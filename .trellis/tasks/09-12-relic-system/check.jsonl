@@ -1,0 +1,5 @@
+{"file": "openspec/changes/add-relic-system/specs/relic-control/spec.md", "reason": "验收基准：`relic-control` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-relic-system/specs/relic-effects/spec.md", "reason": "验收基准：`relic-effects` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-relic-system/specs/relic-generation/spec.md", "reason": "验收基准：`relic-generation` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-relic-system/design.md", "reason": "核对实现是否遵循裁决记录与 Risks 中列出的强制回归"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文（§5.1, §7.3, §8），核对算例数值是否与设计一致"}

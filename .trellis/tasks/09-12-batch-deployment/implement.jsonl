@@ -1,0 +1,4 @@
+{"file": "openspec/changes/add-batch-deployment/design.md", "reason": "架构决策、接口契约与已确认裁决；实现前必读"}
+{"file": "openspec/changes/add-batch-deployment/specs/batch-deployment/spec.md", "reason": "能力 `batch-deployment` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-batch-deployment/specs/capture-resolution/spec.md", "reason": "能力 `capture-resolution` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/ROADMAP.md", "reason": "全局硬约束（四邻接、实时重算、随机可复现、围棋记法坐标）与依赖顺序"}

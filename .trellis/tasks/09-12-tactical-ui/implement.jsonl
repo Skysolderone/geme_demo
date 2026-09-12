@@ -1,0 +1,7 @@
+{"file": "openspec/changes/add-tactical-ui/design.md", "reason": "架构决策、接口契约与已确认裁决；实现前必读"}
+{"file": "openspec/changes/add-tactical-ui/specs/batch-preview/spec.md", "reason": "能力 `batch-preview` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-tactical-ui/specs/hand-info-panel/spec.md", "reason": "能力 `hand-info-panel` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-tactical-ui/specs/information-visibility/spec.md", "reason": "能力 `information-visibility` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-tactical-ui/specs/tactical-layers/spec.md", "reason": "能力 `tactical-layers` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-tactical-ui/specs/visual-style-baseline/spec.md", "reason": "能力 `visual-style-baseline` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/ROADMAP.md", "reason": "全局硬约束（四邻接、实时重算、随机可复现、围棋记法坐标）与依赖顺序"}

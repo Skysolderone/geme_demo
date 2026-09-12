@@ -1,0 +1,7 @@
+{"file": "openspec/changes/add-tactical-ui/specs/batch-preview/spec.md", "reason": "验收基准：`batch-preview` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-tactical-ui/specs/hand-info-panel/spec.md", "reason": "验收基准：`hand-info-panel` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-tactical-ui/specs/information-visibility/spec.md", "reason": "验收基准：`information-visibility` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-tactical-ui/specs/tactical-layers/spec.md", "reason": "验收基准：`tactical-layers` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-tactical-ui/specs/visual-style-baseline/spec.md", "reason": "验收基准：`visual-style-baseline` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-tactical-ui/design.md", "reason": "核对实现是否遵循裁决记录与 Risks 中列出的强制回归"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文（§13, §14, §20），核对算例数值是否与设计一致"}

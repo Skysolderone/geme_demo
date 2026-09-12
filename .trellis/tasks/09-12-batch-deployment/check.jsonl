@@ -1,0 +1,4 @@
+{"file": "openspec/changes/add-batch-deployment/specs/batch-deployment/spec.md", "reason": "验收基准：`batch-deployment` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-batch-deployment/specs/capture-resolution/spec.md", "reason": "验收基准：`capture-resolution` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-batch-deployment/design.md", "reason": "核对实现是否遵循裁决记录与 Risks 中列出的强制回归"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文（§5.4–5.5, §6），核对算例数值是否与设计一致"}

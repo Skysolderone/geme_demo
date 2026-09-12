@@ -1,0 +1,5 @@
+{"file": "openspec/changes/add-territory-power/specs/coverage-territory/spec.md", "reason": "验收基准：`coverage-territory` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-territory-power/specs/piece-effects/spec.md", "reason": "验收基准：`piece-effects` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-territory-power/specs/power-score/spec.md", "reason": "验收基准：`power-score` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-territory-power/design.md", "reason": "核对实现是否遵循裁决记录与 Risks 中列出的强制回归"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文（§7.1–7.2, §9, §10），核对算例数值是否与设计一致"}

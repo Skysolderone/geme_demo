@@ -1,0 +1,6 @@
+{"file": "openspec/changes/add-match-flow/design.md", "reason": "架构决策、接口契约与已确认裁决；实现前必读"}
+{"file": "openspec/changes/add-match-flow/specs/elimination-endgame/spec.md", "reason": "能力 `elimination-endgame` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-match-flow/specs/initiative-order/spec.md", "reason": "能力 `initiative-order` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-match-flow/specs/match-setup/spec.md", "reason": "能力 `match-setup` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-match-flow/specs/turn-sequence/spec.md", "reason": "能力 `turn-sequence` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/ROADMAP.md", "reason": "全局硬约束（四邻接、实时重算、随机可复现、围棋记法坐标）与依赖顺序"}

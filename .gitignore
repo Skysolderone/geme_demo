@@ -1,0 +1,11 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+# Godot
+.godot/
+.import/
+export_presets.cfg
+# macOS
+.DS_Store

@@ -1,0 +1,6 @@
+{"file": "openspec/changes/add-match-flow/specs/elimination-endgame/spec.md", "reason": "验收基准：`elimination-endgame` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-match-flow/specs/initiative-order/spec.md", "reason": "验收基准：`initiative-order` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-match-flow/specs/match-setup/spec.md", "reason": "验收基准：`match-setup` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-match-flow/specs/turn-sequence/spec.md", "reason": "验收基准：`turn-sequence` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-match-flow/design.md", "reason": "核对实现是否遵循裁决记录与 Risks 中列出的强制回归"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文（§4, §5, §11, §12），核对算例数值是否与设计一致"}

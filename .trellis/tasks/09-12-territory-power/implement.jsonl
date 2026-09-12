@@ -1,0 +1,5 @@
+{"file": "openspec/changes/add-territory-power/design.md", "reason": "架构决策、接口契约与已确认裁决；实现前必读"}
+{"file": "openspec/changes/add-territory-power/specs/coverage-territory/spec.md", "reason": "能力 `coverage-territory` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-territory-power/specs/piece-effects/spec.md", "reason": "能力 `piece-effects` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-territory-power/specs/power-score/spec.md", "reason": "能力 `power-score` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/ROADMAP.md", "reason": "全局硬约束（四邻接、实时重算、随机可复现、围棋记法坐标）与依赖顺序"}

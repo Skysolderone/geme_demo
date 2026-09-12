@@ -1,0 +1,5 @@
+{"file": "openspec/changes/add-relic-system/design.md", "reason": "架构决策、接口契约与已确认裁决；实现前必读"}
+{"file": "openspec/changes/add-relic-system/specs/relic-control/spec.md", "reason": "能力 `relic-control` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-relic-system/specs/relic-effects/spec.md", "reason": "能力 `relic-effects` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/add-relic-system/specs/relic-generation/spec.md", "reason": "能力 `relic-generation` 的权威 Requirement 与 Scenario，逐条对应测试用例"}
+{"file": "openspec/ROADMAP.md", "reason": "全局硬约束（四邻接、实时重算、随机可复现、围棋记法坐标）与依赖顺序"}

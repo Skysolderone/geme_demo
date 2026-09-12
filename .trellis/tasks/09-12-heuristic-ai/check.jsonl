@@ -1,0 +1,5 @@
+{"file": "openspec/changes/add-heuristic-ai/specs/ai-decision/spec.md", "reason": "验收基准：`ai-decision` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-heuristic-ai/specs/match-telemetry/spec.md", "reason": "验收基准：`match-telemetry` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-heuristic-ai/specs/simulation-harness/spec.md", "reason": "验收基准：`simulation-harness` 的每个 Scenario 都必须有通过的测试"}
+{"file": "openspec/changes/add-heuristic-ai/design.md", "reason": "核对实现是否遵循裁决记录与 Risks 中列出的强制回归"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文（§15, §16, §17），核对算例数值是否与设计一致"}
