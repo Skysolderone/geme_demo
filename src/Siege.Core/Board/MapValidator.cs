@@ -43,8 +43,9 @@ public sealed class MapValidationException : Exception
 /// <remarks>规格：openspec/changes/add-board-core/specs/map-definition —— Requirement: 地图静态校验规则</remarks>
 public static class MapValidator
 {
-    private const double MinObstacleRatio = 0.08;
-    private const double MaxObstacleRatio = 0.12;
+    // 用整数百分比比较，避免浮点进入内核。规范：.trellis/spec/core/determinism.md
+    private const int MinObstaclePercent = 8;
+    private const int MaxObstaclePercent = 12;
 
     /// <summary>人数适配预算：可落子格区间、出生区数、信物格区间。</summary>
     private static readonly ImmutableDictionary<int, (int MinPlayable, int MaxPlayable, int MinRelics, int MaxRelics)> Budgets =
@@ -122,21 +123,27 @@ public static class MapValidator
         }
 
         int obstacles = map.AllCoords().Count(c => map.Obstacles.Contains(c));
-        double ratio = (double)obstacles / area;
-        if (ratio < MinObstacleRatio)
+        if (obstacles * 100 < area * MinObstaclePercent)
         {
             f.Add(new MapValidationFailure(
                 "OBSTACLE_RATIO_TOO_LOW",
-                $"障碍格 {obstacles} 个，占外接区域 {ratio:P1}，低于 8%。",
+                $"障碍格 {obstacles} 个，占外接区域 {FormatPercent(obstacles, area)}，低于 {MinObstaclePercent}%。",
                 ImmutableArray<Coord>.Empty));
         }
-        else if (ratio > MaxObstacleRatio)
+        else if (obstacles * 100 > area * MaxObstaclePercent)
         {
             f.Add(new MapValidationFailure(
                 "OBSTACLE_RATIO_TOO_HIGH",
-                $"障碍格 {obstacles} 个，占外接区域 {ratio:P1}，高于 12%。",
+                $"障碍格 {obstacles} 个，占外接区域 {FormatPercent(obstacles, area)}，高于 {MaxObstaclePercent}%。",
                 ImmutableArray<Coord>.Empty));
         }
+    }
+
+    /// <summary>把占比格式化成一位小数的百分比，全程整数运算。</summary>
+    private static string FormatPercent(int part, int whole)
+    {
+        int tenths = (part * 1000) / whole;
+        return $"{tenths / 10}.{tenths % 10}%";
     }
 
     private static void ValidateBirthZones(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
