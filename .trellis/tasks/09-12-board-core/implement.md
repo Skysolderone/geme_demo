@@ -78,3 +78,23 @@ dotnet test --filter "FullyQualifiedName~<Capability>"
 - 四邻接实现唯一：`Adjacency.Neighbors` 是全项目唯一的邻居遍历，`GameBoard` 与 `MapValidator` 都委托给它（`邻接实现唯一` 测试逐格比对兜底）。
 - 4 人基准地图 `siege-4p-base-v1` 校验通过：109 可落子格、12 障碍（9.9%）、4 区各 15 格、14 信物格（出生区 8 + 公共区 6）、距离极差 0。
 - 地图已导出为 `maps/siege-4p-base-v1.json`，设计师可脱离代码维护；往返读写无信息丢失。
+
+## 自审修复记录
+
+多 agent 审计因会话额度用尽未产出结论（8 个 agent 全部报错，0 条结构化发现）。改为自查，修了 3 个真问题：
+
+1. **恒真测试**：`四邻接Tests.邻接实现唯一` 断言 `Adjacency.Neighbors(...) == board.Neighbors(c)`，而后者实现就是 `return Adjacency.Neighbors(...)`——永远成立，实现写错也不会红。已换成手写四方向偏移独立算期望值。变异验证：删掉 Adjacency 的"上"方向后 73 个测试红 19 个，还原后全绿。
+2. **Godot 守门盲区**：`AssertNoGodotDependency` 只检查 `PackageReference`，`ProjectReference` 与直接 dll 引用都能绕过。已扩展到 `ProjectReference`，并加 `内核不引用Godot` 测试检查真正落进程序集的引用——这才是兜底。
+3. **`LoadUnvalidated` 对生产代码可见**：跳过静态校验的入口是 `public`，生产代码误用会把必死口袋、距离失衡带进对局。已改为 `internal` + `InternalsVisibleTo(Siege.Core.Tests)`。
+
+另补 6 项独立验证（自己算，不调用 MapValidator）：D2 三种变换下障碍/信物/咽喉/出生区不变、四区到三类地标距离精确相等（极差 0）、全盘 109 格连通无小口袋、校验输出跨 50 次运行确定。
+
+测试总数 68 → 88。
+
+### 尚未覆盖（审计未跑成的维度）
+
+- map-definition 逐 Scenario 的符合性复核
+- 全量测试质量扫描（除已修的那一个恒真测试外，其余测试未被独立审过）
+- MapValidator 的边界条件（占比恰好 8%/12%、豁免逻辑是否过宽、BFS 口径）
+- MapFile 对畸形 JSON 的健壮性
+- 对下游 batch-deployment 的契约是否够用（需要"盘面副本模拟整批放置"的原语）

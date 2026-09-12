@@ -58,4 +58,4 @@
 
 无阻塞项。技术栈已确定为 Godot 4 / C#（规则内核为零 Godot 依赖的 net8.0 类库），详见 `design.md`。
 
-非阻塞待办：Godot 编辑器（.NET 版）尚未安装，到子任务 `09-12-tactical-ui` 时才需要。
+非阻塞待办：`~/Desktop/Godot.app` 是 Godot 4.5 **标准版**（不含 C# 支持），到子任务 `09-12-tactical-ui` 时需换成 **.NET 版** 4.5。子任务 1–7 不受影响。

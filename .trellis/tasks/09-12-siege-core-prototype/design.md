@@ -42,7 +42,12 @@ siege.sln
 - **坐标**：对外围棋记法（`A1`–`L11`，跳过 `I`，行号自下而上），内部数值索引，双向映射只允许一处实现。
 - **测试组织**：每条 Requirement 一个测试类，每个 Scenario 一个 `[Fact]`/`[Theory]`，测试名直接引用 Requirement 名，便于与 openspec 逐条对账。
 
-**环境现状：** .NET SDK 8.0.412 已安装；Godot 尚未安装，到子任务 8 时需装 **.NET 版**的 Godot 4 编辑器（非标准版）。子任务 1–7 全程不需要 Godot。
+**环境现状：** .NET SDK 8.0.412 已安装。Godot 4.5.stable 已安装在 `~/Desktop/Godot.app`，
+但是**标准版，不含 C# 支持**（`Contents/Resources/` 下无 `GodotSharp/`，二进制无 `GodotSharp` 符号，体积 345M）。
+子任务 1–7 是纯 .NET 类库，不碰引擎，完全不受影响；到子任务 8 做表现层时需要换成 **Godot 4.5 .NET 版**。
+
+参考：`~/godot_demo/-dodge_the_creeps` 是既有的 C# Godot 项目（4.4），nuget 缓存中有 `godot.net.sdk 4.4.1`，
+说明此前装过 .NET 版 4.4；`~/game/balatro`（4.4）与 `~/game/jungle-gambler`（4.5）是 GDScript 项目。
 
 ## 兼容性与回滚
 

@@ -7,10 +7,19 @@
     <NoGodotDependency>true</NoGodotDependency>
   </PropertyGroup>
 
-  <!-- 编译期守门：任何 Godot 引用都让构建失败 -->
+  <ItemGroup>
+    <!-- 测试需要构造跳过静态校验的小盘面；LoadUnvalidated 对生产代码不可见 -->
+    <InternalsVisibleTo Include="Siege.Core.Tests" />
+  </ItemGroup>
+
+  <!-- 编译期守门：任何 Godot 引用都让构建失败。
+       注意这只拦得住 PackageReference 与 ProjectReference；
+       真正兜底的是 四邻接Tests.内核不引用Godot，它检查落进程序集的实际引用。 -->
   <Target Name="AssertNoGodotDependency" BeforeTargets="Build">
-    <Error Condition="'%(PackageReference.Identity)' == 'Godot.NET.Sdk' or $([System.String]::Copy('%(PackageReference.Identity)').StartsWith('Godot'))"
-           Text="Siege.Core 不得引用 Godot：规则内核必须能在无引擎环境下跑测试与批量对局。" />
+    <Error Condition="$([System.String]::Copy('%(PackageReference.Identity)').StartsWith('Godot'))"
+           Text="Siege.Core 不得引用 Godot 包：规则内核必须能在无引擎环境下跑测试与批量对局。" />
+    <Error Condition="$([System.String]::Copy('%(ProjectReference.Filename)').StartsWith('Godot'))"
+           Text="Siege.Core 不得引用 Godot 项目：规则内核必须能在无引擎环境下跑测试与批量对局。" />
   </Target>
 
 </Project>

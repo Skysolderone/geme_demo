@@ -36,8 +36,11 @@ public sealed class GameBoard
         return new GameBoard(map);
     }
 
-    /// <summary>跳过静态校验创建棋盘。仅供拓扑单元测试构造小盘面使用。</summary>
-    public static GameBoard LoadUnvalidated(MapData map) => new(map);
+    /// <summary>
+    /// 跳过静态校验创建棋盘。<b>仅供单元测试构造小盘面</b>——生产代码必须走 <see cref="Load"/>，
+    /// 否则未校验的地图会把必死口袋、距离失衡这类问题带进对局。
+    /// </summary>
+    internal static GameBoard LoadUnvalidated(MapData map) => new(map);
 
     /// <summary>地图静态数据。</summary>
     public MapData Map { get; }

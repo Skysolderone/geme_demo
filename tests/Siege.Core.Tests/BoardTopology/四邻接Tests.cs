@@ -37,15 +37,47 @@ public class 四邻接Tests
         Assert.Equal(["F5", "E6", "G6", "F7"], board.Neighbors(TestMaps.At("F6")).Notations());
     }
 
-    [Fact]
-    public void 邻接实现唯一()
+    [Theory]
+    [InlineData("A1", new[] { "B1", "A2" })]
+    [InlineData("L11", new[] { "L10", "K11" })]
+    [InlineData("A6", new[] { "A5", "B6", "A7" })]
+    [InlineData("F6", new[] { "F5", "E6", "G6", "F7" })]
+    public void 邻居集合与手工期望一致(string center, string[] expected)
     {
-        // GameBoard 必须委托给 Adjacency，而不是自带一份遍历
         GameBoard board = TestMaps.Blank(size: 11);
+
+        Assert.Equal(expected, board.Neighbors(TestMaps.At(center)).Notations());
+    }
+
+    [Fact]
+    public void 邻接只走四方向()
+    {
+        // 期望值在测试里独立算出（手写的四个方向偏移），不调用被测实现。
+        // 这样 Adjacency 本身写错（少一个方向、混入斜向、边界差一）时这个测试会红。
+        const int size = 11;
+        (int Dx, int Dy)[] directions = [(0, -1), (-1, 0), (1, 0), (0, 1)];
+        GameBoard board = TestMaps.Blank(size);
 
         foreach (Coord c in board.AllCoords())
         {
-            Assert.Equal(Adjacency.Neighbors(board.Width, board.Height, c), board.Neighbors(c));
+            IEnumerable<Coord> expected = directions
+                .Select(d => (X: c.X + d.Dx, Y: c.Y + d.Dy))
+                .Where(p => p.X >= 0 && p.X < size && p.Y >= 0 && p.Y < size)
+                .Select(p => new Coord(p.X, p.Y));
+
+            Assert.Equal(expected, board.Neighbors(c));
         }
+    }
+
+    [Fact]
+    public void 内核不引用Godot()
+    {
+        // 比 csproj 里的 MSBuild 守门更强：它只看 PackageReference，
+        // 这里看真正落进程序集的引用，ProjectReference 与直接 dll 引用也拦得住。
+        var referenced = typeof(GameBoard).Assembly.GetReferencedAssemblies();
+
+        Assert.DoesNotContain(
+            referenced,
+            r => r.Name is not null && r.Name.StartsWith("Godot", StringComparison.OrdinalIgnoreCase));
     }
 }
