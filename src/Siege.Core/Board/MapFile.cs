@@ -59,27 +59,42 @@ public static class MapFile
         MapDto dto = JsonSerializer.Deserialize<MapDto>(json, Options)
                      ?? throw new FormatException("地图文件为空或不是合法 JSON。");
 
+        List<List<string>> zones = Required(dto.BirthZones, "BirthZones");
+        Dictionary<string, RelicDto> relicCells = Required(dto.RelicCells, "RelicCells");
+        Dictionary<string, string> exemptions = Required(dto.PocketExemptions, "PocketExemptions");
+
         return new MapData
         {
-            Id = dto.Id,
+            Id = Required(dto.Id, "Id"),
             Width = dto.Width,
             Height = dto.Height,
             MaxPlayers = dto.MaxPlayers,
-            Obstacles = Parse(dto.Obstacles),
-            BirthZones = [.. dto.BirthZones.Select(Parse)],
-            RelicCells = dto.RelicCells.ToImmutableDictionary(
+            Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
+            BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
+            RelicCells = relicCells.ToImmutableDictionary(
                 kv => Coord.Parse(kv.Key),
-                kv => new RelicCellSpec(kv.Value.Zone, kv.Value.Budget)),
-            ChokePoints = Parse(dto.ChokePoints),
+                kv => new RelicCellSpec(
+                    Required(kv.Value, $"RelicCells[\"{kv.Key}\"]").Zone,
+                    kv.Value.Budget)),
+            ChokePoints = Parse(Required(dto.ChokePoints, "ChokePoints")),
             CentralEntrance = Coord.Parse(dto.CentralEntrance),
             DistanceTolerance = dto.DistanceTolerance,
             ToleranceRelaxReason = dto.ToleranceRelaxReason,
             MinTwoEyeArea = dto.MinTwoEyeArea,
-            PocketExemptions = dto.PocketExemptions.Keys.Select(Coord.Parse).ToImmutableHashSet(),
-            PocketExemptionReasons = dto.PocketExemptions.ToImmutableDictionary(
+            PocketExemptions = exemptions.Keys.Select(Coord.Parse).ToImmutableHashSet(),
+            PocketExemptionReasons = exemptions.ToImmutableDictionary(
                 kv => Coord.Parse(kv.Key), kv => kv.Value),
         };
     }
+
+    /// <summary>
+    /// 显式写成 <c>null</c> 的字段会让反序列化产出一个坏 <see cref="MapData"/>，
+    /// 报出的却是 <c>ArgumentNullException: Parameter 'source'</c>——看不出是哪个字段。
+    /// 这里把它换成指名道姓的 <see cref="FormatException"/>。
+    /// </summary>
+    private static T Required<T>(T? value, string field)
+        where T : class =>
+        value ?? throw new FormatException($"地图文件的 {field} 字段为 null：缺省请直接省略该字段，不要写 null。");
 
     private static List<string> Sorted(IEnumerable<Coord> coords) =>
         [.. coords.Order().Select(c => c.ToNotation())];

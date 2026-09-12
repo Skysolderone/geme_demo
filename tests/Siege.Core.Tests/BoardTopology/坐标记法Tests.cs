@@ -40,6 +40,27 @@ public class 坐标记法Tests
         }
     }
 
+    [Fact]
+    public void 映射实现只有一处()
+    {
+        // Scenario「双向映射唯一」的后半句："全项目只存在一处映射实现"。
+        // 往返恒等测不出第二份列字母表——两份表只要都跳过 I，往返照样成立，
+        // 直到有人在第二份表里忘了跳 I，而那时错的是日志坐标，极难归因。
+        // 规范：.trellis/spec/core/coordinates.md —— 映射唯一
+        string source = Path.Combine(RepoRoot(), "src");
+        char sep = Path.DirectorySeparatorChar;
+
+        string[] offenders = [.. Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
+            .Where(p => !p.Contains($"{sep}obj{sep}", StringComparison.Ordinal)
+                        && !p.Contains($"{sep}bin{sep}", StringComparison.Ordinal))
+            .Where(p => Path.GetFileName(p) != "Coord.cs")
+            .Where(p => File.ReadAllText(p).Contains("ABCDEFGH", StringComparison.Ordinal))
+            .Select(p => Path.GetRelativePath(RepoRoot(), p))];
+
+        Assert.True(Directory.Exists(source), $"找不到源码目录：{source}");
+        Assert.Empty(offenders);
+    }
+
     [Theory]
     [InlineData("A1", 0, 0)]
     [InlineData("F6", 5, 5)]
@@ -65,4 +86,7 @@ public class 坐标记法Tests
     {
         Assert.False(Coord.TryParse(notation, out _));
     }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", ".."));
 }

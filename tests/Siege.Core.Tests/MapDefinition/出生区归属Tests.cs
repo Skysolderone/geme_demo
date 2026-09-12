@@ -11,14 +11,24 @@ public class 出生区归属Tests
     [Fact]
     public void 共享出生区()
     {
-        // 玩家 A 与玩家 B 都锁定出生区 1：两人在保护期内的合法落子范围是同一个集合
+        // 玩家 A 与玩家 B 都锁定出生区 1：两人的合法落子范围是"该区的全部空格"这同一个集合。
+        // 本层没有"锁定"概念，可观察的等价命题是：范围只由格子的空/可落子状态决定，
+        // 与落子者是谁无关——A 落一子会同时从 B 的范围里消耗掉同一格。
         const int lockedZone = 1;
-        var rangeForA = Map.BirthZones[lockedZone];
-        var rangeForB = Map.BirthZones[lockedZone];
+        GameBoard board = GameBoard.Load(Map);
+        Coord[] LegalFor(PlayerId _) =>
+            [.. Map.BirthZones[lockedZone].Where(c => board[c].IsPlayableEmpty).Order()];
 
-        Assert.Equal(rangeForA, rangeForB);
-        Assert.NotEmpty(rangeForA);
-        Assert.All(rangeForA, c => Assert.Equal(lockedZone, Map.BirthZoneOf(c)));
+        Coord[] before = LegalFor(TestMaps.P0);
+        Assert.Equal(before, LegalFor(TestMaps.P1));
+        Assert.Equal(15, before.Length);
+
+        board.Place(before[0], TestMaps.P0, PieceType.Basic);
+        board.Place(before[1], TestMaps.P1, PieceType.Basic);
+
+        Assert.Equal(before.Skip(2), LegalFor(TestMaps.P0));
+        Assert.Equal(LegalFor(TestMaps.P0), LegalFor(TestMaps.P1));
+        Assert.All(Map.BirthZones[lockedZone], c => Assert.Equal(lockedZone, Map.BirthZoneOf(c)));
     }
 
     [Fact]

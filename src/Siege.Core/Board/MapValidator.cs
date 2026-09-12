@@ -64,6 +64,7 @@ public static class MapValidator
         ArgumentNullException.ThrowIfNull(map);
         ImmutableArray<MapValidationFailure>.Builder f = ImmutableArray.CreateBuilder<MapValidationFailure>();
 
+        ValidateStructure(map, f);
         ValidateBudgets(map, f);
         ValidateObstacleRatio(map, f);
         ValidateBirthZones(map, f);
@@ -74,6 +75,37 @@ public static class MapValidator
         ValidateDistanceBalance(map, f);
 
         return new MapValidationResult(f.ToImmutable());
+    }
+
+    /// <summary>
+    /// 结构性前置校验。这些问题若不先报出来，后面的规则只会报出症状
+    /// （"可落子格为 0"），把根因藏在一堆派生失败里。
+    /// </summary>
+    private static void ValidateStructure(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        if (map.Width <= 0 || map.Height <= 0)
+        {
+            f.Add(new MapValidationFailure(
+                "MAP_DIMENSION_INVALID",
+                $"地图外接尺寸必须为正，实际为 {map.Width}×{map.Height}。",
+                ImmutableArray<Coord>.Empty));
+        }
+
+        if (string.IsNullOrWhiteSpace(map.Id))
+        {
+            f.Add(new MapValidationFailure(
+                "MAP_ID_MISSING",
+                "地图必须有标识：对局日志按地图标识归档（设计文档 §17）。",
+                ImmutableArray<Coord>.Empty));
+        }
+
+        // 越界障碍不参与任何校验，等于被静默丢弃——占比、口袋、距离全都算不到它。
+        ImmutableArray<Coord> outside = map.Obstacles.Where(c => !map.Contains(c)).Order().ToImmutableArray();
+        if (!outside.IsEmpty)
+        {
+            f.Add(new MapValidationFailure(
+                "OBSTACLE_OUT_OF_BOUNDS", "障碍格越界，不会参与任何校验。", outside));
+        }
     }
 
     private static void ValidateBudgets(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
@@ -99,9 +131,13 @@ public static class MapValidator
         int relics = map.RelicCells.Count;
         if (relics < budget.MinRelics || relics > budget.MaxRelics)
         {
+            // 规格的 Scenario 要求报出方向（"信物格少于 7"），不只是"超出区间"。
+            string direction = relics < budget.MinRelics
+                ? $"少于下限 {budget.MinRelics}"
+                : $"多于上限 {budget.MaxRelics}";
             f.Add(new MapValidationFailure(
                 "RELIC_COUNT_OUT_OF_RANGE",
-                $"{map.MaxPlayers} 人地图的信物格为 {relics}，超出 {budget.MinRelics}–{budget.MaxRelics} 区间。",
+                $"{map.MaxPlayers} 人地图的信物格为 {relics}，{direction}，超出 {budget.MinRelics}–{budget.MaxRelics} 区间。",
                 ImmutableArray<Coord>.Empty));
         }
 
@@ -116,11 +152,13 @@ public static class MapValidator
 
     private static void ValidateObstacleRatio(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        int area = map.Width * map.Height;
-        if (area == 0)
+        // 尺寸非正时 Width*Height 可能算出正数（-3×-3=9），占比会变成无意义的比较。
+        if (map.Width <= 0 || map.Height <= 0)
         {
             return;
         }
+
+        int area = map.Width * map.Height;
 
         int obstacles = map.AllCoords().Count(c => map.Obstacles.Contains(c));
         if (obstacles * 100 < area * MinObstaclePercent)

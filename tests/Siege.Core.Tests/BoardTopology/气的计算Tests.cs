@@ -26,15 +26,26 @@ public class 气的计算Tests
     [Fact]
     public void 共享气去重()
     {
-        // 两枚相邻棋子成串，某空格同时与两枚相邻 → 只计一次
+        // 某空格同时与棋串的两枚棋子相邻 → 只计一次。
+        // 注意：四邻接下两枚"直线相邻"的棋子不可能共用邻格（它们之间那格正是棋子本身），
+        // 所以必须用拐角棋串 D4-D5-E5 才真的触发去重：E4 同时邻接 D4 与 E5。
         GameBoard board = TestMaps.Blank(size: 7)
             .Place("D4", TestMaps.P0)
-            .Place("D5", TestMaps.P0);
+            .Place("D5", TestMaps.P0)
+            .Place("E5", TestMaps.P0);
 
-        var liberties = board.LibertiesOf(board.GroupAt(TestMaps.At("D4"))!);
+        Group group = board.GroupAt(TestMaps.At("D4"))!;
+        var liberties = board.LibertiesOf(group);
 
+        Assert.Equal(3, group.Size);
         Assert.Equal(liberties.Length, liberties.Distinct().Count());
-        Assert.Equal(["D3", "C4", "E4", "C5", "E5", "D6"], liberties.Notations());
+
+        // E4 邻接 D4 与 E5 两枚棋子，在气集合里只出现一次
+        Assert.Single(liberties, c => c == TestMaps.At("E4"));
+        // 顺序必须是坐标字典序（先行后列），不是"邻居遍历的插入顺序"——
+        // 这两者在这个拐角棋串上恰好不同（F5 与 D6 会换位），所以这个断言钉得住排序。
+        // 规范：.trellis/spec/core/determinism.md —— 并列必须确定性打破
+        Assert.Equal(["D3", "C4", "E4", "C5", "F5", "D6", "E6"], liberties.Notations());
     }
 
     [Fact]

@@ -46,11 +46,12 @@ public readonly struct Coord : IEquatable<Coord>, IComparable<Coord>
     public string ToNotation() => string.Concat(Column, Row.ToString());
 
     /// <summary>解析围棋记法。大小写不敏感；<c>I</c> 不是合法列字母。</summary>
-    public static Coord Parse(string notation)
+    public static Coord Parse(string? notation)
     {
         if (!TryParse(notation, out Coord coord))
         {
-            throw new FormatException($"无法解析为围棋记法坐标：\"{notation}\"。列字母跳过 I，行号自下而上从 1 起。");
+            throw new FormatException(
+                $"无法解析为围棋记法坐标：{(notation is null ? "<null>" : $"\"{notation}\"")}。列字母跳过 I，行号自下而上从 1 起。");
         }
 
         return coord;

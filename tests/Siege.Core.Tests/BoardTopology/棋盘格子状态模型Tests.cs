@@ -41,5 +41,19 @@ public class 棋盘格子状态模型Tests
         Assert.Empty(walled.LibertiesOf(walled.GroupAt(TestMaps.At("A1"))!));
     }
 
+    [Fact]
+    public void 越界坐标的地形就是障碍()
+    {
+        // "棋盘外沿与障碍具有相同的封堵语义"这句话在数据层的落点：
+        // 越界格的地形 MUST 就是障碍，而不是靠每个调用方各自记得先判边界。
+        MapData map = FourPlayerBaseMapData();
+
+        Assert.False(map.Contains(new Coord(11, 0)));
+        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(11, 0)));
+        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(0, 11)));
+        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(24, 99)));
+        Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("F6")));
+    }
+
     private static MapData FourPlayerBaseMapData() => Siege.Core.Board.Maps.FourPlayerBaseMap.Create();
 }
