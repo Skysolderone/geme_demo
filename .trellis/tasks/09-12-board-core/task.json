@@ -3,7 +3,7 @@
   "name": "board-core",
   "title": "1 棋盘内核：四邻接、棋串、气与地图校验",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

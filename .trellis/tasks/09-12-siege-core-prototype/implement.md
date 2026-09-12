@@ -5,9 +5,9 @@
 ## 0. 启动前（阻塞全部子任务）
 
 - [x] 0.1 确定技术栈：Godot 4 / C#，规则内核为零 Godot 依赖的 net8.0 类库（见 `design.md`）
-- [ ] 0.2 `git init` 并建立首个提交（Trellis Phase 3.4 需要提交，当前目录不是 git 仓库）
-- [ ] 0.3 用 `trellis-spec-bootstrap` 建立 `.trellis/spec/` 的编码规范（至少覆盖：规则内核的测试组织方式、整数/定点运算约定、随机子流的使用约定）
-- [ ] 0.4 补全各子任务 `design.md` 的「实现侧补充」与 `implement.md` 的验证命令
+- [x] 0.2 `git init` 并建立首个提交
+- [x] 0.3 建立 `.trellis/spec/core/` 编码规范（边界与依赖、确定性、坐标、测试组织）
+- [x] 0.4 补全各子任务 `design.md` 的实现侧补充与 `implement.md` 的验证命令
 
 ## 1. 按依赖顺序推进子任务
 

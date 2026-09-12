@@ -76,11 +76,16 @@
 ## 验证命令
 
 ```bash
-openspec validate add-heuristic-ai          # 规格自身仍然有效
-openspec show add-heuristic-ai              # 查看该 change 的完整内容
+dotnet build                      # 零警告（TreatWarningsAsErrors 已开）
+dotnet test                       # 全部测试
+openspec validate add-heuristic-ai      # 规格自身仍然有效
 ```
 
-测试与 lint 命令待技术栈确定后补入本节，并同步写进 `.trellis/spec/`。
+按能力过滤测试：
+
+```bash
+dotnet test --filter "FullyQualifiedName~<Capability>"
+```
 
 ## 风险点与回滚
 

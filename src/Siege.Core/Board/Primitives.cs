@@ -1,0 +1,87 @@
+namespace Siege.Core.Board;
+
+/// <summary>地形种类。障碍在气、覆盖与围杀判定中一律视为封堵边界，与棋盘外沿语义相同。</summary>
+public enum Terrain
+{
+    /// <summary>可落子格。</summary>
+    Playable,
+
+    /// <summary>障碍：不可落子、不可控制、不计分。</summary>
+    Obstacle,
+}
+
+/// <summary>五种原型棋子。基础军势与效果属于计分层，本层只负责类型标识。</summary>
+public enum PieceType
+{
+    /// <summary>普通子，基础军势 1。</summary>
+    Basic,
+
+    /// <summary>堡垒子，基础军势 4。</summary>
+    Fortress,
+
+    /// <summary>连珠子，成线提供位置加值。</summary>
+    Line,
+
+    /// <summary>倍增子，令棋串军势依次乘 1.5。</summary>
+    Multiplier,
+
+    /// <summary>协同子，按同串其他类型数提供位置加值。</summary>
+    Synergy,
+}
+
+/// <summary>信物格所属的强度预算分区。</summary>
+public enum RelicZone
+{
+    /// <summary>出生区：不生成高阶信物。</summary>
+    BirthZone,
+
+    /// <summary>公共争夺区。</summary>
+    Contested,
+}
+
+/// <summary>信物强度预算档位。中央区、交通咽喉与高风险边缘承担更高预算。</summary>
+public enum BudgetTier
+{
+    /// <summary>出生区档位，预算最低。</summary>
+    Birth,
+
+    /// <summary>公共区标准档位。</summary>
+    Standard,
+
+    /// <summary>公共区高档位：中央、咽喉与高风险边缘。</summary>
+    High,
+}
+
+/// <summary>玩家标识。</summary>
+public readonly record struct PlayerId(int Value) : IComparable<PlayerId>
+{
+    public int CompareTo(PlayerId other) => Value.CompareTo(other.Value);
+
+    public override string ToString() => $"P{Value}";
+}
+
+/// <summary>格子上的棋子：所有者 + 类型。</summary>
+public readonly record struct Occupant(PlayerId Owner, PieceType Type)
+{
+    public override string ToString() => $"{Owner}:{Type}";
+}
+
+/// <summary>格子的只读视图。</summary>
+public readonly record struct Cell(
+    Coord Coord,
+    Terrain Terrain,
+    int? BirthZone,
+    bool IsRelicCell,
+    Occupant? Occupant)
+{
+    /// <summary>该格当前是否为空的可落子格。</summary>
+    public bool IsPlayableEmpty => Terrain == Terrain.Playable && Occupant is null;
+}
+
+/// <summary>规则层面的非法操作。</summary>
+public sealed class SiegeRuleException : InvalidOperationException
+{
+    public SiegeRuleException(string message) : base(message)
+    {
+    }
+}

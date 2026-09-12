@@ -13,11 +13,17 @@
 
 ## 实现侧补充
 
-待技术栈确定后补充：
+**技术栈**：Godot 4 / C#。规则内核为零 Godot 依赖的 net8.0 类库，详见父任务 `.trellis/tasks/09-12-siege-core-prototype/design.md`。
 
-- 模块/包边界与目录结构
-- 测试组织方式与回归集的运行入口
-- 与其他子任务的代码级接口形态
+**代码位置**：`src/godot/` —— Godot 4 .NET 项目，单向引用 Siege.Core，仅表现层
+
+**测试位置**：`tests/Siege.Core.Tests/` —— 每条 Requirement 一个测试类，每个 Scenario 一个测试方法，测试名直接用 Scenario 名，便于与 openspec 逐条对账。
+
+**本任务是唯一允许出现 `Godot.*` 的地方。** 引用方向单向：`godot/` → `Siege.Core`。表现层 MUST NOT 包含任何规则计算，只消费内核的预演结果与只读视图。
+
+环境前提：需安装 **.NET 版**的 Godot 4 编辑器（非标准版）。
+
+**必读规范**：`.trellis/spec/core/index.md`，尤其是 [边界与依赖](../../spec/core/boundaries.md)、[确定性](../../spec/core/determinism.md)、[坐标](../../spec/core/coordinates.md)、[测试组织](../../spec/core/testing.md)。
 
 ## 兼容性与回滚
 

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Siege.Core</RootNamespace>
+    <!-- 硬约束：规则内核 MUST NOT 依赖 Godot。见 .trellis/tasks/09-12-siege-core-prototype/design.md -->
+    <NoGodotDependency>true</NoGodotDependency>
+  </PropertyGroup>
+
+  <!-- 编译期守门：任何 Godot 引用都让构建失败 -->
+  <Target Name="AssertNoGodotDependency" BeforeTargets="Build">
+    <Error Condition="'%(PackageReference.Identity)' == 'Godot.NET.Sdk' or $([System.String]::Copy('%(PackageReference.Identity)').StartsWith('Godot'))"
+           Text="Siege.Core 不得引用 Godot：规则内核必须能在无引擎环境下跑测试与批量对局。" />
+  </Target>
+
+</Project>
