@@ -10,8 +10,8 @@ namespace Siege.Core.Board;
 /// <para>棋串、气、覆盖等全部是派生量，每次调用重算，不做增量维护也不缓存。
 /// 设计文档 §9.2 / §10.1 要求实时重算；一次提子可能同时改变覆盖、棋串分裂、连珠断线与倍率，
 /// 增量维护的组合爆炸不可控。</para>
-/// <para>本类是全项目<b>唯一</b>的四邻接遍历实现。连接、气、覆盖与围杀判定 MUST 全部复用
-/// <see cref="Neighbors"/>。</para>
+/// <para>四邻接遍历的唯一实现在 <see cref="Adjacency"/>，本类只是委托；连接、气、覆盖与围杀判定
+/// MUST 全部经由 <see cref="Neighbors"/> 到达它，MUST NOT 在别处手写邻居偏移。</para>
 /// <para>规格：openspec/changes/add-board-core/specs/board-topology</para>
 /// </remarks>
 public sealed class GameBoard
@@ -19,9 +19,15 @@ public sealed class GameBoard
     private readonly Occupant?[] _occupants;
 
     private GameBoard(MapData map)
+        : this(map, new Occupant?[map.Width * map.Height])
+    {
+    }
+
+    /// <summary>副本专用：直接接管一份已复制好的占用数组，不经过 <see cref="Load"/>，不触发校验。</summary>
+    private GameBoard(MapData map, Occupant?[] occupants)
     {
         Map = map;
-        _occupants = new Occupant?[map.Width * map.Height];
+        _occupants = occupants;
     }
 
     /// <summary>按地图数据创建棋盘，先执行静态校验；不通过则抛 <see cref="MapValidationException"/>。</summary>
@@ -41,6 +47,13 @@ public sealed class GameBoard
     /// 否则未校验的地图会把必死口袋、距离失衡这类问题带进对局。
     /// </summary>
     internal static GameBoard LoadUnvalidated(MapData map) => new(map);
+
+    /// <summary>
+    /// 副本：复制占用状态、共享不可变的 <see cref="MapData"/>，<b>不重跑</b>地图静态校验。
+    /// 副本与原盘面之后的修改互不可见。批次结算层的合法性预演在副本上进行，
+    /// 这是"预演不污染正式盘面"得以成立的前提。
+    /// </summary>
+    public GameBoard Clone() => new(Map, (Occupant?[])_occupants.Clone());
 
     /// <summary>地图静态数据。</summary>
     public MapData Map { get; }
@@ -143,14 +156,24 @@ public sealed class GameBoard
     public bool IsCaptured(Group group) => LibertiesOf(group).IsEmpty;
 
     /// <summary>枚举指定玩家的全部棋串，按其最小坐标的字典序排列。</summary>
-    public ImmutableArray<Group> GroupsOf(PlayerId player)
+    public ImmutableArray<Group> GroupsOf(PlayerId player) => ScanGroups(o => o.Owner == player);
+
+    /// <summary>
+    /// 全盘棋串枚举：不依赖玩家名册，返回盘面上全部棋串，按各棋串最小坐标的字典序排列。
+    /// 同时提子（设计文档 §6.1 第 4 步）必须先在全盘范围算出无气棋串的并集再统一移除，
+    /// 而不是按名册逐人遍历、边遍历边移除。
+    /// </summary>
+    public ImmutableArray<Group> AllGroups() => ScanGroups(static _ => true);
+
+    /// <summary>按确定性坐标顺序扫描全盘，把满足条件的占用格所属棋串各收集一次。</summary>
+    private ImmutableArray<Group> ScanGroups(Func<Occupant, bool> include)
     {
         var seen = new HashSet<Coord>();
         ImmutableArray<Group>.Builder groups = ImmutableArray.CreateBuilder<Group>();
 
         foreach (Coord c in AllCoords())
         {
-            if (seen.Contains(c) || _occupants[Index(c)] is not { } occupant || occupant.Owner != player)
+            if (seen.Contains(c) || _occupants[Index(c)] is not { } occupant || !include(occupant))
             {
                 continue;
             }
@@ -197,7 +220,13 @@ public sealed class GameBoard
                 }
                 else
                 {
-                    sb.Append(occupant.Value.Owner.Value.ToString("X1"));
+                    int owner = occupant.Value.Owner.Value;
+                    if (owner is < 0 or > 15)
+                    {
+                        throw new SiegeRuleException($"盘面序列化只支持玩家编号 0–15，实际为 {owner}。");
+                    }
+
+                    sb.Append(owner.ToString("X1"));
                     sb.Append(TypeCode(occupant.Value.Type));
                 }
             }
@@ -231,6 +260,26 @@ public sealed class GameBoard
     {
         RequireInBounds(c);
         _occupants[Index(c)] = null;
+    }
+
+    /// <summary>
+    /// 批量移除：一次调用移除一组坐标上的棋子。先把输入全部物化并做越界检查，
+    /// 全部合法后才写入——不存在"部分已移除"的可观察中间状态。清除空格是无害的空操作。
+    /// 何时移除、移除哪些由批次结算层决定，本层不做任何规则判定。
+    /// </summary>
+    public void RemoveStones(IEnumerable<Coord> coords)
+    {
+        ArgumentNullException.ThrowIfNull(coords);
+        Coord[] targets = [.. coords];
+        foreach (Coord c in targets)
+        {
+            RequireInBounds(c);
+        }
+
+        foreach (Coord c in targets)
+        {
+            _occupants[Index(c)] = null;
+        }
     }
 
     private int Index(Coord c) => (c.Y * Width) + c.X;

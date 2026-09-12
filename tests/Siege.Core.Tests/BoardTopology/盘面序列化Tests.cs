@@ -64,4 +64,17 @@ public class 盘面序列化Tests
 
         Assert.NotEqual(a.Serialize(), b.Serialize());
     }
+
+    [Fact]
+    public void 玩家编号超出0到15时序列化拒绝()
+    {
+        // 每格占用者用一位十六进制表示，编号 16 会溢出成两位并破坏定长格式，必须显式拒绝
+        GameBoard ok = TestMaps.Blank(size: 5).Place("C3", new PlayerId(15));
+        Assert.Contains("FB", ok.Serialize(), StringComparison.Ordinal);
+
+        GameBoard overflow = TestMaps.Blank(size: 5).Place("C3", new PlayerId(16));
+        SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => overflow.Serialize());
+        Assert.Contains("0–15", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("16", ex.Message, StringComparison.Ordinal);
+    }
 }

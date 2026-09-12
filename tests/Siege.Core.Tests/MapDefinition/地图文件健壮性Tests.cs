@@ -92,6 +92,71 @@ public class 地图文件健壮性Tests
         Assert.True(MapValidator.Validate(onDisk).IsValid, MapValidator.Validate(onDisk).ToString());
     }
 
+    [Fact]
+    public void 全小写键名的地图能正确加载()
+    {
+        // 设计师手写的键名不必与 DTO 的大小写一致。把基准图的全部 JSON 键名压成小写，
+        // 往返后 MUST 与原图逐字节一致——包括嵌套的 zone / budget 与豁免理由。
+        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        string lowerKeys = System.Text.RegularExpressions.Regex.Replace(
+            canonical, "\"([A-Za-z0-9_]+)\":", m => $"\"{m.Groups[1].Value.ToLowerInvariant()}\":");
+        Assert.NotEqual(canonical, lowerKeys);
+        Assert.Contains("\"maxplayers\":", lowerKeys, StringComparison.Ordinal);
+
+        MapData loaded = MapFile.FromJson(lowerKeys);
+
+        Assert.Equal(canonical, MapFile.ToJson(loaded));
+        Assert.True(MapValidator.Validate(loaded).IsValid, MapValidator.Validate(loaded).ToString());
+    }
+
+    [Fact]
+    public void 全小写枚举值的地图能正确加载()
+    {
+        // PropertyNameCaseInsensitive 只管键名，枚举值走 JsonStringEnumConverter；
+        // 它读取时同样不区分大小写。这里把 Zone / Budget 的全部枚举值压成小写钉住这一点，
+        // 免得日后换转换器或加 JsonNamingPolicy 时静默变成"看起来能用的坏地图"。
+        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        string lowerValues = canonical
+            .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"birthzone\"", StringComparison.Ordinal)
+            .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"contested\"", StringComparison.Ordinal)
+            .Replace("\"Budget\": \"Birth\"", "\"Budget\": \"birth\"", StringComparison.Ordinal)
+            .Replace("\"Budget\": \"Standard\"", "\"Budget\": \"standard\"", StringComparison.Ordinal)
+            .Replace("\"Budget\": \"High\"", "\"Budget\": \"high\"", StringComparison.Ordinal);
+        Assert.NotEqual(canonical, lowerValues);
+        Assert.DoesNotContain("\"BirthZone\"", lowerValues, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"High\"", lowerValues, StringComparison.Ordinal);
+
+        MapData loaded = MapFile.FromJson(lowerValues);
+
+        Assert.Equal(canonical, MapFile.ToJson(loaded));
+    }
+
+    [Fact]
+    public void 未知枚举值的地图拒绝加载()
+    {
+        // 大小写宽容不等于任意字符串宽容：拼错的分区名 MUST 报错，不能落成默认值 BirthZone。
+        string broken = MapFile.ToJson(FourPlayerBaseMap.Create())
+            .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"Contest\"", StringComparison.Ordinal);
+
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => MapFile.FromJson(broken));
+    }
+
+    [Fact]
+    public void 含未知字段的地图能正确加载()
+    {
+        // 地图文件里允许写 _comment 之类的说明字段：顶层与嵌套对象都不报错、不影响数据。
+        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        string withComments = canonical
+            .Replace("{\n  \"Id\":", "{\n  \"_comment\": \"设计师备注：中央区与咽喉承担高预算\",\n  \"Id\":", StringComparison.Ordinal)
+            .Replace("\"Zone\": \"Contested\",", "\"_comment\": \"公共区\",\n      \"Zone\": \"Contested\",", StringComparison.Ordinal);
+        Assert.NotEqual(canonical, withComments);
+        Assert.Contains("_comment", withComments, StringComparison.Ordinal);
+
+        MapData loaded = MapFile.FromJson(withComments);
+
+        Assert.Equal(canonical, MapFile.ToJson(loaded));
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", ".."));
 }

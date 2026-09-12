@@ -22,6 +22,7 @@
 - [ ] `dotnet build` 零警告（`TreatWarningsAsErrors` 已开）
 - [ ] `dotnet test` 全绿
 - [ ] 本次涉及的每个 Scenario 都有对应测试，测试名可追溯到 Requirement 名
+- [ ] 每个新守门测试都做过变异验证并有记录（见 [测试组织](./testing.md)）
 - [ ] 没有引入 `double` / `float` 参与任何计分或倍率计算
 - [ ] 没有第二处邻接遍历、第二处坐标映射、第二套覆盖语义
 - [ ] `Siege.Core` / `Siege.Sim` 没有出现 `Godot.*`

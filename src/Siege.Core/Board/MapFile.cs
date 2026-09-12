@@ -17,6 +17,8 @@ public static class MapFile
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
+        // 设计师手写的键名大小写不必与 DTO 一致；未知字段（如 _comment）保持宽容，不启用 Disallow。
+        PropertyNameCaseInsensitive = true,
         Converters = { new JsonStringEnumConverter() },
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
