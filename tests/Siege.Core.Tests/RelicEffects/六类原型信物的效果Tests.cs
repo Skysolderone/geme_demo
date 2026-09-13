@@ -1,0 +1,77 @@
+using Siege.Core.Board;
+using Siege.Core.Relics;
+
+namespace Siege.Core.Tests.RelicEffectsSpec;
+
+/// <summary>规格：relic-effects —— Requirement: 六类原型信物的效果</summary>
+public class 六类原型信物的效果Tests
+{
+    [Fact]
+    public void 军令提高部署上限()
+    {
+        // 设计文档 §8.1：控制 1 枚普通军令，基础部署上限 3 → 下一次快照 4。
+        // 变异验证 M-E2：BuildSnapshot 把 Command 分支并入 Depot → 红 5，含本测试。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
+        board.Place("E7", TestMaps.P0);
+        ledger.Settle(board, 1);
+
+        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, 1);
+
+        Assert.Equal(4, snapshot.DeployLimit);
+        Assert.Equal((5, 3, 5), (snapshot.RevealCount, snapshot.FreePickCount, snapshot.TypeSlots));
+    }
+
+    [Fact]
+    public void 高阶结构信物()
+    {
+        // 控制 1 枚效果 +2 的兵站，基础手牌类型槽 5 → 7。
+        // 变异验证 M-E3：BuildSnapshot 各分支改 `+= 1` → 红 4，含本测试。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Depot(2)));
+        board.Place("E6", TestMaps.P0);
+        ledger.Settle(board, 1);
+
+        Assert.Equal(7, ledger.SnapshotFor(TestMaps.P0, board, 0, 1).TypeSlots);
+    }
+
+    [Theory]
+    [InlineData(RelicType.Prospecting, 6, 3, 5, 3)]
+    [InlineData(RelicType.Conscription, 5, 4, 5, 3)]
+    [InlineData(RelicType.Depot, 5, 3, 6, 3)]
+    [InlineData(RelicType.Command, 5, 3, 5, 4)]
+    [InlineData(RelicType.Vanguard, 5, 3, 5, 3)]
+    public void 效果映射(RelicType type, int reveal, int freePick, int slots, int deploy)
+    {
+        // 探勘→展示数、征召→选取数、兵站→类型槽、军令→部署上限；先锋不进快照（另有先手修正读取）。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", new RelicContent(type, 1)));
+        board.Place("E7", TestMaps.P0);
+        ledger.Settle(board, 1);
+
+        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, 1);
+
+        Assert.Equal((reveal, freePick, slots, deploy), (snapshot.RevealCount, snapshot.FreePickCount, snapshot.TypeSlots, snapshot.DeployLimit));
+        Assert.Empty(snapshot.EmblemCounts);
+        Assert.Equal(type == RelicType.Vanguard ? 1 : 0, ledger.ReadInitiativeBonuses(board)[TestMaps.P0]);
+    }
+
+    [Fact]
+    public void 流派徽记绑定棋子类型并随内容揭示()
+    {
+        // 徽记 MUST 绑定一种具体棋子类型；绑定在生成时确定、随内容一同公开；效果是提高该类型的征募权重（§9.1：40 × (1 + 0.75) = 70 → 整数形式 40 × 7 = 280 / 4）。
+        Assert.Throws<ArgumentException>(() => new RelicContent(RelicType.SchoolEmblem, 1));
+        Assert.Throws<ArgumentException>(() => new RelicContent(RelicType.Command, 1, PieceType.Basic));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RelicContent(RelicType.Command, 3));
+
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Emblem(PieceType.Basic)));
+        board.Place("E6", TestMaps.P0);
+        ledger.Settle(board, 1);
+
+        RelicPublicState state = ledger.PublicStateOf(TestMaps.At("E7"));
+        Assert.Equal(PieceType.Basic, state.Content!.Value.EmblemPiece);
+        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, 1);
+        Assert.Equal(1, snapshot.EmblemCountOf(PieceType.Basic));
+        Assert.Equal(7, snapshot.EmblemWeightNumerator(PieceType.Basic));
+        Assert.Equal(280, snapshot.AdjustedWeight(PieceType.Basic, 40));
+        Assert.Equal(80, snapshot.AdjustedWeight(PieceType.Fortress, 20));
+        Assert.Equal((5, 3, 5, 3), (snapshot.RevealCount, snapshot.FreePickCount, snapshot.TypeSlots, snapshot.DeployLimit));
+    }
+}
