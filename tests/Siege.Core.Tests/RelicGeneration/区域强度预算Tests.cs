@@ -184,14 +184,16 @@ public class 区域强度预算Tests
     [Fact]
     public void 高风险区预算更高()
     {
-        // 预算 = 单格期望稀有度：出生区不升级为 600，公共区（含中央 / 咽喉旁的 High 档）按 20% 升级为 720，严格更高。
+        // 预算 = 单格期望稀有度：出生区不升级为 600，Standard 档按 15% 升级为 690，High 档（中央 / 咽喉旁）按 30% 升级为 780，逐级严格更高。
         // 交叉检查：基准图 High 档信物格都在公共区；2000 个种子下 High 档格的平均稀有度严格高于出生区格。
         // 变异验证 M-G14：BudgetOf 对 High 返回 baseline（不乘升级率）→ 红 1（本测试）。
         RelicGenerationOptions options = RelicGenerationOptions.Default;
         Assert.True(options.BudgetOf(BudgetTier.High) > options.BudgetOf(BudgetTier.Birth));
         Assert.True(options.BudgetOf(BudgetTier.Standard) > options.BudgetOf(BudgetTier.Birth));
         Assert.Equal(600, options.BudgetOf(BudgetTier.Birth));
-        Assert.Equal(720, options.BudgetOf(BudgetTier.High));
+        Assert.Equal(690, options.BudgetOf(BudgetTier.Standard));
+        Assert.Equal(780, options.BudgetOf(BudgetTier.High));
+        Assert.True(options.BudgetOf(BudgetTier.High) > options.BudgetOf(BudgetTier.Standard));
 
         Coord[] highCells = [.. Map.RelicCells.Where(kv => kv.Value.Budget == BudgetTier.High).Select(kv => kv.Key)];
         Assert.NotEmpty(highCells);
@@ -219,7 +221,7 @@ public class 区域强度预算Tests
         }
 
         Assert.True(highRarity / highCount > birthRarity / birthCount, $"High 档均值 {highRarity / highCount} 未高于出生区 {birthRarity / birthCount}");
-        // 预算就是单格期望稀有度：High 档 4000 样本的均值应落在 720 附近（±40，约 5 个标准误）。
+        // 预算就是单格期望稀有度：High 档 4000 样本的均值应落在 780 附近（±40，约 5 个标准误）。
         // 不升级（或升级不按 2 倍计稀有度）时均值退化为 600，本断言红——只比较「High > 出生区」守不住这一点，因为校正后的出生区均值本就低于 600。
         Assert.InRange(highRarity / highCount, options.BudgetOf(BudgetTier.High) - 40, options.BudgetOf(BudgetTier.High) + 40);
     }
