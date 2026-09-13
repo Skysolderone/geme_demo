@@ -81,3 +81,4 @@
 - **遥测峰值字段**（来自 territory-power 的 check）：`PowerScoreboard.Peak` 记的是倍增子数量 n（倍率单调，等价于倍率峰值），但没记该串当时的军势值，也没有"峰值串被摧毁"信号。§17 要"高倍率棋串的形成轮次、峰值及被摧毁概率"，建议给 `MultiplierPeak` 加 `Power` 字段，并在每次 `Recalculate` 后比对 `Latest` 中是否仍有包含 `Peak.Stones` 的同主棋串。
 - **覆盖表分配**：`CoverageMap.Compute` 每个被覆盖格分配一个 `HashSet<PlayerId>`，批量跑局下每次重算约百次分配。按 `boundaries.md`"先实测再优化"，Sim 有单局耗时数据后再决定是否改为按 `PlayerId` 位掩码。
 - **信物生成的校准项**（来自 relic-system 的 check）：8% 稀有度容差下，出生区先锋/军令占比约 0.8%/3.7%（权重表 5%/7%），探勘约 36%（权重表 20%），24% 的种子走"未收敛"兜底。§17 分析"出生区随机资源是否造成显著胜率差异"时要把这三个数当作已知输入，并统计未收敛局与收敛局的胜率差异。
+- **AI 只能拿只读公开接口**（来自 recruit-hand 的 check）：`HandLedger.AccessFor(PlayerId)` 是 public，持有账本引用者可拿到任何玩家的私有句柄。D6 信息边界成立的前提是流程层只把 `PlayerHandAccess`（自己的）+ `HandPublicView`（他人的）交给 AI。本任务必须定义一个只含公开成员的读取接口给正式 AI，不传 `HandLedger` / `RelicLedger` 本体；调试 AI 走 `internal` 旁路。

@@ -87,3 +87,4 @@
 
 - **盘面快照发布模型**（来自 batch-deployment 的 check）：结算写入是 `Place`×n + 一次 `RemoveStones`，单线程下观察者只能看到前/后两态；但若表现层或 AI 在另一线程直接读权威盘面，会看到逐格写入的中间态。裁决方向：游戏线程结算完成后发布不可变快照（`Clone()` 或 `Serialize()`），表现层只消费快照，不直接读权威盘面（与 `boundaries.md`"表现层只消费预演结果"一致）。若将来确需跨线程原子发布，在 board-core 加"构造新数组后交换引用"的 `ApplyBatch` 即可，批次层 API 不用动。本任务定线程模型时一并裁决。
 - **势力名次的并列口径**（来自 territory-power 的 check）：`RankGroup(Rank, Power, Players)` 当前 `Rank` 是竞争名次（1、1、3），稠密名次（1、1、2）可由下标推出，信息无损。§11.2 `先手值 = 参赛人数 − 势力名次` 对并列后一名玩家在两种口径下相差 1，**本任务必须裁决用哪种**；选稠密时 scoring 层无需改代码。
+- **小回合开始的三次跨层调用**（来自 recruit-hand 的 check）：`held = hand.HeldTypeCount(p)` → `snap = relics.SnapshotFor(p, board, roster, held, round)` → `hand.BeginTurn(p, snap)`。`HeldTypeCount` 进快照是 relic-effects 基线规格的 SHALL，hand 层只做一致性守门。本任务把这三次调用封成一个流程层函数，集中在一处；是否从快照里去掉 `HeldTypeCount`（需改已归档基线）在接线时评估。
