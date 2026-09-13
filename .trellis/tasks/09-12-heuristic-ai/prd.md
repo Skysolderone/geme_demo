@@ -75,3 +75,8 @@
 - 不实现玩家面向的 AI 难度 UI → `add-tactical-ui`。
 - 不实现局外成长、带入带出的数据分析。
 - 不在本 change 内直接修改玩法数值；本 change 只负责测量与报告。
+
+## 从上游带来的待决项
+
+- **遥测峰值字段**（来自 territory-power 的 check）：`PowerScoreboard.Peak` 记的是倍增子数量 n（倍率单调，等价于倍率峰值），但没记该串当时的军势值，也没有"峰值串被摧毁"信号。§17 要"高倍率棋串的形成轮次、峰值及被摧毁概率"，建议给 `MultiplierPeak` 加 `Power` 字段，并在每次 `Recalculate` 后比对 `Latest` 中是否仍有包含 `Peak.Stones` 的同主棋串。
+- **覆盖表分配**：`CoverageMap.Compute` 每个被覆盖格分配一个 `HashSet<PlayerId>`，批量跑局下每次重算约百次分配。按 `boundaries.md`"先实测再优化"，Sim 有单局耗时数据后再决定是否改为按 `PlayerId` 位掩码。
