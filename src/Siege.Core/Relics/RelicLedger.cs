@@ -89,6 +89,34 @@ public sealed class RelicLedger
         return revealed.ToImmutable();
     }
 
+    /// <summary>
+    /// 导出账本中<b>不能由种子重算</b>的部分供存档：揭示事件（含发生的大回合）与部署上限峰值遥测。
+    /// 信物内容由 <see cref="Generation"/> 的种子重新生成；控制状态是派生量，恢复后按盘面重算。
+    /// </summary>
+    public RelicLedgerState ExportState() =>
+        new([.. _reveals.Select(e => new RevealedRelic(e.Coord.ToNotation(), e.MajorRound))], DeployLimitPeak);
+
+    /// <summary>从生成记录 + <see cref="ExportState"/> 的结果恢复账本。揭示按存档顺序重放；存档里出现非信物格即视为损坏。</summary>
+    public static RelicLedger Restore(RelicGenerationRecord generation, RelicLedgerState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var ledger = new RelicLedger(generation);
+        foreach (RevealedRelic revealed in state.Revealed)
+        {
+            Coord coord = Coord.Parse(revealed.Coord);
+            if (!ledger._relics.TryGetValue(coord, out RelicState? relic))
+            {
+                throw new FormatException($"存档中的揭示记录指向非信物格 {revealed.Coord}。");
+            }
+
+            relic.MarkRevealed(revealed.MajorRound);
+            ledger._reveals.Add(new RelicRevealEvent(coord, relic.Content, revealed.MajorRound));
+        }
+
+        ledger.DeployLimitPeak = state.DeployLimitPeak;
+        return ledger;
+    }
+
     /// <summary>无名册重载：盘面上的全部玩家视为参赛中。只适用于尚无流程层状态的单元测试；正式对局 MUST 走带名册的重载。</summary>
     public void RecalculateControl(GameBoard board)
     {
