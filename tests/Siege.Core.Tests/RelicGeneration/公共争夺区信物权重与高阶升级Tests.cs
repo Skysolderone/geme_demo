@@ -17,7 +17,8 @@ public class 公共争夺区信物权重与高阶升级Tests
         // 每一类（含流派徽记）单独统计也都在 [17%, 23%]——徽记若被排除在升级之外，其升级率为 0，本测试红。
         // 同时验证公共区权重表 30/15/10/15/15/15（±1 个百分点）。
         // 变异验证 M-G6：Draw 里 `type == SchoolEmblem ? 1 : 升级判定`（20% 只对五类）→ 红 1（本测试，徽记升级率 0）；
-        // M-G7：StandardUpgradePermille 默认改 300 → 红 1（本测试）。
+        // M-G7：两档升级率同时改 300 → 红 1（本测试，总体超 21%）。
+        // 两档默认为 Standard 150‰ / High 300‰，基准图 4:2 分布下公共区均值恰为 20%；分档差异由 `高档升级率严格高于标准档` 守门。
         int[] counts = new int[RelicWeights.Order.Length];
         int[] advanced = new int[RelicWeights.Order.Length];
         int total = 0;
@@ -49,6 +50,38 @@ public class 公共争夺区信物权重与高阶升级Tests
         }
 
         Assert.InRange(advanced.Sum() * 1000 / total, 190, 210);
+    }
+
+    [Fact]
+    public void 高档升级率严格高于标准档()
+    {
+        // 负责人裁决（2026-09-13）：Standard 150‰ / High 300‰。§3.3 要求中央、咽喉与高风险边缘承担更高的信物强度预算，
+        // 此前两档都是 200‰，High 在生成结果里是空操作。基准图 F4/F8 为 High，D4/H4/D8/H8 为 Standard。
+        // 变异验证：两档改回同为 200 → 本测试红（High 落到 [17,23]%，不在 [27,33]%）。
+        int standardTotal = 0, standardAdvanced = 0, highTotal = 0, highAdvanced = 0;
+        for (ulong seed = 0; seed < 10000; seed++)
+        {
+            foreach (RelicPlacement p in RelicGenerator.Generate(Map, new GameSeed(seed)).Placements)
+            {
+                switch (p.Spec.Budget)
+                {
+                    case BudgetTier.Standard:
+                        standardTotal++;
+                        standardAdvanced += p.Content.IsAdvanced ? 1 : 0;
+                        break;
+                    case BudgetTier.High:
+                        highTotal++;
+                        highAdvanced += p.Content.IsAdvanced ? 1 : 0;
+                        break;
+                }
+            }
+        }
+
+        Assert.Equal(40000, standardTotal);
+        Assert.Equal(20000, highTotal);
+        Assert.InRange(standardAdvanced * 1000 / standardTotal, 130, 170);
+        Assert.InRange(highAdvanced * 1000 / highTotal, 270, 330);
+        Assert.True(highAdvanced * 1000 / highTotal > standardAdvanced * 1000 / standardTotal);
     }
 
     [Fact]

@@ -26,10 +26,10 @@ public sealed record RelicGenerationOptions
     public int SameTypePenaltyPermille { get; init; } = 500;
 
     /// <summary>公共区标准档升级概率（千分比），裁决记录 1：六类统一。</summary>
-    public int StandardUpgradePermille { get; init; } = 200;
+    public int StandardUpgradePermille { get; init; } = 150;
 
     /// <summary>公共区高档升级概率（千分比）。规格只要求公共区约 20% 且严格高于出生区，默认与标准档相同。</summary>
-    public int HighUpgradePermille { get; init; } = 200;
+    public int HighUpgradePermille { get; init; } = 300;
 
     /// <summary>某预算档位的升级概率。出生区 MUST NOT 生成高阶，恒为 0。</summary>
     public int UpgradePermilleOf(BudgetTier tier) => tier switch

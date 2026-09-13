@@ -82,3 +82,11 @@ dotnet test --filter "FullyQualifiedName~<Capability>"
 - [x] `prd.md` 的验收项与 `openspec/changes/add-relic-system/specs/` 的 Requirement 一一对应
 - [x] `implement.jsonl` / `check.jsonl` 已填入真实规格条目
 - [x] 前置任务已完成或其契约已可用（见 `prd.md` 的 Dependencies）
+
+## 收尾记录（trellis 流程）
+
+- implement（`trellis-implement`）：Determinism 2 文件 + Relics 8 文件，59 条测试，29 次变异全中。
+- check（`trellis-check`）：6 条 API 判断全部核实（含独立复算 10000 种子统计）；补 3 处 0 红守门缺口、修 `EffectSnapshot` 值相等、障碍格揭示失败时机；参考向量对齐 SplitMix64/xoshiro256** 公开值；自做 9 条变异。
+- 负责人裁决：D1 重抽策略保持；升级率改 Standard 150‰ / High 300‰（主会话改常量 + 守门测试 + 变异验证）。
+- 平衡事实（需知情）：8% 容差下出生区先锋/军令占比约 0.8%/3.7%，24% 种子走未收敛兜底——记入 heuristic-ai 的 §17 校准项。
+- 最终：332 个测试全绿，零警告。
