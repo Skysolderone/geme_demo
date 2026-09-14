@@ -1,0 +1,6 @@
+{"file": "openspec/changes/round-cap/specs/elimination-endgame/spec.md", "reason": "验收基准：两条 Requirement 共 12 个 Scenario 都必须有同名通过测试"}
+{"file": "openspec/changes/round-cap/specs/match-setup/spec.md", "reason": "验收基准：2 个 Scenario"}
+{"file": "openspec/changes/round-cap/design.md", "reason": "核对 D1–D5：检查点唯一、条件 1–3 优先、上限进配置、初值 15、不收敛口径切换；时序陷阱是否钉住"}
+{"file": "openspec/changes/round-cap/tasks.md", "reason": "实现清单对账"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "核对 §12.3 §18.2 是否已改、变更记录是否与 cap-multiplier 共用"}
+{"file": ".trellis/spec/core/testing.md", "reason": "持久化守门两条腿、变异验证记录"}

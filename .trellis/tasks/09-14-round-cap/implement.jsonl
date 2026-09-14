@@ -1,0 +1,10 @@
+{"file": "openspec/changes/round-cap/design.md", "reason": "决策 D1–D5、接口契约、时序陷阱与建议裁决；实现前必读"}
+{"file": "openspec/changes/round-cap/specs/elimination-endgame/spec.md", "reason": "ADDED「大回合上限终局」6 个 Scenario 与 MODIFIED「终局名次与并列判定」，逐条对应测试用例"}
+{"file": "openspec/changes/round-cap/specs/match-setup/spec.md", "reason": "对局配置公开大回合上限的 2 个 Scenario"}
+{"file": "openspec/changes/round-cap/proposal.md", "reason": "动机与 Non-goals（不是固定轮数）"}
+{"file": "openspec/specs/elimination-endgame/spec.md", "reason": "当前基线：三类终局条件与名次规则；既有 Scenario 必须原样通过"}
+{"file": "openspec/changes/archive/2026-09-14-add-match-flow/design.md", "reason": "match-flow 的裁决记录（单线程快照发布、裁决 6 保护期 Pass）；终局检查与存档的既有设计"}
+{"file": "openspec/changes/archive/2026-09-14-add-heuristic-ai/design.md", "reason": "裁决 13、15：跑局层 MaxMajorRounds 的来历与不收敛口径；本 change 要把它规则化"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文 §12.3 §13.1 §16 §18.2；4.x 要改它"}
+{"file": ".trellis/spec/core/testing.md", "reason": "持久化守门两条腿、变异验证记录、算例出处"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "存档往返、随机子流不受影响"}

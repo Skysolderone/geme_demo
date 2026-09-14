@@ -1,0 +1,8 @@
+{"file": "openspec/changes/cap-multiplier/design.md", "reason": "决策 D1–D5、接口契约与建议裁决；实现前必读"}
+{"file": "openspec/changes/cap-multiplier/specs/power-score/spec.md", "reason": "能力 power-score 的 MODIFIED Requirement 与 10 个 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/cap-multiplier/proposal.md", "reason": "动机与 Non-goals，界定不做的事"}
+{"file": "openspec/specs/power-score/spec.md", "reason": "当前基线规格；既有三个算例必须原样通过"}
+{"file": "openspec/changes/archive/2026-09-14-add-heuristic-ai/design.md", "reason": "裁决 6、13、15：遥测峰值字段、不收敛先量后改、基线推迟；本 change 的实测依据"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文 §9.2 §10.1 §16；算例来源；3.x 要改它并升 v1.1"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "禁止浮点、Int128 checked；封顶后溢出守门的改写依据"}
+{"file": ".trellis/spec/core/testing.md", "reason": "算例必须来自设计文档；新守门测试必须做变异验证并记录"}

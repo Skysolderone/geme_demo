@@ -1,0 +1,6 @@
+{"file": "openspec/changes/cap-multiplier/specs/power-score/spec.md", "reason": "验收基准：power-score 两条 Requirement 的每个 Scenario 都必须有同名通过测试"}
+{"file": "openspec/changes/cap-multiplier/design.md", "reason": "核对实现是否遵循 D1–D5（指数封顶而非结果封顶、单一常量、明细双字段、单一实现、设计文档 v1.1）"}
+{"file": "openspec/changes/cap-multiplier/tasks.md", "reason": "实现清单对账"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "核对 §9.2 §10.1 是否已改、示例是否保留、变更记录是否存在"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "计分路径零浮点、checked 未被删除"}
+{"file": ".trellis/spec/core/testing.md", "reason": "变异验证记录、算例出处"}
