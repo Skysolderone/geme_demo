@@ -236,6 +236,58 @@ public sealed class GameBoard
     }
 
     /// <summary>
+    /// 从 <see cref="Serialize"/> 的输出恢复盘面：先按地图静态校验创建空盘，再逐格写入占用。
+    /// 这是类型码 ↔ <see cref="PieceType"/> 映射的反向实现，与 <see cref="TypeCode"/> 同在一处，MUST NOT 在别处再写一份。
+    /// 格数、行数或类型码与地图不符即视为存档损坏，抛 <see cref="FormatException"/>。
+    /// </summary>
+    public static GameBoard Restore(MapData map, string serialized)
+    {
+        GameBoard board = Load(map);
+        board.Fill(serialized);
+        return board;
+    }
+
+    /// <summary>跳过静态校验的恢复。<b>仅供单元测试</b>在合成小盘面上做存档往返。</summary>
+    internal static GameBoard RestoreUnvalidated(MapData map, string serialized)
+    {
+        GameBoard board = LoadUnvalidated(map);
+        board.Fill(serialized);
+        return board;
+    }
+
+    private void Fill(string serialized)
+    {
+        ArgumentNullException.ThrowIfNull(serialized);
+        string[] rows = serialized.Trim().Split('/');
+        if (rows.Length != Height)
+        {
+            throw new FormatException($"盘面序列化行数 {rows.Length} 与地图高度 {Height} 不符。");
+        }
+
+        for (int y = 0; y < Height; y++)
+        {
+            string row = rows[y];
+            if (row.Length != Width * 2)
+            {
+                throw new FormatException($"盘面序列化第 {y + 1} 行长度 {row.Length} 与地图宽度 {Width} 不符。");
+            }
+
+            for (int x = 0; x < Width; x++)
+            {
+                char ownerCode = row[x * 2];
+                char typeCode = row[(x * 2) + 1];
+                if (ownerCode == '-' && typeCode == '-')
+                {
+                    continue;
+                }
+
+                int owner = Convert.ToInt32(ownerCode.ToString(), 16);
+                Place(new Coord(x, y), new PlayerId(owner), TypeFromCode(typeCode));
+            }
+        }
+    }
+
+    /// <summary>
     /// 最小写入原语：把棋子放到指定格。<b>不做任何规则判定</b>——
     /// 合法性预演、同时提子与结算顺序由批次结算层负责。
     /// </summary>
@@ -292,6 +344,16 @@ public sealed class GameBoard
                 nameof(c), c.ToNotation(), $"坐标超出棋盘范围（{Width}×{Height}）。");
         }
     }
+
+    private static PieceType TypeFromCode(char code) => code switch
+    {
+        'B' => PieceType.Basic,
+        'F' => PieceType.Fortress,
+        'L' => PieceType.Line,
+        'M' => PieceType.Multiplier,
+        'S' => PieceType.Synergy,
+        _ => throw new FormatException($"未知棋子类型码：'{code}'。"),
+    };
 
     private static char TypeCode(PieceType type) => type switch
     {

@@ -52,6 +52,23 @@ public sealed class RandomStream
         return result;
     }
 
+    /// <summary>
+    /// 丢弃接下来的 <paramref name="count"/> 个 64 位随机数，把子流推进到与「已消费 <paramref name="count"/> 次」完全相同的状态。
+    /// 存档只记录各子流的消费次数，恢复时从头派生再推进——不持久化内部状态，序列算法升级时旧存档的语义仍清晰。
+    /// </summary>
+    public void Advance(long count)
+    {
+        if (count < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count), count, "推进次数不得为负。");
+        }
+
+        for (long i = 0; i < count; i++)
+        {
+            NextUInt64();
+        }
+    }
+
     /// <summary>等概率整数 <c>[0, maxExclusive)</c>。用拒绝采样消除取模偏差；拒绝区极小，且拒绝与否同样由种子决定。</summary>
     public int NextInt(int maxExclusive)
     {

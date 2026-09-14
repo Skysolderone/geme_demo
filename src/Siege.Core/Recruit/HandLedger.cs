@@ -268,6 +268,57 @@ public sealed class HandLedger
         state.Resigned = true;
     }
 
+    // ---------- 持久化（小回合边界） ----------
+
+    /// <summary>
+    /// 导出账本状态供对局存档。只允许在<b>小回合边界</b>（全部玩家 <see cref="TurnPhase.Idle"/>）调用：
+    /// 此时每条两段账的「本轮新增」必为 0，手牌只剩基数；进行中的面板与选取不在导出范围内。
+    /// 征募记录是遥测，不随存档往返；<c>recruit</c> 子流只记录消费次数，恢复时从头派生再推进。
+    /// </summary>
+    public HandLedgerState Export()
+    {
+        ImmutableArray<PlayerHandState>.Builder players = ImmutableArray.CreateBuilder<PlayerHandState>(_players.Count);
+        foreach ((PlayerId player, PlayerState state) in _players)
+        {
+            if (state.Phase != TurnPhase.Idle)
+            {
+                throw new SiegeRuleException($"玩家 {player} 正处于小回合（阶段 {state.Phase}），账本只能在小回合边界导出。");
+            }
+
+            ImmutableArray<HandStockEntry> hand = [.. state.Hand.Select(kv => new HandStockEntry(kv.Key, kv.Value.Total))];
+            players.Add(new PlayerHandState(player.Value, hand, state.Resigned));
+        }
+
+        return new HandLedgerState(players.MoveToImmutable(), _recruit.Consumed, _sequence);
+    }
+
+    /// <summary>从 <see cref="Export"/> 的结果恢复账本：手牌全部计入基数，<c>recruit</c> 子流推进到相同消费位置。</summary>
+    public static HandLedger Restore(GameSeed seed, HandLedgerState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var ledger = new HandLedger(state.Players.Select(p => new PlayerId(p.Player)), seed);
+        foreach (PlayerHandState saved in state.Players)
+        {
+            PlayerState target = ledger._players[new PlayerId(saved.Player)];
+            target.Hand.Clear();
+            foreach (HandStockEntry entry in saved.Hand)
+            {
+                if (entry.Count <= 0)
+                {
+                    throw new FormatException($"存档中玩家 P{saved.Player} 的{BatchFailure.DisplayName(entry.Type)}数量 {entry.Count} 不合法。");
+                }
+
+                target.Hand[entry.Type] = new HandEntry(entry.Count, 0);
+            }
+
+            target.Resigned = saved.Resigned;
+        }
+
+        ledger._recruit.Advance(state.RecruitConsumed);
+        ledger._sequence = state.Sequence;
+        return ledger;
+    }
+
     // ---------- 玩家私有操作（经 PlayerHandAccess / HandDebugAccess 到达） ----------
 
     internal HandPrivateView PrivateViewOf(PlayerId player)
