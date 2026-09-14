@@ -39,7 +39,7 @@ add-board-core
 
 ## 已确认的关键裁决
 
-38 条 Open Question 已全部裁决，完整记录在各 change 的 `design.md` 末尾"裁决记录（已确认）"一节。其中影响面最大的几条：
+50 条 Open Question 已全部裁决，完整记录在各 change 的 `design.md` 末尾"裁决记录（已确认）"一节。其中影响面最大的几条：
 
 | 裁决 | 出处 | 影响 |
 |---|---|---|
