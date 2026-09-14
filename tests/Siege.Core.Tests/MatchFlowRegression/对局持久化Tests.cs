@@ -15,18 +15,22 @@ public class 对局持久化Tests
         // 阶段、顺序、大回合、保护状态、Pass 计数、出局 / 弃赛状态、已提交盘面历史、信物揭示、手牌、弃赛快照、先手明细全部往返；
         // 恢复后继续同样的决策（含征募抽取）产出逐字节相同的存档——三条随机子流的消费位置也被正确恢复。
         // 变异验证 M-P1：Serialize 不写 PassStreak → 红 1；M-P2：HandLedger.Restore 不推进 recruit 子流 → 红 1（续跑后面板不同）。
+        // check 修正：原用例让 P2 在第 1 大回合也落了 B8，之后 P0 落 E5/C3 碰不到 B8，P2 盘面非空、按 spec「两个条件都满足才出局」
+        // 不该出局，于是 P2 仍占第 5 大回合的行动位、大回合停在 5——是用例前提错，不是推进逻辑错。改为 P2 首轮 Pass（盘面始终为空）。
         MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command()), ("C3", RelicFixtures.Vanguard())]);
-        string[] cell = ["B2", "H2", "B8", "H8"];
+        string?[] cell = ["B2", "H2", null, "H8"];
         for (int i = 0; i < 4; i++)
         {
-            match.PlayTurn(cell[match.CurrentPlayer!.Value.Value]);
+            string? c = cell[match.CurrentPlayer!.Value.Value];
+            _ = c is null ? match.PassTurn() : match.PlayTurn(c);
         }
 
         match.AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
         match.Debug.SeedHand(MatchFixtures.P2);
         match.Resign(MatchFixtures.P3);
-        match.PlayTurn("E5", "C3");   // P0：控制军令与先锋，P2 出局
-        match.PassTurn();             // P1 → 大回合结束，第 6 大回合顺序 [P0, P1]
+        match.PlayTurn("E5", "C3");   // P0：控制军令与先锋；结算后出局检查让盘面与手牌皆空、保护已解除的 P2 出局
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P2).Status);
+        match.PassTurn();             // P1 → 出局 / 弃赛者被跳过，大回合结束，第 6 大回合顺序 [P0, P1]
         Assert.Equal(6, match.MajorRound);
         Assert.Equal(1, match.PassStreak);
 
@@ -54,7 +58,8 @@ public class 对局持久化Tests
             restored.Resignations.Select(r => (r.Player, r.Board, r.Hand, r.Effects, r.Power, r.ControlledRelics.Notations())));
         Assert.Equal(match.InitiativeReports.Select(r => r.NextOrder), restored.InitiativeReports.Select(r => r.NextOrder));
         Assert.Equal(match.InitiativeReports.SelectMany(r => r.Entries), restored.InitiativeReports.SelectMany(r => r.Entries));
-        Assert.Equal(match.Scoreboard.Latest!.Players, restored.Scoreboard.Latest!.Players);
+        // PlayerPower 含 ImmutableArray 字段，record 相等退化为数组引用比较，须按值投影比较。
+        Assert.Equal(PowerText(match), PowerText(restored));
         Assert.Equal(json, restored.Serialize());
 
         // 续跑：同样的决策 → 同样的面板、同样的存档
@@ -70,6 +75,15 @@ public class 对局持久化Tests
 
         Assert.Equal(match.Hands.Debug.PrivateViewOf(MatchFixtures.P0), restored.Hands.Debug.PrivateViewOf(MatchFixtures.P0));
         Assert.Equal(match.Serialize(), restored.Serialize());
+    }
+
+    private static string PowerText(MatchFlow m)
+    {
+        Scoring.PowerSnapshot s = m.Scoreboard.Latest!;
+        string players = string.Join(";", s.Players.Select(p =>
+            $"{p.Player}:{p.Status}:{p.Total}:[{string.Join(",", p.ExclusiveCells.Notations())}]:[{string.Join("|", p.Groups.Select(g => $"{string.Join(",", g.Stones.Notations())}={g.Power}"))}]"));
+        string ranking = string.Join(";", s.Ranking.Select(r => $"{r.Rank}:{r.Power}:{string.Join(",", r.Players.Order())}"));
+        return players + "\n" + ranking;
     }
 
     [Fact]

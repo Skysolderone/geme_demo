@@ -106,8 +106,9 @@ public class 主动弃赛Tests
         Assert.Equal(MatchFixtures.P3, snapshot.Player);
         Assert.Equal(5, snapshot.MajorRound);
         Assert.Equal(boardBefore, snapshot.Board);
-        Assert.Equal(50, snapshot.Hand.CountOf(PieceType.Basic) + snapshot.Hand.PendingGained - snapshot.Hand.PendingGained + snapshot.Hand.EntryOf(PieceType.Basic).Gained - snapshot.Hand.EntryOf(PieceType.Basic).Gained);
-        Assert.Equal(1, snapshot.Hand.PendingGained);
+        Assert.Equal(50, snapshot.Hand.EntryOf(PieceType.Basic).Carried);   // 回合前基数原样
+        Assert.Equal(1, snapshot.Hand.PendingGained);                        // 本轮新增 1 枚仍在账上，未被弃赛撤销
+        Assert.Equal(51, snapshot.Hand.TotalCount);
         Assert.Equal(MatchFixtures.P3, snapshot.Effects.Player);
         Assert.Equal(4, snapshot.Effects.DeployLimit);   // 控制军令 +1
         Assert.Equal(new[] { "H8" }, snapshot.ControlledRelics.Notations());

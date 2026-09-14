@@ -48,6 +48,38 @@ board-core 阶段先后被自审（`邻接实现唯一`，提交 25b5f4d）与 `
 
 在测试的注释或提交信息里写清：改了实现哪一行、改成什么、红了几个。没有记录的变异验证等于没做。
 
+### 红测变绿后必须整段复审
+
+一条测试的第一个红断言会挡住后面所有断言，后面那些**从未被执行过**。match-flow 的 `小回合边界存档恢复后状态完全一致` 修好第 30 行的前提错误后，第 61 行才暴露出一个恒假断言（见下）。规则：修红测不是"让它绿"，而是把该测试从头到尾当新测试审一遍，并对新暴露的断言补变异验证。
+
+同类根因：测试注释里"P0 落 E5 使 P2 出局"这种**因果声明必须用断言钉住**（`Assert.Equal(PlayerStatus.Eliminated, match.StateOf(P2).Status)`），否则前提错了（P2 其实在 B8 还有子）只会在很远的下游断言以莫名其妙的数字失败。
+
+## 持久化守门
+
+### 含 `ImmutableArray` 的 record 不能直接 `Assert.Equal`
+
+`ImmutableArray<T>` 是结构体，但它的 `Equals` 是**底层数组引用相等**。所以任何含 `ImmutableArray` 字段的 record（`PlayerPower`、`PowerSnapshot` 等）在 `Assert.Equal(a, b)` 下对两个独立构造的等值对象**恒假**，而对同一对象引用恒真——两种情况都不是在守门。
+
+```csharp
+// 恒假：Players 里的 ExclusiveCells / Groups 是 ImmutableArray
+Assert.Equal(match.Scoreboard.Latest!.Players, restored.Scoreboard.Latest!.Players);
+
+// 正确：投影成值再比
+Assert.Equal(PowerText(match), PowerText(restored));   // 把每个字段拼成确定性字符串
+```
+
+规则：比较持久化前后的复合对象，一律投影成基本值/字符串/序列后比较；`Assert.Equal(json, restored.Serialize())` 这种逐字节比对可以并列做，但不能替代字段级比对（见下一条）。
+
+### "存档→恢复→再存档逐字节相等"抓不到漏字段
+
+`Serialize` 漏写一个字段（变异 M-C4：不写 `Protection`），恢复对象的该字段就是默认值，再次 `Serialize` 仍然不写它——两份 JSON 逐字节相等，百局往返测试全绿。只有拿**活对象**的字段和**恢复对象**的字段逐个比才会红。持久化守门测试必须两条腿都有：
+
+| 断言 | 抓什么 |
+|---|---|
+| `Assert.Equal(match.X, restored.X)` 逐字段（含私有视图、子流消费位置） | 漏写 / 漏读某个字段 |
+| `Assert.Equal(match.Serialize(), restored.Serialize())` | 恢复过程本身引入的差异 |
+| 恢复后**续跑同样决策**，再比一次面板与存档 | 随机子流位置、快照等"存起来了但没用上"的状态 |
+
 ## 强制回归
 
 下列测试是硬约束，不得以"太慢"为由跳过：
