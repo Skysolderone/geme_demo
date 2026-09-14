@@ -27,6 +27,7 @@ public static class Program
             var cli = new CommandLine(args.Skip(1));
             return args[0] switch
             {
+                "play" => Play(cli),
                 "map" => ExportMap(),
                 "run" => Run(cli),
                 "replay" => Replay(cli),
@@ -51,12 +52,31 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
+        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限>]");
         Console.WriteLine("  Siege.Sim map");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限，0=不限>]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
+    }
+
+    // ---------- play ----------
+
+    private static int Play(CommandLine cli)
+    {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        Console.InputEncoding = System.Text.Encoding.UTF8;
+        ulong? seed = cli.Has("seed") ? cli.GetUInt64("seed", 0) : null;
+        var difficulty = Enum.Parse<Core.Ai.AiDifficulty>(cli.Get("difficulty", "Standard"), ignoreCase: true);
+        return Siege.Sim.Play.PlayCommand.Run(
+            seed,
+            cli.GetInt("players", 4),
+            cli.GetInt("seat", 1),
+            difficulty,
+            cli.GetInt("max-rounds", Core.Match.MatchOptions.DefaultMaxMajorRounds),
+            Console.In,
+            Console.Out);
     }
 
     // ---------- map ----------
