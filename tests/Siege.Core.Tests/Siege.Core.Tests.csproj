@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Siege.Core\Siege.Core.csproj" />
+    <ProjectReference Include="..\..\src\Siege.Sim\Siege.Sim.csproj" />
   </ItemGroup>
 
 </Project>

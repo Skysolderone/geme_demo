@@ -3,8 +3,11 @@ using Siege.Core.Board;
 
 namespace Siege.Core.Scoring;
 
-/// <summary>遥测用：整局出现过的最高倍率及其首次出现的大回合序号（设计文档 §16 / §17）。这是遥测记录，不是分数，不参与任何计算。</summary>
-public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerId Player, ImmutableArray<Coord> Stones)
+/// <summary>
+/// 遥测用：整局出现过的最高倍率及其首次出现的大回合序号（设计文档 §16 / §17）。这是遥测记录，不是分数，不参与任何计算。
+/// <see cref="Power"/> 是该串峰值出现时的取整军势（heuristic-ai 裁决 6 的纯增量）；"峰值串被摧毁"由跑局日志层比对相邻快照算出，不进本层。
+/// </summary>
+public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerId Player, ImmutableArray<Coord> Stones, long Power)
 {
     /// <summary>峰值倍率的精确表示。</summary>
     public Multiplier Multiplier => new(MultiplierCount);
@@ -48,7 +51,7 @@ public sealed class PowerScoreboard
             {
                 if (group.MultiplierCount > 0 && (Peak is null || group.MultiplierCount > Peak.MultiplierCount))
                 {
-                    Peak = new MultiplierPeak(group.MultiplierCount, majorRound, player.Player, group.Stones);
+                    Peak = new MultiplierPeak(group.MultiplierCount, majorRound, player.Player, group.Stones, group.Power);
                 }
             }
         }

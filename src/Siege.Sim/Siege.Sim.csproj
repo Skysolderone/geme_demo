@@ -1,14 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Siege.Sim</RootNamespace>
+    <!-- 硬约束：批量跑局程序 MUST NOT 依赖 Godot（.trellis/spec/core/boundaries.md）。 -->
+    <NoGodotDependency>true</NoGodotDependency>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Siege.Core\Siege.Core.csproj" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+  <ItemGroup>
+    <!-- 测试需要直接驱动 MatchSession / 日志解析等 internal 接缝 -->
+    <InternalsVisibleTo Include="Siege.Core.Tests" />
+  </ItemGroup>
+
+  <!-- 编译期守门：与 Siege.Core 相同；真正兜底的是测试里对程序集实际引用的反射扫描。 -->
+  <Target Name="AssertNoGodotDependency" BeforeTargets="Build">
+    <Error Condition="$([System.String]::Copy('%(PackageReference.Identity)').StartsWith('Godot'))"
+           Text="Siege.Sim 不得引用 Godot 包：批量跑局必须能在无引擎环境下并行执行。" />
+    <Error Condition="$([System.String]::Copy('%(ProjectReference.Filename)').StartsWith('Godot'))"
+           Text="Siege.Sim 不得引用 Godot 项目：批量跑局必须能在无引擎环境下并行执行。" />
+  </Target>
 
 </Project>

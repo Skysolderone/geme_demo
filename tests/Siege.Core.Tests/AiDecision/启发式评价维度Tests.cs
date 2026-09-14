@@ -137,6 +137,7 @@ public class 启发式评价维度Tests
         //  1 . O . O .                                1 . . . O .
         //    A B C D E                                  A B C D E
         // 变异验证 M-A10：Analyze 判单点气时把"邻格是己方子"放宽为"邻格非空或为气"→ 红 1（本测试：死形的 A1/B1/C1 被误判为眼）。
+        // 变异验证 M-C2（check）：Score 里 TwoEyePotential × 6 改 × 0 → 红 1（本测试：活形与死形分差 < 12）。
         GameBoard living = TestMaps.Blank(9);
         foreach (string s in new[] { "B1", "A2", "B2", "C2", "D1", "D2" })
         {

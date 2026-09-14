@@ -13,6 +13,7 @@ public class 人工接管Tests
     {
         // 设计文档 §15.3：P1 的整理手牌阶段请求接管 → 征募与部署改由人工做出；P1 的 AI 本回合没有征募 / 部署决策；其他玩家不受影响。
         // 变异验证 M-A23：TakeOver 不调用 SetController → 红 2（本测试 + 交还后继续）。
+        // 变异验证 M-C3（check）：TakeOver 不写 _suspended → 红 3（本测试 IsTakenOver 为假、交还后继续、接管记录可追溯 两者 HandBack 抛出）。
         MatchFlow match = MatchFixtures.Started();
         match.Debug.SetOrder(AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3);
         var runner = new MatchRunner(match);

@@ -19,6 +19,7 @@ public class 正式对战AI的信息边界Tests
         // 且 AI 的类型化可达闭包里不存在 RelicLedger / RelicGenerationRecord / MatchFlow 等能读到真实内容的类型。
         // 变异验证 M-A1：给 HeuristicTurnController 加 `public RelicLedger? Leak { get; init; }` → 红 3（本测试、敌方手牌数量不可读、高难度不越权）。
         //（未用字段的写法会先撞 CS0169 警告即错误，编译期就被拦下。）
+        // 变异验证 M-C1（check）：给非根类型 BatchEvaluator 加 `public RelicGenerationRecord? Leak` 属性（经 CreateEvaluator 返回类型可达）→ 红 3（同上三条），证明闭包确实展开了非根类型的公开成员。
         MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command())]);
         HeuristicTurnController ai = HeuristicAi.Create(match, AiFixtures.P0);
 

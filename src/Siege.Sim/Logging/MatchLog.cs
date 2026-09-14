@@ -1,0 +1,518 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Siege.Sim.Config;
+
+namespace Siege.Sim.Logging;
+
+/// <summary>
+/// 一局的完整日志（design.md D5：事件流 + 每小回合快照）。文件格式为 JSON Lines：首行 <see cref="LogHeader"/>，
+/// 随后每小回合一条 <see cref="TurnSnapshot"/> 与若干 <see cref="LogEvent"/>，末行 <see cref="LogResult"/> 或 <see cref="LogFailure"/>。
+/// 日志是事后记录，允许含全部结果；AI 在跑局中仍只拿正式接口。
+/// </summary>
+/// <remarks>
+/// <para>设计文档 §17 七类记录 → 字段映射：</para>
+/// <list type="table">
+/// <item><term>1. 地图、种子、完整信物分布及揭示时间</term><description><see cref="LogHeader.MapId"/> / <see cref="LogHeader.Seed"/> / <see cref="LogHeader.Relics"/>（含真实内容）；揭示大回合在 <see cref="LogResult.RelicReveals"/>（未揭示为 <c>null</c>），过程中的揭示为 <c>Reveal</c> 事件</description></item>
+/// <item><term>2. 每轮征募候选、玩家选择、被 Pass 撤销的征募数</term><description><c>Recruit</c> 事件：<see cref="LogEvent.Detail"/> 为候选 / 选取 / 弃牌文本，<see cref="LogEvent.Values"/> 含 <c>Recruited</c> / <c>Revoked</c> / <c>Deployed</c>（私有量，来源玩家 = <see cref="LogEvent.Player"/>）</description></item>
+/// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
+/// <item><term>4. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
+/// <item><term>5. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>MultiplierCount</c> / <c>Power</c></description></item>
+/// <item><term>6. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（含达上限未终局）</description></item>
+/// <item><term>7. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
+/// </list>
+/// </remarks>
+public sealed class MatchLog
+{
+    public const int SchemaVersion = 1;
+
+    public required LogHeader Header { get; init; }
+
+    public List<TurnSnapshot> Turns { get; init; } = [];
+
+    public List<LogEvent> Events { get; init; } = [];
+
+    public LogResult? Result { get; set; }
+
+    public LogFailure? Failure { get; set; }
+
+    public ulong Seed => Convert.ToUInt64(Header.Seed, 16);
+
+    public bool IsFailed => Failure is not null;
+
+    /// <summary>本局是否用过调试 AI 或发生过人工接管（design.md D7：默认排除）。</summary>
+    public bool IsContaminated => (Result?.UsedDebugAi ?? Failure?.UsedDebugAi ?? false)
+        || (Result?.Takeovers.Count ?? Failure?.Takeovers.Count ?? 0) > 0;
+
+    /// <summary>文件名：失败局带 <c>failed</c>；压缩时加 <c>.gz</c>。</summary>
+    public string FileName => FileNameFor(compress: false);
+
+    public string FileNameFor(bool compress) => $"match-{Header.Seed}{(IsFailed ? "-failed" : string.Empty)}.jsonl{(compress ? ".gz" : string.Empty)}";
+
+    /// <summary>确定性文本：去掉全部耗时字段，用于串 / 并行与回放比对。</summary>
+    public string DeterministicText() => Serialize(withTiming: false);
+
+    /// <summary>完整文本（含耗时）。</summary>
+    public string FullText() => Serialize(withTiming: true);
+
+    private string Serialize(bool withTiming)
+    {
+        var sb = new System.Text.StringBuilder();
+        Append(sb, Header);
+        var events = new Queue<LogEvent>(Events);
+        foreach (TurnSnapshot turn in Turns)
+        {
+            while (events.Count > 0 && events.Peek().Turn < turn.Turn)
+            {
+                Append(sb, events.Dequeue());
+            }
+
+            Append(sb, withTiming ? turn : turn with { ElapsedMs = null });
+            while (events.Count > 0 && events.Peek().Turn == turn.Turn)
+            {
+                Append(sb, events.Dequeue());
+            }
+        }
+
+        while (events.Count > 0)
+        {
+            Append(sb, events.Dequeue());
+        }
+
+        if (Result is { } r)
+        {
+            Append(sb, withTiming ? r : r with { TotalMs = null, MajorRoundMs = null });
+        }
+
+        if (Failure is { } f)
+        {
+            Append(sb, withTiming ? f : f with { ElapsedMs = null });
+        }
+
+        return sb.ToString();
+    }
+
+    private static void Append<T>(System.Text.StringBuilder sb, T line) =>
+        sb.Append(JsonSerializer.Serialize(line, LogJson.Options)).Append('\n');
+
+    /// <summary>写入文件（含耗时），返回路径。<paramref name="compress"/> 为 GZip（implement 7.5：事件流可选压缩）。</summary>
+    public string WriteTo(string directory, bool compress = false)
+    {
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, FileNameFor(compress));
+        string text = FullText();
+        if (!compress)
+        {
+            File.WriteAllText(path, text);
+            return path;
+        }
+
+        using FileStream file = File.Create(path);
+        using var gzip = new System.IO.Compression.GZipStream(file, System.IO.Compression.CompressionLevel.Optimal);
+        using var writer = new StreamWriter(gzip, new System.Text.UTF8Encoding(false));
+        writer.Write(text);
+        return path;
+    }
+
+    /// <summary>解析 JSON Lines 文本；容忍 CRLF。</summary>
+    public static MatchLog Parse(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        LogHeader? header = null;
+        var turns = new List<TurnSnapshot>();
+        var events = new List<LogEvent>();
+        LogResult? result = null;
+        LogFailure? failure = null;
+        foreach (string raw in text.Split('\n'))
+        {
+            string line = raw.TrimEnd('\r');
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            using JsonDocument doc = JsonDocument.Parse(line);
+            string kind = doc.RootElement.GetProperty("Kind").GetString() ?? throw new FormatException("日志行缺少 Kind。");
+            switch (kind)
+            {
+                case LogHeader.KindName:
+                    header = JsonSerializer.Deserialize<LogHeader>(line, LogJson.Options);
+                    break;
+                case TurnSnapshot.KindName:
+                    turns.Add(JsonSerializer.Deserialize<TurnSnapshot>(line, LogJson.Options)!);
+                    break;
+                case LogEvent.KindName:
+                    events.Add(JsonSerializer.Deserialize<LogEvent>(line, LogJson.Options)!);
+                    break;
+                case LogResult.KindName:
+                    result = JsonSerializer.Deserialize<LogResult>(line, LogJson.Options);
+                    break;
+                case LogFailure.KindName:
+                    failure = JsonSerializer.Deserialize<LogFailure>(line, LogJson.Options);
+                    break;
+                default:
+                    throw new FormatException($"未知日志行类型 {kind}。");
+            }
+        }
+
+        return new MatchLog
+        {
+            Header = header ?? throw new FormatException("日志缺少 header 行。"),
+            Turns = turns,
+            Events = events,
+            Result = result,
+            Failure = failure,
+        };
+    }
+
+    /// <summary>读取文件；<c>.gz</c> 后缀自动解压。</summary>
+    public static MatchLog Read(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        if (!path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+        {
+            return Parse(File.ReadAllText(path));
+        }
+
+        using FileStream file = File.OpenRead(path);
+        using var gzip = new System.IO.Compression.GZipStream(file, System.IO.Compression.CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip, System.Text.Encoding.UTF8);
+        return Parse(reader.ReadToEnd());
+    }
+
+    /// <summary>读取目录下全部 <c>match-*.jsonl</c> / <c>match-*.jsonl.gz</c>，按种子排序。</summary>
+    public static List<MatchLog> ReadDirectory(string directory) =>
+        [.. Directory.GetFiles(directory, "match-*.jsonl").Concat(Directory.GetFiles(directory, "match-*.jsonl.gz")).Select(Read).OrderBy(l => l.Seed)];
+}
+
+internal static class LogJson
+{
+    internal static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = false,
+        Converters = { new JsonStringEnumConverter() },
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+}
+
+/// <summary>首行：配置 + 地图 + 种子 + 完整信物分布 + 配置的调试 AI 玩家。</summary>
+public sealed record LogHeader
+{
+    public const string KindName = "header";
+
+    public string Kind { get; init; } = KindName;
+
+    public int Schema { get; init; } = MatchLog.SchemaVersion;
+
+    public required string MapId { get; init; }
+
+    /// <summary>种子，十六进制（<c>GameSeed.ToString</c>）。</summary>
+    public required string Seed { get; init; }
+
+    public required RunConfig Config { get; init; }
+
+    public List<int> Players { get; init; } = [];
+
+    /// <summary>各玩家锁定的出生区（下标 = 玩家编号）。</summary>
+    public List<int> Zones { get; init; } = [];
+
+    /// <summary>首回合行动顺序。</summary>
+    public List<int> FirstOrder { get; init; } = [];
+
+    public List<RelicEntry> Relics { get; init; } = [];
+
+    public bool RelicsConverged { get; init; }
+
+    public int RelicRerolls { get; init; }
+
+    public List<int> DebugAiPlayers { get; init; } = [];
+
+    /// <summary>本局实际采用的事件保留策略（抽样 / 失败提升后的结果）。</summary>
+    public EventRetention Retention { get; init; }
+}
+
+/// <summary>一枚信物的完整内容（事后记录）。</summary>
+public sealed record RelicEntry
+{
+    public required string Coord { get; init; }
+
+    public required string Zone { get; init; }
+
+    public required string Budget { get; init; }
+
+    public required string Type { get; init; }
+
+    public int Magnitude { get; init; }
+
+    public string? EmblemPiece { get; init; }
+}
+
+/// <summary>每小回合结束时的快照：各玩家势力明细、结构参数、控制信物、手牌类型（无数量）。</summary>
+public sealed record TurnSnapshot
+{
+    public const string KindName = "turn";
+
+    public string Kind { get; init; } = KindName;
+
+    /// <summary>小回合序号，从 1 起。</summary>
+    public int Turn { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public int Player { get; init; }
+
+    /// <summary>本大回合中的行动位置（0 基）。</summary>
+    public int Position { get; init; }
+
+    public bool Passed { get; init; }
+
+    public List<string> Placements { get; init; } = [];
+
+    public List<string> Captures { get; init; } = [];
+
+    /// <summary>确认被拒绝的次数。</summary>
+    public int Rejections { get; init; }
+
+    public int ShowCount { get; init; }
+
+    public int FreePickCount { get; init; }
+
+    public int TypeSlots { get; init; }
+
+    public int DeployLimit { get; init; }
+
+    public List<int> ActionOrder { get; init; } = [];
+
+    public int PassStreak { get; init; }
+
+    public List<PlayerEntry> PlayersState { get; init; } = [];
+
+    public List<RelicStateEntry> Relics { get; init; } = [];
+
+    /// <summary>小回合墙钟耗时（毫秒）；只记录，不参与任何决定。</summary>
+    public long? ElapsedMs { get; init; }
+}
+
+public sealed record PlayerEntry
+{
+    public int Player { get; init; }
+
+    public required string Status { get; init; }
+
+    public bool Protection { get; init; }
+
+    public long Total { get; init; }
+
+    public int Territory { get; init; }
+
+    /// <summary>竞争名次；不参赛为 <c>null</c>。</summary>
+    public int? Rank { get; init; }
+
+    public List<string> HandTypes { get; init; } = [];
+
+    public List<GroupEntry> Groups { get; init; } = [];
+}
+
+public sealed record GroupEntry
+{
+    public List<string> Stones { get; init; } = [];
+
+    public int Base { get; init; }
+
+    public int LineBonus { get; init; }
+
+    public int SynergyBonus { get; init; }
+
+    public int MultiplierCount { get; init; }
+
+    public long Power { get; init; }
+}
+
+public sealed record RelicStateEntry
+{
+    public required string Coord { get; init; }
+
+    public bool Revealed { get; init; }
+
+    public required string Control { get; init; }
+
+    public int? Holder { get; init; }
+}
+
+/// <summary>一条事件。<see cref="Type"/> 见 <see cref="LogEventType"/>。</summary>
+public sealed record LogEvent
+{
+    public const string KindName = "event";
+
+    public string Kind { get; init; } = KindName;
+
+    public int Seq { get; init; }
+
+    /// <summary>所属小回合（事件发生在该小回合内；小回合开始前的事件记 0）。</summary>
+    public int Turn { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public required string Type { get; init; }
+
+    public int? Player { get; init; }
+
+    public string Detail { get; init; } = string.Empty;
+
+    public List<string>? Coords { get; init; }
+
+    public Dictionary<string, long>? Values { get; init; }
+
+    /// <summary>失败类别（<c>Rejected</c> / <c>Rehearsal</c>）。</summary>
+    public string? FailureKind { get; init; }
+}
+
+/// <summary>事件类型常量。</summary>
+public static class LogEventType
+{
+    public const string Recruit = "Recruit";
+    public const string Rehearsal = "Rehearsal";
+    public const string Rejected = "Rejected";
+    public const string Settled = "Settled";
+    public const string Candidates = "Candidates";
+    public const string Reveal = "Reveal";
+    public const string ControlChanged = "ControlChanged";
+    public const string RankChanged = "RankChanged";
+    public const string MajorRoundEnded = "MajorRoundEnded";
+    public const string ProtectionLifted = "ProtectionLifted";
+    public const string PlayerEliminated = "PlayerEliminated";
+    public const string PlayerResigned = "PlayerResigned";
+    public const string MatchEnded = "MatchEnded";
+    public const string MaxRoundsReached = "MaxRoundsReached";
+    public const string Takeover = "Takeover";
+    public const string FlagsLocked = "FlagsLocked";
+
+    /// <summary>只在完整模式保留的细粒度事件。</summary>
+    public static bool IsFineGrained(string type) => type is Rehearsal or Candidates;
+}
+
+/// <summary>达上限未终局的终局原因（裁决 13），与 <c>EndReason</c> 并列。</summary>
+public static class SimEndReason
+{
+    public const string MaxMajorRoundsReached = "MaxMajorRoundsReached";
+}
+
+/// <summary>末行：终局原因、名次、标注、揭示表、峰值遥测、耗时。</summary>
+public sealed record LogResult
+{
+    public const string KindName = "result";
+
+    public string Kind { get; init; } = KindName;
+
+    /// <summary><c>EndReason</c> 名或 <see cref="SimEndReason.MaxMajorRoundsReached"/>。</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>是否真正终局（达上限为 <c>false</c>）。</summary>
+    public bool Converged { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public int TurnCount { get; init; }
+
+    public List<StandingEntry> Standings { get; init; } = [];
+
+    public List<int> Winners { get; init; } = [];
+
+    public bool UsedDebugAi { get; init; }
+
+    public List<int> DebugAiPlayers { get; init; } = [];
+
+    public List<TakeoverEntry> Takeovers { get; init; } = [];
+
+    /// <summary>每枚信物的揭示大回合；整局未揭示为 <c>null</c>。</summary>
+    public List<RelicRevealEntry> RelicReveals { get; init; } = [];
+
+    public PeakEntry? Peak { get; init; }
+
+    /// <summary>峰值串是否在之后被摧毁（日志层比对相邻快照，裁决 6）；无峰值为 <c>null</c>。</summary>
+    public bool? PeakDestroyed { get; init; }
+
+    public int? DeployLimitPeak { get; init; }
+
+    public long? TotalMs { get; init; }
+
+    public List<long>? MajorRoundMs { get; init; }
+}
+
+public sealed record StandingEntry
+{
+    public int Rank { get; init; }
+
+    public int Player { get; init; }
+
+    public required string Group { get; init; }
+
+    public required string Status { get; init; }
+
+    public long Power { get; init; }
+
+    public int ControlledRelics { get; init; }
+
+    public int ExclusiveCells { get; init; }
+
+    public int Stones { get; init; }
+
+    public int? EliminationOrder { get; init; }
+}
+
+public sealed record TakeoverEntry
+{
+    public int Sequence { get; init; }
+
+    public int Player { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public required string Stage { get; init; }
+
+    public required string Kind { get; init; }
+}
+
+public sealed record RelicRevealEntry
+{
+    public required string Coord { get; init; }
+
+    public int? RevealedInMajorRound { get; init; }
+}
+
+public sealed record PeakEntry
+{
+    public int MultiplierCount { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public int Player { get; init; }
+
+    public long Power { get; init; }
+
+    public List<string> Stones { get; init; } = [];
+}
+
+/// <summary>失败局末行：终止位置、异常与标注；种子、配置与终止前事件流都已在前面各行。</summary>
+public sealed record LogFailure
+{
+    public const string KindName = "failed";
+
+    public string Kind { get; init; } = KindName;
+
+    public int Turn { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public required string ExceptionType { get; init; }
+
+    public required string Message { get; init; }
+
+    public string? StackTrace { get; init; }
+
+    public bool UsedDebugAi { get; init; }
+
+    public List<TakeoverEntry> Takeovers { get; init; } = [];
+
+    public long? ElapsedMs { get; init; }
+}

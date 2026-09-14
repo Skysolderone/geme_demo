@@ -9,3 +9,5 @@ obj/
 export_presets.cfg
 # macOS
 .DS_Store
+# Siege.Sim 跑局输出（日志、汇总、报告）
+sim-out/
