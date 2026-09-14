@@ -51,10 +51,12 @@ public class 倍增子的棋串倍率Tests
     }
 
     [Fact]
-    public void 倍率不设上限()
+    public void 倍率指数封顶为5()
     {
-        // 裁决记录 3：不设任何上限。12 枚倍增子 → 1.5^12，⌊12 × 531441 / 4096⌋ = 1556，不截断。
-        // 变异验证 M12：Multiplier.Numerator 对 Count 做 Math.Min(Count, 8) 截断 → 红 1（本测试）。
+        // cap-multiplier（推翻 territory-power 裁决 3"不设上限"）：n ≥ 5 时倍率恒为 243/32。
+        // 12 枚倍增子 → 数量 12、生效指数 5、分子 243、分母 32，⌊12 × 243 / 32⌋ = ⌊91.125⌋ = 91（原无上限版为 1556）。
+        // piece-effects Scenario「倍率指数封顶为 5」：12 枚倍增子全部计入基础军势（基础 12），check 阶段补钉。
+        // 变异验证 M-M1：Multiplier.MaxExponent 改为 6 → 红 15，含本测试（729/64，⌊12 × 729 / 64⌋ = 136）；M-M2（去掉 Math.Min）→ 红 13，含本测试（1556）。
         GameBoard board = TestMaps.Blank(size: 15);
         for (int x = 1; x <= 12; x++)
         {
@@ -64,19 +66,25 @@ public class 倍增子的棋串倍率Tests
         GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
 
         Assert.Equal(12, group.MultiplierCount);
-        Assert.Equal((Int128)531441, group.Multiplier.Numerator);
-        Assert.Equal(1556, group.Power);
+        Assert.Equal(12, group.BaseTotal);
+        Assert.Equal(Multiplier.MaxExponent, group.EffectiveMultiplierCount);
+        Assert.Equal(5, Multiplier.MaxExponent);
+        Assert.Equal((Int128)243, group.Multiplier.Numerator);
+        Assert.Equal((Int128)32, group.Multiplier.Denominator);
+        Assert.Equal(91, group.Power);
     }
 
     [Fact]
     public void 超出整数范围时响亮失败()
     {
-        // 契约边界（implement.md 5.1）：倍率不截断，但结果放不进 long 时 MUST 抛 OverflowException，不得静默回绕。
-        // n = 60 时 value × 3^60 ≈ 4.2e34 仍在 Int128 内、结果在 long 内；n = 81 时 3^81 超出 Int128。
-        // 期望值由任意精度整数独立算出：python3 -c "print(10**6 * 3**60 // 2**60)" = 36768468716933021。
-        // 变异验证 C1：Apply 改为 unchecked 的 long 乘法 → 本测试红（回绕成错误值、且不再抛 OverflowException）。
-        Assert.Equal(36_768_468_716_933_021L, new Multiplier(60).Apply(1_000_000));
-        Assert.Throws<OverflowException>(() => new Multiplier(81).Apply(1));
+        // 封顶后 value × 3^5 = value × 243 不可能溢出 Int128，但结果仍可能装不进 long：以 long.MaxValue 为基础军势时 MUST 抛 OverflowException，不得静默回绕（checked 作防御保留）。
+        // 原"n = 81 时 3^81 超出 Int128"的溢出路径已因封顶消失：n = 60 / 81 现在都按 243/32 算，⌊10^6 × 243 / 32⌋ = 7593750、⌊1 × 243 / 32⌋ = 7。
+        // 变异验证 C1（cap-multiplier 复跑）：Apply 改为 unchecked 的 long 乘法 → 红 1（本测试：回绕成错误值、且不再抛 OverflowException）。
+        Assert.Equal(7_593_750L, new Multiplier(60).Apply(1_000_000));
+        Assert.Equal(7L, new Multiplier(81).Apply(1));
+        Assert.Equal(long.MaxValue, new Multiplier(0).Apply(long.MaxValue));
+        Assert.Throws<OverflowException>(() => new Multiplier(1).Apply(long.MaxValue));
+        Assert.Throws<OverflowException>(() => new Multiplier(5).Apply(long.MaxValue));
         Assert.Throws<OverflowException>(() => new Multiplier(60).Apply(long.MaxValue));
         Assert.Throws<ArgumentOutOfRangeException>(() => new Multiplier(-1));
     }

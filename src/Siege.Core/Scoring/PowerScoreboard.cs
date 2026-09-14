@@ -9,8 +9,11 @@ namespace Siege.Core.Scoring;
 /// </summary>
 public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerId Player, ImmutableArray<Coord> Stones, long Power)
 {
-    /// <summary>峰值倍率的精确表示。</summary>
+    /// <summary>峰值倍率的精确表示（按生效指数）。</summary>
     public Multiplier Multiplier => new(MultiplierCount);
+
+    /// <summary>生效倍率指数 <c>min(<see cref="MultiplierCount"/>, <see cref="Multiplier.MaxExponent"/>)</c>；<see cref="MultiplierCount"/> 仍是原始数量。</summary>
+    public int EffectiveMultiplierCount => Multiplier.Exponent;
 }
 
 /// <summary>
@@ -19,7 +22,7 @@ public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerI
 /// </summary>
 /// <remarks>
 /// <para><see cref="Latest"/> 永远是最近一次全量重算的结果，只反映当前盘面；上一份快照被整体替换，不叠加、不累计。</para>
-/// <para><see cref="Peak"/> 是唯一跨结算保留的量，且只作遥测用：倍率不设上限（裁决记录 3），§16 数值区间失守时靠它定位，不在计分侧截断。</para>
+/// <para><see cref="Peak"/> 是唯一跨结算保留的量，且只作遥测用：按原始倍增子数量取峰值（可超过封顶指数），看玩家"堆了多少"；§16 数值区间失守时靠它定位。</para>
 /// </remarks>
 public sealed class PowerScoreboard
 {

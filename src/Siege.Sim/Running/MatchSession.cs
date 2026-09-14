@@ -401,6 +401,7 @@ public sealed class MatchSession
                     LineBonus = g.LineBonus,
                     SynergyBonus = g.SynergyBonus,
                     MultiplierCount = g.MultiplierCount,
+                    EffectiveMultiplierCount = g.EffectiveMultiplierCount,
                     Power = g.Power,
                 })],
             });
@@ -551,6 +552,7 @@ public sealed class MatchSession
             Peak = peak is null ? null : new PeakEntry
             {
                 MultiplierCount = peak.MultiplierCount,
+                EffectiveMultiplierCount = peak.EffectiveMultiplierCount,
                 MajorRound = peak.MajorRound,
                 Player = peak.Player.Value,
                 Power = peak.Power,

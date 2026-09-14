@@ -3,7 +3,7 @@
   "name": "cap-multiplier",
   "title": "规则复议 1：倍率封顶（cap-multiplier）",
   "description": "openspec change cap-multiplier：倍率指数封顶 min(n,5)，推翻 territory-power 裁决 3",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

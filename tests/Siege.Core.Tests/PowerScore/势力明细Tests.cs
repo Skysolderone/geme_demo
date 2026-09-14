@@ -82,4 +82,56 @@ public class 势力明细Tests
         Assert.Equal(20, group.Power);
         Assert.Equal(34, p0.Total);
     }
+
+    [Fact]
+    public void 明细区分原始与生效倍率()
+    {
+        // cap-multiplier 规格：某棋串含 9 枚倍增子 → 明细中倍增子数量 9、生效倍率指数 5、倍率 7.59375，三者同时可读；军势 ⌊9 × 243 / 32⌋ = 68。
+        // 变异验证 M-M4：GroupPower / MultiplierPeak 的 EffectiveMultiplierCount 改为 => MultiplierCount（生效字段退化成原始字段）→ 红 6，含本测试。
+        // 变异验证 M-M3：Multiplier.ToString 改用原始 Count → 红 3，含本测试（25.62890625）。
+        GameBoard board = TestMaps.Blank(size: 11);
+        for (int x = 1; x <= 9; x++)
+        {
+            board.Place(new Coord(x, 2), TestMaps.P0, PieceType.Multiplier);
+        }
+
+        GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+
+        Assert.Equal(9, group.MultiplierCount);
+        Assert.Equal(5, group.EffectiveMultiplierCount);
+        Assert.Equal("7.59375", group.Multiplier.ToString());
+        Assert.Equal((Int128)243, group.Multiplier.Numerator);
+        Assert.Equal((Int128)32, group.Multiplier.Denominator);
+        Assert.Equal(68, group.Power);
+    }
+
+    [Fact]
+    public void 遥测峰值保留原始数量并可得生效指数()
+    {
+        // Requirement 势力明细：遥测倍率峰值 SHALL 保留原始倍增子数量，并同时可得生效倍率指数（implement.md 2.2：8 枚 → 数量 8、生效 5）。
+        // 峰值按原始数量比较，因此第 9 枚仍会刷新峰值（生效指数不变仍为 5）——原始数量语义不因封顶而改。
+        // 变异验证 M-M4：MultiplierPeak.EffectiveMultiplierCount 改为 => MultiplierCount → 红 6，含本测试；M-M3（ToString 用原始指数）→ 红 3，含本测试。
+        GameBoard board = TestMaps.Blank(size: 11);
+        for (int x = 1; x <= 8; x++)
+        {
+            board.Place(new Coord(x, 2), TestMaps.P0, PieceType.Multiplier);
+        }
+
+        var scoreboard = new PowerScoreboard();
+        var roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
+        scoreboard.Recalculate(board, roster, majorRound: 1);
+
+        MultiplierPeak peak = scoreboard.Peak!;
+        Assert.Equal(8, peak.MultiplierCount);
+        Assert.Equal(5, peak.EffectiveMultiplierCount);
+        Assert.Equal("7.59375", peak.Multiplier.ToString());
+        Assert.Equal(60, peak.Power);
+
+        board.Place(new Coord(9, 2), TestMaps.P0, PieceType.Multiplier);
+        scoreboard.Recalculate(board, roster, majorRound: 2);
+
+        peak = scoreboard.Peak!;
+        Assert.Equal((9, 5, 2), (peak.MultiplierCount, peak.EffectiveMultiplierCount, peak.MajorRound));
+        Assert.Equal(68, peak.Power);
+    }
 }

@@ -19,6 +19,7 @@ heuristic-ai 归档时的 36 局实测（`openspec/changes/archive/2026-09-14-ad
 
 ### Modified Capabilities
 - `power-score`: Requirement「棋串军势公式」改为封顶版本，并新增封顶边界的 Scenario；Requirement「势力明细」新增"生效倍率指数"字段。
+- `piece-effects`: Requirement「倍增子的棋串倍率」改为"至多 5 枚生效"，与 power-score 一致。
 
 ## Impact
 

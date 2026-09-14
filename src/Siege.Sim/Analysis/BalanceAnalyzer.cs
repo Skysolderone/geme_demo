@@ -69,9 +69,11 @@ public sealed record RelicStat(string Type, int Count, int Revealed, int Control
 
 public sealed record SelectionSection(List<PieceStat> Pieces, List<RelicStat> Relics);
 
+/// <summary>§17.4 高倍率棋串。<see cref="PeakCountDistribution"/> 按原始倍增子数量（堆了多少），<see cref="PeakEffectiveExponentDistribution"/> 按生效倍率指数（封顶后生效了多少）。</summary>
 public sealed record MultiplierSection(
     int MatchesWithPeak,
     SortedDictionary<int, int> PeakCountDistribution,
+    SortedDictionary<int, int> PeakEffectiveExponentDistribution,
     double MeanFormationRound,
     double MeanPeakPower,
     long MaxPeakPower,
@@ -578,6 +580,7 @@ public static class BalanceAnalyzer
     private static MultiplierSection Multiplier(List<MatchLog> logs)
     {
         var distribution = new SortedDictionary<int, int>();
+        var effective = new SortedDictionary<int, int>();
         var rounds = new List<double>();
         var powers = new List<double>();
         long max = 0;
@@ -587,6 +590,7 @@ public static class BalanceAnalyzer
         {
             peaks++;
             distribution[peak.MultiplierCount] = distribution.TryGetValue(peak.MultiplierCount, out int n) ? n + 1 : 1;
+            effective[peak.EffectiveMultiplierCount] = effective.TryGetValue(peak.EffectiveMultiplierCount, out int e) ? e + 1 : 1;
             rounds.Add(peak.MajorRound);
             powers.Add(peak.Power);
             max = Math.Max(max, peak.Power);
@@ -597,7 +601,7 @@ public static class BalanceAnalyzer
             destroyed++;
         }
 
-        return new MultiplierSection(peaks, distribution, Statistics.Mean(rounds), Statistics.Mean(powers), max, Statistics.Wilson(destroyed, peaks));
+        return new MultiplierSection(peaks, distribution, effective, Statistics.Mean(rounds), Statistics.Mean(powers), max, Statistics.Wilson(destroyed, peaks));
     }
 
     // ---------- §17.5 出生区（裁决 8：收敛 / 未收敛分组） ----------

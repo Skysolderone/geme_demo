@@ -1,4 +1,5 @@
 using System.Text;
+using Siege.Core.Scoring;
 
 namespace Siege.Sim.Analysis;
 
@@ -90,7 +91,7 @@ public static class ReportWriter
 
         sb.AppendLine("### 4. 高倍率棋串的形成轮次、峰值及被摧毁概率");
         MultiplierSection m = r.Multiplier;
-        sb.AppendLine($"- 出现过倍增串的局 {m.MatchesWithPeak}；峰值倍增子数分布 {Histogram(m.PeakCountDistribution)}");
+        sb.AppendLine($"- 出现过倍增串的局 {m.MatchesWithPeak}；峰值倍增子数分布（原始数量）{Histogram(m.PeakCountDistribution)}；峰值生效倍率指数分布（封顶 {Multiplier.MaxExponent}）{Histogram(m.PeakEffectiveExponentDistribution)}");
         sb.AppendLine($"- 峰值首次出现平均在第 {Num(m.MeanFormationRound)} 大回合，峰值军势平均 {Num(m.MeanPeakPower)}，最高 {m.MaxPeakPower}");
         sb.AppendLine($"- 峰值串之后被摧毁的概率 {m.DestroyedRate}");
         sb.AppendLine("### 5. 出生区随机资源是否造成显著胜率差异（裁决 8：按信物生成收敛分组）");

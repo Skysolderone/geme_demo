@@ -11,8 +11,8 @@ namespace Siege.Core.Scoring;
 /// <param name="BaseTotal">基础军势总和。</param>
 /// <param name="LineBonus">来自连珠线的位置加值。</param>
 /// <param name="SynergyBonus">来自协同子的位置加值。</param>
-/// <param name="MultiplierCount">倍增子数量，即倍率指数。</param>
-/// <param name="Power">取整后军势：<c>⌊(基础 + 加值) × 1.5^n⌋</c>，逐棋串各取整一次。</param>
+/// <param name="MultiplierCount">倍增子的原始数量（未封顶；遥测按它看"堆了多少"）。</param>
+/// <param name="Power">取整后军势：<c>⌊(基础 + 加值) × 1.5^min(n, 5)⌋</c>，逐棋串各取整一次。</param>
 public sealed record GroupPower(
     PlayerId Owner,
     ImmutableArray<Coord> Stones,
@@ -25,8 +25,11 @@ public sealed record GroupPower(
     /// <summary>位置加值总计 = 连珠来源 + 协同来源（design.md D3：分来源记账）。</summary>
     public int PositionBonus => LineBonus + SynergyBonus;
 
-    /// <summary>倍率 <c>1.5^n</c> 的精确表示。</summary>
+    /// <summary>倍率的精确表示，按生效指数计算，最大 <c>7.59375</c>。</summary>
     public Multiplier Multiplier => new(MultiplierCount);
+
+    /// <summary>生效倍率指数 <c>min(倍增子数量, <see cref="Multiplier.MaxExponent"/>)</c>（cap-multiplier D3：与原始数量并列可读）。</summary>
+    public int EffectiveMultiplierCount => Multiplier.Exponent;
 
     public override string ToString() =>
         $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] 基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}) ×{Multiplier} = {Power}";

@@ -55,6 +55,71 @@ public class 棋串军势公式Tests
         Assert.Equal(32 + p0.TerritoryScore, p0.Total);
     }
 
+    [Fact]
+    public void 恰好第5枚倍增子()
+    {
+        // cap-multiplier 规格：普通子×4、倍增子×5，无位置加值 → 基础 9、生效倍率指数 5、倍率 7.59375、军势 ⌊9 × 243 / 32⌋ = ⌊68.34⌋ = 68
+        // 变异验证 M-M2：Multiplier.Exponent 去掉 Math.Min（=> Count）→ 本测试仍绿（n=5 恰在顶上），封顶由「第6枚倍增子只加基础军势」等抓。
+        GroupPower group = Assert.Single(PowerCalculator.Compute(Row("BBBBMMMMM")).Of(TestMaps.P0).Groups);
+
+        Assert.Equal(9, group.BaseTotal);
+        Assert.Equal(0, group.PositionBonus);
+        Assert.Equal((5, 5), (group.MultiplierCount, group.EffectiveMultiplierCount));
+        Assert.Equal("7.59375", group.Multiplier.ToString());
+        Assert.Equal(68, group.Power);
+    }
+
+    [Fact]
+    public void 第6枚倍增子只加基础军势()
+    {
+        // cap-multiplier 规格：普通子×4、倍增子×6 → 数量 6、生效指数仍 5、基础 10、军势 ⌊10 × 243 / 32⌋ = ⌊75.94⌋ = 75，而非 ⌊10 × 1.5^6⌋ = 113
+        // 变异验证 M-M1：Multiplier.MaxExponent 改为 6 → 红 15，含本测试（113）、取整边界两个 Theory 的 n=6/7/8 各行、Sim 双列与回填测试。
+        // 变异验证 M-M2：Multiplier.Exponent 去掉 Math.Min（=> Count）→ 红 13，含本测试（113）；「恰好第5枚倍增子」仍绿（n=5 恰在顶上）。
+        GroupPower group = Assert.Single(PowerCalculator.Compute(Row("BBBBMMMMMM")).Of(TestMaps.P0).Groups);
+
+        Assert.Equal(10, group.BaseTotal);
+        Assert.Equal((6, 5), (group.MultiplierCount, group.EffectiveMultiplierCount));
+        Assert.Equal((Int128)243, group.Multiplier.Numerator);
+        Assert.Equal((Int128)32, group.Multiplier.Denominator);
+        Assert.Equal(75, group.Power);
+        Assert.NotEqual(113, group.Power);
+    }
+
+    [Fact]
+    public void 封顶不影响其他效果()
+    {
+        // cap-multiplier 规格：倍增子×7 + 协同子×1 → 协同加值 2（其他类型只有倍增子 1 种）、8 枚全部计入基础军势与共享气，只有倍率指数取 5。
+        // 军势 ⌊(8 + 2) × 243 / 32⌋ = 75。气数与同位置 8 枚普通子的棋串逐格一致——封顶不得让第 6 枚起的倍增子脱离棋串。
+        // 变异验证 M-M2：Exponent 去掉 Math.Min → 红 13，含本测试（⌊10 × 2187 / 128⌋ = 170）；M-M4（生效指数退化为原始数量）→ 红 6，含本测试。
+        GameBoard mixed = Row("MMMMMMMS");
+        GameBoard plain = Row("BBBBBBBB");
+
+        GroupPower group = Assert.Single(PowerCalculator.Compute(mixed).Of(TestMaps.P0).Groups);
+        Siege.Core.Board.Group mixedGroup = Assert.Single(mixed.GroupsOf(TestMaps.P0));
+        Siege.Core.Board.Group plainGroup = Assert.Single(plain.GroupsOf(TestMaps.P0));
+
+        Assert.Equal(8, group.Stones.Length);
+        Assert.Equal(8, group.BaseTotal);
+        Assert.Equal((0, 2), (group.LineBonus, group.SynergyBonus));
+        Assert.Equal((7, 5), (group.MultiplierCount, group.EffectiveMultiplierCount));
+        Assert.Equal(75, group.Power);
+        Assert.Equal(plainGroup.Stones.Notations(), mixedGroup.Stones.Notations());
+        Assert.Equal(plain.LibertiesOf(plainGroup).Notations(), mixed.LibertiesOf(mixedGroup).Notations());
+    }
+
+    [Fact]
+    public void 倍率显示表达封顶()
+    {
+        // cap-multiplier 规格：含 8 枚倍增子的棋串 → 倍率显示 7.59375，并能同时得知数量 8、生效指数 5。军势 ⌊8 × 243 / 32⌋ = 60。
+        // 变异验证 M-M3：Multiplier.ToString 改用原始 Count 生成 → 红 3（本测试 25.62890625、「明细区分原始与生效倍率」、「遥测峰值保留原始数量并可得生效指数」）。
+        GroupPower group = Assert.Single(PowerCalculator.Compute(Row("MMMMMMMM")).Of(TestMaps.P0).Groups);
+
+        Assert.Equal("7.59375", group.Multiplier.ToString());
+        Assert.Equal(8, group.MultiplierCount);
+        Assert.Equal(5, group.EffectiveMultiplierCount);
+        Assert.Equal(60, group.Power);
+    }
+
     [Theory]
     [InlineData(0, 1, 1)]
     [InlineData(1, 2, 3)]
@@ -62,12 +127,13 @@ public class 棋串军势公式Tests
     [InlineData(3, 8, 27)]
     [InlineData(4, 16, 81)]
     [InlineData(5, 32, 243)]
-    [InlineData(6, 64, 729)]
-    [InlineData(7, 128, 2187)]
-    [InlineData(8, 256, 6561)]
+    [InlineData(6, 64, 486)]
+    [InlineData(7, 128, 972)]
+    [InlineData(8, 256, 1944)]
     public void 倍率取整边界_恰为整数的值必须取到该整数(int count, int value, long expected)
     {
-        // 强制回归（.trellis/spec/core/testing.md）：2^n × 1.5^n = 3^n 恰好落在整数上，各阶都不得因浮点误差少 1。
+        // 强制回归（.trellis/spec/core/testing.md）：2^n × 1.5^min(n,5) 恰好落在整数上，各阶都不得因浮点误差少 1。
+        // cap-multiplier：n ≥ 5 时倍率恒为 243/32，n = 6/7/8 三行期望值由 3^n 改为 2^(n−5) × 243（原 729 / 2187 / 6561）。
         // 变异验证 M4：Apply 改为 (long)Math.Floor(value * Math.Pow(1.5, Count) - 1e-9) → 红 21（本 Theory 各行、「计分路径不含浮点」等）。
         Assert.Equal(expected, new Multiplier(count).Apply(value));
     }
@@ -78,14 +144,34 @@ public class 棋串军势公式Tests
     [InlineData(3, 9, 30)]     // 30.375
     [InlineData(4, 17, 86)]    // 86.0625
     [InlineData(5, 33, 250)]   // 250.59375
-    [InlineData(6, 65, 740)]   // 740.390625
-    [InlineData(7, 129, 2204)] // 2204.0859375
-    [InlineData(8, 257, 6586)] // 6586.62890625
+    [InlineData(6, 65, 493)]   // 493.59375（封顶：65 × 243 / 32）
+    [InlineData(7, 129, 979)]  // 979.59375（封顶：129 × 243 / 32）
+    [InlineData(8, 257, 1951)] // 1951.59375（封顶：257 × 243 / 32）
     public void 倍率取整边界_非整数向下取整(int count, int value, long expected)
     {
-        // 2^n + 1 乘以 1.5^n 一定不是整数，向下取整不得四舍五入。
+        // 2^n + 1 乘以 1.5^min(n,5) 一定不是整数，向下取整不得四舍五入。
+        // cap-multiplier：n = 6/7/8 三行期望值改为封顶版（原 740 / 2204 / 6586）。
         // 变异验证 M17：Apply 改为 (scaled + Denominator/2) / Denominator（四舍五入）→ 红 9，含本 Theory 与「逐棋串取整」。
         Assert.Equal(expected, new Multiplier(count).Apply(value));
+    }
+
+    /// <summary>第 2 行从 x=1 起横放一串 P0 棋子：B 普通、M 倍增、S 协同。</summary>
+    private static GameBoard Row(string types)
+    {
+        GameBoard board = TestMaps.Blank(size: 11);
+        for (int i = 0; i < types.Length; i++)
+        {
+            PieceType type = types[i] switch
+            {
+                'B' => PieceType.Basic,
+                'M' => PieceType.Multiplier,
+                'S' => PieceType.Synergy,
+                _ => throw new ArgumentOutOfRangeException(nameof(types), types, "只支持 B/M/S。"),
+            };
+            board.Place(new Coord(i + 1, 2), TestMaps.P0, type);
+        }
+
+        return board;
     }
 
     [Fact]

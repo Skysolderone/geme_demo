@@ -4,17 +4,22 @@ using Siege.Core.Board;
 namespace Siege.Core.Scoring;
 
 /// <summary>
-/// 倍增子倍率 <c>1.5^n</c> 的精确表示：分子 <c>3^n</c>、分母 <c>2^n</c>。
+/// 倍增子倍率 <c>1.5^e</c> 的精确表示：分子 <c>3^e</c>、分母 <c>2^e</c>，<c>e = min(倍增子数量, <see cref="MaxExponent"/>)</c>。
 /// 计分路径上 MUST NOT 出现二进制浮点——取整对边界值极其敏感，整数运算才能保证跨平台、跨架构结果一致。
 /// </summary>
 /// <remarks>
-/// <para>倍率不设上限（裁决记录 3），护栏由遥测承接、不在计分侧截断。计算用 <see cref="Int128"/> 的 checked 整数运算：
-/// 零分配（批量跑局每次结算都要对全盘每条棋串调用 <see cref="Apply"/>），且中间值 <c>value × 3^n</c> 在 n ≤ 80 内不会溢出；
-/// 真正超出 <see cref="long"/> 表示范围时抛 <see cref="OverflowException"/>，响亮失败而非静默截断。</para>
-/// <para>只有 <see cref="ToString"/> 走 <see cref="BigInteger"/>：它是显示路径，不参与任何计算，且任意 n 都要能打印。</para>
+/// <para>倍率指数封顶为 <see cref="MaxExponent"/>（cap-multiplier D1/D2/D4，推翻 territory-power 裁决 3）：封顶只在这一处做，
+/// 调用方继续传原始倍增子数量，<see cref="Count"/> 保留原始数量、<see cref="Exponent"/> 才是生效指数。</para>
+/// <para>计算用 <see cref="Int128"/> 的 checked 整数运算：零分配（批量跑局每次结算都要对全盘每条棋串调用 <see cref="Apply"/>）。
+/// 封顶后 <c>3^5 = 243</c>，中间值 <c>value × 243</c> 不可能溢出 <see cref="Int128"/>；checked 作防御保留——
+/// 结果装不进 <see cref="long"/> 时仍抛 <see cref="OverflowException"/>，响亮失败而非静默回绕。</para>
+/// <para>只有 <see cref="ToString"/> 走 <see cref="BigInteger"/>：它是显示路径，不参与任何计算。</para>
 /// </remarks>
 public readonly record struct Multiplier
 {
+    /// <summary>倍率指数上限：第 6 枚起的倍增子不再让倍率乘 1.5，倍率上限 <c>3^5 / 2^5 = 7.59375</c>。全项目只在此定义一次。</summary>
+    public const int MaxExponent = 5;
+
     /// <summary>不含倍增子时的倍率 1。</summary>
     public static readonly Multiplier One = new(0);
 
@@ -28,17 +33,20 @@ public readonly record struct Multiplier
         Count = count;
     }
 
-    /// <summary>倍增子数量，即倍率指数 n。</summary>
+    /// <summary>倍增子的原始数量 n（未封顶）。</summary>
     public int Count { get; }
 
-    /// <summary>分子 <c>3^n</c>。</summary>
-    public Int128 Numerator => Pow(3, Count);
+    /// <summary>生效倍率指数 <c>e = min(n, <see cref="MaxExponent"/>)</c>；分子、分母与显示都按它算。</summary>
+    public int Exponent => Math.Min(Count, MaxExponent);
 
-    /// <summary>分母 <c>2^n</c>。</summary>
-    public Int128 Denominator => Pow(2, Count);
+    /// <summary>分子 <c>3^e</c>。</summary>
+    public Int128 Numerator => Pow(3, Exponent);
+
+    /// <summary>分母 <c>2^e</c>。</summary>
+    public Int128 Denominator => Pow(2, Exponent);
 
     /// <summary>
-    /// 对非负整数值施加倍率并向下取整：<c>value × 3^n / 2^n</c>，非负整数除法即向下取整。
+    /// 对非负整数值施加倍率并向下取整：<c>value × 3^e / 2^e</c>，非负整数除法即向下取整。
     /// 这是全项目唯一的"乘倍率并取整"实现。结果超出 <see cref="long"/> 时抛 <see cref="OverflowException"/>。
     /// </summary>
     public long Apply(long value)
@@ -52,17 +60,18 @@ public readonly record struct Multiplier
         return checked((long)(scaled / Denominator));
     }
 
-    /// <summary>精确十进制表示（如 <c>1</c>、<c>1.5</c>、<c>2.25</c>、<c>3.375</c>），供 UI 与遥测显示；不经过浮点，也不参与计算。</summary>
+    /// <summary>精确十进制表示（如 <c>1</c>、<c>1.5</c>、<c>2.25</c>、<c>3.375</c>，最大 <c>7.59375</c>），按生效指数生成，供 UI 与遥测显示；不经过浮点，也不参与计算。</summary>
     public override string ToString()
     {
-        if (Count == 0)
+        int e = Exponent;
+        if (e == 0)
         {
             return "1";
         }
 
-        // 3^n / 2^n = 15^n / 10^n：15^n 的十进制串，小数点左移 n 位。
-        string digits = BigInteger.Pow(15, Count).ToString();
-        return digits[..^Count] + "." + digits[^Count..];
+        // 3^e / 2^e = 15^e / 10^e：15^e 的十进制串，小数点左移 e 位。
+        string digits = BigInteger.Pow(15, e).ToString();
+        return digits[..^e] + "." + digits[^e..];
     }
 
     /// <summary>checked 整数幂；溢出 <see cref="Int128"/> 时抛 <see cref="OverflowException"/>。</summary>
@@ -152,7 +161,7 @@ public static class PieceEffects
         return synergyCount * otherTypes.Count * 2;
     }
 
-    /// <summary>棋串中倍增子的数量，即倍率指数。</summary>
+    /// <summary>棋串中倍增子的原始数量；封顶为生效指数由 <see cref="Multiplier"/> 负责。</summary>
     public static int MultiplierCount(GameBoard board, Group group)
     {
         ArgumentNullException.ThrowIfNull(board);
