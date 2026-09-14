@@ -59,3 +59,15 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 - **WHEN** 插旗完成后保存对局
 - **THEN** 每名玩家锁定的出生区编号被完整保存并可恢复
 
+### Requirement: 对局配置公开大回合上限
+
+对局开始前确定的配置 SHALL 包含"大回合上限"，并 SHALL 与地图标识、对局种子一样属于始终公开信息（设计文档 §13.1），在插旗阶段即对所有玩家可见。
+
+#### Scenario: 插旗阶段可见上限
+- **WHEN** 对局处于匿名插旗阶段
+- **THEN** 公开视图中可读到本局的大回合上限（如 15，或 0 表示不设上限）
+
+#### Scenario: 上限进入对局记录
+- **WHEN** 读取任意一局的对局日志首部
+- **THEN** 其中记录了该局的大回合上限，与地图标识、种子并列
+

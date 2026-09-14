@@ -31,7 +31,7 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 系统 SHALL 把"所有仍在比赛中的玩家各完成一次小回合"定义为一个大回合。
 
-大回合结束时，系统 SHALL 生成下一大回合的行动顺序。对局 MUST NOT 设置固定总轮数。
+大回合结束时，系统 SHALL 生成下一大回合的行动顺序（若对局未因终局条件结束）。对局 MUST NOT 设置固定总轮数；大回合上限（`elimination-endgame`「大回合上限终局」）只是兜底，配置为 0 时对局不受任何轮数约束。
 
 #### Scenario: 大回合完成
 - **WHEN** 4 名参赛玩家依次完成各自的小回合
@@ -42,7 +42,7 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 - **THEN** 第 7 大回合的行动序列中不包含该玩家
 
 #### Scenario: 无固定轮数
-- **WHEN** 对局进行到第 15 大回合且终局条件均未满足
+- **WHEN** 大回合上限配置为 0，对局进行到第 15 大回合且终局条件均未满足
 - **THEN** 对局继续进行
 
 ### Requirement: 构筑保护期的落子限制
