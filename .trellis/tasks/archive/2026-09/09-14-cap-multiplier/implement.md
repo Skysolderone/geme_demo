@@ -28,7 +28,7 @@
 - [x] 4.1 1.1–1.4、2.2 每个新测试做变异验证并记录（封顶常量改 6 / 去掉 min / 显示用原始指数 / 明细两字段互换）。
   - 记录：M-M1 MaxExponent=6 → 红 15；M-M2 去掉 min → 红 13；M-M3 ToString 用原始指数 → 红 3；M-M4 明细/峰值生效指数退化为原始数量 → 红 6；M-M5 Sim 回填不封顶 → 红 2；M-M6 Sim init 丢弃写入值 → 红 1；M-M7 分析器生效分布按原始数量计 → 红 2；C1 unchecked long 乘法 → 红 1。全部还原后 506/506。
   - check 阶段复做（trellis-check，2026-09-14）：Sim 回填硬编码 4 → 红 2；GroupPower.EffectiveMultiplierCount => MultiplierCount（不动 Peak）→ 红 5；报告双列改单列 → 红 1；Apply 两处 checked 改 unchecked → 红 1；Numerator 用原始 Count → 红 13。全部还原后 506/506。
-- [ ] 4.2 200 局 Standard 回归（round-cap 归档后一起跑）：峰值军势分布、倍增子选择率、不收敛率、平均大回合数，写入 design.md 裁决记录。
+- [x] 4.2 200 局 Standard 回归（round-cap 归档后一起跑）：峰值军势分布、倍增子选择率、不收敛率、平均大回合数，写入 design.md 裁决记录。
 
 ## 验证命令
 
