@@ -10,10 +10,12 @@ namespace Siege.Core.Match;
 /// 对局的公开快照（裁决：单线程游戏循环，表现层与 AI 只消费结算完成后发布的快照，不直接读权威盘面）。
 /// 全部字段是该时刻的副本或不可变值：<see cref="Board"/> 是 <see cref="GameBoard.Clone"/> 出的独立副本，
 /// 之后权威盘面的变化不会反映到这里。结构上不含任何私有信息（手牌数量、征募面板、未揭示信物内容）。
+/// <see cref="MaxMajorRounds"/> 是对局配置的大回合上限（0 = 不限），与地图、种子一样始终公开，插旗阶段即可读。
 /// </summary>
 public sealed record MatchPublicView(
     MatchPhase Phase,
     int MajorRound,
+    int MaxMajorRounds,
     TurnStage Stage,
     PlayerId? CurrentPlayer,
     ImmutableArray<PlayerId> ActionOrder,

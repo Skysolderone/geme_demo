@@ -68,10 +68,10 @@ internal static class MatchFixtures
         return MatchFlow.CreateUnvalidated(map, seed ?? Seed, All, Relics(map, relics), options);
     }
 
-    /// <summary>创建一局并依次插旗（默认各占各的出生区），给每人 50 枚普通子，进入第 1 大回合。</summary>
-    internal static MatchFlow Started(GameSeed? seed = null, int[]? zones = null, params (string Cell, RelicContent Content)[] relics)
+    /// <summary>创建一局并依次插旗（默认各占各的出生区），给每人 50 枚普通子，进入第 1 大回合。<paramref name="options"/> 缺省为 <see cref="MatchOptions.Immediate"/>（大回合上限 15）。</summary>
+    internal static MatchFlow Started(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
     {
-        MatchFlow match = Create(seed, MatchOptions.Immediate, relics);
+        MatchFlow match = Create(seed, options ?? MatchOptions.Immediate, relics);
         zones ??= [0, 1, 2, 3];
         foreach (PlayerId p in All)
         {

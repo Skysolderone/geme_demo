@@ -1,3 +1,4 @@
+using Siege.Core.Match;
 using Siege.Core.Relics;
 using Siege.Sim.Logging;
 
@@ -14,7 +15,7 @@ public sealed record AnalysisOptions
     public int RequiredMatches { get; init; } = 200;
 }
 
-/// <summary>收敛情况（裁决 13）：真正终局 vs 达上限未终局，单独成段。</summary>
+/// <summary>收敛情况（裁决 13 → round-cap D5）：条件 1–3 终局 vs 以规则原因 <c>MajorRoundLimit</c>（达大回合上限）终局，单独成段。</summary>
 public sealed record ConvergenceSection(
     int Converged,
     int Capped,
@@ -183,7 +184,8 @@ public static class BalanceAnalyzer
             reasons[r] = reasons.TryGetValue(r, out int n) ? n + 1 : 1;
         }
 
-        int capped = logs.Count(l => !l.Result!.Converged);
+        // round-cap D5：不收敛口径 = 终局原因为规则级 MajorRoundLimit 的局占比。
+        int capped = logs.Count(l => l.Result!.Reason == nameof(EndReason.MajorRoundLimit));
         return new ConvergenceSection(
             logs.Count - capped,
             capped,

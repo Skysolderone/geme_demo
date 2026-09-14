@@ -3,7 +3,7 @@
   "name": "round-cap",
   "title": "规则复议 2：大回合上限终局（round-cap）",
   "description": "openspec change round-cap：第 4 类终局条件，大回合上限 15，入配置与存档",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

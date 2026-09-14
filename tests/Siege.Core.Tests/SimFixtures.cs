@@ -117,8 +117,7 @@ internal static class SimFixtures
     internal static LogResult ResultOf(int majorRound, int[] winners, bool converged = true, int players = 4, PeakEntry? peak = null, bool? peakDestroyed = null) =>
         new()
         {
-            Reason = converged ? nameof(EndReason.AllPassed) : SimEndReason.MaxMajorRoundsReached,
-            Converged = converged,
+            Reason = converged ? nameof(EndReason.AllPassed) : nameof(EndReason.MajorRoundLimit),
             MajorRound = majorRound,
             TurnCount = majorRound * players,
             Standings = [.. Enumerable.Range(0, players).Select(p => new StandingEntry

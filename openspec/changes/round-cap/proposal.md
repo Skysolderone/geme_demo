@@ -21,6 +21,7 @@
 ### Modified Capabilities
 - `elimination-endgame`: 新增 Requirement「大回合上限终局」；Requirement「终局名次与并列判定」扩展到条件 4。
 - `match-setup`: 对局配置新增"大回合上限"字段（公开、入存档）。
+- `turn-sequence`: Requirement「大回合的定义与推进」的 Scenario「无固定轮数」限定为上限 0 时，与默认上限 15 不再冲突。
 
 ## Impact
 

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Match;
 
 namespace Siege.Sim.Config;
 
@@ -34,8 +35,11 @@ public sealed record PlayerAiConfig
 /// </summary>
 public sealed record RunConfig
 {
-    /// <summary>默认大回合上限（裁决 13：AI 互打可能不收敛，达上限记为独立终局原因）。</summary>
-    public const int DefaultMaxMajorRounds = 30;
+    /// <summary>默认大回合上限 = 规则层标准局初值（round-cap D3：跑局层只传值，不再有自己的"达上限"语义）。</summary>
+    public const int DefaultMaxMajorRounds = MatchOptions.DefaultMaxMajorRounds;
+
+    /// <summary>默认小回合硬停（round-cap D3：上限为 0 时的防死锁保险，以异常记为失败局，不是终局原因）。</summary>
+    public const int DefaultMaxTurns = 1_000;
 
     /// <summary>地图标识或地图 JSON 文件路径。</summary>
     public string MapId { get; init; } = "siege-4p-base-v1";
@@ -52,10 +56,11 @@ public sealed record RunConfig
     /// <summary>并行度；0 = 处理器数。</summary>
     public int Parallelism { get; init; }
 
+    /// <summary>大回合上限，直接写入对局配置 <see cref="MatchOptions.MaxMajorRounds"/>（0 = 不限，只受条件 1–3 与 <see cref="MaxTurns"/> 约束）。</summary>
     public int MaxMajorRounds { get; init; } = DefaultMaxMajorRounds;
 
-    /// <summary>单局小回合数硬上限（防死锁），超出视为失败局。</summary>
-    public int MaxTurns { get; init; } = 10_000;
+    /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
+    public int MaxTurns { get; init; } = DefaultMaxTurns;
 
     public EventRetention EventRetention { get; init; } = EventRetention.SnapshotsOnly;
 
@@ -87,9 +92,14 @@ public sealed record RunConfig
             throw new ArgumentException("对局至少需要两名玩家。");
         }
 
-        if (Count < 1 || MaxMajorRounds < 1 || MaxTurns < 1)
+        if (Count < 1 || MaxTurns < 1)
         {
-            throw new ArgumentException("局数、大回合上限与小回合上限至少为 1。");
+            throw new ArgumentException("局数与小回合硬停至少为 1。");
+        }
+
+        if (MaxMajorRounds < 0)
+        {
+            throw new ArgumentException("大回合上限须为非负整数（0 = 不限）。");
         }
 
         if (FullEventSamplePermille is < 0 or > 1000)

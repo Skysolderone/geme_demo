@@ -71,4 +71,33 @@ public class 终局名次与并列判定Tests
         ImmutableArray<Standing> s = FinalStandings.Compute([Eliminated(MatchFixtures.P1, 1), Eliminated(MatchFixtures.P2, 2), Resigned(MatchFixtures.P3, 5), Active(MatchFixtures.P0, 30)]);
         Assert.Equal(new[] { 1, 4, 3, 2 }, Ranks(s, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3));
     }
+
+    [Fact]
+    public void 达上限时按同一规则排名()
+    {
+        // round-cap：以「达大回合上限」终局时走 Finish → FinalStandings.Compute 的同一路径——势力相同比信物数，控制 3 枚者高于控制 1 枚者。
+        // 局面：P0 {B2,B3} 与 P1 {H2,H3} 左右镜像（势力相同），信物格 A2 只被 P0 独占覆盖，G2 / J2 / H1 只被 P1 独占覆盖（信物内容不影响势力）。
+        // 变异验证 M-R1：EndMajorRound 删除上限检查 → 红（本测试：对局未结束）；M-R5 同样红。
+        // 变异验证 M-R14：Finish 在 MajorRoundLimit 下把 ControlledRelics 传 0 → 红 1（本测试：P0 与 P1 并列）。
+        MatchFlow match = MatchFixtures.Started(relics: [("A2", RelicFixtures.Depot()), ("G2", RelicFixtures.Depot()), ("J2", RelicFixtures.Depot()), ("H1", RelicFixtures.Depot())])
+            .AtRound(15, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+            .Stones(MatchFixtures.P0, "B2")
+            .Stones(MatchFixtures.P1, "H2");
+
+        match.PlayTurn("B3");   // P0
+        match.PlayTurn("H3");   // P1
+        match.PassTurn();       // P2
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
+        match.PassTurn();       // P3：第 15 大回合结束 → 达上限
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.MajorRoundLimit, match.Result!.Reason);
+
+        Standing p0 = match.Result.Of(MatchFixtures.P0);
+        Standing p1 = match.Result.Of(MatchFixtures.P1);
+        Assert.Equal(p0.Input.Power, p1.Input.Power);   // 镜像局面：势力相同
+        Assert.True(p0.Input.Power > 0);
+        Assert.Equal((1, 3), (p0.Input.ControlledRelics, p1.Input.ControlledRelics));
+        Assert.Equal((2, 1), (p0.Rank, p1.Rank));
+        Assert.Equal(StandingGroup.Finisher, p1.Group);
+    }
 }

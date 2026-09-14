@@ -108,6 +108,7 @@ public sealed partial class MatchFlow
             throw new ArgumentException($"地图 {map.Id} 最多支持 {map.MaxPlayers} 人，实际 {list.Length} 人。", nameof(players));
         }
 
+        RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(options));
         return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed), new BoardHistory(), options);
     }
 
@@ -117,7 +118,37 @@ public sealed partial class MatchFlow
 
     public GameSeed Seed { get; }
 
-    public MatchOptions Options { get; }
+    /// <summary>对局配置。插旗阶段可经 <see cref="ConfigureMaxMajorRounds"/> 调整大回合上限；锁定后固定。</summary>
+    public MatchOptions Options { get; private set; }
+
+    /// <summary>大回合上限（设计文档 §12.3 条件 4；0 = 不限）。始终公开，入存档。</summary>
+    public int MaxMajorRounds => Options.MaxMajorRounds;
+
+    /// <summary>恢复自不含大回合上限字段的旧存档时为 <c>true</c>：上限按 <see cref="MatchOptions.DefaultMaxMajorRounds"/> 回填。</summary>
+    public bool MaxMajorRoundsBackfilled { get; private set; }
+
+    /// <summary>
+    /// 在插旗阶段调整大回合上限（非负整数，0 = 不限）。对局一旦开始（<see cref="MatchPhase.InProgress"/> 或已结束）即抛 <see cref="SiegeRuleException"/>：
+    /// 上限是对局配置，进行中不可改。
+    /// </summary>
+    public void ConfigureMaxMajorRounds(int maxMajorRounds)
+    {
+        if (Phase != MatchPhase.FlagPlanting)
+        {
+            throw new SiegeRuleException($"大回合上限是对局配置，只能在插旗阶段设定；当前阶段 {Phase}。");
+        }
+
+        RequireValidMaxMajorRounds(maxMajorRounds, nameof(maxMajorRounds));
+        Options = Options with { MaxMajorRounds = maxMajorRounds };
+    }
+
+    private static void RequireValidMaxMajorRounds(int value, string paramName)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(paramName, value, "大回合上限须为非负整数（0 = 不设上限）。");
+        }
+    }
 
     /// <summary>权威盘面。规则层内部使用；表现层与 AI 请消费 <see cref="Publish"/>。</summary>
     public GameBoard Board { get; }
@@ -401,7 +432,7 @@ public sealed partial class MatchFlow
 
     /// <summary>发布公开快照（裁决 1）。</summary>
     public MatchPublicView Publish() =>
-        new(Phase, MajorRound, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(), Board.Serialize(),
+        new(Phase, MajorRound, MaxMajorRounds, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(), Board.Serialize(),
             Scoreboard.Latest, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result);
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------
@@ -459,7 +490,7 @@ public sealed partial class MatchFlow
         }
     }
 
-    /// <summary>三类终局条件（设计文档 §12.3）。只记录待处理的终局原因；收尾在当前小回合结束时进行。</summary>
+    /// <summary>终局条件 1–3（设计文档 §12.3）。只记录待处理的终局原因；收尾在当前小回合结束时进行。条件 4（大回合上限）在 <see cref="EndMajorRound"/> 检查。</summary>
     private void CheckEndConditions()
     {
         if (_pendingEnd is not null || Phase != MatchPhase.InProgress)
@@ -575,6 +606,15 @@ public sealed partial class MatchFlow
         {
             _pendingEnd = EndReason.LastPlayerStanding;
             Finish(EndReason.LastPlayerStanding);
+            return;
+        }
+
+        // 条件 4（round-cap D1 / D2）：唯一检查点在这里——最后一名参赛玩家的小回合结算或 Pass 之后、生成下一大回合顺序之前。
+        // 条件 1–3 在结算瞬间已经判过并在 CompleteTurn 里收尾，走到这里说明对局仍在进行，才轮到上限兜底。
+        // 比较用刚结束的轮次 `completed`，不用推进后的 MajorRound（heuristic-ai 阶段 B 踩过的时序陷阱）。
+        if (MaxMajorRounds > 0 && completed >= MaxMajorRounds)
+        {
+            Finish(EndReason.MajorRoundLimit);
             return;
         }
 

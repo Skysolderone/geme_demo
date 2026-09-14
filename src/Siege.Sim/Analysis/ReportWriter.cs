@@ -26,9 +26,9 @@ public static class ReportWriter
         sb.AppendLine($"- {q.Verdict}");
         sb.AppendLine();
 
-        sb.AppendLine("## 收敛情况（裁决 13）");
+        sb.AppendLine("## 收敛情况（裁决 13 / round-cap：按规则原因 MajorRoundLimit 统计）");
         ConvergenceSection c = r.Convergence;
-        sb.AppendLine($"- 真正终局 {c.Converged} 局；达上限未终局 {c.Capped} 局，不收敛率 {c.CappedRate}");
+        sb.AppendLine($"- 条件 1–3 终局 {c.Converged} 局；达大回合上限终局（MajorRoundLimit）{c.Capped} 局，不收敛率 {c.CappedRate}");
         sb.AppendLine($"- 终局原因：{Histogram(c.Reasons)}");
         sb.AppendLine($"- 平均大回合数：终局局 {Num(c.MeanMajorRoundsConverged)}，全部局 {Num(c.MeanMajorRoundsAll)}；平均小回合数 {Num(c.MeanTurnsPerMatch)}");
         sb.AppendLine();

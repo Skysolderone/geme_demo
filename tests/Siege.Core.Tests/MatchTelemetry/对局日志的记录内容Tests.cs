@@ -69,8 +69,8 @@ public class 对局日志的记录内容Tests
         Assert.All(log.Turns, t => Assert.Equal(t.Placements.Count == 0, t.Passed));
         Assert.Equal(4, log.Result.Standings.Count);
         Assert.NotEmpty(log.Result.Winners);
-        string[] reasons = [SimEndReason.MaxMajorRoundsReached, .. Enum.GetNames<EndReason>()];
-        Assert.Contains(log.Result.Reason, reasons);
+        // round-cap 3.3：跑局层不再有自己的"达上限"原因，终局原因只能是规则级 EndReason（含 MajorRoundLimit）。
+        Assert.Contains(log.Result.Reason, Enum.GetNames<EndReason>());
 
         // 7. 小回合、大回合与整局耗时
         Assert.All(log.Turns, t => Assert.NotNull(t.ElapsedMs));
@@ -120,7 +120,8 @@ public class 对局日志的记录内容Tests
     {
         // 玩家提交自杀手批次：P1 先占 A2、B1，P0 提交 A1（无气、不提子）→ 确认被拒 → 日志记录该次尝试、失败类别 Suicide 与相关坐标 A1。
         // 变异验证 M-B4：LoggingController.OnRejected 不记录 → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().Stones(MatchFixtures.P1, "A2", "B1");
+        // round-cap 3.3：原靠跑局层 maxRounds: 1 硬停；现由对局配置上限 1 以规则原因 MajorRoundLimit 终局。
+        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { MaxMajorRounds = 1 }).Stones(MatchFixtures.P1, "A2", "B1");
         match.Debug.SetOrder(MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3);
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(maxRounds: 1));
         session.SetController(MatchFixtures.P0, new BlindController("A1"));

@@ -17,6 +17,15 @@ public sealed record MatchOptions
 
     /// <summary>插旗时限。<see cref="TimeSpan.Zero"/> 表示立即：宿主无需等待即可锁定。规则内核不持有计时器，到时由宿主调用 <see cref="FlagPlanting.LockAll"/>。</summary>
     public TimeSpan FlagTimeLimit { get; init; } = DefaultFlagTimeLimit;
+
+    /// <summary>标准局的大回合上限初值（设计文档 §12.3 条件 4，round-cap D4）。</summary>
+    public const int DefaultMaxMajorRounds = 15;
+
+    /// <summary>
+    /// 大回合上限（非负整数；0 = 不设上限）。第「上限」个大回合结束时对局仍在进行则以 <see cref="EndReason.MajorRoundLimit"/> 终局。
+    /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureMaxMajorRounds"/>）。
+    /// </summary>
+    public int MaxMajorRounds { get; init; } = DefaultMaxMajorRounds;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

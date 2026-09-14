@@ -41,6 +41,7 @@ public sealed partial class MatchFlow
             MapId = Map.Id,
             Seed = Seed.ToString(),
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
+            MaxMajorRounds = MaxMajorRounds,
             Phase = Phase,
             MajorRound = MajorRound,
             Order = [.. _order.Select(p => p.Value)],
@@ -142,13 +143,21 @@ public sealed partial class MatchFlow
     private static MatchFlow RestoreCore(MapData map, GameBoard board, GameSeed seed, RelicGenerationRecord relicRecord, MatchSaveData data)
     {
         ImmutableArray<PlayerId> players = [.. data.Players.Select(p => new PlayerId(p.Player)).Order()];
-        var options = new MatchOptions { FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks) };
+        // round-cap：旧存档没有大回合上限字段 → 按标准局初值回填（不是 0，否则旧局会变成不限轮），并在 MaxMajorRoundsBackfilled 上留痕。
+        bool backfilled = data.MaxMajorRounds is null;
+        var options = new MatchOptions
+        {
+            FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
+            MaxMajorRounds = data.MaxMajorRounds ?? MatchOptions.DefaultMaxMajorRounds,
+        };
+        RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(data));
         var match = new MatchFlow(
             map, board, seed, players,
             RelicLedger.Restore(relicRecord, data.Relics ?? throw new FormatException("存档缺少信物账本。")),
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。")),
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
+        match.MaxMajorRoundsBackfilled = backfilled;
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -220,6 +229,9 @@ public sealed class MatchSaveData
     public string? Seed { get; set; }
 
     public long FlagTimeLimitTicks { get; set; }
+
+    /// <summary>大回合上限（round-cap）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultMaxMajorRounds"/>。</summary>
+    public int? MaxMajorRounds { get; set; }
 
     public MatchPhase Phase { get; set; }
 

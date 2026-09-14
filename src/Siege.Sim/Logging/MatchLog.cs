@@ -18,7 +18,7 @@ namespace Siege.Sim.Logging;
 /// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
 /// <item><term>4. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
 /// <item><term>5. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c></description></item>
-/// <item><term>6. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（含达上限未终局）</description></item>
+/// <item><term>6. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（达大回合上限是规则级终局原因 <c>MajorRoundLimit</c>）</description></item>
 /// <item><term>7. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
 /// </remarks>
@@ -210,6 +210,9 @@ public sealed record LogHeader
     /// <summary>种子，十六进制（<c>GameSeed.ToString</c>）。</summary>
     public required string Seed { get; init; }
 
+    /// <summary>本局对局配置的大回合上限（0 = 不限；match-setup「上限进入对局记录」）。取自对局本身，不是 <see cref="Config"/>。</summary>
+    public int MaxMajorRounds { get; init; }
+
     public required RunConfig Config { get; init; }
 
     public List<int> Players { get; init; } = [];
@@ -394,18 +397,11 @@ public static class LogEventType
     public const string PlayerEliminated = "PlayerEliminated";
     public const string PlayerResigned = "PlayerResigned";
     public const string MatchEnded = "MatchEnded";
-    public const string MaxRoundsReached = "MaxRoundsReached";
     public const string Takeover = "Takeover";
     public const string FlagsLocked = "FlagsLocked";
 
     /// <summary>只在完整模式保留的细粒度事件。</summary>
     public static bool IsFineGrained(string type) => type is Rehearsal or Candidates;
-}
-
-/// <summary>达上限未终局的终局原因（裁决 13），与 <c>EndReason</c> 并列。</summary>
-public static class SimEndReason
-{
-    public const string MaxMajorRoundsReached = "MaxMajorRoundsReached";
 }
 
 /// <summary>末行：终局原因、名次、标注、揭示表、峰值遥测、耗时。</summary>
@@ -415,11 +411,11 @@ public sealed record LogResult
 
     public string Kind { get; init; } = KindName;
 
-    /// <summary><c>EndReason</c> 名或 <see cref="SimEndReason.MaxMajorRoundsReached"/>。</summary>
+    /// <summary><c>EndReason</c> 名（round-cap 后达上限也是规则级原因 <c>MajorRoundLimit</c>）。</summary>
     public required string Reason { get; init; }
 
-    /// <summary>是否真正终局（达上限为 <c>false</c>）。</summary>
-    public bool Converged { get; init; }
+    /// <summary>是否按条件 1–3 收敛（round-cap D5：不收敛 = 以「达大回合上限」终局）。由 <see cref="Reason"/> 派生，读旧日志时忽略文件里的同名字段。</summary>
+    public bool Converged => Reason != nameof(Siege.Core.Match.EndReason.MajorRoundLimit);
 
     public int MajorRound { get; init; }
 

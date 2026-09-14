@@ -56,7 +56,8 @@ public class 大回合的定义与推进Tests
     {
         // 设计文档 §11 / §18.2：对局进行到第 15 大回合且终局条件均未满足 → 继续。
         // 变异验证 M-T7：EndMajorRound 在 completed >= 15 时 Finish → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().AtRound(15, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+        // round-cap：标准局上限 15 起，第 15 大回合结束即达上限终局；"无固定轮数"改由上限 0（不设上限）表达（§18.2：上限是兜底，0 保留原行为）。
+        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { MaxMajorRounds = 0 }).AtRound(15, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
         match.PlayTurn("B2");
         match.PlayTurn("H2");
         match.PlayTurn("B8");

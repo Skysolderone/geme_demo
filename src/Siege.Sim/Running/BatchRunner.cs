@@ -16,7 +16,7 @@ public sealed record BatchSummary
 
     public int Failed { get; init; }
 
-    /// <summary>达大回合上限未终局的局数（裁决 13）。</summary>
+    /// <summary>以「达大回合上限」（规则级 <c>MajorRoundLimit</c>）终局的局数（round-cap D5 不收敛口径）。</summary>
     public int Capped { get; init; }
 
     public int Excluded { get; init; }

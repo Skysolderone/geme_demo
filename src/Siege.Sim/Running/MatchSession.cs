@@ -40,7 +40,6 @@ public sealed class MatchSession
     private int _eventSeq;
     private int _flowCursor;
     private int _recruitCursor;
-    private bool _capped;
     private bool _finished;
 
     private MatchSession(MatchFlow match, RunConfig config)
@@ -55,6 +54,12 @@ public sealed class MatchSession
         if (match.Players.Length != config.Players.Count)
         {
             throw new SiegeRuleException($"配置了 {config.Players.Count} 名玩家，对局却有 {match.Players.Length} 名。");
+        }
+
+        // round-cap D3：跑局配置与对局配置只能有一个上限值，否则日志首部与报告会和规则层分叉。
+        if (match.MaxMajorRounds != config.MaxMajorRounds)
+        {
+            throw new SiegeRuleException($"跑局配置的大回合上限为 {config.MaxMajorRounds}，对局配置却为 {match.MaxMajorRounds}。");
         }
 
         Runner = new MatchRunner(match);
@@ -81,9 +86,6 @@ public sealed class MatchSession
     /// <summary>已完成的小回合数。</summary>
     public int TurnCount => _turn;
 
-    /// <summary>是否因达大回合上限而停止。</summary>
-    public bool ReachedCap => _capped;
-
     // ---------- 建局 ----------
 
     /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、P<i>i</i> 插旗到出生区 <i>i</i>。</summary>
@@ -93,7 +95,8 @@ public sealed class MatchSession
         config.Validated();
         map ??= MapCatalog.Resolve(config.MapId);
         PlayerId[] players = config.PlayerIds();
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate);
+        // round-cap D3：大回合上限是对局配置，跑局层只把 --max-rounds 透传进去。
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds });
         match.PlantSequentially(players.Select((p, i) => (p, i % map.BirthZones.Length)));
         return new MatchSession(match, config);
     }
@@ -135,7 +138,7 @@ public sealed class MatchSession
 
     // ---------- 驱动 ----------
 
-    /// <summary>跑到终局或大回合上限；任何异常都被捕获为失败局记录。返回完整日志。</summary>
+    /// <summary>跑到终局（含规则级大回合上限）；任何异常（含小回合硬停）都被捕获为失败局记录。返回完整日志。</summary>
     public MatchLog Run()
     {
         try
@@ -165,15 +168,10 @@ public sealed class MatchSession
             return false;
         }
 
-        if (Match.MajorRound > Config.MaxMajorRounds)
-        {
-            _capped = true;
-            return false;
-        }
-
+        // 防死锁硬停（round-cap D3）：不是终局原因，以异常落 failed 日志。上限为 0 时这是唯一兜底。
         if (_turn >= Config.MaxTurns)
         {
-            throw new SimAssertionException($"对局超过 {Config.MaxTurns} 个小回合仍未结束：疑似死锁。");
+            throw new SimAssertionException($"对局超过 {Config.MaxTurns} 个小回合仍未结束（大回合上限 {Match.MaxMajorRounds}）：疑似死锁。");
         }
 
         PlayerId player = Match.CurrentPlayer ?? throw new SimAssertionException("进行中的对局没有当前玩家。");
@@ -474,6 +472,7 @@ public sealed class MatchSession
         {
             MapId = Match.Map.Id,
             Seed = Seed.ToString(),
+            MaxMajorRounds = Match.MaxMajorRounds,
             Config = Config,
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],
@@ -508,29 +507,15 @@ public sealed class MatchSession
     {
         _finished = true;
         MatchPublicView view = _previous;
-        string reason;
-        bool converged;
-        ImmutableArray<Standing> standings;
-        if (Match.Result is { } result)
-        {
-            reason = result.Reason.ToString();
-            converged = true;
-            standings = result.Standings;
-        }
-        else
-        {
-            reason = SimEndReason.MaxMajorRoundsReached;
-            converged = false;
-            standings = ProvisionalStandings(view);
-            Add(_turn, Match.MajorRound, LogEventType.MaxRoundsReached, null, $"第 {Config.MaxMajorRounds} 大回合上限已到，未终局。");
-        }
+        // round-cap：会话只在规则层终局时收尾（达上限也是规则级 EndReason.MajorRoundLimit），名次直接取规则层结果。
+        MatchResult result = Match.Result ?? throw new SimAssertionException("会话收尾时对局尚未终局。");
+        ImmutableArray<Standing> standings = result.Standings;
 
         MultiplierPeak? peak = Match.Scoreboard.Peak;
         var logResult = new LogResult
         {
-            Reason = reason,
-            Converged = converged,
-            MajorRound = converged ? Match.Result!.MajorRound : Config.MaxMajorRounds,
+            Reason = result.Reason.ToString(),
+            MajorRound = result.MajorRound,
             TurnCount = _turn,
             Standings = [.. standings.Select(s => new StandingEntry
             {
@@ -571,27 +556,6 @@ public sealed class MatchSession
             Events = _retention == EventRetention.Full ? _events : [.. _events.Where(e => !LogEventType.IsFineGrained(e.Type))],
             Result = logResult,
         };
-    }
-
-    /// <summary>达上限时按终局名次链算一份"此刻名次"，复用 <see cref="FinalStandings"/> 的唯一实现。</summary>
-    private static ImmutableArray<Standing> ProvisionalStandings(MatchPublicView view)
-    {
-        PowerSnapshot power = view.Power ?? throw new SimAssertionException("没有势力快照。");
-        var inputs = new List<StandingInput>();
-        foreach (PlayerFlowState state in view.Players)
-        {
-            PlayerPower detail = power.Of(state.Player);
-            inputs.Add(new StandingInput(
-                state.Player,
-                state.Status,
-                state.Status == PlayerStatus.Resigned ? state.PowerAtResign ?? 0 : detail.Total,
-                view.Relics.Count(r => r.Control.GrantsEffectTo(state.Player)),
-                detail.ExclusiveCells.Length,
-                detail.Groups.Sum(g => g.Stones.Length),
-                state.EliminationOrder));
-        }
-
-        return FinalStandings.Compute(inputs);
     }
 
     /// <summary>裁决 6：峰值串是否在之后的某个快照里不再完整属于原主（被摧毁）。逐快照比对，不进 scoreboard。</summary>
