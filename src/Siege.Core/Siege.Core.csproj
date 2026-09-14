@@ -10,6 +10,8 @@
   <ItemGroup>
     <!-- 测试需要构造跳过静态校验的小盘面；LoadUnvalidated 对生产代码不可见 -->
     <InternalsVisibleTo Include="Siege.Core.Tests" />
+    <!-- 调试视图 / 调试 AI 的 internal 构造入口只对批量跑局程序集开放（裁决 9） -->
+    <InternalsVisibleTo Include="Siege.Sim" />
   </ItemGroup>
 
   <!-- 编译期守门：任何 Godot 引用都让构建失败。

@@ -17,6 +17,7 @@ public sealed class MatchRunner
     public const int MaxRejections = 8;
 
     private readonly Dictionary<PlayerId, ITurnController> _controllers = [];
+    private readonly Dictionary<PlayerId, ITurnController> _suspended = [];
 
     public MatchRunner(MatchFlow match)
     {
@@ -24,6 +25,9 @@ public sealed class MatchRunner
     }
 
     public MatchFlow Match { get; }
+
+    /// <summary>对局标注：调试 AI 使用与人工接管事件（设计文档 §15.3）。</summary>
+    public MatchAnnotations Annotations { get; } = new();
 
     /// <summary>设置或替换某玩家的控制者。可在任意阶段调用；从下一个阶段起生效。</summary>
     public void SetController(PlayerId player, ITurnController controller)
@@ -40,6 +44,39 @@ public sealed class MatchRunner
     /// <summary>某玩家当前的控制者。</summary>
     public ITurnController ControllerOf(PlayerId player) =>
         _controllers.TryGetValue(player, out ITurnController? c) ? c : throw new SiegeRuleException($"玩家 {player} 没有控制者。");
+
+    /// <summary>
+    /// 人工接管（设计文档 §15.3）：用 <paramref name="manual"/> 替换该玩家当前控制者并记录事件；可在任意小回合的任意阶段调用，
+    /// 从下一个阶段起生效。被替换的控制者保留，供 <see cref="HandBack"/> 交还。重复接管同一玩家即抛出。
+    /// </summary>
+    public void TakeOver(PlayerId player, ITurnController manual)
+    {
+        ArgumentNullException.ThrowIfNull(manual);
+        if (_suspended.ContainsKey(player))
+        {
+            throw new SiegeRuleException($"玩家 {player} 已处于人工接管中。");
+        }
+
+        ITurnController previous = ControllerOf(player);
+        _suspended[player] = previous;
+        SetController(player, manual);
+        Annotations.RecordTakeover(player, Match.MajorRound, Match.Stage, TakeoverKind.TakenOver);
+    }
+
+    /// <summary>交还控制权给接管前的控制者并记录事件；未被接管即抛出。</summary>
+    public void HandBack(PlayerId player)
+    {
+        if (!_suspended.Remove(player, out ITurnController? previous))
+        {
+            throw new SiegeRuleException($"玩家 {player} 未被人工接管。");
+        }
+
+        SetController(player, previous);
+        Annotations.RecordTakeover(player, Match.MajorRound, Match.Stage, TakeoverKind.HandedBack);
+    }
+
+    /// <summary>该玩家当前是否处于人工接管中。</summary>
+    public bool IsTakenOver(PlayerId player) => _suspended.ContainsKey(player);
 
     /// <summary>跑完当前玩家的一个小回合（从 Idle 到 Idle）。对局已结束或本回合中途结束时提前返回。</summary>
     public void RunTurn()
