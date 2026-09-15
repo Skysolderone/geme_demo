@@ -65,6 +65,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 5. 出生区随机资源是否造成显著胜率差异。
 6. 供给（展示/选取）、部署、槽位、倍率四条成长轴是否存在唯一最优顺序。
 7. 玩家是否频繁用"至少落 1 枚"规避 Pass 撤销，并形成无意义拖延。
+8. 势力碾压胜的占比、碾压成立（获胜）的平均大回合，以及成立时获胜者与第 2 名的势力比。
 
 #### Scenario: 棋子选择率与胜率
 - **WHEN** 读取分析报告
@@ -81,6 +82,10 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 #### Scenario: 成长轴顺序分析
 - **WHEN** 读取成长轴分析
 - **THEN** 报告给出四条成长轴在胜局中的优先获取顺序分布，用于判断是否存在唯一最优解
+
+#### Scenario: 碾压胜统计
+- **WHEN** 一批对局中有 40 局以势力碾压终局
+- **THEN** 报告给出碾压胜占比、这些局碾压成立的平均大回合，以及成立时获胜者势力与第 2 名势力之比
 
 ### Requirement: 分析排除测试污染
 
