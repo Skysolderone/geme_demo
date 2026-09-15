@@ -22,7 +22,7 @@ public class 启发式评价维度Tests
     /// </code>
     /// P1 的 E5 只剩一口气 F5；P1 另有 H8、H6、A9 使 P1 势力 14（4 子 + 独占 F5,H5,G6,J6,H7,G8,J8,A8,H9,B9）高于 P0 的 10
     ///（3 子 + 独占 E3,D4,F4,C5,D6,F6,E7）；F5 提 E5 后 P0 13（4 子 + 9 独占格，新增 E5、G5）> P1 12，P0 从第 2 名升到第 1 名；
-    /// 而 D4 这类安静落点只 +2（12 &lt; 14），名次不变。P0 手牌薄（普通子 2 + 倍增子 1 = 部署上限 3），落 1 子后下回合缺 1 枚，供给维 −1。
+    /// 而 D4 这类安静落点只 +2（12 &lt; 14），名次不变。P0 手牌薄（普通子 2 + 倍增子 1 = 3 枚），第 5 大回合部署上限 4（growth-pass-1 分阶段基础值，原 3），落 1 子后剩 2 枚、下回合缺 2 枚，供给维 −2（原 −1）。
     /// </summary>
     internal static MatchFlow CaptureRelicPosition()
     {
@@ -56,7 +56,7 @@ public class 启发式评价维度Tests
         Assert.NotEqual(0, e.RawOf(EvaluationDimension.Safety));
         Assert.True(e.RawOf(EvaluationDimension.Growth) > 0, e.ToString());
         Assert.True(e.RawOf(EvaluationDimension.Initiative) > 0, e.ToString());
-        Assert.Equal(-1, e.RawOf(EvaluationDimension.Supply));
+        Assert.Equal(-2, e.RawOf(EvaluationDimension.Supply));   // −max(0, 部署上限 4 − 剩余 2)
 
         long sum = 0;
         foreach (EvaluationDimension d in Enum.GetValues<EvaluationDimension>())

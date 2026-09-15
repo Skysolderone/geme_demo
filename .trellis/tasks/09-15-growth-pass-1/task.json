@@ -3,7 +3,7 @@
   "name": "growth-pass-1",
   "title": "规则打磨 2：部署上限分阶段与倍率封顶 4（growth-pass-1）",
   "description": "openspec change growth-pass-1：基础部署上限 3/4/5 分阶段，倍率封顶 5->4",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

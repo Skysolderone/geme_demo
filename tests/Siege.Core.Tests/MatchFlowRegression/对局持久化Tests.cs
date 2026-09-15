@@ -66,7 +66,7 @@ public class 对局持久化Tests
         foreach (MatchFlow m in new[] { match, restored })
         {
             m.BeginTurn();
-            Assert.Equal(4, m.CurrentSnapshot!.DeployLimit);
+            Assert.Equal(5, m.CurrentSnapshot!.DeployLimit);   // 第 6 大回合基础 4 + 军令 +1（growth-pass-1：原基础 3 → 4）
             RecruitPanelView panel = m.EnterRecruit();
             m.CurrentHand().Pick(panel.Candidates.First(c => c.IsSelectable).Index);
             Assert.Null(m.EnterDeploy().Stage(TestMaps.At("F6"), PieceType.Basic));

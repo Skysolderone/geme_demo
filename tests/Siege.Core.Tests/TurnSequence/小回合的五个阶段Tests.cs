@@ -67,22 +67,24 @@ public class 小回合的五个阶段Tests
     [Fact]
     public void 快照在回合内不变()
     {
-        // 设计文档 §5.1：本小回合批次中占领军令信物 → 本小回合部署上限仍为快照值 3；下一小回合才变 4。
+        // 设计文档 §5.1：本小回合批次中占领军令信物 → 本小回合部署上限仍为快照值 4；下一小回合才变 5。
+        // growth-pass-1 改写：第 5 大回合分阶段基础值为 4（原基础 3），快照值 3→4、下一小回合 4→5，暂放多一枚（C8）才触及上限。
         // 变异验证 M-T4：EnterDeploy 改为现算 Relics.SnapshotFor 而不用 _snapshot → 本测试仍绿（占领在确认时才生效）；
         // 真正钉住"回合内不变"的是快照对象引用不变 + 上限 3：把 CurrentSnapshot 改成每次访问重新生成 → 红 1（本测试）。
         MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff, relics: [("E5", RelicFixtures.Command())]).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
 
         match.BeginTurn();
         EffectSnapshot snapshot = match.CurrentSnapshot!;
-        Assert.Equal(3, snapshot.DeployLimit);
+        Assert.Equal(4, snapshot.DeployLimit);
         match.EnterRecruit();
         StagedBatch batch = match.EnterDeploy();
         Assert.Null(batch.Stage(TestMaps.At("E5"), PieceType.Basic));
         Assert.Null(batch.Stage(TestMaps.At("A5"), PieceType.Basic));
         Assert.Null(batch.Stage(TestMaps.At("B7"), PieceType.Basic));
-        Assert.Equal(BatchFailureKind.DeployLimitExceeded, batch.Stage(TestMaps.At("C8"), PieceType.Basic)!.Kind);
+        Assert.Null(batch.Stage(TestMaps.At("C8"), PieceType.Basic));
+        Assert.Equal(BatchFailureKind.DeployLimitExceeded, batch.Stage(TestMaps.At("D2"), PieceType.Basic)!.Kind);
         Assert.Same(snapshot, match.CurrentSnapshot);
-        Assert.Equal(3, batch.Context.DeployLimit);
+        Assert.Equal(4, batch.Context.DeployLimit);
         Assert.True(match.Confirm().Confirmed);
 
         // 其余三人 Pass，P0 的下一小回合快照才含军令
@@ -91,6 +93,6 @@ public class 小回合的五个阶段Tests
         match.PassTurn();
         Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
         match.BeginTurn();
-        Assert.Equal(4, match.CurrentSnapshot!.DeployLimit);
+        Assert.Equal(5, match.CurrentSnapshot!.DeployLimit);
     }
 }

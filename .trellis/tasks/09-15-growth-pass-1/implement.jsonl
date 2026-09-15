@@ -1,1 +1,9 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/growth-pass-1/design.md", "reason": "D1–D5、接口契约与裁决 1–5；实现前必读"}
+{"file": "openspec/changes/growth-pass-1/specs/batch-deployment/spec.md", "reason": "部署上限分阶段基础值的 MODIFIED Requirement"}
+{"file": "openspec/changes/growth-pass-1/specs/relic-effects/spec.md", "reason": "军令叠在分阶段基础值上、来源拆分"}
+{"file": "openspec/changes/growth-pass-1/specs/power-score/spec.md", "reason": "封顶 4 的军势公式与边界算例"}
+{"file": "openspec/changes/growth-pass-1/specs/piece-effects/spec.md", "reason": "倍增子至多 4 枚生效"}
+{"file": "openspec/changes/archive/2026-09-14-cap-multiplier/design.md", "reason": "封顶的唯一常量与生效指数设计；本 change 在其上调整"}
+{"file": "openspec/changes/archive/2026-09-15-dominance-victory/design.md", "reason": "裁决 11 的回归基线与起始大回合须复核的预留"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文 §5.4 §9.2 §10.1 §16；3.x 要改它"}
+{"file": ".trellis/spec/core/testing.md", "reason": "默认值改了变异红数要重跑、算例出处、变异验证记录"}

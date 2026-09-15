@@ -68,7 +68,7 @@ public sealed partial class MatchFlow
                 Parameter(EffectSnapshot.BaseRevealCount, snapshot.RevealCount, RelicType.Prospecting, granted),
                 Parameter(EffectSnapshot.BaseFreePickCount, snapshot.FreePickCount, RelicType.Conscription, granted),
                 Parameter(EffectSnapshot.BaseTypeSlots, snapshot.TypeSlots, RelicType.Depot, granted),
-                Parameter(EffectSnapshot.BaseDeployLimit, snapshot.DeployLimit, RelicType.Command, granted))));
+                Parameter(EffectSnapshot.BaseDeployLimitFor(snapshot.MajorRound), snapshot.DeployLimit, RelicType.Command, granted))));
         }
 
         return result.MoveToImmutable();

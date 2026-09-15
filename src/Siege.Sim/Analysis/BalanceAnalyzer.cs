@@ -712,7 +712,7 @@ public static class BalanceAnalyzer
                     rounds[0] = turn.MajorRound;
                 }
 
-                if (rounds[1] is null && turn.DeployLimit > EffectSnapshot.BaseDeployLimit)
+                if (rounds[1] is null && turn.DeployLimit > EffectSnapshot.BaseDeployLimitFor(turn.MajorRound))
                 {
                     rounds[1] = turn.MajorRound;
                 }

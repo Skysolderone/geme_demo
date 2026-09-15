@@ -29,7 +29,7 @@ internal static class HandFixtures
         int slots = EffectSnapshot.BaseTypeSlots,
         int round = 1,
         params (PieceType Type, int Count)[] emblems) =>
-        new(player, round, reveal, freePick, slots, EffectSnapshot.BaseDeployLimit,
+        new(player, round, reveal, freePick, slots, EffectSnapshot.BaseDeployLimitFor(round),
             emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), ledger.HeldTypeCount(player));
 
     /// <summary>开始小回合并返回该玩家的私有句柄。</summary>

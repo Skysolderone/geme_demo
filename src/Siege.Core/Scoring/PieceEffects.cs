@@ -11,14 +11,14 @@ namespace Siege.Core.Scoring;
 /// <para>倍率指数封顶为 <see cref="MaxExponent"/>（cap-multiplier D1/D2/D4，推翻 territory-power 裁决 3）：封顶只在这一处做，
 /// 调用方继续传原始倍增子数量，<see cref="Count"/> 保留原始数量、<see cref="Exponent"/> 才是生效指数。</para>
 /// <para>计算用 <see cref="Int128"/> 的 checked 整数运算：零分配（批量跑局每次结算都要对全盘每条棋串调用 <see cref="Apply"/>）。
-/// 封顶后 <c>3^5 = 243</c>，中间值 <c>value × 243</c> 不可能溢出 <see cref="Int128"/>；checked 作防御保留——
+/// 封顶后 <c>3^4 = 81</c>，中间值 <c>value × 81</c> 不可能溢出 <see cref="Int128"/>；checked 作防御保留——
 /// 结果装不进 <see cref="long"/> 时仍抛 <see cref="OverflowException"/>，响亮失败而非静默回绕。</para>
 /// <para>只有 <see cref="ToString"/> 走 <see cref="BigInteger"/>：它是显示路径，不参与任何计算。</para>
 /// </remarks>
 public readonly record struct Multiplier
 {
-    /// <summary>倍率指数上限：第 6 枚起的倍增子不再让倍率乘 1.5，倍率上限 <c>3^5 / 2^5 = 7.59375</c>。全项目只在此定义一次。</summary>
-    public const int MaxExponent = 5;
+    /// <summary>倍率指数上限：第 5 枚起的倍增子不再让倍率乘 1.5，倍率上限 <c>3^4 / 2^4 = 5.0625</c>（growth-pass-1 D4：由 cap-multiplier 的 5 调整为 4）。全项目只在此定义一次。</summary>
+    public const int MaxExponent = 4;
 
     /// <summary>不含倍增子时的倍率 1。</summary>
     public static readonly Multiplier One = new(0);
@@ -60,7 +60,7 @@ public readonly record struct Multiplier
         return checked((long)(scaled / Denominator));
     }
 
-    /// <summary>精确十进制表示（如 <c>1</c>、<c>1.5</c>、<c>2.25</c>、<c>3.375</c>，最大 <c>7.59375</c>），按生效指数生成，供 UI 与遥测显示；不经过浮点，也不参与计算。</summary>
+    /// <summary>精确十进制表示（如 <c>1</c>、<c>1.5</c>、<c>2.25</c>、<c>3.375</c>，最大 <c>5.0625</c>），按生效指数生成，供 UI 与遥测显示；不经过浮点，也不参与计算。</summary>
     public override string ToString()
     {
         int e = Exponent;

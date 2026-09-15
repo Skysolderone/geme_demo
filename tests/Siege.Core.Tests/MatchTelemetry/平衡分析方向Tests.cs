@@ -102,10 +102,30 @@ public class 平衡分析方向Tests
     }
 
     [Fact]
+    public void 成长轴部署阈值按分阶段基础值()
+    {
+        // growth-pass-1：部署轴的"获取"= 部署上限高于该小回合所在大回合的分阶段基础值（3 / 4 / 5），而不是固定的 3——
+        // 否则第 4 大回合起人人都会被误记为"获取了部署轴"。合成 P0：第 4 大回合 4、第 6 大回合 4、第 7 大回合 5 都只是基础值；第 8 大回合 6 才是军令带来的获取。
+        // 变异验证 M-GP9：BalanceAnalyzer.AxisAcquisitionRounds 的阈值改为 BaseDeployLimitFor(1) → 全套红 1（本测试，部署轴记为第 4 大回合）。
+        MatchLog log = SimFixtures.Synthetic(
+            1,
+            [
+                SimFixtures.Turn(1, 4, 0, [3, 0, 0, 0], ["A3:Basic"], deployLimit: 4),
+                SimFixtures.Turn(2, 6, 0, [3, 0, 0, 0], ["A4:Basic"], deployLimit: 4),
+                SimFixtures.Turn(3, 7, 0, [3, 0, 0, 0], ["A5:Basic"], deployLimit: 5),
+                SimFixtures.Turn(4, 8, 0, [3, 0, 0, 0], ["A6:Basic"], deployLimit: 6),
+            ],
+            [],
+            SimFixtures.ResultOf(8, [0]));
+
+        Assert.Equal([null, 8, null, null], BalanceAnalyzer.AxisAcquisitionRounds(log, 0));
+    }
+
+    [Fact]
     public void 成长轴顺序分析()
     {
         // 四条成长轴（供给 / 部署 / 槽位 / 倍率）在胜局中的获取顺序分布。合成胜者 P0：第 1 大回合出现倍增串、第 2 大回合部署上限 4、第 3 大回合槽位 6，供给未获取。
-        // 部署轴阈值若误为 >= BaseDeployLimit，顺序会变成 部署>倍率>槽位，本测试的期望值钉住 > 。
+        // 部署轴阈值若误为 >= BaseDeployLimitFor(大回合)，顺序会变成 部署>倍率>槽位，本测试的期望值钉住 > 。
         GroupEntry[] multiplierGroup = [new() { Stones = ["A1", "A2"], Base = 2, MultiplierCount = 1, Power = 3 }];
         MatchLog log = SimFixtures.Synthetic(
             1,

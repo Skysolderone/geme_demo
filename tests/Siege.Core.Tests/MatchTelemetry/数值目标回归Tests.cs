@@ -62,6 +62,7 @@ public class 数值目标回归Tests
         Assert.Equal(DeviationDirection.Within, t.DeployPhase2.Direction);
         Assert.Equal(DeviationDirection.Within, t.DeployPhase3.Direction);
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze([log]));
+        Assert.Contains("### 1. 部署上限分阶段分布（growth-pass-1：基础值按大回合 3 / 4 / 5，军令在其上叠加；目标中位数 3 / 3–5 / 5–8）", text);
         Assert.Contains("第 1–3 大回合：3×1", text);
         Assert.Contains("第 4–6 大回合：4×1", text);
         Assert.Contains("第 7 大回合以后：6×2", text);

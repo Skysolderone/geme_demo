@@ -1,5 +1,8 @@
+using System.Text.RegularExpressions;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Match;
+using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.BatchDeployment;
 
@@ -117,5 +120,106 @@ public class 批次数量与库存约束Tests
 
         Assert.Equal(before, board.Serialize());
         Assert.Equal(0, driver.History.Count);
+    }
+
+    [Theory]
+    [InlineData(3, 3)]
+    [InlineData(5, 4)]
+    [InlineData(8, 5)]
+    public void 基础值随阶段提高(int majorRound, int expected)
+    {
+        // growth-pass-1 batch-deployment 规格：未控制任何军令，分别在第 3 / 5 / 8 大回合进入部署阶段 → 部署上限 3 / 4 / 5（D1/D2，裁决 1）。
+        // 走完整流程：BeginTurn 生成快照 → EnterDeploy 建批次；暂放恰好 expected 枚成功，第 expected + 1 枚被拒。
+        // 变异验证 M-GP2（BaseDeployLimitFor 阶段表写死 3：`<= 6 => 3`、`_ => 3`）→ 全套红 19，含本 Theory 的 5/8 两行；
+        // M-GP3（RelicLedger.BuildSnapshot 基础改为 BaseDeployLimitFor(1)）→ 全套红 47，含本 Theory 的 5/8 两行。
+        // M-GP1（边界整体后移一回合）本 Theory 不红（3/5/8 都不在边界上），由「基础值随阶段提高_阶段边界」的 4、7 两行抓。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(majorRound, MatchFixtures.All);
+
+        match.BeginTurn();
+        Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+        Assert.Equal((majorRound, expected), (match.CurrentSnapshot!.MajorRound, match.CurrentSnapshot.DeployLimit));
+        match.EnterRecruit();
+        StagedBatch batch = match.EnterDeploy();
+        Assert.Equal(expected, batch.Context.DeployLimit);
+
+        string[] cells = ["A1", "C1", "B2", "A3", "C3", "B1"];
+        for (int i = 0; i < expected; i++)
+        {
+            Assert.Null(batch.Stage(TestMaps.At(cells[i]), PieceType.Basic));
+        }
+
+        Assert.Equal(BatchFailureKind.DeployLimitExceeded, batch.Stage(TestMaps.At(cells[expected]), PieceType.Basic)!.Kind);
+        Assert.Equal(expected, batch.Count);
+        Assert.True(match.Confirm().Confirmed);
+    }
+
+    [Theory]
+    [InlineData(1, 3)]
+    [InlineData(3, 3)]
+    [InlineData(4, 4)]
+    [InlineData(6, 4)]
+    [InlineData(7, 5)]
+    [InlineData(15, 5)]
+    public void 基础值随阶段提高_阶段边界(int majorRound, int expected)
+    {
+        // growth-pass-1 design.md D2：阶段边界与构筑保护期、§16 三段对齐——第 1–3 / 4–6 / 7+ 大回合为 3 / 4 / 5。两侧边界各取一行。
+        // 经效果快照生成（账本）与无信物默认快照两条路径读取，二者都只能经由 BaseDeployLimitFor。
+        // 变异验证 M-GP1（`<= 3 => 3` 改 `<= 4 => 3`、`<= 6 => 4` 改 `<= 7 => 4`，即第 4 大回合仍取 3）→ 全套红 6，含本 Theory 的 4、7 两行、「分阶段基础部署上限唯一实现」、
+        // 「来源可拆分」、「分阶段基础值只在生成快照时读取一次」、「成长轴部署阈值按分阶段基础值」。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
+        board.Place("A1", TestMaps.P0);
+        ledger.Settle(board, majorRound);
+
+        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, majorRound);
+
+        Assert.Equal(expected, snapshot.DeployLimit);
+        Assert.Equal(expected, EffectSnapshot.BaseDeployLimitFor(majorRound));
+        Assert.Equal(snapshot, EffectSnapshot.Defaults(TestMaps.P0, majorRound, 0));
+    }
+
+    [Fact]
+    public void 分阶段基础部署上限唯一实现()
+    {
+        // growth-pass-1 D2 / 裁决 1：阶段表全项目只定义一处（EffectSnapshot.BaseDeployLimitFor），其余读取点一律调用它。
+        // 源码文本扫描 Core / Sim / Presentation / Godot 脚本（Godot 不在 siege.sln，只有文本扫描能覆盖，testing.md「游离工程」）：
+        //   1) 阶段表形状 `<= 3 => 3` 恰好出现一次且位于 EffectSnapshot.cs（反面断言：判据在唯一实现里确实命中）；
+        //   2) 旧常量名 BaseDeployLimit（不带 For）不得再出现；
+        //   3) 不得出现把部署相关变量直接赋值为 3 / 4 / 5 的字面量。
+        // 样本口径下界：四个目录各自非空，总字符数 ≥ 300 000，防止扫空目录恒绿。
+        // 变异验证 M-GP8：RelicLedger.BuildSnapshot 改为 `int deploy = 3;`（第二处写死基础值）→ 全套红 48，含本测试（规则 3）；
+        // M-GP1（阶段表边界改写）→ 本测试红（规则 1 的形状不再命中）。M-GP2 只改表内数值、不新增第二处，本测试不红（由数值 Theory 抓）。
+        string root = PresentationFixtures.RepoRoot();
+        string[] dirs =
+        [
+            Path.Combine(root, "src", "Siege.Core"),
+            Path.Combine(root, "src", "Siege.Sim"),
+            Path.Combine(root, "src", "Siege.Presentation"),
+            Path.Combine(root, "src", "godot", "scripts"),
+        ];
+
+        var files = new List<(string Path, string Text)>();
+        foreach (string dir in dirs)
+        {
+            string[] found =
+            [
+                .. Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories)
+                    .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                    .Order(StringComparer.Ordinal),
+            ];
+            Assert.True(found.Length > 0, $"{dir} 没有扫到源码");
+            files.AddRange(found.Select(f => (f, File.ReadAllText(f))));
+        }
+
+        Assert.True(files.Sum(f => f.Text.Length) >= 300_000, $"只扫到 {files.Sum(f => f.Text.Length)} 字符");
+
+        var table = new Regex(@"<=\s*3\s*=>\s*3\b");
+        var legacy = new Regex(@"\bBaseDeployLimit\b");
+        var literal = new Regex(@"(?i)\bdeploy\w*\s*=\s*[345]\s*[;,)]");
+
+        string[] tableHits = [.. files.Where(f => table.IsMatch(f.Text)).Select(f => Path.GetFileName(f.Path))];
+        Assert.Equal(["EffectSnapshot.cs"], tableHits);
+        Assert.Empty(files.Where(f => legacy.IsMatch(f.Text)).Select(f => f.Path));
+        Assert.Empty(files.Where(f => literal.IsMatch(f.Text)).Select(f => $"{f.Path}: {literal.Match(f.Text).Value}"));
     }
 }

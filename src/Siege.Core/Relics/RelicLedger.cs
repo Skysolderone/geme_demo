@@ -249,7 +249,7 @@ public sealed class RelicLedger
         int reveal = EffectSnapshot.BaseRevealCount;
         int freePick = EffectSnapshot.BaseFreePickCount;
         int slots = EffectSnapshot.BaseTypeSlots;
-        int deploy = EffectSnapshot.BaseDeployLimit;
+        int deploy = EffectSnapshot.BaseDeployLimitFor(majorRound);
         var emblems = new SortedDictionary<PieceType, int>();
 
         foreach (RelicState relic in _relics.Values)

@@ -38,7 +38,7 @@ public class 难度分级Tests
         Assert.Equal(s.RawOf(EvaluationDimension.PowerGain), e.RawOf(EvaluationDimension.PowerGain));
         Assert.Equal(s.RawOf(EvaluationDimension.EnemyLoss), e.RawOf(EvaluationDimension.EnemyLoss));
         Assert.NotEqual(0, s.RawOf(EvaluationDimension.Relic));
-        Assert.Equal(-1, s.RawOf(EvaluationDimension.Supply));
+        Assert.Equal(-2, s.RawOf(EvaluationDimension.Supply));   // growth-pass-1：第 5 大回合部署上限 4，−(4 − 2)，原 −1
     }
 
     [Fact]

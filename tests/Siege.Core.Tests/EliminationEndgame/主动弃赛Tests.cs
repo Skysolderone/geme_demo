@@ -110,7 +110,7 @@ public class 主动弃赛Tests
         Assert.Equal(1, snapshot.Hand.PendingGained);                        // 本轮新增 1 枚仍在账上，未被弃赛撤销
         Assert.Equal(51, snapshot.Hand.TotalCount);
         Assert.Equal(MatchFixtures.P3, snapshot.Effects.Player);
-        Assert.Equal(4, snapshot.Effects.DeployLimit);   // 控制军令 +1
+        Assert.Equal(5, snapshot.Effects.DeployLimit);   // 第 5 大回合基础 4 + 控制军令 +1（growth-pass-1：原基础 3 → 4）
         Assert.Equal(new[] { "H8" }, snapshot.ControlledRelics.Notations());
         Assert.Equal(powerBefore, snapshot.Power);
         Assert.Equal(powerBefore, match.StateOf(MatchFixtures.P3).PowerAtResign);

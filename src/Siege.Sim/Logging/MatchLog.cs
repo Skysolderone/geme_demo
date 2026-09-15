@@ -335,7 +335,7 @@ public sealed record GroupEntry
     /// <summary>倍增子原始数量（未封顶）。</summary>
     public int MultiplierCount { get; init; }
 
-    /// <summary>生效倍率指数 <c>min(MultiplierCount, 5)</c>。cap-multiplier 之前的旧日志没有该字段，解析时按此回填，旧日志仍可读。</summary>
+    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（growth-pass-1 起为 4）。cap-multiplier 之前的旧日志没有该字段，解析时按此回填，旧日志仍可读。</summary>
     public int EffectiveMultiplierCount
     {
         get => _effectiveMultiplierCount ?? Math.Min(MultiplierCount, Multiplier.MaxExponent);
@@ -497,7 +497,7 @@ public sealed record PeakEntry
     /// <summary>峰值串的倍增子原始数量（峰值按它取，可超过封顶指数）。</summary>
     public int MultiplierCount { get; init; }
 
-    /// <summary>生效倍率指数 <c>min(MultiplierCount, 5)</c>；旧日志无该字段时回填。</summary>
+    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（growth-pass-1 起为 4）；旧日志无该字段时回填。</summary>
     public int EffectiveMultiplierCount
     {
         get => _effectiveMultiplierCount ?? Math.Min(MultiplierCount, Multiplier.MaxExponent);

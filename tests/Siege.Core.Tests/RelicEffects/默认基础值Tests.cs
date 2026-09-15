@@ -9,8 +9,8 @@ public class 默认基础值Tests
     [Fact]
     public void 无信物时的快照()
     {
-        // 设计文档 §5.2–§5.4：展示数 5、免费选取数 3、手牌类型槽 5、部署上限 3；先手修正 0。
-        // 变异验证 M-E12：BaseDeployLimit 改 4 → 红 9，含本测试。
+        // 设计文档 §5.2–§5.4：展示数 5、免费选取数 3、手牌类型槽 5、部署上限 3（第 1 大回合，growth-pass-1 分阶段基础值第一阶段）；先手修正 0。
+        // 变异验证 M-E12（growth-pass-1 前）：BaseDeployLimit 改 4 → 红 9，含本测试。常量已由 BaseDeployLimitFor 取代，现行记录见 M-GP2。
         (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
         board.Place("A1", TestMaps.P0);
         ledger.Settle(board, 1);

@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/growth-pass-1/specs/batch-deployment/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/growth-pass-1/specs/relic-effects/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/growth-pass-1/specs/power-score/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/growth-pass-1/specs/piece-effects/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/growth-pass-1/design.md", "reason": "核对 D1–D5：阶段表唯一、快照内只读一次、封顶唯一常量、不动冲突规则"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "核对 §5.4 §9.2 §10.1 §16 与变更记录"}
+{"file": ".trellis/spec/core/testing.md", "reason": "既有算例改写不得改实现语义凑绿、变异验证记录"}

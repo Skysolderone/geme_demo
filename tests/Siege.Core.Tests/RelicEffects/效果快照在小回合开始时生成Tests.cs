@@ -1,5 +1,6 @@
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Match;
 using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.RelicEffectsSpec;
@@ -7,6 +8,46 @@ namespace Siege.Core.Tests.RelicEffectsSpec;
 /// <summary>规格：relic-effects —— Requirement: 效果快照在小回合开始时生成</summary>
 public class 效果快照在小回合开始时生成Tests
 {
+    [Fact]
+    public void 分阶段基础值只在生成快照时读取一次()
+    {
+        // growth-pass-1 D3 / 裁决 2：基础部署上限按"生成快照时的当前大回合"读一次，小回合内不变、跨大回合不追溯。
+        // 流程上无法在小回合内跨过大回合边界：大回合只在全员行动完后推进，Debug.SetMajorRound 也要求 Idle（小回合边界）。
+        // 所以用快照对象本身证明：第 3 大回合最后一位玩家的快照（基础 3）在大回合推进到 4、为下一位生成基础 4 的快照之后，仍持有 3 / 第 3 大回合；
+        // 本小回合的批次上下文取的也是这份快照的值。
+        // 变异验证 M-GP7（快照重读大回合：BuildSnapshot 写静态 EffectSnapshot.LastRound，DeployLimit 改为 `BaseDeployLimitFor(LastRound) + 军令加成` 现算）
+        // → 全套红 14，含本测试（round3 读成 4）；该变异引入进程级静态状态，并行测试互相污染，红数不稳定（Sim 批量跑局等也会红），以"本测试红"为准。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(3, MatchFixtures.All);
+        match.PassTurn();
+        match.PassTurn();
+        match.PassTurn();
+        Assert.Equal((3, MatchFixtures.P3), (match.MajorRound, match.CurrentPlayer!.Value));
+
+        match.BeginTurn();
+        EffectSnapshot round3 = match.CurrentSnapshot!;
+        Assert.Equal((3, 3), (round3.MajorRound, round3.DeployLimit));
+        match.EnterRecruit();
+        StagedBatch batch = match.EnterDeploy();
+        Assert.Equal(3, batch.Context.DeployLimit);
+        Assert.Null(batch.Stage(TestMaps.At("H8"), PieceType.Basic));
+        Assert.True(match.Confirm().Confirmed);
+
+        Assert.Equal(4, match.MajorRound);
+        match.BeginTurn();
+        EffectSnapshot round4 = match.CurrentSnapshot!;
+        Assert.Equal((4, 4), (round4.MajorRound, round4.DeployLimit));
+        Assert.Equal((3, 3), (round3.MajorRound, round3.DeployLimit));
+
+        // 账本层：同一账本先后为第 3、第 4 大回合生成快照，先生成的那份不被后者改写
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
+        board.Place("A1", TestMaps.P0);
+        ledger.Settle(board, 3);
+        EffectSnapshot early = ledger.SnapshotFor(TestMaps.P0, board, 0, 3);
+        ledger.Settle(board, 7);
+        EffectSnapshot late = ledger.SnapshotFor(TestMaps.P0, board, 0, 7);
+        Assert.Equal((3, 5), (early.DeployLimit, late.DeployLimit));
+    }
+
     [Fact]
     public void 新占信物本回合不生效()
     {

@@ -9,16 +9,35 @@ public class 六类原型信物的效果Tests
     [Fact]
     public void 军令提高部署上限()
     {
-        // 设计文档 §8.1：控制 1 枚普通军令，基础部署上限 3 → 下一次快照 4。
+        // 设计文档 §8.1 / growth-pass-1 relic-effects 规格：第 2 大回合控制 1 枚普通军令，该阶段基础部署上限 3 → 下一次快照 4。
+        // growth-pass-1 改写：原用第 1 大回合，按规格改为第 2 大回合（同在第一阶段，期望值不变）。
         // 变异验证 M-E2：BuildSnapshot 把 Command 分支并入 Depot → 红 5，含本测试。
         (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
         board.Place("E7", TestMaps.P0);
-        ledger.Settle(board, 1);
+        ledger.Settle(board, 2);
 
-        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, 1);
+        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, 2);
 
         Assert.Equal(4, snapshot.DeployLimit);
         Assert.Equal((5, 3, 5), (snapshot.RevealCount, snapshot.FreePickCount, snapshot.TypeSlots));
+    }
+
+    [Fact]
+    public void 军令加成叠在分阶段基础值上()
+    {
+        // growth-pass-1 relic-effects 规格：第 8 大回合控制 1 枚普通军令，该阶段基础部署上限 5 → 下一次快照 6。
+        // 对照：同一盘面第 3 大回合（基础 3）为 4——加成 +1 不随阶段变，变的只是基础值。
+        // 变异验证 M-GP3（BuildSnapshot 基础值改回第一阶段 `BaseDeployLimitFor(1)`，军令照常累加）→ 全套红 47，含本测试（4 ≠ 6）；M-GP2（阶段表写死 3）→ 红 19，含本测试。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
+        board.Place("E7", TestMaps.P0);
+        ledger.Settle(board, 8);
+
+        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, 8);
+
+        Assert.Equal(6, snapshot.DeployLimit);
+        Assert.Equal(8, snapshot.MajorRound);
+        Assert.Equal(4, ledger.SnapshotFor(TestMaps.P0, board, 0, 3).DeployLimit);
+        Assert.Equal(new DeployLimitPeak(6, 8, TestMaps.P0), ledger.DeployLimitPeak);
     }
 
     [Fact]

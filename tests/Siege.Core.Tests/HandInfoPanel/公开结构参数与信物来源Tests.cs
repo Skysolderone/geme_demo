@@ -12,7 +12,8 @@ public class 公开结构参数与信物来源Tests
     [Fact]
     public void 显示参数与来源()
     {
-        // 设计文档 §14.3 算例：B（P1）部署上限 5，其中 +2 来自两枚军令信物 → 面板显示 5 并标注 2 点来自军令。
+        // 设计文档 §14.3 算例：B（P1）部署上限含 +2 来自两枚军令信物 → 面板显示总值并标注 2 点来自军令。
+        // growth-pass-1 改写：第 5 大回合分阶段基础值 4（原 3），总值 5→6、基础 3→4；+2 军令来源不变。
         // P1 经正式结算占据 H4、J4 两枚军令（占据即揭示并控制）；数值取自账本副本上的效果快照，来源取同副本的控制状态。
         // 变异验证 M-S1（结构）：MatchFlow.StructuresOf 的部署上限来源改传 RelicType.Depot → 抛出"来源与效果快照不一致"，本测试红 1。
         // 变异验证 M-S2（呈现）：StructureView.Parameter 的文案改用 `parameter.Base` 代替 `parameter.Value` → 本测试红 1。
@@ -22,10 +23,10 @@ public class 公开结构参数与信物来源Tests
 
         ParameterView deploy = match.World(P0).HandPanel().Opponents.Single(o => o.Player == P1).Structure!.DeployLimit;
 
-        Assert.Equal((5, 3), (deploy.Value, deploy.Base));
+        Assert.Equal((6, 4), (deploy.Value, deploy.Base));
         Assert.Equal(["H4 军令 +1", "J4 军令 +1"], deploy.Sources.Select(s => s.Text));
         Assert.All(deploy.Sources, s => Assert.Equal((RelicType.Command, 1), (s.Type, s.Magnitude)));
-        Assert.Equal("部署上限 5（基础 3，+2 来自 军令×2）", deploy.Text);
+        Assert.Equal("部署上限 6（基础 4，+2 来自 军令×2）", deploy.Text);
 
         // 其他三项无来源
         StructureView structure = match.World(P0).HandPanel().Opponents.Single(o => o.Player == P1).Structure!;

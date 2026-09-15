@@ -82,7 +82,7 @@ public class 高部署上限下的候选剪枝Tests
     }
 
     /// <summary>
-    /// implement 3.4「必须找到的妙手」回归集（标准难度剪枝参数、部署上限 3、只有普通子）。
+    /// implement 3.4「必须找到的妙手」回归集（标准难度剪枝参数、第 5 大回合部署上限 4——growth-pass-1 分阶段基础值，原 3、只有普通子）。
     /// 局面 a（提子 + 抢信物）见 <see cref="启发式评价维度Tests.CaptureRelicPosition"/>。
     /// 局面 b（补气 + 提子）：P0 的 D4-D5 只剩一气 E5，P1 的 E4-F4 也只剩一气 E5；E5 提两子后 P0 串与 F5 连成四气。
     /// <code>
@@ -123,7 +123,7 @@ public class 高部署上限下的候选剪枝Tests
 
         HeuristicTurnController ai = HeuristicAi.Create(match, AiFixtures.P0, AiDifficulty.Standard);
         StagedBatch batch = match.OpenDeploy();
-        Assert.Equal(3, batch.Context.DeployLimit);
+        Assert.Equal(4, batch.Context.DeployLimit);
         ai.Deploy(batch, match.Rehearse);
 
         Assert.Contains(batch.Placements, p => p.Coord == TestMaps.At(key));
