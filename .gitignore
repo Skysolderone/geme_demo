@@ -3,10 +3,14 @@ bin/
 obj/
 *.user
 .vs/
-# Godot
+# Godot（src/godot 的产物：.godot/ 含 mono 的中间目录与导入缓存，bin/ obj/ 已由上面的 .NET 规则覆盖）
 .godot/
 .import/
+.mono/
 export_presets.cfg
+src/godot/bin/
+src/godot/obj/
+# 脚本的 *.cs.uid 是 Godot 4.4+ 的资源标识，必须入库，别加进忽略
 # macOS
 .DS_Store
 # Siege.Sim 跑局输出（日志、汇总、报告）
