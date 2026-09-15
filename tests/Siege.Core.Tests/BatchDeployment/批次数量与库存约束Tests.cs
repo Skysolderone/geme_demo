@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Preview;
 using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.BatchDeployment;
@@ -184,10 +185,12 @@ public class 批次数量与库存约束Tests
         // 源码文本扫描 Core / Sim / Presentation / Godot 脚本（Godot 不在 siege.sln，只有文本扫描能覆盖，testing.md「游离工程」）：
         //   1) 阶段表形状 `<= 3 => 3` 恰好出现一次且位于 EffectSnapshot.cs（反面断言：判据在唯一实现里确实命中）；
         //   2) 旧常量名 BaseDeployLimit（不带 For）不得再出现；
-        //   3) 不得出现把部署相关变量直接赋值为 3 / 4 / 5 的字面量。
+        //   3) 不得出现把部署相关变量 / 常量 / 命名实参直接写成 3 / 4 / 5 的字面量（含 `BaseDeploy = 3`、`deployLimit: 3` 这类前缀非词边界的写法）。
         // 样本口径下界：四个目录各自非空，总字符数 ≥ 300 000，防止扫空目录恒绿。
         // 变异验证 M-GP8：RelicLedger.BuildSnapshot 改为 `int deploy = 3;`（第二处写死基础值）→ 全套红 48，含本测试（规则 3）；
         // M-GP1（阶段表边界改写）→ 本测试红（规则 1 的形状不再命中）。M-GP2 只改表内数值、不新增第二处，本测试不红（由数值 Theory 抓）。
+        // check 变异 M-C1：Siege.Presentation HandInfoPanel 注入 `internal const int BaseDeploy = 3;` → 原判据 `\bdeploy\w*` 因 Base 与 Deploy 间无词边界而全套 0 红（假守门），
+        //   去掉前导 \b 并纳入 `:` 后红 1（本测试）。
         string root = PresentationFixtures.RepoRoot();
         string[] dirs =
         [
@@ -215,11 +218,27 @@ public class 批次数量与库存约束Tests
 
         var table = new Regex(@"<=\s*3\s*=>\s*3\b");
         var legacy = new Regex(@"\bBaseDeployLimit\b");
-        var literal = new Regex(@"(?i)\bdeploy\w*\s*=\s*[345]\s*[;,)]");
+        var literal = new Regex(@"(?i)deploy\w*\s*[=:]\s*[345]\s*[;,)]");
 
         string[] tableHits = [.. files.Where(f => table.IsMatch(f.Text)).Select(f => Path.GetFileName(f.Path))];
         Assert.Equal(["EffectSnapshot.cs"], tableHits);
         Assert.Empty(files.Where(f => legacy.IsMatch(f.Text)).Select(f => f.Path));
         Assert.Empty(files.Where(f => literal.IsMatch(f.Text)).Select(f => $"{f.Path}: {literal.Match(f.Text).Value}"));
+    }
+
+    [Fact]
+    public void 基础值随阶段提高_插旗阶段()
+    {
+        // growth-pass-1 D2 边界补钉（check 阶段）：插旗阶段 MajorRound = 0，PublishSupplement「任何阶段可用」会经账本副本为每名玩家生成效果快照，
+        // 此时基础部署上限必须落在第一阶段 3（BaseDeployLimitFor 的 `<= 3` 分支覆盖 0），不得因 0 不在 1–3 区间而取到其它阶段值或抛出。
+        // 变异验证 M-C4：BaseDeployLimitFor 首分支前插入 `< 1 => 5` → 全套红 2（本测试、既有「插旗阶段也能发布补充载荷」——后者只钉 Value，本测试另钉来源拆分的 Base）。
+        MatchFlow match = MatchFixtures.Create();
+        Assert.Equal((MatchPhase.FlagPlanting, 0), (match.Phase, match.MajorRound));
+
+        StructureParameter deploy = match.PublishSupplement().Structures.Single(s => s.Player == MatchFixtures.P0).Parameters!.DeployLimit;
+
+        Assert.Equal((3, 3), (deploy.Value, deploy.Base));
+        Assert.Empty(deploy.Sources);
+        Assert.Equal(3, EffectSnapshot.BaseDeployLimitFor(0));
     }
 }
