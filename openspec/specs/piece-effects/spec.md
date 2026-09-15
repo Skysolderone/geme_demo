@@ -59,9 +59,9 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 ### Requirement: 倍增子的棋串倍率
 
-棋串中每一枚倍增子 SHALL 令该棋串的军势依次乘以 1.5，至多 5 枚生效，即倍率为 `1.5^min(倍增子数量, 5)`，上限 `1.5^5 = 243/32`（精确值 7.59375）。
+棋串中每一枚倍增子 SHALL 令该棋串的军势依次乘以 1.5，至多 4 枚生效，即倍率为 `1.5^min(倍增子数量, 4)`，上限 `1.5^4 = 81/16`（精确值 5.0625）。
 
-超出第 5 枚的倍增子 SHALL 仍是棋串成员：计入基础军势（每枚 1）、共享气与倍率、参与连珠与协同的类型计数；系统 MUST NOT 因封顶改变这些效果。
+超出第 4 枚的倍增子 SHALL 仍是棋串成员：计入基础军势（每枚 1）、共享气与倍率、参与连珠与协同的类型计数；系统 MUST NOT 因封顶改变这些效果。
 
 倍率 SHALL 只作用于"基础军势总和 + 位置加值"，MUST NOT 作用于领地分。
 
@@ -73,9 +73,9 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 - **WHEN** 某玩家拥有 10 个独占空格与一条倍率为 2.25 的棋串
 - **THEN** 10 点领地分按原值计入总势力，MUST NOT 被乘以 2.25
 
-#### Scenario: 倍率指数封顶为 5
+#### Scenario: 倍率指数封顶为 4
 - **WHEN** 一条棋串包含 12 枚倍增子
-- **THEN** 该棋串倍率为 `1.5^5 = 7.59375`，与含 5 枚倍增子时相同；12 枚倍增子全部计入基础军势
+- **THEN** 该棋串倍率为 `1.5^4 = 5.0625`，与含 4 枚倍增子时相同；12 枚倍增子全部计入基础军势
 
 ### Requirement: 效果随盘面实时重算
 
