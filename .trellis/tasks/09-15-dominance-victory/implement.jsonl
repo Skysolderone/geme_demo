@@ -1,0 +1,8 @@
+{"file": "openspec/changes/dominance-victory/design.md", "reason": "D1–D5、接口契约与裁决记录 1–6；实现前必读"}
+{"file": "openspec/changes/dominance-victory/specs/elimination-endgame/spec.md", "reason": "两条 MODIFIED Requirement 与 16 个 Scenario，逐条对应测试用例"}
+{"file": "openspec/changes/dominance-victory/specs/match-telemetry/spec.md", "reason": "平衡分析方向新增碾压统计"}
+{"file": "openspec/changes/dominance-victory/proposal.md", "reason": "动机与 Non-goals（不改出局条件、不调 AI）"}
+{"file": "openspec/specs/elimination-endgame/spec.md", "reason": "当前基线：四类终局与名次链；既有 Scenario 必须原样通过"}
+{"file": "openspec/changes/archive/2026-09-14-round-cap/design.md", "reason": "终局原因枚举、优先级与检查点时序（MajorRoundEnded 序号已推进的陷阱）"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文 §10 §12.3 §16；3.x 要改它"}
+{"file": ".trellis/spec/core/testing.md", "reason": "算例出处、变异验证、持久化与统计口径守门"}

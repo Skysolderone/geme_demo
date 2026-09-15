@@ -1,0 +1,6 @@
+{"file": "openspec/changes/dominance-victory/specs/elimination-endgame/spec.md", "reason": "验收基准：两条 Requirement 的每个 Scenario 都必须有同名通过测试"}
+{"file": "openspec/changes/dominance-victory/specs/match-telemetry/spec.md", "reason": "验收基准：碾压统计 Scenario"}
+{"file": "openspec/changes/dominance-victory/design.md", "reason": "核对 D1–D5 与裁决：取等号触发、只算参赛玩家、检查点复用、优先级、名次不另写"}
+{"file": "openspec/changes/dominance-victory/tasks.md", "reason": "实现清单对账"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "核对 §12.3 是否已改、变更记录是否存在"}
+{"file": ".trellis/spec/core/testing.md", "reason": "变异验证记录、统计口径测试放被排除样本"}
