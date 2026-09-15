@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Siege.Presentation</RootNamespace>
+    <!-- 硬约束（tactical-ui 裁决 8）：表现模型 MUST NOT 依赖 Godot，才能在 xUnit 里无头测试全部 Scenario。 -->
+    <NoGodotDependency>true</NoGodotDependency>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 只引用 Siege.Core 的公开 API：Core 的 internal 调试接缝（MatchDebugView 等）对本程序集不可见。 -->
+    <ProjectReference Include="..\Siege.Core\Siege.Core.csproj" />
+  </ItemGroup>
+
+  <!-- 编译期守门：与 Siege.Core 相同；真正兜底的是测试里对程序集实际引用与 IL 调用的反射扫描（UI层不含规则计算Tests）。 -->
+  <Target Name="AssertNoGodotDependency" BeforeTargets="Build">
+    <Error Condition="$([System.String]::Copy('%(PackageReference.Identity)').StartsWith('Godot'))"
+           Text="Siege.Presentation 不得引用 Godot 包：表现模型必须能在无引擎环境下测试。" />
+    <Error Condition="$([System.String]::Copy('%(ProjectReference.Filename)').StartsWith('Godot'))"
+           Text="Siege.Presentation 不得引用 Godot 项目：表现模型必须能在无引擎环境下测试。" />
+  </Target>
+
+</Project>
