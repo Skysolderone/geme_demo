@@ -7,7 +7,7 @@
 
 《围杀 Siege》——2–4 人共享棋盘的回合制策略构筑游戏（围棋式围杀 × 自走棋式征募构筑）的 4 人核心原型。
 规则内核是**零 Godot 依赖的 .NET 8 类库**（`src/Siege.Core`），AI 在 `src/Siege.Core/Ai`，批量跑局 / 日志 / 分析在 `src/Siege.Sim`，
-表现层将来用 Godot 4.5 .NET 版（子任务 8）。
+表现层用 Godot 4.7.2 .NET 版（子任务 8）。
 首轮原型的唯一产出目标：跑数千局 AI 对局，回答"这套规则平不平衡"（设计文档 §16 六项指标、§17 七个分析方向）。
 
 ## 分支状态
@@ -71,7 +71,7 @@
 
 ## 之后：tactical-ui
 
-需要 **Godot 4.5 .NET 版**，当前 Windows 机器上未安装。`godot/` 单向引用 `Siege.Core`，表现层不得含任何规则计算。
+需要 **Godot 4.7.2 .NET 版**，已安装在 `D:\software\godot\Godot_v4.7.2-stable_mono_win64\`。`godot/` 单向引用 `Siege.Core`，表现层不得含任何规则计算。
 人工接管入口已就绪：`MatchRunner.TakeOver / HandBack`；公开视图 `MatchPublicView`。
 
 ## 执行流程（每个子任务）
@@ -111,7 +111,8 @@ task.py start <task>
 - 当前开发机：**Windows 11**，Git Bash，28 逻辑核。`python` 可用，`python3` 不可用；`dotnet test` 输出为中文本地化 GBK（"已通过!"/"失败!"），脚本抓失败名用 ASCII 的 `[FAIL]`
 - .NET SDK 8.0.425；`dotnet build` / `dotnet test`（不接受 `--no-incremental`）
 - 跑局用 Release：`dotnet run --project src/Siege.Sim -c Release -- run|replay|analyze|map ...`；输出目录 `sim-out/` 已 gitignore；Standard 单局约 6.6 s 串行、并行有效约 1.3 s
-- Godot 4.5 .NET 版：未安装。子任务 8 前安装（注意要 .NET 版，标准版不含 C#）
+- Godot 4.7.2 .NET 版：`D:\software\godot\Godot_v4.7.2-stable_mono_win64\`（`--version` → `4.7.2.stable.mono.official.ed1daf0bf`）；GodotSharp 目标 net8.0，与 SDK 8.0.425 兼容
+- 终端试玩：`dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--seed N]`
 - openspec 1.5.0、trellis 0.6.5 已装；skill 与 agent type 在会话启动时注册，新装后需重启会话
 - 4 人基准地图：`maps/siege-4p-base-v1.json`（D2 对称、109 可落子格、14 信物格、距离极差 0）
 

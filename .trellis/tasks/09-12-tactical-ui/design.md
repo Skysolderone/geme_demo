@@ -21,7 +21,7 @@
 
 **本任务是唯一允许出现 `Godot.*` 的地方。** 引用方向单向：`godot/` → `Siege.Core`。表现层 MUST NOT 包含任何规则计算，只消费内核的预演结果与只读视图。
 
-环境前提：需 **Godot 4.5 .NET 版**编辑器。`~/Desktop/Godot.app` 当前是 4.5 标准版，不含 C# 支持，开工前必须替换。
+环境前提：**Godot 4.7.2 .NET 版**，已安装于 `D:\software\godot\Godot_v4.7.2-stable_mono_win64\`（2026-09-15 核实：`--version` → `4.7.2.stable.mono.official.ed1daf0bf`；`GodotSharp` 包目标 net8.0，与 SDK 8.0.425 及 `Siege.Core` 的 net8.0 一致）。原规划的 4.5 为规划时版本，用户确认改用 4.7.2。项目 csproj 的 `Godot.NET.Sdk` 版本必须与编辑器一致（4.7.2）。
 
 **必读规范**：`.trellis/spec/core/index.md`，尤其是 [边界与依赖](../../spec/core/boundaries.md)、[确定性](../../spec/core/determinism.md)、[坐标](../../spec/core/coordinates.md)、[测试组织](../../spec/core/testing.md)。
 
