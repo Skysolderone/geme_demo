@@ -20,6 +20,15 @@ internal static class MatchFixtures
     internal static readonly GameSeed Seed = new(0x5EED_0912_2026UL);
 
     /// <summary>
+    /// 关闭势力碾压的立即模式选项（dominance-victory 裁决 8）：只给<b>测其它规则</b>、且摆盘会意外满足碾压式的既有测试在建局行显式使用。
+    /// 夹具默认值保持 <see cref="MatchOptions.DefaultDominanceStartRound"/>（7），不一刀切关闭，否则碾压对其它规则的真实影响会被整体隐藏。
+    /// </summary>
+    internal static readonly MatchOptions DominanceOff = MatchOptions.Immediate with { DominanceStartRound = 0 };
+
+    /// <summary>显式开启势力碾压（起始第 4 大回合）的立即模式选项：碾压相关新测试使用，与默认值相同但写明意图。</summary>
+    internal static readonly MatchOptions DominanceOn = MatchOptions.Immediate with { DominanceStartRound = 4 };
+
+    /// <summary>
     /// 9×9 合成地图：四个 3×3 角落出生区（0 左下、1 右下、2 左上、3 右上），信物格由用例指定。
     /// 不满足人数预算与距离校验，只能经 <see cref="MatchFlow.CreateUnvalidated"/> 使用。
     /// </summary>

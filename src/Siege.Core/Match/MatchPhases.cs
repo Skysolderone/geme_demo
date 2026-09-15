@@ -40,7 +40,7 @@ public enum TurnStage
     Settlement,
 }
 
-/// <summary>四类终局条件（设计文档 §12.3）。序列化名称稳定：存档与对局日志按名字写入。</summary>
+/// <summary>五类终局条件（设计文档 §12.3）。序列化名称稳定：存档与对局日志按名字写入。</summary>
 public enum EndReason
 {
     /// <summary>条件 1：只剩一名参赛玩家，该玩家直接获胜。</summary>
@@ -52,8 +52,14 @@ public enum EndReason
     /// <summary>条件 3：盘面不存在任何可落子的空格。</summary>
     BoardFull,
 
-    /// <summary>条件 4（round-cap）：第「大回合上限」个大回合结束时对局仍在进行。只在大回合结束、生成下一顺序之前检查一次，优先级低于条件 1–3。</summary>
+    /// <summary>条件 4（round-cap）：第「大回合上限」个大回合结束时对局仍在进行。只在大回合结束、生成下一顺序之前检查一次，优先级最低。</summary>
     MajorRoundLimit,
+
+    /// <summary>
+    /// 条件 5（dominance-victory）：碾压候选保持到待回应名单为空且仍满足 <c>势力 ≥ 其余参赛玩家之和</c>，候选直接获胜。
+    /// 碾压式见 <see cref="DominanceCheck"/>，候选制见 <c>MatchFlow.UpdateDominance</c>；追加在枚举末尾以保持既有值的序列化与数值稳定。
+    /// </summary>
+    PowerDominance,
 }
 
 /// <summary>流程事件种类。事件<b>只由</b> <see cref="MatchFlow"/> 在阶段切换点发出，其他模块 MUST NOT 自行发出流程事件。</summary>

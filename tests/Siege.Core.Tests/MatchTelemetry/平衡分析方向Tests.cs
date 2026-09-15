@@ -131,4 +131,66 @@ public class 平衡分析方向Tests
         Assert.Equal("倍率>部署>槽位", g.DominantSequence);
         Assert.Contains("顺序 倍率>部署>槽位：1 次", ReportWriter.Render(BalanceAnalyzer.Analyze([log])));
     }
+
+    [Fact]
+    public void 碾压胜统计()
+    {
+        // 规格算例：一批对局中有 40 局以势力碾压终局 → 报告给出碾压胜占比、这些局的平均触发大回合、触发时获胜者与第 2 名势力之比。
+        // testing.md「统计口径测试必须放一个被排除的样本」：另放 1 局调试 AI 碾压局（污染）与 1 局失败局，分母只能是纳入的 100 局。
+        // 变异验证 M-DV10：Analyze 把 Dominance(included) 改为全部未失败局（含污染局）→ 红 1（本测试：41/101）。
+        static LogResult Dominance(int round, long winner, long second) =>
+            SimFixtures.ResultOf(round, [0]) with
+            {
+                Reason = nameof(Siege.Core.Match.EndReason.PowerDominance),
+                Standings = [.. new[] { winner, second, 0L, 0L }.Select((power, i) => new StandingEntry
+                {
+                    Rank = i + 1,
+                    Player = i,
+                    Group = "Finisher",
+                    Status = "Active",
+                    Power = power,
+                })],
+            };
+
+        TurnSnapshot[] turns = [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])];
+        var logs = new List<MatchLog>();
+        for (int i = 0; i < 100; i++)
+        {
+            LogResult result = i switch
+            {
+                < 20 => Dominance(6, 60, 20),    // 比值 3
+                < 39 => Dominance(8, 50, 25),    // 比值 2
+                39 => Dominance(8, 30, 0),       // 第 2 名势力 0：比值无定义
+                _ => SimFixtures.ResultOf(12, [i % 4]),
+            };
+            logs.Add(SimFixtures.Synthetic(900UL + (ulong)i, turns, [], result));
+        }
+
+        logs.Add(SimFixtures.Synthetic(1100, turns, [], Dominance(4, 99, 1) with { UsedDebugAi = true }));
+        MatchLog failed = SimFixtures.Synthetic(1101, turns, [], SimFixtures.ResultOf(1, [0]));
+        failed.Result = null;
+        failed.Failure = new LogFailure { ExceptionType = "SimAssertionException", Message = "测试注入" };
+        logs.Add(failed);
+
+        BalanceReport report = BalanceAnalyzer.Analyze(logs);
+        Assert.Equal((102, 100, 1, 1), (report.TotalLogs, report.Included, report.ExcludedContaminated, report.ExcludedFailed));
+        DominanceSection d = report.Dominance;
+        Assert.Equal((100, 40), (d.Matches, d.DominanceWins));
+        Assert.Equal((40, 100), (d.Rate.Successes, d.Rate.Trials));
+        Assert.Equal(0.40, d.Rate.Value);
+        Assert.Equal(7.0, d.MeanTriggerRound, 10);                 // (20×6 + 20×8) / 40
+        Assert.Equal((39, 1), (d.RatioSamples, d.RatioUndefined));
+        Assert.Equal(98.0 / 39, d.MeanPowerRatio, 10);             // (20×3 + 19×2) / 39
+
+        // 碾压计为正常终局：终局原因分布含碾压，不计入不收敛。
+        Assert.Equal(40, report.Convergence.Reasons[nameof(Siege.Core.Match.EndReason.PowerDominance)]);
+        Assert.Equal((100, 0), (report.Convergence.Converged, report.Convergence.Capped));
+        Assert.All(logs.Take(40), l => Assert.True(l.Result!.Converged));
+
+        string text = ReportWriter.Render(report);
+        Assert.Contains("## 势力碾压", text);
+        Assert.Contains("碾压胜 40 / 100 局，占比 40.0% (40/100", text);
+        Assert.Contains("碾压局平均触发大回合 7", text);
+        Assert.Contains("平均 2.51（样本 39；第 2 名势力为 0、比值无定义 1）", text);
+    }
 }

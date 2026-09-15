@@ -59,6 +59,9 @@ public sealed record RunConfig
     /// <summary>大回合上限，直接写入对局配置 <see cref="MatchOptions.MaxMajorRounds"/>（0 = 不限，只受条件 1–3 与 <see cref="MaxTurns"/> 约束）。</summary>
     public int MaxMajorRounds { get; init; } = DefaultMaxMajorRounds;
 
+    /// <summary>碾压起始大回合，直接写入对局配置 <see cref="MatchOptions.DominanceStartRound"/>（0 = 关闭势力碾压；默认 = 规则层标准局初值）。</summary>
+    public int DominanceStartRound { get; init; } = MatchOptions.DefaultDominanceStartRound;
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -100,6 +103,11 @@ public sealed record RunConfig
         if (MaxMajorRounds < 0)
         {
             throw new ArgumentException("大回合上限须为非负整数（0 = 不限）。");
+        }
+
+        if (DominanceStartRound < 0)
+        {
+            throw new ArgumentException("碾压起始大回合须为非负整数（0 = 关闭）。");
         }
 
         if (FullEventSamplePermille is < 0 or > 1000)

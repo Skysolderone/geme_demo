@@ -42,6 +42,9 @@ public sealed partial class MatchFlow
             Seed = Seed.ToString(),
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
             MaxMajorRounds = MaxMajorRounds,
+            DominanceStartRound = DominanceStartRound,
+            DominanceCandidate = _dominanceCandidate?.Value,
+            DominancePending = [.. _dominancePending.Select(p => p.Value)],
             Phase = Phase,
             MajorRound = MajorRound,
             Order = [.. _order.Select(p => p.Value)],
@@ -145,12 +148,16 @@ public sealed partial class MatchFlow
         ImmutableArray<PlayerId> players = [.. data.Players.Select(p => new PlayerId(p.Player)).Order()];
         // round-cap：旧存档没有大回合上限字段 → 按标准局初值回填（不是 0，否则旧局会变成不限轮），并在 MaxMajorRoundsBackfilled 上留痕。
         bool backfilled = data.MaxMajorRounds is null;
+        // dominance-victory 裁决 8：旧存档没有碾压起始大回合字段 → 按标准局初值（7）回填（不是 0），并在 DominanceStartRoundBackfilled 上留痕。
+        bool dominanceBackfilled = data.DominanceStartRound is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
             MaxMajorRounds = data.MaxMajorRounds ?? MatchOptions.DefaultMaxMajorRounds,
+            DominanceStartRound = data.DominanceStartRound ?? MatchOptions.DefaultDominanceStartRound,
         };
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(data));
+        RequireValidDominanceStartRound(options.DominanceStartRound, nameof(data));
         var match = new MatchFlow(
             map, board, seed, players,
             RelicLedger.Restore(relicRecord, data.Relics ?? throw new FormatException("存档缺少信物账本。")),
@@ -158,6 +165,7 @@ public sealed partial class MatchFlow
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
         match.MaxMajorRoundsBackfilled = backfilled;
+        match.DominanceStartRoundBackfilled = dominanceBackfilled;
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -191,6 +199,8 @@ public sealed partial class MatchFlow
         match._orderIndex = data.OrderIndex;
         match._passStreak = data.PassStreak;
         match._eliminationSequence = data.EliminationSequence;
+        match._dominanceCandidate = data.DominanceCandidate is { } candidate ? new PlayerId(candidate) : null;
+        match._dominancePending.UnionWith((data.DominancePending ?? []).Select(v => new PlayerId(v)));
         match._setup.Advance(data.SetupConsumed);
         match._initiative.AddRange(data.Initiative);
         foreach (ResignationSaveData r in data.Resignations)
@@ -232,6 +242,15 @@ public sealed class MatchSaveData
 
     /// <summary>大回合上限（round-cap）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultMaxMajorRounds"/>。</summary>
     public int? MaxMajorRounds { get; set; }
+
+    /// <summary>碾压起始大回合（dominance-victory）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultDominanceStartRound"/>。</summary>
+    public int? DominanceStartRound { get; set; }
+
+    /// <summary>碾压候选玩家编号；无候选为 <c>null</c>。</summary>
+    public int? DominanceCandidate { get; set; }
+
+    /// <summary>待回应名单（玩家编号升序）；旧存档无此字段视为空。</summary>
+    public List<int>? DominancePending { get; set; }
 
     public MatchPhase Phase { get; set; }
 

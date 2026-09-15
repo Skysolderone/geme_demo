@@ -10,7 +10,7 @@ public class 排名的作用范围Tests
     {
         // 设计文档 §10.2 / §11.1：连续 5 个大回合排名第 1 → 不获得任何累计分数或额外资源；势力只评价当前盘面。
         // 变异验证 M-I9：EndMajorRound 给名次第 1 的玩家 Power += 1 写回明细 → 红 1（本测试：五轮 Power 不再恒等）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "B5", "E5", "H5", "E2", "E8");
         string[][] moves = [["A1", "B1", "C1", "A2", "B2"], ["J1", "H1", "G1", "J2", "H2"], ["A9", "B9", "C9", "A8", "B8"], ["J9", "H9", "G9", "J8", "H8"]];
 

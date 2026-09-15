@@ -34,7 +34,7 @@ public class 流程回归Tests
     {
         // 前三人 Pass（计数 3 < 4），第四人在小回合边界弃赛 → 参赛人数变 3，计数 3 ≥ 3 立即触发整轮 Pass。
         // 变异验证 M-R2：Resign 后不调用 CheckEndConditions → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "E5");
         match.PassTurn();
         match.PassTurn();

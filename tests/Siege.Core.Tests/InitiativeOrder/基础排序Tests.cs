@@ -34,7 +34,7 @@ public class 基础排序Tests
     {
         // 设计文档 §11.1：4 人局中 1 人已出局、1 人已弃赛 → 势力名次只包含剩余 2 名参赛玩家，名次为 1 与 2。
         // 变异验证 M-I2：EndMajorRound 不过滤 Status → 抛出（弃赛者无名次）→ 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "E5")
             .Stones(MatchFixtures.P3, "H8", "J9");
         match.Debug.SeedHand(MatchFixtures.P2);      // P2 盘面空 + 手牌空，保护已解除

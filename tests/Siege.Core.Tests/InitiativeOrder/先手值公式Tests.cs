@@ -59,7 +59,7 @@ public class 先手值公式Tests
         // 变异验证 M-I4：EndMajorRound 用 _players.Length 代替参赛人数 → 红 1（本测试流程断言）。
         Assert.Equal(1, Flow.ValueOf(2, 1, 0));
 
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "B2");
         match.Debug.SeedHand(MatchFixtures.P2);
         match.Debug.SeedHand(MatchFixtures.P3);

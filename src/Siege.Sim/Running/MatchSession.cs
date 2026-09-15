@@ -62,6 +62,11 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的大回合上限为 {config.MaxMajorRounds}，对局配置却为 {match.MaxMajorRounds}。");
         }
 
+        if (match.DominanceStartRound != config.DominanceStartRound)
+        {
+            throw new SiegeRuleException($"跑局配置的碾压起始大回合为 {config.DominanceStartRound}，对局配置却为 {match.DominanceStartRound}。");
+        }
+
         Runner = new MatchRunner(match);
         Seed = match.Seed;
         bool sampled = Seed.Stream(SampleStream).NextPermille(config.FullEventSamplePermille);
@@ -96,7 +101,7 @@ public sealed class MatchSession
         map ??= MapCatalog.Resolve(config.MapId);
         PlayerId[] players = config.PlayerIds();
         // round-cap D3：大回合上限是对局配置，跑局层只把 --max-rounds 透传进去。
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds });
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound });
         match.PlantSequentially(players.Select((p, i) => (p, i % map.BirthZones.Length)));
         return new MatchSession(match, config);
     }
@@ -473,6 +478,7 @@ public sealed class MatchSession
             MapId = Match.Map.Id,
             Seed = Seed.ToString(),
             MaxMajorRounds = Match.MaxMajorRounds,
+            DominanceStartRound = Match.DominanceStartRound,
             Config = Config,
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],

@@ -275,6 +275,13 @@ public sealed partial class Hud : CanvasLayer
                 row.StatusText is null ? Ui.InfoText : Ui.MutedText));
             _rankBody.AddChild(line);
         }
+
+        // dominance-victory 裁决 10：候选存在时显示一行，数据只取公开视图。
+        if (world.Public.View.Dominance is { } dominance)
+        {
+            string pending = dominance.Pending.IsDefaultOrEmpty ? "无" : string.Join("、", dominance.Pending.Select(p => FactionTable.For(p).Name));
+            _rankBody.AddChild(Ui.Text($"{FactionTable.For(dominance.Candidate).Name} 碾压中，待回应：{pending}", Ui.DangerText, wrap: true));
+        }
     }
 
     private void RefreshHand(MatchSession session, ViewerWorld world)

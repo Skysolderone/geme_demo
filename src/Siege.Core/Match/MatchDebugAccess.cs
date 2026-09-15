@@ -27,6 +27,9 @@ internal sealed class MatchDebugAccess
     /// <summary>直接设定连续 Pass 计数。</summary>
     internal void SetPassStreak(int streak) => _match.DebugSetPassStreak(streak);
 
+    /// <summary>直接设定碾压候选与待回应名单（<c>null</c> 候选即清空）。只允许在小回合边界。</summary>
+    internal void SetDominance(PlayerId? candidate, params PlayerId[] pending) => _match.DebugSetDominance(candidate, pending);
+
     /// <summary>在小回合之外直接设定某玩家的手牌（空数组即清空手牌）。</summary>
     internal void SeedHand(PlayerId player, params (PieceType Type, int Count)[] entries) => _match.Hands.Debug.SeedHand(player, entries);
 

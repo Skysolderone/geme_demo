@@ -17,7 +17,7 @@ public class 对局持久化Tests
         // 变异验证 M-P1：Serialize 不写 PassStreak → 红 1；M-P2：HandLedger.Restore 不推进 recruit 子流 → 红 1（续跑后面板不同）。
         // check 修正：原用例让 P2 在第 1 大回合也落了 B8，之后 P0 落 E5/C3 碰不到 B8，P2 盘面非空、按 spec「两个条件都满足才出局」
         // 不该出局，于是 P2 仍占第 5 大回合的行动位、大回合停在 5——是用例前提错，不是推进逻辑错。改为 P2 首轮 Pass（盘面始终为空）。
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command()), ("C3", RelicFixtures.Vanguard())]);
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff, relics: [("E5", RelicFixtures.Command()), ("C3", RelicFixtures.Vanguard())]);
         string?[] cell = ["B2", "H2", null, "H8"];
         for (int i = 0; i < 4; i++)
         {

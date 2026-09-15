@@ -35,7 +35,7 @@ public class 三类终局条件Tests
     {
         // 设计文档 §12.3 条件 2：某大回合中全部 3 名参赛玩家依次都确认 0 落子 → 对局在该大回合结束时终止，按当前势力值排名。
         // 变异验证 M-E14：`_passStreak >= active` 改为 `> active` → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "E5", "B2")
             .Stones(MatchFixtures.P1, "H2")
             .Stones(MatchFixtures.P2, "B8");
@@ -90,5 +90,94 @@ public class 三类终局条件Tests
         Assert.Equal(1, match.PassStreak);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
         Assert.Equal(6, match.MajorRound);
+    }
+
+    /// <summary>棋盘填满摆盘：P0 占 A–D 列（36 子）、P1 占其余（45 子），P2、P3 盘面为空；P1 满足碾压式。</summary>
+    private static MatchFlow FullBoard(MatchOptions options)
+    {
+        MatchFlow match = MatchFixtures.Started(options: options).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+        foreach (Coord c in match.Board.AllCoords())
+        {
+            match.Board.Place(c, c.X < 4 ? MatchFixtures.P0 : MatchFixtures.P1, PieceType.Basic);
+        }
+
+        match.Debug.Recalculate();
+        Assert.False(match.Board.HasPlayableEmptyCell());
+        return match;
+    }
+
+    [Fact]
+    public void 碾压优先于棋盘填满与整轮Pass()
+    {
+        // dominance-victory 规格 / 裁决 4、9：某次结算后碾压成立，且同一时刻棋盘填满（并凑成整轮 Pass）→ 原因记势力碾压，候选获胜。
+        // 候选状态用测试接缝摆出"P1 为候选、只差 P0 回应"，P0 的 Pass 同时满足三条。
+        // 变异验证 M-DV8：CheckEndConditions 把碾压分支移到棋盘填满之后 → 红 1（本测试）。
+        MatchFlow match = FullBoard(MatchFixtures.DominanceOn);
+        match.Debug.SetDominance(MatchFixtures.P1, MatchFixtures.P0);
+        match.Debug.SetPassStreak(3);
+        match.PassTurn();
+
+        Assert.Equal(4, match.PassStreak);                                   // 整轮 Pass 同时成立
+        Assert.False(match.Board.HasPlayableEmptyCell());                    // 棋盘填满同时成立
+        Assert.True(match.Dominance!.Pending.IsEmpty);                       // 碾压同时成立
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.PowerDominance, match.Result!.Reason);
+        Assert.Equal([MatchFixtures.P1], match.Result.Winners);
+    }
+
+    [Fact]
+    public void 棋盘填满优先于整轮Pass()
+    {
+        // 裁决 9：同一时刻棋盘填满与整轮 Pass → 原因记棋盘填满（沿用既有代码顺序，规格据此修正）。碾压关闭以隔离这一对。
+        // 变异验证 M-DV16：棋盘填满与整轮 Pass 两个分支对调 → 红 1（本测试）。
+        MatchFlow match = FullBoard(MatchFixtures.DominanceOff);
+        match.Debug.SetPassStreak(3);
+        match.PassTurn();
+
+        Assert.Equal(4, match.PassStreak);
+        Assert.Equal(EndReason.BoardFull, match.Result!.Reason);
+    }
+
+    [Fact]
+    public void 只剩一人优先于碾压()
+    {
+        // 裁决 4：只剩一名参赛玩家 > 势力碾压。P0 为候选、名单只剩 P3；P3 弃赛使名单清空（碾压成立）且只剩 P0 一人。
+        // 变异验证 M-DV9：碾压分支移到只剩一人之前 → 红 2（本测试、既有 已结束对局与终局结果可恢复）。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOn).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+            .Stones(MatchFixtures.P3, "H8");
+        match.Debug.SeedHand(MatchFixtures.P1);
+        match.Debug.SeedHand(MatchFixtures.P2);
+        match.PlayTurn("E5");   // P0 结算 → P1、P2 出局
+        Assert.Equal(2, match.ActiveCount);
+
+        match.Debug.SetDominance(MatchFixtures.P0, MatchFixtures.P3);
+        match.Resign(MatchFixtures.P3);
+
+        Assert.Equal(MatchFixtures.P0, match.Dominance!.Candidate);           // 碾压同时成立：候选仍在、名单已空
+        Assert.True(match.Dominance.Pending.IsEmpty);
+        Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
+        Assert.Equal([MatchFixtures.P0], match.Result.Winners);
+    }
+
+    [Fact]
+    public void 碾压成立优先于达大回合上限()
+    {
+        // 裁决 4：势力碾压 > 达大回合上限。第 15 大回合（上限 15）最后一名行动者 P3 的 Pass 使碾压成立 → 原因记势力碾压，不走到上限检查。
+        // 变异验证：M-DV13（名单不移除刚行动者）→ 红（本测试）；上限检查结构上位于 EndMajorRound、晚于 CompleteTurn 收尾，无更直接的单行变异。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOn).AtRound(15, [MatchFixtures.P3]);
+        foreach (string cell in new[] { "A1", "B1", "A2" })
+        {
+            match.Board.Place(Coord.Parse(cell), MatchFixtures.P0, PieceType.Fortress);
+        }
+
+        match.Stones(MatchFixtures.P3, "H8");
+        match.Debug.SetDominance(MatchFixtures.P0, MatchFixtures.P3);
+        Assert.Equal(15, match.MaxMajorRounds);
+        match.PassTurn();
+
+        Assert.Equal(EndReason.PowerDominance, match.Result!.Reason);
+        Assert.Equal(15, match.Result.MajorRound);
+        Assert.Equal(15, match.MajorRound);
+        Assert.Equal([MatchFixtures.P0], match.Result.Winners);
     }
 }

@@ -26,6 +26,15 @@ public sealed record MatchOptions
     /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureMaxMajorRounds"/>）。
     /// </summary>
     public int MaxMajorRounds { get; init; } = DefaultMaxMajorRounds;
+
+    /// <summary>标准局的碾压起始大回合初值（dominance-victory 裁决 8）。</summary>
+    public const int DefaultDominanceStartRound = 7;
+
+    /// <summary>
+    /// 碾压起始大回合（非负整数；0 = 关闭势力碾压）。当前大回合 ≥ 该值时才在检查点建立碾压候选（<see cref="EndReason.PowerDominance"/>）。
+    /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureDominanceStartRound"/>）。
+    /// </summary>
+    public int DominanceStartRound { get; init; } = DefaultDominanceStartRound;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

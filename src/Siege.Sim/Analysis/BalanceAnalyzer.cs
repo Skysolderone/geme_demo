@@ -25,6 +25,19 @@ public sealed record ConvergenceSection(
     double MeanMajorRoundsAll,
     double MeanTurnsPerMatch);
 
+/// <summary>
+/// 势力碾压（match-telemetry 平衡分析方向 8，dominance-victory）：碾压胜占比（分母 = 纳入分析的局）、这些局的平均触发大回合、
+/// 触发时获胜者势力与第 2 名势力之比。第 2 名势力为 0 时比值无定义，不计入均值，单独计数。
+/// </summary>
+public sealed record DominanceSection(
+    int Matches,
+    int DominanceWins,
+    Proportion Rate,
+    double MeanTriggerRound,
+    double MeanPowerRatio,
+    int RatioSamples,
+    int RatioUndefined);
+
 /// <summary>§16 六项数值目标。</summary>
 public sealed record TargetsSection(
     SortedDictionary<int, int> DeployLimitRounds1To3,
@@ -118,6 +131,7 @@ public sealed record BalanceReport(
     int PlayerCount,
     AnalysisOptions Options,
     ConvergenceSection Convergence,
+    DominanceSection Dominance,
     TargetsSection Targets,
     LeaderSection Leader,
     SnowballSection Snowball,
@@ -162,6 +176,7 @@ public static class BalanceAnalyzer
         return new BalanceReport(
             logs.Count, included.Count, contaminated, failed, playerCount, options,
             Convergence(included),
+            Dominance(included),
             Targets(included, options),
             Leader(included, options),
             Snowball(included),
@@ -194,6 +209,36 @@ public static class BalanceAnalyzer
             Statistics.Mean(logs.Where(l => l.Result!.Converged).Select(l => (double)l.Result!.MajorRound)),
             Statistics.Mean(logs.Select(l => (double)l.Result!.MajorRound)),
             Statistics.Mean(logs.Select(l => (double)l.Result!.TurnCount)));
+    }
+
+    // ---------- 势力碾压 ----------
+
+    private static DominanceSection Dominance(List<MatchLog> logs)
+    {
+        List<LogResult> wins = [.. logs.Select(l => l.Result!).Where(r => r.Reason == nameof(EndReason.PowerDominance))];
+        var ratios = new List<double>();
+        int undefined = 0;
+        foreach (LogResult r in wins)
+        {
+            // 名次序列即 FinalStandings 的输出顺序：碾压获胜者第 1，其后第一项即第 2 名。
+            List<StandingEntry> ordered = [.. r.Standings.OrderBy(s => s.Rank)];
+            if (ordered.Count < 2 || ordered[1].Power == 0)
+            {
+                undefined++;
+                continue;
+            }
+
+            ratios.Add((double)ordered[0].Power / ordered[1].Power);
+        }
+
+        return new DominanceSection(
+            logs.Count,
+            wins.Count,
+            Statistics.Wilson(wins.Count, logs.Count),
+            Statistics.Mean(wins.Select(r => (double)r.MajorRound)),
+            Statistics.Mean(ratios),
+            ratios.Count,
+            undefined);
     }
 
     // ---------- §16 ----------

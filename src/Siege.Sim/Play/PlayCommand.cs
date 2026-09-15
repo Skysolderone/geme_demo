@@ -167,6 +167,7 @@ internal static class PlayCommand
         string reason = result.Reason switch
         {
             EndReason.LastPlayerStanding => "只剩一名玩家",
+            EndReason.PowerDominance => "势力碾压（≥ 其余参赛玩家之和）",
             EndReason.AllPassed => "一整轮所有人都 Pass",
             EndReason.BoardFull => "棋盘已无空位",
             EndReason.MajorRoundLimit => "达到大回合上限",

@@ -32,6 +32,7 @@ public static class Names
         EndReason.AllPassed => "一整轮所有人都 Pass",
         EndReason.BoardFull => "棋盘已无可落子空位",
         EndReason.MajorRoundLimit => "达到大回合上限",
+        EndReason.PowerDominance => "势力碾压",
         _ => reason.ToString(),
     };
 

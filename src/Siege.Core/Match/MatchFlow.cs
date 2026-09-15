@@ -39,7 +39,9 @@ public sealed partial class MatchFlow
     private int _orderIndex;
     private int _passStreak;
     private int _eliminationSequence;
+    private readonly SortedSet<PlayerId> _dominancePending = [];
     private EndReason? _pendingEnd;
+    private PlayerId? _dominanceCandidate;
     private StagedBatch? _batch;
     private EffectSnapshot? _snapshot;
     private int _eventSequence;
@@ -109,6 +111,7 @@ public sealed partial class MatchFlow
         }
 
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(options));
+        RequireValidDominanceStartRound(options.DominanceStartRound, nameof(options));
         return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed), new BoardHistory(), options);
     }
 
@@ -150,6 +153,34 @@ public sealed partial class MatchFlow
         }
     }
 
+    /// <summary>碾压起始大回合（dominance-victory 裁决 8；0 = 关闭势力碾压）。始终公开，入存档。</summary>
+    public int DominanceStartRound => Options.DominanceStartRound;
+
+    /// <summary>恢复自不含碾压起始大回合字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultDominanceStartRound"/> 回填。</summary>
+    public bool DominanceStartRoundBackfilled { get; private set; }
+
+    /// <summary>
+    /// 在插旗阶段调整碾压起始大回合（非负整数，0 = 关闭）。对局一旦开始即抛 <see cref="SiegeRuleException"/>：该值是对局配置，进行中不可改。
+    /// </summary>
+    public void ConfigureDominanceStartRound(int dominanceStartRound)
+    {
+        if (Phase != MatchPhase.FlagPlanting)
+        {
+            throw new SiegeRuleException($"碾压起始大回合是对局配置，只能在插旗阶段设定；当前阶段 {Phase}。");
+        }
+
+        RequireValidDominanceStartRound(dominanceStartRound, nameof(dominanceStartRound));
+        Options = Options with { DominanceStartRound = dominanceStartRound };
+    }
+
+    private static void RequireValidDominanceStartRound(int value, string paramName)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(paramName, value, "碾压起始大回合须为非负整数（0 = 关闭势力碾压）。");
+        }
+    }
+
     /// <summary>权威盘面。规则层内部使用；表现层与 AI 请消费 <see cref="Publish"/>。</summary>
     public GameBoard Board { get; }
 
@@ -184,6 +215,10 @@ public sealed partial class MatchFlow
 
     /// <summary>连续 Pass 计数（design.md D2）：任一玩家确认 ≥1 枚落子即清零，达到当前参赛人数触发终局条件 2。</summary>
     public int PassStreak => _passStreak;
+
+    /// <summary>碾压候选与待回应名单（dominance-victory 裁决 7，始终公开）；没有候选时为 <c>null</c>。</summary>
+    public DominanceState? Dominance =>
+        _dominanceCandidate is { } candidate ? new DominanceState(candidate, [.. _dominancePending]) : null;
 
     /// <summary>本小回合的效果快照；不在小回合内为 <c>null</c>。小回合内不变。</summary>
     public EffectSnapshot? CurrentSnapshot => _snapshot;
@@ -413,6 +448,7 @@ public sealed partial class MatchFlow
             SetStage(TurnStage.Idle, player);
         }
 
+        UpdateDominance(completedTurn: null, establish: false);
         CheckEndConditions();
         if (_pendingEnd is { } reason)
         {
@@ -432,8 +468,8 @@ public sealed partial class MatchFlow
 
     /// <summary>发布公开快照（裁决 1）。</summary>
     public MatchPublicView Publish() =>
-        new(Phase, MajorRound, MaxMajorRounds, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(), Board.Serialize(),
-            Scoreboard.Latest, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result);
+        new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(), Board.Serialize(),
+            Scoreboard.Latest, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------
 
@@ -455,6 +491,7 @@ public sealed partial class MatchFlow
         // D2：连续 Pass 计数——落子 ≥1 枚即清零。
         _passStreak = context.IsPass ? _passStreak + 1 : 0;
         CheckEliminations();
+        UpdateDominance(completedTurn: context.Player, establish: true);
         CheckEndConditions();
     }
 
@@ -490,7 +527,13 @@ public sealed partial class MatchFlow
         }
     }
 
-    /// <summary>终局条件 1–3（设计文档 §12.3）。只记录待处理的终局原因；收尾在当前小回合结束时进行。条件 4（大回合上限）在 <see cref="EndMajorRound"/> 检查。</summary>
+    /// <summary>
+    /// 立即生效的终局条件（设计文档 §12.3）。只记录待处理的终局原因；收尾在当前小回合结束时进行。大回合上限在 <see cref="EndMajorRound"/> 检查。
+    /// </summary>
+    /// <remarks>
+    /// 分支顺序即优先级（dominance-victory 裁决 4 / 9）：只剩一人 &gt; 势力碾压 &gt; 棋盘填满 &gt; 整轮 Pass（&gt; 达大回合上限）。
+    /// 碾压候选状态由 <see cref="UpdateDominance"/> 在同一检查点先行推进，这里只读"候选存在且待回应名单为空"。
+    /// </remarks>
     private void CheckEndConditions()
     {
         if (_pendingEnd is not null || Phase != MatchPhase.InProgress)
@@ -503,6 +546,10 @@ public sealed partial class MatchFlow
         {
             _pendingEnd = EndReason.LastPlayerStanding;
         }
+        else if (_dominanceCandidate is not null && _dominancePending.Count == 0)
+        {
+            _pendingEnd = EndReason.PowerDominance;
+        }
         else if (!Board.HasPlayableEmptyCell())
         {
             _pendingEnd = EndReason.BoardFull;
@@ -512,6 +559,47 @@ public sealed partial class MatchFlow
             _pendingEnd = EndReason.AllPassed;
         }
     }
+
+    /// <summary>
+    /// 碾压候选状态机（dominance-victory 裁决 7）的<b>唯一</b>推进点。挂在既有检查点上（裁决 3），不新增触发时机。
+    /// </summary>
+    /// <param name="completedTurn">刚完成小回合（确认或 Pass）的玩家，从待回应名单移除；非结算检查点传 <c>null</c>。</param>
+    /// <param name="establish">是否允许建立新候选：只在合法批次结算后与 Pass 完成后为 <c>true</c>。</param>
+    /// <remarks>
+    /// 顺序：① 名单移除已出局 / 弃赛者与刚完成小回合者；② 复查候选——候选出局 / 弃赛或不再满足碾压式即取消并清空名单；
+    /// ③ 无候选且当前大回合 ≥ 起始大回合（起始为 0 即关闭）时，<b>恰有一名</b>参赛玩家满足则成为候选，名单为此刻其余全部参赛玩家。
+    /// 成立（名单为空且仍满足）由 <see cref="CheckEndConditions"/> 按优先级记录。
+    /// </remarks>
+    private void UpdateDominance(PlayerId? completedTurn, bool establish)
+    {
+        if (_pendingEnd is not null || Phase != MatchPhase.InProgress)
+        {
+            return;
+        }
+
+        if (_dominanceCandidate is { } candidate)
+        {
+            _dominancePending.RemoveWhere(p => _records[p].Status != PlayerStatus.Active || p == completedTurn);
+            if (_records[candidate].Status != PlayerStatus.Active || !DominanceSatisfying().Contains(candidate))
+            {
+                _dominanceCandidate = null;
+                _dominancePending.Clear();
+            }
+        }
+
+        if (establish && _dominanceCandidate is null && DominanceStartRound > 0 && MajorRound >= DominanceStartRound
+            && DominanceSatisfying() is [PlayerId sole])
+        {
+            _dominanceCandidate = sole;
+            _dominancePending.UnionWith(_players.Where(p => p != sole && _records[p].Status == PlayerStatus.Active));
+        }
+    }
+
+    /// <summary>当前满足碾压式的参赛玩家：势力取自最近一次重算的快照，参赛状态取自<b>权威名册</b>（快照里的状态早于本次出局检查）。</summary>
+    private ImmutableArray<PlayerId> DominanceSatisfying() =>
+        Scoreboard.Latest is { } power
+            ? DominanceCheck.Satisfying(_players.Select(p => new DominanceEntry(p, _records[p].Status, power.Of(p).Total)))
+            : [];
 
     private void Finish(EndReason reason)
     {
@@ -556,6 +644,7 @@ public sealed partial class MatchFlow
             record.Protection = false;
             Emit(FlowEventKind.ProtectionLifted, player, $"完成第 {MajorRound} 大回合的小回合");
             CheckEliminationOf(player);
+            UpdateDominance(completedTurn: null, establish: false);
             CheckEndConditions();
         }
 
@@ -610,7 +699,7 @@ public sealed partial class MatchFlow
         }
 
         // 条件 4（round-cap D1 / D2）：唯一检查点在这里——最后一名参赛玩家的小回合结算或 Pass 之后、生成下一大回合顺序之前。
-        // 条件 1–3 在结算瞬间已经判过并在 CompleteTurn 里收尾，走到这里说明对局仍在进行，才轮到上限兜底。
+        // 立即生效的条件（含势力碾压）在结算瞬间已经判过并在 CompleteTurn 里收尾，走到这里说明对局仍在进行，才轮到上限兜底。
         // 比较用刚结束的轮次 `completed`，不用推进后的 MajorRound（heuristic-ai 阶段 B 踩过的时序陷阱）。
         if (MaxMajorRounds > 0 && completed >= MaxMajorRounds)
         {
@@ -727,6 +816,14 @@ public sealed partial class MatchFlow
     internal void DebugSetProtection(PlayerId player, bool protectedNow) => Require(player).Protection = protectedNow;
 
     internal void DebugSetPassStreak(int streak) => _passStreak = streak;
+
+    internal void DebugSetDominance(PlayerId? candidate, PlayerId[] pending)
+    {
+        RequireStage(TurnStage.Idle);
+        _dominanceCandidate = candidate;
+        _dominancePending.Clear();
+        _dominancePending.UnionWith(pending);
+    }
 
     internal void DebugRecalculate() => RecalculateDerived();
 

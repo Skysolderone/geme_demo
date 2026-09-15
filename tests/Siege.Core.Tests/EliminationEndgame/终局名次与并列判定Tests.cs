@@ -79,7 +79,7 @@ public class 终局名次与并列判定Tests
         // 局面：P0 {B2,B3} 与 P1 {H2,H3} 左右镜像（势力相同），信物格 A2 只被 P0 独占覆盖，G2 / J2 / H1 只被 P1 独占覆盖（信物内容不影响势力）。
         // 变异验证 M-R1：EndMajorRound 删除上限检查 → 红（本测试：对局未结束）；M-R5 同样红。
         // 变异验证 M-R14：Finish 在 MajorRoundLimit 下把 ControlledRelics 传 0 → 红 1（本测试：P0 与 P1 并列）。
-        MatchFlow match = MatchFixtures.Started(relics: [("A2", RelicFixtures.Depot()), ("G2", RelicFixtures.Depot()), ("J2", RelicFixtures.Depot()), ("H1", RelicFixtures.Depot())])
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff, relics: [("A2", RelicFixtures.Depot()), ("G2", RelicFixtures.Depot()), ("J2", RelicFixtures.Depot()), ("H1", RelicFixtures.Depot())])
             .AtRound(15, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "B2")
             .Stones(MatchFixtures.P1, "H2");
@@ -99,5 +99,41 @@ public class 终局名次与并列判定Tests
         Assert.Equal((1, 3), (p0.Input.ControlledRelics, p1.Input.ControlledRelics));
         Assert.Equal((2, 1), (p0.Rank, p1.Rank));
         Assert.Equal(StandingGroup.Finisher, p1.Group);
+    }
+
+    [Fact]
+    public void 碾压获胜者为第1名()
+    {
+        // dominance-victory 规格算例：以势力碾压终局，获胜者 210，其余 80、70、55 → 获胜者第 1 名，其余按势力依次第 2、3、4 名。
+        // 变异验证 M-DV11：Finish 在 PowerDominance 时改为"候选第 1、其余按玩家编号"另排一套 → 红 1（本测试）。
+        ImmutableArray<Standing> table = FinalStandings.Compute([
+            new StandingInput(new PlayerId(0), PlayerStatus.Active, 210, 0, 0, 0, null),
+            new StandingInput(new PlayerId(1), PlayerStatus.Active, 55, 0, 0, 0, null),
+            new StandingInput(new PlayerId(2), PlayerStatus.Active, 80, 0, 0, 0, null),
+            new StandingInput(new PlayerId(3), PlayerStatus.Active, 70, 0, 0, 0, null)]);
+        Assert.Equal([0, 2, 3, 1], table.Select(s => s.Player.Value));
+        Assert.Equal([1, 2, 3, 4], table.Select(s => s.Rank));
+
+        // 真实对局走到碾压终局：其余三人的势力高低与玩家编号顺序相反（P3 > P2 > P1），
+        // 名次若被另写成"候选第 1、其余按编号 / 按名单顺序"就会与比较链结果不同（裁决 5：不新增第二套排序）。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOn).AtRound(6, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+        foreach ((string cell, PieceType type) in new[] { ("A1", PieceType.Fortress), ("B1", PieceType.Fortress), ("A2", PieceType.Fortress), ("B2", PieceType.Multiplier), ("C1", PieceType.Multiplier) })
+        {
+            match.Board.Place(Coord.Parse(cell), MatchFixtures.P0, type);
+        }
+
+        match.Stones(MatchFixtures.P1, "H1").Stones(MatchFixtures.P2, "A8", "B8").Stones(MatchFixtures.P3, "H8", "J8", "G8");
+        match.PassTurn();
+        match.PassTurn();
+        match.PassTurn();
+        match.PlayTurn("G9");
+        Assert.Equal(EndReason.PowerDominance, match.Result!.Reason);
+
+        long[] power = [.. MatchFixtures.All.Select(p => match.Scoreboard.Latest!.Of(p).Total)];
+        Assert.True(power[0] > power[3] && power[3] > power[2] && power[2] > power[1], string.Join(" ", power));
+        Assert.Equal(new[] { MatchFixtures.P0, MatchFixtures.P3, MatchFixtures.P2, MatchFixtures.P1 }, match.Result.Standings.Select(s => s.Player));
+        Assert.Equal([1, 2, 3, 4], match.Result.Standings.Select(s => s.Rank));
+        Assert.Equal([MatchFixtures.P0], match.Result.Winners);
+        Assert.Equal(power, [.. MatchFixtures.All.Select(p => match.Result.Of(p).Input.Power)]);
     }
 }

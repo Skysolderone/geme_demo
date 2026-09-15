@@ -213,6 +213,9 @@ public sealed record LogHeader
     /// <summary>本局对局配置的大回合上限（0 = 不限；match-setup「上限进入对局记录」）。取自对局本身，不是 <see cref="Config"/>。</summary>
     public int MaxMajorRounds { get; init; }
 
+    /// <summary>本局对局配置的碾压起始大回合（0 = 关闭；match-setup「对局配置公开碾压起始大回合」）。取自对局本身；dominance-victory 之前的旧日志为 <c>null</c>。</summary>
+    public int? DominanceStartRound { get; init; }
+
     public required RunConfig Config { get; init; }
 
     public List<int> Players { get; init; } = [];
