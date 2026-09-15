@@ -1,0 +1,5 @@
+{"file": "openspec/changes/multiplier-rebalance/specs/power-score/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/multiplier-rebalance/specs/piece-effects/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/multiplier-rebalance/design.md", "reason": "核对 D1–D4：只放大基础、取整位置、唯一常量、明细结构不变"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "核对 §9.2 §10.1 与变更记录"}
+{"file": ".trellis/spec/core/testing.md", "reason": "既有算例改写不得改语义凑绿、变异验证记录"}

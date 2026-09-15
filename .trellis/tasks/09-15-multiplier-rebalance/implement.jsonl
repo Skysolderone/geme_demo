@@ -1,0 +1,7 @@
+{"file": "openspec/changes/multiplier-rebalance/design.md", "reason": "D1–D4、接口契约与裁决 1–5；实现前必读"}
+{"file": "openspec/changes/multiplier-rebalance/specs/power-score/spec.md", "reason": "棋串军势公式与势力明细的 MODIFIED Requirement，逐条对应测试"}
+{"file": "openspec/changes/multiplier-rebalance/specs/piece-effects/spec.md", "reason": "倍增子倍率只作用于基础军势、封顶 3"}
+{"file": "openspec/changes/multiplier-rebalance/proposal.md", "reason": "势力归因数据与离线估算依据"}
+{"file": "openspec/changes/archive/2026-09-15-growth-pass-1/design.md", "reason": "封顶常量与回归基线"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文 §9.2 §10.1；3.x 要改它"}
+{"file": ".trellis/spec/core/testing.md", "reason": "算例出处、变异验证、默认值改了红数要重跑、源码扫描正则与 0x08 陷阱"}
