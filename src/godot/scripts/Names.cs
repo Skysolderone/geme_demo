@@ -35,6 +35,34 @@ public static class Names
         _ => reason.ToString(),
     };
 
+    /// <summary>
+    /// 对局结果对本人的一句话结论。名次与状态全部取自 <see cref="MatchResult"/>，本方法只做文案拼接，不做任何判定。
+    /// </summary>
+    public static string Outcome(MatchResult result, Siege.Core.Board.PlayerId me)
+    {
+        System.ArgumentNullException.ThrowIfNull(result);
+        Standing? mine = result.Standings.FirstOrDefault(s => s.Player == me);
+        if (mine is null)
+        {
+            return "本局你不在名单中。";
+        }
+
+        string suffix = mine.Input.Status switch
+        {
+            Siege.Core.Scoring.PlayerStatus.Eliminated => "（你已出局）",
+            Siege.Core.Scoring.PlayerStatus.Resigned => "（你已弃赛）",
+            _ => string.Empty,
+        };
+
+        bool shared = result.Standings.Count(s => s.Rank == mine.Rank) > 1;
+        if (mine.Rank == 1)
+        {
+            return shared ? $"你并列第 1 名，胜利{suffix}" : $"你赢了！第 1 名{suffix}";
+        }
+
+        return $"你输了——第 {mine.Rank} 名，共 {result.Standings.Length} 人{suffix}";
+    }
+
     /// <summary>信息层。</summary>
     public static string Layer(TacticalLayer layer) => layer switch
     {

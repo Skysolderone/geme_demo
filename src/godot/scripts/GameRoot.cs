@@ -350,6 +350,13 @@ public sealed partial class GameRoot : Node3D
             ? "无名次"
             : string.Join("、", result.Standings.Select(s => $"第{s.Rank}名 {Labels.Player(s.Player)} 势力 {s.Input.Power}"));
         GD.Print($"[auto-demo] 终局：第 {result?.MajorRound} 大回合，{(result is null ? "未知" : Names.End(result.Reason))}；{standings}");
+        if (_screenshotFrame >= 0)
+        {
+            // 还等着截图：留在结算画面，由 --screenshot 的帧号或 --quit-after 决定何时退出，
+            // 否则终局画面永远截不到（自检时最该看的就是它）。
+            return;
+        }
+
         GetTree().Quit(0);
     }
 

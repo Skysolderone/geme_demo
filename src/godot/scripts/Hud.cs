@@ -554,6 +554,8 @@ public sealed partial class Hud : CanvasLayer
     private void BuildResult(MatchResult result, PlayerId me)
     {
         _centerBody.AddChild(Ui.Heading($"对局结束：第 {result.MajorRound} 大回合，{Names.End(result.Reason)}"));
+        _centerBody.AddChild(Ui.Text(Names.Outcome(result, me), Ui.PanelBorder, UiTheme.BodyFontPx + 4));
+        _centerBody.AddChild(Ui.Separator());
         foreach (Standing standing in result.Standings)
         {
             _centerBody.AddChild(Ui.Text(
