@@ -29,7 +29,19 @@ public class 势力明细Tests
             foreach (GroupPower g in player.Groups)
             {
                 Assert.Equal(g.LineBonus + g.SynergyBonus, g.PositionBonus);
-                Assert.Equal(PowerCalculator.GroupPowerOf(g.BaseTotal, g.PositionBonus, g.MultiplierCount), g.Power);
+                // multiplier-rebalance check 替换：原用 PowerCalculator.GroupPowerOf 复算（比较被测方法与它的委托目标，恒真）。
+                // 改为测试内独立整数式 ⌊基础 × 3^e / 2^e⌋ + 加值，e = min(n, 3)（规格字面封顶 3，不读 Multiplier.MaxExponent）。
+                // 变异验证 C-MR1（check）：GroupPowerOf 改回 Apply(baseTotal + positionBonus) → 本测试红（P1 串 15 ≠ 13）。
+                int e = Math.Min(g.MultiplierCount, 3);
+                long pow3 = 1;
+                long pow2 = 1;
+                for (int i = 0; i < e; i++)
+                {
+                    pow3 *= 3;
+                    pow2 *= 2;
+                }
+
+                Assert.Equal((g.BaseTotal * pow3 / pow2) + g.PositionBonus, g.Power);
                 Assert.Equal(g.Stones.Sum(s => Siege.Core.Scoring.PieceEffects.BasePower(board[s].Occupant!.Value.Type)), g.BaseTotal);
                 Assert.Equal(g.Stones.Count(s => board[s].Occupant!.Value.Type == PieceType.Multiplier), g.MultiplierCount);
                 recomputed += g.Power;
@@ -41,6 +53,10 @@ public class 势力明细Tests
         // 抽查一条：连珠 B9-C9-D9 + 协同 D10（其他类型只有连珠 → 2）→ 基础 4 + 加值 8 = 12
         GroupPower lineGroup = snapshot.GroupContaining(TestMaps.P0, "D10");
         Assert.Equal((4, 6, 2, 0, 12L), (lineGroup.BaseTotal, lineGroup.LineBonus, lineGroup.SynergyBonus, lineGroup.MultiplierCount, lineGroup.Power));
+
+        // 抽查含倍增子且含位置加值的一条（check 补）：堡垒 H5 + 倍增 H6 + 协同 J6（其他类型 {堡垒, 倍增} → 4）→ ⌊6 × 1.5⌋ + 4 = 13（旧公式 ⌊10 × 1.5⌋ = 15）
+        GroupPower mixedGroup = snapshot.GroupContaining(TestMaps.P1, "H6");
+        Assert.Equal((6, 0, 4, 1, 13L), (mixedGroup.BaseTotal, mixedGroup.LineBonus, mixedGroup.SynergyBonus, mixedGroup.MultiplierCount, mixedGroup.Power));
     }
 
     [Fact]

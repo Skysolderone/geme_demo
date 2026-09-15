@@ -136,6 +136,56 @@ public class 各棋子势力占比Tests
         Assert.Contains("- 棋子 Fortress：盘面 1 枚（5.6%），势力 4（6.0%），每颗平均 4", text);
     }
 
+    [Fact]
+    public void 含连珠线协同倍增的真实棋串写快照读回并按口径归因()
+    {
+        // check 补：真实跑局 Easy 样本里没有连珠成线，连珠计数的写入路径未被覆盖；这里用真实盘面走 MatchSession.PieceCountsOf → 日志往返 → 分析器。
+        // 盘面：连珠 B2-C2-D2（线长 3，加值 3 × 2 = 6）+ 协同 E2（其他类型 {连珠, 倍增} 2 种 → 4）+ 倍增 F2、G2（生效 2，倍率 9/4）。
+        // 手算：基础 6，军势 ⌊6 × 9 / 4⌋ + 6 + 4 = 13 + 10 = 23；放大部分 13 − 6 = 7。
+        //   连珠 3 + 6 = 9、协同 1 + 4 = 5、倍增 2 + 7 = 9；合计 23 = 棋串军势（归因不多不少）。
+        // 变异验证 C-MR2（check）：占比口径里倍增子放大部分不减基础（amplified = Apply(Base)）→ 倍增 15 ≠ 9，本测试红；
+        // C-MR3：连珠加值分给倍增子（Multiplier 分支加 LineBonus、Line 分支不加）→ 本测试红。
+        GameBoard board = TestMaps.Blank(size: 9)
+            .Place("B2", TestMaps.P0, PieceType.Line).Place("C2", TestMaps.P0, PieceType.Line).Place("D2", TestMaps.P0, PieceType.Line)
+            .Place("E2", TestMaps.P0, PieceType.Synergy)
+            .Place("F2", TestMaps.P0, PieceType.Multiplier).Place("G2", TestMaps.P0, PieceType.Multiplier);
+        GroupPower g = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+        Assert.Equal((6, 6, 4, 2, 23L), (g.BaseTotal, g.LineBonus, g.SynergyBonus, g.MultiplierCount, g.Power));
+
+        GroupEntry written = new()
+        {
+            Stones = [.. g.Stones.Select(s => s.ToNotation())],
+            Base = g.BaseTotal,
+            LineBonus = g.LineBonus,
+            SynergyBonus = g.SynergyBonus,
+            MultiplierCount = g.MultiplierCount,
+            EffectiveMultiplierCount = g.EffectiveMultiplierCount,
+            Power = g.Power,
+            PieceCounts = Siege.Sim.Running.MatchSession.PieceCountsOf(board, g),
+        };
+        MatchLog log = SimFixtures.Synthetic(
+            41,
+            [SimFixtures.Turn(1, 1, 0, [23, 0, 0, 0], ["G2:Multiplier"], groupsOfPlayer: [written])],
+            [],
+            SimFixtures.ResultOf(1, [0]));
+
+        MatchLog restored = MatchLog.Parse(log.DeterministicText());
+        Dictionary<string, int>? read = Assert.Single(restored.Turns[0].PlayersState[0].Groups).PieceCounts;
+        Assert.NotNull(read);
+        Assert.Equal(
+            ["Basic=0", "Fortress=0", "Line=3", "Multiplier=2", "Synergy=1"],
+            read.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key}={kv.Value}"));
+
+        BalanceReport report = BalanceAnalyzer.Analyze([restored]);
+        PieceShareSection s = report.PieceShares;
+        Assert.Equal((1, 0), (s.Matches, s.Skipped));
+        Assert.Equal((6L, 23L), (s.TotalStones, s.TotalPower));
+        Assert.Equal(
+            ["Basic:0/0", "Fortress:0/0", "Line:3/9", "Multiplier:2/9", "Synergy:1/5"],
+            s.Pieces.Select(p => $"{p.Type}:{p.Stones}/{p.Power}"));
+        Assert.Contains("- 棋子 Synergy：盘面 1 枚（16.7%），势力 5（21.7%），每颗平均 5", ReportWriter.Render(report));
+    }
+
     private static TurnSnapshot TurnWith(int turn, params (int Player, string Status, GroupEntry[] Groups)[] players) =>
         SimFixtures.Turn(turn, 1, 0, [0, 0, 0, 0], ["A1:Basic"]) with
         {

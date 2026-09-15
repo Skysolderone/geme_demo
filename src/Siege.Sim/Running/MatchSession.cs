@@ -414,8 +414,8 @@ public sealed class MatchSession
         return list;
     }
 
-    /// <summary>棋串各棋子类型的数量（五种全写，含 0，按枚举顺序），从快照盘面按棋子坐标逐枚统计。</summary>
-    private static Dictionary<string, int> PieceCountsOf(GameBoard board, GroupPower group)
+    /// <summary>棋串各棋子类型的数量（五种全写，含 0，按枚举顺序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。</summary>
+    internal static Dictionary<string, int> PieceCountsOf(GameBoard board, GroupPower group)
     {
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (PieceType type in Enum.GetValues<PieceType>())
