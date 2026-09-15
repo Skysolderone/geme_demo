@@ -173,18 +173,10 @@ public sealed partial class GameRoot : Node3D
         _hud.LayerPressed += ToggleLayer;
     }
 
-    /// <summary>按钮点选信息层：与按键走同一个可见性状态机（D5），只是进入 / 退出的触发条件不同。</summary>
+    /// <summary>按钮点选信息层：与按键走同一个可见性状态机（D5），只是进入 / 退出的触发条件不同——判断本身在状态机里，这里不复写。</summary>
     private void ToggleLayer(TacticalLayer layer)
     {
-        if (_layers.Active == layer)
-        {
-            _layers.Back();
-        }
-        else
-        {
-            _layers.Press(layer);
-        }
-
+        _layers.Toggle(layer);
         _dirty = true;
     }
 

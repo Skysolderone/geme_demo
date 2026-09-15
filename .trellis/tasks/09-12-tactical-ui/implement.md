@@ -64,6 +64,20 @@
 - [x] 6.2 建立预演一致性回归：对随机生成的局面，断言 UI 显示的预计提子集合与实际结算的提子集合完全一致。验证：1000 例随机局面全部一致。 — （阶段 A）`预演一致性回归Tests.千例随机局面预演与结算一致`（1000 例，含样本口径下界）。
 - [x] 6.3 断言 UI 层不包含规则计算。验证：依赖检查通过，UI 不引用棋串/气/军势计算模块。 — （阶段 A）`表现层不调用规则计算入口` / `表现层不持有可变对局对象` / `表现层不引用Godot` / `内核与表现层不出现浮点`。
 
+## check 结论（阶段 A + B 合并审查，2026-09-15）
+
+- **对账**：22 条 Requirement → 22 个同名测试类，49 个 Scenario → 49 个同名测试方法，**无缺项，补 0 条**。`openspec validate add-tactical-ui` 通过。
+- **既有资产零改动**：`git diff f0c5aec..HEAD -- tests/` 里既有文件仅 `Siege.Core.Tests.csproj` 一行；`src/Siege.Core` 四个文件全为新增。
+- **零副作用**：变异 M-A3（`StructuresOf` 改走正式账本 `Relics.SnapshotFor`）实做 → 红 6，部署上限峰值遥测与势力榜版本被牢牢钉住；富预演与补充载荷全部在 `RelicLedger.Restore` 的副本与盘面副本上试算，正式状态零触碰。
+- **「将揭示」**：来自结算后盘面 `projected` 上的账本副本 `Reveal`，只出坐标；变异「把内容带进 `RevealHintView`」→ 红 1。
+- **UI 不做规则计算**：
+  - Presentation：IL 扫描守门对**扩展方法** / **局部函数（编译器生成闭包）** / **非根类型静态工厂**三种形状各做一次变异，三条 violation 全部报出。
+  - Godot：`src/godot/` 不在 `siege.sln` 里，阶段 A 的 IL 扫描扫不到它 → 本次**新增** `tests/Siege.Core.Tests/BatchPreview/Godot层不含规则计算Tests.cs`（源码文本扫描，3 条，各自变异验证过）：不调规则计算入口、不读他人私有手牌、坐标映射不得在 `BoardGeometry` 之外写第二份。
+  - `MatchSession.RunAiTurn` 对前后两份**只读公开快照**做占位差集用于演出：只观测结果、不产生规则结论，判定**可接受**（棋子只因提子消失，差集与结算提子等价）。
+- **D5 漂移已修**：`GameRoot.ToggleLayer` 原先自己写了 `Active == layer ? Back() : Press(layer)`——点击语义被复写在界面侧。已把判断收回 `TacticalLayerState.Toggle`，Godot 侧只调用；`辅助设置切换为点击` 补上等价性断言（变异 M-I4 → 红 1）。
+- **Godot 自检**：`--build-solutions` 退出码 0、零警告；`--auto-demo` 跑完整局退出码 0；开窗截图 1600×900 正常生成。
+- **仍需人工确认（截图检查清单）**：5.2 去色可辨、5.3 装饰不遮挡、5.4 缩略图轮廓可辨、5.6 同屏可分辨、5.7 降饱和观感。数据层断言已就位且非恒真。
+
 ## 验证命令
 
 ```bash

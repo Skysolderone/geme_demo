@@ -79,5 +79,25 @@ public class 信息层的进入与退出Tests
         state.Click(TacticalLayer.Order);
         state.Back();
         Assert.Null(state.Active);
+
+        // D5：HUD 上的信息层按钮（鼠标点击）走状态机的 Toggle，界面侧不复写判断；Toggle 与"点击模式下的 Press"必须逐步等价。
+        // check 阶段发现 Godot 的 GameRoot.ToggleLayer 自己写了 `Active == layer ? Back() : Press(layer)`，已收回状态机。
+        // 变异验证 M-I4（check 阶段实做）：Toggle 改为 `Active = layer`（不退出）→ 本测试红 1。
+        var viaToggle = new TacticalLayerState();
+        var viaClick = new TacticalLayerState(LayerInputMode.ClickToToggle);
+        foreach (TacticalLayer layer in new[] { TacticalLayer.Power, TacticalLayer.Power, TacticalLayer.Relics, TacticalLayer.Relics, TacticalLayer.Territory })
+        {
+            viaToggle.Toggle(layer);
+            viaClick.Press(layer);
+            Assert.Equal(viaClick.Active, viaToggle.Active);
+        }
+
+        Assert.Equal(TacticalLayer.Territory, viaToggle.Active);
+
+        // 按住模式下点按钮同样是切换：Toggle 不看 Mode
+        var holding = new TacticalLayerState();
+        holding.Toggle(TacticalLayer.Order);
+        holding.Toggle(TacticalLayer.Order);
+        Assert.Null(holding.Active);
     }
 }

@@ -54,10 +54,25 @@ public sealed class TacticalLayerState
         Active = null;
     }
 
-    /// <summary>层 X 的键被按下。按住模式：显示 X（替换当前层）。点击模式：X 已显示则退出，否则显示 X。</summary>
+    /// <summary>层 X 的键被按下。按住模式：显示 X（替换当前层）。点击模式：转交 <see cref="Toggle"/>。</summary>
     public void Press(TacticalLayer layer)
     {
-        Active = Mode == LayerInputMode.ClickToToggle && Active == layer ? null : layer;
+        if (Mode == LayerInputMode.ClickToToggle)
+        {
+            Toggle(layer);
+            return;
+        }
+
+        Active = layer;
+    }
+
+    /// <summary>
+    /// 点击语义：X 已显示则退出，否则显示 X（替换当前层）。供 HUD 上的信息层按钮直接调用——
+    /// 鼠标点按钮天然是"点击切换"，但它 MUST NOT 在界面侧复写这段判断（D5：两种输入映射共用同一套状态机）。
+    /// </summary>
+    public void Toggle(TacticalLayer layer)
+    {
+        Active = Active == layer ? null : layer;
     }
 
     /// <summary>层 X 的键被松开。按住模式：若 X 正在显示则立即退出；点击模式忽略。</summary>
