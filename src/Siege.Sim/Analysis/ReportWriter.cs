@@ -101,6 +101,14 @@ public static class ReportWriter
         sb.AppendLine($"- 出现过倍增串的局 {m.MatchesWithPeak}；峰值倍增子数分布（原始数量）{Histogram(m.PeakCountDistribution)}；峰值生效倍率指数分布（封顶 {Multiplier.MaxExponent}，倍率上限 {new Multiplier(Multiplier.MaxExponent)}）{Histogram(m.PeakEffectiveExponentDistribution)}");
         sb.AppendLine($"- 峰值首次出现平均在第 {Num(m.MeanFormationRound)} 大回合，峰值军势平均 {Num(m.MeanPeakPower)}，最高 {m.MaxPeakPower}");
         sb.AppendLine($"- 峰值串之后被摧毁的概率 {m.DestroyedRate}");
+        sb.AppendLine("### 4b. 各棋子势力占比（multiplier-rebalance：终局快照、参赛玩家的全部棋串；倍增子计其放大出的部分，其余计基础军势与分得的位置加值；不含领地分）");
+        PieceShareSection ps = r.PieceShares;
+        sb.AppendLine($"- 纳入 {ps.Matches} 局，跳过无棋子类型计数的旧日志 / 无快照局 {ps.Skipped} 局；盘面棋子 {ps.TotalStones} 枚，归因势力 {ps.TotalPower}");
+        foreach (PieceShare p in ps.Pieces)
+        {
+            sb.AppendLine($"- 棋子 {p.Type}：盘面 {p.Stones} 枚（{Pct(p.StoneShare)}），势力 {p.Power}（{Pct(p.PowerShare)}），每颗平均 {Num(p.MeanPerStone)}");
+        }
+
         sb.AppendLine("### 5. 出生区随机资源是否造成显著胜率差异（裁决 8：按信物生成收敛分组）");
         BirthZoneSection z = r.BirthZones;
         sb.AppendLine($"- 基线 {Pct(z.Baseline)}；显著 = 基线落在该区 Wilson 区间之外");

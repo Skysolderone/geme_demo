@@ -1,5 +1,7 @@
+using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Relics;
+using Siege.Core.Scoring;
 using Siege.Sim.Logging;
 
 namespace Siege.Sim.Analysis;
@@ -93,6 +95,17 @@ public sealed record MultiplierSection(
     long MaxPeakPower,
     Proportion DestroyedRate);
 
+/// <summary>一种棋子的势力归因：盘面枚数、盘面占比、归因势力、势力占比、每颗平均贡献。</summary>
+public sealed record PieceShare(string Type, long Stones, double StoneShare, long Power, double PowerShare, double MeanPerStone);
+
+/// <summary>
+/// 各棋子势力占比（multiplier-rebalance 裁决 3，proposal 表格口径）：逐局取终局快照（最后一条小回合快照）中参赛玩家（<c>Active</c>）的全部棋串；
+/// 普通 / 堡垒 / 连珠 / 协同计各自基础军势，连珠与协同再分得本串对应的位置加值；倍增子计各自基础军势 1，再分得本串"放大出来的部分"
+/// <c>⌊基础 × 倍率⌋ − 基础</c>（整数，经唯一的 <see cref="Siege.Core.Scoring.Multiplier.Apply"/> 按日志里的生效指数算）。势力占比的分母是纳入局归因势力之和（棋串军势，不含领地分）。
+/// 终局快照里有任何参赛玩家棋串缺 <see cref="GroupEntry.PieceCounts"/>（旧日志）或整局无快照的局计入 <see cref="Skipped"/>，不参与任何分子分母。
+/// </summary>
+public sealed record PieceShareSection(int Matches, int Skipped, long TotalStones, long TotalPower, List<PieceShare> Pieces);
+
 public sealed record ZoneStat(int Zone, Proportion WinRate, bool Significant);
 
 public sealed record BirthZoneSection(
@@ -137,6 +150,7 @@ public sealed record BalanceReport(
     SnowballSection Snowball,
     SelectionSection Selection,
     MultiplierSection Multiplier,
+    PieceShareSection PieceShares,
     BirthZoneSection BirthZones,
     GrowthAxisSection GrowthAxes,
     StallingSection Stalling,
@@ -182,6 +196,7 @@ public static class BalanceAnalyzer
             Snowball(included),
             Selection(included),
             Multiplier(included),
+            PieceShares(included),
             BirthZones(included),
             GrowthAxes(included),
             Stalling(included),
@@ -649,6 +664,68 @@ public static class BalanceAnalyzer
         }
 
         return new MultiplierSection(peaks, distribution, effective, Statistics.Mean(rounds), Statistics.Mean(powers), max, Statistics.Wilson(destroyed, peaks));
+    }
+
+    // ---------- 各棋子势力占比（multiplier-rebalance 裁决 3） ----------
+
+    private static PieceShareSection PieceShares(List<MatchLog> logs)
+    {
+        PieceType[] types = Enum.GetValues<PieceType>();
+        var stones = types.ToDictionary(t => t, _ => 0L);
+        var power = types.ToDictionary(t => t, _ => 0L);
+        int matches = 0;
+        int skipped = 0;
+        foreach (MatchLog log in logs)
+        {
+            if (log.Turns.Count == 0)
+            {
+                skipped++;
+                continue;
+            }
+
+            List<GroupEntry> groups = [.. log.Turns[^1].PlayersState
+                .Where(p => p.Status == nameof(PlayerStatus.Active))
+                .SelectMany(p => p.Groups)];
+            if (groups.Any(g => g.PieceCounts is null))
+            {
+                skipped++;
+                continue;
+            }
+
+            matches++;
+            foreach (GroupEntry g in groups)
+            {
+                long amplified = new Siege.Core.Scoring.Multiplier(g.EffectiveMultiplierCount).Apply(g.Base) - g.Base;
+                foreach (PieceType type in types)
+                {
+                    int count = g.PieceCounts!.TryGetValue(type.ToString(), out int n) ? n : 0;
+                    if (count == 0)
+                    {
+                        continue;
+                    }
+
+                    stones[type] += count;
+                    power[type] += (long)PieceEffects.BasePower(type) * count + type switch
+                    {
+                        PieceType.Line => g.LineBonus,
+                        PieceType.Synergy => g.SynergyBonus,
+                        PieceType.Multiplier => amplified,
+                        _ => 0,
+                    };
+                }
+            }
+        }
+
+        long totalStones = stones.Values.Sum();
+        long totalPower = power.Values.Sum();
+        List<PieceShare> pieces = [.. types.Select(t => new PieceShare(
+            t.ToString(),
+            stones[t],
+            totalStones == 0 ? double.NaN : (double)stones[t] / totalStones,
+            power[t],
+            totalPower == 0 ? double.NaN : (double)power[t] / totalPower,
+            stones[t] == 0 ? double.NaN : (double)power[t] / stones[t]))];
+        return new PieceShareSection(matches, skipped, totalStones, totalPower, pieces);
     }
 
     // ---------- §17.5 出生区（裁决 8：收敛 / 未收敛分组） ----------

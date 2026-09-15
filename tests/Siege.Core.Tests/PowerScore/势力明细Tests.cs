@@ -87,7 +87,7 @@ public class 势力明细Tests
     public void 明细区分原始与生效倍率()
     {
         // cap-multiplier 规格：某棋串含 9 枚倍增子 → 明细中倍增子数量、生效倍率指数、倍率三者同时可读。
-        // growth-pass-1 改写：封顶 4 → 数量 9、生效指数 4、倍率 5.0625、军势 ⌊9 × 81 / 16⌋ = 45（封顶 5 时为 5 / 7.59375 / 243/32 / 68）。
+        // multiplier-rebalance 改写：封顶 3 → 数量 9、生效指数 3、倍率 3.375、军势 ⌊9 × 27 / 8⌋ = ⌊30.375⌋ = 30（封顶 4 时为 4 / 5.0625 / 81/16 / 45；封顶 5 时为 5 / 7.59375 / 243/32 / 68）。
         // 变异验证 M-M4：GroupPower / MultiplierPeak 的 EffectiveMultiplierCount 改为 => MultiplierCount（生效字段退化成原始字段）→ 红 6，含本测试。
         // 变异验证 M-M3 / M-GP6（growth-pass-1 重跑）：Multiplier.ToString 改用原始 Count → 红 5，含本测试（38.443359375）。
         GameBoard board = TestMaps.Blank(size: 11);
@@ -99,11 +99,11 @@ public class 势力明细Tests
         GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
 
         Assert.Equal(9, group.MultiplierCount);
-        Assert.Equal(4, group.EffectiveMultiplierCount);
-        Assert.Equal("5.0625", group.Multiplier.ToString());
-        Assert.Equal((Int128)81, group.Multiplier.Numerator);
-        Assert.Equal((Int128)16, group.Multiplier.Denominator);
-        Assert.Equal(45, group.Power);
+        Assert.Equal(3, group.EffectiveMultiplierCount);
+        Assert.Equal("3.375", group.Multiplier.ToString());
+        Assert.Equal((Int128)27, group.Multiplier.Numerator);
+        Assert.Equal((Int128)8, group.Multiplier.Denominator);
+        Assert.Equal(30, group.Power);
     }
 
     [Fact]
@@ -112,6 +112,7 @@ public class 势力明细Tests
         // Requirement 势力明细：遥测倍率峰值 SHALL 保留原始倍增子数量，并同时可得生效倍率指数（implement.md 2.2：8 枚 → 数量 8、生效 4）。
         // 峰值按原始数量比较，因此第 9 枚仍会刷新峰值（生效指数不变仍为 4）——原始数量语义不因封顶而改。
         // growth-pass-1 改写：封顶 4 → 生效 5→4、显示 7.59375→5.0625、军势 60→40（8 枚）与 68→45（9 枚）。
+        // multiplier-rebalance 改写：封顶 3 → 生效 4→3、显示 5.0625→3.375、军势 40→27（8 枚，⌊8 × 27 / 8⌋）与 45→30（9 枚，⌊9 × 27 / 8⌋）。
         // 变异验证 M-M4：MultiplierPeak.EffectiveMultiplierCount 改为 => MultiplierCount → 红 6，含本测试；M-M3 / M-GP6（ToString 用原始指数，growth-pass-1 重跑）→ 红 5，含本测试；M-M4 重跑仍红 6。
         GameBoard board = TestMaps.Blank(size: 11);
         for (int x = 1; x <= 8; x++)
@@ -125,15 +126,74 @@ public class 势力明细Tests
 
         MultiplierPeak peak = scoreboard.Peak!;
         Assert.Equal(8, peak.MultiplierCount);
-        Assert.Equal(4, peak.EffectiveMultiplierCount);
-        Assert.Equal("5.0625", peak.Multiplier.ToString());
-        Assert.Equal(40, peak.Power);
+        Assert.Equal(3, peak.EffectiveMultiplierCount);
+        Assert.Equal("3.375", peak.Multiplier.ToString());
+        Assert.Equal(27, peak.Power);
 
         board.Place(new Coord(9, 2), TestMaps.P0, PieceType.Multiplier);
         scoreboard.Recalculate(board, roster, majorRound: 2);
 
         peak = scoreboard.Peak!;
-        Assert.Equal((9, 4, 2), (peak.MultiplierCount, peak.EffectiveMultiplierCount, peak.MajorRound));
-        Assert.Equal(45, peak.Power);
+        Assert.Equal((9, 3, 2), (peak.MultiplierCount, peak.EffectiveMultiplierCount, peak.MajorRound));
+        Assert.Equal(30, peak.Power);
+    }
+
+    [Fact]
+    public void 明细可复算棋串军势()
+    {
+        // multiplier-rebalance power-score 规格：对任一棋串，⌊基础军势总和 × 倍率⌋ + 位置加值 = 取整后军势。
+        // 复算完全在测试里用整数做：倍率取明细的精确十进制显示串（如 "3.375" → 3375 / 1000），不调用被测的 Multiplier.Apply / GroupPowerOf
+        //（testing.md：比较被测方法与它的委托目标是恒真形状）。这样显示串与计算用的倍率也被一起钉住。
+        // 覆盖两类棋串：含位置加值且含倍增子（A、B、D）、不含位置加值（C 标准算例）、含加值不含倍增子（E）；D 同时越过封顶。
+        // 每条的期望值手算（旧公式下依次为 40 / 10 / 20 / 27 / 7）：
+        //   A 连珠×4 横线 + 倍增×2：⌊6 × 2.25⌋ + 12 = 25        B 协同 + 倍增 + 普通：⌊3 × 1.5⌋ + 协同 2×2 = 4 + 4 = 8
+        //   C §10.1 标准算例：⌊9 × 2.25⌋ + 0 = 20              D 倍增×5 + 协同：⌊6 × 3.375⌋ + 2 = 20 + 2 = 22
+        //   E 连珠×2 + 协同：3 × 1 + 连珠 2 + 协同 2 = 7
+        // 变异验证 M-MR5：把 Multiplier.Apply 改为向上取整 → 本测试在复算循环的断言处红；同时把复算改用 g.Multiplier.Apply(g.BaseTotal) + g.PositionBonus →
+        // 复算循环全部通过、只剩末尾手算字面值断言红（复算守门变成恒真，印证不能用被测方法复算）。另 M-MR1 红 5、M-MR2 红 23、M-MR4 红 7 均含本测试。
+        GameBoard board = TestMaps.Blank(size: 13)
+            .Place("B2", TestMaps.P0, PieceType.Line).Place("C2", TestMaps.P0, PieceType.Line).Place("D2", TestMaps.P0, PieceType.Line).Place("E2", TestMaps.P0, PieceType.Line)
+            .Place("F2", TestMaps.P0, PieceType.Multiplier).Place("G2", TestMaps.P0, PieceType.Multiplier)
+            .Place("B4", TestMaps.P0, PieceType.Synergy).Place("C4", TestMaps.P0, PieceType.Multiplier).Place("D4", TestMaps.P0, PieceType.Basic)
+            .PlaceStandardGroup(TestMaps.P0, row: 6)
+            .Place("B8", TestMaps.P0, PieceType.Multiplier).Place("C8", TestMaps.P0, PieceType.Multiplier).Place("D8", TestMaps.P0, PieceType.Multiplier)
+            .Place("E8", TestMaps.P0, PieceType.Multiplier).Place("F8", TestMaps.P0, PieceType.Multiplier).Place("G8", TestMaps.P0, PieceType.Synergy)
+            .Place("B10", TestMaps.P0, PieceType.Line).Place("C10", TestMaps.P0, PieceType.Line).Place("D10", TestMaps.P0, PieceType.Synergy);
+
+        PowerSnapshot snapshot = PowerCalculator.Compute(board);
+        PlayerPower p0 = snapshot.Of(TestMaps.P0);
+
+        Assert.Equal(5, p0.Groups.Length);
+        Assert.Contains(p0.Groups, g => g.PositionBonus > 0 && g.MultiplierCount > 0);
+        Assert.Contains(p0.Groups, g => g.PositionBonus == 0 && g.MultiplierCount > 0);
+        Assert.Contains(p0.Groups, g => g.PositionBonus > 0 && g.MultiplierCount == 0);
+        Assert.Contains(p0.Groups, g => g.MultiplierCount > Multiplier.MaxExponent && g.PositionBonus > 0);
+        foreach (GroupPower g in p0.Groups)
+        {
+            (long numerator, long denominator) = DecimalFraction(g.Multiplier.ToString());
+            Assert.Equal(g.BaseTotal * numerator / denominator + g.PositionBonus, g.Power);
+        }
+
+        Assert.Equal(
+            new[] { ("B2", 6, 12, 2, 25L), ("B4", 3, 4, 1, 8L), ("B6", 9, 0, 2, 20L), ("B8", 6, 2, 5, 22L), ("B10", 3, 4, 0, 7L) },
+            p0.Groups.Select(g => (g.Stones[0].ToNotation(), g.BaseTotal, g.PositionBonus, g.MultiplierCount, g.Power)).OrderBy(t => int.Parse(t.Item1[1..])));
+    }
+
+    /// <summary>把精确十进制串（"1"、"2.25"、"3.375"）转成分数 (分子, 10^小数位数)；纯整数运算，不经过浮点。</summary>
+    private static (long Numerator, long Denominator) DecimalFraction(string text)
+    {
+        int dot = text.IndexOf('.');
+        if (dot < 0)
+        {
+            return (long.Parse(text), 1);
+        }
+
+        long denominator = 1;
+        for (int i = dot + 1; i < text.Length; i++)
+        {
+            denominator *= 10;
+        }
+
+        return (long.Parse(text.Remove(dot, 1)), denominator);
     }
 }

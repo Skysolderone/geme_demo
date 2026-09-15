@@ -406,11 +406,30 @@ public sealed class MatchSession
                     MultiplierCount = g.MultiplierCount,
                     EffectiveMultiplierCount = g.EffectiveMultiplierCount,
                     Power = g.Power,
+                    PieceCounts = PieceCountsOf(view.Board, g),
                 })],
             });
         }
 
         return list;
+    }
+
+    /// <summary>棋串各棋子类型的数量（五种全写，含 0，按枚举顺序），从快照盘面按棋子坐标逐枚统计。</summary>
+    private static Dictionary<string, int> PieceCountsOf(GameBoard board, GroupPower group)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (PieceType type in Enum.GetValues<PieceType>())
+        {
+            counts[type.ToString()] = 0;
+        }
+
+        foreach (Coord stone in group.Stones)
+        {
+            PieceType type = (board[stone].Occupant ?? throw new InvalidOperationException($"势力明细与快照盘面不一致：{stone.ToNotation()} 为空。")).Type;
+            counts[type.ToString()]++;
+        }
+
+        return counts;
     }
 
     /// <summary>把流程层新增的事件（不含阶段噪声）复制进日志；大回合结束附先手值明细。</summary>

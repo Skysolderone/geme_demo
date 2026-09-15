@@ -41,7 +41,8 @@ public sealed record HandCostView(PieceType Type, int Used, int Stock, string Te
 /// <summary>一条预计被提走的敌方棋串。</summary>
 public sealed record CaptureView(PlayerId Owner, ImmutableArray<Coord> Stones, string Text);
 
-/// <summary>棋串军势明细的呈现。全部数值来自 Core 的 <see cref="GroupPower"/>，本类只拼文字；倍率文字用 <see cref="Multiplier.ToString"/>。</summary>
+/// <summary>棋串军势明细的呈现。全部数值来自 Core 的 <see cref="GroupPower"/>，本类只拼文字；倍率文字用 <see cref="Multiplier.ToString"/>。
+/// 公式文案按 multiplier-rebalance 的顺序拼：倍率只挨着基础军势，位置加值写在倍率之后（不被放大）；取整值直接取 <see cref="GroupPower.Power"/>。</summary>
 public sealed record GroupPowerView(
     int BaseTotal,
     int LineBonus,
@@ -62,7 +63,7 @@ public sealed record GroupPowerView(
             : $"位置加值 {power.PositionBonus}（连珠 {power.LineBonus} / 协同 {power.SynergyBonus}）";
         return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.PositionBonus,
             power.MultiplierCount, power.EffectiveMultiplierCount, multiplier, power.Power,
-            $"（基础 {power.BaseTotal} + {bonus}）× {multiplier} = {power.Power}");
+            $"基础 {power.BaseTotal} × {multiplier} + {bonus} = {power.Power}");
     }
 }
 

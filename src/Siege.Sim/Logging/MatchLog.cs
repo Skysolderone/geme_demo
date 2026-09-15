@@ -17,7 +17,7 @@ namespace Siege.Sim.Logging;
 /// <item><term>2. 每轮征募候选、玩家选择、被 Pass 撤销的征募数</term><description><c>Recruit</c> 事件：<see cref="LogEvent.Detail"/> 为候选 / 选取 / 弃牌文本，<see cref="LogEvent.Values"/> 含 <c>Recruited</c> / <c>Revoked</c> / <c>Deployed</c>（私有量，来源玩家 = <see cref="LogEvent.Player"/>）</description></item>
 /// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
 /// <item><term>4. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
-/// <item><term>5. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c></description></item>
+/// <item><term>5. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）</description></item>
 /// <item><term>6. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（达大回合上限是规则级终局原因 <c>MajorRoundLimit</c>）</description></item>
 /// <item><term>7. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
@@ -335,7 +335,7 @@ public sealed record GroupEntry
     /// <summary>倍增子原始数量（未封顶）。</summary>
     public int MultiplierCount { get; init; }
 
-    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（growth-pass-1 起为 4）。cap-multiplier 之前的旧日志没有该字段，解析时按此回填，旧日志仍可读。</summary>
+    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（multiplier-rebalance 起为 3）。cap-multiplier 之前的旧日志没有该字段，解析时按此回填，旧日志仍可读。</summary>
     public int EffectiveMultiplierCount
     {
         get => _effectiveMultiplierCount ?? Math.Min(MultiplierCount, Multiplier.MaxExponent);
@@ -343,6 +343,12 @@ public sealed record GroupEntry
     }
 
     public long Power { get; init; }
+
+    /// <summary>
+    /// 本串各棋子类型的数量，键为 <see cref="Siege.Core.Board.PieceType"/> 名，五种全写（含 0）；multiplier-rebalance 裁决 3，供"各棋子势力占比"归因。
+    /// 此前的旧日志没有该字段，解析为 <c>null</c>（未知）：分析时跳过该局的占比统计，MUST NOT 回填成 0——那会把旧局错算成"全是某种棋子"。
+    /// </summary>
+    public Dictionary<string, int>? PieceCounts { get; init; }
 }
 
 public sealed record RelicStateEntry
@@ -497,7 +503,7 @@ public sealed record PeakEntry
     /// <summary>峰值串的倍增子原始数量（峰值按它取，可超过封顶指数）。</summary>
     public int MultiplierCount { get; init; }
 
-    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（growth-pass-1 起为 4）；旧日志无该字段时回填。</summary>
+    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（multiplier-rebalance 起为 3）；旧日志无该字段时回填。</summary>
     public int EffectiveMultiplierCount
     {
         get => _effectiveMultiplierCount ?? Math.Min(MultiplierCount, Multiplier.MaxExponent);

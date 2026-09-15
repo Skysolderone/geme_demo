@@ -87,7 +87,8 @@ public class 批次预演必须显示的信息Tests
         Assert.Equal(2, power.EffectiveExponent);
         Assert.Equal("2.25", power.MultiplierText);
         Assert.Equal(20, power.Power);
-        Assert.Equal("（基础 9 + 位置加值 0）× 2.25 = 20", power.FormulaText);
+        // multiplier-rebalance 改写：文案顺序随公式改为"基础 × 倍率 + 加值"（原 "（基础 9 + 位置加值 0）× 2.25 = 20"，数值 20 不变）。
+        Assert.Equal("基础 9 × 2.25 + 位置加值 0 = 20", power.FormulaText);
     }
 
     [Fact]

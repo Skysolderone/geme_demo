@@ -8,16 +8,19 @@ namespace Siege.Core.Scoring;
 /// 每次调用对整个盘面全量重算（design.md D2），不做增量、不缓存、不保留任何成长层数。
 /// </summary>
 /// <remarks>
-/// <para>公式：<c>棋串军势 = ⌊(基础军势总和 + 位置加值) × 1.5^min(倍增子数量, 4)⌋</c>（封顶在 <see cref="Multiplier"/> 内部做），取整在乘倍率之后、对每条棋串各执行一次；
+/// <para>公式：<c>棋串军势 = ⌊基础军势总和 × 1.5^min(倍增子数量, 3)⌋ + 位置加值</c>（封顶在 <see cref="Multiplier"/> 内部做；multiplier-rebalance D1：倍率只放大基础军势，位置加值不被放大），取整只作用于"基础 × 倍率"、对每条棋串各执行一次；
 /// <c>总势力 = 独占空格数 + 全部棋串军势之和</c>，领地分不进倍率，不对总势力二次取整。</para>
 /// <para>玩家状态只用于名次过滤与明细标记；覆盖与军势对弃赛者、出局者的遗留棋子一视同仁（D7）。</para>
 /// <para>规格：openspec/changes/add-territory-power/specs/power-score</para>
 /// </remarks>
 public static class PowerCalculator
 {
-    /// <summary>棋串军势公式。<paramref name="baseTotal"/> 与 <paramref name="positionBonus"/> 之和乘以 <c>3^e</c> 后整数除以 <c>2^e</c>，<c>e = min(n, 4)</c>；<paramref name="multiplierCount"/> 传原始数量。</summary>
+    /// <summary>
+    /// 棋串军势公式（multiplier-rebalance D1/D2）：<paramref name="baseTotal"/> 经唯一的 <see cref="Multiplier.Apply"/> 乘倍率并向下取整，
+    /// 再加上 <paramref name="positionBonus"/>（连珠 + 协同，不被倍率放大、不参与取整）；<c>e = min(n, <see cref="Multiplier.MaxExponent"/>)</c>，<paramref name="multiplierCount"/> 传原始数量。
+    /// </summary>
     public static long GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount) =>
-        new Multiplier(multiplierCount).Apply(baseTotal + positionBonus);
+        checked(new Multiplier(multiplierCount).Apply(baseTotal) + positionBonus);
 
     /// <summary>计算一条棋串的军势明细。</summary>
     public static GroupPower Evaluate(GameBoard board, Group group)
