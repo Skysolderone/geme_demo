@@ -1,32 +1,48 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-09-14（heuristic-ai 归档后）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-09-15（首轮原型 8/8 完成，图形界面可玩）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续，不需要翻聊天记录。
 
 ## 一句话
 
 《围杀 Siege》——2–4 人共享棋盘的回合制策略构筑游戏（围棋式围杀 × 自走棋式征募构筑）的 4 人核心原型。
-规则内核是**零 Godot 依赖的 .NET 8 类库**（`src/Siege.Core`），AI 在 `src/Siege.Core/Ai`，批量跑局 / 日志 / 分析在 `src/Siege.Sim`，
-表现层用 Godot 4.7.2 .NET 版（子任务 8）。
-首轮原型的唯一产出目标：跑数千局 AI 对局，回答"这套规则平不平衡"（设计文档 §16 六项指标、§17 七个分析方向）。
+规则内核是**零 Godot 依赖的 .NET 8 类库**（`src/Siege.Core`），AI 在 `src/Siege.Core/Ai`，
+批量跑局 / 日志 / 分析与终端版在 `src/Siege.Sim`，界面视图模型在 `src/Siege.Presentation`（零 Godot），
+3D 表现层在 `src/godot`（Godot 4.7.2 .NET 版）。
+
+## 现在就能玩
+
+**图形版（推荐）**
+```bash
+"D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --path E:/wws/geme_demo/src/godot
+```
+点出生区插旗 → 征募 → 左下手牌选类型、点格子暂放 → 右侧看预演 → 右下确认或 Pass。
+按住 1/2/3/4 看领地/气/势力/信物层，5 或点顶部顺序条看顺序层，H 开手牌面板，T 切换按住/点击模式。
+命令行加 `-- --seed=12345` 复现同一局；`-- --auto-demo` 自动演示；`-- "--screenshot=<路径>.png:90"` 截图。
+
+**终端版**
+```bash
+dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--seed N]
+```
 
 ## 分支状态
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test` **497/497**，零警告，套件约 25 s。只含经过 `trellis-check` 并归档的内容。已推送 |
-| `wip/match-flow` | 已合入 main，本地与远端均可删，尚未删 |
+| `main` | 全绿：`dotnet test` **583/583**，零警告，套件约 13 秒。已推送 |
+| `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）
 
-1. `2026-09-10-siege-core-gameplay-design-v1.md` —— 玩法设计 v1.0（`Siege-玩法介绍-v1.docx` 是同规则的玩家向介绍稿，冲突以 md 为准）
-2. `openspec/specs/` —— 已归档进基线的 19 个能力规格（Requirement / Scenario 是验收基准）
-3. `openspec/changes/add-tactical-ui/` —— 剩下的 1 个 change；`openspec/changes/archive/2026-09-14-add-heuristic-ai/design.md` 的裁决记录 1–17 含 AI / 跑局层的全部判定
-4. `.trellis/spec/core/` —— 编码规范四份：`boundaries.md` `determinism.md` `coordinates.md` `testing.md`（**必读**，里面全是踩过的坑）
-5. `.trellis/tasks/09-12-*/` 与 `.trellis/tasks/archive/2026-09/` —— 各子任务的 prd / design / implement
-6. `openspec/ROADMAP.md` —— 依赖顺序、四条全局硬约束、50 条已确认裁决速查
+1. `2026-09-10-siege-core-gameplay-design-v1.md` —— 玩法设计 **v1.1**（文末有变更记录；`Siege-玩法介绍-v1.docx` 是玩家向介绍稿，冲突以 md 为准）
+2. `openspec/specs/` —— 已归档进基线的 24 个能力规格（Requirement / Scenario 是验收基准）
+3. `openspec/changes/archive/` —— 各 change 的 `design.md` 末尾「裁决记录（已确认）」共 76 条，是设计文档未覆盖部分的判定来源
+4. `.trellis/spec/core/` —— 编码规范四份：`boundaries.md` `determinism.md` `coordinates.md` `testing.md`（**必读**，全是踩过的坑）
+5. `.trellis/tasks/archive/2026-09/` —— 各子任务的 prd / design / implement
+6. `openspec/ROADMAP.md` —— 依赖顺序、四条全局硬约束、裁决速查
+7. `art/style-exploration/` —— 视觉基准图与 8 张功能示意（从 docx 解出），`README.md` 是风格基准与人工检查清单
 
-## 进度
+## 进度：首轮原型 8/8 完成
 
 | # | 子任务 | 状态 | 测试 |
 |---|---|---|---|
@@ -36,92 +52,85 @@
 | 4 | relic-system | 归档 | +66 |
 | 5 | recruit-hand | 归档 | +50 → 382 |
 | 6 | match-flow | 归档 | +65 → 447 |
-| 7 | heuristic-ai | 归档（2026-09-14） | +50 → **497** |
-| 8 | tactical-ui | 未开始 | — |
+| 7 | heuristic-ai | 归档 | +50 → 497 |
+| 8 | tactical-ui | 归档（2026-09-15） | +86 → **583** |
 
-`python ./.trellis/scripts/task.py list` 看实时状态。父任务 `09-12-siege-core-prototype` 7/8。
+之后的规则复议（均已归档）：`cap-multiplier`（倍率指数封顶 5）、`round-cap`（第 4 类终局条件，大回合上限 15）。
 
-## 关键实测结论（heuristic-ai，36 局）——**2000 局基线尚未跑**
+## 数据现状（200 局回归，cap-multiplier + round-cap 之后）
 
-启发式 AI 互打**不收敛率 75–100%**（跑局层靠 `MaxMajorRounds` 上限收尾），倍增串军势随大回合**指数膨胀**
-（第 10 / 20 / 30 大回合单串 ≈ 2×10³ / 3×10⁴ / 8.5×10⁵），倍增子选择率 92%，部署上限第 7 大回合后中位数仍是 3。
-裁决 15：2000 局基线推迟到规则复议之后。
+| 指标 | 实测 | §16 目标 |
+|---|---|---|
+| 达上限才结束的局 | 25% | — |
+| 终局局平均结束大回合 | 12.5 | 7–10 |
+| 单串最高军势 | 1511（峰值均值 594） | 数百 |
+| 每批次平均提子 | 0.29 | — |
+| 第 3 大回合领先者胜率 | 38%（基线 25%） | ≤ 50% |
+| 首次跨出生区冲突 | 第 7.1 大回合 | 第 4–5 |
+| 第 7 大回合后部署上限中位数 | 3 | 5–8 |
 
-根因（已分析，待用户定）：§10.1 `1.5^n` 无上限 → 边际收益永远为正 → 整轮 Pass 永远不触发；
-§6.1 按整批终态判合法 → 一批 3 子可同时填两眼，"两眼活"不存在，≤3 气必死 → 绞肉循环；
-§5.4 部署上限只靠军令信物（7% / 15%）→ 成长轴打不开。
+结论：不收敛与数值膨胀已解决；残余偏离是数值问题（部署成长、冲突偏晚、先手滚雪球、倍增子选择率 87%）。
 
-候选改法（每条独立 openspec change，落上游能力）：
-- **A1** 倍率封顶 `1.5^min(n,5)`（territory-power）——建议先做
-- **C1** 规则级大回合上限，如第 15 大回合结束按势力排名（match-flow）——建议先做
-- **B1** 批次内逐枚判自杀恢复两眼活（batch-deployment）——第二轮，看 A/C 之后是否仍绞肉
-- 部署上限成长——等基线数据
+## 可选的下一步（按用户意愿排）
 
-## 续接第一步：规则复议
-
-1. 向用户确认选哪几条改法（上面 A1 / C1 / B1），或用户另有方案。
-2. 每条用 `opsx:propose` 开 change（proposal + specs delta + design 裁决），在 `.trellis/tasks/` 建任务，
-   走 implement → check → update-spec → commit → archive → push。
-3. 规则改完后跑 200 局快速回归看不收敛率与倍率曲线：
+1. **按试玩反馈改界面**：已知待办——棋盘无坐标标注；底部按钮是否放顺序层；插旗未做四家竞争。
+2. **2000 局基线**（约 45 分钟）：
    ```bash
-   dotnet run --project src/Siege.Sim -c Release -- run --out sim-out/regress --seed 1 --count 200 --difficulty Standard --max-rounds 30 --gzip
-   dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/regress
+   dotnet run --project src/Siege.Sim -c Release -- run --out sim-out/baseline --seed 1 --count 2000 --difficulty Standard --gzip
+   dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/baseline
    ```
-4. 满意后跑 2000 局基线（`--count 2000`，Standard 约 45 分钟 / 28 核），归档报告，作为后续调参基线。
-
-## 之后：tactical-ui
-
-需要 **Godot 4.7.2 .NET 版**，已安装在 `D:\software\godot\Godot_v4.7.2-stable_mono_win64\`。`godot/` 单向引用 `Siege.Core`，表现层不得含任何规则计算。
-人工接管入口已就绪：`MatchRunner.TakeOver / HandBack`；公开视图 `MatchPublicView`。
+3. **数值调整 change**：军令信物权重（部署上限打不开）、封顶值 5→4、征募权重（倍增子过强）。
+4. **第二轮规则候选**：批次内逐枚判自杀以恢复"两眼活"（`per-stone-legality`）——注意每批次提子已降到 0.29，冲突偏少，改前先看 2000 局数据。
+5. **美术与音效**：目前全是程序生成几何体，无正式资源。
 
 ## 执行流程（每个子任务）
 
 ```
-task.py start <task>
+opsx:propose 开 change → task.py create + start
   → Agent(trellis-implement)   写代码 + 测试 + 变异验证记录，不 commit，不改 openspec/
   → Agent(trellis-check)       对照规格审 + 自修小问题 + 自做变异，待决写清
-  → 主会话核实（真实退出码跑 build/test、抽查一条变异）
+  → 主会话核实（真实退出码跑 build/test、自做一条变异）
   → 裁定待决（设计级的问用户，常规的自己定并写明）
   → trellis-update-spec        学到的写进 .trellis/spec/core/
   → git commit -F msgfile      提交与归档之间用 &&
   → task.py archive + openspec archive --yes → 提交 → push
 ```
 
-派发 prompt 模板（两类 agent 通用开头）：`Active task: .trellis/tasks/<task>` + "不要 commit、不要改 openspec/" + 指向 `implement.jsonl`/`check.jsonl` + 点名必须一次做对的陷阱 + 要求变异验证记录。
-派子 agent 前先把待决项拟成编号裁决 + 派发方式选项，一次向用户确认（用户全局规则）；体量大的任务顺序分段派，
-分段之间落本地 wip 提交（不 push）。
+派发前把待决项拟成编号裁决 + 派发方式选项，一次向用户确认（用户全局规则）；体量大的任务顺序分段派，
+段与段之间落本地 wip 提交（不 push）。
 
 ## 规范要点（`.trellis/spec/core/` 的浓缩）
 
-- **零 Godot 依赖**：`Siege.Core`/`Siege.Sim` 不得引用 `Godot.*`，csproj 有守门 + 运行时断言
-- **单一实现**：四邻接遍历只在 `Adjacency.Neighbors`；坐标映射只在 `Coord`；覆盖语义只在 `CoverageMap`；结算顺序只在 `SettlementDriver`；AI 层不重算提子 / 军势
-- **禁止浮点**：计分/倍率/稀有度/AI 评价全整数；倍率用 `Int128` checked；浮点只允许在 `Siege.Sim/Analysis/`
+- **零 Godot 依赖**：`Siege.Core` / `Siege.Sim` / `Siege.Presentation` 不得引用 `Godot.*`，csproj 有守门；`src/godot/` 是唯一例外
+- **单一实现**：四邻接只在 `Adjacency.Neighbors`；坐标映射只在 `Coord`（表现层的 `Coord`↔3D 只在 `BoardGeometry`）；覆盖只在 `CoverageMap`；结算顺序只在 `SettlementDriver`；乘倍率取整只在 `Multiplier`
+- **禁止浮点**：计分 / 倍率 / AI 评价全整数；浮点只允许在 `Siege.Sim/Analysis/` 与表现层渲染
 - **随机子流隔离**：`GameSeed.Stream("relic-gen"|"recruit"|"setup"|"ai-P{n}"|"sim-sample")`，不用 `System.Random`
 - **围棋记法坐标**：`A1` 左下，列跳过 `I`
-- **视图分离 / 信息边界**：公开视图结构上不存在私有字段，靠反射守门；正式 AI 只持 `MatchPublicView` + 本人句柄，调试 AI `internal`
-- **显式名册**：未知玩家一律抛 `SiegeRuleException`
+- **信息边界**：公开视图结构上不含私有字段；正式 AI 与界面共用同一 `MatchPublicView`；调试入口 `internal`
+- **UI 不做规则计算**：表现层只消费富预演与视图模型
 - **一切实时重算**：不缓存不增量
-- **新守门测试必须做变异验证**并记录；反射闭包守门要对非根类型做变异
-- **红测变绿后整段复审**；测试注释里的因果声明要用断言钉住
-- **持久化 / 比对守门两条腿**：含集合字段的 record 用 `Assert.Equal` 恒假，要投影成值比；逐字节文本比对必须配行数下界与字段级投影
+- **新守门测试必须做变异验证**并记录；反射闭包守门要对非根类型做变异；**不在 sln 里的工程（`src/godot/`）对守门隐身，必须补源码级扫描**
+- **共用状态机会在最外层被复写**：把完整语义暴露成方法，并断言两条入口逐步等价
+- **红测变绿后整段复审**；含集合字段的 record 不能直接 `Assert.Equal`；逐字节比对要配行数下界与字段级投影
 - **提交前用真实退出码把关**，`dotnet test | tail` 会吞退出码；提交信息用 `-F`
 
 ## 环境
 
-- 当前开发机：**Windows 11**，Git Bash，28 逻辑核。`python` 可用，`python3` 不可用；`dotnet test` 输出为中文本地化 GBK（"已通过!"/"失败!"），脚本抓失败名用 ASCII 的 `[FAIL]`
+- Windows 11，Git Bash，28 逻辑核。`python` 可用，`python3` 不可用；`dotnet test` 输出为中文本地化 GBK，脚本抓失败名用 ASCII `[FAIL]`
 - .NET SDK 8.0.425；`dotnet build` / `dotnet test`（不接受 `--no-incremental`）
-- 跑局用 Release：`dotnet run --project src/Siege.Sim -c Release -- run|replay|analyze|map ...`；输出目录 `sim-out/` 已 gitignore；Standard 单局约 6.6 s 串行、并行有效约 1.3 s
-- Godot 4.7.2 .NET 版：`D:\software\godot\Godot_v4.7.2-stable_mono_win64\`（`--version` → `4.7.2.stable.mono.official.ed1daf0bf`）；GodotSharp 目标 net8.0，与 SDK 8.0.425 兼容
-- 终端试玩：`dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--seed N]`
-- openspec 1.5.0、trellis 0.6.5 已装；skill 与 agent type 在会话启动时注册，新装后需重启会话
+- Godot **4.7.2 .NET 版**：`D:\software\godot\Godot_v4.7.2-stable_mono_win64\`，命令行用 `..._console.exe`
+  - 构建 C#：`--headless --path src/godot --build-solutions --quit`
+  - 自动演示：`--headless --path src/godot --quit-after 3000 -- --auto-demo`
+  - 自定义参数必须放在 `--` 之后
+- 跑局用 Release；输出目录 `sim-out/` 已 gitignore
 - 4 人基准地图：`maps/siege-4p-base-v1.json`（D2 对称、109 可落子格、14 信物格、距离极差 0）
 
 ## 可直接粘贴的开场 prompt
 
 ```
-读 E:\wws\geme_demo\HANDOFF.md，按其中「续接第一步：规则复议」继续：先向我确认选哪几条改法（A1 / C1 / B1），
-每条用 opsx:propose 开 change 并建 trellis 任务，派发前把待决项拟成裁决列表向我确认，
-走 implement → check → update-spec → commit(-F) → archive → push；规则改完跑 200 局回归再跑 2000 局基线。
-全程遵守 .trellis/spec/core/ 四份规范，每个子任务结束向我汇报：测试数、变异验证情况、待决项。
+读 E:\wws\geme_demo\HANDOFF.md。首轮原型 8/8 已完成，图形版可玩。
+按我的指示继续：改界面 / 跑 2000 局基线 / 开数值调整 change / 第二轮规则。
+全程遵守 .trellis/spec/core/ 四份规范；派子 agent 前先把待决项拟成编号裁决向我确认。
+每个任务结束汇报：测试数、变异验证情况、待决项。设计级的待决问我，常规的自己定并说明。
 使用中文，每次回答开头报数（ws:N）。
 ```
