@@ -1,5 +1,10 @@
-; 围杀 Siege —— 战术表现层（tactical-ui 阶段 B）
-; 独立工程，不进 siege.sln（裁决 10）。引用方向单向：godot/ → Siege.Core / Siege.Presentation。
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -23,5 +28,4 @@ project/assembly_name="Siege.Godot"
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
 anti_aliasing/quality/msaa_3d=2
