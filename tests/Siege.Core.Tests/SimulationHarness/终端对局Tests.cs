@@ -33,5 +33,6 @@ public class 终端对局Tests
 
         Assert.Equal(0, exit);
         Assert.Contains("已退出。种子 7", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("或势力碾压（第 7 大回合起", output.ToString(), StringComparison.Ordinal);   // dominance-victory：开场说明提到碾压且用标准局起始值
     }
 }

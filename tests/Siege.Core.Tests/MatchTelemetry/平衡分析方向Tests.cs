@@ -135,7 +135,7 @@ public class 平衡分析方向Tests
     [Fact]
     public void 碾压胜统计()
     {
-        // 规格算例：一批对局中有 40 局以势力碾压终局 → 报告给出碾压胜占比、这些局的平均触发大回合、触发时获胜者与第 2 名势力之比。
+        // 规格算例：一批对局中有 40 局以势力碾压终局 → 报告给出碾压胜占比、这些局碾压成立的平均大回合、触发时获胜者与第 2 名势力之比。
         // testing.md「统计口径测试必须放一个被排除的样本」：另放 1 局调试 AI 碾压局（污染）与 1 局失败局，分母只能是纳入的 100 局。
         // 变异验证 M-DV10：Analyze 把 Dominance(included) 改为全部未失败局（含污染局）→ 红 1（本测试：41/101）。
         static LogResult Dominance(int round, long winner, long second) =>
@@ -189,8 +189,9 @@ public class 平衡分析方向Tests
 
         string text = ReportWriter.Render(report);
         Assert.Contains("## 势力碾压", text);
+        Assert.Contains("非达上限终局（含势力碾压）100 局", text);
         Assert.Contains("碾压胜 40 / 100 局，占比 40.0% (40/100", text);
-        Assert.Contains("碾压局平均触发大回合 7", text);
+        Assert.Contains("碾压局平均成立大回合 7", text);
         Assert.Contains("平均 2.51（样本 39；第 2 名势力为 0、比值无定义 1）", text);
     }
 }

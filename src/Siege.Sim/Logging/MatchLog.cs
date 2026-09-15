@@ -417,7 +417,7 @@ public sealed record LogResult
     /// <summary><c>EndReason</c> 名（round-cap 后达上限也是规则级原因 <c>MajorRoundLimit</c>）。</summary>
     public required string Reason { get; init; }
 
-    /// <summary>是否按条件 1–3 收敛（round-cap D5：不收敛 = 以「达大回合上限」终局）。由 <see cref="Reason"/> 派生，读旧日志时忽略文件里的同名字段。</summary>
+    /// <summary>是否以非达上限原因终局（含势力碾压；round-cap D5：不收敛 = 以「达大回合上限」终局）。由 <see cref="Reason"/> 派生，读旧日志时忽略文件里的同名字段。</summary>
     public bool Converged => Reason != nameof(Siege.Core.Match.EndReason.MajorRoundLimit);
 
     public int MajorRound { get; init; }

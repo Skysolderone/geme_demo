@@ -271,6 +271,27 @@ public class 势力碾压Tests
     }
 
     [Fact]
+    public void 候选弃赛即取消候选()
+    {
+        // 规格「维持与取消」：候选已出局 / 弃赛 → 候选立即取消，待回应名单清空。弃赛者本人也 MUST NOT 获胜。
+        // check 变异验证 N2：复查条件 `Status != Active || !满足` 改为 `Status == Active && !满足`（候选弃赛不取消）→ 红 1（本测试）；实现方测试集原本 0 红。
+        MatchFlow match = Crushing(MatchFixtures.DominanceOn);
+        match.PassTurn();                   // P0：候选，名单 P1 P2 P3
+        match.PassTurn();                   // P1 回应
+        Assert.Equal(P0, match.Dominance!.Candidate);
+
+        match.Resign(P0);                   // 候选在小回合边界弃赛
+        Assert.Equal(PlayerStatus.Resigned, match.StateOf(P0).Status);
+        Assert.Null(match.Dominance);
+        Assert.Null(match.Publish().Dominance);
+
+        match.PlayTurn("C8");               // P2、P3 依次完成小回合：若候选残留，名单清空即会以碾压终局
+        match.PlayTurn("G8");
+        Assert.Null(match.Dominance);
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
+    }
+
+    [Fact]
     public void 关闭势力碾压()
     {
         // 规格：碾压起始大回合为 0 → 任何局面下都不产生候选，对局只受其余终局条件约束。

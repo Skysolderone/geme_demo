@@ -15,7 +15,7 @@ public sealed record AnalysisOptions
     public int RequiredMatches { get; init; } = 200;
 }
 
-/// <summary>收敛情况（裁决 13 → round-cap D5）：条件 1–3 终局 vs 以规则原因 <c>MajorRoundLimit</c>（达大回合上限）终局，单独成段。</summary>
+/// <summary>收敛情况（裁决 13 → round-cap D5）：非达上限终局（含势力碾压）vs 以规则原因 <c>MajorRoundLimit</c>（达大回合上限）终局，单独成段。</summary>
 public sealed record ConvergenceSection(
     int Converged,
     int Capped,
@@ -26,7 +26,7 @@ public sealed record ConvergenceSection(
     double MeanTurnsPerMatch);
 
 /// <summary>
-/// 势力碾压（match-telemetry 平衡分析方向 8，dominance-victory）：碾压胜占比（分母 = 纳入分析的局）、这些局的平均触发大回合、
+/// 势力碾压（match-telemetry 平衡分析方向 8，dominance-victory）：碾压胜占比（分母 = 纳入分析的局）、这些局碾压成立（获胜）的平均大回合、
 /// 触发时获胜者势力与第 2 名势力之比。第 2 名势力为 0 时比值无定义，不计入均值，单独计数。
 /// </summary>
 public sealed record DominanceSection(

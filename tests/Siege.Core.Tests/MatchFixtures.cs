@@ -25,7 +25,7 @@ internal static class MatchFixtures
     /// </summary>
     internal static readonly MatchOptions DominanceOff = MatchOptions.Immediate with { DominanceStartRound = 0 };
 
-    /// <summary>显式开启势力碾压（起始第 4 大回合）的立即模式选项：碾压相关新测试使用，与默认值相同但写明意图。</summary>
+    /// <summary>显式开启势力碾压（起始第 4 大回合）的立即模式选项：碾压相关新测试使用（规格场景算例写的是"起始大回合为 4"，属显式配置，不同于标准局默认值 7）。</summary>
     internal static readonly MatchOptions DominanceOn = MatchOptions.Immediate with { DominanceStartRound = 4 };
 
     /// <summary>

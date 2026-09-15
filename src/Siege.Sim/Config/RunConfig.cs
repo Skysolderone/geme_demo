@@ -56,7 +56,7 @@ public sealed record RunConfig
     /// <summary>并行度；0 = 处理器数。</summary>
     public int Parallelism { get; init; }
 
-    /// <summary>大回合上限，直接写入对局配置 <see cref="MatchOptions.MaxMajorRounds"/>（0 = 不限，只受条件 1–3 与 <see cref="MaxTurns"/> 约束）。</summary>
+    /// <summary>大回合上限，直接写入对局配置 <see cref="MatchOptions.MaxMajorRounds"/>（0 = 不限，只受其余终局条件与 <see cref="MaxTurns"/> 约束）。</summary>
     public int MaxMajorRounds { get; init; } = DefaultMaxMajorRounds;
 
     /// <summary>碾压起始大回合，直接写入对局配置 <see cref="MatchOptions.DominanceStartRound"/>（0 = 关闭势力碾压；默认 = 规则层标准局初值）。</summary>

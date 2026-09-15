@@ -34,6 +34,11 @@ internal static class PlayCommand
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI，大回合上限 {(maxRounds == 0 ? "不限" : maxRounds)}");
         output.WriteLine("目标：大回合结束时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
+        if (match.DominanceStartRound > 0)
+        {
+            output.WriteLine($"或势力碾压（第 {match.DominanceStartRound} 大回合起，势力 ≥ 其余参赛玩家之和且保持到其余人各行动一次）直接获胜。");
+        }
+
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         output.WriteLine();
 

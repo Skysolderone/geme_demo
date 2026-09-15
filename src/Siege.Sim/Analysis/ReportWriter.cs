@@ -28,7 +28,7 @@ public static class ReportWriter
 
         sb.AppendLine("## 收敛情况（裁决 13 / round-cap：按规则原因 MajorRoundLimit 统计）");
         ConvergenceSection c = r.Convergence;
-        sb.AppendLine($"- 条件 1–3 终局 {c.Converged} 局；达大回合上限终局（MajorRoundLimit）{c.Capped} 局，不收敛率 {c.CappedRate}");
+        sb.AppendLine($"- 非达上限终局（含势力碾压）{c.Converged} 局；达大回合上限终局（MajorRoundLimit）{c.Capped} 局，不收敛率 {c.CappedRate}");
         sb.AppendLine($"- 终局原因：{Histogram(c.Reasons)}");
         sb.AppendLine($"- 平均大回合数：终局局 {Num(c.MeanMajorRoundsConverged)}，全部局 {Num(c.MeanMajorRoundsAll)}；平均小回合数 {Num(c.MeanTurnsPerMatch)}");
         sb.AppendLine();
@@ -36,7 +36,7 @@ public static class ReportWriter
         sb.AppendLine("## 势力碾压（dominance-victory：候选制，占比分母为纳入局）");
         DominanceSection d = r.Dominance;
         sb.AppendLine($"- 碾压胜 {d.DominanceWins} / {d.Matches} 局，占比 {d.Rate}");
-        sb.AppendLine($"- 碾压局平均触发大回合 {Num(d.MeanTriggerRound)}");
+        sb.AppendLine($"- 碾压局平均成立大回合 {Num(d.MeanTriggerRound)}");
         sb.AppendLine($"- 触发时获胜者势力 / 第 2 名势力：平均 {Num(d.MeanPowerRatio)}（样本 {d.RatioSamples}；第 2 名势力为 0、比值无定义 {d.RatioUndefined}）");
         sb.AppendLine();
 
