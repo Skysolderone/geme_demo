@@ -18,7 +18,7 @@
 ```
 点出生区插旗 → 征募 → 左下手牌选类型、点格子暂放 → 右侧看预演 → 右下确认或 Pass。
 棋盘四边有围棋记法坐标（列 A–L 跳过 I，行自下而上 1–11，A1 左下），与对局日志一致。
-按住 1/2/3/4 看领地/气/势力/信物层，5 或点顶部顺序条看顺序层，H 开手牌面板，T 切换按住/点击模式。
+按住 1/2/3 看盘面/势力/信物层，4 或点顶部顺序条看顺序层，Tab 切换盘面层的归属／棋串读法，H 开手牌面板，T 切换按住/点击模式。
 命令行加 `-- --seed=12345` 复现同一局；`-- --auto-demo` 自动演示；`-- "--screenshot=<路径>.png:90"` 截图。
 
 **终端版**
@@ -30,7 +30,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test` **672/672**，零警告，套件约 14 秒。已推送 |
+| `main` | 全绿：`dotnet test` **680/680**，零警告，套件约 16 秒。已推送 |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）
@@ -61,7 +61,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 `multiplier-rebalance`（倍率只放大基础军势、封顶降到 3）、`catch-up-recruit`（落后者征募补偿）、
 `denser-map`（4 人基准图改版 v2，可落子 109→85、障碍 12→36）。测试 **658**。
 
-`ai-safety-weight`（AI 安全权重 20→5）、`board-coordinates`（棋盘四边坐标标注）也已归档。测试 **672**。
+`ai-safety-weight`（AI 安全权重 20→5）、`board-coordinates`（棋盘四边坐标标注）、`merge-board-layer`（领地层与气层合并为盘面层的两种读法）也已归档。测试 **680**。
 **已写好规格待执行**：`strict-cli`（未知命令行选项必须报错）。
 
 ## 现行终局与关键数值
