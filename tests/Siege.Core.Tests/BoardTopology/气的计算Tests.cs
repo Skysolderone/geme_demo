@@ -74,4 +74,21 @@ public class 气的计算Tests
         board.Clear(TestMaps.At("D5"));
         Assert.Equal(4, board.LibertiesOf(board.GroupAt(TestMaps.At("D4"))!).Length);
     }
+
+    [Fact]
+    public void 靠崖壁的棋串()
+    {
+        // h=0 的棋串 F6 三面（F5/E6/G6）被敌子围住，第四面 F7 是 h=2 的空格 → 无气
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("F7", 2)]))
+            .Place("F6", TestMaps.P0)
+            .Place("F5", TestMaps.P1)
+            .Place("E6", TestMaps.P1)
+            .Place("G6", TestMaps.P1);
+
+        Group trapped = board.GroupAt(TestMaps.At("F6"))!;
+
+        Assert.True(board[TestMaps.At("F7")].IsPlayableEmpty);
+        Assert.Empty(board.LibertiesOf(trapped));
+        Assert.True(board.IsCaptured(trapped));
+    }
 }

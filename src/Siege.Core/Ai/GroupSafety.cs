@@ -50,7 +50,8 @@ public readonly record struct GroupSafety(int Liberties, int EyePoints, int Disp
         {
             bool isEye = true;
             bool touchesLiberty = false;
-            foreach (Coord n in board.Neighbors(liberty))
+            // 只看有气边的邻格：障碍、深水、崖壁、栅栏另一侧都够不到这口气，天然是"墙"。
+            foreach (Coord n in board.LibertyNeighbors(liberty))
             {
                 Cell cell = board[n];
                 if (liberties.Contains(n))
@@ -58,7 +59,7 @@ public readonly record struct GroupSafety(int Liberties, int EyePoints, int Disp
                     touchesLiberty = true;
                 }
 
-                bool ownWall = cell.Terrain == Terrain.Obstacle || (cell.Occupant is { } o && o.Owner == group.Owner);
+                bool ownWall = cell.Occupant is { } o && o.Owner == group.Owner;
                 if (!ownWall)
                 {
                     isEye = false;

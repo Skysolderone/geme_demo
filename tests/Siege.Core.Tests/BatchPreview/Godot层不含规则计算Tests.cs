@@ -43,6 +43,8 @@ public class Godot层不含规则计算Tests
             "PowerCalculator", "CoverageMap", "BatchRehearsal", "BatchPreviewBuilder", "LibertySnapshot", "CatchUpCompensation",
             "CaptureResolver", "FinalStandings", "Adjacency", "MapValidator", "RelicGenerator", "InitiativeOrder",
             ".GroupAt(", ".LibertiesOf(", ".AllGroups(", ".GroupsOf(", ".IsCaptured(", ".RemoveStones(", ".Apply(",
+            // terrain-model：几何邻居 / 气边 / 覆盖关系三个导出入口，Godot 层不得自算邻接或地形过滤
+            ".Neighbors(", ".LibertyNeighbors(", ".CoverageTargets(",
         ];
 
         string[] violations =

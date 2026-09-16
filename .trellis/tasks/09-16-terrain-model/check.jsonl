@@ -1,0 +1,8 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/terrain-model/specs/terrain/spec.md", "reason": "验收基准：气边与覆盖关系全部 Scenario"}
+{"file": "openspec/changes/terrain-model/specs/board-topology/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/terrain-model/specs/coverage-territory/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/terrain-model/specs/map-definition/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/terrain-model/design.md", "reason": "核对 D-A～D-H 与裁决记录；本轮不得实现②③轮内容"}
+{"file": ".trellis/spec/core/testing.md", "reason": "不得改期望凑绿；守门测试必须有变异记录"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "不得出现第二处邻接遍历或地形过滤"}

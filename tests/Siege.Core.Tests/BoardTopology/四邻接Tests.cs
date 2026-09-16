@@ -1,4 +1,7 @@
+using System.Reflection;
+using System.Reflection.Emit;
 using Siege.Core.Board;
+using static Siege.Core.Tests.PresentationFixtures;
 
 namespace Siege.Core.Tests.BoardTopology;
 
@@ -68,6 +71,76 @@ public class 四邻接Tests
             Assert.Equal(expected, board.Neighbors(c));
         }
     }
+
+    [Fact]
+    public void 几何相邻但无气边()
+    {
+        // F6 为 h=0、F7 为 h=2，两格均为空草地 → 互为几何邻居，但之间不存在气边
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("F7", 2)]));
+
+        Assert.Contains(TestMaps.At("F7"), board.Neighbors(TestMaps.At("F6")));
+        Assert.Contains(TestMaps.At("F6"), board.Neighbors(TestMaps.At("F7")));
+        Assert.DoesNotContain(TestMaps.At("F7"), board.LibertyNeighbors(TestMaps.At("F6")));
+        Assert.DoesNotContain(TestMaps.At("F6"), board.LibertyNeighbors(TestMaps.At("F7")));
+        Assert.Equal(["F5", "E6", "G6"], board.LibertyNeighbors(TestMaps.At("F6")).Notations());
+    }
+
+    [Fact]
+    public void 几何邻居枚举只在允许名单内直接调用()
+    {
+        // 规格「几何邻居枚举、气边与覆盖关系 MUST 各自只有一处实现；任何规则 MUST NOT 绕过它们手写邻居遍历或地形过滤」。
+        // 逐条解析 Siege.Core 全部方法体的 IL，收集两类 call：
+        //   ① Adjacency.Neighbors：只允许 Adjacency 自身（两个导出关系）、GameBoard.Neighbors（几何委托）与 MapValidator（几何校验）。
+        //   ② GameBoard.Neighbors：Core 内公开的几何入口，只允许 PieceEffects（Step 找连珠方向；piece-effects 规格不在 terrain-model 内）。
+        // lambda / 迭代器落在编译器生成的嵌套类型里，沿 DeclaringType 走到最外层再比。
+        // 变异验证 M-A5：CoverageMap.Compute 里加一行 `_ = Adjacency.Neighbors(board.Width, board.Height, c);` → 本测试红 1，报出 CoverageMap.Compute。
+        // check 变异 N-4：GroupSafety 改回 `board.Neighbors(liberty)` + 手写 `cell.Terrain == Terrain.Obstacle` 判墙——只扫 ① 时 0 红，
+        // 因为经 GameBoard.Neighbors 绕回"几何邻居 + 手写地形过滤"不经过 Adjacency；补 ② 后红 1，报出 GroupSafety。
+        (MethodBase Caller, MemberInfo Target, OpCode OpCode)[] refs = [.. IlReferences(typeof(GameBoard).Assembly)];
+        MethodBase[] adjacencyCallers = CallersOf(refs, typeof(Adjacency), nameof(Adjacency.Neighbors));
+        MethodBase[] boardCallers = CallersOf(refs, typeof(GameBoard), nameof(GameBoard.Neighbors));
+
+        static Type Outermost(Type t)
+        {
+            while (t.DeclaringType is { } outer)
+            {
+                t = outer;
+            }
+
+            return t;
+        }
+
+        static bool AdjacencyAllowed(MethodBase caller)
+        {
+            Type outer = Outermost(caller.DeclaringType!);
+            return outer == typeof(Adjacency)
+                   || outer == typeof(MapValidator)
+                   || (outer == typeof(GameBoard) && caller.Name == nameof(GameBoard.Neighbors));
+        }
+
+        static bool BoardAllowed(MethodBase caller) => Outermost(caller.DeclaringType!) == typeof(Siege.Core.Scoring.PieceEffects);
+
+        static string Describe(MethodBase c) => $"{c.DeclaringType!.FullName}.{c.Name}";
+
+        string[] violations =
+        [
+            .. adjacencyCallers.Where(c => !AdjacencyAllowed(c)).Select(c => $"Adjacency.Neighbors ← {Describe(c)}"),
+            .. boardCallers.Where(c => !BoardAllowed(c)).Select(c => $"GameBoard.Neighbors ← {Describe(c)}"),
+        ];
+        Assert.Empty(violations.Order());
+
+        // 反面断言：两段扫描都确实命中了允许名单里的调用者，不是扫了个空集
+        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(GameBoard) && c.Name == nameof(GameBoard.Neighbors));
+        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.LibertyNeighbors));
+        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.CoverageTargets));
+        Assert.Contains(boardCallers, c => Outermost(c.DeclaringType!) == typeof(Siege.Core.Scoring.PieceEffects));
+    }
+
+    private static MethodBase[] CallersOf((MethodBase Caller, MemberInfo Target, OpCode OpCode)[] refs, Type declaringType, string methodName) =>
+        [.. refs
+            .Where(r => r.Target is MethodBase m && m.DeclaringType == declaringType && m.Name == methodName)
+            .Select(r => r.Caller)
+            .Distinct()];
 
     [Fact]
     public void 内核不引用Godot()

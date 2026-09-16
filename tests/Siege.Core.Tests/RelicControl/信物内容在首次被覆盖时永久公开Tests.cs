@@ -46,6 +46,27 @@ public class 信物内容在首次被覆盖时永久公开Tests
     }
 
     [Fact]
+    public void 占据即揭示()
+    {
+        // 林地格不接收覆盖：P0 的敌邻子（E6）先与林地信物格 E7 相邻 → 无覆盖、不揭示；
+        // P0 落子占据 E7 → 类型与强度公开，且由 P0 控制。这是林地上的信物唯一的揭示途径。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(
+            TestMaps.Terrain(surfaces: [("E7", Surface.Forest)]),
+            ("E7", RelicFixtures.Depot(2)));
+        board.Place("E6", TestMaps.P0);
+        Assert.Empty(ledger.Settle(board, majorRound: 1));
+        Assert.False(ledger.IsRevealed(TestMaps.At("E7")));
+        Assert.Equal(RelicControl.Uncontrolled, ledger.ControlOf(TestMaps.At("E7")));
+
+        board.Place("E7", TestMaps.P0);
+        RelicRevealEvent evt = Assert.Single(ledger.Settle(board, majorRound: 2));
+
+        Assert.Equal(new RelicRevealEvent(TestMaps.At("E7"), RelicFixtures.Depot(2), 2), evt);
+        Assert.Equal(RelicFixtures.Depot(2), ledger.PublicStateOf(TestMaps.At("E7")).Content);
+        Assert.Equal(new RelicControl(RelicControlKind.Controlled, TestMaps.P0), ledger.ControlOf(TestMaps.At("E7")));
+    }
+
+    [Fact]
     public void 争议不阻止揭示()
     {
         // 结算后 E7 同时被 P0（E6）与 P1（E8）覆盖 → 内容仍揭示，且信物为争议状态、不向任何人提供效果。

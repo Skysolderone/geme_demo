@@ -30,12 +30,17 @@ internal static class RelicFixtures
     /// <summary>
     /// 一张 9×9 合成盘面 + 手工指定内容的信物账本。信物格全部标为公共区标准档（内容既已手工指定，分区只影响记录）。
     /// </summary>
-    internal static (GameBoard Board, RelicLedger Ledger) Scene(params (string Cell, RelicContent Content)[] relics)
+    internal static (GameBoard Board, RelicLedger Ledger) Scene(params (string Cell, RelicContent Content)[] relics) =>
+        Scene(TerrainData.Flat, relics);
+
+    /// <summary>同 <see cref="Scene(ValueTuple{string, RelicContent}[])"/>，但盘面带地形。</summary>
+    internal static (GameBoard Board, RelicLedger Ledger) Scene(TerrainData terrain, params (string Cell, RelicContent Content)[] relics)
     {
         var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
         MapData map = TestMaps.Synthetic(
             size: 9, maxPlayers: 4,
-            relics: relics.Select(r => KeyValuePair.Create(TestMaps.At(r.Cell), spec)));
+            relics: relics.Select(r => KeyValuePair.Create(TestMaps.At(r.Cell), spec)),
+            terrain: terrain);
         GameBoard board = GameBoard.LoadUnvalidated(map);
         ImmutableArray<RelicPlacement> placements = [.. relics.Select(r => new RelicPlacement(TestMaps.At(r.Cell), r.Content, spec)).OrderBy(p => p.Coord)];
         var record = new RelicGenerationRecord(Seed, map.Id, placements, Converged: true, Rerolls: 0);

@@ -158,6 +158,64 @@ public class 地图文件健壮性Tests
         Assert.Equal(canonical, MapFile.ToJson(loaded));
     }
 
+    [Fact]
+    public void 地形字段往返逐字段相等()
+    {
+        // 高度 / 地表 / 桥 / 栅栏一起写出再读入，逐字段相等；再写一次 JSON 逐字节相同。
+        // A1 显式 h=0、A2 显式草地：文件只写非缺省项，TerrainData 构造期把显式缺省项归一化掉，否则这两条 Assert.Equal 恒假（check 修订）。
+        TerrainData terrain = TestMaps.Terrain(
+            heights: [("A1", 0), ("B2", 1), ("C3", 2), ("G7", 1)],
+            surfaces: [("A2", Surface.Grass), ("D4", Surface.Forest), ("E5", Surface.DeepWater), ("E6", Surface.DeepWater), ("F2", Surface.Road)],
+            bridges: ["E6"],
+            fences: [("B2", "B3"), ("H8", "H9")]);
+        MapData original = TestMaps.Synthetic(size: 9, maxPlayers: 4, obstacles: [TestMaps.At("A9")], terrain: terrain);
+
+        string json = MapFile.ToJson(original);
+        MapData loaded = MapFile.FromJson(json);
+
+        Assert.Equal(3, original.TerrainData.Heights.Count);
+        Assert.Equal(4, original.TerrainData.Surfaces.Count);
+        Assert.Equal(original.TerrainData.Heights, loaded.TerrainData.Heights);
+        Assert.Equal(original.TerrainData.Surfaces, loaded.TerrainData.Surfaces);
+        Assert.Equal(original.TerrainData.Bridges, loaded.TerrainData.Bridges);
+        Assert.Equal(original.TerrainData.Fences, loaded.TerrainData.Fences);
+        Assert.Equal(json, MapFile.ToJson(loaded));
+        Assert.Contains("\"Bridges\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"B2-B3\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 缺地形字段的旧文件按平地读入()
+    {
+        // v2 文件没有地形字段 → 全 h=0、全草地、无桥无栅；可落子格仍是 85
+        string path = Path.Combine(RepoRoot(), "maps", "siege-4p-base-v2.json");
+        string text = File.ReadAllText(path);
+        Assert.DoesNotContain("\"Heights\"", text, StringComparison.Ordinal);
+
+        MapData onDisk = MapFile.FromJson(text);
+
+        Assert.Empty(onDisk.TerrainData.Heights);
+        Assert.Empty(onDisk.TerrainData.Surfaces);
+        Assert.Empty(onDisk.TerrainData.Bridges);
+        Assert.Empty(onDisk.TerrainData.Fences);
+        Assert.Equal(85, onDisk.PlayableCount);
+    }
+
+    [Theory]
+    [InlineData("\"Heights\":[\"000\"]", "Heights")]
+    [InlineData("\"Surfaces\":[\"GGG\",\"GGG\",\"GG\"]", "Surfaces")]
+    [InlineData("\"Heights\":[\"000\",\"000\",\"003\"]", "3")]
+    [InlineData("\"Surfaces\":[\"GGG\",\"GGG\",\"GGX\"]", "X")]
+    [InlineData("\"Fences\":[\"A1B1\"]", "A1B1")]
+    public void 畸形地形字段被指名报出(string fragment, string expectedFragment)
+    {
+        string json = "{\"Id\":\"t\",\"Width\":3,\"Height\":3,\"MaxPlayers\":2,\"CentralEntrance\":\"B2\"," + fragment + "}";
+
+        var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
+
+        Assert.Contains(expectedFragment, ex.Message, StringComparison.Ordinal);
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", ".."));
 }

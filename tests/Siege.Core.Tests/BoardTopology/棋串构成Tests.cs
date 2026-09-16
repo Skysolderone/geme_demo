@@ -49,6 +49,22 @@ public class 棋串构成Tests
     }
 
     [Fact]
+    public void 崖壁两侧不成串()
+    {
+        // 同一玩家的两枚棋子位于 h=0 的 F6 与 h=2 的 F7 → 分属两个棋串
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("F7", 2)]))
+            .Place("F6", TestMaps.P0)
+            .Place("F7", TestMaps.P0);
+
+        Group low = board.GroupAt(TestMaps.At("F6"))!;
+        Group high = board.GroupAt(TestMaps.At("F7"))!;
+
+        Assert.Equal(1, low.Size);
+        Assert.Equal(1, high.Size);
+        Assert.Equal(2, board.GroupsOf(TestMaps.P0).Length);
+    }
+
+    [Fact]
     public void 棋串坐标按字典序稳定()
     {
         GameBoard board = TestMaps.Blank(size: 7)

@@ -1,12 +1,15 @@
 namespace Siege.Core.Board;
 
-/// <summary>地形种类。障碍在气、覆盖与围杀判定中一律视为封堵边界，与棋盘外沿语义相同。</summary>
+/// <summary>
+/// 格子的可落子性。<see cref="Obstacle"/> 在气、覆盖与围杀判定中一律视为封堵边界，与棋盘外沿语义相同；
+/// 未架桥的深水共享这一语义，因此也归入 <see cref="Obstacle"/>。高度、地表、桥等地形细节见 <see cref="MapData.TerrainData"/>。
+/// </summary>
 public enum Terrain
 {
-    /// <summary>可落子格。</summary>
+    /// <summary>可落子格（含桥格与林地）。</summary>
     Playable,
 
-    /// <summary>障碍：不可落子、不可控制、不计分。</summary>
+    /// <summary>不可落子：岩石障碍或未架桥的深水；不可控制、不计分。</summary>
     Obstacle,
 }
 

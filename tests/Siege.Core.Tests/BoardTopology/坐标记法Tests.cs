@@ -14,13 +14,17 @@ public class 坐标记法Tests
         Assert.Equal("A1", corner.ToNotation());
     }
 
-    [Fact]
-    public void 列字母跳过I()
+    [Theory]
+    [InlineData(11, "ABCDEFGHJKL")]
+    [InlineData(13, "ABCDEFGHJKLMN")]
+    public void 列字母跳过I(int width, string expected)
     {
-        string letters = new(Enumerable.Range(0, 11).Select(x => new Coord(x, 0).Column).ToArray());
+        // 列字母个数由棋盘宽度决定：11 列到 L，13 列到 N；都不含 I
+        string letters = new(Enumerable.Range(0, width).Select(x => new Coord(x, 0).Column).ToArray());
 
-        Assert.Equal("ABCDEFGHJKL", letters);
+        Assert.Equal(expected, letters);
         Assert.DoesNotContain('I', letters);
+        Assert.Equal(new Coord(width - 1, 0), Coord.Parse($"{expected[^1]}1"));
     }
 
     [Fact]

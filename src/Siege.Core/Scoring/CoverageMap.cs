@@ -46,8 +46,9 @@ public readonly record struct CellOwnership(OwnershipKind Kind, PlayerId? Owner)
 /// MUST NOT 在别处再算一遍覆盖——"领地层说独占、信物层判争议"就是第二套覆盖语义的典型症状。
 /// </summary>
 /// <remarks>
-/// <para>棋子向其四邻接的相邻格提供所有者的覆盖；不沿斜向传播，不穿过障碍或棋盘外沿。障碍格不记录任何覆盖。
-/// 邻接遍历经由 <see cref="GameBoard.Neighbors"/>，不在此处手写偏移。</para>
+/// <para>棋子按 terrain 规格的覆盖关系提供所有者的覆盖：通常是几何相邻格，遇一格宽深水落到对岸，不向林地 / 障碍 / 未架桥深水、
+/// 不向比自身高 2 的格覆盖，栅栏不挡。覆盖目标由 <see cref="GameBoard.CoverageTargets"/> 给出（唯一实现在 <see cref="Adjacency.CoverageTargets"/>），
+/// 不在此处手写偏移或地形过滤。</para>
 /// <para>按格存"覆盖者数量 + 唯一覆盖者"（design.md D1），三态判定与唯一覆盖查询都是 O(1) 读取。
 /// 每次调用 <see cref="Compute"/> 全量重算，不做增量、不缓存（D2）。</para>
 /// <para>规格：openspec/changes/add-territory-power/specs/coverage-territory</para>
@@ -82,16 +83,10 @@ public sealed class CoverageMap
                 continue;
             }
 
-            foreach (Coord n in board.Neighbors(c))
+            foreach (Coord target in board.CoverageTargets(c))
             {
-                // 障碍与越界语义相同：Neighbors 已排除越界，这里排除障碍。覆盖到此为止，不再向更远的格传递。
-                if (board[n].Terrain == Terrain.Obstacle)
-                {
-                    continue;
-                }
-
-                int index = Index(width, n);
-                (coverers[index] ??= []).Add(occupant.Owner);
+                // CoverageTargets 已排除越界、障碍、未架桥深水、林地与崖上格；覆盖到此为止，不再向更远的格传递。
+                (coverers[Index(width, target)] ??= []).Add(occupant.Owner);
             }
         }
 
@@ -144,7 +139,7 @@ public sealed class CoverageMap
         return cells.ToImmutable();
     }
 
-    /// <summary>三态判定（设计文档 §7.1 / §7.2）：障碍 → 占据优先 → 按覆盖者数量分独占 / 争议 / 中立。</summary>
+    /// <summary>三态判定（设计文档 §7.1 / §7.2）：不可落子（障碍 / 未架桥深水）→ 占据优先 → 按覆盖者数量分独占 / 争议 / 中立。</summary>
     private static CellOwnership Resolve(Cell cell, CellCoverage coverage)
     {
         if (cell.Terrain == Terrain.Obstacle)

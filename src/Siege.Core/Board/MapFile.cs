@@ -50,6 +50,10 @@ public static class MapFile
                 .ToDictionary(
                     c => c.ToNotation(),
                     c => map.PocketExemptionReasons.TryGetValue(c, out string? r) ? r : string.Empty),
+            Heights = Rows(map, c => (char)('0' + map.HeightAt(c))),
+            Surfaces = Rows(map, c => SurfaceCode(map.SurfaceAt(c))),
+            Bridges = Sorted(map.TerrainData.Bridges),
+            Fences = [.. map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B).Select(f => f.ToString())],
         };
 
         return JsonSerializer.Serialize(dto, Options);
@@ -86,8 +90,132 @@ public static class MapFile
             PocketExemptions = exemptions.Keys.Select(Coord.Parse).ToImmutableHashSet(),
             PocketExemptionReasons = exemptions.ToImmutableDictionary(
                 kv => Coord.Parse(kv.Key), kv => kv.Value),
+            TerrainData = ParseTerrain(dto),
         };
     }
+
+    /// <summary>
+    /// 地形字段全部可省略（旧 v2 文件按全平地读入）；写出时按行字符串自上而下（最高行号在前，与看图方向一致）。
+    /// 桥与栅栏的合法性由 <see cref="TerrainData"/> 构造期校验，这里把它的 <see cref="ArgumentException"/> 换成指名字段的 <see cref="FormatException"/>。
+    /// </summary>
+    private static TerrainData ParseTerrain(MapDto dto)
+    {
+        List<string> heightRows = Required(dto.Heights, "Heights");
+        List<string> surfaceRows = Required(dto.Surfaces, "Surfaces");
+        List<string> bridges = Required(dto.Bridges, "Bridges");
+        List<string> fences = Required(dto.Fences, "Fences");
+
+        ImmutableDictionary<Coord, int>.Builder heights = ImmutableDictionary.CreateBuilder<Coord, int>();
+        foreach ((Coord c, char code) in Cells(dto, heightRows, "Heights"))
+        {
+            if (code is < '0' or > (char)('0' + TerrainData.MaxHeight))
+            {
+                throw new FormatException($"地图文件的 Heights 在 {c.ToNotation()} 处为 '{code}'：高度只能是 0–{TerrainData.MaxHeight}。");
+            }
+
+            if (code != '0')
+            {
+                heights[c] = code - '0';
+            }
+        }
+
+        ImmutableDictionary<Coord, Surface>.Builder surfaces = ImmutableDictionary.CreateBuilder<Coord, Surface>();
+        foreach ((Coord c, char code) in Cells(dto, surfaceRows, "Surfaces"))
+        {
+            Surface surface = SurfaceFromCode(code)
+                ?? throw new FormatException($"地图文件的 Surfaces 在 {c.ToNotation()} 处为 '{code}'：地表只能是 G（草地）/ R（土路）/ F（林地）/ W（深水）。");
+            if (surface != Surface.Grass)
+            {
+                surfaces[c] = surface;
+            }
+        }
+
+        ImmutableHashSet<FenceEdge>.Builder fenceSet = ImmutableHashSet.CreateBuilder<FenceEdge>();
+        foreach (string text in fences)
+        {
+            string[] ends = Required(text, "Fences[]").Split('-');
+            if (ends.Length != 2)
+            {
+                throw new FormatException($"地图文件的 Fences 项 \"{text}\" 不是 \"F6-G6\" 形式。");
+            }
+
+            fenceSet.Add(new FenceEdge(Coord.Parse(ends[0]), Coord.Parse(ends[1])));
+        }
+
+        try
+        {
+            return new TerrainData(heights.ToImmutable(), surfaces.ToImmutable(), Parse(bridges), fenceSet.ToImmutable());
+        }
+        catch (ArgumentException ex)
+        {
+            throw new FormatException($"地图文件的地形数据不合法：{ex.Message}", ex);
+        }
+    }
+
+    /// <summary>按行字符串（自上而下）逐格枚举；行数或行长与外接尺寸不符即报出字段名。空列表表示缺省。</summary>
+    private static IEnumerable<(Coord Coord, char Code)> Cells(MapDto dto, List<string> rows, string field)
+    {
+        if (rows.Count == 0)
+        {
+            yield break;
+        }
+
+        if (rows.Count != dto.Height)
+        {
+            throw new FormatException($"地图文件的 {field} 有 {rows.Count} 行，与外接高度 {dto.Height} 不符。");
+        }
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            string row = Required(rows[i], $"{field}[{i}]");
+            if (row.Length != dto.Width)
+            {
+                throw new FormatException($"地图文件的 {field} 第 {i + 1} 行长度 {row.Length} 与外接宽度 {dto.Width} 不符。");
+            }
+
+            int y = dto.Height - 1 - i;
+            for (int x = 0; x < row.Length; x++)
+            {
+                yield return (new Coord(x, y), row[x]);
+            }
+        }
+    }
+
+    private static List<string> Rows(MapData map, Func<Coord, char> code)
+    {
+        var rows = new List<string>(map.Height);
+        for (int y = map.Height - 1; y >= 0; y--)
+        {
+            var chars = new char[map.Width];
+            for (int x = 0; x < map.Width; x++)
+            {
+                chars[x] = code(new Coord(x, y));
+            }
+
+            rows.Add(new string(chars));
+        }
+
+        return rows;
+    }
+
+    /// <summary>地表 ↔ 单字符码的唯一映射（与 <see cref="SurfaceFromCode"/> 同在一处）。</summary>
+    private static char SurfaceCode(Surface surface) => surface switch
+    {
+        Surface.Grass => 'G',
+        Surface.Road => 'R',
+        Surface.Forest => 'F',
+        Surface.DeepWater => 'W',
+        _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
+    };
+
+    private static Surface? SurfaceFromCode(char code) => char.ToUpperInvariant(code) switch
+    {
+        'G' => Surface.Grass,
+        'R' => Surface.Road,
+        'F' => Surface.Forest,
+        'W' => Surface.DeepWater,
+        _ => null,
+    };
 
     /// <summary>
     /// 显式写成 <c>null</c> 的字段会让反序列化产出一个坏 <see cref="MapData"/>，
@@ -132,6 +260,18 @@ public static class MapFile
 
         /// <summary>必死口袋豁免：格 → 理由。每条豁免都必须写明理由，否则校验不通过。</summary>
         public Dictionary<string, string> PocketExemptions { get; set; } = [];
+
+        /// <summary>每格高度，按行字符串自上而下（第一行是最高行号），字符 0/1/2。省略即全 0。</summary>
+        public List<string> Heights { get; set; } = [];
+
+        /// <summary>每格地表，按行字符串自上而下，字符 G 草地 / R 土路 / F 林地 / W 深水。省略即全草地。</summary>
+        public List<string> Surfaces { get; set; } = [];
+
+        /// <summary>预置桥所在的深水格。</summary>
+        public List<string> Bridges { get; set; } = [];
+
+        /// <summary>栅栏边，形如 <c>F6-G6</c>。</summary>
+        public List<string> Fences { get; set; } = [];
     }
 
     private sealed class RelicDto

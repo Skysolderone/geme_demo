@@ -482,9 +482,10 @@ public static class MapValidator
         {
             Coord current = queue.Dequeue();
             component.Add(current);
-            foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, current))
+            // 连通区沿气边（terrain-model D-E）：崖壁、栅栏、深水隔开的两片各成一区。平地上与几何邻居等价。
+            foreach (Coord n in Adjacency.LibertyNeighbors(map, current))
             {
-                if (!visited.Contains(n) && map.TerrainAt(n) == Terrain.Playable)
+                if (!visited.Contains(n))
                 {
                     visited.Add(n);
                     queue.Enqueue(n);
@@ -513,9 +514,10 @@ public static class MapValidator
         while (queue.Count > 0)
         {
             Coord current = queue.Dequeue();
-            foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, current))
+            // 最短落子距离沿气边（terrain-model D-E）：崖壁挡住的路不算路。平地上与几何邻居等价。
+            foreach (Coord n in Adjacency.LibertyNeighbors(map, current))
             {
-                if (map.TerrainAt(n) == Terrain.Playable && !dist.ContainsKey(n))
+                if (!dist.ContainsKey(n))
                 {
                     dist[n] = dist[current] + 1;
                     queue.Enqueue(n);

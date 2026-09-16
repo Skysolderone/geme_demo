@@ -1,0 +1,14 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/terrain-model/design.md", "reason": "D-A～D-H 与 31 条裁决记录；实现前必读，标「本轮」的才做"}
+{"file": "openspec/changes/terrain-model/specs/terrain/spec.md", "reason": "新能力：格属性、边属性、气边、覆盖关系——全部算例在此"}
+{"file": "openspec/changes/terrain-model/specs/board-topology/spec.md", "reason": "几何四邻 + 两套导出关系；棋串与气改走气边"}
+{"file": "openspec/changes/terrain-model/specs/coverage-territory/spec.md", "reason": "覆盖改走覆盖关系；林地信物只能占据"}
+{"file": "openspec/changes/terrain-model/specs/relic-control/spec.md", "reason": "揭示触发补占据"}
+{"file": "openspec/changes/terrain-model/specs/map-definition/spec.md", "reason": "v3 硬约束、校验规则改动"}
+{"file": "openspec/changes/terrain-model/specs/tactical-layers/spec.md", "reason": "两读法差集口径"}
+{"file": "openspec/changes/terrain-model/specs/visual-style-baseline/spec.md", "reason": "地形可判读、13 列标注"}
+{"file": "openspec/changes/terrain-model/tasks.md", "reason": "分段执行的任务清单与验证方式"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现原则：几何四邻/气边/覆盖关系各一处"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "围棋记法、列字母随宽度"}
+{"file": ".trellis/spec/core/testing.md", "reason": "既有算例改坐标不改期望；守门测试要做变异验证"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "全整数、实时重算不缓存"}

@@ -41,6 +41,27 @@ public class 唯一覆盖查询Tests
     }
 
     [Fact]
+    public void 林地信物只能占据()
+    {
+        // 玩家 B 的棋子（E6）与林地信物格 E7 几何相邻 → E7 无人覆盖、中立；B 落子占据 E7 后才控制
+        GameBoard board = GameBoard.LoadUnvalidated(TestMaps.Synthetic(
+            size: 9, maxPlayers: 4,
+            relics: [KeyValuePair.Create(TestMaps.At("E7"), new RelicCellSpec(RelicZone.Contested, BudgetTier.High))],
+            terrain: TestMaps.Terrain(surfaces: [("E7", Surface.Forest)])));
+        board.Place("E6", TestMaps.P1);
+
+        CoverageMap before = CoverageMap.Compute(board);
+        Assert.Equal(CellCoverage.None, before.CoverageOf(TestMaps.At("E7")));
+        Assert.Null(before.UniqueCoverer(TestMaps.At("E7")));
+        Assert.Equal(new CellOwnership(OwnershipKind.Neutral, null), before.OwnershipOf(TestMaps.At("E7")));
+
+        board.Place("E7", TestMaps.P1);
+        CoverageMap after = CoverageMap.Compute(board);
+        Assert.Equal(new CellOwnership(OwnershipKind.Occupied, TestMaps.P1), after.OwnershipOf(TestMaps.At("E7")));
+        Assert.True(after.OwnershipOf(TestMaps.At("E7")).IsControlledBy(TestMaps.P1));
+    }
+
+    [Fact]
     public void 唯一覆盖查询与空格归属交叉一致()
     {
         // 两套判定 MUST 读同一份覆盖表：对全盘每一格断言 OwnershipOf 与 UniqueCoverer / CoverageOf 不矛盾。

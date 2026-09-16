@@ -33,6 +33,8 @@ public class UI层不含规则计算Tests
         (typeof(GameBoard), nameof(GameBoard.GroupsOf)),
         (typeof(GameBoard), nameof(GameBoard.AllGroups)),
         (typeof(GameBoard), nameof(GameBoard.Neighbors)),
+        (typeof(GameBoard), nameof(GameBoard.LibertyNeighbors)),
+        (typeof(GameBoard), nameof(GameBoard.CoverageTargets)),
         (typeof(GameBoard), nameof(GameBoard.HasPlayableEmptyCell)),
         (typeof(GameBoard), nameof(GameBoard.Place)),
         (typeof(GameBoard), nameof(GameBoard.Clear)),

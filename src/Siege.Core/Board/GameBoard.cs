@@ -10,8 +10,9 @@ namespace Siege.Core.Board;
 /// <para>棋串、气、覆盖等全部是派生量，每次调用重算，不做增量维护也不缓存。
 /// 设计文档 §9.2 / §10.1 要求实时重算；一次提子可能同时改变覆盖、棋串分裂、连珠断线与倍率，
 /// 增量维护的组合爆炸不可控。</para>
-/// <para>四邻接遍历的唯一实现在 <see cref="Adjacency"/>，本类只是委托；连接、气、覆盖与围杀判定
-/// MUST 全部经由 <see cref="Neighbors"/> 到达它，MUST NOT 在别处手写邻居偏移。</para>
+/// <para>几何四邻、气边与覆盖关系的唯一实现都在 <see cref="Adjacency"/>，本类只是委托：
+/// <see cref="Neighbors"/> 是几何邻居；棋串与气走 <see cref="LibertyNeighbors"/>；覆盖走 <see cref="CoverageTargets"/>。
+/// MUST NOT 在别处手写邻居偏移或地形过滤。</para>
 /// <para>规格：openspec/changes/add-board-core/specs/board-topology</para>
 /// </remarks>
 public sealed class GameBoard
@@ -93,6 +94,25 @@ public sealed class GameBoard
         return Adjacency.Neighbors(Width, Height, c);
     }
 
+    /// <summary>
+    /// 气边邻居：与 <paramref name="c"/> 之间存在气边的格（两格可落子、|Δh| ≤ 1、无栅栏）。
+    /// 委托给 <see cref="Adjacency.LibertyNeighbors"/>，连接、棋串、气与围杀判定全部走这里。
+    /// </summary>
+    public ImmutableArray<Coord> LibertyNeighbors(Coord c)
+    {
+        RequireInBounds(c);
+        return Adjacency.LibertyNeighbors(Map, c);
+    }
+
+    /// <summary>
+    /// 覆盖目标：位于 <paramref name="c"/> 的棋子会向哪些格提供覆盖。委托给 <see cref="Adjacency.CoverageTargets"/>。
+    /// </summary>
+    public ImmutableArray<Coord> CoverageTargets(Coord c)
+    {
+        RequireInBounds(c);
+        return Adjacency.CoverageTargets(Map, c);
+    }
+
     /// <summary>该格所属棋串；空格或障碍返回 <c>null</c>。</summary>
     public Group? GroupAt(Coord c)
     {
@@ -111,14 +131,14 @@ public sealed class GameBoard
         while (queue.Count > 0)
         {
             Coord current = queue.Dequeue();
-            foreach (Coord n in Neighbors(current))
+            foreach (Coord n in LibertyNeighbors(current))
             {
                 if (visited.Contains(n))
                 {
                     continue;
                 }
 
-                // 棋子类型不影响棋串归属；不同玩家的棋子绝不合并。
+                // 棋子类型不影响棋串归属；不同玩家的棋子绝不合并；崖壁 / 栅栏两侧的己子不成串（无气边）。
                 if (_occupants[Index(n)] is { } other && other.Owner == owner)
                 {
                     visited.Add(n);
@@ -131,8 +151,8 @@ public sealed class GameBoard
     }
 
     /// <summary>
-    /// 棋串的气：与该棋串任一棋子四邻接、且当前为空的可落子格（按格去重）。
-    /// 被任何玩家棋子占据的格、障碍格与越界方向都不计气。
+    /// 棋串的气：与该棋串任一棋子之间存在气边、且当前为空的可落子格（按格去重）。
+    /// 被任何玩家棋子占据的格、障碍格、未架桥深水、越界方向，以及因崖壁或栅栏而无气边的格都不计气。
     /// </summary>
     public ImmutableArray<Coord> LibertiesOf(Group group)
     {
@@ -140,7 +160,7 @@ public sealed class GameBoard
         var liberties = new HashSet<Coord>();
         foreach (Coord stone in group.Stones)
         {
-            foreach (Coord n in Neighbors(stone))
+            foreach (Coord n in LibertyNeighbors(stone))
             {
                 if (this[n].IsPlayableEmpty)
                 {
@@ -294,9 +314,10 @@ public sealed class GameBoard
     public void Place(Coord c, PlayerId owner, PieceType type)
     {
         RequireInBounds(c);
-        if (Map.TerrainAt(c) == Terrain.Obstacle)
+        if (!Map.IsPlayable(c))
         {
-            throw new SiegeRuleException($"目标格不可落子：{c.ToNotation()} 是障碍格。");
+            string reason = Map.TerrainData.IsUnbridgedDeepWater(c) ? "未架桥的深水格" : "障碍格";
+            throw new SiegeRuleException($"目标格不可落子：{c.ToNotation()} 是{reason}。");
         }
 
         if (_occupants[Index(c)] is not null)

@@ -32,6 +32,19 @@ public class 棋子向四邻接相邻格提供覆盖Tests
     }
 
     [Fact]
+    public void 覆盖判定与气边判定分离()
+    {
+        // 玩家 A 的棋子位于 h=2 的 F7，F6 为 h=0 的空格 → F6 获得 A 的覆盖，但 F6 不是 F7 所在棋串的气
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("F7", 2)])).Place("F7", TestMaps.P0);
+
+        CoverageMap coverage = CoverageMap.Compute(board);
+
+        Assert.Equal(new CellCoverage(1, TestMaps.P0), coverage.CoverageOf(TestMaps.At("F6")));
+        Assert.Equal(OwnershipKind.Exclusive, coverage.OwnershipOf(TestMaps.At("F6")).Kind);
+        Assert.DoesNotContain(TestMaps.At("F6"), board.LibertiesOf(board.GroupAt(TestMaps.At("F7"))!));
+    }
+
+    [Fact]
     public void 障碍不传播覆盖()
     {
         // 障碍格不记录任何覆盖，且覆盖不越过障碍到达更远的格。
