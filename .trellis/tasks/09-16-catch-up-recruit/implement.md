@@ -30,7 +30,22 @@
 ## 5. 变异验证与回归
 
 - [x] 5.1 变异验证并记录：阈值改 `≥`、并列不共享名次、弃赛者计入人数、快照内重读名次、最后一名条件去掉 `> 1`、来源拆分把补偿算进信物、开关不入存档。
-- [ ] 5.2 200 局回归：第 3 大回合领先者胜率、Pass 率、获补偿小回合占比、平均结束大回合、终局原因分布、各棋子势力占比，与 multiplier-rebalance 之后对照。验证：跑局统计如实记录。
+- [x] 5.2 200 局回归：第 3 大回合领先者胜率、Pass 率、获补偿小回合占比、平均结束大回合、终局原因分布、各棋子势力占比，与 multiplier-rebalance 之后对照。验证：跑局统计如实记录。
+
+## 6. check 阶段（2026-09-16）
+
+- 基线 `dotnet build` 零警告、`dotnet test` **654/654** 退出码 0（check 新增 1 条守门）。
+- 抽查实现方变异复现：M-CU3（人数改用名册全员）红 1、M-CU5（去掉 `rank > 1`）红 3、M-CU10（排除条件去掉"缺留痕"那半）红 1。
+- check 自做变异：S1 阈值 `(n+1)/2` → `n/2` 红 4；S2 `CatchUpFor` 改为触发 `Scoreboard.Recalculate`（读活排名而非现成排名）红 4；S3 报告分母混入关闭补偿的局 红 1。
+- **M-CU12（新守门）**：在 `src/godot/scripts/Hud.cs` 注入第二份 `rank > (participants + 1) / 2` 判定 → 既有的
+  「Godot 层不调用规则计算入口」与 UI 层 IL 扫描**全绿（0 红）**：把 `CatchUpCompensation` 列进违禁 token 只挡得住
+  "调用唯一实现"，挡不住"照抄一份阈值算式"。check 补 `Godot层不含规则计算Tests.落后补偿判定不在表现层重写一份`
+  （判据 `(… + 1) / 2`，先在唯一实现上反面命中 1 次，再扫 `src/godot/scripts` 与 `src/Siege.Presentation`），补后该变异红 1。
+- check 修复：`tests/Siege.Core.Tests/AiFixtures.cs` 的 `SetDeployLimit` 重建快照时漏带 `s.CatchUp`，会造成
+  `RevealCount` 含补偿而 `CatchUp` 留痕为空的不自洽（当前用例盘面为空故偶然绿）；设计文档变更记录行补到时间顺序末尾。
+- 既有测试"零关闭"核验：`CatchUpOff` 只被新增测试使用；grep 全部断言展示 / 选取数的既有测试
+  （`征募的信息边界`、`选取受类型槽约束`、`流派徽记调整征募权重`、`槽位缩水时的强制整类弃牌`）都走 `HandFixtures.Ledger()`
+  账本层、不经 `MatchFlow`，无补偿路径；经 `MatchFlow` 的 `对局日志的记录内容` 用的是 `>= 5 / >= 3` 下界断言。**无漏网**。
 
 ## 验证命令
 

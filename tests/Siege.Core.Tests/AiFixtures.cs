@@ -160,7 +160,7 @@ internal static class AiFixtures
     /// <summary>把当前玩家本小回合的部署上限改成 <paramref name="deployLimit"/>（只改快照，不改生成路径）。</summary>
     internal static void SetDeployLimit(this MatchFlow match, int deployLimit) =>
         match.Debug.SetSnapshotTransform(s => new EffectSnapshot(
-            s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, s.TypeSlots, deployLimit, s.EmblemCounts, s.HeldTypeCount));
+            s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, s.TypeSlots, deployLimit, s.EmblemCounts, s.HeldTypeCount, s.CatchUp));
 
     /// <summary>跑完前 <paramref name="majorRounds"/> 个大回合（或直到终局）。</summary>
     internal static void RunMajorRounds(this MatchRunner runner, int majorRounds)
