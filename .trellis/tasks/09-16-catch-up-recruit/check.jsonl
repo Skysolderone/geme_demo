@@ -1,0 +1,8 @@
+{"file": "openspec/changes/catch-up-recruit/specs/recruitment/spec.md", "reason": "验收基准：补偿的 10 个 Scenario"}
+{"file": "openspec/changes/catch-up-recruit/specs/relic-effects/spec.md", "reason": "验收基准：快照读取时机"}
+{"file": "openspec/changes/catch-up-recruit/specs/initiative-order/spec.md", "reason": "验收基准：排名作用范围"}
+{"file": "openspec/changes/catch-up-recruit/specs/power-score/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/catch-up-recruit/specs/hand-info-panel/spec.md", "reason": "验收基准：来源拆分"}
+{"file": "openspec/changes/catch-up-recruit/specs/match-setup/spec.md", "reason": "验收基准：配置公开与回填"}
+{"file": "openspec/changes/catch-up-recruit/design.md", "reason": "核对 D1–D6 与裁决"}
+{"file": ".trellis/spec/core/testing.md", "reason": "既有测试改动不得放宽断言、变异验证记录"}

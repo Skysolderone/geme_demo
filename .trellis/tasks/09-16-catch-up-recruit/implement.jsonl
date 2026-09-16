@@ -1,0 +1,10 @@
+{"file": "openspec/changes/catch-up-recruit/design.md", "reason": "D1–D6 与裁决 1–6；实现前必读"}
+{"file": "openspec/changes/catch-up-recruit/specs/recruitment/spec.md", "reason": "落后者征募补偿的 10 个 Scenario 与面板 Requirement"}
+{"file": "openspec/changes/catch-up-recruit/specs/relic-effects/spec.md", "reason": "快照读取名次、默认基础值表述"}
+{"file": "openspec/changes/catch-up-recruit/specs/initiative-order/spec.md", "reason": "排名作用范围扩展"}
+{"file": "openspec/changes/catch-up-recruit/specs/power-score/spec.md", "reason": "排名作用范围同步"}
+{"file": "openspec/changes/catch-up-recruit/specs/hand-info-panel/spec.md", "reason": "来源拆分新增落后补偿"}
+{"file": "openspec/changes/catch-up-recruit/specs/match-setup/spec.md", "reason": "开关公开与旧存档回填"}
+{"file": "openspec/changes/archive/2026-09-15-dominance-victory/design.md", "reason": "对局配置开关 / 存档回填 / 既有测试显式关闭的既有做法，照此模仿"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文 §5.3 §10.2 §11；4.2 要改它"}
+{"file": ".trellis/spec/core/testing.md", "reason": "变异验证、往返用非回填值、真实盘面端到端、可复算守门用独立算式"}
