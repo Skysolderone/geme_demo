@@ -104,7 +104,7 @@ public class 信息层的可用时机与无副作用Tests
         Assert.Null(supplement.CurrentOrderReport);
 
         ViewerWorld world = match.World(P0);
-        Assert.Empty(((TerritoryLayerContent)world.Layer(TacticalLayer.Territory)).Cells);
+        Assert.Empty(((TerritoryLayerContent)world.Layer(TacticalLayer.Board, BoardReading.Ownership)).Cells);
         Assert.Empty(((PowerLayerContent)world.Layer(TacticalLayer.Power)).Groups);
         Assert.Empty(((OrderLayerContent)world.Layer(TacticalLayer.Order)).Rows);
         Assert.Equal(81, world.Board().Cells.Length);

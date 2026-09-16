@@ -87,8 +87,10 @@ public sealed class ViewerWorld
     /// <summary>全玩家手牌对比面板。</summary>
     public HandInfoPanelView HandPanel() => HandInfoPanelView.Build(this);
 
-    /// <summary>某信息层的内容。只读公开世界。</summary>
-    public LayerContent Layer(TacticalLayer layer, LibertyThresholds? thresholds = null) => TacticalLayers.Build(Public, layer, thresholds);
+    /// <summary>某信息层的内容。只读公开世界。<paramref name="reading"/> 只对盘面层有意义。</summary>
+    public LayerContent Layer(
+        TacticalLayer layer, BoardReading reading = BoardReading.Ownership, LibertyThresholds? thresholds = null) =>
+        TacticalLayers.Build(Public, layer, reading, thresholds);
 
     /// <summary>组装。<paramref name="ownPreview"/> 只在本人处于部署阶段时传入。</summary>
     public static ViewerWorld Build(

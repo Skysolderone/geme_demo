@@ -8,18 +8,18 @@ using static Siege.Core.Tests.PresentationFixtures;
 
 namespace Siege.Core.Tests.TacticalLayers;
 
-/// <summary>规格：tactical-layers —— Requirement: 五种战术信息层</summary>
+/// <summary>规格：tactical-layers —— Requirement: 五种战术信息层（merge-board-layer 后为四种，盘面层含两种读法）</summary>
 public class 五种战术信息层Tests
 {
     [Fact]
-    public void 领地层三态可辨()
+    public void 归属读法三态可辨()
     {
         // 设计文档 §7.1 / §7.2 / §14.2：P0 占 D4、P1 占 F4 → D4 占据、C4 独占、E4 争议、A9 中立；四态以不同枚举值呈现，
         // 且全盘每格与 Core 覆盖表的归属逐格一致（不重算）。领地层弱化棋子演出（渲染部分归阶段 B）。
         // 变异验证 M-L1：TacticalLayers.Territory 把 Contested 映射为 Neutral → 本测试红 1。
         MatchFlow match = AiFixtures.Round5().Pieces(P0, PieceType.Basic, "D4").Pieces(P1, PieceType.Basic, "F4");
 
-        var layer = (TerritoryLayerContent)match.World(P2).Layer(TacticalLayer.Territory);
+        var layer = (TerritoryLayerContent)match.World(P2).Layer(TacticalLayer.Board, BoardReading.Ownership);
 
         Assert.Equal((TerritoryState.Occupied, (PlayerId?)P0), State(layer, "D4"));
         Assert.Equal((TerritoryState.Exclusive, (PlayerId?)P0), State(layer, "C4"));
@@ -28,18 +28,18 @@ public class 五种战术信息层Tests
         CoverageMap coverage = match.Scoreboard.Latest!.Coverage;
         Assert.Equal(81, layer.Cells.Length);
         Assert.All(layer.Cells, c => Assert.Equal(coverage.OwnershipOf(c.Coord).Kind.ToString(), c.State.ToString()));
-        Assert.True(LayerVisuals.For(TacticalLayer.Territory).PieceEmphasisPercent < 100);
+        Assert.True(LayerVisuals.For(TacticalLayer.Board, BoardReading.Ownership).PieceEmphasisPercent < 100);
     }
 
     [Fact]
-    public void 气层标示危险棋串()
+    public void 棋串读法标示危险棋串()
     {
         // 裁决 2：气 ≤ 2 危险、气 = 1 紧急，阈值可配置。P0 的 A1 被 P1 的 B1 贴住只剩 A2 一口气 → 紧急；
         // P0 的 J1 边角两口气 → 危险；P0 的 E5 四口气 → 安全。把危险阈值调到 4 后 E5 也变危险。
         // 变异验证 M-L2：LibertyThresholds.Classify 的紧急判断改为 `liberties < Urgent` → 本测试红 1。
         MatchFlow match = AiFixtures.Round5().Pieces(P0, PieceType.Basic, "A1", "J1", "E5").Pieces(P1, PieceType.Basic, "B1");
 
-        var layer = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Liberties);
+        var layer = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups);
 
         LibertyGroupView a1 = layer.Groups.Single(g => g.Stones[0] == TestMaps.At("A1"));
         Assert.Equal((1, DangerLevel.Urgent), (a1.LibertyCount, a1.Level));
@@ -47,7 +47,7 @@ public class 五种战术信息层Tests
         Assert.Equal(DangerLevel.Danger, layer.Groups.Single(g => g.Stones[0] == TestMaps.At("J1")).Level);
         Assert.Equal(DangerLevel.Safe, layer.Groups.Single(g => g.Stones[0] == TestMaps.At("E5")).Level);
 
-        var loose = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Liberties, new LibertyThresholds(danger: 4, urgent: 1));
+        var loose = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups, new LibertyThresholds(danger: 4, urgent: 1));
         Assert.Equal(DangerLevel.Danger, loose.Groups.Single(g => g.Stones[0] == TestMaps.At("E5")).Level);
         Assert.Throws<ArgumentOutOfRangeException>(() => new LibertyThresholds(danger: 1, urgent: 2));
     }

@@ -60,7 +60,7 @@ public class 始终公开的信息Tests
 
         foreach (PlayerId viewer in MatchFixtures.All)
         {
-            var layer = (LibertyLayerContent)match.World(viewer).Layer(TacticalLayer.Liberties);
+            var layer = (LibertyLayerContent)match.World(viewer).Layer(TacticalLayer.Board, BoardReading.Groups);
             LibertyGroupView group = Assert.Single(layer.Groups, g => g.Owner == P2);
             Assert.Equal(["D4", "D5", "E5"], group.Stones.Notations());
             Assert.Equal(["D3", "C4", "E4", "C5", "F5", "D6", "E6"], group.Liberties.Notations());

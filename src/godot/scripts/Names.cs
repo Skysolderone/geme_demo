@@ -67,12 +67,19 @@ public static class Names
     /// <summary>信息层。</summary>
     public static string Layer(TacticalLayer layer) => layer switch
     {
-        TacticalLayer.Territory => "领地",
-        TacticalLayer.Liberties => "气",
+        TacticalLayer.Board => "盘面",
         TacticalLayer.Power => "势力",
         TacticalLayer.Relics => "信物",
         TacticalLayer.Order => "顺序",
         _ => layer.ToString(),
+    };
+
+    /// <summary>盘面层的读法。</summary>
+    public static string Reading(BoardReading reading) => reading switch
+    {
+        BoardReading.Ownership => "归属",
+        BoardReading.Groups => "棋串",
+        _ => reading.ToString(),
     };
 
     /// <summary>危险等级。</summary>

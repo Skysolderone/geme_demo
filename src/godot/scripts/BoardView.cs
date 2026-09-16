@@ -168,13 +168,19 @@ public sealed partial class BoardView : Node3D
     /// 按当前世界重画棋子、叠加层与预览。<paramref name="treatment"/> 来自 <see cref="TacticalLayerState.Treatment"/>：
     /// 打开信息层时临时降饱和、压低装饰对比并按需弱化棋子（5.7），退出即恢复。
     /// </summary>
-    public void Refresh(ViewerWorld world, TacticalLayer? layer, SceneTreatment treatment, LibertyThresholds thresholds, TurnFlash flash)
+    public void Refresh(
+        ViewerWorld world,
+        TacticalLayer? layer,
+        BoardReading reading,
+        SceneTreatment treatment,
+        LibertyThresholds thresholds,
+        TurnFlash flash)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(treatment);
         ArgumentNullException.ThrowIfNull(flash);
         DefaultBoardView board = world.Board();
-        LayerContent? content = layer is { } active ? world.Layer(active, thresholds) : null;
+        LayerContent? content = layer is { } active ? world.Layer(active, reading, thresholds) : null;
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
         float decorationScale = 0.72f + (0.28f * treatment.DecorationContrastPercent / 100f);

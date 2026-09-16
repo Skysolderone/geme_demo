@@ -57,7 +57,7 @@ public sealed record LibertyThresholds
 /// <summary>信息层内容的基类。Godot 层按具体类型分派渲染。</summary>
 public abstract record LayerContent(TacticalLayer Layer);
 
-// ---------- 领地层 ----------
+// ---------- 盘面层 · 归属读法 ----------
 
 /// <summary>领地层四态（设计文档 §7.1 / §7.2），取自 Core 覆盖表的归属结果，不重算。</summary>
 public enum TerritoryState
@@ -68,19 +68,19 @@ public enum TerritoryState
     Neutral,
 }
 
-/// <summary>领地层的一格（障碍格不列出）。<see cref="Owner"/> 只在占据与独占时非空。</summary>
+/// <summary>盘面层归属读法的一格（障碍格不列出）。<see cref="Owner"/> 只在占据与独占时非空。</summary>
 public sealed record TerritoryCellView(Coord Coord, TerritoryState State, PlayerId? Owner);
 
-/// <summary>领地层。</summary>
-public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells) : LayerContent(TacticalLayer.Territory);
+/// <summary>盘面层的归属读法。</summary>
+public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells) : LayerContent(TacticalLayer.Board);
 
-// ---------- 气层 ----------
+// ---------- 盘面层 · 棋串读法 ----------
 
-/// <summary>气层的一条棋串：轮廓（棋子集合）、全部气位与危险等级。</summary>
+/// <summary>盘面层棋串读法的一条棋串：轮廓（棋子集合）、全部气位与危险等级。</summary>
 public sealed record LibertyGroupView(PlayerId Owner, ImmutableArray<Coord> Stones, ImmutableArray<Coord> Liberties, int LibertyCount, DangerLevel Level);
 
-/// <summary>气层。</summary>
-public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds) : LayerContent(TacticalLayer.Liberties);
+/// <summary>盘面层的棋串读法。两个内容 record 不合并——它们携带的字段本就不同（merge-board-layer D5）。</summary>
+public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds) : LayerContent(TacticalLayer.Board);
 
 // ---------- 势力层 ----------
 
@@ -139,13 +139,21 @@ public sealed record OrderLayerContent(
 /// </summary>
 public static class TacticalLayers
 {
-    public static LayerContent Build(PublicWorld world, TacticalLayer layer, LibertyThresholds? thresholds = null)
+    /// <summary>
+    /// 某层当前该显示的内容。<paramref name="reading"/> 只对 <see cref="TacticalLayer.Board"/> 有意义，
+    /// 其余层忽略它——读法是盘面层内部的维度，不参与层之间的互斥（merge-board-layer D5）。
+    /// </summary>
+    public static LayerContent Build(
+        PublicWorld world,
+        TacticalLayer layer,
+        BoardReading reading = BoardReading.Ownership,
+        LibertyThresholds? thresholds = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         return layer switch
         {
-            TacticalLayer.Territory => Territory(world),
-            TacticalLayer.Liberties => Liberties(world, thresholds ?? LibertyThresholds.Default),
+            TacticalLayer.Board when reading == BoardReading.Ownership => Territory(world),
+            TacticalLayer.Board => Liberties(world, thresholds ?? LibertyThresholds.Default),
             TacticalLayer.Power => Power(world),
             TacticalLayer.Relics => Relics(world),
             TacticalLayer.Order => Order(world),

@@ -37,6 +37,13 @@ public sealed class InputBindings
     /// <summary>在「按住显示」与「点击切换」之间切换（辅助设置）。</summary>
     public const string ToggleModeAction = "siege_layer_mode";
 
+    /// <summary>
+    /// 切换盘面层的读法（归属／棋串）。<b>独立于层键</b>：按住显示模式下层键正被按住，没有"再按一次"可言，
+    /// 若把读法切换绑在层键上，按住显示的玩家会被锁死在一种读法里（merge-board-layer D3）。
+    /// 手柄用右摇杆按下，避免占用已绑给手牌面板的右肩键。
+    /// </summary>
+    public const string CycleReadingAction = "siege_board_reading";
+
     /// <summary>已注册的全部信息层动作。</summary>
     public IReadOnlyList<(string Action, InputDevice Device, string Binding)> LayerActions => _actions;
 
@@ -45,11 +52,10 @@ public sealed class InputBindings
     {
         (TacticalLayer Layer, Key Key, JoyButton Pad)[] layers =
         [
-            (TacticalLayer.Territory, Key.Key1, JoyButton.DpadUp),
-            (TacticalLayer.Liberties, Key.Key2, JoyButton.DpadRight),
-            (TacticalLayer.Power, Key.Key3, JoyButton.DpadDown),
-            (TacticalLayer.Relics, Key.Key4, JoyButton.DpadLeft),
-            (TacticalLayer.Order, Key.Key5, JoyButton.LeftShoulder),
+            (TacticalLayer.Board, Key.Key1, JoyButton.DpadUp),
+            (TacticalLayer.Power, Key.Key2, JoyButton.DpadRight),
+            (TacticalLayer.Relics, Key.Key3, JoyButton.DpadDown),
+            (TacticalLayer.Order, Key.Key4, JoyButton.DpadLeft),
         ];
 
         foreach ((TacticalLayer layer, Key key, JoyButton pad) in layers)
@@ -63,6 +69,7 @@ public sealed class InputBindings
             _actions.Add((gamepad, InputDevice.Gamepad, Layers.BindingOf(InputDevice.Gamepad, layer)!));
         }
 
+        Register(CycleReadingAction, new InputEventKey { PhysicalKeycode = Key.Tab }, new InputEventJoypadButton { ButtonIndex = JoyButton.RightStick });
         Register(HandPanelAction, new InputEventKey { PhysicalKeycode = Key.H }, new InputEventJoypadButton { ButtonIndex = JoyButton.RightShoulder });
         Register(ConfirmAction, new InputEventKey { PhysicalKeycode = Key.Enter }, new InputEventJoypadButton { ButtonIndex = JoyButton.A });
         Register(PassAction, new InputEventKey { PhysicalKeycode = Key.P }, new InputEventJoypadButton { ButtonIndex = JoyButton.Y });

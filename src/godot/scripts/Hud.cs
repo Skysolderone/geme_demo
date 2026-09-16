@@ -72,6 +72,9 @@ public sealed partial class Hud : CanvasLayer
     /// <summary>切换「按住显示 / 点击切换」。</summary>
     public event Action? LayerModePressed;
 
+    /// <summary>盘面层的读法切换（Tab 或按钮）。</summary>
+    public event Action? ReadingPressed;
+
     /// <summary>搭出全部面板。只调用一次。</summary>
     public void Build()
     {
@@ -323,10 +326,9 @@ public sealed partial class Hud : CanvasLayer
         Ui.Clear(_layerButtons);
         (TacticalLayer Layer, string Key)[] entries =
         [
-            (TacticalLayer.Territory, "1"),
-            (TacticalLayer.Liberties, "2"),
-            (TacticalLayer.Power, "3"),
-            (TacticalLayer.Relics, "4"),
+            (TacticalLayer.Board, "1"),
+            (TacticalLayer.Power, "2"),
+            (TacticalLayer.Relics, "3"),
         ];
         foreach ((TacticalLayer layer, string key) in entries)
         {
@@ -334,6 +336,14 @@ public sealed partial class Hud : CanvasLayer
             TacticalLayer captured = layer;
             button.Pressed += () => LayerPressed?.Invoke(captured);
             _layerButtons.AddChild(button);
+        }
+
+        // 盘面层显示期间给出读法切换入口：按住显示模式下键正被按住，没有"再按一次"可言（merge-board-layer D3）。
+        if (layers.Active == TacticalLayer.Board)
+        {
+            Button reading = Ui.Toggle($"{Names.Reading(layers.Reading)} [Tab]", false, 104);
+            reading.Pressed += () => ReadingPressed?.Invoke();
+            _layerButtons.AddChild(reading);
         }
 
         Button hand = Ui.Toggle("手牌 [H]", handPanel.IsOpen, 104);
@@ -419,8 +429,15 @@ public sealed partial class Hud : CanvasLayer
             return;
         }
 
-        LayerContent content = world.Layer(active);
-        _layerBody.AddChild(Ui.Heading($"{Names.Layer(active)}层"));
+        LayerContent content = world.Layer(active, layers.Reading);
+        _layerBody.AddChild(Ui.Heading(
+            active == TacticalLayer.Board
+                ? $"{Names.Layer(active)}层 · {Names.Reading(layers.Reading)}读法"
+                : $"{Names.Layer(active)}层"));
+        if (active == TacticalLayer.Board)
+        {
+            _layerBody.AddChild(Ui.Text("Tab 切换归属／棋串读法。两种读法点亮的是同一批空格。", Ui.MutedText, wrap: true));
+        }
         switch (content)
         {
             case TerritoryLayerContent:

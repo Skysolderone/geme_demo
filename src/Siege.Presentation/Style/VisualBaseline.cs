@@ -178,11 +178,15 @@ public sealed record SceneTreatment(int SaturationPercent, int DecorationContras
 /// <summary>各信息层的场景处理基准。领地层额外弱化棋子（设计文档 §14.2「弱化棋子效果和演出」）。</summary>
 public static class LayerVisuals
 {
-    public static SceneTreatment For(TacticalLayer? layer) => layer switch
+    /// <summary>
+    /// 某层（及盘面层的读法）对应的场景处理。两种读法的处理值不同，不能合并：归属读法弱化棋子演出以便看清格子归属，
+    /// 棋串读法必须保持棋子清晰（棋串轮廓就画在棋子上），所以棋子强调是 45% 对 100%。
+    /// </summary>
+    public static SceneTreatment For(TacticalLayer? layer, BoardReading reading = BoardReading.Ownership) => layer switch
     {
         null => SceneTreatment.Default,
-        TacticalLayer.Territory => new SceneTreatment(40, 45, 45),
-        TacticalLayer.Liberties => new SceneTreatment(45, 45, 100),
+        TacticalLayer.Board when reading == BoardReading.Ownership => new SceneTreatment(40, 45, 45),
+        TacticalLayer.Board => new SceneTreatment(45, 45, 100),
         TacticalLayer.Power => new SceneTreatment(45, 45, 100),
         TacticalLayer.Relics => new SceneTreatment(45, 45, 80),
         TacticalLayer.Order => new SceneTreatment(45, 45, 80),

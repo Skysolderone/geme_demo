@@ -171,12 +171,20 @@ public sealed partial class GameRoot : Node3D
             _dirty = true;
         };
         _hud.LayerPressed += ToggleLayer;
+        _hud.ReadingPressed += CycleReading;
     }
 
     /// <summary>按钮点选信息层：与按键走同一个可见性状态机（D5），只是进入 / 退出的触发条件不同——判断本身在状态机里，这里不复写。</summary>
     private void ToggleLayer(TacticalLayer layer)
     {
         _layers.Toggle(layer);
+        _dirty = true;
+    }
+
+    /// <summary>切换盘面层的读法（Tab 或按钮）。不改变任何层的可见性——读法是盘面层内部的维度（merge-board-layer D3）。</summary>
+    private void CycleReading()
+    {
+        _layers.CycleReading();
         _dirty = true;
     }
 
@@ -199,7 +207,7 @@ public sealed partial class GameRoot : Node3D
         if (_dirty)
         {
             _dirty = false;
-            _board.Refresh(_session.World, _layers.Active, _layers.Treatment, LibertyThresholds.Default, _flash);
+            _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash);
             _hud.Refresh(_session, _layers, _handPanel);
         }
 
@@ -413,7 +421,11 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
-        if (@event.IsActionPressed(InputBindings.HandPanelAction))
+        if (@event.IsActionPressed(InputBindings.CycleReadingAction))
+        {
+            CycleReading();
+        }
+        else if (@event.IsActionPressed(InputBindings.HandPanelAction))
         {
             _handPanel.ClickButton();
             _dirty = true;
