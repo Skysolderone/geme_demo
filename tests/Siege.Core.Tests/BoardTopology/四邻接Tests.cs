@@ -90,12 +90,16 @@ public class 四邻接Tests
     {
         // 规格「几何邻居枚举、气边与覆盖关系 MUST 各自只有一处实现；任何规则 MUST NOT 绕过它们手写邻居遍历或地形过滤」。
         // 逐条解析 Siege.Core 全部方法体的 IL，收集两类 call：
-        //   ① Adjacency.Neighbors：只允许 Adjacency 自身（两个导出关系）、GameBoard.Neighbors（几何委托）与 MapValidator（几何校验）。
-        //   ② GameBoard.Neighbors：Core 内公开的几何入口，只允许 PieceEffects（Step 找连珠方向；piece-effects 规格不在 terrain-model 内）。
+        //   ① Adjacency.Neighbors：只允许 Adjacency 自身（两个导出关系）与 GameBoard.Neighbors（几何委托）。
+        //      MapValidator 在段 A 已改走气边、段 B 的盘内 / 旋转校验只做坐标算术，按裁决 A-3 从名单移除。
+        //   ② GameBoard.Neighbors：Core 内公开的几何入口，段 B 3.4 起 Core 内不再有任何调用者
+        //      （PieceEffects.Step 改走 LibertyNeighbors，裁决 A-6）；它只留给表现层几何。
         // lambda / 迭代器落在编译器生成的嵌套类型里，沿 DeclaringType 走到最外层再比。
         // 变异验证 M-A5：CoverageMap.Compute 里加一行 `_ = Adjacency.Neighbors(board.Width, board.Height, c);` → 本测试红 1，报出 CoverageMap.Compute。
         // check 变异 N-4：GroupSafety 改回 `board.Neighbors(liberty)` + 手写 `cell.Terrain == Terrain.Obstacle` 判墙——只扫 ① 时 0 红，
         // 因为经 GameBoard.Neighbors 绕回"几何邻居 + 手写地形过滤"不经过 Adjacency；补 ② 后红 1，报出 GroupSafety。
+        // 段 B 变异 M-B3：PieceEffects.Step 改回 board.Neighbors → ② 红（报出 PieceEffects.Step）；
+        // M-B2：MapValidator 距离 BFS 改走 Adjacency.Neighbors → ① 红（报出 MapValidator）。
         (MethodBase Caller, MemberInfo Target, OpCode OpCode)[] refs = [.. IlReferences(typeof(GameBoard).Assembly)];
         MethodBase[] adjacencyCallers = CallersOf(refs, typeof(Adjacency), nameof(Adjacency.Neighbors));
         MethodBase[] boardCallers = CallersOf(refs, typeof(GameBoard), nameof(GameBoard.Neighbors));
@@ -114,26 +118,22 @@ public class 四邻接Tests
         {
             Type outer = Outermost(caller.DeclaringType!);
             return outer == typeof(Adjacency)
-                   || outer == typeof(MapValidator)
                    || (outer == typeof(GameBoard) && caller.Name == nameof(GameBoard.Neighbors));
         }
-
-        static bool BoardAllowed(MethodBase caller) => Outermost(caller.DeclaringType!) == typeof(Siege.Core.Scoring.PieceEffects);
 
         static string Describe(MethodBase c) => $"{c.DeclaringType!.FullName}.{c.Name}";
 
         string[] violations =
         [
             .. adjacencyCallers.Where(c => !AdjacencyAllowed(c)).Select(c => $"Adjacency.Neighbors ← {Describe(c)}"),
-            .. boardCallers.Where(c => !BoardAllowed(c)).Select(c => $"GameBoard.Neighbors ← {Describe(c)}"),
+            .. boardCallers.Select(c => $"GameBoard.Neighbors ← {Describe(c)}"),
         ];
         Assert.Empty(violations.Order());
 
-        // 反面断言：两段扫描都确实命中了允许名单里的调用者，不是扫了个空集
+        // 反面断言：① 段扫描确实命中了允许名单里的调用者，不是扫了个空集；② 段与 ① 共用同一份 refs，扫描器坏了 ① 先红。
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(GameBoard) && c.Name == nameof(GameBoard.Neighbors));
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.LibertyNeighbors));
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.CoverageTargets));
-        Assert.Contains(boardCallers, c => Outermost(c.DeclaringType!) == typeof(Siege.Core.Scoring.PieceEffects));
     }
 
     private static MethodBase[] CallersOf((MethodBase Caller, MemberInfo Target, OpCode OpCode)[] refs, Type declaringType, string methodName) =>

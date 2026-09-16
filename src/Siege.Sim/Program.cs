@@ -82,22 +82,29 @@ public static class Program
 
     // ---------- map ----------
 
-    /// <summary>board-core 阶段的地图工具：打印 4 人基准地图并导出 maps/&lt;id&gt;.json（权威地图文件）。</summary>
+    /// <summary>地图工具：打印 4 人基准地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区）并导出 maps/&lt;id&gt;.json（权威地图文件）。</summary>
     private static int ExportMap()
     {
         MapData map = FourPlayerBaseMap.Create();
         MapValidationResult result = MapValidator.Validate(map);
+        TerrainData terrain = map.TerrainData;
+        Coord[] all = [.. map.AllCoords()];
 
         Console.WriteLine($"地图 {map.Id}  {map.Width}×{map.Height}");
-        Console.WriteLine($"可落子格 {map.PlayableCount}   障碍 {map.Obstacles.Count} ({map.Obstacles.Count * 100 / (map.Width * map.Height)}%)");
+        Console.WriteLine(
+            $"可落子格 {map.PlayableCount}   岩石 {map.Obstacles.Count}   深水 {all.Count(c => map.SurfaceAt(c) == Surface.DeepWater)}（其中桥 {terrain.Bridges.Count}）"
+            + $"   栅栏 {terrain.Fences.Count}   林地 {all.Count(c => map.SurfaceAt(c) == Surface.Forest)}   土路 {all.Count(c => map.SurfaceAt(c) == Surface.Road)}");
+        Console.WriteLine(
+            "可落子格按高度 h0/h1/h2 = "
+            + string.Join("/", Enumerable.Range(0, TerrainData.MaxHeight + 1).Select(h => all.Count(c => map.IsPlayable(c) && map.HeightAt(c) == h))));
         Console.WriteLine(
             $"出生区 {map.BirthZones.Length} 个，各 "
-            + string.Join("/", map.BirthZones.Select(z => z.Count(c => map.TerrainAt(c) == Terrain.Playable)))
-            + " 个可落子格（区形各 "
-            + string.Join("/", map.BirthZones.Select(z => z.Count))
-            + " 格，差额是区内障碍）");
+            + string.Join("/", map.BirthZones.Select(z => z.Count(map.IsPlayable)))
+            + " 个可落子格，高度 "
+            + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
-        Console.WriteLine($"咽喉 {string.Join(" ", map.ChokePoints.Order())}   中央入口 {map.CentralEntrance}");
+        Console.WriteLine($"咽喉 {string.Join(" ", map.ChokePoints.Order())}   中央入口 {map.CentralEntrance}   桥 {string.Join(" ", terrain.Bridges.Order())}");
+        Console.WriteLine($"栅栏 {string.Join(" ", terrain.Fences.OrderBy(e => e.A).ThenBy(e => e.B))}");
         Console.WriteLine();
         Console.WriteLine(result);
         Console.WriteLine();
@@ -108,28 +115,34 @@ public static class Program
             for (int x = 0; x < map.Width; x++)
             {
                 Coord c = new(x, y);
-                char ch = map.TerrainAt(c) == Terrain.Obstacle ? '#'
-                    : map.RelicCells.TryGetValue(c, out RelicCellSpec spec)
-                        ? spec.Budget switch { BudgetTier.Birth => 'r', BudgetTier.High => 'R', _ => 'o' }
-                    : c == map.CentralEntrance ? '@'
-                    : map.ChokePoints.Contains(c) ? '^'
-                    : map.BirthZoneOf(c) is { } z ? (char)('1' + z)
-                    : '.';
-                Console.Write($"{ch} ");
+                Console.Write(Glyph(map, c));
+                Console.Write(x < map.Width - 1 && map.HasFence(c, new Coord(x + 1, y)) ? '|' : ' ');
             }
 
             Console.WriteLine();
+
+            if (y > 0 && Enumerable.Range(0, map.Width).Any(x => map.HasFence(new Coord(x, y), new Coord(x, y - 1))))
+            {
+                Console.Write("    ");
+                for (int x = 0; x < map.Width; x++)
+                {
+                    Console.Write(map.HasFence(new Coord(x, y), new Coord(x, y - 1)) ? "-- " : "   ");
+                }
+
+                Console.WriteLine();
+            }
         }
 
         Console.Write("    ");
         for (int x = 0; x < map.Width; x++)
         {
-            Console.Write($"{Coord.ColumnLetters[x]} ");
+            Console.Write($"{Coord.ColumnLetters[x]}  ");
         }
 
         Console.WriteLine();
         Console.WriteLine();
-        Console.WriteLine("# 障碍  1-4 出生区  r 出生区信物  o 公共信物  R 公共高档信物  ^ 咽喉  @ 中央入口");
+        Console.WriteLine("每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-4 出生区  r 出生区信物  o 公共信物  R 公共高档信物");
+        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记；v3 的入口 G7 是高档信物 R、四座桥即咽喉 =）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
 
         // 导出地图文件，供设计师脱离代码维护
         Directory.CreateDirectory("maps");
@@ -138,6 +151,31 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine($"已导出 {path}");
         return 0;
+    }
+
+    /// <summary>文本图的单格两字符：高度数字 + 标记。岩石与未架桥深水不可落子，画成 ## / ~~，桥格按可落子格画并标 =。</summary>
+    private static string Glyph(MapData map, Coord c)
+    {
+        if (map.Obstacles.Contains(c))
+        {
+            return "##";
+        }
+
+        if (map.SurfaceAt(c) == Surface.DeepWater && !map.HasBridge(c))
+        {
+            return "~~";
+        }
+
+        char mark = map.RelicCells.TryGetValue(c, out RelicCellSpec spec)
+            ? spec.Budget switch { BudgetTier.Birth => 'r', BudgetTier.High => 'R', _ => 'o' }
+            : c == map.CentralEntrance ? '@'
+            : map.HasBridge(c) ? '='
+            : map.ChokePoints.Contains(c) ? '^'
+            : map.SurfaceAt(c) == Surface.Forest ? 'F'
+            : map.SurfaceAt(c) == Surface.Road ? '.'
+            : map.BirthZoneOf(c) is { } z ? (char)('1' + z)
+            : ' ';
+        return $"{map.HeightAt(c)}{mark}";
     }
 
     // ---------- run ----------

@@ -22,9 +22,9 @@ public class 出生区归属Tests
         Coord[] before = LegalFor(TestMaps.P0);
         Assert.Equal(before, LegalFor(TestMaps.P1));
 
-        // denser-map：区形仍是 15 格阶梯三角，区内挖了 2 格障碍，可落子的空格是 13 个。
+        // terrain-model v3：出生区是 13 格 h=2 高台，区内无障碍，可落子的空格就是全部 13 格。
         Assert.Equal(13, before.Length);
-        Assert.Equal(15, Map.BirthZones[lockedZone].Count);
+        Assert.Equal(13, Map.BirthZones[lockedZone].Count);
 
         board.Place(before[0], TestMaps.P0, PieceType.Basic);
         board.Place(before[1], TestMaps.P1, PieceType.Basic);

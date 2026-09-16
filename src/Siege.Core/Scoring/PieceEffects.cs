@@ -110,9 +110,10 @@ public static class PieceEffects
     /// 横、纵各扫一遍，每条线只从其起点出发计一次，MUST NOT 拆成子区间重复加分；十字交点自然在两次扫描中各计一次。
     /// </summary>
     /// <remarks>
-    /// 裁决记录 1：线的构成是"同玩家 + 四邻接连续的连珠子"，MUST NOT 穿越普通子、堡垒子等其他类型的己方棋子。
-    /// 四邻接连续的同玩家棋子必然同串，因此只需检查所有者与类型，无需再做棋串判定。
-    /// 方向步进从 <see cref="GameBoard.Neighbors"/> 的结果中挑选，不在此处手写邻居偏移。
+    /// 裁决记录 1：线的构成是"同玩家 + 连续的连珠子"，MUST NOT 穿越普通子、堡垒子等其他类型的己方棋子。
+    /// "连续"指相邻两枚之间存在<b>气边</b>（terrain-model 裁决 A-6）：隔着崖壁、未架桥深水或栅栏的两枚连珠子不成线。
+    /// 经气边相邻的同玩家棋子必然同串，因此只需检查所有者与类型，无需再做棋串判定。
+    /// 方向步进从 <see cref="GameBoard.LibertyNeighbors"/> 的结果中挑选，不在此处手写邻居偏移或地形过滤。
     /// </remarks>
     public static int LineBonus(GameBoard board, Group group)
     {
@@ -196,10 +197,10 @@ public static class PieceEffects
         return length >= 2 ? length * (length - 1) : 0;
     }
 
-    /// <summary>在四邻接邻居中挑出位于 (dx, dy) 方向的那一格；越界则为 <c>null</c>。</summary>
+    /// <summary>在气边邻居中挑出位于 (dx, dy) 方向的那一格；越界或无气边（崖壁 / 深水 / 栅栏）则为 <c>null</c>。</summary>
     private static Coord? Step(GameBoard board, Coord c, int dx, int dy)
     {
-        foreach (Coord n in board.Neighbors(c))
+        foreach (Coord n in board.LibertyNeighbors(c))
         {
             if (n.X - c.X == dx && n.Y - c.Y == dy)
             {

@@ -66,7 +66,9 @@ public class 地图文件往返Tests
     {
         string json = MapFile.ToJson(FourPlayerBaseMap.Create());
 
-        Assert.Contains("\"F6\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"A6\"", json, StringComparison.Ordinal);
+        // v3：G7 是中央入口兼信物格，B2 是出生区信物格，G4 是桥；三处各走不同字段。
+        Assert.Contains("\"G7\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"B2\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"G4\"", json, StringComparison.Ordinal);
     }
 }

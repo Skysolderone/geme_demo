@@ -81,6 +81,42 @@ public class 连珠子的位置加值Tests
     }
 
     [Fact]
+    public void 崖壁截断连珠线()
+    {
+        // terrain-model piece-effects 增量（裁决 A-6）：C6/D6/E6 连珠，D6 h=0、E6 h=2 → C6–D6 成线 2×1 = 2，E6 单独不计，总位置加值 2。
+        // E6 与 D6 之间无气边，E6 自成一串；两串各自的 LineBonus 之和就是该玩家的总位置加值。
+        // 变异验证 M-B3：PieceEffects.Step 改回 board.Neighbors（几何邻居）→ 本测试红（C6–D6–E6 按 3 子线计 6）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("E6", 2)]), size: 9);
+        foreach (string c in new[] { "C6", "D6", "E6" })
+        {
+            board.Place(c, TestMaps.P0, PieceType.Line);
+        }
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal(2, p0.Groups.Length);
+        Assert.Equal(2, p0.Groups.Sum(g => g.LineBonus));
+        Assert.Equal(2, p0.Groups.Sum(g => g.PositionBonus));
+    }
+
+    [Fact]
+    public void 栅栏截断连珠线()
+    {
+        // terrain-model piece-effects 增量：C6/D6/E6 连珠，D6–E6 之间有栅栏 → 总位置加值 2，与崖壁截断相同。
+        // 变异验证 M-B3 同上：改回几何邻居 → 红（计 6）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(fences: [("D6", "E6")]), size: 9);
+        foreach (string c in new[] { "C6", "D6", "E6" })
+        {
+            board.Place(c, TestMaps.P0, PieceType.Line);
+        }
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal(2, p0.Groups.Length);
+        Assert.Equal(2, p0.Groups.Sum(g => g.LineBonus));
+    }
+
+    [Fact]
     public void 连珠线不跨玩家()
     {
         // P0 的 D4-E4 与 P1 的 F4 相邻：P0 计 2×1 = 2，P1 计 0。

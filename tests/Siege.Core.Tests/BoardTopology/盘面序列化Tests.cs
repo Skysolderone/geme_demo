@@ -20,9 +20,10 @@ public class 盘面序列化Tests
     {
         // 两份盘面的格子占用完全一致；手牌与信物控制不属于序列化内容，因此结果必须相等。
         // 这里用"地图的信物标注不同但占用相同"来代表非盘面差异。
-        GameBoard plain = TestMaps.Blank(size: 11).Place("D4", TestMaps.P0, PieceType.Line);
+        // v3 基准图 13×13，B2 是出生区信物格；空盘取同尺寸。
+        GameBoard plain = TestMaps.Blank(size: 13).Place("B2", TestMaps.P0, PieceType.Line);
         GameBoard withRelics = GameBoard.LoadUnvalidated(Siege.Core.Board.Maps.FourPlayerBaseMap.Create());
-        withRelics.Place(TestMaps.At("D4"), TestMaps.P0, PieceType.Line);
+        withRelics.Place(TestMaps.At("B2"), TestMaps.P0, PieceType.Line);
 
         Assert.Equal(plain.Serialize(), withRelics.Serialize());
     }

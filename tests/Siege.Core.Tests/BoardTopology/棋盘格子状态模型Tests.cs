@@ -20,7 +20,7 @@ public class 棋盘格子状态模型Tests
     public void 信物格可正常落子()
     {
         GameBoard board = GameBoard.LoadUnvalidated(FourPlayerBaseMapData());
-        Coord relic = TestMaps.At("D4");
+        Coord relic = TestMaps.At("B2");
         Assert.True(board[relic].IsRelicCell);
 
         board.Place(relic, TestMaps.P0, PieceType.Fortress);
@@ -48,11 +48,12 @@ public class 棋盘格子状态模型Tests
         // 越界格的地形 MUST 就是障碍，而不是靠每个调用方各自记得先判边界。
         MapData map = FourPlayerBaseMapData();
 
-        Assert.False(map.Contains(new Coord(11, 0)));
-        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(11, 0)));
-        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(0, 11)));
+        // v3 基准图 13×13：(13, 0) / (0, 13) 刚好越界一格；G7 是盘内可落子格（中央入口）。
+        Assert.False(map.Contains(new Coord(13, 0)));
+        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(13, 0)));
+        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(0, 13)));
         Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(24, 99)));
-        Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("F6")));
+        Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("G7")));
     }
 
     private static MapData FourPlayerBaseMapData() => Siege.Core.Board.Maps.FourPlayerBaseMap.Create();

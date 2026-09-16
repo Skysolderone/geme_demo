@@ -10,22 +10,19 @@ public class 人数适配预算Tests
     [Fact]
     public void 格数超出预算()
     {
-        // 规格 Scenario：4 人地图的可落子格为 130 → 拒绝并报告超出 80–95（denser-map 裁决 5）。
-        // 12×12 = 144 外接，只留 14 格障碍 → 可落子恰好 130，与规格算例逐字对上。
-        MapData baseMap = FourPlayerBaseMap.Create();
-        MapData oversized = baseMap with
-        {
-            Width = 12,
-            Height = 12,
-            Obstacles = [.. baseMap.Obstacles.Order().Take(14)],
-        };
+        // 规格 Scenario：4 人地图的可落子格为 130 → 拒绝并报告超出 95–110（terrain-model 裁决 D18）。
+        // 12×12 = 144 外接的合成图，只留 14 格障碍 → 可落子恰好 130，与规格算例逐字对上。
+        // （不再拿 v3 基准图裁尺寸：13×13 的地形数据在 12×12 上会越界，触发的是 TERRAIN_OUT_OF_BOUNDS。）
+        MapData plain = TestMaps.Synthetic(size: 12, maxPlayers: 4);
+        MapData oversized = plain with { Obstacles = [.. plain.FirstCells(14)] };
+        Assert.Equal(130, oversized.PlayableCount);
 
         MapValidationResult result = MapValidator.Validate(oversized);
 
         MapValidationFailure failure = Assert.Single(
             result.Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
         Assert.Contains("可落子格为 130", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("80–95", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("95–110", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]

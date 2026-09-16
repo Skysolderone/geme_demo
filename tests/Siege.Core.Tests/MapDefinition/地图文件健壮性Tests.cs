@@ -83,9 +83,9 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 磁盘上的基准地图文件与代码一致()
     {
-        // maps/siege-4p-base-v2.json 是设计师维护的那一份；它若与代码里的基准图漂移，
+        // maps/siege-4p-base-v3.json 是设计师维护的那一份；它若与代码里的基准图漂移，
         // 就会出现"代码跑的图和设计师看的图不是同一张"。
-        // 文件名跟着地图 Id 走（denser-map 裁决 3），旧的 v1 留在 maps/ 只作对照，不参与本断言。
+        // 文件名跟着地图 Id 走（denser-map 裁决 3），旧的 v1 / v2 留在 maps/ 只作对照，不参与本断言。
         string path = Path.Combine(RepoRoot(), "maps", $"{FourPlayerBaseMap.Create().Id}.json");
         MapData onDisk = MapFile.FromJson(File.ReadAllText(path));
 
@@ -187,7 +187,7 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 缺地形字段的旧文件按平地读入()
     {
-        // v2 文件没有地形字段 → 全 h=0、全草地、无桥无栅；可落子格仍是 85
+        // v2 文件（历史存档，已不能通过校验）没有地形字段 → 全 h=0、全草地、无桥无栅；可落子格仍是 85
         string path = Path.Combine(RepoRoot(), "maps", "siege-4p-base-v2.json");
         string text = File.ReadAllText(path);
         Assert.DoesNotContain("\"Heights\"", text, StringComparison.Ordinal);

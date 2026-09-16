@@ -1,5 +1,5 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Relics;
 
@@ -8,7 +8,40 @@ namespace Siege.Core.Tests.RelicGeneration;
 /// <summary>规格：relic-generation —— Requirement: 公共争夺区信物权重与高阶升级</summary>
 public class 公共争夺区信物权重与高阶升级Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    /// <summary>
+    /// 公共区 4 Standard + 2 High、出生区 4×2 的合成图——与 v2 基准图的信物分布一致。
+    /// 两条统计测试的期望值（总体升级率 20% = (4×150 + 2×300) / 6、样本 60000 / 40000 / 20000）依赖这个 4:2 分布；
+    /// v3 基准图在 C4 下公共区只能是 4 + 1（均值 18%），terrain-model 段 B 把用例换到合成图上，期望值不变。
+    /// </summary>
+    private static readonly MapData Map = SixContestedMap();
+
+    private static MapData SixContestedMap()
+    {
+        ImmutableHashSet<Coord>[] zones =
+        [
+            [TestMaps.At("A1"), TestMaps.At("B1")],
+            [TestMaps.At("J1"), TestMaps.At("K1")],
+            [TestMaps.At("A11"), TestMaps.At("B11")],
+            [TestMaps.At("J11"), TestMaps.At("K11")],
+        ];
+        var relics = new Dictionary<Coord, RelicCellSpec>();
+        foreach (Coord c in zones.SelectMany(z => z))
+        {
+            relics[c] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+        }
+
+        foreach (string n in new[] { "D4", "H4", "D8", "H8" })
+        {
+            relics[TestMaps.At(n)] = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
+        }
+
+        foreach (string n in new[] { "F4", "F8" })
+        {
+            relics[TestMaps.At(n)] = new RelicCellSpec(RelicZone.Contested, BudgetTier.High);
+        }
+
+        return TestMaps.Synthetic(size: 11, maxPlayers: 4, relics: relics) with { BirthZones = [.. zones] };
+    }
 
     [Fact]
     public void 高阶比例()
@@ -18,7 +51,7 @@ public class 公共争夺区信物权重与高阶升级Tests
         // 同时验证公共区权重表 30/15/10/15/15/15（±1 个百分点）。
         // 变异验证 M-G6：Draw 里 `type == SchoolEmblem ? 1 : 升级判定`（20% 只对五类）→ 红 1（本测试，徽记升级率 0）；
         // M-G7：两档升级率同时改 300 → 红 1（本测试，总体超 21%）。
-        // 两档默认为 Standard 150‰ / High 300‰，基准图 4:2 分布下公共区均值恰为 20%；分档差异由 `高档升级率严格高于标准档` 守门。
+        // 两档默认为 Standard 150‰ / High 300‰，4:2 分布下公共区均值恰为 20%；分档差异由 `高档升级率严格高于标准档` 守门。
         int[] counts = new int[RelicWeights.Order.Length];
         int[] advanced = new int[RelicWeights.Order.Length];
         int total = 0;
@@ -56,7 +89,7 @@ public class 公共争夺区信物权重与高阶升级Tests
     public void 高档升级率严格高于标准档()
     {
         // 负责人裁决（2026-09-13）：Standard 150‰ / High 300‰。§3.3 要求中央、咽喉与高风险边缘承担更高的信物强度预算，
-        // 此前两档都是 200‰，High 在生成结果里是空操作。基准图 F4/F8 为 High，D4/H4/D8/H8 为 Standard。
+        // 此前两档都是 200‰，High 在生成结果里是空操作。合成图 F4/F8 为 High，D4/H4/D8/H8 为 Standard（与 v2 基准图相同）。
         // 变异验证：两档改回同为 200 → 本测试红（High 落到 [17,23]%，不在 [27,33]%）。
         int standardTotal = 0, standardAdvanced = 0, highTotal = 0, highAdvanced = 0;
         for (ulong seed = 0; seed < 10000; seed++)

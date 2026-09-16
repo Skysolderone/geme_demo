@@ -99,7 +99,15 @@ internal sealed class BoardRenderer
                 Cell cell = board[c];
                 if (cell.Terrain == Terrain.Obstacle)
                 {
-                    Ink(" # ", ConsoleColor.DarkGray);
+                    // 不可落子格有两种：岩石与未架桥深水，只读地表区分（terrain-model 裁决 A-2），不做任何规则计算。
+                    if (map.SurfaceAt(c) == Surface.DeepWater)
+                    {
+                        Ink(" ~ ", ConsoleColor.DarkBlue);
+                    }
+                    else
+                    {
+                        Ink(" # ", ConsoleColor.DarkGray);
+                    }
                 }
                 else if (staged.TryGetValue(c, out PieceType st))
                 {
@@ -139,7 +147,7 @@ internal sealed class BoardRenderer
         }
 
         WriteColumns(map.Width);
-        _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=障碍");
+        _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=岩石  ~=深水");
         _out.WriteLine("        已揭示信物：p探勘 c征召 d兵站 o军令 v先锋 e徽记");
     }
 

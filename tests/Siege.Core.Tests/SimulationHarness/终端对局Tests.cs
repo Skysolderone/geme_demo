@@ -9,8 +9,8 @@ public class 终端对局Tests
     [Fact]
     public void 脚本输入能落子并走到终局()
     {
-        // 选 1 号区；第一回合选 1 号候选，在出生区落 A1，预演后确认；之后一直 Pass 到大回合上限。
-        var script = new System.Text.StringBuilder("1\n1\nA1 B\nv\nok\n");
+        // 选 1 号区；第一回合选 1 号候选，在出生区落 B1（v3 的 A1 是角石），预演后确认；之后一直 Pass 到大回合上限。
+        var script = new System.Text.StringBuilder("1\n1\nB1 B\nv\nok\n");
         for (int i = 0; i < 20; i++)
         {
             script.Append("\npass\n");
@@ -21,7 +21,7 @@ public class 终端对局Tests
         string text = output.ToString();
 
         Assert.Equal(0, exit);
-        Assert.Contains("玩家1(你) 落子 A1B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 B1B", text, StringComparison.Ordinal);
         Assert.Contains("对局结束：第 3 大回合", text, StringComparison.Ordinal);
     }
 

@@ -1,4 +1,5 @@
 {
+  "_comment": "历史存档：11×11 / 85 格的 denser-map 基线。terrain-model（D18）起 4 人可落子区间为 95–110，本文件已不能通过校验，仅供对照；现行基准图是 siege-4p-base-v3.json。",
   "Id": "siege-4p-base-v2",
   "Width": 11,
   "Height": 11,

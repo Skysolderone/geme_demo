@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 
@@ -11,38 +12,46 @@ public class 四人基准地图Tests
     [Fact]
     public void 外接尺寸与可落子格()
     {
-        Assert.Equal(11, Map.Width);
-        Assert.Equal(11, Map.Height);
-        Assert.InRange(Map.PlayableCount, 80, 95);
+        // terrain-model 裁决 D18：v3 外接 13×13，可落子格 95–110（v2 是 11×11、80–95）。
+        Assert.Equal("siege-4p-base-v3", Map.Id);
+        Assert.Equal(13, Map.Width);
+        Assert.Equal(13, Map.Height);
+        Assert.InRange(Map.PlayableCount, 95, 110);
     }
 
     [Fact]
     public void 可落子格规模()
     {
-        // 规格 Scenario：可落子格落在 80–95 区间，其中四个出生区各 12–14 格（denser-map 裁决 2 / 4）。
-        Assert.InRange(Map.PlayableCount, 80, 95);
+        // 规格 Scenario：可落子格落在 95–110，其中四个出生区各 12–14 格且全部为 h=2。
+        // design Open Question 1：每区经 2–3 格 h=1 缓坡下到 h=0，其余边缘直接落到 h=0（崖壁）——
+        // 即"区外、与区内某格有气边"的格只能是 h=1 的缓坡，且恰有 2–3 格。
+        Assert.InRange(Map.PlayableCount, 95, 110);
         Assert.Equal(4, Map.BirthZones.Length);
-        foreach (var zone in Map.BirthZones)
+        foreach (ImmutableHashSet<Coord> zone in Map.BirthZones)
         {
-            Assert.InRange(zone.Count(c => Map.TerrainAt(c) == Terrain.Playable), 12, 14);
-        }
+            Assert.InRange(zone.Count(Map.IsPlayable), 12, 14);
+            Assert.All(zone, c => Assert.Equal(2, Map.HeightAt(c)));
 
-        // 障碍占外接区域 25%–35%：36 / 121 = 29.7%。用整数比较，不让浮点进内核。
-        Assert.InRange(Map.Obstacles.Count * 100, 121 * 25, 121 * 35);
+            Coord[] exits = [.. zone.SelectMany(c => Adjacency.LibertyNeighbors(Map, c)).Where(n => !zone.Contains(n)).Distinct()];
+            Assert.InRange(exits.Length, 2, 3);
+            Assert.All(exits, n => Assert.Equal(1, Map.HeightAt(n)));
+        }
     }
 
     [Fact]
     public void 信物格分布()
     {
-        // 每个出生区各 2 个，公共争夺区约 6 个，总数落在 13–15 区间
+        // 规格 Scenario：每个出生区各 2 个，公共争夺区约 6 个，总数落在 13–15 区间。
+        // C4 旋转下轨道大小只有 4（一般格）或 1（中心格），公共区 6 枚不可能：4 元轨道 + 中心格 = 5，总数 13（段 B 待决 B-1）。
         for (int i = 0; i < Map.BirthZones.Length; i++)
         {
             int inZone = Map.RelicCells.Keys.Count(c => Map.BirthZoneOf(c) == i);
             Assert.Equal(2, inZone);
         }
 
-        Assert.Equal(6, Map.RelicCells.Count(kv => kv.Value.Zone == RelicZone.Contested));
+        Assert.Equal(5, Map.RelicCells.Count(kv => kv.Value.Zone == RelicZone.Contested));
         Assert.InRange(Map.RelicCells.Count, 13, 15);
+        Assert.Equal(new RelicCellSpec(RelicZone.Contested, BudgetTier.High), Map.RelicCells[Map.CentralEntrance]);
     }
 
     [Fact]
@@ -64,6 +73,61 @@ public class 四人基准地图Tests
 
         Assert.Equal(9, board.GroupsOf(TestMaps.P0).Sum(g => g.Size));
         Assert.Contains(zone, c => board[c].IsPlayableEmpty);
+    }
+
+    [Fact]
+    public void 旋转对称()
+    {
+        // 规格 Scenario：绕中心旋转 90° 后高度、地表、障碍、桥、栅栏、出生区（编号轮换）与信物格逐格一致。
+        // MapSymmetry 是唯一的旋转比对实现；基准地图对称性Tests 另用测试内独立的旋转算式逐项复核，两边不共用代码。
+        // 变异验证 M-B1：MapSymmetry.Rotate90 改成 180°（(w−1−x, w−1−y)）→ 红 2：本测试（v3 虽也 180° 对称，
+        // 但 180° 下出生区 0 的像是出生区 2，编号轮换检查报出）与 基准地图对称性Tests.只满足D2的图被判不对称。
+        Assert.Empty(MapSymmetry.RotationDefects(Map));
+        Assert.True(MapSymmetry.IsC4Symmetric(Map));
+    }
+
+    [Fact]
+    public void 地形要素齐全()
+    {
+        // 规格 Scenario：三种高度、一格宽深水、预置桥、栅栏与林地各至少出现一次。
+        Coord[] playable = [.. Map.AllCoords().Where(Map.IsPlayable)];
+        Assert.Equal([0, 1, 2], playable.Select(Map.HeightAt).Distinct().Order());
+        Assert.Contains(Map.AllCoords(), Map.TerrainData.IsUnbridgedDeepWater);
+        Assert.NotEmpty(Map.TerrainData.Bridges);
+        Assert.NotEmpty(Map.TerrainData.Fences);
+        Assert.Contains(playable, c => Map.SurfaceAt(c) == Surface.Forest);
+
+        // "一格宽"按 terrain 规格 E4 的可观察定义：某可落子格 s 的几何邻居 t 是未架桥深水，且 s 的覆盖关系落到对岸 u = 2t − s。
+        // 宽河（u 仍是深水）不满足；所以只要有一处成立，就存在一段一格宽的深水。
+        bool oneWide = false;
+        foreach (Coord s in playable)
+        {
+            foreach (Coord t in Adjacency.Neighbors(Map.Width, Map.Height, s))
+            {
+                int ux = (2 * t.X) - s.X;
+                int uy = (2 * t.Y) - s.Y;
+                if (Map.TerrainData.IsUnbridgedDeepWater(t)
+                    && ux >= 0 && uy >= 0 && ux < Map.Width && uy < Map.Height
+                    && Adjacency.CoverageTargets(Map, s).Contains(new Coord(ux, uy)))
+                {
+                    oneWide = true;
+                }
+            }
+        }
+
+        Assert.True(oneWide, "地图上没有任何一段可隔岸覆盖的一格宽深水。");
+
+        // 规格 Requirement："中央区域为 h=0 低地并含深水"。中央入口在 h=0；以中心为界、切比雪夫距离 ≤ 2 的岛内可落子格全 h=0；
+        // 距离 ≤ 3 处存在未架桥深水（护城河）。check 变异 N-4：生成器把 G7 抬到 h=1 → 只有 `磁盘上的基准地图文件与代码一致` 红
+        // （通用漂移守门，说不出违反了哪条约束），补本段后这里也红。
+        Coord center = new(Map.Width / 2, Map.Height / 2);
+        static int Chebyshev(Coord a, Coord b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+        Assert.Equal(center, Map.CentralEntrance);
+        Assert.Equal(0, Map.HeightAt(Map.CentralEntrance));
+        Coord[] island = [.. playable.Where(c => Chebyshev(c, center) <= 2)];
+        Assert.NotEmpty(island);
+        Assert.All(island, c => Assert.Equal(0, Map.HeightAt(c)));
+        Assert.Contains(Map.AllCoords(), c => Chebyshev(c, center) <= 3 && Map.TerrainData.IsUnbridgedDeepWater(c));
     }
 
     [Fact]

@@ -37,18 +37,14 @@ public sealed class MapValidationException : Exception
 }
 
 /// <summary>
-/// 地图静态校验。把必死口袋、距离失衡、障碍占比这类问题挡在加载期——
+/// 地图静态校验。把必死口袋、距离失衡、出生区被崖壁封死这类问题挡在加载期——
 /// 漏到对局中会表现为"某玩家莫名其妙被迫 Pass"，极难归因。
+/// 距离与连通区一律沿气边（<see cref="Adjacency.LibertyNeighbors"/>）：崖壁、栅栏、未架桥深水挡住的路不算路。
+/// "障碍占外接区域 25%–35%"在 terrain-model 取消：深水与崖壁同样在压缩空间，只数障碍已无意义，密度由可落子格区间把控。
 /// </summary>
-/// <remarks>规格：openspec/changes/add-board-core/specs/map-definition —— Requirement: 地图静态校验规则</remarks>
+/// <remarks>规格：openspec/changes/terrain-model/specs/map-definition —— Requirement: 地图静态校验规则</remarks>
 public static class MapValidator
 {
-    // 用整数百分比比较，避免浮点进入内核。规范：.trellis/spec/core/determinism.md
-    // 区间在 denser-map 从 8%–12% 放宽到 25%–35%：原值是 board-core 阶段凭"11×11 少量障碍"的直觉定的，
-    // 现在有实测密度曲线作为依据（首次提子稳定发生在盘面占可落子格 62% 时）。denser-map 裁决 5。
-    private const int MinObstaclePercent = 25;
-    private const int MaxObstaclePercent = 35;
-
     /// <summary>
     /// 人数适配预算：可落子格区间、信物格区间、出生区可落子格区间。
     /// 出生区区间为 <c>null</c> 表示规格未给该人数的区间（2 / 3 人图尚未定稿），此项不校验；
@@ -59,7 +55,7 @@ public static class MapValidator
         {
             [2] = new(50, 65, 7, 9, null),
             [3] = new(75, 90, 10, 12, null),
-            [4] = new(80, 95, 13, 15, (12, 14)),
+            [4] = new(95, 110, 13, 15, (12, 14)),
         }.ToImmutableDictionary();
 
     /// <summary>一档人数的规模预算。</summary>
@@ -79,14 +75,15 @@ public static class MapValidator
         ImmutableArray<MapValidationFailure>.Builder f = ImmutableArray.CreateBuilder<MapValidationFailure>();
 
         ValidateStructure(map, f);
+        ValidateTerrainBounds(map, f);
         ValidatePlayableCount(map, f);
         ValidateBudgets(map, f);
-        ValidateObstacleRatio(map, f);
         ValidateBirthZones(map, f);
         ValidateRelicCells(map, f);
         ValidateLandmarks(map, f);
         ValidateTolerance(map, f);
         ValidatePockets(map, f);
+        ValidateBirthZoneConnectivity(map, f);
         ValidateDistanceBalance(map, f);
 
         return new MapValidationResult(f.ToImmutable());
@@ -124,7 +121,30 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 校验规则第 6 条：可落子格总数必须落在该人数的预算区间内。
+    /// 地形坐标必须在盘内：高度 / 地表 / 桥 / 栅栏两端。越界的地形项不参与任何查询，等于被静默丢弃。
+    /// "桥必须在深水格上、栅栏必须在相邻格之间"（规则第 6 条）已由 <see cref="TerrainData"/> 构造期强制，
+    /// 到不了这里（terrain-model 裁决 A-1），此处不重复。
+    /// </summary>
+    private static void ValidateTerrainBounds(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        TerrainData t = map.TerrainData;
+        ImmutableArray<Coord> outside = t.Heights.Keys
+            .Concat(t.Surfaces.Keys)
+            .Concat(t.Bridges)
+            .Concat(t.Fences.SelectMany(fence => new[] { fence.A, fence.B }))
+            .Where(c => !map.Contains(c))
+            .Distinct()
+            .Order()
+            .ToImmutableArray();
+        if (!outside.IsEmpty)
+        {
+            f.Add(new MapValidationFailure(
+                "TERRAIN_OUT_OF_BOUNDS", "地形数据（高度 / 地表 / 桥 / 栅栏端点）含越界格，不会参与任何查询。", outside));
+        }
+    }
+
+    /// <summary>
+    /// 校验规则第 5 条：可落子格总数必须落在该人数的预算区间内（4 人 95–110，terrain-model 裁决 D18）。
     /// 单列成一步而不是混在信物 / 出生区预算里——改图时越界是最容易发生、又最难在对局中归因的一类错误
     /// （表现为"密度不对、冲突时点漂移"，而不是任何一条规则报错）。denser-map 裁决 5。
     /// </summary>
@@ -178,40 +198,6 @@ public static class MapValidator
         }
     }
 
-    private static void ValidateObstacleRatio(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        // 尺寸非正时 Width*Height 可能算出正数（-3×-3=9），占比会变成无意义的比较。
-        if (map.Width <= 0 || map.Height <= 0)
-        {
-            return;
-        }
-
-        int area = map.Width * map.Height;
-
-        int obstacles = map.AllCoords().Count(c => map.Obstacles.Contains(c));
-        if (obstacles * 100 < area * MinObstaclePercent)
-        {
-            f.Add(new MapValidationFailure(
-                "OBSTACLE_RATIO_TOO_LOW",
-                $"障碍格 {obstacles} 个，占外接区域 {FormatPercent(obstacles, area)}，低于 {MinObstaclePercent}%。",
-                ImmutableArray<Coord>.Empty));
-        }
-        else if (obstacles * 100 > area * MaxObstaclePercent)
-        {
-            f.Add(new MapValidationFailure(
-                "OBSTACLE_RATIO_TOO_HIGH",
-                $"障碍格 {obstacles} 个，占外接区域 {FormatPercent(obstacles, area)}，高于 {MaxObstaclePercent}%。",
-                ImmutableArray<Coord>.Empty));
-        }
-    }
-
-    /// <summary>把占比格式化成一位小数的百分比，全程整数运算。</summary>
-    private static string FormatPercent(int part, int whole)
-    {
-        int tenths = (part * 1000) / whole;
-        return $"{tenths / 10}.{tenths % 10}%";
-    }
-
     private static void ValidateBirthZones(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
         for (int i = 0; i < map.BirthZones.Length; i++)
@@ -224,7 +210,7 @@ public static class MapValidator
                     "BIRTH_ZONE_OUT_OF_BOUNDS", $"出生区 {i} 含越界格。", outside));
             }
 
-            int playable = zone.Count(c => map.TerrainAt(c) == Terrain.Playable);
+            int playable = zone.Count(map.IsPlayable);
             if (playable < ProtectionPhaseDeployments)
             {
                 f.Add(new MapValidationFailure(
@@ -233,7 +219,7 @@ public static class MapValidator
                     ImmutableArray<Coord>.Empty));
             }
 
-            // 出生区内可以有障碍，但不得把该区压到区间之外（denser-map：4 人图每区 12–14 格）。
+            // 出生区内可以有障碍或深水，但不得把该区压到区间之外（denser-map：4 人图每区 12–14 格）。
             if (Budgets.TryGetValue(map.MaxPlayers, out Budget b)
                 && b.BirthZoneCells is { } range
                 && (playable < range.Min || playable > range.Max))
@@ -353,7 +339,7 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 必死口袋：出生区内被障碍或边界围成的连通空区，面积小于
+    /// 必死口袋：出生区内被障碍、崖壁、深水、栅栏或边界围成的沿气边连通空区，面积小于
     /// <see cref="MapData.MinTwoEyeArea"/> 即判失败，除非有显式豁免。
     /// 这是保守近似——不做完整死活判定，宁可误报由设计师确认，也不放过对局中卡死的风险。
     /// </summary>
@@ -362,7 +348,7 @@ public static class MapValidator
         var visited = new HashSet<Coord>();
         foreach (Coord start in map.AllCoords())
         {
-            if (visited.Contains(start) || map.TerrainAt(start) != Terrain.Playable)
+            if (visited.Contains(start) || !map.IsPlayable(start))
             {
                 continue;
             }
@@ -387,8 +373,29 @@ public static class MapValidator
     }
 
     /// <summary>
+    /// 校验规则第 7 条：每个出生区至少有一条沿气边到中央入口的通路。高台出生区若四周全是崖壁 / 深水 / 栅栏，
+    /// 对局根本无法开始。与第 1 条的"中央入口不可达"是同一根因的两条规则，各自报出（后者带的是距离口径）。
+    /// </summary>
+    private static void ValidateBirthZoneConnectivity(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        for (int z = 0; z < map.BirthZones.Length; z++)
+        {
+            Dictionary<Coord, int> dist = MultiSourceDistances(map, map.BirthZones[z]);
+            if (dist.ContainsKey(map.CentralEntrance))
+            {
+                continue;
+            }
+
+            f.Add(new MapValidationFailure(
+                "BIRTH_ZONE_ISOLATED",
+                $"出生区 {z} 没有任何一条沿气边到中央入口 {map.CentralEntrance.ToNotation()} 的通路：它的边缘全是崖壁、深水、栅栏或障碍。",
+                map.BirthZones[z].Where(map.IsPlayable).Order().ToImmutableArray()));
+        }
+    }
+
+    /// <summary>
     /// 距离均衡：各出生区到最近公共信物格、中央入口与主要咽喉的最短落子距离
-    /// （四邻接、绕开障碍），两两差值不得超过容差。
+    /// （沿气边——崖壁、栅栏、未架桥深水挡住的路不算路），两两差值不得超过容差。
     /// </summary>
     private static void ValidateDistanceBalance(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -502,7 +509,7 @@ public static class MapValidator
         var queue = new Queue<Coord>();
         foreach (Coord s in sources.Order())
         {
-            if (map.TerrainAt(s) != Terrain.Playable)
+            if (!map.IsPlayable(s))
             {
                 continue;
             }

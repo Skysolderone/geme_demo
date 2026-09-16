@@ -76,7 +76,7 @@ public class 盘面副本与批量写入Tests
         Assert.Throws<MapValidationException>(() => GameBoard.Load(bait));
 
         GameBoard board = GameBoard.LoadUnvalidated(bait);
-        board.Place(TestMaps.At("F6"), TestMaps.P0, PieceType.Basic);
+        board.Place(TestMaps.At("G7"), TestMaps.P0, PieceType.Basic);   // v3：F6 是岩石，G7 是中央入口
 
         GameBoard clone = board.Clone();
 
