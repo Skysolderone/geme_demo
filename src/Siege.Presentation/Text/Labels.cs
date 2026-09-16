@@ -12,6 +12,16 @@ namespace Siege.Presentation.Text;
 /// </summary>
 public static class Labels
 {
+    /// <summary>两种读法差集的地形原因（tactical-layers「差集可由地形解释」）。</summary>
+    public static string TerrainReason(Layers.TerrainReason reason) => reason switch
+    {
+        Layers.TerrainReason.Cliff => "崖壁",
+        Layers.TerrainReason.Fence => "栅栏",
+        Layers.TerrainReason.AcrossWater => "隔岸",
+        Layers.TerrainReason.Forest => "林地",
+        _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "未知地形原因。"),
+    };
+
     /// <summary>棋子类型名称。</summary>
     public static string Piece(PieceType type) => type switch
     {

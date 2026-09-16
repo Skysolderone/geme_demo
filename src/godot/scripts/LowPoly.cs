@@ -127,6 +127,84 @@ public static class LowPoly
         return root;
     }
 
+    /// <summary>
+    /// 林地格的三棵小树（装饰层）：放在地砖三个角上、树冠半径 0.09、高 0.24，落在棋子底座（半径 0.36）之外，
+    /// 不遮挡该格的落点、气与归属标记（visual-style-baseline「装饰不遮挡判读」）。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Trees(int variant)
+    {
+        var root = new Node3D { Name = "Trees" };
+        StandardMaterial3D canopy = Visuals.Matte(Visuals.TreeCanopy, 1f);
+        StandardMaterial3D trunk = Visuals.Matte(Visuals.Timber, 1f);
+        Vector2[] corners = [new(-0.31f, -0.30f), new(0.30f, -0.29f), new(-0.02f, 0.31f)];
+        for (int i = 0; i < corners.Length; i++)
+        {
+            float scale = 0.85f + (0.15f * (((variant + i) % 3) / 2f));
+            Vector3 at = new(corners[i].X, 0f, corners[i].Y);
+            root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.02f, BottomRadius = 0.025f, Height = 0.08f, RadialSegments = 5, Rings = 0 }, trunk,
+                at + new Vector3(0f, 0.04f, 0f)));
+            root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.09f * scale, Height = 0.20f * scale, RadialSegments = 5, Rings = 0 }, canopy,
+                at + new Vector3(0f, 0.08f + (0.10f * scale), 0f), new Vector3(0f, (variant * 53f) + (i * 40f), 0f)));
+        }
+
+        return root;
+    }
+
+    /// <summary>
+    /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
+    /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
+    /// 返回节点原点在缝中心、地砖上表面。
+    /// </summary>
+    public static Node3D Fence(bool alongX)
+    {
+        var root = new Node3D { Name = "Fence" };
+        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
+        float length = BoardGeometry.TileSize + 0.06f;
+        for (int i = -1; i <= 1; i++)
+        {
+            float offset = i * 0.40f;
+            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.05f, 0.30f, 0.05f) }, timber,
+                alongX ? new Vector3(offset, 0.15f, 0f) : new Vector3(0f, 0.15f, offset)));
+        }
+
+        foreach (float y in new[] { 0.11f, 0.23f })
+        {
+            root.AddChild(Mesh(new BoxMesh { Size = alongX ? new Vector3(length, 0.035f, 0.03f) : new Vector3(0.03f, 0.035f, length) }, timber,
+                new Vector3(0f, y, 0f)));
+        }
+
+        return root;
+    }
+
+    /// <summary>
+    /// 预置桥（terrain-model 设施）：一块木板面 + 四根角柱，铺在深水格上，面与同层地砖齐平——桥格是普通可落子格，
+    /// 棋子与标记照常放在面上。角柱只有 0.07 见方，不遮挡落点。返回节点原点在桥面（地砖上表面）。
+    /// </summary>
+    public static Node3D Bridge()
+    {
+        var root = new Node3D { Name = "Bridge" };
+        StandardMaterial3D deck = Visuals.Matte(Visuals.BridgeDeck, 1f);
+        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
+        const float half = BoardGeometry.TileSize * 0.5f;
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.06f, BoardGeometry.TileSize) }, deck, new Vector3(0f, -0.03f, 0f)));
+
+        // 板缝：三条深色细槽，让桥面在缩略图里也读得出"木板"。
+        for (int i = -1; i <= 1; i++)
+        {
+            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.004f, 0.02f) }, timber, new Vector3(0f, 0.002f, i * 0.28f)));
+        }
+
+        foreach (float sx in new[] { -half + 0.05f, half - 0.05f })
+        {
+            foreach (float sz in new[] { -half + 0.05f, half - 0.05f })
+            {
+                root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.07f, 0.16f, 0.07f) }, timber, new Vector3(sx, 0.05f, sz)));
+            }
+        }
+
+        return root;
+    }
+
     /// <summary>贴在地砖上的扁平方形标记（叠加层用）。</summary>
     public static PlaneMesh Marker(float size) => new() { Size = new Vector2(size, size), Orientation = PlaneMesh.OrientationEnum.Y };
 

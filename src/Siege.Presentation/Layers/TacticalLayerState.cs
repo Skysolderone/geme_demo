@@ -14,9 +14,9 @@ public enum TacticalLayer
 }
 
 /// <summary>
-/// 盘面层的两种读法。合并的依据是二者点亮的空格集合<b>恒等</b>：覆盖的定义是棋子向四邻接相邻格提供覆盖，
-/// 气的定义是棋串的空邻格，所以"被某方覆盖的空格"与"某条棋串的气"是同一批格子；分成两层只是让玩家
-/// 在同一片格子的两种着色之间来回切换（merge-board-layer）。
+/// 盘面层的两种读法。合为一层的依据是二者描述同一批棋子对周边空格的两种作用（merge-board-layer）；
+/// 在 terrain-model 之前两者点亮的空格恒等，引入崖壁、栅栏、深水与林地后覆盖关系与气边分开走，
+/// 两个集合 MAY 不同：平地区域仍相同，差集由地形解释（<see cref="BoardReadingDiff"/>，design D-G）。
 /// </summary>
 public enum BoardReading
 {

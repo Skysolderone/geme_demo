@@ -34,15 +34,15 @@
 
 ## 5. 表现层视图模型（Siege.Presentation）
 
-- [ ] 5.1 盘面层视图模型带出每格高度、地表、桥与栅栏边，供 Godot 渲染；归属读法与棋串读法各按 2.1 / 2.2 取集合。验证：单元测试——平地区域两读法集合相同；有崖壁 / 栅栏 / 一格深水 / 林地时差集中的每一格都能给出地形原因。
-- [ ] 5.2 改写 `merge-board-layer` 留下的"两读法恒等"测试为 D-G 口径。验证：新测试绿，旧断言删除并列入提交信息。
+- [x] 5.1 盘面层视图模型带出每格高度、地表、桥与栅栏边，供 Godot 渲染；归属读法与棋串读法各按 2.1 / 2.2 取集合。验证：单元测试——平地区域两读法集合相同；有崖壁 / 栅栏 / 一格深水 / 林地时差集中的每一格都能给出地形原因。
+- [x] 5.2 改写 `merge-board-layer` 留下的"两读法恒等"测试为 D-G 口径。验证：新测试绿，旧断言删除并列入提交信息。
 
 ## 6. Godot 地形渲染与交互
 
-- [ ] 6.1 `BoardGeometry.Center` 带高度（每层抬升固定层高）；`TryFromWorld` / `TryPick` 支持分层拾取（射线与三层平面求交，取最近命中的可落子格）。验证：Godot 端 headless 测试脚本——对 v3 每个可落子格从相机投影再拾取回同一格。
-- [ ] 6.2 地砖按高度堆叠并画崖壁侧面（Δh=2 与 Δh=1 侧面可区分）；深水、桥、林地各有可辨地表；栅栏沿格边立起不占落点。验证：`--screenshot` 出图人工对照 `art/style-exploration/` 基准与用户参考图；检查清单写入 `art/terrain-v3/README.md`。
-- [ ] 6.3 坐标标注适配 13 列，锚点放在棋盘外圈 h=0 平面，边缘格高度不同仍可读。验证：截图人工检查 + `A B C D E F G H J K L M N` 无 `I`。
-- [ ] 6.4 `--auto-demo` 与 `--seed` 在 v3 上跑通；Godot 层不自己算邻接 / 地形过滤。验证：源码级扫描（`src/godot/` 不在 sln，补 grep 守门）确认只消费视图模型与 `BoardGeometry`。
+- [x] 6.1 `BoardGeometry.Center` 带高度（每层抬升固定层高）；`TryFromWorld` / `TryPick` 支持分层拾取（射线与三层平面求交，取最近命中的可落子格）。验证：Godot 端 headless 测试脚本——对 v3 每个可落子格从相机投影再拾取回同一格。
+- [x] 6.2 地砖按高度堆叠并画崖壁侧面（Δh=2 与 Δh=1 侧面可区分）；深水、桥、林地各有可辨地表；栅栏沿格边立起不占落点。验证：`--screenshot` 出图人工对照 `art/style-exploration/` 基准与用户参考图；检查清单写入 `art/terrain-v3/README.md`。
+- [x] 6.3 坐标标注适配 13 列，锚点放在棋盘外圈 h=0 平面，边缘格高度不同仍可读。验证：截图人工检查 + `A B C D E F G H J K L M N` 无 `I`。
+- [x] 6.4 `--auto-demo` 与 `--seed` 在 v3 上跑通；Godot 层不自己算邻接 / 地形过滤。验证：源码级扫描（`src/godot/` 不在 sln，补 grep 守门）确认只消费视图模型与 `BoardGeometry`。
 
 ## 7. 既有测试与文档
 
@@ -50,6 +50,7 @@
 - [ ] 7.2 设计文档 §3.1–3.3 改写为格属性与 v3 描述、§7.1 覆盖改走覆盖关系、§7.3 补"占据信物格同样揭示"、§14.2 两读法差集说明、§20 地形从装饰升级为规则元素；把 `terrain` 规格里的气边 / 覆盖算例（`F6`/`F7` 崖壁、`F6`–`G6` 栅栏、`F6`→`G6`→`H6` 隔岸）带进 §3 作为标准算例，使本 change 的规则类任务算例在归档后来自设计文档；变更记录加一行（v1.1 → v1.2）。验证：人工检查。
 - [ ] 7.3 `.trellis/spec/core/boundaries.md` 补"几何四邻 / 气边 / 覆盖关系三个唯一实现点"；`coordinates.md` 补列字母随宽度。验证：人工检查。
 - [ ] 7.4 `relic-generation` 在 v3 基准图上补一条宽口径统计断言（升级率 15–21%，裁决 B-7）。验证：单元测试。
+- [ ] 7.5 崖壁阈值具名常量（裁决 C-8）：Core 出 `TerrainData.CliffDrop = 2`，`Adjacency.LibertyNeighbors / CoverageTargets` 与 `Presentation.LayerContents.ReasonFor` 共用，全仓不再有第二份字面量 2 / 1 表达同一阈值；`boundaries.md` 单一实现表补"几何四邻 / 气边 / 覆盖关系 / 崖壁阈值"与 `CoverageMap.SourcesOf` 只读查询。验证：grep 守门 + 既有测试仍绿。
 
 ## 8. 变异验证与回归
 
@@ -286,3 +287,102 @@ N-1 中 `覆盖不等于气` / `覆盖判定与气边判定分离` 不红是几�
 - `dotnet build siege.sln` EXIT=0 零警告；`dotnet test siege.sln` EXIT=0，723/723（check 修订后）。
 - 自做变异 M-主-2：`FourPlayerBaseMap.FenceSeeds` 多加一条 `("G5","G6")` → MapDefinition 红 6+（基准校验、往返、距离失衡、出生区归属……），还原逐字节一致。
 - 裁决：B-1 公共信物取 5，规格文字改为"桥头 4 + 岛心 1"（design 裁决 33）；B-2 接受同格（裁决 34）；B-3 转 8.2 归因；B-4 / B-5 转段 C；B-6 守门现状接受；B-7 转段 D（裁决 35）。check 修订 3 条接受。
+
+### 段 C（组 5 + 组 6）
+
+**结果**：`dotnet build siege.sln` 退出码 0、0 警告；`dotnet test siege.sln` 退出码 0，726/726（段 B 末 723 + 新增 3：`平地上两种读法点亮同一批空格` 是改写不是新增，新增为 `差集可由地形解释`、`盘面层视图模型带地形Tests` ×2）。Godot `--headless --build-solutions` 退出码 0；`--headless -- --auto-demo` 退出码 0（种子 20260915 第 4 大回合达到上限，四家名次照常打印）；`-- --auto-demo --pick-check` 退出码 0，105 个可落子格投影 → 拾取往返一致 105。
+
+**改动文件与公开接口**
+
+- `src/Siege.Core/Scoring/CoverageMap.cs`（**Core 只读查询，段记录写明**）：新增 `readonly record struct CoverageSource(Coord Stone, bool Adjacent)` 与 `ImmutableArray<CoverageSource> CoverageMap.SourcesOf(Coord)`。`Compute` 遍历 `board.CoverageTargets(c)` 时顺手记录来源与 `Adjacency.AreAdjacent(c, target)` 一位，不另算覆盖关系、不改任何既有查询。理由：Presentation 被 IL 守门禁用 `Adjacency` 整类与 `GameBoard.CoverageTargets / LibertyNeighbors`，而差集原因里"崖壁 vs 隔岸"要知道来源与目标是否相邻——这一位只能由 Core 给。`UI层不含规则计算Tests` 未禁 `SourcesOf`（它是已算好的表的读取）。
+- `src/Siege.Presentation/Visibility/DefaultBoardView.cs`：`BoardCellView` 新增 `int Height`、`Surface Surface`、`bool HasBridge`（位于 `Terrain` 之后）；`DefaultBoardView` 新增 `ImmutableArray<FenceEdge> Fences`（Coord 字典序）。`From` 读 `board.Map.HeightAt / SurfaceAt / HasBridge / TerrainData.Fences`。
+- `src/Siege.Presentation/Layers/LayerContents.cs`：新增 `enum TerrainReason { Cliff, Fence, AcrossWater, Forest }`、`record ReadingDiffCell(Coord, ImmutableArray<TerrainReason> Reasons)`、`record BoardReadingDiff(CoveredNotLiberty, LibertyNotCovered)`（`Empty` / `IsEmpty`）；`TerritoryLayerContent(Cells, Diff)` 与 `LibertyLayerContent(Groups, Thresholds, Diff)` 各带差集；新增 `TacticalLayers.ReadingDiff(PublicWorld)`：被覆盖 = 覆盖表独占 / 争议格，气 = 气快照全部棋串的气；差集原因由 `SourcesOf` 的 `Adjacent` 位 + `MapData.HasFence / HeightAt / SurfaceAt` 查表：不相邻 → 隔岸；相邻有栅栏 → 栅栏；相邻且来源比目标高 ≥ 2 → 崖壁；是气无人覆盖且林地 → 林地；四条都不命中抛 `InvalidOperationException`（说明 Core 两套关系与规格不一致，不静默）。归属读法仍按覆盖表（2.2）、棋串读法仍按气快照（2.1）取集合，段 A 已接好，本段没有重取。
+- `src/Siege.Presentation/Layers/TacticalLayerState.cs`：`BoardReading` 文档注释由"恒等"改为 D-G 口径。`src/Siege.Presentation/Text/Labels.cs`：新增 `Labels.TerrainReason`（崖壁 / 栅栏 / 隔岸 / 林地）。
+- `src/godot/scripts/BoardGeometry.cs`：新增 `LayerHeight = 0.35f`、`MaxLevel = 2`、`TopYOf(level)`、`Center(coord, width, height, level)`（3 参重载 = h=0 平面，标注锚点专用）；`TryPick(camera, screen, width, height, Func<Coord,int?> levelOf, out coord)` 分层拾取；`LabelMargin` 0.85 → 1.2（近边与左右），新增 `FarLabelMargin = 1.7`（远边列标注专用，`ColumnLabelAnchor` 的 `far` 分支用它，`Z = edge.Z` 形状不变）。`TryFromWorld` 不变。`(width - 1)` 类换算仍恰 6 处、`RoundToInt` 恰 2 处，`坐标映射在Godot侧唯一` 的精确计数不用改。
+- `src/godot/scripts/BoardView.cs`：`Build(DefaultBoardView, zoneOwners)`（原来吃 Core `MatchPublicView`，现在只吃 Presentation 视图模型）；新增 `LevelOf(Coord)`（可落子格的高度，否则 `null`）、`CenterOf(Coord)`（带高度格心）；`AddTileStack`（h=1 层土色带、h=2 层岩灰带 + 面砖）、`AddWater`（水面比同层地砖低 `WaterDrop = 0.10`，与底座齐平）、`AddFence`（缝中点、两格较高层）；林地加 `LowPoly.Trees`、桥加 `LowPoly.Bridge`；底座板顶面下沉到地砖面之下 0.10；一切叠加物（光标 / 信物标记 / 棋子 / 着色 / 气点 / 柱 / 环 / 叉）改走 `CenterOf`；相机改为固定俯角 60°、距离随（棋盘 + 标注外圈）跨度缩放。
+- `src/godot/scripts/LowPoly.cs`：新增 `Trees(variant)`、`Fence(alongX)`、`Bridge()`。`src/godot/scripts/Visuals.cs`：新增 `TileRoad / TileForest / DeepWater / WaterRipple / BridgeDeck / Timber / SlopeSide / CliffSide / TreeCanopy`，`TilePlayable` 改偏草绿。
+- `src/godot/scripts/GameRoot.cs`：`_board.Build(_session.World.Board(), …)` ×3；两处 `TryPick` 传 `_board.LevelOf`；新增 `-- --pick-check`（第 2 帧对视图模型里每个可落子格 `Camera.UnprojectPosition(CenterOf)` → `TryPick` 回同格，打印 `[pick-check]` 一行并以 0 / 1 退出）。
+- `src/godot/scripts/Hud.cs`：盘面层面板文案改为"平地上两种读法点亮同一批空格；崖壁、栅栏、深水与林地会让两者不同"，并列出 `Diff`："被覆盖但不是气：D4（崖壁）…" / "是气但无人覆盖：B5（林地）"。两处布局挪动（13×13 + 60° 相机下棋盘在屏幕上占得更高更宽，四边标注贴到了 HUD 上）：插旗提示面板由顶部居中（y 100–206，正压远边列标注 y≈186）挪到左列 x 14–392 / y 92–198（信息层面板的位置，插旗时它隐藏）；底部通知条由 y 772–796（压近边标注 y≈794）挪到顶部顺序条之下 y 66–90。
+- `art/terrain-v3/README.md`（新）：渲染约定表 + 18 项人工检查清单 + 截图 / 自检命令；`terrain-v3-opening.png`（种子 12345、不带 auto-demo、第 14 帧、插旗阶段：无棋子无信息层）、`terrain-v3-endgame.png`（种子 12345、auto-demo 第 90 帧终局）。
+- 测试：`tests/Siege.Core.Tests/TacticalLayers/盘面层的读法切换Tests.cs`（改写 + 新增，见下）、`盘面层视图模型带地形Tests.cs`（新，真 v3 图：B2 h=2 草地出生区 0、E2 h=1、G7 h=0、D4 未架桥深水 = 障碍、G4 桥 = 可落子、A13 岩石地表草地、E5 林地、C8 土路、高度恰 {0,1,2}；栅栏四段按 Coord 序、端点归一化）。
+
+**层高常量与拾取算法**：`LayerHeight = 0.35` 格宽——Δh=2 崖壁侧面 0.70、Δh=1 缓坡 0.35，配两条 / 一条色带。拾取：射线依次与 h=2 / h=1 / h=0 三层平面求交（相机在上方，越高的平面越先被击中 = 最近命中优先）；每层交点经 `TryFromWorld` 取格，若该格可落子且高度恰等于该层即命中，否则（盘外 / 高度不等）继续下一层。相机俯角从 45° 抬到 60° 的原因：`--pick-check` 首跑抓到 B5(h0) → B4——B5 紧贴 B4 高台正后方，45° 下 h=2 顶面向远处投 0.70 / tan 45° = 0.70 格遮挡 > 半格，B5 格心被崖壁挡住（几何事实，不是算法错）；格心可见的判据是 `(TopYOf(2) − TopYOf(0)) / tan θ < 0.5` 即 θ > 54.5°，取 60°（遮挡 0.40 格），崖壁侧面仍有 cos 60° = 0.5 的投影高度。**限定**：60° 只是相机对注视点（盘心附近）的俯角，射线仰角随行数变化——B5 / B4 在第 4–5 行（z ≈ +2），射线约 60°，所以过；远半盘（第 10–13 行）射线只有 45–50°，遮挡区 0.70 / tan 46° ≈ 0.68 格 > 半格。v3 恰好没有"h=0 可落子格紧贴 h=2 格正后方"落在远半盘的情形（远半盘高台身后是岩石 / 深水 / 盘外），`--pick-check` 105/105 不能推出远半盘也安全；换图或调相机时以 `--pick-check` 为准。远边列标注按远半盘的 46° 算遮挡：0.45 + 0.76 / tan 46° ≈ 1.2 格，所以远边单独取 `FarLabelMargin = 1.7`，近边与左右（遮挡只有侧向分量约 0.3 格）取 1.2。
+
+**截图**：`art/terrain-v3/terrain-v3-opening.png`、`art/terrain-v3/terrain-v3-endgame.png`。实现方按派发要求未读图片；只做了纯 Python 像素抽样（不进上下文）：开局图水蓝 2.09% / 草林绿 3.75% / 暖色（土路 / 木 / 缓坡 / 出生区提示）11.0% / 灰（岩 / 崖壁）5.3%——第一版水蓝为 0%，查出水面顶 0.03 被底座顶面 0.04 埋住，改底座下沉后露出。另做了投影探针：用相同相机参数把四边标注锚点投到截图（Label3D 无光照，`CoordinateLabel` 色精确），锚点 ±30 px 框内数标注色像素——开局图四边每个字母 / 数字都有像素（远边 A–N 最少 74、近边最少 98、左右最少 78，近边 / 远边逐字：近 [155 192 116 173 147 117 162 167 99 153 98 231 189]、远 [101 124 77 116 82 74 114 113 81 94 74 150 157]）；第一版远边 13 个字母全为 0，查出是插旗提示面板盖住（不是地砖遮挡），挪面板后恢复。终局图左右第 5–9 行的数字被居中的结算面板盖住，是终局画面的既有布局，与地形无关。人工清单 18 项待主会话核。
+
+**既有测试改写逐条**
+
+| 测试 | 改法 |
+|---|---|
+| `盘面层的读法切换Tests.两种读法点亮同一批空格` | 改名 `平地上两种读法点亮同一批空格`（规格 MODIFIED Scenario 同名）。9×9 夹具全平地，原两条 `Assert.Empty(covered.Except(liberties))` / 反向断言**原样保留**——它们现在钉的是 D-G 的"平地区域恒等"；加 `ownership.Diff.IsEmpty` 与两读法 `Diff` 的 `Dump` 相等。"全盘恒等"的前提只删注释与 Hud 文案，没有测试断言被删除（旧断言在平地上仍是规格要求） |
+| `盘面层的读法切换Tests` 新增 | `差集可由地形解释`：9×9 夹具 `with { TerrainData }` + `CreateUnvalidated`，D5 h=2 / D6 h=1 / E3 深水 / B5 林地 / F6–G6 栅栏，四家各一子；测试内独立算差集 = {D4 E4 C5 E5 G6} 与 {B5}，视图模型逐格原因 = 崖壁 ×3 / 隔岸 / 栅栏 / 林地，D6 缓坡两集合都有 |
+| `盘面层视图模型带地形Tests` 新增 ×2 | 见上 |
+| `默认棋盘上的未发现信物Tests.默认棋盘不显示分区` | 未改：B2 / E5 的 `Dump` 比较在 9×9 平地上新增三字段相等 |
+| `坐标映射在Godot侧唯一` / `棋盘坐标标注Tests` / `Godot层不含规则计算Tests` | 未改，全绿：BoardGeometry 换算计数不变；`ColumnLabelAnchor` 仍在 `RowLabelAnchor` 之前；Godot 侧无 `.Neighbors(` 等 token（A-8 未触发，未收窄） |
+
+**变异验证**（`mutate.py`：`cp` 带时间戳备份 → 变异 → 全量 build+test 或 Godot 重建 + `--pick-check` → `finally` 还原 → `filecmp` 逐字节比对，3 条全部 True）
+
+| 编号 | 变异（文件 / 改动） | 红 | 红掉的测试 / 检查 |
+|---|---|---|---|
+| M-C1 | `TacticalLayers.ReasonFor` 去掉"来源不相邻 → 隔岸"分支 | 1 | `盘面层的读法切换Tests.差集可由地形解释`（E4 抛"既无栅栏也非崖壁"） |
+| M-C2 | `CoverageMap.Compute` 记录来源时 `Adjacent` 写死 `true` | 1 | 同上（证明 Presentation 确实靠 Core 的相邻位，不是自己算） |
+| M-C3 | `BoardGeometry.TryPick` 只取 h=0 平面（`for (int level = 0; …)`） | 60 | `--pick-check` 退出码 1：全部 52 个 h=2 与 8 个 h=1 可落子格"未命中"，105 → 45 |
+
+**常规决定（自定，附理由）**
+
+1. Core 只加 `SourcesOf`（Adjacent 一位），不动 `Adjacency` / `GameBoard`：顾问复核后的最小方案；差集原因的其余判断全是 `MapData` 查表。
+2. 差集挂在两个盘面层 content 上而不是第三种 content：两种读法的面板都要列同一份差集，且 D-G 说的是"同一层的两种读法"。
+3. 拾取只返回可落子格（`levelOf` 为 `null` 的岩石 / 未架桥深水不命中）：派发口径"该格高度等于该层的可落子格"；插旗与落子都不需要点到不可落子格。
+4. 桥用四根角柱不用两侧栏杆：视图模型不带水流方向，推方向就是 Godot 自算邻接。
+5. 林地小树放地砖角、树冠半径 0.09：落在棋子底座（0.36）之外，不遮落点 / 气点 / 着色。
+6. `--pick-check` 放第 2 帧而不是 `_Ready`：视口尺寸在 `_Ready` 时可能未定；headless 下 `UnprojectPosition` 可用（实测 105/105），不必开窗。
+7. 开局截图不带 `--auto-demo`：自动演示每帧推进一步，其中 4/7 的帧按着某个信息层（场景降饱和），截到的开局图会发灰；插旗阶段的画面无棋子、无信息层，地形最清楚。
+8. B-4 复核：Godot / Presentation 没有按出生区编号推方位或颜色——`MatchSession.ZoneOwners` 按玩家实际选择填表，颜色走 `FactionTable.For(PlayerId)`；auto-demo `ChooseZone(0)` 在 v2 / v3 都是左下（v3 编号 0 仍是左下，只是 1–3 改为旋转序）。
+9. 变异脚本用 `cp` 备份 + `filecmp`，不用 `git checkout --`；M-C3 还原后重建 Godot 程序集（headless 运行不自动重建，首次复跑时踩过：改了源码没 `--build-solutions`，结果与改前一样）。
+
+**待决（给主会话）**
+
+- **C-1（人工核图）**：两张截图实现方未目视，只有像素抽样证据；请按 `art/terrain-v3/README.md` 18 项清单核，重点第 2（崖壁 / 缓坡色带）、10（远边字母不被高台挡）、14（B5 光标不跳到 B4）。
+- **C-2（相机角度）**：45° → 60° 是为拾取准确性。判据 `(2·LayerHeight) / tan θ < 0.5` 里的 θ 是**该格的射线仰角**而非相机标称俯角（远半盘比标称低 10–15°）。若嫌崖壁侧面不够立体想回 50–55°，`LayerHeight` 须同步降（55° 标称时远半盘约 42°，需 ≤ 0.22），且每次调整都以 `--pick-check` 为准；v3 上目前远半盘没有紧贴崖壁的低地可落子格，才没触发。
+- **C-3（Core 增量）**：`CoverageMap.SourcesOf` 是本段唯一 Core 改动，只读、不改既有语义；`.trellis/spec/core/boundaries.md` 段 D 补条时可把"覆盖来源（含相邻位）由覆盖表给出，表现层不算邻接"一并写进去。
+- **C-4（Sim 不动）**：Sim `play` 视图仍只区分水 / 岩石（B-5 保留），本段范围是图形版。
+- **C-5（拾取边界）**：`--pick-check` 只验格心往返；高台边缘的非格心点击按"最近命中"处理，未做逐像素验证。
+- **C-6（5.2 口径，写提交信息用）**：派发写"旧断言删除并列入提交信息"，实际处理是**改名不删**：`两种读法点亮同一批空格` → `平地上两种读法点亮同一批空格`，两条 `Except` 断言原样保留（规格 MODIFIED Scenario 要求平地恒等），删掉的只是"全盘恒等"的注释与 Hud 文案；差集口径由新测试 `差集可由地形解释` 承担。
+- **C-7（HUD 布局）**：插旗提示与通知条的挪动是为不压标注（6.3），属 Godot 层布局；若主会话认为通知条在顶部不合阅读习惯，可改回底部但要把近边标注一起下移（需加大相机距离），不要只挪一头。
+- **A-8**：`Godot层不含规则计算Tests` 的 `.Neighbors(` token 本段未被触发，未收窄。
+
+#### check 修订（段 C，trellis-check）
+
+**验证**：`dotnet build siege.sln` 退出码 0（0 警告）；`dotnet test siege.sln` 退出码 0，726/726；Godot `--build-solutions` 0、`-- --auto-demo` 0（种子 20260915 第 4 大回合上限，名次照常）、`-- --auto-demo --pick-check` 0（105/105）。codegraph MCP 本会话不可用，理解代码只读 `git diff HEAD` 涉及文件与定点 grep。
+
+**修订**
+
+1. `src/godot/scripts/BoardGeometry.cs` `LayerHeight` 文档注释仍写"约 45° 的固定对局相机"，与相机改 60° 不符 → 改为 60° 并注明崖壁侧面投影 cos 60° = 0.5。
+2. `tests/.../盘面层的读法切换Tests.差集可由地形解释`：`CoverageMap.SourcesOf` 此前只被间接覆盖（经 ReadingDiff），补 4 条直接断言——E4 来源 `(E2, Adjacent:false)`、C5 `(D5, true)`、G6 `(F6, true)`、B5 无来源；并把 M-C4 记进测试注释。
+3. `src/godot/scripts/Hud.cs` `DiffText` 参数类型去掉多余的全限定 `System.Collections.Immutable.`（文件已 using）。
+4. auto-demo 证据复核：`all = Enum.GetValues<TacticalLayer>()` 含 `Board`，`Hud.RefreshLayerPanel` 对活动层调 `world.Layer(active, reading)`，所以 headless auto-demo 确实在 v3 上算过 `ReadingDiff`。
+5. 给 C-1 人工核图的提醒：`BoardView.AddTileStack` 的色带颜色按**层序号**取（第 1 层土色、第 2 层岩灰），不是按 Δh——h=1→h=2 的缓坡露出的是一条岩灰带，h=0→h=1 的缓坡是一条土色带。"崖壁 / 缓坡可分"靠**色带条数**（2 vs 1）成立，README 第 2 项核图时应数条数而不是认颜色，否则会把 h=1→h=2 的缓坡误读成崖壁。
+
+**变异验证（check 阶段，`cp` 备份 → 变异 → 跑 → 还原 → `cmp` 逐字节一致，4 条全部一致）**
+
+| 编号 | 变异 | 红 | 红掉的测试 / 检查 |
+|---|---|---|---|
+| G1（派发要求） | `BoardView.Build` 加一行 `_ = board.LibertyNeighbors(default);` | 1 | `Godot层不含规则计算Tests.Godot层不调用规则计算入口`（token `.LibertyNeighbors(`；守门表仍有效） |
+| M-C4 | `TacticalLayers.ReadingDiff` 去掉"是气但无人覆盖 → 林地"分支（条件改 `false`） | 1 | `盘面层的读法切换Tests.差集可由地形解释`（B5 抛"不是林地"）。注：条件改 `true` 是等价变异——Core 不变量下"是气且无人覆盖"只能是林地，测试无法也不必区分 |
+| M-C5 | `BoardGeometry.Center(coord,w,h,level)` 高度写成 `TopY`（忽略层数） | 26 | `--pick-check` 退出码 1：105 → 79，失败全在远半盘第 10–13 行的 h=2 格（`A11(h2) → A10` 之类，或"未命中"）；近半盘 h=2 格因 h=2 平面交点只偏 0.40 格仍落在同格而漏过——与"射线仰角随行数变化"的分析一致，说明 `--pick-check` 对格心高度错误只在远半盘敏感 |
+| M-C6 | `BoardView.BuildCoordinateLabels` 列字母写死 `"ABCDEFGHJKLMN"[x]` | 2 | `坐标记法Tests.映射实现只有一处`、`棋盘坐标标注Tests.表现层不得自带跳过I的列字母表` |
+
+**C-5 结论（读代码，未逐像素）**：`TryPick` 用真实鼠标射线依次交 h=2 / h=1 / h=0 平面并要求"命中格高度 == 该层"。对屏幕上显示的是**顶面**的像素，这与渲染遮挡精确一致（高台顶面挡住身后低地的区域 = 射线在高层平面的交点正好落进高台格），不会把高台边缘点到低处格。对显示的是**侧面**（崖壁 / 缓坡）的像素：高层交点落在前方低格（层不等），h=0 交点落在高格脚印内（层不等）→ 返回 false，是"死区"而非误拾。唯一例外是朝 ±X 的侧面靠远角处：射线穿过侧面后可能出高格远边落到身后的格并命中它——极窄的一条，不改。
+
+**边界扫描**：`src/godot/` 无 `HeightAt / SurfaceAt / HasFence / Neighbors / AreAdjacent / CoverageTargets / TerrainData / Math.Abs(`；`AddFence` 的 `fence.A.X == fence.B.X`（栅栏朝向）与 `Math.Max(LevelOf(A), LevelOf(B))`（栅栏高度）是渲染用途，判定可接受。`Siege.Presentation` 无 `Godot.*`；`ReadingDiff` 只做 `MapData` 查表 + `SourcesOf` 相邻位。`LibertySnapshot.Compute` 走 `board.AllGroups()`、`CoverageMap` 不过滤玩家状态（D7）→ 弃赛者遗留棋子两侧都计入，`ReadingDiff` 的抛出路径不会因弃赛触发；auto-demo 在 v3 上按过盘面层且退出码 0。
+
+**新增待决（给主会话）**
+
+- **C-8（设计级，不改）**：`TacticalLayers.ReasonFor` 里的崖壁判据 `HeightAt(source) - HeightAt(target) >= 2` 与 Core `Adjacency` 的 `Math.Abs(Δh) <= 1` / `HeightAt(target) - sourceHeight <= 1` 是同一常量的两份字面量（Core 无具名常量）。Core 若改阈值，Presentation 会先抛 `InvalidOperationException`（响亮失败，不静默），但仍是第二份；段 D 补 `boundaries.md` 时可裁决：要么 Core 给 `TerrainData.CliffDrop = 2` 常量供两侧共用，要么把差集原因整体下沉到 Core（`CoverageSource` 直接带原因）。
+
+#### 主会话核实（段 C）
+
+- `dotnet build` EXIT=0 零警告；`dotnet test` EXIT=0，726/726；Godot `--build-solutions` EXIT=0；`--auto-demo --pick-check` EXIT=0，105/105。
+- 截图人工核（开局 / 终局两张）：四角高台抬起且侧面可见、h=1 缓坡台阶、环河 + 四桥、岛上林地、栅栏立在格边、岩石灰块；13 列 `A–N` 四边正向可读、无 `I`；面板不压标注。通过。
+- 自做变异 M-主-3：`LayerContents.ReasonFor` 栅栏分支短路为 false → `差集可由地形解释` 红，还原逐字节一致。
+- 裁决：C-2 相机 60° 保留，调相机以 `--pick-check` 为门；C-3 / C-8 段 D 处理——Core 出具名常量 `TerrainData.CliffDrop = 2`，`Adjacency` 与 Presentation 共用，去掉第二份字面量；C-4 Sim 不动；C-5 结论接受不改；C-6 按"改名 + 原断言保留 + 加 Diff 为空"口径；C-7 无动作；C-9 README 第 2 项按色带条数核。check 修订 3 条接受。

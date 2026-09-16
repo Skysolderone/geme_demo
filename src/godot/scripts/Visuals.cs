@@ -18,8 +18,35 @@ public static class Visuals
     /// <summary>坐标标注的描边色：压住浅色字在亮地砖上的反差不足。</summary>
     public static readonly Color CoordinateLabelOutline = Color.Color8(18, 19, 23);
 
-    /// <summary>可落子地砖。</summary>
-    public static readonly Color TilePlayable = Color.Color8(150, 146, 128);
+    /// <summary>可落子地砖（草地，terrain-model 缺省地表）。</summary>
+    public static readonly Color TilePlayable = Color.Color8(146, 156, 118);
+
+    /// <summary>土路地表：比草地暖、比岩石亮，只作视觉，帮玩家读出"下山的路"。</summary>
+    public static readonly Color TileRoad = Color.Color8(178, 160, 122);
+
+    /// <summary>林地地表：深绿，配角落的小树；林地不接收覆盖，靠占据拿。</summary>
+    public static readonly Color TileForest = Color.Color8(92, 128, 84);
+
+    /// <summary>深水：低于地砖的蓝色水面，不可落子。</summary>
+    public static readonly Color DeepWater = Color.Color8(58, 104, 148);
+
+    /// <summary>深水的浅色波纹。</summary>
+    public static readonly Color WaterRipple = Color.Color8(104, 150, 190);
+
+    /// <summary>预置桥的木板面。</summary>
+    public static readonly Color BridgeDeck = Color.Color8(156, 116, 72);
+
+    /// <summary>栅栏与桥墩的深色木料。</summary>
+    public static readonly Color Timber = Color.Color8(112, 84, 54);
+
+    /// <summary>h=1 那一层的侧面（缓坡侧面）：土色。</summary>
+    public static readonly Color SlopeSide = Color.Color8(134, 108, 84);
+
+    /// <summary>h=2 那一层的侧面（崖壁侧面）：岩灰。Δh=2 的崖壁露出土色 + 岩灰两条色带，Δh=1 的缓坡只露土色一条。</summary>
+    public static readonly Color CliffSide = Color.Color8(112, 108, 104);
+
+    /// <summary>林地小树的树冠。</summary>
+    public static readonly Color TreeCanopy = Color.Color8(70, 112, 66);
 
     /// <summary>障碍岩石（装饰层）。</summary>
     public static readonly Color TileObstacle = Color.Color8(96, 98, 104);

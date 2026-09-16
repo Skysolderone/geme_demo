@@ -94,7 +94,8 @@ public sealed partial class Hud : CanvasLayer
 
         _notice = Ui.Text(string.Empty, Ui.MutedText);
         _notice.HorizontalAlignment = HorizontalAlignment.Center;
-        Ui.Anchor(_notice, 0.5f, 1f, -420f, -128f, 420f, -104f);
+        // 通知条放在顶部顺序条之下：13×13 + 60° 相机下棋盘近边的行 / 列标注已经贴到底部 HUD 上沿，放底部会压住近边字母。
+        Ui.Anchor(_notice, 0.5f, 0f, -420f, 66f, 420f, 90f);
         _root.AddChild(_notice);
     }
 
@@ -417,6 +418,9 @@ public sealed partial class Hud : CanvasLayer
         AddSection(_previewBody, "将揭示", preview.RevealHints.Select(h => $"{h.Coord.ToNotation()} {h.Text}"), Ui.InfoText);
     }
 
+    private static string DiffText(ImmutableArray<ReadingDiffCell> cells) =>
+        string.Join("、", cells.Select(c => $"{c.Coord.ToNotation()}（{string.Join("/", c.Reasons.Select(Labels.TerrainReason))}）"));
+
     private static string GroupLine(OwnGroupView group) =>
         (group.IsSuicideRisk ? "⚠ " : string.Empty) + $"[{Names.Danger(group.Danger)}] " + group.LibertyText;
 
@@ -436,7 +440,26 @@ public sealed partial class Hud : CanvasLayer
                 : $"{Names.Layer(active)}层"));
         if (active == TacticalLayer.Board)
         {
-            _layerBody.AddChild(Ui.Text("Tab 切换归属／棋串读法。两种读法点亮的是同一批空格。", Ui.MutedText, wrap: true));
+            _layerBody.AddChild(Ui.Text("Tab 切换归属／棋串读法。平地上两种读法点亮同一批空格；崖壁、栅栏、深水与林地会让两者不同。", Ui.MutedText, wrap: true));
+            BoardReadingDiff? diff = content switch
+            {
+                TerritoryLayerContent territory => territory.Diff,
+                LibertyLayerContent groups => groups.Diff,
+                _ => null,
+            };
+            if (diff is { IsEmpty: false })
+            {
+                // 差集与地形原因来自视图模型（tactical-layers「差集可由地形解释」），本层只列出来。
+                if (!diff.CoveredNotLiberty.IsEmpty)
+                {
+                    _layerBody.AddChild(Ui.Text("被覆盖但不是气：" + DiffText(diff.CoveredNotLiberty), Ui.InfoText, wrap: true));
+                }
+
+                if (!diff.LibertyNotCovered.IsEmpty)
+                {
+                    _layerBody.AddChild(Ui.Text("是气但无人覆盖：" + DiffText(diff.LibertyNotCovered), Ui.InfoText, wrap: true));
+                }
+            }
         }
         switch (content)
         {
@@ -491,7 +514,8 @@ public sealed partial class Hud : CanvasLayer
 
         if (session.AwaitingZone)
         {
-            CenterBox(0.17f, 620f, 106f);
+            // 插旗提示放左列（信息层面板的位置，此时它是隐藏的）：居中放在顶部会盖住棋盘远边的列标注（terrain-model 6.3）。
+            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, 198f);
             _centerBody.AddChild(Ui.Heading("开局插旗"));
             _centerBody.AddChild(Ui.Text("点棋盘上任意一块染色的出生区地砖，即可把旗插在那一区。", Ui.InfoText, wrap: true));
             _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的出生区落子（构筑保护期）。", Ui.MutedText, wrap: true));

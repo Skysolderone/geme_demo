@@ -24,16 +24,20 @@ public sealed record TurnFlash(ImmutableArray<Coord> Placed, ImmutableArray<Coor
 }
 
 /// <summary>
-/// 3D 棋盘表现（tactical-ui 裁决 6）：方块地砖 + 固定倾斜俯视镜头 + 程序生成的低多边形棋子与叠加标记。
+/// 3D 棋盘表现（tactical-ui 裁决 6）：分层地砖 + 固定倾斜俯视镜头 + 程序生成的低多边形棋子与叠加标记。
 /// </summary>
 /// <remarks>
-/// 本类<b>不做任何规则计算</b>：画什么全部来自 <see cref="ViewerWorld"/>（默认棋盘、预演呈现、信息层内容）。
-/// 绘制顺序遵守 <see cref="RenderLayer"/>：装饰（岩石）在最下，网格 / 归属 / 标记 / 棋子 / 预览依次在上。
+/// <para>本类<b>不做任何规则计算、不读地图</b>：画什么全部来自 <see cref="ViewerWorld"/>（默认棋盘视图模型含每格高度 / 地表 / 桥与栅栏边、预演呈现、信息层内容）。
+/// 绘制顺序遵守 <see cref="RenderLayer"/>：装饰（岩石、小树）在最下，网格 / 归属 / 标记 / 棋子 / 预览依次在上。</para>
+/// <para>地形（terrain-model D-H）：高度 → 地砖按层堆叠，h=1 层侧面土色、h=2 层侧面岩灰，Δh=2 的崖壁露出两条色带、Δh=1 的缓坡一条；
+/// 深水 → 低于地砖的蓝色水面；桥 → 与同层地砖齐平的木板面；林地 → 深绿地表 + 角落小树；栅栏 → 沿两格公共边立起的木栅。
+/// 格心高度统一由 <see cref="BoardGeometry.Center(Coord, int, int, int)"/> 给出，本类只把视图模型的高度传进去。</para>
 /// </remarks>
 public sealed partial class BoardView : Node3D
 {
     private readonly Dictionary<Coord, StandardMaterial3D> _tileMaterials = [];
     private readonly Dictionary<Coord, Color> _tileBase = [];
+    private readonly Dictionary<Coord, int> _levels = [];
     private Node3D _decoration = null!;
     private Node3D _overlay = null!;
     private Node3D _pieces = null!;
@@ -43,27 +47,37 @@ public sealed partial class BoardView : Node3D
     private int _width;
     private int _height;
 
-    /// <summary>固定倾斜俯视镜头（约 40 度）。</summary>
+    /// <summary>固定倾斜俯视镜头（俯角 60 度）。</summary>
     public Camera3D Camera { get; private set; } = null!;
 
-    /// <summary>一次性搭出地形、装饰、灯光与镜头。</summary>
-    public void Build(MatchPublicView view, IReadOnlyDictionary<int, PlayerId> zoneOwners)
+    /// <summary>某可落子格的层数（视图模型的高度）；不可落子格（岩石、未架桥深水）或盘外为 <c>null</c>。供分层拾取使用。</summary>
+    public int? LevelOf(Coord coord) => _levels.TryGetValue(coord, out int level) ? level : null;
+
+    /// <summary>某格格心（含高度）的世界坐标：盘内一切叠加物都从这里取位置。</summary>
+    public Vector3 CenterOf(Coord coord) => BoardGeometry.Center(coord, _width, _height, LevelOf(coord) ?? 0);
+
+    /// <summary>一次性搭出地形、装饰、灯光与镜头。只消费默认棋盘视图模型。</summary>
+    public void Build(DefaultBoardView board, IReadOnlyDictionary<int, PlayerId> zoneOwners)
     {
-        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(zoneOwners);
 
         // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次。
         Clear(this);
         _tileMaterials.Clear();
         _tileBase.Clear();
-        _width = view.Board.Width;
-        _height = view.Board.Height;
+        _levels.Clear();
+        _width = board.Width;
+        _height = board.Height;
 
+        // 底座：盖住棋盘外圈的标注平面（标注在 h=0 平面上、离边缘格最远 FarLabelMargin），再向外留 0.45 格的边。
+        // 顶面压到地砖上表面之下 WaterDrop：深水面与底座齐平、地砖高出一截，水才读得出是"沟"；地砖缝里露出的深色底座就是网格线。
+        float apron = 2f * (BoardGeometry.FarLabelMargin + 0.45f);
         AddChild(new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3((_width + 1.4f) * BoardGeometry.CellSize, BoardGeometry.TileHeight, (_height + 1.4f) * BoardGeometry.CellSize) },
+            Mesh = new BoxMesh { Size = new Vector3((_width + apron) * BoardGeometry.CellSize, BoardGeometry.TileHeight, (_height + apron) * BoardGeometry.CellSize) },
             MaterialOverride = Visuals.Matte(Visuals.GridInk),
-            Position = new Vector3(0f, -0.02f, 0f),
+            Position = new Vector3(0f, BoardGeometry.TopY - WaterDrop - (BoardGeometry.TileHeight * 0.5f), 0f),
         });
 
         _decoration = new Node3D { Name = "Decoration" };
@@ -73,12 +87,39 @@ public sealed partial class BoardView : Node3D
         AddChild(tiles);
 
         int variant = 0;
-        foreach (Coord coord in view.Board.AllCoords())
+        foreach (BoardCellView cell in board.Cells)
         {
-            Cell cell = view.Board[coord];
-            Vector3 center = BoardGeometry.Center(coord, _width, _height);
-            Color color = Visuals.TilePlayable;
-            if (cell.Terrain == Terrain.Obstacle)
+            bool playable = cell.Terrain == Terrain.Playable;
+            if (playable)
+            {
+                _levels[cell.Coord] = cell.Height;
+            }
+
+            if (cell.Surface == Surface.DeepWater)
+            {
+                // 深水：水面低于同层地砖，不可落子；架桥后桥面与地砖齐平、可落子。
+                Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
+                Color water = Visuals.DeepWater;
+                _tileMaterials[cell.Coord] = AddWater(tiles, waterCenter, water, variant++);
+                _tileBase[cell.Coord] = water;
+                if (cell.HasBridge)
+                {
+                    Node3D bridge = LowPoly.Bridge();
+                    bridge.Position = waterCenter;
+                    tiles.AddChild(bridge);
+                }
+
+                continue;
+            }
+
+            Vector3 center = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
+            Color color = cell.Surface switch
+            {
+                Surface.Road => Visuals.TileRoad,
+                Surface.Forest => Visuals.TileForest,
+                _ => Visuals.TilePlayable,
+            };
+            if (!playable)
             {
                 color = Visuals.TileObstacle;
                 Node3D rock = LowPoly.Rock(variant++);
@@ -93,15 +134,22 @@ public sealed partial class BoardView : Node3D
                     : color.Lerp(Visuals.BirthHint, 0.62f);
             }
 
-            StandardMaterial3D material = Visuals.Matte(color);
-            _tileMaterials[coord] = material;
-            _tileBase[coord] = color;
-            tiles.AddChild(new MeshInstance3D
+            if (playable && cell.Surface == Surface.Forest)
             {
-                Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize) },
-                MaterialOverride = material,
-                Position = center - new Vector3(0f, BoardGeometry.TopY, 0f),
-            });
+                Node3D trees = LowPoly.Trees(variant++);
+                trees.Position = center;
+                _decoration.AddChild(trees);
+            }
+
+            StandardMaterial3D material = Visuals.Matte(color);
+            _tileMaterials[cell.Coord] = material;
+            _tileBase[cell.Coord] = color;
+            AddTileStack(tiles, center, cell.Height, material);
+        }
+
+        foreach (FenceEdge fence in board.Fences)
+        {
+            AddFence(tiles, fence);
         }
 
         BuildCoordinateLabels();
@@ -149,9 +197,88 @@ public sealed partial class BoardView : Node3D
         };
         AddChild(_environment);
 
-        Camera = new Camera3D { Position = new Vector3(0f, 9.0f, 10.4f), Fov = 54f };
+        // 固定俯视相机：俯角取 60°。h=2 高台（0.70 高）在这个角度下向远处只投 0.70 / tan 60° ≈ 0.40 格的遮挡，
+        // 小于半格——紧贴崖壁身后的 h=0 格格心仍露出来，能被点到（--pick-check 钉住）；45° 时会被挡住。
+        // 崖壁侧面在 60° 下仍有 cos 60° = 0.5 的投影高度，看得见。距离随棋盘（含标注外圈）的跨度缩放。
+        const float pitchDegrees = 60f;
+        float span = Math.Max(_width, _height) + (2f * BoardGeometry.FarLabelMargin);
+        float distance = 14.6f * span / 12.7f;
+        Vector3 target = new(0f, 0.2f, 0.3f);
+        Camera = new Camera3D
+        {
+            Position = target + new Vector3(0f, distance * Mathf.Sin(Mathf.DegToRad(pitchDegrees)), distance * Mathf.Cos(Mathf.DegToRad(pitchDegrees))),
+            Fov = 54f,
+        };
         AddChild(Camera);
-        Camera.LookAt(new Vector3(0f, 0f, 0.3f), Vector3.Up);
+        Camera.LookAt(target, Vector3.Up);
+    }
+
+    /// <summary>
+    /// 一格地砖：h=0 只有一块面砖；h=1 在面砖下垫一层土色侧面；h=2 再垫一层岩灰侧面。
+    /// 相邻格高度差越大露出的色带越多（Δh=1 一条土色，Δh=2 土色 + 岩灰），崖壁与缓坡因此可分。
+    /// </summary>
+    private static void AddTileStack(Node3D parent, Vector3 top, int level, StandardMaterial3D surface)
+    {
+        const float half = BoardGeometry.TileHeight * 0.5f;
+        float bandBottom = -half;
+        for (int layer = 1; layer <= level; layer++)
+        {
+            float bandTop = BoardGeometry.TopYOf(layer) - BoardGeometry.TileHeight;
+            parent.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, bandTop - bandBottom, BoardGeometry.TileSize) },
+                MaterialOverride = Visuals.Matte(layer == 1 ? Visuals.SlopeSide : Visuals.CliffSide),
+                Position = new Vector3(top.X, (bandTop + bandBottom) * 0.5f, top.Z),
+            });
+            bandBottom = bandTop;
+        }
+
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize) },
+            MaterialOverride = surface,
+            Position = top - new Vector3(0f, half, 0f),
+        });
+    }
+
+    /// <summary>深水面低于同层地砖上表面的距离：够让相邻地砖露出一段侧面，读得出"沟"。</summary>
+    private const float WaterDrop = 0.10f;
+
+    /// <summary>深水格：比同层地砖低 <see cref="WaterDrop"/> 的蓝色水面 + 两道浅色波纹（装饰，贴在水面上）。返回水面材质以便信息层降饱和。</summary>
+    private static StandardMaterial3D AddWater(Node3D parent, Vector3 top, Color color, int variant)
+    {
+        StandardMaterial3D material = Visuals.Matte(color, 0.55f);
+        const float drop = WaterDrop;
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize) },
+            MaterialOverride = material,
+            Position = top - new Vector3(0f, drop + (BoardGeometry.TileHeight * 0.5f), 0f),
+        });
+        StandardMaterial3D ripple = Visuals.Flat(Visuals.WaterRipple);
+        for (int i = 0; i < 2; i++)
+        {
+            float z = ((variant + i) % 3 * 0.22f) - 0.24f;
+            parent.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.34f, 0.004f, 0.03f) },
+                MaterialOverride = ripple,
+                Position = top + new Vector3(i == 0 ? -0.18f : 0.16f, -drop + 0.002f, z),
+            });
+        }
+
+        return material;
+    }
+
+    /// <summary>栅栏沿两格的公共边立起：放在两格格心的中点（即缝上）、取两格中较高一层的地砖面。</summary>
+    private void AddFence(Node3D parent, FenceEdge fence)
+    {
+        int level = Math.Max(LevelOf(fence.A) ?? 0, LevelOf(fence.B) ?? 0);
+        Vector3 a = BoardGeometry.Center(fence.A, _width, _height, level);
+        Vector3 b = BoardGeometry.Center(fence.B, _width, _height, level);
+        Node3D post = LowPoly.Fence(alongX: fence.A.X == fence.B.X);
+        post.Position = (a + b) * 0.5f;
+        parent.AddChild(post);
     }
 
     /// <summary>把光标移到某格（null 表示隐藏）。</summary>
@@ -160,7 +287,7 @@ public sealed partial class BoardView : Node3D
         _cursor.Visible = coord is not null;
         if (coord is { } c)
         {
-            _cursor.Position = BoardGeometry.Center(c, _width, _height) + new Vector3(0f, 0.014f, 0f);
+            _cursor.Position = CenterOf(c) + new Vector3(0f, 0.014f, 0f);
         }
     }
 
@@ -184,9 +311,9 @@ public sealed partial class BoardView : Node3D
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
         float decorationScale = 0.72f + (0.28f * treatment.DecorationContrastPercent / 100f);
-        foreach (Node3D rock in _decoration.GetChildren().OfType<Node3D>())
+        foreach (Node3D ornament in _decoration.GetChildren().OfType<Node3D>())
         {
-            rock.Scale = Vector3.One * decorationScale;
+            ornament.Scale = Vector3.One * decorationScale;
         }
 
         Clear(_overlay);
@@ -229,7 +356,7 @@ public sealed partial class BoardView : Node3D
             {
                 Mesh = new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.12f, Height = 0.16f, RadialSegments = 4 },
                 MaterialOverride = Visuals.Glow(color, 0.5f, false),
-                Position = BoardGeometry.Center(cell.Coord, _width, _height) + new Vector3(0f, 0.09f, 0f),
+                Position = CenterOf(cell.Coord) + new Vector3(0f, 0.09f, 0f),
                 RotationDegrees = new Vector3(0f, 45f, 0f),
             });
         }
@@ -245,7 +372,7 @@ public sealed partial class BoardView : Node3D
             }
 
             Node3D piece = BuildPiece(occupant, treatment.PieceEmphasisPercent);
-            piece.Position = BoardGeometry.Center(cell.Coord, _width, _height);
+            piece.Position = CenterOf(cell.Coord);
             _pieces.AddChild(piece);
         }
     }
@@ -366,7 +493,7 @@ public sealed partial class BoardView : Node3D
         {
             // 暂放：半透明发光（HighlightStyle.TranslucentGlow），单独渲染在 StagedPieces 层。
             Node3D piece = BuildPiece(new Occupant(preview.Player, staged.Type), 100);
-            piece.Position = BoardGeometry.Center(staged.Coord, _width, _height) + new Vector3(0f, 0.02f, 0f);
+            piece.Position = CenterOf(staged.Coord) + new Vector3(0f, 0.02f, 0f);
             Translucent(piece, 0.55f);
             _preview.AddChild(piece);
             AddTint(staged.Coord, Visuals.FactionColorOf(preview.Player).Lerp(Colors.White, 0.4f), 0.42f, _preview);
@@ -417,7 +544,7 @@ public sealed partial class BoardView : Node3D
         {
             Mesh = LowPoly.Marker(BoardGeometry.TileSize),
             MaterialOverride = Visuals.Flat(new Color(color, alpha)),
-            Position = BoardGeometry.Center(coord, _width, _height) + new Vector3(0f, 0.008f, 0f),
+            Position = CenterOf(coord) + new Vector3(0f, 0.008f, 0f),
         });
     }
 
@@ -427,7 +554,7 @@ public sealed partial class BoardView : Node3D
         {
             Mesh = new CylinderMesh { TopRadius = size * 0.5f, BottomRadius = size * 0.5f, Height = 0.02f, RadialSegments = 8 },
             MaterialOverride = Visuals.Glow(color, 0.8f, false),
-            Position = BoardGeometry.Center(coord, _width, _height) + new Vector3(0f, 0.02f, 0f),
+            Position = CenterOf(coord) + new Vector3(0f, 0.02f, 0f),
         });
     }
 
@@ -437,7 +564,7 @@ public sealed partial class BoardView : Node3D
         {
             Mesh = new BoxMesh { Size = new Vector3(0.10f, height, 0.10f) },
             MaterialOverride = Visuals.Glow(color, 0.9f, false),
-            Position = BoardGeometry.Center(coord, _width, _height) + new Vector3(0f, 0.92f + (height * 0.5f), 0f),
+            Position = CenterOf(coord) + new Vector3(0f, 0.92f + (height * 0.5f), 0f),
         });
     }
 
@@ -447,13 +574,13 @@ public sealed partial class BoardView : Node3D
         {
             Mesh = new SphereMesh { Radius = 0.10f, Height = 0.20f, RadialSegments = 6, Rings = 3 },
             MaterialOverride = Visuals.Glow(color, 1.2f, false),
-            Position = BoardGeometry.Center(coord, _width, _height) + new Vector3(0f, 0.74f, 0f),
+            Position = CenterOf(coord) + new Vector3(0f, 0.74f, 0f),
         });
     }
 
     private void AddCross(Coord coord, Color color)
     {
-        Vector3 center = BoardGeometry.Center(coord, _width, _height) + new Vector3(0f, 0.045f, 0f);
+        Vector3 center = CenterOf(coord) + new Vector3(0f, 0.045f, 0f);
         StandardMaterial3D material = Visuals.Flat(color);
         for (int i = 0; i < 2; i++)
         {
@@ -470,7 +597,7 @@ public sealed partial class BoardView : Node3D
     /// <summary>格子轮廓环。<paramref name="dashed"/> 为虚线（预计提子），否则实线（警示 / 落子演出）。</summary>
     private void AddRing(Node3D parent, Coord coord, Color color, bool dashed, float y)
     {
-        Vector3 center = BoardGeometry.Center(coord, _width, _height) + new Vector3(0f, y, 0f);
+        Vector3 center = CenterOf(coord) + new Vector3(0f, y, 0f);
         StandardMaterial3D material = Visuals.Flat(color);
         const float half = BoardGeometry.TileSize * 0.5f;
         const float thickness = 0.055f;
@@ -509,9 +636,9 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>
-    /// 棋盘四边的围棋记法坐标标注（visual-style-baseline「棋盘坐标标注」）：列字母沿上下两边，行数字沿左右两边。
-    /// 文本一律取 <see cref="Coord.Column"/> / <see cref="Coord.Row"/>，位置一律取 <see cref="BoardGeometry"/> 的锚点——
-    /// 本层不得再写一份跳过 <c>I</c> 的字母表，否则界面与日志迟早指向不同的格子。
+    /// 棋盘四边的围棋记法坐标标注（visual-style-baseline「棋盘坐标标注」）：列字母沿上下两边，行数字沿左右两边，个数随棋盘宽高。
+    /// 文本一律取 <see cref="Coord.Column"/> / <see cref="Coord.Row"/>，位置一律取 <see cref="BoardGeometry"/> 的锚点（棋盘外圈 h=0 平面，
+    /// 边缘格是高台也不影响）——本层不得再写一份跳过 <c>I</c> 的字母表，否则界面与日志迟早指向不同的格子。
     /// </summary>
     private void BuildCoordinateLabels()
     {

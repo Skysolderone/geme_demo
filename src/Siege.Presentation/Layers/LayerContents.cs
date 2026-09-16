@@ -71,16 +71,48 @@ public enum TerritoryState
 /// <summary>盘面层归属读法的一格（障碍格不列出）。<see cref="Owner"/> 只在占据与独占时非空。</summary>
 public sealed record TerritoryCellView(Coord Coord, TerritoryState State, PlayerId? Owner);
 
-/// <summary>盘面层的归属读法。</summary>
-public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells) : LayerContent(TacticalLayer.Board);
+/// <summary>盘面层的归属读法。集合来自 Core 覆盖表（按覆盖关系导出）；与棋串读法的差集见 <see cref="Diff"/>。</summary>
+public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
+
+// ---------- 盘面层 · 两种读法的差集 ----------
+
+/// <summary>
+/// 两种读法点亮的空格不一致时的地形原因（tactical-layers「差集可由地形解释」，design D-G）。
+/// 被覆盖但不是气：<see cref="Cliff"/>（居高临下）、<see cref="Fence"/>（栅栏挡气不挡覆盖）、<see cref="AcrossWater"/>（隔一格深水覆盖对岸）；
+/// 是气但未被覆盖：<see cref="Forest"/>（林地不接收覆盖）。
+/// </summary>
+public enum TerrainReason
+{
+    Cliff,
+    Fence,
+    AcrossWater,
+    Forest,
+}
+
+/// <summary>差集中的一格及其全部地形原因（去重、按枚举序）。同一格可能同时有多个来源，各给各的原因。</summary>
+public sealed record ReadingDiffCell(Coord Coord, ImmutableArray<TerrainReason> Reasons);
+
+/// <summary>
+/// 归属读法与棋串读法点亮的空格之差（design D-G）：
+/// <see cref="CoveredNotLiberty"/> 是被覆盖（独占 / 争议）但不是任何棋串的气的空格；<see cref="LibertyNotCovered"/> 是某棋串的气但无人覆盖的空格。
+/// 平地上两者都为空。原因只由地形数据查表得出（覆盖来源是否相邻、栅栏、高度、地表），本层不算邻接。
+/// </summary>
+public sealed record BoardReadingDiff(ImmutableArray<ReadingDiffCell> CoveredNotLiberty, ImmutableArray<ReadingDiffCell> LibertyNotCovered)
+{
+    /// <summary>两种读法点亮同一批空格。</summary>
+    public static readonly BoardReadingDiff Empty = new([], []);
+
+    /// <summary>是否无差集。</summary>
+    public bool IsEmpty => CoveredNotLiberty.IsEmpty && LibertyNotCovered.IsEmpty;
+}
 
 // ---------- 盘面层 · 棋串读法 ----------
 
 /// <summary>盘面层棋串读法的一条棋串：轮廓（棋子集合）、全部气位与危险等级。</summary>
 public sealed record LibertyGroupView(PlayerId Owner, ImmutableArray<Coord> Stones, ImmutableArray<Coord> Liberties, int LibertyCount, DangerLevel Level);
 
-/// <summary>盘面层的棋串读法。两个内容 record 不合并——它们携带的字段本就不同（merge-board-layer D5）。</summary>
-public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds) : LayerContent(TacticalLayer.Board);
+/// <summary>盘面层的棋串读法。集合来自 Core 气快照（按气边导出）。两个内容 record 不合并——它们携带的字段本就不同（merge-board-layer D5）。</summary>
+public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
 
 // ---------- 势力层 ----------
 
@@ -166,7 +198,7 @@ public static class TacticalLayers
         ArgumentNullException.ThrowIfNull(world);
         if (world.View.Power is not { } power)
         {
-            return new TerritoryLayerContent([]);
+            return new TerritoryLayerContent([], BoardReadingDiff.Empty);
         }
 
         ImmutableArray<TerritoryCellView>.Builder cells = ImmutableArray.CreateBuilder<TerritoryCellView>();
@@ -188,7 +220,7 @@ public static class TacticalLayers
             }
         }
 
-        return new TerritoryLayerContent(cells.ToImmutable());
+        return new TerritoryLayerContent(cells.ToImmutable(), ReadingDiff(world));
     }
 
     public static LibertyLayerContent Liberties(PublicWorld world, LibertyThresholds thresholds)
@@ -197,7 +229,67 @@ public static class TacticalLayers
         ArgumentNullException.ThrowIfNull(thresholds);
         return new LibertyLayerContent(
             [.. world.Supplement.Liberties.Select(g => new LibertyGroupView(g.Owner, g.Stones, g.Liberties, g.Count, thresholds.Classify(g.Count)))],
-            thresholds);
+            thresholds,
+            ReadingDiff(world));
+    }
+
+    /// <summary>
+    /// 两种读法的差集及其地形原因。被覆盖的空格取覆盖表的独占 / 争议格，气取气快照里全部棋串的气；
+    /// 每个差集格的原因由 Core 给出的覆盖来源（<see cref="CoverageMap.SourcesOf"/>，含"是否相邻"一位）与地图数据查表得出：
+    /// 来源不相邻 → 隔岸；相邻且有栅栏 → 栅栏；相邻且来源比目标高 2 → 崖壁；是气而无人覆盖 → 林地。
+    /// 四条都不命中说明 Core 的覆盖 / 气边关系与规格不一致，直接抛出而不是静默吞掉。
+    /// </summary>
+    public static BoardReadingDiff ReadingDiff(PublicWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (world.View.Power is not { } power)
+        {
+            return BoardReadingDiff.Empty;
+        }
+
+        MapData map = world.View.Board.Map;
+        HashSet<Coord> liberties = [.. world.Supplement.Liberties.SelectMany(g => g.Liberties)];
+        HashSet<Coord> covered = [.. world.View.Board.AllCoords().Where(c => power.Coverage.OwnershipOf(c).Kind is OwnershipKind.Exclusive or OwnershipKind.Contested)];
+
+        ImmutableArray<ReadingDiffCell> coveredNotLiberty =
+        [
+            .. covered.Except(liberties).OrderBy(c => c).Select(c =>
+            {
+                ImmutableArray<TerrainReason> reasons = [.. power.Coverage.SourcesOf(c).Select(s => ReasonFor(map, s, c)).Distinct().OrderBy(r => r)];
+                return reasons.IsEmpty
+                    ? throw new InvalidOperationException($"{c.ToNotation()} 被覆盖但不是气，却没有任何覆盖来源。")
+                    : new ReadingDiffCell(c, reasons);
+            }),
+        ];
+
+        ImmutableArray<ReadingDiffCell> libertyNotCovered =
+        [
+            .. liberties.Except(covered).OrderBy(c => c).Select(c => map.SurfaceAt(c) == Surface.Forest
+                ? new ReadingDiffCell(c, [TerrainReason.Forest])
+                : throw new InvalidOperationException($"{c.ToNotation()} 是气但未被覆盖，且不是林地：气边与覆盖关系不一致。")),
+        ];
+
+        return coveredNotLiberty.IsEmpty && libertyNotCovered.IsEmpty ? BoardReadingDiff.Empty : new BoardReadingDiff(coveredNotLiberty, libertyNotCovered);
+    }
+
+    private static TerrainReason ReasonFor(MapData map, CoverageSource source, Coord target)
+    {
+        if (!source.Adjacent)
+        {
+            return TerrainReason.AcrossWater;
+        }
+
+        if (map.HasFence(source.Stone, target))
+        {
+            return TerrainReason.Fence;
+        }
+
+        if (map.HeightAt(source.Stone) - map.HeightAt(target) >= 2)
+        {
+            return TerrainReason.Cliff;
+        }
+
+        throw new InvalidOperationException($"{source.Stone.ToNotation()} 覆盖相邻的 {target.ToNotation()} 却不构成气边，且既无栅栏也非崖壁：气边与覆盖关系不一致。");
     }
 
     public static PowerLayerContent Power(PublicWorld world)

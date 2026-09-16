@@ -14,6 +14,12 @@ public readonly record struct CellCoverage(int CovererCount, PlayerId? SoleCover
     public bool IsUnique => CovererCount == 1;
 }
 
+/// <summary>
+/// 一格的一个覆盖来源：提供覆盖的棋子所在格，以及它与被覆盖格是否几何相邻（不相邻只可能是隔着一格深水，terrain「覆盖关系」第三步）。
+/// 供表现层解释两种读法的差集（tactical-layers「差集可由地形解释」）——表现层只读这一位，不自己算邻接。
+/// </summary>
+public readonly record struct CoverageSource(Coord Stone, bool Adjacent);
+
 /// <summary>格子归属的四种结果加障碍。</summary>
 public enum OwnershipKind
 {
@@ -59,13 +65,15 @@ public sealed class CoverageMap
     private readonly int _height;
     private readonly CellCoverage[] _coverage;
     private readonly CellOwnership[] _ownership;
+    private readonly ImmutableArray<CoverageSource>[] _sources;
 
-    private CoverageMap(int width, int height, CellCoverage[] coverage, CellOwnership[] ownership)
+    private CoverageMap(int width, int height, CellCoverage[] coverage, CellOwnership[] ownership, ImmutableArray<CoverageSource>[] sources)
     {
         _width = width;
         _height = height;
         _coverage = coverage;
         _ownership = ownership;
+        _sources = sources;
     }
 
     /// <summary>对当前盘面全量计算覆盖表与格子归属。不过滤任何玩家状态：弃赛者的遗留棋子照常覆盖（D7）。</summary>
@@ -75,6 +83,7 @@ public sealed class CoverageMap
         int width = board.Width;
         int height = board.Height;
         var coverers = new HashSet<PlayerId>?[width * height];
+        var sources = new ImmutableArray<CoverageSource>.Builder?[width * height];
 
         foreach (Coord c in board.AllCoords())
         {
@@ -86,7 +95,9 @@ public sealed class CoverageMap
             foreach (Coord target in board.CoverageTargets(c))
             {
                 // CoverageTargets 已排除越界、障碍、未架桥深水、林地与崖上格；覆盖到此为止，不再向更远的格传递。
-                (coverers[Index(width, target)] ??= []).Add(occupant.Owner);
+                int index = Index(width, target);
+                (coverers[index] ??= []).Add(occupant.Owner);
+                (sources[index] ??= ImmutableArray.CreateBuilder<CoverageSource>()).Add(new CoverageSource(c, Adjacency.AreAdjacent(c, target)));
             }
         }
 
@@ -103,7 +114,8 @@ public sealed class CoverageMap
             ownership[index] = Resolve(board[c], cell);
         }
 
-        return new CoverageMap(width, height, coverage, ownership);
+        return new CoverageMap(width, height, coverage, ownership,
+            [.. sources.Select(b => b is null ? ImmutableArray<CoverageSource>.Empty : b.ToImmutable())]);
     }
 
     /// <summary>覆盖查询：该格有几名不同的覆盖者，以及唯一覆盖者是谁。被占据的格同样记录覆盖，占据优先由 <see cref="OwnershipOf"/> 处理。</summary>
@@ -118,6 +130,12 @@ public sealed class CoverageMap
 
     /// <summary>格子归属：障碍 / 占据 / 独占 / 争议 / 中立。与 <see cref="UniqueCoverer"/> 读取同一份覆盖数据。</summary>
     public CellOwnership OwnershipOf(Coord c) => _ownership[RequireIndex(c)];
+
+    /// <summary>
+    /// 该格的全部覆盖来源（按 <see cref="Compute"/> 的遍历顺序，即棋子坐标字典序），无覆盖为空。
+    /// 只读查询：来源在 <see cref="Compute"/> 遍历覆盖目标时顺手记录，不另算一遍覆盖关系。
+    /// </summary>
+    public ImmutableArray<CoverageSource> SourcesOf(Coord c) => _sources[RequireIndex(c)];
 
     /// <summary>某玩家的独占空格集合，按字典序排列。棋子所在格不在其中——那些格只通过棋子的基础军势计分。</summary>
     public ImmutableArray<Coord> ExclusiveCellsOf(PlayerId player)

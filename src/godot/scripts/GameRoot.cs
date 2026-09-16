@@ -16,7 +16,8 @@ namespace Siege.Godot;
 /// </summary>
 /// <remarks>
 /// <para>AI 回合之间用 <c>_Process</c> 的计时器留出可见停顿，不开线程、不 <c>Sleep</c>。</para>
-/// <para>无人值守自检：命令行传 <c>-- --auto-demo</c> 时自动插旗、每回合自动 Pass，跑到终局打印一行结果后退出。</para>
+/// <para>无人值守自检：命令行传 <c>-- --auto-demo</c> 时自动插旗、每回合自动 Pass，跑到终局打印一行结果后退出；
+/// 传 <c>-- --pick-check</c> 时对每个可落子格做"格心投影到屏幕再分层拾取回同一格"的往返检查（terrain-model 6.1），全过退出码 0，否则 1。</para>
 /// </remarks>
 public sealed partial class GameRoot : Node3D
 {
@@ -38,6 +39,7 @@ public sealed partial class GameRoot : Node3D
     private int _screenshotFrame = -1;
     private string _screenshotPath = string.Empty;
     private bool _autoDemo;
+    private bool _pickCheck;
     private bool _dirty = true;
     private Coord? _hover;
 
@@ -46,6 +48,7 @@ public sealed partial class GameRoot : Node3D
     {
         List<string> args = [.. OS.GetCmdlineUserArgs(), .. OS.GetCmdlineArgs()];
         _autoDemo = args.Contains("--auto-demo");
+        _pickCheck = args.Contains("--pick-check");
         ulong seed = ReadSeed(args) ?? (_autoDemo ? 20260915UL : (ulong)Stopwatch.GetTimestamp());
         int rounds = _autoDemo ? 4 : MatchOptions.DefaultMaxMajorRounds;
         _pause = _autoDemo ? 0d : AiPauseSeconds;
@@ -56,7 +59,7 @@ public sealed partial class GameRoot : Node3D
 
         _board = new BoardView { Name = "Board" };
         AddChild(_board);
-        _board.Build(_session.World.Public.View, _session.ZoneOwners);
+        _board.Build(_session.World.Board(), _session.ZoneOwners);
 
         _hud = new Hud { Name = "Hud" };
         AddChild(_hud);
@@ -212,12 +215,50 @@ public sealed partial class GameRoot : Node3D
         }
 
         _frame++;
+        if (_pickCheck && _frame >= 2)
+        {
+            // 等到相机与视口都就绪的第 2 帧再投影，_Ready 里视口尺寸可能还没定。
+            _pickCheck = false;
+            GetTree().Quit(RunPickCheck() ? 0 : 1);
+            return;
+        }
+
         if (_screenshotFrame >= 0 && _frame >= _screenshotFrame)
         {
             _screenshotFrame = -1;
             Capture(_screenshotPath);
             GetTree().Quit(0);
         }
+    }
+
+    /// <summary>
+    /// 分层拾取往返检查：对视图模型里每个可落子格，把它（含高度）的格心投影到屏幕，再用 <see cref="BoardGeometry.TryPick"/> 拾取，
+    /// 必须回到同一格。高台边缘格是最容易错的地方——射线若先落到身后低地格就会在这里暴露。只用视图模型与 BoardGeometry，不读地图。
+    /// </summary>
+    private bool RunPickCheck()
+    {
+        int width = _session.Match.Map.Width;
+        int height = _session.Match.Map.Height;
+        var failures = new List<string>();
+        int total = 0;
+        foreach (var cell in _session.World.Board().Cells)
+        {
+            if (cell.Terrain != Terrain.Playable)
+            {
+                continue;
+            }
+
+            total++;
+            Vector2 screen = _board.Camera.UnprojectPosition(_board.CenterOf(cell.Coord));
+            bool hit = BoardGeometry.TryPick(_board.Camera, screen, width, height, _board.LevelOf, out Coord picked);
+            if (!hit || picked != cell.Coord)
+            {
+                failures.Add($"{cell.Coord.ToNotation()}(h{cell.Height}) → {(hit ? picked.ToNotation() : "未命中")}");
+            }
+        }
+
+        GD.Print($"[pick-check] 可落子格 {total}，往返一致 {total - failures.Count}，失败 {failures.Count}{(failures.Count == 0 ? string.Empty : "：" + string.Join("、", failures))}");
+        return failures.Count == 0;
     }
 
     private void Drive(double delta)
@@ -233,7 +274,7 @@ public sealed partial class GameRoot : Node3D
             if (_autoDemo)
             {
                 _session.ChooseZone(0);
-                _board.Build(_session.World.Public.View, _session.ZoneOwners);
+                _board.Build(_session.World.Board(), _session.ZoneOwners);
                 _dirty = true;
             }
 
@@ -376,7 +417,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         Vector2 mouse = GetViewport().GetMousePosition();
-        Coord? hover = BoardGeometry.TryPick(_board.Camera, mouse, _session.Match.Map.Width, _session.Match.Map.Height, out Coord coord)
+        Coord? hover = BoardGeometry.TryPick(_board.Camera, mouse, _session.Match.Map.Width, _session.Match.Map.Height, _board.LevelOf, out Coord coord)
             ? coord
             : null;
         if (hover != _hover)
@@ -463,7 +504,7 @@ public sealed partial class GameRoot : Node3D
     }
 
     private Coord? PickCell() =>
-        BoardGeometry.TryPick(_board.Camera, GetViewport().GetMousePosition(), _session.Match.Map.Width, _session.Match.Map.Height, out Coord coord)
+        BoardGeometry.TryPick(_board.Camera, GetViewport().GetMousePosition(), _session.Match.Map.Width, _session.Match.Map.Height, _board.LevelOf, out Coord coord)
             ? coord
             : null;
 
@@ -477,7 +518,7 @@ public sealed partial class GameRoot : Node3D
             }
 
             _session.ChooseZone(zone);
-            _board.Build(_session.World.Public.View, _session.ZoneOwners);
+            _board.Build(_session.World.Board(), _session.ZoneOwners);
             _dirty = true;
             return;
         }
