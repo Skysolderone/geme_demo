@@ -16,13 +16,32 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 
 | 语义 | 唯一归属 |
 |---|---|
-| 四邻接邻居遍历 | `Siege.Core` 棋盘拓扑 |
+| 几何四邻邻居枚举 | `Adjacency.Neighbors(width, height, c)`；Core 内直接调用只允许 `Adjacency` 自身与 `GameBoard.Neighbors`（守门名单） |
+| 气边（连接 / 棋串 / 气 / 围杀 / 连珠成线 / 校验器距离与口袋） | `Adjacency.LibertyNeighbors(MapData, Coord)`；经 `GameBoard.LibertyNeighbors` 到达 |
+| 覆盖关系（覆盖 / 空格归属 / 唯一覆盖 / 信物发现） | `Adjacency.CoverageTargets(MapData, Coord)`；经 `GameBoard.CoverageTargets` 到达。可不对称 |
+| 崖壁阈值 | `TerrainData.CliffDrop`（= 2）；气边 `abs(Δh) < CliffDrop`、覆盖 `h_t − h_s < CliffDrop`、表现层差集原因 `≥ CliffDrop` 三处共用，禁止第二份字面量 |
 | 围棋记法 ↔ 内部索引映射 | `Siege.Core` 坐标类型 |
-| 覆盖关系计算 | `Siege.Core` 领地层（信物控制复用它，不自行遍历） |
+| 覆盖数据（谁覆盖了哪格、来源棋子、是否几何相邻） | `CoverageMap.Compute` 一次算出；`SourcesOf(c)` 只读查询（信物控制、盘面层差集原因都消费它，不自行遍历） |
 | 结算顺序（设计文档 §6.3 六步） | `Siege.Core` 批次结算驱动器 |
 | 规则计算 | `Siege.Core`——表现层只消费预演结果，绝不自己算 |
 
 写新代码前先搜一遍是否已有实现。重复实现的典型症状：领地层说独占、信物层判争议。
+
+### 气与覆盖是两套边，不再恒等（terrain-model）
+
+`terrain-model` 之前"覆盖 = 棋子的四邻空格 = 棋串的气"，两个集合恒等，`merge-board-layer` 就是靠这一点把两层合成一层。地形进入规则后：
+
+- **气边**被 崖壁（Δh ≥ 2）、未架桥深水、栅栏 切断，对称
+- **覆盖关系**被 林地（不接收）切断，跨崖只能居高临下，遇一格宽深水落到对岸，栅栏不挡；可不对称
+
+任何地方写"被覆盖的空格就是气"或反过来，都是缺陷。表现层差集的四种原因（隔岸 / 栅栏 / 崖壁 / 林地）互斥，未命中必须响亮失败，不得静默归零。
+
+**Wrong**：`foreach (var n in board.Neighbors(c)) if (map.TerrainAt(n) != Terrain.Obstacle) …`（手写地形过滤，段 A 前 `GroupSafety` 就是这么写的）
+**Correct**：`foreach (var n in board.LibertyNeighbors(c)) …` 或 `board.CoverageTargets(c)`，按语义选一个。
+
+### 地形属性在表现层只能用于渲染
+
+`src/godot/` 与 `Siege.Presentation` 可以读 `HeightAt / SurfaceAt / HasBridge / HasFence` 决定画什么（层高、材质、栅栏朝向），**不得**用它们做任何规则判断（是否相邻、是否是气、谁覆盖）。规则结论一律从 `Siege.Presentation` 视图模型拿。守门：`Godot层不含规则计算Tests` 的 token 表含 `LibertyNeighbors(` / `CoverageTargets(`（变异 G1 已证实有效）。
 
 ## 视图分离
 
