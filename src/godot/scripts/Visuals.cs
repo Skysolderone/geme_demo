@@ -12,6 +12,12 @@ public static class Visuals
     /// <summary>棋盘底座色（缝隙露出的颜色，即网格线）。</summary>
     public static readonly Color GridInk = Color.Color8(28, 30, 36);
 
+    /// <summary>棋盘四边坐标标注的字色。棋盘外是深色背景，深灰字读不出来，取浅色并配深色描边。</summary>
+    public static readonly Color CoordinateLabel = Color.Color8(206, 202, 190);
+
+    /// <summary>坐标标注的描边色：压住浅色字在亮地砖上的反差不足。</summary>
+    public static readonly Color CoordinateLabelOutline = Color.Color8(18, 19, 23);
+
     /// <summary>可落子地砖。</summary>
     public static readonly Color TilePlayable = Color.Color8(150, 146, 128);
 

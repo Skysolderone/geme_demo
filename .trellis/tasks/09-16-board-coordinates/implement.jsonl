@@ -1,0 +1,3 @@
+{"file": "openspec/changes/board-coordinates/design.md", "reason": "D1-D3 与 §2.1 修订"}
+{"file": "openspec/changes/board-coordinates/specs/visual-style-baseline/spec.md", "reason": "棋盘坐标标注的 Requirement 与 Scenario"}
+{"file": "src/godot/scripts/BoardGeometry.cs", "reason": "Coord 到 3D 的唯一映射与标注锚点"}

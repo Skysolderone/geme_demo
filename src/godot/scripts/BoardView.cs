@@ -104,6 +104,8 @@ public sealed partial class BoardView : Node3D
             });
         }
 
+        BuildCoordinateLabels();
+
         _overlay = new Node3D { Name = "Overlay" };
         AddChild(_overlay);
         _pieces = new Node3D { Name = "Pieces" };
@@ -499,4 +501,57 @@ public sealed partial class BoardView : Node3D
             Translucent(child, alpha);
         }
     }
+
+    /// <summary>
+    /// 棋盘四边的围棋记法坐标标注（visual-style-baseline「棋盘坐标标注」）：列字母沿上下两边，行数字沿左右两边。
+    /// 文本一律取 <see cref="Coord.Column"/> / <see cref="Coord.Row"/>，位置一律取 <see cref="BoardGeometry"/> 的锚点——
+    /// 本层不得再写一份跳过 <c>I</c> 的字母表，否则界面与日志迟早指向不同的格子。
+    /// </summary>
+    private void BuildCoordinateLabels()
+    {
+        var labels = new Node3D { Name = "CoordinateLabels" };
+        AddChild(labels);
+
+        for (int x = 0; x < _width; x++)
+        {
+            string text = new Coord(x, 0).Column.ToString();
+            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: false)));
+            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: true)));
+        }
+
+        for (int y = 0; y < _height; y++)
+        {
+            string text = new Coord(0, y).Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: false)));
+            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: true)));
+        }
+    }
+
+    /// <summary>
+    /// 一个坐标标注：绕 X 轴 −90° 平铺在棋盘平面上，与地砖共面，像围棋棋盘边缘印刷的坐标。
+    /// </summary>
+    /// <remarks>
+    /// <b>不要改用 billboard。</b>Godot 的 Label3D 在 billboard 下渲染的是文字面的背面——billboard 让节点的
+    /// −Z 轴指向相机，而文字画在 +Z 面——四边标注会全部左右镜像。<c>Enabled</c> 与 <c>FixedY</c> 都如此。
+    /// 数字里的 1 / 0 / 8 字形左右对称，看不出异常，2 / 3 / 5 / 7 与字母 B / K / L 才暴露，
+    /// 所以这个缺陷靠"扫一眼截图"发现不了，必须逐字辨认。对局相机本身是固定的（见 <see cref="Build"/> 里的
+    /// <see cref="Camera3D"/>，没有任何旋转绑定），不存在"转到背面"的情形，平铺没有代价。（board-coordinates D2 修订）
+    /// </remarks>
+    private static Label3D Label(string text, Vector3 position) => new()
+    {
+        Text = text,
+        Position = position,
+        FontSize = 96,
+        // FixedSize：标注在屏幕上大小恒定，不随距相机远近缩放。坐标是读数不是景物，
+        // 近边的 A 与远边的 A 必须一样大——否则近端会胀到压住底部面板，远端小到看不清。
+        FixedSize = true,
+        PixelSize = 0.00035f,
+        Modulate = Visuals.CoordinateLabel,
+        OutlineModulate = Visuals.CoordinateLabelOutline,
+        OutlineSize = 10,
+        Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
+        RotationDegrees = new Vector3(-90f, 0f, 0f),
+        NoDepthTest = false,
+        TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
+    };
 }

@@ -136,8 +136,11 @@ public class Godot层不含规则计算Tests
 
         (string Name, string Text) geometry = scripts.Single(s => s.Name == "BoardGeometry.cs");
 
-        // 反面：判据在唯一实现里确实命中，否则下面的"别处没有"只是规则失效
-        Assert.Equal(4, Regex.Matches(geometry.Text, centering, RegexOptions.None, TimeSpan.FromSeconds(5)).Count);
+        // 反面：判据在唯一实现里确实命中，否则下面的"别处没有"只是规则失效。
+        // 6 处的构成：Center 的 x / z 各一处，TryFromWorld 反算的 x / y 各一处，
+        // 以及 board-coordinates 新增的两个标注锚点各取一次边界行列（ColumnLabelAnchor 的 height - 1、RowLabelAnchor 的 width - 1）。
+        // 这个数字是精确值而非下界：BoardGeometry 每多一处换算都该有人复审一次，确认它不是第二份映射。
+        Assert.Equal(6, Regex.Matches(geometry.Text, centering, RegexOptions.None, TimeSpan.FromSeconds(5)).Count);
         Assert.Equal(2, Regex.Matches(geometry.Text, inverse, RegexOptions.None, TimeSpan.FromSeconds(5)).Count);
 
         string[] second =

@@ -29,7 +29,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test` **658/658**，零警告，套件约 14 秒。已推送 |
+| `main` | 全绿：`dotnet test` **668/668**，零警告，套件约 14 秒。已推送 |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）
@@ -60,7 +60,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 `multiplier-rebalance`（倍率只放大基础军势、封顶降到 3）、`catch-up-recruit`（落后者征募补偿）、
 `denser-map`（4 人基准图改版 v2，可落子 109→85、障碍 12→36）。测试 **658**。
 
-**进行中**：`ai-safety-weight`（AI 安全权重 20→5，见下方数据）。
+`ai-safety-weight`（AI 安全权重 20→5）也已归档。测试 **668**。
 **已写好规格待执行**：`strict-cli`（未知命令行选项必须报错）、`board-coordinates`（棋盘四边显示坐标）。
 
 ## 现行终局与关键数值
@@ -110,7 +110,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 | 1–2 | catch-up-recruit 收尾与补偿强度定夺 | 已归档 |
 | 3 | 冲突偏晚 | 已归档（denser-map，6.52 → 5.46） |
 | 4 | 对局偏长 | 已归档（denser-map，终局局 11.15 → 9.43） |
-| 5 | 2000 局基线 | **等 ai-safety-weight 落地后再跑**——在未校准的权重上跑基线等于把错误口径固化 |
+| 5 | 2000 局基线 | 进行中（ai-safety-weight 已落地，前置条件已满足） |
 | 6 | 棋盘坐标标注 | 规格已写好（`openspec/changes/board-coordinates/`），待执行 |
 | 7 | 插旗竞争（四家抢同一出生区） | 未开始。建议排在"落后者无处可下"之后，它改开局动态，两者会互相干扰 |
 
