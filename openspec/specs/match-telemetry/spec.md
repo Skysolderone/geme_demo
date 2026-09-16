@@ -66,6 +66,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 6. 供给（展示/选取）、部署、槽位、倍率四条成长轴是否存在唯一最优顺序。
 7. 玩家是否频繁用"至少落 1 枚"规避 Pass 撤销，并形成无意义拖延。
 8. 势力碾压胜的占比、碾压成立（获胜）的平均大回合，以及成立时获胜者与第 2 名的势力比。
+9. 首次跨出生区冲突发生时的盘面占用率（盘面棋子数 ÷ 可落子格），与冲突大回合并列输出。
 
 #### Scenario: 棋子选择率与胜率
 - **WHEN** 读取分析报告
@@ -86,6 +87,10 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 #### Scenario: 碾压胜统计
 - **WHEN** 一批对局中有 40 局以势力碾压终局
 - **THEN** 报告给出碾压胜占比、这些局碾压成立的平均大回合，以及成立时获胜者势力与第 2 名势力之比
+
+#### Scenario: 冲突时的盘面占用率
+- **WHEN** 某局首次提子发生时盘面有 52 枚棋子、地图可落子格为 85
+- **THEN** 报告在首次冲突分析中给出该局占用率 61%，并给出全批次的平均占用率
 
 ### Requirement: 分析排除测试污染
 
