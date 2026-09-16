@@ -36,11 +36,17 @@ public sealed record EvaluationWeights(
     int Supply)
 {
     /// <summary>
-    /// 默认权重。初值，跑局后校准。安全权重曾取 3：基准图 5 局全部 600 小回合不终局（落子数 ≈ 被提数，纯绞肉循环）；
-    /// 取 10 仍不终局，取 20 两颗种子分别在第 11 / 53 大回合整轮 Pass 收尾，取 40 一半收敛——因此初值 20，并列为阶段 B 的首个校准项。
+    /// 默认权重。<see cref="Safety"/> = 5 是校准值：4 人基准图 v2、4 人 Standard AI、种子 1–200、大回合上限 15，
+    /// 按 3 / 5 / 7 / 8 / 10 / 20 / 30 / 40 / 60 九档各跑 200 局（数据在 <c>sim-out/safety&lt;N&gt;/</c>，<c>Safety = 20</c> 即 <c>sim-out/denser-map-200/</c>）。
+    /// <para>曲线非单调，且调高更不收敛：不收敛率 3→10.0%、5→9.5%、7→3.5%、8→13.0%、10→31.5%、20→27.5%、30→34.0%、40→42.0%、60→57.5%。
+    /// 机理是安全权重越高，被威胁的棋串越是总有"补一口气就加分"的手可下，AI 因此不 Pass，对局拖到大回合上限。
+    /// 取 5 而不取不收敛率最低的 7：7 的第 3 大回合领先者胜率 61.5%，与旧值 20 的 64.5% 没有差别，滚雪球原样保留；5 是 51.0%，
+    /// 而"领先者胜率 ≤ 50%"是设计文档 §16 / §17 的目标项，"不收敛率"只是"越低越好"。取 3 的领先者胜率跌到 16.0%，低于 25% 的随机基线，同样出局。</para>
+    /// <para>其余六维仍是 heuristic-ai 阶段的未校准初值，各自独立成轮；以它们产出的基线数据在引用时须注明权重口径。
+    /// 调这一维必须双向扫档，不得只朝一个方向试探。</para>
     /// </summary>
     public static readonly EvaluationWeights Default = new(
-        PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 20, Growth: 4, Initiative: 20, Supply: 2);
+        PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 5, Growth: 4, Initiative: 20, Supply: 2);
 
     /// <summary>某维度的权重。</summary>
     public int Of(EvaluationDimension dimension) => dimension switch
