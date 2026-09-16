@@ -1,0 +1,3 @@
+{"file": "openspec/changes/ai-safety-weight/specs/ai-decision/spec.md", "reason": "逐条核对 Requirement 与 Scenario 的守门是否真能红"}
+{"file": "openspec/changes/ai-safety-weight/design.md", "reason": "核对实现是否越过 D3（只改 Safety）与 §4 的不做事项"}
+{"file": ".trellis/spec/core/testing.md", "reason": "假守门的既有清单"}

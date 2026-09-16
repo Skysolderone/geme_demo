@@ -1,0 +1,5 @@
+{"file": "openspec/changes/ai-safety-weight/design.md", "reason": "D1–D5 裁决与九档扫档数据；实现前必读"}
+{"file": "openspec/changes/ai-safety-weight/specs/ai-decision/spec.md", "reason": "默认权重校准的 ADDED Requirement 与评价维度的 MODIFIED"}
+{"file": "openspec/changes/ai-safety-weight/tasks.md", "reason": "五组任务与各自的验证方式"}
+{"file": "src/Siege.Core/Ai/EvaluationWeights.cs", "reason": "默认权重表与待重写的 doc 注释"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门测试与变异验证的既有纪律"}
