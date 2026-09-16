@@ -60,6 +60,14 @@ public sealed class TerrainData
     /// <summary>最大高度档位。</summary>
     public const int MaxHeight = 2;
 
+    /// <summary>
+    /// 崖壁落差（裁决 D2）：相邻两格高度差达到此值即为崖壁——切断气边（<see cref="Adjacency.LibertyNeighbors"/> 要求 |Δh| &lt; CliffDrop），
+    /// 覆盖只能从高处落下（<see cref="Adjacency.CoverageTargets"/> 要求 h_t − h_s &lt; CliffDrop）；差 1 为缓坡，两个方向都通。
+    /// 表现层解释"被覆盖但不是气"的崖壁原因时也读它。这是全仓唯一一份阈值（terrain-model 裁决 C-8）；
+    /// 与 <see cref="MaxHeight"/> 数值相同只是三层高度下的巧合，不是同一语义。
+    /// </summary>
+    public const int CliffDrop = 2;
+
     /// <summary>全平地：无任何地形要素。</summary>
     public static readonly TerrainData Flat = new(
         ImmutableDictionary<Coord, int>.Empty,

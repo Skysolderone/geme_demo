@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Relics;
 
@@ -83,6 +84,37 @@ public class 公共争夺区信物权重与高阶升级Tests
         }
 
         Assert.InRange(advanced.Sum() * 1000 / total, 190, 210);
+    }
+
+    [Fact]
+    public void v3基准图上公共信物升级率落在宽口径()
+    {
+        // terrain-model 裁决 35（B-7）：`高阶比例` 换到合成 4:2 图后没有统计测试在真实基准图上跑。
+        // v3（siege-4p-base-v3，C4）公共区 = 桥头 4 Standard（150‰）+ 岛心 1 High（300‰），均值 (4×150 + 300) / 5 = 180‰；
+        // 宽口径 [15%, 21%]（"约 20%"的升级口径在 4+1 分布下的容许带），种子数与统计方式沿用 `高阶比例`（10000 种子）。
+        // 先钉 50000 = 10000 × 5：公共区少展开一个轨道（段 B N-2 的形状）本条先红，不会被宽口径吞掉。
+        // 变异验证 M-D3：两档升级率同改 300‰ → 本测试红（30% 越上界）；不用 "High 300 → 150"（恰压 15.0% 下界，抽样噪声下红绿不定）。
+        MapData v3 = FourPlayerBaseMap.Create();
+        Assert.Equal("siege-4p-base-v3", v3.Id);
+
+        int total = 0;
+        int advanced = 0;
+        for (ulong seed = 0; seed < 10000; seed++)
+        {
+            foreach (RelicPlacement p in RelicGenerator.Generate(v3, new GameSeed(seed)).Placements)
+            {
+                if (p.Spec.Zone != RelicZone.Contested)
+                {
+                    continue;
+                }
+
+                total++;
+                advanced += p.Content.IsAdvanced ? 1 : 0;
+            }
+        }
+
+        Assert.Equal(50000, total);
+        Assert.InRange(advanced * 1000 / total, 150, 210);
     }
 
     [Fact]

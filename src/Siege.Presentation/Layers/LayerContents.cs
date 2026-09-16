@@ -284,7 +284,7 @@ public static class TacticalLayers
             return TerrainReason.Fence;
         }
 
-        if (map.HeightAt(source.Stone) - map.HeightAt(target) >= 2)
+        if (map.HeightAt(source.Stone) - map.HeightAt(target) >= TerrainData.CliffDrop)
         {
             return TerrainReason.Cliff;
         }

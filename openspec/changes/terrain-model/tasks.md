@@ -42,7 +42,7 @@
 
 - [ ] 7.1 改写写死 11×11 / 85 / 36 障碍 / D2 对称 / `A–L` 的测试；几何算例改坐标重构，不改期望值。逐条列入提交信息并说明新坐标等价。
 - [ ] 7.2 设计文档 §3.1–3.3 改写为格属性与 v3 描述、§7.1 覆盖改走覆盖关系、§7.3 补"占据信物格同样揭示"、§14.2 两读法差集说明、§20 地形从装饰升级为规则元素；把 `terrain` 规格里的气边 / 覆盖算例（`F6`/`F7` 崖壁、`F6`–`G6` 栅栏、`F6`→`G6`→`H6` 隔岸）带进 §3 作为标准算例，使本 change 的规则类任务算例在归档后来自设计文档；变更记录加一行（v1.1 → v1.2）。验证：人工检查。
-- [ ] 7.3 `.trellis/spec/core/boundaries.md` 补"几何四邻 / 气边 / 覆盖关系三个唯一实现点"；`coordinates.md` 补列字母随宽度。验证：人工检查。
+- [x] 7.3 `.trellis/spec/core/boundaries.md` 补"几何四邻 / 气边 / 覆盖关系三个唯一实现点"；`coordinates.md` 补列字母随宽度。验证：人工检查。
 - [ ] 7.4 `relic-generation` 在 v3 基准图上补一条宽口径统计断言（升级率 15–21%，裁决 B-7）。验证：单元测试。
 - [ ] 7.5 崖壁阈值具名常量（裁决 C-8）：Core 出 `TerrainData.CliffDrop = 2`，`Adjacency.LibertyNeighbors / CoverageTargets` 与 `Presentation.LayerContents.ReasonFor` 共用，全仓不再有第二份字面量 2 / 1 表达同一阈值；`boundaries.md` 单一实现表补"几何四邻 / 气边 / 覆盖关系 / 崖壁阈值"与 `CoverageMap.SourcesOf` 只读查询。验证：grep 守门 + 既有测试仍绿。
 

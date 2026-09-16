@@ -53,7 +53,7 @@ public static class Adjacency
 
     /// <summary>
     /// 气边导出：<paramref name="c"/> 的几何邻居中，与 <paramref name="c"/> 之间存在气边者——
-    /// 两格都可落子（非障碍、非未架桥深水）∧ |Δh| ≤ 1 ∧ 之间无栅栏。对称关系。
+    /// 两格都可落子（非障碍、非未架桥深水）∧ |Δh| &lt; <see cref="TerrainData.CliffDrop"/>（即 ≤ 1）∧ 之间无栅栏。对称关系。
     /// <paramref name="c"/> 自身不可落子时返回空。顺序沿用 <see cref="Neighbors"/>（字典序）。
     /// </summary>
     public static ImmutableArray<Coord> LibertyNeighbors(MapData map, Coord c)
@@ -68,7 +68,7 @@ public static class Adjacency
         ImmutableArray<Coord>.Builder builder = ImmutableArray.CreateBuilder<Coord>(4);
         foreach (Coord n in Neighbors(map.Width, map.Height, c))
         {
-            if (map.IsPlayable(n) && Math.Abs(map.HeightAt(n) - h) <= 1 && !map.HasFence(c, n))
+            if (map.IsPlayable(n) && Math.Abs(map.HeightAt(n) - h) < TerrainData.CliffDrop && !map.HasFence(c, n))
             {
                 builder.Add(n);
             }
@@ -130,9 +130,9 @@ public static class Adjacency
         return builder.ToImmutable();
     }
 
-    /// <summary>目标格是否接收来自高度 <paramref name="sourceHeight"/> 的覆盖：可落子、非林地、不比来源高 2。</summary>
+    /// <summary>目标格是否接收来自高度 <paramref name="sourceHeight"/> 的覆盖：可落子、非林地、不比来源高 <see cref="TerrainData.CliffDrop"/>。</summary>
     private static bool Receives(MapData map, Coord target, int sourceHeight) =>
         map.IsPlayable(target)
         && map.SurfaceAt(target) != Surface.Forest
-        && map.HeightAt(target) - sourceHeight <= 1;
+        && map.HeightAt(target) - sourceHeight < TerrainData.CliffDrop;
 }
