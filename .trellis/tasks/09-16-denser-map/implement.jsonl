@@ -1,0 +1,9 @@
+{"file": "openspec/changes/denser-map/design.md", "reason": "D1–D5 与裁决 1–5；实现前必读"}
+{"file": "openspec/changes/denser-map/specs/map-definition/spec.md", "reason": "地图规模与校验区间的 MODIFIED Requirement"}
+{"file": "openspec/changes/denser-map/specs/match-telemetry/spec.md", "reason": "首次冲突补盘面占用率"}
+{"file": "openspec/changes/denser-map/proposal.md", "reason": "密度数据与根因分析"}
+{"file": "openspec/specs/map-definition/spec.md", "reason": "当前基线：校验五项与出生区容量要求"}
+{"file": "openspec/specs/board-topology/spec.md", "reason": "四邻接、气、绕障距离的既有定义"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "玩法设计权威原文 §3.1 §3.3 §16；4.2 要改它"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "围棋记法坐标，改图与改测试坐标时必读"}
+{"file": ".trellis/spec/core/testing.md", "reason": "既有算例改写纪律、变异验证、扫描守门要配算式形状"}

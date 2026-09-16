@@ -1,0 +1,5 @@
+{"file": "openspec/changes/denser-map/specs/map-definition/spec.md", "reason": "验收基准"}
+{"file": "openspec/changes/denser-map/specs/match-telemetry/spec.md", "reason": "验收基准：占用率统计"}
+{"file": "openspec/changes/denser-map/design.md", "reason": "核对 D1–D5 与裁决：85 格、13 格出生区、v2、区间放宽依据"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "核对 §3.3 §16 与变更记录"}
+{"file": ".trellis/spec/core/testing.md", "reason": "既有测试改写不得改期望凑绿；几何用例换坐标要说明等价性"}
