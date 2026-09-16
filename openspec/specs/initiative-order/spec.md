@@ -67,9 +67,13 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 ### Requirement: 排名的作用范围
 
-势力排名 SHALL 只影响信息展示与下一大回合的行动顺序，MUST NOT 在每轮转换为累计积分。
+势力排名 SHALL 只影响：信息展示、下一大回合的行动顺序、以及落后者征募补偿（名次靠后者在下一小回合获得征募展示数 / 选取数加成）。排名 MUST NOT 在每轮转换为累计积分，领先者 MUST NOT 因排名获得任何资源。
 
 #### Scenario: 排名不累计
 - **WHEN** 某玩家连续 5 个大回合排名第 1
 - **THEN** 该玩家不因此获得任何累计分数或额外资源
+
+#### Scenario: 落后补偿不累计
+- **WHEN** 某玩家连续 5 个小回合以最后一名开始
+- **THEN** 该玩家每个小回合各获得一次当回合的补偿，补偿不叠加、不结转
 

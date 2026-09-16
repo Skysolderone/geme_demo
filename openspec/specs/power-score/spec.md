@@ -97,9 +97,9 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 系统 SHALL 在每个合法批次结算后、以及每次 Pass 完成后，立即重算所有玩家的势力值并更新公开排名。
 
-排名 SHALL 只影响信息展示与下一大回合行动顺序的计算，MUST NOT 在每轮转换为累计积分。
+排名 SHALL 只影响信息展示、下一大回合行动顺序的计算与落后者征募补偿的判定，MUST NOT 在每轮转换为累计积分。
 
-已弃赛玩家的盘面势力 SHALL 继续计算与显示，并 MUST 被标记为"已弃赛"；其势力 MUST NOT 参与行动顺序生成与获胜判断。
+已弃赛玩家的盘面势力 SHALL 继续计算与显示，并 MUST 被标记为"已弃赛"；其势力 MUST NOT 参与行动顺序生成、落后者征募补偿判定与获胜判断。
 
 #### Scenario: 每次结算后更新
 - **WHEN** 任意玩家确认一个合法批次
@@ -111,7 +111,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 #### Scenario: 弃赛者势力可见但不参与
 - **WHEN** 已弃赛玩家 D 的盘面势力为 45，高于参赛玩家 A 的 30
-- **THEN** D 的势力照常显示并标记为已弃赛，但生成下一大回合顺序时 D 被排除，不占据任何名次
+- **THEN** D 的势力照常显示并标记为已弃赛，但生成下一大回合顺序与判定落后者征募补偿时 D 被排除，不占据任何名次
 
 ### Requirement: 势力名次
 
