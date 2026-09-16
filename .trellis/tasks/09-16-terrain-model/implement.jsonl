@@ -12,3 +12,4 @@
 {"file": ".trellis/spec/core/coordinates.md", "reason": "围棋记法、列字母随宽度"}
 {"file": ".trellis/spec/core/testing.md", "reason": "既有算例改坐标不改期望；守门测试要做变异验证"}
 {"file": ".trellis/spec/core/determinism.md", "reason": "全整数、实时重算不缓存"}
+{"file": "openspec/changes/terrain-model/specs/piece-effects/spec.md", "reason": "连珠线沿气边（裁决 A-6）"}

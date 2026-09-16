@@ -6,3 +6,4 @@
 {"file": "openspec/changes/terrain-model/design.md", "reason": "核对 D-A～D-H 与裁决记录；本轮不得实现②③轮内容"}
 {"file": ".trellis/spec/core/testing.md", "reason": "不得改期望凑绿；守门测试必须有变异记录"}
 {"file": ".trellis/spec/core/boundaries.md", "reason": "不得出现第二处邻接遍历或地形过滤"}
+{"file": "openspec/changes/terrain-model/specs/piece-effects/spec.md", "reason": "验收基准：连珠两个新 Scenario"}
