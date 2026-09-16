@@ -21,7 +21,7 @@ public class 对局日志的记录内容Tests
         MatchLog log = MatchLog.Read(path);
 
         // 1. 地图、种子、完整信物分布及揭示时间
-        Assert.Equal("siege-4p-base-v1", log.Header.MapId);
+        Assert.Equal("siege-4p-base-v2", log.Header.MapId);
         Assert.Equal(live.Header.Seed, log.Header.Seed);
         Assert.NotEmpty(log.Header.Relics);
         Assert.All(log.Header.Relics, r => Assert.True(Coord.TryParse(r.Coord, out _) && Enum.TryParse<Relics.RelicType>(r.Type, out _)));

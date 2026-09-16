@@ -44,17 +44,31 @@ public sealed class MapValidationException : Exception
 public static class MapValidator
 {
     // 用整数百分比比较，避免浮点进入内核。规范：.trellis/spec/core/determinism.md
-    private const int MinObstaclePercent = 8;
-    private const int MaxObstaclePercent = 12;
+    // 区间在 denser-map 从 8%–12% 放宽到 25%–35%：原值是 board-core 阶段凭"11×11 少量障碍"的直觉定的，
+    // 现在有实测密度曲线作为依据（首次提子稳定发生在盘面占可落子格 62% 时）。denser-map 裁决 5。
+    private const int MinObstaclePercent = 25;
+    private const int MaxObstaclePercent = 35;
 
-    /// <summary>人数适配预算：可落子格区间、出生区数、信物格区间。</summary>
-    private static readonly ImmutableDictionary<int, (int MinPlayable, int MaxPlayable, int MinRelics, int MaxRelics)> Budgets =
-        new Dictionary<int, (int, int, int, int)>
+    /// <summary>
+    /// 人数适配预算：可落子格区间、信物格区间、出生区可落子格区间。
+    /// 出生区区间为 <c>null</c> 表示规格未给该人数的区间（2 / 3 人图尚未定稿），此项不校验；
+    /// 与之无关的"容得下 9 枚基础部署"下界对所有人数一律生效。
+    /// </summary>
+    private static readonly ImmutableDictionary<int, Budget> Budgets =
+        new Dictionary<int, Budget>
         {
-            [2] = (50, 65, 7, 9),
-            [3] = (75, 90, 10, 12),
-            [4] = (100, 115, 13, 15),
+            [2] = new(50, 65, 7, 9, null),
+            [3] = new(75, 90, 10, 12, null),
+            [4] = new(80, 95, 13, 15, (12, 14)),
         }.ToImmutableDictionary();
+
+    /// <summary>一档人数的规模预算。</summary>
+    private readonly record struct Budget(
+        int MinPlayable,
+        int MaxPlayable,
+        int MinRelics,
+        int MaxRelics,
+        (int Min, int Max)? BirthZoneCells);
 
     /// <summary>前三大回合单玩家最多 9 枚基础部署，出生区必须容得下。</summary>
     private const int ProtectionPhaseDeployments = 9;
@@ -65,6 +79,7 @@ public static class MapValidator
         ImmutableArray<MapValidationFailure>.Builder f = ImmutableArray.CreateBuilder<MapValidationFailure>();
 
         ValidateStructure(map, f);
+        ValidatePlayableCount(map, f);
         ValidateBudgets(map, f);
         ValidateObstacleRatio(map, f);
         ValidateBirthZones(map, f);
@@ -108,14 +123,15 @@ public static class MapValidator
         }
     }
 
-    private static void ValidateBudgets(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    /// <summary>
+    /// 校验规则第 6 条：可落子格总数必须落在该人数的预算区间内。
+    /// 单列成一步而不是混在信物 / 出生区预算里——改图时越界是最容易发生、又最难在对局中归因的一类错误
+    /// （表现为"密度不对、冲突时点漂移"，而不是任何一条规则报错）。denser-map 裁决 5。
+    /// </summary>
+    private static void ValidatePlayableCount(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        if (!Budgets.TryGetValue(map.MaxPlayers, out var budget))
+        if (!Budgets.TryGetValue(map.MaxPlayers, out Budget budget))
         {
-            f.Add(new MapValidationFailure(
-                "UNSUPPORTED_PLAYER_COUNT",
-                $"不支持的人数 {map.MaxPlayers}：只提供 2 / 3 / 4 人的预算表。",
-                ImmutableArray<Coord>.Empty));
             return;
         }
 
@@ -126,6 +142,18 @@ public static class MapValidator
                 "PLAYABLE_COUNT_OUT_OF_RANGE",
                 $"{map.MaxPlayers} 人地图的可落子格为 {playable}，超出 {budget.MinPlayable}–{budget.MaxPlayable} 区间。",
                 ImmutableArray<Coord>.Empty));
+        }
+    }
+
+    private static void ValidateBudgets(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        if (!Budgets.TryGetValue(map.MaxPlayers, out Budget budget))
+        {
+            f.Add(new MapValidationFailure(
+                "UNSUPPORTED_PLAYER_COUNT",
+                $"不支持的人数 {map.MaxPlayers}：只提供 2 / 3 / 4 人的预算表。",
+                ImmutableArray<Coord>.Empty));
+            return;
         }
 
         int relics = map.RelicCells.Count;
@@ -202,6 +230,17 @@ public static class MapValidator
                 f.Add(new MapValidationFailure(
                     "BIRTH_ZONE_TOO_SMALL",
                     $"出生区 {i} 只有 {playable} 个可落子格，容不下前三大回合最多 {ProtectionPhaseDeployments} 枚基础部署。",
+                    ImmutableArray<Coord>.Empty));
+            }
+
+            // 出生区内可以有障碍，但不得把该区压到区间之外（denser-map：4 人图每区 12–14 格）。
+            if (Budgets.TryGetValue(map.MaxPlayers, out Budget b)
+                && b.BirthZoneCells is { } range
+                && (playable < range.Min || playable > range.Max))
+            {
+                f.Add(new MapValidationFailure(
+                    "BIRTH_ZONE_SIZE_OUT_OF_RANGE",
+                    $"出生区 {i} 有 {playable} 个可落子格，超出 {map.MaxPlayers} 人地图的 {range.Min}–{range.Max} 区间。",
                     ImmutableArray<Coord>.Empty));
             }
 

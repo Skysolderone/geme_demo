@@ -10,14 +10,22 @@ public class 人数适配预算Tests
     [Fact]
     public void 格数超出预算()
     {
-        // 4 人地图的可落子格必须落在 100–115；这里放大到 12×12 使其变成 132
-        MapData oversized = FourPlayerBaseMap.Create() with { Width = 12, Height = 12 };
+        // 规格 Scenario：4 人地图的可落子格为 130 → 拒绝并报告超出 80–95（denser-map 裁决 5）。
+        // 12×12 = 144 外接，只留 14 格障碍 → 可落子恰好 130，与规格算例逐字对上。
+        MapData baseMap = FourPlayerBaseMap.Create();
+        MapData oversized = baseMap with
+        {
+            Width = 12,
+            Height = 12,
+            Obstacles = [.. baseMap.Obstacles.Order().Take(14)],
+        };
 
         MapValidationResult result = MapValidator.Validate(oversized);
 
         MapValidationFailure failure = Assert.Single(
             result.Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("100–115", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("可落子格为 130", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("80–95", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]

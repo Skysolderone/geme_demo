@@ -7,27 +7,85 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <summary>规格：map-definition —— Requirement: 地图静态校验规则</summary>
 public class 地图静态校验规则Tests
 {
+    /// <summary>v1 基准图的 12 格障碍集合：可落子 109、障碍占比 9.9%，两条区间都越界。</summary>
+    private static readonly string[] V1Obstacles =
+    [
+        "C5", "J5", "C7", "J7", "E3", "G3", "E9", "G9", "A6", "L6", "F1", "F11",
+    ];
+
     [Fact]
     public void 障碍占比越界()
     {
-        MapData sparse = FourPlayerBaseMap.Create() with
-        {
-            Obstacles = [Coord.Parse("A6"), Coord.Parse("L6"), Coord.Parse("F1"), Coord.Parse("F11")],
-        };
+        // 规格 Scenario：11×11 地图的障碍格为 12 个（约 9.9%）→ 报告低于 25%。用的就是 v1 基准图的障碍集合。
+        MapData sparse = FourPlayerBaseMap.Create() with { Obstacles = [.. V1Obstacles.Select(Coord.Parse)] };
 
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(sparse).Failures, f => f.Code == "OBSTACLE_RATIO_TOO_LOW");
-        Assert.Contains("低于 8%", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("障碍格 12 个", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("9.9%", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("低于 25%", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 可落子格越界()
+    {
+        // 规格 Scenario：可落子格为 109 的 11×11 地图 → 拒绝并报告超出 80–95 区间。
+        // 校验规则第 6 条，denser-map 新增：可落子格越界既不会报障碍占比、也不会报出生区，
+        // 只会表现为"密度不对、冲突时点漂移"，必须有一条显式规则挡住。
+        MapData v1 = FourPlayerBaseMap.Create() with { Obstacles = [.. V1Obstacles.Select(Coord.Parse)] };
+        Assert.Equal(109, v1.PlayableCount);
+
+        MapValidationFailure failure = Assert.Single(
+            MapValidator.Validate(v1).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
+        Assert.Contains("可落子格为 109", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("80–95", failure.Message, StringComparison.Ordinal);
+
+        // 下界 80 同样要挡住：区间只有上界有算例时，把下界写成 60 只会让消息文本变化，
+        // 行为上一条测试都不红（check 变异 M-CK3 实测）。这里在基准图上再挖 10 格公共区障碍 → 75 格。
+        MapData baseMap = FourPlayerBaseMap.Create();
+        Coord[] extra = [.. baseMap.AllCoords()
+            .Where(c => baseMap.TerrainAt(c) == Terrain.Playable && baseMap.BirthZoneOf(c) is null)
+            .Order().Take(10)];
+        MapData tooSparse = baseMap with { Obstacles = baseMap.Obstacles.Union(extra) };
+        Assert.Equal(75, tooSparse.PlayableCount);
+
+        MapValidationFailure low = Assert.Single(
+            MapValidator.Validate(tooSparse).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
+        Assert.Contains("可落子格为 75", low.Message, StringComparison.Ordinal);
+        Assert.Contains("80–95", low.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 出生区可落子格超出区间()
+    {
+        // 「出生区内的障碍 MUST NOT 使该区的可落子格少于 12」：把出生区 0 再挖掉 2 格 → 11 格 → 报错。
+        MapData map = FourPlayerBaseMap.Create();
+        Coord[] extra = [.. map.BirthZones[0].Where(c => map.TerrainAt(c) == Terrain.Playable).Order().Take(2)];
+        MapData shrunk = map with { Obstacles = map.Obstacles.Union(extra) };
+
+        MapValidationFailure failure = Assert.Single(
+            MapValidator.Validate(shrunk).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
+        Assert.Contains("出生区 0 有 11 个可落子格", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("12–14", failure.Message, StringComparison.Ordinal);
+
+        // 14 格是上界：区形 15 格里只挖 1 格 → 14，必须通过。
+        MapData fourteen = map with
+        {
+            Obstacles = map.Obstacles.Except(
+                [Coord.Parse("B4"), Coord.Parse("K4"), Coord.Parse("B8"), Coord.Parse("K8")]),
+        };
+        Assert.DoesNotContain(
+            MapValidator.Validate(fourteen).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
     }
 
     [Theory]
-    [InlineData(7, false)]    // 7.0% < 8%
-    [InlineData(8, true)]     // 恰好 8%，区间是闭的
-    [InlineData(12, true)]    // 恰好 12%，区间是闭的
-    [InlineData(13, false)]   // 13.0% > 12%
+    [InlineData(24, false)]   // 24.0% < 25%
+    [InlineData(25, true)]    // 恰好 25%，区间是闭的
+    [InlineData(35, true)]    // 恰好 35%，区间是闭的
+    [InlineData(36, false)]   // 36.0% > 35%
     public void 障碍占比区间两端都是闭的(int obstacleCount, bool accepted)
     {
-        // "障碍格数占外接区域的 8%–12%"：10×10 = 100 格，障碍数直接就是百分比。
+        // "障碍格数占外接区域的 25%–35%"（denser-map 裁决 5）：10×10 = 100 格，障碍数直接就是百分比。
         MapData map = TestMaps.Synthetic(size: 10, maxPlayers: 4);
         MapData withObstacles = map with { Obstacles = [.. map.FirstCells(obstacleCount)] };
 
@@ -35,19 +93,19 @@ public class 地图静态校验规则Tests
             .Select(f => f.Code)
             .Where(c => c.StartsWith("OBSTACLE_RATIO", StringComparison.Ordinal))];
 
-        Assert.Equal(accepted ? [] : new[] { obstacleCount < 8 ? "OBSTACLE_RATIO_TOO_LOW" : "OBSTACLE_RATIO_TOO_HIGH" }, codes);
+        Assert.Equal(accepted ? [] : new[] { obstacleCount < 25 ? "OBSTACLE_RATIO_TOO_LOW" : "OBSTACLE_RATIO_TOO_HIGH" }, codes);
     }
 
     [Fact]
     public void 障碍占比过高()
     {
         MapData map = TestMaps.Synthetic(size: 10, maxPlayers: 4);
-        MapData crowded = map with { Obstacles = [.. map.FirstCells(30)] };
+        MapData crowded = map with { Obstacles = [.. map.FirstCells(48)] };
 
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(crowded).Failures, f => f.Code == "OBSTACLE_RATIO_TOO_HIGH");
-        Assert.Contains("高于 12%", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("30.0%", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("高于 35%", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("48.0%", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -94,9 +152,11 @@ public class 地图静态校验规则Tests
     public void 出生区容不下九枚部署()
     {
         MapData map = FourPlayerBaseMap.Create();
+        // 区形里现在有障碍（denser-map），所以要按"可落子格"截取，否则截到的 8 格里会混进障碍。
         MapData shrunk = map with
         {
-            BirthZones = map.BirthZones.SetItem(0, [.. map.BirthZones[0].Order().Take(8)]),
+            BirthZones = map.BirthZones.SetItem(
+                0, [.. map.BirthZones[0].Where(c => map.TerrainAt(c) == Terrain.Playable).Order().Take(8)]),
         };
 
         MapValidationFailure failure = Assert.Single(
@@ -107,11 +167,13 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 出生区恰好九格时通过()
     {
-        // 阈值是"容得下 9 枚"，9 本身合法。
+        // 阈值是"容得下 9 枚"，9 本身合法。本条只管 BIRTH_ZONE_TOO_SMALL 这一码；
+        // "每区 12–14 格"是另一条独立规则（BIRTH_ZONE_SIZE_OUT_OF_RANGE），由「出生区可落子格超出区间」把关。
         MapData map = FourPlayerBaseMap.Create();
         MapData nineCells = map with
         {
-            BirthZones = map.BirthZones.SetItem(0, [.. map.BirthZones[0].Order().Take(9)]),
+            BirthZones = map.BirthZones.SetItem(
+                0, [.. map.BirthZones[0].Where(c => map.TerrainAt(c) == Terrain.Playable).Order().Take(9)]),
         };
 
         Assert.DoesNotContain(
@@ -195,32 +257,32 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 必死口袋()
     {
-        // 用障碍把出生区左下角封出一块 6 格死角（小于两眼所需的 8 格）
+        // 用障碍把出生区 0 封出一块 7 格死角（小于两眼所需的 8 格）。
+        // denser-map 之后 D1/D2 只剩 C1/C2 一条出路（E1、D3 已是障碍），所以墙必须绕开 C1/C2，
+        // 否则会额外圈出一个 {D1, D2} 的 2 格口袋，Assert.Single 会因为出现两个口袋而红。
         MapData map = FourPlayerBaseMap.Create();
         MapData pocketed = map with
         {
             Obstacles = map.Obstacles.Union([
-                Coord.Parse("C1"), Coord.Parse("C2"), Coord.Parse("C3"),
-                Coord.Parse("A4"), Coord.Parse("B4")]),
+                Coord.Parse("A1"), Coord.Parse("C2"), Coord.Parse("B3"), Coord.Parse("A4")]),
         };
 
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(pocketed).Failures, f => f.Code == "DEAD_POCKET");
         Assert.Contains("小于形成两眼所需的 8 格", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(["A1", "B1", "A2", "B2", "A3", "B3"], failure.Coords.Notations());
+        Assert.Equal(["B1", "C1", "D1", "A2", "B2", "D2", "A3"], failure.Coords.Notations());
     }
 
     [Fact]
     public void 面积恰好等于两眼最小格数的空区不算口袋()
     {
         // 规格："连通空区面积小于 8 即判失败"——8 本身是合法的，阈值是闭的下界。
-        // 下面用障碍把出生区 0 的角上圈出恰好 8 格（A1 B1 C1 A2 B2 C2 A3 B3）。
+        // 下面用障碍把出生区 0 圈出恰好 8 格（A1 B1 C1 D1 A2 B2 D2 A3）。
         MapData map = FourPlayerBaseMap.Create();
         MapData eightCellPocket = map with
         {
             Obstacles = map.Obstacles.Union([
-                Coord.Parse("D1"), Coord.Parse("D2"), Coord.Parse("C3"),
-                Coord.Parse("A4"), Coord.Parse("B4")]),
+                Coord.Parse("C2"), Coord.Parse("B3"), Coord.Parse("A4")]),
         };
 
         Assert.DoesNotContain(
@@ -229,11 +291,11 @@ public class 地图静态校验规则Tests
         // 同一块区域少一格（7 格）就必须失败，证明上面那次通过不是因为规则没跑。
         MapData sevenCellPocket = eightCellPocket with
         {
-            Obstacles = eightCellPocket.Obstacles.Add(Coord.Parse("C1")),
+            Obstacles = eightCellPocket.Obstacles.Add(Coord.Parse("A1")),
         };
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(sevenCellPocket).Failures, f => f.Code == "DEAD_POCKET");
-        Assert.Equal(["A1", "B1", "A2", "B2", "C2", "A3", "B3"], failure.Coords.Notations());
+        Assert.Equal(["B1", "C1", "D1", "A2", "B2", "D2", "A3"], failure.Coords.Notations());
     }
 
     [Fact]
@@ -288,15 +350,14 @@ public class 地图静态校验规则Tests
         MapData map = FourPlayerBaseMap.Create();
         var walls = new[]
         {
-            Coord.Parse("C1"), Coord.Parse("C2"), Coord.Parse("C3"),
-            Coord.Parse("A4"), Coord.Parse("B4"),
+            Coord.Parse("A1"), Coord.Parse("C2"), Coord.Parse("B3"), Coord.Parse("A4"),
         };
         MapData exempted = map with
         {
             Obstacles = map.Obstacles.Union(walls),
-            PocketExemptions = [Coord.Parse("A1")],
+            PocketExemptions = [Coord.Parse("B1")],
             PocketExemptionReasons = ImmutableDictionary<Coord, string>.Empty
-                .Add(Coord.Parse("A1"), "测试用：刻意保留的装饰性死角"),
+                .Add(Coord.Parse("B1"), "测试用：刻意保留的装饰性死角"),
         };
 
         Assert.DoesNotContain(MapValidator.Validate(exempted).Failures, f => f.Code == "DEAD_POCKET");
@@ -315,6 +376,7 @@ public class 地图静态校验规则Tests
     public void 信物格必须位于可落子格()
     {
         MapData map = FourPlayerBaseMap.Create();
+        Assert.Contains(Coord.Parse("D4"), map.RelicCells.Keys);
         MapData broken = map with { Obstacles = map.Obstacles.Add(Coord.Parse("D4")) };
 
         Assert.Contains(

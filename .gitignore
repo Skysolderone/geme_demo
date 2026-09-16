@@ -15,3 +15,6 @@ src/godot/obj/
 .DS_Store
 # Siege.Sim 跑局输出（日志、汇总、报告）
 sim-out/
+# Siege.Sim 跑局输出（另一处历史目录名）
+out/
+cfg-safety*.json

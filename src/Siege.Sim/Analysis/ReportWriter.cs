@@ -57,6 +57,10 @@ public static class ReportWriter
         sb.AppendLine("### 3. 首次跨出生区冲突（首次提子所在大回合）");
         sb.AppendLine($"- 分布：{Histogram(t.FirstConflictRounds)}；整局无冲突 {t.MatchesWithoutConflict} 局");
         sb.AppendLine($"- 平均：{t.FirstConflict}");
+        sb.AppendLine(
+            $"- 冲突时的盘面占用率（首次提子时盘面棋子数 ÷ 该局地图可落子格）：平均 {Pct(t.MeanFirstConflictOccupancy)}；"
+            + $"分布（整数百分比向下取整）{Histogram(t.FirstConflictOccupancy)}；"
+            + $"未纳入 {t.MatchesWithoutOccupancy} 局（整局无提子，或 denser-map 之前未记可落子格的旧日志）");
         sb.AppendLine("### 4. 4 人完整大回合平均耗时");
         sb.AppendLine($"- {t.MajorRoundMinutes}：这是玩家体验目标，无头跑局不测（裁决 10）。代理：平均每大回合 {Num(t.MeanTurnsPerMajorRound)} 个小回合，AI 计算耗时 {Num(t.MeanAiMsPerMajorRound)} ms/大回合");
         sb.AppendLine("### 5. 对局结束的大回合数与整局时长");
@@ -132,6 +136,10 @@ public static class ReportWriter
         sb.AppendLine($"- 判定：{(g.DominantSequence is null ? "无样本" : g.DominantShare > 0.5 ? $"存在占比 {Pct(g.DominantShare)} 的主导顺序 {g.DominantSequence}，疑似唯一最优解" : $"最多的顺序 {g.DominantSequence} 占 {Pct(g.DominantShare)}，未见唯一最优顺序")}");
         sb.AppendLine("### 7. 最小落子规避 Pass 撤销（落 1 枚且势力无变化）");
         sb.AppendLine($"- 信号出现 {r.Stalling.SignalTurns} 次，占全部 {r.Stalling.TotalTurns} 个小回合的 {r.Stalling.Ratio}");
+        sb.AppendLine("### 9. 首次跨出生区冲突发生时的盘面占用率（denser-map D5：改图 / 改部署上限后必须复看这条）");
+        sb.AppendLine(
+            $"- 平均占用率 {Pct(t.MeanFirstConflictOccupancy)}，与冲突大回合 {t.FirstConflict} 并列；"
+            + $"分布 {Histogram(t.FirstConflictOccupancy)}；未纳入 {t.MatchesWithoutOccupancy} 局");
         return sb.ToString();
     }
 

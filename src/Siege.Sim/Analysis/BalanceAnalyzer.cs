@@ -70,6 +70,9 @@ public sealed record TargetsSection(
     SortedDictionary<int, int> FirstConflictRounds,
     int MatchesWithoutConflict,
     Deviation FirstConflict,
+    SortedDictionary<int, int> FirstConflictOccupancy,
+    double MeanFirstConflictOccupancy,
+    int MatchesWithoutOccupancy,
     Deviation MajorRoundMinutes,
     double MeanTurnsPerMajorRound,
     double MeanAiMsPerMajorRound,
@@ -331,6 +334,9 @@ public static class BalanceAnalyzer
         var maxGroupByRound = new SortedDictionary<int, long>();
         var firstConflict = new SortedDictionary<int, int>();
         int noConflict = 0;
+        var occupancyHistogram = new SortedDictionary<int, int>();
+        var occupancyRatios = new List<double>();
+        int noOccupancy = 0;
         var endRounds = new SortedDictionary<int, int>();
         long totalTurns = 0;
         long totalRounds = 0;
@@ -340,6 +346,7 @@ public static class BalanceAnalyzer
         foreach (MatchLog log in logs)
         {
             int? conflictRound = null;
+            int? conflictStones = null;
             var lastOfRound = new Dictionary<int, TurnSnapshot>();
             foreach (TurnSnapshot turn in log.Turns)
             {
@@ -352,6 +359,10 @@ public static class BalanceAnalyzer
                 if (conflictRound is null && turn.Captures.Count > 0)
                 {
                     conflictRound = turn.MajorRound;
+
+                    // 口径：首次提子那一小回合结束时盘面上的棋子数（提子已生效），
+                    // 取各玩家棋串的棋子数之和——落子记录是增量，快照才是盘面。
+                    conflictStones = turn.PlayersState.Sum(p => p.Groups.Sum(g => g.Stones.Count));
                 }
 
                 lastOfRound[turn.MajorRound] = turn;
@@ -379,6 +390,18 @@ public static class BalanceAnalyzer
             else
             {
                 noConflict++;
+            }
+
+            // 分母是"纳入局"：整局无提子的局、以及 denser-map 之前没记可落子格的旧日志，一律排除。
+            if (conflictStones is { } stones && log.Header.PlayableCells is { } cells && cells > 0)
+            {
+                int percent = stones * 100 / cells;
+                occupancyHistogram[percent] = occupancyHistogram.TryGetValue(percent, out int k) ? k + 1 : 1;
+                occupancyRatios.Add((double)stones / cells);
+            }
+            else
+            {
+                noOccupancy++;
             }
 
             LogResult r = log.Result!;
@@ -418,6 +441,7 @@ public static class BalanceAnalyzer
             Statistics.Assess(mid, 20, 150),
             firstConflict, noConflict,
             Statistics.Assess(conflictMean, 4, 5, " 大回合"),
+            occupancyHistogram, Statistics.Mean(occupancyRatios), noOccupancy,
             Statistics.Unmeasurable(0, 3, " 分钟"),
             totalRounds == 0 ? double.NaN : (double)totalTurns / totalRounds,
             Statistics.Mean(roundMs),

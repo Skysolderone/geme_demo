@@ -502,6 +502,7 @@ public sealed class MatchSession
         return new LogHeader
         {
             MapId = Match.Map.Id,
+            PlayableCells = Match.Map.PlayableCount,
             Seed = Seed.ToString(),
             MaxMajorRounds = Match.MaxMajorRounds,
             DominanceStartRound = Match.DominanceStartRound,

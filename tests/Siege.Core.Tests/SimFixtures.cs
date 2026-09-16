@@ -69,7 +69,7 @@ internal static class SimFixtures
 
     internal static MatchLog Synthetic(
         ulong seed, IEnumerable<TurnSnapshot> turns, IEnumerable<LogEvent> events, LogResult result, int players = 4, int[]? zones = null, bool relicsConverged = true, RelicEntry[]? relics = null,
-        bool? catchUpRecruit = null) =>
+        bool? catchUpRecruit = null, int? playableCells = null) =>
         new()
         {
             Header = new LogHeader
@@ -77,6 +77,7 @@ internal static class SimFixtures
                 MapId = "synthetic",
                 Seed = new Siege.Core.Determinism.GameSeed(seed).ToString(),
                 CatchUpRecruit = catchUpRecruit,
+                PlayableCells = playableCells,
                 Config = Config(players: players),
                 Players = [.. Enumerable.Range(0, players)],
                 Zones = [.. zones ?? Enumerable.Range(0, players)],

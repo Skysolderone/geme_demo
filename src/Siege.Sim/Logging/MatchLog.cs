@@ -207,6 +207,13 @@ public sealed record LogHeader
 
     public required string MapId { get; init; }
 
+    /// <summary>
+    /// 本局地图的可落子格总数，供"冲突时的盘面占用率"用（match-telemetry 第 9 条）。
+    /// 必须取自对局本身而不是分析端按 <see cref="MapId"/> 重建地图——否则改图之后旧日志会被按新图的格数换算。
+    /// denser-map 之前的旧日志没有该字段（<c>null</c>）：分析时整局排除出占用率口径，MUST NOT 回填。
+    /// </summary>
+    public int? PlayableCells { get; init; }
+
     /// <summary>种子，十六进制（<c>GameSeed.ToString</c>）。</summary>
     public required string Seed { get; init; }
 

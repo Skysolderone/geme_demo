@@ -42,7 +42,7 @@ public sealed record RunConfig
     public const int DefaultMaxTurns = 1_000;
 
     /// <summary>地图标识或地图 JSON 文件路径。</summary>
-    public string MapId { get; init; } = "siege-4p-base-v1";
+    public string MapId { get; init; } = "siege-4p-base-v2";
 
     /// <summary>各玩家配置；玩家编号即下标（P0、P1……），插旗时 P<i>i</i> 锁定出生区 <i>i</i>。</summary>
     public List<PlayerAiConfig> Players { get; init; } = [new(), new(), new(), new()];

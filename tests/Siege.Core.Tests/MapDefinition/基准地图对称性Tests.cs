@@ -103,7 +103,11 @@ public class 基准地图对称性Tests
             ("最近咽喉", Map.ChokePoints.ToImmutableArray()),
         };
 
-        foreach ((string name, ImmutableArray<Coord> targets) in metrics)
+        // 绕障最短距离的实测值（denser-map v2，与 v1 相同）：公共信物 2、中央入口 6、咽喉 3。
+        // 只断言"四区相等"抓不到"四区一起变远"——加障碍最容易犯的正是这个错。
+        int[] expected = [2, 6, 3];
+
+        foreach (((string name, ImmutableArray<Coord> targets), int want) in metrics.Zip(expected))
         {
             int[] perZone = Map.BirthZones
                 .Select(zone =>
@@ -116,6 +120,7 @@ public class 基准地图对称性Tests
             Assert.Equal(perZone.Min(), perZone.Max());
             Assert.True(perZone.Max() - perZone.Min() <= Map.DistanceTolerance,
                 $"到{name}的距离极差 {perZone.Max() - perZone.Min()} 超出容差 {Map.DistanceTolerance}。");
+            Assert.Equal([want, want, want, want], perZone);
         }
     }
 
@@ -127,7 +132,10 @@ public class 基准地图对称性Tests
         Dictionary<Coord, int> reached = Bfs([playable.OrderBy(c => c).First()]);
 
         Assert.Equal(playable.Count, reached.Count);
-        Assert.Equal(109, playable.Count);
+
+        // denser-map：可落子格 109 → 85（障碍 12 → 36，占外接 29.8%）。
+        Assert.Equal(85, playable.Count);
+        Assert.Equal(36, Map.Obstacles.Count);
     }
 
     [Fact]

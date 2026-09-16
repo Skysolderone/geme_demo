@@ -13,17 +13,22 @@ public class 四人基准地图Tests
     {
         Assert.Equal(11, Map.Width);
         Assert.Equal(11, Map.Height);
-        Assert.InRange(Map.PlayableCount, 100, 115);
+        Assert.InRange(Map.PlayableCount, 80, 95);
     }
 
     [Fact]
-    public void 四个出生区各十二至十五格()
+    public void 可落子格规模()
     {
+        // 规格 Scenario：可落子格落在 80–95 区间，其中四个出生区各 12–14 格（denser-map 裁决 2 / 4）。
+        Assert.InRange(Map.PlayableCount, 80, 95);
         Assert.Equal(4, Map.BirthZones.Length);
         foreach (var zone in Map.BirthZones)
         {
-            Assert.InRange(zone.Count(c => Map.TerrainAt(c) == Terrain.Playable), 12, 15);
+            Assert.InRange(zone.Count(c => Map.TerrainAt(c) == Terrain.Playable), 12, 14);
         }
+
+        // 障碍占外接区域 25%–35%：36 / 121 = 29.7%。用整数比较，不让浮点进内核。
+        Assert.InRange(Map.Obstacles.Count * 100, 121 * 25, 121 * 35);
     }
 
     [Fact]

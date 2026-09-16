@@ -90,7 +90,12 @@ public static class Program
 
         Console.WriteLine($"地图 {map.Id}  {map.Width}×{map.Height}");
         Console.WriteLine($"可落子格 {map.PlayableCount}   障碍 {map.Obstacles.Count} ({map.Obstacles.Count * 100 / (map.Width * map.Height)}%)");
-        Console.WriteLine($"出生区 {map.BirthZones.Length} 个，各 {string.Join("/", map.BirthZones.Select(z => z.Count))} 格");
+        Console.WriteLine(
+            $"出生区 {map.BirthZones.Length} 个，各 "
+            + string.Join("/", map.BirthZones.Select(z => z.Count(c => map.TerrainAt(c) == Terrain.Playable)))
+            + " 个可落子格（区形各 "
+            + string.Join("/", map.BirthZones.Select(z => z.Count))
+            + " 格，差额是区内障碍）");
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
         Console.WriteLine($"咽喉 {string.Join(" ", map.ChokePoints.Order())}   中央入口 {map.CentralEntrance}");
         Console.WriteLine();
