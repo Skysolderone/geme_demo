@@ -9,11 +9,18 @@ namespace Siege.Core.Preview;
 /// <summary>结构参数的一个信物来源：信物格、类型与强度（该信物已揭示且由该玩家控制，属 §13.1 公开信息）。</summary>
 public sealed record ParameterSource(Coord Coord, RelicType Type, int Magnitude);
 
-/// <summary>一项结构参数：基础值、当前值与全部信物来源。<c>Base + Σ Magnitude == Value</c> 由组装方核对，不一致即抛出。</summary>
-public sealed record StructureParameter(int Base, int Value, ImmutableArray<ParameterSource> Sources)
+/// <summary>
+/// 一项结构参数：基础值、当前值、落后者征募补偿与全部信物来源。
+/// <c>Base + CatchUp + Σ Magnitude == Value</c> 由组装方核对，不一致即抛出。
+/// </summary>
+/// <param name="CatchUp">落后者征募补偿贡献的点数（catch-up-recruit 裁决 5）；只有展示数与免费选取数可能非 0。它<b>不是</b>信物来源，不进 <paramref name="Sources"/>。</param>
+public sealed record StructureParameter(int Base, int Value, ImmutableArray<ParameterSource> Sources, int CatchUp = 0)
 {
-    /// <summary>信物加成总计。</summary>
+    /// <summary>基础值之外的加成总计（信物 + 落后补偿）。</summary>
     public int Bonus => Value - Base;
+
+    /// <summary>信物贡献的点数（不含落后补偿）。</summary>
+    public int RelicBonus => Sources.Sum(s => s.Magnitude);
 }
 
 /// <summary>四项公开结构参数（设计文档 §14.3）：征募展示数、免费选取数、手牌类型槽、部署上限。</summary>

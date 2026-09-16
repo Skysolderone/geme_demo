@@ -67,6 +67,11 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的碾压起始大回合为 {config.DominanceStartRound}，对局配置却为 {match.DominanceStartRound}。");
         }
 
+        if (match.CatchUpRecruit != config.CatchUpRecruit)
+        {
+            throw new SiegeRuleException($"跑局配置的落后者征募补偿为 {config.CatchUpRecruit}，对局配置却为 {match.CatchUpRecruit}。");
+        }
+
         Runner = new MatchRunner(match);
         Seed = match.Seed;
         bool sampled = Seed.Stream(SampleStream).NextPermille(config.FullEventSamplePermille);
@@ -101,7 +106,7 @@ public sealed class MatchSession
         map ??= MapCatalog.Resolve(config.MapId);
         PlayerId[] players = config.PlayerIds();
         // round-cap D3：大回合上限是对局配置，跑局层只把 --max-rounds 透传进去。
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound });
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound, CatchUpRecruit = config.CatchUpRecruit });
         match.PlantSequentially(players.Select((p, i) => (p, i % map.BirthZones.Length)));
         return new MatchSession(match, config);
     }
@@ -362,6 +367,8 @@ public sealed class MatchSession
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
             FreePickCount = _trace.FreePickCount,
+            CatchUpReveal = _trace.CatchUp.RevealBonus,
+            CatchUpPick = _trace.CatchUp.PickBonus,
             TypeSlots = _trace.TypeSlots,
             DeployLimit = _trace.DeployLimit,
             ActionOrder = [.. after.ActionOrder.Select(p => p.Value)],
@@ -498,6 +505,7 @@ public sealed class MatchSession
             Seed = Seed.ToString(),
             MaxMajorRounds = Match.MaxMajorRounds,
             DominanceStartRound = Match.DominanceStartRound,
+            CatchUpRecruit = Match.CatchUpRecruit,
             Config = Config,
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],

@@ -21,6 +21,8 @@ public class 私人征募面板Tests
         Assert.Equal(5, panel.ShowCount);
         Assert.Equal(3, panel.FreePickCount);
         Assert.Equal(3, panel.PicksRemaining);
+        // catch-up-recruit：规格把本 Scenario 的前提改为"不控制任何信物、未获得落后者征募补偿"。
+        Assert.Equal(Siege.Core.Scoring.CatchUpBonus.None, panel.CatchUp);
         Assert.All(panel.Candidates, c => Assert.True(c.IsSelectable));
 
         access.Pick(0);

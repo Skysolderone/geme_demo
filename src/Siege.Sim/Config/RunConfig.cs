@@ -62,6 +62,9 @@ public sealed record RunConfig
     /// <summary>碾压起始大回合，直接写入对局配置 <see cref="MatchOptions.DominanceStartRound"/>（0 = 关闭势力碾压；默认 = 规则层标准局初值）。</summary>
     public int DominanceStartRound { get; init; } = MatchOptions.DefaultDominanceStartRound;
 
+    /// <summary>落后者征募补偿开关，直接写入对局配置 <see cref="MatchOptions.CatchUpRecruit"/>（默认 = 规则层标准局初值，开启）。</summary>
+    public bool CatchUpRecruit { get; init; } = MatchOptions.DefaultCatchUpRecruit;
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 

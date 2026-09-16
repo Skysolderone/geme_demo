@@ -51,7 +51,7 @@ public class 小回合的五个阶段Tests
         MatchFlow match = MatchFixtures.Started();
         PlayerId p = match.CurrentPlayer!.Value;
         match.Debug.SeedHand(p, (PieceType.Basic, 5), (PieceType.Fortress, 1), (PieceType.Line, 1), (PieceType.Multiplier, 1));
-        match.Debug.SetSnapshotTransform(s => new EffectSnapshot(s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, 3, s.DeployLimit, s.EmblemCounts, s.HeldTypeCount));
+        match.Debug.SetSnapshotTransform(s => new EffectSnapshot(s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, 3, s.DeployLimit, s.EmblemCounts, s.HeldTypeCount, s.CatchUp));
 
         match.BeginTurn();
         Assert.Equal(1, match.CurrentSnapshot!.OverflowTypeCount);

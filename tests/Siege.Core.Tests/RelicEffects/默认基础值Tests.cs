@@ -18,6 +18,8 @@ public class 默认基础值Tests
         EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, 1);
 
         Assert.Equal((5, 3, 5, 3), (snapshot.RevealCount, snapshot.FreePickCount, snapshot.TypeSlots, snapshot.DeployLimit));
+        // catch-up-recruit：规格把默认值的前提改为"不控制任何信物、且未获得落后者征募补偿"——这里补偿为空。
+        Assert.Equal(Siege.Core.Scoring.CatchUpBonus.None, snapshot.CatchUp);
         Assert.Empty(snapshot.EmblemCounts);
         Assert.Equal(0, snapshot.OverflowTypeCount);
         Assert.Equal(4, snapshot.EmblemWeightNumerator(PieceType.Basic));

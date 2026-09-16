@@ -43,6 +43,7 @@ public sealed partial class MatchFlow
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
             MaxMajorRounds = MaxMajorRounds,
             DominanceStartRound = DominanceStartRound,
+            CatchUpRecruit = CatchUpRecruit,
             DominanceCandidate = _dominanceCandidate?.Value,
             DominancePending = [.. _dominancePending.Select(p => p.Value)],
             Phase = Phase,
@@ -82,6 +83,8 @@ public sealed partial class MatchFlow
                 TypeSlots = r.Hand.TypeSlots,
                 RevealCount = r.Effects.RevealCount,
                 FreePickCount = r.Effects.FreePickCount,
+                CatchUpReveal = r.Effects.CatchUp.RevealBonus,
+                CatchUpPick = r.Effects.CatchUp.PickBonus,
                 EffectTypeSlots = r.Effects.TypeSlots,
                 DeployLimit = r.Effects.DeployLimit,
                 HeldTypeCount = r.Effects.HeldTypeCount,
@@ -150,11 +153,14 @@ public sealed partial class MatchFlow
         bool backfilled = data.MaxMajorRounds is null;
         // dominance-victory 裁决 8：旧存档没有碾压起始大回合字段 → 按标准局初值（7）回填（不是 0），并在 DominanceStartRoundBackfilled 上留痕。
         bool dominanceBackfilled = data.DominanceStartRound is null;
+        // catch-up-recruit 裁决 4：旧存档没有落后者征募补偿字段 → 按标准局初值「开启」回填，并在 CatchUpRecruitBackfilled 上留痕。
+        bool catchUpBackfilled = data.CatchUpRecruit is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
             MaxMajorRounds = data.MaxMajorRounds ?? MatchOptions.DefaultMaxMajorRounds,
             DominanceStartRound = data.DominanceStartRound ?? MatchOptions.DefaultDominanceStartRound,
+            CatchUpRecruit = data.CatchUpRecruit ?? MatchOptions.DefaultCatchUpRecruit,
         };
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(data));
         RequireValidDominanceStartRound(options.DominanceStartRound, nameof(data));
@@ -166,6 +172,7 @@ public sealed partial class MatchFlow
             options);
         match.MaxMajorRoundsBackfilled = backfilled;
         match.DominanceStartRoundBackfilled = dominanceBackfilled;
+        match.CatchUpRecruitBackfilled = catchUpBackfilled;
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -208,7 +215,8 @@ public sealed partial class MatchFlow
             var player = new PlayerId(r.Player);
             var entries = r.Hand.ToImmutableSortedDictionary(h => h.Type, h => new HandEntry(h.Carried, h.Gained));
             var effects = new EffectSnapshot(player, r.MajorRound, r.RevealCount, r.FreePickCount, r.EffectTypeSlots, r.DeployLimit,
-                r.Emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), r.HeldTypeCount);
+                r.Emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), r.HeldTypeCount,
+                new CatchUpBonus(r.CatchUpReveal ?? 0, r.CatchUpPick ?? 0));
             match._resignations.Add(new ResignationSnapshot(player, r.MajorRound, r.Board!, new HandPrivateView(player, entries, r.HandPhase, r.TypeSlots),
                 effects, [.. r.ControlledRelics.Select(Coord.Parse)], r.Power));
         }
@@ -245,6 +253,9 @@ public sealed class MatchSaveData
 
     /// <summary>碾压起始大回合（dominance-victory）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultDominanceStartRound"/>。</summary>
     public int? DominanceStartRound { get; set; }
+
+    /// <summary>落后者征募补偿开关（catch-up-recruit）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启）。</summary>
+    public bool? CatchUpRecruit { get; set; }
 
     /// <summary>碾压候选玩家编号；无候选为 <c>null</c>。</summary>
     public int? DominanceCandidate { get; set; }
@@ -336,6 +347,12 @@ public sealed class ResignationSaveData
     public int RevealCount { get; set; }
 
     public int FreePickCount { get; set; }
+
+    /// <summary>弃赛快照里落后补偿给展示数的点数；catch-up-recruit 之前的旧存档为 <c>null</c>（按 0 读）。</summary>
+    public int? CatchUpReveal { get; set; }
+
+    /// <summary>弃赛快照里落后补偿给选取数的点数；catch-up-recruit 之前的旧存档为 <c>null</c>（按 0 读）。</summary>
+    public int? CatchUpPick { get; set; }
 
     public int EffectTypeSlots { get; set; }
 

@@ -56,7 +56,7 @@ public static class Program
         Console.WriteLine("  Siege.Sim map");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限，0=不限>]");
-        Console.WriteLine("                [--dominance-start <碾压起始大回合，0=关闭，默认 7>]");
+        Console.WriteLine("                [--dominance-start <碾压起始大回合，0=关闭，默认 7>] [--no-catch-up（关闭落后者征募补偿，默认开启）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
@@ -157,6 +157,7 @@ public static class Program
             Parallelism = cli.GetInt("parallel", config.Parallelism),
             MaxMajorRounds = cli.GetInt("max-rounds", config.MaxMajorRounds),
             DominanceStartRound = cli.GetInt("dominance-start", config.DominanceStartRound),
+            CatchUpRecruit = !cli.Flag("no-catch-up") && config.CatchUpRecruit,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,

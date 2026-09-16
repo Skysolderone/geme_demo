@@ -181,6 +181,31 @@ public sealed partial class MatchFlow
         }
     }
 
+    /// <summary>落后者征募补偿开关（catch-up-recruit 裁决 4）。始终公开，入存档。</summary>
+    public bool CatchUpRecruit => Options.CatchUpRecruit;
+
+    /// <summary>恢复自不含落后者征募补偿字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启）回填。</summary>
+    public bool CatchUpRecruitBackfilled { get; private set; }
+
+    /// <summary>
+    /// 在插旗阶段设定落后者征募补偿开关。对局一旦开始即抛 <see cref="SiegeRuleException"/>：该开关是对局配置，进行中不可改。
+    /// </summary>
+    public void ConfigureCatchUpRecruit(bool enabled)
+    {
+        if (Phase != MatchPhase.FlagPlanting)
+        {
+            throw new SiegeRuleException($"落后者征募补偿是对局配置，只能在插旗阶段设定；当前阶段 {Phase}。");
+        }
+
+        Options = Options with { CatchUpRecruit = enabled };
+    }
+
+    /// <summary>
+    /// 某玩家此刻的落后者征募补偿（catch-up-recruit）：读<b>现成的</b>公开势力名次（<see cref="PowerScoreboard.Latest"/>），
+    /// 不触发任何重算、不自己排序。快照生成与结构参数组装都经由此处，判定实现唯一。
+    /// </summary>
+    private CatchUpBonus CatchUpFor(PlayerId player) => CatchUpCompensation.For(Scoreboard.Latest, player, CatchUpRecruit);
+
     /// <summary>权威盘面。规则层内部使用；表现层与 AI 请消费 <see cref="Publish"/>。</summary>
     public GameBoard Board { get; }
 
@@ -308,7 +333,8 @@ public sealed partial class MatchFlow
         SetStage(TurnStage.RelicSnapshot, player);
 
         int held = Hands.HeldTypeCount(player);
-        EffectSnapshot snapshot = Relics.SnapshotFor(player, Board, Roster, held, MajorRound);
+        // catch-up-recruit 裁决 2：名次只在这一刻读一次（用上一次结算 / Pass 后的现成排名），本小回合内名次再变也不回收。
+        EffectSnapshot snapshot = Relics.SnapshotFor(player, Board, Roster, held, MajorRound, CatchUpFor(player));
         if (_snapshotTransform is { } transform)
         {
             snapshot = transform(snapshot);
@@ -424,7 +450,7 @@ public sealed partial class MatchFlow
         HandPrivateView hand = Hands.AccessFor(player).PrivateView();
         EffectSnapshot effects = inOwnTurn && _snapshot is not null
             ? _snapshot
-            : Relics.SnapshotFor(player, Board, Roster, Hands.HeldTypeCount(player), MajorRound);
+            : Relics.SnapshotFor(player, Board, Roster, Hands.HeldTypeCount(player), MajorRound, CatchUpFor(player));
         ImmutableArray<Coord> controlled = [.. Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(player)).Select(s => s.Coord)];
         long power = Scoreboard.Latest?.Of(player).Total ?? 0;
         _resignations.Add(new ResignationSnapshot(player, MajorRound, Board.Serialize(), hand, effects, controlled, power));
@@ -468,8 +494,8 @@ public sealed partial class MatchFlow
 
     /// <summary>发布公开快照（裁决 1）。</summary>
     public MatchPublicView Publish() =>
-        new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(), Board.Serialize(),
-            Scoreboard.Latest, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
+        new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
+            Board.Serialize(), Scoreboard.Latest, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------
 

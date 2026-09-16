@@ -49,6 +49,32 @@ public class 效果快照在小回合开始时生成Tests
     }
 
     [Fact]
+    public void 快照读取开始时的名次()
+    {
+        // 规格 Scenario「快照读取开始时的名次」（catch-up-recruit 裁决 2）：小回合开始时为最后一名 → 快照的展示数与选取数含补偿；
+        // 本小回合内名次上升也不回收。与「新占信物本回合不生效」同构：快照是不可变值对象，生成后不再回读任何活状态。
+        // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P3 J9 → 1 + 2 = 3。
+        // 变异验证 M-CU4：把 MatchFlow.CurrentSnapshot 改成回读账本与此刻名次的活视图 → 红 4，含本用例。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff)
+            .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
+            .Stones(MatchFixtures.P0, "A1", "B1", "C1", "D1")
+            .Stones(MatchFixtures.P1, "G1", "H1", "J1")
+            .Stones(MatchFixtures.P2, "A9", "B9")
+            .Stones(MatchFixtures.P3, "J9");
+        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(MatchFixtures.P3));
+
+        match.BeginTurn();
+        EffectSnapshot snapshot = match.CurrentSnapshot!;
+        Assert.Equal((6, 4), (snapshot.RevealCount, snapshot.FreePickCount));
+
+        match.Stones(MatchFixtures.P3, "D4", "E4", "F4", "D5", "E5", "F5", "D6", "E6", "F6");
+        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(MatchFixtures.P3));
+        Assert.Equal((6, 4), (snapshot.RevealCount, snapshot.FreePickCount));
+        Assert.Equal((6, 4), (match.CurrentSnapshot!.RevealCount, match.CurrentSnapshot!.FreePickCount));
+        Assert.Equal((6, 4), (match.EnterRecruit().ShowCount, match.CurrentHand().Panel().FreePickCount));
+    }
+
+    [Fact]
     public void 新占信物本回合不生效()
     {
         // 设计文档 §5.1：小回合开始时生成快照（部署上限 3）；本小回合的批次占领军令 E7（走真实结算驱动器）→ 已生成的快照仍为 3；下一小回合的快照为 4。

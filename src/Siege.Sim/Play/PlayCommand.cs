@@ -39,6 +39,11 @@ internal static class PlayCommand
             output.WriteLine($"或势力碾压（第 {match.DominanceStartRound} 大回合起，势力 ≥ 其余参赛玩家之和且保持到其余人各行动一次）直接获胜。");
         }
 
+        if (match.CatchUpRecruit)
+        {
+            output.WriteLine("落后者征募补偿：小回合开始时名次在后半的玩家征募展示数 +1，最后一名再免费选取数 +1。");
+        }
+
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         output.WriteLine();
 

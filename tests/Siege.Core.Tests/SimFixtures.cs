@@ -68,13 +68,15 @@ internal static class SimFixtures
     // ---------- 合成日志（分析口径用；不跑对局） ----------
 
     internal static MatchLog Synthetic(
-        ulong seed, IEnumerable<TurnSnapshot> turns, IEnumerable<LogEvent> events, LogResult result, int players = 4, int[]? zones = null, bool relicsConverged = true, RelicEntry[]? relics = null) =>
+        ulong seed, IEnumerable<TurnSnapshot> turns, IEnumerable<LogEvent> events, LogResult result, int players = 4, int[]? zones = null, bool relicsConverged = true, RelicEntry[]? relics = null,
+        bool? catchUpRecruit = null) =>
         new()
         {
             Header = new LogHeader
             {
                 MapId = "synthetic",
                 Seed = new Siege.Core.Determinism.GameSeed(seed).ToString(),
+                CatchUpRecruit = catchUpRecruit,
                 Config = Config(players: players),
                 Players = [.. Enumerable.Range(0, players)],
                 Zones = [.. zones ?? Enumerable.Range(0, players)],
@@ -90,7 +92,8 @@ internal static class SimFixtures
 
     internal static TurnSnapshot Turn(
         int turn, int majorRound, int player, long[] totals, string[]? placements = null, int deployLimit = 3,
-        int showCount = 5, int freePick = 3, int typeSlots = 5, GroupEntry[]? groupsOfPlayer = null, string[]? captures = null) =>
+        int showCount = 5, int freePick = 3, int typeSlots = 5, GroupEntry[]? groupsOfPlayer = null, string[]? captures = null,
+        int? catchUpReveal = null, int? catchUpPick = null) =>
         new()
         {
             Turn = turn,
@@ -102,6 +105,8 @@ internal static class SimFixtures
             Captures = [.. captures ?? []],
             ShowCount = showCount,
             FreePickCount = freePick,
+            CatchUpReveal = catchUpReveal,
+            CatchUpPick = catchUpPick,
             TypeSlots = typeSlots,
             DeployLimit = deployLimit,
             ActionOrder = [.. Enumerable.Range(0, totals.Length)],
@@ -114,7 +119,7 @@ internal static class SimFixtures
             })],
         };
 
-    internal static LogResult ResultOf(int majorRound, int[] winners, bool converged = true, int players = 4, PeakEntry? peak = null, bool? peakDestroyed = null) =>
+    internal static LogResult ResultOf(int majorRound, int[] winners, bool converged = true, int players = 4, PeakEntry? peak = null, bool? peakDestroyed = null, int[]? ranks = null) =>
         new()
         {
             Reason = converged ? nameof(EndReason.AllPassed) : nameof(EndReason.MajorRoundLimit),
@@ -122,7 +127,7 @@ internal static class SimFixtures
             TurnCount = majorRound * players,
             Standings = [.. Enumerable.Range(0, players).Select(p => new StandingEntry
             {
-                Rank = winners.Contains(p) ? 1 : 2,
+                Rank = ranks is not null ? ranks[p] : winners.Contains(p) ? 1 : 2,
                 Player = p,
                 Group = nameof(StandingGroup.Finisher),
                 Status = "Active",

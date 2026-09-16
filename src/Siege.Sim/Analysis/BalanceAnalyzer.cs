@@ -40,6 +40,22 @@ public sealed record DominanceSection(
     int RatioSamples,
     int RatioUndefined);
 
+/// <summary>
+/// 落后者征募补偿（catch-up-recruit 裁决 3 的报告口径）：占比分母是<b>纳入局</b>的小回合总数，不是全部局。
+/// 纳入 = 日志首部记录本局开启补偿，且每条小回合快照都带补偿留痕；旧日志（<see cref="TurnSnapshot.CatchUpReveal"/> 为 <c>null</c>）
+/// 与关闭补偿的局整局计入 <see cref="Skipped"/>，MUST NOT 把缺字段回填成 0——那会把旧局错算成"从未补偿"。
+/// </summary>
+/// <param name="FinalRankOfCompensated">至少获得过一次补偿的玩家，其终局名次 → 人次。</param>
+public sealed record CatchUpSection(
+    int Matches,
+    int Skipped,
+    int Turns,
+    int CompensatedTurns,
+    Proportion CompensatedTurnRate,
+    int RevealTriggers,
+    int PickTriggers,
+    SortedDictionary<int, int> FinalRankOfCompensated);
+
 /// <summary>§16 六项数值目标。</summary>
 public sealed record TargetsSection(
     SortedDictionary<int, int> DeployLimitRounds1To3,
@@ -151,6 +167,7 @@ public sealed record BalanceReport(
     SelectionSection Selection,
     MultiplierSection Multiplier,
     PieceShareSection PieceShares,
+    CatchUpSection CatchUp,
     BirthZoneSection BirthZones,
     GrowthAxisSection GrowthAxes,
     StallingSection Stalling,
@@ -197,10 +214,57 @@ public static class BalanceAnalyzer
             Selection(included),
             Multiplier(included),
             PieceShares(included),
+            CatchUp(included),
             BirthZones(included),
             GrowthAxes(included),
             Stalling(included),
             AiQuality(included));
+    }
+
+    // ---------- 落后者征募补偿 ----------
+
+    private static CatchUpSection CatchUp(List<MatchLog> logs)
+    {
+        int matches = 0;
+        int skipped = 0;
+        int turns = 0;
+        int compensated = 0;
+        int revealTriggers = 0;
+        int pickTriggers = 0;
+        var finalRanks = new SortedDictionary<int, int>();
+        foreach (MatchLog log in logs)
+        {
+            // 被排除样本：关闭补偿的局、以及 catch-up-recruit 之前没有留痕字段的旧日志。
+            if (log.Header.CatchUpRecruit != true || log.Turns.Count == 0 || log.Turns.Any(t => t.CatchUpReveal is null || t.CatchUpPick is null))
+            {
+                skipped++;
+                continue;
+            }
+
+            matches++;
+            var compensatedPlayers = new HashSet<int>();
+            foreach (TurnSnapshot turn in log.Turns)
+            {
+                turns++;
+                int reveal = turn.CatchUpReveal!.Value;
+                int pick = turn.CatchUpPick!.Value;
+                revealTriggers += reveal;
+                pickTriggers += pick;
+                if (reveal + pick > 0)
+                {
+                    compensated++;
+                    compensatedPlayers.Add(turn.Player);
+                }
+            }
+
+            foreach (StandingEntry entry in log.Result!.Standings.Where(s => compensatedPlayers.Contains(s.Player)))
+            {
+                finalRanks[entry.Rank] = finalRanks.TryGetValue(entry.Rank, out int n) ? n + 1 : 1;
+            }
+        }
+
+        return new CatchUpSection(
+            matches, skipped, turns, compensated, Statistics.Wilson(compensated, turns), revealTriggers, pickTriggers, finalRanks);
     }
 
     // ---------- 收敛 ----------

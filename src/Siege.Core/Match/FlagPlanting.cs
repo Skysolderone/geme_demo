@@ -35,6 +35,15 @@ public sealed record MatchOptions
     /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureDominanceStartRound"/>）。
     /// </summary>
     public int DominanceStartRound { get; init; } = DefaultDominanceStartRound;
+
+    /// <summary>标准局的落后者征募补偿初值（catch-up-recruit 裁决 4）：开启。</summary>
+    public const bool DefaultCatchUpRecruit = true;
+
+    /// <summary>
+    /// 落后者征募补偿开关（catch-up-recruit 裁决 1；<c>false</c> = 关闭，任何名次都不产生补偿）。
+    /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureCatchUpRecruit"/>）。
+    /// </summary>
+    public bool CatchUpRecruit { get; init; } = DefaultCatchUpRecruit;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

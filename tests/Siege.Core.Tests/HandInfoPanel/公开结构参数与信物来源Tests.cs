@@ -35,6 +35,38 @@ public class 公开结构参数与信物来源Tests
     }
 
     [Fact]
+    public void 显示落后补偿来源()
+    {
+        // 规格 Scenario「显示落后补偿来源」（catch-up-recruit 裁决 5）：D 本小回合以最后一名开始 → 展示数 6、选取数 4，
+        // 面板各标注其中 1 点来自「落后补偿」；落后补偿是<b>非信物</b>来源，不进 Sources。
+        // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P1 G1 H1 J1 → 3 + 4 = 7；P2 A9 B9 → 2 + 3 = 5；P3 J9 → 1 + 2 = 3。
+        // 变异验证 M-CU6：MatchFlow.Parameter 把 catchUp 折进 sources（当成一枚探勘信物来源）→ 红 1（本测试：Sources 非空且文案变成 探勘×1）。
+        // 变异验证 M-CU6b：StructureView.Parameter 的文案丢掉落后补偿项（只拼信物）→ 本测试红：文案变成"展示数 6（基础）"。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff)
+            .AtRound(5, [P3, P0, P1, P2])
+            .Stones(P0, "A1", "B1", "C1", "D1")
+            .Stones(P1, "G1", "H1", "J1")
+            .Stones(P2, "A9", "B9")
+            .Stones(P3, "J9");
+        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(P3));
+
+        StructureView structure = match.World(P0).HandPanel().Opponents.Single(o => o.Player == P3).Structure!;
+
+        Assert.Equal((6, 5, 1), (structure.RevealCount.Value, structure.RevealCount.Base, structure.RevealCount.CatchUp));
+        Assert.Empty(structure.RevealCount.Sources);
+        Assert.Equal("展示数 6（基础 5，+1 来自 落后补偿 +1）", structure.RevealCount.Text);
+        Assert.Equal((4, 3, 1), (structure.FreePickCount.Value, structure.FreePickCount.Base, structure.FreePickCount.CatchUp));
+        Assert.Empty(structure.FreePickCount.Sources);
+        Assert.Equal("选取数 4（基础 3，+1 来自 落后补偿 +1）", structure.FreePickCount.Text);
+
+        // 第 1 名不获补偿，且补偿不外溢到其它两项
+        StructureView leader = match.World(P0).HandPanel().Own.Structure!;
+        Assert.Equal((5, 0), (leader.RevealCount.Value, leader.RevealCount.CatchUp));
+        Assert.Equal("展示数 5（基础）", leader.RevealCount.Text);
+        Assert.Equal((0, 0), (structure.TypeSlots.CatchUp, structure.DeployLimit.CatchUp));
+    }
+
+    [Fact]
     public void 参数对全体公开()
     {
         // 设计文档 §14.3：任意玩家打开面板 → 全部玩家的四项结构参数均可见，且不同观察者看到的同一玩家参数逐字相同。

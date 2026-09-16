@@ -40,7 +40,7 @@ public class Godot层不含规则计算Tests
         // 变异验证 M-G1（check 阶段实做）：BoardView.DrawLiberties 里加一行 `_ = Siege.Core.Scoring.CoverageMap.Compute(...)` → 本测试红 1。
         string[] forbidden =
         [
-            "PowerCalculator", "CoverageMap", "BatchRehearsal", "BatchPreviewBuilder", "LibertySnapshot",
+            "PowerCalculator", "CoverageMap", "BatchRehearsal", "BatchPreviewBuilder", "LibertySnapshot", "CatchUpCompensation",
             "CaptureResolver", "FinalStandings", "Adjacency", "MapValidator", "RelicGenerator", "InitiativeOrder",
             ".GroupAt(", ".LibertiesOf(", ".AllGroups(", ".GroupsOf(", ".IsCaptured(", ".RemoveStones(", ".Apply(",
         ];

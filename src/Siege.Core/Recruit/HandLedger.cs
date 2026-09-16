@@ -406,7 +406,7 @@ public sealed class HandLedger
         }
 
         return new RecruitPanelView(player, views.MoveToImmutable(), snapshot.FreePickCount, turn.Picked.Count,
-            snapshot.TypeSlots, state.Hand.Count);
+            snapshot.TypeSlots, state.Hand.Count, snapshot.CatchUp);
     }
 
     internal void Pick(PlayerId player, int candidateIndex)

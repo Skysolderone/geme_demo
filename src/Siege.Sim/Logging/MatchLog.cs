@@ -216,6 +216,9 @@ public sealed record LogHeader
     /// <summary>本局对局配置的碾压起始大回合（0 = 关闭；match-setup「对局配置公开碾压起始大回合」）。取自对局本身；dominance-victory 之前的旧日志为 <c>null</c>。</summary>
     public int? DominanceStartRound { get; init; }
 
+    /// <summary>本局对局配置的落后者征募补偿开关（match-setup「对局配置公开落后补偿开关」）。取自对局本身；catch-up-recruit 之前的旧日志为 <c>null</c>。</summary>
+    public bool? CatchUpRecruit { get; init; }
+
     public required RunConfig Config { get; init; }
 
     public List<int> Players { get; init; } = [];
@@ -283,6 +286,15 @@ public sealed record TurnSnapshot
     public int ShowCount { get; init; }
 
     public int FreePickCount { get; init; }
+
+    /// <summary>
+    /// 本小回合落后者征募补偿给<b>展示数</b>的点数（0 或 1）。取自该玩家真实征募面板上的快照留痕，不由分析端按名次重算。
+    /// catch-up-recruit 之前的旧日志没有该字段（<c>null</c>）：分析时整局跳过落后补偿口径，MUST NOT 回填成 0。
+    /// </summary>
+    public int? CatchUpReveal { get; init; }
+
+    /// <summary>本小回合落后者征募补偿给<b>免费选取数</b>的点数（0 或 1）；旧日志为 <c>null</c>，同 <see cref="CatchUpReveal"/>。</summary>
+    public int? CatchUpPick { get; init; }
 
     public int TypeSlots { get; init; }
 

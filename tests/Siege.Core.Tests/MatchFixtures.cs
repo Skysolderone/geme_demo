@@ -29,6 +29,27 @@ internal static class MatchFixtures
     internal static readonly MatchOptions DominanceOn = MatchOptions.Immediate with { DominanceStartRound = 4 };
 
     /// <summary>
+    /// 关闭落后者征募补偿的立即模式选项（catch-up-recruit 裁决 4）：只给<b>测其它规则</b>、且局面会让某名玩家拿到补偿的既有测试在建局行显式使用。
+    /// 夹具默认值保持 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启），不一刀切关闭。
+    /// </summary>
+    internal static readonly MatchOptions CatchUpOff = MatchOptions.Immediate with { CatchUpRecruit = false };
+
+    /// <summary>2 人局（catch-up-recruit「2 人局」算例）：只插旗、各 50 枚普通子，摆到第 <paramref name="majorRound"/> 大回合、指定顺序、保护已解除。</summary>
+    internal static MatchFlow TwoPlayer(MatchOptions? options = null, int majorRound = 5, PlayerId[]? order = null)
+    {
+        MapData map = Map();
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, Seed, [P0, P1], Relics(map), options ?? MatchOptions.Immediate);
+        match.Debug.SeedHand(P0, (PieceType.Basic, 50));
+        match.Debug.SeedHand(P1, (PieceType.Basic, 50));
+        match.PlantSequentially([(P0, 0), (P1, 1)]);
+        match.Debug.SetMajorRound(majorRound);
+        match.Debug.SetOrder(order ?? [P0, P1]);
+        match.Debug.SetProtection(P0, false);
+        match.Debug.SetProtection(P1, false);
+        return match;
+    }
+
+    /// <summary>
     /// 9×9 合成地图：四个 3×3 角落出生区（0 左下、1 右下、2 左上、3 右上），信物格由用例指定。
     /// 不满足人数预算与距离校验，只能经 <see cref="MatchFlow.CreateUnvalidated"/> 使用。
     /// </summary>

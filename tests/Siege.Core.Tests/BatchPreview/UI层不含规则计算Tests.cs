@@ -18,6 +18,7 @@ public class UI层不含规则计算Tests
     private static readonly Type[] ForbiddenTypes =
     [
         typeof(PowerCalculator), typeof(global::Siege.Core.Scoring.PieceEffects), typeof(CaptureResolver), typeof(BatchRehearsal), typeof(BatchPreviewBuilder),
+        typeof(global::Siege.Core.Scoring.CatchUpCompensation),   // catch-up-recruit：补偿判定唯一实现在规则层，表现层只读来源拆分
         typeof(LibertySnapshot), typeof(global::Siege.Core.Match.InitiativeOrder), typeof(FinalStandings), typeof(Adjacency), typeof(MapValidator),
         typeof(RelicLedger), typeof(RelicGenerator), typeof(HandLedger), typeof(PlayerHandAccess), typeof(PowerScoreboard),
         typeof(MatchFlow), typeof(MatchRunner), typeof(SettlementDriver), typeof(StagedBatch), typeof(BoardHistory), typeof(FlagPlanting),
