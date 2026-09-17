@@ -221,7 +221,10 @@ public static class LowPoly
         return root;
     }
 
-    /// <summary>篝火（档位 2，中等）：六块矮石围成的圈 + 两根交叉木柴 + 两层发光火苗。高 0.42。</summary>
+    /// <summary>
+    /// 篝火（档位 2，中等）：六块矮石围成的圈（半径 0.23）+ 两根交叉木柴 + 两层发光火苗（外焰底半径 0.17、顶高 0.55）。
+    /// S-16：火焰加大、提亮、自发光增强，让篝火在整盘视图里一眼可见；石圈半径 0.24→0.23，使 1.5 倍放大后外缘 0.443 不越出地砖半宽 0.45。
+    /// </summary>
     public static Node3D Campfire()
     {
         var root = new Node3D { Name = "Campfire" };
@@ -230,7 +233,7 @@ public static class LowPoly
         {
             float a = Mathf.Pi * 2f * i / 6f;
             root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.045f, BottomRadius = 0.065f, Height = 0.07f, RadialSegments = 5, Rings = 0 }, stone,
-                new Vector3(Mathf.Cos(a) * 0.24f, 0.035f, Mathf.Sin(a) * 0.24f), new Vector3(0f, i * 23f, 0f)));
+                new Vector3(Mathf.Cos(a) * 0.23f, 0.035f, Mathf.Sin(a) * 0.23f), new Vector3(0f, i * 23f, 0f)));
         }
 
         StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
@@ -239,19 +242,22 @@ public static class LowPoly
             root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.40f, 0.05f, 0.05f) }, timber, new Vector3(0f, 0.05f, 0f), new Vector3(0f, yaw, 8f)));
         }
 
-        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.13f, Height = 0.36f, RadialSegments = 5, Rings = 0 },
-            Visuals.Glow(Visuals.FlameOuter, 1.1f, false), new Vector3(0f, 0.24f, 0f)));
-        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.07f, Height = 0.22f, RadialSegments = 5, Rings = 0 },
-            Visuals.Glow(Visuals.FlameInner, 1.4f, false), new Vector3(0.02f, 0.19f, 0.05f), new Vector3(0f, 36f, 0f)));
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.17f, Height = 0.50f, RadialSegments = 5, Rings = 0 },
+            Visuals.Glow(Visuals.FlameOuter, 2.0f, false), new Vector3(0f, 0.30f, 0f)));
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.10f, Height = 0.34f, RadialSegments = 5, Rings = 0 },
+            Visuals.Glow(Visuals.FlameInner, 2.6f, false), new Vector3(0.02f, 0.22f, 0.04f), new Vector3(0f, 36f, 0f)));
         return root;
     }
 
-    /// <summary>石碑（档位 3，最大）：宽基座 + 竖立石板 + 人字形碑顶 + 正面浅色刻痕。高 0.80。</summary>
+    /// <summary>
+    /// 石碑（档位 3，最大）：宽基座 + 竖立石板 + 人字形碑顶 + 正面深色刻痕。高 0.80。
+    /// S-16：石板与基座改用亮石色（不再用岩石 <see cref="Visuals.Rock"/> 的灰），刻痕相应改深，与障碍格岩石一眼可分。
+    /// </summary>
     public static Node3D Stele()
     {
         var root = new Node3D { Name = "Stele" };
         StandardMaterial3D slab = Visuals.Matte(Visuals.SteleStone, 0.95f);
-        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.40f, 0.08f, 0.24f) }, Visuals.Matte(Visuals.Rock, 1f), new Vector3(0f, 0.04f, 0f)));
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.40f, 0.08f, 0.24f) }, Visuals.Matte(Visuals.SteleBase, 1f), new Vector3(0f, 0.04f, 0f)));
         root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.26f, 0.62f, 0.10f) }, slab, new Vector3(0f, 0.39f, 0f)));
         root.AddChild(Mesh(Prism([new(-0.13f, 0f), new(0.13f, 0f), new(0f, 0.10f)], 0.10f), slab, new Vector3(0f, 0.70f, 0f)));
         StandardMaterial3D carving = Visuals.Matte(Visuals.SteleCarving, 1f);
