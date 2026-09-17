@@ -11,12 +11,12 @@ namespace Siege.Core.Tests.AiDecision;
 public class 默认评价权重的校准Tests
 {
     [Theory]
-    // 校准表出处：openspec/changes/ai-safety-weight/proposal.md（Safety 一维由 v2 九档各 200 局扫档定为 5，见 design.md §2）；
+    // 校准表出处：Safety 一维先由 ai-safety-weight（v2 领地计分，九档）定为 5，后由 scoring-sites 段 C（v4 据点计分 5/15/45，九档 + 22/25/27，各 200 局）改为 27，见该 change design.md 裁决 S-15；
     // 其余六维仍是 heuristic-ai 阶段的初值，本测试把它们一并钉住（design.md D4）——任一维被改动，必须连同校准记录一起更新才允许变绿。
     [InlineData(EvaluationDimension.PowerGain, 10)]
     [InlineData(EvaluationDimension.EnemyLoss, 8)]
     [InlineData(EvaluationDimension.Relic, 6)]
-    [InlineData(EvaluationDimension.Safety, 5)]
+    [InlineData(EvaluationDimension.Safety, 27)]
     [InlineData(EvaluationDimension.Growth, 4)]
     [InlineData(EvaluationDimension.Initiative, 20)]
     [InlineData(EvaluationDimension.Supply, 2)]
@@ -45,11 +45,15 @@ public class 默认评价权重的校准Tests
     [Fact]
     public void 安全权重取校准值()
     {
-        // design.md §2 / D1：v2 基准图 3 / 5 / 7 / 8 / 10 / 20 / 30 / 40 / 60 九档各 200 局，取 5（不收敛率 9.5%、领先者胜率 51.0%）。
-        Assert.Equal(5, EvaluationWeights.Default.Safety);
-        Assert.Equal(5, EvaluationWeights.Default.Of(EvaluationDimension.Safety));
+        // scoring-sites 段 C（裁决 S-15）：v4 基准图、据点分值 5/15/45，九档 + 22/25/27 加密档各 200 局，取 27
+        // （第 3 大回合领先者胜率 25.5%、不收敛率 6.5%、整局无提子 0 局）。
+        Assert.Equal(27, EvaluationWeights.Default.Safety);
+        Assert.Equal(27, EvaluationWeights.Default.Of(EvaluationDimension.Safety));
 
-        // 旧初值 20 是 v1 上 5 局 2 颗种子试出的未校准值，已被扫档否定（不收敛率 27.5%、领先者胜率 64.5%）。
+        // 旧值 5 是 v2 领地计分下的校准，在据点计分下领先者胜率 95.5%，已被扫档否定。
+        Assert.NotEqual(5, EvaluationWeights.Default.Safety);
+
+        // 更早的初值 20 是 v1 上 5 局 2 颗种子试出的未校准值，已被扫档否定。
         Assert.NotEqual(20, EvaluationWeights.Default.Safety);
     }
 
@@ -104,7 +108,7 @@ public class 默认评价权重的校准Tests
         Assert.Contains($"= {actual} 是校准值", src, StringComparison.Ordinal);
 
         // 依据必须指向可复查的数据，而不只是一句结论。
-        Assert.Contains("sim-out/safety", src, StringComparison.Ordinal);
+        Assert.Contains("sim-out/sites-safety", src, StringComparison.Ordinal);
         Assert.Contains("200 局", src, StringComparison.Ordinal);
 
         // 反面：已被扫档推翻的旧结论不得留在注释里——留着会把下一个人往反方向引。
