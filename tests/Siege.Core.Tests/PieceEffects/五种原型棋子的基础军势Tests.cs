@@ -35,7 +35,7 @@ public class 五种原型棋子的基础军势Tests
         Assert.True(outcome.Confirmed);
         Assert.Equal(2, outcome.CaptureRecord!.Captured.Length);
         Assert.Empty(board.GroupsOf(TestMaps.P1));
-        PowerSnapshot after = PowerCalculator.Compute(board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active)));
+        PowerSnapshot after = PowerCalculator.Compute(board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active)), SiteValues.Standard);
         Assert.Equal(0, after.Of(TestMaps.P1).Total);
         Assert.Empty(after.Of(TestMaps.P1).Groups);
     }

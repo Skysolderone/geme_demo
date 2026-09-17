@@ -74,7 +74,7 @@ public class 棋串军势公式Tests
         Assert.Equal(2, p0.Groups.Length);
         Assert.All(p0.Groups, g => Assert.Equal((11, 1, 16L), (g.BaseTotal, g.MultiplierCount, g.Power)));
         Assert.Equal(32, p0.GroupPowerSum());
-        Assert.Equal(32 + p0.TerritoryScore, p0.Total);
+        Assert.Equal(32, p0.Total); // scoring-sites 2.7 改写：旧期望 32 + 领地分 → 32（无据点，独占空格不计分）
     }
 
     [Fact]
@@ -230,5 +230,24 @@ public class 棋串军势公式Tests
                 Assert.False(forbidden.IsMatch(lines[i]), $"{Path.GetFileName(file)}:{i + 1} 出现浮点：{lines[i].Trim()}");
             }
         }
+    }
+
+    [Fact]
+    public void 高地加值不被倍率放大()
+    {
+        // 规格 Scenario（scoring-sites）：h=2 的棋串含普通子×2、倍增子×2，其中 3 枚各自压制到一枚更低处的敌子
+        // → 基础 4、高地 3，军势 ⌊4 × 2.25⌋ + 3 = 12，而非 ⌊7 × 2.25⌋ = 15。
+        // 变异验证 M-S12（段 A2）：Evaluate 把高地加值并进 baseTotal 传给 GroupPowerOf → 红，含本测试（15）。
+        TerrainData terrain = TestMaps.Terrain(heights: [("B7", 2), ("C7", 2), ("D7", 2), ("E7", 2)]);
+        GameBoard board = TestMaps.Blank(terrain)
+            .Place("B7", TestMaps.P0).Place("C7", TestMaps.P0)
+            .Place("D7", TestMaps.P0, PieceType.Multiplier).Place("E7", TestMaps.P0, PieceType.Multiplier)
+            .Place("B6", TestMaps.P1).Place("C6", TestMaps.P1).Place("E6", TestMaps.P1);
+
+        GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "B7");
+
+        Assert.Equal((4, 3, 2), (group.BaseTotal, group.HighGroundBonus, group.MultiplierCount));
+        Assert.Equal((4 * 9 / 4) + 3, group.Power);
+        Assert.Equal(12, group.Power);
     }
 }

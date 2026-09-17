@@ -17,7 +17,7 @@ public enum StandingGroup
 /// <param name="Status">终局时的状态。</param>
 /// <param name="Power">当前势力值（弃赛者为弃赛时势力值）。</param>
 /// <param name="ControlledRelics">控制中的信物数量。</param>
-/// <param name="ExclusiveCells">独占空格数。</param>
+/// <param name="ControlledSites">控制中的据点数量（scoring-sites D-G：取代原"独占空格数"）。</param>
 /// <param name="Stones">盘面棋子数。</param>
 /// <param name="EliminationOrder">出局序号；未出局为 <c>null</c>。</param>
 public sealed record StandingInput(
@@ -25,7 +25,7 @@ public sealed record StandingInput(
     PlayerStatus Status,
     long Power,
     int ControlledRelics,
-    int ExclusiveCells,
+    int ControlledSites,
     int Stones,
     int? EliminationOrder);
 
@@ -36,7 +36,7 @@ public sealed record Standing(int Rank, PlayerId Player, StandingGroup Group, St
 /// 终局名次比较链（设计文档 §12.3，design.md D7）的<b>唯一</b>实现，纯函数。
 /// </summary>
 /// <remarks>
-/// 完赛者按 势力值 → 控制信物数 → 独占空格数 → 盘面棋子数 逐级比较，四项全同则并列；
+/// 完赛者按 势力值 → 控制信物数 → 控制据点数 → 盘面棋子数 逐级比较，四项全同则并列；
 /// 弃赛者排在全部完赛者之后，组内按弃赛时势力值；出局者排在最后，按出局先后倒序（越晚出局名次越高）。
 /// 终局条件 1（只剩一名参赛玩家）下唯一的完赛者自然位列第 1，无需特殊分支。
 /// </remarks>
@@ -104,7 +104,7 @@ public static class FinalStandings
                 return c;
             }
 
-            c = b.ExclusiveCells.CompareTo(a.ExclusiveCells);
+            c = b.ControlledSites.CompareTo(a.ControlledSites);
             if (c != 0)
             {
                 return c;

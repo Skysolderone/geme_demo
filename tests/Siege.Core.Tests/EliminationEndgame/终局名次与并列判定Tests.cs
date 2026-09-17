@@ -8,8 +8,8 @@ namespace Siege.Core.Tests.EliminationEndgame;
 /// <summary>规格：elimination-endgame —— Requirement: 终局名次与并列判定（design.md D7 纯函数）</summary>
 public class 终局名次与并列判定Tests
 {
-    private static StandingInput Active(PlayerId p, long power, int relics = 0, int exclusive = 0, int stones = 0) =>
-        new(p, PlayerStatus.Active, power, relics, exclusive, stones, null);
+    private static StandingInput Active(PlayerId p, long power, int relics = 0, int sites = 0, int stones = 0) =>
+        new(p, PlayerStatus.Active, power, relics, sites, stones, null);
 
     private static StandingInput Resigned(PlayerId p, long powerAtResign) => new(p, PlayerStatus.Resigned, powerAtResign, 0, 0, 0, null);
 
@@ -30,7 +30,7 @@ public class 终局名次与并列判定Tests
     [Fact]
     public void 逐级比较到棋子数()
     {
-        // 设计文档 §12.3：势力、信物、独占空格均相同，棋子数 11 与 8 → 11 者名次更高。
+        // 设计文档 §12.3：势力、信物、控制据点数均相同，棋子数 11 与 8 → 11 者名次更高（scoring-sites：第 3 级由独占空格数改为据点数，参数值不变）。
         // 变异验证 M-E18：FinisherComparer 删除棋子数级（少一级）→ 红 1（本测试：二者并列）。
         ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 42, 2, 7, stones: 8), Active(MatchFixtures.P1, 42, 2, 7, stones: 11)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, MatchFixtures.P0, MatchFixtures.P1));
@@ -135,5 +135,32 @@ public class 终局名次与并列判定Tests
         Assert.Equal([1, 2, 3, 4], match.Result.Standings.Select(s => s.Rank));
         Assert.Equal([MatchFixtures.P0], match.Result.Winners);
         Assert.Equal(power, [.. MatchFixtures.All.Select(p => match.Result.Of(p).Input.Power)]);
+    }
+
+    [Fact]
+    public void 信物相同比据点数()
+    {
+        // 规格 Scenario（scoring-sites D-G）：势力均为 60、控制信物均为 2，控制据点数 3 与 1 → 3 者名次更高；独占空格数不参与比较。
+        // 变异验证 M-S13（段 A2）：FinisherComparer 删除据点级 → 红 1（本测试：二者比到棋子数，P0 棋子多反而第 1）。
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 60, relics: 2, sites: 1, stones: 20), Active(MatchFixtures.P1, 60, relics: 2, sites: 3, stones: 5)]);
+        Assert.Equal(new[] { 2, 1 }, Ranks(s, MatchFixtures.P0, MatchFixtures.P1));
+    }
+
+    [Fact]
+    public void 终局输入取控制中的据点数量()
+    {
+        // 接线：MatchFlow 终局时 StandingInput.ControlledSites = 势力明细里该玩家控制的据点个数（不是独占空格数）。
+        // P0 占据营帐 B5、唯一覆盖篝火 D5（被 C5 覆盖），另有大量独占空格；其余三人弃赛 → 只剩一名参赛玩家终局。
+        // 变异验证 M-S14（段 A2）：MatchFlow.Finish 改回 detail.ExclusiveCells.Length → 红，含本测试。
+        MatchFlow match = SiteFixtures.Started(null, ("B5", SiteTier.Tent), ("D5", SiteTier.Campfire)).AtRound(5, MatchFixtures.All)
+            .Stones(MatchFixtures.P0, "B5", "C5");
+        Assert.True(match.Scoreboard.Latest!.Of(MatchFixtures.P0).ExclusiveCells.Length > 2);   // 前提：独占空格数 ≠ 据点数
+        match.Resign(MatchFixtures.P1);
+        match.Resign(MatchFixtures.P2);
+        match.Resign(MatchFixtures.P3);
+
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(2, match.Result!.Of(MatchFixtures.P0).Input.ControlledSites);
+        Assert.Equal(5 + 15 + 2, match.Result.Of(MatchFixtures.P0).Input.Power);
     }
 }

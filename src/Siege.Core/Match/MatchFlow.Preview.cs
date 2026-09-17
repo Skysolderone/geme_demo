@@ -20,7 +20,7 @@ public sealed partial class MatchFlow
     public BatchPreview PreviewCurrentBatch()
     {
         RequireStage(TurnStage.Deploy);
-        return BatchPreviewBuilder.Build(Board, _batch!.Context, _batch.Placements, History, Roster, Relics, MajorRound);
+        return BatchPreviewBuilder.Build(Board, _batch!.Context, _batch.Placements, History, Roster, SiteValues, Relics, MajorRound);
     }
 
     /// <summary>
@@ -95,7 +95,7 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 顺序预测（tactical-ui D7）：假设本大回合此刻结束，按 <see cref="EndMajorRound"/> 的同一组输入生成先手值明细与下一轮顺序。
-    /// 势力走 <see cref="PowerCalculator.Compute(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus})"/>（不经势力榜，避免推进版本号与峰值遥测），
+    /// 势力走 <see cref="PowerCalculator.Compute(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, SiteValues)"/>（不经势力榜，避免推进版本号与峰值遥测），
     /// 先手修正在账本副本上读取，公式与同值链走 <see cref="InitiativeOrder"/>。
     /// </summary>
     private InitiativeReport? ForecastInitiative(IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
@@ -107,7 +107,7 @@ public sealed partial class MatchFlow
         }
 
         int completed = MajorRound;
-        PowerSnapshot power = PowerCalculator.Compute(Board, roster);
+        PowerSnapshot power = PowerCalculator.Compute(Board, roster, SiteValues);
         ImmutableSortedDictionary<PlayerId, int> bonuses =
             RelicLedger.Restore(Relics.Generation, Relics.ExportState()).ReadInitiativeBonuses(Board, roster);
 

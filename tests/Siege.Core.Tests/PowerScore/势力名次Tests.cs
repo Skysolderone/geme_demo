@@ -6,7 +6,7 @@ namespace Siege.Core.Tests.PowerScore;
 /// <summary>规格：power-score —— Requirement: 势力名次</summary>
 public class 势力名次Tests
 {
-    /// <summary>堡垒子×4 + 倍增子×1 横排在 B–F 列：基础 17 × 1.5 = 25，加 12 独占 = 37。</summary>
+    /// <summary>堡垒子×4 + 倍增子×1 横排在 B–F 列：基础 17 × 1.5 = 25（scoring-sites 起独占空格不计分；旧口径加 12 独占 = 37，方法名保留）。</summary>
     private static GameBoard Place37(GameBoard board, PlayerId owner, int row)
     {
         foreach (char col in "BCDE")
@@ -32,12 +32,13 @@ public class 势力名次Tests
 
         PowerSnapshot snapshot = PowerCalculator.Compute(board, ScoringFixtures.Roster(
             (TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active),
-            (ScoringFixtures.P2, PlayerStatus.Eliminated), (ScoringFixtures.P3, PlayerStatus.Resigned)));
+            (ScoringFixtures.P2, PlayerStatus.Eliminated), (ScoringFixtures.P3, PlayerStatus.Resigned)), SiteValues.Standard);
 
         Assert.Equal(4, snapshot.Players.Length);
         Assert.Equal(0, snapshot.Of(ScoringFixtures.P2).Total);
-        Assert.Equal(38, snapshot.Of(ScoringFixtures.P3).Total);
-        Assert.Equal([(1, 37L), (2, 5L)], snapshot.Ranking.Select(r => (r.Rank, r.Power)));
+        // scoring-sites 2.7 改写：旧 P3 38（24 + 14 独占）、名次 (1, 37) (2, 5) → 新 P3 24、(1, 25) (2, 1)；名次结构不变。
+        Assert.Equal(24, snapshot.Of(ScoringFixtures.P3).Total);
+        Assert.Equal([(1, 25L), (2, 1L)], snapshot.Ranking.Select(r => (r.Rank, r.Power)));
         Assert.Equal([TestMaps.P0], snapshot.Ranking[0].Players);
         Assert.Equal([TestMaps.P1], snapshot.Ranking[1].Players);
         Assert.Null(snapshot.RankOf(ScoringFixtures.P2));
@@ -47,7 +48,8 @@ public class 势力名次Tests
     [Fact]
     public void 并列如实输出()
     {
-        // P0 与 P1 均为 37 → 同一名次组、标记并列，不自行打破；P2 势力 5 排在其后，名次跳号为 3。
+        // P0 与 P1 均为 25 → 同一名次组、标记并列，不自行打破；P2 势力 1 排在其后，名次跳号为 3。
+        // scoring-sites 2.7 改写：旧 37 / 37 / 5（含领地分）→ 25 / 25 / 1。
         // 变异验证 M10：Rank 在同值组内逐人各发一个名次（1、2、3）→ 红 2（本测试、「Pass也触发更新」）。
         GameBoard board = TestMaps.Blank(size: 11);
         Place37(board, TestMaps.P0, row: 2);
@@ -56,16 +58,16 @@ public class 势力名次Tests
 
         PowerSnapshot snapshot = PowerCalculator.Compute(board);
 
-        Assert.Equal(37, snapshot.Of(TestMaps.P0).Total);
-        Assert.Equal(37, snapshot.Of(TestMaps.P1).Total);
+        Assert.Equal(25, snapshot.Of(TestMaps.P0).Total);
+        Assert.Equal(25, snapshot.Of(TestMaps.P1).Total);
         Assert.Equal(2, snapshot.Ranking.Length);
         RankGroup tied = snapshot.Ranking[0];
         Assert.True(tied.IsTied);
-        Assert.Equal((1, 37L), (tied.Rank, tied.Power));
+        Assert.Equal((1, 25L), (tied.Rank, tied.Power));
         Assert.Equal([TestMaps.P0, TestMaps.P1], tied.Players);
         RankGroup third = snapshot.Ranking[1];
         Assert.False(third.IsTied);
-        Assert.Equal((3, 5L), (third.Rank, third.Power));
+        Assert.Equal((3, 1L), (third.Rank, third.Power));
         Assert.Equal([ScoringFixtures.P2], third.Players);
         Assert.Equal(1, snapshot.RankOf(TestMaps.P0));
         Assert.Equal(1, snapshot.RankOf(TestMaps.P1));
@@ -79,7 +81,7 @@ public class 势力名次Tests
         GameBoard board = TestMaps.Blank(size: 9).Place("D4", TestMaps.P0);
 
         PowerSnapshot snapshot = PowerCalculator.Compute(
-            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active)));
+            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active)), SiteValues.Standard);
 
         Assert.Equal(0, snapshot.Of(TestMaps.P1).Total);
         Assert.Equal(2, snapshot.RankOf(TestMaps.P1));
@@ -94,7 +96,7 @@ public class 势力名次Tests
         GameBoard board = TestMaps.Blank(size: 9).Place("D4", TestMaps.P0).Place("H8", TestMaps.P1);
 
         SiegeRuleException error = Assert.Throws<SiegeRuleException>(
-            () => PowerCalculator.Compute(board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active))));
+            () => PowerCalculator.Compute(board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active)), SiteValues.Standard));
         Assert.Contains("P1", error.Message, StringComparison.Ordinal);
 
         PowerSnapshot unlisted = PowerCalculator.Compute(board);

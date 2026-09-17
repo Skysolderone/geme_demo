@@ -35,20 +35,21 @@ public class 倍增子的棋串倍率Tests
     }
 
     [Fact]
-    public void 倍率不作用于领地()
+    public void 倍率不作用于据点分()
     {
-        // 10 个独占空格 + 一条倍率 2.25 的棋串（§10.1 标准算例，军势 20）→ 领地按原值 10 计入，总势力 30。
-        // 标准算例棋串 B2–G2 天然有 14 个相邻空格，用障碍 A2/H2/B1/C1 削到 10。
-        // 变异验证 M2：PowerCalculator.Compute 的 Total 把 exclusive.Length 也乘上该玩家最高倍率 → 红 9，含本测试（22+20=42）。
-        GameBoard board = TestMaps.Blank(size: 9, "A2", "H2", "B1", "C1").PlaceStandardGroup(TestMaps.P0, row: 2);
+        // 规格 Scenario（scoring-sites，取代原「倍率不作用于领地」）：控制一个 45 分的石碑 + 一条倍率 2.25 的棋串（§10.1 标准算例，军势 20）
+        // → 45 按原值计入，总势力 65，MUST NOT 为 ⌊45 × 2.25⌋ + 20 = 121。
+        // scoring-sites 2.7 改写：旧期望 领地 10 + 20 = 30 → 新期望 石碑 45 + 20 = 65。石碑 H2 紧贴 G2，只被 P0 覆盖。
+        // 变异验证 M-S6（段 A2）：Compute 把 siteScore 乘上该玩家任一棋串的倍率 → 红，含本测试。
+        GameBoard board = TestMaps.Blank(size: 9).WithSites(("H2", SiteTier.Stele)).PlaceStandardGroup(TestMaps.P0, row: 2);
 
         PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
 
-        Assert.Equal(10, p0.TerritoryScore);
+        Assert.Equal(new SiteHolding(TestMaps.At("H2"), SiteTier.Stele, 45, SiteControlKind.UniqueCoverage), Assert.Single(p0.Sites));
         GroupPower group = Assert.Single(p0.Groups);
         Assert.Equal("2.25", group.Multiplier.ToString());
         Assert.Equal(20, group.Power);
-        Assert.Equal(30, p0.Total);
+        Assert.Equal(65, p0.Total);
     }
 
     [Fact]

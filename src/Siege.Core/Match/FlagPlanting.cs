@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
 
@@ -44,6 +45,12 @@ public sealed record MatchOptions
     /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureCatchUpRecruit"/>）。
     /// </summary>
     public bool CatchUpRecruit { get; init; } = DefaultCatchUpRecruit;
+
+    /// <summary>
+    /// 三档据点分值（scoring-sites D-A；标准局 <see cref="Scoring.SiteValues.Standard"/> = 5 / 15 / 45，待扫档校准）。
+    /// 属于对局配置：开局固定、公开、入存档；须为正整数且营帐 ≤ 篝火 ≤ 石碑（<see cref="Scoring.SiteValues.Validated"/>，建局时校验）。
+    /// </summary>
+    public SiteValues SiteValues { get; init; } = SiteValues.Standard;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

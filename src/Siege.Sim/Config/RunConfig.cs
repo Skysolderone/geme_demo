@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Scoring;
 
 namespace Siege.Sim.Config;
 
@@ -65,6 +66,12 @@ public sealed record RunConfig
     /// <summary>落后者征募补偿开关，直接写入对局配置 <see cref="MatchOptions.CatchUpRecruit"/>（默认 = 规则层标准局初值，开启）。</summary>
     public bool CatchUpRecruit { get; init; } = MatchOptions.DefaultCatchUpRecruit;
 
+    /// <summary>
+    /// 据点分值（营帐 / 篝火 / 石碑），直接写入对局配置 <see cref="MatchOptions.SiteValues"/>（simulation-harness「批量跑局」：未配置取标准局值 5 / 15 / 45）。
+    /// 命令行 <c>--site-values 3/8/24</c> 或配置文件 <c>"SiteValues": { "Tent": 3, "Campfire": 8, "Stele": 24 }</c>。
+    /// </summary>
+    public SiteValues SiteValues { get; init; } = SiteValues.Standard;
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -113,6 +120,13 @@ public sealed record RunConfig
             throw new ArgumentException("碾压起始大回合须为非负整数（0 = 关闭）。");
         }
 
+        if (SiteValues is null)
+        {
+            throw new ArgumentException("据点分值不得为空。");
+        }
+
+        SiteValues.Validated();
+
         if (FullEventSamplePermille is < 0 or > 1000)
         {
             throw new ArgumentException("抽样千分比须在 0..1000。");
@@ -135,6 +149,27 @@ public sealed record RunConfig
     };
 
     public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+
+    /// <summary>
+    /// 实际生效的配置：未显式配置权重的玩家填入 <see cref="EvaluationWeights.Default"/>（AI 侧同样按 <c>weights ?? Default</c> 取值，行为不变）。
+    /// 批次 <c>config.json</c> 写它，使四名玩家的完整权重与据点分值如实可查（simulation-harness「扫档配置可追溯」）。
+    /// </summary>
+    public RunConfig Effective() =>
+        this with { Players = [.. Players.Select(p => p with { Weights = p.Weights ?? EvaluationWeights.Default })] };
+
+    /// <summary>解析 <c>营帐/篝火/石碑</c> 形式的据点分值（如 <c>3/8/24</c>），并做 <see cref="SiteValues.Validated"/> 校验。</summary>
+    public static SiteValues ParseSiteValues(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string[] parts = text.Split('/');
+        if (parts.Length != 3)
+        {
+            throw new ArgumentException($"据点分值须写成 营帐/篝火/石碑（如 5/15/45），实际 {text}。");
+        }
+
+        int[] values = [.. parts.Select(p => int.Parse(p.Trim(), System.Globalization.CultureInfo.InvariantCulture))];
+        return new SiteValues(values[0], values[1], values[2]).Validated();
+    }
 
     public static RunConfig FromJson(string json) =>
         (JsonSerializer.Deserialize<RunConfig>(json, JsonOptions) ?? throw new FormatException("配置 JSON 为空。")).Validated();

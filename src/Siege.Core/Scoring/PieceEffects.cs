@@ -162,6 +162,37 @@ public static class PieceEffects
         return synergyCount * otherTypes.Count * 2;
     }
 
+    /// <summary>
+    /// 高地压制加值（scoring-sites D-E，唯一实现）：棋串中每枚棋子 s，若 s 的覆盖目标里存在"非 s 所有者的棋子且其格高度严格低于 s"，
+    /// 则 s 提供 1 点，每枚至多 1 点；按棋串求和，计入位置加值，不被倍率放大。
+    /// </summary>
+    /// <remarks>
+    /// 覆盖目标只经 <see cref="GameBoard.CoverageTargets"/> 取得（含跨崖居高临下、隔一格深水到对岸；林地不是覆盖目标），
+    /// MUST NOT 改走几何邻居或气边。弃赛者的遗留棋子同样判定（不看玩家状态）。
+    /// 规格：openspec/changes/scoring-sites/specs/piece-effects —— Requirement: 高地压制加值
+    /// </remarks>
+    public static int HighGroundBonus(GameBoard board, Group group)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(group);
+
+        int bonus = 0;
+        foreach (Coord stone in group.Stones)
+        {
+            int height = board.Map.HeightAt(stone);
+            foreach (Coord target in board.CoverageTargets(stone))
+            {
+                if (board[target].Occupant is { } enemy && enemy.Owner != group.Owner && board.Map.HeightAt(target) < height)
+                {
+                    bonus++;
+                    break;
+                }
+            }
+        }
+
+        return bonus;
+    }
+
     /// <summary>棋串中倍增子的原始数量；封顶为生效指数由 <see cref="Multiplier"/> 负责。</summary>
     public static int MultiplierCount(GameBoard board, Group group)
     {

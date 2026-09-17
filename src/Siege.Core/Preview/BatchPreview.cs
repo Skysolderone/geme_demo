@@ -97,6 +97,7 @@ public static class BatchPreviewBuilder
         IReadOnlyList<Placement> placements,
         BoardHistory history,
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster,
+        SiteValues siteValues,
         RelicLedger relics,
         int majorRound)
     {
@@ -121,14 +122,14 @@ public static class BatchPreviewBuilder
         }
 
         ImmutableArray<CapturedGroup> captures = GroupCaptures(board, rehearsal.Captures);
-        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster) : null;
+        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, siteValues) : null;
         ImmutableArray<GroupOutlook> own = OwnGroups(projected, context.Player, ordered, rehearsal.Failure, after);
 
         ImmutableArray<PowerChange> changes = [];
         ImmutableArray<Coord> willReveal = [];
         if (after is not null)
         {
-            PowerSnapshot before = PowerCalculator.Compute(board, roster);
+            PowerSnapshot before = PowerCalculator.Compute(board, roster, siteValues);
             changes =
             [
                 .. after.Players.Select(p =>

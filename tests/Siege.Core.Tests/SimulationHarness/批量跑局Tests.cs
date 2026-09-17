@@ -26,7 +26,10 @@ public class 批量跑局Tests
         Assert.Equal(6, Directory.GetFiles(dir, "match-*.jsonl").Length);
         Assert.True(File.Exists(Path.Combine(dir, "summary.json")));
         RunConfig saved = RunConfig.FromJson(File.ReadAllText(Path.Combine(dir, "config.json")));
-        Assert.Equal(config.ToJson(), saved.ToJson());
+        // scoring-sites 3.1：config.json 写实际生效配置——未显式配置的权重填默认表、据点分值如实写出（旧期望 config.ToJson() 原样 → 新期望 Effective()）。
+        Assert.Equal(config.Effective().ToJson(), saved.ToJson());
+        Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
+        Assert.Equal(Core.Scoring.SiteValues.Standard, saved.SiteValues);
         Assert.Equal((21UL, 6, 3, 500), (saved.SeedStart, saved.Count, saved.MaxMajorRounds, saved.FullEventSamplePermille));
 
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);

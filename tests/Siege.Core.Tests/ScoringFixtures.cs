@@ -50,7 +50,7 @@ internal sealed class ScoreboardHooks : ISettlementHooks
     public void OnRecalculatePower(SettlementContext context)
     {
         Steps.Add("OnRecalculatePower");
-        Scoreboard.Recalculate(context.Board, _roster, MajorRound);
+        Scoreboard.Recalculate(context.Board, _roster, SiteValues.Standard, MajorRound);
     }
 
     public void OnCheckEndConditions(SettlementContext context) => Steps.Add("OnCheckEndConditions");

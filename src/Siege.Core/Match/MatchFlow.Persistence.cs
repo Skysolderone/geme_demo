@@ -44,6 +44,7 @@ public sealed partial class MatchFlow
             MaxMajorRounds = MaxMajorRounds,
             DominanceStartRound = DominanceStartRound,
             CatchUpRecruit = CatchUpRecruit,
+            SiteValues = new SiteValuesSaveData { Tent = SiteValues.Tent, Campfire = SiteValues.Campfire, Stele = SiteValues.Stele },
             DominanceCandidate = _dominanceCandidate?.Value,
             DominancePending = [.. _dominancePending.Select(p => p.Value)],
             Phase = Phase,
@@ -104,7 +105,7 @@ public sealed partial class MatchFlow
                     Status = s.Input.Status,
                     Power = s.Input.Power,
                     ControlledRelics = s.Input.ControlledRelics,
-                    ExclusiveCells = s.Input.ExclusiveCells,
+                    ControlledSites = s.Input.ControlledSites,
                     Stones = s.Input.Stones,
                     EliminationOrder = s.Input.EliminationOrder,
                 })],
@@ -155,15 +156,19 @@ public sealed partial class MatchFlow
         bool dominanceBackfilled = data.DominanceStartRound is null;
         // catch-up-recruit 裁决 4：旧存档没有落后者征募补偿字段 → 按标准局初值「开启」回填，并在 CatchUpRecruitBackfilled 上留痕。
         bool catchUpBackfilled = data.CatchUpRecruit is null;
+        // scoring-sites R-7：旧存档没有据点分值字段 → 按标准局 5 / 15 / 45 回填，并在 SiteValuesBackfilled 上留痕。
+        bool siteValuesBackfilled = data.SiteValues is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
             MaxMajorRounds = data.MaxMajorRounds ?? MatchOptions.DefaultMaxMajorRounds,
             DominanceStartRound = data.DominanceStartRound ?? MatchOptions.DefaultDominanceStartRound,
             CatchUpRecruit = data.CatchUpRecruit ?? MatchOptions.DefaultCatchUpRecruit,
+            SiteValues = data.SiteValues is { } sv ? new SiteValues(sv.Tent, sv.Campfire, sv.Stele) : SiteValues.Standard,
         };
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(data));
         RequireValidDominanceStartRound(options.DominanceStartRound, nameof(data));
+        RequireValidSiteValues(options.SiteValues);
         var match = new MatchFlow(
             map, board, seed, players,
             RelicLedger.Restore(relicRecord, data.Relics ?? throw new FormatException("存档缺少信物账本。")),
@@ -173,6 +178,7 @@ public sealed partial class MatchFlow
         match.MaxMajorRoundsBackfilled = backfilled;
         match.DominanceStartRoundBackfilled = dominanceBackfilled;
         match.CatchUpRecruitBackfilled = catchUpBackfilled;
+        match.SiteValuesBackfilled = siteValuesBackfilled;
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -225,7 +231,7 @@ public sealed partial class MatchFlow
         {
             match.Result = new MatchResult(result.Reason, result.MajorRound, [.. result.Standings.Select(s =>
                 new Standing(s.Rank, new PlayerId(s.Player), s.Group,
-                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.ControlledRelics, s.ExclusiveCells, s.Stones, s.EliminationOrder)))]);
+                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.ControlledRelics, s.ControlledSites, s.Stones, s.EliminationOrder)))]);
         }
 
         if (data.Phase != MatchPhase.FlagPlanting)
@@ -256,6 +262,9 @@ public sealed class MatchSaveData
 
     /// <summary>落后者征募补偿开关（catch-up-recruit）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启）。</summary>
     public bool? CatchUpRecruit { get; set; }
+
+    /// <summary>据点分值（scoring-sites）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="Scoring.SiteValues.Standard"/>。</summary>
+    public SiteValuesSaveData? SiteValues { get; set; }
 
     /// <summary>碾压候选玩家编号；无候选为 <c>null</c>。</summary>
     public int? DominanceCandidate { get; set; }
@@ -381,11 +390,22 @@ public sealed class StandingSaveData
 
     public int ControlledRelics { get; set; }
 
-    public int ExclusiveCells { get; set; }
+    /// <summary>控制中的据点数量（scoring-sites D-G）。旧存档只有 <c>ExclusiveCells</c>（已不参与比较，读入时忽略）→ 本字段缺失按 0 回填（R-7）。</summary>
+    public int ControlledSites { get; set; }
 
     public int Stones { get; set; }
 
     public int? EliminationOrder { get; set; }
+}
+
+/// <summary>据点分值的存档结构（scoring-sites）。</summary>
+public sealed class SiteValuesSaveData
+{
+    public int Tent { get; set; }
+
+    public int Campfire { get; set; }
+
+    public int Stele { get; set; }
 }
 
 public sealed class ResultSaveData

@@ -116,14 +116,14 @@ public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups
 
 // ---------- 势力层 ----------
 
-/// <summary>一个计入领地分的独占空格及其归属玩家。</summary>
+/// <summary>一个独占空格及其归属玩家（scoring-sites 起独占空格不计分，只作展示；势力层据点项留段 B）。</summary>
 public sealed record TerritoryContributionView(Coord Coord, PlayerId Owner);
 
 /// <summary>势力层的一条棋串分数与倍率热区等级（= 生效倍率指数，0 表示无倍率）。</summary>
 public sealed record GroupScoreView(PlayerId Owner, ImmutableArray<Coord> Stones, GroupPowerView Power, int HeatLevel);
 
-/// <summary>势力层的玩家汇总。</summary>
-public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, long Total, int TerritoryScore, int? Rank, string? StatusText);
+/// <summary>势力层的玩家汇总。<see cref="SiteScore"/> 是据点分（scoring-sites 段 A2 最小改动：原领地分字段退出计分；据点项与高地拆分的界面语义留段 B）。</summary>
+public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, long Total, long SiteScore, int? Rank, string? StatusText);
 
 /// <summary>势力层。</summary>
 public sealed record PowerLayerContent(
@@ -303,7 +303,7 @@ public static class TacticalLayers
         return new PowerLayerContent(
             [.. power.Players.SelectMany(p => p.ExclusiveCells.Select(c => new TerritoryContributionView(c, p.Player))).OrderBy(t => t.Coord)],
             [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), g.EffectiveMultiplierCount))],
-            [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.TerritoryScore, power.RankOf(p.Player), Labels.Status(p.Status)))]);
+            [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.SiteScore, power.RankOf(p.Player), Labels.Status(p.Status)))]);
     }
 
     public static RelicLayerContent Relics(PublicWorld world)

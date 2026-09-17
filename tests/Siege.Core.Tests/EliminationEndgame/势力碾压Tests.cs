@@ -24,7 +24,8 @@ public class 势力碾压Tests
     private static DominanceEntry Active(PlayerId player, long power) => new(player, PlayerStatus.Active, power);
 
     /// <summary>
-    /// 第 6 大回合、顺序 P0 &gt; P1 &gt; P2 &gt; P3 的碾压局面：P0 角落堡垒 + 倍增串（势力 31），P1 从外侧三面贴住该串（7），P2、P3 各两子（7、7）。
+    /// 第 6 大回合、顺序 P0 &gt; P1 &gt; P2 &gt; P3 的碾压局面：P0 角落堡垒 + 倍增串（势力 31），P1 从外侧三面贴住该串（3），P2、P3 各两子（2、2）。
+    /// scoring-sites 2.7 改写：旧势力 (31, 7, 7, 7) 含独占空格领地分 → 新 (31, 3, 2, 2)（合成图无据点、独占空格不计分）；碾压不等式关系不变。
     /// P0 串 A1-B1-C1-A2-B2 的最后一口气是 B3，P1 在 B3 落子即整串提走。
     /// </summary>
     private static MatchFlow Crushing(MatchOptions options)
@@ -36,7 +37,7 @@ public class 势力碾压Tests
         }
 
         match.Stones(P1, "D1", "C2", "A3").Stones(P2, "A8", "B8").Stones(P3, "H8", "J8");
-        Assert.Equal((31L, 7L, 7L, 7L), (Power(match, P0), Power(match, P1), Power(match, P2), Power(match, P3)));
+        Assert.Equal((31L, 3L, 2L, 2L), (Power(match, P0), Power(match, P1), Power(match, P2), Power(match, P3)));
         return match;
     }
 
@@ -44,11 +45,12 @@ public class 势力碾压Tests
     public void 开局不触发()
     {
         // 规格算例：起始大回合 4，第 1 大回合首位玩家落子后势力 5、其余 0 → 不产生候选，对局继续。
+        // scoring-sites 2.7 改写：真实摆盘一枚孤立子旧势力 5（军势 1 + 领地 4）→ 新 1；规格算例的 5 ≥ 0 仍由真实值 1 ≥ 0 体现。
         // 前提断言：此刻碾压式本身是成立的（5 ≥ 0），不产生候选完全是起始大回合门槛的作用。
         // 变异验证 M-DV3：UpdateDominance 去掉 `MajorRound >= DominanceStartRound` 门槛 → 红 2（本测试、旧存档回填）。
         MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOn).AtRound(1, [P0, P1, P2, P3]);
         match.PlayTurn("B2");
-        Assert.Equal(5, Power(match, P0));
+        Assert.Equal(1, Power(match, P0));
         Assert.All([P1, P2, P3], p => Assert.Equal(0, Power(match, p)));
         Assert.Equal([P0], DominanceCheck.Satisfying(MatchFixtures.All.Select(p => Active(p, Power(match, p)))));
 
@@ -117,9 +119,10 @@ public class 势力碾压Tests
         // 规格算例：同上局面但 A=204 → 204 < 205，不产生候选。
         Assert.Empty(DominanceCheck.Satisfying([Active(P0, 204), Active(P1, 80), Active(P2, 70), Active(P3, 55)]));
 
-        // 真实摆盘：在碾压局面上给 P3 加三枚堡垒，使其余之和超过 P0。
+        // 真实摆盘：在碾压局面上给 P3 加七枚堡垒，使其余之和（3 + 2 + 30 = 35）超过 P0 的 31。
+        // scoring-sites 2.7 改写（改坐标重构，不改期望）：原加三枚堡垒 G8 / G9 / H9 靠领地分凑过 31；独占空格不计分后改为七枚，6 枚时 31 ≥ 31 仍会成为候选。
         MatchFlow match = Crushing(MatchFixtures.DominanceOn);
-        foreach (string cell in new[] { "G8", "G9", "H9" })
+        foreach (string cell in new[] { "G8", "G9", "H9", "J9", "G7", "H7", "J7" })
         {
             match.Board.Place(Coord.Parse(cell), P3, PieceType.Fortress);
         }
@@ -166,13 +169,15 @@ public class 势力碾压Tests
         // 变异验证 M-DV4：复查去掉 `!DominanceSatisfying().Contains(candidate)`（跌破不取消）→ 红 13（本测试、取消后可再次成为候选及 11 条默认开启碾压的既有测试）。
         Assert.Empty(DominanceCheck.Satisfying([Active(P0, 150), Active(P1, 95), Active(P2, 70), Active(P3, 55)]));
 
-        MatchFlow match = Crushing(MatchFixtures.DominanceOn);
+        // scoring-sites 2.7 改写（改坐标重构）：旧局面提子后 (0, 12, 7, 7)；独占空格不计分后 P1 = 4 恰等于其余之和 4，会顶上来成为新候选，
+        // 与本 Scenario 无关，故给 P2 补一子 C8，使提子后为 (0, 4, 3, 2)，"没有人顶上来"的前提照旧成立。
+        MatchFlow match = Crushing(MatchFixtures.DominanceOn).Stones(P2, "C8");
         match.PassTurn();
         Assert.Equal(P0, match.Dominance!.Candidate);
 
         match.PlayTurn("B3");   // P1 提走 P0 的整串
         Assert.Equal(0, match.StoneCount(P0));
-        Assert.Equal((0L, 12L, 7L, 7L), (Power(match, P0), Power(match, P1), Power(match, P2), Power(match, P3)));
+        Assert.Equal((0L, 4L, 3L, 2L), (Power(match, P0), Power(match, P1), Power(match, P2), Power(match, P3)));
         Assert.Empty(DominanceCheck.Satisfying(MatchFixtures.All.Select(p => Active(p, Power(match, p)))));   // 也没有人顶上来成为新候选
 
         Assert.Null(match.Dominance);
@@ -191,7 +196,8 @@ public class 势力碾压Tests
         match.PassTurn();                   // P1 回应
         Assert.Equal([P2, P3], match.Dominance!.Pending);
 
-        Coord[] reinforcement = [Coord.Parse("C9"), Coord.Parse("D9"), Coord.Parse("E9")];
+        // scoring-sites 2.7 改写（改坐标重构，不改期望）：原三枚堡垒 C9 / D9 / E9 靠领地分使 P0 跌破；改为七枚（P2 = 30，其余之和 35 > 31）。
+        Coord[] reinforcement = [.. new[] { "C9", "D9", "E9", "F9", "C8", "D8", "E8" }.Select(Coord.Parse)];
         foreach (Coord c in reinforcement)
         {
             match.Board.Place(c, P2, PieceType.Fortress);
@@ -227,7 +233,8 @@ public class 势力碾压Tests
         }
 
         match.Stones(P1, "H1");
-        foreach (string cell in new[] { "A9", "B9", "C9", "D9", "A8", "B8", "C8" })
+        // scoring-sites 2.7 改写（改坐标重构，不改期望）：原七枚堡垒（28 + 领地）→ 八枚（32），使「若把弃赛者计入则不满足」31 < 1 + 32 仍成立。
+        foreach (string cell in new[] { "A9", "B9", "C9", "D9", "A8", "B8", "C8", "D8" })
         {
             match.Board.Place(Coord.Parse(cell), P2, PieceType.Fortress);
         }

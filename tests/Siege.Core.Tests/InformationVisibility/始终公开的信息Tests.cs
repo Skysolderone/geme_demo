@@ -45,9 +45,10 @@ public class 始终公开的信息Tests
         Assert.Equal((9, 0, "2.25", 20L), (group.Power.BaseTotal, group.Power.PositionBonus, group.Power.MultiplierText, group.Power.Power));
         Scoring.PlayerPower truth = match.Scoreboard.Latest!.Of(P0);
         PlayerPowerRowView row = Assert.Single(layer.Players, p => p.Player == P0);
-        Assert.Equal((truth.Total, truth.TerritoryScore), (row.Total, row.TerritoryScore));
+        // scoring-sites 段 A2 最小改动：领地分字段退出计分，行视图改带据点分（界面语义留段 B）；独占格列表仍在势力层，Take(1) 变异仍须能红。
+        Assert.Equal((truth.Total, truth.SiteScore), (row.Total, row.SiteScore));
         Assert.Equal(truth.ExclusiveCells.Notations(), layer.TerritoryCells.Where(t => t.Owner == P0).Select(t => t.Coord).Notations());
-        Assert.True(truth.TerritoryScore > 0);
+        Assert.True(truth.ExclusiveCells.Length > 1);
     }
 
     [Fact]

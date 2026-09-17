@@ -1,5 +1,6 @@
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Scoring;
 using Siege.Core.Preview;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
@@ -42,7 +43,7 @@ public class 非法批次必须说明原因并高亮Tests
         Assert.True(BatchFixtures.TakeKo(driver, P0, 'A', PieceType.Fortress).Confirmed);
 
         Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P1),
-            [new Placement(BatchFixtures.KoPoint('A', P1), PieceType.Basic)], driver.History, Roster(P0, P1), EmptyRelics(board), 5);
+            [new Placement(BatchFixtures.KoPoint('A', P1), PieceType.Basic)], driver.History, Roster(P0, P1), SiteValues.Standard, EmptyRelics(board), 5);
         PreviewPresentation previewShown = PreviewPresentation.Build(preview, EmptyHand(P1), LibertyThresholds.Default);
         SettlementOutcome outcome = BatchFixtures.TakeKo(driver, P1, 'A', PieceType.Basic);
         FailurePresentation confirmShown = FailurePresentation.From(outcome.Failure!);
@@ -69,7 +70,7 @@ public class 非法批次必须说明原因并高亮Tests
             .Place("B1", P0).Place("H1", P0).Place("C2", P0).Place("E2", P0).Place("F2", P0).Place("G2", P0);
         var batch = new StagedBatch(board, BatchFixtures.Context(board, P0));
         Assert.Null(batch.Stage(TestMaps.At("D2"), PieceType.Basic));
-        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1), EmptyRelics(board), 5);
+        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1), SiteValues.Standard, EmptyRelics(board), 5);
         Assert.Contains(TestMaps.At("C1"), preview.CapturedCoords);
 
         BatchFailure failure = batch.Stage(TestMaps.At("C1"), PieceType.Basic)!;

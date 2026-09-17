@@ -31,10 +31,10 @@ public class 实时重算与公开排名Tests
         Assert.Equal(3, latest.Players.Length);
         Assert.Empty(latest.Of(TestMaps.P1).Groups);
         Assert.Equal(0, latest.Of(TestMaps.P1).Total);
-        // 4 枚棋子围成十字：D4 + 外圈 8 格独占，军势 4 → 13
-        Assert.Equal(13, latest.Of(TestMaps.P0).Total);
+        // 4 枚棋子围成十字：军势 4（scoring-sites 2.7 改写：旧 13 = 4 + D4 与外圈 8 格独占；P3 旧 5 = 1 + 4 独占 → 1）
+        Assert.Equal(4, latest.Of(TestMaps.P0).Total);
         Assert.Equal(PlayerStatus.Resigned, latest.Of(ScoringFixtures.P3).Status);
-        Assert.Equal(5, latest.Of(ScoringFixtures.P3).Total);
+        Assert.Equal(1, latest.Of(ScoringFixtures.P3).Total);
         Assert.Equal([1, 2], latest.Ranking.Select(r => r.Rank));
         Assert.Equal(1, latest.RankOf(TestMaps.P0));
         Assert.Equal(2, latest.RankOf(TestMaps.P1));
@@ -57,8 +57,8 @@ public class 实时重算与公开排名Tests
         Assert.Equal(["OnPass", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
         Assert.Equal(1, hooks.Scoreboard.Version);
         PowerSnapshot latest = hooks.Scoreboard.Latest!;
-        Assert.Equal(5, latest.Of(TestMaps.P0).Total);
-        Assert.Equal(5, latest.Of(TestMaps.P1).Total);
+        Assert.Equal(1, latest.Of(TestMaps.P0).Total);   // scoring-sites 2.7 改写：旧 5（1 + 4 独占）→ 1
+        Assert.Equal(1, latest.Of(TestMaps.P1).Total);
         RankGroup tied = Assert.Single(latest.Ranking);
         Assert.Equal([TestMaps.P0, TestMaps.P1], tied.Players);
     }
@@ -67,7 +67,8 @@ public class 实时重算与公开排名Tests
     public void 弃赛者势力可见但不参与()
     {
         // 设计文档 §10.2 / §12.2：已弃赛 D（P3）势力 45 高于参赛 A（P0）的 30 → D 照常显示并标记，但名次中不出现 D。
-        // 45：堡垒子×5 + 倍增子×1（基础 21 × 1.5 = 31）+ 14 独占；30：堡垒子×3 + 普通子 + 协同子（14 + 协同 4 = 18）+ 12 独占。
+        // 本盘 31 高于 18：31 = 堡垒子×5 + 倍增子×1（基础 21 × 1.5）；18 = 堡垒子×3 + 普通子 + 协同子（14 + 协同 4）。
+        // scoring-sites 2.7 改写：旧 45（31 + 14 独占）/ 30（18 + 12 独占）→ 31 / 18，D 高于 A 的前提不变。
         // 变异验证 M9：IsRanked 改为 Status != Eliminated（弃赛者参与名次）→ 红 4，含本测试；M6（弃赛者棋子被清掉）→ 红 5，含本测试。
         GameBoard board = TestMaps.Blank(size: 11)
             .Place("B2", TestMaps.P0, PieceType.Fortress).Place("C2", TestMaps.P0, PieceType.Fortress).Place("D2", TestMaps.P0, PieceType.Fortress)
@@ -80,15 +81,15 @@ public class 实时重算与公开排名Tests
         board.Place("G9", ScoringFixtures.P3, PieceType.Multiplier);
 
         PowerSnapshot snapshot = PowerCalculator.Compute(
-            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned)));
+            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned)), SiteValues.Standard);
 
         PlayerPower d = snapshot.Of(ScoringFixtures.P3);
-        Assert.Equal(45, d.Total);
+        Assert.Equal(31, d.Total);
         Assert.Equal(PlayerStatus.Resigned, d.Status);
         Assert.False(d.IsRanked);
-        Assert.Equal(30, snapshot.Of(TestMaps.P0).Total);
+        Assert.Equal(18, snapshot.Of(TestMaps.P0).Total);
         RankGroup only = Assert.Single(snapshot.Ranking);
-        Assert.Equal((1, 30L), (only.Rank, only.Power));
+        Assert.Equal((1, 18L), (only.Rank, only.Power));
         Assert.Equal([TestMaps.P0], only.Players);
         Assert.Null(snapshot.RankOf(ScoringFixtures.P3));
 
@@ -107,15 +108,15 @@ public class 实时重算与公开排名Tests
         var scoreboard = new PowerScoreboard();
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
 
-        scoreboard.Recalculate(board, roster, majorRound: 1);
+        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 1);
         Assert.Equal((1, 1), (scoreboard.Peak!.MultiplierCount, scoreboard.Peak.MajorRound));
 
         board.Place("C2", TestMaps.P0, PieceType.Multiplier);
-        scoreboard.Recalculate(board, roster, majorRound: 2);
+        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 2);
         board.Place("G7", TestMaps.P0, PieceType.Multiplier).Place("G8", TestMaps.P0, PieceType.Multiplier);
-        scoreboard.Recalculate(board, roster, majorRound: 3);
+        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 3);
         board.RemoveStones([TestMaps.At("C2"), TestMaps.At("G8")]);
-        scoreboard.Recalculate(board, roster, majorRound: 4);
+        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 4);
 
         MultiplierPeak peak = scoreboard.Peak!;
         Assert.Equal(2, peak.MultiplierCount);

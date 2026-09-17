@@ -9,9 +9,12 @@ public class 势力明细Tests
     [Fact]
     public void 明细可复算总势力()
     {
-        // 领地分总计 + 全部棋串军势之和 = 总势力，对每名玩家成立；Total 是计算层独立算出的字段，这里用明细反向复算。
-        // 变异验证：M20（Total 漏领地）、M8（协同自身计入类型）、M3（连珠拆子区间）、M32（协同并入 LineBonus）都让本测试红。
+        // 规格 Scenario「明细可复算总势力」：据点分总计 + 全部棋串军势之和 = 总势力，对每名玩家成立；Total 是计算层独立算出的字段，这里用明细反向复算。
+        // scoring-sites 2.7 改写：旧口径 领地分（= 独占空格数）+ 军势 → 新口径 据点分 + 军势。盘面补三个据点：营帐 A2（只被 P0 覆盖 → P0 5）、
+        // 石碑 H2（P0 的 G2 与 P2 的 H3 同时覆盖 → 争议）、篝火 J5（只被 P1 的 H5 / J6 覆盖 → P1 15）。据点分用测试内的字面分值表复算，不读 SiteValues。
+        // 变异验证：M20（Total 漏据点分）、M8（协同自身计入类型）、M3（连珠拆子区间）、M32（协同并入 LineBonus）都让本测试红。
         GameBoard board = TestMaps.Blank(size: 11, "F6")
+            .WithSites(("A2", SiteTier.Tent), ("H2", SiteTier.Stele), ("J5", SiteTier.Campfire))
             .PlaceStandardGroup(TestMaps.P0, row: 2)
             .Place("B9", TestMaps.P0, PieceType.Line).Place("C9", TestMaps.P0, PieceType.Line).Place("D9", TestMaps.P0, PieceType.Line)
             .Place("D10", TestMaps.P0, PieceType.Synergy)
@@ -24,11 +27,12 @@ public class 势力明细Tests
         foreach (PlayerPower player in snapshot.Players)
         {
             Assert.NotEmpty(player.Groups);
-            Assert.Equal(player.ExclusiveCells.Length, player.TerritoryScore);
-            long recomputed = player.TerritoryScore;
+            long recomputed = snapshot.SiteStates.Where(s => s.Controller == player.Player)
+                .Sum(s => s.Tier switch { SiteTier.Tent => 5L, SiteTier.Campfire => 15L, SiteTier.Stele => 45L, _ => throw new InvalidOperationException() });
+            Assert.Equal(recomputed, player.SiteScore);
             foreach (GroupPower g in player.Groups)
             {
-                Assert.Equal(g.LineBonus + g.SynergyBonus, g.PositionBonus);
+                Assert.Equal(g.LineBonus + g.SynergyBonus + g.HighGroundBonus, g.PositionBonus);
                 // multiplier-rebalance check 替换：原用 PowerCalculator.GroupPowerOf 复算（比较被测方法与它的委托目标，恒真）。
                 // 改为测试内独立整数式 ⌊基础 × 3^e / 2^e⌋ + 加值，e = min(n, 3)（规格字面封顶 3，不读 Multiplier.MaxExponent）。
                 // 变异验证 C-MR1（check）：GroupPowerOf 改回 Apply(baseTotal + positionBonus) → 本测试红（P1 串 15 ≠ 13）。
@@ -49,6 +53,11 @@ public class 势力明细Tests
 
             Assert.Equal(recomputed, player.Total);
         }
+
+        Assert.Equal(5, snapshot.Of(TestMaps.P0).SiteScore);
+        Assert.Equal(15, snapshot.Of(TestMaps.P1).SiteScore);
+        Assert.Equal(0, snapshot.Of(ScoringFixtures.P2).SiteScore);
+        Assert.Equal(SiteControlKind.Contested, snapshot.SiteStates.Single(s => s.Coord == TestMaps.At("H2")).Kind);
 
         // 抽查一条：连珠 B9-C9-D9 + 协同 D10（其他类型只有连珠 → 2）→ 基础 4 + 加值 8 = 12
         GroupPower lineGroup = snapshot.GroupContaining(TestMaps.P0, "D10");
@@ -78,25 +87,66 @@ public class 势力明细Tests
     }
 
     [Fact]
+    public void 位置加值三来源可溯源()
+    {
+        // 规格 Scenario「位置加值可溯源」（scoring-sites：三部分）：位置加值 14 = 连珠 6（B2-C2-D2 长度 3）+ 协同 4（协同子 E2 × 其他类型 {连珠, 普通} 2 种 × 2）
+        // + 高地 4（第 2 行 h=1，B2 / C2 / D2 / E2 各压制正下方 h=0 的 P1 棋子，F2 / G2 下方无敌子）。军势 = 基础 6 + 14 = 20。
+        // 变异验证 M-S7（段 A2）：Evaluate 把 highGroundBonus 并进 LineBonus 字段 → 红，含本测试。
+        TerrainData terrain = TestMaps.Terrain(heights: [("B2", 1), ("C2", 1), ("D2", 1), ("E2", 1), ("F2", 1), ("G2", 1)]);
+        GameBoard board = TestMaps.Blank(terrain, size: 9)
+            .Place("B2", TestMaps.P0, PieceType.Line).Place("C2", TestMaps.P0, PieceType.Line).Place("D2", TestMaps.P0, PieceType.Line)
+            .Place("E2", TestMaps.P0, PieceType.Synergy).Place("F2", TestMaps.P0).Place("G2", TestMaps.P0)
+            .Place("B3", TestMaps.P1).Place("C3", TestMaps.P1).Place("D3", TestMaps.P1).Place("E3", TestMaps.P1);
+
+        GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((6, 4, 4), (group.LineBonus, group.SynergyBonus, group.HighGroundBonus));
+        Assert.Equal(14, group.PositionBonus);
+        Assert.Equal(6 + 14, group.Power);
+    }
+
+    [Fact]
+    public void 据点分可溯源()
+    {
+        // 规格 Scenario：据点分总计 65 → 明细列出所控据点，各分值之和为 65，且标明占据或唯一覆盖。
+        // 标准局 5 / 15 / 45：P0 占据营帐 C3（5）、唯一覆盖石碑 E4（45，被 E3 覆盖）、唯一覆盖篝火 B4（15，被 B3 覆盖）；另有争议据点 G4 不计。
+        // 变异验证 M-S8（段 A2）：SiteControl 把 Occupied 与 UniqueCoverage 映射对调 → 红，含本测试。
+        GameBoard board = TestMaps.Blank(size: 9)
+            .WithSites(("C3", SiteTier.Tent), ("E4", SiteTier.Stele), ("B4", SiteTier.Campfire), ("G4", SiteTier.Stele))
+            .Place("B3", TestMaps.P0).Place("C3", TestMaps.P0).Place("D3", TestMaps.P0).Place("E3", TestMaps.P0)
+            .Place("G3", TestMaps.P0).Place("G5", TestMaps.P1);
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal(65, p0.SiteScore);
+        Assert.Equal(
+            [("B4", SiteTier.Campfire, 15, SiteControlKind.UniqueCoverage), ("C3", SiteTier.Tent, 5, SiteControlKind.Occupied), ("E4", SiteTier.Stele, 45, SiteControlKind.UniqueCoverage)],
+            p0.Sites.Select(s => (s.Coord.ToNotation(), s.Tier, s.Value, s.Kind)).OrderBy(t => t.Item1));
+        Assert.Equal(65, p0.Sites.Sum(s => s.Value));
+    }
+
+    [Fact]
     public void 明细字段完整()
     {
-        // 规格要求的最少字段：领地分总计、独占空格坐标集合、每条棋串的（棋子坐标、基础军势、位置加值、加值来源拆分、倍增子数量、倍率、取整后军势）。
+        // 规格要求的最少字段：据点分总计与控制据点清单、独占空格坐标集合（只展示）、每条棋串的（棋子坐标、基础军势、位置加值、加值来源拆分、倍增子数量、倍率、取整后军势）。
+        // scoring-sites 2.7 改写：旧期望 领地分 14、总势力 34（14 + 20）→ 新期望 无据点、据点分 0、独占空格仍 14 个、总势力 20。
         GameBoard board = TestMaps.Blank(size: 9).PlaceStandardGroup(TestMaps.P0, row: 2);
 
         PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
         GroupPower group = Assert.Single(p0.Groups);
 
-        Assert.Equal(14, p0.TerritoryScore);
+        Assert.Equal(0, p0.SiteScore);
+        Assert.Empty(p0.Sites);
         Assert.Equal(14, p0.ExclusiveCells.Length);
         Assert.Equal(["B2", "C2", "D2", "E2", "F2", "G2"], group.Stones.Notations());
         Assert.Equal(TestMaps.P0, group.Owner);
         Assert.Equal(9, group.BaseTotal);
         Assert.Equal(0, group.PositionBonus);
-        Assert.Equal((0, 0), (group.LineBonus, group.SynergyBonus));
+        Assert.Equal((0, 0, 0), (group.LineBonus, group.SynergyBonus, group.HighGroundBonus));
         Assert.Equal(2, group.MultiplierCount);
         Assert.Equal(new Multiplier(2), group.Multiplier);
         Assert.Equal(20, group.Power);
-        Assert.Equal(34, p0.Total);
+        Assert.Equal(20, p0.Total);
     }
 
     [Fact]
@@ -138,7 +188,7 @@ public class 势力明细Tests
 
         var scoreboard = new PowerScoreboard();
         var roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
-        scoreboard.Recalculate(board, roster, majorRound: 1);
+        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 1);
 
         MultiplierPeak peak = scoreboard.Peak!;
         Assert.Equal(8, peak.MultiplierCount);
@@ -147,7 +197,7 @@ public class 势力明细Tests
         Assert.Equal(27, peak.Power);
 
         board.Place(new Coord(9, 2), TestMaps.P0, PieceType.Multiplier);
-        scoreboard.Recalculate(board, roster, majorRound: 2);
+        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 2);
 
         peak = scoreboard.Peak!;
         Assert.Equal((9, 3, 2), (peak.MultiplierCount, peak.EffectiveMultiplierCount, peak.MajorRound));

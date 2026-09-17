@@ -105,7 +105,7 @@ public static class ReportWriter
         sb.AppendLine($"- 出现过倍增串的局 {m.MatchesWithPeak}；峰值倍增子数分布（原始数量）{Histogram(m.PeakCountDistribution)}；峰值生效倍率指数分布（封顶 {Multiplier.MaxExponent}，倍率上限 {new Multiplier(Multiplier.MaxExponent)}）{Histogram(m.PeakEffectiveExponentDistribution)}");
         sb.AppendLine($"- 峰值首次出现平均在第 {Num(m.MeanFormationRound)} 大回合，峰值军势平均 {Num(m.MeanPeakPower)}，最高 {m.MaxPeakPower}");
         sb.AppendLine($"- 峰值串之后被摧毁的概率 {m.DestroyedRate}");
-        sb.AppendLine("### 4b. 各棋子势力占比（multiplier-rebalance：终局快照、参赛玩家的全部棋串；倍增子计其放大出的部分，其余计基础军势与分得的位置加值；不含领地分）");
+        sb.AppendLine("### 4b. 各棋子势力占比（multiplier-rebalance：终局快照、参赛玩家的全部棋串；倍增子计其放大出的部分，其余计基础军势与分得的位置加值；不含据点分与高地加值）");
         PieceShareSection ps = r.PieceShares;
         sb.AppendLine($"- 纳入 {ps.Matches} 局，跳过无棋子类型计数的旧日志 / 无快照局 {ps.Skipped} 局；盘面棋子 {ps.TotalStones} 枚，归因势力 {ps.TotalPower}");
         foreach (PieceShare p in ps.Pieces)
@@ -140,8 +140,35 @@ public static class ReportWriter
         sb.AppendLine(
             $"- 平均占用率 {Pct(t.MeanFirstConflictOccupancy)}，与冲突大回合 {t.FirstConflict} 并列；"
             + $"分布 {Histogram(t.FirstConflictOccupancy)}；未纳入 {t.MatchesWithoutOccupancy} 局");
+        sb.AppendLine("### 10. 据点（scoring-sites：分母为纳入局的「小回合快照 × 该档据点数」；缺据点字段的旧日志整局排除）");
+        SiteSection st = r.Sites;
+        sb.AppendLine($"- 纳入 {st.Matches} 局，排除无据点字段的旧日志 {st.Skipped} 局");
+        foreach (SiteTierStat tier in st.Tiers)
+        {
+            sb.AppendLine(
+                $"- {SiteTierName(tier.Tier)}（{tier.SiteInstances} 个·局）：被控制 {Pct(tier.ControlledShare)}（{tier.ControlledTurns}/{tier.SiteTurns}），争议 {Pct(tier.ContestedShare)}（{tier.ContestedTurns}/{tier.SiteTurns}），"
+                + $"首次被控制平均第 {Num(tier.MeanFirstControlledRound)} 大回合（从未被控制 {tier.NeverControlled} 个），控制过它的玩家胜率 {tier.WinRateOfControllers}");
+        }
+
+        AppendOwner(sb, "篝火由所在低地主人控制", st.Campfire);
+        AppendOwner(sb, "石碑由相邻桥头那家控制", st.SteleBridgehead);
+        sb.AppendLine($"- 终局据点分占参赛玩家总势力：平均 {Pct(st.MeanFinalSiteShare)}（样本 {st.FinalShareSamples} 局）");
+        sb.AppendLine($"- 终局高地加值占全部位置加值：{Pct(st.HighGroundShare)}（{st.FinalHighGroundBonus}/{st.FinalPositionBonus}）");
         return sb.ToString();
     }
+
+    private static void AppendOwner(StringBuilder sb, string label, SiteOwnerStat o) =>
+        sb.AppendLine(
+            $"- {label}：占全部据点小回合 {Pct(o.OwnerShare)}（{o.OwnerTurns}/{o.SiteTurns}），占被控制小回合 {Pct(o.OwnerShareOfControlled)}（{o.OwnerTurns}/{o.ControlledTurns}）；"
+            + $"主人首次控制平均第 {Num(o.MeanOwnerFirstControlRound)} 大回合（主人从未控制 {o.OwnerNeverControlled} 个）；推不出主人 {o.UnknownOwner} 个");
+
+    private static string SiteTierName(string tier) => tier switch
+    {
+        nameof(Core.Board.SiteTier.Tent) => "营帐",
+        nameof(Core.Board.SiteTier.Campfire) => "篝火",
+        nameof(Core.Board.SiteTier.Stele) => "石碑",
+        _ => tier,
+    };
 
     private static void AppendZones(StringBuilder sb, string label, List<ZoneStat> zones)
     {

@@ -46,7 +46,7 @@ public class 主动弃赛Tests
         Assert.Equal(PlayerStatus.Resigned, match.StateOf(MatchFixtures.P3).Status);
         PlayerPower power = match.Scoreboard.Latest!.Of(MatchFixtures.P3);
         Assert.Equal(PlayerStatus.Resigned, power.Status);
-        Assert.Equal(5, power.Total);   // 1 子 + 4 独占格
+        Assert.Equal(1, power.Total);   // 1 子（scoring-sites 2.7 改写：旧 5 = 1 子 + 4 独占格）
         Assert.Contains(TestMaps.At("H8"), match.Board.GroupsOf(MatchFixtures.P3).Single().Stones);
 
         match.PlayTurn("B2");
@@ -59,7 +59,8 @@ public class 主动弃赛Tests
     [Fact]
     public void 遗留棋子继续生效()
     {
-        // 设计文档 §12.2：弃赛者 D 与参赛者 A 的棋子同时覆盖某空格 → 争议格，A 不获得该格领地分。
+        // 设计文档 §12.2：弃赛者 D 与参赛者 A 的棋子同时覆盖某空格 → 争议格（scoring-sites：规格 Scenario 已改为"空的据点格"，A 不获得该据点分；
+        // 本测试保留流程层名册接线这条腿，据点格那条腿见 site-control「弃赛者封锁据点」与 coverage-territory「弃赛者遗留棋子制造争议」）。
         // 变异验证 M-E11：Roster 把 Resigned 报为 Eliminated 也不影响；真正的守门是计分层不过滤——把 RecalculateDerived 的名册过滤掉弃赛者 → 抛出 → 红 1（本测试）。
         MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P3, "E5")
@@ -68,7 +69,8 @@ public class 主动弃赛Tests
 
         Assert.Equal(OwnershipKind.Contested, match.Scoreboard.Latest!.Coverage.OwnershipOf(TestMaps.At("E6")).Kind);
         Assert.DoesNotContain(TestMaps.At("E6"), match.Scoreboard.Latest.Of(MatchFixtures.P0).ExclusiveCells);
-        Assert.Equal(3 + 1, match.Scoreboard.Latest.Of(MatchFixtures.P0).Total);   // E7 的 4 邻格中 E6 争议
+        Assert.Equal(3, match.Scoreboard.Latest.Of(MatchFixtures.P0).ExclusiveCells.Length);   // E7 的 4 邻格中 E6 争议
+        Assert.Equal(1, match.Scoreboard.Latest.Of(MatchFixtures.P0).Total);   // scoring-sites 2.7 改写：旧 3 + 1（独占 3 + 军势 1）→ 1
     }
 
     [Fact]

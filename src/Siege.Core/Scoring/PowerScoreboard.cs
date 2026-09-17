@@ -35,10 +35,10 @@ public sealed class PowerScoreboard
     /// <summary>整局倍率峰值遥测；尚未出现任何倍增子时为 <c>null</c>。</summary>
     public MultiplierPeak? Peak { get; private set; }
 
-    /// <summary>对当前盘面全量重算并替换 <see cref="Latest"/>；<paramref name="majorRound"/> 只用于倍率峰值遥测的轮次标记。</summary>
-    public PowerSnapshot Recalculate(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound)
+    /// <summary>对当前盘面全量重算并替换 <see cref="Latest"/>；<paramref name="siteValues"/> 是对局配置的据点分值；<paramref name="majorRound"/> 只用于倍率峰值遥测的轮次标记。</summary>
+    public PowerSnapshot Recalculate(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, SiteValues siteValues, int majorRound)
     {
-        PowerSnapshot snapshot = PowerCalculator.Compute(board, roster);
+        PowerSnapshot snapshot = PowerCalculator.Compute(board, roster, siteValues);
         Latest = snapshot;
         Version++;
         TrackPeak(snapshot, majorRound);

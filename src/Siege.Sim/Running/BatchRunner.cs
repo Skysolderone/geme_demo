@@ -82,7 +82,7 @@ public static class BatchRunner
     {
         ArgumentNullException.ThrowIfNull(config);
         Directory.CreateDirectory(outputDir);
-        File.WriteAllText(Path.Combine(outputDir, "config.json"), config.ToJson());
+        File.WriteAllText(Path.Combine(outputDir, "config.json"), config.Effective().ToJson());
         var wall = Stopwatch.StartNew();
         int done = 0;
         object gate = new();

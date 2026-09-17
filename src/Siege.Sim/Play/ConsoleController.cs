@@ -279,9 +279,11 @@ internal sealed class ConsoleController : ITurnController
             return;
         }
 
-        long before = _observe().Power?.Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0;
+        MatchPublicView view = _observe();
+        long before = view.Power?.Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0;
         long after = r.ProjectedBoard is { } projected
-            ? PowerCalculator.Compute(projected).Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0
+            ? PowerCalculator.Compute(projected, view.Players.ToDictionary(p => p.Player, p => p.Status), view.SiteValues)
+                .Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0
             : before;
         string captures = r.Captures.IsDefaultOrEmpty ? "不提子" : $"提走对手 {r.Captures.Length} 子";
         _render.Line($"预演：合法，{captures}，你的势力 {before} → {after}", ConsoleColor.Green);

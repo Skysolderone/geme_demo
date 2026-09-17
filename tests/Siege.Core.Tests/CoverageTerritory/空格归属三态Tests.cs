@@ -9,12 +9,34 @@ public class 空格归属三态Tests
     [Fact]
     public void 独占()
     {
+        // 规格 Scenario（scoring-sites 改写）：某空格只被 A 覆盖 → A 独占，但不向 A 计入任何分数。
+        // 「不计分」一句由原 领地分Tests（REMOVED Requirement，整文件删除）的「孤立棋子的势力上限」改写并入：旧期望总势力 5（军势 1 + 领地 4）→ 新期望 1。
+        // 变异验证 M-S5（段 A2）：PowerCalculator 的 Total 加回 exclusive.Length → 红，含本测试。
         GameBoard board = TestMaps.Blank(size: 7).Place("D4", TestMaps.P0);
 
         CoverageMap coverage = CoverageMap.Compute(board);
 
         Assert.Equal(new CellOwnership(OwnershipKind.Exclusive, TestMaps.P0), coverage.OwnershipOf(TestMaps.At("C4")));
         Assert.Equal(["D3", "C4", "E4", "D5"], coverage.ExclusiveCellsOf(TestMaps.P0).Notations());
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+        Assert.Equal(["D3", "C4", "E4", "D5"], p0.ExclusiveCells.Notations());
+        Assert.Equal(1, p0.Total);
+    }
+
+    [Fact]
+    public void 棋子格不在独占集合中()
+    {
+        // 由原 领地分Tests「棋子格不重复计分」迁入：棋子所在格 MUST NOT 出现在独占空格集合中（盘面层归属读法仍用它），多子棋串同样如此。
+        // scoring-sites 2.7 改写：旧期望总势力 7 + 6（领地 7 + 军势 6）→ 新期望 6（独占空格不计分）。
+        GameBoard board = TestMaps.Blank(size: 7)
+            .Place("C4", TestMaps.P0).Place("D4", TestMaps.P0, PieceType.Fortress).Place("D5", TestMaps.P0);
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Coord[] stones = [TestMaps.At("C4"), TestMaps.At("D4"), TestMaps.At("D5")];
+        Assert.Empty(p0.ExclusiveCells.Intersect(stones));
+        Assert.Equal(["C3", "D3", "B4", "E4", "C5", "E5", "D6"], p0.ExclusiveCells.Notations());
+        Assert.Equal(6, p0.Total);
     }
 
     [Fact]
@@ -31,8 +53,8 @@ public class 空格归属三态Tests
         Assert.Equal(new CellCoverage(2, null), coverage.CoverageOf(TestMaps.At("D5")));
         Assert.DoesNotContain(TestMaps.At("D5"), snapshot.Of(TestMaps.P0).ExclusiveCells);
         Assert.DoesNotContain(TestMaps.At("D5"), snapshot.Of(TestMaps.P1).ExclusiveCells);
-        Assert.Equal(3, snapshot.Of(TestMaps.P0).TerritoryScore);
-        Assert.Equal(3, snapshot.Of(TestMaps.P1).TerritoryScore);
+        Assert.Equal(3, snapshot.Of(TestMaps.P0).ExclusiveCells.Length);
+        Assert.Equal(3, snapshot.Of(TestMaps.P1).ExclusiveCells.Length);
     }
 
     [Fact]
@@ -50,7 +72,7 @@ public class 空格归属三态Tests
         Assert.Equal(new CellOwnership(OwnershipKind.Exclusive, TestMaps.P0), snapshot.Coverage.OwnershipOf(TestMaps.At("D4")));
         PlayerPower p0 = snapshot.Of(TestMaps.P0);
         Assert.Single(p0.ExclusiveCells, TestMaps.At("D4"));
-        Assert.Equal(9, p0.TerritoryScore);
+        Assert.Equal(9, p0.ExclusiveCells.Length);
         Assert.Equal(p0.ExclusiveCells.Length, p0.ExclusiveCells.Distinct().Count());
     }
 
@@ -76,6 +98,6 @@ public class 空格归属三态Tests
 
         Assert.Equal(OwnershipKind.Obstacle, snapshot.Coverage.OwnershipOf(TestMaps.At("C4")).Kind);
         Assert.Equal(["D3", "E4", "D5"], snapshot.Of(TestMaps.P0).ExclusiveCells.Notations());
-        Assert.Equal(3, snapshot.Of(TestMaps.P0).TerritoryScore);
+        Assert.Equal(3, snapshot.Of(TestMaps.P0).ExclusiveCells.Length);
     }
 }
