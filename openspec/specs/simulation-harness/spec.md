@@ -45,7 +45,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 系统 SHALL 支持按种子批次自动执行大量对局，并汇总结果。
 
-批量跑局 SHALL 支持配置：地图、玩家数量、各玩家的 AI 难度与权重配置、种子范围、局数。
+批量跑局 SHALL 支持配置：地图、玩家数量、各玩家的 AI 难度与权重配置、据点分值（营帐 / 篝火 / 石碑）、种子范围、局数。未显式配置的据点分值 SHALL 取标准局值。实际生效的据点分值与各玩家 AI 权重 MUST 写入该批次的配置记录。
 
 系统 SHALL 支持并行执行；并行 MUST NOT 改变任何单局的结果。
 
@@ -56,6 +56,10 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 #### Scenario: 并行不改变结果
 - **WHEN** 同一批种子分别以串行与并行方式执行
 - **THEN** 每个种子对应的对局结果完全一致
+
+#### Scenario: 扫档配置可追溯
+- **WHEN** 以据点分值 3 / 8 / 24、全部玩家 Safety = 7 执行一批对局
+- **THEN** 该批次的配置记录中写明 3 / 8 / 24 与四名玩家的完整权重，分析报告可据此标注口径
 
 ### Requirement: 可复现回放
 

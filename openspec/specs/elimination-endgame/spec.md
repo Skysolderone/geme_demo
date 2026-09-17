@@ -57,7 +57,7 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 玩家 SHALL 可以主动弃赛并继续观战。弃赛 SHALL 立即使该玩家失去本局胜利资格，并 MUST NOT 再获得小回合、征募与先手效果。
 
-弃赛者已有的棋子与棋串 MUST NOT 消失，SHALL 继续产生覆盖、制造争议格、产生势力，并 SHALL 可以被其他玩家围杀。
+弃赛者已有的棋子与棋串 MUST NOT 消失，SHALL 继续产生覆盖、制造争议、占据与控制据点、产生势力，并 SHALL 可以被其他玩家围杀。
 
 弃赛者遗留的两眼活棋 MAY 永久留在棋盘上成为地形压力。
 
@@ -72,8 +72,8 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 - **THEN** 系统接受该操作，其遗留棋子照常产生覆盖与势力，该玩家不再获得小回合
 
 #### Scenario: 遗留棋子继续生效
-- **WHEN** 玩家 D 弃赛后，其棋子与参赛玩家 A 的棋子同时覆盖某空格
-- **THEN** 该空格为争议格，A 不获得该格领地分
+- **WHEN** 玩家 D 弃赛后，其棋子与参赛玩家 A 的棋子同时覆盖某个空的据点格
+- **THEN** 该据点为争议状态，A 不获得该据点分
 
 #### Scenario: 遗留棋子可被围杀
 - **WHEN** 参赛玩家 B 使弃赛者 D 的一条棋串无气
@@ -116,7 +116,7 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 ### Requirement: 终局名次与并列判定
 
-在终局条件「棋盘填满」「整轮 Pass」「势力碾压」与「达大回合上限」下，系统 SHALL 按当前势力值排名。势力值相同时 SHALL 依次比较：控制中的信物数量 → 独占空格数 → 盘面棋子数；仍完全相同则共享同一名次。
+在终局条件「棋盘填满」「整轮 Pass」「势力碾压」与「达大回合上限」下，系统 SHALL 按当前势力值排名。势力值相同时 SHALL 依次比较：控制中的信物数量 → 控制中的据点数量 → 盘面棋子数；仍完全相同则共享同一名次。
 
 以势力碾压终局时，获胜者 SHALL 为第 1 名；其余玩家按同一比较链排定后续名次。
 
@@ -129,8 +129,12 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 - **THEN** 控制 3 枚信物的玩家名次更高
 
 #### Scenario: 逐级比较到棋子数
-- **WHEN** 两名玩家势力值与信物数量均相同，独占空格数也相同，盘面棋子数分别为 11 与 8
+- **WHEN** 两名玩家势力值与信物数量均相同，控制的据点数量也相同，盘面棋子数分别为 11 与 8
 - **THEN** 盘面棋子数 11 的玩家名次更高
+
+#### Scenario: 信物相同比据点数
+- **WHEN** 两名玩家势力值均为 60、控制信物数量均为 2，控制的据点数量分别为 3 与 1
+- **THEN** 控制 3 个据点的玩家名次更高；独占空格数不参与比较
 
 #### Scenario: 完全相同则并列
 - **WHEN** 两名玩家在全部四项比较中均相同
