@@ -39,13 +39,14 @@ public sealed record BoardCellView(
 
 /// <summary>默认棋盘（不打开任何信息层时）。</summary>
 /// <param name="Fences">栅栏边（无序格对，terrain-model 边属性）：Godot 沿两格公共边立起，不占任一格的落点。</param>
-public sealed record DefaultBoardView(int Width, int Height, ImmutableArray<BoardCellView> Cells, ImmutableArray<FenceEdge> Fences)
+/// <param name="Sites">全部据点（visual-style-baseline「据点地标」）：档位、分值、控制状态与控制者 / 覆盖方，Godot 据此画地标与旗帜，不自己判定控制。</param>
+public sealed record DefaultBoardView(int Width, int Height, ImmutableArray<BoardCellView> Cells, ImmutableArray<FenceEdge> Fences, ImmutableArray<SiteView> Sites)
 {
     /// <summary>某格。</summary>
     public BoardCellView CellAt(Coord coord) =>
         Cells.FirstOrDefault(c => c.Coord == coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标超出棋盘范围。");
 
-    /// <summary>从公开世界构建：只读盘面格子视图与信物公开状态。</summary>
+    /// <summary>从公开世界构建：只读盘面格子视图、信物公开状态与据点公开状态。</summary>
     public static DefaultBoardView From(PublicWorld world)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -70,6 +71,6 @@ public sealed record DefaultBoardView(int Width, int Height, ImmutableArray<Boar
             }),
         ];
 
-        return new DefaultBoardView(board.Width, board.Height, cells, [.. board.Map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B)]);
+        return new DefaultBoardView(board.Width, board.Height, cells, [.. board.Map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B)], SiteViews.From(world));
     }
 }

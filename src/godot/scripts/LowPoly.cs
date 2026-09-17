@@ -205,6 +205,164 @@ public static class LowPoly
         return root;
     }
 
+    // ---------- 据点地标（scoring-sites 4.2，visual-style-baseline「据点地标」） ----------
+    // 三档三种轮廓，体量随档位递增：营帐 = 低矮人字形三角棱柱（横向），篝火 = 石圈 + 交叉木 + 发光火苗（圆形），石碑 = 竖立的高石板（纵向）。
+    // 刻意避开五种棋子的轮廓语言：不用四棱锥（金字塔子）、不用圆柱 + 雉堞（塔楼子）、不用球（圆头兵 / 双球连杆）。
+    // 返回节点原点在地砖上表面格心；占据时由 BoardView 整体缩小并移到格角，本类不关心格内位置。
+    // 全部是纯 MeshInstance3D，没有碰撞体：分层拾取（BoardGeometry.TryPick）是数学投影，地标不参与拾取。
+
+    /// <summary>营帐（档位 1，最小）：人字形帆布三角棱柱 + 正面深色门洞 + 脊杆。高 0.30。</summary>
+    public static Node3D Tent()
+    {
+        var root = new Node3D { Name = "Tent" };
+        root.AddChild(Mesh(Prism([new(-0.27f, 0f), new(0.27f, 0f), new(0f, 0.30f)], 0.46f), Visuals.Matte(Visuals.TentCanvas), Vector3.Zero));
+        root.AddChild(Mesh(Prism([new(-0.08f, 0f), new(0.08f, 0f), new(0f, 0.17f)], 0.02f), Visuals.Matte(Visuals.TentDoor), new Vector3(0f, 0f, 0.235f)));
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.03f, 0.03f, 0.54f) }, Visuals.Matte(Visuals.Timber, 1f), new Vector3(0f, 0.30f, 0f)));
+        return root;
+    }
+
+    /// <summary>篝火（档位 2，中等）：六块矮石围成的圈 + 两根交叉木柴 + 两层发光火苗。高 0.42。</summary>
+    public static Node3D Campfire()
+    {
+        var root = new Node3D { Name = "Campfire" };
+        StandardMaterial3D stone = Visuals.Matte(Visuals.Rock, 1f);
+        for (int i = 0; i < 6; i++)
+        {
+            float a = Mathf.Pi * 2f * i / 6f;
+            root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.045f, BottomRadius = 0.065f, Height = 0.07f, RadialSegments = 5, Rings = 0 }, stone,
+                new Vector3(Mathf.Cos(a) * 0.24f, 0.035f, Mathf.Sin(a) * 0.24f), new Vector3(0f, i * 23f, 0f)));
+        }
+
+        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
+        foreach (float yaw in new[] { 35f, -35f })
+        {
+            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.40f, 0.05f, 0.05f) }, timber, new Vector3(0f, 0.05f, 0f), new Vector3(0f, yaw, 8f)));
+        }
+
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.13f, Height = 0.36f, RadialSegments = 5, Rings = 0 },
+            Visuals.Glow(Visuals.FlameOuter, 1.1f, false), new Vector3(0f, 0.24f, 0f)));
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.07f, Height = 0.22f, RadialSegments = 5, Rings = 0 },
+            Visuals.Glow(Visuals.FlameInner, 1.4f, false), new Vector3(0.02f, 0.19f, 0.05f), new Vector3(0f, 36f, 0f)));
+        return root;
+    }
+
+    /// <summary>石碑（档位 3，最大）：宽基座 + 竖立石板 + 人字形碑顶 + 正面浅色刻痕。高 0.80。</summary>
+    public static Node3D Stele()
+    {
+        var root = new Node3D { Name = "Stele" };
+        StandardMaterial3D slab = Visuals.Matte(Visuals.SteleStone, 0.95f);
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.40f, 0.08f, 0.24f) }, Visuals.Matte(Visuals.Rock, 1f), new Vector3(0f, 0.04f, 0f)));
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.26f, 0.62f, 0.10f) }, slab, new Vector3(0f, 0.39f, 0f)));
+        root.AddChild(Mesh(Prism([new(-0.13f, 0f), new(0.13f, 0f), new(0f, 0.10f)], 0.10f), slab, new Vector3(0f, 0.70f, 0f)));
+        StandardMaterial3D carving = Visuals.Matte(Visuals.SteleCarving, 1f);
+        foreach (float y in new[] { 0.52f, 0.40f, 0.28f })
+        {
+            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.14f, 0.025f, 0.01f) }, carving, new Vector3(0f, y, 0.052f)));
+        }
+
+        return root;
+    }
+
+    /// <summary>
+    /// 控制方旗帜：木杆 + 阵营主色旗面 + 正反两面的阵营徽记（<see cref="EmblemMesh"/>，与棋子底座同一套图形）。
+    /// 灰度下靠徽记形状区分控制方，不只靠颜色。原点在杆脚；旗面向 −X 展开（朝格内），不越出本格。
+    /// </summary>
+    public static Node3D SiteFlag(BannerEmblem emblem, Color faction, Color ink, float poleHeight)
+    {
+        var root = new Node3D { Name = "SiteFlag" };
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.014f, BottomRadius = 0.018f, Height = poleHeight, RadialSegments = 5, Rings = 0 },
+            Visuals.Matte(Visuals.Timber, 1f), new Vector3(0f, poleHeight * 0.5f, 0f)));
+        const float clothWidth = 0.36f;
+        const float clothHeight = 0.26f;
+        var cloth = new Vector3(-clothWidth * 0.5f, poleHeight - (clothHeight * 0.5f), 0f);
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(clothWidth, clothHeight, 0.02f) }, Visuals.Matte(faction), cloth));
+        StandardMaterial3D inkMaterial = Visuals.Flat(ink);
+        foreach (float side in new[] { 1f, -1f })
+        {
+            // EmblemMesh 朝上平铺；绕 X 轴 ±90° 立起来贴在旗面两侧（Flat 材质双面，绕序无关）。
+            root.AddChild(Mesh(EmblemMesh(emblem, 0.22f), inkMaterial, cloth + new Vector3(0f, 0f, side * 0.012f), new Vector3(side * 90f, 0f, 0f)));
+        }
+
+        return root;
+    }
+
+    /// <summary>争议标记：两根交叉斜插的木杆，各挂一面无徽记的警示色三角小旗。与"无人"（不插旗）和"被控制"（主色 + 徽记方旗）在轮廓上都不同。</summary>
+    public static Node3D ContestedFlags(float poleHeight)
+    {
+        var root = new Node3D { Name = "ContestedFlags" };
+        StandardMaterial3D pole = Visuals.Matte(Visuals.Timber, 1f);
+        StandardMaterial3D pennant = Visuals.Glow(Visuals.Contested, 0.35f, false);
+        pennant.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+        foreach (float tilt in new[] { 24f, -24f })
+        {
+            var arm = new Node3D { RotationDegrees = new Vector3(0f, 0f, tilt) };
+            arm.AddChild(Mesh(new CylinderMesh { TopRadius = 0.014f, BottomRadius = 0.018f, Height = poleHeight, RadialSegments = 5, Rings = 0 },
+                pole, new Vector3(0f, poleHeight * 0.5f, 0f)));
+            float dir = tilt > 0f ? -1f : 1f;
+            arm.AddChild(Mesh(Prism([new(0f, -0.09f), new(0f, 0.09f), new(dir * 0.20f, 0f)], 0.02f), pennant, new Vector3(0f, poleHeight - 0.10f, 0f)));
+            root.AddChild(arm);
+        }
+
+        return root;
+    }
+
+    /// <summary>
+    /// 程序化直棱柱（低多边形硬边）：<paramref name="profile"/> 是 XY 平面上的凸多边形，沿 Z 轴居中拉伸 <paramref name="depth"/>。
+    /// 每个面按"朝外"方向定绕序与法线，不依赖输入多边形的顺逆时针。
+    /// </summary>
+    private static ArrayMesh Prism(Vector2[] profile, float depth)
+    {
+        var tool = new SurfaceTool();
+        tool.Begin(global::Godot.Mesh.PrimitiveType.Triangles);
+        float half = depth * 0.5f;
+
+        Vector2 centroid = Vector2.Zero;
+        foreach (Vector2 p in profile)
+        {
+            centroid += p;
+        }
+
+        centroid /= profile.Length;
+        for (int i = 1; i + 1 < profile.Length; i++)
+        {
+            PrismFace(tool, At(profile[0], half), At(profile[i], half), At(profile[i + 1], half), Vector3.Back);
+            PrismFace(tool, At(profile[0], -half), At(profile[i], -half), At(profile[i + 1], -half), Vector3.Forward);
+        }
+
+        for (int i = 0; i < profile.Length; i++)
+        {
+            Vector2 a = profile[i];
+            Vector2 b = profile[(i + 1) % profile.Length];
+            Vector2 edge = b - a;
+            var outward2 = new Vector2(edge.Y, -edge.X);
+            if (outward2.Dot(((a + b) * 0.5f) - centroid) < 0f)
+            {
+                outward2 = -outward2;
+            }
+
+            var outward = new Vector3(outward2.X, outward2.Y, 0f);
+            PrismFace(tool, At(a, half), At(b, half), At(b, -half), outward);
+            PrismFace(tool, At(a, half), At(b, -half), At(a, -half), outward);
+        }
+
+        return tool.Commit();
+
+        static Vector3 At(Vector2 p, float z) => new(p.X, p.Y, z);
+    }
+
+    /// <summary>棱柱的一个三角面：Godot 以顺时针（从正面看）为正面，按期望的朝外法线调整绕序。</summary>
+    private static void PrismFace(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 outward)
+    {
+        Vector3 normal = outward.Normalized();
+        bool counterClockwise = (b - a).Cross(c - a).Dot(outward) > 0f;
+        tool.SetNormal(normal);
+        tool.AddVertex(a);
+        tool.SetNormal(normal);
+        tool.AddVertex(counterClockwise ? c : b);
+        tool.SetNormal(normal);
+        tool.AddVertex(counterClockwise ? b : c);
+    }
+
     /// <summary>贴在地砖上的扁平方形标记（叠加层用）。</summary>
     public static PlaneMesh Marker(float size) => new() { Size = new Vector2(size, size), Orientation = PlaneMesh.OrientationEnum.Y };
 

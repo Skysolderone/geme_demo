@@ -54,6 +54,24 @@ public static class Visuals
     /// <summary>岩石。</summary>
     public static readonly Color Rock = Color.Color8(122, 120, 116);
 
+    /// <summary>营帐帆布（据点地标，浅米色，与岩灰 / 草地在灰度下也拉得开）。</summary>
+    public static readonly Color TentCanvas = Color.Color8(222, 204, 164);
+
+    /// <summary>营帐门洞。</summary>
+    public static readonly Color TentDoor = Color.Color8(70, 52, 38);
+
+    /// <summary>篝火外焰。</summary>
+    public static readonly Color FlameOuter = Color.Color8(236, 118, 40);
+
+    /// <summary>篝火内焰。</summary>
+    public static readonly Color FlameInner = Color.Color8(255, 214, 96);
+
+    /// <summary>石碑石面（偏冷的浅灰蓝，与岩石的暖灰区分）。</summary>
+    public static readonly Color SteleStone = Color.Color8(168, 176, 190);
+
+    /// <summary>石碑刻痕。</summary>
+    public static readonly Color SteleCarving = Color.Color8(236, 232, 214);
+
     /// <summary>旗帜图案 / 棋子高光：高亮度，保证去色后与阵营主色拉开明度差。</summary>
     public static readonly Color EmblemInk = Color.Color8(242, 240, 232);
 

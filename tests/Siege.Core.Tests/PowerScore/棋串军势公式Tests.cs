@@ -50,7 +50,7 @@ public class 棋串军势公式Tests
         Assert.Equal("2.25", group.Multiplier.ToString());
         Assert.Equal(25, group.Power);
         Assert.NotEqual(40, group.Power);
-        Assert.Equal("基础 6 × 2.25 + 位置加值 12（连珠 12 / 协同 0） = 25", GroupPowerView.From(group).FormulaText);
+        Assert.Equal("基础 6 × 2.25 + 位置加值 12（连珠 12 / 协同 0 / 高地 0） = 25", GroupPowerView.From(group).FormulaText);
     }
 
     [Fact]

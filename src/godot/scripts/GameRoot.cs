@@ -123,7 +123,9 @@ public sealed partial class GameRoot : Node3D
 
         Image image = GetViewport().GetTexture().GetImage();
         Error error = image.SavePng(path);
-        GD.Print($"[siege] 截图 {path}：{error}");
+        GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {_session.Match.MajorRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}）");
+        // 截图当刻的据点状态（读视图模型），供 art/sites-v4/README 的人工清单对照"哪张图里有争议 / 控制"。
+        GD.Print("[siege] 据点：" + string.Join("；", _session.World.Board().Sites.Select(s => $"{s.Coord.ToNotation()} {s.TierText} {s.StatusText}")));
     }
 
     private void Connect()

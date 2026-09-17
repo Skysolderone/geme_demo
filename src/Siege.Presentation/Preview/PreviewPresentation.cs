@@ -47,6 +47,7 @@ public sealed record GroupPowerView(
     int BaseTotal,
     int LineBonus,
     int SynergyBonus,
+    int HighGroundBonus,
     int PositionBonus,
     int MultiplierCount,
     int EffectiveExponent,
@@ -60,8 +61,8 @@ public sealed record GroupPowerView(
         string multiplier = power.Multiplier.ToString();
         string bonus = power.PositionBonus == 0
             ? "位置加值 0"
-            : $"位置加值 {power.PositionBonus}（连珠 {power.LineBonus} / 协同 {power.SynergyBonus}）";
-        return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.PositionBonus,
+            : $"位置加值 {power.PositionBonus}（连珠 {power.LineBonus} / 协同 {power.SynergyBonus} / 高地 {power.HighGroundBonus}）";
+        return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus, power.PositionBonus,
             power.MultiplierCount, power.EffectiveMultiplierCount, multiplier, power.Power,
             $"基础 {power.BaseTotal} × {multiplier} + {bonus} = {power.Power}");
     }

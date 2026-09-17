@@ -464,7 +464,7 @@ public sealed partial class Hud : CanvasLayer
         switch (content)
         {
             case TerritoryLayerContent:
-                _layerBody.AddChild(Ui.Text("图例：实色 = 独占（计入领地分）／浅色 = 被棋子占据", Ui.MutedText, wrap: true));
+                _layerBody.AddChild(Ui.Text("图例：实色 = 独占（只作判读，不计分）／浅色 = 被棋子占据", Ui.MutedText, wrap: true));
                 _layerBody.AddChild(Ui.Text("金色 = 争议（多方同时覆盖）／暗灰 = 中立（无人覆盖）", Ui.MutedText, wrap: true));
                 _layerBody.AddChild(Ui.Text("本层弱化棋子与装饰，只突出归属。", Ui.MutedText, wrap: true));
                 break;
@@ -479,8 +479,10 @@ public sealed partial class Hud : CanvasLayer
                 break;
 
             case PowerLayerContent power:
+                _layerBody.AddChild(Ui.Text("势力 = 据点分 + 军势。空格不计分；据点格按控制方着色，金色虚框 = 争议。", Ui.MutedText, wrap: true));
                 AddScroll(_layerBody, power.Players
                     .Select(p => ($"{Labels.Player(p.Player)} 势力 {p.Total}（据点 {p.SiteScore}）{(p.Rank is int r ? $" 第 {r} 名" : string.Empty)}", Ui.InfoText))
+                    .Concat(power.Sites.Select(s => ($"{s.TierText} {s.Coord.ToNotation()}　{s.Value} 分　{s.StatusText}", s.Controller is null ? Ui.MutedText : Ui.InfoText)))
                     .Concat(power.Groups.Select(g => ($"{Labels.Player(g.Owner)} {Labels.Coords(g.Stones)} {g.Power.FormulaText}", Ui.MutedText))));
                 break;
 

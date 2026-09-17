@@ -381,3 +381,105 @@ tasks 要求的 4 条（M-S3、M-H1、M-H2、M-H3）均红；其余 27 条为自
 - `dotnet build`：0 警告 0 错误，EXIT=0。
 - `dotnet test -c Release`（输出落文件后取 `$?`）：**799 通过 0 失败，EXIT=0**（797 + 本次新增 2）。
 - Godot：本次未改 `src/godot/` 与 Presentation，未重跑。
+
+## 段 B（界面，tasks 4.1–4.3）
+
+### 改动文件
+
+- Presentation：
+  - 新增 `src/Siege.Presentation/Visibility/SiteView.cs`：`SiteView`（坐标、档位、档位名、分值、控制状态、控制者、争议覆盖方、状态文案）与 `SiteViews.From(PublicWorld)`。状态一律取 `PowerSnapshot.SiteStates`；争议覆盖方取 `Coverage.SourcesOf` 的来源棋子所有者（读数）；分值取公开快照的 `SiteValues`。插旗阶段 `Power` 为 null 时按地图列出据点、状态记无人（空盘事实，注释写明）。
+  - `Visibility/DefaultBoardView.cs`：加 `Sites` 集合（与 `Fences` 平行，不改 `BoardCellView`）。
+  - `Layers/LayerContents.cs`：删除 `TerritoryContributionView`；`PowerLayerContent.TerritoryCells` → `Sites`（`ImmutableArray<SiteView>`）；插旗阶段势力层也给出据点。
+  - `Preview/PreviewPresentation.cs`：`GroupPowerView` 加 `HighGroundBonus`；`FormulaText` 为 `位置加值 N（连珠 a / 协同 b / 高地 c）`（位置加值 0 时文案不变）。修掉 C-4。
+  - `Text/Labels.cs`：`SiteTier`、`SiteStatus`。
+- Godot（`src/godot/scripts/`）：
+  - `LowPoly.cs`：`Tent` / `Campfire` / `Stele` 三种程序化低多边形地标、`SiteFlag`（主色旗面 + 两面徽记）、`ContestedFlags`（交叉杆 + 无徽记金色三角旗）、私有 `Prism`（程序化直棱柱）。
+  - `Visuals.cs`：帆布 / 门洞 / 火焰两色 / 石碑石面 / 刻痕 6 个颜色。
+  - `BoardView.cs`：`_sites` 节点，`Refresh` 里 `DrawSites`（在棋子之前）；有正式棋子 / 本人暂放 / 打开信息层时地标 ×0.375 退到远侧格角 (−0.35, −0.35)（营帐缩后最近角距格心 0.363 > 棋子底座半径 0.36；首版 ×0.42 / (−0.30, −0.30) 算得营帐最近 0.276 会压底座，已改）、旗帜 ×0.62 插在棋子身后；势力层 `DrawPower` 改为据点格着色 + 争议虚框，不再给空格着领地色。
+  - `Hud.cs`：势力层面板加说明行与 12 条据点项；归属读法图例"实色 = 独占（计入领地分）"改"（只作判读，不计分）"。
+  - `GameRoot.cs`：`Capture` 打印图片尺寸、帧号、大回合、信息层与当刻全部据点状态（供截图清单对照）。
+- 测试：
+  - 新增 `SiteControlSpec/据点公开Tests.cs`（`开局即可见`，v4 真图，插旗阶段与锁定后各查一次，四名观察者 × 默认棋盘 / 势力层；修掉 C-3）。
+  - 新增 `InformationVisibility/据点控制公开Tests.cs`（`据点控制公开`：占据 / 唯一覆盖 / 争议 / 无人四态 + 控制者 + 覆盖方 + 文案，与 Core 快照逐项一致；`据点分值取自对局配置`：10/30/90）。
+  - 新增 `TacticalLayers/势力层据点与高地Tests.cs`（`势力层显示据点控制`：石碑 45 争议、覆盖方 P0/P1；`势力层视图模型不含领地贡献字段`：反射守门；`势力层显示高地加值`：h=2 两子各压一子 → 高地 2，文案含"高地 2"）。
+  - 守门：`UI层不含规则计算Tests` 的 `ForbiddenTypes` 加 `SiteControl`；`Godot层不含规则计算Tests` token 表加 `"SiteControl.Compute("`、`"PieceEffects"`、`".HighGroundBonus("`（不加裸 `SiteControl`，避免误伤 `SiteControlKind`；`GroupPowerView.HighGroundBonus` 属性读不带括号，合法）。
+- 美术：`art/sites-v4/`（README + 4 张图）。
+
+### 既有测试改写（旧 → 新 → 依据）
+
+| 测试 | 旧 | 新 | 依据 |
+|---|---|---|---|
+| `始终公开的信息Tests.势力明细公开` | 断言势力层 `TerritoryCells` 等于 `ExclusiveCells`，且独占格 > 1（M-V2 变异对象） | 删除这两条，保留棋串与行视图断言；注释说明 M-V2 对象已删除，据点清单公开改由 `据点控制公开Tests` 覆盖 | 4.1：势力层不再含领地贡献 |
+| `信息层的可用时机与无副作用Tests.他人行动时可查看` | 每名玩家 `ExclusiveCells` = 势力层 `TerritoryCells` 中该玩家的格 | 每名玩家 `PlayerPower.Sites` 坐标 = 势力层 `Sites` 中控制者为该玩家的坐标 | 同上 |
+| `棋串军势公式Tests`（第 53 行） | `位置加值 12（连珠 12 / 协同 0）` | `位置加值 12（连珠 12 / 协同 0 / 高地 0）` | 4.1：棋串分数拆出高地 |
+
+### 验证
+
+- `dotnet build`：0 警告 0 错误，EXIT=0。
+- `set -o pipefail; dotnet test -c Release`（输出落文件后取 `$?`）：**805 通过 0 失败，EXIT=0**（799 + 新增 6）。
+- Godot（最后一次改 Godot 源码之后跑）：
+  - `--headless --path src/godot --build-solutions --quit`：EXIT=0，输出无 `error CS` / `warning CS`。
+  - `--headless --path src/godot --quit-after 3000 -- --auto-demo`：EXIT=0，`[auto-demo] 终局：第 4 大回合，达到大回合上限；…`。
+  - `--headless --path src/godot --quit-after 3000 -- --auto-demo --pick-check`：EXIT=0，`[pick-check] 可落子格 105，往返一致 105，失败 0`。注意：拾取是数学投影，地标无碰撞体，pick-check 对地标遮挡零敏感，不作地标验证。
+- 截图（非 headless，种子 12345，均 1600×900，EXIT=0）：`art/sites-v4/sites-v4-opening.png`（第 14 帧，插旗阶段，12 据点全无人）、`sites-v4-midgame.png`（auto-demo 第 44 帧，第 4 大回合、信息层关：6 个被控制（3 占据 + 3 唯一覆盖）、4 块石碑争议、2 个无人）、`sites-v4-midgame-gray.png`（中局灰度版）、`sites-v4-endgame.png`（第 90 帧终局结算）。帧号用临时逐帧打印选出（中局 42–46 帧同时有控制与争议且无信息层），临时打印已删除（`GameRoot.cs` 从备份拷回，`grep TEMPSITES` = 0）。截图未读入会话，README 清单第 1–8 项待人工确认。
+
+### 变异验证（`scratchpad/mut_b.py`：带时间戳备份 → 替换（断言原串唯一）→ 全量 `dotnet test -c Release`（`DOTNET_CLI_UI_LANGUAGE=en`）→ `finally` 写回原字节 → 与原字节、备份逐字节比对；全部完成后 `git status --short` / `git diff` 与变异前快照 `cmp` 一致）
+
+| 编号 | 变异 | 结果 | 还原 |
+|---|---|---|---|
+| M-B7 | **（4.3 要求）** `BoardView.DrawSites` 加 `_ = Siege.Core.Scoring.SiteControl.Compute(null!, null!);` | 红 1：`Godot层不含规则计算Tests.Godot层不调用规则计算入口` | True |
+| M-B8 | 同处改加 `PieceEffects.HighGroundBonus(null!, null!)` | 红 1：同上 | True |
+| M-B1 | `SiteViews.From` 快照为 null 时 `.Take(0)`（插旗阶段不列据点） | 红 1：`据点公开Tests.开局即可见` | True |
+| M-B2 | `SiteViews.Build` 控制者恒写 null | 红 1：`据点控制公开Tests.据点控制公开` | True |
+| M-B3 | `SiteViews.Build` 分值改 `SiteValues.Standard.Of` | 红 1：`据点控制公开Tests.据点分值取自对局配置` | True |
+| M-B4 | 争议覆盖方恒为空 | 红 2：`据点控制公开`、`势力层显示据点控制` | True |
+| M-B5 | `PowerLayerContent` 加回 `ImmutableArray<Coord> ExclusiveCells = default` | 红 1：`势力层视图模型不含领地贡献字段` | True |
+| M-B6 | `GroupPowerView.FormulaText` 去掉"/ 高地 N" | 红 2：`棋串军势公式Tests`（第 53 行那条）、`势力层显示高地加值` | True |
+| M-B9 | `SiteViews.Build` 自调 `SiteControl.Compute(board, power.Coverage)` | 红 1：`UI层不含规则计算Tests.表现层不调用规则计算入口` | True |
+
+### 偏离 / 待决
+
+1. **未改 Core**：没有给 `MatchPublicView` 加字段。公开快照已含 `SiteValues` 与 `Power.SiteStates`（插旗锁定即重算，`MatchFlow.cs:317`）；只有插旗阶段 `Power` 为 null，由 `SiteViews.From` 按地图列出、状态记无人。如负责人认为这算表现层"推状态"，可改为 Core `Publish` 在快照为 null 时调 `SiteControl.Compute` 给出。
+2. **争议覆盖方**由 Presentation 读 `Coverage.SourcesOf` 的来源棋子所有者得到（Core 的 `CellCoverage` 只有数量与唯一覆盖者，没有覆盖方清单）。只读、不算覆盖；`UI层不含规则计算` IL 守门仍绿。
+3. **打开任一信息层时地标也退到格角**（spec 只要求占据时退让）：为了不挡气点与着色（visual-style-baseline"不遮挡合法落点与气的判读"）。本人暂放棋子的格同样退让。
+4. **中局截图取第 4 大回合**：`--auto-demo` 固定 4 个大回合，前 3 个大回合只有营帐 / 篝火被控制、无争议；第 4 大回合才出现争议。终局图状态与中局相同，结算面板盖住岛心。
+5. **视觉未经本人目检**：截图未读入会话（用户约束），地标尺寸 / 徽记在远半盘的可读性、退让后旗帜是否被棋子遮挡等以 `art/sites-v4/README.md` 人工清单为准；不合格需要调 `LowPoly` 尺寸常量与 `BoardView.SiteAside*`。
+6. `Hud` 归属读法图例的"计入领地分"是段 A2 起就错的文案，顺手改掉。
+
+## 段 B 检查（trellis-check）
+
+### 结论（逐项）
+
+1. 场景测试：势力层显示据点控制、势力层显示高地加值、据点控制公开（四态 + 分值取配置）、开局即可见均有测试且断言钉住。盲区 1 处：`Labels.SiteTier` 营帐 / 篝火文案无测试（互换全绿，见 M-BC2-对照），已在 `开局即可见` 补 `TierText` 断言。另：`.Distinct()` 去掉仍全绿（测试里每方只有一枚覆盖子），不阻塞，未修。
+2. **偏离 1 判为表现层自推状态**（在表现层写出 `SiteControlKind.Unclaimed`），且前提未被 Core 封死：`MatchFlow.Restore` 对插旗阶段存档跳过 `RecalculateDerived`、不校验盘面无棋子。**已改为 Core 提供**：`MatchPublicView` 加 `ImmutableArray<SiteState> SiteStates`（唯一构造点 `MatchFlow.Publish`），值为 `Scoreboard.Latest?.SiteStates ?? SiteControl.Compute(Board, CoverageMap.Compute(Board))`；`SiteViews.From` 删掉 null 分支，统一读 `View.SiteStates`，覆盖方在无势力快照时为空。`开局即可见` 插旗阶段加 Core 快照 12 据点全无人断言、锁定后加 `View.SiteStates == Power.SiteStates`。**段 B 变异表的 M-B1（`.Take(0)`）变异对象已不存在，由 M-BC1 替代。** 本项使段 B diff 含 Core 两个文件。
+3. 偏离 2：`CoverageMap.SourcesOf` 是只读访问器，取来源棋子主人是投影；IL 守门禁 `CoverageMap.Compute` 与 `SiteControl` 整型，通过。
+4. Godot：`LowPoly` / `BoardView` 无 `CollisionShape` / `StaticBody` / `Area3D`，地标是纯 `MeshInstance3D`；退让只读 `CellAt().Occupant`、预演 `StagedPieces`、`content is not null`，不读地形、不算控制。token 表 `"SiteControl.Compute("` 收紧为 `"SiteControl."`（`SiteControlKind.` 不含该子串）。`领地分` / `TerritoryScore` 全仓：src 仅 `Siege.Sim/Logging/MatchLog.cs:377` 旧日志兼容注释；tests 全是 2.7 改写说明；其余在归档 change / 归档任务 / 设计文档 v1 / `openspec/specs/` 主规格（归档 scoring-sites 时同步，不在段 B 范围）。`Territory` 在 src 只剩盘面层归属读法（`TerritoryLayerContent` / `DrawTerritory` / `RenderLayer.TerritoryTint`），合法。
+5. `art/sites-v4/README.md`：规格 3 条 MUST 与 4 个 Scenario 均对到清单 1–9 项，数值与代码一致。补"已知限制"两条：规格实例（唯一覆盖的石碑、争议的篝火）截图无一一对应；"可被拾取"由无碰撞体保证。
+6. 既有测试改写 3 处均只因领地退役 / 高地拆分。注意 `信息层的可用时机与无副作用Tests.他人行动时可查看` 的新断言在无据点的合成图上两边都是空集（恒真），据点一致性由 `据点控制公开Tests` 覆盖，未修。
+
+### 修复
+
+- `src/Siege.Core/Match/MatchPublicView.cs`、`MatchFlow.cs`（`Publish`）：加 `SiteStates`。
+- `src/Siege.Presentation/Visibility/SiteView.cs`：删插旗阶段自记无人分支。
+- `tests/.../SiteControlSpec/据点公开Tests.cs`：Core 快照断言 + `TierText` 断言。
+- `tests/.../BatchPreview/Godot层不含规则计算Tests.cs`：token 收紧。
+- `art/sites-v4/README.md`：已知限制两条。
+
+### 变异（`scratchpad/mut_bc.py`：带时间戳备份 → 替换（断言原串唯一）→ 全量 `dotnet test -c Release` → `finally` 写回 → 原字节 / 备份三方比对；完成后 `git status --short` / `git diff` 与变异前快照 `cmp` 一致）
+
+| 编号 | 变异 | 结果 | 还原 |
+|---|---|---|---|
+| M-BC1 | `Publish` 中 `power?.SiteStates ?? SiteControl.Compute(...)` → `?? []` | 红 1：`据点公开Tests.开局即可见` | True |
+| M-BC2 | `Labels.SiteTier` 营帐 / 篝火文案互换 | 红 1：`据点公开Tests.开局即可见` | True |
+| M-BC2-对照 | 同 M-BC2，且把新加的 `TierText` 断言换回按枚举自比 | 绿 805（证明补断言前是盲区） | True |
+
+### 验证
+
+- `dotnet build`：0 警告 0 错误，EXIT=0。
+- `set -o pipefail; dotnet test -c Release`：805 通过 0 失败，EXIT=0（补的是断言，不增测试数）。
+- Godot：`--build-solutions` EXIT=0（无 `error CS` / `warning CS`）；`--auto-demo` EXIT=0（第 4 大回合终局）；`--auto-demo --pick-check` EXIT=0（105 / 105，失败 0）。
+
+### 未修 / 待决
+
+- `.Distinct()` 无测试钉住（见第 1 项）；`他人行动时可查看` 据点断言恒真（见第 6 项）。
+- 截图第 1–8 项仍待人工目检（本次未读图）。

@@ -71,6 +71,25 @@ public static class Labels
         _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知档位。"),
     };
 
+    /// <summary>据点档位名（scoring-sites）。</summary>
+    public static string SiteTier(Core.Board.SiteTier tier) => tier switch
+    {
+        Core.Board.SiteTier.Tent => "营帐",
+        Core.Board.SiteTier.Campfire => "篝火",
+        Core.Board.SiteTier.Stele => "石碑",
+        _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知据点档位。"),
+    };
+
+    /// <summary>据点控制状态文案（site-control「据点公开」）：占据 / 唯一覆盖带控制者，争议带全部覆盖方，无人不带。</summary>
+    public static string SiteStatus(SiteControlKind kind, PlayerId? controller, IEnumerable<PlayerId> coverers) => kind switch
+    {
+        SiteControlKind.Occupied => $"由 {Player(controller!.Value)} 占据",
+        SiteControlKind.UniqueCoverage => $"由 {Player(controller!.Value)} 唯一覆盖",
+        SiteControlKind.Contested => $"争议：{string.Join("、", coverers.Select(Player))} 同时覆盖",
+        SiteControlKind.Unclaimed => "无人",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知据点状态。"),
+    };
+
     /// <summary>玩家显示名：阵营名 + 编号，如「红方(P0)」。阵营映射只在 <see cref="FactionTable"/> 一处。</summary>
     public static string Player(PlayerId player) => $"{FactionTable.For(player).Name}({player})";
 

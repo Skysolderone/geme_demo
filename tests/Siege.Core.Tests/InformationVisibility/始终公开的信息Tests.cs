@@ -32,8 +32,8 @@ public class 始终公开的信息Tests
     public void 势力明细公开()
     {
         // 设计文档 §13.1 / §10.1 算例：A（P0）的棋串普通子×3 + 堡垒子×1 + 倍增子×2 → 基础 9、倍率 2.25、军势 20；
-        // B（P1）打开势力层可见 A 的领地分与该棋串的基础军势、位置加值、倍率与最终军势，且与 Core 势力明细逐项一致。
-        // 变异验证 M-V2：TacticalLayers.Power 的领地贡献格改为 `p.ExclusiveCells.Take(1)` → 本测试红 1。
+        // B（P1）打开势力层可见 A 的据点分与该棋串的基础军势、位置加值、倍率与最终军势，且与 Core 势力明细逐项一致。
+        // scoring-sites 段 B 改写：势力层不再含领地贡献格（原 M-V2 变异对象已删除）；据点清单公开见 InformationVisibility/据点控制公开Tests。
         MatchFlow match = AiFixtures.Round5()
             .Pieces(P0, PieceType.Basic, "B2", "C2", "D2")
             .Pieces(P0, PieceType.Fortress, "E2")
@@ -45,10 +45,7 @@ public class 始终公开的信息Tests
         Assert.Equal((9, 0, "2.25", 20L), (group.Power.BaseTotal, group.Power.PositionBonus, group.Power.MultiplierText, group.Power.Power));
         Scoring.PlayerPower truth = match.Scoreboard.Latest!.Of(P0);
         PlayerPowerRowView row = Assert.Single(layer.Players, p => p.Player == P0);
-        // scoring-sites 段 A2 最小改动：领地分字段退出计分，行视图改带据点分（界面语义留段 B）；独占格列表仍在势力层，Take(1) 变异仍须能红。
         Assert.Equal((truth.Total, truth.SiteScore), (row.Total, row.SiteScore));
-        Assert.Equal(truth.ExclusiveCells.Notations(), layer.TerritoryCells.Where(t => t.Owner == P0).Select(t => t.Coord).Notations());
-        Assert.True(truth.ExclusiveCells.Length > 1);
     }
 
     [Fact]

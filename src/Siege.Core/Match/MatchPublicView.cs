@@ -13,7 +13,8 @@ namespace Siege.Core.Match;
 /// <see cref="MaxMajorRounds"/> 是对局配置的大回合上限（0 = 不限），与地图、种子一样始终公开，插旗阶段即可读。
 /// <see cref="DominanceStartRound"/> 是碾压起始大回合（0 = 关闭），同样始终公开；<see cref="Dominance"/> 是碾压候选与待回应名单（无候选为 <c>null</c>）。
 /// <see cref="CatchUpRecruit"/> 是落后者征募补偿开关（catch-up-recruit 裁决 4），插旗阶段即公开。
-/// <see cref="SiteValues"/> 是据点分值配置（site-control「据点公开」），插旗阶段即公开；据点控制状态在 <see cref="Power"/> 的 <c>SiteStates</c>。
+/// <see cref="SiteValues"/> 是据点分值配置（site-control「据点公开」），插旗阶段即公开；<see cref="SiteStates"/> 是地图上全部据点此刻的控制状态（坐标字典序），
+/// 任何阶段都非空：势力快照已生成时即其 <c>SiteStates</c>，插旗阶段（<see cref="Power"/> 为 <c>null</c>）由据点控制唯一实现按当前盘面给出——表现层不自推。
 /// </summary>
 public sealed record MatchPublicView(
     MatchPhase Phase,
@@ -29,6 +30,7 @@ public sealed record MatchPublicView(
     GameBoard Board,
     string BoardSerialized,
     PowerSnapshot? Power,
+    ImmutableArray<SiteState> SiteStates,
     ImmutableArray<RelicPublicState> Relics,
     ImmutableArray<HandPublicView> Hands,
     int PassStreak,

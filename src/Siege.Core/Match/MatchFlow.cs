@@ -505,10 +505,17 @@ public sealed partial class MatchFlow
 
     // ---------- 公开快照 ----------
 
-    /// <summary>发布公开快照（裁决 1）。</summary>
-    public MatchPublicView Publish() =>
-        new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, SiteValues, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
-            Board.Serialize(), Scoreboard.Latest, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
+    /// <summary>
+    /// 发布公开快照（裁决 1）。据点状态（scoring-sites「据点公开」）取势力快照；插旗阶段尚无快照时由 <see cref="SiteControl"/> 按当前盘面现算，
+    /// 不假设"插旗阶段必为空盘"（恢复的存档也走这里）。
+    /// </summary>
+    public MatchPublicView Publish()
+    {
+        PowerSnapshot? power = Scoreboard.Latest;
+        return new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, SiteValues, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
+            Board.Serialize(), power, power?.SiteStates ?? SiteControl.Compute(Board, CoverageMap.Compute(Board)),
+            Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
+    }
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------
 
