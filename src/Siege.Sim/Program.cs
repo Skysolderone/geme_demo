@@ -188,7 +188,7 @@ public static class Program
             : map.ChokePoints.Contains(c) ? '^'
             : map.SurfaceAt(c) == Surface.Forest ? 'F'
             : map.SurfaceAt(c) == Surface.Road ? '.'
-            : map.BirthZoneOf(c) is { } z ? (char)('1' + z)
+            : map.BirthZoneOf(c) is { } z ? (char)('0' + BirthZoneLabel.Number(z))
             : ' ';
         return $"{map.HeightAt(c)}{mark}";
     }

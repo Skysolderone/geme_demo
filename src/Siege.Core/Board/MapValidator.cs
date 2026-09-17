@@ -213,7 +213,7 @@ public static class MapValidator
             if (!outside.IsEmpty)
             {
                 f.Add(new MapValidationFailure(
-                    "BIRTH_ZONE_OUT_OF_BOUNDS", $"出生区 {i} 含越界格。", outside));
+                    "BIRTH_ZONE_OUT_OF_BOUNDS", $"{BirthZoneLabel.Of(i)} 含越界格。", outside));
             }
 
             int playable = zone.Count(map.IsPlayable);
@@ -221,7 +221,7 @@ public static class MapValidator
             {
                 f.Add(new MapValidationFailure(
                     "BIRTH_ZONE_TOO_SMALL",
-                    $"出生区 {i} 只有 {playable} 个可落子格，容不下前三大回合最多 {ProtectionPhaseDeployments} 枚基础部署。",
+                    $"{BirthZoneLabel.Of(i)} 只有 {playable} 个可落子格，容不下前三大回合最多 {ProtectionPhaseDeployments} 枚基础部署。",
                     ImmutableArray<Coord>.Empty));
             }
 
@@ -232,7 +232,7 @@ public static class MapValidator
             {
                 f.Add(new MapValidationFailure(
                     "BIRTH_ZONE_SIZE_OUT_OF_RANGE",
-                    $"出生区 {i} 有 {playable} 个可落子格，超出 {map.MaxPlayers} 人地图的 {range.Min}–{range.Max} 区间。",
+                    $"{BirthZoneLabel.Of(i)} 有 {playable} 个可落子格，超出 {map.MaxPlayers} 人地图的 {range.Min}–{range.Max} 区间。",
                     ImmutableArray<Coord>.Empty));
             }
 
@@ -242,7 +242,7 @@ public static class MapValidator
                 if (!overlap.IsEmpty)
                 {
                     f.Add(new MapValidationFailure(
-                        "BIRTH_ZONE_OVERLAP", $"出生区 {i} 与 {j} 重叠。", overlap));
+                        "BIRTH_ZONE_OVERLAP", $"{BirthZoneLabel.Of(i)} 与 {BirthZoneLabel.Number(j)} 重叠。", overlap));
                 }
             }
         }
@@ -266,7 +266,7 @@ public static class MapValidator
             {
                 f.Add(new MapValidationFailure(
                     "RELIC_ZONE_MISMATCH",
-                    $"位于出生区 {zone} 的信物格被标注为 {spec.Zone}。", [c]));
+                    $"位于{BirthZoneLabel.Of(zone!.Value)} 的信物格被标注为 {spec.Zone}。", [c]));
             }
             else if (!inBirthZone && spec.Zone != RelicZone.Contested)
             {
@@ -439,7 +439,7 @@ public static class MapValidator
 
             f.Add(new MapValidationFailure(
                 "BIRTH_ZONE_ISOLATED",
-                $"出生区 {z} 没有任何一条沿气边到中央入口 {map.CentralEntrance.ToNotation()} 的通路：它的边缘全是崖壁、深水、栅栏或障碍。",
+                $"{BirthZoneLabel.Of(z)} 没有任何一条沿气边到中央入口 {map.CentralEntrance.ToNotation()} 的通路：它的边缘全是崖壁、深水、栅栏或障碍。",
                 map.BirthZones[z].Where(map.IsPlayable).Order().ToImmutableArray()));
         }
     }
@@ -523,7 +523,7 @@ public static class MapValidator
                 {
                     f.Add(new MapValidationFailure(
                         "LANDMARK_UNREACHABLE",
-                        $"出生区 {z} 无法到达{metric.Name}。", metric.Targets));
+                        $"{BirthZoneLabel.Of(z)} 无法到达{metric.Name}。", metric.Targets));
                     complete = false;
                 }
             }
@@ -538,7 +538,7 @@ public static class MapValidator
             int max = ds.Max();
             if (max - min > map.DistanceTolerance)
             {
-                string detail = string.Join("，", ds.Select((d, z) => $"出生区 {z} = {d}"));
+                string detail = string.Join("，", ds.Select((d, z) => $"{BirthZoneLabel.Of(z)} = {d}"));
                 f.Add(new MapValidationFailure(
                     "DISTANCE_IMBALANCE",
                     $"各出生区到{metric.Name}的最短落子距离失衡（{detail}），"

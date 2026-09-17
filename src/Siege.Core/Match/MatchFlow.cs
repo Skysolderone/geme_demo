@@ -315,7 +315,7 @@ public sealed partial class MatchFlow
         MajorRound = 1;
         Phase = MatchPhase.InProgress;
         RecalculateDerived();
-        Emit(FlowEventKind.FlagsLocked, null, $"出生区 {string.Join(" ", zones.Select(kv => $"{kv.Key}:{kv.Value}"))}；首回合顺序 {string.Join(">", _order)}");
+        Emit(FlowEventKind.FlagsLocked, null, $"出生区 {string.Join(" ", zones.Select(kv => $"{kv.Key}:{BirthZoneLabel.Number(kv.Value)}"))}；首回合顺序 {string.Join(">", _order)}");
     }
 
     /// <summary>原型替代路径：依次插旗并锁定，产出与同时插旗完全相同的对局状态。</summary>

@@ -249,6 +249,9 @@ public class 基准地图对称性Tests
 
         Assert.NotEmpty(defects);
         Assert.All(defects, d => Assert.Contains("出生区", d, StringComparison.Ordinal));
+        // S-14：报文里的出生区编号对人显示 1–4（内部索引 1 → 显示 2 等），与 map 文本图一致；不得出现 0 起编号。
+        Assert.Contains(defects, d => d.Contains("出生区 4", StringComparison.Ordinal));
+        Assert.DoesNotContain(defects, d => d.Contains("出生区 0", StringComparison.Ordinal));
     }
 
     [Fact]

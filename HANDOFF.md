@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-09-17（首轮原型 8/8 完成；**去围棋化改造三轮中第一轮 `terrain-model` 已归档**：地形进入规则，4 人基准图换为 13×13 的 v3）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-09-17（首轮原型 8/8 完成；**去围棋化改造第一轮 `terrain-model` 已归档**，**第二轮 `scoring-sites` 已完成、未推送未归档**：势力 = 据点分 + 军势，4 人基准图升为 v4，AI `Safety` 5 → 27）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续，不需要翻聊天记录。
 
 ## 一句话
@@ -31,12 +31,12 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test` **729/729**，零警告，套件约 20 秒。已推送 |
+| `main` | 全绿：`dotnet test -c Release` **808/808**，零警告，套件约 15 秒。`terrain-model` 及之前已推送；`scoring-sites` 段 A1–C 与 S-16 为本地 wip 提交，段 D（设计文档 v1.3、规范、出生区编号统一）待提交，**均未推送** |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）
 
-1. `2026-09-10-siege-core-gameplay-design-v1.md` —— 玩法设计 **v1.1**（文末有变更记录；`Siege-玩法介绍-v1.docx` 是玩家向介绍稿，冲突以 md 为准）
+1. `2026-09-10-siege-core-gameplay-design-v1.md` —— 玩法设计 **v1.3**（文末有变更记录；`Siege-玩法介绍-v1.docx` 是玩家向介绍稿，冲突以 md 为准）
 2. `openspec/specs/` —— 已归档进基线的 24 个能力规格（Requirement / Scenario 是验收基准）
 3. `openspec/changes/archive/` —— 各 change 的 `design.md` 末尾「裁决记录（已确认）」共 76 条，是设计文档未覆盖部分的判定来源
 4. `.trellis/spec/core/` —— 编码规范四份：`boundaries.md` `determinism.md` `coordinates.md` `testing.md`（**必读**，全是踩过的坑）
@@ -72,8 +72,16 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 | 轮 | change | 内容 | 状态 |
 |---|---|---|---|
 | ① | `terrain-model` | 格属性（高度 0/1/2、地表、障碍、预置桥）+ 栅栏边；几何四邻之上导出**气边**与**覆盖关系**两套关系；连珠沿气边；v3 地图；Godot 分层渲染与拾取；设计文档 v1.2 | **已归档**，测试 680 → 729 |
-| ② | `scoring-sites` | 空格领地退役，势力 = 据点分 + 军势；据点 10–14 个、按类型分档、与信物分离、占据或唯一覆盖即控制；相对高度军势 +1（进位置加值） | 未开始 |
+| ② | `scoring-sites` | 空格领地退役，势力 = 据点分 + 军势；12 个据点（营帐 / 篝火 / 石碑 5 / 15 / 45）、与信物分离、占据或唯一覆盖即控制；高地压制加值 +1（进位置加值）；地图 v4；Godot 地标与旗帜；`Safety` 27 | **已完成、未推送**（段 A1 / A2 / B / C / S-16 / D 全部完成，待提交段 D 与归档），测试 729 → 808 |
 | ③ | `artisan-terrain-edit` | 第六种棋子「匠人」：落子即改造（搭桥 / 立栅 / 烧林），占 1 额度，指定相邻目标，不可逆，批次内不链式；同形禁则纳入设施 | 未开始 |
+
+第二轮现状（权威：`openspec/changes/scoring-sites/design.md` 裁决记录 1–22、设计文档 v1.3 §3.3 / §7.4 / §10.1 / §16，逐段记录在 `.trellis/tasks/09-17-scoring-sites/implement.md`）：
+
+- **地图 `siege-4p-base-v4`**：地形与 v3 逐格相同，加 12 个据点——营帐 `B3 / L2 / M11 / C12`（出生区内 h=2）、篝火 `J2 / M9 / E12 / B5`（主人河外低地、紧贴邻家崖边，开局归邻家）、石碑 `H5 / J8 / F9 / E6`（岛上，与桥头信物隔栅栏）；各出生区沿气边距离 最近公共信物 5 / 中央入口 7 / 最近咽喉 4 / 最近篝火 6 / 最近石碑 8。v3 JSON 保留为历史，默认不加载。出生区对人显示统一为 1–4（内部与日志 0 起）。
+- **计分**：`总势力 = 控制中的据点分 + 棋串军势`，空格归属只作判定与展示；控制 = 占据 > 唯一覆盖 > 争议 > 无人（`SiteControl.Compute`，只读 `CoverageMap`）；高地加值 = 覆盖目标上有高度严格更低的敌子 → 每枚 +1（`PieceEffects.HighGroundBonus`，只走 `CoverageTargets`），不被倍率放大；并列链 势力 → 信物数 → 据点数 → 棋子数。
+- **段 C 扫档**（各 200 局，种子 1–200）：分量三档（Safety 5）领先者胜率 90.0 / 95.5 / 92.0%，分量不是杠杆；Safety 九档 + 22 / 25 / 27 加密档，领先者胜率在 20（95.5%）与 30（17.0%）间陡变。负责人拍板分值保持 **5 / 15 / 45**、`EvaluationWeights.Default.Safety` **5 → 27**（裁决 S-15）。
+- **确认 200 局**（`sim-out/sites-final/`，当前地图与口径的唯一有效数据）：第 3 大回合领先者胜率 25.5%、不收敛 6.5%（整轮 Pass 182 / 达上限 13 / 碾压 5）、整局无提子 0、终局局平均结束第 7.78 大回合、首次冲突第 4 大回合、据点分占比 22.1%（低于目标 25%–45%，负责人知情接受）、每批次提子 0.29（偏保守）、Pass 率 22.1%、石碑争议 52.4%。
+- **下一步**：提交段 D → `openspec archive scoring-sites`（同步主规格）→ 归档 Trellis 任务；`art/sites-v4/README.md` 截图清单仍待人工目检。
 
 两套关系（规则的地基，改任何邻接相关代码前必读 `.trellis/spec/core/boundaries.md` 与 `coordinates.md`）：
 
@@ -91,7 +99,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 
 ## 数据现状
 
-### v3 回归（200 局，种子 1–200，Standard，`sim-out/terrain-v3/`）——当前地图的唯一数据
+### v3 回归（200 局，种子 1–200，Standard，`sim-out/terrain-v3/`）——**已作废**（scoring-sites R-8；当前数据见上方「第二轮现状」`sim-out/sites-final/`）
 
 口径：13×13 + 领地计分未退役 + 覆盖不对称，**与下方 v2 基线不可直接对照**。只记录未调参；三条报警线（第 4 大回合即提子 > 50%、首次提子中位 ≤ 4、整局无提子 > 25%）均未触发。
 
@@ -152,7 +160,7 @@ Pass 率 22.9% / 42.7% / 52.8% / 45.2%。**落后者不缺棋子额度，缺的�
 | 5 | 2000 局基线 | 已完成，见上方数据现状 |
 | 6 | 棋盘坐标标注 | 已归档。人工检查清单在 `art/coord-labels/README.md` |
 | 7 | 插旗竞争（四家抢同一出生区） | 未开始。建议排在"落后者无处可下"之后，它改开局动态，两者会互相干扰 |
-| — | **去围棋化第二轮 `scoring-sites`** | 未开始，见上方「去围棋化改造」。"落后者无处可下"与"领先者胜率"两条都可能被据点计分直接改变，建议先做第二轮再议 |
+| — | **去围棋化第二轮 `scoring-sites`** | 已完成、未推送（待提交段 D 与归档），见上方「去围棋化改造」。领先者胜率已由 Safety 27 拉回 25.5%；"落后者无处可下"需在新口径下重新统计再议 |
 
 后续待定：2/3 人地图、联网、带入带出、美术音效。
 

@@ -50,6 +50,11 @@ public class 匿名同时插旗Tests
         Assert.Equal(online.PlayerStates, local.PlayerStates);
         Assert.Equal(online.ActionOrder, local.ActionOrder);
         Assert.Equal(MatchPhase.InProgress, local.Phase);
+
+        // S-14：锁定事件文本对人显示出生区 1–4（内部索引 2 / 0 / 3 / 1 → 3 / 1 / 4 / 2）。
+        // 变异验证 M-D3：MatchFlow 锁定事件改回直接写内部索引 → 红 1（本断言）。
+        FlowEvent locked = Assert.Single(local.Events, e => e.Kind == FlowEventKind.FlagsLocked);
+        Assert.StartsWith("出生区 P0:3 P1:1 P2:4 P3:2；", locked.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

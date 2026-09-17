@@ -626,3 +626,236 @@ tasks 要求的 4 条（M-S3、M-H1、M-H2、M-H3）均红；其余 27 条为自
 3. 测试数 805→808：为了让变异有自动化可抓，新增 3 条源码扫描测试（任务未要求新增测试）。
 4. 任务要求底色"与林地 / 桥不混淆"：篝火框灰度 108 与林地 112（渲染实测 121）/ 桥 123 明度接近，只靠色相（梅灰红）与框形区分。三档明度要两两差 ≥ 40 且各自离所在地砖（出生区 132–188、草地 149–158）≥ 30，中间档只能落在约 107–119，与林地 / 桥的明度带无法同时避开；v4 据点无一落在林地或桥上。
 5. 争议旗无棋子态位置与缩放改了（段 B 就越出格界，本次一并修）：不在任务清单里，但属于"不得越出格子边界"。
+
+## 段 D：文档、规范、出生区编号与变异汇总（tasks 6.1–6.4）
+
+### 改动文件
+
+- `2026-09-10-siege-core-gameplay-design-v1.md`：v1.2 → v1.3（章节清单见下）。
+- `.trellis/spec/core/boundaries.md`：单一实现表加 3 行——据点控制（`SiteControl.Compute`，只读 `CoverageMap.OwnershipOf`；插旗阶段状态由 `MatchFlow.Publish` 给出 `MatchPublicView.SiteStates`，表现层不得自推）、高地压制加值（`PieceEffects.HighGroundBonus`，只走 `CoverageTargets`）、出生区对人显示编号（`BirthZoneLabel`）；表后补一句 `SiteAttribution.HomeZones` 只供遥测首部（A2 检查 C-5 遗留）。
+- `.trellis/spec/core/testing.md`：加 4 节——扫档核对 `config.json` 实际生效值（`--difficulty` / `--players` 丢弃配置文件权重）；计分口径一变默认权重必须重扫、临界区加密档（Safety 5→27、22/25/27）；写出漏字段要用往返测试（M-C1）；0 / null 期望的遥测断言抓不到写入端遗漏（M-T10～12）。
+- `src/Siege.Core/Board/BirthZoneLabel.cs`（新）：`Number(z) = z + 1`、`Of(z) = "出生区 {z+1}"`，对人显示的唯一换算点。
+- `src/Siege.Core/Board/MapValidator.cs`：8 处报文改走 `BirthZoneLabel`（越界 / 容量不足 / 区间 / 重叠（两个编号）/ 信物分区不符 / 孤立 / 地标不可达 / 距离失衡明细）。
+- `src/Siege.Core/Board/MapSymmetry.cs`：`Describe` 改走 `BirthZoneLabel.Of`。
+- `src/Siege.Sim/Analysis/ReportWriter.cs`：第 5 节出生区胜率行改走 `BirthZoneLabel.Of`（`ZoneStat.Zone` 仍 0 起）。
+- 测试：`地图静态校验规则Tests.cs`、`平衡分析方向Tests.cs`（断言改写，见 6.4 表）；`基准地图对称性Tests.cs`（在既有方法内补 2 条断言，测试数不变）。
+- `HANDOFF.md`：顶部注、分支状态（808）、权威来源 v1.3、去围棋化表第②行、新增「第二轮现状」块（v4 参数、计分、段 C 关键数据、Safety 27、下一步）、v3 回归标作废、下一步表第二轮行。
+- `openspec/changes/scoring-sites/tasks.md`：1.1–6.4 全部 24 项勾选。
+
+### 6.1 设计文档改动章节
+
+| 章节 | 改动 |
+|---|---|
+| 头部 | 版本 v1.3，最近一次为 scoring-sites |
+| §1 | 核心循环"围杀与抢地"→"围杀与抢夺据点" |
+| §2 | "覆盖"改为控制影响；新增"据点""据点分""高地加值"；"势力值"= 据点分 + 军势，空格归属不计分 |
+| §3.1 | 首条"地图由…组成"与"由设计师固定"补据点 |
+| §3.2 | 预算表加据点数列（6–8 / 9–11 / 10–14）与越界算例；距离均衡目标加最近篝火 / 石碑；静态校验加据点三条（带 `G7` 与深水算例）；"领地计分将在后续 change 退役"改为已退役 |
+| §3.3 | 基准图 v4（地形同 v3，S-9 升号，v3 文件为历史）；据点 12 条目与三档坐标及理由（S-8 / S-13）；C4 比对含据点；距离 5 / 7 / 4 / 6 / 8；出生区编号 1 左下 → 4 左上，对人显示 1–4（S-14）；文本图换为 `map` 真实输出（只省"已导出"一行）；末段"计分不变、对局变长"改为旧口径数据 + 指向 §16 |
+| §6.3 | 第 5 步加据点控制（与高地、总势力口径）；围杀收益去掉"领地"，改为信物与据点控制 |
+| §7 | 标题改"覆盖、空格归属、信物与据点控制"；§7.2 去计分语义（只作控制判定与展示）并补"覆盖数量不影响" |
+| §7.4（新） | 档位表、分值配置约束、控制四态、林地、实时重算、弃赛、无额外效果；算例表 14 行 |
+| §9.2 | 倍增子行：不放大连珠 / 协同 / 高地位置加值与据点分 |
+| §10.1 | 总势力公式、位置加值三项、据点分 / 空格不计分 / 明细结构；高地压制加值定义 + 7 行算例；标准算例表 11 行（孤立棋子 1 点、20、25、14、12、77、27、45、复算、65、14） |
+| §12.3 | 并列链 信物数 → 据点数 → 棋子数，独占空格数不参与，60 / 2 / 3 vs 1 算例 |
+| §13.1 | 公开据点位置 / 档位 / 分值、据点控制状态、势力明细拆分 |
+| §14.2 | 势力层改看据点档位 / 分值 / 状态与高地拆分，不标空格分，不加新层（S-5） |
+| §16 | Safety 口径 5 → 27（旧 5 作废）；v4 上 Safety 扫档数据与机理、分量不是杠杆；新增两条目标（据点分占比 25%–45%、整局无提子 ≤ 5%，S-10）；确认 200 局实测表，据点分占比 22.1% 标"未达标，负责人知情接受（S-15）" |
+| §17 | 记录项加据点分值、据点控制变化、高地拆分、玩家据点分；批次 `config.json` 口径；重点分析改为 1–10 编号，补 8（碾压）、9（冲突占用率）与新增 10（据点） |
+| §20 | "领地归属 / 领地"改"空格归属"；新增据点地标条（三档、底色框、石碑亮石色、篝火、旗帜主色 + 徽记、争议 / 无人、放大与退让、无碰撞体，S-16） |
+| 变更记录 | 加 2026-09-17 scoring-sites（v1.2 → v1.3）一行 |
+
+### grep 旧说法核对（变更记录从第 687 行起；正文 = 之前）
+
+| 模式 | 正文 | 变更记录 |
+|---|---:|---:|
+| `领地分` | 0 | 0 |
+| `领地` | 0 | 4（catch-up-recruit / merge-board-layer / terrain-model 历史行 + 本轮新行描述"空格领地退出计分"） |
+| `独占空格提供` / `最多产生 5 点` | 0 / 0 | 0 / 0 |
+| `5 点势力` | 0 | 1（本轮新行"孤立普通子最多 5 点势力作废"） |
+| `独占空格数` | 1（§12.3"独占空格数不参与比较"，新规则） | 1 |
+| `v3` / `siege-4p-base-v3` | 1 / 1（§3.3 首段：v4 地形同 v3、v3 文件为历史） | 2 / 1 |
+
+### 规格场景 → 设计文档对照清单（人工逐条核对，数值一致）
+
+| 规格 | 场景 | 设计文档 |
+|---|---|---|
+| site-control | 分值取自对局配置（10/30/90 → 30）、分值配置非法被拒（5/0/45、20/15/45）、据点不带额外效果 | §7.4 正文 + 算例表 |
+| site-control | 占据即控制、唯一覆盖即控制、多人覆盖即争议、居高临下制造争议、仰视无法争夺 | §7.4 算例表 |
+| site-control | 失去控制立即掉分（−45）、占据者被围杀（−15 / +15）、弃赛者封锁据点（D 含 5、不占名次） | §7.4 算例表 |
+| site-control | 开局即可见（12 个、全无人） | §7.4 算例表、§13.1 |
+| power-score | 设计文档标准算例（20）、含位置加值的计算（14 非 16）、位置加值不被倍率放大（25 非 40）、高地加值不被倍率放大（12 非 15） | §10.1 标准算例表 |
+| power-score | 逐棋串取整、恰好第 3 枚、第 4 枚只加基础、封顶不影响其他效果、倍率显示表达封顶 | §10.1 正文（逐棋串取整、封顶 3、超出仍计基础）与 §9.2；这 5 条的具体数值（16.5、23、27、29、3.375 显示）设计文档未列，沿用 multiplier-rebalance 口径，本轮未新增 |
+| power-score | 据点与棋串相加（77）、独占空格不计分（27）、孤立棋子的势力（1） | §10.1 标准算例表 |
+| power-score | 势力不可消耗、势力不累计 | §10.1 列表 |
+| power-score | 明细可复算总势力、据点分可溯源（65）、位置加值可溯源（14）、明细区分原始与生效倍率、明细可复算棋串军势 | §10.1 明细条 + 算例表 |
+| piece-effects | 跨崖居高临下、缓坡压制、同高不加、林地里的敌子压制不到、隔河压制、多个低处敌子只加 1、己方棋子不算 | §10.1 高地算例表（坐标 `F7/F6/G6/H6` 与高度逐条一致） |
+| piece-effects | 两枚倍增子、倍率指数封顶为 3 | §9.2、§10.1 正文 |
+| piece-effects | 倍率不作用于据点分（45）、倍率不作用于位置加值（12） | §10.1 算例表（据点分行、25 那行） |
+| coverage-territory | 独占（不计分）、争议、覆盖数量不影响独占、中立 | §7.2 |
+| coverage-territory | 唯一覆盖者、多人覆盖、林地信物只能占据 | §7.3、§7.4 控制四态与林地条 |
+| coverage-territory | 弃赛者遗留棋子制造争议 | §7.4 算例表 |
+| elimination-endgame | 弃赛后停止行动、保护期内允许弃赛、遗留棋子可被围杀、弃赛快照可记录 | §12.2（未改） |
+| elimination-endgame | 遗留棋子继续生效（据点争议） | §7.4 弃赛条与算例表 |
+| elimination-endgame | 势力相同比信物数、逐级比较到棋子数、信物相同比据点数（60 / 2 / 3 vs 1）、完全相同则并列 | §12.3 |
+| elimination-endgame | 弃赛者排在完赛者之后、多名弃赛者互比、出局者倒序、达上限时按同一规则、碾压获胜者为第 1 名 | §12.3（未改） |
+| map-definition | 加载地图不引入随机、拒绝裁切适配 | §3.1 首条、§3.2 首句、§7.4 首段 |
+| map-definition | 据点数越界（16 → 10–14） | §3.2 表与越界句 |
+| map-definition | 出生区容量、信物格分布、可落子格规模、旋转对称（含据点）、地形要素齐全 | §3.3 |
+| map-definition | 据点布点、篝火可被邻家居高覆盖 | §3.3 据点条 |
+| map-definition | 保护期内篝火归邻家 | §3.3 篝火条、§7.4 算例表 |
+| map-definition | 据点与信物重合（`G7`）、据点在不可落子格（深水）、到据点的距离失衡 | §3.2 校验条 |
+| match-telemetry | 据点控制变化可查 | §17 记录项 |
+| match-telemetry | 据点分析分档输出、据点分占比口径（600 / 180 → 30%） | §17 第 10 项、§16 目标条 |
+| match-telemetry | 碾压胜统计、冲突时的盘面占用率 | §17 第 8、9 项（本轮补齐） |
+| simulation-harness | 扫档配置可追溯 | §17 批次配置记录句、§16 实测口径 |
+| tactical-layers | 势力层显示据点控制（45、争议、A / B 覆盖方）、势力层显示高地加值 | §14.2 势力层 |
+| information-visibility | 势力明细公开、据点控制公开 | §13.1 |
+| visual-style-baseline | 三档可辨、控制方可辨且不只靠颜色、争议与无人可区分、占据时棋子可见 | §20 据点地标条 |
+
+### 6.4 出生区编号统一（S-14）
+
+显示层统一走 `BirthZoneLabel`；内部索引、`MapData.BirthZones[z]`、日志 `HomeZone` / `Header.Zones`、`ZoneStat.Zone` 均保持 0 起。`map` 子命令文本图（`'1' + z`）、`BoardRenderer`（`z + 1`）与 `play` 插旗（`c.Item2 + 1`）原本就是 1 起，段 D 检查时改走 `BirthZoneLabel.Number`（输出字符不变，`map` 输出与改前 `cmp` 一致）；`play` 读入玩家输入的 `z - 1` 是输入解析，未改。人工核对：`map` 输出（本段抓取，与段 A1 文本图逐行相同）出生区标记 21–24 = 1 左下 → 4 左上；校验报文由下表断言钉住（如出生区距离失衡报"出生区 1 = 4"）。
+
+改写的既有断言（10 条）：
+
+| 文件:行 | 旧 | 新 |
+|---|---|---|
+| `地图静态校验规则Tests.cs:58`（距离沿气边计算） | `出生区 0 = 4` | `出生区 1 = 4` |
+| 同上 `:59` | `出生区 1 = 12` | `出生区 2 = 12` |
+| `:74`（出生区被孤立） | `出生区 0` | `出生区 1` |
+| `:85`（同上，护城河变体） | `出生区 0` | `出生区 1` |
+| `:123`（出生区可落子格超出区间） | `出生区 0 有 11 个可落子格` | `出生区 1 有 11 个可落子格` |
+| `:184`（出生区容不下九枚部署） | `出生区 0 只有 8 个可落子格` | `出生区 1 只有 8 个可落子格` |
+| `:274`（出生区距离失衡） | `出生区 0 = 4` | `出生区 1 = 4` |
+| `:490`（到据点的距离失衡，2 组数据） | `出生区 0 = 6` | `出生区 1 = 6` |
+| `:491`（同上） | `出生区 1 = 9` | `出生区 2 = 9` |
+| `平衡分析方向Tests.cs:70`（出生区公平性） | `出生区 0：胜率 100.0% (40/40` | `出生区 1：胜率 100.0% (40/40` |
+| `匿名同时插旗Tests.时限可配置`（段 D 检查补，非改写） | 无 | `FlagsLocked` Detail 以 `出生区 P0:3 P1:1 P2:4 P3:2；` 开头 |
+
+补充断言（非改写）：`基准地图对称性Tests.出生区编号不轮换的图被判不对称` 加"报文含 `出生区 4`、不含 `出生区 0`"——`MapSymmetry` 报文原先没有任何测试钉编号（M-D2 在补之前会全绿）。测试注释里描述夹具的"出生区 0 = {A5}"等是内部索引说明，未改。
+
+~~未改（待决）：`FlagsLocked` Detail 仍 0 起~~ → 段 D 检查已改：Detail 是人读文本，唯一解析日志 Detail 的 `BalanceAnalyzer` 只解析 `Recruit` 事件的 `candidates` / `picks`，无测试依赖旧文本，故改走 `BirthZoneLabel.Number` 并补断言（M-D3）。
+
+### 6.3 变异验证汇总（段 A1–D 全部）
+
+"还原"列：A1 / A1 检查 / C / S-16 / D 为 `cp` 备份 → 还原 → `cmp` 一致；A2 / A2 检查 / B / B 检查为脚本 `finally` 写回并与原字节、备份三方比对（记为 True）；主会话三条为主会话变异后还原（主会话记录，只有红数，未留测试名）。
+
+| 段 | 编号 | 变异 | 红掉的测试 / 命令 | 还原 |
+|---|---|---|---|---|
+| A1 | M-A1 | `MapSymmetry` 比对漏掉据点 | 红 2：`基准地图对称性Tests.每项属性都参与旋转比对`、`只改一个据点档位的图被判不对称` | cmp 一致 |
+| A1 | M-A2 | `MapSymmetry` 只比位置不比档位 | 红 1：`只改一个据点档位的图被判不对称` | cmp 一致 |
+| A1 | M-A3 | 规则 8 不查与信物重合 | 红 1：`地图静态校验规则Tests.据点与信物重合` | cmp 一致 |
+| A1 | M-A4 | 4 人据点上界 14 → 15 | 红 3：`人数适配预算Tests.据点数越界`（15 / 16 / 9） | cmp 一致 |
+| A1 | M-A5 | 距离均衡漏掉"最近石碑" | 红 1：`地图静态校验规则Tests.到据点的距离失衡(Stele)` | cmp 一致 |
+| A1 | M-A6 | `MapFile` 读入丢弃 Sites | 红 8：`地图文件往返Tests` 4 条、`地图文件健壮性Tests` 4 条 | cmp 一致 |
+| A1 | M-A7 | 规则 8 不查档位必填 | 红 1：`地图静态校验规则Tests.据点必须标注档位` | cmp 一致 |
+| A1 | M-A8 | 篝火种子 `J2` → `H2` | 红 6：`四人基准地图Tests.据点布点` / `篝火可被邻家居高覆盖`、`磁盘上的基准地图文件与代码一致`、`据点缺档位的文件被指名报出`、`只改一个据点档位的图被判不对称`、`四个出生区到最近篝火与石碑的距离精确相等` | cmp 一致 |
+| A1 | 主-A1（主会话） | 去掉"据点须在可落子格"检查 | 红 2 | 已还原（主会话） |
+| A1 检查 | M-C1 | `MapFile.ToJson` 写出前清空 Sites | 红 4：`地图文件往返Tests` 3 条、`地图文件健壮性Tests.全小写键名的地图能正确加载`（磁盘一致性测试未红，见 testing.md 新节） | cmp 一致 |
+| A1 检查 | M-C2 | `DistanceTable` 取最近改最远 | 补测试前全绿 753（缺口）；补后红 1：`四个出生区到最近篝火与石碑的距离精确相等` | cmp 一致 |
+| A2 | M-S3 | `SiteControl.Compute` 注入 `CoverageTargets(` | 红 1：`据点控制判定Tests.据点控制实现只读覆盖表` | True |
+| A2 | M-S3b | 同处注入 `HeightAt(` | 红 1：同上 | True |
+| A2 | M-S1 | 占据映射成争议 | 红 9：`占据即控制`、`居高临下制造争议`、`林地据点只能占据`、`占据者被围杀` 等 | True |
+| A2 | M-S2 | 争议映射成无人 | 红 7：`多人覆盖即争议`、`失去控制立即掉分`、`弃赛者遗留棋子制造争议` 等 | True |
+| A2 | M-S8 | 占据的控制方式记成唯一覆盖 | 红 6：`据点分可溯源`、`占据即控制`、`占据者被围杀` 等 | True |
+| A2 | M-H1 | 高地加值 `<` → `<=` | 红 17：`高地压制加值Tests.同高不加` 及平地同高相邻既有算例 | True |
+| A2 | M-H2 | 删"每枚至多 1"的 `break` | 红 1：`多个低处敌子只加1` | True |
+| A2 | M-H3 | `CoverageTargets` 改 `Neighbors` | 红 3：`林地里的敌子压制不到`、`隔河压制`、`几何邻居枚举只在允许名单内直接调用` | True |
+| A2 | M-S12 | 高地加值并入基础军势 | 红 1：`棋串军势公式Tests.高地加值不被倍率放大` | True |
+| A2 | M-S5 | 总势力加回独占空格数 | 红 47：`独占空格不计分`、`孤立棋子的势力` 等 | True |
+| A2 | M-S20 | 总势力漏据点分 | 红 8：`据点与棋串相加`、`倍率不作用于据点分`、`明细可复算总势力` 等 | True |
+| A2 | M-S11 | 只给参赛玩家计据点分 | 红 1：`据点分计入势力Tests.弃赛者封锁据点` | True |
+| A2 | M-S9 | `Validated` 去掉"营帐 ≤ 篝火" | 红 1：`分值配置非法被拒(20,15,45,"营帐")` | True |
+| A2 | M-S4 | `MatchFlow.OnRecalculatePower` 传 `Standard` | 红 1：`据点档位与分值Tests.分值取自对局配置` | True |
+| A2 | M-S4b | `BatchPreviewBuilder` after 用 `Standard` | 红 1：同上 | True |
+| A2 | M-S14 | `Finish` 改回 `ExclusiveCells.Length` | 红 2：`终局输入取控制中的据点数量`、存档往返 | True |
+| A2 | M-S13 | 并列链删据点级 | 红 1：`信物相同比据点数` | True |
+| A2 | M-S15 | 存档不写 `SiteValues` | 红 1：`据点分值与终局据点数随存档往返且旧存档回填` | True |
+| A2 | M-S16 | 读档 `ControlledSites` 恒 0 | 红 2：同上、`百局端到端Tests.连续一百局四人对局无死锁无非法状态` | True |
+| A2 | M-T1 | 据点变化记成 `ControlChanged` | 红 1：`据点遥测Tests.据点控制变化可查` | True |
+| A2 | M-T2 | 日志棋串不写 `HighGroundBonus` | 红 1：同上 | True |
+| A2 | M-T3 | 去掉跑局配置与对局分值一致性检查 | 红 1：`跑局配置与对局据点分值不一致即拒绝` | True |
+| A2 | M-T5 | `MatchSession.Create` 不传分值 | 红 1：`扫档配置可追溯` | True |
+| A2 | M-T4 | `config.json` 改回 `config.ToJson()` | 红 1：`批量跑局Tests.批量执行并汇总` | True |
+| A2 | M-T6 | `SiteAttribution` 不排除桥格 | 红 1：`据点主人按地图推导` | True |
+| A2 | M-T7 | 分析纳入缺据点字段旧日志 | 红 1：`据点分析分档输出` | True |
+| A2 | M-T8 | 据点分占比计入弃赛者 | 红 1：同上 | True |
+| A2 | M-T9 | 主人口径把推不出主人的计入分母 | 红 1：同上 | True |
+| A2 | M-T10 | 日志玩家据点分恒 0 | 红 1：`据点控制变化可查`（补营帐 E4 后） | True |
+| A2 | M-T11 | 快照据点控制者恒 null | 红 1：同上 | True |
+| A2 | M-T12 | 终局名次据点数恒 0 | 红 1：同上 | True |
+| A2 | 主-A2（主会话） | 唯一覆盖控制者置 null | 红 12 | 已还原（主会话） |
+| A2 检查 | N-1 | 据点变化判定 `\|\|` → `&&` | 补测试前全绿 797（缺口 C-1）；补后红 1：`控制者不变而控制方式变化也记事件` | True |
+| A2 检查 | N-2 | `BatchEvaluator` 分值改 `Standard` | 补测试前全绿 797（缺口 C-2）；补后红 1：`AI评价使用对局据点分值` | True |
+| A2 检查 | N-3 | 高地加值去掉 `enemy.Owner != group.Owner` | 红 2：`己方棋子不算`、`连珠子的位置加值Tests.崖壁截断连珠线` | True |
+| B | M-B1 | `SiteViews.From` 快照 null 时 `.Take(0)` | 红 1：`据点公开Tests.开局即可见`。**变异对象已在 B 检查中删除，由 M-BC1 替代** | True |
+| B | M-B2 | 控制者恒 null | 红 1：`据点控制公开` | True |
+| B | M-B3 | 分值改 `Standard.Of` | 红 1：`据点分值取自对局配置` | True |
+| B | M-B4 | 争议覆盖方恒空 | 红 2：`据点控制公开`、`势力层显示据点控制` | True |
+| B | M-B5 | `PowerLayerContent` 加回 `ExclusiveCells` | 红 1：`势力层视图模型不含领地贡献字段` | True |
+| B | M-B6 | `FormulaText` 去掉"/ 高地 N" | 红 2：`棋串军势公式Tests`（第 53 行）、`势力层显示高地加值` | True |
+| B | M-B7 | `BoardView.DrawSites` 调 `SiteControl.Compute` | 红 1：`Godot层不含规则计算Tests.Godot层不调用规则计算入口` | True |
+| B | M-B8 | 同处调 `PieceEffects.HighGroundBonus` | 红 1：同上 | True |
+| B | M-B9 | `SiteViews.Build` 自调 `SiteControl.Compute` | 红 1：`UI层不含规则计算Tests.表现层不调用规则计算入口` | True |
+| B 检查 | M-BC1 | `Publish` 中 `?? SiteControl.Compute(...)` → `?? []` | 红 1：`据点公开Tests.开局即可见` | True |
+| B 检查 | M-BC2 | `Labels.SiteTier` 营帐 / 篝火文案互换（对照：同时把断言换回自比 → 绿 805，证明补断言前是盲区） | 红 1：`开局即可见` | True |
+| B 检查 | 主-B（主会话） | 争议状态文案改成"无人" | 红 2 | 已还原（主会话） |
+| C | M-C-1 | `EvaluationWeights.Default.Safety` 默认值改 25 | 红 3（段 C 记录未列测试名） | cmp 一致 |
+| S-16 | M-S16-1 | `SiteBandCampfire` 改营帐同色 | 红 1：`据点底色三档灰度可辨且与所在地砖拉开明度`（EXIT=1） | cmp 一致 |
+| S-16 | M-S16-2 | `SteleStone` 还原段 B 色 | 红 1：`石碑石色与岩石明度拉开`（EXIT=1） | cmp 一致 |
+| S-16 | M-S16-3 | `AddSiteBand` 加 `StaticBody3D` | 红 1：`地标与底色不带碰撞体`（EXIT=1） | cmp 一致 |
+| D | M-D1 | `BirthZoneLabel.Number` 改回 `zoneIndex`（0 起） | 红 8（EXIT=1，808 中 800 过）：`地图静态校验规则Tests` 的 `距离沿气边计算`、`出生区被孤立`、`出生区可落子格超出区间`、`出生区容不下九枚部署`、`出生区距离失衡`、`到据点的距离失衡`（Campfire、Stele），`平衡分析方向Tests.出生区公平性` | cmp 一致 |
+| D | M-D2 | `MapSymmetry.Describe` 改回 `$"出生区 {z}"`（不经 `BirthZoneLabel`） | 红 1（EXIT=1）：`基准地图对称性Tests.出生区编号不轮换的图被判不对称`（补断言后；补之前该处无任何编号断言） | cmp 一致 |
+| D 检查 | M-D3 | `MatchFlow` 锁定事件 `BirthZoneLabel.Number(kv.Value)` 改回 `kv.Value` | 红 1（EXIT=1，808 中 807 过）：`匿名同时插旗Tests.时限可配置`（补断言后） | cmp 一致 |
+
+合计：A1 9（8 + 主会话 1）、A1 检查 2、A2 32（31 + 主会话 1）、A2 检查 3、B 9、B 检查 3（2 + 主会话 1）、C 1、S-16 3、D 2、D 检查 1，共 65。无自动化手段可抓、只靠人工的已知项：S-16 放大倍率改回 1（Godot 不进 sln）。
+
+### 验证（`set -o pipefail`，EXIT 单独取）
+
+- `dotnet build`：0 警告 0 错误，EXIT=0。
+- `dotnet test -c Release`（`DOTNET_CLI_UI_LANGUAGE=en`，输出落文件后取 `$?`）：**808 通过 0 失败，EXIT=0**（测试数不变）。M-D1、M-D2 均已还原（cmp 一致）后跑的最终全量。
+- `openspec validate scoring-sites`：`Change 'scoring-sites' is valid`，EXIT=0。
+- `dotnet run --project src/Siege.Sim -c Release -- map`：EXIT=0；输出与段 A1 文本图逐行相同，已原样写入设计文档 §3.3。该命令顺带重写 `maps/siege-4p-base-v4.json`，`git status` 无变化。
+
+### 偏离 / 待决
+
+1. **设计文档超出 tasks 6.1 列出的章节**：§1（抢地）、§3.1（首条补据点）、§3.2（据点数列、据点校验、距离目标、"将在后续退役"）、§9.2（倍增子行补高地与据点分），以及 §17 补第 8、9 项——均为清掉旧说法或让规格场景（据点数越界、到据点的距离失衡、碾压与占用率）在设计文档有落点所必需。§17 第 8、9 项是 dominance-victory / denser-map 已实现、§16 已引用"§17 第 9 条"但本节漏写，已在变更记录注明。
+2. **power-score 5 条倍率封顶场景**（逐棋串取整 16.5、第 3 / 4 枚 23 / 27、封顶不影响其他效果 29、倍率显示 3.375）的数值算例未写进设计文档，只有规则正文；本轮未改这些规则，未新增。
+3. ~~`FlagsLocked` 事件 Detail 的出生区编号仍 0 起~~（段 D 检查已改，见 6.4 与 M-D3）。
+4. **§16 实测表只列确认跑的 200 局一组**；扫档全表仍以本文件「段 C」为准，设计文档只摘领先者胜率与不收敛率两列。
+5. **§14.1 "基础军势 + 位置加值 × 倍率"预览文案**是 multiplier-rebalance 之前的写法，与本轮无关，未改。
+6. 主会话三条变异（主-A1 / 主-A2 / 主-B）只有红数，没有留存测试名。
+
+## 段 D 检查（trellis-check）
+
+### 结论（逐项）
+
+1. **算例 / 数据一致**：§7.4、§10.1、§12.3 与 `site-control` / `power-score` / `piece-effects` / `elimination-endgame` / `coverage-territory` 场景逐条对过（77、27、1、`⌊4×2.25⌋+3=12`、高地 7 场景坐标与高度、60 / 2 / 3 vs 1、弃赛 D 含 5、控制四态），一致。§16 与 `sim-out/sites-final/report.txt` 逐项一致（25.5%、6.5%、AllPassed 182 / 上限 13 / 碾压 5、整局无冲突 0、7.78、首次冲突 4、22.1%、0.29、Pass 22.1%、石碑争议 52.4%、篝火主人 10.6%、高地 0.6%），旧计分对照 0.40 / 10.57 / 14%（28/200）/ 17% 与 `sim-out/terrain-v3/report.txt` 一致；22.1% 标未达标。§3.3 文本图与现跑 `map` 输出 39 行逐行相同（python 比对 0 差异）。
+2. **旧说法**：正文（第 687 行变更记录之前）`领地` / `领地分` / `5 点` / `抢地` / `出生区 0` 均 0；`v3` 只在 §3.3 首段作历史；`Safety` 5 只以"已作废"出现。
+3. **boundaries / testing**：引用的 `SiteControl.Compute(GameBoard, CoverageMap)`、`CoverageMap.OwnershipOf`、`据点控制判定Tests.据点控制实现只读覆盖表`、`MatchFlow.Publish`、`MatchPublicView.SiteStates`、`SiteView`、`PieceEffects.HighGroundBonus(GameBoard, Group)`、`GameBoard.CoverageTargets`、`GroupPower.HighGroundBonus`、`SiteAttribution.HomeZones`、`Adjacency.LibertyNeighbors` / `AreAdjacent`、`BirthZoneLabel` 均存在；testing.md 所述 `--difficulty` / `--players` 重建玩家列表（`Program.cs:203–207`）与 Safety 5 档 95.5% / 49.5% 属实。
+4. **出生区编号**：见下"修复"1–2。日志数据字段（`HomeZone`、`Header.Zones`、`ZoneStat.Zone`）仍 0 起；`sites-final/report.txt` 里的"出生区 0–3"是改前产物，不重跑。Godot 与 Presentation 无带编号的出生区文本。
+5. **HANDOFF / tasks**：未推送（`main` ahead 7）、808、v4、Safety 27、关键数据与报告一致；tasks 24 项勾选与各段记录一致。
+6. **变异汇总**：原表 64 条与各段记录（A1 9 / A1 检查 2 / A2 32 / A2 检查 3 / B 9 / B 检查 3 / C 1 / S-16 3 / D 2）逐编号吻合（正文另见的 `M-V2` 是前序 change 的变异，不属本轮）；本次加 M-D3，共 65。
+
+### 修复
+
+1. `src/Siege.Core/Match/MatchFlow.cs` `FlagsLocked` Detail 改走 `BirthZoneLabel.Number`；`tests/.../MatchSetup/匿名同时插旗Tests.cs` `时限可配置` 补断言（测试数不变）。
+2. `BirthZoneLabel` 不是唯一换算入口：`src/Siege.Sim/Program.cs`（`map` 文本图 `'1' + z`）、`src/Siege.Sim/Play/BoardRenderer.cs`（`z + 1`）、`src/Siege.Sim/Play/PlayCommand.cs`（`c.Item2 + 1`）改走 `BirthZoneLabel.Number`，输出不变（`map` 改前后输出 `cmp` 一致）；`BirthZoneLabel` 注释与 boundaries.md 出生区行补全消费者清单并写明"不得手写 `+ 1`"。
+3. `boundaries.md` 高地行原写"不另写邻接或高度比较"，而实现本就用 `Map.HeightAt` 比高度（且据点控制行明文禁 `HeightAt(`，易被误读成同类禁令）→ 改为"覆盖目标只经 `CoverageTargets`，不另写邻接或崖壁判断；严格更低用 `Map.HeightAt` 比较"。
+4. 设计文档 §3.2 距离均衡条补失衡报文算例（出生区 1 到最近石碑 6、出生区 2 为 9 → 被拒），规格「到据点的距离失衡」有了数值落点。
+5. 设计文档 §16 "首次提子稳定发生在占用率约 62%"是 v1 / v2 数值，与当前 38.6% 矛盾 → 补一句注明非常数（13×13 旧计分 61.0%、据点计分 + Safety 27 为 38.6%）。
+
+### 未修 / 说明
+
+- §16 Safety 扫档只列 10 档（缺 7、8），与 design.md S-15 原文一致，未改。
+- `map` 文本图与 `play` 棋盘的 `BirthZoneLabel.Number` 改动无自动化断言（`map` 输出靠人工 `cmp`），与 S-16 放大倍率同属人工项。
+- 未动 `src/godot/`，未跑 Godot 构建。
+
+### 验证（`set -o pipefail`，EXIT 单独取）
+
+- `dotnet build`：0 警告 0 错误，EXIT=0。
+- 变异 M-D3：红 1（EXIT=1，807 / 808），`cp` 还原后 `cmp` 一致。
+- `dotnet test -c Release`（`DOTNET_CLI_UI_LANGUAGE=en`）：**808 通过 0 失败，EXIT=0**。
+- `openspec validate scoring-sites`：valid，EXIT=0。
+- `dotnet run --project src/Siege.Sim -c Release -- map`：EXIT=0，与改前输出 `cmp` 一致，`maps/` 无变化。

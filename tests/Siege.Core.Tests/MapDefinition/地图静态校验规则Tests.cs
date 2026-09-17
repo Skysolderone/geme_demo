@@ -55,8 +55,8 @@ public class 地图静态校验规则Tests
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(Wall(2)).Failures,
             f => f.Code == "DISTANCE_IMBALANCE" && f.Message.Contains("中央入口", StringComparison.Ordinal));
-        Assert.Contains("出生区 0 = 4", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("出生区 1 = 12", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 1 = 4", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 2 = 12", failure.Message, StringComparison.Ordinal);
 
         // 同一堵墙降为 h=1 缓坡：两条路都能走，距离相等，不报失衡——证明上面红的是崖壁而不是别的
         Assert.DoesNotContain(MapValidator.Validate(Wall(1)).Failures, f => f.Code == "DISTANCE_IMBALANCE");
@@ -71,7 +71,7 @@ public class 地图静态校验规则Tests
         MapData cliffs = Isolation(TestMaps.Terrain(heights: plateau));
 
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(cliffs).Failures, f => f.Code == "BIRTH_ZONE_ISOLATED");
-        Assert.Contains("出生区 0", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 1", failure.Message, StringComparison.Ordinal);
         Assert.Equal(["A1", "B1", "A2", "B2"], failure.Coords.Notations());
 
         // 补一格 h=1 缓坡 C1 就连通了
@@ -82,7 +82,7 @@ public class 地图静态校验规则Tests
         // 深水同样封死：平地出生区被 C1 C2 C3 B3 A3 一圈深水围住
         MapData moat = Isolation(TestMaps.Terrain(surfaces:
             [("C1", Surface.DeepWater), ("C2", Surface.DeepWater), ("C3", Surface.DeepWater), ("B3", Surface.DeepWater), ("A3", Surface.DeepWater)]));
-        Assert.Contains(MapValidator.Validate(moat).Failures, f => f.Code == "BIRTH_ZONE_ISOLATED" && f.Message.Contains("出生区 0", StringComparison.Ordinal));
+        Assert.Contains(MapValidator.Validate(moat).Failures, f => f.Code == "BIRTH_ZONE_ISOLATED" && f.Message.Contains("出生区 1", StringComparison.Ordinal));
 
         // 架一座桥就通了
         MapData bridged = Isolation(TestMaps.Terrain(
@@ -120,7 +120,7 @@ public class 地图静态校验规则Tests
 
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(shrunk).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
-        Assert.Contains("出生区 0 有 11 个可落子格", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 1 有 11 个可落子格", failure.Message, StringComparison.Ordinal);
         Assert.Contains("12–14", failure.Message, StringComparison.Ordinal);
 
         // 14 格是上界：把缓坡 E2 划进出生区 0（13 → 14）必须通过本条（距离随之失衡，那是另一条规则）。
@@ -181,7 +181,7 @@ public class 地图静态校验规则Tests
 
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(shrunk).Failures, f => f.Code == "BIRTH_ZONE_TOO_SMALL");
-        Assert.Contains("出生区 0 只有 8 个可落子格", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 1 只有 8 个可落子格", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -271,7 +271,7 @@ public class 地图静态校验规则Tests
 
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(lopsided).Failures, f => f.Code == "DISTANCE_IMBALANCE");
-        Assert.Contains("出生区 0 = 4", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 1 = 4", failure.Message, StringComparison.Ordinal);
         Assert.Contains("超出容差 1", failure.Message, StringComparison.Ordinal);
     }
 
@@ -487,8 +487,8 @@ public class 地图静态校验规则Tests
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(map).Failures, f => f.Code == "DISTANCE_IMBALANCE");
         Assert.Contains(target, failure.Message, StringComparison.Ordinal);
-        Assert.Contains("出生区 0 = 6", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("出生区 1 = 9", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 1 = 6", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 2 = 9", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]

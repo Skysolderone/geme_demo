@@ -79,7 +79,7 @@ internal static class PlayCommand
                     : HeuristicAi.Create(match, p, difficulty));
             }
 
-            output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Item1, me)}→{c.Item2 + 1}号区"))}");
+            output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Item1, me)}→{BirthZoneLabel.Number(c.Item2)}号区"))}");
             output.WriteLine($"第 1 大回合顺序随机：{string.Join(" > ", match.ActionOrder.Select(p => BoardRenderer.Label(p, me)))}");
 
             while (match.Phase == MatchPhase.InProgress)

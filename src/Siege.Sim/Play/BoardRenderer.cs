@@ -146,7 +146,7 @@ internal sealed class BoardRenderer
                 }
                 else if (zones && map.BirthZoneOf(c) is { } z)
                 {
-                    Ink($" {z + 1} ", ColorOf(new PlayerId(z)));
+                    Ink($" {BirthZoneLabel.Number(z)} ", ColorOf(new PlayerId(z)));
                 }
                 else if (legal is not null && legal.Contains(c))
                 {

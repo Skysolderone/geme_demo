@@ -175,7 +175,7 @@ public static class ReportWriter
         sb.AppendLine($"- {label}：");
         foreach (ZoneStat zone in zones)
         {
-            sb.AppendLine($"  - 出生区 {zone.Zone}：胜率 {zone.WinRate}{(zone.Significant ? "，显著" : "")}");
+            sb.AppendLine($"  - {Siege.Core.Board.BirthZoneLabel.Of(zone.Zone)}：胜率 {zone.WinRate}{(zone.Significant ? "，显著" : "")}");
         }
     }
 

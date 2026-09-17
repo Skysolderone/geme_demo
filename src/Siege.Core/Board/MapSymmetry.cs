@@ -108,5 +108,5 @@ public static class MapSymmetry
 
     private static string DescribeSite(bool present, SiteTier tier) => present ? tier.ToString() : "无据点";
 
-    private static string Describe(int? zone) => zone is { } z ? $"出生区 {z}" : "非出生区";
+    private static string Describe(int? zone) => zone is { } z ? BirthZoneLabel.Of(z) : "非出生区";
 }

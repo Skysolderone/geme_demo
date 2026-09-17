@@ -67,7 +67,7 @@ public class 平衡分析方向Tests
         Assert.Equal((20, 20), (z.RelicsConverged.Single(s => s.Zone == 0).WinRate.Successes, z.RelicsNotConverged.Single(s => s.Zone == 0).WinRate.Successes));
 
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze(logs));
-        Assert.Contains("出生区 0：胜率 100.0% (40/40", text);
+        Assert.Contains("出生区 1：胜率 100.0% (40/40", text);
         Assert.Contains("，显著", text);
         Assert.Contains("信物生成未收敛局（20）", text);
 

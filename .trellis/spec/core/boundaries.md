@@ -22,8 +22,13 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 崖壁阈值 | `TerrainData.CliffDrop`（= 2）；气边 `abs(Δh) < CliffDrop`、覆盖 `h_t − h_s < CliffDrop`、表现层差集原因 `≥ CliffDrop` 三处共用，禁止第二份字面量 |
 | 围棋记法 ↔ 内部索引映射 | `Siege.Core` 坐标类型 |
 | 覆盖数据（谁覆盖了哪格、来源棋子、是否几何相邻） | `CoverageMap.Compute` 一次算出；`SourcesOf(c)` 只读查询（信物控制、盘面层差集原因都消费它，不自行遍历） |
+| 据点控制（占据 / 唯一覆盖 / 争议 / 无人及控制者） | `SiteControl.Compute(board, coverage)`（`Siege.Core.Scoring`）；只读 `CoverageMap.OwnershipOf`，实现内不得出现 `Neighbors(` / `CoverageTargets(` / `HeightAt(`（守门 `据点控制判定Tests.据点控制实现只读覆盖表`）。插旗阶段尚无势力快照时，据点状态也由 Core 的 `MatchFlow.Publish` 给出（`MatchPublicView.SiteStates` 唯一构造点）；表现层与 `src/godot/` 只读 `SiteStates` / `SiteView`，不得自推"无人"或任何控制状态 |
+| 高地压制加值 | `PieceEffects.HighGroundBonus(board, group)`；覆盖目标只经 `GameBoard.CoverageTargets` 取得，不另写邻接或崖壁判断；"严格更低"用 `Map.HeightAt` 比较目标格与自身格；`PowerCalculator` 是唯一消费者，表现层只读 `GroupPower.HighGroundBonus` |
+| 出生区编号的对人显示（1–4） | `BirthZoneLabel.Of` / `Number`；校验器、对称检查、平衡分析报告、`FlagsLocked` 事件文本、`map` 文本图、`play` 棋盘与插旗提示都经它换算，不得手写 `+ 1`；内部索引与日志数据字段保持 0 起（`play` 读入玩家输入的 `z - 1` 是输入解析，不在此列） |
 | 结算顺序（设计文档 §6.3 六步） | `Siege.Core` 批次结算驱动器 |
 | 规则计算 | `Siege.Core`——表现层只消费预演结果，绝不自己算 |
+
+据点主人推导（`SiteAttribution.HomeZones`）只供遥测首部，规则代码不得引用；它复用 `Adjacency.LibertyNeighbors` / `AreAdjacent`，不是第二份邻接实现。
 
 写新代码前先搜一遍是否已有实现。重复实现的典型症状：领地层说独占、信物层判争议。
 
