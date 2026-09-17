@@ -3,7 +3,7 @@ using System.Collections.Immutable;
 namespace Siege.Core.Board;
 
 /// <summary>
-/// C4 旋转对称检查：地图绕中心旋转 90° 后，高度、地表、障碍、桥、栅栏、信物格逐格一致，出生区编号轮换
+/// C4 旋转对称检查：地图绕中心旋转 90° 后，高度、地表、障碍、桥、栅栏、信物格、据点（位置与档位）逐格一致，出生区编号轮换
 /// （出生区 <c>i</c> 的像是出生区 <c>(i + 1) mod n</c>），咽喉集合不变，中央入口不动。
 /// 不接入 <see cref="MapValidator"/>——3 人图 MUST NOT 被强制套用方形对称；由 4 人基准图的测试直接调用。
 /// </summary>
@@ -61,6 +61,13 @@ public static class MapSymmetry
                 defects.Add($"{pair}：信物格不一致。");
             }
 
+            bool siteP = map.Sites.TryGetValue(p, out SiteTier tierP);
+            bool siteQ = map.Sites.TryGetValue(q, out SiteTier tierQ);
+            if (siteP != siteQ || (siteP && tierP != tierQ))
+            {
+                defects.Add($"{pair}：据点不一致（{DescribeSite(siteP, tierP)} ≠ {DescribeSite(siteQ, tierQ)}）。");
+            }
+
             int? zoneP = map.BirthZoneOf(p);
             int? zoneQ = map.BirthZoneOf(q);
             int? expectedQ = zoneP is { } z && map.BirthZones.Length > 0 ? (z + 1) % map.BirthZones.Length : null;
@@ -98,6 +105,8 @@ public static class MapSymmetry
 
     /// <summary>地图是否 C4 对称。</summary>
     public static bool IsC4Symmetric(MapData map) => RotationDefects(map).IsEmpty;
+
+    private static string DescribeSite(bool present, SiteTier tier) => present ? tier.ToString() : "无据点";
 
     private static string Describe(int? zone) => zone is { } z ? $"出生区 {z}" : "非出生区";
 }

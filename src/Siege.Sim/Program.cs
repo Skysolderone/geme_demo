@@ -82,7 +82,7 @@ public static class Program
 
     // ---------- map ----------
 
-    /// <summary>地图工具：打印 4 人基准地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区）并导出 maps/&lt;id&gt;.json（权威地图文件）。</summary>
+    /// <summary>地图工具：打印 4 人基准地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 据点 / 出生区与距离表）并导出 maps/&lt;id&gt;.json（权威地图文件）。</summary>
     private static int ExportMap()
     {
         MapData map = FourPlayerBaseMap.Create();
@@ -103,6 +103,19 @@ public static class Program
             + " 个可落子格，高度 "
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
+        Console.WriteLine(
+            $"据点 {map.Sites.Count}（营帐 {map.Sites.Count(s => s.Value == SiteTier.Tent)}，篝火 {map.Sites.Count(s => s.Value == SiteTier.Campfire)}，石碑 {map.Sites.Count(s => s.Value == SiteTier.Stele)}）");
+        foreach (SiteTier tier in Enum.GetValues<SiteTier>())
+        {
+            Console.WriteLine($"  {tier switch { SiteTier.Tent => "营帐", SiteTier.Campfire => "篝火", _ => "石碑" }}（{Siege.Sim.Play.BoardRenderer.SiteLetter(tier)}） {string.Join(" ", map.Sites.Where(s => s.Value == tier).Select(s => s.Key).Order())}");
+        }
+
+        Console.WriteLine("各出生区沿气边最短距离（出生区 1/2/3/4）：");
+        foreach (BirthZoneDistance metric in MapValidator.DistanceTable(map))
+        {
+            Console.WriteLine($"  {metric.Name}  {string.Join("/", metric.Distances.Select(d => d?.ToString() ?? "-"))}");
+        }
+
         Console.WriteLine($"咽喉 {string.Join(" ", map.ChokePoints.Order())}   中央入口 {map.CentralEntrance}   桥 {string.Join(" ", terrain.Bridges.Order())}");
         Console.WriteLine($"栅栏 {string.Join(" ", terrain.Fences.OrderBy(e => e.A).ThenBy(e => e.B))}");
         Console.WriteLine();
@@ -141,8 +154,8 @@ public static class Program
 
         Console.WriteLine();
         Console.WriteLine();
-        Console.WriteLine("每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-4 出生区  r 出生区信物  o 公共信物  R 公共高档信物");
-        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记；v3 的入口 G7 是高档信物 R、四座桥即咽喉 =）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
+        Console.WriteLine("每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-4 出生区  r 出生区信物  o 公共信物  R 公共高档信物  T 营帐  C 篝火  S 石碑");
+        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物、据点或桥同格时显示信物 / 据点 / 桥的标记；入口 G7 是高档信物 R、四座桥即咽喉 =；据点不与信物重合）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
 
         // 导出地图文件，供设计师脱离代码维护
         Directory.CreateDirectory("maps");
@@ -168,6 +181,7 @@ public static class Program
 
         char mark = map.RelicCells.TryGetValue(c, out RelicCellSpec spec)
             ? spec.Budget switch { BudgetTier.Birth => 'r', BudgetTier.High => 'R', _ => 'o' }
+            : map.Sites.TryGetValue(c, out SiteTier site) ? Siege.Sim.Play.BoardRenderer.SiteLetter(site)
             : c == map.CentralEntrance ? '@'
             : map.HasBridge(c) ? '='
             : map.ChokePoints.Contains(c) ? '^'

@@ -14,6 +14,9 @@ public readonly record struct MapValidationFailure(
             : $"[{Code}] {Message}（{string.Join(", ", Coords.Select(c => c.ToNotation()))}）";
 }
 
+/// <summary>规则第 1 条的一项距离均衡目标：目标名、目标格、各出生区（按编号）到最近目标格的沿气边距离，<c>null</c> 为不可达或无目标。</summary>
+public readonly record struct BirthZoneDistance(string Name, ImmutableArray<Coord> Targets, ImmutableArray<int?> Distances);
+
 /// <summary>地图校验结果。</summary>
 public sealed class MapValidationResult
 {
@@ -46,16 +49,16 @@ public sealed class MapValidationException : Exception
 public static class MapValidator
 {
     /// <summary>
-    /// 人数适配预算：可落子格区间、信物格区间、出生区可落子格区间。
+    /// 人数适配预算：可落子格区间、信物格区间、出生区可落子格区间、据点数区间（scoring-sites：2 人 6–8 / 3 人 9–11 / 4 人 10–14，2 / 3 人为估值）。
     /// 出生区区间为 <c>null</c> 表示规格未给该人数的区间（2 / 3 人图尚未定稿），此项不校验；
     /// 与之无关的"容得下 9 枚基础部署"下界对所有人数一律生效。
     /// </summary>
     private static readonly ImmutableDictionary<int, Budget> Budgets =
         new Dictionary<int, Budget>
         {
-            [2] = new(50, 65, 7, 9, null),
-            [3] = new(75, 90, 10, 12, null),
-            [4] = new(95, 110, 13, 15, (12, 14)),
+            [2] = new(50, 65, 7, 9, null, 6, 8),
+            [3] = new(75, 90, 10, 12, null, 9, 11),
+            [4] = new(95, 110, 13, 15, (12, 14), 10, 14),
         }.ToImmutableDictionary();
 
     /// <summary>一档人数的规模预算。</summary>
@@ -64,7 +67,9 @@ public static class MapValidator
         int MaxPlayable,
         int MinRelics,
         int MaxRelics,
-        (int Min, int Max)? BirthZoneCells);
+        (int Min, int Max)? BirthZoneCells,
+        int MinSites,
+        int MaxSites);
 
     /// <summary>前三大回合单玩家最多 9 枚基础部署，出生区必须容得下。</summary>
     private const int ProtectionPhaseDeployments = 9;
@@ -80,6 +85,7 @@ public static class MapValidator
         ValidateBudgets(map, f);
         ValidateBirthZones(map, f);
         ValidateRelicCells(map, f);
+        ValidateSites(map, f);
         ValidateLandmarks(map, f);
         ValidateTolerance(map, f);
         ValidatePockets(map, f);
@@ -286,6 +292,51 @@ public static class MapValidator
         }
     }
 
+    /// <summary>
+    /// 校验规则第 8 条：每个据点位于可落子格、标注合法档位、不与信物格重合；据点总数落在人数区间。
+    /// 据点与信物完全分离（裁决 D10）：同一格两种价值会让"控制一格"的收益翻倍，且表现层地标互相遮挡。
+    /// </summary>
+    private static void ValidateSites(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        foreach ((Coord c, SiteTier tier) in map.Sites.OrderBy(kv => kv.Key))
+        {
+            if (!Enum.IsDefined(tier))
+            {
+                f.Add(new MapValidationFailure(
+                    "SITE_TIER_MISSING", $"据点必须标注档位（营帐 / 篝火 / 石碑），实际为 {(int)tier}。", [c]));
+            }
+
+            if (map.TerrainAt(c) != Terrain.Playable)
+            {
+                f.Add(new MapValidationFailure(
+                    "SITE_ON_NON_PLAYABLE", "据点必须位于可落子格上。", [c]));
+            }
+
+            if (map.RelicCells.ContainsKey(c))
+            {
+                f.Add(new MapValidationFailure(
+                    "SITE_ON_RELIC_CELL", "据点不得与信物格重合。", [c]));
+            }
+        }
+
+        if (!Budgets.TryGetValue(map.MaxPlayers, out Budget budget))
+        {
+            return;
+        }
+
+        int sites = map.Sites.Count;
+        if (sites < budget.MinSites || sites > budget.MaxSites)
+        {
+            string direction = sites < budget.MinSites
+                ? $"少于下限 {budget.MinSites}"
+                : $"多于上限 {budget.MaxSites}";
+            f.Add(new MapValidationFailure(
+                "SITE_COUNT_OUT_OF_RANGE",
+                $"{map.MaxPlayers} 人地图的据点为 {sites} 个，{direction}，超出 {budget.MinSites}–{budget.MaxSites} 区间。",
+                ImmutableArray<Coord>.Empty));
+        }
+    }
+
     private static void ValidateLandmarks(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
         if (map.TerrainAt(map.CentralEntrance) != Terrain.Playable)
@@ -394,15 +445,14 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 距离均衡：各出生区到最近公共信物格、中央入口与主要咽喉的最短落子距离
-    /// （沿气边——崖壁、栅栏、未架桥深水挡住的路不算路），两两差值不得超过容差。
+    /// 各出生区到每个距离均衡目标的最短落子距离（沿气边），规则第 1 条的唯一口径。
+    /// 目标依次为：最近公共信物、中央入口、最近咽喉、最近篝火、最近石碑（后两项 scoring-sites R-5；营帐在区内，不纳入）。
+    /// 距离为 <c>null</c> 表示该出生区到不了任一目标格；目标集合为空时（如无据点的旧图）整项距离全为 <c>null</c>。
+    /// 校验器与 <c>Siege.Sim map</c> 的距离表共用这一份计算。
     /// </summary>
-    private static void ValidateDistanceBalance(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    public static ImmutableArray<BirthZoneDistance> DistanceTable(MapData map)
     {
-        if (map.BirthZones.IsDefaultOrEmpty)
-        {
-            return;
-        }
+        ArgumentNullException.ThrowIfNull(map);
 
         ImmutableArray<Coord> publicRelics = map.RelicCells
             .Where(kv => kv.Value.Zone == RelicZone.Contested)
@@ -413,57 +463,77 @@ public static class MapValidator
             ("最近公共信物", publicRelics),
             ("中央入口", [map.CentralEntrance]),
             ("最近咽喉", map.ChokePoints.Order().ToImmutableArray()),
+            ("最近篝火", SitesOf(map, SiteTier.Campfire)),
+            ("最近石碑", SitesOf(map, SiteTier.Stele)),
         };
 
-        var distances = new int[metrics.Length][];
-        for (int m = 0; m < metrics.Length; m++)
-        {
-            distances[m] = new int[map.BirthZones.Length];
-        }
+        Dictionary<Coord, int>[] zoneDistances = map.BirthZones.IsDefault
+            ? []
+            : [.. map.BirthZones.Select(z => MultiSourceDistances(map, z))];
 
-        for (int z = 0; z < map.BirthZones.Length; z++)
+        ImmutableArray<BirthZoneDistance>.Builder table = ImmutableArray.CreateBuilder<BirthZoneDistance>(metrics.Length);
+        foreach ((string name, ImmutableArray<Coord> targets) in metrics)
         {
-            Dictionary<Coord, int> dist = MultiSourceDistances(map, map.BirthZones[z]);
-            for (int m = 0; m < metrics.Length; m++)
+            ImmutableArray<int?>.Builder ds = ImmutableArray.CreateBuilder<int?>(zoneDistances.Length);
+            foreach (Dictionary<Coord, int> dist in zoneDistances)
             {
-                (string name, ImmutableArray<Coord> targets) = metrics[m];
-                if (targets.IsDefaultOrEmpty)
-                {
-                    distances[m][z] = -1;
-                    continue;
-                }
-
-                int best = int.MaxValue;
+                int? best = null;
                 foreach (Coord t in targets)
                 {
-                    if (dist.TryGetValue(t, out int d) && d < best)
+                    if (dist.TryGetValue(t, out int d) && (best is null || d < best))
                     {
                         best = d;
                     }
                 }
 
-                if (best == int.MaxValue)
-                {
-                    f.Add(new MapValidationFailure(
-                        "LANDMARK_UNREACHABLE",
-                        $"出生区 {z} 无法到达{name}。", targets));
-                    distances[m][z] = -1;
-                }
-                else
-                {
-                    distances[m][z] = best;
-                }
+                ds.Add(best);
             }
+
+            table.Add(new BirthZoneDistance(name, targets, ds.ToImmutable()));
         }
 
-        for (int m = 0; m < metrics.Length; m++)
+        return table.ToImmutable();
+    }
+
+    private static ImmutableArray<Coord> SitesOf(MapData map, SiteTier tier) =>
+        map.Sites.Where(kv => kv.Value == tier).Select(kv => kv.Key).Order().ToImmutableArray();
+
+    /// <summary>
+    /// 距离均衡：各出生区到最近公共信物格、中央入口、主要咽喉、最近篝火与最近石碑的最短落子距离
+    /// （沿气边——崖壁、栅栏、未架桥深水挡住的路不算路），两两差值不得超过容差。
+    /// </summary>
+    private static void ValidateDistanceBalance(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        if (map.BirthZones.IsDefaultOrEmpty)
         {
-            int[] ds = distances[m];
-            if (ds.Any(d => d < 0))
+            return;
+        }
+
+        foreach (BirthZoneDistance metric in DistanceTable(map))
+        {
+            if (metric.Targets.IsDefaultOrEmpty)
             {
                 continue;
             }
 
+            bool complete = true;
+            for (int z = 0; z < metric.Distances.Length; z++)
+            {
+                if (metric.Distances[z] is null)
+                {
+                    f.Add(new MapValidationFailure(
+                        "LANDMARK_UNREACHABLE",
+                        $"出生区 {z} 无法到达{metric.Name}。", metric.Targets));
+                    complete = false;
+                }
+            }
+
+            if (!complete)
+            {
+                continue;
+            }
+
+            int[] ds = [.. metric.Distances.Select(d => d!.Value)];
             int min = ds.Min();
             int max = ds.Max();
             if (max - min > map.DistanceTolerance)
@@ -471,7 +541,7 @@ public static class MapValidator
                 string detail = string.Join("，", ds.Select((d, z) => $"出生区 {z} = {d}"));
                 f.Add(new MapValidationFailure(
                     "DISTANCE_IMBALANCE",
-                    $"各出生区到{metrics[m].Name}的最短落子距离失衡（{detail}），"
+                    $"各出生区到{metric.Name}的最短落子距离失衡（{detail}），"
                     + $"极差 {max - min} 超出容差 {map.DistanceTolerance}。",
                     ImmutableArray<Coord>.Empty));
             }

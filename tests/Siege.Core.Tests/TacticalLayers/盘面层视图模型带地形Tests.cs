@@ -8,7 +8,8 @@ namespace Siege.Core.Tests.TacticalLayers;
 
 /// <summary>
 /// terrain-model 5.1：盘面层视图模型带出每格高度、地表、桥与栅栏边，供 Godot 渲染——Godot 只消费这些字段，不读地图、不推地形。
-/// 钉在真 v3 基准图上（<c>siege-4p-base-v3</c>），字段值直接对照 implement.md 段 B 的文本图。
+/// 钉在真 v3 基准图地形上，字段值直接对照 implement.md 段 B 的文本图。scoring-sites 起 <see cref="FourPlayerBaseMap"/> 是 v4
+/// （地形与 v3 逐格相同，只加据点），本类只测地形，断言不变。
 /// </summary>
 public class 盘面层视图模型带地形Tests
 {

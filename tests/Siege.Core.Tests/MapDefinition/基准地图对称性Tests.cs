@@ -172,6 +172,74 @@ public class 基准地图对称性Tests
     }
 
     [Fact]
+    public void 只改一个据点档位的图被判不对称()
+    {
+        // scoring-sites 1.3：位置全对、只把 J2 的篝火改成石碑 → MapSymmetry MUST 判不对称并指出据点。
+        Coord j2 = Coord.Parse("J2");
+        Assert.Equal(SiteTier.Campfire, Map.Sites[j2]);
+        MapData retiered = Map with { Sites = Map.Sites.SetItem(j2, SiteTier.Stele) };
+
+        ImmutableArray<string> defects = MapSymmetry.RotationDefects(retiered);
+
+        Assert.NotEmpty(defects);
+        Assert.All(defects, d => Assert.Contains("据点", d, StringComparison.Ordinal));
+        Assert.False(MapSymmetry.IsC4Symmetric(retiered));
+    }
+
+    [Fact]
+    public void 据点在C4旋转下不变()
+    {
+        // 测试内独立旋转：每个据点的像仍是据点且档位相同。
+        Assert.Equal(12, Map.Sites.Count);
+        foreach ((Coord c, SiteTier tier) in Map.Sites)
+        {
+            Coord image = Rotate90(c);
+            Assert.True(Map.Sites.TryGetValue(image, out SiteTier imageTier), $"据点 {c} 的像 {image} 不是据点。");
+            Assert.Equal(tier, imageTier);
+        }
+    }
+
+    [Fact]
+    public void 四个出生区到最近篝火与石碑的距离精确相等()
+    {
+        // scoring-sites R-5：距离均衡目标加最近篝火与最近石碑。独立 BFS 复算实测值：篝火 6（J2 经缓坡、尾巷）、石碑 8（E6 经桥头 G5、F5、林地 E5）。
+        // 钉住具体值而不是只断言相等：四区一起变远时"相等"仍成立。
+        foreach ((SiteTier tier, int want) in new[] { (SiteTier.Campfire, 6), (SiteTier.Stele, 8) })
+        {
+            Coord[] targets = [.. Map.Sites.Where(kv => kv.Value == tier).Select(kv => kv.Key)];
+            int[] perZone = [.. Map.BirthZones.Select(zone =>
+            {
+                Dictionary<Coord, int> dist = Bfs(zone);
+                return targets.Where(dist.ContainsKey).Select(t => dist[t]).Min();
+            })];
+
+            Assert.Equal([want, want, want, want], perZone);
+        }
+
+        // 校验器与 map 子命令共用的 DistanceTable 必须与独立 BFS 逐项一致，且取的是"最近"目标。
+        // 只断言四区相等挡不住"最近"写成"最远"（C4 下最远也四区相等）——A1 检查变异 M-C2 在补这段前全绿。
+        (string Name, Coord[] Targets)[] expected =
+        [
+            ("最近公共信物", [.. Map.RelicCells.Where(kv => kv.Value.Zone == RelicZone.Contested).Select(kv => kv.Key)]),
+            ("中央入口", [Map.CentralEntrance]),
+            ("最近咽喉", [.. Map.ChokePoints]),
+            ("最近篝火", [.. Map.Sites.Where(kv => kv.Value == SiteTier.Campfire).Select(kv => kv.Key)]),
+            ("最近石碑", [.. Map.Sites.Where(kv => kv.Value == SiteTier.Stele).Select(kv => kv.Key)]),
+        ];
+        ImmutableArray<BirthZoneDistance> table = MapValidator.DistanceTable(Map);
+        Assert.Equal(expected.Select(e => e.Name), table.Select(m => m.Name));
+        for (int m = 0; m < expected.Length; m++)
+        {
+            int?[] independent = [.. Map.BirthZones.Select(zone =>
+            {
+                Dictionary<Coord, int> dist = Bfs(zone);
+                return (int?)expected[m].Targets.Where(dist.ContainsKey).Select(t => dist[t]).Min();
+            })];
+            Assert.Equal(independent, table[m].Distances);
+        }
+    }
+
+    [Fact]
     public void 出生区编号不轮换的图被判不对称()
     {
         // 四个区的形状都对，但编号顺序 0 → 2 → 1 → 3 不是旋转顺序，MUST 判不对称。
@@ -197,6 +265,7 @@ public class 基准地图对称性Tests
             ("桥", Map with { TerrainData = new TerrainData(t.Heights, t.Surfaces, t.Bridges.Remove(Coord.Parse("G4")), t.Fences) }),
             ("栅栏", Map with { TerrainData = new TerrainData(t.Heights, t.Surfaces, t.Bridges, t.Fences.Add(new FenceEdge(g3, Coord.Parse("G2")))) }),
             ("信物", Map with { RelicCells = Map.RelicCells.Add(g3, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)) }),
+            ("据点", Map with { Sites = Map.Sites.Add(g3, SiteTier.Campfire) }),
             ("咽喉", Map with { ChokePoints = Map.ChokePoints.Add(g3) }),
             ("中央入口", Map with { CentralEntrance = g3 }),
         };

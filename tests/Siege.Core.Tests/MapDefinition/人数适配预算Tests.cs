@@ -55,6 +55,73 @@ public class 人数适配预算Tests
         Assert.Contains(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");
     }
 
+    [Theory]
+    [InlineData(16, "多于上限 14")]
+    [InlineData(15, "多于上限 14")]
+    [InlineData(9, "少于下限 10")]
+    public void 据点数越界(int count, string direction)
+    {
+        // 规格 Scenario（scoring-sites）：4 人地图据点为 16 个 → 拒绝并报告超出 10–14 区间。
+        // 15 与 9 是紧贴区间外的边界：只测 16 的话把上界写成 15，行为上一条都不红。
+        MapData map = WithSiteCount(FourPlayerBaseMap.Create(), count);
+        Assert.Equal(count, map.Sites.Count);
+
+        MapValidationFailure failure = Assert.Single(
+            MapValidator.Validate(map).Failures, f => f.Code == "SITE_COUNT_OUT_OF_RANGE");
+        Assert.Contains($"据点为 {count} 个", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(direction, failure.Message, StringComparison.Ordinal);
+        Assert.Contains("10–14", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(14)]
+    public void 据点数恰在区间端点时通过(int count)
+    {
+        MapData map = WithSiteCount(FourPlayerBaseMap.Create(), count);
+        Assert.Equal(count, map.Sites.Count);
+
+        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "SITE_COUNT_OUT_OF_RANGE");
+    }
+
+    [Theory]
+    [InlineData(2, 5, "6–8")]
+    [InlineData(2, 9, "6–8")]
+    [InlineData(3, 8, "9–11")]
+    [InlineData(3, 12, "9–11")]
+    public void 两人三人据点数区间(int players, int count, string range)
+    {
+        // scoring-sites map-definition 预算表：2 人 6–8、3 人 9–11（估值，定稿时重估）。合成图只用于触发这一条。
+        MapData plain = TestMaps.Synthetic(size: 9, maxPlayers: players);
+        MapData map = plain with
+        {
+            Sites = plain.AllCoords().Take(count).ToImmutableDictionary(c => c, _ => SiteTier.Stele),
+        };
+
+        MapValidationFailure failure = Assert.Single(
+            MapValidator.Validate(map).Failures, f => f.Code == "SITE_COUNT_OUT_OF_RANGE");
+        Assert.Contains($"据点为 {count} 个", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(range, failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>把 v4 的 12 个据点增删到 <paramref name="count"/> 个：增加的取岛上内圈（可落子、非信物、非据点），删除按坐标序从末尾删。</summary>
+    private static MapData WithSiteCount(MapData map, int count)
+    {
+        ImmutableDictionary<Coord, SiteTier> sites = map.Sites;
+        string[] spare = ["G6", "F7", "H7", "G8"];
+        foreach (string s in spare.Take(Math.Max(0, count - sites.Count)))
+        {
+            sites = sites.Add(Coord.Parse(s), SiteTier.Stele);
+        }
+
+        foreach (Coord c in sites.Keys.Order().Reverse().Take(Math.Max(0, sites.Count - count)).ToArray())
+        {
+            sites = sites.Remove(c);
+        }
+
+        return map with { Sites = sites };
+    }
+
     [Fact]
     public void 两人预算区间()
     {

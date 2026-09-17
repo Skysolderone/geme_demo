@@ -1,6 +1,5 @@
 {
-  "_comment": "历史存档：terrain-model 的 v3 基线（无据点）。scoring-sites（裁决 S-9）起地形不变、加 12 个据点升为 siege-4p-base-v4，本文件缺 Sites 字段、按无据点读入，通不过校验规则 8（4 人据点 10–14），仅供对照；现行基准图是 siege-4p-base-v4.json。",
-  "Id": "siege-4p-base-v3",
+  "Id": "siege-4p-base-v4",
   "Width": 13,
   "Height": 13,
   "MaxPlayers": 4,
@@ -157,6 +156,20 @@
       "Zone": "BirthZone",
       "Budget": "Birth"
     }
+  },
+  "Sites": {
+    "J2": "Campfire",
+    "L2": "Tent",
+    "B3": "Tent",
+    "B5": "Campfire",
+    "H5": "Stele",
+    "E6": "Stele",
+    "J8": "Stele",
+    "F9": "Stele",
+    "M9": "Campfire",
+    "M11": "Tent",
+    "C12": "Tent",
+    "E12": "Campfire"
   },
   "ChokePoints": [
     "G4",

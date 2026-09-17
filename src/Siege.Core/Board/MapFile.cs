@@ -40,6 +40,9 @@ public static class MapFile
                 .ToDictionary(
                     kv => kv.Key.ToNotation(),
                     kv => new RelicDto { Zone = kv.Value.Zone, Budget = kv.Value.Budget }),
+            Sites = map.Sites
+                .OrderBy(kv => kv.Key)
+                .ToDictionary(kv => kv.Key.ToNotation(), kv => (SiteTier?)kv.Value),
             ChokePoints = Sorted(map.ChokePoints),
             CentralEntrance = map.CentralEntrance.ToNotation(),
             DistanceTolerance = map.DistanceTolerance,
@@ -68,6 +71,7 @@ public static class MapFile
         List<List<string>> zones = Required(dto.BirthZones, "BirthZones");
         Dictionary<string, RelicDto> relicCells = Required(dto.RelicCells, "RelicCells");
         Dictionary<string, string> exemptions = Required(dto.PocketExemptions, "PocketExemptions");
+        Dictionary<string, SiteTier?> sites = Required(dto.Sites, "Sites");
 
         return new MapData
         {
@@ -82,6 +86,9 @@ public static class MapFile
                 kv => new RelicCellSpec(
                     Required(kv.Value, $"RelicCells[\"{kv.Key}\"]").Zone,
                     kv.Value.Budget)),
+            Sites = sites.ToImmutableDictionary(
+                kv => Coord.Parse(kv.Key),
+                kv => kv.Value ?? throw new FormatException($"地图文件的 Sites[\"{kv.Key}\"] 缺档位：据点档位必填（Tent / Campfire / Stele）。")),
             ChokePoints = Parse(Required(dto.ChokePoints, "ChokePoints")),
             CentralEntrance = Coord.Parse(dto.CentralEntrance),
             DistanceTolerance = dto.DistanceTolerance,
@@ -247,6 +254,9 @@ public static class MapFile
         public List<List<string>> BirthZones { get; set; } = [];
 
         public Dictionary<string, RelicDto> RelicCells { get; set; } = [];
+
+        /// <summary>据点：格 → 档位（Tent 营帐 / Campfire 篝火 / Stele 石碑）。省略即无据点（v3 及更早的文件）。</summary>
+        public Dictionary<string, SiteTier?> Sites { get; set; } = [];
 
         public List<string> ChokePoints { get; set; } = [];
 
