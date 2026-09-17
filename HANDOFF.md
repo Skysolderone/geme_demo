@@ -31,7 +31,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test` **729/729**，零警告，套件约 20 秒。`terrain-model` 的 10 个提交**尚未推送** |
+| `main` | 全绿：`dotnet test` **729/729**，零警告，套件约 20 秒。已推送 |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）
