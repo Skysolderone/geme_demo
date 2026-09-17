@@ -33,11 +33,19 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 方格边界 MUST 始终清晰可辨。
 
-树木、遗迹、水面与高低差 SHALL 只作为不可通行地块或视觉装饰，MUST NOT 遮挡合法落点、气与领地归属的判读。
+高度、深水、桥、栅栏与林地是承载规则的地形要素，MUST 在默认视图下可判读：三档高度以地砖层高与崖壁侧面区分；深水、桥、林地各有可辨的地表表现；栅栏沿格边立起。纯装饰物（岩石造型、草丛、旗帜等）MUST NOT 遮挡合法落点、气与领地归属的判读。
 
 #### Scenario: 装饰不遮挡判读
-- **WHEN** 某格附近存在树木与高低差装饰
+- **WHEN** 某格附近存在装饰物
 - **THEN** 该格是否可落子、是否为气、归属于谁仍然清晰可辨
+
+#### Scenario: 崖壁可辨
+- **WHEN** 相邻两格高度差为 2
+- **THEN** 二者之间的崖壁侧面在对局相机下可见，与高度差为 1 的缓坡可区分
+
+#### Scenario: 栅栏立在格边
+- **WHEN** 两格之间有栅栏
+- **THEN** 栅栏沿两格的公共边呈现，不占用任一格的落点
 
 ### Requirement: 五种棋子的轮廓语言
 
@@ -75,9 +83,9 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 ### Requirement: 棋盘坐标标注
 
-棋盘 SHALL 在四边显示围棋记法的坐标标注：列字母沿棋盘的上下两边，行数字沿左右两边。字母与数字的取值 MUST 与 `board-topology`「坐标记法」一致（列 `A`–`L` 跳过 `I`，行自下而上从 `1` 起），且 MUST 由 `Coord` ↔ 3D 的唯一映射推出，MUST NOT 在视图层另算一份。
+棋盘 SHALL 在四边显示围棋记法的坐标标注：列字母沿棋盘的上下两边，行数字沿左右两边。字母与数字的取值 MUST 与 `board-topology`「坐标记法」一致（列字母跳过 `I`，个数随棋盘宽度；行自下而上从 `1` 起），且 MUST 由 `Coord` ↔ 3D 的唯一映射推出，MUST NOT 在视图层另算一份。
 
-标注 SHALL 平铺在棋盘平面上（与地砖共面），朝向使其在对局相机下正向可读，MUST NOT 出现镜像或倒置。
+标注 SHALL 平铺在棋盘边缘的平面上，朝向使其在对局相机下正向可读，MUST NOT 出现镜像或倒置。边缘格高度不同时，标注 MUST 仍处于可读位置。
 
 标注 MUST NOT 遮挡任何格子，也 MUST NOT 影响合法落点、气与领地归属的判读。
 
@@ -90,8 +98,8 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **THEN** 字形正向可读，既不镜像也不倒置；左右两边的同一行数字读出相同的值
 
 #### Scenario: 跳过字母 I
-- **WHEN** 读取 11 列棋盘的列标注
-- **THEN** 依次为 `A B C D E F G H J K L`，其中没有 `I`
+- **WHEN** 读取 13 列棋盘的列标注
+- **THEN** 依次为 `A B C D E F G H J K L M N`，其中没有 `I`
 
 #### Scenario: 标注不遮挡棋盘
 - **WHEN** 棋盘四边均有标注且边缘格上有棋子

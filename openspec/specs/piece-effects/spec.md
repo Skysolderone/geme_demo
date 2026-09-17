@@ -19,14 +19,14 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 ### Requirement: 连珠子的位置加值
 
-对每一条由连珠子构成的、长度为 `L` 且 `L ≥ 2` 的连续横向或纵向序列，系统 SHALL 提供 `L × (L − 1)` 点位置加值。
+对每一条由连珠子构成的、长度为 `L` 且 `L ≥ 2` 的连续横向或纵向序列，系统 SHALL 提供 `L × (L − 1)` 点位置加值。"连续"指序列中相邻两枚连珠子之间存在**气边**（见 `terrain`）：隔着崖壁、未架桥深水或栅栏的两枚连珠子 MUST NOT 视为同一条线。
 
 每条连续线 MUST 按其最大长度计算一次，系统 MUST NOT 把同一条线拆成多个子区间重复加分。
 
 位于十字交叉处的连珠子 SHALL 可以同时参与一条横线与一条竖线的计算。
 
 #### Scenario: 长度为 3 的横线
-- **WHEN** 同一玩家的连珠子占据 `C6`、`D6`、`E6`
+- **WHEN** 同一玩家的连珠子占据 `C6`、`D6`、`E6`，三格同高且之间无栅栏
 - **THEN** 该线提供 `3 × 2 = 6` 点位置加值
 
 #### Scenario: 不拆分子区间
@@ -40,6 +40,14 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 #### Scenario: 长度为 1 不计分
 - **WHEN** 一枚连珠子在横向与纵向均无相邻的己方连珠子
 - **THEN** 该连珠子不提供任何位置加值
+
+#### Scenario: 崖壁截断连珠线
+- **WHEN** 同一玩家的连珠子占据 `C6`、`D6`、`E6`，其中 `D6` 为 h=0、`E6` 为 h=2
+- **THEN** `C6`–`D6` 构成长度 2 的线提供 `2 × 1 = 2` 点，`E6` 单独不计分，总位置加值为 2
+
+#### Scenario: 栅栏截断连珠线
+- **WHEN** 同一玩家的连珠子占据 `C6`、`D6`、`E6`，`D6` 与 `E6` 之间有栅栏
+- **THEN** 总位置加值为 2，与崖壁截断相同
 
 ### Requirement: 协同子的位置加值
 

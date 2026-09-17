@@ -5,17 +5,21 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 ## Requirements
 ### Requirement: 棋子向四邻接相邻格提供覆盖
 
-系统 SHALL 让每枚棋子向其四邻接的相邻格提供属于该棋子所有者的覆盖。覆盖 MUST NOT 沿斜向传播，MUST NOT 穿过障碍或棋盘外沿。
+系统 SHALL 让每枚棋子按 `terrain`「覆盖关系」向格子提供属于该棋子所有者的覆盖：通常是几何相邻格；遇到一格宽的深水时落到对岸那一格；不向林地、障碍、未架桥的深水提供覆盖；不向比自身高 2 的格提供覆盖。覆盖 MUST NOT 沿斜向传播，MUST NOT 穿过障碍或棋盘外沿，MUST NOT 被栅栏阻挡。
 
 覆盖关系 SHALL 在每次盘面变化后实时重算，MUST NOT 保留历史覆盖状态。
 
 #### Scenario: 覆盖范围
-- **WHEN** 玩家 A 的一枚棋子位于棋盘中央 `F6`
+- **WHEN** 玩家 A 的一枚棋子位于棋盘中央 `F6`，四周为同高的空草地
 - **THEN** `E6`、`G6`、`F5`、`F7` 四格获得玩家 A 的覆盖，`E5` 等斜向格不获得
 
 #### Scenario: 障碍不传播覆盖
 - **WHEN** 棋子相邻的某格为障碍
 - **THEN** 该障碍格不记录任何覆盖，且覆盖不越过障碍传递到更远的格
+
+#### Scenario: 覆盖判定与气边判定分离
+- **WHEN** 玩家 A 的棋子位于 h=2 的 `F7`，`F6` 为 h=0 的空格
+- **THEN** `F6` 获得玩家 A 的覆盖，但 `F6` 不是 `F7` 所在棋串的气
 
 ### Requirement: 占据优先于覆盖
 
@@ -79,7 +83,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 系统 SHALL 提供"某格是否被恰好一名玩家覆盖，以及该玩家是谁"的查询，供 `add-relic-system` 判定信物控制权。
 
-该查询 MUST 与空格归属判定使用同一套覆盖数据，MUST NOT 出现两处不一致的覆盖语义。
+该查询 MUST 与空格归属判定使用同一套覆盖数据，MUST NOT 出现两处不一致的覆盖语义。位于林地格上的信物 SHALL 只能通过占据取得控制。
 
 #### Scenario: 唯一覆盖者
 - **WHEN** 查询一个只被玩家 B 覆盖的信物格
@@ -88,6 +92,10 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 #### Scenario: 多人覆盖
 - **WHEN** 查询一个同时被玩家 A 与玩家 C 覆盖的信物格
 - **THEN** 查询返回"非唯一覆盖"
+
+#### Scenario: 林地信物只能占据
+- **WHEN** 玩家 B 的棋子与一个位于林地格上的空信物格几何相邻
+- **THEN** 该信物格无人覆盖、内容未被发现；玩家 B 落子占据该格后才发现并控制
 
 ### Requirement: 弃赛玩家的遗留棋子仍产生覆盖
 
