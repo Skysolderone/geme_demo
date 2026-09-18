@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-09-17（首轮原型 8/8 完成；**去围棋化改造第一轮 `terrain-model` 已归档**，**第二轮 `scoring-sites` 已完成、未推送未归档**：势力 = 据点分 + 军势，4 人基准图升为 v4，AI `Safety` 5 → 27）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-09-17（首轮原型 8/8 完成；**去围棋化改造第一轮 `terrain-model` 已归档**，**第二轮 `scoring-sites` 已归档、未推送**：势力 = 据点分 + 军势，4 人基准图升为 v4，AI `Safety` 5 → 27）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续，不需要翻聊天记录。
 
 ## 一句话
@@ -31,7 +31,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test -c Release` **808/808**，零警告，套件约 15 秒。`terrain-model` 及之前已推送；`scoring-sites` 段 A1–C 与 S-16 为本地 wip 提交，段 D（设计文档 v1.3、规范、出生区编号统一）待提交，**均未推送** |
+| `main` | 全绿：`dotnet test -c Release` **808/808**，零警告，套件约 15 秒。`terrain-model` 及之前已推送；`scoring-sites` 段 A1–D、S-16 与两次归档提交，以及第三轮 `artisan-terrain-edit` 的方案提交，均为本地提交，**未推送** |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）
@@ -72,7 +72,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 | 轮 | change | 内容 | 状态 |
 |---|---|---|---|
 | ① | `terrain-model` | 格属性（高度 0/1/2、地表、障碍、预置桥）+ 栅栏边；几何四邻之上导出**气边**与**覆盖关系**两套关系；连珠沿气边；v3 地图；Godot 分层渲染与拾取；设计文档 v1.2 | **已归档**，测试 680 → 729 |
-| ② | `scoring-sites` | 空格领地退役，势力 = 据点分 + 军势；12 个据点（营帐 / 篝火 / 石碑 5 / 15 / 45）、与信物分离、占据或唯一覆盖即控制；高地压制加值 +1（进位置加值）；地图 v4；Godot 地标与旗帜；`Safety` 27 | **已完成、未推送**（段 A1 / A2 / B / C / S-16 / D 全部完成，待提交段 D 与归档），测试 729 → 808 |
+| ② | `scoring-sites` | 空格领地退役，势力 = 据点分 + 军势；12 个据点（营帐 / 篝火 / 石碑 5 / 15 / 45）、与信物分离、占据或唯一覆盖即控制；高地压制加值 +1（进位置加值）；地图 v4；Godot 地标与旗帜；`Safety` 27 | **已完成、已归档、未推送**（段 A1 / A2 / B / C / S-16 / D 全部完成，openspec 与 Trellis 均已归档），测试 729 → 808 |
 | ③ | `artisan-terrain-edit` | 第六种棋子「匠人」：落子即改造（搭桥 / 立栅 / 烧林），占 1 额度，指定相邻目标，不可逆，批次内不链式；同形禁则纳入设施 | 未开始 |
 
 第二轮现状（权威：`openspec/changes/scoring-sites/design.md` 裁决记录 1–22、设计文档 v1.3 §3.3 / §7.4 / §10.1 / §16，逐段记录在 `.trellis/tasks/09-17-scoring-sites/implement.md`）：
@@ -81,7 +81,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 - **计分**：`总势力 = 控制中的据点分 + 棋串军势`，空格归属只作判定与展示；控制 = 占据 > 唯一覆盖 > 争议 > 无人（`SiteControl.Compute`，只读 `CoverageMap`）；高地加值 = 覆盖目标上有高度严格更低的敌子 → 每枚 +1（`PieceEffects.HighGroundBonus`，只走 `CoverageTargets`），不被倍率放大；并列链 势力 → 信物数 → 据点数 → 棋子数。
 - **段 C 扫档**（各 200 局，种子 1–200）：分量三档（Safety 5）领先者胜率 90.0 / 95.5 / 92.0%，分量不是杠杆；Safety 九档 + 22 / 25 / 27 加密档，领先者胜率在 20（95.5%）与 30（17.0%）间陡变。负责人拍板分值保持 **5 / 15 / 45**、`EvaluationWeights.Default.Safety` **5 → 27**（裁决 S-15）。
 - **确认 200 局**（`sim-out/sites-final/`，当前地图与口径的唯一有效数据）：第 3 大回合领先者胜率 25.5%、不收敛 6.5%（整轮 Pass 182 / 达上限 13 / 碾压 5）、整局无提子 0、终局局平均结束第 7.78 大回合、首次冲突第 4 大回合、据点分占比 22.1%（低于目标 25%–45%，负责人知情接受）、每批次提子 0.29（偏保守）、Pass 率 22.1%、石碑争议 52.4%。
-- **下一步**：提交段 D → `openspec archive scoring-sites`（同步主规格）→ 归档 Trellis 任务；`art/sites-v4/README.md` 截图清单仍待人工目检。
+- **下一步**：第三轮按 `artisan-terrain-edit/tasks.md` 的段 O（strict-cli）→ A（匠人棋子）→ B（改造规则与遥测）→ C（界面）→ D（扫档）→ E（文档）执行；`art/sites-v4/README.md` 截图清单仍待人工目检。
 
 两套关系（规则的地基，改任何邻接相关代码前必读 `.trellis/spec/core/boundaries.md` 与 `coordinates.md`）：
 
