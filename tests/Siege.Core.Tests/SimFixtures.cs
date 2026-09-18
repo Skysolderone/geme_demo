@@ -73,7 +73,7 @@ internal static class SimFixtures
 
     internal static MatchLog Synthetic(
         ulong seed, IEnumerable<TurnSnapshot> turns, IEnumerable<LogEvent> events, LogResult result, int players = 4, int[]? zones = null, bool relicsConverged = true, RelicEntry[]? relics = null,
-        bool? catchUpRecruit = null, int? playableCells = null) =>
+        bool? catchUpRecruit = null, int? playableCells = null, int? artisanWeight = null) =>
         new()
         {
             Header = new LogHeader
@@ -82,6 +82,7 @@ internal static class SimFixtures
                 Seed = new Siege.Core.Determinism.GameSeed(seed).ToString(),
                 CatchUpRecruit = catchUpRecruit,
                 PlayableCells = playableCells,
+                ArtisanWeight = artisanWeight,
                 Config = Config(players: players),
                 Players = [.. Enumerable.Range(0, players)],
                 Zones = [.. zones ?? Enumerable.Range(0, players)],
@@ -98,7 +99,7 @@ internal static class SimFixtures
     internal static TurnSnapshot Turn(
         int turn, int majorRound, int player, long[] totals, string[]? placements = null, int deployLimit = 3,
         int showCount = 5, int freePick = 3, int typeSlots = 5, GroupEntry[]? groupsOfPlayer = null, string[]? captures = null,
-        int? catchUpReveal = null, int? catchUpPick = null) =>
+        int? catchUpReveal = null, int? catchUpPick = null, TerrainEditEntry[]? edits = null, bool legacyNoEdits = false) =>
         new()
         {
             Turn = turn,
@@ -108,6 +109,10 @@ internal static class SimFixtures
             Passed = placements is null || placements.Length == 0,
             Placements = [.. placements ?? []],
             Captures = [.. captures ?? []],
+
+            // 改造字段：新日志一律写出（没有改造就是空表 []）；<paramref name="legacyNoEdits"/> 造的是
+            // artisan-terrain-edit 之前的**旧日志**（字段缺失 → null），分析时整局排除并计数（R-6），MUST NOT 回填成空表。
+            Edits = legacyNoEdits ? null : [.. edits ?? []],
             ShowCount = showCount,
             FreePickCount = freePick,
             CatchUpReveal = catchUpReveal,

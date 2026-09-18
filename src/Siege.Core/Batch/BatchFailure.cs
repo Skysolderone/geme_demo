@@ -32,6 +32,15 @@ public enum BatchFailureKind
 
     /// <summary>盘面同形：结算后盘面与某次历史提交完全相同。</summary>
     Superko,
+
+    /// <summary>
+    /// 改造目标非法（artisan-terrain-edit）：非匠人携带改造、目标不是几何四邻、目标类型不匹配，或目标已被改造过。
+    /// 判定按<b>批次开始前</b>的地形，实现唯一在 <see cref="Board.TerrainEditRules"/>。
+    /// </summary>
+    TerrainEditIllegal,
+
+    /// <summary>同一批次内两枚匠人指定了同一个改造目标（批次内不链式：同一目标批内唯一）。</summary>
+    DuplicateEditInBatch,
 }
 
 /// <summary>
@@ -72,6 +81,19 @@ public sealed record BatchFailure(
     internal static BatchFailure Superko(int sequence, ImmutableArray<Coord> placements) =>
         new(BatchFailureKind.Superko,
             $"盘面同形：结算后盘面与第 {sequence} 次提交后的盘面完全相同。", placements, DuplicateOfSequence: sequence);
+
+    internal static BatchFailure NotArtisan(Coord c, PieceType type) =>
+        new(BatchFailureKind.TerrainEditIllegal,
+            $"只有匠人能改造：{c.ToNotation()} 上的{DisplayName(type)}携带了改造目标。", [c]);
+
+    internal static BatchFailure IllegalEdit(Coord c, TerrainEdit edit, string reason) =>
+        new(BatchFailureKind.TerrainEditIllegal,
+            $"改造目标非法（{c.ToNotation()} {TerrainEdit.DisplayName(edit.Kind)} {edit}）：{reason}",
+            [c, .. edit.Cells.Where(t => t != c)]);
+
+    internal static BatchFailure DuplicateEdit(Coord c, TerrainEdit edit) =>
+        new(BatchFailureKind.DuplicateEditInBatch,
+            $"同一批次内重复的改造目标：{edit}。", [c, .. edit.Cells.Where(t => t != c)]);
 
     /// <summary>面向人的棋子类型名称，只用于失败文案。</summary>
     internal static string DisplayName(PieceType type) => type switch

@@ -99,7 +99,11 @@ public sealed record FailurePresentation(
     ImmutableArray<CellHighlight> Highlights,
     int? DuplicateOfSequence)
 {
-    /// <summary>标题：规格要求至少区分的七类 + 批次内重复落点，各有明确文案。预占腾空格属于「该格当前已被占据」。</summary>
+    /// <summary>
+    /// 标题：规格要求至少区分的七类 + 批次内重复落点 + 两类改造失败，各有明确文案。预占腾空格属于「该格当前已被占据」。
+    /// 改造两类的详情沿用 Core 文案（已含动作、目标与具体原因）；高亮与其余类别同为 <see cref="HighlightKind.FailureFocus"/>。
+    /// 改造在预演里的<b>正向</b>呈现（可改造目标、按改造后地形算气）属于 4.1，段 C 处理。
+    /// </summary>
     public static string TitleOf(BatchFailureKind kind) => kind switch
     {
         BatchFailureKind.Unplayable => "落点不可落子",
@@ -110,6 +114,8 @@ public sealed record FailurePresentation(
         BatchFailureKind.InsufficientStock => "手牌库存不足",
         BatchFailureKind.Suicide => "自杀手",
         BatchFailureKind.Superko => "盘面同形禁则",
+        BatchFailureKind.TerrainEditIllegal => "改造目标非法",
+        BatchFailureKind.DuplicateEditInBatch => "同一批次内重复的改造目标",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知失败类别。"),
     };
 

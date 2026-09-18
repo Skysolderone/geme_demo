@@ -118,7 +118,12 @@ public class 四邻接Tests
         {
             Type outer = Outermost(caller.DeclaringType!);
             return outer == typeof(Adjacency)
-                   || (outer == typeof(GameBoard) && caller.Name == nameof(GameBoard.Neighbors));
+                   || (outer == typeof(GameBoard) && caller.Name == nameof(GameBoard.Neighbors))
+
+                   // ③ TerrainEditRules：改造合法性的唯一实现。裁决 T-2 把改造目标口径定成**几何四邻**（不是气边——深水没有气边，
+                   //    搭桥会变成不可能），所以它必须直接读几何邻居；它只接受 MapData，走不了 GameBoard.Neighbors。
+                   //    名单只放这一个类型：任何第二处"自己遍历四邻判改造目标"的实现都会在这里红。
+                   || outer == typeof(TerrainEditRules);
         }
 
         static string Describe(MethodBase c) => $"{c.DeclaringType!.FullName}.{c.Name}";

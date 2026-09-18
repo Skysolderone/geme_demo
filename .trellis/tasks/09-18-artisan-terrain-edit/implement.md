@@ -231,3 +231,219 @@ M-A7 之所以对调 **倍增 12 ↔ 匠人 10**（而不是协同 ↔ 匠人）
 | `src/Siege.Sim/Running/MatchSession.cs`、`src/Siege.Sim/Logging/MatchLog.cs` | 文档注释「五种全写」→「六种全写」 |
 | `tests/Siege.Core.Tests/SimFixtures.cs` | `Sample` 的文档注释写明「Easy 从不落匠人」与替代做法，免得下一个人重跑一遍探针 |
 | `.trellis/spec/core/testing.md` | 变异脚本行尾纪律加严一档（见第 6 项） |
+
+## 段 B（tasks 2.1–2.6、3.1–3.4：改造规则本体 + AI、跑局、日志与分析）
+
+不含第 4 组界面。Presentation 只做了让编译与既有守门通过的最小改动（见「越段的最小改动」）。
+
+### 改动文件
+
+**规则层（新增）**
+
+| 文件 | 内容 |
+|---|---|
+| `src/Siege.Core/Board/TerrainEdit.cs` | `TerrainEditKind`（Bridge / Fence / Burn）与 `TerrainEdit` 值类型：格目标 / 边目标（`FenceEdge` 构造即归一，`(a,b)` 与 `(b,a)` 是同一个改造——「批内唯一」靠值相等判定，归一是前提）。规范记法 `B:D4` / `F:G6-H6` / `X:F4` 与 `Parse` 同在一处；盘面序列化的改造段、日志目标字段、失败文案共用 |
+| `src/Siege.Core/Board/TerrainWriter.cs` | **地形写入口（唯一实现）**：`Apply(TerrainData, edit)` / `ApplyAll(MapData, edits)`。只做加法（加桥 / 加栅 / 林地→草地），没有逆向入口，不碰高度、障碍、信物与据点（R-4）。`ApplyAll` 的动作前提一律按传入的**那一份**地形判，因此整组同时生效、与顺序无关 |
+| `src/Siege.Core/Board/TerrainEditRules.cs` | **改造合法性（唯一实现）**：`LegalTargets(map, artisanCell)` 枚举全部合法目标（确定性序），`IsLegal` / `Reject` 是它的两个出口（守门 `拒绝理由与合法目标集合一致` 穷举比对）。口径：几何四邻（T-2）、不含自身格、已改造过的目标不在集合里（R-5）。**批内唯一与「不链式」不在本类**——那是批次层的事 |
+| `src/Siege.Core/Match/TerrainEditRecord.cs` | 对局层留痕：大回合、本局第几次、改造方、动作与目标、匠人落点、是否致提子。只供日志与分析（R-3：公开视图不显示改造者）；不随存档往返 |
+
+**规则层（改动）**
+
+| 文件 | 改动 |
+|---|---|
+| `Board/GameBoard.cs` | `Map` 由只读改为 `{ get; private set; }`，新增 `BaseMap`（开局那份）与 `TerrainEdits`；新增最小写入原语 `ApplyTerrainEdits`（只经写入口）；`Clone` 复制地形与改造列表；`Serialize` 在非空时追加改造段，`Fill` **先读改造段再写棋子**（否则本局架过桥的格会被当成未架桥深水而拒绝落子） |
+| `Batch/Placement.cs` | `Placement` 加 `TerrainEdit? Edit = null`（源码兼容）；`ToString` 含改造（`CandidateBatch.Key` 拼的就是它，漏了会把「同落点带/不带改造」两个候选静默去重成一个）。新增 `AppliedTerrainEdit`；`CaptureRecord` 加 `Edits` |
+| `Batch/StagedBatch.cs` | `Stage` 加可选 `edit` 形参（旧调用点源码兼容） |
+| `Batch/BatchFailure.cs` | 新增两类：`TerrainEditIllegal`（非匠人带改造 / 不相邻 / 类型不匹配 / 已被改造过）与 `DuplicateEditInBatch` |
+| `Batch/BatchRehearsal.cs` | 预演由六步变**七步**：① 落点 + 改造目标合法性 → ② 额度与库存 → ③ 放置 → ④ **应用全部改造** → ⑤ 同时提子 → ⑥ 自杀手 → ⑦ 同形。第 1 步全部按 `board.Map`（= 批次开始前的地形），「当批不能站上新桥」由既有的「地形可落子」判定天然成立，没有额外规则 |
+| `Batch/SettlementDriver.cs` | 正式结算插入第 3 步「同时应用本批全部改造」；新增 `AttributeEdits`（只在确认路径、且只在真有改造时算） |
+| `Match/MatchFlow.cs` | `Map` 由建局时的字段改为 `=> Board.Map`；删掉 `_playableCells` 缓存，`LegalRangeFor` 现算；`Confirm` 把 `CaptureRecord.Edits` 追加进 `TerrainEdits` 留痕（大回合取结算**前**的值） |
+| `Match/MatchPublicView.cs` | 新增 `int ArtisanWeight`（段 A 检查第 5 项结论，R-2 照 `SiteValues` 的口径），`Publish()` 投影 |
+
+**表现 / 跑局层**
+
+| 文件 | 改动 |
+|---|---|
+| `Siege.Presentation/Preview/PreviewPresentation.cs` | `FailurePresentation.TitleOf` 补两类标题（枚举是穷举的，不补会抛）。**越段的最小改动**，正向呈现属 4.1 |
+| `Siege.Sim/Program.cs` | 新增 `--artisan-weight`（段 A 遗留；`strict-cli` 已上线，未注册选项直接报错）；用法行与跑局抬头打印匠人权重 |
+| `Siege.Sim/Logging/MatchLog.cs` | 类文档的 §17 记录映射由七类改八类并顺延编号；`LogHeader.ArtisanWeight`（`int?`，旧日志为 null）；新增 `TerrainEditEntry`；`TurnSnapshot.Edits`（`List<TerrainEditEntry>?`，**新日志一律写 `[]`**，旧日志才是 null） |
+| `Siege.Sim/Running/MatchSession.cs` | 建局时校验 `config.ArtisanWeight == match.ArtisanWeight`；按游标把 `Match.TerrainEdits` 写进每条小回合快照；首部写 `ArtisanWeight`；`PlayableCells` 口径改为 `Board.BaseMap.PlayableCount`（见「口径决定」） |
+| `Siege.Sim/Analysis/BalanceAnalyzer.cs` | 新增 `TerrainEditActionStat` / `TerrainEditSection` 与 `TerrainEdits(logs)`（§17 第 11 项全部指标） |
+| `Siege.Sim/Analysis/ReportWriter.cs` | 新增「§17-11 地形改造」段，三种动作逐行输出（0 次也给出） |
+| `Siege.Core/Ai/CandidateBatch.cs`、`Ai/HeuristicTurnController.cs` | `PointScore` 加 `Edit`；`RankPoints` 对匠人枚举「不改造 + 全部合法目标」；`Greedy` 与 **`Deploy` 末尾的复摆**都带上 `Edit`。**未改 `EvaluationWeights`**（D-J：不新增评估维度） |
+
+### 待决 B-1（**必须上报主会话，本段没有自行改规则**）
+
+**现行规则下，任何改造都不可能直接导致提子。** 三行证明：
+
+1. 立栅的目标边 `(A, N)` 必有一端是匠人落点 `A`（D-B / T-2），而第 5 步算提子时 `A` 已被己方匠人占据。敌串的气是「(敌子 s, 空格 c) 之间的气边」：`s = A` 不成立（A 是己子），`c = A` 不成立（A 已占）；栅栏也切不断敌串的**内部**连接（A 不是敌子）。故栅栏碰不到任何敌串的气。
+2. 搭桥只把未架桥深水变成空的可落子格 → 只**加**气，永不减气。
+3. 烧林只改地表，`Adjacency.LibertyNeighbors` 不读地表 → 气边一条不变。
+
+实证：20 局 97 次改造，`CausedCapture` **0 次**（不是样本问题，是结构性的）。
+
+受影响的文本（**未改**，请裁决）：
+
+- design **D-C** 的理由「立栅因此是真正的战术武器：可以敲掉敌串最后一口气」与裁决 **T-3**「立栅断气：能提子」；
+- `specs/terrain-edit`「改造先于提子生效」的 Scenario **立栅导致提子**、**多个改造同时生效**（后者的算例是「两道栅栏共同使一条敌串无气」）；
+- `specs/capture-resolution`「以整批最终状态判定合法性」的 Scenario **改造在提子之前应用**；
+- tasks **3.1** 的验证「AI 在能一手立栅提子时选择该手」。
+
+**反向仍然成立**：立栅可以把自己堵死（匠人与相邻己子被切开后无气）→ 自杀手，规格的「改造把自己堵死」可实现且已测。**搭桥的顺序敏感性也成立**（见下），所以「改造先于提子」这条规则本身不是空转。
+
+可裁的备选（属规则变更，段 D 扫档前必须先定）：把边目标放宽为「至少一端是匠人的几何四邻格」（即匠人 1 环内的边，不要求以落点为端点），D-C 的意图才成立。
+
+本段的处置：
+
+- `AppliedTerrainEdit.CausedCapture` 字段与日志 / 分析的相应口径**保留**（规格要求日志有它，分析第 11 项照常输出 0）；
+- 不可实现的规格 Scenario 换成**结构性 tripwire** `立栅不改变任何敌串的提子结果`（三个局面 × 每个空落点 × 每条合法栅栏穷举，共 >100 条），它红了就说明口径被放宽，届时改回规格场景；
+- 「改造先于提子」的正向守门改由两条**搭桥**用例承担（`搭桥先于提子可救活敌串`、`搭桥先于提子可使自杀手变合法`），它们对顺序严格敏感。
+
+### 其它口径决定（design 未写死，本段取定）
+
+| 口径 | 取值 | 理由 |
+|---|---|---|
+| 「是否直接导致提子」的定义 | 把该条改造**单独去掉**后重算，无气敌串集合**严格变小** | design 未定义。这样两道栅栏合围时两条都记 true（各自必要），顺带架的桥记 false。算在 `Confirm` 路径（每批至多一次、且只在真有改造时算），MUST NOT 放进 `Rehearse`——AI 每小回合调预演成千上万次 |
+| 同形 / 存档的改造表示 | **增量**（只写本局新增的改造，地图预置设施不写），排序后即规范形，空时不写 `｜` 分隔符 | ① 预置设施一局内恒定，写不写对同形等价；② 无改造时输出与改造上线前**逐字节相同**，旧存档与旧 `BoardHistory` 天然按「无改造」回填（R-6），既有 `Serialize()` 字面量期望一条都没改；③ 改造不可逆且每目标只能改一次，「已应用集合 ⇔ 当前地形」一一对应 |
+| 日志占用率的分母 `PlayableCells` | `Board.BaseMap.PlayableCount`（**开局**地图） | 首部是一局一条、终局时才写出；写终局值等于把「未来的分母」塞进第 9 项。代价：本局架的桥不进分母，占用率略偏高（20 局共 76 座桥，对 105 的基数 < 1 个百分点）。**口径变化，扫档时需注意与第二轮基线的可比性** |
+| 栅栏另一端可以是不可落子格 | 允许 | 规格字面只要求「几何四邻」，R-5 只排已有栅栏。未自行加限制 |
+| `Move` / `Replace` 碰到带改造的暂放 | 不特判，让既有校验自然拒绝（`Replace` 成非匠人 → `TerrainEditIllegal`） | UI 语义属段 C |
+
+### 2.6 缓存排查清单（守门测试：`地形派生数据不缓存Tests`）
+
+排查口径：全仓搜「持有 `MapData` / `GameBoard` 的字段」「`static readonly` 的坐标派生表」「`cache` / `memo` / `Lazy<`」，以及 `DistanceTable` / `EntireBoard` / `CoverageMap.Compute` 的全部调用方，逐处判定。
+
+| # | 位置 | 判定 | 处置 / 对应测试 |
+|---|---|---|---|
+| 1 | `MatchFlow._playableCells`（建局时算好的可落子格集合） | **曾经是缓存，改造后过期** | **已删**，`LegalRangeFor` 改为按 `Board` 现算。测试 `合法落子范围在保护期后含本局新架的桥`（走真实 `MatchFlow.LegalRangeFor`：E5 做成深水 → 不在范围内；架桥后在范围内，且范围只多这一格）；变异 **M-B15** 证红 |
+| 2 | `MatchFlow.Map`（建局时拷进字段的 `MapData`） | **曾经是缓存，改造后过期** | **已改**为 `=> Board.Map`。测试 `MatchFlow的Map随改造更新`；变异 **M-B13** 证红 |
+| 3 | `Adjacency.LibertyNeighbors` / `CoverageTargets`（气边、覆盖） | 不缓存（每次按传入 `MapData` 实时导出，类型注释明写） | 测试 `气边覆盖与棋串每次调用重算`（先各读一遍制造「若有缓存就会命中」的时机，再改造后复读） |
+| 4 | `GameBoard.GroupAt` / `LibertiesOf`（棋串与气） | 不缓存（「每次调用重算，不做增量维护也不缓存」） | 同上 + `地形写入口Tests.架桥后两格同串` / `立栅后分串` |
+| 5 | `CoverageMap.Compute`（覆盖表） | 不缓存（每次结算重算一次；5 个调用点都是现算） | 测试 `覆盖表与据点控制按新地形重算`（烧林 → 据点由「无人」变「被 P0 控制」） |
+| 6 | `SiteControl.Compute`（据点控制） | 不缓存，只读 `CoverageMap` | 同上 |
+| 7 | `MapValidator.DistanceTable`（出生区距离表） | 纯函数，不缓存；唯二调用方 `Validate`（建局）与 `Siege.Sim map` 都只看开局地图 | 测试 `距离表按传入地图现算`。**结论：本局架的桥不回头改变距离均衡校验——这是有意的**，校验是「地图设计」的守门，不是对局态 |
+| 8 | `BatchContext.EntireBoard(board)` | 每次调用现算；唯一调用点是 `LegalRangeFor`（已改现算） | 测试 1 |
+| 9 | `MatchFlow.Flags`（`FlagPlanting.Map`，建局时的地图） | 持有开局地图，**但只用于插旗**（出生区、时限）；出生区与高度都不可改造 | 不缓存地形派生量，无需改；出生区集合本身 MUST NOT 随改造变 |
+| 10 | AI：`HeuristicTurnController` / `BatchEvaluator` / `GroupSafety` / `RelicEstimate` | 不持有 `MapData` 字段；每次从 `MatchPublicView.Board`（Clone，带当前地形）现取 | 测试 `AI枚举改造目标Tests.单点枚举…`（枚举出的目标按当前 `Board.Map` 判定合法） |
+| 11 | `Siege.Presentation` `DefaultBoardView.From` | 不缓存：每次从公开快照的 `Board.Map` 现取地表与栅栏集合 | 测试 `表现层的地形视图随改造更新` |
+| 12 | `src/godot/scripts/BoardView`（`_tileMaterials` / `_tileBase` / `_levels`） | 缓存的是**渲染态**，且 `GameRoot` 每次刷新都重跑 `_board.Build(...)` 整体重建 | 无失效机制需要加。`_levels` 缓存的高度不受影响（改造 MUST NOT 改高度）；「被烧林地呈现为草地」「新桥 / 新栅栏的外观」属 4.2，段 C |
+| 13 | `Siege.Sim` 日志首部 `PlayableCells` | 不是缓存，是**口径**：一局一条、终局时写出 | 已改取 `BaseMap`，见上表 |
+| 14 | `RelicLedger` / `RelicGenerationRecord` | 不持有 `MapData`；信物位置由地图给定，改造不动信物（R-4） | 无需处理 |
+
+### 既有测试改写逐条
+
+| # | 文件 / 用例 | 旧 → 新 | 依据 |
+|---|---|---|---|
+| 1 | `BatchPreview/非法批次必须说明原因并高亮Tests.八类失败标题互不相同` → 改名 `十类失败标题互不相同` | 标题数 `8` → `10` | 新增两类改造失败类别；该用例穷举 `Enum.GetValues<BatchFailureKind>()`，不补标题会直接抛 |
+| 2 | `BoardTopology/四邻接Tests.几何邻居枚举只在允许名单内直接调用` | 允许名单加第 ③ 条 `TerrainEditRules` | 裁决 T-2 把改造目标口径定成**几何四邻**（不是气边——深水没有气边，搭桥会变成不可能），而 `TerrainEditRules` 只接受 `MapData`，走不了 `GameBoard.Neighbors`。名单只放这一个类型，任何第二处「自己遍历四邻判改造目标」仍会红。**`.trellis/spec/core/boundaries.md` 需同步补两行（地形写入口 / 改造合法性）与这条名单——属 6.2，段 E** |
+| 3 | `tests/…/BatchFixtures.cs` | `P(...)` 加可选 `edit`；新增 `Artisan(notation, edit)` | 夹具 |
+| 4 | `tests/…/MatchFixtures.cs` | `Map` / `Create` / `Started` 各加一个可选 `TerrainData` 重载 | 9×9 合成对局图原本是全平地，测不了改造 |
+| 5 | `tests/…/SimFixtures.cs` | `Synthetic` 加 `artisanWeight`；`Turn` 加 `edits` 与 `legacyNoEdits`。**默认写空表 `[]`（新日志形态），`legacyNoEdits: true` 才是缺字段的旧日志** | R-6 的判定靠「字段缺失」，默认必须是新日志形态，否则所有合成样本都会被当成旧日志 |
+
+「因 R-1 重新取值」的逐条：**0 条**（段 A 已论证全仓无「种子 → 具体信物内容」的期望值）。
+
+### 新增测试（48 条：827 → 875）
+
+| 文件 | 条数 | 覆盖 |
+|---|---|---|
+| `TerrainEditing/地形写入口Tests` | 9 | 2.1：架桥后同串 / 立栅后分串 / 烧林后可覆盖且气边不变 / 只加不减且不动高度障碍信物据点 / 对局中改造与预置设施完全等价（逐格比可落子性、气边、覆盖）/ 同一目标不能写两次 / 同时生效与顺序无关 / 副本不影响原盘 / **守门：写入口之外不得构造改造后的地形**（IL 扫描 `new TerrainData(`，白名单 = 写入口 + `TerrainData.Flat` + `MapFile` + 基准图，另有「扫描器确实命中写入口」的反面断言） |
+| `TerrainEditing/改造合法性Tests` | 11 | 2.2 / 2.3：四邻且不含自身格 / 已改造过的目标不在集合 / **`Reject` 与 `LegalTargets` 穷举一致** / 非匠人不得改造 / 目标必须相邻 / 不带目标与无目标可改仍可落子 / 批内同一目标唯一（两端顺序相反也算同一个）/ 当批不能站上新桥也不能拿它当跳板、下一批次可以 / 改造不额外占额度 / 改造随暂放留在批次里 / 记法往返 |
+| `TerrainEditing/改造先于提子Tests` | 8 | 2.4：**搭桥先于提子可救活敌串** / **搭桥先于提子可使自杀手变合法**（两条对顺序严格敏感）/ 改造导致的自杀手 / **立栅不改变任何敌串的提子结果**（待决 B-1 的 tripwire）/ 多个改造同时生效且顺序无关 / 本批改造一律不记致提子 / 烧林后的揭示与控制（钩子看到的已是改造后地形）/ 预演不污染正式盘面的地形 |
+| `TerrainEditing/同形与存档纳入设施Tests` | 5 | 2.5：多一道栅栏 / 桥 / 烧痕即不同形（四份两两不同 + `BoardHistory` 实测）/ 无改造时逐字节与改造上线前相同 / 改造段排序是规范形 / 盘面序列化往返（站在新桥上、站在烧痕上）+ 旧存档回填 + 损坏段抛 `FormatException` / **对局存档往返保留改造与匠人权重**（含 `restored.Publish().ArtisanWeight == 18` 与旧存档 `== 10` 两处） |
+| `TerrainEditing/地形派生数据不缓存Tests` | 6 | 2.6，见上表（全部走各自的**真实调用路径**，不自己重算一遍恒真断言） |
+| `AiDecision/AI枚举改造目标Tests` | 4 | 3.1：单点枚举同时产出带 / 不带改造且三种动作都在、每个目标都经唯一实现判过合法 / 非匠人没有改造候选 / **选中的批次连改造一起摆回暂放** / 候选去重的键区分带不带改造 |
+| `MatchTelemetry/地形改造日志与分析Tests` | 5 | 3.2–3.4：真实跑局写日志 + 往返 + **离线重放重建地形** / 匠人权重写进批次配置与日志首部（含反向 10）/ 第 11 项手算样本（含烧林 0 次照常输出、旧日志整局排除并计数）/ 一条快照缺字段就整局排除 / 真实批次的第 11 项分析自洽 |
+
+### 验证结果
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 编译 | `dotnet build` | EXIT 0，零警告（`TreatWarningsAsErrors` 已开） |
+| 全量 | `dotnet test -c Release` | EXIT 0，**875** 通过（基线 827 + 48） |
+| Godot 编译 | `--headless --path src/godot --build-solutions --quit` | EXIT 0 |
+| 冒烟跑局 | `run --out sim-out/b-smoke --seed 1 --count 1 --difficulty Standard` | EXIT 0；`config.json` 写出 `"ArtisanWeight": 10`；日志首部 `ArtisanWeight = 10`；该局真的发生了 3 次搭桥 |
+| 权重选项 | `run --out sim-out/b-w18 … --artisan-weight 18` | EXIT 0；`config.json` 与日志首部都是 **18**，其余配置不变（分值仍 5/15/45） |
+| 20 局 | `run --out sim-out/b-20 --seed 1 --count 20 --difficulty Standard --gzip` | EXIT 0，0 失败局 |
+| 分析 | `analyze --dir sim-out/b-20` | EXIT 0，第 11 项见下 |
+
+`sim-out/` 不提交。
+
+### 20 局第 11 项报告（种子 1–20，Standard，分值 5/15/45，匠人权重 10）
+
+```
+## §17-11 地形改造（artisan-terrain-edit）
+- 纳入 20 局，排除缺改造字段的旧日志 0 局
+- 改造总次数 97，每局平均 4.85 次；整局无改造 0 局
+  - 搭桥：76 次（78.4%），其中直接导致提子 0 次
+  - 立栅：20 次（20.6%），其中直接导致提子 0 次
+  - 烧林：1 次（1.0%），其中直接导致提子 0 次
+- 带改造的匠人占已落匠人：89.0%（97/109）
+- 改造直接导致提子 0 次；首次改造平均第 3.4 大回合
+- 改造过的玩家胜率 25.5% (12/47，95% 区间 15.3%–39.5%)
+- 终局新增：桥 76 座，栅栏 20 道，被烧林地 1 格
+```
+
+要点（20 局样本，只供段 D 参考，不作结论）：
+
+- **搭桥占 78%**；落盘的匠人里 89% 都带了改造，说明「改造可选」在 AI 手里不是摆设；
+- **烧林 1 次**（全图只有 4 格林地，与 D-H 的预期一致；报告照常输出该行，未省略）；
+- **改造致提子 0 次**——见待决 B-1，这是结构性的，不是样本不足；
+- 与第二轮基线只作结构性对照（R-1 已使基线作废）。
+
+### AI 枚举取舍与耗时对照（3.1 / D-J）
+
+**保留「全部合法目标 + 不改造」的全枚举**，不退到退化版。
+
+| 口径 | 实测 |
+|---|---|
+| 第二轮基线 | 19.2 秒/局 |
+| 本段 20 局（第一次跑） | 均值 **20.1** s/局（min 7.5，max 27.4）→ +4.7% |
+| 本段 20 局（补完测试后复跑同一批种子） | 均值 **14.8** s/局（min 5.9，max 19.4） |
+
+两次跑之间的差异远大于「有没有枚举改造」可能带来的差异（本机并行度 28，第一次跑时同时在跑 `dotnet test`），因此**没有观察到显著上升**。搜索规模上也解释得通：匠人至多是 5 种持有类型之一，且只对四邻枚举（每个合法落点至多 +8 个候选），其余五种类型一个都不多枚。
+
+**顺带一条重要事实**：D-J 给的退路「只枚举能直接导致提子的改造 + 不改造」在现行规则下是**空集**（待决 B-1），即退路本身也失效——将来若真要降规模，得换别的剪枝（例如只枚举搭桥与烧林，或只枚举与己方棋串相邻的目标）。
+
+### 变异验证逐条
+
+脚本纪律照 `.trellis/spec/core/testing.md`：二进制读写、锚点按各文件**实测行尾**归一并 `assert count == 1`、备份名带时间戳、还原写在 `finally` 并与「改之前读到的原文」逐字节 `assert`、`DOTNET_CLI_UI_LANGUAGE=en`、红绿以退出码为准。基线 EXIT 0 / 875。
+
+| 编号 | 变异 | 文件（行尾） | 结果 | 代表性红测 |
+|---|---|---|---|---|
+| **M-B1** | `GameBoard.ApplyTerrainEdits` 绕开写入口，自己 `new TerrainData(...)` 加桥（第二份地形写入实现） | `Board/GameBoard.cs`（CRLF） | EXIT 1，红 **3** | `地形写入口之外不得构造改造后的地形`、`同一目标不能被写两次`、`盘面序列化往返保留改造` |
+| **M-B2** | 预演去掉「同一目标批内唯一」 | `Batch/BatchRehearsal.cs`（CRLF） | EXIT 1，红 **2** | `同一批次内同一目标只能被改造一次`、`AI…选中的批次连改造一起摆回暂放` |
+| **M-B3** | 改造目标口径由几何四邻改成**气边**（`Adjacency.LibertyNeighbors`） | `Board/TerrainEditRules.cs`（LF） | EXIT 1，红 **4** | `合法目标枚举只含几何四邻且不含自身格`、`拒绝理由与合法目标集合一致`、两条 AI 枚举用例（深水无气边 → 搭桥全部消失） |
+| **M-B4** | 删掉「只有匠人能带改造」的检查 | `Batch/BatchRehearsal.cs`（CRLF） | EXIT 1，红 **1** | `非匠人不得改造` |
+| **M-B5** | **把改造挪到提子之后**（预演第 4、5 步对调） | `Batch/BatchRehearsal.cs`（CRLF） | EXIT 1，红 **2** | `搭桥先于提子可救活敌串`、`本批改造一律不记致提子` |
+| **M-B6** | 同形 / 存档表示**去掉设施段**（`Serialize` 不写改造） | `Board/GameBoard.cs`（CRLF） | EXIT 1，红 **4** | `棋子分布相同但多一道栅栏即不同形`、`改造段的排序是规范形`、`盘面序列化往返保留改造`、`对局存档往返保留改造与匠人权重` |
+| **M-B7** | 改造合法性改按「本批其余改造已生效后的地形」判（**批内链式放行**） | `Batch/BatchRehearsal.cs`（CRLF） | EXIT 1，红 **1** | `同一批次内同一目标只能被改造一次`（失败类别由「批内重复」变成「已被改造过」） |
+| **M-B8** | AI 不枚举改造目标（`EditOptions` 只 yield `null`） | `Ai/HeuristicTurnController.cs`（LF） | EXIT 1，红 **4** | 两条 AI 枚举用例 + `真实跑局把改造写进日志且可离线重建地形`、`真实批次的第11项分析自洽`（真实样本里改造归零） |
+| **M-B9** | AI **复摆丢掉改造**（`Deploy` 末尾 `Stage` 不传 `Edit`） | `Ai/HeuristicTurnController.cs`（LF） | EXIT 1，红 **3** | `选中的批次连改造一起摆回暂放` + 两条真实跑局遥测 |
+| **M-B10** | 正式结算不写地形（只有预演副本写） | `Batch/SettlementDriver.cs`（CRLF） | EXIT 1，红 **14** | 预演副本与正式盘面的逐字节核对当场抛；`日志覆盖七类记录`、`真实跑局把可落子格写进日志首部`、`领先者胜率回归` 等大面积红 |
+| **M-B11** | 分析把缺改造字段的旧日志当成「这局没改造」（不排除） | `Sim/Analysis/BalanceAnalyzer.cs`（CRLF） | EXIT 1，红 **2** | `一局里只要有一条快照缺改造字段就整局排除`、`第11项改造分析按手算样本输出` |
+| **M-B12** | 跑局不把匠人权重写进日志首部 | `Sim/Running/MatchSession.cs`（LF） | EXIT 1，红 **2** | `匠人权重写进批次配置与日志首部`、`真实跑局把改造写进日志且可离线重建地形` |
+| **M-B13** | `MatchFlow.Map` 退回「建局时的快照」（`=> Board.BaseMap`） | `Match/MatchFlow.cs`（LF） | EXIT 1，红 **1** | `MatchFlow的Map随改造更新`（2.6 缓存排查第 2 项） |
+| **M-B14** | `Publish()` 把匠人权重写成默认值（读到了但没传） | `Match/MatchFlow.cs`（LF） | EXIT 1，红 **1** | `对局存档往返保留改造与匠人权重`（`restored.Publish().ArtisanWeight == 18`） |
+| **M-B15** | `LegalRangeFor` 退回按**开局地图**算可落子格（等价于把建局时的缓存加回去） | `Match/MatchFlow.cs`（LF） | EXIT 1，红 **1** | `合法落子范围在保护期后含本局新架的桥`（2.6 缓存排查第 1 项） |
+
+`tasks` 点名要求的六条：2.1 的「写入口之外不得直接构造带不同设施的 `TerrainData`」= **M-B1**；2.2 的「去掉批内唯一 / 改用气边口径 / 允许非匠人带目标」= **M-B2 / M-B3 / M-B4**；2.4 的「把改造挪到提子之后」= **M-B5**；2.5 的「同形表示去掉设施」= **M-B6**。
+自做九条：**M-B7**（批内链式放行）、**M-B8**、**M-B9**（AI 两条）、**M-B10**（结算不写地形）、**M-B11**（旧日志不排除）、**M-B12**（日志漏配置）、**M-B13** / **M-B15**（两处地形缓存回归）、**M-B14**（公开视图漏传）。
+
+三条纪律注记：
+
+1. 初版的 M-B4 / M-B6 / M-B11 用 `if (false)` 短路，结果 `TreatWarningsAsErrors` 下 **CS0162 不可达代码**直接编译失败——EXIT 1 但一条测试都没跑。这不是「守门证红」，是**假红**。已全部改成运行时恒假的条件（删掉整个检查块 / `_edits.Count > 0 && Height < 0` / `log.Turns.Count < 0`）后重跑，才拿到真实的红测名单。脚本因此加了一条：抓不到统计行就打印输出尾部，免得把编译失败当成守门生效。
+2. 脚本按各文件**实测行尾**归一锚点并 `assert count == 1`；本批同时命中 CRLF 文件（`GameBoard.cs`、`BatchRehearsal.cs`、`SettlementDriver.cs`、`BalanceAnalyzer.cs`）与 LF 文件（`TerrainEditRules.cs`、`HeuristicTurnController.cs`、`MatchFlow.cs`、`MatchSession.cs`），两类都正确变异。
+3. 全部变异在 `finally` 里还原并与「改之前读到的原文」逐字节 `assert`；还原后复跑全量 → EXIT 0、**875** 通过。
+
+### 越段的最小改动（语义留段 C）
+
+1. `FailurePresentation.TitleOf` 补「改造目标非法」「同一批次内重复的改造目标」两条标题——`TitleOf` 的 `switch` 以 `throw` 收尾且有穷举守门，不补会直接抛。**只补了标题**，详情沿用 Core 文案；4.1 要做的「可改造目标高亮、预演按改造后地形算气与自杀风险、棋串读法区分栅栏侧」一概未做。
+2. `src/godot/` **零改动**（`--build-solutions` EXIT 0）。4.2 的匠人轮廓定稿、可改造目标高亮、改造落成反馈、被烧林地呈现为草地全部留给段 C；`BoardView` 每次刷新整体重建，段 C 不需要再加失效机制（2.6 第 12 条）。
+
+### 偏离与待决（汇总给主会话）
+
+1. **待决 B-1：立栅不可能致提子**（详见上文）。影响 design D-C / 裁决 T-3、`terrain-edit` 与 `capture-resolution` 的三条 Scenario、tasks 3.1 的验证方式。**段 D 扫档前必须裁决**——若决定放宽边目标口径，规则、AI 枚举与相关测试都要改，届时扫档数据作废。
+2. **`PlayableCells` 口径改为开局地图**。第 9 项占用率的分母因此不含本局架的桥（20 局 76 座）。
+3. **`boundaries.md` 需补两行**（地形写入口、改造合法性）并写明「地形不再是对局内不变量」，另需把 `Adjacency.Neighbors` 守门名单的第 ③ 条 `TerrainEditRules` 写进文档。属 6.2，段 E。
+4. **openspec 的 Requirement 标题仍叫「五种…」**（段 A 检查第 6 项遗留），属 6.1，段 E。
+5. 段 C 需要的接口都已就位：`TerrainEditRules.LegalTargets`（可改造目标）、`GameBoard.TerrainEdits`（本局改造）、`MatchPublicView.Board.Map`（含设施的当前地形）、`Placement.Edit`（预演里的改造目标）。`MatchFlow.TerrainEdits` 含改造方，**MUST NOT** 进公开视图（R-3）。

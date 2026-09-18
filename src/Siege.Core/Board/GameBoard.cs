@@ -18,17 +18,20 @@ namespace Siege.Core.Board;
 public sealed class GameBoard
 {
     private readonly Occupant?[] _occupants;
+    private readonly List<TerrainEdit> _edits;
 
     private GameBoard(MapData map)
-        : this(map, new Occupant?[map.Width * map.Height])
+        : this(map, map, new Occupant?[map.Width * map.Height], [])
     {
     }
 
-    /// <summary>副本专用：直接接管一份已复制好的占用数组，不经过 <see cref="Load"/>，不触发校验。</summary>
-    private GameBoard(MapData map, Occupant?[] occupants)
+    /// <summary>副本专用：直接接管一份已复制好的占用数组与改造列表，不经过 <see cref="Load"/>，不触发校验。</summary>
+    private GameBoard(MapData baseMap, MapData map, Occupant?[] occupants, List<TerrainEdit> edits)
     {
+        BaseMap = baseMap;
         Map = map;
         _occupants = occupants;
+        _edits = edits;
     }
 
     /// <summary>按地图数据创建棋盘，先执行静态校验；不通过则抛 <see cref="MapValidationException"/>。</summary>
@@ -54,10 +57,20 @@ public sealed class GameBoard
     /// 副本与原盘面之后的修改互不可见。批次结算层的合法性预演在副本上进行，
     /// 这是"预演不污染正式盘面"得以成立的前提。
     /// </summary>
-    public GameBoard Clone() => new(Map, (Occupant?[])_occupants.Clone());
+    public GameBoard Clone() => new(BaseMap, Map, (Occupant?[])_occupants.Clone(), [.. _edits]);
 
-    /// <summary>地图静态数据。</summary>
-    public MapData Map { get; }
+    /// <summary>
+    /// 地图数据。<b>地形不再是对局内的不变量</b>（artisan-terrain-edit）：每次改造经 <see cref="ApplyTerrainEdits"/> 换上一份新的
+    /// <see cref="MapData"/>，气边、覆盖、棋串、气、据点与信物控制都从这里实时导出，因此自动按新地形重算。
+    /// 消费方 MUST NOT 把它缓存进字段——要缓存就得自己负责失效，本项目的做法是每次读 <c>Board.Map</c>。
+    /// </summary>
+    public MapData Map { get; private set; }
+
+    /// <summary>本局开局时的地图（不含对局中的改造）。存档、日志与"改造了什么"的比对读它。</summary>
+    public MapData BaseMap { get; }
+
+    /// <summary>本局已完成的改造，按应用顺序。不可逆，只增不减（terrain-edit「改造不可逆」）。</summary>
+    public ImmutableArray<TerrainEdit> TerrainEdits => [.. _edits];
 
     public int Width => Map.Width;
 
@@ -217,10 +230,16 @@ public sealed class GameBoard
     public bool HasPlayableEmptyCell() => AllCoords().Any(c => this[c].IsPlayableEmpty);
 
     /// <summary>
-    /// 确定性盘面序列化。内容<b>只含</b>每格的占用者与棋子类型，
+    /// 确定性盘面序列化。内容<b>只含</b>每格的占用者与棋子类型，以及对局中完成的地形改造（桥 / 栅栏 / 被烧的地表）；
     /// 不含手牌、征募结果、信物控制、势力值、行动顺序或当前行动者。
-    /// 直接服务于批次结算的盘面同形禁则（设计文档 §6.2）。
+    /// 直接服务于批次结算的盘面同形禁则（设计文档 §6.2 + terrain-edit「盘面同形禁则纳入设施」）。
     /// </summary>
+    /// <remarks>
+    /// 改造段是<b>增量</b>：只写对局中新增的改造，地图预置的桥与栅栏不写。理由有三——
+    /// ① 预置设施在一局内恒定，写不写对同形比对等价；② 无改造时输出与改造上线之前逐字节相同，旧存档与旧历史天然按"无改造"读入（R-6）；
+    /// ③ 改造不可逆且同一目标只能改一次，"已应用集合"与"当前地形"一一对应，排序后即规范形。
+    /// 格式：棋子网格后接 <c>|</c> 与按记法字典序排好的改造列表，如 <c>…|B:F7,F:F6-G6</c>；无改造时不写 <c>|</c>。
+    /// </remarks>
     public string Serialize()
     {
         var sb = new StringBuilder(Width * Height * 2 + Height);
@@ -252,8 +271,17 @@ public sealed class GameBoard
             }
         }
 
+        if (_edits.Count > 0)
+        {
+            sb.Append(TerrainSeparator);
+            sb.Append(string.Join(",", _edits.Select(e => e.ToString()).Order(StringComparer.Ordinal)));
+        }
+
         return sb.ToString();
     }
+
+    /// <summary>棋子网格与改造段之间的分隔符。</summary>
+    private const char TerrainSeparator = '|';
 
     /// <summary>
     /// 从 <see cref="Serialize"/> 的输出恢复盘面：先按地图静态校验创建空盘，再逐格写入占用。
@@ -278,7 +306,29 @@ public sealed class GameBoard
     private void Fill(string serialized)
     {
         ArgumentNullException.ThrowIfNull(serialized);
-        string[] rows = serialized.Trim().Split('/');
+        string text = serialized.Trim();
+
+        // 改造段先读：气边、覆盖与"该格可不可落子"都依赖地形，棋子必须写进改造后的地形里
+        // （否则本局架过桥的格会被 Place 当成未架桥的深水拒绝）。缺该段即"无改造"，旧存档由此天然回填（R-6）。
+        int bar = text.IndexOf(TerrainSeparator, StringComparison.Ordinal);
+        if (bar >= 0)
+        {
+            string tail = text[(bar + 1)..];
+            text = text[..bar];
+            if (tail.Length > 0)
+            {
+                try
+                {
+                    ApplyTerrainEdits(tail.Split(',').Select(TerrainEdit.Parse));
+                }
+                catch (SiegeRuleException ex)
+                {
+                    throw new FormatException($"盘面序列化的改造段与地图不符：{ex.Message}", ex);
+                }
+            }
+        }
+
+        string[] rows = text.Split('/');
         if (rows.Length != Height)
         {
             throw new FormatException($"盘面序列化行数 {rows.Length} 与地图高度 {Height} 不符。");
@@ -326,6 +376,24 @@ public sealed class GameBoard
         }
 
         _occupants[Index(c)] = new Occupant(owner, type);
+    }
+
+    /// <summary>
+    /// 最小写入原语：同时应用一组地形改造。<b>不做任何规则判定</b>——目标合法性（几何四邻、只有匠人能带、批内唯一）
+    /// 由 <see cref="TerrainEditRules"/> 与批次结算层负责；本方法只经唯一写入口 <see cref="TerrainWriter.ApplyAll"/> 换上新地形。
+    /// 整组改造同时生效、结果与顺序无关；任一目标不满足动作前提即整组抛出，地形不变（原子）。
+    /// </summary>
+    public void ApplyTerrainEdits(IEnumerable<TerrainEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+        TerrainEdit[] list = [.. edits];
+        if (list.Length == 0)
+        {
+            return;
+        }
+
+        Map = TerrainWriter.ApplyAll(Map, list);
+        _edits.AddRange(list);
     }
 
     /// <summary>最小写入原语：清除指定格的占用。</summary>

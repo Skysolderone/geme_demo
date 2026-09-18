@@ -202,6 +202,41 @@ public sealed record SiteSection(
     long FinalPositionBonus,
     double HighGroundShare);
 
+/// <summary>某种改造动作的次数与占比。占比分母是纳入局的改造总次数；一次都没有时如实给出 0 与 0%（规格明令 MUST NOT 省略该行）。</summary>
+public sealed record TerrainEditActionStat(string Action, int Count, double Share, int CausedCaptures);
+
+/// <summary>
+/// 地形改造分析（match-telemetry 平衡分析方向 11）。
+/// 纳入 = 每条小回合快照都有改造字段（<see cref="TurnSnapshot.Edits"/> 非 <c>null</c>）；
+/// artisan-terrain-edit 之前的旧日志整局计入 <paramref name="Skipped"/>（R-6），MUST NOT 回填成空表。
+/// </summary>
+/// <param name="MeanEditsPerMatch">每局平均改造次数（分母 = 纳入局数，含一次都没改造的局）。</param>
+/// <param name="Actions">三种动作各自的次数与占比，按枚举顺序（搭桥 / 立栅 / 烧林），0 次也在列。</param>
+/// <param name="ArtisansPlaced">纳入局中落盘的匠人总枚数（含不带改造的）。</param>
+/// <param name="ArtisansWithEdit">其中带改造的枚数；<paramref name="EditingArtisanShare"/> 是它占已落匠人的比例。</param>
+/// <param name="CausedCaptures">直接导致提子的改造次数（口径见 <c>AppliedTerrainEdit.CausedCapture</c>）。</param>
+/// <param name="MeanFirstEditRound">首次改造所在大回合的平均；<paramref name="MatchesWithoutEdit"/> 局整局无改造，不进均值。</param>
+/// <param name="WinRateOfEditors">样本 = 每局中至少改造过一次的玩家；成功 = 该玩家是本局获胜者。</param>
+/// <param name="FinalBridges">终局时本局新增的桥数合计（不含地图预置）。</param>
+/// <param name="FinalFences">终局时本局新增的栅栏数合计。</param>
+/// <param name="FinalBurns">终局时被烧掉的林地数合计。</param>
+public sealed record TerrainEditSection(
+    int Matches,
+    int Skipped,
+    int TotalEdits,
+    double MeanEditsPerMatch,
+    List<TerrainEditActionStat> Actions,
+    int ArtisansPlaced,
+    int ArtisansWithEdit,
+    double EditingArtisanShare,
+    int CausedCaptures,
+    double MeanFirstEditRound,
+    int MatchesWithoutEdit,
+    Proportion WinRateOfEditors,
+    int FinalBridges,
+    int FinalFences,
+    int FinalBurns);
+
 public sealed record AiQualitySection(
     int SettledBatches,
     int Captures,
@@ -233,7 +268,8 @@ public sealed record BalanceReport(
     GrowthAxisSection GrowthAxes,
     StallingSection Stalling,
     AiQualitySection AiQuality,
-    SiteSection Sites);
+    SiteSection Sites,
+    TerrainEditSection TerrainEdits);
 
 /// <summary>
 /// 离线平衡分析（match-telemetry 三条 Requirement）：只读日志，不重跑对局，改口径无需重跑（design.md D6）。
@@ -281,7 +317,103 @@ public static class BalanceAnalyzer
             GrowthAxes(included),
             Stalling(included),
             AiQuality(included),
-            Sites(included));
+            Sites(included),
+            TerrainEdits(included));
+    }
+
+    // ---------- §17 第 11 项 地形改造（artisan-terrain-edit 3.4） ----------
+
+    private static TerrainEditSection TerrainEdits(List<MatchLog> logs)
+    {
+        string[] actions = Enum.GetNames<TerrainEditKind>();
+        var counts = actions.ToDictionary(a => a, _ => 0);
+        var actionCaptures = actions.ToDictionary(a => a, _ => 0);
+        int matches = 0, skipped = 0, artisans = 0, withEdit = 0, causedCaptures = 0, withoutEdit = 0;
+        int editorWins = 0, editorSamples = 0;
+        var firstRounds = new List<double>();
+
+        foreach (MatchLog log in logs)
+        {
+            // 缺改造字段的旧日志整局排除并计数（R-6）：哪怕只有一条快照缺字段也排除，MUST NOT 把它当成"这局没改造"。
+            if (log.Turns.Any(t => t.Edits is null))
+            {
+                skipped++;
+                continue;
+            }
+
+            matches++;
+            var editors = new HashSet<int>();
+            int? firstRound = null;
+            foreach (TurnSnapshot turn in log.Turns)
+            {
+                // 已落匠人：从落子记录里数（快照的 Placements 是"坐标:类型"，由前后盘面比对得出）。
+                // 带改造的匠人不从落子记录推——那里没有改造信息；改造记录自带匠人落点，且一枚匠人至多带一个改造。
+                artisans += turn.Placements.Count(IsArtisanPlacement);
+                withEdit += turn.Edits!.Select(e => e.Artisan).Distinct(StringComparer.Ordinal).Count();
+                foreach (TerrainEditEntry edit in turn.Edits!)
+                {
+                    counts[edit.Action]++;
+                    causedCaptures += edit.CausedCapture ? 1 : 0;
+                    actionCaptures[edit.Action] += edit.CausedCapture ? 1 : 0;
+                    editors.Add(edit.Player);
+                    firstRound ??= turn.MajorRound;
+                }
+            }
+
+            if (firstRound is { } round)
+            {
+                firstRounds.Add(round);
+            }
+            else
+            {
+                withoutEdit++;
+            }
+
+            List<int> winners = log.Result?.Winners ?? [];
+            foreach (int editor in editors)
+            {
+                editorSamples++;
+                editorWins += winners.Contains(editor) ? 1 : 0;
+            }
+        }
+
+        int total = counts.Values.Sum();
+        return new TerrainEditSection(
+            matches,
+            skipped,
+            total,
+            matches == 0 ? 0 : (double)total / matches,
+            [.. actions.Select(a => new TerrainEditActionStat(
+                a, counts[a], total == 0 ? 0 : (double)counts[a] / total, actionCaptures[a]))],
+            artisans,
+            withEdit,
+            artisans == 0 ? 0 : (double)withEdit / artisans,
+            causedCaptures,
+            Statistics.Mean(firstRounds),
+            withoutEdit,
+            Statistics.Wilson(editorWins, editorSamples),
+
+            // 终局地形 = 按日志重放全部改造（match-telemetry「地形可离线重建」）：三种动作各自的次数即新增桥 / 栅栏 / 被烧林地。
+            counts[nameof(TerrainEditKind.Bridge)],
+            counts[nameof(TerrainEditKind.Fence)],
+            counts[nameof(TerrainEditKind.Burn)]);
+    }
+
+    /// <summary>
+    /// 该条落子记录是不是一枚匠人。快照里的格式是 <c>坐标:类型</c>；
+    /// 也容忍 <c>Placement.ToString</c> 的完整形式 <c>坐标:类型+改造</c>，免得格式一变这里就静默数成 0。
+    /// </summary>
+    private static bool IsArtisanPlacement(string placement)
+    {
+        int colon = placement.IndexOf(':', StringComparison.Ordinal);
+        if (colon < 0)
+        {
+            return false;
+        }
+
+        int plus = placement.IndexOf('+', colon);
+        string type = plus < 0 ? placement[(colon + 1)..] : placement[(colon + 1)..plus];
+        return string.Equals(type, nameof(PieceType.Artisan), StringComparison.Ordinal);
     }
 
     // ---------- §17 第 10 项 据点（scoring-sites 3.3） ----------

@@ -16,24 +16,31 @@ public sealed record RehearsalResult(
     GameBoard? ProjectedBoard);
 
 /// <summary>
-/// 六步合法性预演（设计文档 §6.1）的唯一实现。以<b>整批最终状态</b>判定，MUST NOT 逐枚结算。
-/// 全部计算在 <see cref="GameBoard.Clone"/> 出的副本上进行，对正式盘面零副作用。
+/// 七步合法性预演（设计文档 §6.1 + artisan-terrain-edit「改造先于提子生效」）的唯一实现。
+/// 顺序为：① 落点与改造目标合法性 → ② 额度与库存 → ③ 放置 → ④ 应用全部改造 → ⑤ 同时提子 → ⑥ 自杀手 → ⑦ 同形。
+/// 以<b>整批最终状态</b>判定，MUST NOT 逐枚结算。
+/// 全部计算在 <see cref="GameBoard.Clone"/> 出的副本上进行，对正式盘面零副作用（副本自带独立的地形快照）。
 /// </summary>
 public static class BatchRehearsal
 {
     /// <summary>
-    /// 第 1–2 步：落点为空、地形可落子、符合合法落子范围；数量不超上限、类型不超库存。
+    /// 第 1–2 步：落点为空、地形可落子、符合合法落子范围、改造目标满足 <c>terrain-edit</c> 的全部约束；数量不超上限、类型不超库存。
     /// 暂放操作与确认路径共用这一份实现——绕过 UI 直接提交超量批次时同样被拒绝。
     /// 返回 <c>null</c> 表示通过。
     /// </summary>
+    /// <remarks>
+    /// 第 1 步的<b>全部</b>判定基于本批次开始前的地形，即 <paramref name="board"/> 此刻的 <see cref="GameBoard.Map"/>——
+    /// 本批新架的桥还没写进去，"当批不能站上新桥"因此由既有的"地形可落子"判定天然成立，不需要额外规则（D-D）。
+    /// </remarks>
     public static BatchFailure? ValidateShape(GameBoard board, BatchContext context, IReadOnlyList<Placement> placements)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(placements);
 
-        // 第 1 步：逐个落点
+        // 第 1 步：逐个落点 + 改造目标
         var seen = new HashSet<Coord>();
+        var seenEdits = new HashSet<TerrainEdit>();
         foreach (Placement placement in placements)
         {
             Coord c = placement.Coord;
@@ -63,6 +70,28 @@ public static class BatchRehearsal
             {
                 return BatchFailure.OutOfLegalRange(c);
             }
+
+            if (placement.Edit is not { } edit)
+            {
+                continue;
+            }
+
+            if (placement.Type != TerrainEditRules.EditorType)
+            {
+                return BatchFailure.NotArtisan(c, placement.Type);
+            }
+
+            // 合法性唯一实现；按批次开始前的地形判定（本批的改造还没应用到 board.Map 上）。
+            if (TerrainEditRules.Reject(board.Map, c, edit) is { } reason)
+            {
+                return BatchFailure.IllegalEdit(c, edit, reason);
+            }
+
+            // 同一目标批内唯一（D-D）。FenceEdge 构造时已归一，(a,b) 与 (b,a) 是同一个键。
+            if (!seenEdits.Add(edit))
+            {
+                return BatchFailure.DuplicateEdit(c, edit);
+            }
         }
 
         // 第 2 步：数量与库存
@@ -88,7 +117,7 @@ public static class BatchRehearsal
     }
 
     /// <summary>
-    /// 完整六步预演。空批次即 Pass：合法、无提子、不走第 3–6 步（否则"结算后盘面"必然等于上一次提交而误触同形）。
+    /// 完整七步预演。空批次即 Pass：合法、无提子、不走第 3–7 步（否则"结算后盘面"必然等于上一次提交而误触同形）。
     /// </summary>
     public static RehearsalResult Rehearse(
         GameBoard board, BatchContext context, IReadOnlyList<Placement> placements, BoardHistory history)
@@ -116,11 +145,15 @@ public static class BatchRehearsal
             projected.Place(placement.Coord, context.Player, placement.Type);
         }
 
-        // 第 4 步：一次性求出全部无气敌串的并集，再统一移除
+        // 第 4 步：同时应用本批次的全部改造（terrain-edit「改造先于提子生效」/ 裁决 T-3）。
+        // 顺序不可调换：立栅能敲掉敌串最后一口气而直接提子，对称地，堵死自己就是自杀手。
+        projected.ApplyTerrainEdits(EditsOf(placements));
+
+        // 第 5 步：一次性求出全部无气敌串的并集，再统一移除
         ImmutableArray<CapturedStone> captures = CaptureResolver.FindCaptured(projected, context.Player);
         projected.RemoveStones(captures.Select(s => s.Coord));
 
-        // 第 5 步：提子后重算当前玩家的全部棋串（裁决记录 2：全量，不收窄到受影响子集）
+        // 第 6 步：提子后重算当前玩家的全部棋串（裁决记录 2：全量，不收窄到受影响子集）
         var dead = new SortedSet<Coord>();
         foreach (Group group in projected.GroupsOf(context.Player))
         {
@@ -135,7 +168,7 @@ public static class BatchRehearsal
             return Rejected(BatchFailure.Suicide([.. dead]), projected, captures);
         }
 
-        // 第 6 步：结算后盘面与任一历史提交相同即同形（只比较每格占用者与类型，即 Serialize 的全部内容）
+        // 第 7 步：结算后盘面与任一历史提交相同即同形（比较每格占用者与类型 + 设施与地表，即 Serialize 的全部内容）
         if (history.FindDuplicate(projected.Serialize()) is { } sequence)
         {
             return Rejected(BatchFailure.Superko(sequence, [.. placements.Select(p => p.Coord)]), projected, captures);
@@ -143,6 +176,10 @@ public static class BatchRehearsal
 
         return new RehearsalResult(IsLegal: true, IsPass: false, Failure: null, captures, projected);
     }
+
+    /// <summary>批次里全部非空的改造目标，按批次内落子顺序。</summary>
+    internal static ImmutableArray<TerrainEdit> EditsOf(IReadOnlyList<Placement> placements) =>
+        [.. placements.Where(p => p.Edit is not null).Select(p => p.Edit!.Value)];
 
     private static RehearsalResult Rejected(
         BatchFailure failure, GameBoard? projected, ImmutableArray<CapturedStone> captures = default) =>

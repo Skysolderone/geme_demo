@@ -57,7 +57,7 @@ public static class Program
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限，0=不限>]");
         Console.WriteLine("                [--dominance-start <碾压起始大回合，0=关闭，默认 7>] [--no-catch-up（关闭落后者征募补偿，默认开启）]");
-        Console.WriteLine("                [--site-values <营帐/篝火/石碑，默认 5/15/45>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
+        Console.WriteLine("                [--site-values <营帐/篝火/石碑，默认 5/15/45>] [--artisan-weight <匠人征募权重，默认 10>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
@@ -215,6 +215,7 @@ public static class Program
             DominanceStartRound = cli.GetInt("dominance-start", config.DominanceStartRound),
             CatchUpRecruit = !cli.Flag("no-catch-up") && config.CatchUpRecruit,
             SiteValues = cli.GetOrNull("site-values") is { } siteValues ? RunConfig.ParseSiteValues(siteValues) : config.SiteValues,
+            ArtisanWeight = cli.GetInt("artisan-weight", config.ArtisanWeight),
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,
@@ -224,7 +225,7 @@ public static class Program
         config.Validated();
         int parallelism = serial ? 1 : config.EffectiveParallelism;
 
-        Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，{config.PlayerCount} 人，并行度 {parallelism}，大回合上限 {config.MaxMajorRounds}，据点分值 {config.SiteValues}，输出 {outDir}");
+        Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，{config.PlayerCount} 人，并行度 {parallelism}，大回合上限 {config.MaxMajorRounds}，据点分值 {config.SiteValues}，匠人权重 {config.ArtisanWeight}，输出 {outDir}");
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, outDir, parallelism, Console.Out);
         Console.WriteLine();
         Console.WriteLine(summary.ToJson());

@@ -34,9 +34,12 @@ public sealed class StagedBatch
 
     public int Count => _placements.Count;
 
-    /// <summary>暂放一枚。返回 <c>null</c> 表示接受，否则为拒绝原因，暂放状态不变。</summary>
-    public BatchFailure? Stage(Coord coord, PieceType type) =>
-        TryApply([.. _placements, new Placement(coord, type)]);
+    /// <summary>
+    /// 暂放一枚，可带一个地形改造目标（只有匠人能带；改造与该枚共用同一枚额度，不另计）。
+    /// 返回 <c>null</c> 表示接受，否则为拒绝原因，暂放状态不变。
+    /// </summary>
+    public BatchFailure? Stage(Coord coord, PieceType type, TerrainEdit? edit = null) =>
+        TryApply([.. _placements, new Placement(coord, type, edit)]);
 
     /// <summary>换位：把 <paramref name="from"/> 上的暂放移到 <paramref name="to"/>，保留其批次内顺序与类型。</summary>
     public BatchFailure? Move(Coord from, Coord to)

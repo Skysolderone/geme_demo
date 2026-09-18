@@ -33,7 +33,7 @@ public sealed partial class MatchFlow
     private readonly List<ResignationSnapshot> _resignations = [];
     private readonly RandomStream _setup;
     private readonly SettlementDriver _driver;
-    private readonly ImmutableHashSet<Coord> _playableCells;
+    private readonly List<TerrainEditRecord> _terrainEdits = [];
 
     private ImmutableArray<PlayerId> _order = [];
     private int _orderIndex;
@@ -51,7 +51,6 @@ public sealed partial class MatchFlow
         MapData map, GameBoard board, GameSeed seed, ImmutableArray<PlayerId> players,
         RelicLedger relics, HandLedger hands, BoardHistory history, MatchOptions options)
     {
-        Map = map;
         Board = board;
         Seed = seed;
         Options = options;
@@ -62,7 +61,6 @@ public sealed partial class MatchFlow
         Scoreboard = new PowerScoreboard();
         _setup = seed.Stream(GameSeed.Setup);
         _driver = new SettlementDriver(board, history, new Hooks(this));
-        _playableCells = board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable).ToImmutableHashSet();
         Flags = new FlagPlanting(map, players, options.FlagTimeLimit);
         foreach (PlayerId player in players)
         {
@@ -119,7 +117,18 @@ public sealed partial class MatchFlow
 
     // ---------- 组成部分 ----------
 
-    public MapData Map { get; }
+    /// <summary>
+    /// 当前地图数据。<b>地形不是对局内的不变量</b>（artisan-terrain-edit）：改造经 <see cref="GameBoard.ApplyTerrainEdits"/> 换上新快照，
+    /// 这里直接读盘面的那一份，MUST NOT 在建局时拷贝成字段——那样改造之后就读到旧地形了。
+    /// 开局那份（不含改造）见 <see cref="GameBoard.BaseMap"/>。
+    /// </summary>
+    public MapData Map => Board.Map;
+
+    /// <summary>
+    /// 本局已完成的地形改造（含大回合、改造方与是否直接导致提子），按发生顺序。供日志与分析；
+    /// 与事件日志、征募记录一样属于遥测，<b>不随存档往返</b>——地形本身经盘面序列化的改造段持久化。
+    /// </summary>
+    public IReadOnlyList<TerrainEditRecord> TerrainEdits => _terrainEdits;
 
     public GameSeed Seed { get; }
 
@@ -415,10 +424,18 @@ public sealed partial class MatchFlow
     {
         RequireStage(TurnStage.Deploy);
         PlayerId player = CurrentPlayer!.Value;
+        int majorRound = MajorRound;
         SettlementOutcome outcome = _driver.Confirm(_batch!);
         if (!outcome.Confirmed)
         {
             return outcome;
+        }
+
+        // 改造留痕（match-telemetry 第 4 条）：大回合取结算前的值——第 7 步可能已经推进了大回合。
+        foreach (AppliedTerrainEdit applied in outcome.CaptureRecord?.Edits ?? [])
+        {
+            _terrainEdits.Add(new TerrainEditRecord(
+                majorRound, _terrainEdits.Count + 1, player, applied.Edit, applied.ArtisanCoord, applied.CausedCapture));
         }
 
         SetStage(TurnStage.Settlement, player);
@@ -442,7 +459,12 @@ public sealed partial class MatchFlow
     {
         RequirePhase(MatchPhase.InProgress);
         int zone = Require(player).BirthZone ?? throw new SiegeRuleException($"玩家 {player} 尚未锁定出生区。");
-        return MajorRound <= BuildProtectionRounds ? Map.BirthZones[zone] : _playableCells;
+
+        // 可落子格按当前地形现算：本局架出来的桥必须立刻成为合法落点。
+        // 这里曾是建局时算好的缓存字段，地形可变之后它是过期数据（2.6 缓存排查第 1 条）。
+        return MajorRound <= BuildProtectionRounds
+            ? Map.BirthZones[zone]
+            : Board.AllCoords().Where(c => Board[c].Terrain == Terrain.Playable).ToImmutableHashSet();
     }
 
     // ---------- 弃赛 ----------
@@ -519,7 +541,7 @@ public sealed partial class MatchFlow
     public MatchPublicView Publish()
     {
         PowerSnapshot? power = Scoreboard.Latest;
-        return new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, SiteValues, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
+        return new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, SiteValues, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
             Board.Serialize(), power, power?.SiteStates ?? SiteControl.Compute(Board, CoverageMap.Compute(Board)),
             Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
     }

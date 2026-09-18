@@ -85,13 +85,14 @@ public class 非法批次必须说明原因并高亮Tests
     }
 
     [Fact]
-    public void 八类失败标题互不相同()
+    public void 十类失败标题互不相同()
     {
-        // 规格要求至少区分七类（+ 本层补充的批次内重复落点）：每类都有非空且互不相同的标题。
+        // 规格要求至少区分七类（+ 本层补充的批次内重复落点 + artisan-terrain-edit 的改造目标非法 / 批内重复改造目标）：
+        // 每类都有非空且互不相同的标题。枚举是穷举的，新增类别忘了给标题会在这里抛 ArgumentOutOfRangeException。
         // 变异验证：M-F3（见上）→ 本测试红 1。
         string[] titles = [.. Enum.GetValues<BatchFailureKind>().Select(FailurePresentation.TitleOf)];
 
-        Assert.Equal(8, titles.Length);
+        Assert.Equal(10, titles.Length);
         Assert.Equal(titles.Length, titles.Distinct().Count());
         Assert.All(titles, t => Assert.False(string.IsNullOrWhiteSpace(t)));
         Assert.Equal("该格当前已被占据", FailurePresentation.TitleOf(BatchFailureKind.Occupied));

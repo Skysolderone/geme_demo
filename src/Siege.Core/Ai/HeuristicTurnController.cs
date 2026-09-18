@@ -228,7 +228,8 @@ public sealed class HeuristicTurnController : ITurnController
         batch.Clear();
         foreach (Placement placement in choice.Placements)
         {
-            if (batch.Stage(placement.Coord, placement.Type) is { } failure)
+            // 复摆 MUST 带上改造目标：漏了会静默丢掉改造（匠人照落，地形不动），而候选评分是按带改造算的。
+            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
             {
                 throw new SiegeRuleException($"AI 复摆已预演通过的批次被拒绝：{failure.Message}");
             }
@@ -237,7 +238,13 @@ public sealed class HeuristicTurnController : ITurnController
         _decisions.Add(choice.IsPass ? "D:pass" : $"D:{choice.Key}");
     }
 
-    /// <summary>单点评价：每个合法空格 × 每种持有类型各预演一次，取总分前 N（同分按坐标、再按类型）。</summary>
+    /// <summary>
+    /// 单点评价：每个合法空格 × 每种持有类型 × 改造选项各预演一次，取总分前 N（同分按坐标、再按类型、再按改造记法）。
+    /// </summary>
+    /// <remarks>
+    /// 改造不新增评估维度（design D-J）：匠人的每个合法改造目标只是多一个候选暂放，
+    /// "提子""通路""覆盖变化"由既有的 <see cref="EvaluationWeights"/> 维度经预演结果自然反映。
+    /// </remarks>
     private ImmutableArray<PointScore> RankPoints(StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
     {
         BatchContext context = batch.Context;
@@ -248,19 +255,22 @@ public sealed class HeuristicTurnController : ITurnController
         {
             foreach (PieceType type in types)
             {
-                batch.Clear();
-                if (batch.Stage(cell, type) is not null)
+                foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type))
                 {
-                    continue;
-                }
+                    batch.Clear();
+                    if (batch.Stage(cell, type, edit) is not null)
+                    {
+                        continue;
+                    }
 
-                RehearsalResult result = rehearse();
-                if (!result.IsLegal)
-                {
-                    continue;
-                }
+                    RehearsalResult result = rehearse();
+                    if (!result.IsLegal)
+                    {
+                        continue;
+                    }
 
-                points.Add(new PointScore(cell, type, evaluator.Evaluate(batch.Placements, result, context)));
+                    points.Add(new PointScore(cell, type, edit, evaluator.Evaluate(batch.Placements, result, context)));
+                }
             }
         }
 
@@ -269,7 +279,26 @@ public sealed class HeuristicTurnController : ITurnController
             .OrderByDescending(p => p.Total)
             .ThenBy(p => p.Coord)
             .ThenBy(p => p.Type)
+            .ThenBy(p => p.Edit?.ToString() ?? string.Empty, StringComparer.Ordinal)
             .Take(Config.CandidatePointCount)];
+    }
+
+    /// <summary>
+    /// 该落点该类型要枚举的改造选项（design D-J）：匠人为"不改造 + 全部合法目标"，其余五种只有"不改造"。
+    /// 合法目标经 <see cref="TerrainEditRules.LegalTargets"/> 取得（唯一实现），AI MUST NOT 自己判目标合法性。
+    /// </summary>
+    private static IEnumerable<TerrainEdit?> EditOptions(MapData map, Coord cell, PieceType type)
+    {
+        yield return null;
+        if (type != TerrainEditRules.EditorType)
+        {
+            yield break;
+        }
+
+        foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, cell))
+        {
+            yield return edit;
+        }
     }
 
     /// <summary>
@@ -289,7 +318,8 @@ public sealed class HeuristicTurnController : ITurnController
                 break;
             }
 
-            if (batch.Placements.Any(p => p.Coord == point.Coord) || batch.Stage(point.Coord, point.Type) is not null)
+            // 同一落点只取排序里最靠前的那个改造选项：后面那些"同格不同改造"的候选在这里被跳过。
+            if (batch.Placements.Any(p => p.Coord == point.Coord) || batch.Stage(point.Coord, point.Type, point.Edit) is not null)
             {
                 continue;
             }

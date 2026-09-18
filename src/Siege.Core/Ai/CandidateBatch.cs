@@ -4,13 +4,19 @@ using Siege.Core.Board;
 
 namespace Siege.Core.Ai;
 
-/// <summary>单点评价结果：某落点放某类型棋子的分解。</summary>
-public sealed record PointScore(Coord Coord, PieceType Type, EvaluationBreakdown Evaluation)
+/// <summary>
+/// 单点评价结果：某落点放某类型棋子（匠人可再带一个改造目标）的分解。
+/// <see cref="Edit"/> 非空时这一项代表"落这枚匠人<b>并且</b>做这次改造"，与同落点的"不改造"是两个独立候选。
+/// </summary>
+public sealed record PointScore(Coord Coord, PieceType Type, TerrainEdit? Edit, EvaluationBreakdown Evaluation)
 {
     /// <summary>加权总分。</summary>
     public long Total => Evaluation.Total;
 
-    public override string ToString() => $"{Coord.ToNotation()}:{Type}={Total}";
+    /// <summary>该单点对应的暂放。</summary>
+    public Placement Placement => new(Coord, Type, Edit);
+
+    public override string ToString() => $"{Placement}={Total}";
 }
 
 /// <summary>一个候选批次：落点序列（批次内顺序）与整批评价分解。</summary>

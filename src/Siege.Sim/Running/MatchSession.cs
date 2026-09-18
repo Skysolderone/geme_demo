@@ -40,6 +40,7 @@ public sealed class MatchSession
     private int _eventSeq;
     private int _flowCursor;
     private int _recruitCursor;
+    private int _editCursor;
     private bool _finished;
 
     private MatchSession(MatchFlow match, RunConfig config)
@@ -75,6 +76,11 @@ public sealed class MatchSession
         if (match.SiteValues != config.SiteValues)
         {
             throw new SiegeRuleException($"跑局配置的据点分值为 {config.SiteValues}，对局配置却为 {match.SiteValues}。");
+        }
+
+        if (match.ArtisanWeight != config.ArtisanWeight)
+        {
+            throw new SiegeRuleException($"跑局配置的匠人权重为 {config.ArtisanWeight}，对局配置却为 {match.ArtisanWeight}。");
         }
 
         Runner = new MatchRunner(match);
@@ -270,6 +276,21 @@ public sealed class MatchSession
             }
         }
 
+        // 本小回合完成的地形改造：读 Core 的留痕（含"是否直接导致提子"），MUST NOT 由日志层比对前后地形自己推。
+        var edits = new List<TerrainEditEntry>();
+        for (; _editCursor < Match.TerrainEdits.Count; _editCursor++)
+        {
+            TerrainEditRecord e = Match.TerrainEdits[_editCursor];
+            edits.Add(new TerrainEditEntry
+            {
+                Action = e.Edit.Kind.ToString(),
+                Target = e.Edit.ToString(),
+                Player = e.Player.Value,
+                Artisan = e.ArtisanCoord.ToNotation(),
+                CausedCapture = e.CausedCapture,
+            });
+        }
+
         RecruitTurnRecord? recruit = null;
         if (Match.Hands.Records.Count > _recruitCursor)
         {
@@ -385,6 +406,7 @@ public sealed class MatchSession
             Passed = passed,
             Placements = placements,
             Captures = captures,
+            Edits = edits,
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
             FreePickCount = _trace.FreePickCount,
@@ -533,7 +555,11 @@ public sealed class MatchSession
         return new LogHeader
         {
             MapId = Match.Map.Id,
-            PlayableCells = Match.Map.PlayableCount,
+            // 口径：取**开局地图**的可落子格（BaseMap），不是终局地形。地形自 artisan-terrain-edit 起可变（搭桥会加可落子格），
+            // 而首部是一局一条、在终局时才写出——写终局值等于把"未来的分母"塞进第 9 项占用率。
+            // 代价：本局架出来的桥不进分母，占用率会略微偏高（实测每局新增桥个位数，对 105 的基数 < 1 个百分点）。
+            PlayableCells = Match.Board.BaseMap.PlayableCount,
+            ArtisanWeight = Match.ArtisanWeight,
             Seed = Seed.ToString(),
             MaxMajorRounds = Match.MaxMajorRounds,
             DominanceStartRound = Match.DominanceStartRound,

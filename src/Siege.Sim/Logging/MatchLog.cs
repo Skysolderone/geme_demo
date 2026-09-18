@@ -11,15 +11,16 @@ namespace Siege.Sim.Logging;
 /// 日志是事后记录，允许含全部结果；AI 在跑局中仍只拿正式接口。
 /// </summary>
 /// <remarks>
-/// <para>设计文档 §17 七类记录 → 字段映射：</para>
+/// <para>设计文档 §17 八类记录 → 字段映射：</para>
 /// <list type="table">
 /// <item><term>1. 地图、种子、据点分值配置、完整信物分布及揭示时间</term><description><see cref="LogHeader.MapId"/> / <see cref="LogHeader.Seed"/> / <see cref="LogHeader.SiteValues"/>（取自对局本身）与 <see cref="LogHeader.Sites"/> / <see cref="LogHeader.Relics"/>（含真实内容）；揭示大回合在 <see cref="LogResult.RelicReveals"/>（未揭示为 <c>null</c>），过程中的揭示为 <c>Reveal</c> 事件</description></item>
 /// <item><term>2. 每轮征募候选、玩家选择、被 Pass 撤销的征募数</term><description><c>Recruit</c> 事件：<see cref="LogEvent.Detail"/> 为候选 / 选取 / 弃牌文本，<see cref="LogEvent.Values"/> 含 <c>Recruited</c> / <c>Revoked</c> / <c>Deployed</c>（私有量，来源玩家 = <see cref="LogEvent.Player"/>）</description></item>
 /// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
-/// <item><term>4. 信物与据点控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）、<c>SiteControlChanged</c> 事件（据点，Detail 为 <c>坐标 档位: 旧状态 -> 新状态</c>）与 <see cref="TurnSnapshot.Sites"/>；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
-/// <item><term>5. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；每名玩家据点分 <see cref="PlayerEntry.SiteScore"/></description></item>
-/// <item><term>6. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（达大回合上限是规则级终局原因 <c>MajorRoundLimit</c>）</description></item>
-/// <item><term>7. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
+/// <item><term>4. 每次地形改造（大回合、小回合、改造方、动作、目标、是否致提子）</term><description><see cref="TurnSnapshot.Edits"/>（大回合 / 小回合由所在快照给出）；配置的匠人权重在 <see cref="LogHeader.ArtisanWeight"/></description></item>
+/// <item><term>5. 信物与据点控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）、<c>SiteControlChanged</c> 事件（据点，Detail 为 <c>坐标 档位: 旧状态 -> 新状态</c>）与 <see cref="TurnSnapshot.Sites"/>；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
+/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；每名玩家据点分 <see cref="PlayerEntry.SiteScore"/></description></item>
+/// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（达大回合上限是规则级终局原因 <c>MajorRoundLimit</c>）</description></item>
+/// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
 /// </remarks>
 public sealed class MatchLog
@@ -230,6 +231,12 @@ public sealed record LogHeader
     public SiteValuesEntry? SiteValues { get; init; }
 
     /// <summary>
+    /// 本局对局配置的匠人征募权重（artisan-terrain-edit R-2 / match-telemetry 第 1 条）。取自对局本身，不是 <see cref="Config"/>——
+    /// 扫档三档的口径由它标注。artisan-terrain-edit 之前的旧日志为 <c>null</c>，MUST NOT 回填成 10。
+    /// </summary>
+    public int? ArtisanWeight { get; init; }
+
+    /// <summary>
     /// 本局地图的全部据点：坐标、档位与主人出生区（<see cref="Siege.Core.Board.SiteAttribution"/>，只供分析）。
     /// scoring-sites 之前的旧日志为 <c>null</c>：据点分析整局排除并计数（R-7），MUST NOT 回填。
     /// </summary>
@@ -275,6 +282,33 @@ public sealed record SiteEntry
     public required string Tier { get; init; }
 
     public int? HomeZone { get; init; }
+}
+
+/// <summary>
+/// 本小回合完成的一次地形改造（match-telemetry 第 4 条）：动作、目标、改造方与是否直接导致提子。
+/// 大回合与小回合由所在的 <see cref="TurnSnapshot"/> 给出。
+/// </summary>
+/// <remarks>
+/// <para><see cref="Target"/> 是 <c>TerrainEdit</c> 的规范记法（<c>B:F7</c> / <c>F:F6-G6</c> / <c>X:H3</c>），
+/// 按日志顺序重放全部 <see cref="Target"/> 即可离线重建终局地形（「地形可离线重建」）。</para>
+/// <para><see cref="Player"/> 只在日志里有，公开视图与盘面不记改造者（R-3）。</para>
+/// </remarks>
+public sealed record TerrainEditEntry
+{
+    /// <summary>动作名（<c>TerrainEditKind</c>：Bridge / Fence / Burn）。</summary>
+    public required string Action { get; init; }
+
+    /// <summary>目标的规范记法。</summary>
+    public required string Target { get; init; }
+
+    /// <summary>改造方。</summary>
+    public int Player { get; init; }
+
+    /// <summary>携带该改造的匠人落点。</summary>
+    public required string Artisan { get; init; }
+
+    /// <summary>该次改造是否直接导致提子。</summary>
+    public bool CausedCapture { get; init; }
 }
 
 /// <summary>一个据点在某小回合结束时的状态：控制状态名（<c>SiteControlKind</c>）与控制者。</summary>
@@ -358,6 +392,12 @@ public sealed record TurnSnapshot
     /// 本小回合结束时全部据点的状态（坐标序）。scoring-sites 之前的旧日志为 <c>null</c>：据点分析整局排除，MUST NOT 回填成"无人"。
     /// </summary>
     public List<SiteStateEntry>? Sites { get; init; }
+
+    /// <summary>
+    /// 本小回合完成的地形改造（坐标序由结算顺序给出）。<b>没有改造时写空表 <c>[]</c>，不是 <c>null</c></b>——
+    /// artisan-terrain-edit 之前的旧日志才是 <c>null</c>，分析时整局排除并计数（R-6），MUST NOT 回填成空表。
+    /// </summary>
+    public List<TerrainEditEntry>? Edits { get; init; }
 
     /// <summary>小回合墙钟耗时（毫秒）；只记录，不参与任何决定。</summary>
     public long? ElapsedMs { get; init; }

@@ -15,6 +15,9 @@ namespace Siege.Core.Match;
 /// <see cref="CatchUpRecruit"/> 是落后者征募补偿开关（catch-up-recruit 裁决 4），插旗阶段即公开。
 /// <see cref="SiteValues"/> 是据点分值配置（site-control「据点公开」），插旗阶段即公开；<see cref="SiteStates"/> 是地图上全部据点此刻的控制状态（坐标字典序），
 /// 任何阶段都非空：势力快照已生成时即其 <c>SiteStates</c>，插旗阶段（<see cref="Power"/> 为 <c>null</c>）由据点控制唯一实现按当前盘面给出——表现层不自推。
+/// <see cref="ArtisanWeight"/> 是匠人征募权重（artisan-terrain-edit R-2），照 <see cref="SiteValues"/> 的口径：开局固定、始终公开、插旗阶段即可读。
+/// <para><b>地形在这里是活的</b>：<see cref="Board"/> 的 <c>Map</c> 含本局已完成的改造，<see cref="BoardSerialized"/> 的改造段同理；
+/// 设施无归属，视图里 MUST NOT 出现改造者（R-3）。</para>
 /// </summary>
 public sealed record MatchPublicView(
     MatchPhase Phase,
@@ -23,6 +26,7 @@ public sealed record MatchPublicView(
     int DominanceStartRound,
     bool CatchUpRecruit,
     SiteValues SiteValues,
+    int ArtisanWeight,
     TurnStage Stage,
     PlayerId? CurrentPlayer,
     ImmutableArray<PlayerId> ActionOrder,

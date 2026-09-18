@@ -30,8 +30,12 @@ internal static class BatchFixtures
             Stock = stock ?? GenerousStock(),
         };
 
-    internal static Placement P(string notation, PieceType type = PieceType.Basic) =>
-        new(Coord.Parse(notation), type);
+    internal static Placement P(string notation, PieceType type = PieceType.Basic, TerrainEdit? edit = null) =>
+        new(Coord.Parse(notation), type, edit);
+
+    /// <summary>一枚带改造的匠人。</summary>
+    internal static Placement Artisan(string notation, TerrainEdit edit) =>
+        new(Coord.Parse(notation), PieceType.Artisan, edit);
 
     internal static SettlementDriver Driver(GameBoard board, RecordingHooks? hooks = null, BoardHistory? history = null) =>
         new(board, history ?? new BoardHistory(), hooks ?? new RecordingHooks());

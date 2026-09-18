@@ -154,8 +154,33 @@ public static class ReportWriter
         AppendOwner(sb, "石碑由相邻桥头那家控制", st.SteleBridgehead);
         sb.AppendLine($"- 终局据点分占参赛玩家总势力：平均 {Pct(st.MeanFinalSiteShare)}（样本 {st.FinalShareSamples} 局）");
         sb.AppendLine($"- 终局高地加值占全部位置加值：{Pct(st.HighGroundShare)}（{st.FinalHighGroundBonus}/{st.FinalPositionBonus}）");
+        sb.AppendLine();
+
+        sb.AppendLine("## §17-11 地形改造（artisan-terrain-edit）");
+        TerrainEditSection te = r.TerrainEdits;
+        sb.AppendLine($"- 纳入 {te.Matches} 局，排除缺改造字段的旧日志 {te.Skipped} 局");
+        sb.AppendLine($"- 改造总次数 {te.TotalEdits}，每局平均 {Num(te.MeanEditsPerMatch)} 次；整局无改造 {te.MatchesWithoutEdit} 局");
+
+        // 三种动作逐行输出：0 次也照常给出（规格「烧林无人使用也如实给出」MUST NOT 省略该行）。
+        foreach (TerrainEditActionStat a in te.Actions)
+        {
+            sb.AppendLine($"  - {EditActionName(a.Action)}：{a.Count} 次（{Pct(a.Share)}），其中直接导致提子 {a.CausedCaptures} 次");
+        }
+
+        sb.AppendLine($"- 带改造的匠人占已落匠人：{Pct(te.EditingArtisanShare)}（{te.ArtisansWithEdit}/{te.ArtisansPlaced}）");
+        sb.AppendLine($"- 改造直接导致提子 {te.CausedCaptures} 次；首次改造平均第 {Num(te.MeanFirstEditRound)} 大回合");
+        sb.AppendLine($"- 改造过的玩家胜率 {te.WinRateOfEditors}");
+        sb.AppendLine($"- 终局新增：桥 {te.FinalBridges} 座，栅栏 {te.FinalFences} 道，被烧林地 {te.FinalBurns} 格");
         return sb.ToString();
     }
+
+    private static string EditActionName(string action) => action switch
+    {
+        nameof(Core.Board.TerrainEditKind.Bridge) => "搭桥",
+        nameof(Core.Board.TerrainEditKind.Fence) => "立栅",
+        nameof(Core.Board.TerrainEditKind.Burn) => "烧林",
+        _ => action,
+    };
 
     private static void AppendOwner(StringBuilder sb, string label, SiteOwnerStat o) =>
         sb.AppendLine(

@@ -1,0 +1,203 @@
+using Siege.Core.Ai;
+using Siege.Core.Board;
+using Siege.Sim.Analysis;
+using Siege.Sim.Config;
+using Siege.Sim.Logging;
+using Siege.Sim.Running;
+
+namespace Siege.Core.Tests.MatchTelemetry;
+
+/// <summary>
+/// 规格：match-telemetry —— Requirement: 对局日志的记录内容（第 4 条改造记录）/ 平衡分析方向（第 11 项）；
+/// simulation-harness —— Requirement: 批量跑局（匠人权重写入批次配置）。tasks 3.2 / 3.3 / 3.4。
+/// </summary>
+public class 地形改造日志与分析Tests
+{
+    private static TerrainEditEntry Edit(string action, string target, int player, string artisan, bool caused = false) =>
+        new() { Action = action, Target = target, Player = player, Artisan = artisan, CausedCapture = caused };
+
+    [Fact]
+    public void 真实跑局把改造写进日志且可离线重建地形()
+    {
+        // 「改造可查」+「地形可离线重建」：走真实跑局（Standard——Easy 结构性地几乎不落匠人）→ 日志往返 → 重放。
+        List<MatchLog> logs = BatchRunner.Execute(
+            SimFixtures.Config(count: 3, seedStart: 1, maxRounds: 6, difficulty: AiDifficulty.Standard), parallelism: 1);
+
+        // 每一条小回合快照都带改造字段（没有改造就是空表），首部带匠人权重。
+        Assert.All(logs, l => Assert.All(l.Turns, t => Assert.NotNull(t.Edits)));
+        Assert.All(logs, l => Assert.Equal(10, l.Header.ArtisanWeight));
+
+        List<TerrainEditEntry> all = [.. logs.SelectMany(l => l.Turns).SelectMany(t => t.Edits!)];
+
+        // 样本口径下界：真跑出了改造，否则下面的往返与重放什么都没证明。
+        Assert.NotEmpty(all);
+
+        // 日志往返保留全部字段。
+        foreach (MatchLog log in logs)
+        {
+            MatchLog back = MatchLog.Parse(log.DeterministicText());
+            Assert.Equal(
+                log.Turns.SelectMany(t => t.Edits!).Select(e => $"{e.Action}/{e.Target}/{e.Player}/{e.Artisan}/{e.CausedCapture}"),
+                back.Turns.SelectMany(t => t.Edits!).Select(e => $"{e.Action}/{e.Target}/{e.Player}/{e.Artisan}/{e.CausedCapture}"));
+        }
+
+        // 离线重建：按日志顺序把改造重放到开局地图上，结果与该局终局地形逐格一致。
+        foreach (MatchLog log in logs)
+        {
+            MapData start = Siege.Core.Board.Maps.FourPlayerBaseMap.Create();
+            MapData replayed = TerrainWriter.ApplyAll(
+                start, log.Turns.SelectMany(t => t.Edits!).Select(e => TerrainEdit.Parse(e.Target)));
+
+            // 记法可解析且动作名与记法一致（Action 与 Target 不会写反）。
+            Assert.All(log.Turns.SelectMany(t => t.Edits!),
+                e => Assert.Equal(e.Action, TerrainEdit.Parse(e.Target).Kind.ToString()));
+            Assert.Equal(
+                start.TerrainData.Bridges.Count + log.Turns.SelectMany(t => t.Edits!).Count(e => e.Action == nameof(TerrainEditKind.Bridge)),
+                replayed.TerrainData.Bridges.Count);
+            Assert.Equal(
+                start.TerrainData.Fences.Count + log.Turns.SelectMany(t => t.Edits!).Count(e => e.Action == nameof(TerrainEditKind.Fence)),
+                replayed.TerrainData.Fences.Count);
+        }
+    }
+
+    [Fact]
+    public void 匠人权重写进批次配置与日志首部()
+    {
+        // simulation-harness「扫档配置可追溯」：匠人权重 18 + 分值 3/8/24 + Safety 7 如实写出。
+        // 首部取自**对局本身**（不是 Config），两者不一致时 MatchSession 建局即抛。
+        RunConfig config = SimFixtures.Config(count: 1, seedStart: 3, maxRounds: 3, difficulty: AiDifficulty.Standard) with
+        {
+            ArtisanWeight = 18,
+            SiteValues = new Siege.Core.Scoring.SiteValues(3, 8, 24),
+        };
+
+        MatchLog log = BatchRunner.Execute(config, parallelism: 1).Single();
+
+        Assert.Equal(18, log.Header.ArtisanWeight);
+        Assert.Equal(18, log.Header.Config.ArtisanWeight);
+        Assert.Equal(new Siege.Core.Scoring.SiteValues(3, 8, 24), log.Header.Config.SiteValues);
+
+        // 序列化往返：配置记录真的写进了文件，不是只活在内存对象里。
+        MatchLog back = MatchLog.Parse(log.FullText());
+        Assert.Equal(18, back.Header.ArtisanWeight);
+        Assert.Equal(18, back.Header.Config.ArtisanWeight);
+
+        // 反向：默认配置下首部是 10，不是"永远写 18"。
+        Assert.Equal(10, BatchRunner.Execute(
+            SimFixtures.Config(count: 1, seedStart: 3, maxRounds: 3), parallelism: 1).Single().Header.ArtisanWeight);
+    }
+
+    [Fact]
+    public void 第11项改造分析按手算样本输出()
+    {
+        // 分析第 11 项的逐指标手算样本。两局：
+        //   局 901：第 2 大回合 P0 搭桥（匠人带改造）、第 3 大回合 P1 立栅；落盘匠人 3 枚，其中 2 枚带改造。P0 获胜。
+        //   局 902：整局无改造，落盘匠人 1 枚。P1 获胜。
+        //   局 903：旧日志（快照缺改造字段）→ 整局排除并计数。
+        MatchLog withEdits = SimFixtures.Synthetic(
+            901,
+            [
+                SimFixtures.Turn(1, 2, 0, [10, 5, 5, 5], ["C4:Artisan+B:D4"],
+                    edits: [Edit(nameof(TerrainEditKind.Bridge), "B:D4", 0, "C4")]),
+                SimFixtures.Turn(2, 3, 1, [10, 5, 5, 5], ["G6:Artisan+F:G6-H6"],
+                    edits: [Edit(nameof(TerrainEditKind.Fence), "F:G6-H6", 1, "G6")]),
+                SimFixtures.Turn(3, 4, 0, [10, 5, 5, 5], ["B2:Artisan", "B3:Basic"]),
+            ],
+            [],
+            SimFixtures.ResultOf(8, [0]));
+
+        MatchLog noEdits = SimFixtures.Synthetic(
+            902,
+            [SimFixtures.Turn(1, 2, 1, [5, 10, 5, 5], ["E5:Artisan", "F5:Basic"])],
+            [],
+            SimFixtures.ResultOf(8, [1]));
+
+        MatchLog legacy = SimFixtures.Synthetic(
+            903,
+            [SimFixtures.Turn(1, 2, 0, [10, 5, 5, 5], ["C4:Artisan+B:D4"], legacyNoEdits: true)],
+            [],
+            SimFixtures.ResultOf(8, [0]));
+        Assert.Null(legacy.Turns[0].Edits);
+
+        TerrainEditSection t = BalanceAnalyzer.Analyze([withEdits, noEdits, legacy]).TerrainEdits;
+
+        Assert.Equal(2, t.Matches);
+        Assert.Equal(1, t.Skipped);                 // 旧日志整局排除并计数（R-6）
+        Assert.Equal(2, t.TotalEdits);
+        Assert.Equal(1.0, t.MeanEditsPerMatch);     // 2 次 ÷ 2 局（含整局无改造的那局）
+        Assert.Equal(1, t.MatchesWithoutEdit);
+        Assert.Equal(2.0, t.MeanFirstEditRound);    // 只有 901 有改造，首次在第 2 大回合
+
+        // 三种动作逐条：烧林 0 次也在列（规格 MUST NOT 省略该行）。
+        Assert.Equal(["Bridge", "Fence", "Burn"], t.Actions.Select(a => a.Action));
+        Assert.Equal(1, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Bridge)).Count);
+        Assert.Equal(1, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Fence)).Count);
+        Assert.Equal(0, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Burn)).Count);
+        Assert.Equal(0.5, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Bridge)).Share);
+        Assert.Equal(0, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Burn)).Share);
+
+        // 匠人：901 落 3 枚（C4 / G6 / B2）其中 2 枚带改造，902 落 1 枚不带 → 4 枚中 2 枚带改造。
+        Assert.Equal(4, t.ArtisansPlaced);
+        Assert.Equal(2, t.ArtisansWithEdit);
+        Assert.Equal(0.5, t.EditingArtisanShare);
+
+        Assert.Equal(0, t.CausedCaptures);
+
+        // 改造过的玩家胜率：样本 = {901 的 P0, 901 的 P1}，胜者是 P0 → 1/2。
+        Assert.Equal(2, t.WinRateOfEditors.Trials);
+        Assert.Equal(1, t.WinRateOfEditors.Successes);
+
+        // 终局新增设施 = 三种动作各自的次数（按日志重放即得）。
+        Assert.Equal(1, t.FinalBridges);
+        Assert.Equal(1, t.FinalFences);
+        Assert.Equal(0, t.FinalBurns);
+
+        // 报告段落：三行动作全在，烧林那行如实给出 0。
+        string text = ReportWriter.Render(BalanceAnalyzer.Analyze([withEdits, noEdits, legacy]));
+        Assert.Contains("§17-11 地形改造", text, StringComparison.Ordinal);
+        Assert.Contains("搭桥：1 次（50.0%）", text, StringComparison.Ordinal);
+        Assert.Contains("立栅：1 次（50.0%）", text, StringComparison.Ordinal);
+        Assert.Contains("烧林：0 次（0.0%）", text, StringComparison.Ordinal);
+        Assert.Contains("排除缺改造字段的旧日志 1 局", text, StringComparison.Ordinal);
+        Assert.Contains("带改造的匠人占已落匠人：50.0%（2/4）", text, StringComparison.Ordinal);
+        Assert.Contains("桥 1 座，栅栏 1 道，被烧林地 0 格", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 一局里只要有一条快照缺改造字段就整局排除()
+    {
+        // R-6 的边界：半旧半新的日志 MUST NOT 被当成"这局只改造了这些"，否则每局平均改造次数会被系统性低估。
+        MatchLog halfOld = SimFixtures.Synthetic(
+            904,
+            [
+                SimFixtures.Turn(1, 2, 0, [10, 5, 5, 5], ["C4:Artisan+B:D4"],
+                    edits: [Edit(nameof(TerrainEditKind.Bridge), "B:D4", 0, "C4")]),
+                SimFixtures.Turn(2, 3, 1, [10, 5, 5, 5], ["E5:Basic"], legacyNoEdits: true),
+            ],
+            [],
+            SimFixtures.ResultOf(8, [0]));
+
+        TerrainEditSection t = BalanceAnalyzer.Analyze([halfOld]).TerrainEdits;
+
+        Assert.Equal(0, t.Matches);
+        Assert.Equal(1, t.Skipped);
+        Assert.Equal(0, t.TotalEdits);
+    }
+
+    [Fact]
+    public void 真实批次的第11项分析自洽()
+    {
+        // 真实跑局上跑一遍分析：分母自洽、动作次数与日志逐条对得上。
+        List<MatchLog> logs = BatchRunner.Execute(
+            SimFixtures.Config(count: 3, seedStart: 1, maxRounds: 6, difficulty: AiDifficulty.Standard), parallelism: 1);
+        TerrainEditSection t = BalanceAnalyzer.Analyze(logs).TerrainEdits;
+
+        Assert.Equal(logs.Count, t.Matches);
+        Assert.Equal(0, t.Skipped);
+        Assert.Equal(logs.SelectMany(l => l.Turns).SelectMany(x => x.Edits!).Count(), t.TotalEdits);
+        Assert.Equal(t.TotalEdits, t.Actions.Sum(a => a.Count));
+        Assert.True(t.ArtisansWithEdit <= t.ArtisansPlaced);
+        Assert.Equal(t.TotalEdits, t.ArtisansWithEdit);   // 一枚匠人至多带一个改造
+        Assert.True(t.TotalEdits > 0, "真实样本里一次改造都没有，本条什么都没证明。");
+    }
+}

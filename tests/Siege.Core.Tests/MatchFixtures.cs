@@ -53,11 +53,15 @@ internal static class MatchFixtures
     /// 9×9 合成地图：四个 3×3 角落出生区（0 左下、1 右下、2 左上、3 右上），信物格由用例指定。
     /// 不满足人数预算与距离校验，只能经 <see cref="MatchFlow.CreateUnvalidated"/> 使用。
     /// </summary>
-    internal static MapData Map(params string[] relicCells)
+    internal static MapData Map(params string[] relicCells) => Map(null, relicCells);
+
+    /// <summary>同上，另可指定地形（artisan-terrain-edit：需要深水 / 林地才能测改造）。</summary>
+    internal static MapData Map(TerrainData? terrain, params string[] relicCells)
     {
         var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
         return new MapData
         {
+            TerrainData = terrain ?? TerrainData.Flat,
             Id = "test-match-9x9",
             Width = 9,
             Height = 9,
@@ -92,16 +96,24 @@ internal static class MatchFixtures
     }
 
     /// <summary>创建一局但停在插旗阶段。</summary>
-    internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
+    internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
+        Create(null, seed, options, relics);
+
+    /// <summary>同上，另可指定地形。</summary>
+    internal static MatchFlow Create(TerrainData? terrain, GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
     {
-        MapData map = Map([.. relics.Select(r => r.Cell)]);
+        MapData map = Map(terrain, [.. relics.Select(r => r.Cell)]);
         return MatchFlow.CreateUnvalidated(map, seed ?? Seed, All, Relics(map, relics), options);
     }
 
     /// <summary>创建一局并依次插旗（默认各占各的出生区），给每人 50 枚普通子，进入第 1 大回合。<paramref name="options"/> 缺省为 <see cref="MatchOptions.Immediate"/>（大回合上限 15）。</summary>
-    internal static MatchFlow Started(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
+    internal static MatchFlow Started(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
+        Started(null, seed, zones, options, relics);
+
+    /// <summary>同上，另可指定地形。</summary>
+    internal static MatchFlow Started(TerrainData? terrain, GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
     {
-        MatchFlow match = Create(seed, options ?? MatchOptions.Immediate, relics);
+        MatchFlow match = Create(terrain, seed, options ?? MatchOptions.Immediate, relics);
         zones ??= [0, 1, 2, 3];
         foreach (PlayerId p in All)
         {
