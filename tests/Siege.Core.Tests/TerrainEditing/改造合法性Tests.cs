@@ -26,9 +26,9 @@ public class 改造合法性Tests
         new(board, BatchFixtures.Context(board, TestMaps.P0, limit));
 
     [Fact]
-    public void 合法目标枚举只含几何四邻且不含自身格()
+    public void 格目标只含几何四邻且不含自身格()
     {
-        // 裁决 T-2：目标口径是几何四邻。匠人不能改自己脚下那格——四邻不含自身，
+        // 裁决 T-2：格目标（搭桥、烧林）口径是几何四邻。匠人不能改自己脚下那格——四邻不含自身，
         // 因此"要烧哪片林，先站到它旁边"，落点选择本身有意义。
         GameBoard board = Forested();
 
@@ -46,9 +46,72 @@ public class 改造合法性Tests
         Assert.DoesNotContain(TerrainEdit.Bridge(TestMaps.At("D4")), fromB7);
         Assert.DoesNotContain(TerrainEdit.Fence(TestMaps.At("E4"), TestMaps.At("F4")), fromB7);
 
-        // 全部目标都以落点为一端 / 就是落点的四邻。
+        // 格目标必须就是落点的四邻；边目标（T-11）只要求至少一端是四邻格。
         var neighbors = board.Neighbors(TestMaps.At("E4"));
-        Assert.All(fromE4, e => Assert.All(e.Cells, c => Assert.True(c == TestMaps.At("E4") || neighbors.Contains(c))));
+        foreach (TerrainEdit edit in fromE4)
+        {
+            if (edit.Kind == TerrainEditKind.Fence)
+            {
+                Assert.True(neighbors.Contains(edit.Edge.A) || neighbors.Contains(edit.Edge.B), edit.ToString());
+            }
+            else
+            {
+                Assert.Contains(edit.Cell, neighbors);
+            }
+        }
+    }
+
+    [Fact]
+    public void 边目标可落在外圈但不得更远()
+    {
+        // 裁决 T-11（design D-B′）：立栅的边只要求至少一端是匠人落点的几何四邻格。
+        // F6 的四邻是 F5 / E6 / G6 / F7；F7-F8 的一端 F7 是四邻 → 合法；F8-F9 两端都不是 → 非法。
+        GameBoard board = TestMaps.Blank(size: 9);
+        Coord at = TestMaps.At("F6");
+        var targets = TerrainEditRules.LegalTargets(board.Map, at);
+
+        Assert.Contains(TerrainEdit.Fence(TestMaps.At("F7"), TestMaps.At("F8")), targets);
+        Assert.Contains(TerrainEdit.Fence(TestMaps.At("F6"), TestMaps.At("F7")), targets);   // 原口径的内圈边仍在
+        Assert.Contains(TerrainEdit.Fence(TestMaps.At("E7"), TestMaps.At("F7")), targets);   // 外圈的横向边
+        Assert.DoesNotContain(TerrainEdit.Fence(TestMaps.At("F8"), TestMaps.At("F9")), targets);
+
+        Assert.Null(TerrainEditRules.Reject(board.Map, at, TerrainEdit.Fence(TestMaps.At("F7"), TestMaps.At("F8"))));
+        Assert.Contains(
+            "两端都不是匠人落点的几何四邻格",
+            TerrainEditRules.Reject(board.Map, at, TerrainEdit.Fence(TestMaps.At("F8"), TestMaps.At("F9")))!);
+
+        // 候选边由 4 条增至 16 条（棋盘中央、无预置栅栏）：4 条内圈 + 12 条外圈。
+        var fences = targets.Where(e => e.Kind == TerrainEditKind.Fence).ToList();
+        Assert.Equal(16, fences.Count);
+        Assert.Equal(16, fences.Distinct().Count());
+        Assert.Equal(4, fences.Count(e => e.Edge.A == at || e.Edge.B == at));
+
+        // 边的两端本身仍必须几何相邻，且都在棋盘内。
+        Assert.All(fences, e => Assert.True(Adjacency.AreAdjacent(e.Edge.A, e.Edge.B)));
+        Assert.Contains("不是几何四邻", TerrainEditRules.Reject(board.Map, at, TerrainEdit.Fence(TestMaps.At("F7"), TestMaps.At("G8")))!);
+
+        // 贴边落点：越界方向的边不进候选（A1 只有 A2 / B1 两个四邻）。
+        Assert.All(
+            TerrainEditRules.LegalTargets(board.Map, TestMaps.At("A1")).Where(e => e.Kind == TerrainEditKind.Fence),
+            e => Assert.All(e.Cells, c => Assert.True(board.Map.Contains(c))));
+    }
+
+    [Fact]
+    public void 边目标不得离得更远时整批非法()
+    {
+        // 规格场景「边目标不得离得更远」走到批次层：拒绝理由与失败类别都要说清楚。
+        GameBoard board = TestMaps.Blank(size: 9);
+        StagedBatch batch = Batch(board);
+
+        BatchFailure? failure = batch.Stage(
+            TestMaps.At("F6"), PieceType.Artisan, TerrainEdit.Fence(TestMaps.At("F8"), TestMaps.At("F9")));
+
+        Assert.Equal(BatchFailureKind.TerrainEditIllegal, failure!.Kind);
+        Assert.Contains("两端都不是匠人落点的几何四邻格", failure.Message);
+        Assert.Empty(batch.Placements);
+
+        // 同一落点换成外圈边即合法。
+        Assert.Null(batch.Stage(TestMaps.At("F6"), PieceType.Artisan, TerrainEdit.Fence(TestMaps.At("F7"), TestMaps.At("F8"))));
     }
 
     [Fact]
@@ -73,25 +136,46 @@ public class 改造合法性Tests
     public void 拒绝理由与合法目标集合一致()
     {
         // 守门：Reject 与 LegalTargets 是同一个判定的两个出口，口径 MUST NOT 分歧。
-        // 穷举全盘每个落点 × 它四邻上三种动作的全部构造，两边必须逐条一致。
+        // 穷举全盘每个落点 × 全盘每个格目标 × 全盘每一条几何边（不止以落点为端的那些，T-11 后外圈边必须进穷举）。
         GameBoard board = Board();
+
+        // 全盘所有几何相邻的边，外加若干"两端不相邻 / 出界"的坏边——Reject 必须逐条与集合一致。
+        var edges = new List<TerrainEdit>();
+        foreach (Coord a in board.AllCoords())
+        {
+            foreach (Coord b in board.AllCoords())
+            {
+                if (a < b && Adjacency.AreAdjacent(a, b))
+                {
+                    edges.Add(TerrainEdit.Fence(a, b));
+                }
+            }
+        }
+
+        edges.Add(TerrainEdit.Fence(TestMaps.At("E4"), TestMaps.At("F5")));   // 斜向，两端不相邻
+        edges.Add(TerrainEdit.Fence(TestMaps.At("A1"), TestMaps.At("H8")));   // 隔着老远
+
         int legal = 0;
         foreach (Coord cell in board.AllCoords())
         {
             var targets = TerrainEditRules.LegalTargets(board.Map, cell).ToHashSet();
+            var candidates = new List<TerrainEdit>(edges);
             foreach (Coord n in board.AllCoords())
             {
-                TerrainEdit[] candidates = n == cell
-                    ? [TerrainEdit.Bridge(n), TerrainEdit.Burn(n)]
-                    : [TerrainEdit.Bridge(n), TerrainEdit.Burn(n), TerrainEdit.Fence(cell, n)];
-                foreach (TerrainEdit edit in candidates)
-                {
-                    bool inSet = targets.Contains(edit);
-                    Assert.Equal(inSet, TerrainEditRules.IsLegal(board.Map, cell, edit));
-                    Assert.Equal(inSet, TerrainEditRules.Reject(board.Map, cell, edit) is null);
-                    legal += inSet ? 1 : 0;
-                }
+                candidates.Add(TerrainEdit.Bridge(n));
+                candidates.Add(TerrainEdit.Burn(n));
             }
+
+            foreach (TerrainEdit edit in candidates)
+            {
+                bool inSet = targets.Contains(edit);
+                Assert.Equal(inSet, TerrainEditRules.IsLegal(board.Map, cell, edit));
+                Assert.Equal(inSet, TerrainEditRules.Reject(board.Map, cell, edit) is null);
+                legal += inSet ? 1 : 0;
+            }
+
+            // 穷举确实覆盖了该落点的全部合法目标（否则"一致"只在被枚举到的子集上成立）。
+            Assert.Empty(targets.Except(candidates));
         }
 
         // 样本口径下界：这盘面确实存在合法目标，不是"两边都恒为空"的假绿。
@@ -142,9 +226,16 @@ public class 改造合法性Tests
         Assert.True(driver.Confirm(batch.Context, batch.Placements).Confirmed);
         Assert.Empty(board.TerrainEdits);
 
-        // ② 构造一个"四邻全无合法目标"的落点：四条边都已有栅栏，四邻无深水无林地。
+        // ② 构造一个"全无合法目标"的落点：T-11 放宽后要把 16 条候选边（4 内圈 + 12 外圈）全部预置栅栏，
+        //    四邻也无深水无林地。少封一条就有合法目标，这一条会红。
         GameBoard boxed = TestMaps.Blank(
-            TestMaps.Terrain(fences: [("E4", "E5"), ("E5", "E6"), ("D5", "E5"), ("E5", "F5")]),
+            TestMaps.Terrain(fences:
+            [
+                ("E4", "E3"), ("E4", "D4"), ("E4", "F4"), ("E4", "E5"),
+                ("D5", "D4"), ("D5", "C5"), ("D5", "E5"), ("D5", "D6"),
+                ("F5", "F4"), ("F5", "E5"), ("F5", "G5"), ("F5", "F6"),
+                ("E6", "E5"), ("E6", "D6"), ("E6", "F6"), ("E6", "E7"),
+            ]),
             size: 9);
         Assert.Empty(TerrainEditRules.LegalTargets(boxed.Map, TestMaps.At("E5")));
         Assert.Null(Batch(boxed).Stage(TestMaps.At("E5"), PieceType.Artisan));

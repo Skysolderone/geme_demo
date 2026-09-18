@@ -10,8 +10,8 @@ namespace Siege.Core.Tests.AiDecision;
 /// design D-J / tasks 3.1：AI 对每枚暂放匠人枚举其全部合法改造目标 + "不改造"，与落点组合进入既有评分。
 /// </summary>
 /// <remarks>
-/// 规格场景「AI 在能一手立栅提子时选择该手」<b>不可实现</b>（见 <c>改造先于提子Tests</c> 的待决 B-1：
-/// 现行规则下任何改造都不可能直接致提子）。因此这里改钉三件可实现的事：
+/// tasks 3.1 点名的「AI 在能一手立栅提子时选择该手」在段 B 的旧边目标口径下不可实现（立栅永远提不了子），
+/// 裁决 T-11 放宽边目标后成立，见 <see cref="AI在能一手立栅提子时选择该手"/>。本文件另钉三件事：
 /// ① 枚举确实同时产出"带改造"与"不改造"两类候选，三种动作都在；
 /// ② 选中的批次<b>连改造一起</b>摆回暂放（复摆漏 Edit 会静默丢改造）；
 /// ③ 非匠人一律没有改造候选。
@@ -49,23 +49,43 @@ public class AI枚举改造目标Tests
         return ai.LastPointRanking;
     }
 
+    /// <summary>
+    /// 与 <see cref="Match"/> 同地形，但把 E4 的 16 条候选边（T-11）预先封掉 14 条，只留 E3–E4 与 E2–E3。
+    /// 不这么做，单点排行榜的 12 个名额会被同分的栅栏候选占满，烧林（记法 <c>X:</c> 排在最后）被挤出榜外——
+    /// 这条要钉的是"三种动作都进了枚举"，不是"三种动作都挤得进前 12"（挤占本身记在 implement.md 供段 D 参考）。
+    /// </summary>
+    private static MatchFlow Boxed() => MatchFixtures
+        .Started(TestMaps.Terrain(
+            surfaces: [("D4", Surface.DeepWater), ("D5", Surface.DeepWater), ("F4", Surface.Forest)],
+            fences:
+            [
+                ("E3", "D3"), ("E3", "F3"),
+                ("D4", "D3"), ("D4", "C4"), ("D4", "E4"), ("D4", "D5"),
+                ("F4", "F3"), ("F4", "E4"), ("F4", "G4"), ("F4", "F5"),
+                ("E5", "E4"), ("E5", "D5"), ("E5", "F5"), ("E5", "E6"),
+            ]))
+        .AtRound(5);
+
     [Fact]
     public void 单点枚举同时产出带改造与不改造两类候选()
     {
         // D-J：对每枚暂放匠人枚举"全部合法目标 + 不改造"。同一落点因此会出现多个候选，只差在改造上。
         // 变异 M-B5：RankPoints 只 yield null（不枚举改造）→ 本条红。
-        MatchFlow match = Match();
-        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 1, "C4", "E4");
+        MatchFlow match = Boxed();
+        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 1, "E4");
 
         ImmutableArray<PointScore> ranking = Rank(Ai(match), batch, driver);
 
         Assert.Contains(ranking, p => p.Edit is null);
         Assert.Contains(ranking, p => p.Edit is not null);
 
-        // 三种动作都被枚举到：C4 旁是深水 D4，E4 旁是林地 F4，任何落点都能对四邻立栅。
+        // 三种动作都被枚举到：E4 旁是深水 D4 与林地 F4，还剩两条没封的边可立栅。
         Assert.Contains(ranking, p => p.Edit?.Kind == TerrainEditKind.Bridge);
         Assert.Contains(ranking, p => p.Edit?.Kind == TerrainEditKind.Burn);
         Assert.Contains(ranking, p => p.Edit?.Kind == TerrainEditKind.Fence);
+
+        // T-11：留下的两条边里有一条是**外圈边**（E2–E3 不以落点 E4 为端），放宽后的口径确实进了 AI 枚举。
+        Assert.Contains(ranking, p => p.Edit == TerrainEdit.Fence(TestMaps.At("E2"), TestMaps.At("E3")));
 
         // 同一落点既有"不改造"也有"带改造"（两者是独立候选，不会被静默合并）。
         Assert.Contains(
@@ -76,6 +96,32 @@ public class AI枚举改造目标Tests
         Assert.All(
             ranking.Where(p => p.Edit is not null),
             p => Assert.True(TerrainEditRules.IsLegal(match.Board.Map, p.Coord, p.Edit!.Value)));
+    }
+
+    [Fact]
+    public void AI在能一手立栅提子时选择该手()
+    {
+        // tasks 3.1 点名的验证：P1 孤子 E5 被堵到只剩 E5–E6 一口气，AI 手里只有匠人且只能落 E7。
+        // E7 不与 E5 相邻——只有 T-11 放宽后的外圈边 E5–E6 才是它的合法目标，带上它当场提子；
+        // 同一落点不带改造提不到子。AI 必须选带栅栏那一手。
+        MatchFlow match = MatchFixtures.Started().AtRound(5);
+        GameBoard board = match.Board;
+        board.Place(TestMaps.At("E5"), MatchFixtures.P1, PieceType.Basic);
+        foreach (string cell in new[] { "E4", "D5", "F5" })
+        {
+            board.Place(TestMaps.At(cell), Me, PieceType.Basic);
+        }
+
+        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 1, "E7");
+        HeuristicTurnController ai = Ai(match);
+        ai.Deploy(batch, () => driver.Rehearse(batch.Context, batch.Placements));
+
+        Placement chosen = Assert.Single(ai.LastChoice!.Placements);
+        Assert.Equal(TestMaps.At("E7"), chosen.Coord);
+        Assert.Equal(TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6")), chosen.Edit);
+
+        // 该手确实提子（不是"碰巧评分最高"）：复摆后预演的提子集合是 E5。
+        Assert.Equal(["E5"], driver.Rehearse(batch.Context, batch.Placements).Captures.Select(c => c.Coord).Notations());
     }
 
     [Fact]

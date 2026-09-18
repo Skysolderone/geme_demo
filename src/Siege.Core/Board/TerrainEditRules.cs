@@ -7,9 +7,14 @@ namespace Siege.Core.Board;
 /// （artisan-terrain-edit 接口契约「改造合法性（新，唯一实现）」）。预演、结算、AI 与界面全部经这里。
 /// </summary>
 /// <remarks>
-/// <para><b>目标口径是几何四邻</b>（裁决 T-2）：格目标必须是匠人落点的 <see cref="Adjacency.Neighbors"/> 之一，
-/// 边目标是匠人落点与某个几何四邻格之间的 <see cref="FenceEdge"/>。匠人<b>不能</b>改自己脚下那格——四邻不含自身。
+/// <para><b>格目标口径是几何四邻</b>（裁决 T-2）：搭桥、烧林的目标必须是匠人落点的 <see cref="Adjacency.Neighbors"/> 之一。
+/// 匠人<b>不能</b>改自己脚下那格——四邻不含自身。
 /// MUST NOT 改用气边口径：深水没有气边，搭桥会变成不可能。</para>
+/// <para><b>边目标口径放宽一圈</b>（裁决 T-11，design D-B′）：立栅的边只要求<b>至少一端</b>是匠人落点的几何四邻格，
+/// 因此既含匠人格与四邻之间的 4 条边，也含四邻与更外一格之间的 12 条边（棋盘内共至多 16 条）。
+/// 旧口径（边必以匠人落点为一端）下立栅<b>永远不可能提子</b>——那条边必有一端是匠人自己刚落的子，
+/// 既不是敌串的气也切不断敌串（段 B 实测 20 局 97 次改造致提子 0 次）；放宽后 T-3「改造先于提子」才真正成立。
+/// 边的两端本身仍 MUST 几何相邻且都在棋盘内。</para>
 /// <para><b>没有逆向动作</b>（R-5）：已架桥的深水格、已有栅栏的边、已是草地的格都不是合法目标。</para>
 /// <para><b>批内唯一与"不链式"不在本类</b>：本类只按传入的这一份地形判定单次改造，
 /// 而"按批次开始前的地形判定"与"同一目标批内唯一"是批次层的事（<c>BatchRehearsal</c>）。</para>
@@ -45,9 +50,14 @@ public static class TerrainEditRules
                 found.Add(TerrainEdit.Burn(n));
             }
 
-            if (!map.HasFence(artisanCell, n))
+            // 边目标（T-11）：以该四邻格 n 为一端的全部边——m == artisanCell 给出原口径的 4 条内圈边，
+            // 其余给出 12 条外圈边。不同的 n 之间不会撞车：两个四邻格互不相邻，外圈端点离落点是 2 格。
+            foreach (Coord m in Adjacency.Neighbors(map.Width, map.Height, n))
             {
-                found.Add(TerrainEdit.Fence(artisanCell, n));
+                if (!map.HasFence(n, m))
+                {
+                    found.Add(TerrainEdit.Fence(n, m));
+                }
             }
         }
 
@@ -98,10 +108,19 @@ public static class TerrainEditRules
                     : null;
 
             case TerrainEditKind.Fence:
-                Coord other = edit.Edge.A == artisanCell ? edit.Edge.B : edit.Edge.A;
-                if (!edit.Edge.Connects(artisanCell, other) || !neighbors.Contains(other))
+                if (!map.Contains(edit.Edge.A) || !map.Contains(edit.Edge.B))
                 {
-                    return $"改造目标与匠人落点不是几何四邻：立栅的边 {edit.Edge} 不以 {artisanCell.ToNotation()} 为一端。";
+                    return $"立栅的边不在棋盘范围内：{edit.Edge}。";
+                }
+
+                if (!Adjacency.AreAdjacent(edit.Edge.A, edit.Edge.B))
+                {
+                    return $"立栅的边两端不是几何四邻：{edit.Edge}。";
+                }
+
+                if (!neighbors.Contains(edit.Edge.A) && !neighbors.Contains(edit.Edge.B))
+                {
+                    return $"该边两端都不是匠人落点的几何四邻格：{artisanCell.ToNotation()} 与 {edit.Edge}。";
                 }
 
                 return map.HasFence(edit.Edge.A, edit.Edge.B)

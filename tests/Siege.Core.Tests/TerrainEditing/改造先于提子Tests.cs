@@ -10,12 +10,12 @@ namespace Siege.Core.Tests.TerrainEditing;
 /// tasks 2.4（裁决 T-3）。
 /// </summary>
 /// <remarks>
-/// <para><b>待决 B-1</b>：规格场景「立栅导致提子」在现行规则下<b>不可实现</b>。
-/// 立栅的边必有一端是匠人落点 A，而第 5 步算提子时 A 已被己方匠人占据；敌串的气是"(敌子 s, 空格 c) 的气边"，
-/// s = A 不成立（A 是己子）、c = A 不成立（A 已占），栅栏也切不断敌串内部连接（A 不是敌子）。
-/// 搭桥只新增空可落子格（只加气），烧林不改气边。因此<b>任何改造都不可能直接导致提子</b>。
-/// 本文件因此把「立栅导致提子」换成结构性守门 <see cref="立栅不改变任何敌串的提子结果"/>：
-/// 它红了就说明边目标口径被放宽，届时应改回规格场景。顺序敏感性由两条搭桥用例正面守住。</para>
+/// <para><b>裁决 T-11（段 B 待决 B-1 的结论）</b>：段 B 的旧口径下立栅的边必有一端是匠人落点 A，
+/// 而第 5 步算提子时 A 已被己方匠人占据——该边既不是敌串的气（s = A 是己子、c = A 已占），
+/// 也切不断敌串内部连接（A 不是敌子），因此<b>任何改造都不可能直接提子</b>（20 局 97 次改造实测 0 次）。
+/// 边目标放宽为"至少一端是匠人落点的几何四邻格"后，匠人可以给<b>两枚敌子之间</b>或<b>敌子与其最后一口气之间</b>立栅，
+/// 规格场景「立栅导致提子」「立栅切断敌串连接」因此成立并在本文件正面守住；
+/// 段 B 的结构性 tripwire <c>立栅不改变任何敌串的提子结果</c> 钉的是旧规则的事实，已随本次放宽删除。</para>
 /// </remarks>
 public class 改造先于提子Tests
 {
@@ -127,44 +127,103 @@ public class 改造先于提子Tests
     }
 
     [Fact]
-    public void 立栅不改变任何敌串的提子结果()
+    public void 立栅导致提子()
     {
-        // 待决 B-1 的结构性守门（替代不可实现的规格场景「立栅导致提子」）：
-        // 立栅的边必有一端是匠人落点，而提子判定时该格已被己方棋子占据，因此栅栏碰不到敌串的气。
-        // 穷举：三个局面 × 每个合法落点 × 该落点的每条合法栅栏，带 / 不带栅栏的提子集合必须完全相同。
-        // 本条红 = 边目标口径被放宽（例如放宽到"至少一端是匠人的四邻格"），届时应改回规格场景。
-        GameBoard[] boards = [Cornered(), Trapped(), Surrounded()];
-        int fencesChecked = 0;
-        foreach (GameBoard board in boards)
+        // terrain-edit「立栅导致提子」（裁决 T-3，口径由 T-11 放宽后才可实现）：
+        // P1 单子 E5 只剩 E5–E6 一条气边。匠人落 E7（**不与 E5 相邻**），给 E5–E6 立栅——
+        // E6 是 E7 的几何四邻，因此该边合法（旧口径下这条边非法，立栅永远提不了子）。
+        GameBoard plainBoard = Trapped();
+        RehearsalResult plain = BatchFixtures.Driver(plainBoard).Rehearse(
+            BatchFixtures.Context(plainBoard, TestMaps.P0), [BatchFixtures.P("E7", PieceType.Artisan)]);
+
+        // 对照：同一落点不带栅栏时一个子都提不掉——被提的原因确实是那道栅栏。
+        Assert.True(plain.IsLegal);
+        Assert.Empty(plain.Captures);
+
+        GameBoard board = Trapped();
+        SettlementDriver driver = BatchFixtures.Driver(board);
+        BatchContext context = BatchFixtures.Context(board, TestMaps.P0);
+        Placement[] batch = [BatchFixtures.Artisan("E7", TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6")))];
+
+        RehearsalResult rehearsal = driver.Rehearse(context, batch);
+        Assert.True(rehearsal.IsLegal, rehearsal.Failure?.Message);
+        Assert.Equal(["E5"], rehearsal.Captures.Select(c => c.Coord).Notations());
+
+        SettlementOutcome outcome = driver.Confirm(context, batch);
+        Assert.True(outcome.Confirmed);
+        Assert.Equal(["E5"], outcome.CaptureRecord!.Captured.Select(c => c.Coord).Notations());
+        Assert.Null(board[TestMaps.At("E5")].Occupant);
+        Assert.True(board.Map.HasFence(TestMaps.At("E5"), TestMaps.At("E6")));
+
+        // 该栅栏记为"直接导致提子"（口径：去掉它后提子集合严格变小）。
+        AppliedTerrainEdit applied = Assert.Single(outcome.CaptureRecord.Edits);
+        Assert.True(applied.CausedCapture);
+        Assert.Equal(TestMaps.At("E7"), applied.ArtisanCoord);
+    }
+
+    [Fact]
+    public void 立栅切断敌串连接后各自算气()
+    {
+        // terrain-edit「立栅切断敌串连接」：P1 的 E5、E6 本是一串（合起来有气）。
+        // 匠人落 E7 给 E5–E6 立栅后二者分属两串：E5 单独 0 气被提，E6 单独仍有 D6 / F6 两口气。
+        GameBoard plainBoard = Chained();
+        plainBoard.Place(TestMaps.At("E7"), TestMaps.P0, PieceType.Artisan);
+        Group whole = plainBoard.GroupAt(TestMaps.At("E5"))!;
+        Assert.Equal(["E5", "E6"], whole.Stones.Notations());
+        Assert.Equal(["D6", "F6"], plainBoard.LibertiesOf(whole).Notations());
+
+        GameBoard board = Chained();
+        SettlementDriver driver = BatchFixtures.Driver(board);
+        BatchContext context = BatchFixtures.Context(board, TestMaps.P0);
+        Placement[] batch = [BatchFixtures.Artisan("E7", TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6")))];
+
+        SettlementOutcome outcome = driver.Confirm(context, batch);
+
+        Assert.True(outcome.Confirmed);
+        Assert.Equal(["E5"], outcome.CaptureRecord!.Captured.Select(c => c.Coord).Notations());
+        Assert.True(outcome.CaptureRecord.Edits.Single().CausedCapture);
+
+        // E6 独立成串并独立算气：栅栏挡住 E5 方向，但 E5 空出来后从 E6 看仍不是气（中间有栅栏）。
+        Group rest = board.GroupAt(TestMaps.At("E6"))!;
+        Assert.Equal(["E6"], rest.Stones.Notations());
+        Assert.Equal(["D6", "F6"], board.LibertiesOf(rest).Notations());
+        Assert.DoesNotContain(TestMaps.At("E5"), board.LibertyNeighbors(TestMaps.At("E6")));
+    }
+
+    [Fact]
+    public void 外圈立栅把自己堵死也算自杀手()
+    {
+        // terrain-edit「改造把自己堵死」的外圈变体（T-11）：匠人 E7 给**己方**孤子 E5 与它唯一的气 E6 之间立栅，
+        // 本批没有提走任何敌串 → 整批判自杀手。旧口径下这条边不合法，本用例证明放宽后自杀判定同样跟着放宽。
+        GameBoard Setup()
         {
-            foreach (Coord cell in board.AllCoords().Where(c => board[c].IsPlayableEmpty))
+            GameBoard b = TestMaps.Blank(size: 9);
+            b.Place(TestMaps.At("E5"), TestMaps.P0, PieceType.Basic);
+            foreach (string cell in new[] { "E4", "D5", "F5" })
             {
-                foreach (TerrainEdit fence in TerrainEditRules.LegalTargets(board.Map, cell)
-                             .Where(e => e.Kind == TerrainEditKind.Fence))
-                {
-                    GameBoard plain = board.Clone();
-                    plain.Place(cell, TestMaps.P0, PieceType.Artisan);
-                    GameBoard fenced = board.Clone();
-                    fenced.Place(cell, TestMaps.P0, PieceType.Artisan);
-                    fenced.ApplyTerrainEdits([fence]);
-
-                    Assert.Equal(
-                        CaptureResolver.FindCaptured(plain, TestMaps.P0).Select(s => s.Coord).Notations(),
-                        CaptureResolver.FindCaptured(fenced, TestMaps.P0).Select(s => s.Coord).Notations());
-                    fencesChecked++;
-                }
+                b.Place(TestMaps.At(cell), TestMaps.P1, PieceType.Basic);
             }
+
+            return b;
         }
 
-        // 样本口径下界：确实检了大量栅栏，也确实有局面本来就会提子（不是"两边恒为空集"的假绿）。
-        Assert.True(fencesChecked > 100, $"只检了 {fencesChecked} 条栅栏，样本太小。");
-        Assert.NotEmpty(CaptureResolver.FindCaptured(Placed(Cornered(), "E5"), TestMaps.P0));
+        GameBoard plain = Setup();
+        Assert.True(BatchFixtures.Driver(plain).Rehearse(
+            BatchFixtures.Context(plain, TestMaps.P0), [BatchFixtures.P("E7", PieceType.Artisan)]).IsLegal);
 
-        static GameBoard Placed(GameBoard board, string cell)
-        {
-            board.Place(TestMaps.At(cell), TestMaps.P0, PieceType.Artisan);
-            return board;
-        }
+        GameBoard board = Setup();
+        SettlementDriver driver = BatchFixtures.Driver(board);
+        BatchContext context = BatchFixtures.Context(board, TestMaps.P0);
+        Placement[] batch = [BatchFixtures.Artisan("E7", TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6")))];
+
+        RehearsalResult rehearsal = driver.Rehearse(context, batch);
+
+        Assert.False(rehearsal.IsLegal);
+        Assert.Equal(BatchFailureKind.Suicide, rehearsal.Failure!.Kind);
+        Assert.Equal(["E5"], rehearsal.Failure.Coords.Notations());
+
+        Assert.False(driver.Confirm(context, batch).Confirmed);
+        Assert.Empty(board.TerrainEdits);
     }
 
     /// <summary>9×9：P1 单子 E5 被 P0 的 E4 / D5 / F5 围住，只剩 E5–E6 一条气边。</summary>
@@ -178,12 +237,13 @@ public class 改造先于提子Tests
         return board;
     }
 
-    /// <summary>9×9 带林地与深水：三种动作都有合法目标，供穷举用。</summary>
-    private static GameBoard Surrounded() => TestMaps.Blank(
-        TestMaps.Terrain(
-            surfaces: [("D4", Surface.DeepWater), ("D5", Surface.DeepWater), ("F4", Surface.Forest)],
-            fences: [("G6", "H6")]),
-        size: 9);
+    /// <summary>9×9：<see cref="Trapped"/> 之上 P1 在 E6 再落一子，与 E5 连成一串；该串的气只剩 D6 / F6 / E7。</summary>
+    private static GameBoard Chained()
+    {
+        GameBoard board = Trapped();
+        board.Place(TestMaps.At("E6"), TestMaps.P1, PieceType.Basic);
+        return board;
+    }
 
     [Fact]
     public void 多个改造同时生效且与顺序无关()
@@ -220,28 +280,38 @@ public class 改造先于提子Tests
     }
 
     [Fact]
-    public void 本批改造一律不记致提子()
+    public void 两道栅栏合围时两条都记致提子()
     {
-        // "直接导致提子"的口径：把这一条改造去掉后提子集合**严格变小**才算 true。
-        // 待决 B-1：现行规则下没有任何改造能做到这一点，因此本条钉的是"恒为 false"——
-        // 规则一旦放宽（立栅能敲敌串的气），本条会红，那时它就是提醒改口径的信号。
-        GameBoard board = Cornered();
+        // terrain-edit「多个改造同时生效」：两枚匠人各立一道栅栏，两道栅栏共同使 P1 的 E5 无气。
+        // "直接导致提子"的口径：把这一条改造去掉后提子集合**严格变小**才算 true——
+        // 两道栅栏各自都是必要的，因此两条都记 true；顺带架的桥记 false。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("B8", Surface.DeepWater)]), size: 9);
+        board.Place(TestMaps.At("E5"), TestMaps.P1, PieceType.Basic);
+        board.Place(TestMaps.At("D5"), TestMaps.P0, PieceType.Basic);
+        board.Place(TestMaps.At("F5"), TestMaps.P0, PieceType.Basic);
+
         SettlementDriver driver = BatchFixtures.Driver(board);
         Placement[] batch =
         [
-            BatchFixtures.Artisan("E5", TerrainEdit.Bridge(TestMaps.At("E6"))),
-            BatchFixtures.Artisan("B7", TerrainEdit.Fence(TestMaps.At("B7"), TestMaps.At("B8"))),
+            BatchFixtures.Artisan("E3", TerrainEdit.Fence(TestMaps.At("E4"), TestMaps.At("E5"))),
+            BatchFixtures.Artisan("E7", TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6"))),
+            BatchFixtures.Artisan("B7", TerrainEdit.Bridge(TestMaps.At("B8"))),
         ];
 
         SettlementOutcome outcome = driver.Confirm(BatchFixtures.Context(board, TestMaps.P0), batch);
 
         Assert.True(outcome.Confirmed);
-        ImmutableArray<AppliedTerrainEdit> edits = outcome.CaptureRecord!.Edits;
-        Assert.Equal(2, edits.Length);
-        Assert.All(edits, e => Assert.False(e.CausedCapture));
+        Assert.Equal(["E5"], outcome.CaptureRecord!.Captured.Select(c => c.Coord).Notations());
+
+        ImmutableArray<AppliedTerrainEdit> edits = outcome.CaptureRecord.Edits;
+        Assert.Equal(3, edits.Length);
+        Assert.Equal(
+            ["E3", "E7"],
+            edits.Where(e => e.CausedCapture).Select(e => e.ArtisanCoord).Order().Notations());
+        Assert.False(edits.Single(e => e.Edit.Kind == TerrainEditKind.Bridge).CausedCapture);
 
         // 改造方留痕仍然完整（日志要用；公开视图不显示）。
-        Assert.Equal(["E5", "B7"], edits.Select(e => e.ArtisanCoord).Order().Notations());
+        Assert.Equal(["E3", "B7", "E7"], edits.Select(e => e.ArtisanCoord).Order().Notations());
     }
 
     [Fact]

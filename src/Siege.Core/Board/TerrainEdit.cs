@@ -6,7 +6,7 @@ public enum TerrainEditKind
     /// <summary>搭桥：目标为一个未架桥的深水格。</summary>
     Bridge,
 
-    /// <summary>立栅：目标为匠人所在格与某个几何四邻格之间的边。</summary>
+    /// <summary>立栅：目标为一条边，其至少一端是匠人所在格的几何四邻格（裁决 T-11）。</summary>
     Fence,
 
     /// <summary>烧林：目标为一个林地格，改造后地表变草地。</summary>
