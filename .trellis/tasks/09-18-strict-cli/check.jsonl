@@ -1,0 +1,5 @@
+{"file": "openspec/changes/strict-cli/proposal.md", "reason": "为什么要做：静默忽略产出过错误数据"}
+{"file": "openspec/changes/strict-cli/design.md", "reason": "设计与取舍"}
+{"file": "openspec/changes/strict-cli/tasks.md", "reason": "任务清单与验证方式，守门测试先行"}
+{"file": "openspec/changes/strict-cli/specs/simulation-harness/spec.md", "reason": "验收基准：未知选项必须报错的 Scenario"}
+{"file": ".trellis/spec/core/testing.md", "reason": "不得改期望凑绿；守门测试必须有变异记录"}

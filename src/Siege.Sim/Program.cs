@@ -28,7 +28,7 @@ public static class Program
             return args[0] switch
             {
                 "play" => Play(cli),
-                "map" => ExportMap(),
+                "map" => ExportMap(cli),
                 "run" => Run(cli),
                 "replay" => Replay(cli),
                 "analyze" => Analyze(cli),
@@ -71,21 +71,19 @@ public static class Program
         Console.InputEncoding = System.Text.Encoding.UTF8;
         ulong? seed = cli.Has("seed") ? cli.GetUInt64("seed", 0) : null;
         var difficulty = Enum.Parse<Core.Ai.AiDifficulty>(cli.Get("difficulty", "Standard"), ignoreCase: true);
-        return Siege.Sim.Play.PlayCommand.Run(
-            seed,
-            cli.GetInt("players", 4),
-            cli.GetInt("seat", 1),
-            difficulty,
-            cli.GetInt("max-rounds", Core.Match.MatchOptions.DefaultMaxMajorRounds),
-            Console.In,
-            Console.Out);
+        int players = cli.GetInt("players", 4);
+        int seat = cli.GetInt("seat", 1);
+        int maxRounds = cli.GetInt("max-rounds", Core.Match.MatchOptions.DefaultMaxMajorRounds);
+        cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
+        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, maxRounds, Console.In, Console.Out);
     }
 
     // ---------- map ----------
 
     /// <summary>地图工具：打印 4 人基准地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 据点 / 出生区与距离表）并导出 maps/&lt;id&gt;.json（权威地图文件）。</summary>
-    private static int ExportMap()
+    private static int ExportMap(CommandLine cli)
     {
+        cli.EnsureRecognized();   // map 不认任何选项；结算在导出 maps/ 之前（strict-cli 2.4）
         MapData map = FourPlayerBaseMap.Create();
         MapValidationResult result = MapValidator.Validate(map);
         TerrainData terrain = map.TerrainData;
@@ -221,8 +219,10 @@ public static class Program
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,
         };
+        bool serial = cli.Flag("serial");
+        cli.EnsureRecognized();   // 读完所有选项、创建输出目录与跑局之前结算（strict-cli 2.4；先于 Validated 以便未知选项优先报出）
         config.Validated();
-        int parallelism = cli.Flag("serial") ? 1 : config.EffectiveParallelism;
+        int parallelism = serial ? 1 : config.EffectiveParallelism;
 
         Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，{config.PlayerCount} 人，并行度 {parallelism}，大回合上限 {config.MaxMajorRounds}，据点分值 {config.SiteValues}，输出 {outDir}");
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, outDir, parallelism, Console.Out);
@@ -238,6 +238,13 @@ public static class Program
         string path;
         if (cli.GetOrNull("file") is { } file)
         {
+            // --file 与 --dir/--seed 是两种互斥的定位方式；混用必须报错，而不是静默忽略后者——
+            // 静默忽略正是 strict-cli 要消灭的失败模式（design D2）。
+            if (cli.Has("dir") || cli.Has("seed"))
+            {
+                throw new ArgumentException("replay 的 --file 与 --dir/--seed 是两种定位方式，不能混用。");
+            }
+
             path = file;
         }
         else
@@ -249,6 +256,8 @@ public static class Program
                 ?? throw new FileNotFoundException($"目录 {dir} 里没有种子 {hex} 的日志。");
         }
 
+        // 两个分支都已把 file / dir / seed 读过（混用在上面就报错了），所以结算不需要任何"声明放行"的白名单。
+        cli.EnsureRecognized();
         MatchLog original = MatchLog.Read(path);
         Console.WriteLine($"回放 {path}：种子 {original.Header.Seed}，{original.Turns.Count} 小回合，{(original.IsFailed ? "失败局" : original.Result!.Reason)}");
         ReplayResult result = Replayer.Replay(original);
@@ -268,12 +277,13 @@ public static class Program
     private static int Analyze(CommandLine cli)
     {
         string dir = cli.GetOrNull("dir") ?? throw new ArgumentException("analyze 需要 --dir <目录>。");
-        List<MatchLog> logs = MatchLog.ReadDirectory(dir);
         var options = new AnalysisOptions { IncludeContaminated = cli.Flag("include-contaminated") };
+        string outPath = cli.Get("out", Path.Combine(dir, "report.txt"));
+        cli.EnsureRecognized();   // 读完所有选项、读日志与写报告之前结算（strict-cli 2.4）
+        List<MatchLog> logs = MatchLog.ReadDirectory(dir);
         BalanceReport report = BalanceAnalyzer.Analyze(logs, options);
         string text = ReportWriter.Render(report);
         Console.WriteLine(text);
-        string outPath = cli.Get("out", Path.Combine(dir, "report.txt"));
         File.WriteAllText(outPath, text);
         Console.WriteLine($"报告已写入 {outPath}");
         return 0;
