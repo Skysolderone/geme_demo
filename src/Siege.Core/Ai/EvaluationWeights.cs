@@ -36,19 +36,20 @@ public sealed record EvaluationWeights(
     int Supply)
 {
     /// <summary>
-    /// 默认权重。<see cref="Safety"/> = 27 是校准值（scoring-sites 段 C，负责人 2026-09-17 拍板，裁决 S-15）：4 人基准图 v4、
+    /// 默认权重。<see cref="Safety"/> = 35 是校准值（artisan-terrain-edit 段 D，负责人 2026-09-18 拍板，裁决 T-13）：4 人基准图 v4、据点分值 5 / 15 / 45、匠人征募权重 5、4 人 Standard AI、种子 1–200、大回合上限 15，
     /// 据点分值 5 / 15 / 45、4 人 Standard AI、种子 1–200、大回合上限 15，
-    /// 按 3 / 5 / 7 / 8 / 10 / 20 / 30 / 40 / 60 九档加 22 / 25 / 27 加密档各跑 200 局（数据在 <c>sim-out/sites-safety&lt;N&gt;/</c>）。
-    /// <para>第 3 大回合领先者胜率：3→80.5%、5→95.5%、10→95.0%、20→95.5%、22→76.0%、25→31.0%、27→25.5%、30→17.0%、40→13.5%、60→15.5%。
-    /// 20 以下领先者在第 4 大回合先手抢光岛上石碑、滚雪球；22–27 之间逐步转为围绕石碑相持。
-    /// 取 27：领先者胜率落在 25% 基线上，不收敛率 6.5%，整局无提子 0 局；40 / 60 有过半对局整局无提子而出局，30 的 17% 显著低于基线。
-    /// 代价：打法偏保守，每批次提子 0.29，石碑争议 52%，终局据点分占比 22.1%（低于 25% 目标）。</para>
+    /// 按 25 / 27 / 30 / 35 / 40 / 45 各跑 200 局（数据在 <c>sim-out/artisan-w5-s&lt;N&gt;/</c>，匠人权重档在 <c>sim-out/artisan-w&lt;N&gt;/</c>）。
+    /// <para>第 3 大回合领先者胜率（匠人权重 5）：25→44.0%、27→35.5%、30→34.5%、35→24.0%、40→22.5%、45→23.0%。
+    /// 40 与 45 各有 78 / 94 局整局无提子（目标 ≤ 5%），出局；35 的整局无提子 0 局、不收敛率 26.0%（全档最低）、
+    /// 终局据点分占比 31.5%（落进 25–45% 目标）、每批次提子 0.52（scoring-sites 终版为 0.29）。
+    /// 匠人权重先扫 5 / 10 / 18（Safety 27）：领先者胜率 35.5% / 45.5% / 51.5%、不收敛率 38.0% / 44.5% / 57.0%，取 5。
+    /// 遗留：不收敛率 26% 仍显著高于 scoring-sites 终版的 6.5%，成因是栅栏使盘面更难填满；本轮不动终局条件（Non-goals）。</para>
     /// <para>旧值 5 是地形改造前 v2 领地计分下的校准（ai-safety-weight），在据点计分下已失效。
     /// 其余六维仍是 heuristic-ai 阶段的未校准初值，各自独立成轮；以它们产出的基线数据在引用时须注明权重口径。
     /// 调这一维必须双向扫档，不得只朝一个方向试探。</para>
     /// </summary>
     public static readonly EvaluationWeights Default = new(
-        PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 27, Growth: 4, Initiative: 20, Supply: 2);
+        PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2);
 
     /// <summary>某维度的权重。</summary>
     public int Of(EvaluationDimension dimension) => dimension switch

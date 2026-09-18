@@ -16,7 +16,7 @@ public class 默认评价权重的校准Tests
     [InlineData(EvaluationDimension.PowerGain, 10)]
     [InlineData(EvaluationDimension.EnemyLoss, 8)]
     [InlineData(EvaluationDimension.Relic, 6)]
-    [InlineData(EvaluationDimension.Safety, 27)]
+    [InlineData(EvaluationDimension.Safety, 35)]
     [InlineData(EvaluationDimension.Growth, 4)]
     [InlineData(EvaluationDimension.Initiative, 20)]
     [InlineData(EvaluationDimension.Supply, 2)]
@@ -45,13 +45,13 @@ public class 默认评价权重的校准Tests
     [Fact]
     public void 安全权重取校准值()
     {
-        // scoring-sites 段 C（裁决 S-15）：v4 基准图、据点分值 5/15/45，九档 + 22/25/27 加密档各 200 局，取 27
-        // （第 3 大回合领先者胜率 25.5%、不收敛率 6.5%、整局无提子 0 局）。
-        Assert.Equal(27, EvaluationWeights.Default.Safety);
-        Assert.Equal(27, EvaluationWeights.Default.Of(EvaluationDimension.Safety));
+        // artisan-terrain-edit 段 D（裁决 T-13）：v4 + 据点分值 5/15/45 + 匠人权重 5，Safety 25/27/30/35/40/45 各 200 局，取 35
+        // （第 3 大回合领先者胜率 24.0%、整局无提子 0 局、不收敛率 26.0%、据点分占比 31.5%）。
+        Assert.Equal(35, EvaluationWeights.Default.Safety);
+        Assert.Equal(35, EvaluationWeights.Default.Of(EvaluationDimension.Safety));
 
-        // 旧值 5 是 v2 领地计分下的校准，在据点计分下领先者胜率 95.5%，已被扫档否定。
-        Assert.NotEqual(5, EvaluationWeights.Default.Safety);
+        // 旧值 27 是无匠人时的校准，加入匠人后领先者胜率 35.5%、不收敛 38%；更早的 5 在据点计分下是 95.5%。二者均已被扫档否定。
+        Assert.NotEqual(27, EvaluationWeights.Default.Safety);
 
         // 更早的初值 20 是 v1 上 5 局 2 颗种子试出的未校准值，已被扫档否定。
         Assert.NotEqual(20, EvaluationWeights.Default.Safety);
@@ -108,7 +108,7 @@ public class 默认评价权重的校准Tests
         Assert.Contains($"= {actual} 是校准值", src, StringComparison.Ordinal);
 
         // 依据必须指向可复查的数据，而不只是一句结论。
-        Assert.Contains("sim-out/sites-safety", src, StringComparison.Ordinal);
+        Assert.Contains("sim-out/artisan-w5-s", src, StringComparison.Ordinal);
         Assert.Contains("200 局", src, StringComparison.Ordinal);
 
         // 反面：已被扫档推翻的旧结论不得留在注释里——留着会把下一个人往反方向引。

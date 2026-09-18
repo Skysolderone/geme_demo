@@ -24,7 +24,11 @@ public class 地形改造日志与分析Tests
         // 结果必须与这一局终局时的真实地形**逐项**相同——桥集合、栅栏集合、每一格的地表与可落子性。
         // 只比条数或只比自己算出来的期望值是恒真断言，挡不住"日志漏记一条改造"。
         // 这里走 MatchSession（而不是 BatchRunner.Execute），因为只有它同时给得到日志与活的对局终态。
+        // 权重写死，不取 EvaluationWeights.Default：下面「样本里确实有致提子的改造」依赖 AI 的实际走法，
+        // 默认权重一校准（scoring-sites 的 27、artisan 的 35）样本就会变，那属于校准而非日志保真度的回归。
+        var pinned = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 27, Growth: 4, Initiative: 20, Supply: 2);
         RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, maxRounds: 6, difficulty: AiDifficulty.Standard);
+        config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 
         for (int i = 0; i < config.Count; i++)
