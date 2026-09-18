@@ -108,8 +108,22 @@ public sealed record BoardReadingDiff(ImmutableArray<ReadingDiffCell> CoveredNot
 
 // ---------- 盘面层 · 棋串读法 ----------
 
-/// <summary>盘面层棋串读法的一条棋串：轮廓（棋子集合）、全部气位与危险等级。</summary>
-public sealed record LibertyGroupView(PlayerId Owner, ImmutableArray<Coord> Stones, ImmutableArray<Coord> Liberties, int LibertyCount, DangerLevel Level);
+/// <summary>
+/// 盘面层棋串读法的一条棋串：轮廓（棋子集合）、全部气位、危险等级与<b>栅栏侧</b>。
+/// </summary>
+/// <param name="FenceSides">
+/// 该棋串被栅栏堵住的那些侧（tactical-layers「棋串读法」：栅栏侧 MUST 与空侧可区分，玩家据此看出气边被堵在哪里）：
+/// 地形里恰有一端落在 <paramref name="Stones"/> 上的边。同一条棋串的两枚子之间不可能有栅栏——立栅当场把棋串切成两条，
+/// 所以"恰一端在串上"就是这条串全部的栅栏侧。本字段只做数据过滤（读 <see cref="TerrainData.Fences"/>），不算邻接、不判气。
+/// 预置栅栏与本局立起的栅栏在这里<b>不区分</b>（information-visibility「改造结果公开」）。
+/// </param>
+public sealed record LibertyGroupView(
+    PlayerId Owner,
+    ImmutableArray<Coord> Stones,
+    ImmutableArray<Coord> Liberties,
+    int LibertyCount,
+    DangerLevel Level,
+    ImmutableArray<FenceEdge> FenceSides);
 
 /// <summary>盘面层的棋串读法。集合来自 Core 气快照（按气边导出）。两个内容 record 不合并——它们携带的字段本就不同（merge-board-layer D5）。</summary>
 public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
@@ -227,8 +241,16 @@ public static class TacticalLayers
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(thresholds);
+        ImmutableArray<FenceEdge> fences = [.. world.View.Board.Map.TerrainData.Fences];
         return new LibertyLayerContent(
-            [.. world.Supplement.Liberties.Select(g => new LibertyGroupView(g.Owner, g.Stones, g.Liberties, g.Count, thresholds.Classify(g.Count)))],
+            [
+                .. world.Supplement.Liberties.Select(g =>
+                {
+                    var stones = g.Stones.ToHashSet();
+                    return new LibertyGroupView(g.Owner, g.Stones, g.Liberties, g.Count, thresholds.Classify(g.Count),
+                        [.. fences.Where(f => stones.Contains(f.A) || stones.Contains(f.B)).OrderBy(f => f.A).ThenBy(f => f.B)]);
+                }),
+            ],
             thresholds,
             ReadingDiff(world));
     }

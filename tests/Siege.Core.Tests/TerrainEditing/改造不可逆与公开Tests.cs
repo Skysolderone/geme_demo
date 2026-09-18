@@ -94,4 +94,42 @@ public class 改造不可逆与公开Tests
             BatchFixtures.Context(board, TestMaps.P1), [BatchFixtures.Artisan("C4", TerrainEdit.Bridge(TestMaps.At("D4")))]);
         Assert.Equal(TestMaps.At("C4"), outcome.CaptureRecord!.Edits.Single().ArtisanCoord);
     }
+
+    [Fact]
+    public void 默认棋盘上的新旧设施同形且不带改造者()
+    {
+        // terrain-edit「改造公开」+ visual-style-baseline「新旧设施同形」在<b>表现层</b>的落点（tasks 4.1「公开视图含当前设施」）：
+        // 默认棋盘的桥 / 栅栏 / 地表字段里分不出预置与本局新增，且整个闭包里没有改造者。
+        // 变异验证 M-SC3（实做）：DefaultBoardView.From 把 Edits 恒传 [] → 本测试红（Edits.Length 3 → 0，落成反馈失去数据来源）。
+        TerrainData terrain = TestMaps.Terrain(
+            surfaces: [("D4", Surface.DeepWater), ("F4", Surface.DeepWater), ("G4", Surface.Forest), ("H4", Surface.Forest)],
+            bridges: ["D4"],
+            fences: [("B1", "B2")]);
+        MatchFlow match = MatchFixtures.Started(terrain).AtRound(5);
+        match.Board.ApplyTerrainEdits(
+            [TerrainEdit.Bridge(TestMaps.At("F4")), TerrainEdit.Fence(TestMaps.At("C1"), TestMaps.At("C2")), TerrainEdit.Burn(TestMaps.At("H4"))]);
+        match.Debug.Recalculate();
+
+        Siege.Presentation.Visibility.DefaultBoardView board = match.World(MatchFixtures.P0).Board();
+
+        // 预置桥 D4 与本局架的桥 F4：三个可见字段逐项相同。
+        Siege.Presentation.Visibility.BoardCellView preset = board.CellAt(TestMaps.At("D4"));
+        Siege.Presentation.Visibility.BoardCellView built = board.CellAt(TestMaps.At("F4"));
+        Assert.Equal((preset.Terrain, preset.Surface, preset.HasBridge), (built.Terrain, built.Surface, built.HasBridge));
+        Assert.True(built.HasBridge);
+
+        // 预置栅栏与本局立的栅栏混在同一个集合里，没有第二个字段区分。
+        Assert.Equal(
+            [new FenceEdge(TestMaps.At("B1"), TestMaps.At("B2")), new FenceEdge(TestMaps.At("C1"), TestMaps.At("C2"))],
+            board.Fences);
+
+        // 被烧的林地读起来就是草地（未烧的 G4 仍是林地）。
+        Assert.Equal(Surface.Grass, board.CellAt(TestMaps.At("H4")).Surface);
+        Assert.Equal(Surface.Forest, board.CellAt(TestMaps.At("G4")).Surface);
+
+        // Edits 只是"本局改了哪几处"的清单，没有归属；整个闭包里不存在带改造方的记录类型（R-3）。
+        Assert.Equal(3, board.Edits.Length);
+        Assert.DoesNotContain(typeof(TerrainEditRecord), PresentationFixtures.ReachableTypes(typeof(Siege.Presentation.Visibility.DefaultBoardView)));
+        Assert.DoesNotContain(typeof(TerrainEditRecord), PresentationFixtures.ReachableTypes(typeof(Siege.Presentation.Visibility.PublicWorld)));
+    }
 }

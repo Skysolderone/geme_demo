@@ -731,3 +731,249 @@ M-T2 证明的正是"改其一即红"，且红的第一条就是那条同源守�
 | Godot | 未改 `src/godot` 与 `Siege.Presentation` | 按约定未跑 `--build-solutions` |
 
 `sim-out/` 不提交（`sim-out/check-3` 已清理）。本次检查**未 commit**。
+
+---
+
+## 段 C（tasks 4.1–4.3：Presentation 与 Godot 的改造呈现）
+
+不含第 5 / 6 组。**没有改规则、参数与任何 Core 规则口径**；Core 只加了一个把既有规则结果投影出去的预演字段。
+
+### 改动文件
+
+**Core（只投影，不新增规则）**
+
+| 文件 | 改动 |
+|---|---|
+| `src/Siege.Core/Preview/BatchPreview.cs` | 新增 `EditOutlook(ArtisanCell, Chosen, Legal)` 与 `BatchPreview.EditOptions`；`BatchPreviewBuilder.Build` 对每枚暂放匠人调 `TerrainEditRules.LegalTargets(board.Map, 落点)`（改造合法性**唯一实现**，按批次开始前的地形，与预演第 1 步同源）。失败路径与第 1–2 步失败的早退路径都照样填——玩家正是要靠它换目标。**不在这里剔除"本批别人已选走的目标"**：批内唯一是 `BatchRehearsal` 的判定（`DuplicateEditInBatch`），复制一份就是第二实现 |
+
+**Presentation**
+
+| 文件 | 改动 |
+|---|---|
+| `Preview/PreviewPresentation.cs` | `HighlightKind` 加 `EditTarget` / `ChosenEdit`；新增 `EdgeHighlight(FenceEdge, HighlightKind)`（立栅的目标是**边**，格高亮表达不了）、`EditTargetView`、`ArtisanEditView`（带 `BridgeCells` / `BurnCells` / `FenceEdges` 三个读数）；`StagedPieceView` 加 `Edit` / `EditText`；`PreviewPresentation` 加 `ArtisanEdits` 与 `EdgeHighlights`。`ArtisanEdit()` 只标"哪个被选中"并拼文案，**不增删条目**（增删 = 表现层重判一次合法性） |
+| `Style/VisualBaseline.cs` | `HighlightStyle` 加 `EditTargetHint`（半透明贴地虚线）/ `EditChosenMark`（实心立起）；`StyleOf` / `LayerOf` 补两条，两者都落在 `RenderLayer.PreviewHighlights`——tactical-layers 要求目标在**默认棋盘**上就可见，MUST NOT 依赖打开信息层 |
+| `Layers/LayerContents.cs` | `LibertyGroupView` 加 `FenceSides`：地形里**恰有一端落在本串棋子上**的边。同一串两枚子之间不可能有栅栏（立栅当场分串），所以"恰一端"就是全部栅栏侧。纯数据过滤（读 `TerrainData.Fences`），**不碰 `Adjacency`**（它在表现层禁表里） |
+| `Visibility/DefaultBoardView.cs` | 加 `Edits`（`GameBoard.TerrainEdits` 的投影，无归属）——**唯一用途**是让渲染层认出"这一帧刚多出来的那条改造"给一次落成反馈；注释写明 MUST NOT 据此把新设施画得与预置不同。`HasBridge` / `Fences` 的注释改写为"当前"（预置与本局新增在这里本来就分不出） |
+| `Text/Labels.cs` | `TerrainEdit(edit)` →「搭桥 D4」「立栅 E5–E6」「烧林 F4」（动作名取 `TerrainEdit.DisplayName` 唯一一份）；`Edge(FenceEdge)` |
+
+**Godot**
+
+| 文件 | 改动 |
+|---|---|
+| `scripts/LowPoly.cs` | `ScaffoldParts` 由占位（四立柱 + 横梁）改为定稿：**偏心斜立木柄 + 柄顶横置宽槌头 + 一道斜撑**；新增 `EditEdgeMark(alongX, material, upright)`——贴边的三段虚线短条，`upright` 时另立一道 0.18 高亮板 |
+| `scripts/BoardView.cs` | `TurnFlash` 加 `Edits`；`Build` 记下 `_zoneOwners` 与 `TerrainKeyOf(board)` 地形指纹，`Refresh` 开头指纹不符即整体重搭（**2.6 第 12 条的更正，见下**）；`Refresh` 加 `focus` 形参；`DrawPreview` 画候选 / 已选目标；`DrawFlash` 画落成反馈；新增 `AddEditFence`（位置算式与 `AddFence` 同一份，不引入第二份坐标换算） |
+| `scripts/Visuals.cs` | `EditTarget`（冷青白 150,230,240）/ `EditChosen`（暖亮黄 255,226,120）/ `EditDone`（近白 255,250,220）三色，都不是木料色——与真设施一眼分得开 |
+| `scripts/MatchSession.cs` | `CycleEdit(preferred)`：候选**整份**取自 `ArtisanEditView.Targets`，只做"取下一位"的下标运算；换目标靠撤回后原位重暂放（`StagedBatch.Replace` 只换类型、不带改造目标）。`StageArtisanPreferringBurn()`（演示用，见下）。`RunAiTurn` 的 `TurnFlash` 补 `[]` |
+| `scripts/InputBindings.cs` | `CycleEditAction`（`E` / 手柄左肩键） |
+| `scripts/Hud.cs` | 预演面板加「改造」一节：每枚匠人一行"落点 → 已选动作与目标（可选 N 个，[E] 轮换）" |
+| `scripts/GameRoot.cs` | `NewEdits()` 按 `DefaultBoardView.Edits` 增量给出落成反馈（AI 结算 / 本人确认 / 演示三条路径统一走它，不改 `RunAiTurn` 与 `Confirm` 的签名）；`E` 键接 `CycleEdit(_hover)`；`Refresh` 传 `_hover` 作为 focus；`--rounds=N` 启动选项；`Capture` 另打四行（六种棋子各多少枚及坐标 / 本局改造 / 当刻暂放与改造高亮 / 落成反馈）；无人值守演示改动见下 |
+
+**测试**
+
+| 文件 | 内容 |
+|---|---|
+| `tests/…/BatchPreview/改造在预演中的呈现Tests.cs`（新，5 条） | `显示改造目标` / `显示可改造目标` / `可改造目标逐条来自改造合法性唯一实现`（全盘每格与 `TerrainEditRules.LegalTargets` 逐条相等且同序）/ `改造后的气与自杀风险` / `改造目标非法时仍列出全部合法目标` |
+| `tests/…/TacticalLayers/改造在默认棋盘与棋串读法里的呈现Tests.cs`（新，3 条） | `暂放匠人时标出可改造目标`（全程不调 `world.Layer(...)`）/ `棋串读法区分栅栏侧` / `立栅后栅栏侧与差集都随改造更新` |
+| `tests/…/TerrainEditing/改造不可逆与公开Tests.cs` | 新增 `默认棋盘上的新旧设施同形且不带改造者`（预置桥 D4 与本局架的 F4 三个字段逐项相同；两道栅栏混在同一集合；烧过的 H4 读作草地而 G4 仍是林地；`DefaultBoardView` 与 `PublicWorld` 的闭包里都没有 `TerrainEditRecord`） |
+| `tests/…/BatchPreview/UI层不含规则计算Tests.cs` | `ForbiddenTypes` 加 `TerrainEditRules` / `TerrainWriter` |
+| `tests/…/BatchPreview/Godot层不含规则计算Tests.cs` | token 表加 `"TerrainEditRules."` / `"TerrainWriter."` / `"ApplyTerrainEdits"`（**4.3**） |
+| `tests/…/VisualStyleBaseline/六种棋子的轮廓语言Tests.cs` | 只改注释：匠人轮廓由"占位"改为"定稿"，指向 `art/artisan-v4/README.md` |
+
+### 16 条边高亮的读法方案与理由
+
+**方案：候选边一律贴在边上画半透明的三段虚线短条，不做任何偏移；一次只显示一枚匠人的候选。**
+
+1. **几何事实替我们选了**：一枚匠人的 16 条候选边恰好是"以匠人格为中心的十字五格区域的 12 条外轮廓边 + 匠人格自身的 4 条边"。
+   屏幕上就是**一个十字轮廓套一个小方框**，中心正是匠人——"这条边属于哪个落点"由图形本身回答，不需要额外线索。
+2. **否决"朝匠人落点一侧收缩"**：判断一条边的哪一端靠匠人需要四邻判定，而 `FenceEdge` 构造即按字典序归一、端点角色已丢。
+   表现层禁用 `Adjacency`、Godot 禁用 `.Neighbors(`，两边都不能自己算邻接；为此改 `TerrainEditRules` 的返回形状属于越界。
+3. **多匠人靠"只显示一枚"解决**：光标停在哪枚已暂放的匠人上就显示那枚的候选，否则显示最后暂放的那枚——两个十字叠在一起才是真正看不清的情形。
+   **已选**目标不受此限，全部匠人的一直都画：它是要提交的动作。
+4. **候选 / 已选 / 真设施三层分开**：候选 = 贴地青白半透明虚线；已选 = 同样虚线 + 立起的暖黄实心亮板；真栅栏 = 棕木三柱两杆、高 0.30。
+   明暗、实虚、立卧三条通道都不同，灰度下也分得开。
+5. **选目标用键不用点边**：拾取原语是格（`BoardGeometry.TryPick` 的数学投影），边要再做一次消歧，代价不值。
+   `E` 键在"不改造 → 目标 1 → … → 目标 N → 不改造"之间轮换。
+
+### 2.6 第 12 条的更正
+
+段 B 写的是"`BoardView` 的渲染态缓存不需要失效机制，因为 `GameRoot` 每次刷新都重跑 `_board.Build(...)`"。
+**实际不是**：`Build` 只在 `_Ready`、选出生区、重开局三处被调用，`Refresh` 完全不碰地砖、水面、栅栏与 `_levels`。
+不改的话，AI 架的桥 / 立的栅 / 烧的林一处都不会显示，且新桥格不进 `_levels` → 拾取拿不到它（`--pick-check` 在第 2 帧就跑完，抓不到这个回归）。
+本段补上：`Build` 时记一份**地形指纹**（每格可落子 / 高度 / 地表 / 有无桥 + 全部栅栏边，只读默认棋盘视图模型），`Refresh` 开头指纹不符即整体重搭。
+
+### 为什么没给 `MatchPublicView` 加"可改造目标"字段
+
+派发提示提醒过这条路会先撞上 `改造结果人人可见且不显示改造者` 的反射守门。**结论是这条路根本不该走**：
+"暂放匠人的合法改造目标"依赖**本人尚未确认的批次**，而暂放是私有信息（§13.2「对手尚未确认的批次部署」，
+`敌方未确认批次不可读` 已钉住公开视图闭包里没有 `StagedBatch` / `Placement`）。所以它只能随**预演**走，进不了公开快照。
+
+4.1 说的"公开视图含当前设施"由 `DefaultBoardView` 承担，且**段 B 就已经成立**（`HasBridge` / `Surface` / `Fences` 都从活的 `Map` 现取，
+2.6 第 11 条有测试）；本段只把注释改准、加上供落成反馈定位用的 `Edits`，并补一条"新旧设施同形 + 闭包无改造者"的守门
+（`DefaultBoardView` 与 `PublicWorld` 两个根都断言了 `TerrainEditRecord` 不可达）。
+`ArtisanEditView` 与 `EdgeHighlight` 只出现在 `PreviewPresentation`（`ViewerWorld.Preview()` 的返回值，结构上只给本人）。
+
+### 无人值守演示（`--auto-demo`）的三处改动
+
+原先本人席位只 Pass 与摆第一种手牌，匠人与三种改造在自检里**一次都跑不到**。本段补三条（全在演示代码路径里，
+不是 AI 估值、不动任何规则）：
+
+1. `AutoPick()`：征募阶段真的挑一个候选（原先只渲染面板不点），有匠人就挑匠人。
+2. `StageArtisanPreferringBurn()`：把匠人摆到"此刻能烧林"的落点（用"暂放 → 看预演给的目标 → 不合意就撤回"的笨办法找；
+   判断只读 `ArtisanEditView.BurnCells`，界面一次都没自己算过合法性）。另外加了 `CanConfirm` 这一关——
+   `LegalRange` 只过了预演第 1–2 步，落到会被闷死的格上整批会以自杀手被拒（实测第一版就踩了：D5 那座刚架的桥四面是敌子）。
+3. 摆下匠人后按 `E` 轮换到目标；有烧林目标就一路轮到烧林——**烧林是三种动作里最难被跑到的**（全图 4 格林地 + 裁决 T-12 的候选拥挤，
+   AI 实测 0 次；本段另扫了种子 1–30 × 14 大回合的 `--auto-demo`，AI 烧林仍是 **0 次**）。
+
+副作用：`--auto-demo` 的终局数值与段 B 不同（本人现在会征募、会落匠人、会改造）。这是自检脚本的行为变化，不影响任何规则测试。
+
+### 验证结果
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 构建 | `dotnet build siege.sln -c Release` | EXIT 0，0 警告 0 错误 |
+| 全量测试 | `dotnet test -c Release --nologo`（`set -o pipefail`） | EXIT 0，**896** 通过（基线 887 + 9） |
+| Godot 构建 | `$G --headless --path src/godot --build-solutions --quit` | **EXIT 0** |
+| Godot 自检 | `$G --headless --path src/godot --quit-after 3000 -- --auto-demo` | **EXIT 0** |
+| Godot 拾取 | `$G --headless --path src/godot --quit-after 3000 -- --auto-demo --pick-check` | **EXIT 0**，`可落子格 105，往返一致 105，失败 0`（**105/105**） |
+
+`$G = D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64_console.exe`
+
+### 截图
+
+`art/artisan-v4/`，8 张 PNG + 1 张灰度版 + `README.md` 人工清单（画法约定、16 条边的读法、逐项核对 9 条、已知限制、存档表）。
+全部出自同一条可复现跑法：默认种子 20260915、`--auto-demo --rounds=9`（不带 `--headless`）。
+
+| 文件 | 尺寸 | 内容 |
+|---|---|---|
+| `art/artisan-v4/artisan-v4-edit-targets.png` | 1600×900 | 第 47 帧：J6 暂放匠人，已选 烧林 J5，候选 桥 1 / 栅 15 / 林 1；信息层关 |
+| `art/artisan-v4/artisan-v4-fence-before.png` | 1600×900 | 第 39 帧：本局改造 0 处；D1 暂放匠人 + 已选 立栅 B1–C1（候选 10 条边） |
+| `art/artisan-v4/artisan-v4-fence-after.png` | 1600×900 | 第 40 帧：改造 1 处（立栅 B1–C1）+ 落成反馈 |
+| `art/artisan-v4/artisan-v4-bridge-before.png` | 1600×900 | 第 41 帧：改造 1 处，D5 仍是深水 |
+| `art/artisan-v4/artisan-v4-bridge-after.png` | 1600×900 | 第 42 帧：改造 2 处（+ 搭桥 D5）+ 落成反馈 |
+| `art/artisan-v4/artisan-v4-burn-before.png` | 1600×900 | 第 52 帧：改造 2 处，J5 仍是林地；J6 暂放匠人 + 已选 烧林 J5 |
+| `art/artisan-v4/artisan-v4-burn-after.png` | 1600×900 | 第 53 帧：改造 3 处（+ 烧林 J5）+ 落成反馈；匠人 3 枚 |
+| `art/artisan-v4/artisan-v4-six-pieces.png` | 1600×900 | 第 96 帧：六种棋子同屏——普通 10 / 堡垒 23 / 连珠 4 / 倍增 5 / 协同 8 / **匠人 4**（C1、M4、E5、C7） |
+| `art/artisan-v4/artisan-v4-six-pieces-gray.png` | 1600×900 | 上图灰度版（PIL `convert('L')`） |
+
+**截图未读进会话**；上表内容取自截图时控制台打印的视图模型读数。
+
+### 变异验证逐条
+
+脚本（`scratchpad/mutate_c.py`，**不入库**；命令 `python mutate_c.py M-SC1`，键名即下表编号）二进制读写、
+按每文件实测行尾归一锚点并 `assert count == 1`、`finally` 还原后与原文逐字节 `assert`；
+全部用**运行时恒假**的条件而不是 `if (false)`（段 B 教训：`TreatWarningsAsErrors` 下 CS0162 会变成"编译失败的假红"）。
+
+| 编号 | 文件 | 变异 | 红掉的测试 | 还原 |
+|---|---|---|---|---|
+| **M-SC1** | `Core/Preview/BatchPreview.cs` | `EditOptions` 只留以落点为端的内圈边（回到 T-11 之前的口径） | EXIT 1，红 **4**：`显示可改造目标`、`可改造目标逐条来自改造合法性唯一实现`、`改造目标非法时仍列出全部合法目标`、`暂放匠人时标出可改造目标` | 逐字节一致 |
+| **M-SC2** | `Presentation/Layers/LayerContents.cs` | `LibertyGroupView.FenceSides` 恒给 `[]` | EXIT 1，红 **2**：`棋串读法区分栅栏侧`、`立栅后栅栏侧与差集都随改造更新` | 逐字节一致 |
+| **M-SC3** | `Presentation/Visibility/DefaultBoardView.cs` | `From` 把 `Edits` 恒传 `[]`（落成反馈失去数据来源） | EXIT 1，红 **1**：`默认棋盘上的新旧设施同形且不带改造者` | 逐字节一致 |
+| **M-SC4** | `Presentation/Preview/PreviewPresentation.cs` | `ArtisanEdit` 里加一条恒假分支调 `TerrainEditRules.Reject(...)`（表现层自判合法性） | EXIT 1，红 **1**：`UI层不含规则计算Tests.表现层不调用规则计算入口` | 逐字节一致 |
+| **M-SC5**（4.3 点名） | `godot/scripts/BoardView.cs` | `DrawPreview` 加 `if (_width < 0) { _ = Siege.Core.Board.TerrainEditRules.LegalTargets(null!, default); }` | EXIT 1，红 **1**：`Godot层不含规则计算Tests.Godot层不调用规则计算入口` | 逐字节一致 |
+
+五条全部还原后复跑全量：EXIT 0、**896** 通过。
+
+### 偏离与待决
+
+1. **`--rounds=N` 是本段新增的启动选项**（缺省行为不变：自动演示 4、手动 15）。只为让自检跑得到岛心、拍得到烧林前后；
+   规格与规则不受影响。需要负责人点头的话在段 E 一并处理。
+2. **`--auto-demo` 的本人席位行为变了**（会征募、优先匠人、优先烧林落点、按 `E` 选目标）。终局数值与段 B 不同。
+   这是自检脚本的覆盖度改进，不是 AI 估值改动；若负责人希望自检保持"纯 Pass"的旧形态，这三条可以整块回退——
+   代价是三种改造的截图与 Godot 侧的改造链路再次无人跑过。
+   **开销**：`StageArtisanPreferringBurn` 每个匠人回合最多把合法落子范围走一遍（105 格 × 一次暂放 + 重建世界 + 预演 + 撤回）。
+   实测 `--auto-demo --rounds=9` 全程 11.7 秒、默认 4 大回合的 `--quit-after 3000` 通过；若以后收紧 `--quit-after`，先看这里。
+3. **AI 仍然从不烧林**：本段另扫种子 1–30 × 14 大回合的 `--auto-demo`，AI 烧林 0 次，与裁决 T-12 的观察一致。
+   扫档（段 D）时第 11 项的烧林次数若仍接近 0，D-H 的"再单开一轮加林地"就该被提上来。
+4. **2.6 第 12 条的说法有误，已在本段更正并补实现**（见上）。段 E 写 `boundaries.md` 时请连带把这条更正带上。
+5. **第 9 项人工检查（棋串读法的栅栏侧）没有截图**：它要在运行时按住 `1` + `Tab` 才出现，`--auto-demo` 的信息层轮换帧
+   与"挨着栅栏的棋串"不一定同时成立。数据层由 `棋串读法区分栅栏侧` 与 `立栅后栅栏侧与差集都随改造更新` 钉住，
+   画面需要人工跑一次。
+6. **落成反馈是 1.2 秒的瞬时效果**，静态截图只能证明"有"，"够不够显眼"要跑一次真机看（人工清单第 4a / 5a / 6a 项）。
+7. **未 commit**（按派发要求）。`art/artisan-v4/` 是新增目录，需要随本段一起提交。
+
+---
+
+## 段 C 检查
+
+检查范围：tasks 第 4 组 4.1–4.3 的未提交改动。**未 commit**。没有动规则、参数、日志与分析（越段项一条也没碰）。
+
+8 张截图**全部作废重拍**（三处系统性取景缺陷，见下表 1 / 2 / 6）；`six-pieces` 的帧号由 96 改为 **91**，其余 7 张帧号不变。
+
+### 已修的问题
+
+| # | 位置 | 问题 | 修法 |
+|---|---|---|---|
+| 1 | `src/godot/scripts/GameRoot.cs` `Capture` | **截图差一帧**：`GetViewport().GetTexture()` 拿的是<b>上一帧已绘制</b>的画面，在 `_Process` 里直接取，截到的是本帧刷新<b>之前</b>的状态。控制台读数与图像因此系统性错位一帧——旧 `artisan-v4-edit-targets.png` 打印"J6 暂放匠人 + 候选 桥1/栅15/林1"，图上却是上一轮确认之后的盘面：<b>一枚暂放匠人都没有，一条候选边高亮都没有</b>，这张图不成立 | 新增 `BeginCapture` + `CaptureWhenDrawn`：`await ToSignal(RenderingServer.Singleton, FramePostDraw)` 之后才取画面；并置 `_shotPending` 冻结 `Drive` 与刷新，画面不再变，打印的读数即图像所示 |
+| 2 | 同上 | **面板遮挡**：无人值守演示每个部署回合都会开一次「全玩家手牌信息面板」（`AutoDeployStep` 第 `all.Length+1` 步），它整块盖住棋盘。旧 `artisan-v4-fence-after.png` 与旧 `artisan-v4-burn-after.png` 都被它盖住，看不到栅栏落成 / 烧林落成 | `BeginCapture` 取图前先 `_layers.Back()` + `_handPanel.Back()` 再重刷一次；`Capture` 那行另打「手牌信息面板 开/关」，让每张图自证取景 |
+| 3 | `art/artisan-v4/*.png` | 8 张图全部作废（问题 1 是系统性的） | **全部重拍**，帧号不变（`--auto-demo --rounds=9`，默认种子 20260915）；灰度版一并重生成 |
+| 4 | `art/artisan-v4/README.md` 第 5b 项 | **证据不成立**：原写"新桥可被拾取：`--pick-check` 105/105"，但 `--pick-check` 在第 2 帧就跑完，此刻一处改造都没发生，105/105 证明不了"重搭后新桥格能被拾取" | 改写为以像素差为证据的"新桥被画出来了 = 重搭确实发生"（地砖/水面/桥只在 `Build` 里搭，画面变了即证明 `Refresh` 触发了重搭；`_levels` 同一次 `Build` 更新）。原口径的真证据需要给 `--pick-check` 加"第几帧再跑"的形参，**本段没做**，见「未修」 |
+| 5 | `src/godot/scripts/GameRoot.cs` + 4 个测试文件 | **凭空多出 UTF-8 BOM**：`GameRoot.cs`、`Godot层不含规则计算Tests.cs`、`UI层不含规则计算Tests.cs`、`改造不可逆与公开Tests.cs` 原本无 BOM 却被加上，两个新测试文件也带 BOM。全仓库其余 `.cs` 一律无 BOM | 全仓扫描并剥除，扫完仓库 BOM 数为 0 |
+| 6 | `art/artisan-v4/artisan-v4-six-pieces.png` + `Hud.cs` / `GameRoot.cs` | **第三处遮挡**：中央面板还有两种关不掉的——终局结算面板（`Hud.RefreshCenter` 首个分支，700×220 压在棋盘正中）与征募面板（520×330）。原 `six-pieces` 取第 96 帧，正落在终局之后，中央被结算面板压住（紧中心框里面板底色占 **0.151**，其余图 0.000）；第 84 帧则撞上征募面板（**0.552**） | `six-pieces` 改取**第 91 帧**（终局前最后一帧，六种棋子齐全）；`Hud` 新增 `CenterPanelOpen`，`Capture` 那一行改打「中央面板 开/关」——这两种面板是对局状态、不是按键开关，`BeginCapture` 不该去动它们，改成**选帧时自证** |
+| 7 | `tests/…/BatchPreview/改造在预演中的呈现Tests.cs` | **覆盖缺口**：「可改造目标按<b>批次开始前</b>地形枚举」（design 默认 2 / D-B′）只被 `显示改造目标` 间接钉住（经 `IsChosen`），没有直说这件事的用例 | 新增 `可改造目标按批次开始前的地形枚举`：同批两枚匠人，第一枚要烧的林地对第二枚<b>仍然</b>是候选，且与 `TerrainEditRules.LegalTargets(批前 Map, …)` 逐条相等。全量 896 → **897** |
+
+### 未修（留给负责人 / 后续段）
+
+1. **`--pick-check` 拿不到"改造之后"的盘面**。要给第 5b 项一个真证据，得让 `--pick-check` 支持"第几帧再跑"（默认仍是第 2 帧、三条正式命令不变，架桥后应得 106 格）。这是**新增功能**，属实现方的取舍，检查侧不替它决定。
+2. **`--rounds=N` 不按 `--auto-demo` 收口**（`ReadRounds(args) ?? (_autoDemo ? 4 : Default)`）：手动开局带 `--rounds=3` 也会生效。这与既有的 `--seed` 完全同形（`ReadSeed` 也不收口），缺省行为不变，判定为**可接受**，但需要负责人在段 E 点头。
+3. `art/artisan-v4/artisan-v4-edit-targets.png` 与 `artisan-v4-burn-before.png` **逐字节相同**（同一刻：J6 暂放 + 已选烧林 J5；中间几帧只在轮换信息层，而截图一律先关面板）。保留两份是为让第 3 项与第 6 项各自成对，README 已注明。
+4. **F12 手动截图仍走旧的直取 `Capture`**（`GameRoot` 第 559 行附近），同样差一帧、也不关面板。它不在段 C 的自检路径上，检查侧**没有改**——要不要一并走 `BeginCapture`，由实现方定。
+5. **`--auto-demo` 下改造落成反馈实际只活一帧**：`bridge-before`（第 41 帧）控制台打「落成反馈：无」，而第 39 帧的立栅亮板按 1.2 秒本应还在——原因是 `MatchSession.RunAiTurn` 用 `new TurnFlash(placed, captured, [])` 把 `Edits` 覆盖掉了。自动演示 `_pause = 0`，下一次 AI 小回合紧接着就来；真机有 `AiPauseSeconds` 缓冲，人能看到。这是段 C 实现的可视表现口径问题，**检查侧没有改**（改它要动 `TurnFlash` 的合并语义），留给负责人判断。
+6. 人工清单第 1 / 2 / 3a / 3b / 4a / 5a / 6a / 6b / 7 / 8 / 9 项仍需人看图确认（检查侧同样没有把截图读进会话，只数了像素）。
+
+### 重拍后每张图应当看到什么（供人工核对）
+
+帧号全部未变；每一行都与截图那一刻控制台打印的视图模型读数逐项对上，8 张实测均为「信息层 关，手牌信息面板 关」。
+
+| 文件 | 帧 | 应当看到 |
+|---|---|---|
+| `artisan-v4-edit-targets.png` | 47 | **J6 上有一枚半透明发光的暂放匠人**；以它为中心的"十字轮廓套小方框"青白虚线短条 **15 条**（十字五格区域 16 条边减去预置栅栏 J7–J8）；**J5 是已选目标**，暖亮黄亮底 + 实线环；另有 **1 个青白候选深水格**可搭桥。盘上本局改造 2 处（栅 B1–C1、桥 D5）。棋盘中央无任何面板 |
+| `artisan-v4-fence-before.png` | 39 | 本局改造 **0** 处；**D1 上有一枚暂放匠人**，其候选边 **10 条**青白虚线短条；**B1–C1 之间是暖亮黄的立起亮板**（已选立栅），该处**还没有**棕木栅栏 |
+| `artisan-v4-fence-after.png` | 40 | **B1–C1 之间有一道新栅栏**（棕木三柱两杆，与预置的 G5–H5 / E6–E7 / J7–J8 / F9–G9 外观一致）；**候选虚线已全部消失**（批次已确认）；那道边上另叠一道近白亮板 = 落成反馈。D1 上现在是一枚实体匠人。中央无面板 |
+| `artisan-v4-bridge-before.png` | 41 | 本局改造 1 处（只有栅 B1–C1）；**D5 仍是蓝色深水**；无暂放、无落成反馈 |
+| `artisan-v4-bridge-after.png` | 42 | **D5 由深水变成与同层地砖齐平的木板桥面**（与预置桥 G4 / D7 / K7 / G10 外观一致）；D5 格亮底 + 近白亮环 = 落成反馈；**E5 上多了一枚实体匠人** |
+| `artisan-v4-burn-before.png` | 52 | 与 edit-targets 同一刻（逐字节相同）：**J5 仍是深绿林地 + 小树**；J6 上有暂放匠人，J5 是暖亮黄的已选目标 |
+| `artisan-v4-burn-after.png` | 53 | **J5 由深绿林地变成普通草地、三棵小树全部消失**（读起来就是草地）；J5 格亮底 + 近白亮环 = 落成反馈；**J6 上是一枚实体匠人**（盘上匠人 3 枚：D1、E5、J6）；本局改造 3 处。中央无面板 |
+| `artisan-v4-six-pieces.png` | 91 | **棋盘中央没有任何面板**（终局前最后一帧）。六种棋子同屏：普通 10 / 堡垒 23 / 连珠 4 / 倍增 5 / 协同 8 / **实体匠人 3（C1、E5、C7）**；匠人是画面里唯一不对称的轮廓（斜立木柄 + 顶部横置槌头 + 斜撑）。另有 **M4 上一枚半透明的暂放匠人**、其 15 条青白候选边、K4–L4 的暖黄已选亮板；B2–C2 上一道近白亮板（当刻的立栅落成反馈）；本局改造 5 处 |
+| `artisan-v4-six-pieces-gray.png` | — | 上图灰度版：匠人仍是唯一"歪"的轮廓，与塔楼子（顶部一圈四枚小方块）分得开 |
+
+### 取景自查（脚本数像素，没把图读进会话）
+
+以旧 `fence-after`（已知被面板盖住的样本）中心区主色 `[22,26,34]` 为面板参照：
+
+- 宽中心框（x 22–80%、y 18–86%）面板底色占比：旧 `fence-after` **0.339**、旧 `burn-after` **0.334**，其余 0.137–0.235。
+- 更灵敏的**紧中心框**（x 35–65%、y 30–70%，面板在那里成一整块、地砖不会）：旧 `six-pieces`（第 96 帧）**0.151**、第 84 帧候选 **0.552**（征募面板）；
+  **最终 8 张紧框全部 0.000**、宽框 0.137–0.141 → 三处遮挡（旧 `fence-after` / 旧 `burn-after` / 旧 `six-pieces`）全部修掉，没有新遮挡。
+- 青白候选像素（棋盘中心区）：新 `edit-targets` / `burn-before` **2053**、新 `fence-before` **2014**、新 `six-pieces` **2463**（M4 的 15 条候选边）；旧 `edit-targets` 只有 **252**（= 无候选）→ 问题 1 坐实且已修。
+- 三对"前后"在棋盘区各只有**一处**局部变化（`diff>40` 按 40×40 分块）：立栅 = y680–720 x520–720 的横带；搭桥 = y480–560 x600–720（深水蓝像素少 1671）；烧林 = y440–560 x840–960。没有整屏漂移 → 没有截错帧。
+- 旧图与新图的错位可直接对上：旧 `bridge-before` 的像素统计 = 新 `fence-after`，旧 `bridge-after` = 新 `bridge-before`，正好差一帧。
+
+### 逐条核对（派发清单）
+
+| 项 | 结论 |
+|---|---|
+| 规格场景逐条有测试 | **成立**。预演显示改造目标与动作 = `显示改造目标`；按改造后地形算气与自杀风险 = `改造后的气与自杀风险`（含"不改造就没风险"的对照）；可改造目标标示且不依赖信息层 = `暂放匠人时标出可改造目标`（全程不调 `world.Layer(...)`，并断言 `LayerOf(EditTarget) == PreviewHighlights ≠ TacticalOverlay`）；棋串读法区分栅栏侧 = `棋串读法区分栅栏侧` + `立栅后栅栏侧与差集都随改造更新`；改造公开且不显示改造者 = `默认棋盘上的新旧设施同形且不带改造者`（`DefaultBoardView` 与 `PublicWorld` 两个闭包都断言 `TerrainEditRecord` 不可达）；六种棋子轮廓 = `六种棋子的轮廓语言Tests`；新旧设施同形 / 烧过的林地读作草地 = 同上那条 |
+| 单一实现 | **成立**。`UI层不含规则计算Tests.ForbiddenTypes` 加了 `TerrainEditRules` / `TerrainWriter`（IL 级反射扫表现层全部方法）；`Godot层不含规则计算Tests` token 表加了 `TerrainEditRules.` / `TerrainWriter.` / `ApplyTerrainEdits`（4.3）。两条都有实做变异（M-SC4 / M-SC5）红过 |
+| `BatchPreview` 调 `LegalTargets` 的地形与"批内唯一" | **成立**。传的是 `board.Map`，`board` 即 `Build(board, context, placements, …)` 的<b>批次开始前</b>盘面，与预演第 1 步同源；不是 `rehearsal.ProjectedBoard`。新变异 **M-SC6** 把它换成 `ProjectedBoard` → 红 2。**没有**重复实现"批内唯一"：`EditOptions` 不剔除本批别人选走的目标，该判定留在 `BatchRehearsal` 的 `DuplicateEditInBatch` |
+| 偏离 3（`--auto-demo` 行为 + `--rounds`） | **只影响自检演示**。`AutoPick` / `StageArtisanPreferringBurn` / `AutoDeployStep` 三处全在 `if (_autoDemo)` 的演示驱动路径里，不在 AI 估值、不在规则层；`Siege.Sim` 的跑局完全不经过 `src/godot`。`--rounds` 只改 `MatchOptions` 的大回合上限，缺省不变。**未被 `strict-cli` 覆盖**：`CommandLine.EnsureRecognized`（未知选项检查）只在 `Siege.Sim/Program.cs` 里调用；Godot 侧走 `OS.GetCmdlineUserArgs()` + `Contains`/`StartsWith`，从来没有未知选项拒绝——`--seed` / `--screenshot` / `--auto-demo` / `--pick-check` 都是这个形态，`--rounds` 与它们同形，不是本段引入的新缺口 |
+| 偏离 2（`BoardView.Build` 与地形指纹重搭） | **属实**。`_board.Build(...)` 全仓仅 3 处调用：`GameRoot._Ready`（第 67 行）、自动演示选出生区（第 326 行）、手动选出生区（第 646 行）——`Refresh` 路径上一处都没有。所以 2.6 第 12 条"`GameRoot` 每次刷新都重跑 `Build`"确实是错的，地形指纹重搭是必需的。**记给段 E**：更正 `.trellis/spec/core/boundaries.md` 2.6 第 12 条（注意 implement.md 段 C 把三处写成"`_Ready`、选出生区、重开局"，实际是"`_Ready` + 两处选出生区"，一并改准） |
+| 越段 | **没有越段**。Core 只动 `Preview/BatchPreview.cs` 一个文件且只新增投影字段 `EditOptions`；规则层（`TerrainEditRules` / `TerrainWriter` / `BatchRehearsal` / 结算）、参数、日志与改造分析一行未动；4 个既有测试文件的改动全是**新增**断言 / 禁表项 / 注释，没有任何既有断言被改弱 |
+
+### 变异验证（新增一条，与 M-SC1～M-SC5 不同）
+
+脚本 `scratchpad/mutate_c.py`（**不入库**）：二进制读写、按文件实测行尾归一锚点并 `assert count == 1`、`finally` 还原后与原文逐字节 `assert`；不用 `if (false)`（`TreatWarningsAsErrors` 下 CS0162 会变成"编译失败的假红"），本条是直接替换实参、无死代码。
+
+| 编号 | 文件 | 变异 | 结果 | 还原 |
+|---|---|---|---|---|
+| **M-SC6** | `Core/Preview/BatchPreview.cs` | `TerrainEditRules.LegalTargets(board.Map, p.Coord)` → `LegalTargets((rehearsal.ProjectedBoard ?? board).Map, p.Coord)`：可改造目标改按<b>本批结算后</b>的地形枚举，违反 design 默认 2「批次内不链式」 | EXIT 1，红 **2**：`改造在预演中的呈现Tests.显示改造目标`、`改造在预演中的呈现Tests.可改造目标按批次开始前的地形枚举` | 逐字节一致 |
+
+（第一次跑 M-SC6 时只红 1 条，暴露出上表问题 6 的覆盖缺口；补完用例后红 2。）
+
+### 验证结果
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 构建 | `dotnet build siege.sln -c Release` | **EXIT 0**，0 警告 0 错误 |
+| Godot 构建 | `$G --headless --path src/godot --build-solutions --quit` | **EXIT 0** |
+| 全量测试 | `dotnet test -c Release --nologo`（`set -o pipefail`） | **EXIT 0**，**897** 通过（段 C 实现 896 + 检查补 1） |
+| Godot 自检 | `$G --headless --path src/godot --quit-after 3000 -- --auto-demo` | **EXIT 0** |
+| Godot 拾取 | `$G --headless --path src/godot --quit-after 3000 -- --auto-demo --pick-check` | **EXIT 0**，`可落子格 105，往返一致 105，失败 0` |

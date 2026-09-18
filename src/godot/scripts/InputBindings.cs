@@ -44,6 +44,12 @@ public sealed class InputBindings
     /// </summary>
     public const string CycleReadingAction = "siege_board_reading";
 
+    /// <summary>
+    /// 轮换当前匠人的改造目标（artisan-terrain-edit 4.2）：在"不改造 + 全部合法目标"之间循环。
+    /// 用键而不是点边：拾取原语是<b>格</b>（<see cref="BoardGeometry.TryPick"/> 的数学投影），边要再做一次消歧，代价不值。
+    /// </summary>
+    public const string CycleEditAction = "siege_cycle_edit";
+
     /// <summary>已注册的全部信息层动作。</summary>
     public IReadOnlyList<(string Action, InputDevice Device, string Binding)> LayerActions => _actions;
 
@@ -76,6 +82,7 @@ public sealed class InputBindings
         Register(UnstageAction, new InputEventMouseButton { ButtonIndex = MouseButton.Right }, new InputEventJoypadButton { ButtonIndex = JoyButton.X });
         Register(BackAction, new InputEventKey { PhysicalKeycode = Key.Escape }, new InputEventJoypadButton { ButtonIndex = JoyButton.B });
         Register(ToggleModeAction, new InputEventKey { PhysicalKeycode = Key.T });
+        Register(CycleEditAction, new InputEventKey { PhysicalKeycode = Key.E }, new InputEventJoypadButton { ButtonIndex = JoyButton.LeftShoulder });
     }
 
     private static void Register(string action, params InputEvent[] events)

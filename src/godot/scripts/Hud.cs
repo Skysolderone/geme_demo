@@ -202,6 +202,12 @@ public sealed partial class Hud : CanvasLayer
         panel.Visible = false;
     }
 
+    /// <summary>
+    /// 中央面板（终局结算 / 插旗提示 / 手牌信息 / 征募）此刻是否显示。
+    /// 截图自检用：除插旗提示外它都压在棋盘上，取景时必须为 <c>false</c>（见 <c>GameRoot.BeginCapture</c>）。
+    /// </summary>
+    public bool CenterPanelOpen => _centerPanel.Visible;
+
     /// <summary>中央面板按内容定尺寸——插旗提示只占一条，不该盖住棋盘。</summary>
     private void CenterBox(float anchorY, float width, float height) =>
         Ui.Anchor(_centerPanel, 0.5f, anchorY, -width * 0.5f, -height * 0.5f, width * 0.5f, height * 0.5f);
@@ -411,6 +417,11 @@ public sealed partial class Hud : CanvasLayer
             _previewBody.AddChild(Ui.Text(failure.Detail, Ui.DangerText, UiTheme.BodyFontPx - 1, wrap: true));
         }
 
+        // 改造（artisan-terrain-edit 4.1 第 1 / 7 项）：每枚暂放匠人一行"落点 → 已选动作与目标（可选目标 N 个）"。
+        // 目标清单整份来自预演，HUD 只排字。
+        AddSection(_previewBody, "改造",
+            preview.ArtisanEdits.Select(a => $"{a.ArtisanCell.ToNotation()} → {a.ChosenText}（可选 {a.Targets.Length} 个，[E] 轮换）"),
+            Ui.InfoText);
         AddSection(_previewBody, "预计提子", preview.Captures.Select(c => c.Text), Ui.InfoText);
         AddSection(_previewBody, "己方棋串", preview.OwnGroups.Select(GroupLine), Ui.InfoText);
         AddSection(_previewBody, "军势预览", preview.OwnGroups.Where(g => g.Power is not null).Select(g => g.Power!.FormulaText), Ui.MutedText);

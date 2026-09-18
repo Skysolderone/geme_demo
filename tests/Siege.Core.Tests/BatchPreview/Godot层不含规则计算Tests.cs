@@ -50,6 +50,12 @@ public class Godot层不含规则计算Tests
             // M-B8：同处改调 `PieceEffects.HighGroundBonus(null!, null!)` → 本测试红 1。
             // 段 B 检查：据点控制收紧为 "SiteControl."（整个静态类的任何成员；"SiteControlKind." 不含该子串，不误伤）。
             "SiteControl.", "PieceEffects", ".HighGroundBonus(",
+            // artisan-terrain-edit 4.3：改造合法性与地形写入口的入口名。Godot 侧的可改造目标一律来自
+            // PreviewPresentation.ArtisanEdits（Core 富预演 → 表现层），地形改动一律由规则层结算后经默认棋盘视图带过来。
+            // 只禁带点的调用形态：TerrainEdit / TerrainEditKind 是值类型与枚举，Godot 读它们合法，且都不含下列子串。
+            // 变异验证 M-SC5（实做，4.3 点名的那一条）：BoardView.DrawPreview 加一行
+            //   `if (_width < 0) { _ = Siege.Core.Board.TerrainEditRules.LegalTargets(null!, default); }` → 本测试红 1。
+            "TerrainEditRules.", "TerrainWriter.", "ApplyTerrainEdits",
         ];
 
         string[] violations =

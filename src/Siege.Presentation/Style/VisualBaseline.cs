@@ -137,6 +137,12 @@ public enum HighlightStyle
     WarningOutline,
     RevealBadge,
     FailureOutline,
+
+    /// <summary>可改造目标：半透明虚线的短栏 / 轮廓，贴在目标格或目标边上，明显比已选目标弱。</summary>
+    EditTargetHint,
+
+    /// <summary>已选改造目标：实心亮色的短栏 / 轮廓，与候选在明度和实虚上都分得开。</summary>
+    EditChosenMark,
 }
 
 /// <summary>视觉层级与高亮手法的数据基准（tactical-ui 裁决 7：可自动化的部分只断言数据层）。</summary>
@@ -162,6 +168,8 @@ public static class VisualLayering
         HighlightKind.SuicideRisk => HighlightStyle.WarningOutline,
         HighlightKind.WillReveal => HighlightStyle.RevealBadge,
         HighlightKind.FailureFocus => HighlightStyle.FailureOutline,
+        HighlightKind.EditTarget => HighlightStyle.EditTargetHint,
+        HighlightKind.ChosenEdit => HighlightStyle.EditChosenMark,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知高亮类别。"),
     };
 
@@ -169,7 +177,9 @@ public static class VisualLayering
     public static RenderLayer LayerOf(HighlightKind kind) => kind switch
     {
         HighlightKind.Staged => RenderLayer.StagedPieces,
+        // 可改造目标与已选目标同在预览层：tactical-layers 要求它们在<b>默认棋盘</b>上就能看到，MUST NOT 依赖打开任何信息层。
         HighlightKind.PredictedCapture or HighlightKind.SuicideRisk or HighlightKind.WillReveal or HighlightKind.FailureFocus
+            or HighlightKind.EditTarget or HighlightKind.ChosenEdit
             => RenderLayer.PreviewHighlights,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知高亮类别。"),
     };

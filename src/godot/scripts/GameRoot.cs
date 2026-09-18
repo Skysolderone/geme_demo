@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -5,9 +6,12 @@ using Godot;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Recruit;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
+using Siege.Presentation.Preview;
 using Siege.Presentation.Text;
+using Siege.Presentation.Visibility;
 
 namespace Siege.Godot;
 
@@ -35,9 +39,11 @@ public sealed partial class GameRoot : Node3D
     private double _flashTimer;
     private double _pause = AiPauseSeconds;
     private int _demoStep;
+    private int _seenEdits;
     private int _frame;
     private int _screenshotFrame = -1;
     private string _screenshotPath = string.Empty;
+    private bool _shotPending;
     private bool _autoDemo;
     private bool _pickCheck;
     private bool _dirty = true;
@@ -50,7 +56,7 @@ public sealed partial class GameRoot : Node3D
         _autoDemo = args.Contains("--auto-demo");
         _pickCheck = args.Contains("--pick-check");
         ulong seed = ReadSeed(args) ?? (_autoDemo ? 20260915UL : (ulong)Stopwatch.GetTimestamp());
-        int rounds = _autoDemo ? 4 : MatchOptions.DefaultMaxMajorRounds;
+        int rounds = ReadRounds(args) ?? (_autoDemo ? 4 : MatchOptions.DefaultMaxMajorRounds);
         _pause = _autoDemo ? 0d : AiPauseSeconds;
 
         ReadScreenshotArg(args);
@@ -76,6 +82,23 @@ public sealed partial class GameRoot : Node3D
             if (arg.StartsWith("--seed=", System.StringComparison.Ordinal) && ulong.TryParse(arg[7..], out ulong seed))
             {
                 return seed;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// <c>--rounds=N</c>：覆盖本局的大回合上限（缺省：自动演示 4，手动 <see cref="MatchOptions.DefaultMaxMajorRounds"/>）。
+    /// 无人值守演示的 4 个大回合走不到岛心，拍不到"烧林前后"——把上限调高是唯一不改规则也不加演示专用分支的取法。
+    /// </summary>
+    private static int? ReadRounds(IReadOnlyList<string> args)
+    {
+        foreach (string arg in args)
+        {
+            if (arg.StartsWith("--rounds=", System.StringComparison.Ordinal) && int.TryParse(arg["--rounds=".Length..], out int rounds) && rounds > 0)
+            {
+                return rounds;
             }
         }
 
@@ -123,9 +146,27 @@ public sealed partial class GameRoot : Node3D
 
         Image image = GetViewport().GetTexture().GetImage();
         Error error = image.SavePng(path);
-        GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {_session.Match.MajorRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}）");
+        GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {_session.Match.MajorRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}，手牌信息面板 {(_handPanel.IsOpen ? "开" : "关")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}）");
         // 截图当刻的据点状态（读视图模型），供 art/sites-v4/README 的人工清单对照"哪张图里有争议 / 控制"。
-        GD.Print("[siege] 据点：" + string.Join("；", _session.World.Board().Sites.Select(s => $"{s.Coord.ToNotation()} {s.TierText} {s.StatusText}")));
+        DefaultBoardView shot = _session.World.Board();
+        GD.Print("[siege] 据点：" + string.Join("；", shot.Sites.Select(s => $"{s.Coord.ToNotation()} {s.TierText} {s.StatusText}")));
+
+        // 盘上六种棋子各多少枚、本局已完成哪些改造，供 art/artisan-v4/README 的人工清单对照（都读视图模型，不读地图、不判规则）。
+        GD.Print("[siege] 棋子：" + string.Join("；", shot.Cells
+            .Where(c => c.Occupant is not null)
+            .GroupBy(c => c.Occupant!.Value.Type)
+            .OrderBy(g => g.Key)
+            .Select(g => $"{Labels.Piece(g.Key)} {g.Count()}（{string.Join("、", g.Select(c => c.Coord.ToNotation()))}）")));
+        GD.Print($"[siege] 本局改造 {shot.Edits.Length} 处：" + string.Join("、", shot.Edits.Select(Labels.TerrainEdit)));
+        if (_session.World.Preview() is { } shownPreview)
+        {
+            GD.Print("[siege] 暂放：" + string.Join("；", shownPreview.StagedPieces.Select(s =>
+                $"{s.Coord.ToNotation()} {Labels.Piece(s.Type)}{(s.EditText is null ? string.Empty : " + " + s.EditText)}")));
+            GD.Print("[siege] 改造高亮：" + string.Join("；", shownPreview.ArtisanEdits.Select(a =>
+                $"{a.ArtisanCell.ToNotation()} 已选 {a.ChosenText}，候选 桥 {a.BridgeCells.Length} / 栅 {a.FenceEdges.Length} / 林 {a.BurnCells.Length}")));
+        }
+
+        GD.Print($"[siege] 落成反馈：{(_flash.Edits.IsEmpty ? "无" : string.Join("、", _flash.Edits.Select(Labels.TerrainEdit)))}");
     }
 
     private void Connect()
@@ -196,6 +237,12 @@ public sealed partial class GameRoot : Node3D
     /// <inheritdoc/>
     public override void _Process(double delta)
     {
+        if (_shotPending)
+        {
+            // 已进入截图流程：冻结演示与刷新，等 FramePostDraw 取图后退出（见 BeginCapture）。
+            return;
+        }
+
         if (_flashTimer > 0d)
         {
             _flashTimer -= delta;
@@ -212,7 +259,14 @@ public sealed partial class GameRoot : Node3D
         if (_dirty)
         {
             _dirty = false;
-            _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash);
+            if (NewEdits() is { IsEmpty: false } fresh)
+            {
+                _flash = _flash with { Edits = fresh };
+                _flashTimer = FlashSeconds;
+                GD.Print($"[terrain-edit] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合落成：{string.Join("、", fresh.Select(Labels.TerrainEdit))}");
+            }
+
+            _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
             _hud.Refresh(_session, _layers, _handPanel);
         }
 
@@ -228,9 +282,35 @@ public sealed partial class GameRoot : Node3D
         if (_screenshotFrame >= 0 && _frame >= _screenshotFrame)
         {
             _screenshotFrame = -1;
-            Capture(_screenshotPath);
-            GetTree().Quit(0);
+            BeginCapture();
         }
+    }
+
+    /// <summary>
+    /// 进入截图流程：<b>先把盖住棋盘的面板全部关掉</b>再重刷一次，等本帧绘制完成后才取画面。
+    /// </summary>
+    /// <remarks>
+    /// 两个坑都在这里治：①「全玩家手牌信息面板」与信息层会整块盖住棋盘（无人值守演示每个部署回合都会开一次），
+    /// 截到就废；②<c>GetViewport().GetTexture()</c> 拿的是<b>上一帧已绘制</b>的画面，在 <c>_Process</c> 里直接取
+    /// 会截到本帧刷新之前的状态——控制台打印的读数与图像因此对不上（旧的 edit-targets / fence-after 两张就是这么废的）。
+    /// 进入本流程后 <see cref="_shotPending"/> 冻结 <c>Drive</c>，画面不再变，打印的读数即图像所示。
+    /// </remarks>
+    private void BeginCapture()
+    {
+        _shotPending = true;
+        _layers.Back();
+        _handPanel.Back();
+        _dirty = false;
+        _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
+        _hud.Refresh(_session, _layers, _handPanel);
+        CaptureWhenDrawn(_screenshotPath);
+    }
+
+    private async void CaptureWhenDrawn(string path)
+    {
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        Capture(path);
+        GetTree().Quit(0);
     }
 
     /// <summary>
@@ -333,6 +413,9 @@ public sealed partial class GameRoot : Node3D
             case TurnStage.Recruit:
                 if (_demoStep++ == 0)
                 {
+                    // 征募面板原先只渲染不点：本人手里因此永远只有开局那几种棋子，匠人与改造在无人值守自检下一次都跑不到。
+                    // 现在挑一个候选：有匠人就要匠人，否则要第一个可选的。
+                    AutoPick();
                     break;
                 }
 
@@ -349,12 +432,55 @@ public sealed partial class GameRoot : Node3D
         }
     }
 
+    /// <summary>无人值守演示：征募一枚——优先匠人（本轮要覆盖的正是它），否则第一个可选候选。选不动就算了，不拦流程。</summary>
+    private void AutoPick()
+    {
+        if (_session.RecruitPanel is not { } panel)
+        {
+            return;
+        }
+
+        RecruitCandidateView? pick = panel.Candidates.FirstOrDefault(c => c.IsSelectable && c.Type == PieceType.Artisan)
+            ?? panel.Candidates.FirstOrDefault(c => c.IsSelectable);
+        if (pick is not null)
+        {
+            _session.Pick(pick.Index);
+        }
+    }
+
+    /// <summary>当前那枚暂放匠人有烧林目标、但还没选中它。</summary>
+    private bool WantsBurn() =>
+        _session.World.Preview()?.ArtisanEdits.LastOrDefault() is { BurnCells.IsEmpty: false } a
+        && a.Chosen?.Kind != TerrainEditKind.Burn;
+
     private void AutoDeployStep()
     {
         if (_demoStep == 0)
         {
-            _session.SelectedType ??= _session.World.OwnHand.Types.Cast<PieceType?>().FirstOrDefault();
-            _session.StageFirstLegal();
+            // 手里有匠人就优先摆匠人，摆下后按一次"轮换改造目标"：让无人值守自检也走一遍
+            // 可改造目标枚举 → 选目标 → 带改造结算这条链路（原先这条链路在 --auto-demo 下完全没被跑到）。
+            PieceType[] types = [.. _session.World.OwnHand.Types];
+            bool artisan = types.Contains(PieceType.Artisan);
+            _session.SelectedType = artisan ? PieceType.Artisan : _session.SelectedType ?? types.Cast<PieceType?>().FirstOrDefault();
+            bool staged = artisan ? _session.StageArtisanPreferringBurn() : _session.StageFirstLegal();
+            if (staged && artisan)
+            {
+                // 轮到第一个目标；若这个落点能烧林就一路轮到烧林——三种动作里烧林最难被跑到（全图 4 格林地 + 裁决 T-12 的候选拥挤）。
+                _session.CycleEdit(null);
+                for (int i = 0; i < 24 && WantsBurn(); i++)
+                {
+                    _session.CycleEdit(null);
+                }
+
+                if (_session.World.Preview() is { ArtisanEdits.IsEmpty: false } p)
+                {
+                    ArtisanEditView view = p.ArtisanEdits[^1];
+                    GD.Print($"[auto-demo] 第 {_frame} 帧暂放匠人 {view.ArtisanCell.ToNotation()}："
+                        + $"已选 {view.ChosenText}，可改造目标 {view.Targets.Length} 个"
+                        + $"（桥 {view.BridgeCells.Length} / 栅 {view.FenceEdges.Length} / 林 {view.BurnCells.Length}）");
+                }
+            }
+
             _demoStep++;
             return;
         }
@@ -382,6 +508,11 @@ public sealed partial class GameRoot : Node3D
         }
         else
         {
+            if (_session.World.Preview() is { Failure: { } why, DeployUsed: > 0 })
+            {
+                GD.Print($"[auto-demo] 第 {_frame} 帧本批被拒，改为 Pass：{why.Title}——{why.Detail}");
+            }
+
             _session.Pass();
         }
 
@@ -409,6 +540,25 @@ public sealed partial class GameRoot : Node3D
         }
 
         GetTree().Quit(0);
+    }
+
+    /// <summary>
+    /// 自上次刷新以来<b>新落成</b>的改造（visual-style-baseline「改造完成的那一刻 SHALL 有一次可察觉的反馈」）。
+    /// 走默认棋盘视图的 <c>Edits</c>——AI 结算、本人确认、无人值守演示三条路径都经过它，不必各写一遍；
+    /// 该清单无归属、不含改造者（R-3）。
+    /// </summary>
+    private ImmutableArray<TerrainEdit> NewEdits()
+    {
+        ImmutableArray<TerrainEdit> edits = _session.World.Board().Edits;
+        if (edits.Length <= _seenEdits)
+        {
+            _seenEdits = edits.Length;
+            return [];
+        }
+
+        ImmutableArray<TerrainEdit> fresh = [.. edits.Skip(_seenEdits)];
+        _seenEdits = edits.Length;
+        return fresh;
     }
 
     private void UpdateHover()
@@ -482,6 +632,12 @@ public sealed partial class GameRoot : Node3D
         else if (@event.IsActionPressed(InputBindings.ToggleModeAction))
         {
             _layers.SetMode(_layers.Mode == LayerInputMode.HoldToShow ? LayerInputMode.ClickToToggle : LayerInputMode.HoldToShow);
+            _dirty = true;
+        }
+        else if (@event.IsActionPressed(InputBindings.CycleEditAction))
+        {
+            // 光标停在某枚已暂放的匠人上就换那一枚的目标，否则换最后暂放的那一枚。
+            _session.CycleEdit(_hover);
             _dirty = true;
         }
         else if (@event.IsActionPressed(InputBindings.ConfirmAction))

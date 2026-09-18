@@ -21,7 +21,8 @@ public class 六种棋子的轮廓语言Tests
         Assert.Equal((PieceSilhouette.TwinOrbBar, SilhouetteLanguage.Connection), Style(PieceType.Line));
         Assert.Equal((PieceSilhouette.Pyramid, SilhouetteLanguage.Radial), Style(PieceType.Multiplier));
         Assert.Equal((PieceSilhouette.CrystalCluster, SilhouetteLanguage.MultiNode), Style(PieceType.Synergy));
-        // artisan-terrain-edit Open Question 3：匠人轮廓建议"工具或支架状"，本段先落占位标识（Scaffold / Tooling），正式外观与截图属于段 C。
+        // artisan-terrain-edit Open Question 3（段 C 定稿）：匠人轮廓"工具或支架状"，几何在 LowPoly.ScaffoldParts——
+        // 偏心斜立的木柄 + 柄顶横置宽槌头 + 一道斜撑；去色缩略图下靠"唯一不对称"与其余五种分开（见 art/artisan-v4/README）。
         Assert.Equal((PieceSilhouette.Scaffold, SilhouetteLanguage.Tooling), Style(PieceType.Artisan));
     }
 

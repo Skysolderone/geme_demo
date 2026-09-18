@@ -34,6 +34,16 @@ public static class Labels
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
 
+    /// <summary>
+    /// 一次地形改造的文案，如「搭桥 D4」「立栅 E5–E6」「烧林 F4」。动作名取 <see cref="Core.Board.TerrainEdit.DisplayName"/>（唯一一份），
+    /// 目标用围棋记法；本方法不判断该改造是否合法。
+    /// </summary>
+    public static string TerrainEdit(TerrainEdit edit) =>
+        $"{Core.Board.TerrainEdit.DisplayName(edit.Kind)} {(edit.Kind == TerrainEditKind.Fence ? Edge(edit.Edge) : edit.Cell.ToNotation())}";
+
+    /// <summary>一条边的文案，如「E5–E6」。两端顺序取 <see cref="FenceEdge"/> 归一后的顺序。</summary>
+    public static string Edge(FenceEdge edge) => $"{edge.A.ToNotation()}–{edge.B.ToNotation()}";
+
     /// <summary>信物类型名称。</summary>
     public static string Relic(RelicType type) => type switch
     {

@@ -122,6 +122,18 @@ public static class Visuals
     /// <summary>紧急。</summary>
     public static readonly Color Urgent = Color.Color8(236, 76, 60);
 
+    // ---------- 改造（artisan-terrain-edit 4.2）----------
+    // 三色都不是木料色：候选 / 已选 / 落成都是"标记"，与真设施（<see cref="Timber"/> / <see cref="BridgeDeck"/> 的棕木）一眼分得开。
+
+    /// <summary>可改造目标（候选）：冷青白，配半透明贴地虚线短条。</summary>
+    public static readonly Color EditTarget = Color.Color8(150, 230, 240);
+
+    /// <summary>已选中的改造目标：暖亮黄，配立起的实心亮栏 / 实心亮环。</summary>
+    public static readonly Color EditChosen = Color.Color8(255, 226, 120);
+
+    /// <summary>改造落成的瞬时反馈：近白高亮，只在演出时长内出现。</summary>
+    public static readonly Color EditDone = Color.Color8(255, 250, 220);
+
     /// <summary><see cref="Rgba"/>（Presentation 的整数色）→ Godot 颜色。</summary>
     public static Color ToColor(Rgba c) => Color.Color8(c.R, c.G, c.B, c.A);
 

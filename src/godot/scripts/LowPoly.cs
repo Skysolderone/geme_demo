@@ -117,27 +117,61 @@ public static class LowPoly
     }
 
     /// <summary>
-    /// 匠人的支架轮廓占位（artisan-terrain-edit 段 A）：四根立柱 + 一道横梁，与其余五种明显不同。
-    /// Open Question 3 的正式外观与截图属于段 C，这里只保证六种棋子都渲染得出来、不抛异常。
+    /// 匠人的工具轮廓（artisan-terrain-edit 4.2，Open Question 3 定稿）：一根<b>偏心斜立</b>的木柄 +
+    /// 柄顶横置的宽槌头 + 一道斜撑，读起来是"立在支架上的槌"。
     /// </summary>
+    /// <remarks>
+    /// 去色缩略图下的判据是<b>不对称</b>：其余五种（球 / 塔 + 雉堞 / 双球连杆 / 四棱锥 / 晶簇）全部关于竖轴对称，
+    /// 匠人是唯一整体向一侧倾斜、且顶部是横向实块的轮廓。
+    /// 段 A 的占位（四根立柱 + 横梁）刻意换掉：四根立柱在小尺寸下与塔楼子的四枚雉堞太像。
+    /// </remarks>
     private static Node3D[] ScaffoldParts(Color body, Color faction)
     {
-        var parts = new Node3D[5];
-        for (int i = 0; i < 4; i++)
+        const float lean = 14f;
+        return
+        [
+            // 斜撑：从底座右前方斜插到柄的中段，是"支架"感的来源，也是不对称的第二个信号。
+            Mesh(new BoxMesh { Size = new Vector3(0.05f, 0.34f, 0.05f) }, Visuals.Matte(body),
+                new Vector3(0.14f, BaseHeight + 0.15f, 0.02f), new Vector3(0f, 0f, 34f)),
+
+            // 木柄：偏心（−0.05）且向左倾 14°。
+            Mesh(new BoxMesh { Size = new Vector3(0.08f, 0.46f, 0.08f) }, Visuals.Matte(body),
+                new Vector3(-0.05f, BaseHeight + 0.23f, 0f), new Vector3(0f, 0f, lean)),
+
+            // 槌头：柄顶的宽横块，阵营色；与柄同角度，整体重心偏向一侧。
+            Mesh(new BoxMesh { Size = new Vector3(0.36f, 0.14f, 0.16f) }, Visuals.Matte(faction),
+                new Vector3(-0.12f, BaseHeight + 0.49f, 0f), new Vector3(0f, 0f, lean)),
+        ];
+    }
+
+    /// <summary>
+    /// 一条边上的改造标记（artisan-terrain-edit 4.2）：<b>贴在边上</b>，不向任何一格偏移。
+    /// <paramref name="upright"/> 为 <c>false</c> 时是三段贴地虚线短条（候选目标），为 <c>true</c> 时另立一道 0.18 高的亮板（已选 / 落成）。
+    /// 刻意不是木栅的样子（木栅是三柱两杆的棕木、高 0.30），玩家一眼分得出"这里还没有栅栏、只是可以立"。
+    /// </summary>
+    public static Node3D EditEdgeMark(bool alongX, StandardMaterial3D material, bool upright)
+    {
+        var root = new Node3D { Name = "EditEdgeMark" };
+        const float dash = 0.24f;
+        for (int i = -1; i <= 1; i++)
         {
-            float a = (Mathf.Pi * 2f * i / 4f) + (Mathf.Pi / 4f);
-            parts[i] = Mesh(
-                new BoxMesh { Size = new Vector3(0.06f, 0.42f, 0.06f) },
-                Visuals.Matte(body),
-                new Vector3(Mathf.Cos(a) * 0.16f, BaseHeight + 0.21f, Mathf.Sin(a) * 0.16f));
+            float offset = i * 0.34f;
+            root.AddChild(Mesh(
+                new BoxMesh { Size = alongX ? new Vector3(dash, 0.012f, 0.09f) : new Vector3(0.09f, 0.012f, dash) },
+                material,
+                alongX ? new Vector3(offset, 0.006f, 0f) : new Vector3(0f, 0.006f, offset)));
         }
 
-        parts[4] = Mesh(
-            new BoxMesh { Size = new Vector3(0.44f, 0.07f, 0.10f) },
-            Visuals.Matte(faction),
-            new Vector3(0f, BaseHeight + 0.44f, 0f),
-            new Vector3(0f, 45f, 0f));
-        return parts;
+        if (upright)
+        {
+            float length = BoardGeometry.TileSize + 0.06f;
+            root.AddChild(Mesh(
+                new BoxMesh { Size = alongX ? new Vector3(length, 0.18f, 0.04f) : new Vector3(0.04f, 0.18f, length) },
+                material,
+                new Vector3(0f, 0.09f, 0f)));
+        }
+
+        return root;
     }
 
     /// <summary>障碍格的低多边形岩石（装饰层，渲染顺序在一切判读信息之下）。</summary>

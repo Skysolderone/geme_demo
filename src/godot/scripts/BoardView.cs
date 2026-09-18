@@ -14,14 +14,21 @@ using Siege.Presentation.Visibility;
 
 namespace Siege.Godot;
 
-/// <summary>AI 小回合的落子 / 提子演出数据。</summary>
-public sealed record TurnFlash(ImmutableArray<Coord> Placed, ImmutableArray<Coord> Captured)
+/// <summary>
+/// 一个小回合的落子 / 提子 / 改造演出数据。
+/// </summary>
+/// <param name="Edits">
+/// 本次刚落成的改造（visual-style-baseline「改造的可视表现」：改造完成的那一刻 SHALL 有一次可察觉的反馈，使对手知道地形变了）。
+/// 只是<b>瞬时</b>反馈的定位信息；设施本身一律照 <see cref="DefaultBoardView.Fences"/> / <see cref="BoardCellView.HasBridge"/> /
+/// <see cref="BoardCellView.Surface"/> 画，新旧同形。
+/// </param>
+public sealed record TurnFlash(ImmutableArray<Coord> Placed, ImmutableArray<Coord> Captured, ImmutableArray<TerrainEdit> Edits)
 {
     /// <summary>无演出。</summary>
-    public static readonly TurnFlash None = new([], []);
+    public static readonly TurnFlash None = new([], [], []);
 
     /// <summary>是否为空。</summary>
-    public bool IsEmpty => Placed.IsEmpty && Captured.IsEmpty;
+    public bool IsEmpty => Placed.IsEmpty && Captured.IsEmpty && Edits.IsEmpty;
 }
 
 /// <summary>
@@ -46,6 +53,8 @@ public sealed partial class BoardView : Node3D
     private Node3D _preview = null!;
     private MeshInstance3D _cursor = null!;
     private WorldEnvironment _environment = null!;
+    private IReadOnlyDictionary<int, PlayerId> _zoneOwners = new Dictionary<int, PlayerId>();
+    private string _terrainKey = string.Empty;
     private int _width;
     private int _height;
 
@@ -64,8 +73,10 @@ public sealed partial class BoardView : Node3D
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(zoneOwners);
 
-        // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次。
+        // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次；地形被改造后 Refresh 也会再搭一次（见 TerrainKeyOf）。
         Clear(this);
+        _zoneOwners = zoneOwners;
+        _terrainKey = TerrainKeyOf(board);
         _tileMaterials.Clear();
         _tileBase.Clear();
         _levels.Clear();
@@ -305,12 +316,21 @@ public sealed partial class BoardView : Node3D
         BoardReading reading,
         SceneTreatment treatment,
         LibertyThresholds thresholds,
-        TurnFlash flash)
+        TurnFlash flash,
+        Coord? focus = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(treatment);
         ArgumentNullException.ThrowIfNull(flash);
         DefaultBoardView board = world.Board();
+
+        // 地形不再是对局内不变量（artisan-terrain-edit）：架桥 / 立栅 / 烧林都改地砖、水面、栅栏与 _levels（新桥格要能被拾取），
+        // 而这些只在 Build 里搭。地形指纹一变就整体重搭一次——2.6 第 12 条原写"GameRoot 每次刷新都重跑 Build"，实际不是，这里补上。
+        if (TerrainKeyOf(board) != _terrainKey)
+        {
+            Build(board, _zoneOwners);
+        }
+
         LayerContent? content = layer is { } active ? world.Layer(active, reading, thresholds) : null;
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
@@ -335,8 +355,29 @@ public sealed partial class BoardView : Node3D
         DrawSites(board, preview, compact: content is not null);
         DrawPieces(board, treatment);
         DrawLayer(content);
-        DrawPreview(preview);
+        DrawPreview(preview, focus);
         DrawFlash(flash);
+    }
+
+    /// <summary>
+    /// 地形指纹：可落子 / 高度 / 地表 / 桥 + 全部栅栏边。只读默认棋盘视图模型，不读地图、不判改造。
+    /// 预置设施与本局改造在这里<b>本来就分不出</b>——指纹变了只说明"要重搭"，不说明是谁改的。
+    /// </summary>
+    private static string TerrainKeyOf(DefaultBoardView board)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (BoardCellView cell in board.Cells)
+        {
+            sb.Append((int)cell.Terrain).Append(cell.Height).Append((int)cell.Surface).Append(cell.HasBridge ? '1' : '0').Append(';');
+        }
+
+        sb.Append('|');
+        foreach (FenceEdge fence in board.Fences)
+        {
+            sb.Append(fence).Append(';');
+        }
+
+        return sb.ToString();
     }
 
     private static void Clear(Node container)
@@ -629,11 +670,57 @@ public sealed partial class BoardView : Node3D
 
     // ---------- 批次预演 ----------
 
-    private void DrawPreview(PreviewPresentation? preview)
+    /// <summary>
+    /// 预演叠加。<paramref name="focus"/> 是当前光标所在格：盘上同时暂放多枚匠人时，只显示<b>一枚</b>的候选目标——
+    /// 光标停在某枚已暂放的匠人上就显示那枚，否则显示最后暂放的那枚。
+    /// </summary>
+    /// <remarks>
+    /// 16 条候选边（裁决 T-11）同屏的读法：候选边一律<b>贴在边上</b>画半透明矮栏，不做任何偏移。
+    /// 一枚匠人的 16 条边恰好构成"十字五格区域的 12 条外轮廓边 + 匠人格自身的 4 条边"——
+    /// 屏幕上就是一个十字轮廓套一个小方框，中心正是匠人，读法自解释，不需要"朝落点收缩"。
+    /// （收缩要判断边的哪一端靠匠人，而 <see cref="FenceEdge"/> 构造即归一、丢掉了端点角色，
+    /// 表现层重新判邻接就是第二份邻接实现——禁。）一次只画一枚匠人的候选，是为了避免两枚匠人的十字叠在一起看不清。
+    /// 已选目标不受 <paramref name="focus"/> 限制，全部匠人的都画：它是要提交的动作，必须一直可见。
+    /// </remarks>
+    private void DrawPreview(PreviewPresentation? preview, Coord? focus = null)
     {
         if (preview is null)
         {
             return;
+        }
+
+        // 已选目标：全部匠人的都画，实心亮色（HighlightStyle.EditChosenMark）。
+        foreach (EdgeHighlight edge in preview.EdgeHighlights.Where(h => h.Kind == HighlightKind.ChosenEdit))
+        {
+            AddEditFence(edge.Edge, Visuals.EditChosen, 1f);
+        }
+
+        foreach (CellHighlight cell in preview.Highlights.Where(h => h.Kind == HighlightKind.ChosenEdit))
+        {
+            AddTint(cell.Coord, Visuals.EditChosen, 0.55f, _preview);
+            AddRing(_preview, cell.Coord, Visuals.EditChosen, false, 0.062f);
+        }
+
+        // 候选目标：只画当前那一枚匠人的，半透明（HighlightStyle.EditTargetHint），明显弱于已选。
+        ArtisanEditView? current = preview.ArtisanEdits.FirstOrDefault(a => focus is { } f && a.ArtisanCell == f)
+            ?? preview.ArtisanEdits.LastOrDefault();
+        if (current is not null)
+        {
+            foreach (FenceEdge edge in current.FenceEdges.Where(e => current.Chosen is not { Kind: TerrainEditKind.Fence } c || c.Edge != e))
+            {
+                AddEditFence(edge, Visuals.EditTarget, 0.42f);
+            }
+
+            foreach (Coord cell in current.BridgeCells.Concat(current.BurnCells))
+            {
+                if (current.Chosen is { Kind: not TerrainEditKind.Fence } chosen && chosen.Cell == cell)
+                {
+                    continue;
+                }
+
+                AddTint(cell, Visuals.EditTarget, 0.30f, _preview);
+                AddRing(_preview, cell, Visuals.EditTarget, true, 0.046f);
+            }
         }
 
         foreach (StagedPieceView staged in preview.StagedPieces)
@@ -681,6 +768,36 @@ public sealed partial class BoardView : Node3D
         {
             AddCross(coord, Visuals.Urgent);
         }
+
+        // 改造落成的一次可察觉反馈（visual-style-baseline「改造的可视表现」）：格目标亮环 + 亮底，边目标沿边立一道亮栏。
+        // 反馈只持续 FlashSeconds；设施本身此刻已经由 Build 按新地形画成了与预置设施一模一样的样子。
+        foreach (TerrainEdit edit in flash.Edits)
+        {
+            if (edit.Kind == TerrainEditKind.Fence)
+            {
+                AddEditFence(edit.Edge, Visuals.EditDone, 1f);
+            }
+            else
+            {
+                AddTint(edit.Cell, Visuals.EditDone, 0.5f, _preview);
+                AddRing(_preview, edit.Cell, Visuals.EditDone, false, 0.09f);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 沿一条边画改造标记。位置与 <see cref="AddFence"/> 同一套算式（两格格心的中点），不引入第二份坐标换算。
+    /// <paramref name="alpha"/> 满值时立起亮栏（已选 / 落成），否则贴地画虚线短条（候选）。
+    /// </summary>
+    private void AddEditFence(FenceEdge edge, Color color, float alpha)
+    {
+        int level = Math.Max(LevelOf(edge.A) ?? 0, LevelOf(edge.B) ?? 0);
+        Vector3 a = BoardGeometry.Center(edge.A, _width, _height, level);
+        Vector3 b = BoardGeometry.Center(edge.B, _width, _height, level);
+        Node3D mark = LowPoly.EditEdgeMark(
+            alongX: edge.A.X == edge.B.X, Visuals.Flat(new Color(color, alpha)), upright: alpha >= 1f);
+        mark.Position = ((a + b) * 0.5f) + new Vector3(0f, 0.012f, 0f);
+        _preview.AddChild(mark);
     }
 
     // ---------- 图元 ----------

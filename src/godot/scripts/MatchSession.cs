@@ -227,6 +227,59 @@ public sealed class MatchSession
         Rebuild();
     }
 
+    /// <summary>
+    /// 部署阶段：把某枚暂放匠人的改造目标向后轮换一位（"不改造" → 目标 1 → … → 目标 N → "不改造"）。
+    /// </summary>
+    /// <remarks>
+    /// 候选目标<b>整份</b>取自预演呈现的 <see cref="ArtisanEditView.Targets"/>（← Core 富预演 ← 改造合法性唯一实现），
+    /// 本方法只做"取下一个"的下标运算，MUST NOT 自己判断某个目标合不合法。
+    /// 换目标的手段是撤回后原位重暂放：<c>StagedBatch.Replace</c> 只换类型、不带改造目标。
+    /// </remarks>
+    public bool CycleEdit(Coord? preferred)
+    {
+        if (!IsMyTurn || Match.Stage != TurnStage.Deploy || Match.CurrentBatch is not { } batch
+            || World.Preview() is not { } preview || preview.ArtisanEdits.IsEmpty)
+        {
+            return false;
+        }
+
+        ArtisanEditView artisan = preview.ArtisanEdits.FirstOrDefault(a => preferred is { } p && a.ArtisanCell == p)
+            ?? preview.ArtisanEdits[^1];
+        if (artisan.Targets.IsEmpty)
+        {
+            Notice = $"{artisan.ArtisanCell.ToNotation()} 的匠人此刻没有可改造的目标。";
+            return false;
+        }
+
+        // −1 = 当前"不改造"（轮换的第 0 位），下一位就是 Targets[0]。
+        int current = -1;
+        for (int i = 0; i < artisan.Targets.Length; i++)
+        {
+            if (artisan.Targets[i].IsChosen)
+            {
+                current = i;
+                break;
+            }
+        }
+
+        // 末位之后回到"不改造"（裁决 T-6）。
+        int next = current + 1;
+        TerrainEdit? edit = next < artisan.Targets.Length ? artisan.Targets[next].Edit : null;
+
+        if (!batch.Unstage(artisan.ArtisanCell))
+        {
+            return false;
+        }
+
+        BatchFailure? failure = batch.Stage(artisan.ArtisanCell, PieceType.Artisan, edit);
+        LastFailure = failure is null ? null : FailurePresentation.From(failure);
+        Notice = failure is null
+            ? $"{artisan.ArtisanCell.ToNotation()} 的匠人：{(edit is { } e ? Siege.Presentation.Text.Labels.TerrainEdit(e) : ArtisanEditView.NoEditText)}"
+            : LastFailure!.Detail;
+        Rebuild();
+        return failure is null;
+    }
+
     /// <summary>部署阶段：撤回某格（右键）。</summary>
     public void Unstage(Coord coord)
     {
@@ -325,7 +378,9 @@ public sealed class MatchSession
             ? $"{who} Pass。"
             : $"{who} 落子 {placed.Count} 枚" + (captured.Count == 0 ? "。" : $"，提走 {captured.Count} 子。");
         Rebuild();
-        return new TurnFlash(placed.ToImmutable(), captured.ToImmutable());
+
+        // 改造的落成反馈不在这里算：AI 与人类两条路径都由 GameRoot 按默认棋盘视图的 Edits 增量统一给出（TurnFlash.Edits）。
+        return new TurnFlash(placed.ToImmutable(), captured.ToImmutable(), []);
     }
 
     /// <summary>无人值守演示：把整理手牌阶段推过去（超出槽位时整类弃牌），停在征募面板。</summary>
@@ -366,6 +421,56 @@ public sealed class MatchSession
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 无人值守演示：把一枚匠人摆到"此刻能烧林"的落点上；没有这样的落点就退回第一个合法落点。
+    /// </summary>
+    /// <remarks>
+    /// 全图只有 4 格林地，AI 的候选排行榜又被 16 条栅栏候选挤占（裁决 T-12），烧林在自检里几乎永远跑不到。
+    /// 这里用"暂放 → 看预演给的目标 → 不合意就撤回"的笨办法找落点：判断全程只读
+    /// <see cref="ArtisanEditView.BurnCells"/>（← 改造合法性唯一实现），界面一次都没有自己算过合法性。
+    /// </remarks>
+    public bool StageArtisanPreferringBurn()
+    {
+        if (!IsMyTurn || Match.Stage != TurnStage.Deploy || Match.CurrentBatch is not { } batch)
+        {
+            return false;
+        }
+
+        Coord? fallback = null;
+        foreach (Coord coord in batch.Context.LegalRange.Order())
+        {
+            if (batch.Stage(coord, PieceType.Artisan) is not null)
+            {
+                continue;
+            }
+
+            Rebuild();
+            PreviewPresentation? shown = World.Preview();
+
+            // CanConfirm 也要看：LegalRange 只过了预演第 1–2 步，落到一个自己会被闷死的格上整批都会被拒（自杀手）。
+            if (shown is { CanConfirm: true })
+            {
+                if (shown.ArtisanEdits.LastOrDefault() is { BurnCells.IsEmpty: false })
+                {
+                    return true;
+                }
+
+                fallback ??= coord;
+            }
+
+            batch.Unstage(coord);
+        }
+
+        if (fallback is not { } cell || batch.Stage(cell, PieceType.Artisan) is not null)
+        {
+            Rebuild();
+            return false;
+        }
+
+        Rebuild();
+        return true;
     }
 
     /// <summary>重建观察者世界：公开快照、补充载荷、私有手牌、预演<b>一次性</b>取齐，杜绝跨帧混用。</summary>

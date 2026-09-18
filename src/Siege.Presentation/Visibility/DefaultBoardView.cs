@@ -24,7 +24,10 @@ public enum RelicMarker
 /// <param name="Terrain">可落子 / 障碍（未架桥深水按障碍报，见 <see cref="MapData.TerrainAt"/>）。</param>
 /// <param name="Height">高度 0–2（terrain-model）：Godot 按它堆叠地砖与抬升落点，不自己推。</param>
 /// <param name="Surface">地表：草地 / 土路 / 林地 / 深水。</param>
-/// <param name="HasBridge">深水格上是否有预置桥（有桥即可落子）。</param>
+/// <param name="HasBridge">
+/// 深水格上<b>当前</b>是否有桥（有桥即可落子）。地图预置的桥与本局架起的桥在这里没有区别——
+/// visual-style-baseline「新旧设施同形」要求二者外观一致，information-visibility「改造结果公开」要求不标记改造者。
+/// </param>
 /// <param name="RevealedType">已揭示信物的类型；未揭示或非信物格为 <c>null</c>。</param>
 public sealed record BoardCellView(
     Coord Coord,
@@ -38,9 +41,24 @@ public sealed record BoardCellView(
     RelicType? RevealedType);
 
 /// <summary>默认棋盘（不打开任何信息层时）。</summary>
-/// <param name="Fences">栅栏边（无序格对，terrain-model 边属性）：Godot 沿两格公共边立起，不占任一格的落点。</param>
+/// <param name="Fences">
+/// <b>当前</b>全部栅栏边（无序格对，terrain-model 边属性）：Godot 沿两格公共边立起，不占任一格的落点。
+/// 预置栅栏与本局立起的栅栏混在一起，不可区分——这是 visual-style-baseline「新旧设施同形」要的结果。
+/// </param>
 /// <param name="Sites">全部据点（visual-style-baseline「据点地标」）：档位、分值、控制状态与控制者 / 覆盖方，Godot 据此画地标与旗帜，不自己判定控制。</param>
-public sealed record DefaultBoardView(int Width, int Height, ImmutableArray<BoardCellView> Cells, ImmutableArray<FenceEdge> Fences, ImmutableArray<SiteView> Sites)
+/// <param name="Edits">
+/// 本局<b>已完成</b>的改造（<see cref="GameBoard.TerrainEdits"/> 的投影，无归属、不含改造者，R-3）。
+/// 只有一个用途：让渲染层能认出"这一帧刚多出来的那条改造"，给一次落成反馈（visual-style-baseline「改造的可视表现」）。
+/// MUST NOT 据此把新设施画得与预置设施不同——设施本身一律从 <see cref="Fences"/> / <see cref="BoardCellView.HasBridge"/> /
+/// <see cref="BoardCellView.Surface"/> 读，那三处根本分不出新旧。
+/// </param>
+public sealed record DefaultBoardView(
+    int Width,
+    int Height,
+    ImmutableArray<BoardCellView> Cells,
+    ImmutableArray<FenceEdge> Fences,
+    ImmutableArray<SiteView> Sites,
+    ImmutableArray<TerrainEdit> Edits)
 {
     /// <summary>某格。</summary>
     public BoardCellView CellAt(Coord coord) =>
@@ -71,6 +89,10 @@ public sealed record DefaultBoardView(int Width, int Height, ImmutableArray<Boar
             }),
         ];
 
-        return new DefaultBoardView(board.Width, board.Height, cells, [.. board.Map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B)], SiteViews.From(world));
+        return new DefaultBoardView(
+            board.Width, board.Height, cells,
+            [.. board.Map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B)],
+            SiteViews.From(world),
+            board.TerrainEdits);
     }
 }

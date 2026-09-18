@@ -40,6 +40,17 @@ public sealed record GroupOutlook(
     public int LibertyCount => Liberties.Length;
 }
 
+/// <summary>
+/// 一枚暂放匠人的改造前景（batch-preview「批次预演必须显示的信息」第 1 / 7 项）：它选中的目标（没选为 <c>null</c>）与此刻<b>全部</b>合法目标。
+/// </summary>
+/// <remarks>
+/// <para><see cref="Legal"/> 一律来自改造合法性的唯一实现 <see cref="TerrainEditRules.LegalTargets"/>，按<b>批次开始前</b>的地形枚举
+/// （与 <see cref="BatchRehearsal"/> 第 1 步同源，design 默认 2「批次内不链式」）。表现层 MUST NOT 自己遍历四邻或复算合法性。</para>
+/// <para>本批其它匠人已经选走的目标<b>不</b>从 <see cref="Legal"/> 里剔除：「同一目标批内唯一」是批次层的判定
+/// （<see cref="BatchFailureKind.DuplicateEditInBatch"/>），在这里再写一遍就成了第二实现。玩家选重了会在预演里直接看到该失败。</para>
+/// </remarks>
+public sealed record EditOutlook(Coord ArtisanCell, TerrainEdit? Chosen, ImmutableArray<TerrainEdit> Legal);
+
 /// <summary>一名玩家的势力与竞争名次在本批结算前后的变化（tactical-ui 裁决 1：含被挤动的他人名次）。名次对非参赛玩家为 <c>null</c>。</summary>
 public sealed record PowerChange(PlayerId Player, PlayerStatus Status, long Before, long After, int? RankBefore, int? RankAfter)
 {
@@ -56,9 +67,13 @@ public sealed record PowerChange(PlayerId Player, PlayerStatus Status, long Befo
 /// <remarks>
 /// <para>六项：① <see cref="Placements"/> + <see cref="HandCosts"/>；② <see cref="DeployLimit"/> / <see cref="DeployUsed"/>；
 /// ③ <see cref="Captures"/>；④ <see cref="OwnGroups"/> 的气位与自杀风险；⑤ <see cref="OwnGroups"/> 的军势明细；
-/// ⑥ <see cref="PowerChanges"/>。另有 <see cref="Failure"/>（类别 + 坐标）与 <see cref="WillReveal"/>（将揭示格，<b>只有坐标</b>）。</para>
+/// ⑥ <see cref="PowerChanges"/>。另有 <see cref="Failure"/>（类别 + 坐标）与 <see cref="WillReveal"/>（将揭示格，<b>只有坐标</b>）
+/// 与 <see cref="EditOptions"/>（每枚暂放匠人的改造目标与全部合法目标，artisan-terrain-edit 4.1）。</para>
 /// <para>填充规则：第 1–2 步失败时没有结算后盘面，③–⑥ 与将揭示均为空；自杀手 / 同形时 ③④ 有值（供高亮），⑤⑥ 与将揭示为空；
-/// 合法非 Pass 时全部有值；Pass 时除额度外均为空。</para>
+/// 合法非 Pass 时全部有值；Pass 时除额度外均为空。<see cref="EditOptions"/> 是例外：只要批次里有匠人就有值，
+/// <b>失败时照样给</b>——玩家正是要靠它换一个合法目标。</para>
+/// <para>④⑤⑥ 与 ③ 都算在<b>应用本批改造之后</b>的地形上（预演第 4 步先于提子），因此「按改造后地形算气与自杀风险」
+/// 不需要表现层做任何事（batch-preview「改造后的气与自杀风险」）。</para>
 /// </remarks>
 public sealed record BatchPreview(
     PlayerId Player,
@@ -71,7 +86,8 @@ public sealed record BatchPreview(
     ImmutableArray<CapturedGroup> Captures,
     ImmutableArray<GroupOutlook> OwnGroups,
     ImmutableArray<PowerChange> PowerChanges,
-    ImmutableArray<Coord> WillReveal)
+    ImmutableArray<Coord> WillReveal,
+    ImmutableArray<EditOutlook> EditOptions)
 {
     /// <summary>已用部署额度 = 暂放枚数。</summary>
     public int DeployUsed => Placements.Length;
@@ -115,10 +131,17 @@ public static class BatchPreviewBuilder
             .. ordered.GroupBy(p => p.Type).OrderBy(g => g.Key).Select(g => new HandCost(g.Key, g.Count(), context.StockOf(g.Key))),
         ];
 
+        // 改造目标按批次开始前的地形（board.Map）枚举，与预演第 1 步同源；合法性只走 TerrainEditRules 这一份实现。
+        ImmutableArray<EditOutlook> editOptions =
+        [
+            .. ordered.Where(p => p.Type == TerrainEditRules.EditorType)
+                .Select(p => new EditOutlook(p.Coord, p.Edit, TerrainEditRules.LegalTargets(board.Map, p.Coord))),
+        ];
+
         if (rehearsal.IsPass || rehearsal.ProjectedBoard is not { } projected)
         {
             return new BatchPreview(context.Player, rehearsal.IsLegal, rehearsal.IsPass, rehearsal.Failure, ordered, costs,
-                context.DeployLimit, [], [], [], []);
+                context.DeployLimit, [], [], [], [], editOptions);
         }
 
         ImmutableArray<CapturedGroup> captures = GroupCaptures(board, rehearsal.Captures);
@@ -142,7 +165,7 @@ public static class BatchPreviewBuilder
         }
 
         return new BatchPreview(context.Player, rehearsal.IsLegal, IsPass: false, rehearsal.Failure, ordered, costs,
-            context.DeployLimit, captures, own, changes, willReveal);
+            context.DeployLimit, captures, own, changes, willReveal, editOptions);
     }
 
     /// <summary>把平铺的提子集合按正式盘面上的棋串分组。放置己方棋子不改变敌方棋串结构，且提子总是整串，故正式盘面上的棋串即被提棋串。</summary>
