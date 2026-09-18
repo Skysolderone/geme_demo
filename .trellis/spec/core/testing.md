@@ -251,7 +251,28 @@ Safety 权重的旧注释记着"取 3 不收敛、取 10 仍不收敛、取 20 �
 - 还原后 MUST 与"改之前读到的原文"逐字符比对，不要只比对备份文件——备份本身可能已被污染。
 - 这些文件的改动往往尚未提交，`git checkout` 会连同本轮工作一起抹掉，**不是**退路。
 - 读写 MUST 用二进制模式（`open(p, 'rb')` / `'wb'`），比对也比字节串。文本模式读会把 CRLF 归一成 `\n`，`open(p, 'w', newline='')` 再把整份文件写成 LF——本仓源码是 CRLF，一次变异就能把整个文件的行尾换掉。
-  这个错误的隐蔽之处在于**三道防线同时失效**（strict-cli 检查阶段实测）：脚本里"还原后与变异前读到的原文比对"两边都是文本模式，一起被归一，恒为 `True`；`core.autocrlf=true` 下 `git diff` 对 LF 工作树文件输出为空（只在 stderr 给一句 warning）；编译与测试对行尾无感，全绿。只有二进制读写或 `cmp` 才看得见。锚点串里的换行也要写成 `\r\n`，否则 `replace` 匹配不到而静默不变异（假绿）。
+  这个错误的隐蔽之处在于**三道防线同时失效**（strict-cli 检查阶段实测）：脚本里"还原后与变异前读到的原文比对"两边都是文本模式，一起被归一，恒为 `True`；`core.autocrlf=true` 下 `git diff` 对 LF 工作树文件输出为空（只在 stderr 给一句 warning）；编译与测试对行尾无感，全绿。只有二进制读写或 `cmp` 才看得见。
+
+### 锚点按「每个文件实际的行尾」归一，并断言命中次数恰为 1
+
+上一条写的"锚点串里的换行写成 `\r\n`"还不够严：**本仓 CRLF 与 LF 混用**（artisan-terrain-edit 段 A 检查实测：295 个 `.cs` 里 181 个纯 CRLF、114 个纯 LF，无单文件内混用；`MatchFlow.cs`、`PieceEffects.cs`、`VisualBaseline.cs`、`ConsoleController.cs`、`Siege.Sim/Running/MatchSession.cs` 与部分测试文件都是 LF）。把 `\r\n` 写死进锚点，在 LF 文件上一样匹配不到、一样静默不变异、一样假绿——只是把假绿从一半文件换到了另一半。
+
+规则：多行锚点 MUST 先读该文件的字节、探测它实际的行尾，再把锚点与替换串里的换行归一成同一个行尾；并且 MUST `assert data.count(anchor) == 1`——命中 0 次（没变异）与命中多次（改了不该改的地方）都要响亮失败，不能只看 `replace` 的返回值。
+
+```python
+def detect_eol(data):
+    crlf = data.count(b"\r\n")
+    lf = data.count(b"\n") - crlf
+    if crlf and lf:
+        raise SystemExit("文件内部混用行尾")     # 本仓目前没有，出现了要先查清楚
+    return b"\r\n" if crlf else b"\n"
+
+eol = detect_eol(original)
+anchor = text.replace("\r\n", "\n").replace("\n", eol.decode()).encode("utf-8")
+assert original.count(anchor) == 1
+```
+
+判据："这次变异到底改没改到文件"必须由脚本自己证明，不能靠事后看红了几条来反推——变异本来就该红，不红时你无法区分"守门缺失"与"锚点没匹配上"。
 
 ## 跑 dotnet test 的脚本要强制英文输出
 

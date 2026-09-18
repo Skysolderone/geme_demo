@@ -72,6 +72,12 @@ public sealed record RunConfig
     /// </summary>
     public SiteValues SiteValues { get; init; } = SiteValues.Standard;
 
+    /// <summary>
+    /// 匠人征募权重，直接写入对局配置 <see cref="MatchOptions.ArtisanWeight"/>（artisan-terrain-edit R-2：未配置取 10）。
+    /// 其余五种类型的基础权重不随它变化。
+    /// </summary>
+    public int ArtisanWeight { get; init; } = MatchOptions.DefaultArtisanWeight;
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -126,6 +132,11 @@ public sealed record RunConfig
         }
 
         SiteValues.Validated();
+
+        if (ArtisanWeight < 0)
+        {
+            throw new ArgumentException("匠人征募权重须为非负整数（0 = 匠人不进池）。");
+        }
 
         if (FullEventSamplePermille is < 0 or > 1000)
         {

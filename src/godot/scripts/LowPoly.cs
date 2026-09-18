@@ -76,6 +76,7 @@ public static class LowPoly
 
         // 多瓣水晶：一根主晶柱 + 四根外倾副晶柱，轮廓语言 = 多节点聚合。
         PieceSilhouette.CrystalCluster => CrystalParts(body),
+        PieceSilhouette.Scaffold => ScaffoldParts(body, faction),
 
         _ => throw new System.ArgumentOutOfRangeException(nameof(silhouette), silhouette, "未知棋子轮廓。"),
     };
@@ -112,6 +113,30 @@ public static class LowPoly
                 new Vector3(Mathf.Sin(a) * 26f, 0f, -Mathf.Cos(a) * 26f));
         }
 
+        return parts;
+    }
+
+    /// <summary>
+    /// 匠人的支架轮廓占位（artisan-terrain-edit 段 A）：四根立柱 + 一道横梁，与其余五种明显不同。
+    /// Open Question 3 的正式外观与截图属于段 C，这里只保证六种棋子都渲染得出来、不抛异常。
+    /// </summary>
+    private static Node3D[] ScaffoldParts(Color body, Color faction)
+    {
+        var parts = new Node3D[5];
+        for (int i = 0; i < 4; i++)
+        {
+            float a = (Mathf.Pi * 2f * i / 4f) + (Mathf.Pi / 4f);
+            parts[i] = Mesh(
+                new BoxMesh { Size = new Vector3(0.06f, 0.42f, 0.06f) },
+                Visuals.Matte(body),
+                new Vector3(Mathf.Cos(a) * 0.16f, BaseHeight + 0.21f, Mathf.Sin(a) * 0.16f));
+        }
+
+        parts[4] = Mesh(
+            new BoxMesh { Size = new Vector3(0.44f, 0.07f, 0.10f) },
+            Visuals.Matte(faction),
+            new Vector3(0f, BaseHeight + 0.44f, 0f),
+            new Vector3(0f, 45f, 0f));
         return parts;
     }
 

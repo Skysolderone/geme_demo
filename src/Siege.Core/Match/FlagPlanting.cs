@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
@@ -51,6 +52,15 @@ public sealed record MatchOptions
     /// 属于对局配置：开局固定、公开、入存档；须为正整数且营帐 ≤ 篝火 ≤ 石碑（<see cref="Scoring.SiteValues.Validated"/>，建局时校验）。
     /// </summary>
     public SiteValues SiteValues { get; init; } = SiteValues.Standard;
+
+    /// <summary>标准局的匠人征募权重初值（artisan-terrain-edit 裁决 T-1 / R-2：10，待扫档校准）。</summary>
+    public const int DefaultArtisanWeight = RecruitWeights.DefaultArtisanWeight;
+
+    /// <summary>
+    /// 匠人的征募权重（artisan-terrain-edit R-2；非负整数，0 = 匠人不进池）。其余五种类型的基础权重固定，不随它变化。
+    /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改。
+    /// </summary>
+    public int ArtisanWeight { get; init; } = DefaultArtisanWeight;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

@@ -13,7 +13,7 @@ public enum Terrain
     Obstacle,
 }
 
-/// <summary>五种原型棋子。基础军势与效果属于计分层，本层只负责类型标识。</summary>
+/// <summary>六种原型棋子。基础军势与效果属于计分层，本层只负责类型标识。</summary>
 public enum PieceType
 {
     /// <summary>普通子，基础军势 1。</summary>
@@ -30,6 +30,9 @@ public enum PieceType
 
     /// <summary>协同子，按同串其他类型数提供位置加值。</summary>
     Synergy,
+
+    /// <summary>匠人，基础军势 1；能力只在落子瞬间改造地形（见 <c>terrain-edit</c>），落子后与普通子完全相同。</summary>
+    Artisan,
 }
 
 /// <summary>信物格所属的强度预算分区。</summary>

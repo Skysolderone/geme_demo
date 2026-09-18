@@ -88,13 +88,13 @@ public readonly record struct Multiplier
 }
 
 /// <summary>
-/// 五种原型棋子的效果（设计文档 §9.2）：基础军势、连珠线位置加值、协同位置加值。
+/// 六种原型棋子的效果（设计文档 §9.2）：基础军势、连珠线位置加值、协同位置加值。
 /// 只回答"这条棋串上的棋子产生多少数值"；棋串归属、气与围杀完全由棋盘层决定，类型效果 MUST NOT 提供额外气、免死或复活。
 /// </summary>
 /// <remarks>规格：openspec/changes/add-territory-power/specs/piece-effects</remarks>
 public static class PieceEffects
 {
-    /// <summary>基础军势：普通子 1、堡垒子 4、连珠子 1、倍增子 1、协同子 1。</summary>
+    /// <summary>基础军势：普通子 1、堡垒子 4、连珠子 1、倍增子 1、协同子 1、匠人 1（artisan-terrain-edit 裁决 T-1）。</summary>
     public static int BasePower(PieceType type) => type switch
     {
         PieceType.Basic => 1,
@@ -102,6 +102,7 @@ public static class PieceEffects
         PieceType.Line => 1,
         PieceType.Multiplier => 1,
         PieceType.Synergy => 1,
+        PieceType.Artisan => 1,
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
 

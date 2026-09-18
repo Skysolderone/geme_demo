@@ -373,6 +373,7 @@ public sealed class GameBoard
         'L' => PieceType.Line,
         'M' => PieceType.Multiplier,
         'S' => PieceType.Synergy,
+        'A' => PieceType.Artisan,
         _ => throw new FormatException($"未知棋子类型码：'{code}'。"),
     };
 
@@ -383,6 +384,7 @@ public sealed class GameBoard
         PieceType.Line => 'L',
         PieceType.Multiplier => 'M',
         PieceType.Synergy => 'S',
+        PieceType.Artisan => 'A',
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
 }

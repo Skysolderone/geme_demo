@@ -30,6 +30,7 @@ public static class Labels
         PieceType.Line => "连珠子",
         PieceType.Multiplier => "倍增子",
         PieceType.Synergy => "协同子",
+        PieceType.Artisan => "匠人",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
 

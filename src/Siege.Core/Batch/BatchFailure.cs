@@ -81,6 +81,7 @@ public sealed record BatchFailure(
         PieceType.Line => "连珠子",
         PieceType.Multiplier => "倍增子",
         PieceType.Synergy => "协同子",
+        PieceType.Artisan => "匠人",
         _ => type.ToString(),
     };
 }

@@ -16,6 +16,30 @@ public class 盘面序列化Tests
     }
 
     [Fact]
+    public void 六种类型的盘面码两两不同且往返保留类型()
+    {
+        // 设计文档 §6.2 + artisan-terrain-edit 段 A：盘面序列化同时是存档与同形禁则的表示，六种棋子类型 MUST 各有一个码。
+        // 漏码会在匠人落子后存档时抛 FormatException（响亮），撞码则是**静默**的：读回来变成另一种棋子、两个不同盘面还会被判成同形。
+        // 变异验证 M-C2（检查阶段）：GameBoard 的 Artisan 码由 'A' 改成 'S'（与协同子撞码）→ 补本测试前全绿 826（缺口），补后本测试红。
+        PieceType[] all = Enum.GetValues<PieceType>();
+        Assert.Equal(6, all.Length);
+        var texts = new List<string>();
+        foreach (PieceType type in all)
+        {
+            GameBoard board = TestMaps.Blank(size: 5).Place("C3", TestMaps.P0, type);
+            string text = board.Serialize();
+            texts.Add(text);
+
+            GameBoard back = GameBoard.RestoreUnvalidated(board.Map, text);
+            Assert.Equal(type, back[TestMaps.At("C3")].Occupant!.Value.Type);
+            Assert.Equal(text, back.Serialize());
+        }
+
+        // 两两不同：任何两种类型撞码都会让这里少一个元素（同时意味着两种盘面同形）。
+        Assert.Equal(all.Length, texts.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public void 非盘面信息不影响序列化()
     {
         // 两份盘面的格子占用完全一致；手牌与信物控制不属于序列化内容，因此结果必须相等。

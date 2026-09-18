@@ -55,4 +55,34 @@ public class 出生区信物权重Tests
             Assert.InRange(permille, (expected[i] * 10) - 10, (expected[i] * 10) + 10);
         }
     }
+
+    [Fact]
+    public void 徽记可绑定匠人()
+    {
+        // 规格 relic-generation「徽记可绑定匠人」+ artisan-terrain-edit R-1：流派徽记的棋子类型在<b>全部</b>棋子类型中等概率抽取，
+        // 类型增至六种后，六种各约六分之一，其中包含匠人。3000 个种子 × 全图信物格，容差 ±2 个百分点。
+        // 变异验证见测试报告 M-A5（EmblemPieces 把匠人排除在外）。
+        var counts = new SortedDictionary<PieceType, int>();
+        int total = 0;
+        for (ulong seed = 0; seed < 3000; seed++)
+        {
+            foreach (RelicPlacement p in RelicGenerator.Generate(Map, new GameSeed(seed)).Placements)
+            {
+                if (p.Content.EmblemPiece is { } piece)
+                {
+                    counts[piece] = counts.TryGetValue(piece, out int n) ? n + 1 : 1;
+                    total++;
+                }
+            }
+        }
+
+        Assert.Equal(Enum.GetValues<PieceType>().Order(), counts.Keys);
+        Assert.True(total > 6000, $"样本量 {total} 太小，不足以判断分布。");
+        foreach ((PieceType piece, int n) in counts)
+        {
+            int permille = n * 1000 / total;
+            Assert.InRange(permille, 167 - 20, 167 + 20);
+            Assert.True(n > 0, $"{piece} 从未被徽记绑定。");
+        }
+    }
 }

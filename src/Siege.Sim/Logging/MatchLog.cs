@@ -414,7 +414,7 @@ public sealed record GroupEntry
     public long Power { get; init; }
 
     /// <summary>
-    /// 本串各棋子类型的数量，键为 <see cref="Siege.Core.Board.PieceType"/> 名，五种全写（含 0）；multiplier-rebalance 裁决 3，供"各棋子势力占比"归因。
+    /// 本串各棋子类型的数量，键为 <see cref="Siege.Core.Board.PieceType"/> 名，六种全写（含 0）；multiplier-rebalance 裁决 3，供"各棋子势力占比"归因。
     /// 此前的旧日志没有该字段，解析为 <c>null</c>（未知）：分析时跳过该局的占比统计，MUST NOT 回填成 0——那会把旧局错算成"全是某种棋子"。
     /// </summary>
     public Dictionary<string, int>? PieceCounts { get; init; }

@@ -29,6 +29,7 @@ internal sealed class BoardRenderer
         PieceType.Line => 'L',
         PieceType.Multiplier => 'M',
         PieceType.Synergy => 'S',
+        PieceType.Artisan => 'A',
         _ => '?',
     };
 
@@ -39,6 +40,7 @@ internal sealed class BoardRenderer
         PieceType.Line => "连珠",
         PieceType.Multiplier => "倍增",
         PieceType.Synergy => "协同",
+        PieceType.Artisan => "匠人",
         _ => type.ToString(),
     };
 
@@ -52,6 +54,7 @@ internal sealed class BoardRenderer
             case "L" or "连" or "连珠": type = PieceType.Line; return true;
             case "M" or "倍" or "倍增": type = PieceType.Multiplier; return true;
             case "S" or "协" or "协同": type = PieceType.Synergy; return true;
+            case "A" or "匠" or "匠人": type = PieceType.Artisan; return true;
             default: return false;
         }
     }

@@ -50,6 +50,46 @@ public class 手牌类型槽Tests
     }
 
     [Fact]
+    public void 六种类型挤不进默认槽位()
+    {
+        // 规格 hand-management「六种类型挤不进默认槽位」+ artisan-terrain-edit 风险条目：默认 5 槽、六种类型是设计意图上的取舍。
+        // 已持有五种（普通 / 堡垒 / 连珠 / 倍增 / 协同）且槽位为 5 时，面板出现匠人 → 选取被拒并说明槽位已满；
+        // 整类弃掉一种之后同一个候选位即可选取（走的是既有的整类弃牌路径，本段没有新增规则）。
+        GameSeed seed = HandFixtures.SeedWhere(p => p.Contains(PieceType.Artisan));
+        (PieceType Type, int Count)[] fiveTypes =
+            [(PieceType.Basic, 5), (PieceType.Fortress, 1), (PieceType.Line, 1), (PieceType.Multiplier, 1), (PieceType.Synergy, 1)];
+
+        HandLedger full = HandFixtures.Ledger(seed);
+        full.Debug.SeedHand(HandFixtures.P0, fiveTypes);
+        PlayerHandAccess access = HandFixtures.Begin(full, HandFixtures.P0);
+        RecruitPanelView panel = access.EnterRecruit();
+        Assert.Equal(5, access.PrivateView().TypeSlots);
+        Assert.Equal(5, access.PrivateView().OccupiedSlots);
+        int index = panel.IndicesOf(PieceType.Artisan)[0];
+
+        SiegeRuleException rejected = Assert.Throws<SiegeRuleException>(() => access.Pick(index));
+
+        Assert.Contains("类型槽已被占满", rejected.Message);
+        Assert.Contains("匠人", rejected.Message);
+        Assert.Equal(0, access.PrivateView().CountOf(PieceType.Artisan));
+        Assert.Equal(5, access.PrivateView().OccupiedSlots);
+
+        // 对照：同一种子、同一面板，先在整理手牌阶段整类弃掉协同子再进征募 → 同一个候选位就能选取。
+        HandLedger discarded = HandFixtures.Ledger(seed);
+        discarded.Debug.SeedHand(HandFixtures.P0, fiveTypes);
+        discarded.BeginTurn(HandFixtures.P0, HandFixtures.Snapshot(discarded, HandFixtures.P0));
+        PlayerHandAccess freed = discarded.AccessFor(HandFixtures.P0);
+        freed.Discard(PieceType.Synergy);
+        Assert.Equal(4, freed.PrivateView().OccupiedSlots);
+        Assert.Equal(panel.CandidateTypes, freed.EnterRecruit().CandidateTypes);
+
+        freed.Pick(index);
+
+        Assert.Equal(1, freed.PrivateView().CountOf(PieceType.Artisan));
+        Assert.Equal(5, freed.PrivateView().OccupiedSlots);
+    }
+
+    [Fact]
     public void 槽位统计种类而非总数()
     {
         // 设计文档 §5.2：普通子×9 + 堡垒子×1 → 已占 2 槽、余 3 空槽（默认 5 槽）。

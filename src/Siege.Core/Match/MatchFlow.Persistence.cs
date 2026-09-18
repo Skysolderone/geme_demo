@@ -45,6 +45,7 @@ public sealed partial class MatchFlow
             DominanceStartRound = DominanceStartRound,
             CatchUpRecruit = CatchUpRecruit,
             SiteValues = new SiteValuesSaveData { Tent = SiteValues.Tent, Campfire = SiteValues.Campfire, Stele = SiteValues.Stele },
+            ArtisanWeight = ArtisanWeight,
             DominanceCandidate = _dominanceCandidate?.Value,
             DominancePending = [.. _dominancePending.Select(p => p.Value)],
             Phase = Phase,
@@ -158,6 +159,8 @@ public sealed partial class MatchFlow
         bool catchUpBackfilled = data.CatchUpRecruit is null;
         // scoring-sites R-7：旧存档没有据点分值字段 → 按标准局 5 / 15 / 45 回填，并在 SiteValuesBackfilled 上留痕。
         bool siteValuesBackfilled = data.SiteValues is null;
+        // artisan-terrain-edit R-2 / R-6：旧存档没有匠人权重字段 → 按标准局初值 10 回填，并在 ArtisanWeightBackfilled 上留痕。
+        bool artisanWeightBackfilled = data.ArtisanWeight is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
@@ -165,20 +168,23 @@ public sealed partial class MatchFlow
             DominanceStartRound = data.DominanceStartRound ?? MatchOptions.DefaultDominanceStartRound,
             CatchUpRecruit = data.CatchUpRecruit ?? MatchOptions.DefaultCatchUpRecruit,
             SiteValues = data.SiteValues is { } sv ? new SiteValues(sv.Tent, sv.Campfire, sv.Stele) : SiteValues.Standard,
+            ArtisanWeight = data.ArtisanWeight ?? MatchOptions.DefaultArtisanWeight,
         };
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(data));
         RequireValidDominanceStartRound(options.DominanceStartRound, nameof(data));
         RequireValidSiteValues(options.SiteValues);
+        RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         var match = new MatchFlow(
             map, board, seed, players,
             RelicLedger.Restore(relicRecord, data.Relics ?? throw new FormatException("存档缺少信物账本。")),
-            HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。")),
+            HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight),
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
         match.MaxMajorRoundsBackfilled = backfilled;
         match.DominanceStartRoundBackfilled = dominanceBackfilled;
         match.CatchUpRecruitBackfilled = catchUpBackfilled;
         match.SiteValuesBackfilled = siteValuesBackfilled;
+        match.ArtisanWeightBackfilled = artisanWeightBackfilled;
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -265,6 +271,9 @@ public sealed class MatchSaveData
 
     /// <summary>据点分值（scoring-sites）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="Scoring.SiteValues.Standard"/>。</summary>
     public SiteValuesSaveData? SiteValues { get; set; }
+
+    /// <summary>匠人征募权重（artisan-terrain-edit R-2）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultArtisanWeight"/>。</summary>
+    public int? ArtisanWeight { get; set; }
 
     /// <summary>碾压候选玩家编号；无候选为 <c>null</c>。</summary>
     public int? DominanceCandidate { get; set; }

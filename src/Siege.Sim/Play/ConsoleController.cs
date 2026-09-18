@@ -248,7 +248,7 @@ internal sealed class ConsoleController : ITurnController
         }
         else if (!BoardRenderer.TryParseType(typeText, out type))
         {
-            _out.WriteLine($"不认识的类型 {typeText}（B 普通 / F 堡垒 / L 连珠 / M 倍增 / S 协同）");
+            _out.WriteLine($"不认识的类型 {typeText}（B 普通 / F 堡垒 / L 连珠 / M 倍增 / S 协同 / A 匠人）");
             return;
         }
 

@@ -20,7 +20,24 @@ public class 流派徽记调整征募权重Tests
         EffectSnapshot snapshot = HandFixtures.Snapshot(ledger, HandFixtures.P0, emblems: [(PieceType.Multiplier, 1)]);
 
         Assert.Equal(21 * 4, RecruitWeights.AdjustedWeightOf(snapshot, PieceType.Multiplier));
-        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 21 * 4, 10 * 4], RecruitWeights.AdjustedTable(snapshot));
+        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 21 * 4, 10 * 4, 10 * 4], RecruitWeights.AdjustedTable(snapshot));
+    }
+
+    [Fact]
+    public void 匠人徽记按同一公式调权()
+    {
+        // 规格 relic-generation：「匠人徽记与其他徽记按同一征募权重公式生效」。
+        // 1 枚匠人徽记 → 10 × (1 + 0.75) = 17.5；整数形式 10 × 7 = 70；其余五档一字不变。
+        // 期望值用独立算式（基础 × (4 + 3n)）写死，不调用 EmblemWeightNumerator。
+        HandLedger ledger = HandFixtures.Ledger();
+        EffectSnapshot snapshot = HandFixtures.Snapshot(ledger, HandFixtures.P0, emblems: [(PieceType.Artisan, 1)]);
+
+        Assert.Equal(10 * 7, RecruitWeights.AdjustedWeightOf(snapshot, PieceType.Artisan));
+        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 12 * 4, 10 * 4, 10 * 7], RecruitWeights.AdjustedTable(snapshot));
+
+        // 对局配置把匠人基础权重改成 18 时，徽记公式照常叠在它上面：18 × 7 = 126。
+        Assert.Equal(18 * 7, RecruitWeights.AdjustedWeightOf(snapshot, PieceType.Artisan, artisanWeight: 18));
+        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 12 * 4, 10 * 4, 18 * 7], RecruitWeights.AdjustedTable(snapshot, artisanWeight: 18));
     }
 
     [Fact]
@@ -79,7 +96,7 @@ public class 流派徽记调整征募权重Tests
             Assert.Equal(5, panel.ShowCount);
 
             RandomStream expected = seed.Stream(GameSeed.Recruit);
-            int[] table = [160, 80, 72, 48, 40];
+            int[] table = [160, 80, 72, 48, 40, 40];
             PieceType[] direct = [.. Enumerable.Range(0, 5).Select(_ => RecruitWeights.Order[expected.WeightedPick(table)])];
             Assert.Equal(direct, panel.CandidateTypes);
 

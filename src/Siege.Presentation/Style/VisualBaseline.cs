@@ -74,6 +74,9 @@ public enum PieceSilhouette
 
     /// <summary>多瓣水晶。</summary>
     CrystalCluster,
+
+    /// <summary>支架（匠人）。artisan-terrain-edit Open Question 3：正式轮廓由段 C 定稿并出截图，本段先占位以保证六种类型各有一条标识。</summary>
+    Scaffold,
 }
 
 /// <summary>规格要求的轮廓语言（visual-style-baseline：简洁圆润 / 塔楼体块 / 连接关系 / 放射状 / 多节点聚合）。</summary>
@@ -84,12 +87,15 @@ public enum SilhouetteLanguage
     Connection,
     Radial,
     MultiNode,
+
+    /// <summary>工具 / 支架感（匠人）。</summary>
+    Tooling,
 }
 
 /// <summary>一种棋子的视觉标识。</summary>
 public sealed record PieceStyle(PieceType Type, PieceSilhouette Silhouette, SilhouetteLanguage Language);
 
-/// <summary>五种棋子 → 轮廓的<b>唯一</b>映射。</summary>
+/// <summary>六种棋子 → 轮廓的<b>唯一</b>映射。</summary>
 public static class PieceStyleTable
 {
     public static readonly ImmutableArray<PieceStyle> All =
@@ -99,6 +105,7 @@ public static class PieceStyleTable
         new(PieceType.Line, PieceSilhouette.TwinOrbBar, SilhouetteLanguage.Connection),
         new(PieceType.Multiplier, PieceSilhouette.Pyramid, SilhouetteLanguage.Radial),
         new(PieceType.Synergy, PieceSilhouette.CrystalCluster, SilhouetteLanguage.MultiNode),
+        new(PieceType.Artisan, PieceSilhouette.Scaffold, SilhouetteLanguage.Tooling),
     ];
 
     public static PieceStyle For(PieceType type) =>

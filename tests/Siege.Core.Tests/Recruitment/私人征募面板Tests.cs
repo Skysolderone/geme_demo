@@ -115,7 +115,7 @@ public class 私人征募面板Tests
         Assert.Throws<SiegeRuleException>(() => access.Panel());
 
         RandomStream expected = seed.Stream(GameSeed.Recruit);
-        int[] table = [160, 80, 72, 48, 40];
+        int[] table = [160, 80, 72, 48, 40, 40];
         for (int i = 0; i < 5; i++)
         {
             expected.WeightedPick(table);

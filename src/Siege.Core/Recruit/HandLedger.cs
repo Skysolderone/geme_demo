@@ -31,12 +31,24 @@ public sealed class HandLedger
     private readonly SortedDictionary<PlayerId, PlayerState> _players = [];
     private readonly RandomStream _recruit;
     private readonly List<RecruitTurnRecord> _records = [];
+    private readonly int _artisanWeight;
     private int _sequence;
 
-    /// <summary>建立账本：为每名玩家发放 5 枚普通子（计入回合前基数），并派生 <c>recruit</c> 子流。</summary>
+    /// <summary>建立账本（匠人权重取默认 10）。</summary>
     public HandLedger(IEnumerable<PlayerId> players, GameSeed seed)
+        : this(players, seed, RecruitWeights.DefaultArtisanWeight)
+    {
+    }
+
+    /// <summary>
+    /// 建立账本：为每名玩家发放 5 枚普通子（计入回合前基数），并派生 <c>recruit</c> 子流。
+    /// <paramref name="artisanWeight"/> 是对局配置的匠人征募权重（artisan-terrain-edit R-2），全程只在这里持有一份。
+    /// </summary>
+    public HandLedger(IEnumerable<PlayerId> players, GameSeed seed, int artisanWeight)
     {
         ArgumentNullException.ThrowIfNull(players);
+        RecruitWeights.RequireValidArtisanWeight(artisanWeight);
+        _artisanWeight = artisanWeight;
         foreach (PlayerId player in players)
         {
             if (_players.ContainsKey(player))
@@ -293,10 +305,14 @@ public sealed class HandLedger
     }
 
     /// <summary>从 <see cref="Export"/> 的结果恢复账本：手牌全部计入基数，<c>recruit</c> 子流推进到相同消费位置。</summary>
-    public static HandLedger Restore(GameSeed seed, HandLedgerState state)
+    public static HandLedger Restore(GameSeed seed, HandLedgerState state) =>
+        Restore(seed, state, RecruitWeights.DefaultArtisanWeight);
+
+    /// <summary>从 <see cref="Export"/> 的结果恢复账本，并带上对局配置的匠人征募权重。</summary>
+    public static HandLedger Restore(GameSeed seed, HandLedgerState state, int artisanWeight)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var ledger = new HandLedger(state.Players.Select(p => new PlayerId(p.Player)), seed);
+        var ledger = new HandLedger(state.Players.Select(p => new PlayerId(p.Player)), seed, artisanWeight);
         foreach (PlayerHandState saved in state.Players)
         {
             PlayerState target = ledger._players[new PlayerId(saved.Player)];
@@ -374,7 +390,7 @@ public sealed class HandLedger
         }
 
         // D3 / D4：权重按当前快照现算，每个候选位独立抽取、允许重复；只消费 recruit 子流。
-        int[] table = RecruitWeights.AdjustedTable(snapshot);
+        int[] table = RecruitWeights.AdjustedTable(snapshot, _artisanWeight);
         ImmutableArray<PieceType>.Builder candidates = ImmutableArray.CreateBuilder<PieceType>(snapshot.RevealCount);
         for (int i = 0; i < snapshot.RevealCount; i++)
         {

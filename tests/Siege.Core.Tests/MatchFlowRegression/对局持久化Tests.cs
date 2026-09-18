@@ -1,4 +1,5 @@
 using Siege.Core.Board;
+using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Core.Relics;
@@ -119,6 +120,48 @@ public class 对局持久化Tests
         MatchFlow match = MatchFixtures.Started();
         MapData other = MatchFixtures.Map() with { Id = "another-map" };
         Assert.Throws<FormatException>(() => MatchFlow.RestoreUnvalidated(other, match.Relics.Generation, match.Serialize()));
+    }
+
+    [Fact]
+    public void 匠人权重随存档往返且旧存档回填()
+    {
+        // artisan-terrain-edit R-2 / R-6：匠人权重属于对局配置，入存档；旧存档没有该字段 → 回填 10 并留痕。
+        // 两条腿（testing.md 持久化守门）：① 非回填值 18 往返，逐字段比活对象 + 再存档逐字节相等；
+        // ② 剥掉 ArtisanWeight 字段的旧存档 → 回填 10、ArtisanWeightBackfilled 为 true。
+        // 变异验证见测试报告 M-A6（Serialize 不写 ArtisanWeight）。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff with { ArtisanWeight = 18 });
+        Assert.Equal(18, match.ArtisanWeight);
+        Assert.False(match.ArtisanWeightBackfilled);
+
+        string json = match.Serialize();
+        Assert.Contains("\"ArtisanWeight\": 18", json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, json);
+        Assert.Equal(18, restored.ArtisanWeight);
+        Assert.False(restored.ArtisanWeightBackfilled);
+        Assert.Equal(json, restored.Serialize());
+
+        // 独立读路径（testing.md：结果对象与活对象两边都要钉）——restored.Options 与 restored.ArtisanWeight 是同一个字段的两个读法，
+        // 证明不了"恢复出来的手牌账本真拿到了 18"。这里从恢复后的账本实抽一次面板，与 18 权重下的字面量表独立对齐。
+        RandomStream expected = MatchFixtures.Seed.Stream(GameSeed.Recruit);
+        expected.Advance(restored.Hands.RecruitStreamConsumed);
+        int[] table18 = [160, 80, 72, 48, 40, 72];   // 基础 × 4（无徽记），匠人 18 × 4 = 72
+        PieceType[] direct = [.. Enumerable.Range(0, 10).Select(_ => RecruitWeights.Order[expected.WeightedPick(table18)])];
+        RecruitPanelView panel = HandFixtures.Begin(restored.Hands, MatchFixtures.P0, reveal: 10).EnterRecruit();
+        Assert.Equal(direct, panel.CandidateTypes);
+
+        RandomStream atDefault = MatchFixtures.Seed.Stream(GameSeed.Recruit);
+        atDefault.Advance(restored.Hands.RecruitStreamConsumed);
+        int[] table10 = [160, 80, 72, 48, 40, 40];
+        Assert.NotEqual([.. Enumerable.Range(0, 10).Select(_ => RecruitWeights.Order[atDefault.WeightedPick(table10)])], panel.CandidateTypes);
+
+        System.Text.Json.Nodes.JsonNode legacyNode = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        Assert.True(legacyNode.AsObject().Remove("ArtisanWeight"));
+        string legacy = legacyNode.ToJsonString();
+        Assert.DoesNotContain("ArtisanWeight", legacy);
+        MatchFlow fromLegacy = MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, legacy);
+        Assert.Equal(MatchOptions.DefaultArtisanWeight, fromLegacy.ArtisanWeight);
+        Assert.Equal(10, fromLegacy.ArtisanWeight);
+        Assert.True(fromLegacy.ArtisanWeightBackfilled);
     }
 
     [Fact]

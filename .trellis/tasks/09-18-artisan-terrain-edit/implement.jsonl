@@ -1,0 +1,18 @@
+{"file": "openspec/changes/artisan-terrain-edit/design.md", "reason": "D-A～D-J、接口契约、裁决记录 1–17 与 R-1～R-7；实现前必读"}
+{"file": "openspec/changes/artisan-terrain-edit/tasks.md", "reason": "分段任务清单与验证方式；只做派发时指定的组"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/terrain-edit/spec.md", "reason": "新能力：动作集、落子即改造、改造先于提子、不链式、不可逆、同形、公开"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/terrain/spec.md", "reason": "格属性/边属性/气边/覆盖关系在改造后的重算"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/piece-effects/spec.md", "reason": "六种棋子基础军势"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/recruitment/spec.md", "reason": "匠人进池与权重可配置"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/hand-management/spec.md", "reason": "六种类型与 5 个类型槽"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/relic-generation/spec.md", "reason": "徽记可绑定匠人"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/batch-deployment/spec.md", "reason": "改造与匠人共用额度"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/capture-resolution/spec.md", "reason": "预演与结算顺序、同形纳入设施"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/batch-preview/spec.md", "reason": "预演显示改造目标与改造后的气"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/information-visibility/spec.md", "reason": "设施公开、不记改造者"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/tactical-layers/spec.md", "reason": "可改造目标标示与栅栏侧"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/visual-style-baseline/spec.md", "reason": "匠人轮廓与改造可视表现"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/match-telemetry/spec.md", "reason": "改造事件与第 11 项分析"}
+{"file": "openspec/changes/artisan-terrain-edit/specs/simulation-harness/spec.md", "reason": "匠人权重写入批次配置"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现：规则只走气边与覆盖关系；本轮新增地形写入口"}
+{"file": ".trellis/spec/core/testing.md", "reason": "不得改期望凑绿；守门需变异记录；变异脚本二进制读写"}

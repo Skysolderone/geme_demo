@@ -31,7 +31,11 @@ internal static class SimFixtures
             Compress = compress,
         };
 
-    /// <summary>全部测试共用的真实样本：Easy 4 局、4 大回合、完整事件流（只算一次）。</summary>
+    /// <summary>
+    /// 全部测试共用的真实样本：Easy 4 局、4 大回合、完整事件流（只算一次）。
+    /// <b>Easy 难度从不落匠人</b>（征募前瞻分只看基础军势，匠人 1 分在平手里排枚举末位；实测 4 局 × 12 大回合 2718 条棋串含匠人 0 条），
+    /// 需要匠人上盘的遥测守门要自己起 <see cref="Siege.Core.Ai.AiDifficulty.Standard"/> 的小样本——见 <c>各棋子势力占比Tests.真实跑局快照的类型计数与明细自洽</c>。
+    /// </summary>
     internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(Config(count: 4, seedStart: 11, maxRounds: 4), parallelism: 1));
 
     /// <summary>独立的临时目录（每次调用都清空重建）。</summary>

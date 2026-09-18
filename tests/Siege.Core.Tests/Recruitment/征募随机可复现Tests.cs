@@ -147,7 +147,7 @@ public class 征募随机可复现Tests
         PlayerHandAccess access = HandFixtures.Begin(ledger, HandFixtures.P0, reveal: 8);
         RecruitPanelView panel = access.EnterRecruit();
 
-        int[] table = [160, 80, 72, 48, 40];
+        int[] table = [160, 80, 72, 48, 40, 40];
         PieceType[] Direct(string name)
         {
             RandomStream s = HandFixtures.Seed.Stream(name);
@@ -163,7 +163,7 @@ public class 征募随机可复现Tests
             RandomStream s = HandFixtures.Seed.Stream(GameSeed.Recruit);
             for (int i = 0; i < picks; i++)
             {
-                s.WeightedPick([160, 80, 72, 48, 40]);
+                s.WeightedPick([160, 80, 72, 48, 40, 40]);
             }
 
             return s.Consumed;

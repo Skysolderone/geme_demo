@@ -111,7 +111,7 @@ public sealed class MatchSession
         map ??= MapCatalog.Resolve(config.MapId);
         PlayerId[] players = config.PlayerIds();
         // round-cap D3：大回合上限是对局配置，跑局层只把 --max-rounds 透传进去。
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound, CatchUpRecruit = config.CatchUpRecruit, SiteValues = config.SiteValues });
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound, CatchUpRecruit = config.CatchUpRecruit, SiteValues = config.SiteValues, ArtisanWeight = config.ArtisanWeight });
         match.PlantSequentially(players.Select((p, i) => (p, i % map.BirthZones.Length)));
         return new MatchSession(match, config);
     }
@@ -452,7 +452,7 @@ public sealed class MatchSession
         return list;
     }
 
-    /// <summary>棋串各棋子类型的数量（五种全写，含 0，按枚举顺序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。</summary>
+    /// <summary>棋串各棋子类型的数量（六种全写，含 0，按枚举顺序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。</summary>
     internal static Dictionary<string, int> PieceCountsOf(GameBoard board, GroupPower group)
     {
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);

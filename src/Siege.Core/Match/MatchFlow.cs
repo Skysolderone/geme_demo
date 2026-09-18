@@ -113,7 +113,8 @@ public sealed partial class MatchFlow
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(options));
         RequireValidDominanceStartRound(options.DominanceStartRound, nameof(options));
         RequireValidSiteValues(options.SiteValues);
-        return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed), new BoardHistory(), options);
+        RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
+        return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed, options.ArtisanWeight), new BoardHistory(), options);
     }
 
     // ---------- 组成部分 ----------
@@ -206,6 +207,12 @@ public sealed partial class MatchFlow
 
     /// <summary>恢复自不含据点分值字段的旧存档时为 <c>true</c>：按 <see cref="SiteValues.Standard"/> 回填。</summary>
     public bool SiteValuesBackfilled { get; private set; }
+
+    /// <summary>匠人征募权重（artisan-terrain-edit R-2）。对局配置，始终公开，入存档。</summary>
+    public int ArtisanWeight => Options.ArtisanWeight;
+
+    /// <summary>恢复自不含匠人权重字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultArtisanWeight"/> 回填。</summary>
+    public bool ArtisanWeightBackfilled { get; private set; }
 
     private static void RequireValidSiteValues(SiteValues? values)
     {
@@ -874,8 +881,8 @@ public sealed partial class MatchFlow
     internal void DebugRecalculate() => RecalculateDerived();
 
     /// <summary>
-    /// 测试专用：改写小回合开始时生成的效果快照。原型只有五种棋子而基础类型槽也是 5，靠信物永远造不出"类型数超过槽位"，
-    /// 强制弃牌门只能用缩水的快照来触发；生成路径本身不变。
+    /// 测试专用：改写小回合开始时生成的效果快照。棋子类型增至六种（artisan-terrain-edit）后，五槽装不下全部六种，
+    /// 但靠信物只会把槽位<b>加多</b>；要造出"类型数超过槽位"仍需缩水的快照（兵站丢失路径除外），生成路径本身不变。
     /// </summary>
     internal void DebugSetSnapshotTransform(Func<EffectSnapshot, EffectSnapshot>? transform) => _snapshotTransform = transform;
 
