@@ -73,7 +73,7 @@ dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--see
 |---|---|---|---|
 | ① | `terrain-model` | 格属性（高度 0/1/2、地表、障碍、预置桥）+ 栅栏边；几何四邻之上导出**气边**与**覆盖关系**两套关系；连珠沿气边；v3 地图；Godot 分层渲染与拾取；设计文档 v1.2 | **已归档**，测试 680 → 729 |
 | ② | `scoring-sites` | 空格领地退役，势力 = 据点分 + 军势；12 个据点（营帐 / 篝火 / 石碑 5 / 15 / 45）、与信物分离、占据或唯一覆盖即控制；高地压制加值 +1（进位置加值）；地图 v4；Godot 地标与旗帜；`Safety` 27 | **已完成、已归档、未推送**（段 A1 / A2 / B / C / S-16 / D 全部完成，openspec 与 Trellis 均已归档），测试 729 → 808 |
-| ③ | `artisan-terrain-edit` | 第六种棋子「匠人」：落子即改造（搭桥 / 立栅 / 烧林），占 1 额度，指定相邻目标，不可逆，批次内不链式；同形禁则纳入设施 | 未开始 |
+| ③ | `artisan-terrain-edit` | 第六种棋子「匠人」：落子即改造（搭桥 / 立栅 / 烧林），占 1 额度，指定相邻目标，不可逆，批次内不链式；同形禁则纳入设施 | **方案已写、待执行**：`openspec/changes/artisan-terrain-edit/`（裁决 T-1～T-10、R-1～R-7），第一段先做 `strict-cli` |
 
 第二轮现状（权威：`openspec/changes/scoring-sites/design.md` 裁决记录 1–22、设计文档 v1.3 §3.3 / §7.4 / §10.1 / §16，逐段记录在 `.trellis/tasks/09-17-scoring-sites/implement.md`）：
 
