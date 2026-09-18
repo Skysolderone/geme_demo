@@ -340,6 +340,42 @@ public class 改造先于提子Tests
     }
 
     [Fact]
+    public void 结算的原子性含改造()
+    {
+        // capture-resolution「结算的原子性」的改造分支：外部观察者 MUST NOT 看到
+        // "棋子已落下但设施未写入"或"设施已写入但敌串尚未移除"的中间盘面。
+        // 既有的 `正式结算顺序Tests.结算的原子性` 那一批次不带改造，证不了这两种中间态。
+        GameBoard board = Trapped();
+        var hooks = new RecordingHooks { Board = board };
+        var driver = new SettlementDriver(board, new BoardHistory(), hooks);
+        string before = board.Serialize();
+        Placement[] batch = [BatchFixtures.Artisan("E7", TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6")))];
+
+        Assert.True(driver.Confirm(BatchFixtures.Context(board, TestMaps.P0), batch).Confirmed);
+
+        string after = board.Serialize();
+        Assert.NotEqual(before, after);
+        Assert.Equal(["DeductHand", "OnRevealRelics", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
+
+        // 第 1 步（扣手牌）看到的还是结算前；此后每一次采样都已经是终态。
+        Assert.Equal(before, hooks.Calls[0].Board);
+        foreach ((string step, string snapshot) in hooks.Calls.Skip(1))
+        {
+            Assert.True(snapshot == after, $"{step} 观察到中间盘面：{snapshot}");
+        }
+
+        // 两种中间态的具体形状，逐个确认不曾出现在任何采样里。
+        GameBoard placedOnly = Trapped();                                  // 匠人已落、栅栏未写、E5 还在
+        placedOnly.Place(TestMaps.At("E7"), TestMaps.P0, PieceType.Artisan);
+        GameBoard fencedNotCaptured = placedOnly.Clone();                  // 栅栏已写、E5 尚未移除
+        fencedNotCaptured.ApplyTerrainEdits([TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6"))]);
+
+        string[] sampled = [.. hooks.Calls.Select(c => c.Board)];
+        Assert.DoesNotContain(placedOnly.Serialize(), sampled);
+        Assert.DoesNotContain(fencedNotCaptured.Serialize(), sampled);
+    }
+
+    [Fact]
     public void 预演不污染正式盘面的地形()
     {
         // capture-resolution「预演不污染正式盘面」：预演在副本上应用改造，正式盘面与地形的序列化结果不变。

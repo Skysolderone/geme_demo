@@ -630,3 +630,104 @@ M-T2 证明的正是"改其一即红"，且红的第一条就是那条同源守�
    旧口径下匠人同样能对未架桥深水格、障碍格的那条边立栅，`terrain-edit` 规格与 design 也没有这条要求。
    放宽后的副作用是：这类"两端都不可落子"的**无效边**从每落点最多 4 条变成最多 16 条进入 AI 枚举（无功能影响，只是候选噪声）。
    若负责人本意确实要"至少一端可落子"或"两端都可落子"，那是一条**新约束**，需要先裁决、改规格，再动 `TerrainEditRules`。
+
+---
+
+## 段 B 检查（trellis-check，2026-09-18）
+
+范围：`git diff d4bfe02..HEAD -- src tests`（段 B 9d4b8ad + T-11 bf57a73 + 094c2a8）。基线 EXIT 0 / **880**；
+检查后 EXIT 0 / **887**（新增 7 条，全部用于补规格缺口或把弱断言换成真比对）。
+
+### 问题清单
+
+**已修（7 条，均为"规格 Scenario 没有测试"或"注释写了却没真比"）**
+
+| # | 问题 | 处置 |
+|---|---|---|
+| 1 | `terrain`「架桥切断隔水覆盖」**无测试**。规格是两半（s 不再覆盖对岸 t、改为覆盖新桥格），一条都没钉 | 新增 `地形写入口Tests.架桥切断隔水覆盖`，两半都断言。变异 **M-C1** 证红 |
+| 2 | `terrain`「立栅不影响覆盖」**无测试**。`立栅后分串` 只断言气边与棋串；`对局中架的桥与预置桥完全等价` 比的是"改造出来的 = 预置的"，证不了"立栅前后覆盖不变" | 新增 `地形写入口Tests.立栅不影响覆盖`（覆盖集合逐项相等 + 反面：那条气边确实没了） |
+| 3 | `terrain-edit`「改造不可逆且设施无归属」的两条 Scenario（匠人被提走后设施仍在、弃赛不撤销改造）**都无测试** | 新增 `改造不可逆与公开Tests` 前两条：前者走**两次 `SettlementDriver.Confirm`**（先立栅、后围杀），不直接 `RemoveStones`；后者走真实 `MatchFlow.Resign` |
+| 4 | `terrain-edit`「改造公开」**无测试**，R-3「公开视图 MUST NOT 显示改造者」只有代码注释 | 新增 `改造不可逆与公开Tests.改造结果人人可见且不显示改造者`：正向断言 `Publish().Board.Map` 与 `BoardSerialized` 含三种改造；守门用 `PresentationFixtures.ReachableTypes(typeof(MatchPublicView))` 断言类型闭包里没有 `TerrainEditRecord`；再加反面（改造方确实被记下来了，只是不在公开视图里） |
+| 5 | `capture-resolution`「结算的原子性」在**带改造的批次**上没有测试。既有 `正式结算顺序Tests.结算的原子性` 那一批不带改造，证不了规格新加的"设施已写入但敌串尚未移除" | 新增 `改造先于提子Tests.结算的原子性含改造`：四个回调点采样正式盘面，第 1 步是结算前、其余全是终态，并逐个否掉两种中间态的具体形状。变异 **M-C4** 证红 |
+| 6 | `match-telemetry`「回放全部改造可重建终局地形」**注释写了"与该局终局地形逐格一致"，代码没这么比**——`真实跑局把改造写进日志且可离线重建地形` 只把重放结果与**日志自己**算出的条数相比，日志漏记一条改造它照样绿 | 新增 `回放日志改造可重建终局地形并与对局逐项一致`：走 `MatchSession`（唯一同时拿得到日志与活对局终态的入口），把日志改造重放到 `Board.BaseMap` 上，与 `Board.Map` **逐项**比（桥集合、栅栏集合、每格地表 / 可落子性 / 高度）；另加"日志是 Core 留痕的逐条转录"（五字段）与两条反面（开局≠终局、少放一条就对不上）。变异 **M-C5 / M-C6** 证红 |
+| 7 | 第 11 项的 `CausedCapture` 全线只断言 **0**（手算样本里没有致提子的改造），把它恒写 false 的实现照样绿——而 T-11 之后这是主力指标 | 手算样本的立栅改成 `caused: true`，补 `t.CausedCaptures == 1` 与逐动作 `CausedCaptures`，报告行断言收紧到含"其中直接导致提子 N 次"与"改造直接导致提子 1 次；首次改造平均第 2 大回合"。变异 **M-C3** 同时证明"烧林 0 次那一行"是**字符串**断言，跳过零行即红 |
+
+另补两条小口子（同批修）：
+
+- `当批不能站上新桥也不能拿它当跳板` 只覆盖了「下一批次可以使用」的前半句（可落子），补上后半句"以新桥为起点继续向外架桥"（两格宽河，T-4）。
+- `TerrainWriter.ApplyAll` 的注释说"同一目标被改两次必然在**前提校验**处抛出"与实现不符（前提按 `before` 判，两次都过得去，实际是第二次 `Apply` 按累加后的 `terrain` 抛的）。行为对、注释错，已改。
+
+**未修（3 条，均属后续段或需裁决）**
+
+1. **`.trellis/spec/core/boundaries.md` 的守门名单仍写"只允许 `Adjacency` 自身与 `GameBoard.Neighbors`"**，而测试名单已加第 ③ 条 `TerrainEditRules`，文档滞后于代码。属 **6.2（段 E）**，且 6.2 要求三处一起改（两行唯一实现 + "地形不再是对局内不变量"），不在检查阶段自行动刀——段 B 偏离 3 已记。
+2. **`距离表按传入地图现算`（缓存清单第 7 项）名不副实**：测试断言的是 `IsUnbridgedDeepWater` 与 `PlayableCount`，**没有调用 `MapValidator.DistanceTable`**。结论本身（纯函数、唯二调用方只看开局地图）经代码核对属实，但这条测试挡不住"有人给 `DistanceTable` 加缓存"。建议段 E 或下轮补一条真调它的用例。
+3. **真实跑局样本里"致提子的改造"依赖种子**：种子 1 那一局没有致提子的改造，逐条转录里的 `CausedCapture` 要靠种子 1–3 合起来才校得到（已加 `Assert.Contains(records, r => r.CausedCapture)` 作样本下界）。若将来 AI 或地图变动使这三局都不再致提子，该断言会响亮失败而不是静默失效——这是有意的。
+
+### 第 2 项结论：唯一实现成立，缓存清单抽查 3 项属实，另核掉一个盲点
+
+- **地形写入口**：全仓 `new TerrainData(` 的调用方只有 `TerrainWriter` / `TerrainData.Flat` / `MapFile` / `FourPlayerBaseMap`，由 IL 扫描守门 `地形写入口之外不得构造改造后的地形` 钉住（含"扫描器确实命中写入口"的反面断言），M-B1 已证红。`GameBoard.ApplyTerrainEdits` 是唯一写入路径，调用点四处：`BatchRehearsal`（预演第 4 步）、`SettlementDriver.Confirm`（正式第 3 步）、`SettlementDriver.AttributeEdits`（探针，在 `Clone` 上）、`GameBoard.Fill`（存档回放）。
+- **改造合法性**：`TerrainEditRules.*` 全仓调用点**只有两处**——`BatchRehearsal.ValidateShape`（`EditorType` + `Reject`）与 `HeuristicTurnController.EditOptions`（`EditorType` + `LegalTargets`）。枚举与判定同类同源，守门 `拒绝理由与合法目标集合一致` 穷举全盘 144 条几何边比对；M-T2 已证"改其一即红"。
+- **`Adjacency.Neighbors` 守门名单**：测试侧已按需加 ③ `TerrainEditRules`（只放这一个类型），文档侧未更新——见上「未修 1」。
+- **缓存清单自行抽查 3 项**：
+  - 第 3 项（`Adjacency` 不缓存）**属实**：`Adjacency.cs` 里没有任何 `static readonly` 坐标派生表 / `Lazy<` / 字典缓存，唯一的 `private static` 是纯函数 `Receives`。
+  - 第 10 项（AI 不持有 `MapData`）**属实**：`src/Siege.Core/Ai/*.cs` 里 `MapData` 只出现一次，是 `EditOptions(MapData map, …)` 的形参；无字段。
+  - 第 12 项（godot 渲染态每次重建）**属实**：`BoardView.Build` 开头就 `_tileMaterials.Clear() / _tileBase.Clear() / _levels.Clear()` 再整体重填，`GameRoot` 在建局与两处刷新点都调 `_board.Build(...)`。
+- **另核一个盲点（implement.md 未记）**：`GameBoard.Fill` 现在会重放改造段，若有人拿**已含改造的** `Board.Map` 去 `GameBoard.Restore(map, serialized)`，改造会二次应用而抛 `FormatException`。核对结果：`Restore` / `RestoreUnvalidated` 的调用方只有 `MatchFlow.Persistence`（传的是调用方给的开局地图），`Siege.Presentation` 与 `src/godot` 一次都没调过——**无此调用，无需处理**。
+
+### 第 5 项结论：日志与分析
+
+- **"回放可重建终局地形"原先是假绿**，已按上表第 6 条改成真的逐项比对（桥集合 / 栅栏集合 / 每格地表、可落子性、高度），并补了"日志是 Core 留痕的逐条转录"。M-C5（游标差一，本局最后一条改造永远写不进日志）与 M-C6（`CausedCapture` 恒写 false）在旧断言下**全绿**、在新断言下**各红 1**——这正是旧测试挡不住的两类缺陷。
+- **第 11 项每个指标都有测试**：`Matches` / `Skipped` / `TotalEdits` / `MeanEditsPerMatch` / `MatchesWithoutEdit` / `MeanFirstEditRound` / 三种动作的 `Count` 与 `Share` / `ArtisansPlaced` / `ArtisansWithEdit` / `EditingArtisanShare` / `WinRateOfEditors` / `FinalBridges` / `FinalFences` / `FinalBurns` 原已逐项断言；**`CausedCaptures`（总数与逐动作）本次补上**，此前只钉 0。
+- **缺改造字段的旧日志整局排除并计数**：`第11项改造分析按手算样本输出`（`Skipped == 1`、报告文案"排除缺改造字段的旧日志 1 局"）+ `一局里只要有一条快照缺改造字段就整局排除`（半旧半新也整局排除）；M-B11 已证红。
+- **烧林 0 次仍输出该行**：报告断言是**字符串** `烧林：0 次（0.0%），其中直接导致提子 0 次`，不是"Count == 0"。M-C3（0 次跳过该行）当场红。本次 3 局真实跑局（种子 1–3，`--max-rounds 6`）实测报告确实输出了烧林 0 次那一行，与 T-11 的 20 局报告一致。
+
+### 第 1 / 3 / 4 / 6 / 7 / 8 项
+
+- **第 1 项（Scenario 覆盖）**：`terrain-edit` 的 21 条与 `terrain` 改造相关的 8 条，补完上表 1–4 后**逐条有测试**。任务点名的六项：批次内不链式三条（当批不能站上新桥 / 同一目标只能改一次 / 下一批次可以使用，后者本次补齐"继续向外架桥"）、不可逆且无归属两条（本次新增）、同形纳入设施（`棋子分布相同但多一道栅栏即不同形` + `BoardHistory` 实测 + 存档往返）、改造公开（本次新增）、`terrain` 四条改造后重算（架桥产生气边 / 立栅移除气边 / 烧林不改气边 / 烧林后可被覆盖 原已有；**架桥切断隔水覆盖 / 立栅不影响覆盖 本次新增**）。
+- **第 3 项（顺序与原子性）**：预演七步与正式结算七步的实现顺序与规格逐条对得上；`SettlementDriver.Confirm` 的"应用改造"在 `RemoveStones` 之前、`OnRevealRelics` 之前，且 `AttributeEdits` 在改盘之前按批前地形算好。原子性本次补齐带改造的分支（M-C4 证红）。
+- **第 4 项（自杀手与同形）**：改造导致的自杀手（内圈 `改造导致的自杀手` + 外圈 `外圈立栅把自己堵死也算自杀手`，两条都断言整批被拒后地形一个字节没变）；设施差异不构成同形（四份两两不同 + `BoardHistory`）；旧存档按无改造回填（`无改造时序列化与改造上线之前逐字节相同` + `对局存档往返保留改造与匠人权重` 含 `restored.Publish().ArtisanWeight == 18` 与旧存档 `== 10`）。M-B6 / M-B14 已证红。
+- **第 6 项（`--artisan-weight` 与 `config.json`）**：`RunConfig.ArtisanWeight`（默认 `MatchOptions.DefaultArtisanWeight`、`Validated()` 校验非负）→ `MatchSession` 建局时与对局配置一致性校验 → 日志首部；`Program.cs` 经 `cli.GetInt("artisan-weight", …)` 注册（`strict-cli` 已上线，未注册选项直接报错）。`MatchPublicView.ArtisanWeight` 照 `SiteValues` 口径投影，`输出契约Tests` 的公开视图守门仍绿。
+- **第 7 项（越段）**：`src/Siege.Presentation` 只改了 `FailurePresentation.TitleOf` 的两条 `case`（穷举 `switch` 不补会抛），`src/godot` **零改动**（`git diff --stat d4bfe02..HEAD -- src/godot` 为空）。4.1 / 4.2 / 4.3 一概未做。**本次检查也未动这两处**，因此未跑 Godot `--build-solutions`。
+- **第 8 项（两处实锤过期缓存）**：`合法落子范围在保护期后含本局新架的桥` 读的是 `match.LegalRangeFor(P0)`、`MatchFlow的Map随改造更新` 读的是 `match.Map`——**都走真实 `MatchFlow` 调用路径**，不是自己重算一遍的恒真断言；M-B15 / M-B13 各红 1 与之吻合。
+
+### 检查阶段变异验证逐条
+
+脚本纪律同段 B / T-11：二进制读写、锚点按各文件**实测行尾**归一并 `assert count == 1`、备份名带时间戳、
+还原写在 `finally` 并与"改之前读到的原文"逐字节 `assert`、`DOTNET_CLI_UI_LANGUAGE=en`、`PYTHONIOENCODING=utf-8`、
+红绿以退出码为准、**不用 `if (false)`**（`TreatWarningsAsErrors` 下 CS0162 = 假红；M-C6 用的是运行时恒假的 `e.Sequence < 0`）。
+六条全部与 M-B1～M-B15、M-T1～M-T3 不同。
+
+| 编号 | 变异 | 文件（行尾） | 结果 | 红测 |
+|---|---|---|---|---|
+| **M-C1** | `Adjacency.CoverageTargets` 跨一格深水时不再检查是否已架桥（`IsUnbridgedDeepWater(t)` → `SurfaceAt(t) == DeepWater`，架了桥仍当水穿过） | `Board/Adjacency.cs`（LF） | EXIT 1，红 **1** | `地形写入口Tests.架桥切断隔水覆盖` |
+| **M-C2** | `SettlementDriver.AttributeEdits` 的致提子口径由"严格变小"放宽成"不变也算"（`<` → `<=`） | `Batch/SettlementDriver.cs`（CRLF） | EXIT 1，红 **1** | `改造先于提子Tests.两道栅栏合围时两条都记致提子`（顺带架的桥被误记 true） |
+| **M-C3** | `ReportWriter` 第 11 项跳过 0 次的动作行（烧林 0 次就不输出那一行） | `Sim/Analysis/ReportWriter.cs`（LF） | EXIT 1，红 **1** | `地形改造日志与分析Tests.第11项改造分析按手算样本输出` |
+| **M-C4** | `SettlementDriver` 把第 1 步扣手牌挪到放置之后、写设施之前（外部观察者看到"棋子已落下但设施未写入"） | `Batch/SettlementDriver.cs`（CRLF） | EXIT 1，红 **3** | **`改造先于提子Tests.结算的原子性含改造`**、`正式结算顺序Tests.结算的原子性`、`结算驱动器步骤顺序` |
+| **M-C5** | `MatchSession` 的改造游标差一（`_editCursor + 1 < Count`）：本局最后一次改造永远写不进日志 | `Sim/Running/MatchSession.cs`（LF） | EXIT 1，红 **1** | `地形改造日志与分析Tests.回放日志改造可重建终局地形并与对局逐项一致` |
+| **M-C6** | `MatchSession` 把改造事件的"是否致提子"恒写 false（`e.CausedCapture && e.Sequence < 0`，运行时恒假） | `Sim/Running/MatchSession.cs`（LF） | EXIT 1，红 **1** | 同上 |
+
+**M-C5 的红测只有新用例、M-C6 在补测试前实跑 `Passed! 44/44`**——两者都说明旧的"离线重建"用例挡不住（它只拿日志跟日志自己比），这是本次最大的一处假绿。
+六条全部在 `finally` 里还原并与原文逐字节比对通过，还原后复跑全量 → EXIT 0、**887** 通过。
+
+### 检查阶段改动的文件
+
+| 文件 | 改动 |
+|---|---|
+| `src/Siege.Core/Board/TerrainWriter.cs` | 只改注释：`ApplyAll` 里"同一目标被改两次在何处抛出"的说法与实现对齐 |
+| `tests/…/TerrainEditing/地形写入口Tests.cs` | 新增 `架桥切断隔水覆盖`、`立栅不影响覆盖` |
+| `tests/…/TerrainEditing/改造合法性Tests.cs` | `当批不能站上新桥也不能拿它当跳板` 补第 ④ 段（下一批次可以继续向外架桥，两格宽河） |
+| `tests/…/TerrainEditing/改造先于提子Tests.cs` | 新增 `结算的原子性含改造` |
+| `tests/…/TerrainEditing/改造不可逆与公开Tests.cs`（新） | `匠人被提走后设施仍在` / `弃赛不撤销改造` / `改造结果人人可见且不显示改造者` |
+| `tests/…/MatchTelemetry/地形改造日志与分析Tests.cs` | 新增 `回放日志改造可重建终局地形并与对局逐项一致`；`第11项改造分析按手算样本输出` 的手算样本加"致提子"并收紧报告断言 |
+
+### 验证结果
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 构建 | `dotnet build` | EXIT 0，0 Warning 0 Error |
+| 全量测试 | `dotnet test -c Release`（`set -o pipefail`） | EXIT 0，**887** 通过（基线 880 + 7） |
+| 3 局冒烟 + 分析 | `run --out sim-out/check-3 --seed 1 --count 3 --max-rounds 6 --difficulty Standard` → `analyze` | EXIT 0，`FailedFiles: []`；第 11 项照常输出三行（烧林 0 次那行在），6 次改造 / 立栅 4 次其中致提子 3 次 |
+| 变异 | M-C1 ～ M-C6 | 六条全红（EXIT 1），还原后逐字节一致，复跑 EXIT 0 / 887 |
+| Godot | 未改 `src/godot` 与 `Siege.Presentation` | 按约定未跑 `--build-solutions` |
+
+`sim-out/` 不提交（`sim-out/check-3` 已清理）。本次检查**未 commit**。

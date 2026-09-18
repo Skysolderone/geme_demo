@@ -72,6 +72,48 @@ public class 地形写入口Tests
     }
 
     [Fact]
+    public void 架桥切断隔水覆盖()
+    {
+        // terrain「架桥切断隔水覆盖」：s 原本隔着一格宽深水覆盖对岸的 t，该深水格架桥后
+        // ① s 不再覆盖 t（那格不再是"可被穿过的一格宽深水"）② s 改为覆盖新架桥的那一格。
+        // 规格是两半，只断言其中一半会漏掉"架完桥连桥格都覆盖不到"的实现错误。
+        GameBoard board = Board();
+        Coord source = TestMaps.At("C4");
+        Coord water = TestMaps.At("D4");
+        Coord across = TestMaps.At("E4");
+
+        Assert.Contains(across, board.CoverageTargets(source));
+        Assert.DoesNotContain(water, board.CoverageTargets(source));
+
+        board.ApplyTerrainEdits([TerrainEdit.Bridge(water)]);
+
+        Assert.DoesNotContain(across, board.CoverageTargets(source));
+        Assert.Contains(water, board.CoverageTargets(source));
+    }
+
+    [Fact]
+    public void 立栅不影响覆盖()
+    {
+        // terrain「立栅不影响覆盖」：覆盖 MUST NOT 被栅栏阻挡——同一条边上气边没了、覆盖一条不变。
+        // 与「立栅移除气边」是同一道栅栏的两面，分开断言才挡得住"顺手也把覆盖切了"的实现。
+        GameBoard board = Board();
+        Coord s = TestMaps.At("F6");
+        Coord t = TestMaps.At("G6");
+        string[] coverageBefore = board.CoverageTargets(s).Notations();
+        Assert.Contains(t, board.CoverageTargets(s));
+        Assert.Contains(t, board.LibertyNeighbors(s));
+
+        board.ApplyTerrainEdits([TerrainEdit.Fence(s, t)]);
+
+        Assert.Equal(coverageBefore, board.CoverageTargets(s).Notations());
+        Assert.Contains(t, board.CoverageTargets(s));
+        Assert.Contains(s, board.CoverageTargets(t));
+
+        // 反面：这道栅栏确实生效了（否则上面的"不变"是因为什么都没发生）。
+        Assert.DoesNotContain(t, board.LibertyNeighbors(s));
+    }
+
+    [Fact]
     public void 改造只加不减且不动高度与障碍()
     {
         // R-4 + terrain-edit「MUST NOT 提供逆向动作」：写入口只有加桥 / 加栅 / 林地→草地，且不碰高度、障碍、信物与据点。

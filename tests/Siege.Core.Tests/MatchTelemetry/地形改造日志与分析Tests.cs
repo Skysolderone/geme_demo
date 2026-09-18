@@ -1,5 +1,6 @@
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Match;
 using Siege.Sim.Analysis;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -15,6 +16,60 @@ public class 地形改造日志与分析Tests
 {
     private static TerrainEditEntry Edit(string action, string target, int player, string artisan, bool caused = false) =>
         new() { Action = action, Target = target, Player = player, Artisan = artisan, CausedCapture = caused };
+
+    [Fact]
+    public void 回放日志改造可重建终局地形并与对局逐项一致()
+    {
+        // match-telemetry「地形可离线重建」的正题：把日志里的全部改造按顺序重放到**开局地图**上，
+        // 结果必须与这一局终局时的真实地形**逐项**相同——桥集合、栅栏集合、每一格的地表与可落子性。
+        // 只比条数或只比自己算出来的期望值是恒真断言，挡不住"日志漏记一条改造"。
+        // 这里走 MatchSession（而不是 BatchRunner.Execute），因为只有它同时给得到日志与活的对局终态。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, maxRounds: 6, difficulty: AiDifficulty.Standard);
+        var records = new List<TerrainEditRecord>();
+
+        for (int i = 0; i < config.Count; i++)
+        {
+            MatchSession session = MatchSession.Create(config, config.SeedAt(i));
+            MatchLog log = session.Run();
+            records.AddRange(session.Match.TerrainEdits);
+
+            TerrainEdit[] replayed = [.. log.Turns.SelectMany(t => t.Edits!).Select(e => TerrainEdit.Parse(e.Target))];
+            Assert.NotEmpty(replayed);   // 样本口径下界：真跑出了改造，否则下面什么都没证明
+
+            // 日志层是对 Core 留痕的**逐条转录**，不是自己推的：动作、目标、改造方、匠人落点、是否致提子五项全对得上。
+            // 少了这一条，MatchSession 把某个字段写成常量也照样绿。
+            Assert.Equal(
+                session.Match.TerrainEdits.Select(r =>
+                    $"{r.Edit.Kind}/{r.Edit}/{r.Player.Value}/{r.ArtisanCoord.ToNotation()}/{r.CausedCapture}"),
+                log.Turns.SelectMany(t => t.Edits!).Select(e =>
+                    $"{e.Action}/{e.Target}/{e.Player}/{e.Artisan}/{e.CausedCapture}"));
+
+            MapData start = session.Match.Board.BaseMap;
+            MapData rebuilt = TerrainWriter.ApplyAll(start, replayed);
+            MapData actual = session.Match.Board.Map;
+
+            Assert.Equal(actual.TerrainData.Bridges, rebuilt.TerrainData.Bridges);
+            Assert.Equal(actual.TerrainData.Fences, rebuilt.TerrainData.Fences);
+            foreach (Coord c in actual.AllCoords())
+            {
+                Assert.Equal(actual.SurfaceAt(c), rebuilt.SurfaceAt(c));
+                Assert.Equal(actual.IsPlayable(c), rebuilt.IsPlayable(c));
+                Assert.Equal(actual.HeightAt(c), rebuilt.HeightAt(c));
+            }
+
+            // 反面：开局地图与终局地形确实不同（否则"重建一致"可以靠"一条改造都没发生"通过），
+            // 且重放少一条就对不上——逐项比对确实在做比对。三元组覆盖三种动作各自改变的那一项。
+            Assert.NotEqual(Shape(start), Shape(actual));
+            Assert.NotEqual(Shape(actual), Shape(TerrainWriter.ApplyAll(start, replayed[..^1])));
+        }
+
+        // 样本口径下界之二：这三局里确实有"致提子的改造"，上面那条逐条转录才真的校到了 CausedCapture
+        // （T-11 之后立栅致提子是第 11 项的主力指标；单局样本里它可能恰好全是 false）。
+        Assert.Contains(records, r => r.CausedCapture);
+
+        static (int Bridges, int Fences, int Forests) Shape(MapData m) =>
+            (m.TerrainData.Bridges.Count, m.TerrainData.Fences.Count, m.AllCoords().Count(c => m.SurfaceAt(c) == Surface.Forest));
+    }
 
     [Fact]
     public void 真实跑局把改造写进日志且可离线重建地形()
@@ -100,7 +155,7 @@ public class 地形改造日志与分析Tests
                 SimFixtures.Turn(1, 2, 0, [10, 5, 5, 5], ["C4:Artisan+B:D4"],
                     edits: [Edit(nameof(TerrainEditKind.Bridge), "B:D4", 0, "C4")]),
                 SimFixtures.Turn(2, 3, 1, [10, 5, 5, 5], ["G6:Artisan+F:G6-H6"],
-                    edits: [Edit(nameof(TerrainEditKind.Fence), "F:G6-H6", 1, "G6")]),
+                    edits: [Edit(nameof(TerrainEditKind.Fence), "F:G6-H6", 1, "G6", caused: true)]),
                 SimFixtures.Turn(3, 4, 0, [10, 5, 5, 5], ["B2:Artisan", "B3:Basic"]),
             ],
             [],
@@ -141,7 +196,12 @@ public class 地形改造日志与分析Tests
         Assert.Equal(2, t.ArtisansWithEdit);
         Assert.Equal(0.5, t.EditingArtisanShare);
 
-        Assert.Equal(0, t.CausedCaptures);
+        // 致提子：立栅那一条记 true、搭桥那一条记 false。总数与逐动作两处都钉住——
+        // 只断言 0 的话，把 CausedCapture 恒写 false 的实现照样绿（T-11 之后立栅致提子是主力指标）。
+        Assert.Equal(1, t.CausedCaptures);
+        Assert.Equal(1, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Fence)).CausedCaptures);
+        Assert.Equal(0, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Bridge)).CausedCaptures);
+        Assert.Equal(0, t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Burn)).CausedCaptures);
 
         // 改造过的玩家胜率：样本 = {901 的 P0, 901 的 P1}，胜者是 P0 → 1/2。
         Assert.Equal(2, t.WinRateOfEditors.Trials);
@@ -155,9 +215,10 @@ public class 地形改造日志与分析Tests
         // 报告段落：三行动作全在，烧林那行如实给出 0。
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze([withEdits, noEdits, legacy]));
         Assert.Contains("§17-11 地形改造", text, StringComparison.Ordinal);
-        Assert.Contains("搭桥：1 次（50.0%）", text, StringComparison.Ordinal);
-        Assert.Contains("立栅：1 次（50.0%）", text, StringComparison.Ordinal);
-        Assert.Contains("烧林：0 次（0.0%）", text, StringComparison.Ordinal);
+        Assert.Contains("搭桥：1 次（50.0%），其中直接导致提子 0 次", text, StringComparison.Ordinal);
+        Assert.Contains("立栅：1 次（50.0%），其中直接导致提子 1 次", text, StringComparison.Ordinal);
+        Assert.Contains("烧林：0 次（0.0%），其中直接导致提子 0 次", text, StringComparison.Ordinal);
+        Assert.Contains("改造直接导致提子 1 次；首次改造平均第 2 大回合", text, StringComparison.Ordinal);
         Assert.Contains("排除缺改造字段的旧日志 1 局", text, StringComparison.Ordinal);
         Assert.Contains("带改造的匠人占已落匠人：50.0%（2/4）", text, StringComparison.Ordinal);
         Assert.Contains("桥 1 座，栅栏 1 道，被烧林地 0 格", text, StringComparison.Ordinal);

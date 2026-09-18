@@ -277,6 +277,19 @@ public class 改造合法性Tests
         SettlementDriver driver = BatchFixtures.Driver(board);
         Assert.True(driver.Confirm(batch.Context, batch.Placements).Confirmed);
         Assert.Null(Batch(board).Stage(TestMaps.At("D4"), PieceType.Basic));
+
+        // ④「下一批次可以使用」的后半句：也可以以新桥为起点继续向外架桥（T-4 宽河分批次逐格架）。
+        // 需要一条两格宽的河，Forested() 只有一格，另起一份地形。
+        GameBoard river = TestMaps.Blank(
+            TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater), ("E4", Surface.DeepWater)]), size: 9);
+        StagedBatch first = Batch(river);
+        Assert.Null(first.Stage(TestMaps.At("C4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("D4"))));
+
+        // 本批次里 E4 还不是 D4 的合法跳板——匠人根本站不上 D4。
+        Assert.Equal(BatchFailureKind.Unplayable, first.Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E4")))!.Kind);
+
+        Assert.True(BatchFixtures.Driver(river).Confirm(first.Context, first.Placements).Confirmed);
+        Assert.Null(Batch(river).Stage(TestMaps.At("D4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E4"))));
     }
 
     [Fact]

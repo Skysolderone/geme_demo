@@ -78,7 +78,8 @@ public static class TerrainWriter
         TerrainData terrain = before;
         foreach (TerrainEdit edit in list)
         {
-            // 前提按 before（本批开始前的地形）判，写入累加到 terrain：顺序无关，且同一目标被改两次必然在前提校验处抛出。
+            // 前提按 before（本批开始前的地形）判，写入累加到 terrain：因此结果与顺序无关。
+            // 同一目标出现两次时前提都过得去（before 里它还没被改），由 Apply 按累加后的 terrain 抛出。
             RequirePrecondition(before, edit);
             terrain = Apply(terrain, edit);
         }
