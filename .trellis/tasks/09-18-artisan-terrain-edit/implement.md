@@ -1054,3 +1054,84 @@ M-T2 证明的正是"改其一即红"，且红的第一条就是那条同源守�
 全部指标与 Safety 35 档逐项相同（确定性复现）。改造 425 次：搭桥 97、立栅 328（致提子 119）、烧林 0；每批次提子 0.52。
 
 遗留（本轮不处理，写进设计文档 §16 的已知偏离）：不收敛率 26.0%，显著高于 scoring-sites 终版的 6.5%；成因是栅栏使盘面更难填满、Pass 更晚。终局条件与保护期属本轮 Non-goals。
+
+## 6.3 变异验证汇总（段 O–E）
+
+各段逐条记录保留在本文件对应节；本表按段前缀汇总（O = strict-cli 独立任务 `.trellis/tasks/archive/2026-09/09-18-strict-cli/implement.md`）。全部变异均为备份 → 变异 → 全量 `dotnet test -c Release` → 还原 → 逐字节比对一致；段 B 起一律二进制读写、按每文件实测行尾归一锚点、不用 `if (false)`。
+
+| 段 | 编号 | 变异 | 结果 |
+|---|---|---|---|
+| O | M-SC1～M-SC5 | 删 Run 结算 / 建议恒空 / 已消费也算未知 / Has 不计消费 / 去掉字典序 | 红 2 / 1 / 3 / 1 / 1（详见 strict-cli 任务记录） |
+| O 检 | M-CK1、M-CK2、M-CK4 | 建议并列裁决 `<`→`<=` / 删 Analyze 结算 / 删 replay 左支 | 红 1 / 1 / 修前 0 → 修后 1 |
+| O 主会话 | — | 去掉 replay 混用检查 | 红 1（`replay两种定位方式不得混用`） |
+| A | M-A1 | `PieceEffects.BasePower` 删掉 `Artisan => 1` 分支（军势表漏掉匠人） | EXIT 1，红 **33** / `军势表穷举六种类型`、`匠人按1计`、`百局端到端`、`千例随机局面预演与结算一致` |
+| A | M-A2 | 匠人基础军势写成 4（与堡垒子同档） | EXIT 1，红 **7** / `军势表穷举六种类型`、`匠人按1计`、`各棋子势力占比按口径手算` |
+| A | M-A3 | `RecruitWeights.Order` / `BaseTable` 去掉匠人一档（棋池权重表漏掉匠人） | EXIT 1，红 **9** / `匠人在池中`、`棋池全局一致`、`无徽记大样本分布贴合权重表`、`六种类型挤不进默认槽位` |
+| A | M-A4 | `HandLedger.EnterRecruit` 改回 `AdjustedTable(snapshot)`（匠人权重配置不生效） | EXIT 1，红 **1** / `匠人权重可配置` |
+| A | M-A5 | `RelicGenerator.EmblemPieces` 过滤掉 `Artisan`（徽记绑定排除匠人） | EXIT 1，红 **1** / `徽记可绑定匠人` |
+| A | M-A6 | `MatchFlow.Serialize` 不写 `ArtisanWeight`（存档漏字段） | EXIT 1，红 **1** / `匠人权重随存档往返且旧存档回填` |
+| A | M-A7 | **只改测试不改实现**（testing.md「钉常量表」）：权重表期望对调 倍增 12 ↔ 匠人 10 | EXIT 1，红 **1** / `棋池全局一致` |
+| A | M-A8 | `MatchFlow.Persistence` 恢复时不把 `options.ArtisanWeight` 传给 `HandLedger.Restore`（读到了但没用上） | EXIT 1，红 **1** / `匠人权重随存档往返且旧存档回填` |
+| A | M-A9 | `EffectSnapshot.AdjustedWeight` 对匠人恒用分子 4（匠人徽记不调权） | EXIT 1，红 **1** / `匠人徽记按同一公式调权` |
+| A检 | M-C1a | 只改测试：`自洽` 的 `Base` 反证等式去掉 `+ c["Artisan"]` | CRLF / EXIT 0，**绿 826（缺口）** / EXIT 1，红 1（`真实跑局快照的类型计数与明细自洽`） |
+| A检 | M-C1b | 只改测试：`otherTypes` 数组去掉 `"Artisan"`（协同加值不把匠人算作其他类型） | CRLF / EXIT 0，**绿 826（缺口）** / EXIT 1，红 1（同上） |
+| A检 | M-C2 | `GameBoard.TypeCode`：`Artisan => 'A'` 改成 `'S'`（与协同子**撞码**，静默变类型 + 误判同形） | CRLF / EXIT 0，**绿 826（缺口）** / EXIT 1，红 1（`六种类型的盘面码两两不同且往返保留类型`） |
+| A检 | M-C3 | `Siege.Sim/Running/MatchSession.Create` 不传 `ArtisanWeight = config.ArtisanWeight` | **LF** / EXIT 0，**绿 826（缺口）** / EXIT 1，红 1（`匠人权重可配置`） |
+| A检 | M-C4 | `MatchSession.PieceCountsOf` 把匠人并进 `Basic` 键（「写反」形状，Σ计数与 Base 等式都仍成立） | **LF** / EXIT 1，红 2 / EXIT 1，红 2（`含连珠线协同倍增的真实棋串写快照读回并按口径归因`、`真实跑局快照的类型计数与明细自洽`） |
+| B | M-B1 | `GameBoard.ApplyTerrainEdits` 绕开写入口，自己 `new TerrainData(...)` 加桥（第二份地形写入实现） | `Board/GameBoard.cs`（CRLF） / EXIT 1，红 **3** / `地形写入口之外不得构造改造后的地形`、`同一目标不能被写两次`、`盘面序列化往返保留改造` |
+| B | M-B2 | 预演去掉「同一目标批内唯一」 | `Batch/BatchRehearsal.cs`（CRLF） / EXIT 1，红 **2** / `同一批次内同一目标只能被改造一次`、`AI…选中的批次连改造一起摆回暂放` |
+| B | M-B3 | 改造目标口径由几何四邻改成**气边**（`Adjacency.LibertyNeighbors`） | `Board/TerrainEditRules.cs`（LF） / EXIT 1，红 **4** / `合法目标枚举只含几何四邻且不含自身格`、`拒绝理由与合法目标集合一致`、两条 AI 枚举用例（深水无气边 → 搭桥全部消失） |
+| B | M-B4 | 删掉「只有匠人能带改造」的检查 | `Batch/BatchRehearsal.cs`（CRLF） / EXIT 1，红 **1** / `非匠人不得改造` |
+| B | M-B5 | **把改造挪到提子之后**（预演第 4、5 步对调） | `Batch/BatchRehearsal.cs`（CRLF） / EXIT 1，红 **2** / `搭桥先于提子可救活敌串`、`本批改造一律不记致提子` |
+| B | M-B6 | 同形 / 存档表示**去掉设施段**（`Serialize` 不写改造） | `Board/GameBoard.cs`（CRLF） / EXIT 1，红 **4** / `棋子分布相同但多一道栅栏即不同形`、`改造段的排序是规范形`、`盘面序列化往返保留改造`、`对局存档往返保留改造与匠人权重` |
+| B | M-B7 | 改造合法性改按「本批其余改造已生效后的地形」判（**批内链式放行**） | `Batch/BatchRehearsal.cs`（CRLF） / EXIT 1，红 **1** / `同一批次内同一目标只能被改造一次`（失败类别由「批内重复」变成「已被改造过」） |
+| B | M-B8 | AI 不枚举改造目标（`EditOptions` 只 yield `null`） | `Ai/HeuristicTurnController.cs`（LF） / EXIT 1，红 **4** / 两条 AI 枚举用例 + `真实跑局把改造写进日志且可离线重建地形`、`真实批次的第11项分析自洽`（真实样本里改造归零） |
+| B | M-B9 | AI **复摆丢掉改造**（`Deploy` 末尾 `Stage` 不传 `Edit`） | `Ai/HeuristicTurnController.cs`（LF） / EXIT 1，红 **3** / `选中的批次连改造一起摆回暂放` + 两条真实跑局遥测 |
+| B | M-B10 | 正式结算不写地形（只有预演副本写） | `Batch/SettlementDriver.cs`（CRLF） / EXIT 1，红 **14** / 预演副本与正式盘面的逐字节核对当场抛；`日志覆盖七类记录`、`真实跑局把可落子格写进日志首部`、`领先者胜率回归` 等大面积红 |
+| B | M-B11 | 分析把缺改造字段的旧日志当成「这局没改造」（不排除） | `Sim/Analysis/BalanceAnalyzer.cs`（CRLF） / EXIT 1，红 **2** / `一局里只要有一条快照缺改造字段就整局排除`、`第11项改造分析按手算样本输出` |
+| B | M-B12 | 跑局不把匠人权重写进日志首部 | `Sim/Running/MatchSession.cs`（LF） / EXIT 1，红 **2** / `匠人权重写进批次配置与日志首部`、`真实跑局把改造写进日志且可离线重建地形` |
+| B | M-B13 | `MatchFlow.Map` 退回「建局时的快照」（`=> Board.BaseMap`） | `Match/MatchFlow.cs`（LF） / EXIT 1，红 **1** / `MatchFlow的Map随改造更新`（2.6 缓存排查第 2 项） |
+| B | M-B14 | `Publish()` 把匠人权重写成默认值（读到了但没传） | `Match/MatchFlow.cs`（LF） / EXIT 1，红 **1** / `对局存档往返保留改造与匠人权重`（`restored.Publish().ArtisanWeight == 18`） |
+| B | M-B15 | `LegalRangeFor` 退回按**开局地图**算可落子格（等价于把建局时的缓存加回去） | `Match/MatchFlow.cs`（LF） / EXIT 1，红 **1** / `合法落子范围在保护期后含本局新架的桥`（2.6 缓存排查第 1 项） |
+| T11 | M-T1 | 边目标放宽**改回旧口径**：`LegalTargets` 只产出 `Fence(落点, n)`，`Reject` 只认"以落点为一端" | `Board/TerrainEditRules.cs`（LF） / EXIT 1，红 **8** / `边目标可落在外圈但不得更远`、`边目标不得离得更远时整批非法`、`立栅导致提子`、`立栅切断敌串连接后各自算气`、`外圈立栅把自己堵死也算自杀手`、`两道栅栏合围时两条都记致提子`、`AI在能一手立栅提子时选择该手`、`单点枚举同时产出带改造与不改造两类候选` |
+| T11 | M-T2 | **只放宽 `Reject` 一侧**（`neighbors.Length < 0`，运行时恒假 → 任何盘内几何边都放行），`LegalTargets` 不动——等价于"枚举与合法性各写一份且口径分歧" | `Board/TerrainEditRules.cs`（LF） / EXIT 1，红 **3** / **`拒绝理由与合法目标集合一致`**（守门本身）、`边目标可落在外圈但不得更远`、`边目标不得离得更远时整批非法` |
+| T11 | M-T3 | **结算顺序改回提子先于改造**（预演第 4、5 步对调，与段 B 的 M-B5 同锚点） | `Batch/BatchRehearsal.cs`（CRLF） / EXIT 1，红 **5** / **`立栅导致提子`**、**`立栅切断敌串连接后各自算气`**、`两道栅栏合围时两条都记致提子`、`AI在能一手立栅提子时选择该手`、`搭桥先于提子可救活敌串` |
+| B检 | M-C1 | `Adjacency.CoverageTargets` 跨一格深水时不再检查是否已架桥（`IsUnbridgedDeepWater(t)` → `SurfaceAt(t) == DeepWater`，架了桥仍当水穿过） | `Board/Adjacency.cs`（LF） / EXIT 1，红 **1** / `地形写入口Tests.架桥切断隔水覆盖` |
+| B检 | M-C2 | `SettlementDriver.AttributeEdits` 的致提子口径由"严格变小"放宽成"不变也算"（`<` → `<=`） | `Batch/SettlementDriver.cs`（CRLF） / EXIT 1，红 **1** / `改造先于提子Tests.两道栅栏合围时两条都记致提子`（顺带架的桥被误记 true） |
+| B检 | M-C3 | `ReportWriter` 第 11 项跳过 0 次的动作行（烧林 0 次就不输出那一行） | `Sim/Analysis/ReportWriter.cs`（LF） / EXIT 1，红 **1** / `地形改造日志与分析Tests.第11项改造分析按手算样本输出` |
+| B检 | M-C4 | `SettlementDriver` 把第 1 步扣手牌挪到放置之后、写设施之前（外部观察者看到"棋子已落下但设施未写入"） | `Batch/SettlementDriver.cs`（CRLF） / EXIT 1，红 **3** / **`改造先于提子Tests.结算的原子性含改造`**、`正式结算顺序Tests.结算的原子性`、`结算驱动器步骤顺序` |
+| B检 | M-C5 | `MatchSession` 的改造游标差一（`_editCursor + 1 < Count`）：本局最后一次改造永远写不进日志 | `Sim/Running/MatchSession.cs`（LF） / EXIT 1，红 **1** / `地形改造日志与分析Tests.回放日志改造可重建终局地形并与对局逐项一致` |
+| B检 | M-C6 | `MatchSession` 把改造事件的"是否致提子"恒写 false（`e.CausedCapture && e.Sequence < 0`，运行时恒假） | `Sim/Running/MatchSession.cs`（LF） / EXIT 1，红 **1** / 同上 |
+| C | M-SC1 | `Core/Preview/BatchPreview.cs` | `EditOptions` 只留以落点为端的内圈边（回到 T-11 之前的口径） / EXIT 1，红 **4**：`显示可改造目标`、`可改造目标逐条来自改造合法性唯一实现`、`改造目标非法时仍列出全部合法目标`、`暂放匠人时标出可改造目标` / 逐字节一致 |
+| C | M-SC2 | `Presentation/Layers/LayerContents.cs` | `LibertyGroupView.FenceSides` 恒给 `[]` / EXIT 1，红 **2**：`棋串读法区分栅栏侧`、`立栅后栅栏侧与差集都随改造更新` / 逐字节一致 |
+| C | M-SC3 | `Presentation/Visibility/DefaultBoardView.cs` | `From` 把 `Edits` 恒传 `[]`（落成反馈失去数据来源） / EXIT 1，红 **1**：`默认棋盘上的新旧设施同形且不带改造者` / 逐字节一致 |
+| C | M-SC4 | `Presentation/Preview/PreviewPresentation.cs` | `ArtisanEdit` 里加一条恒假分支调 `TerrainEditRules.Reject(...)`（表现层自判合法性） / EXIT 1，红 **1**：`UI层不含规则计算Tests.表现层不调用规则计算入口` / 逐字节一致 |
+| C检 | M-SC6 | `Core/Preview/BatchPreview.cs` | `TerrainEditRules.LegalTargets(board.Map, p.Coord)` → `LegalTargets((rehearsal.ProjectedBoard ?? board).Map, p.Coord)`：可改造目标改按<b>本批结算后</b>的地形枚举，违反 design 默认 2「批次内不链式」 / EXIT 1，红 **2**：`改造在预演中的呈现Tests.显示改造目标`、`改造在预演中的呈现Tests.可改造目标按批次开始前的地形枚举` / 逐字节一致 |
+| A 主会话 | — | 默认匠人权重 10→12 | 红 5 |
+| B 主会话 | — | （无；段 B 由检查 M-C1～M-C6 补验） | — |
+| D | M-D1 | 默认 Safety 35→30 | 红 3（校准三条） |
+
+合计 53 条（含 O 段 9 条、主会话 3 条）。
+
+## 6.1 规格场景 → 设计文档章节对照（抽样核对）
+
+| 规格场景 | 设计文档 |
+|---|---|
+| terrain-edit 改造动作集（搭桥 / 立栅 / 烧林、无逆向） | §3.4 动作集 |
+| terrain-edit 匠人落子即改造（格目标四邻、边目标至少一端四邻、可选、非匠人非法） | §3.4 目标口径与额度 |
+| terrain-edit 改造先于提子（立栅提子、堵死自己、多改造同时） | §3.4 时机；§6.1 预演第 4 步；§6.3 结算第 3 步 |
+| terrain-edit 批次内不链式 | §3.4 不链式 |
+| terrain-edit 不可逆且无归属 / 同形纳入设施 / 改造公开 | §3.4；§6.2 同形表示；§13.1 |
+| piece-effects 六种基础军势（匠人按 1 计） | §9.2 棋子表；§10.1 算例 |
+| recruitment 匠人在池中 / 权重可配置 | §9.1 |
+| hand-management 六种类型挤不进默认槽位 | §9.1 / §9.3 |
+| capture-resolution 七步预演与七步结算、设施差异不构成同形 | §6.1–6.3 |
+| batch-preview 显示改造目标 / 可改造目标 / 改造后的气 | §14.1 |
+| tactical-layers 暂放匠人时标出可改造目标、栅栏侧 | §14.2 |
+| match-telemetry 改造可查 / 地形可离线重建 / 第 11 项 | §17 |
+| visual-style-baseline 六种轮廓 / 改造的可视表现 | §20 |
+
+## 段 E 验证
+
+- 6.1 设计文档 v1.4、6.2 boundaries.md / testing.md 由 trellis-implement 完成（因配额中断，6.3、HANDOFF、tasks 勾选由主会话补齐）。
+- §16 数字核对脚本：主会话用 `cmp.py` 从 `sim-out/artisan-final/report.txt` 重提取，与设计文档 §16 表逐项相同（领先者 24.0%、无提子 0、不收敛 26.0%、据点分占比 31.5%、提子 0.52、结束 7.56、终局原因 143/52/5）。

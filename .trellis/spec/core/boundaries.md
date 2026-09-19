@@ -16,7 +16,7 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 
 | 语义 | 唯一归属 |
 |---|---|
-| 几何四邻邻居枚举 | `Adjacency.Neighbors(width, height, c)`；Core 内直接调用只允许 `Adjacency` 自身与 `GameBoard.Neighbors`（守门名单） |
+| 几何四邻邻居枚举 | `Adjacency.Neighbors(width, height, c)`；Core 内直接调用只允许 ① `Adjacency` 自身 ② `GameBoard.Neighbors` ③ `TerrainEditRules`（守门名单，测试 `四邻接Tests.几何邻居枚举只在允许名单内直接调用`）。第 ③ 条是 artisan-terrain-edit 裁决 T-2 的后果：改造目标口径定成几何四邻（深水没有气边，用气边会让搭桥不可能），而 `TerrainEditRules` 只拿得到 `MapData`、走不了 `GameBoard.Neighbors`。名单只放这一个类型，任何第二处"自己遍历四邻判改造目标"仍会红 |
 | 气边（连接 / 棋串 / 气 / 围杀 / 连珠成线 / 校验器距离与口袋） | `Adjacency.LibertyNeighbors(MapData, Coord)`；经 `GameBoard.LibertyNeighbors` 到达 |
 | 覆盖关系（覆盖 / 空格归属 / 唯一覆盖 / 信物发现） | `Adjacency.CoverageTargets(MapData, Coord)`；经 `GameBoard.CoverageTargets` 到达。可不对称 |
 | 崖壁阈值 | `TerrainData.CliffDrop`（= 2）；气边 `abs(Δh) < CliffDrop`、覆盖 `h_t − h_s < CliffDrop`、表现层差集原因 `≥ CliffDrop` 三处共用，禁止第二份字面量 |
@@ -25,7 +25,9 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 据点控制（占据 / 唯一覆盖 / 争议 / 无人及控制者） | `SiteControl.Compute(board, coverage)`（`Siege.Core.Scoring`）；只读 `CoverageMap.OwnershipOf`，实现内不得出现 `Neighbors(` / `CoverageTargets(` / `HeightAt(`（守门 `据点控制判定Tests.据点控制实现只读覆盖表`）。插旗阶段尚无势力快照时，据点状态也由 Core 的 `MatchFlow.Publish` 给出（`MatchPublicView.SiteStates` 唯一构造点）；表现层与 `src/godot/` 只读 `SiteStates` / `SiteView`，不得自推"无人"或任何控制状态 |
 | 高地压制加值 | `PieceEffects.HighGroundBonus(board, group)`；覆盖目标只经 `GameBoard.CoverageTargets` 取得，不另写邻接或崖壁判断；"严格更低"用 `Map.HeightAt` 比较目标格与自身格；`PowerCalculator` 是唯一消费者，表现层只读 `GroupPower.HighGroundBonus` |
 | 出生区编号的对人显示（1–4） | `BirthZoneLabel.Of` / `Number`；校验器、对称检查、平衡分析报告、`FlagsLocked` 事件文本、`map` 文本图、`play` 棋盘与插旗提示都经它换算，不得手写 `+ 1`；内部索引与日志数据字段保持 0 起（`play` 读入玩家输入的 `z - 1` 是输入解析，不在此列） |
-| 结算顺序（设计文档 §6.3 六步） | `Siege.Core` 批次结算驱动器 |
+| 结算顺序（设计文档 §6.3 **七步**） | `Siege.Core` 批次结算驱动器（`SettlementDriver`）。第 3 步"同时应用本批全部改造"先于第 4 步提子，顺序不得改（设计文档 §3.4 / §6.3） |
+| 地形写入口（加桥 / 加栅 / 烧林） | `TerrainWriter.Apply` / `ApplyAll`（`Siege.Core.Board`）——唯一构造"改造后 `TerrainData`"的地方，只做加法、没有逆向入口，不碰高度 / 障碍 / 信物 / 据点。盘面侧的唯一写入路径是 `GameBoard.ApplyTerrainEdits`（内部只经 `TerrainWriter`），调用点只有 `BatchRehearsal`（预演第 4 步）、`SettlementDriver.Confirm`（正式第 3 步）与 `AttributeEdits` 探针、`GameBoard.Fill`（存档回放）。守门 `地形写入口Tests.地形写入口之外不得构造改造后的地形`（IL 扫 `new TerrainData(`，白名单 = 写入口 + `TerrainData.Flat` + `MapFile` + 基准图，另配"扫描器确实命中写入口"的反面断言），变异 M-B1 已证红 |
+| 改造合法性（动作集、目标枚举与拒绝理由） | `TerrainEditRules`（`Siege.Core.Board`）——`LegalTargets` 枚举、`IsLegal` / `Reject` 判定同类同源，守门 `改造合法性Tests.拒绝理由与合法目标集合一致` 穷举全盘 144 条几何边比对。全仓调用点**只有两处**：`BatchRehearsal.ValidateShape`（`Reject`）与 `HeuristicTurnController.EditOptions`（`LegalTargets`）；表现层的可改造目标经 `BatchPreview.EditOptions` 投影，**MUST NOT** 自判。"批内唯一 / 不链式"不在本类——那是批次层（`BatchRehearsal` 的 `DuplicateEditInBatch`）的事，复制一份就是第二实现。变异 M-T2（只放宽 `Reject` 一侧）已证"改其一即红" |
 | 规则计算 | `Siege.Core`——表现层只消费预演结果，绝不自己算 |
 
 据点主人推导（`SiteAttribution.HomeZones`）只供遥测首部，规则代码不得引用；它复用 `Adjacency.LibertyNeighbors` / `AreAdjacent`，不是第二份邻接实现。
@@ -43,6 +45,16 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 
 **Wrong**：`foreach (var n in board.Neighbors(c)) if (map.TerrainAt(n) != Terrain.Obstacle) …`（手写地形过滤，段 A 前 `GroupSafety` 就是这么写的）
 **Correct**：`foreach (var n in board.LibertyNeighbors(c)) …` 或 `board.CoverageTargets(c)`，按语义选一个。
+
+### 地形不再是对局内不变量（artisan-terrain-edit）
+
+`terrain-model` 与 `scoring-sites` 两轮里地形是只读的：建局时读一次 `MapData`，此后一局里没有任何一手能改变它。第三轮加入匠人与三种改造（搭桥 / 立栅 / 烧林）后**这条前提作废**：
+
+- `GameBoard.Map` 是**可变**的（`{ get; private set; }`），`GameBoard.BaseMap` 才是开局那一份；`MatchFlow.Map` 是 `=> Board.Map` 的转发，不得再拷成字段。
+- 一次改造之后，气边、覆盖、棋串、气、据点控制与信物控制**全部**按新地形重算；预置设施与对局中造出来的设施在规则上完全等价（`地形写入口Tests.对局中架的桥与预置桥完全等价` 逐格比可落子性 / 气边 / 覆盖）。
+- 凡是"建局时算好、此后不再更新"的地形派生量，现在都是缺陷。本轮实锤两处：`MatchFlow._playableCells`（可落子格集合，已删，`LegalRangeFor` 改现算，变异 M-B15）与 `MatchFlow.Map`（建局时的 `MapData` 拷贝，已改成转发，变异 M-B13）。写任何持有 `MapData` / 坐标派生表的字段之前，先问"改造之后它还对吗"。
+- 例外（有意保留、不是遗漏）：`MapValidator.DistanceTable` 与 `MatchFlow.Flags` 只看**开局地图**——前者是"地图设计"的守门而不是对局态，后者只用于插旗（出生区与高度都不可改造）；`Siege.Sim` 日志首部的 `PlayableCells` 取 `Board.BaseMap.PlayableCount`，因为首部是一局一条、终局时才写出，写终局值等于把"未来的分母"塞进占用率指标。这三处的口径都要在引用它们的数据里注明。
+- `src/godot/` 的渲染态缓存**需要**失效机制：`BoardView.Build`（地砖 / 水面 / 桥 / 栅栏 / `_levels`）全仓只有 **3 处**调用——`GameRoot._Ready` 与两处"选出生区"（自动演示一处、手动一处），`Refresh` 路径上一处都没有。段 B 的 2.6 排查第 12 条曾写成"`GameRoot` 每次刷新都重跑 `Build`"，**这是错的**（段 C 核实并更正；段 C 实现记录里把三处写成"`_Ready`、选出生区、重开局"，也一并更正为"`_Ready` + 两处选出生区"）。现行做法：`Build` 时记一份地形指纹（每格可落子 / 高度 / 地表 / 有无桥 + 全部栅栏边，只读默认棋盘视图模型），`Refresh` 开头指纹不符即整体重搭。不补这条，AI 架的桥 / 立的栅 / 烧的林一处都不会显示，且新桥格不进 `_levels` → 拾取拿不到它；`--pick-check` 在第 2 帧就跑完，抓不到这个回归。
 
 ### 地形属性在表现层只能用于渲染
 
@@ -66,6 +78,8 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 设计文档 §9.2 / §10.1 明确要求实时重算、不保留成长层数。一次提子可能同时改变覆盖、棋串分裂、连珠断线与倍率，增量维护的组合爆炸不可控。
 
 11×11 约 121 格 × 4 人的全量重算开销可忽略。性能优化必须等到 `Siege.Sim` 有实测数据后再做，且不得改变语义。
+
+**地形派生量同理**（artisan-terrain-edit）：气边、覆盖、可落子格集合也是派生量，改造之后一律重算。本轮实锤的两处反例都是"建局时算好的地形派生量"——`MatchFlow._playableCells`（变异 M-B15）与 `MatchFlow.Map` 的字段拷贝（变异 M-B13），在地形只读的两轮里它们是对的，加入改造后立刻成了缺陷。这类"曾经正确的缓存"不会有编译错误，只会给出陈旧答案：给每一处缓存配一条"改造后结果变化"的测试，或在实现记录里写明它不缓存/只看开局地图（本轮的 14 项排查清单见 `.trellis/tasks/09-18-artisan-terrain-edit/implement.md` 段 B 的 2.6 表）。
 
 ## 显式输入的名册：未知玩家必须响亮失败
 
