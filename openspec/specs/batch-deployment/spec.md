@@ -23,6 +23,8 @@ TBD - created by archiving change add-batch-deployment. Update Purpose after arc
 
 批次中每种棋子类型的暂放数量 MUST NOT 超过玩家手牌中该类型的库存数量。
 
+一枚匠人携带的改造 SHALL 与该匠人共用同一枚额度，MUST NOT 另计；不带改造的匠人与带改造的匠人在额度上完全相同。
+
 未使用的部署额度 MUST NOT 跨小回合保存。
 
 #### Scenario: 超出部署上限
@@ -32,6 +34,10 @@ TBD - created by archiving change add-batch-deployment. Update Purpose after arc
 #### Scenario: 超出手牌库存
 - **WHEN** 玩家手牌中有 2 枚连珠子，尝试暂放第 3 枚连珠子
 - **THEN** 系统拒绝该次暂放并说明该类型库存不足
+
+#### Scenario: 改造不额外占额度
+- **WHEN** 当前部署上限为 3，玩家暂放 3 枚匠人且每枚都带一个改造目标
+- **THEN** 批次合法，已使用额度为 3
 
 #### Scenario: 高部署上限无硬顶
 - **WHEN** 玩家通过军令信物把部署上限提高到 9

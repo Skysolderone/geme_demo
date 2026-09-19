@@ -7,7 +7,7 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 
 系统 SHALL 以"类型槽"组织手牌：默认 5 个槽位（兵站信物 +1），每个槽位对应一种棋子类型，同一类型的棋子数量 MUST 无限叠加而只占用 1 个槽位。
 
-类型槽限制的是玩家同时持有的棋子**种类数**，MUST NOT 限制棋子总数。
+类型槽限制的是玩家同时持有的棋子**种类数**，MUST NOT 限制棋子总数。棋子类型共六种（含匠人），因此默认 5 槽下玩家 MUST NOT 同时持有全部六种。
 
 #### Scenario: 同类无限叠加
 - **WHEN** 玩家持有 14 枚普通子
@@ -20,6 +20,10 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 #### Scenario: 槽位统计种类而非总数
 - **WHEN** 玩家持有普通子×9、堡垒子×1
 - **THEN** 已占用槽位为 2，剩余 3 个空槽（默认 5 槽）
+
+#### Scenario: 六种类型挤不进默认槽位
+- **WHEN** 玩家已持有五种棋子类型且槽位数为 5，征募面板出现匠人
+- **THEN** 选取匠人前 MUST 先整类弃掉一种已有类型，否则该选取被拒绝并说明槽位已满
 
 ### Requirement: 主动整类弃牌
 

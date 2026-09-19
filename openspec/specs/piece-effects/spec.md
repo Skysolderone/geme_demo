@@ -5,9 +5,9 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 ## Requirements
 ### Requirement: 五种原型棋子的基础军势
 
-系统 SHALL 按下表定义棋子的基础军势：普通子 1、堡垒子 4、连珠子 1、倍增子 1、协同子 1。
+系统 SHALL 按下表定义棋子的基础军势：普通子 1、堡垒子 4、连珠子 1、倍增子 1、协同子 1、匠人 1。
 
-所有棋子 MUST 遵守完全相同的有气、无气与围杀规则。棋子类型效果 MUST NOT 提供额外的气、免死或复活。
+所有棋子 MUST 遵守完全相同的有气、无气与围杀规则。棋子类型效果 MUST NOT 提供额外的气、免死或复活。匠人的改造能力 SHALL 只在它落子的那一刻生效（见 `terrain-edit`），MUST NOT 提供任何持续的盘面效果、军势加值或计分。
 
 #### Scenario: 堡垒子不免死
 - **WHEN** 一条只含堡垒子的棋串失去全部气
@@ -16,6 +16,14 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 #### Scenario: 基础军势求和
 - **WHEN** 一条棋串包含普通子×3、堡垒子×1、倍增子×2
 - **THEN** 该棋串的基础军势总和为 `3×1 + 4 + 2×1 = 9`
+
+#### Scenario: 匠人按 1 计
+- **WHEN** 一条棋串包含匠人×2、堡垒子×1
+- **THEN** 该棋串的基础军势总和为 `2×1 + 4 = 6`
+
+#### Scenario: 匠人落子后无持续效果
+- **WHEN** 一枚已完成改造的匠人留在盘面上
+- **THEN** 它与普通子一样，只贡献 1 点基础军势，不提供任何额外效果
 
 ### Requirement: 连珠子的位置加值
 

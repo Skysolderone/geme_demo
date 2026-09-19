@@ -7,7 +7,7 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 
 系统 SHALL 在对局开始时为每名玩家发放 5 枚普通子作为初始手牌。
 
-全部玩家 SHALL 共用同一基础棋池，其基础权重为：普通子 40、堡垒子 20、连珠子 18、倍增子 12、协同子 10。
+全部玩家 SHALL 共用同一基础棋池，其基础权重为：普通子 40、堡垒子 20、连珠子 18、倍增子 12、协同子 10、匠人 10。匠人的权重 SHALL 为对局配置，用于扫档校准；未显式配置时取 10。
 
 #### Scenario: 开局手牌
 - **WHEN** 对局开始
@@ -16,6 +16,14 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 #### Scenario: 棋池全局一致
 - **WHEN** 比较任意两名玩家在不控制任何流派徽记时的征募抽取分布
 - **THEN** 二者使用完全相同的基础权重
+
+#### Scenario: 匠人在池中
+- **WHEN** 以默认配置统计基础棋池
+- **THEN** 六种类型的权重为 40 / 20 / 18 / 12 / 10 / 10，匠人的出现概率为 `10 / 110`
+
+#### Scenario: 匠人权重可配置
+- **WHEN** 批量跑局把匠人权重配置为 18
+- **THEN** 该批次的棋池权重为 40 / 20 / 18 / 12 / 10 / 18，其余类型的权重不变
 
 ### Requirement: 流派徽记调整征募权重
 
