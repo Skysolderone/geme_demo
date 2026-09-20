@@ -65,8 +65,11 @@ public sealed class InputBindings
     /// <summary>相机回到本机玩家的出生平台（空格）；未选区时回地图中心。</summary>
     public const string CameraHomeAction = "siege_camera_home";
 
+    /// <summary>全局预览开关（M）：一屏看不全的地图上拉到整盘可见，再按一次回到原来的画面。</summary>
+    public const string CameraOverviewAction = "siege_camera_overview";
+
     /// <summary>全部相机按键动作：这些键在到达界面控件之前就被认领（否则空格会按下获得焦点的按钮、方向键会挪动按钮焦点）。</summary>
-    public static readonly string[] CameraKeyActions = [CameraLeftAction, CameraRightAction, CameraUpAction, CameraDownAction, CameraHomeAction];
+    public static readonly string[] CameraKeyActions = [CameraLeftAction, CameraRightAction, CameraUpAction, CameraDownAction, CameraHomeAction, CameraOverviewAction];
 
     /// <summary>已注册的全部信息层动作。</summary>
     public IReadOnlyList<(string Action, InputDevice Device, string Binding)> LayerActions => _actions;
@@ -103,6 +106,7 @@ public sealed class InputBindings
         Register(CycleEditAction, new InputEventKey { PhysicalKeycode = Key.E }, new InputEventJoypadButton { ButtonIndex = JoyButton.LeftShoulder });
 
         // 相机：与上面的键都不重（已用 1–4 / Tab / H / Enter / P / Esc / T / E / F12 / 鼠标右键）。
+        Register(CameraOverviewAction, new InputEventKey { PhysicalKeycode = Key.M });
         Register(CameraLeftAction, new InputEventKey { PhysicalKeycode = Key.A }, new InputEventKey { PhysicalKeycode = Key.Left });
         Register(CameraRightAction, new InputEventKey { PhysicalKeycode = Key.D }, new InputEventKey { PhysicalKeycode = Key.Right });
         Register(CameraUpAction, new InputEventKey { PhysicalKeycode = Key.W }, new InputEventKey { PhysicalKeycode = Key.Up });

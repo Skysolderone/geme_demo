@@ -48,6 +48,7 @@ public sealed partial class GameRoot : Node3D
     private bool _shotPending;
     private bool _autoDemo;
     private bool _pickCheck;
+    private bool _shotOverview;
     private bool _dirty = true;
     private bool _mouseInside;
     private bool _opened;
@@ -71,6 +72,7 @@ public sealed partial class GameRoot : Node3D
             var args = new LaunchArgs(OS.GetCmdlineUserArgs(), OS.GetCmdlineArgs());
             _autoDemo = args.Flag("auto-demo");
             _pickCheck = args.Flag("pick-check");
+            _shotOverview = args.Flag("overview");
             seed = args.Value<ulong>("seed", "无符号整数种子", t => ulong.TryParse(t, out ulong v) ? v : null)
                 ?? (_autoDemo ? 20260915UL : (ulong)Stopwatch.GetTimestamp());
 
@@ -225,6 +227,17 @@ public sealed partial class GameRoot : Node3D
         };
         _hud.LayerPressed += ToggleLayer;
         _hud.ReadingPressed += CycleReading;
+        _hud.OverviewPressed += ToggleOverview;
+    }
+
+    /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。</summary>
+    private void ToggleOverview()
+    {
+        if (_board.Rig.ToggleOverview())
+        {
+            ApplyCamera("全局预览");
+            _dirty = true;
+        }
     }
 
     /// <summary>按钮点选信息层：与按键走同一个可见性状态机（D5），只是进入 / 退出的触发条件不同——判断本身在状态机里，这里不复写。</summary>
@@ -280,7 +293,8 @@ public sealed partial class GameRoot : Node3D
             }
 
             _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
-            _hud.Refresh(_session, _layers, _handPanel);
+            _hud.OverviewActive = _board.Rig.IsOverview;
+        _hud.Refresh(_session, _layers, _handPanel);
         }
 
         _frame++;
@@ -300,6 +314,12 @@ public sealed partial class GameRoot : Node3D
             }
 
             return;
+        }
+
+        // --overview：截图前两帧切到全局预览（只用于截全图；对局中用 M 键 / "全局"按钮）。
+        if (_shotOverview && _screenshotFrame >= 0 && _frame >= _screenshotFrame - 2 && !_board.Rig.IsOverview)
+        {
+            ToggleOverview();
         }
 
         if (_screenshotFrame >= 0 && _frame >= _screenshotFrame)
@@ -325,6 +345,7 @@ public sealed partial class GameRoot : Node3D
         _handPanel.Back();
         _dirty = false;
         _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
+        _hud.OverviewActive = _board.Rig.IsOverview;
         _hud.Refresh(_session, _layers, _handPanel);
         CaptureWhenDrawn(_screenshotPath);
     }
@@ -385,9 +406,21 @@ public sealed partial class GameRoot : Node3D
 
         // ② 7 个位姿
         var verified = new HashSet<Coord>();
-        foreach ((string name, CameraPose pose) in _board.Rig.CheckPoses())
+        // 一屏看不全的地图另加"全局预览"一档：距离越过平时的最远上限，是拾取要另验的新距离段。
+        List<(string Name, System.Action Apply)> stages = [.. _board.Rig.CheckPoses().Select(p => (p.Name, (System.Action)(() => _board.Rig.Set(p.Pose))))];
+        if (!_board.Rig.FitsOneScreen)
         {
-            _board.Rig.Set(pose);
+            stages.Add(("全局预览", () =>
+            {
+                _board.Rig.Set(saved);
+                _board.Rig.ToggleOverview();
+            }));
+        }
+
+        foreach ((string name, System.Action apply) in stages)
+        {
+            apply();
+            CameraPose pose = _board.Rig.Pose;
             _board.ApplyCameraPose();
             Vector3 eye = _board.Camera.Position;
             var failures = new List<string>();
@@ -724,7 +757,8 @@ public sealed partial class GameRoot : Node3D
         if (_board.ApplyCameraPose() && Unattended)
         {
             // 开局对准之后，无人值守模式下没有任何输入：位姿再变就是相机在"自己动"（规格：MUST NOT 因其他玩家行动而自动移动）。
-            _poseChangesAfterOpening += _opened ? 1 : 0;
+            // --overview 为截全图主动切的全局预览不算在内。
+            _poseChangesAfterOpening += _opened && why != "全局预览" ? 1 : 0;
             CameraPose pose = _board.Rig.Pose;
             GD.Print($"[camera] 第 {_frame} 帧（{why}）注视点 ({pose.FocusX:0.###}, {pose.FocusZ:0.###})，距离 {pose.Distance:0.###}");
         }
@@ -822,6 +856,11 @@ public sealed partial class GameRoot : Node3D
             if (action == InputBindings.CameraHomeAction && @event.IsActionPressed(action))
             {
                 FocusHome(opening: false);
+                _dirty = true;
+            }
+            else if (action == InputBindings.CameraOverviewAction && @event.IsActionPressed(action))
+            {
+                ToggleOverview();
             }
 
             GetViewport().SetInputAsHandled();
@@ -846,8 +885,10 @@ public sealed partial class GameRoot : Node3D
         // 滚轮缩放：只改距离（俯角恒定），夹取在视图模型里。指针在面板上时事件到不了这里，滚轮不会穿透面板。
         if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown } wheel)
         {
+            bool wasOverview = _board.Rig.IsOverview;
             _board.Rig.Zoom(wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1);
             ApplyCamera("缩放");
+            _dirty |= wasOverview != _board.Rig.IsOverview;
             return;
         }
 

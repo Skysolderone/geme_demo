@@ -111,6 +111,12 @@ public sealed partial class Hud : CanvasLayer
     /// <summary>悬停格坐标读数。文本由 Presentation 的 <c>HoverReadout</c> 给出（即 <c>Coord</c> 的记法），本类不拼坐标；空串即不显示。</summary>
     public void SetHoverReadout(string text) => _hoverReadout.Text = text;
 
+    /// <summary>点了"全局预览"按钮（与 M 键同一入口）。只在一屏看不全的地图上出现（<see cref="CameraHintVisible"/>）。</summary>
+    public event Action? OverviewPressed;
+
+    /// <summary>相机当前是否处于全局预览（由主场景在刷新前同步，按钮据此显示按下态）。</summary>
+    public bool OverviewActive { get; set; }
+
     private void BuildTurnBanner()
     {
         (PanelContainer panel, VBoxContainer body) = Ui.Panel();
@@ -372,6 +378,14 @@ public sealed partial class Hud : CanvasLayer
         Button mode = Ui.Toggle(layers.Mode == LayerInputMode.HoldToShow ? "按住 [T]" : "点击 [T]", false, 76);
         mode.Pressed += () => LayerModePressed?.Invoke();
         _layerButtons.AddChild(mode);
+
+        // 全局预览：只在一屏看不全的地图上给（v4 整盘本来就看得全，按钮没有意义，画面也保持不变）。
+        if (CameraHintVisible)
+        {
+            Button overview = Ui.Toggle("全局 [M]", OverviewActive, 92);
+            overview.Pressed += () => OverviewPressed?.Invoke();
+            _layerButtons.AddChild(overview);
+        }
     }
 
     private void RefreshActions(MatchSession session, ViewerWorld world)
@@ -540,7 +554,7 @@ public sealed partial class Hud : CanvasLayer
         if (session.AwaitingZone)
         {
             // 插旗提示放左列（信息层面板的位置，此时它是隐藏的）：居中放在顶部会盖住棋盘远边的列标注（terrain-model 6.3）。
-            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, 198f);
+            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, CameraHintVisible ? 268f : 198f);
             _centerBody.AddChild(Ui.Heading("开局插旗"));
             _centerBody.AddChild(Ui.Text("点棋盘上任意一块染色的出生区地砖，即可把旗插在那一区。", Ui.InfoText, wrap: true));
             _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的出生区落子（构筑保护期）。", Ui.MutedText, wrap: true));

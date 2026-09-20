@@ -179,10 +179,73 @@ public static class LowPoly
     {
         var root = new Node3D { Name = "Rock" };
         StandardMaterial3D material = Visuals.Matte(Visuals.Rock, 1f);
-        root.AddChild(Mesh(new SphereMesh { Radius = 0.34f, Height = 0.52f, RadialSegments = 5, Rings = 2 }, material,
-            new Vector3(0f, 0.16f, 0f), new Vector3(0f, variant * 37f, 0f), new Vector3(1f, 0.85f, 1.1f)));
-        root.AddChild(Mesh(new SphereMesh { Radius = 0.20f, Height = 0.30f, RadialSegments = 5, Rings = 2 }, material,
-            new Vector3(0.16f, 0.10f, -0.13f), new Vector3(0f, variant * 61f, 0f), new Vector3(1f, 0.9f, 1f)));
+        StandardMaterial3D shade = Visuals.Matte(Visuals.Rock.Darkened(0.14f), 1f);
+        root.AddChild(Mesh(new SphereMesh { Radius = 0.30f, Height = 0.56f, RadialSegments = 5, Rings = 2 }, material,
+            new Vector3(-0.06f, 0.18f, 0.04f), new Vector3(8f, variant * 37f, 6f), new Vector3(1f, 0.9f, 1.1f)));
+        root.AddChild(Mesh(new SphereMesh { Radius = 0.20f, Height = 0.34f, RadialSegments = 5, Rings = 2 }, shade,
+            new Vector3(0.20f, 0.11f, -0.14f), new Vector3(0f, variant * 61f, 10f), new Vector3(1f, 0.9f, 1f)));
+        root.AddChild(Mesh(new SphereMesh { Radius = 0.13f, Height = 0.20f, RadialSegments = 4, Rings = 1 }, material,
+            new Vector3(0.10f, 0.07f, 0.24f), new Vector3(0f, variant * 23f, 0f)));
+        return root;
+    }
+
+    /// <summary>
+    /// 障碍格的松树丛（装饰层）：两三棵叠层锥形松树。障碍格不可落子，树可以长在格中央；最高约 0.75（树尖很细），
+    /// 俯角 60° 下向身后投不到半格，不盖住后一格的格心。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Pines(int variant)
+    {
+        var root = new Node3D { Name = "Pines" };
+        StandardMaterial3D trunk = Visuals.Matte(Visuals.Timber, 1f);
+        StandardMaterial3D[] canopies =
+        [
+            Visuals.Matte(Visuals.TreeCanopy, 1f),
+            Visuals.Matte(Visuals.TreeCanopy.Lightened(0.12f), 1f),
+            Visuals.Matte(Visuals.PineAutumn, 1f),
+        ];
+        (Vector2 At, float Scale)[] spots = (variant % 3) switch
+        {
+            0 => [(new(-0.16f, 0.10f), 1.2f), (new(0.18f, -0.12f), 0.9f)],
+            1 => [(new(0.02f, 0.02f), 1.25f), (new(-0.24f, -0.20f), 0.75f), (new(0.24f, 0.20f), 0.85f)],
+            _ => [(new(0.14f, 0.12f), 1.15f), (new(-0.18f, -0.10f), 1.0f)],
+        };
+        for (int i = 0; i < spots.Length; i++)
+        {
+            (Vector2 at, float s) = spots[i];
+            // 每七丛里有一棵秋色的（基准图里点缀的黄松），其余两种绿交替。
+            StandardMaterial3D canopy = i == 0 && variant % 7 == 3 ? canopies[2] : canopies[(variant + i) % 2];
+            var origin = new Vector3(at.X, 0f, at.Y);
+            root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.03f * s, BottomRadius = 0.04f * s, Height = 0.14f * s, RadialSegments = 5, Rings = 0 }, trunk,
+                origin + new Vector3(0f, 0.07f * s, 0f)));
+            for (int tier = 0; tier < 3; tier++)
+            {
+                float radius = (0.20f - (tier * 0.05f)) * s;
+                float height = 0.22f * s;
+                root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = radius, Height = height, RadialSegments = 6, Rings = 0 }, canopy,
+                    origin + new Vector3(0f, (0.12f + (tier * 0.13f)) * s + (height * 0.5f), 0f), new Vector3(0f, (variant * 47f) + (tier * 30f), 0f)));
+            }
+        }
+
+        return root;
+    }
+
+    /// <summary>
+    /// 障碍格的断柱遗迹（装饰层）：一块石台、一根立着的断柱、一段倒伏的柱身。高度压在 0.55 以内。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Ruins(int variant)
+    {
+        var root = new Node3D { Name = "Ruins" };
+        StandardMaterial3D stone = Visuals.Matte(Visuals.RuinStone, 1f);
+        StandardMaterial3D dark = Visuals.Matte(Visuals.RuinStone.Darkened(0.18f), 1f);
+        float turn = variant * 90f;
+        root.RotationDegrees = new Vector3(0f, turn, 0f);
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.62f, 0.07f, 0.62f) }, dark, new Vector3(0f, 0.035f, 0f)));
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.24f, 0.06f, 0.24f) }, stone, new Vector3(-0.14f, 0.10f, -0.12f)));
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.085f, BottomRadius = 0.095f, Height = 0.36f + (variant % 2 * 0.10f), RadialSegments = 6, Rings = 0 }, stone,
+            new Vector3(-0.14f, 0.13f + ((0.36f + (variant % 2 * 0.10f)) * 0.5f), -0.12f)));
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.08f, BottomRadius = 0.08f, Height = 0.34f, RadialSegments = 6, Rings = 0 }, stone,
+            new Vector3(0.12f, 0.15f, 0.14f), new Vector3(90f, 35f, 0f)));
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.16f, 0.10f, 0.14f) }, dark, new Vector3(0.18f, 0.12f, -0.18f), new Vector3(0f, 25f, 8f)));
         return root;
     }
 

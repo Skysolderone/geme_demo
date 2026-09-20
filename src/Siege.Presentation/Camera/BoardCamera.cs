@@ -83,6 +83,8 @@ public sealed class BoardCamera
     private float _x;
     private float _z;
     private float _distance;
+    private bool _overview;
+    private CameraPose _beforeOverview;
 
     /// <summary>以地图外接矩形（含坐标标注外圈）建相机：初始在地图中心、最远缩放。</summary>
     public BoardCamera(PlaneRect bounds, float aspect = 16f / 9f)
@@ -117,6 +119,9 @@ public sealed class BoardCamera
 
     /// <summary>最远缩放下整盘一屏可见（如 <c>siege-4p-base-v4</c>）：这类地图上相机等价于旧的固定相机。</summary>
     public bool FitsOneScreen => FullViewDistance <= FarthestCap;
+
+    /// <summary>是否处于全局预览：整盘一屏可见，距离越过 <see cref="FarthestCap"/>，注视点锁在地图中心。</summary>
+    public bool IsOverview => _overview;
 
     /// <summary>当前缩放下注视点的可行矩形：外接矩形向内收缩所见范围之半；某方向所见 ≥ 地图跨度则退化为中线。</summary>
     public PlaneRect Feasible
@@ -158,6 +163,11 @@ public sealed class BoardCamera
     /// </summary>
     public void Pan(float right, float up, float seconds)
     {
+        if (_overview)
+        {
+            return;
+        }
+
         float step = PanSpeedPerDistance * _distance * MathF.Max(seconds, 0f);
         _x += Math.Clamp(right, -1f, 1f) * step;
         _z -= Math.Clamp(up, -1f, 1f) * step;
@@ -167,13 +177,60 @@ public sealed class BoardCamera
     /// <summary>缩放：<paramref name="steps"/> 为正拉近、为负拉远（滚轮格数）。只改距离；改后立即重夹注视点。</summary>
     public void Zoom(int steps)
     {
+        if (_overview)
+        {
+            if (steps <= 0)
+            {
+                return;
+            }
+
+            // 全局预览里拉近：退出预览，从平时的最远缩放接着拉，注视点留在地图中心。
+            _overview = false;
+            _distance = Farthest;
+        }
+
         _distance *= MathF.Pow(ZoomStepFactor, steps);
         Clamp();
+    }
+
+    /// <summary>
+    /// 全局预览开关（只在一屏看不全的地图上有意义，一屏看全的地图返回 <c>false</c>、不动相机）。
+    /// 切入：记下当前位姿，距离取 <see cref="FullViewDistance"/>（越过 <see cref="FarthestCap"/>）、注视点锁地图中心；
+    /// 再切一次：回到切入前的位姿。预览中推屏与拉远无效，拉近 / 回家 / 开局对准 / 直接置位都会退出预览。
+    /// 俯角不变——预览只是"更远"，拾取的几何论证不受影响（<c>--pick-check</c> 另验这一位姿）。
+    /// </summary>
+    public bool ToggleOverview()
+    {
+        if (FitsOneScreen)
+        {
+            return false;
+        }
+
+        if (_overview)
+        {
+            _overview = false;
+            Set(_beforeOverview);
+        }
+        else
+        {
+            _beforeOverview = Pose;
+            _overview = true;
+            Clamp();
+        }
+
+        return true;
     }
 
     /// <summary>回家：注视点移到 (<paramref name="x"/>, <paramref name="z"/>)，缩放距离不变，结果同样经过夹取。</summary>
     public void Home(float x, float z)
     {
+        if (_overview)
+        {
+            // 预览里回家：距离回到切入前的值。
+            _overview = false;
+            _distance = _beforeOverview.Distance;
+        }
+
         _x = x;
         _z = z;
         Clamp();
@@ -188,6 +245,12 @@ public sealed class BoardCamera
     /// </summary>
     public void Open(PlaneRect? platform)
     {
+        if (_overview)
+        {
+            _overview = false;
+            _distance = _beforeOverview.Distance;
+        }
+
         if (platform is not { } rect)
         {
             Home(_bounds.CenterX, _bounds.CenterZ);
@@ -209,6 +272,7 @@ public sealed class BoardCamera
     /// <summary>直接给位姿（自检用），同样经过夹取。</summary>
     public void Set(CameraPose pose)
     {
+        _overview = false;
         _x = pose.FocusX;
         _z = pose.FocusZ;
         _distance = pose.Distance;
@@ -222,6 +286,8 @@ public sealed class BoardCamera
     public IReadOnlyList<(string Name, CameraPose Pose)> CheckPoses()
     {
         CameraPose saved = Pose;
+        bool wasOverview = _overview;
+        CameraPose beforeOverview = _beforeOverview;
         float middle = MathF.Sqrt(Nearest * Farthest);
         (string, float, float, float)[] raw =
         [
@@ -242,6 +308,13 @@ public sealed class BoardCamera
         }
 
         Set(saved);
+        if (wasOverview)
+        {
+            _beforeOverview = beforeOverview;
+            _overview = true;
+            Clamp();
+        }
+
         return poses;
     }
 
@@ -262,6 +335,14 @@ public sealed class BoardCamera
 
     private void Clamp()
     {
+        if (_overview)
+        {
+            _distance = FullViewDistance;
+            _x = _bounds.CenterX;
+            _z = _bounds.CenterZ;
+            return;
+        }
+
         _distance = Math.Clamp(_distance, Nearest, Farthest);
         PlaneRect feasible = Feasible;
         _x = Math.Clamp(_x, feasible.MinX, feasible.MaxX);

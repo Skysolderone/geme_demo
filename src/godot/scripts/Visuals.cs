@@ -10,7 +10,10 @@ namespace Siege.Godot;
 public static class Visuals
 {
     /// <summary>棋盘底座色（缝隙露出的颜色，即网格线）。</summary>
-    public static readonly Color GridInk = Color.Color8(28, 30, 36);
+    public static readonly Color GridInk = Color.Color8(58, 66, 78);
+
+    /// <summary>浮空岛的岛缘（棋盘外圈、坐标标注所在的那一圈）：压暗的暖色岩石，浅色标注字在上面读得清。</summary>
+    public static readonly Color IslandRim = Color.Color8(92, 82, 74);
 
     /// <summary>棋盘四边坐标标注的字色。棋盘外是深色背景，深灰字读不出来，取浅色并配深色描边。</summary>
     public static readonly Color CoordinateLabel = Color.Color8(206, 202, 190);
@@ -19,40 +22,46 @@ public static class Visuals
     public static readonly Color CoordinateLabelOutline = Color.Color8(18, 19, 23);
 
     /// <summary>可落子地砖（草地，terrain-model 缺省地表）。</summary>
-    public static readonly Color TilePlayable = Color.Color8(146, 156, 118);
+    public static readonly Color TilePlayable = Color.Color8(138, 190, 88);
 
     /// <summary>土路地表：比草地暖、比岩石亮，只作视觉，帮玩家读出"下山的路"。</summary>
-    public static readonly Color TileRoad = Color.Color8(178, 160, 122);
+    public static readonly Color TileRoad = Color.Color8(222, 192, 132);
 
     /// <summary>林地地表：深绿，配角落的小树；林地不接收覆盖，靠占据拿。</summary>
-    public static readonly Color TileForest = Color.Color8(92, 128, 84);
+    public static readonly Color TileForest = Color.Color8(86, 150, 78);
 
     /// <summary>深水：低于地砖的蓝色水面，不可落子。</summary>
-    public static readonly Color DeepWater = Color.Color8(58, 104, 148);
+    public static readonly Color DeepWater = Color.Color8(46, 138, 204);
 
     /// <summary>深水的浅色波纹。</summary>
-    public static readonly Color WaterRipple = Color.Color8(104, 150, 190);
+    public static readonly Color WaterRipple = Color.Color8(170, 222, 246);
 
     /// <summary>预置桥的木板面。</summary>
-    public static readonly Color BridgeDeck = Color.Color8(156, 116, 72);
+    public static readonly Color BridgeDeck = Color.Color8(176, 128, 78);
 
     /// <summary>栅栏与桥墩的深色木料。</summary>
     public static readonly Color Timber = Color.Color8(112, 84, 54);
 
     /// <summary>h=1 那一层的侧面（缓坡侧面）：土色。</summary>
-    public static readonly Color SlopeSide = Color.Color8(134, 108, 84);
+    public static readonly Color SlopeSide = Color.Color8(158, 112, 72);
 
     /// <summary>h=2 那一层的侧面（崖壁侧面）：岩灰。Δh=2 的崖壁露出土色 + 岩灰两条色带，Δh=1 的缓坡只露土色一条。</summary>
-    public static readonly Color CliffSide = Color.Color8(112, 108, 104);
+    public static readonly Color CliffSide = Color.Color8(136, 124, 116);
 
     /// <summary>林地小树的树冠。</summary>
-    public static readonly Color TreeCanopy = Color.Color8(70, 112, 66);
+    public static readonly Color TreeCanopy = Color.Color8(48, 128, 72);
+
+    /// <summary>松树丛里点缀的秋色树冠（装饰层）。</summary>
+    public static readonly Color PineAutumn = Color.Color8(222, 176, 58);
+
+    /// <summary>断柱遗迹的浅色石材（装饰层）。</summary>
+    public static readonly Color RuinStone = Color.Color8(160, 152, 138);
 
     /// <summary>障碍岩石（装饰层）。</summary>
-    public static readonly Color TileObstacle = Color.Color8(96, 98, 104);
+    public static readonly Color TileObstacle = Color.Color8(118, 150, 96);
 
     /// <summary>岩石。</summary>
-    public static readonly Color Rock = Color.Color8(122, 120, 116);
+    public static readonly Color Rock = Color.Color8(142, 138, 134);
 
     /// <summary>营帐帆布（据点地标，浅米色，与岩灰 / 草地在灰度下也拉得开）。</summary>
     public static readonly Color TentCanvas = Color.Color8(222, 204, 164);

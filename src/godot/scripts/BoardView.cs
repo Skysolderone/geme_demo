@@ -97,7 +97,7 @@ public sealed partial class BoardView : Node3D
         AddChild(new MeshInstance3D
         {
             Mesh = new BoxMesh { Size = new Vector3((_width + apron) * BoardGeometry.CellSize, BoardGeometry.TileHeight, (_height + apron) * BoardGeometry.CellSize) },
-            MaterialOverride = Visuals.Matte(Visuals.GridInk),
+            MaterialOverride = Visuals.Matte(Visuals.IslandRim),
             Position = new Vector3(0f, BoardGeometry.TopY - WaterDrop - (BoardGeometry.TileHeight * 0.5f), 0f),
         });
 
@@ -106,6 +106,33 @@ public sealed partial class BoardView : Node3D
 
         var tiles = new Node3D { Name = "Tiles" };
         AddChild(tiles);
+
+        // 出生区的外圈格（四邻里有不属于同一区的格）：归属色只重染外圈，内部只淡淡带一点，让草地本色露出来。只是渲染，不进规则。
+        Dictionary<Coord, int> zoneOf = board.Cells.Where(c => c.BirthZone is not null).ToDictionary(c => c.Coord, c => c.BirthZone!.Value);
+        Dictionary<int, (int MinX, int MinY, int MaxX, int MaxY)> zoneBox = zoneOf
+            .GroupBy(kv => kv.Value)
+            .ToDictionary(g => g.Key, g => (g.Min(kv => kv.Key.X), g.Min(kv => kv.Key.Y), g.Max(kv => kv.Key.X), g.Max(kv => kv.Key.Y)));
+        HashSet<Coord> blocked = [.. board.Cells.Where(c => c.Terrain != Terrain.Playable).Select(c => c.Coord)];
+
+        // 某格朝 (dx, dy) 方向是不是出生区的外缘：邻格不属于同一区即是；区外接矩形之内的不可落子格（平台里的岩石洞）不算外缘，否则洞的四周也会描一圈。
+        bool IsZoneEdge(Coord c, int zone, int dx, int dy)
+        {
+            int x = c.X + dx, y = c.Y + dy;
+            if (x < 0 || y < 0 || x >= _width || y >= _height)
+            {
+                return true;
+            }
+
+            var next = new Coord(x, y);
+            if (zoneOf.TryGetValue(next, out int other))
+            {
+                return other != zone;
+            }
+
+            (int minX0, int minY0, int maxX0, int maxY0) = zoneBox[zone];
+            bool hole = blocked.Contains(next) && x >= minX0 && x <= maxX0 && y >= minY0 && y <= maxY0;
+            return !hole;
+        }
 
         int variant = 0;
         float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
@@ -150,18 +177,47 @@ public sealed partial class BoardView : Node3D
             };
             if (!playable)
             {
+                // 障碍格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
                 color = Visuals.TileObstacle;
-                Node3D rock = LowPoly.Rock(variant++);
-                rock.Position = center;
-                _decoration.AddChild(rock);
+                int pick = unchecked((int)(((uint)(cell.Coord.X * 73856093) ^ (uint)(cell.Coord.Y * 19349663)) % 100u));
+                Node3D obstacle = pick < 40 ? LowPoly.Rock(variant++) : pick < 82 ? LowPoly.Pines(variant++) : LowPoly.Ruins(variant++);
+                obstacle.Position = center;
+                _decoration.AddChild(obstacle);
             }
             else if (cell.BirthZone is int zone)
             {
                 // 插旗阶段还没有归属，先用统一的出生区高亮让玩家看得见可点的区域；锁定后有主的平台改染该阵营主色，
                 // 没人选的平台（平台数 > 人数的地图，frontier-map D9）褪成中性色——区号独立于玩家色，几个平台都一样处理。
-                color = zoneOwners.TryGetValue(zone, out PlayerId owner) ? color.Lerp(Visuals.FactionColorOf(owner), 0.34f)
-                    : zoneOwners.Count > 0 ? color.Lerp(Visuals.Neutral, 0.34f)
-                    : color.Lerp(Visuals.BirthHint, 0.62f);
+                // 归属靠外缘描边读出来，地砖只淡淡带一点色，草地本色留着（整片染色会把红 / 金混成土褐、土黄）。
+                bool owned = zoneOwners.TryGetValue(zone, out PlayerId owner);
+                Color zoneColor = owned ? Visuals.FactionColorOf(owner) : zoneOwners.Count > 0 ? Visuals.Neutral : Visuals.BirthHint;
+                color = color.Lerp(zoneColor, owned ? 0.10f : zoneOwners.Count > 0 ? 0.08f : 0.30f);
+
+                StandardMaterial3D edge = Visuals.Flat(zoneColor);
+                foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    if (!IsZoneEdge(cell.Coord, zone, dx, dy))
+                    {
+                        continue;
+                    }
+
+                    // Coord 的 y 向上（北）对应世界 −Z。描边条贴在格内侧边缘、略高于面砖，不占落点。
+                    const float strip = 0.07f;
+                    float offset = (BoardGeometry.CellSize * 0.5f) - (strip * 0.5f);
+                    tiles.AddChild(new MeshInstance3D
+                    {
+                        Mesh = new BoxMesh { Size = dx != 0 ? new Vector3(strip, 0.03f, BoardGeometry.CellSize) : new Vector3(BoardGeometry.CellSize, 0.03f, strip) },
+                        MaterialOverride = edge,
+                        Position = center + new Vector3(dx * offset, 0.015f, -dy * offset),
+                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                    });
+                }
+            }
+
+            // 棋盘格式的轻微明暗交替（参考图的草地拼块感），只动亮度、不动色相；障碍格不参与。
+            if (playable && ((cell.Coord.X + cell.Coord.Y) & 1) == 0)
+            {
+                color = color.Darkened(0.05f);
             }
 
             if (playable && cell.Surface == Surface.Forest)
@@ -181,6 +237,8 @@ public sealed partial class BoardView : Node3D
         {
             AddFence(tiles, fence);
         }
+
+        AddFloatingIsland(board, apron);
 
         BuildCoordinateLabels();
 
@@ -203,9 +261,15 @@ public sealed partial class BoardView : Node3D
 
         AddChild(new DirectionalLight3D
         {
-            RotationDegrees = new Vector3(-58f, -42f, 0f),
-            LightColor = Color.Color8(255, 246, 226),
-            LightEnergy = 1.15f,
+            // 暖色主光 + 柔和阴影：高台、树、棋子落下影子，层次才读得出来（基准图的"温暖自然光"）。
+            RotationDegrees = new Vector3(-52f, -38f, 0f),
+            LightColor = Color.Color8(255, 240, 208),
+            LightEnergy = 1.25f,
+            ShadowEnabled = true,
+            ShadowBlur = 1.6f,
+            ShadowOpacity = 0.55f,
+            DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel2Splits,
+            DirectionalShadowMaxDistance = 70f,
         });
         AddChild(new DirectionalLight3D
         {
@@ -218,11 +282,24 @@ public sealed partial class BoardView : Node3D
         {
             Environment = new global::Godot.Environment
             {
-                BackgroundMode = global::Godot.Environment.BGMode.Color,
-                BackgroundColor = Color.Color8(22, 26, 34),
+                // 明亮的天空渐变：沙盘悬浮在天上（基准图），不再是深色虚空。地平线以下同样取浅色，俯视时画面边缘是云海的颜色。
+                BackgroundMode = global::Godot.Environment.BGMode.Sky,
+                Sky = new Sky
+                {
+                    SkyMaterial = new ProceduralSkyMaterial
+                    {
+                        SkyTopColor = Color.Color8(86, 148, 222),
+                        SkyHorizonColor = Color.Color8(206, 228, 246),
+                        GroundHorizonColor = Color.Color8(206, 228, 246),
+                        GroundBottomColor = Color.Color8(148, 190, 232),
+                        SunAngleMax = 0f,
+                    },
+                },
                 AmbientLightSource = global::Godot.Environment.AmbientSource.Color,
-                AmbientLightColor = Color.Color8(120, 130, 150),
-                AmbientLightEnergy = 0.55f,
+                AmbientLightColor = Color.Color8(186, 200, 222),
+                AmbientLightEnergy = 0.62f,
+                TonemapMode = global::Godot.Environment.ToneMapper.Filmic,
+                TonemapWhite = 1.4f,
                 AdjustmentEnabled = true,
                 AdjustmentSaturation = 1f,
             },
@@ -243,6 +320,144 @@ public sealed partial class BoardView : Node3D
         Camera = new Camera3D { Fov = CameraPose.FovDegrees };
         AddChild(Camera);
         ApplyCameraPose();
+    }
+
+    /// <summary>
+    /// 浮空岛（纯装饰，visual-style-baseline「悬浮于奇幻世界中的立体战争沙盘」）：底座之下逐层收窄的岩体与垂下的石笋、
+    /// 岛下的云海、以及地图边缘深水格外侧垂落的瀑布。全部在底座平面之下或地图外接矩形之外，不进拾取、不遮挡任何格。
+    /// 形状只由地图尺寸与格坐标决定，不用随机数——同一张图永远同一副样子。
+    /// </summary>
+    private void AddFloatingIsland(DefaultBoardView board, float apron)
+    {
+        var island = new Node3D { Name = "Island" };
+        AddChild(island);
+
+        float baseTop = BoardGeometry.TopY - WaterDrop - BoardGeometry.TileHeight;
+        float spanX = (_width + apron) * BoardGeometry.CellSize;
+        float spanZ = (_height + apron) * BoardGeometry.CellSize;
+        StandardMaterial3D earth = Visuals.Matte(Visuals.SlopeSide.Darkened(0.12f), 1f);
+        StandardMaterial3D rock = Visuals.Matte(Visuals.CliffSide.Darkened(0.10f), 1f);
+        StandardMaterial3D deepRock = Visuals.Matte(Visuals.CliffSide.Darkened(0.30f), 1f);
+
+        // 逐层收窄的岩体：一层土、两层岩，越往下越窄越暗。
+        (float Shrink, float Thickness, StandardMaterial3D Material)[] layers =
+        [
+            (0.985f, 0.9f, earth),
+            (0.90f, 1.6f, rock),
+            (0.72f, 2.2f, rock),
+            (0.48f, 2.6f, deepRock),
+            (0.22f, 2.4f, deepRock),
+        ];
+        float y = baseTop;
+        foreach ((float shrink, float thickness, StandardMaterial3D material) in layers)
+        {
+            island.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(spanX * shrink, thickness, spanZ * shrink) },
+                MaterialOverride = material,
+                Position = new Vector3(0f, y - (thickness * 0.5f), 0f),
+            });
+            y -= thickness;
+        }
+
+        // 沿底座四边垂下的石笋：位置与长短按序号散列。
+        int count = Math.Max(10, (_width + _height) / 2);
+        for (int i = 0; i < count; i++)
+        {
+            int h = unchecked((i * 40503) ^ (i * i * 9973));
+            float t = ((h & 0x3FF) / 1023f) - 0.5f;
+            float length = 1.2f + (((h >> 10) & 0xFF) / 255f * 2.4f);
+            bool alongX = (i & 1) == 0;
+            float side = ((i >> 1) & 1) == 0 ? -1f : 1f;
+            var at = alongX
+                ? new Vector3(t * spanX * 0.92f, baseTop - 0.9f - (length * 0.5f), side * spanZ * 0.46f)
+                : new Vector3(side * spanX * 0.46f, baseTop - 0.9f - (length * 0.5f), t * spanZ * 0.92f);
+            island.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.55f + (length * 0.12f), BottomRadius = 0.02f, Height = length, RadialSegments = 5, Rings = 0 },
+                MaterialOverride = (i % 3) == 0 ? deepRock : rock,
+                Position = at,
+                RotationDegrees = new Vector3(0f, i * 37f, 0f),
+            });
+        }
+
+        // 云海：岛下与四周的几团扁平白云（不投影、不受光）。
+        StandardMaterial3D cloud = Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f));
+        float reach = Math.Max(spanX, spanZ);
+        for (int i = 0; i < 26; i++)
+        {
+            float angle = i * 2.399963f;
+            float radius = reach * (0.50f + (0.42f * ((i * 7) % 5) / 4f));
+            float size = reach * (0.07f + (0.03f * (i % 3)));
+            island.AddChild(new MeshInstance3D
+            {
+                Mesh = new SphereMesh { Radius = size, Height = size * 0.55f, RadialSegments = 8, Rings = 3 },
+                MaterialOverride = cloud,
+                Position = new Vector3(MathF.Cos(angle) * radius, baseTop - 5.5f - (i % 4 * 1.1f), MathF.Sin(angle) * radius * 0.9f),
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            });
+        }
+
+        // 瀑布：贴着地图边缘的深水格，沿外侧垂下一道水帘，落到云海里。
+        StandardMaterial3D fall = Visuals.Flat(new Color(Visuals.WaterRipple, 0.85f));
+        StandardMaterial3D foam = Visuals.Flat(new Color(1f, 1f, 1f, 0.9f));
+        const float drop = 9f;
+        foreach (BoardCellView cell in board.Cells)
+        {
+            if (cell.Surface != Surface.DeepWater || cell.HasBridge)
+            {
+                continue;
+            }
+
+            foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            {
+                int nx = cell.Coord.X + dx, ny = cell.Coord.Y + dy;
+                if (nx >= 0 && ny >= 0 && nx < _width && ny < _height)
+                {
+                    continue;
+                }
+
+                // 河道出口才挂瀑布：这一格朝里（反方向）的邻格也得是水，否则只是贴边的一格水塘。
+                int ix = cell.Coord.X - dx, iy = cell.Coord.Y - dy;
+                BoardCellView? inner = board.Cells.FirstOrDefault(c => c.Coord.X == ix && c.Coord.Y == iy);
+                if (inner is null || inner.Surface != Surface.DeepWater)
+                {
+                    continue;
+                }
+
+                Vector3 water = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
+                float outward = (apron * 0.5f * BoardGeometry.CellSize) + (BoardGeometry.CellSize * 0.5f);
+                var lip = new Vector3(water.X + (dx * outward), 0f, water.Z - (dy * outward));
+                float top = water.Y - WaterDrop;
+
+                // 从水格到底座边缘的一段水道（盖在底座上），再接垂直水帘。
+                float channel = outward - (BoardGeometry.CellSize * 0.5f);
+                island.AddChild(new MeshInstance3D
+                {
+                    Mesh = new BoxMesh { Size = dx != 0 ? new Vector3(channel, 0.02f, BoardGeometry.TileSize) : new Vector3(BoardGeometry.TileSize, 0.02f, channel) },
+                    MaterialOverride = Visuals.Matte(Visuals.DeepWater, 0.55f),
+                    Position = new Vector3(water.X + (dx * (outward + (BoardGeometry.CellSize * 0.5f)) * 0.5f), baseTop + 0.012f, water.Z - (dy * (outward + (BoardGeometry.CellSize * 0.5f)) * 0.5f)),
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+                island.AddChild(new MeshInstance3D
+                {
+                    Mesh = new BoxMesh { Size = dx != 0 ? new Vector3(0.10f, drop, BoardGeometry.TileSize) : new Vector3(BoardGeometry.TileSize, drop, 0.10f) },
+                    MaterialOverride = fall,
+                    Position = new Vector3(lip.X + (dx * 0.05f), top - (drop * 0.5f), lip.Z - (dy * 0.05f)),
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+                for (int streak = -1; streak <= 1; streak++)
+                {
+                    island.AddChild(new MeshInstance3D
+                    {
+                        Mesh = new BoxMesh { Size = dx != 0 ? new Vector3(0.02f, drop * 0.8f, 0.05f) : new Vector3(0.05f, drop * 0.8f, 0.02f) },
+                        MaterialOverride = foam,
+                        Position = new Vector3(lip.X + (dx * 0.11f) + (dx != 0 ? 0f : streak * 0.26f), top - (drop * 0.45f), lip.Z - (dy * 0.11f) + (dx != 0 ? streak * 0.26f : 0f)),
+                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                    });
+                }
+            }
+        }
     }
 
     /// <summary>把视图模型的位姿写到相机节点。<b>全仓唯一</b>写相机位置 / 朝向的地方；返回位姿是否变了。</summary>
@@ -267,6 +482,9 @@ public sealed partial class BoardView : Node3D
     /// 一格地砖：h=0 只有一块面砖；h=1 在面砖下垫一层土色侧面；h=2 再垫一层岩灰侧面。
     /// 相邻格高度差越大露出的色带越多（Δh=1 一条土色，Δh=2 土色 + 岩灰），崖壁与缓坡因此可分。
     /// </summary>
+    private static readonly StandardMaterial3D SlopeMaterial = Visuals.Matte(Visuals.SlopeSide);
+    private static readonly StandardMaterial3D CliffMaterial = Visuals.Matte(Visuals.CliffSide);
+
     private static void AddTileStack(Node3D parent, Vector3 top, int level, StandardMaterial3D surface)
     {
         const float half = BoardGeometry.TileHeight * 0.5f;
@@ -276,12 +494,23 @@ public sealed partial class BoardView : Node3D
             float bandTop = BoardGeometry.TopYOf(layer) - BoardGeometry.TileHeight;
             parent.AddChild(new MeshInstance3D
             {
-                Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, bandTop - bandBottom, BoardGeometry.TileSize) },
-                MaterialOverride = Visuals.Matte(layer == 1 ? Visuals.SlopeSide : Visuals.CliffSide),
+                // 侧面色带铺满整格（CellSize）：高台读作一整块实心的土 / 岩，而不是一根根立柱之间透着黑缝。
+                Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, bandTop - bandBottom, BoardGeometry.CellSize) },
+                MaterialOverride = layer == 1 ? SlopeMaterial : CliffMaterial,
                 Position = new Vector3(top.X, (bandTop + bandBottom) * 0.5f, top.Z),
             });
             bandBottom = bandTop;
         }
+
+        // 面砖之下垫一块铺满整格的薄衬底，颜色取面砖压暗：面砖之间那 0.10 的缝露出的就是它——
+        // 网格线仍然清楚（visual-style-baseline「方格边界始终清晰」），但是同色系的细线，不再是黑缝。
+        const float liner = 0.03f;
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, liner, BoardGeometry.CellSize) },
+            MaterialOverride = Visuals.Matte(surface.AlbedoColor.Darkened(0.30f)),
+            Position = top - new Vector3(0f, BoardGeometry.TileHeight - (liner * 0.5f), 0f),
+        });
 
         parent.AddChild(new MeshInstance3D
         {
@@ -303,7 +532,8 @@ public sealed partial class BoardView : Node3D
         {
             Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize) },
             MaterialOverride = material,
-            Position = top - new Vector3(0f, drop + (BoardGeometry.TileHeight * 0.5f), 0f),
+            // 水面比底座顶面高出一丝：两者原本同高，会 z-fight，大片水格闪成底座的颜色。
+            Position = top - new Vector3(0f, drop - 0.008f + (BoardGeometry.TileHeight * 0.5f), 0f),
         });
         StandardMaterial3D ripple = Visuals.Flat(Visuals.WaterRipple);
         for (int i = 0; i < 2; i++)
@@ -313,7 +543,7 @@ public sealed partial class BoardView : Node3D
             {
                 Mesh = new BoxMesh { Size = new Vector3(0.34f, 0.004f, 0.03f) },
                 MaterialOverride = ripple,
-                Position = top + new Vector3(i == 0 ? -0.18f : 0.16f, -drop + 0.002f, z),
+                Position = top + new Vector3(i == 0 ? -0.18f : 0.16f, -drop + 0.011f, z),
             });
         }
 
