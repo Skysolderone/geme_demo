@@ -43,7 +43,7 @@ dotnet run --project src/Siege.Sim -c Release -- play --map siege-frontier-v1
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 最近一次提交（a572877）全绿 **897/897**；工作树含 `frontier-map` 段 A–D 的**全部未提交改动**，在其上 `dotnet test -c Release` **1076/1076**、零警告，套件约 20–45 秒（含 3 局真实跑局的日志保真度测试）。`artisan-terrain-edit` 方案提交（43208d8）及之前已推送；`strict-cli` 归档与第三轮段 O–E 均为本地提交，**未推送** |
+| `main` | 全绿：`dotnet test -c Release` **1076/1076**、零警告；`frontier-map` 段 A–D 已提交并推送（63307d3，change 未归档，待 6.1 人工试玩），套件约 20–45 秒（含 3 局真实跑局的日志保真度测试）。`artisan-terrain-edit` 方案提交（43208d8）及之前已推送；`strict-cli` 归档与第三轮段 O–E 均为本地提交，**未推送** |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）
