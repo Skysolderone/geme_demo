@@ -2,12 +2,25 @@ using System.Collections.Immutable;
 
 namespace Siege.Core.Board;
 
-/// <summary>一条地图校验失败。</summary>
+/// <summary>校验输出项的严重度（frontier-map D2）：拒绝项让地图无法加载；报告项只供人工判断（如边疆档各平台的距离），不影响加载。</summary>
+public enum MapFindingSeverity
+{
+    /// <summary>拒绝加载。缺省值——既有的每一条校验失败都是拒绝项。</summary>
+    Reject = 0,
+
+    /// <summary>只报告，不拒绝。</summary>
+    Report = 1,
+}
+
+/// <summary>一条地图校验输出：拒绝项（缺省）或报告项，见 <see cref="Severity"/>。</summary>
 public readonly record struct MapValidationFailure(
     string Code,
     string Message,
     ImmutableArray<Coord> Coords)
 {
+    /// <summary>严重度，缺省为拒绝。</summary>
+    public MapFindingSeverity Severity { get; init; } = MapFindingSeverity.Reject;
+
     public override string ToString() =>
         Coords.IsDefaultOrEmpty
             ? $"[{Code}] {Message}"
@@ -20,14 +33,27 @@ public readonly record struct BirthZoneDistance(string Name, ImmutableArray<Coor
 /// <summary>地图校验结果。</summary>
 public sealed class MapValidationResult
 {
-    internal MapValidationResult(ImmutableArray<MapValidationFailure> failures) => Failures = failures;
+    internal MapValidationResult(ImmutableArray<MapValidationFailure> findings)
+    {
+        Failures = [.. findings.Where(f => f.Severity == MapFindingSeverity.Reject)];
+        Reports = [.. findings.Where(f => f.Severity == MapFindingSeverity.Report)];
+    }
 
+    /// <summary>拒绝项：任何一条都让地图无法加载。</summary>
     public ImmutableArray<MapValidationFailure> Failures { get; }
+
+    /// <summary>报告项：与拒绝项出自同一次校验，但不影响 <see cref="IsValid"/>。标准档地图没有报告项。</summary>
+    public ImmutableArray<MapValidationFailure> Reports { get; }
 
     public bool IsValid => Failures.IsEmpty;
 
-    public override string ToString() =>
-        IsValid ? "地图校验通过。" : string.Join(Environment.NewLine, Failures);
+    public override string ToString()
+    {
+        string verdict = IsValid ? "地图校验通过。" : string.Join(Environment.NewLine, Failures);
+        return Reports.IsEmpty
+            ? verdict
+            : verdict + Environment.NewLine + "报告项（不影响加载）：" + Environment.NewLine + string.Join(Environment.NewLine, Reports);
+    }
 }
 
 /// <summary>地图校验失败时抛出。</summary>
@@ -49,17 +75,57 @@ public sealed class MapValidationException : Exception
 public static class MapValidator
 {
     /// <summary>
-    /// 人数适配预算：可落子格区间、信物格区间、出生区可落子格区间、据点数区间（scoring-sites：2 人 6–8 / 3 人 9–11 / 4 人 10–14，2 / 3 人为估值）。
-    /// 出生区区间为 <c>null</c> 表示规格未给该人数的区间（2 / 3 人图尚未定稿），此项不校验；
-    /// 与之无关的"容得下 9 枚基础部署"下界对所有人数一律生效。
+    /// 规格档声明表（frontier-map D2）：每个规格档的人数预算与各条分流规则的处理方式，<b>全部</b>写在这一张表里。
+    /// 校验器里对规格档的分支只允许出现在这里——各条规则只读 <see cref="ProfileRules"/> 的字段，不得再写"如果是边疆档"的散落分支
+    /// （守门 <c>规格档分流守门Tests</c>：本文件里规格档枚举的字面量只在本表内、地图的规格档属性只在 <see cref="RulesOf"/> 读一次）。
+    /// <para>
+    /// 人数预算：可落子格区间、信物格区间、出生区数区间、单个出生区可落子格区间、据点数区间。
+    /// 标准档（scoring-sites：据点 2 人 6–8 / 3 人 9–11 / 4 人 10–14，2 / 3 人为估值）出生区数 = 人数；单区区间为 <c>null</c> 表示规格未给该人数的区间
+    /// （2 / 3 人图尚未定稿），此项不校验。边疆档只定 4 人（300–420 / 5–8 区且多于人数 / 单区 20–225 / 信物 14–24 / 据点 12–22，验证版估值）。
+    /// 与规格档无关的"容得下 9 枚基础部署"下界对所有地图一律生效。
+    /// </para>
+    /// 两档共用、不在表里的规则：必死口袋、桥在深水、栅栏在邻格、到中央入口可达、据点 / 信物格合法、保护期容量、目标不可达。
+    /// 旋转对称不在校验器里（<see cref="MapSymmetry"/> 只由标准档基准图的测试调用）。
     /// </summary>
-    private static readonly ImmutableDictionary<int, Budget> Budgets =
-        new Dictionary<int, Budget>
+    private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
+        new Dictionary<MapProfile, ProfileRules>
         {
-            [2] = new(50, 65, 7, 9, null, 6, 8),
-            [3] = new(75, 90, 10, 12, null, 9, 11),
-            [4] = new(95, 110, 13, 15, (12, 14), 10, 14),
+            [MapProfile.Standard] = new(
+                "只提供 2 / 3 / 4 人的预算表",
+                new Dictionary<int, Budget>
+                {
+                    [2] = new(50, 65, 7, 9, (2, 2), null, 6, 8),
+                    [3] = new(75, 90, 10, 12, (3, 3), null, 9, 11),
+                    [4] = new(95, 110, 13, 15, (4, 4), (12, 14), 10, 14),
+                }.ToImmutableDictionary(),
+                ZonesMustExceedPlayers: false,
+                DistanceHandling.RejectOnImbalance),
+            [MapProfile.Frontier] = new(
+                "边疆档验证版只提供 4 人的预算表，2 / 3 人边疆图尚未设计",
+                new Dictionary<int, Budget>
+                {
+                    [4] = new(300, 420, 14, 24, (5, 8), (20, 225), 12, 22),
+                }.ToImmutableDictionary(),
+                ZonesMustExceedPlayers: true,
+                DistanceHandling.AlwaysReport),
         }.ToImmutableDictionary();
+
+    /// <summary>距离均衡（规则第 1 条）的处理方式。目标不可达不在此列——两档都拒绝。</summary>
+    private enum DistanceHandling
+    {
+        /// <summary>极差超容差即拒绝；不超则无输出。</summary>
+        RejectOnImbalance,
+
+        /// <summary>无论极差多少都把各出生区的距离作为报告项给出，不因极差拒绝。</summary>
+        AlwaysReport,
+    }
+
+    /// <summary>一个规格档的全部分流声明。</summary>
+    private sealed record ProfileRules(
+        string SupportedPlayers,
+        ImmutableDictionary<int, Budget> Budgets,
+        bool ZonesMustExceedPlayers,
+        DistanceHandling Distance);
 
     /// <summary>一档人数的规模预算。</summary>
     private readonly record struct Budget(
@@ -67,9 +133,13 @@ public static class MapValidator
         int MaxPlayable,
         int MinRelics,
         int MaxRelics,
+        (int Min, int Max) BirthZones,
         (int Min, int Max)? BirthZoneCells,
         int MinSites,
         int MaxSites);
+
+    /// <summary>全文件唯一读取规格档的地方。未定义的规格档值（只可能来自手工构造）没有声明行，返回 <c>null</c>。</summary>
+    private static ProfileRules? RulesOf(MapData map) => Rules.GetValueOrDefault(map.Profile);
 
     /// <summary>前三大回合单玩家最多 9 枚基础部署，出生区必须容得下。</summary>
     private const int ProtectionPhaseDeployments = 9;
@@ -80,17 +150,32 @@ public static class MapValidator
         ImmutableArray<MapValidationFailure>.Builder f = ImmutableArray.CreateBuilder<MapValidationFailure>();
 
         ValidateStructure(map, f);
+        if (map.Width > Coord.ColumnLetters.Length)
+        {
+            // 超宽地图的第 26 列构造不出坐标：后面的规则一枚举格子就会抛异常，只能到此为止。
+            return new MapValidationResult(f.ToImmutable());
+        }
+
+        if (RulesOf(map) is not { } rules)
+        {
+            f.Add(new MapValidationFailure(
+                "MAP_PROFILE_UNKNOWN", "未知的规格档：只有标准档与边疆档。", ImmutableArray<Coord>.Empty));
+            return new MapValidationResult(f.ToImmutable());
+        }
+
+        Budget? budget = rules.Budgets.TryGetValue(map.MaxPlayers, out Budget found) ? found : null;
+
         ValidateTerrainBounds(map, f);
-        ValidatePlayableCount(map, f);
-        ValidateBudgets(map, f);
-        ValidateBirthZones(map, f);
+        ValidatePlayableCount(map, budget, f);
+        ValidateBudgets(map, rules, budget, f);
+        ValidateBirthZones(map, budget, f);
         ValidateRelicCells(map, f);
-        ValidateSites(map, f);
+        ValidateSites(map, budget, f);
         ValidateLandmarks(map, f);
         ValidateTolerance(map, f);
         ValidatePockets(map, f);
         ValidateBirthZoneConnectivity(map, f);
-        ValidateDistanceBalance(map, f);
+        ValidateDistanceBalance(map, rules.Distance, f);
 
         return new MapValidationResult(f.ToImmutable());
     }
@@ -106,6 +191,14 @@ public static class MapValidator
             f.Add(new MapValidationFailure(
                 "MAP_DIMENSION_INVALID",
                 $"地图外接尺寸必须为正，实际为 {map.Width}×{map.Height}。",
+                ImmutableArray<Coord>.Empty));
+        }
+
+        if (map.Width > Coord.ColumnLetters.Length)
+        {
+            f.Add(new MapValidationFailure(
+                "MAP_TOO_WIDE",
+                $"地图宽 {map.Width} 列，超出坐标记法的 {Coord.ColumnLetters.Length} 列上限（列字母 A–Z 跳过 I）；行数不限。",
                 ImmutableArray<Coord>.Empty));
         }
 
@@ -154,9 +247,9 @@ public static class MapValidator
     /// 单列成一步而不是混在信物 / 出生区预算里——改图时越界是最容易发生、又最难在对局中归因的一类错误
     /// （表现为"密度不对、冲突时点漂移"，而不是任何一条规则报错）。denser-map 裁决 5。
     /// </summary>
-    private static void ValidatePlayableCount(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidatePlayableCount(MapData map, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        if (!Budgets.TryGetValue(map.MaxPlayers, out Budget budget))
+        if (known is not { } budget)
         {
             return;
         }
@@ -171,13 +264,13 @@ public static class MapValidator
         }
     }
 
-    private static void ValidateBudgets(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateBudgets(MapData map, ProfileRules rules, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        if (!Budgets.TryGetValue(map.MaxPlayers, out Budget budget))
+        if (known is not { } budget)
         {
             f.Add(new MapValidationFailure(
                 "UNSUPPORTED_PLAYER_COUNT",
-                $"不支持的人数 {map.MaxPlayers}：只提供 2 / 3 / 4 人的预算表。",
+                $"不支持的人数 {map.MaxPlayers}：{rules.SupportedPlayers}。",
                 ImmutableArray<Coord>.Empty));
             return;
         }
@@ -195,16 +288,36 @@ public static class MapValidator
                 ImmutableArray<Coord>.Empty));
         }
 
-        if (map.BirthZones.Length != map.MaxPlayers)
+        // 规则第 4 条。区间退化成一个数（标准档：= 人数）时沿用原来的报文；否则报区间与方向。
+        int zones = map.BirthZones.Length;
+        (int minZones, int maxZones) = budget.BirthZones;
+        bool outOfRange = zones < minZones || zones > maxZones;
+        if (outOfRange && minZones == maxZones)
         {
             f.Add(new MapValidationFailure(
                 "BIRTH_ZONE_COUNT_MISMATCH",
-                $"出生区数量 {map.BirthZones.Length} 必须等于该地图支持的最大人数 {map.MaxPlayers}。",
+                $"出生区数量 {zones} 必须等于该地图支持的最大人数 {map.MaxPlayers}。",
+                ImmutableArray<Coord>.Empty));
+        }
+        else if (outOfRange)
+        {
+            string direction = zones < minZones ? $"低于下限 {minZones}" : $"高于上限 {maxZones}";
+            f.Add(new MapValidationFailure(
+                "BIRTH_ZONE_COUNT_OUT_OF_RANGE",
+                $"{map.MaxPlayers} 人地图的出生区为 {zones} 个，{direction}，超出 {minZones}–{maxZones} 区间。",
+                ImmutableArray<Coord>.Empty));
+        }
+
+        if (rules.ZonesMustExceedPlayers && zones <= map.MaxPlayers)
+        {
+            f.Add(new MapValidationFailure(
+                "BIRTH_ZONE_COUNT_NOT_ABOVE_PLAYERS",
+                $"出生区数量 {zones} 必须多于该地图支持的最大人数 {map.MaxPlayers}：没人选的平台是中立争夺区。",
                 ImmutableArray<Coord>.Empty));
         }
     }
 
-    private static void ValidateBirthZones(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateBirthZones(MapData map, Budget? budget, ImmutableArray<MapValidationFailure>.Builder f)
     {
         for (int i = 0; i < map.BirthZones.Length; i++)
         {
@@ -226,8 +339,7 @@ public static class MapValidator
             }
 
             // 出生区内可以有障碍或深水，但不得把该区压到区间之外（denser-map：4 人图每区 12–14 格）。
-            if (Budgets.TryGetValue(map.MaxPlayers, out Budget b)
-                && b.BirthZoneCells is { } range
+            if (budget?.BirthZoneCells is { } range
                 && (playable < range.Min || playable > range.Max))
             {
                 f.Add(new MapValidationFailure(
@@ -296,7 +408,7 @@ public static class MapValidator
     /// 校验规则第 8 条：每个据点位于可落子格、标注合法档位、不与信物格重合；据点总数落在人数区间。
     /// 据点与信物完全分离（裁决 D10）：同一格两种价值会让"控制一格"的收益翻倍，且表现层地标互相遮挡。
     /// </summary>
-    private static void ValidateSites(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateSites(MapData map, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
         foreach ((Coord c, SiteTier tier) in map.Sites.OrderBy(kv => kv.Key))
         {
@@ -319,7 +431,7 @@ public static class MapValidator
             }
         }
 
-        if (!Budgets.TryGetValue(map.MaxPlayers, out Budget budget))
+        if (known is not { } budget)
         {
             return;
         }
@@ -501,8 +613,10 @@ public static class MapValidator
     /// <summary>
     /// 距离均衡：各出生区到最近公共信物格、中央入口、主要咽喉、最近篝火与最近石碑的最短落子距离
     /// （沿气边——崖壁、栅栏、未架桥深水挡住的路不算路），两两差值不得超过容差。
+    /// 任一出生区到任一目标不可达：一律拒绝。极差：按 <paramref name="handling"/>——超容差即拒绝，或不论极差多少都把逐区距离作为报告项给出
+    /// （边疆档平台大小与远近本就不等，见规格档声明表）。
     /// </summary>
-    private static void ValidateDistanceBalance(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateDistanceBalance(MapData map, DistanceHandling handling, ImmutableArray<MapValidationFailure>.Builder f)
     {
         if (map.BirthZones.IsDefaultOrEmpty)
         {
@@ -536,9 +650,16 @@ public static class MapValidator
             int[] ds = [.. metric.Distances.Select(d => d!.Value)];
             int min = ds.Min();
             int max = ds.Max();
-            if (max - min > map.DistanceTolerance)
+            string detail = string.Join("，", ds.Select((d, z) => $"{BirthZoneLabel.Of(z)} = {d}"));
+            if (handling == DistanceHandling.AlwaysReport)
             {
-                string detail = string.Join("，", ds.Select((d, z) => $"{BirthZoneLabel.Of(z)} = {d}"));
+                f.Add(new MapValidationFailure(
+                    "BIRTH_ZONE_DISTANCE_REPORT",
+                    $"各出生区到{metric.Name}的最短落子距离：{detail}；极差 {max - min}（只报告，不因极差拒绝）。",
+                    ImmutableArray<Coord>.Empty) { Severity = MapFindingSeverity.Report });
+            }
+            else if (max - min > map.DistanceTolerance)
+            {
                 f.Add(new MapValidationFailure(
                     "DISTANCE_IMBALANCE",
                     $"各出生区到{metric.Name}的最短落子距离失衡（{detail}），"

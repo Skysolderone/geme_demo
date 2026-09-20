@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Siege.Core.Ai;
 using Siege.Core.Board;
@@ -10,9 +11,12 @@ namespace Siege.Sim.Play;
 /// <summary>终端对局：一名人类玩家对若干启发式 AI。</summary>
 internal static class PlayCommand
 {
-    public static int Run(ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, int maxRounds, TextReader input, TextWriter output)
+    /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
+    /// <param name="cellLimit">AI 候选格上限 K；<c>null</c> 按地图的可落子格数自动取（<see cref="AiSearchConfig.ForMap"/>），0 = 不限制。</param>
+    public static int Run(ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, int maxRounds, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null)
     {
-        MapData map = FourPlayerBaseMap.Create();
+        map ??= MapCatalog.Resolve(null);
+        AiSearchConfig search = AiSearchConfig.ForMap(difficulty, map.PlayableCount, cellLimit).Validated();
         if (playerCount < 2 || playerCount > map.MaxPlayers)
         {
             throw new ArgumentException($"人数须在 2..{map.MaxPlayers}。");
@@ -32,6 +36,11 @@ internal static class PlayCommand
 
         output.WriteLine();
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
+        if (map.Id != MapCatalog.DefaultId)
+        {
+            output.WriteLine($"地图 {map.Id}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）");
+        }
+
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI，大回合上限 {(maxRounds == 0 ? "不限" : maxRounds)}");
         output.WriteLine("目标：大回合结束时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
         if (match.DominanceStartRound > 0)
@@ -50,36 +59,18 @@ internal static class PlayCommand
         try
         {
             int zone = ChooseZone(match, me, map, input, output, render);
-            int next = 0;
-            var choices = new List<(PlayerId, int)>();
-            foreach (PlayerId p in players)
-            {
-                if (p == me)
-                {
-                    choices.Add((p, zone));
-                    continue;
-                }
-
-                if (next == zone)
-                {
-                    next++;
-                }
-
-                choices.Add((p, next % map.BirthZones.Length));
-                next++;
-            }
-
-            match.PlantSequentially(choices);
+            // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4）：标准图按编号顺排，平台多于人数的图由种子选区。
+            ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
 
             var runner = new MatchRunner(match);
             foreach (PlayerId p in players)
             {
                 runner.SetController(p, p == me
                     ? new ConsoleController(me, match.Publish, input, output)
-                    : HeuristicAi.Create(match, p, difficulty));
+                    : HeuristicAi.Create(match, p, difficulty, config: search));
             }
 
-            output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Item1, me)}→{BirthZoneLabel.Number(c.Item2)}号区"))}");
+            output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Player, me)}→{BirthZoneLabel.Number(c.Zone)}号区"))}");
             output.WriteLine($"第 1 大回合顺序随机：{string.Join(" > ", match.ActionOrder.Select(p => BoardRenderer.Label(p, me)))}");
 
             while (match.Phase == MatchPhase.InProgress)

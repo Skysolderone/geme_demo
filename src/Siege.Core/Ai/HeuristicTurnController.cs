@@ -70,6 +70,11 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>决策日志（每次弃牌 / 选取 / 部署一行），供可复现性断言与跑局日志。</summary>
     public IReadOnlyList<string> Decisions => _decisions;
 
+    /// <summary>
+    /// 最近一次部署里进入完整"类型 × 改造目标"枚举的格（坐标序）。候选格上限 K 未启用或合法空格不多于 K 时就是全部合法空格。
+    /// </summary>
+    public ImmutableArray<Coord> LastCandidateCells { get; private set; } = [];
+
     /// <summary>最近一次部署的单点排序（前 N）。</summary>
     public ImmutableArray<PointScore> LastPointRanking { get; private set; } = [];
 
@@ -240,6 +245,7 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>
     /// 单点评价：每个合法空格 × 每种持有类型 × 改造选项各预演一次，取总分前 N（同分按坐标、再按类型、再按改造记法）。
+    /// 配置了候选格上限 K 且合法空格多于 K 时，先经 <see cref="PrefilterCells"/> 把"每个合法空格"收窄到 K 格。
     /// </summary>
     /// <remarks>
     /// 改造不新增评估维度（design D-J）：匠人的每个合法改造目标只是多一个候选暂放，
@@ -250,6 +256,12 @@ public sealed class HeuristicTurnController : ITurnController
         BatchContext context = batch.Context;
         ImmutableArray<PieceType> types = [.. context.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order()];
         ImmutableArray<Coord> cells = [.. context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
+        if (Config.CandidateCellLimit > 0 && cells.Length > Config.CandidateCellLimit && !types.IsEmpty)
+        {
+            cells = PrefilterCells(cells, types, batch, rehearse, evaluator);
+        }
+
+        LastCandidateCells = cells;
         var points = new List<PointScore>();
         foreach (Coord cell in cells)
         {
@@ -281,6 +293,70 @@ public sealed class HeuristicTurnController : ITurnController
             .ThenBy(p => p.Type)
             .ThenBy(p => p.Edit?.ToString() ?? string.Empty, StringComparer.Ordinal)
             .Take(Config.CandidatePointCount)];
+    }
+
+    /// <summary>
+    /// 候选格预筛（frontier-map 裁决 12）：用代表类型（持有类型里枚举序最前的一种）、不带改造，对每格预演一次得格分，
+    /// 取前 K 格（同分按坐标序），按坐标序返回。评估函数原样复用；不消费随机流。
+    /// 代表类型在某格落不下（自杀手等）而手里有匠人时，该格退而用匠人逐个合法改造目标预演，格分取其中最高的合法总分。
+    /// </summary>
+    /// <remarks>
+    /// <para>提子点与救命点不另设豁免：提子走"敌方损失"维、补气走"安全"维，两维都与落下的类型无关，代表类型的格分已经把它们排在前面
+    /// （由 <c>候选格上限Tests.小K下仍找到妙手</c> 守门）。</para>
+    /// <para>匠人回退：自杀手判定与类型无关（六种类型在盘面上气的口径相同），不带改造时代表类型落不下的格，别的类型同样落不下；
+    /// 唯一的例外是匠人的改造先于自杀手判定（terrain-edit T-3：搭桥补气、立栅切断敌串）。这类"只有带改造的匠人才落得下"的格
+    /// 不回退就会被预筛整格漏掉。回退只发生在代表类型落不下的格上（通常寥寥数个），开销可忽略；枚举次序即
+    /// <see cref="TerrainEditRules.LegalTargets"/> 的确定性次序。</para>
+    /// <para>仍有的偏差：代表类型落得下的格只按"不带改造"计分，改造带来的额外收益不进格分（那是完整枚举的事）；
+    /// 同形禁则比对的盘面序列化含棋子类型，代表类型因同形被拒而别的类型不被拒的格会漏掉（极罕见，未处理）。</para>
+    /// </remarks>
+    private ImmutableArray<Coord> PrefilterCells(
+        ImmutableArray<Coord> cells, ImmutableArray<PieceType> types, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+    {
+        BatchContext context = batch.Context;
+        PieceType representative = types[0];
+        bool holdsEditor = types.Contains(TerrainEditRules.EditorType);
+        var scored = new List<(Coord Cell, long Total)>();
+
+        long? Score(Coord cell, PieceType type, TerrainEdit? edit)
+        {
+            batch.Clear();
+            if (batch.Stage(cell, type, edit) is not null)
+            {
+                return null;
+            }
+
+            RehearsalResult result = rehearse();
+            return result.IsLegal ? evaluator.Evaluate(batch.Placements, result, context).Total : null;
+        }
+
+        foreach (Coord cell in cells)
+        {
+            long? total = Score(cell, representative, null);
+            if (total is null && holdsEditor)
+            {
+                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell))
+                {
+                    if (Score(cell, TerrainEditRules.EditorType, edit) is { } edited && (total is null || edited > total))
+                    {
+                        total = edited;
+                    }
+                }
+            }
+
+            if (total is { } best)
+            {
+                scored.Add((cell, best));
+            }
+        }
+
+        batch.Clear();
+        return [.. scored
+            .OrderByDescending(s => s.Total)
+            .ThenBy(s => s.Cell)
+            .Take(Config.CandidateCellLimit)
+            .Select(s => s.Cell)
+            .Order()];
     }
 
     /// <summary>

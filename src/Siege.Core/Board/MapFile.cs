@@ -33,6 +33,8 @@ public static class MapFile
             Width = map.Width,
             Height = map.Height,
             MaxPlayers = map.MaxPlayers,
+            // 标准档不写出：四份既有 maps/*.json 逐字节不变；缺字段按标准档读入（frontier-map 1.1）。
+            Profile = map.Profile == MapProfile.Standard ? null : map.Profile,
             Obstacles = Sorted(map.Obstacles),
             BirthZones = [.. map.BirthZones.Select(Sorted)],
             RelicCells = map.RelicCells
@@ -79,6 +81,7 @@ public static class MapFile
             Width = dto.Width,
             Height = dto.Height,
             MaxPlayers = dto.MaxPlayers,
+            Profile = ParseProfile(dto.Profile),
             Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
             RelicCells = relicCells.ToImmutableDictionary(
@@ -99,6 +102,15 @@ public static class MapFile
                 kv => Coord.Parse(kv.Key), kv => kv.Value),
             TerrainData = ParseTerrain(dto),
         };
+    }
+
+    /// <summary>规格档缺省为标准档；写成数字且不是已定义的档位时响亮失败（字符串形式的未知值由 JSON 反序列化直接拒绝）。</summary>
+    private static MapProfile ParseProfile(MapProfile? profile)
+    {
+        MapProfile value = profile ?? MapProfile.Standard;
+        return Enum.IsDefined(value)
+            ? value
+            : throw new FormatException($"地图文件的 Profile 为 {(int)value}：规格档只能是 Standard（标准）/ Frontier（边疆）。");
     }
 
     /// <summary>
@@ -248,6 +260,10 @@ public static class MapFile
         public int Height { get; set; }
 
         public int MaxPlayers { get; set; }
+
+        /// <summary>规格档（Standard 标准 / Frontier 边疆）。省略即标准档；标准档写出时也省略。</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public MapProfile? Profile { get; set; }
 
         public List<string> Obstacles { get; set; } = [];
 

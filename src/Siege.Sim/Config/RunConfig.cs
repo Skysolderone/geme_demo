@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Scoring;
 
@@ -43,7 +44,7 @@ public sealed record RunConfig
     public const int DefaultMaxTurns = 1_000;
 
     /// <summary>地图标识或地图 JSON 文件路径。</summary>
-    public string MapId { get; init; } = "siege-4p-base-v4";
+    public string MapId { get; init; } = MapCatalog.DefaultId;
 
     /// <summary>各玩家配置；玩家编号即下标（P0、P1……），插旗时 P<i>i</i> 锁定出生区 <i>i</i>。</summary>
     public List<PlayerAiConfig> Players { get; init; } = [new(), new(), new(), new()];
@@ -77,6 +78,13 @@ public sealed record RunConfig
     /// 其余五种类型的基础权重不随它变化。
     /// </summary>
     public int ArtisanWeight { get; init; } = MatchOptions.DefaultArtisanWeight;
+
+    /// <summary>
+    /// AI 候选格上限 K（<see cref="AiSearchConfig.CandidateCellLimit"/>，frontier-map 裁决 12）：<c>null</c> = 按地图的可落子格数自动取
+    /// （<see cref="AiSearchConfig.DefaultCellLimitFor"/>：大图取缺省 K，其余 0）；0 = 不限制；大于 0 = 显式上限。
+    /// 只作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家——显式的剪枝参数原样生效。命令行 <c>--cell-limit</c>。
+    /// </summary>
+    public int? CandidateCellLimit { get; init; }
 
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
@@ -138,6 +146,11 @@ public sealed record RunConfig
             throw new ArgumentException("匠人征募权重须为非负整数（0 = 匠人不进池）。");
         }
 
+        if (CandidateCellLimit < 0)
+        {
+            throw new ArgumentException("候选格上限须为非负整数（0 = 不限制）。");
+        }
+
         if (FullEventSamplePermille is < 0 or > 1000)
         {
             throw new ArgumentException("抽样千分比须在 0..1000。");
@@ -167,6 +180,18 @@ public sealed record RunConfig
     /// </summary>
     public RunConfig Effective() =>
         this with { Players = [.. Players.Select(p => p with { Weights = p.Weights ?? EvaluationWeights.Default })] };
+
+    /// <summary>
+    /// 把"按地图自动"的候选格上限落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K。
+    /// 已显式配置、或自动值为 0（小图）时原样返回——标准图上的配置记录与日志首部与引入本项之前逐字节相同。幂等。
+    /// </summary>
+    public RunConfig ResolvedFor(MapData map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return CandidateCellLimit is null && AiSearchConfig.DefaultCellLimitFor(map.PlayableCount) is > 0 and int auto
+            ? this with { CandidateCellLimit = auto }
+            : this;
+    }
 
     /// <summary>解析 <c>营帐/篝火/石碑</c> 形式的据点分值（如 <c>3/8/24</c>），并做 <see cref="SiteValues.Validated"/> 校验。</summary>
     public static SiteValues ParseSiteValues(string text)

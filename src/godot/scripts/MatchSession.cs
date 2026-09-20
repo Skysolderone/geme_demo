@@ -24,12 +24,14 @@ public sealed class MatchSession
     private readonly Dictionary<int, PlayerId> _zoneOwners = [];
     private MatchRunner? _runner;
 
-    private MatchSession(MatchFlow match, PlayerId me, ulong seed, AiDifficulty difficulty)
+    private MatchSession(MatchFlow match, PlayerId me, ulong seed, AiDifficulty difficulty, int? cellLimit)
     {
         Match = match;
         Me = me;
         Seed = seed;
         Difficulty = difficulty;
+        // AI 候选格上限：未显式给出时按地图的可落子格数取（阈值逻辑在 Core，与批量 / 终端版共用）。
+        Search = AiSearchConfig.ForMap(difficulty, match.Map.PlayableCount, cellLimit).Validated();
         World = BuildWorld();
     }
 
@@ -44,6 +46,9 @@ public sealed class MatchSession
 
     /// <summary>AI 难度。</summary>
     public AiDifficulty Difficulty { get; }
+
+    /// <summary>AI 的剪枝参数（含候选格上限 K）。</summary>
+    public AiSearchConfig Search { get; }
 
     /// <summary>当前观察者世界。每次状态变化后整体重建，两份快照必然同一时刻。</summary>
     public ViewerWorld World { get; private set; }
@@ -75,19 +80,21 @@ public sealed class MatchSession
     /// <summary>本回合暂放的落点。</summary>
     public ImmutableArray<Placement> Staged => Match.CurrentBatch?.Placements ?? [];
 
-    /// <summary>开一局：四方标准地图，本机玩家坐第 <paramref name="seat"/> 位（1 起）。</summary>
-    public static MatchSession Create(ulong seed, int playerCount, int seat, AiDifficulty difficulty, int maxRounds)
+    /// <summary>开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（缺省四方标准地图），本机玩家坐第 <paramref name="seat"/> 位（1 起）。</summary>
+    public static MatchSession Create(MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int maxRounds, int? cellLimit = null)
     {
-        MapData map = FourPlayerBaseMap.Create();
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = maxRounds });
-        return new MatchSession(match, players[seat - 1], seed, difficulty);
+        return new MatchSession(match, players[seat - 1], seed, difficulty, cellLimit);
     }
 
     /// <summary>某格属于哪个出生区；不是出生区格为 <c>null</c>。</summary>
     public int? BirthZoneAt(Coord coord) => Match.Map.BirthZoneOf(coord);
 
-    /// <summary>插旗：本机玩家选定出生区，其余玩家依次占用剩下的区，随后锁定并开始第 1 大回合。</summary>
+    /// <summary>
+    /// 插旗：本机玩家选定出生区，其余玩家的区由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：
+    /// 标准图按编号顺排，平台多于人数的图由种子选区），随后锁定并开始第 1 大回合。
+    /// </summary>
     public void ChooseZone(int zone)
     {
         if (!AwaitingZone)
@@ -95,27 +102,7 @@ public sealed class MatchSession
             return;
         }
 
-        int zoneCount = Match.Map.BirthZones.Length;
-        var choices = new List<(PlayerId Player, int Zone)>();
-        int next = 0;
-        foreach (PlayerId player in Match.Players)
-        {
-            if (player == Me)
-            {
-                choices.Add((player, zone));
-                continue;
-            }
-
-            if (next == zone)
-            {
-                next++;
-            }
-
-            choices.Add((player, next % zoneCount));
-            next++;
-        }
-
-        Match.PlantSequentially(choices);
+        ImmutableArray<(PlayerId Player, int Zone)> choices = Match.PlantPrototype((Me, zone));
         foreach ((PlayerId player, int chosen) in choices)
         {
             _zoneOwners.TryAdd(chosen, player);
@@ -124,7 +111,7 @@ public sealed class MatchSession
         _runner = new MatchRunner(Match);
         foreach (PlayerId player in Match.Players.Where(p => p != Me))
         {
-            _runner.SetController(player, HeuristicAi.Create(Match, player, Difficulty));
+            _runner.SetController(player, HeuristicAi.Create(Match, player, Difficulty, config: Search));
         }
 
         Notice = $"出生区锁定。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";

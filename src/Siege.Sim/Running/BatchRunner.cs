@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 
@@ -81,12 +82,16 @@ public static class BatchRunner
     public static BatchSummary ExecuteToDirectory(RunConfig config, string outputDir, int parallelism, TextWriter? progress = null)
     {
         ArgumentNullException.ThrowIfNull(config);
+        // 先解析地图再建输出目录：未知地图标识要在写出任何东西之前报错（strict-cli D4：半份输出比没有输出更糟）。
+        MapData map = MapCatalog.Resolve(config.MapId);
+        // 候选格上限先按地图落成具体值，config.json 记录的就是实际生效的 K（小图上原样不变）。
+        config = config.ResolvedFor(map);
         Directory.CreateDirectory(outputDir);
         File.WriteAllText(Path.Combine(outputDir, "config.json"), config.Effective().ToJson());
         var wall = Stopwatch.StartNew();
         int done = 0;
         object gate = new();
-        List<MatchLog> logs = Execute(config, parallelism, onCompleted: log =>
+        List<MatchLog> logs = Execute(config, parallelism, map, onCompleted: log =>
         {
             log.WriteTo(outputDir, config.Compress);
             int n = Interlocked.Increment(ref done);

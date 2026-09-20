@@ -7,6 +7,7 @@ using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Relics;
 using Siege.Core.Scoring;
+using Siege.Presentation.Camera;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Style;
@@ -57,9 +58,16 @@ public sealed partial class BoardView : Node3D
     private string _terrainKey = string.Empty;
     private int _width;
     private int _height;
+    private CameraPose? _appliedPose;
 
-    /// <summary>固定倾斜俯视镜头（俯角 60 度）。</summary>
+    /// <summary>倾斜俯视镜头节点（俯角恒为 60 度）。位姿只由 <see cref="ApplyCameraPose"/> 写入，取自 <see cref="Rig"/>。</summary>
     public Camera3D Camera { get; private set; } = null!;
+
+    /// <summary>
+    /// 相机视图模型（viewport-camera D6）：注视点 / 距离 / 夹取的纯计算都在 Presentation。
+    /// 跨 <see cref="Build"/> 保留——插旗锁定与地形改造都会重搭场景，玩家推到哪、缩到多大不能因此复位。
+    /// </summary>
+    public BoardCamera Rig { get; private set; } = null!;
 
     /// <summary>某可落子格的层数（视图模型的高度）；不可落子格（岩石、未架桥深水）或盘外为 <c>null</c>。供分层拾取使用。</summary>
     public int? LevelOf(Coord coord) => _levels.TryGetValue(coord, out int level) ? level : null;
@@ -100,8 +108,16 @@ public sealed partial class BoardView : Node3D
         AddChild(tiles);
 
         int variant = 0;
+        float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
         foreach (BoardCellView cell in board.Cells)
         {
+            // 地图外接矩形由格心推出（格心只有 BoardGeometry.Center 一份映射），供相机夹取用。
+            Vector3 flat = BoardGeometry.Center(cell.Coord, _width, _height);
+            minX = Math.Min(minX, flat.X);
+            maxX = Math.Max(maxX, flat.X);
+            minZ = Math.Min(minZ, flat.Z);
+            maxZ = Math.Max(maxZ, flat.Z);
+
             bool playable = cell.Terrain == Terrain.Playable;
             if (playable)
             {
@@ -141,9 +157,10 @@ public sealed partial class BoardView : Node3D
             }
             else if (cell.BirthZone is int zone)
             {
-                // 插旗阶段还没有归属，先用统一的出生区高亮让玩家看得见可点的区域；锁定后改染该阵营主色。
-                color = zoneOwners.TryGetValue(zone, out PlayerId owner)
-                    ? color.Lerp(Visuals.FactionColorOf(owner), 0.34f)
+                // 插旗阶段还没有归属，先用统一的出生区高亮让玩家看得见可点的区域；锁定后有主的平台改染该阵营主色，
+                // 没人选的平台（平台数 > 人数的地图，frontier-map D9）褪成中性色——区号独立于玩家色，几个平台都一样处理。
+                color = zoneOwners.TryGetValue(zone, out PlayerId owner) ? color.Lerp(Visuals.FactionColorOf(owner), 0.34f)
+                    : zoneOwners.Count > 0 ? color.Lerp(Visuals.Neutral, 0.34f)
                     : color.Lerp(Visuals.BirthHint, 0.62f);
             }
 
@@ -212,20 +229,38 @@ public sealed partial class BoardView : Node3D
         };
         AddChild(_environment);
 
-        // 固定俯视相机：俯角取 60°。h=2 高台（0.70 高）在这个角度下向远处只投 0.70 / tan 60° ≈ 0.40 格的遮挡，
-        // 小于半格——紧贴崖壁身后的 h=0 格格心仍露出来，能被点到（--pick-check 钉住）；45° 时会被挡住。
-        // 崖壁侧面在 60° 下仍有 cos 60° = 0.5 的投影高度，看得见。距离随棋盘（含标注外圈）的跨度缩放。
-        const float pitchDegrees = 60f;
-        float span = Math.Max(_width, _height) + (2f * BoardGeometry.FarLabelMargin);
-        float distance = 14.6f * span / 12.7f;
-        Vector3 target = new(0f, 0.2f, 0.3f);
-        Camera = new Camera3D
+        // 俯视相机：俯角恒为 60°。h=2 高台（0.70 高）在这个角度下向远处只投 0.70 / tan 60° ≈ 0.40 格的遮挡，
+        // 小于半格——紧贴崖壁身后的 h=0 格格心仍露出来，能被点到（--pick-check 多位姿钉住）；45° 时会被挡住。
+        // 崖壁侧面在 60° 下仍有 cos 60° = 0.5 的投影高度，看得见。位姿（注视点、距离）全部来自视图模型：
+        // 一屏看全的地图（v4）在最远缩放下两方向锁中线，与引入推屏之前的固定相机逐位相同。
+        float outer = (0.5f * BoardGeometry.CellSize) + BoardGeometry.FarLabelMargin;
+        var bounds = new PlaneRect(minX - outer, minZ - outer, maxX + outer, maxZ + outer);
+        if (Rig is null || Rig.Bounds != bounds)
         {
-            Position = target + new Vector3(0f, distance * Mathf.Sin(Mathf.DegToRad(pitchDegrees)), distance * Mathf.Cos(Mathf.DegToRad(pitchDegrees))),
-            Fov = 54f,
-        };
+            Rig = new BoardCamera(bounds);
+        }
+
+        Camera = new Camera3D { Fov = CameraPose.FovDegrees };
         AddChild(Camera);
-        Camera.LookAt(target, Vector3.Up);
+        ApplyCameraPose();
+    }
+
+    /// <summary>把视图模型的位姿写到相机节点。<b>全仓唯一</b>写相机位置 / 朝向的地方；返回位姿是否变了。</summary>
+    public bool ApplyCameraPose()
+    {
+        CameraPose pose = Rig.Pose;
+        bool changed = pose != _appliedPose;
+        _appliedPose = pose;
+        Camera.Position = new Vector3(pose.Eye.X, pose.Eye.Y, pose.Eye.Z);
+        Camera.LookAt(new Vector3(pose.Target.X, pose.Target.Y, pose.Target.Z), Vector3.Up);
+        return changed;
+    }
+
+    /// <summary>某格格心在棋盘平面上的 (x, z)：相机回家目标用。仍是 <see cref="BoardGeometry.Center(Coord, int, int)"/> 那一份映射。</summary>
+    public (float X, float Z) PlaneCenterOf(Coord coord)
+    {
+        Vector3 center = BoardGeometry.Center(coord, _width, _height);
+        return (center.X, center.Z);
     }
 
     /// <summary>

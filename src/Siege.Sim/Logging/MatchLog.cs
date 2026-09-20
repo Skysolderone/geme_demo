@@ -215,6 +215,14 @@ public sealed record LogHeader
     /// </summary>
     public int? PlayableCells { get; init; }
 
+    /// <summary>
+    /// 本局地图的出生区（平台）数（frontier-map 3.5）。取自对局本身：边疆档区数多于人数，没人选的平台不会出现在 <see cref="Zones"/> 里，
+    /// 各区胜率报告要靠它固定行数（6 号台整批没人选也要有一行"被选 0 次"）。
+    /// frontier-map 之前的旧日志没有该字段（<c>null</c>）：分析端回填成"被选到过的最大区号 + 1"。这里回填是安全的——
+    /// 旧日志全部来自区数 = 人数的标准档图，每个区必被选到，回填值就是真值；与本文件其余"MUST NOT 回填"的字段不同，它不会造出假样本。
+    /// </summary>
+    public int? ZoneCount { get; init; }
+
     /// <summary>种子，十六进制（<c>GameSeed.ToString</c>）。</summary>
     public required string Seed { get; init; }
 

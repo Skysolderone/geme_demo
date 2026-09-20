@@ -52,12 +52,12 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限>]");
-        Console.WriteLine("  Siege.Sim map");
+        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>]");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限，0=不限>]");
         Console.WriteLine("                [--dominance-start <碾压起始大回合，0=关闭，默认 7>] [--no-catch-up（关闭落后者征募补偿，默认开启）]");
-        Console.WriteLine("                [--site-values <营帐/篝火/石碑，默认 5/15/45>] [--artisan-weight <匠人征募权重，默认 10>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
+        Console.WriteLine("                [--site-values <营帐/篝火/石碑，默认 5/15/45>] [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
@@ -74,17 +74,24 @@ public static class Program
         int players = cli.GetInt("players", 4);
         int seat = cli.GetInt("seat", 1);
         int maxRounds = cli.GetInt("max-rounds", Core.Match.MatchOptions.DefaultMaxMajorRounds);
+        string? mapId = cli.GetOrNull("map");
+        int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
-        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, maxRounds, Console.In, Console.Out);
+        MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
+        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, maxRounds, Console.In, Console.Out, map, cellLimit);
     }
 
     // ---------- map ----------
 
-    /// <summary>地图工具：打印 4 人基准地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 据点 / 出生区与距离表）并导出 maps/&lt;id&gt;.json（权威地图文件）。</summary>
+    /// <summary>
+    /// 地图工具：打印一张地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 据点 / 出生区与距离表、校验结果与报告项）；
+    /// 内置图另导出 maps/&lt;id&gt;.json（权威地图文件）。<c>--map</c> 缺省为缺省地图；给地图文件路径时只打印不导出（不回写设计师的文件）。
+    /// </summary>
     private static int ExportMap(CommandLine cli)
     {
-        cli.EnsureRecognized();   // map 不认任何选项；结算在导出 maps/ 之前（strict-cli 2.4）
-        MapData map = FourPlayerBaseMap.Create();
+        string? mapId = cli.GetOrNull("map");
+        cli.EnsureRecognized();   // map 只认 --map；结算在导出 maps/ 之前（strict-cli 2.4）
+        MapData map = MapCatalog.Resolve(mapId);
         MapValidationResult result = MapValidator.Validate(map);
         TerrainData terrain = map.TerrainData;
         Coord[] all = [.. map.AllCoords()];
@@ -109,7 +116,7 @@ public static class Program
             Console.WriteLine($"  {tier switch { SiteTier.Tent => "营帐", SiteTier.Campfire => "篝火", _ => "石碑" }}（{Siege.Sim.Play.BoardRenderer.SiteLetter(tier)}） {string.Join(" ", map.Sites.Where(s => s.Value == tier).Select(s => s.Key).Order())}");
         }
 
-        Console.WriteLine("各出生区沿气边最短距离（出生区 1/2/3/4）：");
+        Console.WriteLine($"各出生区沿气边最短距离（出生区 {string.Join("/", Enumerable.Range(0, map.BirthZones.Length).Select(BirthZoneLabel.Number))}）：");
         foreach (BirthZoneDistance metric in MapValidator.DistanceTable(map))
         {
             Console.WriteLine($"  {metric.Name}  {string.Join("/", metric.Distances.Select(d => d?.ToString() ?? "-"))}");
@@ -153,8 +160,16 @@ public static class Program
 
         Console.WriteLine();
         Console.WriteLine();
-        Console.WriteLine("每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-4 出生区  r 出生区信物  o 公共信物  R 公共高档信物  T 营帐  C 篝火  S 石碑");
-        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物、据点或桥同格时显示信物 / 据点 / 桥的标记；入口 G7 是高档信物 R、四座桥即咽喉 =；据点不与信物重合）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
+        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区  r 出生区信物  o 公共信物  R 公共高档信物  T 营帐  C 篝火  S 石碑");
+        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物、据点或桥同格时显示信物 / 据点 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =；据点不与信物重合）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
+
+        // 只导出"按内置标识请求"的图。判据是请求的标识而不是读到的 map.Id：设计师拿一份 v4 的副本改了地形、Id 没改，
+        // `map --map 副本.json` 只是想看一眼，不得因此覆盖 maps/ 里的权威文件。
+        string requested = string.IsNullOrWhiteSpace(mapId) ? MapCatalog.DefaultId : mapId.Trim();
+        if (!MapCatalog.BuiltinIds.Contains(requested))
+        {
+            return 0;
+        }
 
         // 导出地图文件，供设计师脱离代码维护
         Directory.CreateDirectory("maps");
@@ -216,6 +231,7 @@ public static class Program
             CatchUpRecruit = !cli.Flag("no-catch-up") && config.CatchUpRecruit,
             SiteValues = cli.GetOrNull("site-values") is { } siteValues ? RunConfig.ParseSiteValues(siteValues) : config.SiteValues,
             ArtisanWeight = cli.GetInt("artisan-weight", config.ArtisanWeight),
+            CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,

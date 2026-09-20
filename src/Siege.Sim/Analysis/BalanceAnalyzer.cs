@@ -80,7 +80,15 @@ public sealed record TargetsSection(
     Deviation EndRound,
     Deviation MatchMinutes,
     double MeanAiMsPerMatch,
-    Deviation LeaderWinRate);
+    Deviation LeaderWinRate,
+    AiStepTiming AiStep);
+
+/// <summary>
+/// AI 单步决策耗时（frontier-map 3.5）。"单步" = 一个小回合：控制者在其中整理手牌、征募、并一次性决定整批部署，是 AI 对外可观察的最小决策单位。
+/// 取自 <see cref="TurnSnapshot.ElapsedMs"/>（墙钟，只记录、不参与任何决定、不进确定性文本）；没有耗时的快照（确定性文本读回的日志）不计入。
+/// 并行跑局会把墙钟撑大，量耗时的批次应当 <c>--serial</c>。
+/// </summary>
+public sealed record AiStepTiming(int Samples, double MeanMs, long MaxMs);
 
 /// <summary>第 3 大回合领先者（裁决 3 双口径）。</summary>
 public sealed record LeaderSection(
@@ -125,9 +133,12 @@ public sealed record PieceShare(string Type, long Stones, double StoneShare, lon
 /// </summary>
 public sealed record PieceShareSection(int Matches, int Skipped, long TotalStones, long TotalPower, List<PieceShare> Pieces);
 
-public sealed record ZoneStat(int Zone, Proportion WinRate, bool Significant);
+/// <param name="Picks">该区被选次数（= 胜率的分母）。出生区多于玩家的图上单列：没人选的平台是 0 次，不是缺行。</param>
+public sealed record ZoneStat(int Zone, Proportion WinRate, bool Significant, int Picks);
 
+/// <param name="ZoneCount">地图出生区数：取日志首部 <see cref="LogHeader.ZoneCount"/>；旧日志无该字段时回填为被选到过的最大区号 + 1。</param>
 public sealed record BirthZoneSection(
+    int ZoneCount,
     double Baseline,
     List<ZoneStat> All,
     List<ZoneStat> RelicsConverged,
@@ -691,6 +702,7 @@ public static class BalanceAnalyzer
         long totalRounds = 0;
         var roundMs = new List<double>();
         var matchMs = new List<double>();
+        var stepMs = new List<long>();
 
         foreach (MatchLog log in logs)
         {
@@ -759,6 +771,7 @@ public static class BalanceAnalyzer
                 endRounds[r.MajorRound] = endRounds.TryGetValue(r.MajorRound, out int n) ? n + 1 : 1;
             }
 
+            stepMs.AddRange(log.Turns.Where(turn => turn.ElapsedMs is not null).Select(turn => turn.ElapsedMs!.Value));
             totalTurns += r.TurnCount;
             totalRounds += r.MajorRound;
             if (r.MajorRoundMs is { } ms)
@@ -798,7 +811,8 @@ public static class BalanceAnalyzer
             Statistics.Assess(endMean, 7, 10, " 大回合"),
             Statistics.Unmeasurable(20, 30, " 分钟"),
             Statistics.Mean(matchMs),
-            Statistics.Assess(leader.AnyOfGroupWins.IsEmpty ? double.NaN : leader.AnyOfGroupWins.Value * 100, 0, 50, "%"));
+            Statistics.Assess(leader.AnyOfGroupWins.IsEmpty ? double.NaN : leader.AnyOfGroupWins.Value * 100, 0, 50, "%"),
+            new AiStepTiming(stepMs.Count, Statistics.Mean(stepMs.Select(v => (double)v)), stepMs.Count == 0 ? 0 : stepMs.Max()));
     }
 
     private static double Median(SortedDictionary<int, int> histogram) =>
@@ -1169,11 +1183,16 @@ public static class BalanceAnalyzer
 
     private static BirthZoneSection BirthZones(List<MatchLog> logs)
     {
-        int zones = logs.Count == 0 ? 0 : logs.Max(l => l.Header.Zones.Count == 0 ? 0 : l.Header.Zones.Max() + 1);
-        double baseline = zones == 0 ? double.NaN : 1.0 / Math.Max(zones, logs[0].Header.Players.Count);
+        // 行数 = 地图出生区数，取自日志首部；旧日志（frontier-map 之前）无该字段，回填为被选到过的最大区号 + 1（标准档上即真值）。
+        // 首部区数与被选区号取较大者：首部偏小（手改日志 / 混批）时不得把越界区的样本静默丢掉。
+        int zones = logs.Count == 0 ? 0 : logs.Max(l => Math.Max(l.Header.ZoneCount ?? 0, l.Header.Zones.Count == 0 ? 0 : l.Header.Zones.Max() + 1));
+        // 基线 = 1 / 参赛人数：各区胜率的分母是"该区被选中的局数"，被选中的区上那名玩家的期望胜率是 1/人数，与地图有几个区无关。
+        // 出生区多于玩家的图（边疆档 6 区 4 人）若按 1/区数 = 1/6 取基线，公平的 25% 会被系统性判成"显著偏高"（frontier-map 2.4）。
+        double baseline = zones == 0 ? double.NaN : 1.0 / logs[0].Header.Players.Count;
         List<MatchLog> converged = [.. logs.Where(l => l.Header.RelicsConverged)];
         List<MatchLog> notConverged = [.. logs.Where(l => !l.Header.RelicsConverged)];
         return new BirthZoneSection(
+            zones,
             baseline,
             ZoneStats(logs, zones, baseline),
             ZoneStats(converged, zones, baseline),
@@ -1207,7 +1226,7 @@ public static class BalanceAnalyzer
         return [.. Enumerable.Range(0, zones).Select(z =>
         {
             Proportion rate = Statistics.Wilson(wins[z], samples[z]);
-            return new ZoneStat(z, rate, rate.Excludes(baseline));
+            return new ZoneStat(z, rate, rate.Excludes(baseline), samples[z]);
         })];
     }
 

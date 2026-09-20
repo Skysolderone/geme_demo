@@ -21,8 +21,14 @@ public sealed record MapData
     /// <summary>外接高度（行数）。</summary>
     public required int Height { get; init; }
 
-    /// <summary>该地图支持的最大人数。出生区数量 MUST 与之相等。</summary>
+    /// <summary>该地图支持的最大人数。标准档出生区数量 MUST 与之相等；边疆档出生区（平台）数 MUST 多于它。</summary>
     public required int MaxPlayers { get; init; }
+
+    /// <summary>
+    /// 规格档，缺省 <see cref="MapProfile.Standard"/>（旧地图与既有测试不必显式给出）。只供 <see cref="MapValidator"/> 选预算表与校验处理方式，
+    /// 对局规则不读它（frontier-map D1）。
+    /// </summary>
+    public MapProfile Profile { get; init; } = MapProfile.Standard;
 
     /// <summary>障碍格：岩石等不可通行地块。</summary>
     public required ImmutableHashSet<Coord> Obstacles { get; init; }

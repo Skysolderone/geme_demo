@@ -9,6 +9,7 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>规格：simulation-harness —— Requirement: 批量跑局</summary>
+[Collection(ConsoleRedirect.Collection)]   // 与其他重定向 Console.Error 的测试类串行（见 ConsoleRedirect）
 public class 批量跑局Tests
 {
     [Fact]

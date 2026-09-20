@@ -41,6 +41,7 @@ public sealed partial class Hud : CanvasLayer
     private VBoxContainer _centerBody = null!;
     private PanelContainer _centerPanel = null!;
     private Label _notice = null!;
+    private Label _hoverReadout = null!;
 
     /// <summary>点选手牌类型（决定下一次点格子放什么）。</summary>
     public event Action<PieceType>? HandTypeSelected;
@@ -97,7 +98,18 @@ public sealed partial class Hud : CanvasLayer
         // 通知条放在顶部顺序条之下：13×13 + 60° 相机下棋盘近边的行 / 列标注已经贴到底部 HUD 上沿，放底部会压住近边字母。
         Ui.Anchor(_notice, 0.5f, 0f, -420f, 66f, 420f, 90f);
         _root.AddChild(_notice);
+
+        // 悬停格坐标读数（viewport-camera）：固定在回合横幅右侧。需要推屏的地图上四边标注经常不在画面内，读坐标靠它。
+        _hoverReadout = Ui.Text(string.Empty, Ui.InfoText, UiTheme.BodyFontPx + 2);
+        Ui.Anchor(_hoverReadout, 0f, 0f, 334f, 28f, 470f, 54f);
+        _root.AddChild(_hoverReadout);
     }
+
+    /// <summary>插旗提示里是否带一行推屏说明：只在一屏看不全的地图上显示（一屏看全的 v4 上插旗画面保持原样）。</summary>
+    public bool CameraHintVisible { get; set; }
+
+    /// <summary>悬停格坐标读数。文本由 Presentation 的 <c>HoverReadout</c> 给出（即 <c>Coord</c> 的记法），本类不拼坐标；空串即不显示。</summary>
+    public void SetHoverReadout(string text) => _hoverReadout.Text = text;
 
     private void BuildTurnBanner()
     {
@@ -532,6 +544,10 @@ public sealed partial class Hud : CanvasLayer
             _centerBody.AddChild(Ui.Heading("开局插旗"));
             _centerBody.AddChild(Ui.Text("点棋盘上任意一块染色的出生区地砖，即可把旗插在那一区。", Ui.InfoText, wrap: true));
             _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的出生区落子（构筑保护期）。", Ui.MutedText, wrap: true));
+            if (CameraHintVisible)
+            {
+                _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));
+            }
             _centerPanel.Visible = true;
             return;
         }

@@ -37,6 +37,9 @@ namespace Siege.Core.Board.Maps;
 /// </remarks>
 public static class FourPlayerBaseMap
 {
+    /// <summary>地图标识，也是各入口的缺省地图（<see cref="MapCatalog.DefaultId"/>）。</summary>
+    public const string Id = "siege-4p-base-v4";
+
     private const int Size = 13;
 
     /// <summary>出生区 0（左下角）：<c>A1–D4</c> 的 4×4 减去角上的岩石 <c>A1</c> 与护城河转角 <c>C4 D4</c>，13 格全部 h=2。</summary>
@@ -163,7 +166,7 @@ public static class FourPlayerBaseMap
 
         return new MapData
         {
-            Id = "siege-4p-base-v4",
+            Id = FourPlayerBaseMap.Id,
             Width = Size,
             Height = Size,
             MaxPlayers = 4,

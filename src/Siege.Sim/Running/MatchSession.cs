@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
@@ -43,10 +44,12 @@ public sealed class MatchSession
     private int _editCursor;
     private bool _finished;
 
-    private MatchSession(MatchFlow match, RunConfig config)
+    private MatchSession(MatchFlow match, RunConfig config, bool recorded = false)
     {
         Match = match ?? throw new ArgumentNullException(nameof(match));
         Config = (config ?? throw new ArgumentNullException(nameof(config))).Validated();
+        // 回放（recorded）：首部配置里没有候选格上限 = 这局当时就是不限制（小图省略，或该项出现之前的旧日志），MUST NOT 再按地图自动取。
+        CellLimit = Config.CandidateCellLimit ?? (recorded ? 0 : AiSearchConfig.DefaultCellLimitFor(match.Map.PlayableCount));
         if (match.Phase != MatchPhase.InProgress)
         {
             throw new SiegeRuleException("会话要求对局已完成插旗并处于进行中。");
@@ -102,6 +105,9 @@ public sealed class MatchSession
 
     public RunConfig Config { get; }
 
+    /// <summary>本局未显式配置剪枝参数的 AI 实际生效的候选格上限 K（0 = 不限制）。</summary>
+    public int CellLimit { get; }
+
     public GameSeed Seed { get; }
 
     /// <summary>已完成的小回合数。</summary>
@@ -109,17 +115,29 @@ public sealed class MatchSession
 
     // ---------- 建局 ----------
 
-    /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、P<i>i</i> 插旗到出生区 <i>i</i>。</summary>
-    public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null)
+    /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
+    public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null) => Create(config, seed, map, recorded: false);
+
+    /// <summary>
+    /// <paramref name="recorded"/> 为 <c>true</c> 即按日志首部的配置原样重建（回放）：不把候选格上限按地图落成缺省值，
+    /// 首部没有该项就是不限制——否则该项出现之前的大图旧日志会被按新缺省 K 重跑而中途分歧，重建出的首部也会多出一项。
+    /// </summary>
+    internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded)
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
         map ??= MapCatalog.Resolve(config.MapId);
+        if (!recorded)
+        {
+            config = config.ResolvedFor(map);
+        }
+
         PlayerId[] players = config.PlayerIds();
         // round-cap D3：大回合上限是对局配置，跑局层只把 --max-rounds 透传进去。
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound, CatchUpRecruit = config.CatchUpRecruit, SiteValues = config.SiteValues, ArtisanWeight = config.ArtisanWeight });
-        match.PlantSequentially(players.Select((p, i) => (p, i % map.BirthZones.Length)));
-        return new MatchSession(match, config);
+        // 选区的唯一实现在 Core（frontier-map D4）：区数不多于人数上限时 P<i> → 区 <i>（与此前逐项相同），否则由种子的独立子流均匀选区。
+        match.PlantPrototype();
+        return new MatchSession(match, config, recorded);
     }
 
     /// <summary>测试接缝：对已插旗的对局（可以是未校验的合成地图）建会话。</summary>
@@ -127,14 +145,16 @@ public sealed class MatchSession
 
     private void AttachConfigured(PlayerId player, PlayerAiConfig ai)
     {
+        // 显式的剪枝参数原样生效；未配置时按难度取，候选格上限取跑局配置的值，仍未给出则按地图大小取（阈值逻辑在 Core，三个入口共用）。
+        AiSearchConfig search = ai.Search ?? AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit);
         if (ai.DebugAi)
         {
-            DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, ai.Search);
+            DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, search);
             Runner.SetController(player, new LoggingController(Runner.ControllerOf(player), _trace));
         }
         else
         {
-            SetController(player, HeuristicAi.Create(Match, player, ai.Difficulty, ai.Weights, ai.Search));
+            SetController(player, HeuristicAi.Create(Match, player, ai.Difficulty, ai.Weights, search));
         }
     }
 
@@ -559,6 +579,7 @@ public sealed class MatchSession
             // 而首部是一局一条、在终局时才写出——写终局值等于把"未来的分母"塞进第 9 项占用率。
             // 代价：本局架出来的桥不进分母，占用率会略微偏高（实测每局新增桥个位数，对 105 的基数 < 1 个百分点）。
             PlayableCells = Match.Board.BaseMap.PlayableCount,
+            ZoneCount = Match.Map.BirthZones.Length,
             ArtisanWeight = Match.ArtisanWeight,
             Seed = Seed.ToString(),
             MaxMajorRounds = Match.MaxMajorRounds,

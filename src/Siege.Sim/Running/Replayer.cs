@@ -24,7 +24,7 @@ public static class Replayer
     {
         ArgumentNullException.ThrowIfNull(original);
         // 原样使用首行配置：失败局自动提升为完整事件流、抽样由 sim-sample 子流决定，二者都只由种子 + 配置决定。
-        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map).Run();
+        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true).Run();
         return Compare(original, replayed);
     }
 

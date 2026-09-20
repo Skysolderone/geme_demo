@@ -342,6 +342,19 @@ public sealed partial class MatchFlow
         LockFlags();
     }
 
+    /// <summary>
+    /// 原型替代路径的一站式入口（frontier-map D4）：<paramref name="manual"/> 是人工指定的那一名玩家及其区号，其余玩家的区由
+    /// <see cref="PrototypeZoneAssignment"/> 给出（区数不多于地图人数上限时按编号顺排，否则由种子的独立子流均匀选区），随后依次插旗并锁定。
+    /// 批量跑局、终端版与图形版都走这里；返回每名玩家的选择（顺序同 <see cref="Players"/>）。
+    /// </summary>
+    public ImmutableArray<(PlayerId Player, int Zone)> PlantPrototype((PlayerId Player, int Zone)? manual = null)
+    {
+        RequirePhase(MatchPhase.FlagPlanting);
+        ImmutableArray<(PlayerId Player, int Zone)> choices = PrototypeZoneAssignment.Assign(Board.BaseMap, Seed, _players, manual);
+        PlantSequentially(choices);
+        return choices;
+    }
+
     // ---------- 小回合阶段机 ----------
 
     /// <summary>

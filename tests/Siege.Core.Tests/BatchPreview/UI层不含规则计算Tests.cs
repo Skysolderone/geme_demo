@@ -110,12 +110,20 @@ public class UI层不含规则计算Tests
         // determinism.md：计分与倍率禁止浮点；tactical-ui 把同一约束扩到表现层（倍率显示用 Multiplier.ToString）。
         // 检查字段 / 属性 / 参数 / 返回 / 局部变量类型，以及 IL 中的 ldc.r4 / ldc.r8 / conv.r*。
         // 变异验证 M-D5：GroupPowerView 加 `public double Ratio => (double)Power / 2;` → 本测试红 1。
+        //
+        // frontier-map 段 C 的唯一豁免：相机视图模型（Siege.Presentation.Camera，design D6「逻辑与引擎分离」）。注视点、距离、夹取是连续几何量，
+        // 且 v4 位姿要与旧固定相机的 float 算式逐位相等，只能用 float；它不承载任何计分 / 倍率 / 规则数据（规则调用另有 IL 扫描禁止）。
+        // 豁免按<b>类型名单</b>而不是按命名空间放行：往该命名空间里新塞一个带浮点的类型仍会红（变异 M-C2）；名单里的类型必须真实存在（防名单腐烂）。
+        string[] cameraTypes = ["PlaneRect", "CameraPose", "BoardCamera", "EdgePan", "CameraHome"];
+        Type[] exempt = [.. PresentationAssembly.GetTypes().Where(t => RootOf(t) is { Namespace: "Siege.Presentation.Camera" } root && cameraTypes.Contains(root.Name))];
+        Assert.Equal(cameraTypes.Order(), exempt.Where(t => !t.IsNested).Select(t => t.Name).Order());
+
         Type[] floats = [typeof(double), typeof(float), typeof(decimal)];
         const BindingFlags all = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
         var found = new List<string>();
         foreach (Assembly assembly in new[] { typeof(GameBoard).Assembly, PresentationAssembly })
         {
-            foreach (Type type in assembly.GetTypes())
+            foreach (Type type in assembly.GetTypes().Except(exempt))
             {
                 found.AddRange(type.GetFields(all).Where(f => IsFloat(f.FieldType, floats)).Select(f => $"{type.Name}.{f.Name}"));
                 found.AddRange(type.GetProperties(all).Where(p => IsFloat(p.PropertyType, floats)).Select(p => $"{type.Name}.{p.Name}"));
@@ -132,6 +140,7 @@ public class UI层不含规则计算Tests
             }
 
             found.AddRange(IlReferences(assembly)
+                .Where(r => !exempt.Contains(r.Caller.DeclaringType))
                 .Where(r => r.OpCode == OpCodes.Ldc_R4 || r.OpCode == OpCodes.Ldc_R8 || r.OpCode == OpCodes.Conv_R4 || r.OpCode == OpCodes.Conv_R8 || r.OpCode == OpCodes.Conv_R_Un)
                 .Select(r => $"{r.Caller.DeclaringType!.Name}.{r.Caller.Name} {r.OpCode.Name}"));
         }
@@ -139,6 +148,9 @@ public class UI层不含规则计算Tests
         // 唯一豁免：MatchOptions 的静态初始化 `TimeSpan.FromSeconds(15)`（插旗时限，非计分路径，match-flow 既有代码，本 change 只做纯增量不改它）。
         Assert.Equal(["MatchOptions..cctor ldc.r8"], found);
     }
+
+    /// <summary>嵌套类型（编译器生成的闭包 / 迭代器）归到它的最外层声明类型。</summary>
+    private static Type RootOf(Type type) => type.DeclaringType is { } outer ? RootOf(outer) : type;
 
     private static bool IsFloat(Type type, Type[] floats) =>
         floats.Contains(Nullable.GetUnderlyingType(type) ?? type) || (type.HasElementType && IsFloat(type.GetElementType()!, floats));

@@ -50,6 +50,24 @@ public sealed class InputBindings
     /// </summary>
     public const string CycleEditAction = "siege_cycle_edit";
 
+    /// <summary>相机平移（viewport-camera 裁决 5）：方向键与 W A S D，与贴边推屏等速，可同时按两个方向。</summary>
+    public const string CameraLeftAction = "siege_camera_left";
+
+    /// <inheritdoc cref="CameraLeftAction"/>
+    public const string CameraRightAction = "siege_camera_right";
+
+    /// <inheritdoc cref="CameraLeftAction"/>
+    public const string CameraUpAction = "siege_camera_up";
+
+    /// <inheritdoc cref="CameraLeftAction"/>
+    public const string CameraDownAction = "siege_camera_down";
+
+    /// <summary>相机回到本机玩家的出生平台（空格）；未选区时回地图中心。</summary>
+    public const string CameraHomeAction = "siege_camera_home";
+
+    /// <summary>全部相机按键动作：这些键在到达界面控件之前就被认领（否则空格会按下获得焦点的按钮、方向键会挪动按钮焦点）。</summary>
+    public static readonly string[] CameraKeyActions = [CameraLeftAction, CameraRightAction, CameraUpAction, CameraDownAction, CameraHomeAction];
+
     /// <summary>已注册的全部信息层动作。</summary>
     public IReadOnlyList<(string Action, InputDevice Device, string Binding)> LayerActions => _actions;
 
@@ -83,6 +101,13 @@ public sealed class InputBindings
         Register(BackAction, new InputEventKey { PhysicalKeycode = Key.Escape }, new InputEventJoypadButton { ButtonIndex = JoyButton.B });
         Register(ToggleModeAction, new InputEventKey { PhysicalKeycode = Key.T });
         Register(CycleEditAction, new InputEventKey { PhysicalKeycode = Key.E }, new InputEventJoypadButton { ButtonIndex = JoyButton.LeftShoulder });
+
+        // 相机：与上面的键都不重（已用 1–4 / Tab / H / Enter / P / Esc / T / E / F12 / 鼠标右键）。
+        Register(CameraLeftAction, new InputEventKey { PhysicalKeycode = Key.A }, new InputEventKey { PhysicalKeycode = Key.Left });
+        Register(CameraRightAction, new InputEventKey { PhysicalKeycode = Key.D }, new InputEventKey { PhysicalKeycode = Key.Right });
+        Register(CameraUpAction, new InputEventKey { PhysicalKeycode = Key.W }, new InputEventKey { PhysicalKeycode = Key.Up });
+        Register(CameraDownAction, new InputEventKey { PhysicalKeycode = Key.S }, new InputEventKey { PhysicalKeycode = Key.Down });
+        Register(CameraHomeAction, new InputEventKey { PhysicalKeycode = Key.Space });
     }
 
     private static void Register(string action, params InputEvent[] events)

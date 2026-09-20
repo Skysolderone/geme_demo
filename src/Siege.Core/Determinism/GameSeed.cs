@@ -23,6 +23,12 @@ public readonly record struct GameSeed(ulong Value)
     /// <summary>流程初始化子流名。</summary>
     public const string Setup = "setup";
 
+    /// <summary>
+    /// 原型插旗路径的 AI 选区子流名（frontier-map D4）：只在出生区数多于地图人数上限时消费；
+    /// 独立命名，MUST NOT 扰动信物生成、首回合顺序与 AI 决策的既有序列。
+    /// </summary>
+    public const string ZonePick = "zone-pick";
+
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
     private const ulong Golden = 0x9E3779B97F4A7C15UL;

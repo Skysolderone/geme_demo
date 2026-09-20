@@ -27,11 +27,23 @@
 dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--seed N]
 ```
 
+**边疆图（多平台大地图验证版，`frontier-map`，进行中）**
+```bash
+"D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --path E:/wws/geme_demo/src/godot -- --map=siege-frontier-v1
+```
+```bash
+dotnet run --project src/Siege.Sim -c Release -- play --map siege-frontier-v1
+```
+25×30、可落子 377 格、6 个大小不一的 h=2 平台（9×9 / 8×8 / 7×7 / 6×6 / 5×5 / 5×5），平台即出生区，4 人选 6 个、没人选的是中立争夺区；前三大回合只能落自家平台，之后全图。缺省地图仍是 v4。
+相机：鼠标贴窗口边缘推屏，方向键 / WASD 平移，滚轮缩放（俯角恒 60°），空格回自家平台；回合横幅右侧显示悬停格坐标。开局自动缩放到"自家平台整个可见"。v4 上整盘一屏看全，最远缩放下相机不动、画面与从前逐像素相同。
+图形版命令行现在是严格解析（`--map=` `--cell-limit=` `--seed=` `--rounds=` `--auto-demo` `--pick-check` `--screenshot=`），拼错即报错退出。大图（可落子 > 150）AI 自动启用候选格上限 K=24（`--cell-limit 0` 关闭）。
+已量到的数（4 个 Standard AI，K=0 口径 20 局）：**全部打满 15 大回合靠上限收场**、无一局碾压；首次提子平均第 6 大回合；5×5 中央平台胜率明显偏高、9×9 为 0 胜（样本小）。AI 单步 K=0 均值 2.2 s / 最大 11 s → K=24 均值 0.73 s / 最大 2.2 s。**节奏参数（部署额度 / 大回合上限 / 碾压起始）与调图待负责人试玩后裁决**，规格与逐段记录在 `openspec/changes/frontier-map/`、`.trellis/tasks/09-19-frontier-map/implement.md`（含 17 条人工检查清单）。
+
 ## 分支状态
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test -c Release` **897/897**，零警告，套件约 20–45 秒（含 3 局真实跑局的日志保真度测试）。`artisan-terrain-edit` 方案提交（43208d8）及之前已推送；`strict-cli` 归档与第三轮段 O–E 均为本地提交，**未推送** |
+| `main` | 最近一次提交（a572877）全绿 **897/897**；工作树含 `frontier-map` 段 A–D 的**全部未提交改动**，在其上 `dotnet test -c Release` **1076/1076**、零警告，套件约 20–45 秒（含 3 局真实跑局的日志保真度测试）。`artisan-terrain-edit` 方案提交（43208d8）及之前已推送；`strict-cli` 归档与第三轮段 O–E 均为本地提交，**未推送** |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）

@@ -63,6 +63,7 @@ public static class ReportWriter
             + $"未纳入 {t.MatchesWithoutOccupancy} 局（整局无提子，或 denser-map 之前未记可落子格的旧日志）");
         sb.AppendLine("### 4. 4 人完整大回合平均耗时");
         sb.AppendLine($"- {t.MajorRoundMinutes}：这是玩家体验目标，无头跑局不测（裁决 10）。代理：平均每大回合 {Num(t.MeanTurnsPerMajorRound)} 个小回合，AI 计算耗时 {Num(t.MeanAiMsPerMajorRound)} ms/大回合");
+        sb.AppendLine($"- AI 单步决策耗时（单步 = 一个小回合：整理 + 征募 + 整批部署）：均值 {Num(t.AiStep.MeanMs)} ms，最大 {t.AiStep.MaxMs} ms（样本 {t.AiStep.Samples} 个小回合；墙钟，并行跑局会被撑大，量耗时请用 --serial）");
         sb.AppendLine("### 5. 对局结束的大回合数与整局时长");
         sb.AppendLine($"- 终局局的结束大回合分布：{Histogram(t.EndRounds)}；平均 {t.EndRound}");
         sb.AppendLine($"- 整局时长 {t.MatchMinutes}：不测（裁决 10）。代理：平均每局 {Num(r.Convergence.MeanTurnsPerMatch)} 个小回合，AI 计算耗时 {Num(t.MeanAiMsPerMatch)} ms/局");
@@ -121,6 +122,7 @@ public static class ReportWriter
         sb.AppendLine($"- 获补偿玩家的终局名次分布：{Histogram(cu.FinalRankOfCompensated)}");
         sb.AppendLine("### 5. 出生区随机资源是否造成显著胜率差异（裁决 8：按信物生成收敛分组）");
         BirthZoneSection z = r.BirthZones;
+        sb.AppendLine($"- 区数 {z.ZoneCount}（地图出生区数；多于人数时没人选的平台是中立争夺区，被选 0 次的区同样列出）");
         sb.AppendLine($"- 基线 {Pct(z.Baseline)}；显著 = 基线落在该区 Wilson 区间之外");
         AppendZones(sb, "全部局", z.All);
         AppendZones(sb, $"信物生成收敛局（{z.ConvergedMatches}）", z.RelicsConverged);
@@ -200,7 +202,7 @@ public static class ReportWriter
         sb.AppendLine($"- {label}：");
         foreach (ZoneStat zone in zones)
         {
-            sb.AppendLine($"  - {Siege.Core.Board.BirthZoneLabel.Of(zone.Zone)}：胜率 {zone.WinRate}{(zone.Significant ? "，显著" : "")}");
+            sb.AppendLine($"  - {Siege.Core.Board.BirthZoneLabel.Of(zone.Zone)}：胜率 {zone.WinRate}{(zone.Significant ? "，显著" : "")}；被选 {zone.Picks} 次");
         }
     }
 

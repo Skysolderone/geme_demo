@@ -91,6 +91,43 @@ public class 坐标记法Tests
         Assert.False(Coord.TryParse(notation, out _));
     }
 
+    // ---------- frontier-map 1.6：两位数行号与 25 列上限（裁决 7：25 × 28–32 的竖长图） ----------
+
+    [Fact]
+    public void 两位数行号往返()
+    {
+        // tasks 1.6 算例：A27 往返；行号 10–32 × 全部 25 列逐个恒等。
+        Coord a27 = Coord.Parse("A27");
+        Assert.Equal((0, 26), (a27.X, a27.Y));
+        Assert.Equal("A27", a27.ToNotation());
+        Assert.Equal("Z32", new Coord(24, 31).ToNotation());
+        Assert.Equal(new Coord(24, 31), Coord.Parse("z32"));
+
+        for (int y = 9; y < 32; y++)
+        {
+            for (int x = 0; x < 25; x++)
+            {
+                Coord original = new(x, y);
+                Assert.Equal(original, Coord.Parse(original.ToNotation()));
+            }
+        }
+
+        // 排序按数值行号，不按字符串：A9 < A10 < A27（字符串序会把 A10 排到 A9 前面）。
+        Assert.Equal(["A9", "A10", "A27"], new[] { "A27", "A9", "A10" }.Select(Coord.Parse).Order().Select(c => c.ToNotation()));
+    }
+
+    [Fact]
+    public void 列字母共25个且第26列构造被拒()
+    {
+        // tasks 1.6 算例：25 列字母为 A…Z 跳 I；第 26 列构造被拒。
+        string letters = new(Enumerable.Range(0, 25).Select(x => new Coord(x, 0).Column).ToArray());
+
+        Assert.Equal("ABCDEFGHJKLMNOPQRSTUVWXYZ", letters);
+        Assert.Equal(25, Coord.ColumnLetters.Length);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Coord(25, 0));
+        Assert.False(Coord.TryParse("I27", out _));
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", ".."));
 }
