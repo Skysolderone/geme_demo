@@ -176,6 +176,64 @@ public static class Visuals
         return material;
     }
 
+    private static ShaderMaterial? _waterFlow;
+    private static ShaderMaterial? _waterfall;
+
+    /// <summary>
+    /// 水面流动（纯装饰）：一张贴在水面上的透明层，按<b>世界坐标</b>画两组漂移的浅色波纹与细碎闪光——相邻水格的纹路自然接上，
+    /// 整条河读作一体在流。全图水格共用这一份材质；打开信息层时由 <c>dim</c> 压淡（与装饰对比同步）。不参与拾取、不投影。
+    /// </summary>
+    public static ShaderMaterial WaterFlow => _waterFlow ??= new ShaderMaterial
+    {
+        Shader = new Shader
+        {
+            Code = """
+                shader_type spatial;
+                render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+                uniform vec4 foam : source_color = vec4(0.78, 0.92, 1.0, 0.85);
+                uniform float speed = 0.55;
+                uniform float dim = 1.0;
+                varying vec3 world;
+                void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+                void fragment() {
+                    float t = TIME * speed;
+                    float a = sin(world.x * 3.1 + sin(world.z * 1.7 + t * 0.8) * 1.3 + t);
+                    float b = sin(world.z * 4.3 - t * 1.6 + sin(world.x * 2.3 + t * 0.5) * 1.1);
+                    float c = sin((world.x + world.z) * 7.0 + t * 2.4) * sin((world.x - world.z) * 5.0 - t * 1.3);
+                    float bands = smoothstep(0.90, 1.0, a * 0.5 + 0.5) + 0.7 * smoothstep(0.93, 1.0, b * 0.5 + 0.5);
+                    float glint = 0.35 * smoothstep(0.80, 1.0, c);
+                    float swell = 0.07 * (0.5 + 0.5 * sin(world.x * 0.9 + world.z * 1.1 + t * 0.7));
+                    ALBEDO = foam.rgb;
+                    ALPHA = clamp(bands + glint + swell, 0.0, 1.0) * foam.a * dim;
+                }
+                """,
+        },
+    };
+
+    /// <summary>瀑布水帘（纯装饰）：沿世界 Y 向下滚动的亮暗条纹，全图共用一份材质。</summary>
+    public static ShaderMaterial Waterfall => _waterfall ??= new ShaderMaterial
+    {
+        Shader = new Shader
+        {
+            Code = """
+                shader_type spatial;
+                render_mode unshaded, blend_mix, cull_disabled, shadows_disabled;
+                uniform vec4 water : source_color = vec4(0.55, 0.82, 0.96, 0.88);
+                uniform float speed = 3.2;
+                varying vec3 world;
+                void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+                void fragment() {
+                    float across = world.x * 9.0 + world.z * 9.0;
+                    float fall = sin(world.y * 2.2 + TIME * speed + sin(across) * 2.0);
+                    float streak = smoothstep(0.55, 1.0, fall * 0.5 + 0.5);
+                    float fade = clamp((world.y + 9.5) / 3.0, 0.0, 1.0);
+                    ALBEDO = mix(water.rgb, vec3(1.0), streak * 0.75);
+                    ALPHA = water.a * fade;
+                }
+                """,
+        },
+    };
+
     /// <summary>无光照的扁平材质：贴在地砖上的标记用，避免被光照吃掉判读性。</summary>
     public static StandardMaterial3D Flat(Color albedo)
     {

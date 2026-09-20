@@ -156,7 +156,7 @@ public sealed partial class BoardView : Node3D
                 // 深水：水面低于同层地砖，不可落子；架桥后桥面与地砖齐平、可落子。
                 Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
                 Color water = Visuals.DeepWater;
-                _tileMaterials[cell.Coord] = AddWater(tiles, waterCenter, water, variant++);
+                _tileMaterials[cell.Coord] = AddWater(tiles, waterCenter, water);
                 _tileBase[cell.Coord] = water;
                 if (cell.HasBridge)
                 {
@@ -399,8 +399,6 @@ public sealed partial class BoardView : Node3D
         }
 
         // 瀑布：贴着地图边缘的深水格，沿外侧垂下一道水帘，落到云海里。
-        StandardMaterial3D fall = Visuals.Flat(new Color(Visuals.WaterRipple, 0.85f));
-        StandardMaterial3D foam = Visuals.Flat(new Color(1f, 1f, 1f, 0.9f));
         const float drop = 9f;
         foreach (BoardCellView cell in board.Cells)
         {
@@ -442,20 +440,11 @@ public sealed partial class BoardView : Node3D
                 island.AddChild(new MeshInstance3D
                 {
                     Mesh = new BoxMesh { Size = dx != 0 ? new Vector3(0.10f, drop, BoardGeometry.TileSize) : new Vector3(BoardGeometry.TileSize, drop, 0.10f) },
-                    MaterialOverride = fall,
+                    // 向下滚动的亮暗条纹由着色器画（Visuals.Waterfall），落到云海高度渐隐。
+                    MaterialOverride = Visuals.Waterfall,
                     Position = new Vector3(lip.X + (dx * 0.05f), top - (drop * 0.5f), lip.Z - (dy * 0.05f)),
                     CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 });
-                for (int streak = -1; streak <= 1; streak++)
-                {
-                    island.AddChild(new MeshInstance3D
-                    {
-                        Mesh = new BoxMesh { Size = dx != 0 ? new Vector3(0.02f, drop * 0.8f, 0.05f) : new Vector3(0.05f, drop * 0.8f, 0.02f) },
-                        MaterialOverride = foam,
-                        Position = new Vector3(lip.X + (dx * 0.11f) + (dx != 0 ? 0f : streak * 0.26f), top - (drop * 0.45f), lip.Z - (dy * 0.11f) + (dx != 0 ? streak * 0.26f : 0f)),
-                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                    });
-                }
             }
         }
     }
@@ -524,28 +513,29 @@ public sealed partial class BoardView : Node3D
     private const float WaterDrop = 0.10f;
 
     /// <summary>深水格：比同层地砖低 <see cref="WaterDrop"/> 的蓝色水面 + 两道浅色波纹（装饰，贴在水面上）。返回水面材质以便信息层降饱和。</summary>
-    private static StandardMaterial3D AddWater(Node3D parent, Vector3 top, Color color, int variant)
+    private static readonly PlaneMesh FlowPlane = new() { Size = new Vector2(BoardGeometry.CellSize, BoardGeometry.CellSize), Orientation = PlaneMesh.OrientationEnum.Y };
+
+    private static StandardMaterial3D AddWater(Node3D parent, Vector3 top, Color color)
     {
         StandardMaterial3D material = Visuals.Matte(color, 0.55f);
         const float drop = WaterDrop;
         parent.AddChild(new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize) },
+            // 水体铺满整格：相邻水格连成一片，河才读作"一条在流的河"而不是一格格水池。
+            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize) },
             MaterialOverride = material,
             // 水面比底座顶面高出一丝：两者原本同高，会 z-fight，大片水格闪成底座的颜色。
             Position = top - new Vector3(0f, drop - 0.008f + (BoardGeometry.TileHeight * 0.5f), 0f),
         });
-        StandardMaterial3D ripple = Visuals.Flat(Visuals.WaterRipple);
-        for (int i = 0; i < 2; i++)
+
+        // 流动层：全图共用一份按世界坐标画波纹的材质，相邻格的纹路自然接上（Visuals.WaterFlow）。
+        parent.AddChild(new MeshInstance3D
         {
-            float z = ((variant + i) % 3 * 0.22f) - 0.24f;
-            parent.AddChild(new MeshInstance3D
-            {
-                Mesh = new BoxMesh { Size = new Vector3(0.34f, 0.004f, 0.03f) },
-                MaterialOverride = ripple,
-                Position = top + new Vector3(i == 0 ? -0.18f : 0.16f, -drop + 0.011f, z),
-            });
-        }
+            Mesh = FlowPlane,
+            MaterialOverride = Visuals.WaterFlow,
+            Position = top + new Vector3(0f, -drop + 0.012f, 0f),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
 
         return material;
     }
@@ -609,6 +599,9 @@ public sealed partial class BoardView : Node3D
         Clear(_overlay);
         Clear(_pieces);
         Clear(_preview);
+
+        // 水面流动层与装饰对比同步压淡：信息层打开时它不该比判读信息更抢眼。
+        Visuals.WaterFlow.SetShaderParameter("dim", 0.35f + (0.65f * treatment.DecorationContrastPercent / 100f));
 
         foreach ((Coord coord, StandardMaterial3D material) in _tileMaterials)
         {
