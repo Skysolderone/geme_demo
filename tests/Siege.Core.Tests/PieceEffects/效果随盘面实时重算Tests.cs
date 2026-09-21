@@ -24,15 +24,15 @@ public class 效果随盘面实时重算Tests
 
         var scoreboard = new PowerScoreboard();
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
-        Assert.Equal(12, Assert.Single(scoreboard.Recalculate(board, roster, SiteValues.Standard, 1).Of(TestMaps.P0).Groups).LineBonus);
+        Assert.Equal(12, Assert.Single(scoreboard.Recalculate(board, roster, 1).Of(TestMaps.P0).Groups).LineBonus);
 
         board.RemoveStones([TestMaps.At("D6")]);
-        PlayerPower afterOne = scoreboard.Recalculate(board, roster, SiteValues.Standard, 2).Of(TestMaps.P0);
+        PlayerPower afterOne = scoreboard.Recalculate(board, roster, 2).Of(TestMaps.P0);
         Assert.Equal(2, afterOne.Groups.Length);
         Assert.Equal(2, afterOne.Groups.Sum(g => g.LineBonus));
 
         board.RemoveStones([TestMaps.At("E6")]);
-        PlayerPower afterTwo = scoreboard.Recalculate(board, roster, SiteValues.Standard, 3).Of(TestMaps.P0);
+        PlayerPower afterTwo = scoreboard.Recalculate(board, roster, 3).Of(TestMaps.P0);
         Assert.Equal(2, afterTwo.Groups.Length);
         Assert.All(afterTwo.Groups, g => Assert.Equal(0, g.LineBonus));
         Assert.Equal(0, afterTwo.Groups.Sum(g => g.LineBonus));
@@ -45,13 +45,13 @@ public class 效果随盘面实时重算Tests
         GameBoard board = TestMaps.Blank(size: 9).PlaceStandardGroup(TestMaps.P0, row: 2);
         var scoreboard = new PowerScoreboard();
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
-        GroupPower before = Assert.Single(scoreboard.Recalculate(board, roster, SiteValues.Standard, 1).Of(TestMaps.P0).Groups);
+        GroupPower before = Assert.Single(scoreboard.Recalculate(board, roster, 1).Of(TestMaps.P0).Groups);
         Assert.Equal("2.25", before.Multiplier.ToString());
         Assert.Equal(20, before.Power);
 
         board.RemoveStones([TestMaps.At("G2")]);
 
-        GroupPower after = Assert.Single(scoreboard.Recalculate(board, roster, SiteValues.Standard, 2).Of(TestMaps.P0).Groups);
+        GroupPower after = Assert.Single(scoreboard.Recalculate(board, roster, 2).Of(TestMaps.P0).Groups);
         Assert.Equal(1, after.MultiplierCount);
         Assert.Equal("1.5", after.Multiplier.ToString());
         Assert.Equal(8, after.BaseTotal);

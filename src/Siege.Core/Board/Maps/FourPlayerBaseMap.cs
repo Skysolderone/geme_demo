@@ -3,10 +3,9 @@ using System.Collections.Immutable;
 namespace Siege.Core.Board.Maps;
 
 /// <summary>
-/// 4 人原型基准地图 v4（<c>siege-4p-base-v4</c>）：地形与 v3 逐格相同，加 12 个据点（营帐 / 篝火 / 石碑各 4）。
+/// 4 人原型基准地图 v5（<c>siege-4p-base-v5</c>）：地形、出生区与信物格与 v4 逐格相同（restore-go-core-rules D6：内容变了标识就变）。
 /// 外接 13×13，C4 旋转对称，四家出生在角落的 h=2 高台，中央 h=0 低地被一圈一格宽的护城河环绕。
 /// 可落子格 105（岩石 36、深水 32 其中桥 4），4 个出生区各 13 格全部 h=2，信物格 13（出生区 8、公共区 4 + 中心 1）。
-/// v3（<c>maps/siege-4p-base-v3.json</c>）已被本图取代，只作历史存档：它没有据点，通不过规则 8（scoring-sites 裁决 S-9）。
 /// </summary>
 /// <remarks>
 /// <para><b>地貌。</b>每个出生区是角落 4×4 减去三格的 13 格高台；朝顺时针方向的下一家经两格 h=1 缓坡（<c>E2 E3</c>）下到
@@ -23,22 +22,12 @@ namespace Siege.Core.Board.Maps;
 /// 两眼最小格数 = 8（默认值）；必死口袋豁免：<b>无</b>——全盘 105 个可落子格沿气边连通成一块。</para>
 /// <para><b>为什么这么密。</b>map-definition 把 4 人可落子区间定为 95–110（裁决 D18）：三层高度与水系需要过渡带来表达地貌，
 /// 而 169 格里只留 95–110 可落子，意味着岩石与深水要占掉近四成——密度由可落子格区间把控，不再校验障碍占比（裁决 D-F）。</para>
-/// <para><b>据点（v4，scoring-sites D-C）。</b>三档各一条 C4 轨道，均不与信物重合：
-/// <list type="bullet">
-/// <item><b>营帐</b> <c>B3</c> 轨道：出生区腹地，四邻全是本区高台格；<c>D2 D3</c> 能被缓坡 <c>E2 E3</c>（h=1）覆盖，故不选。</item>
-/// <item><b>篝火</b> <c>J2</c> 轨道：出生区 0 河外低地（尾巷尽头，h=0）里唯一与另一出生区 h=2 格（<c>K2</c>）几何相邻的格——
-/// v3 地形上满足约束的只有这一条轨道。邻家在 <c>K2</c> 落子即居高覆盖，主人 h=0 棋子覆盖不到 <c>K2</c>（裁决 S-8）。</item>
-/// <item><b>石碑</b> <c>H5</c> 轨道：岛上非林地非信物格共三条轨道。内圈 <c>G6</c> 轨道四格都是岛心 <c>G7</c> 的邻居，
-/// 一枚棋子即可同时覆盖全部石碑，价值过度集中，否决；<c>F5</c> 轨道隔一格深水被主人河外低地 <c>F3</c> 覆盖，等于自家白给，否决。
-/// 选 <c>H5</c> 轨道：石碑与本家桥头信物 <c>G5</c> 隔着栅栏——桥头可覆盖（栅栏不挡覆盖）但走不进去，
-/// 只能经林地角 <c>J5</c> 从邻家桥头 <c>J7</c> 一侧进入，形成"一家隔栏覆盖、一家绕林占据"的交叉争夺；四家到最近石碑距离相等。</item>
-/// </list></para>
-/// <para>规格：openspec/changes/scoring-sites/specs/map-definition —— Requirement: 4 人基准地图</para>
+/// <para>规格：openspec/changes/restore-go-core-rules/specs/map-definition —— Requirement: 4 人基准地图</para>
 /// </remarks>
 public static class FourPlayerBaseMap
 {
     /// <summary>地图标识，也是各入口的缺省地图（<see cref="MapCatalog.DefaultId"/>）。</summary>
-    public const string Id = "siege-4p-base-v4";
+    public const string Id = "siege-4p-base-v5";
 
     private const int Size = 13;
 
@@ -77,15 +66,6 @@ public static class FourPlayerBaseMap
 
     /// <summary>公共区高档信物：岛心，轨道大小为 1；同时是中央入口。</summary>
     private const string Center = "G7";
-
-    /// <summary>营帐种子：出生区 0 腹地。</summary>
-    private static readonly string[] TentSeeds = ["B3"];
-
-    /// <summary>篝火种子：出生区 0 尾巷尽头，紧贴出生区 1 的崖边 <c>K2</c>。</summary>
-    private static readonly string[] CampfireSeeds = ["J2"];
-
-    /// <summary>石碑种子：岛上、与桥头信物 <c>G5</c> 隔栅栏的格。</summary>
-    private static readonly string[] SteleSeeds = ["H5"];
 
     /// <summary>咽喉：四座桥。</summary>
     private static readonly string[] ChokeSeeds = ["G4"];
@@ -150,20 +130,6 @@ public static class FourPlayerBaseMap
 
         relics[Coord.Parse(Center)] = new RelicCellSpec(RelicZone.Contested, BudgetTier.High);
 
-        ImmutableDictionary<Coord, SiteTier>.Builder sites = ImmutableDictionary.CreateBuilder<Coord, SiteTier>();
-        foreach ((string[] seeds, SiteTier tier) in new[]
-                 {
-                     (TentSeeds, SiteTier.Tent),
-                     (CampfireSeeds, SiteTier.Campfire),
-                     (SteleSeeds, SiteTier.Stele),
-                 })
-        {
-            foreach (Coord c in Orbit(seeds))
-            {
-                sites.Add(c, tier);
-            }
-        }
-
         return new MapData
         {
             Id = FourPlayerBaseMap.Id,
@@ -174,7 +140,6 @@ public static class FourPlayerBaseMap
             TerrainData = terrain,
             BirthZones = zones.ToImmutable(),
             RelicCells = relics.ToImmutable(),
-            Sites = sites.ToImmutable(),
             ChokePoints = Orbit(ChokeSeeds),
             CentralEntrance = Coord.Parse(Center),
             DistanceTolerance = 1,

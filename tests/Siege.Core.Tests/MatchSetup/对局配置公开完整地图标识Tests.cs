@@ -76,7 +76,7 @@ public class 对局配置公开完整地图标识Tests
 
     [Theory]
     [InlineData("gen:12345:p7")]
-    [InlineData("siege-frontier-v1")]
+    [InlineData("siege-frontier-v2")]
     public void 存档记地图内容摘要_标识相同而内容不同的地图_恢复时报地图不一致(string mapId)
     {
         // 段 B 检查（负责人裁决 4）：存档只存标识，生成器改版 / 内置图被改之后按标识会重建出另一张图——与日志同一风险（design D5），同样响亮失败。
@@ -131,13 +131,13 @@ public class 对局配置公开完整地图标识Tests
     public void 内置图上的存档_地图标识仍是内置图的标识()
     {
         // 规格 Scenario「旧存档不受影响」：引入生成图没有改存档里地图标识的写法；按它解析回来的仍是那张内置图。
-        MatchFlow match = MatchFixturesOnBuiltin(FrontierMapV1.Id);
+        MatchFlow match = MatchFixturesOnBuiltin(FrontierMapV2.Id);
         match.PlantPrototype();
         string json = match.Serialize();
 
-        Assert.Equal(FrontierMapV1.Id, MatchFlow.SavedMapId(json));
+        Assert.Equal(FrontierMapV2.Id, MatchFlow.SavedMapId(json));
         MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(json)), json);
-        Assert.Equal(FrontierMapV1.Id, restored.Publish().MapId);
+        Assert.Equal(FrontierMapV2.Id, restored.Publish().MapId);
         Assert.Equal(json, restored.Serialize());
     }
 
@@ -159,12 +159,12 @@ public class 对局配置公开完整地图标识Tests
     [Fact]
     public void 地图种子不扰动对局随机()
     {
-        // 规格 Scenario：在内置图 siege-frontier-v1 上用某对局种子开局，信物内容与首回合顺序与引入生成器之前逐项相同。
+        // 规格 Scenario：在内置图 siege-frontier-v2 上用某对局种子开局，信物内容与首回合顺序与引入生成器之前逐项相同。
         // 黄金值取自提交 71761d6（生成器出现之前）的干净 worktree、同一算式（见实施记录）；再加一条结构性对照：先生成若干张图再开局，结果不变——
         // 生成器不与对局共享任何随机状态。
         static (string Relics, string Order, string Zones) Open()
         {
-            MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FrontierMapV1.Id), new GameSeed(42), Four, MatchOptions.Immediate);
+            MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FrontierMapV2.Id), new GameSeed(42), Four, MatchOptions.Immediate);
             var choices = match.PlantPrototype();
             return (match.Relics.Generation.Serialize(), string.Join(",", match.ActionOrder.Select(p => p.Value)), string.Join(",", choices.Select(c => c.Zone)));
         }
@@ -178,7 +178,11 @@ public class 对局配置公开完整地图标识Tests
         Assert.Equal((relics, order, zones), Open());
         Assert.Equal(GoldenFrontierOrder, order);
         Assert.Equal(GoldenFrontierZones, zones);
-        Assert.Equal(GoldenFrontierRelicDigest, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(relics))));
+        // 段 B：信物账本的记录里带着地图标识（RelicGenerationRecord.MapId），v1 → v2 使这段文本变了；
+        // 信物内容本身逐字节不变——把标识换回 v1 之后，摘要仍是引入生成器之前的那个黄金值，所以黄金值不重建。
+        Assert.Contains("siege-frontier-v2", relics, StringComparison.Ordinal);
+        string asV1 = relics.Replace("siege-frontier-v2", "siege-frontier-v1", StringComparison.Ordinal);
+        Assert.Equal(GoldenFrontierRelicDigest, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(asV1))));
 
         // 同一对局种子、换一张生成图：首回合顺序的随机序列不因地图种子而变（顺序子流只由对局种子决定）。
         static string OrderOn(string mapId)

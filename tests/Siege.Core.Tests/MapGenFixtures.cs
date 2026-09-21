@@ -166,11 +166,6 @@ internal static class MapGenFixtures
             return '~';
         }
 
-        if (map.Sites.TryGetValue(c, out SiteTier tier))
-        {
-            return tier switch { SiteTier.Tent => 'T', SiteTier.Campfire => 'C', _ => 'S' };
-        }
-
         if (map.RelicCells.TryGetValue(c, out RelicCellSpec spec))
         {
             return spec.Zone == RelicZone.BirthZone ? 'r' : spec.Budget == BudgetTier.High ? 'R' : 'o';

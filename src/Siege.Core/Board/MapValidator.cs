@@ -79,12 +79,12 @@ public static class MapValidator
     /// 校验器里对规格档的分支只允许出现在这里——各条规则只读 <see cref="ProfileRules"/> 的字段，不得再写"如果是边疆档"的散落分支
     /// （守门 <c>规格档分流守门Tests</c>：本文件里规格档枚举的字面量只在本表内、地图的规格档属性只在 <see cref="RulesOf"/> 读一次）。
     /// <para>
-    /// 人数预算：可落子格区间、信物格区间、出生区数区间、单个出生区可落子格区间、据点数区间。
-    /// 标准档（scoring-sites：据点 2 人 6–8 / 3 人 9–11 / 4 人 10–14，2 / 3 人为估值）出生区数 = 人数；单区区间为 <c>null</c> 表示规格未给该人数的区间
-    /// （2 / 3 人图尚未定稿），此项不校验。边疆档只定 4 人（300–420 / 5–8 区且多于人数 / 单区 20–225 / 信物 14–24 / 据点 8–16，验证版估值；平台内不放营帐，据点 = 篝火 + 石碑）。
+    /// 人数预算：可落子格区间、信物格区间、出生区数区间、单个出生区可落子格区间。
+    /// 标准档出生区数 = 人数；单区区间为 <c>null</c> 表示规格未给该人数的区间
+    /// （2 / 3 人图尚未定稿），此项不校验。边疆档只定 4 人（300–420 / 5–8 区且多于人数 / 单区 20–225 / 信物 14–24，验证版估值）。
     /// 与规格档无关的"容得下 9 枚基础部署"下界对所有地图一律生效。
     /// </para>
-    /// 两档共用、不在表里的规则：必死口袋、桥在深水、栅栏在邻格、到中央入口可达、据点 / 信物格合法、保护期容量、目标不可达。
+    /// 两档共用、不在表里的规则：必死口袋、桥在深水、栅栏在邻格、到中央入口可达、信物格合法、保护期容量、目标不可达。
     /// 旋转对称不在校验器里（<see cref="MapSymmetry"/> 只由标准档基准图的测试调用）。
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
@@ -94,9 +94,9 @@ public static class MapValidator
                 "只提供 2 / 3 / 4 人的预算表",
                 new Dictionary<int, Budget>
                 {
-                    [2] = new(50, 65, 7, 9, (2, 2), null, 6, 8),
-                    [3] = new(75, 90, 10, 12, (3, 3), null, 9, 11),
-                    [4] = new(95, 110, 13, 15, (4, 4), (12, 14), 10, 14),
+                    [2] = new(50, 65, 7, 9, (2, 2), null),
+                    [3] = new(75, 90, 10, 12, (3, 3), null),
+                    [4] = new(95, 110, 13, 15, (4, 4), (12, 14)),
                 }.ToImmutableDictionary(),
                 ZonesMustExceedPlayers: false,
                 DistanceHandling.RejectOnImbalance),
@@ -104,7 +104,7 @@ public static class MapValidator
                 "边疆档验证版只提供 4 人的预算表，2 / 3 人边疆图尚未设计",
                 new Dictionary<int, Budget>
                 {
-                    [4] = new(300, 420, 14, 24, (5, 8), (20, 225), 8, 16),
+                    [4] = new(300, 420, 14, 24, (5, 8), (20, 225)),
                 }.ToImmutableDictionary(),
                 ZonesMustExceedPlayers: true,
                 DistanceHandling.AlwaysReport),
@@ -134,9 +134,7 @@ public static class MapValidator
         int MinRelics,
         int MaxRelics,
         (int Min, int Max) BirthZones,
-        (int Min, int Max)? BirthZoneCells,
-        int MinSites,
-        int MaxSites);
+        (int Min, int Max)? BirthZoneCells);
 
     /// <summary>全文件唯一读取规格档的地方。未定义的规格档值（只可能来自手工构造）没有声明行，返回 <c>null</c>。</summary>
     private static ProfileRules? RulesOf(MapData map) => Rules.GetValueOrDefault(map.Profile);
@@ -170,7 +168,6 @@ public static class MapValidator
         ValidateBudgets(map, rules, budget, f);
         ValidateBirthZones(map, budget, f);
         ValidateRelicCells(map, f);
-        ValidateSites(map, budget, f);
         ValidateLandmarks(map, f);
         ValidateTolerance(map, f);
         ValidatePockets(map, f);
@@ -404,51 +401,6 @@ public static class MapValidator
         }
     }
 
-    /// <summary>
-    /// 校验规则第 8 条：每个据点位于可落子格、标注合法档位、不与信物格重合；据点总数落在人数区间。
-    /// 据点与信物完全分离（裁决 D10）：同一格两种价值会让"控制一格"的收益翻倍，且表现层地标互相遮挡。
-    /// </summary>
-    private static void ValidateSites(MapData map, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        foreach ((Coord c, SiteTier tier) in map.Sites.OrderBy(kv => kv.Key))
-        {
-            if (!Enum.IsDefined(tier))
-            {
-                f.Add(new MapValidationFailure(
-                    "SITE_TIER_MISSING", $"据点必须标注档位（营帐 / 篝火 / 石碑），实际为 {(int)tier}。", [c]));
-            }
-
-            if (map.TerrainAt(c) != Terrain.Playable)
-            {
-                f.Add(new MapValidationFailure(
-                    "SITE_ON_NON_PLAYABLE", "据点必须位于可落子格上。", [c]));
-            }
-
-            if (map.RelicCells.ContainsKey(c))
-            {
-                f.Add(new MapValidationFailure(
-                    "SITE_ON_RELIC_CELL", "据点不得与信物格重合。", [c]));
-            }
-        }
-
-        if (known is not { } budget)
-        {
-            return;
-        }
-
-        int sites = map.Sites.Count;
-        if (sites < budget.MinSites || sites > budget.MaxSites)
-        {
-            string direction = sites < budget.MinSites
-                ? $"少于下限 {budget.MinSites}"
-                : $"多于上限 {budget.MaxSites}";
-            f.Add(new MapValidationFailure(
-                "SITE_COUNT_OUT_OF_RANGE",
-                $"{map.MaxPlayers} 人地图的据点为 {sites} 个，{direction}，超出 {budget.MinSites}–{budget.MaxSites} 区间。",
-                ImmutableArray<Coord>.Empty));
-        }
-    }
-
     private static void ValidateLandmarks(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
         if (map.TerrainAt(map.CentralEntrance) != Terrain.Playable)
@@ -558,8 +510,8 @@ public static class MapValidator
 
     /// <summary>
     /// 各出生区到每个距离均衡目标的最短落子距离（沿气边），规则第 1 条的唯一口径。
-    /// 目标依次为：最近公共信物、中央入口、最近咽喉、最近篝火、最近石碑（后两项 scoring-sites R-5；营帐在区内，不纳入）。
-    /// 距离为 <c>null</c> 表示该出生区到不了任一目标格；目标集合为空时（如无据点的旧图）整项距离全为 <c>null</c>。
+    /// 目标依次为：最近公共信物、中央入口、最近咽喉，共三项（restore-go-core-rules 起由五项改三项）。
+    /// 距离为 <c>null</c> 表示该出生区到不了任一目标格；目标集合为空时整项距离全为 <c>null</c>。
     /// 校验器与 <c>Siege.Sim map</c> 的距离表共用这一份计算。
     /// </summary>
     public static ImmutableArray<BirthZoneDistance> DistanceTable(MapData map)
@@ -575,8 +527,6 @@ public static class MapValidator
             ("最近公共信物", publicRelics),
             ("中央入口", [map.CentralEntrance]),
             ("最近咽喉", map.ChokePoints.Order().ToImmutableArray()),
-            ("最近篝火", SitesOf(map, SiteTier.Campfire)),
-            ("最近石碑", SitesOf(map, SiteTier.Stele)),
         };
 
         Dictionary<Coord, int>[] zoneDistances = map.BirthZones.IsDefault
@@ -607,11 +557,8 @@ public static class MapValidator
         return table.ToImmutable();
     }
 
-    private static ImmutableArray<Coord> SitesOf(MapData map, SiteTier tier) =>
-        map.Sites.Where(kv => kv.Value == tier).Select(kv => kv.Key).Order().ToImmutableArray();
-
     /// <summary>
-    /// 距离均衡：各出生区到最近公共信物格、中央入口、主要咽喉、最近篝火与最近石碑的最短落子距离
+    /// 距离均衡：各出生区到最近公共信物格、中央入口与主要咽喉的最短落子距离
     /// （沿气边——崖壁、栅栏、未架桥深水挡住的路不算路），两两差值不得超过容差。
     /// 任一出生区到任一目标不可达：一律拒绝。极差：按 <paramref name="handling"/>——超容差即拒绝，或不论极差多少都把逐区距离作为报告项给出
     /// （边疆档平台大小与远近本就不等，见规格档声明表）。

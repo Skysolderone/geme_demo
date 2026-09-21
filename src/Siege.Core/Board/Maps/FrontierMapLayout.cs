@@ -106,8 +106,6 @@ internal sealed partial class FrontierMapLayout
 
     internal bool[,] Forest { get; } = new bool[W, H];
 
-    internal SiteTier?[,] Sites { get; } = new SiteTier?[W, H];
-
     internal RelicCellSpec?[,] Relics { get; } = new RelicCellSpec?[W, H];
 
     internal List<(P A, P B)> Fences { get; } = [];
@@ -124,7 +122,7 @@ internal sealed partial class FrontierMapLayout
         && EnsureBridges(out reason)
         && WidenNarrowCorridors(out reason)
         && FillAndDecorate(out reason)
-        && PlaceSitesAndRelics(out reason)
+        && PlaceRelics(out reason)
         && CheckSingleRegion(out reason)
         && CheckCorridorWidth(out reason);
 }

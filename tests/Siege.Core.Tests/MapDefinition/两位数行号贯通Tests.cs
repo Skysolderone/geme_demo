@@ -28,7 +28,6 @@ public class 两位数行号贯通Tests
             Obstacles = [Coord.Parse("Z30")],
             BirthZones = [[.. FrontierFixtures.Rect(0, 24, 5, 5)], [.. FrontierFixtures.Rect(20, 0, 5, 5)]],
             RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty.Add(Coord.Parse("C28"), new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)),
-            Sites = ImmutableDictionary<Coord, SiteTier>.Empty.Add(Coord.Parse("Y30"), SiteTier.Stele),
             ChokePoints = [Coord.Parse("M27")],
             CentralEntrance = Coord.Parse("N16"),
             TerrainData = TestMaps.Terrain(
@@ -46,7 +45,7 @@ public class 两位数行号贯通Tests
         string json = MapFile.ToJson(original);
         MapData restored = MapFile.FromJson(json);
 
-        foreach (string notation in new[] { "\"Z30\"", "\"C28\"", "\"Y30\"", "\"M27\"", "\"N16\"", "\"M28\"", "\"Z31-Z32\"", "\"A27\"" })
+        foreach (string notation in new[] { "\"Z30\"", "\"C28\"", "\"M27\"", "\"N16\"", "\"M28\"", "\"Z31-Z32\"", "\"A27\"" })
         {
             Assert.Contains(notation, json, StringComparison.Ordinal);
         }
@@ -55,7 +54,6 @@ public class 两位数行号贯通Tests
         Assert.Equal(0, restored.BirthZoneOf(Coord.Parse("A27")));
         Assert.Equal(original.BirthZones[0].Order(), restored.BirthZones[0].Order());
         Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
-        Assert.Equal(original.Sites.OrderBy(kv => kv.Key), restored.Sites.OrderBy(kv => kv.Key));
         Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
         Assert.Equal(2, restored.HeightAt(Coord.Parse("B31")));
         Assert.Equal(1, restored.HeightAt(Coord.Parse("C31")));

@@ -139,15 +139,13 @@ public sealed record GroupScoreView(PlayerId Owner, ImmutableArray<Coord> Stones
     public const int MaxHeatLevel = 3;
 }
 
-/// <summary>势力层的玩家汇总。<see cref="SiteScore"/> 是据点分（总势力 = 据点分 + 军势）。</summary>
-public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, BigInteger Total, long SiteScore, int? Rank, string? StatusText);
+/// <summary>势力层的玩家汇总。<see cref="TerritoryScore"/> 是领地分（总势力 = 领地分 + 棋串军势）。</summary>
+public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, BigInteger Total, int TerritoryScore, int? Rank, string? StatusText);
 
 /// <summary>
-/// 势力层（tactical-layers「五种战术信息层」，scoring-sites D-F）：据点项（档位、分值、控制状态、控制者或覆盖方）、
-/// 棋串分数（位置加值拆连珠 / 协同 / 高地）与玩家汇总。结构上<b>没有</b>空格领地贡献字段——独占空格不计分，只在盘面层归属读法里出现。
+/// 势力层（tactical-layers「五种战术信息层」）：棋串分数（位置加值拆连珠 / 协同 / 高地）与玩家汇总（含领地分）。
 /// </summary>
 public sealed record PowerLayerContent(
-    ImmutableArray<SiteView> Sites,
     ImmutableArray<GroupScoreView> Groups,
     ImmutableArray<PlayerPowerRowView> Players) : LayerContent(TacticalLayer.Power);
 
@@ -325,14 +323,13 @@ public static class TacticalLayers
         ArgumentNullException.ThrowIfNull(world);
         if (world.View.Power is not { } power)
         {
-            // 插旗阶段尚无势力快照：据点仍然公开（site-control「据点公开」），棋串与玩家汇总为空。
-            return new PowerLayerContent(SiteViews.From(world), [], []);
+            // 插旗阶段尚无势力快照：棋串与玩家汇总为空。
+            return new PowerLayerContent([], []);
         }
 
         return new PowerLayerContent(
-            SiteViews.From(world),
             [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), Math.Min(g.MultiplierCount, GroupScoreView.MaxHeatLevel)))],
-            [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.SiteScore, power.RankOf(p.Player), Labels.Status(p.Status)))]);
+            [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.TerritoryScore, power.RankOf(p.Player), Labels.Status(p.Status)))]);
     }
 
     public static RelicLayerContent Relics(PublicWorld world)

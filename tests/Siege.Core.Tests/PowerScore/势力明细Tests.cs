@@ -11,8 +11,8 @@ public class 势力明细Tests
     public void 明细可复算总势力()
     {
         // restore-go-core-rules power-score 规格「明细可复算总势力」：领地分总计 + 全部棋串军势之和 = 总势力，对每名玩家成立；Total 是计算层独立算出的字段，这里用明细反向复算。
-        // 段 A 改写：旧口径 据点分 + 军势 → 新口径 领地分（= 独占空格数）+ 军势；盘面去掉三个据点（其据点分 / 争议据点断言随之删除，据点控制仍由 SiteControlSpec 下的测试守），棋子不变。
-        // 变异验证：M-A4（Total 漏领地分）、M-A1（加值挪到乘法之外）都让本测试红；M-A7（Total 加回据点分）本盘面无据点不触发，由「据点分不计入总势力」抓。
+        // 段 A 改写：旧口径改为 领地分（= 独占空格数）+ 军势；盘面只留棋子，摆法不变。
+        // 变异验证：M-A4（Total 漏领地分）、M-A1（加值挪到乘法之外）都让本测试红。
         GameBoard board = TestMaps.Blank(size: 11, "F6")
             .PlaceStandardGroup(TestMaps.P0, row: 2)
             .Place("B9", TestMaps.P0, PieceType.Line).Place("C9", TestMaps.P0, PieceType.Line).Place("D9", TestMaps.P0, PieceType.Line)
@@ -113,30 +113,10 @@ public class 势力明细Tests
     }
 
     [Fact]
-    public void 据点分可溯源()
-    {
-        // 规格 Scenario：据点分总计 65 → 明细列出所控据点，各分值之和为 65，且标明占据或唯一覆盖。
-        // 标准局 5 / 15 / 45：P0 占据营帐 C3（5）、唯一覆盖石碑 E4（45，被 E3 覆盖）、唯一覆盖篝火 B4（15，被 B3 覆盖）；另有争议据点 G4 不计。
-        // 变异验证 M-S8（段 A2）：SiteControl 把 Occupied 与 UniqueCoverage 映射对调 → 红，含本测试。
-        GameBoard board = TestMaps.Blank(size: 9)
-            .WithSites(("C3", SiteTier.Tent), ("E4", SiteTier.Stele), ("B4", SiteTier.Campfire), ("G4", SiteTier.Stele))
-            .Place("B3", TestMaps.P0).Place("C3", TestMaps.P0).Place("D3", TestMaps.P0).Place("E3", TestMaps.P0)
-            .Place("G3", TestMaps.P0).Place("G5", TestMaps.P1);
-
-        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
-
-        Assert.Equal(65, p0.SiteScore);
-        Assert.Equal(
-            [("B4", SiteTier.Campfire, 15, SiteControlKind.UniqueCoverage), ("C3", SiteTier.Tent, 5, SiteControlKind.Occupied), ("E4", SiteTier.Stele, 45, SiteControlKind.UniqueCoverage)],
-            p0.Sites.Select(s => (s.Coord.ToNotation(), s.Tier, s.Value, s.Kind)).OrderBy(t => t.Item1));
-        Assert.Equal(65, p0.Sites.Sum(s => s.Value));
-    }
-
-    [Fact]
     public void 明细字段完整()
     {
         // 规格要求的最少字段：领地分总计、独占空格坐标集合、每条棋串的（棋子坐标、基础军势、位置加值、加值来源拆分、倍增子数量、倍率、取整后军势）。
-        // 段 A 重算：原期望 据点分 0、总势力 20（scoring-sites：独占空格不计分）→ 领地分 14、总势力 34 = 14 + 20（与 territory-power 时期同值）。
+        // 段 A 重算：原期望总势力 20（scoring-sites：独占空格不计分）→ 领地分 14、总势力 34 = 14 + 20（与 territory-power 时期同值）。
         GameBoard board = TestMaps.Blank(size: 9).PlaceStandardGroup(TestMaps.P0, row: 2);
 
         PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
@@ -170,7 +150,7 @@ public class 势力明细Tests
 
         var scoreboard = new PowerScoreboard();
         var roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
-        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 1);
+        scoreboard.Recalculate(board, roster, majorRound: 1);
 
         MultiplierPeak peak = scoreboard.Peak!;
         Assert.Equal(8, peak.MultiplierCount);
@@ -178,7 +158,7 @@ public class 势力明细Tests
         Assert.Equal(205, peak.Power);
 
         board.Place(new Coord(9, 2), TestMaps.P0, PieceType.Multiplier);
-        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 2);
+        scoreboard.Recalculate(board, roster, majorRound: 2);
 
         peak = scoreboard.Peak!;
         Assert.Equal((9, 2), (peak.MultiplierCount, peak.MajorRound));

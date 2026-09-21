@@ -71,7 +71,7 @@ public class 各入口支持生成图Tests
         var silent = new StringWriter();
         static ulong Never() => throw new InvalidOperationException("不是裸 gen，不应取地图种子。");
         Assert.Equal("gen:12345:p7", Siege.Sim.Program.MaterializeMapRequest("gen:12345:p7", silent, Never));
-        Assert.Equal("siege-frontier-v1", Siege.Sim.Program.MaterializeMapRequest("siege-frontier-v1", silent, Never));
+        Assert.Equal("siege-frontier-v2", Siege.Sim.Program.MaterializeMapRequest("siege-frontier-v2", silent, Never));
         Assert.Null(Siege.Sim.Program.MaterializeMapRequest(null, silent, Never));
         Assert.Equal(string.Empty, silent.ToString());
 
@@ -204,7 +204,7 @@ public class 各入口支持生成图Tests
     [Fact]
     public void 地图子命令的out不得指向内置图的权威文件_同目录下的新文件名允许()
     {
-        // 段 B 检查（负责人裁决 5）：防手滑 `map --map gen:12345 --out maps/siege-frontier-v1.json` 覆盖权威文件。
+        // 段 B 检查（负责人裁决 5）：防手滑 `map --map gen:12345 --out maps/siege-frontier-v2.json` 覆盖权威文件。
         // 只在临时目录与测试工作目录里试，绝不碰仓库的 maps/（变异下也不会写坏它）。变异 CB-5：去掉这道检查 → 本测试红。
         string root = SimFixtures.TempDir("map-out-guard");
         string mapsDir = Path.Combine(root, "maps");
@@ -222,7 +222,7 @@ public class 各入口支持生成图Tests
 
         // 文件已存在、大小写不同（Windows 上是同一个文件）、相对路径：一律拒绝，原文件逐字节不变。
         Directory.CreateDirectory(Path.Combine(root, "Maps"));
-        string existing = Path.Combine(root, "Maps", FrontierMapV1.Id.ToUpperInvariant() + ".JSON");
+        string existing = Path.Combine(root, "Maps", FrontierMapV2.Id.ToUpperInvariant() + ".JSON");
         File.WriteAllText(existing, "原样");
         // （请求的是生成图而不是内置图：内置图的导出另会往工作目录的 maps/ 写，变异下会留垃圾。）
         Assert.Equal(1, RunMain("map", "--map", "gen:12345", "--out", existing).Code);
@@ -253,7 +253,7 @@ public class 各入口支持生成图Tests
         (int freshCode, _, string freshErr) = RunMain("map", "--map", "gen:12345", "--out", fresh);
         Assert.True(freshCode == 0, freshErr);
         Assert.Equal(MapFile.Digest(MapCatalog.Resolve("gen:12345")), MapFile.Digest(MapCatalog.Resolve(fresh)));
-        string elsewhere = Path.Combine(root, "scratch", FrontierMapV1.Id + ".json");
+        string elsewhere = Path.Combine(root, "scratch", FrontierMapV2.Id + ".json");
         Assert.Equal(0, RunMain("map", "--map", "gen:12345", "--out", elsewhere).Code);
         Assert.True(File.Exists(elsewhere));
     }

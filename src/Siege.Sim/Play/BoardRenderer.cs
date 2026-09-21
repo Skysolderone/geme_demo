@@ -71,15 +71,6 @@ internal sealed class BoardRenderer
         _ => type.ToString(),
     };
 
-    /// <summary>据点档位的单字符标记（对局盘面与 <c>map</c> 子命令文本图共用）。</summary>
-    public static char SiteLetter(SiteTier tier) => tier switch
-    {
-        SiteTier.Tent => 'T',
-        SiteTier.Campfire => 'C',
-        SiteTier.Stele => 'S',
-        _ => '?',
-    };
-
     private static char RelicLetter(RelicType type) => type switch
     {
         RelicType.Prospecting => 'p',
@@ -142,12 +133,6 @@ internal sealed class BoardRenderer
                         Ink(" ? ", ConsoleColor.DarkYellow);
                     }
                 }
-                else if (map.Sites.TryGetValue(c, out SiteTier site))
-                {
-                    // 据点只是地图静态数据的展示（档位），控制状态属于计分层，此处不算。
-                    string mark = legal is not null && legal.Contains(c) ? "+" : " ";
-                    Ink($"{mark}{SiteLetter(site)} ", ConsoleColor.Cyan);
-                }
                 else if (zones && map.BirthZoneOf(c) is { } z)
                 {
                     Ink($" {BirthZoneLabel.Number(z)} ", ZoneColor);
@@ -167,7 +152,6 @@ internal sealed class BoardRenderer
 
         WriteColumns(map.Width);
         _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=岩石  ~=深水");
-        _out.WriteLine("        据点：T营帐 C篝火 S石碑（空格时显示；前缀 + 表示可落子）");
         _out.WriteLine("        已揭示信物：p探勘 c征召 d兵站 o军令 v先锋 e徽记");
     }
 

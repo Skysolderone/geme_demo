@@ -156,13 +156,10 @@ public static class FrontierMapGenerator
             return "缺栅栏或林地。";
         }
 
-        int tents = map.Sites.Values.Count(t => t == SiteTier.Tent);
-        int fires = map.Sites.Values.Count(t => t == SiteTier.Campfire);
-        int steles = map.Sites.Values.Count(t => t == SiteTier.Stele);
         int publicRelics = map.RelicCells.Values.Count(r => r.Zone == RelicZone.Contested);
-        if (tents != 0 || map.Sites.Keys.Any(c => map.BirthZoneOf(c) is not null) || fires != platforms.Length || steles != 4 || publicRelics != 7)
+        if (publicRelics != 7)
         {
-            return $"布点不对（平台内不得有据点、不放营帐）：营帐 {tents}、篝火 {fires}、石碑 {steles}、公共信物 {publicRelics}。";
+            return $"布点不对：公共信物 {publicRelics} 个，应为 7 个。";
         }
 
         // 小平台靠中央：最小的两个平台（编号最后两个）到中央入口的沿气边距离，不大于任何一个边长最大的平台的距离。
@@ -248,7 +245,6 @@ public static class FrontierMapGenerator
         var bridges = ImmutableHashSet.CreateBuilder<Coord>();
         var chokes = ImmutableHashSet.CreateBuilder<Coord>();
         var relics = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
-        var sites = ImmutableDictionary.CreateBuilder<Coord, SiteTier>();
         var zones = new ImmutableHashSet<Coord>.Builder[layout.Platforms.Length];
         for (int i = 0; i < zones.Length; i++)
         {
@@ -293,11 +289,6 @@ public static class FrontierMapGenerator
                         throw new InvalidOperationException($"生成器在 {c} 留下了未填充的格子。");
                 }
 
-                if (layout.Sites[x, y] is { } tier)
-                {
-                    sites[c] = tier;
-                }
-
                 if (layout.Relics[x, y] is { } spec)
                 {
                     relics[c] = spec;
@@ -322,7 +313,6 @@ public static class FrontierMapGenerator
             TerrainData = new TerrainData(heights.ToImmutable(), surfaces.ToImmutable(), bridges.ToImmutable(), fences.ToImmutable()),
             BirthZones = [.. zones.Select(z => z.ToImmutable())],
             RelicCells = relics.ToImmutable(),
-            Sites = sites.ToImmutable(),
             ChokePoints = chokes.ToImmutable(),
             CentralEntrance = new Coord(layout.Entrance.X, layout.Entrance.Y),
         };

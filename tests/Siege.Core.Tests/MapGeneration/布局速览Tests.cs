@@ -63,7 +63,7 @@ public class 布局速览Tests
         MapData map = g.Map;
         var entrance = MapValidator.DistanceTable(map)[1].Distances;
         var text = new StringBuilder();
-        text.Append(CultureInfo.InvariantCulture, $"== {map.Id}  尝试序号 {g.Attempt}  可落子格 {map.PlayableCount}  信物 {map.RelicCells.Count}  据点 {map.Sites.Count}  桥（每座格数） {string.Join("+", MapGenFixtures.BridgeSpans(map))}\n");
+        text.Append(CultureInfo.InvariantCulture, $"== {map.Id}  尝试序号 {g.Attempt}  可落子格 {map.PlayableCount}  信物 {map.RelicCells.Count}  桥（每座格数） {string.Join("+", MapGenFixtures.BridgeSpans(map))}\n");
         text.Append("   平台（编号:边长/到中央入口）：")
             .Append(string.Join("  ", g.Platforms.Select((p, i) => $"{i + 1}:{p.Side}/{entrance[i]}")))
             .Append('\n');

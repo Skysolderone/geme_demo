@@ -181,9 +181,7 @@ public sealed partial class GameRoot : Node3D
         Image image = GetViewport().GetTexture().GetImage();
         Error error = image.SavePng(path);
         GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {_session.Match.MajorRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}，手牌信息面板 {(_handPanel.IsOpen ? "开" : "关")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}）");
-        // 截图当刻的据点状态（读视图模型），供 art/sites-v4/README 的人工清单对照"哪张图里有争议 / 控制"。
         DefaultBoardView shot = _session.World.Board();
-        GD.Print("[siege] 据点：" + string.Join("；", shot.Sites.Select(s => $"{s.Coord.ToNotation()} {s.TierText} {s.StatusText}")));
 
         // 盘上六种棋子各多少枚、本局已完成哪些改造，供 art/artisan-v4/README 的人工清单对照（都读视图模型，不读地图、不判规则）。
         GD.Print("[siege] 棋子：" + string.Join("；", shot.Cells

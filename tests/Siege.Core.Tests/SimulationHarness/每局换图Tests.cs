@@ -26,13 +26,13 @@ public class 每局换图Tests
         Assert.Equal(["gen:18446744073709551613:p7", "gen:18446744073709551614:p7", "gen:18446744073709551615:p7"], Enumerable.Range(0, 3).Select(seven.MapIdAt));
 
         // 不换图：恒为配置的地图标识。
-        Assert.Equal("siege-frontier-v1", (SimFixtures.Config(count: 3) with { MapId = "siege-frontier-v1" }).MapIdAt(2));
+        Assert.Equal("siege-frontier-v2", (SimFixtures.Config(count: 3) with { MapId = "siege-frontier-v2" }).MapIdAt(2));
     }
 
     [Fact]
     public void 每局换图要求带起始种子的生成图标识_开跑之前报错()
     {
-        Assert.Throws<ArgumentException>(() => Rotating(2, "siege-frontier-v1").Validated());
+        Assert.Throws<ArgumentException>(() => Rotating(2, "siege-frontier-v2").Validated());
         Assert.Throws<ArgumentException>(() => Rotating(2, "gen").Validated());
         Assert.Throws<FormatException>(() => Rotating(2, "gen:1:p9").Validated());
         Assert.Throws<ArgumentException>(() => Rotating(2, "gen:18446744073709551615").Validated());
@@ -42,7 +42,7 @@ public class 每局换图Tests
 
         // 半份输出比没有输出更糟：非法配置不建输出目录。
         string dir = Path.Combine(SimFixtures.TempDir("rotate-invalid"), "out");
-        Assert.Throws<ArgumentException>(() => BatchRunner.ExecuteToDirectory(Rotating(2, "siege-4p-base-v4"), dir, parallelism: 1));
+        Assert.Throws<ArgumentException>(() => BatchRunner.ExecuteToDirectory(Rotating(2, "siege-4p-base-v5"), dir, parallelism: 1));
         Assert.False(Directory.Exists(dir));
     }
 

@@ -81,27 +81,6 @@ public class 总势力Tests
     }
 
     [Fact]
-    public void 据点分不计入总势力()
-    {
-        // 段 A 过渡（据点类型与控制判定到段 B 才删除）：总势力公式已去掉据点分一项；控制中的据点仍列在明细里、SiteScore 仍可读，但 MUST NOT 进 Total。
-        // 段 A 改写：原「据点与棋串相加」期望 5 + 45 + 20 + 7 = 77 → 领地 24 + 20 + 7 = 51（盘面不变）。
-        // 领地手数：第 2 行棋串 B–G 上下各 6 + 两端 A2、H2（H2 是空的营帐格，仍是空可落子格）= 14；第 6 行棋串 B–E 上下各 4 + 两端 A6、F6（空的石碑格）= 10。
-        // 变异验证 M-AC4（段 A check 实跑）：Compute 的 Total 加回 sites.Sum(s => s.Value) → 红 3：本测试（101）、
-        // 终局名次与并列判定.终局输入取控制中的据点数量、候选格上限.缺省不限制时标准图整局与改动前逐步相同。
-        GameBoard board = TestMaps.Blank(size: 11)
-            .WithSites(("H2", SiteTier.Tent), ("F6", SiteTier.Stele))
-            .PlaceStandardGroup(TestMaps.P0, row: 2)
-            .Place("B6", TestMaps.P0, PieceType.Fortress).Place("C6", TestMaps.P0).Place("D6", TestMaps.P0).Place("E6", TestMaps.P0);
-
-        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
-
-        Assert.Equal(50, p0.SiteScore);
-        Assert.Equal(24, p0.TerritoryScore);
-        Assert.Equal(new BigInteger[] { 20, 7 }, p0.Groups.Select(g => g.Power));
-        Assert.Equal(51, p0.Total);
-    }
-
-    [Fact]
     public void 领地计分直接取空格归属结果()
     {
         // design D2 / coverage-territory「空格归属三态」：领地计分 MUST 直接使用空格归属判定的结果，MUST NOT 另行统计覆盖——全仓库只有一处覆盖统计。
@@ -195,12 +174,12 @@ public class 总势力Tests
 
         var scoreboard = new PowerScoreboard();
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active));
-        Assert.Equal(80, scoreboard.Recalculate(board, roster, SiteValues.Standard, 5).Of(TestMaps.P0).Total);
+        Assert.Equal(80, scoreboard.Recalculate(board, roster, 5).Of(TestMaps.P0).Total);
 
         board.RemoveStones(new[] { "D2", "E2", "F2", "G2", "H2" }.Select(TestMaps.At));
         board.Place("B4", TestMaps.P1).Place("C4", TestMaps.P1);
 
-        PlayerPower now = scoreboard.Recalculate(board, roster, SiteValues.Standard, 6).Of(TestMaps.P0);
+        PlayerPower now = scoreboard.Recalculate(board, roster, 6).Of(TestMaps.P0);
         Assert.Equal((4, (BigInteger)12), (now.TerritoryScore, now.Total));
         Assert.Equal(12, scoreboard.Latest!.Of(TestMaps.P0).Total);
         string[] historyWords = ["History", "Accumulated", "Cumulative", "Previous", "Peak", "Max"];

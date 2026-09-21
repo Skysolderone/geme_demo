@@ -10,9 +10,9 @@ internal static class CameraFixtures
     /// <summary>坐标标注外圈的边距（与引擎侧 <c>BoardGeometry.FarLabelMargin</c> 同值；旧固定相机的跨度公式用的就是它）。</summary>
     internal const float Margin = 1.7f;
 
-    internal static MapData V4 => MapCatalog.Resolve("siege-4p-base-v4");
+    internal static MapData V4 => MapCatalog.Resolve("siege-4p-base-v5");
 
-    internal static MapData Frontier => MapCatalog.Resolve("siege-frontier-v1");
+    internal static MapData Frontier => MapCatalog.Resolve("siege-frontier-v2");
 
     /// <summary>格心间距 1、棋盘以原点为中心：外接矩形 = 全部格子 + 四周各 <see cref="Margin"/>。</summary>
     internal static PlaneRect BoundsOf(int width, int height) =>

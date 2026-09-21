@@ -12,7 +12,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// </summary>
 public class 边疆档基准地图Tests
 {
-    private static readonly MapData Map = FrontierMapV1.Create();
+    private static readonly MapData Map = FrontierMapV2.Create();
 
     /// <summary>规格写死的平台边长，按平台编号 1–6（生成器注释里的"编号 → 边长 → 方位"表）。</summary>
     private static readonly int[] Sides = [9, 8, 7, 6, 5, 5];
@@ -21,7 +21,7 @@ public class 边疆档基准地图Tests
     public void 外接尺寸与校验通过()
     {
         // 规格：宽度 MUST NOT 超过 25 列，本图取 25 × 28–32；可落子格落在边疆档 4 人区间 300–420；边疆档全项校验通过，五项距离作为报告项给出。
-        Assert.Equal("siege-frontier-v1", Map.Id);
+        Assert.Equal("siege-frontier-v2", Map.Id);
         Assert.Equal(25, Map.Width);
         Assert.InRange(Map.Height, 28, 32);
         Assert.Equal(4, Map.MaxPlayers);
@@ -30,7 +30,7 @@ public class 边疆档基准地图Tests
 
         MapValidationResult result = MapValidator.Validate(Map);
         Assert.True(result.IsValid, result.ToString());
-        Assert.Equal(5, result.Reports.Count(r => r.Code == "BIRTH_ZONE_DISTANCE_REPORT"));
+        Assert.Equal(3, result.Reports.Count(r => r.Code == "BIRTH_ZONE_DISTANCE_REPORT"));   // restore-go-core-rules：距离报告项五项改三项
         Assert.Empty(Map.PocketExemptions);
     }
 
@@ -60,8 +60,7 @@ public class 边疆档基准地图Tests
     {
         // 规格：平台内 MUST NOT 有障碍格（map-generator 裁决 17，负责人 2026-09-21 试玩后要求）。外接方块按规格写死的边长从出生区推出，
         // 方块里每一格都属于本平台、可落子、不是障碍；留在平台上的只有 1–2 个信物格（边长 5–6 的 1 个、7–9 的 2 个），
-        // 平台内 MUST NOT 有据点（裁决 18：不放营帐，得分点全在平台外）。变异 M-B16：解析器恢复 'T' 并把 H15 改回 'T' → 本测试与「资源布点」红。
-        // 变异 M-B15：字符画解析里恢复"方块内允许 '#'"并把 5 号台 F15 改回 '#' → 本测试与「平台规模」红。
+        // 变异（frontier-map 段 B）M-B15：字符画解析里恢复"方块内允许 '#'"并把 5 号台 F15 改回 '#' → 本测试与「平台规模」红。
         for (int z = 0; z < 6; z++)
         {
             ImmutableHashSet<Coord> zone = Map.BirthZones[z];
@@ -69,7 +68,6 @@ public class 边疆档基准地图Tests
             Coord[] box = [.. FrontierFixtures.Rect(zone.Min(c => c.X), zone.Min(c => c.Y), side, side)];
             Assert.Empty(box.Where(Map.Obstacles.Contains));
             Assert.All(box, c => Assert.True(zone.Contains(c) && Map.IsPlayable(c), $"{BirthZoneLabel.Of(z)} 的外接方块里 {c} 不是平台格。"));
-            Assert.Empty(box.Where(Map.Sites.ContainsKey));
             Assert.Equal(side >= 7 ? 2 : 1, box.Count(Map.RelicCells.ContainsKey));
         }
 
@@ -170,32 +168,12 @@ public class 边疆档基准地图Tests
     [Fact]
     public void 资源布点()
     {
-        // 规格 Scenario：据点 10（篝火 6、石碑 4；平台内没有据点、没有营帐），信物格 16（平台内 9、公共 7），无一重合。
-        Assert.Equal(10, Map.Sites.Count);
+        // 规格 Scenario「资源布点」：信物格 16 个（平台内 9、公共 7），地图数据不含据点。
+        // 变异 M-B15b（restore-go-core-rules 段 B，实跑红 71）：FrontierMapV2 的解析把 'o'（标准档公共信物）这一分支改掉 → 本测试红。
         Assert.Equal(16, Map.RelicCells.Count);
-        Assert.DoesNotContain(Map.Sites.Keys, Map.RelicCells.ContainsKey);
-
-        Coord[] Tier(SiteTier t) => [.. Map.Sites.Where(kv => kv.Value == t).Select(kv => kv.Key).Order()];
-
-        // 营帐：没有（裁决 18）；任何据点都不在平台内。
-        Assert.Empty(Tier(SiteTier.Tent));
-        Assert.All(Map.Sites.Keys, c => Assert.Null(Map.BirthZoneOf(c)));
-
-        // 篝火：6 个，全在过渡带（不属于任何平台，h=0）。石碑：4 个，中央区域（到中央入口的气边距离 ≤ 3），h=0，非林地。
-        Coord[] campfires = Tier(SiteTier.Campfire);
-        Assert.Equal(6, campfires.Length);
-        Assert.All(campfires, c => Assert.True(Map.BirthZoneOf(c) is null && Map.HeightAt(c) == 0, $"篝火 {c} 不在过渡带。"));
+        Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(Map), StringComparison.Ordinal);
 
         Dictionary<Coord, int> fromEntrance = Distances([Map.CentralEntrance]);
-        Coord[] steles = Tier(SiteTier.Stele);
-        Assert.Equal(4, steles.Length);
-        Assert.All(steles, c =>
-        {
-            Assert.Null(Map.BirthZoneOf(c));
-            Assert.Equal(0, Map.HeightAt(c));
-            Assert.NotEqual(Surface.Forest, Map.SurfaceAt(c));
-            Assert.InRange(fromEntrance[c], 1, 3);
-        });
 
         // 信物：边长 5–6 的平台各 1、7–9 的各 2（全部出生区分区 / 出生区预算，含没人选的中立平台——裁决 9）；公共 7，其中至少 1 个高档在中央入口附近。
         for (int z = 0; z < 6; z++)
@@ -245,11 +223,11 @@ public class 边疆档基准地图Tests
     [Fact]
     public void 生成器确定且与磁盘文件一致()
     {
-        // tasks 3.4：同一代码两次导出字节相同；maps/siege-frontier-v1.json 与代码一致、再读入逐字段相等（规格档仍为边疆）。
-        string json = MapFile.ToJson(FrontierMapV1.Create());
-        Assert.Equal(json, MapFile.ToJson(FrontierMapV1.Create()));
+        // tasks 3.4：同一代码两次导出字节相同；maps/siege-frontier-v2.json 与代码一致、再读入逐字段相等（规格档仍为边疆）。
+        string json = MapFile.ToJson(FrontierMapV2.Create());
+        Assert.Equal(json, MapFile.ToJson(FrontierMapV2.Create()));
 
-        string path = Path.Combine(FrontierFixtures.RepoRoot(), "maps", $"{FrontierMapV1.Id}.json");
+        string path = Path.Combine(FrontierFixtures.RepoRoot(), "maps", $"{FrontierMapV2.Id}.json");
         MapData onDisk = MapFile.FromJson(File.ReadAllText(path));
         Assert.Equal(json, MapFile.ToJson(onDisk));
         Assert.Equal(MapProfile.Frontier, onDisk.Profile);
@@ -259,14 +237,14 @@ public class 边疆档基准地图Tests
     [Fact]
     public void 已收录但不是缺省地图()
     {
-        // 规格 Scenario「不是缺省地图」：不带地图选项 → siege-4p-base-v4；边疆图只能按标识显式选到。
-        // 变异 M-B3：MapCatalog.DefaultId 改成 FrontierMapV1.Id → 本测试红。
-        Assert.Contains(FrontierMapV1.Id, MapCatalog.BuiltinIds);
-        Assert.Equal(FrontierMapV1.Id, MapCatalog.Resolve("siege-frontier-v1").Id);
-        Assert.NotEqual(FrontierMapV1.Id, MapCatalog.DefaultId);
+        // 规格 Scenario「不是缺省地图」：不带地图选项 → siege-4p-base-v5；边疆图只能按标识显式选到。
+        // 变异 M-B3：MapCatalog.DefaultId 改成 FrontierMapV2.Id → 本测试红。
+        Assert.Contains(FrontierMapV2.Id, MapCatalog.BuiltinIds);
+        Assert.Equal(FrontierMapV2.Id, MapCatalog.Resolve("siege-frontier-v2").Id);
+        Assert.NotEqual(FrontierMapV2.Id, MapCatalog.DefaultId);
         Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.Resolve(null).Id);
         Assert.Equal(FourPlayerBaseMap.Id, new Siege.Sim.Config.RunConfig().MapId);
-        Assert.Equal(MapFile.ToJson(FrontierMapV1.Create()), MapFile.ToJson(MapCatalog.Resolve(FrontierMapV1.Id)));
+        Assert.Equal(MapFile.ToJson(FrontierMapV2.Create()), MapFile.ToJson(MapCatalog.Resolve(FrontierMapV2.Id)));
     }
 
     [Theory]

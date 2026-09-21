@@ -47,12 +47,6 @@ public sealed record MatchOptions
     /// </summary>
     public bool CatchUpRecruit { get; init; } = DefaultCatchUpRecruit;
 
-    /// <summary>
-    /// 三档据点分值（scoring-sites D-A；标准局 <see cref="Scoring.SiteValues.Standard"/> = 5 / 15 / 45，待扫档校准）。
-    /// 属于对局配置：开局固定、公开、入存档；须为正整数且营帐 ≤ 篝火 ≤ 石碑（<see cref="Scoring.SiteValues.Validated"/>，建局时校验）。
-    /// </summary>
-    public SiteValues SiteValues { get; init; } = SiteValues.Standard;
-
     /// <summary>标准局的匠人征募权重初值（artisan-terrain-edit 裁决 T-1 / R-2：10，待扫档校准）。</summary>
     public const int DefaultArtisanWeight = RecruitWeights.DefaultArtisanWeight;
 

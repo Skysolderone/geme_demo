@@ -116,7 +116,7 @@ public class 地形写入口Tests
     [Fact]
     public void 改造只加不减且不动高度与障碍()
     {
-        // R-4 + terrain-edit「MUST NOT 提供逆向动作」：写入口只有加桥 / 加栅 / 林地→草地，且不碰高度、障碍、信物与据点。
+        // R-4 + terrain-edit「MUST NOT 提供逆向动作」：写入口只有加桥 / 加栅 / 林地→草地，且不碰高度、障碍与信物。
         GameBoard board = TestMaps.Blank(
             TestMaps.Terrain(
                 heights: [("D4", 1), ("F4", 2)],
@@ -144,7 +144,6 @@ public class 地形写入口Tests
         Assert.Equal(Surface.Grass, board.Map.SurfaceAt(TestMaps.At("F4")));
         Assert.True(board.Map.HasFence(TestMaps.At("H6"), TestMaps.At("G6")));
         Assert.Equal(before.Obstacles, board.Map.Obstacles);
-        Assert.Equal(before.Sites, board.Map.Sites);
         Assert.Equal(before.RelicCells, board.Map.RelicCells);
     }
 
@@ -246,7 +245,7 @@ public class 地形写入口Tests
             typeof(TerrainData).FullName!,            // TerrainData.Flat
             "Siege.Core.Board.MapFile",
             "Siege.Core.Board.Maps.FourPlayerBaseMap",
-            "Siege.Core.Board.Maps.FrontierMapV1",
+            "Siege.Core.Board.Maps.FrontierMapV2",
             "Siege.Core.Board.Maps.FrontierMapGenerator",   // map-generator 1.3：生成图与两张内置图同属"地图定义"，只在灌成 MapData 的那一处构造
         ];
 

@@ -83,21 +83,21 @@ public class 地形派生数据不缓存Tests
     }
 
     [Fact]
-    public void 覆盖表与据点控制按新地形重算()
+    public void 覆盖表与空格归属按新地形重算()
     {
-        // 排查项 ④（不缓存）：CoverageMap.Compute 每次结算重算一次；SiteControl 只读它。
-        // 烧林使该格可被覆盖 → 据点控制随之变化。
-        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F4", Surface.Forest)]), size: 9)
-            .WithSites(("F4", SiteTier.Tent));
+        // 排查项 ④（不缓存）：CoverageMap.Compute 每次结算重算一次。
+        // 烧林使该格由"不是覆盖目标"变成可被覆盖 → 空格归属随之由中立变为独占（terrain-edit「烧林后可被覆盖」）。
+        // 段 B 改写：原来用的是据点控制（SiteControl），据点摘除后改断言同一份覆盖表给出的空格归属三态，行为等价。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F4", Surface.Forest)]), size: 9);
         board.Place(TestMaps.At("E4"), TestMaps.P0, PieceType.Artisan);
 
-        SiteState before = SiteControl.Compute(board, CoverageMap.Compute(board)).Single(s => s.Coord == TestMaps.At("F4"));
-        Assert.Equal(SiteControlKind.Unclaimed, before.Kind);
+        CellOwnership before = CoverageMap.Compute(board).OwnershipOf(TestMaps.At("F4"));
+        Assert.Equal(OwnershipKind.Neutral, before.Kind);
 
         board.ApplyTerrainEdits([TerrainEdit.Burn(TestMaps.At("F4"))]);
 
-        SiteState after = SiteControl.Compute(board, CoverageMap.Compute(board)).Single(s => s.Coord == TestMaps.At("F4"));
-        Assert.Equal(TestMaps.P0, after.Controller);
+        CellOwnership after = CoverageMap.Compute(board).OwnershipOf(TestMaps.At("F4"));
+        Assert.Equal(new CellOwnership(OwnershipKind.Exclusive, TestMaps.P0), after);
     }
 
     [Fact]

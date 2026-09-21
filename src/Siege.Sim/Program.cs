@@ -70,7 +70,7 @@ public static class Program
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限，0=不限>]");
         Console.WriteLine("                [--dominance-start <碾压起始大回合，0=关闭，默认 7>] [--no-catch-up（关闭落后者征募补偿，默认开启）]");
-        Console.WriteLine("                [--site-values <营帐/篝火/石碑，默认 5/15/45>] [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
+        Console.WriteLine("                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  地图标识：内置图 / 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
@@ -117,7 +117,7 @@ public static class Program
     // ---------- map ----------
 
     /// <summary>
-    /// 地图工具：打印一张地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 据点 / 出生区与距离表、校验结果与报告项）；
+    /// 地图工具：打印一张地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、校验结果与报告项）；
     /// 内置图另导出 maps/&lt;id&gt;.json（权威地图文件）。<c>--map</c> 缺省为缺省地图；给地图文件路径时只打印不导出（不回写设计师的文件）。
     /// <c>--out</c> 把这张图另存为指定文件（生成图只有这一条落盘的路）；目标不得是内置图的权威文件（<see cref="RequireNotAuthoritativeMapFile"/>）。
     /// </summary>
@@ -146,14 +146,6 @@ public static class Program
             + " 个可落子格，高度 "
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
-        Console.WriteLine(
-            $"据点 {map.Sites.Count}（营帐 {map.Sites.Count(s => s.Value == SiteTier.Tent)}，篝火 {map.Sites.Count(s => s.Value == SiteTier.Campfire)}，石碑 {map.Sites.Count(s => s.Value == SiteTier.Stele)}）");
-        // 该档一个都没有就不打空行（边疆图的平台内不放营帐）。
-        foreach (SiteTier tier in Enum.GetValues<SiteTier>().Where(t => map.Sites.Any(s => s.Value == t)))
-        {
-            Console.WriteLine($"  {tier switch { SiteTier.Tent => "营帐", SiteTier.Campfire => "篝火", _ => "石碑" }}（{Siege.Sim.Play.BoardRenderer.SiteLetter(tier)}） {string.Join(" ", map.Sites.Where(s => s.Value == tier).Select(s => s.Key).Order())}");
-        }
-
         Console.WriteLine($"各出生区沿气边最短距离（出生区 {string.Join("/", Enumerable.Range(0, map.BirthZones.Length).Select(BirthZoneLabel.Number))}）：");
         foreach (BirthZoneDistance metric in MapValidator.DistanceTable(map))
         {
@@ -198,8 +190,8 @@ public static class Program
 
         Console.WriteLine();
         Console.WriteLine();
-        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区  r 出生区信物  o 公共信物  R 公共高档信物  T 营帐  C 篝火  S 石碑");
-        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物、据点或桥同格时显示信物 / 据点 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =；据点不与信物重合）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
+        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区  r 出生区信物  o 公共信物  R 公共高档信物");
+        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
 
         // --out：把这张图导出到指定文件（map-generator 2.6）。生成图靠它落成普通地图文件——标识里有冒号，做不了 Windows 文件名，
         // 而且 maps/ 是内置图的权威目录，查看生成图不得往里写。导出的文件按路径加载，与按标识生成的地图逐项相同。
@@ -270,7 +262,6 @@ public static class Program
 
         char mark = map.RelicCells.TryGetValue(c, out RelicCellSpec spec)
             ? spec.Budget switch { BudgetTier.Birth => 'r', BudgetTier.High => 'R', _ => 'o' }
-            : map.Sites.TryGetValue(c, out SiteTier site) ? Siege.Sim.Play.BoardRenderer.SiteLetter(site)
             : c == map.CentralEntrance ? '@'
             : map.HasBridge(c) ? '='
             : map.ChokePoints.Contains(c) ? '^'
@@ -305,7 +296,6 @@ public static class Program
             MaxMajorRounds = cli.GetInt("max-rounds", config.MaxMajorRounds),
             DominanceStartRound = cli.GetInt("dominance-start", config.DominanceStartRound),
             CatchUpRecruit = !cli.Flag("no-catch-up") && config.CatchUpRecruit,
-            SiteValues = cli.GetOrNull("site-values") is { } siteValues ? RunConfig.ParseSiteValues(siteValues) : config.SiteValues,
             ArtisanWeight = cli.GetInt("artisan-weight", config.ArtisanWeight),
             CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
@@ -321,7 +311,7 @@ public static class Program
         config.Validated();
         int parallelism = serial ? 1 : config.EffectiveParallelism;
 
-        Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，地图 {(config.MapPerMatch ? $"每局换图 {config.MapIdAt(0)}..{config.MapIdAt(config.Count - 1)}" : config.MapId)}，{config.PlayerCount} 人，并行度 {parallelism}，大回合上限 {config.MaxMajorRounds}，据点分值 {config.SiteValues}，匠人权重 {config.ArtisanWeight}，输出 {outDir}");
+        Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，地图 {(config.MapPerMatch ? $"每局换图 {config.MapIdAt(0)}..{config.MapIdAt(config.Count - 1)}" : config.MapId)}，{config.PlayerCount} 人，并行度 {parallelism}，大回合上限 {config.MaxMajorRounds}，匠人权重 {config.ArtisanWeight}，输出 {outDir}");
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, outDir, parallelism, Console.Out);
         Console.WriteLine();
         Console.WriteLine(summary.ToJson());

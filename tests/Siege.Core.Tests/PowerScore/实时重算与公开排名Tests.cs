@@ -84,7 +84,7 @@ public class 实时重算与公开排名Tests
         board.Place("G9", ScoringFixtures.P3, PieceType.Multiplier);
 
         PowerSnapshot snapshot = PowerCalculator.Compute(
-            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned)), SiteValues.Standard);
+            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned)));
 
         PlayerPower d = snapshot.Of(ScoringFixtures.P3);
         Assert.Equal((14, (BigInteger)45), (d.TerritoryScore, d.Total));
@@ -111,15 +111,15 @@ public class 实时重算与公开排名Tests
         var scoreboard = new PowerScoreboard();
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
 
-        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 1);
+        scoreboard.Recalculate(board, roster, majorRound: 1);
         Assert.Equal((1, 1), (scoreboard.Peak!.MultiplierCount, scoreboard.Peak.MajorRound));
 
         board.Place("C2", TestMaps.P0, PieceType.Multiplier);
-        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 2);
+        scoreboard.Recalculate(board, roster, majorRound: 2);
         board.Place("G7", TestMaps.P0, PieceType.Multiplier).Place("G8", TestMaps.P0, PieceType.Multiplier);
-        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 3);
+        scoreboard.Recalculate(board, roster, majorRound: 3);
         board.RemoveStones([TestMaps.At("C2"), TestMaps.At("G8")]);
-        scoreboard.Recalculate(board, roster, SiteValues.Standard, majorRound: 4);
+        scoreboard.Recalculate(board, roster, majorRound: 4);
 
         MultiplierPeak peak = scoreboard.Peak!;
         Assert.Equal(2, peak.MultiplierCount);

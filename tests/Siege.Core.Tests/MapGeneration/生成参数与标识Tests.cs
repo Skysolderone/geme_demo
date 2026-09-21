@@ -91,7 +91,7 @@ public class 生成参数与标识Tests
     [InlineData("gen:18446744073709551616")]
     [InlineData("GEN:1")]
     [InlineData("generated:1")]
-    [InlineData("siege-frontier-v1")]
+    [InlineData("siege-frontier-v2")]
     [InlineData("")]
     [InlineData(null)]
     public void 非法标识报错并说明格式与范围(string? id)
@@ -109,7 +109,7 @@ public class 生成参数与标识Tests
         Assert.True(GeneratedMapId.IsGenerated("gen:1"));
         Assert.True(GeneratedMapId.IsGenerated("gen:abc"));          // 属于这一族，交给 Parse 去报格式错，而不是被当成文件路径
         Assert.False(GeneratedMapId.IsGenerated("generated"));
-        Assert.False(GeneratedMapId.IsGenerated("siege-frontier-v1"));
+        Assert.False(GeneratedMapId.IsGenerated("siege-frontier-v2"));
         Assert.False(GeneratedMapId.IsGenerated(null));
 
         Assert.True(GeneratedMapId.IsBareRequest("gen"));

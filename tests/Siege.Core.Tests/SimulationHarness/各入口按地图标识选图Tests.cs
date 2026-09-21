@@ -21,14 +21,14 @@ public class 各入口按地图标识选图Tests
     [Fact]
     public void 缺省地图不变()
     {
-        // 未给地图选项 → siege-4p-base-v4。三个入口的缺省都取自目录的同一个常量。
+        // 未给地图选项 → siege-4p-base-v5。三个入口的缺省都取自目录的同一个常量。
         // 变异 M-A9：MapCatalog.DefaultId 换成 siege-4p-base-v3 → 本测试红（全套共红 39：所有走缺省地图的入口都跟着变）。
-        Assert.Equal("siege-4p-base-v4", MapCatalog.DefaultId);
-        Assert.Equal("siege-4p-base-v4", MapCatalog.Resolve(null).Id);
-        Assert.Equal("siege-4p-base-v4", MapCatalog.Resolve("  ").Id);
-        Assert.Equal("siege-4p-base-v4", MapCatalog.Resolve("siege-4p-base-v4").Id);
-        Assert.Equal("siege-4p-base-v4", new Siege.Sim.Config.RunConfig().MapId);
-        Assert.Contains("siege-4p-base-v4", MapCatalog.BuiltinIds);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.DefaultId);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve(null).Id);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve("  ").Id);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve("siege-4p-base-v5").Id);
+        Assert.Equal("siege-4p-base-v5", new Siege.Sim.Config.RunConfig().MapId);
+        Assert.Contains("siege-4p-base-v5", MapCatalog.BuiltinIds);
         Assert.Equal(MapFile.ToJson(FourPlayerBaseMap.Create()), MapFile.ToJson(MapCatalog.Resolve(null)));
     }
 
@@ -45,14 +45,38 @@ public class 各入口按地图标识选图Tests
         // 终端版入口
         (int playCode, string playErr) = RunMain("play", "--map", "no-such-map", "--seed", "1");
         Assert.NotEqual(0, playCode);
-        Assert.Contains("siege-4p-base-v4", playErr, StringComparison.Ordinal);
+        Assert.Contains("siege-4p-base-v5", playErr, StringComparison.Ordinal);
 
         // 批量入口：报错且不写出任何输出
         string outDir = Path.Combine(SimFixtures.TempDir("mapcatalog-unknown"), "out");
         (int runCode, string runErr) = RunMain("run", "--out", outDir, "--map", "no-such-map", "--seed", "1");
         Assert.NotEqual(0, runCode);
-        Assert.Contains("siege-4p-base-v4", runErr, StringComparison.Ordinal);
+        Assert.Contains("siege-4p-base-v5", runErr, StringComparison.Ordinal);
         Assert.False(Directory.Exists(outDir));
+    }
+
+    [Theory]
+    [InlineData("siege-4p-base-v4", "siege-4p-base-v5")]
+    [InlineData("siege-frontier-v1", "siege-frontier-v2")]
+    public void 改名前的旧地图标识报未知地图(string retired, string current)
+    {
+        // 规格：map-definition —— 内置图随据点摘除改名（tasks 2.3）。旧标识 MUST 报"找不到地图"并列出现名，
+        // MUST NOT 悄悄解析成新图——两张图的信物/地形虽然一样，但旧标识对应的权威文件已经不存在，
+        // 让它还能解析出图会掩盖"调用方仍在用旧标识"。
+        // 变异 M-B20：Builtins 表里把新标识写回旧标识 → 本测试红。
+        Assert.DoesNotContain(retired, MapCatalog.BuiltinIds);
+        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve(retired));
+        Assert.Contains("找不到地图", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(retired, ex.Message, StringComparison.Ordinal);
+        Assert.Contains(current, ex.Message, StringComparison.Ordinal);
+
+        // 反面：现名必须解析得出，否则上面那条"旧的报错"可以靠"两个都报错"恒真。
+        Assert.Equal(current, MapCatalog.Resolve(current).Id);
+
+        // 旧标识的权威文件也不得留在仓库里——留着的话 Resolve 会经 maps/<标识>.json 回落，旧标识悄悄复活。
+        Assert.False(
+            File.Exists(Path.Combine(FrontierFixtures.RepoRoot(), "maps", retired + ".json")),
+            $"maps/{retired}.json 仍在仓库里。");
     }
 
     [Fact]
@@ -73,7 +97,7 @@ public class 各入口按地图标识选图Tests
     {
         // tasks 2.2：--map 已在 play 的严格命令行解析里登记；拼错的 --mapp 按 strict-cli 报错，并建议 --map。
         // 变异 M-A11：Program.Play 不读 "map" 选项 → 合法的 --map 也成了未知选项，下面的反面断言红。
-        (int code, string err) = RunMain("play", "--mapp", "siege-4p-base-v4", "--seed", "1");
+        (int code, string err) = RunMain("play", "--mapp", "siege-4p-base-v5", "--seed", "1");
         Assert.NotEqual(0, code);
         Assert.Contains("--mapp", err, StringComparison.Ordinal);
         Assert.Contains("是否想用 --map？", err, StringComparison.Ordinal);
@@ -117,7 +141,7 @@ public class 各入口按地图标识选图Tests
         var explicitOut = new StringWriter();
 
         PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, 3, new StringReader(script), implicitOut);
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, 3, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v4"));
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, 3, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"));
 
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());

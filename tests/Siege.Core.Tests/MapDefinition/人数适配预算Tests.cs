@@ -55,73 +55,6 @@ public class 人数适配预算Tests
         Assert.Contains(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");
     }
 
-    [Theory]
-    [InlineData(16, "多于上限 14")]
-    [InlineData(15, "多于上限 14")]
-    [InlineData(9, "少于下限 10")]
-    public void 据点数越界(int count, string direction)
-    {
-        // 规格 Scenario（scoring-sites）：4 人地图据点为 16 个 → 拒绝并报告超出 10–14 区间。
-        // 15 与 9 是紧贴区间外的边界：只测 16 的话把上界写成 15，行为上一条都不红。
-        MapData map = WithSiteCount(FourPlayerBaseMap.Create(), count);
-        Assert.Equal(count, map.Sites.Count);
-
-        MapValidationFailure failure = Assert.Single(
-            MapValidator.Validate(map).Failures, f => f.Code == "SITE_COUNT_OUT_OF_RANGE");
-        Assert.Contains($"据点为 {count} 个", failure.Message, StringComparison.Ordinal);
-        Assert.Contains(direction, failure.Message, StringComparison.Ordinal);
-        Assert.Contains("10–14", failure.Message, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData(10)]
-    [InlineData(14)]
-    public void 据点数恰在区间端点时通过(int count)
-    {
-        MapData map = WithSiteCount(FourPlayerBaseMap.Create(), count);
-        Assert.Equal(count, map.Sites.Count);
-
-        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "SITE_COUNT_OUT_OF_RANGE");
-    }
-
-    [Theory]
-    [InlineData(2, 5, "6–8")]
-    [InlineData(2, 9, "6–8")]
-    [InlineData(3, 8, "9–11")]
-    [InlineData(3, 12, "9–11")]
-    public void 两人三人据点数区间(int players, int count, string range)
-    {
-        // scoring-sites map-definition 预算表：2 人 6–8、3 人 9–11（估值，定稿时重估）。合成图只用于触发这一条。
-        MapData plain = TestMaps.Synthetic(size: 9, maxPlayers: players);
-        MapData map = plain with
-        {
-            Sites = plain.AllCoords().Take(count).ToImmutableDictionary(c => c, _ => SiteTier.Stele),
-        };
-
-        MapValidationFailure failure = Assert.Single(
-            MapValidator.Validate(map).Failures, f => f.Code == "SITE_COUNT_OUT_OF_RANGE");
-        Assert.Contains($"据点为 {count} 个", failure.Message, StringComparison.Ordinal);
-        Assert.Contains(range, failure.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>把 v4 的 12 个据点增删到 <paramref name="count"/> 个：增加的取岛上内圈（可落子、非信物、非据点），删除按坐标序从末尾删。</summary>
-    private static MapData WithSiteCount(MapData map, int count)
-    {
-        ImmutableDictionary<Coord, SiteTier> sites = map.Sites;
-        string[] spare = ["G6", "F7", "H7", "G8"];
-        foreach (string s in spare.Take(Math.Max(0, count - sites.Count)))
-        {
-            sites = sites.Add(Coord.Parse(s), SiteTier.Stele);
-        }
-
-        foreach (Coord c in sites.Keys.Order().Reverse().Take(Math.Max(0, sites.Count - count)).ToArray())
-        {
-            sites = sites.Remove(c);
-        }
-
-        return map with { Sites = sites };
-    }
-
     [Fact]
     public void 两人预算区间()
     {
@@ -173,18 +106,17 @@ public class 人数适配预算Tests
         Assert.Contains(MapValidator.Validate(map).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
     }
 
-    // ---------- frontier-map：边疆档 4 人预算（300–420 / 5–8 区且多于人数 / 单区 20–225 / 信物 14–24 / 据点 8–16） ----------
+    // ---------- frontier-map：边疆档 4 人预算（300–420 / 5–8 区且多于人数 / 单区 20–225 / 信物 14–24） ----------
 
     [Fact]
     public void 边疆档按自己的区间校验()
     {
-        // 规格 Scenario：4 人边疆档，可落子 360、出生区 6、信物 16、据点 10 → 规模校验通过；同样的数字标成标准档因可落子超出 95–110 被拒。
+        // 规格 Scenario：4 人边疆档，可落子 360、出生区 6、信物 16 → 规模校验通过；同样的数字标成标准档因可落子超出 95–110 被拒。
         // 变异 M-A3：把声明表里边疆档的可落子区间改成标准档的 95–110 → 本测试红。
         MapData frontier = FrontierFixtures.Map();
         Assert.Equal(360, frontier.PlayableCount);
         Assert.Equal(6, frontier.BirthZones.Length);
         Assert.Equal(16, frontier.RelicCells.Count);
-        Assert.Equal(10, frontier.Sites.Count);
 
         MapValidationResult accepted = MapValidator.Validate(frontier);
         Assert.True(accepted.IsValid, accepted.ToString());
@@ -333,8 +265,8 @@ public class 人数适配预算Tests
     [InlineData(25, "多于上限 24")]
     public void 边疆档信物数区间端点(int count, string? direction)
     {
-        // 「只改测试不改实现」的变异 M-A20（testing.md：专治测试抄实现）：把本测试期望的区间文本换成据点的 8–16 → 越界的两行红，
-        // 说明信物 / 据点两个维度的期望值各自钉住了实现，而不是跟着实现走。
+        // 「只改测试不改实现」的变异 M-A20（testing.md：专治测试抄实现）：把本测试期望的区间文本换成单区格数的 20–225 → 越界的两行红，
+        // 说明信物与单区格数两个维度的期望值各自钉住了实现，而不是跟着实现走。
         MapData frontier = FrontierFixtures.Map();
         ImmutableDictionary<Coord, RelicCellSpec> relics = frontier.RelicCells;
         foreach (Coord c in relics.Where(kv => kv.Value.Budget == BudgetTier.Standard).Select(kv => kv.Key).Order().Take(Math.Max(0, 16 - count)))
@@ -351,33 +283,6 @@ public class 人数适配预算Tests
         Assert.Equal(count, map.RelicCells.Count);
 
         AssertRange(MapValidator.Validate(map), "RELIC_COUNT_OUT_OF_RANGE", direction, "14–24");
-    }
-
-    [Theory]
-    [InlineData(7, "少于下限 8")]
-    [InlineData(8, null)]
-    [InlineData(16, null)]
-    [InlineData(17, "多于上限 16")]
-    public void 边疆档据点数区间端点(int count, string? direction)
-    {
-        // map-generator 裁决 18：平台内不放营帐，边疆档 4 人据点区间 12–22 → 8–16（夹具基数 16 → 10）。
-        // 变异 M-A21：声明表里边疆档的据点区间改回 12, 22 → 本测试与「边疆档按自己的区间校验」红。
-        MapData frontier = FrontierFixtures.Map();
-        ImmutableDictionary<Coord, SiteTier> sites = frontier.Sites;
-        foreach (Coord c in sites.Where(kv => kv.Value == SiteTier.Campfire).Select(kv => kv.Key).Order().Take(Math.Max(0, 10 - count)))
-        {
-            sites = sites.Remove(c);
-        }
-
-        foreach (Coord c in FrontierFixtures.FreeCells(frontier).Take(Math.Max(0, count - 10)))
-        {
-            sites = sites.Add(c, SiteTier.Campfire);
-        }
-
-        MapData map = frontier with { Sites = sites };
-        Assert.Equal(count, map.Sites.Count);
-
-        AssertRange(MapValidator.Validate(map), "SITE_COUNT_OUT_OF_RANGE", direction, "8–16");
     }
 
     [Theory]

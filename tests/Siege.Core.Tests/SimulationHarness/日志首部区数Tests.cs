@@ -17,10 +17,10 @@ public class 日志首部区数Tests
         // 走真实写入路径（合成日志是手填值，漏写照样绿）：边疆图 6 区 4 人，首部 ZoneCount = 6 ≠ 参赛人数 4 ≠ 被选到的最大区号 + 1（不恒等），
         // 确定性文本与完整文本两条往返都保留；标准图样本为 4。
         // 变异 M-B5：MatchSession.BuildHeader 不写 ZoneCount → 本测试红。
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV1.Id }, seed: 7).Run();
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
 
         Assert.False(frontier.IsFailed, frontier.Failure?.Message);
-        Assert.Equal(FrontierMapV1.Id, frontier.Header.MapId);
+        Assert.Equal(FrontierMapV2.Id, frontier.Header.MapId);
         Assert.Equal(6, frontier.Header.ZoneCount);
         Assert.Equal(4, frontier.Header.Zones.Count);
         Assert.Equal(6, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);

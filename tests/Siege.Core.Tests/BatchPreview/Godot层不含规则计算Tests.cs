@@ -45,11 +45,9 @@ public class Godot层不含规则计算Tests
             ".GroupAt(", ".LibertiesOf(", ".AllGroups(", ".GroupsOf(", ".IsCaptured(", ".RemoveStones(", ".Apply(",
             // terrain-model：几何邻居 / 气边 / 覆盖关系三个导出入口，Godot 层不得自算邻接或地形过滤
             ".Neighbors(", ".LibertyNeighbors(", ".CoverageTargets(",
-            // scoring-sites 4.3：据点控制与高地加值的唯一实现入口。只禁调用形态——SiteControlKind 枚举与 GroupPowerView.HighGroundBonus 属性是合法读数。
-            // 变异验证 M-B7（段 B）：BoardView.DrawSites 加一行 `_ = Siege.Core.Scoring.SiteControl.Compute(null!, null!);` → 本测试红 1；
-            // M-B8：同处改调 `PieceEffects.HighGroundBonus(null!, null!)` → 本测试红 1。
-            // 段 B 检查：据点控制收紧为 "SiteControl."（整个静态类的任何成员；"SiteControlKind." 不含该子串，不误伤）。
-            "SiteControl.", "PieceEffects", ".HighGroundBonus(",
+            // 高地加值的唯一实现入口。只禁调用形态——GroupPowerView.HighGroundBonus 属性是合法读数。
+            // 变异验证（scoring-sites 段 B）M-B8：BoardView 里改调 `PieceEffects.HighGroundBonus(null!, null!)` → 本测试红 1。
+            "PieceEffects", ".HighGroundBonus(",
             // artisan-terrain-edit 4.3：改造合法性与地形写入口的入口名。Godot 侧的可改造目标一律来自
             // PreviewPresentation.ArtisanEdits（Core 富预演 → 表现层），地形改动一律由规则层结算后经默认棋盘视图带过来。
             // 只禁带点的调用形态：TerrainEdit / TerrainEditKind 是值类型与枚举，Godot 读它们合法，且都不含下列子串。

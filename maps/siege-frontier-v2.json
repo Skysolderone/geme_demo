@@ -1,5 +1,5 @@
 {
-  "Id": "siege-frontier-v1",
+  "Id": "siege-frontier-v2",
   "Width": 25,
   "Height": 30,
   "MaxPlayers": 4,
@@ -552,18 +552,6 @@
       "Zone": "BirthZone",
       "Budget": "Birth"
     }
-  },
-  "Sites": {
-    "L7": "Campfire",
-    "P8": "Campfire",
-    "T11": "Campfire",
-    "O13": "Stele",
-    "L14": "Stele",
-    "P16": "Stele",
-    "M17": "Stele",
-    "E19": "Campfire",
-    "L21": "Campfire",
-    "P23": "Campfire"
   },
   "ChokePoints": [
     "K7",

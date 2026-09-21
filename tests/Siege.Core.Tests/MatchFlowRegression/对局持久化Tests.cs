@@ -165,48 +165,43 @@ public class 对局持久化Tests
     }
 
     [Fact]
-    public void 据点分值与终局据点数随存档往返且旧存档回填()
+    public void 终局独占空格数随存档往返而含据点分值的旧存档被拒()
     {
-        // scoring-sites 2.6 / R-7：存档写据点分值与终局名次的"控制中的据点数量"。两条腿（testing.md 持久化守门）：
-        // ① 非回填值往返：分值 10 / 30 / 90（非标准局）、据点数 2（非 0）→ 恢复后逐字段相等 + 再存档逐字节相等；
-        // ② 旧存档：剥掉 SiteValues 与 ControlledSites、换回旧字段 ExclusiveCells → 分值回填 5 / 15 / 45 并留痕、据点数回填 0。
-        // 变异验证 M-S15（段 A2）：Serialize 不写 SiteValues → 红（恢复得标准值）；M-S16：Restore 读 ControlledSites 恒 0 → 红（往返得 0）。
-        MatchOptions options = MatchFixtures.DominanceOff with { SiteValues = new SiteValues(10, 30, 90) };
-        MatchFlow match = SiteFixtures.Started(options, ("B5", SiteTier.Tent), ("D5", SiteTier.Campfire)).AtRound(5, MatchFixtures.All)
+        // 两条腿（testing.md 持久化守门）：
+        // ① 非回填值往返：终局名次的"独占空格数"是非 0 值 → 恢复后逐字段相等 + 再存档逐字节相等；
+        // ② 旧存档：往存档里塞回已废弃的 SiteValues 段 → 明确报错并指出该字段已废弃（design.md Migration Plan 3：旧存档不迁移）。
+        // 变异验证 M-B18（段 B，实跑红 1）：MatchFlow.Parse 去掉 RejectRetiredFields 调用（退回静默忽略）→ ② 红。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, MatchFixtures.All)
             .Stones(MatchFixtures.P0, "B5", "C5");
         match.Resign(MatchFixtures.P1);
         match.Resign(MatchFixtures.P2);
         match.Resign(MatchFixtures.P3);
-        Assert.Equal(2, match.Result!.Of(MatchFixtures.P0).Input.ControlledSites);
+        int cells = match.Result!.Of(MatchFixtures.P0).Input.ExclusiveCells;
+        Assert.True(cells > 0, "前提：终局独占空格数非 0");
 
         string json = match.Serialize();
         MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, json);
-        Assert.Equal(new SiteValues(10, 30, 90), restored.SiteValues);
-        Assert.Equal(new SiteValues(10, 30, 90), restored.Publish().SiteValues);
-        Assert.False(restored.SiteValuesBackfilled);
-        Assert.Equal(40, restored.Scoreboard.Latest!.Of(MatchFixtures.P0).SiteScore);
         Assert.Equal(
-            match.Result.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.ControlledRelics, s.Input.ControlledSites, s.Input.Stones)),
-            restored.Result!.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.ControlledRelics, s.Input.ControlledSites, s.Input.Stones)));
+            match.Result.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.ControlledRelics, s.Input.ExclusiveCells, s.Input.Stones)),
+            restored.Result!.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.ControlledRelics, s.Input.ExclusiveCells, s.Input.Stones)));
         Assert.Equal(json, restored.Serialize());
 
         System.Text.Json.Nodes.JsonNode legacyNode = System.Text.Json.Nodes.JsonNode.Parse(json)!;
-        Assert.True(legacyNode.AsObject().Remove("SiteValues"));
-        foreach (System.Text.Json.Nodes.JsonNode? standing in legacyNode["Result"]!["Standings"]!.AsArray())
+        legacyNode["SiteValues"] = new System.Text.Json.Nodes.JsonObject
         {
-            System.Text.Json.Nodes.JsonObject o = standing!.AsObject();
-            Assert.True(o.Remove("ControlledSites"));
-            o["ExclusiveCells"] = 7;
-        }
-
+            ["Tent"] = 5, ["Campfire"] = 15, ["Stele"] = 45,
+        };
         string legacy = legacyNode.ToJsonString();
-        Assert.DoesNotContain("SiteValues", legacy);
-        Assert.DoesNotContain("ControlledSites", legacy);
-        MatchFlow fromLegacy = MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, legacy);
-        Assert.Equal(SiteValues.Standard, fromLegacy.SiteValues);
-        Assert.True(fromLegacy.SiteValuesBackfilled);
-        Assert.Equal(20, fromLegacy.Scoreboard.Latest!.Of(MatchFixtures.P0).SiteScore);
-        Assert.All(fromLegacy.Result!.Standings, s => Assert.Equal(0, s.Input.ControlledSites));
-        Assert.Equal(match.Result.Standings.Select(s => (s.Player, s.Rank)), fromLegacy.Result.Standings.Select(s => (s.Player, s.Rank)));
+
+        FormatException ex = Assert.Throws<FormatException>(
+            () => MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, legacy));
+        Assert.Contains("SiteValues", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("废弃", ex.Message, StringComparison.Ordinal);
+
+        // 反面：其余未知字段照旧宽容，不是"任何多余字段都拒绝"。
+        System.Text.Json.Nodes.JsonNode extraNode = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        extraNode["_comment"] = "手工批注";
+        MatchFlow withExtra = MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, extraNode.ToJsonString());
+        Assert.Equal(json, withExtra.Serialize());
     }
 }

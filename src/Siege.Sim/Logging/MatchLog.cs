@@ -14,12 +14,12 @@ namespace Siege.Sim.Logging;
 /// <remarks>
 /// <para>设计文档 §17 八类记录 → 字段映射：</para>
 /// <list type="table">
-/// <item><term>1. 地图、种子、据点分值配置、完整信物分布及揭示时间</term><description><see cref="LogHeader.MapId"/> / <see cref="LogHeader.Seed"/> / <see cref="LogHeader.SiteValues"/>（取自对局本身）与 <see cref="LogHeader.Sites"/> / <see cref="LogHeader.Relics"/>（含真实内容）；揭示大回合在 <see cref="LogResult.RelicReveals"/>（未揭示为 <c>null</c>），过程中的揭示为 <c>Reveal</c> 事件</description></item>
+/// <item><term>1. 地图、种子、完整信物分布及揭示时间</term><description><see cref="LogHeader.MapId"/> / <see cref="LogHeader.Seed"/> 与 <see cref="LogHeader.Relics"/>（含真实内容）；揭示大回合在 <see cref="LogResult.RelicReveals"/>（未揭示为 <c>null</c>），过程中的揭示为 <c>Reveal</c> 事件</description></item>
 /// <item><term>2. 每轮征募候选、玩家选择、被 Pass 撤销的征募数</term><description><c>Recruit</c> 事件：<see cref="LogEvent.Detail"/> 为候选 / 选取 / 弃牌文本，<see cref="LogEvent.Values"/> 含 <c>Recruited</c> / <c>Revoked</c> / <c>Deployed</c>（私有量，来源玩家 = <see cref="LogEvent.Player"/>）</description></item>
 /// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
 /// <item><term>4. 每次地形改造（大回合、小回合、改造方、动作、目标、是否致提子）</term><description><see cref="TurnSnapshot.Edits"/>（大回合 / 小回合由所在快照给出）；配置的匠人权重在 <see cref="LogHeader.ArtisanWeight"/></description></item>
-/// <item><term>5. 信物与据点控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）、<c>SiteControlChanged</c> 事件（据点，Detail 为 <c>坐标 档位: 旧状态 -> 新状态</c>）与 <see cref="TurnSnapshot.Sites"/>；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
-/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；每名玩家据点分 <see cref="PlayerEntry.SiteScore"/></description></item>
+/// <item><term>5. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
+/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）</description></item>
 /// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（达大回合上限是规则级终局原因 <c>MajorRoundLimit</c>）</description></item>
 /// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
@@ -250,20 +250,11 @@ public sealed record LogHeader
     /// <summary>本局对局配置的落后者征募补偿开关（match-setup「对局配置公开落后补偿开关」）。取自对局本身；catch-up-recruit 之前的旧日志为 <c>null</c>。</summary>
     public bool? CatchUpRecruit { get; init; }
 
-    /// <summary>本局对局配置的据点分值（scoring-sites；取自对局本身，不是 <see cref="Config"/>）。scoring-sites 之前的旧日志为 <c>null</c>。</summary>
-    public SiteValuesEntry? SiteValues { get; init; }
-
     /// <summary>
     /// 本局对局配置的匠人征募权重（artisan-terrain-edit R-2 / match-telemetry 第 1 条）。取自对局本身，不是 <see cref="Config"/>——
     /// 扫档三档的口径由它标注。artisan-terrain-edit 之前的旧日志为 <c>null</c>，MUST NOT 回填成 10。
     /// </summary>
     public int? ArtisanWeight { get; init; }
-
-    /// <summary>
-    /// 本局地图的全部据点：坐标、档位与主人出生区（<see cref="Siege.Core.Board.SiteAttribution"/>，只供分析）。
-    /// scoring-sites 之前的旧日志为 <c>null</c>：据点分析整局排除并计数（R-7），MUST NOT 回填。
-    /// </summary>
-    public List<SiteEntry>? Sites { get; init; }
 
     public required RunConfig Config { get; init; }
 
@@ -285,26 +276,6 @@ public sealed record LogHeader
 
     /// <summary>本局实际采用的事件保留策略（抽样 / 失败提升后的结果）。</summary>
     public EventRetention Retention { get; init; }
-}
-
-/// <summary>据点分值（营帐 / 篝火 / 石碑）。</summary>
-public sealed record SiteValuesEntry
-{
-    public int Tent { get; init; }
-
-    public int Campfire { get; init; }
-
-    public int Stele { get; init; }
-}
-
-/// <summary>一个据点的静态信息：坐标、档位名（<c>SiteTier</c>）、主人出生区（0 起；推不出唯一主人为 <c>null</c>）。</summary>
-public sealed record SiteEntry
-{
-    public required string Coord { get; init; }
-
-    public required string Tier { get; init; }
-
-    public int? HomeZone { get; init; }
 }
 
 /// <summary>
@@ -332,16 +303,6 @@ public sealed record TerrainEditEntry
 
     /// <summary>该次改造是否直接导致提子。</summary>
     public bool CausedCapture { get; init; }
-}
-
-/// <summary>一个据点在某小回合结束时的状态：控制状态名（<c>SiteControlKind</c>）与控制者。</summary>
-public sealed record SiteStateEntry
-{
-    public required string Coord { get; init; }
-
-    public required string Control { get; init; }
-
-    public int? Holder { get; init; }
 }
 
 /// <summary>一枚信物的完整内容（事后记录）。</summary>
@@ -412,11 +373,6 @@ public sealed record TurnSnapshot
     public List<RelicStateEntry> Relics { get; init; } = [];
 
     /// <summary>
-    /// 本小回合结束时全部据点的状态（坐标序）。scoring-sites 之前的旧日志为 <c>null</c>：据点分析整局排除，MUST NOT 回填成"无人"。
-    /// </summary>
-    public List<SiteStateEntry>? Sites { get; init; }
-
-    /// <summary>
     /// 本小回合完成的地形改造（坐标序由结算顺序给出）。<b>没有改造时写空表 <c>[]</c>，不是 <c>null</c></b>——
     /// artisan-terrain-edit 之前的旧日志才是 <c>null</c>，分析时整局排除并计数（R-6），MUST NOT 回填成空表。
     /// </summary>
@@ -437,11 +393,6 @@ public sealed record PlayerEntry
     /// <summary>总势力，精确整数（restore-go-core-rules D1：任意精度，写出为不失真的十进制整数）。</summary>
     public BigInteger Total { get; init; }
 
-    /// <summary>
-    /// 据点分（scoring-sites：取代旧日志的 <c>Territory</c> 领地分，旧字段读入时忽略）。旧日志为 <c>null</c>，MUST NOT 回填成 0。
-    /// </summary>
-    public long? SiteScore { get; init; }
-
     /// <summary>竞争名次；不参赛为 <c>null</c>。</summary>
     public int? Rank { get; init; }
 
@@ -460,7 +411,7 @@ public sealed record GroupEntry
 
     public int SynergyBonus { get; init; }
 
-    /// <summary>高地压制加值（scoring-sites）。旧日志为 <c>null</c>：高地加值占比整局排除，MUST NOT 回填成 0。</summary>
+    /// <summary>高地压制加值。旧日志为 <c>null</c>：高地加值占比整局排除，MUST NOT 回填成 0。</summary>
     public int? HighGroundBonus { get; init; }
 
     /// <summary>倍增子数量，即倍率指数（restore-go-core-rules：不封顶，"生效倍率指数"字段已删；旧日志里的该字段读入时忽略）。</summary>
@@ -525,7 +476,6 @@ public static class LogEventType
     public const string Candidates = "Candidates";
     public const string Reveal = "Reveal";
     public const string ControlChanged = "ControlChanged";
-    public const string SiteControlChanged = "SiteControlChanged";
     public const string RankChanged = "RankChanged";
     public const string MajorRoundEnded = "MajorRoundEnded";
     public const string ProtectionLifted = "ProtectionLifted";
@@ -595,8 +545,8 @@ public sealed record StandingEntry
 
     public int ControlledRelics { get; init; }
 
-    /// <summary>控制中的据点数量（并列链第 3 级，scoring-sites D-G；取代旧日志的 <c>ExclusiveCells</c>）。旧日志为 <c>null</c>。</summary>
-    public int? ControlledSites { get; init; }
+    /// <summary>独占空格数（并列链第 3 级，restore-go-core-rules D4）。旧日志为 <c>null</c>。</summary>
+    public int? ExclusiveCells { get; init; }
 
     public int Stones { get; init; }
 

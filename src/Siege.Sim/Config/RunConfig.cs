@@ -77,12 +77,6 @@ public sealed record RunConfig
     public bool CatchUpRecruit { get; init; } = MatchOptions.DefaultCatchUpRecruit;
 
     /// <summary>
-    /// 据点分值（营帐 / 篝火 / 石碑），直接写入对局配置 <see cref="MatchOptions.SiteValues"/>（simulation-harness「批量跑局」：未配置取标准局值 5 / 15 / 45）。
-    /// 命令行 <c>--site-values 3/8/24</c> 或配置文件 <c>"SiteValues": { "Tent": 3, "Campfire": 8, "Stele": 24 }</c>。
-    /// </summary>
-    public SiteValues SiteValues { get; init; } = SiteValues.Standard;
-
-    /// <summary>
     /// 匠人征募权重，直接写入对局配置 <see cref="MatchOptions.ArtisanWeight"/>（artisan-terrain-edit R-2：未配置取 10）。
     /// 其余五种类型的基础权重不随它变化。
     /// </summary>
@@ -172,13 +166,6 @@ public sealed record RunConfig
             throw new ArgumentException("碾压起始大回合须为非负整数（0 = 关闭）。");
         }
 
-        if (SiteValues is null)
-        {
-            throw new ArgumentException("据点分值不得为空。");
-        }
-
-        SiteValues.Validated();
-
         if (ArtisanWeight < 0)
         {
             throw new ArgumentException("匠人征募权重须为非负整数（0 = 匠人不进池）。");
@@ -214,7 +201,7 @@ public sealed record RunConfig
 
     /// <summary>
     /// 实际生效的配置：未显式配置权重的玩家填入 <see cref="EvaluationWeights.Default"/>（AI 侧同样按 <c>weights ?? Default</c> 取值，行为不变）。
-    /// 批次 <c>config.json</c> 写它，使四名玩家的完整权重与据点分值如实可查（simulation-harness「扫档配置可追溯」）。
+    /// 批次 <c>config.json</c> 写它，使四名玩家的完整权重如实可查（simulation-harness「扫档配置可追溯」）。
     /// </summary>
     public RunConfig Effective() =>
         this with { Players = [.. Players.Select(p => p with { Weights = p.Weights ?? EvaluationWeights.Default })] };
@@ -229,20 +216,6 @@ public sealed record RunConfig
         return CandidateCellLimit is null && AiSearchConfig.DefaultCellLimitFor(map.PlayableCount) is > 0 and int auto
             ? this with { CandidateCellLimit = auto }
             : this;
-    }
-
-    /// <summary>解析 <c>营帐/篝火/石碑</c> 形式的据点分值（如 <c>3/8/24</c>），并做 <see cref="SiteValues.Validated"/> 校验。</summary>
-    public static SiteValues ParseSiteValues(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        string[] parts = text.Split('/');
-        if (parts.Length != 3)
-        {
-            throw new ArgumentException($"据点分值须写成 营帐/篝火/石碑（如 5/15/45），实际 {text}。");
-        }
-
-        int[] values = [.. parts.Select(p => int.Parse(p.Trim(), System.Globalization.CultureInfo.InvariantCulture))];
-        return new SiteValues(values[0], values[1], values[2]).Validated();
     }
 
     public static RunConfig FromJson(string json) =>

@@ -299,7 +299,7 @@ public sealed partial class Hud : CanvasLayer
             line.AddChild(icon);
             string rank = row.Rank is int r ? $"第 {r} 名" : "—";
             string suffix = row.StatusText is null ? string.Empty : $"（{row.StatusText}）";
-            line.AddChild(Ui.Text($"{rank}　{faction.Name}　势力 {row.Total}　据点 {row.SiteScore}{suffix}",
+            line.AddChild(Ui.Text($"{rank}　{faction.Name}　势力 {row.Total}　领地 {row.TerritoryScore}{suffix}",
                 row.StatusText is null ? Ui.InfoText : Ui.MutedText));
             _rankBody.AddChild(line);
         }
@@ -516,10 +516,9 @@ public sealed partial class Hud : CanvasLayer
                 break;
 
             case PowerLayerContent power:
-                _layerBody.AddChild(Ui.Text("势力 = 据点分 + 军势。空格不计分；据点格按控制方着色，金色虚框 = 争议。", Ui.MutedText, wrap: true));
+                _layerBody.AddChild(Ui.Text("势力 = 领地分 + 棋串军势。领地分 = 独占空格数，争议格与中立格不计分。", Ui.MutedText, wrap: true));
                 AddScroll(_layerBody, power.Players
-                    .Select(p => ($"{Labels.Player(p.Player)} 势力 {p.Total}（据点 {p.SiteScore}）{(p.Rank is int r ? $" 第 {r} 名" : string.Empty)}", Ui.InfoText))
-                    .Concat(power.Sites.Select(s => ($"{s.TierText} {s.Coord.ToNotation()}　{s.Value} 分　{s.StatusText}", s.Controller is null ? Ui.MutedText : Ui.InfoText)))
+                    .Select(p => ($"{Labels.Player(p.Player)} 势力 {p.Total}（领地 {p.TerritoryScore}）{(p.Rank is int r ? $" 第 {r} 名" : string.Empty)}", Ui.InfoText))
                     .Concat(power.Groups.Select(g => ($"{Labels.Player(g.Owner)} {Labels.Coords(g.Stones)} {g.Power.FormulaText}", Ui.MutedText))));
                 break;
 
@@ -650,7 +649,7 @@ public sealed partial class Hud : CanvasLayer
         foreach (Standing standing in result.Standings)
         {
             _centerBody.AddChild(Ui.Text(
-                $"第 {standing.Rank} 名　{Labels.Player(standing.Player)}　势力 {standing.Input.Power}　信物 {standing.Input.ControlledRelics}　据点 {standing.Input.ControlledSites}",
+                $"第 {standing.Rank} 名　{Labels.Player(standing.Player)}　势力 {standing.Input.Power}　信物 {standing.Input.ControlledRelics}　独占空格 {standing.Input.ExclusiveCells}",
                 standing.Player == me ? Ui.PanelBorder : Ui.InfoText));
         }
     }

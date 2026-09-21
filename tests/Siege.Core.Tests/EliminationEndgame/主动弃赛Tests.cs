@@ -60,8 +60,8 @@ public class 主动弃赛Tests
     [Fact]
     public void 遗留棋子继续生效()
     {
-        // 设计文档 §12.2：弃赛者 D 与参赛者 A 的棋子同时覆盖某空格 → 争议格（scoring-sites：规格 Scenario 已改为"空的据点格"，A 不获得该据点分；
-        // 本测试保留流程层名册接线这条腿，据点格那条腿见 site-control「弃赛者封锁据点」与 coverage-territory「弃赛者遗留棋子制造争议」）。
+        // 设计文档 §12.2：弃赛者 D 与参赛者 A 的棋子同时覆盖某空格 → 争议格，A 不获得该格的领地分。
+        // 本测试保留流程层名册接线这条腿；覆盖判定那条腿见 coverage-territory「弃赛者遗留棋子制造争议」。
         // 变异验证 M-E11：Roster 把 Resigned 报为 Eliminated 也不影响；真正的守门是计分层不过滤——把 RecalculateDerived 的名册过滤掉弃赛者 → 抛出 → 红 1（本测试）。
         MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P3, "E5")

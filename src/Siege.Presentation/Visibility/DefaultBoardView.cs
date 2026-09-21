@@ -45,7 +45,6 @@ public sealed record BoardCellView(
 /// <b>当前</b>全部栅栏边（无序格对，terrain-model 边属性）：Godot 沿两格公共边立起，不占任一格的落点。
 /// 预置栅栏与本局立起的栅栏混在一起，不可区分——这是 visual-style-baseline「新旧设施同形」要的结果。
 /// </param>
-/// <param name="Sites">全部据点（visual-style-baseline「据点地标」）：档位、分值、控制状态与控制者 / 覆盖方，Godot 据此画地标与旗帜，不自己判定控制。</param>
 /// <param name="Edits">
 /// 本局<b>已完成</b>的改造（<see cref="GameBoard.TerrainEdits"/> 的投影，无归属、不含改造者，R-3）。
 /// 只有一个用途：让渲染层能认出"这一帧刚多出来的那条改造"，给一次落成反馈（visual-style-baseline「改造的可视表现」）。
@@ -57,14 +56,13 @@ public sealed record DefaultBoardView(
     int Height,
     ImmutableArray<BoardCellView> Cells,
     ImmutableArray<FenceEdge> Fences,
-    ImmutableArray<SiteView> Sites,
     ImmutableArray<TerrainEdit> Edits)
 {
     /// <summary>某格。</summary>
     public BoardCellView CellAt(Coord coord) =>
         Cells.FirstOrDefault(c => c.Coord == coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标超出棋盘范围。");
 
-    /// <summary>从公开世界构建：只读盘面格子视图、信物公开状态与据点公开状态。</summary>
+    /// <summary>从公开世界构建：只读盘面格子视图与信物公开状态。</summary>
     public static DefaultBoardView From(PublicWorld world)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -92,7 +90,6 @@ public sealed record DefaultBoardView(
         return new DefaultBoardView(
             board.Width, board.Height, cells,
             [.. board.Map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B)],
-            SiteViews.From(world),
             board.TerrainEdits);
     }
 }

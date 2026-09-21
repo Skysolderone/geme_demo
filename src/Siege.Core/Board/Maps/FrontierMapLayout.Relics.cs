@@ -1,19 +1,12 @@
 namespace Siege.Core.Board.Maps;
 
-/// <summary><see cref="FrontierMapLayout"/> 第 6 步：布点——石碑、篝火、信物（平台内不放营帐）。</summary>
+/// <summary><see cref="FrontierMapLayout"/> 第 6 步：布信物（平台内 1–2 个、公共区 7 个）。</summary>
 internal sealed partial class FrontierMapLayout
 {
-    private bool PlaceSitesAndRelics(out string reason)
+    private bool PlaceRelics(out string reason)
     {
         // 中央入口兼高档公共信物。
         Relics[_cx, _cy] = new RelicCellSpec(RelicZone.Contested, BudgetTier.High);
-
-        // 石碑 4：风车形摆在广场外圈，没有一块与中心相邻；旋向由随机源定。广场四角才可能是林地，外圈中段不是。
-        int mirror = _rng.NextInt(2) == 0 ? 1 : -1;
-        foreach (P o in new[] { new P(-1, 2), new P(2, 1), new P(1, -2), new P(-2, -1) })
-        {
-            Sites[_cx + (o.X * mirror), _cy + o.Y] = SiteTier.Stele;
-        }
 
         for (int i = 0; i < _n; i++)
         {
@@ -24,30 +17,22 @@ internal sealed partial class FrontierMapLayout
             }
         }
 
-        // 公共信物先于篝火：桥头优先给信物，篝火再避开它们。
         if (!PlacePublicRelics())
         {
             reason = "走廊上放不下 6 个标准档公共信物。";
             return false;
         }
 
-        var fires = new List<P>();
-        for (int i = 0; i < _n; i++)
-        {
-            if (!PlaceCampfire(i, fires))
-            {
-                reason = "走廊上放不下足够的篝火。";
-                return false;
-            }
-        }
-
         reason = string.Empty;
         return true;
     }
 
-    private bool IsFree(P p) => Sites[p.X, p.Y] is null && Relics[p.X, p.Y] is null;
+    private bool IsFree(P p) => Relics[p.X, p.Y] is null;
 
-    /// <summary>平台内只放信物（1 或 2 个，彼此至少 2 步）；平台内没有据点——不放营帐（design 裁决 18）。</summary>
+    /// <summary>可放公共信物的走廊格：空着且不是林地。</summary>
+    private bool SuitsRelic(P p) => IsFree(p) && !Forest[p.X, p.Y];
+
+    /// <summary>平台内只放信物（1 或 2 个，彼此至少 2 步）。</summary>
     private bool PlacePlatformRelics(int platform)
     {
         PlatformRect r = Platforms[platform];
@@ -91,76 +76,6 @@ internal sealed partial class FrontierMapLayout
 
     private static int Manhattan(P a, P b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 
-    /// <summary>篝火：优先放在该平台缓坡口外 2–3 步的走廊格上；广场里不放（小平台的缓坡直通广场时改放到别处的走廊上），彼此拉开。</summary>
-    private bool PlaceCampfire(int platform, List<P> fires)
-    {
-        int[,] steps = GroundSteps(platform);
-        List<P> near = CorridorCells(p =>
-            steps[p.X, p.Y] is >= 2 and <= 3 && SuitsSite(p) && fires.TrueForAll(o => Manhattan(o, p) >= 3));
-        List<P> pool = near;
-        for (int spacing = 5; pool.Count == 0 && spacing >= 0; spacing--)
-        {
-            int required = spacing;
-            pool = CorridorCells(p => SuitsSite(p) && fires.TrueForAll(o => Manhattan(o, p) >= required));
-        }
-
-        if (pool.Count == 0)
-        {
-            return false;
-        }
-
-        P pick = pool[_rng.NextInt(pool.Count)];
-        Sites[pick.X, pick.Y] = SiteTier.Campfire;
-        fires.Add(pick);
-        return true;
-    }
-
-    private bool SuitsSite(P p) => IsFree(p) && !Forest[p.X, p.Y];
-
-    /// <summary>从某平台的缓坡格出发，只沿 h=0 空地走的步数（缓坡口 = 1）；到不了为 −1。</summary>
-    private int[,] GroundSteps(int platform)
-    {
-        var steps = new int[W, H];
-        for (int y = 0; y < H; y++)
-        {
-            for (int x = 0; x < W; x++)
-            {
-                steps[x, y] = -1;
-            }
-        }
-
-        var queue = new Queue<P>();
-        foreach (Ramp ramp in _ramps)
-        {
-            if (ramp.Platform != platform)
-            {
-                continue;
-            }
-
-            foreach (P c in ramp.Cells)
-            {
-                steps[c.X, c.Y] = 0;
-                queue.Enqueue(c);
-            }
-        }
-
-        while (queue.Count > 0)
-        {
-            P cur = queue.Dequeue();
-            foreach (P d in Dirs)
-            {
-                var n = new P(cur.X + d.X, cur.Y + d.Y);
-                if (InMap(n) && Cells[n.X, n.Y] == Cell.Ground && steps[n.X, n.Y] < 0)
-                {
-                    steps[n.X, n.Y] = steps[cur.X, cur.Y] + 1;
-                    queue.Enqueue(n);
-                }
-            }
-        }
-
-        return steps;
-    }
-
     /// <summary>公共信物：中心高档已放；标准档 6 个——桥头优先（每座桥一个、两岸交错，至多 4 个），其余撒在走廊上彼此拉开。</summary>
     private bool PlacePublicRelics()
     {
@@ -199,7 +114,7 @@ internal sealed partial class FrontierMapLayout
                             seenBridge[n.X, n.Y] = true;
                             queue.Enqueue(n);
                         }
-                        else if (Cells[n.X, n.Y] == Cell.Ground && !Plaza[n.X, n.Y] && SuitsSite(n) && !heads.Contains(n)
+                        else if (Cells[n.X, n.Y] == Cell.Ground && !Plaza[n.X, n.Y] && SuitsRelic(n) && !heads.Contains(n)
                             && placed.TrueForAll(o => Manhattan(o, n) >= 3))
                         {
                             heads.Add(n);
@@ -226,7 +141,7 @@ internal sealed partial class FrontierMapLayout
             for (int spacing = 6; pool.Count == 0 && spacing >= 1; spacing--)
             {
                 int required = spacing;
-                pool = CorridorCells(p => SuitsSite(p) && placed.TrueForAll(o => Manhattan(o, p) >= required));
+                pool = CorridorCells(p => SuitsRelic(p) && placed.TrueForAll(o => Manhattan(o, p) >= required));
             }
 
             if (pool.Count == 0)

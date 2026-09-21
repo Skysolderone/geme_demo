@@ -266,22 +266,15 @@ public class 生成图布局规则Tests
     [MemberData(nameof(PlatformCounts))]
     public void 资源布点(int platforms)
     {
-        // Scenario: 资源布点（平台数 6：篝火 6、石碑 4、无营帐、公共信物 7、无重合）；其余平台数同理。
+        // Scenario: 资源布点（平台内按边长 1 或 2 个信物、公共区 7 个、地图数据不含据点）；各平台数同理。
         // 变异验证 MG-10：把中央入口的信物档位从高档改成标准档 → 本测试红。
+        // 变异验证 M-B17（restore-go-core-rules 段 B，实跑红 29）：MapFile.ToJson 写出一个 "Sites" 字段 → 本测试红。
         foreach (GeneratedMap g in Maps(platforms))
         {
             MapData map = g.Map;
             Coord e = map.CentralEntrance;
-            bool InPlaza(Coord c) => Math.Abs(c.X - e.X) <= 2 && Math.Abs(c.Y - e.Y) <= 2;
 
-            Coord[] tents = [.. map.Sites.Where(kv => kv.Value == SiteTier.Tent).Select(kv => kv.Key)];
-            Coord[] fires = [.. map.Sites.Where(kv => kv.Value == SiteTier.Campfire).Select(kv => kv.Key)];
-            Coord[] steles = [.. map.Sites.Where(kv => kv.Value == SiteTier.Stele).Select(kv => kv.Key)];
-            Assert.Equal((0, platforms, 4), (tents.Length, fires.Length, steles.Length));                              // 裁决 18：不放营帐
-            Assert.All(map.Sites.Keys, c => Assert.True(map.BirthZoneOf(c) is null, $"{map.Id} 的据点 {c} 在平台内。"));  // 平台内没有据点；变异 MG-22
-            Assert.All(fires, c => Assert.True(map.BirthZoneOf(c) is null && map.HeightAt(c) == 0 && !InPlaza(c)));   // 篝火在过渡带上
-            Assert.All(steles, c => Assert.True(InPlaza(c) && map.SurfaceAt(c) != Surface.Forest));                   // 石碑在中央区域、非林地
-            Assert.All(steles, c => Assert.True(Math.Abs(c.X - e.X) + Math.Abs(c.Y - e.Y) > 1));                       // 没有一块与中央入口相邻
+            Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(map), StringComparison.Ordinal);   // 生成器 MUST NOT 布置据点
 
             // 信物：平台内按边长 1 或 2 个；公共区 7 个 = 中央入口 1 个高档 + 6 个标准档。
             for (int z = 0; z < platforms; z++)
@@ -294,7 +287,6 @@ public class 生成图布局规则Tests
             Assert.Equal(7, contested.Length);
             Assert.Equal([e], contested.Where(kv => kv.Value.Budget == BudgetTier.High).Select(kv => kv.Key));
             Assert.Equal(6, contested.Count(kv => kv.Value.Budget == BudgetTier.Standard));
-            Assert.Empty(map.Sites.Keys.Intersect(map.RelicCells.Keys));
 
             // 河、桥、栅栏、林地。
             Assert.True(map.TerrainData.Bridges.Count >= 2, $"{map.Id} 桥少于 2 座。");

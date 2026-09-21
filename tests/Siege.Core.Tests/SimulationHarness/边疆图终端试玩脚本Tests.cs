@@ -5,7 +5,7 @@ using Siege.Sim.Play;
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
-/// frontier-map tasks 3.6 的自动化部分：终端版用脚本化输入在 <c>siege-frontier-v1</c> 上走到第 5 大回合
+/// frontier-map tasks 3.6 的自动化部分：终端版用脚本化输入在 <c>siege-frontier-v2</c> 上走到第 5 大回合
 /// （真正的人工试玩留给负责人）。规格：simulation-harness「选边疆图」+ map-definition「出生区归属与共享」的保护期口径。
 /// </summary>
 public class 边疆图终端试玩脚本Tests
@@ -27,12 +27,12 @@ public class 边疆图终端试玩脚本Tests
             "");
         var output = new StringWriter();
 
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, maxRounds: 15, new StringReader(script), output, MapCatalog.Resolve(FrontierMapV1.Id));
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, maxRounds: 15, new StringReader(script), output, MapCatalog.Resolve(FrontierMapV2.Id));
 
         string text = output.ToString();
         string[] lines = [.. text.Split('\n').Select(l => l.TrimEnd('\r'))];
         Assert.Equal(0, exit);
-        Assert.Contains("地图 siege-frontier-v1", text, StringComparison.Ordinal);
+        Assert.Contains("地图 siege-frontier-v2", text, StringComparison.Ordinal);
         Assert.Contains("选择你的出生区（1–6）", text, StringComparison.Ordinal);
         Assert.Contains(lines, l => l.Contains("出生区锁定：玩家1(你)→5号区", StringComparison.Ordinal));
 

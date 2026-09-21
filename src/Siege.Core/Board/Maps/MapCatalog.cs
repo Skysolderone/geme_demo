@@ -19,7 +19,7 @@ public static class MapCatalog
     private static readonly (string Id, string Title, Func<MapData> Create)[] Builtins =
     [
         (FourPlayerBaseMap.Id, "标准图 13×13", FourPlayerBaseMap.Create),
-        (FrontierMapV1.Id, "边疆图 25×30（手工）", FrontierMapV1.Create),
+        (FrontierMapV2.Id, "边疆图 25×30（手工）", FrontierMapV2.Create),
     ];
 
     /// <summary>缺省地图标识：任何入口未给地图选项时加载它。</summary>

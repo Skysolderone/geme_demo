@@ -100,7 +100,7 @@ public class 高地压制加值Tests
             .Place("B6", TestMaps.P1).Place("C6", TestMaps.P1).Place("D6", ScoringFixtures.P3);
 
         PowerSnapshot snapshot = PowerCalculator.Compute(board, ScoringFixtures.Roster(
-            (TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned)), SiteValues.Standard);
+            (TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned)));
 
         GroupPower group = Assert.Single(snapshot.Of(TestMaps.P0).Groups);
         Assert.Equal(3, group.HighGroundBonus);

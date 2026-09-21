@@ -124,20 +124,17 @@ public class 地形改造日志与分析Tests
     [Fact]
     public void 匠人权重写进批次配置与日志首部()
     {
-        // simulation-harness「扫档配置可追溯」：匠人权重 18 + 分值 3/8/24 + Safety 7 如实写出。
+        // simulation-harness「扫档配置可追溯」：匠人权重 18 如实写出。
         // 首部取自**对局本身**（不是 Config），两者不一致时 MatchSession 建局即抛。
         RunConfig config = SimFixtures.Config(count: 1, seedStart: 3, maxRounds: 3, difficulty: AiDifficulty.Standard) with
         {
             ArtisanWeight = 18,
-            SiteValues = new Siege.Core.Scoring.SiteValues(3, 8, 24),
         };
 
         MatchLog log = BatchRunner.Execute(config, parallelism: 1).Single();
 
         Assert.Equal(18, log.Header.ArtisanWeight);
         Assert.Equal(18, log.Header.Config.ArtisanWeight);
-        Assert.Equal(new Siege.Core.Scoring.SiteValues(3, 8, 24), log.Header.Config.SiteValues);
-
         // 序列化往返：配置记录真的写进了文件，不是只活在内存对象里。
         MatchLog back = MatchLog.Parse(log.FullText());
         Assert.Equal(18, back.Header.ArtisanWeight);

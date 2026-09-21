@@ -29,7 +29,7 @@ public class 改造在预演中的呈现Tests
     private static PreviewPresentation Shown(GameBoard board, params Placement[] placements) =>
         PreviewPresentation.Build(
             BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0), placements, new BoardHistory(), Roster(P0, P1),
-                SiteValues.Standard, EmptyRelics(board), majorRound: 5),
+                EmptyRelics(board), majorRound: 5),
             EmptyHand(P0),
             LibertyThresholds.Default);
 

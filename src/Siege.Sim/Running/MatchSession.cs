@@ -77,11 +77,6 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的落后者征募补偿为 {config.CatchUpRecruit}，对局配置却为 {match.CatchUpRecruit}。");
         }
 
-        if (match.SiteValues != config.SiteValues)
-        {
-            throw new SiegeRuleException($"跑局配置的据点分值为 {config.SiteValues}，对局配置却为 {match.SiteValues}。");
-        }
-
         if (match.ArtisanWeight != config.ArtisanWeight)
         {
             throw new SiegeRuleException($"跑局配置的匠人权重为 {config.ArtisanWeight}，对局配置却为 {match.ArtisanWeight}。");
@@ -141,7 +136,7 @@ public sealed class MatchSession
 
         PlayerId[] players = config.PlayerIds();
         // round-cap D3：大回合上限是对局配置，跑局层只把 --max-rounds 透传进去。
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound, CatchUpRecruit = config.CatchUpRecruit, SiteValues = config.SiteValues, ArtisanWeight = config.ArtisanWeight });
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound, CatchUpRecruit = config.CatchUpRecruit, ArtisanWeight = config.ArtisanWeight });
         // 选区的唯一实现在 Core（frontier-map D4）：区数不多于人数上限时 P<i> → 区 <i>（与此前逐项相同），否则由种子的独立子流均匀选区。
         match.PlantPrototype();
         return new MatchSession(match, config, recorded);
@@ -399,22 +394,6 @@ public sealed class MatchSession
             }
         }
 
-        // 据点控制变化（match-telemetry「据点控制变化可查」）：逐据点比对前后两份公开快照里 Core 算好的 SiteStates，不自行判定。
-        // 前一快照尚无势力（开局第一次重算之前）时，视为全部无人。
-        ImmutableArray<SiteState> sitesAfter = after.Power?.SiteStates ?? [];
-        foreach (SiteState now in sitesAfter)
-        {
-            SiteState? was = before.Power?.SiteStates.FirstOrDefault(s => s.Coord == now.Coord);
-            SiteControlKind wasKind = was?.Kind ?? SiteControlKind.Unclaimed;
-            PlayerId? wasHolder = was?.Controller;
-            if (wasKind != now.Kind || wasHolder != now.Controller)
-            {
-                Add(turn, majorRound, LogEventType.SiteControlChanged, now.Controller?.Value,
-                    $"{now.Coord.ToNotation()} {now.Tier}: {SiteText(wasKind, wasHolder)} -> {SiteText(now.Kind, now.Controller)}",
-                    coords: [now.Coord.ToNotation()]);
-            }
-        }
-
         string rankBefore = RankingText(before.Power);
         string rankAfter = RankingText(after.Power);
         if (rankBefore != rankAfter)
@@ -451,18 +430,9 @@ public sealed class MatchSession
                 Control = r.Control.Kind.ToString(),
                 Holder = r.Control.Holder?.Value,
             })],
-            Sites = [.. sitesAfter.Select(s => new SiteStateEntry
-            {
-                Coord = s.Coord.ToNotation(),
-                Control = s.Kind.ToString(),
-                Holder = s.Controller?.Value,
-            })],
             ElapsedMs = elapsedMs,
         });
     }
-
-    /// <summary>据点状态文本：<c>Occupied:P1</c> / <c>UniqueCoverage:P2</c> / <c>Contested</c> / <c>Unclaimed</c>。</summary>
-    private static string SiteText(SiteControlKind kind, PlayerId? holder) => holder is { } h ? $"{kind}:{h}" : kind.ToString();
 
     private static string RankingText(PowerSnapshot? power) =>
         power is null ? string.Empty : string.Join(",", power.Ranking.Select(g => $"{g.Rank}:{string.Join("=", g.Players)}"));
@@ -480,7 +450,6 @@ public sealed class MatchSession
                 Status = state.Status.ToString(),
                 Protection = state.HasOpeningProtection,
                 Total = power?.Total ?? 0,
-                SiteScore = power?.SiteScore ?? 0,
                 Rank = view.Power?.RankOf(state.Player),
                 HandTypes = hand is null ? [] : [.. hand.Types.Select(t => t.ToString())],
                 Groups = power is null ? [] : [.. power.Groups.Select(g => new GroupEntry
@@ -594,13 +563,6 @@ public sealed class MatchSession
             MaxMajorRounds = Match.MaxMajorRounds,
             DominanceStartRound = Match.DominanceStartRound,
             CatchUpRecruit = Match.CatchUpRecruit,
-            SiteValues = new SiteValuesEntry { Tent = Match.SiteValues.Tent, Campfire = Match.SiteValues.Campfire, Stele = Match.SiteValues.Stele },
-            Sites = [.. SiteAttribution.HomeZones(Match.Map).Select(kv => new SiteEntry
-            {
-                Coord = kv.Key.ToNotation(),
-                Tier = Match.Map.Sites[kv.Key].ToString(),
-                HomeZone = kv.Value,
-            })],
             Config = Config,
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],
@@ -660,7 +622,7 @@ public sealed class MatchSession
                 Status = s.Input.Status.ToString(),
                 Power = s.Input.Power,
                 ControlledRelics = s.Input.ControlledRelics,
-                ControlledSites = s.Input.ControlledSites,
+                ExclusiveCells = s.Input.ExclusiveCells,
                 Stones = s.Input.Stones,
                 EliminationOrder = s.Input.EliminationOrder,
             })],

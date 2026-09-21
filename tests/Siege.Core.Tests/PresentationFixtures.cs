@@ -60,7 +60,7 @@ internal static class PresentationFixtures
             BatchFixtures.Context(board, player, limit, stock),
             [.. placements.Select(p => new Placement(Coord.Parse(p.Cell), p.Type))],
             history ?? new BoardHistory(),
-            roster, SiteValues.Standard,
+            roster,
             EmptyRelics(board),
             majorRound: 5);
 

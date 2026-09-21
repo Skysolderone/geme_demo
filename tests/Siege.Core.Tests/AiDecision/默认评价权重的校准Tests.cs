@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Sim.Config;
@@ -11,8 +11,8 @@ namespace Siege.Core.Tests.AiDecision;
 public class 默认评价权重的校准Tests
 {
     [Theory]
-    // 校准表出处：Safety 一维先由 ai-safety-weight（v2 领地计分，九档）定为 5，后由 scoring-sites 段 C（v4 据点计分 5/15/45，九档 + 22/25/27，各 200 局）改为 27，见该 change design.md 裁决 S-15；
-    // 其余六维仍是 heuristic-ai 阶段的初值，本测试把它们一并钉住（design.md D4）——任一维被改动，必须连同校准记录一起更新才允许变绿。
+    // restore-go-core-rules 起七维全部标注为未校准（EvaluationWeights.CalibrationStatus）：计分口径变了，此前每一档扫档结论所依赖的分数尺度都不复存在。
+    // 本测试把七维当前取值一并钉住——任一维被改动，必须连同 EvaluationWeights 的依据段一起更新才允许变绿。
     [InlineData(EvaluationDimension.PowerGain, 10)]
     [InlineData(EvaluationDimension.EnemyLoss, 8)]
     [InlineData(EvaluationDimension.Relic, 6)]
@@ -43,17 +43,17 @@ public class 默认评价权重的校准Tests
     }
 
     [Fact]
-    public void 安全权重取校准值()
+    public void 规则变更使校准失效()
     {
-        // artisan-terrain-edit 段 D（裁决 T-13）：v4 + 据点分值 5/15/45 + 匠人权重 5，Safety 25/27/30/35/40/45 各 200 局，取 35
-        // （第 3 大回合领先者胜率 24.0%、整局无提子 0 局、不收敛率 26.0%、据点分占比 31.5%）。
-        Assert.Equal(35, EvaluationWeights.Default.Safety);
-        Assert.Equal(35, EvaluationWeights.Default.Of(EvaluationDimension.Safety));
+        // restore-go-core-rules 改写了军势公式与总势力构成，旧口径下扫档得到的全部默认权重随之失效。
+        // 规格「默认评价权重的校准」：在 ai-eye 重新扫档之前，权重表 MUST 带显式的未校准标注，
+        // 且 MUST NOT 声称任一维度已校准——本条钉住标注在位，并挡住"悄悄把值改回旧口径的取值"。
 
-        // 旧值 27 是无匠人时的校准，加入匠人后领先者胜率 35.5%、不收敛 38%；更早的 5 在据点计分下是 95.5%。二者均已被扫档否定。
+        Assert.Contains("未校准", EvaluationWeights.CalibrationStatus);
+        Assert.DoesNotContain("已校准", EvaluationWeights.CalibrationStatus);
+
+        // 27 / 20 都是更早口径下的 Safety 取值，各自被当时的扫档否定；现口径下同样不是校准值。
         Assert.NotEqual(27, EvaluationWeights.Default.Safety);
-
-        // 更早的初值 20 是 v1 上 5 局 2 颗种子试出的未校准值，已被扫档否定。
         Assert.NotEqual(20, EvaluationWeights.Default.Safety);
     }
 
@@ -102,21 +102,30 @@ public class 默认评价权重的校准Tests
         string src = File.ReadAllText(
             Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "EvaluationWeights.cs"));
 
-        // 依据里声明的校准值必须就是实际取值：改了值不改注释，这里就对不上。
-        // 不用正则，避免 testing.md 记过的"以  开头匹配复合标识符"那类坑。
-        int actual = EvaluationWeights.Default.Safety;
-        Assert.Contains($"= {actual} 是校准值", src, StringComparison.Ordinal);
+        // restore-go-core-rules 段 B（tasks 2.6）：计分口径一变，七维的校准依据全部失效。
+        // 守门改为：① 有一条机读的"未校准"标注常量，且它就是 ai-decision 规格要求的显式标注；
+        //           ② 依据段里逐维点名当前取值，改了值不改这一段就对不上；③ 已作废的旧结论不得留在注释里。
+        Assert.Equal("未校准（restore-go-core-rules 起失效，待 ai-eye）", EvaluationWeights.CalibrationStatus);
+        Assert.Contains(EvaluationWeights.CalibrationStatus, src, StringComparison.Ordinal);
+        Assert.Contains("ai-eye", src, StringComparison.Ordinal);
 
-        // 依据必须指向可复查的数据，而不只是一句结论。
-        Assert.Contains("sim-out/artisan-w5-s", src, StringComparison.Ordinal);
-        Assert.Contains("200 局", src, StringComparison.Ordinal);
+        EvaluationWeights d = EvaluationWeights.Default;
+        foreach ((string name, int value) in new[]
+                 {
+                     (nameof(d.Safety), d.Safety), (nameof(d.PowerGain), d.PowerGain), (nameof(d.EnemyLoss), d.EnemyLoss),
+                     (nameof(d.Relic), d.Relic), (nameof(d.Growth), d.Growth), (nameof(d.Initiative), d.Initiative), (nameof(d.Supply), d.Supply),
+                 })
+        {
+            Assert.Contains($"{name} = {value}", src, StringComparison.Ordinal);
+            // 反面：确认上一行不是恒真——把取值 +1 之后的写法不该出现在源码里。
+            Assert.DoesNotContain($"{name} = {value + 1}", src, StringComparison.Ordinal);
+        }
 
-        // 反面：已被扫档推翻的旧结论不得留在注释里——留着会把下一个人往反方向引。
+        // ③ 反面：已被计分口径作废的旧结论不得留在注释里——留着会把下一个人往反方向引。
+        Assert.DoesNotContain("是校准值", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("sim-out/artisan-w5-s", src, StringComparison.Ordinal);
         Assert.DoesNotContain("阶段 B 的首个校准项", src, StringComparison.Ordinal);
         Assert.DoesNotContain("取 40 一半收敛", src, StringComparison.Ordinal);
-
-        // 反面之二：确认上面那条"声明值等于实际值"不是恒真——换一个不等于实际取值的数字，源码里不该出现。
-        Assert.DoesNotContain($"= {actual + 1} 是校准值", src, StringComparison.Ordinal);
     }
 
     /// <summary>一局的过程投影（快照 + 事件），不含首行 header——header 里带配置 JSON，会把"权重填没填"本身混进比对。</summary>

@@ -283,7 +283,7 @@ internal sealed class ConsoleController : ITurnController
         MatchPublicView view = _observe();
         BigInteger before = view.Power?.Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0;
         BigInteger after = r.ProjectedBoard is { } projected
-            ? PowerCalculator.Compute(projected, view.Players.ToDictionary(p => p.Player, p => p.Status), view.SiteValues)
+            ? PowerCalculator.Compute(projected, view.Players.ToDictionary(p => p.Player, p => p.Status))
                 .Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0
             : before;
         string captures = r.Captures.IsDefaultOrEmpty ? "不提子" : $"提走对手 {r.Captures.Length} 子";

@@ -66,7 +66,7 @@ public class 选图界面守门Tests
         // 反面：被禁的记号在它的归属处（目录）确实命中。
         string catalog = File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs"));
         Assert.Matches(banned, catalog);
-        Assert.Matches(banned, File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "FrontierMapV1.cs")));
+        Assert.Matches(banned, File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "FrontierMapV2.cs")));
     }
 
     [Fact]

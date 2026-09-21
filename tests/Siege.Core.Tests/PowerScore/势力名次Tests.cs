@@ -33,7 +33,7 @@ public class 势力名次Tests
 
         PowerSnapshot snapshot = PowerCalculator.Compute(board, ScoringFixtures.Roster(
             (TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active),
-            (ScoringFixtures.P2, PlayerStatus.Eliminated), (ScoringFixtures.P3, PlayerStatus.Resigned)), SiteValues.Standard);
+            (ScoringFixtures.P2, PlayerStatus.Eliminated), (ScoringFixtures.P3, PlayerStatus.Resigned)));
 
         Assert.Equal(4, snapshot.Players.Length);
         Assert.Equal(0, snapshot.Of(ScoringFixtures.P2).Total);
@@ -83,7 +83,7 @@ public class 势力名次Tests
         GameBoard board = TestMaps.Blank(size: 9).Place("D4", TestMaps.P0);
 
         PowerSnapshot snapshot = PowerCalculator.Compute(
-            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active)), SiteValues.Standard);
+            board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (TestMaps.P1, PlayerStatus.Active)));
 
         Assert.Equal(0, snapshot.Of(TestMaps.P1).Total);
         Assert.Equal(2, snapshot.RankOf(TestMaps.P1));
@@ -98,7 +98,7 @@ public class 势力名次Tests
         GameBoard board = TestMaps.Blank(size: 9).Place("D4", TestMaps.P0).Place("H8", TestMaps.P1);
 
         SiegeRuleException error = Assert.Throws<SiegeRuleException>(
-            () => PowerCalculator.Compute(board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active)), SiteValues.Standard));
+            () => PowerCalculator.Compute(board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active))));
         Assert.Contains("P1", error.Message, StringComparison.Ordinal);
 
         PowerSnapshot unlisted = PowerCalculator.Compute(board);

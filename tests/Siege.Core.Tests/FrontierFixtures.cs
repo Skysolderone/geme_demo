@@ -4,7 +4,7 @@ using Siege.Core.Board;
 namespace Siege.Core.Tests;
 
 /// <summary>
-/// frontier-map 段 A 的测试用边疆档地图：在测试内用代码构造，不依赖段 B 的 <c>siege-frontier-v1</c>。
+/// 测试用边疆档地图：在测试内用代码构造，不依赖内置的 <c>siege-frontier-v2</c>。
 /// </summary>
 internal static class FrontierFixtures
 {
@@ -12,11 +12,11 @@ internal static class FrontierFixtures
     internal static readonly Coord Entrance = new(10, 9);
 
     /// <summary>
-    /// 一张<b>合法</b>的边疆档小图，数字取自规格算例「边疆档按自己的区间校验」：可落子 360、出生区（平台）6、信物 16、据点 10。
+    /// 一张<b>合法</b>的边疆档小图，数字取自规格算例「边疆档按自己的区间校验」：可落子 360、出生区（平台）6、信物 16。
     /// 20×20 全平地草地，最上两行（第 19、20 行）整行岩石 → 400 − 40 = 360；单连通、无口袋。
     /// 6 个 5×5 平台<b>故意不对称</b>摆放（1.4：边疆档不要求旋转对称），到中央入口的气边距离依次为
     /// 11 / 10 / 10 / 7 / 4 / 2（平地无障碍 → 平台最近格到 <c>L10</c> 的曼哈顿距离，规格算例「平台 A 为 4、平台 B 为 11」即 5 号与 1 号）。
-    /// 据点：6 篝火 + 4 石碑（平台内没有据点）；信物：每平台 1 个出生区信物 + 10 个公共信物（入口 <c>L10</c> 为高档）。
+    /// 信物：每平台 1 个出生区信物 + 10 个公共信物（入口 <c>L10</c> 为高档）。
     /// </summary>
     internal static MapData Map() =>
         new()
@@ -55,12 +55,6 @@ internal static class FrontierFixtures
                 (18, 10, RelicZone.Contested, BudgetTier.Standard),
                 (6, 14, RelicZone.Contested, BudgetTier.Standard),
             }.ToImmutableDictionary(r => new Coord(r.X, r.Y), r => new RelicCellSpec(r.Zone, r.Budget)),
-            Sites = new (int X, int Y, SiteTier Tier)[]
-            {
-                (6, 8, SiteTier.Campfire), (13, 8, SiteTier.Campfire), (5, 10, SiteTier.Campfire),
-                (16, 9, SiteTier.Campfire), (6, 16, SiteTier.Campfire), (13, 6, SiteTier.Campfire),
-                (9, 9, SiteTier.Stele), (11, 9, SiteTier.Stele), (10, 8, SiteTier.Stele), (10, 10, SiteTier.Stele),
-            }.ToImmutableDictionary(s => new Coord(s.X, s.Y), s => s.Tier),
             ChokePoints = [new Coord(7, 9), new Coord(13, 9)],
             CentralEntrance = Entrance,
         };
@@ -71,10 +65,10 @@ internal static class FrontierFixtures
         from x in Enumerable.Range(x0, w)
         select new Coord(x, y);
 
-    /// <summary>不在任何出生区、不是据点、不是信物、可落子的空闲格（先行后列），供测试增补信物 / 据点 / 障碍。</summary>
+    /// <summary>不在任何出生区、不是信物、可落子的空闲格（先行后列），供测试增补信物 / 障碍。</summary>
     internal static Coord[] FreeCells(MapData map) =>
         [.. map.AllCoords().Where(c =>
-            map.IsPlayable(c) && map.BirthZoneOf(c) is null && !map.Sites.ContainsKey(c) && !map.RelicCells.ContainsKey(c)
+            map.IsPlayable(c) && map.BirthZoneOf(c) is null && !map.RelicCells.ContainsKey(c)
             && c != map.CentralEntrance && !map.ChokePoints.Contains(c))];
 
     /// <summary>仓库根目录（含 <c>siege.sln</c>）。</summary>

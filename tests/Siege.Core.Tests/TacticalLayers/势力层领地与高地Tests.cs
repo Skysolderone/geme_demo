@@ -10,57 +10,39 @@ using static Siege.Core.Tests.PresentationFixtures;
 
 namespace Siege.Core.Tests.TacticalLayers;
 
-/// <summary>规格：tactical-layers —— Requirement: 五种战术信息层（势力层据点项与高地拆分，scoring-sites 4.1）</summary>
-public class 势力层据点与高地Tests
+/// <summary>规格：tactical-layers —— Requirement: 五种战术信息层（势力层的领地分与高地拆分）</summary>
+public class 势力层领地与高地Tests
 {
     [Fact]
-    public void 势力层显示据点控制()
+    public void 势力层显示领地分()
     {
-        // 规格 Scenario：某石碑正被玩家 A 与玩家 B 同时覆盖 → 势力层显示档位、分值 45 与"争议"，并标出 A、B 两个覆盖方；
-        // 势力层中任何空格都不显示领地贡献（结构守门见下一条）。
-        // 变异验证 M-B4（段 B）：SiteViews.Build 的覆盖方恒为空 → 本测试红。
-        MatchFlow match = SiteFixtures.Started(null, ("E5", SiteTier.Stele)).AtRound(5).Stones(P0, "E4").Stones(P1, "E6");
+        // 规格 Scenario「势力层显示领地分」：玩家 A 有 N 个独占空格 → 势力层可读到 A 的领地分为 N，且总势力 = 领地分 + 全部棋串军势。
+        // restore-go-core-rules 段 B：取代旧的「势力层显示据点控制」与「势力层视图模型不含领地贡献字段」两条——
+        // 据点项已随据点摘除，领地分恢复计分后势力层必须给得出它。
+        // 变异验证 M-B11（段 B，实跑红 3）：LayerContents.Power 把 PlayerPowerRowView 的领地分改成 0 → 本测试红。
+        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(P0, "E5").Stones(P1, "J9");
 
         var layer = (PowerLayerContent)match.World(P2).Layer(TacticalLayer.Power);
+        PowerSnapshot truth = match.Scoreboard.Latest!;
 
-        SiteView stele = Assert.Single(layer.Sites);
-        Assert.Equal((SiteTier.Stele, "石碑", 45, SiteControlKind.Contested, (PlayerId?)null), (stele.Tier, stele.TierText, stele.Value, stele.Kind, stele.Controller));
-        Assert.Equal([P0, P1], stele.Coverers);
-        Assert.Equal($"争议：{Labels.Player(P0)}、{Labels.Player(P1)} 同时覆盖", stele.StatusText);
-    }
+        foreach (PlayerPowerRowView row in layer.Players)
+        {
+            PlayerPower detail = truth.Of(row.Player);
+            Assert.Equal(detail.ExclusiveCells.Length, row.TerritoryScore);
+            Assert.Equal(detail.Total, row.Total);
 
-    [Fact]
-    public void 势力层视图模型不含领地贡献字段()
-    {
-        // 守门（tasks 4.1）：势力层及其行视图结构上没有"空格领地贡献"——没有 Territory / Exclusive 命名的成员，也不引用盘面层归属读法的类型；
-        // 旧的领地贡献视图类型整个不存在。盘面层归属读法（TerritoryLayerContent / TerritoryCellView）是合法保留，不在扫描范围内。
-        // 变异验证 M-B5（段 B）：PowerLayerContent 加回 `ImmutableArray<Coord> ExclusiveCells` 参数 → 本测试红。
-        Type[] powerTypes = [typeof(PowerLayerContent), typeof(GroupScoreView), typeof(PlayerPowerRowView), typeof(GroupPowerView), typeof(SiteView)];
-        Type[] ownershipTypes = [typeof(TerritoryLayerContent), typeof(TerritoryCellView), typeof(TerritoryState)];
-        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            // 独立复算：总势力 = 领地分 + 该玩家全部棋串军势（不回调被测视图）。
+            System.Numerics.BigInteger groups = System.Numerics.BigInteger.Zero;
+            foreach (GroupScoreView g in layer.Groups.Where(g => g.Owner == row.Player))
+            {
+                groups += g.Power.Power;
+            }
 
-        string[] violations =
-        [
-            .. powerTypes.SelectMany(t => t.GetProperties(all).Select(p => (t, p.Name, p.PropertyType))
-                    .Concat(t.GetConstructors(all).SelectMany(c => c.GetParameters().Select(p => (t, p.Name!, p.ParameterType)))))
-                .Where(m => m.Item2.Contains("Territory", StringComparison.OrdinalIgnoreCase)
-                    || m.Item2.Contains("Exclusive", StringComparison.OrdinalIgnoreCase)
-                    || Mentions(m.Item3, ownershipTypes))
-                .Select(m => $"{m.t.Name}.{m.Item2}: {m.Item3.Name}")
-                .Distinct()
-                .Order(StringComparer.Ordinal),
-        ];
+            Assert.Equal(row.TerritoryScore + groups, row.Total);
+        }
 
-        Assert.Empty(violations);
-        Assert.DoesNotContain(PresentationAssembly.GetTypes(), t => t.Name == "TerritoryContributionView");
-
-        // 反面：扫描确实读到了成员（据点项与棋串分数字段都在）
-        string[] seen = [.. typeof(PowerLayerContent).GetProperties(all).Select(p => p.Name)];
-        Assert.Contains("Sites", seen);
-        Assert.Contains("Groups", seen);
-
-        static bool Mentions(Type type, Type[] targets) =>
-            targets.Contains(type) || (type.IsGenericType && type.GetGenericArguments().Any(a => Mentions(a, targets))) || (type.IsArray && Mentions(type.GetElementType()!, targets));
+        Assert.Equal(4, layer.Players.Length);
+        Assert.Contains(layer.Players, r => r.TerritoryScore > 0);
     }
 
     [Fact]

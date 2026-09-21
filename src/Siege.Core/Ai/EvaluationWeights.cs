@@ -36,17 +36,23 @@ public sealed record EvaluationWeights(
     int Supply)
 {
     /// <summary>
-    /// 默认权重。<see cref="Safety"/> = 35 是校准值（artisan-terrain-edit 段 D，负责人 2026-09-18 拍板，裁决 T-13）：4 人基准图 v4、据点分值 5 / 15 / 45、匠人征募权重 5、4 人 Standard AI、种子 1–200、大回合上限 15，
-    /// 据点分值 5 / 15 / 45、4 人 Standard AI、种子 1–200、大回合上限 15，
-    /// 按 25 / 27 / 30 / 35 / 40 / 45 各跑 200 局（数据在 <c>sim-out/artisan-w5-s&lt;N&gt;/</c>，匠人权重档在 <c>sim-out/artisan-w&lt;N&gt;/</c>）。
-    /// <para>第 3 大回合领先者胜率（匠人权重 5）：25→44.0%、27→35.5%、30→34.5%、35→24.0%、40→22.5%、45→23.0%。
-    /// 40 与 45 各有 78 / 94 局整局无提子（目标 ≤ 5%），出局；35 的整局无提子 0 局、不收敛率 26.0%（全档最低）、
-    /// 终局据点分占比 31.5%（落进 25–45% 目标）、每批次提子 0.52（scoring-sites 终版为 0.29）。
-    /// 匠人权重先扫 5 / 10 / 18（Safety 27）：领先者胜率 35.5% / 45.5% / 51.5%、不收敛率 38.0% / 44.5% / 57.0%，取 5。
-    /// 遗留：不收敛率 26% 仍显著高于 scoring-sites 终版的 6.5%，成因是栅栏使盘面更难填满；本轮不动终局条件（Non-goals）。</para>
-    /// <para>旧值 5 是地形改造前 v2 领地计分下的校准（ai-safety-weight），在据点计分下已失效。
-    /// 其余六维仍是 heuristic-ai 阶段的未校准初值，各自独立成轮；以它们产出的基线数据在引用时须注明权重口径。
-    /// 调这一维必须双向扫档，不得只朝一个方向试探。</para>
+    /// 默认权重表的校准口径。restore-go-core-rules 起<b>七维全部未校准</b>：计分口径已变（军势整体乘倍率、不封顶、位置加值进倍率、
+    /// 领地恢复计分、总势力回归"独占空格 + 棋串军势"），此前每一档扫档结论所依赖的分数尺度都不复存在，MUST NOT 再被当作校准依据。
+    /// 重新扫档由 <c>ai-eye</c> 负责，届时解除本标注。
+    /// <para>ai-decision「默认评价权重的校准」要求"尚未校准的维度 MUST 在代码中显式标注"——本常量即该标注；
+    /// 守门测试 <c>默认评价权重的校准Tests</c> 断言它与 <see cref="Default"/> 的每一维同步。
+    /// 以当前权重产出的基线数据，引用时 MUST 注明"未校准口径"，MUST NOT 与别的权重口径下的数据直接比较。</para>
+    /// </summary>
+    public const string CalibrationStatus = "未校准（restore-go-core-rules 起失效，待 ai-eye）";
+
+    /// <summary>
+    /// 默认权重。七维取值一律沿用旧值不动（restore-go-core-rules Non-goal：本 change 不调 AI 权重），但校准依据已随计分口径作废：
+    /// <list type="bullet">
+    /// <item><b>Safety = 35</b>——未校准（restore-go-core-rules 起失效，待 ai-eye）。旧依据是 artisan-terrain-edit 段 D 在旧计分口径下的扫档，已作废。</item>
+    /// <item><b>PowerGain = 10、EnemyLoss = 8、Relic = 6、Growth = 4、Initiative = 20、Supply = 2</b>——未校准（restore-go-core-rules 起失效，待 ai-eye）：
+    /// 自 heuristic-ai 阶段起就是初值，从未扫过档。</item>
+    /// </list>
+    /// <para>改任何一维仍须双向扫档、同种子同地图不少于 200 局的前后对照，并连同本段与 <see cref="CalibrationStatus"/> 一起更新。</para>
     /// </summary>
     public static readonly EvaluationWeights Default = new(
         PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2);

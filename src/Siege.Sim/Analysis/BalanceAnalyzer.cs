@@ -128,7 +128,7 @@ public sealed record PieceShare(string Type, long Stones, double StoneShare, Big
 /// <summary>
 /// 各棋子势力占比（multiplier-rebalance 裁决 3，proposal 表格口径）：逐局取终局快照（最后一条小回合快照）中参赛玩家（<c>Active</c>）的全部棋串；
 /// 普通 / 堡垒 / 连珠 / 协同计各自基础军势，连珠与协同再分得本串对应的位置加值；倍增子计各自基础军势 1，再分得本串"放大出来的部分"
-/// <c>⌊基础 × 倍率⌋ − 基础</c>（整数，经唯一的 <see cref="Siege.Core.Scoring.Multiplier.Apply"/> 按日志里的生效指数算）。势力占比的分母是纳入局归因势力之和（棋串军势，不含据点分；scoring-sites 的高地加值不属于任何棋子类型，同样不计入）。
+/// <c>⌊基础 × 倍率⌋ − 基础</c>（整数，经唯一的 <see cref="Siege.Core.Scoring.Multiplier.Apply"/> 按日志里的生效指数算）。势力占比的分母是纳入局归因势力之和（棋串军势；高地加值不属于任何棋子类型，不计入）。
 /// 终局快照里有任何参赛玩家棋串缺 <see cref="GroupEntry.PieceCounts"/>（旧日志）或整局无快照的局计入 <see cref="Skipped"/>，不参与任何分子分母。
 /// </summary>
 public sealed record PieceShareSection(int Matches, int Skipped, long TotalStones, BigInteger TotalPower, List<PieceShare> Pieces);
@@ -174,59 +174,11 @@ public sealed record GrowthAxisSection(
 public sealed record StallingSection(int SignalTurns, int TotalTurns, Proportion Ratio);
 
 /// <summary>
-/// 据点一档的统计（match-telemetry 平衡分析方向 10）。分母"据点小回合" = 纳入局的小回合快照数 × 该档据点数。
+/// 高地压制加值在位置加值里的占比（match-telemetry 平衡分析方向 10 的遗留项）。
+/// 逐局取终局快照（最后一条小回合快照）中参赛玩家的全部棋串，全批次合并计算；缺高地加值字段的旧日志整局排除。
 /// </summary>
-/// <param name="SiteInstances">纳入局中该档据点的个数之和（局 × 个）。</param>
-/// <param name="ControlledShare">被控制（占据或唯一覆盖）的据点小回合 ÷ 据点小回合。</param>
-/// <param name="ContestedShare">争议的据点小回合 ÷ 据点小回合。</param>
-/// <param name="MeanFirstControlledRound">曾被控制过的据点首次被控制所在大回合的平均；<paramref name="NeverControlled"/> 个整局从未被控制，不进均值。</param>
-/// <param name="WinRateOfControllers">样本 = 每局中至少在一条小回合快照里控制过该档任一据点的玩家；成功 = 该玩家是本局获胜者。</param>
-public sealed record SiteTierStat(
-    string Tier,
-    int SiteInstances,
-    long SiteTurns,
-    long ControlledTurns,
-    long ContestedTurns,
-    double ControlledShare,
-    double ContestedShare,
-    double MeanFirstControlledRound,
-    int NeverControlled,
-    Proportion WinRateOfControllers);
-
-/// <summary>
-/// 据点"主人"口径（篝火主人 / 石碑桥头那家）：主人 = 日志首部 <see cref="SiteEntry.HomeZone"/> 所对应出生区上的玩家（经 <see cref="LogHeader.Zones"/> 映射）。
-/// 首部推不出主人（<c>HomeZone</c> 为 <c>null</c>）的据点计入 <paramref name="UnknownOwner"/>，不进任何分子分母。
-/// </summary>
-/// <param name="OwnerShare">主人控制的据点小回合 ÷ 据点小回合。</param>
-/// <param name="OwnerShareOfControlled">主人控制的据点小回合 ÷ 被控制的据点小回合。</param>
-/// <param name="MeanOwnerFirstControlRound">主人首次控制所在大回合的平均（只算主人曾控制过的据点；<paramref name="OwnerNeverControlled"/> 个从未）。</param>
-public sealed record SiteOwnerStat(
-    long SiteTurns,
-    long ControlledTurns,
-    long OwnerTurns,
-    double OwnerShare,
-    double OwnerShareOfControlled,
-    double MeanOwnerFirstControlRound,
-    int OwnerNeverControlled,
-    int UnknownOwner);
-
-/// <summary>
-/// 据点分析（match-telemetry 平衡分析方向 10，scoring-sites 3.3）。
-/// 纳入 = 日志首部有据点表（<see cref="LogHeader.Sites"/>）且每条小回合快照都有据点状态（<see cref="TurnSnapshot.Sites"/>）；
-/// scoring-sites 之前的旧日志整局计入 <paramref name="Skipped"/>（R-7），MUST NOT 回填成"无人"。
-/// </summary>
-/// <param name="Campfire">篝火由所在低地主人控制（主人 = 篝火所在河外低地所属出生区的玩家）。</param>
-/// <param name="SteleBridgehead">石碑由相邻桥头那家控制（桥头信物所在河外低地的主人）。</param>
-/// <param name="MeanFinalSiteShare">逐局取终局快照（最后一条小回合快照）中参赛玩家的 Σ据点分 ÷ Σ总势力，再对纳入局取平均；Σ总势力为 0 的局不进均值。</param>
-/// <param name="HighGroundShare">终局快照中参赛玩家全部棋串的 Σ高地加值 ÷ Σ位置加值（连珠 + 协同 + 高地），全批次合并计算。</param>
-public sealed record SiteSection(
-    int Matches,
-    int Skipped,
-    List<SiteTierStat> Tiers,
-    SiteOwnerStat Campfire,
-    SiteOwnerStat SteleBridgehead,
-    double MeanFinalSiteShare,
-    int FinalShareSamples,
+/// <param name="HighGroundShare">Σ高地加值 ÷ Σ位置加值（连珠 + 协同 + 高地）。</param>
+public sealed record HighGroundSection(
     long FinalHighGroundBonus,
     long FinalPositionBonus,
     double HighGroundShare);
@@ -297,7 +249,7 @@ public sealed record BalanceReport(
     GrowthAxisSection GrowthAxes,
     StallingSection Stalling,
     AiQualitySection AiQuality,
-    SiteSection Sites,
+    HighGroundSection HighGround,
     TerrainEditSection TerrainEdits);
 
 /// <summary>
@@ -346,7 +298,7 @@ public static class BalanceAnalyzer
             GrowthAxes(included),
             Stalling(included),
             AiQuality(included),
-            Sites(included),
+            HighGround(included),
             TerrainEdits(included));
     }
 
@@ -445,124 +397,24 @@ public static class BalanceAnalyzer
         return string.Equals(type, nameof(PieceType.Artisan), StringComparison.Ordinal);
     }
 
-    // ---------- §17 第 10 项 据点（scoring-sites 3.3） ----------
+    // ---------- §17 第 10 项 高地加值占比 ----------
 
-    private static SiteSection Sites(List<MatchLog> logs)
+    private static HighGroundSection HighGround(List<MatchLog> logs)
     {
-        string[] tiers = Enum.GetNames<SiteTier>();
-        var instances = tiers.ToDictionary(t => t, _ => 0);
-        var siteTurns = tiers.ToDictionary(t => t, _ => 0L);
-        var controlled = tiers.ToDictionary(t => t, _ => 0L);
-        var contested = tiers.ToDictionary(t => t, _ => 0L);
-        var firstRounds = tiers.ToDictionary(t => t, _ => new List<int>());
-        var never = tiers.ToDictionary(t => t, _ => 0);
-        var controllerSamples = tiers.ToDictionary(t => t, _ => (Wins: 0, Samples: 0));
-        var owner = new Dictionary<string, OwnerAccumulator>
-        {
-            [nameof(SiteTier.Campfire)] = new(),
-            [nameof(SiteTier.Stele)] = new(),
-        };
-        int matches = 0;
-        int skipped = 0;
-        var finalShares = new List<double>();
         long highGround = 0;
         long positionBonus = 0;
 
         foreach (MatchLog log in logs)
         {
-            if (log.Header.Sites is not { } sites || log.Turns.Count == 0 || log.Turns.Any(t => t.Sites is null))
+            if (log.Turns.Count == 0)
             {
-                skipped++;
                 continue;
             }
 
-            matches++;
-            List<int> winners = log.Result!.Winners;
-            var controllersByTier = tiers.ToDictionary(t => t, _ => new HashSet<int>());
-            foreach (SiteEntry site in sites)
-            {
-                string tier = site.Tier;
-                instances[tier]++;
-                int[] owners = site.HomeZone is { } zone
-                    ? [.. Enumerable.Range(0, log.Header.Zones.Count).Where(p => log.Header.Zones[p] == zone)]
-                    : [];
-                owner.TryGetValue(tier, out OwnerAccumulator? acc);
-                int? first = null;
-                int? ownerFirst = null;
-                foreach (TurnSnapshot turn in log.Turns)
-                {
-                    SiteStateEntry state = turn.Sites!.Single(s => s.Coord == site.Coord);
-                    siteTurns[tier]++;
-                    if (state.Control == nameof(SiteControlKind.Contested))
-                    {
-                        contested[tier]++;
-                    }
-
-                    if (state.Holder is { } holder)
-                    {
-                        controlled[tier]++;
-                        first ??= turn.MajorRound;
-                        controllersByTier[tier].Add(holder);
-                    }
-
-                    if (acc is not null && site.HomeZone is not null)
-                    {
-                        acc.SiteTurns++;
-                        if (state.Holder is { } h)
-                        {
-                            acc.ControlledTurns++;
-                            if (owners.Contains(h))
-                            {
-                                acc.OwnerTurns++;
-                                ownerFirst ??= turn.MajorRound;
-                            }
-                        }
-                    }
-                }
-
-                if (first is { } f)
-                {
-                    firstRounds[tier].Add(f);
-                }
-                else
-                {
-                    never[tier]++;
-                }
-
-                if (acc is not null)
-                {
-                    if (site.HomeZone is null)
-                    {
-                        acc.Unknown++;
-                    }
-                    else if (ownerFirst is { } of)
-                    {
-                        acc.FirstRounds.Add(of);
-                    }
-                    else
-                    {
-                        acc.Never++;
-                    }
-                }
-            }
-
-            foreach (string tier in tiers)
-            {
-                foreach (int player in controllersByTier[tier])
-                {
-                    (int wins, int samples) = controllerSamples[tier];
-                    controllerSamples[tier] = (wins + (winners.Contains(player) ? 1 : 0), samples + 1);
-                }
-            }
-
-            List<PlayerEntry> active = [.. log.Turns[^1].PlayersState.Where(p => p.Status == nameof(PlayerStatus.Active))];
-            BigInteger total = active.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total);
-            if (total > 0 && active.All(p => p.SiteScore is not null))
-            {
-                finalShares.Add(active.Sum(p => p.SiteScore!.Value) / (double)total);
-            }
-
-            List<GroupEntry> groups = [.. active.SelectMany(p => p.Groups)];
+            List<GroupEntry> groups =
+            [
+                .. log.Turns[^1].PlayersState.Where(p => p.Status == nameof(PlayerStatus.Active)).SelectMany(p => p.Groups),
+            ];
             if (groups.All(g => g.HighGroundBonus is not null))
             {
                 highGround += groups.Sum(g => (long)g.HighGroundBonus!.Value);
@@ -570,36 +422,8 @@ public static class BalanceAnalyzer
             }
         }
 
-        static double Ratio(long a, long b) => b == 0 ? double.NaN : (double)a / b;
-
-        List<SiteTierStat> stats = [.. tiers.Select(t => new SiteTierStat(
-            t, instances[t], siteTurns[t], controlled[t], contested[t],
-            Ratio(controlled[t], siteTurns[t]), Ratio(contested[t], siteTurns[t]),
-            firstRounds[t].Count == 0 ? double.NaN : firstRounds[t].Average(), never[t],
-            Statistics.Wilson(controllerSamples[t].Wins, controllerSamples[t].Samples)))];
-        SiteOwnerStat OwnerStat(OwnerAccumulator a) => new(
-            a.SiteTurns, a.ControlledTurns, a.OwnerTurns, Ratio(a.OwnerTurns, a.SiteTurns), Ratio(a.OwnerTurns, a.ControlledTurns),
-            a.FirstRounds.Count == 0 ? double.NaN : a.FirstRounds.Average(), a.Never, a.Unknown);
-        return new SiteSection(
-            matches, skipped, stats,
-            OwnerStat(owner[nameof(SiteTier.Campfire)]), OwnerStat(owner[nameof(SiteTier.Stele)]),
-            finalShares.Count == 0 ? double.NaN : finalShares.Average(), finalShares.Count,
-            highGround, positionBonus, Ratio(highGround, positionBonus));
-    }
-
-    private sealed class OwnerAccumulator
-    {
-        internal long SiteTurns { get; set; }
-
-        internal long ControlledTurns { get; set; }
-
-        internal long OwnerTurns { get; set; }
-
-        internal int Never { get; set; }
-
-        internal int Unknown { get; set; }
-
-        internal List<int> FirstRounds { get; } = [];
+        return new HighGroundSection(
+            highGround, positionBonus, positionBonus == 0 ? double.NaN : (double)highGround / positionBonus);
     }
 
     // ---------- 落后者征募补偿 ----------

@@ -55,7 +55,7 @@ public class 批次预演必须显示的信息Tests
         Assert.Null(batch.Stage(TestMaps.At("D4"), PieceType.Basic));
         Assert.Null(batch.Stage(TestMaps.At("C4"), PieceType.Basic));
 
-        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1), SiteValues.Standard, EmptyRelics(board), 5);
+        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1), EmptyRelics(board), 5);
         PreviewPresentation shown = PreviewPresentation.Build(preview, EmptyHand(P0), LibertyThresholds.Default);
 
         Assert.False(shown.CanConfirm);
@@ -95,7 +95,7 @@ public class 批次预演必须显示的信息Tests
     [Fact]
     public void 显示势力与排名变化()
     {
-        // 规格算例：势力 45 → 62、排名第 3 → 第 2；裁决 1：他人被挤动的名次也要显示。11×11 空盘（无据点），四方各据一列：
+        // 规格算例：势力 45 → 62、排名第 3 → 第 2；裁决 1：他人被挤动的名次也要显示。11×11 空盘，四方各据一列：
         //   P0 A1–A6 堡垒 + A7 倍增：⌊25×1.5⌋=37；暂放 A8 堡垒、A9 堡垒、A10 普通 → ⌊34×1.5⌋=51。
         //   P1 H1–H4 堡垒 + H5、H6 倍增：⌊18×2.25⌋=40（第 2 → 第 3）。
         //   P2 L1–L6 堡垒 + L7、L8 倍增：⌊26×2.25⌋=58（第 1 不变）。

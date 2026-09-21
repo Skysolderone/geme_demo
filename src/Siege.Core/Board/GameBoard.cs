@@ -61,7 +61,7 @@ public sealed class GameBoard
 
     /// <summary>
     /// 地图数据。<b>地形不再是对局内的不变量</b>（artisan-terrain-edit）：每次改造经 <see cref="ApplyTerrainEdits"/> 换上一份新的
-    /// <see cref="MapData"/>，气边、覆盖、棋串、气、据点与信物控制都从这里实时导出，因此自动按新地形重算。
+    /// <see cref="MapData"/>，气边、覆盖、棋串、气与信物控制都从这里实时导出，因此自动按新地形重算。
     /// 消费方 MUST NOT 把它缓存进字段——要缓存就得自己负责失效，本项目的做法是每次读 <c>Board.Map</c>。
     /// </summary>
     public MapData Map { get; private set; }

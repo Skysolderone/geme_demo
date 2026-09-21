@@ -122,7 +122,7 @@ public class 同形与存档纳入设施Tests
     [Fact]
     public void 对局存档往返保留改造与匠人权重()
     {
-        // 段 A 检查第 5 项：ArtisanWeight 进 MatchPublicView（R-2 照 SiteValues 的口径）。
+        // 段 A 检查第 5 项：ArtisanWeight 进 MatchPublicView（R-2 照对局配置的口径：开局固定、始终公开、插旗阶段即可读）。
         // 这里一并钉住"地形改造随对局存档往返"——地图由调用方提供，改造只能靠盘面序列化带过去。
         MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { ArtisanWeight = 18 }).AtRound(5);
         TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6"));

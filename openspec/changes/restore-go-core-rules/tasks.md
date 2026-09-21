@@ -13,13 +13,13 @@
 
 ## 2. 段 B——据点摘除（Board / 地图 / Scoring / Preview / Ai）
 
-- [ ] 2.1 删除 `SiteTier`、`SiteAttribution`、`SiteControl`、`SiteValues` 及 `MapData` / `MapFile` / `MapProfile` / `MapSymmetry` / `GameBoard` / `TerrainWriter` 中的据点成员；`MapFile` 读到据点字段时拒绝加载并指出该字段已废弃。测试：`map-definition`「含据点字段的旧地图被拒绝」。验证：编译通过；变异（改成静默忽略应红）。
-- [ ] 2.2 `MapValidator`：去掉据点数区间、落点、与信物重合、到篝火 / 石碑距离四类检查；距离报告项由五项改三项。测试：`map-definition`「人数适配预算」「地图静态校验规则」的全部 Scenario。验证：全绿。
-- [ ] 2.3 内置图：`FourPlayerBaseMap` → `siege-4p-base-v5`，`FrontierMapV1` → `siege-frontier-v2`，`maps/*.json` 同步去掉据点并改名；缺省地图改 v5；`MapCatalog` 对旧标识报"未知地图"。测试：「地形与 v4 一致」逐格比较（用 v4 的导出文本去掉据点段作为基准）、边疆档「资源布点」「不是缺省地图」。验证：全绿；黄金值随标识重建并在 implement 记录里写明差异只有据点。
-- [ ] 2.4 生成器：删除 `FrontierMapLayout.Sites.cs` 的据点布置，保留信物布置；填充步骤不再避让据点。测试：`map-generation`「布局规则」六个 Scenario（种子 1–50 × 平台数 5–8 全过校验）；生成确定性测试的基准值重建。验证：全绿；重新出一份"种子 1–50 布局速览"放 `sim-out/`。
-- [ ] 2.5 结算与预演：结算第 6 步去掉据点控制；`BatchPreview` 去掉据点变化项，势力变化改为"领地分变化 + 棋串军势变化"。测试：`capture-resolution`「正式结算顺序」五个 Scenario。验证：全绿。
-- [ ] 2.6 AI 最小改动：`BatchEvaluator` / `EvaluationWeights` 删除据点估值项；默认权重表的校准记录改写为"未校准（restore-go-core-rules 起失效，待 ai-eye）"并加显式未校准标注，守门测试保持存在且通过。验证：`ai-decision` 既有测试全绿；一局 4 AI 对局能跑到终局或被截断，不抛异常。
-- [ ] 2.7 删除据点相关测试类；`grep -rE "Site|据点" src tests` 只剩与据点无关的命中（如 `WebSite` 之类的误命中需逐条确认为零）。验证：`dotnet build` 零警告，`dotnet test -c Release` 全绿。
+- [x] 2.1 删除 `SiteTier`、`SiteAttribution`、`SiteControl`、`SiteValues` 及 `MapData` / `MapFile` / `MapProfile` / `MapSymmetry` / `GameBoard` / `TerrainWriter` 中的据点成员；`MapFile` 读到据点字段时拒绝加载并指出该字段已废弃。测试：`map-definition`「含据点字段的旧地图被拒绝」。验证：编译通过；变异（改成静默忽略应红）。
+- [x] 2.2 `MapValidator`：去掉据点数区间、落点、与信物重合、到篝火 / 石碑距离四类检查；距离报告项由五项改三项。测试：`map-definition`「人数适配预算」「地图静态校验规则」的全部 Scenario。验证：全绿。
+- [x] 2.3 内置图：`FourPlayerBaseMap` → `siege-4p-base-v5`，`FrontierMapV1` → `siege-frontier-v2`，`maps/*.json` 同步去掉据点并改名；缺省地图改 v5；`MapCatalog` 对旧标识报"未知地图"。测试：「地形与 v4 一致」逐格比较（用 v4 的导出文本去掉据点段作为基准）、边疆档「资源布点」「不是缺省地图」。验证：全绿；黄金值随标识重建并在 implement 记录里写明差异只有据点。
+- [x] 2.4 生成器：删除 `FrontierMapLayout.Sites.cs` 的据点布置，保留信物布置；填充步骤不再避让据点。测试：`map-generation`「布局规则」六个 Scenario（种子 1–50 × 平台数 5–8 全过校验）；生成确定性测试的基准值重建。验证：全绿；重新出一份"种子 1–50 布局速览"放 `sim-out/`。
+- [x] 2.5 结算与预演：结算第 6 步去掉据点控制；`BatchPreview` 去掉据点变化项，势力变化改为"领地分变化 + 棋串军势变化"。测试：`capture-resolution`「正式结算顺序」五个 Scenario。验证：全绿。
+- [x] 2.6 AI 最小改动：`BatchEvaluator` / `EvaluationWeights` 删除据点估值项；默认权重表的校准记录改写为"未校准（restore-go-core-rules 起失效，待 ai-eye）"并加显式未校准标注，守门测试保持存在且通过。验证：`ai-decision` 既有测试全绿；一局 4 AI 对局能跑到终局或被截断，不抛异常。
+- [x] 2.7 删除据点相关测试类；`grep -rE "Site|据点" src tests` 只剩与据点无关的命中（如 `WebSite` 之类的误命中需逐条确认为零）。验证：`dotnet build` 零警告，`dotnet test -c Release` 全绿。
 
 ## 3. 段 C——出局、终局与对局配置（Siege.Core/Match）
 
@@ -49,4 +49,5 @@
 - [ ] 6.2 新规则基线：4 人 v5 图、种子 1–200、同强度 AI 跑 200 局，出报告；重点记录截断率、终局原因分布、平均结束大回合、单串军势峰值、倍增子选择率、第 3 大回合领先者胜率。验证：报告放 `sim-out/`，关键数字写入 implement 记录，明确标注"AI 权重未校准口径"。
 - [ ] 6.3 `.trellis/spec/core/` 补充本 change 形成的编码约定（势力值用不溢出的整数类型、截断只在 Sim、内置图内容变更必须递增标识）。验证：`index.md` 的 Quality Check 同步一条"势力 / 军势不得用定宽整数"。（`determinism.md` 的「势力 / 军势用 BigInteger」与 `testing.md` 的「还原后必须刷新时间戳」已在段 A 提前写入，本项只需补其余条目。）
 - [ ] 6.4 补强段 A check 报出的两处守门缺口（`implement.md`「段 A check 记录」）：（a）`总势力Tests.领地计分直接取空格归属结果` ② 只扫 `PowerCalculator.cs` 的违禁词与仓库级 `CoverageTargets(` 名单，挡得住"同文件另写统计"（M-AC2 红 1）却挡不住"另起文件照抄一份"（M-AC14 红 0）——补"算式形状 / `OwnershipOf(` 调用者名单"扫描，注意仓库级限制 `OwnershipOf(` 会误伤 Presentation / Sim 的合法读法；（b）`计分路径不含浮点` 用 `Directory.GetFiles` 不递归，`Scoring/` 将来加子目录会静默漏扫，改为递归。验证：两条各配一次变异（照抄到新文件应红、子目录里塞浮点应红）。
+- [ ] 6.4b 生成图黄金值扩到 2–3 颗种子（段 B 待决 8）：`MG-14`（河道拐弯加价 6→1）在新的 `gen:12345` 上实跑 **0 红**，单颗种子的导出摘要挡不住布局参数改动；非自证目前只靠 M-B19（桥头相位反转，红 1）。验证：扩种子后重跑 MG-14 必须红，并记录红数。
 - [ ] 6.5 全量回归：`dotnet build` 零警告；`dotnet test -c Release` 全绿；`openspec validate restore-go-core-rules --strict` 通过。

@@ -24,7 +24,6 @@ public sealed class BatchEvaluator
     private readonly PlayerId _me;
     private readonly EvaluationWeights _weights;
     private readonly bool _immediateOnly;
-    private readonly SiteValues _siteValues;
     private readonly Func<RelicPublicState, int> _relicValue;
     private readonly ImmutableSortedDictionary<PlayerId, PlayerStatus> _roster;
     private readonly ImmutableArray<RelicPublicState> _relics;
@@ -50,8 +49,7 @@ public sealed class BatchEvaluator
         _relicValue = relicValue ?? RelicEstimate.Estimate;
         _roster = view.Players.ToImmutableSortedDictionary(p => p.Player, p => p.Status);
         _relics = view.Relics;
-        _siteValues = view.SiteValues;
-        _before = PowerCalculator.Compute(view.Board, _roster, _siteValues);
+        _before = PowerCalculator.Compute(view.Board, _roster);
         _rankBefore = _before.RankOf(me);
         _relicBefore = RelicScore(_before.Coverage);
         _safetyBefore = SafetyOf(view.Board);
@@ -90,7 +88,7 @@ public sealed class BatchEvaluator
         }
 
         GameBoard after = result.ProjectedBoard;
-        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _siteValues);
+        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster);
 
         raw[(int)EvaluationDimension.PowerGain] = afterPower.Of(_me).Total - _before.Of(_me).Total;
 

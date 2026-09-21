@@ -32,7 +32,7 @@ public class 信息层的可用时机与无副作用Tests
         foreach (Scoring.PlayerPower truth in match.Scoreboard.Latest!.Players)
         {
             Assert.Equal(truth.Total, layer.Players.Single(r => r.Player == truth.Player).Total);
-            Assert.Equal(truth.Sites.Select(s => s.Coord).Notations(), layer.Sites.Where(s => s.Controller == truth.Player).Select(s => s.Coord).Notations());
+            Assert.Equal(truth.TerritoryScore, layer.Players.Single(r => r.Player == truth.Player).TerritoryScore);
             Assert.Equal(truth.Groups.Select(g => g.Power), layer.Groups.Where(g => g.Owner == truth.Player).Select(g => g.Power.Power));
         }
 

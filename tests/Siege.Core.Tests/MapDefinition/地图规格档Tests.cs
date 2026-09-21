@@ -12,7 +12,7 @@ public class 地图规格档Tests
     [InlineData("siege-4p-base-v1")]
     [InlineData("siege-4p-base-v2")]
     [InlineData("siege-4p-base-v3")]
-    [InlineData("siege-4p-base-v4")]
+    [InlineData("siege-4p-base-v5")]
     public void 缺省为标准档(string id)
     {
         // Scenario：读入一张没有规格档字段的旧地图文件 → 规格档为标准。四份既有 maps/*.json 都没有该字段。
@@ -25,13 +25,13 @@ public class 地图规格档Tests
     [Fact]
     public void 标准档写出时不带规格档字段且基准图文件逐字节不变()
     {
-        // 标准档省略该字段：磁盘上的 v4 文件与代码序列化结果仍逐字符相等（行尾归一后），不必重导四份 json。
-        MapData v4 = FourPlayerBaseMap.Create();
-        Assert.Equal(MapProfile.Standard, v4.Profile);
-        string json = MapFile.ToJson(v4);
+        // 标准档省略该字段：磁盘上的 v5 文件与代码序列化结果仍逐字符相等（行尾归一后），不必重导四份 json。
+        MapData v5 = FourPlayerBaseMap.Create();
+        Assert.Equal(MapProfile.Standard, v5.Profile);
+        string json = MapFile.ToJson(v5);
         Assert.DoesNotContain("\"Profile\"", json, StringComparison.Ordinal);
 
-        string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", "siege-4p-base-v4.json"));
+        string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", "siege-4p-base-v5.json"));
         Assert.Equal(Normalize(disk), Normalize(json));
     }
 
@@ -60,7 +60,6 @@ public class 地图规格档Tests
         }
 
         Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
-        Assert.Equal(original.Sites.OrderBy(kv => kv.Key), restored.Sites.OrderBy(kv => kv.Key));
         Assert.Equal(original.ChokePoints.Order(), restored.ChokePoints.Order());
         Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
         Assert.Equal(original.DistanceTolerance, restored.DistanceTolerance);

@@ -48,7 +48,6 @@ public sealed partial class BoardView : Node3D
     private readonly Dictionary<Coord, Color> _tileBase = [];
     private readonly Dictionary<Coord, int> _levels = [];
     private Node3D _decoration = null!;
-    private Node3D _sites = null!;
     private Node3D _overlay = null!;
     private Node3D _pieces = null!;
     private Node3D _preview = null!;
@@ -242,8 +241,6 @@ public sealed partial class BoardView : Node3D
 
         BuildCoordinateLabels();
 
-        _sites = new Node3D { Name = "Sites" };
-        AddChild(_sites);
         _overlay = new Node3D { Name = "Overlay" };
         AddChild(_overlay);
         _pieces = new Node3D { Name = "Pieces" };
@@ -595,7 +592,6 @@ public sealed partial class BoardView : Node3D
             ornament.Scale = Vector3.One * decorationScale;
         }
 
-        Clear(_sites);
         Clear(_overlay);
         Clear(_pieces);
         Clear(_preview);
@@ -610,7 +606,6 @@ public sealed partial class BoardView : Node3D
 
         PreviewPresentation? preview = world.Preview(thresholds);
         DrawRelicMarkers(board);
-        DrawSites(board, preview, compact: content is not null);
         DrawPieces(board, treatment);
         DrawLayer(content);
         DrawPreview(preview, focus);
@@ -667,138 +662,6 @@ public sealed partial class BoardView : Node3D
             });
         }
     }
-
-    /// <summary>
-    /// 据点地标（visual-style-baseline「据点地标」）：档位 → 营帐 / 篝火 / 石碑；控制状态 → 被控制插主色 + 徽记旗、争议插交叉警示旗、无人不插旗。
-    /// 状态与控制者全部取视图模型 <see cref="DefaultBoardView.Sites"/>，本方法不判定控制。
-    /// 格上有正式棋子或本人暂放棋子、或打开了任一信息层（要读气点与着色）时，地标整体缩小并退到远侧格角（相机在 +Z 一侧，
-    /// 格角 (−0.35, −0.35) 在棋子身后），棋子与叠加标记完整可见；地标只是 MeshInstance3D，不参与拾取。
-    /// S-16：无棋子时地标按 <see cref="SiteFullScale"/> 放大；据点格另画一圈按档位区分的底色带（<see cref="AddSiteBand"/>），打开信息层时降到低不透明度让位。
-    /// </summary>
-    private void DrawSites(DefaultBoardView board, PreviewPresentation? preview, bool compact)
-    {
-        HashSet<Coord> staged = preview is null ? [] : [.. preview.StagedPieces.Select(p => p.Coord)];
-        foreach (SiteView site in board.Sites)
-        {
-            bool occupied = board.CellAt(site.Coord).Occupant is not null || staged.Contains(site.Coord);
-            bool aside = occupied || compact;
-            Node3D landmark = site.Tier switch
-            {
-                SiteTier.Tent => LowPoly.Tent(),
-                SiteTier.Campfire => LowPoly.Campfire(),
-                SiteTier.Stele => LowPoly.Stele(),
-                _ => throw new ArgumentOutOfRangeException(nameof(board), site.Tier, "未知据点档位。"),
-            };
-
-            Vector3 center = CenterOf(site.Coord);
-            AddSiteBand(site.Coord, site.Tier, compact);
-            landmark.Position = center + (aside ? new Vector3(-SiteAsideOffset, 0f, -SiteAsideOffset) : new Vector3(0f, 0f, SiteFullNudge));
-            landmark.Scale = aside ? Vector3.One * SiteAsideScale : SiteFullScale(site.Tier);
-            _sites.AddChild(landmark);
-
-            // 旗帜单独缩放（缩得比地标少，徽记在对局相机下仍读得出）。空格：插在地标右后侧（x 0.43：放大后营帐半宽 0.405、篝火石圈 0.443 在 z≈0 处，
-            // 杆脚 z −0.24 离两者都有余量；杆半径 0.018，外缘 0.448 < 地砖半宽 0.45）；退到格角时：插在远边、棋子正后方偏左，
-            // 旗面在屏幕上高过棋子顶部（远 0.38 格、高 0.6 的旗面投影在高 0.6 的棋子之上）。
-            // 争议旗是左右对称外倾 24° 的交叉杆，单侧最远伸出 = 杆 0.85 × sin24° 处挂的旗尖 ≈ 0.488 × 缩放：无棋子态插在格心正后方 (0, −0.30)
-            // （营帐后沿 −0.274、篝火后侧石块中心 (±0.17, −0.25) 之外）并缩到 0.9，伸出 0.44 < 地砖半宽 0.45；退到格角时仍按原位置与 0.62（伸出 −0.40..+0.20）。
-            bool contested = site.Kind == SiteControlKind.Contested;
-            Vector3 flagFoot = center + (aside
-                ? new Vector3(-0.10f, 0f, -0.38f)
-                : contested ? new Vector3(0f, 0f, -0.30f) : new Vector3(0.43f, 0f, -0.24f));
-            float flagScale = aside ? SiteAsideFlagScale : contested ? SiteContestedFullScale : 1f;
-            Node3D? flag = site.Kind switch
-            {
-                SiteControlKind.Occupied or SiteControlKind.UniqueCoverage => ControllerFlag(site.Controller!.Value),
-                SiteControlKind.Contested => LowPoly.ContestedFlags(SiteFlagHeight * 0.85f),
-                // 无人：不插旗。
-                _ => null,
-            };
-            if (flag is not null)
-            {
-                flag.Position = flagFoot;
-                flag.Scale = Vector3.One * flagScale;
-                _sites.AddChild(flag);
-            }
-        }
-    }
-
-    private static Node3D ControllerFlag(PlayerId controller)
-    {
-        FactionStyle faction = FactionTable.For(controller);
-        return LowPoly.SiteFlag(faction.Emblem, Visuals.ToColor(faction.Primary), Visuals.EmblemInk, SiteFlagHeight);
-    }
-
-    /// <summary>
-    /// 据点格底色带（S-16）：地砖内嵌一圈方框带，内缘 0.38（棋子底座半径 0.36 之外）、外缘 0.44（地砖半宽 0.45 之内），贴地 +0.004，
-    /// 低于势力层着色（+0.008）与轮廓环（+0.03）。颜色按档位（<see cref="Visuals.SiteBandTent"/> 等，三档灰度明度 67 / 108 / 210）。
-    /// 无光照不透明；打开信息层时不透明度降到 <see cref="SiteBandCompactAlpha"/>：仍能看出据点位置，但不与气点 / 势力着色抢明度。
-    /// 纯 MeshInstance3D，无碰撞体，不参与拾取。
-    /// </summary>
-    private void AddSiteBand(Coord coord, SiteTier tier, bool compact)
-    {
-        Color color = tier switch
-        {
-            SiteTier.Tent => Visuals.SiteBandTent,
-            SiteTier.Campfire => Visuals.SiteBandCampfire,
-            SiteTier.Stele => Visuals.SiteBandStele,
-            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知据点档位。"),
-        };
-        StandardMaterial3D material = Visuals.Flat(new Color(color, compact ? SiteBandCompactAlpha : 1f));
-        Vector3 center = CenterOf(coord) + new Vector3(0f, 0.004f, 0f);
-        const float inner = 0.38f;
-        const float outer = 0.44f;
-        float mid = (inner + outer) * 0.5f;
-        float width = outer - inner;
-        for (int side = 0; side < 4; side++)
-        {
-            bool horizontal = side is 0 or 1;
-            float sign = side is 0 or 2 ? 1f : -1f;
-            Vector3 size = horizontal ? new Vector3(outer * 2f, 0.004f, width) : new Vector3(width, 0.004f, inner * 2f);
-            Vector3 position = horizontal ? center + new Vector3(0f, 0f, sign * mid) : center + new Vector3(sign * mid, 0f, 0f);
-            _sites.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = size }, MaterialOverride = material, Position = position });
-        }
-    }
-
-    /// <summary>打开信息层时据点底色带的不透明度（让位给信息层着色）。</summary>
-    private const float SiteBandCompactAlpha = 0.3f;
-
-    /// <summary>
-    /// 无棋子、未退让时地标的放大倍率（S-16，约 1.5 倍；X 一律 1.5，高度与进深按相机遮挡收窄）。以格心为原点、地砖半宽 0.45：
-    /// 营帐 (1.5, 1.2, 1.2) → 平面 x ±0.405、z −0.274..+0.374（含 <see cref="SiteFullNudge"/>）、顶高 0.378；
-    /// 篝火 1.5 → 石圈外缘 x ±0.443、z −0.346..+0.446、火焰顶高 0.825；
-    /// 石碑 (1.5, 1.1, 1.5) → 基座 x ±0.300、z −0.130..+0.230、顶高 0.880。
-    /// 高度不同比拔到 1.5：固定相机到远边的仰角只有约 46°，石碑 1.2 高会盖住 J8 / E6 远侧邻格棋子底座前缘（投影重叠 3–8 px），
-    /// 营帐 1.5 进深会盖住 C12 / M11 远侧邻格；按上面取值逐格投影（1600×900）与同行及远侧共 5 个邻格的棋子（底座 0.36 + 身体）不重叠。
-    /// </summary>
-    private static Vector3 SiteFullScale(SiteTier tier) => tier switch
-    {
-        SiteTier.Tent => new Vector3(1.5f, 1.2f, 1.2f),
-        SiteTier.Campfire => new Vector3(1.5f, 1.5f, 1.5f),
-        SiteTier.Stele => new Vector3(1.5f, 1.1f, 1.5f),
-        _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知据点档位。"),
-    };
-
-    /// <summary>无棋子时地标整体向相机一侧（+Z）挪的距离：给远侧邻格多留遮挡余量（S-16）。</summary>
-    private const float SiteFullNudge = 0.05f;
-
-    /// <summary>无棋子态争议旗的缩放（S-16：让交叉外倾旗尖不越出地砖，见 <see cref="DrawSites"/>）。</summary>
-    private const float SiteContestedFullScale = 0.9f;
-
-    /// <summary>退到格角时旗帜的缩放（杆高约 0.62，与棋子同高、立在棋子身后）。</summary>
-    private const float SiteAsideFlagScale = 0.62f;
-
-    /// <summary>
-    /// 有棋子 / 打开信息层时地标的缩放（相对 LowPoly 原始几何；S-16 的放大只作用于无棋子态，本值不变，相对放大态约 0.25）。
-    /// 与 <see cref="SiteAsideOffset"/> 联立：营帐（最宽，0.54 × 0.46）缩后最近角距格心 0.363、
-    /// 石碑基座 0.411、篝火石圈（S-16 半径 0.23）0.388，都在棋子底座（半径 0.36）之外；营帐外缘 0.451 ≈ 地砖半宽 0.45。
-    /// </summary>
-    private const float SiteAsideScale = 0.375f;
-
-    /// <summary>退到格角时相对格心的偏移（沿 −X、−Z，即远离相机的一角）。</summary>
-    private const float SiteAsideOffset = 0.35f;
-
-    /// <summary>旗杆高度：高过石碑（0.80），让三档地标上的旗帜在对局相机下都露得出来。</summary>
-    private const float SiteFlagHeight = 1.0f;
 
     private void DrawPieces(DefaultBoardView board, SceneTreatment treatment)
     {
@@ -888,19 +751,6 @@ public sealed partial class BoardView : Node3D
 
     private void DrawPower(PowerLayerContent power)
     {
-        // 势力层只给据点格着色（控制者主色 / 争议金色 / 无人暗灰），不再给任何空格着领地贡献色（tactical-layers「势力层显示据点控制」）。
-        foreach (SiteView site in power.Sites)
-        {
-            (Color color, float alpha) = site.Kind switch
-            {
-                SiteControlKind.Occupied or SiteControlKind.UniqueCoverage => (Visuals.FactionColorOf(site.Controller!.Value), 0.6f),
-                SiteControlKind.Contested => (Visuals.Contested, 0.6f),
-                _ => (Visuals.Neutral, 0.3f),
-            };
-            AddTint(site.Coord, color, alpha);
-            AddRing(_overlay, site.Coord, color, site.Kind == SiteControlKind.Contested, 0.03f);
-        }
-
         foreach (GroupScoreView group in power.Groups.Where(g => g.HeatLevel > 0))
         {
             foreach (Coord stone in group.Stones)

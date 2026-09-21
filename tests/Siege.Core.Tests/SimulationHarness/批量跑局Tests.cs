@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.Text.Json;
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Sim.Cli;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -28,10 +30,9 @@ public class 批量跑局Tests
         Assert.Equal(6, Directory.GetFiles(dir, "match-*.jsonl").Length);
         Assert.True(File.Exists(Path.Combine(dir, "summary.json")));
         RunConfig saved = RunConfig.FromJson(File.ReadAllText(Path.Combine(dir, "config.json")));
-        // scoring-sites 3.1：config.json 写实际生效配置——未显式配置的权重填默认表、据点分值如实写出（旧期望 config.ToJson() 原样 → 新期望 Effective()）。
+        // config.json 写实际生效配置——未显式配置的权重填默认表（旧期望 config.ToJson() 原样 → 新期望 Effective()）。
         Assert.Equal(config.Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
-        Assert.Equal(Core.Scoring.SiteValues.Standard, saved.SiteValues);
         Assert.Equal((21UL, 6, 3, 500), (saved.SeedStart, saved.Count, saved.MaxMajorRounds, saved.FullEventSamplePermille));
 
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
@@ -91,6 +92,44 @@ public class 批量跑局Tests
     }
 
     // ---------- 既有守门延伸到 Siege.Sim 程序集 ----------
+
+    [Fact]
+    public void 扫档配置可追溯()
+    {
+        // 规格 Scenario：以匠人权重 18、全部玩家 Safety = 7 执行一批对局 → 配置记录写明匠人权重 18 与四名玩家的完整权重。
+        // 读 config.json 原文（不经 RunConfig 反序列化，避免缺省值把漏写掩盖掉）；日志首部的匠人权重取自对局本身。
+        // restore-go-core-rules 段 B：原断言里的"据点分值 3 / 8 / 24"随据点摘除删去（规格 Scenario 同步改写）；
+        // "小回合数截断值"是段 E 5.1 的新增项，本段尚未实现，不在此断言。
+        // 变异验证 M-B10（段 B，实跑红 3）：MatchSession.Create 不把 RunConfig.ArtisanWeight 传入对局 → 本测试红（首部回到 10）。
+        EvaluationWeights safety7 = EvaluationWeights.Default with { Safety = 7 };
+        RunConfig config = SimFixtures.Config(count: 1, maxRounds: 1) with
+        {
+            ArtisanWeight = 18,
+            Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = AiDifficulty.Easy, Weights = safety7 })],
+        };
+        string dir = SimFixtures.TempDir("sweep-config");
+
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+
+        using JsonDocument json = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json")));
+        Assert.Equal(18, json.RootElement.GetProperty("ArtisanWeight").GetInt32());
+        JsonElement[] players = [.. json.RootElement.GetProperty("Players").EnumerateArray()];
+        Assert.Equal(4, players.Length);
+        Assert.All(players, p =>
+        {
+            JsonElement w = p.GetProperty("Weights");
+            Assert.Equal(
+                (10, 8, 6, 7, 4, 20, 2),
+                (w.GetProperty("PowerGain").GetInt32(), w.GetProperty("EnemyLoss").GetInt32(), w.GetProperty("Relic").GetInt32(), w.GetProperty("Safety").GetInt32(),
+                 w.GetProperty("Growth").GetInt32(), w.GetProperty("Initiative").GetInt32(), w.GetProperty("Supply").GetInt32()));
+        });
+
+        MatchLog log = Assert.Single(MatchLog.ReadDirectory(dir));
+        Assert.Equal(18, log.Header.ArtisanWeight);
+
+        // 反面：地图数据不含据点——写出的地图文本里没有该字段（段 B 守门）。
+        Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(MapCatalog.Resolve(log.Header.MapId)), StringComparison.Ordinal);
+    }
 
     [Fact]
     public void Sim程序集不引用Godot()

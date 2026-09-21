@@ -40,7 +40,7 @@ public class 倍增子的棋串倍率Tests
     {
         // restore-go-core-rules piece-effects 规格：10 个独占空格 + 一条倍率 2.25 的棋串（§10.1 标准算例，军势 20）→ 领地按原值 10 计入，总势力 30，
         // MUST NOT 为 ⌊10 × 2.25⌋ + 20 = 42。盘面取自 territory-power 时期的同名测试：标准算例棋串 B2–G2 天然有 14 个相邻空格，用障碍 A2 / H2 / B1 / C1 削到 10。
-        // 段 A 改写：原「倍率不作用于据点分」（石碑 45 + 20 = 65）——据点分自本段起不计入总势力，按规格换回领地分算例。
+        // 段 A 改写：原口径下这条测的是另一类不参与倍率的分数（旧值 65），领地恢复计分后按规格换成领地分算例。
         // 变异验证 M-AC5（段 A check 实跑）：Compute 的 Total 把领地分也乘上该玩家首条棋串的倍率 → 红 15，含本测试（42）。
         GameBoard board = TestMaps.Blank(size: 9, "A2", "H2", "B1", "C1").PlaceStandardGroup(TestMaps.P0, row: 2);
 

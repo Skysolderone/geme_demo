@@ -2,7 +2,7 @@ namespace Siege.Core.Board;
 
 /// <summary>
 /// 地图规格档（frontier-map D1）：只决定加载时用哪一套规模预算与静态校验（<see cref="MapValidator"/> 的声明表），
-/// MUST NOT 被任何对局规则、AI 或表现层读取——气、连珠、覆盖、保护期、据点与信物的结算在两档下完全相同。
+/// MUST NOT 被任何对局规则、AI 或表现层读取——气、连珠、覆盖、保护期与信物的结算在两档下完全相同。
 /// </summary>
 /// <remarks>规格：openspec/changes/frontier-map/specs/map-definition —— Requirement: 地图规格档</remarks>
 public enum MapProfile

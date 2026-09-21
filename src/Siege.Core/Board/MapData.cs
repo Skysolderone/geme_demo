@@ -45,12 +45,6 @@ public sealed record MapData
     /// <summary>信物格及其分区与预算档位。</summary>
     public required ImmutableDictionary<Coord, RelicCellSpec> RelicCells { get; init; }
 
-    /// <summary>
-    /// 据点：坐标 → 档位（scoring-sites D-A）。缺省为空，旧地图与既有测试不必显式给出；
-    /// 数量区间、可落子、不与信物重合、档位必填由 <see cref="MapValidator"/> 规则 8 校验。
-    /// </summary>
-    public ImmutableDictionary<Coord, SiteTier> Sites { get; init; } = ImmutableDictionary<Coord, SiteTier>.Empty;
-
     /// <summary>设计师显式标注的主要咽喉格。不做自动识别——自动识别的错误会静默污染距离均衡校验。</summary>
     public required ImmutableHashSet<Coord> ChokePoints { get; init; }
 

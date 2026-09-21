@@ -31,8 +31,8 @@ public class 日志首部地图摘要Tests
         Assert.Contains($"\"MapDigest\":\"{gen.Header.MapDigest}\"", gen.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
         Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(FourPlayerBaseMap.Create()), l.Header.MapDigest));
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV1.Id }, seed: 7).Run();
-        Assert.Equal(Expect(FrontierMapV1.Create()), frontier.Header.MapDigest);
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
+        Assert.Equal(Expect(FrontierMapV2.Create()), frontier.Header.MapDigest);
         Assert.NotEqual(gen.Header.MapDigest, frontier.Header.MapDigest);
     }
 
@@ -76,7 +76,7 @@ public class 日志首部地图摘要Tests
         Assert.Contains(otherDigest, fromStale.Expected, StringComparison.Ordinal);
         Assert.Contains(original.Header.MapDigest!, fromStale.Actual, StringComparison.Ordinal);
 
-        // ② 改一格：把一个不是出生区 / 据点 / 信物的岩石格挖掉（导出文本里把它从 Obstacles 移走），标识仍是 gen:12345。
+        // ② 改一格：把一个不是出生区 / 信物的岩石格挖掉（导出文本里把它从 Obstacles 移走），标识仍是 gen:12345。
         MapData map = FrontierMapGenerator.Generate(12345);
         MapData tampered = TamperOneCell(map);
         Assert.Equal(map.Id, tampered.Id);

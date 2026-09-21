@@ -68,7 +68,7 @@ public class 启发式评价维度Tests
         Assert.Equal(sum, e.Total);
 
         // 敌损 = 参赛敌方势力下降 + 提子数 × 2。段 A 重算：原期望下降 1 → 2 = P1 失去 E5 的军势 1 + 失去独占格 F5 的领地 1（F5 被 P0 落子占据），提 1 子。
-        BigInteger p1Drop = evaluator.Before.Of(AiFixtures.P1).Total - PowerCalculator.Compute(result.ProjectedBoard!, match.Roster, SiteValues.Standard).Of(AiFixtures.P1).Total;
+        BigInteger p1Drop = evaluator.Before.Of(AiFixtures.P1).Total - PowerCalculator.Compute(result.ProjectedBoard!, match.Roster).Of(AiFixtures.P1).Total;
         Assert.Equal(2, p1Drop);
         Assert.Equal(p1Drop + BatchEvaluator.CapturePerStone, e.RawOf(EvaluationDimension.EnemyLoss));
     }
@@ -118,7 +118,7 @@ public class 启发式评价维度Tests
         RehearsalResult result = match.RehearseBatch(batch, ("F5", PieceType.Basic));
         EvaluationBreakdown e = ai.CreateEvaluator().Evaluate(batch.Placements, result, batch.Context);
 
-        PowerSnapshot after = PowerCalculator.Compute(result.ProjectedBoard!, match.Roster, SiteValues.Standard);
+        PowerSnapshot after = PowerCalculator.Compute(result.ProjectedBoard!, match.Roster);
         Assert.Equal(13, after.Of(AiFixtures.P0).Total);
         Assert.Equal(12, after.Of(AiFixtures.P1).Total);
         Assert.Equal(1, after.RankOf(AiFixtures.P0));

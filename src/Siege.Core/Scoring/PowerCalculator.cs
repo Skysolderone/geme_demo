@@ -13,7 +13,6 @@ namespace Siege.Core.Scoring;
 /// 位置加值 = 连珠 + 协同 + 高地，三项先求和、再与基础军势相加、最后整体乘倍率，对每条棋串各取整一次。</para>
 /// <para><c>总势力 = 独占空格数 + 全部棋串军势之和</c>（D2）：独占空格直接取 <see cref="CoverageMap.ExclusiveCellsOf"/> 的空格归属结果，
 /// 本类不另行统计覆盖；争议格、中立格（含空林地格）不计分，棋子所在格只算军势，领地分不进倍率，不对总势力二次取整。</para>
-/// <para>据点（过渡，段 B 删除）：据点控制仍照常判定并列在明细里，但据点分<b>不计入</b>总势力。</para>
 /// <para>棋串军势与总势力用 <see cref="BigInteger"/>：不溢出、不截断、不饱和；计分路径不出现浮点。</para>
 /// <para>玩家状态只用于名次过滤与明细标记；覆盖与军势对弃赛者、出局者的遗留棋子一视同仁（D7）。</para>
 /// <para>规格：openspec/changes/restore-go-core-rules/specs/power-score</para>
@@ -43,33 +42,30 @@ public static class PowerCalculator
     }
 
     /// <summary>
-    /// 无名册重载：把盘面上出现的全部玩家视为参赛中，据点分值取 <see cref="SiteValues.Standard"/>。只适用于尚无流程层状态的场景（如信物、征募层的单元测试）；
-    /// 正式对局 MUST 走带名册与据点分值的重载，否则弃赛与出局状态、对局配置的据点分值都无从得知。
+    /// 无名册重载：把盘面上出现的全部玩家视为参赛中。只适用于尚无流程层状态的场景（如信物、征募层的单元测试）；
+    /// 正式对局 MUST 走带名册的重载，否则弃赛与出局状态无从得知。
     /// </summary>
     public static PowerSnapshot Compute(GameBoard board)
     {
         ArgumentNullException.ThrowIfNull(board);
-        return ComputeCore(board, roster: null, SiteValues.Standard);
+        return ComputeCore(board, roster: null);
     }
 
     /// <summary>
     /// 全量计算。名册 <paramref name="roster"/> 来自流程层，MUST 列出盘面上的每一名玩家（含已弃赛、已出局者）：
     /// 盘面上出现名册外的玩家几乎一定是接线错误，抛 <see cref="SiegeRuleException"/> 而不是静默视为参赛中。
     /// 名册列出但盘面上没有棋子的玩家（例如刚被提光）势力为 0，仍按状态参与名次。
-    /// <paramref name="siteValues"/> 是对局配置的据点分值（<c>MatchOptions.SiteValues</c>），没有缺省值：调用方必须显式传入。
     /// </summary>
-    public static PowerSnapshot Compute(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, SiteValues siteValues)
+    public static PowerSnapshot Compute(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(roster);
-        ArgumentNullException.ThrowIfNull(siteValues);
-        return ComputeCore(board, roster, siteValues.Validated());
+        return ComputeCore(board, roster);
     }
 
-    private static PowerSnapshot ComputeCore(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster, SiteValues siteValues)
+    private static PowerSnapshot ComputeCore(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster)
     {
         CoverageMap coverage = CoverageMap.Compute(board);
-        ImmutableArray<SiteState> siteStates = SiteControl.Compute(board, coverage);
         ImmutableArray<Group> allGroups = board.AllGroups();
 
         var players = roster is null ? new SortedSet<PlayerId>() : new SortedSet<PlayerId>(roster.Keys);
@@ -89,11 +85,6 @@ public static class PowerCalculator
         {
             PlayerStatus status = roster is null ? PlayerStatus.Active : roster[player];
             ImmutableArray<Coord> exclusive = coverage.ExclusiveCellsOf(player);
-            // 据点（过渡，段 B 删除）：控制中的据点仍列入明细供展示，但据点分不进 Total。
-            ImmutableArray<SiteHolding> sites =
-            [
-                .. siteStates.Where(st => st.Controller == player).Select(st => new SiteHolding(st.Coord, st.Tier, siteValues.Of(st.Tier), st.Kind)),
-            ];
             ImmutableArray<GroupPower> groups = allGroups
                 .Where(g => g.Owner == player)
                 .Select(g => Evaluate(board, g))
@@ -106,11 +97,11 @@ public static class PowerCalculator
             }
 
             // 领地分 = 独占空格数：直接取空格归属结果（coverage-territory「空格归属三态」），不另行统计覆盖。
-            details.Add(new PlayerPower(player, status, exclusive, sites, groups, exclusive.Length + groupTotal));
+            details.Add(new PlayerPower(player, status, exclusive, groups, exclusive.Length + groupTotal));
         }
 
         ImmutableArray<PlayerPower> playerPowers = details.ToImmutable();
-        return new PowerSnapshot(coverage, siteStates, siteValues, playerPowers, Rank(playerPowers));
+        return new PowerSnapshot(coverage, playerPowers, Rank(playerPowers));
     }
 
     /// <summary>

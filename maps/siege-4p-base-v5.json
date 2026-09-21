@@ -1,5 +1,5 @@
 {
-  "Id": "siege-4p-base-v4",
+  "Id": "siege-4p-base-v5",
   "Width": 13,
   "Height": 13,
   "MaxPlayers": 4,
@@ -156,20 +156,6 @@
       "Zone": "BirthZone",
       "Budget": "Birth"
     }
-  },
-  "Sites": {
-    "J2": "Campfire",
-    "L2": "Tent",
-    "B3": "Tent",
-    "B5": "Campfire",
-    "H5": "Stele",
-    "E6": "Stele",
-    "J8": "Stele",
-    "F9": "Stele",
-    "M9": "Campfire",
-    "M11": "Tent",
-    "C12": "Tent",
-    "E12": "Campfire"
   },
   "ChokePoints": [
     "G4",

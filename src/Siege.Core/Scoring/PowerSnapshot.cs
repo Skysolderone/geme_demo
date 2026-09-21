@@ -12,7 +12,7 @@ namespace Siege.Core.Scoring;
 /// <param name="BaseTotal">基础军势总和。</param>
 /// <param name="LineBonus">来自连珠线的位置加值。</param>
 /// <param name="SynergyBonus">来自协同子的位置加值。</param>
-/// <param name="HighGroundBonus">来自高地压制的位置加值（scoring-sites D-E：每枚棋子至多 1 点）。</param>
+/// <param name="HighGroundBonus">来自高地压制的位置加值（每枚棋子至多 1 点）。</param>
 /// <param name="MultiplierCount">倍增子数量 n，即倍率指数（不封顶）。</param>
 /// <param name="Power">取整后军势：<c>⌊(基础 + 加值) × 3^n / 2^n⌋</c>，逐棋串各取整一次（restore-go-core-rules D1：加值被倍率放大）。任意精度整数，不溢出。</param>
 public sealed record GroupPower(
@@ -25,7 +25,7 @@ public sealed record GroupPower(
     int MultiplierCount,
     BigInteger Power)
 {
-    /// <summary>位置加值总计 = 连珠来源 + 协同来源 + 高地来源（design.md D3：分来源记账；scoring-sites 加高地）。</summary>
+    /// <summary>位置加值总计 = 连珠来源 + 协同来源 + 高地来源（design.md D3：分来源记账）。</summary>
     public int PositionBonus => LineBonus + SynergyBonus + HighGroundBonus;
 
     /// <summary>倍率 <c>1.5^n</c> 的精确表示（分子 <c>3^n</c>、分母 <c>2^n</c>），不封顶。</summary>
@@ -41,22 +41,17 @@ public sealed record GroupPower(
 /// <param name="Player">玩家。</param>
 /// <param name="Status">参赛状态（由流程层提供，原样携带，供 UI 标记"已弃赛"）。</param>
 /// <param name="ExclusiveCells">独占空格坐标集合，字典序；棋子所在格不在其中。每格计 1 点领地分，取自空格归属三态的结果。</param>
-/// <param name="Sites">该玩家控制中的据点（占据或唯一覆盖），坐标字典序。过渡字段（段 B 删除）：只展示，<b>不计分</b>。</param>
 /// <param name="Groups">逐棋串拆分，按棋串最小坐标字典序。</param>
 /// <param name="Total">总势力 = 领地分 + 全部棋串军势之和。领地分不参与任何倍率。任意精度整数，不溢出。</param>
 public sealed record PlayerPower(
     PlayerId Player,
     PlayerStatus Status,
     ImmutableArray<Coord> ExclusiveCells,
-    ImmutableArray<SiteHolding> Sites,
     ImmutableArray<GroupPower> Groups,
     BigInteger Total)
 {
     /// <summary>领地分总计 = 独占空格数（每格 1 分）。</summary>
     public int TerritoryScore => ExclusiveCells.Length;
-
-    /// <summary>所控制据点的分值之和。过渡字段（段 B 删除）：只展示，<b>不计入</b> <see cref="Total"/>。</summary>
-    public long SiteScore => Sites.Sum(s => (long)s.Value);
 
     /// <summary>是否参与势力名次（只有参赛中的玩家参与）。</summary>
     public bool IsRanked => Status == PlayerStatus.Active;
@@ -79,14 +74,10 @@ public sealed record RankGroup(int Rank, BigInteger Power, ImmutableArray<Player
 }
 
 /// <summary>
-/// 一次势力重算的完整结果：覆盖表、全部据点状态、据点分值配置、每名玩家的明细、势力名次。整份结果只依赖当前盘面、玩家状态与据点分值输入。
+/// 一次势力重算的完整结果：覆盖表、每名玩家的明细、势力名次。整份结果只依赖当前盘面与玩家状态。
 /// </summary>
-/// <param name="SiteStates">地图上全部据点此刻的状态（含争议与无人），坐标字典序；表现层与遥测直接消费，不各自判定。</param>
-/// <param name="SiteValues">本次计算所用的据点分值（对局配置）。</param>
 public sealed record PowerSnapshot(
     CoverageMap Coverage,
-    ImmutableArray<SiteState> SiteStates,
-    SiteValues SiteValues,
     ImmutableArray<PlayerPower> Players,
     ImmutableArray<RankGroup> Ranking)
 {

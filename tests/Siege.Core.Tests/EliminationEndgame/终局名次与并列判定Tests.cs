@@ -9,8 +9,8 @@ namespace Siege.Core.Tests.EliminationEndgame;
 /// <summary>规格：elimination-endgame —— Requirement: 终局名次与并列判定（design.md D7 纯函数）</summary>
 public class 终局名次与并列判定Tests
 {
-    private static StandingInput Active(PlayerId p, long power, int relics = 0, int sites = 0, int stones = 0) =>
-        new(p, PlayerStatus.Active, power, relics, sites, stones, null);
+    private static StandingInput Active(PlayerId p, long power, int relics = 0, int cells = 0, int stones = 0) =>
+        new(p, PlayerStatus.Active, power, relics, cells, stones, null);
 
     private static StandingInput Resigned(PlayerId p, long powerAtResign) => new(p, PlayerStatus.Resigned, powerAtResign, 0, 0, 0, null);
 
@@ -31,7 +31,7 @@ public class 终局名次与并列判定Tests
     [Fact]
     public void 逐级比较到棋子数()
     {
-        // 设计文档 §12.3：势力、信物、控制据点数均相同，棋子数 11 与 8 → 11 者名次更高（scoring-sites：第 3 级由独占空格数改为据点数，参数值不变）。
+        // 设计文档 §12.3：势力、信物、独占空格数均相同，棋子数 11 与 8 → 11 者名次更高。
         // 变异验证 M-E18：FinisherComparer 删除棋子数级（少一级）→ 红 1（本测试：二者并列）。
         ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 42, 2, 7, stones: 8), Active(MatchFixtures.P1, 42, 2, 7, stones: 11)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, MatchFixtures.P0, MatchFixtures.P1));
@@ -139,30 +139,33 @@ public class 终局名次与并列判定Tests
     }
 
     [Fact]
-    public void 信物相同比据点数()
+    public void 信物相同比独占空格数()
     {
-        // 规格 Scenario（scoring-sites D-G）：势力均为 60、控制信物均为 2，控制据点数 3 与 1 → 3 者名次更高；独占空格数不参与比较。
-        // 变异验证 M-S13（段 A2）：FinisherComparer 删除据点级 → 红 1（本测试：二者比到棋子数，P0 棋子多反而第 1）。
-        ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 60, relics: 2, sites: 1, stones: 20), Active(MatchFixtures.P1, 60, relics: 2, sites: 3, stones: 5)]);
+        // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、控制信物均为 2，独占空格数 3 与 1 → 3 者名次更高。
+        // 变异验证 M-B13（段 B，实跑红 1）：FinisherComparer 删除独占空格级 → 红 1（本测试：二者比到棋子数，P0 棋子多反而第 1）。
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 60, relics: 2, cells: 1, stones: 20), Active(MatchFixtures.P1, 60, relics: 2, cells: 3, stones: 5)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, MatchFixtures.P0, MatchFixtures.P1));
     }
 
     [Fact]
-    public void 终局输入取控制中的据点数量()
+    public void 终局输入取独占空格数()
     {
-        // 接线：MatchFlow 终局时 StandingInput.ControlledSites = 势力明细里该玩家控制的据点个数（不是独占空格数）。
-        // P0 占据营帐 B5、唯一覆盖篝火 D5（被 C5 覆盖），另有大量独占空格；其余三人弃赛 → 只剩一名参赛玩家终局。
-        // 变异验证 M-S14（段 A2）：MatchFlow.Finish 改回 detail.ExclusiveCells.Length → 红，含本测试。
-        MatchFlow match = SiteFixtures.Started(null, ("B5", SiteTier.Tent), ("D5", SiteTier.Campfire)).AtRound(5, MatchFixtures.All)
-            .Stones(MatchFixtures.P0, "B5", "C5");
-        Assert.True(match.Scoreboard.Latest!.Of(MatchFixtures.P0).ExclusiveCells.Length > 2);   // 前提：独占空格数 ≠ 据点数
+        // 接线（restore-go-core-rules D4：并列链第三级改回独占空格数）：MatchFlow 终局时 StandingInput.ExclusiveCells
+        // = 势力明细里该玩家的独占空格个数。P0 在 B5 / C5 各落一子，其余三人弃赛 → 只剩一名参赛玩家终局。
+        // 变异验证 M-B12（段 B，实跑红 1）：MatchFlow.Finish 改成 detail.Groups.Length → 本测试红。
+        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All).Stones(MatchFixtures.P0, "B5", "C5");
+        PlayerPower detail = match.Scoreboard.Latest!.Of(MatchFixtures.P0);
+        Assert.True(detail.ExclusiveCells.Length > 2);   // 前提：独占空格数 ≠ 棋子数 / 棋串数
         match.Resign(MatchFixtures.P1);
         match.Resign(MatchFixtures.P2);
         match.Resign(MatchFixtures.P3);
 
         Assert.Equal(MatchPhase.Ended, match.Phase);
-        Assert.Equal(2, match.Result!.Of(MatchFixtures.P0).Input.ControlledSites);
-        // 段 A 重算：原 22 = 营帐 5 + 篝火 15 + 军势 2 → 8 = 领地 6（A5 / D5 / B4 / C4 / B6 / C6；D5 是空的篝火格，仍是独占空格）+ 军势 2；据点分不进总势力。
-        Assert.Equal(6 + 2, match.Result.Of(MatchFixtures.P0).Input.Power);
+        StandingInput input = match.Result!.Of(MatchFixtures.P0).Input;
+        Assert.Equal(detail.ExclusiveCells.Length, input.ExclusiveCells);
+        // 段 B 重算：原夹具是一张 7×7 小图（值 8 = 领地 6 + 军势 2）；本测试改用 MatchFixtures 的标准夹具盘面，
+        // 领地分与军势逐项取自同一份势力明细，不再写死数字。
+        Assert.Equal(detail.Total, input.Power);
+        Assert.Equal(detail.TerritoryScore + detail.Groups.Aggregate(BigInteger.Zero, (s, g) => s + g.Power), input.Power);
     }
 }

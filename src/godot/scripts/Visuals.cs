@@ -63,44 +63,6 @@ public static class Visuals
     /// <summary>岩石。</summary>
     public static readonly Color Rock = Color.Color8(142, 138, 134);
 
-    /// <summary>营帐帆布（据点地标，浅米色，与岩灰 / 草地在灰度下也拉得开）。</summary>
-    public static readonly Color TentCanvas = Color.Color8(222, 204, 164);
-
-    /// <summary>营帐门洞。</summary>
-    public static readonly Color TentDoor = Color.Color8(70, 52, 38);
-
-    /// <summary>篝火外焰（S-16 提亮：236,118,40 → 255,140,40，配合自发光 2.0）。</summary>
-    public static readonly Color FlameOuter = Color.Color8(255, 140, 40);
-
-    /// <summary>篝火内焰（S-16 提亮：255,214,96 → 255,236,140，配合自发光 2.6）。</summary>
-    public static readonly Color FlameInner = Color.Color8(255, 236, 140);
-
-    /// <summary>
-    /// 石碑石面（S-16：亮白石色，灰度明度 ≈ 222；岩石 <see cref="Rock"/> 明度 ≈ 120，差约 100，不再与障碍格岩石混淆）。
-    /// 原值 168,176,190（明度 ≈ 175）。
-    /// </summary>
-    public static readonly Color SteleStone = Color.Color8(226, 222, 208);
-
-    /// <summary>石碑基座（S-16：浅石色，明度 ≈ 184；原先直接用岩石色）。</summary>
-    public static readonly Color SteleBase = Color.Color8(190, 184, 168);
-
-    /// <summary>石碑刻痕（S-16：石面变亮后刻痕改深，明度 ≈ 113，与石面差约 108）。</summary>
-    public static readonly Color SteleCarving = Color.Color8(120, 112, 100);
-
-    // ---------- 据点格底色（S-16）：内嵌边框带，按档位区分，低饱和；灰度明度 = 0.299R + 0.587G + 0.114B ----------
-    // 地表参照（反照率明度）：障碍 98、林地 112、桥 123、草地 149、土路 161、出生区插旗前高亮 ≈ 178、
-    // 出生区锁定后（草地与阵营主色 0.34 混合）红 132 / 蓝 132 / 金 156 / 紫 132。
-    // 营帐全在出生区，篝火与石碑全在草地上，三档各取离所在地砖远的明度，且三档两两相差 ≥ 40。
-
-    /// <summary>营帐格底色：暖炭灰，明度 ≈ 67（与出生区地砖 132–178 差 ≥ 65）。</summary>
-    public static readonly Color SiteBandTent = Color.Color8(74, 66, 58);
-
-    /// <summary>篝火格底色：低饱和梅灰红，明度 ≈ 108（与草地 149 差 41；地表没有这一色相）。</summary>
-    public static readonly Color SiteBandCampfire = Color.Color8(140, 92, 104);
-
-    /// <summary>石碑格底色：冷象牙白，明度 ≈ 210（与草地 149 差 61）。</summary>
-    public static readonly Color SiteBandStele = Color.Color8(214, 210, 196);
-
     /// <summary>旗帜图案 / 棋子高光：高亮度，保证去色后与阵营主色拉开明度差。</summary>
     public static readonly Color EmblemInk = Color.Color8(242, 240, 232);
 

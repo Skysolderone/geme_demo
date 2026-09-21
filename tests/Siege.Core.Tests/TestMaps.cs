@@ -72,19 +72,6 @@ internal static class TestMaps
     /// <summary>取该地图前 <paramref name="count"/> 个格（先行后列），用于凑出精确的障碍占比。</summary>
     internal static Coord[] FirstCells(this MapData map, int count) => [.. map.AllCoords().Take(count)];
 
-    /// <summary>
-    /// 给一张<b>尚未落子</b>的测试盘面补上据点（scoring-sites），返回新盘面。据点位置与档位是地图静态数据，只能在建盘时给出。
-    /// </summary>
-    internal static GameBoard WithSites(this GameBoard board, params (string Cell, SiteTier Tier)[] sites)
-    {
-        if (board.AllCoords().Any(c => board[c].Occupant is not null))
-        {
-            throw new InvalidOperationException("WithSites 只能用于空盘：据点是地图数据，须在落子之前给出。");
-        }
-
-        return GameBoard.LoadUnvalidated(board.Map with { Sites = sites.ToImmutableDictionary(s => At(s.Cell), s => s.Tier) });
-    }
-
     internal static GameBoard Place(this GameBoard board, string notation, PlayerId owner, PieceType type = PieceType.Basic)
     {
         board.Place(Coord.Parse(notation), owner, type);

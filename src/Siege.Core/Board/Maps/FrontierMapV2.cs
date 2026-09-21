@@ -3,7 +3,7 @@ using System.Collections.Immutable;
 namespace Siege.Core.Board.Maps;
 
 /// <summary>
-/// 4 人边疆档验证地图 v1（<c>siege-frontier-v1</c>）：25 列 × 30 行的竖长图，6 个大小不一的 h=2 平台（平台 ≡ 出生区），
+/// 4 人边疆档验证地图 v2（<c>siege-frontier-v2</c>）：25 列 × 30 行的竖长图，6 个大小不一的 h=2 平台（平台 ≡ 出生区），
 /// 平台之间由 h=0 过渡带连成一片，一条南北向主河在中央广场处断开。验证版（frontier-map 裁决 1）：不是任何入口的缺省地图。
 /// </summary>
 /// <remarks>
@@ -24,31 +24,30 @@ namespace Siege.Core.Board.Maps;
 /// 西北巷（第 19–20 行，1 号与 5 号之间）、西南巷（第 10–11 行，4 号北侧）、东南巷（第 10–11 行，6 号与 2 号之间）、东北巷（第 20–21 行，3 号南侧）。
 /// 平台四周除缓坡外全是崖壁（与 h=0 直接相邻，高差 2）或岩石；一格宽的主河可隔岸覆盖。其余用岩石（内陆）与深水（外海）填满。</para>
 /// <para><b>中央广场。</b>5×5，西北与东南两角是林地、东北与西南两角是岩石；中心 <c>N15</c> 是中央入口兼高档公共信物。
-/// 四块石碑按风车形摆在外圈（<c>M17 P16 O13 L14</c>）：没有一块与中心相邻，一枚棋子覆盖不了两块。
-/// 东、西两块就在 6 号、5 号的缓坡口；北、南两块各被一段栅栏（<c>M17-M18</c>、<c>O12-O13</c>）挡在河岸带一侧——
+/// 两段栅栏（<c>M17-M18</c>、<c>O12-O13</c>）把广场外圈的北、南两处挡在河岸带一侧——
 /// 隔栏可覆盖但走不进去，北面只能绕林地角 <c>L17</c> 或走东岸 <c>O18</c> 进广场，南面同理。</para>
-/// <para><b>据点 10。</b>平台内没有据点（得分点全在平台外，鼓励出门争抢）。篝火 6：四个大 / 中平台通向河岸的缓坡口各 1（<c>L21 P23 L7 P8</c>），
-/// 西北巷尽头 <c>E19</c>、东南巷尽头 <c>T11</c> 各 1。石碑 4：见上。均不与信物格重合。</para>
+/// <para><b>与 v1 的差别。</b>地形、出生区、缓坡、桥、栅栏与信物格逐格不变；v1 里另有 10 个记分格（原字符画的 <c>C</c> / <c>S</c> 字形），
+/// 该机制已在 restore-go-core-rules 整体退役，这 10 格现在与周围一样是 h=0 草地过渡带（D6：内容变了标识就变）。</para>
 /// <para><b>信物 16。</b>平台内 9（边长 5–6 的各 1、7–9 的各 2，全部出生区分区 / 出生区预算）；公共 7 = 桥头 4 + 西南巷尽头 <c>E10</c> + 东北巷尽头 <c>W20</c>（标准档）+ 中心 <c>N15</c>（高档）。</para>
 /// <para><b>栅栏 4。</b>广场两段见上；另两段在支巷入河岸的交汇口各挡住一半宽度：<c>K10-L10</c>（西南巷）、<c>P20-Q20</c>（东北巷）。</para>
 /// <para><b>咽喉</b>按 design D3 取全部缓坡格与四座桥，由字符画导出，不另列表。</para>
 /// <para><b>本图的校验参数与豁免记录：</b>边疆档距离均衡只报告不拒绝（裁决 8），容差留默认值；两眼最小格数 = 8（默认值）；必死口袋豁免：<b>无</b>——
 /// 全部可落子格沿气边连通成一块。不要求对称；确定性：字符画是唯一的数据来源，同一代码永远导出同一文件。</para>
-/// <para>规格：openspec/changes/frontier-map/specs/map-definition —— Requirement: 边疆档基准地图</para>
+/// <para>规格：openspec/changes/restore-go-core-rules/specs/map-definition —— Requirement: 边疆档基准地图</para>
 /// </remarks>
-public static class FrontierMapV1
+public static class FrontierMapV2
 {
     /// <summary>地图标识。</summary>
-    public const string Id = "siege-frontier-v1";
+    public const string Id = "siege-frontier-v2";
 
     private const int Columns = 25;
 
     /// <summary>
     /// 地形与布点的字符画：上北下南，<b>最后一行是第 1 行</b>（<c>A1</c> 在左下），每行恰 25 个字符，列依次为 <c>A–Z</c>（跳 <c>I</c>）。
     /// <list type="bullet">
-    /// <item><c>1</c>–<c>6</c> 平台格（h=2，数字是平台编号）；<c>r</c> 平台内的信物格——所属平台由 <see cref="Platforms"/> 的外接方块决定。平台内没有据点（map-generator 裁决 18：不放营帐）。</item>
+    /// <item><c>1</c>–<c>6</c> 平台格（h=2，数字是平台编号）；<c>r</c> 平台内的信物格——所属平台由 <see cref="Platforms"/> 的外接方块决定。</item>
     /// <item><c>,</c> 缓坡（h=1）；<c>.</c> 过渡带 / 广场（h=0）；<c>F</c> 林地（h=0）。</item>
-    /// <item><c>C</c> 篝火；<c>S</c> 石碑；<c>o</c> 标准档公共信物；<c>R</c> 高档公共信物兼中央入口——都在 h=0 草地上。</item>
+    /// <item><c>o</c> 标准档公共信物；<c>R</c> 高档公共信物兼中央入口——都在 h=0 草地上。</item>
     /// <item><c>~</c> 深水；<c>=</c> 预置桥（深水上，h=0）；<c>#</c> 岩石。</item>
     /// </list>
     /// 栅栏在格与格之间，字符画画不了，见 <see cref="Fences"/>。
@@ -63,23 +62,23 @@ public static class FrontierMapV1
         "111111111###~###3333333~~", // 26
         "111111111###~###3333333~~", // 25
         "111111111###~###3333333~~", // 24
-        "111111r11###~.C,33333r3~~", // 23
+        "111111r11###~..,33333r3~~", // 23
         "111111111,.o=..,3333333~~", // 22
-        "111111111,C.~...F.#,,##~~", // 21
+        "111111111,..~...F.#,,##~~", // 21
         "~####,,.....~........o#~~", // 20
-        "~###C.......=o.########~~", // 19
+        "~###........=o.########~~", // 19
         "~####,,###..~..########~~", // 18
-        "~###55555#FS..##66666##~~", // 17
-        "~###5r555,....S,66666##~~", // 16
+        "~###55555#F...##66666##~~", // 17
+        "~###5r555,.....,66666##~~", // 16
         "~###55555,..R..,66666##~~", // 15
-        "~###55555,S....,666r6##~~", // 14
-        "~###55555##..SF#66666##~~", // 13
+        "~###55555,.....,666r6##~~", // 14
+        "~###55555##...F#66666##~~", // 13
         "~#########..~..##,,####~~", // 12
-        "~######F....=o....C###~~~", // 11
+        "~######F....=o.....###~~~", // 11
         "~###o.......~....,,####~~", // 10
         "~~###,,###..~..,22222222~", //  9
-        "~~#444444,.o=.C,22222r22~", //  8
-        "~~#444444,C.~###22222222~", //  7
+        "~~#444444,.o=..,22222r22~", //  8
+        "~~#444444,..~###22222222~", //  7
         "~~#444444###~###22222222~", //  6
         "~~#44r444###~###22222222~", //  5
         "~~#444444###~###2r222222~", //  4
@@ -118,7 +117,6 @@ public static class FrontierMapV1
         var bridges = ImmutableHashSet.CreateBuilder<Coord>();
         var chokes = ImmutableHashSet.CreateBuilder<Coord>();
         var relics = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
-        var sites = ImmutableDictionary.CreateBuilder<Coord, SiteTier>();
         ImmutableHashSet<Coord>.Builder[] zones = [.. Platforms.Select(_ => ImmutableHashSet.CreateBuilder<Coord>())];
         Coord? entrance = null;
 
@@ -168,12 +166,6 @@ public static class FrontierMapV1
                     case 'F':
                         surfaces[c] = Surface.Forest;
                         break;
-                    case 'C':
-                        sites[c] = SiteTier.Campfire;
-                        break;
-                    case 'S':
-                        sites[c] = SiteTier.Stele;
-                        break;
                     case 'o':
                         relics[c] = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
                         break;
@@ -213,7 +205,6 @@ public static class FrontierMapV1
             TerrainData = new TerrainData(heights.ToImmutable(), surfaces.ToImmutable(), bridges.ToImmutable(), fences),
             BirthZones = [.. zones.Select(z => z.ToImmutable())],
             RelicCells = relics.ToImmutable(),
-            Sites = sites.ToImmutable(),
             ChokePoints = chokes.ToImmutable(),
             CentralEntrance = entrance ?? throw new InvalidOperationException($"{Id} 字符画里没有中央入口 R。"),
         };

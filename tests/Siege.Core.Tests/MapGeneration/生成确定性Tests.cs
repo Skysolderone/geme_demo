@@ -32,6 +32,10 @@ public class 生成确定性Tests
         // 红了不等于错——但旧日志、旧存档里的 gen: 标识会重建出另一张图（回放靠 D5 的内容摘要响亮失败）。确认要改再更新此值，并在实施记录里写明。
         // 变异验证 MG-14：把 FrontierMapLayout.FindRiver 的拐弯加价 6 改成 1 → 本测试红（改成 5 时这一张图恰好不变——只钉了一张图，
         // 它挡的是"大改"，不是每一处微调）；MG-13 / MG-16（去掉走廊拓宽、去掉桥头刻开）也在这里红。
+        // restore-go-core-rules 段 B 重建（design.md D6 明文接受）：布点步骤去掉了据点，随机子流的消费次序随之改变，
+        // 同一 gen: 标识产出的图与此前不同。旧值 CF4009DE…BE5D6（可落子 370）作废；新值取自段 B 完成后的实跑，连跑两次一致。
+        // 非自证：变异 M-B19（PlacePublicRelics 的桥头两岸交错相位反过来）在新值上实跑红 1（只红本测试）。
+        // 注意：旧注释里的 MG-14（河道拐弯加价 6 → 1）在<b>新</b>的 gen:12345 上恰好不改变这一张图（实跑 0 红），与"改成 5 时恰好不变"同理。
         GeneratedMap g = FrontierMapGenerator.GenerateDetailed(12345);
         string json = MapFile.ToJson(g.Map).Replace("\r\n", "\n", StringComparison.Ordinal);
         string digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(json)));
@@ -41,7 +45,7 @@ public class 生成确定性Tests
 
     private const int Golden12345Attempt = 0;
     private const int Golden12345Playable = 370;
-    private const string Golden12345Digest = "CF4009DE1668F935A5A9B2601D426A0D333FD20FD528A613CF9E37D03ADBE5D6";
+    private const string Golden12345Digest = "2BDE685DDDC949FCA24F28B950859D27D8852EFD2C854086B9F7766963C5CAC3";
 
     [Fact]
     public void 并发生成不串味()
@@ -99,9 +103,9 @@ public class 生成确定性Tests
     public void 内置图不受生成器影响()
     {
         // map-definition 增量：内置图行为零变化——边疆手工图的导出文本仍与仓库里的权威文件一致（v4 的同类断言在 地图规格档Tests）。
-        string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", "siege-frontier-v1.json"));
-        Assert.Equal(Normalize(disk), Normalize(MapFile.ToJson(FrontierMapV1.Create())));
-        Assert.Equal(["siege-4p-base-v4", "siege-frontier-v1"], MapCatalog.BuiltinIds);
+        string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", "siege-frontier-v2.json"));
+        Assert.Equal(Normalize(disk), Normalize(MapFile.ToJson(FrontierMapV2.Create())));
+        Assert.Equal(["siege-4p-base-v5", "siege-frontier-v2"], MapCatalog.BuiltinIds);
 
         static string Normalize(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
     }
@@ -131,7 +135,7 @@ public class 生成确定性Tests
         Assert.True(builders.Length >= 7, $"样本口径：只认出 {builders.Length} 个 builder。");
         Assert.All(builders, name => Assert.DoesNotMatch($@"\bin {name}\b|\b{name}\.(Select|Where|First|Order|ToArray|ToList)", generator));
 
-        // 地图数据自带的散列容器（Sites / RelicCells / BirthZones……）只许计数与查询，不许拿来 foreach 或取"第一个"。
+        // 地图数据自带的散列容器（RelicCells / BirthZones / Obstacles……）只许计数与查询，不许拿来 foreach 或取"第一个"。
         Assert.DoesNotMatch(@"foreach\s*\([^)]*\bin\s+map\.|\bmap\.\w+(\.\w+)*\.(First|FirstOrDefault|Last|ElementAt|Take|Skip)\(", generator);
 
         foreach (string source in new[] { layout, generator, random })

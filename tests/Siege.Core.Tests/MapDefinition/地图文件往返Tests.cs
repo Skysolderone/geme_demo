@@ -33,8 +33,6 @@ public class 地图文件往返Tests
         }
 
         Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
-        Assert.Equal(12, original.Sites.Count);
-        Assert.Equal(original.Sites.OrderBy(kv => kv.Key), restored.Sites.OrderBy(kv => kv.Key));
         Assert.Equal(original.ChokePoints, restored.ChokePoints);
         Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
         Assert.Equal(original.DistanceTolerance, restored.DistanceTolerance);
@@ -46,10 +44,45 @@ public class 地图文件往返Tests
             restored.PocketExemptionReasons.OrderBy(kv => kv.Key));
     }
 
-    [Fact]
-    public void 缺据点字段的旧文件读入为无据点()
+    [Theory]
+    [InlineData("Sites")]
+    [InlineData("sites")]
+    [InlineData("SITES")]
+    public void 含据点字段的旧地图被拒绝(string field)
     {
-        // scoring-sites：v3 文件（历史存档）没有 Sites 字段 → 按无据点读入；它因此通不过规则 8，不再被默认加载。
+        // 规格 Scenario「含据点字段的旧地图被拒绝」：读入一张仍带据点字段的旧地图文件 → 拒绝加载并指出该字段已废弃，MUST NOT 静默忽略。
+        // 三种大小写都要拒：MapFile 的 JsonSerializerOptions 开着 PropertyNameCaseInsensitive，写成 "sites" 同样会落进扩展字段。
+        // 变异验证 M-B1（段 B，实跑红 3）：MapFile.FromJson 去掉 RejectRetiredFields 调用（退回静默忽略）→ 本测试红 3。
+        string json = MapFile.ToJson(FourPlayerBaseMap.Create())
+            .Replace("  \"ChokePoints\":", $"  \"{field}\": {{{Environment.NewLine}    \"J2\": \"Campfire\"{Environment.NewLine}  }},{Environment.NewLine}  \"ChokePoints\":", StringComparison.Ordinal);
+        Assert.Contains($"\"{field}\"", json, StringComparison.Ordinal);
+
+        FormatException ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
+
+        Assert.Contains("Sites", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("废弃", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("据点", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 其余未知字段仍然宽容()
+    {
+        // 反面：废弃字段是<b>点名</b>拒绝，不是"任何未知字段都拒绝"——设计师手写的 _comment 之类照旧读得进来。
+        // 没有这一条，上面那条测试在"把未知字段一律拒绝"的实现下同样会绿，挡不住过度收紧。
+        string json = MapFile.ToJson(FourPlayerBaseMap.Create())
+            .Replace("  \"ChokePoints\":", $"  \"_comment\": \"设计师批注\",{Environment.NewLine}  \"ChokePoints\":", StringComparison.Ordinal);
+
+        MapData restored = MapFile.FromJson(json);
+
+        Assert.Equal("siege-4p-base-v5", restored.Id);
+        Assert.True(MapValidator.Validate(restored).IsValid);
+    }
+
+    [Fact]
+    public void v3历史文件仍可读入并通过校验()
+    {
+        // maps/siege-4p-base-v3.json 是历史存档，没有 Sites 字段（v4 才加的）。据点校验取消后它不再因规则 8 被拒——
+        // 它与 v5 的差别只剩 Id。本条同时钉住"缺省地图是 v5"。
         string path = Path.Combine(RepoRoot(), "maps", "siege-4p-base-v3.json");
         string text = File.ReadAllText(path);
         Assert.DoesNotContain("\"Sites\"", text, StringComparison.Ordinal);
@@ -57,27 +90,9 @@ public class 地图文件往返Tests
         MapData v3 = MapFile.FromJson(text);
 
         Assert.Equal("siege-4p-base-v3", v3.Id);
-        Assert.Empty(v3.Sites);
-        MapValidationResult result = MapValidator.Validate(v3);
-        MapValidationFailure failure = Assert.Single(result.Failures);
-        Assert.Equal("SITE_COUNT_OUT_OF_RANGE", failure.Code);
-        Assert.Contains("据点为 0 个", failure.Message, StringComparison.Ordinal);
-        Assert.Throws<MapValidationException>(() => GameBoard.Load(v3));
-
-        // 默认不再加载 v3：跑局默认地图与内置基准图都是 v4。
-        Assert.Equal("siege-4p-base-v4", new Siege.Sim.Config.RunConfig().MapId);
-        Assert.Equal("siege-4p-base-v4", FourPlayerBaseMap.Create().Id);
-    }
-
-    [Fact]
-    public void 据点缺档位的文件被指名报出()
-    {
-        string json = MapFile.ToJson(FourPlayerBaseMap.Create())
-            .Replace("\"J2\": \"Campfire\"", "\"J2\": null", StringComparison.Ordinal);
-        Assert.Contains("\"J2\": null", json, StringComparison.Ordinal);
-
-        var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
-        Assert.Contains("J2", ex.Message, StringComparison.Ordinal);
+        Assert.True(MapValidator.Validate(v3).IsValid);
+        Assert.Equal("siege-4p-base-v5", new Siege.Sim.Config.RunConfig().MapId);
+        Assert.Equal("siege-4p-base-v5", FourPlayerBaseMap.Create().Id);
     }
 
     [Fact]

@@ -1,12 +1,18 @@
-{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "D1–D8、接口契约、风险、裁决记录与追认"}
-{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "段 A 为第 1 组（已勾选）；只 check 这一组"}
+{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "D6（据点摘除的边界）为本段核心；另看 D1/D2/D8 与裁决记录"}
+{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "段 B = 第 2 组 2.1–2.7；只做这一组"}
 {"file": "openspec/changes/restore-go-core-rules/proposal.md", "reason": "裁决表与影响面"}
 {"file": ".trellis/tasks/09-21-restore-go-core-rules/prd.md", "reason": "分段计划、验收标准与子 agent 约束"}
-{"file": ".trellis/tasks/09-21-restore-go-core-rules/implement.md", "reason": "段 A 实施记录：改了什么、重算逐条、变异逐条、9 条待决"}
+{"file": ".trellis/tasks/09-21-restore-go-core-rules/implement.md", "reason": "段 A 实施与 check 记录：据点在段 A 的过渡状态、9 条裁决、两处守门缺口"}
 {"file": ".trellis/spec/core/index.md", "reason": "内核开发规范入口与 Quality Check"}
 {"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、视图分离、全量重算、单一实现"}
-{"file": ".trellis/spec/core/determinism.md", "reason": "整数运算与可复现；注意「大数用 Int128」一条与本段冲突，见 implement 待决 1"}
-{"file": ".trellis/spec/core/testing.md", "reason": "Requirement→测试类、Scenario→测试方法、变异验证与记录方式"}
-{"file": "openspec/changes/restore-go-core-rules/specs/power-score/spec.md", "reason": "段 A：军势公式、总势力、势力明细、排名"}
-{"file": "openspec/changes/restore-go-core-rules/specs/piece-effects/spec.md", "reason": "段 A：倍增子倍率、高地加值被倍率放大"}
-{"file": "openspec/changes/restore-go-core-rules/specs/coverage-territory/spec.md", "reason": "段 A：空格归属恢复计分、空林地恒中立"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "整数运算、随机子流、可复现（段 A 已更新大数条款）"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Requirement→测试类、Scenario→测试方法、变异验证与 mtime 坑"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "围棋记法与单一映射"}
+{"file": "openspec/changes/restore-go-core-rules/specs/site-control/spec.md", "reason": "段 B：能力整体退役（4 条 REMOVED）"}
+{"file": "openspec/changes/restore-go-core-rules/specs/map-definition/spec.md", "reason": "段 B：地图数据 / 预算 / 校验 / 两张内置图改名与去据点"}
+{"file": "openspec/changes/restore-go-core-rules/specs/map-generation/spec.md", "reason": "段 B：生成器不布置据点"}
+{"file": "openspec/changes/restore-go-core-rules/specs/capture-resolution/spec.md", "reason": "段 B：结算第 6 步去掉据点控制"}
+{"file": "openspec/changes/restore-go-core-rules/specs/terrain-edit/spec.md", "reason": "段 B：改造条款去据点"}
+{"file": "openspec/changes/restore-go-core-rules/specs/ai-decision/spec.md", "reason": "段 B：仅内置图标识改名（v4→v5）"}
+{"file": "openspec/changes/restore-go-core-rules/specs/map-selection/spec.md", "reason": "段 B：仅内置图标识改名"}
+{"file": "openspec/changes/restore-go-core-rules/specs/viewport-camera/spec.md", "reason": "段 B：仅内置图标识改名"}

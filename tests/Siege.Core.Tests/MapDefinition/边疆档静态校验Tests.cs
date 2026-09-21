@@ -10,7 +10,7 @@ public class 边疆档静态校验Tests
     [Fact]
     public void 边疆档距离只报告()
     {
-        // 规格 Scenario：平台 A 到中央入口的气边距离为 4，平台 B 为 11 → 接受，报告项给出每个平台到五类目标的距离。
+        // 规格 Scenario：平台 A 到中央入口的气边距离为 4，平台 B 为 11 → 接受，报告项给出每个平台到三类目标的距离。
         // 夹具是平地无障碍，距离 = 平台最近格到 L10 的曼哈顿距离（测试内独立复算，不调校验器的 BFS）：
         //   5 号台 x7–11,y1–5 → 最近格 L6 → |10−10| + |9−5| = 4；1 号台 x0–4,y0–4 → 最近格 E5 → 6 + 5 = 11。
         // 变异 M-A4：声明表里边疆档的距离处理改成 RejectOnImbalance → 本测试红（DISTANCE_IMBALANCE 成了拒绝项）。
@@ -22,10 +22,10 @@ public class 边疆档静态校验Tests
 
         Assert.True(result.IsValid, result.ToString());
         Assert.Empty(result.Failures);
-        Assert.Equal(5, result.Reports.Length);   // 五类目标各一条
+        Assert.Equal(3, result.Reports.Length);   // 三类目标各一条（restore-go-core-rules：五项改三项）
         Assert.All(result.Reports, r => Assert.Equal(MapFindingSeverity.Report, r.Severity));
         Assert.All(result.Reports, r => Assert.Equal("BIRTH_ZONE_DISTANCE_REPORT", r.Code));
-        foreach (string target in new[] { "最近公共信物", "中央入口", "最近咽喉", "最近篝火", "最近石碑" })
+        foreach (string target in new[] { "最近公共信物", "中央入口", "最近咽喉" })
         {
             MapValidationFailure line = Assert.Single(result.Reports, r => r.Message.Contains($"到{target}的", StringComparison.Ordinal));
             for (int z = 1; z <= 6; z++)
@@ -49,52 +49,73 @@ public class 边疆档静态校验Tests
     [Fact]
     public void 均衡的边疆图同样给出距离报告()
     {
-        // 规格：边疆档 MUST 照样算出五项距离作为报告项——不是"失衡了才报"。把六个平台都改成贴着入口的同距小区会破坏其他规则，
-        // 这里改用容差：容差放到 99 时标准档口径下根本不失衡，报告项仍须五条。
+        // 规格：边疆档 MUST 照样算出三项距离作为报告项——不是"失衡了才报"。把六个平台都改成贴着入口的同距小区会破坏其他规则，
+        // 这里改用容差：容差放到 99 时标准档口径下根本不失衡，报告项仍须三条。
         // 变异 M-A5：AlwaysReport 分支改成只在极差超容差时才报 → 本测试红。
         MapData map = FrontierFixtures.Map() with { DistanceTolerance = 99, ToleranceRelaxReason = "测试用：让极差不超容差" };
 
         MapValidationResult result = MapValidator.Validate(map);
 
         Assert.True(result.IsValid, result.ToString());
-        Assert.Equal(5, result.Reports.Length);
+        Assert.Equal(3, result.Reports.Length);
     }
 
     [Fact]
     public void 边疆档不可达仍拒绝()
     {
-        // 规格 Scenario：某平台沿气边到不了任何石碑 → 拒绝并指出该平台编号与目标"石碑"。
-        // 构造：只留一座石碑 K10，四面立栅栏把它围死（另三座改成篝火，据点总数仍 16）。栅栏断气边，任何平台都到不了它；
-        // 入口、篝火、信物、咽喉照常可达，所以拒绝项只应指向"石碑"。
+        // 规格 Scenario：某平台沿气边到不了任何公共信物格 → 拒绝并指出该平台编号与目标"公共信物格"。
+        // 构造：把 15 个信物都挪进平台内（出生区分区），只留 K10 一个公共信物，再四面立栅栏把它围死。
+        // 栅栏断气边，任何平台都到不了它；入口与咽喉照常可达，所以拒绝项只应指向"最近公共信物"。
         // 变异 M-A6：不可达的拒绝挪进 RejectOnImbalance 分支（边疆档下不再报）→ 本测试红。
         MapData plain = FrontierFixtures.Map();
-        Coord stele = new(9, 9);
+        Coord relic = new(9, 9);
+        Assert.Equal("K10", relic.ToNotation());
+        Assert.Null(plain.BirthZoneOf(relic));
+
+        ImmutableDictionary<Coord, RelicCellSpec>.Builder cells = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
+        cells[relic] = new RelicCellSpec(RelicZone.Contested, BudgetTier.High);
+        int placed = 0;
+        foreach (ImmutableHashSet<Coord> zone in plain.BirthZones)
+        {
+            foreach (Coord c in zone.Order().Take(3))
+            {
+                if (placed == 15)
+                {
+                    break;
+                }
+
+                cells[c] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+                placed++;
+            }
+        }
+
         MapData map = plain with
         {
-            Sites = plain.Sites.ToImmutableDictionary(kv => kv.Key, kv => kv.Value == SiteTier.Stele && kv.Key != stele ? SiteTier.Campfire : kv.Value),
+            RelicCells = cells.ToImmutable(),
             TerrainData = new TerrainData(
                 ImmutableDictionary<Coord, int>.Empty,
                 ImmutableDictionary<Coord, Surface>.Empty,
                 [],
                 [
-                    new FenceEdge(stele, new Coord(8, 9)), new FenceEdge(stele, new Coord(10, 9)),
-                    new FenceEdge(stele, new Coord(9, 8)), new FenceEdge(stele, new Coord(9, 10)),
+                    new FenceEdge(relic, new Coord(8, 9)), new FenceEdge(relic, new Coord(10, 9)),
+                    new FenceEdge(relic, new Coord(9, 8)), new FenceEdge(relic, new Coord(9, 10)),
                 ]),
         };
-        Assert.Equal("K10", stele.ToNotation());
+        Assert.Equal(16, map.RelicCells.Count);
+        Assert.Single(map.RelicCells.Where(kv => kv.Value.Zone == RelicZone.Contested));
 
         MapValidationResult result = MapValidator.Validate(map);
 
         Assert.False(result.IsValid);
         MapValidationFailure[] unreachable = [.. result.Failures.Where(f => f.Code == "LANDMARK_UNREACHABLE")];
         Assert.Equal(6, unreachable.Length);
-        Assert.All(unreachable, f => Assert.Contains("石碑", f.Message, StringComparison.Ordinal));
+        Assert.All(unreachable, f => Assert.Contains("公共信物", f.Message, StringComparison.Ordinal));
         Assert.All(unreachable, f => Assert.Equal(MapFindingSeverity.Reject, f.Severity));
         Assert.Contains(unreachable, f => f.Message.Contains("出生区 3 ", StringComparison.Ordinal));
         Assert.Throws<MapValidationException>(() => GameBoard.Load(map));
-        // 不可达的那一项不出距离报告，其余四项照报。
-        Assert.Equal(4, result.Reports.Length);
-        Assert.DoesNotContain(result.Reports, r => r.Message.Contains("石碑", StringComparison.Ordinal));
+        // 不可达的那一项不出距离报告，其余两项照报。
+        Assert.Equal(2, result.Reports.Length);
+        Assert.DoesNotContain(result.Reports, r => r.Message.Contains("公共信物", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -140,7 +161,7 @@ public class 边疆档静态校验Tests
         // 正则不以 \b 开头（testing.md）。
         // 变异 M-A7a：在 ValidateBudgets 里加 `if (map.Profile == MapProfile.Frontier) { return; }` → ①② 同时红。
         // 变异 M-A7b：在 ValidateDistanceBalance 里加 `if (map.Profile != 0 && …) { return; }`（不写枚举字面量）→ ② 红。
-        // 变异 M-A7c：在 ValidateSites 里加 `if (map.Profile != MapProfile.Standard && …) { return; }` → ①② 红。
+        // 变异 M-A7c：在 ValidateRelicCells 里加 `if (map.Profile != MapProfile.Standard && …) { return; }` → ①② 红。
         // （三条变异的附加条件都取运行时恒假，不改行为——只有本守门会红，实测各红 1。）
         string source = File.ReadAllText(ValidatorPath());
         Assert.True(source.Length > 20_000, $"样本口径：MapValidator.cs 只有 {source.Length} 个字符。");
@@ -163,7 +184,7 @@ public class 边疆档静态校验Tests
         // ② 数的是裸标识符 Profile，不是 ".Profile"：属性模式 `map is { Profile: not 0 }` / `{ Profile: > 0 }` 前面没有点、也不写枚举字面量，
         // 按成员访问去数会整条漏过（检查阶段用旧的两条正则在 M-C1 变异体上复算：都不命中）。前后的否定环视只为排除类型名 MapProfile / ProfileRules——
         // 它们正是要放行的，不属于 testing.md 说的"以词边界开头漏抓复合标识符"。
-        // 变异 M-C1：在 ValidateSites 里加 `if (map is { Profile: not 0 } && …恒假) { return; }` → 本测试红 1。
+        // 变异 M-C1：在 ValidateRelicCells 里加 `if (map is { Profile: not 0 } && …恒假) { return; }` → 本测试红 1。
         MatchCollection reads = Regex.Matches(source, @"(?<![\w])Profile(?![\w])");
         string[] readLines = [.. reads.Select(m => $"第 {LineOf(source, m.Index)} 行")];
         Assert.True(reads.Count == 1, "地图的规格档属性只允许在 RulesOf 里读一次（含属性模式），实际：" + string.Join("、", readLines));

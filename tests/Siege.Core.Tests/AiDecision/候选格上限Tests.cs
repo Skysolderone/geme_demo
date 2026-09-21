@@ -21,10 +21,12 @@ public class 候选格上限Tests
     /// 黄金值：取自引入候选格上限<b>之前</b>的代码（工作树 = 段 A + 段 B）的实际运行结果——v4、种子 31、4 名 Standard AI、6 大回合，
     /// 全部小回合快照（去耗时）逐行拼接后的 SHA-256。
     /// <para>restore-go-core-rules 段 A 重建：计分口径（领地计分、加值进倍率、不封顶）与快照字段（删"生效倍率指数"）都变了，整局走法与快照文本随之变，
-    /// 旧值 83755037…403E18 作废。新值取自段 A 完成后 K = 0 的实际运行（同样 v4、种子 31、4 名 Standard AI、6 大回合，24 个小回合），连跑两次一致；
-    /// 它钉的仍是"K = 0 与不预筛逐步相同"，变异 M-K1 在新值下重跑仍红（见段 A implement 记录）。</para>
+    /// 旧值 83755037…403E18 作废。</para>
+    /// <para>段 B 再次重建：<b>走法一步没变</b>——把段 A 的快照文本与段 B 的逐条比对，去掉被删的 <c>TurnSnapshot.Sites</c> 与
+    /// <c>PlayerEntry.SiteScore</c> 两项之后 24 个小回合逐字节相同（比对脚本见 implement 记录）。变的只是快照 JSON 少了这两个字段，
+    /// 段 A 值 43D7E980…A757D 因此作废。新值取自段 B 完成后 K = 0 的实际运行，连跑两次一致；变异 M-K1 在新值下重跑仍红。</para>
     /// </summary>
-    private const string V4GoldenTurnHash = "43D7E980BACAE58A50E66174BEECFA0C295EB432B04D8B870206E089B2AA757D";
+    private const string V4GoldenTurnHash = "96D6C02A76C538A7AFC1B799D8E88F70A052FCE1C7CCF3DCDC41A8B580385917";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
@@ -300,7 +302,7 @@ public class 候选格上限Tests
         Assert.True(AiSearchConfig.LargeMapCellLimit > 0);
 
         int v4 = MapCatalog.Resolve(null).PlayableCount;
-        int frontier = MapCatalog.Resolve(FrontierMapV1.Id).PlayableCount;
+        int frontier = MapCatalog.Resolve(FrontierMapV2.Id).PlayableCount;
         Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"v4 可落子格 {v4}");
         Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"边疆图可落子格 {frontier}");
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.ForDifficulty(d), AiSearchConfig.ForMap(d, v4)));
@@ -350,7 +352,7 @@ public class 候选格上限Tests
     {
         // 该项出现之前的边疆图日志首部没有 CandidateCellLimit：当时就是不限制。回放 MUST NOT 按今天的大图缺省 K 重跑，重建的首部也不得多出一项。
         // 变异 M-K12：Replayer 改回不带 recorded 的 MatchSession.Create → 重建首部多出该项、第 1 行即分歧 → 本测试红。
-        RunConfig frontier = SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV1.Id };
+        RunConfig frontier = SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id };
         MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"CandidateCellLimit\":0,", text, StringComparison.Ordinal);
@@ -406,7 +408,7 @@ public class 候选格上限Tests
     {
         // 边疆图、Easy、1 个大回合（保护期内只有自家平台可落，跑得快）。读 config.json 原文，不经反序列化，避免缺省值掩盖漏写。
         // 变异 M-K8：BatchRunner.ExecuteToDirectory 去掉 ResolvedFor → config.json 不含该项 → 本测试红。
-        RunConfig auto = SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV1.Id };
+        RunConfig auto = SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id };
         string autoDir = SimFixtures.TempDir("cell-limit-auto");
         BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1);
         Assert.Contains($"\"CandidateCellLimit\": {AiSearchConfig.LargeMapCellLimit}", File.ReadAllText(Path.Combine(autoDir, "config.json")), StringComparison.Ordinal);

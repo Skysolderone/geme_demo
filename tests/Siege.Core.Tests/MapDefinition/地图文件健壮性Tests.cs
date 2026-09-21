@@ -83,7 +83,7 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 磁盘上的基准地图文件与代码一致()
     {
-        // maps/siege-4p-base-v4.json（文件名随 Id）是设计师维护的那一份；它若与代码里的基准图漂移，
+        // maps/siege-4p-base-v5.json（文件名随 Id）是设计师维护的那一份；它若与代码里的基准图漂移，
         // 就会出现"代码跑的图和设计师看的图不是同一张"。
         // 文件名跟着地图 Id 走（denser-map 裁决 3），旧的 v1 / v2 / v3 留在 maps/ 只作对照，不参与本断言。
         string path = Path.Combine(RepoRoot(), "maps", $"{FourPlayerBaseMap.Create().Id}.json");

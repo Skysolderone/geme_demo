@@ -47,7 +47,6 @@ public sealed partial class MatchFlow
             MaxMajorRounds = MaxMajorRounds,
             DominanceStartRound = DominanceStartRound,
             CatchUpRecruit = CatchUpRecruit,
-            SiteValues = new SiteValuesSaveData { Tent = SiteValues.Tent, Campfire = SiteValues.Campfire, Stele = SiteValues.Stele },
             ArtisanWeight = ArtisanWeight,
             DominanceCandidate = _dominanceCandidate?.Value,
             DominancePending = [.. _dominancePending.Select(p => p.Value)],
@@ -109,7 +108,7 @@ public sealed partial class MatchFlow
                     Status = s.Input.Status,
                     Power = s.Input.Power,
                     ControlledRelics = s.Input.ControlledRelics,
-                    ControlledSites = s.Input.ControlledSites,
+                    ExclusiveCells = s.Input.ExclusiveCells,
                     Stones = s.Input.Stones,
                     EliminationOrder = s.Input.EliminationOrder,
                 })],
@@ -152,8 +151,31 @@ public sealed partial class MatchFlow
     private static MatchSaveData Parse(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
-        return JsonSerializer.Deserialize<MatchSaveData>(json, JsonOptions) ?? throw new FormatException("对局存档为空或不是合法 JSON。");
+        MatchSaveData data = JsonSerializer.Deserialize<MatchSaveData>(json, JsonOptions)
+                             ?? throw new FormatException("对局存档为空或不是合法 JSON。");
+        RejectRetiredFields(data);
+        return data;
     }
+
+    /// <summary>
+    /// 已废弃的对局配置字段：读到就拒绝恢复并点名说明，MUST NOT 静默忽略（design.md Migration Plan 3：旧存档不迁移，加载时明确报错）。
+    /// </summary>
+    private static void RejectRetiredFields(MatchSaveData data)
+    {
+        foreach ((string field, string reason) in RetiredSaveFields)
+        {
+            if (data.Unknown.ContainsKey(field))
+            {
+                throw new FormatException($"对局存档含已废弃的 {field} 字段：{reason}该存档不再支持恢复。");
+            }
+        }
+    }
+
+    /// <summary>已废弃字段 → 废弃说明。</summary>
+    private static readonly (string Field, string Reason)[] RetiredSaveFields =
+    [
+        ("SiteValues", "据点已在 restore-go-core-rules 整体移除，对局配置不再有据点分值。"),
+    ];
 
     private static void RequireMap(MapData map, MatchSaveData data)
     {
@@ -185,8 +207,6 @@ public sealed partial class MatchFlow
         bool dominanceBackfilled = data.DominanceStartRound is null;
         // catch-up-recruit 裁决 4：旧存档没有落后者征募补偿字段 → 按标准局初值「开启」回填，并在 CatchUpRecruitBackfilled 上留痕。
         bool catchUpBackfilled = data.CatchUpRecruit is null;
-        // scoring-sites R-7：旧存档没有据点分值字段 → 按标准局 5 / 15 / 45 回填，并在 SiteValuesBackfilled 上留痕。
-        bool siteValuesBackfilled = data.SiteValues is null;
         // artisan-terrain-edit R-2 / R-6：旧存档没有匠人权重字段 → 按标准局初值 10 回填，并在 ArtisanWeightBackfilled 上留痕。
         bool artisanWeightBackfilled = data.ArtisanWeight is null;
         var options = new MatchOptions
@@ -195,12 +215,10 @@ public sealed partial class MatchFlow
             MaxMajorRounds = data.MaxMajorRounds ?? MatchOptions.DefaultMaxMajorRounds,
             DominanceStartRound = data.DominanceStartRound ?? MatchOptions.DefaultDominanceStartRound,
             CatchUpRecruit = data.CatchUpRecruit ?? MatchOptions.DefaultCatchUpRecruit,
-            SiteValues = data.SiteValues is { } sv ? new SiteValues(sv.Tent, sv.Campfire, sv.Stele) : SiteValues.Standard,
             ArtisanWeight = data.ArtisanWeight ?? MatchOptions.DefaultArtisanWeight,
         };
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(data));
         RequireValidDominanceStartRound(options.DominanceStartRound, nameof(data));
-        RequireValidSiteValues(options.SiteValues);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         var match = new MatchFlow(
             map, board, seed, players,
@@ -211,7 +229,6 @@ public sealed partial class MatchFlow
         match.MaxMajorRoundsBackfilled = backfilled;
         match.DominanceStartRoundBackfilled = dominanceBackfilled;
         match.CatchUpRecruitBackfilled = catchUpBackfilled;
-        match.SiteValuesBackfilled = siteValuesBackfilled;
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
@@ -267,7 +284,7 @@ public sealed partial class MatchFlow
         {
             match.Result = new MatchResult(result.Reason, result.MajorRound, [.. result.Standings.Select(s =>
                 new Standing(s.Rank, new PlayerId(s.Player), s.Group,
-                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.ControlledRelics, s.ControlledSites, s.Stones, s.EliminationOrder)))]);
+                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.ControlledRelics, s.ExclusiveCells, s.Stones, s.EliminationOrder)))]);
         }
 
         if (data.Phase != MatchPhase.FlagPlanting)
@@ -305,11 +322,15 @@ public sealed class MatchSaveData
     /// <summary>落后者征募补偿开关（catch-up-recruit）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启）。</summary>
     public bool? CatchUpRecruit { get; set; }
 
-    /// <summary>据点分值（scoring-sites）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="Scoring.SiteValues.Standard"/>。</summary>
-    public SiteValuesSaveData? SiteValues { get; set; }
-
     /// <summary>匠人征募权重（artisan-terrain-edit R-2）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultArtisanWeight"/>。</summary>
     public int? ArtisanWeight { get; set; }
+
+    /// <summary>
+    /// 本结构未声明的字段。其余未知字段照旧宽容；已废弃字段在
+    /// <see cref="MatchFlow"/> 的 <c>RejectRetiredFields</c> 里逐个点名拒绝，MUST NOT 静默忽略。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, JsonElement> Unknown { get; set; } = [];
 
     /// <summary>碾压候选玩家编号；无候选为 <c>null</c>。</summary>
     public int? DominanceCandidate { get; set; }
@@ -435,22 +456,12 @@ public sealed class StandingSaveData
 
     public int ControlledRelics { get; set; }
 
-    /// <summary>控制中的据点数量（scoring-sites D-G）。旧存档只有 <c>ExclusiveCells</c>（已不参与比较，读入时忽略）→ 本字段缺失按 0 回填（R-7）。</summary>
-    public int ControlledSites { get; set; }
+    /// <summary>独占空格数（并列链第三级）。</summary>
+    public int ExclusiveCells { get; set; }
 
     public int Stones { get; set; }
 
     public int? EliminationOrder { get; set; }
-}
-
-/// <summary>据点分值的存档结构（scoring-sites）。</summary>
-public sealed class SiteValuesSaveData
-{
-    public int Tent { get; set; }
-
-    public int Campfire { get; set; }
-
-    public int Stele { get; set; }
 }
 
 public sealed class ResultSaveData

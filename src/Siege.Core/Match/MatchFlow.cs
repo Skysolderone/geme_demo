@@ -111,7 +111,6 @@ public sealed partial class MatchFlow
 
         RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(options));
         RequireValidDominanceStartRound(options.DominanceStartRound, nameof(options));
-        RequireValidSiteValues(options.SiteValues);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed, options.ArtisanWeight), new BoardHistory(), options);
     }
@@ -212,12 +211,6 @@ public sealed partial class MatchFlow
         Options = Options with { CatchUpRecruit = enabled };
     }
 
-    /// <summary>据点分值（scoring-sites D-A：营帐 / 篝火 / 石碑）。对局配置，始终公开，入存档。</summary>
-    public SiteValues SiteValues => Options.SiteValues;
-
-    /// <summary>恢复自不含据点分值字段的旧存档时为 <c>true</c>：按 <see cref="SiteValues.Standard"/> 回填。</summary>
-    public bool SiteValuesBackfilled { get; private set; }
-
     /// <summary>匠人征募权重（artisan-terrain-edit R-2）。对局配置，始终公开，入存档。</summary>
     public int ArtisanWeight => Options.ArtisanWeight;
 
@@ -229,12 +222,6 @@ public sealed partial class MatchFlow
     /// 调用方据此可知这张地图只按标识把过关、内容没有核对过。
     /// </summary>
     public bool MapDigestBackfilled { get; private set; }
-
-    private static void RequireValidSiteValues(SiteValues? values)
-    {
-        ArgumentNullException.ThrowIfNull(values, nameof(MatchOptions.SiteValues));
-        values.Validated();
-    }
 
     /// <summary>
     /// 某玩家此刻的落后者征募补偿（catch-up-recruit）：读<b>现成的</b>公开势力名次（<see cref="PowerScoreboard.Latest"/>），
@@ -554,17 +541,13 @@ public sealed partial class MatchFlow
 
     // ---------- 公开快照 ----------
 
-    /// <summary>
-    /// 发布公开快照（裁决 1）。据点状态（scoring-sites「据点公开」）取势力快照；插旗阶段尚无快照时由 <see cref="SiteControl"/> 按当前盘面现算，
-    /// 不假设"插旗阶段必为空盘"（恢复的存档也走这里）。
-    /// </summary>
+    /// <summary>发布公开快照（裁决 1）。</summary>
     public MatchPublicView Publish()
     {
         PowerSnapshot? power = Scoreboard.Latest;
         // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
-        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, SiteValues, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
-            Board.Serialize(), power, power?.SiteStates ?? SiteControl.Compute(Board, CoverageMap.Compute(Board)),
-            Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
+        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
+            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
     }
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------
@@ -579,7 +562,7 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(context.Board, roster);
-        Scoreboard.Recalculate(context.Board, roster, SiteValues, MajorRound);
+        Scoreboard.Recalculate(context.Board, roster, MajorRound);
     }
 
     private void OnCheckEndConditions(SettlementContext context)
@@ -712,7 +695,7 @@ public sealed partial class MatchFlow
                 record.Status,
                 record.Status == PlayerStatus.Resigned ? record.PowerAtResign!.Value : detail.Total,
                 relics.Count(s => s.Control.GrantsEffectTo(player)),
-                detail.Sites.Length,
+                detail.ExclusiveCells.Length,
                 Board.GroupsOf(player).Sum(g => g.Size),
                 record.EliminationOrder));
         }
@@ -784,7 +767,7 @@ public sealed partial class MatchFlow
     {
         int completed = MajorRound;
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
-        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, SiteValues, completed);
+        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed);
         ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.ReadInitiativeBonuses(Board, roster);
         int active = ActiveCount;
         if (active == 0)
@@ -840,7 +823,7 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(Board, roster);
-        Scoreboard.Recalculate(Board, roster, SiteValues, Math.Max(MajorRound, 1));
+        Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1));
     }
 
     /// <summary>流程事件的<b>唯一</b>发出点。</summary>

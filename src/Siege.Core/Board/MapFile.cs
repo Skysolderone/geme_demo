@@ -42,9 +42,6 @@ public static class MapFile
                 .ToDictionary(
                     kv => kv.Key.ToNotation(),
                     kv => new RelicDto { Zone = kv.Value.Zone, Budget = kv.Value.Budget }),
-            Sites = map.Sites
-                .OrderBy(kv => kv.Key)
-                .ToDictionary(kv => kv.Key.ToNotation(), kv => (SiteTier?)kv.Value),
             ChokePoints = Sorted(map.ChokePoints),
             CentralEntrance = map.CentralEntrance.ToNotation(),
             DistanceTolerance = map.DistanceTolerance,
@@ -81,10 +78,11 @@ public static class MapFile
         MapDto dto = JsonSerializer.Deserialize<MapDto>(json, Options)
                      ?? throw new FormatException("地图文件为空或不是合法 JSON。");
 
+        RejectRetiredFields(dto);
+
         List<List<string>> zones = Required(dto.BirthZones, "BirthZones");
         Dictionary<string, RelicDto> relicCells = Required(dto.RelicCells, "RelicCells");
         Dictionary<string, string> exemptions = Required(dto.PocketExemptions, "PocketExemptions");
-        Dictionary<string, SiteTier?> sites = Required(dto.Sites, "Sites");
 
         return new MapData
         {
@@ -100,9 +98,6 @@ public static class MapFile
                 kv => new RelicCellSpec(
                     Required(kv.Value, $"RelicCells[\"{kv.Key}\"]").Zone,
                     kv.Value.Budget)),
-            Sites = sites.ToImmutableDictionary(
-                kv => Coord.Parse(kv.Key),
-                kv => kv.Value ?? throw new FormatException($"地图文件的 Sites[\"{kv.Key}\"] 缺档位：据点档位必填（Tent / Campfire / Stele）。")),
             ChokePoints = Parse(Required(dto.ChokePoints, "ChokePoints")),
             CentralEntrance = Coord.Parse(dto.CentralEntrance),
             DistanceTolerance = dto.DistanceTolerance,
@@ -256,6 +251,28 @@ public static class MapFile
         where T : class =>
         value ?? throw new FormatException($"地图文件的 {field} 字段为 null：缺省请直接省略该字段，不要写 null。");
 
+    /// <summary>
+    /// 已废弃字段：读到就拒绝加载并点名说明，MUST NOT 静默忽略（restore-go-core-rules D6）。
+    /// 键比对大小写不敏感，与 <see cref="Options"/> 的 <c>PropertyNameCaseInsensitive</c> 同口径。
+    /// </summary>
+    /// <remarks>规格：openspec/changes/restore-go-core-rules/specs/map-definition —— Scenario: 含据点字段的旧地图被拒绝</remarks>
+    private static void RejectRetiredFields(MapDto dto)
+    {
+        foreach ((string field, string reason) in RetiredFields)
+        {
+            if (dto.Unknown.Keys.Any(k => string.Equals(k, field, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new FormatException($"地图文件含已废弃的 {field} 字段：{reason}请从地图文件中删去该字段。");
+            }
+        }
+    }
+
+    /// <summary>已废弃字段 → 废弃说明。</summary>
+    private static readonly (string Field, string Reason)[] RetiredFields =
+    [
+        ("Sites", "据点已在 restore-go-core-rules 整体移除，地图数据不再含据点。"),
+    ];
+
     private static List<string> Sorted(IEnumerable<Coord> coords) =>
         [.. coords.Order().Select(c => c.ToNotation())];
 
@@ -282,9 +299,6 @@ public static class MapFile
 
         public Dictionary<string, RelicDto> RelicCells { get; set; } = [];
 
-        /// <summary>据点：格 → 档位（Tent 营帐 / Campfire 篝火 / Stele 石碑）。省略即无据点（v3 及更早的文件）。</summary>
-        public Dictionary<string, SiteTier?> Sites { get; set; } = [];
-
         public List<string> ChokePoints { get; set; } = [];
 
         public string CentralEntrance { get; set; } = string.Empty;
@@ -309,6 +323,13 @@ public static class MapFile
 
         /// <summary>栅栏边，形如 <c>F6-G6</c>。</summary>
         public List<string> Fences { get; set; } = [];
+
+        /// <summary>
+        /// DTO 未声明的字段（如设计师写的 <c>_comment</c>）。保持宽容是既有约定；
+        /// 已废弃字段在 <see cref="RejectRetiredFields"/> 里逐个点名拒绝，MUST NOT 静默忽略。
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> Unknown { get; set; } = [];
     }
 
     private sealed class RelicDto
