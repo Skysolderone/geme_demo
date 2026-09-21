@@ -1,0 +1,12 @@
+{"file": "openspec/changes/map-generator/design.md", "reason": "D1–D8、风险、裁决记录 1–10；实现前必读"}
+{"file": "openspec/changes/map-generator/tasks.md", "reason": "分段任务清单与验证方式；只做派发时指定的组"}
+{"file": "openspec/changes/map-generator/specs/map-generation/spec.md", "reason": "地图种子与确定性、参数、布局规则、校验闭环、标识格式"}
+{"file": "openspec/changes/map-generator/specs/map-selection/spec.md", "reason": "图形版开局选图界面"}
+{"file": "openspec/changes/map-generator/specs/map-definition/spec.md", "reason": "静态数据条款放宽：边疆档允许生成"}
+{"file": "openspec/changes/map-generator/specs/simulation-harness/spec.md", "reason": "gen: 标识、每局换图、回放重建、map 子命令"}
+{"file": "openspec/changes/map-generator/specs/match-setup/spec.md", "reason": "公开完整地图标识，两个种子分开"}
+{"file": "openspec/changes/frontier-map/specs/map-definition/spec.md", "reason": "边疆档预算与校验分流（生成图必须通过）"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现：MapCatalog、规格档不进下游、相机与命令行唯一入口"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "随机子流隔离、整数运算、集合遍历次序、并列打破"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "坐标记法与 25 列上限"}
+{"file": ".trellis/spec/core/testing.md", "reason": "不得改期望凑绿；守门需变异记录；变异脚本纪律"}

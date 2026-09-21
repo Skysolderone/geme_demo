@@ -124,9 +124,21 @@ public static class ReportWriter
         BirthZoneSection z = r.BirthZones;
         sb.AppendLine($"- 区数 {z.ZoneCount}（地图出生区数；多于人数时没人选的平台是中立争夺区，被选 0 次的区同样列出）");
         sb.AppendLine($"- 基线 {Pct(z.Baseline)}；显著 = 基线落在该区 Wilson 区间之外");
-        AppendZones(sb, "全部局", z.All);
-        AppendZones(sb, $"信物生成收敛局（{z.ConvergedMatches}）", z.RelicsConverged);
-        AppendZones(sb, $"信物生成未收敛局（{z.NotConvergedMatches}）", z.RelicsNotConverged);
+        if (z.BySide is { } bySide)
+        {
+            // 每局换图：平台编号跨局不可比，按编号的胜率没有意义——改按平台边长分组（map-generator D6）。
+            sb.AppendLine($"- 每局换图的批次：各局地图不同，平台编号跨局不可比，改按平台边长分组（纳入 {bySide.Matches} 局，首部无平台边长而排除 {bySide.Skipped} 局）");
+            foreach (SideStat side in bySide.Sides)
+            {
+                sb.AppendLine($"  - 边长 {side.Side}：胜率 {side.WinRate}{(side.Significant ? "，显著" : "")}；被选 {side.Picks} 次（共出现 {side.Offered} 个）");
+            }
+        }
+        else
+        {
+            AppendZones(sb, "全部局", z.All);
+            AppendZones(sb, $"信物生成收敛局（{z.ConvergedMatches}）", z.RelicsConverged);
+            AppendZones(sb, $"信物生成未收敛局（{z.NotConvergedMatches}）", z.RelicsNotConverged);
+        }
         sb.AppendLine("### 6. 供给、部署、槽位、倍率四条成长轴的获取顺序");
         GrowthAxisSection g = r.GrowthAxes;
         sb.AppendLine($"- 胜者样本 {g.WinnerSamples}；首先获取的轴分布：{Histogram(g.FirstAxisCounts)}");

@@ -12,10 +12,13 @@
 
 ## 现在就能玩
 
+> 负责人的终端是 **Windows PowerShell**：带引号的 exe 前要加 `&`，Godot 参数前加 `--%`（下面的命令都按此写）。在 Godot 编辑器里点 ▶ 运行 = 不带任何参数启动，直接进选图界面。
+
 **图形版（推荐）**
-```bash
-"D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --path E:/wws/geme_demo/src/godot
+```powershell
+& "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot
 ```
+不带 `--map=` 启动先进**选图界面**（`map-generator`）：标准图 13×13 / 边疆图 25×30（手工）/ 随机图；随机图可输地图种子回车、点"换一张"、平台数 5–8，背景是该图的全局预览，面板显示完整地图标识（如 `gen:12345`、`gen:12345:p8`），点"开始"进入插旗。带 `--map=<标识>` 则跳过选图；`--auto-demo` / `--pick-check` / `--screenshot` 不带 `--map=` 时缺省 v4 并跳过选图。
 点出生区插旗 → 征募 → 左下手牌选类型、点格子暂放 → 右侧看预演 → 右下确认或 Pass。
 棋盘四边有围棋记法坐标（v3 为列 A–N 跳过 I，行自下而上 1–13，A1 左下），与对局日志一致。
 地形：四角黄色高台是出生区（h=2），浅褐台阶是缓坡（h=1），中央环河岛（h=0）经四座木桥进出；崖壁（高差 2）、深水、栅栏切断气，林地挡覆盖。
@@ -23,19 +26,30 @@
 命令行加 `-- --seed=12345` 复现同一局；`-- --auto-demo` 自动演示；`-- "--screenshot=<路径>.png:90"` 截图；`-- --auto-demo --pick-check` 自检分层拾取（换相机 / 层高 / 地图后必跑）。
 
 **终端版**
-```bash
-dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--seed N]
+```powershell
+dotnet run --project src/Siege.Sim -c Release -- play [--difficulty Easy] [--seed N] [--map <标识>]
 ```
 
-**边疆图（多平台大地图验证版，`frontier-map`，进行中）**
-```bash
-"D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --path E:/wws/geme_demo/src/godot -- --map=siege-frontier-v1
+**随机地图（`map-generator`）**：地图标识 `gen:<地图种子>[:p<平台数>]`，同一标识永远同一张图（25×30、平台边长 5–9、平台数 5–8 缺省 6、必过边疆档校验）；裸 `gen` = 随机取一个九位以内的种子并打印完整标识。地图种子与对局种子（`--seed`）互相独立。
+```powershell
+dotnet run --project src/Siege.Sim -c Release -- play --map gen:12345
 ```
-```bash
+```powershell
+& "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --map=gen:12345
+```
+看 / 导出某张生成图：`dotnet run --project src/Siege.Sim -c Release -- map --map gen:12345 [--out 文件.json]`（不给 `--out` 不写盘；拒绝覆盖 `maps/` 下的内置图文件）。批量每局换图：`run --map gen:100 --map-per-match …`（第 i 局用 `gen:<100+i>`，报告按平台边长 5–9 统计被选次数与胜率）。
+日志首部与存档都带地图内容摘要：生成器一改，旧日志回放 / 旧存档恢复会报"地图不一致"（预期的响亮失败）；`gen:12345` 的导出摘要有黄金值测试，改生成器会先红。种子 1–50 的文本图速览在 `sim-out/mapgen-gallery.txt`（重出：`$env:SIEGE_MAPGEN_GALLERY=1; dotnet test -c Release --filter 布局速览`）。
+已量到的数（20 局每局换图，Standard AI）：19 局打满 15 大回合、1 局第 7 大回合碾压；AI 单步均值 0.8 s / 最大 5.6 s；按边长胜率 5→33% / 6→25% / 7→8% / 8→27% / 9→0%（样本小，均与 25% 基线无显著差异）。
+
+**边疆图（多平台大地图验证版，`frontier-map`，进行中）**
+```powershell
+& "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --map=siege-frontier-v1
+```
+```powershell
 dotnet run --project src/Siege.Sim -c Release -- play --map siege-frontier-v1
 ```
 25×30、可落子 377 格、6 个大小不一的 h=2 平台（9×9 / 8×8 / 7×7 / 6×6 / 5×5 / 5×5），平台即出生区，4 人选 6 个、没人选的是中立争夺区；前三大回合只能落自家平台，之后全图。缺省地图仍是 v4。
-相机：鼠标贴窗口边缘推屏，方向键 / WASD 平移，滚轮缩放（俯角恒 60°），空格回自家平台；回合横幅右侧显示悬停格坐标。开局自动缩放到"自家平台整个可见"。v4 上整盘一屏看全，最远缩放下相机不动、画面与从前逐像素相同。
+相机：鼠标贴窗口边缘推屏，方向键 / WASD 平移，滚轮缩放（俯角恒 60°），空格回自家平台，**M 键 / "全局"按钮切全局预览**（再按回到原画面）；回合横幅右侧显示悬停格坐标。开局自动缩放到"自家平台整个可见"。v4 上整盘一屏看全，最远缩放下相机不动、画面与从前逐像素相同。
 图形版命令行现在是严格解析（`--map=` `--cell-limit=` `--seed=` `--rounds=` `--auto-demo` `--pick-check` `--screenshot=`），拼错即报错退出。大图（可落子 > 150）AI 自动启用候选格上限 K=24（`--cell-limit 0` 关闭）。
 已量到的数（4 个 Standard AI，K=0 口径 20 局）：**全部打满 15 大回合靠上限收场**、无一局碾压；首次提子平均第 6 大回合；5×5 中央平台胜率明显偏高、9×9 为 0 胜（样本小）。AI 单步 K=0 均值 2.2 s / 最大 11 s → K=24 均值 0.73 s / 最大 2.2 s。**节奏参数（部署额度 / 大回合上限 / 碾压起始）与调图待负责人试玩后裁决**，规格与逐段记录在 `openspec/changes/frontier-map/`、`.trellis/tasks/09-19-frontier-map/implement.md`（含 17 条人工检查清单）。
 
@@ -43,7 +57,7 @@ dotnet run --project src/Siege.Sim -c Release -- play --map siege-frontier-v1
 
 | 分支 | 状态 |
 |---|---|
-| `main` | 全绿：`dotnet test -c Release` **1076/1076**、零警告；`frontier-map` 段 A–D 已提交并推送（63307d3，change 未归档，待 6.1 人工试玩），套件约 20–45 秒（含 3 局真实跑局的日志保真度测试）。`artisan-terrain-edit` 方案提交（43208d8）及之前已推送；`strict-cli` 归档与第三轮段 O–E 均为本地提交，**未推送** |
+| `main` | 全绿：`dotnet test -c Release` **1244/1244**、零警告；`frontier-map`（63307d3 起，含全局预览与地形效果 cf9651b、水面动画 71761d6）与 `map-generator` 段 A–D 均在 main，两个 change 都未归档（待负责人试玩结论），套件约 20–45 秒（含 3 局真实跑局的日志保真度测试）。`artisan-terrain-edit` 方案提交（43208d8）及之前已推送；`strict-cli` 归档与第三轮段 O–E 均为本地提交，**未推送** |
 | `wip/match-flow` | 早已合入 main，本地与远端均可删 |
 
 ## 权威来源（按优先级）

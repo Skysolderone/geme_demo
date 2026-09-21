@@ -1,4 +1,5 @@
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Sim.Logging;
 
 namespace Siege.Sim.Running;
@@ -6,7 +7,15 @@ namespace Siege.Sim.Running;
 /// <summary>回放比对结果：逐行比对确定性文本（去耗时）。</summary>
 public sealed record ReplayResult(bool Identical, int LineCount, int? FirstDivergentLine, string? Expected, string? Actual, MatchLog Replayed)
 {
-    public override string ToString() => Identical
+    /// <summary>
+    /// 地图不一致（map-generator D5）：按日志首部的地图标识重建出的地图，其内容摘要与首部记录的不同。此时分歧报在首部（第 1 行），
+    /// <b>没有重跑对局</b>——<see cref="Replayed"/> 只有一行首部（原首部换上重建地图的摘要），不含任何小回合。其余情形为 <c>null</c>。
+    /// </summary>
+    public string? MapMismatch { get; init; }
+
+    public override string ToString() => MapMismatch is not null
+        ? $"回放在首部（第 1 行）分歧：地图不一致。{MapMismatch}"
+        : Identical
         ? $"回放一致：{LineCount} 行逐字节相同。"
         : $"回放在第 {FirstDivergentLine} 行分歧。\n  原：{Truncate(Expected)}\n  今：{Truncate(Actual)}";
 
@@ -23,6 +32,24 @@ public static class Replayer
     public static ReplayResult Replay(MatchLog original, MapData? map = null)
     {
         ArgumentNullException.ThrowIfNull(original);
+        LogHeader header = original.Header;
+        // 重建地图：每局换图的批次里，首部配置的 MapId 只是批次的起始标识，本局的图是首部的地图标识；
+        // 其余情形仍按配置的 MapId（它可能是地图文件路径，而首部的地图标识是文件里写的 Id，未必解析得回去）。
+        map ??= MapCatalog.Resolve(header.Config.MapPerMatch ? header.MapId : header.Config.MapId);
+
+        // 先比地图内容摘要：不同就停在首部，MUST NOT 带着另一张图继续逐步比对。旧日志没有摘要 → 跳过（不回填）。
+        string digest = MapFile.Digest(map);
+        if (header.MapDigest is { } recordedDigest && !string.Equals(recordedDigest, digest, StringComparison.Ordinal))
+        {
+            var stub = new MatchLog { Header = header with { MapDigest = digest } };
+            string[] expected = original.DeterministicText().Split('\n');
+            return new ReplayResult(false, expected.Length, 1, expected[0], stub.DeterministicText().Split('\n')[0], stub)
+            {
+                MapMismatch = $"日志首部记录的地图 {header.MapId} 摘要为 {recordedDigest}，现在按标识重建出的地图摘要为 {digest}"
+                    + "——生成器或地图数据在这局之后改过，同一标识已不是同一张图；未重跑对局。",
+            };
+        }
+
         // 原样使用首行配置：失败局自动提升为完整事件流、抽样由 sim-sample 子流决定，二者都只由种子 + 配置决定。
         MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true).Run();
         return Compare(original, replayed);

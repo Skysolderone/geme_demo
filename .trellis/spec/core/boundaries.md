@@ -25,7 +25,8 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 据点控制（占据 / 唯一覆盖 / 争议 / 无人及控制者） | `SiteControl.Compute(board, coverage)`（`Siege.Core.Scoring`）；只读 `CoverageMap.OwnershipOf`，实现内不得出现 `Neighbors(` / `CoverageTargets(` / `HeightAt(`（守门 `据点控制判定Tests.据点控制实现只读覆盖表`）。插旗阶段尚无势力快照时，据点状态也由 Core 的 `MatchFlow.Publish` 给出（`MatchPublicView.SiteStates` 唯一构造点）；表现层与 `src/godot/` 只读 `SiteStates` / `SiteView`，不得自推"无人"或任何控制状态 |
 | 高地压制加值 | `PieceEffects.HighGroundBonus(board, group)`；覆盖目标只经 `GameBoard.CoverageTargets` 取得，不另写邻接或崖壁判断；"严格更低"用 `Map.HeightAt` 比较目标格与自身格；`PowerCalculator` 是唯一消费者，表现层只读 `GroupPower.HighGroundBonus` |
 | 地图规格档（标准 / 边疆）的分流 | `MapValidator` 里"规则 → 处理方式"的一张声明表（frontier-map D2）。校验器别处不得出现对规格档的分支，下游（对局、AI、Sim、表现层、`src/godot/`）不得读 `Profile`——要按图的大小分流就读可落子格数（如 `AiSearchConfig.DefaultCellLimitFor`）。守门在 `地图规格档Tests` / `边疆档静态校验Tests`，属性模式、强转比较等绕法已做过变异 |
-| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省恒为 `siege-4p-base-v4`。加内置图只在 `Builtins` 表加一行 |
+| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省恒为 `siege-4p-base-v4`。加内置图只在 `Builtins` 表加一行（含面向人的显示名，`BuiltinMaps`）。生成图 `gen:<种子>[:p<N>]` 也只经它解析——`FrontierMapGenerator` 的唯一生产调用方就是 `MapCatalog`；选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`） |
+| 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——生成器一旦改版，同一 `gen:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
 | 原型插旗路径的 AI 选区 | `PrototypeZoneAssignment`（见 `determinism.md` 的 `zone-pick`）；三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门） |
 | AI 候选格上限的缺省值 | `AiSearchConfig.ForMap` / `DefaultCellLimitFor`（可落子格 > 150 取 24，否则 0）；显式配置含 0 优先；实际生效值进 `config.json` 与日志首部，`Replayer` 按首部重建、缺项按不限制 |
 | 相机位姿 | 纯计算在 `Siege.Presentation.Camera`（状态只有注视点与距离，俯角恒 60°、朝向恒定——缩放若带俯角变化，拾取会在某个缩放档静默出错）；`src/godot/` 只采输入，写相机节点的唯一位置是 `BoardView.ApplyCameraPose` |
@@ -60,7 +61,7 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 - 一次改造之后，气边、覆盖、棋串、气、据点控制与信物控制**全部**按新地形重算；预置设施与对局中造出来的设施在规则上完全等价（`地形写入口Tests.对局中架的桥与预置桥完全等价` 逐格比可落子性 / 气边 / 覆盖）。
 - 凡是"建局时算好、此后不再更新"的地形派生量，现在都是缺陷。本轮实锤两处：`MatchFlow._playableCells`（可落子格集合，已删，`LegalRangeFor` 改现算，变异 M-B15）与 `MatchFlow.Map`（建局时的 `MapData` 拷贝，已改成转发，变异 M-B13）。写任何持有 `MapData` / 坐标派生表的字段之前，先问"改造之后它还对吗"。
 - 例外（有意保留、不是遗漏）：`MapValidator.DistanceTable` 与 `MatchFlow.Flags` 只看**开局地图**——前者是"地图设计"的守门而不是对局态，后者只用于插旗（出生区与高度都不可改造）；`Siege.Sim` 日志首部的 `PlayableCells` 取 `Board.BaseMap.PlayableCount`，因为首部是一局一条、终局时才写出，写终局值等于把"未来的分母"塞进占用率指标。这三处的口径都要在引用它们的数据里注明。
-- `src/godot/` 的渲染态缓存**需要**失效机制：`BoardView.Build`（地砖 / 水面 / 桥 / 栅栏 / `_levels`）全仓只有 **3 处**调用——`GameRoot._Ready` 与两处"选出生区"（自动演示一处、手动一处），`Refresh` 路径上一处都没有。段 B 的 2.6 排查第 12 条曾写成"`GameRoot` 每次刷新都重跑 `Build`"，**这是错的**（段 C 核实并更正；段 C 实现记录里把三处写成"`_Ready`、选出生区、重开局"，也一并更正为"`_Ready` + 两处选出生区"）。现行做法：`Build` 时记一份地形指纹（每格可落子 / 高度 / 地表 / 有无桥 + 全部栅栏边，只读默认棋盘视图模型），`Refresh` 开头指纹不符即整体重搭。不补这条，AI 架的桥 / 立的栅 / 烧的林一处都不会显示，且新桥格不进 `_levels` → 拾取拿不到它；`--pick-check` 在第 2 帧就跑完，抓不到这个回归。
+- `src/godot/` 的渲染态缓存**需要**失效机制：`BoardView.Build`（地砖 / 水面 / 桥 / 栅栏 / `_levels`）`GameRoot` 里只有 **5 处**调用——`_Ready`、两处"选出生区"（自动演示一处、手动一处），以及 map-generator 加的选图阶段两处（切换候选图重搭预览、点"开始"后按正式对局重搭；`GameRoot.MapSelect.cs`）；`Refresh` 路径上一处都没有（地形指纹不符时由 `BoardView.Refresh` 自己重搭）。段 B 的 2.6 排查第 12 条曾写成"`GameRoot` 每次刷新都重跑 `Build`"，**这是错的**（段 C 核实并更正；段 C 实现记录里把三处写成"`_Ready`、选出生区、重开局"，也一并更正为"`_Ready` + 两处选出生区"）。现行做法：`Build` 时记一份地形指纹（每格可落子 / 高度 / 地表 / 有无桥 + 全部栅栏边，只读默认棋盘视图模型），`Refresh` 开头指纹不符即整体重搭。不补这条，AI 架的桥 / 立的栅 / 烧的林一处都不会显示，且新桥格不进 `_levels` → 拾取拿不到它；`--pick-check` 在第 2 帧就跑完，抓不到这个回归。
 
 ### 地形属性在表现层只能用于渲染
 

@@ -38,7 +38,10 @@ internal static class PlayCommand
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
         if (map.Id != MapCatalog.DefaultId)
         {
-            output.WriteLine($"地图 {map.Id}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）");
+            // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
+            string mapId = match.Publish().MapId;
+            output.WriteLine($"地图 {mapId}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）"
+                + (GeneratedMapId.IsGenerated(mapId) ? $"——随机生成图，用 --map {mapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
         }
 
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI，大回合上限 {(maxRounds == 0 ? "不限" : maxRounds)}");

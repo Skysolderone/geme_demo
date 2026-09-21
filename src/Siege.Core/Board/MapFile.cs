@@ -64,6 +64,17 @@ public static class MapFile
         return JsonSerializer.Serialize(dto, Options);
     }
 
+    /// <summary>
+    /// 地图数据的内容摘要（map-generator D5）：导出文本（行尾统一成 <c>\n</c>，与平台无关）按 UTF-8 取 SHA-256，大写十六进制。
+    /// 写入对局日志首部；回放按标识重建地图后先比它——生成器改版、内置图被改而标识没改，都会在这里响亮失败。
+    /// 它是内容的指纹，不参与任何规则计算，也不是随机源。
+    /// </summary>
+    public static string Digest(MapData map)
+    {
+        string text = ToJson(map).Replace("\r\n", "\n", StringComparison.Ordinal);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
+    }
+
     /// <summary>从 JSON 反序列化。</summary>
     public static MapData FromJson(string json)
     {

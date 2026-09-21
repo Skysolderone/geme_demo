@@ -144,7 +144,25 @@ public sealed record BirthZoneSection(
     List<ZoneStat> RelicsConverged,
     List<ZoneStat> RelicsNotConverged,
     int ConvergedMatches,
-    int NotConvergedMatches);
+    int NotConvergedMatches)
+{
+    /// <summary>
+    /// 按平台边长分组（map-generator D6）：只在每局换图的批次里给出（批内有任何一局的首部配置带 <see cref="Siege.Sim.Config.RunConfig.MapPerMatch"/>），其余为 <c>null</c>。
+    /// 每局换图时平台编号跨局不可比（第 3 局的 2 号台与第 4 局的 2 号台不是同一个平台），按编号的胜率没有意义，报告改列这一节。
+    /// </summary>
+    public PlatformSideSection? BySide { get; init; }
+}
+
+/// <param name="Side">平台边长（外接矩形的较长边）。</param>
+/// <param name="Offered">该边长的平台在纳入局里一共出现过多少个（每局每个平台计一次）——被选次数的分母，回答"大小即取舍"里有多少人愿意选它。</param>
+/// <param name="Picks">被选次数（= 胜率的分母）。</param>
+public sealed record SideStat(int Side, int Offered, int Picks, Proportion WinRate, bool Significant);
+
+/// <param name="Matches">纳入局数（首部带各平台边长）。</param>
+/// <param name="Skipped">首部没有各平台边长的局（不是每局换图批次的日志混了进来）：整局排除并计数，MUST NOT 按地图标识重建地图去补。</param>
+/// <param name="Baseline">基线 = 1 / 参赛人数，口径同各区胜率。</param>
+/// <param name="Sides">边长 5–9 各一行（没出现过 / 没人选同样列出），另含样本里出现的其它边长；按边长升序。</param>
+public sealed record PlatformSideSection(int Matches, int Skipped, double Baseline, List<SideStat> Sides);
 
 public sealed record GrowthAxisSection(
     int WinnerSamples,
@@ -1198,29 +1216,67 @@ public static class BalanceAnalyzer
             ZoneStats(converged, zones, baseline),
             ZoneStats(notConverged, zones, baseline),
             converged.Count,
-            notConverged.Count);
+            notConverged.Count)
+        {
+            BySide = logs.Any(l => l.Header.Config.MapPerMatch) ? SideStats(logs, baseline) : null,
+        };
+    }
+
+    /// <summary>生成图的平台边长范围（报告固定列出这几行）。</summary>
+    private const int MinPlatformSide = 5;
+    private const int MaxPlatformSide = 9;
+
+    private static PlatformSideSection SideStats(List<MatchLog> logs, double baseline)
+    {
+        var offered = new SortedDictionary<int, int>();
+        var picks = new SortedDictionary<int, int>();
+        var wins = new SortedDictionary<int, int>();
+        for (int side = MinPlatformSide; side <= MaxPlatformSide; side++)
+        {
+            offered[side] = picks[side] = wins[side] = 0;
+        }
+
+        int matches = 0;
+        int skipped = 0;
+        foreach (MatchLog log in logs)
+        {
+            if (log.Header.ZoneSides is not { } sides)
+            {
+                skipped++;
+                continue;
+            }
+
+            matches++;
+            foreach (int side in sides)
+            {
+                offered[side] = offered.GetValueOrDefault(side) + 1;
+                picks.TryAdd(side, 0);
+                wins.TryAdd(side, 0);
+            }
+
+            // 被选 / 获胜的计数与各区胜率走同一份（TallyPicks）：这里只是把"区号"换成"该区的边长"来归组。
+            TallyPicks(log, sides.Count, zone => sides[zone], picks, wins);
+        }
+
+        return new PlatformSideSection(matches, skipped, baseline, [.. offered.Keys.Select(side =>
+        {
+            Proportion rate = Statistics.Wilson(wins[side], picks[side]);
+            return new SideStat(side, offered[side], picks[side], rate, rate.Excludes(baseline));
+        })]);
     }
 
     private static List<ZoneStat> ZoneStats(List<MatchLog> logs, int zones, double baseline)
     {
-        int[] wins = new int[zones];
-        int[] samples = new int[zones];
+        var wins = new SortedDictionary<int, int>();
+        var samples = new SortedDictionary<int, int>();
+        for (int z = 0; z < zones; z++)
+        {
+            wins[z] = samples[z] = 0;
+        }
+
         foreach (MatchLog log in logs)
         {
-            for (int p = 0; p < log.Header.Zones.Count; p++)
-            {
-                int zone = log.Header.Zones[p];
-                if (zone < 0 || zone >= zones)
-                {
-                    continue;
-                }
-
-                samples[zone]++;
-                if (log.Result!.Winners.Contains(log.Header.Players[p]))
-                {
-                    wins[zone]++;
-                }
-            }
+            TallyPicks(log, zones, zone => zone, samples, wins);
         }
 
         return [.. Enumerable.Range(0, zones).Select(z =>
@@ -1228,6 +1284,30 @@ public static class BalanceAnalyzer
             Proportion rate = Statistics.Wilson(wins[z], samples[z]);
             return new ZoneStat(z, rate, rate.Excludes(baseline), samples[z]);
         })];
+    }
+
+    /// <summary>
+    /// 一局的选区样本计数——"各区胜率"与"按平台边长分组"（map-generator D6）共用的唯一一份：每名玩家锁定的出生区计一次被选，
+    /// 该玩家在胜者之列再计一次获胜；区号越界（不在 <c>[0, zoneCount)</c>）的样本不计。<paramref name="groupOf"/> 把区号映射到归组键
+    /// （各区胜率：区号本身；按边长：该局该区的边长），键 MUST 已在两个计数表里。
+    /// </summary>
+    private static void TallyPicks(MatchLog log, int zoneCount, Func<int, int> groupOf, SortedDictionary<int, int> picks, SortedDictionary<int, int> wins)
+    {
+        for (int p = 0; p < log.Header.Zones.Count; p++)
+        {
+            int zone = log.Header.Zones[p];
+            if (zone < 0 || zone >= zoneCount)
+            {
+                continue;
+            }
+
+            int group = groupOf(zone);
+            picks[group]++;
+            if (log.Result!.Winners.Contains(log.Header.Players[p]))
+            {
+                wins[group]++;
+            }
+        }
     }
 
     // ---------- §17.6 成长轴顺序 ----------

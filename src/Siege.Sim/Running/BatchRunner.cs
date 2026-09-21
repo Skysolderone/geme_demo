@@ -52,13 +52,19 @@ public static class BatchRunner
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
-        map ??= MapCatalog.Resolve(config.MapId);
+        // 每局换图（map-generator D6）：第 i 局的地图 = MapIdAt(i)，逐局解析（生成一张十几毫秒）；调用方给的 map 只在不换图时使用。
+        if (!config.MapPerMatch)
+        {
+            map ??= MapCatalog.Resolve(config.MapId);
+        }
+
         var results = new ConcurrentBag<MatchLog>();
         int[] indices = [.. Enumerable.Range(0, config.Count)];
 
         void RunOne(int index)
         {
-            MatchLog log = MatchSession.Create(config, config.SeedAt(index), map).Run();
+            MapData matchMap = config.MapPerMatch ? MapCatalog.Resolve(config.MapIdAt(index)) : map!;
+            MatchLog log = MatchSession.Create(config, config.SeedAt(index), matchMap).Run();
             results.Add(log);
             onCompleted?.Invoke(log);
         }
@@ -83,7 +89,9 @@ public static class BatchRunner
     {
         ArgumentNullException.ThrowIfNull(config);
         // 先解析地图再建输出目录：未知地图标识要在写出任何东西之前报错（strict-cli D4：半份输出比没有输出更糟）。
-        MapData map = MapCatalog.Resolve(config.MapId);
+        // 每局换图时解析的是第 0 局的图（同样起到"先验证再写盘"的作用）；生成图的可落子格都在边疆档区间内，按它落成的 K 对每一局都成立。
+        config.Validated();
+        MapData map = MapCatalog.Resolve(config.MapIdAt(0));
         // 候选格上限先按地图落成具体值，config.json 记录的就是实际生效的 K（小图上原样不变）。
         config = config.ResolvedFor(map);
         Directory.CreateDirectory(outputDir);

@@ -126,6 +126,12 @@ public sealed class MatchSession
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
+        if (map is null && config.MapPerMatch)
+        {
+            // 每局换图的配置里 MapId 只是起始标识；本局是第几局只有调用方知道（BatchRunner 按序号、Replayer 按日志首部的地图标识）。
+            throw new ArgumentException("每局换图的配置不能由会话自行解析地图：请由调用方按本局的地图标识解析后传入。");
+        }
+
         map ??= MapCatalog.Resolve(config.MapId);
         if (!recorded)
         {
@@ -580,6 +586,9 @@ public sealed class MatchSession
             // 代价：本局架出来的桥不进分母，占用率会略微偏高（实测每局新增桥个位数，对 105 的基数 < 1 个百分点）。
             PlayableCells = Match.Board.BaseMap.PlayableCount,
             ZoneCount = Match.Map.BirthZones.Length,
+            // 摘要与平台边长同样取开局地图：首部在终局时才写出，活地形（本局架的桥、烧掉的林）不属于"这是哪张图"。
+            MapDigest = MapFile.Digest(Match.Board.BaseMap),
+            ZoneSides = Config.MapPerMatch ? [.. Match.Board.BaseMap.BirthZones.Select(SideOf)] : null,
             ArtisanWeight = Match.ArtisanWeight,
             Seed = Seed.ToString(),
             MaxMajorRounds = Match.MaxMajorRounds,
@@ -610,6 +619,13 @@ public sealed class MatchSession
             DebugAiPlayers = [.. Runner.Annotations.DebugAiPlayers.Select(p => p.Value)],
             Retention = retention,
         };
+    }
+
+    /// <summary>出生区的边长：格子外接矩形的较长边（生成图的平台是正方形；台内岩石不属于出生区，但挖不掉一整行或一整列——平台内障碍 ≤ 20% 且不撒四角）。</summary>
+    private static int SideOf(IEnumerable<Coord> zone)
+    {
+        Coord[] cells = [.. zone];
+        return Math.Max(cells.Max(c => c.X) - cells.Min(c => c.X), cells.Max(c => c.Y) - cells.Min(c => c.Y)) + 1;
     }
 
     private List<TakeoverEntry> TakeoverEntries() =>

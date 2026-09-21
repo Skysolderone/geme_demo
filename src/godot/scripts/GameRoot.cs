@@ -64,7 +64,6 @@ public sealed partial class GameRoot : Node3D
         // 命令行：先把全部选项读完，再结算未知选项（LaunchArgs：合法选项集合 = 读取过的名字，没有第二张表）。
         // --map=<地图标识或文件>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5）。缺省 v4；
         // 选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
-        MapData map;
         ulong seed;
         int rounds;
         try
@@ -73,6 +72,10 @@ public sealed partial class GameRoot : Node3D
             _autoDemo = args.Flag("auto-demo");
             _pickCheck = args.Flag("pick-check");
             _shotOverview = args.Flag("overview");
+
+            // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
+            // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
+            bool mapSelect = args.Flag("map-select");
             seed = args.Value<ulong>("seed", "无符号整数种子", t => ulong.TryParse(t, out ulong v) ? v : null)
                 ?? (_autoDemo ? 20260915UL : (ulong)Stopwatch.GetTimestamp());
 
@@ -86,12 +89,37 @@ public sealed partial class GameRoot : Node3D
             string? mapId = args.Text("map", "地图标识或地图文件路径");
             ReadScreenshotArg(args.Text("screenshot", "截图路径[:第几帧]"));
             args.EnsureRecognized();
+            if (mapSelect && _pickCheck && !_autoDemo)
+            {
+                throw new System.FormatException("--map-select 下没有人点「开始」：--pick-check 须与 --auto-demo 同用（先自动走完选图再自检拾取）。");
+            }
 
             _pause = _autoDemo ? 0d : AiPauseSeconds;
-            map = MapCatalog.Resolve(mapId);
-            _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, rounds, cellLimit);
+            _matchSeed = seed;
+            _rounds = rounds;
+            _cellLimit = cellLimit;
+
+            // --map=gen：随机取一个地图种子。规则内核不读时钟，取种子只在入口最外层做；时间戳折成九位以内的短种子（与选图界面"换一张"同一个折叠函数），
+            // 拼成完整标识、打印出来，再交给 MapCatalog。
+            // 地图种子与上面的对局种子各取各的，互不相干（map-generator D2 / D3）。
+            if (GeneratedMapId.IsBareRequest(mapId))
+            {
+                mapId = GeneratedMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapGenParameters.Default);
+                GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
+            }
+
+            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时缺省 v4、跳过选图（既有自检命令不变）。
+            if (mapSelect || (mapId is null && !Unattended))
+            {
+                _session = BeginMapSelect(mapId);
+            }
+            else
+            {
+                MapData map = MapCatalog.Resolve(mapId);
+                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, rounds, cellLimit);
+            }
         }
-        catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException)
+        catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException or MapGenerationException)
         {
             GD.PrintErr($"[siege] 错误：{ex.Message}");
             SetProcess(false);
@@ -110,8 +138,11 @@ public sealed partial class GameRoot : Node3D
         _hud.Build();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
         Connect();
+        ConnectMapSelect();
 
-        GD.Print($"[siege] 地图 {map.Id}，种子 {seed}，你是 {Labels.Player(_session.Me)}，大回合上限 {rounds}{(_autoDemo ? "，自动演示模式" : string.Empty)}");
+        GD.Print(Selecting
+            ? $"[siege] 选图界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=<标识> 可跳过选图）"
+            : $"[siege] 地图 {_session.Match.Map.Id}，对局种子 {seed}，你是 {Labels.Player(_session.Me)}，大回合上限 {rounds}{(_autoDemo ? "，自动演示模式" : string.Empty)}");
     }
 
     /// <summary>
@@ -167,6 +198,13 @@ public sealed partial class GameRoot : Node3D
                 $"{s.Coord.ToNotation()} {Labels.Piece(s.Type)}{(s.EditText is null ? string.Empty : " + " + s.EditText)}")));
             GD.Print("[siege] 改造高亮：" + string.Join("；", shownPreview.ArtisanEdits.Select(a =>
                 $"{a.ArtisanCell.ToNotation()} 已选 {a.ChosenText}，候选 桥 {a.BridgeCells.Length} / 栅 {a.FenceEdges.Length} / 林 {a.BurnCells.Length}")));
+        }
+
+        if (Selecting)
+        {
+            Rect2 panel = _hud.MapSelectRect;
+            GD.Print($"[siege] 选图界面：选中「{_select!.Options[_select.SelectedIndex].Title}」，完整标识 {_select.CurrentId}，{PreviewInfo()}；全局预览 {(_board.Rig.IsOverview ? "开" : "关（一屏看全）")}；"
+                + $"面板 ({panel.Position.X:0}, {panel.Position.Y:0}) {panel.Size.X:0}×{panel.Size.Y:0}，对局面板 {(_hud.MapSelectOpen ? "隐藏" : "显示")}");
         }
 
         GD.Print($"[siege] 落成反馈：{(_flash.Edits.IsEmpty ? "无" : string.Join("、", _flash.Edits.Select(Labels.TerrainEdit)))}");
@@ -278,6 +316,20 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
+        if (Selecting)
+        {
+            // 选图阶段：不推进对局、不采悬停与平移；只剩定帧截图这一条无人值守路径（--map-select --screenshot）。
+            ProcessMapSelect();
+            _frame++;
+            if (_screenshotFrame >= 0 && _frame >= _screenshotFrame)
+            {
+                _screenshotFrame = -1;
+                BeginCapture();
+            }
+
+            return;
+        }
+
         Drive(delta);
         UpdateCamera(delta);
         UpdateHover();
@@ -292,9 +344,7 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[terrain-edit] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合落成：{string.Join("、", fresh.Select(Labels.TerrainEdit))}");
             }
 
-            _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
-            _hud.OverviewActive = _board.Rig.IsOverview;
-        _hud.Refresh(_session, _layers, _handPanel);
+            RefreshViews();
         }
 
         _frame++;
@@ -344,10 +394,22 @@ public sealed partial class GameRoot : Node3D
         _layers.Back();
         _handPanel.Back();
         _dirty = false;
+        RefreshViews();
+        CaptureWhenDrawn(_screenshotPath);
+    }
+
+    /// <summary>把当前状态刷到棋盘与 HUD。选图阶段 HUD 只显示选图面板（对局面板隐藏），棋盘照常刷新——预览与插旗前的盘面是同一条渲染路径。</summary>
+    private void RefreshViews()
+    {
         _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
+        if (Selecting)
+        {
+            _hud.ShowMapSelect(_select!, PreviewInfo());
+            return;
+        }
+
         _hud.OverviewActive = _board.Rig.IsOverview;
         _hud.Refresh(_session, _layers, _handPanel);
-        CaptureWhenDrawn(_screenshotPath);
     }
 
     private async void CaptureWhenDrawn(string path)
@@ -365,11 +427,19 @@ public sealed partial class GameRoot : Node3D
     /// <para>动态相机（viewport-camera「动态相机下的拾取正确」）分两层，任一层失败即整体失败，失败行指出位姿与格坐标：</para>
     /// <para>① <b>逐格居中</b>（全严格）：把每个可落子格尽量移到画面中心（受夹取），在最近、最远两种缩放下各验一次，必须往返到同一格。
     /// 这是「俯角 60° 下高台向远处只投 0.40 格遮挡」那条论证的直接验证——它只在注视点附近成立，所以就在注视点附近验；
-    /// 一屏看全的地图上「最远」居中位姿就是旧固定相机。</para>
+    /// 一屏看全的地图上「最远」居中位姿就是旧固定相机。
+    /// <b>例外只有一种</b>（map-generator 3.5，生成图上实测到）：注视点在<b>纵深方向</b>被边界夹取、该格落在注视点的<b>远侧</b>（最远缩放下贴近地图远边的几行），
+    /// 视线比 60° 浅，上面那条论证的前提不成立——此时按 ② 的口径分类，且只认<b>紧邻</b>的格：拾到层数严格更高、离相机更近、在该格<b>正前或斜前一行</b>（行号小 1、列差不超过 1；同一行的左右邻格遮不住格心，不算）的格 → 记「遮挡」并打印，不算失败；其余仍是失败。
+    /// 判据是注视点与格心的实际偏差，不是"凡失败就算没居中"。只有横向被夹取（纵深居中）的格<b>不在例外内</b>：台面向远处的遮挡只取决于纵深方向的视线分量，
+    /// 横向偏移不加深它——段 C 检查实测：把横向夹取也算进例外，"缩放带 5° 俯角变化"这个真错误在 v4 上会被当成遮挡放过（<c>B5 → B4</c>，退出码 0）。
+    /// 落在注视点近侧的格视线更陡，同样全严格。并且<b>每个可落子格至少要在一种缩放下严格往返到自己</b>，否则整体失败——
+    /// 例外只免掉"这一档缩放下看不见它"，免不掉"哪一档都点不到它"。</para>
     /// <para>② <b>7 个位姿</b>（中心、四角夹取位、最近、最远；位姿表在视图模型里）：每个位姿验<b>格心落在画面内</b>的全部格。
     /// 透视相机下屏幕上部的射线俯角远小于 60°（视场 54° → 顶边只有 33°），紧贴 h=2 崖壁身后的低地格心在那里会被高台顶面<b>真实遮住</b>，
     /// 此时拾到高台才是对的（规格：点在某格顶面的屏幕投影内即选中该格）。故不一致时分类：拾到的格层数严格更高、且离相机更近 → 记「遮挡」并打印，不算失败；
-    /// 未命中、拾到同层或更低的格 → 失败。另要求每个可落子格至少在一个位姿下被验到。</para>
+    /// 未命中、拾到同层或更低的格 → 失败。另要求每个可落子格至少在一个位姿下被验到。
+    /// 注视地图中心的位姿（中心 / 最近 / 最远 / 全局预览）画面内 MUST 有可落子格；四个角位姿在随机生成图上可能整屏都是深水与障碍
+    /// （map-generator 3.5 实测 <c>gen:1:p5</c> 右上角），此时没有可验的格——打印出来、不算失败，由"每格至少验到一次"兜住覆盖面。</para>
     /// </remarks>
     private bool RunPickCheck()
     {
@@ -382,27 +452,45 @@ public sealed partial class GameRoot : Node3D
         bool ok = cells.Length > 0;
 
         // ① 逐格居中
+        var strict = new HashSet<Coord>();
         foreach ((string label, float distance) in new[] { ("最近", _board.Rig.Nearest), ("最远", _board.Rig.Farthest) })
         {
             var failures = new List<string>();
+            var offCenter = new List<string>();
             foreach (BoardCellView cell in cells)
             {
                 (float x, float z) = _board.PlaneCenterOf(cell.Coord);
                 _board.Rig.Set(new CameraPose(x, z, distance));
                 _board.ApplyCameraPose();
-                Vector2 screen = _board.Camera.UnprojectPosition(_board.CenterOf(cell.Coord));
+                Vector3 center = _board.CenterOf(cell.Coord);
+                Vector2 screen = _board.Camera.UnprojectPosition(center);
                 bool hit = BoardGeometry.TryPick(_board.Camera, screen, width, height, _board.LevelOf, out Coord picked);
-                if (!hit || picked != cell.Coord)
+                if (hit && picked == cell.Coord)
+                {
+                    strict.Add(cell.Coord);
+                }
+                else
                 {
                     CameraPose at = _board.Rig.Pose;
-                    failures.Add($"{cell.Coord.ToNotation()}(h{cell.Height}) → {(hit ? picked.ToNotation() : "未命中")}〔注视点 ({at.FocusX:0.###}, {at.FocusZ:0.###})〕");
+                    Vector3 eye = _board.Camera.Position;
+                    bool beyondFocus = at.FocusZ - z > 1e-3f;
+                    bool adjacent = hit && picked.Y == cell.Coord.Y - 1 && System.Math.Abs(picked.X - cell.Coord.X) <= 1;
+                    bool blocked = beyondFocus && adjacent && _board.LevelOf(picked) > cell.Height && Flat(_board.CenterOf(picked) - eye) < Flat(center - eye);
+                    (blocked ? offCenter : failures).Add(
+                        $"{cell.Coord.ToNotation()}(h{cell.Height}) → {(hit ? $"{picked.ToNotation()}(h{_board.LevelOf(picked)})" : "未命中")}〔注视点 ({at.FocusX:0.###}, {at.FocusZ:0.###})〕");
                 }
             }
 
             ok &= failures.Count == 0;
-            GD.Print($"[pick-check] 逐格居中·{label}（距离 {distance:0.###}）：可落子格 {cells.Length}，往返一致 {cells.Length - failures.Count}，失败 {failures.Count}"
-                + (failures.Count == 0 ? string.Empty : "：" + string.Join("、", failures)));
+            GD.Print($"[pick-check] 逐格居中·{label}（距离 {distance:0.###}）：可落子格 {cells.Length}，往返一致 {cells.Length - failures.Count - offCenter.Count}，"
+                + $"纵深夹取后落在注视点远侧、被紧邻的更近高台遮挡 {offCenter.Count}{(offCenter.Count == 0 ? string.Empty : "（" + string.Join("、", offCenter) + "）")}，"
+                + $"失败 {failures.Count}{(failures.Count == 0 ? string.Empty : "：" + string.Join("、", failures))}");
         }
+
+        string[] neverStrict = [.. cells.Where(c => !strict.Contains(c.Coord)).Select(c => c.Coord.ToNotation())];
+        ok &= neverStrict.Length == 0;
+        GD.Print($"[pick-check] 逐格居中·合计：至少在一种缩放下严格往返的格 {strict.Count} / {cells.Length}"
+            + (neverStrict.Length == 0 ? string.Empty : "；哪一档都点不到：" + string.Join("、", neverStrict)));
 
         // ② 7 个位姿
         var verified = new HashSet<Coord>();
@@ -453,10 +541,13 @@ public sealed partial class GameRoot : Node3D
                 (blocked ? occluded : failures).Add(line);
             }
 
-            ok &= failures.Count == 0 && inView > 0;
+            PlaneRect bounds = _board.Rig.Bounds;
+            bool focusedOnCenter = Mathf.Abs(pose.FocusX - bounds.CenterX) < 1e-3f && Mathf.Abs(pose.FocusZ - bounds.CenterZ) < 1e-3f;
+            ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter);
             GD.Print($"[pick-check] 位姿「{name}」注视点 ({pose.FocusX:0.###}, {pose.FocusZ:0.###}) 距离 {pose.Distance:0.###}：画面内可落子格 {inView}，"
                 + $"往返一致 {inView - failures.Count - occluded.Count}，被更近的高台遮挡 {occluded.Count}{(occluded.Count == 0 ? string.Empty : "（" + string.Join("、", occluded) + "）")}，"
-                + $"失败 {failures.Count}{(failures.Count == 0 ? string.Empty : "：" + string.Join("、", failures))}");
+                + $"失败 {failures.Count}{(failures.Count == 0 ? string.Empty : "：" + string.Join("、", failures))}"
+                + (inView == 0 && !focusedOnCenter ? "（该角视野内没有可落子格，无可验）" : string.Empty));
         }
 
         _board.Rig.Set(saved);
@@ -692,7 +783,8 @@ public sealed partial class GameRoot : Node3D
 
     private void UpdateHover()
     {
-        if (DisplayServer.GetName() == "headless")
+        // 无人值守（自动演示 / 定帧截图 / 拾取自检）同样不采悬停：指针恰好停在窗口内不该给定帧截图带上悬停读数与光标格。
+        if (DisplayServer.GetName() == "headless" || Unattended)
         {
             return;
         }
@@ -839,7 +931,8 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        if (@event is not InputEventKey || _session is null)
+        // 选图阶段不认领相机键（map-generator D8）：相机本来就锁在预览位姿，而 W A S D / 空格 / 方向键 / 退格要能落到种子输入框。
+        if (@event is not InputEventKey || _session is null || Selecting)
         {
             return;
         }
@@ -879,6 +972,12 @@ public sealed partial class GameRoot : Node3D
         if (@event is InputEventKey { Keycode: Key.F12, Pressed: true })
         {
             Capture($"user://siege-{System.DateTime.Now:yyyyMMdd-HHmmss}.png");
+            return;
+        }
+
+        // 选图阶段不接受落子、插旗、缩放与信息层按键：点棋盘无效果（map-selection「预览阶段 MUST NOT 接受落子与插旗」）。
+        if (Selecting)
+        {
             return;
         }
 

@@ -39,6 +39,8 @@ public sealed partial class MatchFlow
         var data = new MatchSaveData
         {
             MapId = Map.Id,
+            // 摘要取开局地图（与日志首部同口径）：恢复时调用方按标识重建出来的就是开局图，本局的改造在盘面段里。
+            MapDigest = MapFile.Digest(Board.BaseMap),
             Seed = Seed.ToString(),
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
             MaxMajorRounds = MaxMajorRounds,
@@ -116,7 +118,19 @@ public sealed partial class MatchFlow
         return JsonSerializer.Serialize(data, JsonOptions);
     }
 
-    /// <summary>从 <see cref="Serialize"/> 的输出恢复。地图由调用方提供，其 <see cref="MapData.Id"/> MUST 与存档一致。</summary>
+    /// <summary>
+    /// 读出存档记录的完整地图标识。存档<b>只存标识、不存整张地图</b>（盘面段只有棋子与本局的改造）：恢复时由调用方凭这个标识
+    /// 经地图目录（内置图直接给、生成图按标识里的地图种子与参数重新生成）得到地图，再交给 <see cref="Restore"/>。
+    /// 对局流程自己不解析标识——它只认 <see cref="MapData"/> 与标识字符串。
+    /// 重建出的地图是不是保存时那一张，由 <see cref="Restore"/> 按存档里的地图内容摘要把关（见 <see cref="MatchSaveData.MapDigest"/>）。
+    /// </summary>
+    public static string SavedMapId(string json) =>
+        Parse(json).MapId ?? throw new FormatException("对局存档里没有地图标识。");
+
+    /// <summary>
+    /// 从 <see cref="Serialize"/> 的输出恢复。地图由调用方提供，其 <see cref="MapData.Id"/> 与内容摘要（<see cref="MapFile.Digest"/>）MUST 与存档一致；
+    /// 不一致抛 <see cref="FormatException"/>（"地图不一致"），MUST NOT 在另一张图上静默恢复。
+    /// </summary>
     public static MatchFlow Restore(MapData map, string json)
     {
         ArgumentNullException.ThrowIfNull(map);
@@ -145,6 +159,19 @@ public sealed partial class MatchFlow
         if (!string.Equals(map.Id, data.MapId, StringComparison.Ordinal))
         {
             throw new FormatException($"存档记录的地图为 {data.MapId}，提供的地图为 {map.Id}。");
+        }
+
+        // 标识相同不等于同一张图（map-generator D5 的同一风险）：生成器改版后旧标识会重建出另一张图，内置图也可能被改而标识没改。
+        // 旧存档没有摘要 → 跳过比对（MapDigestBackfilled 留痕），不回填。
+        if (data.MapDigest is { } recorded)
+        {
+            string actual = MapFile.Digest(map);
+            if (!string.Equals(recorded, actual, StringComparison.Ordinal))
+            {
+                throw new FormatException(
+                    $"地图不一致：存档记录的地图 {data.MapId} 摘要为 {recorded}，提供的地图摘要为 {actual}"
+                    + "——生成器或地图数据在存档之后改过，同一标识已不是同一张图；未恢复。");
+            }
         }
     }
 
@@ -185,6 +212,8 @@ public sealed partial class MatchFlow
         match.CatchUpRecruitBackfilled = catchUpBackfilled;
         match.SiteValuesBackfilled = siteValuesBackfilled;
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
+        // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
+        match.MapDigestBackfilled = data.MapDigest is null;
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -255,6 +284,12 @@ public sealed class MatchSaveData
     public int Version { get; set; } = 1;
 
     public string? MapId { get; set; }
+
+    /// <summary>
+    /// 开局地图的内容摘要（<see cref="MapFile.Digest"/>，与对局日志首部同一算法，map-generator D5）。存档只存地图标识、不存整张地图：
+    /// 恢复时比对它，不同即报"地图不一致"。旧存档无此字段（<c>null</c>）→ 跳过比对，<see cref="MatchFlow.MapDigestBackfilled"/> 为 <c>true</c>。
+    /// </summary>
+    public string? MapDigest { get; set; }
 
     public string? Seed { get; set; }
 

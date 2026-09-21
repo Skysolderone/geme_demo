@@ -223,6 +223,12 @@ public sealed partial class MatchFlow
     /// <summary>恢复自不含匠人权重字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultArtisanWeight"/> 回填。</summary>
     public bool ArtisanWeightBackfilled { get; private set; }
 
+    /// <summary>
+    /// 恢复自不含地图内容摘要的旧存档（map-generator 之前）时为 <c>true</c>：恢复时<b>跳过了</b>"地图不一致"的比对——
+    /// 调用方据此可知这张地图只按标识把过关、内容没有核对过。
+    /// </summary>
+    public bool MapDigestBackfilled { get; private set; }
+
     private static void RequireValidSiteValues(SiteValues? values)
     {
         ArgumentNullException.ThrowIfNull(values, nameof(MatchOptions.SiteValues));
@@ -554,7 +560,8 @@ public sealed partial class MatchFlow
     public MatchPublicView Publish()
     {
         PowerSnapshot? power = Scoreboard.Latest;
-        return new(Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, SiteValues, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
+        // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
+        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, SiteValues, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
             Board.Serialize(), power, power?.SiteStates ?? SiteControl.Compute(Board, CoverageMap.Compute(Board)),
             Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
     }
