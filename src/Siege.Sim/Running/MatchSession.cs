@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -332,7 +333,7 @@ public sealed class MatchSession
         {
             Add(turn, majorRound, LogEventType.Recruit, pid,
                 $"candidates={string.Join(",", recruit.Candidates)} picks={string.Join(",", recruit.PickedTypes)} discards={string.Join(",", recruit.Discarded)}",
-                values: new Dictionary<string, long>
+                values: new Dictionary<string, BigInteger>
                 {
                     ["Recruited"] = recruit.RecruitedCount,
                     ["Revoked"] = recruit.RevokedCount,
@@ -351,13 +352,13 @@ public sealed class MatchSession
         {
             Add(turn, majorRound, LogEventType.Rejected, pid, $"[{string.Join(",", tried)}] {failure.Message}",
                 coords: [.. failure.Coords.Select(c => c.ToNotation())], failureKind: failure.Kind.ToString(),
-                values: new Dictionary<string, long> { ["Attempt"] = ++attempt });
+                values: new Dictionary<string, BigInteger> { ["Attempt"] = ++attempt });
         }
 
         HeuristicTurnController? ai = AiOf(player);
         if (!passed)
         {
-            var values = new Dictionary<string, long>
+            var values = new Dictionary<string, BigInteger>
             {
                 ["Captures"] = captures.Count,
                 ["SuperkoPassed"] = 1,
@@ -490,7 +491,6 @@ public sealed class MatchSession
                     SynergyBonus = g.SynergyBonus,
                     HighGroundBonus = g.HighGroundBonus,
                     MultiplierCount = g.MultiplierCount,
-                    EffectiveMultiplierCount = g.EffectiveMultiplierCount,
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g),
                 })],
@@ -531,7 +531,7 @@ public sealed class MatchSession
                     // 流程层发此事件时 MajorRound 已推进到下一轮；日志记"完成的那一轮"。
                     int completed = e.MajorRound - 1;
                     InitiativeReport report = Match.InitiativeReports.Last(r => r.CompletedMajorRound == completed);
-                    var values = new Dictionary<string, long> { ["ActiveCount"] = report.ActiveCount };
+                    var values = new Dictionary<string, BigInteger> { ["ActiveCount"] = report.ActiveCount };
                     foreach (InitiativeEntry entry in report.Entries)
                     {
                         values[$"{entry.Player}.Rank"] = entry.Rank;
@@ -559,7 +559,7 @@ public sealed class MatchSession
 
     private void Add(
         int turn, int majorRound, string type, int? player, string detail,
-        List<string>? coords = null, Dictionary<string, long>? values = null, string? failureKind = null) =>
+        List<string>? coords = null, Dictionary<string, BigInteger>? values = null, string? failureKind = null) =>
         _events.Add(new LogEvent
         {
             Seq = ++_eventSeq,
@@ -672,7 +672,6 @@ public sealed class MatchSession
             Peak = peak is null ? null : new PeakEntry
             {
                 MultiplierCount = peak.MultiplierCount,
-                EffectiveMultiplierCount = peak.EffectiveMultiplierCount,
                 MajorRound = peak.MajorRound,
                 Player = peak.Player.Value,
                 Power = peak.Power,

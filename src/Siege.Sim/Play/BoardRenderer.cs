@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -189,7 +190,7 @@ internal sealed class BoardRenderer
 
         foreach (PlayerFlowState state in view.Players)
         {
-            long power = view.Power?.Players.FirstOrDefault(p => p.Player == state.Player)?.Total ?? 0;
+            BigInteger power = view.Power?.Players.FirstOrDefault(p => p.Player == state.Player)?.Total ?? 0;
             int rank = view.Power?.Ranking.FirstOrDefault(g => g.Players.Contains(state.Player))?.Rank ?? 0;
             HandPublicView? hand = view.Hands.FirstOrDefault(h => h.Player == state.Player);
             string types = hand is null || hand.IsEmpty ? "无" : string.Join("", hand.Types.Select(Letter));

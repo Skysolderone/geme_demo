@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -280,8 +281,8 @@ internal sealed class ConsoleController : ITurnController
         }
 
         MatchPublicView view = _observe();
-        long before = view.Power?.Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0;
-        long after = r.ProjectedBoard is { } projected
+        BigInteger before = view.Power?.Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0;
+        BigInteger after = r.ProjectedBoard is { } projected
             ? PowerCalculator.Compute(projected, view.Players.ToDictionary(p => p.Player, p => p.Status), view.SiteValues)
                 .Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0
             : before;

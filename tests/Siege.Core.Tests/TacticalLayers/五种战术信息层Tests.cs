@@ -119,8 +119,9 @@ public class 五种战术信息层Tests
     public void 顺序层可解释下一轮排序()
     {
         // 设计文档 §11.2 算例：4 人局第 4 名基础先手值 0，持"先手 +2"后为 2，与原第 2 名竞争位置（同值时先手修正高者先）。
-        // P0 A1–A4（势力 4，第 1）、P1 J1–J3（3，第 2）、P2 A9-B9（2，第 3）、P3 J9 + 先锋 +2 于 H9（1，第 4）。
-        // scoring-sites 2.7 改写：旧势力 9 / 7 / 5 / 3（含领地分）→ 4 / 3 / 2 / 1，名次、先手值与预测顺序不变。
+        // P0 A1–A4（势力 9，第 1）、P1 J1–J3（7，第 2）、P2 A9-B9（5，第 3）、P3 J9 + 先锋 +2 于 H9（3，第 4）。
+        // 段 A 重算（9×9 图，总势力 = 领地 + 军势）：原 4 / 3 / 2 / 1 → 9 / 7 / 5 / 3，名次、先手值与预测顺序不变：
+        //   P0 4 + 领地 5（B1–B4 + A5）；P1 3 + 领地 4（H1–H3 + J4，J 列贴右边）；P2 2 + 领地 3（A8 / B8 / C9）；P3 1 + 领地 2（J8 + 空的信物格 H9）。
         // 预测：P0(3) > P3(2, 修正 2) > P1(2, 修正 0) > P2(1)。随后 P0–P2 Pass、P3 Pass 结束大回合，实际生成的明细与预测逐项一致。
         // 变异验证 M-L6：MatchFlow.ForecastInitiative 的先手修正读取改为恒 0 → 本测试红 1。
         // 变异验证 M-L7：TacticalLayers.OrderRow 的 PredictedPosition 改为 `index` → 本测试红 1。
@@ -134,7 +135,7 @@ public class 五种战术信息层Tests
 
         Assert.Equal([P0, P3, P1, P2], layer.PredictedNextOrder);
         Assert.Equal(
-            ["P0:1:4:0:3:1", "P3:4:1:2:2:2", "P1:2:3:0:2:3", "P2:3:2:0:1:4"],
+            ["P0:1:9:0:3:1", "P3:4:3:2:2:2", "P1:2:7:0:2:3", "P2:3:5:0:1:4"],
             layer.Rows.Select(r => $"{r.Player}:{r.Rank}:{r.Power}:{r.Bonus}:{r.Value}:{r.PredictedPosition}"));
         Assert.Equal("先手值 2 =（参赛 4 − 势力名次 4）+ 先手修正 2；预测第 2 位", layer.Rows[1].Explanation);
 

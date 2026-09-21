@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
@@ -31,10 +32,11 @@ public class 实时重算与公开排名Tests
         Assert.Equal(3, latest.Players.Length);
         Assert.Empty(latest.Of(TestMaps.P1).Groups);
         Assert.Equal(0, latest.Of(TestMaps.P1).Total);
-        // 4 枚棋子围成十字：军势 4（scoring-sites 2.7 改写：旧 13 = 4 + D4 与外圈 8 格独占；P3 旧 5 = 1 + 4 独占 → 1）
-        Assert.Equal(4, latest.Of(TestMaps.P0).Total);
+        // 段 A 重算（总势力 = 领地 + 军势）：P0 原 4 → 13 = 军势 4（四枚互不相连的普通子）+ 领地 9（提子后空出的 D4 + 外圈 B4 / F4 / C3 / E3 / C5 / E5 / D2 / D6）；
+        // P3 原 1 → 5 = 军势 1 + H8 四邻 4。与 territory-power 时期同值。
+        Assert.Equal(13, latest.Of(TestMaps.P0).Total);
         Assert.Equal(PlayerStatus.Resigned, latest.Of(ScoringFixtures.P3).Status);
-        Assert.Equal(1, latest.Of(ScoringFixtures.P3).Total);
+        Assert.Equal(5, latest.Of(ScoringFixtures.P3).Total);
         Assert.Equal([1, 2], latest.Ranking.Select(r => r.Rank));
         Assert.Equal(1, latest.RankOf(TestMaps.P0));
         Assert.Equal(2, latest.RankOf(TestMaps.P1));
@@ -57,8 +59,8 @@ public class 实时重算与公开排名Tests
         Assert.Equal(["OnPass", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
         Assert.Equal(1, hooks.Scoreboard.Version);
         PowerSnapshot latest = hooks.Scoreboard.Latest!;
-        Assert.Equal(1, latest.Of(TestMaps.P0).Total);   // scoring-sites 2.7 改写：旧 5（1 + 4 独占）→ 1
-        Assert.Equal(1, latest.Of(TestMaps.P1).Total);
+        Assert.Equal(5, latest.Of(TestMaps.P0).Total);   // 段 A 重算：原 1 → 5 = 军势 1 + 四邻独占 4（D4 与 H8 相距甚远，无争议格）
+        Assert.Equal(5, latest.Of(TestMaps.P1).Total);
         RankGroup tied = Assert.Single(latest.Ranking);
         Assert.Equal([TestMaps.P0, TestMaps.P1], tied.Players);
     }
@@ -67,8 +69,9 @@ public class 实时重算与公开排名Tests
     public void 弃赛者势力可见但不参与()
     {
         // 设计文档 §10.2 / §12.2：已弃赛 D（P3）势力 45 高于参赛 A（P0）的 30 → D 照常显示并标记，但名次中不出现 D。
-        // 本盘 31 高于 18：31 = 堡垒子×5 + 倍增子×1（基础 21 × 1.5）；18 = 堡垒子×3 + 普通子 + 协同子（14 + 协同 4）。
-        // scoring-sites 2.7 改写：旧 45（31 + 14 独占）/ 30（18 + 12 独占）→ 31 / 18，D 高于 A 的前提不变。
+        // 本盘恰为规格算例 45 / 30：D 军势 31 = 堡垒子×5 + 倍增子×1（⌊21 × 1.5⌋）+ 领地 14（第 9 行 B–G 六子：上 6 + 下 6 + 两端 A9 / H9）；
+        // A 军势 18 = 堡垒子×3 + 普通子 + 协同子（⌊(14 + 协同 4) × 1⌋）+ 领地 12（第 2 行 B–F 五子：上 5 + 下 5 + 两端 A2 / G2）。
+        // 段 A 重算：原 31 / 18（scoring-sites：独占空格不计分）→ 45 / 30。
         // 变异验证 M9：IsRanked 改为 Status != Eliminated（弃赛者参与名次）→ 红 4，含本测试；M6（弃赛者棋子被清掉）→ 红 5，含本测试。
         GameBoard board = TestMaps.Blank(size: 11)
             .Place("B2", TestMaps.P0, PieceType.Fortress).Place("C2", TestMaps.P0, PieceType.Fortress).Place("D2", TestMaps.P0, PieceType.Fortress)
@@ -84,12 +87,12 @@ public class 实时重算与公开排名Tests
             board, ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned)), SiteValues.Standard);
 
         PlayerPower d = snapshot.Of(ScoringFixtures.P3);
-        Assert.Equal(31, d.Total);
+        Assert.Equal((14, (BigInteger)45), (d.TerritoryScore, d.Total));
         Assert.Equal(PlayerStatus.Resigned, d.Status);
         Assert.False(d.IsRanked);
-        Assert.Equal(18, snapshot.Of(TestMaps.P0).Total);
+        Assert.Equal((12, (BigInteger)30), (snapshot.Of(TestMaps.P0).TerritoryScore, snapshot.Of(TestMaps.P0).Total));
         RankGroup only = Assert.Single(snapshot.Ranking);
-        Assert.Equal((1, 18L), (only.Rank, only.Power));
+        Assert.Equal((1, (BigInteger)30), (only.Rank, only.Power));
         Assert.Equal([TestMaps.P0], only.Players);
         Assert.Null(snapshot.RankOf(ScoringFixtures.P3));
 

@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Siege.Core.Scoring;
@@ -191,7 +192,7 @@ internal static class LogJson
     internal static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = false,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(), new BigIntegerJsonConverter() },
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
@@ -433,7 +434,8 @@ public sealed record PlayerEntry
 
     public bool Protection { get; init; }
 
-    public long Total { get; init; }
+    /// <summary>总势力，精确整数（restore-go-core-rules D1：任意精度，写出为不失真的十进制整数）。</summary>
+    public BigInteger Total { get; init; }
 
     /// <summary>
     /// 据点分（scoring-sites：取代旧日志的 <c>Territory</c> 领地分，旧字段读入时忽略）。旧日志为 <c>null</c>，MUST NOT 回填成 0。
@@ -450,8 +452,6 @@ public sealed record PlayerEntry
 
 public sealed record GroupEntry
 {
-    private readonly int? _effectiveMultiplierCount;
-
     public List<string> Stones { get; init; } = [];
 
     public int Base { get; init; }
@@ -463,17 +463,11 @@ public sealed record GroupEntry
     /// <summary>高地压制加值（scoring-sites）。旧日志为 <c>null</c>：高地加值占比整局排除，MUST NOT 回填成 0。</summary>
     public int? HighGroundBonus { get; init; }
 
-    /// <summary>倍增子原始数量（未封顶）。</summary>
+    /// <summary>倍增子数量，即倍率指数（restore-go-core-rules：不封顶，"生效倍率指数"字段已删；旧日志里的该字段读入时忽略）。</summary>
     public int MultiplierCount { get; init; }
 
-    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（multiplier-rebalance 起为 3）。cap-multiplier 之前的旧日志没有该字段，解析时按此回填，旧日志仍可读。</summary>
-    public int EffectiveMultiplierCount
-    {
-        get => _effectiveMultiplierCount ?? Math.Min(MultiplierCount, Multiplier.MaxExponent);
-        init => _effectiveMultiplierCount = value;
-    }
-
-    public long Power { get; init; }
+    /// <summary>取整后军势，精确整数。</summary>
+    public BigInteger Power { get; init; }
 
     /// <summary>
     /// 本串各棋子类型的数量，键为 <see cref="Siege.Core.Board.PieceType"/> 名，六种全写（含 0）；multiplier-rebalance 裁决 3，供"各棋子势力占比"归因。
@@ -515,7 +509,7 @@ public sealed record LogEvent
 
     public List<string>? Coords { get; init; }
 
-    public Dictionary<string, long>? Values { get; init; }
+    public Dictionary<string, BigInteger>? Values { get; init; }
 
     /// <summary>失败类别（<c>Rejected</c> / <c>Rehearsal</c>）。</summary>
     public string? FailureKind { get; init; }
@@ -597,7 +591,7 @@ public sealed record StandingEntry
 
     public required string Status { get; init; }
 
-    public long Power { get; init; }
+    public BigInteger Power { get; init; }
 
     public int ControlledRelics { get; init; }
 
@@ -631,23 +625,14 @@ public sealed record RelicRevealEntry
 
 public sealed record PeakEntry
 {
-    private readonly int? _effectiveMultiplierCount;
-
-    /// <summary>峰值串的倍增子原始数量（峰值按它取，可超过封顶指数）。</summary>
+    /// <summary>峰值串的倍增子数量（峰值按它取），即倍率指数。</summary>
     public int MultiplierCount { get; init; }
-
-    /// <summary>生效倍率指数 <c>min(MultiplierCount, Multiplier.MaxExponent)</c>（multiplier-rebalance 起为 3）；旧日志无该字段时回填。</summary>
-    public int EffectiveMultiplierCount
-    {
-        get => _effectiveMultiplierCount ?? Math.Min(MultiplierCount, Multiplier.MaxExponent);
-        init => _effectiveMultiplierCount = value;
-    }
 
     public int MajorRound { get; init; }
 
     public int Player { get; init; }
 
-    public long Power { get; init; }
+    public BigInteger Power { get; init; }
 
     public List<string> Stones { get; init; } = [];
 }

@@ -85,7 +85,28 @@ public class 势力层据点与高地Tests
 
         Assert.Equal((0, 0, 2, 2), (group.Power.LineBonus, group.Power.SynergyBonus, group.Power.HighGroundBonus, group.Power.PositionBonus));
         Assert.Equal((truth.LineBonus, truth.SynergyBonus, truth.HighGroundBonus, truth.Power), (group.Power.LineBonus, group.Power.SynergyBonus, group.Power.HighGroundBonus, group.Power.Power));
-        Assert.Equal($"基础 2 × {truth.Multiplier} + 位置加值 2（连珠 0 / 协同 0 / 高地 2） = {truth.Power}", group.Power.FormulaText);
+        // 段 A 改写：文案顺序随公式改为"（基础 + 加值）× 倍率"；无倍增子，军势 ⌊(2 + 2) × 1⌋ = 4（新旧同值）。
+        Assert.Equal(4, truth.Power);
+        Assert.Equal("（基础 2 + 位置加值 2（连珠 0 / 协同 0 / 高地 2））× 1 = 4", group.Power.FormulaText);
         Assert.Equal(group.Power.PositionBonus, group.Power.LineBonus + group.Power.SynergyBonus + group.Power.HighGroundBonus);
+    }
+
+    [Fact]
+    public void 倍率热区等级只是显示档位()
+    {
+        // restore-go-core-rules 段 A：倍率不封顶后，势力层的热区等级（柱高 / 着色档位）取 min(倍增子数量, 3)，不随数量无限加高；
+        // 它只是显示档位，不是倍率封顶——同一条棋串的倍率文字与军势仍是精确值：5 枚倍增子 → 倍率 7.59375、军势 ⌊5 × 243 / 32⌋ = ⌊37.96…⌋ = 37。
+        // 变异验证 M-AC15（段 A check 实跑）：LayerContents 的热区等级去掉 Math.Min（直接取倍增子数量）→ 全套只红本测试 1 条（5 ≠ 3）。
+        MatchFlow match = MatchFixtures.Started().AtRound(5).Pieces(P0, PieceType.Multiplier, "C5", "D5", "E5", "F5", "G5").Pieces(P1, PieceType.Multiplier, "C2", "D2");
+
+        var layer = (PowerLayerContent)match.World(P3).Layer(TacticalLayer.Power);
+        GroupScoreView five = Assert.Single(layer.Groups, g => g.Owner == P0);
+        GroupScoreView two = Assert.Single(layer.Groups, g => g.Owner == P1);
+
+        Assert.Equal(3, GroupScoreView.MaxHeatLevel);
+        Assert.Equal((5, 3, "7.59375"), (five.Power.MultiplierCount, five.HeatLevel, five.Power.MultiplierText));
+        Assert.Equal(37, five.Power.Power);
+        Assert.Equal("（基础 5 + 位置加值 0）× 7.59375 = 37", five.Power.FormulaText);
+        Assert.Equal((2, 2), (two.Power.MultiplierCount, two.HeatLevel));
     }
 }

@@ -27,7 +27,9 @@ public class 地形改造日志与分析Tests
         // 权重写死，不取 EvaluationWeights.Default：下面「样本里确实有致提子的改造」依赖 AI 的实际走法，
         // 默认权重一校准（scoring-sites 的 27、artisan 的 35）样本就会变，那属于校准而非日志保真度的回归。
         var pinned = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 27, Growth: 4, Initiative: 20, Supply: 2);
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, maxRounds: 6, difficulty: AiDifficulty.Standard);
+        // 段 A（restore-go-core-rules）重挑种子：计分口径改为"领地 + 整体乘倍率"后 AI 走法随之变，原种子 1–3 里第 2 局一次改造都没有（样本口径下界响亮失败）。
+        // 同一份写死权重下扫种子 1–24，取连续的 3–5：改造 5 / 3 / 5 次、致提子 3 / 1 / 0 次。断言与期望均未改，只换样本。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 3, maxRounds: 6, difficulty: AiDifficulty.Standard);
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -19,8 +20,11 @@ public class 候选格上限Tests
     /// <summary>
     /// 黄金值：取自引入候选格上限<b>之前</b>的代码（工作树 = 段 A + 段 B）的实际运行结果——v4、种子 31、4 名 Standard AI、6 大回合，
     /// 全部小回合快照（去耗时）逐行拼接后的 SHA-256。
+    /// <para>restore-go-core-rules 段 A 重建：计分口径（领地计分、加值进倍率、不封顶）与快照字段（删"生效倍率指数"）都变了，整局走法与快照文本随之变，
+    /// 旧值 83755037…403E18 作废。新值取自段 A 完成后 K = 0 的实际运行（同样 v4、种子 31、4 名 Standard AI、6 大回合，24 个小回合），连跑两次一致；
+    /// 它钉的仍是"K = 0 与不预筛逐步相同"，变异 M-K1 在新值下重跑仍红（见段 A implement 记录）。</para>
     /// </summary>
-    private const string V4GoldenTurnHash = "83755037FDBD41D6040A22B913C589461E20AACF76C7E8F01075ACD5D5403E18";
+    private const string V4GoldenTurnHash = "43D7E980BACAE58A50E66174BEECFA0C295EB432B04D8B870206E089B2AA757D";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
@@ -61,6 +65,7 @@ public class 候选格上限Tests
     public void 缺省不限制时标准图整局与改动前逐步相同()
     {
         // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 本测试红。
+        // 段 A check 实跑：在重建后的黄金哈希上 M-K1 仍红 36（含本测试）——哈希虽是段 A 后重生成的，但不是自证的。
         MatchLog log = BatchRunner.Execute(SimFixtures.Config(seedStart: 31, maxRounds: 6, difficulty: AiDifficulty.Standard), parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
@@ -111,7 +116,7 @@ public class 候选格上限Tests
         StagedBatch batch = oracleMatch.OpenDeploy();
         BatchEvaluator evaluator = oracleAi.CreateEvaluator();
         PieceType representative = batch.Context.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order().First();
-        var scored = new List<(Coord Cell, long Total)>();
+        var scored = new List<(Coord Cell, BigInteger Total)>();
         foreach (Coord cell in batch.Context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order())
         {
             batch.Clear();
@@ -161,7 +166,7 @@ public class 候选格上限Tests
         ImmutableArray<TerrainEdit> a1Edits = TerrainEditRules.LegalTargets(batch.Board.Map, a1);
 
         // 前提：A1 不带改造是自杀手，带改造（立栅 B1–C1 / 在 A2 搭桥）才合法；其余空格普通子都落得下。
-        var scored = new List<(Coord Cell, long Total)>();
+        var scored = new List<(Coord Cell, BigInteger Total)>();
         foreach (Coord cell in empties)
         {
             batch.Clear();
@@ -174,7 +179,7 @@ public class 候选格上限Tests
             }
         }
 
-        var a1Totals = new List<long>();
+        var a1Totals = new List<BigInteger>();
         foreach (TerrainEdit edit in a1Edits)
         {
             batch.Clear();
@@ -193,7 +198,7 @@ public class 候选格上限Tests
         scored.Add((a1, a1Totals.Max()));
 
         // K 取"恰好把 A1 收进来"的名次：A1 在前 K 格里，K 仍小于合法空格数（预筛生效）。
-        (Coord Cell, long Total)[] ranked = [.. scored.OrderByDescending(s => s.Total).ThenBy(s => s.Cell)];
+        (Coord Cell, BigInteger Total)[] ranked = [.. scored.OrderByDescending(s => s.Total).ThenBy(s => s.Cell)];
         int k = Array.FindIndex(ranked, s => s.Cell == a1) + 1;
         Assert.InRange(k, 1, empties.Length - 1);   // A1 垫底时无法既收进它又让预筛生效——那样局面要重摆
         Coord[] expected = [.. ranked.Take(k).Select(s => s.Cell).Order()];

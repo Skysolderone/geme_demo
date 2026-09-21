@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
 
@@ -8,7 +9,7 @@ namespace Siege.Core.Match;
 /// <param name="Player">玩家。</param>
 /// <param name="Status">参赛状态。只有 <see cref="PlayerStatus.Active"/> 参与判定（dominance-victory 裁决 2）。</param>
 /// <param name="Power">当前势力值。</param>
-public sealed record DominanceEntry(PlayerId Player, PlayerStatus Status, long Power);
+public sealed record DominanceEntry(PlayerId Player, PlayerStatus Status, BigInteger Power);
 
 /// <summary>碾压候选的公开状态（dominance-victory 裁决 7）：候选玩家与待回应名单，始终公开。</summary>
 /// <param name="Candidate">碾压候选。</param>
@@ -31,7 +32,7 @@ public static class DominanceCheck
     {
         ArgumentNullException.ThrowIfNull(entries);
         DominanceEntry[] active = [.. entries.Where(e => e.Status == PlayerStatus.Active).OrderBy(e => e.Player)];
-        long total = active.Sum(e => e.Power);
+        BigInteger total = active.Aggregate(BigInteger.Zero, (sum, e) => sum + e.Power);
         return [.. active.Where(e => e.Power >= total - e.Power).Select(e => e.Player)];
     }
 }

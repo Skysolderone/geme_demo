@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -76,7 +77,7 @@ public sealed class BatchEvaluator
             throw new ArgumentException("只评价合法的预演结果。", nameof(result));
         }
 
-        long[] raw = new long[EvaluationBreakdown.DimensionCount];
+        var raw = new BigInteger[EvaluationBreakdown.DimensionCount];
         int placed = placements.IsDefault ? 0 : placements.Length;
         if (!_immediateOnly)
         {
@@ -91,14 +92,14 @@ public sealed class BatchEvaluator
         GameBoard after = result.ProjectedBoard;
         PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _siteValues);
 
-        raw[(int)EvaluationDimension.PowerGain] = checked(afterPower.Of(_me).Total - _before.Of(_me).Total);
+        raw[(int)EvaluationDimension.PowerGain] = afterPower.Of(_me).Total - _before.Of(_me).Total;
 
-        long enemyLoss = checked((long)result.Captures.Length * CapturePerStone);
+        BigInteger enemyLoss = (BigInteger)result.Captures.Length * CapturePerStone;
         foreach ((PlayerId player, PlayerStatus status) in _roster)
         {
             if (player != _me && status == PlayerStatus.Active)
             {
-                enemyLoss = checked(enemyLoss + (_before.Of(player).Total - afterPower.Of(player).Total));
+                enemyLoss += _before.Of(player).Total - afterPower.Of(player).Total;
             }
         }
 

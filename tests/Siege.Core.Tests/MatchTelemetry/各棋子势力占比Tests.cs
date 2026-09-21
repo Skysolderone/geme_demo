@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.Json;
 using Siege.Core.Ai;
 using Siege.Core.Board;
@@ -21,7 +22,7 @@ public class 各棋子势力占比Tests
         // 旧日志（无 PieceCounts 字段）解析为 null（未知），MUST NOT 回填成 0。
         // 变异验证 M-MR8：GroupEntry.PieceCounts 的 get 恒 null、init 丢弃传入值 → 红 3（本类 3 个测试全红）。
         var counts = new Dictionary<string, int> { ["Basic"] = 1, ["Fortress"] = 2, ["Line"] = 3, ["Multiplier"] = 4, ["Synergy"] = 5, ["Artisan"] = 6 };
-        GroupEntry group = new() { Stones = ["A1"], Base = 20, LineBonus = 6, SynergyBonus = 8, MultiplierCount = 4, EffectiveMultiplierCount = 3, Power = 81, PieceCounts = counts };
+        GroupEntry group = new() { Stones = ["A1"], Base = 20, LineBonus = 6, SynergyBonus = 8, MultiplierCount = 4, Power = 81, PieceCounts = counts };
         MatchLog log = SimFixtures.Synthetic(
             21,
             [SimFixtures.Turn(1, 1, 0, [81, 0, 0, 0], ["A1:Basic"], groupsOfPlayer: [group])],
@@ -93,14 +94,16 @@ public class 各棋子势力占比Tests
     public void 各棋子势力占比按口径手算()
     {
         // proposal 口径，逐局取终局快照（最后一条小回合快照）中参赛玩家的全部棋串：
-        //   P0 串 1：普通×3 + 堡垒×1 + 倍增×2，基础 9、生效 2、军势 20 → 放大部分 ⌊9 × 9/4⌋ − 9 = 11
+        // 口径（restore-go-core-rules 段 A）：倍率整体放大"基础 + 位置加值"，放大部分 = 军势 − 基础 − 全部位置加值，整块归倍增子；各类型自己的基础军势与位置加值按原值归各自。
+        //   P0 串 1：普通×3 + 堡垒×1 + 倍增×2，基础 9、军势 ⌊9 × 9/4⌋ = 20 → 放大部分 20 − 9 = 11
         //            普通 3、堡垒 4、倍增 2 + 11 = 13
-        //   P0 串 2：连珠×4 + 倍增×2，基础 6、连珠加值 12、军势 25 → 放大部分 ⌊6 × 9/4⌋ − 6 = 7
-        //            连珠 4 + 12 = 16、倍增 2 + 7 = 9
-        //   P1 串  ：倍增×5 + 协同×1 + 匠人×1，基础 7、协同加值 1 × 2 × 2 = 4、生效 3、军势 ⌊7 × 27/8⌋ + 4 = 23 + 4 = 27 → 放大部分 23 − 7 = 16
-        //            倍增 5 + 16 = 21、协同 1 + 4 = 5、匠人 1 + 0 = 1（匠人只贡献基础军势 1，无任何位置加值：piece-effects「匠人落子后无持续效果」）
+        //   P0 串 2：连珠×4 + 倍增×2，基础 6、连珠加值 12、军势 ⌊18 × 9/4⌋ = 40 → 放大部分 40 − 6 − 12 = 22
+        //            连珠 4 + 12 = 16、倍增 2 + 22 = 24
+        //   P1 串  ：倍增×5 + 协同×1 + 匠人×1，基础 7、协同加值 1 × 2 × 2 = 4、军势 ⌊11 × 243/32⌋ = ⌊83.53…⌋ = 83 → 放大部分 83 − 7 − 4 = 72
+        //            倍增 5 + 72 = 77、协同 1 + 4 = 5、匠人 1 + 0 = 1（匠人只贡献基础军势 1，无任何位置加值：piece-effects「匠人落子后无持续效果」）
         //   P2 已弃赛：堡垒×3（军势 12）→ 不计。第 1 小回合快照（非终局）里的棋串 → 不计。
-        //   合计：盘面 普通 3 / 堡垒 1 / 连珠 4 / 倍增 9 / 协同 1 / 匠人 1 = 19 枚；势力 3 / 4 / 16 / 43 / 5 / 1 = 72（= 20 + 25 + 27）。
+        //   合计：盘面 普通 3 / 堡垒 1 / 连珠 4 / 倍增 9 / 协同 1 / 匠人 1 = 19 枚；势力 3 / 4 / 16 / 114 / 5 / 1 = 143（= 20 + 40 + 83）。
+        // 段 A 重算：串 2 军势 25 → 40、P1 串 27 → 83；倍增归因 43 → 114（13 + 24 + 77）、合计 72 → 143；其余类型不变。
         // 被排除的样本（testing.md：统计口径测试必须放一个被排除的样本）：旧日志一局，终局快照里有一条棋串缺类型计数 → 整局跳过，
         // 它的 100 点军势与 5 枚棋子 MUST NOT 进任何分子分母。
         // 变异验证 M-MR7：PieceShares 在 skipped 分支里仍把该局棋串军势累加进分母 → 红 1（本测试）；M-MR9：终局快照改取 Turns[0] → 红 1（本测试）；M-MR2（封顶改回 4）→ 红 23，含本测试。
@@ -112,9 +115,9 @@ public class 各棋子势力占比Tests
                     2,
                     (0, "Active", [
                         Group(power: 20, @base: 9, basic: 3, fortress: 1, multiplier: 2),
-                        Group(power: 25, @base: 6, line: 4, multiplier: 2, lineBonus: 12),
+                        Group(power: 40, @base: 6, line: 4, multiplier: 2, lineBonus: 12),
                     ]),
-                    (1, "Active", [Group(power: 27, @base: 7, multiplier: 5, synergy: 1, artisan: 1, synergyBonus: 4)]),
+                    (1, "Active", [Group(power: 83, @base: 7, multiplier: 5, synergy: 1, artisan: 1, synergyBonus: 4)]),
                     (2, "Resigned", [Group(power: 12, @base: 12, fortress: 3)])),
             ],
             [],
@@ -135,22 +138,22 @@ public class 各棋子势力占比Tests
 
         Assert.Equal(2, report.Included);
         Assert.Equal((1, 1), (s.Matches, s.Skipped));
-        Assert.Equal((19L, 72L), (s.TotalStones, s.TotalPower));
+        Assert.Equal((19L, (BigInteger)143), (s.TotalStones, s.TotalPower));
         Assert.Equal(
-            ["Basic:3/3", "Fortress:1/4", "Line:4/16", "Multiplier:9/43", "Synergy:1/5", "Artisan:1/1"],
+            ["Basic:3/3", "Fortress:1/4", "Line:4/16", "Multiplier:9/114", "Synergy:1/5", "Artisan:1/1"],
             s.Pieces.Select(p => $"{p.Type}:{p.Stones}/{p.Power}"));
         PieceShare m = s.Pieces.Single(p => p.Type == "Multiplier");
         Assert.Equal(9.0 / 19, m.StoneShare, 9);
-        Assert.Equal(43.0 / 72, m.PowerShare, 9);
-        Assert.Equal(43.0 / 9, m.MeanPerStone, 9);
+        Assert.Equal(114.0 / 143, m.PowerShare, 9);
+        Assert.Equal(114.0 / 9, m.MeanPerStone, 9);
         Assert.Equal(1.0, s.Pieces.Sum(p => p.PowerShare), 9);
 
         string text = ReportWriter.Render(report);
         Assert.Contains("各棋子势力占比", text);
-        Assert.Contains("- 纳入 1 局，跳过无棋子类型计数的旧日志 / 无快照局 1 局；盘面棋子 19 枚，归因势力 72", text);
-        Assert.Contains("- 棋子 Multiplier：盘面 9 枚（47.4%），势力 43（59.7%），每颗平均 4.78", text);
-        Assert.Contains("- 棋子 Fortress：盘面 1 枚（5.3%），势力 4（5.6%），每颗平均 4", text);
-        Assert.Contains("- 棋子 Artisan：盘面 1 枚（5.3%），势力 1（1.4%），每颗平均 1", text);
+        Assert.Contains("- 纳入 1 局，跳过无棋子类型计数的旧日志 / 无快照局 1 局；盘面棋子 19 枚，归因势力 143", text);
+        Assert.Contains("- 棋子 Multiplier：盘面 9 枚（47.4%），势力 114（79.7%），每颗平均 12.67", text);
+        Assert.Contains("- 棋子 Fortress：盘面 1 枚（5.3%），势力 4（2.8%），每颗平均 4", text);
+        Assert.Contains("- 棋子 Artisan：盘面 1 枚（5.3%），势力 1（0.7%），每颗平均 1", text);
     }
 
     [Fact]
@@ -159,10 +162,11 @@ public class 各棋子势力占比Tests
         // check 补：真实跑局 Easy 样本里没有连珠成线，连珠计数的写入路径未被覆盖；这里用真实盘面走 MatchSession.PieceCountsOf → 日志往返 → 分析器。
         // artisan-terrain-edit 段 A 检查再补一枚匠人 H2：Easy 样本里匠人同样一枚都不落盘（见上一条测试的注释），
         // 匠人计数的写入路径与"协同子把匠人算作其他类型"的位置加值口径都由这条真实盘面测试钉住，且期望值非 0（testing.md：期望值是 0 的遥测断言抓不到写入端漏写）。
-        // 盘面：连珠 B2-C2-D2（线长 3，加值 3 × 2 = 6）+ 协同 E2（其他类型 {连珠, 倍增, 匠人} 3 种 → 6）+ 倍增 F2、G2（生效 2，倍率 9/4）+ 匠人 H2（基础 1、无任何加值）。
-        // 手算：基础 3 + 1 + 2 + 1 = 7，军势 ⌊7 × 9 / 4⌋ + 6 + 6 = 15 + 12 = 27；放大部分 15 − 7 = 8。
-        //   连珠 3 + 6 = 9、协同 1 + 6 = 7、倍增 2 + 8 = 10、匠人 1 + 0 = 1；合计 27 = 棋串军势（归因不多不少）。
-        // 变异验证 C-MR2（check）：占比口径里倍增子放大部分不减基础（amplified = Apply(Base)）→ 倍增 15 ≠ 9，本测试红；
+        // 盘面：连珠 B2-C2-D2（线长 3，加值 3 × 2 = 6）+ 协同 E2（其他类型 {连珠, 倍增, 匠人} 3 种 → 6）+ 倍增 F2、G2（倍率 9/4）+ 匠人 H2（基础 1、无任何加值）。
+        // 手算：基础 3 + 1 + 2 + 1 = 7，军势 ⌊(7 + 6 + 6) × 9 / 4⌋ = ⌊42.75⌋ = 42；放大部分 42 − 7 − 12 = 23。
+        //   连珠 3 + 6 = 9、协同 1 + 6 = 7、倍增 2 + 23 = 25、匠人 1 + 0 = 1；合计 42 = 棋串军势（归因不多不少）。
+        // 段 A 重算：军势 27 → 42、倍增归因 10 → 25、合计 27 → 42；连珠 9 / 协同 7 / 匠人 1 不变；占比 协同 25.9% → 7/42 = 16.7%、匠人 3.7% → 1/42 = 2.4%。
+        // 变异验证 M-AC13（段 A check 实跑）：占比口径里放大部分不减位置加值（amplified = Power − Base）→ 红 2：本测试（倍增 37 ≠ 25）+ 各棋子势力占比按口径手算；
         // C-MR3：连珠加值分给倍增子（Multiplier 分支加 LineBonus、Line 分支不加）→ 本测试红；
         // M-C4（artisan-terrain-edit 检查）：PieceCountsOf 把匠人并进普通子键 → 本测试红。
         GameBoard board = TestMaps.Blank(size: 9)
@@ -171,7 +175,7 @@ public class 各棋子势力占比Tests
             .Place("F2", TestMaps.P0, PieceType.Multiplier).Place("G2", TestMaps.P0, PieceType.Multiplier)
             .Place("H2", TestMaps.P0, PieceType.Artisan);
         GroupPower g = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
-        Assert.Equal((7, 6, 6, 2, 27L), (g.BaseTotal, g.LineBonus, g.SynergyBonus, g.MultiplierCount, g.Power));
+        Assert.Equal((7, 6, 6, 2, (BigInteger)42), (g.BaseTotal, g.LineBonus, g.SynergyBonus, g.MultiplierCount, g.Power));
 
         GroupEntry written = new()
         {
@@ -180,13 +184,12 @@ public class 各棋子势力占比Tests
             LineBonus = g.LineBonus,
             SynergyBonus = g.SynergyBonus,
             MultiplierCount = g.MultiplierCount,
-            EffectiveMultiplierCount = g.EffectiveMultiplierCount,
             Power = g.Power,
             PieceCounts = Siege.Sim.Running.MatchSession.PieceCountsOf(board, g),
         };
         MatchLog log = SimFixtures.Synthetic(
             41,
-            [SimFixtures.Turn(1, 1, 0, [27, 0, 0, 0], ["H2:Artisan"], groupsOfPlayer: [written])],
+            [SimFixtures.Turn(1, 1, 0, [42, 0, 0, 0], ["H2:Artisan"], groupsOfPlayer: [written])],
             [],
             SimFixtures.ResultOf(1, [0]));
 
@@ -200,13 +203,13 @@ public class 各棋子势力占比Tests
         BalanceReport report = BalanceAnalyzer.Analyze([restored]);
         PieceShareSection s = report.PieceShares;
         Assert.Equal((1, 0), (s.Matches, s.Skipped));
-        Assert.Equal((7L, 27L), (s.TotalStones, s.TotalPower));
+        Assert.Equal((7L, (BigInteger)42), (s.TotalStones, s.TotalPower));
         Assert.Equal(
-            ["Basic:0/0", "Fortress:0/0", "Line:3/9", "Multiplier:2/10", "Synergy:1/7", "Artisan:1/1"],
+            ["Basic:0/0", "Fortress:0/0", "Line:3/9", "Multiplier:2/25", "Synergy:1/7", "Artisan:1/1"],
             s.Pieces.Select(p => $"{p.Type}:{p.Stones}/{p.Power}"));
         string rendered = ReportWriter.Render(report);
-        Assert.Contains("- 棋子 Synergy：盘面 1 枚（14.3%），势力 7（25.9%），每颗平均 7", rendered);
-        Assert.Contains("- 棋子 Artisan：盘面 1 枚（14.3%），势力 1（3.7%），每颗平均 1", rendered);
+        Assert.Contains("- 棋子 Synergy：盘面 1 枚（14.3%），势力 7（16.7%），每颗平均 7", rendered);
+        Assert.Contains("- 棋子 Artisan：盘面 1 枚（14.3%），势力 1（2.4%），每颗平均 1", rendered);
     }
 
     private static TurnSnapshot TurnWith(int turn, params (int Player, string Status, GroupEntry[] Groups)[] players) =>

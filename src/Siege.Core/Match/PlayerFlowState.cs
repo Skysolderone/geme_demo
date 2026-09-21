@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
@@ -23,7 +24,7 @@ public sealed record PlayerFlowState(
     int? EliminationOrder,
     int? EliminatedInMajorRound,
     int? ResignedInMajorRound,
-    long? PowerAtResign)
+    BigInteger? PowerAtResign)
 {
     /// <summary>是否参赛中。</summary>
     public bool IsActive => Status == PlayerStatus.Active;

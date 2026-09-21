@@ -13,48 +13,8 @@ public class 据点档位与分值Tests
 {
     private static readonly PlayerId P0 = MatchFixtures.P0;
 
-    [Fact]
-    public void 分值取自对局配置()
-    {
-        // 规格 Scenario：以据点分值 10 / 30 / 90 开局，A 控制 1 个篝火 → A 从据点获得 30 分。
-        // 端到端走 MatchFlow：对局配置 → 结算第 5 步势力榜 → 公开视图；另钉预演（BatchPreview，AI 与界面用它）与实际结算一致，防止预演路径拿默认分值。
-        // 变异验证 M-S4（段 A2）：MatchFlow.OnRecalculatePower 改传 SiteValues.Standard → 红，含本测试（15 ≠ 30）；
-        //           M-S4b：BatchPreviewBuilder 的 after 改用 SiteValues.Standard → 红，含本测试（预演 16 ≠ 实际 31）。
-        MatchOptions options = MatchFixtures.DominanceOff with { SiteValues = new SiteValues(10, 30, 90) };
-        MatchFlow match = SiteFixtures.Started(options, ("E5", SiteTier.Campfire)).AtRound(5, MatchFixtures.All);
-        Assert.Equal(new SiteValues(10, 30, 90), match.Publish().SiteValues);
-
-        match.BeginTurn();
-        match.EnterRecruit();
-        StagedBatch batch = match.EnterDeploy();
-        Assert.Null(batch.Stage(Coord.Parse("E4"), PieceType.Basic));
-        Core.Preview.BatchPreview preview = match.PreviewCurrentBatch();
-        long predicted = preview.PowerChanges.Single(c => c.Player == P0).After;
-        Assert.True(match.Confirm().Confirmed);
-
-        PlayerPower p0 = match.Scoreboard.Latest!.Of(P0);
-        Assert.Equal(new SiteHolding(Coord.Parse("E5"), SiteTier.Campfire, 30, SiteControlKind.UniqueCoverage), Assert.Single(p0.Sites));
-        Assert.Equal(30, p0.SiteScore);
-        Assert.Equal(31, p0.Total);
-        Assert.Equal(p0.Total, predicted);
-    }
-
-    [Fact]
-    public void AI评价使用对局据点分值()
-    {
-        // 「分值取自对局配置」的 AI 路径：AI 的势力增量维度 MUST 用对局配置的据点分值（经公开视图 SiteValues），不得用标准局值。
-        // 10 / 30 / 90 下 P0 在 E4 落 1 枚普通子即唯一覆盖篝火 E5 → 势力增量 = 军势 1 + 篝火 30 = 31（标准局值会是 16）。
-        // 变异验证 N-2（段 A2 检查）：BatchEvaluator 构造里 `_siteValues = view.SiteValues` 改为 `SiteValues.Standard` → 补本测试前全绿 797（缺口），补后红 1（本测试）。
-        MatchOptions options = MatchFixtures.DominanceOff with { SiteValues = new SiteValues(10, 30, 90) };
-        MatchFlow match = SiteFixtures.Started(options, ("E5", SiteTier.Campfire)).AtRound(5, MatchFixtures.All);
-
-        HeuristicTurnController ai = HeuristicAi.Create(match, P0);
-        StagedBatch batch = match.OpenDeploy();
-        RehearsalResult result = match.RehearseBatch(batch, ("E4", PieceType.Basic));
-        EvaluationBreakdown e = ai.CreateEvaluator().Evaluate(batch.Placements, result, batch.Context);
-
-        Assert.Equal(1 + 30, e.RawOf(EvaluationDimension.PowerGain));
-    }
+    // 段 A（restore-go-core-rules）删除「分值取自对局配置」「AI评价使用对局据点分值」：两条都断言"据点分进入总势力 / AI 势力增量"，
+    // 据点分自本段起不计入总势力（过渡，见 总势力Tests.据点分不计入总势力）；据点类型与分值配置到段 B 整体删除。
 
     [Theory]
     [InlineData(5, 0, 45, "篝火")]

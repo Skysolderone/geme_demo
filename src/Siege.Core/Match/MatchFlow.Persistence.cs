@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Siege.Core.Batch;
@@ -24,7 +25,7 @@ public sealed partial class MatchFlow
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(), new BigIntegerJsonConverter() },
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
@@ -371,7 +372,7 @@ public sealed class PlayerSaveData
 
     public int? ResignedInMajorRound { get; set; }
 
-    public long? PowerAtResign { get; set; }
+    public BigInteger? PowerAtResign { get; set; }
 }
 
 public sealed class HandSegmentSaveData
@@ -417,7 +418,7 @@ public sealed class ResignationSaveData
 
     public List<string> ControlledRelics { get; set; } = [];
 
-    public long Power { get; set; }
+    public BigInteger Power { get; set; }
 }
 
 public sealed class StandingSaveData
@@ -430,7 +431,7 @@ public sealed class StandingSaveData
 
     public PlayerStatus Status { get; set; }
 
-    public long Power { get; set; }
+    public BigInteger Power { get; set; }
 
     public int ControlledRelics { get; set; }
 

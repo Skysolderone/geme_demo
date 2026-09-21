@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
@@ -153,7 +154,7 @@ internal static class PlayCommand
         string who = BoardRenderer.Label(actor, me);
         string action = placed.Count == 0 ? "Pass" : $"落子 {string.Join(" ", placed)}";
         string captures = lost.Count == 0 ? "" : "，提走 " + string.Join("、", lost.Select(kv => $"{BoardRenderer.Label(kv.Key, me)} {kv.Value} 子"));
-        long power = after.Power?.Players.FirstOrDefault(p => p.Player == actor)?.Total ?? 0;
+        BigInteger power = after.Power?.Players.FirstOrDefault(p => p.Player == actor)?.Total ?? 0;
         render.Line($"{who} {action}{captures}（势力 {power}）", lost.ContainsKey(me) ? ConsoleColor.Red : ConsoleColor.Gray);
 
         foreach (PlayerFlowState s in after.Players)

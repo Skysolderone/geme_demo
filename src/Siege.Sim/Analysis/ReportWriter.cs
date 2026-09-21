@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text;
 using Siege.Core.Scoring;
 
@@ -47,7 +48,7 @@ public static class ReportWriter
         sb.AppendLine($"- 第 4–6 大回合：{Histogram(t.DeployLimitRounds4To6)}；中位数 {t.DeployPhase2}");
         sb.AppendLine($"- 第 7 大回合以后：{Histogram(t.DeployLimitRounds7Plus)}；中位数 {t.DeployPhase3}（允许极端构筑超过 8）");
         sb.AppendLine("### 2. 势力成长曲线");
-        foreach ((int round, double mean, long maxGroup, int samples) in t.PowerCurve)
+        foreach ((int round, double mean, BigInteger maxGroup, int samples) in t.PowerCurve)
         {
             sb.AppendLine($"- 第 {round} 大回合结束：参赛玩家平均势力 {Num(mean)}，最高单串军势 {maxGroup}（样本 {samples}）");
         }
@@ -103,7 +104,7 @@ public static class ReportWriter
 
         sb.AppendLine("### 4. 高倍率棋串的形成轮次、峰值及被摧毁概率");
         MultiplierSection m = r.Multiplier;
-        sb.AppendLine($"- 出现过倍增串的局 {m.MatchesWithPeak}；峰值倍增子数分布（原始数量）{Histogram(m.PeakCountDistribution)}；峰值生效倍率指数分布（封顶 {Multiplier.MaxExponent}，倍率上限 {new Multiplier(Multiplier.MaxExponent)}）{Histogram(m.PeakEffectiveExponentDistribution)}");
+        sb.AppendLine($"- 出现过倍增串的局 {m.MatchesWithPeak}；峰值倍增子数分布（即倍率指数，不封顶）{Histogram(m.PeakCountDistribution)}");
         sb.AppendLine($"- 峰值首次出现平均在第 {Num(m.MeanFormationRound)} 大回合，峰值军势平均 {Num(m.MeanPeakPower)}，最高 {m.MaxPeakPower}");
         sb.AppendLine($"- 峰值串之后被摧毁的概率 {m.DestroyedRate}");
         sb.AppendLine("### 4b. 各棋子势力占比（multiplier-rebalance：终局快照、参赛玩家的全部棋串；倍增子计其放大出的部分，其余计基础军势与分得的位置加值；不含据点分与高地加值）");

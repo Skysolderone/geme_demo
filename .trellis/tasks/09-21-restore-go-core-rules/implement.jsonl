@@ -1,0 +1,10 @@
+{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "D1–D8、接口契约、风险、裁决记录与追认；实现前必读"}
+{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "分段任务清单与验证方式；只做派发时指定的组"}
+{"file": "openspec/changes/restore-go-core-rules/proposal.md", "reason": "裁决表与影响面"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核开发规范入口与 Quality Check"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、视图分离、全量重算、单一实现"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "整数运算、随机子流、可复现"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Requirement→测试类、Scenario→测试方法、变异验证记录"}
+{"file": "openspec/changes/restore-go-core-rules/specs/power-score/spec.md", "reason": "段 A：军势公式、总势力、势力明细、排名"}
+{"file": "openspec/changes/restore-go-core-rules/specs/piece-effects/spec.md", "reason": "段 A：倍增子倍率、高地加值被倍率放大"}
+{"file": "openspec/changes/restore-go-core-rules/specs/coverage-territory/spec.md", "reason": "段 A：空格归属恢复计分、空林地恒中立"}

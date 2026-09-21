@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Preview;
@@ -130,11 +131,16 @@ public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups
 
 // ---------- 势力层 ----------
 
-/// <summary>势力层的一条棋串分数与倍率热区等级（= 生效倍率指数，0 表示无倍率）。</summary>
-public sealed record GroupScoreView(PlayerId Owner, ImmutableArray<Coord> Stones, GroupPowerView Power, int HeatLevel);
+/// <summary>势力层的一条棋串分数与倍率热区等级（= min(倍增子数量, <see cref="MaxHeatLevel"/>)，0 表示无倍率）。
+/// 热区等级只是显示档位（柱高 / 着色），到 <see cref="MaxHeatLevel"/> 为止不再加高；它不是倍率封顶，军势与倍率文字始终取精确值。</summary>
+public sealed record GroupScoreView(PlayerId Owner, ImmutableArray<Coord> Stones, GroupPowerView Power, int HeatLevel)
+{
+    /// <summary>热区显示档位上限。</summary>
+    public const int MaxHeatLevel = 3;
+}
 
 /// <summary>势力层的玩家汇总。<see cref="SiteScore"/> 是据点分（总势力 = 据点分 + 军势）。</summary>
-public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, long Total, long SiteScore, int? Rank, string? StatusText);
+public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, BigInteger Total, long SiteScore, int? Rank, string? StatusText);
 
 /// <summary>
 /// 势力层（tactical-layers「五种战术信息层」，scoring-sites D-F）：据点项（档位、分值、控制状态、控制者或覆盖方）、
@@ -170,7 +176,7 @@ public sealed record RelicLayerContent(ImmutableArray<RelicCellView> Relics) : L
 // ---------- 顺序层 ----------
 
 /// <summary>顺序层的一行：势力名次、势力、先手修正、先手值、预测位置（1 起）与公式解释。</summary>
-public sealed record OrderRowView(PlayerId Player, int Rank, long Power, int Bonus, int Value, int PredictedPosition, string Explanation);
+public sealed record OrderRowView(PlayerId Player, int Rank, BigInteger Power, int Bonus, int Value, int PredictedPosition, string Explanation);
 
 /// <summary>顺序层（tactical-ui D7）：本轮顺序 + 若此刻结束本大回合的先手值明细与下一轮顺序预测。</summary>
 public sealed record OrderLayerContent(
@@ -325,7 +331,7 @@ public static class TacticalLayers
 
         return new PowerLayerContent(
             SiteViews.From(world),
-            [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), g.EffectiveMultiplierCount))],
+            [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), Math.Min(g.MultiplierCount, GroupScoreView.MaxHeatLevel)))],
             [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.SiteScore, power.RankOf(p.Player), Labels.Status(p.Status)))]);
     }
 

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
@@ -25,7 +26,7 @@ internal static class ScoringFixtures
     internal static GroupPower GroupContaining(this PowerSnapshot snapshot, PlayerId player, string notation) =>
         snapshot.Of(player).Groups.Single(g => g.Stones.Contains(TestMaps.At(notation)));
 
-    internal static long GroupPowerSum(this PlayerPower player) => player.Groups.Sum(g => g.Power);
+    internal static BigInteger GroupPowerSum(this PlayerPower player) => player.Groups.Aggregate(BigInteger.Zero, (sum, g) => sum + g.Power);
 }
 
 /// <summary>

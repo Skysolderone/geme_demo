@@ -107,4 +107,22 @@ public class 高地压制加值Tests
         Assert.Equal(3, group.PositionBonus);
         Assert.Equal(4 + 3, group.Power);
     }
+
+    [Fact]
+    public void 高地加值随倍率放大()
+    {
+        // restore-go-core-rules piece-effects 规格：含普通子×2、倍增子×1 的棋串中有 2 枚棋子各提供 1 点高地加值 → 军势 ⌊(3 + 2) × 1.5⌋ = ⌊7.5⌋ = 7
+        //（加值不进倍率会得 ⌊3 × 1.5⌋ + 2 = 6）。第 7 行 B7–D7 为 h=2：B7、C7 下方各有一枚 h=0 敌子，倍增子 D7 下方无敌子。
+        // 变异验证 M-A1（段 A：加值挪到乘法之外）→ 红，含本测试（6）。
+        TerrainData terrain = TestMaps.Terrain(heights: [("B7", 2), ("C7", 2), ("D7", 2)]);
+        GameBoard board = TestMaps.Blank(terrain)
+            .Place("B7", TestMaps.P0).Place("C7", TestMaps.P0).Place("D7", TestMaps.P0, PieceType.Multiplier)
+            .Place("B6", TestMaps.P1).Place("C6", TestMaps.P1);
+
+        GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "B7");
+
+        Assert.Equal((3, 2, 1), (group.BaseTotal, group.HighGroundBonus, group.MultiplierCount));
+        Assert.Equal(7, group.Power);
+        Assert.NotEqual(6, group.Power);
+    }
 }

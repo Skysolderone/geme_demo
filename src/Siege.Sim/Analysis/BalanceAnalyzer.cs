@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Relics;
@@ -64,7 +65,7 @@ public sealed record TargetsSection(
     Deviation DeployPhase1,
     Deviation DeployPhase2,
     Deviation DeployPhase3,
-    List<(int Round, double MeanPower, long MaxGroupPower, int Samples)> PowerCurve,
+    List<(int Round, double MeanPower, BigInteger MaxGroupPower, int Samples)> PowerCurve,
     Deviation PowerOpening,
     Deviation PowerMid,
     SortedDictionary<int, int> FirstConflictRounds,
@@ -112,18 +113,17 @@ public sealed record RelicStat(string Type, int Count, int Revealed, int Control
 
 public sealed record SelectionSection(List<PieceStat> Pieces, List<RelicStat> Relics);
 
-/// <summary>§17.4 高倍率棋串。<see cref="PeakCountDistribution"/> 按原始倍增子数量（堆了多少），<see cref="PeakEffectiveExponentDistribution"/> 按生效倍率指数（封顶后生效了多少）。</summary>
+/// <summary>§17.4 高倍率棋串。<see cref="PeakCountDistribution"/> 按峰值串的倍增子数量（即倍率指数，不封顶）。均值类统计量是报告口径的近似值；<see cref="MaxPeakPower"/> 是精确整数。</summary>
 public sealed record MultiplierSection(
     int MatchesWithPeak,
     SortedDictionary<int, int> PeakCountDistribution,
-    SortedDictionary<int, int> PeakEffectiveExponentDistribution,
     double MeanFormationRound,
     double MeanPeakPower,
-    long MaxPeakPower,
+    BigInteger MaxPeakPower,
     Proportion DestroyedRate);
 
 /// <summary>一种棋子的势力归因：盘面枚数、盘面占比、归因势力、势力占比、每颗平均贡献。</summary>
-public sealed record PieceShare(string Type, long Stones, double StoneShare, long Power, double PowerShare, double MeanPerStone);
+public sealed record PieceShare(string Type, long Stones, double StoneShare, BigInteger Power, double PowerShare, double MeanPerStone);
 
 /// <summary>
 /// 各棋子势力占比（multiplier-rebalance 裁决 3，proposal 表格口径）：逐局取终局快照（最后一条小回合快照）中参赛玩家（<c>Active</c>）的全部棋串；
@@ -131,7 +131,7 @@ public sealed record PieceShare(string Type, long Stones, double StoneShare, lon
 /// <c>⌊基础 × 倍率⌋ − 基础</c>（整数，经唯一的 <see cref="Siege.Core.Scoring.Multiplier.Apply"/> 按日志里的生效指数算）。势力占比的分母是纳入局归因势力之和（棋串军势，不含据点分；scoring-sites 的高地加值不属于任何棋子类型，同样不计入）。
 /// 终局快照里有任何参赛玩家棋串缺 <see cref="GroupEntry.PieceCounts"/>（旧日志）或整局无快照的局计入 <see cref="Skipped"/>，不参与任何分子分母。
 /// </summary>
-public sealed record PieceShareSection(int Matches, int Skipped, long TotalStones, long TotalPower, List<PieceShare> Pieces);
+public sealed record PieceShareSection(int Matches, int Skipped, long TotalStones, BigInteger TotalPower, List<PieceShare> Pieces);
 
 /// <param name="Picks">该区被选次数（= 胜率的分母）。出生区多于玩家的图上单列：没人选的平台是 0 次，不是缺行。</param>
 public sealed record ZoneStat(int Zone, Proportion WinRate, bool Significant, int Picks);
@@ -556,10 +556,10 @@ public static class BalanceAnalyzer
             }
 
             List<PlayerEntry> active = [.. log.Turns[^1].PlayersState.Where(p => p.Status == nameof(PlayerStatus.Active))];
-            long total = active.Sum(p => p.Total);
+            BigInteger total = active.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total);
             if (total > 0 && active.All(p => p.SiteScore is not null))
             {
-                finalShares.Add((double)active.Sum(p => p.SiteScore!.Value) / total);
+                finalShares.Add(active.Sum(p => p.SiteScore!.Value) / (double)total);
             }
 
             List<GroupEntry> groups = [.. active.SelectMany(p => p.Groups)];
@@ -688,7 +688,7 @@ public static class BalanceAnalyzer
                 continue;
             }
 
-            ratios.Add((double)ordered[0].Power / ordered[1].Power);
+            ratios.Add((double)ordered[0].Power / (double)ordered[1].Power);
         }
 
         return new DominanceSection(
@@ -709,7 +709,7 @@ public static class BalanceAnalyzer
         var phase2 = new SortedDictionary<int, int>();
         var phase3 = new SortedDictionary<int, int>();
         var powerByRound = new SortedDictionary<int, List<double>>();
-        var maxGroupByRound = new SortedDictionary<int, long>();
+        var maxGroupByRound = new SortedDictionary<int, BigInteger>();
         var firstConflict = new SortedDictionary<int, int>();
         int noConflict = 0;
         var occupancyHistogram = new SortedDictionary<int, int>();
@@ -756,9 +756,9 @@ public static class BalanceAnalyzer
 
                 foreach (PlayerEntry p in snapshot.PlayersState.Where(p => p.Status == "Active"))
                 {
-                    list.Add(p.Total);
-                    long maxGroup = p.Groups.Count == 0 ? 0 : p.Groups.Max(g => g.Power);
-                    maxGroupByRound[round] = Math.Max(maxGroupByRound.TryGetValue(round, out long m) ? m : 0, maxGroup);
+                    list.Add((double)p.Total);
+                    BigInteger maxGroup = p.Groups.Count == 0 ? BigInteger.Zero : p.Groups.Max(g => g.Power);
+                    maxGroupByRound[round] = BigInteger.Max(maxGroupByRound.TryGetValue(round, out BigInteger m) ? m : BigInteger.Zero, maxGroup);
                 }
             }
 
@@ -803,8 +803,8 @@ public static class BalanceAnalyzer
             }
         }
 
-        List<(int, double, long, int)> curve = [.. powerByRound.Select(kv =>
-            (kv.Key, Statistics.Mean(kv.Value), maxGroupByRound.TryGetValue(kv.Key, out long m) ? m : 0, kv.Value.Count))];
+        List<(int, double, BigInteger, int)> curve = [.. powerByRound.Select(kv =>
+            (kv.Key, Statistics.Mean(kv.Value), maxGroupByRound.TryGetValue(kv.Key, out BigInteger m) ? m : BigInteger.Zero, kv.Value.Count))];
         double opening = Statistics.Mean(powerByRound.Where(kv => kv.Key <= 2).SelectMany(kv => kv.Value));
         double mid = Statistics.Mean(powerByRound.Where(kv => kv.Key is >= 4 and <= 6).SelectMany(kv => kv.Value));
         double conflictMean = Statistics.Mean(firstConflict.SelectMany(kv => Enumerable.Repeat((double)kv.Key, kv.Value)));
@@ -847,7 +847,7 @@ public static class BalanceAnalyzer
             return [];
         }
 
-        return [.. log.Header.Players.Where(p => e.Values.TryGetValue($"P{p}.Rank", out long rank) && rank == 1)];
+        return [.. log.Header.Players.Where(p => e.Values.TryGetValue($"P{p}.Rank", out BigInteger rank) && rank == 1)];
     }
 
     private static LeaderSection Leader(List<MatchLog> logs, AnalysisOptions options)
@@ -921,12 +921,12 @@ public static class BalanceAnalyzer
             List<LogEvent> ends = [.. log.Events.Where(e => e.Type == LogEventType.MajorRoundEnded && e.Values is not null).OrderBy(e => e.MajorRound)];
             for (int i = 0; i + 1 < ends.Count; i++)
             {
-                Dictionary<string, long> now = ends[i].Values!;
-                Dictionary<string, long> next = ends[i + 1].Values!;
+                Dictionary<string, BigInteger> now = ends[i].Values!;
+                Dictionary<string, BigInteger> next = ends[i + 1].Values!;
                 foreach (int p in log.Header.Players)
                 {
-                    if (!now.TryGetValue($"P{p}.Next", out long position) || !now.TryGetValue($"P{p}.Rank", out long rank)
-                        || !next.TryGetValue($"P{p}.Rank", out long nextRank))
+                    if (!now.TryGetValue($"P{p}.Next", out BigInteger position) || !now.TryGetValue($"P{p}.Rank", out BigInteger rank)
+                        || !next.TryGetValue($"P{p}.Rank", out BigInteger nextRank))
                     {
                         continue;
                     }
@@ -949,7 +949,7 @@ public static class BalanceAnalyzer
                     if (position == 0)
                     {
                         firstSamples++;
-                        if (next.TryGetValue($"P{p}.Next", out long nextPosition) && nextPosition == 0)
+                        if (next.TryGetValue($"P{p}.Next", out BigInteger nextPosition) && nextPosition == 0)
                         {
                             firstStays++;
                         }
@@ -962,7 +962,7 @@ public static class BalanceAnalyzer
             {
                 foreach (int p in log.Header.Players)
                 {
-                    if (third.Values!.TryGetValue($"P{p}.Next", out long position))
+                    if (third.Values!.TryGetValue($"P{p}.Next", out BigInteger position))
                     {
                         StandingEntry? standing = log.Result!.Standings.FirstOrDefault(s => s.Player == p);
                         if (standing is not null)
@@ -1111,20 +1111,18 @@ public static class BalanceAnalyzer
     private static MultiplierSection Multiplier(List<MatchLog> logs)
     {
         var distribution = new SortedDictionary<int, int>();
-        var effective = new SortedDictionary<int, int>();
         var rounds = new List<double>();
         var powers = new List<double>();
-        long max = 0;
+        BigInteger max = BigInteger.Zero;
         int destroyed = 0;
         int peaks = 0;
         foreach (PeakEntry peak in logs.Select(l => l.Result!).Where(r => r.Peak is not null).Select(r => r.Peak!))
         {
             peaks++;
             distribution[peak.MultiplierCount] = distribution.TryGetValue(peak.MultiplierCount, out int n) ? n + 1 : 1;
-            effective[peak.EffectiveMultiplierCount] = effective.TryGetValue(peak.EffectiveMultiplierCount, out int e) ? e + 1 : 1;
             rounds.Add(peak.MajorRound);
-            powers.Add(peak.Power);
-            max = Math.Max(max, peak.Power);
+            powers.Add((double)peak.Power);
+            max = BigInteger.Max(max, peak.Power);
         }
 
         foreach (LogResult r in logs.Select(l => l.Result!).Where(r => r.PeakDestroyed == true))
@@ -1132,7 +1130,7 @@ public static class BalanceAnalyzer
             destroyed++;
         }
 
-        return new MultiplierSection(peaks, distribution, effective, Statistics.Mean(rounds), Statistics.Mean(powers), max, Statistics.Wilson(destroyed, peaks));
+        return new MultiplierSection(peaks, distribution, Statistics.Mean(rounds), Statistics.Mean(powers), max, Statistics.Wilson(destroyed, peaks));
     }
 
     // ---------- 各棋子势力占比（multiplier-rebalance 裁决 3） ----------
@@ -1141,7 +1139,7 @@ public static class BalanceAnalyzer
     {
         PieceType[] types = Enum.GetValues<PieceType>();
         var stones = types.ToDictionary(t => t, _ => 0L);
-        var power = types.ToDictionary(t => t, _ => 0L);
+        var power = types.ToDictionary(t => t, _ => BigInteger.Zero);
         int matches = 0;
         int skipped = 0;
         foreach (MatchLog log in logs)
@@ -1164,7 +1162,8 @@ public static class BalanceAnalyzer
             matches++;
             foreach (GroupEntry g in groups)
             {
-                long amplified = new Siege.Core.Scoring.Multiplier(g.EffectiveMultiplierCount).Apply(g.Base) - g.Base;
+                // restore-go-core-rules：倍率整体放大"基础 + 位置加值"，放大部分 = 日志里的精确军势 − 基础 − 全部位置加值，整块归倍增子。
+                BigInteger amplified = g.Power - g.Base - g.LineBonus - g.SynergyBonus - (g.HighGroundBonus ?? 0);
                 foreach (PieceType type in types)
                 {
                     int count = g.PieceCounts!.TryGetValue(type.ToString(), out int n) ? n : 0;
@@ -1174,25 +1173,25 @@ public static class BalanceAnalyzer
                     }
 
                     stones[type] += count;
-                    power[type] += (long)PieceEffects.BasePower(type) * count + type switch
+                    power[type] += ((long)PieceEffects.BasePower(type) * count) + type switch
                     {
                         PieceType.Line => g.LineBonus,
                         PieceType.Synergy => g.SynergyBonus,
                         PieceType.Multiplier => amplified,
-                        _ => 0,
+                        _ => BigInteger.Zero,
                     };
                 }
             }
         }
 
         long totalStones = stones.Values.Sum();
-        long totalPower = power.Values.Sum();
+        BigInteger totalPower = power.Values.Aggregate(BigInteger.Zero, (sum, v) => sum + v);
         List<PieceShare> pieces = [.. types.Select(t => new PieceShare(
             t.ToString(),
             stones[t],
             totalStones == 0 ? double.NaN : (double)stones[t] / totalStones,
             power[t],
-            totalPower == 0 ? double.NaN : (double)power[t] / totalPower,
+            totalPower.IsZero ? double.NaN : (double)power[t] / (double)totalPower,
             stones[t] == 0 ? double.NaN : (double)power[t] / stones[t]))];
         return new PieceShareSection(matches, skipped, totalStones, totalPower, pieces);
     }
@@ -1402,8 +1401,8 @@ public static class BalanceAnalyzer
                     continue;
                 }
 
-                long before = log.Turns[i - 1].PlayersState.First(p => p.Player == turn.Player).Total;
-                long after = turn.PlayersState.First(p => p.Player == turn.Player).Total;
+                BigInteger before = log.Turns[i - 1].PlayersState.First(p => p.Player == turn.Player).Total;
+                BigInteger after = turn.PlayersState.First(p => p.Player == turn.Player).Total;
                 if (before == after)
                 {
                     signal++;

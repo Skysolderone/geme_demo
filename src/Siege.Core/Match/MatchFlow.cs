@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
@@ -513,7 +514,7 @@ public sealed partial class MatchFlow
             ? _snapshot
             : Relics.SnapshotFor(player, Board, Roster, Hands.HeldTypeCount(player), MajorRound, CatchUpFor(player));
         ImmutableArray<Coord> controlled = [.. Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(player)).Select(s => s.Coord)];
-        long power = Scoreboard.Latest?.Of(player).Total ?? 0;
+        BigInteger power = Scoreboard.Latest?.Of(player).Total ?? BigInteger.Zero;
         _resignations.Add(new ResignationSnapshot(player, MajorRound, Board.Serialize(), hand, effects, controlled, power));
 
         if (inOwnTurn)
@@ -946,7 +947,7 @@ public sealed partial class MatchFlow
 
         internal int? ResignedInMajorRound { get; set; }
 
-        internal long? PowerAtResign { get; set; }
+        internal BigInteger? PowerAtResign { get; set; }
     }
 
     /// <summary>复合结算钩子：把 §6.3 各步转发到对应的层。本类不自行计算任何一步。</summary>

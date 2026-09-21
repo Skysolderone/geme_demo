@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Relics;
@@ -46,7 +47,7 @@ public class 主动弃赛Tests
         Assert.Equal(PlayerStatus.Resigned, match.StateOf(MatchFixtures.P3).Status);
         PlayerPower power = match.Scoreboard.Latest!.Of(MatchFixtures.P3);
         Assert.Equal(PlayerStatus.Resigned, power.Status);
-        Assert.Equal(1, power.Total);   // 1 子（scoring-sites 2.7 改写：旧 5 = 1 子 + 4 独占格）
+        Assert.Equal(5, power.Total);   // 段 A 重算：原 1 → 5 = 军势 1 + H8 四邻独占 4（9×9 图，H8 不贴边）
         Assert.Contains(TestMaps.At("H8"), match.Board.GroupsOf(MatchFixtures.P3).Single().Stones);
 
         match.PlayTurn("B2");
@@ -70,7 +71,7 @@ public class 主动弃赛Tests
         Assert.Equal(OwnershipKind.Contested, match.Scoreboard.Latest!.Coverage.OwnershipOf(TestMaps.At("E6")).Kind);
         Assert.DoesNotContain(TestMaps.At("E6"), match.Scoreboard.Latest.Of(MatchFixtures.P0).ExclusiveCells);
         Assert.Equal(3, match.Scoreboard.Latest.Of(MatchFixtures.P0).ExclusiveCells.Length);   // E7 的 4 邻格中 E6 争议
-        Assert.Equal(1, match.Scoreboard.Latest.Of(MatchFixtures.P0).Total);   // scoring-sites 2.7 改写：旧 3 + 1（独占 3 + 军势 1）→ 1
+        Assert.Equal(4, match.Scoreboard.Latest.Of(MatchFixtures.P0).Total);   // 段 A 重算：原 1 → 4 = 军势 1 + 独占 3（E6 争议不计）
     }
 
     [Fact]
@@ -94,7 +95,7 @@ public class 主动弃赛Tests
         MatchFlow match = MatchFixtures.Started(relics: [("H8", RelicFixtures.Command())])
             .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
             .Stones(MatchFixtures.P3, "H8", "J9");
-        long powerBefore = match.Scoreboard.Latest!.Of(MatchFixtures.P3).Total;
+        BigInteger powerBefore = match.Scoreboard.Latest!.Of(MatchFixtures.P3).Total;
 
         // P3 在自己的征募阶段中途弃赛：本轮新增尚未提交，快照应保留两段账原样
         match.BeginTurn();

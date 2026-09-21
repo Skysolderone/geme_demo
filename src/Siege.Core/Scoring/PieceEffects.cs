@@ -4,22 +4,17 @@ using Siege.Core.Board;
 namespace Siege.Core.Scoring;
 
 /// <summary>
-/// 倍增子倍率 <c>1.5^e</c> 的精确表示：分子 <c>3^e</c>、分母 <c>2^e</c>，<c>e = min(倍增子数量, <see cref="MaxExponent"/>)</c>。
+/// 倍增子倍率 <c>1.5^n</c> 的精确表示：分子 <c>3^n</c>、分母 <c>2^n</c>，<c>n = 倍增子数量</c>，不设任何封顶（restore-go-core-rules D1）。
 /// 计分路径上 MUST NOT 出现二进制浮点——取整对边界值极其敏感，整数运算才能保证跨平台、跨架构结果一致。
 /// </summary>
 /// <remarks>
-/// <para>倍率指数封顶为 <see cref="MaxExponent"/>（cap-multiplier D1/D2/D4，推翻 territory-power 裁决 3）：封顶只在这一处做，
-/// 调用方继续传原始倍增子数量，<see cref="Count"/> 保留原始数量、<see cref="Exponent"/> 才是生效指数。</para>
-/// <para>计算用 <see cref="Int128"/> 的 checked 整数运算：零分配（批量跑局每次结算都要对全盘每条棋串调用 <see cref="Apply"/>）。
-/// 封顶后 <c>3^3 = 27</c>，中间值 <c>value × 27</c> 不可能溢出 <see cref="Int128"/>；checked 作防御保留——
-/// 结果装不进 <see cref="long"/> 时仍抛 <see cref="OverflowException"/>，响亮失败而非静默回绕。</para>
-/// <para>只有 <see cref="ToString"/> 走 <see cref="BigInteger"/>：它是显示路径，不参与任何计算。</para>
+/// <para><c>n</c> 的上界是地图可落子格数（边疆档可达数百），<c>3^n</c> 远超 64 位乃至 128 位整数，
+/// 因此分子、分母与 <see cref="Apply"/> 的结果一律用任意精度整数 <see cref="BigInteger"/>：精确、不溢出、不截断、不饱和。
+/// 饱和到某个上限等于变相封顶，已被裁决否决。</para>
+/// <para><see cref="ToString"/> 给精确十进制显示串，同样只走整数。</para>
 /// </remarks>
 public readonly record struct Multiplier
 {
-    /// <summary>倍率指数上限：第 4 枚起的倍增子不再让倍率乘 1.5，倍率上限 <c>3^3 / 2^3 = 3.375</c>（multiplier-rebalance D3：由 growth-pass-1 的 4 调整为 3）。全项目只在此定义一次。</summary>
-    public const int MaxExponent = 3;
-
     /// <summary>不含倍增子时的倍率 1。</summary>
     public static readonly Multiplier One = new(0);
 
@@ -33,57 +28,41 @@ public readonly record struct Multiplier
         Count = count;
     }
 
-    /// <summary>倍增子的原始数量 n（未封顶）。</summary>
+    /// <summary>倍增子数量 n，即倍率指数。</summary>
     public int Count { get; }
 
-    /// <summary>生效倍率指数 <c>e = min(n, <see cref="MaxExponent"/>)</c>；分子、分母与显示都按它算。</summary>
-    public int Exponent => Math.Min(Count, MaxExponent);
+    /// <summary>分子 <c>3^n</c>。</summary>
+    public BigInteger Numerator => BigInteger.Pow(3, Count);
 
-    /// <summary>分子 <c>3^e</c>。</summary>
-    public Int128 Numerator => Pow(3, Exponent);
-
-    /// <summary>分母 <c>2^e</c>。</summary>
-    public Int128 Denominator => Pow(2, Exponent);
+    /// <summary>分母 <c>2^n</c>。</summary>
+    public BigInteger Denominator => BigInteger.Pow(2, Count);
 
     /// <summary>
-    /// 对非负整数值施加倍率并向下取整：<c>value × 3^e / 2^e</c>，非负整数除法即向下取整。
-    /// 这是全项目唯一的"乘倍率并取整"实现；势力组装只把基础军势传进来（multiplier-rebalance D2），位置加值在外面直接相加。结果超出 <see cref="long"/> 时抛 <see cref="OverflowException"/>。
+    /// 对非负整数值施加倍率并向下取整：<c>value × 3^n / 2^n</c>，非负整数除法即向下取整。
+    /// 这是全项目唯一的"乘倍率并取整"实现；势力组装把"基础军势总和 + 位置加值"整体传进来（restore-go-core-rules D1），每条棋串各取整一次。
     /// </summary>
-    public long Apply(long value)
+    public BigInteger Apply(BigInteger value)
     {
-        if (value < 0)
+        if (value.Sign < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(value), value, "军势不得为负。");
         }
 
-        Int128 scaled = checked((Int128)value * Numerator);
-        return checked((long)(scaled / Denominator));
+        return value * Numerator / Denominator;
     }
 
-    /// <summary>精确十进制表示（如 <c>1</c>、<c>1.5</c>、<c>2.25</c>、<c>3.375</c>，最大 <c>3.375</c>），按生效指数生成，供 UI 与遥测显示；不经过浮点，也不参与计算。</summary>
+    /// <summary>精确十进制表示（如 <c>1</c>、<c>1.5</c>、<c>2.25</c>、<c>3.375</c>、<c>5.0625</c>），供 UI 与遥测显示；不经过浮点，也不参与计算。</summary>
     public override string ToString()
     {
-        int e = Exponent;
-        if (e == 0)
+        int n = Count;
+        if (n == 0)
         {
             return "1";
         }
 
-        // 3^e / 2^e = 15^e / 10^e：15^e 的十进制串，小数点左移 e 位。
-        string digits = BigInteger.Pow(15, e).ToString();
-        return digits[..^e] + "." + digits[^e..];
-    }
-
-    /// <summary>checked 整数幂；溢出 <see cref="Int128"/> 时抛 <see cref="OverflowException"/>。</summary>
-    private static Int128 Pow(Int128 @base, int exponent)
-    {
-        Int128 result = Int128.One;
-        for (int i = 0; i < exponent; i++)
-        {
-            result = checked(result * @base);
-        }
-
-        return result;
+        // 3^n / 2^n = 15^n / 10^n：15^n 的十进制串，小数点左移 n 位（15^n > 10^n，整数部分至少一位）。
+        string digits = BigInteger.Pow(15, n).ToString();
+        return digits[..^n] + "." + digits[^n..];
     }
 }
 

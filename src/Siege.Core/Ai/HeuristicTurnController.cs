@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
@@ -316,9 +317,9 @@ public sealed class HeuristicTurnController : ITurnController
         BatchContext context = batch.Context;
         PieceType representative = types[0];
         bool holdsEditor = types.Contains(TerrainEditRules.EditorType);
-        var scored = new List<(Coord Cell, long Total)>();
+        var scored = new List<(Coord Cell, BigInteger Total)>();
 
-        long? Score(Coord cell, PieceType type, TerrainEdit? edit)
+        BigInteger? Score(Coord cell, PieceType type, TerrainEdit? edit)
         {
             batch.Clear();
             if (batch.Stage(cell, type, edit) is not null)
@@ -332,7 +333,7 @@ public sealed class HeuristicTurnController : ITurnController
 
         foreach (Coord cell in cells)
         {
-            long? total = Score(cell, representative, null);
+            BigInteger? total = Score(cell, representative, null);
             if (total is null && holdsEditor)
             {
                 foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell))

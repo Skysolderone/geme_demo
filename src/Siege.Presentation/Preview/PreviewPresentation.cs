@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Preview;
@@ -80,7 +81,7 @@ public sealed record HandCostView(PieceType Type, int Used, int Stock, string Te
 public sealed record CaptureView(PlayerId Owner, ImmutableArray<Coord> Stones, string Text);
 
 /// <summary>棋串军势明细的呈现。全部数值来自 Core 的 <see cref="GroupPower"/>，本类只拼文字；倍率文字用 <see cref="Multiplier.ToString"/>。
-/// 公式文案按 multiplier-rebalance 的顺序拼：倍率只挨着基础军势，位置加值写在倍率之后（不被放大）；取整值直接取 <see cref="GroupPower.Power"/>。</summary>
+/// 公式文案按 restore-go-core-rules D1 的顺序拼：基础军势与位置加值先相加、整体乘倍率；取整值直接取 <see cref="GroupPower.Power"/>（任意精度整数）。</summary>
 public sealed record GroupPowerView(
     int BaseTotal,
     int LineBonus,
@@ -88,9 +89,8 @@ public sealed record GroupPowerView(
     int HighGroundBonus,
     int PositionBonus,
     int MultiplierCount,
-    int EffectiveExponent,
     string MultiplierText,
-    long Power,
+    BigInteger Power,
     string FormulaText)
 {
     public static GroupPowerView From(GroupPower power)
@@ -101,8 +101,8 @@ public sealed record GroupPowerView(
             ? "位置加值 0"
             : $"位置加值 {power.PositionBonus}（连珠 {power.LineBonus} / 协同 {power.SynergyBonus} / 高地 {power.HighGroundBonus}）";
         return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus, power.PositionBonus,
-            power.MultiplierCount, power.EffectiveMultiplierCount, multiplier, power.Power,
-            $"基础 {power.BaseTotal} × {multiplier} + {bonus} = {power.Power}");
+            power.MultiplierCount, multiplier, power.Power,
+            $"（基础 {power.BaseTotal} + {bonus}）× {multiplier} = {power.Power}");
     }
 }
 
@@ -121,9 +121,9 @@ public sealed record OwnGroupView(
 public sealed record PowerChangeView(
     PlayerId Player,
     bool IsViewer,
-    long Before,
-    long After,
-    long Delta,
+    BigInteger Before,
+    BigInteger After,
+    BigInteger Delta,
     int? RankBefore,
     int? RankAfter,
     bool RankChanged,

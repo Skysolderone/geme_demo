@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 
 namespace Siege.Core.Match;
@@ -16,7 +17,7 @@ namespace Siege.Core.Match;
 public sealed record InitiativeEntry(
     PlayerId Player,
     int Rank,
-    long Power,
+    BigInteger Power,
     int Bonus,
     int Value,
     int? PreviousPosition,

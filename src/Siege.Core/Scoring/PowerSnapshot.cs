@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 
 namespace Siege.Core.Scoring;
@@ -12,8 +13,8 @@ namespace Siege.Core.Scoring;
 /// <param name="LineBonus">来自连珠线的位置加值。</param>
 /// <param name="SynergyBonus">来自协同子的位置加值。</param>
 /// <param name="HighGroundBonus">来自高地压制的位置加值（scoring-sites D-E：每枚棋子至多 1 点）。</param>
-/// <param name="MultiplierCount">倍增子的原始数量（未封顶；遥测按它看"堆了多少"）。</param>
-/// <param name="Power">取整后军势：<c>⌊基础 × 1.5^min(n, 3)⌋ + 加值</c>，逐棋串各取整一次（multiplier-rebalance：加值不被倍率放大）。</param>
+/// <param name="MultiplierCount">倍增子数量 n，即倍率指数（不封顶）。</param>
+/// <param name="Power">取整后军势：<c>⌊(基础 + 加值) × 3^n / 2^n⌋</c>，逐棋串各取整一次（restore-go-core-rules D1：加值被倍率放大）。任意精度整数，不溢出。</param>
 public sealed record GroupPower(
     PlayerId Owner,
     ImmutableArray<Coord> Stones,
@@ -22,19 +23,16 @@ public sealed record GroupPower(
     int SynergyBonus,
     int HighGroundBonus,
     int MultiplierCount,
-    long Power)
+    BigInteger Power)
 {
     /// <summary>位置加值总计 = 连珠来源 + 协同来源 + 高地来源（design.md D3：分来源记账；scoring-sites 加高地）。</summary>
     public int PositionBonus => LineBonus + SynergyBonus + HighGroundBonus;
 
-    /// <summary>倍率的精确表示，按生效指数计算，最大 <c>3.375</c>（封顶指数 <see cref="Multiplier.MaxExponent"/> = 3）。</summary>
+    /// <summary>倍率 <c>1.5^n</c> 的精确表示（分子 <c>3^n</c>、分母 <c>2^n</c>），不封顶。</summary>
     public Multiplier Multiplier => new(MultiplierCount);
 
-    /// <summary>生效倍率指数 <c>min(倍增子数量, <see cref="Multiplier.MaxExponent"/>)</c>（cap-multiplier D3：与原始数量并列可读）。</summary>
-    public int EffectiveMultiplierCount => Multiplier.Exponent;
-
     public override string ToString() =>
-        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] 基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus}) ×{Multiplier} = {Power}";
+        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] (基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus})) ×{Multiplier} = {Power}";
 }
 
 /// <summary>
@@ -42,19 +40,22 @@ public sealed record GroupPower(
 /// </summary>
 /// <param name="Player">玩家。</param>
 /// <param name="Status">参赛状态（由流程层提供，原样携带，供 UI 标记"已弃赛"）。</param>
-/// <param name="ExclusiveCells">独占空格坐标集合，字典序；棋子所在格不在其中。只供盘面层归属读法展示，<b>不计分</b>（scoring-sites D8）。</param>
-/// <param name="Sites">该玩家控制中的据点（占据或唯一覆盖），坐标字典序；各项分值取自对局配置。</param>
+/// <param name="ExclusiveCells">独占空格坐标集合，字典序；棋子所在格不在其中。每格计 1 点领地分，取自空格归属三态的结果。</param>
+/// <param name="Sites">该玩家控制中的据点（占据或唯一覆盖），坐标字典序。过渡字段（段 B 删除）：只展示，<b>不计分</b>。</param>
 /// <param name="Groups">逐棋串拆分，按棋串最小坐标字典序。</param>
-/// <param name="Total">总势力 = 据点分 + 全部棋串军势之和。据点分不参与任何倍率。</param>
+/// <param name="Total">总势力 = 领地分 + 全部棋串军势之和。领地分不参与任何倍率。任意精度整数，不溢出。</param>
 public sealed record PlayerPower(
     PlayerId Player,
     PlayerStatus Status,
     ImmutableArray<Coord> ExclusiveCells,
     ImmutableArray<SiteHolding> Sites,
     ImmutableArray<GroupPower> Groups,
-    long Total)
+    BigInteger Total)
 {
-    /// <summary>据点分总计：所控制据点的分值之和。</summary>
+    /// <summary>领地分总计 = 独占空格数（每格 1 分）。</summary>
+    public int TerritoryScore => ExclusiveCells.Length;
+
+    /// <summary>所控制据点的分值之和。过渡字段（段 B 删除）：只展示，<b>不计入</b> <see cref="Total"/>。</summary>
     public long SiteScore => Sites.Sum(s => (long)s.Value);
 
     /// <summary>是否参与势力名次（只有参赛中的玩家参与）。</summary>
@@ -71,7 +72,7 @@ public sealed record PlayerPower(
 /// <para>§11.2 <c>先手值 = 参赛人数 − 势力名次 + 先手修正</c> 中"势力名次"用竞争还是稠密名次，设计文档与 power-score 规格均未明说，
 /// 这是 add-match-flow 必须做的裁决（两者对并列之后的玩家先手值相差 1）；本层只保证信息完整，不替它定。</para>
 /// </remarks>
-public sealed record RankGroup(int Rank, long Power, ImmutableArray<PlayerId> Players)
+public sealed record RankGroup(int Rank, BigInteger Power, ImmutableArray<PlayerId> Players)
 {
     /// <summary>是否并列。</summary>
     public bool IsTied => Players.Length > 1;

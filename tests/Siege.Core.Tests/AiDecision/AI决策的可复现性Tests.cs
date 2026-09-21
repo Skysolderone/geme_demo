@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -59,7 +60,7 @@ public class AI决策的可复现性Tests
             Assert.True(CandidateSelection.CompareCoords(choice.SortedCoords, other.SortedCoords) <= 0, $"{choice} 应不晚于 {other}");
         }
 
-        long top = ai.LastPointRanking[0].Total;
+        BigInteger top = ai.LastPointRanking[0].Total;
         Assert.True(ai.LastPointRanking.Count(p => p.Total == top) >= 2, "首手应存在同分落点，否则本测试没有覆盖并列");
     }
 

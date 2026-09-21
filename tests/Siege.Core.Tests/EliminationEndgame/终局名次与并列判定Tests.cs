@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Scoring;
@@ -129,7 +130,7 @@ public class 终局名次与并列判定Tests
         match.PlayTurn("G9");
         Assert.Equal(EndReason.PowerDominance, match.Result!.Reason);
 
-        long[] power = [.. MatchFixtures.All.Select(p => match.Scoreboard.Latest!.Of(p).Total)];
+        BigInteger[] power = [.. MatchFixtures.All.Select(p => match.Scoreboard.Latest!.Of(p).Total)];
         Assert.True(power[0] > power[3] && power[3] > power[2] && power[2] > power[1], string.Join(" ", power));
         Assert.Equal(new[] { MatchFixtures.P0, MatchFixtures.P3, MatchFixtures.P2, MatchFixtures.P1 }, match.Result.Standings.Select(s => s.Player));
         Assert.Equal([1, 2, 3, 4], match.Result.Standings.Select(s => s.Rank));
@@ -161,6 +162,7 @@ public class 终局名次与并列判定Tests
 
         Assert.Equal(MatchPhase.Ended, match.Phase);
         Assert.Equal(2, match.Result!.Of(MatchFixtures.P0).Input.ControlledSites);
-        Assert.Equal(5 + 15 + 2, match.Result.Of(MatchFixtures.P0).Input.Power);
+        // 段 A 重算：原 22 = 营帐 5 + 篝火 15 + 军势 2 → 8 = 领地 6（A5 / D5 / B4 / C4 / B6 / C6；D5 是空的篝火格，仍是独占空格）+ 军势 2；据点分不进总势力。
+        Assert.Equal(6 + 2, match.Result.Of(MatchFixtures.P0).Input.Power);
     }
 }

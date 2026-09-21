@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 
 namespace Siege.Core.Scoring;
@@ -7,13 +8,10 @@ namespace Siege.Core.Scoring;
 /// 遥测用：整局出现过的最高倍率及其首次出现的大回合序号（设计文档 §16 / §17）。这是遥测记录，不是分数，不参与任何计算。
 /// <see cref="Power"/> 是该串峰值出现时的取整军势（heuristic-ai 裁决 6 的纯增量）；"峰值串被摧毁"由跑局日志层比对相邻快照算出，不进本层。
 /// </summary>
-public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerId Player, ImmutableArray<Coord> Stones, long Power)
+public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerId Player, ImmutableArray<Coord> Stones, BigInteger Power)
 {
-    /// <summary>峰值倍率的精确表示（按生效指数）。</summary>
+    /// <summary>峰值倍率的精确表示 <c>1.5^<see cref="MultiplierCount"/></c>。</summary>
     public Multiplier Multiplier => new(MultiplierCount);
-
-    /// <summary>生效倍率指数 <c>min(<see cref="MultiplierCount"/>, <see cref="Multiplier.MaxExponent"/>)</c>；<see cref="MultiplierCount"/> 仍是原始数量。</summary>
-    public int EffectiveMultiplierCount => Multiplier.Exponent;
 }
 
 /// <summary>
@@ -22,7 +20,7 @@ public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerI
 /// </summary>
 /// <remarks>
 /// <para><see cref="Latest"/> 永远是最近一次全量重算的结果，只反映当前盘面；上一份快照被整体替换，不叠加、不累计。</para>
-/// <para><see cref="Peak"/> 是唯一跨结算保留的量，且只作遥测用：按原始倍增子数量取峰值（可超过封顶指数），看玩家"堆了多少"；§16 数值区间失守时靠它定位。</para>
+/// <para><see cref="Peak"/> 是唯一跨结算保留的量，且只作遥测用：按倍增子数量取峰值，看玩家"堆了多少"；§16 数值区间失守时靠它定位。</para>
 /// </remarks>
 public sealed class PowerScoreboard
 {

@@ -11,9 +11,9 @@ namespace Siege.Core.Tests.Recruitment;
 /// </summary>
 /// <remarks>
 /// <para>盘面用「阶梯」局面代替规格里的 60/45/30/20：规则只看名次，故每个用例先把<b>名次</b>断言死（前提用断言钉住），再看补偿。
-/// 阶梯盘面（9×9 合成图，四角各一簇，无据点）势力可独立复算：势力 = 棋子基础军势（scoring-sites 起独占空格不计分）。
-/// P0 A1-D1 四枚 → 4；P1 G1 H1 J1 三枚 → 3；P2 A9 B9 两枚 → 2；P3 J9 一枚 → 1。名次 1 / 2 / 3 / 4。
-/// scoring-sites 2.7 改写：旧势力 9 / 7 / 5 / 3（含领地分）→ 新 4 / 3 / 2 / 1，名次与补偿期望全部不变。</para>
+/// 阶梯盘面（9×9 合成图，四角各一簇，无据点）势力可独立复算：势力 = 棋子基础军势 + 独占空格数（restore-go-core-rules 段 A：领地重新计分）。
+/// P0 A1-D1 四枚 + 独占 5（A2 B2 C2 D2 E1）→ 9；P1 G1 H1 J1 三枚 + 独占 4（G2 H2 J2 F1）→ 7；P2 A9 B9 两枚 + 独占 3（A8 B8 C9）→ 5；P3 J9 一枚 + 独占 2（H9 J8）→ 3。名次 1 / 2 / 3 / 4。
+/// 段 A 重算：原势力 4 / 3 / 2 / 1（scoring-sites：独占空格不计分）→ 9 / 7 / 5 / 3（与 territory-power 时期同值），名次与补偿期望全部不变。</para>
 /// <para>变异验证（基线 653 绿；每条都是 cp 备份 → 变异 → 跑全量 → 还原 → 逐字节 cmp）：</para>
 /// <list type="table">
 /// <item><term>M-CU1</term><description>阈值 <c>(n+1)/2</c> 写成 <c>n/2</c> → 红 4：阈值按人数取上取整（3 人 / 5 人两行）、出局与弃赛者不计入、弃赛者势力可见但不参与</description></item>
@@ -37,7 +37,7 @@ public class 落后者征募补偿Tests
     private static readonly PlayerId P2 = MatchFixtures.P2;
     private static readonly PlayerId P3 = MatchFixtures.P3;
 
-    /// <summary>阶梯局面：势力 4 / 3 / 2 / 1，名次 1 / 2 / 3 / 4。<paramref name="first"/> 是即将开始小回合的玩家。</summary>
+    /// <summary>阶梯局面：势力 9 / 7 / 5 / 3，名次 1 / 2 / 3 / 4。<paramref name="first"/> 是即将开始小回合的玩家。</summary>
     private static MatchFlow Ladder(PlayerId first, MatchOptions? options = null, PlayerId[]? rest = null, params (string Cell, RelicContent Content)[] relics)
     {
         PlayerId[] order = [first, .. rest ?? [.. MatchFixtures.All.Where(p => p != first)]];
@@ -71,7 +71,7 @@ public class 落后者征募补偿Tests
     {
         // 规格 Scenario「4 人局第 3、4 名」：D 名次 4 > ⌈4÷2⌉=2 → 展示 +1；D 是最后一名 → 选取 +1；面板展示 6、选取 4。
         MatchFlow match = Ladder(P3);
-        AssertRanks(match, (P0, 4, 1), (P1, 3, 2), (P2, 2, 3), (P3, 1, 4));
+        AssertRanks(match, (P0, 9, 1), (P1, 7, 2), (P2, 5, 3), (P3, 3, 4));
 
         match.BeginTurn();
         EffectSnapshot snapshot = match.CurrentSnapshot!;
@@ -89,7 +89,7 @@ public class 落后者征募补偿Tests
         // 规格 Scenario「4 人局第 3 名只加展示」：C 名次 3 > 2 → 展示 +1；C 不是最后一名（最大名次 4）→ 选取不加；面板展示 6、选取 3。
         // 本用例是「两档分开」的证伪点：第 3 名只拿展示，不拿选取。
         MatchFlow match = Ladder(P2);
-        AssertRanks(match, (P2, 2, 3), (P3, 1, 4));
+        AssertRanks(match, (P2, 5, 3), (P3, 3, 4));
 
         match.BeginTurn();
         EffectSnapshot snapshot = match.CurrentSnapshot!;
@@ -105,7 +105,7 @@ public class 落后者征募补偿Tests
         // 规格 Scenario「前半名次无补偿」：B 名次 2，不大于 ⌈4÷2⌉=2 → 无任何补偿，面板展示 5、选取 3。
         // M-CU1b（阈值比较改 ≥）在本用例红：B 会拿到展示 +1。
         MatchFlow match = Ladder(P1);
-        AssertRanks(match, (P0, 4, 1), (P1, 3, 2));
+        AssertRanks(match, (P0, 9, 1), (P1, 7, 2));
 
         match.BeginTurn();
         EffectSnapshot snapshot = match.CurrentSnapshot!;
@@ -119,8 +119,8 @@ public class 落后者征募补偿Tests
     [Fact]
     public void 并列最后一名都获得补偿()
     {
-        // 规格 Scenario「并列最后一名都获得补偿」：势力 9 / 7 / 5 / 5（本盘 4 / 3 / 2 / 2）→ C、D 共享名次 3（竞争名次，最大名次是 3 不是 4），二者均展示 +1、选取 +1。
-        // P3 补一枚 H9 与 P2 的 A9 B9 镜像对称：2 枚 = 2（scoring-sites 2.7 改写：旧 2 + 3 独占 = 5）。
+        // 规格 Scenario「并列最后一名都获得补偿」：势力 9 / 7 / 5 / 5（本盘恰为此值）→ C、D 共享名次 3（竞争名次，最大名次是 3 不是 4），二者均展示 +1、选取 +1。
+        // P3 补一枚 H9 与 P2 的 A9 B9 镜像对称：2 枚 + 独占 3（J8 H8 G9）= 5（段 A 重算：原 2 → 5）。
         // M-CU2（并列各占独立名次）在本用例红：P3 会被排到名次 4，越过最大名次 3。
         MatchFlow match = MatchFixtures.Started()
             .AtRound(5, [P2, P3, P0, P1])
@@ -128,7 +128,7 @@ public class 落后者征募补偿Tests
             .Stones(P1, "G1", "H1", "J1")
             .Stones(P2, "A9", "B9")
             .Stones(P3, "J9", "H9");
-        AssertRanks(match, (P0, 4, 1), (P1, 3, 2), (P2, 2, 3), (P3, 2, 3));
+        AssertRanks(match, (P0, 9, 1), (P1, 7, 2), (P2, 5, 3), (P3, 5, 3));
         Assert.Equal(3, match.Scoreboard.Latest!.Ranking[^1].Rank);
 
         match.BeginTurn();
@@ -136,7 +136,7 @@ public class 落后者征募补偿Tests
         Assert.Equal((6, 4), (match.CurrentSnapshot!.RevealCount, match.CurrentSnapshot!.FreePickCount));
         FinishStartedTurn(match);   // 结束 P2 已开始的小回合；Pass 不改盘面，并列前提在下面重新断言
 
-        AssertRanks(match, (P2, 2, 3), (P3, 2, 3));
+        AssertRanks(match, (P2, 5, 3), (P3, 5, 3));
         match.BeginTurn();
         Assert.Equal(P3, match.CurrentPlayer);
         Assert.Equal(new CatchUpBonus(1, 1), match.CurrentSnapshot!.CatchUp);
@@ -170,7 +170,7 @@ public class 落后者征募补偿Tests
         MatchFlow match = MatchFixtures.TwoPlayer(order: [P1, P0])
             .Stones(P0, "A1", "B1", "C1", "D1")
             .Stones(P1, "J9");
-        AssertRanks(match, (P0, 4, 1), (P1, 1, 2));
+        AssertRanks(match, (P0, 9, 1), (P1, 3, 2));
         Assert.Equal(2, match.Scoreboard.Latest!.Ranking.Sum(g => g.Players.Length));
 
         match.BeginTurn();
@@ -183,9 +183,9 @@ public class 落后者征募补偿Tests
     public void 与信物加成相加()
     {
         // 规格 Scenario「与信物加成相加」：D 为最后一名并控制 1 枚探勘 → 展示 5 + 1（探勘）+ 1（补偿）= 7，选取 3 + 1（补偿）= 4。
-        // D 的唯一一枚棋子就落在信物格 J9 上（占据即控制），故势力仍为 1、名次仍为 4。
+        // D 的唯一一枚棋子就落在信物格 J9 上（占据即控制），故势力仍为 3（1 子 + 独占 H9 J8）、名次仍为 4。
         MatchFlow match = Ladder(P3, relics: ("J9", RelicFixtures.Prospecting()));
-        AssertRanks(match, (P3, 1, 4));
+        AssertRanks(match, (P3, 3, 4));
         Assert.Contains(match.Relics.PublicStates(), s => s.Coord == TestMaps.At("J9") && s.Control.GrantsEffectTo(P3));
 
         match.BeginTurn();
@@ -203,7 +203,7 @@ public class 落后者征募补偿Tests
         // 已生成的快照与面板参数保持补偿后的数值，不回收；下一次判定按届时名次重新算（此处以补充载荷的结构参数证明 D 已不再有补偿）。
         // M-CU4（把 CurrentSnapshot 改成回读此刻名次的活视图）在本用例红：快照会变回 5 / 3。
         MatchFlow match = Ladder(P3);
-        AssertRanks(match, (P3, 1, 4));
+        AssertRanks(match, (P3, 3, 4));
 
         match.BeginTurn();
         RecruitPanelView panel = match.EnterRecruit();
@@ -211,7 +211,8 @@ public class 落后者征募补偿Tests
 
         // 小回合进行中直接改盘并重算：D 变成第 1 名
         match.Stones(P3, "E5", "E6", "E4", "D5", "F5", "D6", "F6", "D4", "F4");
-        AssertRanks(match, (P3, 10, 1), (P0, 4, 2));
+        // 段 A 重算：P3 原 10 → 24 = 10 子（J9 + D4–F6 九宫）+ 独占 14（J9 的 H9 J8；九宫外圈 D3 E3 F3 / D7 E7 F7 / C4 C5 C6 / G4 G5 G6）；P0 原 4 → 9。
+        AssertRanks(match, (P3, 24, 1), (P0, 9, 2));
 
         Assert.Equal(new CatchUpBonus(1, 1), match.CurrentSnapshot!.CatchUp);
         Assert.Equal((6, 4), (match.CurrentSnapshot!.RevealCount, match.CurrentSnapshot!.FreePickCount));
@@ -233,7 +234,7 @@ public class 落后者征募补偿Tests
         MatchFlow match = Ladder(P3, rest: [P2, P1, P0]);
         match.Resign(P3);
         Assert.Equal(PlayerStatus.Resigned, match.StateOf(P3).Status);
-        AssertRanks(match, (P0, 4, 1), (P1, 3, 2), (P2, 2, 3));
+        AssertRanks(match, (P0, 9, 1), (P1, 7, 2), (P2, 5, 3));
         Assert.Null(match.Scoreboard.Latest!.RankOf(P3));
         Assert.Equal(3, match.Scoreboard.Latest!.Ranking.Sum(g => g.Players.Length));
 
@@ -258,7 +259,7 @@ public class 落后者征募补偿Tests
         match.Debug.SetPassStreak(0);   // 前两回合都是 Pass；弃赛后参赛人数降到 2，不清零会立刻触发"全员 Pass"终局
         match.Resign(P2);
         Assert.Equal(2, match.Scoreboard.Latest!.Ranking.Sum(g => g.Players.Length));
-        AssertRanks(match, (P0, 4, 1), (P1, 3, 2));
+        AssertRanks(match, (P0, 9, 1), (P1, 7, 2));
         match.Debug.SetOrder(P1, P0);
 
         match.BeginTurn();
@@ -274,7 +275,7 @@ public class 落后者征募补偿Tests
         // M-CU7（判定忽略开关）在本用例红。
         MatchFlow match = Ladder(P3, options: MatchFixtures.CatchUpOff, relics: ("J9", RelicFixtures.Prospecting()));
         Assert.False(match.CatchUpRecruit);
-        AssertRanks(match, (P3, 1, 4));
+        AssertRanks(match, (P3, 3, 4));
 
         match.BeginTurn();
         EffectSnapshot snapshot = match.CurrentSnapshot!;

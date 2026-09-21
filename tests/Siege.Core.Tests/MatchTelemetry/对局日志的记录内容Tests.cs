@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Sim.Config;
@@ -80,7 +81,9 @@ public class 对局日志的记录内容Tests
         // 活对象 vs 解析结果逐字段；再文本往返逐字节
         Assert.Equal(live.Turns.Count, log.Turns.Count);
         Assert.Equal(live.Events.Count, log.Events.Count);
-        Assert.Equal(live.Turns.Select(t => t.PlayersState.Select(p => p.Total).Sum()), log.Turns.Select(t => t.PlayersState.Select(p => p.Total).Sum()));
+        Assert.Equal(
+            live.Turns.Select(t => t.PlayersState.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total)),
+            log.Turns.Select(t => t.PlayersState.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total)));
         Assert.Equal(live.Result!.Winners, log.Result.Winners);
         Assert.Equal(live.Result.Reason, log.Result.Reason);
         Assert.Equal(live.Header.Relics.Select(r => $"{r.Coord}:{r.Type}{r.Magnitude}"), log.Header.Relics.Select(r => $"{r.Coord}:{r.Type}{r.Magnitude}"));

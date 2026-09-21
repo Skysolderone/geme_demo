@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 
@@ -11,7 +12,7 @@ namespace Siege.Core.Ai;
 public sealed record PointScore(Coord Coord, PieceType Type, TerrainEdit? Edit, EvaluationBreakdown Evaluation)
 {
     /// <summary>加权总分。</summary>
-    public long Total => Evaluation.Total;
+    public BigInteger Total => Evaluation.Total;
 
     /// <summary>该单点对应的暂放。</summary>
     public Placement Placement => new(Coord, Type, Edit);
@@ -23,7 +24,7 @@ public sealed record PointScore(Coord Coord, PieceType Type, TerrainEdit? Edit, 
 public sealed record CandidateBatch(ImmutableArray<Placement> Placements, EvaluationBreakdown Evaluation)
 {
     /// <summary>加权总分。</summary>
-    public long Total => Evaluation.Total;
+    public BigInteger Total => Evaluation.Total;
 
     /// <summary>落点按 <see cref="Coord"/> 字典序排好的序列（并列打破用，裁决 D4）。</summary>
     public ImmutableArray<Coord> SortedCoords => [.. Placements.Select(p => p.Coord).Order()];

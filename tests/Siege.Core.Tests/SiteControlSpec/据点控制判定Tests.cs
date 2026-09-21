@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.RegularExpressions;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
@@ -48,7 +49,8 @@ public class 据点控制判定Tests
 
         Assert.Equal(new SiteState(TestMaps.At("E5"), SiteTier.Tent, SiteControlKind.Contested, null), snapshot.StateAt("E5"));
         Assert.Equal((0L, 0L), (snapshot.Of(TestMaps.P0).SiteScore, snapshot.Of(P2).SiteScore));
-        Assert.Equal((1L, 1L), (snapshot.Of(TestMaps.P0).Total, snapshot.Of(P2).Total));
+        // 段 A 重算：原 (1, 1) → (4, 4) = 军势 1 + 领地 3（四邻中 E5 是争议格，不计；据点分不进总势力）。
+        Assert.Equal(((BigInteger)4, (BigInteger)4), (snapshot.Of(TestMaps.P0).Total, snapshot.Of(P2).Total));
     }
 
     [Fact]

@@ -1,0 +1,12 @@
+{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "D1–D8、接口契约、风险、裁决记录与追认"}
+{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "段 A 为第 1 组（已勾选）；只 check 这一组"}
+{"file": "openspec/changes/restore-go-core-rules/proposal.md", "reason": "裁决表与影响面"}
+{"file": ".trellis/tasks/09-21-restore-go-core-rules/prd.md", "reason": "分段计划、验收标准与子 agent 约束"}
+{"file": ".trellis/tasks/09-21-restore-go-core-rules/implement.md", "reason": "段 A 实施记录：改了什么、重算逐条、变异逐条、9 条待决"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核开发规范入口与 Quality Check"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、视图分离、全量重算、单一实现"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "整数运算与可复现；注意「大数用 Int128」一条与本段冲突，见 implement 待决 1"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Requirement→测试类、Scenario→测试方法、变异验证与记录方式"}
+{"file": "openspec/changes/restore-go-core-rules/specs/power-score/spec.md", "reason": "段 A：军势公式、总势力、势力明细、排名"}
+{"file": "openspec/changes/restore-go-core-rules/specs/piece-effects/spec.md", "reason": "段 A：倍增子倍率、高地加值被倍率放大"}
+{"file": "openspec/changes/restore-go-core-rules/specs/coverage-territory/spec.md", "reason": "段 A：空格归属恢复计分、空林地恒中立"}

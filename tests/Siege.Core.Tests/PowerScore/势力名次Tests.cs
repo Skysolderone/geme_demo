@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
 
@@ -6,7 +7,7 @@ namespace Siege.Core.Tests.PowerScore;
 /// <summary>规格：power-score —— Requirement: 势力名次</summary>
 public class 势力名次Tests
 {
-    /// <summary>堡垒子×4 + 倍增子×1 横排在 B–F 列：基础 17 × 1.5 = 25（scoring-sites 起独占空格不计分；旧口径加 12 独占 = 37，方法名保留）。</summary>
+    /// <summary>堡垒子×4 + 倍增子×1 横排在 B–F 列：军势 ⌊17 × 1.5⌋ = 25，加 12 个独占空格 = 总势力 37。</summary>
     private static GameBoard Place37(GameBoard board, PlayerId owner, int row)
     {
         foreach (char col in "BCDE")
@@ -36,9 +37,10 @@ public class 势力名次Tests
 
         Assert.Equal(4, snapshot.Players.Length);
         Assert.Equal(0, snapshot.Of(ScoringFixtures.P2).Total);
-        // scoring-sites 2.7 改写：旧 P3 38（24 + 14 独占）、名次 (1, 37) (2, 5) → 新 P3 24、(1, 25) (2, 1)；名次结构不变。
-        Assert.Equal(24, snapshot.Of(ScoringFixtures.P3).Total);
-        Assert.Equal([(1, 25L), (2, 1L)], snapshot.Ranking.Select(r => (r.Rank, r.Power)));
+        // 段 A 重算（总势力 = 领地 + 军势）：P3 原 24 → 38 = 堡垒子×6 军势 24 + 领地 14（第 9 行 B–G：上 6 + 下 6 + 两端）；
+        // P0 原 25 → 37 = ⌊17 × 1.5⌋ 25 + 领地 12（第 2 行 B–F：上 5 + 下 5 + 两端）；P1 原 1 → 5 = 1 + F6 四邻 4。名次结构不变。
+        Assert.Equal(38, snapshot.Of(ScoringFixtures.P3).Total);
+        Assert.Equal([(1, (BigInteger)37), (2, (BigInteger)5)], snapshot.Ranking.Select(r => (r.Rank, r.Power)));
         Assert.Equal([TestMaps.P0], snapshot.Ranking[0].Players);
         Assert.Equal([TestMaps.P1], snapshot.Ranking[1].Players);
         Assert.Null(snapshot.RankOf(ScoringFixtures.P2));
@@ -48,8 +50,8 @@ public class 势力名次Tests
     [Fact]
     public void 并列如实输出()
     {
-        // P0 与 P1 均为 25 → 同一名次组、标记并列，不自行打破；P2 势力 1 排在其后，名次跳号为 3。
-        // scoring-sites 2.7 改写：旧 37 / 37 / 5（含领地分）→ 25 / 25 / 1。
+        // P0 与 P1 均为 37 → 同一名次组、标记并列，不自行打破；P2 势力 5 排在其后，名次跳号为 3。
+        // 段 A 重算：原 25 / 25 / 1（scoring-sites：独占空格不计分）→ 37 / 37 / 5：37 = ⌊17 × 1.5⌋ 25 + 领地 12（五子一排：上 5 + 下 5 + 两端）；5 = 1 + K6 四邻 4。
         // 变异验证 M10：Rank 在同值组内逐人各发一个名次（1、2、3）→ 红 2（本测试、「Pass也触发更新」）。
         GameBoard board = TestMaps.Blank(size: 11);
         Place37(board, TestMaps.P0, row: 2);
@@ -58,16 +60,16 @@ public class 势力名次Tests
 
         PowerSnapshot snapshot = PowerCalculator.Compute(board);
 
-        Assert.Equal(25, snapshot.Of(TestMaps.P0).Total);
-        Assert.Equal(25, snapshot.Of(TestMaps.P1).Total);
+        Assert.Equal(37, snapshot.Of(TestMaps.P0).Total);
+        Assert.Equal(37, snapshot.Of(TestMaps.P1).Total);
         Assert.Equal(2, snapshot.Ranking.Length);
         RankGroup tied = snapshot.Ranking[0];
         Assert.True(tied.IsTied);
-        Assert.Equal((1, 25L), (tied.Rank, tied.Power));
+        Assert.Equal((1, (BigInteger)37), (tied.Rank, tied.Power));
         Assert.Equal([TestMaps.P0, TestMaps.P1], tied.Players);
         RankGroup third = snapshot.Ranking[1];
         Assert.False(third.IsTied);
-        Assert.Equal((3, 1L), (third.Rank, third.Power));
+        Assert.Equal((3, (BigInteger)5), (third.Rank, third.Power));
         Assert.Equal([ScoringFixtures.P2], third.Players);
         Assert.Equal(1, snapshot.RankOf(TestMaps.P0));
         Assert.Equal(1, snapshot.RankOf(TestMaps.P1));

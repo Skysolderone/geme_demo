@@ -1,8 +1,9 @@
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
-using Siege.Core.Scoring;
 using Siege.Core.Match;
 using Siege.Core.Preview;
+using Siege.Core.Scoring;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Visibility;
@@ -85,11 +86,10 @@ public class 批次预演必须显示的信息Tests
         Assert.Equal(9, power.BaseTotal);
         Assert.Equal(0, power.PositionBonus);
         Assert.Equal(2, power.MultiplierCount);
-        Assert.Equal(2, power.EffectiveExponent);
         Assert.Equal("2.25", power.MultiplierText);
         Assert.Equal(20, power.Power);
-        // multiplier-rebalance 改写：文案顺序随公式改为"基础 × 倍率 + 加值"（原 "（基础 9 + 位置加值 0）× 2.25 = 20"，数值 20 不变）。
-        Assert.Equal("基础 9 × 2.25 + 位置加值 0 = 20", power.FormulaText);
+        // 段 A 改写：文案顺序随公式改回"（基础 + 加值）× 倍率"（原 "基础 9 × 2.25 + 位置加值 0 = 20"，数值 20 不变：⌊(9 + 0) × 9 / 4⌋）。
+        Assert.Equal("（基础 9 + 位置加值 0）× 2.25 = 20", power.FormulaText);
     }
 
     [Fact]
@@ -100,7 +100,10 @@ public class 批次预演必须显示的信息Tests
         //   P1 H1–H4 堡垒 + H5、H6 倍增：⌊18×2.25⌋=40（第 2 → 第 3）。
         //   P2 L1–L6 堡垒 + L7、L8 倍增：⌊26×2.25⌋=58（第 1 不变）。
         //   P3 E1、E2 堡垒 + E3 倍增：⌊9×1.5⌋=13（第 4 不变）。
-        // scoring-sites 2.7 改写：旧期望含独占空格领地分 45→62（+17）/ 53 / 67 / 20 → 新期望 37→51（+14）/ 40 / 58 / 13；名次变化全部不变。
+        // 段 A 重算（总势力 = 领地 + 军势，恰为规格算例 45 → 62）：原 37→51（+14）/ 40 / 58 / 13 → 45→62（+17）/ 53 / 67 / 20；名次变化全部不变。
+        //   P0 领地：A 列贴左边，B1–B7 共 7 + 上端 A8 = 8 → 37 + 8 = 45；暂放后 B1–B10 共 10 + A11 = 11 → 51 + 11 = 62。
+        //   P1 领地：G1–G6 + J1–J6 + H7 = 13 → 40 + 13 = 53。P2 领地：L 列贴右边，K1–K8 + L9 = 9 → 58 + 9 = 67。P3 领地：D1–D3 + F1–F3 + E4 = 7 → 13 + 7 = 20。
+        //   四列互不相邻到同一空格（P3 覆盖 F 列、P1 覆盖 G 列），无争议格。
         // 变异验证 M-P4：BatchPreviewBuilder 的 RankBefore 改读 after.RankOf → 本测试红 1。
         GameBoard board = TestMaps.Blank(size: 11);
         Column(board, P0, "A", 1, PieceType.Fortress, PieceType.Fortress, PieceType.Fortress, PieceType.Fortress, PieceType.Fortress, PieceType.Fortress, PieceType.Multiplier);
@@ -114,15 +117,15 @@ public class 批次预演必须显示的信息Tests
         PreviewPresentation shown = PreviewPresentation.Build(preview, EmptyHand(P0), LibertyThresholds.Default);
 
         PowerChangeView mine = Assert.Single(shown.PowerChanges, c => c.IsViewer);
-        Assert.Equal((37L, 51L, 14L, 3, 2), (mine.Before, mine.After, mine.Delta, mine.RankBefore!.Value, mine.RankAfter!.Value));
-        Assert.Contains("势力 37 → 51", mine.Text);
+        Assert.Equal(((BigInteger)45, (BigInteger)62, (BigInteger)17, 3, 2), (mine.Before, mine.After, mine.Delta, mine.RankBefore!.Value, mine.RankAfter!.Value));
+        Assert.Contains("势力 45 → 62", mine.Text);
         Assert.Contains("排名 第 3 → 第 2", mine.Text);
 
         PowerChangeView pushed = Assert.Single(shown.PowerChanges, c => c.Player == P1);
-        Assert.Equal((40L, 40L, 2, 3), (pushed.Before, pushed.After, pushed.RankBefore!.Value, pushed.RankAfter!.Value));
+        Assert.Equal(((BigInteger)53, (BigInteger)53, 2, 3), (pushed.Before, pushed.After, pushed.RankBefore!.Value, pushed.RankAfter!.Value));
         Assert.True(pushed.RankChanged);
-        Assert.Equal((58L, 1, 1), (shown.PowerChanges.Single(c => c.Player == P2).After, shown.PowerChanges.Single(c => c.Player == P2).RankBefore!.Value, shown.PowerChanges.Single(c => c.Player == P2).RankAfter!.Value));
-        Assert.Equal((13L, 4, 4), (shown.PowerChanges.Single(c => c.Player == P3).After, shown.PowerChanges.Single(c => c.Player == P3).RankBefore!.Value, shown.PowerChanges.Single(c => c.Player == P3).RankAfter!.Value));
+        Assert.Equal(((BigInteger)67, 1, 1), (shown.PowerChanges.Single(c => c.Player == P2).After, shown.PowerChanges.Single(c => c.Player == P2).RankBefore!.Value, shown.PowerChanges.Single(c => c.Player == P2).RankAfter!.Value));
+        Assert.Equal(((BigInteger)20, 4, 4), (shown.PowerChanges.Single(c => c.Player == P3).After, shown.PowerChanges.Single(c => c.Player == P3).RankBefore!.Value, shown.PowerChanges.Single(c => c.Player == P3).RankAfter!.Value));
         Assert.Equal(4, shown.PowerChanges.Length);
     }
 

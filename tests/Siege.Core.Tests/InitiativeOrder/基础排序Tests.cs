@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Scoring;
@@ -24,7 +25,7 @@ public class 基础排序Tests
 
         InitiativeReport report = match.InitiativeReports.Single();
         Assert.Equal(new[] { 1, 2, 3, 4 }, MatchFixtures.All.Select(p => report.Of(p).Rank));
-        long[] powers = [.. MatchFixtures.All.Select(p => report.Of(p).Power)];
+        BigInteger[] powers = [.. MatchFixtures.All.Select(p => report.Of(p).Power)];
         Assert.True(powers[0] > powers[1] && powers[1] > powers[2] && powers[2] > powers[3], string.Join(",", powers));
         Assert.Equal(new[] { MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3 }, report.NextOrder);
     }

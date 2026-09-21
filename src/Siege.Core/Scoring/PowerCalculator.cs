@@ -1,26 +1,31 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 
 namespace Siege.Core.Scoring;
 
 /// <summary>
-/// 势力计算（设计文档 §10）的唯一实现：覆盖 → 空格归属三态与据点控制 → 逐棋串军势 → 总势力 → 名次。
+/// 势力计算（设计文档 §10）的唯一实现：覆盖 → 空格归属三态 → 逐棋串军势 → 总势力 → 名次。
 /// 每次调用对整个盘面全量重算（design.md D2），不做增量、不缓存、不保留任何成长层数。
 /// </summary>
 /// <remarks>
-/// <para>公式：<c>棋串军势 = ⌊基础军势总和 × 1.5^min(倍增子数量, 3)⌋ + 位置加值</c>（封顶在 <see cref="Multiplier"/> 内部做；multiplier-rebalance D1：倍率只放大基础军势，位置加值不被放大），取整只作用于"基础 × 倍率"、对每条棋串各执行一次；
-/// <c>总势力 = 据点分 + 全部棋串军势之和</c>（scoring-sites D8：空格领地退出计分，独占空格只保留为展示），据点分不进倍率，不对总势力二次取整。</para>
+/// <para>公式（restore-go-core-rules D1）：<c>棋串军势 = ⌊(基础军势总和 + 位置加值) × 3^n / 2^n⌋</c>，<c>n = 倍增子数量</c>、不封顶；
+/// 位置加值 = 连珠 + 协同 + 高地，三项先求和、再与基础军势相加、最后整体乘倍率，对每条棋串各取整一次。</para>
+/// <para><c>总势力 = 独占空格数 + 全部棋串军势之和</c>（D2）：独占空格直接取 <see cref="CoverageMap.ExclusiveCellsOf"/> 的空格归属结果，
+/// 本类不另行统计覆盖；争议格、中立格（含空林地格）不计分，棋子所在格只算军势，领地分不进倍率，不对总势力二次取整。</para>
+/// <para>据点（过渡，段 B 删除）：据点控制仍照常判定并列在明细里，但据点分<b>不计入</b>总势力。</para>
+/// <para>棋串军势与总势力用 <see cref="BigInteger"/>：不溢出、不截断、不饱和；计分路径不出现浮点。</para>
 /// <para>玩家状态只用于名次过滤与明细标记；覆盖与军势对弃赛者、出局者的遗留棋子一视同仁（D7）。</para>
-/// <para>规格：openspec/changes/add-territory-power/specs/power-score</para>
+/// <para>规格：openspec/changes/restore-go-core-rules/specs/power-score</para>
 /// </remarks>
 public static class PowerCalculator
 {
     /// <summary>
-    /// 棋串军势公式（multiplier-rebalance D1/D2）：<paramref name="baseTotal"/> 经唯一的 <see cref="Multiplier.Apply"/> 乘倍率并向下取整，
-    /// 再加上 <paramref name="positionBonus"/>（连珠 + 协同 + 高地，不被倍率放大、不参与取整）；<c>e = min(n, <see cref="Multiplier.MaxExponent"/>)</c>，<paramref name="multiplierCount"/> 传原始数量。
+    /// 棋串军势公式：<paramref name="baseTotal"/> 与 <paramref name="positionBonus"/>（连珠 + 协同 + 高地）先相加，
+    /// 再经唯一的 <see cref="Multiplier.Apply"/> 整体乘倍率并向下取整；<paramref name="multiplierCount"/> 即倍率指数，不封顶。
     /// </summary>
-    public static long GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount) =>
-        checked(new Multiplier(multiplierCount).Apply(baseTotal) + positionBonus);
+    public static BigInteger GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount) =>
+        new Multiplier(multiplierCount).Apply((BigInteger)baseTotal + positionBonus);
 
     /// <summary>计算一条棋串的军势明细。</summary>
     public static GroupPower Evaluate(GameBoard board, Group group)
@@ -33,7 +38,7 @@ public static class PowerCalculator
         int synergyBonus = PieceEffects.SynergyBonus(board, group);
         int highGroundBonus = PieceEffects.HighGroundBonus(board, group);
         int multiplierCount = PieceEffects.MultiplierCount(board, group);
-        long power = GroupPowerOf(baseTotal, lineBonus + synergyBonus + highGroundBonus, multiplierCount);
+        BigInteger power = GroupPowerOf(baseTotal, lineBonus + synergyBonus + highGroundBonus, multiplierCount);
         return new GroupPower(group.Owner, group.Stones, baseTotal, lineBonus, synergyBonus, highGroundBonus, multiplierCount, power);
     }
 
@@ -84,29 +89,24 @@ public static class PowerCalculator
         {
             PlayerStatus status = roster is null ? PlayerStatus.Active : roster[player];
             ImmutableArray<Coord> exclusive = coverage.ExclusiveCellsOf(player);
-            // 弃赛 / 出局者遗留棋子控制的据点照常计入其盘面势力（R-4），名次过滤只在 Rank 里做。
+            // 据点（过渡，段 B 删除）：控制中的据点仍列入明细供展示，但据点分不进 Total。
             ImmutableArray<SiteHolding> sites =
             [
                 .. siteStates.Where(st => st.Controller == player).Select(st => new SiteHolding(st.Coord, st.Tier, siteValues.Of(st.Tier), st.Kind)),
             ];
-            long siteScore = 0;
-            foreach (SiteHolding site in sites)
-            {
-                siteScore = checked(siteScore + site.Value);
-            }
-
             ImmutableArray<GroupPower> groups = allGroups
                 .Where(g => g.Owner == player)
                 .Select(g => Evaluate(board, g))
                 .ToImmutableArray();
 
-            long groupTotal = 0;
+            BigInteger groupTotal = BigInteger.Zero;
             foreach (GroupPower g in groups)
             {
-                groupTotal = checked(groupTotal + g.Power);
+                groupTotal += g.Power;
             }
 
-            details.Add(new PlayerPower(player, status, exclusive, sites, groups, checked(siteScore + groupTotal)));
+            // 领地分 = 独占空格数：直接取空格归属结果（coverage-territory「空格归属三态」），不另行统计覆盖。
+            details.Add(new PlayerPower(player, status, exclusive, sites, groups, exclusive.Length + groupTotal));
         }
 
         ImmutableArray<PlayerPower> playerPowers = details.ToImmutable();
@@ -127,7 +127,7 @@ public static class PowerCalculator
             .OrderByDescending(g => g.Key);
 
         int placed = 0;
-        foreach (IGrouping<long, PlayerPower> tier in byPower)
+        foreach (IGrouping<BigInteger, PlayerPower> tier in byPower)
         {
             ImmutableArray<PlayerId> ids = tier.Select(p => p.Player).Order().ToImmutableArray();
             ranking.Add(new RankGroup(placed + 1, tier.Key, ids));

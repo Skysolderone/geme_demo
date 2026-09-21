@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -151,7 +152,7 @@ internal static class SimFixtures
     /// <summary>大回合结束事件：各玩家的名次与下一轮位置。</summary>
     internal static LogEvent RoundEnded(int completedRound, int turn, params (int Player, int Rank, int Next)[] entries)
     {
-        var values = new Dictionary<string, long> { ["ActiveCount"] = entries.Length };
+        var values = new Dictionary<string, BigInteger> { ["ActiveCount"] = entries.Length };
         foreach ((int player, int rank, int next) in entries)
         {
             values[$"P{player}.Rank"] = rank;
@@ -174,7 +175,7 @@ internal static class SimFixtures
             Type = LogEventType.Recruit,
             Player = player,
             Detail = $"candidates={candidates} picks={picks} discards=",
-            Values = new Dictionary<string, long> { ["Recruited"] = picks.Split(',', StringSplitOptions.RemoveEmptyEntries).Length, ["Revoked"] = 0, ["Deployed"] = 1 },
+            Values = new Dictionary<string, BigInteger> { ["Recruited"] = picks.Split(',', StringSplitOptions.RemoveEmptyEntries).Length, ["Revoked"] = 0, ["Deployed"] = 1 },
         };
 }
 

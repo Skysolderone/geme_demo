@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -40,7 +41,7 @@ public class 对隐藏信息的概率估计Tests
         // 变异验证 M-A5：把 (2) 的正式评价器换成调试评价器 → 红 1（本测试，四种内容的分解不再唯一）。
         RelicContent[] contents = [RelicFixtures.Command(), RelicFixtures.Emblem(PieceType.Basic), RelicFixtures.Vanguard(), RelicFixtures.Depot()];
         var officialBreakdowns = new List<string>();
-        var debugRelicRaw = new List<long>();
+        var debugRelicRaw = new List<BigInteger>();
         foreach (RelicContent content in contents)
         {
             MatchFlow match = MatchFixtures.Started(relics: [("B2", content)]);

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Relics;
@@ -52,10 +53,10 @@ public sealed record GroupOutlook(
 public sealed record EditOutlook(Coord ArtisanCell, TerrainEdit? Chosen, ImmutableArray<TerrainEdit> Legal);
 
 /// <summary>一名玩家的势力与竞争名次在本批结算前后的变化（tactical-ui 裁决 1：含被挤动的他人名次）。名次对非参赛玩家为 <c>null</c>。</summary>
-public sealed record PowerChange(PlayerId Player, PlayerStatus Status, long Before, long After, int? RankBefore, int? RankAfter)
+public sealed record PowerChange(PlayerId Player, PlayerStatus Status, BigInteger Before, BigInteger After, int? RankBefore, int? RankAfter)
 {
     /// <summary>势力增减。</summary>
-    public long Delta => After - Before;
+    public BigInteger Delta => After - Before;
 
     /// <summary>名次是否变化。</summary>
     public bool RankChanged => RankBefore != RankAfter;

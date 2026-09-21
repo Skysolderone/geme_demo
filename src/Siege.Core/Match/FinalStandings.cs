@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
 
@@ -23,7 +24,7 @@ public enum StandingGroup
 public sealed record StandingInput(
     PlayerId Player,
     PlayerStatus Status,
-    long Power,
+    BigInteger Power,
     int ControlledRelics,
     int ControlledSites,
     int Stones,

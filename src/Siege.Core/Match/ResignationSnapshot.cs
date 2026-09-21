@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Recruit;
 using Siege.Core.Relics;
@@ -16,4 +17,4 @@ public sealed record ResignationSnapshot(
     HandPrivateView Hand,
     EffectSnapshot Effects,
     ImmutableArray<Coord> ControlledRelics,
-    long Power);
+    BigInteger Power);
