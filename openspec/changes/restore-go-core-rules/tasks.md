@@ -1,7 +1,7 @@
 ## 0. 前置
 
-- [ ] 0.1 提交当前工作区的 `frontier-map` / `map-generator` 改动，完成 `frontier-map` 剩余 1 项任务，两个 change 依次归档。验证：`openspec list` 不再列出二者；`openspec/specs/map-definition` 含「地图规格档」「边疆档基准地图」，`openspec/specs/map-generation` 存在；`dotnet test -c Release` 全绿。
-- [ ] 0.2 归档后逐条核对本 change 的 `map-definition` / `map-generation` 增量：每个 MODIFIED Requirement 的标题在主规范里存在，正文除据点相关改动外与主规范逐字一致。验证：`openspec validate restore-go-core-rules --strict` 通过。
+- [x] 0.1 提交当前工作区的 `frontier-map` / `map-generator` 改动，完成 `frontier-map` 剩余 1 项任务，两个 change 依次归档。验证：`openspec list` 不再列出二者；`openspec/specs/map-definition` 含「地图规格档」「边疆档基准地图」，`openspec/specs/map-generation` 存在；`dotnet test -c Release` 全绿。
+- [x] 0.2 归档后逐条核对本 change 的 `map-definition` / `map-generation` 增量：每个 MODIFIED Requirement 的标题在主规范里存在，正文除据点相关改动外与主规范逐字一致。验证：`openspec validate restore-go-core-rules --strict` 通过。 （已核对：差异全部只与据点、内置图标识有关；另补了 5 个能力的标识改名增量。`frontier-map` 6.1 人工试玩移交 `ai-eye` 5.3。）
 
 ## 1. 段 A——军势公式与领地计分（Siege.Core/Scoring）
 

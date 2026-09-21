@@ -58,13 +58,14 @@
 - `visual-style-baseline`: 移除「据点地标」。
 - `terrain-edit`: 「改造动作集」「改造不可逆且设施无归属」去掉据点。
 - `map-definition`: 「地图为设计师固定的静态数据」「地图规格档」「人数适配预算」「4 人基准地图」「地图静态校验规则」「边疆档基准地图」去掉据点。
-- `map-generation`: 「布局规则」去掉据点布置。
-- `simulation-harness`: 「批量跑局」去掉据点分值配置，加入技术性截断。
+- `map-generation`: 「布局规则」去掉据点布置；「地图种子与确定性」内置图标识改名。
+- `ai-decision`、`map-selection`、`viewport-camera`: 仅内置图标识改名（v4 → v5、frontier-v1 → frontier-v2），行为不变：「候选格上限」「开局选图界面」「推屏与平移」「回到出生平台」「全局预览」「动态相机下的拾取正确」「悬停格坐标读数」。
+- `simulation-harness`: 「批量跑局」去掉据点分值配置，加入技术性截断；「各入口按地图标识选图」缺省图改为 v5。
 - `match-telemetry`: 「对局日志的记录内容」「数值目标回归」「平衡分析方向」去掉据点 / 碾压 / 上限 / 补偿统计。
 
 ## Impact
 
-- **前置 change**：`frontier-map`（29/30）与 `map-generator`（已完成未归档）MUST 先归档——本 change 的 `map-definition` / `map-generation` 增量以它们归档后的规范为基线。
+- **前置 change**：`frontier-map` 与 `map-generator`（均已于 2026-09-21 归档；本 change 的地图类增量已按归档后的主规范逐条核对，差异只与据点和内置图标识有关）。
 - **被回退的已归档 change**：`cap-multiplier`、`multiplier-rebalance`、`growth-pass-1`（仅倍率封顶部分）、`round-cap`、`dominance-victory`、`catch-up-recruit`、`scoring-sites`。`ai-safety-weight` 的校准数据因计分规则变化而失效，重新校准放在 `ai-eye`。
 - **受影响代码**：`Siege.Core/Scoring/*`（`PowerCalculator`、`SiteControl`、`SiteValues`、`PowerSnapshot`、`PowerScoreboard`）、`Siege.Core/Board/*`（`SiteTier`、`SiteAttribution`、`MapData`、`MapFile`、`MapValidator`、`MapProfile`、各内置地图、`FrontierMapLayout.Sites.cs` 与生成器）、`Siege.Core/Match/*`（`MatchFlow`、`MatchOptions`、`FinalStandings`、`MatchPublicView`、存档）、`Siege.Core/Preview`、`Siege.Core/Ai`（`BatchEvaluator` 中的据点估值项，最小改动到能编译、能跑，调权留给 `ai-eye`）、`Siege.Presentation`（`SiteView`、层内容、标签）、`Siege.Sim`（配置、日志、分析、报告、控制台）、`src/godot/scripts`（据点地标、HUD）。
 - **数据**：`maps/*.json` 去掉据点字段；旧存档不兼容，原型阶段不做迁移，加载时明确报错。

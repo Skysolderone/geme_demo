@@ -18,3 +18,4 @@ sim-out/
 # Siege.Sim 跑局输出（另一处历史目录名）
 out/
 cfg-safety*.json
+.codegraph/
