@@ -39,9 +39,9 @@ public class 生成确定性Tests
         Assert.True(Golden12345Digest == digest, $"gen:12345 的导出文本摘要变了：现为 {digest}。");
     }
 
-    private const int Golden12345Attempt = 8;
-    private const int Golden12345Playable = 334;
-    private const string Golden12345Digest = "D8F510CAA3A33FBA98FC631D823D54043CF1356EA0EA1315BFE446B504FEA203";
+    private const int Golden12345Attempt = 0;
+    private const int Golden12345Playable = 370;
+    private const string Golden12345Digest = "CF4009DE1668F935A5A9B2601D426A0D333FD20FD528A613CF9E37D03ADBE5D6";
 
     [Fact]
     public void 并发生成不串味()

@@ -140,9 +140,9 @@ public static class FrontierMapGenerator
         for (int i = 0; i < platforms.Length; i++)
         {
             int playable = map.BirthZones[i].Count(map.IsPlayable);
-            if (playable * 5 < platforms[i].Area * 4)
+            if (playable != platforms[i].Area)
             {
-                return $"{BirthZoneLabel.Of(i)} 的可落子格 {playable} 不足外接面积 {platforms[i].Area} 的 80%。";
+                return $"{BirthZoneLabel.Of(i)} 的可落子格 {playable} 不等于外接面积 {platforms[i].Area}：平台内不得有障碍格。";
             }
         }
 
@@ -160,9 +160,9 @@ public static class FrontierMapGenerator
         int fires = map.Sites.Values.Count(t => t == SiteTier.Campfire);
         int steles = map.Sites.Values.Count(t => t == SiteTier.Stele);
         int publicRelics = map.RelicCells.Values.Count(r => r.Zone == RelicZone.Contested);
-        if (tents != platforms.Length || fires != platforms.Length || steles != 4 || publicRelics != 7)
+        if (tents != 0 || map.Sites.Keys.Any(c => map.BirthZoneOf(c) is not null) || fires != platforms.Length || steles != 4 || publicRelics != 7)
         {
-            return $"布点数量不对：营帐 {tents}、篝火 {fires}、石碑 {steles}、公共信物 {publicRelics}。";
+            return $"布点不对（平台内不得有据点、不放营帐）：营帐 {tents}、篝火 {fires}、石碑 {steles}、公共信物 {publicRelics}。";
         }
 
         // 小平台靠中央：最小的两个平台（编号最后两个）到中央入口的沿气边距离，不大于任何一个边长最大的平台的距离。
@@ -239,7 +239,7 @@ public static class FrontierMapGenerator
         return cells > FrontierMapLayout.MaxBridgeCells ? $"桥格共 {cells} 个，超过上限 {FrontierMapLayout.MaxBridgeCells}。" : null;
     }
 
-    /// <summary>把工作态网格灌成不可变地图数据。写法与手工边疆图一致：平台内的岩石不进出生区、不标高度。</summary>
+    /// <summary>把工作态网格灌成不可变地图数据。写法与手工边疆图一致；平台是整块方块，方块内每一格都进出生区、h=2。</summary>
     private static MapData ToMapData(string id, FrontierMapLayout layout)
     {
         var obstacles = ImmutableHashSet.CreateBuilder<Coord>();
@@ -263,7 +263,6 @@ public static class FrontierMapGenerator
                 switch (layout.Cells[x, y])
                 {
                     case FrontierMapLayout.Cell.Rock:
-                    case FrontierMapLayout.Cell.PlatformRock:
                         obstacles.Add(c);
                         break;
                     case FrontierMapLayout.Cell.Water:

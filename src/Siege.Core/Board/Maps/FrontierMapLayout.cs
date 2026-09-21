@@ -45,7 +45,6 @@ internal sealed partial class FrontierMapLayout
         Rock,
         Water,
         Platform,
-        PlatformRock,
         Ramp,
         Ground,
         River,

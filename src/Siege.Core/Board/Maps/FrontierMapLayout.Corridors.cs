@@ -85,7 +85,10 @@ internal sealed partial class FrontierMapLayout
     private bool CarveEdge(int a, int b, bool newCrossingOnly)
     {
         bool horizontalFirst = _rng.NextInt(2) == 0;
-        int width = _rng.NextInt(10) < 7 ? 2 : 3;
+
+        // 3 格宽只在平台数 ≤ 6 时出现：平台留白之后没有往下调可落子格的手段，7 / 8 个平台的走廊网本来就铺得满，一律 2 格宽（design 裁决 17）。
+        // 随机数照抽不误——随机序列的消费次序不随平台数变。
+        int width = _rng.NextInt(10) < 7 || _n >= 7 ? 2 : 3;
         int sign = _rng.NextInt(2) == 0 ? 1 : -1;
         List<P>? path = FindCorridor(_nodes[a], _nodes[b], horizontalFirst, newCrossingOnly);
         if (path is null)

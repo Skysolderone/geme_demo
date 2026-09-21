@@ -18,7 +18,7 @@ public class 出生区编号显示Tests
     {
         // 期望行由夹具的平台摆放手工写出（不经渲染器）：
         //   第 1 行（y=0）：1 号台 A–E、空地 F–P、2 号台 Q–U；
-        //   第 14 行（y=13）：3 号台 A–E、空地 F–H、6 号台 J–N（其中 L14 是营帐 T）、空地 O、4 号台 P–T、空地 U。
+        //   第 14 行（y=13）：3 号台 A–E、空地 F–H、6 号台 J–N（夹具的平台内已无营帐，map-generator 裁决 18）、空地 O、4 号台 P–T、空地 U。
         MatchFlow match = MatchFlow.Create(FrontierFixtures.Map(), new GameSeed(3), MatchFixtures.All, MatchOptions.Immediate);
         var output = new StringWriter();
 
@@ -26,15 +26,15 @@ public class 出生区编号显示Tests
 
         string[] lines = [.. output.ToString().Split('\n').Select(l => l.TrimEnd('\r'))];
         Assert.Equal("  1  1  1  1  1  1  .  .  .  .  .  .  .  .  .  .  2  2  2  2  2  1", lines.Single(l => l.StartsWith("  1 ", StringComparison.Ordinal)));
-        Assert.Equal(" 14  3  3  3  3  3  .  .  .  6  6  T  6  6  .  4  4  4  4  4  .  14", lines.Single(l => l.StartsWith(" 14 ", StringComparison.Ordinal)));
+        Assert.Equal(" 14  3  3  3  3  3  .  .  .  6  6  6  6  6  .  4  4  4  4  4  .  14", lines.Single(l => l.StartsWith(" 14 ", StringComparison.Ordinal)));
 
-        // 六个区号都出现，且格数 = 平台 25 格 − 台内信物 1 − 台内营帐 1 = 23；没有 7 以上的区号。
+        // 六个区号都出现，且格数 = 平台 25 格 − 台内信物 1 = 24；没有 7 以上的区号。
         string[] boardRows = [.. lines.Where(l => l.Length > 4 && char.IsDigit(l[2]) && l[3] == ' ')];
         Assert.Equal(20, boardRows.Length);
         string cells = string.Concat(boardRows.Select(l => l[4..(4 + (20 * 3))]));
         for (int zone = 1; zone <= 6; zone++)
         {
-            Assert.Equal(23, Enumerable.Range(0, cells.Length / 3).Count(i => cells.Substring(i * 3, 3) == $" {zone} "));
+            Assert.Equal(24, Enumerable.Range(0, cells.Length / 3).Count(i => cells.Substring(i * 3, 3) == $" {zone} "));
         }
 
         Assert.DoesNotContain(" 7 ", cells, StringComparison.Ordinal);

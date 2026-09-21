@@ -31,7 +31,7 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
     /// <summary>可落子格数超过它的地图算"大图"：各入口未显式配置 K 时取 <see cref="LargeMapCellLimit"/>，否则取 0。</summary>
     public const int LargeMapPlayableThreshold = 150;
 
-    /// <summary>大图的缺省候选格上限（边疆图 377 格上实测选定，见任务 09-19-frontier-map 的实施记录）。</summary>
+    /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>
     public const int LargeMapCellLimit = 24;
 
     /// <summary>简单：贪心一条、只看即时收益。</summary>

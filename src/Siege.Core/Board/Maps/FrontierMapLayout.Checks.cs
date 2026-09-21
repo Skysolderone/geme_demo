@@ -62,7 +62,7 @@ internal sealed partial class FrontierMapLayout
         P start = Entrance;
         if (removed == Entrance)
         {
-            // 1 号平台的四角不撒岩石，西南角必为平台格。
+            // 平台是整块方块（平台内无障碍），1 号平台的西南角必为平台格。
             start = new P(Platforms[0].X, Platforms[0].Y);
         }
 

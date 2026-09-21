@@ -12,11 +12,11 @@ internal static class FrontierFixtures
     internal static readonly Coord Entrance = new(10, 9);
 
     /// <summary>
-    /// 一张<b>合法</b>的边疆档小图，数字取自规格算例「边疆档按自己的区间校验」：可落子 360、出生区（平台）6、信物 16、据点 16。
+    /// 一张<b>合法</b>的边疆档小图，数字取自规格算例「边疆档按自己的区间校验」：可落子 360、出生区（平台）6、信物 16、据点 10。
     /// 20×20 全平地草地，最上两行（第 19、20 行）整行岩石 → 400 − 40 = 360；单连通、无口袋。
     /// 6 个 5×5 平台<b>故意不对称</b>摆放（1.4：边疆档不要求旋转对称），到中央入口的气边距离依次为
     /// 11 / 10 / 10 / 7 / 4 / 2（平地无障碍 → 平台最近格到 <c>L10</c> 的曼哈顿距离，规格算例「平台 A 为 4、平台 B 为 11」即 5 号与 1 号）。
-    /// 据点：每平台中心 1 营帐 + 6 篝火 + 4 石碑；信物：每平台 1 个出生区信物 + 10 个公共信物（入口 <c>L10</c> 为高档）。
+    /// 据点：6 篝火 + 4 石碑（平台内没有据点）；信物：每平台 1 个出生区信物 + 10 个公共信物（入口 <c>L10</c> 为高档）。
     /// </summary>
     internal static MapData Map() =>
         new()
@@ -57,8 +57,6 @@ internal static class FrontierFixtures
             }.ToImmutableDictionary(r => new Coord(r.X, r.Y), r => new RelicCellSpec(r.Zone, r.Budget)),
             Sites = new (int X, int Y, SiteTier Tier)[]
             {
-                (2, 2, SiteTier.Tent), (17, 2, SiteTier.Tent), (2, 15, SiteTier.Tent),
-                (16, 14, SiteTier.Tent), (9, 3, SiteTier.Tent), (10, 13, SiteTier.Tent),
                 (6, 8, SiteTier.Campfire), (13, 8, SiteTier.Campfire), (5, 10, SiteTier.Campfire),
                 (16, 9, SiteTier.Campfire), (6, 16, SiteTier.Campfire), (13, 6, SiteTier.Campfire),
                 (9, 9, SiteTier.Stele), (11, 9, SiteTier.Stele), (10, 8, SiteTier.Stele), (10, 10, SiteTier.Stele),

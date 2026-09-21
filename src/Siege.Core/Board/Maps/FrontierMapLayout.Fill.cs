@@ -1,12 +1,12 @@
 namespace Siege.Core.Board.Maps;
 
-/// <summary><see cref="FrontierMapLayout"/> 第 5 步：填充与点缀——外海与岩石、平台内撒岩石、补空地、林地、栅栏。</summary>
+/// <summary><see cref="FrontierMapLayout"/> 第 5 步：填充与点缀——外海与岩石、补空地、林地、栅栏。平台留白：平台内不放任何障碍（design 裁决 17）。</summary>
 internal sealed partial class FrontierMapLayout
 {
     private bool FillAndDecorate(out string reason)
     {
         FillRemainder();
-        if (!ScatterPlatformRocks(out reason))
+        if (!TopUpOpenGround(out reason))
         {
             return false;
         }
@@ -83,38 +83,16 @@ internal sealed partial class FrontierMapLayout
     }
 
     /// <summary>
-    /// 平台内撒岩石（每个平台 ≤ 外接面积的 20%），数量同时用来把可落子格总数调进目标区间；仍偏少则在走廊边上开几格空地 / 林地补足。
-    /// 每撒一格立即自检：平台内可落子格必须仍连成一块（比"口袋面积 ≥ 8"更严，必然满足口袋规则），不合格的那一格撤回。
-    /// 不撒在四角（保住外接方块）与缓坡正对的平台格上。
+    /// 可落子格总数调进目标区间：平台是整块留白的方块（不撒岩石），总数只由边长组合的面积预算与走廊网决定；
+    /// 偏少则在走廊边上开几格空地 / 林地补足，偏多没有往下调的手段——超出边疆档上限即作废本次尝试（面积预算保证这几乎不发生）。
     /// </summary>
-    private bool ScatterPlatformRocks(out string reason)
+    private bool TopUpOpenGround(out string reason)
     {
         int playable = CountPlayable();
         int target = TargetMin + _rng.NextInt(TargetMax - TargetMin + 1);
-
-        int[] min = new int[_n];
-        int[] cap = new int[_n];
-        int minTotal = 0;
-        int capTotal = 0;
-        for (int i = 0; i < _n; i++)
-        {
-            min[i] = Platforms[i].Side - 4;
-            cap[i] = Platforms[i].Area / 5;
-            minTotal += min[i];
-            capTotal += cap[i];
-        }
-
-        int wanted = Math.Clamp(playable - target, minTotal, capTotal);
-        int spare = wanted - minTotal;
-        for (int i = 0; i < _n; i++)
-        {
-            int count = min[i] + (spare * (cap[i] - min[i]) / Math.Max(1, capTotal - minTotal));
-            playable -= ScatterOn(i, count);
-        }
-
         if (playable > BudgetMax)
         {
-            reason = $"可落子格 {playable} 超出边疆档上限 {BudgetMax}，平台内的岩石已撒到 20%。";
+            reason = $"可落子格 {playable} 超出边疆档上限 {BudgetMax}。";
             return false;
         }
 
@@ -169,86 +147,6 @@ internal sealed partial class FrontierMapLayout
         }
 
         return false;
-    }
-
-    private int ScatterOn(int platform, int count)
-    {
-        PlatformRect r = Platforms[platform];
-        var candidates = new List<P>();
-        for (int y = r.Y; y <= r.Y1; y++)
-        {
-            for (int x = r.X; x <= r.X1; x++)
-            {
-                bool corner = (x == r.X || x == r.X1) && (y == r.Y || y == r.Y1);
-                if (!corner && !TouchesCell(new P(x, y), Cell.Ramp))
-                {
-                    candidates.Add(new P(x, y));
-                }
-            }
-        }
-
-        int placed = 0;
-        while (placed < count && candidates.Count > 0)
-        {
-            int index = _rng.NextInt(candidates.Count);
-            P pick = candidates[index];
-            candidates.RemoveAt(index);
-            Cells[pick.X, pick.Y] = Cell.PlatformRock;
-            if (PlatformStaysWhole(r))
-            {
-                placed++;
-            }
-            else
-            {
-                Cells[pick.X, pick.Y] = Cell.Platform;
-            }
-        }
-
-        return placed;
-    }
-
-    private bool PlatformStaysWhole(PlatformRect r)
-    {
-        int total = 0;
-        P? start = null;
-        for (int y = r.Y; y <= r.Y1; y++)
-        {
-            for (int x = r.X; x <= r.X1; x++)
-            {
-                if (Cells[x, y] == Cell.Platform)
-                {
-                    total++;
-                    start ??= new P(x, y);
-                }
-            }
-        }
-
-        if (start is not { } s)
-        {
-            return false;
-        }
-
-        var seen = new bool[W, H];
-        var queue = new Queue<P>();
-        queue.Enqueue(s);
-        seen[s.X, s.Y] = true;
-        int reached = 0;
-        while (queue.Count > 0)
-        {
-            P cur = queue.Dequeue();
-            reached++;
-            foreach (P d in Dirs)
-            {
-                var n = new P(cur.X + d.X, cur.Y + d.Y);
-                if (r.Contains(n.X, n.Y) && !seen[n.X, n.Y] && Cells[n.X, n.Y] == Cell.Platform)
-                {
-                    seen[n.X, n.Y] = true;
-                    queue.Enqueue(n);
-                }
-            }
-        }
-
-        return reached == total;
     }
 
     /// <summary>林地：广场四角取 1–2 个，走廊上再取 1–2 格（不挨缓坡、不在桥上）。</summary>

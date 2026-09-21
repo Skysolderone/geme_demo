@@ -1,6 +1,6 @@
 namespace Siege.Core.Board.Maps;
 
-/// <summary><see cref="FrontierMapLayout"/> 第 6 步：布点——营帐、石碑、篝火、信物。</summary>
+/// <summary><see cref="FrontierMapLayout"/> 第 6 步：布点——石碑、篝火、信物（平台内不放营帐）。</summary>
 internal sealed partial class FrontierMapLayout
 {
     private bool PlaceSitesAndRelics(out string reason)
@@ -17,9 +17,9 @@ internal sealed partial class FrontierMapLayout
 
         for (int i = 0; i < _n; i++)
         {
-            if (!PlaceTentAndRelics(i))
+            if (!PlacePlatformRelics(i))
             {
-                reason = $"平台 {i + 1} 放不下营帐与信物。";
+                reason = $"平台 {i + 1} 放不下信物。";
                 return false;
             }
         }
@@ -47,59 +47,11 @@ internal sealed partial class FrontierMapLayout
 
     private bool IsFree(P p) => Sites[p.X, p.Y] is null && Relics[p.X, p.Y] is null;
 
-    /// <summary>营帐取平台内离缓坡最远的可落子格（平台内逐格最短路；并列取坐标序最前）；信物 1 或 2 个，离营帐与彼此至少 2 步。</summary>
-    private bool PlaceTentAndRelics(int platform)
+    /// <summary>平台内只放信物（1 或 2 个，彼此至少 2 步）；平台内没有据点——不放营帐（design 裁决 18）。</summary>
+    private bool PlacePlatformRelics(int platform)
     {
         PlatformRect r = Platforms[platform];
-        var dist = new int[W, H];
-        var queue = new Queue<P>();
-        for (int y = r.Y; y <= r.Y1; y++)
-        {
-            for (int x = r.X; x <= r.X1; x++)
-            {
-                dist[x, y] = -1;
-                if (Cells[x, y] == Cell.Platform && TouchesCell(new P(x, y), Cell.Ramp))
-                {
-                    dist[x, y] = 0;
-                    queue.Enqueue(new P(x, y));
-                }
-            }
-        }
-
-        while (queue.Count > 0)
-        {
-            P cur = queue.Dequeue();
-            foreach (P d in Dirs)
-            {
-                var n = new P(cur.X + d.X, cur.Y + d.Y);
-                if (r.Contains(n.X, n.Y) && Cells[n.X, n.Y] == Cell.Platform && dist[n.X, n.Y] < 0)
-                {
-                    dist[n.X, n.Y] = dist[cur.X, cur.Y] + 1;
-                    queue.Enqueue(n);
-                }
-            }
-        }
-
-        P? tent = null;
-        for (int y = r.Y; y <= r.Y1; y++)
-        {
-            for (int x = r.X; x <= r.X1; x++)
-            {
-                if (Cells[x, y] == Cell.Platform && (tent is not { } t || dist[x, y] > dist[t.X, t.Y]))
-                {
-                    tent = new P(x, y);
-                }
-            }
-        }
-
-        if (tent is not { } tentCell)
-        {
-            return false;
-        }
-
-        Sites[tentCell.X, tentCell.Y] = SiteTier.Tent;
-
-        var taken = new List<P> { tentCell };
+        var taken = new List<P>();
         int relics = r.Side >= 7 ? 2 : 1;
         for (int k = 0; k < relics; k++)
         {

@@ -18,9 +18,9 @@ public class 地图子命令Tests
 
         Assert.True(code == 0, err);
         Assert.Contains("地图 siege-frontier-v1  25×30", lines);
-        Assert.Contains(lines, l => l.StartsWith("出生区 6 个，各 70/54/43/31/24/24 个可落子格", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("出生区 6 个，各 81/64/49/36/25/25 个可落子格", StringComparison.Ordinal));
         Assert.Contains("信物格 16（出生区 9，公共区 7）", lines);
-        Assert.Contains("据点 16（营帐 6，篝火 6，石碑 4）", lines);
+        Assert.Contains("据点 10（营帐 0，篝火 6，石碑 4）", lines);
         Assert.Contains("地图校验通过。", lines);
 
         // 报告项：五类目标各一行，每行列出 6 个平台的距离。
@@ -30,11 +30,11 @@ public class 地图子命令Tests
         Assert.Contains(lines, l => l.StartsWith("各出生区沿气边最短距离（出生区 1/2/3/4/5/6）", StringComparison.Ordinal));
         Assert.Contains("  中央入口  10/10/11/11/4/4", lines);
 
-        // 文本图：30 行 × 25 列对齐（每格 3 字符）；第 15 行手写期望——5 号台（含台内岩石与营帐）、东西两处 3 格宽缓坡的中格、广场中心的高档信物、6 号台。
+        // 文本图：30 行 × 25 列对齐（每格 3 字符）；第 15 行手写期望——5 号台（整块留白，连营帐也没有）、东西两处 3 格宽缓坡的中格、广场中心的高档信物、6 号台。
         string[] rows = [.. text.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Length > 4 && char.IsDigit(l[2]) && l[3] == ' ')];
         Assert.Equal(30, rows.Length);
         Assert.All(rows, r => Assert.Equal(4 + (25 * 3), r.Length));
-        Assert.Contains(" 15 ~~ ## ## ## 25 ## 25 2T 25 1^ 0  0  0R 0  0  1^ 26 26 2T 26 26 ## ## ~~ ~~", lines);
+        Assert.Contains(" 15 ~~ ## ## ## 25 25 25 25 25 1^ 0  0  0R 0  0  1^ 26 26 26 26 26 ## ## ~~ ~~", lines);
         Assert.Contains("    " + string.Join("  ", Coord.ColumnLetters.Take(25).Select(c => c.ToString())), lines);
         Assert.Contains(rows, r => r.Contains("0=", StringComparison.Ordinal));          // 桥
         Assert.Contains(rows, r => r.Contains("0F", StringComparison.Ordinal));          // 林地

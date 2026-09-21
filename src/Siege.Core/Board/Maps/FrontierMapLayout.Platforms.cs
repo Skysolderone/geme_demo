@@ -12,7 +12,15 @@ internal sealed partial class FrontierMapLayout
     /// </summary>
     private bool PlacePlatforms(out string reason)
     {
-        int maxArea = 320 - (5 * _n);
+        // 平台留白（design 裁决 17）之后平台内不再撒岩石，外接面积就是平台的可落子格数，没有往下调的余地：
+        // 面积上限按平台数收紧（原为 320 − 5N = 295 / 290 / 285 / 280）。平台越多走廊网越满，留给平台的面积越少。
+        int maxArea = _n switch
+        {
+            <= 5 => 295,
+            6 => 270,
+            7 => 255,
+            _ => 240,
+        };
         int outer = _n - 2;
 
         // 边长 5–9 的抽样权重：平台多了就偏向小边长，否则绝大多数组合过不了面积上限，白白重采。

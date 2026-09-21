@@ -621,7 +621,7 @@ public sealed class MatchSession
         };
     }
 
-    /// <summary>出生区的边长：格子外接矩形的较长边（生成图的平台是正方形；台内岩石不属于出生区，但挖不掉一整行或一整列——平台内障碍 ≤ 20% 且不撒四角）。</summary>
+    /// <summary>出生区的边长：格子外接矩形的较长边（生成图与手工边疆图的平台都是整块正方形，平台内无障碍）。</summary>
     private static int SideOf(IEnumerable<Coord> zone)
     {
         Coord[] cells = [.. zone];

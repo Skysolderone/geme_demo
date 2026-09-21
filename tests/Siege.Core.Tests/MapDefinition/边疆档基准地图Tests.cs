@@ -37,8 +37,8 @@ public class 边疆档基准地图Tests
     [Fact]
     public void 平台规模()
     {
-        // 规格 Scenario：共 6 个，外接边长 5、5、6、7、8、9，全部格子 h=2，每个平台可落子格不少于外接面积的 80%。
-        // 变异 M-B1：字符画里把 5 号台一格 '5' 改成 '#'（再多挖 4 格）→ 低于 80% 红；把平台一格抬 / 降高度 → h=2 断言红。
+        // 规格 Scenario：共 6 个，外接边长 5、5、6、7、8、9，全部格子 h=2，每个平台恰是整块外接方块（格数 = 边长²，平台留白）。
+        // 变异 M-B1（平台留白修订后）：字符画里把 5 号台一格 '5' 改成 '#' → 构造当场抛出、本类全红；把平台一格抬 / 降高度 → h=2 断言红。
         Assert.Equal(6, Map.BirthZones.Length);
         for (int z = 0; z < 6; z++)
         {
@@ -49,14 +49,32 @@ public class 边疆档基准地图Tests
             Assert.Equal((side, side), (width, height));
             Assert.All(zone, c => Assert.Equal(2, Map.HeightAt(c)));
             Assert.All(zone, c => Assert.True(Map.IsPlayable(c), $"{BirthZoneLabel.Of(z)} 的 {c} 不可落子。"));
-            Assert.True(zone.Count * 100 >= side * side * 80, $"{BirthZoneLabel.Of(z)} 只有 {zone.Count} 格，不足外接 {side}×{side} 的 80%。");
-
-            // 外接方块里不属于平台的格只能是岩石（"平台内允许少量障碍"），不许混进别的高度或别的平台。
-            IEnumerable<Coord> box = FrontierFixtures.Rect(zone.Min(c => c.X), zone.Min(c => c.Y), side, side);
-            Assert.All(box.Where(c => !zone.Contains(c)), c => Assert.Contains(c, Map.Obstacles));
+            Assert.True(zone.Count == side * side, $"{BirthZoneLabel.Of(z)} 有 {zone.Count} 格，应为整块 {side}×{side}。");
         }
 
         Assert.Equal([5, 5, 6, 7, 8, 9], Sides.Order());
+    }
+
+    [Fact]
+    public void 平台留白_平台内无障碍格()
+    {
+        // 规格：平台内 MUST NOT 有障碍格（map-generator 裁决 17，负责人 2026-09-21 试玩后要求）。外接方块按规格写死的边长从出生区推出，
+        // 方块里每一格都属于本平台、可落子、不是障碍；留在平台上的只有 1–2 个信物格（边长 5–6 的 1 个、7–9 的 2 个），
+        // 平台内 MUST NOT 有据点（裁决 18：不放营帐，得分点全在平台外）。变异 M-B16：解析器恢复 'T' 并把 H15 改回 'T' → 本测试与「资源布点」红。
+        // 变异 M-B15：字符画解析里恢复"方块内允许 '#'"并把 5 号台 F15 改回 '#' → 本测试与「平台规模」红。
+        for (int z = 0; z < 6; z++)
+        {
+            ImmutableHashSet<Coord> zone = Map.BirthZones[z];
+            int side = Sides[z];
+            Coord[] box = [.. FrontierFixtures.Rect(zone.Min(c => c.X), zone.Min(c => c.Y), side, side)];
+            Assert.Empty(box.Where(Map.Obstacles.Contains));
+            Assert.All(box, c => Assert.True(zone.Contains(c) && Map.IsPlayable(c), $"{BirthZoneLabel.Of(z)} 的外接方块里 {c} 不是平台格。"));
+            Assert.Empty(box.Where(Map.Sites.ContainsKey));
+            Assert.Equal(side >= 7 ? 2 : 1, box.Count(Map.RelicCells.ContainsKey));
+        }
+
+        Assert.Equal([81, 64, 49, 36, 25, 25], Map.BirthZones.Select(z => z.Count));
+        Assert.Equal(411, Map.PlayableCount);
     }
 
     [Fact]
@@ -152,23 +170,16 @@ public class 边疆档基准地图Tests
     [Fact]
     public void 资源布点()
     {
-        // 规格 Scenario：据点 16（营帐 6、篝火 6、石碑 4），信物格 16（平台内 9、公共 7），无一重合。
-        Assert.Equal(16, Map.Sites.Count);
+        // 规格 Scenario：据点 10（篝火 6、石碑 4；平台内没有据点、没有营帐），信物格 16（平台内 9、公共 7），无一重合。
+        Assert.Equal(10, Map.Sites.Count);
         Assert.Equal(16, Map.RelicCells.Count);
         Assert.DoesNotContain(Map.Sites.Keys, Map.RelicCells.ContainsKey);
 
         Coord[] Tier(SiteTier t) => [.. Map.Sites.Where(kv => kv.Value == t).Select(kv => kv.Key).Order()];
 
-        // 营帐：每个平台内恰 1 个，且只有本平台的格与它有覆盖关系（不贴缓坡——缓坡 h=1 能覆盖 h=2）。
-        Coord[] tents = Tier(SiteTier.Tent);
-        Assert.Equal(6, tents.Length);
-        for (int z = 0; z < 6; z++)
-        {
-            Coord tent = Assert.Single(tents, c => Map.BirthZoneOf(c) == z);
-            Assert.All(
-                Map.AllCoords().Where(s => Adjacency.CoverageTargets(Map, s).Contains(tent)),
-                s => Assert.Equal(z, Map.BirthZoneOf(s)));
-        }
+        // 营帐：没有（裁决 18）；任何据点都不在平台内。
+        Assert.Empty(Tier(SiteTier.Tent));
+        Assert.All(Map.Sites.Keys, c => Assert.Null(Map.BirthZoneOf(c)));
 
         // 篝火：6 个，全在过渡带（不属于任何平台，h=0）。石碑：4 个，中央区域（到中央入口的气边距离 ≤ 3），h=0，非林地。
         Coord[] campfires = Tier(SiteTier.Campfire);

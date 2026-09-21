@@ -148,7 +148,8 @@ public static class Program
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
         Console.WriteLine(
             $"据点 {map.Sites.Count}（营帐 {map.Sites.Count(s => s.Value == SiteTier.Tent)}，篝火 {map.Sites.Count(s => s.Value == SiteTier.Campfire)}，石碑 {map.Sites.Count(s => s.Value == SiteTier.Stele)}）");
-        foreach (SiteTier tier in Enum.GetValues<SiteTier>())
+        // 该档一个都没有就不打空行（边疆图的平台内不放营帐）。
+        foreach (SiteTier tier in Enum.GetValues<SiteTier>().Where(t => map.Sites.Any(s => s.Value == t)))
         {
             Console.WriteLine($"  {tier switch { SiteTier.Tent => "营帐", SiteTier.Campfire => "篝火", _ => "石碑" }}（{Siege.Sim.Play.BoardRenderer.SiteLetter(tier)}） {string.Join(" ", map.Sites.Where(s => s.Value == tier).Select(s => s.Key).Order())}");
         }
