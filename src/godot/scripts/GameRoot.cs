@@ -192,6 +192,9 @@ public sealed partial class GameRoot : Node3D
         var powerLayer = (PowerLayerContent)_session.World.Layer(TacticalLayer.Power);
         GD.Print("[siege] 势力栏：" + string.Join("；", powerLayer.Players.Select(p => $"{Labels.Player(p.Player)} {p.CompactText}")));
         GD.Print($"[siege] 独占格 {powerLayer.Territory.Length}（" + string.Join("、", powerLayer.Territory.GroupBy(c => c.Owner!.Value).OrderBy(g => g.Key.Value).Select(g => $"{Labels.Player(g.Key)} {g.Count()}")) + "）");
+        Rect2 rank = _hud.RankPanelRect;
+        float viewportWidth = GetViewport().GetVisibleRect().Size.X;
+        GD.Print($"[siege] 势力排名面板 左 {rank.Position.X:0} 右 {rank.End.X:0} / 视口宽 {viewportWidth:0}：{(rank.End.X <= viewportWidth && rank.Position.X >= 0 ? "完整可见" : "越界")}");
 
         // 盘上六种棋子各多少枚、本局已完成哪些改造，供 art/artisan-v4/README 的人工清单对照（都读视图模型，不读地图、不判规则）。
         GD.Print("[siege] 棋子：" + string.Join("；", shot.Cells

@@ -35,7 +35,8 @@ public class 生成确定性Tests
         // restore-go-core-rules 段 B 重建（design.md D6 明文接受）：布点步骤去掉了据点，随机子流的消费次序随之改变，
         // 同一 gen: 标识产出的图与此前不同。旧值 CF4009DE…BE5D6（可落子 370）作废；新值取自段 B 完成后的实跑，连跑两次一致。
         // 非自证：变异 M-B19（PlacePublicRelics 的桥头两岸交错相位反过来）在新值上实跑红 1（只红本测试）。
-        // 注意：旧注释里的 MG-14（河道拐弯加价 6 → 1）在<b>新</b>的 gen:12345 上恰好不改变这一张图（实跑 0 红），与"改成 5 时恰好不变"同理。
+        // 注意：旧注释里的 MG-14（河道拐弯加价 6 → 1）在<b>新</b>的 gen:12345 上恰好不改变这一张图（实跑 0 红），与"改成 5 时恰好不变"同理；
+        // 段 F 6.4b 另加 `生成图的黄金值_多种子的导出文本摘要`（种子 1 / 7），MG-14 在那里红。
         GeneratedMap g = FrontierMapGenerator.GenerateDetailed(12345);
         string json = MapFile.ToJson(g.Map).Replace("\r\n", "\n", StringComparison.Ordinal);
         string digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(json)));
@@ -46,6 +47,22 @@ public class 生成确定性Tests
     private const int Golden12345Attempt = 0;
     private const int Golden12345Playable = 370;
     private const string Golden12345Digest = "2BDE685DDDC949FCA24F28B950859D27D8852EFD2C854086B9F7766963C5CAC3";
+
+    [Theory]
+    [InlineData(1UL, 1, 383, "E726108A634E025733FE54FC6059CBE8E535C2F294E9C731E1C0EBF8D4B481DC")]
+    [InlineData(7UL, 0, 370, "BC137EAEA5E4E9048FD0C89242F1BA929460D5EEC61DE42719633F27C29A8C50")]
+    public void 生成图的黄金值_多种子的导出文本摘要(ulong seed, int attempt, int playable, string golden)
+    {
+        // restore-go-core-rules 段 F 6.4b：单颗种子（gen:12345）挡不住布局参数的微调——MG-14（河道拐弯加价 6 → 1）在它上面 0 红。
+        // 扩到另外两颗种子。选种方法：在未改动的代码上导出种子 1–12 与 12345 的摘要，再在 MG-14 变异下导出一遍，1–12 全部变化、12345 不变；
+        // 取尝试序号与可落子格各不相同的 1（重试 1 次、383 格）与 7（首次成功、370 格）。黄金值取自**未变异**那次导出（连跑一致），不是由变异后的代码生成。
+        // 变异验证 MG-14（段 F 实跑）：拐弯加价 6 → 1 → 红 2（本 Theory 两行；gen:12345 那条仍绿）。
+        GeneratedMap g = FrontierMapGenerator.GenerateDetailed(seed);
+        string json = MapFile.ToJson(g.Map).Replace("\r\n", "\n", StringComparison.Ordinal);
+        string digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+        Assert.Equal(($"gen:{seed}", attempt, playable), (g.Map.Id, g.Attempt, g.Map.PlayableCount));
+        Assert.True(golden == digest, $"gen:{seed} 的导出文本摘要变了：现为 {digest}。");
+    }
 
     [Fact]
     public void 并发生成不串味()

@@ -40,7 +40,7 @@ public class 原型插旗替代路径Tests
         MatchFlow match = MatchFixtures.Create(options: MatchOptions.Immediate);
         match.PlantSequentially([(MatchFixtures.P0, 2), (MatchFixtures.P1, 2), (MatchFixtures.P2, 0), (MatchFixtures.P3, 3)]);
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, match.Serialize());
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, match.Serialize());
         Assert.Equal(new int?[] { 2, 2, 0, 3 }, restored.PlayerStates.Select(s => s.BirthZone));
         Assert.Equal(new int?[] { 2, 2, 0, 3 }, MatchFixtures.All.Select(restored.Flags.FlagOf));
         Assert.True(restored.Flags.IsLocked);

@@ -98,6 +98,6 @@ public class 百局端到端Tests(ITestOutputHelper output)
         }
 
         // 存档往返
-        Assert.Equal(match.Serialize(), MatchFlow.Restore(match.Map, match.Serialize()).Serialize());
+        Assert.Equal(match.Serialize(), MatchFlow.Restore(match.Board.BaseMap, match.Serialize()).Serialize());
     }
 }

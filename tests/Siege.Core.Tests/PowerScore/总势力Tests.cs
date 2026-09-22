@@ -89,8 +89,12 @@ public class 总势力Tests
         //    （唯一实现 Adjacency、转发 GameBoard、覆盖表 CoverageMap、高地加值 PieceEffects）。src/godot 不在 sln 里，同样纳入文本扫描（testing.md）。
         // 变异验证 M-AC2（段 A check 实跑）：ComputeCore 的 Total 改为自己遍历 board.AllCoords() + coverage.OwnershipOf 统计独占格
         //（行为完全不变，exclusive 仍供明细）→ 全套只红本测试 1 条，红在 ② 的违禁词 OwnershipOf(。
-        // 已知缺口（check 记录、未修，留给段 F 6.3）：把这份重复统计搬到 Scoring 下另一个文件、再由本类调用 → 0 红。
-        // ② 只扫 PowerCalculator.cs 的违禁词 + 仓库级 CoverageTargets( 名单，挡不住 testing.md 说的"在别处照抄一份算式"。
+        // ③ 调用者名单（段 F 6.4 补）：覆盖表的逐格查询（OwnershipOf( / SourcesOf( / UniqueCoverer( / CoverageOf(）、领地出口 ExclusiveCellsOf( 与
+        //    判据字面量 OwnershipKind.Exclusive，在全仓库（同 ② 的四个目录、递归）出现的文件按**相对路径**钉死。M-AC14 那种"把统计搬到 Scoring 下另起一个文件、
+        //    再由 PowerCalculator 调它"会让新文件进入 OwnershipOf( 的名单而红；Presentation / AI / 信物账本的合法读法在名单里，不误伤。
+        //    加新的合法读者 = 改这张表并在实现记录里写明理由。
+        // 变异验证 M-F1（段 F 实跑，= M-AC14 原样重演）：新建 Scoring/TerritoryTally.cs 逐格读 OwnershipOf 数独占格，PowerCalculator 的 Total 改用它 → 红 1（本测试 ③）。
+        //   此前同一变异 0 红（段 A check 记录的缺口）。M-F1b（= M-AC2 重跑：同文件里自己逐格读 OwnershipOf 数独占格）在补 ③ 之后仍只红本测试 1 条。
         GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("C5", Surface.Forest)]), size: 9, "G6")
             .Place("C4", TestMaps.P0).Place("D4", TestMaps.P0, PieceType.Multiplier).Place("F4", TestMaps.P1).Place("F6", TestMaps.P1)
             .Place("D6", ScoringFixtures.P2);
@@ -127,6 +131,26 @@ public class 总势力Tests
         string[] callers = [.. sources.Where(f => File.ReadAllText(f).Contains("CoverageTargets(")).Select(f => Path.GetFileName(f)!).Order(StringComparer.Ordinal)];
         Assert.Contains("CoverageMap.cs", callers);   // 反面：判据在唯一实现所在文件里确实命中
         Assert.Equal(allowed.Order(StringComparer.Ordinal), callers);
+
+        // ③ 覆盖表查询与领地判据的调用者名单（相对 src/，统一用 / 分隔）。
+        string src = Path.Combine(root.FullName, "src");
+        string Rel(string f) => Path.GetRelativePath(src, f).Replace(Path.DirectorySeparatorChar, '/');
+        var readers = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["OwnershipOf("] = ["Siege.Core/Ai/BatchEvaluator.cs", "Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+            ["SourcesOf("] = ["Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+            ["UniqueCoverer("] = ["Siege.Core/Scoring/CoverageMap.cs"],
+            ["CoverageOf("] = ["Siege.Core/Scoring/CoverageMap.cs"],
+            ["ExclusiveCellsOf("] = ["Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PowerCalculator.cs"],
+            ["OwnershipKind.Exclusive"] = ["Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+        };
+        Dictionary<string, string> texts = sources.ToDictionary(Rel, File.ReadAllText, StringComparer.Ordinal);
+        foreach ((string token, string[] expected) in readers)
+        {
+            string[] found = [.. texts.Where(kv => kv.Value.Contains(token, StringComparison.Ordinal)).Select(kv => kv.Key).Order(StringComparer.Ordinal)];
+            Assert.True(expected.Order(StringComparer.Ordinal).SequenceEqual(found),
+                $"{token} 的调用者名单变了：实际 [{string.Join(", ", found)}]，允许 [{string.Join(", ", expected)}]。领地 / 覆盖统计只允许一处实现（CoverageMap），新读者须改名单并写明理由。");
+        }
     }
 
     [Fact]

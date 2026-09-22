@@ -18,8 +18,9 @@ public class 地形改造日志与分析Tests
         new() { Action = action, Target = target, Player = player, Artisan = artisan, CausedCapture = caused };
 
     [Fact]
-    public void 回放日志改造可重建终局地形并与对局逐项一致()
+    public void 地形可离线重建()
     {
+        // 段 F 6.4e 改名（原 回放日志改造可重建终局地形并与对局逐项一致）：测试名 = Scenario 名。
         // match-telemetry「地形可离线重建」的正题：把日志里的全部改造按顺序重放到**开局地图**上，
         // 结果必须与这一局终局时的真实地形**逐项**相同——桥集合、栅栏集合、每一格的地表与可落子性。
         // 只比条数或只比自己算出来的期望值是恒真断言，挡不住"日志漏记一条改造"。
@@ -78,8 +79,9 @@ public class 地形改造日志与分析Tests
     }
 
     [Fact]
-    public void 真实跑局把改造写进日志且可离线重建地形()
+    public void 改造可查()
     {
+        // 段 F 6.4e 改名（原 真实跑局把改造写进日志且可离线重建地形）：测试名 = Scenario 名；「地形可离线重建」的正题在同名方法里，这里是附带的第二条腿。
         // 「改造可查」+「地形可离线重建」：走真实跑局（Standard——Easy 结构性地几乎不落匠人）→ 日志往返 → 重放。
         List<MatchLog> logs = BatchRunner.Execute(
             SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard), parallelism: 1);
@@ -146,8 +148,9 @@ public class 地形改造日志与分析Tests
     }
 
     [Fact]
-    public void 第11项改造分析按手算样本输出()
+    public void 改造分析分动作输出()
     {
+        // 段 F 6.4e 改名（原 第11项改造分析按手算样本输出）：测试名 = Scenario 名。
         // 分析第 11 项的逐指标手算样本。两局：
         //   局 901：第 2 大回合 P0 搭桥（匠人带改造）、第 3 大回合 P1 立栅；落盘匠人 3 枚，其中 2 枚带改造。P0 获胜。
         //   局 902：整局无改造，落盘匠人 1 枚。P1 获胜。
@@ -225,6 +228,35 @@ public class 地形改造日志与分析Tests
         Assert.Contains("排除缺改造字段的旧日志 1 局", text, StringComparison.Ordinal);
         Assert.Contains("带改造的匠人占已落匠人：50.0%（2/4）", text, StringComparison.Ordinal);
         Assert.Contains("桥 1 座，栅栏 1 道，被烧林地 0 格", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 烧林无人使用也如实给出()
+    {
+        // match-telemetry「烧林无人使用也如实给出」：一批对局里没有任何一次烧林 → 报告给出烧林 0 次与 0% 占比，MUST NOT 省略该行。
+        // 段 F 6.4e 从「改造分析分动作输出」里拆出（原来只是那条手算样本里的几行断言，没有同名方法）。
+        // 反面：同一批里搭桥与立栅确有次数，证明不是"整段都没输出"。
+        // 变异验证 M-F3（段 F 实跑）：ReportWriter 第 11 项跳过次数为 0 的动作行 → 红 2（本测试 + 改造分析分动作输出）。
+        MatchLog sample = SimFixtures.Synthetic(
+            905,
+            [
+                SimFixtures.Turn(1, 2, 0, [10, 5, 5, 5], ["C4:Artisan+B:D4"],
+                    edits: [Edit(nameof(TerrainEditKind.Bridge), "B:D4", 0, "C4")]),
+                SimFixtures.Turn(2, 3, 1, [10, 5, 5, 5], ["G6:Artisan+F:G6-H6"],
+                    edits: [Edit(nameof(TerrainEditKind.Fence), "F:G6-H6", 1, "G6")]),
+            ],
+            [],
+            SimFixtures.ResultOf(8, [0]));
+
+        TerrainEditSection t = BalanceAnalyzer.Analyze([sample]).TerrainEdits;
+        TerrainEditActionStat burn = t.Actions.Single(a => a.Action == nameof(TerrainEditKind.Burn));
+        Assert.Equal((0, 0.0), (burn.Count, burn.Share));
+        Assert.Equal(2, t.TotalEdits);
+
+        string text = ReportWriter.Render(BalanceAnalyzer.Analyze([sample]));
+        Assert.Contains("烧林：0 次（0.0%），其中直接导致提子 0 次", text, StringComparison.Ordinal);
+        Assert.Contains("搭桥：1 次（50.0%）", text, StringComparison.Ordinal);
+        Assert.Contains("立栅：1 次（50.0%）", text, StringComparison.Ordinal);
     }
 
     [Fact]

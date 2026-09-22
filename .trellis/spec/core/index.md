@@ -24,6 +24,7 @@
 - [ ] 本次涉及的每个 Scenario 都有对应测试，测试名可追溯到 Requirement 名
 - [ ] 每个新守门测试都做过变异验证并有记录（见 [测试组织](./testing.md)）
 - [ ] 没有引入 `double` / `float` 参与任何计分或倍率计算
+- [ ] 势力 / 军势 / 倍率分子分母没有用定宽整数（`int` / `long` / `Int128` 等）：一律 `BigInteger`，不溢出、不截断、不饱和（见 [确定性](./determinism.md)）
 - [ ] 没有第二处邻接遍历、第二处坐标映射、第二套覆盖语义
 - [ ] `Siege.Core` / `Siege.Sim` 没有出现 `Godot.*`
 

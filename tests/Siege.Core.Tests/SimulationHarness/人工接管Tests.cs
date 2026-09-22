@@ -70,7 +70,7 @@ public class 人工接管Tests
         // 接管后的存档可恢复，且逐字段一致（含 ImmutableArray 的 record 投影成文本比）
         string saveAfter = match.Serialize();
         Assert.NotEqual(saveBefore, saveAfter);
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, saveAfter);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, saveAfter);
         Assert.Equal(match.Board.Serialize(), restored.Board.Serialize());
         Assert.Equal(AiFixtures.PowerText(match), AiFixtures.PowerText(restored));
         Assert.Equal(AiFixtures.FlowText(match), AiFixtures.FlowText(restored));

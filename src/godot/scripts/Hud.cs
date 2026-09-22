@@ -31,6 +31,7 @@ public sealed partial class Hud : CanvasLayer
     private Label _turnSubtitle = null!;
     private Button _orderButton = null!;
     private VBoxContainer _rankBody = null!;
+    private PanelContainer _rankPanel = null!;
     private VBoxContainer _handBody = null!;
     private VBoxContainer _actionBody = null!;
     private VBoxContainer _previewBody = null!;
@@ -154,7 +155,10 @@ public sealed partial class Hud : CanvasLayer
         _rankBody.AddThemeConstantOverride("separation", 1);
         body.AddChild(_rankBody);
         Ui.Anchor(panel, 1f, 0f, -300f, 14f, -14f, 146f);
+        // 贴右上角：内容比最小宽度宽时向左长（缺省 End 会向右长出屏幕——restore-go-core-rules 段 E 截图里"领地 + 棋串"那半行被截掉）。
+        panel.GrowHorizontal = Control.GrowDirection.Begin;
         _root.AddChild(panel);
+        _rankPanel = panel;
     }
 
     private void BuildHandBar()
@@ -225,6 +229,9 @@ public sealed partial class Hud : CanvasLayer
     /// 截图自检用：除插旗提示外它都压在棋盘上，取景时必须为 <c>false</c>（见 <c>GameRoot.BeginCapture</c>）。
     /// </summary>
     public bool CenterPanelOpen => _centerPanel.Visible;
+
+    /// <summary>「势力排名」面板在屏幕上的矩形（截图取景自证：右边界不得超出视口）。</summary>
+    public Rect2 RankPanelRect => _rankPanel.GetGlobalRect();
 
     /// <summary>中央面板按内容定尺寸——插旗提示只占一条，不该盖住棋盘。</summary>
     private void CenterBox(float anchorY, float width, float height) =>

@@ -321,7 +321,7 @@ artisan-terrain-edit 段 B 的初版 M-B4 / M-B6 / M-B11 都写成 `if (false) {
 
 ### 依赖"AI 实际怎么走"的断言要把权重写死，不跟随默认值
 
-artisan-terrain-edit 段 D 把 `EvaluationWeights.Default.Safety` 由 27 改成 35，`地形改造日志与分析Tests.回放日志改造可重建终局地形并与对局逐项一致` 当场红——它的样本下界断言"样本中确实有致提子的改造"依赖 AI 在那三颗种子下的实际走法，而走法随默认权重变。
+artisan-terrain-edit 段 D 把 `EvaluationWeights.Default.Safety` 由 27 改成 35，`地形改造日志与分析Tests.回放日志改造可重建终局地形并与对局逐项一致`（restore-go-core-rules 段 F 起改名为 `地形可离线重建`）当场红——它的样本下界断言"样本中确实有致提子的改造"依赖 AI 在那三颗种子下的实际走法，而走法随默认权重变。
 
 这类测试钉的是**日志保真度**（写进去的和跑出来的一致），不是校准值。两者耦合在一起，每次调参都要重挑种子，还会让人误以为"调参把日志写坏了"。
 

@@ -34,9 +34,19 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 结算顺序（设计文档 §6.3 **七步**） | `Siege.Core` 批次结算驱动器（`SettlementDriver`）。第 3 步"同时应用本批全部改造"先于第 4 步提子，顺序不得改（设计文档 §3.4 / §6.3） |
 | 地形写入口（加桥 / 加栅 / 烧林） | `TerrainWriter.Apply` / `ApplyAll`（`Siege.Core.Board`）——唯一构造"改造后 `TerrainData`"的地方，只做加法、没有逆向入口，不碰高度 / 障碍 / 信物。盘面侧的唯一写入路径是 `GameBoard.ApplyTerrainEdits`（内部只经 `TerrainWriter`），调用点只有 `BatchRehearsal`（预演第 4 步）、`SettlementDriver.Confirm`（正式第 3 步）与 `AttributeEdits` 探针、`GameBoard.Fill`（存档回放）。守门 `地形写入口Tests.地形写入口之外不得构造改造后的地形`（IL 扫 `new TerrainData(`，白名单 = 写入口 + `TerrainData.Flat` + `MapFile` + 基准图，另配"扫描器确实命中写入口"的反面断言），变异 M-B1 已证红 |
 | 改造合法性（动作集、目标枚举与拒绝理由） | `TerrainEditRules`（`Siege.Core.Board`）——`LegalTargets` 枚举、`IsLegal` / `Reject` 判定同类同源，守门 `改造合法性Tests.拒绝理由与合法目标集合一致` 穷举全盘 144 条几何边比对。全仓调用点**只有两处**：`BatchRehearsal.ValidateShape`（`Reject`）与 `HeuristicTurnController.EditOptions`（`LegalTargets`）；表现层的可改造目标经 `BatchPreview.EditOptions` 投影，**MUST NOT** 自判。"批内唯一 / 不链式"不在本类——那是批次层（`BatchRehearsal` 的 `DuplicateEditInBatch`）的事，复制一份就是第二实现。变异 M-T2（只放宽 `Reject` 一侧）已证"改其一即红" |
+| 跑局的小回合数截断（防死循环） | `Siege.Sim` 的跑局驱动循环（`MatchSession.RunTurn` 读 `RunConfig.TurnLimit`，默认 600、0 = 不截断）。它是技术设施不是规则：以结束原因 `turn_limit` 记录、**不产生名次与胜者**、不计入胜率类指标、报告单列截断率。`Siege.Core` 里 MUST NOT 出现任何截断符号，终局只有三类规则原因；人机对局不受其约束。守门 `批量跑局Tests.截断只存在于跑局驱动循环`（扫 `src/Siege.Core/**` 的 `turn_?limit|truncat`，变异 M-E10 已证红）。restore-go-core-rules 删掉大回合上限后，Sim 要在有限时间内收尾只能靠它——别把它"升级"回规则层 |
 | 规则计算 | `Siege.Core`——表现层只消费预演结果，绝不自己算 |
 
 写新代码前先搜一遍是否已有实现。重复实现的典型症状：领地层说独占、信物层判争议。
+
+### 内置图内容一变，标识必须递增（restore-go-core-rules D6）
+
+内置图（`MapCatalog.Builtins` 里的 `siege-4p-base-vN` / `siege-frontier-vN`）的**任何**内容变化——地形、信物格、出生区，或像据点这样整类字段的增删——MUST 同时递增标识，MUST NOT 沿用旧标识。先例：v3 → v4（加计分格，裁决 S-9）、v4 → v5 与 frontier v1 → v2（摘除据点）。
+
+- 理由：日志首部、存档、扫档 `config.json` 只记标识与 `MapFile.Digest`；沿用旧标识会让"同一个标识"在不同时期指向两张图，旧数据与新数据被静默混比。
+- 旧标识 MUST 从 `Builtins` 删除，请求时报"未知地图"；`maps/<旧标识>.json` 也不得留在仓库里——否则 `MapCatalog.Resolve` 的"`maps/<标识>.json` 文件回落"会把旧标识悄悄复活（守门 `各入口按地图标识选图Tests.改名前的旧地图标识报未知地图`）。
+- 类名随标识走（`FrontierMapV1` → `FrontierMapV2`）：标识升号而类名不动是陷阱。
+- 生成图 `gen:` 标识不含生成器版本段，生成器改动后同一标识产出不同的图是**已接受**的不兼容（D6）；对应的生成确定性黄金值随之重建，并在实现记录里写明原因。
 
 ### 气与覆盖是两套边，不再恒等（terrain-model）
 

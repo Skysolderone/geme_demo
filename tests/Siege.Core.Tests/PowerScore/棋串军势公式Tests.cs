@@ -249,6 +249,8 @@ public class 棋串军势公式Tests
         // .trellis/spec/core/determinism.md：禁止 double / float / decimal 出现在任何计分、倍率、取整路径上。
         // 扫描 Scoring 目录全部源码；Math.Floor / Math.Pow 也一并禁止——它们只会配合浮点出现。
         // 变异验证 M4：Multiplier.Apply 改用 Math.Floor / Math.Pow → 本测试红（与取整边界 Theory 同时红）。
+        // 段 F 6.4：改为递归扫描（此前 Directory.GetFiles 不递归，Scoring 下新增子目录会被静默漏扫），并钉文件数下界。
+        // 变异验证 M-F2（段 F 实跑）：新建 Scoring/Probe/FloatProbe.cs（内含一个 double 常量）→ 红 2（本测试 + `UI层不含规则计算Tests.内核与表现层不出现浮点`，后者本来就递归扫全 Core）；改前本测试用不递归的 GetFiles，扫不到子目录。
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "siege.sln")))
         {
@@ -257,8 +259,8 @@ public class 棋串军势公式Tests
 
         Assert.NotNull(dir);
         string scoring = Path.Combine(dir.FullName, "src", "Siege.Core", "Scoring");
-        string[] files = Directory.GetFiles(scoring, "*.cs");
-        Assert.NotEmpty(files);
+        string[] files = Directory.GetFiles(scoring, "*.cs", SearchOption.AllDirectories);
+        Assert.True(files.Length >= 8, $"Scoring 下只扫到 {files.Length} 个源文件，口径可疑");   // 段 F 实测 8 个（含 PowerNotation / BigIntegerJsonConverter）
         // 不列 Single：LINQ 的 .Single() 会误伤；System.Single 由 float 关键字与 Math.* 一并挡住。
         var forbidden = new Regex(@"\b(double|float|decimal|Double|Decimal|Math\.(Floor|Ceiling|Round|Pow))\b");
 
@@ -267,7 +269,7 @@ public class 棋串军势公式Tests
             string[] lines = File.ReadAllLines(file);
             for (int i = 0; i < lines.Length; i++)
             {
-                Assert.False(forbidden.IsMatch(lines[i]), $"{Path.GetFileName(file)}:{i + 1} 出现浮点：{lines[i].Trim()}");
+                Assert.False(forbidden.IsMatch(lines[i]), $"{Path.GetRelativePath(scoring, file)}:{i + 1} 出现浮点：{lines[i].Trim()}");
             }
         }
     }
