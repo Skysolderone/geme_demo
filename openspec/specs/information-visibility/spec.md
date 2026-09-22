@@ -9,9 +9,9 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 1. 棋盘上每一枚棋子的位置、所属玩家与类型。
 2. 地形：每格的高度、地表、障碍，当前的桥与栅栏；对局中完成的改造与地图预置的设施 MUST 以同一形式呈现，MUST NOT 标记改造者。
-3. 每个据点的位置、档位、分值与当前控制状态。
+3. 每个空格的归属（独占及独占者 / 争议 / 中立）。
 4. 已揭示信物的位置、类型与强度，以及各信物的控制状态。
-5. 每名玩家的当前势力、势力明细、行动顺序与公开属性。
+5. 每名玩家的当前势力、势力明细（领地分与各棋串军势）、行动顺序与公开属性。
 
 #### Scenario: 改造结果公开
 - **WHEN** 某玩家的匠人架起一座桥
@@ -20,6 +20,10 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 #### Scenario: 改造者不被记录在公开视图
 - **WHEN** 查询任一设施的公开信息
 - **THEN** 其中不含任何玩家标识
+
+#### Scenario: 领地分公开
+- **WHEN** 任意玩家查询对手的势力明细
+- **THEN** 可读到对手的领地分总计与独占空格坐标集合
 
 ### Requirement: 必须隐藏的信息
 

@@ -43,7 +43,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 ### Requirement: 公开结构参数与信物来源
 
-面板 SHALL 同时显示每名玩家公开的展示数、免费选取数、手牌类型槽、部署上限，以及这些数值各自的来源：分阶段基础值、各枚信物、落后者征募补偿。
+面板 SHALL 同时显示每名玩家公开的展示数、免费选取数、手牌类型槽、部署上限，以及这些数值各自的来源：分阶段基础值、各枚信物。
 
 #### Scenario: 显示参数与来源
 - **WHEN** 玩家 B 的部署上限为 5，其中 +2 来自两枚军令信物
@@ -53,9 +53,9 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **WHEN** 任意玩家打开面板
 - **THEN** 全部玩家的四项结构参数均可见
 
-#### Scenario: 显示落后补偿来源
-- **WHEN** 玩家 D 本小回合以最后一名开始，展示数 6、选取数 4
-- **THEN** 面板显示 D 的展示数 6 标注其中 1 点来自落后补偿，选取数 4 标注其中 1 点来自落后补偿
+#### Scenario: 来源只有基础值与信物
+- **WHEN** 读取任一玩家任一结构参数的来源拆分
+- **THEN** 各来源之和等于该参数的当前值，且来源类别只包含"分阶段基础值"与"信物"
 
 ### Requirement: 弃赛玩家的面板表现
 

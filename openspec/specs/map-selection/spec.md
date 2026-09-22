@@ -9,7 +9,7 @@ TBD - created by archiving change map-generator. Update Purpose after archive.
 
 图形版 SHALL 另提供启动选项 `--map-select`，**仅用于截图与无人值守自检**：给出时强制进入选图界面。它是上面"给了地图选项 MUST 跳过选图"的**显式例外**——与 `--map=<内置标识或完整生成图标识>` 同给时，该标识只作为选图界面的预选项而不直接建局（地图文件路径、未带种子的随机请求与写错的标识 MUST 报错退出）；与 `--auto-demo` 同给时，先把选图操作（选中随机图、换一张、调平台数、非法种子、合法种子、逐个内置图、开始）自动走一遍并逐步核对，任一步不符 MUST 以失败退出，通过后照常自动演示。未给 `--map-select` 时上面两条规则不变。
 
-选图界面 SHALL 列出：内置的标准图 `siege-4p-base-v4`、内置的手工边疆图 `siege-frontier-v1`、随机图。内置图的选项标题 SHALL 用面向人的显示名（如"标准图 13×13"、"边疆图 25×30（手工）"），显示名 MUST 与标识一起登记在共用的那一份内置地图表里，界面层 MUST NOT 另带"标识 → 显示名"对照表。选中随机图时 SHALL 显示当前地图种子与平台数，并提供：
+选图界面 SHALL 列出：内置的标准图 `siege-4p-base-v5`、内置的手工边疆图 `siege-frontier-v2`、随机图。内置图的选项标题 SHALL 用面向人的显示名（如"标准图 13×13"、"边疆图 25×30（手工）"），显示名 MUST 与标识一起登记在共用的那一份内置地图表里，界面层 MUST NOT 另带"标识 → 显示名"对照表。选中随机图时 SHALL 显示当前地图种子与平台数，并提供：
 
 - **种子输入**：输入十进制地图种子后按确认生成该图；非法输入 MUST 给出提示且不改变当前图。
 - **换一张**：取一个新的地图种子并生成。
@@ -24,7 +24,7 @@ TBD - created by archiving change map-generator. Update Purpose after archive.
 - **THEN** 先显示选图界面，列出标准图、手工边疆图与随机图，背景是当前选中地图的全局预览
 
 #### Scenario: 命令行指定则跳过
-- **WHEN** 以 `--map=siege-frontier-v1` 或 `--map=gen:12345` 启动图形版
+- **WHEN** 以 `--map=siege-frontier-v2` 或 `--map=gen:12345` 启动图形版
 - **THEN** 不显示选图界面，直接进入插旗阶段
 
 #### Scenario: 换一张

@@ -45,9 +45,11 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 系统 SHALL 支持按种子批次自动执行大量对局，并汇总结果。
 
-批量跑局 SHALL 支持配置：地图、玩家数量、各玩家的 AI 难度与权重配置、据点分值（营帐 / 篝火 / 石碑）、匠人征募权重、种子范围、局数。未显式配置的据点分值与匠人权重 SHALL 取标准局值。实际生效的据点分值、匠人权重与各玩家 AI 权重 MUST 写入该批次的配置记录。
+批量跑局 SHALL 支持配置：地图、玩家数量、各玩家的 AI 难度与权重配置、匠人征募权重、小回合数截断、种子范围、局数。未显式配置的匠人权重 SHALL 取标准局值。实际生效的匠人权重、小回合数截断与各玩家 AI 权重 MUST 写入该批次的配置记录。
 
 系统 SHALL 支持并行执行；并行 MUST NOT 改变任何单局的结果。
+
+**小回合数截断**是防止不收敛对局无限运行的技术设施，不是游戏规则：默认 600，0 表示不截断。某局累计小回合数达到截断值时，跑局 SHALL 终止该局并以结束原因 `turn_limit` 记录。被截断的对局 MUST NOT 产生名次与胜者，MUST NOT 计入任何胜率或名次类指标，但 MUST 计入该批次的局数并在汇总中单列。截断 SHALL 只存在于批量跑局的驱动循环，MUST NOT 进入对局规则流程，MUST NOT 影响人机对局。
 
 #### Scenario: 批量执行并汇总
 - **WHEN** 以 200 个种子执行同强度 4 人 AI 对局
@@ -58,8 +60,20 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 - **THEN** 每个种子对应的对局结果完全一致
 
 #### Scenario: 扫档配置可追溯
-- **WHEN** 以据点分值 3 / 8 / 24、匠人权重 18、全部玩家 Safety = 7 执行一批对局
-- **THEN** 该批次的配置记录中写明 3 / 8 / 24、匠人权重 18 与四名玩家的完整权重，分析报告可据此标注口径
+- **WHEN** 以匠人权重 18、全部玩家 Safety = 7 执行一批对局
+- **THEN** 该批次的配置记录中写明匠人权重 18、小回合数截断值与四名玩家的完整权重，分析报告可据此标注口径
+
+#### Scenario: 不收敛对局被截断
+- **WHEN** 小回合数截断为 600，某局进行到第 600 个小回合仍未满足任何终局条件
+- **THEN** 该局以 `turn_limit` 结束，不产生名次与胜者
+
+#### Scenario: 截断局不污染胜率
+- **WHEN** 200 局中有 12 局以 `turn_limit` 结束
+- **THEN** 汇总报告单列"截断 12 局（6%）"，领先者胜率等指标只基于其余 188 局计算并注明样本数
+
+#### Scenario: 截断可复现
+- **WHEN** 用相同种子、相同配置与相同截断值重跑一局被截断的对局
+- **THEN** 该局在同一个小回合被截断，截断时的盘面完全一致
 
 ### Requirement: 可复现回放
 
@@ -85,7 +99,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 ### Requirement: 各入口按地图标识选图
 
-批量跑局、终端版与图形版 SHALL 都能通过一个地图选项按地图标识选图；未给出该选项时 MUST 加载 `siege-4p-base-v4`。三个入口 MUST 共用同一份"标识 → 地图"的解析，MUST NOT 各自维护一份地图清单。
+批量跑局、终端版与图形版 SHALL 都能通过一个地图选项按地图标识选图；未给出该选项时 MUST 加载 `siege-4p-base-v5`。三个入口 MUST 共用同一份"标识 → 地图"的解析，MUST NOT 各自维护一份地图清单。
 
 地图标识无法解析时，入口 MUST 报错并列出可用的地图标识，MUST NOT 静默回落到缺省地图。地图选项 MUST 在各入口的严格命令行解析中登记（未登记的选项按 `strict-cli` 报错）。
 
@@ -93,18 +107,18 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 #### Scenario: 缺省地图不变
 - **WHEN** 不带地图选项启动终端版
-- **THEN** 加载 `siege-4p-base-v4`，对局与引入本选项之前在同一种子下逐步相同
+- **THEN** 加载 `siege-4p-base-v5`，对局与引入本选项之前在同一种子下逐步相同
 
 #### Scenario: 选边疆图
-- **WHEN** 以地图标识 `siege-frontier-v1` 启动终端版
-- **THEN** 插旗提示列出 1–6 号平台，对局日志首部记录的地图标识为 `siege-frontier-v1`
+- **WHEN** 以地图标识 `siege-frontier-v2` 启动终端版
+- **THEN** 插旗提示列出 1–6 号平台，对局日志首部记录的地图标识为 `siege-frontier-v2`
 
 #### Scenario: 未知标识报错
 - **WHEN** 以地图标识 `no-such-map` 启动任一入口
 - **THEN** 入口报错退出并列出可用地图标识，不开始对局
 
 #### Scenario: 边疆图批量跑局
-- **WHEN** 在 `siege-frontier-v1` 上用 4 个 AI 批量跑 20 局
+- **WHEN** 在 `siege-frontier-v2` 上用 4 个 AI 批量跑 20 局
 - **THEN** 全部对局正常终局，批次报告给出平均大回合数、各平台被选次数与胜率、AI 单步决策耗时的均值与最大值
 
 ### Requirement: 各入口支持生成图

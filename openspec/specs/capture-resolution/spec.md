@@ -78,7 +78,7 @@ TBD - created by archiving change add-batch-deployment. Update Purpose after arc
 3. 同时应用本批次的全部改造。
 4. 同时移除所有无气的敌方棋串。
 5. 更新首次进入覆盖范围的信物并永久公开其内容。
-6. 重新计算信物控制、据点控制、空格归属、棋串军势与总势力。
+6. 重新计算信物控制、空格归属、棋串军势与总势力。
 7. 更新公开排名并检查出局与终局条件。
 
 第 5、6、7 步的具体计算分别由 `relic-control`、`power-score` 与 `elimination-endgame` 提供；本能力 SHALL 只负责按此顺序驱动它们，MUST NOT 改变步骤次序。

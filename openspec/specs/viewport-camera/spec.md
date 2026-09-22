@@ -14,10 +14,10 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 
 窗口失去焦点、指针在窗口之外、或指针停在可交互界面面板（手牌、预演、顺序条等）之上时，贴边推屏 MUST NOT 触发。
 
-整盘能在最远缩放下一屏看全的地图（如 `siege-4p-base-v4`）上，初始画面 MUST 与引入本能力之前的固定相机相同；在最远缩放下推屏被边界夹取、不产生位移（见「边界夹取」），拉近之后才可平移。
+整盘能在最远缩放下一屏看全的地图（如 `siege-4p-base-v5`）上，初始画面 MUST 与引入本能力之前的固定相机相同；在最远缩放下推屏被边界夹取、不产生位移（见「边界夹取」），拉近之后才可平移。
 
 #### Scenario: 贴边推屏
-- **WHEN** 在 `siege-frontier-v1` 上把指针移到窗口右边缘并停留
+- **WHEN** 在 `siege-frontier-v2` 上把指针移到窗口右边缘并停留
 - **THEN** 画面持续向右平移，直到指针离开感应带或到达地图边界
 
 #### Scenario: 对角推屏
@@ -33,7 +33,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 - **THEN** 画面不平移
 
 #### Scenario: 小地图上等价于固定相机
-- **WHEN** 在 `siege-4p-base-v4` 上启动图形版、不动滚轮，把指针推到任一边缘
+- **WHEN** 在 `siege-4p-base-v5` 上启动图形版、不动滚轮，把指针推到任一边缘
 - **THEN** 初始画面与固定相机时相同，画面不平移，整盘始终完整可见
 
 ### Requirement: 缩放
@@ -71,7 +71,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 相机 MUST NOT 因其他玩家行动而自动移动。
 
 #### Scenario: 开局对准自家
-- **WHEN** 本机玩家在 `siege-frontier-v1` 上锁定 3 号平台，第 1 大回合开始
+- **WHEN** 本机玩家在 `siege-frontier-v2` 上锁定 3 号平台，第 1 大回合开始
 - **THEN** 3 号平台的全部格子都在画面内，四周留有约 2 格余量
 
 #### Scenario: 贴边的大平台整个可见
@@ -79,7 +79,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 - **THEN** 1 号平台的 9 行 9 列全部在画面内；注视点被夹取而偏离平台中心是允许的
 
 #### Scenario: 小图开局不拉近
-- **WHEN** 在 `siege-4p-base-v4` 上插旗锁定
+- **WHEN** 在 `siege-4p-base-v5` 上插旗锁定
 - **THEN** 相机位姿与锁定前相同
 
 #### Scenario: 空格回家
@@ -99,7 +99,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 `--pick-check` 的多位姿层 SHALL 在一屏看不全的地图上另加"全局预览"一档。
 
 #### Scenario: 一键看全图再回来
-- **WHEN** 在 `siege-frontier-v1` 上拉近并推到地图一角后按 `M`，再按一次 `M`
+- **WHEN** 在 `siege-frontier-v2` 上拉近并推到地图一角后按 `M`，再按一次 `M`
 - **THEN** 第一次按下后 25×30 的整盘与四边坐标标注都在画面内；第二次按下后相机回到按下前的位姿
 
 #### Scenario: 预览里拉近
@@ -111,7 +111,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 - **THEN** 退出预览，注视点回到自己的出生平台，缩放距离为切入预览前的值
 
 #### Scenario: 小图没有全局预览
-- **WHEN** 在 `siege-4p-base-v4` 上查看界面并按 `M`
+- **WHEN** 在 `siege-4p-base-v5` 上查看界面并按 `M`
 - **THEN** 没有"全局"按钮，相机不动
 
 ### Requirement: 动态相机下的拾取正确
@@ -128,7 +128,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 失败与遮挡都 MUST 指出位姿与格子坐标。换相机参数、层高或地图后 MUST 重跑该自检。
 
 #### Scenario: 平移后拾取
-- **WHEN** 相机平移到 `siege-frontier-v1` 的右上角，点击屏幕上某格顶面的中心
+- **WHEN** 相机平移到 `siege-frontier-v2` 的右上角，点击屏幕上某格顶面的中心
 - **THEN** 选中的正是该格
 
 #### Scenario: 崖后低地仍可点
@@ -136,7 +136,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 - **THEN** 两种缩放下都选中该 h=0 格，而不是前面的高台格
 
 #### Scenario: 两层自检
-- **WHEN** 在 `siege-frontier-v1` 上运行 `--pick-check`
+- **WHEN** 在 `siege-frontier-v2` 上运行 `--pick-check`
 - **THEN** 逐格居中层 411 格 × 2 种缩放全部选中自身；多位姿层 7 个位姿下没有失败，遮挡（若有）逐条打印位姿与坐标
 
 #### Scenario: 夹取后未能居中的格按遮挡分类
@@ -153,7 +153,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 
 #### Scenario: 缩放带俯角变化会被抓住
 - **WHEN** 相机实现被改成缩放时俯角随之变化 5°
-- **THEN** `--pick-check` 在 `siege-4p-base-v4`、`siege-frontier-v1` 与 `gen:987654321:p8` 上都以失败退出并指出位姿与格子坐标
+- **THEN** `--pick-check` 在 `siege-4p-base-v5`、`siege-frontier-v2` 与 `gen:987654321:p8` 上都以失败退出并指出位姿与格子坐标
 
 #### Scenario: 拾取同层偏移一格会被抓住
 - **WHEN** 拾取实现被改成选中目标格同层的相邻格
@@ -170,7 +170,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 - **THEN** 悬停时显示的坐标与对局日志里这一手的坐标相同
 
 #### Scenario: 两位数行号
-- **WHEN** 指针悬停在 `siege-frontier-v1` 第 1 列第 27 行的格子上
+- **WHEN** 指针悬停在 `siege-frontier-v2` 第 1 列第 27 行的格子上
 - **THEN** 读数为 `A27`
 
 #### Scenario: 不在格上

@@ -60,3 +60,29 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 **实施中要盯的点**：势力 / 军势必须用不溢出的整数类型（`3^n` 远超 64 位）；`EvaluationWeights` 注释里的 `Safety = 35` 与主规范「默认评价权重的校准」写的 5 早已不一致，③ 统一重写；`PowerGain` 在不封顶倍率下可能淹没其余维度，对数刻度是备选但**启用前须用户确认**；codegraph 在本仓库未初始化（`codegraph init`），子 agent 规则 #7 目前无法满足。
 
 **未做**：`.trellis/spec/core/` 的 AI / 计分编码约定没有现在写，而是挂在 ①6.3、②4.5、③5.2（代码落地后按实写）；`.trellis/tasks/` 尚未建任务。
+
+
+## Session: 2026-09-22 — ① restore-go-core-rules 实施完成并归档
+
+**状态**：① 六段（A–F）全部实施、复核、提交并归档为 `openspec/changes/archive/2026-09-22-restore-go-core-rules`；Trellis 任务已归档。测试 **1197 全绿**，`siege.sln` 与 `src/godot/Siege.Godot.csproj` 均 0 警告，`openspec validate --all --strict` 31 项全过。
+
+**提交链**：`d668d2f` 段 A（军势整体乘倍率不封顶、领地计分、BigInteger）→ `1682f97` 段 B（据点摘除、内置图改名 v5 / frontier-v2）→ `66e410f` 段 C（势力归零即出局、三类终局）→ `697bcbe` 段 D（删落后补偿）→ `c30484b` 段 E（Sim 截断与报告、领地显示）→ `940f090` 段 F（设计文档 v1.5、守门补强、20 局冒烟）→ 归档提交。
+
+**下一步：② `life-shape`（0/23）**，之后 ③ `ai-eye`（0/22）。开新会话后从 `openspec/changes/life-shape/tasks.md` 起步，照 ① 的节奏：建 Trellis 任务 → 每段一个 trellis-implement → 主会话前台复核（构建 + Godot 单独构建 + 全量测试 + 必要时补变异）→ 提交 → 下一段。
+
+**本会话形成的工作约定（新会话必须沿用）**：
+- **同一时间只跑一个任务**（用户 2026-09-22 明确要求，已存记忆）：agent 在跑时主会话不起后台 dotnet / 变异 / 第二个 agent。
+- 变异还原必须逐字节校验 **并 `os.utime` 刷新 mtime**，否则 MSBuild 跳过重建、下一次"全绿"是假的（`testing.md` 已写）。识别信号：失败数恰等于上一条变异的红数。
+- Godot 在编辑器外运行读 **Debug** 程序集：只做 Release 构建会截到旧代码（段 F 踩到，`testing.md` 已写）。
+- `openspec archive` 遇到"某能力全部 REMOVED → 空 spec"会报错中止，但**中止前已写入按字母序排在它前面的主规范**（提示却说 No files were changed）。退役整个能力时：先把该能力的增量移出 change → 归档 → 再手工 `git rm` 该 spec 目录，并把增量放回归档目录留档。
+- `.claude/agents/trellis-implement.md` / `trellis-check.md` 已加 `mcp__codegraph__*`，**需新会话才生效**；codegraph 索引已在 `.codegraph/`（已 gitignore）。
+
+**负责人本会话裁决（2026-09-22）**：
+- 6.2 只跑 20 局冒烟，**不补 200 局**；完整 200 局基线由 `life-shape` 4.4 首次给出，`ai-eye` 校准以它为准。
+- 匠人征募权重统一取代码缺省 **10**（设计文档 §9 已改），旧扫档值 5 随计分口径失效。
+
+**20 局冒烟关键数字**（`sim-out/restore-smoke20/`；Standard、v5、种子 1–20、七维权重未校准、匠人 10）：截断 0/20，终局 20/20 为整轮 Pass；平均结束第 18.7 大回合（中位 15、最长 69，目标 7–10）；单串军势峰值 29776；倍增子选择率 88.1%；整局无提子 5/20；第 3 大回合领先者胜率 35%（样本不足）。
+
+**修正了 ai-eye 的前提**：原以为删上限后 AI 不收敛，实测 **Standard 已收敛**（贪心"总分严格提高才落子"自带停手）；当初"200 局会近 100% 截断"的判断是拿 Easy 数据套到 Standard 上，是主会话的错误。ai-eye 真正要解决的是**对局偏长**与**不打仗**；Easy 是否收敛仍未验证。
+
+**遗留给后续的已知项**：`M-C12`（Pass 后出局检查）只能靠伪造存档触发，最薄；`改造可查` 未钉住 Scenario 的具体局面；势力排名面板左缘离按钮条约 140 px；`.trellis/tasks/` 下 `09-19-frontier-map`、`09-20-map-generator` 两个 Trellis 任务对应的 openspec change 已归档，但 Trellis 任务本身尚未归档（上一会话遗留，未处理）。
