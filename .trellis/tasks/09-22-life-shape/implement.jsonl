@@ -1,0 +1,8 @@
+{"file": "openspec/changes/life-shape/design.md", "reason": "全文，含 D1–D7 与裁决记录 R1–R5"}
+{"file": "openspec/changes/life-shape/tasks.md", "reason": "当前段对应组"}
+{"file": "openspec/changes/life-shape/specs/", "type": "directory", "reason": "8 个能力增量，Scenario 即测试名"}
+{"file": ".trellis/tasks/09-22-life-shape/prd.md", "reason": "验收标准与分段"}
+{"file": ".trellis/spec/core/index.md", "reason": "核心约定索引"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现清单"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "确定性"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/Debug 程序集"}
