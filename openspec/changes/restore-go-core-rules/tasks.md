@@ -37,11 +37,11 @@
 
 ## 5. 段 E——Sim、表现层、Godot
 
-- [ ] 5.1 （**部分完成于段 C**：`RunConfig.TurnLimit` / `--turn-limit` / 结束原因 `turn_limit` / 截断局无名次 / `LogResult.Truncated` 已就位；剩旧选项"已删除"报错、配置文件旧键报错、六个 Scenario 测试）`Siege.Sim`：`RunConfig` 去掉据点分值、大回合上限、碾压、补偿选项（严格 CLI：传入旧选项报错并说明已删除）；加入"小回合数截断"（默认 600，0 不截断），只存在于跑局驱动循环；被截断的局记 `turn_limit`、无名次。测试：`simulation-harness`「批量跑局」六个 Scenario。验证：全绿；守门——`Siege.Core` 中不出现截断相关符号。
-- [ ] 5.2 日志与分析：`MatchLog` 去掉据点记录、加领地分与结束原因，大数以精确整数文本写入；`BalanceAnalyzer` / `ReportWriter` 删据点、碾压、补偿段，加终局原因分布、截断率、领地分占比，对局长度与地图可落子格数 / 信物格数并列；胜率类指标排除截断局并注明样本数。测试：`match-telemetry` 三条 Requirement 的全部 Scenario（含"大数不失真"）。验证：全绿；旧日志缺字段时按既有约定整局排除并计数。
-- [ ] 5.3 终端版：`BoardRenderer` / `ConsoleController` 去掉据点符号与图例，势力栏显示"领地 + 棋串"；大数显示不换行溢出。验证：脚本化终端测试全绿；人工看一局文本盘面。
-- [ ] 5.4 `Siege.Presentation`：删除 `SiteView`；势力层内容改为独占格着色 + 领地分 + 棋串分；`Labels` 去掉据点文案。测试：`tactical-layers`「势力层显示领地分」及既有层测试；`information-visibility`「领地分公开」。验证：全绿。
-- [ ] 5.5 Godot：删除三档地标与控制旗（`BoardView` / `Visuals` / `LowPoly`）；HUD 势力显示改"领地 + 棋串"，≥ 10^6 用缩写、明细给精确值；选图界面缺省 v5。验证：`--auto-demo`、`--auto-demo --pick-check`、`--screenshot` 在 v5、`--map=siege-frontier-v2`、`--map=gen:12345` 上退出码 0；各截一张图放 `sim-out/` 供负责人过目。
+- [x] 5.1 （**部分完成于段 C**：`RunConfig.TurnLimit` / `--turn-limit` / 结束原因 `turn_limit` / 截断局无名次 / `LogResult.Truncated` 已就位；剩旧选项"已删除"报错、配置文件旧键报错、六个 Scenario 测试）`Siege.Sim`：`RunConfig` 去掉据点分值、大回合上限、碾压、补偿选项（严格 CLI：传入旧选项报错并说明已删除）；加入"小回合数截断"（默认 600，0 不截断），只存在于跑局驱动循环；被截断的局记 `turn_limit`、无名次。测试：`simulation-harness`「批量跑局」六个 Scenario。验证：全绿；守门——`Siege.Core` 中不出现截断相关符号。
+- [x] 5.2 日志与分析：`MatchLog` 去掉据点记录、加领地分与结束原因，大数以精确整数文本写入；`BalanceAnalyzer` / `ReportWriter` 删据点、碾压、补偿段，加终局原因分布、截断率、领地分占比，对局长度与地图可落子格数 / 信物格数并列；胜率类指标排除截断局并注明样本数。测试：`match-telemetry` 三条 Requirement 的全部 Scenario（含"大数不失真"）。验证：全绿；旧日志缺字段时按既有约定整局排除并计数。
+- [x] 5.3 终端版：`BoardRenderer` / `ConsoleController` 去掉据点符号与图例，势力栏显示"领地 + 棋串"；大数显示不换行溢出。验证：脚本化终端测试全绿；人工看一局文本盘面。
+- [x] 5.4 `Siege.Presentation`：删除 `SiteView`；势力层内容改为独占格着色 + 领地分 + 棋串分；`Labels` 去掉据点文案。测试：`tactical-layers`「势力层显示领地分」及既有层测试；`information-visibility`「领地分公开」。验证：全绿。
+- [x] 5.5 Godot：删除三档地标与控制旗（`BoardView` / `Visuals` / `LowPoly`）；HUD 势力显示改"领地 + 棋串"，≥ 10^6 用缩写、明细给精确值；选图界面缺省 v5。验证：`--auto-demo`、`--auto-demo --pick-check`、`--screenshot` 在 v5、`--map=siege-frontier-v2`、`--map=gen:12345` 上退出码 0；各截一张图放 `sim-out/` 供负责人过目。
 
 ## 6. 段 F——收尾
 
@@ -51,4 +51,6 @@
 - [ ] 6.4 补强段 A check 报出的两处守门缺口（`implement.md`「段 A check 记录」）：（a）`总势力Tests.领地计分直接取空格归属结果` ② 只扫 `PowerCalculator.cs` 的违禁词与仓库级 `CoverageTargets(` 名单，挡得住"同文件另写统计"（M-AC2 红 1）却挡不住"另起文件照抄一份"（M-AC14 红 0）——补"算式形状 / `OwnershipOf(` 调用者名单"扫描，注意仓库级限制 `OwnershipOf(` 会误伤 Presentation / Sim 的合法读法；（b）`计分路径不含浮点` 用 `Directory.GetFiles` 不递归，`Scoring/` 将来加子目录会静默漏扫，改为递归。验证：两条各配一次变异（照抄到新文件应红、子目录里塞浮点应红）。
 - [ ] 6.4b 生成图黄金值扩到 2–3 颗种子（段 B 待决 8）：`MG-14`（河道拐弯加价 6→1）在新的 `gen:12345` 上实跑 **0 红**，单颗种子的导出摘要挡不住布局参数改动；非自证目前只靠 M-B19（桥头相位反转，红 1）。验证：扩种子后重跑 MG-14 必须红，并记录红数。
 - [ ] 6.4c 修正往返恢复测试的地图来源（段 D 待决 5）：`对局持久化Tests`、`百局端到端Tests:101`、`原型插旗替代路径Tests:43`、`人工接管Tests:73` 恢复时传的是 `match.Map`，应为 `Board.BaseMap`——有地形改造的局面下会恢复出错误地形（`人工接管Tests.交还后继续` 在段 D 已因此暴露并修正）。验证：给其中至少一条构造含改造的局面，改前红、改后绿。
+- [ ] 6.4d 修 Godot 右上角「势力排名」面板在 1600 宽下被屏幕边缘截断（段 E 截图发现：领地 + 棋串拆分让行变长）。验证：v5 / frontier-v2 / gen:12345 截图里面板完整可见，控制台打印面板右边界 ≤ 视口宽。
+- [ ] 6.4e 测试名对账（段 E 待决 4）：`match-telemetry` 的 `改造可查`、`地形可离线重建`、`改造分析分动作输出`、`烧林无人使用也如实给出` 四条 Scenario 在 `地形改造日志与分析Tests` 里仍以旧方法名覆盖，改为测试名 = Scenario 名。验证：逐条对账表写入 implement 记录。
 - [ ] 6.5 全量回归：`dotnet build` 零警告；`dotnet test -c Release` 全绿；`openspec validate restore-go-core-rules --strict` 通过。

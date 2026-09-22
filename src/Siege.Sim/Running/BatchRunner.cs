@@ -17,8 +17,11 @@ public sealed record BatchSummary
 
     public int Failed { get; init; }
 
-    /// <summary>以旧日志的「达大回合上限」（<c>MajorRoundLimit</c>）终局的局数（round-cap D5 不收敛口径；该原因已从规则层删除，段 E 5.2 改为截断计数）。</summary>
+    /// <summary>未以规则级原因终局的局数（不收敛口径，与 <see cref="LogResult.Converged"/> 同一判据）：跑局层截断 <c>turn_limit</c> + 旧日志的「达大回合上限」。</summary>
     public int Capped { get; init; }
+
+    /// <summary>被小回合数截断（<c>turn_limit</c>，restore-go-core-rules D5）的局数：计入本批局数、单列，这些局没有名次与胜者。</summary>
+    public int Truncated { get; init; }
 
     public int Excluded { get; init; }
 
@@ -128,6 +131,7 @@ public static class BatchRunner
         long ms = 0;
         int failed = 0;
         int capped = 0;
+        int truncated = 0;
         int excluded = 0;
         var failedFiles = new List<string>();
         foreach (MatchLog log in logs)
@@ -145,6 +149,11 @@ public static class BatchRunner
             if (!r.Converged)
             {
                 capped++;
+            }
+
+            if (r.Truncated)
+            {
+                truncated++;
             }
 
             if (log.IsContaminated)
@@ -168,6 +177,7 @@ public static class BatchRunner
             Completed = logs.Count - failed,
             Failed = failed,
             Capped = capped,
+            Truncated = truncated,
             Excluded = excluded,
             Reasons = reasons,
             WinsByPlayer = wins,

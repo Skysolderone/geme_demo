@@ -426,7 +426,8 @@ public sealed class MatchSession
     private static string RankingText(PowerSnapshot? power) =>
         power is null ? string.Empty : string.Join(",", power.Ranking.Select(g => $"{g.Rank}:{string.Join("=", g.Players)}"));
 
-    private static List<PlayerEntry> PlayerEntries(MatchPublicView view)
+    /// <summary>快照里的逐玩家势力明细（日志写入函数）。internal 供测试用真实盘面走写入路径（大数、领地分变化在真实跑局里未必出现）。</summary>
+    internal static List<PlayerEntry> PlayerEntries(MatchPublicView view)
     {
         var list = new List<PlayerEntry>();
         foreach (PlayerFlowState state in view.Players)
@@ -439,6 +440,7 @@ public sealed class MatchSession
                 Status = state.Status.ToString(),
                 HasEstablishedPower = state.HasEstablishedPower,
                 Total = power?.Total ?? 0,
+                TerritoryScore = power?.TerritoryScore ?? 0,
                 Rank = view.Power?.RankOf(state.Player),
                 HandTypes = hand is null ? [] : [.. hand.Types.Select(t => t.ToString())],
                 Groups = power is null ? [] : [.. power.Groups.Select(g => new GroupEntry

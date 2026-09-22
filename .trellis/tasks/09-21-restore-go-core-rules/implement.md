@@ -750,3 +750,173 @@ M-A1 / M-A2 对应 tasks 1.2 明确要求的两条；M-A3 对应 1.3 要求的"�
 2. 旧存档弃赛快照里嵌套的 `CatchUpReveal/Pick` 静默忽略——接受：只是留痕、不参与计算，旧存档迁移在范围外。顶层废弃字段仍一律点名拒绝。
 3. 日志旧字段是否列入契约——并入段 E 5.2 决定。
 5. 往返恢复传 `match.Map` 而非 `Board.BaseMap` 的潜伏测试缺陷（`对局持久化Tests`、`百局端到端Tests:101`、`原型插旗替代路径Tests:43`、`人工接管Tests:73`）——现在能过只因局面里恰好没有地形改造。已落成任务 6.4c。
+
+## 段 E——Sim、表现层、Godot（tasks 5.1–5.5，2026-09-22）
+
+段 D 基线 1162 全绿 → 段末 **1194 全绿**（+32），`dotnet build -c Release` 0 警告 0 错误；`src/godot/Siege.Godot.csproj` 单独 `dotnet build -c Release --no-incremental` 0 警告 0 错误。
+Godot 自检 9 条（v5 / `siege-frontier-v2` / `gen:12345` × `--auto-demo` / `--auto-demo --pick-check` / `--screenshot`）退出码全 0。未提交。
+理解代码用了 `codegraph_explore` / `codegraph_node`（`PlayerPower`、`LayerContents.Power` 一带），其余靠定向 grep + 编译器收敛；未读媒体（截图只做像素统计）。
+
+### 改了什么
+
+1. **5.1 Sim 配置与截断**
+   - `CommandLine.RetiredOptions`：`--max-rounds` / `--dominance-start` / `--no-catch-up` / `--site-values` 四个旧选项在 `EnsureRecognized` 里先于"未知选项"报 **"选项 --X 已删除：原因"**（点名 restore-go-core-rules 与裁决号）；对全部子命令生效，一般拼错仍走"未知选项 + 最相近建议"。
+   - `RunConfig.FromJson`：先扫顶层键，`SiteValues` / `MaxMajorRounds` / `DominanceStartRound` / `CatchUpRecruit`（大小写不敏感）→ `FormatException("配置项 X 已删除：…")`；其余未知键仍宽容。旧日志首部里的配置不经 `FromJson`（直接反序列化），照常可读。
+   - `BatchSummary.Truncated`（`summary.json` 单列截断局数）；`Capped` 注释改为"未以规则级原因终局 = 截断 + 旧日志达上限"。
+   - 截断本体（`RunConfig.TurnLimit` / `turn_limit` / 无名次）段 C 已就位，本段只补测试与守门。
+2. **5.2 日志与分析**
+   - `PlayerEntry.TerritoryScore`（`int?`，旧日志 null）：`MatchSession.PlayerEntries` 写 `PlayerPower.TerritoryScore`；`PlayerEntries` 改 `internal` 供真实盘面写入路径测试。
+   - `MatchLog` 类型注释：八类映射表改写（第 6 类补领地分、删 `EffectiveMultiplierCount`；第 7 类补结束原因与 `HasEstablishedPower`），并列出**不属于契约**的已删旧字段（见待决 D3）。
+   - `BalanceAnalyzer`：`Analyze` 里一次算出 `ranked = 纳入局 − 截断局`，凡读胜者 / 名次的段只吃它：领先者（`Leader(ranked)`，`Targets` 的领先者偏离同源）、出生区与平台边长（`BirthZones(all, ranked)`：区数仍取全部纳入局）、成长轴、滚雪球的"第 3 大回合位置 → 最终名次"、选择与信物控制的**胜率样本**、改造者胜率。选择率、控制时长、改造次数等非胜率量仍用全部纳入局。旧日志的 `MajorRoundLimit` 局有规则名次，**不排除**。
+   - 新段：`EndingSection`（三类规则终局按优先级各给局数 / 占比 / 平均结束大回合，截断单列并对目标 0 给偏离，旧原因计 `Other`，`Ranked` = 胜率有效样本）、`MapScaleSection`（首部可落子格数与信物格数的范围 / 均值，缺可落子格的旧日志计数）、`TerritoryShareSection`（终局快照参赛玩家 Σ领地分 ÷ Σ总势力，逐局取平均；缺字段或势力为 0 的局整局排除并计数）；势力成长曲线增加领地分均值（棋串军势 = 总势力 − 领地分）。
+   - `ReportWriter`：首部加"胜率 / 名次类指标排除截断局 N 局，有效样本 M 局"；§16 第 5 项并列地图规模，新增第 7 项截断率（目标 0）；领先者样本行注明已排除截断局数；§17 新增第 8 项终局原因分布；第 10 项改"领地与高地"，加领地分占比。据点 / 碾压 / 补偿段此前各段已删，本段确认无残留。
+   - `Statistics.Deviation.ToString`：越界端为 0（截断率目标 0）时不再输出无意义的"（+0%）"相对幅度。§16 类型注释与报告说明由"六项"改"七项"（第 7 项截断率）。
+3. **5.3 终端版**：`BoardRenderer.PowerText` = "势力 T（领地 a + 棋串 g）"，≥ 10^6 用缩写；去掉 `{power,6}` 定宽；`PlayCommand` 的每步播报同用它。终局名次与预演仍给精确值。
+   人工看一局（`dotnet run --project src/Siege.Sim -c Release -- play --seed 42 --difficulty Easy`，脚本 `1/1/B1 B/v/ok/pass/pass`，退出码 0，268 行）摘录：
+   ```
+   玩家4 思考中… 玩家4 落子 B10F B11F（势力 14（领地 6 + 棋串 8））
+     玩家1(你)   势力 0（领地 0 + 棋串 0）  名次 2  手牌类型 B
+     玩家4      势力 14（领地 6 + 棋串 8）  名次 1  手牌类型 B
+   部署 [1/3] 暂放 B1:B > 预演：合法，不提子，你的势力 0 → 3
+   部署 [1/3] 暂放 B1:B > 玩家1(你) 落子 B1B（势力 3（领地 2 + 棋串 1））
+   玩家4 思考中… 玩家4 落子 C10M B12M D12B（势力 33（领地 10 + 棋串 23））
+     玩家1(你)   势力 3（领地 2 + 棋串 1）  名次 4  手牌类型 BF
+   ```
+   盘面图例里已无据点符号（段 B 已删）。
+4. **5.4 Presentation**：`PowerLayerContent` 新增 `Territory`（只含独占空格、带独占者，直接投影 `PlayerPower.ExclusiveCells`，不在表现层另扫覆盖表）；`PlayerPowerRowView` 新增 `GroupScore`（取 Core 新增的 `PlayerPower.GroupScore` = Σ棋串军势）与 `CompactText` / `ExactText`；`Labels.CompactPower` / `PowerBreakdown`。`SiteView` 与据点文案段 B 已删。
+   - Core 新增 `Scoring.PowerNotation.Compact`（显示用短写法：< 10^6 精确；10^6–10^14 用 M/B/T 三位有效数字向零截断；≥ 10^15 用 `d.dde指数`）。放 Core 是因为终端版（Sim 不引用表现层）与图形版要共用同一份；纯整数 / 字符串运算，`Scoring/` 的无浮点守门照样扫到它。
+5. **5.5 Godot**：`BoardView.DrawPower` 先按独占者阵营色给 `Territory` 着色，再画倍率热区柱；`Hud` 名次栏用 `CompactText`，势力层明细用 `ExactText`（精确值）；三档地标 / 控制旗段 B 已删（`grep Tent|Campfire|Stele|SiteFlag|据点` 零命中）；选图缺省 v5（`MapSelectModel` 读 `MapCatalog.DefaultId`），`GameRoot` 两处"缺省 v4"陈旧注释改正。
+   - `--rounds` 停止点的收尾文案由"终局：第  大回合，未知；无名次"改为"演示停止：跑满 N 个大回合（--rounds 停止点，不是终局；对局停在第 M 大回合）；无名次"。
+   - 新增截图选项 `--shot-power`：取图前收起全部面板后只打开势力层（其文字面板在左列，不盖棋盘中心）；截图行另打"势力栏"与"独占格"两行取景自证。
+
+### 新增测试（Requirement → 类，Scenario → 方法）
+
+| 类 | 方法 | 说明 |
+|---|---|---|
+| `SimulationHarness/批量跑局Tests` | `不收敛对局被截断` | 截断 10：`turn_limit`、TurnCount 10、无名次无胜者、对局仍 InProgress、`Match.Result` 为 null；钉缺省 600 |
+| | `截断局不污染胜率` | 188 局有名次（`RankedSample` 克隆）+ 12 局真实截断（有第 3 大回合领先者）→ 领先者样本 188、胜数 = 测试内独立判定；报告"截断（turn_limit）12 局（6.0%）""有效样本 188 局"；`summary.Truncated` 12 |
+| | `截断可复现` | 同种子同截断两跑：快照 / 事件 / 确定性文本逐字节相同、末条快照有子；截断 12 的前 12 条与截断 14 的前 12 条相同 |
+| | `截断只存在于跑局驱动循环`（守门） | `src/Siege.Core/**/*.cs`（≥ 80 个文件）不匹配 `(?i)turn_?limit|truncat`；反面：`Sim/Running/MatchSession.cs` 命中 |
+| | `已删除的选项报已删除`（Theory 4） | CLI 退出码 1、报文含"--X 已删除"与 change 名、不含"未知选项"、不建目录；解析器直测；反面 `--max-round` 仍报"未知选项" |
+| | `配置文件里的已删除配置项被拒绝`（Theory 5，含小写键） | `FromJson` 抛 `FormatException` 点名 + "已删除"；反面 `_comment` 宽容、新配置不写这些键；CLI `--config` 退出码 1 不建目录 |
+| `MatchTelemetry/对局日志的记录内容Tests` | `领地分可查` | 真实盘面 → `PlayerEntries` → 文本往返：P0 独占 14 → 9（C5–H5 一排，P1 落 D6 / H4），P1 3 |
+| | `大数不失真` | 12×12 平地 120 枚倍增子一串：军势 = 测试内 `120·3^120/2^120`（> 2^63），日志文本含该精确整数、解析后逐位相等；领地分 12 |
+| `MatchTelemetry/数值目标回归Tests` | `时长与地图规模并列` | 370/16、411/20、旧日志 null/18 → 可落子 370–411（平均 390.5；旧日志 1 局）、信物 16–20（平均 18），且落在报告 §16 第 5 项 |
+| | `截断率如实报告` | 185 规则终局 + 3 旧日志达上限 + 12 截断 → 截断 12、6%、偏离"超出目标上限 0%"；反面 0 截断判 Within |
+| `MatchTelemetry/平衡分析方向Tests` | `终局原因分布` | 30 / 150 / 8 / 12 → 15% / 75% / 4% 与平均结束大回合 5 / 8 / 12，截断单列；某类 0 局仍列行 |
+| | `领地分占比口径` | 600 中 180 → 30%；+ 50% 一局 → 批平均 40%；弃赛玩家（领地 500）与缺字段旧日志各作被排除样本；另钉成长曲线两条腿（第 8 大回合总势力均值 150、领地分均值 45 → 棋串 105；旧日志领地分无样本、不回填 0） |
+| `InformationVisibility/始终公开的信息Tests` | `领地分公开` | 三名对手从各自公开世界读 P0 领地分 12 与独占坐标集合，势力层着色格同一份 |
+| `TacticalLayers/势力层领地与高地Tests` | `大数势力显示缩写且明细给精确值`（Theory 11） | 手写期望：999999 / 1.00M / 1.23M / 12.3M / 123M / 1.99B / 999T / 1.00e15 / 5.15e47 / -1.23M；行视图 `CompactText` / `ExactText` |
+| `SimulationHarness/终端对局Tests` | `状态栏大数势力缩写不撑破一行` | 120 枚倍增子局面：状态行为缩写、不含 23 位精确值、≤ 100 列 |
+
+先红：新测试引用的 `EndingSection` / `MapScaleSection` / `TerritoryShareSection` / `PlayerEntry.TerritoryScore` / `PowerLayerContent.Territory` / `PlayerPowerRowView.GroupScore` / `PowerNotation` / `BatchSummary.Truncated` 在旧实现上不存在——**编译期红**（与段 A 同口径）。行为层的"先红"由下方变异逐条给出。
+
+### "空证"测试的替换
+
+段 C 待决 2：`SimFixtures.Sample`（4 局 × 16 小回合）全是 `turn_limit` 截断局、胜者全空，读胜者 / 名次的测试在它上面是空证。
+
+- 新夹具 **`SimFixtures.RankedSample`**：同为 Easy 4 人、种子 11–14 的**真实对局**，跑满 3 个大回合（第 3 大回合结束事件已写入）后，除"幸存者"外三人弃赛 → 规则终局「只剩一名参赛玩家」，名次取自规则层；幸存者按局轮换（P0–P3），领先者胜数实测落在 1–3 之间（测试里有 `InRange(wins, 1, 3)` 的样本口径断言，恒真 / 恒假的判定都抓得到）。另加 `SimFixtures.TruncatedResult`（截断结果行形状）供合成样本当"被排除的样本"。
+- 替换 / 补强的测试：`数值目标回归Tests.领先者胜率回归`（改用 RankedSample，并把 4 局真实截断样本混进来；期望值由测试内读第 3 大回合事件与胜者独立判定，不回调 `LeadersAtRound3`）、`分析排除测试污染Tests.默认排除调试局`（Sample → RankedSample，否则新口径下领先者样本为 0）、`平衡分析方向Tests.棋子选择率与胜率` / `出生区公平性`（各补一段截断样本腿）、新增的 `截断局不污染胜率`。
+- 对应变异：M-E3（领先者段改吃全部纳入局）红 2、M-E3b（领先者恒不获胜）红 2、M-B5 重跑（取名次 2 的玩家）红 3、M-E4 / M-E4b 各红 1（详见变异表）。旧样本上 M-E3b 这种"恒不获胜"是恒绿的——那正是空证的形状。
+
+### 既有测试改写逐条（旧 → 新 + 依据）
+
+| 测试 | 旧 → 新 | 依据 |
+|---|---|---|
+| `对局日志的记录内容Tests.日志覆盖七类记录` | 改名 **`日志覆盖八类记录`**；新增第 6 类领地分腿（每条快照每名玩家非 null、`Total = 领地分 + Σ军势` 独立加和、样本有非零领地分）；其余断言不变 | 规格 Scenario 名早已是"八类"；本段加领地分字段 |
+| `数值目标回归Tests.领先者胜率回归` | 样本 `Sample` → `RankedSample` + 4 局截断；小样本 `Leader.Samples` 4（旧 4 读的是截断局，新口径下旧样本会是 0）；新增 `Successes == wins`；大样本 200 克隆 → 200 有名次 + 12 截断，`Samples` 仍 200、`Successes == wins × 50` | 段 C 待决 2：旧测试是空证 |
+| `分析排除测试污染Tests.默认排除调试局` | 样本 `Sample` → `RankedSample`；期望 `(15, 4, 11, 0)` 与 `Leader.Samples == 4` **数值不变** | 新口径下旧样本的领先者样本为 0，"污染局被排除"会只剩纳入计数一条腿 |
+| `候选格上限Tests.V4GoldenTurnHash` | `F3DA0A40…48D8F6E0` → `49BCFA49…11DEA30C` | **走法一步没变**：快照新增 `PlayerEntry.TerritoryScore` 一个字段。临时探针把同一局 24 条快照逐条去掉该字段（JsonNode 往返与原文逐字节一致）后的哈希**恰为旧值 F3DA0A40…**；领地分非零 90 处。探针已删除 |
+| `势力层领地与高地Tests.势力层显示领地分` | 摆法 P0 E5 + P1 J9 → 规格算例 P0 C5–G5（独占 12）+ P1 J9 + P2 G9（H9 争议）；新增独占格集合 / 着色 / 争议格不在其中 / `GroupScore` 断言；原逐行复算保留 | tasks 5.4：势力层改"独占格着色 + 领地分 + 棋串分" |
+| `平衡分析方向Tests.棋子选择率与胜率` / `出生区公平性` | 原断言不变，各追加一段截断样本腿（Basic 选择 (5, 2)、胜率仍 (1, 1)；出生区 0 仍 (40, 40)） | 胜率类指标排除截断局 |
+| `批量跑局Tests.扫档配置可追溯` | 追加 `config.json` 原文 `TurnLimit == 4` 与首部 `Config.TurnLimit == 4` | 段 B 注释写明欠的"小回合数截断值"半条 |
+| `终端对局Tests.脚本输入能落子并走到输入耗尽` | 追加：势力栏"领地 + 棋串"两项之和 = 总势力（≥ 8 处、有非零领地） | tasks 5.3 |
+| `SimFixtures` | `Turn(…, territory:)`、`ResultOf(…, reason:)`、`TruncatedResult`、`RankedSample` / `RankedMatch`（四名玩家权重写死为当前七维取值，testing.md「依赖 AI 实际怎么走的断言要把权重写死」） | 夹具 |
+
+无删除的测试。
+
+### 变异验证逐条
+
+`mut_e.py`（scratchpad，不入库）：二进制读写、按文件实际行尾归一锚点并 `assert count == 1`、`finally` 还原 → 逐字节断言 → `os.utime` 刷新 mtime；`DOTNET_CLI_UI_LANGUAGE=en` 解析统计行。每条一次全量 `dotnet test -c Release`（含重建）。变异前后 `git diff` 逐字节相同；确认跑见文末。
+
+| 编号 | 改了哪一行、改成什么 | 红 |
+|---|---|---|
+| M-E1 | `CommandLine.EnsureRecognized`：已删除选项的筛选恒空（退回"未知选项"） | 4（`已删除的选项报已删除` 四行） |
+| M-E2 | `RunConfig.FromJson`：已删除键命中后不抛（静默忽略） | 5（`配置文件里的已删除配置项被拒绝` 五行） |
+| M-E3 | `BalanceAnalyzer.Analyze`：`Leader(ranked, …)` → `Leader(included, …)` | 2（`领先者胜率回归`、`截断局不污染胜率`）——**空证已替换的证据** |
+| M-E3b | `Leader`：`anyWins++` → `anyWins += 0`（领先者恒不获胜；段 C 样本上恒绿的形状） | 2（同上） |
+| M-E4 | `Selection`：胜率样本不看截断（`pickedBy.Where(_ => rankable.Count >= 0)`） | 1（`棋子选择率与胜率`） |
+| M-E4b | `Analyze`：`BirthZones(included, ranked)` → `BirthZones(included, included)` | 1（`出生区公平性`） |
+| M-E5 | `MatchSession.PlayerEntries`：`TerritoryScore = null`（写入端漏写） | 4（`日志覆盖八类记录`、`领地分可查`、`大数不失真`、候选格上限黄金哈希） |
+| M-E6 | `TerritoryShare`：分母误用 `总势力 − 领地分` | 1（`领地分占比口径`） |
+| M-E6b | `TerritoryShare`：不过滤非参赛玩家 | 1（`领地分占比口径`） |
+| M-E7 | `MatchSession.RunTurn`：截断判据 `_turn >= TurnLimit` → `>` | 5（`不收敛对局被截断`、`截断可复现`、`批量执行并汇总`、`日志覆盖八类记录`、候选格上限黄金哈希） |
+| M-E8 | `LayerContents.Power`：独占格集合掺入争议格（以独占格呈现） | 1（`势力层显示领地分`） |
+| M-E9 | `PowerNotation.CompactThreshold`：10^6 → 10^7 | 3（Theory 的 1.00M / 1.23M / -1.23M 三行） |
+| M-E10 | Core `MatchFlow.cs` 注入 `internal const int TurnLimit = 0;` | 1（`截断只存在于跑局驱动循环`） |
+| M-E11 | `RunConfig.TurnLimit` 加 `[JsonIgnore]`（配置记录漏写截断值） | ≥ 10：含 `扫档配置可追溯`、`不收敛对局被截断`、`批量执行并汇总` 与 7 条回放类测试（回放按首部配置重建，截断值丢失后按缺省 600 重跑，极慢）。**第 40 分钟我手动终止了 testhost**，已跑 1181 条中红 10、13 条未跑；还原仍在 `finally` 里完成并逐字节校验 |
+| M-E12 | `MapScale`：可落子格取 `Relics.Count` | 1（`时长与地图规模并列`） |
+| M-E13 | `Ending`：截断计数改读 `!Converged`（旧日志达上限也算截断） | 1（`截断率如实报告`） |
+| M-E14 | `Ending`：截断局并入整轮 Pass | 1（`终局原因分布`） |
+| M-E15 | `LayerContents.Power`：独占格集合漏掉 P0 | 2（`领地分公开`、`势力层显示领地分`） |
+| M-E16 | `BoardRenderer.Status`：只打总势力（去掉领地 / 棋串拆分） | 1（`状态栏大数势力缩写不撑破一行`；`脚本输入能落子…` 的正则也命中每步播报，故不红——状态栏由前者钉住） |
+| M-E17 | 势力成长曲线的领地分一律记 0（`territories.Add(0)`） | 1（`领地分占比口径` 的成长曲线腿；复核阶段补） |
+| M-B5 重跑 | `LeadersAtRound3`：`rank == 1` → `rank == 2` | 3（`领先者胜率回归`、`截断局不污染胜率`、`默认排除调试局`）——段 C 之后原 1 红是在截断样本上，本段在有名次样本上重跑 |
+
+**空证替换的证据**：M-E3 / M-E3b / M-B5 都红在 `领先者胜率回归` 与 `截断局不污染胜率` 上；M-E4 / M-E4b 各红在补了截断腿的 `棋子选择率与胜率` / `出生区公平性` 上。
+确认跑：变异全部还原后 `dotnet build -c Release --no-incremental` 0 警告、`dotnet test -c Release` **1194 全绿、退出码 0**；变异前后 `git diff` 除 tasks.md 勾选外逐字节相同。
+
+### 截图（`sim-out/restore-shots/`，未读进会话）
+
+全部为 `--auto-demo --rounds=9`（缺省种子 20260915，不带 `--headless`），1600×900：
+
+| 文件 | 帧 / 大回合 | 取景自证（控制台） |
+|---|---|---|
+| `siege-4p-base-v5-power.png` | 第 66 帧 / 第 6 大回合，`--shot-power` | 信息层 势力、手牌面板 关、中央面板 关；势力栏 红 2（领地 0 + 棋串 2）/ 蓝 61（14 + 47）/ 金 53（16 + 37）/ 紫 45（11 + 34）；独占格 41（蓝 14、金 16、紫 11） |
+| `siege-frontier-v2-power.png` | 第 90 帧 / 第 7 大回合，`--shot-power --map=siege-frontier-v2` | 势力、关、关；红 11（6 + 5）/ 蓝 86（30 + 56）/ 金 91（25 + 66）/ 紫 99（50 + 49）；独占格 111 |
+| `gen-12345-power.png` | 第 90 帧 / 第 7 大回合，`--shot-power --map=gen:12345` | 势力、关、关；红 19（13 + 6）/ 蓝 87（49 + 38）/ 金 96（38 + 58）/ 紫 76（42 + 34）；独占格 142 |
+| `*-board.png`（三张） | 同帧、不带 `--shot-power` 的默认棋盘 | 信息层 关、手牌面板 关、中央面板 关——供对照 |
+
+每张势力层图里各玩家独占格数与势力栏"领地"项逐人相等（控制台两行互证）。
+
+像素统计（PIL，不读图）：同帧"势力层 vs 默认棋盘"差分像素占比——紧中心框（x 35–65%、y 30–70%）v5 81.1% / 边疆 81.5% / gen 86.3%，左列面板区 97.8–100%（势力层着色 + 场景弱化 + 左列势力面板确实在图里）；三张势力层图的"中央面板"读数全为"关"。
+选帧：v5 在第 70 / 90 帧"中央面板 开"（第 90 帧演示已在第 10 大回合停止；第 70 帧的中央面板是哪一种未查——按 `RefreshCenter` 只可能是终局结算 / 插旗 / 手牌 / 本人征募之一），按 testing.md 改选第 66 帧。
+
+### 前段待决逐条处理
+
+| 待决 | 处理 |
+|---|---|
+| 段 A-2 JSON 大数写法 | **保持**不加引号的 JSON 数字（与旧 `long` 逐字节兼容，读入同时接受整数字符串）。本段 `大数不失真` 在真实盘面上钉住：`⌊120·3^120/2^120⌋` 写出为精确十进制、读回逐位相等 |
+| 段 A-4「各棋子势力占比」归因口径 | **保持**"军势 − 基础 − 全部位置加值"整块归倍增子。该段不在现行 match-telemetry 规格里，旧口径在新公式下不可分；没有更好的可分口径，不删（仍有信息量） |
+| 段 A-7 `GroupScoreView.MaxHeatLevel = 3` | **保持**为显示档位（柱高 0.12 + 0.14 × 档位，档位 = min(倍增子数, 3)）；倍率文字与军势照旧取精确值。势力层另加独占格阵营着色后，领地一眼可读，柱高无需对数档 |
+| 段 B-4 5.4 独占格着色、5.5 ≥ 10^6 缩写 | **已做**：`PowerLayerContent.Territory` + `BoardView.DrawPower` 着色；`PowerNotation.Compact` 供 HUD 与终端 |
+| 段 B-6 `PlayerEntry` 无领地分 | **已做**：`PlayerEntry.TerritoryScore`（旧日志 null，领地分占比整局排除并计数） |
+| 段 B-7 `--site-values` / 配置 `SiteValues` 的"已删除" | **已做**：CLI 四个旧选项与配置文件四个旧键都报"已删除"并说明原因 |
+| 段 C-1 5.1 剩余部分 | **已做**：旧选项 / 旧键报错、六个 Scenario 测试（三个既有 + 三个新增）、Core 零截断符号守门 |
+| 段 C-2 Sim 样本全是截断局（空证） | **已替换**：`RankedSample` + 截断样本混入 + 独立判定期望，见上"空证"一节与变异 |
+| 段 C-4 Godot `--rounds` 改义的实际运行 | **已实跑**：三张图 `--auto-demo` 退出码 0，停止行为"演示停止：跑满 4 个大回合……无名次"（文案本段改正，原来会打出"第  大回合，未知"）；`--rounds=9` 的截图跑同样退出码 0 |
+| 段 D-3 日志旧字段是否列入契约 | **不列入**：`MatchLog` 类型注释新增一段"已删除、不属于日志契约的旧字段"清单（据点各字段、首部三项、`Protection`、`CatchUpReveal/Pick`、`EffectiveMultiplierCount`），读入忽略；`HasEstablishedPower` 列入第 7 类（出局判据标记） |
+
+### 待决 / 需主会话裁决
+
+1. **`PowerNotation`（显示用短写法）放在了 `Siege.Core/Scoring`**：终端版在 `Siege.Sim`，不引用 `Siege.Presentation`，要让终端与图形版共用一份缩写规则只能放 Core。它只做"整数 → 文字"，不参与任何比较或计分；备选是让 Sim 引用 Presentation（改工程依赖），或两处各写一份（违背唯一实现）。请裁决是否接受。
+2. **新增 Godot 截图选项 `--shot-power`**（tasks 未点名）：只为让负责人在截图里看到 5.4 / 5.5 的势力层着色；它走 `LaunchArgs` 的严格解析，不影响三条自检命令。若不希望增加选项，可删掉并改截默认棋盘（默认棋盘上看不到领地着色）。
+3. **出生区段"信物生成收敛局（N）/ 未收敛局（N）"的 N 现在只数有名次的局**（它们是该段胜率的样本数）；区数仍取全部纳入局。报告首部已写明截断局数与有效样本数。
+4. **领地分占比口径取"逐局比例的平均"**（规格 Scenario"该局 30%，报告给出全批次平均"），不是全批次 Σ领地 ÷ Σ势力；单串军势不封顶后后者会被个别天文数字局主导。
+5. **`RankedSample` 的规则终局是人为造的**（第 4 大回合开头三人弃赛），只用来验证"读胜者 / 名次"的机制与截断排除口径，不代表真实胜负分布；真实 200 局基线在段 F 6.2。
+6. **四条 match-telemetry Scenario 仍以旧名存在**：`改造可查` / `地形可离线重建` / `改造分析分动作输出` / `烧林无人使用也如实给出` 在 `地形改造日志与分析Tests` 里以别的方法名覆盖（artisan-terrain-edit 时期命名），本段未改名，留段 F 对账时一并处理。
+7. **v5 自动演示里红方（P0，演示席位）在第 10 大回合势力归零**（第 90 帧截图读数），按裁决 #3 出局——属新规则下的正常现象，记录备查。
+8. **M-E11 的红数是下界**：`[JsonIgnore]` 让日志首部与 config.json 丢掉 `TurnLimit`，回放类测试按首部重建配置、落回缺省 600 重跑，所以极慢——这恰说明"配置记录漏写截断值"会被回放守门抓到，不是测试脆弱。我在第 40 分钟终止了 testhost；还原在 `finally` 里完成并逐字节校验，随后 `--no-incremental` 全量构建 + 1194 全绿闭环。
+9. **`RankedSample` / `Sample` 依赖 AI 实际走法**：`RankedMatch` 已把权重写死为当前七维取值；`Sample`（截断样本）只用到"截断、有第 3 大回合领先者"这类结构性质，未写死。ai-eye 改权重后若 `Sample` 的这些性质失守，相应测试会在样本口径断言处响亮失败。
+
+### 主会话补记（段 E 复核，2026-09-22）
+
+复核：两处构建 0 警告 0 错误，`dotnet test -c Release` **1194 全绿**。主会话亲自看了 `sim-out/restore-shots/siege-4p-base-v5-power.png`：势力层按阵营给独占格着色、无据点地标；左侧明细 `（基础 12 + 位置加值 0）× 2.25 = 27` 与 ⌊12 × 9/4⌋ 相符；蓝方 61 = 领地 14 + 棋串 47 自洽。
+
+**发现一处表现缺陷**：右上角「势力排名」面板在 1600 宽下被屏幕边缘截断（"势力 61（领地 14 + 棋串…"后半段看不到）。多出的"领地 + 棋串"拆分让行变长，面板没有随之收窄或换行。已落成任务 6.4d。
+
+**待决裁决**：
+1. `PowerNotation` 放在 `Siege.Core.Scoring`——接受。只被 Presentation / Sim / Godot 的显示路径调用，不进计分与比较；放 Core 是为了让终端与图形版共用一份缩写规则，比"Sim 引用 Presentation"或"两边各写一份"都好。它在 `Scoring/` 下，受 `计分路径不含浮点` 扫描约束，不得引入浮点。
+2. Godot `--shot-power` 截图选项——保留。没有它默认棋盘看不到领地着色，截图无法作判据。
+3. 口径：出生区"收敛 / 未收敛局"只数有名次的局——接受；领地分占比取逐局比例平均——接受，理由成立（不封顶军势会让 Σ/Σ 被个别局主导），报告里须写明口径。
+4. 四条 match-telemetry Scenario 仍用旧测试方法名——已落成任务 6.4e，段 F 对账改名。

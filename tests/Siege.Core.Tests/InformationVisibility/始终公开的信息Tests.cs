@@ -49,6 +49,32 @@ public class 始终公开的信息Tests
     }
 
     [Fact]
+    public void 领地分公开()
+    {
+        // 规格 Scenario（information-visibility「始终公开的信息」第 5 条）：任意玩家查询对手的势力明细 → 可读到对手的领地分总计与独占空格坐标集合。
+        // P0 占 C5–G5 一排 5 子 → 独占 12 格（第 4 / 6 行 C–G 各 5 格 + B5、H5）。三名对手各自从自己的公开世界读取，逐格与权威明细一致；
+        // 势力层的独占格着色与领地分也对每名对手给出同一份（不是只对本人可见）。
+        // 变异验证 M-E15：势力层的独占格集合漏掉 P0（只投影其余玩家）→ 实跑红 2（本测试、势力层显示领地分）。
+        // 公开视图（MatchPublicView.Power）对所有观察者是同一个对象，不存在按观察者裁剪的路径，所以变异落在表现层投影上。
+        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(P0, "C5", "D5", "E5", "F5", "G5");
+        Scoring.PlayerPower truth = match.Scoreboard.Latest!.Of(P0);
+        string[] expected = ["B5", "C4", "C6", "D4", "D6", "E4", "E6", "F4", "F6", "G4", "G6", "H5"];
+        Assert.Equal(expected, truth.ExclusiveCells.Select(c => c.ToNotation()).Order(StringComparer.Ordinal));
+
+        foreach (PlayerId viewer in new[] { P1, MatchFixtures.P2, MatchFixtures.P3 })
+        {
+            ViewerWorld world = match.World(viewer);
+            Scoring.PlayerPower seen = world.Public.View.Power!.Of(P0);
+            Assert.Equal(12, seen.TerritoryScore);
+            Assert.Equal(expected, seen.ExclusiveCells.Select(c => c.ToNotation()).Order(StringComparer.Ordinal));
+
+            var layer = (PowerLayerContent)world.Layer(TacticalLayer.Power);
+            Assert.Equal(12, layer.Players.Single(r => r.Player == P0).TerritoryScore);
+            Assert.Equal(expected, layer.Territory.Where(c => c.Owner == P0).Select(c => c.Coord.ToNotation()).Order(StringComparer.Ordinal));
+        }
+    }
+
+    [Fact]
     public void 气可推导()
     {
         // 设计文档 §13.1：任意棋串的气数与气位可从公开信息推导。拐角串 D4-D5-E5（testing.md：共享气 E4 被 D4 与 E5 同时邻接），

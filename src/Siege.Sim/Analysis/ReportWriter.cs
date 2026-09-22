@@ -6,7 +6,7 @@ namespace Siege.Sim.Analysis;
 
 // 本文件属于离线分析输出层：允许浮点（裁决 14）。
 
-/// <summary>把 <see cref="BalanceReport"/> 渲染成纯文本报告：§16 六项目标 + §17 七个方向各一段、收敛单独一段、旁证警告置顶。</summary>
+/// <summary>把 <see cref="BalanceReport"/> 渲染成纯文本报告：§16 七项目标（第 7 项为截断率）+ §17 各方向各一段（含第 8 项终局原因分布）、收敛单独一段、旁证警告置顶。</summary>
 public static class ReportWriter
 {
     public static string Render(BalanceReport r)
@@ -17,6 +17,8 @@ public static class ReportWriter
         sb.AppendLine();
         sb.AppendLine($"日志 {r.TotalLogs} 局：纳入 {r.Included}，排除调试 AI / 人工接管局 {r.ExcludedContaminated}（{(r.Options.IncludeContaminated ? "已显式要求包含" : "默认排除")}），排除失败局 {r.ExcludedFailed}。玩家数 {r.PlayerCount}。");
         sb.AppendLine($"胜率类指标要求样本 ≥ {r.Options.RequiredMatches} 局；置信区间一律为 Wilson 得分区间（95%）。");
+        EndingSection e = r.Ending;
+        sb.AppendLine($"胜率 / 名次类指标排除截断局 {e.Truncated} 局，有效样本 {e.Ranked} 局（被小回合数截断的局没有名次与胜者，restore-go-core-rules D5）。");
         sb.AppendLine();
 
         sb.AppendLine("## AI 决策质量旁证");
@@ -41,9 +43,10 @@ public static class ReportWriter
         sb.AppendLine($"- 第 4–6 大回合：{Histogram(t.DeployLimitRounds4To6)}；中位数 {t.DeployPhase2}");
         sb.AppendLine($"- 第 7 大回合以后：{Histogram(t.DeployLimitRounds7Plus)}；中位数 {t.DeployPhase3}（允许极端构筑超过 8）");
         sb.AppendLine("### 2. 势力成长曲线");
-        foreach ((int round, double mean, BigInteger maxGroup, int samples) in t.PowerCurve)
+        foreach ((int round, double mean, double territory, BigInteger maxGroup, int samples) in t.PowerCurve)
         {
-            sb.AppendLine($"- 第 {round} 大回合结束：参赛玩家平均势力 {Num(mean)}，最高单串军势 {maxGroup}（样本 {samples}）");
+            string split = double.IsNaN(territory) ? "领地分无样本（旧日志）" : $"其中领地分 {Num(territory)}、棋串军势 {Num(mean - territory)}";
+            sb.AppendLine($"- 第 {round} 大回合结束：参赛玩家平均势力 {Num(mean)}（{split}），最高单串军势 {maxGroup}（样本 {samples}）");
         }
 
         sb.AppendLine($"- 开局（第 1–2 大回合，目标个位或十位）：{t.PowerOpening}");
@@ -61,11 +64,18 @@ public static class ReportWriter
         sb.AppendLine("### 5. 对局结束的大回合数与整局时长");
         sb.AppendLine($"- 终局局的结束大回合分布：{Histogram(t.EndRounds)}；平均 {t.EndRound}");
         sb.AppendLine($"- 整局时长 {t.MatchMinutes}：不测（裁决 10）。代理：平均每局 {Num(r.Convergence.MeanTurnsPerMatch)} 个小回合，AI 计算耗时 {Num(t.MeanAiMsPerMatch)} ms/局");
+        MapScaleSection ms = r.MapScale;
+        string playableSkip = ms.PlayableSkipped > 0 ? $"未记可落子格的旧日志 {ms.PlayableSkipped} 局" : string.Empty;
+        sb.AppendLine(
+            $"- 本批地图规模（对局时长的调节手段，取自日志首部）：地图可落子格 {Scale(ms.PlayableMatches, ms.MinPlayable, ms.MaxPlayable, ms.MeanPlayable, playableSkip)}，"
+            + $"信物格 {Scale(ms.RelicMatches, ms.MinRelics, ms.MaxRelics, ms.MeanRelics, string.Empty)}");
         sb.AppendLine("### 6. 第 3 大回合领先者最终胜率（目标 ≤ 50%）");
         LeaderSection l = r.Leader;
         sb.AppendLine($"- 口径 A（并列组内任一人获胜）：{l.AnyOfGroupWins}；{t.LeaderWinRate}");
         sb.AppendLine($"- 口径 B（必须该具体玩家获胜，按领先者逐人计样本）：{l.SpecificPlayerWins}");
-        sb.AppendLine($"- 样本 {l.Samples} 局（其中并列 {l.TiedSamples} 局）{(l.EnoughSamples ? "" : $"——不足 {r.Options.RequiredMatches} 局，结论不可靠")}");
+        sb.AppendLine($"- 样本 {l.Samples} 局（其中并列 {l.TiedSamples} 局；已排除截断局 {e.Truncated} 局）{(l.EnoughSamples ? "" : $"——不足 {r.Options.RequiredMatches} 局，结论不可靠")}");
+        sb.AppendLine("### 7. 以 turn_limit 截断的局数与占比（目标 0；截断是跑局层的技术设施，不是规则终局）");
+        sb.AppendLine($"- {TruncatedLine(e)}，平均截断于第 {Num(e.MeanTruncatedRound)} 大回合；{e.TruncationTarget}");
         sb.AppendLine();
 
         sb.AppendLine("## §17 平衡分析方向");
@@ -138,11 +148,25 @@ public static class ReportWriter
         sb.AppendLine($"- 判定：{(g.DominantSequence is null ? "无样本" : g.DominantShare > 0.5 ? $"存在占比 {Pct(g.DominantShare)} 的主导顺序 {g.DominantSequence}，疑似唯一最优解" : $"最多的顺序 {g.DominantSequence} 占 {Pct(g.DominantShare)}，未见唯一最优顺序")}");
         sb.AppendLine("### 7. 最小落子规避 Pass 撤销（落 1 枚且势力无变化）");
         sb.AppendLine($"- 信号出现 {r.Stalling.SignalTurns} 次，占全部 {r.Stalling.TotalTurns} 个小回合的 {r.Stalling.Ratio}");
+        sb.AppendLine("### 8. 三类终局原因各自的占比与平均结束大回合（占比分母为全部纳入局；截断局单列）");
+        foreach (EndReasonStat reason in e.Reasons)
+        {
+            sb.AppendLine($"- {EndReasonName(reason.Reason)}（{reason.Reason}）{reason.Count} 局（{Pct(reason.Share)}），平均结束大回合 {Num(reason.MeanEndRound)}");
+        }
+
+        sb.AppendLine($"- {TruncatedLine(e)}：不属于三类规则终局，单列");
+        if (e.Other > 0)
+        {
+            sb.AppendLine($"- 其它原因（旧日志的达大回合上限等）{e.Other} 局");
+        }
+
         sb.AppendLine("### 9. 首次跨出生区冲突发生时的盘面占用率（denser-map D5：改图 / 改部署上限后必须复看这条）");
         sb.AppendLine(
             $"- 平均占用率 {Pct(t.MeanFirstConflictOccupancy)}，与冲突大回合 {t.FirstConflict} 并列；"
             + $"分布 {Histogram(t.FirstConflictOccupancy)}；未纳入 {t.MatchesWithoutOccupancy} 局");
-        sb.AppendLine("### 10. 高地压制加值（终局快照、参赛玩家的全部棋串；缺高地加值字段的旧日志整局排除）");
+        sb.AppendLine("### 10. 领地与高地（终局快照、参赛玩家）");
+        TerritoryShareSection ts = r.TerritoryShare;
+        sb.AppendLine($"- 终局领地分占参赛玩家总势力：全批次平均 {Pct(ts.MeanShare)}（纳入 {ts.Matches} 局；排除缺领地分字段的旧日志 / 参赛玩家势力为 0 的局 {ts.Skipped} 局）");
         HighGroundSection hg = r.HighGround;
         sb.AppendLine($"- 终局高地加值占全部位置加值：{Pct(hg.HighGroundShare)}（{hg.FinalHighGroundBonus}/{hg.FinalPositionBonus}）");
         sb.AppendLine();
@@ -163,6 +187,33 @@ public static class ReportWriter
         sb.AppendLine($"- 改造过的玩家胜率 {te.WinRateOfEditors}");
         sb.AppendLine($"- 终局新增：桥 {te.FinalBridges} 座，栅栏 {te.FinalFences} 道，被烧林地 {te.FinalBurns} 格");
         return sb.ToString();
+    }
+
+    private static string TruncatedLine(EndingSection e) =>
+        $"截断（turn_limit）{e.Truncated} 局（{(e.TruncatedRate.IsEmpty ? "无样本" : Pct(e.TruncatedRate.Value))}）";
+
+    private static string EndReasonName(string reason) => reason switch
+    {
+        nameof(Core.Match.EndReason.LastPlayerStanding) => "只剩一名参赛玩家",
+        nameof(Core.Match.EndReason.BoardFull) => "棋盘填满",
+        nameof(Core.Match.EndReason.AllPassed) => "整轮 Pass",
+        _ => reason,
+    };
+
+    /// <summary>范围写法：各局相同只给一个数，否则"最小–最大（平均 …）"；<paramref name="note"/> 附在括号里。</summary>
+    private static string Scale(int samples, int min, int max, double mean, string note)
+    {
+        if (samples == 0)
+        {
+            return note.Length == 0 ? "无样本" : $"无样本（{note}）";
+        }
+
+        if (min == max)
+        {
+            return note.Length == 0 ? $"{min}" : $"{min}（{note}）";
+        }
+
+        return $"{min}–{max}（平均 {Num(mean)}{(note.Length == 0 ? string.Empty : "；" + note)}）";
     }
 
     private static string EditActionName(string action) => action switch

@@ -91,6 +91,15 @@ public static class Labels
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, "未知状态。"),
     };
 
+    /// <summary>势力 / 军势的短写法（≥ 10^6 缩写）。规则与终端版共用 <see cref="PowerNotation.Compact"/> 这唯一一份；只用于显示，比较与排序始终用精确值。</summary>
+    public static string CompactPower(System.Numerics.BigInteger value) => PowerNotation.Compact(value);
+
+    /// <summary>势力拆成"领地 + 棋串"的文案，如「势力 39（领地 12 + 棋串 27）」；<paramref name="compact"/> 为真时两处大数用短写法。</summary>
+    public static string PowerBreakdown(System.Numerics.BigInteger total, int territory, System.Numerics.BigInteger groups, bool compact) =>
+        compact
+            ? $"势力 {CompactPower(total)}（领地 {territory} + 棋串 {CompactPower(groups)}）"
+            : $"势力 {total}（领地 {territory} + 棋串 {groups}）";
+
     /// <summary>坐标列表，围棋记法，顿号分隔。</summary>
     public static string Coords(IEnumerable<Coord> coords) => string.Join("、", coords.Select(c => c.ToNotation()));
 

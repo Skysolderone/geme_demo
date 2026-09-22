@@ -35,6 +35,18 @@ public class 平衡分析方向Tests
         Assert.Equal((1, 0), (multiplier.Offered, multiplier.Picked));
         Assert.True(multiplier.WinRateOfPickers.IsEmpty);
 
+        // restore-go-core-rules 段 E：被截断的局没有胜者，MUST NOT 计入胜率类指标——但它的征募仍计入选择率（选择率不是胜率）。
+        // 截断局里 P2 选了 Basic：选择率 1/4 → 2/5，选过 Basic 的玩家胜率仍是 (1/1)；不排除的话会变成 (1/2)。
+        // 变异验证 M-E4：Selection 的胜率样本不看截断（截断局也记"选过它的玩家"）→ 实跑红 1（本测试）。
+        MatchLog cut = SimFixtures.Synthetic(
+            2,
+            [SimFixtures.Turn(1, 1, 2, [1, 1, 1, 1], ["A7:Basic"])],
+            [SimFixtures.Recruit(1, 2, "Basic", "Basic")],
+            SimFixtures.TruncatedResult(150));
+        PieceStat basicWithCut = BalanceAnalyzer.Analyze([log, cut]).Selection.Pieces.Single(p => p.Type == "Basic");
+        Assert.Equal((5, 2), (basicWithCut.Offered, basicWithCut.Picked));
+        Assert.Equal((1, 1), (basicWithCut.WinRateOfPickers.Successes, basicWithCut.WinRateOfPickers.Trials));
+
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze(SimFixtures.Sample.Value));
         Assert.All(Enum.GetNames<PieceType>(), type => Assert.Contains($"- 棋子 {type}：", text));
         Assert.All(Enum.GetNames<Relics.RelicType>(), type => Assert.Contains($"- 信物 {type}：", text));
@@ -70,6 +82,13 @@ public class 平衡分析方向Tests
         Assert.Contains("出生区 1：胜率 100.0% (40/40", text);
         Assert.Contains("，显著", text);
         Assert.Contains("信物生成未收敛局（20）", text);
+
+        // restore-go-core-rules 段 E：再混入 10 局截断局（出生区 2 的玩家"未胜"——截断局没有胜者）→ 各区胜率与样本数不变。
+        // 变异验证 M-E4b：BirthZones 的输入改回全部纳入局 → 实跑红 1（本测试；出生区 0 的样本 40 → 50）。
+        MatchLog[] withCut = [.. logs, .. Enumerable.Range(0, 10).Select(i => SimFixtures.Synthetic(
+            (ulong)i + 200, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.TruncatedResult(150), zones: [2, 1, 3, 0]))];
+        ZoneStat zone0WithCut = BalanceAnalyzer.Analyze(withCut).BirthZones.All.Single(s => s.Zone == 0);
+        Assert.Equal((40, 40), (zone0WithCut.WinRate.Successes, zone0WithCut.WinRate.Trials));
 
         // 均衡样本不显著：4 局各区各胜一次
         MatchLog[] even = [.. Enumerable.Range(0, 4).Select(i => SimFixtures.Synthetic(
@@ -150,5 +169,82 @@ public class 平衡分析方向Tests
         Assert.Equal(1, g.FirstAxisCounts["倍率"]);
         Assert.Equal("倍率>部署>槽位", g.DominantSequence);
         Assert.Contains("顺序 倍率>部署>槽位：1 次", ReportWriter.Render(BalanceAnalyzer.Analyze([log])));
+    }
+
+    [Fact]
+    public void 终局原因分布()
+    {
+        // 规格 Scenario：200 局中 30 局只剩一名参赛玩家、150 局整轮 Pass、8 局棋盘填满、12 局被截断 →
+        // 报告给出三类终局原因各自的占比与平均结束大回合，截断局单列。占比的分母是全部纳入局（200）。
+        // 结束大回合按原因各取不同的值（5 / 8 / 12 / 150），把截断局混进任一类的均值都会改变它。
+        // 变异验证 M-E14：Ending 把截断局计入整轮 Pass（按"未知原因归 AllPassed"）→ 实跑红 1（本测试）。
+        static MatchLog Of(int seed, LogResult result) =>
+            SimFixtures.Synthetic((ulong)seed, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], result);
+        List<MatchLog> logs =
+        [
+            .. Enumerable.Range(0, 30).Select(i => Of(i + 1, SimFixtures.ResultOf(5, [0], reason: nameof(Match.EndReason.LastPlayerStanding)))),
+            .. Enumerable.Range(0, 150).Select(i => Of(i + 100, SimFixtures.ResultOf(8, [i % 4]))),
+            .. Enumerable.Range(0, 8).Select(i => Of(i + 300, SimFixtures.ResultOf(12, [1], reason: nameof(Match.EndReason.BoardFull)))),
+            .. Enumerable.Range(0, 12).Select(i => Of(i + 400, SimFixtures.TruncatedResult(150))),
+        ];
+
+        EndingSection e = BalanceAnalyzer.Analyze(logs).Ending;
+
+        Assert.Equal(
+            [(nameof(Match.EndReason.LastPlayerStanding), 30, 0.15, 5.0), (nameof(Match.EndReason.BoardFull), 8, 0.04, 12.0), (nameof(Match.EndReason.AllPassed), 150, 0.75, 8.0)],
+            e.Reasons.Select(r => (r.Reason, r.Count, Math.Round(r.Share, 10), r.MeanEndRound)));
+        Assert.Equal((200, 12, 0, 150.0), (e.Matches, e.Truncated, e.Other, e.MeanTruncatedRound));
+
+        string text = ReportWriter.Render(BalanceAnalyzer.Analyze(logs));
+        Assert.Contains("- 只剩一名参赛玩家（LastPlayerStanding）30 局（15.0%），平均结束大回合 5", text);
+        Assert.Contains("- 棋盘填满（BoardFull）8 局（4.0%），平均结束大回合 12", text);
+        Assert.Contains("- 整轮 Pass（AllPassed）150 局（75.0%），平均结束大回合 8", text);
+        Assert.Contains("- 截断（turn_limit）12 局（6.0%）", text);
+
+        // 某类一局都没有也照常给出（0 局、无样本），不省略该行。
+        Assert.Contains("- 棋盘填满（BoardFull）0 局（0.0%），平均结束大回合 无样本", ReportWriter.Render(BalanceAnalyzer.Analyze([.. logs.Take(180)])));
+    }
+
+    [Fact]
+    public void 领地分占比口径()
+    {
+        // 规格 Scenario：某局终局时四名参赛玩家总势力合计 600，其中领地分合计 180 → 该局领地分占比为 30%，报告给出全批次平均。
+        // 口径：逐局取终局快照（最后一条小回合快照）中参赛玩家（Active）的领地分之和 ÷ 其总势力之和，再对纳入局取平均。
+        // 被排除的样本（testing.md）：① 同一局里一名已弃赛玩家（领地 500 / 势力 500，不是参赛玩家）；
+        // ② 一局旧日志（领地分字段缺失 → null）：整局排除并计数，MUST NOT 回填成 0。
+        // 另一局 50%（领地 100 / 势力 200）→ 全批次平均 (30% + 50%) / 2 = 40%。
+        // 变异验证 M-E6：领地占比的分母误用棋串军势（总势力 − 领地分）→ 实跑红 1；M-E6b：不过滤非参赛玩家 → 实跑红 1（均为本测试）。
+        TurnSnapshot last = SimFixtures.Turn(9, 8, 0, [200, 150, 150, 100, 500], ["A1:Basic"], territory: [60, 45, 45, 30, 500]);
+        last = last with { PlayersState = [.. last.PlayersState.Select(p => p.Player == 4 ? p with { Status = nameof(Scoring.PlayerStatus.Resigned) } : p)] };
+        MatchLog thirty = SimFixtures.Synthetic(
+            1,
+            [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1, 1], ["A1:Basic"], territory: [1, 1, 1, 1, 1]), last],
+            [],
+            SimFixtures.ResultOf(8, [0], players: 5),
+            players: 5);
+        MatchLog fifty = SimFixtures.Synthetic(
+            2, [SimFixtures.Turn(1, 7, 0, [120, 80, 0, 0], ["A1:Basic"], territory: [60, 40, 0, 0])], [], SimFixtures.ResultOf(7, [0]));
+        MatchLog legacy = SimFixtures.Synthetic(
+            3, [SimFixtures.Turn(1, 7, 0, [90, 10, 0, 0], ["A1:Basic"])], [], SimFixtures.ResultOf(7, [0]));
+
+        TerritoryShareSection single = BalanceAnalyzer.Analyze([thirty]).TerritoryShare;
+        Assert.Equal((1, 0), (single.Matches, single.Skipped));
+        Assert.Equal(0.30, single.MeanShare, 10);
+
+        TerritoryShareSection batch = BalanceAnalyzer.Analyze([thirty, fifty, legacy]).TerritoryShare;
+        Assert.Equal((2, 1), (batch.Matches, batch.Skipped));
+        Assert.Equal(0.40, batch.MeanShare, 10);
+
+        string text = ReportWriter.Render(BalanceAnalyzer.Analyze([thirty, fifty, legacy]));
+        Assert.Contains("- 终局领地分占参赛玩家总势力：全批次平均 40.0%（纳入 2 局；排除缺领地分字段的旧日志 / 参赛玩家势力为 0 的局 1 局）", text);
+
+        // 数值目标回归「势力值的成长曲线，分别给出领地分与棋串军势两条」：第 8 大回合参赛四人 总势力均值 (200+150+150+100)/4 = 150、
+        // 领地分均值 (60+45+45+30)/4 = 45（弃赛者不计）→ 棋串军势 105；旧日志那一局领地分无样本，MUST NOT 回填成 0。
+        // 变异验证 M-E17：成长曲线的领地分一律记 0 → 实跑红 1（本测试）。
+        var round8 = BalanceAnalyzer.Analyze([thirty]).Targets.PowerCurve.Single(c => c.Round == 8);
+        Assert.Equal((150.0, 45.0, 4), (round8.MeanPower, round8.MeanTerritory, round8.Samples));
+        Assert.Contains("- 第 8 大回合结束：参赛玩家平均势力 150（其中领地分 45、棋串军势 105）", ReportWriter.Render(BalanceAnalyzer.Analyze([thirty])));
+        Assert.True(double.IsNaN(BalanceAnalyzer.Analyze([legacy]).Targets.PowerCurve.Single().MeanTerritory));
+        Assert.Contains("领地分无样本（旧日志）", ReportWriter.Render(BalanceAnalyzer.Analyze([legacy])));
     }
 }

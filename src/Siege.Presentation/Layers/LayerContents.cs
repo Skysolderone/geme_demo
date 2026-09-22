@@ -139,15 +139,28 @@ public sealed record GroupScoreView(PlayerId Owner, ImmutableArray<Coord> Stones
     public const int MaxHeatLevel = 3;
 }
 
-/// <summary>势力层的玩家汇总。<see cref="TerritoryScore"/> 是领地分（总势力 = 领地分 + 棋串军势）。</summary>
-public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, BigInteger Total, int TerritoryScore, int? Rank, string? StatusText);
+/// <summary>
+/// 势力层的玩家汇总。<see cref="TerritoryScore"/> 是领地分、<see cref="GroupScore"/> 是全部棋串军势之和（总势力 = 领地分 + 棋串军势，两项都取自 Core 势力明细）。
+/// <see cref="CompactText"/> 给概览栏（≥ 10^6 缩写，<see cref="PowerNotation.Compact"/>），<see cref="ExactText"/> 给明细（精确值）。
+/// </summary>
+public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, BigInteger Total, int TerritoryScore, BigInteger GroupScore, int? Rank, string? StatusText)
+{
+    /// <summary>概览文案，如「势力 1.23M（领地 12 + 棋串 1.23M）」。</summary>
+    public string CompactText => Labels.PowerBreakdown(Total, TerritoryScore, GroupScore, compact: true);
+
+    /// <summary>明细文案（精确值）。</summary>
+    public string ExactText => Labels.PowerBreakdown(Total, TerritoryScore, GroupScore, compact: false);
+}
 
 /// <summary>
-/// 势力层（tactical-layers「五种战术信息层」）：棋串分数（位置加值拆连珠 / 协同 / 高地）与玩家汇总（含领地分）。
+/// 势力层（tactical-layers「五种战术信息层」）：独占格着色（<see cref="Territory"/>）+ 领地分与棋串分（<see cref="Players"/>）+ 棋串分数（位置加值拆连珠 / 协同 / 高地）与倍率热区（<see cref="Groups"/>）。
+/// <see cref="Territory"/> 只含独占空格（每格带独占者），直接投影势力明细的 <see cref="PlayerPower.ExclusiveCells"/>——即计分所用的那一份空格归属结果；
+/// 争议格与中立格不在其中，因而 MUST NOT 被显示为任何玩家的得分（与独占格可区分）。
 /// </summary>
 public sealed record PowerLayerContent(
     ImmutableArray<GroupScoreView> Groups,
-    ImmutableArray<PlayerPowerRowView> Players) : LayerContent(TacticalLayer.Power);
+    ImmutableArray<PlayerPowerRowView> Players,
+    ImmutableArray<TerritoryCellView> Territory) : LayerContent(TacticalLayer.Power);
 
 // ---------- 信物层 ----------
 
@@ -323,13 +336,14 @@ public static class TacticalLayers
         ArgumentNullException.ThrowIfNull(world);
         if (world.View.Power is not { } power)
         {
-            // 插旗阶段尚无势力快照：棋串与玩家汇总为空。
-            return new PowerLayerContent([], []);
+            // 插旗阶段尚无势力快照：棋串、玩家汇总与独占格都为空。
+            return new PowerLayerContent([], [], []);
         }
 
         return new PowerLayerContent(
             [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), Math.Min(g.MultiplierCount, GroupScoreView.MaxHeatLevel)))],
-            [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.TerritoryScore, power.RankOf(p.Player), Labels.Status(p.Status)))]);
+            [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.TerritoryScore, p.GroupScore, power.RankOf(p.Player), Labels.Status(p.Status)))],
+            [.. power.Players.SelectMany(p => p.ExclusiveCells.Select(c => new TerritoryCellView(c, TerritoryState.Exclusive, p.Player))).OrderBy(c => c.Coord)]);
     }
 
     public static RelicLayerContent Relics(PublicWorld world)

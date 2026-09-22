@@ -12,17 +12,24 @@ namespace Siege.Sim.Logging;
 /// 日志是事后记录，允许含全部结果；AI 在跑局中仍只拿正式接口。
 /// </summary>
 /// <remarks>
-/// <para>设计文档 §17 八类记录 → 字段映射：</para>
+/// <para>match-telemetry「对局日志的记录内容」八类记录 → 字段映射：</para>
 /// <list type="table">
 /// <item><term>1. 地图、种子、完整信物分布及揭示时间</term><description><see cref="LogHeader.MapId"/> / <see cref="LogHeader.Seed"/> 与 <see cref="LogHeader.Relics"/>（含真实内容）；揭示大回合在 <see cref="LogResult.RelicReveals"/>（未揭示为 <c>null</c>），过程中的揭示为 <c>Reveal</c> 事件</description></item>
 /// <item><term>2. 每轮征募候选、玩家选择、被 Pass 撤销的征募数</term><description><c>Recruit</c> 事件：<see cref="LogEvent.Detail"/> 为候选 / 选取 / 弃牌文本，<see cref="LogEvent.Values"/> 含 <c>Recruited</c> / <c>Revoked</c> / <c>Deployed</c>（私有量，来源玩家 = <see cref="LogEvent.Player"/>）</description></item>
 /// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
 /// <item><term>4. 每次地形改造（大回合、小回合、改造方、动作、目标、是否致提子）</term><description><see cref="TurnSnapshot.Edits"/>（大回合 / 小回合由所在快照给出）；配置的匠人权重在 <see cref="LogHeader.ArtisanWeight"/></description></item>
 /// <item><term>5. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
-/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）</description></item>
-/// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（终局原因只剩三类：LastPlayerStanding / BoardFull / AllPassed）</description></item>
+/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍增子数量、倍率与最终军势；每名玩家的领地分</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>MultiplierCount</c>（即倍率指数，倍率 = 1.5^n 由它得出）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；
+/// <see cref="PlayerEntry.TerritoryScore"/>（独占空格数）与 <see cref="PlayerEntry.Total"/>（= 领地分 + Σ军势）。势力与军势一律精确十进制整数（JSON 数字，不加引号、无指数）</description></item>
+/// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果与结束原因</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="PlayerEntry.HasEstablishedPower"/>（出局判据的"曾建立正势力"标记）；
+/// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因三类之一（LastPlayerStanding / BoardFull / AllPassed），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
 /// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
+/// <para>
+/// 已删除、<b>不属于</b>日志契约的旧字段（restore-go-core-rules 段 E 裁决）：据点（首部 <c>SiteValues</c> / <c>Sites</c>、快照 <c>Sites</c>、<c>PlayerEntry.SiteScore</c>、<c>SiteControlChanged</c> 事件）、
+/// 首部 <c>MaxMajorRounds</c> / <c>DominanceStartRound</c> / <c>CatchUpRecruit</c>、<c>PlayerEntry.Protection</c>、快照 <c>CatchUpReveal</c> / <c>CatchUpPick</c>、
+/// <c>EffectiveMultiplierCount</c>。旧日志里出现它们时读入忽略（System.Text.Json 缺省行为），其余字段照常可读；分析端缺新字段（如领地分）的旧日志按各段约定整局排除并计数。
+/// </para>
 /// </remarks>
 public sealed class MatchLog
 {
@@ -378,6 +385,12 @@ public sealed record PlayerEntry
 
     /// <summary>总势力，精确整数（restore-go-core-rules D1：任意精度，写出为不失真的十进制整数）。</summary>
     public BigInteger Total { get; init; }
+
+    /// <summary>
+    /// 领地分 = 独占空格数（restore-go-core-rules D2；总势力 = 领地分 + 全部棋串军势）。取自对局内的势力明细，不在分析端按盘面重算。
+    /// 段 E 之前的旧日志没有该字段（<c>null</c>）：领地分占比整局排除并计数，MUST NOT 回填成 0。
+    /// </summary>
+    public int? TerritoryScore { get; init; }
 
     /// <summary>竞争名次；不参赛为 <c>null</c>。</summary>
     public int? Rank { get; init; }

@@ -751,6 +751,14 @@ public sealed partial class BoardView : Node3D
 
     private void DrawPower(PowerLayerContent power)
     {
+        // 领地分：独占空格按独占者的阵营着色（restore-go-core-rules 段 E，tasks 5.4 / 5.5）。格子来自势力明细的独占集合，
+        // 争议格与中立格不在其中、不着色——它们不是任何玩家的得分，与独占格一眼可分。
+        foreach (TerritoryCellView cell in power.Territory)
+        {
+            AddTint(cell.Coord, Visuals.FactionColorOf(cell.Owner!.Value), 0.5f);
+        }
+
+        // 倍率热区：柱高按显示档位 HeatLevel（min(倍增子数量, 3)），只是显示档位，不是倍率封顶。
         foreach (GroupScoreView group in power.Groups.Where(g => g.HeatLevel > 0))
         {
             foreach (Coord stone in group.Stones)

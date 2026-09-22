@@ -48,8 +48,9 @@ public sealed record Deviation(DeviationDirection Direction, double Value, doubl
     public override string ToString() => Direction switch
     {
         DeviationDirection.Within => $"在目标 {Range()} 内（实测 {Value:0.##}{Unit}）",
-        DeviationDirection.Below => $"偏离：低于目标下限 {Low:0.##}{Unit}，实测 {Value:0.##}{Unit}，低 {Amount:0.##}{Unit}（-{Percent:F0}%）",
-        DeviationDirection.Above => $"偏离：超出目标上限 {High:0.##}{Unit}，实测 {Value:0.##}{Unit}，高 {Amount:0.##}{Unit}（+{Percent:F0}%）",
+        // 越界端为 0 时（如截断率目标 0）相对幅度无意义，只给绝对幅度。
+        DeviationDirection.Below => $"偏离：低于目标下限 {Low:0.##}{Unit}，实测 {Value:0.##}{Unit}，低 {Amount:0.##}{Unit}{(Low != 0 ? $"（-{Percent:F0}%）" : string.Empty)}",
+        DeviationDirection.Above => $"偏离：超出目标上限 {High:0.##}{Unit}，实测 {Value:0.##}{Unit}，高 {Amount:0.##}{Unit}{(High != 0 ? $"（+{Percent:F0}%）" : string.Empty)}",
         _ => $"不可测（目标 {Range()}）",
     };
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Sim.Analysis;
 using Siege.Sim.Cli;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -99,7 +100,8 @@ public class 批量跑局Tests
         // 规格 Scenario：以匠人权重 18、全部玩家 Safety = 7 执行一批对局 → 配置记录写明匠人权重 18 与四名玩家的完整权重。
         // 读 config.json 原文（不经 RunConfig 反序列化，避免缺省值把漏写掩盖掉）；日志首部的匠人权重取自对局本身。
         // restore-go-core-rules 段 B：原断言里的"据点分值 3 / 8 / 24"随据点摘除删去（规格 Scenario 同步改写）；
-        // "小回合数截断值"是段 E 5.1 的新增项，本段尚未实现，不在此断言。
+        // 段 E 5.1：规格 Scenario 要求配置记录写明"小回合数截断值"——config.json 原文与日志首部都要有（取非缺省值 4，缺省 600 抓不到漏写）。
+        // 变异验证 M-E11：RunConfig.TurnLimit 加 [JsonIgnore]（配置记录漏写截断值） → 红 ≥ 10（本测试 + 回放类：回放按缺省 600 重跑、极慢，第 40 分钟终止时已跑 1181 条中红 10）。
         // 变异验证 M-B10（段 B，实跑红 3）：MatchSession.Create 不把 RunConfig.ArtisanWeight 传入对局 → 本测试红（首部回到 10）。
         EvaluationWeights safety7 = EvaluationWeights.Default with { Safety = 7 };
         RunConfig config = SimFixtures.Config(count: 1, turnLimit: 4) with
@@ -113,6 +115,7 @@ public class 批量跑局Tests
 
         using JsonDocument json = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json")));
         Assert.Equal(18, json.RootElement.GetProperty("ArtisanWeight").GetInt32());
+        Assert.Equal(4, json.RootElement.GetProperty("TurnLimit").GetInt32());
         JsonElement[] players = [.. json.RootElement.GetProperty("Players").EnumerateArray()];
         Assert.Equal(4, players.Length);
         Assert.All(players, p =>
@@ -126,6 +129,7 @@ public class 批量跑局Tests
 
         MatchLog log = Assert.Single(MatchLog.ReadDirectory(dir));
         Assert.Equal(18, log.Header.ArtisanWeight);
+        Assert.Equal(4, log.Header.Config.TurnLimit);
 
         // 反面：地图数据不含据点——写出的地图文本里没有该字段（段 B 守门）。
         Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(MapCatalog.Resolve(log.Header.MapId)), StringComparison.Ordinal);
@@ -376,5 +380,205 @@ public class 批量跑局Tests
         Assert.Contains("未知选项 --oot", err.ToString(), StringComparison.Ordinal);
         Assert.Contains("是否想用 --out", err.ToString(), StringComparison.Ordinal);   // 建议路径在真实 CLI 上生效
         Assert.False(File.Exists(Path.Combine(dir, "report.txt")));
+    }
+
+    // ---------- restore-go-core-rules 段 E（tasks 5.1）：小回合数截断与已删除的配置项 ----------
+
+    [Fact]
+    public void 不收敛对局被截断()
+    {
+        // 规格 Scenario：截断为 600、第 600 个小回合仍未满足任何终局条件 → 该局以 turn_limit 结束，不产生名次与胜者。
+        // 真跑 600 个小回合要几分钟（段 C 实测 1000 小回合 226 s），这里用同一机制的小截断值 10（Easy 4 人在 10 个小回合内不会满足规则终局），
+        // 另钉缺省值 600 这条配置口径；"0 = 不截断"由 防死锁硬停Tests 钉住。
+        // 变异验证 M-E7：MatchSession.RunTurn 的截断判据 `_turn >= Config.TurnLimit` 改成 `>` → 实跑红 5（本测试、截断可复现、批量执行并汇总、日志覆盖八类记录、候选格上限黄金哈希——都多跑一个小回合）。
+        Assert.Equal(600, RunConfig.DefaultTurnLimit);
+        Assert.Equal(600, new RunConfig().TurnLimit);
+
+        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 10), 41);
+        MatchLog log = MatchLog.Parse(session.Run().FullText());
+
+        Assert.False(log.IsFailed);
+        Assert.Equal(LogResult.TurnLimitReason, log.Result!.Reason);
+        Assert.True(log.Result.Truncated);
+        Assert.Equal((10, 10), (log.Result.TurnCount, log.Turns.Count));
+        Assert.Empty(log.Result.Standings);
+        Assert.Empty(log.Result.Winners);
+        Assert.Equal(10, log.Header.Config.TurnLimit);
+
+        // 截断不是规则终局：对局本身仍在进行中、规则层没有结果（Core 不知道截断）。
+        Assert.Equal(Core.Match.MatchPhase.InProgress, session.Match.Phase);
+        Assert.Null(session.Match.Result);
+    }
+
+    [Fact]
+    public void 截断局不污染胜率()
+    {
+        // 规格 Scenario：200 局中 12 局以 turn_limit 结束 → 汇总单列"截断 12 局（6%）"，领先者胜率等指标只基于其余 188 局计算并注明样本数。
+        // 188 局 = 有名次的真实样本（SimFixtures.RankedSample）克隆；12 局 = 真实截断样本（SimFixtures.Sample）克隆。
+        // 截断样本同样有第 3 大回合的领先者：不排除的话领先者样本就是 200——它就是 testing.md 要求的"被排除的样本"。
+        // 变异验证 M-E3：BalanceAnalyzer.Analyze 把领先者段的输入由"有名次的局"改回全部纳入局 → 实跑红 2（本测试、领先者胜率回归）。
+        List<MatchLog> ranked = SimFixtures.RankedSample.Value;
+        List<MatchLog> truncated = SimFixtures.Sample.Value;
+        Assert.All(ranked, l => Assert.NotEmpty(l.Result!.Winners));
+        Assert.All(truncated, l => Assert.True(l.Result!.Truncated));
+        Assert.All(truncated, l => Assert.NotEmpty(BalanceAnalyzer.LeadersAtRound3(l)));
+
+        List<MatchLog> batch =
+        [
+            .. Enumerable.Range(0, 188).Select(i => SimFixtures.Clone(ranked[i % ranked.Count], seed: 2000UL + (ulong)i)),
+            .. Enumerable.Range(0, 12).Select(i => SimFixtures.Clone(truncated[i % truncated.Count], seed: 3000UL + (ulong)i)),
+        ];
+        BalanceReport report = BalanceAnalyzer.Analyze(batch);
+
+        Assert.Equal((200, 200), (report.TotalLogs, report.Included));
+        Assert.Equal((12, 188), (report.Ending.Truncated, report.Ending.Ranked));
+        Assert.Equal((12, 200), (report.Ending.TruncatedRate.Successes, report.Ending.TruncatedRate.Trials));
+        Assert.Equal(188, report.Leader.Samples);
+        int expectedWins = Enumerable.Range(0, 188).Count(i => LeaderWon(ranked[i % ranked.Count]));
+        Assert.Equal((expectedWins, 188), (report.Leader.AnyOfGroupWins.Successes, report.Leader.AnyOfGroupWins.Trials));
+
+        string text = ReportWriter.Render(report);
+        Assert.Contains("截断（turn_limit）12 局（6.0%）", text);
+        Assert.Contains("胜率 / 名次类指标排除截断局 12 局，有效样本 188 局", text);
+        Assert.Contains("样本 188 局", text);
+
+        // 批次汇总（summary.json）同样单列截断局数，且截断局计入该批次的局数
+        BatchSummary summary = BatchRunner.Summarize(batch, parallelism: 1, wallClockMs: 0);
+        Assert.Equal((200, 12), (summary.Count, summary.Truncated));
+    }
+
+    /// <summary>测试内独立判定（不回调 <see cref="BalanceAnalyzer.LeadersAtRound3"/>）：第 3 大回合结束时名次为 1 的玩家中有人获胜。</summary>
+    internal static bool LeaderWon(MatchLog log)
+    {
+        LogEvent third = log.Events.Single(e => e.Type == LogEventType.MajorRoundEnded && e.MajorRound == 3);
+        return log.Header.Players.Any(p => third.Values![$"P{p}.Rank"] == 1 && log.Result!.Winners.Contains(p));
+    }
+
+    [Fact]
+    public void 截断可复现()
+    {
+        // 规格 Scenario：相同种子、相同配置与相同截断值重跑一局被截断的对局 → 在同一个小回合被截断，截断时的盘面完全一致。
+        // 逐字节比对要钉住覆盖范围（testing.md）：快照条数 = 截断值、末条快照盘面有子；另逐条比对事件。
+        // 反面：换一个更小的截断值，前面的小回合逐条相同——截断只是停止驱动，不改变走法。
+        RunConfig config = SimFixtures.Config(turnLimit: 14);
+        MatchLog a = MatchSession.Create(config, 43).Run();
+        MatchLog b = MatchSession.Create(config, 43).Run();
+
+        Assert.True(a.Result!.Truncated && b.Result!.Truncated);
+        Assert.Equal((14, 14, 14), (a.Result.TurnCount, b.Result.TurnCount, a.Turns.Count));
+        Assert.True(a.Turns[^1].PlayersState.Sum(p => p.Groups.Sum(g => g.Stones.Count)) > 0, "截断时盘面上应有棋子");
+        Assert.Equal(SimFixtures.TurnTexts(a.Turns), SimFixtures.TurnTexts(b.Turns));
+        Assert.Equal(
+            a.Events.Select(e => $"{e.Seq}:{e.Turn}:{e.Type}:{e.Player}:{e.Detail}"),
+            b.Events.Select(e => $"{e.Seq}:{e.Turn}:{e.Type}:{e.Player}:{e.Detail}"));
+        Assert.Equal(a.DeterministicText(), b.DeterministicText());
+
+        MatchLog shorter = MatchSession.Create(SimFixtures.Config(turnLimit: 12), 43).Run();
+        Assert.Equal(12, shorter.Result!.TurnCount);
+        Assert.Equal(SimFixtures.TurnTexts(a.Turns.Take(12)), SimFixtures.TurnTexts(shorter.Turns));
+    }
+
+    [Fact]
+    public void 截断只存在于跑局驱动循环()
+    {
+        // 规格：截断 SHALL 只存在于批量跑局的驱动循环，MUST NOT 进入对局规则流程（design D5：Siege.Core 不知道它）。
+        // 守门：Siege.Core 源码不出现截断相关符号。样本口径下界：扫到的 Core 源文件 ≥ 80；反面：Sim 的 MatchSession.cs 确实命中同一正则。
+        // 正则不以词边界开头（testing.md：复合标识符如 DefaultTurnLimit / IsTruncated 也要抓到）。
+        // 变异验证 M-E10：往 Siege.Core/Match/MatchFlow.cs 注入 `internal const int TurnLimit = 0;` → 实跑红 1（本测试）。
+        var pattern = new System.Text.RegularExpressions.Regex("(?i)turn_?limit|truncat");
+        string src = Path.Combine(Determinism.随机子流隔离Tests.SourceRoot(), "src");
+        string[] core = [.. Directory.GetFiles(Path.Combine(src, "Siege.Core"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))];
+
+        Assert.True(core.Length >= 80, $"只扫到 {core.Length} 个 Siege.Core 源文件");
+        Assert.All(core, f => Assert.False(pattern.IsMatch(File.ReadAllText(f)), $"{Path.GetFileName(f)} 出现截断相关符号：截断只属于 Siege.Sim 的跑局驱动循环"));
+        Assert.Matches(pattern, File.ReadAllText(Path.Combine(src, "Siege.Sim", "Running", "MatchSession.cs")));
+    }
+
+    [Theory]
+    [InlineData("max-rounds", "6")]
+    [InlineData("dominance-start", "7")]
+    [InlineData("no-catch-up", null)]
+    [InlineData("site-values", "3,8,24")]
+    public void 已删除的选项报已删除(string option, string? value)
+    {
+        // tasks 5.1：RunConfig 去掉据点分值、大回合上限、碾压、补偿选项；严格 CLI 下传入旧选项 MUST 报错并说明已删除——
+        // 不是笼统的"未知选项"（那会让人以为拼错了、去找相近的选项），更不能静默忽略。报错先于创建输出目录。
+        // 变异验证 M-E1：CommandLine.EnsureRecognized 不查已删除选项表（退回"未知选项"） → 实跑红 4（本 Theory 四行）。
+        string outDir = Path.Combine(SimFixtures.TempDir($"retired-{option}"), "out");
+        string[] args = value is null
+            ? ["run", "--out", outDir, "--seed", "1", $"--{option}"]
+            : ["run", "--out", outDir, "--seed", "1", $"--{option}", value];
+        var err = new StringWriter();
+        TextWriter saved = Console.Error;
+        int code;
+        try
+        {
+            Console.SetError(err);
+            code = Siege.Sim.Program.Main(args);
+        }
+        finally
+        {
+            Console.SetError(saved);
+        }
+
+        Assert.Equal(1, code);
+        Assert.Contains($"--{option} 已删除", err.ToString(), StringComparison.Ordinal);
+        Assert.Contains("restore-go-core-rules", err.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("未知选项", err.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outDir));
+
+        // 同一张表对任一子命令生效（play 的 --max-rounds 在段 C 删除）：直接对解析器断言，不起终端对局。
+        var cli = new CommandLine(["--seed", "1", $"--{option}"]);
+        _ = cli.GetOrNull("seed");
+        ArgumentException ex = Assert.ThrowsAny<ArgumentException>(() => cli.EnsureRecognized());
+        Assert.Contains($"--{option} 已删除", ex.Message, StringComparison.Ordinal);
+
+        // 反面：真正的未知选项仍按"未知选项"报出（已删除表不能吞掉一般的拼错）。
+        var typo = new CommandLine(["--seed", "1", "--max-round", "3"]);
+        _ = typo.GetOrNull("seed");
+        Assert.Contains("未知选项 --max-round", Assert.ThrowsAny<ArgumentException>(() => typo.EnsureRecognized()).Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("SiteValues", "{\"Low\":3,\"Mid\":8,\"High\":24}")]
+    [InlineData("MaxMajorRounds", "15")]
+    [InlineData("DominanceStartRound", "7")]
+    [InlineData("CatchUpRecruit", "true")]
+    [InlineData("maxMajorRounds", "15")]
+    public void 配置文件里的已删除配置项被拒绝(string key, string value)
+    {
+        // tasks 5.1：配置文件（run --config）里的旧键 MUST 报错并说明已删除——静默忽略会让一份旧扫档配置"跑通了但参数没生效"（testing.md）。
+        // 与 MapFile / 存档的废弃字段口径一致：大小写不敏感、点名字段；其余未知键仍宽容（反面）。旧日志首部里的配置不经 FromJson，照常可读。
+        // 变异验证 M-E2：RunConfig.FromJson 不查已删除键（静默忽略） → 实跑红 5（本 Theory 五行）。
+        FormatException ex = Assert.Throws<FormatException>(() => RunConfig.FromJson($"{{\"Count\": 2, \"{key}\": {value}}}"));
+        Assert.Contains(key, ex.Message, StringComparison.Ordinal);
+        Assert.Contains("已删除", ex.Message, StringComparison.Ordinal);
+
+        Assert.Equal(2, RunConfig.FromJson("{\"Count\": 2, \"_comment\": \"说明\"}").Count);
+        Assert.DoesNotContain(key, new RunConfig().ToJson(), StringComparison.OrdinalIgnoreCase);
+
+        // 走 CLI：报错退出码 1、不创建输出目录。
+        string dir = SimFixtures.TempDir($"retired-config-{key}");
+        string file = Path.Combine(dir, "config.json");
+        File.WriteAllText(file, $"{{\"Count\": 2, \"{key}\": {value}}}");
+        string outDir = Path.Combine(dir, "out");
+        var err = new StringWriter();
+        TextWriter saved = Console.Error;
+        int code;
+        try
+        {
+            Console.SetError(err);
+            code = Siege.Sim.Program.Main(["run", "--out", outDir, "--config", file]);
+        }
+        finally
+        {
+            Console.SetError(saved);
+        }
+
+        Assert.Equal(1, code);
+        Assert.Contains("已删除", err.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outDir));
     }
 }

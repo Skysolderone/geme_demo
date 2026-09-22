@@ -40,6 +40,33 @@ internal static class SimFixtures
     /// </summary>
     internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(Config(count: 4, seedStart: 11), parallelism: 1));
 
+    /// <summary>
+    /// 有名次的真实样本（restore-go-core-rules 段 E）：规则层删掉大回合上限与碾压之后，<see cref="Sample"/> 的 4 局全是 <c>turn_limit</c> 截断局、胜者全空，
+    /// 读胜者 / 名次的报告测试在它上面是空证。这里同样是 Easy 4 人、种子 11–14 的真实对局，跑满 3 个大回合（第 3 大回合结束事件已写入）后，
+    /// 让除"幸存者"外的三人弃赛 → 以规则原因「只剩一名参赛玩家」终局，名次取自规则层。幸存者按局轮换（第 i 局为 P<i>i</i>），
+    /// 于是"第 3 大回合领先者是否获胜"在四局里不是恒真也不是恒假。弃赛不算污染（<see cref="MatchLog.IsContaminated"/> 只看调试 AI 与人工接管）。
+    /// </summary>
+    internal static readonly Lazy<List<MatchLog>> RankedSample = new(() => [.. Enumerable.Range(0, 4).Select(i => RankedMatch(11UL + (ulong)i, survivor: i))]);
+
+    /// <summary>一局有名次的真实对局：跑满 3 个大回合后，除 <paramref name="survivor"/> 外全部弃赛。</summary>
+    internal static MatchLog RankedMatch(ulong seed, int survivor)
+    {
+        // 走法依赖 AI 权重：写死当前取值（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），调默认权重不会让领先者胜数的样本口径断言翻掉。
+        var weights = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2);
+        RunConfig config = Config(turnLimit: 0) with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = AiDifficulty.Easy, Weights = weights })] };
+        MatchSession session = MatchSession.Create(config, seed);
+        while (session.Match.MajorRound <= 3 && session.RunTurn())
+        {
+        }
+
+        foreach (PlayerId p in session.Match.Players.Where(p => p.Value != survivor))
+        {
+            session.Match.Resign(p);
+        }
+
+        return session.Run();
+    }
+
     /// <summary>独立的临时目录（每次调用都清空重建）。</summary>
     internal static string TempDir(string name)
     {
@@ -101,7 +128,7 @@ internal static class SimFixtures
     internal static TurnSnapshot Turn(
         int turn, int majorRound, int player, long[] totals, string[]? placements = null, int deployLimit = 3,
         int showCount = 5, int freePick = 3, int typeSlots = 5, GroupEntry[]? groupsOfPlayer = null, string[]? captures = null,
-        TerrainEditEntry[]? edits = null, bool legacyNoEdits = false) =>
+        TerrainEditEntry[]? edits = null, bool legacyNoEdits = false, int[]? territory = null) =>
         new()
         {
             Turn = turn,
@@ -125,15 +152,21 @@ internal static class SimFixtures
                 Player = i,
                 Status = "Active",
                 Total = t,
+
+                // 领地分：缺省 null = restore-go-core-rules 段 E 之前的旧日志（领地分占比整局排除并计数），MUST NOT 回填。
+                TerritoryScore = territory?[i],
                 Groups = i == player && groupsOfPlayer is not null ? [.. groupsOfPlayer] : [],
             })],
         };
 
-    internal static LogResult ResultOf(int majorRound, int[] winners, bool converged = true, int players = 4, PeakEntry? peak = null, bool? peakDestroyed = null, int[]? ranks = null) =>
+    internal static LogResult ResultOf(
+        int majorRound, int[] winners, bool converged = true, int players = 4, PeakEntry? peak = null, bool? peakDestroyed = null, int[]? ranks = null,
+        string? reason = null) =>
         new()
         {
-            // 未收敛样本用旧日志的「达大回合上限」原因名（规则层已删除该原因，只剩旧日志会出现；段 E 5.2 改为 turn_limit 口径）。
-            Reason = converged ? nameof(EndReason.AllPassed) : LogResult.LegacyMajorRoundLimit,
+            // 未收敛样本用旧日志的「达大回合上限」原因名（规则层已删除该原因，只剩旧日志会出现；它有规则名次，仍纳入胜率类指标）。
+            // 跑局层截断见 TruncatedResult：那种局没有名次与胜者。
+            Reason = reason ?? (converged ? nameof(EndReason.AllPassed) : LogResult.LegacyMajorRoundLimit),
             MajorRound = majorRound,
             TurnCount = majorRound * players,
             Standings = [.. Enumerable.Range(0, players).Select(p => new StandingEntry
@@ -146,6 +179,18 @@ internal static class SimFixtures
             Winners = [.. winners],
             Peak = peak,
             PeakDestroyed = peakDestroyed,
+        };
+
+    /// <summary>
+    /// 跑局层截断的结果行（restore-go-core-rules D5）：结束原因 <c>turn_limit</c>、名次与胜者为空——与 <c>MatchSession.Finish</c> 写出的形状一致。
+    /// 这是胜率 / 名次类口径测试里"被排除的样本"（testing.md「统计口径测试必须放一个被排除的样本」）。
+    /// </summary>
+    internal static LogResult TruncatedResult(int majorRound, int players = 4) =>
+        new()
+        {
+            Reason = LogResult.TurnLimitReason,
+            MajorRound = majorRound,
+            TurnCount = majorRound * players,
         };
 
     /// <summary>大回合结束事件：各玩家的名次与下一轮位置。</summary>

@@ -146,8 +146,8 @@ internal static class PlayCommand
         string who = BoardRenderer.Label(actor, me);
         string action = placed.Count == 0 ? "Pass" : $"落子 {string.Join(" ", placed)}";
         string captures = lost.Count == 0 ? "" : "，提走 " + string.Join("、", lost.Select(kv => $"{BoardRenderer.Label(kv.Key, me)} {kv.Value} 子"));
-        BigInteger power = after.Power?.Players.FirstOrDefault(p => p.Player == actor)?.Total ?? 0;
-        render.Line($"{who} {action}{captures}（势力 {power}）", lost.ContainsKey(me) ? ConsoleColor.Red : ConsoleColor.Gray);
+        Core.Scoring.PlayerPower? detail = after.Power?.Players.FirstOrDefault(p => p.Player == actor);
+        render.Line($"{who} {action}{captures}（{BoardRenderer.PowerText(detail)}）", lost.ContainsKey(me) ? ConsoleColor.Red : ConsoleColor.Gray);
 
         foreach (PlayerFlowState s in after.Players)
         {

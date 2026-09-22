@@ -298,7 +298,8 @@ public sealed partial class Hud : CanvasLayer
             line.AddChild(icon);
             string rank = row.Rank is int r ? $"第 {r} 名" : "—";
             string suffix = row.StatusText is null ? string.Empty : $"（{row.StatusText}）";
-            line.AddChild(Ui.Text($"{rank}　{faction.Name}　势力 {row.Total}　领地 {row.TerritoryScore}{suffix}",
+            // 概览栏：势力拆成"领地 + 棋串"，≥ 10^6 缩写（restore-go-core-rules 段 E）；精确值在势力层明细里。
+            line.AddChild(Ui.Text($"{rank}　{faction.Name}　{row.CompactText}{suffix}",
                 row.StatusText is null ? Ui.InfoText : Ui.MutedText));
             _rankBody.AddChild(line);
         }
@@ -508,9 +509,9 @@ public sealed partial class Hud : CanvasLayer
                 break;
 
             case PowerLayerContent power:
-                _layerBody.AddChild(Ui.Text("势力 = 领地分 + 棋串军势。领地分 = 独占空格数，争议格与中立格不计分。", Ui.MutedText, wrap: true));
+                _layerBody.AddChild(Ui.Text("势力 = 领地分 + 棋串军势。领地分 = 独占空格数（盘上按阵营着色），争议格与中立格不计分。明细为精确值。", Ui.MutedText, wrap: true));
                 AddScroll(_layerBody, power.Players
-                    .Select(p => ($"{Labels.Player(p.Player)} 势力 {p.Total}（领地 {p.TerritoryScore}）{(p.Rank is int r ? $" 第 {r} 名" : string.Empty)}", Ui.InfoText))
+                    .Select(p => ($"{Labels.Player(p.Player)} {p.ExactText}{(p.Rank is int r ? $" 第 {r} 名" : string.Empty)}", Ui.InfoText))
                     .Concat(power.Groups.Select(g => ($"{Labels.Player(g.Owner)} {Labels.Coords(g.Stones)} {g.Power.FormulaText}", Ui.MutedText))));
                 break;
 

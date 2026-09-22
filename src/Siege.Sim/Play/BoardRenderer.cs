@@ -167,13 +167,13 @@ internal sealed class BoardRenderer
 
         foreach (PlayerFlowState state in view.Players)
         {
-            BigInteger power = view.Power?.Players.FirstOrDefault(p => p.Player == state.Player)?.Total ?? 0;
+            PlayerPower? detail = view.Power?.Players.FirstOrDefault(p => p.Player == state.Player);
             int rank = view.Power?.Ranking.FirstOrDefault(g => g.Players.Contains(state.Player))?.Rank ?? 0;
             HandPublicView? hand = view.Hands.FirstOrDefault(h => h.Player == state.Player);
             string types = hand is null || hand.IsEmpty ? "无" : string.Join("", hand.Types.Select(Letter));
             string status = state.Status == PlayerStatus.Active ? "" : $"  [{state.Status}]";
             Ink($"  {Label(state.Player, me),-8}", ColorOf(state.Player), bright: state.Player == me);
-            _out.WriteLine($" 势力 {power,6}  名次 {rank}  手牌类型 {types}{status}");
+            _out.WriteLine($" {PowerText(detail)}  名次 {rank}  手牌类型 {types}{status}");
         }
 
         var owned = view.Relics.Where(r => r.IsRevealed && r.Content is not null).ToList();
@@ -184,6 +184,14 @@ internal sealed class BoardRenderer
                 (r.Control.Holder is { } h ? $"→{Label(h, me)}" : r.Control.Kind == RelicControlKind.Contested ? "→争夺中" : ""))));
         }
     }
+
+    /// <summary>
+    /// 势力栏：总势力拆成"领地 + 棋串"（restore-go-core-rules 段 E，tasks 5.3），两项都取自 Core 势力明细。
+    /// ≥ 10^6 用 <see cref="PowerNotation.Compact"/> 缩写（与图形版同一份），不封顶的军势不会把一行撑到换行；精确值见终局名次与预演。不定宽对齐——定宽遇到大数只会把列撑歪。
+    /// </summary>
+    internal static string PowerText(PlayerPower? detail) => detail is null
+        ? "势力 0（领地 0 + 棋串 0）"
+        : $"势力 {PowerNotation.Compact(detail.Total)}（领地 {detail.TerritoryScore} + 棋串 {PowerNotation.Compact(detail.GroupScore)}）";
 
     public static string Label(PlayerId p, PlayerId me) => p == me ? $"玩家{p.Value + 1}(你)" : $"玩家{p.Value + 1}";
 

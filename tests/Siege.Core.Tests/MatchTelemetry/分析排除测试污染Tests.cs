@@ -14,7 +14,9 @@ public class 分析排除测试污染Tests
     {
         // 混有 10 局调试 AI 局 → 默认排除并说明数量；显式要求包含时纳入。人工接管局同样排除。分析只读文件，不碰内存对象。
         // 变异验证 M-B12：MatchLog.IsContaminated 忽略 UsedDebugAi → 红 1（本测试）。
-        List<MatchLog> sample = SimFixtures.Sample.Value;
+        // restore-go-core-rules 段 E：样本由 Sample（段 C 起 4 局全是截断局，领先者样本按新口径为 0）换成有名次的 RankedSample——
+        // 否则下面的 Leader.Samples == 4 读的是截断局，"污染局被排除"就只剩纳入计数一条腿在证。
+        List<MatchLog> sample = SimFixtures.RankedSample.Value;
         string dir = SimFixtures.TempDir("exclude-debug");
         foreach (MatchLog log in sample)
         {

@@ -49,6 +49,7 @@ public sealed partial class GameRoot : Node3D
     private bool _autoDemo;
     private bool _pickCheck;
     private bool _shotOverview;
+    private bool _shotPower;
     private bool _dirty = true;
     private bool _mouseInside;
     private bool _opened;
@@ -62,7 +63,7 @@ public sealed partial class GameRoot : Node3D
         _bindings.Install();
 
         // 命令行：先把全部选项读完，再结算未知选项（LaunchArgs：合法选项集合 = 读取过的名字，没有第二张表）。
-        // --map=<地图标识或文件>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5）。缺省 v4；
+        // --map=<地图标识或文件>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5）。缺省 v5（MapCatalog.DefaultId）；
         // 选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
         ulong seed;
         int rounds;
@@ -72,6 +73,10 @@ public sealed partial class GameRoot : Node3D
             _autoDemo = args.Flag("auto-demo");
             _pickCheck = args.Flag("pick-check");
             _shotOverview = args.Flag("overview");
+
+            // --shot-power：截图时打开势力层（restore-go-core-rules 段 E：给负责人看独占格着色与"领地 + 棋串"）。
+            // 势力层的文字面板在左侧、不盖棋盘中心；手牌信息面板照旧收起。
+            _shotPower = args.Flag("shot-power");
 
             // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
             // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
@@ -108,7 +113,7 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
-            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时缺省 v4、跳过选图（既有自检命令不变）。
+            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图（v5）、跳过选图（既有自检命令不变）。
             if (mapSelect || (mapId is null && !Unattended))
             {
                 _session = BeginMapSelect(mapId);
@@ -182,6 +187,11 @@ public sealed partial class GameRoot : Node3D
         Error error = image.SavePng(path);
         GD.Print($"[siege] 截图 {path}：{error}（{image.GetWidth()}×{image.GetHeight()}，第 {_frame} 帧，第 {_session.Match.MajorRound} 大回合，信息层 {(_layers.Active is { } layer ? Names.Layer(layer) : "关")}，手牌信息面板 {(_handPanel.IsOpen ? "开" : "关")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}）");
         DefaultBoardView shot = _session.World.Board();
+
+        // 势力栏与独占格（取景自证：HUD 概览栏的"领地 + 棋串"文字、势力层着色的独占格数，都读视图模型）。
+        var powerLayer = (PowerLayerContent)_session.World.Layer(TacticalLayer.Power);
+        GD.Print("[siege] 势力栏：" + string.Join("；", powerLayer.Players.Select(p => $"{Labels.Player(p.Player)} {p.CompactText}")));
+        GD.Print($"[siege] 独占格 {powerLayer.Territory.Length}（" + string.Join("、", powerLayer.Territory.GroupBy(c => c.Owner!.Value).OrderBy(g => g.Key.Value).Select(g => $"{Labels.Player(g.Key)} {g.Count()}")) + "）");
 
         // 盘上六种棋子各多少枚、本局已完成哪些改造，供 art/artisan-v4/README 的人工清单对照（都读视图模型，不读地图、不判规则）。
         GD.Print("[siege] 棋子：" + string.Join("；", shot.Cells
@@ -391,6 +401,11 @@ public sealed partial class GameRoot : Node3D
         _shotPending = true;
         _layers.Back();
         _handPanel.Back();
+        if (_shotPower)
+        {
+            _layers.Toggle(TacticalLayer.Power);
+        }
+
         _dirty = false;
         RefreshViews();
         CaptureWhenDrawn(_screenshotPath);
@@ -749,7 +764,10 @@ public sealed partial class GameRoot : Node3D
         string standings = result is null
             ? "无名次"
             : string.Join("、", result.Standings.Select(s => $"第{s.Rank}名 {Labels.Player(s.Player)} 势力 {s.Input.Power}"));
-        GD.Print($"[auto-demo] 终局：第 {result?.MajorRound} 大回合，{(result is null ? "未知" : Names.End(result.Reason))}；{standings}");
+        // --rounds 停止点（表现层的无人值守收尾，不是规则终局）：规则层没有结果，如实写"演示停止"而不是"终局"。
+        GD.Print(result is null
+            ? $"[auto-demo] 演示停止：跑满 {_rounds} 个大回合（--rounds 停止点，不是终局；对局停在第 {_session.Match.MajorRound} 大回合）；{standings}"
+            : $"[auto-demo] 终局：第 {result.MajorRound} 大回合，{Names.End(result.Reason)}；{standings}");
         GD.Print($"[perf] 启动到首帧 {_firstFrameMsec} ms，启动到终局 {Time.GetTicksMsec()} ms，共 {_frame} 帧");
         if (_screenshotFrame >= 0)
         {

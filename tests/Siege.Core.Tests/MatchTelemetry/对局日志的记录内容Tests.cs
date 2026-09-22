@@ -11,9 +11,11 @@ namespace Siege.Core.Tests.MatchTelemetry;
 public class 对局日志的记录内容Tests
 {
     [Fact]
-    public void 日志覆盖七类记录()
+    public void 日志覆盖八类记录()
     {
-        // 设计文档 §17 七类记录逐类对应到字段（映射表见 MatchLog 类型注释）。写文件 → 只读文件解析 → 逐类断言字段存在且可解析。
+        // match-telemetry 八类记录逐类对应到字段（映射表见 MatchLog 类型注释；第 4 类地形改造由 地形改造日志与分析Tests 逐字段钉住）。写文件 → 只读文件解析 → 逐类断言字段存在且可解析。
+        // restore-go-core-rules 段 E：原名「日志覆盖七类记录」，规格早已是八类；本段补第 6 类的领地分与第 7 类的结束原因。
+        // 变异验证 M-E5：MatchSession.PlayerEntries 不写领地分（TerritoryScore 恒 null）→ 实跑红 4（本测试、领地分可查、大数不失真、候选格上限黄金哈希）。
         // 持久化两条腿：活对象字段 vs 解析结果逐字段比 + 文本往返逐字节比。
         // 变异验证 M-B1：MatchSession.RecordTurn 不写 Recruit 事件 → 红 2（本测试、SimulationHarness.子流互不干扰）。
         MatchLog live = SimFixtures.Sample.Value[0];
@@ -65,6 +67,15 @@ public class 对局日志的记录内容Tests
         Assert.True(group.Base > 0 && group.Power > 0);
         Assert.True(group.LineBonus >= 0 && group.SynergyBonus >= 0 && group.MultiplierCount >= 0);
 
+        // 5（续）每名玩家的领地分（独占空格数）：每条快照每名玩家都写出（非 null）；总势力 = 领地分 + Σ棋串军势（测试内独立加和），
+        // 且样本里确有非零领地分（testing.md「期望值是 0 / null 的遥测断言抓不到写入端漏写」）。
+        Assert.All(log.Turns.SelectMany(t => t.PlayersState), p =>
+        {
+            Assert.NotNull(p.TerritoryScore);
+            Assert.Equal(p.Total, p.TerritoryScore!.Value + p.Groups.Aggregate(BigInteger.Zero, (sum, g) => sum + g.Power));
+        });
+        Assert.Contains(log.Turns.SelectMany(t => t.PlayersState), p => p.TerritoryScore > 0);
+
         // 6. 势力排名变化、Pass、出局、弃赛、最终结果
         Assert.Contains(log.Events, e => e.Type == LogEventType.RankChanged);
         Assert.All(log.Turns, t => Assert.Equal(t.Placements.Count == 0, t.Passed));
@@ -109,6 +120,69 @@ public class 对局日志的记录内容Tests
         Assert.Equal(4, ended.Result.Standings.Count);
         Assert.Equal([0], ended.Result.Winners);
         Assert.Equal(match.Result!.Standings.Select(s => (s.Player.Value, s.Rank)), ended.Result.Standings.Select(s => (s.Player, s.Rank)));
+    }
+
+    [Fact]
+    public void 领地分可查()
+    {
+        // 规格 Scenario：某次结算后玩家 A 的独占空格由 14 变为 9 → 日志中可查到该次结算后 A 的领地分为 9。
+        // 走真实盘面 → 日志写入函数（MatchSession.PlayerEntries，RecordTurn 用的同一个）→ 文本往返（testing.md「真实跑局覆盖不到的写入路径」）。
+        // 9×9 平地：P0 占 C5–H5 一排 6 子 → 覆盖第 4 / 6 行各 6 格 + 两端 B5、J5 = 14 个独占空格。
+        // 随后 P1 落 D6、H4：D6 与 H4 本身被占（−2），D6 使 C6 / E6 变争议（−2），H4 使 G4 变争议（−1）→ 14 − 5 = 9。
+        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(MatchFixtures.P0, "C5", "D5", "E5", "F5", "G5", "H5");
+        List<PlayerEntry> before = MatchSession.PlayerEntries(match.Publish());
+        match.Stones(MatchFixtures.P1, "D6", "H4");
+        List<PlayerEntry> after = MatchSession.PlayerEntries(match.Publish());
+
+        MatchLog written = SimFixtures.Synthetic(
+            1,
+            [SimFixtures.Turn(1, 5, 0, [0, 0, 0, 0]) with { PlayersState = before }, SimFixtures.Turn(2, 5, 1, [0, 0, 0, 0]) with { PlayersState = after }],
+            [],
+            SimFixtures.ResultOf(5, [0]));
+        MatchLog log = MatchLog.Parse(written.FullText());
+
+        Assert.Equal(14, log.Turns[0].PlayersState.Single(p => p.Player == 0).TerritoryScore);
+        Assert.Equal(9, log.Turns[1].PlayersState.Single(p => p.Player == 0).TerritoryScore);
+        // 与权威势力明细逐人一致（P1 的领地分也非零：D7 / J4 / H3 三格）
+        Assert.All(log.Turns[1].PlayersState, p => Assert.Equal(match.Scoreboard.Latest!.Of(new PlayerId(p.Player)).TerritoryScore, p.TerritoryScore));
+        Assert.Equal(3, log.Turns[1].PlayersState.Single(p => p.Player == 1).TerritoryScore);
+    }
+
+    [Fact]
+    public void 大数不失真()
+    {
+        // 规格 Scenario：某棋串军势超过 2^63 → 日志中记录的是精确整数，离线解析后与对局内的值逐位一致。
+        // 真实盘面：12×12 平地上 P0 用 120 枚倍增子铺满第 1–10 行（一条棋串）→ 军势 ⌊120 × 3^120 / 2^120⌋（测试内独立整数式），
+        // 远超 2^63；第 11 行 12 格为 P0 独占（领地分 12，非零）。经日志写入函数 → 文本 → 解析，逐位与对局内的势力明细比。
+        // 写出端形状见 军势精确整数遥测Tests（JSON 数字、不加引号、无指数）。
+        MapData map = MatchFixtures.Map() with { Id = "test-match-12x12", Width = 12, Height = 12 };
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
+        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
+        for (int y = 0; y < 10; y++)
+        {
+            for (int x = 0; x < 12; x++)
+            {
+                match.Board.Place(new Coord(x, y), MatchFixtures.P0, PieceType.Multiplier);
+            }
+        }
+
+        match.Debug.Recalculate();
+        BigInteger expected = 120 * BigInteger.Pow(3, 120) / BigInteger.Pow(2, 120);
+        Assert.True(expected > BigInteger.Pow(2, 63));
+        Scoring.PlayerPower truth = match.Scoreboard.Latest!.Of(MatchFixtures.P0);
+        Assert.Equal(expected, Assert.Single(truth.Groups).Power);
+        Assert.Equal(12, truth.TerritoryScore);
+
+        MatchLog written = SimFixtures.Synthetic(
+            1, [SimFixtures.Turn(1, 5, 0, [0, 0, 0, 0]) with { PlayersState = MatchSession.PlayerEntries(match.Publish()) }], [], SimFixtures.ResultOf(5, [0]));
+        string text = written.FullText();
+        Assert.Contains($"\"Power\":{expected}", text, StringComparison.Ordinal);
+        Assert.Contains($"\"Total\":{expected + 12}", text, StringComparison.Ordinal);
+
+        PlayerEntry p0 = MatchLog.Parse(text).Turns[0].PlayersState.Single(p => p.Player == 0);
+        Assert.Equal(expected, Assert.Single(p0.Groups).Power);
+        Assert.Equal(truth.Total, p0.Total);
+        Assert.Equal((12, 120), (p0.TerritoryScore, p0.Groups[0].MultiplierCount));
     }
 
     [Fact]

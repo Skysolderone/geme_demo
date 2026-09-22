@@ -34,7 +34,9 @@ public class 候选格上限Tests
     /// 而分叉点恰是旧日志里第一次出现加成的小回合，且第 2、3 个小回合只差展示数 / 选取数（旧 5/4、6/4 → 新 5/3、5/3），
     /// 第 4 个小回合起候选抽取不同、落点随之分叉。旧值 ABA5D7F9…229A65 在 HEAD 上重跑复现，因此作废；新值取自段 D 的实际运行。</para>
     /// </summary>
-    private const string V4GoldenTurnHash = "F3DA0A40BA2DE993936D39C094676FBC98C0B77548295BD8D319F79548D8F6E0";
+    // restore-go-core-rules 段 E：F3DA0A40…48D8F6E0 → 49BCFA49…11DEA30C。走法一步没变：快照新增 PlayerEntry.TerritoryScore 一个字段；
+    // 同一局 24 条快照逐条去掉该字段后的哈希恰为旧值 F3DA0A40…（临时探针实跑，roundtrip 逐字节一致），领地分非零 90 处。
+    private const string V4GoldenTurnHash = "49BCFA498B6C12E8E8B14A0698F19CC31BEDD054B2EE8374D4FC88AB11DEA30C";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));

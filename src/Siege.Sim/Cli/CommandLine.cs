@@ -12,6 +12,18 @@ public sealed class CommandLine
     /// <summary>建议"最相近合法选项"的编辑距离上限（design.md D3）。超过它就只报全部合法选项。</summary>
     private const int MaxSuggestDistance = 3;
 
+    /// <summary>
+    /// 已删除的选项 → 删除说明（restore-go-core-rules tasks 5.1）。传入它们 MUST 报"已删除"并说明原因——
+    /// 笼统的"未知选项"会让人以为拼错了、去试相近的写法；静默忽略则是 strict-cli 要消灭的失败模式。对全部子命令生效。
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> RetiredOptions = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["max-rounds"] = "大回合上限终局已随 restore-go-core-rules（裁决 #4）删除，对局只剩三类终局；批量跑局要限长请用 --turn-limit（小回合数截断）",
+        ["dominance-start"] = "势力碾压已随 restore-go-core-rules（裁决 #4）删除",
+        ["no-catch-up"] = "落后者征募补偿已随 restore-go-core-rules（裁决 #7）删除",
+        ["site-values"] = "据点已随 restore-go-core-rules（裁决 #14）整体移除",
+    };
+
     private readonly Dictionary<string, string> _options = new(StringComparer.Ordinal);
     private readonly List<string> _positional = [];
 
@@ -102,6 +114,12 @@ public sealed class CommandLine
         if (unknown.Count == 0)
         {
             return;
+        }
+
+        IReadOnlyList<string> retired = [.. unknown.Where(RetiredOptions.ContainsKey)];
+        if (retired.Count > 0)
+        {
+            throw new ArgumentException(string.Join("；", retired.Select(k => $"选项 --{k} 已删除：{RetiredOptions[k]}")) + "。");
         }
 
         IReadOnlyList<string> legal = LegalOptions();

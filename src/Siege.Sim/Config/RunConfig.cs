@@ -213,6 +213,37 @@ public sealed record RunConfig
             : this;
     }
 
-    public static RunConfig FromJson(string json) =>
-        (JsonSerializer.Deserialize<RunConfig>(json, JsonOptions) ?? throw new FormatException("配置 JSON 为空。")).Validated();
+    /// <summary>
+    /// 已删除的配置项（restore-go-core-rules）→ 删除说明。配置文件（<c>run --config</c>）里出现任何一个都 MUST 报错点名，MUST NOT 静默忽略：
+    /// 一份旧扫档配置照常"跑通"、实际却没按它写的上限 / 分值跑，是最难发现的口径错误（testing.md「静默忽略的输入会产出口径错误的数据」）。
+    /// 比对大小写不敏感（与地图文件、存档的废弃字段同口径）；其余未知键照旧宽容（<c>_comment</c> 等）。
+    /// 旧日志首部里的配置不经本方法（直接反序列化），照常可读。
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> RetiredKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["SiteValues"] = "据点已整体移除（restore-go-core-rules 裁决 #14），没有据点分值可配",
+        ["MaxMajorRounds"] = "大回合上限终局已删除（restore-go-core-rules 裁决 #4），对局只剩三类终局；跑局要限长请用 TurnLimit（小回合数截断）",
+        ["DominanceStartRound"] = "势力碾压已删除（restore-go-core-rules 裁决 #4）",
+        ["CatchUpRecruit"] = "落后者征募补偿已删除（restore-go-core-rules 裁决 #7）",
+    };
+
+    public static RunConfig FromJson(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        using (JsonDocument doc = JsonDocument.Parse(json))
+        {
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                foreach (JsonProperty property in doc.RootElement.EnumerateObject())
+                {
+                    if (RetiredKeys.TryGetValue(property.Name, out string? why))
+                    {
+                        throw new FormatException($"配置项 {property.Name} 已删除：{why}。请从配置文件里去掉它。");
+                    }
+                }
+            }
+        }
+
+        return (JsonSerializer.Deserialize<RunConfig>(json, JsonOptions) ?? throw new FormatException("配置 JSON 为空。")).Validated();
+    }
 }

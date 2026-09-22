@@ -1,4 +1,6 @@
 using Siege.Core.Ai;
+using Siege.Core.Board;
+using Siege.Core.Match;
 using Siege.Sim.Play;
 
 namespace Siege.Core.Tests.SimulationHarness;
@@ -25,6 +27,41 @@ public class 终端对局Tests
         Assert.Contains("玩家1(你) 落子 B1B", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 42", text, StringComparison.Ordinal);
+
+        // restore-go-core-rules 段 E（tasks 5.3）：势力栏显示"领地 + 棋串"，且两项之和等于总势力（测试内独立加和）；样本里确有非零领地分。
+        // 变异验证 M-E16：BoardRenderer.Status 只打总势力（去掉领地 / 棋串拆分）→ 实跑红 1，只红 状态栏大数势力缩写不撑破一行——
+        // 本测试这条正则也会命中每步播报（PlayCommand 同用 PowerText），所以状态栏本身由下一条测试钉住。
+        System.Text.RegularExpressions.MatchCollection rows = System.Text.RegularExpressions.Regex.Matches(text, "势力 (\\d+)（领地 (\\d+) \\+ 棋串 (\\d+)）");
+        Assert.True(rows.Count >= 8, $"只找到 {rows.Count} 条势力栏");
+        Assert.All(rows, m => Assert.Equal(long.Parse(m.Groups[1].Value), long.Parse(m.Groups[2].Value) + long.Parse(m.Groups[3].Value)));
+        Assert.Contains(rows, m => m.Groups[2].Value != "0");
+    }
+
+    [Fact]
+    public void 状态栏大数势力缩写不撑破一行()
+    {
+        // tasks 5.3「大数显示不换行溢出」：120 枚倍增子的一条棋串军势 ⌊120 × 3^120 / 2^120⌋ 有 23 位；势力栏用 ≥ 10^6 的缩写（与图形版同一份 PowerNotation），
+        // 整行不超过 100 列、不出现完整的 23 位数字。精确值由终局名次 / 预演给出，不在概览栏。
+        MapData map = MatchFixtures.Map() with { Id = "test-match-12x12", Width = 12, Height = 12 };
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
+        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
+        for (int y = 0; y < 10; y++)
+        {
+            for (int x = 0; x < 12; x++)
+            {
+                match.Board.Place(new Coord(x, y), MatchFixtures.P0, PieceType.Multiplier);
+            }
+        }
+
+        match.Debug.Recalculate();
+        Scoring.PlayerPower p0 = match.Scoreboard.Latest!.Of(MatchFixtures.P0);
+        var output = new StringWriter();
+        new BoardRenderer(output).Status(match.Publish(), MatchFixtures.P0);
+
+        string line = output.ToString().Split('\n').Single(l => l.Contains("玩家1(你)", StringComparison.Ordinal) && l.Contains("势力 ", StringComparison.Ordinal));
+        Assert.Contains($"势力 {Scoring.PowerNotation.Compact(p0.Total)}（领地 12 + 棋串 {Scoring.PowerNotation.Compact(p0.GroupScore)}）", line, StringComparison.Ordinal);
+        Assert.DoesNotContain(p0.GroupScore.ToString(System.Globalization.CultureInfo.InvariantCulture), line, StringComparison.Ordinal);
+        Assert.True(line.TrimEnd().Length <= 100, $"势力栏 {line.TrimEnd().Length} 列");
     }
 
     [Fact]

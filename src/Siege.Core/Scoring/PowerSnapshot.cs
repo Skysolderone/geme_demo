@@ -53,6 +53,9 @@ public sealed record PlayerPower(
     /// <summary>领地分总计 = 独占空格数（每格 1 分）。</summary>
     public int TerritoryScore => ExclusiveCells.Length;
 
+    /// <summary>全部棋串军势之和（<see cref="Total"/> = <see cref="TerritoryScore"/> + 本项）。表现层显示"领地 + 棋串"时读它，不自己做减法。</summary>
+    public BigInteger GroupScore => Groups.Aggregate(BigInteger.Zero, (sum, g) => sum + g.Power);
+
     /// <summary>是否参与势力名次（只有参赛中的玩家参与）。</summary>
     public bool IsRanked => Status == PlayerStatus.Active;
 }

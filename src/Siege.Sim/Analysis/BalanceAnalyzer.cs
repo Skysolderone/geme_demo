@@ -28,7 +28,49 @@ public sealed record ConvergenceSection(
     double MeanMajorRoundsAll,
     double MeanTurnsPerMatch);
 
-/// <summary>§16 六项数值目标。</summary>
+/// <summary>一类规则终局原因：局数、占全部纳入局的比例、平均结束大回合（该类一局都没有时为 NaN，报告照常给出该行）。</summary>
+public sealed record EndReasonStat(string Reason, int Count, double Share, double MeanEndRound);
+
+/// <summary>
+/// 终局原因分布与截断（restore-go-core-rules：match-telemetry 平衡分析方向 8 + 数值目标回归「截断率」）。
+/// <see cref="Reasons"/> 固定三行、按终局优先级（只剩一名 &gt; 棋盘填满 &gt; 整轮 Pass）；截断局（<c>turn_limit</c>）单列，目标 0；
+/// 旧日志的「达大回合上限」等其它原因计入 <see cref="Other"/>（它们有规则名次，仍计入胜率类指标）。
+/// </summary>
+/// <param name="Matches">纳入局数（占比的分母）。</param>
+/// <param name="Ranked">有名次的局 = 纳入局 − 截断局：胜率 / 名次类指标的有效样本数。</param>
+public sealed record EndingSection(
+    int Matches,
+    List<EndReasonStat> Reasons,
+    int Truncated,
+    Proportion TruncatedRate,
+    double MeanTruncatedRound,
+    Deviation TruncationTarget,
+    int Other,
+    int Ranked);
+
+/// <summary>
+/// 对局时长的调节手段（match-telemetry 数值目标回归「时长与地图规模并列」）：批次地图的可落子格数与信物格数，取自日志首部
+/// （<see cref="LogHeader.PlayableCells"/>、<see cref="LogHeader.Relics"/> 条数），不按地图标识重建地图。每局换图时给出范围与均值。
+/// </summary>
+/// <param name="PlayableSkipped">首部没有可落子格数的旧日志（denser-map 之前）：不进可落子格统计，计数。</param>
+public sealed record MapScaleSection(
+    int PlayableMatches,
+    int PlayableSkipped,
+    int MinPlayable,
+    int MaxPlayable,
+    double MeanPlayable,
+    int RelicMatches,
+    int MinRelics,
+    int MaxRelics,
+    double MeanRelics);
+
+/// <summary>
+/// 领地分占比（match-telemetry 平衡分析方向 10「领地分占比口径」）：逐局取终局快照（最后一条小回合快照）中参赛玩家（Active）的
+/// Σ领地分 ÷ Σ总势力，再对纳入局取平均。任一参赛玩家缺领地分字段（段 E 之前的旧日志）或参赛玩家总势力为 0 的局整局排除并计数，MUST NOT 回填。
+/// </summary>
+public sealed record TerritoryShareSection(int Matches, int Skipped, double MeanShare);
+
+/// <summary>§16 数值目标（restore-go-core-rules 段 E 起七项：第 7 项截断率在 <see cref="EndingSection"/>，报告里并入 §16）。</summary>
 public sealed record TargetsSection(
     SortedDictionary<int, int> DeployLimitRounds1To3,
     SortedDictionary<int, int> DeployLimitRounds4To6,
@@ -36,7 +78,7 @@ public sealed record TargetsSection(
     Deviation DeployPhase1,
     Deviation DeployPhase2,
     Deviation DeployPhase3,
-    List<(int Round, double MeanPower, BigInteger MaxGroupPower, int Samples)> PowerCurve,
+    List<(int Round, double MeanPower, double MeanTerritory, BigInteger MaxGroupPower, int Samples)> PowerCurve,
     Deviation PowerOpening,
     Deviation PowerMid,
     SortedDictionary<int, int> FirstConflictRounds,
@@ -219,7 +261,10 @@ public sealed record BalanceReport(
     StallingSection Stalling,
     AiQualitySection AiQuality,
     HighGroundSection HighGround,
-    TerrainEditSection TerrainEdits);
+    TerrainEditSection TerrainEdits,
+    EndingSection Ending,
+    MapScaleSection MapScale,
+    TerritoryShareSection TerritoryShare);
 
 /// <summary>
 /// 离线平衡分析（match-telemetry 三条 Requirement）：只读日志，不重跑对局，改口径无需重跑（design.md D6）。
@@ -252,26 +297,105 @@ public static class BalanceAnalyzer
         }
 
         int playerCount = included.Count == 0 ? 0 : included[0].Header.Players.Count;
+
+        // 胜率 / 名次类指标的唯一口径（restore-go-core-rules D5）：被小回合数截断的局没有名次与胜者，MUST NOT 计入——
+        // 它们不排除就会以"无人获胜"混进分母。凡读 Winners / Standings 的段一律吃这一份 ranked（或按它判定单局是否计胜率样本），
+        // 不各写一遍 Truncated 判断；其余统计（部署、势力曲线、选择率、改造次数……）仍用全部纳入局。
+        List<MatchLog> ranked = [.. included.Where(l => !l.Result!.Truncated)];
+        var rankable = new HashSet<MatchLog>(ranked, ReferenceEqualityComparer.Instance);
         return new BalanceReport(
             logs.Count, included.Count, contaminated, failed, playerCount, options,
             Convergence(included),
-            Targets(included, options),
-            Leader(included, options),
-            Snowball(included),
-            Selection(included),
+            Targets(included, ranked, options),
+            Leader(ranked, options),
+            Snowball(included, ranked),
+            Selection(included, rankable),
             Multiplier(included),
             PieceShares(included),
-            BirthZones(included),
-            GrowthAxes(included),
+            BirthZones(included, ranked),
+            GrowthAxes(ranked),
             Stalling(included),
             AiQuality(included),
             HighGround(included),
-            TerrainEdits(included));
+            TerrainEdits(included, rankable),
+            Ending(included, ranked.Count),
+            MapScale(included),
+            TerritoryShare(included));
+    }
+
+    // ---------- 终局原因分布与截断（restore-go-core-rules 段 E） ----------
+
+    /// <summary>终局原因的报告顺序 = 终局优先级（只剩一名 &gt; 棋盘填满 &gt; 整轮 Pass）。</summary>
+    private static readonly string[] RuleReasons = [nameof(EndReason.LastPlayerStanding), nameof(EndReason.BoardFull), nameof(EndReason.AllPassed)];
+
+    private static EndingSection Ending(List<MatchLog> logs, int ranked)
+    {
+        List<EndReasonStat> reasons = [.. RuleReasons.Select(reason =>
+        {
+            List<LogResult> of = [.. logs.Select(l => l.Result!).Where(r => r.Reason == reason)];
+            return new EndReasonStat(reason, of.Count, logs.Count == 0 ? double.NaN : (double)of.Count / logs.Count, Statistics.Mean(of.Select(r => (double)r.MajorRound)));
+        })];
+        List<LogResult> truncated = [.. logs.Select(l => l.Result!).Where(r => r.Truncated)];
+        Proportion rate = Statistics.Wilson(truncated.Count, logs.Count);
+        int other = logs.Count - truncated.Count - reasons.Sum(r => r.Count);
+        return new EndingSection(
+            logs.Count,
+            reasons,
+            truncated.Count,
+            rate,
+            Statistics.Mean(truncated.Select(r => (double)r.MajorRound)),
+            Statistics.Assess(rate.IsEmpty ? double.NaN : rate.Value * 100, 0, 0, "%"),
+            other,
+            ranked);
+    }
+
+    // ---------- 对局时长与地图规模并列 ----------
+
+    private static MapScaleSection MapScale(List<MatchLog> logs)
+    {
+        List<int> playable = [.. logs.Where(l => l.Header.PlayableCells is > 0).Select(l => l.Header.PlayableCells!.Value)];
+        List<int> relics = [.. logs.Select(l => l.Header.Relics.Count)];
+        return new MapScaleSection(
+            playable.Count,
+            logs.Count - playable.Count,
+            playable.Count == 0 ? 0 : playable.Min(),
+            playable.Count == 0 ? 0 : playable.Max(),
+            Statistics.Mean(playable.Select(v => (double)v)),
+            relics.Count,
+            relics.Count == 0 ? 0 : relics.Min(),
+            relics.Count == 0 ? 0 : relics.Max(),
+            Statistics.Mean(relics.Select(v => (double)v)));
+    }
+
+    // ---------- §17 第 10 项 领地分占比 ----------
+
+    private static TerritoryShareSection TerritoryShare(List<MatchLog> logs)
+    {
+        var shares = new List<double>();
+        int skipped = 0;
+        foreach (MatchLog log in logs)
+        {
+            List<PlayerEntry> active = log.Turns.Count == 0
+                ? []
+                : [.. log.Turns[^1].PlayersState.Where(p => p.Status == nameof(PlayerStatus.Active))];
+            BigInteger total = active.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total);
+            if (active.Count == 0 || active.Any(p => p.TerritoryScore is null) || total.IsZero)
+            {
+                skipped++;
+                continue;
+            }
+
+            long territory = active.Sum(p => (long)p.TerritoryScore!.Value);
+            shares.Add(territory / (double)total);
+        }
+
+        return new TerritoryShareSection(shares.Count, skipped, Statistics.Mean(shares));
     }
 
     // ---------- §17 第 11 项 地形改造（artisan-terrain-edit 3.4） ----------
 
-    private static TerrainEditSection TerrainEdits(List<MatchLog> logs)
+    /// <param name="rankable">有名次的局：只有它们里的改造者计入"改造过的玩家胜率"样本（截断局没有胜者）。</param>
+    private static TerrainEditSection TerrainEdits(List<MatchLog> logs, HashSet<MatchLog> rankable)
     {
         string[] actions = Enum.GetNames<TerrainEditKind>();
         var counts = actions.ToDictionary(a => a, _ => 0);
@@ -318,7 +442,7 @@ public static class BalanceAnalyzer
             }
 
             List<int> winners = log.Result?.Winners ?? [];
-            foreach (int editor in editors)
+            foreach (int editor in editors.Where(_ => rankable.Contains(log)))
             {
                 editorSamples++;
                 editorWins += winners.Contains(editor) ? 1 : 0;
@@ -419,12 +543,13 @@ public static class BalanceAnalyzer
 
     // ---------- §16 ----------
 
-    private static TargetsSection Targets(List<MatchLog> logs, AnalysisOptions options)
+    private static TargetsSection Targets(List<MatchLog> logs, List<MatchLog> ranked, AnalysisOptions options)
     {
         var phase1 = new SortedDictionary<int, int>();
         var phase2 = new SortedDictionary<int, int>();
         var phase3 = new SortedDictionary<int, int>();
         var powerByRound = new SortedDictionary<int, List<double>>();
+        var territoryByRound = new SortedDictionary<int, List<double>>();
         var maxGroupByRound = new SortedDictionary<int, BigInteger>();
         var firstConflict = new SortedDictionary<int, int>();
         int noConflict = 0;
@@ -470,9 +595,21 @@ public static class BalanceAnalyzer
                     powerByRound[round] = list = [];
                 }
 
+                if (!territoryByRound.TryGetValue(round, out List<double>? territories))
+                {
+                    territoryByRound[round] = territories = [];
+                }
+
                 foreach (PlayerEntry p in snapshot.PlayersState.Where(p => p.Status == "Active"))
                 {
                     list.Add((double)p.Total);
+
+                    // 领地分曲线（数值目标回归：势力成长曲线分领地分与棋串军势两条）；旧日志无该字段则不进领地分均值，MUST NOT 回填成 0。
+                    if (p.TerritoryScore is { } territory)
+                    {
+                        territories.Add(territory);
+                    }
+
                     BigInteger maxGroup = p.Groups.Count == 0 ? BigInteger.Zero : p.Groups.Max(g => g.Power);
                     maxGroupByRound[round] = BigInteger.Max(maxGroupByRound.TryGetValue(round, out BigInteger m) ? m : BigInteger.Zero, maxGroup);
                 }
@@ -519,13 +656,13 @@ public static class BalanceAnalyzer
             }
         }
 
-        List<(int, double, BigInteger, int)> curve = [.. powerByRound.Select(kv =>
-            (kv.Key, Statistics.Mean(kv.Value), maxGroupByRound.TryGetValue(kv.Key, out BigInteger m) ? m : BigInteger.Zero, kv.Value.Count))];
+        List<(int, double, double, BigInteger, int)> curve = [.. powerByRound.Select(kv =>
+            (kv.Key, Statistics.Mean(kv.Value), Statistics.Mean(territoryByRound[kv.Key]), maxGroupByRound.TryGetValue(kv.Key, out BigInteger m) ? m : BigInteger.Zero, kv.Value.Count))];
         double opening = Statistics.Mean(powerByRound.Where(kv => kv.Key <= 2).SelectMany(kv => kv.Value));
         double mid = Statistics.Mean(powerByRound.Where(kv => kv.Key is >= 4 and <= 6).SelectMany(kv => kv.Value));
         double conflictMean = Statistics.Mean(firstConflict.SelectMany(kv => Enumerable.Repeat((double)kv.Key, kv.Value)));
         double endMean = Statistics.Mean(endRounds.SelectMany(kv => Enumerable.Repeat((double)kv.Key, kv.Value)));
-        LeaderSection leader = Leader(logs, options);
+        LeaderSection leader = Leader(ranked, options);
 
         return new TargetsSection(
             phase1, phase2, phase3,
@@ -626,8 +763,10 @@ public static class BalanceAnalyzer
 
     // ---------- §17.2 先手滚雪球 ----------
 
-    private static SnowballSection Snowball(List<MatchLog> logs)
+    /// <param name="ranked">有名次的局：只有它们参与"第 3 大回合位置 → 最终名次"（截断局没有最终名次）。</param>
+    private static SnowballSection Snowball(List<MatchLog> logs, List<MatchLog> ranked)
     {
+        var rankable = new HashSet<MatchLog>(ranked, ReferenceEqualityComparer.Instance);
         var byPosition = new SortedDictionary<int, (int Improved, int Same, int Worse)>();
         int firstSamples = 0;
         int firstStays = 0;
@@ -674,7 +813,7 @@ public static class BalanceAnalyzer
             }
 
             LogEvent? third = ends.FirstOrDefault(e => e.MajorRound == 3);
-            if (third is not null)
+            if (third is not null && rankable.Contains(log))
             {
                 foreach (int p in log.Header.Players)
                 {
@@ -703,7 +842,8 @@ public static class BalanceAnalyzer
 
     // ---------- §17.3 棋子与信物 ----------
 
-    private static SelectionSection Selection(List<MatchLog> logs)
+    /// <param name="rankable">有名次的局：选择率与控制时长用全部纳入局，"选过 / 控制过它的玩家胜率"只取这些局（截断局没有胜者）。</param>
+    private static SelectionSection Selection(List<MatchLog> logs, HashSet<MatchLog> rankable)
     {
         var offered = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var picked = new SortedDictionary<string, int>(StringComparer.Ordinal);
@@ -750,7 +890,7 @@ public static class BalanceAnalyzer
                 }
             }
 
-            foreach ((int player, HashSet<string> types) in pickedBy)
+            foreach ((int player, HashSet<string> types) in pickedBy.Where(_ => rankable.Contains(log)))
             {
                 foreach (string type in types)
                 {
@@ -787,7 +927,7 @@ public static class BalanceAnalyzer
                 }
             }
 
-            foreach ((int player, HashSet<string> types) in controlledBy)
+            foreach ((int player, HashSet<string> types) in controlledBy.Where(_ => rankable.Contains(log)))
             {
                 foreach (string type in types)
                 {
@@ -914,14 +1054,16 @@ public static class BalanceAnalyzer
 
     // ---------- §17.5 出生区（裁决 8：收敛 / 未收敛分组） ----------
 
-    private static BirthZoneSection BirthZones(List<MatchLog> logs)
+    /// <param name="all">全部纳入局：只用来定区数（地图属性，与名次无关）。</param>
+    /// <param name="logs">有名次的局：各区胜率与被选次数的样本（截断局没有胜者，MUST NOT 以"未胜"计入）。</param>
+    private static BirthZoneSection BirthZones(List<MatchLog> all, List<MatchLog> logs)
     {
         // 行数 = 地图出生区数，取自日志首部；旧日志（frontier-map 之前）无该字段，回填为被选到过的最大区号 + 1（标准档上即真值）。
         // 首部区数与被选区号取较大者：首部偏小（手改日志 / 混批）时不得把越界区的样本静默丢掉。
-        int zones = logs.Count == 0 ? 0 : logs.Max(l => Math.Max(l.Header.ZoneCount ?? 0, l.Header.Zones.Count == 0 ? 0 : l.Header.Zones.Max() + 1));
+        int zones = all.Count == 0 ? 0 : all.Max(l => Math.Max(l.Header.ZoneCount ?? 0, l.Header.Zones.Count == 0 ? 0 : l.Header.Zones.Max() + 1));
         // 基线 = 1 / 参赛人数：各区胜率的分母是"该区被选中的局数"，被选中的区上那名玩家的期望胜率是 1/人数，与地图有几个区无关。
         // 出生区多于玩家的图（边疆档 6 区 4 人）若按 1/区数 = 1/6 取基线，公平的 25% 会被系统性判成"显著偏高"（frontier-map 2.4）。
-        double baseline = zones == 0 ? double.NaN : 1.0 / logs[0].Header.Players.Count;
+        double baseline = zones == 0 ? double.NaN : 1.0 / all[0].Header.Players.Count;
         List<MatchLog> converged = [.. logs.Where(l => l.Header.RelicsConverged)];
         List<MatchLog> notConverged = [.. logs.Where(l => !l.Header.RelicsConverged)];
         return new BirthZoneSection(
@@ -933,7 +1075,7 @@ public static class BalanceAnalyzer
             converged.Count,
             notConverged.Count)
         {
-            BySide = logs.Any(l => l.Header.Config.MapPerMatch) ? SideStats(logs, baseline) : null,
+            BySide = all.Any(l => l.Header.Config.MapPerMatch) ? SideStats(logs, baseline) : null,
         };
     }
 

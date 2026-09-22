@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Reflection;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -20,10 +21,28 @@ public class 势力层领地与高地Tests
         // restore-go-core-rules 段 B：取代旧的「势力层显示据点控制」与「势力层视图模型不含领地贡献字段」两条——
         // 据点项已随据点摘除，领地分恢复计分后势力层必须给得出它。
         // 变异验证 M-B11（段 B，实跑红 3）：LayerContents.Power 把 PlayerPowerRowView 的领地分改成 0 → 本测试红。
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(P0, "E5").Stones(P1, "J9");
+        // 段 E（tasks 5.4）：势力层内容改为"独占格着色 + 领地分 + 棋串分"。规格算例：P0 占 C5–G5 一排 5 子 → 覆盖第 4 / 6 行各 5 格 + 两端 B5、H5 = 12 个独占空格，
+        // 这 12 格以 P0 的阵营呈现、领地分读得出 12。另摆 P1 J9 与 P2 G9：两家共同覆盖 H9 → 争议格，MUST NOT 以任何玩家的得分呈现。
+        // 独占格直接投影势力明细的 ExclusiveCells（空格归属三态的唯一结果），不在表现层另扫覆盖表。
+        // 变异验证 M-E8：LayerContents.Power 的独占格集合掺入争议格（争议格也以独占格呈现）→ 实跑红 1（本测试）。
+        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(P0, "C5", "D5", "E5", "F5", "G5").Stones(P1, "J9").Stones(P2, "G9");
 
-        var layer = (PowerLayerContent)match.World(P2).Layer(TacticalLayer.Power);
+        var layer = (PowerLayerContent)match.World(P3).Layer(TacticalLayer.Power);
         PowerSnapshot truth = match.Scoreboard.Latest!;
+
+        TerritoryCellView[] mine = [.. layer.Territory.Where(c => c.Owner == P0)];
+        Assert.Equal(12, mine.Length);
+        Assert.Equal(12, layer.Players.Single(r => r.Player == P0).TerritoryScore);
+        Assert.Equal(
+            ["B5", "C4", "C6", "D4", "D6", "E4", "E6", "F4", "F6", "G4", "G6", "H5"],
+            mine.Select(c => c.Coord.ToNotation()).Order(StringComparer.Ordinal));
+        Assert.All(layer.Territory, c => Assert.Equal(TerritoryState.Exclusive, c.State));
+        Assert.Equal(OwnershipKind.Contested, truth.Coverage.OwnershipOf(Coord.Parse("H9")).Kind);
+        Assert.DoesNotContain(layer.Territory, c => c.Coord == Coord.Parse("H9"));
+        foreach (PlayerPower p in truth.Players)
+        {
+            Assert.Equal(p.ExclusiveCells.Order(), layer.Territory.Where(c => c.Owner == p.Player).Select(c => c.Coord).Order());
+        }
 
         foreach (PlayerPowerRowView row in layer.Players)
         {
@@ -39,6 +58,7 @@ public class 势力层领地与高地Tests
             }
 
             Assert.Equal(row.TerritoryScore + groups, row.Total);
+            Assert.Equal(groups, row.GroupScore);
         }
 
         Assert.Equal(4, layer.Players.Length);
@@ -90,5 +110,33 @@ public class 势力层领地与高地Tests
         Assert.Equal(37, five.Power.Power);
         Assert.Equal("（基础 5 + 位置加值 0）× 7.59375 = 37", five.Power.FormulaText);
         Assert.Equal((2, 2), (two.Power.MultiplierCount, two.HeatLevel));
+    }
+
+    [Theory]
+    [InlineData("0", "0")]
+    [InlineData("999999", "999999")]
+    [InlineData("1000000", "1.00M")]
+    [InlineData("1234567", "1.23M")]
+    [InlineData("12345678", "12.3M")]
+    [InlineData("123456789", "123M")]
+    [InlineData("1999999999", "1.99B")]
+    [InlineData("999999999999999", "999T")]
+    [InlineData("1000000000000000", "1.00e15")]
+    [InlineData("515377520732011331036461129765621272702107522001", "5.15e47")]
+    [InlineData("-1234567", "-1.23M")]
+    public void 大数势力显示缩写且明细给精确值(string exact, string compact)
+    {
+        // restore-go-core-rules 段 E（tasks 5.3 / 5.5，design Open Question 4）：势力 ≥ 10^6 起用缩写（M / B / T，再往上用 e 记数），
+        // 三位有效数字、一律向零截断（不四舍五入：999999999 不会显示成 1000M）；10^6 以下原样给精确值。只是显示——比较与排序始终用精确值。
+        // 期望值是手写的十进制串（3^100 的 48 位值由仓库外独立计算，见 军势精确整数遥测Tests）。全程整数运算，不经浮点（守门 内核与表现层不出现浮点）。
+        // 变异验证 M-E9：缩写阈值 10^6 → 10^7 → 实跑红 3（1.00M / 1.23M / -1.23M 三行）。
+        BigInteger value = BigInteger.Parse(exact);
+        Assert.Equal(compact, PowerNotation.Compact(value));
+        Assert.Equal(compact, Labels.CompactPower(value));
+
+        // 势力行：概览用缩写，明细给精确值；两者都拆成"领地 + 棋串"。
+        var row = new PlayerPowerRowView(P0, PlayerStatus.Active, value + 7, 7, value, 1, null);
+        Assert.Equal($"势力 {PowerNotation.Compact(value + 7)}（领地 7 + 棋串 {compact}）", row.CompactText);
+        Assert.Equal($"势力 {value + 7}（领地 7 + 棋串 {value}）", row.ExactText);
     }
 }
