@@ -15,7 +15,7 @@ public class 可复现回放Tests
         // 用某局的种子与配置重跑 → 每一步的征募候选、选择、批次与结算结果完全一致：日志逐行一致，AI 的决策序列与候选集合也一致。
         // 标准难度带种子扰动子流（ai-P{n}），一并覆盖。
         // 变异验证：M-B16 / M-B23（种子被扰动）均使本测试红；本类专属变异见 失败局可复现 的 M-B21。
-        RunConfig config = SimFixtures.Config(maxRounds: 2, difficulty: AiDifficulty.Standard);
+        RunConfig config = SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard);
         MatchSession a = MatchSession.Create(config, 41);
         MatchLog logA = a.Run();
         string dir = SimFixtures.TempDir("replay");
@@ -58,7 +58,7 @@ public class 可复现回放Tests
         // 批量跑局中某局因断言失败而终止 → 保留种子、配置与终止前完整日志（文件名带 failed），可单独重跑复现同一失败。
         // 用配置里的测试专用注入点在第 5 个小回合触发断言失败；批量里其他局不受影响。
         // 变异验证 M-B21：MatchSession.Fail 丢弃已记录的事件（Events = []）→ 红 1（本测试）。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 51, maxRounds: 3, retention: EventRetention.SnapshotsOnly, injectFailureAtTurn: 5);
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 51, turnLimit: 12, retention: EventRetention.SnapshotsOnly, injectFailureAtTurn: 5);
         string dir = SimFixtures.TempDir("failed");
 
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);

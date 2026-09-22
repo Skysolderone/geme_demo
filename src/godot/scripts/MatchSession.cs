@@ -81,10 +81,10 @@ public sealed class MatchSession
     public ImmutableArray<Placement> Staged => Match.CurrentBatch?.Placements ?? [];
 
     /// <summary>开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（缺省四方标准地图），本机玩家坐第 <paramref name="seat"/> 位（1 起）。</summary>
-    public static MatchSession Create(MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int maxRounds, int? cellLimit = null)
+    public static MatchSession Create(MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int? cellLimit = null)
     {
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = maxRounds });
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate);
         return new MatchSession(match, players[seat - 1], seed, difficulty, cellLimit);
     }
 

@@ -43,7 +43,7 @@ public class 对局配置公开完整地图标识Tests
         // 现状核实：存档不含整张地图（盘面段只有棋子与本局改造），恢复时地图由调用方提供。取法：调用方读存档里的完整标识 →
         // MapCatalog 按标识重新生成 → Restore。这里的"恢复方"手里没有保存方的任何对象，只有那段 JSON。
         // 变异 MB-9：Serialize 把地图标识写成不带参数的 gen:<种子> → 本测试红（重建出 6 平台的图，标识不符被拒）。
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve("gen:12345:p7"), new GameSeed(11), Four, MatchOptions.Immediate with { MaxMajorRounds = 3 });
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve("gen:12345:p7"), new GameSeed(11), Four, MatchOptions.Immediate);
         match.PlantPrototype();
         var runner = new MatchRunner(match);
         foreach (PlayerId p in Four)

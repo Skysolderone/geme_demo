@@ -43,7 +43,7 @@ public class 分析排除测试污染Tests
         Assert.Contains("已显式要求包含", ReportWriter.Render(inclusive));
 
         // 真实路径：配置里的调试 AI 会经 MatchRunner.Annotations 落到日志的标注
-        RunConfig config = SimFixtures.Config(maxRounds: 1) with
+        RunConfig config = SimFixtures.Config(turnLimit: 4) with
         {
             Players = [new PlayerAiConfig { DebugAi = true, Difficulty = AiDifficulty.Easy }, new PlayerAiConfig { Difficulty = AiDifficulty.Easy }, new PlayerAiConfig { Difficulty = AiDifficulty.Easy }, new PlayerAiConfig { Difficulty = AiDifficulty.Easy }],
         };

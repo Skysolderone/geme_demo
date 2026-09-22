@@ -38,7 +38,7 @@ public sealed record Standing(int Rank, PlayerId Player, StandingGroup Group, St
 /// </summary>
 /// <remarks>
 /// 完赛者按 势力值 → 控制信物数 → 独占空格数 → 盘面棋子数 逐级比较，四项全同则并列；
-/// 弃赛者排在全部完赛者之后，组内按弃赛时势力值；出局者排在最后，按出局先后倒序（越晚出局名次越高）。
+/// 弃赛者排在全部完赛者之后，组内按弃赛时势力值；出局者排在最后，按出局先后倒序（越晚出局名次越高），同一次结算中同时出局者共享名次。
 /// 终局条件 1（只剩一名参赛玩家）下唯一的完赛者自然位列第 1，无需特殊分支。
 /// </remarks>
 public static class FinalStandings
@@ -59,7 +59,8 @@ public static class FinalStandings
 
         Append(result, finishers, StandingGroup.Finisher, ref position, (a, b) => FinisherComparer.Instance.Compare(a, b) == 0);
         Append(result, resigned, StandingGroup.Resigned, ref position, (a, b) => a.Power == b.Power);
-        Append(result, eliminated, StandingGroup.Eliminated, ref position, (_, _) => false);
+        // 同一次结算中同时出局者共享同一出局序号（MatchFlow.CheckEliminations），据此共享同一名次（restore-go-core-rules 裁决 #3）。
+        Append(result, eliminated, StandingGroup.Eliminated, ref position, (a, b) => a.EliminationOrder == b.EliminationOrder);
         return result.MoveToImmutable();
     }
 

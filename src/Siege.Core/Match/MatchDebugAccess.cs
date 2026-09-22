@@ -3,7 +3,7 @@ using Siege.Core.Board;
 namespace Siege.Core.Match;
 
 /// <summary>
-/// <b>测试专用</b>接缝（设计文档 §15.3）：把对局直接摆到某个大回合 / 某种保护状态，以便单独触发一条规则。
+/// <b>测试专用</b>接缝（设计文档 §15.3）：把对局直接摆到某个大回合 / 某种局面，以便单独触发一条规则。
 /// <c>internal</c>：仅测试程序集可达。它只改流程层自己的状态，不绕过任何下层规则。
 /// </summary>
 internal sealed class MatchDebugAccess
@@ -21,14 +21,8 @@ internal sealed class MatchDebugAccess
     /// <summary>直接设定本大回合的行动顺序并把指针指向第一位。只允许在小回合边界。</summary>
     internal void SetOrder(params PlayerId[] order) => _match.DebugSetOrder(order);
 
-    /// <summary>直接设定某玩家的开局出局保护状态。</summary>
-    internal void SetProtection(PlayerId player, bool protectedNow) => _match.DebugSetProtection(player, protectedNow);
-
     /// <summary>直接设定连续 Pass 计数。</summary>
     internal void SetPassStreak(int streak) => _match.DebugSetPassStreak(streak);
-
-    /// <summary>直接设定碾压候选与待回应名单（<c>null</c> 候选即清空）。只允许在小回合边界。</summary>
-    internal void SetDominance(PlayerId? candidate, params PlayerId[] pending) => _match.DebugSetDominance(candidate, pending);
 
     /// <summary>在小回合之外直接设定某玩家的手牌（空数组即清空手牌）。</summary>
     internal void SeedHand(PlayerId player, params (PieceType Type, int Count)[] entries) => _match.Hands.Debug.SeedHand(player, entries);

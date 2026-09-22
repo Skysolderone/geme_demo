@@ -71,7 +71,7 @@ public class 小回合的五个阶段Tests
         // growth-pass-1 改写：第 5 大回合分阶段基础值为 4（原基础 3），快照值 3→4、下一小回合 4→5，暂放多一枚（C8）才触及上限。
         // 变异验证 M-T4：EnterDeploy 改为现算 Relics.SnapshotFor 而不用 _snapshot → 本测试仍绿（占领在确认时才生效）；
         // 真正钉住"回合内不变"的是快照对象引用不变 + 上限 4（growth-pass-1 前为 3）：把 CurrentSnapshot 改成每次访问重新生成 → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff, relics: [("E5", RelicFixtures.Command())]).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command())]).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
 
         match.BeginTurn();
         EffectSnapshot snapshot = match.CurrentSnapshot!;

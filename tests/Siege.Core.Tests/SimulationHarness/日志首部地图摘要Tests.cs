@@ -13,7 +13,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 public class 日志首部地图摘要Tests
 {
     private static readonly Lazy<MatchLog> Gen12345 = new(() =>
-        MatchSession.Create(SimFixtures.Config(maxRounds: 2) with { MapId = "gen:12345" }, seed: 5).Run());
+        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "gen:12345" }, seed: 5).Run());
 
     [Fact]
     public void 真实跑局把开局地图的摘要写进首部并经文本往返_内置图同样写()
@@ -31,7 +31,7 @@ public class 日志首部地图摘要Tests
         Assert.Contains($"\"MapDigest\":\"{gen.Header.MapDigest}\"", gen.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
         Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(FourPlayerBaseMap.Create()), l.Header.MapDigest));
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
         Assert.Equal(Expect(FrontierMapV2.Create()), frontier.Header.MapDigest);
         Assert.NotEqual(gen.Header.MapDigest, frontier.Header.MapDigest);
     }

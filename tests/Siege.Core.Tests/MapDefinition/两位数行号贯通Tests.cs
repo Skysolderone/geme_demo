@@ -106,9 +106,9 @@ public class 两位数行号贯通Tests
         // 所以 P0 的落点必然全是两位数行号——样本口径下界：P0 确实落了子。
         MapData map = Tall();
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate with { MaxMajorRounds = 1 });
+            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate);
         match.PlantSequentially([(P0, 0), (P1, 1)]);
-        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(maxRounds: 1, players: 2));
+        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 2, players: 2));
 
         MatchLog log = MatchLog.Parse(session.Run().FullText());
 

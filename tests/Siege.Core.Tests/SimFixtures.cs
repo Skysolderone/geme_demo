@@ -11,21 +11,22 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests;
 
 /// <summary>
-/// 跑局 / 日志 / 分析测试的公共夹具。真实对局只用小样本（Easy、少量种子、小 <c>MaxMajorRounds</c>）验证机制；
+/// 跑局 / 日志 / 分析测试的公共夹具。真实对局只用小样本（Easy、少量种子）验证机制；
 /// 200 / 2000 局规模只走 CLI（<c>Siege.Sim run</c>），不进单元测试。
 /// </summary>
 internal static class SimFixtures
 {
     /// <summary>基准图 4 人 Easy 配置。</summary>
     internal static RunConfig Config(
-        int count = 1, ulong seedStart = 1, int maxRounds = 4, AiDifficulty difficulty = AiDifficulty.Easy,
+        int count = 1, ulong seedStart = 1, int? turnLimit = null, AiDifficulty difficulty = AiDifficulty.Easy,
         EventRetention retention = EventRetention.Full, int players = 4, int? injectFailureAtTurn = null, bool compress = false) =>
         new()
         {
             Players = [.. Enumerable.Range(0, players).Select(_ => new PlayerAiConfig { Difficulty = difficulty })],
             SeedStart = seedStart,
             Count = count,
-            MaxMajorRounds = maxRounds,
+            // 规则层已无大回合上限：小样本改由跑局层的小回合数截断（D5）收住，缺省 4 × 人数 = 此前 4 个大回合的样本长度。
+            TurnLimit = turnLimit ?? 4 * players,
             EventRetention = retention,
             FullEventSamplePermille = 0,
             InjectFailureAtTurn = injectFailureAtTurn,
@@ -37,7 +38,7 @@ internal static class SimFixtures
     /// <b>Easy 难度从不落匠人</b>（征募前瞻分只看基础军势，匠人 1 分在平手里排枚举末位；实测 4 局 × 12 大回合 2718 条棋串含匠人 0 条），
     /// 需要匠人上盘的遥测守门要自己起 <see cref="Siege.Core.Ai.AiDifficulty.Standard"/> 的小样本——见 <c>各棋子势力占比Tests.真实跑局快照的类型计数与明细自洽</c>。
     /// </summary>
-    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(Config(count: 4, seedStart: 11, maxRounds: 4), parallelism: 1));
+    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(Config(count: 4, seedStart: 11), parallelism: 1));
 
     /// <summary>独立的临时目录（每次调用都清空重建）。</summary>
     internal static string TempDir(string name)
@@ -74,14 +75,13 @@ internal static class SimFixtures
 
     internal static MatchLog Synthetic(
         ulong seed, IEnumerable<TurnSnapshot> turns, IEnumerable<LogEvent> events, LogResult result, int players = 4, int[]? zones = null, bool relicsConverged = true, RelicEntry[]? relics = null,
-        bool? catchUpRecruit = null, int? playableCells = null, int? artisanWeight = null, int? zoneCount = null) =>
+        int? playableCells = null, int? artisanWeight = null, int? zoneCount = null) =>
         new()
         {
             Header = new LogHeader
             {
                 MapId = "synthetic",
                 Seed = new Siege.Core.Determinism.GameSeed(seed).ToString(),
-                CatchUpRecruit = catchUpRecruit,
                 PlayableCells = playableCells,
                 ZoneCount = zoneCount,
                 ArtisanWeight = artisanWeight,
@@ -134,7 +134,8 @@ internal static class SimFixtures
     internal static LogResult ResultOf(int majorRound, int[] winners, bool converged = true, int players = 4, PeakEntry? peak = null, bool? peakDestroyed = null, int[]? ranks = null) =>
         new()
         {
-            Reason = converged ? nameof(EndReason.AllPassed) : nameof(EndReason.MajorRoundLimit),
+            // 未收敛样本用旧日志的「达大回合上限」原因名（规则层已删除该原因，只剩旧日志会出现；段 E 5.2 改为 turn_limit 口径）。
+            Reason = converged ? nameof(EndReason.AllPassed) : LogResult.LegacyMajorRoundLimit,
             MajorRound = majorRound,
             TurnCount = majorRound * players,
             Standings = [.. Enumerable.Range(0, players).Select(p => new StandingEntry

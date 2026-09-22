@@ -116,7 +116,7 @@ public class 各入口按地图标识选图Tests
         //（入口 Program.Play 只做"标识 → 地图"的解析后把地图传给 PlayCommand.Run，解析本身由上面几条钉住）。
         // 人选 3 号台后其余三名 AI 由种子选区：互不相同、不与人重复、都在 1–6 内。
         var output = new StringWriter();
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, maxRounds: 1, new StringReader("9\n0\n3\n"), output, FrontierFixtures.Map());
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader("9\n0\n3\n"), output, FrontierFixtures.Map());
         string text = output.ToString();
 
         Assert.Equal(0, exit);
@@ -136,18 +136,19 @@ public class 各入口按地图标识选图Tests
     {
         // tasks 2.2：不带 --map 时同种子对局与改动前逐步相同。改动前后的完整转录对比是一次性做的（记录在任务 implement.md 段 A）；
         // 这里长期钉住的是"缺省 ≡ 显式给 v4"，并配行数下界与字段级断言，防止两边一起只剩首行（testing.md）。
-        string script = "2\n" + string.Concat(Enumerable.Repeat("\npass\n", 40));   // 每个小回合：空行 = 不征募，pass = 不落子
+        string script = "2\n" + string.Concat(Enumerable.Repeat("\npass\n", 3));   // 段 C：大回合上限删除，改为 3 个小回合后输入耗尽退出（原 40 行 + 上限 3 收尾）；   // 每个小回合：空行 = 不征募，pass = 不落子
         var implicitOut = new StringWriter();
         var explicitOut = new StringWriter();
 
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, 3, new StringReader(script), implicitOut);
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, 3, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"));
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut);
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"));
 
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());
         Assert.True(text.Split('\n').Length > 100, "转录过短，对局没有真正进行。");
         Assert.Contains("选择你的出生区（1–4）", text, StringComparison.Ordinal);
-        Assert.Contains("对局结束：第 3 大回合", text, StringComparison.Ordinal);
+        Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
+        Assert.Contains("已退出。种子 7", text, StringComparison.Ordinal);
         Assert.DoesNotContain("地图 ", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);   // 缺省地图不多打一行，转录与改动前一致
     }
 

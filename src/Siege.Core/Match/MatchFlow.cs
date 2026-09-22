@@ -15,8 +15,8 @@ namespace Siege.Core.Match;
 /// </summary>
 /// <remarks>
 /// <para><b>时机（design.md Context）</b>：信物快照在小回合<b>开始</b>时读一次（<see cref="BeginTurn"/>）；先锋在大回合<b>结束</b>时
-/// 单次拉取、不缓存（<see cref="EndMajorRound"/>，D4）；出局保护<b>逐玩家</b>解除（<see cref="CompleteTurn"/>，D1）；
-/// 整轮 Pass 用跨回合的连续 Pass 计数器（<see cref="PassStreak"/>，D2 / 裁决 3）。</para>
+/// 单次拉取、不缓存（<see cref="EndMajorRound"/>，D4）；出局检查在每次合法批次结算后与每次 Pass 后对<b>全部</b>参赛玩家执行
+/// （<see cref="CheckEliminations"/>，restore-go-core-rules D3）；整轮 Pass 用跨回合的连续 Pass 计数器（<see cref="PassStreak"/>，D2 / 裁决 3）。</para>
 /// <para><b>结算接线</b>：本类以 <see cref="Hooks"/> 实现 <see cref="ISettlementHooks"/>，把手牌扣减（第 1 步）、信物揭示（第 4 步）、
 /// 控制与势力重算（第 5 步）、出局与终局检查（第 6 步）按 §6.3 顺序接到 <see cref="SettlementDriver"/>。</para>
 /// <para><b>事件</b>：全部流程事件只由本类的 <see cref="Emit"/> 在阶段切换点发出。</para>
@@ -40,9 +40,7 @@ public sealed partial class MatchFlow
     private int _orderIndex;
     private int _passStreak;
     private int _eliminationSequence;
-    private readonly SortedSet<PlayerId> _dominancePending = [];
     private EndReason? _pendingEnd;
-    private PlayerId? _dominanceCandidate;
     private StagedBatch? _batch;
     private EffectSnapshot? _snapshot;
     private int _eventSequence;
@@ -109,8 +107,6 @@ public sealed partial class MatchFlow
             throw new ArgumentException($"地图 {map.Id} 最多支持 {map.MaxPlayers} 人，实际 {list.Length} 人。", nameof(players));
         }
 
-        RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(options));
-        RequireValidDominanceStartRound(options.DominanceStartRound, nameof(options));
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed, options.ArtisanWeight), new BoardHistory(), options);
     }
@@ -132,84 +128,8 @@ public sealed partial class MatchFlow
 
     public GameSeed Seed { get; }
 
-    /// <summary>对局配置。插旗阶段可经 <see cref="ConfigureMaxMajorRounds"/> 调整大回合上限；锁定后固定。</summary>
+    /// <summary>对局配置。开局固定。</summary>
     public MatchOptions Options { get; private set; }
-
-    /// <summary>大回合上限（设计文档 §12.3 条件 4；0 = 不限）。始终公开，入存档。</summary>
-    public int MaxMajorRounds => Options.MaxMajorRounds;
-
-    /// <summary>恢复自不含大回合上限字段的旧存档时为 <c>true</c>：上限按 <see cref="MatchOptions.DefaultMaxMajorRounds"/> 回填。</summary>
-    public bool MaxMajorRoundsBackfilled { get; private set; }
-
-    /// <summary>
-    /// 在插旗阶段调整大回合上限（非负整数，0 = 不限）。对局一旦开始（<see cref="MatchPhase.InProgress"/> 或已结束）即抛 <see cref="SiegeRuleException"/>：
-    /// 上限是对局配置，进行中不可改。
-    /// </summary>
-    public void ConfigureMaxMajorRounds(int maxMajorRounds)
-    {
-        if (Phase != MatchPhase.FlagPlanting)
-        {
-            throw new SiegeRuleException($"大回合上限是对局配置，只能在插旗阶段设定；当前阶段 {Phase}。");
-        }
-
-        RequireValidMaxMajorRounds(maxMajorRounds, nameof(maxMajorRounds));
-        Options = Options with { MaxMajorRounds = maxMajorRounds };
-    }
-
-    private static void RequireValidMaxMajorRounds(int value, string paramName)
-    {
-        if (value < 0)
-        {
-            throw new ArgumentOutOfRangeException(paramName, value, "大回合上限须为非负整数（0 = 不设上限）。");
-        }
-    }
-
-    /// <summary>碾压起始大回合（dominance-victory 裁决 8；0 = 关闭势力碾压）。始终公开，入存档。</summary>
-    public int DominanceStartRound => Options.DominanceStartRound;
-
-    /// <summary>恢复自不含碾压起始大回合字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultDominanceStartRound"/> 回填。</summary>
-    public bool DominanceStartRoundBackfilled { get; private set; }
-
-    /// <summary>
-    /// 在插旗阶段调整碾压起始大回合（非负整数，0 = 关闭）。对局一旦开始即抛 <see cref="SiegeRuleException"/>：该值是对局配置，进行中不可改。
-    /// </summary>
-    public void ConfigureDominanceStartRound(int dominanceStartRound)
-    {
-        if (Phase != MatchPhase.FlagPlanting)
-        {
-            throw new SiegeRuleException($"碾压起始大回合是对局配置，只能在插旗阶段设定；当前阶段 {Phase}。");
-        }
-
-        RequireValidDominanceStartRound(dominanceStartRound, nameof(dominanceStartRound));
-        Options = Options with { DominanceStartRound = dominanceStartRound };
-    }
-
-    private static void RequireValidDominanceStartRound(int value, string paramName)
-    {
-        if (value < 0)
-        {
-            throw new ArgumentOutOfRangeException(paramName, value, "碾压起始大回合须为非负整数（0 = 关闭势力碾压）。");
-        }
-    }
-
-    /// <summary>落后者征募补偿开关（catch-up-recruit 裁决 4）。始终公开，入存档。</summary>
-    public bool CatchUpRecruit => Options.CatchUpRecruit;
-
-    /// <summary>恢复自不含落后者征募补偿字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启）回填。</summary>
-    public bool CatchUpRecruitBackfilled { get; private set; }
-
-    /// <summary>
-    /// 在插旗阶段设定落后者征募补偿开关。对局一旦开始即抛 <see cref="SiegeRuleException"/>：该开关是对局配置，进行中不可改。
-    /// </summary>
-    public void ConfigureCatchUpRecruit(bool enabled)
-    {
-        if (Phase != MatchPhase.FlagPlanting)
-        {
-            throw new SiegeRuleException($"落后者征募补偿是对局配置，只能在插旗阶段设定；当前阶段 {Phase}。");
-        }
-
-        Options = Options with { CatchUpRecruit = enabled };
-    }
 
     /// <summary>匠人征募权重（artisan-terrain-edit R-2）。对局配置，始终公开，入存档。</summary>
     public int ArtisanWeight => Options.ArtisanWeight;
@@ -226,8 +146,10 @@ public sealed partial class MatchFlow
     /// <summary>
     /// 某玩家此刻的落后者征募补偿（catch-up-recruit）：读<b>现成的</b>公开势力名次（<see cref="PowerScoreboard.Latest"/>），
     /// 不触发任何重算、不自己排序。快照生成与结构参数组装都经由此处，判定实现唯一。
+    /// <b>过渡状态</b>：对局配置里的开关已随裁决 #7 / #15 删除（match-setup「对局配置公开落后补偿开关」REMOVED），
+    /// 补偿本体的删除是 restore-go-core-rules 段 D（tasks 4.1 / 4.2）的事，此处暂时恒为开启。
     /// </summary>
-    private CatchUpBonus CatchUpFor(PlayerId player) => CatchUpCompensation.For(Scoreboard.Latest, player, CatchUpRecruit);
+    private CatchUpBonus CatchUpFor(PlayerId player) => CatchUpCompensation.For(Scoreboard.Latest, player, enabled: true);
 
     /// <summary>权威盘面。规则层内部使用；表现层与 AI 请消费 <see cref="Publish"/>。</summary>
     public GameBoard Board { get; }
@@ -264,10 +186,6 @@ public sealed partial class MatchFlow
     /// <summary>连续 Pass 计数（design.md D2）：任一玩家确认 ≥1 枚落子即清零，达到当前参赛人数触发终局条件 2。</summary>
     public int PassStreak => _passStreak;
 
-    /// <summary>碾压候选与待回应名单（dominance-victory 裁决 7，始终公开）；没有候选时为 <c>null</c>。</summary>
-    public DominanceState? Dominance =>
-        _dominanceCandidate is { } candidate ? new DominanceState(candidate, [.. _dominancePending]) : null;
-
     /// <summary>本小回合的效果快照；不在小回合内为 <c>null</c>。小回合内不变。</summary>
     public EffectSnapshot? CurrentSnapshot => _snapshot;
 
@@ -294,7 +212,7 @@ public sealed partial class MatchFlow
     public PlayerFlowState StateOf(PlayerId player)
     {
         PlayerRecord r = Require(player);
-        return new PlayerFlowState(player, r.Status, r.Protection, r.BirthZone, r.LastRoundPosition,
+        return new PlayerFlowState(player, r.Status, r.HasEstablishedPower, r.BirthZone, r.LastRoundPosition,
             r.EliminationOrder, r.EliminatedInMajorRound, r.ResignedInMajorRound, r.PowerAtResign);
     }
 
@@ -523,7 +441,6 @@ public sealed partial class MatchFlow
             SetStage(TurnStage.Idle, player);
         }
 
-        UpdateDominance(completedTurn: null, establish: false);
         CheckEndConditions();
         if (_pendingEnd is { } reason)
         {
@@ -546,8 +463,8 @@ public sealed partial class MatchFlow
     {
         PowerSnapshot? power = Scoreboard.Latest;
         // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
-        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, MaxMajorRounds, DominanceStartRound, CatchUpRecruit, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
-            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Dominance, Result);
+        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
+            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result);
     }
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------
@@ -562,7 +479,7 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(context.Board, roster);
-        Scoreboard.Recalculate(context.Board, roster, MajorRound);
+        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound));
     }
 
     private void OnCheckEndConditions(SettlementContext context)
@@ -570,48 +487,66 @@ public sealed partial class MatchFlow
         // D2：连续 Pass 计数——落子 ≥1 枚即清零。
         _passStreak = context.IsPass ? _passStreak + 1 : 0;
         CheckEliminations();
-        UpdateDominance(completedTurn: context.Player, establish: true);
         CheckEndConditions();
     }
 
     // ---------- 出局与终局 ----------
 
-    /// <summary>检查全部<b>已解除保护</b>的参赛玩家；保护中的玩家不检查（设计文档 §12.1）。</summary>
-    private void CheckEliminations()
+    /// <summary>
+    /// 「曾建立正势力」单调标记（restore-go-core-rules 裁决 #3 / design D3）的<b>唯一</b>置位点：
+    /// 任意一次势力重算后总势力 &gt; 0 即置位，此后 MUST NOT 复位（故用 <c>|=</c>，不是 <c>=</c>）。
+    /// 挂在每一处 <see cref="PowerScoreboard.Recalculate"/> 之后——结算第 5 步、弃赛 / 大回合结束 / 恢复存档时的派生量重算都经过这里。
+    /// </summary>
+    private void MarkEstablishedPower(PowerSnapshot power)
     {
         foreach (PlayerId player in _players)
         {
-            PlayerRecord record = _records[player];
-            if (record.Status == PlayerStatus.Active && !record.Protection)
-            {
-                CheckEliminationOf(player);
-            }
-        }
-    }
-
-    private void CheckEliminationOf(PlayerId player)
-    {
-        PlayerRecord record = _records[player];
-        if (record.Status != PlayerStatus.Active || record.Protection)
-        {
-            return;
-        }
-
-        if (Board.GroupsOf(player).IsEmpty && Hands.IsHandEmpty(player))
-        {
-            record.Status = PlayerStatus.Eliminated;
-            record.EliminationOrder = ++_eliminationSequence;
-            record.EliminatedInMajorRound = MajorRound;
-            Emit(FlowEventKind.PlayerEliminated, player, $"第 {record.EliminationOrder} 个出局");
+            _records[player].HasEstablishedPower |= power.Of(player).Total > BigInteger.Zero;
         }
     }
 
     /// <summary>
-    /// 立即生效的终局条件（设计文档 §12.3）。只记录待处理的终局原因；收尾在当前小回合结束时进行。大回合上限在 <see cref="EndMajorRound"/> 检查。
+    /// 出局检查（elimination-endgame「出局判定」）：每次合法批次结算后与每次 Pass 后，对<b>全部</b>参赛玩家（不只行动者）检查
+    /// 「曾建立正势力且当前总势力为 0」。手牌是否还有棋子 MUST NOT 影响判定，构筑保护期 MUST NOT 豁免。
     /// </summary>
     /// <remarks>
-    /// 分支顺序即优先级（dominance-victory 裁决 4 / 9）：只剩一人 &gt; 势力碾压 &gt; 棋盘填满 &gt; 整轮 Pass（&gt; 达大回合上限）。
-    /// 碾压候选状态由 <see cref="UpdateDominance"/> 在同一检查点先行推进，这里只读"候选存在且待回应名单为空"。
+    /// 同一次检查里同时满足条件的多名玩家<b>共享同一出局序号</b>（裁决：同时出局、出局次序相同），
+    /// 终局名次据此让他们并列（<see cref="FinalStandings"/> 出局组）。序号因此每次检查至多自增一次。
+    /// </remarks>
+    private void CheckEliminations()
+    {
+        PowerSnapshot? power = Scoreboard.Latest;
+        if (power is null)
+        {
+            return;
+        }
+
+        List<PlayerId> zeroed = [.. _players.Where(p =>
+            _records[p].Status == PlayerStatus.Active
+            && _records[p].HasEstablishedPower
+            && power.Of(p).Total == BigInteger.Zero)];
+        if (zeroed.Count == 0)
+        {
+            return;
+        }
+
+        int order = ++_eliminationSequence;
+        foreach (PlayerId player in zeroed)
+        {
+            PlayerRecord record = _records[player];
+            record.Status = PlayerStatus.Eliminated;
+            record.EliminationOrder = order;
+            record.EliminatedInMajorRound = MajorRound;
+            Emit(FlowEventKind.PlayerEliminated, player, $"第 {order} 个出局（势力归零）");
+        }
+    }
+
+    /// <summary>
+    /// 三类终局条件（elimination-endgame「三类终局条件」）。只记录待处理的终局原因；收尾在当前小回合结束时进行。
+    /// </summary>
+    /// <remarks>
+    /// 分支顺序即优先级：只剩一名参赛玩家 &gt; 棋盘填满 &gt; 整轮 Pass。
+    /// 本方法 MUST NOT 再增加分支：既不按轮数结束，也不因势力领先幅度提前结束。
     /// </remarks>
     private void CheckEndConditions()
     {
@@ -625,10 +560,6 @@ public sealed partial class MatchFlow
         {
             _pendingEnd = EndReason.LastPlayerStanding;
         }
-        else if (_dominanceCandidate is not null && _dominancePending.Count == 0)
-        {
-            _pendingEnd = EndReason.PowerDominance;
-        }
         else if (!Board.HasPlayableEmptyCell())
         {
             _pendingEnd = EndReason.BoardFull;
@@ -638,47 +569,6 @@ public sealed partial class MatchFlow
             _pendingEnd = EndReason.AllPassed;
         }
     }
-
-    /// <summary>
-    /// 碾压候选状态机（dominance-victory 裁决 7）的<b>唯一</b>推进点。挂在既有检查点上（裁决 3），不新增触发时机。
-    /// </summary>
-    /// <param name="completedTurn">刚完成小回合（确认或 Pass）的玩家，从待回应名单移除；非结算检查点传 <c>null</c>。</param>
-    /// <param name="establish">是否允许建立新候选：只在合法批次结算后与 Pass 完成后为 <c>true</c>。</param>
-    /// <remarks>
-    /// 顺序：① 名单移除已出局 / 弃赛者与刚完成小回合者；② 复查候选——候选出局 / 弃赛或不再满足碾压式即取消并清空名单；
-    /// ③ 无候选且当前大回合 ≥ 起始大回合（起始为 0 即关闭）时，<b>恰有一名</b>参赛玩家满足则成为候选，名单为此刻其余全部参赛玩家。
-    /// 成立（名单为空且仍满足）由 <see cref="CheckEndConditions"/> 按优先级记录。
-    /// </remarks>
-    private void UpdateDominance(PlayerId? completedTurn, bool establish)
-    {
-        if (_pendingEnd is not null || Phase != MatchPhase.InProgress)
-        {
-            return;
-        }
-
-        if (_dominanceCandidate is { } candidate)
-        {
-            _dominancePending.RemoveWhere(p => _records[p].Status != PlayerStatus.Active || p == completedTurn);
-            if (_records[candidate].Status != PlayerStatus.Active || !DominanceSatisfying().Contains(candidate))
-            {
-                _dominanceCandidate = null;
-                _dominancePending.Clear();
-            }
-        }
-
-        if (establish && _dominanceCandidate is null && DominanceStartRound > 0 && MajorRound >= DominanceStartRound
-            && DominanceSatisfying() is [PlayerId sole])
-        {
-            _dominanceCandidate = sole;
-            _dominancePending.UnionWith(_players.Where(p => p != sole && _records[p].Status == PlayerStatus.Active));
-        }
-    }
-
-    /// <summary>当前满足碾压式的参赛玩家：势力取自最近一次重算的快照，参赛状态取自<b>权威名册</b>（快照里的状态早于本次出局检查）。</summary>
-    private ImmutableArray<PlayerId> DominanceSatisfying() =>
-        Scoreboard.Latest is { } power
-            ? DominanceCheck.Satisfying(_players.Select(p => new DominanceEntry(p, _records[p].Status, power.Of(p).Total)))
-            : [];
 
     private void Finish(EndReason reason)
     {
@@ -715,17 +605,6 @@ public sealed partial class MatchFlow
         _snapshot = null;
         Emit(FlowEventKind.TurnEnded, player, _passStreak > 0 ? "Pass" : "落子");
         SetStage(TurnStage.Idle, player);
-
-        // D1：开局出局保护只在"该玩家完成第 4 大回合的小回合"这一个点解除，解除后立即按正常规则检查该玩家。
-        PlayerRecord record = _records[player];
-        if (_pendingEnd is null && MajorRound > BuildProtectionRounds && record.Protection)
-        {
-            record.Protection = false;
-            Emit(FlowEventKind.ProtectionLifted, player, $"完成第 {MajorRound} 大回合的小回合");
-            CheckEliminationOf(player);
-            UpdateDominance(completedTurn: null, establish: false);
-            CheckEndConditions();
-        }
 
         if (_pendingEnd is { } reason)
         {
@@ -768,6 +647,7 @@ public sealed partial class MatchFlow
         int completed = MajorRound;
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed);
+        MarkEstablishedPower(power);
         ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.ReadInitiativeBonuses(Board, roster);
         int active = ActiveCount;
         if (active == 0)
@@ -777,14 +657,7 @@ public sealed partial class MatchFlow
             return;
         }
 
-        // 条件 4（round-cap D1 / D2）：唯一检查点在这里——最后一名参赛玩家的小回合结算或 Pass 之后、生成下一大回合顺序之前。
-        // 立即生效的条件（含势力碾压）在结算瞬间已经判过并在 CompleteTurn 里收尾，走到这里说明对局仍在进行，才轮到上限兜底。
-        // 比较用刚结束的轮次 `completed`，不用推进后的 MajorRound（heuristic-ai 阶段 B 踩过的时序陷阱）。
-        if (MaxMajorRounds > 0 && completed >= MaxMajorRounds)
-        {
-            Finish(EndReason.MajorRoundLimit);
-            return;
-        }
+        // restore-go-core-rules 裁决 #4：大回合结束 MUST NOT 成为终局条件（大回合上限终局已删除），对局只因三类条件结束。
 
         ImmutableArray<InitiativeEntry>.Builder entries = ImmutableArray.CreateBuilder<InitiativeEntry>(active);
         foreach (PlayerId player in _players)
@@ -823,7 +696,7 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(Board, roster);
-        Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1));
+        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1)));
     }
 
     /// <summary>流程事件的<b>唯一</b>发出点。</summary>
@@ -892,17 +765,7 @@ public sealed partial class MatchFlow
         _orderIndex = 0;
     }
 
-    internal void DebugSetProtection(PlayerId player, bool protectedNow) => Require(player).Protection = protectedNow;
-
     internal void DebugSetPassStreak(int streak) => _passStreak = streak;
-
-    internal void DebugSetDominance(PlayerId? candidate, PlayerId[] pending)
-    {
-        RequireStage(TurnStage.Idle);
-        _dominanceCandidate = candidate;
-        _dominancePending.Clear();
-        _dominancePending.UnionWith(pending);
-    }
 
     internal void DebugRecalculate() => RecalculateDerived();
 
@@ -916,7 +779,8 @@ public sealed partial class MatchFlow
     {
         internal PlayerStatus Status { get; set; } = PlayerStatus.Active;
 
-        internal bool Protection { get; set; } = true;
+        /// <summary>「曾建立正势力」单调标记（design D3）：只经 <see cref="MarkEstablishedPower"/> 置位，永不复位，随存档往返。</summary>
+        internal bool HasEstablishedPower { get; set; }
 
         internal int? BirthZone { get; set; }
 

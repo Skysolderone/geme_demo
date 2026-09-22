@@ -59,11 +59,11 @@ public class 先手值公式Tests
         // 变异验证 M-I4：EndMajorRound 用 _players.Length 代替参赛人数 → 红 1（本测试流程断言）。
         Assert.Equal(1, Flow.ValueOf(2, 1, 0));
 
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "B2");
-        match.Debug.SeedHand(MatchFixtures.P2);
-        match.Debug.SeedHand(MatchFixtures.P3);
-        match.PlayTurn("E5");    // P0 结算 → P2、P3 出局
+        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+            .Stones(MatchFixtures.P0, "B2", "B1", "H9")
+            .Stones(MatchFixtures.P2, "A1")
+            .Stones(MatchFixtures.P3, "J9");
+        match.PlayTurn("A2", "J8");    // P0 一个批次提光 P2（A1）与 P3（J9）→ 同时出局（段 C 改摆法：原为二人盘面与手牌皆空、P0 落 E5）
         Assert.Equal(2, match.ActiveCount);
         match.PlayTurn("H2");    // P1
 

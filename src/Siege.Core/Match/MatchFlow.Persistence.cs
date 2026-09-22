@@ -44,12 +44,7 @@ public sealed partial class MatchFlow
             MapDigest = MapFile.Digest(Board.BaseMap),
             Seed = Seed.ToString(),
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
-            MaxMajorRounds = MaxMajorRounds,
-            DominanceStartRound = DominanceStartRound,
-            CatchUpRecruit = CatchUpRecruit,
             ArtisanWeight = ArtisanWeight,
-            DominanceCandidate = _dominanceCandidate?.Value,
-            DominancePending = [.. _dominancePending.Select(p => p.Value)],
             Phase = Phase,
             MajorRound = MajorRound,
             Order = [.. _order.Select(p => p.Value)],
@@ -62,7 +57,7 @@ public sealed partial class MatchFlow
             {
                 Player = p.Value,
                 Status = _records[p].Status,
-                Protection = _records[p].Protection,
+                HasEstablishedPower = _records[p].HasEstablishedPower,
                 BirthZone = _records[p].BirthZone,
                 Flag = Flags.FlagOf(p),
                 LastRoundPosition = _records[p].LastRoundPosition,
@@ -175,6 +170,11 @@ public sealed partial class MatchFlow
     private static readonly (string Field, string Reason)[] RetiredSaveFields =
     [
         ("SiteValues", "据点已在 restore-go-core-rules 整体移除，对局配置不再有据点分值。"),
+        ("MaxMajorRounds", "大回合上限终局已在 restore-go-core-rules（裁决 #4 / #15）删除，对局配置不再有大回合上限。"),
+        ("DominanceStartRound", "势力碾压已在 restore-go-core-rules（裁决 #4 / #15）删除，对局配置不再有碾压起始大回合。"),
+        ("CatchUpRecruit", "落后者征募补偿开关已在 restore-go-core-rules（裁决 #7 / #15）删除。"),
+        ("DominanceCandidate", "势力碾压已在 restore-go-core-rules 删除，存档不再有碾压候选。"),
+        ("DominancePending", "势力碾压已在 restore-go-core-rules 删除，存档不再有待回应名单。"),
     ];
 
     private static void RequireMap(MapData map, MatchSaveData data)
@@ -201,24 +201,13 @@ public sealed partial class MatchFlow
     private static MatchFlow RestoreCore(MapData map, GameBoard board, GameSeed seed, RelicGenerationRecord relicRecord, MatchSaveData data)
     {
         ImmutableArray<PlayerId> players = [.. data.Players.Select(p => new PlayerId(p.Player)).Order()];
-        // round-cap：旧存档没有大回合上限字段 → 按标准局初值回填（不是 0，否则旧局会变成不限轮），并在 MaxMajorRoundsBackfilled 上留痕。
-        bool backfilled = data.MaxMajorRounds is null;
-        // dominance-victory 裁决 8：旧存档没有碾压起始大回合字段 → 按标准局初值（7）回填（不是 0），并在 DominanceStartRoundBackfilled 上留痕。
-        bool dominanceBackfilled = data.DominanceStartRound is null;
-        // catch-up-recruit 裁决 4：旧存档没有落后者征募补偿字段 → 按标准局初值「开启」回填，并在 CatchUpRecruitBackfilled 上留痕。
-        bool catchUpBackfilled = data.CatchUpRecruit is null;
         // artisan-terrain-edit R-2 / R-6：旧存档没有匠人权重字段 → 按标准局初值 10 回填，并在 ArtisanWeightBackfilled 上留痕。
         bool artisanWeightBackfilled = data.ArtisanWeight is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
-            MaxMajorRounds = data.MaxMajorRounds ?? MatchOptions.DefaultMaxMajorRounds,
-            DominanceStartRound = data.DominanceStartRound ?? MatchOptions.DefaultDominanceStartRound,
-            CatchUpRecruit = data.CatchUpRecruit ?? MatchOptions.DefaultCatchUpRecruit,
             ArtisanWeight = data.ArtisanWeight ?? MatchOptions.DefaultArtisanWeight,
         };
-        RequireValidMaxMajorRounds(options.MaxMajorRounds, nameof(data));
-        RequireValidDominanceStartRound(options.DominanceStartRound, nameof(data));
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         var match = new MatchFlow(
             map, board, seed, players,
@@ -226,9 +215,6 @@ public sealed partial class MatchFlow
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight),
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
-        match.MaxMajorRoundsBackfilled = backfilled;
-        match.DominanceStartRoundBackfilled = dominanceBackfilled;
-        match.CatchUpRecruitBackfilled = catchUpBackfilled;
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
@@ -237,7 +223,8 @@ public sealed partial class MatchFlow
         {
             PlayerRecord record = match.Require(new PlayerId(saved.Player));
             record.Status = saved.Status;
-            record.Protection = saved.Protection;
+            // 标记取自存档（随存档往返），不是由末尾的 RecalculateDerived 重算出来的：从未落子者恢复后仍为 false。
+            record.HasEstablishedPower = saved.HasEstablishedPower;
             record.BirthZone = saved.BirthZone;
             record.LastRoundPosition = saved.LastRoundPosition;
             record.SeedRank = saved.SeedRank;
@@ -265,8 +252,6 @@ public sealed partial class MatchFlow
         match._orderIndex = data.OrderIndex;
         match._passStreak = data.PassStreak;
         match._eliminationSequence = data.EliminationSequence;
-        match._dominanceCandidate = data.DominanceCandidate is { } candidate ? new PlayerId(candidate) : null;
-        match._dominancePending.UnionWith((data.DominancePending ?? []).Select(v => new PlayerId(v)));
         match._setup.Advance(data.SetupConsumed);
         match._initiative.AddRange(data.Initiative);
         foreach (ResignationSaveData r in data.Resignations)
@@ -313,15 +298,6 @@ public sealed class MatchSaveData
 
     public long FlagTimeLimitTicks { get; set; }
 
-    /// <summary>大回合上限（round-cap）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultMaxMajorRounds"/>。</summary>
-    public int? MaxMajorRounds { get; set; }
-
-    /// <summary>碾压起始大回合（dominance-victory）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultDominanceStartRound"/>。</summary>
-    public int? DominanceStartRound { get; set; }
-
-    /// <summary>落后者征募补偿开关（catch-up-recruit）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启）。</summary>
-    public bool? CatchUpRecruit { get; set; }
-
     /// <summary>匠人征募权重（artisan-terrain-edit R-2）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultArtisanWeight"/>。</summary>
     public int? ArtisanWeight { get; set; }
 
@@ -331,12 +307,6 @@ public sealed class MatchSaveData
     /// </summary>
     [System.Text.Json.Serialization.JsonExtensionData]
     public Dictionary<string, JsonElement> Unknown { get; set; } = [];
-
-    /// <summary>碾压候选玩家编号；无候选为 <c>null</c>。</summary>
-    public int? DominanceCandidate { get; set; }
-
-    /// <summary>待回应名单（玩家编号升序）；旧存档无此字段视为空。</summary>
-    public List<int>? DominancePending { get; set; }
 
     public MatchPhase Phase { get; set; }
 
@@ -377,7 +347,8 @@ public sealed class PlayerSaveData
 
     public PlayerStatus Status { get; set; }
 
-    public bool Protection { get; set; }
+    /// <summary>「曾建立正势力」单调标记（restore-go-core-rules design D3）。</summary>
+    public bool HasEstablishedPower { get; set; }
 
     public int? BirthZone { get; set; }
 

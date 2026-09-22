@@ -29,7 +29,7 @@ public class 地形改造日志与分析Tests
         var pinned = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 27, Growth: 4, Initiative: 20, Supply: 2);
         // 段 A（restore-go-core-rules）重挑种子：计分口径改为"领地 + 整体乘倍率"后 AI 走法随之变，原种子 1–3 里第 2 局一次改造都没有（样本口径下界响亮失败）。
         // 同一份写死权重下扫种子 1–24，取连续的 3–5：改造 5 / 3 / 5 次、致提子 3 / 1 / 0 次。断言与期望均未改，只换样本。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 3, maxRounds: 6, difficulty: AiDifficulty.Standard);
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 3, turnLimit: 24, difficulty: AiDifficulty.Standard);
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 
@@ -82,7 +82,7 @@ public class 地形改造日志与分析Tests
     {
         // 「改造可查」+「地形可离线重建」：走真实跑局（Standard——Easy 结构性地几乎不落匠人）→ 日志往返 → 重放。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, maxRounds: 6, difficulty: AiDifficulty.Standard), parallelism: 1);
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard), parallelism: 1);
 
         // 每一条小回合快照都带改造字段（没有改造就是空表），首部带匠人权重。
         Assert.All(logs, l => Assert.All(l.Turns, t => Assert.NotNull(t.Edits)));
@@ -126,7 +126,7 @@ public class 地形改造日志与分析Tests
     {
         // simulation-harness「扫档配置可追溯」：匠人权重 18 如实写出。
         // 首部取自**对局本身**（不是 Config），两者不一致时 MatchSession 建局即抛。
-        RunConfig config = SimFixtures.Config(count: 1, seedStart: 3, maxRounds: 3, difficulty: AiDifficulty.Standard) with
+        RunConfig config = SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 12, difficulty: AiDifficulty.Standard) with
         {
             ArtisanWeight = 18,
         };
@@ -142,7 +142,7 @@ public class 地形改造日志与分析Tests
 
         // 反向：默认配置下首部是 10，不是"永远写 18"。
         Assert.Equal(10, BatchRunner.Execute(
-            SimFixtures.Config(count: 1, seedStart: 3, maxRounds: 3), parallelism: 1).Single().Header.ArtisanWeight);
+            SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 12), parallelism: 1).Single().Header.ArtisanWeight);
     }
 
     [Fact]
@@ -253,7 +253,7 @@ public class 地形改造日志与分析Tests
     {
         // 真实跑局上跑一遍分析：分母自洽、动作次数与日志逐条对得上。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, maxRounds: 6, difficulty: AiDifficulty.Standard), parallelism: 1);
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard), parallelism: 1);
         TerrainEditSection t = BalanceAnalyzer.Analyze(logs).TerrainEdits;
 
         Assert.Equal(logs.Count, t.Matches);

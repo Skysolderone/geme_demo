@@ -10,9 +10,7 @@ namespace Siege.Core.Match;
 /// 对局的公开快照（裁决：单线程游戏循环，表现层与 AI 只消费结算完成后发布的快照，不直接读权威盘面）。
 /// 全部字段是该时刻的副本或不可变值：<see cref="Board"/> 是 <see cref="GameBoard.Clone"/> 出的独立副本，
 /// 之后权威盘面的变化不会反映到这里。结构上不含任何私有信息（手牌数量、征募面板、未揭示信物内容）。
-/// <see cref="MaxMajorRounds"/> 是对局配置的大回合上限（0 = 不限），与地图、种子一样始终公开，插旗阶段即可读。
-/// <see cref="DominanceStartRound"/> 是碾压起始大回合（0 = 关闭），同样始终公开；<see cref="Dominance"/> 是碾压候选与待回应名单（无候选为 <c>null</c>）。
-/// <see cref="CatchUpRecruit"/> 是落后者征募补偿开关（catch-up-recruit 裁决 4），插旗阶段即公开。
+/// 大回合上限、碾压起始大回合与落后补偿开关三项配置及碾压候选状态已随 restore-go-core-rules（裁决 #4 / #7 / #15）删除，视图里不再有对应字段。
 /// <see cref="ArtisanWeight"/> 是匠人征募权重（artisan-terrain-edit R-2）：开局固定、始终公开、插旗阶段即可读。
 /// <see cref="MapId"/> 是完整的地图标识（map-generator D3：对生成图即 <c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c>，凭它能重新得到同一张图），
 /// <see cref="Seed"/> 是对局种子的文本（<see cref="Siege.Core.Determinism.GameSeed.ToString"/>）。二者始终公开、插旗阶段即可读，
@@ -25,9 +23,6 @@ public sealed record MatchPublicView(
     string Seed,
     MatchPhase Phase,
     int MajorRound,
-    int MaxMajorRounds,
-    int DominanceStartRound,
-    bool CatchUpRecruit,
     int ArtisanWeight,
     TurnStage Stage,
     PlayerId? CurrentPlayer,
@@ -39,5 +34,4 @@ public sealed record MatchPublicView(
     ImmutableArray<RelicPublicState> Relics,
     ImmutableArray<HandPublicView> Hands,
     int PassStreak,
-    DominanceState? Dominance,
     MatchResult? Result);

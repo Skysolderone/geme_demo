@@ -432,3 +432,196 @@ M-A1 / M-A2 对应 tasks 1.2 明确要求的两条；M-A3 对应 1.3 要求的"�
 - 变异 **M-B23**：`EvaluationWeights.CalibrationStatus` 改成 `"已校准（4 人基准图 v5、种子 1-200）"` → **红 2**（`规则变更使校准失效` + `默认权重的校准依据随值一起更新`）。还原逐字节校验 OK，`os.utime` 刷新 mtime 后重建复核。
 
 **段 B 待决 8（生成黄金值只钉一颗种子）** 已落成任务 6.4b：`MG-14` 在新 `gen:12345` 上 0 红，需把黄金值扩到 2–3 颗种子并重跑 MG-14 确认变红。
+
+## 段 C——出局、终局与对局配置（tasks 3.1–3.6，2026-09-22）
+
+段 B 基线 1204 全绿 → 段末 **1176 全绿**（净 −28：删掉的碾压 / 上限 / 保护期 / 配置测试多于新增）。`dotnet build -c Release` 0 警告 0 错误；
+`src/godot/Siege.Godot.csproj` 单独 `dotnet build -c Release` 0 警告 0 错误；`openspec validate restore-go-core-rules --strict` 通过。未提交。
+实施中途因 API 额度中断一次，续做前核对过 `git diff --stat`，半成品完好。
+
+### 改了什么
+
+1. **出局（裁决 #3 / D3）**：`MatchFlow.PlayerRecord.HasEstablishedPower`，即「曾建立正势力」单调标记。唯一置位点 `MarkEstablishedPower(PowerSnapshot)` 用 `|=`，
+   挂在三处 `Scoreboard.Recalculate` 之后：结算第 5 步 `OnRecalculatePower`、`RecalculateDerived`（弃赛 / 恢复 / 测试接缝）、`EndMajorRound`。
+   `CheckEliminations` 在每次合法批次结算后与每次 Pass 后（`OnCheckEndConditions`）对**全部**参赛玩家判「标记已置位 且 `Total == 0`」，不看手牌，也不看保护期。
+   同一次检查里的出局者共享同一个 `EliminationOrder`：序号每次检查至多自增一次。
+   删除：`PlayerRecord.Protection`、`CompleteTurn` 里的逐玩家解除块、`CheckEliminationOf`、`FlowEventKind.ProtectionLifted`、`DebugSetProtection` / `MatchDebugAccess.SetProtection`。
+   `PlayerFlowState.HasOpeningProtection` 改为 `HasEstablishedPower`。`BuildProtectionRounds` 保留，它只管落子范围。
+2. **标记入存档**：`PlayerSaveData.Protection` 换成 `HasEstablishedPower`。`RestoreCore` 先从存档写回标记，再走末尾的 `RecalculateDerived`，所以标记是往返出来的，不是重算出来的（M-C9 守门）。
+3. **终局（裁决 #4 / D4）**：`EndReason` 只剩 `LastPlayerStanding` / `AllPassed` / `BoardFull`（数值 0 / 1 / 2 不变，序列化名不变）。`CheckEndConditions` 优先级为只剩一名 > 棋盘填满 > 整轮 Pass。
+   `EndMajorRound` 删掉大回合上限检查。整体删除 `DominanceCheck.cs`（`DominanceEntry` / `DominanceState` / `DominanceCheck`）、`_dominanceCandidate` / `_dominancePending`、
+   `UpdateDominance` / `DominanceSatisfying` / `Dominance` 属性、`DebugSetDominance` / `MatchDebugAccess.SetDominance`。
+4. **名次（D4）**：`FinalStandings` 出局组的并列判定由 `(_, _) => false` 改为 `a.EliminationOrder == b.EliminationOrder`，同时出局者共享名次。第三级独占空格数段 B 已改好，本段只补测试与变异。
+5. **配置（match-setup 三条 REMOVED）**：`MatchOptions` 删除 `MaxMajorRounds` / `DefaultMaxMajorRounds` / `DominanceStartRound` / `DefaultDominanceStartRound` / `CatchUpRecruit` / `DefaultCatchUpRecruit`。
+   `MatchFlow` 删除对应属性、`*Backfilled`、`Configure*`、`RequireValid*`。`MatchPublicView` 删除 `MaxMajorRounds` / `DominanceStartRound` / `CatchUpRecruit` / `Dominance` 四个位置参数。
+   `MatchSaveData` 删除 `MaxMajorRounds` / `DominanceStartRound` / `CatchUpRecruit` / `DominanceCandidate` / `DominancePending`。这五个名字都登记进段 B 的 `RetiredSaveFields`：
+   旧存档哪怕取值为 null / 空数组也会写出这些字段，任何一个出现就 `FormatException` 点名"已废弃"。
+6. **落后补偿（过渡）**：开关删了，补偿本体属段 D。`MatchFlow.CatchUpFor` 暂时硬编码 `enabled: true`，补偿在过渡期恒开。
+7. **Sim**：`RunConfig` 删除 `MaxMajorRounds` / `DominanceStartRound` / `CatchUpRecruit` 及校验；`Program` 删除 `play --max-rounds` 与 `run --max-rounds / --dominance-start / --no-catch-up`
+   （strict-cli 现在报"未知选项"，5.1 要求的"说明已删除"文案仍欠）；`PlayCommand.Run` 去掉 `maxRounds` 形参，开场说明改为三类终局。
+   `LogHeader` 删除上述三字段（旧日志里的同名字段读入时被忽略）；`PlayerEntry.Protection` 改为 `HasEstablishedPower`；删除 `LogEventType.ProtectionLifted`。
+   `BalanceAnalyzer` / `ReportWriter` 整段删除 `DominanceSection`；落后补偿段的"首部开关为 true"排除条件随字段删除。
+   收敛段的不收敛计数改为 `!Converged`：旧日志 `MajorRoundLimit`（字面量 `LogResult.LegacyMajorRoundLimit`）与截断 `turn_limit` 都算不收敛。
+   这与 `LogResult.Converged`、`BatchRunner.Summarize.Capped` 同口径。此前三处不一致：截断局在报告里既算"规则级终局"，又被排除出平均大回合。
+   报告文案改为"规则级终局 N 局；未收敛（达上限 / 截断）M 局"。`BoardRenderer` 删除 `/上限` 与 `DominanceLine`。
+8. **Sim 小回合数截断（提前做了 5.1 的核心，见待决 1）**：`RunConfig.TurnLimit`（默认 `DefaultTurnLimit = 600`，0 = 不截断），CLI 选项 `run --turn-limit`。
+   `MatchSession.RunTurn` 在 `_turn >= TurnLimit` 时停止驱动；`Finish` 写 `Reason = LogResult.TurnLimitReason ("turn_limit")`，名次与胜者为空，
+   `MajorRound` 记最后一个实际进行的小回合所在大回合，与 `MajorRoundMs.Count` 一致。
+   `LogResult.Truncated` 为新增；`Converged` 对截断局为 false。原 `MaxTurns` 硬停保留，截断为 0 时它是唯一兜底。Core 里没有任何截断符号。
+9. **Godot**：`MatchSession.Create` 去掉 `maxRounds`；HUD 标题去掉 `/上限`，删掉碾压提示行；`Names.End` 删掉两个原因。
+   `--rounds=N` 保留，但改义为**自动演示的停止大回合**（缺省 4，0 = 跑到终局），由 `GameRoot.Drive` 在 `MajorRound > N` 时收尾。它是表现层的无人值守停止点，不是规则。
+10. **`.trellis/spec/core/testing.md`**：「强制回归」表里的「出局保护逐玩家 | 先手行动不误伤未行动玩家」已被裁决 #3 作废，改为「出局判据」一行，指向 `出局判定Tests`。
+    check 以 `.trellis/spec/` 为真相源，不改的话会照旧条要求补回已删的测试。其余 3 处碾压 / Protection 字样是历史案例，保留。
+
+### 新增测试（按规格 Scenario）
+
+- `出局判定Tests`（重写，6 个方法 = 6 个 Scenario）：开局零势力不出局、势力归零立即出局、手牌有子也出局、保护期内不豁免、从未落子者不因Pass出局（同一次检查里放一个已置位且被清零的 P0，证明检查确实执行了）、同时归零同时出局（共享序号 + 共享名次）。
+  **先红**：在旧实现上实跑 **红 5 / 6**。「开局零势力不出局」在旧实现上也绿，因为保护期同样挡住了。
+- `三类终局条件Tests`（6 个 Scenario + 2 条优先级）：唯一参赛者获胜（改走新判据）、整轮Pass、棋盘填满、Pass计数跨回合重置、
+  **势力悬殊不提前结束**（新，P0 ≥ 其余之和、第 9 大回合跑完进入第 10 大回合；旧实现在此以碾压终局）、**轮数再多也不结束**（新，第 40 大回合跑完进入第 41）、
+  棋盘填满优先于整轮Pass、**只剩一名参赛玩家优先于棋盘填满**（新：先弃赛两人 → 测试接缝填满盘面 → 第三人弃赛）。
+- `终局名次与并列判定Tests`：7 个 Scenario 齐全，另新增 `同一次结算出局者共享名次`（纯函数，1 / 3 / 3 / 2）。
+- `对局持久化Tests`：新增 `曾建立正势力标记随存档往返`。钉的是 false 那半边：从未落子者恢复后仍为 false，随后 Pass 不出局；
+  另把 JSON 里的标记伪造成 true 再恢复，下一次 Pass 检查即出局，证明恢复读的是存档值。
+  新增 `含大回合上限碾压或补偿字段的旧存档被拒`（Theory 5 例）：新存档不写出该字段；塞回后抛 `FormatException`，报文含字段名与"废弃"。
+- `收敛口径Tests.截断局计入不收敛`（新）：一局规则级终局 + 一局截断 → `(Converged, Capped) = (1, 1)`，截断局不进平均大回合；`BatchRunner.Summarize` 与报告文案同口径。
+- `对局日志的记录内容Tests.日志覆盖七类记录`：第 6 类补了"截断局无名次"与"规则级终局有名次"两条腿，后者是 P1、P2 弃赛，AI 走一个小回合后 P3 弃赛。
+
+### 既有测试改写 / 删除逐条
+
+**A. 整类删除（7 个文件，35 个方法）**
+
+| 文件 | 方法数 | 理由 |
+|---|---|---|
+| `EliminationEndgame/保护期暂停出局检查Tests` | 1 | Requirement REMOVED |
+| `EliminationEndgame/逐玩家的开局出局保护解除Tests` | 3 | Requirement REMOVED（含 ROADMAP 强制回归"先手行动不误伤后手"，已由 testing.md 新行取代） |
+| `EliminationEndgame/势力碾压Tests` | 13 | Requirement REMOVED |
+| `EliminationEndgame/大回合上限终局Tests` | 6 | Requirement REMOVED |
+| `MatchSetup/对局配置公开大回合上限Tests` / `…碾压起始大回合Tests` / `…落后补偿开关Tests` | 4 + 4 + 4 | match-setup 三条 REMOVED（tasks 3.5） |
+
+**B. 方法级删除（8 个）**
+
+`三类终局条件Tests` 的 `碾压优先于棋盘填满与整轮Pass` / `只剩一人优先于碾压` / `碾压成立优先于达大回合上限`；`终局名次与并列判定Tests.碾压获胜者为第1名`；
+`平衡分析方向Tests.碾压胜统计`；`落后者征募补偿Tests.关闭补偿`（开关已删；其余补偿测试留给段 D）；`大回合上限跑局Tests.上限写入对局配置并以规则原因终局`；
+`出局判定Tests` 旧的 3 个方法（`两个条件都满足才出局` / `出局立即生效` / `Pass后也检查`）由新的 6 个 Scenario 取代。
+`两个条件都满足才出局` 的摆法是 P0 从头 0 子、手牌 2 枚，新旧实现上都绿，证明不了"手牌有子也出局"。
+
+**C. 改摆法：出局改由提子造成（旧摆法是"盘面与手牌皆空、从未落子"，新判据下标记未置位，不出局）**
+
+| 测试 | 旧 → 新 |
+|---|---|
+| `三类终局条件.唯一参赛者获胜` | P1 / P2 手牌清空、P0 落 E5 → P1 A1、P2 J9、P0 B1 / H9，P0 批次 A2 + J8 同时提光；其余断言不变 |
+| `流程回归.出局改变参赛人数后Pass计数与新人数重比` | P0 **Pass** 让 P3 出局 → P0 落 A2 提光 P3 的 A1（计数清零），再 3 次 Pass；**终局大回合 5 → 6**（跨入第 6 大回合的第 1 次 Pass 才凑够 3）。Pass 不改变任何人的势力，所以"Pass 导致出局"在新规则下不可能 |
+| `大回合的定义与推进.出局者不再获得小回合` | P2 手牌清空、P0 落 E5 → P2 A1、P0 B1，P0 落 A2 |
+| `基础排序.排除非参赛玩家` | P2 手牌清空、P0 落 B2 → P2 A1、P0 另有 B1，P0 落 A2 |
+| `先手值公式.参赛人数变化影响公式` | P2 / P3 手牌清空、P0 落 E5 → P2 A1、P3 J9、P0 另有 B1 / H9，P0 批次 A2 + J8 |
+| `对局持久化.小回合边界存档恢复后状态完全一致` | P2 首轮 Pass → 首轮落 A9，第 5 大回合 P0 另有 B9，批次 E5 / C3 **+ A8** 提光 A9 |
+| `对局持久化.已结束对局与终局结果可恢复` | P1–P3 手牌清空、P0 落 B2 → 三人各一子，P0 批次 A2 / J8 / J2 同时提光；新增断言名次 `[1, 2, 2, 2]`（共享名次随存档往返） |
+| `出局判定.保护期内不豁免`（新写后自修） | `ActionOrder.Skip(1)` 不含 P1 → `CurrentPlayer == P2`：本大回合的顺序在大回合结束前不刷新 |
+
+**D. 改期望值（逐条旧 → 新）**
+
+| 测试 | 旧 → 新 | 依据 |
+|---|---|---|
+| `终局名次与并列判定.达上限时按同一规则排名` → `整轮Pass时按同一规则排名` | 终局原因 `MajorRoundLimit`（第 15 大回合）→ `AllPassed`（第 5 大回合 P2、P3 Pass + 第 6 大回合两次 Pass，计数 4 ≥ 4） | 局面、信物与名次断言 `(1, 3)` / `(2, 1)` 不变，只换触发 Finish 的终局原因 |
+| `终局名次与并列判定.信物相同比独占空格数` | 独占空格 3 / 1 → 14 / 9 | 改用规格 Scenario 的算例数值；棋子数反向（20 vs 5）保留，跳过该级仍红 |
+| `批量跑局.批量执行并汇总` | `saved.MaxMajorRounds == 3` → `saved.TurnLimit == 12` | 3 大回合 × 4 人 |
+| `边疆图终端试玩脚本` | "第 4/15 大回合" / "第 5/15 大回合" → "第 4 大回合" / "第 5 大回合" | 标题不再显示上限 |
+| `终端对局.脚本输入能落子并走到终局` → `…走到输入耗尽` | 20 次 Pass + 上限 3 → "对局结束：第 3 大回合"；改为 2 次 Pass → 断言"第 3 大回合" + "已退出。种子 42" | AI 不会停手，脚本已无法走到终局 |
+| `终端对局.输入结束时干净退出` | 断言开场说明含"或势力碾压（第 7 大回合起" → 不含"碾压"、含三类终局说明 | — |
+| `各入口按地图标识选图.显式选缺省地图与不带选项逐字相同` | 40 次 Pass + 上限 3 → 3 次 Pass；"对局结束：第 3 大回合" → "第 3 大回合" + "已退出。种子 7" | 行数下界 > 100 仍满足 |
+| `收敛口径.按规则原因统计不收敛率` | 报告文案"达大回合上限终局（MajorRoundLimit）3 局" → "未收敛（达上限 / 截断）3 局"；计数不变（样本只有 AllPassed 与旧原因两种） | 不收敛计数改读 `Converged` |
+| `落后补偿口径.报告落后补偿段落含被排除样本` | 删 `switchedOff` 样本（首部开关已不存在），`(Matches, Skipped)` (2, 3) → (2, 2)；报告文案"排除关闭补偿 / 无补偿留痕的局 3 局" → "排除无补偿留痕的局 2 局" | 被排除局的小回合不进分母，这一口径不变 |
+| `对局日志的记录内容.日志覆盖七类记录` | 第 6 类 `Standings.Count == 4` / `Winners` 非空 / 原因 ∈ `EndReason` → 截断局 `turn_limit`、名次与胜者为空、`TurnCount 16`、`MajorRound 4`，另加一局规则级终局断言 4 个名次 | D5 |
+| `防死锁硬停Tests`（原 `大回合上限跑局Tests`，`git mv`） | 保留 `上限为0时硬停…` → `规则层无上限时硬停以失败局记录`，`with { MaxTurns = 30, TurnLimit = 0 }`；删 `DefaultMaxMajorRounds` / `maxRounds: -1` 断言 | 截断关闭时硬停是唯一兜底 |
+| `候选格上限.V4GoldenTurnHash` | `96D6C02A…385917` → `ABA5D7F9…229A65` | **走法一步没变**：用 `git archive HEAD` 在 scratchpad 建出段 B 提交，`--max-rounds 6` 与本段 `--turn-limit 24` 各跑种子 31。两份日志的 24 个小回合快照去掉 `ElapsedMs`、再去掉被改名的 `Protection` / `HasEstablishedPower` 之后 **24 / 24 逐条相同**（`cmp_turns.py`）。变的只有快照里这一个字段 |
+
+**E. 只删开关 / 夹具**
+
+`MatchFixtures.DominanceOff` / `DominanceOn` / `CatchUpOff` 删除；`AtRound` 去掉 `protectedPlayers` 形参与 `SetProtection`；`TwoPlayer` 去掉两行 `SetProtection`。
+`SimFixtures.Config` 的 `maxRounds` 换成 `turnLimit`（缺省 `4 × 人数`，等于此前的 4 大回合样本长度），全部 `maxRounds: N` 机械换成 `turnLimit: N × 人数`；`Synthetic` 删去 `catchUpRecruit` 形参。
+`ResultOf(converged: false)` 改用 `LogResult.LegacyMajorRoundLimit`。
+去掉 `options: MatchFixtures.DominanceOff` 的 11 个文件：批次数量与库存约束、公开结构参数与信物来源、先手值公式、基础排序、排名的作用范围（×2）、对局持久化（×3）、流程回归、
+同类信物叠加、效果快照（×2）、势力层领地与高地、小回合的五个阶段。全部未改期望、照旧通过。`排名的作用范围` 另删 `Assert.True(match.CatchUpRecruit)`。
+`百局端到端` 把 `HasOpeningProtection` / "保护期内不可能出局" / `ProtectionLifted` 三条断言换成"出局者必定 `HasEstablishedPower`"。随机控制者 100 局照常跑完，未触发 4000 小回合护栏。
+
+### 变异验证逐条
+
+`mut_c.py`（scratchpad）：二进制读写、`assert anchor 计数 == 1`、`finally` 还原 → 逐字节断言 → `os.utime` 刷新 mtime。每条跑一次全量 `dotnet test -c Release`（含重建）。
+跑前与跑后 `git diff` / `git status --short` 各存一份，**逐字节相同**。段末确认跑 1175 全绿。
+
+| 编号 | 改了哪一行、改成什么 | 红 |
+|---|---|---|
+| M-C1 | `MarkEstablishedPower`：`\|=` → `=`（标记可复位）——**tasks 3.2 点名** | 13 |
+| M-C2 | `CheckEliminations` 过滤加 `p == CurrentPlayer &&`（只检查行动者）——**tasks 3.2 点名** | 13（前一条是 M-C14 红 2 时单独重跑，仍为 13；与 M-C1 同集合是因为两者都让"非行动者永不出局"，非陈旧二进制） |
+| M-C3 | `FinisherComparer` 独占空格级 `c = 0`——**tasks 3.4 点名** | 1（`信物相同比独占空格数`） |
+| M-C4 | 同时出局逐人 `++_eliminationSequence` | 2（`同时归零同时出局`、`已结束对局与终局结果可恢复`） |
+| M-C5 | `FinalStandings` 出局组并列判定 → `(_, _) => false` | 3 |
+| M-C6 | 判据加回 `&& Hands.IsHandEmpty(p)`（复活手牌判据） | 12 |
+| M-C7 | 判据加 `&& MajorRound > BuildProtectionRounds`（复活保护期豁免） | 1（`保护期内不豁免`） |
+| M-C8 | 判据去掉 `HasEstablishedPower`（只看势力 = 0） | 60（开局空盘 0 势力者被判出局，波及全部真实跑局） |
+| M-C9 | `RestoreCore` 不写回标记 | 3 |
+| M-C10 | `RetiredSaveFields` 的 `MaxMajorRounds` 改名 | 1（Theory 的该行） |
+| M-C11 | `CheckEndConditions` 棋盘填满分支挪到只剩一人之前 | 1（`只剩一名参赛玩家优先于棋盘填满`） |
+| M-C12 | `OnCheckEndConditions` 在 Pass 时跳过 `CheckEliminations` | 1（`曾建立正势力标记随存档往返` 伪造腿） |
+| M-C13 | `LogResult.Converged` 不排除 `turn_limit` | 1（`日志覆盖七类记录`） |
+| M-C14 | `EndMajorRound` 复活"第 15 大回合结束即终局" | 2（`轮数再多也不结束`、`无固定轮数`） |
+| M-C15 | `CheckEndConditions` 在棋盘填满之前插回碾压式分支（任一参赛者势力 × 2 ≥ 全体参赛者之和且和 > 0 即终局） | 64（含 `势力悬殊不提前结束`；红得宽，因为这条变异没有起始大回合也没有"恰一人满足"，摆盘里一家独大的局面都会提前结束） |
+| M-C16 | `BalanceAnalyzer` 不收敛计数改回只数 `LegacyMajorRoundLimit` | 1（`截断局计入不收敛`） |
+
+**M-C12 只红 1 条，是本段最薄的守门**："Pass 后也检查"在新判据下只有伪造存档才能单独触发。Pass 不改变任何人的势力，真实对局里不存在"Pass 后才归零"的局面。
+所以这条检查点在真实对局中是冗余保险：规格要求有，但行为上与"只在批次后检查"不可区分。
+
+### 退化局面核算（testing.md「带等号的比较式先拿退化局面算一遍」）
+
+判据是「标记已置位 **且** `Total == 0`」：
+
+| 局面 | 左 | 右 | 结论 | 守门 |
+|---|---|---|---|---|
+| ① 开局空盘，全员 0 势力 | 假 | 真 | 不出局 | `开局零势力不出局`、M-C8 |
+| ② 从未落子者连续 Pass（手牌空、保护早解除） | 假 | 真 | 不出局（旧判据会出局） | `从未落子者不因Pass出局` |
+| ③ 行动者自己的批次 | 真 | **假** | 不出局：至少落 1 子（0 子即 Pass）、自杀手非法 → 结算后至少 1 子、军势 ≥ 1 | 结构保证；`EndMajorRound` 的 `active == 0` 分支因此不可达 |
+| ③' 行动者 Pass | 不变 | 不变 | Pass 不改盘面，势力与上一次检查相同；上一次若为 0 早已出局 | — |
+| ④ 有独占空格但无子 | — | — | 不可能：独占格要求自己的棋子覆盖，故 `Total == 0 ⇔ 无子`（D3） | — |
+| ⑤ 恢复"从未落子者"的进行中存档 | 假（读存档） | 真 | 不出局；伪造成 true 则下一次检查即出局 | `曾建立正势力标记随存档往返`、M-C9 |
+| ⑥ 第 2 大回合同区 B 提光 A，A 手牌非空 | 真 | 真 | 出局 | `保护期内不豁免`、`手牌有子也出局`、M-C6 / M-C7 |
+| ⑦ 一个批次同时提光两人 | 真 | 真 | 同时出局、同一序号、同一名次 | `同时归零同时出局`、M-C4 / M-C5 |
+| ⑧ 测试接缝 `.Stones()` 摆子 | 经 `Debug.Recalculate` → `RecalculateDerived` 置位 | — | 与真实结算同一置位点，摆上去的子被提光即按规则出局 | 夹具注释 |
+
+### 待决 / 需主会话裁决
+
+1. **提前做了 5.1 的"小回合数截断"核心（非计划内，主会话请裁决是否接受）**：删掉大回合上限后，对局在现有 AI 下不收敛。
+   实测：段 C 实现后用 CLI 跑 Easy 4 人 v5 种子 11，**226 秒跑到 1000 小回合硬停（第 251 大回合）才以失败局收场**，4 局的探测在 500 秒超时里只跑完 1 局。
+   此前约 25 个 Sim 测试靠 `maxRounds: 1..6` 让对局以规则原因在几个大回合内结束；现在没有规则层手段能让它们在单元测试的时间预算内结束。
+   所以把 D5 的截断机制本体提前：`RunConfig.TurnLimit` / `--turn-limit` / `turn_limit` 结束原因 / 无名次 / `LogResult.Truncated`，只在 Sim 驱动循环里。
+   5.1 其余部分仍欠：旧选项"已删除"的报错文案、`RunConfig.FromJson` 读到旧键时报错、`simulation-harness`「批量跑局」六个 Scenario 的测试、Core 无截断符号的守门扫描。
+   5.2 也仍欠：终局原因分布、截断率、胜率类指标排除截断局。`BalanceAnalyzer` 目前没有专门排除截断局：截断局名次为空，按胜者统计的指标自然取不到它们，但分母里仍包含。
+   **范围说明**：advisor 原建议是"只在 Sim / 测试驱动层加一个循环护栏，不加日志字段与报告"。实施时为了让测试能断言"截断局无名次"，
+   扩到了结束原因 `turn_limit`、`LogResult.Truncated`、`Converged` 改义与 `--turn-limit`。这是有意为之，advisor 事后复核接受。
+2. **段 C 之后全量测试里的 Sim 样本全是截断局，读胜者 / 名次的报告测试的"绿"不能当证据**：`SimFixtures.Sample`（4 局 × 16 小回合）现在 4 局全是 `turn_limit`，`Winners` 全空。
+   `数值目标回归.领先者胜率回归` 等从 `Sample` 读胜者 / 名次的报告测试在零胜者样本上**仍然绿——这是空证，不是通过**。
+   段 E 5.2 之前，凡是从 `Sample` 读胜者 / 名次的测试都不能当守门；5.2 重做胜率口径时须换成真正终局的样本，或加"样本里至少 N 局有胜者"的下界。
+3. **Godot `--rounds=N` 改义为"自动演示停止大回合"**：`--auto-demo` 无人值守演示原本靠规则层上限 4 收尾；上限删除后若不设停止点，演示要跑几百个小回合。
+   现在由表现层在 `MajorRound > N` 时调用 `FinishAutoDemo`（`Match.Result` 为空，打印"无名次"），不是规则。`--auto-demo` / `--screenshot` 的实际运行验证属 5.5，本段只做了编译。
+4. **落后补偿过渡期恒开**：开关已删，补偿本体段 D 删除。`MatchFlow.CatchUpFor` 硬编码 `enabled: true`；`BalanceAnalyzer` 的补偿段不再能区分"关闭补偿的局"。
+5. **`Resign` 不做出局检查**：规格只要求批次结算后与 Pass 后检查。弃赛不改变任何人的势力（遗留棋子照常计分），所以不会漏判。维持原样。
+6. **M-C12 守门薄**：见上。若主会话希望"Pass 后检查"有真实对局路径上的守门，只能靠伪造存档或测试接缝。当前做法是前者。
+7. **`PlayerEntry.HasEstablishedPower`（日志字段）**：原 `Protection` 字段直接改名改义，旧日志里的 `Protection` 读入时被忽略。是否需要在 5.2 的日志契约里正式列出，由段 E 定。
+8. **`.trellis/spec/core/testing.md` 强制回归表的一行已改**（改了什么 → 第 10 条）。
+9. **codegraph**：本段理解代码用了 `codegraph_explore`（MatchFlow / DominanceCheck / MatchOptions / FinalStandings 等）；影响面主要靠"删类型 → 编译器报错逐个收敛" + 定向 grep 查。未读大文件或媒体。
+
+### 主会话补记（段 C 复核，2026-09-22）
+
+复核：`dotnet build -c Release` 与 Godot 项目单独编译均 0 警告 0 错误，`dotnet test -c Release` **1176 全绿**，`--strict` 通过。`Siege.Core` 中无任何 `TurnLimit` / `turn_limit` / `Truncat` 符号；碾压 / 上限的剩余命中只有废弃字段拒绝表与历史注释。
+
+实施 agent 段中因会话额度中断一次，由原 agent 带上下文续跑完成。
+
+**待决裁决**：
+
+1. **提前做 5.1 截断核心——接受。** 删掉大回合上限后 Sim 测试无法收尾，截断是让段 C 能成绿的必要条件；实现只在 `Siege.Sim`、Core 零符号，与 design D5 一致。tasks 5.1 标为部分完成，剩余"旧选项报已删除 / 配置文件旧键报错 / 六个 Scenario 测试"留段 E。
+2. **Sim 样本全是截断局、胜者全空——接受为过渡态**，但这些测试现在是**空证**：`领先者胜率回归` 等读胜者 / 名次的测试绿不代表任何事。段 E 5.2 必须换成有胜者的样本（或合成样本）并补变异；在此之前不得引用这些测试作为证据。
+3. **落后补偿过渡期恒开——接受**，段 D 删本体。
+4. **Godot `--rounds` 改义为演示停止点——接受**，属表现层；实际运行验证留 5.5。
+5. **弃赛后不做出局检查——接受**。规格只要求批次后与 Pass 后；弃赛不改变任何人的势力，不存在由弃赛导致的归零。
+
+**最薄的守门**：M-C12（Pass 后不做出局检查）只红 1，且只能靠伪造存档触发——真实对局里 Pass 不改变势力，行为上与"只在批次后检查"不可区分。记录在案，不强求加厚。

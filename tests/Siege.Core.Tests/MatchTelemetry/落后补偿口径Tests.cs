@@ -5,7 +5,8 @@ using Siege.Sim.Logging;
 namespace Siege.Core.Tests.MatchTelemetry;
 
 /// <summary>
-/// catch-up-recruit（implement.md 4.1）：Sim 日志首部记开关、小回合快照留痕两档补偿点数，平衡报告新增"落后补偿"段落。
+/// catch-up-recruit（implement.md 4.1）：小回合快照留痕两档补偿点数，平衡报告新增"落后补偿"段落。
+/// （日志首部的开关字段已随 restore-go-core-rules 段 C 删除：match-setup「对局配置公开落后补偿开关」REMOVED；补偿本体由段 D 删除。）
 /// 本段是报告层统计，没有 openspec Scenario；方法名按 implement.md 条目命名。
 /// </summary>
 public class 落后补偿口径Tests
@@ -19,8 +20,7 @@ public class 落后补偿口径Tests
             31,
             [SimFixtures.Turn(1, 1, 0, [10, 5, 5, 5], showCount: 6, freePick: 3, catchUpReveal: 1, catchUpPick: 0)],
             [],
-            SimFixtures.ResultOf(1, [0]),
-            catchUpRecruit: true);
+            SimFixtures.ResultOf(1, [0]));
 
         TurnSnapshot restored = MatchLog.Parse(log.DeterministicText()).Turns[0];
         Assert.Equal((1, 0), (restored.CatchUpReveal, restored.CatchUpPick));
@@ -39,7 +39,6 @@ public class 落后补偿口径Tests
         //   这里用"基础 + 补偿"的下界反证——补偿为 1 的小回合展示数必 ≥ 6，补偿为 0 且无信物的小回合展示数为 5。
         // 样本口径下界：样本里必须真的出现过两档补偿，否则等于没验证写入路径。
         List<MatchLog> sample = SimFixtures.Sample.Value;
-        Assert.All(sample, l => Assert.True(l.Header.CatchUpRecruit));
 
         List<TurnSnapshot> turns = [.. sample.SelectMany(l => l.Turns)];
         Assert.NotEmpty(turns);
@@ -78,8 +77,7 @@ public class 落后补偿口径Tests
         // 口径：分母是**纳入局**的小回合数，不是全部局。纳入 = 首部记录开启补偿且每条快照都带留痕。
         // 被排除样本：① 旧日志（快照缺 CatchUpReveal）②关闭补偿的局。缺一不可——分母写成"全部局"也能算对就说明没在守门。
         // 变异验证 M-CU10：skipped 判定去掉 `t.CatchUpReveal is null`（只看首部开关）→ 红 1（本测试）。
-        //   注意两个排除条件是 `||`：若只放"首部无开关"的旧日志，去掉留痕那半个条件是等价变异（M-CU10 原本 0 红），
-        //   所以这里额外放了 halfLogged——首部有开关、快照却缺留痕。
+        //   段 C：首部开关字段已删，排除条件只剩"快照缺留痕"一条；原"关闭补偿的局（switchedOff）"样本随开关一并删除，Skipped 3 → 2。
         // 变异验证 M-CU11：占比分母改成 logs.Sum(l => l.Turns.Count)（含被排除局）→ 红 1（本测试）。
         MatchLog included = SimFixtures.Synthetic(
             41,
@@ -88,37 +86,27 @@ public class 落后补偿口径Tests
                 SimFixtures.Turn(2, 1, 3, [10, 5, 5, 2], showCount: 6, freePick: 4, catchUpReveal: 1, catchUpPick: 1),
             ],
             [],
-            SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]),
-            catchUpRecruit: true);
+            SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]));
         MatchLog included2 = SimFixtures.Synthetic(
             42,
             [SimFixtures.Turn(1, 1, 2, [10, 8, 5, 5], showCount: 6, freePick: 3, catchUpReveal: 1, catchUpPick: 0)],
             [],
-            SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]),
-            catchUpRecruit: true);
-        MatchLog legacy = SimFixtures.Synthetic(   // 旧日志：开关字段与留痕都没有
+            SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]));
+        MatchLog legacy = SimFixtures.Synthetic(   // 旧日志：没有留痕
             43,
             [SimFixtures.Turn(1, 1, 3, [10, 5, 5, 1]), SimFixtures.Turn(2, 1, 2, [10, 5, 5, 1])],
             [],
             SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]));
-        MatchLog switchedOff = SimFixtures.Synthetic(   // 关闭补偿的局：有留痕但不同口径
-            44,
-            [SimFixtures.Turn(1, 1, 3, [10, 5, 5, 1], catchUpReveal: 0, catchUpPick: 0)],
-            [],
-            SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]),
-            catchUpRecruit: false);
-
-        MatchLog halfLogged = SimFixtures.Synthetic(   // 首部有开关、快照却缺留痕（写入路径漏写）：两个排除条件必须各自单独成立
+        MatchLog halfLogged = SimFixtures.Synthetic(   // 写入路径漏写：快照缺留痕
             45,
             [SimFixtures.Turn(1, 1, 3, [10, 5, 5, 1]), SimFixtures.Turn(2, 1, 2, [10, 5, 5, 1])],
             [],
-            SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]),
-            catchUpRecruit: true);
-        MatchLog[] logs = [included, included2, legacy, switchedOff, halfLogged];
+            SimFixtures.ResultOf(1, [0], ranks: [1, 2, 3, 4]));
+        MatchLog[] logs = [included, included2, legacy, halfLogged];
 
         CatchUpSection section = BalanceAnalyzer.Analyze(logs).CatchUp;
 
-        Assert.Equal((2, 3), (section.Matches, section.Skipped));
+        Assert.Equal((2, 2), (section.Matches, section.Skipped));
         Assert.Equal(3, section.Turns);              // 被排除的 3 个小回合不进分母
         Assert.Equal(2, section.CompensatedTurns);
         Assert.Equal((1.0 * 2) / 3, section.CompensatedTurnRate.Value, 6);
@@ -127,7 +115,7 @@ public class 落后补偿口径Tests
 
         string report = ReportWriter.Render(BalanceAnalyzer.Analyze(logs));
         Assert.Contains("### 4c. 落后者征募补偿", report);
-        Assert.Contains("纳入 2 局（3 个小回合），排除关闭补偿 / 无补偿留痕的局 3 局", report);
+        Assert.Contains("纳入 2 局（3 个小回合），排除无补偿留痕的局 2 局", report);
         Assert.Contains("后半名次展示 +1 共 2 次，最后一名选取 +1 共 1 次", report);
         Assert.Contains("获补偿玩家的终局名次分布：3×1，4×1", report);
     }

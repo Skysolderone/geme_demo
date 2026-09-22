@@ -85,14 +85,10 @@ public class 百局端到端Tests(ITestOutputHelper output)
             {
                 int elim = match.Events.ToList().FindIndex(e => e.Kind == FlowEventKind.PlayerEliminated && e.Player == state.Player);
                 Assert.DoesNotContain(match.Events.Skip(elim + 1), e => e.Kind == FlowEventKind.TurnStarted && e.Player == state.Player);
-                Assert.False(state.HasOpeningProtection);
-                Assert.True(state.EliminatedInMajorRound > MatchFlow.BuildProtectionRounds, "保护期内不可能出局");
+                // restore-go-core-rules D3：出局者必定曾建立正势力（保护期不再豁免，故不再断言出局大回合晚于保护期）。
+                Assert.True(state.HasEstablishedPower);
             }
         }
-
-        // 保护解除事件只在第 4 大回合及以后、每人至多一次
-        Assert.All(match.Events.Where(e => e.Kind == FlowEventKind.ProtectionLifted), e => Assert.True(e.MajorRound >= 4));
-        Assert.True(match.Events.Where(e => e.Kind == FlowEventKind.ProtectionLifted).GroupBy(e => e.Player).All(g => g.Count() == 1));
 
         // 每次大回合结束的顺序只含参赛者，先手值公式逐项成立
         foreach (InitiativeReport report in match.InitiativeReports)

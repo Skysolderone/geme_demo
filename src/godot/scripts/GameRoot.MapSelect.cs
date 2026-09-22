@@ -60,7 +60,7 @@ public sealed partial class GameRoot
     private MatchSession PreviewSession()
     {
         MapData map = MapCatalog.Resolve(_select!.CurrentId);
-        MatchSession preview = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, _rounds, _cellLimit);
+        MatchSession preview = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit);
         _previewMap = map;
         return preview;
     }
@@ -258,7 +258,7 @@ public sealed partial class GameRoot
             throw new System.InvalidOperationException($"选图界面确认的是 {id}，预览的却是 {_previewMap.Id}。");
         }
 
-        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, AiDifficulty.Standard, _rounds, _cellLimit);
+        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit);
         _select = null;
         _board.Build(_session.World.Board(), _session.ZoneOwners);
         if (_board.Rig.IsOverview)
@@ -270,6 +270,6 @@ public sealed partial class GameRoot
         _hud.HideMapSelect();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
         _dirty = true;
-        GD.Print($"[siege] 地图 {id}，对局种子 {_matchSeed}，你是 {Labels.Player(_session.Me)}，大回合上限 {_rounds}{(_autoDemo ? "，自动演示模式" : string.Empty)}");
+        GD.Print($"[siege] 地图 {id}，对局种子 {_matchSeed}，你是 {Labels.Player(_session.Me)}{(_autoDemo ? $"，自动演示模式（{(_rounds == 0 ? "跑到终局" : $"跑满 {_rounds} 个大回合停止")}）" : string.Empty)}");
     }
 }

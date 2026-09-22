@@ -258,10 +258,9 @@ public sealed partial class Hud : CanvasLayer
         PlayerId banner = view.CurrentPlayer ?? session.Me;
         FactionStyle faction = FactionTable.For(banner);
         _turnEmblem.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
-        string cap = view.MaxMajorRounds == 0 ? "不限" : view.MaxMajorRounds.ToString();
         _turnTitle.Text = view.Phase == MatchPhase.FlagPlanting
             ? "插旗阶段"
-            : $"第 {view.MajorRound} / {cap} 大回合 · {Labels.Player(banner)}";
+            : $"第 {view.MajorRound} 大回合 · {Labels.Player(banner)}";
         _turnSubtitle.Text = view.Phase switch
         {
             MatchPhase.FlagPlanting => "点一块出生区地砖插旗",
@@ -302,13 +301,6 @@ public sealed partial class Hud : CanvasLayer
             line.AddChild(Ui.Text($"{rank}　{faction.Name}　势力 {row.Total}　领地 {row.TerritoryScore}{suffix}",
                 row.StatusText is null ? Ui.InfoText : Ui.MutedText));
             _rankBody.AddChild(line);
-        }
-
-        // dominance-victory 裁决 10：候选存在时显示一行，数据只取公开视图。
-        if (world.Public.View.Dominance is { } dominance)
-        {
-            string pending = dominance.Pending.IsDefaultOrEmpty ? "无" : string.Join("、", dominance.Pending.Select(p => FactionTable.For(p).Name));
-            _rankBody.AddChild(Ui.Text($"{FactionTable.For(dominance.Candidate).Name} 碾压中，待回应：{pending}", Ui.DangerText, wrap: true));
         }
     }
 

@@ -20,7 +20,7 @@ public class 批量跑局Tests
         // "200 个种子"的规模走 CLI（Siege.Sim run --count 200）；这里用 6 个种子、3 大回合验证机制：每局一个日志文件 + 配置 + 汇总。
         // 配置可完整序列化并随结果保存（implement 6.1）。
         // 变异验证：本类以 M-B16（见 并行不改变结果）为准，该变异同时使本测试红。
-        RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, maxRounds: 3, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500 };
+        RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, turnLimit: 12, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500 };
         string dir = SimFixtures.TempDir("batch");
 
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);
@@ -33,7 +33,7 @@ public class 批量跑局Tests
         // config.json 写实际生效配置——未显式配置的权重填默认表（旧期望 config.ToJson() 原样 → 新期望 Effective()）。
         Assert.Equal(config.Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
-        Assert.Equal((21UL, 6, 3, 500), (saved.SeedStart, saved.Count, saved.MaxMajorRounds, saved.FullEventSamplePermille));
+        Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
         Assert.Equal(Enumerable.Range(21, 6).Select(i => (ulong)i), logs.Select(l => l.Seed));
@@ -68,7 +68,7 @@ public class 批量跑局Tests
         // 变异验证 M-B16：MatchSession.Create 用 Interlocked 递增的静态计数器异或种子 → 红 5（本测试、批量执行并汇总、纯AI局可凭种子复现、失败局可复现、子流互不干扰）。
         // 变异验证 M-C5（check）：DeterministicText 只序列化 header → 原先两条文本断言恒真（header 含种子，逐字节相等与"不同种子不同"都成立）；
         // 补上行数下界与快照 / 事件逐条比对后 → 红 2（本测试、纯AI局可凭种子复现）。
-        RunConfig config = SimFixtures.Config(count: 6, seedStart: 31, maxRounds: 3);
+        RunConfig config = SimFixtures.Config(count: 6, seedStart: 31, turnLimit: 12);
 
         List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1);
         List<MatchLog> parallel = BatchRunner.Execute(config, parallelism: 4);
@@ -102,7 +102,7 @@ public class 批量跑局Tests
         // "小回合数截断值"是段 E 5.1 的新增项，本段尚未实现，不在此断言。
         // 变异验证 M-B10（段 B，实跑红 3）：MatchSession.Create 不把 RunConfig.ArtisanWeight 传入对局 → 本测试红（首部回到 10）。
         EvaluationWeights safety7 = EvaluationWeights.Default with { Safety = 7 };
-        RunConfig config = SimFixtures.Config(count: 1, maxRounds: 1) with
+        RunConfig config = SimFixtures.Config(count: 1, turnLimit: 4) with
         {
             ArtisanWeight = 18,
             Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = AiDifficulty.Easy, Weights = safety7 })],
@@ -171,7 +171,7 @@ public class 批量跑局Tests
     public void 未知玩家一律抛SiegeRuleException()
     {
         // boundaries.md「未知玩家必须响亮失败」延伸到会话层：替换控制者 / 接管 / 交还一个不在名单的玩家都抛 SiegeRuleException。
-        MatchSession session = MatchSession.Create(SimFixtures.Config(maxRounds: 1), 5);
+        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 4), 5);
         var stranger = new PlayerId(9);
         Assert.Throws<SiegeRuleException>(() => session.SetController(stranger, new BlindController()));
         Assert.Throws<SiegeRuleException>(() => session.TakeOver(stranger, new BlindController()));
@@ -254,7 +254,7 @@ public class 批量跑局Tests
         string outDir = Path.Combine(SimFixtures.TempDir("strictcli-ok"), "out");
 
         int code = Siege.Sim.Program.Main(
-            ["run", "--out", outDir, "--seed", "1", "--count", "1", "--max-rounds", "2", "--difficulty", "Easy", "--serial"]);
+            ["run", "--out", outDir, "--seed", "1", "--count", "1", "--turn-limit", "8", "--difficulty", "Easy", "--serial"]);
 
         Assert.Equal(0, code);
         Assert.True(File.Exists(Path.Combine(outDir, "summary.json")));

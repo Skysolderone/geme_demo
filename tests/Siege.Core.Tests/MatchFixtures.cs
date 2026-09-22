@@ -19,22 +19,7 @@ internal static class MatchFixtures
 
     internal static readonly GameSeed Seed = new(0x5EED_0912_2026UL);
 
-    /// <summary>
-    /// 关闭势力碾压的立即模式选项（dominance-victory 裁决 8）：只给<b>测其它规则</b>、且摆盘会意外满足碾压式的既有测试在建局行显式使用。
-    /// 夹具默认值保持 <see cref="MatchOptions.DefaultDominanceStartRound"/>（7），不一刀切关闭，否则碾压对其它规则的真实影响会被整体隐藏。
-    /// </summary>
-    internal static readonly MatchOptions DominanceOff = MatchOptions.Immediate with { DominanceStartRound = 0 };
-
-    /// <summary>显式开启势力碾压（起始第 4 大回合）的立即模式选项：碾压相关新测试使用（规格场景算例写的是"起始大回合为 4"，属显式配置，不同于标准局默认值 7）。</summary>
-    internal static readonly MatchOptions DominanceOn = MatchOptions.Immediate with { DominanceStartRound = 4 };
-
-    /// <summary>
-    /// 关闭落后者征募补偿的立即模式选项（catch-up-recruit 裁决 4）：只给<b>测其它规则</b>、且局面会让某名玩家拿到补偿的既有测试在建局行显式使用。
-    /// 夹具默认值保持 <see cref="MatchOptions.DefaultCatchUpRecruit"/>（开启），不一刀切关闭。
-    /// </summary>
-    internal static readonly MatchOptions CatchUpOff = MatchOptions.Immediate with { CatchUpRecruit = false };
-
-    /// <summary>2 人局（catch-up-recruit「2 人局」算例）：只插旗、各 50 枚普通子，摆到第 <paramref name="majorRound"/> 大回合、指定顺序、保护已解除。</summary>
+    /// <summary>2 人局（catch-up-recruit「2 人局」算例）：只插旗、各 50 枚普通子，摆到第 <paramref name="majorRound"/> 大回合、指定顺序。</summary>
     internal static MatchFlow TwoPlayer(MatchOptions? options = null, int majorRound = 5, PlayerId[]? order = null)
     {
         MapData map = Map();
@@ -44,8 +29,6 @@ internal static class MatchFixtures
         match.PlantSequentially([(P0, 0), (P1, 1)]);
         match.Debug.SetMajorRound(majorRound);
         match.Debug.SetOrder(order ?? [P0, P1]);
-        match.Debug.SetProtection(P0, false);
-        match.Debug.SetProtection(P1, false);
         return match;
     }
 
@@ -106,7 +89,7 @@ internal static class MatchFixtures
         return MatchFlow.CreateUnvalidated(map, seed ?? Seed, All, Relics(map, relics), options);
     }
 
-    /// <summary>创建一局并依次插旗（默认各占各的出生区），给每人 50 枚普通子，进入第 1 大回合。<paramref name="options"/> 缺省为 <see cref="MatchOptions.Immediate"/>（大回合上限 15）。</summary>
+    /// <summary>创建一局并依次插旗（默认各占各的出生区），给每人 50 枚普通子，进入第 1 大回合。<paramref name="options"/> 缺省为 <see cref="MatchOptions.Immediate"/>。</summary>
     internal static MatchFlow Started(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
         Started(null, seed, zones, options, relics);
 
@@ -125,22 +108,20 @@ internal static class MatchFixtures
     }
 
     /// <summary>
-    /// 把对局摆到第 <paramref name="majorRound"/> 大回合开始、指定顺序。第 1–4 大回合开始时全员仍在保护中（第 4 大回合的解除发生在各自小回合完成后）；
-    /// 第 5 大回合起默认全员已解除，<paramref name="protectedPlayers"/> 可指定保留。
+    /// 把对局摆到第 <paramref name="majorRound"/> 大回合开始、指定顺序。出局判定不再有保护期豁免（restore-go-core-rules 裁决 #3），
+    /// 这里也就没有"保护状态"可摆。
     /// </summary>
-    internal static MatchFlow AtRound(this MatchFlow match, int majorRound, PlayerId[]? order = null, params PlayerId[] protectedPlayers)
+    internal static MatchFlow AtRound(this MatchFlow match, int majorRound, PlayerId[]? order = null)
     {
         match.Debug.SetMajorRound(majorRound);
         match.Debug.SetOrder(order ?? All);
-        foreach (PlayerId p in All)
-        {
-            match.Debug.SetProtection(p, majorRound <= MatchFlow.BuildProtectionRounds + 1 || protectedPlayers.Contains(p));
-        }
-
         return match;
     }
 
-    /// <summary>直接在权威盘面摆子（绕过规则，只为构造局面），然后重算派生量。</summary>
+    /// <summary>
+    /// 直接在权威盘面摆子（绕过规则，只为构造局面），然后重算派生量。重算会照常置位「曾建立正势力」标记（与真实结算同一置位点），
+    /// 所以这样摆上去的棋子若随后被全部提走，该玩家会按规则出局。
+    /// </summary>
     internal static MatchFlow Stones(this MatchFlow match, PlayerId owner, params string[] cells)
     {
         foreach (string cell in cells)

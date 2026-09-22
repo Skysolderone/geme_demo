@@ -35,13 +35,13 @@ public class 基础排序Tests
     {
         // 设计文档 §11.1：4 人局中 1 人已出局、1 人已弃赛 → 势力名次只包含剩余 2 名参赛玩家，名次为 1 与 2。
         // 变异验证 M-I2：EndMajorRound 不过滤 Status → 抛出（弃赛者无名次）→ 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "E5")
+        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+            .Stones(MatchFixtures.P0, "E5", "B1")
+            .Stones(MatchFixtures.P2, "A1")          // 段 C：P2 先有子（标记置位），再被提光出局（原为盘面与手牌皆空）
             .Stones(MatchFixtures.P3, "H8", "J9");
-        match.Debug.SeedHand(MatchFixtures.P2);      // P2 盘面空 + 手牌空，保护已解除
         match.Resign(MatchFixtures.P3);              // P3 弃赛（势力仍显示）
 
-        match.PlayTurn("B2");                        // P0 的结算让 P2 出局
+        match.PlayTurn("A2");                        // P0 提光 P2 → P2 出局（原为落 B2）
         Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P2).Status);
         match.PlayTurn("H2");                        // P1
         Assert.Equal(6, match.MajorRound);

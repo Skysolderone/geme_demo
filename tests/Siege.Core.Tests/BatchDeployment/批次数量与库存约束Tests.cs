@@ -134,7 +134,7 @@ public class 批次数量与库存约束Tests
         // 变异验证 M-GP2（BaseDeployLimitFor 阶段表写死 3：`<= 6 => 3`、`_ => 3`）→ 全套红 19，含本 Theory 的 5/8 两行；
         // M-GP3（RelicLedger.BuildSnapshot 基础改为 BaseDeployLimitFor(1)）→ 全套红 47，含本 Theory 的 5/8 两行。
         // M-GP1（边界整体后移一回合）本 Theory 不红（3/5/8 都不在边界上），由「基础值随阶段提高_阶段边界」的 4、7 两行抓。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(majorRound, MatchFixtures.All);
+        MatchFlow match = MatchFixtures.Started().AtRound(majorRound, MatchFixtures.All);
 
         match.BeginTurn();
         Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);

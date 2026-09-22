@@ -143,7 +143,7 @@ public class 初始配置与基础棋池Tests
 
         // 跑局层接线：Scenario 的原话是"批量跑局把匠人权重配置为 18"，所以 RunConfig → MatchOptions 这一段也要钉住。
         // 变异验证 M-C3（检查阶段）：MatchSession.Create 不传 ArtisanWeight → 补本段前全绿 826（缺口），补后红 1（本测试）。
-        Assert.Equal(18, MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { ArtisanWeight = 18 }, seed: 5).Match.ArtisanWeight);
-        Assert.Equal(MatchOptions.DefaultArtisanWeight, MatchSession.Create(SimFixtures.Config(maxRounds: 1), seed: 5).Match.ArtisanWeight);
+        Assert.Equal(18, MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { ArtisanWeight = 18 }, seed: 5).Match.ArtisanWeight);
+        Assert.Equal(MatchOptions.DefaultArtisanWeight, MatchSession.Create(SimFixtures.Config(turnLimit: 4), seed: 5).Match.ArtisanWeight);
     }
 }

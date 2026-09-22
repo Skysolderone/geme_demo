@@ -8,7 +8,8 @@ namespace Siege.Core.Match;
 /// </summary>
 /// <param name="Player">玩家。</param>
 /// <param name="Status">参赛 / 已弃赛 / 已出局。</param>
-/// <param name="HasOpeningProtection">开局出局保护是否仍然有效。<b>每玩家一个布尔</b>，只在该玩家完成第 4 大回合的小回合后单独解除（design.md D1）。</param>
+/// <param name="HasEstablishedPower">是否曾建立正势力（restore-go-core-rules design D3）：任意一次结算后总势力 &gt; 0 即置位、永不复位、随存档往返。
+/// 出局判据 = 该标记为 <c>true</c> 且当前总势力为 0；开局空盘时的 0 势力不算清零。</param>
 /// <param name="BirthZone">锁定的出生区编号；插旗未锁定时为 <c>null</c>。</param>
 /// <param name="LastRoundPosition">上一大回合的行动位置（0 基）；首回合的随机顺序不计入，故第 1 大回合结束时为 <c>null</c>。</param>
 /// <param name="EliminationOrder">出局序号（第几个出局，从 1 起）；未出局为 <c>null</c>。</param>
@@ -18,7 +19,7 @@ namespace Siege.Core.Match;
 public sealed record PlayerFlowState(
     Board.PlayerId Player,
     PlayerStatus Status,
-    bool HasOpeningProtection,
+    bool HasEstablishedPower,
     int? BirthZone,
     int? LastRoundPosition,
     int? EliminationOrder,

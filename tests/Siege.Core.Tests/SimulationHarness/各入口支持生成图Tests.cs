@@ -87,7 +87,7 @@ public class 各入口支持生成图Tests
     {
         // 规格 Scenario「裸 gen 不入记录」。走真实入口 run --map gen；"随机取的地图种子"由测试注入固定值（不依赖墙钟）。
         string dir = SimFixtures.TempDir("run-bare-gen");
-        (int code, string text, string err) = RunMain(() => 12345UL, "run", "--out", dir, "--map", "gen", "--count", "1", "--difficulty", "Easy", "--max-rounds", "1", "--serial", "--sample-permille", "0");
+        (int code, string text, string err) = RunMain(() => 12345UL, "run", "--out", dir, "--map", "gen", "--count", "1", "--difficulty", "Easy", "--turn-limit", "4", "--serial", "--sample-permille", "0");
 
         Assert.True(code == 0, err);
         AssertRecordsOnly(dir, "gen:12345", perMatch: false);
@@ -95,7 +95,7 @@ public class 各入口支持生成图Tests
 
         // 反例一：裸 gen 写在配置文件里（不经 --map）→ 同样在入口落成完整标识，落盘的 config.json 不是原样抄回去的。
         string configFile = Path.Combine(SimFixtures.TempDir("run-bare-gen-config"), "in.json");
-        File.WriteAllText(configFile, (SimFixtures.Config(count: 1, maxRounds: 1) with { MapId = "gen" }).ToJson());
+        File.WriteAllText(configFile, (SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = "gen" }).ToJson());
         Assert.Contains("\"gen\"", File.ReadAllText(configFile), StringComparison.Ordinal);
         string fromFile = Path.Combine(Path.GetDirectoryName(configFile)!, "out");
         (int fileCode, _, string fileErr) = RunMain(() => 12345UL, "run", "--out", fromFile, "--config", configFile, "--serial");
@@ -104,16 +104,16 @@ public class 各入口支持生成图Tests
 
         // 反例二：裸 gen + 每局换图（命令行）→ 起始地图种子取自同一来源，批次配置记 gen:<起始>，各局首部依次递增。
         string rotating = SimFixtures.TempDir("run-bare-gen-rotate");
-        (int rotateCode, string rotateText, string rotateErr) = RunMain(() => 100UL, "run", "--out", rotating, "--map", "gen", "--map-per-match", "--count", "2", "--difficulty", "Easy", "--max-rounds", "1", "--serial", "--sample-permille", "0");
+        (int rotateCode, string rotateText, string rotateErr) = RunMain(() => 100UL, "run", "--out", rotating, "--map", "gen", "--map-per-match", "--count", "2", "--difficulty", "Easy", "--turn-limit", "4", "--serial", "--sample-permille", "0");
         Assert.True(rotateCode == 0, rotateErr);
         AssertRecordsOnly(rotating, "gen:100", perMatch: true);
         Assert.Contains("每局换图 gen:100..gen:101", rotateText, StringComparison.Ordinal);
 
         // 反例三：绕过入口、把裸 gen 直接交给批量 / 会话 → 规则内核拒绝，且不留半份输出。
         string direct = Path.Combine(SimFixtures.TempDir("run-bare-gen-direct"), "out");
-        Assert.Throws<FormatException>(() => BatchRunner.ExecuteToDirectory(SimFixtures.Config(count: 1, maxRounds: 1) with { MapId = "gen" }, direct, parallelism: 1));
+        Assert.Throws<FormatException>(() => BatchRunner.ExecuteToDirectory(SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = "gen" }, direct, parallelism: 1));
         Assert.False(Directory.Exists(direct));
-        Assert.Throws<FormatException>(() => MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = " gen " }, seed: 1));
+        Assert.Throws<FormatException>(() => MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = " gen " }, seed: 1));
     }
 
     /// <summary>输出目录里的全部记录（config.json、每局日志首部及其内嵌配置）只出现带种子的完整标识，不出现裸 gen。</summary>
@@ -141,7 +141,7 @@ public class 各入口支持生成图Tests
         MapData map = MapCatalog.Resolve("gen:12345:p8");
         var output = new StringWriter();
 
-        int exit = PlayCommand.Run(7, 4, 1, AiDifficulty.Easy, maxRounds: 3, new StringReader("8\n"), output, map);
+        int exit = PlayCommand.Run(7, 4, 1, AiDifficulty.Easy, new StringReader("8\n"), output, map);
 
         string text = output.ToString();
         Assert.Equal(0, exit);
@@ -155,7 +155,7 @@ public class 各入口支持生成图Tests
     [Fact]
     public void 在生成图上跑局_日志首部的地图标识是完整标识_对局种子另记()
     {
-        MatchLog log = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = "gen:12345:p6" }, seed: 7).Run();
+        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "gen:12345:p6" }, seed: 7).Run();
 
         Assert.False(log.IsFailed, log.Failure?.Message);
         Assert.Equal("gen:12345", log.Header.MapId);                   // 规范化标识
@@ -196,7 +196,7 @@ public class 各入口支持生成图Tests
         GameBoard.Load(loaded);   // 作为普通地图文件过同一套校验
 
         // 用导出的文件跑的局，回放时按文件重建，摘要对得上。
-        MatchLog log = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = exported }, seed: 3).Run();
+        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = exported }, seed: 3).Run();
         Assert.Equal("gen:12345", log.Header.MapId);
         Assert.True(Replayer.Replay(MatchLog.Parse(log.DeterministicText())).Identical);
     }

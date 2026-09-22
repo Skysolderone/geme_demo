@@ -14,7 +14,7 @@ internal static class PlayCommand
 {
     /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
     /// <param name="cellLimit">AI 候选格上限 K；<c>null</c> 按地图的可落子格数自动取（<see cref="AiSearchConfig.ForMap"/>），0 = 不限制。</param>
-    public static int Run(ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, int maxRounds, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null)
+    public static int Run(ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null)
     {
         map ??= MapCatalog.Resolve(null);
         AiSearchConfig search = AiSearchConfig.ForMap(difficulty, map.PlayableCount, cellLimit).Validated();
@@ -32,7 +32,7 @@ internal static class PlayCommand
         ulong seed = seedArg ?? (ulong)Stopwatch.GetTimestamp();
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         PlayerId me = players[seat - 1];
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = maxRounds });
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate);
         var render = new BoardRenderer(output);
 
         output.WriteLine();
@@ -45,17 +45,10 @@ internal static class PlayCommand
                 + (GeneratedMapId.IsGenerated(mapId) ? $"——随机生成图，用 --map {mapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
         }
 
-        output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI，大回合上限 {(maxRounds == 0 ? "不限" : maxRounds)}");
-        output.WriteLine("目标：大回合结束时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
-        if (match.DominanceStartRound > 0)
-        {
-            output.WriteLine($"或势力碾压（第 {match.DominanceStartRound} 大回合起，势力 ≥ 其余参赛玩家之和且保持到其余人各行动一次）直接获胜。");
-        }
-
-        if (match.CatchUpRecruit)
-        {
-            output.WriteLine("落后者征募补偿：小回合开始时名次在后半的玩家征募展示数 +1，最后一名再免费选取数 +1。");
-        }
+        output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI");
+        output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
+        output.WriteLine("终局：只剩一名参赛玩家、棋盘填满或一整轮所有人都 Pass；曾有势力而势力降到 0 即出局。");
+        output.WriteLine("落后者征募补偿：小回合开始时名次在后半的玩家征募展示数 +1，最后一名再免费选取数 +1。");
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         output.WriteLine();
@@ -172,10 +165,8 @@ internal static class PlayCommand
         string reason = result.Reason switch
         {
             EndReason.LastPlayerStanding => "只剩一名玩家",
-            EndReason.PowerDominance => "势力碾压（≥ 其余参赛玩家之和）",
             EndReason.AllPassed => "一整轮所有人都 Pass",
             EndReason.BoardFull => "棋盘已无空位",
-            EndReason.MajorRoundLimit => "达到大回合上限",
             _ => result.Reason.ToString(),
         };
         output.WriteLine();

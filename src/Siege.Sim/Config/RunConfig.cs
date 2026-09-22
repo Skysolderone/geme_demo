@@ -33,14 +33,17 @@ public sealed record PlayerAiConfig
 }
 
 /// <summary>
-/// 批量跑局配置（simulation-harness「批量跑局」）：地图、玩家、种子范围、局数、并行度、大回合上限、事件保留。可完整序列化并随结果保存。
+/// 批量跑局配置（simulation-harness「批量跑局」）：地图、玩家、种子范围、局数、并行度、事件保留。可完整序列化并随结果保存。
 /// </summary>
 public sealed record RunConfig
 {
-    /// <summary>默认大回合上限 = 规则层标准局初值（round-cap D3：跑局层只传值，不再有自己的"达上限"语义）。</summary>
-    public const int DefaultMaxMajorRounds = MatchOptions.DefaultMaxMajorRounds;
+    /// <summary>
+    /// 默认小回合数截断（restore-go-core-rules D5，对应基准文档的 <c>MAX_TURNS</c>）：跑满即停、该局记 <c>turn_limit</c>、无名次。
+    /// 只存在于跑局驱动循环，<b>不是</b>终局条件，Siege.Core 不知道它。
+    /// </summary>
+    public const int DefaultTurnLimit = 600;
 
-    /// <summary>默认小回合硬停（round-cap D3：上限为 0 时的防死锁保险，以异常记为失败局，不是终局原因）。</summary>
+    /// <summary>默认小回合硬停（防死锁保险，以异常记为失败局，不是终局原因）。截断为 0（不截断，仅供调试）时它是唯一兜底。</summary>
     public const int DefaultMaxTurns = 1_000;
 
     /// <summary>地图标识或地图 JSON 文件路径。</summary>
@@ -67,15 +70,6 @@ public sealed record RunConfig
     /// <summary>并行度；0 = 处理器数。</summary>
     public int Parallelism { get; init; }
 
-    /// <summary>大回合上限，直接写入对局配置 <see cref="MatchOptions.MaxMajorRounds"/>（0 = 不限，只受其余终局条件与 <see cref="MaxTurns"/> 约束）。</summary>
-    public int MaxMajorRounds { get; init; } = DefaultMaxMajorRounds;
-
-    /// <summary>碾压起始大回合，直接写入对局配置 <see cref="MatchOptions.DominanceStartRound"/>（0 = 关闭势力碾压；默认 = 规则层标准局初值）。</summary>
-    public int DominanceStartRound { get; init; } = MatchOptions.DefaultDominanceStartRound;
-
-    /// <summary>落后者征募补偿开关，直接写入对局配置 <see cref="MatchOptions.CatchUpRecruit"/>（默认 = 规则层标准局初值，开启）。</summary>
-    public bool CatchUpRecruit { get; init; } = MatchOptions.DefaultCatchUpRecruit;
-
     /// <summary>
     /// 匠人征募权重，直接写入对局配置 <see cref="MatchOptions.ArtisanWeight"/>（artisan-terrain-edit R-2：未配置取 10）。
     /// 其余五种类型的基础权重不随它变化。
@@ -93,6 +87,12 @@ public sealed record RunConfig
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
     public EventRetention EventRetention { get; init; } = EventRetention.SnapshotsOnly;
+
+    /// <summary>
+    /// 小回合数截断（D5；0 = 不截断，仅供调试）：已跑满这么多个小回合仍未终局即停止驱动，该局以结束原因 <see cref="Logging.LogResult.TurnLimitReason"/> 记录，
+    /// MUST NOT 产生名次与胜者。规则层对它一无所知——人机对局不受其约束。
+    /// </summary>
+    public int TurnLimit { get; init; } = DefaultTurnLimit;
 
     /// <summary>按种子抽样保留完整事件流的千分比（子流 <c>sim-sample</c>，与对局子流无关）。</summary>
     public int FullEventSamplePermille { get; init; } = 20;
@@ -139,6 +139,11 @@ public sealed record RunConfig
             throw new ArgumentException("局数与小回合硬停至少为 1。");
         }
 
+        if (TurnLimit < 0)
+        {
+            throw new ArgumentException("小回合数截断须为非负整数（0 = 不截断）。");
+        }
+
         if (MapPerMatch)
         {
             if (!GeneratedMapId.IsGenerated(MapId) || GeneratedMapId.IsBareRequest(MapId))
@@ -154,16 +159,6 @@ public sealed record RunConfig
             {
                 throw new ArgumentException($"每局换图：起始地图标识 {MapId} 加上 {Count} 局会超出地图种子的范围（无符号 64 位）。");
             }
-        }
-
-        if (MaxMajorRounds < 0)
-        {
-            throw new ArgumentException("大回合上限须为非负整数（0 = 不限）。");
-        }
-
-        if (DominanceStartRound < 0)
-        {
-            throw new ArgumentException("碾压起始大回合须为非负整数（0 = 关闭）。");
         }
 
         if (ArtisanWeight < 0)

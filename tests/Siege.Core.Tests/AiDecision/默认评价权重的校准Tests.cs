@@ -62,7 +62,7 @@ public class 默认评价权重的校准Tests
     {
         // 任务 1.2：PlayerAiConfig.Weights 留空 → AI 用 EvaluationWeights.Default（HeuristicTurnController 的 weights ?? Default）。
         // Easy 只看即时收益两维（Safety 恒 0），必须用 Standard 才能让权重表影响决策。
-        RunConfig blank = SimFixtures.Config(maxRounds: 2, difficulty: AiDifficulty.Standard);
+        RunConfig blank = SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard);
         Assert.All(blank.Players, p => Assert.Null(p.Weights));
 
         MatchSession session = MatchSession.Create(blank, 41);

@@ -42,7 +42,7 @@ public class 公开结构参数与信物来源Tests
         // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P1 G1 H1 J1 → 3 + 4 = 7；P2 A9 B9 → 2 + 3 = 5；P3 J9 → 1 + 2 = 3。
         // 变异验证 M-CU6：MatchFlow.Parameter 把 catchUp 折进 sources（当成一枚探勘信物来源）→ 红 1（本测试：Sources 非空且文案变成 探勘×1）。
         // 变异验证 M-CU6b：StructureView.Parameter 的文案丢掉落后补偿项（只拼信物）→ 本测试红：文案变成"展示数 6（基础）"。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff)
+        MatchFlow match = MatchFixtures.Started()
             .AtRound(5, [P3, P0, P1, P2])
             .Stones(P0, "A1", "B1", "C1", "D1")
             .Stones(P1, "G1", "H1", "J1")

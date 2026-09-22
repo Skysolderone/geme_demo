@@ -14,7 +14,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 public class 每局换图Tests
 {
     private static RunConfig Rotating(int count, string mapId = "gen:100") =>
-        SimFixtures.Config(count: count, seedStart: 1, maxRounds: 1) with { MapId = mapId, MapPerMatch = true };
+        SimFixtures.Config(count: count, seedStart: 1, turnLimit: 4) with { MapId = mapId, MapPerMatch = true };
 
     [Fact]
     public void 第i局的地图标识是起始种子加i_平台数不变()
@@ -99,7 +99,7 @@ public class 每局换图Tests
         }
 
         // 不换图的批次（哪怕是生成图）不写这一项。
-        MatchLog single = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = "gen:1:p8" }, seed: 1).Run();
+        MatchLog single = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "gen:1:p8" }, seed: 1).Run();
         Assert.Null(single.Header.ZoneSides);
     }
 

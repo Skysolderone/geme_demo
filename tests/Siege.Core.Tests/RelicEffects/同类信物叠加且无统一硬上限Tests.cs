@@ -51,7 +51,7 @@ public class 同类信物叠加且无统一硬上限Tests
         // P1 经正式结算占据 H4、J4（占据即揭示并控制），P0 视角读公开结构参数与手牌面板文案。
         // 变异验证 M-GP4（MatchFlow.StructuresOf 的部署基础改传 BaseDeployLimitFor(1)，并去掉 Parameter 的一致性抛出——
         //   即把 +2 阶段增量算进"军令加成"）→ 全套红 2（本测试 Base 3 / Bonus 4、「显示参数与来源」）。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff, relics: [("H4", RelicFixtures.Command()), ("J4", RelicFixtures.Command())])
+        MatchFlow match = MatchFixtures.Started(relics: [("H4", RelicFixtures.Command()), ("J4", RelicFixtures.Command())])
             .AtRound(7, MatchFixtures.All);
         match.PassTurn();
         match.PlayTurn("H4", "J4");

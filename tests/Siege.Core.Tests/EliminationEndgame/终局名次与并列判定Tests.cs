@@ -6,7 +6,7 @@ using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.EliminationEndgame;
 
-/// <summary>规格：elimination-endgame —— Requirement: 终局名次与并列判定（design.md D7 纯函数）</summary>
+/// <summary>规格：elimination-endgame —— Requirement: 终局名次与并列判定（design.md D7 纯函数；restore-go-core-rules D4 并列链：势力 → 信物数 → 独占空格数 → 棋子数）</summary>
 public class 终局名次与并列判定Tests
 {
     private static StandingInput Active(PlayerId p, long power, int relics = 0, int cells = 0, int stones = 0) =>
@@ -74,24 +74,35 @@ public class 终局名次与并列判定Tests
     }
 
     [Fact]
-    public void 达上限时按同一规则排名()
+    public void 同一次结算出局者共享名次()
     {
-        // round-cap：以「达大回合上限」终局时走 Finish → FinalStandings.Compute 的同一路径——势力相同比信物数，控制 3 枚者高于控制 1 枚者。
+        // restore-go-core-rules 裁决 #3：同一次结算中同时出局者共享同一出局序号 → 共享同一名次（竞争名次，其后跳号）。
+        // 真实对局路径见 出局判定Tests.同时归零同时出局。
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 30), Eliminated(MatchFixtures.P1, 1), Eliminated(MatchFixtures.P2, 1), Eliminated(MatchFixtures.P3, 2)]);
+        Assert.Equal(new[] { 1, 3, 3, 2 }, Ranks(s, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3));
+    }
+
+    [Fact]
+    public void 整轮Pass时按同一规则排名()
+    {
+        // 接线：以「整轮 Pass」终局时走 Finish → FinalStandings.Compute 的同一路径——势力相同比信物数，控制 3 枚者高于控制 1 枚者。
+        // （原「达上限时按同一规则排名」：大回合上限终局已删除，改由整轮 Pass 触发同一收尾路径，局面与断言不变。）
         // 局面：P0 {B2,B3} 与 P1 {H2,H3} 左右镜像（势力相同），信物格 A2 只被 P0 独占覆盖，G2 / J2 / H1 只被 P1 独占覆盖（信物内容不影响势力）。
-        // 变异验证 M-R1：EndMajorRound 删除上限检查 → 红（本测试：对局未结束）；M-R5 同样红。
-        // 变异验证 M-R14：Finish 在 MajorRoundLimit 下把 ControlledRelics 传 0 → 红 1（本测试：P0 与 P1 并列）。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff, relics: [("A2", RelicFixtures.Depot()), ("G2", RelicFixtures.Depot()), ("J2", RelicFixtures.Depot()), ("H1", RelicFixtures.Depot())])
-            .AtRound(15, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+        // 变异验证 M-R14（沿用）：Finish 把 ControlledRelics 传 0 → 本测试红（P0 与 P1 并列）。
+        MatchFlow match = MatchFixtures.Started(relics: [("A2", RelicFixtures.Depot()), ("G2", RelicFixtures.Depot()), ("J2", RelicFixtures.Depot()), ("H1", RelicFixtures.Depot())])
+            .AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "B2")
             .Stones(MatchFixtures.P1, "H2");
 
         match.PlayTurn("B3");   // P0
         match.PlayTurn("H3");   // P1
         match.PassTurn();       // P2
+        match.PassTurn();       // P3：第 5 大回合结束，连续 Pass 计数 2（跨大回合累计）
+        match.PassTurn();       // 第 6 大回合第 1 位：计数 3
         Assert.Equal(MatchPhase.InProgress, match.Phase);
-        match.PassTurn();       // P3：第 15 大回合结束 → 达上限
+        match.PassTurn();       // 第 6 大回合第 2 位：计数 4 ≥ 4 → 整轮 Pass
         Assert.Equal(MatchPhase.Ended, match.Phase);
-        Assert.Equal(EndReason.MajorRoundLimit, match.Result!.Reason);
+        Assert.Equal(EndReason.AllPassed, match.Result!.Reason);
 
         Standing p0 = match.Result.Of(MatchFixtures.P0);
         Standing p1 = match.Result.Of(MatchFixtures.P1);
@@ -103,47 +114,11 @@ public class 终局名次与并列判定Tests
     }
 
     [Fact]
-    public void 碾压获胜者为第1名()
-    {
-        // dominance-victory 规格算例：以势力碾压终局，获胜者 210，其余 80、70、55 → 获胜者第 1 名，其余按势力依次第 2、3、4 名。
-        // 变异验证 M-DV11：Finish 在 PowerDominance 时改为"候选第 1、其余按玩家编号"另排一套 → 红 1（本测试）。
-        ImmutableArray<Standing> table = FinalStandings.Compute([
-            new StandingInput(new PlayerId(0), PlayerStatus.Active, 210, 0, 0, 0, null),
-            new StandingInput(new PlayerId(1), PlayerStatus.Active, 55, 0, 0, 0, null),
-            new StandingInput(new PlayerId(2), PlayerStatus.Active, 80, 0, 0, 0, null),
-            new StandingInput(new PlayerId(3), PlayerStatus.Active, 70, 0, 0, 0, null)]);
-        Assert.Equal([0, 2, 3, 1], table.Select(s => s.Player.Value));
-        Assert.Equal([1, 2, 3, 4], table.Select(s => s.Rank));
-
-        // 真实对局走到碾压终局：其余三人的势力高低与玩家编号顺序相反（P3 > P2 > P1），
-        // 名次若被另写成"候选第 1、其余按编号 / 按名单顺序"就会与比较链结果不同（裁决 5：不新增第二套排序）。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOn).AtRound(6, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
-        foreach ((string cell, PieceType type) in new[] { ("A1", PieceType.Fortress), ("B1", PieceType.Fortress), ("A2", PieceType.Fortress), ("B2", PieceType.Multiplier), ("C1", PieceType.Multiplier) })
-        {
-            match.Board.Place(Coord.Parse(cell), MatchFixtures.P0, type);
-        }
-
-        match.Stones(MatchFixtures.P1, "H1").Stones(MatchFixtures.P2, "A8", "B8").Stones(MatchFixtures.P3, "H8", "J8", "G8");
-        match.PassTurn();
-        match.PassTurn();
-        match.PassTurn();
-        match.PlayTurn("G9");
-        Assert.Equal(EndReason.PowerDominance, match.Result!.Reason);
-
-        BigInteger[] power = [.. MatchFixtures.All.Select(p => match.Scoreboard.Latest!.Of(p).Total)];
-        Assert.True(power[0] > power[3] && power[3] > power[2] && power[2] > power[1], string.Join(" ", power));
-        Assert.Equal(new[] { MatchFixtures.P0, MatchFixtures.P3, MatchFixtures.P2, MatchFixtures.P1 }, match.Result.Standings.Select(s => s.Player));
-        Assert.Equal([1, 2, 3, 4], match.Result.Standings.Select(s => s.Rank));
-        Assert.Equal([MatchFixtures.P0], match.Result.Winners);
-        Assert.Equal(power, [.. MatchFixtures.All.Select(p => match.Result.Of(p).Input.Power)]);
-    }
-
-    [Fact]
     public void 信物相同比独占空格数()
     {
-        // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、控制信物均为 2，独占空格数 3 与 1 → 3 者名次更高。
-        // 变异验证 M-B13（段 B，实跑红 1）：FinisherComparer 删除独占空格级 → 红 1（本测试：二者比到棋子数，P0 棋子多反而第 1）。
-        ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 60, relics: 2, cells: 1, stones: 20), Active(MatchFixtures.P1, 60, relics: 2, cells: 3, stones: 5)]);
+        // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、控制信物均为 2，独占空格数 14 与 9 → 14 者名次更高（段 C 改用规格算例数值，原为 3 与 1）。
+        // 变异验证 M-B13（段 B，实跑红 1）/ M-C（段 C 重跑）：FinisherComparer 删除独占空格级 → 本测试红（二者比到棋子数，P0 棋子多反而第 1）。
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(MatchFixtures.P0, 60, relics: 2, cells: 9, stones: 20), Active(MatchFixtures.P1, 60, relics: 2, cells: 14, stones: 5)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, MatchFixtures.P0, MatchFixtures.P1));
     }
 

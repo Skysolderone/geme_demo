@@ -13,7 +13,7 @@ public class 排名的作用范围Tests
     {
         // 设计文档 §10.2 / §11.1：连续 5 个大回合排名第 1 → 不获得任何累计分数或额外资源；势力只评价当前盘面。
         // 变异验证 M-I9：EndMajorRound 给名次第 1 的玩家 Power += 1 写回明细 → 红 1（本测试：五轮 Power 不再恒等）。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
             .Stones(MatchFixtures.P0, "B5", "E5", "H5", "E2", "E8");
         string[][] moves = [["A1", "B1", "C1", "A2", "B2"], ["J1", "H1", "G1", "J2", "H2"], ["A9", "B9", "C9", "A8", "B8"], ["J9", "H9", "G9", "J8", "H8"]];
 
@@ -31,8 +31,7 @@ public class 排名的作用范围Tests
         Assert.Single(match.InitiativeReports.Select(r => r.Of(MatchFixtures.P0).Power).Distinct());
         Assert.Equal(match.Scoreboard.Latest!.Of(MatchFixtures.P0).Total, match.InitiativeReports[^1].Of(MatchFixtures.P0).Power);
 
-        // 落后补偿也不累计：P0 连续 5 个大回合第 1，从未获得补偿（本测试建局默认开启补偿）
-        Assert.True(match.CatchUpRecruit);
+        // 落后补偿也不累计：P0 连续 5 个大回合第 1，从未获得补偿（补偿开关已删除，过渡期补偿恒开，段 D 删除补偿本体）
 
         // 结构上不存在累计分：玩家状态与先手明细类型里没有任何 Score / Accum / Point 字段
         foreach (Type t in new[] { typeof(PlayerFlowState), typeof(InitiativeEntry), typeof(InitiativeReport) })
@@ -54,7 +53,7 @@ public class 排名的作用范围Tests
         // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P3 J9 → 1 + 2 = 3，名次 4（最后一名）。
         // 变异验证：补偿若被累加 / 结转（例如按玩家保留一个计数器再加到快照上），第 2 个小回合起就会变成 7 / 5，本测试红。
         // 与 M-CU1b（阈值比较改 ≥）、M-CU5（去掉 `rank > 1`）互补：那两条改的是"谁拿"，这条钉的是"拿几次"。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff)
+        MatchFlow match = MatchFixtures.Started()
             .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
             .Stones(MatchFixtures.P0, "A1", "B1", "C1", "D1")
             .Stones(MatchFixtures.P1, "G1", "H1", "J1")

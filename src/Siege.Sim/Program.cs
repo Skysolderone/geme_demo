@@ -65,11 +65,10 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
-        Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--max-rounds <大回合上限，0=不限>]");
-        Console.WriteLine("                [--dominance-start <碾压起始大回合，0=关闭，默认 7>] [--no-catch-up（关闭落后者征募补偿，默认开启）]");
+        Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine("                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
@@ -88,13 +87,12 @@ public static class Program
         var difficulty = Enum.Parse<Core.Ai.AiDifficulty>(cli.Get("difficulty", "Standard"), ignoreCase: true);
         int players = cli.GetInt("players", 4);
         int seat = cli.GetInt("seat", 1);
-        int maxRounds = cli.GetInt("max-rounds", Core.Match.MatchOptions.DefaultMaxMajorRounds);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
         mapId = MaterializeMapRequest(mapId, Console.Out, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
-        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, maxRounds, Console.In, Console.Out, map, cellLimit);
+        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, Console.In, Console.Out, map, cellLimit);
     }
 
     /// <summary>
@@ -293,9 +291,7 @@ public static class Program
             SeedStart = cli.GetUInt64("seed", config.SeedStart),
             Count = cli.GetInt("count", config.Count),
             Parallelism = cli.GetInt("parallel", config.Parallelism),
-            MaxMajorRounds = cli.GetInt("max-rounds", config.MaxMajorRounds),
-            DominanceStartRound = cli.GetInt("dominance-start", config.DominanceStartRound),
-            CatchUpRecruit = !cli.Flag("no-catch-up") && config.CatchUpRecruit,
+            TurnLimit = cli.GetInt("turn-limit", config.TurnLimit),
             ArtisanWeight = cli.GetInt("artisan-weight", config.ArtisanWeight),
             CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
@@ -311,7 +307,7 @@ public static class Program
         config.Validated();
         int parallelism = serial ? 1 : config.EffectiveParallelism;
 
-        Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，地图 {(config.MapPerMatch ? $"每局换图 {config.MapIdAt(0)}..{config.MapIdAt(config.Count - 1)}" : config.MapId)}，{config.PlayerCount} 人，并行度 {parallelism}，大回合上限 {config.MaxMajorRounds}，匠人权重 {config.ArtisanWeight}，输出 {outDir}");
+        Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，地图 {(config.MapPerMatch ? $"每局换图 {config.MapIdAt(0)}..{config.MapIdAt(config.Count - 1)}" : config.MapId)}，{config.PlayerCount} 人，并行度 {parallelism}，小回合数截断 {config.TurnLimit}，匠人权重 {config.ArtisanWeight}，输出 {outDir}");
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, outDir, parallelism, Console.Out);
         Console.WriteLine();
         Console.WriteLine(summary.ToJson());

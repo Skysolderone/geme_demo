@@ -268,23 +268,6 @@ public class 落后者征募补偿Tests
         Assert.Equal((6, 4), (match.CurrentSnapshot!.RevealCount, match.CurrentSnapshot!.FreePickCount));
     }
 
-    [Fact]
-    public void 关闭补偿()
-    {
-        // 规格 Scenario「关闭补偿」：对局配置关闭 → 任何名次都不产生补偿，面板只由基础值与信物决定（这里 D 控制 1 枚探勘 → 6 / 3）。
-        // M-CU7（判定忽略开关）在本用例红。
-        MatchFlow match = Ladder(P3, options: MatchFixtures.CatchUpOff, relics: ("J9", RelicFixtures.Prospecting()));
-        Assert.False(match.CatchUpRecruit);
-        AssertRanks(match, (P3, 3, 4));
-
-        match.BeginTurn();
-        EffectSnapshot snapshot = match.CurrentSnapshot!;
-
-        Assert.Equal(CatchUpBonus.None, snapshot.CatchUp);
-        Assert.Equal((6, 3), (snapshot.RevealCount, snapshot.FreePickCount));
-        Assert.Equal((6, 3), (match.EnterRecruit().ShowCount, match.CurrentHand().Panel().FreePickCount));
-    }
-
     [Theory]
     [InlineData(4, 2, "0,0|0,0|1,0|1,1")]
     [InlineData(3, 2, "0,0|0,0|1,1")]

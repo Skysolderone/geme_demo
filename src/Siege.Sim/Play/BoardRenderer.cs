@@ -158,18 +158,11 @@ internal sealed class BoardRenderer
     /// <summary>对局状态：大回合、行动顺序、各家势力与公开手牌类型、已揭示信物。</summary>
     public void Status(MatchPublicView view, PlayerId me)
     {
-        string limit = view.MaxMajorRounds > 0 ? $"/{view.MaxMajorRounds}" : "";
         string order = string.Join(" > ", view.ActionOrder.Select(p => Label(p, me)));
-        _out.WriteLine($"第 {view.MajorRound}{limit} 大回合    行动顺序：{order}    连续 Pass：{view.PassStreak}");
+        _out.WriteLine($"第 {view.MajorRound} 大回合    行动顺序：{order}    连续 Pass：{view.PassStreak}");
         if (view.MajorRound <= MatchFlow.BuildProtectionRounds)
         {
             _out.WriteLine($"  构筑保护期（第 1–{MatchFlow.BuildProtectionRounds} 大回合）：只能在自己的出生区落子");
-        }
-
-        if (DominanceLine(view, p => Label(p, me)) is { } dominance)
-        {
-            Ink($"  {dominance}", ConsoleColor.Red, bright: true);
-            _out.WriteLine();
         }
 
         foreach (PlayerFlowState state in view.Players)
@@ -193,12 +186,6 @@ internal sealed class BoardRenderer
     }
 
     public static string Label(PlayerId p, PlayerId me) => p == me ? $"玩家{p.Value + 1}(你)" : $"玩家{p.Value + 1}";
-
-    /// <summary>碾压候选提示行（dominance-victory 裁决 10）：数据只取公开视图；无候选为 <c>null</c>。</summary>
-    public static string? DominanceLine(MatchPublicView view, Func<PlayerId, string> label) =>
-        view.Dominance is { } d
-            ? $"{label(d.Candidate)} 碾压中，待回应：{(d.Pending.IsEmpty ? "无" : string.Join("、", d.Pending.Select(label)))}"
-            : null;
 
     public void Ink(string text, ConsoleColor color, bool bright = false)
     {

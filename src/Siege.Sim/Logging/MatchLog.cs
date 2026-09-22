@@ -20,7 +20,7 @@ namespace Siege.Sim.Logging;
 /// <item><term>4. 每次地形改造（大回合、小回合、改造方、动作、目标、是否致提子）</term><description><see cref="TurnSnapshot.Edits"/>（大回合 / 小回合由所在快照给出）；配置的匠人权重在 <see cref="LogHeader.ArtisanWeight"/></description></item>
 /// <item><term>5. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）；<see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
 /// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>MultiplierCount</c>（原始数量）/ <c>EffectiveMultiplierCount</c>（生效指数）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）</description></item>
-/// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（达大回合上限是规则级终局原因 <c>MajorRoundLimit</c>）</description></item>
+/// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="LogResult"/>（终局原因只剩三类：LastPlayerStanding / BoardFull / AllPassed）</description></item>
 /// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
 /// </remarks>
@@ -241,14 +241,8 @@ public sealed record LogHeader
     /// <summary>种子，十六进制（<c>GameSeed.ToString</c>）。</summary>
     public required string Seed { get; init; }
 
-    /// <summary>本局对局配置的大回合上限（0 = 不限；match-setup「上限进入对局记录」）。取自对局本身，不是 <see cref="Config"/>。</summary>
-    public int MaxMajorRounds { get; init; }
-
-    /// <summary>本局对局配置的碾压起始大回合（0 = 关闭；match-setup「对局配置公开碾压起始大回合」）。取自对局本身；dominance-victory 之前的旧日志为 <c>null</c>。</summary>
-    public int? DominanceStartRound { get; init; }
-
-    /// <summary>本局对局配置的落后者征募补偿开关（match-setup「对局配置公开落后补偿开关」）。取自对局本身；catch-up-recruit 之前的旧日志为 <c>null</c>。</summary>
-    public bool? CatchUpRecruit { get; init; }
+    // 大回合上限 / 碾压起始大回合 / 落后补偿开关三项已随 restore-go-core-rules（match-setup 三条 REMOVED）从首部删除；
+    // 旧日志里的同名字段读入时被忽略。
 
     /// <summary>
     /// 本局对局配置的匠人征募权重（artisan-terrain-edit R-2 / match-telemetry 第 1 条）。取自对局本身，不是 <see cref="Config"/>——
@@ -388,7 +382,8 @@ public sealed record PlayerEntry
 
     public required string Status { get; init; }
 
-    public bool Protection { get; init; }
+    /// <summary>是否曾建立正势力（restore-go-core-rules D3 出局标记）。</summary>
+    public bool HasEstablishedPower { get; init; }
 
     /// <summary>总势力，精确整数（restore-go-core-rules D1：任意精度，写出为不失真的十进制整数）。</summary>
     public BigInteger Total { get; init; }
@@ -478,7 +473,6 @@ public static class LogEventType
     public const string ControlChanged = "ControlChanged";
     public const string RankChanged = "RankChanged";
     public const string MajorRoundEnded = "MajorRoundEnded";
-    public const string ProtectionLifted = "ProtectionLifted";
     public const string PlayerEliminated = "PlayerEliminated";
     public const string PlayerResigned = "PlayerResigned";
     public const string MatchEnded = "MatchEnded";
@@ -496,11 +490,26 @@ public sealed record LogResult
 
     public string Kind { get; init; } = KindName;
 
-    /// <summary><c>EndReason</c> 名（round-cap 后达上限也是规则级原因 <c>MajorRoundLimit</c>）。</summary>
+    /// <summary><c>EndReason</c> 名。</summary>
     public required string Reason { get; init; }
 
-    /// <summary>是否以非达上限原因终局（含势力碾压；round-cap D5：不收敛 = 以「达大回合上限」终局）。由 <see cref="Reason"/> 派生，读旧日志时忽略文件里的同名字段。</summary>
-    public bool Converged => Reason != nameof(Siege.Core.Match.EndReason.MajorRoundLimit);
+    /// <summary>
+    /// 旧日志里「达大回合上限」的终局原因名。该原因已随 restore-go-core-rules（裁决 #4）从 <c>EndReason</c> 删除，
+    /// 这里只为读旧日志保留字面量；段 E（tasks 5.2）换成 <c>turn_limit</c> 截断口径。
+    /// </summary>
+    public const string LegacyMajorRoundLimit = "MajorRoundLimit";
+
+    /// <summary>
+    /// 跑局层小回合数截断的结束原因（restore-go-core-rules D5）：不是 <c>EndReason</c> 的成员（规则层没有这种终局），
+    /// 这样的局 <see cref="Standings"/> 与 <see cref="Winners"/> 为空。
+    /// </summary>
+    public const string TurnLimitReason = "turn_limit";
+
+    /// <summary>是否被跑局层截断（<see cref="TurnLimitReason"/>）。</summary>
+    public bool Truncated => Reason == TurnLimitReason;
+
+    /// <summary>是否以规则级原因终局：被截断的局与旧日志的「达大回合上限」局为 <c>false</c>。由 <see cref="Reason"/> 派生，读旧日志时忽略文件里的同名字段。</summary>
+    public bool Converged => Reason != LegacyMajorRoundLimit && Reason != TurnLimitReason;
 
     public int MajorRound { get; init; }
 

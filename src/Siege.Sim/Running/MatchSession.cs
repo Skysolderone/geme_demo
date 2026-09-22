@@ -16,7 +16,7 @@ using Siege.Sim.Logging;
 namespace Siege.Sim.Running;
 
 /// <summary>
-/// 一局的跑局会话：建局、装 AI、逐小回合驱动 <see cref="MatchRunner"/>、记日志、到终局或大回合上限（裁决 13）、捕获失败。
+/// 一局的跑局会话：建局、装 AI、逐小回合驱动 <see cref="MatchRunner"/>、记日志、到终局或小回合数截断（restore-go-core-rules D5，记 turn_limit、无名次）、捕获失败。
 /// 每个会话独享自己的 <see cref="GameSeed"/> 派生状态，会话之间零共享，因此可并行。
 /// </summary>
 /// <remarks>
@@ -44,6 +44,7 @@ public sealed class MatchSession
     private int _recruitCursor;
     private int _editCursor;
     private bool _finished;
+    private bool _truncated;
 
     private MatchSession(MatchFlow match, RunConfig config, bool recorded = false)
     {
@@ -59,22 +60,6 @@ public sealed class MatchSession
         if (match.Players.Length != config.Players.Count)
         {
             throw new SiegeRuleException($"配置了 {config.Players.Count} 名玩家，对局却有 {match.Players.Length} 名。");
-        }
-
-        // round-cap D3：跑局配置与对局配置只能有一个上限值，否则日志首部与报告会和规则层分叉。
-        if (match.MaxMajorRounds != config.MaxMajorRounds)
-        {
-            throw new SiegeRuleException($"跑局配置的大回合上限为 {config.MaxMajorRounds}，对局配置却为 {match.MaxMajorRounds}。");
-        }
-
-        if (match.DominanceStartRound != config.DominanceStartRound)
-        {
-            throw new SiegeRuleException($"跑局配置的碾压起始大回合为 {config.DominanceStartRound}，对局配置却为 {match.DominanceStartRound}。");
-        }
-
-        if (match.CatchUpRecruit != config.CatchUpRecruit)
-        {
-            throw new SiegeRuleException($"跑局配置的落后者征募补偿为 {config.CatchUpRecruit}，对局配置却为 {match.CatchUpRecruit}。");
         }
 
         if (match.ArtisanWeight != config.ArtisanWeight)
@@ -135,8 +120,7 @@ public sealed class MatchSession
         }
 
         PlayerId[] players = config.PlayerIds();
-        // round-cap D3：大回合上限是对局配置，跑局层只把 --max-rounds 透传进去。
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { MaxMajorRounds = config.MaxMajorRounds, DominanceStartRound = config.DominanceStartRound, CatchUpRecruit = config.CatchUpRecruit, ArtisanWeight = config.ArtisanWeight });
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight });
         // 选区的唯一实现在 Core（frontier-map D4）：区数不多于人数上限时 P<i> → 区 <i>（与此前逐项相同），否则由种子的独立子流均匀选区。
         match.PlantPrototype();
         return new MatchSession(match, config, recorded);
@@ -181,7 +165,7 @@ public sealed class MatchSession
 
     // ---------- 驱动 ----------
 
-    /// <summary>跑到终局（含规则级大回合上限）；任何异常（含小回合硬停）都被捕获为失败局记录。返回完整日志。</summary>
+    /// <summary>跑到终局或小回合数截断；任何异常（含小回合硬停）都被捕获为失败局记录。返回完整日志。</summary>
     public MatchLog Run()
     {
         try
@@ -211,10 +195,17 @@ public sealed class MatchSession
             return false;
         }
 
-        // 防死锁硬停（round-cap D3）：不是终局原因，以异常落 failed 日志。上限为 0 时这是唯一兜底。
+        // D5 小回合数截断：跑满即停，不是终局原因、不产生名次；Finish 以 turn_limit 收尾。只在跑局驱动循环里，Core 不知道它。
+        if (Config.TurnLimit > 0 && _turn >= Config.TurnLimit)
+        {
+            _truncated = true;
+            return false;
+        }
+
+        // 防死锁硬停：不是终局原因，以异常落 failed 日志。截断为 0（仅供调试）时这是唯一兜底。
         if (_turn >= Config.MaxTurns)
         {
-            throw new SimAssertionException($"对局超过 {Config.MaxTurns} 个小回合仍未结束（大回合上限 {Match.MaxMajorRounds}）：疑似死锁。");
+            throw new SimAssertionException($"对局超过 {Config.MaxTurns} 个小回合仍未结束：疑似死锁。");
         }
 
         PlayerId player = Match.CurrentPlayer ?? throw new SimAssertionException("进行中的对局没有当前玩家。");
@@ -448,7 +439,7 @@ public sealed class MatchSession
             {
                 Player = state.Player.Value,
                 Status = state.Status.ToString(),
-                Protection = state.HasOpeningProtection,
+                HasEstablishedPower = state.HasEstablishedPower,
                 Total = power?.Total ?? 0,
                 Rank = view.Power?.RankOf(state.Player),
                 HandTypes = hand is null ? [] : [.. hand.Types.Select(t => t.ToString())],
@@ -513,7 +504,6 @@ public sealed class MatchSession
 
                     Add(_turn, completed, LogEventType.MajorRoundEnded, null, e.Detail, values: values);
                     break;
-                case FlowEventKind.ProtectionLifted:
                 case FlowEventKind.PlayerEliminated:
                 case FlowEventKind.PlayerResigned:
                 case FlowEventKind.MatchEnded:
@@ -560,9 +550,6 @@ public sealed class MatchSession
             ZoneSides = Config.MapPerMatch ? [.. Match.Board.BaseMap.BirthZones.Select(SideOf)] : null,
             ArtisanWeight = Match.ArtisanWeight,
             Seed = Seed.ToString(),
-            MaxMajorRounds = Match.MaxMajorRounds,
-            DominanceStartRound = Match.DominanceStartRound,
-            CatchUpRecruit = Match.CatchUpRecruit,
             Config = Config,
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],
@@ -604,15 +591,21 @@ public sealed class MatchSession
     {
         _finished = true;
         MatchPublicView view = _previous;
-        // round-cap：会话只在规则层终局时收尾（达上限也是规则级 EndReason.MajorRoundLimit），名次直接取规则层结果。
-        MatchResult result = Match.Result ?? throw new SimAssertionException("会话收尾时对局尚未终局。");
-        ImmutableArray<Standing> standings = result.Standings;
+        // 会话在规则层终局时收尾，名次直接取规则层结果；被截断（D5）的局没有规则层结果，记 turn_limit、名次为空。
+        MatchResult? result = Match.Result;
+        if (result is null && !_truncated)
+        {
+            throw new SimAssertionException("会话收尾时对局尚未终局。");
+        }
+
+        ImmutableArray<Standing> standings = result?.Standings ?? [];
 
         MultiplierPeak? peak = Match.Scoreboard.Peak;
         var logResult = new LogResult
         {
-            Reason = result.Reason.ToString(),
-            MajorRound = result.MajorRound,
+            Reason = result?.Reason.ToString() ?? LogResult.TurnLimitReason,
+            // 截断局：记最后一个实际进行的小回合所在的大回合（与 MajorRoundMs 的长度一致），不是推进后的下一轮序号。
+            MajorRound = result?.MajorRound ?? (_turns.Count > 0 ? _turns[^1].MajorRound : Match.MajorRound),
             TurnCount = _turn,
             Standings = [.. standings.Select(s => new StandingEntry
             {

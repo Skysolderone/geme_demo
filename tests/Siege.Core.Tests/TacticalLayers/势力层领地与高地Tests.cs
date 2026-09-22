@@ -52,7 +52,7 @@ public class 势力层领地与高地Tests
         // D5 / E5 为 h=2，P0 占两格、各自覆盖正下方 h=0 的 P1 敌子（D4 / E4）→ 每枚 +1，高地 2；无连珠 / 协同。
         // 变异验证 M-B6（段 B）：GroupPowerView.From 的公式文案去掉高地一项 → 本测试红。
         MapData map = MatchFixtures.Map() with { TerrainData = TestMaps.Terrain(heights: [("D5", 2), ("E5", 2)]) };
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchFixtures.DominanceOff);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
         foreach (PlayerId p in MatchFixtures.All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));

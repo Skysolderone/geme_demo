@@ -17,7 +17,7 @@ public class 效果快照在小回合开始时生成Tests
         // 本小回合的批次上下文取的也是这份快照的值。
         // 变异验证 M-GP7（快照重读大回合：BuildSnapshot 写静态 EffectSnapshot.LastRound，DeployLimit 改为 `BaseDeployLimitFor(LastRound) + 军令加成` 现算）
         // → 全套红 14，含本测试（round3 读成 4）；该变异引入进程级静态状态，并行测试互相污染，红数不稳定（Sim 批量跑局等也会红），以"本测试红"为准。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff).AtRound(3, MatchFixtures.All);
+        MatchFlow match = MatchFixtures.Started().AtRound(3, MatchFixtures.All);
         match.PassTurn();
         match.PassTurn();
         match.PassTurn();
@@ -55,7 +55,7 @@ public class 效果快照在小回合开始时生成Tests
         // 本小回合内名次上升也不回收。与「新占信物本回合不生效」同构：快照是不可变值对象，生成后不再回读任何活状态。
         // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P3 J9 → 1 + 2 = 3。
         // 变异验证 M-CU4：把 MatchFlow.CurrentSnapshot 改成回读账本与此刻名次的活视图 → 红 4，含本用例。
-        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.DominanceOff)
+        MatchFlow match = MatchFixtures.Started()
             .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
             .Stones(MatchFixtures.P0, "A1", "B1", "C1", "D1")
             .Stones(MatchFixtures.P1, "G1", "H1", "J1")

@@ -27,7 +27,7 @@ public class 边疆图终端试玩脚本Tests
             "");
         var output = new StringWriter();
 
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, maxRounds: 15, new StringReader(script), output, MapCatalog.Resolve(FrontierMapV2.Id));
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script), output, MapCatalog.Resolve(FrontierMapV2.Id));
 
         string text = output.ToString();
         string[] lines = [.. text.Split('\n').Select(l => l.TrimEnd('\r'))];
@@ -46,11 +46,11 @@ public class 边疆图终端试玩脚本Tests
         Assert.Contains(lines, l => l.Contains("玩家1(你) 落子 E15B", StringComparison.Ordinal));
 
         // 第 4 大回合起：同一批落点（他人平台 J8、中立平台 R13、过渡带 N15）合法。拒绝提示只出现在第 4 大回合标题之前。
-        int round4 = text.IndexOf("第 4/15 大回合", StringComparison.Ordinal);
+        int round4 = text.IndexOf("第 4 大回合", StringComparison.Ordinal);   // 段 C：大回合上限删除，标题不再带 "/15"
         Assert.True(round4 > 0);
         Assert.DoesNotContain("落点不在当前合法落子范围内", text[round4..], StringComparison.Ordinal);
         Assert.Contains(lines, l => l.Contains("玩家1(你) 落子 J8B R13B N15B", StringComparison.Ordinal));
-        Assert.Contains("第 5/15 大回合", text, StringComparison.Ordinal);
+        Assert.Contains("第 5 大回合", text, StringComparison.Ordinal);
     }
 
     private static int Count(string text, string needle) => text.Split(needle).Length - 1;

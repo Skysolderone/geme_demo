@@ -55,7 +55,7 @@ public class 各棋子势力占比Tests
         // 变异验证 M-MR6a：MatchSession.PieceCountsOf 把 Basic / Fortress 的键写反 → 红 1（本测试）；M-MR6b：把 Line / Synergy 写反 → 红 1（本测试）；
         // M-C1a（去掉 Base 等式的匠人项）、M-C1b（otherTypes 去掉匠人）→ 各红 1（本测试）。
         List<MatchLog> withArtisan = BatchRunner.Execute(
-            SimFixtures.Config(count: 2, seedStart: 11, maxRounds: 3, difficulty: AiDifficulty.Standard), parallelism: 1);
+            SimFixtures.Config(count: 2, seedStart: 11, turnLimit: 12, difficulty: AiDifficulty.Standard), parallelism: 1);
         List<GroupEntry> groups =
             [.. SimFixtures.Sample.Value.Concat(withArtisan).SelectMany(l => l.Turns).SelectMany(t => t.PlayersState).SelectMany(p => p.Groups)];
         Assert.NotEmpty(groups);

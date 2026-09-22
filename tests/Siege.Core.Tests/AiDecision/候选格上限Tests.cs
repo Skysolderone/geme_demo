@@ -25,8 +25,12 @@ public class 候选格上限Tests
     /// <para>段 B 再次重建：<b>走法一步没变</b>——把段 A 的快照文本与段 B 的逐条比对，去掉被删的 <c>TurnSnapshot.Sites</c> 与
     /// <c>PlayerEntry.SiteScore</c> 两项之后 24 个小回合逐字节相同（比对脚本见 implement 记录）。变的只是快照 JSON 少了这两个字段，
     /// 段 A 值 43D7E980…A757D 因此作废。新值取自段 B 完成后 K = 0 的实际运行，连跑两次一致；变异 M-K1 在新值下重跑仍红。</para>
+    /// <para>段 C 第三次重建：<b>走法一步没变</b>——段 B 提交（HEAD）用 <c>--max-rounds 6</c>、段 C 用 <c>--turn-limit 24</c> 各跑种子 31，
+    /// 两份日志的 24 个小回合快照去掉耗时、再去掉被改名的 <c>PlayerEntry.Protection</c> → <c>HasEstablishedPower</c> 之后逐条相同（比对脚本见 implement 记录）。
+    /// 变的只是快照 JSON 里这一个字段名（及其取值：保护状态 → 出局标记），段 B 值 96D6C02A…385917 因此作废。样本长度由规则级大回合上限 6
+    /// 改为跑局层小回合数截断 24（同为 24 个小回合）。</para>
     /// </summary>
-    private const string V4GoldenTurnHash = "96D6C02A76C538A7AFC1B799D8E88F70A052FCE1C7CCF3DCDC41A8B580385917";
+    private const string V4GoldenTurnHash = "ABA5D7F9E4FD71AD70DD5FF4E86B1CA1270136C85901A548B569A74545229A65";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
@@ -68,7 +72,7 @@ public class 候选格上限Tests
     {
         // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 本测试红。
         // 段 A check 实跑：在重建后的黄金哈希上 M-K1 仍红 36（含本测试）——哈希虽是段 A 后重生成的，但不是自证的。
-        MatchLog log = BatchRunner.Execute(SimFixtures.Config(seedStart: 31, maxRounds: 6, difficulty: AiDifficulty.Standard), parallelism: 1)[0];
+        MatchLog log = BatchRunner.Execute(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard), parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
         Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
@@ -279,7 +283,7 @@ public class 候选格上限Tests
         // v4（105 格）上显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
         // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局——实测 K = 8 在这个种子上与不限制逐步相同，证明不了 K 传到了 AI。
         static MatchLog Run() => BatchRunner.Execute(
-            SimFixtures.Config(seedStart: 31, maxRounds: 6, difficulty: AiDifficulty.Standard) with { CandidateCellLimit = 2 }, parallelism: 1)[0];
+            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { CandidateCellLimit = 2 }, parallelism: 1)[0];
 
         // 变异 M-K9：Sim 的 MatchSession 建 AI 时不传跑局配置的 K → 与不限制的那一局相同 → 本测试红。
         MatchLog a = Run();
@@ -352,7 +356,7 @@ public class 候选格上限Tests
     {
         // 该项出现之前的边疆图日志首部没有 CandidateCellLimit：当时就是不限制。回放 MUST NOT 按今天的大图缺省 K 重跑，重建的首部也不得多出一项。
         // 变异 M-K12：Replayer 改回不带 recorded 的 MatchSession.Create → 重建首部多出该项、第 1 行即分歧 → 本测试红。
-        RunConfig frontier = SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id };
+        RunConfig frontier = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
         MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"CandidateCellLimit\":0,", text, StringComparison.Ordinal);
@@ -408,7 +412,7 @@ public class 候选格上限Tests
     {
         // 边疆图、Easy、1 个大回合（保护期内只有自家平台可落，跑得快）。读 config.json 原文，不经反序列化，避免缺省值掩盖漏写。
         // 变异 M-K8：BatchRunner.ExecuteToDirectory 去掉 ResolvedFor → config.json 不含该项 → 本测试红。
-        RunConfig auto = SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id };
+        RunConfig auto = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
         string autoDir = SimFixtures.TempDir("cell-limit-auto");
         BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1);
         Assert.Contains($"\"CandidateCellLimit\": {AiSearchConfig.LargeMapCellLimit}", File.ReadAllText(Path.Combine(autoDir, "config.json")), StringComparison.Ordinal);
@@ -422,7 +426,7 @@ public class 候选格上限Tests
 
         // 标准图：配置记录与引入本项之前一样，不多出这一项。
         string v4Dir = SimFixtures.TempDir("cell-limit-v4");
-        BatchRunner.ExecuteToDirectory(SimFixtures.Config(maxRounds: 1), v4Dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(SimFixtures.Config(turnLimit: 4), v4Dir, parallelism: 1);
         Assert.DoesNotContain("CandidateCellLimit", File.ReadAllText(Path.Combine(v4Dir, "config.json")), StringComparison.Ordinal);
     }
 }

@@ -17,7 +17,7 @@ public class 日志首部区数Tests
         // 走真实写入路径（合成日志是手填值，漏写照样绿）：边疆图 6 区 4 人，首部 ZoneCount = 6 ≠ 参赛人数 4 ≠ 被选到的最大区号 + 1（不恒等），
         // 确定性文本与完整文本两条往返都保留；标准图样本为 4。
         // 变异 M-B5：MatchSession.BuildHeader 不写 ZoneCount → 本测试红。
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(maxRounds: 1) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
 
         Assert.False(frontier.IsFailed, frontier.Failure?.Message);
         Assert.Equal(FrontierMapV2.Id, frontier.Header.MapId);
@@ -54,7 +54,7 @@ public class 日志首部区数Tests
     {
         // ZoneCount 进了确定性文本（它不是耗时字段）：回放 frontier-map 之前的旧日志时，重建的首部多出这一项，
         // 逐行比对在第 1 行（首部）报分歧——与历次加首部字段的效果相同，不静默放过、也不伪造一致；而对局本身逐步相同。
-        MatchLog current = BatchRunner.Execute(SimFixtures.Config(maxRounds: 1), parallelism: 1)[0];
+        MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4), parallelism: 1)[0];
         string text = current.DeterministicText();
         Assert.Contains("\"ZoneCount\":4,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":4,", string.Empty, StringComparison.Ordinal));

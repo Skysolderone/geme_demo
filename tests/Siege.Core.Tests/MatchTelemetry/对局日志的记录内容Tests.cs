@@ -68,10 +68,16 @@ public class 对局日志的记录内容Tests
         // 6. 势力排名变化、Pass、出局、弃赛、最终结果
         Assert.Contains(log.Events, e => e.Type == LogEventType.RankChanged);
         Assert.All(log.Turns, t => Assert.Equal(t.Placements.Count == 0, t.Passed));
-        Assert.Equal(4, log.Result.Standings.Count);
-        Assert.NotEmpty(log.Result.Winners);
-        // round-cap 3.3：跑局层不再有自己的"达上限"原因，终局原因只能是规则级 EndReason（含 MajorRoundLimit）。
-        Assert.Contains(log.Result.Reason, Enum.GetNames<EndReason>());
+        // 段 C：规则层已无大回合上限，4 大回合样本由跑局层的小回合数截断（D5）收住——结束原因 turn_limit，MUST NOT 产生名次与胜者；
+        // turn_limit 不是 EndReason 的成员（规则层没有这种终局）。规则级终局的名次记录见本测试末段的第二局。
+        Assert.Equal(LogResult.TurnLimitReason, log.Result.Reason);
+        Assert.True(log.Result.Truncated);
+        Assert.False(log.Result.Converged);
+        Assert.DoesNotContain(log.Result.Reason, Enum.GetNames<EndReason>());
+        Assert.Empty(log.Result.Standings);
+        Assert.Empty(log.Result.Winners);
+        Assert.Equal(16, log.Result.TurnCount);
+        Assert.Equal(4, log.Result.MajorRound);
 
         // 7. 小回合、大回合与整局耗时
         Assert.All(log.Turns, t => Assert.NotNull(t.ElapsedMs));
@@ -89,6 +95,20 @@ public class 对局日志的记录内容Tests
         Assert.Equal(live.Header.Relics.Select(r => $"{r.Coord}:{r.Type}{r.Magnitude}"), log.Header.Relics.Select(r => $"{r.Coord}:{r.Type}{r.Magnitude}"));
         Assert.Equal(live.FullText(), log.FullText());
         Assert.Equal(live.DeterministicText(), MatchLog.Parse(live.FullText().Replace("\n", "\r\n")).DeterministicText());
+
+        // 6（续）规则级终局的最终结果：P1、P2 先弃赛，P0 由 AI 走一个小回合后 P3 弃赛 → 只剩一名参赛玩家，名次取自规则层。
+        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All);
+        match.Resign(MatchFixtures.P1);
+        match.Resign(MatchFixtures.P2);
+        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config());
+        Assert.True(session.RunTurn());
+        match.Resign(MatchFixtures.P3);
+        MatchLog ended = MatchLog.Parse(session.Run().FullText());
+        Assert.Equal(nameof(EndReason.LastPlayerStanding), ended.Result!.Reason);
+        Assert.True(ended.Result.Converged);
+        Assert.Equal(4, ended.Result.Standings.Count);
+        Assert.Equal([0], ended.Result.Winners);
+        Assert.Equal(match.Result!.Standings.Select(s => (s.Player.Value, s.Rank)), ended.Result.Standings.Select(s => (s.Player, s.Rank)));
     }
 
     [Fact]
@@ -124,9 +144,9 @@ public class 对局日志的记录内容Tests
         // 玩家提交自杀手批次：P1 先占 A2、B1，P0 提交 A1（无气、不提子）→ 确认被拒 → 日志记录该次尝试、失败类别 Suicide 与相关坐标 A1。
         // 变异验证 M-B4：LoggingController.OnRejected 不记录 → 红 1（本测试）。
         // round-cap 3.3：原靠跑局层 maxRounds: 1 硬停；现由对局配置上限 1 以规则原因 MajorRoundLimit 终局。
-        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { MaxMajorRounds = 1 }).Stones(MatchFixtures.P1, "A2", "B1");
+        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate).Stones(MatchFixtures.P1, "A2", "B1");
         match.Debug.SetOrder(MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3);
-        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(maxRounds: 1));
+        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 4));
         session.SetController(MatchFixtures.P0, new BlindController("A1"));
 
         Assert.True(session.RunTurn());

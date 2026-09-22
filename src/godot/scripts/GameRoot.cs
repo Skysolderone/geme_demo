@@ -79,10 +79,10 @@ public sealed partial class GameRoot : Node3D
             seed = args.Value<ulong>("seed", "无符号整数种子", t => ulong.TryParse(t, out ulong v) ? v : null)
                 ?? (_autoDemo ? 20260915UL : (ulong)Stopwatch.GetTimestamp());
 
-            // --rounds=N：覆盖本局的大回合上限（缺省：自动演示 4，手动 MatchOptions.DefaultMaxMajorRounds）。
-            // 无人值守演示的 4 个大回合走不到岛心，拍不到"烧林前后"——把上限调高是唯一不改规则也不加演示专用分支的取法。
-            rounds = args.Value<int>("rounds", "正整数（大回合上限）", t => int.TryParse(t, out int v) && v > 0 ? v : null)
-                ?? (_autoDemo ? 4 : MatchOptions.DefaultMaxMajorRounds);
+            // --rounds=N：自动演示跑满 N 个大回合后停止（缺省 4；0 = 跑到终局）。这只是无人值守演示的停止点，<b>不是规则</b>——
+            // 规则层已无大回合上限（restore-go-core-rules 裁决 #4），手动对局不受它约束。
+            rounds = args.Value<int>("rounds", "非负整数（自动演示的停止大回合，0 = 跑到终局）", t => int.TryParse(t, out int v) && v >= 0 ? v : null)
+                ?? (_autoDemo ? 4 : 0);
 
             // --cell-limit=K：AI 候选格上限（0 = 不限制）；未给出由 Core 按地图的可落子格数取缺省值。
             int? cellLimit = args.Value<int>("cell-limit", "非负整数（AI 候选格上限，0 = 不限制）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
@@ -116,7 +116,7 @@ public sealed partial class GameRoot : Node3D
             else
             {
                 MapData map = MapCatalog.Resolve(mapId);
-                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, rounds, cellLimit);
+                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, cellLimit);
             }
         }
         catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException or MapGenerationException)
@@ -142,7 +142,7 @@ public sealed partial class GameRoot : Node3D
 
         GD.Print(Selecting
             ? $"[siege] 选图界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=<标识> 可跳过选图）"
-            : $"[siege] 地图 {_session.Match.Map.Id}，对局种子 {seed}，你是 {Labels.Player(_session.Me)}，大回合上限 {rounds}{(_autoDemo ? "，自动演示模式" : string.Empty)}");
+            : $"[siege] 地图 {_session.Match.Map.Id}，对局种子 {seed}，你是 {Labels.Player(_session.Me)}{(_autoDemo ? $"，自动演示模式（{(rounds == 0 ? "跑到终局" : $"跑满 {rounds} 个大回合停止")}）" : string.Empty)}");
     }
 
     /// <summary>
@@ -561,7 +561,8 @@ public sealed partial class GameRoot : Node3D
 
     private void Drive(double delta)
     {
-        if (_session.IsOver)
+        // 自动演示的停止点（--rounds）：表现层自己的无人值守收尾，不改对局状态、不产生名次。
+        if (_session.IsOver || (_autoDemo && _rounds > 0 && _session.Match.MajorRound > _rounds))
         {
             FinishAutoDemo();
             return;

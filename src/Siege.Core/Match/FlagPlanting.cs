@@ -20,32 +20,9 @@ public sealed record MatchOptions
     /// <summary>插旗时限。<see cref="TimeSpan.Zero"/> 表示立即：宿主无需等待即可锁定。规则内核不持有计时器，到时由宿主调用 <see cref="FlagPlanting.LockAll"/>。</summary>
     public TimeSpan FlagTimeLimit { get; init; } = DefaultFlagTimeLimit;
 
-    /// <summary>标准局的大回合上限初值（设计文档 §12.3 条件 4，round-cap D4）。</summary>
-    public const int DefaultMaxMajorRounds = 15;
-
-    /// <summary>
-    /// 大回合上限（非负整数；0 = 不设上限）。第「上限」个大回合结束时对局仍在进行则以 <see cref="EndReason.MajorRoundLimit"/> 终局。
-    /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureMaxMajorRounds"/>）。
-    /// </summary>
-    public int MaxMajorRounds { get; init; } = DefaultMaxMajorRounds;
-
-    /// <summary>标准局的碾压起始大回合初值（dominance-victory 裁决 8）。</summary>
-    public const int DefaultDominanceStartRound = 7;
-
-    /// <summary>
-    /// 碾压起始大回合（非负整数；0 = 关闭势力碾压）。当前大回合 ≥ 该值时才在检查点建立碾压候选（<see cref="EndReason.PowerDominance"/>）。
-    /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureDominanceStartRound"/>）。
-    /// </summary>
-    public int DominanceStartRound { get; init; } = DefaultDominanceStartRound;
-
-    /// <summary>标准局的落后者征募补偿初值（catch-up-recruit 裁决 4）：开启。</summary>
-    public const bool DefaultCatchUpRecruit = true;
-
-    /// <summary>
-    /// 落后者征募补偿开关（catch-up-recruit 裁决 1；<c>false</c> = 关闭，任何名次都不产生补偿）。
-    /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改（<see cref="MatchFlow.ConfigureCatchUpRecruit"/>）。
-    /// </summary>
-    public bool CatchUpRecruit { get; init; } = DefaultCatchUpRecruit;
+    // restore-go-core-rules 裁决 #4 / #7 / #15：大回合上限、碾压起始大回合、落后者征募补偿开关三项配置整体删除。
+    // 终局只剩「只剩一名参赛玩家 / 棋盘填满 / 整轮 Pass」三类，对局 MUST NOT 设置固定总轮数，也 MUST NOT 因势力领先幅度提前结束。
+    // 批量跑局的防死循环截断属 Siege.Sim 的技术设施，不是对局配置，MUST NOT 回到这里。
 
     /// <summary>标准局的匠人征募权重初值（artisan-terrain-edit 裁决 T-1 / R-2：10，待扫档校准）。</summary>
     public const int DefaultArtisanWeight = RecruitWeights.DefaultArtisanWeight;
