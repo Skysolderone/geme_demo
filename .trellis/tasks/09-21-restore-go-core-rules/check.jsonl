@@ -1,12 +1,9 @@
-{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "D5（Sim 技术性截断）、D6 表现部分、D8"}
-{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "段 E = 第 5 组 5.1–5.5；5.1 已部分完成于段 C，只做剩余"}
-{"file": ".trellis/tasks/09-21-restore-go-core-rules/prd.md", "reason": "分段计划与子 agent 约束"}
-{"file": ".trellis/tasks/09-21-restore-go-core-rules/implement.md", "reason": "段 A–D 记录；段 C 待决 2（Sim 样本全是截断局=空证）、段 A 待决 2/4/7、段 B 待决 4/6/7、段 D 待决 3 都落在本段"}
-{"file": ".trellis/spec/core/index.md", "reason": "内核开发规范入口"}
-{"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、视图分离、单一实现"}
-{"file": ".trellis/spec/core/testing.md", "reason": "变异验证、mtime 坑、统计口径必须放被排除样本、截图取图规则、游离工程扫描"}
-{"file": "openspec/changes/restore-go-core-rules/specs/simulation-harness/spec.md", "reason": "段 E：批量跑局与截断六个 Scenario"}
-{"file": "openspec/changes/restore-go-core-rules/specs/match-telemetry/spec.md", "reason": "段 E：日志记录内容、数值目标回归、平衡分析方向"}
-{"file": "openspec/changes/restore-go-core-rules/specs/information-visibility/spec.md", "reason": "段 E：领地分公开"}
-{"file": "openspec/changes/restore-go-core-rules/specs/tactical-layers/spec.md", "reason": "段 E：势力层显示领地分"}
-{"file": "openspec/changes/restore-go-core-rules/specs/visual-style-baseline/spec.md", "reason": "段 E：删据点地标"}
+{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "全文；段 F 收尾"}
+{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "段 F = 第 6 组 6.1–6.5（含 6.4b–e）；6.2 已改为 20 局冒烟"}
+{"file": "openspec/changes/restore-go-core-rules/proposal.md", "reason": "被回退的 change 清单，用于设计文档变更记录"}
+{"file": ".trellis/tasks/09-21-restore-go-core-rules/prd.md", "reason": "验收标准"}
+{"file": ".trellis/tasks/09-21-restore-go-core-rules/implement.md", "reason": "段 A–E 全部记录与待决；6.4 系列的来源"}
+{"file": ".trellis/spec/core/index.md", "reason": "Quality Check 要补\"势力不得用定宽整数\""}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现清单"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "段 A 已改大数条款"}
+{"file": ".trellis/spec/core/testing.md", "reason": "段 A 已加 mtime 条；违禁 token 与算式形状扫描"}
