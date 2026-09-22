@@ -23,6 +23,12 @@ internal sealed class BoardRenderer
         _color = ReferenceEquals(output, Console.Out) && !Console.IsOutputRedirected;
     }
 
+    /// <summary>已活棋串的子：类型字母后的第三个字符（life-shape 3.3）。</summary>
+    internal const char AliveMark = '@';
+
+    /// <summary>禁入格：后跟活形所有者的玩家号（life-shape 3.3）。</summary>
+    internal const char ForbiddenMark = 'x';
+
     public static char Letter(PieceType type) => type switch
     {
         PieceType.Basic => 'B',
@@ -93,6 +99,14 @@ internal sealed class BoardRenderer
             : batch.Placements.ToImmutableDictionary(p => p.Coord, p => p.Type);
         IReadOnlySet<Coord>? legal = batch?.Context.LegalRange;
 
+        // life-shape 3.3：活形状态与禁入格只读公开视图里那一份全量分析（与盘面同一时刻），终端不调 Analyze、不判活形。
+        // 禁入格 = 他人已确定活形棋串的眼空间：按所有者取 ProtectedCellsOf，所有者即符号里的玩家号；自己的眼不标（所有者可自拆）。
+        LifeShapeReport life = view.LifeShape;
+        ImmutableDictionary<Coord, PlayerId> forbidden = view.Players
+            .Where(p => p.Player != me)
+            .SelectMany(p => life.ProtectedCellsOf(p.Player).Select(c => (Cell: c, Owner: p.Player)))
+            .ToImmutableDictionary(t => t.Cell, t => t.Owner);
+
         WriteColumns(map.Width);
         for (int y = map.Height - 1; y >= 0; y--)
         {
@@ -119,8 +133,14 @@ internal sealed class BoardRenderer
                 }
                 else if (cell.Occupant is { } o)
                 {
-                    string glyph = $"{o.Owner.Value + 1}{Letter(o.Type)} ";
+                    char alive = life.GroupLifeAt(c)?.Life == LifeState.Alive ? AliveMark : ' ';
+                    string glyph = $"{o.Owner.Value + 1}{Letter(o.Type)}{alive}";
                     Ink(glyph, ColorOf(o.Owner), bright: o.Owner == me);
+                }
+                else if (forbidden.TryGetValue(c, out PlayerId lifeOwner))
+                {
+                    // 禁入格排在信物、区号、合法空格之前：它回答的是"这里能不能落"，比别的标记要紧（与预演第 1 步"禁入先于范围"同序）。
+                    Ink($"{ForbiddenMark}{lifeOwner.Value + 1} ", ColorOf(lifeOwner));
                 }
                 else if (relics.TryGetValue(c, out RelicPublicState? relic))
                 {
@@ -152,6 +172,7 @@ internal sealed class BoardRenderer
 
         WriteColumns(map.Width);
         _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=岩石  ~=深水");
+        _out.WriteLine($"        {AliveMark}=已活棋串(如 1B{AliveMark})  {ForbiddenMark}N=玩家N活形的眼(你禁入)");
         _out.WriteLine("        已揭示信物：p探勘 c征召 d兵站 o军令 v先锋 e徽记");
     }
 

@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
+using Siege.Presentation.Visibility;
 
 namespace Siege.Presentation.Style;
 
@@ -143,6 +144,9 @@ public enum HighlightStyle
 
     /// <summary>已选改造目标：实心亮色的短栏 / 轮廓，与候选在明度和实虚上都分得开。</summary>
     EditChosenMark,
+
+    /// <summary>失败说明里涉及的已确定活形棋串（life-shape）：已活色实线环 + 悬浮"眼"徽记（与棋串读法的已活标记同形），与失败焦点的叉号、自杀手的双警示环在形状上都不同。</summary>
+    LifeOutline,
 }
 
 /// <summary>视觉层级与高亮手法的数据基准（tactical-ui 裁决 7：可自动化的部分只断言数据层）。</summary>
@@ -170,6 +174,7 @@ public static class VisualLayering
         HighlightKind.FailureFocus => HighlightStyle.FailureOutline,
         HighlightKind.EditTarget => HighlightStyle.EditTargetHint,
         HighlightKind.ChosenEdit => HighlightStyle.EditChosenMark,
+        HighlightKind.LifeGroup => HighlightStyle.LifeOutline,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知高亮类别。"),
     };
 
@@ -179,9 +184,78 @@ public static class VisualLayering
         HighlightKind.Staged => RenderLayer.StagedPieces,
         // 可改造目标与已选目标同在预览层：tactical-layers 要求它们在<b>默认棋盘</b>上就能看到，MUST NOT 依赖打开任何信息层。
         HighlightKind.PredictedCapture or HighlightKind.SuicideRisk or HighlightKind.WillReveal or HighlightKind.FailureFocus
-            or HighlightKind.EditTarget or HighlightKind.ChosenEdit
+            or HighlightKind.EditTarget or HighlightKind.ChosenEdit or HighlightKind.LifeGroup
             => RenderLayer.PreviewHighlights,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知高亮类别。"),
+    };
+}
+
+/// <summary>
+/// 棋串读法里一条棋串的标记形状（tactical-layers「活形与禁入格的标示」：已活 MUST 与危险、普通可区分，且 MUST NOT 只依赖颜色）。
+/// 形状是第一通道，颜色（阵营色 / 危险色 / 已活色）只是第二通道：去色之后三种标记仍各不相同。
+/// </summary>
+public enum GroupMarkShape
+{
+    /// <summary>普通棋串：阵营色虚线环。</summary>
+    DashedRing,
+
+    /// <summary>危险棋串：危险色实线环。</summary>
+    SolidRing,
+
+    /// <summary>已活棋串：已活色实线环 + 每枚子上方悬浮一枚环形"眼"徽记（危险棋串没有这个立体徽记，去色后仍可分）。</summary>
+    SolidRingWithEyeBadge,
+}
+
+/// <summary>棋串读法标记 → 形状的<b>唯一</b>映射。Godot 按形状选图元，不自行按活形或气数分支。</summary>
+public static class GroupMarks
+{
+    public static GroupMarkShape ShapeOf(GroupMark mark) => mark switch
+    {
+        GroupMark.Normal => GroupMarkShape.DashedRing,
+        GroupMark.Danger => GroupMarkShape.SolidRing,
+        GroupMark.Alive => GroupMarkShape.SolidRingWithEyeBadge,
+        _ => throw new ArgumentOutOfRangeException(nameof(mark), mark, "未知棋串标记。"),
+    };
+}
+
+/// <summary>
+/// 默认棋盘上"落不下"的三类在外观上的手法（tactical-layers「活形与禁入格的标示」）。
+/// 地形不可落子由地形本身（岩石 / 深水）表达，不加标记；超出合法落子范围不加标记（合法落点另有标记，范围外即"没有合法标记"）；
+/// 活棋禁入加一枚禁入印记（叉 + 所有者阵营色的方框），三者互不相同。
+/// </summary>
+public enum PlacementMarkStyle
+{
+    /// <summary>地形本身即表达（岩石体块 / 深水水面）。</summary>
+    TerrainSurface,
+
+    /// <summary>无标记（超出合法落子范围）。</summary>
+    NoMarker,
+
+    /// <summary>禁入印记：叉 + 所有者阵营色方框。</summary>
+    LifeSeal,
+}
+
+/// <summary>落点阻断类别的呈现：手法与指向时的原因文案。</summary>
+public static class PlacementBlocks
+{
+    /// <summary>超出合法落子范围（不在 <see cref="PlacementBlock"/> 里：范围来自合法落子范围契约，不由默认棋盘推断）的手法。</summary>
+    public const PlacementMarkStyle OutOfRangeStyle = PlacementMarkStyle.NoMarker;
+
+    public static PlacementMarkStyle StyleOf(PlacementBlock block) => block switch
+    {
+        PlacementBlock.None => PlacementMarkStyle.NoMarker,
+        PlacementBlock.Terrain => PlacementMarkStyle.TerrainSurface,
+        PlacementBlock.LifeForbidden => PlacementMarkStyle.LifeSeal,
+        _ => throw new ArgumentOutOfRangeException(nameof(block), block, "未知阻断类别。"),
+    };
+
+    /// <summary>指向该格时的原因（不含所有者；所有者由 <see cref="Camera.HoverReadout"/> 拼上）。</summary>
+    public static string ReasonText(PlacementBlock block) => block switch
+    {
+        PlacementBlock.None => string.Empty,
+        PlacementBlock.Terrain => "地形不可落子",
+        PlacementBlock.LifeForbidden => "活棋禁入",
+        _ => throw new ArgumentOutOfRangeException(nameof(block), block, "未知阻断类别。"),
     };
 }
 

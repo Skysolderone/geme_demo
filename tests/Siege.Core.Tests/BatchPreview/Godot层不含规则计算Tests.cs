@@ -54,6 +54,9 @@ public class Godot层不含规则计算Tests
             // 变异验证 M-SC5（实做，4.3 点名的那一条）：BoardView.DrawPreview 加一行
             //   `if (_width < 0) { _ = Siege.Core.Board.TerrainEditRules.LegalTargets(null!, default); }` → 本测试红 1。
             "TerrainEditRules.", "TerrainWriter.", "ApplyTerrainEdits",
+            // life-shape 3.4：活形状态、眼空间与禁入格一律经 Siege.Presentation 视图模型（LibertyGroupView.Life / BoardCellView.LifeForbiddenBy / HoverReadout）到达，
+            // Godot 侧 MUST NOT 直接碰活形报告——既不调 Analyze 重算，也不读公开视图里的 LifeShapeReport（否则就是在引擎层再写一份"谁的禁入"判断）。
+            "LifeShapeReport", ".LifeShape.",
         ];
 
         string[] violations =

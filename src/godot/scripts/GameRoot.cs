@@ -50,6 +50,7 @@ public sealed partial class GameRoot : Node3D
     private bool _pickCheck;
     private bool _shotOverview;
     private bool _shotPower;
+    private bool _shotGroups;
     private bool _dirty = true;
     private bool _mouseInside;
     private bool _opened;
@@ -77,6 +78,9 @@ public sealed partial class GameRoot : Node3D
             // --shot-power：截图时打开势力层（restore-go-core-rules 段 E：给负责人看独占格着色与"领地 + 棋串"）。
             // 势力层的文字面板在左侧、不盖棋盘中心；手牌信息面板照旧收起。
             _shotPower = args.Flag("shot-power");
+
+            // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
+            _shotGroups = args.Flag("shot-groups");
 
             // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
             // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
@@ -409,8 +413,24 @@ public sealed partial class GameRoot : Node3D
             _layers.Toggle(TacticalLayer.Power);
         }
 
+        if (_shotGroups)
+        {
+            _layers.Toggle(TacticalLayer.Board);
+            if (_layers.Reading != BoardReading.Groups)
+            {
+                _layers.CycleReading();
+            }
+        }
+
         _dirty = false;
         RefreshViews();
+
+        // life-shape 3.4 取景自证：打印本帧视图模型里的禁入格与已活棋串数量（都取自 Presentation，不在引擎侧判活形）。
+        DefaultBoardView shotBoard = _session.World.Board();
+        int alive = _session.World.Layer(TacticalLayer.Board, BoardReading.Groups) is LibertyLayerContent groups
+            ? groups.Groups.Count(g => g.Mark == GroupMark.Alive)
+            : 0;
+        GD.Print($"[life-shape] 截图取景：当前行动 {(_session.Match.CurrentPlayer is { } actor ? Labels.Player(actor) : "无")}，禁入格 {shotBoard.Cells.Count(c => c.Block == PlacementBlock.LifeForbidden)}，已活棋串 {alive}，棋串读法 {(_layers.Active == TacticalLayer.Board && _layers.Reading == BoardReading.Groups ? "开" : "关")}");
         CaptureWhenDrawn(_screenshotPath);
     }
 
@@ -418,6 +438,7 @@ public sealed partial class GameRoot : Node3D
     private void RefreshViews()
     {
         _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
+        _hud.SetHoverReadout(HoverReadout.Of(_hover, _session.World.Board())); // life-shape 3.4：盘面变了（如新成活形），悬停格的禁入读数随之刷新
         if (Selecting)
         {
             _hud.ShowMapSelect(_select!, PreviewInfo());
@@ -819,7 +840,7 @@ public sealed partial class GameRoot : Node3D
         {
             _hover = hover;
             _board.SetCursor(hover);
-            _hud.SetHoverReadout(HoverReadout.Of(hover));
+            _hud.SetHoverReadout(HoverReadout.Of(hover, _session.World.Board()));
         }
     }
 

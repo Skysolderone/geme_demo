@@ -29,6 +29,11 @@ public enum RelicMarker
 /// visual-style-baseline「新旧设施同形」要求二者外观一致，information-visibility「改造结果公开」要求不标记改造者。
 /// </param>
 /// <param name="RevealedType">已揭示信物的类型；未揭示或非信物格为 <c>null</c>。</param>
+/// <param name="LifeForbiddenBy">
+/// 该格若是<b>当前行动玩家</b>的禁入格（他人已确定活形棋串的眼空间，life-shape D3 / D6），为那条活形的所有者；否则 <c>null</c>。
+/// 所有者本人看自己的眼空间为 <c>null</c>（可以自拆）。集合原样取自公开视图的 <see cref="LifeShapeReport.ForbiddenCellsFor"/>，
+/// 所有者取自 <see cref="LifeShapeReport.EyeSpaceAt"/>——本层不判活形、不重算。没有当前行动玩家（插旗阶段、终局）时全为 <c>null</c>。
+/// </param>
 public sealed record BoardCellView(
     Coord Coord,
     Terrain Terrain,
@@ -38,7 +43,31 @@ public sealed record BoardCellView(
     int? BirthZone,
     Occupant? Occupant,
     RelicMarker Relic,
-    RelicType? RevealedType);
+    RelicType? RevealedType,
+    PlayerId? LifeForbiddenBy)
+{
+    /// <summary>该格为什么落不下（对当前行动玩家）。超出合法落子范围不在此列——范围来自合法落子范围契约，默认棋盘不推断它。</summary>
+    public PlacementBlock Block =>
+        Terrain == Terrain.Obstacle ? PlacementBlock.Terrain
+        : LifeForbiddenBy is not null ? PlacementBlock.LifeForbidden
+        : PlacementBlock.None;
+}
+
+/// <summary>
+/// 默认棋盘上一格"落不下"的原因类别（tactical-layers「活形与禁入格的标示」）。与"超出当前合法落子范围"在外观上可区分：
+/// 范围外的格在这里是 <see cref="None"/>、不加任何标记，合法落点另由合法落子范围契约点亮。
+/// </summary>
+public enum PlacementBlock
+{
+    /// <summary>无阻断（空格、棋子格，或只是范围外）。</summary>
+    None,
+
+    /// <summary>地形不可落子（岩石 / 未架桥深水）。</summary>
+    Terrain,
+
+    /// <summary>活棋禁入：他人已确定活形棋串的眼空间。</summary>
+    LifeForbidden,
+}
 
 /// <summary>默认棋盘（不打开任何信息层时）。</summary>
 /// <param name="Fences">
@@ -68,6 +97,12 @@ public sealed record DefaultBoardView(
         ArgumentNullException.ThrowIfNull(world);
         GameBoard board = world.View.Board;
         var relics = world.View.Relics.ToDictionary(r => r.Coord);
+        LifeShapeReport life = world.View.LifeShape;
+        Dictionary<Coord, PlayerId> forbidden = world.View.CurrentPlayer is { } current
+            ? life.ForbiddenCellsFor(current).ToDictionary(
+                c => c,
+                c => life.EyeSpaceAt(c)?.Owner ?? throw new InvalidOperationException($"禁入格 {c.ToNotation()} 不在任何眼空间里：活形报告自相矛盾。"))
+            : [];
         ImmutableArray<BoardCellView> cells =
         [
             .. board.AllCoords().Select(c =>
@@ -83,7 +118,7 @@ public sealed record DefaultBoardView(
 
                 return new BoardCellView(
                     c, cell.Terrain, board.Map.HeightAt(c), board.Map.SurfaceAt(c), board.Map.HasBridge(c),
-                    cell.BirthZone, cell.Occupant, marker, revealed);
+                    cell.BirthZone, cell.Occupant, marker, revealed, forbidden.TryGetValue(c, out PlayerId owner) ? owner : null);
             }),
         ];
 

@@ -124,3 +124,6 @@
   - R5 截图与报告统一放 `sim-out/life-shape/`。
   - R6（段 A 后）1.5 性能上界分母改为"`AllGroups` + 全部气的计算"，上界仍为 3 倍（实测 v5 1.37×、frontier-v2 1.51×）；段 B 接入预演后按 R4 用 AI 单回合耗时再复核。
   - R7（段 A 后）慢测试约定：默认跳过，设环境变量（`SIEGE_PERF=1` / `SIEGE_SLOW=1`）并按 `Category` 过滤才运行；写入 `.trellis/spec/core/testing.md`。
+  - R8（段 B 后）"活形过易"（v5 贴地形小空区单子即活）不在本 change 改规则；段 D 基线报告单列单子活形数与贴地形小空区占比，再决定是否另开 change。
+  - R9（段 B 后）失败定位形状沿用段 B：活棋禁入 = 落点 + 所属活形棋串 + 所有者；破坏活形 = 受影响棋串 + 整批落子，不指认单枚。
+  - R10（段 B 后）工作树里非本任务的 Godot 改动（`GameRoot.cs` 的 `--export-parts`、`PartExport.cs`、`src/godot/parts/`）不动、不随本任务提交。

@@ -93,6 +93,14 @@ public static class Visuals
     /// <summary>紧急。</summary>
     public static readonly Color Urgent = Color.Color8(236, 76, 60);
 
+    // ---------- 活形（life-shape 3.4）----------
+
+    /// <summary>已活棋串的标记色（翠绿）：只是第二通道，第一通道是悬浮的环形"眼"徽记（<see cref="GroupMarkShape.SolidRingWithEyeBadge"/>）。</summary>
+    public static readonly Color Alive = Color.Color8(72, 230, 140);
+
+    /// <summary>禁入格印记的底色（压暗）：配所有者阵营色的叉与方框（<see cref="PlacementMarkStyle.LifeSeal"/>）。</summary>
+    public static readonly Color ForbiddenShade = Color.Color8(24, 26, 32);
+
     // ---------- 改造（artisan-terrain-edit 4.2）----------
     // 三色都不是木料色：候选 / 已选 / 落成都是"标记"，与真设施（<see cref="Timber"/> / <see cref="BridgeDeck"/> 的棕木）一眼分得开。
 

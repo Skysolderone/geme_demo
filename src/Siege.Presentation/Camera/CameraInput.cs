@@ -74,4 +74,19 @@ public static class HoverReadout
 {
     /// <summary>读数文本。</summary>
     public static string Of(Coord? hover) => hover?.ToNotation() ?? string.Empty;
+
+    /// <summary>读数文本，带该格对当前行动玩家的阻断原因（life-shape：指向禁入格给出"活棋禁入（所有者）"）。</summary>
+    public static string Of(Coord? hover, Visibility.DefaultBoardView board)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        if (hover is not { } c)
+        {
+            return string.Empty;
+        }
+
+        Visibility.BoardCellView cell = board.CellAt(c);
+        return cell.LifeForbiddenBy is { } owner
+            ? $"{c.ToNotation()} · {Style.PlacementBlocks.ReasonText(Visibility.PlacementBlock.LifeForbidden)}（{Text.Labels.Player(owner)}）"
+            : c.ToNotation();
+    }
 }

@@ -100,6 +100,15 @@ public static class Labels
             ? $"势力 {CompactPower(total)}（领地 {territory} + 棋串 {CompactPower(groups)}）"
             : $"势力 {total}（领地 {territory} + 棋串 {groups}）";
 
+    /// <summary>棋串读法标记的文案（tactical-layers「活形与禁入格的标示」）：已活 / 危险；普通棋串不加文字。</summary>
+    public static string GroupMark(Layers.GroupMark mark) => mark switch
+    {
+        Layers.GroupMark.Normal => string.Empty,
+        Layers.GroupMark.Danger => "危险",
+        Layers.GroupMark.Alive => "已活",
+        _ => throw new ArgumentOutOfRangeException(nameof(mark), mark, "未知棋串标记。"),
+    };
+
     /// <summary>坐标列表，围棋记法，顿号分隔。</summary>
     public static string Coords(IEnumerable<Coord> coords) => string.Join("、", coords.Select(c => c.ToNotation()));
 

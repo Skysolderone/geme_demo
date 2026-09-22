@@ -34,6 +34,9 @@ public enum HighlightKind
 
     /// <summary>暂放匠人<b>已选中</b>的改造目标。</summary>
     ChosenEdit,
+
+    /// <summary>失败说明涉及的已确定活形棋串（life-shape：活棋禁入时围住落点的那条、破坏活形时受影响的那条）。</summary>
+    LifeGroup,
 }
 
 /// <summary>一格高亮。</summary>
@@ -130,12 +133,16 @@ public sealed record PowerChangeView(
     string Text);
 
 /// <summary>非法原因的呈现：类别、标题（每类不同）、详情、高亮与同形时的重复提交序号。</summary>
+/// <param name="EdgeHighlights">边高亮：破坏活形时触发的立栅目标（边）；其余类别为空。</param>
+/// <param name="LifeOwner">活棋禁入 / 破坏活形涉及的活形所有者（取自 Core 的 <see cref="BatchFailure.LifeOwner"/>）；其余类别为 <c>null</c>。</param>
 public sealed record FailurePresentation(
     BatchFailureKind Kind,
     string Title,
     string Detail,
     ImmutableArray<CellHighlight> Highlights,
-    int? DuplicateOfSequence)
+    int? DuplicateOfSequence,
+    ImmutableArray<EdgeHighlight> EdgeHighlights,
+    PlayerId? LifeOwner)
 {
     /// <summary>
     /// 标题：规格要求至少区分的七类 + 批次内重复落点 + 两类改造失败，各有明确文案。预占腾空格属于「该格当前已被占据」。
@@ -166,6 +173,16 @@ public sealed record FailurePresentation(
     public static FailurePresentation From(BatchFailure failure)
     {
         ArgumentNullException.ThrowIfNull(failure);
+        return failure.Kind switch
+        {
+            BatchFailureKind.LifeForbidden => LifeForbidden(failure),
+            BatchFailureKind.BreaksLife => BreaksLife(failure),
+            _ => Plain(failure),
+        };
+    }
+
+    private static FailurePresentation Plain(BatchFailure failure)
+    {
         string detail = failure.Kind switch
         {
             BatchFailureKind.Suicide => $"结算后己方棋串仍无气：{Labels.Coords(failure.Coords)}",
@@ -174,7 +191,55 @@ public sealed record FailurePresentation(
         };
         HighlightKind kind = failure.Kind == BatchFailureKind.Suicide ? HighlightKind.SuicideRisk : HighlightKind.FailureFocus;
         return new FailurePresentation(failure.Kind, TitleOf(failure.Kind), detail,
-            [.. failure.Coords.Order().Select(c => new CellHighlight(c, kind))], failure.DuplicateOfSequence);
+            [.. failure.Coords.Order().Select(c => new CellHighlight(c, kind))], failure.DuplicateOfSequence, [], null);
+    }
+
+    /// <summary>
+    /// 活棋禁入（batch-preview Scenario「活棋禁入说明」，R9：落点 + 所属活形棋串 + 所有者）：
+    /// 违规落点为失败焦点，围住它的活形棋串整条以 <see cref="HighlightKind.LifeGroup"/> 高亮。定位数据全部取自 Core 的 <see cref="BatchFailure"/>。
+    /// </summary>
+    private static FailurePresentation LifeForbidden(BatchFailure failure)
+    {
+        PlayerId owner = failure.LifeOwner ?? throw new ArgumentException("活棋禁入缺所有者。", nameof(failure));
+        string detail = $"{Labels.Coords(failure.Coords)} 是 {Labels.Player(owner)} 已确定活形棋串（{Labels.Coords(failure.LifeGroup)}）的眼空间：非所有者不可落子";
+        return new FailurePresentation(failure.Kind, TitleOf(failure.Kind), detail,
+            [
+                .. failure.Coords.Order().Select(c => new CellHighlight(c, HighlightKind.FailureFocus)),
+                .. failure.LifeGroup.Order().Select(c => new CellHighlight(c, HighlightKind.LifeGroup)),
+            ],
+            null, [], owner);
+    }
+
+    /// <summary>
+    /// 破坏活形（batch-preview Scenario「破坏活形说明」，R9：受影响棋串 + 整批落子，不指认单枚）：
+    /// 受影响的活形棋串以 <see cref="HighlightKind.LifeGroup"/> 高亮；触发的落子与改造目标为失败焦点——
+    /// 格目标（搭桥 / 烧林）进格高亮，边目标（立栅）进边高亮。
+    /// </summary>
+    private static FailurePresentation BreaksLife(BatchFailure failure)
+    {
+        PlayerId owner = failure.LifeOwner ?? throw new ArgumentException("破坏活形缺所有者。", nameof(failure));
+        string triggers = string.Join("，", failure.Triggers.Select(p =>
+            p.Edit is { } edit ? $"{p.Coord.ToNotation()} {Labels.Piece(p.Type)} {Labels.TerrainEdit(edit)}" : $"{p.Coord.ToNotation()} {Labels.Piece(p.Type)}"));
+        string detail = $"本批次（{triggers}）结算后，{Labels.Player(owner)} 的已确定活形棋串（{Labels.Coords(failure.LifeGroup)}）将不再是活形：非所有者不得破坏他人活形";
+        ImmutableArray<Coord> focus =
+        [
+            .. failure.Triggers.Select(p => p.Coord)
+                .Concat(failure.Triggers.Where(p => p.Edit is { Kind: not TerrainEditKind.Fence }).Select(p => p.Edit!.Value.Cell))
+                .Distinct()
+                .Order(),
+        ];
+        return new FailurePresentation(failure.Kind, TitleOf(failure.Kind), detail,
+            [
+                .. focus.Select(c => new CellHighlight(c, HighlightKind.FailureFocus)),
+                .. failure.LifeGroup.Order().Select(c => new CellHighlight(c, HighlightKind.LifeGroup)),
+            ],
+            null,
+            [
+                .. failure.Triggers.Where(p => p.Edit is { Kind: TerrainEditKind.Fence }).Select(p => p.Edit!.Value.Edge)
+                    .Distinct().OrderBy(e => e.A).ThenBy(e => e.B)
+                    .Select(e => new EdgeHighlight(e, HighlightKind.FailureFocus)),
+            ],
+            owner);
     }
 }
 
@@ -225,14 +290,15 @@ public sealed record PreviewPresentation(
         highlights.AddRange(preview.Placements.Select(p => new CellHighlight(p.Coord, HighlightKind.Staged)));
         highlights.AddRange(preview.CapturedCoords.Select(c => new CellHighlight(c, HighlightKind.PredictedCapture)));
         highlights.AddRange(preview.WillReveal.Select(c => new CellHighlight(c, HighlightKind.WillReveal)));
+        ImmutableArray<EdgeHighlight>.Builder edges = ImmutableArray.CreateBuilder<EdgeHighlight>();
         if (failure is not null)
         {
             highlights.AddRange(failure.Highlights);
+            edges.AddRange(failure.EdgeHighlights);
         }
 
         // 改造目标：格目标（搭桥 / 烧林）进格高亮，边目标（立栅）进边高亮；已选中的那个换一类高亮。
         // 自杀手是"立栅把自己堵死"时，那道栅栏就在这里以 ChosenEdit 高亮——规格「按应用该栅栏后的地形标示自杀风险并高亮其位置」的后半句。
-        ImmutableArray<EdgeHighlight>.Builder edges = ImmutableArray.CreateBuilder<EdgeHighlight>();
         foreach (ArtisanEditView artisan in artisanEdits)
         {
             foreach (EditTargetView target in artisan.Targets)

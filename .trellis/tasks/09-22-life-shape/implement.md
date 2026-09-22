@@ -205,3 +205,114 @@
 4. 活棋禁入的 `Coords` 只含落点；所属活形棋串放在 `LifeGroup`，所有者放在 `LifeOwner`。破坏活形的 `Triggers` 是本批全部暂放，因为结果导向检查不归因到单枚。段 C 做高亮时按这个形状取数；如果要换形状，请在段 C 开工前裁决。
 5. 守门 `禁入只在契约一处扣除且与预演共用同一查询` 的源码扫描范围是 Siege.Core + Siege.Sim，断言 `ForbiddenCellsFor(` 只在 MatchFlow.cs 出现。段 D 4.2 要算"终局禁入格占比"，`BalanceAnalyzer` 读 `view.LifeShape.ForbiddenCellsFor(p)` 属于读取、不是扣除，但这个守门会翻红。段 D 开工时需要二选一：把守门收窄成"从范围里扣除（`.Except(…ForbiddenCellsFor`）只有一处"，或者给分析器加白名单。Siege.Presentation 不在扫描范围，段 C 读公开视图不受影响。
 6. 段末发现工作树里有**不属于本段**的改动：`src/godot/scripts/GameRoot.cs`（+12 行），以及未跟踪的 `src/godot/parts/`、`src/godot/scripts/PartExport.cs`。它们在 18:15 之后出现，本段没有触碰；上面的 Godot 构建 0 警告是包含它们一起构建的结果。提交时请主会话把它们和本段分开。
+
+## 段 C（tasks 3.1–3.4）
+
+### 改了什么
+
+| 文件 | 性质 |
+|---|---|
+| `src/Siege.Presentation/Preview/PreviewPresentation.cs` | `HighlightKind` 加 `LifeGroup`。`FailurePresentation` 末尾加位置参数 `EdgeHighlights`、`LifeOwner`。`From` 拆成三支：`Plain`（原逻辑）、`LifeForbidden`（落点为 FailureFocus，`LifeGroup` 整串为 LifeGroup）、`BreaksLife`（受影响棋串为 LifeGroup；整批落点与格目标改造为 FailureFocus；立栅目标走边高亮 FailureFocus）。`PreviewPresentation.Build` 把失败的边高亮并入 `EdgeHighlights`。定位形状沿用 R9 |
+| `src/Siege.Presentation/Layers/LayerContents.cs` | `LibertyGroupView` 末尾加 `LifeState Life`，取自 `world.View.LifeShape.GroupLifeAt`，取不到时抛出（两份快照不同源）。新增 `Mark`：已活优先于危险；新增 `MarkText`。新增枚举 `GroupMark`（Normal / Danger / Alive） |
+| `src/Siege.Presentation/Visibility/DefaultBoardView.cs` | `BoardCellView` 末尾加 `PlayerId? LifeForbiddenBy`：当前行动玩家的禁入格，值为所有者。集合来自 `View.LifeShape.ForbiddenCellsFor(current)`，所有者来自 `EyeSpaceAt(c).Owner`。新增 `Block` 与枚举 `PlacementBlock`（None / Terrain / LifeForbidden）。范围外不在此枚举里，因为范围来自契约，默认棋盘不推断 |
+| `src/Siege.Presentation/Style/VisualBaseline.cs` | `HighlightStyle.LifeOutline` 及其 `StyleOf` / `LayerOf` 映射。`GroupMarkShape` 与 `GroupMarks.ShapeOf`：虚线环 / 实线环 / 实线环加悬浮眼徽记，形状是第一通道。`PlacementMarkStyle` 与 `PlacementBlocks`（`StyleOf`、`OutOfRangeStyle`、`ReasonText`） |
+| `src/Siege.Presentation/Text/Labels.cs` | `GroupMark(mark)`：已活 / 危险 / 空 |
+| `src/Siege.Presentation/Camera/CameraInput.cs` | `HoverReadout.Of(Coord?, DefaultBoardView)` 重载：指向禁入格时输出 "E5 · 活棋禁入（红方(P0)）"。原来的单参 `Of` 保留 |
+| `src/Siege.Sim/Play/BoardRenderer.cs` | 已活棋串的子在类型字母后加 `@`（如 `1B@`）；禁入格记作 `xN`（N 为所有者的玩家号），优先级排在信物 / 区号 / `+` 之前；图例加一行。禁入格按"他人各自的 `ProtectedCellsOf`"取，原因见待决 1 |
+| `src/godot/scripts/BoardView.cs` | `DrawLifeSeals`：默认棋盘上当前行动玩家的禁入格画成压暗底 + 所有者阵营色方框 + 叉。`DrawLiberties` 按 `GroupMarks.ShapeOf` 选图元，已活为已活色实线环 + 悬浮 `TorusMesh` 眼徽记（`AddEyeBadge`）。`DrawPreview` 加 `LifeOutline` 一支和失败边高亮（警示色亮栏）。`AddCross` 加可选 parent 参数 |
+| `src/godot/scripts/Visuals.cs` | 新增 `Alive`、`ForbiddenShade` 两色 |
+| `src/godot/scripts/GameRoot.cs` | 只加本段自己的 hunk，**别人的 `--export-parts` 两段（现第 100–102、104–112 行）逐字未动**。本段 hunk 按当前行号：第 53 行字段 `_shotGroups`；第 82–84 行解析 `--shot-groups`；第 428–436 行 `BeginCapture` 按 `--shot-groups` 打开盘面层棋串读法；第 439–445 行截图取景自证打印 `[life-shape]`；第 453 行 `RefreshViews` 刷新悬停读数；第 855 行 `UpdateHover` 改用带棋盘的 `HoverReadout.Of`（**唯一一处改动的既有行**）。与段 C 开工前的快照做 difflib 比对：删 1 行、加 22 行。`PartExport.cs` 与 `src/godot/parts/` 的 SHA-256 全部未变 |
+
+活形与禁入在表现层只读公开视图：Presentation 读 `View.LifeShape`，不调 `Analyze`；Godot 一处都不碰 `LifeShapeReport`，只读 Presentation 视图模型。
+
+### 既有测试改写（逐条）
+
+没有删除，也没有改期望值。
+
+1. `BatchPreview/Godot层不含规则计算Tests.Godot层不调用规则计算入口`：禁用 token 表追加 `"LifeShapeReport"`、`".LifeShape."`（3.4 守门，变异 M-C2 已证红）。
+2. `BatchPreview/非法批次必须说明原因并高亮Tests`：只加 `using`（`Siege.Core.Match`、`Siege.Presentation.Text`）和新方法，既有 4 个方法未动。`十二类失败标题互不相同` 不需要改。
+
+### 新测试（14 条，全部默认运行）
+
+- `BatchPreview/非法批次必须说明原因并高亮Tests` 加 3 条：
+  - 活棋禁入说明、破坏活形说明：这两条对应 Scenario。破坏活形走预演与确认两条路径，钉住边高亮。
+  - 破坏活形的格目标改造高亮在格上：搭桥目标走格高亮。
+- `TacticalLayers/活形与禁入格的标示Tests`（新类）加 6 条：
+  - 对应 3 个 Scenario：已活棋串可辨、禁入格在默认棋盘上可见、所有者看到的是可落子；
+  - 已活棋串即使气少也标已活：钉标记优先级；
+  - 禁入格区别于地形不可落子与范围外：保护期内眼格同时在范围外时仍标禁入，与预演第 1 步同序；另验岩石和别家出生区；
+  - 守门 `表现层不调用活形分析只读公开视图`：IL 扫描确认没有 `LifeShapeReport.Analyze`，并反面断言扫描器确实看得见 `MatchPublicView.get_LifeShape`、`GroupLifeAt`、`ForbiddenCellsFor`。
+- `SimulationHarness/终端活形与禁入标示Tests`（新类）加 5 条：
+  - 文本盘面标出禁入格与已活棋串：逐格断言，并与测试侧独立取的 `ForbiddenCellsFor(P1)` 逐项相等；
+  - 所有者看自己的眼不标禁入；
+  - 未定棋串不标已活；
+  - 图例含禁入与已活符号；
+  - 脚本对局里出现禁入与已活标示：真实 `PlayCommand.Run`，种子 31，Standard 难度。样本口径下界要求棋盘行至少 20 行，且出现 `@` 与 `x`。
+
+**先红**：先加 API 骨架，返回值全部是默认值（`Life = Dead`、`LifeForbiddenBy = null`、边高亮为空、`HoverReadout` 不带原因、终端不改）。这时跑相关 7 个类共 28 条，12 红。按设计本来就绿的 4 条：所有者看到的是可落子、未定棋串不标已活（骨架默认值恰好正确），以及 Godot 守门、UI 守门（此时源码里还没有违规）。实现后全绿，没有改过期望值。
+
+### 变异（脚本 scratchpad `mutate_c.py`，每条跑整个测试工程）
+
+口径同段 A / B：二进制读写，先探测行尾，断言锚点命中恰为 1 次，备份名带时间戳，在 `finally` 里还原，还原后逐字节比对，用 `os.utime` 刷新 mtime；设 `DOTNET_CLI_UI_LANGUAGE=en`，解析统计行；条件变异只用运行时恒假的条件。14 条全部 `restored=True`。跑完后 `git diff` 与 `git status` 和变异前逐字节相同（cmp），复跑 1257 通过 / 2 跳过 / 0 失败。
+
+| 编号 | 变异 | 红数 | 红的测试 |
+|---|---|---:|---|
+| M-C1 | Presentation 棋串读法改为自调 `LifeShapeReport.Analyze(world.View.Board)` | 1 | 表现层不调用活形分析只读公开视图 |
+| M-C2 | Godot `DrawLifeSeals` 注入 `LifeShapeReport.Analyze` | 1 | Godot层不调用规则计算入口 |
+| M-C3 | 默认棋盘禁入改取全部受保护眼空间，对所有者也标 | 2 | 所有者看到的是可落子、表现层不调用活形分析只读公开视图（反面断言失去 `ForbiddenCellsFor`） |
+| M-C4 | 棋串读法的活形恒为 Dead | 2 | 已活棋串可辨、已活棋串即使气少也标已活 |
+| M-C5 | 标记优先级改为危险先于已活 | 1 | 已活棋串即使气少也标已活 |
+| M-C6 | 活棋禁入不高亮所属活形棋串 | 1 | 活棋禁入说明 |
+| M-C7 | 破坏活形丢掉立栅边高亮 | 1 | 破坏活形说明 |
+| M-C8 | 预演呈现不并入失败的边高亮 | 1 | 破坏活形说明（预演路径） |
+| M-C9 | 破坏活形不高亮格目标改造 | 1 | 破坏活形的格目标改造高亮在格上 |
+| M-C10 | `HoverReadout` 不给所有者 | 1 | 禁入格在默认棋盘上可见 |
+| M-C11 | 已活与危险同形（`ShapeOf(Alive)=SolidRing`） | 1 | 已活棋串可辨 |
+| M-C12 | `Block` 不看 `LifeForbiddenBy` | 2 | 禁入格在默认棋盘上可见、禁入格区别于地形不可落子与范围外 |
+| M-C13 | 终端对自己的眼也标禁入 | 1 | 所有者看自己的眼不标禁入 |
+| M-C14 | 终端不标已活 | 3 | 文本盘面标出禁入格与已活棋串、所有者看自己的眼不标禁入、脚本对局里出现禁入与已活标示 |
+
+### 3.3 人工看一局
+
+`sim-out/life-shape/terminal-sample.txt`（58 行）。
+
+- 命令：`Siege.Sim play --seed 31 --players 4 --seat 1 --difficulty Standard`（v5 图），输入为"选 1 号区，之后每个小回合 Pass"。
+- 完整输出 617 行、18 个盘面，其中 17 个同时出现 `@` 和 `x`。样本摘了首个（第 1 大回合）和末个（第 9 大回合）盘面，都带状态栏与图例。
+- 第 1 大回合时，玩家4 的三枚单子堡垒已经各自成活（R8 现象）。
+
+### 3.4 Godot 自检（最终 Debug 构建后重跑）
+
+`$G = D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64_console.exe`
+
+| 命令（`$G … --path src/godot …`） | 退出码 | 要点 |
+|---|---:|---|
+| `--headless --quit-after 20000 -- --auto-demo` | 0 | 开局对准自检通过；日志里没有 exception / error |
+| `--headless --quit-after 20000 -- --auto-demo --pick-check` | 0 | 105/105，通过 |
+| `--headless --quit-after 40000 -- --auto-demo --map=siege-frontier-v2` | 0 | 开局对准 81/81 |
+| `--headless --quit-after 40000 -- --auto-demo --pick-check --map=siege-frontier-v2` | 0 | 411/411，通过 |
+| `-- --auto-demo --rounds=8 --screenshot=…/v5-default.png:95` | 0 | 取景：第 9 大回合，当前行动 P1，禁入格 35，已活棋串 32，棋串读法关 |
+| `-- --auto-demo --rounds=8 --shot-groups --screenshot=…/v5-groups.png:95` | 0 | 同上，棋串读法开 |
+| `-- --auto-demo --map=siege-frontier-v2 --rounds=8 --screenshot=…/frontier-default.png:95` | 0 | 第 8 大回合，当前行动 P0，禁入格 34，已活棋串 29 |
+| `-- --auto-demo --map=siege-frontier-v2 --rounds=8 --shot-groups --screenshot=…/frontier-groups.png:95` | 0 | 棋串读法开 |
+| 同上再加 `--overview`，存为 `frontier-groups-overview.png` | 0 | 全局预览 |
+
+截图共 5 张，都在 `sim-out/life-shape/`，1600×900，没有读进上下文，供负责人过目。截图时手牌面板和中央面板都是关的。
+
+### 段末自验
+
+- `dotnet build siege.sln`：0 警告、0 错误。
+- `dotnet build src/godot/Siege.Godot.csproj`（Debug）：0 警告、0 错误。
+- `dotnet test siege.sln -c Release`：通过 1257，跳过 2，失败 0。
+- Godot 自检：见上表，全部退出码 0。
+- `openspec validate life-shape --strict`：valid。
+
+### 待决
+
+1. **终端的禁入格取法**。段 B 的守门 `禁入只在契约一处扣除且与预演共用同一查询` 扫描 Siege.Core + Siege.Sim，要求 `ForbiddenCellsFor(` 只出现在 MatchFlow.cs、`IsForbiddenFor(` 只出现在 BatchRehearsal.cs。终端在 Siege.Sim 里，调哪一个都会让它翻红，所以改用"除我之外每名玩家的 `ProtectedCellsOf(p)`"。这等于把"他人受保护的眼格 = 我的禁入格"复述了一遍，一致性由测试 `文本盘面标出禁入格与已活棋串` 钉住（测试侧取 `ForbiddenCellsFor(P1)` 逐项比对）。建议段 D 按段 B 待决 5 的方案收窄守门（只管"从范围里扣除"），届时终端改调 `ForbiddenCellsFor(me)`。Presentation 不在那条守门的扫描范围内，直接读 `ForbiddenCellsFor`。
+2. **默认棋盘的禁入标示对象**是"当前行动玩家"（规格原文）。Godot 在 AI 行动时显示的是那名 AI 的禁入格。另外，Godot 本来就没有合法落点标记（既有状况，不是本段引入的），所以"范围外"在画面上就是"无标记"。数据层三类互斥已有测试钉住。如果希望改成始终按本机玩家显示，需要裁决。
+3. **悬停提示进不了截图**：无人值守模式下 `UpdateHover` 不执行，这是既有设计。悬停只由 `HoverReadout` 单测与变异 M-C10 覆盖。
+4. **截图的像素验收没能做成判据**。打开信息层后场景降饱和到 45%，已活色和草地在颜色窗口上分不开，数像素的结果不能作为依据。取景由 `[life-shape]` 打印的视图模型读数自证（禁入格数、已活棋串数、棋串读法开关）。已活标记的外观要请负责人看 `v5-groups.png` / `frontier-groups.png`。
+5. **标记优先级**：已活优先于危险（两眼活形往往只有两口气）。这是本段的实现选择，已由测试与变异 M-C5 钉住，请确认。
+6. **R8 数据点**：Godot 自动演示第 9 大回合（v5，种子 20260915）有 32 条已活棋串，当前行动玩家有 35 个禁入格；边疆图第 8 大回合是 29 条 / 34 个。终端样本里，第 1 大回合就有单子堡垒成活。
+7. 新增了一个 Godot 命令行选项 `--shot-groups`，仅用于截图时打开棋串读法。它走 `LaunchArgs` 的合法选项集合，未知选项照旧退出码 1。
+8. **终端里禁入格会盖住信物标记**。if 链里禁入格排在信物之前，眼空间格如果恰好是信物格，`xN` 会盖掉 `?` / `p` 等标记，公开的信物状态在文本盘面上就看不到了（已揭示信物仍列在状态栏的"已揭示信物"行）。3 字符的格宽放不下两个标记，这是有意的取舍。如果要改为信物优先，需要裁决。

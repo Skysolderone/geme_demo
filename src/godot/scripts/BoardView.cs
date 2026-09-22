@@ -606,6 +606,7 @@ public sealed partial class BoardView : Node3D
 
         PreviewPresentation? preview = world.Preview(thresholds);
         DrawRelicMarkers(board);
+        DrawLifeSeals(board);
         DrawPieces(board, treatment);
         DrawLayer(content);
         DrawPreview(preview, focus);
@@ -660,6 +661,27 @@ public sealed partial class BoardView : Node3D
                 Position = CenterOf(cell.Coord) + new Vector3(0f, 0.09f, 0f),
                 RotationDegrees = new Vector3(0f, 45f, 0f),
             });
+        }
+    }
+
+    /// <summary>
+    /// 默认棋盘上当前行动玩家的禁入格（tactical-layers「活形与禁入格的标示」）：压暗底 + 所有者阵营色方框 + 叉。
+    /// 哪些格禁入、归谁，一律读 <see cref="BoardCellView.Block"/> / <see cref="BoardCellView.LifeForbiddenBy"/>，本类不判活形。
+    /// 地形不可落子靠地形本身、范围外不加标记（<see cref="PlacementBlocks.StyleOf"/>），三者外观互不相同。
+    /// </summary>
+    private void DrawLifeSeals(DefaultBoardView board)
+    {
+        foreach (BoardCellView cell in board.Cells)
+        {
+            if (PlacementBlocks.StyleOf(cell.Block) != PlacementMarkStyle.LifeSeal || cell.LifeForbiddenBy is not { } owner)
+            {
+                continue;
+            }
+
+            Color faction = Visuals.FactionColorOf(owner);
+            AddTint(cell.Coord, Visuals.ForbiddenShade, 0.45f);
+            AddRing(_overlay, cell.Coord, faction, false, 0.03f);
+            AddCross(cell.Coord, faction, _overlay);
         }
     }
 
@@ -731,15 +753,22 @@ public sealed partial class BoardView : Node3D
     {
         foreach (LibertyGroupView group in liberties.Groups)
         {
-            Color color = group.Level switch
+            // 标记形状来自 Presentation（GroupMarks.ShapeOf）：已活 = 实线环 + 悬浮"眼"徽记，危险 = 危险色实线环，普通 = 阵营色虚线环。
+            // 形状是第一通道、颜色是第二通道（已活 MUST NOT 只靠颜色区分）。
+            GroupMarkShape shape = GroupMarks.ShapeOf(group.Mark);
+            Color color = shape switch
             {
-                DangerLevel.Urgent or DangerLevel.NoLiberty => Visuals.Urgent,
-                DangerLevel.Danger => Visuals.Danger,
+                GroupMarkShape.SolidRingWithEyeBadge => Visuals.Alive,
+                GroupMarkShape.SolidRing => group.Level is DangerLevel.Urgent or DangerLevel.NoLiberty ? Visuals.Urgent : Visuals.Danger,
                 _ => Visuals.FactionColorOf(group.Owner),
             };
             foreach (Coord stone in group.Stones)
             {
-                AddRing(_overlay, stone, color, group.Level == DangerLevel.Safe, 0.024f);
+                AddRing(_overlay, stone, color, shape == GroupMarkShape.DashedRing, 0.024f);
+                if (shape == GroupMarkShape.SolidRingWithEyeBadge)
+                {
+                    AddEyeBadge(_overlay, stone, color);
+                }
             }
 
             foreach (Coord liberty in group.Liberties)
@@ -805,6 +834,12 @@ public sealed partial class BoardView : Node3D
             return;
         }
 
+        // 破坏活形：触发的立栅目标是边（FailurePresentation.EdgeHighlights），沿边立一道警示色亮栏。
+        foreach (EdgeHighlight edge in preview.EdgeHighlights.Where(h => h.Kind == HighlightKind.FailureFocus))
+        {
+            AddEditFence(edge.Edge, Visuals.Urgent, 1f);
+        }
+
         // 已选目标：全部匠人的都画，实心亮色（HighlightStyle.EditChosenMark）。
         foreach (EdgeHighlight edge in preview.EdgeHighlights.Where(h => h.Kind == HighlightKind.ChosenEdit))
         {
@@ -866,6 +901,11 @@ public sealed partial class BoardView : Node3D
                     break;
                 case HighlightStyle.FailureOutline:
                     AddCross(highlight.Coord, Visuals.Urgent);
+                    break;
+                case HighlightStyle.LifeOutline:
+                    // 活棋禁入 / 破坏活形涉及的活形棋串：与棋串读法的"已活"同形（实线环 + 悬浮眼徽记）。
+                    AddRing(_preview, highlight.Coord, Visuals.Alive, false, 0.066f);
+                    AddEyeBadge(_preview, highlight.Coord, Visuals.Alive);
                     break;
                 default:
                     break;
@@ -958,13 +998,24 @@ public sealed partial class BoardView : Node3D
         });
     }
 
-    private void AddCross(Coord coord, Color color)
+    /// <summary>已活标记的"眼"徽记：棋子上方悬浮一枚平放的圆环（形状通道，去色后仍与危险棋串的单环可分）。</summary>
+    private void AddEyeBadge(Node3D parent, Coord coord, Color color)
+    {
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = new TorusMesh { InnerRadius = 0.07f, OuterRadius = 0.13f, Rings = 12, RingSegments = 6 },
+            MaterialOverride = Visuals.Glow(color, 1.1f, false),
+            Position = CenterOf(coord) + new Vector3(0f, 1.02f, 0f),
+        });
+    }
+
+    private void AddCross(Coord coord, Color color, Node3D? parent = null)
     {
         Vector3 center = CenterOf(coord) + new Vector3(0f, 0.045f, 0f);
         StandardMaterial3D material = Visuals.Flat(color);
         for (int i = 0; i < 2; i++)
         {
-            _preview.AddChild(new MeshInstance3D
+            (parent ?? _preview).AddChild(new MeshInstance3D
             {
                 Mesh = new BoxMesh { Size = new Vector3(0.62f, 0.02f, 0.07f) },
                 MaterialOverride = material,
