@@ -12,6 +12,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 3. 每个空格的归属（独占及独占者 / 争议 / 中立）。
 4. 已揭示信物的位置、类型与强度，以及各信物的控制状态。
 5. 每名玩家的当前势力、势力明细（领地分与各棋串军势）、行动顺序与公开属性。
+6. 每条棋串的活形状态（活 / 未定 / 死）、各已确定活形棋串的眼空间，以及每名玩家的禁入格集合。
 
 #### Scenario: 改造结果公开
 - **WHEN** 某玩家的匠人架起一座桥
@@ -24,6 +25,10 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 #### Scenario: 领地分公开
 - **WHEN** 任意玩家查询对手的势力明细
 - **THEN** 可读到对手的领地分总计与独占空格坐标集合
+
+#### Scenario: 活形状态公开
+- **WHEN** 任意玩家查询盘面上任一棋串
+- **THEN** 可读到其活形状态；若为已确定活形，可读到其眼空间格集合
 
 ### Requirement: 必须隐藏的信息
 
