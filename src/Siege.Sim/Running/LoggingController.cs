@@ -27,6 +27,9 @@ internal sealed class TurnTrace
 
     internal List<(ImmutableArray<Placement> Placements, BatchFailure Failure)> Rejections { get; } = [];
 
+    /// <summary>本小回合的暂放批次：读它的 <see cref="StagedBatch.Refusals"/>（暂放环节被拒的留痕，含活棋禁入）。</summary>
+    internal StagedBatch? Batch { get; set; }
+
     internal void Reset()
     {
         ShowCount = 0;
@@ -36,6 +39,7 @@ internal sealed class TurnTrace
         Rehearsals = 0;
         IllegalRehearsals.Clear();
         Rejections.Clear();
+        Batch = null;
     }
 }
 
@@ -71,6 +75,7 @@ internal sealed class LoggingController(ITurnController inner, TurnTrace trace) 
         ArgumentNullException.ThrowIfNull(batch);
         ArgumentNullException.ThrowIfNull(rehearse);
         trace.DeployLimit = batch.Context.DeployLimit;
+        trace.Batch = batch;
         Inner.Deploy(batch, () =>
         {
             RehearsalResult result = rehearse();

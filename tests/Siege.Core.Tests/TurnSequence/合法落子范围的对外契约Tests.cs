@@ -67,23 +67,32 @@ public class 合法落子范围的对外契约Tests
     }
 
     [Fact]
-    public void 禁入只在契约一处扣除且与预演共用同一查询()
+    public void 禁入扣除只在LegalRangeFor且与预演共用同一查询()
     {
-        // 守门（tasks 2.4）：
-        // ① 源码：规则层（Siege.Core、Siege.Sim）里按玩家取禁入格集合（ForbiddenCellsFor）只有合法落子范围契约 MatchFlow.cs 一处；
-        //    逐格判禁入（IsForbiddenFor）只有预演 BatchRehearsal.cs 一处；二者都是 LifeShapeReport 的方法（唯一实现）。
+        // 守门（tasks 2.4，段 D 按裁决 R12 收窄；原名 禁入只在契约一处扣除且与预演共用同一查询）：
+        // ① 源码：从某个格集合里**扣除**禁入格，全仓（Siege.Core、Siege.Sim、Siege.Presentation、src/godot）只有 MatchFlow.LegalRangeFor 一处。
+        //    读取禁入格（ForbiddenCellsFor / IsForbiddenFor / ProtectedCellsOf）对表现、终端、分析放开——那是标示与统计，不是第二份合法范围。
+        //    "扣除"认三种形状：Except / ExceptWith 的实参里取禁入格；Where 里对 IsForbiddenFor 取反；RemoveWhere / RemoveAll 里判禁入。
+        //    挡不住所有绕法（testing.md「违禁 token 清单挡不住照抄一份算式」），靠 ② 的行为比对兜底。
         // ② 行为：同一盘面上，P1 在全图范围下逐格单子预演得到"活棋禁入"的格，恰好是契约从全图可落子格里扣掉的格。
         string root = RepoRoot();
         string[] files =
         [
-            .. new[] { "Siege.Core", "Siege.Sim" }
-                .SelectMany(p => Directory.GetFiles(Path.Combine(root, "src", p), "*.cs", SearchOption.AllDirectories))
-                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .. new[] { Path.Combine("src", "Siege.Core"), Path.Combine("src", "Siege.Sim"), Path.Combine("src", "Siege.Presentation"), Path.Combine("src", "godot") }
+                .SelectMany(p => Directory.GetFiles(Path.Combine(root, p), "*.cs", SearchOption.AllDirectories))
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                            && !f.Contains($"{Path.DirectorySeparatorChar}.godot{Path.DirectorySeparatorChar}"))
                 .Where(f => Path.GetFileName(f) != "LifeShape.cs"),
         ];
-        Assert.True(files.Length > 100, $"扫描口径过小：只扫到 {files.Length} 个文件。");
-        Assert.Equal(["MatchFlow.cs"], CallersOf(files, "ForbiddenCellsFor"));
-        Assert.Equal(["BatchRehearsal.cs"], CallersOf(files, "IsForbiddenFor"));
+        Assert.True(files.Length > 120, $"扫描口径过小：只扫到 {files.Length} 个文件。");
+        Assert.Contains(files, f => f.EndsWith("BoardView.cs", StringComparison.Ordinal));   // 口径含 Godot
+
+        Assert.Equal(["MatchFlow.cs:LegalRangeFor"], DeductionsOf(files));
+
+        // 读取放开的反面：扫描口径里确实有契约之外的读取者（终端、表现层、预演），它们不算扣除。
+        Assert.Contains("BoardRenderer.cs", CallersOf(files, "ForbiddenCellsFor"));
+        Assert.Contains("DefaultBoardView.cs", CallersOf(files, "ForbiddenCellsFor"));
+        Assert.Contains("BatchRehearsal.cs", CallersOf(files, "IsForbiddenFor"));
 
         MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(MatchFixtures.P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5)
             .Stones(MatchFixtures.P2, "A8", "B8", "C8", "D8", "B9", "D9");
@@ -102,6 +111,30 @@ public class 合法落子范围的对外契约Tests
         Coord[] removed = [.. board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable).Except(match.LegalRangeFor(MatchFixtures.P1)).Order()];
         Assert.Equal(["E5", "G5", "A9", "C9"], removed.Notations());
         Assert.Equal(removed, rejected);
+    }
+
+    /// <summary>扣除禁入格的位置，形如 <c>文件名:所在方法名</c>，按序排列（同一方法里出现两处即列两次）。</summary>
+    private static string[] DeductionsOf(string[] files)
+    {
+        const string Query = @"(?:ForbiddenCellsFor|ProtectedCellsOf|IsForbiddenFor)";
+        var deduction = new Regex(
+            $@"Except\w*\s*\([^;]*?{Query}" +                 // range.Except(…ForbiddenCellsFor(…)) / set.ExceptWith(…)
+            $@"|Where\s*\([^;]*?!\s*[\w.()]*?IsForbiddenFor" +  // .Where(c => !life.IsForbiddenFor(p, c))
+            $@"|Remove\w*\s*\([^;]*?{Query}",                   // set.RemoveWhere(c => life.IsForbiddenFor(p, c))
+            RegexOptions.Singleline);
+        var method = new Regex(@"(?:public|private|internal|protected)[^;{}=]*?\s(\w+)\s*(?:<[^>]*>)?\s*\(", RegexOptions.Singleline);
+        var hits = new List<string>();
+        foreach (string file in files)
+        {
+            string text = Regex.Replace(File.ReadAllText(file), "//[^\\n]*", string.Empty);
+            foreach (System.Text.RegularExpressions.Match m in deduction.Matches(text))
+            {
+                string owner = method.Matches(text[..m.Index]).LastOrDefault()?.Groups[1].Value ?? "?";
+                hits.Add($"{Path.GetFileName(file)}:{owner}");
+            }
+        }
+
+        return [.. hits.Order(StringComparer.Ordinal)];
     }
 
     private static string[] CallersOf(string[] files, string method) =>

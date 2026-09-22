@@ -63,6 +63,7 @@ public static class ReportWriter
         sb.AppendLine($"- AI 单步决策耗时（单步 = 一个小回合：整理 + 征募 + 整批部署）：均值 {Num(t.AiStep.MeanMs)} ms，最大 {t.AiStep.MaxMs} ms（样本 {t.AiStep.Samples} 个小回合；墙钟，并行跑局会被撑大，量耗时请用 --serial）");
         sb.AppendLine("### 5. 对局结束的大回合数与整局时长");
         sb.AppendLine($"- 终局局的结束大回合分布：{Histogram(t.EndRounds)}；平均 {t.EndRound}");
+        sb.AppendLine($"- 终局局的结束大回合：中位 {MedianOf(t.EndRounds)}，最长 {(t.EndRounds.Count == 0 ? "无样本" : t.EndRounds.Keys.Max().ToString(System.Globalization.CultureInfo.InvariantCulture))}");
         sb.AppendLine($"- 整局时长 {t.MatchMinutes}：不测（裁决 10）。代理：平均每局 {Num(r.Convergence.MeanTurnsPerMatch)} 个小回合，AI 计算耗时 {Num(t.MeanAiMsPerMatch)} ms/局");
         MapScaleSection ms = r.MapScale;
         string playableSkip = ms.PlayableSkipped > 0 ? $"未记可落子格的旧日志 {ms.PlayableSkipped} 局" : string.Empty;
@@ -186,7 +187,47 @@ public static class ReportWriter
         sb.AppendLine($"- 改造直接导致提子 {te.CausedCaptures} 次；首次改造平均第 {Num(te.MeanFirstEditRound)} 大回合");
         sb.AppendLine($"- 改造过的玩家胜率 {te.WinRateOfEditors}");
         sb.AppendLine($"- 终局新增：桥 {te.FinalBridges} 座，栅栏 {te.FinalFences} 道，被烧林地 {te.FinalBurns} 格");
+        sb.AppendLine();
+
+        AppendLifeShape(sb, r.LifeShape);
         return sb.ToString();
+    }
+
+    /// <summary>活形一段（life-shape 4.2）。口径写在各行里：禁入格占比的分子是受保护眼空间格（至少对一名玩家禁入），分母是当时地形的可落子格。</summary>
+    private static void AppendLifeShape(StringBuilder sb, LifeShapeSection l)
+    {
+        sb.AppendLine("## 活形（life-shape）");
+        sb.AppendLine($"- 纳入 {l.Matches} 局，排除缺活形字段的旧日志 {l.Skipped} 局");
+        sb.AppendLine($"- 首次活形确立平均第 {Num(l.MeanFirstEstablishedRound)} 大回合（有确立的 {l.MatchesWithLife} 局；整局无确立 {l.MatchesWithoutLife} 局）");
+        string byRank = l.FirstRoundByRank.Count == 0
+            ? "无样本"
+            : string.Join("，", l.FirstRoundByRank.Select(kv => $"第 {kv.Key} 名 {Num(kv.Value.Mean)}（样本 {kv.Value.Samples}）"));
+        sb.AppendLine($"- 按终局名次分组（每名玩家取自己最早一次确立；只取有名次的局）：{byRank}；从未确立 {l.PlayersNeverAlive} 人次");
+        sb.AppendLine($"- 终局每名玩家平均：已确定活形棋串 {Num(l.MeanFinalAliveGroups)} 条，受保护眼空间 {Num(l.MeanFinalEyeCells)} 格");
+        sb.AppendLine($"- 终局禁入格占可落子格：平均 {Pct(l.MeanForbiddenShare)}（分子 = 全部已确定活形的眼空间之并，即至少对一名玩家禁入的格；分母 = 终局地形的可落子格）");
+        sb.AppendLine($"- 终局有活形玩家的胜率 {l.WinRateWithLife}；无活形玩家 {l.WinRateWithoutLife}");
+        sb.AppendLine($"- 活棋禁入：暂放被拒 {l.ForbiddenStaged}，预演 {l.ForbiddenRehearsed}，确认被拒 {l.ForbiddenRejected}");
+        sb.AppendLine($"- 破坏活形：预演 {l.BreaksRehearsed}，确认被拒 {l.BreaksRejected}");
+        sb.AppendLine($"- 活形失去按原因：{Histogram(l.LostByCause)}");
+        sb.AppendLine($"- 他人致失活（规则缺陷，应为 0）：{l.Defects.Count} 次");
+        foreach (LifeDefect d in l.Defects)
+        {
+            sb.AppendLine($"  - 种子 {d.Seed} 第 {d.Turn} 小回合（第 {d.MajorRound} 大回合）：玩家 {d.Actor} 的批次使玩家 {d.Owner} 的活形失去（代表坐标 {d.At}）");
+        }
+
+        sb.AppendLine("### R8：活形过易的两项单列");
+        sb.AppendLine($"- 单子活形棋串：终局 {Ratio(l.FinalSingleStoneAlive, l.FinalAliveGroups)}；确立事件 {Ratio(l.EstablishedSingleStone, l.EstablishedTotal)}");
+        sb.AppendLine($"- 贴地形小空区（≤ 3 格且贴地形墙）形成的眼空间：终局 {Ratio(l.FinalTerrainSmallEyeSpaces, l.FinalEyeSpaces)}（地形墙 = 盘内几何方向上没有气边：岩石 / 深水 / 崖壁 / 栅栏；棋盘外沿不算）");
+    }
+
+    private static string Ratio(int part, int whole) =>
+        $"{part}/{whole}（{(whole == 0 ? "无样本" : Pct((double)part / whole))}）";
+
+    /// <summary>直方图（值 → 次数）的中位数；偶数个样本取中间两值的平均。</summary>
+    private static string MedianOf(SortedDictionary<int, int> histogram)
+    {
+        List<double> values = [.. histogram.SelectMany(kv => Enumerable.Repeat((double)kv.Key, kv.Value))];
+        return Num(Statistics.Median(values));
     }
 
     private static string TruncatedLine(EndingSection e) =>

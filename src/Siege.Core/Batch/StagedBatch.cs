@@ -16,6 +16,7 @@ namespace Siege.Core.Batch;
 public sealed class StagedBatch
 {
     private readonly List<Placement> _placements = [];
+    private readonly List<StageRefusal> _refusals = [];
 
     public StagedBatch(GameBoard board, BatchContext context)
     {
@@ -33,6 +34,13 @@ public sealed class StagedBatch
     public ImmutableArray<Placement> Placements => [.. _placements];
 
     public int Count => _placements.Count;
+
+    /// <summary>
+    /// 本批次里暂放 / 换位 / 替换被拒的留痕，按发生顺序（life-shape 4.1）。<see cref="Clear"/> 不清它。
+    /// 活棋禁入在暂放环节（预演第 1 步）就被拦下，落进禁入格的一枚永远进不了 <see cref="Placements"/>——
+    /// 日志要记"被判为活棋禁入的批次尝试"，只能读这里，MUST NOT 由日志层自己重判。
+    /// </summary>
+    public IReadOnlyList<StageRefusal> Refusals => _refusals;
 
     /// <summary>
     /// 暂放一枚，可带一个地形改造目标（只有匠人能带；改造与该枚共用同一枚额度，不另计）。
@@ -95,7 +103,14 @@ public sealed class StagedBatch
             _placements.Clear();
             _placements.AddRange(candidate);
         }
+        else
+        {
+            _refusals.Add(new StageRefusal([.. candidate], failure));
+        }
 
         return failure;
     }
 }
+
+/// <summary>一次被拒的暂放 / 换位 / 替换：试图成为的整批暂放与拒绝原因。</summary>
+public sealed record StageRefusal(ImmutableArray<Placement> Tried, BatchFailure Failure);

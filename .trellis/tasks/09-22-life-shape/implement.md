@@ -316,3 +316,120 @@
 6. **R8 数据点**：Godot 自动演示第 9 大回合（v5，种子 20260915）有 32 条已活棋串，当前行动玩家有 35 个禁入格；边疆图第 8 大回合是 29 条 / 34 个。终端样本里，第 1 大回合就有单子堡垒成活。
 7. 新增了一个 Godot 命令行选项 `--shot-groups`，仅用于截图时打开棋串读法。它走 `LaunchArgs` 的合法选项集合，未知选项照旧退出码 1。
 8. **终端里禁入格会盖住信物标记**。if 链里禁入格排在信物之前，眼空间格如果恰好是信物格，`xN` 会盖掉 `?` / `p` 等标记，公开的信物状态在文本盘面上就看不到了（已揭示信物仍列在状态栏的"已揭示信物"行）。3 字符的格宽放不下两个标记，这是有意的取舍。如果要改为信物优先，需要裁决。
+
+## 段 D（tasks 4.1–4.6，外加段 C 收尾 R12 / R13）
+
+### 改了什么
+
+| 文件 | 性质 |
+|---|---|
+| `src/Siege.Core/Batch/StagedBatch.cs` | 新增 `Refusals`（`StageRefusal(Tried, Failure)` 列表）：暂放 / 换位 / 替换被拒时追加，`Clear` 不清。活棋禁入在暂放环节（预演第 1 步）就被拦下，落进禁入格的那一枚永远进不了 `Placements`、也到不了 `Rehearsal` / `Rejected`，所以日志要记"活棋禁入的尝试"只能读这份 Core 留痕（先例：`Match.TerrainEdits`）。**Core 唯一改动** |
+| `src/Siege.Sim/Running/LoggingController.cs` | `TurnTrace.Batch`：`Deploy` 时记下本小回合的暂放批次 |
+| `src/Siege.Sim/Logging/MatchLog.cs` | `TurnSnapshot.Life`（`LifeTurnEntry?`，旧日志为 `null`）：`Changes`（`LifeChangeEntry`：确立 / 失去、所有者、行动者、代表坐标 `At` = 坐标序首格、棋串坐标、眼空间与眼值 `A1,B1=1`、失去原因 `OwnerFill` / `OwnerEdit` / `OwnerOther` / `NonOwner`）；五个拒绝计数 `ForbiddenStaged` / `ForbiddenRehearsed` / `ForbiddenRejected` / `BreaksRehearsed` / `BreaksRejected`；结算后逐玩家 `LifePlayerEntry`（活形棋串数、其中单子数、受保护眼空间块数 / 格数、贴地形小空区块数）；`ProtectedCells`、`PlayableCells`。新事件类型 `LifeRefused`（非细粒度，暂放 / 确认环节被拒时写：行动玩家、类别、坐标、`Values.Owner`、`Detail` 以 `stage` / `confirm` 开头） |
+| `src/Siege.Sim/Running/MatchSession.cs` | `RecordTurn` 写 `Life` 与 `LifeRefused`；新增 `LifeEntry`（internal static）。确立 / 失去比对 `RecordTurn` 已有的前后两份 `MatchPublicView.LifeShape`，**Sim 不调 `Analyze`**，按**棋子归属**判：结算后一条活串里没有任何一枚子在结算前属于同主的活串 → 确立；结算前一条活串里有任一枚子在结算后不在同主的活串里 → 失去。失去原因：行动者 ≠ 所有者 → `NonOwner`（规则缺陷）；所有者落点落进原眼空间 → `OwnerFill`；所有者带了改造 → `OwnerEdit`；否则 `OwnerOther`。R8 的"贴地形"判定 `IsTerrainSmall`：≤ 3 格且至少一格 `board.Neighbors(c).Length > board.LibertyNeighbors(c).Length`（盘内几何方向上缺气边；棋盘外沿不在几何邻居里，不算）。这是遥测分类，不是规则判断；`GameBoard.Neighbors` 的 IL 守门只扫 Core 程序集，boundaries.md 的"只留给表现层几何"这里按"分析层分类"同类处理 |
+| `src/Siege.Sim/Analysis/BalanceAnalyzer.cs` | 新 `LifeShapeSection` / `RoundStat` / `LifeDefect`，`BalanceReport` 末尾加 `LifeShape`。任一快照 `Life == null` 即整局排除并计数；胜率与"按名次分组"只取有名次的局（`rankable`） |
+| `src/Siege.Sim/Analysis/ReportWriter.cs` | 新段「## 活形（life-shape）」+「### R8：活形过易的两项单列」；§16-5 加一行"终局局的结束大回合：中位 X，最长 Y"（从既有直方图算，供与 ① 并列） |
+| `src/Siege.Sim/Play/BoardRenderer.cs` | R12：禁入格改为直接取 `life.ForbiddenCellsFor(me)`，所有者取 `EyeSpaceAt(c).Owner`。R13：if 链里信物排到禁入格之前；被信物盖住的禁入格在图例下方单列一行"信物格同为禁入：E5(x1)"（无重叠不出这一行） |
+| `2026-09-10-siege-core-gameplay-design-v1.md` | 4.3：v1.5 → v1.6；§6.1 七步 → 八步（第 1 步加活棋禁入、提子后新增第 6 步「破坏活形」）；新增 §6.4 活形判定与活棋禁入（空区、无气边即墙、`EYE_SPACE_MAX` = 12、眼值表与相加、三态、方四按气边图、全量重算不入存档、公开）；§12.2 弃赛者遗留活棋指向 §6.4；§13.1 公开活形状态 / 眼空间 / 禁入格；§16 在 20 局冒烟表后追加 200 局基线表（清掉 ① 留下的"完整 200 局由 life-shape 4.4 给出"欠条）；文末变更记录加一行。§6.3 正式结算仍是七步，boundaries.md 那行"七步"未改 |
+| `.trellis/spec/core/boundaries.md` | 4.5：单一实现清单加一行「活形 / 禁入」（唯一实现 `LifeShapeReport`；预演、契约、公开视图、表现、终端、AI、遥测共用；扣除只在 `LegalRangeFor`；守门与变异编号） |
+| `openspec/changes/life-shape/tasks.md` | 23 项全部 `[x]`（段 A–C 的 0.1–3.4 已由前三段完成并记录，本段一并勾选） |
+
+**R10**：`GameRoot.cs` 的 `--export-parts` 两段、`PartExport.cs`、`src/godot/parts/` 未触碰；本段没有改任何 `src/godot/` 文件。Godot 构建 0 警告是含这些改动一起构建的结果。
+
+### 既有测试的改写 / 删除（逐条）
+
+没有删除。改写 4 处，均未改期望值去凑绿：
+
+1. `TurnSequence/合法落子范围的对外契约Tests.禁入只在契约一处扣除且与预演共用同一查询` → 改名 `禁入扣除只在LegalRangeFor且与预演共用同一查询`（R12 收窄）。源码腿由"`ForbiddenCellsFor(` 只在 MatchFlow.cs、`IsForbiddenFor(` 只在 BatchRehearsal.cs"改为"扣除形态只在 `MatchFlow.cs:LegalRangeFor`"：注释剥离后匹配 `Except\w*(…Forbidden…)`、`Where(…!…IsForbiddenFor)`、`Remove\w*(…Forbidden…)` 三种形态，并报出所在方法名；扫描口径扩到 Core / Sim / Presentation / `src/godot`（136 个文件，下界 > 120，另断言口径含 Godot 的 `BoardView.cs`）。"读取放开"加反面断言：`BoardRenderer.cs`、`DefaultBoardView.cs` 确实在读 `ForbiddenCellsFor`。原"`IsForbiddenFor` 只在 `BatchRehearsal.cs`"的断言改为反面断言（`BatchRehearsal.cs` 在读取者之中），读取不再锁死。行为腿（逐格单子预演 = 契约扣除）未动。先红：终端改调 `ForbiddenCellsFor` 后旧守门红 1，收窄后绿。
+2. `AiDecision/候选格上限Tests` 黄金哈希 `F1B2CAB6…4ACEB088` → `CDEB4C13…70084563`。**走法一步没变**：临时探针（已删）在同一局 24 条快照上逐条用 JsonNode 删掉 `Life` 键再序列化，哈希恰为旧值 `F1B2CAB6…`；24 条快照的活形字段全部非空。M-K1 在新值下重跑仍红（40 条）。
+3. `SimFixtures.Turn` 加参数 `life` / `legacyNoLife`（缺省写空的活形记录；`legacyNoLife: true` 造旧日志 `null`）。
+4. `SimulationHarness/终端活形与禁入标示Tests`：只新增方法，既有 5 条未动、全绿（夹具里的信物不在眼上）。
+
+### 新测试（10 条，全部默认运行）
+
+- `MatchTelemetry/活形记录与统计Tests`（新类 = Requirement 名）：
+  - 5 条 Scenario：`活形确立可查`（第 3 大回合 P0 落 B1 成两眼：大回合 3、小回合 1、所有者、`At = B1`、6 枚子、`A1=1`、`C1=1`；并验逐玩家状态、平地角上的眼不算贴地形）、`自拆可查`（P0 填 A1 → `Lost` / `OwnerFill`，棋串与眼空间取结算前）、`拒绝尝试可查`（P1 暂放进 P0 的眼 A1：`ForbiddenStaged = 1`；只存快照的保留策略下 `LifeRefused` 事件仍在，类别 / 坐标 / 所有者 / `stage`）、`活形分析输出`（4 局手算样本 + 1 局旧日志：排除计数、首次确立均值 11/3、按名次 4 / 3.5、终局均值、禁入占比 0.03、胜率 2/3 与 1/9、拒绝计数、失去原因、R8 两项 1/3、1/4、1/4，以及报告行原文）、`他人致失活视为缺陷`（给出种子、小回合、大回合、行动者、所有者；反面：正常样本不出明细）。
+  - 3 条行为钉子：`活形棋串加子不重复记确立`（按棋子归属，不按棋串相等）、`所有者的改造导致失去记为所有者的改造`（B2 深水为墙的两眼活串，P0 在 B3 落匠人搭桥 → B1、B2 成 2 格空区 → `OwnerEdit`）、`真实跑局的活形字段自洽`（Standard、种子 1、40 小回合、完整事件流：每条快照有 `Life`；`BreaksRehearsed` 之和 = 细粒度 `Rehearsal` 事件里 BreaksLife 的条数且 > 0；终局逐玩家四项 = 测试侧在活对局上独立数出的值；贴地形小空区块数 = 测试侧用坐标算术独立算的值且 > 0）。
+- `SimulationHarness/终端活形与禁入标示Tests.信物格同为禁入时信物标记优先`（R13）：E5 放未揭示信物 → `" ? "`，G5 仍为 `"x1 "`；盘面 x 集合 = `ForbiddenCellsFor(P1)` − 信物格；说明行含 `E5(x1)`；反面：无重叠时没有该行。
+
+**先红**：活形遥测的测试写在实现之前，但新类型尚不存在，第一次只能编译失败，不算有效的红；有效的红由下面的变异逐条给出（每条 Scenario 至少一条变异使其红）。R13 同理：实现与测试同批写入，由 M-D4 / M-D5 证红。R12 的红见上面改写第 1 条。
+
+### 变异（脚本 scratchpad `mutate_d.py`，每条跑整个测试工程）
+
+口径同段 A–C：二进制读写，先探测行尾，锚点命中恰 1 次，备份名带变异编号与时间戳，`finally` 里还原，还原后与变异前原始字节逐字节比对，`os.utime` 刷新 mtime；`DOTNET_CLI_UI_LANGUAGE=en`，解析统计行；条件变异只用运行时恒假。17 条全部 `restored=True`；跑完后全部改动文件与未跟踪文件的 SHA-1 与变异前逐一相同，复跑 1266 通过 / 2 跳过 / 0 失败（退出码 0）。
+
+| 编号 | 变异 | 红数 | 红的测试 |
+|---|---|---:|---|
+| M-D1 | 终端 `legal` 上 `.Except(view.LifeShape.ForbiddenCellsFor(me))`（第二处扣除） | 1 | 禁入扣除只在LegalRangeFor且与预演共用同一查询 |
+| M-D2 | AI 候选格 `.Where(c => !LifeShapeReport.Analyze(…).IsForbiddenFor(…))`（第二处扣除） | 1 | 同上（黄金哈希不红：范围本已扣除禁入格） |
+| M-D4 | 终端：信物分支加 `!forbidden.ContainsKey(c)`（禁入重新盖住信物） | 1 | 信物格同为禁入时信物标记优先 |
+| M-D5 | 终端：不输出"信物格同为禁入"行 | 1 | 信物格同为禁入时信物标记优先 |
+| M-D6 | 不写确立事件 | 2 | 活形确立可查、候选格上限黄金哈希 |
+| M-D6b | 确立判定 `Any` → `All`（按棋串整体而非棋子归属） | 2 | 活形棋串加子不重复记确立、黄金哈希 |
+| M-D7 | 失去原因：有改造也记 `OwnerFill` | 1 | 所有者的改造导致失去记为所有者的改造 |
+| M-D8 | `ForbiddenStaged` 恒 0 | 1 | 拒绝尝试可查 |
+| M-D9 | `StagedBatch` 不追加 `Refusals` | 1 | 拒绝尝试可查 |
+| M-D10 | `BreaksRehearsed` 恒 0 | 2 | 真实跑局的活形字段自洽、黄金哈希 |
+| M-D12 | 暂放被拒不写 `LifeRefused` 事件 | 1 | 拒绝尝试可查 |
+| M-D13 | 贴地形判定只看格数（去掉地形墙条件） | 3 | 活形确立可查（角上眼被误计）、真实跑局的活形字段自洽、黄金哈希 |
+| M-D13b | `TerrainSmallEyeSpaces` 恒 0 | 2 | 真实跑局的活形字段自洽、黄金哈希 |
+| M-D14 | 旧日志不排除（`Life` 缺失回填空记录） | 1 | 活形分析输出 |
+| M-D15 | 他人致失活不进缺陷单 | 1 | 他人致失活视为缺陷 |
+| M-D16 | 胜率不排除截断局 | 1 | 活形分析输出 |
+| M-K1 | 候选格预筛恒启用（在新黄金哈希上复核） | 40 | 含 缺省不限制时标准图整局与改动前逐步相同 |
+
+旧 M-B8（AI 里纯读 `ForbiddenCellsFor`）在收窄后的守门下按设计应为绿（读取放开），未单独重跑；"读取放开"由守门里 `BoardRenderer.cs` / `DefaultBoardView.cs` 的反面断言在常态下钉住。
+
+### 旧日志回放 / 排除
+
+- 既有回放测试（`可复现回放Tests`、`批量跑局Tests`、`地形改造日志与分析Tests` 等）全绿。
+- 真实旧日志：新分析器读 `sim-out/restore-smoke20/`（① 的 20 局，无 `Life` 字段）→ 报告「纳入 0 局，排除缺活形字段的旧日志 20 局」，不崩；同一份报告的新行"中位 15，最长 69"与 ① 的记录一致（新行的自证）。
+
+### 4.4 200 局基线
+
+命令（与 ① 逐项同口径；`config.json` 核对：v5、4 名 Standard、七维权重相同、匠人权重 10、截断 600、`SnapshotsOnly`）：
+`Siege.Sim.exe run --out sim-out/life-shape/baseline200 --seed 1 --count 200 --map siege-4p-base-v5 --players 4 --difficulty Standard`，随后 `analyze --dir sim-out/life-shape/baseline200`。
+产物：`sim-out/life-shape/baseline200/`（`config.json`、200 份日志、`summary.json`、`report.txt`）与控制台 `sim-out/life-shape/baseline200.run.log`。失败 0，墙钟 174.8 s（28 并行）。因单次命令上限 10 分钟，以后台方式单独运行，期间没有并行任何其它 dotnet 进程，只做了文档编辑。**AI 未校准口径**（七维权重待 `ai-eye`）。
+
+| 指标 | ① restore-go-core-rules 20 局冒烟 | life-shape 200 局基线 |
+|---|---|---|
+| 截断率（turn_limit） | 0 / 20（0%） | **0 / 200（0%，95% 上界 1.9%）** |
+| 终局原因分布 | 整轮 Pass 20（100%） | 整轮 Pass **200（100%）**；只剩一名 0；棋盘填满 0 |
+| 平均结束大回合 | 18.7 | **13.15** |
+| 中位结束大回合 | 15 | **10** |
+| 最长结束大回合 | 69 | **83** |
+| 平均小回合 / 局 | 70.75 | 48.07 |
+| 首次跨出生区冲突 | 第 6.13 大回合；整局无提子 5 / 20 | 第 8.52 大回合；**整局无提子 82 / 200（41%）** |
+| 每批次提子 / Pass 率 | 0.82 / 29.0% | 0.65 / 33.5% |
+| 第 3 大回合领先者胜率 | 35.0%（7/20） | 46.0%（92/200，区间 39.2%–52.9%） |
+| 首次活形确立（全局） | —（无此机制） | 第 **1.02** 大回合（200 局全部有确立） |
+| 首次活形确立（按终局名次） | — | 第 1 名 1.33 / 第 2 名 1.34 / 第 3 名 1.40 / 第 4 名 1.50 |
+| 终局每名玩家：活形棋串 / 受保护眼格 | — | 6.12 条 / 9.29 格 |
+| 终局禁入格占可落子格 | — | **34.9%** |
+| 有活形玩家胜率 / 无活形玩家胜率 | — | 26.9%（200/743）/ 0.0%（0/57） |
+| 活棋禁入（暂放 / 预演 / 确认） | — | 0 / 0 / 0 |
+| 破坏活形（预演 / 确认） | — | 12046 / 0 |
+| 活形失去按原因 | — | OwnerFill 212 |
+| 他人致失活（规则缺陷） | — | **0** |
+| **R8 单子活形棋串** | — | 终局 **3780 / 4893（77.3%）**；确立事件 5231 / 6471（80.8%） |
+| **R8 贴地形小空区形成的眼空间** | — | 终局 **6001 / 7055（85.1%）** |
+
+### 段末自验（4.6）
+
+- `dotnet build siege.sln --no-incremental`：0 警告、0 错误。
+- `dotnet build src/godot/Siege.Godot.csproj --no-incremental`（Debug）：0 警告、0 错误（含 R10 的他人改动）。
+- `dotnet test -c Release`：通过 1266，跳过 2（Perf、Slow 门控），失败 0，退出码 0。
+- `SIEGE_SLOW=1 dotnet test tests/Siege.Core.Tests -c Release --filter "Category=Slow"`：1 通过（活形保护性质，种子 1–200），耗时 3 s。
+- `openspec validate life-shape --strict`：valid。tasks.md 23 / 23 勾选。
+
+### 待决
+
+1. **R8 数据已经给出，需要负责人裁决是否另开 change**：终局活形棋串 77% 是单子，受保护眼空间 85% 是贴地形的 ≤ 3 格小空区；首次活形确立平均第 1.02 大回合（每局第 1 大回合就有人活）；终局 34.9% 的可落子格对至少一人禁入。连带现象：整局无提子 41%（① 为 25%）、首次冲突推迟到第 8.52 大回合。结论只在 AI 未校准口径下成立。
+2. **"有活形玩家胜率"几乎是全员**：800 个玩家样本里 743 个终局有活形，无活形的 57 人胜率 0%。这个指标在当前 v5 上区分度很低，与第 1 条同源。
+3. **R8"贴地形"的口径**：以"盘内几何方向上缺气边"定义地形墙（岩石 / 深水 / 崖壁 / 栅栏），棋盘外沿不算；分母是终局受保护眼空间块数。实现用 Sim 里的 `GameBoard.Neighbors`（遥测分类，不是规则判断）。如果要把棋盘外沿也算作地形，或者按格数而不是块数计，需要裁决。
+4. **失去原因的判定是启发式**：落点落进原眼空间就记 `OwnerFill`，否则有改造就记 `OwnerEdit`。所有者同一批既填眼又改造时记 `OwnerFill`。基线里 212 次全是 `OwnerFill`，没有出现 `OwnerOther`。
+5. **活棋禁入尝试在 AI 跑局中恒为 0**，这符合设计：AI 的候选来自已扣除禁入格的合法范围。暂放环节的禁入尝试只有人类 / 脚本控制者会产生，现在由 `StagedBatch.Refusals` 记录。破坏活形在 AI 预演里每局约 60 次（12046 / 200），是可观的预演浪费，归 `ai-eye`。
+6. `LifeRefused` 事件只写暂放与确认两个环节；预演环节的同类失败只计数（快照），明细仍在细粒度 `Rehearsal` 事件里（完整模式才保留），这样避免每局约 60 行的日志膨胀。
+7. **`LifeRefused` 的 `confirm` 环节没有专门测试**：`拒绝尝试可查` 走的是 `stage` 环节；"破坏活形在确认时被拒"（控制者不预演直接确认）的写入路径和 `stage` 共用同一个 `AddLifeRefused`，但没有样本钉住，基线里 `BreaksRejected` 也是 0。列为已知薄弱点。
+8. 变异编号跳过了 M-D3、M-D11（草拟时合并或删去），并不是漏跑。
+9. 收尾补丁：按 R12 原文，守门里原来的"`IsForbiddenFor` 只在 `BatchRehearsal.cs`"改为反面断言（读取放开）。改完后重跑该测试类，4 条全绿；复跑 M-D2，仍然只红 1 条（守门本身）。

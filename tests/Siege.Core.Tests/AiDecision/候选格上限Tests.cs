@@ -40,7 +40,9 @@ public class 候选格上限Tests
     // 改动前后的二进制各跑种子 31、24 个小回合，快照去掉耗时后前 15 个小回合逐条相同；第 16 个小回合（第 4 大回合、P0，保护期后第一手全图落子）起分叉——
     // 旧落点 H2 / M8 / E9 中 M8、E9 在新规则下正是 P0 的禁入格（临时探针实测该时刻 P0 禁入 39 格），新落点 H2 / E5 / F12。新值连跑两次一致。
     // 契约是否扣除禁入格不影响这一局（变异 M-B7「契约不扣除」下本测试仍绿：落进禁入格的候选在预演第 1 步被拒、不进排名）。
-    private const string V4GoldenTurnHash = "F1B2CAB64AB55F08D8A03492F90212050C95B2E34FB22644D011C2B44ACEB088";
+    // life-shape 段 D：F1B2CAB6…4ACEB088 → CDEB4C13…70084563。走法一步没变：快照新增 TurnSnapshot.Life 一个字段（活形记录，4.1）；
+    // 同一局 24 条快照逐条去掉该字段（JsonNode 删键后重新序列化）的哈希恰为旧值 F1B2CAB6…（临时探针实跑），24 条快照的活形字段全部非空。
+    private const string V4GoldenTurnHash = "CDEB4C1349308458B40F7007A651F2B4B8583A84F8988BA40513EF0D70084563";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));

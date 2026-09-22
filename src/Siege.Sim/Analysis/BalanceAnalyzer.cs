@@ -264,7 +264,45 @@ public sealed record BalanceReport(
     TerrainEditSection TerrainEdits,
     EndingSection Ending,
     MapScaleSection MapScale,
-    TerritoryShareSection TerritoryShare);
+    TerritoryShareSection TerritoryShare,
+    LifeShapeSection LifeShape);
+
+/// <summary>首次活形确立大回合的一个分组（均值与样本数）。</summary>
+public sealed record RoundStat(double Mean, int Samples);
+
+/// <summary>一条"非所有者的批次导致活形失去"的记录：规则缺陷（D3 + D4 应使其不可能），报告单列并给出种子与小回合序号。</summary>
+public sealed record LifeDefect(string Seed, int Turn, int MajorRound, int Owner, int Actor, string At);
+
+/// <summary>
+/// 活形记录与统计（life-shape 4.2，match-telemetry「活形记录与统计」）。缺活形字段的旧日志整局排除并计数（<see cref="Skipped"/>）。
+/// 终局口径取每局最后一条快照的 <see cref="LifeTurnEntry"/>；胜率类只取有名次的局。
+/// </summary>
+public sealed record LifeShapeSection(
+    int Matches,
+    int Skipped,
+    int MatchesWithLife,
+    int MatchesWithoutLife,
+    double MeanFirstEstablishedRound,
+    SortedDictionary<int, RoundStat> FirstRoundByRank,
+    int PlayersNeverAlive,
+    double MeanFinalAliveGroups,
+    double MeanFinalEyeCells,
+    double MeanForbiddenShare,
+    Proportion WinRateWithLife,
+    Proportion WinRateWithoutLife,
+    int ForbiddenStaged,
+    int ForbiddenRehearsed,
+    int ForbiddenRejected,
+    int BreaksRehearsed,
+    int BreaksRejected,
+    SortedDictionary<string, int> LostByCause,
+    List<LifeDefect> Defects,
+    int FinalAliveGroups,
+    int FinalSingleStoneAlive,
+    int EstablishedTotal,
+    int EstablishedSingleStone,
+    int FinalEyeSpaces,
+    int FinalTerrainSmallEyeSpaces);
 
 /// <summary>
 /// 离线平衡分析（match-telemetry 三条 Requirement）：只读日志，不重跑对局，改口径无需重跑（design.md D6）。
@@ -320,7 +358,160 @@ public static class BalanceAnalyzer
             TerrainEdits(included, rankable),
             Ending(included, ranked.Count),
             MapScale(included),
-            TerritoryShare(included));
+            TerritoryShare(included),
+            LifeShape(included, rankable));
+    }
+
+    // ---------- 活形（life-shape 4.2） ----------
+
+    /// <param name="rankable">有名次的局：只有它们计入胜率与"按名次分组"（截断局没有名次与胜者）。</param>
+    private static LifeShapeSection LifeShape(List<MatchLog> logs, HashSet<MatchLog> rankable)
+    {
+        int matches = 0, skipped = 0, withoutLife = 0, neverAlive = 0;
+        var firstRounds = new List<double>();
+        var byRank = new SortedDictionary<int, List<double>>();
+        var finalAlive = new List<double>();
+        var finalEyeCells = new List<double>();
+        var forbiddenShares = new List<double>();
+        int withWins = 0, withTrials = 0, withoutWins = 0, withoutTrials = 0;
+        int forbiddenStaged = 0, forbiddenRehearsed = 0, forbiddenRejected = 0, breaksRehearsed = 0, breaksRejected = 0;
+        var lostByCause = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var defects = new List<LifeDefect>();
+        int aliveTotal = 0, aliveSingle = 0, establishedTotal = 0, establishedSingle = 0, eyeSpaces = 0, terrainSmall = 0;
+
+        foreach (MatchLog log in logs)
+        {
+            // 缺活形字段的旧日志整局排除并计数：哪怕只有一条快照缺也排除，MUST NOT 当成"这局没人活"。
+            if (log.Turns.Count == 0 || log.Turns.Any(t => t.Life is null))
+            {
+                skipped++;
+                continue;
+            }
+
+            matches++;
+            var firstByPlayer = new SortedDictionary<int, int>();
+            foreach (TurnSnapshot turn in log.Turns)
+            {
+                LifeTurnEntry life = turn.Life!;
+                forbiddenStaged += life.ForbiddenStaged;
+                forbiddenRehearsed += life.ForbiddenRehearsed;
+                forbiddenRejected += life.ForbiddenRejected;
+                breaksRehearsed += life.BreaksRehearsed;
+                breaksRejected += life.BreaksRejected;
+                foreach (LifeChangeEntry change in life.Changes)
+                {
+                    if (change.Kind == LifeChangeEntry.Established)
+                    {
+                        establishedTotal++;
+                        establishedSingle += change.Stones.Count == 1 ? 1 : 0;
+                        firstByPlayer.TryAdd(change.Owner, turn.MajorRound);
+                        continue;
+                    }
+
+                    string cause = change.Cause ?? "?";
+                    lostByCause[cause] = lostByCause.TryGetValue(cause, out int n) ? n + 1 : 1;
+                    if (cause == LifeChangeEntry.NonOwner || change.Actor != change.Owner)
+                    {
+                        defects.Add(new LifeDefect(log.Header.Seed, turn.Turn, turn.MajorRound, change.Owner, change.Actor, change.At));
+                    }
+                }
+            }
+
+            if (firstByPlayer.Count == 0)
+            {
+                withoutLife++;
+            }
+            else
+            {
+                firstRounds.Add(firstByPlayer.Values.Min());
+            }
+
+            LifeTurnEntry last = log.Turns[^1].Life!;
+            foreach (LifePlayerEntry p in last.Players)
+            {
+                finalAlive.Add(p.AliveGroups);
+                finalEyeCells.Add(p.EyeCells);
+                aliveTotal += p.AliveGroups;
+                aliveSingle += p.SingleStoneAlive;
+                eyeSpaces += p.EyeSpaces;
+                terrainSmall += p.TerrainSmallEyeSpaces;
+            }
+
+            if (last.PlayableCells > 0)
+            {
+                forbiddenShares.Add((double)last.ProtectedCells / last.PlayableCells);
+            }
+
+            if (!rankable.Contains(log))
+            {
+                continue;
+            }
+
+            List<int> winners = log.Result?.Winners ?? [];
+            foreach (LifePlayerEntry p in last.Players)
+            {
+                bool won = winners.Contains(p.Player);
+                if (p.AliveGroups > 0)
+                {
+                    withTrials++;
+                    withWins += won ? 1 : 0;
+                }
+                else
+                {
+                    withoutTrials++;
+                    withoutWins += won ? 1 : 0;
+                }
+            }
+
+            foreach (StandingEntry standing in log.Result!.Standings)
+            {
+                if (!firstByPlayer.TryGetValue(standing.Player, out int round))
+                {
+                    neverAlive++;
+                    continue;
+                }
+
+                if (!byRank.TryGetValue(standing.Rank, out List<double>? rounds))
+                {
+                    byRank[standing.Rank] = rounds = [];
+                }
+
+                rounds.Add(round);
+            }
+        }
+
+        var firstRoundByRank = new SortedDictionary<int, RoundStat>();
+        foreach ((int rank, List<double> rounds) in byRank)
+        {
+            firstRoundByRank[rank] = new RoundStat(Statistics.Mean(rounds), rounds.Count);
+        }
+
+        return new LifeShapeSection(
+            matches,
+            skipped,
+            firstRounds.Count,
+            withoutLife,
+            Statistics.Mean(firstRounds),
+            firstRoundByRank,
+            neverAlive,
+            Statistics.Mean(finalAlive),
+            Statistics.Mean(finalEyeCells),
+            Statistics.Mean(forbiddenShares),
+            Statistics.Wilson(withWins, withTrials),
+            Statistics.Wilson(withoutWins, withoutTrials),
+            forbiddenStaged,
+            forbiddenRehearsed,
+            forbiddenRejected,
+            breaksRehearsed,
+            breaksRejected,
+            lostByCause,
+            defects,
+            aliveTotal,
+            aliveSingle,
+            establishedTotal,
+            establishedSingle,
+            eyeSpaces,
+            terrainSmall);
     }
 
     // ---------- 终局原因分布与截断（restore-go-core-rules 段 E） ----------

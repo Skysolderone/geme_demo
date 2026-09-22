@@ -88,6 +88,31 @@ public class 终端活形与禁入标示Tests
     }
 
     [Fact]
+    public void 信物格同为禁入时信物标记优先()
+    {
+        // life-shape 裁决 R13：禁入格与未揭示信物重叠时，格上显示信物标记（信物更少见、信息量更大），
+        // 被盖住的禁入格改由图例下方一行列出（格 + 所有者），不丢信息。
+        // P0 的眼 E5 上放一枚未揭示信物，G5 没有：P1 看盘时 E5 为 " ? "，G5 仍为 "x1 "。
+        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command())])
+            .AtRound(5, [P1, P0, MatchFixtures.P2, MatchFixtures.P3])
+            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5);
+        string text = Render(match, P1);
+
+        Assert.Equal(" ? ", CellText(text, 5, 4));
+        Assert.Equal("x1 ", CellText(text, 5, 6));
+
+        // 盘面上的 x 集合 = 禁入格 − 信物格（测试侧独立取数）；被盖住的 E5 出现在图例下方的说明行里，并带所有者。
+        MatchPublicView view = match.Publish();
+        Coord[] relicCells = [.. view.Relics.Select(r => r.Coord)];
+        Coord[] marked = [.. view.Board.AllCoords().Where(c => CellText(text, c.Y + 1, c.X).StartsWith('x')).Order()];
+        Assert.Equal(view.LifeShape.ForbiddenCellsFor(P1).Except(relicCells).Order(), marked);
+        Assert.Contains("信物格同为禁入：E5(x1)", text, StringComparison.Ordinal);
+
+        // 反面：没有重叠时不出这一行（说明行不是恒写）。
+        Assert.DoesNotContain("信物格同为禁入", Render(RingMatch(), P1), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void 脚本对局里出现禁入与已活标示()
     {
         // 脚本化终端测试：v5 图、种子 31，人类坐 1 号位、选 1 号区后每个小回合都 Pass；AI（Standard）按规则落子。

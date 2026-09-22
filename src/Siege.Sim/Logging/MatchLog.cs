@@ -25,6 +25,8 @@ namespace Siege.Sim.Logging;
 /// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因三类之一（LastPlayerStanding / BoardFull / AllPassed），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
 /// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
+/// <para>life-shape「活形记录与统计」：快照的 <see cref="TurnSnapshot.Life"/>（本小回合的活形确立 / 失去、两类拒绝计数、结算后逐玩家活形状态）；
+/// 暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试另记 <c>LifeRefused</c> 事件（非细粒度，任何保留策略下都在）。</para>
 /// <para>
 /// 已删除、<b>不属于</b>日志契约的旧字段（restore-go-core-rules 段 E 裁决）：据点（首部 <c>SiteValues</c> / <c>Sites</c>、快照 <c>Sites</c>、<c>PlayerEntry.SiteScore</c>、<c>SiteControlChanged</c> 事件）、
 /// 首部 <c>MaxMajorRounds</c> / <c>DominanceStartRound</c> / <c>CatchUpRecruit</c>、<c>PlayerEntry.Protection</c>、快照 <c>CatchUpReveal</c> / <c>CatchUpPick</c>、
@@ -306,6 +308,103 @@ public sealed record TerrainEditEntry
     public bool CausedCapture { get; init; }
 }
 
+/// <summary>
+/// 一个小回合的活形记录：本次结算的活形确立 / 失去、两类拒绝尝试的计数、结算后的逐玩家活形状态。
+/// 全部取自公开视图里那一份全量活形分析（<c>MatchPublicView.LifeShape</c>，唯一实现），日志层不调 <c>Analyze</c>、不自己判活形。
+/// </summary>
+public sealed record LifeTurnEntry
+{
+    /// <summary>本次结算后新确立 / 失去的已确定活形，确立在前、失去在后，各按代表坐标排序。</summary>
+    public List<LifeChangeEntry> Changes { get; init; } = [];
+
+    /// <summary>暂放环节因活棋禁入被拒的次数（预演第 1 步；AI 的候选来自已扣除禁入格的合法范围，正常为 0）。</summary>
+    public int ForbiddenStaged { get; init; }
+
+    /// <summary>控制者主动预演时因活棋禁入被判非法的次数。</summary>
+    public int ForbiddenRehearsed { get; init; }
+
+    /// <summary>确认时因活棋禁入被拒的次数。</summary>
+    public int ForbiddenRejected { get; init; }
+
+    /// <summary>控制者主动预演时因破坏活形被判非法的次数（AI 的候选预演，细粒度 <c>Rehearsal</c> 事件只在完整模式保留，这里在任何模式下都计）。</summary>
+    public int BreaksRehearsed { get; init; }
+
+    /// <summary>确认时因破坏活形被拒的次数。</summary>
+    public int BreaksRejected { get; init; }
+
+    /// <summary>结算后逐玩家的活形状态（按玩家编号）。</summary>
+    public List<LifePlayerEntry> Players { get; init; } = [];
+
+    /// <summary>结算后受保护的眼空间格数（全部已确定活形的封闭眼空间之并；至少对一名玩家禁入）。</summary>
+    public int ProtectedCells { get; init; }
+
+    /// <summary>结算后全图可落子格数（按当时地形：本局架的桥计入），是禁入格占比的分母。</summary>
+    public int PlayableCells { get; init; }
+}
+
+/// <summary>一次活形确立或失去（match-telemetry「活形记录与统计」第 1、2 条）。大回合 / 小回合由所在快照给出。</summary>
+public sealed record LifeChangeEntry
+{
+    public const string Established = "Established";
+    public const string Lost = "Lost";
+
+    /// <summary>失去原因：所有者的落点落进了原眼空间（自拆）。</summary>
+    public const string OwnerFill = "OwnerFill";
+
+    /// <summary>失去原因：所有者本批带了改造，且落点不在原眼空间里。</summary>
+    public const string OwnerEdit = "OwnerEdit";
+
+    /// <summary>失去原因：所有者本批既没有填眼也没有改造（兜底，正常不应出现）。</summary>
+    public const string OwnerOther = "OwnerOther";
+
+    /// <summary>失去原因：行动者不是所有者——规则缺陷（D3 + D4 应使其不可能），分析单列。</summary>
+    public const string NonOwner = "NonOwner";
+
+    /// <summary><see cref="Established"/> / <see cref="Lost"/>。</summary>
+    public required string Kind { get; init; }
+
+    public int Owner { get; init; }
+
+    /// <summary>本小回合的行动者。</summary>
+    public int Actor { get; init; }
+
+    /// <summary>代表坐标：棋串坐标序的首格。</summary>
+    public required string At { get; init; }
+
+    /// <summary>棋串坐标，坐标序。确立取结算后，失去取结算前。</summary>
+    public List<string> Stones { get; init; } = [];
+
+    /// <summary>该棋串的封闭眼空间与眼值，形如 <c>A1,B1=1</c>；确立取结算后，失去取结算前。</summary>
+    public List<string> EyeSpaces { get; init; } = [];
+
+    /// <summary>失去原因；确立为 <c>null</c>。</summary>
+    public string? Cause { get; init; }
+}
+
+/// <summary>某名玩家在某次结算后的活形状态。</summary>
+public sealed record LifePlayerEntry
+{
+    public int Player { get; init; }
+
+    /// <summary>已确定活形棋串数。</summary>
+    public int AliveGroups { get; init; }
+
+    /// <summary>其中只有一枚子的（R8：贴地形的小空区单子即活）。</summary>
+    public int SingleStoneAlive { get; init; }
+
+    /// <summary>受保护的眼空间块数（至少属于一条已确定活形棋串的封闭眼空间）。</summary>
+    public int EyeSpaces { get; init; }
+
+    /// <summary>受保护的眼空间格数。</summary>
+    public int EyeCells { get; init; }
+
+    /// <summary>
+    /// 受保护眼空间里"贴地形的小空区"块数（R8）：不超过 3 格，且至少一格在盘内某个几何方向上没有气边（岩石 / 深水 / 崖壁 / 栅栏；棋盘外沿不算）。
+    /// 这是遥测分类，不是规则判断。
+    /// </summary>
+    public int TerrainSmallEyeSpaces { get; init; }
+}
+
 /// <summary>一枚信物的完整内容（事后记录）。</summary>
 public sealed record RelicEntry
 {
@@ -369,6 +468,12 @@ public sealed record TurnSnapshot
     /// artisan-terrain-edit 之前的旧日志才是 <c>null</c>，分析时整局排除并计数（R-6），MUST NOT 回填成空表。
     /// </summary>
     public List<TerrainEditEntry>? Edits { get; init; }
+
+    /// <summary>
+    /// 活形记录（life-shape 4.1）。新日志每条快照都写（没有变化就是空表与 0），life-shape 之前的旧日志为 <c>null</c>：
+    /// 活形分析整局排除并计数，MUST NOT 回填成"这局没人活"。
+    /// </summary>
+    public LifeTurnEntry? Life { get; init; }
 
     /// <summary>小回合墙钟耗时（毫秒）；只记录，不参与任何决定。</summary>
     public long? ElapsedMs { get; init; }
@@ -482,6 +587,9 @@ public static class LogEventType
     public const string MatchEnded = "MatchEnded";
     public const string Takeover = "Takeover";
     public const string FlagsLocked = "FlagsLocked";
+
+    /// <summary>暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试（life-shape 4.1）；预演环节的同类失败见细粒度 <see cref="Rehearsal"/> 与快照计数。</summary>
+    public const string LifeRefused = "LifeRefused";
 
     /// <summary>只在完整模式保留的细粒度事件。</summary>
     public static bool IsFineGrained(string type) => type is Rehearsal or Candidates;

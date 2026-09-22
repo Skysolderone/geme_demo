@@ -100,12 +100,11 @@ internal sealed class BoardRenderer
         IReadOnlySet<Coord>? legal = batch?.Context.LegalRange;
 
         // life-shape 3.3：活形状态与禁入格只读公开视图里那一份全量分析（与盘面同一时刻），终端不调 Analyze、不判活形。
-        // 禁入格 = 他人已确定活形棋串的眼空间：按所有者取 ProtectedCellsOf，所有者即符号里的玩家号；自己的眼不标（所有者可自拆）。
+        // 禁入格直接取 ForbiddenCellsFor(me)（裁决 R12：读取放开，扣除只在 LegalRangeFor），所有者取该格所在眼空间的所有者；
+        // 自己的眼本就不在其中（所有者可自拆）。
         LifeShapeReport life = view.LifeShape;
-        ImmutableDictionary<Coord, PlayerId> forbidden = view.Players
-            .Where(p => p.Player != me)
-            .SelectMany(p => life.ProtectedCellsOf(p.Player).Select(c => (Cell: c, Owner: p.Player)))
-            .ToImmutableDictionary(t => t.Cell, t => t.Owner);
+        ImmutableDictionary<Coord, PlayerId> forbidden = life.ForbiddenCellsFor(me)
+            .ToImmutableDictionary(c => c, c => life.EyeSpaceAt(c)!.Owner);
 
         WriteColumns(map.Width);
         for (int y = map.Height - 1; y >= 0; y--)
@@ -137,13 +136,9 @@ internal sealed class BoardRenderer
                     string glyph = $"{o.Owner.Value + 1}{Letter(o.Type)}{alive}";
                     Ink(glyph, ColorOf(o.Owner), bright: o.Owner == me);
                 }
-                else if (forbidden.TryGetValue(c, out PlayerId lifeOwner))
-                {
-                    // 禁入格排在信物、区号、合法空格之前：它回答的是"这里能不能落"，比别的标记要紧（与预演第 1 步"禁入先于范围"同序）。
-                    Ink($"{ForbiddenMark}{lifeOwner.Value + 1} ", ColorOf(lifeOwner));
-                }
                 else if (relics.TryGetValue(c, out RelicPublicState? relic))
                 {
+                    // 裁决 R13：信物排在禁入格之前（信物更少见、信息量更大）；被盖住的禁入格在图例下方单列一行。
                     if (relic.IsRevealed && relic.Content is { } content)
                     {
                         Ink($" {RelicLetter(content.Type)} ", ConsoleColor.DarkYellow);
@@ -152,6 +147,11 @@ internal sealed class BoardRenderer
                     {
                         Ink(" ? ", ConsoleColor.DarkYellow);
                     }
+                }
+                else if (forbidden.TryGetValue(c, out PlayerId lifeOwner))
+                {
+                    // 禁入格排在区号、合法空格之前：它回答的是"这里能不能落"（与预演第 1 步"禁入先于范围"同序）。
+                    Ink($"{ForbiddenMark}{lifeOwner.Value + 1} ", ColorOf(lifeOwner));
                 }
                 else if (zones && map.BirthZoneOf(c) is { } z)
                 {
@@ -174,6 +174,11 @@ internal sealed class BoardRenderer
         _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=岩石  ~=深水");
         _out.WriteLine($"        {AliveMark}=已活棋串(如 1B{AliveMark})  {ForbiddenMark}N=玩家N活形的眼(你禁入)");
         _out.WriteLine("        已揭示信物：p探勘 c征召 d兵站 o军令 v先锋 e徽记");
+        Coord[] covered = [.. forbidden.Keys.Where(relics.ContainsKey).Order()];
+        if (covered.Length > 0)
+        {
+            _out.WriteLine("        信物格同为禁入：" + string.Join("  ", covered.Select(c => $"{c.ToNotation()}({ForbiddenMark}{forbidden[c].Value + 1})")));
+        }
     }
 
     /// <summary>对局状态：大回合、行动顺序、各家势力与公开手牌类型、已揭示信物。</summary>

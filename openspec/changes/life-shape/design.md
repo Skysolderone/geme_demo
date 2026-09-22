@@ -127,3 +127,7 @@
   - R8（段 B 后）"活形过易"（v5 贴地形小空区单子即活）不在本 change 改规则；段 D 基线报告单列单子活形数与贴地形小空区占比，再决定是否另开 change。
   - R9（段 B 后）失败定位形状沿用段 B：活棋禁入 = 落点 + 所属活形棋串 + 所有者；破坏活形 = 受影响棋串 + 整批落子，不指认单枚。
   - R10（段 B 后）工作树里非本任务的 Godot 改动（`GameRoot.cs` 的 `--export-parts`、`PartExport.cs`、`src/godot/parts/`）不动、不随本任务提交。
+  - R11（段 C 后）棋串读法"已活"优先于"危险"（两眼活形常只剩两口气，受保护即不危险）。
+  - R12（段 C 后）"禁入只在一处扣除"守门收窄为"扣除只在 `LegalRangeFor`"，读取禁入格（`ForbiddenCellsFor` / `IsForbiddenFor`）对表现 / 终端 / 分析放开；终端改为直接调 `ForbiddenCellsFor`。
+  - R13（段 C 后）终端禁入格与未揭示信物重叠时，信物标记优先（信物更少见、信息量更大），禁入改由图例旁说明。
+  - R14（段 D 后）遥测"贴地形小空区"分类在 `MatchSession` 用 `GameBoard.Neighbors` 与 `LibertyNeighbors` 的差判定"某方向无气边"，只作统计分类、不是规则判定，认可；R8 规则是否修改待负责人看 200 局数据后另行裁决。

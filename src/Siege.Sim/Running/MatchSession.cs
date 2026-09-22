@@ -274,6 +274,7 @@ public sealed class MatchSession
     private void RecordTurn(PlayerId player, int majorRound, int position, MatchPublicView before, MatchPublicView after, long elapsedMs)
     {
         var placements = new List<string>();
+        var placedCells = new List<Coord>();
         var captures = new List<string>();
         foreach (Coord c in after.Board.AllCoords())
         {
@@ -282,6 +283,7 @@ public sealed class MatchSession
             if (was is null && now is { } placed)
             {
                 placements.Add(new Placement(c, placed.Type).ToString());
+                placedCells.Add(c);
             }
             else if (was is { } taken && now is null)
             {
@@ -339,6 +341,18 @@ public sealed class MatchSession
             Add(turn, majorRound, LogEventType.Rejected, pid, $"[{string.Join(",", tried)}] {failure.Message}",
                 coords: [.. failure.Coords.Select(c => c.ToNotation())], failureKind: failure.Kind.ToString(),
                 values: new Dictionary<string, BigInteger> { ["Attempt"] = ++attempt });
+        }
+
+        // life-shape 4.1：暂放 / 确认环节因活棋禁入或破坏活形被拒的尝试（暂放被拒读 Core 留痕 StagedBatch.Refusals，不自己重判）。
+        ImmutableArray<StageRefusal> refusals = _trace.Batch is { } staged ? [.. staged.Refusals] : [];
+        foreach (StageRefusal refusal in refusals.Where(r => IsLifeFailure(r.Failure)))
+        {
+            AddLifeRefused(turn, majorRound, pid, "stage", refusal.Tried, refusal.Failure);
+        }
+
+        foreach ((ImmutableArray<Placement> tried, BatchFailure failure) in _trace.Rejections.Where(r => IsLifeFailure(r.Failure)))
+        {
+            AddLifeRefused(turn, majorRound, pid, "confirm", tried, failure);
         }
 
         HeuristicTurnController? ai = AiOf(player);
@@ -404,6 +418,14 @@ public sealed class MatchSession
             Placements = placements,
             Captures = captures,
             Edits = edits,
+            Life = LifeEntry(player, before, after, placedCells, edits.Count > 0) with
+            {
+                ForbiddenStaged = refusals.Count(r => r.Failure.Kind == BatchFailureKind.LifeForbidden),
+                ForbiddenRehearsed = _trace.IllegalRehearsals.Count(r => r.Failure.Kind == BatchFailureKind.LifeForbidden),
+                ForbiddenRejected = _trace.Rejections.Count(r => r.Failure.Kind == BatchFailureKind.LifeForbidden),
+                BreaksRehearsed = _trace.IllegalRehearsals.Count(r => r.Failure.Kind == BatchFailureKind.BreaksLife),
+                BreaksRejected = _trace.Rejections.Count(r => r.Failure.Kind == BatchFailureKind.BreaksLife),
+            },
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
             FreePickCount = _trace.FreePickCount,
@@ -422,6 +444,99 @@ public sealed class MatchSession
             ElapsedMs = elapsedMs,
         });
     }
+
+    private static bool IsLifeFailure(BatchFailure failure) =>
+        failure.Kind is BatchFailureKind.LifeForbidden or BatchFailureKind.BreaksLife;
+
+    private void AddLifeRefused(int turn, int majorRound, int? player, string stage, ImmutableArray<Placement> tried, BatchFailure failure) =>
+        Add(turn, majorRound, LogEventType.LifeRefused, player, $"{stage} [{string.Join(",", tried)}] {failure.Message}",
+            coords: [.. failure.Coords.Select(c => c.ToNotation())], failureKind: failure.Kind.ToString(),
+            values: failure.LifeOwner is { } owner ? new Dictionary<string, BigInteger> { ["Owner"] = owner.Value } : null);
+
+    /// <summary>"贴地形的小空区"的格数上限（R8 统计口径，只用于遥测分类）。</summary>
+    internal const int SmallEyeSpaceMax = 3;
+
+    /// <summary>
+    /// 本小回合的活形记录（life-shape 4.1）：比对结算前后两份公开视图里的活形分析，按<b>棋子归属</b>而不是棋串相等来判——
+    /// 己方加子合并两条活串时，旧串的子仍在同主的活串里，不算失去；新串含旧活串的子，不算新确立。
+    /// 两类拒绝计数由调用方填。internal 供测试用真实盘面走写入路径。
+    /// </summary>
+    internal static LifeTurnEntry LifeEntry(PlayerId actor, MatchPublicView before, MatchPublicView after, IReadOnlyCollection<Coord> placed, bool edited)
+    {
+        LifeShapeReport was = before.LifeShape;
+        LifeShapeReport now = after.LifeShape;
+        var changes = new List<LifeChangeEntry>();
+
+        foreach (GroupLife g in now.Groups.Where(g => g.Life == LifeState.Alive).OrderBy(g => g.Group.Stones.Min()))
+        {
+            if (!g.Group.Stones.Any(s => StillAlive(was, s, g.Group.Owner)))
+            {
+                changes.Add(Change(LifeChangeEntry.Established, g, actor, cause: null));
+            }
+        }
+
+        foreach (GroupLife g in was.Groups.Where(g => g.Life == LifeState.Alive).OrderBy(g => g.Group.Stones.Min()))
+        {
+            if (g.Group.Stones.All(s => StillAlive(now, s, g.Group.Owner)))
+            {
+                continue;
+            }
+
+            string cause = g.Group.Owner != actor ? LifeChangeEntry.NonOwner
+                : placed.Any(c => g.EyeSpaces.Any(e => e.Cells.Contains(c))) ? LifeChangeEntry.OwnerFill
+                : edited ? LifeChangeEntry.OwnerEdit
+                : LifeChangeEntry.OwnerOther;
+            changes.Add(Change(LifeChangeEntry.Lost, g, actor, cause));
+        }
+
+        GameBoard board = after.Board;
+        return new LifeTurnEntry
+        {
+            Changes = changes,
+            Players = [.. after.Players.Select(p => p.Player).OrderBy(p => p.Value).Select(p =>
+            {
+                GroupLife[] alive = [.. now.Groups.Where(g => g.Life == LifeState.Alive && g.Group.Owner == p)];
+                EyeSpace[] eyes = [.. now.EyeSpaces.Where(e => e.Owner == p && now.IsProtected(e))];
+                return new LifePlayerEntry
+                {
+                    Player = p.Value,
+                    AliveGroups = alive.Length,
+                    SingleStoneAlive = alive.Count(g => g.Group.Size == 1),
+                    EyeSpaces = eyes.Length,
+                    EyeCells = eyes.Sum(e => e.Cells.Length),
+                    TerrainSmallEyeSpaces = eyes.Count(e => IsTerrainSmall(board, e)),
+                };
+            })],
+            ProtectedCells = now.EyeSpaces.Where(now.IsProtected).Sum(e => e.Cells.Length),
+            PlayableCells = board.AllCoords().Count(c => board[c].Terrain == Terrain.Playable),
+        };
+
+        static bool StillAlive(LifeShapeReport report, Coord stone, PlayerId owner) =>
+            report.GroupLifeAt(stone) is { Life: LifeState.Alive } l && l.Group.Owner == owner;
+
+        static LifeChangeEntry Change(string kind, GroupLife g, PlayerId actor, string? cause)
+        {
+            string[] stones = [.. g.Group.Stones.Order().Select(s => s.ToNotation())];
+            return new LifeChangeEntry
+            {
+                Kind = kind,
+                Owner = g.Group.Owner.Value,
+                Actor = actor.Value,
+                At = stones[0],
+                Stones = [.. stones],
+                EyeSpaces = [.. g.EyeSpaces.Select(e => $"{string.Join(",", e.Cells.Order().Select(c => c.ToNotation()))}={e.EyeValue}")],
+                Cause = cause,
+            };
+        }
+    }
+
+    /// <summary>
+    /// R8 统计口径：眼空间不超过 <see cref="SmallEyeSpaceMax"/> 格，且至少一格在盘内某个几何方向上没有气边（岩石 / 深水 / 崖壁 / 栅栏）。
+    /// 几何邻居与气边邻居的差集只用于这条遥测分类（与表现层差集原因同类），不是规则判断；棋盘外沿不在几何邻居里，不算。
+    /// </summary>
+    private static bool IsTerrainSmall(GameBoard board, EyeSpace space) =>
+        space.Cells.Length <= SmallEyeSpaceMax
+        && space.Cells.Any(c => board.Neighbors(c).Length > board.LibertyNeighbors(c).Length);
 
     private static string RankingText(PowerSnapshot? power) =>
         power is null ? string.Empty : string.Join(",", power.Ranking.Select(g => $"{g.Rank}:{string.Join("=", g.Players)}"));

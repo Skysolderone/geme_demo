@@ -128,7 +128,7 @@ internal static class SimFixtures
     internal static TurnSnapshot Turn(
         int turn, int majorRound, int player, long[] totals, string[]? placements = null, int deployLimit = 3,
         int showCount = 5, int freePick = 3, int typeSlots = 5, GroupEntry[]? groupsOfPlayer = null, string[]? captures = null,
-        TerrainEditEntry[]? edits = null, bool legacyNoEdits = false, int[]? territory = null) =>
+        TerrainEditEntry[]? edits = null, bool legacyNoEdits = false, int[]? territory = null, LifeTurnEntry? life = null, bool legacyNoLife = false) =>
         new()
         {
             Turn = turn,
@@ -142,6 +142,9 @@ internal static class SimFixtures
             // 改造字段：新日志一律写出（没有改造就是空表 []）；<paramref name="legacyNoEdits"/> 造的是
             // artisan-terrain-edit 之前的**旧日志**（字段缺失 → null），分析时整局排除并计数（R-6），MUST NOT 回填成空表。
             Edits = legacyNoEdits ? null : [.. edits ?? []],
+
+            // 活形字段：新日志一律写出（缺省为无变化、无拒绝的空记录）；legacyNoLife 造的是 life-shape 之前的旧日志（null），活形分析整局排除并计数。
+            Life = legacyNoLife ? null : life ?? new LifeTurnEntry(),
             ShowCount = showCount,
             FreePickCount = freePick,
             TypeSlots = typeSlots,
