@@ -17,6 +17,8 @@ namespace Siege.Core.Match;
 /// <b>分开给出、MUST NOT 合并成一个数</b>：地图种子只决定地图，对局种子只决定对局里的随机，互不影响。都是字符串——视图的结构里不放随机源类型。
 /// <para><b>地形在这里是活的</b>：<see cref="Board"/> 的 <c>Map</c> 含本局已完成的改造，<see cref="BoardSerialized"/> 的改造段同理；
 /// 设施无归属，视图里 MUST NOT 出现改造者（R-3）。</para>
+/// <para><see cref="LifeShape"/> 是对 <see cref="Board"/> 这份副本做的一次全量活形分析（life-shape D6，始终公开的信息第 6 条）：
+/// 每条棋串的活形状态、各眼空间与每名玩家的禁入格都由它查询（<see cref="LifeShapeReport.ForbiddenCellsFor"/>），与盘面同一时刻；不入存档。</para>
 /// </summary>
 public sealed record MatchPublicView(
     string MapId,
@@ -34,4 +36,5 @@ public sealed record MatchPublicView(
     ImmutableArray<RelicPublicState> Relics,
     ImmutableArray<HandPublicView> Hands,
     int PassStreak,
-    MatchResult? Result);
+    MatchResult? Result,
+    LifeShapeReport LifeShape);

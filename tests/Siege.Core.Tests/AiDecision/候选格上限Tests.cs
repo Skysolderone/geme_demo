@@ -36,7 +36,11 @@ public class 候选格上限Tests
     /// </summary>
     // restore-go-core-rules 段 E：F3DA0A40…48D8F6E0 → 49BCFA49…11DEA30C。走法一步没变：快照新增 PlayerEntry.TerritoryScore 一个字段；
     // 同一局 24 条快照逐条去掉该字段后的哈希恰为旧值 F3DA0A40…（临时探针实跑，roundtrip 逐字节一致），领地分非零 90 处。
-    private const string V4GoldenTurnHash = "49BCFA498B6C12E8E8B14A0698F19CC31BEDD054B2EE8374D4FC88AB11DEA30C";
+    // life-shape 段 B：49BCFA49…11DEA30C → F1B2CAB6…4ACEB088。<b>走法确实变了</b>，来源是活棋禁入 / 破坏活形生效：
+    // 改动前后的二进制各跑种子 31、24 个小回合，快照去掉耗时后前 15 个小回合逐条相同；第 16 个小回合（第 4 大回合、P0，保护期后第一手全图落子）起分叉——
+    // 旧落点 H2 / M8 / E9 中 M8、E9 在新规则下正是 P0 的禁入格（临时探针实测该时刻 P0 禁入 39 格），新落点 H2 / E5 / F12。新值连跑两次一致。
+    // 契约是否扣除禁入格不影响这一局（变异 M-B7「契约不扣除」下本测试仍绿：落进禁入格的候选在预演第 1 步被拒、不进排名）。
+    private const string V4GoldenTurnHash = "F1B2CAB64AB55F08D8A03492F90212050C95B2E34FB22644D011C2B44ACEB088";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));

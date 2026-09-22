@@ -8,14 +8,14 @@ namespace Siege.Core.Tests.LifeShape;
 
 /// <summary>
 /// tasks 1.5 性能基线（不对应 Scenario）：在 v5 与边疆图的中盘局面上，一次全盘活形分析的耗时中位数
-/// 不超过一次全盘棋串计算（<see cref="GameBoard.AllGroups"/>）的 3 倍（宽松上界）。
+/// 不超过一次含气的全盘棋串计算（<see cref="GameBoard.AllGroups"/> + 全部 <see cref="GameBoard.LibertiesOf"/>）的 3 倍（宽松上界，裁决 R6）。
 /// 中盘 = Easy 4 人真实对局（种子 7）跑满 40 个小回合（10 个大回合）。两者交错计时、取中位数之比。
-/// 另输出"AllGroups + 全部 LibertiesOf"（含气的全盘棋串计算）为分母的比值，供待决项裁决。
+/// 另输出只以 AllGroups 为分母的比值，仅供参考（段 A 口径）。
 /// </summary>
 /// <remarks>
 /// 计时测试不进默认套件（xunit 并行跑时计时噪声大，且要跑两局真实对局约 35 s）：
 /// 设环境变量 <c>SIEGE_PERF=1</c> 才运行，按 <c>--filter "Category=Perf"</c> 单独跑。
-/// 段 A 实测 v5 ≈ 3.0、边疆 ≈ 3.5–3.7，超出 3 倍上界——见 implement.md 段 A 待决 #1，阈值未改。
+/// 段 A 实测含气分母比 v5 1.37、边疆 1.51（只以 AllGroups 为分母时 ≈ 3.0 / 3.5–3.7）；裁决 R6 改用含气分母，上界仍为 3。
 /// </remarks>
 public class 活形分析性能基线Tests
 {
@@ -31,7 +31,7 @@ public class 活形分析性能基线Tests
     [Trait("Category", "Perf")]
     [InlineData("siege-4p-base-v5")]
     [InlineData("siege-frontier-v2")]
-    public void 中盘全盘活形分析不超过棋串计算的三倍(string mapId)
+    public void 中盘全盘活形分析不超过含气棋串计算的三倍(string mapId)
     {
         RunConfig config = SimFixtures.Config(turnLimit: 0) with { MapId = mapId };
         MatchSession session = MatchSession.Create(config, 7);
@@ -77,13 +77,13 @@ public class 活形分析性能基线Tests
         double groupsUs = MedianMicroseconds(groupTicks);
         double withLibertiesUs = MedianMicroseconds(withLibertiesTicks);
         double lifeUs = MedianMicroseconds(lifeTicks);
-        double ratio = lifeUs / groupsUs;
+        double ratio = lifeUs / withLibertiesUs;
         _output.WriteLine(
             $"{mapId}: 小回合 {turns}，棋子 {stones}，棋串 {report!.Groups.Length}，眼空间 {report.EyeSpaces.Length}，" +
             $"活形棋串 {report.Groups.Count(g => g.Life == LifeState.Alive)}；AllGroups 中位 {groupsUs:F1} µs，" +
             $"AllGroups+LibertiesOf 中位 {withLibertiesUs:F1} µs，Analyze 中位 {lifeUs:F1} µs；" +
-            $"比 {ratio:F2}（对含气分母 {lifeUs / withLibertiesUs:F2}）");
-        Assert.True(ratio <= MaxRatio, $"{mapId}: Analyze 中位 {lifeUs:F1} µs 是 AllGroups 中位 {groupsUs:F1} µs 的 {ratio:F2} 倍，超过 {MaxRatio} 倍。");
+            $"比 {ratio:F2}（只对 AllGroups {lifeUs / groupsUs:F2}）");
+        Assert.True(ratio <= MaxRatio, $"{mapId}: Analyze 中位 {lifeUs:F1} µs 是 AllGroups+LibertiesOf 中位 {withLibertiesUs:F1} µs 的 {ratio:F2} 倍，超过 {MaxRatio} 倍。");
     }
 
     private static double MedianMicroseconds(long[] ticks)

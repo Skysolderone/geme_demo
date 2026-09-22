@@ -99,3 +99,109 @@
    这项影响 AI 每回合的预演成本。段 B 接入预演后，应按 R4 用 AI 单回合耗时（与 ① 比，是否慢 2 倍以上）复核。
 2. v5 中盘（40 小回合）已有 7 条活形棋串、21 块眼空间。活形在 v5 上形成得早，印证了 design 里的风险"活形过易形成"。这只是一个观察，留给段 D 的基线数据判断。
 3. 性能测试的门控用的是环境变量加 `[Trait("Category","Perf")]`。R3 说的 2.3 种子 1–200 慢测试"以 Category 单独运行"，段 B 可以沿用同一个 `PerfTheory` / Trait 形状，也可以另定约定，由主会话决定。
+
+## 段 B（tasks 2.1–2.6，外加段 A 收尾 R6 / R7）
+
+### 改了什么
+
+| 文件 | 性质 |
+|---|---|
+| `src/Siege.Core/Batch/BatchFailure.cs` | 新增 `BatchFailureKind.LifeForbidden`（活棋禁入）、`BreaksLife`（破坏活形）。`BatchFailure` 加三个 init 属性：`LifeGroup`（活形棋串坐标，批次开始前、坐标序）、`LifeOwner`、`Triggers`（破坏活形时为本批全部暂放）。活棋禁入的 `Coords` 是违规落点单格；破坏活形的 `Coords` 是受影响棋串批次开始前的全部坐标 |
+| `src/Siege.Core/Batch/BatchRehearsal.cs` | 七步改八步。`Rehearse` 开头对正式盘面做一次 `LifeShapeReport.Analyze`，第 1 步与第 6 步共用，不跨调用复用。第 1 步在"地形可落子"之后、"合法落子范围"之前查 `IsForbiddenFor`，所有者不受限。第 5 步提子之后插入第 6 步 `BrokenLife`：只复查批次开始前已活、且所有者不是行动方的棋串，按原棋子在副本上所在棋串重查；棋子不在副本上（`null`）即失活。没有这样的棋串时不分析副本。原第 6、7 步顺延为 7、8。public `ValidateShape`（`StagedBatch.Stage` 用）签名不变，内部自行分析一次 |
+| `src/Siege.Core/Match/MatchFlow.cs` | `LegalRangeFor` 在出生区 / 全图两种范围上都扣除 `ForbiddenCellsFor(player)`，全仓只有这一处扣除；`Publish` 在同一份 `Board.Clone()` 上做活形分析 |
+| `src/Siege.Core/Match/MatchPublicView.cs` | 末尾新增位置参数 `LifeShapeReport LifeShape`，用来公开活形状态、眼空间和各玩家禁入格。全仓只有 `Publish` 构造它 |
+| `src/Siege.Presentation/Preview/PreviewPresentation.cs` | `TitleOf` 加两行标题"活棋禁入""破坏活形"。这是段 C 3.1 的提前最小落地：`TitleOf` 是穷举 switch，不加就会抛异常 |
+| AI（`HeuristicTurnController` 等） | **未改**。候选格来自 `context.LegalRange`，已经扣除禁入格；两类新原因走既有的 `OnRejected`（撤掉最后一枚再试） |
+| `tests/Siege.Core.Tests/LifeShape/活形分析性能基线Tests.cs` | R6：分母改成 `AllGroups` + 全部 `LibertiesOf`，上界仍为 3 |
+| `.trellis/spec/core/testing.md` | R7：新增一节「慢测试与计时测试：默认跳过，环境变量 + `Category` 才运行」（`[PerfTheory]` / `SIEGE_PERF=1` / `Category=Perf`；`[SlowFact]` / `SIEGE_SLOW=1` / `Category=Slow`；慢测试必须在默认套件里留一份缩小版） |
+
+### 既有测试的改写 / 删除（逐条）
+
+没有删除任何测试。改写 7 条：
+
+1. `LifeShape/活形分析性能基线Tests`：R6 改分母，方法名 `中盘全盘活形分析不超过棋串计算的三倍` 改为 `中盘全盘活形分析不超过含气棋串计算的三倍`。
+2. `TurnSequence/合法落子范围的对外契约Tests.范围随大回合切换`：规范改为"二者都不含该玩家的禁入格"。夹具加了 P2 在出生区 1 角上的两眼活形（眼 G1、J1）。期望值由 9 / 81 改为 7 / 79，并加了"P2 自己的范围含这两格"的断言。
+3. `BatchDeployment/非法批次必须给出可定位的原因Tests.七类失败各有独立类别` 改名为 `九类失败各有独立类别`，按规范的原因清单加入两个新类别。
+4. `BatchPreview/非法批次必须说明原因并高亮Tests.十类失败标题互不相同` 改名为 `十二类失败标题互不相同`，数量 10 改为 12（枚举新增两项）。
+5. `AiDecision/候选格上限Tests` 的黄金哈希由 `49BCFA49…11DEA30C` 改为 `F1B2CAB6…4ACEB088`。改动前后的二进制各跑种子 31、24 个小回合，快照去掉耗时后前 15 个小回合逐条相同。第 16 个小回合（第 4 大回合、P0 第一手全图落子）起分叉：旧落点 M8、E9 在新规则下正是 P0 的禁入格（临时探针实测该时刻 P0 有 39 个禁入格）。新值连跑两次一致；M-K1 在新值下仍红（见变异表）。另外，M-B7（契约不扣除）下本测试仍绿，说明分叉来自预演拒绝，而不是契约扣除。
+6. `MatchTelemetry/地形改造日志与分析Tests.地形可离线重建`：只换样本。新规则下种子 3–5 致提子为 0 / 0 / 0，样本口径下界响亮失败。用同一份写死权重重扫种子 1–24，致提子只剩种子 10、18、19、23 各 1 次；改取连续的 17–19（改造 2 / 2 / 3 次，致提子 0 / 1 / 1 次）。断言与期望未改。
+7. `SimulationHarness/终端对局Tests.脚本输入能落子并走到输入耗尽`：脚本由 Pass 两次改为 Pass 一次。新旧二进制逐行比对，前 3 个大回合相同；第 4 大回合 AI 走法分叉，玩家2 在轮到人类之前提走了人类唯一的 B1，人类出局后对局自动跑到终局，永远走不到"输入耗尽"。改为在第 3 大回合提示处耗尽后，保护期内别家进不了人类的出生区，不再依赖 AI 走法。断言未改。（先试了换种子：43、44、45 都在第 4 大回合被提，所以放弃换种子。）
+
+### 新测试清单（17 条：默认 16 条，另 1 条慢测试门控）
+
+- `CaptureResolution/以整批最终状态判定合法性Tests` 新增 9 条。前 8 条对应 Scenario：同时填两眼被禁入拦下、未定棋串的眼可以进、立栅切开活形被拒、立栅隔开眼与棋子被拒、搭桥漏眼被拒、围死活形被拒、不影响活形的改造合法、所有者可以拆自己的眼。第 9 条 `提子后恢复活形的批次合法` 钉住第 5 步在第 6 步之前：A 在正式盘面上是活、提子前（手工 Clone + 放置 + 改造）是未定、提子后回到活，三个盘面都有断言。
+- `BatchDeployment/非法批次必须给出可定位的原因Tests` 新增 2 条 Scenario：活棋禁入返回落点与棋串（走真实 `MatchFlow` 暂放，抓"禁入排在范围之后"）、破坏活形返回受影响棋串（`Coords` / `LifeGroup` / `LifeOwner` / `Triggers`）。
+- `TurnSequence/合法落子范围的对外契约Tests` 新增 3 条：禁入格不在范围内、共享出生区内的禁入（这两条对应 Scenario），以及守门 `禁入只在契约一处扣除且与预演共用同一查询`。守门分两部分：一是源码扫描 Siege.Core + Siege.Sim，文件数下界 > 100，`ForbiddenCellsFor(` 只在 MatchFlow.cs、`IsForbiddenFor(` 只在 BatchRehearsal.cs；二是行为比对，全图范围下逐格单子预演，得到"活棋禁入"的格集合恰好等于契约扣掉的格集合。
+- `InformationVisibility/始终公开的信息Tests.活形状态公开`：四名观察者读到活 / 未定 / 死三态、眼空间和四人禁入格，且与在 `view.Board` 上独立重算的结果逐项相同。既有的隐藏信息守门（`必须隐藏的信息Tests`、`正式对战AI的信息边界Tests`，含 `ReachableTypes` 闭包）保持绿。
+- `CaptureResolution/活形保护性质Tests`（2.3 性质守门）。每个种子在 13×13 盘面上摆 4 个活形模板（两单格眼环、带深水墙的 6 格眼、直四、贴岩石的一字两眼），其余格随机撒子、深水和林地；然后跑 40 个随机批次，八成落点在他人活形两格以内，七成是带随机合法改造的匠人。每个确认成功的批次后，逐子核对批次开始前的非己方活形。样本口径下界：累计的受保护核对、BreaksLife 拒绝、LifeForbidden 拒绝都必须大于 0。
+  - 默认 `[Fact]` 跑种子 1–20：批次 800，确认 472，受保护核对 935，拒绝 LifeForbidden 240 / BreaksLife 15 / Suicide 73，耗时 1.2 s。
+  - `[SlowFact]` + `Category=Slow` 跑种子 1–200（`SIEGE_SLOW=1 dotnet test tests/Siege.Core.Tests -c Release --filter "Category=Slow"`）：批次 8000，确认 4793，受保护核对 9199，拒绝 LifeForbidden 2468 / BreaksLife 137 / Suicide 602，**无反例**，耗时 7.8 s。
+- 新增特性 `SlowFactAttribute`（与 `PerfTheoryAttribute` 同形）。
+
+**先红**：只加了枚举和工厂骨架、没有判定逻辑时，跑新测试 12 条红：5 条应拒的 Scenario（同时填两眼、立栅切开、立栅隔开、搭桥漏眼、围死），2 条定位 Scenario，4 条契约用例（含改写后的范围随大回合切换和守门），以及性质测试（有反例）。按设计本来就应该绿的 5 条是绿的：未定可进、不影响、所有者拆眼、提子后恢复，以及 2.5 已经接上的公开视图。
+
+### 变异（逐条；脚本 scratchpad `mutate_b.py`，每条跑整个测试工程）
+
+执行口径同段 A：二进制读写，先探测行尾，`assert count==1`，备份名带时间戳，在 `finally` 里还原；还原后与原始字节逐字节比对，用 `os.utime` 刷新 mtime；`DOTNET_CLI_UI_LANGUAGE=en`，解析统计行。全部 11 条 `restored=True`。跑完后 `git diff` 与变异前逐字节相同，复跑 0 失败、1243 通过。
+
+| 编号 | 变异 | 红数 | 红的测试 |
+|---|---|---:|---|
+| M-B1 | 第 6 步挪到提子之前 | 2 | 提子后恢复活形的批次合法、围死活形被拒 |
+| M-B2 | 第 1 步对所有者也施加禁入 | 3 | 所有者可以拆自己的眼、候选格上限黄金哈希、对局日志的记录内容.揭示时间可查 |
+| M-B3 | 去掉第 6 步 | 6 | **活形保护性质（种子 1–20）**、立栅切开、立栅隔开、搭桥漏眼、围死、破坏活形返回受影响棋串 |
+| M-B4 | 第 6 步不豁免所有者 | 3 | 所有者可以拆自己的眼、黄金哈希、地形可离线重建 |
+| M-B5 | 第 6 步把"原棋子不在副本上"当作通过 | 2 | 围死活形被拒、活形保护性质 |
+| M-B6 | 活棋禁入排在合法落子范围之后 | 1 | 活棋禁入返回落点与棋串 |
+| M-B7 | 契约不扣除禁入格 | 4 | 范围随大回合切换、禁入格不在范围内、共享出生区内的禁入、禁入只在契约一处扣除… |
+| M-B8 | 守门自证：AI 里自行 `ForbiddenCellsFor` | 1 | 禁入只在契约一处扣除且与预演共用同一查询 |
+| M-B9 | 活棋禁入不带 `LifeGroup` | 1 | 活棋禁入返回落点与棋串 |
+| M-B10 | 公开视图的活形取自空盘 | 1 | 活形状态公开 |
+| M-K1 | 候选格预筛恒启用（在新黄金哈希上复核） | 38 | 含 缺省不限制时标准图整局与改动前逐步相同 |
+
+### 性能（R4 / R6）
+
+- AI 单回合耗时：`Siege.Sim run --seed 1 --count 10 --serial`，v5、4 名 Standard AI，用小回合快照的 `ElapsedMs`。改动前的二进制复制一份，与改动后交错跑：
+
+| 运行 | 小回合数 | 平均 | 中位 | P90 |
+|---|---:|---:|---:|---:|
+| 改动前 ① | 1041 | 139.9 ms | 114 ms | 282 ms |
+| 改动后 | 682 | 218.3 ms | 174 ms | 386 ms |
+| 改动前 ②（改动后之后再跑） | 1041 | 168.8 ms | 132 ms | 354 ms |
+
+  中位数的比值为 1.32–1.53，平均数的比值为 1.29–1.56，**没有超过 2 倍**，未加缓存。注意两边对局不同：新规则下 10 局只有 682 个小回合，旧规则是 1041 个。
+- 边疆图（`run --map siege-frontier-v2 --seed 1 --count 3 --turn-limit 120 --serial`，缺省候选格上限生效，每个候选格都要走 `Stage` + 预演；三局都截断在 120 个小回合，两边都是 360 个小回合），同样交错跑：
+
+| 运行 | 平均 | 中位 | P90 |
+|---|---:|---:|---:|
+| 改动前 ① | 1060.9 ms | 941 ms | 1411 ms |
+| 改动后 | 1457.9 ms | 1356 ms | 1884 ms |
+| 改动前 ② | 1152.4 ms | 1037 ms | 1604 ms |
+
+  中位数的比值为 1.31–1.44，平均数的比值为 1.27–1.37，**没有超过 2 倍**。
+- 1.5 基线（R6 口径，`SIEGE_PERF=1 --filter Category=Perf`，两条都绿）：v5 的 `Analyze` 为 107.3 µs，含气分母为 97.3 µs，比值 **1.10**（只对 `AllGroups` 为 2.48）；frontier-v2 为 381.9 µs 对 285.3 µs，比值 **1.34**（只对 `AllGroups` 为 3.31）。
+
+### 2.6 50 局（`run --seed 1 --count 50 --retention Full`，v5，4 名 Standard AI，并行 28）
+
+- 50 局全部完成：`Failed 0`、`Capped 0`、`Truncated 0`，`FailedFiles` 为空，终局原因都是整轮 Pass（AllPassed；改动前种子 1–10 也全是）。共 2826 个小回合、796 个大回合，墙钟 153 s。
+- AI 预演中被拒（`Rehearsal` 事件）：**活棋禁入 0**，破坏活形 4190，自杀手 64610。
+- 确认被拒（`Rejected` 事件）：**活棋禁入 0，破坏活形 0**。
+- 破坏活形只出现在 AI 的候选预演里。AI 的贪心已经把这些候选撤回，没有任何一次走到确认。
+
+### 段末自验
+
+- `dotnet build siege.sln`：0 警告、0 错误。`dotnet build src/godot/Siege.Godot.csproj`：0 警告、0 错误。
+- `dotnet test -c Release`：通过 1243，跳过 2（Perf 门控 1 个 Theory、Slow 门控 1 条），失败 0。
+- `openspec validate life-shape --strict`：valid。
+
+### 待决
+
+1. **活形在 v5 上形成得早而且多（段 A 待决 2 的加强版）**。种子 31 第 16 个小回合（第 4 大回合）时盘上已有 18 条活形棋串，P0 有 39 个禁入格。其中 13 条是单子。机制：v5 的岩石、深水切出很多小空区，只贴一枚子就封闭；一枚子贴两个这样的 1 / 3 / 5 格空区（各眼值 1），或贴一个 4 格非方四 / 6–12 格的空区（眼值 2），就已确定活形。结果是：
+   - 同样种子 1–10，小回合总数由 1041 降到 682（−34%）；
+   - 带写死权重时，"致提子的改造"原来种子 3–5 三局共 4 次，现在种子 1–24 二十四局共 4 次。
+
+   这是规则表的直接后果（D1 无气边即墙 + D2 眼值相加）。本段没有改数值。是否要为"贴地形的小空区"另设约束，留给段 D 的 200 局基线数据和负责人裁决。
+2. 破坏活形在 AI 预演中出现 4190 次（每局约 84 次），是一笔可观的预演浪费。AI 评价与候选过滤属于 `ai-eye` 范围，本段没有动。
+3. `PreviewPresentation.TitleOf` 的两行标题是段 C 3.1 的提前最小落地，高亮与详情文案仍归段 C。
+4. 活棋禁入的 `Coords` 只含落点；所属活形棋串放在 `LifeGroup`，所有者放在 `LifeOwner`。破坏活形的 `Triggers` 是本批全部暂放，因为结果导向检查不归因到单枚。段 C 做高亮时按这个形状取数；如果要换形状，请在段 C 开工前裁决。
+5. 守门 `禁入只在契约一处扣除且与预演共用同一查询` 的源码扫描范围是 Siege.Core + Siege.Sim，断言 `ForbiddenCellsFor(` 只在 MatchFlow.cs 出现。段 D 4.2 要算"终局禁入格占比"，`BalanceAnalyzer` 读 `view.LifeShape.ForbiddenCellsFor(p)` 属于读取、不是扣除，但这个守门会翻红。段 D 开工时需要二选一：把守门收窄成"从范围里扣除（`.Except(…ForbiddenCellsFor`）只有一处"，或者给分析器加白名单。Siege.Presentation 不在扫描范围，段 C 读公开视图不受影响。
+6. 段末发现工作树里有**不属于本段**的改动：`src/godot/scripts/GameRoot.cs`（+12 行），以及未跟踪的 `src/godot/parts/`、`src/godot/scripts/PartExport.cs`。它们在 18:15 之后出现，本段没有触碰；上面的 Godot 构建 0 警告是包含它们一起构建的结果。提交时请主会话把它们和本段分开。

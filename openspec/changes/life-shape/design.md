@@ -122,3 +122,5 @@
   - R3 2.3 性质测试：默认测试集跑种子 1–20；1–200 以 `Category` 标签单独运行，记录耗时。
   - R4 性能先测不缓存；若 AI 单回合耗时较 ① 慢 2 倍以上，停下报告，不自行加缓存。
   - R5 截图与报告统一放 `sim-out/life-shape/`。
+  - R6（段 A 后）1.5 性能上界分母改为"`AllGroups` + 全部气的计算"，上界仍为 3 倍（实测 v5 1.37×、frontier-v2 1.51×）；段 B 接入预演后按 R4 用 AI 单回合耗时再复核。
+  - R7（段 A 后）慢测试约定：默认跳过，设环境变量（`SIEGE_PERF=1` / `SIEGE_SLOW=1`）并按 `Category` 过滤才运行；写入 `.trellis/spec/core/testing.md`。

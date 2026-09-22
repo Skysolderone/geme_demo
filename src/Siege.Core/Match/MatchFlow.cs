@@ -371,6 +371,8 @@ public sealed partial class MatchFlow
     /// <summary>
     /// 对 <c>add-batch-deployment</c> 的契约（design.md D5）：第 1–3 大回合为该玩家锁定的出生区格集合（同区玩家自然共享），
     /// 从第 4 大回合起为全图可落子格集合。出生区数据本身不带限制，限制只由本方法按当前大回合序号决定。
+    /// 两种情况都扣除该玩家的禁入格（life-shape，turn-sequence「合法落子范围的对外契约」）：禁入只在这里扣除，
+    /// 查询走 <see cref="LifeShapeReport.ForbiddenCellsFor"/>（唯一实现，与预演第 1 步同源），界面与 AI 不自行判断。
     /// </summary>
     public IReadOnlySet<Coord> LegalRangeFor(PlayerId player)
     {
@@ -379,9 +381,10 @@ public sealed partial class MatchFlow
 
         // 可落子格按当前地形现算：本局架出来的桥必须立刻成为合法落点。
         // 这里曾是建局时算好的缓存字段，地形可变之后它是过期数据（2.6 缓存排查第 1 条）。
-        return MajorRound <= BuildProtectionRounds
+        IEnumerable<Coord> range = MajorRound <= BuildProtectionRounds
             ? Map.BirthZones[zone]
-            : Board.AllCoords().Where(c => Board[c].Terrain == Terrain.Playable).ToImmutableHashSet();
+            : Board.AllCoords().Where(c => Board[c].Terrain == Terrain.Playable);
+        return range.Except(LifeShapeReport.Analyze(Board).ForbiddenCellsFor(player)).ToImmutableHashSet();
     }
 
     // ---------- 弃赛 ----------
@@ -454,9 +457,11 @@ public sealed partial class MatchFlow
     public MatchPublicView Publish()
     {
         PowerSnapshot? power = Scoreboard.Latest;
+        GameBoard board = Board.Clone();
         // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
-        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, Board.Clone(),
-            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result);
+        // 活形分析在同一份副本上做，与 Board / BoardSerialized 同一时刻（life-shape D6）。
+        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, board,
+            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board));
     }
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------

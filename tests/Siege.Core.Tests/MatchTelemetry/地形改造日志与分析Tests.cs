@@ -30,7 +30,9 @@ public class 地形改造日志与分析Tests
         var pinned = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 27, Growth: 4, Initiative: 20, Supply: 2);
         // 段 A（restore-go-core-rules）重挑种子：计分口径改为"领地 + 整体乘倍率"后 AI 走法随之变，原种子 1–3 里第 2 局一次改造都没有（样本口径下界响亮失败）。
         // 同一份写死权重下扫种子 1–24，取连续的 3–5：改造 5 / 3 / 5 次、致提子 3 / 1 / 0 次。断言与期望均未改，只换样本。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 3, turnLimit: 24, difficulty: AiDifficulty.Standard);
+        // life-shape 段 B 再次重挑：预演新增活棋禁入 / 破坏活形后 AI 走法随之变，种子 3–5 致提子降为 0 / 0 / 0（下界响亮失败）。
+        // 同一份写死权重下重扫种子 1–24：致提子只剩种子 10、18、19、23 各 1 次；取连续的 17–19：改造 2 / 2 / 3 次、致提子 0 / 1 / 1 次。断言与期望均未改，只换样本。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 17, turnLimit: 24, difficulty: AiDifficulty.Standard);
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 

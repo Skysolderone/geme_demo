@@ -179,4 +179,231 @@ public class 以整批最终状态判定合法性Tests
         Assert.Empty(hooks.Calls);
         Assert.Equal(1, driver.History.Count);
     }
+
+    // ---------- life-shape：活棋禁入（第 1 步）与破坏活形（第 6 步） ----------
+
+    private static readonly PlayerId A = LifeShapeFixtures.A;
+    private static readonly PlayerId B = LifeShapeFixtures.B;
+
+    private static RehearsalResult Rehearse(GameBoard board, PlayerId player, params Placement[] placements) =>
+        BatchRehearsal.Rehearse(board, BatchFixtures.Context(board, player, limit: 5), placements, new BoardHistory());
+
+    private static Placement Fence(string artisan, string a, string b) =>
+        BatchFixtures.Artisan(artisan, TerrainEdit.Fence(TestMaps.At(a), TestMaps.At(b)));
+
+    /// <summary>
+    /// 角上两眼活形：A 串 A3–D3、B2、D2、A1–D1，单格眼 A2、C2；外气全被 B（A4–E4、E3、E2、E1）填满，A 只剩两眼这两口气。
+    /// </summary>
+    internal static GameBoard CornerTwoEyes() => LifeShapeFixtures.Grid(
+    [
+        ".......",
+        "11111..",
+        "00001..",
+        ".0.01..",
+        "00001..",
+    ]);
+
+    /// <summary>
+    /// 一字两眼：A 串 A2–E2，单格眼 A1（B1 岩石）与 E1（D1 岩石），每个眼只有一条气边通向 A 子；
+    /// A2–E2 与第 3 行之间全是既有栅栏，第 3 行是空的、可供 B 的匠人落脚（几何上贴着 A 串，但不是 A 的气）。
+    /// </summary>
+    internal static GameBoard FencedLineTwoEyes() => LifeShapeFixtures.Grid(
+        [
+            ".....",
+            "00000",
+            ".###.",
+        ],
+        fences: [("A2", "A3"), ("B2", "B3"), ("C2", "C3"), ("D2", "D3"), ("E2", "E3")]);
+
+    [Fact]
+    public void 同时填两眼被禁入拦下()
+    {
+        // life-shape D3：B 把两枚子分别放进 A 活形的两个单格眼。没有禁入时这是合法的提子批次（A 两口气同时被填、整串被提，
+        // B 的两子随即得气）——前提断言钉住 A 只剩这两口气，拦下它的只能是第 1 步。
+        GameBoard board = CornerTwoEyes();
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(board).LifeOf("A1"));
+        Assert.Equal(["A2", "C2"], board.LibertiesOf(board.GroupAt(TestMaps.At("A1"))!).Notations());
+        string before = board.Serialize();
+
+        RehearsalResult result = Rehearse(board, B, BatchFixtures.P("A2"), BatchFixtures.P("C2"));
+
+        Assert.False(result.IsLegal);
+        Assert.Equal(BatchFailureKind.LifeForbidden, result.Failure!.Kind);
+        Assert.Equal(["A2"], result.Failure.Coords.Notations());
+        Assert.Null(result.ProjectedBoard);
+        Assert.Empty(result.Captures);
+        Assert.Equal(before, board.Serialize());
+        Assert.NotNull(board.GroupAt(TestMaps.At("A1")));
+    }
+
+    [Fact]
+    public void 未定棋串的眼可以进()
+    {
+        // A 串只有单格眼 A2（C2 是 A 子），另一口外气 E2。B 一批落 E2 + A2：A2 不是禁入格（A 为未定），第 5 步 A 无气被提，批次合法。
+        GameBoard board = LifeShapeFixtures.Grid(
+        [
+            ".......",
+            "11111..",
+            "00001..",
+            ".000...",
+            "00001..",
+        ]);
+        LifeShapeReport life = LifeShapeReport.Analyze(board);
+        Assert.Equal(LifeState.Undetermined, life.LifeOf("A1"));
+        Assert.False(life.IsForbiddenFor(B, TestMaps.At("A2")));
+
+        RehearsalResult result = Rehearse(board, B, BatchFixtures.P("E2"), BatchFixtures.P("A2"));
+
+        Assert.True(result.IsLegal, result.Failure?.Message);
+        Assert.Equal(
+            ["A1", "B1", "C1", "D1", "B2", "C2", "D2", "A3", "B3", "C3", "D3"],
+            result.Captures.Select(s => s.Coord).Notations());
+    }
+
+    [Fact]
+    public void 立栅切开活形被拒()
+    {
+        // B 的匠人落 C3，在 C2–D2 立栅：A 串被切成 A2–C2（眼 A1）与 D2–E2（眼 E1），两条都只剩一个眼 → 第 6 步破坏活形。
+        GameBoard board = FencedLineTwoEyes();
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(board).LifeOf("A2"));
+
+        RehearsalResult result = Rehearse(board, B, Fence("C3", "C2", "D2"));
+
+        Assert.False(result.IsLegal);
+        Assert.Equal(BatchFailureKind.BreaksLife, result.Failure!.Kind);
+        Assert.Equal(["A2", "B2", "C2", "D2", "E2"], result.Failure.Coords.Notations());
+        LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard!);
+        Assert.Equal(LifeState.Undetermined, after.LifeOf("A2"));
+        Assert.Equal(LifeState.Undetermined, after.LifeOf("E2"));
+    }
+
+    [Fact]
+    public void 立栅隔开眼与棋子被拒()
+    {
+        // B 的匠人落 A3，在 A1–A2 立栅：眼 A1 不再贴任何棋串（B1 岩石），A 串只剩眼 E1 → 未定 → 第 6 步破坏活形。
+        GameBoard board = FencedLineTwoEyes();
+
+        RehearsalResult result = Rehearse(board, B, Fence("A3", "A1", "A2"));
+
+        Assert.False(result.IsLegal);
+        Assert.Equal(BatchFailureKind.BreaksLife, result.Failure!.Kind);
+        LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard!);
+        Assert.Equal(LifeState.Undetermined, after.LifeOf("A2"));
+        Assert.Null(after.EyeSpaceAt(TestMaps.At("A1")));
+    }
+
+    [Fact]
+    public void 搭桥漏眼被拒()
+    {
+        // A 的环围出 6 格眼空间 B2–D3，右侧 E3 是未架桥深水（墙）。B 的匠人落 F3 给 E3 搭桥：空区连到 E3、贴到 F3 的 B 子，不再封闭 → A 无眼。
+        GameBoard board = LifeShapeFixtures.Grid(
+        [
+            ".......",
+            ".......",
+            "00000..",
+            "0...~..",
+            "0...0..",
+            "00000..",
+        ]);
+        LifeShapeReport before = LifeShapeReport.Analyze(board);
+        Assert.Equal(LifeState.Alive, before.LifeOf("A1"));
+        Assert.Equal(["B2,C2,D2,B3,C3,D3"], before.EyeSpacesOf("A1"));
+
+        RehearsalResult result = Rehearse(board, B, BatchFixtures.Artisan("F3", TerrainEdit.Bridge(TestMaps.At("E3"))));
+
+        Assert.False(result.IsLegal);
+        Assert.Equal(BatchFailureKind.BreaksLife, result.Failure!.Kind);
+        Assert.Equal(LifeState.Dead, LifeShapeReport.Analyze(result.ProjectedBoard!).LifeOf("A1"));
+    }
+
+    [Fact]
+    public void 围死活形被拒()
+    {
+        // design D4：A 一字两眼，外气已被 B（B3–D3）填满，A3 / E3 与 A 串之间有既有栅栏。B 一批落两枚匠人：A3 立 A1–A2、E3 立 E1–E2，
+        // 隔断 A 串与两个眼之间的全部气边 → 第 5 步 A 无气被提 → 第 6 步发现原棋子已不在副本上 → 破坏活形。
+        // 没有第 6 步时这是合法批次（B 的五子连成一串，A 被提后得气）。
+        GameBoard board = LifeShapeFixtures.Grid(
+            [
+                "2....",
+                ".111.",
+                "00000",
+                ".###.",
+            ],
+            fences: [("A2", "A3"), ("E2", "E3")]);
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(board).LifeOf("A2"));
+        Assert.Equal(["A1", "E1"], board.LibertiesOf(board.GroupAt(TestMaps.At("A2"))!).Notations());
+        SettlementDriver driver = BatchFixtures.Driver(board);
+        Placement[] batch = [Fence("A3", "A1", "A2"), Fence("E3", "E1", "E2")];
+
+        RehearsalResult result = driver.Rehearse(BatchFixtures.Context(board, B), batch);
+
+        Assert.False(result.IsLegal);
+        Assert.Equal(BatchFailureKind.BreaksLife, result.Failure!.Kind);
+        Assert.Equal(["A2", "B2", "C2", "D2", "E2"], result.Captures.Select(s => s.Coord).Notations());
+        Assert.Equal(["A2", "B2", "C2", "D2", "E2"], result.Failure.Coords.Notations());
+        Assert.False(driver.Confirm(BatchFixtures.Context(board, B), batch).Confirmed);
+        Assert.Equal(5, board.GroupAt(TestMaps.At("A2"))!.Size);
+    }
+
+    [Fact]
+    public void 不影响活形的改造合法()
+    {
+        // B 的匠人落 C3，在 C3–D3 立栅（A 串旁，不碰 A 的气边）：结算后 A 仍为已确定活形，第 6 步通过。
+        GameBoard board = FencedLineTwoEyes();
+
+        RehearsalResult result = Rehearse(board, B, Fence("C3", "C3", "D3"));
+
+        Assert.True(result.IsLegal, result.Failure?.Message);
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(result.ProjectedBoard!).LifeOf("A2"));
+    }
+
+    [Fact]
+    public void 所有者可以拆自己的眼()
+    {
+        // A 把一子落进自己的单格眼 C2：第 1 步不拦（所有者不受禁入），第 6 步不拦（只复查非己方活形）；
+        // 结算后 A 只剩眼 A2，按新盘面重算为未定。
+        GameBoard board = CornerTwoEyes();
+
+        RehearsalResult result = Rehearse(board, A, BatchFixtures.P("C2"));
+
+        Assert.True(result.IsLegal, result.Failure?.Message);
+        Assert.Equal(LifeState.Undetermined, LifeShapeReport.Analyze(result.ProjectedBoard!).LifeOf("A1"));
+    }
+
+    [Fact]
+    public void 提子后恢复活形的批次合法()
+    {
+        // 规格顺序：第 5 步（提子）在第 6 步（破坏活形）之前，第 6 步看的是提子后的盘面。
+        // A 串 A3–E3，眼 A2、E2（各只有一条气边）；C 的孤子 C2 两侧岩石，唯一的气是 C1（C1–D1 是 C 的两格空区，眼值 0）。
+        // B 一批两枚匠人：A4 立 A2–A3（A 失去眼 A2），C1 立 C1–C2（C2 无气）。放置 + 改造后、提子前 A 只剩眼 E2 → 未定；
+        // 第 5 步提走 C2 后，C2 只贴 A 的 C3 → A 新得单格眼 C2 → 回到已确定活形 → 批次合法。
+        GameBoard board = LifeShapeFixtures.Grid(
+            [
+                ".....",
+                "00000",
+                ".#2#.",
+                "##..#",
+            ],
+            fences: [("A3", "A4"), ("B3", "B4"), ("C3", "C4"), ("D3", "D4"), ("E3", "E4")]);
+        Placement[] batch = [Fence("A4", "A2", "A3"), Fence("C1", "C1", "C2")];
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(board).LifeOf("A3"));
+
+        // 夹具几何上确实经过"提子前未定"：手工复现第 3–4 步
+        GameBoard placed = board.Clone();
+        foreach (Placement p in batch)
+        {
+            placed.Place(p.Coord, B, p.Type);
+        }
+
+        placed.ApplyTerrainEdits(batch.Select(p => p.Edit!.Value));
+        Assert.Equal(LifeState.Undetermined, LifeShapeReport.Analyze(placed).LifeOf("A3"));
+
+        RehearsalResult result = Rehearse(board, B, batch);
+
+        Assert.True(result.IsLegal, result.Failure?.Message);
+        Assert.Equal(["C2"], result.Captures.Select(s => s.Coord).Notations());
+        LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard!);
+        Assert.Equal(LifeState.Alive, after.LifeOf("A3"));
+        Assert.Equal(["C2", "E2"], after.EyeSpacesOf("A3"));
+    }
 }

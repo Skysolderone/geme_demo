@@ -154,6 +154,8 @@ public sealed record FailurePresentation(
         BatchFailureKind.Superko => "盘面同形禁则",
         BatchFailureKind.TerrainEditIllegal => "改造目标非法",
         BatchFailureKind.DuplicateEditInBatch => "同一批次内重复的改造目标",
+        BatchFailureKind.LifeForbidden => "活棋禁入",
+        BatchFailureKind.BreaksLife => "破坏活形",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知失败类别。"),
     };
 

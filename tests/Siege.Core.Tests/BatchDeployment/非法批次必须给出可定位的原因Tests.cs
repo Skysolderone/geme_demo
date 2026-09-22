@@ -1,5 +1,6 @@
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Match;
 
 namespace Siege.Core.Tests.BatchDeployment;
 
@@ -139,16 +140,16 @@ public class 非法批次必须给出可定位的原因Tests
     }
 
     [Fact]
-    public void 七类失败各有独立类别()
+    public void 九类失败各有独立类别()
     {
-        // 枚举本身必须至少包含规格列出的七类，且互不相同
+        // 枚举本身必须至少包含规格列出的九类（life-shape 加入活棋禁入、破坏活形），且互不相同
         BatchFailureKind[] required =
         [
             BatchFailureKind.Unplayable, BatchFailureKind.Occupied, BatchFailureKind.OutOfLegalRange,
-            BatchFailureKind.DeployLimitExceeded, BatchFailureKind.InsufficientStock,
-            BatchFailureKind.Suicide, BatchFailureKind.Superko,
+            BatchFailureKind.LifeForbidden, BatchFailureKind.DeployLimitExceeded, BatchFailureKind.InsufficientStock,
+            BatchFailureKind.BreaksLife, BatchFailureKind.Suicide, BatchFailureKind.Superko,
         ];
-        Assert.Equal(7, required.Distinct().Count());
+        Assert.Equal(9, required.Distinct().Count());
         Assert.All(required, kind => Assert.True(Enum.IsDefined(kind)));
     }
 
@@ -168,5 +169,48 @@ public class 非法批次必须给出可定位的原因Tests
         Assert.Equal("该格当前已被占据：G7。", failure!.Message);
         Assert.DoesNotContain("非法落点", failure.Message);
         Assert.DoesNotContain("不可落子", failure.Message);
+    }
+
+    /// <summary>9×9 对局盘面上 P0 的两眼活形：D4–H4、D6–H6、D5、F5、H5 围出单格眼 E5、G5。</summary>
+    internal static readonly string[] RingE5G5 = ["D4", "E4", "F4", "G4", "H4", "D5", "F5", "H5", "D6", "E6", "F6", "G6", "H6"];
+
+    [Fact]
+    public void 活棋禁入返回落点与棋串()
+    {
+        // 走真实对局流程（第 5 大回合，P1 行动）：P1 的合法落子范围已扣除 E5，暂放 E5 时预演第 1 步必须报"活棋禁入"而不是"违反合法落子范围"——
+        // 禁入判定排在范围判定之前，经 BatchFixtures.Context（全图范围）的用例抓不住这个顺序。
+        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P1, MatchFixtures.P0, MatchFixtures.P2, MatchFixtures.P3])
+            .Stones(MatchFixtures.P0, RingE5G5);
+        StagedBatch batch = match.OpenDeploy();
+
+        BatchFailure? failure = batch.Stage(TestMaps.At("E5"), PieceType.Basic);
+
+        Assert.NotNull(failure);
+        Assert.Equal(BatchFailureKind.LifeForbidden, failure.Kind);
+        Assert.Equal(["E5"], failure.Coords.Notations());
+        Assert.Equal(RingE5G5.Select(TestMaps.At).Order().Notations(), failure.LifeGroup.Notations());
+        Assert.Equal(MatchFixtures.P0, failure.LifeOwner);
+        Assert.Contains("活棋禁入", failure.Message);
+        Assert.Contains("E5", failure.Message);
+        Assert.Equal(0, batch.Count);
+    }
+
+    [Fact]
+    public void 破坏活形返回受影响棋串()
+    {
+        // P1 的匠人落 C3 在 C2–D2 立栅，把 P0 的一字两眼活形 A2–E2 切成两条各一眼的未定棋串（夹具见 capture-resolution 同名用例）。
+        GameBoard board = CaptureResolution.以整批最终状态判定合法性Tests.FencedLineTwoEyes();
+        Placement cut = BatchFixtures.Artisan("C3", TerrainEdit.Fence(TestMaps.At("C2"), TestMaps.At("D2")));
+
+        SettlementOutcome outcome = BatchFixtures.Driver(board).Confirm(BatchFixtures.Context(board, TestMaps.P1), [cut]);
+
+        Assert.False(outcome.Confirmed);
+        BatchFailure failure = outcome.Failure!;
+        Assert.Equal(BatchFailureKind.BreaksLife, failure.Kind);
+        Assert.Equal(["A2", "B2", "C2", "D2", "E2"], failure.Coords.Notations());
+        Assert.Equal(["A2", "B2", "C2", "D2", "E2"], failure.LifeGroup.Notations());
+        Assert.Equal(TestMaps.P0, failure.LifeOwner);
+        Assert.Equal([cut], failure.Triggers);
+        Assert.Contains("破坏活形", failure.Message);
     }
 }

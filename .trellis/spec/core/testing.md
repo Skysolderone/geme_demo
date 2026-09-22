@@ -197,6 +197,20 @@ Assert.Equal(PowerText(match), PowerText(restored));   // 把每个字段拼成�
 | 手牌两段账 | 回合前 4 + 本轮新增 2 → Pass 后剩 4 |
 | 倍率取整边界 | n=0..8 各阶，恰为整数的值必须取到该整数 |
 
+## 慢测试与计时测试：默认跳过，环境变量 + `Category` 才运行（life-shape 裁决 R7）
+
+跑满真实对局的计时测试、种子数上百的性质测试不进默认套件——xunit 并行下计时噪声大，且会把全量 `dotnet test` 拖长到不可日常运行。约定：
+
+| 类别 | 特性 | 环境变量 | `Trait` | 运行命令 |
+|---|---|---|---|---|
+| 计时 | `[PerfTheory]` | `SIEGE_PERF=1` | `Category=Perf` | `SIEGE_PERF=1 dotnet test tests/Siege.Core.Tests -c Release --filter "Category=Perf"` |
+| 慢（大种子集性质测试等） | `[SlowFact]` | `SIEGE_SLOW=1` | `Category=Slow` | `SIEGE_SLOW=1 dotnet test tests/Siege.Core.Tests -c Release --filter "Category=Slow"` |
+
+- 未设环境变量时这些测试在默认套件里显示为 **Skipped**，不是静默通过；特性在构造时读环境变量并设 `Skip`。
+- 两个条件缺一不可：只设环境变量不加过滤会把慢测试混进全量跑；只加过滤不设环境变量全部 Skipped。
+- `Category=Slow` 的守门测试 MUST 在默认套件里留一份缩小版（例：life-shape 2.3 默认跑种子 1–20，`Category=Slow` 跑 1–200），守门不因"默认跳过"而失效；缩小版与完整版共用同一个测试体，只换种子范围。`Category=Perf` 的计时测试只出数字、不守门，不要求缩小版。
+- 慢测试的耗时要写进当段 implement 记录。
+
 ## 提交前的测试必须用真实退出码把关
 
 `dotnet test ... | tail -1 && git commit` 这种写法，`&&` 看到的是 `tail` 的退出码，永远为 0——红测试会被原样提交。relic-system 收尾时就这样把一条过期断言连同归档一起提交了，靠事后肉眼才发现。

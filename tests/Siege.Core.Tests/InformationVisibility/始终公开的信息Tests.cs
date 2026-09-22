@@ -91,4 +91,34 @@ public class 始终公开的信息Tests
             Assert.Equal(7, group.LibertyCount);
         }
     }
+
+    [Fact]
+    public void 活形状态公开()
+    {
+        // life-shape D6 / 始终公开的信息第 6 条：P0 两眼活形（眼 E5、G5）、P2 一眼未定（角上 A9，A8 / B9）、P3 孤子 J1（无眼，死）。
+        // 四名观察者从各自的公开世界读到同一份：每条棋串的三态、已确定活形的眼空间、每名玩家的禁入格；且与公开盘面上独立重算的结果逐项相同。
+        MatchFlow match = AiFixtures.Round5()
+            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5)
+            .Stones(MatchFixtures.P2, "A8", "B9")
+            .Stones(MatchFixtures.P3, "J1");
+
+        foreach (PlayerId viewer in MatchFixtures.All)
+        {
+            MatchPublicView view = match.World(viewer).Public.View;
+            Siege.Core.Board.LifeShapeReport life = view.LifeShape;
+
+            Assert.Equal(Siege.Core.Board.LifeState.Alive, life.LifeOf("E4"));
+            Assert.Equal(["E5", "G5"], life.EyeSpacesOf("E4"));
+            Assert.Equal(Siege.Core.Board.LifeState.Undetermined, life.LifeOf("A8"));
+            Assert.Equal(Siege.Core.Board.LifeState.Undetermined, life.LifeOf("B9"));
+            Assert.Equal(Siege.Core.Board.LifeState.Dead, life.LifeOf("J1"));
+            Assert.Empty(life.Forbidden(P0));
+            Assert.Equal(["E5", "G5"], life.Forbidden(P1));
+            Assert.Equal(["E5", "G5"], life.Forbidden(MatchFixtures.P2));
+            Assert.Equal(["E5", "G5"], life.Forbidden(MatchFixtures.P3));
+            Assert.Equal(
+                LifeShapeFixtures.Describe(Siege.Core.Board.LifeShapeReport.Analyze(view.Board)),
+                LifeShapeFixtures.Describe(life));
+        }
+    }
 }

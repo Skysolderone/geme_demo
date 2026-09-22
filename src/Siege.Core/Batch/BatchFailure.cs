@@ -41,11 +41,25 @@ public enum BatchFailureKind
 
     /// <summary>同一批次内两枚匠人指定了同一个改造目标（批次内不链式：同一目标批内唯一）。</summary>
     DuplicateEditInBatch,
+
+    /// <summary>
+    /// 活棋禁入（life-shape，预演第 1 步）：落点在当前玩家的禁入格集合内，即他人已确定活形棋串的眼空间。
+    /// 判定基于批次开始前的正式盘面，查询只走 <see cref="LifeShapeReport.IsForbiddenFor"/>。
+    /// </summary>
+    LifeForbidden,
+
+    /// <summary>
+    /// 破坏活形（life-shape，预演第 6 步）：批次开始前某条非己方的已确定活形棋串，其原有棋子在结算后不在盘上
+    /// 或所在棋串不再是已确定活形。
+    /// </summary>
+    BreaksLife,
 }
 
 /// <summary>
 /// 可定位的失败原因。<see cref="Coords"/> 直接服务 UI 高亮：
 /// 自杀手时为提子后仍无气的己方棋串全部坐标；同形时为本批次落点，并由 <see cref="DuplicateOfSequence"/> 指出重复的历史提交序号。
+/// 活棋禁入时为违规落点（单格），所属活形棋串在 <see cref="LifeGroup"/>；破坏活形时为受影响棋串在批次开始前的全部坐标（与 <see cref="LifeGroup"/> 相同），
+/// 触发的落子 / 改造在 <see cref="Triggers"/>。两类都由 <see cref="LifeOwner"/> 给出活形所有者。
 /// </summary>
 public sealed record BatchFailure(
     BatchFailureKind Kind,
@@ -54,6 +68,15 @@ public sealed record BatchFailure(
     PieceType? StockType = null,
     int? DuplicateOfSequence = null)
 {
+    /// <summary>活棋禁入 / 破坏活形：涉及的已确定活形棋串的全部坐标（批次开始前的正式盘面，坐标序）；其余类别为空。</summary>
+    public ImmutableArray<Coord> LifeGroup { get; init; } = [];
+
+    /// <summary>活棋禁入 / 破坏活形：该活形的所有者；其余类别为 <c>null</c>。</summary>
+    public PlayerId? LifeOwner { get; init; }
+
+    /// <summary>破坏活形：触发的落子与改造（本批次全部暂放，按批内顺序；结果导向检查不归因到单枚）；其余类别为空。</summary>
+    public ImmutableArray<Placement> Triggers { get; init; } = [];
+
     internal static BatchFailure Unplayable(Coord c) =>
         new(BatchFailureKind.Unplayable, $"落点不可落子：{c.ToNotation()}。", [c]);
 
@@ -94,6 +117,27 @@ public sealed record BatchFailure(
     internal static BatchFailure DuplicateEdit(Coord c, TerrainEdit edit) =>
         new(BatchFailureKind.DuplicateEditInBatch,
             $"同一批次内重复的改造目标：{edit}。", [c, .. edit.Cells.Where(t => t != c)]);
+
+    internal static BatchFailure LifeForbidden(Coord c, PlayerId owner, ImmutableArray<Coord> group) =>
+        new(BatchFailureKind.LifeForbidden,
+            $"活棋禁入：{c.ToNotation()} 是 {owner} 已确定活形棋串（{string.Join(",", group.Select(s => s.ToNotation()))}）的眼空间。", [c])
+        {
+            LifeGroup = group,
+            LifeOwner = owner,
+        };
+
+    internal static BatchFailure BreaksLife(PlayerId owner, ImmutableArray<Coord> group, ImmutableArray<Placement> triggers) =>
+        new(BatchFailureKind.BreaksLife,
+            $"破坏活形：{owner} 的已确定活形棋串（{string.Join(",", group.Select(s => s.ToNotation()))}）在本批次（{string.Join("，", triggers.Select(Describe))}）结算后不再是已确定活形。",
+            group)
+        {
+            LifeGroup = group,
+            LifeOwner = owner,
+            Triggers = triggers,
+        };
+
+    private static string Describe(Placement p) =>
+        p.Edit is { } edit ? $"{p.Coord.ToNotation()} {DisplayName(p.Type)} {TerrainEdit.DisplayName(edit.Kind)} {edit}" : $"{p.Coord.ToNotation()} {DisplayName(p.Type)}";
 
     /// <summary>面向人的棋子类型名称，只用于失败文案。</summary>
     internal static string DisplayName(PieceType type) => type switch
