@@ -86,3 +86,24 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 **修正了 ai-eye 的前提**：原以为删上限后 AI 不收敛，实测 **Standard 已收敛**（贪心"总分严格提高才落子"自带停手）；当初"200 局会近 100% 截断"的判断是拿 Easy 数据套到 Standard 上，是主会话的错误。ai-eye 真正要解决的是**对局偏长**与**不打仗**；Easy 是否收敛仍未验证。
 
 **遗留给后续的已知项**：`M-C12`（Pass 后出局检查）只能靠伪造存档触发，最薄；`改造可查` 未钉住 Scenario 的具体局面；势力排名面板左缘离按钮条约 140 px；`.trellis/tasks/` 下 `09-19-frontier-map`、`09-20-map-generator` 两个 Trellis 任务对应的 openspec change 已归档，但 Trellis 任务本身尚未归档（上一会话遗留，未处理）。
+
+
+## Session: 2026-09-22 — ② life-shape 实施完成并归档
+
+**状态**：四段（A–D）实施、主会话前台复核、提交，归档为 `openspec/changes/archive/2026-09-22-life-shape`；Trellis 任务已归档。测试 **1266 通过 / 2 门控跳过**（`SIEGE_PERF` / `SIEGE_SLOW`），两处构建 0 警告，`openspec validate --all --strict` 31 项全过，`ai-eye` 仍 valid。
+
+**提交链**：`a14414f` 段 A（`LifeShapeReport`）→ `3781fa5` 段 B（预演八步、`LegalRangeFor` 唯一扣禁入、公开视图）→ `c358936` 段 C（预演提示 / 表现层 / 终端 / Godot）→ `33e929b` 段 D（遥测、分析、设计文档 v1.6、200 局基线）→ `48146b2` 归档 → `e045be1` 任务归档。
+
+**实施裁决 R1–R14** 全文在归档 design.md「裁决记录」。要点：慢测试 = 环境变量 + `Category` 门控（testing.md）；性能分母含气；扣除禁入只在 `LegalRangeFor`、读取放开；"已活"优先于"危险"。
+
+**200 局基线**（`sim-out/life-shape/baseline200/`，v5、种子 1–200、Standard、AI 未校准）：截断 0、整轮 Pass 200/200；结束大回合 平均 13.15 / 中位 10 / 最长 83（① 冒烟 18.7 / 15 / 69）；整局无提子 41%；首次活形确立第 1.02 大回合；终局禁入格占可落子格 34.9%；他人致失活 0。
+
+**待负责人裁决（R8）**：活形过早过易——终局单子活形 77.3%、贴地形 ≤3 格小空区眼空间 85.1%。是否另开 change 修规则（例如眼空间须贴 ≥ N 枚子 / 地形墙不算封闭）尚未定，**`ai-eye` 开工前应先定**，否则其校准以这个口径为准。
+
+**待负责人过目**：`sim-out/life-shape/v5-groups.png`、`frontier-groups.png`（已活标记在信息层降饱和下与草地难区分）。
+
+**已知薄弱点**：破坏活形在确认阶段被拒的日志路径无专门测试；活形失去原因（所有者自拆 vs 其它）为启发式；"有活形玩家胜率"在 v5 上区分度低。
+
+**工作树里非本任务的改动**（未提交，一直未碰）：`src/godot/scripts/GameRoot.cs` 的 `--export-parts` 一段、`src/godot/scripts/PartExport.cs`、`src/godot/parts/`。
+
+**下一步**：先裁决 R8 → ③ `ai-eye`（0/22）。
