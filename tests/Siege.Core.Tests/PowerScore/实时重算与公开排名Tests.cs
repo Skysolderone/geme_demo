@@ -95,11 +95,6 @@ public class 实时重算与公开排名Tests
         Assert.Equal((1, (BigInteger)30), (only.Rank, only.Power));
         Assert.Equal([TestMaps.P0], only.Players);
         Assert.Null(snapshot.RankOf(ScoringFixtures.P3));
-
-        // catch-up-recruit：判定落后者征募补偿时 D 同样被排除，不占据任何名次——
-        // 参赛人数按名次表算得 1，唯一的参赛者 P0 名次 1（既不 > ⌈1÷2⌉=1，也不 > 1）→ 无人补偿；D 自己也拿不到。
-        Assert.Equal(CatchUpBonus.None, CatchUpCompensation.For(snapshot, TestMaps.P0, enabled: true));
-        Assert.Equal(CatchUpBonus.None, CatchUpCompensation.For(snapshot, ScoringFixtures.P3, enabled: true));
     }
 
     [Fact]

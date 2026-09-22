@@ -40,7 +40,7 @@ public class Godot层不含规则计算Tests
         // 变异验证 M-G1（check 阶段实做）：BoardView.DrawLiberties 里加一行 `_ = Siege.Core.Scoring.CoverageMap.Compute(...)` → 本测试红 1。
         string[] forbidden =
         [
-            "PowerCalculator", "CoverageMap", "BatchRehearsal", "BatchPreviewBuilder", "LibertySnapshot", "CatchUpCompensation",
+            "PowerCalculator", "CoverageMap", "BatchRehearsal", "BatchPreviewBuilder", "LibertySnapshot",
             "CaptureResolver", "FinalStandings", "Adjacency", "MapValidator", "RelicGenerator", "InitiativeOrder",
             ".GroupAt(", ".LibertiesOf(", ".AllGroups(", ".GroupsOf(", ".IsCaptured(", ".RemoveStones(", ".Apply(",
             // terrain-model：几何邻居 / 气边 / 覆盖关系三个导出入口，Godot 层不得自算邻接或地形过滤
@@ -96,42 +96,6 @@ public class Godot层不含规则计算Tests
                 }
             }
         }
-    }
-
-    [Fact]
-    public void 落后补偿判定不在表现层重写一份()
-    {
-        // catch-up-recruit 裁决 1 / design.md D3：补偿判定的唯一实现是 Core 的 CatchUpCompensation，表现层只读来源拆分、不另算。
-        // 把 "CatchUpCompensation" 列进上面的违禁 token 只挡得住"调用唯一实现"，挡不住"随手照抄一份阈值算式"——
-        // 变异验证 M-CU12（check 阶段实做）：在 Hud.AddStructure 里写 `rank > (participants + 1) / 2 ? 1 : 0` 并拼进结构参数文案，
-        //   Godot层不调用规则计算入口、UI层不含规则计算Tests 的 IL 扫描全绿（0 红）；补上本测试后该变异红 1。
-        // 判据取阈值 ⌈n ÷ 2⌉ 的整数写法 `(… + 1) / 2`：全 src/ 树里只有唯一实现命中，且恰好 1 次。
-        const string threshold = @"\+\s*1\s*\)\s*/\s*2";
-
-        // 反面：判据在唯一实现里确实命中，否则下面的"别处没有"只是规则失效
-        string unique = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Siege.Core", "Scoring", "CatchUpCompensation.cs"));
-        Assert.Single(Regex.Matches(unique, threshold, RegexOptions.None, TimeSpan.FromSeconds(5)));
-
-        string[] files =
-        [
-            .. new[] { Path.Combine(RepoRoot(), "src", "godot", "scripts"), Path.Combine(RepoRoot(), "src", "Siege.Presentation") }
-                .SelectMany(d => Directory.GetFiles(d, "*.cs", SearchOption.AllDirectories))
-                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                    && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-                .Order(),
-        ];
-
-        // 样本口径下界：路径写错时下面的"不含"断言会恒真
-        Assert.True(files.Length >= 20, $"只扫到 {files.Length} 个表现层源文件");
-
-        string[] second =
-        [
-            .. files.Where(f => Regex.IsMatch(File.ReadAllText(f), threshold, RegexOptions.None, TimeSpan.FromSeconds(5)))
-                .Select(Path.GetFileName)
-                .Order()!,
-        ];
-
-        Assert.Empty(second);
     }
 
     [Fact]

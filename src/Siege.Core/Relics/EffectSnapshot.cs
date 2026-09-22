@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Scoring;
 
 namespace Siege.Core.Relics;
 
@@ -43,8 +42,7 @@ public sealed record EffectSnapshot
         int typeSlots,
         int deployLimit,
         ImmutableSortedDictionary<PieceType, int> emblemCounts,
-        int heldTypeCount,
-        CatchUpBonus catchUp = default)
+        int heldTypeCount)
     {
         ArgumentNullException.ThrowIfNull(emblemCounts);
         if (heldTypeCount < 0)
@@ -60,7 +58,6 @@ public sealed record EffectSnapshot
         DeployLimit = deployLimit;
         EmblemCounts = emblemCounts;
         HeldTypeCount = heldTypeCount;
-        CatchUp = catchUp;
     }
 
     /// <summary>快照所属玩家。</summary>
@@ -69,10 +66,10 @@ public sealed record EffectSnapshot
     /// <summary>生成时所在的大回合。</summary>
     public int MajorRound { get; }
 
-    /// <summary>征募展示数（默认 5，探勘 +、落后补偿 +）。</summary>
+    /// <summary>征募展示数（默认 5，探勘 +）。</summary>
     public int RevealCount { get; }
 
-    /// <summary>免费选取数（默认 3，征召 +、落后补偿 +）。</summary>
+    /// <summary>免费选取数（默认 3，征召 +）。</summary>
     public int FreePickCount { get; }
 
     /// <summary>手牌类型槽（默认 5，兵站 +）。</summary>
@@ -86,12 +83,6 @@ public sealed record EffectSnapshot
 
     /// <summary>快照生成时玩家持有的棋子类型数（由手牌层提供的输入，原样携带）。</summary>
     public int HeldTypeCount { get; }
-
-    /// <summary>
-    /// 本小回合的落后者征募补偿（catch-up-recruit 裁决 1–2）：已经计入 <see cref="RevealCount"/> / <see cref="FreePickCount"/>，
-    /// 这里另行留痕只为来源拆分与遥测。名次在快照生成时读一次，本小回合内不因名次变化而改变。
-    /// </summary>
-    public CatchUpBonus CatchUp { get; }
 
     /// <summary>超限种数：持有类型数超出槽位的部分，0 即合法。大于 0 时征募流程在整类弃牌前不得进行。</summary>
     public int OverflowTypeCount => Math.Max(0, HeldTypeCount - TypeSlots);
@@ -123,7 +114,6 @@ public sealed record EffectSnapshot
         && TypeSlots == other.TypeSlots
         && DeployLimit == other.DeployLimit
         && HeldTypeCount == other.HeldTypeCount
-        && CatchUp == other.CatchUp
         && EmblemCounts.SequenceEqual(other.EmblemCounts);
 
     public override int GetHashCode()
@@ -136,7 +126,6 @@ public sealed record EffectSnapshot
         hash.Add(TypeSlots);
         hash.Add(DeployLimit);
         hash.Add(HeldTypeCount);
-        hash.Add(CatchUp);
         foreach ((PieceType piece, int count) in EmblemCounts)
         {
             hash.Add(piece);
@@ -146,7 +135,7 @@ public sealed record EffectSnapshot
         return hash.ToHashCode();
     }
 
-    /// <summary>无信物、无落后补偿时的默认快照。</summary>
+    /// <summary>无信物时的默认快照。</summary>
     public static EffectSnapshot Defaults(PlayerId player, int majorRound, int heldTypeCount) =>
         new(player, majorRound, BaseRevealCount, BaseFreePickCount, BaseTypeSlots, BaseDeployLimitFor(majorRound),
             ImmutableSortedDictionary<PieceType, int>.Empty, heldTypeCount);

@@ -1,6 +1,7 @@
 using System.Reflection;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
+using Siege.Core.Match;
 using Siege.Core.Recruit;
 
 namespace Siege.Core.Tests.Recruitment;
@@ -21,8 +22,6 @@ public class 私人征募面板Tests
         Assert.Equal(5, panel.ShowCount);
         Assert.Equal(3, panel.FreePickCount);
         Assert.Equal(3, panel.PicksRemaining);
-        // catch-up-recruit：规格把本 Scenario 的前提改为"不控制任何信物、未获得落后者征募补偿"。
-        Assert.Equal(Siege.Core.Scoring.CatchUpBonus.None, panel.CatchUp);
         Assert.All(panel.Candidates, c => Assert.True(c.IsSelectable));
 
         access.Pick(0);
@@ -52,6 +51,36 @@ public class 私人征募面板Tests
 
         Assert.Throws<SiegeRuleException>(() => access.Pick(4));
         Assert.Equal(4, access.PrivateView().PendingGained);
+    }
+
+    [Fact]
+    public void 最后一名没有补偿()
+    {
+        // 规格 Scenario「最后一名没有补偿」（restore-go-core-rules 裁决 #7）：4 人局中势力名次第 4 的玩家不控制任何信物，进入征募阶段
+        // → 面板展示 5 枚候选，最多可免费选取 3 枚，与第 1 名相同。走真实 MatchFlow（名次来自势力榜），不走 HandFixtures 的直给快照。
+        // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P1 G1 H1 J1 → 3 + 4 = 7；P2 A9 B9 → 2 + 3 = 5；P3 J9 → 1 + 2 = 3。
+        // 先红：旧实现下 P3 面板为 展示 6 / 选取 4 → 本测试红。
+        MatchFlow match = MatchFixtures.Started()
+            .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
+            .Stones(MatchFixtures.P0, "A1", "B1", "C1", "D1")
+            .Stones(MatchFixtures.P1, "G1", "H1", "J1")
+            .Stones(MatchFixtures.P2, "A9", "B9")
+            .Stones(MatchFixtures.P3, "J9");
+        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(MatchFixtures.P3));
+        Assert.Empty(match.Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(MatchFixtures.P3)));
+
+        match.BeginTurn();
+        Assert.Equal(MatchFixtures.P3, match.CurrentPlayer);
+        RecruitPanelView lastPanel = match.EnterRecruit();
+        Assert.Equal((5, 3, 3), (lastPanel.ShowCount, lastPanel.FreePickCount, lastPanel.PicksRemaining));
+        match.EnterDeploy();
+        Assert.True(match.Confirm().Confirmed);
+
+        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(MatchFixtures.P0));
+        match.BeginTurn();
+        Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+        RecruitPanelView firstPanel = match.EnterRecruit();
+        Assert.Equal((firstPanel.ShowCount, firstPanel.FreePickCount), (lastPanel.ShowCount, lastPanel.FreePickCount));
     }
 
     [Fact]

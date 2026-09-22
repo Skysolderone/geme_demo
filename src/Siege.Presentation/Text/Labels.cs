@@ -56,9 +56,6 @@ public static class Labels
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知信物类型。"),
     };
 
-    /// <summary>结构参数中非信物来源的名称：落后者征募补偿（catch-up-recruit 裁决 5）。</summary>
-    public const string CatchUpSource = "落后补偿";
-
     /// <summary>已揭示信物的内容文案，如「军令 +1」「流派徽记·倍增子 ×2」。</summary>
     public static string RelicContent(RelicContent content) =>
         content.Type == RelicType.SchoolEmblem

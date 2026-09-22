@@ -345,15 +345,6 @@ public sealed record TurnSnapshot
 
     public int FreePickCount { get; init; }
 
-    /// <summary>
-    /// 本小回合落后者征募补偿给<b>展示数</b>的点数（0 或 1）。取自该玩家真实征募面板上的快照留痕，不由分析端按名次重算。
-    /// catch-up-recruit 之前的旧日志没有该字段（<c>null</c>）：分析时整局跳过落后补偿口径，MUST NOT 回填成 0。
-    /// </summary>
-    public int? CatchUpReveal { get; init; }
-
-    /// <summary>本小回合落后者征募补偿给<b>免费选取数</b>的点数（0 或 1）；旧日志为 <c>null</c>，同 <see cref="CatchUpReveal"/>。</summary>
-    public int? CatchUpPick { get; init; }
-
     public int TypeSlots { get; init; }
 
     public int DeployLimit { get; init; }

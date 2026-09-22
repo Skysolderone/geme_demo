@@ -407,8 +407,6 @@ public sealed class MatchSession
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
             FreePickCount = _trace.FreePickCount,
-            CatchUpReveal = _trace.CatchUp.RevealBonus,
-            CatchUpPick = _trace.CatchUp.PickBonus,
             TypeSlots = _trace.TypeSlots,
             DeployLimit = _trace.DeployLimit,
             ActionOrder = [.. after.ActionOrder.Select(p => p.Value)],

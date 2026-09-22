@@ -18,7 +18,6 @@ public class UI层不含规则计算Tests
     private static readonly Type[] ForbiddenTypes =
     [
         typeof(PowerCalculator), typeof(global::Siege.Core.Scoring.PieceEffects), typeof(CaptureResolver), typeof(BatchRehearsal), typeof(BatchPreviewBuilder),
-        typeof(global::Siege.Core.Scoring.CatchUpCompensation),   // catch-up-recruit：补偿判定唯一实现在规则层，表现层只读来源拆分
         typeof(TerrainEditRules), typeof(TerrainWriter),          // artisan-terrain-edit 4.1：改造合法性与地形写入口的唯一实现在规则层。可改造目标由 Core 富预演的 EditOutlook.Legal 带过来，
                                                                   // 表现层只拼文案与高亮（变异 M-SC4 实做：PreviewPresentation.ArtisanEdit 自调 TerrainEditRules.Reject → 本测试红 1）
         typeof(LibertySnapshot), typeof(global::Siege.Core.Match.InitiativeOrder), typeof(FinalStandings), typeof(Adjacency), typeof(MapValidator),

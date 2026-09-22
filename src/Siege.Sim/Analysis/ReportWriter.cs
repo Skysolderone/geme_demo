@@ -108,12 +108,6 @@ public static class ReportWriter
             sb.AppendLine($"- 棋子 {p.Type}：盘面 {p.Stones} 枚（{Pct(p.StoneShare)}），势力 {p.Power}（{Pct(p.PowerShare)}），每颗平均 {Num(p.MeanPerStone)}");
         }
 
-        sb.AppendLine("### 4c. 落后者征募补偿（catch-up-recruit：占比分母为纳入局的小回合数；关闭补偿的局与无留痕的旧日志整局排除）");
-        CatchUpSection cu = r.CatchUp;
-        sb.AppendLine($"- 纳入 {cu.Matches} 局（{cu.Turns} 个小回合），排除无补偿留痕的局 {cu.Skipped} 局");
-        sb.AppendLine($"- 获补偿小回合 {cu.CompensatedTurns}，占比 {cu.CompensatedTurnRate}");
-        sb.AppendLine($"- 两档触发次数：后半名次展示 +1 共 {cu.RevealTriggers} 次，最后一名选取 +1 共 {cu.PickTriggers} 次");
-        sb.AppendLine($"- 获补偿玩家的终局名次分布：{Histogram(cu.FinalRankOfCompensated)}");
         sb.AppendLine("### 5. 出生区随机资源是否造成显著胜率差异（裁决 8：按信物生成收敛分组）");
         BirthZoneSection z = r.BirthZones;
         sb.AppendLine($"- 区数 {z.ZoneCount}（地图出生区数；多于人数时没人选的平台是中立争夺区，被选 0 次的区同样列出）");

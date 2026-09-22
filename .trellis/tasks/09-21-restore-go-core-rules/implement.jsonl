@@ -1,13 +1,11 @@
-{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "D3（出局判据与\"曾有正势力\"标记）、D4（终局只剩三类）为本段核心"}
-{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "段 C = 第 3 组 3.1–3.6；只做这一组"}
-{"file": "openspec/changes/restore-go-core-rules/proposal.md", "reason": "裁决表与影响面"}
-{"file": ".trellis/tasks/09-21-restore-go-core-rules/prd.md", "reason": "分段计划、验收标准与子 agent 约束"}
-{"file": ".trellis/tasks/09-21-restore-go-core-rules/implement.md", "reason": "段 A / 段 B 记录与全部待决；注意段 B 已把并列链第三级提前改成 ExclusiveCells"}
-{"file": ".trellis/spec/core/index.md", "reason": "内核开发规范入口与 Quality Check"}
-{"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、视图分离、全量重算、单一实现"}
-{"file": ".trellis/spec/core/determinism.md", "reason": "整数运算、随机子流、可复现"}
-{"file": ".trellis/spec/core/testing.md", "reason": "Requirement→测试类、Scenario→测试方法、变异验证、mtime 坑、带等号比较式先算退化局面"}
-{"file": "openspec/changes/restore-go-core-rules/specs/elimination-endgame/spec.md", "reason": "段 C 核心：出局判定、主动弃赛、三类终局、终局名次与并列判定；四条 REMOVED"}
-{"file": "openspec/changes/restore-go-core-rules/specs/match-setup/spec.md", "reason": "段 C：三条对局配置公开项整体移除"}
-{"file": "openspec/changes/restore-go-core-rules/specs/turn-sequence/spec.md", "reason": "段 C：大回合推进不再引用大回合上限"}
-{"file": "openspec/changes/restore-go-core-rules/specs/power-score/spec.md", "reason": "段 C 参考：总势力口径与排名作用范围（段 A 已实现）"}
+{"file": "openspec/changes/restore-go-core-rules/design.md", "reason": "D7（征募与快照）为本段核心"}
+{"file": "openspec/changes/restore-go-core-rules/tasks.md", "reason": "段 D = 第 4 组 4.1–4.2；只做这一组"}
+{"file": ".trellis/tasks/09-21-restore-go-core-rules/prd.md", "reason": "分段计划与子 agent 约束"}
+{"file": ".trellis/tasks/09-21-restore-go-core-rules/implement.md", "reason": "段 A–C 记录；段 C 待决 3：CatchUpFor 暂时写死开启，本段删本体"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核开发规范入口"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现、视图分离"}
+{"file": ".trellis/spec/core/testing.md", "reason": "变异验证、mtime 坑、违禁 token 挡不住照抄算式"}
+{"file": "openspec/changes/restore-go-core-rules/specs/recruitment/spec.md", "reason": "段 D：删落后者征募补偿、私人征募面板"}
+{"file": "openspec/changes/restore-go-core-rules/specs/relic-effects/spec.md", "reason": "段 D：快照不读名次、默认基础值"}
+{"file": "openspec/changes/restore-go-core-rules/specs/initiative-order/spec.md", "reason": "段 D：排名作用范围"}
+{"file": "openspec/changes/restore-go-core-rules/specs/hand-info-panel/spec.md", "reason": "段 D：来源拆分只剩基础值与信物"}

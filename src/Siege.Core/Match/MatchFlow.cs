@@ -143,14 +143,6 @@ public sealed partial class MatchFlow
     /// </summary>
     public bool MapDigestBackfilled { get; private set; }
 
-    /// <summary>
-    /// 某玩家此刻的落后者征募补偿（catch-up-recruit）：读<b>现成的</b>公开势力名次（<see cref="PowerScoreboard.Latest"/>），
-    /// 不触发任何重算、不自己排序。快照生成与结构参数组装都经由此处，判定实现唯一。
-    /// <b>过渡状态</b>：对局配置里的开关已随裁决 #7 / #15 删除（match-setup「对局配置公开落后补偿开关」REMOVED），
-    /// 补偿本体的删除是 restore-go-core-rules 段 D（tasks 4.1 / 4.2）的事，此处暂时恒为开启。
-    /// </summary>
-    private CatchUpBonus CatchUpFor(PlayerId player) => CatchUpCompensation.For(Scoreboard.Latest, player, enabled: true);
-
     /// <summary>权威盘面。规则层内部使用；表现层与 AI 请消费 <see cref="Publish"/>。</summary>
     public GameBoard Board { get; }
 
@@ -287,8 +279,8 @@ public sealed partial class MatchFlow
         SetStage(TurnStage.RelicSnapshot, player);
 
         int held = Hands.HeldTypeCount(player);
-        // catch-up-recruit 裁决 2：名次只在这一刻读一次（用上一次结算 / Pass 后的现成排名），本小回合内名次再变也不回收。
-        EffectSnapshot snapshot = Relics.SnapshotFor(player, Board, Roster, held, MajorRound, CatchUpFor(player));
+        // restore-go-core-rules D7：快照只读信物与当前大回合，MUST NOT 读取势力名次。
+        EffectSnapshot snapshot = Relics.SnapshotFor(player, Board, Roster, held, MajorRound);
         if (_snapshotTransform is { } transform)
         {
             snapshot = transform(snapshot);
@@ -417,7 +409,7 @@ public sealed partial class MatchFlow
         HandPrivateView hand = Hands.AccessFor(player).PrivateView();
         EffectSnapshot effects = inOwnTurn && _snapshot is not null
             ? _snapshot
-            : Relics.SnapshotFor(player, Board, Roster, Hands.HeldTypeCount(player), MajorRound, CatchUpFor(player));
+            : Relics.SnapshotFor(player, Board, Roster, Hands.HeldTypeCount(player), MajorRound);
         ImmutableArray<Coord> controlled = [.. Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(player)).Select(s => s.Coord)];
         BigInteger power = Scoreboard.Latest?.Of(player).Total ?? BigInteger.Zero;
         _resignations.Add(new ResignationSnapshot(player, MajorRound, Board.Serialize(), hand, effects, controlled, power));

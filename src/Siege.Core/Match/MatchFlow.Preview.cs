@@ -40,7 +40,7 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 结构参数：落后者征募补偿经 <c>CatchUpFor</c> 读取同一份现成排名（不触发重算），数值取自账本副本上的 <see cref="RelicLedger.SnapshotFor(PlayerId, GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, int, int, CatchUpBonus)"/>（唯一实现，
+    /// 结构参数：数值取自账本副本上的 <see cref="RelicLedger.SnapshotFor(PlayerId, GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, int, int)"/>（唯一实现，
     /// 副本上的遥测峰值变化不回写正式账本）；来源取同一副本中由该玩家控制的已揭示信物。二者不一致即抛出——
     /// 控制而未揭示只会出现在绕过结算直接改盘的测试局面里，此时列出来源会泄漏内容，宁可响亮失败。
     /// </summary>
@@ -57,8 +57,7 @@ public sealed partial class MatchFlow
                 continue;
             }
 
-            CatchUpBonus catchUp = CatchUpFor(player);
-            EffectSnapshot snapshot = copy.SnapshotFor(player, Board, roster, Hands.HeldTypeCount(player), MajorRound, catchUp);
+            EffectSnapshot snapshot = copy.SnapshotFor(player, Board, roster, Hands.HeldTypeCount(player), MajorRound);
             ImmutableArray<RelicPublicState> granted = [.. copy.PublicStates().Where(s => s.Control.GrantsEffectTo(player))];
             if (granted.FirstOrDefault(s => !s.IsRevealed) is { } hidden)
             {
@@ -66,8 +65,8 @@ public sealed partial class MatchFlow
             }
 
             result.Add(new PlayerStructure(player, status, new StructureParameters(
-                Parameter(EffectSnapshot.BaseRevealCount, snapshot.RevealCount, RelicType.Prospecting, granted, catchUp.RevealBonus),
-                Parameter(EffectSnapshot.BaseFreePickCount, snapshot.FreePickCount, RelicType.Conscription, granted, catchUp.PickBonus),
+                Parameter(EffectSnapshot.BaseRevealCount, snapshot.RevealCount, RelicType.Prospecting, granted),
+                Parameter(EffectSnapshot.BaseFreePickCount, snapshot.FreePickCount, RelicType.Conscription, granted),
                 Parameter(EffectSnapshot.BaseTypeSlots, snapshot.TypeSlots, RelicType.Depot, granted),
                 Parameter(EffectSnapshot.BaseDeployLimitFor(snapshot.MajorRound), snapshot.DeployLimit, RelicType.Command, granted))));
         }
@@ -75,22 +74,22 @@ public sealed partial class MatchFlow
         return result.MoveToImmutable();
     }
 
-    /// <summary><paramref name="catchUp"/> 是落后者征募补偿贡献的点数（catch-up-recruit 裁决 5）：单列一类来源，MUST NOT 混进信物来源项。</summary>
+    /// <summary>来源只有两类（restore-go-core-rules D7）：<paramref name="baseValue"/>（默认值 / 分阶段基础值）与各枚信物。</summary>
     private static StructureParameter Parameter(
-        int baseValue, int value, RelicType type, ImmutableArray<RelicPublicState> granted, int catchUp = 0)
+        int baseValue, int value, RelicType type, ImmutableArray<RelicPublicState> granted)
     {
         ImmutableArray<ParameterSource> sources =
         [
             .. granted.Where(s => s.Content!.Value.Type == type).Select(s => new ParameterSource(s.Coord, type, s.Content!.Value.Magnitude)),
         ];
         int relics = sources.Sum(s => s.Magnitude);
-        if (baseValue + catchUp + relics != value)
+        if (baseValue + relics != value)
         {
             throw new SiegeRuleException(
-                $"结构参数来源与效果快照不一致：{type} 基础 {baseValue} + 信物 {relics} + 落后补偿 {catchUp} ≠ 快照 {value}。");
+                $"结构参数来源与效果快照不一致：{type} 基础 {baseValue} + 信物 {relics} ≠ 快照 {value}。");
         }
 
-        return new StructureParameter(baseValue, value, sources, catchUp);
+        return new StructureParameter(baseValue, value, sources);
     }
 
     /// <summary>

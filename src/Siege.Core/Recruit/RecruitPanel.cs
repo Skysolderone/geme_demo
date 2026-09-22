@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Scoring;
 
 namespace Siege.Core.Recruit;
 
@@ -23,8 +22,7 @@ public sealed record RecruitPanelView(
     int FreePickCount,
     int PicksMade,
     int TypeSlots,
-    int OccupiedSlots,
-    CatchUpBonus CatchUp = default)
+    int OccupiedSlots)
 {
     /// <summary>展示数。</summary>
     public int ShowCount => Candidates.Length;
@@ -43,7 +41,6 @@ public sealed record RecruitPanelView(
         && PicksMade == other.PicksMade
         && TypeSlots == other.TypeSlots
         && OccupiedSlots == other.OccupiedSlots
-        && CatchUp == other.CatchUp
         && Candidates.SequenceEqual(other.Candidates);
 
     public override int GetHashCode()
@@ -54,7 +51,6 @@ public sealed record RecruitPanelView(
         hash.Add(PicksMade);
         hash.Add(TypeSlots);
         hash.Add(OccupiedSlots);
-        hash.Add(CatchUp);
         foreach (RecruitCandidateView c in Candidates)
         {
             hash.Add(c);

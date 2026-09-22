@@ -32,8 +32,8 @@
 
 ## 4. 段 D——落后补偿摘除（快照 / 征募 / 面板）
 
-- [ ] 4.1 效果快照不再读取势力名次；展示数 / 选取数 = 默认值 + 信物；来源拆分只剩"分阶段基础值""信物"。测试：`relic-effects`「效果快照在小回合开始时生成」四个 Scenario（含"名次不影响快照"）、「默认基础值」、`recruitment`「私人征募面板」五个 Scenario（含"最后一名没有补偿"）、`initiative-order`「排名的作用范围」、`hand-info-panel`「公开结构参数与信物来源」三个 Scenario。验证：全绿；守门——快照生成代码不引用势力名次；变异验证。
-- [ ] 4.2 删除落后补偿的实现、测试类与 Sim 报告段。验证：`grep -rE "CatchUp|落后|补偿" src tests` 无命中；`dotnet test -c Release` 全绿。
+- [x] 4.1 效果快照不再读取势力名次；展示数 / 选取数 = 默认值 + 信物；来源拆分只剩"分阶段基础值""信物"。测试：`relic-effects`「效果快照在小回合开始时生成」四个 Scenario（含"名次不影响快照"）、「默认基础值」、`recruitment`「私人征募面板」五个 Scenario（含"最后一名没有补偿"）、`initiative-order`「排名的作用范围」、`hand-info-panel`「公开结构参数与信物来源」三个 Scenario。验证：全绿；守门——快照生成代码不引用势力名次；变异验证。
+- [x] 4.2 删除落后补偿的实现、测试类与 Sim 报告段。验证：`grep -rE "CatchUp|落后|补偿" src tests` 无命中；`dotnet test -c Release` 全绿。
 
 ## 5. 段 E——Sim、表现层、Godot
 
@@ -50,4 +50,5 @@
 - [ ] 6.3 `.trellis/spec/core/` 补充本 change 形成的编码约定（势力值用不溢出的整数类型、截断只在 Sim、内置图内容变更必须递增标识）。验证：`index.md` 的 Quality Check 同步一条"势力 / 军势不得用定宽整数"。（`determinism.md` 的「势力 / 军势用 BigInteger」与 `testing.md` 的「还原后必须刷新时间戳」已在段 A 提前写入，本项只需补其余条目。）
 - [ ] 6.4 补强段 A check 报出的两处守门缺口（`implement.md`「段 A check 记录」）：（a）`总势力Tests.领地计分直接取空格归属结果` ② 只扫 `PowerCalculator.cs` 的违禁词与仓库级 `CoverageTargets(` 名单，挡得住"同文件另写统计"（M-AC2 红 1）却挡不住"另起文件照抄一份"（M-AC14 红 0）——补"算式形状 / `OwnershipOf(` 调用者名单"扫描，注意仓库级限制 `OwnershipOf(` 会误伤 Presentation / Sim 的合法读法；（b）`计分路径不含浮点` 用 `Directory.GetFiles` 不递归，`Scoring/` 将来加子目录会静默漏扫，改为递归。验证：两条各配一次变异（照抄到新文件应红、子目录里塞浮点应红）。
 - [ ] 6.4b 生成图黄金值扩到 2–3 颗种子（段 B 待决 8）：`MG-14`（河道拐弯加价 6→1）在新的 `gen:12345` 上实跑 **0 红**，单颗种子的导出摘要挡不住布局参数改动；非自证目前只靠 M-B19（桥头相位反转，红 1）。验证：扩种子后重跑 MG-14 必须红，并记录红数。
+- [ ] 6.4c 修正往返恢复测试的地图来源（段 D 待决 5）：`对局持久化Tests`、`百局端到端Tests:101`、`原型插旗替代路径Tests:43`、`人工接管Tests:73` 恢复时传的是 `match.Map`，应为 `Board.BaseMap`——有地形改造的局面下会恢复出错误地形（`人工接管Tests.交还后继续` 在段 D 已因此暴露并修正）。验证：给其中至少一条构造含改造的局面，改前红、改后绿。
 - [ ] 6.5 全量回归：`dotnet build` 零警告；`dotnet test -c Release` 全绿；`openspec validate restore-go-core-rules --strict` 通过。

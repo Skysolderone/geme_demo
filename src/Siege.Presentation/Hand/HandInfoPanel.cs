@@ -27,11 +27,10 @@ public sealed class HandPanelState
 public sealed record ParameterSourceView(Coord Coord, RelicType Type, int Magnitude, string Text);
 
 /// <summary>
-/// 一项公开结构参数：当前值、基础值、信物来源、落后者征募补偿与汇总文案，
-/// 如「部署上限 5（基础 3，+2 来自 军令×2）」「展示数 6（基础 5，+1 来自 落后补偿）」。
+/// 一项公开结构参数：当前值、基础值、信物来源与汇总文案，如「部署上限 5（基础 3，+2 来自 军令×2）」。
+/// 来源只有分阶段基础值与各枚信物两类（restore-go-core-rules D7）；来源拆分由规则层给出，本层只显示，不另算。
 /// </summary>
-/// <param name="CatchUp">落后者征募补偿贡献的点数（catch-up-recruit 裁决 5）；来源拆分由规则层给出，本层只显示，不另算。</param>
-public sealed record ParameterView(string Label, int Value, int Base, ImmutableArray<ParameterSourceView> Sources, int CatchUp, string Text);
+public sealed record ParameterView(string Label, int Value, int Base, ImmutableArray<ParameterSourceView> Sources, string Text);
 
 /// <summary>四项公开结构参数（展示数、免费选取数、手牌类型槽、部署上限）。</summary>
 public sealed record StructureView(ParameterView RevealCount, ParameterView FreePickCount, ParameterView TypeSlots, ParameterView DeployLimit)
@@ -58,15 +57,10 @@ public sealed record StructureView(ParameterView RevealCount, ParameterView Free
                 $"{s.Coord.ToNotation()} {Labels.Relic(s.Type)} +{s.Magnitude}")),
         ];
         List<string> parts = [.. parameter.Sources.GroupBy(s => s.Type).Select(g => $"{Labels.Relic(g.Key)}×{g.Count()}")];
-        if (parameter.CatchUp > 0)
-        {
-            parts.Add($"{Labels.CatchUpSource} +{parameter.CatchUp}");
-        }
-
         string text = parts.Count == 0
             ? $"{label} {parameter.Value}（基础）"
             : $"{label} {parameter.Value}（基础 {parameter.Base}，+{parameter.Bonus} 来自 {string.Join("、", parts)}）";
-        return new ParameterView(label, parameter.Value, parameter.Base, sources, parameter.CatchUp, text);
+        return new ParameterView(label, parameter.Value, parameter.Base, sources, text);
     }
 }
 

@@ -17,9 +17,6 @@ internal sealed class TurnTrace
 
     internal int FreePickCount { get; set; }
 
-    /// <summary>落后者征募补偿在本小回合的两档点数（catch-up-recruit）：原样取自该玩家征募面板携带的快照留痕。</summary>
-    internal CatchUpBonus CatchUp { get; set; }
-
     internal int TypeSlots { get; set; }
 
     internal int DeployLimit { get; set; }
@@ -34,7 +31,6 @@ internal sealed class TurnTrace
     {
         ShowCount = 0;
         FreePickCount = 0;
-        CatchUp = CatchUpBonus.None;
         TypeSlots = 0;
         DeployLimit = 0;
         Rehearsals = 0;
@@ -66,7 +62,6 @@ internal sealed class LoggingController(ITurnController inner, TurnTrace trace) 
         ArgumentNullException.ThrowIfNull(panel);
         trace.ShowCount = panel.ShowCount;
         trace.FreePickCount = panel.FreePickCount;
-        trace.CatchUp = panel.CatchUp;
         trace.TypeSlots = panel.TypeSlots;
         Inner.Recruit(hand, panel);
     }

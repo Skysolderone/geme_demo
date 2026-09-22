@@ -101,7 +101,7 @@ internal static class SimFixtures
     internal static TurnSnapshot Turn(
         int turn, int majorRound, int player, long[] totals, string[]? placements = null, int deployLimit = 3,
         int showCount = 5, int freePick = 3, int typeSlots = 5, GroupEntry[]? groupsOfPlayer = null, string[]? captures = null,
-        int? catchUpReveal = null, int? catchUpPick = null, TerrainEditEntry[]? edits = null, bool legacyNoEdits = false) =>
+        TerrainEditEntry[]? edits = null, bool legacyNoEdits = false) =>
         new()
         {
             Turn = turn,
@@ -117,8 +117,6 @@ internal static class SimFixtures
             Edits = legacyNoEdits ? null : [.. edits ?? []],
             ShowCount = showCount,
             FreePickCount = freePick,
-            CatchUpReveal = catchUpReveal,
-            CatchUpPick = catchUpPick,
             TypeSlots = typeSlots,
             DeployLimit = deployLimit,
             ActionOrder = [.. Enumerable.Range(0, totals.Length)],

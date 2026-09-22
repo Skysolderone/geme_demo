@@ -625,3 +625,128 @@ M-A1 / M-A2 对应 tasks 1.2 明确要求的两条；M-A3 对应 1.3 要求的"�
 5. **弃赛后不做出局检查——接受**。规格只要求批次后与 Pass 后；弃赛不改变任何人的势力，不存在由弃赛导致的归零。
 
 **最薄的守门**：M-C12（Pass 后不做出局检查）只红 1，且只能靠伪造存档触发——真实对局里 Pass 不改变势力，行为上与"只在批次后检查"不可区分。记录在案，不强求加厚。
+
+## 段 D——落后补偿摘除（tasks 4.1–4.2，2026-09-22）
+
+段 C 基线 1176 全绿 → 段末 **1162 全绿**（净 −14：删 20 个测试用例，新增 6 个）。`dotnet build -c Release` 0 警告 0 错误（`--no-incremental` 复核）；
+`src/godot/Siege.Godot.csproj` 单独 `dotnet build -c Release` 0 警告 0 错误。未提交。
+
+### 改了什么
+
+1. **快照不读名次（D7）**：删除 `MatchFlow.CatchUpFor` 及三处调用（`BeginTurn` 小回合快照、弃赛快照、`Preview.StructuresOf`）。
+   `RelicLedger.SnapshotFor` 两个重载与 `BuildSnapshot` 去掉 `CatchUpBonus` 形参：展示数 / 选取数 = 默认值 5 / 3 + 信物，部署上限 = `BaseDeployLimitFor(大回合)` + 军令。
+   `EffectSnapshot` 删 `CatchUp` 属性、构造参数与 Equals / GetHashCode 项，`using Siege.Core.Scoring` 随之去掉。两处 `<see cref="SnapshotFor(…, CatchUpBonus)"/>` 同步改签名（否则 CS1574）。
+2. **来源拆分只剩两类**：`StructureParameter(Base, Value, Sources)` 删 `CatchUp` 与 `RelicBonus`（删后与 `Bonus` 同值）；`MatchFlow.Parameter` 的核对式改为 `基础 + Σ信物 == 快照`。
+   Presentation `ParameterView` 删 `CatchUp` 位置参数与文案拼接分支，`Labels.CatchUpSource` 删除。
+3. **征募面板**：`RecruitPanelView` 删 `CatchUp`（`HandLedger.PanelView` 同步）。
+4. **整删**：`Siege.Core/Scoring/CatchUpCompensation.cs`（`CatchUpBonus` / `CatchUpCompensation`）。
+5. **存档**：`ResignationSaveData.CatchUpReveal / CatchUpPick` 与 Serialize / Restore 两处删除（见待决 2）。
+6. **Sim**：`TurnTrace.CatchUp` 与 `LoggingController` 的留痕、`MatchSession` 写快照的两个字段、`TurnSnapshot.CatchUpReveal / CatchUpPick`、
+   `BalanceAnalyzer.CatchUpSection` / `CatchUp()` / `BalanceReport.CatchUp` 位置参数、`ReportWriter` 的「4c. 落后者征募补偿」整段、`PlayCommand` 开场说明那一行。
+   旧日志里的这两个快照字段读入时被忽略（System.Text.Json 缺省行为，与段 C 首部三字段同口径）。
+7. **`.trellis/spec/core/testing.md`**：「违禁 token 清单挡不住照抄一份算式」补一段：唯一实现删除之后，形状扫描扩到全 `src/`、期望零命中，反面命中改为对测试内字面量断言。
+
+### 新增测试（按规格 Scenario）与先红
+
+先写测试、在旧实现上 `--filter` 实跑：**红 6 / 7**（`无信物时的快照` 在旧实现上也绿：无信物、首名次即无补偿，属预期）。
+
+| 测试 | Scenario | 旧实现 |
+|---|---|---|
+| `效果快照在小回合开始时生成Tests.名次不影响快照` | relic-effects「名次不影响快照」：P3 名次 4 与 P0 名次 1 同大回合，快照 (5,3,5,4) 逐项相同 | 红（P3 6/4） |
+| `私人征募面板Tests.最后一名没有补偿` | recruitment：走真实 MatchFlow，第 4 名面板 5 / 3，与第 1 名相同 | 红 |
+| `排名的作用范围Tests.落后不获补偿` | initiative-order：P3 连续 5 个小回合以最后一名开始，每回合快照与同大回合第 1 名 P0 逐项相同 | 红 |
+| `公开结构参数与信物来源Tests.来源只有基础值与信物` | hand-info-panel：两局（名次阶梯 + 两枚军令）× 4 人 × 4 项，`Base + Σ信物 == Value`，Base 等于默认值 / 分阶段基础值；样本下界 32 项、信物来源 2 条；`StructureParameter` / `ParameterView` 构造参数名集合钉死 | 红 |
+| `效果快照在小回合开始时生成Tests.快照生成代码不引用势力名次`（守门） | ① `SnapshotFor` 各重载、`EffectSnapshot` 构造参数与属性的类型不得来自 `Siege.Core.Scoring`；② `src/Siege.Core/Relics/**` 不含 `(?i)rank\|scoreboard\|powersnapshot\|standing\|catchup\|名次\|排名`；③ 全 `src/` 的 `.SnapshotFor(` 实参不含名次 / 势力榜（下界 3 处） | 红（①：`CatchUpBonus`） |
+| `效果快照在小回合开始时生成Tests.名次半数阈值算式不在源码中出现`（守门） | 全 `src/`（含 Godot，排除 obj/bin/.godot）不出现 `\+\s*1\s*\)\s*/\s*2` 与 `\*\s*2\s*>`；反面命中对测试内字面量断言；下界 ≥ 100 文件、Godot ≥ 10 | 红（`CatchUpCompensation.cs:58`） |
+| `默认基础值Tests.无信物时的快照`（改写） | 按 Scenario 改为第 2 大回合：`(5,3,5,3)`；删 `CatchUp == None` 断言 | 绿 |
+
+### 既有测试改写 / 删除逐条
+
+**A. 整类删除（2 个文件，16 个用例）**
+
+| 文件 | 用例数 | 理由 |
+|---|---|---|
+| `Recruitment/落后者征募补偿Tests` | 9 Fact + 1 Theory × 4 = 13 | Requirement REMOVED（裁决 #7） |
+| `MatchTelemetry/落后补偿口径Tests` | 3 | 补偿留痕字段与报告段删除（tasks 4.2） |
+
+**B. 方法级删除 / 替换（4 个）**
+
+| 方法 | 处理 |
+|---|---|
+| `效果快照在小回合开始时生成Tests.快照读取开始时的名次` | 删，Scenario 已被「名次不影响快照」取代（同一摆盘复用） |
+| `公开结构参数与信物来源Tests.显示落后补偿来源` | 删，Scenario 已被「来源只有基础值与信物」取代 |
+| `排名的作用范围Tests.落后补偿不累计` | 改名改写为 `落后不获补偿`：**旧 5 次 `"6/4/11"`（展示 6 / 选取 4 / 两档各 1）→ 新 5 次 `"5:5/3/5/4"、"6:5/3/5/4"、"7:5/3/5/5"、"8:5/3/5/5"、"9:5/3/5/5"`，且与同大回合 P0 逐项相同**。依据：裁决 #7 删补偿，展示 / 选取回到默认 5 / 3；部署上限为分阶段基础值（第 5–6 大回合 4、第 7 起 5），旧串不含该项 |
+| `Godot层不含规则计算Tests.落后补偿判定不在表现层重写一份` | 删；其正面命中读 `CatchUpCompensation.cs`，文件已删。职责并入新守门「名次半数阈值算式不在源码中出现」（范围从 Godot + Presentation 扩到全 `src/`） |
+
+**C. 断言 / 夹具删除（未改期望）**
+
+`实时重算与公开排名Tests.弃赛者势力可见但不参与` 删末尾两条 `CatchUpCompensation.For(...) == None`；`私人征募面板Tests.默认面板` 删 `panel.CatchUp == None`；
+`排名的作用范围Tests.排名不累计` 删一行过渡期注释；`AiFixtures.SetDeployLimit` 与 `小回合的五个阶段Tests` 的 `new EffectSnapshot(…, s.CatchUp)` 去掉末参；
+`SimFixtures.Turn` 删 `catchUpReveal` / `catchUpPick` 形参；`Godot层不调用规则计算入口` 的违禁 token 删 `"CatchUpCompensation"`；`UI层不含规则计算Tests.ForbiddenTypes` 删该类型一行。
+
+**D. 改期望值 / 改写法**
+
+| 测试 | 旧 → 新 | 依据 |
+|---|---|---|
+| `候选格上限Tests.V4GoldenTurnHash` | `ABA5D7F9…229A65` → `F3DA0A40…48D8F6E0` | **走法确实变了**，与段 B / C 不同。临时测试在 `git archive HEAD`（段 C）与本段各跑同一夹具（种子 31、Standard、24 小回合）并导出快照文本：旧文本的哈希正好复现旧常量（证明导出与测试同口径）；旧快照去掉被删的两个留痕字段后逐条比对（`cmp31.py`）：**第 1 个小回合逐字节相同**（全员并列名次 1，旧实现无加成）；**第 2 个小回合起分叉，分叉点恰是旧日志第一次出现加成的小回合**；第 2、3 个小回合只差 `ShowCount` / `FreePickCount`（旧 5/4、6/4 → 新 5/3、5/3），第 4 个起候选抽取不同、落点随之分叉。之后旧日志每个大回合的后两位都带加成（展示 6、选取 +1），新日志恒为默认值 + 信物 |
+| `人工接管Tests.交还后继续` | 末尾往返 `RestoreUnvalidated(match.Map, …)` → `RestoreUnvalidated(match.Board.BaseMap, …)` | **测试自身的潜伏错误，不是改期望**：存档记的是开局地图摘要，`match.Map` 是改造后的活地形。删补偿后 4 个大回合里首次出现地形改造，报"地图不一致"。临时断言 `Assert.NotSame(match.Board.BaseMap, match.Map)` 实跑为真（确有改造），验证后移除。与 `TerrainEditing/同形与存档纳入设施Tests` 用 `Board.BaseMap` 的既有约定一致。同文件第 73 行的往返发生在任何改造之前，未改 |
+
+另：首次全量跑出现一次 `OutOfMemoryException`（`旧存档缺地图摘要_跳过比对并留痕_再存档补写`）和一次 `Internal CLR error`，单独重跑与之后全量均绿，属本机资源抖动（同期 bash 也报 fork 失败），与改动无关。
+
+### 变异验证逐条
+
+`mut_d.py`（scratchpad）：二进制读写、锚点计数 == 1、`finally` 还原 → 逐字节断言 → `os.utime` 刷新 mtime。每条跑一次全量 `dotnet test -c Release`（含重建）。
+变异前后 `git diff`（除 tasks.md / testing.md 两个文档外）**逐字节相同**；最后的确认跑 **1162 全绿、退出码 0**。
+
+| 编号 | 改了哪一行、改成什么 | 红 |
+|---|---|---|
+| M-D1 | `MatchFlow.BeginTurn` 生成快照后插入：名次 ≥ 3 者重建快照，展示 / 选取各 +1（复活补偿行为，不改签名） | 4（名次不影响快照、最后一名没有补偿、落后不获补偿、候选格上限黄金哈希） |
+| M-D2 | `Preview.StructuresOf` 副本快照之后：名次 ≥ 3 者展示数 +1（第三类来源） | 12（来源只有基础值与信物 + 11 条 TacticalLayers：组装核对抛"来源与快照不一致"） |
+| M-D3 | `RelicLedger.SnapshotFor` 无名册重载加可选参数 `Siege.Core.Scoring.PlayerPower? power = null`（只有腿 ① 能抓：`PlayerPower` 不含腿 ② 的词） | 1（快照生成代码不引用势力名次） |
+| M-D4 | `RelicLedger` 加 `internal static int BonusForRank(int rank) => rank >= 3 ? 1 : 0;`（腿 ②） | 1（同上） |
+| M-D5 | `BeginTurn` 实参改 `held + (0 * (Scoreboard.Latest?.RankOf(player) ?? 0))`（行为不变，只有腿 ③ 能抓） | 1（同上） |
+| M-D6 | Godot `Hud` 加 `rank > (participants + 1) / 2 ? 1 : 0`（M-CU12 原样） | 1（名次半数阈值算式不在源码中出现） |
+| M-D7 | Core `RelicLedger` 加 `r * 2 > n ? 1 : 0`（第二种写法、Core 侧） | 1（同上） |
+| M-D8 | 只改测试：反面字面量改为 `(participants + 2) / 2` | 1（同上，反面断言红） |
+
+**守门限度**：M-D1 没有让「快照生成代码不引用势力名次」红——名次在 `SnapshotFor` 返回之后由流程层改写快照，不经过签名、Relics 目录与调用点实参三条腿。
+这一路径由四条行为测试挡住（红 4）。静态守门只保证"名次进不了快照生成本身"。
+
+### 残留检查（`grep -rE "CatchUp|落后|补偿" src tests`，排除 obj/bin/.godot）
+
+共 12 行，逐条：
+
+| 位置 | 性质 |
+|---|---|
+| `Match/MatchFlow.Persistence.cs:173` `("CatchUpRecruit", …)` | 废弃字段拒绝表（段 C） |
+| `MatchFlowRegression/对局持久化Tests.cs:253 / 256 / 258` | 上表的守门：`[InlineData("CatchUpRecruit", …)]`、方法名 `含大回合上限碾压或补偿字段的旧存档被拒` 及其注释 |
+| `Match/FlagPlanting.cs:23`、`Match/MatchPublicView.cs:13`、`Sim/Logging/MatchLog.cs:244` | 历史说明注释："三项配置已删除"（段 C 写入） |
+| `Recruitment/私人征募面板Tests.cs:57 / 59` | 方法名 `最后一名没有补偿` 与规格引文——**测试方法名 = Scenario 名**（prd 验收），无法回避 |
+| `InitiativeOrder/排名的作用范围Tests.cs:47 / 49` | 同上：Scenario「落后不获补偿」 |
+| `InitiativeOrder/排名的作用范围Tests.cs:54` | 旧 → 新记录里的旧方法名 `落后补偿不累计` |
+
+实现代码里零命中；`Siege.Core` 中无任何 `CatchUp` 符号。
+
+### 待决 / 需主会话裁决
+
+1. **tasks 4.2 的"grep 无命中"与"方法名 = Scenario 名"冲突**：增量规范本身把 Scenario 命名为「最后一名没有补偿」「落后不获补偿」，照 prd 验收命名测试方法就必然命中。
+   按"残留逐条说明"处理，未为躲 grep 改名。
+2. **存档里弃赛快照的 `CatchUpReveal / CatchUpPick` 静默忽略**：这两个是嵌套在 `ResignationSaveData` 里的字段，`RetiredSaveFields` 只查顶层 `MatchSaveData.Unknown`，旧存档里的这两个字段现在被忽略、不报错。
+   弃赛快照里的 `RevealCount / FreePickCount` 本来就是含补偿的生效值，两个字段只是来源留痕，不参与任何计算。prd 把旧存档迁移列为 Out of Scope，故未给嵌套类型加 `[JsonExtensionData]` 拒绝机制。若要与顶层口径一致，需另开一项。
+3. **日志快照字段直接删除**：`TurnSnapshot.CatchUpReveal / CatchUpPick` 删了，旧日志读入时忽略。报告段已整段删除，没有消费方；是否在 5.2 的日志契约里列出，由段 E 定。
+4. **`候选格上限` 黄金哈希这次是真的走法变化**（见 D 表）。分叉点定位证明变化只来自补偿删除，但新值本质上是"段 D 实际运行"的快照，非自证的保证仍靠 M-K1（本段未重跑 M-K1）。
+5. **其余传 `match.Map` 的往返恢复**（`对局持久化Tests` 多处、`百局端到端Tests:101`、`原型插旗替代路径Tests:43`、`人工接管Tests:73`）：现在绿是因为那些局面里没有地形改造，与 `交还后继续` 同属潜伏问题，非本段范围，请主会话决定是否归入段 E / F。
+   （已核实"读入时忽略"的说法：`UnmappedMemberHandling` 全仓库未设置，`[JsonExtensionData]` 只在顶层 `MatchSaveData.Unknown`。）
+6. **codegraph**：本段理解代码主要靠定向 grep + 编译器报错收敛，未读大文件或媒体。
+
+### 主会话补记（段 D 复核，2026-09-22）
+
+复核：两处构建 0 警告 0 错误，`dotnet test -c Release` **1162 全绿**。
+
+**待决 4 由主会话补做**：M-K1（`RankPoints` 预筛启用条件改为恒真）在**重建后**的黄金哈希 `F3DA0A40…` 上重跑 → `候选格上限` 类红 4，含 `缺省不限制时标准图整局与改动前逐步相同`，新哈希不是自证。还原逐字节校验 + mtime 刷新后全量 1162 全绿。
+
+**其余裁决**：
+1. grep 与 Scenario 名冲突——接受逐条说明，不为躲 grep 改测试名（测试名 = Scenario 名优先）。
+2. 旧存档弃赛快照里嵌套的 `CatchUpReveal/Pick` 静默忽略——接受：只是留痕、不参与计算，旧存档迁移在范围外。顶层废弃字段仍一律点名拒绝。
+3. 日志旧字段是否列入契约——并入段 E 5.2 决定。
+5. 往返恢复传 `match.Map` 而非 `Board.BaseMap` 的潜伏测试缺陷（`对局持久化Tests`、`百局端到端Tests:101`、`原型插旗替代路径Tests:43`、`人工接管Tests:73`）——现在能过只因局面里恰好没有地形改造。已落成任务 6.4c。

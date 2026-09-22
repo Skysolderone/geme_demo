@@ -83,7 +83,10 @@ public class 人工接管Tests
         Assert.Contains(aiP1.Decisions, d => d.StartsWith("D:", StringComparison.Ordinal));
         Assert.True(match.MajorRound >= 5 || match.Phase == MatchPhase.Ended, $"第 {match.MajorRound} 大回合 / {match.Phase}");
         Assert.Equal(match.CountEvents(FlowEventKind.TurnStarted), match.CountEvents(FlowEventKind.TurnEnded));
-        Assert.Equal(match.Serialize(), MatchFlow.RestoreUnvalidated(match.Map, match.Relics.Generation, match.Serialize()).Serialize());
+        // 恢复传开局地图（Board.BaseMap），不传活地形 match.Map：存档记的是开局地图摘要，地形改造经盘面序列化的改造段往返
+        // （与 TerrainEditing/同形与存档纳入设施Tests 同一约定）。restore-go-core-rules 段 D 删除名次征募加成后，这 4 个大回合里出现了地形改造，
+        // 原先传 match.Map 的写法才暴露为"地图不一致"。
+        Assert.Equal(match.Serialize(), MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, match.Serialize()).Serialize());
         Assert.Throws<SiegeRuleException>(() => runner.HandBack(AiFixtures.P1));
     }
 

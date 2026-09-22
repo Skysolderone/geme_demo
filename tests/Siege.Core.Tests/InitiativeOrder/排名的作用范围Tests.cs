@@ -31,8 +31,6 @@ public class 排名的作用范围Tests
         Assert.Single(match.InitiativeReports.Select(r => r.Of(MatchFixtures.P0).Power).Distinct());
         Assert.Equal(match.Scoreboard.Latest!.Of(MatchFixtures.P0).Total, match.InitiativeReports[^1].Of(MatchFixtures.P0).Power);
 
-        // 落后补偿也不累计：P0 连续 5 个大回合第 1，从未获得补偿（补偿开关已删除，过渡期补偿恒开，段 D 删除补偿本体）
-
         // 结构上不存在累计分：玩家状态与先手明细类型里没有任何 Score / Accum / Point 字段
         foreach (Type t in new[] { typeof(PlayerFlowState), typeof(InitiativeEntry), typeof(InitiativeReport) })
         {
@@ -46,13 +44,14 @@ public class 排名的作用范围Tests
     }
 
     [Fact]
-    public void 落后补偿不累计()
+    public void 落后不获补偿()
     {
-        // 规格 Scenario「落后补偿不累计」（catch-up-recruit 裁决 2）：连续 5 个小回合以最后一名开始 → 每个小回合各获得一次当回合的补偿，
-        // 补偿不叠加、不结转：5 次快照逐次都是 展示 6 / 选取 4，MUST NOT 递增成 7 / 8…，本回合未用完的选取数也不结转到下一回合。
-        // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P3 J9 → 1 + 2 = 3，名次 4（最后一名）。
-        // 变异验证：补偿若被累加 / 结转（例如按玩家保留一个计数器再加到快照上），第 2 个小回合起就会变成 7 / 5，本测试红。
-        // 与 M-CU1b（阈值比较改 ≥）、M-CU5（去掉 `rank > 1`）互补：那两条改的是"谁拿"，这条钉的是"拿几次"。
+        // 规格 Scenario「落后不获补偿」（restore-go-core-rules 裁决 #7）：某玩家连续 5 个小回合以最后一名开始 →
+        // 其征募展示数、免费选取数与其他结构参数不因名次发生任何变化。
+        // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P1 G1 H1 J1 → 3 + 4 = 7；P2 A9 B9 → 2 + 3 = 5；P3 J9 → 1 + 2 = 3，名次 4（最后一名）。
+        // 每个大回合同时记下第 1 名 P0 的快照（二者都不控制任何信物）：两份逐项相同，且等于默认值 + 该大回合的分阶段基础部署上限
+        // （第 5、6 大回合 4，第 7–9 大回合 5）。
+        // 旧 → 新：旧名 `落后补偿不累计`，期望 5 次 "6/4/11"（展示 6 / 选取 4 / 两档补偿各 1）→ 5 次 P3 = P0 = "5/3/5/{4,4,5,5,5}"，依据裁决 #7 删除落后补偿。
         MatchFlow match = MatchFixtures.Started()
             .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
             .Stones(MatchFixtures.P0, "A1", "B1", "C1", "D1")
@@ -60,23 +59,25 @@ public class 排名的作用范围Tests
             .Stones(MatchFixtures.P2, "A9", "B9")
             .Stones(MatchFixtures.P3, "J9");
 
-        var seen = new List<string>();
+        var last = new List<string>();
+        var first = new List<string>();
         for (int round = 0; round < 5; round++)
         {
             match.Debug.SetOrder(MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2);
             Assert.Equal(MatchFixtures.P3, match.CurrentPlayer);
             Assert.Equal(4, match.Scoreboard.Latest!.RankOf(MatchFixtures.P3));
             match.BeginTurn();
-            EffectSnapshot snapshot = match.CurrentSnapshot!;
-            seen.Add($"{snapshot.RevealCount}/{snapshot.FreePickCount}/{snapshot.CatchUp.RevealBonus}{snapshot.CatchUp.PickBonus}");
+            last.Add(Params(match.CurrentSnapshot!));
             match.EnterRecruit();
-            match.CurrentHand().Pick(0);   // 每回合只用掉 4 个选取名额中的 1 个，剩余名额不结转
+            match.CurrentHand().Pick(0);
             match.EnterDeploy();
             Assert.True(match.Confirm().Confirmed);   // P3 本回合 Pass，盘面不变，下一回合仍是最后一名
 
             // 第 1 名落 1 枚打断连续 Pass（4 连 Pass 会终局），其余两人 Pass
+            Assert.Equal(1, match.Scoreboard.Latest!.RankOf(MatchFixtures.P0));
             match.BeginTurn();
             Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+            first.Add(Params(match.CurrentSnapshot!));
             match.EnterRecruit();
             Siege.Core.Batch.StagedBatch batch = match.EnterDeploy();
             Coord cell = batch.Context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order().First();
@@ -86,6 +87,10 @@ public class 排名的作用范围Tests
             match.PassTurn();
         }
 
-        Assert.Equal(["6/4/11", "6/4/11", "6/4/11", "6/4/11", "6/4/11"], seen);
+        Assert.Equal(["5:5/3/5/4", "6:5/3/5/4", "7:5/3/5/5", "8:5/3/5/5", "9:5/3/5/5"], last);
+        Assert.Equal(first, last);
+
+        static string Params(EffectSnapshot s) =>
+            $"{s.MajorRound}:{s.RevealCount}/{s.FreePickCount}/{s.TypeSlots}/{s.DeployLimit}{(s.EmblemCounts.IsEmpty ? string.Empty : "/徽记")}";
     }
 }

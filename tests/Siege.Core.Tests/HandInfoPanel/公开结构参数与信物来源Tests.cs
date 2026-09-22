@@ -35,35 +35,66 @@ public class 公开结构参数与信物来源Tests
     }
 
     [Fact]
-    public void 显示落后补偿来源()
+    public void 来源只有基础值与信物()
     {
-        // 规格 Scenario「显示落后补偿来源」（catch-up-recruit 裁决 5）：D 本小回合以最后一名开始 → 展示数 6、选取数 4，
-        // 面板各标注其中 1 点来自「落后补偿」；落后补偿是<b>非信物</b>来源，不进 Sources。
-        // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P1 G1 H1 J1 → 3 + 4 = 7；P2 A9 B9 → 2 + 3 = 5；P3 J9 → 1 + 2 = 3。
-        // 变异验证 M-CU6：MatchFlow.Parameter 把 catchUp 折进 sources（当成一枚探勘信物来源）→ 红 1（本测试：Sources 非空且文案变成 探勘×1）。
-        // 变异验证 M-CU6b：StructureView.Parameter 的文案丢掉落后补偿项（只拼信物）→ 本测试红：文案变成"展示数 6（基础）"。
-        MatchFlow match = MatchFixtures.Started()
+        // 规格 Scenario「来源只有基础值与信物」（restore-go-core-rules 裁决 #7 / D7）：读取任一玩家任一结构参数的来源拆分 →
+        // 各来源之和等于该参数的当前值，且来源类别只包含"分阶段基础值"与"信物"。
+        // 局面一：名次阶梯（P3 最后一名，无信物）；势力独立复算（四邻接）：P0 9、P1 7、P2 5、P3 3。
+        // 局面二：P1 经正式结算控制两枚军令（同「显示参数与来源」）。两局覆盖"末名"与"有信物来源"两种情形。
+        // 先红：旧实现下局面一 P3 的展示数 6 = 基础 5 + 名次加成 1，信物来源为空 → 基础 + Σ信物 ≠ 当前值；且 StructureParameter 多一个非信物来源成员。
+        // 变异验证 M-D2：StructuresOf 在账本副本快照之后给名次 ≥ 3 者展示数 +1（第三类来源）→ 红 12（本测试 + 11 条 TacticalLayers 用例：组装方核对"基础 + Σ信物 ≠ 快照"抛出）。
+        MatchFlow ladder = MatchFixtures.Started()
             .AtRound(5, [P3, P0, P1, P2])
             .Stones(P0, "A1", "B1", "C1", "D1")
             .Stones(P1, "G1", "H1", "J1")
             .Stones(P2, "A9", "B9")
             .Stones(P3, "J9");
-        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(P3));
+        Assert.Equal(4, ladder.Scoreboard.Latest!.RankOf(P3));
 
-        StructureView structure = match.World(P0).HandPanel().Opponents.Single(o => o.Player == P3).Structure!;
+        MatchFlow command = AiFixtures.Round5(relics: [("H4", RelicFixtures.Command()), ("J4", RelicFixtures.Command())]);
+        command.PassTurn();
+        command.PlayTurn("H4", "J4");
 
-        Assert.Equal((6, 5, 1), (structure.RevealCount.Value, structure.RevealCount.Base, structure.RevealCount.CatchUp));
-        Assert.Empty(structure.RevealCount.Sources);
-        Assert.Equal("展示数 6（基础 5，+1 来自 落后补偿 +1）", structure.RevealCount.Text);
-        Assert.Equal((4, 3, 1), (structure.FreePickCount.Value, structure.FreePickCount.Base, structure.FreePickCount.CatchUp));
-        Assert.Empty(structure.FreePickCount.Sources);
-        Assert.Equal("选取数 4（基础 3，+1 来自 落后补偿 +1）", structure.FreePickCount.Text);
+        int checkedParameters = 0;
+        int relicSourced = 0;
+        foreach (MatchFlow match in new[] { ladder, command })
+        {
+            // 规则层：Base 恒为分阶段基础值（部署上限）或默认值（其余三项），其余全部来自信物
+            foreach (Siege.Core.Preview.PlayerStructure player in match.PublishSupplement().Structures)
+            {
+                Siege.Core.Preview.StructureParameters p = player.Parameters!;
+                foreach ((Siege.Core.Preview.StructureParameter parameter, int expectedBase) in new[]
+                {
+                    (p.RevealCount, 5), (p.FreePickCount, 3), (p.TypeSlots, 5), (p.DeployLimit, 4),
+                })
+                {
+                    Assert.Equal(expectedBase, parameter.Base);
+                    Assert.Equal(parameter.Value, parameter.Base + parameter.Sources.Sum(s => s.Magnitude));
+                    checkedParameters++;
+                    relicSourced += parameter.Sources.Length;
+                }
+            }
 
-        // 第 1 名不获补偿，且补偿不外溢到其它两项
-        StructureView leader = match.World(P0).HandPanel().Own.Structure!;
-        Assert.Equal((5, 0), (leader.RevealCount.Value, leader.RevealCount.CatchUp));
-        Assert.Equal("展示数 5（基础）", leader.RevealCount.Text);
-        Assert.Equal((0, 0), (structure.TypeSlots.CatchUp, structure.DeployLimit.CatchUp));
+            // 表现层：面板上每一项的文案只由基础值与信物拼成
+            HandInfoPanelView panel = match.World(P0).HandPanel();
+            foreach (StructureView structure in panel.Opponents.Select(o => o.Structure!).Append(panel.Own.Structure!))
+            {
+                foreach (ParameterView view in new[] { structure.RevealCount, structure.FreePickCount, structure.TypeSlots, structure.DeployLimit })
+                {
+                    Assert.Equal(view.Value, view.Base + view.Sources.Sum(s => s.Magnitude));
+                }
+            }
+        }
+
+        // 样本口径下界：2 局 × 4 人 × 4 项，且确实出现过信物来源（否则"其余全部来自信物"只在零来源上成立）
+        Assert.Equal(32, checkedParameters);
+        Assert.Equal(2, relicSourced);
+
+        // 结构上只有两类来源：规则层参数与表现层视图的数值成员只剩 基础值 / 当前值 / 信物来源
+        Assert.Equal(["Base", "Sources", "Value"],
+            typeof(Siege.Core.Preview.StructureParameter).GetConstructors().Single().GetParameters().Select(x => x.Name!).Order());
+        Assert.Equal(["Base", "Label", "Sources", "Text", "Value"],
+            typeof(ParameterView).GetConstructors().Single().GetParameters().Select(x => x.Name!).Order());
     }
 
     [Fact]

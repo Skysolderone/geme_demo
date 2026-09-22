@@ -82,8 +82,6 @@ public sealed partial class MatchFlow
                 TypeSlots = r.Hand.TypeSlots,
                 RevealCount = r.Effects.RevealCount,
                 FreePickCount = r.Effects.FreePickCount,
-                CatchUpReveal = r.Effects.CatchUp.RevealBonus,
-                CatchUpPick = r.Effects.CatchUp.PickBonus,
                 EffectTypeSlots = r.Effects.TypeSlots,
                 DeployLimit = r.Effects.DeployLimit,
                 HeldTypeCount = r.Effects.HeldTypeCount,
@@ -259,8 +257,7 @@ public sealed partial class MatchFlow
             var player = new PlayerId(r.Player);
             var entries = r.Hand.ToImmutableSortedDictionary(h => h.Type, h => new HandEntry(h.Carried, h.Gained));
             var effects = new EffectSnapshot(player, r.MajorRound, r.RevealCount, r.FreePickCount, r.EffectTypeSlots, r.DeployLimit,
-                r.Emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), r.HeldTypeCount,
-                new CatchUpBonus(r.CatchUpReveal ?? 0, r.CatchUpPick ?? 0));
+                r.Emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), r.HeldTypeCount);
             match._resignations.Add(new ResignationSnapshot(player, r.MajorRound, r.Board!, new HandPrivateView(player, entries, r.HandPhase, r.TypeSlots),
                 effects, [.. r.ControlledRelics.Select(Coord.Parse)], r.Power));
         }
@@ -393,12 +390,6 @@ public sealed class ResignationSaveData
     public int RevealCount { get; set; }
 
     public int FreePickCount { get; set; }
-
-    /// <summary>弃赛快照里落后补偿给展示数的点数；catch-up-recruit 之前的旧存档为 <c>null</c>（按 0 读）。</summary>
-    public int? CatchUpReveal { get; set; }
-
-    /// <summary>弃赛快照里落后补偿给选取数的点数；catch-up-recruit 之前的旧存档为 <c>null</c>（按 0 读）。</summary>
-    public int? CatchUpPick { get; set; }
 
     public int EffectTypeSlots { get; set; }
 

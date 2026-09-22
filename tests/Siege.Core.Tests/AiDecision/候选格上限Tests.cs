@@ -29,8 +29,12 @@ public class 候选格上限Tests
     /// 两份日志的 24 个小回合快照去掉耗时、再去掉被改名的 <c>PlayerEntry.Protection</c> → <c>HasEstablishedPower</c> 之后逐条相同（比对脚本见 implement 记录）。
     /// 变的只是快照 JSON 里这一个字段名（及其取值：保护状态 → 出局标记），段 B 值 96D6C02A…385917 因此作废。样本长度由规则级大回合上限 6
     /// 改为跑局层小回合数截断 24（同为 24 个小回合）。</para>
+    /// <para>段 D 第四次重建：<b>走法确实变了</b>，变化只来自删除名次征募加成（裁决 #7）。段 C 提交（HEAD）与段 D 在同一测试夹具下各跑种子 31、24 个小回合，
+    /// 旧快照去掉被删的两个留痕字段后逐条比对：第 1 个小回合（全员并列名次 1、旧实现无加成）逐字节相同；第 2 个小回合起分叉，
+    /// 而分叉点恰是旧日志里第一次出现加成的小回合，且第 2、3 个小回合只差展示数 / 选取数（旧 5/4、6/4 → 新 5/3、5/3），
+    /// 第 4 个小回合起候选抽取不同、落点随之分叉。旧值 ABA5D7F9…229A65 在 HEAD 上重跑复现，因此作废；新值取自段 D 的实际运行。</para>
     /// </summary>
-    private const string V4GoldenTurnHash = "ABA5D7F9E4FD71AD70DD5FF4E86B1CA1270136C85901A548B569A74545229A65";
+    private const string V4GoldenTurnHash = "F3DA0A40BA2DE993936D39C094676FBC98C0B77548295BD8D319F79548D8F6E0";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
