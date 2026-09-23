@@ -1,0 +1,122 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_465c60_r35.tres" id="1_4ekt0"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_b09c60_r100.tres" id="2_1kd1h"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_o200m"]
+top_radius = 0.17
+bottom_radius = 0.17
+height = 0.008
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_42okc"]
+top_radius = 0.14
+bottom_radius = 0.14
+height = 0.008
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_rcuo5"]
+top_radius = 0.08
+bottom_radius = 0.08
+height = 0.008
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_osboi"]
+size = Vector3(0.018, 0.16, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_exu6w"]
+size = Vector3(0.018, 0.17999999, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_v2qo3"]
+size = Vector3(0.018, 0.19999999, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_lujt0"]
+size = Vector3(0.018, 0.22, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_228dd"]
+size = Vector3(0.018, 0.16, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_55ty3"]
+size = Vector3(0.018, 0.16, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_nck38"]
+size = Vector3(0.018, 0.17999999, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_dr5su"]
+size = Vector3(0.018, 0.19999999, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2omce"]
+size = Vector3(0.018, 0.22, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_855cc"]
+size = Vector3(0.018, 0.16, 0.018)
+
+[node name="Marsh4" type="Node3D" unique_id=295488575]
+
+[node name="@MeshInstance3D@214" type="MeshInstance3D" parent="." unique_id=2039364228]
+transform = Transform3D(-0.43837112, 0, 0.6291558, 0, 1, 0, -0.89879405, 0, -0.3068598, 0.08, 0.004, 0.1)
+material_override = ExtResource("1_4ekt0")
+mesh = SubResource("CylinderMesh_o200m")
+
+[node name="@MeshInstance3D@215" type="MeshInstance3D" parent="." unique_id=614466248]
+transform = Transform3D(-0.9702957, 0, 0.1693453, 0, 1, 0, -0.24192186, 0, -0.679207, -0.14, 0.004, -0.08)
+material_override = ExtResource("1_4ekt0")
+mesh = SubResource("CylinderMesh_42okc")
+
+[node name="@MeshInstance3D@216" type="MeshInstance3D" parent="." unique_id=962837289]
+transform = Transform3D(-0.80901706, 0, -0.41144958, 0, 1, 0, 0.5877851, 0, -0.56631196, 0.18, 0.004, -0.18)
+material_override = ExtResource("1_4ekt0")
+mesh = SubResource("CylinderMesh_rcuo5")
+
+[node name="@MeshInstance3D@217" type="MeshInstance3D" parent="." unique_id=1520818215]
+transform = Transform3D(0.9963075, 0.08585673, 0, -0.085337564, 0.99028295, -0.10980519, -0.009427514, 0.109399736, 0.9939531, 0.33154815, 0.08, -0.27241963)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_osboi")
+
+[node name="@MeshInstance3D@218" type="MeshInstance3D" parent="." unique_id=160935290]
+transform = Transform3D(0.9969534, -0.07799874, 0, 0.07747676, 0.99028164, -0.11549715, 0.009008632, 0.11514528, 0.9933078, 0.29042825, 0.089999996, -0.2709837)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_exu6w")
+
+[node name="@MeshInstance3D@219" type="MeshInstance3D" parent="." unique_id=1176771253]
+transform = Transform3D(0.9910064, -0.13381484, 0, 0.13371575, 0.9902725, 0.038476728, -0.0051487572, -0.038130682, 0.9992595, 0.27635583, 0.099999994, -0.30964732)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_v2qo3")
+
+[node name="@MeshInstance3D@220" type="MeshInstance3D" parent="." unique_id=1674859732]
+transform = Transform3D(0.99998814, -0.004872907, 0, 0.0048255417, 0.9902682, 0.13908887, -0.0006777671, -0.13908722, 0.9902799, 0.30877852, 0.11, -0.3349787)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_lujt0")
+
+[node name="@MeshInstance3D@221" type="MeshInstance3D" parent="." unique_id=2102364268]
+transform = Transform3D(0.99140483, 0.1308297, 0, -0.13068055, 0.99027455, 0.0477369, 0.006245405, -0.047326595, 0.99885994, 0.34288925, 0.08, -0.3119707)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_228dd")
+
+[node name="@MeshInstance3D@222" type="MeshInstance3D" parent="." unique_id=229579635]
+transform = Transform3D(0.9963075, 0.08585673, 0, -0.085337564, 0.99028295, -0.10980519, -0.009427514, 0.109399736, 0.9939531, -0.27845186, 0.08, 0.33758038)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_55ty3")
+
+[node name="@MeshInstance3D@223" type="MeshInstance3D" parent="." unique_id=310699682]
+transform = Transform3D(0.9969534, -0.07799874, 0, 0.07747676, 0.99028164, -0.11549715, 0.009008632, 0.11514528, 0.9933078, -0.31957176, 0.089999996, 0.33901632)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_nck38")
+
+[node name="@MeshInstance3D@224" type="MeshInstance3D" parent="." unique_id=311099024]
+transform = Transform3D(0.9910064, -0.13381484, 0, 0.13371575, 0.9902725, 0.038476728, -0.0051487572, -0.038130682, 0.9992595, -0.33364418, 0.099999994, 0.3003527)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_dr5su")
+
+[node name="@MeshInstance3D@225" type="MeshInstance3D" parent="." unique_id=509084997]
+transform = Transform3D(0.99998814, -0.004872907, 0, 0.0048255417, 0.9902682, 0.13908887, -0.0006777671, -0.13908722, 0.9902799, -0.3012215, 0.11, 0.2750213)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_2omce")
+
+[node name="@MeshInstance3D@226" type="MeshInstance3D" parent="." unique_id=711894714]
+transform = Transform3D(0.99140483, 0.1308297, 0, -0.13068055, 0.99027455, 0.0477369, 0.006245405, -0.047326595, 0.99885994, -0.26711076, 0.08, 0.2980293)
+material_override = ExtResource("2_1kd1h")
+mesh = SubResource("BoxMesh_855cc")

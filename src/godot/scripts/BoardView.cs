@@ -238,6 +238,13 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(desert);
             }
 
+            if (playable && cell.Surface == Surface.Marsh)
+            {
+                Node3D marsh = LowPoly.Marsh(variant++);
+                marsh.Position = center;
+                _decoration.AddChild(marsh);
+            }
+
             StandardMaterial3D material = Visuals.Matte(color);
             _tileMaterials[cell.Coord] = material;
             _tileBase[cell.Coord] = color;

@@ -125,4 +125,16 @@ public class 高地压制加值Tests
         Assert.Equal(7, group.Power);
         Assert.NotEqual(6, group.Power);
     }
+
+    [Fact]
+    public void 沼泽上的棋子没有压制()
+    {
+        // 规格 terrain-surfaces · piece-effects「沼泽上的棋子没有压制」（裁决 S-2′）：A 在 h=1 的沼泽 F6，B 在 h=0 的 G6 → A 无高地加值；
+        // 压制沿用唯一覆盖关系，不设地表例外。对照：同样布置在草地上为 1（「缓坡压制」）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("F6", 1)], surfaces: [("F6", Surface.Marsh)]))
+            .Place("F6", TestMaps.P0).Place("G6", TestMaps.P1);
+
+        Assert.DoesNotContain(TestMaps.At("G6"), board.CoverageTargets(TestMaps.At("F6")));
+        Assert.Equal(0, GroupAt(board, TestMaps.P0, "F6").HighGroundBonus);
+    }
 }

@@ -42,6 +42,12 @@ public static class PartExport
             parts.Add(($"desert_{v}", LowPoly.Desert(v)));
         }
 
+        // 沼泽：水洼布局按 variant % 3、朝向按 variant % 2，取 0–5。
+        for (int v = 0; v < 6; v++)
+        {
+            parts.Add(($"marsh_{v}", LowPoly.Marsh(v)));
+        }
+
         parts.Add(("fence_x", LowPoly.Fence(alongX: true)));
         parts.Add(("fence_z", LowPoly.Fence(alongX: false)));
         parts.Add(("bridge", LowPoly.Bridge()));

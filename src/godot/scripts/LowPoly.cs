@@ -315,6 +315,46 @@ public static class LowPoly
     }
 
     /// <summary>
+    /// 沼泽格的点缀（terrain-surfaces 段 2）：两三块贴地的积水斑块 + 两个角上的芦苇丛（细长竖条成簇，顶高 ≤ 0.24）。
+    /// 刻意不用锥形树冠（visual-style-baseline「沼泽不被读成林地」）；芦苇在棋子底座（半径 0.36）之外，水洼贴地，不遮挡判读。
+    /// 返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Marsh(int variant)
+    {
+        var root = new Node3D { Name = "Marsh" };
+        StandardMaterial3D puddle = Visuals.Matte(Visuals.MarshPuddle, 0.35f);
+        StandardMaterial3D reed = Visuals.Matte(Visuals.Reed, 1f);
+        float sx = variant % 2 == 0 ? 1f : -1f;
+
+        // 积水：扁的不规则多边形（低段数圆柱压扁），贴地、各转一个角度。
+        (Vector2 At, float R)[] puddles = variant % 3 == 0
+            ? [(new(-0.10f, 0.05f), 0.20f), (new(0.16f, -0.10f), 0.12f)]
+            : [(new(0.08f, 0.10f), 0.17f), (new(-0.14f, -0.08f), 0.14f), (new(0.18f, -0.18f), 0.08f)];
+        for (int i = 0; i < puddles.Length; i++)
+        {
+            (Vector2 at, float r) = puddles[i];
+            root.AddChild(Mesh(new CylinderMesh { TopRadius = r, BottomRadius = r, Height = 0.008f, RadialSegments = 6, Rings = 0 }, puddle,
+                new Vector3(at.X * sx, 0.004f, at.Y), new Vector3(0f, (variant * 29f) + (i * 50f), 0f), new Vector3(1f, 1f, 0.7f)));
+        }
+
+        // 芦苇：两丛，各四五根细竖条，略向外倾。
+        foreach (Vector3 clump in new[] { new Vector3(0.31f * sx, 0f, -0.30f), new Vector3(-0.30f * sx, 0f, 0.31f) })
+        {
+            for (int k = 0; k < 5; k++)
+            {
+                float a = (k * 72f) + (variant * 13f);
+                float rad = Mathf.DegToRad(a);
+                float height = 0.16f + (0.02f * ((k + variant) % 4));
+                var offset = new Vector3(Mathf.Cos(rad) * 0.035f, 0f, Mathf.Sin(rad) * 0.035f);
+                root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.018f, height, 0.018f) }, reed,
+                    clump + offset + new Vector3(0f, height * 0.5f, 0f), new Vector3(Mathf.Sin(rad) * 8f, 0f, -Mathf.Cos(rad) * 8f)));
+            }
+        }
+
+        return root;
+    }
+
+    /// <summary>
     /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
     /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
     /// 返回节点原点在缝中心、地砖上表面。

@@ -498,6 +498,18 @@ public sealed partial class Hud : CanvasLayer
                 }
             }
         }
+        // 新地表的规则说明（tactical-layers「新地表的规则标示」）：只列当前地图上出现过的，文案取自视图模型。
+        ImmutableArray<string> legend = content switch
+        {
+            TerritoryLayerContent territory => territory.SurfaceLegend,
+            LibertyLayerContent groups => groups.SurfaceLegend,
+            _ => [],
+        };
+        foreach (string line in legend)
+        {
+            _layerBody.AddChild(Ui.Text("图例：" + line, Ui.MutedText, wrap: true));
+        }
+
         switch (content)
         {
             case TerritoryLayerContent:

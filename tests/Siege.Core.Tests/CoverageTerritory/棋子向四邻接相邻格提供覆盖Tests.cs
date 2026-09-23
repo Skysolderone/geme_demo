@@ -83,4 +83,16 @@ public class 棋子向四邻接相邻格提供覆盖Tests
 
         Assert.Equal(CellCoverage.None, CoverageMap.Compute(board).CoverageOf(TestMaps.At("E6")));
     }
+
+    [Fact]
+    public void 沼泽上的棋子不提供覆盖()
+    {
+        // 规格 terrain-surfaces · coverage-territory「沼泽上的棋子不提供覆盖」：A 唯一的棋子在沼泽 F6 → 盘面上没有任何格获得 A 的覆盖。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Marsh)])).Place("F6", TestMaps.P0);
+
+        CoverageMap coverage = CoverageMap.Compute(board);
+
+        Assert.All(board.Map.AllCoords(), c => Assert.Equal(0, coverage.CoverageOf(c).CovererCount));
+        Assert.Empty(coverage.ExclusiveCellsOf(TestMaps.P0));
+    }
 }

@@ -42,6 +42,12 @@ public static class Visuals
     /// <summary>兽骨（荒漠装饰）：暖白，贴地横放，灰度下是地砖上最亮的一小块。</summary>
     public static readonly Color Bone = Color.Color8(238, 230, 212);
 
+    /// <summary>沼泽水洼：暗蓝灰的积水斑块，贴地；比深水暗、比浅滩深，读起来是"泥里的水"。</summary>
+    public static readonly Color MarshPuddle = Color.Color8(70, 92, 96);
+
+    /// <summary>芦苇（沼泽装饰）：干草黄褐。细长竖条成簇，轮廓与林地锥形树冠、荒漠仙人掌都不同。</summary>
+    public static readonly Color Reed = Color.Color8(176, 156, 96);
+
     /// <summary>沼泽地表：暗橄榄泥色，去色后（≈93）比林地（≈123）更暗；形状提示是水洼与芦苇，不用锥形树冠（段 2 补装饰）。</summary>
     public static readonly Color TileMarsh = Color.Color8(92, 98, 70);
 

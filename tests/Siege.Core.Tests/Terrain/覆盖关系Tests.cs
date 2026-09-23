@@ -167,4 +167,26 @@ public class 覆盖关系Tests
         Assert.NotEqual(covered, liberties);
         Assert.Equal(["F6"], covered.Except(liberties));
     }
+
+    // ---------- terrain-surfaces 段 2：沼泽 ----------
+
+    [Fact]
+    public void 沼泽上的棋子不覆盖()
+    {
+        // 设计文档 §3.1 新地表算例「沼泽上的棋子不覆盖」/ 规格 terrain「覆盖关系」第 1 步：A 在沼泽 F6、四周空草地 → 覆盖目标为空。
+        // 变异验证 M-S2a（实跑）：CoverageTargets 去掉沼泽源判断 → 本测试与覆盖 / 压制 / 归属 / 差集的沼泽测试共红 5。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Marsh)])).Place("F6", TestMaps.P0);
+
+        Assert.Empty(board.CoverageTargets(TestMaps.At("F6")));
+        Assert.Equal(4, board.LibertiesOf(board.GroupAt(TestMaps.At("F6"))!).Length);   // 气不受影响
+    }
+
+    [Fact]
+    public void 沼泽格本身接收覆盖()
+    {
+        // 规格 Scenario「沼泽格本身接收覆盖」：A 在草地 F6，右侧 G6 是空沼泽 → G6 是覆盖目标。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.Marsh)])).Place("F6", TestMaps.P0);
+
+        Assert.Equal(["F5", "E6", "G6", "F7"], board.CoverageTargets(TestMaps.At("F6")).Notations());
+    }
 }

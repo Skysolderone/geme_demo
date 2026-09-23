@@ -83,11 +83,13 @@ public static class Adjacency
     /// ② t 是未架桥深水 → 看沿同方向的下一格 u：在盘内、可落子、非林地且 h_u − h_s ≤ 1 → 覆盖 u，不覆盖 t（只穿一格水）；
     /// ③ 其余不覆盖。栅栏不影响。可不对称：高处覆盖低处，低处不跨崖覆盖高处。
     /// <paramref name="s"/> 自身不可落子时返回空。结果按字典序排列。
+    /// <para>terrain-surfaces：<paramref name="s"/> 是沼泽时返回空（沼泽源，design D2 第 1 步）——沼泽上的棋子不产生覆盖，
+    /// 空格归属、信物发现与高地压制都经本方法自然继承，不另设地表例外。</para>
     /// </summary>
     public static ImmutableArray<Coord> CoverageTargets(MapData map, Coord s)
     {
         ArgumentNullException.ThrowIfNull(map);
-        if (!map.IsPlayable(s))
+        if (!map.IsPlayable(s) || map.SurfaceAt(s) == Surface.Marsh)
         {
             return ImmutableArray<Coord>.Empty;
         }

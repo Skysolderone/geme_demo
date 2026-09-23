@@ -77,14 +77,18 @@ public enum TerritoryState
 public sealed record TerritoryCellView(Coord Coord, TerritoryState State, PlayerId? Owner, bool Scored = true);
 
 /// <summary>盘面层的归属读法。集合来自 Core 覆盖表（按覆盖关系导出）；与棋串读法的差集见 <see cref="Diff"/>。</summary>
-public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
+public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board)
+{
+    /// <summary>盘面层图例里的新地表规则说明（当前地图上出现过的才列，见 <see cref="TacticalLayers.SurfaceLegend"/>）。</summary>
+    public ImmutableArray<string> SurfaceLegend { get; init; } = [];
+}
 
 // ---------- 盘面层 · 两种读法的差集 ----------
 
 /// <summary>
 /// 两种读法点亮的空格不一致时的地形原因（tactical-layers「差集可由地形解释」，design D-G）。
 /// 被覆盖但不是气：<see cref="Cliff"/>（居高临下）、<see cref="Fence"/>（栅栏挡气不挡覆盖）、<see cref="AcrossWater"/>（隔一格深水覆盖对岸）；
-/// 是气但未被覆盖：<see cref="Forest"/>（林地不接收覆盖）。
+/// 是气但未被覆盖：<see cref="Forest"/>（林地不接收覆盖）、<see cref="Marsh"/>（与该格有气边的棋子位于沼泽上，沼泽源不产生覆盖，terrain-surfaces）。
 /// </summary>
 public enum TerrainReason
 {
@@ -92,6 +96,7 @@ public enum TerrainReason
     Fence,
     AcrossWater,
     Forest,
+    Marsh,
 }
 
 /// <summary>差集中的一格及其全部地形原因（去重、按枚举序）。同一格可能同时有多个来源，各给各的原因。</summary>
@@ -144,7 +149,11 @@ public sealed record LibertyGroupView(
 }
 
 /// <summary>盘面层的棋串读法。集合来自 Core 气快照（按气边导出）。两个内容 record 不合并——它们携带的字段本就不同（merge-board-layer D5）。</summary>
-public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
+public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board)
+{
+    /// <summary>盘面层图例里的新地表规则说明，与归属读法同一份。</summary>
+    public ImmutableArray<string> SurfaceLegend { get; init; } = [];
+}
 
 /// <summary>棋串读法里一条棋串的标记（tactical-layers「活形与禁入格的标示」）。外观形状见 <see cref="Style.GroupMarks.ShapeOf"/>。</summary>
 public enum GroupMark
@@ -281,7 +290,7 @@ public static class TacticalLayers
             }
         }
 
-        return new TerritoryLayerContent(cells.ToImmutable(), ReadingDiff(world));
+        return new TerritoryLayerContent(cells.ToImmutable(), ReadingDiff(world)) { SurfaceLegend = SurfaceLegend(world.View.Board.Map) };
     }
 
     public static LibertyLayerContent Liberties(PublicWorld world, LibertyThresholds thresholds)
@@ -304,7 +313,7 @@ public static class TacticalLayers
                 }),
             ],
             thresholds,
-            ReadingDiff(world));
+            ReadingDiff(world)) { SurfaceLegend = SurfaceLegend(world.View.Board.Map) };
     }
 
     /// <summary>
@@ -340,10 +349,30 @@ public static class TacticalLayers
         [
             .. liberties.Except(covered).OrderBy(c => c).Select(c => map.SurfaceAt(c) == Surface.Forest
                 ? new ReadingDiffCell(c, [TerrainReason.Forest])
-                : throw new InvalidOperationException($"{c.ToNotation()} 是气但未被覆盖，且不是林地：气边与覆盖关系不一致。")),
+                : OnMarshSide(world, map, c)
+                    ? new ReadingDiffCell(c, [TerrainReason.Marsh])
+                    : throw new InvalidOperationException($"{c.ToNotation()} 是气但未被覆盖，既不是林地、以它为气的棋串里也没有沼泽上的棋子：气边与覆盖关系不一致。")),
         ];
 
         return coveredNotLiberty.IsEmpty && libertyNotCovered.IsEmpty ? BoardReadingDiff.Empty : new BoardReadingDiff(coveredNotLiberty, libertyNotCovered);
+    }
+
+    /// <summary>
+    /// 以 <paramref name="cell"/> 为气的棋串里是否有棋子站在沼泽上——只查气快照与地表，不算邻接。
+    /// 既然该格是气（与某棋子有气边）却无人覆盖、又不是林地，能解释它的只有"给它气的棋子都在沼泽上"。
+    /// </summary>
+    private static bool OnMarshSide(PublicWorld world, MapData map, Coord cell) =>
+        world.Supplement.Liberties.Where(g => g.Liberties.Contains(cell)).Any(g => g.Stones.Any(s => map.SurfaceAt(s) == Surface.Marsh));
+
+    /// <summary>
+    /// 盘面层图例的新地表规则说明：当前地图上出现过的新地表各一句，按地表枚举序；没有新地表时为空。
+    /// 文案取自 <see cref="Labels.SurfaceRule"/>（与 terrain「格属性」表的"规则差别"一致），本层只决定列哪几条。
+    /// </summary>
+    public static ImmutableArray<string> SurfaceLegend(MapData map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        HashSet<Surface> present = [.. map.AllCoords().Select(map.SurfaceAt)];
+        return [.. Enum.GetValues<Surface>().Where(present.Contains).Select(Labels.SurfaceRule).OfType<string>()];
     }
 
     private static TerrainReason ReasonFor(MapData map, CoverageSource source, Coord target)
