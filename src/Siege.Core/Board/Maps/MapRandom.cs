@@ -28,4 +28,21 @@ internal static class MapRandom
         ulong s3 = SplitMix64.Next(ref root);
         return new RandomStream("map-gen", s0, s1, s2, s3);
     }
+
+    /// <summary>域分隔常量：新地表投放子流（terrain-surfaces D6），与尝试子流的任何取值不同构。</summary>
+    private const ulong SurfacesDomain = 0x3F71_C8E2_5AD9_0B64UL;
+
+    /// <summary>
+    /// 新地表投放的独立随机源：只由地图种子决定，不依赖尝试序号，也不消耗布局子流——
+    /// 同一种子开 / 关新地表的两张图，布局部分因此逐格相同。
+    /// </summary>
+    internal static RandomStream ForSurfaces(ulong mapSeed)
+    {
+        ulong root = SplitMix64.Mix(mapSeed ^ SurfacesDomain) ^ SplitMix64.Mix(SurfacesDomain);
+        ulong s0 = SplitMix64.Next(ref root);
+        ulong s1 = SplitMix64.Next(ref root);
+        ulong s2 = SplitMix64.Next(ref root);
+        ulong s3 = SplitMix64.Next(ref root);
+        return new RandomStream("map-gen-surfaces", s0, s1, s2, s3);
+    }
 }

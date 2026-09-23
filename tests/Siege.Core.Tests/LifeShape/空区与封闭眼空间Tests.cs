@@ -260,4 +260,87 @@ public class 空区与封闭眼空间Tests
 
     internal static string StripComments(string code) =>
         Regex.Replace(code, "//[^\\n]*", string.Empty);
+
+    // ---------- terrain-surfaces 段 4：浅滩 ----------
+
+    [Fact]
+    public void 空浅滩不是眼()
+    {
+        // 规格 terrain-surfaces · life-shape「空浅滩不是眼」：空浅滩 E5 的四个气边邻格全是 A → E5 不属于任何空区、不是眼空间。
+        // 变异验证 M-S4b（实跑）：空区起点与 flood 不排除空浅滩 → 本测试与「贴着空浅滩不封闭」红。
+        GameBoard board = Grid([
+            ".........",
+            "....0....",
+            "...0s0...",
+            "....0....",
+            ".........",
+            ".........",
+            "........1",
+        ]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        Assert.Null(report.EyeSpaceAt(TestMaps.At("E5")));
+        Assert.Empty(report.EyeSpaces);
+    }
+
+    [Fact]
+    public void 贴着空浅滩不封闭()
+    {
+        // 规格 Scenario：空草地 E5 的气边邻格三个是 A、一个是空浅滩 F5 → {E5} 对 A 不封闭（空浅滩不是墙，任何人都能落进去）。
+        // F5 另三面也用 A 包住，排除"F5 那一侧通向外部大空区"这条别的开口。
+        // 变异验证 M-S4c（实跑）：把空浅滩当墙（跳过、不破坏封闭）→ 本测试红。
+        GameBoard board = Grid([
+            ".........",
+            "....00...",
+            "...0.s0..",
+            "....00...",
+            ".........",
+            ".........",
+            "........1",
+        ]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        Assert.Null(report.EyeSpaceAt(TestMaps.At("E5")));
+        Assert.Null(report.EyeSpaceAt(TestMaps.At("F5")));
+    }
+
+    [Fact]
+    public void 浅滩被己方占据后可封闭()
+    {
+        // 规格 Scenario：上例中 F5 被 A 的棋子占据（F5 仍是浅滩地表）→ {E5} 对 A 封闭。
+        GameBoard board = Grid([
+            ".........",
+            "....00...",
+            "...0.00..",
+            "....00...",
+            ".........",
+            ".........",
+            "........1",
+        ], under: [("F5", Surface.Shallows)]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        Assert.Equal(Surface.Shallows, board.Map.SurfaceAt(TestMaps.At("F5")));
+        Assert.Equal(["E5"], report.EyeSpaceAt(TestMaps.At("E5"))!.Cells());
+    }
+
+    [Theory]
+    [InlineData('d')]
+    [InlineData('m')]
+    [InlineData('p')]
+    public void 荒漠沼泽岩台可以是眼空间(char surface)
+    {
+        // 规格 Scenario「荒漠、沼泽、岩台可以是眼空间」：它们有气边、空着时是气，照常构成空区。
+        GameBoard board = Grid([
+            ".........",
+            "....0....",
+            $"...0{surface}0...",
+            "....0....",
+            ".........",
+            ".........",
+            "........1",
+        ]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        Assert.Equal(["E5"], report.EyeSpaceAt(TestMaps.At("E5"))!.Cells());
+    }
 }

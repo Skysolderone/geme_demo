@@ -458,4 +458,75 @@ public class 地图静态校验规则Tests
 
         return dir ?? throw new InvalidOperationException("找不到仓库根目录（siege.sln）。");
     }
+
+
+    [Fact]
+    public void 出生区内有新地表()
+    {
+        // 规格 terrain-surfaces · map-definition 第 9 条：出生区内的格子 MUST NOT 是荒漠、沼泽、岩台或浅滩；报出生区编号、坐标与地表。
+        // 取出生区 2（下标 1）坐标序第一个可落子格标为浅滩。
+        // 变异验证 M-S0c（实跑）：ValidateBirthZones 漏掉 Shallows → 本测试与「出生区内四种新地表都被拒(Shallows)」各红 1。
+        MapData map = FourPlayerBaseMap.Create();
+        Coord cell = map.BirthZones[1].Where(map.IsPlayable).Order().First();
+        MapData tainted = map with
+        {
+            TerrainData = WithSurfaces(map.TerrainData, map.TerrainData.Surfaces.SetItem(cell, Surface.Shallows)),
+        };
+
+        MapValidationFailure failure = Assert.Single(
+            MapValidator.Validate(tainted).Failures, f => f.Code == "BIRTH_ZONE_SPECIAL_SURFACE");
+        Assert.Contains("出生区 2", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(cell.ToNotation(), failure.Message, StringComparison.Ordinal);
+        Assert.Contains("浅滩", failure.Message, StringComparison.Ordinal);
+        Assert.Equal([cell], failure.Coords);
+    }
+
+    [Theory]
+    [InlineData(Surface.Desert)]
+    [InlineData(Surface.Marsh)]
+    [InlineData(Surface.Crag)]
+    [InlineData(Surface.Shallows)]
+    public void 出生区内四种新地表都被拒(Surface surface)
+    {
+        MapData map = FourPlayerBaseMap.Create();
+        Coord cell = map.BirthZones[0].Where(map.IsPlayable).Order().First();
+        MapData tainted = map with
+        {
+            TerrainData = WithSurfaces(map.TerrainData, map.TerrainData.Surfaces.SetItem(cell, surface)),
+        };
+
+        Assert.Contains(MapValidator.Validate(tainted).Failures, f => f.Code == "BIRTH_ZONE_SPECIAL_SURFACE");
+    }
+
+    [Fact]
+    public void 公共区域的新地表不受限()
+    {
+        // 规格 Scenario「公共区域的新地表不受限」：出生区之外标四种新地表，其余校验通过 → 接受。
+        // 反面对照：原图本身必须通过（否则"接受"只是恰好没报这条）。
+        MapData map = FourPlayerBaseMap.Create();
+        Assert.True(MapValidator.Validate(map).IsValid);
+        Coord[] outside =
+        [
+            .. map.AllCoords()
+                .Where(c => map.IsPlayable(c) && map.BirthZoneOf(c) is null && !map.RelicCells.ContainsKey(c)
+                    && map.SurfaceAt(c) is Surface.Grass or Surface.Road)
+                .Order()
+                .Take(4),
+        ];
+        Surface[] kinds = [Surface.Desert, Surface.Marsh, Surface.Crag, Surface.Shallows];
+        ImmutableDictionary<Coord, Surface> surfaces = map.TerrainData.Surfaces;
+        for (int i = 0; i < 4; i++)
+        {
+            surfaces = surfaces.SetItem(outside[i], kinds[i]);
+        }
+
+        MapData painted = map with { TerrainData = WithSurfaces(map.TerrainData, surfaces) };
+
+        Assert.Equal(4, outside.Length);
+        MapValidationResult result = MapValidator.Validate(painted);
+        Assert.True(result.IsValid, string.Join("；", result.Failures.Select(f => f.Message)));
+    }
+
+    private static TerrainData WithSurfaces(TerrainData terrain, ImmutableDictionary<Coord, Surface> surfaces) =>
+        new(terrain.Heights, surfaces, terrain.Bridges, terrain.Fences);
 }

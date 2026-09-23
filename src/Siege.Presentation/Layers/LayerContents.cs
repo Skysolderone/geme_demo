@@ -69,18 +69,28 @@ public enum TerritoryState
     Neutral,
 }
 
-/// <summary>盘面层归属读法的一格（障碍格不列出）。<see cref="Owner"/> 只在占据与独占时非空。</summary>
-public sealed record TerritoryCellView(Coord Coord, TerritoryState State, PlayerId? Owner);
+/// <summary>
+/// 盘面层归属读法 / 势力层独占格的一格（障碍格不列出）。<see cref="Owner"/> 只在占据与独占时非空。
+/// <see cref="Scored"/> 只在势力层有意义：独占但不计领地分的格（荒漠，terrain-surfaces）为 <c>false</c>，取自 Core 势力明细的 <see cref="PlayerPower.ScoredCells"/>；
+/// 盘面层归属读法只读归属，恒为 <c>true</c>。
+/// </summary>
+public sealed record TerritoryCellView(Coord Coord, TerritoryState State, PlayerId? Owner, bool Scored = true);
 
 /// <summary>盘面层的归属读法。集合来自 Core 覆盖表（按覆盖关系导出）；与棋串读法的差集见 <see cref="Diff"/>。</summary>
-public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
+public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board)
+{
+    /// <summary>盘面层图例里的新地表规则说明（当前地图上出现过的才列，见 <see cref="TacticalLayers.SurfaceLegend"/>）。</summary>
+    public ImmutableArray<string> SurfaceLegend { get; init; } = [];
+}
 
 // ---------- 盘面层 · 两种读法的差集 ----------
 
 /// <summary>
 /// 两种读法点亮的空格不一致时的地形原因（tactical-layers「差集可由地形解释」，design D-G）。
-/// 被覆盖但不是气：<see cref="Cliff"/>（居高临下）、<see cref="Fence"/>（栅栏挡气不挡覆盖）、<see cref="AcrossWater"/>（隔一格深水覆盖对岸）；
-/// 是气但未被覆盖：<see cref="Forest"/>（林地不接收覆盖）。
+/// 被覆盖但不是气：<see cref="Cliff"/>（居高临下）、<see cref="Fence"/>（栅栏挡气不挡覆盖）、<see cref="AcrossWater"/>（隔一格深水覆盖对岸）、
+/// <see cref="Crag"/>（岩台上的棋子覆盖直线远一格，terrain-surfaces）；
+/// 被覆盖但不是气还有 <see cref="Shallows"/>（该格是空浅滩，空浅滩不算气，terrain-surfaces）；
+/// 是气但未被覆盖：<see cref="Forest"/>（林地不接收覆盖）、<see cref="Marsh"/>（与该格有气边的棋子位于沼泽上，沼泽源不产生覆盖，terrain-surfaces）。
 /// </summary>
 public enum TerrainReason
 {
@@ -88,6 +98,9 @@ public enum TerrainReason
     Fence,
     AcrossWater,
     Forest,
+    Marsh,
+    Crag,
+    Shallows,
 }
 
 /// <summary>差集中的一格及其全部地形原因（去重、按枚举序）。同一格可能同时有多个来源，各给各的原因。</summary>
@@ -137,10 +150,20 @@ public sealed record LibertyGroupView(
 
     /// <summary>标记文案：已活为「已活」，危险为「危险」，普通为空串。</summary>
     public string MarkText => Labels.GroupMark(Mark);
+
+    /// <summary>
+    /// 贴着该棋串、为空却不算气的空浅滩（tactical-layers「新地表的规则标示」：MUST 与气可区分并标明"浅滩：不算气"）。
+    /// 原样取自 Core 气快照的 <see cref="GroupLiberties.ShallowsBeside"/>，本层不算邻接。
+    /// </summary>
+    public ImmutableArray<Coord> ShallowsBeside { get; init; } = [];
 }
 
 /// <summary>盘面层的棋串读法。集合来自 Core 气快照（按气边导出）。两个内容 record 不合并——它们携带的字段本就不同（merge-board-layer D5）。</summary>
-public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
+public sealed record LibertyLayerContent(ImmutableArray<LibertyGroupView> Groups, LibertyThresholds Thresholds, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board)
+{
+    /// <summary>盘面层图例里的新地表规则说明，与归属读法同一份。</summary>
+    public ImmutableArray<string> SurfaceLegend { get; init; } = [];
+}
 
 /// <summary>棋串读法里一条棋串的标记（tactical-layers「活形与禁入格的标示」）。外观形状见 <see cref="Style.GroupMarks.ShapeOf"/>。</summary>
 public enum GroupMark
@@ -277,7 +300,7 @@ public static class TacticalLayers
             }
         }
 
-        return new TerritoryLayerContent(cells.ToImmutable(), ReadingDiff(world));
+        return new TerritoryLayerContent(cells.ToImmutable(), ReadingDiff(world)) { SurfaceLegend = SurfaceLegend(world.View.Board.Map) };
     }
 
     public static LibertyLayerContent Liberties(PublicWorld world, LibertyThresholds thresholds)
@@ -296,11 +319,14 @@ public static class TacticalLayers
                     return new LibertyGroupView(g.Owner, g.Stones, g.Liberties, g.Count, thresholds.Classify(g.Count),
                         [.. fences.Where(f => stones.Contains(f.A) || stones.Contains(f.B)).OrderBy(f => f.A).ThenBy(f => f.B)],
                         life.GroupLifeAt(g.Stones[0])?.Life
-                            ?? throw new InvalidOperationException($"{g.Stones[0].ToNotation()} 在气快照里是棋子，活形报告里却是空格：两份快照不同源。"));
+                            ?? throw new InvalidOperationException($"{g.Stones[0].ToNotation()} 在气快照里是棋子，活形报告里却是空格：两份快照不同源。"))
+                    {
+                        ShallowsBeside = g.ShallowsBeside,
+                    };
                 }),
             ],
             thresholds,
-            ReadingDiff(world));
+            ReadingDiff(world)) { SurfaceLegend = SurfaceLegend(world.View.Board.Map) };
     }
 
     /// <summary>
@@ -325,7 +351,10 @@ public static class TacticalLayers
         [
             .. covered.Except(liberties).OrderBy(c => c).Select(c =>
             {
-                ImmutableArray<TerrainReason> reasons = [.. power.Coverage.SourcesOf(c).Select(s => ReasonFor(map, s, c)).Distinct().OrderBy(r => r)];
+                // 空浅滩被覆盖却不算气——原因在格本身，与来源无关；其余按来源逐个查表。
+                ImmutableArray<TerrainReason> reasons = map.SurfaceAt(c) == Surface.Shallows
+                    ? [TerrainReason.Shallows]
+                    : [.. power.Coverage.SourcesOf(c).Select(s => ReasonFor(map, s, c)).Distinct().OrderBy(r => r)];
                 return reasons.IsEmpty
                     ? throw new InvalidOperationException($"{c.ToNotation()} 被覆盖但不是气，却没有任何覆盖来源。")
                     : new ReadingDiffCell(c, reasons);
@@ -336,17 +365,39 @@ public static class TacticalLayers
         [
             .. liberties.Except(covered).OrderBy(c => c).Select(c => map.SurfaceAt(c) == Surface.Forest
                 ? new ReadingDiffCell(c, [TerrainReason.Forest])
-                : throw new InvalidOperationException($"{c.ToNotation()} 是气但未被覆盖，且不是林地：气边与覆盖关系不一致。")),
+                : OnMarshSide(world, map, c)
+                    ? new ReadingDiffCell(c, [TerrainReason.Marsh])
+                    : throw new InvalidOperationException($"{c.ToNotation()} 是气但未被覆盖，既不是林地、以它为气的棋串里也没有沼泽上的棋子：气边与覆盖关系不一致。")),
         ];
 
         return coveredNotLiberty.IsEmpty && libertyNotCovered.IsEmpty ? BoardReadingDiff.Empty : new BoardReadingDiff(coveredNotLiberty, libertyNotCovered);
     }
 
+    /// <summary>
+    /// 以 <paramref name="cell"/> 为气的棋串里是否有棋子站在沼泽上——只查气快照与地表，不算邻接。
+    /// 既然该格是气（与某棋子有气边）却无人覆盖、又不是林地，能解释它的只有"给它气的棋子都在沼泽上"。
+    /// </summary>
+    private static bool OnMarshSide(PublicWorld world, MapData map, Coord cell) =>
+        world.Supplement.Liberties.Where(g => g.Liberties.Contains(cell)).Any(g => g.Stones.Any(s => map.SurfaceAt(s) == Surface.Marsh));
+
+    /// <summary>
+    /// 盘面层图例的新地表规则说明：当前地图上出现过的新地表各一句，按地表枚举序；没有新地表时为空。
+    /// 文案取自 <see cref="Labels.SurfaceRule"/>（与 terrain「格属性」表的"规则差别"一致），本层只决定列哪几条。
+    /// </summary>
+    public static ImmutableArray<string> SurfaceLegend(MapData map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        HashSet<Surface> present = [.. map.AllCoords().Select(map.SurfaceAt)];
+        return [.. Enum.GetValues<Surface>().Where(present.Contains).Select(Labels.SurfaceRule).OfType<string>()];
+    }
+
     private static TerrainReason ReasonFor(MapData map, CoverageSource source, Coord target)
     {
+        // 来源不相邻只有两种来历：隔一格深水（覆盖关系第 2 步）或岩台远格（第 3 步）。来源站在岩台上就按岩台解释——
+        // 岩台隔着一格宽深水覆盖对岸时两步落到同一格，"岩台"同样解释得通；不站在岩台上的只能是隔岸。
         if (!source.Adjacent)
         {
-            return TerrainReason.AcrossWater;
+            return map.SurfaceAt(source.Stone) == Surface.Crag ? TerrainReason.Crag : TerrainReason.AcrossWater;
         }
 
         if (map.HasFence(source.Stone, target))
@@ -374,7 +425,7 @@ public static class TacticalLayers
         return new PowerLayerContent(
             [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), Math.Min(g.MultiplierCount, GroupScoreView.MaxHeatLevel)))],
             [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.TerritoryScore, p.GroupScore, power.RankOf(p.Player), Labels.Status(p.Status)))],
-            [.. power.Players.SelectMany(p => p.ExclusiveCells.Select(c => new TerritoryCellView(c, TerritoryState.Exclusive, p.Player))).OrderBy(c => c.Coord)]);
+            [.. power.Players.SelectMany(p => p.ExclusiveCells.Select(c => new TerritoryCellView(c, TerritoryState.Exclusive, p.Player, p.ScoredCells.Contains(c)))).OrderBy(c => c.Coord)]);
     }
 
     public static RelicLayerContent Relics(PublicWorld world)

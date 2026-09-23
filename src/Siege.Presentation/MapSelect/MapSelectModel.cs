@@ -37,7 +37,7 @@ public sealed class MapSelectModel
     {
         _options = [.. MapCatalog.BuiltinMaps.Select(m => new MapOption(m.Title, m.Id)), new MapOption("随机图", null)];
         int selected = Array.FindIndex(_options, o => o.BuiltinId == MapCatalog.DefaultId);
-        _current = new State(Math.Max(selected, 0), initialMapSeed, MapGenParameters.DefaultPlatforms);
+        _current = new State(Math.Max(selected, 0), initialMapSeed, MapGenParameters.DefaultPlatforms, MapGenParameters.RandomPick.NewSurfaces);
         _accepted = _current;
         SeedText = Invariant(initialMapSeed);
     }
@@ -107,7 +107,7 @@ public sealed class MapSelectModel
         try
         {
             (ulong seed, MapGenParameters parameters) = GeneratedMapId.Parse(id);
-            Move(new State(_options.Length - 1, seed, parameters.PlatformCount));
+            Move(new State(_options.Length - 1, seed, parameters.PlatformCount, parameters.NewSurfaces));
             return true;
         }
         catch (FormatException)
@@ -159,7 +159,12 @@ public sealed class MapSelectModel
             return false;
         }
 
-        return Move(_current with { Seed = newMapSeed == _current.Seed ? unchecked(newMapSeed + 1UL) : newMapSeed });
+        // "换一张"随机出的生成图一律开新地表（terrain-surfaces D7），即使进入时预选的是不带 :s1 的标识。
+        return Move(_current with
+        {
+            Seed = newMapSeed == _current.Seed ? unchecked(newMapSeed + 1UL) : newMapSeed,
+            NewSurfaces = MapGenParameters.RandomPick.NewSurfaces,
+        });
     }
 
     /// <summary>平台数加减；到边界不再变化（不夹取越界值，按钮此时应禁用）。</summary>
@@ -199,7 +204,7 @@ public sealed class MapSelectModel
     private static string Invariant(ulong value) => value.ToString(CultureInfo.InvariantCulture);
 
     private string IdOf(State state) =>
-        _options[state.Index].BuiltinId ?? GeneratedMapId.Format(state.Seed, new MapGenParameters { PlatformCount = state.Platforms });
+        _options[state.Index].BuiltinId ?? GeneratedMapId.Format(state.Seed, new MapGenParameters { PlatformCount = state.Platforms, NewSurfaces = state.NewSurfaces });
 
     /// <summary>状态迁移的唯一出口：清提示、同步输入框文本，返回标识是否变了。</summary>
     private bool Move(State next)
@@ -219,5 +224,6 @@ public sealed class MapSelectModel
         }
     }
 
-    private readonly record struct State(int Index, ulong Seed, int Platforms);
+    /// <summary>选图状态。<paramref name="NewSurfaces"/>：随机图是否开新地表——缺省与"换一张"为开，按标识预选时取标识里的值，输入种子 / 调平台数时保持不变。</summary>
+    private readonly record struct State(int Index, ulong Seed, int Platforms, bool NewSurfaces);
 }

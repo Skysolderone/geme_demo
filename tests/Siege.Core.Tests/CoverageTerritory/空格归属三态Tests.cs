@@ -1,5 +1,6 @@
 using System.Numerics;
 using Siege.Core.Board;
+using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.CoverageTerritory;
@@ -123,5 +124,34 @@ public class 空格归属三态Tests
         Assert.Equal(["D3", "E4", "D5"], snapshot.Of(TestMaps.P0).ExclusiveCells.Notations());
         Assert.Equal(3, snapshot.Of(TestMaps.P0).ExclusiveCells.Length);
         Assert.Equal((3, (BigInteger)4), (snapshot.Of(TestMaps.P0).TerritoryScore, snapshot.Of(TestMaps.P0).Total));
+    }
+
+    // ---------- terrain-surfaces 段 1：荒漠 ----------
+
+    [Fact]
+    public void 荒漠独占不计分()
+    {
+        // 规格 terrain-surfaces · coverage-territory「荒漠独占不计分」：空荒漠 G6 只被 A 覆盖 → 判定为 A 独占（归属照常），但不计领地分。
+        // 变异验证 M-S1a（实跑）：把荒漠直接从 ExclusiveCells 里剔掉（等于把它当成不独占）→ 本测试与另两条荒漠测试共红 3。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.Desert)])).Place("F6", TestMaps.P0);
+
+        PowerSnapshot snapshot = PowerCalculator.Compute(board);
+
+        Assert.Equal(new CellOwnership(OwnershipKind.Exclusive, TestMaps.P0), snapshot.Coverage.OwnershipOf(TestMaps.At("G6")));
+        Assert.Contains(TestMaps.At("G6"), snapshot.Of(TestMaps.P0).ExclusiveCells);
+        Assert.DoesNotContain(TestMaps.At("G6"), snapshot.Of(TestMaps.P0).ScoredCells);
+        Assert.Equal(3, snapshot.Of(TestMaps.P0).TerritoryScore);
+    }
+
+    [Fact]
+    public void 荒漠上的信物照常被控制()
+    {
+        // 规格 Scenario「荒漠上的信物照常被控制」：信物格 E7 是空荒漠、只被 P1（F7）覆盖 → P1 控制，与草地相同。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(TestMaps.Terrain(surfaces: [("E7", Surface.Desert)]), ("E7", RelicFixtures.Conscription()));
+        board.Place("F7", TestMaps.P1);
+
+        ledger.Settle(board, 1);
+
+        Assert.Equal(new RelicControl(RelicControlKind.Controlled, TestMaps.P1), ledger.ControlOf(TestMaps.At("E7")));
     }
 }

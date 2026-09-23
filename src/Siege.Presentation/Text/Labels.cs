@@ -19,7 +19,23 @@ public static class Labels
         Layers.TerrainReason.Fence => "栅栏",
         Layers.TerrainReason.AcrossWater => "隔岸",
         Layers.TerrainReason.Forest => "林地",
+        Layers.TerrainReason.Marsh => "沼泽",
+        Layers.TerrainReason.Crag => "岩台",
+        Layers.TerrainReason.Shallows => "浅滩",
         _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "未知地形原因。"),
+    };
+
+    /// <summary>
+    /// 新地表的一句规则说明（盘面层图例；与 terrain「格属性」表的"规则差别"一致）。草地 / 土路 / 林地 / 深水不在图例里，返回 <c>null</c>。
+    /// </summary>
+    public static string? SurfaceRule(Surface surface) => surface switch
+    {
+        Surface.Grass or Surface.Road or Surface.Forest or Surface.DeepWater => null,
+        Surface.Desert => "荒漠：独占也不计领地分",
+        Surface.Marsh => "沼泽：其上的棋子不产生覆盖",
+        Surface.Crag => "岩台：其上的棋子多覆盖直线远一格",
+        Surface.Shallows => "浅滩：空着时不算气",
+        _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
     };
 
     /// <summary>棋子类型名称。</summary>

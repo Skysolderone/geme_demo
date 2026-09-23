@@ -7,8 +7,9 @@ namespace Siege.Core.Tests;
 /// <summary>
 /// 活形测试用的文本盘面夹具。文本<b>第一行是最高行号</b>（与 <see cref="Coord"/> 的"行号自下而上"一致，最后一行是第 1 行），
 /// 每行从 <c>A</c> 列起。格字符：
-/// <c>.</c> 空草地、<c>#</c> 岩石障碍、<c>~</c> 未架桥深水、<c>T</c> 空林地、<c>0</c>–<c>3</c> 对应玩家的普通子。
-/// 高度、栅栏与桥是另给的参数（栅栏是边，画不进格字符）。只用 <see cref="GameBoard.LoadUnvalidated"/> 构造。
+/// <c>.</c> 空草地、<c>#</c> 岩石障碍、<c>~</c> 未架桥深水、<c>T</c> 空林地、<c>0</c>–<c>3</c> 对应玩家的普通子；
+/// terrain-surfaces：<c>s</c> 空浅滩、<c>d</c> 空荒漠、<c>m</c> 空沼泽、<c>p</c> 空岩台。
+/// 高度、栅栏、桥与"棋子底下的地表"（<c>under</c>）是另给的参数（栅栏是边，画不进格字符）。只用 <see cref="GameBoard.LoadUnvalidated"/> 构造。
 /// </summary>
 internal static class LifeShapeFixtures
 {
@@ -22,7 +23,8 @@ internal static class LifeShapeFixtures
         string[] rows,
         (string Cell, int Height)[]? heights = null,
         (string A, string B)[]? fences = null,
-        string[]? bridges = null)
+        string[]? bridges = null,
+        (string Cell, Surface Surface)[]? under = null)
     {
         int height = rows.Length;
         int width = rows[0].Length;
@@ -50,6 +52,18 @@ internal static class LifeShapeFixtures
                     case 'T':
                         surfaces.Add((c.ToNotation(), Surface.Forest));
                         break;
+                    case 's':
+                        surfaces.Add((c.ToNotation(), Surface.Shallows));
+                        break;
+                    case 'd':
+                        surfaces.Add((c.ToNotation(), Surface.Desert));
+                        break;
+                    case 'm':
+                        surfaces.Add((c.ToNotation(), Surface.Marsh));
+                        break;
+                    case 'p':
+                        surfaces.Add((c.ToNotation(), Surface.Crag));
+                        break;
                     case >= '0' and <= '3':
                         stones.Add((c, new PlayerId(ch - '0')));
                         break;
@@ -59,7 +73,7 @@ internal static class LifeShapeFixtures
             }
         }
 
-        TerrainData terrain = TestMaps.Terrain(heights, [.. surfaces], bridges, fences);
+        TerrainData terrain = TestMaps.Terrain(heights, [.. surfaces, .. under ?? []], bridges, fences);
         GameBoard board = GameBoard.LoadUnvalidated(new MapData
         {
             Id = "test-life-shape",

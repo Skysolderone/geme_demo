@@ -64,8 +64,8 @@ public class 各入口支持生成图Tests
         var output = new StringWriter();
         string id = Siege.Sim.Program.MaterializeMapRequest(" gen ", output, () => 987654321UL)!;
 
-        Assert.Equal("gen:987654321", id);
-        Assert.Contains("--map gen:987654321", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal("gen:987654321:s1", id);
+        Assert.Contains("--map gen:987654321:s1", output.ToString(), StringComparison.Ordinal);
 
         // 其余标识原样返回、不打印，也不去取种子。
         var silent = new StringWriter();
@@ -78,8 +78,8 @@ public class 各入口支持生成图Tests
         // map 子命令走同一处：注入的种子出现在打印的完整标识里，随即按它出图。
         (int code, string text, string err) = RunMain(() => 12345UL, "map", "--map", "gen");
         Assert.True(code == 0, err);
-        Assert.Contains("本次地图为 gen:12345（", text, StringComparison.Ordinal);
-        Assert.Contains("地图 gen:12345  25×30", text, StringComparison.Ordinal);
+        Assert.Contains("本次地图为 gen:12345:s1（", text, StringComparison.Ordinal);
+        Assert.Contains("地图 gen:12345:s1  25×30", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -90,8 +90,8 @@ public class 各入口支持生成图Tests
         (int code, string text, string err) = RunMain(() => 12345UL, "run", "--out", dir, "--map", "gen", "--count", "1", "--difficulty", "Easy", "--turn-limit", "4", "--serial", "--sample-permille", "0");
 
         Assert.True(code == 0, err);
-        AssertRecordsOnly(dir, "gen:12345", perMatch: false);
-        Assert.Contains("--map gen:12345", text, StringComparison.Ordinal);   // 打印给用户
+        AssertRecordsOnly(dir, "gen:12345:s1", perMatch: false);
+        Assert.Contains("--map gen:12345:s1", text, StringComparison.Ordinal);   // 打印给用户
 
         // 反例一：裸 gen 写在配置文件里（不经 --map）→ 同样在入口落成完整标识，落盘的 config.json 不是原样抄回去的。
         string configFile = Path.Combine(SimFixtures.TempDir("run-bare-gen-config"), "in.json");
@@ -100,14 +100,14 @@ public class 各入口支持生成图Tests
         string fromFile = Path.Combine(Path.GetDirectoryName(configFile)!, "out");
         (int fileCode, _, string fileErr) = RunMain(() => 12345UL, "run", "--out", fromFile, "--config", configFile, "--serial");
         Assert.True(fileCode == 0, fileErr);
-        AssertRecordsOnly(fromFile, "gen:12345", perMatch: false);
+        AssertRecordsOnly(fromFile, "gen:12345:s1", perMatch: false);
 
         // 反例二：裸 gen + 每局换图（命令行）→ 起始地图种子取自同一来源，批次配置记 gen:<起始>，各局首部依次递增。
         string rotating = SimFixtures.TempDir("run-bare-gen-rotate");
         (int rotateCode, string rotateText, string rotateErr) = RunMain(() => 100UL, "run", "--out", rotating, "--map", "gen", "--map-per-match", "--count", "2", "--difficulty", "Easy", "--turn-limit", "4", "--serial", "--sample-permille", "0");
         Assert.True(rotateCode == 0, rotateErr);
-        AssertRecordsOnly(rotating, "gen:100", perMatch: true);
-        Assert.Contains("每局换图 gen:100..gen:101", rotateText, StringComparison.Ordinal);
+        AssertRecordsOnly(rotating, "gen:100:s1", perMatch: true);
+        Assert.Contains("每局换图 gen:100:s1..gen:101:s1", rotateText, StringComparison.Ordinal);
 
         // 反例三：绕过入口、把裸 gen 直接交给批量 / 会话 → 规则内核拒绝，且不留半份输出。
         string direct = Path.Combine(SimFixtures.TempDir("run-bare-gen-direct"), "out");

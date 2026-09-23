@@ -148,7 +148,7 @@ public static class MapFile
         foreach ((Coord c, char code) in Cells(dto, surfaceRows, "Surfaces"))
         {
             Surface surface = SurfaceFromCode(code)
-                ?? throw new FormatException($"地图文件的 Surfaces 在 {c.ToNotation()} 处为 '{code}'：地表只能是 G（草地）/ R（土路）/ F（林地）/ W（深水）。");
+                ?? throw new FormatException($"地图文件的 Surfaces 在 {c.ToNotation()} 处为 '{code}'：地表只能是 {LegalSurfaceCodes}。");
             if (surface != Surface.Grass)
             {
                 surfaces[c] = surface;
@@ -230,8 +230,16 @@ public static class MapFile
         Surface.Road => 'R',
         Surface.Forest => 'F',
         Surface.DeepWater => 'W',
+        Surface.Desert => 'D',
+        Surface.Marsh => 'M',
+        Surface.Crag => 'P',
+        Surface.Shallows => 'S',
         _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
     };
+
+    /// <summary>错误信息里的合法码清单，由 <see cref="SurfaceCode"/> 与 <see cref="SurfaceNames.DisplayName"/> 推出，不另写一份。</summary>
+    private static string LegalSurfaceCodes =>
+        string.Join(" / ", Enum.GetValues<Surface>().Select(s => $"{SurfaceCode(s)}（{s.DisplayName()}）"));
 
     private static Surface? SurfaceFromCode(char code) => char.ToUpperInvariant(code) switch
     {
@@ -239,6 +247,10 @@ public static class MapFile
         'R' => Surface.Road,
         'F' => Surface.Forest,
         'W' => Surface.DeepWater,
+        'D' => Surface.Desert,
+        'M' => Surface.Marsh,
+        'P' => Surface.Crag,
+        'S' => Surface.Shallows,
         _ => null,
     };
 

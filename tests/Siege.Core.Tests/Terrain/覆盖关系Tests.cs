@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Relics;
 using Siege.Core.Scoring;
@@ -166,5 +167,111 @@ public class 覆盖关系Tests
         Assert.Equal(["E7", "G7", "F8"], liberties);
         Assert.NotEqual(covered, liberties);
         Assert.Equal(["F6"], covered.Except(liberties));
+    }
+
+    // ---------- terrain-surfaces 段 2：沼泽 ----------
+
+    [Fact]
+    public void 沼泽上的棋子不覆盖()
+    {
+        // 设计文档 §3.1 新地表算例「沼泽上的棋子不覆盖」/ 规格 terrain「覆盖关系」第 1 步：A 在沼泽 F6、四周空草地 → 覆盖目标为空。
+        // 变异验证 M-S2a（实跑）：CoverageTargets 去掉沼泽源判断 → 本测试与覆盖 / 压制 / 归属 / 差集的沼泽测试共红 5。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Marsh)])).Place("F6", TestMaps.P0);
+
+        Assert.Empty(board.CoverageTargets(TestMaps.At("F6")));
+        Assert.Equal(4, board.LibertiesOf(board.GroupAt(TestMaps.At("F6"))!).Length);   // 气不受影响
+    }
+
+    [Fact]
+    public void 沼泽格本身接收覆盖()
+    {
+        // 规格 Scenario「沼泽格本身接收覆盖」：A 在草地 F6，右侧 G6 是空沼泽 → G6 是覆盖目标。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.Marsh)])).Place("F6", TestMaps.P0);
+
+        Assert.Equal(["F5", "E6", "G6", "F7"], board.CoverageTargets(TestMaps.At("F6")).Notations());
+    }
+
+    // ---------- terrain-surfaces 段 3：岩台 ----------
+
+    [Fact]
+    public void 岩台覆盖远一格()
+    {
+        // 设计文档 §3.1 新地表算例「岩台覆盖远一格」/ 规格 terrain「覆盖关系」第 3 步：平地中央岩台 F6 → 四邻 + 直线距离 2 共 8 格，无斜向。
+        // 变异验证 M-S3a（实跑）：CoverageTargets 去掉岩台远格一步 → 岩台相关测试红 9 / 11（「被障碍 / 高崖阻挡」两条是反面断言，本就不含远格）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Crag)])).Place("F6", TestMaps.P0);
+
+        Assert.Equal(["F4", "F5", "D6", "E6", "G6", "H6", "F7", "F8"], board.CoverageTargets(TestMaps.At("F6")).Notations());
+    }
+
+    [Fact]
+    public void 岩台远格被障碍阻挡()
+    {
+        // 规格 Scenario（裁决 S-3a′）：G6 是障碍 → H6 不是覆盖目标；其余三个方向照常。
+        // 变异验证 M-S3b（实跑）：去掉"m 不是障碍"→ 本测试红。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Crag)]), 11, "G6").Place("F6", TestMaps.P0);
+
+        ImmutableArray<Coord> targets = board.CoverageTargets(TestMaps.At("F6"));
+
+        Assert.DoesNotContain(TestMaps.At("H6"), targets);
+        Assert.DoesNotContain(TestMaps.At("G6"), targets);
+        Assert.Contains(TestMaps.At("D6"), targets);
+    }
+
+    [Fact]
+    public void 岩台远格越过棋子与栅栏()
+    {
+        // 规格 Scenario：G6 上有 B 的棋子且 F6–G6 有栅栏，H6 空草地 → H6 仍是 A 的覆盖目标（棋子与栅栏都不阻挡）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Crag)], fences: [("F6", "G6")]))
+            .Place("F6", TestMaps.P0).Place("G6", TestMaps.P1);
+
+        Assert.Contains(TestMaps.At("H6"), board.CoverageTargets(TestMaps.At("F6")));
+    }
+
+    [Fact]
+    public void 岩台远格被高崖阻挡()
+    {
+        // 规格 Scenario（design O-1）：h=0 的岩台 F6，G6 是 h=2 的空格，H6 是 h=0 的空草地 → G6 与 H6 都不是覆盖目标。
+        // 变异验证 M-S3c（实跑）：去掉中间格的崖壁判断 → 本测试红（H6 被越崖覆盖）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("G6", 2)], surfaces: [("F6", Surface.Crag)])).Place("F6", TestMaps.P0);
+
+        ImmutableArray<Coord> targets = board.CoverageTargets(TestMaps.At("F6"));
+
+        Assert.DoesNotContain(TestMaps.At("G6"), targets);
+        Assert.DoesNotContain(TestMaps.At("H6"), targets);
+    }
+
+    [Fact]
+    public void 岩台远格不仰视()
+    {
+        // 规格 Scenario：h=0 的岩台 F6，G6 是 h=1、H6 是 h=2 → G6 是覆盖目标，H6 不是。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("G6", 1), ("H6", 2)], surfaces: [("F6", Surface.Crag)])).Place("F6", TestMaps.P0);
+
+        ImmutableArray<Coord> targets = board.CoverageTargets(TestMaps.At("F6"));
+
+        Assert.Contains(TestMaps.At("G6"), targets);
+        Assert.DoesNotContain(TestMaps.At("H6"), targets);
+    }
+
+    [Fact]
+    public void 岩台远格不接收林地()
+    {
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Crag), ("H6", Surface.Forest)])).Place("F6", TestMaps.P0);
+
+        Assert.DoesNotContain(TestMaps.At("H6"), board.CoverageTargets(TestMaps.At("F6")));
+        Assert.Contains(TestMaps.At("D6"), board.CoverageTargets(TestMaps.At("F6")));
+    }
+
+    [Fact]
+    public void 岩台与隔水覆盖重合()
+    {
+        // 规格 Scenario：岩台 F6，G6 为一格宽未架桥深水，H6 空草地 → H6 是覆盖目标且只计一次，G6 不是覆盖目标。
+        // 变异验证 M-S3d（实跑）：远格不去重 → 本测试红。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Crag), ("G6", Surface.DeepWater)])).Place("F6", TestMaps.P0);
+
+        ImmutableArray<Coord> targets = board.CoverageTargets(TestMaps.At("F6"));
+
+        Assert.Single(targets, TestMaps.At("H6"));
+        Assert.DoesNotContain(TestMaps.At("G6"), targets);
+        Assert.Equal(7, targets.Length);
     }
 }

@@ -49,14 +49,14 @@ public class 选图视图模型Tests
         Assert.Equal(InitialSeed, model.MapSeed);
         Assert.Equal(MapGenParameters.DefaultPlatforms, model.PlatformCount);
         Assert.Equal("424242", model.SeedText);
-        Assert.Equal("gen:424242", model.CurrentId);   // 缺省平台数省略 :p6
+        Assert.Equal("gen:424242:s1", model.CurrentId);   // 缺省平台数省略 :p6
 
         // 切回内置图再切回来，种子与平台数都还在。
         Assert.True(model.AdjustPlatforms(+1));
         Assert.True(model.Select(1));
         Assert.Equal(MapCatalog.BuiltinIds[1], model.CurrentId);
         Assert.True(model.Select(2));
-        Assert.Equal("gen:424242:p7", model.CurrentId);
+        Assert.Equal("gen:424242:p7:s1", model.CurrentId);
 
         // 选中已选中的那一项：标识没变，不必重搭预览。
         Assert.False(model.Select(2));
@@ -75,13 +75,13 @@ public class 选图视图模型Tests
 
         Assert.Equal(987654321UL, model.MapSeed);
         Assert.Equal("987654321", model.SeedText);
-        Assert.Equal("gen:987654321", model.CurrentId);
+        Assert.Equal("gen:987654321:s1", model.CurrentId);
         Assert.NotEqual(before, model.CurrentId);
 
         // 注入值恰好与当前种子相同：仍然要"换"。
         model.Accept();
         Assert.True(model.Reroll(987654321UL));
-        Assert.NotEqual("gen:987654321", model.CurrentId);
+        Assert.NotEqual("gen:987654321:s1", model.CurrentId);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class 选图视图模型Tests
         Assert.True(first.AdjustPlatforms(+1));
         Assert.True(second.AdjustPlatforms(+1));
 
-        Assert.Equal("gen:12345:p7", first.CurrentId);
+        Assert.Equal("gen:12345:p7:s1", first.CurrentId);
         Assert.Equal(first.CurrentId, second.CurrentId);
         Assert.Equal(MapFile.ToJson(MapCatalog.Resolve(first.CurrentId)), MapFile.ToJson(MapCatalog.Resolve(second.CurrentId)));
         Assert.Equal("12345", second.SeedText);
@@ -125,7 +125,7 @@ public class 选图视图模型Tests
         Assert.False(model.SubmitSeed(text));
 
         Assert.Contains("非负整数", model.Notice, StringComparison.Ordinal);
-        Assert.Equal("gen:424242:p8", model.CurrentId);
+        Assert.Equal("gen:424242:p8:s1", model.CurrentId);
         Assert.Equal(InitialSeed, model.MapSeed);
         Assert.Equal(8, model.PlatformCount);
         Assert.Equal(text, model.SeedText);   // 输入框保留用户敲的内容，方便改
@@ -133,7 +133,7 @@ public class 选图视图模型Tests
         // 随后一次合法输入清掉提示。
         Assert.True(model.SubmitSeed("18446744073709551615"));
         Assert.Equal(string.Empty, model.Notice);
-        Assert.Equal("gen:18446744073709551615:p8", model.CurrentId);
+        Assert.Equal("gen:18446744073709551615:p8:s1", model.CurrentId);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class 选图视图模型Tests
         Assert.False(model.SubmitSeed("424242"));
         Assert.Equal(string.Empty, model.Notice);
         Assert.True(model.SubmitSeed("007"));
-        Assert.Equal("gen:7", model.CurrentId);
+        Assert.Equal("gen:7:s1", model.CurrentId);
         Assert.Equal("7", model.SeedText);
     }
 
@@ -156,16 +156,16 @@ public class 选图视图模型Tests
         Assert.True(model.CanDecreasePlatforms && model.CanIncreasePlatforms);
 
         Assert.True(model.AdjustPlatforms(-1));
-        Assert.Equal("gen:424242:p5", model.CurrentId);
+        Assert.Equal("gen:424242:p5:s1", model.CurrentId);
         Assert.False(model.CanDecreasePlatforms);
         Assert.False(model.AdjustPlatforms(-1));
         Assert.Equal(5, model.PlatformCount);
 
         Assert.True(model.AdjustPlatforms(+1));
-        Assert.Equal("gen:424242", model.CurrentId);
+        Assert.Equal("gen:424242:s1", model.CurrentId);
         Assert.True(model.AdjustPlatforms(+1));
         Assert.True(model.AdjustPlatforms(+1));
-        Assert.Equal("gen:424242:p8", model.CurrentId);
+        Assert.Equal("gen:424242:p8:s1", model.CurrentId);
         Assert.False(model.CanIncreasePlatforms);
         Assert.False(model.AdjustPlatforms(+1));
         Assert.Equal(MapGenParameters.MaxPlatforms, model.PlatformCount);
@@ -200,7 +200,7 @@ public class 选图视图模型Tests
         Assert.True(model.AdjustPlatforms(+1));
         model.RollBack("地图生成失败：尝试次数耗尽。");
 
-        Assert.Equal("gen:5", model.CurrentId);
+        Assert.Equal("gen:5:s1", model.CurrentId);
         Assert.Equal(5UL, model.MapSeed);
         Assert.Equal("5", model.SeedText);
         Assert.Equal(MapGenParameters.DefaultPlatforms, model.PlatformCount);
@@ -241,8 +241,29 @@ public class 选图视图模型Tests
         // 还没被接受的候选（预览尚未搭成功）不会被带进对局：确认给出的是上一次接受的标识。
         MapSelectModel pending = RandomSelected();
         Assert.True(pending.Reroll(99UL));
-        Assert.Equal("gen:424242", pending.Confirm());
-        Assert.Equal("gen:424242", pending.CurrentId);
+        Assert.Equal("gen:424242:s1", pending.Confirm());
+        Assert.Equal("gen:424242:s1", pending.CurrentId);
+    }
+
+    [Fact]
+    public void 随机图缺省开新地表_预选标识保持原值_换一张一律开()
+    {
+        // terrain-surfaces design D7：选图界面随机出的生成图带 :s1；按标识预选时照标识原样（不带 :s1 就是不开），
+        // 其后"换一张"一律开；输入种子、调平台数保持当前开关。
+        // 变异验证 M-S5e（实跑）：Reroll 不改开关 → 本测试红。
+        var model = new MapSelectModel(InitialSeed);
+        Assert.True(model.TrySelectId("gen:42"));
+        Assert.Equal("gen:42", model.CurrentId);
+        Assert.True(model.SubmitSeed("43"));
+        Assert.Equal("gen:43", model.CurrentId);
+        Assert.True(model.AdjustPlatforms(+1));   // 调平台数同样保持"关"
+        Assert.Equal("gen:43:p7", model.CurrentId);
+        Assert.True(model.AdjustPlatforms(-1));
+        Assert.True(model.Reroll(77UL));
+        Assert.Equal("gen:77:s1", model.CurrentId);
+        Assert.True(model.AdjustPlatforms(+1));
+        Assert.Equal("gen:77:p7:s1", model.CurrentId);
+        Assert.Contains(Surface.Desert, MapCatalog.Resolve(model.CurrentId).TerrainData.Surfaces.Values);
     }
 
     [Fact]

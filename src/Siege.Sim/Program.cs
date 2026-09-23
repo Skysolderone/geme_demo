@@ -107,7 +107,7 @@ public static class Program
             return mapId;
         }
 
-        string id = GeneratedMapId.Format(mapSeedSource(), MapGenParameters.Default);
+        string id = GeneratedMapId.Format(mapSeedSource(), MapGenParameters.RandomPick);
         output.WriteLine($"随机取了一个地图种子：本次地图为 {id}（用 --map {id} 可重开同一张图）");
         return id;
     }
@@ -134,7 +134,11 @@ public static class Program
         Console.WriteLine($"地图 {map.Id}  {map.Width}×{map.Height}");
         Console.WriteLine(
             $"可落子格 {map.PlayableCount}   岩石 {map.Obstacles.Count}   深水 {all.Count(c => map.SurfaceAt(c) == Surface.DeepWater)}（其中桥 {terrain.Bridges.Count}）"
-            + $"   栅栏 {terrain.Fences.Count}   林地 {all.Count(c => map.SurfaceAt(c) == Surface.Forest)}   土路 {all.Count(c => map.SurfaceAt(c) == Surface.Road)}");
+            + $"   栅栏 {terrain.Fences.Count}   林地 {all.Count(c => map.SurfaceAt(c) == Surface.Forest)}   土路 {all.Count(c => map.SurfaceAt(c) == Surface.Road)}"
+            + string.Concat(new[] { Surface.Desert, Surface.Marsh, Surface.Crag, Surface.Shallows }
+                .Select(s => (s, n: all.Count(c => map.SurfaceAt(c) == s)))
+                .Where(x => x.n > 0)
+                .Select(x => $"   {x.s.DisplayName()} {x.n}")));
         Console.WriteLine(
             "可落子格按高度 h0/h1/h2 = "
             + string.Join("/", Enumerable.Range(0, TerrainData.MaxHeight + 1).Select(h => all.Count(c => map.IsPlayable(c) && map.HeightAt(c) == h))));
@@ -189,7 +193,7 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine();
         Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区  r 出生区信物  o 公共信物  R 公共高档信物");
-        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =）  F 林地  . 土路   格间 | 与行间 -- 为栅栏");
+        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =）  F 林地  . 土路  D 荒漠  M 沼泽  P 岩台  S 浅滩   格间 | 与行间 -- 为栅栏");
 
         // --out：把这张图导出到指定文件（map-generator 2.6）。生成图靠它落成普通地图文件——标识里有冒号，做不了 Windows 文件名，
         // 而且 maps/ 是内置图的权威目录，查看生成图不得往里写。导出的文件按路径加载，与按标识生成的地图逐项相同。
@@ -263,12 +267,24 @@ public static class Program
             : c == map.CentralEntrance ? '@'
             : map.HasBridge(c) ? '='
             : map.ChokePoints.Contains(c) ? '^'
-            : map.SurfaceAt(c) == Surface.Forest ? 'F'
-            : map.SurfaceAt(c) == Surface.Road ? '.'
+            : SurfaceMark(map.SurfaceAt(c)) is char s ? s
             : map.BirthZoneOf(c) is { } z ? (char)('0' + BirthZoneLabel.Number(z))
             : ' ';
         return $"{map.HeightAt(c)}{mark}";
     }
+
+    /// <summary>文本图的地表标记（8 种地表全覆盖；草地无标记，深水在上面已画成 ~~ / 桥）。</summary>
+    private static char? SurfaceMark(Surface surface) => surface switch
+    {
+        Surface.Grass or Surface.DeepWater => null,
+        Surface.Road => '.',
+        Surface.Forest => 'F',
+        Surface.Desert => 'D',
+        Surface.Marsh => 'M',
+        Surface.Crag => 'P',
+        Surface.Shallows => 'S',
+        _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
+    };
 
     // ---------- run ----------
 

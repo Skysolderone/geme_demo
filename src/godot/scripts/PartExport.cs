@@ -36,6 +36,30 @@ public static class PartExport
             parts.Add(($"trees_{v}", LowPoly.Trees(v)));
         }
 
+        // 新地表（terrain-surfaces）：荒漠朝向按 variant % 2、侧臂按 variant % 3，取 0–5 共 6 档。
+        for (int v = 0; v < 6; v++)
+        {
+            parts.Add(($"desert_{v}", LowPoly.Desert(v)));
+        }
+
+        // 沼泽：水洼布局按 variant % 3、朝向按 variant % 2，取 0–5。
+        for (int v = 0; v < 6; v++)
+        {
+            parts.Add(($"marsh_{v}", LowPoly.Marsh(v)));
+        }
+
+        // 岩台：裂纹条数与碎石朝向按 variant % 2、裂纹转角按 variant，取 0–3。
+        for (int v = 0; v < 4; v++)
+        {
+            parts.Add(($"crag_{v}", LowPoly.Crag(v)));
+        }
+
+        // 浅滩：水纹朝向与鹅卵石颗数按 variant % 2、石子大小按 variant % 3，取 0–5。
+        for (int v = 0; v < 6; v++)
+        {
+            parts.Add(($"shallows_{v}", LowPoly.Shallows(v)));
+        }
+
         parts.Add(("fence_x", LowPoly.Fence(alongX: true)));
         parts.Add(("fence_z", LowPoly.Fence(alongX: false)));
         parts.Add(("bridge", LowPoly.Bridge()));

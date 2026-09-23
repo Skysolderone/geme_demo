@@ -164,8 +164,14 @@ public sealed class GameBoard
     }
 
     /// <summary>
-    /// 棋串的气：与该棋串任一棋子之间存在气边、且当前为空的可落子格（按格去重）。
-    /// 被任何玩家棋子占据的格、障碍格、未架桥深水、越界方向，以及因崖壁或栅栏而无气边的格都不计气。
+    /// 该格此刻能否作为气（terrain-surfaces design D1 / D3 的唯一落点）：为空的可落子格，且地表不是浅滩。
+    /// 浅滩只影响"空格能否作为气"——气边、连串、浅滩上棋子自己的气都不受影响。气、空区与活形都经这里判断，不另写地表比较。
+    /// </summary>
+    public bool GivesLiberty(Coord c) => this[c].IsPlayableEmpty && Map.SurfaceAt(c) != Surface.Shallows;
+
+    /// <summary>
+    /// 棋串的气：与该棋串任一棋子之间存在气边、且 <see cref="GivesLiberty"/> 的格（按格去重）。
+    /// 被任何玩家棋子占据的格、空浅滩、障碍格、未架桥深水、越界方向，以及因崖壁或栅栏而无气边的格都不计气。
     /// </summary>
     public ImmutableArray<Coord> LibertiesOf(Group group)
     {
@@ -175,7 +181,7 @@ public sealed class GameBoard
         {
             foreach (Coord n in LibertyNeighbors(stone))
             {
-                if (this[n].IsPlayableEmpty)
+                if (GivesLiberty(n))
                 {
                     liberties.Add(n);
                 }
@@ -183,6 +189,28 @@ public sealed class GameBoard
         }
 
         return liberties.Order().ToImmutableArray();
+    }
+
+    /// <summary>
+    /// 与棋串有气边相连、为空却不能作为气的格——即贴着它的空浅滩（按格去重、坐标序）。
+    /// 供表现层把"浅滩：不算气"与真正的气分开标出，表现层不自己遍历邻接（tactical-layers「新地表的规则标示」）。
+    /// </summary>
+    public ImmutableArray<Coord> EmptyShallowsBeside(Group group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        var cells = new HashSet<Coord>();
+        foreach (Coord stone in group.Stones)
+        {
+            foreach (Coord n in LibertyNeighbors(stone))
+            {
+                if (this[n].IsPlayableEmpty && !GivesLiberty(n))
+                {
+                    cells.Add(n);
+                }
+            }
+        }
+
+        return cells.Order().ToImmutableArray();
     }
 
     /// <summary>棋串是否无气。</summary>

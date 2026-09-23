@@ -430,4 +430,23 @@ public class 以整批最终状态判定合法性Tests
         Assert.Equal(LifeState.Alive, after.LifeOf("A3"));
         Assert.Equal(["C2", "E2"], after.EyeSpacesOf("A3"));
     }
+
+    [Fact]
+    public void 只挨空浅滩的落子是自杀手()
+    {
+        // terrain-surfaces tasks 4.2：C4 的四个气边邻格全是空浅滩、批次不提任何子 → 无气，按既有自杀规则判非法并给出可定位的原因。
+        // 对照：同样位置四邻是空草地时合法。
+        TerrainData shallows = TestMaps.Terrain(surfaces: [("B4", Surface.Shallows), ("D4", Surface.Shallows), ("C3", Surface.Shallows), ("C5", Surface.Shallows)]);
+        GameBoard board = TestMaps.Blank(shallows, size: 7);
+        SettlementDriver driver = BatchFixtures.Driver(board);
+
+        RehearsalResult rehearsal = driver.Rehearse(BatchFixtures.Context(board, TestMaps.P0), [BatchFixtures.P("C4")]);
+
+        Assert.False(rehearsal.IsLegal);
+        Assert.Equal(BatchFailureKind.Suicide, rehearsal.Failure!.Kind);
+        Assert.Equal(["C4"], rehearsal.Failure.Coords.Notations());
+
+        GameBoard grass = TestMaps.Blank(size: 7);
+        Assert.True(BatchFixtures.Driver(grass).Rehearse(BatchFixtures.Context(grass, TestMaps.P0), [BatchFixtures.P("C4")]).IsLegal);
+    }
 }

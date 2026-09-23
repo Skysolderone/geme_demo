@@ -57,12 +57,39 @@ public class 生成参数与标识Tests
     [InlineData("gen:0:p5", "gen:0:p5")]
     [InlineData("gen:18446744073709551615:p8", "gen:18446744073709551615:p8")]
     [InlineData(" gen:007 ", "gen:7")]
+    [InlineData("gen:42:s1", "gen:42:s1")]
+    [InlineData("gen:42:p6:s1", "gen:42:s1")]
+    [InlineData("gen:42:p7:s1", "gen:42:p7:s1")]
     public void 标识规范化(string input, string expected)
     {
         // 变异验证 MG-9：Format 里"缺省平台数省略该段"的判断改成恒假 → 本测试红。
         Assert.Equal(expected, GeneratedMapId.Normalize(input));
         (ulong seed, MapGenParameters parameters) = GeneratedMapId.Parse(input);
         Assert.Equal(expected, GeneratedMapId.Format(seed, parameters));
+    }
+
+    [Fact]
+    public void 新地表段往返()
+    {
+        // 规格 terrain-surfaces · map-generation「新地表段往返」。
+        // 变异验证 M-S5a（实跑）：Format 漏写 :s1 段 → 本测试、「标识规范化」三条 :s1 用例与「同种子开新地表两次生成逐字节相同」共红 5。
+        Assert.Equal("gen:42:p7:s1", FrontierMapGenerator.Generate("gen:42:p7:s1").Id);
+        Assert.Equal("gen:42:s1", FrontierMapGenerator.Generate("gen:42:s1").Id);
+        Assert.Equal("gen:42:s1", FrontierMapGenerator.Generate("gen:42:p6:s1").Id);
+        (ulong seed, MapGenParameters parameters) = GeneratedMapId.Parse("gen:42:p7:s1");
+        Assert.Equal(42UL, seed);
+        Assert.Equal(7, parameters.PlatformCount);
+        Assert.True(parameters.NewSurfaces);
+        Assert.False(GeneratedMapId.Parse("gen:42:p7").Parameters.NewSurfaces);
+    }
+
+    [Fact]
+    public void 新地表开关缺省关()
+    {
+        Assert.False(MapGenParameters.Default.NewSurfaces);
+        Assert.False(new MapGenParameters().NewSurfaces);
+        Assert.True(MapGenParameters.RandomPick.NewSurfaces);
+        Assert.Equal(MapGenParameters.DefaultPlatforms, MapGenParameters.RandomPick.PlatformCount);
     }
 
     [Fact]
@@ -82,6 +109,12 @@ public class 生成参数与标识Tests
     [InlineData("gen:1:p")]
     [InlineData("gen:1:7")]
     [InlineData("gen:1:p7:x")]
+    [InlineData("gen:1:s2")]
+    [InlineData("gen:1:s0")]
+    [InlineData("gen:1:s")]
+    [InlineData("gen:1:s1:p7")]
+    [InlineData("gen:1:s1:s1")]
+    [InlineData("gen:1:p7:s1:x")]
     [InlineData("gen:")]
     [InlineData("gen")]
     [InlineData("gen:-1")]
@@ -100,6 +133,7 @@ public class 生成参数与标识Tests
         var ex = Assert.Throws<FormatException>(() => GeneratedMapId.Parse(id));
         Assert.Contains("gen:<地图种子>[:p<平台数>]", ex.Message, StringComparison.Ordinal);
         Assert.Contains("5–8", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("[:s1]", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

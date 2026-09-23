@@ -19,6 +19,20 @@ public class 地图随机源Tests
     }
 
     [Fact]
+    public void 新地表投放子流独立于全部尝试子流()
+    {
+        // terrain-surfaces design D6：投放子流只由地图种子决定、可复现，且与任何一次尝试的布局子流都不同。
+        Assert.Equal(Take(MapRandom.ForSurfaces(12345), 64), Take(MapRandom.ForSurfaces(12345), 64));
+        ulong[] surfaces = Take(MapRandom.ForSurfaces(12345), 8);
+        for (int attempt = 0; attempt < FrontierMapGenerator.DefaultMaxAttempts; attempt++)
+        {
+            Assert.NotEqual(surfaces, Take(MapRandom.ForAttempt(12345, attempt), 8));
+        }
+
+        Assert.NotEqual(surfaces, Take(MapRandom.ForSurfaces(12346), 8));
+    }
+
+    [Fact]
     public void 不同尝试序号或不同种子得到不同序列()
     {
         ulong[] baseline = Take(MapRandom.ForAttempt(12345, 0), 8);
@@ -91,7 +105,7 @@ public class 地图随机源Tests
         string core = Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Core");
         string[] generatorNames =
         [
-            "MapRandom.cs", "MapGenParameters.cs", "FrontierMapGenerator.cs",
+            "MapRandom.cs", "MapGenParameters.cs", "FrontierMapGenerator.cs", "FrontierSurfaces.cs",   // FrontierSurfaces：terrain-surfaces 新地表投放
             .. Directory.EnumerateFiles(Path.Combine(core, "Board", "Maps"), "FrontierMapLayout*.cs").Select(path => Path.GetFileName(path)!),
         ];
         Assert.True(generatorNames.Length >= 11, $"样本口径：只认出 {generatorNames.Length} 个生成器文件。");

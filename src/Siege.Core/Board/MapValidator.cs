@@ -345,6 +345,19 @@ public static class MapValidator
                     ImmutableArray<Coord>.Empty));
             }
 
+            // 第 9 条（terrain-surfaces）：出生区是起手阵地，新地表只出现在公共区域，避免起手条件因地表而不对等。
+            foreach (Coord c in zone.Where(map.Contains).Order())
+            {
+                Surface surface = map.SurfaceAt(c);
+                if (surface is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows)
+                {
+                    f.Add(new MapValidationFailure(
+                        "BIRTH_ZONE_SPECIAL_SURFACE",
+                        $"{BirthZoneLabel.Of(i)} 的 {c.ToNotation()} 是{surface.DisplayName()}：出生区内不得有荒漠、沼泽、岩台或浅滩。",
+                        [c]));
+                }
+            }
+
             for (int j = i + 1; j < map.BirthZones.Length; j++)
             {
                 ImmutableArray<Coord> overlap = zone.Intersect(map.BirthZones[j]).Order().ToImmutableArray();

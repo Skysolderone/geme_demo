@@ -40,18 +40,20 @@ public sealed record GroupPower(
 /// </summary>
 /// <param name="Player">玩家。</param>
 /// <param name="Status">参赛状态（由流程层提供，原样携带，供 UI 标记"已弃赛"）。</param>
-/// <param name="ExclusiveCells">独占空格坐标集合，字典序；棋子所在格不在其中。每格计 1 点领地分，取自空格归属三态的结果。</param>
+/// <param name="ExclusiveCells">独占空格坐标集合，字典序；棋子所在格不在其中。取自空格归属三态的结果（含不计分的荒漠格）。</param>
+/// <param name="ScoredCells">其中计领地分的格（<see cref="PowerCalculator.ScoresTerritory"/>：去掉荒漠），字典序；每格计 1 点领地分。</param>
 /// <param name="Groups">逐棋串拆分，按棋串最小坐标字典序。</param>
 /// <param name="Total">总势力 = 领地分 + 全部棋串军势之和。领地分不参与任何倍率。任意精度整数，不溢出。</param>
 public sealed record PlayerPower(
     PlayerId Player,
     PlayerStatus Status,
     ImmutableArray<Coord> ExclusiveCells,
+    ImmutableArray<Coord> ScoredCells,
     ImmutableArray<GroupPower> Groups,
     BigInteger Total)
 {
-    /// <summary>领地分总计 = 独占空格数（每格 1 分）。</summary>
-    public int TerritoryScore => ExclusiveCells.Length;
+    /// <summary>领地分总计 = 计分独占空格数（每格 1 分；独占的荒漠格不计）。</summary>
+    public int TerritoryScore => ScoredCells.Length;
 
     /// <summary>全部棋串军势之和（<see cref="Total"/> = <see cref="TerritoryScore"/> + 本项）。表现层显示"领地 + 棋串"时读它，不自己做减法。</summary>
     public BigInteger GroupScore => Groups.Aggregate(BigInteger.Zero, (sum, g) => sum + g.Power);
