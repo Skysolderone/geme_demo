@@ -142,9 +142,17 @@ public class 生成确定性Tests
         string generator = StripComments(File.ReadAllText(Path.Combine(maps, "FrontierMapGenerator.cs")));
         string random = StripComments(File.ReadAllText(Path.Combine(maps, "MapRandom.cs")));
 
+        // terrain-surfaces D6：新地表投放同属生成路径，工作态规则与布局一致（只许数组与列表）。
+        // 变异验证 M-S5g（check 实跑）：投放的候选改回 `new HashSet<Coord>(candidates)` → 本测试红。
+        string surfaces = StripComments(File.ReadAllText(Path.Combine(maps, "FrontierSurfaces.cs")));
+
         Assert.Contains("_rng.NextInt(", layout, StringComparison.Ordinal);                          // 反面：扫到的确实是工作态
-        Assert.DoesNotMatch(@"\b(HashSet|Dictionary|SortedSet|SortedDictionary|Hashtable|Lookup|GroupBy|ToHashSet|ToDictionary|ToLookup|Distinct|AsParallel)\b", layout);
-        Assert.DoesNotMatch(@"\b(Immutable\w+|FrozenSet|FrozenDictionary|ISet|IDictionary|ConcurrentBag)\b", layout);       // 换个名字的散列容器同样不许
+        Assert.Contains("rng.NextInt(", surfaces, StringComparison.Ordinal);                         // 反面：扫到的确实是投放
+        foreach (string working in new[] { layout, surfaces })
+        {
+            Assert.DoesNotMatch(@"\b(HashSet|Dictionary|SortedSet|SortedDictionary|Hashtable|Lookup|GroupBy|ToHashSet|ToDictionary|ToLookup|Distinct|AsParallel)\b", working);
+            Assert.DoesNotMatch(@"\b(Immutable\w+|FrozenSet|FrozenDictionary|ISet|IDictionary|ConcurrentBag)\b", working);       // 换个名字的散列容器同样不许
+        }
 
         // FrontierMapGenerator：散列容器只有不可变 builder，且任何 builder 都不出现在 foreach / LINQ 的数据源位置。
         Assert.DoesNotMatch(@"(?<!Immutable)\b(HashSet|Dictionary)<", generator);
@@ -155,7 +163,7 @@ public class 生成确定性Tests
         // 地图数据自带的散列容器（RelicCells / BirthZones / Obstacles……）只许计数与查询，不许拿来 foreach 或取"第一个"。
         Assert.DoesNotMatch(@"foreach\s*\([^)]*\bin\s+map\.|\bmap\.\w+(\.\w+)*\.(First|FirstOrDefault|Last|ElementAt|Take|Skip)\(", generator);
 
-        foreach (string source in new[] { layout, generator, random })
+        foreach (string source in new[] { layout, generator, random, surfaces })
         {
             Assert.DoesNotMatch(@"\b(double|float|decimal|Half|Single|Double|MathF|Math\.(Sqrt|Cbrt|Pow|Round|Floor|Ceiling|Truncate|Log|Log2|Log10|Exp|Sin|Cos|Tan|Atan|Atan2))\b", source);
             Assert.DoesNotMatch(@"\b\d+\.\d+[fdmFDM]?\b|\b\d+[fdmFDM]\b", source);                                                   // 浮点 / 十进制字面量

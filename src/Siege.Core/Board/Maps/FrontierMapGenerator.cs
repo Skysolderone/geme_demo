@@ -125,6 +125,21 @@ public static class FrontierMapGenerator
                 continue;
             }
 
+            if (parameters.NewSurfaces)
+            {
+                // 新地表在布局与校验全部通过之后投放（terrain-surfaces D6），用独立子流；投放后重跑一遍静态校验，保持校验闭环只有一处。
+                // 投放不改可落子性、高度与气边，校验不过说明投放本身有缺陷——直接报错，不换下一次尝试（换尝试会连布局一起变）。
+                List<(Coord Cell, Surface Surface)> placed = FrontierSurfaces.Place(map, RiverCells(layout), MapRandom.ForSurfaces(mapSeed));
+                TerrainData terrain = map.TerrainData;
+                ImmutableDictionary<Coord, Surface> surfaces = terrain.Surfaces.SetItems(placed.Select(p => KeyValuePair.Create(p.Cell, p.Surface)));
+                map = map with { TerrainData = new TerrainData(terrain.Heights, surfaces, terrain.Bridges, terrain.Fences) };
+                MapValidationResult painted = MapValidator.Validate(map);
+                if (!painted.IsValid)
+                {
+                    throw new MapGenerationException($"地图 {id} 投放新地表后未通过边疆档静态校验：{string.Join("；", painted.Failures)}");
+                }
+            }
+
             return new GeneratedMap(map, attempt, platforms);
         }
 
@@ -234,6 +249,24 @@ public static class FrontierMapGenerator
         }
 
         return cells > FrontierMapLayout.MaxBridgeCells ? $"桥格共 {cells} 个，超过上限 {FrontierMapLayout.MaxBridgeCells}。" : null;
+    }
+
+    /// <summary>
+    /// 主河的深水格（含架了桥的河格——桥格的地表仍是深水），按 <c>[x, y]</c> 标记：浅滩块的种子格必须挨着它。
+    /// 过渡带只在桥处跨河，走廊挨着主河的格几乎都是桥头；不算桥格的话，平台多的图上浅滩常常无处可放。
+    /// </summary>
+    private static bool[,] RiverCells(FrontierMapLayout layout)
+    {
+        var river = new bool[Columns, Rows];
+        for (int y = 0; y < Rows; y++)
+        {
+            for (int x = 0; x < Columns; x++)
+            {
+                river[x, y] = layout.Cells[x, y] is FrontierMapLayout.Cell.River or FrontierMapLayout.Cell.Bridge;
+            }
+        }
+
+        return river;
     }
 
     /// <summary>把工作态网格灌成不可变地图数据。写法与手工边疆图一致；平台是整块方块，方块内每一格都进出生区、h=2。</summary>

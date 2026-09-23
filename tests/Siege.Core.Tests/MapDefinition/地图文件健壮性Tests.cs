@@ -216,6 +216,43 @@ public class 地图文件健壮性Tests
         Assert.Contains(expectedFragment, ex.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void 新地表码往返()
+    {
+        // terrain-surfaces design D5：D 荒漠 / M 沼泽 / P 岩台 / S 浅滩；8 种地表全部写出再读入逐字段相等，再写一次逐字节相同。
+        // 变异验证 M-S0b（实跑）：SurfaceCode 把 Crag 写成 'D' → 本测试与「非法地表码列出全部八个码」各红 1。
+        TerrainData terrain = TestMaps.Terrain(
+            heights: [("B2", 2)],
+            surfaces:
+            [
+                ("A1", Surface.Road), ("B1", Surface.Forest), ("C1", Surface.DeepWater),
+                ("A2", Surface.Desert), ("B2", Surface.Marsh), ("C2", Surface.Crag), ("D2", Surface.Shallows),
+            ]);
+        MapData original = TestMaps.Synthetic(size: 9, maxPlayers: 4, terrain: terrain);
+
+        string json = MapFile.ToJson(original);
+        MapData loaded = MapFile.FromJson(json);
+
+        Assert.Equal(7, original.TerrainData.Surfaces.Count);
+        Assert.Equal(original.TerrainData.Surfaces.OrderBy(kv => kv.Key), loaded.TerrainData.Surfaces.OrderBy(kv => kv.Key));
+        Assert.Equal(json, MapFile.ToJson(loaded));
+        Assert.Contains("\"DMPS", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 非法地表码列出全部八个码()
+    {
+        string json = "{\"Id\":\"t\",\"Width\":3,\"Height\":3,\"MaxPlayers\":2,\"CentralEntrance\":\"B2\",\"Surfaces\":[\"GGG\",\"GGG\",\"GGX\"]}";
+
+        var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
+
+        Assert.Contains("C1", ex.Message, StringComparison.Ordinal);
+        foreach (string code in new[] { "G（草地）", "R（土路）", "F（林地）", "W（深水）", "D（荒漠）", "M（沼泽）", "P（岩台）", "S（浅滩）" })
+        {
+            Assert.Contains(code, ex.Message, StringComparison.Ordinal);
+        }
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", ".."));
 }

@@ -2,8 +2,11 @@ using System.Collections.Immutable;
 
 namespace Siege.Core.Board;
 
-/// <summary>地表种类。草地与土路在规则上等价，只作视觉区分；林地不接收覆盖；深水未架桥时不可落子、断气。</summary>
-/// <remarks>规格：openspec/changes/terrain-model/specs/terrain —— Requirement: 格属性</remarks>
+/// <summary>
+/// 地表种类。草地与土路在规则上等价，只作视觉区分；林地不接收覆盖；深水未架桥时不可落子、断气。
+/// 荒漠 / 沼泽 / 岩台 / 浅滩（terrain-surfaces）都是可落子格、不改变气边，各自只在一处唯一实现里产生规则差别（design D1）。
+/// </summary>
+/// <remarks>规格：openspec/specs/terrain —— Requirement: 格属性；terrain-surfaces 的 terrain 增量规格</remarks>
 public enum Surface
 {
     /// <summary>草地。</summary>
@@ -17,6 +20,36 @@ public enum Surface
 
     /// <summary>深水：未架桥时不可落子、不可控制、不计分；覆盖可穿过一格宽的深水。</summary>
     DeepWater,
+
+    /// <summary>荒漠：可落子；空的荒漠格被独占时不计领地分。</summary>
+    Desert,
+
+    /// <summary>沼泽：可落子；位于其上的棋子没有覆盖目标。</summary>
+    Marsh,
+
+    /// <summary>岩台：可落子；位于其上的棋子另覆盖直线距离 2 的格。与高度（h=1 "平台"）无关。</summary>
+    Crag,
+
+    /// <summary>浅滩：可落子；空的浅滩格不是任何棋串的气，也不属于任何空区。</summary>
+    Shallows,
+}
+
+/// <summary>地表的中文显示名（错误信息、图例、终端输出共用的唯一映射）。</summary>
+public static class SurfaceNames
+{
+    /// <summary>该地表的中文名。</summary>
+    public static string DisplayName(this Surface surface) => surface switch
+    {
+        Surface.Grass => "草地",
+        Surface.Road => "土路",
+        Surface.Forest => "林地",
+        Surface.DeepWater => "深水",
+        Surface.Desert => "荒漠",
+        Surface.Marsh => "沼泽",
+        Surface.Crag => "岩台",
+        Surface.Shallows => "浅滩",
+        _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知地表。"),
+    };
 }
 
 /// <summary>

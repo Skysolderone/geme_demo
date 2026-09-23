@@ -123,7 +123,12 @@ public class 四邻接Tests
                    // ③ TerrainEditRules：改造合法性的唯一实现。裁决 T-2 把改造目标口径定成**几何四邻**（不是气边——深水没有气边，
                    //    搭桥会变成不可能），所以它必须直接读几何邻居；它只接受 MapData，走不了 GameBoard.Neighbors。
                    //    名单只放这一个类型：任何第二处"自己遍历四邻判改造目标"的实现都会在这里红。
-                   || outer == typeof(TerrainEditRules);
+                   || outer == typeof(TerrainEditRules)
+
+                   // ④ FrontierSurfaces：生成器的新地表投放（terrain-surfaces D6）。规格按**几何四邻**定义"块"（同种地表沿几何四邻连通、
+                   //    浅滩块挨着主河），与气边无关——栅栏、崖壁都不该把一块地表切成两块；它只读 MapData，走不了 GameBoard.Neighbors。
+                   //    内部类型按全名比（测试程序集看得见 internal，但写成字符串免得把可见性绑进守门）。
+                   || outer.FullName == "Siege.Core.Board.Maps.FrontierSurfaces";
         }
 
         static string Describe(MethodBase c) => $"{c.DeclaringType!.FullName}.{c.Name}";
@@ -139,6 +144,9 @@ public class 四邻接Tests
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(GameBoard) && c.Name == nameof(GameBoard.Neighbors));
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.LibertyNeighbors));
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.CoverageTargets));
+
+        // 豁免 ④ 按全名字符串比，类型改名后豁免会静默失效成摆设——这里钉住它确实命中了一个真实调用者。
+        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!).FullName == "Siege.Core.Board.Maps.FrontierSurfaces");
     }
 
     private static MethodBase[] CallersOf((MethodBase Caller, MemberInfo Target, OpCode OpCode)[] refs, Type declaringType, string methodName) =>

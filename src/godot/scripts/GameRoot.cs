@@ -125,7 +125,7 @@ public sealed partial class GameRoot : Node3D
             // 地图种子与上面的对局种子各取各的，互不相干（map-generator D2 / D3）。
             if (GeneratedMapId.IsBareRequest(mapId))
             {
-                mapId = GeneratedMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapGenParameters.Default);
+                mapId = GeneratedMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapGenParameters.RandomPick);
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 

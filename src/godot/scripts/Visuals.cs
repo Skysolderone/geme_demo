@@ -30,6 +30,21 @@ public static class Visuals
     /// <summary>林地地表：深绿，配角落的小树；林地不接收覆盖，靠占据拿。</summary>
     public static readonly Color TileForest = Color.Color8(86, 150, 78);
 
+    /// <summary>
+    /// 荒漠地表（terrain-surfaces）：比土路更浅更白的沙色。去色后亮度约 224，与土路（≈194）、草地（≈163）拉开；
+    /// 与土路的区分主要靠格角的仙人掌 / 兽骨（段 1 补装饰）。
+    /// </summary>
+    public static readonly Color TileDesert = Color.Color8(242, 226, 170);
+
+    /// <summary>沼泽地表：暗橄榄泥色，去色后（≈93）比林地（≈123）更暗；形状提示是水洼与芦苇，不用锥形树冠（段 2 补装饰）。</summary>
+    public static readonly Color TileMarsh = Color.Color8(92, 98, 70);
+
+    /// <summary>岩台地表：灰褐石面，去色后 ≈140，与障碍岩石的冷灰区分；形状提示是裂纹与加厚边缘（段 3 补装饰）。</summary>
+    public static readonly Color TileCrag = Color.Color8(150, 138, 120);
+
+    /// <summary>浅滩地表：与地砖齐平的浅青水色，去色后 ≈181；与深水（低于地砖、深蓝）靠高度与鹅卵石区分（段 4 补装饰）。</summary>
+    public static readonly Color TileShallows = Color.Color8(130, 200, 215);
+
     /// <summary>深水：低于地砖的蓝色水面，不可落子。</summary>
     public static readonly Color DeepWater = Color.Color8(46, 138, 204);
 

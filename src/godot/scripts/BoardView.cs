@@ -172,6 +172,10 @@ public sealed partial class BoardView : Node3D
             {
                 Surface.Road => Visuals.TileRoad,
                 Surface.Forest => Visuals.TileForest,
+                Surface.Desert => Visuals.TileDesert,
+                Surface.Marsh => Visuals.TileMarsh,
+                Surface.Crag => Visuals.TileCrag,
+                Surface.Shallows => Visuals.TileShallows,
                 _ => Visuals.TilePlayable,
             };
             if (!playable)
