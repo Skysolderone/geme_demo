@@ -39,7 +39,10 @@ public class 地形改造日志与分析Tests
         // ai-eye 段 B 第四次重挑：活形硬约束 + 停手阈值（缺省 20）之后种子 3–5 致提子降为 0 / 0 / 0（下界响亮失败；硬约束之后只剩种子 4 的 1 次，阈值之后为 0）。
         // 同一份写死权重、并把停手阈值也写死为 20（与权重同理：段 D 调缺省阈值不应再翻掉样本）重扫种子 1–200（CLI 探针）：1–24 致提子全为 0，
         // 25–200 里有 20 局各有致提子；取连续且每局都有改造的 53–55：改造 1 / 5 / 3 次、致提子 1 / 1 / 1 次。断言与期望均未改，只换样本。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 53, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20 };
+        // life-single-stone 1.3 第五次重挑：单子不成活后 AI 走法随之变，种子 53 一次改造都没有（改造 0 / 4 / 5、致提子 0 / 0 / 1，第一条下界响亮失败）。
+        // 同一份写死权重与阈值重扫种子 1–200（临时探针；探针先在去掉单子上限的二进制上复现了 53–55 的 改造 1 / 5 / 3、致提子 1 / 1 / 1）：
+        // 58 局有致提子；取最小的连续且每局都有改造的 1–3：改造 3 / 3 / 6 次、致提子 1 / 0 / 0 次。断言与期望均未改，只换样本。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20 };
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 

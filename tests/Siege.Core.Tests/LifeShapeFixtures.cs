@@ -81,6 +81,22 @@ internal static class LifeShapeFixtures
         return board;
     }
 
+    /// <summary>
+    /// life-single-stone「切出单子即不再是活形」：A 的两子棋串 B1–C1 是已确定活形，<b>两枚子各自</b>带一个眼值 2 的眼空间——
+    /// B1 贴竖直直四 A1–A4，C1 贴水平直四 D1–G1。C1–C2 之间是既有栅栏，C2 不是 A 的气、也不在任何眼空间里，
+    /// 谁的匠人落 C2 都可以对 B1–C1 立栅（C1 是 C2 的几何四邻，T-11）且不与 A 串相连。
+    /// 立栅后两枚单子的眼值之和仍各为 2——没有单子上限时它们仍是"活"，所以这个夹具能让规则缺失时的测试变红。
+    /// </summary>
+    internal static GameBoard SingleStoneCut() => Grid(
+        [
+            "#.......1",
+            ".#.......",
+            ".#.......",
+            ".#.######",
+            ".00....##",
+        ],
+        fences: [("C1", "C2")]);
+
     /// <summary>眼空间格的记法数组（坐标序）。</summary>
     internal static string[] Cells(this EyeSpace space) => space.Cells.Notations();
 

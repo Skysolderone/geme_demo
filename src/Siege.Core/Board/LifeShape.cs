@@ -8,10 +8,10 @@ public enum LifeState
     /// <summary>眼值之和为 0。</summary>
     Dead = 0,
 
-    /// <summary>眼值之和为 1，不受保护。</summary>
+    /// <summary>眼值之和为 1，或单子（1 枚子的棋串）眼值之和 ≥ 2；不受保护。</summary>
     Undetermined = 1,
 
-    /// <summary>眼值之和 ≥ 2：已确定活形，其眼空间对非所有者禁入。</summary>
+    /// <summary>眼值之和 ≥ 2 且棋串不止 1 枚子：已确定活形，其眼空间对非所有者禁入。单子上限为未定（life-single-stone D1）。</summary>
     Alive = 2,
 }
 
@@ -73,7 +73,7 @@ public sealed class GroupLife
 /// 无气边的方向（障碍、未架桥深水、崖壁、栅栏、棋盘外沿）不产生邻格，天然是墙，不另写判定（design D1）。</para>
 /// <para>不接名册：所有者从棋子读出，弃赛 / 出局者遗留的活形照常产生禁入。不缓存、不入存档（design D5）。</para>
 /// <para>确定性：内部只用按 <c>y * 宽 + x</c> 编址的数组与按坐标序构造的列表，不遍历无序集合。</para>
-/// <para>规格：openspec/changes/life-shape/specs/life-shape</para>
+/// <para>规格：openspec/changes/life-shape/specs/life-shape；单子不成活见 openspec/changes/life-single-stone（「活形三态」MODIFIED）。</para>
 /// </remarks>
 public sealed class LifeShapeReport
 {
@@ -221,13 +221,13 @@ public sealed class LifeShapeReport
             }
         }
 
-        // ⑤ 每条棋串：眼值相加得三态。eyeSpaces 按首格坐标序生成，每条棋串的列表因此天然有序。
+        // ⑤ 每条棋串：眼值相加得三态（单子上限为未定，life-single-stone D1）。eyeSpaces 按首格坐标序生成，每条棋串的列表因此天然有序。
         ImmutableArray<GroupLife>.Builder lives = ImmutableArray.CreateBuilder<GroupLife>(groups.Length);
         for (int g = 0; g < groups.Length; g++)
         {
             ImmutableArray<EyeSpace> own = eyeSpacesOfGroup[g] is { } list ? [.. list] : [];
             int sum = own.Sum(e => e.EyeValue);
-            lives.Add(new GroupLife(groups[g], StateOf(sum), sum, own));
+            lives.Add(new GroupLife(groups[g], StateOf(sum, groups[g].Size), sum, own));
         }
 
         return new LifeShapeReport(width, groupAt, eyeSpaceAt, lives.MoveToImmutable(), [.. eyeSpaces]);
@@ -353,10 +353,15 @@ public sealed class LifeShapeReport
         return true;
     }
 
-    private static LifeState StateOf(int eyeValueSum) => eyeValueSum switch
+    /// <summary>
+    /// 三态判定：眼值之和 ≥ 2 → 活，= 1 → 未定，= 0 → 死；<b>只有 1 枚子的棋串上限为未定</b>（life-single-stone D1）——
+    /// 眼空间与眼值照常计算、对外可查，只是不成活。共享眼空间经由同一玩家的另一条多子活形棋串照常受保护（D2），
+    /// 破坏活形检查按原棋子重查本结果，无需另改（D3）。这是"活"的唯一判定处，预演、合法落子范围、公开视图、表现层与 AI 自动跟随。
+    /// </summary>
+    private static LifeState StateOf(int eyeValueSum, int stoneCount) => eyeValueSum switch
     {
-        >= 2 => LifeState.Alive,
-        1 => LifeState.Undetermined,
+        >= 2 when stoneCount > 1 => LifeState.Alive,
+        >= 1 => LifeState.Undetermined,
         _ => LifeState.Dead,
     };
 

@@ -278,6 +278,30 @@ public class 以整批最终状态判定合法性Tests
     }
 
     [Fact]
+    public void 立栅切出单子被拒()
+    {
+        // life-single-stone「切出单子即不再是活形」的非所有者一半（所有者自切在 LifeShape/活形三态Tests）：
+        // B 的匠人落 C2、在 B1–C1 立栅，A 的两子活形串切成两枚单子。两枚单子各自仍有眼值 2 的直四（A1–A4 / D1–G1），
+        // 没有单子上限时二者仍"活"、批次合法；有了上限二者都是未定 → 第 6 步破坏活形（design D3，第 6 步本身不改）。
+        // 实现前红（IsLegal 为 True）。变异 M1（去掉单子上限）→ 红 7，M2（上限误用于 2 子）→ 红 7，本测试均在其中；明细见 implement 记录。
+        GameBoard board = LifeShapeFixtures.SingleStoneCut();
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(board).LifeOf("B1"));
+        Assert.False(LifeShapeReport.Analyze(board).IsForbiddenFor(B, TestMaps.At("C2")));
+
+        RehearsalResult result = Rehearse(board, B, Fence("C2", "B1", "C1"));
+
+        Assert.False(result.IsLegal);
+        Assert.Equal(BatchFailureKind.BreaksLife, result.Failure!.Kind);
+        Assert.Equal(["B1", "C1"], result.Failure.Coords.Notations());
+        Assert.Empty(result.Captures);
+        LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard!);
+        Assert.Equal(2, after.GroupLifeAt(TestMaps.At("B1"))!.EyeValueSum);
+        Assert.Equal(2, after.GroupLifeAt(TestMaps.At("C1"))!.EyeValueSum);
+        Assert.Equal(LifeState.Undetermined, after.LifeOf("B1"));
+        Assert.Equal(LifeState.Undetermined, after.LifeOf("C1"));
+    }
+
+    [Fact]
     public void 立栅隔开眼与棋子被拒()
     {
         // B 的匠人落 A3，在 A1–A2 立栅：眼 A1 不再贴任何棋串（B1 岩石），A 串只剩眼 E1 → 未定 → 第 6 步破坏活形。

@@ -52,7 +52,13 @@ public class 候选格上限Tests
     // ② 停手阈值缺省 20（2.3）：8EEC49A7… → D1481DD5…。阈值取 0 时整局重现 8EEC49A7…（停手阈值Tests.阈值为0时零变化 钉住）。
     //    第 16 个小回合（第 4 大回合、P0）起分叉：旧选中批次 [G3 普通, G4 连珠, J9 要塞] = 1422 里 G3 是最后加入的一枚、边际提升 1422 − 1402 = 20，
     //    恰等于阈值被撤回，该扰动次序改出 [G4 连珠, J9 要塞] = 1402；同分 1422 的另一候选 [G3 要塞, G4 普通, J9 连珠] 当选。新值连跑两次一致。
-    internal const string V4GoldenTurnHash = "D1481DD50F4F5BE8DA4DC37E3CAB0878AF59C4A43CA0141E891B1638772968BD";
+    // life-single-stone（规则变更）：D1481DD5…772968BD → 35E25329…8B88D3D7，<b>走法确实变了</b>，来源只是单子上限（单子眼值之和 ≥ 2 也只判未定）：
+    // 探针 = 工作树只把三态判定里的 `when stoneCount > 1` 去掉（其余改动全保留），全量测试只红本 change 新增的 4 条，本测试与「阈值为0时零变化」
+    // 在旧常量下重新变绿，即两份哈希被逐字节复现。两份二进制各跑种子 31、24 个小回合逐条比对：第 1 个小回合（P3）落点 B10 / B11 / C12 不变，
+    // 快照只差活形记录——旧记录里单子 C12（与 B10-B11 共享平台角 8 格眼空间、眼值 2）的"确立"事件消失；第 2 个小回合（P0）起走法分叉：
+    // 旧落点 C2 连珠 + D3 匠人（立 D2–E2）两枚单子共享同一块 11 格眼空间、各自"确立"活形，新落点 C2 连珠 + B3 匠人（立 A2–B2）。
+    // 旧日志各小回合快照里的单子活形条数由 1 增到 26，新日志恒为 0。新值连跑两次一致。
+    internal const string V4GoldenTurnHash = "35E25329A68CDF9ADE5DD1EE424E923F8A01CB5C27D474CD047CBAC68B88D3D7";
 
     internal static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));

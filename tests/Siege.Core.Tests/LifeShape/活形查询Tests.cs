@@ -39,12 +39,12 @@ public class 活形查询Tests
         GameBoard board = Grid(
             [
                 "2.2...1.1",
-                ".2...1.1.",
+                ".22..1.1.",
                 "2.2......",
                 "...00000.",
                 "...0.0.0.",
                 "...00000.",
-                "0........",
+                "00.......",
                 ".0.~...33",
                 "0.0....3.",
             ],
@@ -57,8 +57,10 @@ public class 活形查询Tests
         Assert.Equal(first, second);
         Assert.Equal(first, onCopy);
         Assert.Contains("Alive", first, StringComparison.Ordinal);
-        // 手算：A 的 B2（眼 A2、B1、C2）与 C1（眼 B1、C2）、中部两眼串（E5、G5）为活；C 的 A9、B8（眼 A8、B9）为活；
-        // B 的 H9、D 的 J1 只是各自单子 / 棋串的唯一单格眼（未定）。C2 的三面墙：深水 D2、崖 C3（h=2）。
+        // 手算：A 的 A3–B3–B2（眼 A2、B1、C2）、中部两眼串（E5、G5）为活；C 的 B8–C8–C9–C7（眼 A8、B9）为活；
+        // B 的 H9、D 的 J1 只是各自单子 / 棋串的唯一单格眼（未定）。C2 的三面墙：深水 D2、崖 C3（h=2，B3–C3 同样是崖）。
+        // life-single-stone 1.3 改盘面不改期望：原盘面里 A 的 A1、B2、C1 与 C 的 A9、B8 都是单子活形，单子不成活后改为
+        // 补 B3（A）、C8（C）连成多子串；A1、C1、A9 等单子现为未定，眼空间仍经由多子串受保护，两条禁入期望不变。
         Assert.Contains("forbid P1 B1,A2,C2,E5,G5,A8,B9\n", first, StringComparison.Ordinal);
         Assert.Contains("forbid P0 A8,B9\n", first, StringComparison.Ordinal);
     }

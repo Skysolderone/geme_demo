@@ -20,8 +20,10 @@ public class 停手阈值Tests
     /// 严格提高实现（ai-eye 段 B 2.2 完成、2.3 之前：活形硬约束已生效，保留条件仍是 <c>next.Total &gt; current.Total</c>）的实际运行结果——
     /// v4、种子 31、4 名 Standard AI、24 个小回合，全部小回合快照（去耗时）逐行拼接后的 SHA-256（口径同 <see cref="候选格上限Tests.TurnHash"/>）。
     /// 阈值取 0 时本 change 的实现 MUST 逐步重现它。
+    /// <para>life-single-stone（规则变更）重建：8EEC49A7…04679FC8 → DCB7CC7C…CD39033E。去掉单子上限的探针下旧值逐字节复现；
+    /// 分叉与 <see cref="候选格上限Tests.V4GoldenTurnHash"/> 同源（第 1 个小回合只差活形记录，第 2 个小回合 P0 的匠人 D3 → B3），归因见那里的注释。</para>
     /// </summary>
-    private const string StrictImprovementTurnHash = "8EEC49A70D985E83D8C986B1E93B5F8E8DE2D6B0EF6006047B5D782204679FC8";
+    private const string StrictImprovementTurnHash = "DCB7CC7CAC326562BD7FFFDE813172AD8494335298F4B2EBDC44BD17CD39033E";
 
     private static readonly PlayerId Me = AiFixtures.P0;
 
