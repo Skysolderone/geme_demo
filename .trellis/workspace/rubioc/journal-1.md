@@ -123,3 +123,11 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 5. 段 C 新增 / 改写的规格增量（「候选格上限」「活形分析的决策内缓存」）待过目。
 
 **参考数字**（未校准）：段 B 后 v5 20 局平均结束 7.70 大回合、截断 0；段 C 耗时对 c18ad97 标准图 0.45×、边疆图 1.05×；边疆图基线本身约 2.4 s / 小回合，大量跑边疆图建议另开性能任务。简单难度 v5 仍有 1/20 局打到 600 小回合。
+
+
+## Session: 2026-09-23（续）— R8 裁决为 K1，life-single-stone 实施并归档
+
+- ai-eye 段 D 前裁决 R15–R18 已记入 `openspec/changes/ai-eye/design.md`（`ad199af`）。
+- R8 五变体对比实验（v5、各 50 局，数据 `sim-out/r8-explore/`）：负责人选 **K1 单子棋串不受活形保护**。
+- change `life-single-stone`：`e1d23ce` 实施（只改 `LifeShapeReport` 三态一处）→ `78b8e33` 归档 → `9a4df63` 任务归档；设计文档 v1.7。复核与实验逐局相同：整局无提子 22/50（原 47/50）、结束 8.02 / 最长 13、终局禁入 25.1%、第 3 大回合领先者胜率 76%（n=50，留给段 D 200 局观察）。1310 通过 / 4 门控跳过。
+- 当前 Trellis 任务切回 `09-23-ai-eye`。**下一步**：等 `terrain-surfaces`（`.claude/worktrees/terrain-surfaces`，另一会话负责）完成 → 主会话合入 main（与 `LifeShape.cs` 单子上限相邻，需复跑活形测试）→ ai-eye 段 D 校准。
