@@ -48,6 +48,9 @@ public static class Visuals
     /// <summary>芦苇（沼泽装饰）：干草黄褐。细长竖条成簇，轮廓与林地锥形树冠、荒漠仙人掌都不同。</summary>
     public static readonly Color Reed = Color.Color8(176, 156, 96);
 
+    /// <summary>岩台的裂纹与碎石：比岩台地砖深一档的冷褐，贴地细线；灰度下是石面上的深色纹理。</summary>
+    public static readonly Color CragCrack = Color.Color8(96, 86, 74);
+
     /// <summary>沼泽地表：暗橄榄泥色，去色后（≈93）比林地（≈123）更暗；形状提示是水洼与芦苇，不用锥形树冠（段 2 补装饰）。</summary>
     public static readonly Color TileMarsh = Color.Color8(92, 98, 70);
 

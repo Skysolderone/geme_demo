@@ -137,4 +137,18 @@ public class 高地压制加值Tests
         Assert.DoesNotContain(TestMaps.At("G6"), board.CoverageTargets(TestMaps.At("F6")));
         Assert.Equal(0, GroupAt(board, TestMaps.P0, "F6").HighGroundBonus);
     }
+
+    [Fact]
+    public void 岩台远格压制()
+    {
+        // 规格 terrain-surfaces · piece-effects「岩台远格压制」：A 在 h=1 的岩台 F6，G6 为 h=1 空格，B 在 h=0 的 H6 → A 提供 1 点高地加值。
+        // 对照：F6 若是草地，H6 不是覆盖目标，没有加值。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(heights: [("F6", 1), ("G6", 1)], surfaces: [("F6", Surface.Crag)]))
+            .Place("F6", TestMaps.P0).Place("H6", TestMaps.P1);
+        GameBoard grass = TestMaps.Blank(TestMaps.Terrain(heights: [("F6", 1), ("G6", 1)]))
+            .Place("F6", TestMaps.P0).Place("H6", TestMaps.P1);
+
+        Assert.Equal(1, GroupAt(board, TestMaps.P0, "F6").HighGroundBonus);
+        Assert.Equal(0, GroupAt(grass, TestMaps.P0, "F6").HighGroundBonus);
+    }
 }

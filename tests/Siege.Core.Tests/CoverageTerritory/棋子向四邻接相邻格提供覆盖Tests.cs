@@ -95,4 +95,22 @@ public class 棋子向四邻接相邻格提供覆盖Tests
         Assert.All(board.Map.AllCoords(), c => Assert.Equal(0, coverage.CoverageOf(c).CovererCount));
         Assert.Empty(coverage.ExclusiveCellsOf(TestMaps.P0));
     }
+
+    [Fact]
+    public void 岩台上的棋子覆盖更远()
+    {
+        // 规格 terrain-surfaces · coverage-territory「岩台上的棋子覆盖更远」：平地中央岩台 F6 → 八格获得 A 的覆盖（并独占）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Crag)])).Place("F6", TestMaps.P0);
+
+        CoverageMap coverage = CoverageMap.Compute(board);
+
+        foreach (string covered in new[] { "E6", "G6", "F5", "F7", "D6", "H6", "F4", "F8" })
+        {
+            Assert.Equal(new CellCoverage(1, TestMaps.P0), coverage.CoverageOf(TestMaps.At(covered)));
+        }
+
+        Assert.Equal(8, coverage.ExclusiveCellsOf(TestMaps.P0).Length);
+        Assert.Equal(0, coverage.CoverageOf(TestMaps.At("G7")).CovererCount);   // 斜向不覆盖
+        Assert.Equal(new[] { new CoverageSource(TestMaps.At("F6"), Adjacent: false) }, coverage.SourcesOf(TestMaps.At("H6")).ToArray());
+    }
 }

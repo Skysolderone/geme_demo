@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.TacticalLayers;
 
 /// <summary>
 /// 规格 terrain-surfaces · tactical-layers —— Requirement: 新地表的规则标示；以及「五种战术信息层」的差集地形来源（沼泽源 / 岩台远格 / 空浅滩）。
-/// 各段只加本段落地的地表：段 2 沼泽。
+/// 各段只加本段落地的地表：段 2 沼泽、段 3 岩台。
 /// </summary>
 public class 新地表的规则标示Tests
 {
@@ -55,6 +55,50 @@ public class 新地表的规则标示Tests
 
         Assert.Empty(diff.CoveredNotLiberty);
         Assert.Equal(["E4", "D5", "F5", "E6"], diff.LibertyNotCovered.Select(d => d.Coord).Notations());
+        Assert.All(diff.LibertyNotCovered, d => Assert.Equal([TerrainReason.Marsh], d.Reasons));
+    }
+
+    [Fact]
+    public void 岩台远格的归属()
+    {
+        // 规格 Scenario「岩台远格的归属」：A 在岩台 E5，G5 为空草地且只被它覆盖 → 归属读法显示 G5 为 A 独占，样式与其他独占格相同（不另设状态）。
+        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("E5", Surface.Crag)])).Pieces(P0, PieceType.Basic, "E5");
+
+        var ownership = (TerritoryLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership);
+
+        Assert.Contains(new TerritoryCellView(TestMaps.At("G5"), TerritoryState.Exclusive, P0), ownership.Cells);
+        Assert.Equal(8, ownership.Cells.Count(c => c.State == TerritoryState.Exclusive && c.Owner == P0));
+    }
+
+    [Fact]
+    public void 差集可由岩台远格解释()
+    {
+        // 规格「五种战术信息层」差集来源：被覆盖但不是气的格来自岩台远格。A 单子在岩台 E5 → C5、G5、E3、E7 被覆盖却不是气，原因"岩台"。
+        // 修改前这些格会被错标成"隔岸"（来源不相邻）。
+        // 变异验证 M-S3e（实跑）：ReasonFor 对不相邻来源恒返回隔岸 → 本测试红。
+        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("E5", Surface.Crag)])).Pieces(P0, PieceType.Basic, "E5");
+
+        BoardReadingDiff diff = ((TerritoryLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership)).Diff;
+
+        Assert.Empty(diff.LibertyNotCovered);
+        Assert.Equal(["E3", "C5", "G5", "E7"], diff.CoveredNotLiberty.Select(d => d.Coord).Notations());
+        Assert.All(diff.CoveredNotLiberty, d => Assert.Equal([TerrainReason.Crag], d.Reasons));
+    }
+
+    [Fact]
+    public void 差集可由新地表解释()
+    {
+        // 规格 Scenario「差集可由新地表解释」（段 3 先覆盖岩台 + 沼泽两类；浅滩在段 4 补进同一区域）：
+        // 岩台 C5 上 P0、沼泽 G6 上 P1（两子相隔足够远，互不干扰）→ 差集每一格都属于岩台远格或沼泽源。
+        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("C5", Surface.Crag), ("G6", Surface.Marsh)]))
+            .Pieces(P0, PieceType.Basic, "C5").Pieces(P1, PieceType.Basic, "G6");
+
+        BoardReadingDiff diff = ((LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups)).Diff;
+
+        Assert.NotEmpty(diff.CoveredNotLiberty);
+        Assert.NotEmpty(diff.LibertyNotCovered);
+        Assert.All(diff.CoveredNotLiberty.Concat(diff.LibertyNotCovered), d => Assert.Contains(d.Reasons.Single(), new[] { TerrainReason.Crag, TerrainReason.Marsh }));
+        Assert.All(diff.CoveredNotLiberty, d => Assert.Equal([TerrainReason.Crag], d.Reasons));
         Assert.All(diff.LibertyNotCovered, d => Assert.Equal([TerrainReason.Marsh], d.Reasons));
     }
 

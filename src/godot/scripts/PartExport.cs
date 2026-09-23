@@ -48,6 +48,12 @@ public static class PartExport
             parts.Add(($"marsh_{v}", LowPoly.Marsh(v)));
         }
 
+        // 岩台：裂纹条数与碎石朝向按 variant % 2、裂纹转角按 variant，取 0–3。
+        for (int v = 0; v < 4; v++)
+        {
+            parts.Add(($"crag_{v}", LowPoly.Crag(v)));
+        }
+
         parts.Add(("fence_x", LowPoly.Fence(alongX: true)));
         parts.Add(("fence_z", LowPoly.Fence(alongX: false)));
         parts.Add(("bridge", LowPoly.Bridge()));

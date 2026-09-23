@@ -245,6 +245,13 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(marsh);
             }
 
+            if (playable && cell.Surface == Surface.Crag)
+            {
+                Node3D crag = LowPoly.Crag(variant++);
+                crag.Position = center;
+                _decoration.AddChild(crag);
+            }
+
             StandardMaterial3D material = Visuals.Matte(color);
             _tileMaterials[cell.Coord] = material;
             _tileBase[cell.Coord] = color;

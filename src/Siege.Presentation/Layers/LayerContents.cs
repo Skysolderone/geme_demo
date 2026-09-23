@@ -87,7 +87,8 @@ public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cel
 
 /// <summary>
 /// 两种读法点亮的空格不一致时的地形原因（tactical-layers「差集可由地形解释」，design D-G）。
-/// 被覆盖但不是气：<see cref="Cliff"/>（居高临下）、<see cref="Fence"/>（栅栏挡气不挡覆盖）、<see cref="AcrossWater"/>（隔一格深水覆盖对岸）；
+/// 被覆盖但不是气：<see cref="Cliff"/>（居高临下）、<see cref="Fence"/>（栅栏挡气不挡覆盖）、<see cref="AcrossWater"/>（隔一格深水覆盖对岸）、
+/// <see cref="Crag"/>（岩台上的棋子覆盖直线远一格，terrain-surfaces）；
 /// 是气但未被覆盖：<see cref="Forest"/>（林地不接收覆盖）、<see cref="Marsh"/>（与该格有气边的棋子位于沼泽上，沼泽源不产生覆盖，terrain-surfaces）。
 /// </summary>
 public enum TerrainReason
@@ -97,6 +98,7 @@ public enum TerrainReason
     AcrossWater,
     Forest,
     Marsh,
+    Crag,
 }
 
 /// <summary>差集中的一格及其全部地形原因（去重、按枚举序）。同一格可能同时有多个来源，各给各的原因。</summary>
@@ -377,9 +379,11 @@ public static class TacticalLayers
 
     private static TerrainReason ReasonFor(MapData map, CoverageSource source, Coord target)
     {
+        // 来源不相邻只有两种来历：隔一格深水（覆盖关系第 2 步）或岩台远格（第 3 步）。来源站在岩台上就按岩台解释——
+        // 岩台隔着一格宽深水覆盖对岸时两步落到同一格，"岩台"同样解释得通；不站在岩台上的只能是隔岸。
         if (!source.Adjacent)
         {
-            return TerrainReason.AcrossWater;
+            return map.SurfaceAt(source.Stone) == Surface.Crag ? TerrainReason.Crag : TerrainReason.AcrossWater;
         }
 
         if (map.HasFence(source.Stone, target))

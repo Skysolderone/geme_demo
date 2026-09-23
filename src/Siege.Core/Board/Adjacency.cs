@@ -128,6 +128,29 @@ public static class Adjacency
             }
         }
 
+        // terrain-surfaces 岩台远格（design D2 第 3 步）：沿每个方向越过中间格 m 再覆盖一格 u。
+        // m 是障碍、盘外或比源高出崖壁阈值时阻挡；深水、林地、有子的格、栅栏都不阻挡。u 与隔水覆盖可能是同一格，按格去重。
+        if (map.SurfaceAt(s) == Surface.Crag)
+        {
+            foreach (Coord m in Neighbors(map.Width, map.Height, s))
+            {
+                int ux = (2 * m.X) - s.X;
+                int uy = (2 * m.Y) - s.Y;
+                if (ux < 0 || uy < 0 || ux >= map.Width || uy >= map.Height
+                    || map.Obstacles.Contains(m)
+                    || map.HeightAt(m) - h >= TerrainData.CliffDrop)
+                {
+                    continue;
+                }
+
+                var u = new Coord(ux, uy);
+                if (Receives(map, u, h) && !builder.Contains(u))
+                {
+                    builder.Add(u);
+                }
+            }
+        }
+
         builder.Sort();
         return builder.ToImmutable();
     }

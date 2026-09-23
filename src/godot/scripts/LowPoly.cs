@@ -355,6 +355,54 @@ public static class LowPoly
     }
 
     /// <summary>
+    /// 岩台格的石面细节（terrain-surfaces 段 3）：沿地砖内缘一圈 0.03 高的石沿（"加厚边缘"）+ 三四道贴地裂纹 + 两颗碎石。
+    /// 石沿只高 0.03、远低于一层地砖（高差 1 的缓坡侧面明显更高），读起来是"一块石台"而不是高一层（visual-style-baseline「岩台不被读成高一层」）。
+    /// 碎石在棋子底座（半径 0.36）之外，裂纹贴地，不遮挡判读。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Crag(int variant)
+    {
+        var root = new Node3D { Name = "Crag" };
+        StandardMaterial3D rim = Visuals.Matte(Visuals.TileCrag.Lightened(0.08f), 1f);
+        StandardMaterial3D crack = Visuals.Matte(Visuals.CragCrack, 1f);
+        const float half = BoardGeometry.TileSize * 0.5f;
+        const float band = 0.05f;
+        const float lip = 0.03f;
+
+        // 石沿：四条贴内缘的矮条。
+        foreach ((Vector3 at, Vector3 size) in new[]
+        {
+            (new Vector3(0f, lip * 0.5f, -half + (band * 0.5f)), new Vector3(BoardGeometry.TileSize, lip, band)),
+            (new Vector3(0f, lip * 0.5f, half - (band * 0.5f)), new Vector3(BoardGeometry.TileSize, lip, band)),
+            (new Vector3(-half + (band * 0.5f), lip * 0.5f, 0f), new Vector3(band, lip, BoardGeometry.TileSize - (2f * band))),
+            (new Vector3(half - (band * 0.5f), lip * 0.5f, 0f), new Vector3(band, lip, BoardGeometry.TileSize - (2f * band))),
+        })
+        {
+            root.AddChild(Mesh(new BoxMesh { Size = size }, rim, at));
+        }
+
+        // 裂纹：三四道折线段，贴地。
+        float turn = (variant * 41f) % 90f;
+        (Vector2 At, float Len, float Angle)[] cracks =
+        [
+            (new(-0.12f, -0.08f), 0.26f, 25f), (new(0.02f, -0.02f), 0.18f, -40f), (new(0.12f, 0.12f), 0.22f, 70f), (new(-0.16f, 0.16f), 0.14f, -10f),
+        ];
+        for (int i = 0; i < cracks.Length - (variant % 2); i++)
+        {
+            (Vector2 at, float len, float angle) = cracks[i];
+            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(len, 0.006f, 0.022f) }, crack,
+                new Vector3(at.X, 0.003f, at.Y), new Vector3(0f, angle + turn, 0f)));
+        }
+
+        // 碎石：两颗小多面体，放在两个角上。
+        float sx = variant % 2 == 0 ? 1f : -1f;
+        root.AddChild(Mesh(new SphereMesh { Radius = 0.05f, Height = 0.07f, RadialSegments = 5, Rings = 2 }, crack,
+            new Vector3(0.30f * sx, 0.03f, -0.29f), new Vector3(0f, variant * 31f, 0f)));
+        root.AddChild(Mesh(new SphereMesh { Radius = 0.035f, Height = 0.05f, RadialSegments = 4, Rings = 1 }, crack,
+            new Vector3(-0.29f * sx, 0.02f, 0.30f)));
+        return root;
+    }
+
+    /// <summary>
     /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
     /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
     /// 返回节点原点在缝中心、地砖上表面。
