@@ -24,6 +24,23 @@ public static class HeuristicAi
         return new HeuristicTurnController(player, match.Publish, match.Seed.Stream(StreamName(player)), difficulty, weights, config);
     }
 
+    /// <summary>
+    /// 测试接缝：同 <see cref="Create(MatchFlow, PlayerId, AiDifficulty, EvaluationWeights?, AiSearchConfig?)"/>，另可换上活形查询计数桩、关闭决策内活形缓存（ai-eye D5）。
+    /// </summary>
+    internal static HeuristicTurnController Create(
+        MatchFlow match,
+        PlayerId player,
+        AiDifficulty difficulty,
+        EvaluationWeights? weights,
+        AiSearchConfig? config,
+        Func<GameBoard, LifeShapeReport>? lifeQuery,
+        bool cacheLife)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        return new HeuristicTurnController(
+            player, match.Publish, match.Seed.Stream(StreamName(player)), difficulty, weights, config, relicValue: null, lifeQuery, cacheLife);
+    }
+
     /// <summary>给全部玩家装上同难度、同权重的正式 AI。</summary>
     public static void AttachAll(
         MatchRunner runner,

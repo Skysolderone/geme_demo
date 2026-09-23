@@ -1,0 +1,6 @@
+{"file": "openspec/changes/life-single-stone/proposal.md", "reason": "动机与实验数据"}
+{"file": "openspec/changes/life-single-stone/design.md", "reason": "D1–D3"}
+{"file": "openspec/changes/life-single-stone/tasks.md", "reason": "任务清单"}
+{"file": "openspec/changes/life-single-stone/specs/", "type": "directory", "reason": "life-shape 增量"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现清单"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/慢测试门控"}

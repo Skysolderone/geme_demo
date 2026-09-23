@@ -46,9 +46,15 @@ public class 候选格上限Tests
     // 已确定活形的安全分取公式上界常数 18）。新增的眼位 / 威胁两维默认权重为 0、不进总分（1.1 之后种子 1–20 的 4 AI 对局与改动前逐步相同，
     // 比对含候选与预演事件）。改动前后的二进制各跑种子 31、24 个小回合：第 1 个小回合（P3）即分叉——旧落点 B10 / B11 / C12 全为要塞、
     // 安全维原始值 12；新落点 B11 改为普通子、安全维 36（B10-B11 与 C12 两条棋串共享平台角上一块 8 格眼空间、眼值 2，均为已确定活形，各取常数 18），眼位原始值 8 = 2 + 2 × 3（权重 0）。新值连跑两次一致。
-    private const string V4GoldenTurnHash = "14E1B0D2E28A53DCFA389861CA9056AB42E425F57E073A6F7B781184104CBA72";
+    // ai-eye 段 B：14E1B0D2…104CBA72 → D1481DD5…772968BD，<b>走法确实变了</b>，分两步归因（每步都有独立的零变化证据）：
+    // ① 活形硬约束（2.2）：14E1B0D2… → 8EEC49A7…04679FC8。探针（硬约束判据短路为恒不淘汰、其余改动保留）跑种子 1–20 与改动前逐步相同（20 / 20，含候选与预演事件），
+    //    所以变化只来自淘汰本身。本局第 23 个小回合（第 6 大回合、P2）起分叉：旧落点 E12 协同子，新实现 Pass——E12 在 v5 上被地形围成 P2 的单格眼（四邻只有 F12 有气边）。
+    // ② 停手阈值缺省 20（2.3）：8EEC49A7… → D1481DD5…。阈值取 0 时整局重现 8EEC49A7…（停手阈值Tests.阈值为0时零变化 钉住）。
+    //    第 16 个小回合（第 4 大回合、P0）起分叉：旧选中批次 [G3 普通, G4 连珠, J9 要塞] = 1422 里 G3 是最后加入的一枚、边际提升 1422 − 1402 = 20，
+    //    恰等于阈值被撤回，该扰动次序改出 [G4 连珠, J9 要塞] = 1402；同分 1422 的另一候选 [G3 要塞, G4 普通, J9 连珠] 当选。新值连跑两次一致。
+    internal const string V4GoldenTurnHash = "D1481DD50F4F5BE8DA4DC37E3CAB0878AF59C4A43CA0141E891B1638772968BD";
 
-    private static string TurnHash(MatchLog log) =>
+    internal static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
 
     private static AiSearchConfig StandardWith(int cellLimit) => AiSearchConfig.Standard with { CandidateCellLimit = cellLimit };
@@ -130,7 +136,9 @@ public class 候选格上限Tests
     [Fact]
     public void 预筛按代表类型的格分取前K同分按坐标序()
     {
-        // 独立复算：代表类型 = 持有类型里枚举序最前的一种、不带改造；格分 = 既有评估函数的总分；降序、同分按坐标序、取前 K。
+        // 独立复算：代表类型 = 持有类型里枚举序最前的一种、不带改造；格分 = 预筛口径的总分；降序、同分按坐标序、取前 K。
+        // ai-eye 段 C（3.1）：格分由"既有评估函数（九维）"改为预筛口径（七维、不查活形，EvaluatePrefilter），oracle 随之改用它；
+        // 本测试钉的是"前 K 的取法"，格分口径本身由「预筛阶段不触发活形查询」钉住。
         // 变异 M-K3：PrefilterCells 的 OrderByDescending 改成 OrderBy（取最差的 K 格）→ 本测试红。变异 M-K11：同分次序改成坐标逆序 → 本测试红。
         //（单删 ThenBy 是等价变异：LINQ 排序稳定，而输入已按坐标序。）
         const int k = 6;
@@ -147,7 +155,7 @@ public class 候选格上限Tests
             RehearsalResult result = oracleMatch.Rehearse();
             if (result.IsLegal)
             {
-                scored.Add((cell, evaluator.Evaluate(batch.Placements, result, batch.Context).Total));
+                scored.Add((cell, evaluator.EvaluatePrefilter(batch.Placements, result, batch.Context).Total));
             }
         }
 
@@ -189,6 +197,7 @@ public class 候选格上限Tests
         ImmutableArray<TerrainEdit> a1Edits = TerrainEditRules.LegalTargets(batch.Board.Map, a1);
 
         // 前提：A1 不带改造是自杀手，带改造（立栅 B1–C1 / 在 A2 搭桥）才合法；其余空格普通子都落得下。
+        // 格分按预筛口径（ai-eye 段 C 3.1：七维、不查活形，EvaluatePrefilter）复算。
         var scored = new List<(Coord Cell, BigInteger Total)>();
         foreach (Coord cell in empties)
         {
@@ -198,7 +207,7 @@ public class 候选格上限Tests
             Assert.Equal(cell != a1, plain.IsLegal);
             if (plain.IsLegal)
             {
-                scored.Add((cell, evaluator.Evaluate(batch.Placements, plain, batch.Context).Total));
+                scored.Add((cell, evaluator.EvaluatePrefilter(batch.Placements, plain, batch.Context).Total));
             }
         }
 
@@ -210,7 +219,7 @@ public class 候选格上限Tests
             RehearsalResult edited = oracleMatch.Rehearse();
             if (edited.IsLegal)
             {
-                a1Totals.Add(evaluator.Evaluate(batch.Placements, edited, batch.Context).Total);
+                a1Totals.Add(evaluator.EvaluatePrefilter(batch.Placements, edited, batch.Context).Total);
             }
         }
 
@@ -244,6 +253,77 @@ public class 候选格上限Tests
         Assert.DoesNotContain(a1, noArtisan.Ai.LastCandidateCells);
         Assert.True(noArtisan.Rehearsals <= empties.Length + k + combine, $"预演 {noArtisan.Rehearsals} 次");
     }
+
+    [Fact]
+    public void 预筛阶段不触发活形查询()
+    {
+        // ai-eye D5 / 段 C 3.1：预筛只算既有七维（眼位、威胁记 0；安全按不查活形的口径），不做活形查询；进入完整枚举的 ≤ K 格才算九维。
+        // 计数桩：换上记录盘面的活形查询，并关掉决策内缓存（每一次请求都落到桩上，缓存命中不会掩盖预筛的查询）。
+        // 预筛预演的盘面是"代表类型落在某一格"：若预筛也查活形，被剪掉的每一格（合法空格 − K 格）都会各留下一次"新落子不在完整枚举格里"的查询。
+        // 变异 M-C1（PrefilterCells 改回 evaluator.Evaluate，即九维）→ 红 1（本测试）。
+        const int k = 8;
+        MatchFlow match = OpenPosition();
+        GameBoard before = match.Board.Clone();
+        var queried = new List<GameBoard>();
+        HeuristicTurnController ai = HeuristicAi.Create(
+            match,
+            AiFixtures.P0,
+            AiDifficulty.Standard,
+            weights: null,
+            StandardWith(k),
+            lifeQuery: board =>
+            {
+                queried.Add(board.Clone());
+                return LifeShapeReport.Analyze(board);
+            },
+            cacheLife: false);
+        StagedBatch batch = match.OpenDeploy();
+        int empties = batch.Context.LegalRange.Count(c => batch.Board[c].IsPlayableEmpty);
+
+        ai.Deploy(batch, match.Rehearse);
+
+        Assert.True(empties > k, $"合法空格 {empties}");
+        Assert.Equal(k, ai.LastCandidateCells.Length);
+        var cells = ai.LastCandidateCells.ToHashSet();
+        Coord[] outside = [.. queried.SelectMany(b => NewStones(before, b)).Where(c => !cells.Contains(c)).Distinct().Order()];
+        Assert.True(outside.Length == 0, $"预筛阶段查了活形：新落子在 {string.Join(" ", outside.Select(c => c.ToNotation()))}");
+
+        // 桩确实接上（否则上面恒真）：批次前 1 次，完整枚举每个候选至少 1 次（缓存关着，硬约束与评价各查一次）。
+        Assert.Equal(1, queried.Count(b => !NewStones(before, b).Any()));
+        Assert.True(queried.Count >= 1 + ai.LastPointRanking.Length, $"活形查询 {queried.Count} 次");
+        Assert.All(ai.LastCandidateCells, c => Assert.Contains(queried, b => NewStones(before, b).Contains(c)));
+
+        // 口径：同一个预演结果，预筛口径与完整口径的其余五维逐项相同，眼位、威胁记 0；安全维仍在（按不查活形的口径），不是整维丢掉。
+        // 变异 M-C9（预筛把安全维也记 0，即只剩六维）→ 红 1（本测试，最后一条断言；两条 oracle 测试跟着预筛口径走，不红）。
+        BatchEvaluator evaluator = ai.CreateEvaluator();
+        PieceType representative = batch.Context.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order().First();
+        var prefilterSafety = new List<BigInteger>();
+        foreach (Coord cell in ai.LastCandidateCells)
+        {
+            batch.Clear();
+            Assert.Null(batch.Stage(cell, representative));
+            RehearsalResult result = match.Rehearse();
+            Assert.True(result.IsLegal);
+            EvaluationBreakdown full = evaluator.Evaluate(batch.Placements, result, batch.Context);
+            EvaluationBreakdown prefilter = evaluator.EvaluatePrefilter(batch.Placements, result, batch.Context);
+            foreach (EvaluationDimension d in new[] { EvaluationDimension.PowerGain, EvaluationDimension.EnemyLoss, EvaluationDimension.Relic,
+                EvaluationDimension.Growth, EvaluationDimension.Initiative, EvaluationDimension.Supply })
+            {
+                Assert.Equal(full.RawOf(d), prefilter.RawOf(d));
+            }
+
+            Assert.Equal(BigInteger.Zero, prefilter.RawOf(EvaluationDimension.Eye));
+            Assert.Equal(BigInteger.Zero, prefilter.RawOf(EvaluationDimension.Threat));
+            prefilterSafety.Add(prefilter.RawOf(EvaluationDimension.Safety));
+        }
+
+        batch.Clear();
+        Assert.Contains(prefilterSafety, v => !v.IsZero);
+    }
+
+    /// <summary>盘面 <paramref name="after"/> 上比 <paramref name="before"/> 多出棋子的格。</summary>
+    private static IEnumerable<Coord> NewStones(GameBoard before, GameBoard after) =>
+        after.AllCoords().Where(c => after[c].Occupant is not null && before[c].Occupant is null);
 
     [Theory]
     [InlineData(0)]
@@ -397,8 +477,11 @@ public class 候选格上限Tests
     [Fact]
     public void 剪枝参数的文本往返与旧文本兼容()
     {
+        // ai-eye 段 B：旧文本没有停手阈值，按 0 读入（当时的保留条件就是严格提高），所以等于"标准预设去掉阈值"，不再等于预设本身（预设阈值为缺省 20）。
         AiSearchConfig old = JsonSerializer.Deserialize<AiSearchConfig>("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false}""")!;
-        Assert.Equal(AiSearchConfig.Standard, old);
+        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0 }, old);
+        AiSearchConfig tuned = AiSearchConfig.Standard with { PassThreshold = 7 };
+        Assert.Equal(tuned, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(tuned)));
 
         AiSearchConfig limited = StandardWith(16);
         Assert.Equal(limited, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(limited)));

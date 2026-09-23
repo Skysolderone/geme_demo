@@ -1,3 +1,4 @@
+using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Sim.Logging;
@@ -13,8 +14,17 @@ public sealed record ReplayResult(bool Identical, int LineCount, int? FirstDiver
     /// </summary>
     public string? MapMismatch { get; init; }
 
+    /// <summary>
+    /// AI 评价版本不一致（ai-eye 裁决 R10、design Risks「回放兼容」）：日志首部记录的 <see cref="LogHeader.AiEvaluationVersion"/>
+    /// 与当前 <see cref="EvaluationBreakdown.Version"/> 不同（缺字段 = 版本 1）。旧版本的 AI 决策不能用新评价逐步重现，所以同样停在首部（第 1 行）、
+    /// <b>没有重跑对局</b>——<see cref="Replayed"/> 只有一行首部（原首部换上当前版本号）。其余情形为 <c>null</c>。
+    /// </summary>
+    public string? AiVersionMismatch { get; init; }
+
     public override string ToString() => MapMismatch is not null
         ? $"回放在首部（第 1 行）分歧：地图不一致。{MapMismatch}"
+        : AiVersionMismatch is not null
+        ? $"回放在首部（第 1 行）分歧：AI 评价版本不一致。{AiVersionMismatch}"
         : Identical
         ? $"回放一致：{LineCount} 行逐字节相同。"
         : $"回放在第 {FirstDivergentLine} 行分歧。\n  原：{Truncate(Expected)}\n  今：{Truncate(Actual)}";
@@ -47,6 +57,20 @@ public static class Replayer
             {
                 MapMismatch = $"日志首部记录的地图 {header.MapId} 摘要为 {recordedDigest}，现在按标识重建出的地图摘要为 {digest}"
                     + "——生成器或地图数据在这局之后改过，同一标识已不是同一张图；未重跑对局。",
+            };
+        }
+
+        // AI 评价版本（ai-eye R10）：首部版本与当前不同 → 按首部版本处理：旧版本的 AI 决策无法用今天的评价重现，停在首部、不重跑。
+        // 缺字段（ai-eye 之前的旧日志）即版本 1，MUST NOT 当作当前版本。
+        if (header.AiEvaluationVersion != EvaluationBreakdown.Version)
+        {
+            var stub = new MatchLog { Header = header with { AiEvaluationVersion = EvaluationBreakdown.Version } };
+            string[] expected = original.DeterministicText().Split('\n');
+            string recorded = header.AiEvaluationVersion is { } v ? v.ToString(System.Globalization.CultureInfo.InvariantCulture) : "缺（= 版本 1，ai-eye 之前）";
+            return new ReplayResult(false, expected.Length, 1, expected[0], stub.DeterministicText().Split('\n')[0], stub)
+            {
+                AiVersionMismatch = $"日志首部记录的 AI 评价版本为 {recorded}，当前为 {EvaluationBreakdown.Version}"
+                    + "——旧版本的 AI 决策不能用当前评价逐步重现；未重跑对局。",
             };
         }
 

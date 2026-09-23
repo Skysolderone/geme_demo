@@ -342,7 +342,8 @@ public class 启发式评价维度Tests
 
         Assert.Empty(violations);
         Assert.True(neighborCalls >= 1, "扫描器一处邻格枚举都没命中——扫描口径失效");
-        Assert.Contains("LifeShapeReport.Analyze(", File.ReadAllText(Path.Combine(aiDir, "BatchEvaluator.cs")), StringComparison.Ordinal);
+        // 段 C：活形查询改经决策内缓存（缺省查询是方法组 LifeShapeReport.Analyze，不再带括号直接调用），反面命中去掉 "("。
+        Assert.Contains("LifeShapeReport.Analyze", File.ReadAllText(Path.Combine(aiDir, "BatchEvaluator.cs")), StringComparison.Ordinal);
 
         Assert.NotEmpty(EyeJudgmentScan(LegacyEyeLoop).Violations);
         Assert.NotEmpty(EyeJudgmentScan(LinqEyeCheck).Violations);
@@ -492,7 +493,8 @@ public class 启发式评价维度Tests
         // Standard 难度：Easy 的非即时维恒 0，钉不住"分解值确实写的是这一维"。
         Siege.Sim.Logging.MatchLog log = Siege.Sim.Running.MatchSession
             .Create(SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard), 41).Run();
-        Assert.Equal(2, EvaluationBreakdown.Version);
+        // 段 C（裁决 R10）：硬约束 + 阈值 + 预筛口径使走法变化，版本 2 → 3。
+        Assert.Equal(3, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
 
         // 往返：写出再读回仍在（写入路径漏写则读回 null）。
@@ -512,5 +514,44 @@ public class 启发式评价维度Tests
         Assert.All(settled, e => Assert.All(Enum.GetNames<EvaluationDimension>(), name => Assert.True(e.Values!.ContainsKey(name), name)));
         Assert.Contains(nameof(EvaluationDimension.Eye), Enum.GetNames<EvaluationDimension>());
         Assert.Contains(nameof(EvaluationDimension.Threat), Enum.GetNames<EvaluationDimension>());
+    }
+
+    [Fact]
+    public void 旧评价版本的日志回放按首部版本处理()
+    {
+        // 裁决 R10 / design Risks「回放兼容」：首部版本与当前不同（含缺字段 = 版本 1）→ 停在首部报分歧、不重跑 AI；同版本照常逐步回放。
+        // 样本：当前二进制跑出的真实日志，只把首部版本改成 2 / 删掉——对局内容其实可重现，所以"没停下"就会回放一致，变异可见。
+        // 变异 M-C7（去掉版本检查）→ 红 1（本测试）。变异 M-C8（缺字段当作当前版本：只比有值的版本）→ 红 1（本测试的 null 一轮）。
+        Siege.Sim.Logging.MatchLog log = Siege.Sim.Running.MatchSession
+            .Create(SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard), 41).Run();
+        Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
+        Assert.True(log.Turns.Count >= 8, $"小回合 {log.Turns.Count}");
+
+        // 反面：同版本逐步一致。
+        Siege.Sim.Running.ReplayResult same = Siege.Sim.Running.Replayer.Replay(log);
+        Assert.True(same.Identical, same.ToString());
+        Assert.Null(same.AiVersionMismatch);
+
+        foreach (int? old in new int?[] { 2, null })
+        {
+            Siege.Sim.Logging.MatchLog legacy = new()
+            {
+                Header = log.Header with { AiEvaluationVersion = old },
+                Turns = log.Turns,
+                Events = log.Events,
+                Result = log.Result,
+            };
+            Assert.Equal(old, Siege.Sim.Logging.MatchLog.Parse(legacy.DeterministicText()).Header.AiEvaluationVersion);
+
+            Siege.Sim.Running.ReplayResult replay = Siege.Sim.Running.Replayer.Replay(legacy);
+
+            Assert.False(replay.Identical);
+            Assert.Equal(1, replay.FirstDivergentLine);
+            Assert.NotNull(replay.AiVersionMismatch);
+            Assert.Null(replay.MapMismatch);
+            Assert.Contains($"当前为 {EvaluationBreakdown.Version}", replay.AiVersionMismatch, StringComparison.Ordinal);
+            Assert.Empty(replay.Replayed.Turns);   // 没有重跑对局
+            Assert.Equal(EvaluationBreakdown.Version, replay.Replayed.Header.AiEvaluationVersion);
+        }
     }
 }

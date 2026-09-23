@@ -1,21 +1,25 @@
 namespace Siege.Core.Ai;
 
-/// <summary>AI 难度（设计文档 §15.2）。简单只看即时收益、贪心一条；标准 / 高难扩大候选数量与评价深度，MUST NOT 读隐藏信息。</summary>
+/// <summary>
+/// AI 难度（设计文档 §15.2）。简单只看即时收益、贪心一条；标准 / 高难扩大候选数量与评价深度，MUST NOT 读隐藏信息。
+/// 活形硬约束与停手阈值对三档一律生效（ai-eye D7：它们是对局收敛的底线，不是强度手段）；眼位 / 威胁两维从标准难度起生效。
+/// </summary>
 public enum AiDifficulty
 {
     /// <summary>简单：只用即时势力增量与敌方势力损失两维，候选批次 M = 1（对照组）。</summary>
     Easy,
 
-    /// <summary>标准：七维评价，M = 8。</summary>
+    /// <summary>标准：九维评价，M = 8。</summary>
     Standard,
 
-    /// <summary>高难：七维评价，M = 32，N 更大。</summary>
+    /// <summary>高难：九维评价，M = 32，N 更大。</summary>
     Hard,
 }
 
 /// <summary>
 /// 候选剪枝参数（design.md D3 / 裁决 2）：先筛前 <see cref="CandidatePointCount"/>（N）个高价值落点，再组合不超过
 /// <see cref="CandidateBatchCount"/>（M）个候选批次。初值：简单 N 6 / M 1，标准 N 12 / M 8，高难 N 24 / M 32；跑局实测后校准。
+/// 另含停手阈值（ai-eye D4）——AI 配置而不是游戏规则，不影响人类玩家的合法操作。
 /// </summary>
 /// <param name="CandidatePointCount">候选落点数 N。</param>
 /// <param name="CandidateBatchCount">候选批次数 M。</param>
@@ -26,22 +30,38 @@ public enum AiDifficulty
 /// 取前 K 格（同分按坐标序），再只对这 K 格做完整的"类型 × 改造目标"枚举。
 /// N / M 是在穷举<b>之后</b>截断，管不住大图上的预演次数；K 在穷举之前截断。不改评估函数、不消费随机流。
 /// </param>
-public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchCount, bool ImmediateOnly, int CandidateCellLimit = 0)
+/// <param name="PassThreshold">
+/// 停手阈值（ai-eye D4，非负整数，单位为加权总分）：贪心组批逐枚加入落点时，这一枚使整批加权总分的提升<b>严格大于</b>它才保留，否则撤回；
+/// 一枚都没保留即 Pass。取 0 时退化为"严格提高"，与引入本参数之前逐步相同。三档难度的预设都取 <see cref="DefaultPassThreshold"/>（裁决 R1：三档共用）。
+/// 构造参数的缺省值是 0 而不是 <see cref="DefaultPassThreshold"/>：该项出现之前记录的剪枝参数（配置 / 日志首部里的 <c>Search</c>）缺这个字段，
+/// 当时的保留条件就是严格提高，按 0 读入才能原样重建。
+/// </param>
+public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchCount, bool ImmediateOnly, int CandidateCellLimit = 0, int PassThreshold = 0)
 {
     /// <summary>可落子格数超过它的地图算"大图"：各入口未显式配置 K 时取 <see cref="LargeMapCellLimit"/>，否则取 0。</summary>
     public const int LargeMapPlayableThreshold = 150;
+
+    /// <summary>
+    /// 默认停手阈值。<b>PassThreshold = 20</b>——未校准（ai-eye 段 B 初值）：取 2 × <see cref="EvaluationWeights.PowerGain"/> 默认权重 10，
+    /// 对应基准文档 <c>PASS_THRESHOLD = 2.0</c>、power 权重 1.0 的比例；没有任何跑局依据，校准归 ai-eye 段 D（design D6 第 2 条，双向扫档）。
+    /// 以它产出的数据引用时 MUST 注明"未校准口径"。改值须连同本段与 <see cref="PassThresholdCalibrationStatus"/> 一起更新（守门：<c>默认评价权重的校准Tests.默认停手阈值被改动</c>）。
+    /// </summary>
+    public const int DefaultPassThreshold = 20;
+
+    /// <summary>默认停手阈值的校准口径（ai-decision「默认评价权重的校准」要求的显式标注）。</summary>
+    public const string PassThresholdCalibrationStatus = "未校准（ai-eye 段 B 初值 = 2 × PowerGain 权重，待段 D 扫档）";
 
     /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>
     public const int LargeMapCellLimit = 24;
 
     /// <summary>简单：贪心一条、只看即时收益。</summary>
-    public static readonly AiSearchConfig Easy = new(CandidatePointCount: 6, CandidateBatchCount: 1, ImmediateOnly: true);
+    public static readonly AiSearchConfig Easy = new(CandidatePointCount: 6, CandidateBatchCount: 1, ImmediateOnly: true, PassThreshold: DefaultPassThreshold);
 
     /// <summary>标准。</summary>
-    public static readonly AiSearchConfig Standard = new(CandidatePointCount: 12, CandidateBatchCount: 8, ImmediateOnly: false);
+    public static readonly AiSearchConfig Standard = new(CandidatePointCount: 12, CandidateBatchCount: 8, ImmediateOnly: false, PassThreshold: DefaultPassThreshold);
 
     /// <summary>高难。</summary>
-    public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false);
+    public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold);
 
     /// <summary>某难度的默认参数。</summary>
     public static AiSearchConfig ForDifficulty(AiDifficulty difficulty) => difficulty switch
@@ -65,7 +85,7 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
     public static AiSearchConfig ForMap(AiDifficulty difficulty, int playableCells, int? cellLimit = null) =>
         ForDifficulty(difficulty) with { CandidateCellLimit = cellLimit ?? DefaultCellLimitFor(playableCells) };
 
-    /// <summary>参数校验：N、M 至少为 1；K 非负。</summary>
+    /// <summary>参数校验：N、M 至少为 1；K 与停手阈值非负。</summary>
     public AiSearchConfig Validated()
     {
         if (CandidatePointCount < 1 || CandidateBatchCount < 1)
@@ -76,6 +96,11 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
         if (CandidateCellLimit < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(CandidateCellLimit), "候选格上限 K 须为非负整数（0 = 不限制）。");
+        }
+
+        if (PassThreshold < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(PassThreshold), "停手阈值须为非负整数（0 = 严格提高即保留）。");
         }
 
         return this;

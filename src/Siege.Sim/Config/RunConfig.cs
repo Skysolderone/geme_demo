@@ -83,6 +83,13 @@ public sealed record RunConfig
     /// </summary>
     public int? CandidateCellLimit { get; init; }
 
+    /// <summary>
+    /// AI 停手阈值（<see cref="AiSearchConfig.PassThreshold"/>，ai-eye D4）：<c>null</c> = 新建的局取 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
+    /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 0 重建。
+    /// 与候选格上限同口径：只作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家——显式的剪枝参数（含其中的阈值）原样生效。命令行 <c>--pass-threshold</c>。
+    /// </summary>
+    public int? PassThreshold { get; init; }
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -171,6 +178,11 @@ public sealed record RunConfig
             throw new ArgumentException("候选格上限须为非负整数（0 = 不限制）。");
         }
 
+        if (PassThreshold < 0)
+        {
+            throw new ArgumentException("停手阈值须为非负整数（0 = 严格提高即保留）。");
+        }
+
         if (FullEventSamplePermille is < 0 or > 1000)
         {
             throw new ArgumentException("抽样千分比须在 0..1000。");
@@ -202,15 +214,17 @@ public sealed record RunConfig
         this with { Players = [.. Players.Select(p => p with { Weights = p.Weights ?? EvaluationWeights.Default })] };
 
     /// <summary>
-    /// 把"按地图自动"的候选格上限落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K。
-    /// 已显式配置、或自动值为 0（小图）时原样返回——标准图上的配置记录与日志首部与引入本项之前逐字节相同。幂等。
+    /// 把"按地图自动"的候选格上限与缺省停手阈值落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K 与阈值。
+    /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>
+    /// （缺省非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分）。幂等。
     /// </summary>
     public RunConfig ResolvedFor(MapData map)
     {
         ArgumentNullException.ThrowIfNull(map);
-        return CandidateCellLimit is null && AiSearchConfig.DefaultCellLimitFor(map.PlayableCount) is > 0 and int auto
+        RunConfig resolved = CandidateCellLimit is null && AiSearchConfig.DefaultCellLimitFor(map.PlayableCount) is > 0 and int auto
             ? this with { CandidateCellLimit = auto }
             : this;
+        return resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
     }
 
     /// <summary>

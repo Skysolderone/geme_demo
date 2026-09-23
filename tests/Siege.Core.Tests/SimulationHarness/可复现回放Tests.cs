@@ -76,7 +76,8 @@ public class 可复现回放Tests
         Assert.Equal(typeof(SimAssertionException).FullName, failed.Failure.ExceptionType);
         Assert.Contains("第 5 个小回合", failed.Failure.Message);
         Assert.Equal(5, failed.Turns.Count);
-        Assert.Equal(config.ToJson(), failed.Header.Config.ToJson());
+        // ai-eye 段 B：首部配置里未配置的停手阈值落成实际生效的缺省值（ai-decision「停手阈值」：实际生效的阈值 MUST 写入日志首部）。
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold }).ToJson(), failed.Header.Config.ToJson());
         // 失败局强制保留完整事件流（含细粒度事件），不受 SnapshotsOnly 影响
         Assert.Equal(EventRetention.Full, failed.Header.Retention);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.Candidates);

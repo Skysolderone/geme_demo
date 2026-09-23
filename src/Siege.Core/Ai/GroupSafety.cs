@@ -63,9 +63,21 @@ public readonly record struct GroupSafety(int Liberties, int EyeValueSum, int Di
     /// <summary>分析一条棋串。<paramref name="life"/> 必须取自同一盘面的 <see cref="LifeShapeReport.Analyze"/>。</summary>
     public static GroupSafety Analyze(GameBoard board, GroupLife life)
     {
-        ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(life);
-        var liberties = board.LibertiesOf(life.Group).ToHashSet();
+        return Analyze(board, life.Group, life.EyeValueSum, life.Life == LifeState.Alive);
+    }
+
+    /// <summary>
+    /// 候选格预筛口径（ai-eye D5、段 C）：预筛阶段不做活形查询，眼值之和记 0、不视为已确定活形——只剩气数、分散气与危险三项。
+    /// 这不是眼判定：不看任何一格是不是眼，只是把眼信息这一项整个留空；进入完整枚举的格仍按 <see cref="Analyze(GameBoard, GroupLife)"/> 计。
+    /// </summary>
+    public static GroupSafety AnalyzeWithoutLife(GameBoard board, Group group) => Analyze(board, group, eyeValueSum: 0, isAlive: false);
+
+    private static GroupSafety Analyze(GameBoard board, Group group, int eyeValueSum, bool isAlive)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(group);
+        var liberties = board.LibertiesOf(group).ToHashSet();
         int dispersed = 0;
         foreach (Coord liberty in liberties)
         {
@@ -85,6 +97,6 @@ public readonly record struct GroupSafety(int Liberties, int EyeValueSum, int Di
             }
         }
 
-        return new GroupSafety(liberties.Count, life.EyeValueSum, dispersed, life.Group.Size, life.Life == LifeState.Alive);
+        return new GroupSafety(liberties.Count, eyeValueSum, dispersed, group.Size, isAlive);
     }
 }

@@ -69,7 +69,7 @@ public static class Program
         Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
-        Console.WriteLine("                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
+        Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（未校准）>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  地图标识：内置图 / 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
@@ -310,6 +310,7 @@ public static class Program
             TurnLimit = cli.GetInt("turn-limit", config.TurnLimit),
             ArtisanWeight = cli.GetInt("artisan-weight", config.ArtisanWeight),
             CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
+            PassThreshold = cli.Has("pass-threshold") ? cli.GetInt("pass-threshold", 0) : config.PassThreshold,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,
