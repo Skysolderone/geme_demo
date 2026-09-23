@@ -53,14 +53,14 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 系统 SHALL 按下式计算玩家总势力：
 
-`总势力 = 该玩家的独占空格数 + 所有己方棋串的军势值之和`
+`总势力 = 该玩家的计分独占空格数 + 所有己方棋串的军势值之和`
 
-独占空格见 `coverage-territory`「空格归属三态」，每个独占空格计 1 分；争议格与中立格 MUST NOT 计分。棋子所在格 SHALL 只计军势，MUST NOT 重复计入领地。领地分 MUST NOT 参与倍率。
+计分独占空格 = 该玩家独占（见 `coverage-territory`「空格归属三态」）且地表不是荒漠的空格，每格计 1 分；独占的荒漠格、争议格与中立格 MUST NOT 计分。棋子所在格 SHALL 只计军势，MUST NOT 重复计入领地；位于荒漠上的棋子 SHALL 照常计军势。领地分 MUST NOT 参与倍率。
 
 势力值 SHALL 只评价当前盘面，MUST NOT 可被消耗，MUST NOT 累计历史积分。
 
 #### Scenario: 领地与棋串相加
-- **WHEN** 某玩家有 12 个独占空格，棋串军势分别为 20 与 7
+- **WHEN** 某玩家有 12 个计分独占空格，棋串军势分别为 20 与 7
 - **THEN** 其总势力为 `12 + 20 + 7 = 39`
 
 #### Scenario: 争议格不计分
@@ -68,11 +68,11 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 - **THEN** 该格不向任何玩家计分
 
 #### Scenario: 孤立棋子的势力
-- **WHEN** 一枚没有任何竞争的孤立普通子位于平地中央，四周为空的可落子格，附近无敌子
+- **WHEN** 一枚没有任何竞争的孤立普通子位于平地中央，四周为空的可落子草地，附近无敌子
 - **THEN** 该玩家从此局部获得 5 点势力（棋子军势 1 + 四个独占空格各 1）
 
 #### Scenario: 领地分不参与倍率
-- **WHEN** 某玩家有 10 个独占空格，并拥有一条倍率为 2.25、基础军势 4、无位置加值的棋串
+- **WHEN** 某玩家有 10 个计分独占空格，并拥有一条倍率为 2.25、基础军势 4、无位置加值的棋串
 - **THEN** 其总势力为 `10 + ⌊4 × 2.25⌋ = 19`，10 点领地分 MUST NOT 被乘以 2.25
 
 #### Scenario: 势力不可消耗
@@ -82,6 +82,14 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 #### Scenario: 势力不累计
 - **WHEN** 某玩家在第 5 大回合势力为 80，随后棋串被摧毁至势力为 12
 - **THEN** 其当前势力为 12，系统 MUST NOT 保留 80 作为历史积分
+
+#### Scenario: 荒漠中的孤立棋子
+- **WHEN** 一枚没有任何竞争的孤立普通子位于荒漠格，四周为空的荒漠格，附近无敌子
+- **THEN** 该玩家从此局部获得 1 点势力（棋子军势 1；四个独占荒漠格不计分）
+
+#### Scenario: 荒漠与草地混合
+- **WHEN** 一枚孤立普通子位于草地，四个独占空格中两格是荒漠、两格是草地
+- **THEN** 该玩家从此局部获得 3 点势力
 
 ### Requirement: 势力明细
 

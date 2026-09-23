@@ -125,6 +125,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 6. 预置桥 MUST 位于深水格上；栅栏 MUST 位于两个几何相邻格之间。
 7. 任一出生区 MUST 至少有一条沿气边到中央入口的通路。
 8. 每个出生区 MUST 能容纳单名玩家前三大回合最多 9 枚基础部署（两档共用）。
+9. 出生区内的格子 MUST NOT 是荒漠、沼泽、岩台或浅滩（两档共用）：出生区是各玩家的起手阵地，新地表只出现在公共区域，避免起手条件因地表而不对等。
 
 "障碍占外接区域 25%–35%"这一项在 `terrain-model` 取消：深水与崖壁同样在压缩可落子空间，只数障碍已无意义，密度由可落子格区间把控。据点相关校验在 `restore-go-core-rules` 随据点一并取消。
 
@@ -155,6 +156,14 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 #### Scenario: 出生区被孤立
 - **WHEN** 某出生区的全部边缘都是崖壁或深水，没有气边通向中央入口
 - **THEN** 系统拒绝加载并指出该出生区编号
+
+#### Scenario: 出生区内有新地表
+- **WHEN** 地图数据把出生区 2 中的 `C3` 标为浅滩
+- **THEN** 系统拒绝加载并指出出生区编号 2、坐标 `C3` 与地表"浅滩"
+
+#### Scenario: 公共区域的新地表不受限
+- **WHEN** 地图数据在出生区之外标有荒漠、沼泽、岩台与浅滩格，其余校验均通过
+- **THEN** 系统接受该地图
 
 ### Requirement: 出生区归属与共享
 

@@ -11,6 +11,8 @@ TBD - created by archiving change artisan-terrain-edit. Update Purpose after arc
 2. **立栅**：目标为一条边，其**至少一端是匠人所在格的几何四邻格**（因此既包括匠人格与四邻之间的 4 条边，也包括四邻与更外一格之间的 12 条边）。改造后该边 SHALL 带栅栏。
 3. **烧林**：目标为一个林地格。改造后该格地表 SHALL 变为草地，高度、障碍与其上的信物不变。
 
+荒漠、沼泽、岩台、浅滩格 MUST NOT 是搭桥或烧林的目标；它们的地表在对局中 MUST NOT 被任何改造改变。立栅的目标是边，与边两侧格子的地表无关。
+
 系统 MUST NOT 提供逆向动作（拆桥、拆栅、把草地变林地、把陆地变水），也 MUST NOT 让改造改变高度或信物。
 
 #### Scenario: 搭桥使深水可落子
@@ -28,6 +30,18 @@ TBD - created by archiving change artisan-terrain-edit. Update Purpose after arc
 #### Scenario: 没有逆向动作
 - **WHEN** 玩家试图对一个已架桥的深水格或一个已有栅栏的边提交改造
 - **THEN** 该批次非法，原因指出目标已被改造过
+
+#### Scenario: 新地表不是格改造目标
+- **WHEN** 匠人的四个几何四邻依次是荒漠、沼泽、岩台、浅滩格，且没有深水与林地
+- **THEN** 该匠人的合法改造目标中没有任何格目标，只有立栅的边目标
+
+#### Scenario: 对新地表提交格改造被拒
+- **WHEN** 玩家对一个与匠人几何相邻的浅滩格提交搭桥，或对一个相邻的沼泽格提交烧林
+- **THEN** 该批次非法，原因指出目标地表不适用于该改造动作
+
+#### Scenario: 新地表两侧可以立栅
+- **WHEN** 匠人与相邻的岩台格之间没有栅栏
+- **THEN** 这条边是合法的立栅目标
 
 ### Requirement: 匠人落子即改造
 

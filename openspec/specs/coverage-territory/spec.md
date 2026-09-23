@@ -5,7 +5,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 ## Requirements
 ### Requirement: 棋子向四邻接相邻格提供覆盖
 
-系统 SHALL 让每枚棋子按 `terrain`「覆盖关系」向格子提供属于该棋子所有者的覆盖：通常是几何相邻格；遇到一格宽的深水时落到对岸那一格；不向林地、障碍、未架桥的深水提供覆盖；不向比自身高 2 的格提供覆盖。覆盖 MUST NOT 沿斜向传播，MUST NOT 穿过障碍或棋盘外沿，MUST NOT 被栅栏阻挡。
+系统 SHALL 让每枚棋子按 `terrain`「覆盖关系」向格子提供属于该棋子所有者的覆盖：通常是几何相邻格；遇到一格宽的深水时落到对岸那一格；位于岩台上的棋子另覆盖四个方向直线距离 2 的格；位于沼泽上的棋子不提供任何覆盖。不向林地、障碍、未架桥的深水提供覆盖；不向比自身高 2 的格提供覆盖。覆盖 MUST NOT 沿斜向传播，MUST NOT 穿过障碍或棋盘外沿，MUST NOT 被栅栏阻挡。
 
 覆盖关系 SHALL 在每次盘面变化后实时重算，MUST NOT 保留历史覆盖状态。
 
@@ -20,6 +20,14 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 #### Scenario: 覆盖判定与气边判定分离
 - **WHEN** 玩家 A 的棋子位于 h=2 的 `F7`，`F6` 为 h=0 的空格
 - **THEN** `F6` 获得玩家 A 的覆盖，但 `F6` 不是 `F7` 所在棋串的气
+
+#### Scenario: 沼泽上的棋子不提供覆盖
+- **WHEN** 玩家 A 唯一的一枚棋子位于沼泽格 `F6`，四周为空草地
+- **THEN** 盘面上没有任何格获得玩家 A 的覆盖
+
+#### Scenario: 岩台上的棋子覆盖更远
+- **WHEN** 玩家 A 的一枚棋子位于平地中央的岩台格 `F6`，周围为同高的空草地
+- **THEN** `E6`、`G6`、`F5`、`F7`、`D6`、`H6`、`F4`、`F8` 八格获得玩家 A 的覆盖
 
 ### Requirement: 占据优先于覆盖
 
@@ -39,11 +47,13 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 系统 SHALL 按下列规则判定每个空的可落子格的归属：
 
-- 只受到一名玩家覆盖 → 该玩家**独占**，向该玩家计 1 点领地分。
+- 只受到一名玩家覆盖 → 该玩家**独占**；若该格地表不是荒漠，向该玩家计 1 点领地分。
 - 同时受到多名玩家覆盖 → **争议**，不属于任何玩家，不计分。
 - 未受到任何覆盖 → **中立**，不属于任何玩家，不计分。
 
 空格归属 SHALL 同时用于领地计分（见 `power-score`「总势力」）、信物的控制判定和盘面层归属读法的展示。领地计分 MUST 直接使用本判定的结果，MUST NOT 另行统计覆盖。
+
+荒漠格的归属 SHALL 与其他空格一样判定（可以被独占、争议或中立），独占的荒漠格照常参与信物控制与盘面层归属读法，只是 MUST NOT 计领地分。
 
 障碍格与未架桥的深水格 MUST NOT 属于任何玩家。林地格不是覆盖目标（见 `terrain`「覆盖关系」），空的林地格 SHALL 恒为中立。
 
@@ -68,6 +78,14 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 #### Scenario: 空林地格恒为中立
 - **WHEN** 玩家 A 的棋子与一个空的林地格几何相邻，且无其他玩家在附近
 - **THEN** 该林地格判定为中立，不向 A 计分
+
+#### Scenario: 荒漠独占不计分
+- **WHEN** 某空的荒漠格只被玩家 A 的棋子覆盖
+- **THEN** 该格判定为玩家 A 独占，但不向 A 计领地分
+
+#### Scenario: 荒漠上的信物照常被控制
+- **WHEN** 某信物格的地表是荒漠，该格为空且只被玩家 A 覆盖
+- **THEN** 该信物由玩家 A 控制，与该格位于草地时相同
 
 ### Requirement: 唯一覆盖查询
 
