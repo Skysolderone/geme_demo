@@ -107,3 +107,19 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 **工作树里非本任务的改动**（未提交，一直未碰）：`src/godot/scripts/GameRoot.cs` 的 `--export-parts` 一段、`src/godot/scripts/PartExport.cs`、`src/godot/parts/`。
 
 **下一步**：先裁决 R8 → ③ `ai-eye`（0/22）。
+
+
+## Session: 2026-09-23 — ③ ai-eye 段 A–C 完成，暂停于段 D 前
+
+**状态**：ai-eye 段 A–C 实施、前台复核、提交；**按用户"不要并行处理"暂停**（另一会话在 `.claude/worktrees/terrain-surfaces` 做 `terrain-surfaces`）。Trellis 任务 `09-23-ai-eye` 仍为当前任务（未归档）。测试 1305 通过 / 4 门控跳过，两处构建 0 警告，`openspec validate ai-eye --strict` 通过。
+
+**提交链**：`e4aa4b4` 段 A（九维、眼位 / 威胁、Safety 活形中性）→ `048c069` 段 B（活形硬约束、停手阈值、CLI `--pass-threshold`）→ `ee739b7` 段 C（预筛七维口径、决策内活形缓存、评价版本 3）。实施裁决 R1–R14 与待裁项见 `openspec/changes/ai-eye/design.md`「裁决记录」。
+
+**段 D（校准）开工前必须先裁决**：
+1. life-shape R8 活形过易（200 局：单子活形 77%、贴地形小空区眼 85%）；段 B 后 20 局整局无提子 19/20。若改规则 → 先另开 change。
+2. terrain-surfaces（浅滩改气与眼空间）是否先于校准合入——若是，校准要在新地表规则上做；两边都改 AI 候选剪枝 / 预筛，合并可能冲突。
+3. 预筛"七维"口径（现行：安全维不查活形、眼值记 0）。
+4. R10 旧日志"只重放落子结果"未做，是否另立任务。
+5. 段 C 新增 / 改写的规格增量（「候选格上限」「活形分析的决策内缓存」）待过目。
+
+**参考数字**（未校准）：段 B 后 v5 20 局平均结束 7.70 大回合、截断 0；段 C 耗时对 c18ad97 标准图 0.45×、边疆图 1.05×；边疆图基线本身约 2.4 s / 小回合，大量跑边疆图建议另开性能任务。简单难度 v5 仍有 1/20 局打到 600 小回合。
