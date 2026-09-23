@@ -13,10 +13,12 @@ public sealed record EvaluationBreakdown(ImmutableArray<BigInteger> Raw, Evaluat
     public const int DimensionCount = 9;
 
     /// <summary>
-    /// AI 评价版本，写入跑局日志首部（ai-eye 1.1）。1 = 七维（ai-eye 之前，旧日志首部缺该字段）；2 = ai-eye 九维（眼位、威胁）。
-    /// 维度数或任一维原始值的算法变化 MUST 递增它：旧版本日志的 AI 决策不能用新评价逐步重现。
+    /// AI 评价版本，写入跑局日志首部（ai-eye 1.1）。1 = 七维（ai-eye 之前，旧日志首部缺该字段）；2 = ai-eye 九维（眼位、威胁）；
+    /// 3 = 活形硬约束 + 停手阈值（ai-eye 段 B，裁决 R10）+ 预筛只算七维（段 C）。
+    /// 维度数、任一维原始值的算法、或"哪些候选参与打分 / 保留"的规则变化 MUST 递增它：旧版本日志的 AI 决策不能用新评价逐步重现，
+    /// 回放按首部版本处理（版本不同即在首部报分歧、不重跑）。
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>全零分解（空批次 / Pass）。</summary>
     public static EvaluationBreakdown Zero(EvaluationWeights weights) => new([.. new BigInteger[DimensionCount]], weights);

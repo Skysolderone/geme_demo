@@ -28,6 +28,8 @@ public sealed class HeuristicTurnController : ITurnController
     private readonly Func<MatchPublicView> _observe;
     private readonly RandomStream _perturbation;
     private readonly Func<RelicPublicState, int>? _relicValue;
+    private readonly Func<GameBoard, LifeShapeReport>? _lifeQuery;
+    private readonly bool _cacheLife;
     private readonly List<string> _decisions = [];
 
     public HeuristicTurnController(
@@ -41,7 +43,10 @@ public sealed class HeuristicTurnController : ITurnController
     {
     }
 
-    /// <summary>调试旁路（<c>internal</c>）：<paramref name="relicValue"/> 可读真实信物内容。正式构造不暴露此参数。</summary>
+    /// <summary>
+    /// 调试旁路（<c>internal</c>）：<paramref name="relicValue"/> 可读真实信物内容。正式构造不暴露此参数。
+    /// 测试接缝：<paramref name="lifeQuery"/> 替换活形查询（计数桩），<paramref name="cacheLife"/> 为 <c>false</c> 关闭决策内活形缓存（见 <see cref="BatchEvaluator"/>）。
+    /// </summary>
     internal HeuristicTurnController(
         PlayerId player,
         Func<MatchPublicView> observe,
@@ -49,7 +54,9 @@ public sealed class HeuristicTurnController : ITurnController
         AiDifficulty difficulty,
         EvaluationWeights? weights,
         AiSearchConfig? config,
-        Func<RelicPublicState, int>? relicValue)
+        Func<RelicPublicState, int>? relicValue,
+        Func<GameBoard, LifeShapeReport>? lifeQuery = null,
+        bool cacheLife = true)
     {
         Player = player;
         _observe = observe ?? throw new ArgumentNullException(nameof(observe));
@@ -58,6 +65,8 @@ public sealed class HeuristicTurnController : ITurnController
         Weights = weights ?? EvaluationWeights.Default;
         Config = (config ?? AiSearchConfig.ForDifficulty(difficulty)).Validated();
         _relicValue = relicValue;
+        _lifeQuery = lifeQuery;
+        _cacheLife = cacheLife;
     }
 
     public PlayerId Player { get; }
@@ -85,8 +94,10 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>最近一次部署的选择；尚未部署过为 <c>null</c>。</summary>
     public CandidateBatch? LastChoice { get; private set; }
 
-    /// <summary>为当前公开快照建立评价器（供外部检视单个批次的分解）。</summary>
-    public BatchEvaluator CreateEvaluator() => new(Player, _observe(), Weights, Config.ImmediateOnly, _relicValue);
+    /// <summary>
+    /// 为当前公开快照建立评价器（供外部检视单个批次的分解）。<see cref="Deploy"/> 每次决策新建一个：活形分析的决策内缓存挂在评价器上，随之丢弃（ai-eye D5）。
+    /// </summary>
+    public BatchEvaluator CreateEvaluator() => new(Player, _observe(), Weights, Config.ImmediateOnly, _relicValue, _lifeQuery, _cacheLife);
 
     // ---------- 第 2 阶段 ----------
 
@@ -301,11 +312,12 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>
     /// 候选格预筛（frontier-map 裁决 12）：用代表类型（持有类型里枚举序最前的一种）、不带改造，对每格预演一次得格分，
-    /// 取前 K 格（同分按坐标序），按坐标序返回。评估函数原样复用；不消费随机流。
+    /// 取前 K 格（同分按坐标序），按坐标序返回。不消费随机流。
+    /// 格分只算既有七维、不做活形查询（ai-eye D5，<see cref="BatchEvaluator.EvaluatePrefilter"/>）；进入完整枚举的 ≤ K 格才算九维。
     /// 代表类型在某格落不下（自杀手等）而手里有匠人时，该格退而用匠人逐个合法改造目标预演，格分取其中最高的合法总分。
     /// </summary>
     /// <remarks>
-    /// <para>提子点与救命点不另设豁免：提子走"敌方损失"维、补气走"安全"维，两维都与落下的类型无关，代表类型的格分已经把它们排在前面
+    /// <para>提子点与救命点不另设豁免：提子走"敌方损失"维、补气走"安全"维（预筛口径下安全维只看气数、分散气与危险，见 <see cref="GroupSafety.AnalyzeWithoutLife"/>），两维都与落下的类型无关，代表类型的格分已经把它们排在前面
     /// （由 <c>候选格上限Tests.小K下仍找到妙手</c> 守门）。</para>
     /// <para>匠人回退：自杀手判定与类型无关（六种类型在盘面上气的口径相同），不带改造时代表类型落不下的格，别的类型同样落不下；
     /// 唯一的例外是匠人的改造先于自杀手判定（terrain-edit T-3：搭桥补气、立栅切断敌串）。这类"只有带改造的匠人才落得下"的格
@@ -331,7 +343,7 @@ public sealed class HeuristicTurnController : ITurnController
             }
 
             RehearsalResult result = rehearse();
-            return result.IsLegal ? evaluator.Evaluate(batch.Placements, result, context).Total : null;
+            return result.IsLegal ? evaluator.EvaluatePrefilter(batch.Placements, result, context).Total : null;
         }
 
         foreach (Coord cell in cells)
