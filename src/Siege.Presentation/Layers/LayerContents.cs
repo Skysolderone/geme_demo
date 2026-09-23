@@ -69,8 +69,12 @@ public enum TerritoryState
     Neutral,
 }
 
-/// <summary>盘面层归属读法的一格（障碍格不列出）。<see cref="Owner"/> 只在占据与独占时非空。</summary>
-public sealed record TerritoryCellView(Coord Coord, TerritoryState State, PlayerId? Owner);
+/// <summary>
+/// 盘面层归属读法 / 势力层独占格的一格（障碍格不列出）。<see cref="Owner"/> 只在占据与独占时非空。
+/// <see cref="Scored"/> 只在势力层有意义：独占但不计领地分的格（荒漠，terrain-surfaces）为 <c>false</c>，取自 Core 势力明细的 <see cref="PlayerPower.ScoredCells"/>；
+/// 盘面层归属读法只读归属，恒为 <c>true</c>。
+/// </summary>
+public sealed record TerritoryCellView(Coord Coord, TerritoryState State, PlayerId? Owner, bool Scored = true);
 
 /// <summary>盘面层的归属读法。集合来自 Core 覆盖表（按覆盖关系导出）；与棋串读法的差集见 <see cref="Diff"/>。</summary>
 public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cells, BoardReadingDiff Diff) : LayerContent(TacticalLayer.Board);
@@ -374,7 +378,7 @@ public static class TacticalLayers
         return new PowerLayerContent(
             [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), Math.Min(g.MultiplierCount, GroupScoreView.MaxHeatLevel)))],
             [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.TerritoryScore, p.GroupScore, power.RankOf(p.Player), Labels.Status(p.Status)))],
-            [.. power.Players.SelectMany(p => p.ExclusiveCells.Select(c => new TerritoryCellView(c, TerritoryState.Exclusive, p.Player))).OrderBy(c => c.Coord)]);
+            [.. power.Players.SelectMany(p => p.ExclusiveCells.Select(c => new TerritoryCellView(c, TerritoryState.Exclusive, p.Player, p.ScoredCells.Contains(c)))).OrderBy(c => c.Coord)]);
     }
 
     public static RelicLayerContent Relics(PublicWorld world)

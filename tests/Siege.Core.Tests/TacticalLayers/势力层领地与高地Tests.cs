@@ -47,7 +47,7 @@ public class 势力层领地与高地Tests
         foreach (PlayerPowerRowView row in layer.Players)
         {
             PlayerPower detail = truth.Of(row.Player);
-            Assert.Equal(detail.ExclusiveCells.Length, row.TerritoryScore);
+            Assert.Equal(detail.ScoredCells.Length, row.TerritoryScore);
             Assert.Equal(detail.Total, row.Total);
 
             // 独立复算：总势力 = 领地分 + 该玩家全部棋串军势（不回调被测视图）。
@@ -63,6 +63,26 @@ public class 势力层领地与高地Tests
 
         Assert.Equal(4, layer.Players.Length);
         Assert.Contains(layer.Players, r => r.TerritoryScore > 0);
+    }
+
+    [Fact]
+    public void 荒漠独占不进领地分()
+    {
+        // 规格 terrain-surfaces · tactical-layers「荒漠独占不进领地分」：A 独占 5 个空草地格与 3 个空荒漠格 → 领地分显示 5，
+        // 3 个荒漠格以"独占、不计分"的样式出现（Scored = false），且仍归 A。
+        // 布置：P0 占 C5–E5 一排 3 子 → 独占 B5、F5、C4、D4、E4、C6、D6、E6 共 8 格，其中 B5、C4、C6 为荒漠。
+        // 变异验证 M-S1c（实跑）：LayerContents.Power 的 Scored 恒为 true → 本测试红。
+        TerrainData terrain = TestMaps.Terrain(surfaces: [("B5", Surface.Desert), ("C4", Surface.Desert), ("C6", Surface.Desert)]);
+        MatchFlow match = MatchFixtures.Started(terrain).AtRound(5).Stones(P0, "C5", "D5", "E5");
+
+        var layer = (PowerLayerContent)match.World(P1).Layer(TacticalLayer.Power);
+
+        TerritoryCellView[] mine = [.. layer.Territory.Where(c => c.Owner == P0)];
+        Assert.Equal(8, mine.Length);
+        Assert.Equal(["B5", "C4", "C6"], mine.Where(c => !c.Scored).Select(c => c.Coord.ToNotation()).Order(StringComparer.Ordinal));
+        Assert.Equal(5, mine.Count(c => c.Scored));
+        Assert.Equal(5, layer.Players.Single(r => r.Player == P0).TerritoryScore);
+        Assert.Equal(5 + 3, layer.Players.Single(r => r.Player == P0).Total);
     }
 
     [Fact]

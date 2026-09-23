@@ -11,8 +11,9 @@ namespace Siege.Core.Scoring;
 /// <remarks>
 /// <para>公式（restore-go-core-rules D1）：<c>棋串军势 = ⌊(基础军势总和 + 位置加值) × 3^n / 2^n⌋</c>，<c>n = 倍增子数量</c>、不封顶；
 /// 位置加值 = 连珠 + 协同 + 高地，三项先求和、再与基础军势相加、最后整体乘倍率，对每条棋串各取整一次。</para>
-/// <para><c>总势力 = 独占空格数 + 全部棋串军势之和</c>（D2）：独占空格直接取 <see cref="CoverageMap.ExclusiveCellsOf"/> 的空格归属结果，
-/// 本类不另行统计覆盖；争议格、中立格（含空林地格）不计分，棋子所在格只算军势，领地分不进倍率，不对总势力二次取整。</para>
+/// <para><c>总势力 = 计分独占空格数 + 全部棋串军势之和</c>（D2）：独占空格直接取 <see cref="CoverageMap.ExclusiveCellsOf"/> 的空格归属结果，
+/// 本类不另行统计覆盖；再经 <see cref="ScoresTerritory"/> 过滤掉荒漠（terrain-surfaces D4）。争议格、中立格（含空林地格）不计分，
+/// 棋子所在格只算军势，领地分不进倍率，不对总势力二次取整。</para>
 /// <para>棋串军势与总势力用 <see cref="BigInteger"/>：不溢出、不截断、不饱和；计分路径不出现浮点。</para>
 /// <para>玩家状态只用于名次过滤与明细标记；覆盖与军势对弃赛者、出局者的遗留棋子一视同仁（D7）。</para>
 /// <para>规格：openspec/changes/restore-go-core-rules/specs/power-score</para>
@@ -25,6 +26,16 @@ public static class PowerCalculator
     /// </summary>
     public static BigInteger GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount) =>
         new Multiplier(multiplierCount).Apply((BigInteger)baseTotal + positionBonus);
+
+    /// <summary>
+    /// 独占空格是否计领地分（terrain-surfaces D1 / D4 的唯一落点）：荒漠格可以被独占（归属、信物控制照常），但不计分。
+    /// 过滤只在"归属 → 领地分"这一步，空格归属三态本身不看地表。
+    /// </summary>
+    public static bool ScoresTerritory(MapData map, Coord cell)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return map.SurfaceAt(cell) != Surface.Desert;
+    }
 
     /// <summary>计算一条棋串的军势明细。</summary>
     public static GroupPower Evaluate(GameBoard board, Group group)
@@ -85,6 +96,7 @@ public static class PowerCalculator
         {
             PlayerStatus status = roster is null ? PlayerStatus.Active : roster[player];
             ImmutableArray<Coord> exclusive = coverage.ExclusiveCellsOf(player);
+            ImmutableArray<Coord> scored = [.. exclusive.Where(c => ScoresTerritory(board.Map, c))];
             ImmutableArray<GroupPower> groups = allGroups
                 .Where(g => g.Owner == player)
                 .Select(g => Evaluate(board, g))
@@ -96,8 +108,8 @@ public static class PowerCalculator
                 groupTotal += g.Power;
             }
 
-            // 领地分 = 独占空格数：直接取空格归属结果（coverage-territory「空格归属三态」），不另行统计覆盖。
-            details.Add(new PlayerPower(player, status, exclusive, groups, exclusive.Length + groupTotal));
+            // 领地分 = 计分独占空格数：直接取空格归属结果（coverage-territory「空格归属三态」），不另行统计覆盖；荒漠只在这里被滤掉。
+            details.Add(new PlayerPower(player, status, exclusive, scored, groups, scored.Length + groupTotal));
         }
 
         ImmutableArray<PlayerPower> playerPowers = details.ToImmutable();

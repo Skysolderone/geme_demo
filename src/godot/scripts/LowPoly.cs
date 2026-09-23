@@ -273,6 +273,48 @@ public static class LowPoly
     }
 
     /// <summary>
+    /// 荒漠格的点缀（terrain-surfaces 段 1）：两道贴地沙纹 + 一株带侧臂的仙人掌 + 一株矮仙人掌 + 一副贴地兽骨，点缀分放三个角，高度压在 0.25 以内、
+    /// 全部落在棋子底座（半径 0.36）之外，不遮挡落点、气与归属标记。仙人掌是"竖柱 + 侧臂"，与林地的锥形小树、沼泽的芦苇轮廓都不同。
+    /// 返回节点原点在地砖上表面；<paramref name="variant"/> 决定放哪一组对角与朝向。
+    /// </summary>
+    public static Node3D Desert(int variant)
+    {
+        var root = new Node3D { Name = "Desert" };
+        StandardMaterial3D cactus = Visuals.Matte(Visuals.Cactus, 1f);
+        StandardMaterial3D bone = Visuals.Matte(Visuals.Bone, 1f);
+        StandardMaterial3D ripple = Visuals.Matte(Visuals.TileDesert.Darkened(0.16f), 1f);
+        float sx = variant % 2 == 0 ? 1f : -1f;
+
+        // 沙纹：两道贴地的深沙色细条，斜穿地砖中部——灰度下也读得出"这块地是沙"，且贴地不遮挡任何标记。
+        for (int i = -1; i <= 1; i += 2)
+        {
+            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.62f, 0.006f, 0.035f) }, ripple,
+                new Vector3(0f, 0.003f, i * 0.12f), new Vector3(0f, 18f * sx, 0f)));
+        }
+
+        // 仙人掌：主柱 + 一侧的曲臂（短横段 + 竖段），顶高 0.24；放在一个角上。
+        var cactusAt = new Vector3(0.30f * sx, 0f, -0.29f);
+        float arm = variant % 3 == 0 ? -1f : 1f;
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.06f, Height = 0.24f, RadialSegments = 6, Rings = 0 }, cactus,
+            cactusAt + new Vector3(0f, 0.12f, 0f)));
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.09f, 0.045f, 0.045f) }, cactus,
+            cactusAt + new Vector3(0.065f * arm, 0.10f, 0f)));
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.03f, BottomRadius = 0.035f, Height = 0.11f, RadialSegments = 5, Rings = 0 }, cactus,
+            cactusAt + new Vector3(0.11f * arm, 0.15f, 0f)));
+
+        // 第二株矮仙人掌放在对角，只有主柱（顶高 0.14）。
+        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.04f, BottomRadius = 0.05f, Height = 0.14f, RadialSegments = 6, Rings = 0 }, cactus,
+            new Vector3(-0.30f * sx, 0.07f, 0.30f)));
+
+        // 兽骨：两根交叉的细骨贴地横放在第三个角，高 0.035。
+        var boneAt = new Vector3(0.28f * sx, 0f, 0.30f);
+        float turn = (variant * 37f) % 180f;
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.22f, 0.035f, 0.045f) }, bone, boneAt + new Vector3(0f, 0.018f, 0f), new Vector3(0f, turn, 0f)));
+        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.14f, 0.03f, 0.04f) }, bone, boneAt + new Vector3(0f, 0.02f, 0f), new Vector3(0f, turn + 70f, 0f)));
+        return root;
+    }
+
+    /// <summary>
     /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
     /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
     /// 返回节点原点在缝中心、地砖上表面。

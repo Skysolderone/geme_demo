@@ -23,6 +23,7 @@ public class 新地表判断唯一Tests
         "Siege.Core/Board/MapFile.cs",       // 映射：地表 ↔ 地图文件字符码
         "Siege.Core/Board/MapValidator.cs",  // 校验：map-definition 第 9 条（出生区内无新地表）
         "Siege.Core/Board/Maps/FrontierSurfaces.cs",  // 生成：map-generation 新地表投放
+        "Siege.Core/Scoring/PowerCalculator.cs",      // 规则：段 1 荒漠——独占计分谓词 ScoresTerritory
         "Siege.Sim/Program.cs",              // 映射：终端文本图字符
         "godot/scripts/BoardView.cs",        // 映射：地砖色
     ];

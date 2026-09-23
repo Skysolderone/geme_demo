@@ -211,4 +211,50 @@ public class 总势力Tests
             typeof(PlayerPower).GetProperties().Select(p => p.Name),
             name => historyWords.Any(w => name.Contains(w, StringComparison.OrdinalIgnoreCase)));
     }
+
+    // ---------- terrain-surfaces 段 1：荒漠 ----------
+
+    [Fact]
+    public void 荒漠中的孤立棋子()
+    {
+        // 设计文档 §3.1 新地表算例「荒漠独占不计分」/ 规格 power-score「荒漠中的孤立棋子」：
+        // 荒漠 F6 上的孤立普通子、四周空荒漠 → 势力 1（军势 1；四个独占荒漠格不计分）；同样布置在草地上为 5（「孤立棋子的势力」）。
+        // 变异验证 M-S1b（实跑）：Total 仍按 ExclusiveCells.Length 计 → 本测试红。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Desert), ("F5", Surface.Desert), ("E6", Surface.Desert), ("G6", Surface.Desert), ("F7", Surface.Desert)]))
+            .Place("F6", TestMaps.P0);
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal(["F5", "E6", "G6", "F7"], p0.ExclusiveCells.Notations());
+        Assert.Empty(p0.ScoredCells);
+        Assert.Equal(0, p0.TerritoryScore);
+        Assert.Equal((BigInteger)1, p0.GroupScore);
+        Assert.Equal(1, p0.Total);
+    }
+
+    [Fact]
+    public void 荒漠与草地混合()
+    {
+        // 规格 Scenario「荒漠与草地混合」：草地孤子四个独占空格中两格荒漠（E6、G6）、两格草地 → 势力 3。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("E6", Surface.Desert), ("G6", Surface.Desert)])).Place("F6", TestMaps.P0);
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal(["F5", "F7"], p0.ScoredCells.Notations());
+        Assert.Equal(2, p0.TerritoryScore);
+        Assert.Equal(3, p0.Total);
+    }
+
+    [Fact]
+    public void 荒漠上的棋子照常计军势()
+    {
+        // 规格 power-score「总势力」：位于荒漠上的棋子 SHALL 照常计军势——荒漠只影响空格的领地分。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Desert)])).Place("F6", TestMaps.P0);
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal((BigInteger)1, p0.GroupScore);
+        Assert.Equal(4, p0.TerritoryScore);
+        Assert.Equal(5, p0.Total);
+    }
 }

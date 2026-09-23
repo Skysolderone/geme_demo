@@ -230,6 +230,14 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(trees);
             }
 
+            // 新地表的形状提示（terrain-surfaces S-8）：和林地的小树一样放在装饰层，渲染在一切判读信息之下。
+            if (playable && cell.Surface == Surface.Desert)
+            {
+                Node3D desert = LowPoly.Desert(variant++);
+                desert.Position = center;
+                _decoration.AddChild(desert);
+            }
+
             StandardMaterial3D material = Visuals.Matte(color);
             _tileMaterials[cell.Coord] = material;
             _tileBase[cell.Coord] = color;
@@ -786,9 +794,10 @@ public sealed partial class BoardView : Node3D
     {
         // 领地分：独占空格按独占者的阵营着色（restore-go-core-rules 段 E，tasks 5.4 / 5.5）。格子来自势力明细的独占集合，
         // 争议格与中立格不在其中、不着色——它们不是任何玩家的得分，与独占格一眼可分。
+        // 独占但不计分的格（荒漠，terrain-surfaces）只淡淡着色：看得出归谁，也看得出不进领地分。
         foreach (TerritoryCellView cell in power.Territory)
         {
-            AddTint(cell.Coord, Visuals.FactionColorOf(cell.Owner!.Value), 0.5f);
+            AddTint(cell.Coord, Visuals.FactionColorOf(cell.Owner!.Value), cell.Scored ? 0.5f : 0.18f);
         }
 
         // 倍率热区：柱高按显示档位 HeatLevel（min(倍增子数量, 3)），只是显示档位，不是倍率封顶。

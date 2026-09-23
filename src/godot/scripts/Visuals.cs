@@ -36,6 +36,12 @@ public static class Visuals
     /// </summary>
     public static readonly Color TileDesert = Color.Color8(242, 226, 170);
 
+    /// <summary>仙人掌（荒漠装饰）：偏灰的橄榄绿，比林地树冠浅、比沼泽亮；轮廓是竖柱带侧臂，不是锥形树冠。</summary>
+    public static readonly Color Cactus = Color.Color8(110, 150, 86);
+
+    /// <summary>兽骨（荒漠装饰）：暖白，贴地横放，灰度下是地砖上最亮的一小块。</summary>
+    public static readonly Color Bone = Color.Color8(238, 230, 212);
+
     /// <summary>沼泽地表：暗橄榄泥色，去色后（≈93）比林地（≈123）更暗；形状提示是水洼与芦苇，不用锥形树冠（段 2 补装饰）。</summary>
     public static readonly Color TileMarsh = Color.Color8(92, 98, 70);
 
