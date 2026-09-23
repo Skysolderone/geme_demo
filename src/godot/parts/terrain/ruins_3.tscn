@@ -1,0 +1,55 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_837d71_r100.tres" id="1_mjfjm"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_a0988a_r100.tres" id="2_vw42m"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_debbm"]
+size = Vector3(0.62, 0.07, 0.62)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jjopk"]
+size = Vector3(0.24, 0.06, 0.24)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_pf5ul"]
+top_radius = 0.085
+bottom_radius = 0.095
+height = 0.46
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_8e0yp"]
+top_radius = 0.08
+bottom_radius = 0.08
+height = 0.34
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_frkk5"]
+size = Vector3(0.16, 0.1, 0.14)
+
+[node name="Ruins3" type="Node3D" unique_id=758716055]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 0, 0, 0)
+
+[node name="@MeshInstance3D@29" type="MeshInstance3D" parent="." unique_id=1330243069]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.035, 0)
+material_override = ExtResource("1_mjfjm")
+mesh = SubResource("BoxMesh_debbm")
+
+[node name="@MeshInstance3D@30" type="MeshInstance3D" parent="." unique_id=1732456484]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.1, -0.12)
+material_override = ExtResource("2_vw42m")
+mesh = SubResource("BoxMesh_jjopk")
+
+[node name="@MeshInstance3D@31" type="MeshInstance3D" parent="." unique_id=243016820]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.36, -0.12)
+material_override = ExtResource("2_vw42m")
+mesh = SubResource("CylinderMesh_pf5ul")
+
+[node name="@MeshInstance3D@32" type="MeshInstance3D" parent="." unique_id=1335731691]
+transform = Transform3D(0.81915206, 0.57357645, -2.5071824e-08, 0, -4.371139e-08, -1, -0.57357645, 0.81915206, -3.5806274e-08, 0.12, 0.15, 0.14)
+material_override = ExtResource("2_vw42m")
+mesh = SubResource("CylinderMesh_8e0yp")
+
+[node name="@MeshInstance3D@33" type="MeshInstance3D" parent="." unique_id=1949850836]
+transform = Transform3D(0.89748764, -0.12613367, 0.42261827, 0.1391731, 0.99026805, 0, -0.41850537, 0.058817096, 0.90630776, 0.18, 0.12, -0.18)
+material_override = ExtResource("1_mjfjm")
+mesh = SubResource("BoxMesh_frkk5")

@@ -1,0 +1,55 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_837d71_r100.tres" id="1_0h2iw"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_a0988a_r100.tres" id="2_mpm0m"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_iqnhd"]
+size = Vector3(0.62, 0.07, 0.62)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7x2kc"]
+size = Vector3(0.24, 0.06, 0.24)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qys7w"]
+top_radius = 0.085
+bottom_radius = 0.095
+height = 0.46
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_xb3sp"]
+top_radius = 0.08
+bottom_radius = 0.08
+height = 0.34
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_6c1ob"]
+size = Vector3(0.16, 0.1, 0.14)
+
+[node name="Ruins1" type="Node3D" unique_id=931585378]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="@MeshInstance3D@13" type="MeshInstance3D" parent="." unique_id=1488190969]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.035, 0)
+material_override = ExtResource("1_0h2iw")
+mesh = SubResource("BoxMesh_iqnhd")
+
+[node name="@MeshInstance3D@14" type="MeshInstance3D" parent="." unique_id=1304022524]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.1, -0.12)
+material_override = ExtResource("2_mpm0m")
+mesh = SubResource("BoxMesh_7x2kc")
+
+[node name="@MeshInstance3D@15" type="MeshInstance3D" parent="." unique_id=1937201378]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.36, -0.12)
+material_override = ExtResource("2_mpm0m")
+mesh = SubResource("CylinderMesh_qys7w")
+
+[node name="@MeshInstance3D@16" type="MeshInstance3D" parent="." unique_id=1516153741]
+transform = Transform3D(0.81915206, 0.57357645, -2.5071824e-08, 0, -4.371139e-08, -1, -0.57357645, 0.81915206, -3.5806274e-08, 0.12, 0.15, 0.14)
+material_override = ExtResource("2_mpm0m")
+mesh = SubResource("CylinderMesh_xb3sp")
+
+[node name="@MeshInstance3D@17" type="MeshInstance3D" parent="." unique_id=676696382]
+transform = Transform3D(0.89748764, -0.12613367, 0.42261827, 0.1391731, 0.99026805, 0, -0.41850537, 0.058817096, 0.90630776, 0.18, 0.12, -0.18)
+material_override = ExtResource("1_0h2iw")
+mesh = SubResource("BoxMesh_6c1ob")

@@ -97,7 +97,19 @@ public sealed partial class GameRoot : Node3D
             int? cellLimit = args.Value<int>("cell-limit", "非负整数（AI 候选格上限，0 = 不限制）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
             string? mapId = args.Text("map", "地图标识或地图文件路径");
             ReadScreenshotArg(args.Text("screenshot", "截图路径[:第几帧]"));
+
+            // --export-parts=<目录>：把地形 / 设施部件导出成 .tscn（PartExport），导完即退出，不建局。
+            string? exportParts = args.Text("export-parts", "导出目录（如 res://parts/terrain）");
             args.EnsureRecognized();
+            if (exportParts is not null)
+            {
+                SetProcess(false);
+                SetProcessInput(false);
+                SetProcessUnhandledInput(false);
+                GetTree().Quit(PartExport.Run(exportParts) == 0 ? 0 : 1);
+                return;
+            }
+
             if (mapSelect && _pickCheck && !_autoDemo)
             {
                 throw new System.FormatException("--map-select 下没有人点「开始」：--pick-check 须与 --auto-demo 同用（先自动走完选图再自检拾取）。");

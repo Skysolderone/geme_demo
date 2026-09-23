@@ -1,0 +1,78 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_705436_r100.tres" id="1_1p8f5"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_308048_r100.tres" id="2_r0mes"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_281m6"]
+top_radius = 0.02
+bottom_radius = 0.025
+height = 0.08
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_j5p8h"]
+top_radius = 0.001
+bottom_radius = 0.08325
+height = 0.185
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_osg68"]
+top_radius = 0.02
+bottom_radius = 0.025
+height = 0.08
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_yb2b0"]
+top_radius = 0.001
+bottom_radius = 0.09
+height = 0.2
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1heno"]
+top_radius = 0.02
+bottom_radius = 0.025
+height = 0.08
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_mbt2r"]
+top_radius = 0.001
+bottom_radius = 0.076500006
+height = 0.17
+radial_segments = 5
+rings = 0
+
+[node name="Trees1" type="Node3D" unique_id=881246474]
+
+[node name="@MeshInstance3D@104" type="MeshInstance3D" parent="." unique_id=925366200]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.31, 0.04, -0.3)
+material_override = ExtResource("1_1p8f5")
+mesh = SubResource("CylinderMesh_281m6")
+
+[node name="@MeshInstance3D@105" type="MeshInstance3D" parent="." unique_id=1385710876]
+transform = Transform3D(0.60181504, 0, 0.79863554, 0, 1, 0, -0.79863554, 0, 0.60181504, -0.31, 0.1725, -0.3)
+material_override = ExtResource("2_r0mes")
+mesh = SubResource("CylinderMesh_j5p8h")
+
+[node name="@MeshInstance3D@106" type="MeshInstance3D" parent="." unique_id=1436264683]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3, 0.04, -0.29)
+material_override = ExtResource("1_1p8f5")
+mesh = SubResource("CylinderMesh_osg68")
+
+[node name="@MeshInstance3D@107" type="MeshInstance3D" parent="." unique_id=419466]
+transform = Transform3D(-0.05233594, 0, 0.9986295, 0, 1, 0, -0.9986295, 0, -0.05233594, 0.3, 0.18, -0.29)
+material_override = ExtResource("2_r0mes")
+mesh = SubResource("CylinderMesh_yb2b0")
+
+[node name="@MeshInstance3D@108" type="MeshInstance3D" parent="." unique_id=1815663242]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.02, 0.04, 0.31)
+material_override = ExtResource("1_1p8f5")
+mesh = SubResource("CylinderMesh_1heno")
+
+[node name="@MeshInstance3D@109" type="MeshInstance3D" parent="." unique_id=1188874286]
+transform = Transform3D(-0.6819983, 0, 0.7313537, 0, 1, 0, -0.7313537, 0, -0.6819983, -0.02, 0.16499999, 0.31)
+material_override = ExtResource("2_r0mes")
+mesh = SubResource("CylinderMesh_mbt2r")

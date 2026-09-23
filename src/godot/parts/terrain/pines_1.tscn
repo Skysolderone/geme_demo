@@ -1,0 +1,151 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_705436_r100.tres" id="1_onowd"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_498f5e_r100.tres" id="2_58imf"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_308048_r100.tres" id="3_qwjga"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_jfrrl"]
+top_radius = 0.037499998
+bottom_radius = 0.049999997
+height = 0.175
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_5gxwr"]
+top_radius = 0.001
+bottom_radius = 0.25
+height = 0.275
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_e7gdt"]
+top_radius = 0.001
+bottom_radius = 0.1875
+height = 0.275
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_l61i8"]
+top_radius = 0.001
+bottom_radius = 0.125
+height = 0.275
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_w11tk"]
+top_radius = 0.022499999
+bottom_radius = 0.03
+height = 0.105000004
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_e5d1t"]
+top_radius = 0.001
+bottom_radius = 0.15
+height = 0.16499999
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_gkles"]
+top_radius = 0.001
+bottom_radius = 0.112500004
+height = 0.16499999
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_fbird"]
+top_radius = 0.001
+bottom_radius = 0.075
+height = 0.16499999
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_00usx"]
+top_radius = 0.0255
+bottom_radius = 0.034
+height = 0.119
+radial_segments = 5
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_8h0sh"]
+top_radius = 0.001
+bottom_radius = 0.17
+height = 0.187
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hsrhq"]
+top_radius = 0.001
+bottom_radius = 0.12750001
+height = 0.187
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qt41w"]
+top_radius = 0.001
+bottom_radius = 0.085
+height = 0.187
+radial_segments = 6
+rings = 0
+
+[node name="Pines1" type="Node3D" unique_id=120370942]
+
+[node name="@MeshInstance3D@42" type="MeshInstance3D" parent="." unique_id=1721278894]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.02, 0.0875, 0.02)
+material_override = ExtResource("1_onowd")
+mesh = SubResource("CylinderMesh_jfrrl")
+
+[node name="@MeshInstance3D@43" type="MeshInstance3D" parent="." unique_id=1709673244]
+transform = Transform3D(0.6819984, 0, 0.7313537, 0, 1, 0, -0.7313537, 0, 0.6819984, 0.02, 0.2875, 0.02)
+material_override = ExtResource("2_58imf")
+mesh = SubResource("CylinderMesh_5gxwr")
+
+[node name="@MeshInstance3D@44" type="MeshInstance3D" parent="." unique_id=2027085699]
+transform = Transform3D(0.22495104, 0, 0.97437006, 0, 1, 0, -0.97437006, 0, 0.22495104, 0.02, 0.45, 0.02)
+material_override = ExtResource("2_58imf")
+mesh = SubResource("CylinderMesh_e7gdt")
+
+[node name="@MeshInstance3D@45" type="MeshInstance3D" parent="." unique_id=1406929086]
+transform = Transform3D(-0.29237175, 0, 0.9563047, 0, 1, 0, -0.9563047, 0, -0.29237175, 0.02, 0.6125, 0.02)
+material_override = ExtResource("2_58imf")
+mesh = SubResource("CylinderMesh_l61i8")
+
+[node name="@MeshInstance3D@46" type="MeshInstance3D" parent="." unique_id=1447181659]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, 0.052500002, -0.2)
+material_override = ExtResource("1_onowd")
+mesh = SubResource("CylinderMesh_w11tk")
+
+[node name="@MeshInstance3D@47" type="MeshInstance3D" parent="." unique_id=1076500768]
+transform = Transform3D(0.6819984, 0, 0.7313537, 0, 1, 0, -0.7313537, 0, 0.6819984, -0.24, 0.17249998, -0.2)
+material_override = ExtResource("3_qwjga")
+mesh = SubResource("CylinderMesh_e5d1t")
+
+[node name="@MeshInstance3D@48" type="MeshInstance3D" parent="." unique_id=1252712858]
+transform = Transform3D(0.22495104, 0, 0.97437006, 0, 1, 0, -0.97437006, 0, 0.22495104, -0.24, 0.26999998, -0.2)
+material_override = ExtResource("3_qwjga")
+mesh = SubResource("CylinderMesh_gkles")
+
+[node name="@MeshInstance3D@49" type="MeshInstance3D" parent="." unique_id=1396270735]
+transform = Transform3D(-0.29237175, 0, 0.9563047, 0, 1, 0, -0.9563047, 0, -0.29237175, -0.24, 0.3675, -0.2)
+material_override = ExtResource("3_qwjga")
+mesh = SubResource("CylinderMesh_fbird")
+
+[node name="@MeshInstance3D@50" type="MeshInstance3D" parent="." unique_id=1277523024]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, 0.0595, 0.2)
+material_override = ExtResource("1_onowd")
+mesh = SubResource("CylinderMesh_00usx")
+
+[node name="@MeshInstance3D@51" type="MeshInstance3D" parent="." unique_id=1220818775]
+transform = Transform3D(0.6819984, 0, 0.7313537, 0, 1, 0, -0.7313537, 0, 0.6819984, 0.24, 0.1955, 0.2)
+material_override = ExtResource("2_58imf")
+mesh = SubResource("CylinderMesh_8h0sh")
+
+[node name="@MeshInstance3D@52" type="MeshInstance3D" parent="." unique_id=911367795]
+transform = Transform3D(0.22495104, 0, 0.97437006, 0, 1, 0, -0.97437006, 0, 0.22495104, 0.24, 0.306, 0.2)
+material_override = ExtResource("2_58imf")
+mesh = SubResource("CylinderMesh_hsrhq")
+
+[node name="@MeshInstance3D@53" type="MeshInstance3D" parent="." unique_id=846290868]
+transform = Transform3D(-0.29237175, 0, 0.9563047, 0, 1, 0, -0.9563047, 0, -0.29237175, 0.24, 0.41650003, 0.2)
+material_override = ExtResource("2_58imf")
+mesh = SubResource("CylinderMesh_qt41w")

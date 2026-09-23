@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_8e8a86_r100.tres" id="1_16n1i"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_7a7773_r100.tres" id="2_j4mr2"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_7vupb"]
+radius = 0.3
+height = 0.56
+radial_segments = 5
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_aecs0"]
+radius = 0.2
+height = 0.34
+radial_segments = 5
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_vp32t"]
+radius = 0.13
+height = 0.2
+radial_segments = 4
+rings = 1
+
+[node name="Rock2" type="Node3D" unique_id=2129872404]
+
+[node name="@MeshInstance3D@18" type="MeshInstance3D" parent="." unique_id=1248324478]
+transform = Transform3D(0.28811142, 0.093813255, 1.0470974, 0.1035112, 0.8863589, -0.15309042, -0.95198596, 0.12476733, 0.3002504, -0.06, 0.18, 0.04)
+material_override = ExtResource("1_16n1i")
+mesh = SubResource("SphereMesh_7vupb")
+
+[node name="@MeshInstance3D@19" type="MeshInstance3D" parent="." unique_id=222573394]
+transform = Transform3D(-0.52186865, 0.08281758, 0.84804803, 0.17364818, 0.8863269, 0, -0.83516425, 0.13253579, -0.5299193, 0.2, 0.11, -0.14)
+material_override = ExtResource("2_j4mr2")
+mesh = SubResource("SphereMesh_aecs0")
+
+[node name="@MeshInstance3D@20" type="MeshInstance3D" parent="." unique_id=1564595382]
+transform = Transform3D(0.6946584, 0, 0.7193398, 0, 1, 0, -0.7193398, 0, 0.6946584, 0.1, 0.07, 0.24)
+material_override = ExtResource("1_16n1i")
+mesh = SubResource("SphereMesh_vp32t")

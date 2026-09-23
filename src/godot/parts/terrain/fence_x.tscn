@@ -1,0 +1,45 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_705436_r100.tres" id="1_ilxve"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_xrxux"]
+size = Vector3(0.05, 0.3, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_pt35r"]
+size = Vector3(0.05, 0.3, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_0wiah"]
+size = Vector3(0.05, 0.3, 0.05)
+
+[sub_resource type="BoxMesh" id="BoxMesh_tjt45"]
+size = Vector3(0.96, 0.035, 0.03)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8sk50"]
+size = Vector3(0.96, 0.035, 0.03)
+
+[node name="FenceX" type="Node3D" unique_id=1023786327]
+
+[node name="@MeshInstance3D@116" type="MeshInstance3D" parent="." unique_id=954941703]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0.15, 0)
+material_override = ExtResource("1_ilxve")
+mesh = SubResource("BoxMesh_xrxux")
+
+[node name="@MeshInstance3D@117" type="MeshInstance3D" parent="." unique_id=2061394025]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+material_override = ExtResource("1_ilxve")
+mesh = SubResource("BoxMesh_pt35r")
+
+[node name="@MeshInstance3D@118" type="MeshInstance3D" parent="." unique_id=2056914300]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, 0.15, 0)
+material_override = ExtResource("1_ilxve")
+mesh = SubResource("BoxMesh_0wiah")
+
+[node name="@MeshInstance3D@119" type="MeshInstance3D" parent="." unique_id=425483461]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.11, 0)
+material_override = ExtResource("1_ilxve")
+mesh = SubResource("BoxMesh_tjt45")
+
+[node name="@MeshInstance3D@120" type="MeshInstance3D" parent="." unique_id=1968310695]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23, 0)
+material_override = ExtResource("1_ilxve")
+mesh = SubResource("BoxMesh_8sk50")

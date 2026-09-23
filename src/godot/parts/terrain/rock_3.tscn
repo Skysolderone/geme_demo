@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_8e8a86_r100.tres" id="1_72q24"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_7a7773_r100.tres" id="2_iokua"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_dsvot"]
+radius = 0.3
+height = 0.56
+radial_segments = 5
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_v65mn"]
+radius = 0.2
+height = 0.34
+radial_segments = 5
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_j32b8"]
+radius = 0.13
+height = 0.2
+radial_segments = 4
+rings = 1
+
+[node name="Rock3" type="Node3D" unique_id=1215333408]
+
+[node name="@MeshInstance3D@26" type="MeshInstance3D" parent="." unique_id=1827004611]
+transform = Transform3D(-0.34282348, 0.15000945, 1.0169444, 0.1035112, 0.8863589, -0.15309042, -0.9336796, 0.04318539, -0.39036837, -0.06, 0.18, 0.04)
+material_override = ExtResource("1_72q24")
+mesh = SubResource("SphereMesh_dsvot")
+
+[node name="@MeshInstance3D@27" type="MeshInstance3D" parent="." unique_id=2134156601]
+transform = Transform3D(-0.98345804, 0.15606917, -0.052335985, 0.17364818, 0.8863269, 0, 0.05154088, -0.008179244, -0.9986295, 0.2, 0.11, -0.14)
+material_override = ExtResource("2_iokua")
+mesh = SubResource("SphereMesh_v65mn")
+
+[node name="@MeshInstance3D@28" type="MeshInstance3D" parent="." unique_id=619591059]
+transform = Transform3D(0.35836798, 0, 0.9335804, 0, 1, 0, -0.9335804, 0, 0.35836798, 0.1, 0.07, 0.24)
+material_override = ExtResource("1_72q24")
+mesh = SubResource("SphereMesh_j32b8")
