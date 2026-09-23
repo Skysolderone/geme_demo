@@ -1,6 +1,6 @@
 namespace Siege.Core.Ai;
 
-/// <summary>七个评价维度（设计文档 §15.2），顺序即分解数组下标。</summary>
+/// <summary>九个评价维度（设计文档 §15.2；ai-eye 在末尾追加 8、9 两维），顺序即分解数组下标——前七维的下标不得变动。</summary>
 public enum EvaluationDimension
 {
     /// <summary>1. 即时势力增量。</summary>
@@ -23,9 +23,18 @@ public enum EvaluationDimension
 
     /// <summary>7. 手牌供给与部署能力匹配度。</summary>
     Supply,
+
+    /// <summary>8. 眼位：己方眼值之和 + 己方已确定活形棋串数 × 3（ai-eye D1），眼信息只来自 <see cref="Siege.Core.Board.LifeShapeReport"/>。</summary>
+    Eye,
+
+    /// <summary>9. 威胁：敌方非已确定活形、气数 ≤ <see cref="GroupSafety.DangerLiberties"/> 的棋串棋子总数（ai-eye D1）。</summary>
+    Threat,
 }
 
-/// <summary>七维权重，全部为整数，可整体替换以便跑局调参（design.md D2）。</summary>
+/// <summary>
+/// 九维权重，全部为整数，可整体替换以便跑局调参（design.md D2）。<see cref="Eye"/> / <see cref="Threat"/> 是 ai-eye 追加的两维；
+/// 缺这两项的旧配置 / 旧日志首部按 0 读入（System.Text.Json 对缺失的构造参数取类型默认值）。
+/// </summary>
 public sealed record EvaluationWeights(
     int PowerGain,
     int EnemyLoss,
@@ -33,7 +42,9 @@ public sealed record EvaluationWeights(
     int Safety,
     int Growth,
     int Initiative,
-    int Supply)
+    int Supply,
+    int Eye,
+    int Threat)
 {
     /// <summary>
     /// 默认权重表的校准口径。restore-go-core-rules 起<b>七维全部未校准</b>：计分口径已变（军势整体乘倍率、不封顶、位置加值进倍率、
@@ -51,11 +62,12 @@ public sealed record EvaluationWeights(
     /// <item><b>Safety = 35</b>——未校准（restore-go-core-rules 起失效，待 ai-eye）。旧依据是 artisan-terrain-edit 段 D 在旧计分口径下的扫档，已作废。</item>
     /// <item><b>PowerGain = 10、EnemyLoss = 8、Relic = 6、Growth = 4、Initiative = 20、Supply = 2</b>——未校准（restore-go-core-rules 起失效，待 ai-eye）：
     /// 自 heuristic-ai 阶段起就是初值，从未扫过档。</item>
+    /// <item><b>Eye = 0、Threat = 0</b>——未校准（ai-eye 段 A 新增，先取 0：权重为 0 时决策与七维实现逐步相同）。初值与扫档归 ai-eye 段 D。</item>
     /// </list>
     /// <para>改任何一维仍须双向扫档、同种子同地图不少于 200 局的前后对照，并连同本段与 <see cref="CalibrationStatus"/> 一起更新。</para>
     /// </summary>
     public static readonly EvaluationWeights Default = new(
-        PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2);
+        PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 0, Threat: 0);
 
     /// <summary>某维度的权重。</summary>
     public int Of(EvaluationDimension dimension) => dimension switch
@@ -67,6 +79,8 @@ public sealed record EvaluationWeights(
         EvaluationDimension.Growth => Growth,
         EvaluationDimension.Initiative => Initiative,
         EvaluationDimension.Supply => Supply,
+        EvaluationDimension.Eye => Eye,
+        EvaluationDimension.Threat => Threat,
         _ => throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "未知评价维度。"),
     };
 }

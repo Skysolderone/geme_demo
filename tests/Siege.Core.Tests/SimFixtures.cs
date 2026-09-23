@@ -52,7 +52,7 @@ internal static class SimFixtures
     internal static MatchLog RankedMatch(ulong seed, int survivor)
     {
         // 走法依赖 AI 权重：写死当前取值（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），调默认权重不会让领先者胜数的样本口径断言翻掉。
-        var weights = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2);
+        var weights = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 0, Threat: 0);
         RunConfig config = Config(turnLimit: 0) with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = AiDifficulty.Easy, Weights = weights })] };
         MatchSession session = MatchSession.Create(config, seed);
         while (session.Match.MajorRound <= 3 && session.RunTurn())

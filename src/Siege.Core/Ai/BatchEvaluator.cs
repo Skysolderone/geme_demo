@@ -9,8 +9,9 @@ using Siege.Core.Scoring;
 namespace Siege.Core.Ai;
 
 /// <summary>
-/// 七维启发式评价（设计文档 §15.2）。以一次预演结果（<see cref="RehearsalResult.ProjectedBoard"/>）为"落子后盘面"，
-/// 与公开快照里的"落子前盘面"逐维求差。提子、军势、覆盖全部由下层算出（<see cref="PowerCalculator"/>），本类不重造规则。
+/// 九维启发式评价（设计文档 §15.2；ai-eye 追加眼位、威胁）。以一次预演结果（<see cref="RehearsalResult.ProjectedBoard"/>）为"落子后盘面"，
+/// 与公开快照里的"落子前盘面"逐维求差——每一维都是增量，MUST NOT 取结算后的绝对值。
+/// 提子、军势、覆盖全部由下层算出（<see cref="PowerCalculator"/>）；眼、眼值与活形状态只来自 <see cref="LifeShapeReport"/>，本类不重造规则。
 /// </summary>
 /// <remarks>
 /// 输入只有 <see cref="MatchPublicView"/> 与本人的 <see cref="BatchContext"/>：结构上没有手牌数量、征募面板与未揭示信物内容。
@@ -20,6 +21,9 @@ public sealed class BatchEvaluator
 {
     /// <summary>每提一枚敌子在"敌方损失"维度上的附加原始分。</summary>
     public const int CapturePerStone = 2;
+
+    /// <summary>眼位维度里每条己方已确定活形棋串的附加原始分（ai-eye D1，沿用基准文档系数）。</summary>
+    public const int AliveGroupEyeBonus = 3;
 
     private readonly PlayerId _me;
     private readonly EvaluationWeights _weights;
@@ -31,6 +35,8 @@ public sealed class BatchEvaluator
     private readonly long _relicBefore;
     private readonly long _safetyBefore;
     private readonly long _growthBefore;
+    private readonly long _eyeBefore;
+    private readonly long _threatBefore;
     private readonly int? _rankBefore;
 
     public BatchEvaluator(PlayerId me, MatchPublicView view, EvaluationWeights weights, bool immediateOnly)
@@ -52,7 +58,15 @@ public sealed class BatchEvaluator
         _before = PowerCalculator.Compute(view.Board, _roster);
         _rankBefore = _before.RankOf(me);
         _relicBefore = RelicScore(_before.Coverage);
-        _safetyBefore = SafetyOf(view.Board);
+        if (!immediateOnly)
+        {
+            // 活形查询每个盘面一次，安全 / 眼位 / 威胁三维共用（简单难度不看这三维，不查）。
+            LifeShapeReport life = LifeShapeReport.Analyze(view.Board);
+            _safetyBefore = SafetyOf(view.Board, life);
+            _eyeBefore = EyeOf(life);
+            _threatBefore = ThreatOf(view.Board, life);
+        }
+
         _growthBefore = GrowthOf(view.Board);
     }
 
@@ -105,10 +119,13 @@ public sealed class BatchEvaluator
 
         if (!_immediateOnly)
         {
+            LifeShapeReport life = LifeShapeReport.Analyze(after);
             raw[(int)EvaluationDimension.Relic] = checked(RelicScore(afterPower.Coverage) - _relicBefore);
-            raw[(int)EvaluationDimension.Safety] = checked(SafetyOf(after) - _safetyBefore);
+            raw[(int)EvaluationDimension.Safety] = checked(SafetyOf(after, life) - _safetyBefore);
             raw[(int)EvaluationDimension.Growth] = checked(GrowthOf(after) - _growthBefore);
             raw[(int)EvaluationDimension.Initiative] = InitiativeShift(afterPower);
+            raw[(int)EvaluationDimension.Eye] = checked(EyeOf(life) - _eyeBefore);
+            raw[(int)EvaluationDimension.Threat] = checked(ThreatOf(after, life) - _threatBefore);
         }
 
         return new EvaluationBreakdown([.. raw], _weights);
@@ -164,13 +181,67 @@ public sealed class BatchEvaluator
         return score;
     }
 
-    /// <summary>维度 4 的盘面总分：己方全部棋串的安全分之和。</summary>
-    private long SafetyOf(GameBoard board)
+    /// <summary>维度 4 的盘面总分：己方全部棋串的安全分之和（已确定活形取常数，见 <see cref="GroupSafety.AliveScore"/>）。</summary>
+    private long SafetyOf(GameBoard board, LifeShapeReport life)
     {
         long total = 0;
-        foreach (Group group in board.GroupsOf(_me))
+        foreach (GroupLife group in life.Groups)
         {
-            total += GroupSafety.Analyze(board, group).Score;
+            if (group.Group.Owner == _me)
+            {
+                total += GroupSafety.Analyze(board, group).Score;
+            }
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// 维度 8 的盘面总分：己方眼空间的眼值之和（每个眼空间只计一次——一块眼空间只有一个所有者，但可同时是多条己方棋串的眼空间）
+    /// + 己方已确定活形棋串数 × <see cref="AliveGroupEyeBonus"/>。
+    /// </summary>
+    private long EyeOf(LifeShapeReport life)
+    {
+        long total = 0;
+        foreach (EyeSpace space in life.EyeSpaces)
+        {
+            if (space.Owner == _me)
+            {
+                total += space.EyeValue;
+            }
+        }
+
+        foreach (GroupLife group in life.Groups)
+        {
+            if (group.Group.Owner == _me && group.Life == LifeState.Alive)
+            {
+                total += AliveGroupEyeBonus;
+            }
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// 维度 9 的盘面总分：参赛敌方的<b>非</b>已确定活形、气数 ≤ <see cref="GroupSafety.DangerLiberties"/> 的棋串棋子总数。
+    /// 已确定活形提不动，MUST 排除（ai-eye D2）；"参赛敌方"与维度 2 敌方损失同一口径（弃赛 / 出局者的遗留棋子不计）。
+    /// </summary>
+    private long ThreatOf(GameBoard board, LifeShapeReport life)
+    {
+        long total = 0;
+        foreach (GroupLife group in life.Groups)
+        {
+            PlayerId owner = group.Group.Owner;
+            if (owner == _me || group.Life == LifeState.Alive
+                || !_roster.TryGetValue(owner, out PlayerStatus status) || status != PlayerStatus.Active)
+            {
+                continue;
+            }
+
+            if (board.LibertiesOf(group.Group).Length <= GroupSafety.DangerLiberties)
+            {
+                total += group.Group.Size;
+            }
         }
 
         return total;

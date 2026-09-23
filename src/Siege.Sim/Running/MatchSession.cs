@@ -664,6 +664,7 @@ public sealed class MatchSession
             MapDigest = MapFile.Digest(Match.Board.BaseMap),
             ZoneSides = Config.MapPerMatch ? [.. Match.Board.BaseMap.BirthZones.Select(SideOf)] : null,
             ArtisanWeight = Match.ArtisanWeight,
+            AiEvaluationVersion = EvaluationBreakdown.Version,
             Seed = Seed.ToString(),
             Config = Config,
             Players = [.. Match.Players.Select(p => p.Value)],

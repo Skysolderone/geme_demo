@@ -20,6 +20,10 @@ public class 默认评价权重的校准Tests
     [InlineData(EvaluationDimension.Growth, 4)]
     [InlineData(EvaluationDimension.Initiative, 20)]
     [InlineData(EvaluationDimension.Supply, 2)]
+    // ai-eye 段 A：新增两维先取 0（权重为 0 时决策与七维实现逐步相同），初值与扫档归段 D。
+    // 变异 M-A6t（只改测试不改实现）：Supply / Eye 两行期望对调（2 ↔ 0）→ 红 2（这两行）。
+    [InlineData(EvaluationDimension.Eye, 0)]
+    [InlineData(EvaluationDimension.Threat, 0)]
     public void 默认权重被改动(EvaluationDimension dimension, int calibrated)
     {
         EvaluationWeights d = EvaluationWeights.Default;
@@ -37,6 +41,8 @@ public class 默认评价权重的校准Tests
             EvaluationDimension.Growth => d.Growth,
             EvaluationDimension.Initiative => d.Initiative,
             EvaluationDimension.Supply => d.Supply,
+            EvaluationDimension.Eye => d.Eye,
+            EvaluationDimension.Threat => d.Threat,
             _ => throw new ArgumentOutOfRangeException(nameof(dimension)),
         };
         Assert.Equal(calibrated, byProperty);
@@ -114,6 +120,7 @@ public class 默认评价权重的校准Tests
                  {
                      (nameof(d.Safety), d.Safety), (nameof(d.PowerGain), d.PowerGain), (nameof(d.EnemyLoss), d.EnemyLoss),
                      (nameof(d.Relic), d.Relic), (nameof(d.Growth), d.Growth), (nameof(d.Initiative), d.Initiative), (nameof(d.Supply), d.Supply),
+                     (nameof(d.Eye), d.Eye), (nameof(d.Threat), d.Threat),
                  })
         {
             Assert.Contains($"{name} = {value}", src, StringComparison.Ordinal);

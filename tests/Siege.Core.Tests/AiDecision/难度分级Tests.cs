@@ -12,7 +12,7 @@ public class 难度分级Tests
     [Fact]
     public void 简单难度只看即时收益()
     {
-        // 设计文档 §15.2：简单难度只考虑即时收益 = 即时势力增量 + 敌方势力损失两维，其余五维恒 0；M = 1（贪心一条）。
+        // 设计文档 §15.2：简单难度只考虑即时收益 = 即时势力增量 + 敌方势力损失两维，其余七维恒 0（ai-eye 起含眼位、威胁）；M = 1（贪心一条）。
         // 同一提子 + 信物局面，标准难度的信物 / 安全 / 供给维非零。
         // 变异验证 M-A11：BatchEvaluator 忽略 immediateOnly → 红 1（本测试）。
         MatchFlow match = 启发式评价维度Tests.CaptureRelicPosition();
@@ -30,7 +30,7 @@ public class 难度分级Tests
 
         Assert.True(e.RawOf(EvaluationDimension.PowerGain) > 0);
         Assert.True(e.RawOf(EvaluationDimension.EnemyLoss) > 0);
-        foreach (EvaluationDimension d in new[] { EvaluationDimension.Relic, EvaluationDimension.Safety, EvaluationDimension.Growth, EvaluationDimension.Initiative, EvaluationDimension.Supply })
+        foreach (EvaluationDimension d in new[] { EvaluationDimension.Relic, EvaluationDimension.Safety, EvaluationDimension.Growth, EvaluationDimension.Initiative, EvaluationDimension.Supply, EvaluationDimension.Eye, EvaluationDimension.Threat })
         {
             Assert.Equal(0, e.RawOf(d));
         }

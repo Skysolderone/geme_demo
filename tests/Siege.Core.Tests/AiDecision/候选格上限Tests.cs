@@ -42,7 +42,11 @@ public class 候选格上限Tests
     // 契约是否扣除禁入格不影响这一局（变异 M-B7「契约不扣除」下本测试仍绿：落进禁入格的候选在预演第 1 步被拒、不进排名）。
     // life-shape 段 D：F1B2CAB6…4ACEB088 → CDEB4C13…70084563。走法一步没变：快照新增 TurnSnapshot.Life 一个字段（活形记录，4.1）；
     // 同一局 24 条快照逐条去掉该字段（JsonNode 删键后重新序列化）的哈希恰为旧值 F1B2CAB6…（临时探针实跑），24 条快照的活形字段全部非空。
-    private const string V4GoldenTurnHash = "CDEB4C1349308458B40F7007A651F2B4B8583A84F8988BA40513EF0D70084563";
+    // ai-eye 段 A：CDEB4C13…70084563 → 14E1B0D2…104CBA72。<b>走法确实变了</b>，来源是 GroupSafety 改用活形查询（1.4：两眼潜力 = min(2, 眼值之和)、
+    // 已确定活形的安全分取公式上界常数 18）。新增的眼位 / 威胁两维默认权重为 0、不进总分（1.1 之后种子 1–20 的 4 AI 对局与改动前逐步相同，
+    // 比对含候选与预演事件）。改动前后的二进制各跑种子 31、24 个小回合：第 1 个小回合（P3）即分叉——旧落点 B10 / B11 / C12 全为要塞、
+    // 安全维原始值 12；新落点 B11 改为普通子、安全维 36（B10-B11 与 C12 两条棋串共享平台角上一块 8 格眼空间、眼值 2，均为已确定活形，各取常数 18），眼位原始值 8 = 2 + 2 × 3（权重 0）。新值连跑两次一致。
+    private const string V4GoldenTurnHash = "14E1B0D2E28A53DCFA389861CA9056AB42E425F57E073A6F7B781184104CBA72";
 
     private static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
@@ -89,7 +93,8 @@ public class 候选格上限Tests
         Assert.False(log.IsFailed);
         Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
         Assert.Null(log.Header.Config.CandidateCellLimit);
-        Assert.Equal(V4GoldenTurnHash, TurnHash(log));
+        string hash = TurnHash(log);
+        Assert.True(V4GoldenTurnHash == hash, $"种子 31 的小回合快照哈希变了：现为 {hash}。");
     }
 
     [Fact]

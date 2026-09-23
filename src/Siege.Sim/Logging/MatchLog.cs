@@ -259,6 +259,12 @@ public sealed record LogHeader
     /// </summary>
     public int? ArtisanWeight { get; init; }
 
+    /// <summary>
+    /// 本局 AI 的评价版本（<see cref="Siege.Core.Ai.EvaluationBreakdown.Version"/>，ai-eye 1.1）：维度数与各维算法随版本变，
+    /// 旧版本日志的 AI 决策不能用新评价重算（design Risks「回放兼容」）。ai-eye 之前的旧日志为 <c>null</c>（即版本 1、七维），MUST NOT 回填。
+    /// </summary>
+    public int? AiEvaluationVersion { get; init; }
+
     public required RunConfig Config { get; init; }
 
     public List<int> Players { get; init; } = [];

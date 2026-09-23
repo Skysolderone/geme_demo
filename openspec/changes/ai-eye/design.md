@@ -118,3 +118,13 @@
 
 - #9 UI 对局保留启发式 AI 与难度分级；#10 保留仓库的批次级评价架构，并入眼位算法（2026-09-21）。
 - Open Questions 为实施细节，默认按建议执行；第 2 项如需启用，须先经用户确认。
+- 实施裁决（2026-09-23，开工确认）：
+  - R1 Open Questions 1–3 全按建议：有提子即放行、交给打分；`PowerGain` 先线性，对数刻度启用前须用户确认；三档难度共用 `PassThreshold`。
+  - R2 顺序五段 A（0+1）/ B（2）/ C（3）/ D（4）/ E（5），每段一个 trellis-implement，主会话前台复核后提交。
+  - R3 `life-shape` R8（活形过易）在段 D 校准**开工前**由负责人裁决；若改规则，先另开 change 实施，再做段 D。段 A–C 不受影响。
+  - R4 0.1 的"两份 200 局基线"：`restore-go-core-rules` 只有 20 局冒烟（`sim-out/restore-smoke20/`），完整基线为 `sim-out/life-shape/baseline200/`，按此核对。
+  - R5 5.3 实机：agent 只做自动检查（Godot 自检 + 终端脚本局 + 检查清单 + 截图）；人 vs 3 AI 的实机局（含边疆图手感）由负责人下，结论由主会话写入 HANDOFF。
+  - R6 沿用 `life-shape` 约定：慢测试环境变量 + `Category` 门控；变异还原逐字节校验 + 刷新 mtime；Godot 验证前 Debug 构建；工作树中非本任务的 Godot 改动（`GameRoot.cs` 的 `--export-parts`、`PartExport.cs`、`src/godot/parts/`）不碰。
+  - R7（段 A 后）`Threat` 的"敌方"只算参赛中的敌方（与 `EnemyLoss` 一致），弃赛 / 出局者的遗留棋子不计。
+  - R8（段 A 后）"直三点中间"算例按"棋串已活、点中间只加眼值 1"理解，不另补盘面。
+  - R9（段 A 后）段 A 起默认权重下走法已变（开局平台角棋串即为已确定活形，`Safety` 取上界常数），属预期；数字为未校准口径。
