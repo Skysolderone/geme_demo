@@ -246,6 +246,7 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>
     /// 单点评价：每个合法空格 × 每种持有类型 × 改造选项各预演一次，取总分前 N（同分按坐标、再按类型、再按改造记法）。
+    /// 预演合法之后先过活形硬约束（<see cref="BatchEvaluator.TryEvaluate"/>），被淘汰的候选不打分、不进排行。
     /// 配置了候选格上限 K 且合法空格多于 K 时，先经 <see cref="PrefilterCells"/> 把"每个合法空格"收窄到 K 格。
     /// </summary>
     /// <remarks>
@@ -277,12 +278,14 @@ public sealed class HeuristicTurnController : ITurnController
                     }
 
                     RehearsalResult result = rehearse();
-                    if (!result.IsLegal)
+
+                    // 预演合法之后、打分之前：活形硬约束淘汰的候选不打分、不进排行（ai-eye D3）。
+                    if (!result.IsLegal || !evaluator.TryEvaluate(batch.Placements, result, context, out EvaluationBreakdown? evaluation))
                     {
                         continue;
                     }
 
-                    points.Add(new PointScore(cell, type, edit, evaluator.Evaluate(batch.Placements, result, context)));
+                    points.Add(new PointScore(cell, type, edit, evaluation));
                 }
             }
         }
@@ -379,10 +382,12 @@ public sealed class HeuristicTurnController : ITurnController
     }
 
     /// <summary>
-    /// 按给定顺序贪心加入落点：预演不合法或总分<b>没有严格提高</b>即撤回；直到部署上限。
-    /// 零收益的落子一律不下——这是 AI 会 Pass、对局能以整轮 Pass 收尾的前提（实测 <c>&gt;=</c> 会让对局 600 小回合不终局）。
+    /// 按给定顺序贪心加入落点：预演不合法、整批被活形硬约束淘汰、或这一枚使总分的提升<b>不大于</b>停手阈值
+    /// （<see cref="AiSearchConfig.PassThreshold"/>，ai-eye D4）即撤回；直到部署上限。
+    /// 阈值作用在每一枚的边际提升上，不是整批总分。阈值 0 即"严格提高"：零收益的落子一律不下——这是 AI 会 Pass、
+    /// 对局能以整轮 Pass 收尾的前提（实测 <c>&gt;=</c> 会让对局 600 小回合不终局）。
     /// </summary>
-    private static CandidateBatch Greedy(
+    private CandidateBatch Greedy(
         ImmutableArray<PointScore> order, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
     {
         BatchContext context = batch.Context;
@@ -401,15 +406,15 @@ public sealed class HeuristicTurnController : ITurnController
                 continue;
             }
 
+            // 预演不合法、或整批被活形硬约束淘汰（ai-eye D3：批次层判——同批次另有提子即放行）→ 撤回这一枚。
             RehearsalResult result = rehearse();
-            if (!result.IsLegal)
+            if (!result.IsLegal || !evaluator.TryEvaluate(batch.Placements, result, context, out EvaluationBreakdown? next))
             {
                 batch.Unstage(point.Coord);
                 continue;
             }
 
-            EvaluationBreakdown next = evaluator.Evaluate(batch.Placements, result, context);
-            if (next.Total > current.Total)
+            if (next.Total - current.Total > Config.PassThreshold)
             {
                 current = next;
             }

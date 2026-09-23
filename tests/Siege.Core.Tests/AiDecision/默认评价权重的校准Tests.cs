@@ -49,6 +49,24 @@ public class 默认评价权重的校准Tests
     }
 
     [Fact]
+    public void 默认停手阈值被改动()
+    {
+        // 规格 Scenario「默认权重被改动」同样覆盖默认停手阈值（ai-eye 段 B 2.3）：初值 20 = 2 × PowerGain 权重 10（基准文档 PASS_THRESHOLD = 2.0、power 权重 1.0），
+        // 未校准，段 D 扫档定值。钉住取值、三档共用（裁决 R1）、源码里的未校准标注与依据同步。
+        // 变异 M-B12t（只改测试不改实现：期望 20 → 21）→ 红 1（本测试）。M-B16（简单难度预设漏写阈值、回落到构造缺省 0）→ 红 2（本测试、难度分级Tests.简单难度只看即时收益）。
+        Assert.Equal(20, AiSearchConfig.DefaultPassThreshold);
+        Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.DefaultPassThreshold, AiSearchConfig.ForDifficulty(d).PassThreshold));
+
+        string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "AiDifficulty.cs"));
+        Assert.Contains("未校准", AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
+        Assert.DoesNotContain("已校准", AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
+        Assert.Contains(AiSearchConfig.PassThresholdCalibrationStatus, src, StringComparison.Ordinal);
+        Assert.Contains($"DefaultPassThreshold = {AiSearchConfig.DefaultPassThreshold}", src, StringComparison.Ordinal);
+        Assert.Contains($"PassThreshold = {AiSearchConfig.DefaultPassThreshold}", src.Replace("DefaultPassThreshold", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.DoesNotContain($"PassThreshold = {AiSearchConfig.DefaultPassThreshold + 1}", src, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void 规则变更使校准失效()
     {
         // restore-go-core-rules 改写了军势公式与总势力构成，旧口径下扫档得到的全部默认权重随之失效。

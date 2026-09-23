@@ -190,7 +190,9 @@ public class 对局日志的记录内容Tests
     {
         // 每枚信物在 Result.RelicReveals 里都有一条：揭示的记大回合序号，且与过程中的 Reveal 事件一致；整局未揭示的标为 null。
         // 变异验证 M-C4（check）：MatchSession.Finish 把 RelicReveals 置空 → 红 2（本测试、日志覆盖七类记录）。
-        MatchLog log = MatchLog.Parse(SimFixtures.Sample.Value[1].FullText());
+        // ai-eye 段 B：样本由第 2 局（种子 12）换为第 1 局（种子 11）。停手阈值（缺省 20）之后种子 12 在 16 个小回合内揭示了全部 13 枚信物，
+        // "整局未揭示的标为 null"这一支没有样本（下界响亮失败）；种子 11 在改动前、硬约束后、阈值后都恰有 1 枚未揭示。断言与期望均未改，只换样本。
+        MatchLog log = MatchLog.Parse(SimFixtures.Sample.Value[0].FullText());
         Assert.Equal(log.Header.Relics.Select(r => r.Coord).Order(), log.Result!.RelicReveals.Select(r => r.Coord).Order());
         List<LogEvent> reveals = [.. log.Events.Where(e => e.Type == LogEventType.Reveal)];
         Assert.NotEmpty(reveals);

@@ -36,7 +36,10 @@ public class 地形改造日志与分析Tests
         // 种子 17–19 致提子降为 0 / 0 / 0（下界响亮失败）。同一份写死权重（新增 Eye / Threat 取 0）下重扫种子 1–24（CLI 探针，
         // 探针配置先用改动前二进制复现了 17–19 的 改造 2 / 2 / 3、致提子 0 / 1 / 1）：致提子只剩种子 3、4 各 1 次；
         // 取连续的 3–5：改造 5 / 6 / 1 次、致提子 1 / 1 / 0 次。断言与期望均未改，只换样本。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 3, turnLimit: 24, difficulty: AiDifficulty.Standard);
+        // ai-eye 段 B 第四次重挑：活形硬约束 + 停手阈值（缺省 20）之后种子 3–5 致提子降为 0 / 0 / 0（下界响亮失败；硬约束之后只剩种子 4 的 1 次，阈值之后为 0）。
+        // 同一份写死权重、并把停手阈值也写死为 20（与权重同理：段 D 调缺省阈值不应再翻掉样本）重扫种子 1–200（CLI 探针）：1–24 致提子全为 0，
+        // 25–200 里有 20 局各有致提子；取连续且每局都有改造的 53–55：改造 1 / 5 / 3 次、致提子 1 / 1 / 1 次。断言与期望均未改，只换样本。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 53, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20 };
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 

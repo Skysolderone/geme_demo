@@ -52,6 +52,8 @@ public sealed class MatchSession
         Config = (config ?? throw new ArgumentNullException(nameof(config))).Validated();
         // 回放（recorded）：首部配置里没有候选格上限 = 这局当时就是不限制（小图省略，或该项出现之前的旧日志），MUST NOT 再按地图自动取。
         CellLimit = Config.CandidateCellLimit ?? (recorded ? 0 : AiSearchConfig.DefaultCellLimitFor(match.Map.PlayableCount));
+        // 停手阈值同理：首部没有该项 = 该项出现之前的旧日志，当时的保留条件是严格提高（= 0），MUST NOT 按今天的缺省阈值重建。
+        PassThreshold = Config.PassThreshold ?? (recorded ? 0 : AiSearchConfig.DefaultPassThreshold);
         if (match.Phase != MatchPhase.InProgress)
         {
             throw new SiegeRuleException("会话要求对局已完成插旗并处于进行中。");
@@ -89,6 +91,9 @@ public sealed class MatchSession
     /// <summary>本局未显式配置剪枝参数的 AI 实际生效的候选格上限 K（0 = 不限制）。</summary>
     public int CellLimit { get; }
 
+    /// <summary>本局未显式配置剪枝参数的 AI 实际生效的停手阈值（ai-eye D4）。</summary>
+    public int PassThreshold { get; }
+
     public GameSeed Seed { get; }
 
     /// <summary>已完成的小回合数。</summary>
@@ -102,6 +107,7 @@ public sealed class MatchSession
     /// <summary>
     /// <paramref name="recorded"/> 为 <c>true</c> 即按日志首部的配置原样重建（回放）：不把候选格上限按地图落成缺省值，
     /// 首部没有该项就是不限制——否则该项出现之前的大图旧日志会被按新缺省 K 重跑而中途分歧，重建出的首部也会多出一项。
+    /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。
     /// </summary>
     internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded)
     {
@@ -132,7 +138,8 @@ public sealed class MatchSession
     private void AttachConfigured(PlayerId player, PlayerAiConfig ai)
     {
         // 显式的剪枝参数原样生效；未配置时按难度取，候选格上限取跑局配置的值，仍未给出则按地图大小取（阈值逻辑在 Core，三个入口共用）。
-        AiSearchConfig search = ai.Search ?? AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit);
+        // 停手阈值同样只作用于未显式配置剪枝参数的玩家（显式的 Search 自带阈值）。
+        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold });
         if (ai.DebugAi)
         {
             DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, search);

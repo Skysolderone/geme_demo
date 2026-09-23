@@ -46,9 +46,15 @@ public class 候选格上限Tests
     // 已确定活形的安全分取公式上界常数 18）。新增的眼位 / 威胁两维默认权重为 0、不进总分（1.1 之后种子 1–20 的 4 AI 对局与改动前逐步相同，
     // 比对含候选与预演事件）。改动前后的二进制各跑种子 31、24 个小回合：第 1 个小回合（P3）即分叉——旧落点 B10 / B11 / C12 全为要塞、
     // 安全维原始值 12；新落点 B11 改为普通子、安全维 36（B10-B11 与 C12 两条棋串共享平台角上一块 8 格眼空间、眼值 2，均为已确定活形，各取常数 18），眼位原始值 8 = 2 + 2 × 3（权重 0）。新值连跑两次一致。
-    private const string V4GoldenTurnHash = "14E1B0D2E28A53DCFA389861CA9056AB42E425F57E073A6F7B781184104CBA72";
+    // ai-eye 段 B：14E1B0D2…104CBA72 → D1481DD5…772968BD，<b>走法确实变了</b>，分两步归因（每步都有独立的零变化证据）：
+    // ① 活形硬约束（2.2）：14E1B0D2… → 8EEC49A7…04679FC8。探针（硬约束判据短路为恒不淘汰、其余改动保留）跑种子 1–20 与改动前逐步相同（20 / 20，含候选与预演事件），
+    //    所以变化只来自淘汰本身。本局第 23 个小回合（第 6 大回合、P2）起分叉：旧落点 E12 协同子，新实现 Pass——E12 在 v5 上被地形围成 P2 的单格眼（四邻只有 F12 有气边）。
+    // ② 停手阈值缺省 20（2.3）：8EEC49A7… → D1481DD5…。阈值取 0 时整局重现 8EEC49A7…（停手阈值Tests.阈值为0时零变化 钉住）。
+    //    第 16 个小回合（第 4 大回合、P0）起分叉：旧选中批次 [G3 普通, G4 连珠, J9 要塞] = 1422 里 G3 是最后加入的一枚、边际提升 1422 − 1402 = 20，
+    //    恰等于阈值被撤回，该扰动次序改出 [G4 连珠, J9 要塞] = 1402；同分 1422 的另一候选 [G3 要塞, G4 普通, J9 连珠] 当选。新值连跑两次一致。
+    internal const string V4GoldenTurnHash = "D1481DD50F4F5BE8DA4DC37E3CAB0878AF59C4A43CA0141E891B1638772968BD";
 
-    private static string TurnHash(MatchLog log) =>
+    internal static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
 
     private static AiSearchConfig StandardWith(int cellLimit) => AiSearchConfig.Standard with { CandidateCellLimit = cellLimit };
@@ -397,8 +403,11 @@ public class 候选格上限Tests
     [Fact]
     public void 剪枝参数的文本往返与旧文本兼容()
     {
+        // ai-eye 段 B：旧文本没有停手阈值，按 0 读入（当时的保留条件就是严格提高），所以等于"标准预设去掉阈值"，不再等于预设本身（预设阈值为缺省 20）。
         AiSearchConfig old = JsonSerializer.Deserialize<AiSearchConfig>("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false}""")!;
-        Assert.Equal(AiSearchConfig.Standard, old);
+        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0 }, old);
+        AiSearchConfig tuned = AiSearchConfig.Standard with { PassThreshold = 7 };
+        Assert.Equal(tuned, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(tuned)));
 
         AiSearchConfig limited = StandardWith(16);
         Assert.Equal(limited, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(limited)));

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -38,6 +39,8 @@ public sealed class BatchEvaluator
     private readonly long _eyeBefore;
     private readonly long _threatBefore;
     private readonly int? _rankBefore;
+    private readonly ImmutableArray<Coord> _ownAliveStones;
+    private readonly ImmutableHashSet<Coord> _ownSingleEyes;
 
     public BatchEvaluator(PlayerId me, MatchPublicView view, EvaluationWeights weights, bool immediateOnly)
         : this(me, view, weights, immediateOnly, relicValue: null)
@@ -58,10 +61,16 @@ public sealed class BatchEvaluator
         _before = PowerCalculator.Compute(view.Board, _roster);
         _rankBefore = _before.RankOf(me);
         _relicBefore = RelicScore(_before.Coverage);
+
+        // 批次开始前的活形查询：活形硬约束（全部难度）与安全 / 眼位 / 威胁三维（非简单难度）共用，每个盘面一次。
+        LifeShapeReport life = LifeShapeReport.Analyze(view.Board);
+        _ownAliveStones = [.. life.Groups
+            .Where(g => g.Group.Owner == me && g.Life == LifeState.Alive)
+            .SelectMany(g => g.Group.Stones)
+            .Order()];
+        _ownSingleEyes = [.. life.EyeSpaces.Where(e => e.Owner == me && e.Cells.Length == 1).Select(e => e.Cells[0])];
         if (!immediateOnly)
         {
-            // 活形查询每个盘面一次，安全 / 眼位 / 威胁三维共用（简单难度不看这三维，不查）。
-            LifeShapeReport life = LifeShapeReport.Analyze(view.Board);
             _safetyBefore = SafetyOf(view.Board, life);
             _eyeBefore = EyeOf(life);
             _threatBefore = ThreatOf(view.Board, life);
@@ -129,6 +138,64 @@ public sealed class BatchEvaluator
         }
 
         return new EvaluationBreakdown([.. raw], _weights);
+    }
+
+    /// <summary>
+    /// 活形硬约束 + 评价（ai-eye D3）：对一个已预演合法的候选，先判是否被活形硬约束淘汰，未被淘汰才打分。
+    /// 淘汰即返回 <c>false</c>、<paramref name="evaluation"/> 为 <c>null</c>——被淘汰的候选 MUST NOT 以扣分的形式留在候选集里。
+    /// 单点排序与贪心组批都经这里；对全部难度生效（简单难度同样淘汰，只是打分只用两维）。
+    /// </summary>
+    public bool TryEvaluate(
+        ImmutableArray<Placement> placements, RehearsalResult result, BatchContext context, [NotNullWhen(true)] out EvaluationBreakdown? evaluation)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (ViolatesLifeConstraint(placements, result))
+        {
+            evaluation = null;
+            return false;
+        }
+
+        evaluation = Evaluate(placements, result, context);
+        return true;
+    }
+
+    /// <summary>
+    /// 活形硬约束的判据（ai-eye D3）：本批次<b>无提子</b>，且下列任一成立——
+    /// ① 批次开始前己方某条已确定活形棋串，其任一棋子在预演结算后所在的棋串不再是已确定活形（按棋子归属判，与规则层「破坏活形」同一口径，只是对象是己方）；
+    /// ② 任一落点是批次开始前己方的一个<b>单格眼</b>（格数为 1 的眼空间）。
+    /// 落进己方多格眼空间不淘汰（直三点中间是在做眼），交给眼位维度与停手阈值。有提子即放行（裁决 R1），交给打分。
+    /// 眼与活形只来自 <see cref="LifeShapeReport"/>。
+    /// </summary>
+    private bool ViolatesLifeConstraint(ImmutableArray<Placement> placements, RehearsalResult result)
+    {
+        if (!result.IsLegal || result.IsPass || result.ProjectedBoard is null || placements.IsDefaultOrEmpty || !result.Captures.IsEmpty)
+        {
+            return false;
+        }
+
+        foreach (Placement placement in placements)
+        {
+            if (_ownSingleEyes.Contains(placement.Coord))
+            {
+                return true;
+            }
+        }
+
+        if (_ownAliveStones.IsEmpty)
+        {
+            return false;
+        }
+
+        LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard);
+        foreach (Coord stone in _ownAliveStones)
+        {
+            if (after.GroupLifeAt(stone) is not { Life: LifeState.Alive } life || life.Group.Owner != _me)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
