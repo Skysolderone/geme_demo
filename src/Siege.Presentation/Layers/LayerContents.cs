@@ -89,6 +89,7 @@ public sealed record TerritoryLayerContent(ImmutableArray<TerritoryCellView> Cel
 /// 两种读法点亮的空格不一致时的地形原因（tactical-layers「差集可由地形解释」，design D-G）。
 /// 被覆盖但不是气：<see cref="Cliff"/>（居高临下）、<see cref="Fence"/>（栅栏挡气不挡覆盖）、<see cref="AcrossWater"/>（隔一格深水覆盖对岸）、
 /// <see cref="Crag"/>（岩台上的棋子覆盖直线远一格，terrain-surfaces）；
+/// 被覆盖但不是气还有 <see cref="Shallows"/>（该格是空浅滩，空浅滩不算气，terrain-surfaces）；
 /// 是气但未被覆盖：<see cref="Forest"/>（林地不接收覆盖）、<see cref="Marsh"/>（与该格有气边的棋子位于沼泽上，沼泽源不产生覆盖，terrain-surfaces）。
 /// </summary>
 public enum TerrainReason
@@ -99,6 +100,7 @@ public enum TerrainReason
     Forest,
     Marsh,
     Crag,
+    Shallows,
 }
 
 /// <summary>差集中的一格及其全部地形原因（去重、按枚举序）。同一格可能同时有多个来源，各给各的原因。</summary>
@@ -148,6 +150,12 @@ public sealed record LibertyGroupView(
 
     /// <summary>标记文案：已活为「已活」，危险为「危险」，普通为空串。</summary>
     public string MarkText => Labels.GroupMark(Mark);
+
+    /// <summary>
+    /// 贴着该棋串、为空却不算气的空浅滩（tactical-layers「新地表的规则标示」：MUST 与气可区分并标明"浅滩：不算气"）。
+    /// 原样取自 Core 气快照的 <see cref="GroupLiberties.ShallowsBeside"/>，本层不算邻接。
+    /// </summary>
+    public ImmutableArray<Coord> ShallowsBeside { get; init; } = [];
 }
 
 /// <summary>盘面层的棋串读法。集合来自 Core 气快照（按气边导出）。两个内容 record 不合并——它们携带的字段本就不同（merge-board-layer D5）。</summary>
@@ -311,7 +319,10 @@ public static class TacticalLayers
                     return new LibertyGroupView(g.Owner, g.Stones, g.Liberties, g.Count, thresholds.Classify(g.Count),
                         [.. fences.Where(f => stones.Contains(f.A) || stones.Contains(f.B)).OrderBy(f => f.A).ThenBy(f => f.B)],
                         life.GroupLifeAt(g.Stones[0])?.Life
-                            ?? throw new InvalidOperationException($"{g.Stones[0].ToNotation()} 在气快照里是棋子，活形报告里却是空格：两份快照不同源。"));
+                            ?? throw new InvalidOperationException($"{g.Stones[0].ToNotation()} 在气快照里是棋子，活形报告里却是空格：两份快照不同源。"))
+                    {
+                        ShallowsBeside = g.ShallowsBeside,
+                    };
                 }),
             ],
             thresholds,
@@ -340,7 +351,10 @@ public static class TacticalLayers
         [
             .. covered.Except(liberties).OrderBy(c => c).Select(c =>
             {
-                ImmutableArray<TerrainReason> reasons = [.. power.Coverage.SourcesOf(c).Select(s => ReasonFor(map, s, c)).Distinct().OrderBy(r => r)];
+                // 空浅滩被覆盖却不算气——原因在格本身，与来源无关；其余按来源逐个查表。
+                ImmutableArray<TerrainReason> reasons = map.SurfaceAt(c) == Surface.Shallows
+                    ? [TerrainReason.Shallows]
+                    : [.. power.Coverage.SourcesOf(c).Select(s => ReasonFor(map, s, c)).Distinct().OrderBy(r => r)];
                 return reasons.IsEmpty
                     ? throw new InvalidOperationException($"{c.ToNotation()} 被覆盖但不是气，却没有任何覆盖来源。")
                     : new ReadingDiffCell(c, reasons);

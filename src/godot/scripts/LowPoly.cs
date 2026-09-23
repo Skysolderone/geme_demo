@@ -403,6 +403,37 @@ public static class LowPoly
     }
 
     /// <summary>
+    /// 浅滩格的水面细节（terrain-surfaces 段 4）：地砖本身是与同层齐平的浅青水色，上面加两道近白水纹 + 五六颗贴地鹅卵石。
+    /// 与深水的区分靠两条通道：高度（深水水面低于地砖、浅滩齐平）与纹理（深水没有鹅卵石）（visual-style-baseline「浅滩不被读成深水」）。
+    /// 全部贴地（≤ 0.03），不遮挡落点、气点与"浅滩：不算气"的标记。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Shallows(int variant)
+    {
+        var root = new Node3D { Name = "Shallows" };
+        StandardMaterial3D pebble = Visuals.Matte(Visuals.Pebble, 1f);
+        StandardMaterial3D ripple = Visuals.Matte(Visuals.Ripple, 0.4f);
+        float sx = variant % 2 == 0 ? 1f : -1f;
+
+        // 水纹：两道斜向细条。
+        for (int i = -1; i <= 1; i += 2)
+        {
+            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.34f, 0.004f, 0.018f) }, ripple,
+                new Vector3(0.06f * i * sx, 0.002f, 0.14f * i), new Vector3(0f, (-20f * sx) + (i * 8f), 0f)));
+        }
+
+        // 鹅卵石：沿地砖外圈散放，扁球，避开格心的棋子底座。
+        Vector2[] spots = [new(-0.33f, -0.18f), new(-0.30f, 0.26f), new(0.32f, -0.30f), new(0.20f, 0.34f), new(0.34f, 0.10f), new(-0.10f, -0.35f)];
+        for (int i = 0; i < spots.Length - (variant % 2); i++)
+        {
+            float r = 0.028f + (0.008f * ((i + variant) % 3));
+            root.AddChild(Mesh(new SphereMesh { Radius = r, Height = r, RadialSegments = 6, Rings = 2 }, pebble,
+                new Vector3(spots[i].X * sx, r * 0.4f, spots[i].Y), new Vector3(0f, (variant * 23f) + (i * 37f), 0f), new Vector3(1.3f, 1f, 1f)));
+        }
+
+        return root;
+    }
+
+    /// <summary>
     /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
     /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
     /// 返回节点原点在缝中心、地砖上表面。

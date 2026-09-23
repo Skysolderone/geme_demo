@@ -127,7 +127,7 @@ public sealed class LifeShapeReport
                 foreach (Coord n in board.LibertyNeighbors(stone))
                 {
                     int ni = Index(width, n);
-                    isLiberty[ni] = groupAt[ni] < 0;
+                    isLiberty[ni] = groupAt[ni] < 0 && board.GivesLiberty(n);
                 }
             }
         }
@@ -171,6 +171,11 @@ public sealed class LifeShapeReport
                             touching.Add(g);
                             open |= groups[g].Owner != groups[touching[0]].Owner;
                         }
+                    }
+                    else if (!board.GivesLiberty(n))
+                    {
+                        // 空浅滩（terrain-surfaces）：不属于任何空区；它有气边、谁都能落进去，所以贴着它的空区不封闭——不是墙。
+                        open = true;
                     }
                     else if (floodOf[ni] == 0)
                     {

@@ -1,0 +1,77 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_e8f6fa_r40.tres" id="1_qxqkr"]
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_a8a092_r100.tres" id="2_1yc7x"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_u1h35"]
+size = Vector3(0.34, 0.004, 0.018)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ibupv"]
+size = Vector3(0.34, 0.004, 0.018)
+
+[sub_resource type="SphereMesh" id="SphereMesh_5xts4"]
+radius = 0.044
+height = 0.044
+radial_segments = 6
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_x7c8y"]
+radius = 0.028
+height = 0.028
+radial_segments = 6
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_leqau"]
+radius = 0.036000002
+height = 0.036000002
+radial_segments = 6
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_b7q7g"]
+radius = 0.044
+height = 0.044
+radial_segments = 6
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_n3c1k"]
+radius = 0.028
+height = 0.028
+radial_segments = 6
+rings = 2
+
+[node name="Shallows5" type="Node3D" unique_id=102588675]
+
+[node name="@MeshInstance3D@316" type="MeshInstance3D" parent="." unique_id=600382410]
+transform = Transform3D(0.9781476, 0, 0.2079117, 0, 1, 0, -0.2079117, 0, 0.9781476, 0.06, 0.002, -0.14)
+material_override = ExtResource("1_qxqkr")
+mesh = SubResource("BoxMesh_u1h35")
+
+[node name="@MeshInstance3D@317" type="MeshInstance3D" parent="." unique_id=1540024656]
+transform = Transform3D(0.88294756, 0, 0.46947157, 0, 1, 0, -0.46947157, 0, 0.88294756, -0.06, 0.002, 0.14)
+material_override = ExtResource("1_qxqkr")
+mesh = SubResource("BoxMesh_ibupv")
+
+[node name="@MeshInstance3D@318" type="MeshInstance3D" parent="." unique_id=605015712]
+transform = Transform3D(-0.5494038, 0, 0.90630776, 0, 1, 0, -1.1782, 0, -0.42261833, 0.33, 0.0176, -0.18)
+material_override = ExtResource("2_1yc7x")
+mesh = SubResource("SphereMesh_5xts4")
+
+[node name="@MeshInstance3D@319" type="MeshInstance3D" parent="." unique_id=363454284]
+transform = Transform3D(-1.1478318, 0, 0.46947157, 0, 1, 0, -0.610313, 0, -0.88294756, 0.3, 0.0112000005, 0.26)
+material_override = ExtResource("2_1yc7x")
+mesh = SubResource("SphereMesh_x7c8y")
+
+[node name="@MeshInstance3D@320" type="MeshInstance3D" parent="." unique_id=1995992658]
+transform = Transform3D(-1.2839948, 0, -0.15643437, 0, 1, 0, 0.20336467, 0, -0.98768836, -0.32, 0.014400001, -0.3)
+material_override = ExtResource("2_1yc7x")
+mesh = SubResource("SphereMesh_leqau")
+
+[node name="@MeshInstance3D@321" type="MeshInstance3D" parent="." unique_id=721791959]
+transform = Transform3D(-0.9030558, 0, -0.71933985, 0, 1, 0, 0.93514174, 0, -0.69465834, -0.2, 0.0176, 0.34)
+material_override = ExtResource("2_1yc7x")
+mesh = SubResource("SphereMesh_b7q7g")
+
+[node name="@MeshInstance3D@322" type="MeshInstance3D" parent="." unique_id=507212098]
+transform = Transform3D(-0.15843047, 0, -0.99254614, 0, 1, 0, 1.2903099, 0, -0.121869594, -0.34, 0.0112000005, 0.1)
+material_override = ExtResource("2_1yc7x")
+mesh = SubResource("SphereMesh_n3c1k")

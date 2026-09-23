@@ -54,6 +54,12 @@ public static class PartExport
             parts.Add(($"crag_{v}", LowPoly.Crag(v)));
         }
 
+        // 浅滩：水纹朝向与鹅卵石颗数按 variant % 2、石子大小按 variant % 3，取 0–5。
+        for (int v = 0; v < 6; v++)
+        {
+            parts.Add(($"shallows_{v}", LowPoly.Shallows(v)));
+        }
+
         parts.Add(("fence_x", LowPoly.Fence(alongX: true)));
         parts.Add(("fence_z", LowPoly.Fence(alongX: false)));
         parts.Add(("bridge", LowPoly.Bridge()));

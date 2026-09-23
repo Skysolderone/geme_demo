@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.TacticalLayers;
 
 /// <summary>
 /// 规格 terrain-surfaces · tactical-layers —— Requirement: 新地表的规则标示；以及「五种战术信息层」的差集地形来源（沼泽源 / 岩台远格 / 空浅滩）。
-/// 各段只加本段落地的地表：段 2 沼泽、段 3 岩台。
+/// 各段只加本段落地的地表：段 2 沼泽、段 3 岩台、段 4 浅滩。
 /// </summary>
 public class 新地表的规则标示Tests
 {
@@ -88,18 +88,49 @@ public class 新地表的规则标示Tests
     [Fact]
     public void 差集可由新地表解释()
     {
-        // 规格 Scenario「差集可由新地表解释」（段 3 先覆盖岩台 + 沼泽两类；浅滩在段 4 补进同一区域）：
-        // 岩台 C5 上 P0、沼泽 G6 上 P1（两子相隔足够远，互不干扰）→ 差集每一格都属于岩台远格或沼泽源。
-        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("C5", Surface.Crag), ("G6", Surface.Marsh)]))
+        // 规格 Scenario「差集可由新地表解释」：一块只含岩台、浅滩、沼泽三种特殊地形的区域——
+        // 岩台 C5 上 P0（其远格 C7 另设为空浅滩）、沼泽 G6 上 P1（两子相隔足够远，互不干扰）→ 差集每一格都属于岩台远格、空浅滩或沼泽源。
+        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("C5", Surface.Crag), ("C7", Surface.Shallows), ("G6", Surface.Marsh)]))
             .Pieces(P0, PieceType.Basic, "C5").Pieces(P1, PieceType.Basic, "G6");
 
         BoardReadingDiff diff = ((LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups)).Diff;
 
-        Assert.NotEmpty(diff.CoveredNotLiberty);
+        Assert.All(diff.CoveredNotLiberty.Concat(diff.LibertyNotCovered), d => Assert.Contains(d.Reasons.Single(), new[] { TerrainReason.Crag, TerrainReason.Shallows, TerrainReason.Marsh }));
+        Assert.Contains(diff.CoveredNotLiberty, d => d.Reasons.Single() == TerrainReason.Crag);
+        Assert.Equal([TerrainReason.Shallows], diff.CoveredNotLiberty.Single(d => d.Coord == TestMaps.At("C7")).Reasons);
         Assert.NotEmpty(diff.LibertyNotCovered);
-        Assert.All(diff.CoveredNotLiberty.Concat(diff.LibertyNotCovered), d => Assert.Contains(d.Reasons.Single(), new[] { TerrainReason.Crag, TerrainReason.Marsh }));
-        Assert.All(diff.CoveredNotLiberty, d => Assert.Equal([TerrainReason.Crag], d.Reasons));
         Assert.All(diff.LibertyNotCovered, d => Assert.Equal([TerrainReason.Marsh], d.Reasons));
+    }
+
+    [Fact]
+    public void 空浅滩在棋串读法中标为不算气()
+    {
+        // 规格 Scenario「空浅滩在棋串读法中标为不算气」：某棋串右侧 F5 是空浅滩、左侧 D5 是空草地 →
+        // D5 是它的气，F5 单独列为"贴着的空浅滩"，不在气里；二者分属两个集合，外观可区分（Godot 画暗灰小点，图例标明）。
+        // 变异验证 M-S4d（实跑）：LibertySnapshot 不填 ShallowsBeside → 本测试红。
+        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("F5", Surface.Shallows)])).Pieces(P0, PieceType.Basic, "E5");
+
+        var groups = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups);
+        LibertyGroupView group = groups.Groups.Single(g => g.Owner == P0);
+
+        Assert.Equal(["E4", "D5", "E6"], group.Liberties.Notations());
+        Assert.Equal(["F5"], group.ShallowsBeside.Notations());
+        Assert.Contains("浅滩：空着时不算气", groups.SurfaceLegend);
+    }
+
+    [Fact]
+    public void 差集可由空浅滩解释()
+    {
+        // 规格「五种战术信息层」差集来源：被覆盖但不是气的格可来自空浅滩。E5 上的 P0 覆盖空浅滩 F5，F5 不是气 → 原因"浅滩"。
+        // 修改前这一格会让 ReasonFor 抛"既无栅栏也非崖壁"。
+        MatchFlow match = TerrainMatch(TestMaps.Terrain(surfaces: [("F5", Surface.Shallows)])).Pieces(P0, PieceType.Basic, "E5");
+
+        BoardReadingDiff diff = ((TerritoryLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership)).Diff;
+
+        Assert.Empty(diff.LibertyNotCovered);
+        ReadingDiffCell cell = Assert.Single(diff.CoveredNotLiberty);
+        Assert.Equal(TestMaps.At("F5"), cell.Coord);
+        Assert.Equal([TerrainReason.Shallows], cell.Reasons);
     }
 
     /// <summary>9×9 流程夹具地图换上指定地形后开到第 5 大回合（与「盘面层的读法切换」同一夹具；地形要素须避开四角 3×3 出生区）。</summary>

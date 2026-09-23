@@ -252,6 +252,13 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(crag);
             }
 
+            if (playable && cell.Surface == Surface.Shallows)
+            {
+                Node3D shallows = LowPoly.Shallows(variant++);
+                shallows.Position = center;
+                _decoration.AddChild(shallows);
+            }
+
             StandardMaterial3D material = Visuals.Matte(color);
             _tileMaterials[cell.Coord] = material;
             _tileBase[cell.Coord] = color;
@@ -800,6 +807,12 @@ public sealed partial class BoardView : Node3D
             foreach (Coord liberty in group.Liberties)
             {
                 AddDot(liberty, Visuals.Liberty, 0.26f);
+            }
+
+            // 空浅滩：贴着棋串却不算气（terrain-surfaces），画成更小的暗灰点，与气点分开；图例写明"浅滩：空着时不算气"。
+            foreach (Coord shallow in group.ShallowsBeside)
+            {
+                AddDot(shallow, Visuals.ShallowNoLiberty, 0.14f);
             }
         }
     }

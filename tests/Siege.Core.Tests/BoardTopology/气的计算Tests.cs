@@ -91,4 +91,73 @@ public class 气的计算Tests
         Assert.Empty(board.LibertiesOf(trapped));
         Assert.True(board.IsCaptured(trapped));
     }
+
+    // ---------- terrain-surfaces 段 4：浅滩 ----------
+
+    [Fact]
+    public void 空浅滩不是气()
+    {
+        // 设计文档 §3.1 新地表算例「空浅滩不是气」/ 规格 board-topology「气的计算」：草地孤子 F6，右侧 G6 是空浅滩 → 气数 3，G6 不计入。
+        // 变异验证 M-S4a（实跑）：LibertiesOf 不过滤浅滩 → 浅滩的气 / 活形 / 差集测试共红。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.Shallows)])).Place("F6", TestMaps.P0);
+
+        Assert.Equal(["F5", "E6", "F7"], board.LibertiesOf(board.GroupAt(TestMaps.At("F6"))!).Notations());
+    }
+
+    [Fact]
+    public void 浅滩上的棋子照常有气()
+    {
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Shallows)])).Place("F6", TestMaps.P0);
+
+        Assert.Equal(4, board.LibertiesOf(board.GroupAt(TestMaps.At("F6"))!).Length);
+    }
+
+    [Fact]
+    public void 浅滩上的棋子照常连串()
+    {
+        // 拐角串 F6-G6-G7（F6、G6 在浅滩上）：同属一串；气边照常。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F6", Surface.Shallows), ("G6", Surface.Shallows)]))
+            .Place("F6", TestMaps.P0).Place("G6", TestMaps.P0).Place("G7", TestMaps.P0);
+
+        Assert.Equal(3, board.GroupAt(TestMaps.At("F6"))!.Size);
+        Assert.Equal(board.GroupAt(TestMaps.At("F6"))!.Stones, board.GroupAt(TestMaps.At("G7"))!.Stones);
+    }
+
+    [Fact]
+    public void 被空浅滩包围即无气()
+    {
+        // 规格 Scenario：孤子 F6 的四个气边邻格全是空浅滩 → 无气。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F5", Surface.Shallows), ("E6", Surface.Shallows), ("G6", Surface.Shallows), ("F7", Surface.Shallows)]))
+            .Place("F6", TestMaps.P0);
+
+        Group group = board.GroupAt(TestMaps.At("F6"))!;
+        Assert.Empty(board.LibertiesOf(group));
+        Assert.True(board.IsCaptured(group));
+    }
+
+    [Fact]
+    public void 提子腾出的浅滩格不成为气()
+    {
+        // 规格 Scenario：A 在浅滩 G6 的棋子被提走后，G6 为空，但不计入与它有气边的 B 棋串的气。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.Shallows)]))
+            .Place("F6", TestMaps.P1).Place("G6", TestMaps.P0);
+        Assert.DoesNotContain(TestMaps.At("G6"), board.LibertiesOf(board.GroupAt(TestMaps.At("F6"))!));
+
+        board.Clear(TestMaps.At("G6"));
+
+        Assert.True(board[TestMaps.At("G6")].IsPlayableEmpty);
+        Assert.Equal(["F5", "E6", "F7"], board.LibertiesOf(board.GroupAt(TestMaps.At("F6"))!).Notations());
+    }
+
+    [Fact]
+    public void 贴着的空浅滩单独列出()
+    {
+        // 表现层「空浅滩在棋串读法中标为不算气」的 Core 数据来源：与棋串有气边相连的空浅滩格，与气分开给出（不让表现层自己遍历邻接）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.Shallows), ("F7", Surface.Shallows)]))
+            .Place("F6", TestMaps.P0).Place("F7", TestMaps.P0);
+        Group group = board.GroupAt(TestMaps.At("F6"))!;
+
+        Assert.Equal(["G6"], board.EmptyShallowsBeside(group).Notations());   // F7 有子，不算"空浅滩"
+        Assert.DoesNotContain(TestMaps.At("G6"), board.LibertiesOf(group));
+    }
 }

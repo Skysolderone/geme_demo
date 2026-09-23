@@ -8,6 +8,9 @@ public sealed record GroupLiberties(PlayerId Owner, ImmutableArray<Coord> Stones
 {
     /// <summary>气数。</summary>
     public int Count => Liberties.Length;
+
+    /// <summary>贴着该棋串（有气边相连）、为空却不算气的格——空浅滩（terrain-surfaces），取自 <see cref="GameBoard.EmptyShallowsBeside"/>。</summary>
+    public ImmutableArray<Coord> ShallowsBeside { get; init; } = [];
 }
 
 /// <summary>
@@ -20,6 +23,6 @@ public static class LibertySnapshot
     public static ImmutableArray<GroupLiberties> Compute(GameBoard board)
     {
         ArgumentNullException.ThrowIfNull(board);
-        return [.. board.AllGroups().Select(g => new GroupLiberties(g.Owner, g.Stones, board.LibertiesOf(g)))];
+        return [.. board.AllGroups().Select(g => new GroupLiberties(g.Owner, g.Stones, board.LibertiesOf(g)) { ShallowsBeside = board.EmptyShallowsBeside(g) })];
     }
 }
