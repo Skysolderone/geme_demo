@@ -1,0 +1,6 @@
+{"file": "openspec/changes/superko-occupancy/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/superko-occupancy/design.md", "reason": "规格"}
+{"file": "openspec/changes/superko-occupancy/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/superko-occupancy/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现清单"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/慢测试/权重写死"}
