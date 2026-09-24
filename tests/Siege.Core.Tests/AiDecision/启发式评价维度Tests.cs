@@ -189,7 +189,7 @@ public class 启发式评价维度Tests
         //  2 O O O O .     A1 已是单格眼（邻格 A2、B1）；C1 的邻格 B1、C2 是 P0，D1 空 → C1 与右侧空地连成大空区，不是眼空间。
         //  1 . O . ! .     ! = 本批次 D1：C1 封闭为第二个单格眼，棋串眼值 1 → 2、成为已确定活形。
         //    A B C D E
-        // 原始值 = 眼值增量 1 + 活形数增量 1 × 3 = 4。简单难度不看眼位（D7）：同一批次为 0。
+        // 原始值 = 眼值增量 1 + 活形数增量 1 × 3 = 4。ai-eye R26 起简单难度也算眼位（D7）：同一批次同为 4（原为 0，段 D2 改写）。
         MatchFlow Position() => AiFixtures.Round5().Stones(AiFixtures.P0, "B1", "A2", "B2", "C2", "D2");
         MatchFlow match = Position();
         LifeShapeReport before = LifeShapeReport.Analyze(match.Board);
@@ -204,7 +204,7 @@ public class 启发式评价维度Tests
         Assert.Equal(4, e.RawOf(EvaluationDimension.Eye));
 
         (EvaluationBreakdown easy, _) = EvaluationFixtures.EvaluateP0(Position(), AiDifficulty.Easy, "D1");
-        Assert.Equal(0, easy.RawOf(EvaluationDimension.Eye));
+        Assert.Equal(4, easy.RawOf(EvaluationDimension.Eye));
     }
 
     [Fact]

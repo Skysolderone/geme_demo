@@ -58,7 +58,9 @@ public class 可复现回放Tests
         // 批量跑局中某局因断言失败而终止 → 保留种子、配置与终止前完整日志（文件名带 failed），可单独重跑复现同一失败。
         // 用配置里的测试专用注入点在第 5 个小回合触发断言失败；批量里其他局不受影响。
         // 变异验证 M-B21：MatchSession.Fail 丢弃已记录的事件（Events = []）→ 红 1（本测试）。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 51, turnLimit: 12, retention: EventRetention.SnapshotsOnly, injectFailureAtTurn: 5);
+        // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：三局都要走到第 5 个小回合才触发注入（默认阈值 80 下简单难度可能第 1 大回合全员 Pass 终局；段 D2 改写）。
+        RunConfig config = SimFixtures.PinPreCalibration(
+            SimFixtures.Config(count: 3, seedStart: 51, turnLimit: 12, retention: EventRetention.SnapshotsOnly, injectFailureAtTurn: 5));
         string dir = SimFixtures.TempDir("failed");
 
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);
@@ -76,8 +78,8 @@ public class 可复现回放Tests
         Assert.Equal(typeof(SimAssertionException).FullName, failed.Failure.ExceptionType);
         Assert.Contains("第 5 个小回合", failed.Failure.Message);
         Assert.Equal(5, failed.Turns.Count);
-        // ai-eye 段 B：首部配置里未配置的停手阈值落成实际生效的缺省值（ai-decision「停手阈值」：实际生效的阈值 MUST 写入日志首部）。
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold }).ToJson(), failed.Header.Config.ToJson());
+        // 首部配置 = 跑局配置（阈值已显式写死；"未配置的阈值落成缺省值写入首部"由 停手阈值Tests.阈值进入记录 钉住）。
+        Assert.Equal(config.ToJson(), failed.Header.Config.ToJson());
         // 失败局强制保留完整事件流（含细粒度事件），不受 SnapshotsOnly 影响
         Assert.Equal(EventRetention.Full, failed.Header.Retention);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.Candidates);

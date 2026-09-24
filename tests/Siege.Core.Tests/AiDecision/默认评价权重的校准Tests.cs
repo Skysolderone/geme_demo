@@ -1,18 +1,21 @@
 ﻿using System.Text.Json;
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
+using Siege.Core.Tests.CaptureResolution;
+using Xunit.Abstractions;
 
 namespace Siege.Core.Tests.AiDecision;
 
 /// <summary>规格：ai-decision —— Requirement: 默认评价权重的校准</summary>
-public class 默认评价权重的校准Tests
+public class 默认评价权重的校准Tests(ITestOutputHelper output)
 {
     [Theory]
-    // restore-go-core-rules 起七维全部标注为未校准（EvaluationWeights.CalibrationStatus）：计分口径变了，此前每一档扫档结论所依赖的分数尺度都不复存在。
-    // 本测试把七维当前取值一并钉住——任一维被改动，必须连同 EvaluationWeights 的依据段一起更新才允许变绿。
+    // ai-eye 段 D 校准（v5、种子 1–200、4 人标准难度、每档 200 局）：Eye / Safety / Threat 三维扫过档，其余六维沿用旧值、新规则下未单独扫档
+    // （EvaluationWeights.CalibrationOf）。本测试把九维当前取值一并钉住——任一维被改动，必须连同 EvaluationWeights 的依据段一起更新才允许变绿。
     [InlineData(EvaluationDimension.PowerGain, 10)]
     [InlineData(EvaluationDimension.EnemyLoss, 8)]
     [InlineData(EvaluationDimension.Relic, 6)]
@@ -20,10 +23,10 @@ public class 默认评价权重的校准Tests
     [InlineData(EvaluationDimension.Growth, 4)]
     [InlineData(EvaluationDimension.Initiative, 20)]
     [InlineData(EvaluationDimension.Supply, 2)]
-    // ai-eye 段 A：新增两维先取 0（权重为 0 时决策与七维实现逐步相同），初值与扫档归段 D。
-    // 变异 M-A6t（只改测试不改实现）：Supply / Eye 两行期望对调（2 ↔ 0）→ 红 2（这两行）。
-    [InlineData(EvaluationDimension.Eye, 0)]
-    [InlineData(EvaluationDimension.Threat, 0)]
+    // ai-eye 段 D2（4.5）：段 A 新增的两维由 0 改为校准值（sim-out/ai-eye-pass-80 = 选定组合）。
+    // 变异 M-D2-1t（只改测试不改实现）：Eye / Threat 两行期望对调（200 ↔ 25）→ 红 2（这两行）。
+    [InlineData(EvaluationDimension.Eye, 200)]
+    [InlineData(EvaluationDimension.Threat, 25)]
     public void 默认权重被改动(EvaluationDimension dimension, int calibrated)
     {
         EvaluationWeights d = EvaluationWeights.Default;
@@ -51,16 +54,27 @@ public class 默认评价权重的校准Tests
     [Fact]
     public void 默认停手阈值被改动()
     {
-        // 规格 Scenario「默认权重被改动」同样覆盖默认停手阈值（ai-eye 段 B 2.3）：初值 20 = 2 × PowerGain 权重 10（基准文档 PASS_THRESHOLD = 2.0、power 权重 1.0），
-        // 未校准，段 D 扫档定值。钉住取值、三档共用（裁决 R1）、源码里的未校准标注与依据同步。
-        // 变异 M-B12t（只改测试不改实现：期望 20 → 21）→ 红 1（本测试）。M-B16（简单难度预设漏写阈值、回落到构造缺省 0）→ 红 2（本测试、难度分级Tests.简单难度只看即时收益）。
-        Assert.Equal(20, AiSearchConfig.DefaultPassThreshold);
+        // 规格 Scenario「默认权重被改动」同样覆盖默认停手阈值。ai-eye 段 D 校准为 80（= 8 × PowerGain 权重 10，裁决 R24；段 B 的初值依据已由扫档取代）。
+        // 钉住取值、三档共用（裁决 R1）、源码里的校准口径（地图 / 种子 / 局数 / 档位 / 数据目录）与依据同步。
+        // 变异 M-B12t（只改测试不改实现：期望 80 → 81）→ 红 1（本测试）；M-D2-2（实现 80 → 81）→ 红 1（本测试）。
+        // M-B16（简单难度预设漏写阈值、回落到构造缺省 0）→ 红 2（本测试、难度分级Tests.简单难度只看即时收益与眼位）。
+        Assert.Equal(80, AiSearchConfig.DefaultPassThreshold);
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.DefaultPassThreshold, AiSearchConfig.ForDifficulty(d).PassThreshold));
 
         string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "AiDifficulty.cs"));
-        Assert.Contains("未校准", AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
-        Assert.DoesNotContain("已校准", AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
-        Assert.Contains(AiSearchConfig.PassThresholdCalibrationStatus, src, StringComparison.Ordinal);
+        string status = AiSearchConfig.PassThresholdCalibrationStatus;
+        foreach (string evidence in new[] { "ai-eye 段 D 校准", FourPlayerBaseMap.Id, "种子 1–200", "200 局", "sim-out/ai-eye-pass-" })
+        {
+            Assert.Contains(evidence, status, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("未校准", status, StringComparison.Ordinal);
+        Assert.Contains($"{AiSearchConfig.DefaultPassThreshold} / 160", status, StringComparison.Ordinal);   // 选定值在档位清单里
+        Assert.Contains(status, src, StringComparison.Ordinal);
+
+        // 已被扫档取代的段 B 初值依据不得留在源码里（D4 改写，R24）。
+        Assert.DoesNotContain("待段 D", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("取 2 ×", src, StringComparison.Ordinal);
         Assert.Contains($"DefaultPassThreshold = {AiSearchConfig.DefaultPassThreshold}", src, StringComparison.Ordinal);
         Assert.Contains($"PassThreshold = {AiSearchConfig.DefaultPassThreshold}", src.Replace("DefaultPassThreshold", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
         Assert.DoesNotContain($"PassThreshold = {AiSearchConfig.DefaultPassThreshold + 1}", src, StringComparison.Ordinal);
@@ -69,16 +83,104 @@ public class 默认评价权重的校准Tests
     [Fact]
     public void 规则变更使校准失效()
     {
-        // restore-go-core-rules 改写了军势公式与总势力构成，旧口径下扫档得到的全部默认权重随之失效。
-        // 规格「默认评价权重的校准」：在 ai-eye 重新扫档之前，权重表 MUST 带显式的未校准标注，
-        // 且 MUST NOT 声称任一维度已校准——本条钉住标注在位，并挡住"悄悄把值改回旧口径的取值"。
+        // restore-go-core-rules / life-shape 之后旧校准全部失效；ai-eye 段 D 重新扫档，但只扫了 Eye / Safety / Threat 三维（与停手阈值）。
+        // 规格：尚未校准的维度 MUST 带显式标注；去掉标注而无新校准记录则守门失败。于是逐维二选一：
+        //   扫过档 → 校准记录必须指向跑局证据（地图、种子范围、局数、数据目录）；没扫过 → 必须恰为"沿用旧值、新规则下未单独扫档"。
+        // 变异 M-D2-3（CalibrationOf 的缺省分支改成 "已校准"）→ 红 2（本测试、引用未校准维度产出的数据）。
+        EvaluationDimension[] swept = [EvaluationDimension.Safety, EvaluationDimension.Eye, EvaluationDimension.Threat];
+        foreach (EvaluationDimension d in Enum.GetValues<EvaluationDimension>())
+        {
+            string status = EvaluationWeights.CalibrationOf(d);
+            if (swept.Contains(d))
+            {
+                foreach (string evidence in new[] { "ai-eye 段 D 校准", FourPlayerBaseMap.Id, "种子 1–200", "200 局", "sim-out/ai-eye-" })
+                {
+                    Assert.Contains(evidence, status, StringComparison.Ordinal);
+                }
+            }
+            else
+            {
+                Assert.Equal(EvaluationWeights.NotSweptStatus, status);
+                Assert.Contains(d.ToString(), EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
+            }
+        }
 
-        Assert.Contains("未校准", EvaluationWeights.CalibrationStatus);
-        Assert.DoesNotContain("已校准", EvaluationWeights.CalibrationStatus);
+        Assert.Equal("沿用旧值、新规则下未单独扫档", EvaluationWeights.NotSweptStatus);
+        Assert.Contains(EvaluationWeights.NotSweptStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
 
-        // 27 / 20 都是更早口径下的 Safety 取值，各自被当时的扫档否定；现口径下同样不是校准值。
+        // 27 / 20 都是更早口径下的 Safety 取值，各自被当时的扫档否定；现口径下 35 是重新扫出来的（恰与旧值相同），不是继承。
         Assert.NotEqual(27, EvaluationWeights.Default.Safety);
         Assert.NotEqual(20, EvaluationWeights.Default.Safety);
+    }
+
+    // 变异（只改测试，段 D2）：M-D2-6t 截断计数取反（Truncated → !Truncated）→ 红 1（本测试）；M-D2-7t 样本下界放大到 10000 × 局数 → 红 1（本测试，下界是活的）。
+    // 完整版（种子 1–200）实测截断 2 局（101、171），上限 10 局。
+    [Fact]
+    public void 校准后截断率达标() => AssertTruncation(count: 20, maxTruncated: 1);
+
+    [SlowFact]
+    [Trait("Category", "Slow")]
+    public void 校准后截断率达标_种子1至200() => AssertTruncation(count: 200, maxTruncated: 10);
+
+    [Fact]
+    public void 引用未校准维度产出的数据()
+    {
+        // 规格：未校准维度的当前默认值产出的数据，引用时须注明其权重口径。机制上由批次记录自带：config.json 写实际生效的九维权重与停手阈值
+        // （RunConfig.Effective / ResolvedFor），即便跑局时一项都没显式配置。本测试钉住"六个未单独扫档的维度，其取值都随数据落盘"。
+        // 变异 M-D2-5（Effective 不填默认权重）→ 红 2（本测试、批量跑局Tests.批量执行并汇总）。
+        EvaluationDimension[] notSwept = [.. Enum.GetValues<EvaluationDimension>().Where(d => EvaluationWeights.CalibrationOf(d) == EvaluationWeights.NotSweptStatus)];
+        Assert.Equal(6, notSwept.Length);   // 样本口径下界：确有未扫档维度可查
+
+        RunConfig config = SimFixtures.Config(seedStart: 5, turnLimit: 4, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly);
+        Assert.All(config.Players, p => Assert.Null(p.Weights));
+        Assert.Null(config.PassThreshold);
+        string dir = SimFixtures.TempDir("calibration-provenance");
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+
+        RunConfig saved = RunConfig.FromJson(File.ReadAllText(Path.Combine(dir, "config.json")));
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, saved.PassThreshold);
+        Assert.All(saved.Players, p =>
+        {
+            Assert.NotNull(p.Weights);
+            foreach (EvaluationDimension d in notSwept)
+            {
+                Assert.Equal(EvaluationWeights.Default.Of(d), p.Weights!.Of(d));
+            }
+
+            Assert.Equal(EvaluationWeights.Default, p.Weights);
+        });
+
+        // 反面：只改一个未扫档维度，记录随之不同——口径不同的两份数据从记录上就区分得开，不会被当成同口径直接比较。
+        EvaluationWeights other = EvaluationWeights.Default with { Growth = EvaluationWeights.Default.Growth + 1 };
+        RunConfig changed = config with { Players = [.. config.Players.Select(p => p with { Weights = other })] };
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold }).Effective().ToJson());
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold }).Effective().ToJson());
+    }
+
+    /// <summary>
+    /// 与校准批次同口径：<c>siege-4p-base-v5</c>、种子 1 起、4 名 Standard AI、未显式配置权重与停手阈值（取默认）、小回合数截断 600。
+    /// 缩小版（默认套件）种子 1–20、截断至多 1 局（5%）；完整版种子 1–200、至多 10 局（规格原文）。
+    /// CLI 对照：<c>sim-out/ai-eye-pass-80</c> 截断 2 局（种子 101、171），种子 1–20 无截断。
+    /// </summary>
+    private void AssertTruncation(int count, int maxTruncated)
+    {
+        RunConfig config = SimFixtures.Config(count: count, seedStart: 1, turnLimit: RunConfig.DefaultTurnLimit, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly);
+        Assert.Equal(FourPlayerBaseMap.Id, config.MapId);
+        Assert.All(config.Players, p => Assert.Null(p.Weights));
+        Assert.Null(config.PassThreshold);
+
+        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: Environment.ProcessorCount);
+        Assert.Equal(count, logs.Count);
+        Assert.All(logs, l => Assert.False(l.IsFailed));
+        Assert.All(logs, l => Assert.Equal(AiSearchConfig.DefaultPassThreshold, l.Header.Config.PassThreshold));
+
+        // 样本口径下界：AI 真的在落子。一子不落的局全部 AllPassed、截断为 0，是空证（段 D2 简单难度在阈值 80 下即如此）。
+        int placingTurns = logs.Sum(l => l.Turns.Count(t => !t.Passed));
+        Assert.True(placingTurns >= 10 * count, $"{count} 局只有 {placingTurns} 个落子小回合");
+
+        ulong[] truncated = [.. logs.Where(l => l.Result!.Truncated).Select(l => l.Seed).Order()];
+        output.WriteLine($"种子 1–{count}：截断 {truncated.Length} 局（{string.Join("、", truncated)}），落子小回合 {placingTurns}");
+        Assert.True(truncated.Length <= maxTruncated, $"截断 {truncated.Length} 局 > {maxTruncated}：{string.Join("、", truncated)}");
     }
 
     [Fact]
@@ -126,12 +228,13 @@ public class 默认评价权重的校准Tests
         string src = File.ReadAllText(
             Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "EvaluationWeights.cs"));
 
-        // restore-go-core-rules 段 B（tasks 2.6）：计分口径一变，七维的校准依据全部失效。
-        // 守门改为：① 有一条机读的"未校准"标注常量，且它就是 ai-decision 规格要求的显式标注；
-        //           ② 依据段里逐维点名当前取值，改了值不改这一段就对不上；③ 已作废的旧结论不得留在注释里。
-        Assert.Equal("未校准（restore-go-core-rules 起失效，待 ai-eye）", EvaluationWeights.CalibrationStatus);
+        // ai-eye 段 D2（4.5）：守门为 ① 机读的校准口径常量钉死、且在源码里；② 依据段里逐维点名当前取值，改了值不改这一段就对不上；
+        //   扫过档的三维另须写成"<b>名 = 值</b>——ai-eye 段 D 校准"；③ 已作废的旧结论与"待校准"措辞不得留在注释里。
+        // 变异 M-D2-4（实现 Eye 200 → 201）→ 红 2（本测试、默认权重被改动(Eye)）。
+        Assert.Equal(
+            "ai-eye 段 D 校准：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档",
+            EvaluationWeights.CalibrationStatus);
         Assert.Contains(EvaluationWeights.CalibrationStatus, src, StringComparison.Ordinal);
-        Assert.Contains("ai-eye", src, StringComparison.Ordinal);
 
         EvaluationWeights d = EvaluationWeights.Default;
         foreach ((string name, int value) in new[]
@@ -146,11 +249,18 @@ public class 默认评价权重的校准Tests
             Assert.DoesNotContain($"{name} = {value + 1}", src, StringComparison.Ordinal);
         }
 
+        foreach ((string name, int value) in new[] { (nameof(d.Eye), d.Eye), (nameof(d.Safety), d.Safety), (nameof(d.Threat), d.Threat) })
+        {
+            Assert.Contains($"<b>{name} = {value}</b>——ai-eye 段 D 校准", src, StringComparison.Ordinal);
+        }
+
         // ③ 反面：已被计分口径作废的旧结论不得留在注释里——留着会把下一个人往反方向引。
         Assert.DoesNotContain("是校准值", src, StringComparison.Ordinal);
         Assert.DoesNotContain("sim-out/artisan-w5-s", src, StringComparison.Ordinal);
         Assert.DoesNotContain("阶段 B 的首个校准项", src, StringComparison.Ordinal);
         Assert.DoesNotContain("取 40 一半收敛", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("待 ai-eye", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("未校准（", src, StringComparison.Ordinal);
     }
 
     /// <summary>一局的过程投影（快照 + 事件），不含首行 header——header 里带配置 JSON，会把"权重填没填"本身混进比对。</summary>

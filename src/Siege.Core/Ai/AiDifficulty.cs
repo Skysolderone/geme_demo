@@ -1,12 +1,12 @@
 namespace Siege.Core.Ai;
 
 /// <summary>
-/// AI 难度（设计文档 §15.2）。简单只看即时收益、贪心一条；标准 / 高难扩大候选数量与评价深度，MUST NOT 读隐藏信息。
-/// 活形硬约束与停手阈值对三档一律生效（ai-eye D7：它们是对局收敛的底线，不是强度手段）；眼位 / 威胁两维从标准难度起生效。
+/// AI 难度（设计文档 §15.2）。简单只看即时收益与眼位、贪心一条；标准 / 高难扩大候选数量与评价深度，MUST NOT 读隐藏信息。
+/// 活形硬约束与停手阈值对三档一律生效（ai-eye D7：它们是对局收敛的底线，不是强度手段）；眼位维同样三档生效（ai-eye R26），威胁维从标准难度起生效。
 /// </summary>
 public enum AiDifficulty
 {
-    /// <summary>简单：只用即时势力增量与敌方势力损失两维，候选批次 M = 1（对照组）。</summary>
+    /// <summary>简单：只用即时势力增量、敌方势力损失与眼位三维（眼位见 ai-eye R26），候选批次 M = 1（对照组）。</summary>
     Easy,
 
     /// <summary>标准：九维评价，M = 8。</summary>
@@ -23,7 +23,7 @@ public enum AiDifficulty
 /// </summary>
 /// <param name="CandidatePointCount">候选落点数 N。</param>
 /// <param name="CandidateBatchCount">候选批次数 M。</param>
-/// <param name="ImmediateOnly">只评价即时收益（简单难度）。</param>
+/// <param name="ImmediateOnly">只评价即时收益与眼位（简单难度；眼位自 ai-eye R26 起计入，字段名沿用以保持配置与日志首部兼容）。</param>
 /// <param name="CandidateCellLimit">
 /// 候选格上限 K（frontier-map 裁决 12）：0 = 不限制（缺省，与引入本参数之前逐步相同）。大于 0 且合法空格多于 K 时，
 /// 先用一种代表类型对每格预演一次得格分（代表类型落不下而持有匠人的格，退而用匠人带改造的最高合法总分），
@@ -42,19 +42,25 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
     public const int LargeMapPlayableThreshold = 150;
 
     /// <summary>
-    /// 默认停手阈值。<b>PassThreshold = 20</b>——未校准（ai-eye 段 B 初值）：取 2 × <see cref="EvaluationWeights.PowerGain"/> 默认权重 10，
-    /// 对应基准文档 <c>PASS_THRESHOLD = 2.0</c>、power 权重 1.0 的比例；没有任何跑局依据，校准归 ai-eye 段 D（design D6 第 2 条，双向扫档）。
-    /// 以它产出的数据引用时 MUST 注明"未校准口径"。改值须连同本段与 <see cref="PassThresholdCalibrationStatus"/> 一起更新（守门：<c>默认评价权重的校准Tests.默认停手阈值被改动</c>）。
+    /// 默认停手阈值。<b>PassThreshold = 80</b>（= 8 × <see cref="EvaluationWeights.PowerGain"/> 默认权重 10）——ai-eye 段 D 校准（design D4 / D6，裁决 R24）：
+    /// <c>siege-4p-base-v5</c>、种子 1–200、4 名标准难度 AI、每档 200 局、小回合数截断 600，Eye 200 / Safety 35 / Threat 25 下双向扫六档，
+    /// 每档写作"截断 / 整局无提子 / 已终局局的平均结束大回合"：0 → 3.5% / 29.0% / 12.24；10 → 4.0% / 32.0% / 11.49；20 → 4.0% / 32.5% / 10.59；
+    /// 40 → 2.5% / 36.0% / 11.15；80 → 1.0% / 32.0% / 9.81；160 → 0% / 73.5% / 7.73（<c>sim-out/ai-eye-pass-*</c>、<c>sim-out/ai-eye-eye-200</c>）。
+    /// 0 / 10 / 80 在无提子最低档的 1 个二项标准误内并列，只有 80 的平均结束大回合落在 7–10；80 → 160 无提子陡升，最优不在边界。
+    /// 三档难度共用（裁决 R1）。简单难度原只算 PowerGain / EnemyLoss 两维，在本阈值下 v5 种子 1–200 一子不落（<c>sim-out/ai-eye-final-easy</c>）；
+    /// 按裁决 R26 把眼位维度下放到简单难度后同口径重跑：截断 36 / 200（18%）、74 局第 1 大回合全员一子不落（<c>sim-out/ai-eye-final-easy-eye</c>）——
+    /// 简单难度仍未达到「截断 ≤ 5%」，按 R26 停下、未再调整，处理方式交负责人裁决（见任务 09-23-ai-eye 的段 D2 记录）。标准难度不受 R26 影响。
+    /// 改值须连同本段与 <see cref="PassThresholdCalibrationStatus"/> 一起更新（守门：<c>默认评价权重的校准Tests.默认停手阈值被改动</c>）。
     /// </summary>
-    public const int DefaultPassThreshold = 20;
+    public const int DefaultPassThreshold = 80;
 
     /// <summary>默认停手阈值的校准口径（ai-decision「默认评价权重的校准」要求的显式标注）。</summary>
-    public const string PassThresholdCalibrationStatus = "未校准（ai-eye 段 B 初值 = 2 × PowerGain 权重，待段 D 扫档）";
+    public const string PassThresholdCalibrationStatus = "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 20 / 40 / 80 / 160 六档；sim-out/ai-eye-pass-*";
 
     /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>
     public const int LargeMapCellLimit = 24;
 
-    /// <summary>简单：贪心一条、只看即时收益。</summary>
+    /// <summary>简单：贪心一条、只看即时收益与眼位。</summary>
     public static readonly AiSearchConfig Easy = new(CandidatePointCount: 6, CandidateBatchCount: 1, ImmediateOnly: true, PassThreshold: DefaultPassThreshold);
 
     /// <summary>标准。</summary>

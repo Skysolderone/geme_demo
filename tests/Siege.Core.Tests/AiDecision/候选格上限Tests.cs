@@ -100,7 +100,9 @@ public class 候选格上限Tests
     {
         // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 本测试红。
         // 段 A check 实跑：在重建后的黄金哈希上 M-K1 仍红 36（含本测试）——哈希虽是段 A 后重生成的，但不是自证的。
-        MatchLog log = BatchRunner.Execute(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard), parallelism: 1)[0];
+        // ai-eye 段 D2（4.5）：黄金哈希产自定值之前的缺省（Eye / Threat 0、停手阈值 20），权重与阈值写死为该口径——本测试钉的是"K 缺省不改变走法"，不是默认权重。
+        MatchLog log = BatchRunner.Execute(
+            SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)), parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
         Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");

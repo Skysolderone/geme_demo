@@ -16,10 +16,13 @@ public class 随机子流隔离Tests
         // 三者的信物生成结果逐格保持不变；跑局层自己的抽样子流 sim-sample 也不影响对局子流。
         // 变异验证 M-B23：MatchSession.Create 把 MaxMajorRounds 混进种子（seed ^ MaxMajorRounds）→ 红 4（本测试：C 的信物分布与 A 不同；另红 批量执行并汇总、纯AI局可凭种子复现、失败局可复现）。
         // 子流原语层的变异（M-D3：Stream 忽略名字）由 Determinism/随机子流隔离Tests 钉住，这里不重复。
-        RunConfig config = SimFixtures.Config(turnLimit: 8);
+        // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：前提"C 多消费征募子流"要求对局走满 3 个大回合（默认阈值 80 下种子 61 第 1 大回合全员 Pass；段 D2 改写）。
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 8));
         MatchSession a = MatchSession.Create(config, 61);
         MatchSession b = MatchSession.Create(config, 61);
-        b.SetController(new PlayerId(0), new NoRecruitController(Ai.HeuristicAi.Create(b.Match, new PlayerId(0), Ai.AiDifficulty.Easy)));
+        b.SetController(new PlayerId(0), new NoRecruitController(Ai.HeuristicAi.Create(
+            b.Match, new PlayerId(0), Ai.AiDifficulty.Easy, SimFixtures.PreCalibrationWeights,
+            Ai.AiSearchConfig.Easy with { PassThreshold = SimFixtures.PreCalibrationPassThreshold })));
         MatchSession c = MatchSession.Create(config with { TurnLimit = 12 }, 61);
 
         MatchLog logA = a.Run();

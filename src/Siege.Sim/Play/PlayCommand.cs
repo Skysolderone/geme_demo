@@ -14,10 +14,16 @@ internal static class PlayCommand
 {
     /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
     /// <param name="cellLimit">AI 候选格上限 K；<c>null</c> 按地图的可落子格数自动取（<see cref="AiSearchConfig.ForMap"/>），0 = 不限制。</param>
-    public static int Run(ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null)
+    /// <param name="weights">测试接缝：AI 评价权重；<c>null</c> = 默认权重表。终端入口不传（ai-eye R12：终端对局一律用缺省值，不加选项）。</param>
+    /// <param name="passThreshold">测试接缝：AI 停手阈值；<c>null</c> = 难度预设的缺省值。终端入口不传（同上）。
+    /// 依赖 AI 实际走法的脚本测试用这两项写死权重与阈值，使脚本不随默认值校准而失步（testing.md「依赖 AI 实际怎么走的断言要把权重写死」）。</param>
+    public static int Run(
+        ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
+        EvaluationWeights? weights = null, int? passThreshold = null)
     {
         map ??= MapCatalog.Resolve(null);
-        AiSearchConfig search = AiSearchConfig.ForMap(difficulty, map.PlayableCount, cellLimit).Validated();
+        AiSearchConfig search = AiSearchConfig.ForMap(difficulty, map.PlayableCount, cellLimit);
+        search = (passThreshold is int threshold ? search with { PassThreshold = threshold } : search).Validated();
         if (playerCount < 2 || playerCount > map.MaxPlayers)
         {
             throw new ArgumentException($"人数须在 2..{map.MaxPlayers}。");
@@ -63,7 +69,7 @@ internal static class PlayCommand
             {
                 runner.SetController(p, p == me
                     ? new ConsoleController(me, match.Publish, input, output)
-                    : HeuristicAi.Create(match, p, difficulty, config: search));
+                    : HeuristicAi.Create(match, p, difficulty, weights, search));
             }
 
             output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Player, me)}→{BirthZoneLabel.Number(c.Zone)}号区"))}");

@@ -27,7 +27,10 @@ public class 边疆图终端试玩脚本Tests
             "");
         var output = new StringWriter();
 
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script), output, MapCatalog.Resolve(FrontierMapV2.Id));
+        // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：脚本里的征募编号与行动顺序依赖 AI 实际走法（默认值下 AI 一子不落，第 2 大回合起失步；段 D2 改写）。
+        int exit = PlayCommand.Run(
+            42, 4, 1, AiDifficulty.Easy, new StringReader(script), output, MapCatalog.Resolve(FrontierMapV2.Id),
+            weights: SimFixtures.PreCalibrationWeights, passThreshold: SimFixtures.PreCalibrationPassThreshold);
 
         string text = output.ToString();
         string[] lines = [.. text.Split('\n').Select(l => l.TrimEnd('\r'))];

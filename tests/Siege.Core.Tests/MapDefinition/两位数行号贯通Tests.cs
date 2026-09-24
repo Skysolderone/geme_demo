@@ -108,7 +108,8 @@ public class 两位数行号贯通Tests
         MatchFlow match = MatchFlow.CreateUnvalidated(
             map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate);
         match.PlantSequentially([(P0, 0), (P1, 1)]);
-        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 2, players: 2));
+        // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：样本下界"P0 落了子"依赖走法（默认阈值 80 下简单难度第 1 大回合可能一子不落；段 D2 改写）。
+        MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 2, players: 2)));
 
         MatchLog log = MatchLog.Parse(session.Run().FullText());
 

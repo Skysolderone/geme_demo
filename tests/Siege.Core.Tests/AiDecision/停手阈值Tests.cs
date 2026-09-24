@@ -73,13 +73,15 @@ public class 停手阈值Tests
         //  1 . ! O     ! = B1（唯一合法格）
         //    A B C
         // 落 B1：领地 −1、棋串军势 +1，势力增量 0；简单难度总分 0。阈值 0 下"提升 0 不大于 0"→ 撤回。
+        // ai-eye R26 起简单难度也算眼位：B1 把 2 格空区变成单格眼 A1（眼位原始值 +1），在默认权重下不再是零收益手。
+        // 本 Scenario 钉的是"零收益 → 撤回"，故权重写死为眼位 0 的定值前缺省（段 D2 改写）。
         MatchFlow match = AiFixtures.Round5().Stones(Me, "A2", "B2", "C1");
         EyeSpace space = LifeShapeReport.Analyze(match.Board).EyeSpaceAt(TestMaps.At("B1"))!;
         Assert.Equal(2, space.Cells.Length);
         Assert.Equal(Me, space.Owner);
         (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, 1, "B1");
 
-        HeuristicTurnController ai = DeployWith(match, AiDifficulty.Easy, AiSearchConfig.Easy with { PassThreshold = 0 }, null, batch, driver);
+        HeuristicTurnController ai = DeployWith(match, AiDifficulty.Easy, AiSearchConfig.Easy with { PassThreshold = 0 }, SimFixtures.PreCalibrationWeights, batch, driver);
 
         PointScore point = Assert.Single(ai.LastPointRanking);
         Assert.Equal(0, point.Evaluation.RawOf(EvaluationDimension.PowerGain));
@@ -135,8 +137,10 @@ public class 停手阈值Tests
         // 对照值取自严格提高实现的实际运行（见 StrictImprovementTurnHash）；种子 1–20 的离线决策序列比对另见 implement 记录。
         // 变异 M-B14（会话建 AI 时不传跑局配置的阈值，即实际按缺省 20 跑）→ 红 2（本测试、阈值进入记录）。
         // M-B6（> 改 >=）在本样本上不红：种子 31 前 24 个小回合里没有边际提升恰为 0 的候选，阈值 0 下 > 与 >= 走法相同；该变异由「零收益不落子」「恰等于阈值不落子」挡住。
-        MatchLog log = BatchRunner.Execute(
-            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 0 }, parallelism: 1)[0];
+        // ai-eye 段 D2（4.5）：九维权重写死为对照实现当时的缺省（Eye / Threat = 0）。本测试钉的是"阈值 0 = 严格提高"，不是默认权重；
+        // 默认权重改为校准值（Eye 200、Threat 25）后若仍跟随缺省，对照哈希就不再是"严格提高实现"的产物（testing.md「校准与保真度分离」）。
+        RunConfig zero = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)) with { PassThreshold = 0 };
+        MatchLog log = BatchRunner.Execute(zero, parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
         Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
@@ -152,7 +156,8 @@ public class 停手阈值Tests
     public void 阈值进入记录()
     {
         // 批次配置记录与日志首部都读原文，不经反序列化（缺省值会掩盖漏写）。
-        // 变异 M-B8（RunConfig.ResolvedFor 不落成缺省阈值）→ 红 6（本测试、首部缺停手阈值的旧日志按0回放，以及 SimulationHarness 4 条：首部缺该项 → 回放按 0 重建而分歧 / 配置记录不符）。
+        // 变异 M-B8（RunConfig.ResolvedFor 不落成缺省阈值）→ 段 B 实测红 6；ai-eye 段 D2 重跑（缺省阈值改为 80、多个夹具写死阈值之后）红 13（本测试、首部缺停手阈值的旧日志按0回放，
+        // 以及回放 / 配置记录类 11 条：首部缺该项 → 回放按 0 重建而分歧 / 配置记录不符，逐条见任务 09-23-ai-eye 段 D2 记录）。
         // 变异 M-B14（会话建 AI 时不传跑局配置的阈值）→ 红 2（本测试的逐玩家断言、阈值为0时零变化）。
         RunConfig blank = SimFixtures.Config(turnLimit: 4);
         Assert.Null(blank.PassThreshold);

@@ -38,7 +38,9 @@ internal static class SimFixtures
     /// <b>Easy 难度从不落匠人</b>（征募前瞻分只看基础军势，匠人 1 分在平手里排枚举末位；实测 4 局 × 12 大回合 2718 条棋串含匠人 0 条），
     /// 需要匠人上盘的遥测守门要自己起 <see cref="Siege.Core.Ai.AiDifficulty.Standard"/> 的小样本——见 <c>各棋子势力占比Tests.真实跑局快照的类型计数与明细自洽</c>。
     /// </summary>
-    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(Config(count: 4, seedStart: 11), parallelism: 1));
+    /// <remarks>权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省（<see cref="PinPreCalibration"/>）：大量遥测 / 日志 / 分析测试的样本口径（4 局全是截断局等）
+    /// 依赖这四局的实际走法，不应随校准值与 R26（简单难度算眼位）漂移（段 D2 改写）。</remarks>
+    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(PinPreCalibration(Config(count: 4, seedStart: 11)), parallelism: 1));
 
     /// <summary>
     /// 有名次的真实样本（restore-go-core-rules 段 E）：规则层删掉大回合上限与碾压之后，<see cref="Sample"/> 的 4 局全是 <c>turn_limit</c> 截断局、胜者全空，
@@ -48,12 +50,31 @@ internal static class SimFixtures
     /// </summary>
     internal static readonly Lazy<List<MatchLog>> RankedSample = new(() => [.. Enumerable.Range(0, 4).Select(i => RankedMatch(11UL + (ulong)i, survivor: i))]);
 
+    /// <summary>
+    /// ai-eye 4.5 定值之前（段 B–D1）实际生效的缺省权重：七维旧值、<c>Eye</c> / <c>Threat</c> 为 0。
+    /// 依赖 AI 实际走法、黄金值在定值之前钉下的测试写死它（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），与校准值脱钩。
+    /// 眼位权重为 0 时简单难度算不算眼位维（ai-eye R26）结果都一样，所以这些测试的走法也不受 R26 影响。
+    /// </summary>
+    internal static readonly EvaluationWeights PreCalibrationWeights =
+        new(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 0, Threat: 0);
+
+    /// <summary>ai-eye 4.5 定值之前（段 B–D1）实际生效的缺省停手阈值（段 B 初值 20；现缺省为校准值 80）。</summary>
+    internal const int PreCalibrationPassThreshold = 20;
+
+    /// <summary>把配置的权重与停手阈值写死为 4.5 定值之前的缺省（见 <see cref="PreCalibrationWeights"/>）。</summary>
+    internal static RunConfig PinPreCalibration(RunConfig config) => config with
+    {
+        PassThreshold = PreCalibrationPassThreshold,
+        Players = [.. config.Players.Select(p => p with { Weights = PreCalibrationWeights })],
+    };
+
     /// <summary>一局有名次的真实对局：跑满 3 个大回合后，除 <paramref name="survivor"/> 外全部弃赛。</summary>
     internal static MatchLog RankedMatch(ulong seed, int survivor)
     {
         // 走法依赖 AI 权重：写死当前取值（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），调默认权重不会让领先者胜数的样本口径断言翻掉。
-        var weights = new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 0, Threat: 0);
-        RunConfig config = Config(turnLimit: 0) with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = AiDifficulty.Easy, Weights = weights })] };
+        // 停手阈值同样写死（ai-eye 段 B 待决 #8，段 D2 落实）：缺省阈值随 4.5 由 20 改为 80，不写死则 Easy 的走法随之变、样本口径断言跟着翻。
+        // 写死的是本夹具建立时（段 B–D1）实际生效的缺省值，四局逐步不变；眼位权重为 0，R26（简单难度算眼位）也不改变走法。
+        RunConfig config = PinPreCalibration(Config(turnLimit: 0));
         MatchSession session = MatchSession.Create(config, seed);
         while (session.Match.MajorRound <= 3 && session.RunTurn())
         {

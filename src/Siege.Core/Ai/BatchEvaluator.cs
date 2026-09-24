@@ -78,17 +78,17 @@ public sealed class BatchEvaluator
         _rankBefore = _before.RankOf(me);
         _relicBefore = RelicScore(_before.Coverage);
 
-        // 批次开始前的活形查询：活形硬约束（全部难度）与安全 / 眼位 / 威胁三维（非简单难度）共用，每个盘面一次。
+        // 批次开始前的活形查询：活形硬约束与眼位维（全部难度，眼位下放到简单难度见 ai-eye R26）、安全 / 威胁两维（非简单难度）共用，每个盘面一次。
         LifeShapeReport life = Life(view.Board);
         _ownAliveStones = [.. life.Groups
             .Where(g => g.Group.Owner == me && g.Life == LifeState.Alive)
             .SelectMany(g => g.Group.Stones)
             .Order()];
         _ownSingleEyes = [.. life.EyeSpaces.Where(e => e.Owner == me && e.Cells.Length == 1).Select(e => e.Cells[0])];
+        _eyeBefore = EyeOf(life);
         if (!immediateOnly)
         {
             _safetyBefore = SafetyOf(view.Board, life);
-            _eyeBefore = EyeOf(life);
             _threatBefore = ThreatOf(view.Board, life);
             _safetyBeforeWithoutLife = SafetyWithoutLifeOf(view.Board);
         }
@@ -102,7 +102,7 @@ public sealed class BatchEvaluator
     /// <summary>被评价的玩家。</summary>
     public PlayerId Player => _me;
 
-    /// <summary>是否只评价即时收益（简单难度）。</summary>
+    /// <summary>是否只评价即时收益与眼位（简单难度，ai-eye R26）。</summary>
     public bool ImmediateOnly => _immediateOnly;
 
     /// <summary>评价一个已预演合法的候选批次（完整口径：九维）。空批次（Pass）除供给维度外全为 0。</summary>
@@ -163,11 +163,16 @@ public sealed class BatchEvaluator
             {
                 raw[(int)EvaluationDimension.Safety] = checked(SafetyWithoutLifeOf(after) - _safetyBeforeWithoutLife);
             }
-            else
+        }
+
+        // 眼位对全部难度生效（ai-eye R26：简单难度 = 即时势力增量、敌方损失、眼位三维）；预筛口径一律记 0、不做活形查询（D5）。
+        if (!prefilter)
+        {
+            LifeShapeReport life = Life(after);
+            raw[(int)EvaluationDimension.Eye] = checked(EyeOf(life) - _eyeBefore);
+            if (!_immediateOnly)
             {
-                LifeShapeReport life = Life(after);
                 raw[(int)EvaluationDimension.Safety] = checked(SafetyOf(after, life) - _safetyBefore);
-                raw[(int)EvaluationDimension.Eye] = checked(EyeOf(life) - _eyeBefore);
                 raw[(int)EvaluationDimension.Threat] = checked(ThreatOf(after, life) - _threatBefore);
             }
         }
@@ -178,7 +183,7 @@ public sealed class BatchEvaluator
     /// <summary>
     /// 活形硬约束 + 评价（ai-eye D3）：对一个已预演合法的候选，先判是否被活形硬约束淘汰，未被淘汰才打分。
     /// 淘汰即返回 <c>false</c>、<paramref name="evaluation"/> 为 <c>null</c>——被淘汰的候选 MUST NOT 以扣分的形式留在候选集里。
-    /// 单点排序与贪心组批都经这里；对全部难度生效（简单难度同样淘汰，只是打分只用两维）。
+    /// 单点排序与贪心组批都经这里；对全部难度生效（简单难度同样淘汰，只是打分只用即时势力增量、敌方损失、眼位三维）。
     /// </summary>
     public bool TryEvaluate(
         ImmutableArray<Placement> placements, RehearsalResult result, BatchContext context, [NotNullWhen(true)] out EvaluationBreakdown? evaluation)

@@ -9,11 +9,19 @@ namespace Siege.Core.Tests.AiDecision;
 /// <summary>规格：ai-decision —— Requirement: 难度分级</summary>
 public class 难度分级Tests
 {
+    /// <summary>简单难度不计的六维（ai-eye R26 起简单难度 = 即时势力增量、敌方损失、眼位三维）。</summary>
+    private static readonly EvaluationDimension[] NotEasyDimensions =
+    [
+        EvaluationDimension.Relic, EvaluationDimension.Safety, EvaluationDimension.Growth,
+        EvaluationDimension.Initiative, EvaluationDimension.Supply, EvaluationDimension.Threat,
+    ];
+
     [Fact]
-    public void 简单难度只看即时收益()
+    public void 简单难度只看即时收益与眼位()
     {
-        // 设计文档 §15.2：简单难度只考虑即时收益 = 即时势力增量 + 敌方势力损失两维，其余七维恒 0（ai-eye 起含眼位、威胁）；M = 1（贪心一条）。
-        // 同一提子 + 信物局面，标准难度的信物 / 安全 / 供给维非零。
+        // 设计文档 §15.2：简单难度只考虑即时收益 = 即时势力增量 + 敌方势力损失两维；ai-eye R26 起另加眼位（共用停手阈值 80 下只看两维一子不落）。
+        // 其余六维（信物、安全、组合成长、先手位、手牌供给、威胁）恒 0；M = 1（贪心一条）。
+        // 同一提子 + 信物局面，标准难度的信物 / 安全 / 供给维非零；眼位在两档同一口径（本盘面的取值不钉，眼位非零的样本见「简单难度也会做活」）。
         // 变异验证 M-A11：BatchEvaluator 忽略 immediateOnly → 红 1（本测试）。
         MatchFlow match = 启发式评价维度Tests.CaptureRelicPosition();
         HeuristicTurnController easy = HeuristicAi.Create(match, AiFixtures.P0, AiDifficulty.Easy);
@@ -34,15 +42,42 @@ public class 难度分级Tests
 
         Assert.True(e.RawOf(EvaluationDimension.PowerGain) > 0);
         Assert.True(e.RawOf(EvaluationDimension.EnemyLoss) > 0);
-        foreach (EvaluationDimension d in new[] { EvaluationDimension.Relic, EvaluationDimension.Safety, EvaluationDimension.Growth, EvaluationDimension.Initiative, EvaluationDimension.Supply, EvaluationDimension.Eye, EvaluationDimension.Threat })
+        foreach (EvaluationDimension d in NotEasyDimensions)
         {
             Assert.Equal(0, e.RawOf(d));
         }
 
         Assert.Equal(s.RawOf(EvaluationDimension.PowerGain), e.RawOf(EvaluationDimension.PowerGain));
         Assert.Equal(s.RawOf(EvaluationDimension.EnemyLoss), e.RawOf(EvaluationDimension.EnemyLoss));
+        Assert.Equal(s.RawOf(EvaluationDimension.Eye), e.RawOf(EvaluationDimension.Eye));
         Assert.NotEqual(0, s.RawOf(EvaluationDimension.Relic));
         Assert.Equal(-2, s.RawOf(EvaluationDimension.Supply));   // growth-pass-1：第 5 大回合部署上限 4，−(4 − 2)，原 −1
+    }
+
+    [Fact]
+    public void 简单难度也会做活()
+    {
+        // ai-eye R26：眼位维度下放到简单难度。盘面同「启发式评价维度Tests.做出第二个眼获得眼位正贡献」：
+        //  2 O O O O .     A1 已是单格眼；本批次 D1 把 C1 封成第二个单格眼，棋串成为已确定活形。
+        //  1 . O . ! .     原始值 = 眼值增量 1 + 活形数增量 1 × 3 = 4，与标准难度同一口径。
+        //    A B C D E
+        // 其余六维仍恒 0（威胁、安全等只从标准难度起生效）；加权后眼位贡献 4 × 200 = 800 远超停手阈值 80，简单难度因此会落这一手。
+        // 变异 M-D2-R26（Evaluate 里眼位重新只在非简单难度计算）→ 红 8（本测试、简单难度只看即时收益与眼位、做出第二个眼获得眼位正贡献，
+        // 及 5 条用缺省 Easy 真实跑局的夹具测试：不收敛对局被截断、截断可复现、终端脚本落子、两条生成图存档 / 回放）。
+        static MatchFlow Position() => AiFixtures.Round5().Stones(AiFixtures.P0, "B1", "A2", "B2", "C2", "D2");
+
+        (EvaluationBreakdown easy, RehearsalResult result) = EvaluationFixtures.EvaluateP0(Position(), AiDifficulty.Easy, "D1");
+        (EvaluationBreakdown standard, _) = EvaluationFixtures.EvaluateP0(Position(), "D1");
+
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(result.ProjectedBoard!).GroupLifeAt(TestMaps.At("B2"))!.Life);
+        Assert.Equal(4, easy.RawOf(EvaluationDimension.Eye));
+        Assert.Equal(standard.RawOf(EvaluationDimension.Eye), easy.RawOf(EvaluationDimension.Eye));
+        foreach (EvaluationDimension d in NotEasyDimensions)
+        {
+            Assert.Equal(0, easy.RawOf(d));
+        }
+
+        Assert.True(easy.ContributionOf(EvaluationDimension.Eye) > AiSearchConfig.DefaultPassThreshold);
     }
 
     [Fact]

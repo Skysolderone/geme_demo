@@ -140,8 +140,11 @@ public class 各入口按地图标识选图Tests
         var implicitOut = new StringWriter();
         var explicitOut = new StringWriter();
 
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut);
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"));
+        // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：默认阈值 80 下简单难度第 1 大回合全员 Pass、对局即终局，走不到第 3 大回合（段 D2 改写）。
+        EvaluationWeights w = SimFixtures.PreCalibrationWeights;
+        const int t = SimFixtures.PreCalibrationPassThreshold;
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t);
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t);
 
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());

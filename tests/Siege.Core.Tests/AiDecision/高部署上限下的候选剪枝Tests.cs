@@ -17,7 +17,10 @@ public class 高部署上限下的候选剪枝Tests
         // 变异验证 M-A13：RankPoints 去掉 Take(N) → 红 1（本测试）。
         MatchFlow match = AiFixtures.Round5().Stones(AiFixtures.P1, "E5", "F6", "D7").Stones(AiFixtures.P2, "G3");
         match.SetDeployLimit(8);
-        HeuristicTurnController ai = HeuristicAi.Create(match, AiFixtures.P0);
+        // ai-eye 段 D2（4.5）：末尾"落满 8 枚"依赖走法，权重与停手阈值写死为定值之前的缺省（默认阈值 80 下只落 7 枚）。
+        HeuristicTurnController ai = HeuristicAi.Create(
+            match, AiFixtures.P0, AiDifficulty.Standard, SimFixtures.PreCalibrationWeights,
+            AiSearchConfig.Standard with { PassThreshold = SimFixtures.PreCalibrationPassThreshold });
         StagedBatch batch = match.OpenDeploy();
         Assert.Equal(8, batch.Context.DeployLimit);
         int empties = batch.Context.LegalRange.Count(c => batch.Board[c].IsPlayableEmpty);
