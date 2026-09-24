@@ -143,7 +143,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 
 系统 SHALL 支持把盘面状态序列化为确定性表示，其内容 MUST 包含每格的占用者与棋子类型，且 MUST NOT 包含手牌、征募结果、信物控制、势力值、行动顺序或当前行动者。
 
-对同一盘面重复序列化 MUST 产生完全相同的结果，供 `add-batch-deployment` 的盘面同形禁则直接比较。
+对同一盘面重复序列化 MUST 产生完全相同的结果。系统 SHALL 另提供由序列化结果确定性导出的**同形比对键**：去掉棋子类型、保留每格占用者与设施、地表，供 `capture-resolution`「盘面同形禁则」比较；序列化本身（存档、日志、结算核对所用）MUST 保留棋子类型。
 
 #### Scenario: 同位置不同类型不等价
 - **WHEN** 两份盘面在所有格上的占用者相同，但某一格的棋子类型不同
@@ -152,6 +152,10 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 #### Scenario: 非盘面信息不影响序列化
 - **WHEN** 两份盘面的格子占用完全一致，但玩家手牌与信物控制不同
 - **THEN** 两份序列化结果相等
+
+#### Scenario: 同形比对键忽略棋子类型
+- **WHEN** 两份盘面在所有格上的占用者、设施与地表相同，但某一格的棋子类型不同
+- **THEN** 两份序列化结果不相等，而两份同形比对键相等
 
 ### Requirement: 盘面副本与批量写入原语
 
