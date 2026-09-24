@@ -264,6 +264,7 @@ Safety 权重的旧注释记着"取 3 不收敛、取 10 仍不收敛、取 20 �
 规则：
 - 计分公式、地图、终局条件任一变更后，凡"校准值"（`EvaluationWeights.Default` 等）MUST 视同"待校准"重扫，不得继承（与上文"换了环境旧调参经验要重新验证"同源，这次是计分口径）。
 - 相邻两档指标跳变超过判据量级（如领先者胜率跨过 25%–50% 目标带）时，MUST 在两档之间加密再下结论。
+- **规则变更后，权重 MUST 先重新标注为未校准，再谈重扫**（ai-eye）。计分、出局、终局或活形规则任一变更，同一个改动里就要把 `EvaluationWeights.CalibrationStatus` / `CalibrationOf`（逐维）与 `AiDifficulty.PassThresholdCalibrationStatus` 改回"未校准"口径，不得保留旧的校准文字等下一轮扫档再改——守门 `默认评价权重的校准Tests.规则变更使校准失效` 与 `默认权重被改动` 要求取值与校准记录同时成立。新规则下只扫了部分维度时，其余维度逐维标 `EvaluationWeights.NotSweptStatus`（"沿用旧值、新规则下未单独扫档"），不得笼统写"已校准"。标注未校准期间产出的数据，引用时 MUST 注明权重口径（设计文档 §16）。实例：`restore-go-core-rules` / `life-shape` 之后七维整体标未校准，由 `ai-eye` 段 D 重扫眼位 / 停手阈值 / 安全 / 威胁四项后才解除，六维至今是 `NotSweptStatus`。
 
 ## "写出时漏字段"要用往返测试抓，磁盘一致性测试抓不到
 

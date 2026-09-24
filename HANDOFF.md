@@ -53,6 +53,10 @@ dotnet run --project src/Siege.Sim -c Release -- play --map siege-frontier-v1
 图形版命令行现在是严格解析（`--map=` `--cell-limit=` `--seed=` `--rounds=` `--auto-demo` `--pick-check` `--screenshot=`），拼错即报错退出。大图（可落子 > 150）AI 自动启用候选格上限 K=24（`--cell-limit 0` 关闭）。
 已量到的数（4 个 Standard AI，K=0 口径 20 局）：**全部打满 15 大回合靠上限收场**、无一局碾压；首次提子平均第 6 大回合；5×5 中央平台胜率明显偏高、9×9 为 0 胜（样本小）。AI 单步 K=0 均值 2.2 s / 最大 11 s → K=24 均值 0.73 s / 最大 2.2 s。**节奏参数（部署额度 / 大回合上限 / 碾压起始）与调图待负责人试玩后裁决**，规格与逐段记录在 `openspec/changes/frontier-map/`、`.trellis/tasks/09-19-frontier-map/implement.md`（含 17 条人工检查清单）。
 
+## 边疆图验证结论
+
+> **待负责人实机**（占位，2026-09-24 由 `ai-eye` 段 E 预留）。承接 `frontier-map` 任务 6.1 → `ai-eye` 任务 5.3：人 vs 3 名 Standard AI 在 `siege-frontier-v2` 上下一整局（图形版），记录推屏手感、找不到自己棋子的次数、对局时长、是否感到"需要小地图"，以及 AI 行为 4 条（做活 / 不填自己的眼 / 不往别人的眼里送 / 无利可图时 Pass）。检查清单与自动检查结果见 `.trellis/tasks/09-23-ai-eye/implement.md` 段 E。结论由主会话写入本节，作为后续裁决（最终规模 / 小地图 / 节奏参数）的依据。
+
 ## 分支状态
 
 | 分支 | 状态 |

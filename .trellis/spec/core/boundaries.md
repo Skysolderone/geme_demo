@@ -40,6 +40,15 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 
 写新代码前先搜一遍是否已有实现。重复实现的典型症状：领地层说独占、信物层判争议。
 
+## AI 评价的约定（ai-eye）
+
+`Siege.Core/Ai` 的评价函数（`BatchEvaluator` / `GroupSafety` / `EvaluationWeights`）守两条硬约定，违反即缺陷：
+
+1. **AI 的眼信息只经活形查询获取**。眼、眼空间、眼值、活形状态（含两眼潜力、活形中性、眼位、威胁里的"非活形"判定、活形硬约束）一律读 `LifeShapeReport`（可作用于预演副本；决策内缓存只是它的记忆化，不是第二套判定）。`Siege.Core/Ai` 下 MUST NOT 出现"邻格全为己方棋子"之类的自带眼判定——`ai-eye` 段 A 删掉的 `GroupSafety` 眼点循环就是这种第二实现。守门 `启发式评价维度Tests.AI不自带眼判定只经活形查询`（源码扫描，变异 M-A4 / M-A4b 已证红）。
+2. **评价维度一律取增量**。每一维的原始值 MUST 是"批次结算后 − 批次开始前"，MUST NOT 用结算后的绝对值：以绝对值计眼位，把棋子填进自己的眼也会得分（设计文档 §15.2）。新增维度沿用 `BatchEvaluator` 的 before / after 结构，before 在构造时对批次开始前的盘面算一次。守门 `启发式评价维度Tests.自填眼位不得分`（变异 M-A1"眼位改取结算后的绝对值"已证红 4 条）。
+
+第三条"规则变更后权重必须重新标注未校准"见 [测试组织](./testing.md)「计分口径一变，默认权重必须重扫」。
+
 ### 内置图内容一变，标识必须递增（restore-go-core-rules D6）
 
 内置图（`MapCatalog.Builtins` 里的 `siege-4p-base-vN` / `siege-frontier-vN`）的**任何**内容变化——地形、信物格、出生区，或像据点这样整类字段的增删——MUST 同时递增标识，MUST NOT 沿用旧标识。先例：v3 → v4（加计分格，裁决 S-9）、v4 → v5 与 frontier v1 → v2（摘除据点）。
