@@ -131,3 +131,12 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - R8 五变体对比实验（v5、各 50 局，数据 `sim-out/r8-explore/`）：负责人选 **K1 单子棋串不受活形保护**。
 - change `life-single-stone`：`e1d23ce` 实施（只改 `LifeShapeReport` 三态一处）→ `78b8e33` 归档 → `9a4df63` 任务归档；设计文档 v1.7。复核与实验逐局相同：整局无提子 22/50（原 47/50）、结束 8.02 / 最长 13、终局禁入 25.1%、第 3 大回合领先者胜率 76%（n=50，留给段 D 200 局观察）。1310 通过 / 4 门控跳过。
 - 当前 Trellis 任务切回 `09-23-ai-eye`。**下一步**：等 `terrain-surfaces`（`.claude/worktrees/terrain-surfaces`，另一会话负责）完成 → 主会话合入 main（与 `LifeShape.cs` 单子上限相邻，需复跑活形测试）→ ai-eye 段 D 校准。
+
+
+## Session: 2026-09-24 — ③ ai-eye 完成并归档；terrain-surfaces / life-single-stone 已合入
+
+- ai-eye 段 D1 / D2 / E：`168bba6` → `762078d` → `38d70d8` → 归档 `c6cc2c1` → 任务归档 `19e870e`。定值 Eye 200 / Safety 35 / Threat 25 / 停手阈值 80（三档共用），简单难度 = 即时势力 / 敌损 / 眼位三维（R26）。设计文档 v1.9。1407 通过 / 5 门控跳过。
+- 复核（标准难度）：v5 截断 1%、无提子 32%、结束 9.81；`gen:<i>:s1` 截断 0、无提子 0%、结束 42.5；边疆图 n=81（负责人叫停，**200 局完整复核延后**）截断 1.2%、结束 43.4。
+- **已知问题**：简单难度 v5 截断 18%（34/36 为同形判重含棋子类型导致的互提循环 = R25）、74 局首回合一子不落；v5 领先者胜率约 71%；大图对局约为 v5 的 4 倍长。
+- **待负责人**：人 vs 3 AI 实机（清单在归档任务 implement.md 段 E；HANDOFF「边疆图验证结论」为占位）；HANDOFF 全文仍是 09-19 内容。
+- **下一步**：R25 规则 change——同形判重是否忽略棋子类型；修完复跑简单难度 200 局。
