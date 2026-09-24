@@ -8,7 +8,7 @@ public class 盘面序列化Tests
     [Fact]
     public void 同位置不同类型不等价()
     {
-        // 设计文档 §6.2：同一玩家在同一位置用不同类型棋子形成的盘面不视为同形
+        // 序列化保留棋子类型（存档、日志、结算核对要用）；同形比对另走比对键，见「同形比对键忽略棋子类型」。
         GameBoard basic = TestMaps.Blank(size: 5).Place("C3", TestMaps.P0, PieceType.Basic);
         GameBoard fortress = TestMaps.Blank(size: 5).Place("C3", TestMaps.P0, PieceType.Fortress);
 
@@ -16,9 +16,37 @@ public class 盘面序列化Tests
     }
 
     [Fact]
+    public void 同形比对键忽略棋子类型()
+    {
+        // superko-occupancy：两份盘面占用者、设施与地表相同，只有 C3 的类型不同 → 序列化不等，比对键相等。
+        // 另钉住比对键不丢占用者与设施：换玩家、多一处改造都必须让比对键不同。
+        // 变异验证（superko-occupancy 1.2）：M-K1 SuperkoKey 保留类型 → 红（本测试）。
+        TerrainData terrain = TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater)]);
+        GameBoard basic = TestMaps.Blank(terrain, size: 7).Place("C3", TestMaps.P0, PieceType.Basic).Place("E5", TestMaps.P1, PieceType.Line);
+        GameBoard fortress = TestMaps.Blank(terrain, size: 7).Place("C3", TestMaps.P0, PieceType.Fortress).Place("E5", TestMaps.P1, PieceType.Artisan);
+        basic.ApplyTerrainEdits([TerrainEdit.Bridge(TestMaps.At("D4"))]);
+        fortress.ApplyTerrainEdits([TerrainEdit.Bridge(TestMaps.At("D4"))]);
+
+        Assert.NotEqual(basic.Serialize(), fortress.Serialize());
+        Assert.Equal(GameBoard.SuperkoKey(basic.Serialize()), GameBoard.SuperkoKey(fortress.Serialize()));
+
+        GameBoard otherOwner = TestMaps.Blank(terrain, size: 7).Place("C3", TestMaps.P1, PieceType.Basic).Place("E5", TestMaps.P1, PieceType.Line);
+        otherOwner.ApplyTerrainEdits([TerrainEdit.Bridge(TestMaps.At("D4"))]);
+        Assert.NotEqual(GameBoard.SuperkoKey(basic.Serialize()), GameBoard.SuperkoKey(otherOwner.Serialize()));
+
+        GameBoard noBridge = TestMaps.Blank(terrain, size: 7).Place("C3", TestMaps.P0, PieceType.Basic).Place("E5", TestMaps.P1, PieceType.Line);
+        Assert.NotEqual(GameBoard.SuperkoKey(basic.Serialize()), GameBoard.SuperkoKey(noBridge.Serialize()));
+
+        // 比对键是序列化的纯函数：同一盘面重复导出逐字节一致，且序列化本身不因导出比对键而改变。
+        string before = basic.Serialize();
+        Assert.Equal(GameBoard.SuperkoKey(before), GameBoard.SuperkoKey(basic.Serialize()));
+        Assert.Equal(before, basic.Serialize());
+    }
+
+    [Fact]
     public void 六种类型的盘面码两两不同且往返保留类型()
     {
-        // 设计文档 §6.2 + artisan-terrain-edit 段 A：盘面序列化同时是存档与同形禁则的表示，六种棋子类型 MUST 各有一个码。
+        // 设计文档 §6.2 + artisan-terrain-edit 段 A：盘面序列化是存档的表示（同形比对键由它投影、不含类型），六种棋子类型 MUST 各有一个码。
         // 漏码会在匠人落子后存档时抛 FormatException（响亮），撞码则是**静默**的：读回来变成另一种棋子、两个不同盘面还会被判成同形。
         // 变异验证 M-C2（检查阶段）：GameBoard 的 Artisan 码由 'A' 改成 'S'（与协同子撞码）→ 补本测试前全绿 826（缺口），补后本测试红。
         PieceType[] all = Enum.GetValues<PieceType>();

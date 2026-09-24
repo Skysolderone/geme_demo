@@ -9,28 +9,17 @@ public sealed record CommittedBoard(int Sequence, string Board);
 /// 本局全部<b>合法批次结算后</b>的盘面集合，服务盘面同形禁则（设计文档 §6.2）。
 /// </summary>
 /// <remarks>
-/// <para>按"内容哈希 + 序号 + 完整内容"存储（design.md D4）：哈希只做预筛，命中后 MUST 按内容再比对一次，
-/// 不能只信哈希。保留序号是为了在同形失败时告诉玩家"和第几次提交重复"。</para>
+/// <para>条目存序列化结果（含棋子类型，存档格式不变）；比对只经 <see cref="GameBoard.SuperkoKey"/> 投影出的同形比对键
+/// （每格占用者 + 设施与地表，不含类型，superko-occupancy D1）。内部维护"比对键 → 最早提交序号"的索引（D2），
+/// 保留序号是为了在同形失败时告诉玩家"和第几次提交重复"。</para>
 /// <para>全局生效、不区分提交者（裁决记录 4）。预览中间态 MUST NOT 记入；Pass 不改变盘面，也不记入。</para>
 /// <para>集合是对局状态的一部分，MUST 随存档持久化：<see cref="Serialize"/> / <see cref="Deserialize(string)"/>。
-/// 哈希不持久化，恢复时按内容重算，哈希函数变更不会让旧存档失效。</para>
+/// 索引不持久化，读档时由序列化结果重建；旧规则下产生的历史可能含只差类型的多条提交，索引取其中最早的一条。</para>
 /// </remarks>
 public sealed class BoardHistory
 {
     private readonly List<CommittedBoard> _entries = [];
-    private readonly Dictionary<int, List<int>> _indexByHash = [];
-    private readonly Func<string, int> _hasher;
-
-    public BoardHistory()
-        : this(Fnv1a)
-    {
-    }
-
-    /// <summary>测试接缝：注入哈希函数以构造碰撞，验证命中后仍按内容比对。</summary>
-    internal BoardHistory(Func<string, int> hasher)
-    {
-        _hasher = hasher ?? throw new ArgumentNullException(nameof(hasher));
-    }
+    private readonly Dictionary<string, int> _earliestByKey = new(StringComparer.Ordinal);
 
     /// <summary>已提交次数，也是最新的提交序号。</summary>
     public int Count => _entries.Count;
@@ -38,25 +27,14 @@ public sealed class BoardHistory
     /// <summary>按提交顺序排列的全部条目。</summary>
     public IReadOnlyList<CommittedBoard> Entries => _entries;
 
-    /// <summary>若 <paramref name="board"/> 与某次历史提交内容完全相同，返回该次提交序号；否则 <c>null</c>。</summary>
+    /// <summary>
+    /// 若 <paramref name="board"/>（盘面序列化结果）与某次历史提交的同形比对键相同，返回最早那次的提交序号；否则 <c>null</c>。
+    /// 只差棋子类型的盘面视为同形。
+    /// </summary>
     public int? FindDuplicate(string board)
     {
         ArgumentNullException.ThrowIfNull(board);
-        if (!_indexByHash.TryGetValue(_hasher(board), out List<int>? indices))
-        {
-            return null;
-        }
-
-        // 哈希命中只是预筛：必须按内容逐条再比对，碰撞不得误判为同形。
-        foreach (int index in indices)
-        {
-            if (string.Equals(_entries[index].Board, board, StringComparison.Ordinal))
-            {
-                return _entries[index].Sequence;
-            }
-        }
-
-        return null;
+        return _earliestByKey.TryGetValue(GameBoard.SuperkoKey(board), out int sequence) ? sequence : null;
     }
 
     /// <summary>记录一次合法批次结算后的盘面，返回其提交序号。只允许由结算驱动器在正式结算时调用。</summary>
@@ -76,12 +54,10 @@ public sealed class BoardHistory
     /// 从 <see cref="Serialize"/> 的输出恢复。序号 MUST 从 1 起连续，否则视为存档损坏。
     /// 容忍 <c>\r\n</c> 行尾与结尾多余的换行（存档经文本层或编辑器往返后常见），但不容忍其他任何偏差。
     /// </summary>
-    public static BoardHistory Deserialize(string text) => Deserialize(text, Fnv1a);
-
-    internal static BoardHistory Deserialize(string text, Func<string, int> hasher)
+    public static BoardHistory Deserialize(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var history = new BoardHistory(hasher);
+        var history = new BoardHistory();
         text = text.TrimEnd('\r', '\n');
         if (text.Length == 0)
         {
@@ -109,32 +85,10 @@ public sealed class BoardHistory
         return history;
     }
 
+    /// <summary>新增与读档共用：记条目并更新索引。同键已有更早的提交时保留更早的序号。</summary>
     private void Append(CommittedBoard entry)
     {
-        int hash = _hasher(entry.Board);
-        if (!_indexByHash.TryGetValue(hash, out List<int>? indices))
-        {
-            indices = [];
-            _indexByHash[hash] = indices;
-        }
-
-        indices.Add(_entries.Count);
+        _earliestByKey.TryAdd(GameBoard.SuperkoKey(entry.Board), entry.Sequence);
         _entries.Add(entry);
-    }
-
-    /// <summary>FNV-1a 32 位，逐字符。与进程、平台无关——<c>string.GetHashCode</c> 每进程随机化，不可用。</summary>
-    internal static int Fnv1a(string text)
-    {
-        unchecked
-        {
-            uint hash = 2166136261;
-            foreach (char ch in text)
-            {
-                hash ^= ch;
-                hash *= 16777619;
-            }
-
-            return (int)hash;
-        }
     }
 }

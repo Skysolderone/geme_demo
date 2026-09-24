@@ -195,7 +195,7 @@ public static class BatchRehearsal
             return Rejected(BatchFailure.Suicide([.. dead]), projected, captures);
         }
 
-        // 第 8 步：结算后盘面与任一历史提交相同即同形（比较每格占用者与类型 + 设施与地表，即 Serialize 的全部内容）
+        // 第 8 步：结算后盘面与任一历史提交同形即拒绝。比较的是同形比对键（每格占用者 + 设施与地表，不含棋子类型），投影在 BoardHistory 内经 GameBoard.SuperkoKey 完成
         if (history.FindDuplicate(projected.Serialize()) is { } sequence)
         {
             return Rejected(BatchFailure.Superko(sequence, [.. placements.Select(p => p.Coord)]), projected, captures);

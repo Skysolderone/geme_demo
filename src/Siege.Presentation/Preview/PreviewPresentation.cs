@@ -186,7 +186,7 @@ public sealed record FailurePresentation(
         string detail = failure.Kind switch
         {
             BatchFailureKind.Suicide => $"结算后己方棋串仍无气：{Labels.Coords(failure.Coords)}",
-            BatchFailureKind.Superko => $"结算后盘面与第 {failure.DuplicateOfSequence} 次提交后的盘面完全相同，不可确认",
+            BatchFailureKind.Superko => $"结算后各格占用者与设施、地表都与第 {failure.DuplicateOfSequence} 次提交后的盘面相同（不看棋子类型），不可确认",
             _ => failure.Message,
         };
         HighlightKind kind = failure.Kind == BatchFailureKind.Suicide ? HighlightKind.SuicideRisk : HighlightKind.FailureFocus;

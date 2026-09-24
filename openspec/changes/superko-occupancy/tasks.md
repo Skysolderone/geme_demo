@@ -1,12 +1,12 @@
 ## 1. 规则实现
 
-- [ ] 1.1 先写测试：`capture-resolution`「盘面同形禁则」的"换类型仍构成同形""多人互提循环换类型也被禁止"，`board-topology`「盘面状态可序列化且确定性」的"同形比对键忽略棋子类型"；既有"换类型不构成同形"测试按规格反转（改名并改期望，逐条记录）。验证：新增 / 反转的先红。
-- [ ] 1.2 实现 D1 / D2：比对键投影一处实现；`BoardHistory` 索引与 `FindDuplicate`、预演第 8 步改用比对键；读档重建索引。验证：1.1 全绿；守门——比对键投影只有一处实现、序列化结果仍含类型（存档往返测试保持绿）；变异（投影保留类型时两条新 Scenario 应红；`FindDuplicate` 绕过投影时应红）。
-- [ ] 1.3 黄金哈希 / 依赖走法的期望按规则变更重建，探针（临时恢复含类型比对）证明分叉只来自本规则。
+- [x] 1.1 先写测试：`capture-resolution`「盘面同形禁则」的"换类型仍构成同形""多人互提循环换类型也被禁止"，`board-topology`「盘面状态可序列化且确定性」的"同形比对键忽略棋子类型"；既有"换类型不构成同形"测试按规格反转（改名并改期望，逐条记录）。验证：新增 / 反转的先红。
+- [x] 1.2 实现 D1 / D2：比对键投影一处实现；`BoardHistory` 索引与 `FindDuplicate`、预演第 8 步改用比对键；读档重建索引。验证：1.1 全绿；守门——比对键投影只有一处实现、序列化结果仍含类型（存档往返测试保持绿）；变异（投影保留类型时两条新 Scenario 应红；`FindDuplicate` 绕过投影时应红）。
+- [x] 1.3 黄金哈希 / 依赖走法的期望按规则变更重建，探针（临时恢复含类型比对）证明分叉只来自本规则。
 
 ## 2. 复核与收尾
 
-- [ ] 2.1 简单难度 v5、种子 1–200、4 名 Easy、默认值：与 `sim-out/ai-eye-final-easy-eye` 并列（截断、终局原因、首回合一子不落局数、无提子、结束大回合）；数据 `sim-out/superko-occupancy/easy/`。
-- [ ] 2.2 标准难度 v5、种子 1–200：与 `sim-out/ai-eye-pass-80` 并列；数据 `sim-out/superko-occupancy/standard/`。只报告，不调参。
-- [ ] 2.3 设计文档 §6.1 / 盘面同形说明同步，版本 v1.9 → v1.10，变更记录加一行。
-- [ ] 2.4 全量回归：两处 `dotnet build` 零警告；`dotnet test -c Release` 全绿；`SIEGE_SLOW=1` 慢测试全过；`openspec validate superko-occupancy --strict` 通过。
+- [ ] 2.1 **延后（负责人 2026-09-24：不再跑 200 局）**。简单难度 v5、种子 1–200、4 名 Easy、默认值：与 `sim-out/ai-eye-final-easy-eye` 并列（截断、终局原因、首回合一子不落局数、无提子、结束大回合）；数据 `sim-out/superko-occupancy/easy/`。
+- [ ] 2.2 **延后（负责人 2026-09-24：不再跑 200 局）**。标准难度 v5、种子 1–200：与 `sim-out/ai-eye-pass-80` 并列；数据 `sim-out/superko-occupancy/standard/`。只报告，不调参。
+- [x] 2.3 设计文档 §6.1 / 盘面同形说明同步，版本 v1.9 → v1.10，变更记录加一行。
+- [x] 2.4 全量回归：两处 `dotnet build` 零警告；`dotnet test -c Release` 全绿；`SIEGE_SLOW=1` 慢测试全过；`openspec validate superko-occupancy --strict` 通过。（负责人 2026-09-24 指示后，段末未重跑 200 局规模的两条慢测试；此前同一规则实现上 4 / 4 慢测试已通过，见 implement.md）

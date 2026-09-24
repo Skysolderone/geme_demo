@@ -260,7 +260,7 @@ public sealed class GameBoard
     /// <summary>
     /// 确定性盘面序列化。内容<b>只含</b>每格的占用者与棋子类型，以及对局中完成的地形改造（桥 / 栅栏 / 被烧的地表）；
     /// 不含手牌、征募结果、信物控制、势力值、行动顺序或当前行动者。
-    /// 直接服务于批次结算的盘面同形禁则（设计文档 §6.2 + terrain-edit「盘面同形禁则纳入设施」）。
+    /// 存档、日志、结算核对与弃赛快照都用它；盘面同形禁则比较的是由它投影出的 <see cref="SuperkoKey"/>（不含棋子类型，superko-occupancy）。
     /// </summary>
     /// <remarks>
     /// 改造段是<b>增量</b>：只写对局中新增的改造，地图预置的桥与栅栏不写。理由有三——
@@ -472,6 +472,57 @@ public sealed class GameBoard
         'A' => PieceType.Artisan,
         _ => throw new FormatException($"未知棋子类型码：'{code}'。"),
     };
+
+    /// <summary>
+    /// 同形比对键（superko-occupancy D1）：把 <see cref="Serialize"/> 的输出投影成"每格占用者 + 设施与地表"，<b>去掉棋子类型</b>。
+    /// 棋子网格每格两字符（占用者 + 类型码）只留首字符，行分隔 <c>/</c> 与 <c>|</c> 之后的改造段原样保留。
+    /// 盘面同形禁则只经它比较（<see cref="Batch.BoardHistory"/> 是唯一调用方）；序列化本身仍含类型，存档、日志、结算核对照旧。
+    /// </summary>
+    /// <remarks>
+    /// 这是比对键投影的<b>唯一实现</b>，紧挨类型码映射放置：序列化格式一改，这里必须同步。
+    /// 只做字符串变换、不解析类型码，因此对任意"每格两字符"的串都是确定性的；行长为奇数即格式损坏，抛 <see cref="FormatException"/>。
+    /// </remarks>
+    public static string SuperkoKey(string serialized)
+    {
+        ArgumentNullException.ThrowIfNull(serialized);
+        int bar = serialized.IndexOf(TerrainSeparator, StringComparison.Ordinal);
+        string grid = bar >= 0 ? serialized[..bar] : serialized;
+        var sb = new StringBuilder(serialized.Length);
+        int column = 0;
+        foreach (char ch in grid)
+        {
+            if (ch == '/')
+            {
+                RequireEvenRow(column, serialized);
+                column = 0;
+                sb.Append(ch);
+                continue;
+            }
+
+            if (column % 2 == 0)
+            {
+                sb.Append(ch);
+            }
+
+            column++;
+        }
+
+        RequireEvenRow(column, serialized);
+        if (bar >= 0)
+        {
+            sb.Append(serialized, bar, serialized.Length - bar);
+        }
+
+        return sb.ToString();
+
+        static void RequireEvenRow(int length, string text)
+        {
+            if (length % 2 != 0)
+            {
+                throw new FormatException($"盘面序列化的行长度 {length} 不是每格两字符：\"{text}\"。");
+            }
+        }
+    }
 
     private static char TypeCode(PieceType type) => type switch
     {

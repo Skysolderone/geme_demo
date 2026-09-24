@@ -103,7 +103,7 @@ public sealed record BatchFailure(
 
     internal static BatchFailure Superko(int sequence, ImmutableArray<Coord> placements) =>
         new(BatchFailureKind.Superko,
-            $"盘面同形：结算后盘面与第 {sequence} 次提交后的盘面完全相同。", placements, DuplicateOfSequence: sequence);
+            $"盘面同形：结算后各格占用者与设施、地表都与第 {sequence} 次提交后的盘面相同（不看棋子类型）。", placements, DuplicateOfSequence: sequence);
 
     internal static BatchFailure NotArtisan(Coord c, PieceType type) =>
         new(BatchFailureKind.TerrainEditIllegal,
