@@ -19,6 +19,7 @@ public static class MapCatalog
     private static readonly (string Id, string Title, Func<MapData> Create)[] Builtins =
     [
         (FourPlayerBaseMap.Id, "标准图 13×13", FourPlayerBaseMap.Create),
+        (TwoPlayerBaseMap.Id, "双人图 9×9", TwoPlayerBaseMap.Create),
         (FrontierMapV2.Id, "边疆图 25×30（手工）", FrontierMapV2.Create),
     ];
 

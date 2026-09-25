@@ -32,7 +32,9 @@ public class 选图视图模型Tests
         Assert.Equal(MapCatalog.BuiltinMaps.Select(m => m.Title), model.Options.Where(o => !o.IsRandom).Select(o => o.Title));
         Assert.Equal(MapCatalog.BuiltinIds, MapCatalog.BuiltinMaps.Select(m => m.Id));
         Assert.True(Assert.Single(model.Options, o => o.IsRandom).Title.Contains("随机", StringComparison.Ordinal));
-        Assert.Equal(3, model.Options.Count);   // 规格：标准图、手工边疆图、随机图
+        // 规格（small-maps 段 A）：标准图、2 人图、手工边疆图、随机图；3 人图在段 B 登记后变 5。
+        Assert.Equal(4, model.Options.Count);
+        Assert.Equal(TwoPlayerBaseMap.Id, model.Options[1].BuiltinId);
 
         Assert.Equal(MapCatalog.DefaultId, model.CurrentId);
         Assert.Equal(MapCatalog.DefaultId, model.Options[model.SelectedIndex].BuiltinId);
@@ -55,12 +57,13 @@ public class 选图视图模型Tests
         Assert.True(model.AdjustPlatforms(+1));
         Assert.True(model.Select(1));
         Assert.Equal(MapCatalog.BuiltinIds[1], model.CurrentId);
-        Assert.True(model.Select(2));
+        int random = model.Options.Count - 1;   // "随机图"恒在最后（small-maps 起内置图多了一张，不写死下标）
+        Assert.True(model.Select(random));
         Assert.Equal("gen:424242:p7:s1", model.CurrentId);
 
         // 选中已选中的那一项：标识没变，不必重搭预览。
-        Assert.False(model.Select(2));
-        Assert.Throws<ArgumentOutOfRangeException>(() => model.Select(3));
+        Assert.False(model.Select(random));
+        Assert.Throws<ArgumentOutOfRangeException>(() => model.Select(model.Options.Count));
         Assert.Throws<ArgumentOutOfRangeException>(() => model.Select(-1));
     }
 
@@ -208,7 +211,7 @@ public class 选图视图模型Tests
 
         // 从内置图切到随机图时失败：回到内置图那一项。
         var fromBuiltin = new MapSelectModel(InitialSeed);
-        Assert.True(fromBuiltin.Select(2));
+        Assert.True(fromBuiltin.Select(fromBuiltin.Options.Count - 1));
         fromBuiltin.RollBack("失败");
         Assert.False(fromBuiltin.IsRandomSelected);
         Assert.Equal(MapCatalog.DefaultId, fromBuiltin.CurrentId);
@@ -217,8 +220,10 @@ public class 选图视图模型Tests
     [Fact]
     public void 确认开局_给出已接受的标识_与按它解析出的地图标识一致()
     {
-        // 规格 Scenario「确认后开局」：日志首部的地图标识取 MapData.Id；三项各验一遍"界面显示的标识 == 解析出的地图的标识"。
-        for (int i = 0; i < 3; i++)
+        // 规格 Scenario「确认后开局」：日志首部的地图标识取 MapData.Id；每一项各验一遍"界面显示的标识 == 解析出的地图的标识"。
+        int options = new MapSelectModel(12345UL).Options.Count;
+        Assert.True(options >= 4, $"样本口径：只有 {options} 项。");
+        for (int i = 0; i < options; i++)
         {
             var model = new MapSelectModel(12345UL);
             if (model.Select(i))

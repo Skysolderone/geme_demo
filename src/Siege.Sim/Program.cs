@@ -65,10 +65,10 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
-        Console.WriteLine("                [--map <地图id或文件>] [--players <人数>] [--difficulty <Easy|Standard|Hard>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
+        Console.WriteLine("                [--map <地图id或文件>] [--players <人数，缺省取地图人数上限>] [--difficulty <Easy|Standard|Hard>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（ai-eye 校准值）>] [--flag-risk <原型插旗冒险概率 0–100，缺省 {Core.Match.MatchOptions.DefaultFlagRisk}>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
@@ -85,7 +85,7 @@ public static class Program
         Console.InputEncoding = System.Text.Encoding.UTF8;
         ulong? seed = cli.Has("seed") ? cli.GetUInt64("seed", 0) : null;
         var difficulty = Enum.Parse<Core.Ai.AiDifficulty>(cli.Get("difficulty", "Standard"), ignoreCase: true);
-        int players = cli.GetInt("players", 4);
+        int? players = cli.Has("players") ? cli.GetInt("players", 0) : null;   // 不给人数 = 地图的人数上限（small-maps D3）
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
@@ -291,7 +291,9 @@ public static class Program
     private static int Run(CommandLine cli, Func<ulong> mapSeedSource)
     {
         string outDir = cli.GetOrNull("out") ?? throw new ArgumentException("run 需要 --out <目录>。");
-        RunConfig config = cli.GetOrNull("config") is { } file ? RunConfig.FromJson(File.ReadAllText(file)) : new RunConfig();
+        string? configText = cli.GetOrNull("config") is { } file ? File.ReadAllText(file) : null;
+        RunConfig config = configText is not null ? RunConfig.FromJson(configText) : new RunConfig();
+        bool declaresPlayers = configText is not null && DeclaresPlayers(configText);
 
         if (cli.Has("players") || cli.Has("difficulty"))
         {
@@ -323,6 +325,18 @@ public static class Program
         // 只有配置文件里同时写"裸 gen + MapPerMatch"会在读入校验（RunConfig.FromJson）时报错——配置文件是要复用的记录，换图必须写明起始地图种子。
         config = config with { MapId = MaterializeMapRequest(config.MapId, Console.Out, mapSeedSource)! };
         config.Validated();
+        if (!cli.Has("players") && !declaresPlayers)
+        {
+            // small-maps D3：命令行与配置文件都没给人数 → 取地图的人数上限（2 人图开 2 人局；4 人图、边疆图、生成图都是 4，行为不变）。
+            // 每局换图时各局的图人数上限相同（生成器固定 4 人），取首局的即可。难度沿用已定的玩家配置（命令行 --difficulty 或配置文件）。
+            int maxPlayers = MapCatalog.Resolve(config.MapIdAt(0)).MaxPlayers;
+            if (maxPlayers != config.PlayerCount)
+            {
+                Core.Ai.AiDifficulty difficulty = config.Players[0].Difficulty;
+                config = config with { Players = [.. Enumerable.Range(0, maxPlayers).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
+            }
+        }
+
         int parallelism = serial ? 1 : config.EffectiveParallelism;
 
         Console.WriteLine($"跑局：{config.Count} 局，种子 {config.SeedStart}..{config.SeedAt(config.Count - 1)}，地图 {(config.MapPerMatch ? $"每局换图 {config.MapIdAt(0)}..{config.MapIdAt(config.Count - 1)}" : config.MapId)}，{config.PlayerCount} 人，并行度 {parallelism}，小回合数截断 {config.TurnLimit}，匠人权重 {config.ArtisanWeight}，输出 {outDir}");
@@ -330,6 +344,14 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine(summary.ToJson());
         return summary.Failed == 0 ? 0 : 3;
+    }
+
+    /// <summary>配置文件是否写了 <c>Players</c>（与 <see cref="RunConfig.FromJson"/> 同口径：键名区分大小写）。没写即"未指定人数"。</summary>
+    private static bool DeclaresPlayers(string json)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+            && doc.RootElement.TryGetProperty(nameof(RunConfig.Players), out _);
     }
 
     // ---------- replay ----------

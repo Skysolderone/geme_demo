@@ -1,6 +1,7 @@
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Sim.Logging;
 using Siege.Sim.Play;
 
 namespace Siege.Core.Tests.SimulationHarness;
@@ -209,6 +210,79 @@ public class 各入口按地图标识选图Tests
         Assert.Equal(["GameRoot.cs: GetCmdlineUserArgs(", "GameRoot.cs: GetCmdlineArgs("], rawReads);
         Assert.Contains("new LaunchArgs(OS.GetCmdlineUserArgs(), OS.GetCmdlineArgs())", root, StringComparison.Ordinal);
         Assert.DoesNotContain(scripts, s => s.Name != "LaunchArgs.cs" && s.Text.Contains("StartsWith(\"--", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void 两人图可选_选中确认后建局恰有2名玩家()
+    {
+        // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 A 只有 2 人图）：选图清单可选到 2 人图，
+        // 变异 M-S5：Program.Run 的缺省人数不改写（条件加 `&& maxPlayers < 0`）→ 本测试与下一条共红 2。
+        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 2 名玩家。选图模型只产出标识，建局走批量入口的同一份解析。
+        var model = new Siege.Presentation.MapSelect.MapSelectModel(1);
+        int index = model.Options.ToList().FindIndex(o => o.BuiltinId == TwoPlayerBaseMap.Id);
+        Assert.True(index >= 0, "选图清单里没有 2 人图。");
+        Assert.True(model.Select(index));
+        model.Accept();
+        string id = model.Confirm();
+        Assert.Equal(TwoPlayerBaseMap.Id, id);
+
+        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunOne("pick-2p", "--map", id);
+        Assert.Equal(2, recorded.PlayerCount);
+        Assert.Equal(TwoPlayerBaseMap.Id, recorded.MapId);
+        Assert.Equal(TwoPlayerBaseMap.Id, log.Header.MapId);
+        Assert.Equal(2, log.Header.Players.Count);
+    }
+
+    [Fact]
+    public void 参赛人数缺省取地图人数上限_显式人数照旧()
+    {
+        // small-maps D3：批量配置 / 终端 / 图形版在未指定人数时用 map.MaxPlayers；显式给人数时仍按给定值；4 人图行为不变。
+        // 变异（各红本测试）：M-S4 PlayCommand 缺省写死 `?? 4`；M-S5 批量缺省不改写（共红 2，另一条是上面的「两人图可选」）；
+        // M-S6 配置文件写了 Players 也当未指定；M-S7 src/godot/scripts/GameRoot.cs 建局人数 Min(4, map.MaxPlayers) 改成 4。
+        // 批量入口：命令行不给 --players
+        Assert.Equal(2, RunOne("default-2p", "--map", TwoPlayerBaseMap.Id).Config.PlayerCount);
+        Assert.Equal(2, RunOne("default-2p-difficulty", "--map", TwoPlayerBaseMap.Id, "--difficulty", "Easy").Config.PlayerCount);
+        Assert.Equal(4, RunOne("default-4p", "--map", MapCatalog.DefaultId).Config.PlayerCount);
+        Assert.Equal(4, RunOne("default-none").Config.PlayerCount);
+        Assert.Equal(3, RunOne("explicit-3-on-4p", "--players", "3").Config.PlayerCount);
+
+        // 批量入口：配置文件不写 Players 也算"未指定"；写了就按写的。
+        string dir = SimFixtures.TempDir("players-config");
+        string noPlayers = Path.Combine(dir, "no-players.json");
+        File.WriteAllText(noPlayers, $"{{ \"MapId\": \"{TwoPlayerBaseMap.Id}\" }}");
+        Assert.Equal(2, RunOne("config-no-players", "--config", noPlayers).Config.PlayerCount);
+        string withPlayers = Path.Combine(dir, "with-players.json");
+        File.WriteAllText(withPlayers, "{ \"Players\": [ { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" } ] }");
+        Assert.Equal(3, RunOne("config-players", "--config", withPlayers).Config.PlayerCount);
+
+        // 终端入口：不给人数 → 地图人数上限（2 人图出生区 1–2、对手 1 名）；4 人图仍是 3 名对手。
+        var twoOut = new StringWriter();
+        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), twoOut, TwoPlayerBaseMap.Create(), flagRisk: 0));
+        Assert.Contains("对手 1 名", twoOut.ToString(), StringComparison.Ordinal);
+        Assert.Contains("选择你的出生区（1–2）", twoOut.ToString(), StringComparison.Ordinal);
+        var fourOut = new StringWriter();
+        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), fourOut, flagRisk: 0));
+        Assert.Contains("对手 3 名", fourOut.ToString(), StringComparison.Ordinal);
+
+        // 图形版（src/godot 不在解决方案里，只能源码扫描）：每一处建局的人数都取自地图的人数上限（Min(4, MaxPlayers)，
+        // 标准档预算表只到 4 人，故恒等于 MaxPlayers；4 封顶是表现层配色只备 4 名玩家的保险）。此项在改动前已成立，由 Godot 自检实测 2 人图建局 2 名玩家。
+        string scripts = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
+        string[] creates = [.. Directory.GetFiles(scripts, "*.cs")
+            .SelectMany(f => File.ReadLines(f))
+            .Where(l => l.Contains("MatchSession.Create(", StringComparison.Ordinal))];
+        Assert.True(creates.Length >= 3, $"样本口径：只扫到 {creates.Length} 处建局。");
+        Assert.All(creates, l => Assert.Contains(".MaxPlayers", l, StringComparison.Ordinal));
+    }
+
+    /// <summary>经批量入口跑 1 局（4 个小回合截断），返回落盘的 config.json 与该局日志。</summary>
+    private static (Siege.Sim.Config.RunConfig Config, MatchLog Log) RunOne(string name, params string[] extra)
+    {
+        string outDir = Path.Combine(SimFixtures.TempDir("players-default-" + name), "out");
+        (int code, string err) = RunMain(["run", "--out", outDir, "--count", "1", "--seed", "1", "--turn-limit", "4", "--serial", .. extra]);
+        Assert.True(code == 0, err);
+        var config = Siege.Sim.Config.RunConfig.FromJson(File.ReadAllText(Path.Combine(outDir, "config.json")));
+        MatchLog log = MatchLog.Parse(File.ReadAllText(Directory.GetFiles(outDir, "match-*.jsonl").Single()));
+        return (config, log);
     }
 
     private static (int Code, string Error) RunMain(params string[] args)

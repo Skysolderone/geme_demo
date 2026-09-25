@@ -1,10 +1,10 @@
 ## 1. 段 A——2 人图与入口
 
-- [ ] 1.1 先写测试：`map-definition`「2 人基准地图」三个 Scenario；`map-selection`「开局选图界面」新 Scenario（选 2 人图建局恰 2 名玩家）与参赛人数缺省。验证：先红。
-- [ ] 1.2 编写 `maps/siege-2p-base-v1.json` 并登记内置地图表（含显示名）。验证：地图静态校验与人数适配预算通过；1.1 地图类测试全绿；变异（改动一格破坏 C2 对称时"旋转对称"应红）。
-- [ ] 1.3 三个入口参赛人数缺省取 `MaxPlayers`（D3）；选图界面列出新图。验证：1.1 全绿；4 人图既有测试全绿（行为不变）。
-- [ ] 1.4 Godot（Debug 构建）在 2 人图上 `--auto-demo`、`--pick-check`、`--screenshot` 退出码 0；截图 `sim-out/small-maps/2p-*.png`，另出一张终端文本盘面 `sim-out/small-maps/2p-map.txt`。
-- [ ] 1.5 2 人图标准难度 20 局冒烟（种子 1–20）：截断、终局原因、结束大回合、整局无提子、先手胜率；数据 `sim-out/small-maps/2p-smoke20/`。只报告。
+- [x] 1.1 先写测试：`map-definition`「2 人基准地图」三个 Scenario；`map-selection`「开局选图界面」新 Scenario（选 2 人图建局恰 2 名玩家）与参赛人数缺省。验证：先红。
+- [x] 1.2 编写 `maps/siege-2p-base-v1.json` 并登记内置地图表（含显示名）。验证：地图静态校验与人数适配预算通过；1.1 地图类测试全绿；变异（改动一格破坏 C2 对称时"旋转对称"应红）。
+- [x] 1.3 三个入口参赛人数缺省取 `MaxPlayers`（D3）；选图界面列出新图。验证：1.1 全绿；4 人图既有测试全绿（行为不变）。
+- [x] 1.4 Godot（Debug 构建）在 2 人图上 `--auto-demo`、`--pick-check`、`--screenshot` 退出码 0；截图 `sim-out/small-maps/2p-*.png`，另出一张终端文本盘面 `sim-out/small-maps/2p-map.txt`。
+- [x] 1.5 2 人图标准难度 20 局冒烟（种子 1–20）：截断、终局原因、结束大回合、整局无提子、先手胜率；数据 `sim-out/small-maps/2p-smoke20/`。只报告。
 
 ## 2. 段 B——3 人图与收尾
 

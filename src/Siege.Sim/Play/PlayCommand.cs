@@ -12,6 +12,7 @@ namespace Siege.Sim.Play;
 /// <summary>终端对局：一名人类玩家对若干启发式 AI。</summary>
 internal static class PlayCommand
 {
+    /// <param name="playerCountArg">参赛人数；<c>null</c> = 地图的人数上限 <see cref="MapData.MaxPlayers"/>（small-maps D3：2 人图开 2 人局，4 人图照旧 4 人）。</param>
     /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
     /// <param name="cellLimit">AI 候选格上限 K；<c>null</c> 按地图的可落子格数自动取（<see cref="AiSearchConfig.ForMap"/>），0 = 不限制。</param>
     /// <param name="weights">测试接缝：AI 评价权重；<c>null</c> = 默认权重表。终端入口不传（ai-eye R12：终端对局一律用缺省值，不加选项）。</param>
@@ -20,10 +21,11 @@ internal static class PlayCommand
     /// <param name="flagRisk">测试接缝：原型插旗的冒险概率；<c>null</c> = 对局配置缺省值（<see cref="MatchOptions.DefaultFlagRisk"/>）。终端入口不传（flag-contest D2，同上）。
     /// 依赖出生区与走法的脚本测试写死 0，使脚本不随缺省冒险概率变化而失步。</param>
     public static int Run(
-        ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
+        ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null)
     {
         map ??= MapCatalog.Resolve(null);
+        int playerCount = playerCountArg ?? map.MaxPlayers;
         AiSearchConfig search = AiSearchConfig.ForMap(difficulty, map.PlayableCount, cellLimit);
         search = (passThreshold is int threshold ? search with { PassThreshold = threshold } : search).Validated();
         if (playerCount < 2 || playerCount > map.MaxPlayers)

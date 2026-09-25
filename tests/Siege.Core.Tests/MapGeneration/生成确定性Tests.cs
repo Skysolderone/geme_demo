@@ -122,7 +122,8 @@ public class 生成确定性Tests
         // map-definition 增量：内置图行为零变化——边疆手工图的导出文本仍与仓库里的权威文件一致（v4 的同类断言在 地图规格档Tests）。
         string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", "siege-frontier-v2.json"));
         Assert.Equal(Normalize(disk), Normalize(MapFile.ToJson(FrontierMapV2.Create())));
-        Assert.Equal(["siege-4p-base-v5", "siege-frontier-v2"], MapCatalog.BuiltinIds);
+        // small-maps 段 A 在标准图之后登记了 2 人图（手工图，与生成器无关）。
+        Assert.Equal(["siege-4p-base-v5", "siege-2p-base-v1", "siege-frontier-v2"], MapCatalog.BuiltinIds);
 
         static string Normalize(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
     }
