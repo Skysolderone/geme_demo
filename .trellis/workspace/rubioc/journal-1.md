@@ -148,3 +148,11 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - **负责人：不再跑 200 局**（已存记忆）。本 change 的简单 / 标准难度复核延后，修正对截断（原简单 36/200、标准 2/200）的实际效果暂无数据；需要数据先问可接受规模。
 - 仍待负责人：人 vs 3 AI 实机（清单在 `09-23-ai-eye` 归档任务 implement.md 段 E）；HANDOFF 全文过时；简单难度首回合一子不落（阈值问题，另议）。
 - 当前无进行中的 change / Trellis 任务。
+
+
+## Session: 2026-09-25 — 简单难度首回合修复、插旗竞争
+
+- `pass-threshold-first-stone`：己方无子时停手阈值视为 0（`068a0ab`，归档 `89acccf` / `b637510`）。简单难度 v5 20 局首回合全员 Pass 8/20 → 0/20；截断 4/20 只报告。设计文档 v1.11。
+- `flag-contest`：原型插旗冒险概率 p（缺省 15，子流 `flag-risk`，CLI `--flag-risk`），p = 0 逐项不变（`0952c29`，归档 `bd2fdee` / `5f40c4d`）。v5 Standard 20 局：同区 7/20、截断 1/20（同区局）。设计文档 v1.12。1425 通过 / 5 门控跳过。
+- 注意：`0952c29` 顺带提交了 Godot 生成的 `PartExport.cs.uid`、`TerrainParts.cs.uid`（对应 `fafe15b` 新增脚本，仓库本就跟踪同类 .uid）。
+- 文档中剩余未开发：2 / 3 人专属地图（§19-2）、更多棋子与信物（§19-3）、正式 AI（§19-4）、联网（§19-5）、带入带出（§19-6）、正式美术音效。遗留：落后者无处可下、简单难度截断、边疆图 200 局延后、人机实机、HANDOFF 过时。
