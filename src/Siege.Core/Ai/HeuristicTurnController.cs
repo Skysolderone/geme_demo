@@ -97,7 +97,17 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>
     /// 为当前公开快照建立评价器（供外部检视单个批次的分解）。<see cref="Deploy"/> 每次决策新建一个：活形分析的决策内缓存挂在评价器上，随之丢弃（ai-eye D5）。
     /// </summary>
-    public BatchEvaluator CreateEvaluator() => new(Player, _observe(), Weights, Config.ImmediateOnly, _relicValue, _lifeQuery, _cacheLife);
+    public BatchEvaluator CreateEvaluator() => CreateEvaluator(_observe());
+
+    private BatchEvaluator CreateEvaluator(MatchPublicView view) => new(Player, view, Weights, Config.ImmediateOnly, _relicValue, _lifeQuery, _cacheLife);
+
+    /// <summary>
+    /// 本次决策实际生效的停手阈值（pass-threshold-first-stone D1，无子豁免）：批次开始前的正式盘面上该玩家没有任何棋子时为 0，
+    /// 否则为配置值 <see cref="AiSearchConfig.PassThreshold"/>。只在决策入口按公开快照算一次，单点排序与贪心组批共用，
+    /// 组批过程中不因已暂放的棋子而改变。<see cref="Config"/> 与日志首部仍记配置值（D2：豁免是盘面的确定性函数，回放按同一实现重建）。
+    /// </summary>
+    private int EffectivePassThreshold(MatchPublicView view) =>
+        view.Board.GroupsOf(Player).IsEmpty ? 0 : Config.PassThreshold;
 
     // ---------- 第 2 阶段 ----------
 
@@ -212,7 +222,9 @@ public sealed class HeuristicTurnController : ITurnController
     {
         ArgumentNullException.ThrowIfNull(batch);
         ArgumentNullException.ThrowIfNull(rehearse);
-        BatchEvaluator evaluator = CreateEvaluator();
+        MatchPublicView view = _observe();
+        BatchEvaluator evaluator = CreateEvaluator(view);
+        int passThreshold = EffectivePassThreshold(view);
         BatchContext context = batch.Context;
         batch.Clear();
 
@@ -231,7 +243,7 @@ public sealed class HeuristicTurnController : ITurnController
         for (int k = 0; k < Config.CandidateBatchCount; k++)
         {
             ImmutableArray<PointScore> order = k == 0 ? ranking : Perturb(ranking);
-            CandidateBatch candidate = Greedy(order, batch, rehearse, evaluator);
+            CandidateBatch candidate = Greedy(order, batch, rehearse, evaluator, passThreshold);
             if (keys.Add(candidate.Key))
             {
                 candidates.Add(candidate);
@@ -395,12 +407,12 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>
     /// 按给定顺序贪心加入落点：预演不合法、整批被活形硬约束淘汰、或这一枚使总分的提升<b>不大于</b>停手阈值
-    /// （<see cref="AiSearchConfig.PassThreshold"/>，ai-eye D4）即撤回；直到部署上限。
+    /// （<paramref name="passThreshold"/>：决策入口按正式盘面算定的实际阈值，见 <see cref="EffectivePassThreshold"/>；ai-eye D4）即撤回；直到部署上限。
     /// 阈值作用在每一枚的边际提升上，不是整批总分。阈值 0 即"严格提高"：零收益的落子一律不下——这是 AI 会 Pass、
     /// 对局能以整轮 Pass 收尾的前提（实测 <c>&gt;=</c> 会让对局 600 小回合不终局）。
     /// </summary>
     private CandidateBatch Greedy(
-        ImmutableArray<PointScore> order, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+        ImmutableArray<PointScore> order, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold)
     {
         BatchContext context = batch.Context;
         batch.Clear();
@@ -426,7 +438,7 @@ public sealed class HeuristicTurnController : ITurnController
                 continue;
             }
 
-            if (next.Total - current.Total > Config.PassThreshold)
+            if (next.Total - current.Total > passThreshold)
             {
                 current = next;
             }

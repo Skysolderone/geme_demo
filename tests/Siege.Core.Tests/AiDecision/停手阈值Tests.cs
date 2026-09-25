@@ -111,7 +111,8 @@ public class 停手阈值Tests
     {
         // 开放局面（同「候选格上限Tests」）：阈值 0 时 AI 会落子（反面，否则 Pass 是恒真）；阈值取 int.MaxValue 时任何一枚的边际提升都不超过它 → 0 落子 Pass。
         // 变异 M-B7（Greedy 仍按"严格提高"保留、不看阈值）→ 红 4（本测试、低于阈值不落子、恰等于阈值不落子、候选格上限黄金哈希）。
-        static MatchFlow Open() => AiFixtures.Round5().Stones(AiFixtures.P1, "E5", "F6", "D7").Stones(AiFixtures.P2, "G3");
+        // pass-threshold-first-stone：P0 在 A1 放一枚远离候选区的子——无子豁免下"盘上没有己方棋子"时阈值取 0，int.MaxValue 就测不到了。
+        static MatchFlow Open() => AiFixtures.Round5().Stones(Me, "A1").Stones(AiFixtures.P1, "E5", "F6", "D7").Stones(AiFixtures.P2, "G3");
 
         MatchFlow eager = Open();
         HeuristicTurnController zero = HeuristicAi.Create(eager, Me, AiDifficulty.Standard, config: AiSearchConfig.Standard with { PassThreshold = 0 });
@@ -120,6 +121,7 @@ public class 停手阈值Tests
         Assert.True(eagerBatch.Count > 0);
 
         MatchFlow match = Open();
+        Assert.False(match.Board.GroupsOf(Me).IsEmpty);
         HeuristicTurnController ai = HeuristicAi.Create(match, Me, AiDifficulty.Standard, config: AiSearchConfig.Standard with { PassThreshold = int.MaxValue });
         StagedBatch batch = match.OpenDeploy();
         ai.Deploy(batch, match.Rehearse);
@@ -182,6 +184,78 @@ public class 停手阈值Tests
         Assert.Contains("\"PassThreshold\":3", header, StringComparison.Ordinal);
         RunConfig recorded = MatchLog.Parse(log.DeterministicText()).Header.Config;
         Assert.Equal([7, 3, 7, 7], recorded.Players.Select(p => p.Search?.PassThreshold ?? recorded.PassThreshold!.Value));
+    }
+
+    // ---------- pass-threshold-first-stone：无子豁免（design D1） ----------
+
+    /// <summary>
+    /// 孤子局面：P0 在指定格落普通子，四邻全是空格、周围没有任何棋子（不连串、不提子、不成眼）。
+    /// 简单难度只算即时势力、敌损、眼位三维；孤子势力增量 = 棋串军势 1 + 独占领地 4 = 5。权重写死为定值前缺省（眼位 0）并把 PowerGain 取 6
+    /// （testing.md「依赖 AI 实际怎么走的断言要把权重写死」），每枚孤子的边际提升恰为 6 × 5 = 30（spec Scenario 的算例；proposal：简单难度空盘单子加权收益约 30，过不了阈值 80）。
+    /// </summary>
+    private static HeuristicTurnController LoneStones(MatchFlow match, int limit, params string[] range)
+    {
+        (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, limit, range);
+        HeuristicTurnController ai = DeployWith(
+            match, AiDifficulty.Easy, AiSearchConfig.Easy with { PassThreshold = AiSearchConfig.DefaultPassThreshold }, SimFixtures.PreCalibrationWeights with { PowerGain = 6 }, batch, driver);
+
+        Assert.Equal(80, ai.Config.PassThreshold);
+        Assert.Equal(range.Length, ai.LastPointRanking.Length);
+        foreach (PointScore point in ai.LastPointRanking)
+        {
+            Assert.Equal(5, point.Evaluation.RawOf(EvaluationDimension.PowerGain));
+            Assert.Equal(0, point.Evaluation.RawOf(EvaluationDimension.EnemyLoss));
+            Assert.Equal(0, point.Evaluation.RawOf(EvaluationDimension.Eye));
+            Assert.Equal(30, point.Total);
+        }
+
+        return ai;
+    }
+
+    [Fact]
+    public void 无子时不受阈值限制()
+    {
+        // 阈值 80，P0 盘上一枚子都没有：提升 30 的落点按实际阈值 0 判定而保留。
+        // 变异 M-F1（去掉豁免：EffectivePassThreshold 恒取配置值）→ 全量红 2（本测试、同批次内不中途切换）；其余全绿，黄金哈希不受影响。
+        MatchFlow match = AiFixtures.Round5();
+        Assert.True(match.Board.GroupsOf(Me).IsEmpty);
+
+        HeuristicTurnController ai = LoneStones(match, 1, "E5");
+
+        Placement placed = Assert.Single(ai.LastChoice!.Placements);
+        Assert.Equal(TestMaps.At("E5"), placed.Coord);
+        Assert.Equal(30, ai.LastChoice.Total);
+        Assert.Equal("D:" + ai.LastChoice.Key, ai.Decisions[^1]);
+    }
+
+    [Fact]
+    public void 有子后恢复阈值()
+    {
+        // 与「无子时不受阈值限制」同一局面，只多一枚远离 E5 的己方子 A1（不影响 E5 的任何一维）：提升 30 不大于配置阈值 80 → 撤回、Pass。
+        // 本条在改动前即绿（描述的是原行为）；变异 M-F3（豁免条件反转：有子取 0、无子取配置值）→ 全量红 8（本测试、无子时不受阈值限制、同批次内不中途切换、
+        // 低于阈值不落子、恰等于阈值不落子、无落点被保留则Pass、候选格上限黄金哈希、地形可离线重建）。
+        MatchFlow match = AiFixtures.Round5().Stones(Me, "A1");
+        Assert.False(match.Board.GroupsOf(Me).IsEmpty);
+
+        HeuristicTurnController ai = LoneStones(match, 1, "E5");
+
+        AssertPassed(ai);
+    }
+
+    [Fact]
+    public void 同批次内不中途切换()
+    {
+        // 阈值 80，P0 批次开始前无子，部署上限 2、两个互不相邻也不共覆盖的候选格 B2 / E5（各自提升 30）。
+        // 第一枚保留后批次里已有己方暂放子，但豁免只按正式盘面判定：第二枚仍按阈值 0 判定而保留，整批 60。
+        // 变异 M-F2（按暂放后盘面判定：Greedy 里批次已有先前保留的暂放子就改用配置阈值）→ 全量红 1（本测试）；「无子时不受阈值限制」仍绿。
+        MatchFlow match = AiFixtures.Round5();
+        Assert.True(match.Board.GroupsOf(Me).IsEmpty);
+
+        HeuristicTurnController ai = LoneStones(match, 2, "B2", "E5");
+
+        Assert.Equal(1, ai.Config.CandidateBatchCount);
+        Assert.Equal([TestMaps.At("B2"), TestMaps.At("E5")], ai.LastChoice!.Placements.Select(p => p.Coord).Order());
+        Assert.Equal(60, ai.LastChoice.Total);
     }
 
     // ---------- 2.4：配置、回放、命令行 ----------
