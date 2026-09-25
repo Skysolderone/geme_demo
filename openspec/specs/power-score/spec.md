@@ -9,7 +9,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 `棋串军势 = ⌊(基础军势总和 + 位置加值) × 1.5^倍增子数量⌋`
 
-`位置加值 = 连珠加值 + 协同加值 + 高地加值`（高地加值见 `piece-effects`「高地压制加值」）。
+`位置加值 = 连珠加值 + 协同加值 + 高地加值 + 旗手加值 + 铁链加值 + 哨兵加值 + 界碑加值`（高地加值见 `piece-effects`「高地压制加值」，四种新来源见 `piece-effects` 对应 Requirement）。连营带来的额外加值 SHALL 计入连珠加值，犄角带来的额外加值 SHALL 计入协同加值（见 `relic-effects`「计分信物：连营与犄角」）。
 
 倍率 SHALL 作用于基础军势总和与全部位置加值之和。倍率指数 SHALL 等于棋串中倍增子的数量，MUST NOT 设置任何封顶。
 
@@ -48,6 +48,10 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 #### Scenario: 倍率显示为精确值
 - **WHEN** 读取一条含 3 枚倍增子的棋串的倍率显示值
 - **THEN** 显示为精确十进制 `3.375`
+
+#### Scenario: 新来源一并被倍率放大
+- **WHEN** 一条棋串由位于信物格上的旗手子、铁链子、倍增子各 1 枚连成，旗手子没有其他相邻信物格，无其他位置加值
+- **THEN** 基础军势为 3，旗手加值 3、铁链加值 2，棋串军势为 `⌊(3 + 3 + 2) × 1.5⌋ = 12`
 
 ### Requirement: 总势力
 
@@ -93,7 +97,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 ### Requirement: 势力明细
 
-系统 SHALL 为每名玩家产出结构化的势力明细，至少包含：领地分总计、独占空格坐标集合、每条棋串的（棋子坐标集合、基础军势总和、位置加值、位置加值的来源拆分：连珠 / 协同 / 高地、倍增子数量、倍率、取整后军势）。
+系统 SHALL 为每名玩家产出结构化的势力明细，至少包含：领地分总计、独占空格坐标集合、每条棋串的（棋子坐标集合、基础军势总和、位置加值、位置加值的来源拆分：连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑、倍增子数量、倍率、取整后军势）。
 
 势力明细 SHALL 作为稳定结构供势力层与遥测记录直接消费。遥测中的倍率峰值记录 SHALL 保留倍增子数量。
 
@@ -107,11 +111,15 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 #### Scenario: 位置加值可溯源
 - **WHEN** 某棋串的位置加值为 14
-- **THEN** 明细拆分出来自连珠线、协同子与高地压制的三部分，且三者之和为 14
+- **THEN** 明细拆分出连珠、协同、高地、旗手、铁链、哨兵、界碑七部分，且七者之和为 14
 
 #### Scenario: 明细可复算棋串军势
 - **WHEN** 读取任一棋串的明细
 - **THEN** `⌊(基础军势总和 + 位置加值) × 倍率⌋` 等于该棋串的取整后军势
+
+#### Scenario: 不含新棋子的棋串新来源为 0
+- **WHEN** 读取一条只含原六种棋子的棋串的明细
+- **THEN** 旗手、铁链、哨兵、界碑四项均为 0，其余各项与引入新棋子之前相同
 
 ### Requirement: 实时重算与公开排名
 
