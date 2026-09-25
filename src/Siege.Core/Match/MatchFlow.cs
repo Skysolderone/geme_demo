@@ -364,7 +364,8 @@ public sealed partial class MatchFlow
         foreach (AppliedTerrainEdit applied in outcome.CaptureRecord?.Edits ?? [])
         {
             _terrainEdits.Add(new TerrainEditRecord(
-                majorRound, _terrainEdits.Count + 1, player, applied.Edit, applied.ArtisanCoord, applied.CausedCapture));
+                majorRound, _terrainEdits.Count + 1, player, applied.Edit, applied.ArtisanCoord, applied.CausedCapture,
+                TerrainEditRules.IsWorkshopReach(applied.ArtisanCoord, applied.Edit)));
         }
 
         SetStage(TurnStage.Settlement, player);

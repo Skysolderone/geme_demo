@@ -214,6 +214,49 @@ public class 各棋子势力占比Tests
         Assert.Contains("- 棋子 Artisan：盘面 1 枚（14.3%），势力 1（2.4%），每颗平均 1", rendered);
     }
 
+    [Fact]
+    public void 新来源归各自棋子不计入倍增子()
+    {
+        // 段 A 待决 3（段 C 3.7）：倍增子的归因是"放大出的部分" = 军势 − 基础 − 全部位置加值。只减连珠 / 协同 / 高地三项时，
+        // 旗手 / 铁链 / 哨兵 / 界碑四项新来源会被整块算给倍增子。合成 v2 棋串：普通、倍增、旗手、铁链、哨兵、界碑各 1 枚（基础 6），
+        // 旗手 3、铁链 5（6 子 − 1）、哨兵 2、界碑 1、高地 1 → 位置加值 12，军势 ⌊18 × 3 / 2⌋ = 27，放大部分 27 − 6 − 12 = 9。
+        // 归因：普通 1、倍增 1 + 9 = 10、旗手 1 + 3 = 4、铁链 1 + 5 = 6、哨兵 1 + 2 = 3、界碑 1 + 1 = 2（高地不归任何棋子，本段口径）→ 合计 26。
+        // 同一快照的高地占位置加值比例 = 1 / 12（分母含四项新来源）。变异 MC-A3（放大部分只减三项）、MC-A4（高地分母只含三项）应红。
+        GroupEntry group = new()
+        {
+            Stones = ["A1", "A2", "A3", "A4", "A5", "A6"],
+            Base = 6,
+            LineBonus = 0,
+            SynergyBonus = 0,
+            HighGroundBonus = 1,
+            BannerBonus = 3,
+            ChainBonus = 5,
+            SentryBonus = 2,
+            BoundaryBonus = 1,
+            MultiplierCount = 1,
+            Power = 27,
+            PieceCounts = ContentSets.PieceTypesOf(ContentSet.V2).ToDictionary(
+                t => t.ToString(),
+                t => t is PieceType.Basic or PieceType.Multiplier or PieceType.Bannerman or PieceType.Chain or PieceType.Sentry or PieceType.Boundary ? 1 : 0),
+        };
+        MatchLog synthetic = SimFixtures.Synthetic(51, [SimFixtures.Turn(1, 1, 0, [27, 0, 0, 0], ["A1:Basic"], groupsOfPlayer: [group])], [], SimFixtures.ResultOf(1, [0]));
+        MatchLog restored = MatchLog.Parse(synthetic.DeterministicText());
+        MatchLog v2 = new()
+        {
+            Header = restored.Header with { Config = restored.Header.Config with { ContentSet = ContentSet.V2 } },
+            Turns = restored.Turns,
+            Events = restored.Events,
+            Result = restored.Result,
+        };
+
+        BalanceReport report = BalanceAnalyzer.Analyze([v2]);
+        Assert.Equal(
+            ["Basic:1", "Fortress:0", "Line:0", "Multiplier:10", "Synergy:0", "Artisan:0", "Bannerman:4", "Chain:6", "Sentry:3", "Boundary:2"],
+            report.PieceShares.Pieces.Select(p => $"{p.Type}:{p.Power}"));
+        Assert.Equal((BigInteger)26, report.PieceShares.TotalPower);
+        Assert.Equal((1L, 12L), (report.HighGround.FinalHighGroundBonus, report.HighGround.FinalPositionBonus));
+    }
+
     private static TurnSnapshot TurnWith(int turn, params (int Player, string Status, GroupEntry[] Groups)[] players) =>
         SimFixtures.Turn(turn, 1, 0, [0, 0, 0, 0], ["A1:Basic"]) with
         {

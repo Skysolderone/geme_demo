@@ -292,7 +292,7 @@ public sealed class HeuristicTurnController : ITurnController
         {
             foreach (PieceType type in types)
             {
-                foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type))
+                foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type, context.WorkshopActive))
                 {
                     batch.Clear();
                     if (batch.Stage(cell, type, edit) is not null)
@@ -323,7 +323,8 @@ public sealed class HeuristicTurnController : ITurnController
     }
 
     /// <summary>
-    /// 候选格预筛（frontier-map 裁决 12）：用代表类型（持有类型里枚举序最前的一种）、不带改造，对每格预演一次得格分，
+    /// 候选格预筛（frontier-map 裁决 12）：用代表类型（持有类型里枚举序最前的一种——枚举序即固定类型次序：普通、堡垒、连珠、倍增、协同、匠人、
+    /// 旗手、铁链、哨兵、界碑，more-pieces-relics D9）、不带改造，对每格预演一次得格分，
     /// 取前 K 格（同分按坐标序），按坐标序返回。不消费随机流。
     /// 格分只算既有七维、不做活形查询（ai-eye D5，<see cref="BatchEvaluator.EvaluatePrefilter"/>）；进入完整枚举的 ≤ K 格才算九维。
     /// 代表类型在某格落不下（自杀手等）而手里有匠人时，该格退而用匠人逐个合法改造目标预演，格分取其中最高的合法总分。
@@ -332,7 +333,7 @@ public sealed class HeuristicTurnController : ITurnController
     /// <para>提子点与救命点不另设豁免：提子走"敌方损失"维、补气走"安全"维（预筛口径下安全维只看气数、分散气与危险，见 <see cref="GroupSafety.AnalyzeWithoutLife"/>），两维都与落下的类型无关，代表类型的格分已经把它们排在前面
     /// （由 <c>候选格上限Tests.小K下仍找到妙手</c> 守门）。</para>
     /// <para>匠人回退：自杀手判定与类型无关（六种类型在盘面上气的口径相同），不带改造时代表类型落不下的格，别的类型同样落不下；
-    /// 唯一的例外是匠人的改造先于自杀手判定（terrain-edit T-3：搭桥补气、立栅切断敌串）。这类"只有带改造的匠人才落得下"的格
+    /// 唯一的例外是匠人的改造先于自杀手判定（terrain-edit T-3：搭桥补气、立栅切断敌串）。回退的目标枚举与完整枚举同样带本小回合快照的工坊标记。这类"只有带改造的匠人才落得下"的格
     /// 不回退就会被预筛整格漏掉。回退只发生在代表类型落不下的格上（通常寥寥数个），开销可忽略；枚举次序即
     /// <see cref="TerrainEditRules.LegalTargets"/> 的确定性次序。</para>
     /// <para>仍有的偏差：代表类型落得下的格只按"不带改造"计分，改造带来的额外收益不进格分（那是完整枚举的事）；
@@ -363,7 +364,7 @@ public sealed class HeuristicTurnController : ITurnController
             BigInteger? total = Score(cell, representative, null);
             if (total is null && holdsEditor)
             {
-                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell))
+                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell, context.WorkshopActive))
                 {
                     if (Score(cell, TerrainEditRules.EditorType, edit) is { } edited && (total is null || edited > total))
                     {
@@ -388,10 +389,12 @@ public sealed class HeuristicTurnController : ITurnController
     }
 
     /// <summary>
-    /// 该落点该类型要枚举的改造选项（design D-J）：匠人为"不改造 + 全部合法目标"，其余五种只有"不改造"。
-    /// 合法目标经 <see cref="TerrainEditRules.LegalTargets"/> 取得（唯一实现），AI MUST NOT 自己判目标合法性。
+    /// 该落点该类型要枚举的改造选项（design D-J）：匠人为"不改造 + 全部合法目标"，其余九种只有"不改造"。
+    /// 合法目标经 <see cref="TerrainEditRules.LegalTargets(MapData, Coord, bool)"/> 取得（唯一实现），AI MUST NOT 自己判目标合法性，
+    /// 也 MUST NOT 自行扩展或收窄范围：<paramref name="workshop"/> 是本小回合快照的工坊标记（经批次上下文传入，more-pieces-relics D5），
+    /// 为真时隔一格的格目标由唯一实现一并给出。
     /// </summary>
-    private static IEnumerable<TerrainEdit?> EditOptions(MapData map, Coord cell, PieceType type)
+    private static IEnumerable<TerrainEdit?> EditOptions(MapData map, Coord cell, PieceType type, bool workshop)
     {
         yield return null;
         if (type != TerrainEditRules.EditorType)
@@ -399,7 +402,7 @@ public sealed class HeuristicTurnController : ITurnController
             yield break;
         }
 
-        foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, cell))
+        foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, cell, workshop))
         {
             yield return edit;
         }

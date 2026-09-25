@@ -146,14 +146,18 @@ public static class BatchPreviewBuilder
         }
 
         ImmutableArray<CapturedGroup> captures = GroupCaptures(board, rehearsal.Captures);
-        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster) : null;
+
+        // 计分信物（more-pieces-relics D3 / batch-preview「计分信物与新棋子的预演」）：只用批次开始前已揭示的公开内容，
+        // 本批将首次揭示的信物不计入任何玩家的预演势力（其内容只显示为"将揭示"）；预演与正式结算的差异只来自它。
+        ImmutableSortedDictionary<Coord, RelicType> known = RevealedRelics.Of(relics.PublicStates());
+        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, known) : null;
         ImmutableArray<GroupOutlook> own = OwnGroups(projected, context.Player, ordered, rehearsal.Failure, after);
 
         ImmutableArray<PowerChange> changes = [];
         ImmutableArray<Coord> willReveal = [];
         if (after is not null)
         {
-            PowerSnapshot before = PowerCalculator.Compute(board, roster);
+            PowerSnapshot before = PowerCalculator.Compute(board, roster, known);
             changes =
             [
                 .. after.Players.Select(p =>

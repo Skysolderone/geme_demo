@@ -12,23 +12,34 @@ namespace Siege.Core.Tests.AiDecision;
 public class 对隐藏信息的概率估计Tests
 {
     [Theory]
-    [InlineData(RelicType.SchoolEmblem, 45)]
-    [InlineData(RelicType.Prospecting, 20)]
-    [InlineData(RelicType.Depot, 15)]
-    [InlineData(RelicType.Conscription, 8)]
-    [InlineData(RelicType.Command, 7)]
-    [InlineData(RelicType.Vanguard, 5)]
-    public void 按分区权重估计未知信物(RelicType type, int percent)
+    [InlineData(ContentSet.V2, RelicType.SchoolEmblem, 360)]
+    [InlineData(ContentSet.V2, RelicType.Prospecting, 160)]
+    [InlineData(ContentSet.V2, RelicType.Depot, 120)]
+    [InlineData(ContentSet.V2, RelicType.Conscription, 64)]
+    [InlineData(ContentSet.V2, RelicType.Command, 56)]
+    [InlineData(ContentSet.V2, RelicType.Vanguard, 40)]
+    [InlineData(ContentSet.V2, RelicType.Encampment, 50)]
+    [InlineData(ContentSet.V2, RelicType.Pincer, 50)]
+    [InlineData(ContentSet.V2, RelicType.Relay, 50)]
+    [InlineData(ContentSet.V2, RelicType.Workshop, 50)]
+    [InlineData(ContentSet.V1, RelicType.SchoolEmblem, 45)]
+    [InlineData(ContentSet.V1, RelicType.Prospecting, 20)]
+    [InlineData(ContentSet.V1, RelicType.Depot, 15)]
+    [InlineData(ContentSet.V1, RelicType.Conscription, 8)]
+    [InlineData(ContentSet.V1, RelicType.Command, 7)]
+    [InlineData(ContentSet.V1, RelicType.Vanguard, 5)]
+    public void 按分区权重估计未知信物(ContentSet set, RelicType type, int weight)
     {
-        // 设计文档 §8.2 出生区权重表：徽记 45 / 探勘 20 / 兵站 15 / 征召 8 / 军令 7 / 先锋 5。
-        // 先验直接读 RelicWeights（单一实现）；期望价值 = Σ 权重 × 类型价值 = 45×4+20×6+15×5+8×8+7×10+5×7 = 544 → 取整 5。
-        // 变异验证 M-A4：PriorPercent 改读 Contested 表 → 红 6（本 Theory 全部 6 条）。
-        Assert.Equal(percent, RelicEstimate.PriorPercent(RelicZone.BirthZone, type));
-        Assert.Equal(544, RelicEstimate.ExpectedValueScaled(RelicZone.BirthZone));
+        // more-pieces-relics ai-decision（MODIFIED）：先验取该对局内容集下的出生区权重表——v2 千分制（徽记 36% / 探勘 16% / 兵站 12% / 征召 6.4% /
+        // 军令 5.6% / 先锋 4% / 新四类各 5%），v1 百分制（设计文档 §8.2：45 / 20 / 15 / 8 / 7 / 5）。先验直接读 RelicWeights（单一实现），按表合计归一：
+        // v2 期望 = 5152 / 1000 → 5；v1 = 45×4+20×6+15×5+8×8+7×10+5×7 = 544 / 100 → 5。
+        // 变异验证 M-A4：PriorPercent 改读 Contested 表 → 红 6（原 Theory 全部 6 条；改写后 v1 / v2 共 16 条同理全红）。
+        Assert.Equal(weight, RelicEstimate.PriorWeight(RelicZone.BirthZone, type, set));
+        Assert.Equal(set == ContentSet.V2 ? 5152 : 544, RelicEstimate.ExpectedValueScaled(RelicZone.BirthZone, set));
 
         var unrevealed = new RelicPublicState(TestMaps.At("B2"), new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth),
             IsRevealed: false, Content: null, RevealedInMajorRound: null, RelicControl.Uncontrolled);
-        Assert.Equal(5, RelicEstimate.Estimate(unrevealed));
+        Assert.Equal(5, RelicEstimate.Estimate(unrevealed, set));
     }
 
     [Fact]
@@ -79,7 +90,7 @@ public class 对隐藏信息的概率估计Tests
         ImmutableSortedDictionary<PlayerId, HeuristicTurnController> aisB = runnerB.AttachAi(difficulty);
 
         RelicPublicState StateOf(MatchFlow m) => m.Publish().Relics.Single(r => r.Coord == b2);
-        Assert.Equal(RelicEstimate.Estimate(StateOf(matchA)), RelicEstimate.Estimate(StateOf(matchB)));
+        Assert.Equal(RelicEstimate.Estimate(StateOf(matchA), matchA.ContentSet), RelicEstimate.Estimate(StateOf(matchB), matchB.ContentSet));
 
         string logA = string.Empty;
         string logB = string.Empty;

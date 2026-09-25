@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using Siege.Core.Board;
+using Siege.Core.Relics;
 using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
 
@@ -23,7 +26,9 @@ public class 平衡分析方向Tests
 
         SelectionSection s = BalanceAnalyzer.Analyze([log]).Selection;
 
-        Assert.Equal(Enum.GetNames<PieceType>().Order(), s.Pieces.Select(p => p.Type).Order());
+        // more-pieces-relics（MODIFIED Scenario「该批次内容集中的每一种棋子」）：合成日志首部没有内容集 → v1，列原六种棋子 / 六类信物（改写前为 Enum.GetNames，枚举追加四值后不再等于 v1 的类型集合）。
+        Assert.Equal(ContentSets.PieceTypesOf(ContentSet.V1).Select(t => t.ToString()).Order(), s.Pieces.Select(p => p.Type).Order());
+        Assert.Equal(RelicWeights.OrderOf(ContentSet.V1).Select(t => t.ToString()).Order(), s.Relics.Select(r => r.Type).Order());
         PieceStat basic = s.Pieces.Single(p => p.Type == "Basic");
         Assert.Equal((4, 1), (basic.Offered, basic.Picked));
         Assert.Equal(0.25, basic.SelectionRate.Value);
@@ -48,8 +53,123 @@ public class 平衡分析方向Tests
         Assert.Equal((1, 1), (basicWithCut.WinRateOfPickers.Successes, basicWithCut.WinRateOfPickers.Trials));
 
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze(SimFixtures.Sample.Value));
-        Assert.All(Enum.GetNames<PieceType>(), type => Assert.Contains($"- 棋子 {type}：", text));
-        Assert.All(Enum.GetNames<Relics.RelicType>(), type => Assert.Contains($"- 信物 {type}：", text));
+        Assert.All(ContentSets.PieceTypesOf(ContentSet.V1), type => Assert.Contains($"- 棋子 {type}：", text));
+        Assert.All(RelicWeights.OrderOf(ContentSet.V1), type => Assert.Contains($"- 信物 {type}：", text));
+        Assert.DoesNotContain("- 棋子 Bannerman：", text);
+        Assert.DoesNotContain("- 信物 Relay：", text);
+
+        // 批次里有 v2 对局：列十种棋子、十类信物（未出现的也列出，0 次）。变异 MC-S1（列表不按内容集、恒取 v1）应红。
+        MatchLog v2 = WithContentSet(log, ContentSet.V2);
+        SelectionSection mixed = BalanceAnalyzer.Analyze([v2, cut]).Selection;
+        Assert.Equal(Enum.GetNames<PieceType>().Order(), mixed.Pieces.Select(p => p.Type).Order());
+        Assert.Equal(Enum.GetNames<RelicType>().Order(), mixed.Relics.Select(r => r.Type).Order());
+        Assert.Equal((0, 0), (mixed.Pieces.Single(p => p.Type == "Sentry").Offered, mixed.Relics.Single(r => r.Type == "Workshop").Count));
+    }
+
+    [Fact]
+    public void 新来源占比()
+    {
+        // more-pieces-relics 规格 Scenario：读取一批内容集 v2 对局的分析报告 → 给出旗手、铁链、哨兵、界碑四种来源各自占全部位置加值的比例，
+        // 以及经工坊扩展的改造次数与占比，即使某项为 0 也 MUST NOT 省略该行（本例界碑、犄角为 0）。第 12 项另给连营 / 犄角额外加值占比与驿站平均展示数加成。
+        // 口径：终局快照（最后一条小回合快照）里参赛玩家的全部棋串；驿站加成按每条小回合快照（行动玩家本小回合的快照）平均；工坊按改造记录计。
+        // 合成 v2 局：终局棋串 连珠 2（其中连营 2）/ 高地 1 / 旗手 3 / 铁链 2 / 哨兵 4 / 界碑 0 → 位置加值 12；
+        // 两个小回合的驿站加成 2、0 → 平均 1，有加成的小回合平均 2；改造 2 次，其中经工坊扩展 1 次（50%）。
+        // 被排除的样本（testing.md「统计口径测试必须放一个被排除的样本」）：一局 v1 对局（终局连珠 6、两次改造都不经工坊）单列不适用，不进任何分母。
+        // 变异 MC-A12a（v1 对局也计入）、MC-A12b（工坊占比的分子改为全部改造）应红。
+        GroupEntry[] final =
+        [
+            new() { Stones = ["A1", "A2", "A3"], Base = 3, LineBonus = 2, SynergyBonus = 0, HighGroundBonus = 1, BannerBonus = 3, ChainBonus = 2, SentryBonus = 4, BoundaryBonus = 0, EncampmentBonus = 2, PincerBonus = 0, MultiplierCount = 0, Power = 15 },
+        ];
+        TerrainEditEntry Edit(string target, bool? viaWorkshop) => new() { Action = "Bridge", Target = target, Player = 0, Artisan = "E5", ViaWorkshop = viaWorkshop };
+        TurnSnapshot first = SimFixtures.Turn(1, 1, 0, [15, 1, 1, 1], ["E5:Artisan"], edits: [Edit("B:E7", true), Edit("B:D5", false)]) with
+        {
+            RelaySources = new Dictionary<string, int> { ["H5"] = 2 },
+            WorkshopActive = true,
+        };
+        TurnSnapshot second = SimFixtures.Turn(2, 1, 1, [15, 1, 1, 1], ["H1:Basic"], groupsOfPlayer: null) with
+        {
+            RelaySources = new Dictionary<string, int>(),
+            WorkshopActive = false,
+        };
+        second = second with { PlayersState = [.. second.PlayersState.Select(p => p.Player == 0 ? p with { Groups = [.. final] } : p)] };
+        MatchLog v2 = WithContentSet(SimFixtures.Synthetic(1, [first, second], [], SimFixtures.ResultOf(1, [0])), ContentSet.V2);
+
+        GroupEntry[] v1Final = [new() { Stones = ["B1", "B2", "B3"], Base = 3, LineBonus = 6, SynergyBonus = 0, HighGroundBonus = 0, MultiplierCount = 0, Power = 9 }];
+        MatchLog v1 = SimFixtures.Synthetic(
+            2,
+            [SimFixtures.Turn(1, 1, 0, [9, 1, 1, 1], ["B1:Line"], groupsOfPlayer: v1Final, edits: [Edit("B:E4", null), Edit("B:E6", null)])],
+            [],
+            SimFixtures.ResultOf(1, [0]));
+
+        NewContentSection n = BalanceAnalyzer.Analyze([v2, v1]).NewContent;
+        Assert.Equal((1, 1), (n.Matches, n.NotApplicable));
+        Assert.Equal(12, n.FinalPositionBonus);
+        Assert.Equal(
+            ["旗手 3", "铁链 2", "哨兵 4", "界碑 0", "连营 2", "犄角 0"],
+            n.Sources.Select(x => $"{x.Name} {x.Bonus}"));
+        Assert.Equal(0.25, n.Sources[0].Share, 10);
+        Assert.Equal((2, 2L, 1), (n.RelayTurns, n.RelayBonusTotal, n.TurnsWithRelay));
+        Assert.Equal(1.0, n.MeanRelayBonus, 10);
+        Assert.Equal(2.0, n.MeanRelayBonusWhenPresent, 10);
+        Assert.Equal((2, 1), (n.Edits, n.WorkshopEdits));
+        Assert.Equal(0.5, n.WorkshopShare, 10);
+
+        string text = ReportWriter.Render(BalanceAnalyzer.Analyze([v2, v1]));
+        Assert.Contains("### 12. 新棋子与新信物", text);
+        Assert.Contains("- 内容集 v2 纳入 1 局；内容集 v1（含首部缺内容集的旧日志）1 局：本项不适用，不计入下列各项", text);
+        Assert.Contains("  - 旗手：3（25.0%）", text);
+        Assert.Contains("  - 铁链：2（16.7%）", text);
+        Assert.Contains("  - 哨兵：4（33.3%）", text);
+        Assert.Contains("  - 界碑：0（0.0%）", text);
+        Assert.Contains("  - 连营（并入连珠的额外加值）：2（16.7%）", text);
+        Assert.Contains("  - 犄角（并入协同的额外加值）：0（0.0%）", text);
+        Assert.Contains("- 驿站平均展示数加成：每小回合 1（样本 2 个小回合）；有驿站加成的小回合 1 个，平均 2", text);
+        Assert.Contains("- 经工坊扩展的改造 1 次，占全部改造 2 次的 50.0%", text);
+
+        // 只有 v1 对局：本项只单列"不适用"，不给出任何比例行。
+        string v1Only = ReportWriter.Render(BalanceAnalyzer.Analyze([v1]));
+        Assert.Contains("- 内容集 v2 纳入 0 局；内容集 v1（含首部缺内容集的旧日志）1 局：本项不适用，不计入下列各项", v1Only);
+        Assert.DoesNotContain("  - 旗手：", v1Only);
+    }
+
+    [Fact]
+    public void 内容集v1的报告除第12项外与引入新内容之前逐字节相同()
+    {
+        // 段 B 待决 6：分析器的棋子 / 信物列表按内容集展开，v1 样本的报告不因枚举追加四值而多出 0 行；
+        // 新增的第 12 项对 v1 对局只单列"不适用"。黄金值取自引入新内容之前的提交（ad78d50，同一共用样本、去掉耗时字段后渲染）的 SHA-256：
+        // 共用样本（4 局 Easy、写死 v1）146 行、名次样本 152 行。去掉第 12 项那一段后逐字节相同。
+        static string Hash(IEnumerable<MatchLog> logs)
+        {
+            string report = ReportWriter.Render(BalanceAnalyzer.Analyze([.. logs.Select(l => MatchLog.Parse(l.DeterministicText()))]));
+            string[] lines = report.Split('\n');
+            int start = Array.FindIndex(lines, l => l.StartsWith("### 12. ", StringComparison.Ordinal));
+            Assert.True(start > 0, "报告里没有第 12 项");
+            int end = start;
+            while (end < lines.Length && lines[end].TrimEnd('\r').Length > 0)
+            {
+                end++;
+            }
+
+            Assert.Contains(lines[start..end], l => l.Contains("本项不适用", StringComparison.Ordinal));
+            string stripped = string.Join('\n', lines[..start].Concat(lines[end..]));
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stripped)));
+        }
+
+        Assert.Equal("83302588F50D3B8B52A75D7DFFF1261561B0073AF56D3C319212DF3D7F651FF1", Hash(SimFixtures.Sample.Value));
+        Assert.Equal("19E3B957D93FC0877760093116CB09E1DF2AC441C510AF7FF315D86217AB9B04", Hash(SimFixtures.RankedSample.Value));
+    }
+
+    /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>
+    private static MatchLog WithContentSet(MatchLog log, ContentSet set)
+    {
+        MatchLog copy = MatchLog.Parse(log.FullText());
+        return new MatchLog
+        {
+            Header = copy.Header with { Config = copy.Header.Config with { ContentSet = set } },
+            Turns = copy.Turns,
+            Events = copy.Events,
+            Result = copy.Result,
+        };
     }
 
     [Fact]

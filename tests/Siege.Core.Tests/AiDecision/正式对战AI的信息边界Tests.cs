@@ -31,7 +31,7 @@ public class 正式对战AI的信息边界Tests
         // 行为：AI 能看到的信物状态里没有类型与强度；评价器只能对它做先验估计
         RelicPublicState state = match.Publish().Relics.Single(r => r.Coord == TestMaps.At("E5"));
         Assert.Equal(AiFixtures.P0, ai.CreateEvaluator().Player);
-        Assert.Equal(RelicEstimate.ExpectedValueScaled(RelicZone.Contested) / RelicEstimate.PercentScale, RelicEstimate.Estimate(state));
+        Assert.Equal(RelicEstimate.ExpectedValueScaled(RelicZone.Contested, match.ContentSet) / RelicEstimate.ScaleOf(match.ContentSet), RelicEstimate.Estimate(state, match.ContentSet));
         Assert.False(state.IsRevealed);
         Assert.Null(state.Content);
         Assert.Equal(RelicZone.Contested, state.Spec.Zone);
@@ -87,5 +87,29 @@ public class 正式对战AI的信息边界Tests
         Assert.DoesNotContain(typeof(StagedBatch), fromPublicView);
         Assert.DoesNotContain(typeof(Placement), fromPublicView);
         Assert.DoesNotContain(typeof(BatchContext), fromPublicView);
+    }
+
+    [Fact]
+    public void AI源码不读取真实信物内容()
+    {
+        // more-pieces-relics D3 / ai-decision「新棋子与新信物的 AI 适配」：AI 评价中的计分信物 MUST 只用批次开始前已揭示的公开内容。
+        // 真实内容的出口是 RelicLedger.TrueContents()（public，供正式结算用）；Siege.Core/Ai 与账本同程序集，类型闭包守门（未知信物不可读）
+        // 只看公开成员的可达类型，挡不住一个 private 方法直接调用它——本条补一道源码扫描（去掉 // 注释）：Ai 目录下不得出现 "TrueContents("。
+        // 调试 AI 读真实内容走 MatchDebugView.ContentOf（逐格、显式标注调试），不经 TrueContents，故无白名单。
+        // 反面命中：判据在 Match/MatchFlow.cs（正式结算的调用点）确实命中；口径下界：文件数 ≥ 10。
+        // 变异 MC-T1（BatchEvaluator 加 private static 方法调用 l.TrueContents()，闭包守门看不到）应红。
+        string root = PresentationFixtures.RepoRoot();
+        string[] files = Directory.GetFiles(Path.Combine(root, "src", "Siege.Core", "Ai"), "*.cs", SearchOption.AllDirectories);
+        Assert.True(files.Length >= 10, $"只扫到 {files.Length} 个文件");
+        string[] hits =
+        [
+            .. files.Order(StringComparer.Ordinal)
+                .Where(f => LifeShape.空区与封闭眼空间Tests.StripComments(File.ReadAllText(f)).Contains("TrueContents(", StringComparison.Ordinal))
+                .Select(Path.GetFileName)
+                .OfType<string>(),
+        ];
+
+        Assert.Empty(hits);
+        Assert.Contains("Relics.TrueContents(", File.ReadAllText(Path.Combine(root, "src", "Siege.Core", "Match", "MatchFlow.cs")), StringComparison.Ordinal);
     }
 }

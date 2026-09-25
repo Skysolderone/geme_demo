@@ -1,6 +1,10 @@
 using System.Numerics;
+using System.Text.Json;
+using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Recruit;
+using Siege.Core.Relics;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
@@ -240,5 +244,137 @@ public class 对局日志的记录内容Tests
         Assert.Equal(["A1"], rejected.Coords);
         Assert.Contains("A1", rejected.Detail);
         Assert.Null(match.Board[Coord.Parse("A1")].Occupant);
+    }
+
+    [Fact]
+    public void 新来源可查()
+    {
+        // more-pieces-relics 规格 Scenario：某次结算后 A 的一条棋串含哨兵子、哨兵加值为 4 → 日志中该棋串的来源拆分记录哨兵 4，七项来源之和等于位置加值。
+        // P0 哨兵 F5 气边邻接 P1 的 E5、G5；v2 局写出四种新来源（含 0），v1 局不写（null，日志与引入新棋子之前逐字节相同）。
+        // 写入 → 文本 → 读回：七项之和 = 军势 − 基础（无倍增子），并与活对象的位置加值一致。变异 MC-L1（写入端漏写哨兵来源）应红。
+        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All).Stones(MatchFixtures.P1, "E5", "G5");
+        match.Board.Place(Coord.Parse("F5"), MatchFixtures.P0, PieceType.Sentry);
+        match.Debug.Recalculate();
+        Scoring.GroupPower live = match.Scoreboard.Latest!.GroupContaining(MatchFixtures.P0, "F5");
+        Assert.Equal(4, live.SentryBonus);
+
+        GroupEntry written = Assert.Single(MatchSession.PlayerEntries(match.Publish()).Single(p => p.Player == 0).Groups);
+        string writtenText = JsonSerializer.Serialize(written, LogJson.Options);
+        GroupEntry g = JsonSerializer.Deserialize<GroupEntry>(writtenText, LogJson.Options)!;
+        Assert.Equal(4, g.SentryBonus);
+        Assert.Equal(((int?)0, (int?)0, (int?)0), (g.BannerBonus, g.ChainBonus, g.BoundaryBonus));
+        int seven = g.LineBonus + g.SynergyBonus + g.HighGroundBonus!.Value + g.BannerBonus!.Value + g.ChainBonus!.Value + g.SentryBonus!.Value + g.BoundaryBonus!.Value;
+        Assert.Equal(live.PositionBonus, seven);
+        Assert.Equal(g.Power - g.Base, seven);
+
+        // v1 局（同一几何、F5 换成普通子）：四种新来源与计分信物子拆分都不出现在日志文本里。
+        MatchFlow v1 = MatchFixtures.Started(options: MatchOptions.Immediate with { ContentSet = ContentSet.V1 }).AtRound(5, MatchFixtures.All).Stones(MatchFixtures.P1, "E5", "G5");
+        v1.Board.Place(Coord.Parse("F5"), MatchFixtures.P0, PieceType.Basic);
+        v1.Debug.Recalculate();
+        string v1Text = JsonSerializer.Serialize(MatchSession.PlayerEntries(v1.Publish()), LogJson.Options);
+        foreach (string field in new[] { "BannerBonus", "ChainBonus", "SentryBonus", "BoundaryBonus", "EncampmentBonus", "PincerBonus" })
+        {
+            Assert.DoesNotContain(field, v1Text, StringComparison.Ordinal);
+            Assert.Contains(field, writtenText, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void 旧日志照常解析()
+    {
+        // more-pieces-relics 规格 Scenario：引入新棋子之前产生的日志——首部配置没有内容集、棋串没有新来源字段——照常解析，
+        // 内容集读为 v1，每条棋串的四种新来源读为 0（字段为 null，按 0 读：规格明文允许这四项回填，与领地分等"MUST NOT 回填"的字段不同）。
+        const string oldGroupLine = "{\"Stones\":[\"C1\"],\"Base\":3,\"LineBonus\":0,\"SynergyBonus\":0,\"HighGroundBonus\":0,\"MultiplierCount\":0,\"Power\":3}";
+        GroupEntry old = JsonSerializer.Deserialize<GroupEntry>(oldGroupLine, LogJson.Options)!;
+        Assert.Equal(((int?)null, (int?)null, (int?)null, (int?)null), (old.BannerBonus, old.ChainBonus, old.SentryBonus, old.BoundaryBonus));
+        Assert.Equal(0, old.NewSourceBonus);
+
+        const string oldEditLine = "{\"Action\":\"Bridge\",\"Target\":\"B:E4\",\"Player\":0,\"Artisan\":\"E5\",\"CausedCapture\":false}";
+        Assert.Null(JsonSerializer.Deserialize<TerrainEditEntry>(oldEditLine, LogJson.Options)!.ViaWorkshop);
+
+        // 首部缺内容集的合成旧日志与一份既有的 v1 样本日志：离线解析后内容集都是 v1，新字段都不存在。
+        MatchLog synthetic = MatchLog.Parse(SimFixtures.Synthetic(3, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(1, [0])).FullText());
+        Assert.Null(synthetic.Header.Config.ContentSet);
+        Assert.Equal(ContentSet.V1, synthetic.ContentSet);
+        MatchLog sample = MatchLog.Parse(SimFixtures.Sample.Value[0].FullText());
+        Assert.Equal(ContentSet.V1, sample.ContentSet);
+        Assert.All(sample.Turns.SelectMany(t => t.PlayersState).SelectMany(p => p.Groups), grp => Assert.Null(grp.SentryBonus));
+        Assert.All(sample.Turns, t => Assert.Null(t.RelaySources));
+    }
+
+    [Fact]
+    public void 驿站来源与工坊标记可查()
+    {
+        // 规格第 4、5 条：快照记录展示数的驿站来源与工坊是否生效；改造记录"目标是否经工坊扩展（隔一格）"。真实会话端到端（写入函数 → 日志文本 → 读回）：
+        // v2 局，P0 占据已揭示的驿站 H5、工坊 H3、先锋 B8 → 驿站计入 2 枚其他信物（+2），展示数 7，工坊生效；
+        // P0 的批次：匠人 E5 隔一格搭桥 E7 + 匠人 C5 搭桥四邻的 D5 → 前者经工坊扩展、后者不是。
+        // 变异 MC-L2（快照漏写驿站来源）、MC-L3（改造记录的工坊扩展恒否）应红。v1 局同一脚本：三个字段都不出现在日志文本与快照哈希文本里。
+        (MatchLog log, MatchFlow match) = WorkshopSession(ContentSet.V2);
+        TurnSnapshot first = MatchLog.Parse(log.DeterministicText()).Turns[0];
+        Assert.Equal(0, first.Player);
+        Assert.Equal(7, first.ShowCount);
+        Assert.Equal(["H5=2"], first.RelaySources!.Select(kv => $"{kv.Key}={kv.Value}"));
+        Assert.True(first.WorkshopActive);
+        Assert.Equal(
+            ["B:D5/False", "B:E7/True"],
+            first.Edits!.Select(e => $"{e.Target}/{e.ViaWorkshop}").Order(StringComparer.Ordinal));
+        Assert.Equal(
+            match.TerrainEdits.Select(r => $"{r.Edit}/{r.ViaWorkshop}").Order(StringComparer.Ordinal),
+            first.Edits!.Select(e => $"{e.Target}/{e.ViaWorkshop}").Order(StringComparer.Ordinal));
+
+        (MatchLog v1, _) = WorkshopSession(ContentSet.V1);
+        string v1Text = v1.DeterministicText() + string.Join('\n', SimFixtures.TurnTexts(v1.Turns));
+        foreach (string field in new[] { "RelaySources", "WorkshopActive", "ViaWorkshop" })
+        {
+            Assert.DoesNotContain(field, v1Text, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>E7 / D5 深水的局（第 5 大回合、P0 先行）：P0 占据并揭示驿站 H5、工坊 H3、先锋 B8，手里只有匠人；P0 的批次是 E5 隔一格搭桥 E7 + C5 搭桥 D5，跑 1 个小回合。</summary>
+    private static (MatchLog Log, MatchFlow Match) WorkshopSession(ContentSet set)
+    {
+        MatchFlow match = MatchFixtures.Started(
+                TestMaps.Terrain(surfaces: [("E7", Surface.DeepWater), ("D5", Surface.DeepWater)]),
+                options: MatchOptions.Immediate with { ContentSet = set },
+                relics: [("H5", RelicFixtures.Relay()), ("H3", RelicFixtures.Workshop()), ("B8", RelicFixtures.Vanguard())])
+            .AtRound(5, MatchFixtures.All);
+        foreach (string cell in new[] { "H5", "H3", "B8" })
+        {
+            match.Board.Place(Coord.Parse(cell), MatchFixtures.P0, PieceType.Basic);
+        }
+
+        match.Relics.Reveal(match.Board, 5);
+        match.Debug.Recalculate();
+        match.Debug.SeedHand(MatchFixtures.P0, (PieceType.Artisan, 3));
+        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
+        session.SetController(MatchFixtures.P0, new ArtisanScript(
+            BatchFixtures.Artisan("E5", TerrainEdit.Bridge(Coord.Parse("E7"))),
+            BatchFixtures.Artisan("C5", TerrainEdit.Bridge(Coord.Parse("D5")))));
+        return (session.Run(), match);
+    }
+
+    /// <summary>按给定暂放（含改造）部署、不征募的脚本控制者。</summary>
+    private sealed class ArtisanScript(params Placement[] placements) : ITurnController
+    {
+        public void OrganizeHand(PlayerHandAccess hand, int overflow)
+        {
+        }
+
+        public void Recruit(PlayerHandAccess hand, RecruitPanelView panel)
+        {
+        }
+
+        public void Deploy(StagedBatch batch, Func<RehearsalResult> rehearse)
+        {
+            foreach (Placement p in placements)
+            {
+                if (batch.Stage(p.Coord, p.Type, p.Edit) is { } failure)
+                {
+                    throw new InvalidOperationException($"脚本暂放失败：{failure.Message}");
+                }
+            }
+        }
+
+        public bool OnRejected(StagedBatch batch, BatchFailure failure) => throw new InvalidOperationException($"脚本批次被拒：{failure.Message}");
     }
 }

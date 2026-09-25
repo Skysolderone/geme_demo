@@ -294,3 +294,143 @@ v2 全部四张图都**下降**，未恶化，不提负责人。第二阶段校�
 7. 段 A 待决 6（`校准后截断率达标_种子1至200` 读缺省配置）现在跑在 v2 且会揭示新信物；该用例是 200 局慢测试、默认跳过，本段未跑、未改。
 8. `.trellis/spec/core/boundaries.md` 单一实现表可补：`RelicControl.Of`（信物控制判定）、`RelicContent.HasAdvancedTier`（可升级类型）、`TerrainEditRules.CellTargets`（含工坊的格目标候选）、`RelicLedger.BuildSnapshot` 的驿站加成——与段 A 待决 7 一并在收尾时定。
 9. 段 A 待决 2（生成不区分内容集）、待决 3 的徽记部分已在本段落地。
+
+## 段 C：AI 适配、终端、遥测（tasks 3.1–3.7）
+
+基线（段 B 提交 1199e78）：`dotnet test -c Release` 通过 1526 / 跳过 5 / 失败 0。段末：通过 1559 / 跳过 5 / 失败 0（新增 33 条，含 Theory 行：`按分区权重估计未知信物` 6 → 16 行）。
+
+### 改动文件
+
+- Core AI：`Ai/RelicEstimate.cs`（重写：`PriorWeight / ScaleOf / ExpectedValueScaled / Estimate` 一律带内容集，删 `PercentScale = 100` 与不带内容集的旧重载；新四类估值标注未校准）、`Ai/BatchEvaluator.cs`（估值取 `view.ContentSet`；前后两次 `Compute` 传同一份 `RevealedRelics.Of(view.Relics)`；Growth 口径注释）、
+  `Ai/HeuristicTurnController.cs`（完整枚举 `EditOptions(…, workshop)` 与预筛匠人回退都传 `context.WorkshopActive`；代表类型次序注释）、`Ai/EvaluationWeights.cs`（`ScoringExtendedStatus` + 补注）、`Ai/AiDifficulty.cs`（停手阈值口径补注）。
+- Core 其余：`Relics/RevealedRelics.cs`（新："已揭示的公开信物内容"唯一投影）、`Preview/BatchPreview.cs`（预演前后势力传已揭示内容）、`Board/TerrainEditRules.cs`（`IsWorkshopReach`：只作留痕 / 显示分类）、`Match/TerrainEditRecord.cs` + `Match/MatchFlow.cs`（改造留痕 `ViaWorkshop`）、
+  `Scoring/PowerSnapshot.cs` + `Scoring/PowerCalculator.cs`（`GroupPower.EncampmentBonus / PincerBonus` 子拆分，见待决 1）。
+- Sim：`Logging/MatchLog.cs`（`GroupEntry` 四项新来源 + 两项子拆分、`TurnSnapshot.RelaySources / WorkshopActive`、`TerrainEditEntry.ViaWorkshop`、`MatchLog.ContentSet`）、`Running/MatchSession.cs`（v2 才写新字段）、`Running/LoggingController.cs`（征募阶段采集本小回合效果快照）、
+  `Analysis/BalanceAnalyzer.cs`（选择率列表按内容集、倍增子归因与高地分母减七项、第 12 项）、`Analysis/ReportWriter.cs`（第 12 项）、`Play/BoardRenderer.cs`、`Play/ConsoleController.cs`、`Play/PlayCommand.cs`。
+
+### 3.1 测试（先红）
+
+新增 Requirement 类：`AiDecision/新棋子与新信物的AI适配Tests`（六个 Scenario + Requirement 正文两条：`组合成长不计新来源与计分信物`、`AI源码不另写新加值公式`）、`BatchPreview/计分信物与新棋子的预演Tests`（两个 Scenario + 正文一条 `新棋子的位置加值计入预演`；第三个 Scenario「工坊下列出隔一格目标」段 B 已在 `改造在预演中的呈现Tests`）。
+既有类追加：`正式对战AI的信息边界Tests.AI源码不读取真实信物内容`（段 B 待决 3 的禁用 token）、`默认评价权重的校准Tests.规则变更使校准失效` 追加补注断言（3.4）；MODIFIED 的 `对隐藏信息的概率估计Tests.按分区权重估计未知信物` 改为 v1 / v2 两表的 Theory。
+
+先红（骨架：`RelicEstimate` 带内容集的新 API 仍钉 v1 表与 100、`ScoringExtendedStatus` 常量存在但未接进口径串）：红 16 = `按分区权重估计未知信物` v2 十行 + `未揭示信物的期望价值`（5152 ≠ 544）、`工坊扩展的目标进入候选`、`组合成长不计新来源与计分信物`（势力增量不含已揭示犄角）、`未揭示的连营不影响AI评价`（信物维 9 ≠ 7）、`已揭示连营计入预演`（6 ≠ 9）、`规则变更使校准失效`。
+骨架态就绿的：`新信物的类型价值`（段 B 已放 D10 初值）、`内容集v1的期望价值不变`、`哨兵加值进入即时势力增量`（`Compute` 早已含哨兵）、`将揭示的连营不计入预演`、`新棋子的位置加值计入预演`、两条源码扫描、`按分区…` 的 v1 六行——描述的是现状或守门，逐条由下表变异证其会红（`新信物的类型价值` MC-V1、`内容集v1的期望价值不变` 与 v1 六行 MC-E3、`哨兵…` / `新棋子的位置加值计入预演` MC-X1 与 MC-G1、`将揭示…` MC-P2、两条扫描 MC-T1 / MC-T2）。
+
+3.6 / 3.7 的测试（第二轮先红，骨架：日志字段已声明但写入端不写、终端新构造函数忽略两个委托、`RevealSourcesText` 返回空、分析器第 12 项恒空）：红 10 = `终端新棋子与新信物Tests` 4 条（字母、渲染快照、驿站来源、工坊目标）+ `新来源可查`、`驿站来源与工坊标记可查`、`新来源占比`、`棋子选择率与胜率`（v2 列十种）、`新来源归各自棋子不计入倍增子`、`内容集v1的报告除第12项外与引入新内容之前逐字节相同`。
+骨架态就绿的：`内容集v1的图例不变`（描述 v1 现状）、`旧日志照常解析`（读取端），由 MC-R3、MC-L6 证其会红。
+
+### 3.2 RelicEstimate（段 B 待决 1）
+
+先验与期望按对局内容集取表（`RelicWeights.WeightOf / OrderOf(set)`），分母 = `RelicWeights.TotalOf(set)`（v1 100 / v2 1000，D6 不写死）。v2：出生区 5152 → 5、公共区 5692 → 5；v1：544 → 5、635 → 6。评价器从公开视图取内容集（`MatchPublicView.ContentSet`，开局固定、始终公开），调试旁路不变。
+
+### 3.3 AI（段 B 待决 2、3）
+
+- 已知信物内容：`RevealedRelics.Of(IEnumerable<RelicPublicState>)` 是"已揭示的公开内容"的唯一投影（以揭示标记为准，状态意外带了内容也不收），AI 评价、预演、终端预演都用它；评价器在构造时对批次开始前的公开视图取一次，结算前后两次势力计算共用——"将揭示"的计分信物天然不计，不另写判断。
+- 改造枚举：完整枚举与预筛回退都把 `context.WorkshopActive` 传给 `TerrainEditRules.LegalTargets`；预筛代表类型 = 持有类型按枚举排序的第一个，枚举次序即规格的固定类型次序（D9），代码未改、只补注释。
+- "组合成长"维口径不变：`GrowthOf` 仍走不带犄角的 `SynergyBonus` 旧重载、不含四项新来源（注释写明）。
+- K = 0 / K > 0 在标准图上的既有等价测试保持绿（v1 与 v2 下预筛回退与完整枚举传的是同一个标记）。
+- 段 B 待决 3 的禁用 token：`正式对战AI的信息边界Tests.AI源码不读取真实信物内容` 扫 `src/Siege.Core/Ai`（去注释）禁 `TrueContents(`，反面命中 `Match/MatchFlow.cs`，文件数下界 10。调试 AI 读真实内容走 `MatchDebugView.ContentOf`，不经 `TrueContents`，无白名单。
+  MC-T1 证它比类型闭包多守了一层（private static 方法不进闭包，只有扫描会红）。
+
+### 3.4 校准口径
+
+`EvaluationWeights.ScoringExtendedStatus = "more-pieces-relics 扩展计分后未重扫"`：`CalibrationStatus`、`CalibrationOf` 九维（含已扫档的三维）与 `AiSearchConfig.PassThresholdCalibrationStatus` 一律以它结尾；权重与阈值数值不变（`默认权重被改动`、`默认停手阈值被改动` 照旧绿）。
+testing.md「规则变更后权重 MUST 先重新标注」点名了停手阈值口径，故一并补注（tasks 3.4 未点名）。
+
+### 3.5 预演
+
+`BatchPreviewBuilder` 前后两次 `Compute` 传 `RevealedRelics.Of(relics.PublicStates())`。首次揭示计分信物的那一批，预演低于结算、差额恰为该信物的加成（`将揭示的连营不计入预演` 钉 3 点）；已揭示的计分信物预演与结算相同。
+
+### 3.6 终端（段 A 待决 4、段 B 待决 4）
+
+- `BoardRenderer`：四种新棋子 `N C T K` / 旗手 铁链 哨兵 界碑，中文快捷输入"旗 / 链 / 哨 / 碑"与全名；新信物 `y j r w` 与名称；`Letter / Name / RelicName / RelicLetter` 改为穷举、未知类型抛出（原兜底 `'?'` 与"未揭示信物"撞符号）。
+  图例按对局内容集：v1 逐字不变，v2 另起一行列新四种棋子、已揭示信物一行末尾追加新四类。
+- 驿站来源：征募阶段打印"展示数 N = 基础 5 + 探勘 … + 驿站 E5 +2（控制 2 枚其他信物）"，数值取 `PublicSupplement` 的结构参数来源，终端不重算；**+0 的驿站在终端隐藏**（没有可列来源时整行不打印）。图形面板（hand-info-panel「驿站来源逐枚列出」）的 +0 处理留段 D。
+- 工坊目标：`ConsoleController` 新增两个观察委托（`PublishSupplement`、`PreviewCurrentBatch`，`PlayCommand` 传入）。`v` 预演改用 Core 富预演（势力前后、将揭示格、每枚暂放匠人的全部合法改造目标——目标集合来自改造合法性唯一实现；隔一格的目标注"（隔一格）"，工坊生效时另打一行提示），终端不再自己调 `PowerCalculator`。
+  另支持 `D4 A B:D5` 暂放带改造的匠人（记法 `TerrainEdit.Parse`）——此前终端完全没有改造输入，只列目标不能选没有意义；超出 3.6 字面，见待决 3。
+
+### 3.7 遥测（段 A 待决 3、段 B 待决 6）
+
+- 日志字段（全部可空，**属性级** `JsonIgnore(WhenWritingNull)`——测试侧快照哈希用默认序列化选项，只有属性级忽略才能保证 v1 文本不多出 `"…":null`）：`GroupEntry` 旗手 / 铁链 / 哨兵 / 界碑四项来源与连营 / 犄角两项子拆分，`TurnSnapshot.RelaySources`（逐枚，含 +0）/ `WorkshopActive`，`TerrainEditEntry.ViaWorkshop`。
+  **只在内容集 v2 的对局写出**（含 0 / 否 / 空表），v1 局一律不写 → v1 日志与改动前逐字节相同（`V4GoldenTurnHash`、`StrictImprovementTurnHash`、`v1逐步相同` 全部未动）。旧日志 / v1 日志读入按 0 / 否 / 空；内容集经 `MatchLog.ContentSet`（首部缺项按 v1）。
+- 驿站来源与工坊标记取本小回合效果快照：快照在小回合结束即清空，会话给 `TurnTrace` 挂读取委托，装饰器在征募阶段取一次（装饰器本身仍不持有对局）。"经工坊扩展"由 Core 在结算留痕时按 `TerrainEditRules.IsWorkshopReach` 判定，日志层只转录。
+- 分析器：选择率的棋子 / 信物列表按样本内容集展开（有 v2 局列十种 / 十类，否则六 / 六）；"各棋子势力占比"的倍增子放大部分改为减去七项来源，四项新来源各归旗手 / 铁链 / 哨兵 / 界碑（段 A 待决 3）；高地占比分母改为七项。
+  第 12 项：四种新来源与连营 / 犄角额外加值各占终局位置加值的比例（六行固定、0 不省略）、驿站平均展示数加成（每小回合 / 有加成的小回合）、经工坊扩展的改造次数与占比；v1 对局（含首部缺内容集的旧日志）单列"不适用"，不进任何分母。
+- v1 报告：黄金值取自引入新内容之前的提交 ad78d50（`git archive` 到 scratchpad 单独构建，同一共用样本去耗时字段后渲染的 SHA-256：共用样本 146 行 `8330…1FF1`、名次样本 152 行 `19E3…9B04`）。改动后去掉第 12 项那一段（v1 局只有"不适用"一行）逐字节相同，由 `内容集v1的报告除第12项外与引入新内容之前逐字节相同` 钉住。
+
+### 变异验证
+
+脚本 `mut.py`（本会话 scratchpad，沿用段 A / B 的做法）：二进制读写、按文件实际行尾归一锚点并断言命中恰 1 次、try/finally 还原、还原后与变异前读到的原文逐字节比对、`os.utime` 刷新 mtime、备份名带时间戳、`DOTNET_CLI_UI_LANGUAGE=en`；每条先 `dotnet build siege.sln -c Release` 再全量 `dotnet test -c Release --no-build`。
+35 条全部编译通过（无编译假红）、restored = True；跑完后对全部未提交文件做 SHA-256 比对，与跑前 29 个文件 0 差异，随后重新构建并全量复跑确认全绿（1559 / 5 / 0）。
+
+| 变异 | 改动 | 红 | 红的用例 |
+|---|---|---|---|
+| MC-V1 | 驿站估值 6 → 5（证骨架态就绿的 `新信物的类型价值`） | 12 | `新信物的类型价值`、`未揭示信物的期望价值`、`按分区…` v2 十行（期望和随之变） |
+| MC-E1 | 期望的分母写死 100（tasks 3.2） | 12 | `按分区权重估计未知信物` v2 十行、`未揭示信物的期望价值`、`未揭示的连营不影响AI评价`（信物维） |
+| MC-E2 | 先验恒取 v1 表 | 57 | 同上 v2 各条 + v2 缺省下凡是 AI 对未揭示信物估值的用例连带红（v1 表里没有新四类，`RelicWeights.WeightOf` 抛出——多数是 AI 估值抛异常，不是走法分叉） |
+| MC-E3 | 分母写死 1000 | 10 | `按分区…` v1 六行、`内容集v1的期望价值不变`、三条 v1 黄金哈希（`缺省不限制时标准图整局与改动前逐步相同`、`阈值为0时零变化`、`v1逐步相同`） |
+| MC-A1 | **AI 读真实内容**：正式 AI 的观察委托把未揭示信物按真实内容标成已揭示（tasks 3.3） | 9 | `未揭示的连营不影响AI评价`、`估计不得使用真实值`、`未揭示信物的期望价值`、`内容集v1的期望价值不变`、三条 v1 黄金哈希、`缓存开关不改变决策序列`、`地形可离线重建` |
+| MC-A1b | 公开状态不看揭示即给出内容（`RelicState.ToPublic` 泄漏；揭示标记不变） | 14 | `未揭示的连营不影响AI评价`（信物维随内容变）、`未知信物不可读`、`将揭示提示`、`插旗阶段的可见信息`、`首次覆盖即揭示`、`调试AI可读全量状态` 等——`RevealedRelics.Of` 以揭示标记为准，势力增量不受影响，由信物维与既有信息边界测试抓 |
+| MC-A2 | 评价器不传已揭示内容 | 2 | `未揭示的连营不影响AI评价`（已揭示对照 +2 → 0）、`组合成长不计新来源与计分信物`（势力增量） |
+| MC-G1 | **Growth 计入新来源**（经势力计算取四项加值，tasks 3.3） | 2 | `哨兵加值进入即时势力增量`（成长 0 → 4）、`组合成长不计新来源与计分信物`（2 → 4）。tasks 写"既有 Growth 期望应红"：既有 Growth 断言的盘面只有原六种，新来源恒 0，改动前后都是 0 红——落点改由本段新增的两条承担 |
+| MC-G2 | Growth 的协同按已揭示犄角计 | 1 | `组合成长不计新来源与计分信物`（2 → 3） |
+| MC-W1 | 完整枚举不传工坊标记 | 1 | `工坊扩展的目标进入候选` |
+| MC-W2 | 预筛匠人回退不传工坊标记 | **0** | 近等价变异，见待决 4 |
+| MC-T1 | `BatchEvaluator` 加 `private static` 方法调用 `ledger.TrueContents()`（段 B 待决 3） | 1 | `AI源码不读取真实信物内容`（类型闭包守门 `未知信物不可读` 未红——private 成员不进闭包，扫描是真正多出的一层） |
+| MC-T2 | AI 目录里直接调用 `PieceEffects.SentryBonus(…)` | 1 | `AI源码不另写新加值公式` |
+| MC-C1 | 去掉 `CalibrationStatus` 的补注（tasks 3.4） | 2 | `规则变更使校准失效`、`默认权重的校准依据随值一起更新` |
+| MC-C1b | 去掉 `CalibrationOf` 未扫档维的补注 | 1 | `规则变更使校准失效` |
+| MC-P1 | 预演不传已揭示内容 | 1 | `已揭示连营计入预演` |
+| MC-P2 | **预演改传真实内容**（tasks 3.5） | 1 | `将揭示的连营不计入预演` |
+| MC-X1 | 势力计算不计哨兵加值（证"骨架态就绿"的两条） | 7 | `哨兵加值进入即时势力增量`、`新棋子的位置加值计入预演`、`新来源可查` + 段 A 的四条哨兵 / 倍率 / 七来源 |
+| MC-R1 | 界碑字母 K → T | 2 | `棋子与信物字母两两不同`、`新棋子与已揭示新信物的渲染快照` |
+| MC-R2 | 驿站 +0 不隐藏 | 1 | `驿站来源逐枚列出且隐藏零加成` |
+| MC-R3 | 图例不按内容集（v1 也列新棋子） | 1 | `内容集v1的图例不变` |
+| MC-R4 | 终端暂放丢掉改造 | 1 | `工坊目标含隔一格的文字列出` |
+| MC-L1 | 日志漏写哨兵来源 | 1 | `新来源可查` |
+| MC-L2 | 不采集效果快照（快照漏写驿站来源 / 工坊） | 1 | `驿站来源与工坊标记可查` |
+| MC-L3 | 日志层"经工坊扩展"恒否 | 1 | 同上 |
+| MC-L3b | Core 留痕"经工坊扩展"恒否 | 1 | 同上 |
+| MC-L4 | v1 局也写新字段 | 6 | 三条 v1 黄金哈希、`新来源可查`、`旧日志照常解析`、`驿站来源与工坊标记可查` |
+| MC-L5 | 哨兵来源去掉**属性级** `WhenWritingNull` | 3 | 三条 v1 黄金哈希（测试侧快照哈希用默认序列化选项，`"SentryBonus":null` 混进文本）——属性级忽略是承重的 |
+| MC-L6 | 首部缺内容集的旧日志按 v2 读 | 5 | `旧日志照常解析`、`新来源占比`、`棋子选择率与胜率`、两条棋子势力占比 |
+| MC-S1 | 选择率列表恒按 v1 | 2 | `棋子选择率与胜率`、`插旗同区统计Tests.真实跑局的同区经首部进入统计`（v2 真实日志里的新类型键缺失） |
+| MC-A12a | 第 12 项把 v1 对局也计入 | 1 | `新来源占比` |
+| MC-A12b | 工坊占比分子计入全部 v2 改造 | 1 | `新来源占比` |
+| MC-A3 | 倍增子放大部分只减三项（段 A 待决 3 的原状） | 1 | `新来源归各自棋子不计入倍增子` |
+| MC-A4 | 高地占比分母只含三项 | 1 | 同上 |
+| MC-A5 | 哨兵加值不归哨兵子 | 1 | 同上 |
+
+### 既有测试改写（逐条理由）
+
+| 测试 | 改写 | 理由 |
+|---|---|---|
+| `对隐藏信息的概率估计Tests.按分区权重估计未知信物` | Theory 6 行 → v2 十行 + v1 六行（加内容集参数）；`PriorPercent(zone, type)` → `PriorWeight(zone, type, set)`，544 → 按内容集 5152 / 544 | 规格 MODIFIED Scenario 给出 v2 / v1 两张先验表；API 按内容集（D6 删 `PercentScale`） |
+| `对隐藏信息的概率估计Tests.估计不得使用真实值` | `Estimate(state)` → `Estimate(state, match.ContentSet)` | 签名多了内容集，断言不变 |
+| `正式对战AI的信息边界Tests.未知信物不可读` | `ExpectedValueScaled(zone) / PercentScale` → `ExpectedValueScaled(zone, set) / ScaleOf(set)` | 同上；常量 `PercentScale = 100` 已删（分母取表合计） |
+| `默认评价权重的校准Tests.规则变更使校准失效` | 未扫档维 `Assert.Equal(NotSweptStatus, …)` → `StartsWith`；追加九维与三处口径串以补注结尾的断言 | tasks 3.4 补注，数值不变 |
+| `默认评价权重的校准Tests.默认权重的校准依据随值一起更新` | 钉死的 `CalibrationStatus` 字面量末尾加"；more-pieces-relics 扩展计分后未重扫" | 同上 |
+| `默认评价权重的校准Tests.引用未校准维度产出的数据` | 未扫档维的筛选由 `== NotSweptStatus` 改为 `StartsWith` | 同上（样本下界 6 维不变） |
+| `平衡分析方向Tests.棋子选择率与胜率` | 列表期望由 `Enum.GetNames` 改为 v1 六种 / 六类，报告不含新类型行；追加 v2 局列十种 / 十类 | 规格 MODIFIED「该批次内容集中的每一种棋子（v2 为十种）」；段 B 待决 6 |
+
+v2 下依赖走法的期望：本段改变了 v2 的 AI 行为（公共区未揭示期望 6 → 5、已揭示计分信物进入势力增量、工坊目标进入枚举），但**没有任何既有测试因此分叉**——依赖走法的黄金值 / 样本在段 A / B 已写死 v1，写死 v1 的全部照旧绿；读缺省配置跑在 v2 的 `校准后截断率达标`（20 局，默认套件）照旧绿。无需重建、未挑种子。
+
+### 段末自验
+
+- `dotnet build siege.sln`：0 警告 0 错误；`dotnet build src/godot/Siege.Godot.csproj`：0 警告 0 错误。
+- `dotnet test -c Release`：通过 1559 / 跳过 5 / 失败 0（改动前 1526 / 5 / 0）。
+- `openspec validate more-pieces-relics --strict`：valid。
+- 未跑批量对局、未跑 200 局与 `Category=Slow` 慢测试（段 B 待决 7 的 `校准后截断率达标_种子1至200` 仍未跑）；全程同一时间只有一个 dotnet。v1 报告黄金值是在 scratchpad 里 `git archive ad78d50` 单独构建、只跑一条临时探针测试取得的（与主工作树串行，未碰 `.claude/worktrees/`）。
+
+### 待决（交主会话 / 段 D）
+
+1. **连营 / 犄角额外加值的来源**：第 12 项要"连营、犄角带来的额外加值占比"，但 D3 把它们并进连珠 / 协同，`GroupPower` 里原本分不出来。本段给 `GroupPower` 加了两个 init 属性 `EncampmentBonus / PincerBonus`（唯一构造点 `PowerCalculator.Evaluate` 用同一份 `PieceEffects.LineBonus / SynergyBonus` 在"无计分信物"下再求一次取差，只在控制计分信物时多算一次），明确是子拆分、不是第八 / 九项来源，七项恒等式与 `ToString` 不变。改动了 Core 计分记录的形状，请确认；备选是日志层自己用无信物重载重算（Sim 里的第二份计算），未采用。
+2. **v1 报告多了第 12 项的两行**：规格要求 v1 对局在第 12 项"单列不适用"，于是只含 v1 局的报告多出标题 + "不适用"一行；其余逐字节与引入新内容之前相同（黄金值来自 ad78d50）。若要 v1 报告完全逐字节不变（第 12 项在无 v2 局时整段省略），改 `ReportWriter.AppendNewContent` 一处即可，请定。
+3. **终端的改造输入**：3.6 只要求"工坊目标的文字列出"，但终端此前完全没有改造输入（`Stage` 不带改造），只列不能选没有意义；本段加了 `D4 A B:D5` 记法（`TerrainEdit.Parse`）并让 `v` 预演改用 Core 富预演（顺带修掉终端预演自己调旧签名 `Compute`、不计已揭示计分信物的问题）。超出 3.6 字面，请确认保留。
+4. **预筛匠人回退的工坊标记（MC-W2 0 红）是近等价变异**：回退只在代表类型落不下时进入；工坊多出的只是隔一格的搭桥 / 烧林，它们既不给落点补气也不致提子，因自杀手落不下的格带上它们照样自杀手（格分仍为空），工坊标记对回退结果没有影响路径。唯一能生效的情形是代表类型因**同形禁则**（而非自杀手）被拒——带任何改造都会改掉同形键。规格要求传标记，代码已传；专用测试须构造"代表类型同形被拒"的格，本段未做，是否需要请定。
+5. **驿站 +0**：终端隐藏（段 B 待决 4）；图形面板（hand-info-panel「驿站来源逐枚列出」）的处理留段 D。遥测照记 +0（逐枚、含 0）。
+6. **调试 AI**：信物估值仍读真实内容（旁路不变），计分信物的势力增量与正式 AI 一样只用已揭示内容——调试 AI 的"全量读取"范围是否要扩到计分信物，未改，请定。
+7. `.trellis/spec/core/boundaries.md` 单一实现表可补（与段 A 待决 7、段 B 待决 8 一并在收尾时定）：`RevealedRelics.Of`（已揭示公开内容的唯一投影：AI、预演、终端共用）、`TerrainEditRules.IsWorkshopReach`（"经工坊扩展"的唯一分类，只供留痕与显示）；"改造合法性"一行的调用点清单已不止两处（段 B 起还有 `BatchPreviewBuilder`、AI 预筛回退），该行文字需要刷新。
+8. 段 A 待决 6 / 段 B 待决 7：`校准后截断率达标`（20 局，默认套件，读缺省配置即 v2）在本段 AI 适配之后仍绿；200 局版本未跑。
+9. **本段之前产生的 v2 日志不能逐行回放**：v2 局的快照现在多写了新字段（v1 局不写），段 A / B 提交后若手动跑过 v2 对局日志（`sim-out/` 下），回放会在第一条快照处报分歧。v2 日志都在本 change 内部、未发布，按"接受"处理；段 D 的 20 局冒烟用本段之后的二进制跑即可。
+10. 终端名称沿用终端原有的短名约定（"旗手 / 铁链 / 哨兵 / 界碑"，同"普通 / 堡垒…"），`Siege.Presentation.Labels.Piece` 是"旗手子…"（同"普通子…"）。hand-info-panel「以与盘面、终端一致的名称」若要求逐字一致，段 D 做面板时一并定口径。

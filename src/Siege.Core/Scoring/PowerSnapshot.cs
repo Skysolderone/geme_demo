@@ -38,6 +38,15 @@ public sealed record GroupPower(
     /// </summary>
     public int PositionBonus => LineBonus + SynergyBonus + HighGroundBonus + BannerBonus + ChainBonus + SentryBonus + BoundaryBonus;
 
+    /// <summary>
+    /// <see cref="LineBonus"/> 中由连营带来的额外部分（more-pieces-relics D3：连营并入连珠来源）。这是<b>子拆分</b>，不是第八项来源——七项恒等式不变；
+    /// 只供遥测"连营额外加值占比"（match-telemetry 第 12 项），由唯一构造点 <see cref="PowerCalculator.Evaluate(GameBoard, CoverageMap, Group, ScoringRelicCounts)"/> 给出。
+    /// </summary>
+    public int EncampmentBonus { get; init; }
+
+    /// <summary><see cref="SynergyBonus"/> 中由犄角带来的额外部分（同上，并入协同来源的子拆分）。</summary>
+    public int PincerBonus { get; init; }
+
     /// <summary>倍率 <c>1.5^n</c> 的精确表示（分子 <c>3^n</c>、分母 <c>2^n</c>），不封顶。</summary>
     public Multiplier Multiplier => new(MultiplierCount);
 

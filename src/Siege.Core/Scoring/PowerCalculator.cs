@@ -66,8 +66,16 @@ public static class PowerCalculator
         int multiplierCount = PieceEffects.MultiplierCount(board, group);
         int positionBonus = lineBonus + synergyBonus + highGroundBonus + bannerBonus + chainBonus + sentryBonus + boundaryBonus;
         BigInteger power = GroupPowerOf(baseTotal, positionBonus, multiplierCount);
+
+        // 计分信物的子拆分（遥测用）：同一份加值实现在"无计分信物"下再求一次，差即额外部分；不控制计分信物时不重算。
+        int encampmentBonus = relics.Encampments == 0 ? 0 : lineBonus - PieceEffects.LineBonus(board, group, 0);
+        int pincerBonus = relics.Pincers == 0 ? 0 : synergyBonus - PieceEffects.SynergyBonus(board, group, 0);
         return new GroupPower(group.Owner, group.Stones, baseTotal, lineBonus, synergyBonus, highGroundBonus,
-            bannerBonus, chainBonus, sentryBonus, boundaryBonus, multiplierCount, power);
+            bannerBonus, chainBonus, sentryBonus, boundaryBonus, multiplierCount, power)
+        {
+            EncampmentBonus = encampmentBonus,
+            PincerBonus = pincerBonus,
+        };
     }
 
     /// <summary>

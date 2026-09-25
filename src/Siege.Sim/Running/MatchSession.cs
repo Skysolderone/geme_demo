@@ -75,6 +75,7 @@ public sealed class MatchSession
         }
 
         Runner = new MatchRunner(match);
+        _trace.SnapshotSource = () => match.CurrentSnapshot;
         Seed = match.Seed;
         bool sampled = Seed.Stream(SampleStream).NextPermille(config.FullEventSamplePermille);
         _retention = config.EventRetention == EventRetention.Full || sampled ? EventRetention.Full : EventRetention.SnapshotsOnly;
@@ -322,6 +323,7 @@ public sealed class MatchSession
                 Player = e.Player.Value,
                 Artisan = e.ArtisanCoord.ToNotation(),
                 CausedCapture = e.CausedCapture,
+                ViaWorkshop = WritesNewContent(Match.ContentSet) ? e.ViaWorkshop : null,
             });
         }
 
@@ -447,6 +449,8 @@ public sealed class MatchSession
             },
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
+            RelaySources = RelaySourcesEntry(_trace.Effects, Match.ContentSet),
+            WorkshopActive = WritesNewContent(Match.ContentSet) ? _trace.Effects?.WorkshopActive : null,
             FreePickCount = _trace.FreePickCount,
             TypeSlots = _trace.TypeSlots,
             DeployLimit = _trace.DeployLimit,
@@ -584,6 +588,12 @@ public sealed class MatchSession
                     LineBonus = g.LineBonus,
                     SynergyBonus = g.SynergyBonus,
                     HighGroundBonus = g.HighGroundBonus,
+                    BannerBonus = NewField(g.BannerBonus, view.ContentSet),
+                    ChainBonus = NewField(g.ChainBonus, view.ContentSet),
+                    SentryBonus = NewField(g.SentryBonus, view.ContentSet),
+                    BoundaryBonus = NewField(g.BoundaryBonus, view.ContentSet),
+                    EncampmentBonus = NewField(g.EncampmentBonus, view.ContentSet),
+                    PincerBonus = NewField(g.PincerBonus, view.ContentSet),
                     MultiplierCount = g.MultiplierCount,
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
@@ -593,6 +603,20 @@ public sealed class MatchSession
 
         return list;
     }
+
+    /// <summary>
+    /// more-pieces-relics D12：新内容的日志字段只在内容集 v1 之外的对局写出（含 0 / 否），v1 局一律不写（<c>null</c>，JSON 里整项省略），
+    /// 使 v1 局的日志与引入新内容之前逐字节相同。旧日志与 v1 日志读入时按 0 / 否 / 空。
+    /// </summary>
+    internal static bool WritesNewContent(ContentSet contentSet) => contentSet != ContentSet.V1;
+
+    private static int? NewField(int value, ContentSet contentSet) => WritesNewContent(contentSet) ? value : null;
+
+    /// <summary>快照记录的驿站来源：坐标 → 该枚驿站的展示数加成（含 +0，逐枚），直接取效果快照的 <see cref="EffectSnapshot.RelaySources"/>（唯一实现在账本）。</summary>
+    internal static Dictionary<string, int>? RelaySourcesEntry(EffectSnapshot? effects, ContentSet contentSet) =>
+        !WritesNewContent(contentSet) || effects is null
+            ? null
+            : effects.RelaySources.ToDictionary(kv => kv.Key.ToNotation(), kv => kv.Value, StringComparer.Ordinal);
 
     /// <summary>
     /// 棋串各棋子类型的数量（本局内容集的全部类型都写，含 0，按固定类型次序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。

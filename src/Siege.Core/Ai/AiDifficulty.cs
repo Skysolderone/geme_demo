@@ -55,7 +55,8 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
     public const int DefaultPassThreshold = 80;
 
     /// <summary>默认停手阈值的校准口径（ai-decision「默认评价权重的校准」要求的显式标注）。</summary>
-    public const string PassThresholdCalibrationStatus = "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 20 / 40 / 80 / 160 六档；sim-out/ai-eye-pass-*";
+    /// <remarks>末尾补注"more-pieces-relics 扩展计分后未重扫"（同 <see cref="EvaluationWeights.ScoringExtendedStatus"/>，ai-decision「规则变更使校准失效」）；取值不变。</remarks>
+    public const string PassThresholdCalibrationStatus = "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 20 / 40 / 80 / 160 六档；sim-out/ai-eye-pass-*；more-pieces-relics 扩展计分后未重扫";
 
     /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>
     public const int LargeMapCellLimit = 24;

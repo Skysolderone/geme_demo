@@ -190,7 +190,7 @@ public sealed record StallingSection(int SignalTurns, int TotalTurns, Proportion
 /// 高地压制加值在位置加值里的占比（match-telemetry 平衡分析方向 10 的遗留项）。
 /// 逐局取终局快照（最后一条小回合快照）中参赛玩家的全部棋串，全批次合并计算；缺高地加值字段的旧日志整局排除。
 /// </summary>
-/// <param name="HighGroundShare">Σ高地加值 ÷ Σ位置加值（连珠 + 协同 + 高地）。</param>
+/// <param name="HighGroundShare">Σ高地加值 ÷ Σ位置加值（七项来源：连珠 + 协同 + 高地 + 旗手 + 铁链 + 哨兵 + 界碑；后四项缺字段按 0）。</param>
 public sealed record HighGroundSection(
     long FinalHighGroundBonus,
     long FinalPositionBonus,
@@ -242,6 +242,39 @@ public sealed record AiQualitySection(
     string Verdict);
 
 /// <summary>完整平衡报告。</summary>
+/// <summary>第 12 项里的一行来源：名称（旗手 / 铁链 / 哨兵 / 界碑 / 连营 / 犄角）、终局加值合计与占全部位置加值的比例（无位置加值时为 NaN）。</summary>
+public sealed record NewSourceShare(string Name, long Bonus, double Share);
+
+/// <summary>
+/// match-telemetry「平衡分析方向」第 12 项：新棋子与新信物（more-pieces-relics D12）。只统计内容集 v2 的对局；
+/// v1 对局（含首部缺内容集的旧日志）单列为 <see cref="NotApplicable"/>，MUST NOT 计为 0 混进任何分母。
+/// </summary>
+/// <param name="Matches">纳入的内容集 v2 对局数。</param>
+/// <param name="NotApplicable">单列为不适用的 v1 对局数。</param>
+/// <param name="FinalPositionBonus">终局快照（最后一条小回合快照）里参赛玩家全部棋串的位置加值（七项来源）之和，是 <see cref="Sources"/> 占比的分母。</param>
+/// <param name="Sources">旗手、铁链、哨兵、界碑四种来源与连营、犄角两项额外加值（后两者是并入连珠 / 协同的子拆分），固定六行、0 也列出。</param>
+/// <param name="RelayTurns">驿站加成的样本：v2 对局的小回合快照数。</param>
+/// <param name="RelayBonusTotal">各小回合行动玩家的驿站展示数加成之和。</param>
+/// <param name="TurnsWithRelay">驿站加成大于 0 的小回合数。</param>
+/// <param name="MeanRelayBonus">每小回合平均驿站加成（无样本为 NaN）。</param>
+/// <param name="MeanRelayBonusWhenPresent">有驿站加成的小回合里的平均加成（无样本为 NaN）。</param>
+/// <param name="Edits">v2 对局的改造总次数。</param>
+/// <param name="WorkshopEdits">其中经工坊扩展（隔一格）的次数。</param>
+/// <param name="WorkshopShare">经工坊扩展占全部改造的比例（无改造为 NaN）。</param>
+public sealed record NewContentSection(
+    int Matches,
+    int NotApplicable,
+    long FinalPositionBonus,
+    List<NewSourceShare> Sources,
+    int RelayTurns,
+    long RelayBonusTotal,
+    int TurnsWithRelay,
+    double MeanRelayBonus,
+    double MeanRelayBonusWhenPresent,
+    int Edits,
+    int WorkshopEdits,
+    double WorkshopShare);
+
 public sealed record BalanceReport(
     int TotalLogs,
     int Included,
@@ -266,7 +299,8 @@ public sealed record BalanceReport(
     MapScaleSection MapScale,
     TerritoryShareSection TerritoryShare,
     LifeShapeSection LifeShape,
-    SharedZoneSection SharedZones);
+    SharedZoneSection SharedZones,
+    NewContentSection NewContent);
 
 /// <summary>
 /// 插旗同区（flag-contest D3，只报告）：同区 = 该局日志首部锁定的出生区（<see cref="LogHeader.Zones"/>）里有两名及以上玩家落在同一个区；
@@ -379,7 +413,86 @@ public static class BalanceAnalyzer
             MapScale(included),
             TerritoryShare(included),
             LifeShape(included, rankable),
-            SharedZones(included, ranked));
+            SharedZones(included, ranked),
+            NewContent(included));
+    }
+
+    /// <summary>
+    /// 样本的类型列表口径（more-pieces-relics D8）：有任何一局不是内容集 v1 就按 v2 列十种棋子 / 十类信物，否则按 v1 列原六种 / 六类——
+    /// 只有 v1 对局（含首部缺内容集的旧日志）的报告与引入新内容之前逐字节相同，不会多出四行 0。
+    /// </summary>
+    private static ContentSet ListingSet(List<MatchLog> logs) =>
+        logs.Any(l => l.ContentSet != ContentSet.V1) ? ContentSet.V2 : ContentSet.V1;
+
+    /// <summary>一条棋串的全部位置加值（七项来源）；四种新来源缺字段（v1 局 / 旧日志）按 0，高地缺字段按 0（本口径只用于新来源占比与倍增子归因）。</summary>
+    private static long PositionBonusOf(GroupEntry g) =>
+        (long)g.LineBonus + g.SynergyBonus + (g.HighGroundBonus ?? 0) + g.NewSourceBonus;
+
+    // ---------- §17-12 新棋子与新信物（more-pieces-relics D12） ----------
+
+    private static NewContentSection NewContent(List<MatchLog> logs)
+    {
+        int matches = 0;
+        int notApplicable = 0;
+        long position = 0;
+        long[] bonuses = new long[6];
+        int relayTurns = 0;
+        int turnsWithRelay = 0;
+        long relayTotal = 0;
+        int edits = 0;
+        int workshopEdits = 0;
+        foreach (MatchLog log in logs)
+        {
+            if (log.ContentSet == ContentSet.V1)
+            {
+                notApplicable++;
+                continue;
+            }
+
+            matches++;
+            if (log.Turns.Count > 0)
+            {
+                foreach (GroupEntry g in log.Turns[^1].PlayersState.Where(p => p.Status == nameof(PlayerStatus.Active)).SelectMany(p => p.Groups))
+                {
+                    position += PositionBonusOf(g);
+                    bonuses[0] += g.BannerBonus ?? 0;
+                    bonuses[1] += g.ChainBonus ?? 0;
+                    bonuses[2] += g.SentryBonus ?? 0;
+                    bonuses[3] += g.BoundaryBonus ?? 0;
+                    bonuses[4] += g.EncampmentBonus ?? 0;
+                    bonuses[5] += g.PincerBonus ?? 0;
+                }
+            }
+
+            foreach (TurnSnapshot turn in log.Turns)
+            {
+                relayTurns++;
+                int relay = turn.RelaySources?.Values.Sum() ?? 0;
+                relayTotal += relay;
+                if (relay > 0)
+                {
+                    turnsWithRelay++;
+                }
+
+                foreach (TerrainEditEntry edit in turn.Edits ?? [])
+                {
+                    edits++;
+                    if (edit.ViaWorkshop == true)
+                    {
+                        workshopEdits++;
+                    }
+                }
+            }
+        }
+
+        string[] names = ["旗手", "铁链", "哨兵", "界碑", "连营", "犄角"];
+        List<NewSourceShare> sources = [.. names.Select((name, i) => new NewSourceShare(name, bonuses[i], position == 0 ? double.NaN : (double)bonuses[i] / position))];
+        return new NewContentSection(
+            matches, notApplicable, position, sources,
+            relayTurns, relayTotal, turnsWithRelay,
+            relayTurns == 0 ? double.NaN : (double)relayTotal / relayTurns,
+            turnsWithRelay == 0 ? double.NaN : (double)relayTotal / turnsWithRelay,
+            edits, workshopEdits, edits == 0 ? double.NaN : (double)workshopEdits / edits);
     }
 
     // ---------- 插旗同区（flag-contest D3） ----------
@@ -769,7 +882,9 @@ public static class BalanceAnalyzer
             if (groups.All(g => g.HighGroundBonus is not null))
             {
                 highGround += groups.Sum(g => (long)g.HighGroundBonus!.Value);
-                positionBonus += groups.Sum(g => (long)g.LineBonus + g.SynergyBonus + g.HighGroundBonus!.Value);
+
+                // 分母是全部位置加值（more-pieces-relics：七项来源，四种新来源缺字段按 0——v1 局与旧日志里它们本就不存在）。
+                positionBonus += groups.Sum(PositionBonusOf);
             }
         }
 
@@ -1112,14 +1227,15 @@ public static class BalanceAnalyzer
         var relicRevealed = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var relicControlledTurns = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var controllerSamples = new SortedDictionary<string, (int Wins, int Samples)>(StringComparer.Ordinal);
-        foreach (string type in Enum.GetNames<Core.Board.PieceType>())
+        ContentSet listing = ListingSet(logs);
+        foreach (string type in ContentSets.PieceTypesOf(listing).Select(t => t.ToString()))
         {
             offered[type] = 0;
             picked[type] = 0;
             pickerSamples[type] = (0, 0);
         }
 
-        foreach (string type in Enum.GetNames<RelicType>())
+        foreach (string type in RelicWeights.OrderOf(listing).Select(t => t.ToString()))
         {
             relicCount[type] = 0;
             relicRevealed[type] = 0;
@@ -1253,9 +1369,9 @@ public static class BalanceAnalyzer
 
     private static PieceShareSection PieceShares(List<MatchLog> logs)
     {
-        // 类型列表按内容集（more-pieces-relics D8）：样本里只有 v1 对局（含首部缺内容集的旧日志）时列原六种，报告与引入新棋子之前逐字节相同；
-        // 有 v2 对局时列十种。完整的"按内容集展开 / v1 单列不适用"属段 C（tasks 3.7）。
-        PieceType[] types = [.. ContentSets.PieceTypesOf(logs.Any(l => l.Header.Config.ContentSet == ContentSet.V2) ? ContentSet.V2 : ContentSet.V1)];
+        // 类型列表按内容集（more-pieces-relics D8，见 ListingSet）：样本里只有 v1 对局（含首部缺内容集的旧日志）时列原六种，报告与引入新棋子之前逐字节相同；
+        // 有 v2 对局时列十种。
+        PieceType[] types = [.. ContentSets.PieceTypesOf(ListingSet(logs))];
         var stones = types.ToDictionary(t => t, _ => 0L);
         var power = types.ToDictionary(t => t, _ => BigInteger.Zero);
         int matches = 0;
@@ -1281,7 +1397,8 @@ public static class BalanceAnalyzer
             foreach (GroupEntry g in groups)
             {
                 // restore-go-core-rules：倍率整体放大"基础 + 位置加值"，放大部分 = 日志里的精确军势 − 基础 − 全部位置加值，整块归倍增子。
-                BigInteger amplified = g.Power - g.Base - g.LineBonus - g.SynergyBonus - (g.HighGroundBonus ?? 0);
+                // more-pieces-relics（段 A 待决 3）："全部位置加值"是七项来源——四种新来源若不减，会被整块算给倍增子；它们各自归旗手 / 铁链 / 哨兵 / 界碑。
+                BigInteger amplified = g.Power - g.Base - PositionBonusOf(g);
                 foreach (PieceType type in types)
                 {
                     int count = g.PieceCounts!.TryGetValue(type.ToString(), out int n) ? n : 0;
@@ -1296,6 +1413,10 @@ public static class BalanceAnalyzer
                         PieceType.Line => g.LineBonus,
                         PieceType.Synergy => g.SynergyBonus,
                         PieceType.Multiplier => amplified,
+                        PieceType.Bannerman => g.BannerBonus ?? 0,
+                        PieceType.Chain => g.ChainBonus ?? 0,
+                        PieceType.Sentry => g.SentryBonus ?? 0,
+                        PieceType.Boundary => g.BoundaryBonus ?? 0,
                         _ => BigInteger.Zero,
                     };
                 }

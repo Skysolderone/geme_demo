@@ -16,13 +16,15 @@ namespace Siege.Core.Match;
 /// <param name="Edit">动作与目标。</param>
 /// <param name="ArtisanCoord">携带该改造的匠人落点。</param>
 /// <param name="CausedCapture">是否直接导致提子；口径见 <see cref="Batch.AppliedTerrainEdit.CausedCapture"/>。</param>
+/// <param name="ViaWorkshop">目标是否经工坊扩展（隔一格，more-pieces-relics D12）；由 <see cref="TerrainEditRules.IsWorkshopReach"/> 在结算留痕时判定。</param>
 public readonly record struct TerrainEditRecord(
     int MajorRound,
     int Sequence,
     PlayerId Player,
     TerrainEdit Edit,
     Coord ArtisanCoord,
-    bool CausedCapture)
+    bool CausedCapture,
+    bool ViaWorkshop = false)
 {
     public override string ToString() =>
         $"R{MajorRound} P{Player.Value} {TerrainEdit.DisplayName(Edit.Kind)} {Edit}{(CausedCapture ? " →提子" : string.Empty)}";

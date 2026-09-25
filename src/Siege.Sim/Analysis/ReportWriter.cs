@@ -174,6 +174,7 @@ public static class ReportWriter
         SharedZoneSection sz = r.SharedZones;
         sb.AppendLine($"- 同区对局 {sz.SharedMatches} 局，占纳入局 {sz.Matches} 局的 {Pct(sz.SharedShare)}");
         sb.AppendLine($"- 有名次的同区局 {sz.RankedSharedMatches} 局、同区玩家 {sz.SharedWinRate.Trials} 人次：平均名次 {Num(sz.MeanSharedRank)}，胜率 {sz.SharedWinRate}（截断局不计）");
+        AppendNewContent(sb, r.NewContent);
         sb.AppendLine();
 
         sb.AppendLine("## §17-11 地形改造（artisan-terrain-edit）");
@@ -195,6 +196,35 @@ public static class ReportWriter
 
         AppendLifeShape(sb, r.LifeShape);
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 第 12 项：新棋子与新信物（more-pieces-relics D12）。v1 对局只单列"不适用"、不进任何比例；有 v2 对局时六行来源、驿站、工坊逐行给出，0 也不省略。
+    /// 本段各行连续、不含空行（报告回归测试据此把它整段切出）。
+    /// </summary>
+    private static void AppendNewContent(StringBuilder sb, NewContentSection n)
+    {
+        sb.AppendLine("### 12. 新棋子与新信物（more-pieces-relics：终局快照、参赛玩家的全部棋串；驿站按每条小回合快照；内容集 v1 的对局单列不适用）");
+        sb.AppendLine($"- 内容集 v2 纳入 {n.Matches} 局；内容集 v1（含首部缺内容集的旧日志）{n.NotApplicable} 局：本项不适用，不计入下列各项");
+        if (n.Matches == 0)
+        {
+            return;
+        }
+
+        sb.AppendLine($"- 终局位置加值合计 {n.FinalPositionBonus}，其中：");
+        foreach (NewSourceShare s in n.Sources)
+        {
+            string note = s.Name switch
+            {
+                "连营" => "（并入连珠的额外加值）",
+                "犄角" => "（并入协同的额外加值）",
+                _ => string.Empty,
+            };
+            sb.AppendLine($"  - {s.Name}{note}：{s.Bonus}（{Pct(s.Share)}）");
+        }
+
+        sb.AppendLine($"- 驿站平均展示数加成：每小回合 {Num(n.MeanRelayBonus)}（样本 {n.RelayTurns} 个小回合）；有驿站加成的小回合 {n.TurnsWithRelay} 个，平均 {Num(n.MeanRelayBonusWhenPresent)}");
+        sb.AppendLine($"- 经工坊扩展的改造 {n.WorkshopEdits} 次，占全部改造 {n.Edits} 次的 {Pct(n.WorkshopShare)}");
     }
 
     /// <summary>活形一段（life-shape 4.2）。口径写在各行里：禁入格占比的分子是受保护眼空间格（至少对一名玩家禁入），分母是当时地形的可落子格。</summary>

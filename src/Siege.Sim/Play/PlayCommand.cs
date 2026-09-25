@@ -77,7 +77,7 @@ internal static class PlayCommand
             foreach (PlayerId p in players)
             {
                 runner.SetController(p, p == me
-                    ? new ConsoleController(me, match.Publish, input, output)
+                    ? new ConsoleController(me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch, input, output)
                     : HeuristicAi.Create(match, p, difficulty, weights, search));
             }
 

@@ -2,6 +2,7 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Preview;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 
@@ -24,14 +25,22 @@ internal sealed class ConsoleController : ITurnController
 {
     private readonly PlayerId _me;
     private readonly Func<MatchPublicView> _observe;
+    private readonly Func<PublicSupplement> _supplement;
+    private readonly Func<BatchPreview> _preview;
     private readonly TextReader _in;
     private readonly TextWriter _out;
     private readonly BoardRenderer _render;
 
-    public ConsoleController(PlayerId me, Func<MatchPublicView> observe, TextReader input, TextWriter output)
+    /// <param name="supplement">公开补充载荷（结构参数的来源拆分，<c>MatchFlow.PublishSupplement</c>）：征募阶段列出展示数来源（含驿站）。</param>
+    /// <param name="preview">本人暂放批次的富预演（<c>MatchFlow.PreviewCurrentBatch</c>）：预演命令的势力、将揭示格与匠人的全部合法改造目标都取自它，终端不自己算。</param>
+    public ConsoleController(
+        PlayerId me, Func<MatchPublicView> observe, Func<PublicSupplement> supplement, Func<BatchPreview> preview,
+        TextReader input, TextWriter output)
     {
         _me = me;
         _observe = observe;
+        _supplement = supplement;
+        _preview = preview;
         _in = input;
         _out = output;
         _render = new BoardRenderer(output);
@@ -69,6 +78,12 @@ internal sealed class ConsoleController : ITurnController
 
     public void Recruit(PlayerHandAccess hand, RecruitPanelView panel)
     {
+        // 展示数的来源拆分（探勘、驿站逐枚；+0 的驿站不列）：只在有可列的来源时打印一行。
+        if (_supplement().Structures.FirstOrDefault(s => s.Player == _me)?.Parameters?.RevealCount is { } reveal && BoardRenderer.VisibleSources(reveal).Any())
+        {
+            _out.WriteLine(BoardRenderer.RevealSourcesText(reveal));
+        }
+
         while (true)
         {
             RecruitPanelView current = hand.Panel();
@@ -167,7 +182,7 @@ internal sealed class ConsoleController : ITurnController
                 case "v" or "preview":
                     if (rehearse is not null)
                     {
-                        Preview(rehearse());
+                        Preview(batch);
                     }
                     else
                     {
@@ -215,7 +230,7 @@ internal sealed class ConsoleController : ITurnController
                     }
                     else if (Coord.TryParse(parts[0].ToUpperInvariant(), out Coord coord))
                     {
-                        Stage(batch, coord, parts.Length > 1 ? parts[1] : null);
+                        Stage(batch, coord, parts.Length > 1 ? parts[1] : null, parts.Length > 2 ? parts[2] : null);
                     }
                     else
                     {
@@ -227,7 +242,7 @@ internal sealed class ConsoleController : ITurnController
         }
     }
 
-    private void Stage(StagedBatch batch, Coord coord, string? typeText)
+    private void Stage(StagedBatch batch, Coord coord, string? typeText, string? editText)
     {
         if (!batch.Board.Map.Contains(coord))
         {
@@ -249,8 +264,22 @@ internal sealed class ConsoleController : ITurnController
         }
         else if (!BoardRenderer.TryParseType(typeText, out type))
         {
-            _out.WriteLine($"不认识的类型 {typeText}（B 普通 / F 堡垒 / L 连珠 / M 倍增 / S 协同 / A 匠人）");
+            _out.WriteLine($"不认识的类型 {typeText}（{string.Join(" / ", Enum.GetValues<PieceType>().Select(t => $"{BoardRenderer.Letter(t)} {BoardRenderer.Name(t)}"))}）");
             return;
+        }
+
+        TerrainEdit? edit = null;
+        if (editText is not null)
+        {
+            try
+            {
+                edit = TerrainEdit.Parse(editText.ToUpperInvariant());
+            }
+            catch (FormatException)
+            {
+                _out.WriteLine($"看不懂改造记法 {editText}（B:E4 搭桥 / F:E4-E5 立栅 / X:F5 烧林；合法目标见 v 预演）");
+                return;
+            }
         }
 
         int used = batch.Placements.Count(p => p.Type == type);
@@ -260,34 +289,52 @@ internal sealed class ConsoleController : ITurnController
             return;
         }
 
-        if (batch.Stage(coord, type) is { } failure)
+        if (batch.Stage(coord, type, edit) is { } failure)
         {
             _render.Line(failure.Message, ConsoleColor.Red);
         }
     }
 
-    private void Preview(RehearsalResult r)
+    /// <summary>
+    /// 预演：一律取 Core 的富预演（<see cref="BatchPreview"/>），终端不自己算势力——势力前后值已按"批次开始前已揭示的计分信物"算好
+    /// （本批将首次揭示的信物不计入，列在"将揭示"里；more-pieces-relics batch-preview）。匠人的合法改造目标同样取自富预演
+    /// （改造合法性唯一实现），不合法时也照列，玩家正要靠它换目标。
+    /// </summary>
+    private void Preview(StagedBatch batch)
     {
-        if (!r.IsLegal)
+        BatchPreview p = _preview();
+        if (!p.IsLegal)
         {
-            _render.Line($"预演：不合法——{r.Failure?.Message}", ConsoleColor.Red);
-            return;
+            _render.Line($"预演：不合法——{p.Failure?.Message}", ConsoleColor.Red);
         }
-
-        if (r.IsPass)
+        else if (p.IsPass)
         {
             _out.WriteLine("预演：空批次（等于 Pass）。");
-            return;
+        }
+        else
+        {
+            PowerChange? mine = p.PowerChanges.FirstOrDefault(c => c.Player == _me);
+            BigInteger before = mine?.Before ?? 0;
+            BigInteger after = mine?.After ?? before;
+            string captures = p.CapturedCoords.IsDefaultOrEmpty ? "不提子" : $"提走对手 {p.CapturedCoords.Length} 子";
+            _render.Line($"预演：合法，{captures}，你的势力 {before} → {after}", ConsoleColor.Green);
+            if (!p.WillReveal.IsDefaultOrEmpty)
+            {
+                _out.WriteLine($"  将揭示信物：{string.Join(" ", p.WillReveal.Select(c => c.ToNotation()))}（内容揭示后才计入势力）");
+            }
         }
 
-        MatchPublicView view = _observe();
-        BigInteger before = view.Power?.Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0;
-        BigInteger after = r.ProjectedBoard is { } projected
-            ? PowerCalculator.Compute(projected, view.Players.ToDictionary(p => p.Player, p => p.Status))
-                .Players.FirstOrDefault(p => p.Player == _me)?.Total ?? 0
-            : before;
-        string captures = r.Captures.IsDefaultOrEmpty ? "不提子" : $"提走对手 {r.Captures.Length} 子";
-        _render.Line($"预演：合法，{captures}，你的势力 {before} → {after}", ConsoleColor.Green);
+        if (!p.EditOptions.IsDefaultOrEmpty && batch.Context.WorkshopActive)
+        {
+            _out.WriteLine("  工坊生效：搭桥 / 烧林的目标可隔一格（同行 / 同列距离 2）");
+        }
+
+        foreach (EditOutlook outlook in p.EditOptions)
+        {
+            string chosen = outlook.Chosen is { } e ? "已选 " + BoardRenderer.EditText(outlook.ArtisanCell, e) : "不改造";
+            string legal = outlook.Legal.IsDefaultOrEmpty ? "无" : string.Join("、", outlook.Legal.Select(t => BoardRenderer.EditText(outlook.ArtisanCell, t)));
+            _out.WriteLine($"  匠人 {outlook.ArtisanCell.ToNotation()}：{chosen}；合法目标 {outlook.Legal.Length} 个：{legal}");
+        }
     }
 
     private void PrintDeployHelp(StagedBatch batch)
@@ -297,6 +344,7 @@ internal sealed class ConsoleController : ITurnController
         _out.WriteLine();
         _render.Line($"── 部署：本回合最多落 {batch.Context.DeployLimit} 枚  库存 {(stock.Length == 0 ? "空" : stock)} ──", ConsoleColor.Yellow);
         _out.WriteLine("  D4 M   在 D4 暂放一枚倍增子（只有一种棋子时可省略类型）");
+        _out.WriteLine("  D4 A B:D5  匠人带改造（B:搭桥 / F:D4-E4 立栅 / X:烧林），v 预演列出全部合法目标");
         _out.WriteLine("  -D4    撤回 D4      c 清空      v 预演（看提子与势力变化）");
         _out.WriteLine("  ok     确认落子     pass 本回合不落子（撤销本回合征募）");
         _out.WriteLine("  b 看盘  s 看各家状态  q 退出游戏");

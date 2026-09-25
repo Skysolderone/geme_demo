@@ -3,6 +3,7 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
+using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Sim.Running;
@@ -30,6 +31,15 @@ internal sealed class TurnTrace
     /// <summary>本小回合的暂放批次：读它的 <see cref="StagedBatch.Refusals"/>（暂放环节被拒的留痕，含活棋禁入）。</summary>
     internal StagedBatch? Batch { get; set; }
 
+    /// <summary>
+    /// 本小回合的效果快照（more-pieces-relics D12：日志记驿站来源与工坊标记）。征募阶段经 <see cref="SnapshotSource"/> 取一次——
+    /// 快照在小回合开始时生成、小回合结束即清空，结算后再读就晚了。来源委托由会话在构造时挂上，装饰器自己不持有对局。
+    /// </summary>
+    internal EffectSnapshot? Effects { get; set; }
+
+    /// <summary>当前小回合效果快照的读取委托（会话挂 <c>MatchFlow.CurrentSnapshot</c>）；为 <c>null</c> 时不采集。不随 <see cref="Reset"/> 清空。</summary>
+    internal Func<EffectSnapshot?>? SnapshotSource { get; set; }
+
     internal void Reset()
     {
         ShowCount = 0;
@@ -40,6 +50,7 @@ internal sealed class TurnTrace
         IllegalRehearsals.Clear();
         Rejections.Clear();
         Batch = null;
+        Effects = null;
     }
 }
 
@@ -67,6 +78,7 @@ internal sealed class LoggingController(ITurnController inner, TurnTrace trace) 
         trace.ShowCount = panel.ShowCount;
         trace.FreePickCount = panel.FreePickCount;
         trace.TypeSlots = panel.TypeSlots;
+        trace.Effects = trace.SnapshotSource?.Invoke();
         Inner.Recruit(hand, panel);
     }
 

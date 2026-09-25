@@ -33,6 +33,7 @@ public sealed class BatchEvaluator
     private readonly Func<RelicPublicState, int> _relicValue;
     private readonly ImmutableSortedDictionary<PlayerId, PlayerStatus> _roster;
     private readonly ImmutableArray<RelicPublicState> _relics;
+    private readonly ImmutableSortedDictionary<Coord, RelicType> _knownRelics;
     private readonly PowerSnapshot _before;
     private readonly long _relicBefore;
     private readonly long _safetyBefore;
@@ -69,12 +70,17 @@ public sealed class BatchEvaluator
         _me = me;
         _weights = weights ?? throw new ArgumentNullException(nameof(weights));
         _immediateOnly = immediateOnly;
-        _relicValue = relicValue ?? RelicEstimate.Estimate;
+        ContentSet contentSet = view.ContentSet;
+        _relicValue = relicValue ?? (state => RelicEstimate.Estimate(state, contentSet));
         _lifeQuery = lifeQuery ?? LifeShapeReport.Analyze;
         _lifeCache = cacheLife ? new Dictionary<string, LifeShapeReport>(StringComparer.Ordinal) : null;
         _roster = view.Players.ToImmutableSortedDictionary(p => p.Player, p => p.Status);
         _relics = view.Relics;
-        _before = PowerCalculator.Compute(view.Board, _roster);
+
+        // 计分信物（连营 / 犄角，more-pieces-relics D3）只用批次开始前已揭示的公开内容：结算前后两次势力计算共用这一份，
+        // 本批将首次揭示的信物不在其中，其计分效果不进"即时势力增量"（只按未揭示期望进信物维）。
+        _knownRelics = RevealedRelics.Of(view.Relics);
+        _before = PowerCalculator.Compute(view.Board, _roster, _knownRelics);
         _rankBefore = _before.RankOf(me);
         _relicBefore = RelicScore(_before.Coverage);
 
@@ -139,7 +145,7 @@ public sealed class BatchEvaluator
         }
 
         GameBoard after = result.ProjectedBoard;
-        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster);
+        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _knownRelics);
 
         raw[(int)EvaluationDimension.PowerGain] = afterPower.Of(_me).Total - _before.Of(_me).Total;
 
@@ -410,7 +416,11 @@ public sealed class BatchEvaluator
         return total;
     }
 
-    /// <summary>维度 5 的盘面总分：倍增子数 × 棋串大小 + 连珠子数 × 2 + 协同加值，对己方全部棋串求和。</summary>
+    /// <summary>
+    /// 维度 5 的盘面总分：倍增子数 × 棋串大小 + 连珠子数 × 2 + 协同加值，对己方全部棋串求和。
+    /// 口径保持不变（more-pieces-relics D10）：MUST NOT 计入旗手 / 铁链 / 哨兵 / 界碑四种新来源与计分信物（协同加值走不带犄角的旧重载）——
+    /// 它们已经经唯一的势力计算进入"即时势力增量"，再计一次就是双计。
+    /// </summary>
     private long GrowthOf(GameBoard board)
     {
         long total = 0;

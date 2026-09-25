@@ -53,7 +53,14 @@ public sealed record EvaluationWeights(
     /// <para>守门测试 <c>默认评价权重的校准Tests</c> 断言本常量、<see cref="CalibrationOf"/> 与 <see cref="Default"/> 的每一维同步。
     /// 以未单独扫档维度的当前默认值产出的基线数据，引用时 MUST 注明权重口径，MUST NOT 与别的权重口径下的数据直接比较。</para>
     /// </summary>
-    public const string CalibrationStatus = "ai-eye 段 D 校准：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档";
+    public const string CalibrationStatus = "ai-eye 段 D 校准：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；more-pieces-relics 扩展计分后未重扫";
+
+    /// <summary>
+    /// more-pieces-relics（D10，负责人裁决不重新校准）扩展了计分——四种新棋子的位置加值、连营 / 犄角——之后的补注：上面的扫档全部是在旧内容上做的，
+    /// 新内容下<b>没有</b>重扫。<see cref="CalibrationStatus"/>、<see cref="CalibrationOf"/> 的九维与 <c>AiSearchConfig.PassThresholdCalibrationStatus</c> 一律以它结尾；
+    /// 权重数值不变。以当前默认值在内容集 v2 下产出的数据，引用时 MUST 注明这一口径。
+    /// </summary>
+    public const string ScoringExtendedStatus = "more-pieces-relics 扩展计分后未重扫";
 
     /// <summary>未单独扫档维度的标注（<see cref="CalibrationOf"/> 对这六维返回它）。</summary>
     public const string NotSweptStatus = "沿用旧值、新规则下未单独扫档";
@@ -87,14 +94,15 @@ public sealed record EvaluationWeights(
         PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 200, Threat: 25);
 
     /// <summary>
-    /// 某维度默认值的校准口径：扫过档的三维返回"地图 / 局数 / 种子 / 档位 / 数据目录"，其余六维返回 <see cref="NotSweptStatus"/>。
+    /// 某维度默认值的校准口径：扫过档的三维返回"地图 / 局数 / 种子 / 档位 / 数据目录"，其余六维返回 <see cref="NotSweptStatus"/>；
+    /// 九维一律以 <see cref="ScoringExtendedStatus"/> 结尾（more-pieces-relics 扩展计分后未重扫）。
     /// </summary>
     public static string CalibrationOf(EvaluationDimension dimension) => dimension switch
     {
-        EvaluationDimension.Eye => "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 50 / 100 / 200 / 400 五档 + 停手阈值 80 下 100 / 200 / 400 复核；sim-out/ai-eye-eye-*、sim-out/ai-eye-eyecheck-*",
-        EvaluationDimension.Safety => "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；10 / 20 / 35 / 50 / 70 五档；sim-out/ai-eye-safety-*、sim-out/ai-eye-pass-80",
-        EvaluationDimension.Threat => "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 25 / 50 / 100 五档；sim-out/ai-eye-threat-*、sim-out/ai-eye-pass-80",
-        _ => NotSweptStatus,
+        EvaluationDimension.Eye => "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 50 / 100 / 200 / 400 五档 + 停手阈值 80 下 100 / 200 / 400 复核；sim-out/ai-eye-eye-*、sim-out/ai-eye-eyecheck-*；" + ScoringExtendedStatus,
+        EvaluationDimension.Safety => "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；10 / 20 / 35 / 50 / 70 五档；sim-out/ai-eye-safety-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
+        EvaluationDimension.Threat => "ai-eye 段 D 校准：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 25 / 50 / 100 五档；sim-out/ai-eye-threat-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
+        _ => NotSweptStatus + "；" + ScoringExtendedStatus,
     };
 
     /// <summary>某维度的权重。</summary>

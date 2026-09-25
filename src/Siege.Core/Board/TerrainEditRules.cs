@@ -151,6 +151,14 @@ public static class TerrainEditRules
         }
     }
 
+    /// <summary>
+    /// 一次<b>合法</b>改造的目标是否"经工坊扩展"（隔一格）：格目标（搭桥 / 烧林）且不是匠人落点的几何四邻——对合法改造而言，这只能是
+    /// 工坊生效时的同行 / 同列距离 2 的格（<see cref="CellTargets"/>）。立栅恒为否（D5：边目标不扩）。
+    /// 只供留痕与显示（遥测"经工坊扩展"、终端目标标注），不参与合法性判定——合法性仍只看 <see cref="Reject(MapData, Coord, TerrainEdit, bool)"/>。
+    /// </summary>
+    public static bool IsWorkshopReach(Coord artisanCell, TerrainEdit edit) =>
+        edit.Kind != TerrainEditKind.Fence && !Adjacency.AreAdjacent(artisanCell, edit.Cell);
+
     /// <summary>工坊的"隔一格"偏移：同行 / 同列、直线距离恰为 2（不含斜向，不含更远）。</summary>
     private static readonly (int Dx, int Dy)[] WorkshopOffsets = [(0, -2), (-2, 0), (2, 0), (0, 2)];
 

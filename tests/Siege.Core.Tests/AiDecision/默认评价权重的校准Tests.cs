@@ -100,10 +100,18 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
             }
             else
             {
-                Assert.Equal(EvaluationWeights.NotSweptStatus, status);
+                Assert.StartsWith(EvaluationWeights.NotSweptStatus, status, StringComparison.Ordinal);
                 Assert.Contains(d.ToString(), EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
             }
+
+            // more-pieces-relics D10（3.4）：计分扩展（四种新棋子、连营 / 犄角）之后，九维一律补注"扩展计分后未重扫"——扫过档的三维也不例外，
+            // 它们的扫档是在旧内容上做的。数值不变（见 默认权重被改动）。变异 MC-C1（去掉补注）应红。
+            Assert.EndsWith("more-pieces-relics 扩展计分后未重扫", status, StringComparison.Ordinal);
         }
+
+        Assert.Equal("more-pieces-relics 扩展计分后未重扫", EvaluationWeights.ScoringExtendedStatus);
+        Assert.EndsWith(EvaluationWeights.ScoringExtendedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
+        Assert.EndsWith(EvaluationWeights.ScoringExtendedStatus, AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
 
         Assert.Equal("沿用旧值、新规则下未单独扫档", EvaluationWeights.NotSweptStatus);
         Assert.Contains(EvaluationWeights.NotSweptStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
@@ -128,7 +136,8 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 规格：未校准维度的当前默认值产出的数据，引用时须注明其权重口径。机制上由批次记录自带：config.json 写实际生效的九维权重与停手阈值
         // （RunConfig.Effective / ResolvedFor），即便跑局时一项都没显式配置。本测试钉住"六个未单独扫档的维度，其取值都随数据落盘"。
         // 变异 M-D2-5（Effective 不填默认权重）→ 红 2（本测试、批量跑局Tests.批量执行并汇总）。
-        EvaluationDimension[] notSwept = [.. Enum.GetValues<EvaluationDimension>().Where(d => EvaluationWeights.CalibrationOf(d) == EvaluationWeights.NotSweptStatus)];
+        // more-pieces-relics 3.4：九维的口径都补注了"扩展计分后未重扫"，未扫档维度由"恰为 NotSweptStatus"改为"以它开头"。
+        EvaluationDimension[] notSwept = [.. Enum.GetValues<EvaluationDimension>().Where(d => EvaluationWeights.CalibrationOf(d).StartsWith(EvaluationWeights.NotSweptStatus, StringComparison.Ordinal))];
         Assert.Equal(6, notSwept.Length);   // 样本口径下界：确有未扫档维度可查
 
         RunConfig config = SimFixtures.Config(seedStart: 5, turnLimit: 4, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly);
@@ -234,7 +243,8 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         //   扫过档的三维另须写成"<b>名 = 值</b>——ai-eye 段 D 校准"；③ 已作废的旧结论与"待校准"措辞不得留在注释里。
         // 变异 M-D2-4（实现 Eye 200 → 201）→ 红 2（本测试、默认权重被改动(Eye)）。
         Assert.Equal(
-            "ai-eye 段 D 校准：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档",
+            "ai-eye 段 D 校准：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档"
+            + "；more-pieces-relics 扩展计分后未重扫",   // more-pieces-relics 3.4：计分扩展后补注，取值不变
             EvaluationWeights.CalibrationStatus);
         Assert.Contains(EvaluationWeights.CalibrationStatus, src, StringComparison.Ordinal);
 
