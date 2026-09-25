@@ -1,0 +1,7 @@
+{"file": "openspec/changes/flag-contest/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/flag-contest/design.md", "reason": "规格"}
+{"file": "openspec/changes/flag-contest/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/flag-contest/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "随机子流隔离"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/写死配置"}
