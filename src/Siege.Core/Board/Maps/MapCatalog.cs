@@ -20,6 +20,7 @@ public static class MapCatalog
     [
         (FourPlayerBaseMap.Id, "标准图 13×13", FourPlayerBaseMap.Create),
         (TwoPlayerBaseMap.Id, "双人图 9×9", TwoPlayerBaseMap.Create),
+        (ThreePlayerBaseMap.Id, "三人图 11×11", ThreePlayerBaseMap.Create),
         (FrontierMapV2.Id, "边疆图 25×30（手工）", FrontierMapV2.Create),
     ];
 

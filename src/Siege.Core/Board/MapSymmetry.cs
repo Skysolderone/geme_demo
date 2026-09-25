@@ -6,10 +6,12 @@ namespace Siege.Core.Board;
 /// C4 / C2 旋转对称检查：地图绕中心旋转 90° 后，高度、地表、障碍、桥、栅栏、信物格逐格一致，出生区编号轮换
 /// （出生区 <c>i</c> 的像是出生区 <c>(i + 1) mod n</c>），咽喉集合不变，中央入口不动。
 /// C2（180°，<see cref="Rotation180Defects"/>）同一口径，出生区 <c>i</c> 的像是 <c>(i + n/2) mod n</c>。
-/// 不接入 <see cref="MapValidator"/>——3 人图 MUST NOT 被强制套用方形对称；由 4 人 / 2 人基准图的测试直接调用。
+/// 竖直中轴镜像（<see cref="MirrorDefects"/>，3 人基准图）同一口径，出生区 <c>i</c> 的像是 <c>(n − i) mod n</c>。
+/// 不接入 <see cref="MapValidator"/>——3 人图 MUST NOT 被强制套用方形对称；由 4 人 / 2 人 / 3 人基准图的测试直接调用。
 /// </summary>
 /// <remarks>规格：openspec/changes/terrain-model/specs/map-definition —— Requirement: 4 人基准地图 / Scenario: 旋转对称；
-/// openspec/changes/small-maps/specs/map-definition —— Requirement: 2 人基准地图 / Scenario: 2 人图旋转对称</remarks>
+/// openspec/changes/small-maps/specs/map-definition —— Requirement: 2 人基准地图 / Scenario: 2 人图旋转对称；
+/// Requirement: 3 人基准地图 / Scenario: 3 人图镜像对称</remarks>
 public static class MapSymmetry
 {
     /// <summary>绕正方形棋盘中心逆时针旋转 90°：<c>(x, y) → (w − 1 − y, x)</c>。</summary>
@@ -35,7 +37,8 @@ public static class MapSymmetry
             return [$"外接尺寸 {map.Width}×{map.Height} 不是正方形，无法绕中心旋转 90°。"];
         }
 
-        return Defects(map, Rotate90, zoneShift: 1);
+        int zones = map.BirthZones.Length;
+        return Defects(map, Rotate90, z => (z + 1) % zones);
     }
 
     /// <summary>
@@ -51,14 +54,36 @@ public static class MapSymmetry
             return [$"出生区 {zones} 个，不是偶数，绕中心旋转 180° 无法两两互换。"];
         }
 
-        return Defects(map, Rotate180, zoneShift: zones / 2);
+        return Defects(map, Rotate180, z => (z + (zones / 2)) % zones);
     }
 
     /// <summary>地图是否 C2 对称（绕中心 180° 不变）。</summary>
     public static bool IsC2Symmetric(MapData map) => Rotation180Defects(map).IsEmpty;
 
-    /// <summary>逐格比对的唯一实现：<paramref name="rotate"/> 给出每格的像，出生区编号按 <paramref name="zoneShift"/> 轮换。</summary>
-    private static ImmutableArray<string> Defects(MapData map, Func<MapData, Coord, Coord> rotate, int zoneShift)
+    /// <summary>沿竖直中轴左右镜像：<c>(x, y) → (w − 1 − x, y)</c>。宽为奇数时中轴是第 <c>(w − 1) / 2</c> 列。</summary>
+    public static Coord MirrorVertical(MapData map, Coord c)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return new Coord(map.Width - 1 - c.X, c.Y);
+    }
+
+    /// <summary>
+    /// 逐格比对沿竖直中轴镜像前后的全部属性（small-maps D1：3 人基准图）。出生区约定：出生区 1（下标 0）跨中轴、像是自身，
+    /// 其余两两互为镜像——出生区 <c>i</c> 的像是 <c>(n − i) mod n</c>（3 个出生区即 1 不变、2 ↔ 3）。
+    /// 中央入口必须在中轴上（镜像不动）；其余口径同 <see cref="RotationDefects"/>。
+    /// </summary>
+    public static ImmutableArray<string> MirrorDefects(MapData map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        int zones = map.BirthZones.Length;
+        return Defects(map, MirrorVertical, z => (zones - z) % zones);
+    }
+
+    /// <summary>地图是否沿竖直中轴镜像对称。</summary>
+    public static bool IsMirrorSymmetric(MapData map) => MirrorDefects(map).IsEmpty;
+
+    /// <summary>逐格比对的唯一实现：<paramref name="rotate"/> 给出每格的像，出生区 <c>i</c> 的像是 <paramref name="zoneImage"/>(i)。</summary>
+    private static ImmutableArray<string> Defects(MapData map, Func<MapData, Coord, Coord> rotate, Func<int, int> zoneImage)
     {
         ImmutableArray<string>.Builder defects = ImmutableArray.CreateBuilder<string>();
 
@@ -96,7 +121,7 @@ public static class MapSymmetry
 
             int? zoneP = map.BirthZoneOf(p);
             int? zoneQ = map.BirthZoneOf(q);
-            int? expectedQ = zoneP is { } z && map.BirthZones.Length > 0 ? (z + zoneShift) % map.BirthZones.Length : null;
+            int? expectedQ = zoneP is { } z && map.BirthZones.Length > 0 ? zoneImage(z) : null;
             if (zoneQ != expectedQ)
             {
                 defects.Add($"{pair}：出生区应由 {Describe(zoneP)} 轮换为 {Describe(expectedQ)}，实际为 {Describe(zoneQ)}。");
@@ -123,7 +148,7 @@ public static class MapSymmetry
 
         if (rotate(map, map.CentralEntrance) != map.CentralEntrance)
         {
-            defects.Add($"中央入口 {map.CentralEntrance.ToNotation()} 不在旋转中心。");
+            defects.Add($"中央入口 {map.CentralEntrance.ToNotation()} 不在旋转中心 / 镜像中轴上。");
         }
 
         return defects.ToImmutable();

@@ -32,9 +32,10 @@ public class 选图视图模型Tests
         Assert.Equal(MapCatalog.BuiltinMaps.Select(m => m.Title), model.Options.Where(o => !o.IsRandom).Select(o => o.Title));
         Assert.Equal(MapCatalog.BuiltinIds, MapCatalog.BuiltinMaps.Select(m => m.Id));
         Assert.True(Assert.Single(model.Options, o => o.IsRandom).Title.Contains("随机", StringComparison.Ordinal));
-        // 规格（small-maps 段 A）：标准图、2 人图、手工边疆图、随机图；3 人图在段 B 登记后变 5。
-        Assert.Equal(4, model.Options.Count);
+        // 规格（small-maps）：标准图、2 人图、3 人图、手工边疆图、随机图。
+        Assert.Equal(5, model.Options.Count);
         Assert.Equal(TwoPlayerBaseMap.Id, model.Options[1].BuiltinId);
+        Assert.Equal(ThreePlayerBaseMap.Id, model.Options[2].BuiltinId);
 
         Assert.Equal(MapCatalog.DefaultId, model.CurrentId);
         Assert.Equal(MapCatalog.DefaultId, model.Options[model.SelectedIndex].BuiltinId);
