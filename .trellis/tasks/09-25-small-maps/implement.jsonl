@@ -1,0 +1,7 @@
+{"file": "openspec/changes/small-maps/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/small-maps/design.md", "reason": "规格"}
+{"file": "openspec/changes/small-maps/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/small-maps/specs/", "type": "directory", "reason": "规格"}
+{"file": "openspec/specs/map-definition/spec.md", "reason": "静态校验 / 人数预算 / 4 人基准图范式"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/Godot Debug"}
