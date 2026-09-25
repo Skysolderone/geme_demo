@@ -1,0 +1,7 @@
+{"file": "openspec/changes/more-pieces-relics/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/more-pieces-relics/design.md", "reason": "规格"}
+{"file": "openspec/changes/more-pieces-relics/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/more-pieces-relics/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "核心约定"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "核心约定"}
+{"file": ".trellis/spec/core/testing.md", "reason": "核心约定"}
