@@ -28,8 +28,8 @@
 
 ## 4. 段 D：Godot 表现、设计文档、冒烟与回归
 
-- [ ] 4.1 `Siege.Presentation`：`PieceSilhouette` / `SilhouetteLanguage` 追加四值，`PieceStyleTable` 覆盖十种；`Labels` 名称。验证：`visual-style-baseline`「映射覆盖全部类型」守门（对 `PieceType` 全部枚举值各有一条、两两不同）。
-- [ ] 4.2 Godot：四种新棋子几何（D11）；手牌面板新类型与驿站来源（`hand-info-panel` 新 Scenario）；势力层七项拆分；工坊生效时的隔一格目标高亮（目标集合直接来自 `LegalTargets`）。验证：`dotnet build` 零警告；人工检查清单与十种棋子灰度缩略图、工坊高亮截图落 `art/more-pieces/`，交负责人过目（易混对：铁链 / 连珠、界碑 / 堡垒、旗手 / 匠人）。
-- [ ] 4.3 设计文档 v1.13 → v1.14：§8（信物表、生成权重千分制表）、§9（棋池、十种棋子表与四种位置加值）、§20（十种轮廓语言），并同步受影响的 §3.4（工坊目标）、§10.1（位置加值公式与算例）、§15 的先验表；变更记录加一行。验证：文档中的数值与规格 Scenario 逐项一致（人工核对清单写进 implement 记录）。
-- [ ] 4.4 冒烟：`siege-4p-base-v5`、种子 1–20、4 名 Standard、内容集 v2。报告截断、终局原因、结束大回合、各类型选择率、四种新来源占比、驿站平均加成、工坊扩展改造次数、军势峰值、小回合耗时、生成未收敛局数；数据 `sim-out/more-pieces-relics/smoke20/`。只报告，不调任何权重（负责人：严禁 200 局）。
-- [ ] 4.5 全量回归：两处 `dotnet build` 零警告；`dotnet test -c Release` 全绿（不跑 200 局规模慢测试）；`openspec validate more-pieces-relics --strict` 通过。
+- [x] 4.1 `Siege.Presentation`：`PieceSilhouette` / `SilhouetteLanguage` 追加四值，`PieceStyleTable` 覆盖十种；`Labels` 名称。验证：`visual-style-baseline`「映射覆盖全部类型」守门（对 `PieceType` 全部枚举值各有一条、两两不同）。
+- [x] 4.2 Godot：四种新棋子几何（D11）；手牌面板新类型与驿站来源（`hand-info-panel` 新 Scenario）；势力层七项拆分；工坊生效时的隔一格目标高亮（目标集合直接来自 `LegalTargets`）。验证：`dotnet build` 零警告；人工检查清单与十种棋子灰度缩略图、工坊高亮截图落 `art/more-pieces/`，交负责人过目（易混对：铁链 / 连珠、界碑 / 堡垒、旗手 / 匠人）。
+- [x] 4.3 设计文档 v1.13 → v1.14：§8（信物表、生成权重千分制表）、§9（棋池、十种棋子表与四种位置加值）、§20（十种轮廓语言），并同步受影响的 §3.4（工坊目标）、§10.1（位置加值公式与算例）、§15 的先验表；变更记录加一行。验证：文档中的数值与规格 Scenario 逐项一致（人工核对清单写进 implement 记录）。
+- [x] 4.4 冒烟：`siege-4p-base-v5`、种子 1–20、4 名 Standard、内容集 v2。报告截断、终局原因、结束大回合、各类型选择率、四种新来源占比、驿站平均加成、工坊扩展改造次数、军势峰值、小回合耗时、生成未收敛局数；数据 `sim-out/more-pieces-relics/smoke20/`。只报告，不调任何权重（负责人：严禁 200 局）。
+- [x] 4.5 全量回归：两处 `dotnet build` 零警告；`dotnet test -c Release` 全绿（不跑 200 局规模慢测试）；`openspec validate more-pieces-relics --strict` 通过。

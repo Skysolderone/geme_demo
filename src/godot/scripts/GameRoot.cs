@@ -100,6 +100,9 @@ public sealed partial class GameRoot : Node3D
 
             // --export-parts=<目录>：把地形 / 设施部件导出成 .tscn（PartExport），导完即退出，不建局。
             string? exportParts = args.Text("export-parts", "导出目录（如 res://parts/terrain）");
+
+            // --piece-gallery=<PNG 路径>：不建局，拍一张十种棋子轮廓对照图后退出（more-pieces-relics 段 D 人工检查清单用，见 PieceGallery）。
+            string? pieceGallery = args.Text("piece-gallery", "PNG 输出路径");
             args.EnsureRecognized();
             if (exportParts is not null)
             {
@@ -107,6 +110,15 @@ public sealed partial class GameRoot : Node3D
                 SetProcessInput(false);
                 SetProcessUnhandledInput(false);
                 GetTree().Quit(PartExport.Run(exportParts) == 0 ? 0 : 1);
+                return;
+            }
+
+            if (pieceGallery is not null)
+            {
+                SetProcess(false);
+                SetProcessInput(false);
+                SetProcessUnhandledInput(false);
+                AddChild(new PieceGallery(pieceGallery) { Name = "PieceGallery" });
                 return;
             }
 
@@ -224,7 +236,9 @@ public sealed partial class GameRoot : Node3D
             GD.Print("[siege] 暂放：" + string.Join("；", shownPreview.StagedPieces.Select(s =>
                 $"{s.Coord.ToNotation()} {Labels.Piece(s.Type)}{(s.EditText is null ? string.Empty : " + " + s.EditText)}")));
             GD.Print("[siege] 改造高亮：" + string.Join("；", shownPreview.ArtisanEdits.Select(a =>
-                $"{a.ArtisanCell.ToNotation()} 已选 {a.ChosenText}，候选 桥 {a.BridgeCells.Length} / 栅 {a.FenceEdges.Length} / 林 {a.BurnCells.Length}")));
+                $"{a.ArtisanCell.ToNotation()} 已选 {a.ChosenText}，候选 桥 {a.BridgeCells.Length} / 栅 {a.FenceEdges.Length} / 林 {a.BurnCells.Length}"
+                + $"（格目标 {(a.BridgeCells.IsEmpty && a.BurnCells.IsEmpty ? "无" : Labels.Coords(a.BridgeCells.Concat(a.BurnCells)))}）"))
+                + $"；工坊 {(_session.Match.CurrentBatch?.Context.WorkshopActive == true ? "生效" : "未生效")}");
         }
 
         if (Selecting)
@@ -746,7 +760,9 @@ public sealed partial class GameRoot : Node3D
                     ArtisanEditView view = p.ArtisanEdits[^1];
                     GD.Print($"[auto-demo] 第 {_frame} 帧暂放匠人 {view.ArtisanCell.ToNotation()}："
                         + $"已选 {view.ChosenText}，可改造目标 {view.Targets.Length} 个"
-                        + $"（桥 {view.BridgeCells.Length} / 栅 {view.FenceEdges.Length} / 林 {view.BurnCells.Length}）");
+                        + $"（桥 {view.BridgeCells.Length} / 栅 {view.FenceEdges.Length} / 林 {view.BurnCells.Length}）"
+                        + $"；格目标 {(view.BridgeCells.IsEmpty && view.BurnCells.IsEmpty ? "无" : Labels.Coords(view.BridgeCells.Concat(view.BurnCells)))}"
+                        + $"；工坊 {(_session.Match.CurrentBatch?.Context.WorkshopActive == true ? "生效" : "未生效")}");
                 }
             }
 

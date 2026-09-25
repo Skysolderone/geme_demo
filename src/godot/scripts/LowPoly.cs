@@ -78,11 +78,11 @@ public static class LowPoly
         PieceSilhouette.CrystalCluster => CrystalParts(body),
         PieceSilhouette.Scaffold => ScaffoldParts(body, faction),
 
-        // more-pieces-relics 段 A 最小占位：v2 局会出现四种新棋子，缺项即抛。先给一枚统一的方柱，正式几何（竖杆方旗 / 双环 / 交叉双矛 / 石碑）在段 D。
-        PieceSilhouette.Pennant or PieceSilhouette.ChainLinks or PieceSilhouette.CrossedSpears or PieceSilhouette.Stele =>
-        [
-            Mesh(new BoxMesh { Size = new Vector3(0.26f, 0.36f, 0.26f) }, Visuals.Matte(body), new Vector3(0f, BaseHeight + 0.18f, 0f)),
-        ],
+        // more-pieces-relics D11 / 裁决 ⑩：四种新轮廓。易混对的判据写在各自的 Parts 注释里（灰度对照见 art/more-pieces/README.md）。
+        PieceSilhouette.Pennant => PennantParts(body, faction),
+        PieceSilhouette.ChainLinks => ChainLinkParts(body, faction),
+        PieceSilhouette.CrossedSpears => CrossedSpearParts(body, faction),
+        PieceSilhouette.Stele => SteleParts(body, faction),
 
         _ => throw new System.ArgumentOutOfRangeException(nameof(silhouette), silhouette, "未知棋子轮廓。"),
     };
@@ -128,7 +128,8 @@ public static class LowPoly
     /// </summary>
     /// <remarks>
     /// 去色缩略图下的判据是<b>不对称</b>：其余五种（球 / 塔 + 雉堞 / 双球连杆 / 四棱锥 / 晶簇）全部关于竖轴对称，
-    /// 匠人是唯一整体向一侧倾斜、且顶部是横向实块的轮廓。
+    /// 匠人是唯一整体向一侧倾斜、且顶部是横向实块的轮廓。more-pieces-relics 之后旗手子的旗面也挂在杆的一侧，
+    /// 但它的杆竖直——匠人仍是十种里唯一<b>主干斜立</b>的轮廓（见 <see cref="PennantParts"/>）。
     /// 段 A 的占位（四根立柱 + 横梁）刻意换掉：四根立柱在小尺寸下与塔楼子的四枚雉堞太像。
     /// </remarks>
     private static Node3D[] ScaffoldParts(Color body, Color faction)
@@ -147,6 +148,130 @@ public static class LowPoly
             // 槌头：柄顶的宽横块，阵营色；与柄同角度，整体重心偏向一侧。
             Mesh(new BoxMesh { Size = new Vector3(0.36f, 0.14f, 0.16f) }, Visuals.Matte(faction),
                 new Vector3(-0.12f, BaseHeight + 0.49f, 0f), new Vector3(0f, 0f, lean)),
+        ];
+    }
+
+    /// <summary>
+    /// 旗手子（more-pieces-relics D11）：<b>竖直</b>细高旗杆 + 杆顶一面方旗（阵营色）+ 杆头小球，是十种里最高的轮廓。
+    /// </summary>
+    /// <remarks>
+    /// 与匠人（易混对）的判据：匠人的柄斜 14°、顶上是横置实块、另有斜撑；旗手的杆绝对竖直、细得多（半径 0.025），
+    /// 顶部是一块薄旗面挂在杆的一侧、杆顶高出旗面，整体高约 0.9（匠人约 0.63）。旗面朝摄像机（XY 平面），灰度下读成"杆 + 方块"。
+    /// </remarks>
+    private static Node3D[] PennantParts(Color body, Color faction) =>
+    [
+        // 杆脚：矮圆台，让细杆立得住。
+        Mesh(new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.08f, Height = 0.06f, RadialSegments = 8, Rings = 0 },
+            Visuals.Matte(body), new Vector3(0f, BaseHeight + 0.03f, 0f)),
+
+        // 旗杆：竖直，不倾斜。
+        Mesh(new CylinderMesh { TopRadius = 0.025f, BottomRadius = 0.03f, Height = 0.80f, RadialSegments = 6, Rings = 0 },
+            Visuals.Matte(body), new Vector3(0f, BaseHeight + 0.40f, 0f)),
+
+        // 杆头小球。
+        Mesh(new SphereMesh { Radius = 0.045f, Height = 0.09f, RadialSegments = 6, Rings = 3 },
+            Visuals.Matte(body), new Vector3(0f, BaseHeight + 0.82f, 0f)),
+
+        // 方旗：阵营色薄板，挂在杆右侧、贴近杆顶。
+        Mesh(new BoxMesh { Size = new Vector3(0.26f, 0.20f, 0.02f) },
+            Visuals.Matte(faction), new Vector3(0.155f, BaseHeight + 0.67f, 0f)),
+    ];
+
+    /// <summary>
+    /// 铁链子（more-pieces-relics D11）：两枚竖立的长圆环上下相扣，<b>中空</b>——下环正对摄像机（XY 平面），上环侧立（YZ 平面）穿过它。
+    /// </summary>
+    /// <remarks>
+    /// 与连珠子（易混对，双球连杆）的判据：连珠是左右两个<b>实心</b>球 + 一根横杆 + 中柱，轮廓是横放的"哑铃"；
+    /// 铁链没有球也没有杆，是竖着叠起的两节环——正面那节中间透出背后的地砖（灰度下"环中有洞"），侧立那节是一道竖直窄椭圆（阵营色）。
+    /// 相扣校核（环管中心半径 (0.13 + 0.085) / 2 ≈ 0.108，竖向拉长 1.35 倍）：两环中心竖向相距 0.20，下环顶管在上环环孔内（相距 0.055 &lt; 孔半高 0.115），
+    /// 上环底管在下环环孔内，两环互相穿过而不相交。
+    /// </remarks>
+    private static Node3D[] ChainLinkParts(Color body, Color faction)
+    {
+        const float outer = 0.13f;
+        const float inner = 0.085f;
+        const float stretch = 1.35f;
+        const float pitch = 0.20f;
+        float lowerY = BaseHeight + (outer * stretch) + 0.01f;
+        return
+        [
+            // 下环：绕 X 轴转 90° 立在 XY 平面（正对摄像机），沿竖直方向拉长（局部 Z → 世界 Y）。
+            Mesh(new TorusMesh { InnerRadius = inner, OuterRadius = outer, Rings = 12, RingSegments = 6 },
+                Visuals.Matte(body), new Vector3(0f, lowerY, 0f), new Vector3(90f, 0f, 0f), new Vector3(1f, 1f, stretch)),
+
+            // 上环：绕 Z 轴转 90° 立在 YZ 平面（侧对摄像机），沿竖直方向拉长（局部 X → 世界 Y），阵营色。
+            Mesh(new TorusMesh { InnerRadius = inner, OuterRadius = outer, Rings = 12, RingSegments = 6 },
+                Visuals.Matte(faction), new Vector3(0f, lowerY + pitch, 0f), new Vector3(0f, 0f, 90f), new Vector3(stretch, 1f, 1f)),
+        ];
+    }
+
+    /// <summary>
+    /// 哨兵子（more-pieces-relics D11）：两支长矛在正面交叉成 X，矛尖朝上，交叉处一道阵营色绑绳。
+    /// </summary>
+    /// <remarks>
+    /// 十种里唯一的"X"字形：其余要么是竖直体块，要么是单根斜柄（匠人）。两矛关于竖轴镜像对称，与匠人的"整体歪向一侧"分得开。
+    /// </remarks>
+    private static Node3D[] CrossedSpearParts(Color body, Color faction)
+    {
+        const float lean = 24f;
+        const float shaft = 0.62f;
+        float centerY = BaseHeight + 0.31f;
+        var parts = new List<Node3D>();
+        foreach (float sign in new[] { -1f, 1f })
+        {
+            float angle = sign * lean;
+            float radians = Mathf.DegToRad(angle);
+            var up = new Vector3(-Mathf.Sin(radians), Mathf.Cos(radians), 0f);
+            parts.Add(Mesh(new BoxMesh { Size = new Vector3(0.035f, shaft, 0.035f) },
+                Visuals.Matte(body), new Vector3(0f, centerY, 0f), new Vector3(0f, 0f, angle)));
+
+            // 矛尖：四棱锥，沿矛杆方向接在上端。
+            parts.Add(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.05f, Height = 0.13f, RadialSegments = 4, Rings = 0 },
+                Visuals.Matte(body), new Vector3(0f, centerY, 0f) + (up * ((shaft * 0.5f) + 0.06f)), new Vector3(0f, 0f, angle)));
+        }
+
+        // 交叉处的绑绳。
+        parts.Add(Mesh(new BoxMesh { Size = new Vector3(0.09f, 0.07f, 0.07f) },
+            Visuals.Matte(faction), new Vector3(0f, centerY, 0f)));
+        return [.. parts];
+    }
+
+    /// <summary>
+    /// 界碑子（more-pieces-relics D11）：<b>矮宽</b>直立的单块石碑，顶部圆弧，碑面两道阵营色横刻痕，立在一块扁基座上。
+    /// </summary>
+    /// <remarks>
+    /// 与堡垒子（易混对，塔楼）的判据：塔楼是高约 0.7 的粗圆柱 + 顶圈 + 四枚雉堞，横竖差不多粗；
+    /// 界碑总高约 0.5、宽 0.52、厚仅 0.11，是十种里最扁的轮廓，顶上是一整道圆弧而不是一圈齿；碑面两道深色横纹。
+    /// </remarks>
+    private static Node3D[] SteleParts(Color body, Color faction)
+    {
+        const float width = 0.52f;
+        const float slab = 0.26f;
+        const float depth = 0.11f;
+        const float plinth = 0.05f;
+        const float tilt = 14f;
+
+        // 碑体各部件挂在一个支点上整体后仰 14°（绕 X 轴、以碑脚为轴）：60° 俯视下直立薄板的正面只投出一半高，后仰让碑面多露出来，
+        // 两道横纹在小尺寸下仍读得出。
+        var stone = new Node3D { Position = new Vector3(0f, BaseHeight + plinth, 0f), RotationDegrees = new Vector3(-tilt, 0f, 0f) };
+        stone.AddChild(Mesh(new BoxMesh { Size = new Vector3(width, slab, depth) }, Visuals.Matte(body), new Vector3(0f, slab * 0.5f, 0f)));
+
+        // 碑顶圆弧：沿 Z 轴放倒的扁圆柱，下半截埋在碑身里，竖向压成半高。
+        stone.AddChild(Mesh(new CylinderMesh { TopRadius = width * 0.5f, BottomRadius = width * 0.5f, Height = depth, RadialSegments = 12, Rings = 0 },
+            Visuals.Matte(body), new Vector3(0f, slab, 0f), new Vector3(90f, 0f, 0f), new Vector3(1f, 1f, 0.5f)));
+
+        // 碑面两道横刻痕（阵营色），贴在朝摄像机的一面：浅色碑面上的两条深色横纹，是灰度下界碑独有的纹样。
+        foreach (float at in new[] { 0.35f, 0.75f })
+        {
+            stone.AddChild(Mesh(new BoxMesh { Size = new Vector3(width * 0.72f, 0.045f, 0.01f) },
+                Visuals.Matte(faction), new Vector3(0f, slab * at, (depth * 0.5f) + 0.004f)));
+        }
+
+        return
+        [
+            // 扁基座。
+            Mesh(new BoxMesh { Size = new Vector3(width + 0.08f, plinth, 0.20f) }, Visuals.Matte(body), new Vector3(0f, BaseHeight + (plinth * 0.5f), 0f)),
+            stone,
         ];
     }
 

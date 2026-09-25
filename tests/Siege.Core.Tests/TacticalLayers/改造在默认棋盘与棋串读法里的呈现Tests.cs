@@ -111,4 +111,45 @@ public class 改造在默认棋盘与棋串读法里的呈现Tests
         DefaultBoardView board = match.World(P0).Board();
         Assert.Equal([new FenceEdge(TestMaps.At("D5"), TestMaps.At("E5"))], board.Fences);
     }
+
+    [Fact]
+    public void 工坊下标出隔一格目标()
+    {
+        // more-pieces-relics tactical-layers Scenario「工坊下标出隔一格目标」：本小回合工坊生效，匠人暂放在 F6，H6 是未架桥深水，且未打开任何信息层
+        // → 默认棋盘把 H6 标为可搭桥目标；工坊未生效时 H6 不被标出。
+        // 走真实对局流程：P0 占据工坊 G4 → 小回合开始的快照标记工坊 → 部署上下文带上标记 → 富预演的改造目标（改造合法性唯一实现）→ 预览层高亮。
+        // 对照：同一局面轮到不控制工坊的 P1，同一落点的目标里没有 H6。全程不调 world.Layer(...)。
+        // 骨架态即绿（段 B 的 MB-W7 已让富预演传工坊标记）；变异验证见 implement.md 段 D（MD-W1：富预演改造目标不传工坊 → 本测试红）。
+        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("H6", Surface.DeepWater)]), relics: [("G4", RelicFixtures.Workshop())])
+            .AtRound(7, MatchFixtures.All)
+            .Pieces(P0, PieceType.Basic, "G4");
+        match.Debug.SeedHand(P0, (PieceType.Artisan, 2));
+        match.Debug.SeedHand(P1, (PieceType.Artisan, 2));
+
+        match.BeginTurn();
+        Assert.True(match.CurrentSnapshot!.WorkshopActive);
+        match.EnterRecruit();
+        StagedBatch batch = match.EnterDeploy();
+        Assert.Null(batch.Stage(TestMaps.At("F6"), PieceType.Artisan));
+
+        PreviewPresentation shown = match.World(P0).Preview()!;
+        ArtisanEditView artisan = Assert.Single(shown.ArtisanEdits);
+        Assert.Equal(TestMaps.At("F6"), artisan.ArtisanCell);
+        Assert.Equal(["H6"], artisan.BridgeCells.Notations());
+        Assert.Contains(shown.Highlights, h => h.Kind == HighlightKind.EditTarget && h.Coord == TestMaps.At("H6"));
+        Assert.Equal(RenderLayer.PreviewHighlights, VisualLayering.LayerOf(HighlightKind.EditTarget));
+
+        batch.Unstage(TestMaps.At("F6"));
+        Assert.True(match.Confirm().Confirmed);
+
+        match.BeginTurn();
+        Assert.Equal(P1, match.CurrentPlayer);
+        Assert.False(match.CurrentSnapshot!.WorkshopActive);
+        match.EnterRecruit();
+        Assert.Null(match.EnterDeploy().Stage(TestMaps.At("F6"), PieceType.Artisan));
+
+        PreviewPresentation without = match.World(P1).Preview()!;
+        Assert.Empty(Assert.Single(without.ArtisanEdits).BridgeCells);
+        Assert.DoesNotContain(without.Highlights, h => h.Coord == TestMaps.At("H6"));
+    }
 }

@@ -738,7 +738,8 @@ public sealed partial class BoardView : Node3D
         }
     }
 
-    private static Node3D BuildPiece(Occupant occupant, int emphasisPercent)
+    /// <summary>一枚棋子的节点：阵营色 + 轮廓（类型 → 轮廓只经 <see cref="PieceStyleTable"/>）。也供 <see cref="PieceGallery"/> 拍十种棋子对照图，两处同一份画法。</summary>
+    internal static Node3D BuildPiece(Occupant occupant, int emphasisPercent)
     {
         FactionStyle faction = FactionTable.For(occupant.Owner);
         PieceStyle style = PieceStyleTable.For(occupant.Type);

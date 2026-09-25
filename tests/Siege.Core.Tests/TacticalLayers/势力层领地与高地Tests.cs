@@ -110,7 +110,64 @@ public class 势力层领地与高地Tests
         // 段 A 改写：文案顺序随公式改为"（基础 + 加值）× 倍率"；无倍增子，军势 ⌊(2 + 2) × 1⌋ = 4（新旧同值）。
         Assert.Equal(4, truth.Power);
         Assert.Equal("（基础 2 + 位置加值 2（连珠 0 / 协同 0 / 高地 2））× 1 = 4", group.Power.FormulaText);
-        Assert.Equal(group.Power.PositionBonus, group.Power.LineBonus + group.Power.SynergyBonus + group.Power.HighGroundBonus);
+
+        // more-pieces-relics 段 D 改写：视图扩为七项来源（段 A 待决 5），恒等式随之改为七项；本盘面只有普通子，四项新来源为 0、文案不列。
+        Assert.Equal((0, 0, 0, 0), (group.Power.BannerBonus, group.Power.ChainBonus, group.Power.SentryBonus, group.Power.BoundaryBonus));
+        Assert.Equal(group.Power.PositionBonus,
+            group.Power.LineBonus + group.Power.SynergyBonus + group.Power.HighGroundBonus
+            + group.Power.BannerBonus + group.Power.ChainBonus + group.Power.SentryBonus + group.Power.BoundaryBonus);
+    }
+
+    [Fact]
+    public void 势力层显示新来源()
+    {
+        // more-pieces-relics tactical-layers Scenario「势力层显示新来源」：打开势力层，查看一条含铁链子与哨兵子的棋串 →
+        // 该棋串的位置加值拆分中可读到铁链与哨兵两项，且各项之和等于位置加值。
+        // 盘面（独立手算，规格 piece-effects）：P0 C5、D5 铁链子 + E5 哨兵子连成 3 子串；P1 普通子 F5 贴着哨兵。
+        //   铁链：每枚提供"棋串棋子数 − 1" = 2，两枚 → 4；哨兵：气边邻格 F5 上 1 枚非己方棋子 → +2；其余来源 0；无倍增子。
+        //   基础 3（新四种各 1）、位置加值 6、军势 ⌊(3 + 6) × 1⌋ = 9。
+        // 文案口径（段 D 定）：连珠 / 协同 / 高地三项照旧恒列；四项新来源只在非 0 时列出——v1 局它们恒为 0，恒列只会给每条棋串多挂四个 0。
+        // 先红：骨架态视图的四个新字段恒 0、文案只列三项。
+        MatchFlow match = MatchFixtures.Started().AtRound(5)
+            .Pieces(P0, PieceType.Chain, "C5", "D5")
+            .Pieces(P0, PieceType.Sentry, "E5")
+            .Stones(P1, "F5");
+
+        var layer = (PowerLayerContent)match.World(P2).Layer(TacticalLayer.Power);
+        GroupScoreView group = Assert.Single(layer.Groups, g => g.Owner == P0);
+        GroupPower truth = match.Scoreboard.Latest!.Of(P0).Groups.Single();
+
+        Assert.Equal(["C5", "D5", "E5"], group.Stones.Notations());
+        Assert.Equal((4, 2), (group.Power.ChainBonus, group.Power.SentryBonus));
+        Assert.Equal((0, 0, 0, 0, 0), (group.Power.LineBonus, group.Power.SynergyBonus, group.Power.HighGroundBonus, group.Power.BannerBonus, group.Power.BoundaryBonus));
+        Assert.Equal((truth.ChainBonus, truth.SentryBonus, truth.PositionBonus), (group.Power.ChainBonus, group.Power.SentryBonus, group.Power.PositionBonus));
+
+        // 各项之和等于位置加值（七项，测试内独立求和，不回调被测视图的汇总）。
+        Assert.Equal(6, group.Power.PositionBonus);
+        Assert.Equal(group.Power.PositionBonus,
+            group.Power.LineBonus + group.Power.SynergyBonus + group.Power.HighGroundBonus
+            + group.Power.BannerBonus + group.Power.ChainBonus + group.Power.SentryBonus + group.Power.BoundaryBonus);
+        Assert.Equal(9, group.Power.Power);
+        Assert.Equal("（基础 3 + 位置加值 6（连珠 0 / 协同 0 / 高地 0 / 铁链 4 / 哨兵 2））× 1 = 9", group.Power.FormulaText);
+    }
+
+    [Fact]
+    public void 势力层四项新来源各自可读()
+    {
+        // 同一 Requirement「位置加值的连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑拆分」：旗手与界碑两项也要各自落到视图字段与文案（上一条只覆盖铁链 / 哨兵）。
+        // 盘面（独立手算）：信物格 D5；P0 D4 旗手子 + E4 界碑子成串。旗手：气边邻格 D5 是信物格 → +3（按位置计，不看揭示与控制）。
+        //   界碑 E4 的气边邻格 E3、F4、E5 都只被 P0 覆盖（D4 另一侧 C4 / D3 与界碑无关）→ 独占空格 3 个 → +3。基础 2、位置加值 6、军势 8。
+        MatchFlow match = MatchFixtures.Started(relics: [("D5", RelicFixtures.Prospecting())]).AtRound(5)
+            .Pieces(P0, PieceType.Bannerman, "D4")
+            .Pieces(P0, PieceType.Boundary, "E4");
+
+        var layer = (PowerLayerContent)match.World(P2).Layer(TacticalLayer.Power);
+        GroupScoreView group = Assert.Single(layer.Groups, g => g.Owner == P0);
+        GroupPower truth = match.Scoreboard.Latest!.Of(P0).Groups.Single();
+
+        Assert.Equal((truth.BannerBonus, truth.BoundaryBonus), (group.Power.BannerBonus, group.Power.BoundaryBonus));
+        Assert.Equal((3, 3, 6, 8), (group.Power.BannerBonus, group.Power.BoundaryBonus, group.Power.PositionBonus, (int)group.Power.Power));
+        Assert.Equal("（基础 2 + 位置加值 6（连珠 0 / 协同 0 / 高地 0 / 旗手 3 / 界碑 3））× 1 = 8", group.Power.FormulaText);
     }
 
     [Fact]

@@ -47,7 +47,7 @@ public static class Labels
         PieceType.Multiplier => "倍增子",
         PieceType.Synergy => "协同子",
         PieceType.Artisan => "匠人",
-        // more-pieces-relics 段 A 最小占位：v2 局的征募面板与手牌里会出现新棋子，本方法是穷举 switch、缺项即抛；完整表现（图例、手牌面板来源）在段 C / D。
+        // more-pieces-relics：新四种棋子（全名带"子"，同既有六种；终端短名"旗手 / 铁链 / 哨兵 / 界碑"见 Siege.Sim BoardRenderer）。
         PieceType.Bannerman => "旗手子",
         PieceType.Chain => "铁链子",
         PieceType.Sentry => "哨兵子",
@@ -74,7 +74,7 @@ public static class Labels
         RelicType.Command => "军令",
         RelicType.Vanguard => "先锋",
         RelicType.SchoolEmblem => "流派徽记",
-        // more-pieces-relics 段 B 最小占位：v2 局会揭示新四类（手牌面板来源文案经这里），本方法是穷举 switch、缺项即抛；图例与完整表现在段 C / D。
+        // more-pieces-relics：新四类信物（手牌面板来源文案经这里）。
         RelicType.Encampment => "连营",
         RelicType.Pincer => "犄角",
         RelicType.Relay => "驿站",

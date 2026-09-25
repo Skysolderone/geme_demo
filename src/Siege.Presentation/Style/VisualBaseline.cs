@@ -79,16 +79,16 @@ public enum PieceSilhouette
     /// <summary>支架（匠人）。artisan-terrain-edit Open Question 3：正式轮廓由段 C 定稿并出截图，本段先占位以保证六种类型各有一条标识。</summary>
     Scaffold,
 
-    /// <summary>竖杆方旗（旗手子，more-pieces-relics D11）。段 A 只占位标识，Godot 几何在段 D 定稿。</summary>
+    /// <summary>竖杆方旗（旗手子，more-pieces-relics D11）：细高竖杆（竖直，不倾斜）+ 杆顶一侧的方旗，全组最高。</summary>
     Pennant,
 
-    /// <summary>双环相扣（铁链子）。段 A 只占位标识。</summary>
+    /// <summary>双环相扣（铁链子）：两枚竖立扁环互成直角相扣，中空。</summary>
     ChainLinks,
 
-    /// <summary>交叉双矛（哨兵子）。段 A 只占位标识。</summary>
+    /// <summary>交叉双矛（哨兵子）：两支长矛交叉成 X，矛尖朝上。</summary>
     CrossedSpears,
 
-    /// <summary>矮宽石碑（界碑子）。段 A 只占位标识。</summary>
+    /// <summary>矮宽石碑（界碑子）：矮宽直立的单块碑板，顶部圆弧。</summary>
     Stele,
 }
 
@@ -120,7 +120,7 @@ public enum SilhouetteLanguage
 /// <summary>一种棋子的视觉标识。</summary>
 public sealed record PieceStyle(PieceType Type, PieceSilhouette Silhouette, SilhouetteLanguage Language);
 
-/// <summary>六种棋子 → 轮廓的<b>唯一</b>映射。</summary>
+/// <summary>十种棋子 → 轮廓的<b>唯一</b>映射（visual-style-baseline：覆盖全部 <see cref="PieceType"/>，两两不同）。</summary>
 public static class PieceStyleTable
 {
     public static readonly ImmutableArray<PieceStyle> All =
@@ -131,7 +131,7 @@ public static class PieceStyleTable
         new(PieceType.Multiplier, PieceSilhouette.Pyramid, SilhouetteLanguage.Radial),
         new(PieceType.Synergy, PieceSilhouette.CrystalCluster, SilhouetteLanguage.MultiNode),
         new(PieceType.Artisan, PieceSilhouette.Scaffold, SilhouetteLanguage.Tooling),
-        // more-pieces-relics 段 A 占位：v2 局会出现新棋子，本表查不到即抛；标识按 D11 取，Godot 几何与灰度可辨在段 D 定稿。
+        // more-pieces-relics D11 / 裁决 ⑩：易混对铁链 / 连珠（相扣环 vs 双球连杆）、界碑 / 堡垒（矮宽单板 vs 高塔体块）、旗手 / 匠人（竖直对称杆 + 旗面 vs 斜柄槌头）；灰度对照见 art/more-pieces/。
         new(PieceType.Bannerman, PieceSilhouette.Pennant, SilhouetteLanguage.Banner),
         new(PieceType.Chain, PieceSilhouette.ChainLinks, SilhouetteLanguage.Interlock),
         new(PieceType.Sentry, PieceSilhouette.CrossedSpears, SilhouetteLanguage.Crossed),

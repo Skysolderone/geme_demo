@@ -84,12 +84,17 @@ public sealed record HandCostView(PieceType Type, int Used, int Stock, string Te
 public sealed record CaptureView(PlayerId Owner, ImmutableArray<Coord> Stones, string Text);
 
 /// <summary>棋串军势明细的呈现。全部数值来自 Core 的 <see cref="GroupPower"/>，本类只拼文字；倍率文字用 <see cref="Multiplier.ToString"/>。
-/// 公式文案按 restore-go-core-rules D1 的顺序拼：基础军势与位置加值先相加、整体乘倍率；取整值直接取 <see cref="GroupPower.Power"/>（任意精度整数）。</summary>
+/// 公式文案按 restore-go-core-rules D1 的顺序拼：基础军势与位置加值先相加、整体乘倍率；取整值直接取 <see cref="GroupPower.Power"/>（任意精度整数）。
+/// 位置加值的来源拆分与 Core 一样是七项（连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑，more-pieces-relics D1），逐项原样转录，不另算。</summary>
 public sealed record GroupPowerView(
     int BaseTotal,
     int LineBonus,
     int SynergyBonus,
     int HighGroundBonus,
+    int BannerBonus,
+    int ChainBonus,
+    int SentryBonus,
+    int BoundaryBonus,
     int PositionBonus,
     int MultiplierCount,
     string MultiplierText,
@@ -100,10 +105,20 @@ public sealed record GroupPowerView(
     {
         ArgumentNullException.ThrowIfNull(power);
         string multiplier = power.Multiplier.ToString();
+        // 来源拆分（more-pieces-relics：七项）：连珠 / 协同 / 高地照旧恒列；旗手 / 铁链 / 哨兵 / 界碑只在非 0 时列出——
+        // v1 局它们恒为 0，恒列只会给每条棋串多挂四个 0。略去的项为 0，各项之和仍等于位置加值；数值字段七项都在。
+        string[] parts =
+        [
+            $"连珠 {power.LineBonus}", $"协同 {power.SynergyBonus}", $"高地 {power.HighGroundBonus}",
+            .. new[] { ("旗手", power.BannerBonus), ("铁链", power.ChainBonus), ("哨兵", power.SentryBonus), ("界碑", power.BoundaryBonus) }
+                .Where(p => p.Item2 != 0)
+                .Select(p => $"{p.Item1} {p.Item2}"),
+        ];
         string bonus = power.PositionBonus == 0
             ? "位置加值 0"
-            : $"位置加值 {power.PositionBonus}（连珠 {power.LineBonus} / 协同 {power.SynergyBonus} / 高地 {power.HighGroundBonus}）";
-        return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus, power.PositionBonus,
+            : $"位置加值 {power.PositionBonus}（{string.Join(" / ", parts)}）";
+        return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus,
+            power.BannerBonus, power.ChainBonus, power.SentryBonus, power.BoundaryBonus, power.PositionBonus,
             power.MultiplierCount, multiplier, power.Power,
             $"（基础 {power.BaseTotal} + {bonus}）× {multiplier} = {power.Power}");
     }

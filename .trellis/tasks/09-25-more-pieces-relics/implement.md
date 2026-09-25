@@ -434,3 +434,173 @@ v2 下依赖走法的期望：本段改变了 v2 的 AI 行为（公共区未揭
 8. 段 A 待决 6 / 段 B 待决 7：`校准后截断率达标`（20 局，默认套件，读缺省配置即 v2）在本段 AI 适配之后仍绿；200 局版本未跑。
 9. **本段之前产生的 v2 日志不能逐行回放**：v2 局的快照现在多写了新字段（v1 局不写），段 A / B 提交后若手动跑过 v2 对局日志（`sim-out/` 下），回放会在第一条快照处报分歧。v2 日志都在本 change 内部、未发布，按"接受"处理；段 D 的 20 局冒烟用本段之后的二进制跑即可。
 10. 终端名称沿用终端原有的短名约定（"旗手 / 铁链 / 哨兵 / 界碑"，同"普通 / 堡垒…"），`Siege.Presentation.Labels.Piece` 是"旗手子…"（同"普通子…"）。hand-info-panel「以与盘面、终端一致的名称」若要求逐字一致，段 D 做面板时一并定口径。
+
+## 段 D：Godot 表现、设计文档 v1.14、20 局冒烟、全量回归（tasks 4.1–4.5）
+
+基线（段 C 提交 71df14f）：`dotnet test -c Release` 通过 1559 / 跳过 5 / 失败 0。段末：通过 1572 / 跳过 5 / 失败 0（新增 13 条，含 3 个 Theory 行）。
+
+### 改动文件
+
+- Presentation：`Preview/PreviewPresentation.cs`（`GroupPowerView` 扩为七项字段；公式文案三项恒列、四项新来源非 0 才列）、`Hand/HandInfoPanel.cs`（结构参数来源取 `ListedSources`；驿站逐枚列出并注"控制 N 枚其他信物"，写进 `ParameterView.Text`——Godot 手牌面板显示的就是它）、`Style/VisualBaseline.cs` / `Text/Labels.cs`（去掉"段 A 占位"注释，写明 D11 与易混对判据）。
+- Core：`Preview/PublicSupplement.cs`（`StructureParameter.ListedSources`：略去 0 加成来源，终端与图形面板共用）、`Preview/BatchPreview.cs`（`GroupCaptures` 按改造后的气边分组，见"段外修复"）。
+- Sim：`Play/BoardRenderer.cs`（`VisibleSources` 改调 `ListedSources`，行为不变）。
+- Godot：`scripts/LowPoly.cs`（四种新几何 `PennantParts / ChainLinkParts / CrossedSpearParts / SteleParts`，删掉段 A 的共用方柱）、`scripts/PieceGallery.cs`（新：`--piece-gallery=<PNG>` 十种棋子对照图，纯渲染、不建局）、`scripts/GameRoot.cs`（读 `--piece-gallery`；演示与截图日志多打"格目标 / 工坊 生效"）、`scripts/BoardView.cs`（`BuildPiece` 改 internal，对照图与盘面同一份画法）。
+- 文档与规范：`2026-09-10-siege-core-gameplay-design-v1.md`（v1.14）、`.trellis/spec/core/boundaries.md`（单一实现表）、`art/more-pieces/`（6 张图 + README 人工检查清单）、`sim-out/more-pieces-relics/`（冒烟数据与 `smoke.py`）。
+- 测试：`VisualStyleBaseline/六种棋子的轮廓语言Tests`、`TacticalLayers/势力层领地与高地Tests`、`TacticalLayers/改造在默认棋盘与棋串读法里的呈现Tests`、`BatchPreview/改造在预演中的呈现Tests`、新增 `HandInfoPanel/新棋子类型与驿站来源的显示Tests`。
+
+### 4.1 Presentation 映射（先红后绿）
+
+`PieceSilhouette` / `SilhouetteLanguage` / `PieceStyleTable` 的四个新值与 `Labels` 名称段 A 已放（占位），本段只补守门与注释。
+`VisualStyleBaseline/六种棋子的轮廓语言Tests`：`轮廓可辨` 追加四种新映射的钉值；新增 `映射覆盖全部类型`（逐个枚举值经 `PieceStyleTable.For` 查询、轮廓与轮廓语言两两不同、两个枚举都没有无人使用的值）、`易混对可辨`（Theory 三行：铁链 / 连珠、界碑 / 堡垒、旗手 / 匠人的轮廓与语言都不同）、
+`Godot几何对每种轮廓各有一个独立分支`（扫 `src/godot/scripts/LowPoly.cs` 的 `Body`：每个轮廓值恰有一个 `PieceSilhouette.X =>` 分支，十个分支体去注释去空白后两两不同；样本下界 ≥ 10000 字符）。
+先红：`Godot几何…` 在段 A 的共用方柱下红（只解析出 Stele 一个分支名）；`映射覆盖全部类型` 与 `易混对可辨` 骨架态即绿（段 A 已补映射），由 MD-V1 证其会红。
+
+### 4.2 Godot 与视图模型（先红后绿）
+
+- `势力层领地与高地Tests`：`势力层显示高地加值` 的恒等式改为七项（段 A 待决 5）；新增 `势力层显示新来源`（铁链 C5 / D5 + 哨兵 E5、P1 F5 贴着哨兵：铁链 4、哨兵 2、军势 9，文案"（基础 3 + 位置加值 6（连珠 0 / 协同 0 / 高地 0 / 铁链 4 / 哨兵 2））× 1 = 9"）与 `势力层四项新来源各自可读`（旗手 D4 邻接信物格 D5 +3、界碑 E4 三个独占空格 +3）。先红：骨架态视图的四个新字段恒 0。
+- `HandInfoPanel/新棋子类型与驿站来源的显示Tests`（ADDED Requirement）：`新类型在自己区域显示`（旗手子 ×2、界碑子 ×1；敌方区域同名）、`驿站来源逐枚列出`（B = P1 占驿站 G4 / 探勘 H4 / 军令 J4：展示数 8 = 5 + 探勘 +1 + 驿站 +2，来源文案"G4 驿站 +2（控制 2 枚其他信物）"，汇总"展示数 8（基础 5，+3 来自 探勘×1、驿站 G4 +2（控制 2 枚其他信物））"，对手视角与本人视角都钉）、`零加成的驿站不列出`（只控制驿站：Core 来源保留一条 +0，`ListedSources` 为空，面板"展示数 5（基础）"）。
+  先红：后两条红（骨架态按类型合并为"驿站×1"、`ListedSources` 不过滤）；`新类型在自己区域显示` 骨架态即绿（段 A 已有名称），由 MD-H1 证其会红。
+- `改造在默认棋盘与棋串读法里的呈现Tests.工坊下标出隔一格目标`：真实对局流程（占工坊 G4 → 快照 → 部署上下文 → F6 暂放匠人 → 预览层高亮含 H6；轮到不控制工坊的 P1，同一落点不含 H6，全程不开信息层）。骨架态即绿（段 B 的 MB-W7 已让富预演传工坊标记），由 MD-W1 证其会红。
+- 名称口径（段 C 待决 10）：面板沿用 `Labels.Piece` 全名"旗手子 / 界碑子"（同既有"普通子"），终端短名"旗手 / 界碑"（同"普通"），两者都含规格点名的"旗手""界碑"，不另起第二张名称表。
+- 驿站 +0（段 B 待决 4 / 段 C 待决 5）：图形面板与终端一样不列，过滤只在 Core 的 `StructureParameter.ListedSources` 一处（终端 `VisibleSources` 改调它）；规则层来源与遥测照旧逐枚保留 +0。
+- 势力层文案：连珠 / 协同 / 高地恒列，四项新来源只在非 0 时列（v1 局恒为 0，恒列会给每条棋串多挂四个 0），数值字段七项都在；MD-P2 / MD-P3 钉住"非 0 才列"两个方向。
+- Godot 几何（D11 / 裁决 ⑩）：旗手 = 竖直细杆 + 杆顶阵营色方旗（全组最高约 0.9）；铁链 = 两节竖立长圆环上下相扣、中空（下环正对镜头、上环侧立阵营色）；哨兵 = 两矛交叉成 X、矛尖朝上；界碑 = 矮宽石碑、顶部圆弧、后仰 14°、碑面两道阵营色横纹。尺寸与判据见 `art/more-pieces/README.md` 画法约定。
+- 工坊高亮不另起画法：隔一格的格目标与几何四邻格目标同一套候选样式，目标集合来自富预演（← `LegalTargets`，工坊标记经批次上下文）。表现层不能调 `TerrainEditRules`（`UI层不含规则计算Tests.ForbiddenTypes`），所以图形面板没有给"隔一格"单独标注（见待决 4）。
+
+### 段外修复：预演的预计提子按改造后的棋串分组（Core）
+
+v2 自动演示（缺省种子 20260915，第 7 大回合）撞到 `BatchPreviewBuilder.GroupCaptures` 抛"预计提子不是整串：P3[E7,F7] 中的 E7 不在提子集合里"，图形版每帧重建预演都抛（日志 70 万行、演示卡死，10 分钟未结束）。
+根因（潜伏自 artisan-terrain-edit）：分组按**批次开始前**的正式盘面取棋串，注释写着"放置己方棋子不改变敌方棋串结构"——本批立栅之后不再成立：栅栏把敌串切成两半、只提被围的一半，旧棋串对不上整串。
+修法：按改造后的气边（`rehearsal.ProjectedBoard` 的地形，经 `GameBoard.LibertyNeighbors`）把同一玩家的提子连成块，每块即一条被提棋串；保留一致性核对（每块必须落在正式盘面同一玩家的同一条棋串里——改造只会切开棋串、不会连起）。
+测试（`BatchPreview/改造在预演中的呈现Tests`）：`立栅切开的敌串只列被提的那一半`（先红：改动前抛 `SiegeRuleException`"预计提子不是整串：P1[E5,F5] 中的 E5 不在提子集合里"）、`立栅切开且两半都被提时分列两串`（改造后两块 [E5]、[F5]；不立栅对照为一块 [E5, F5]——旧代码会合成一块，所以这条钉住"按改造后的气边"，MD-C1 证之）。
+本修复超出 tasks 4.x 字面，但它挡住了 4.2 要求的 `--auto-demo` 验证，且是玩家对局里真实可达的崩溃（图形版暂放匠人立栅切开敌串即触发），故在本段修；请主会话复核（见待决 1）。
+
+### Godot 验证（Debug 构建，`siege-4p-base-v5`，内容集 v2）
+
+- `dotnet build src/godot/Siege.Godot.csproj`：0 警告 0 错误。
+- `--headless --auto-demo`：退出码 0，5 s，日志 0 条 ERROR；`[camera] 开局对准自检 … 通过`。（修复前同一命令卡在异常循环。）
+- `--headless --auto-demo --pick-check`：退出码 0；七个位姿失败 0，可落子格 105，至少在一个位姿下验到 105；遮挡 1（左下角 B5(h0) → B4(h2)，属预期）。
+- `--screenshot`（非无头）：`--auto-demo --rounds=12 --seed=9` 第 60 / 112 / 118 帧三张，退出码均 0，截图行均为"信息层 关，手牌信息面板 关，中央面板 关"；`--piece-gallery` 一张，退出码 0。
+- 种子 9 的来历：`--headless --auto-demo --rounds=12 --seed=1..20` 逐个 grep"工坊 生效"，20 颗里只有种子 9 在演示方控制工坊时暂放了匠人；20 次全部退出码 0、ERROR 0。
+- 截图与清单：`art/more-pieces/`（`more-pieces-ten-pieces.png` / `-gray.png` / `-gray-small.png`、`more-pieces-workshop-burn-targets.png`、`more-pieces-workshop-targets.png`、`more-pieces-workshop-bridge-after.png`、`README.md`）。图片未读进会话，只跑了像素统计（README 末节）：三组易混对在 1/4 灰度缩略图上的平均灰度差 11.4 / 13.2 / 23.9，都高于原六种之间已接受的最小值 9.8（倍增 / 协同）；十种里最小的一对是界碑 / 普通 8.4（见待决 2）。
+
+### 4.3 设计文档 v1.13 → v1.14
+
+按 tasks 同步 §3.4（工坊目标一条 + 5 行算例、"其余九种棋子"）、§8.1（信物表十类、驿站 / 工坊 / 计分信物三条规则、对局内容集）、§8.2（v2 千分制 / v1 百分制两栏表、升级只对原六类且新四类不消费升级抽签、徽记绑定按内容集、稀有度刻度 100000 / 10000）、
+§9.1（棋池十档与 142 / 110、新四种权重未校准、徽记十种）、§9.2（标题与四行、连珠 / 倍增 / 协同三行接连营 / 七项 / 犄角）、§10.1（位置加值七项公式、明细七项、12 行新算例 + 1 行改写 + 1 行新增）、§15（15.1 先验与估值；15.2 新内容适配一段、校准口径补注）、§20（十种轮廓与易混对判据）、变更记录一行（含冒烟数）。
+另为保持一致同步了四处受影响的单句：§13.1 势力明细七项、§14.2 势力层拆分与工坊隔一格目标、§14.3 驿站逐枚列出且 +0 不列、§17 日志记录七项。§2 术语与 §18.1"首轮原型范围"保持原样（历史范围，不是现行规则）。
+
+人工核对清单（文档数值 ↔ 规格 Scenario / 正文 ↔ 代码或测试）：
+
+| 项 | 设计文档 | 规格出处 | 代码 / 测试 | 结论 |
+|---|---|---|---|---|
+| 新四种基础军势 | §9.2 各 1 | piece-effects「五种原型棋子的基础军势」十种表 | `PieceEffects.BasePower`；`四种新棋子按1计` | 一致 |
+| 旗手 | 信物格 +3，按位置、不看揭示与控制、同格对同一枚只计一次；站在信物格上 6 | 「旗手子的位置加值」 | `BannerPerRelicCell = 3` | 一致 |
+| 铁链 | 棋串棋子数 − 1，单子 0；五子串军势 12 | 「铁链子的位置加值」 | `ChainBonus`；铁链 4 条用例 | 一致 |
+| 哨兵 | 非己方 +2，含弃赛者；两敌子 4 | 「哨兵子的位置加值」 | `SentryPerForeignStone = 2` | 一致 |
+| 界碑 | 独占空格 +1，荒漠计、争议 / 中立 / 空林地不计；孤立 9、荒漠 4 vs 领地 2 | 「界碑子的位置加值」 | `BoundaryPerExclusiveCell = 1` | 一致 |
+| 协同 / 犄角 | 类型数计十种；每种 `2 + k`；12 与 8 两例 | 「协同子的位置加值」「犄角提高每种加值」「两枚犄角叠加」 | `SynergyPerType`；计分信物用例 | 一致 |
+| 连珠 / 连营 | 每线 `+k × L`；长 3 线 9、被倍率放大 49 | 「连营为连珠线额外加值」、relic-effects「连营加值被倍率放大」 | 计分信物 7 条 | 一致 |
+| 倍率作用范围 | 七项含连营 / 犄角部分；铁链 15、新来源 12 | 「倍增子的棋串倍率」正文与两个 Scenario、power-score「新来源一并被倍率放大」 | 倍率类用例 | 一致 |
+| 位置加值可溯源 | 七部分之和 14；无新棋子四项为 0 | power-score 两个 Scenario | `势力明细Tests` | 一致 |
+| 信物表 | 十类，新四类无 +2 | relic-effects「新四类信物没有高阶版」 | `RelicContent.HasAdvancedTier` | 一致 |
+| 驿站 | 除自身外全部受控信物、每枚按 1、`k × (k − 1 + m)`、+0 不列 | 「驿站的展示数加成」六个 Scenario | `RelicLedger.BuildSnapshot`；`ListedSources` | 一致（`k × (k − 1 + m)` 出自 D4；代入"两枚驿站 + 1 军令"得 2 × 2 = 4、展示数 9，与 Scenario 吻合） |
+| 工坊 | 直线距离 2、至多 +4 格、中间格不限、不含斜向与距离 3、不扩 16 条边、不叠加、下一小回合生效 | terrain-edit「匠人落子即改造」、relic-effects「工坊扩大匠人的格改造范围」 | `TerrainEditRules.CellTargets`；改造合法性工坊用例 | 一致 |
+| 棋池 | 40 / 20 / 18 / 12 / 10 / 10 + 8 × 4 = 142；v1 110；8 未校准不可配 | recruitment「初始配置与基础棋池」 | `RecruitWeights.UncalibratedNewPieceWeight = 8` | 一致 |
+| 徽记 | 十种；旗手徽记 8 → 14 | recruitment「新棋子徽记调权」、relic-generation「徽记可绑定匠人」 | `新棋子徽记调权` | 一致 |
+| 出生区表 | 360 / 160 / 120 / 64 / 56 / 40 + 50 × 4；v1 45 / 20 / 15 / 8 / 7 / 5 | relic-generation「出生区信物权重」 | `RelicWeights` v2 / v1 表 | 一致（合计 1000 / 100） |
+| 公共区表 | 216 / 108 / 72 / 108 / 108 / 108 + 70 × 4；v1 30 / 15 / 10 / 15 / 15 / 15 | 「公共争夺区信物权重与高阶升级」 | 同上 | 一致 |
+| 升级 | 只原六类约 20%，新四类不消费升级抽签，消费顺序"类型 → 升级 → 徽记绑定" | 同上正文 | `v2随机消费顺序与规格一致` | 一致 |
+| 稀有度刻度 | v2 100000、v1 10000 | design D6（规格正文未写刻度数） | `RelicWeights.RarityScaleOf` | 与 D6 一致 |
+| 类型价值 | 10 / 8 / 7 / 6 / 6 / 5 / 4 / 4 / 3 / 3 | ai-decision「新棋子与新信物的 AI 适配」正文 | `RelicEstimate.ValueOf` | 一致 |
+| 未揭示期望 | v2 ⌊5152/1000⌋ = 5、⌊5692/1000⌋ = 5；v1 ⌊544/100⌋ = 5、⌊635/100⌋ = 6 | ai-decision 两个 Scenario | `未揭示信物的期望价值` 等 | 一致（逐项手算复核四个分子） |
+| AI 适配 | 只经势力计算、组合成长不变、只用已揭示、改造枚举传工坊、固定类型次序 | ai-decision 正文 | `新棋子与新信物的AI适配Tests` | 一致 |
+| 校准口径 | 数值不变、补注"more-pieces-relics 扩展计分后未重扫" | ai-decision「规则变更使校准失效」 | `EvaluationWeights.ScoringExtendedStatus` | 一致 |
+| 对局内容集 | 新局 v2、旧存档 / 旧日志缺字段按 v1、v1 逐步相同 | match-setup「对局内容集」 | `对局内容集Tests` | 一致 |
+| §3.4 工坊算例 | H6 搭桥 / 隔深水 F7 烧 F8 / G7 与 J6 非法 / 无工坊 H6 非法 / F8–F9 边非法 | terrain-edit 六个新 Scenario | `改造合法性Tests` 工坊用例 | 一致（坐标与拒绝理由逐条照抄） |
+| §10.1 新算例 | 旗手 6、铁链 4 与 0、哨兵 4、界碑 4 / 9、荒漠 4 vs 2、新来源 12、铁链 15、连营 9 / 49、犄角 12 / 8、协同类型数 6 | piece-effects / power-score / relic-effects 对应 Scenario | 各用例 | 一致（"新类型计入协同类型数"一行括注的铁链 3 = 4 − 1 是按规格算式补写，该 Scenario 只断言协同 6） |
+| §20 四种轮廓 | 竖杆方旗 / 双环相扣 / 交叉双矛 / 矮宽石碑与三组判据 | visual-style-baseline MODIFIED | `LowPoly` 四个 Parts；`六种棋子的轮廓语言Tests` | 一致 |
+| 变更记录冒烟数 | 见 4.4 表 | — | `smoke20/report.txt`、`smoke-table.txt` | 一致 |
+
+### 4.4 冒烟（v5、种子 1–20、4 名 Standard、内容集 v2；只报告）
+
+命令：`Siege.Sim run --out sim-out/more-pieces-relics/smoke20 --seed 1 --count 20 --map siege-4p-base-v5 --players 4 --difficulty Standard`（Release；其余缺省：截断 600、匠人权重 10、停手阈值 80、冒险概率 15），随后 `analyze --dir …`；逐局表 `python sim-out/more-pieces-relics/smoke.py sim-out/more-pieces-relics/smoke20`。
+已核对 `config.json`：`siege-4p-base-v5`、`ContentSet: "V2"`、4 名 Standard、九维权重齐全、`TurnLimit` 600；`smoke.py` 另逐局断言日志首部 `ContentSet` = V2。墙钟 10 s（并行 28）。只跑了这一次 20 局；没有跑 200 局，也没有跑 `Category=Slow`。
+产物：`smoke20/`（`config.json`、20 份日志、`summary.json`、`report.txt`、`smoke-table.txt`、`smoke-metrics.json`）、`smoke20.run.log`、`smoke20.analyze.log`。权重口径："more-pieces-relics 扩展计分后未重扫"。
+
+| 指标 | 值 |
+|---|---|
+| 截断 | 0 / 20 |
+| 终局原因 | AllPassed 20 |
+| 结束大回合 | 平均 8.4、中位 8、最短 7、最长 14（7×8、8×5、9×3、10×2、11×1、14×1） |
+| 棋子选择率（选取 / 展示） | 普通 42.0%、堡垒 89.0%、连珠 60.8%、倍增 93.1%、协同 92.4%、匠人 29.3%、**旗手 31.4%、铁链 30.6%、哨兵 36.5%、界碑 33.7%** |
+| 终局盘面新棋子 | 旗手 24、铁链 29、哨兵 19、界碑 49 枚（全部棋子 1088 枚） |
+| 四种新来源占终局位置加值（合计 1116） | 旗手 11.0%、铁链 9.1%、哨兵 3.0%、界碑 7.3%；连营额外 0.2%、犄角额外 10.3% |
+| 驿站平均展示数加成 | 每小回合 0.18（637 个小回合）；有加成的 51 个小回合平均 2.25 |
+| 工坊 | 工坊生效的小回合 82 个；经工坊扩展的改造 1 次 / 全部 65 次（1.5%） |
+| 军势峰值 | 单串 193、玩家总势力 244（均为种子 14）；峰值倍增串平均 50.3 |
+| 小回合耗时 | 均值 251 ms、中位 215 ms、最大 2145 ms（并行墙钟；flag-contest 冒烟 v5 为均值 377 / 最大 5784，未超现有两倍，不优化） |
+| 信物生成未收敛 | 6 / 20 局（种子 5、6、11、12、13、17） |
+| 整类弃牌 | 0 次（征募事件的 discards 全空） |
+| 其他（报告原文） | 整局无提子 8 / 20；第 3 大回合领先者胜率 65%（13/20）；P0 胜 8 / 20 |
+
+样本仅 20 局，比例区间很宽，不下结论，未调任何权重。
+
+### 4.5 收尾：单一实现表（`.trellis/spec/core/boundaries.md`）
+
+登记六行新的唯一实现（段 A 待决 7、段 B 待决 8、段 C 待决 7）：四种新棋子的位置加值（`PieceEffects.BannerBonus / ChainBonus / SentryBonus / BoundaryBonus`）、`ContentSets.PieceTypesOf`、`RelicControl.Of`、`RevealedRelics.Of`、`TerrainEditRules.IsWorkshopReach`（只作留痕与显示）、驿站加成（`RelicLedger.BuildSnapshot`，含 `StructureParameter.ListedSources` 这一处显示过滤）；
+"改造合法性"一行的调用点刷新为四处（`BatchRehearsal.ValidateShape`、`BatchPreviewBuilder.Build`、`HeuristicTurnController` 完整枚举与预筛匠人回退，均传快照工坊标记），并写明格目标候选只在私有 `CellTargets` 一处给出。
+段 B 待决 8 提到的 `RelicContent.HasAdvancedTier`（可升级类型）不在本段任务点名之列，未登记。
+
+### 变异验证
+
+脚本 `mut.py`（本会话 scratchpad，沿用段 A–C 的做法：二进制读写、按文件实际行尾归一锚点、`count == 1`、try/finally 还原并逐字节比对、`os.utime`、备份名带时间戳、`DOTNET_CLI_UI_LANGUAGE=en`），每条先 `dotnet build siege.sln -c Release` 再全量 `dotnet test -c Release --no-build`。
+基线 1572 / 5 / 0。12 条全部编译通过（无编译假红）、restored = True；跑完后对全部 18 个未提交文件做 SHA-256 比对，与跑前 0 差异；随后两处 `dotnet build` 与全量 `dotnet test -c Release`（重新构建）复跑全绿。
+
+| 变异 | 改动 | 红 | 红的用例 |
+|---|---|---|---|
+| MD-V1 | `PieceStyleTable` 界碑子的轮廓改为 `Tower`（与堡垒子同） | 3 | `映射覆盖全部类型`、`易混对可辨(Boundary, Fortress)`、`轮廓可辨` |
+| MD-V2 | `LowPoly.Body` 四种新轮廓改回共用一个分支（`Pennant or ChainLinks or CrossedSpears or Stele =>`） | 1 | `Godot几何对每种轮廓各有一个独立分支` |
+| MD-V3 | 界碑分支改用堡垒的几何（`Stele => TowerParts(...)`，分支名齐全、分支体重复） | 1 | 同上 |
+| MD-P1 | `GroupPowerView.From` 的铁链字段恒传 0 | 1 | `势力层显示新来源` |
+| MD-P2 | 公式文案从不列新来源 | 2 | `势力层显示新来源`、`势力层四项新来源各自可读` |
+| MD-P3 | 公式文案恒列七项（含 0） | 4 | 上两条 + `势力层显示高地加值`、`棋串军势公式Tests.连珠加值被倍率放大`（v1 口径文案被改） |
+| MD-H1 | `Labels.Piece` 旗手子 → "旗子" | 1 | `新类型在自己区域显示` |
+| MD-H2 | 驿站来源不注"控制 N 枚其他信物" | 1 | `驿站来源逐枚列出` |
+| MD-H3 | `ListedSources` 不过滤 0 加成 | 2 | `零加成的驿站不列出`、`终端新棋子与新信物Tests.驿站来源逐枚列出且隐藏零加成`（两处共用同一份过滤的证据） |
+| MD-H4 | 面板汇总文案把驿站按类型合并（"驿站×1"） | 1 | `驿站来源逐枚列出` |
+| MD-W1 | 富预演的改造目标不传工坊标记 | 2 | `工坊下标出隔一格目标`、`改造在预演中的呈现Tests.工坊下列出隔一格目标` |
+| MD-C1 | 预计提子分组改按批次开始前的气边（`board.LibertyNeighbors`） | 1 | `立栅切开且两半都被提时分列两串` |
+
+段外修复的先红不是变异而是改动前实跑：`立栅切开的敌串只列被提的那一半` 抛 `SiegeRuleException`（见上）。
+
+### 既有测试改写（逐条理由）
+
+| 测试 | 改写 | 理由 |
+|---|---|---|
+| `势力层领地与高地Tests.势力层显示高地加值` | 恒等式三项 → 七项，追加四个新字段为 0 的断言 | 段 A 待决 5：视图扩为七项；该盘面只有普通子，值与文案不变 |
+| `六种棋子的轮廓语言Tests.轮廓可辨` | 追加四种新映射的钉值，删去"属段 D"的注释 | 段 D 定稿 D11 映射 |
+
+其余既有测试未改。`棋串军势公式Tests`、`批次预演必须显示的信息Tests` 钉的公式文案不含新来源，按"非 0 才列"口径不变（MD-P3 证其承重）。
+
+### 段末自验
+
+- `dotnet build siege.sln`：0 警告 0 错误；`dotnet build src/godot/Siege.Godot.csproj`：0 警告 0 错误。
+- `dotnet test -c Release`：通过 1572 / 跳过 5 / 失败 0（改动前 1559 / 5 / 0），退出码 0。
+- `openspec validate more-pieces-relics --strict`：valid。
+- 未跑 200 局，未跑 `Category=Slow` / `Category=Perf`；冒烟只跑了一次 20 局。全程同一时间只有一个 dotnet（Godot 运行、冒烟、变异与测试均串行）。未碰 `.claude/worktrees/`，未 git commit。
+
+### 待决（交主会话）
+
+1. **段外 Core 修复**：`BatchPreviewBuilder.GroupCaptures` 改为按改造后的气边分组（潜伏自 artisan-terrain-edit，v2 自动演示第一次撞到；图形版里暂放匠人立栅切开敌串即每帧抛异常）。超出 tasks 4.x 字面，两条新用例 + MD-C1 守门；请复核是否保留在本 change，或拆成独立修复提交。
+2. **界碑 / 普通子是十种里灰度差最小的一对**（1/4 灰度缩略图平均灰度差 8.4，原六种之间最小 9.8；三组点名易混对 11.4 / 13.2 / 23.9 都高于 9.8）。界碑已加宽加高、后仰 14° 并加两道横纹（从 6.3 提到 8.4）。它不在规格点名的易混对里，请负责人看 `art/more-pieces/` 的图决定是否再改（D11 允许看图后改造型）。
+3. `src/godot/scripts/PieceGallery.cs` 没有配套的 `.uid` 文件（其余脚本的 `.uid` 都已入库）。它由 `GameRoot` 以 `new` 创建，运行不依赖 `.uid`（本段四次 Godot 运行正常）；Godot 编辑器打开项目时会自动生成，是否补入库请定。
+4. **图形面板不标"隔一格"**：终端给工坊扩展的目标注"（隔一格）"（Sim 可以调 `TerrainEditRules.IsWorkshopReach`），而 `Siege.Presentation` / Godot 禁调 `TerrainEditRules`，所以图形版的隔一格目标与四邻目标同样式、只靠位置区分。若要在 HUD 文案里标注，应由 Core 富预演的 `EditOutlook` 带出每个目标的分类（`IsWorkshopReach` 的结果），表现层只转录——本段未做，规格未要求。
+5. 冒烟里经工坊扩展的改造只有 1 / 65 次（工坊生效的小回合 82 个）、整类弃牌 0 次、连营额外加值仅占 0.2%：只报告，未调任何权重。
+6. 新增 Godot 启动选项 `--piece-gallery=<PNG>`（`LaunchArgs` 合法选项集合随读取自动更新），只为拍对照图；是否需要写进任何规格请定。
+7. 设计文档 §2 术语（"第六种棋子"）与 §18.1"首轮原型范围"（"六种棋子、六类信物"）按历史范围保留未改；如需一并改写请定。
+8. **规格措辞与 +0 驿站**：`hand-info-panel` 增量写"每一枚驿站 SHALL 单独列出"，而实际（按派发要求与终端一致）加成为 +0 的驿站不列（`StructureParameter.ListedSources`）。`openspec validate` 看不出这一差。change 尚未归档，建议主会话把增量补一句"加成为 +0 的驿站不列"，让规格真相源与行为一致。
+9. **名称口径**（段 C 待决 10，本段定）：图形面板用 `Labels.Piece` 全名"旗手子 / 铁链子 / 哨兵子 / 界碑子"（同既有"普通子"），终端用短名"旗手 / 铁链 / 哨兵 / 界碑"（同"普通"）；规格"以与盘面、终端一致的名称"按"同一套命名、全名 / 短名两档"理解。若要求逐字一致，需统一两张表。
+10. **势力层公式文案口径**（本段定）：连珠 / 协同 / 高地三项恒列，旗手 / 铁链 / 哨兵 / 界碑只在非 0 时列；视图字段七项都在。MD-P3 证明既有钉值（`连珠加值被倍率放大`、`势力层显示高地加值` 的文案）依赖这一口径；若负责人要"七项恒列"，改 `GroupPowerView.From` 一处并同步这两条钉值。
+11. 行尾核对（testing.md 的行尾陷阱）：本段改动的文件工作副本行尾与改动前一致（`LowPoly.cs` / `势力层领地与高地Tests.cs` 为 CRLF 工作副本、`六种棋子的轮廓语言Tests.cs` / `改造在预演中的呈现Tests.cs` / `BatchPreview.cs` / 设计文档为 LF，仓库内均为 LF、`core.autocrlf=true`）；`git diff --stat` 只显示实际改动行，没有整文件改写。
+12. 措辞订正：旗手子的旗面挂在杆的一侧，因而匠人不再是"唯一不对称"的轮廓；设计文档 §20、`VisualBaseline.cs`、`LowPoly.ScaffoldParts` 注释与测试注释已改为"匠人是十种里唯一主干斜立的轮廓"。

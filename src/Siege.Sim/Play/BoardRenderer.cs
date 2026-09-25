@@ -119,7 +119,7 @@ internal sealed class BoardRenderer
 
     /// <summary>
     /// 展示数的来源拆分文案（hand-info-panel「驿站来源逐枚列出」的终端版）：基础值 + 各枚信物，驿站逐枚列出并注明它计入的其他受控信物枚数
-    /// （每枚驿站的加成就是这个枚数，D4）。加成为 +0 的驿站（只控制驿站本身）不列——对玩家没有信息量（段 B 待决 4；图形面板的做法留段 D）。
+    /// （每枚驿站的加成就是这个枚数，D4）。加成为 +0 的驿站（只控制驿站本身）不列——对玩家没有信息量（段 B 待决 4；图形面板同样不列，段 D）。
     /// 数值全部取自 Core 公开补充载荷的结构参数，终端不重算。
     /// </summary>
     internal static string RevealSourcesText(StructureParameter parameter)
@@ -131,9 +131,8 @@ internal sealed class BoardRenderer
         return $"展示数 {parameter.Value} = {string.Join(" + ", [$"基础 {parameter.Base}", .. sources])}";
     }
 
-    /// <summary>要列出的来源：略去 +0 的驿站。</summary>
-    internal static IEnumerable<ParameterSource> VisibleSources(StructureParameter parameter) =>
-        parameter.Sources.Where(s => !(s.Type == RelicType.Relay && s.Magnitude == 0));
+    /// <summary>要列出的来源：略去 +0 的驿站。过滤取 Core 的 <see cref="StructureParameter.ListedSources"/>，与图形手牌面板同一份（段 D）。</summary>
+    internal static IEnumerable<ParameterSource> VisibleSources(StructureParameter parameter) => parameter.ListedSources;
 
     /// <summary>改造目标的文案：动作 + 目标格 / 边；经工坊扩展（隔一格）的目标另注"（隔一格）"（判定走 <see cref="TerrainEditRules.IsWorkshopReach"/>）。</summary>
     internal static string EditText(Coord artisanCell, TerrainEdit edit) =>

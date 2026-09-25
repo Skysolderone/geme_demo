@@ -17,6 +17,12 @@ public sealed record StructureParameter(int Base, int Value, ImmutableArray<Para
 {
     /// <summary>基础值之外的加成总计，即全部信物贡献的点数。</summary>
     public int Bonus => Value - Base;
+
+    /// <summary>
+    /// 要向玩家列出的来源：略去加成为 0 的来源（more-pieces-relics：只控制驿站本身时该枚驿站 +0，其余信物来源恒 ≥ 1）。
+    /// 略去的项为 0，<c>Base + Σ 列出来源 == Value</c> 仍成立。终端与图形面板共用这一份，不各写过滤。
+    /// </summary>
+    public IEnumerable<ParameterSource> ListedSources => Sources.Where(s => s.Magnitude != 0);
 }
 
 /// <summary>四项公开结构参数（设计文档 §14.3）：征募展示数、免费选取数、手牌类型槽、部署上限。</summary>
