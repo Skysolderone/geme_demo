@@ -74,6 +74,11 @@ public static class Labels
         RelicType.Command => "军令",
         RelicType.Vanguard => "先锋",
         RelicType.SchoolEmblem => "流派徽记",
+        // more-pieces-relics 段 B 最小占位：v2 局会揭示新四类（手牌面板来源文案经这里），本方法是穷举 switch、缺项即抛；图例与完整表现在段 C / D。
+        RelicType.Encampment => "连营",
+        RelicType.Pincer => "犄角",
+        RelicType.Relay => "驿站",
+        RelicType.Workshop => "工坊",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知信物类型。"),
     };
 

@@ -3,7 +3,8 @@ using Siege.Core.Board;
 namespace Siege.Core.Relics;
 
 /// <summary>
-/// 生成参数。默认值来自设计文档 §8.2 与 design.md 裁决记录；地图可按图覆盖（容差、重试上限），但权重表不在此处调整。
+/// 生成参数。默认值来自设计文档 §8.2 与 design.md 裁决记录；地图可按图覆盖（容差、重试上限）。
+/// 权重表本身不可在此调整，只能经 <see cref="ContentSet"/> 在两份固定表之间选择（more-pieces-relics D8）。
 /// </summary>
 public sealed record RelicGenerationOptions
 {
@@ -12,6 +13,12 @@ public sealed record RelicGenerationOptions
 
     /// <summary>默认参数。</summary>
     public static readonly RelicGenerationOptions Default = new();
+
+    /// <summary>
+    /// 对局内容集（more-pieces-relics D8）：决定权重表、稀有度刻度与徽记可绑定的棋子类型。缺省 <see cref="ContentSets.Default"/>（v2）；
+    /// 对局按 <c>MatchOptions.ContentSet</c> 传入，恢复旧存档按 v1。
+    /// </summary>
+    public ContentSet ContentSet { get; init; } = ContentSets.Default;
 
     /// <summary>出生区稀有度容差（千分比）。1000 即不做任何校正。</summary>
     public int RarityTolerancePermille { get; init; } = DefaultRarityTolerancePermille;
@@ -41,13 +48,27 @@ public sealed record RelicGenerationOptions
     };
 
     /// <summary>
-    /// 某预算档位的强度预算：单格期望稀有度（定点，<see cref="RelicWeights.RarityScale"/> 为单位）。
-    /// 期望稀有度 = Σ 权重% × 稀有度 × (1 + 升级率)，权重倒数定义下 Σ 权重% × 稀有度 恒为 <c>100 × 类型数</c>。
+    /// 某预算档位的强度预算：单格期望稀有度（定点，<see cref="RelicWeights.RarityScaleOf"/> 为单位）。
+    /// 期望稀有度 = Σ 权重占比 × 稀有度 × (1 + 升级率)，权重倒数定义下每一类的 权重占比 × 稀有度 恒为 <c>100</c>；
+    /// 升级率只作用于有高阶版的类型（<see cref="RelicContent.HasAdvancedTier"/>，D7），v1 即 <c>600 × (1 + 升级率)</c>，v2 为 <c>600 × (1 + 升级率) + 400</c>。
     /// 用于「中央区预算严格高于出生区」的地图交叉检查。
     /// </summary>
     public int BudgetOf(BudgetTier tier)
     {
-        int baseline = 100 * RelicWeights.Order.Length;
-        return baseline * (1000 + UpgradePermilleOf(tier)) / 1000;
+        int upgradable = 0;
+        int plain = 0;
+        foreach (RelicType type in RelicWeights.OrderOf(ContentSet))
+        {
+            if (RelicContent.HasAdvancedTier(type))
+            {
+                upgradable++;
+            }
+            else
+            {
+                plain++;
+            }
+        }
+
+        return (100 * upgradable * (1000 + UpgradePermilleOf(tier)) / 1000) + (100 * plain);
     }
 }

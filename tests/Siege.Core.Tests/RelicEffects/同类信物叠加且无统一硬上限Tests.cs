@@ -69,4 +69,30 @@ public class 同类信物叠加且无统一硬上限Tests
         Assert.Equal((5, 5), (plain.Value, plain.Base));
         Assert.Empty(plain.Sources);
     }
+
+    [Fact]
+    public void 工坊不按数值相加()
+    {
+        // more-pieces-relics MODIFIED（D5）：同时控制 3 枚工坊，匠人的格目标范围与只控制 1 枚工坊时相同——工坊没有数值，不叠加。
+        // 落点 F6：三枚与一枚都只多出直线距离 2 的 D6 / H6 / F4 / F8，距离 3 的 J6 / F9 与斜向格都不在集合里。
+        (GameBoard three, RelicLedger threeLedger) = RelicFixtures.Scene(
+            ("B2", RelicFixtures.Workshop()), ("B4", RelicFixtures.Workshop()), ("B6", RelicFixtures.Workshop()));
+        three.Place("B2", TestMaps.P0).Place("B4", TestMaps.P0).Place("B6", TestMaps.P0);
+        (GameBoard one, RelicLedger oneLedger) = RelicFixtures.Scene(("B2", RelicFixtures.Workshop()));
+        one.Place("B2", TestMaps.P0);
+
+        EffectSnapshot withThree = threeLedger.SnapshotFor(TestMaps.P0, three, 0, 1);
+        EffectSnapshot withOne = oneLedger.SnapshotFor(TestMaps.P0, one, 0, 1);
+
+        Assert.True(withOne.WorkshopActive);
+        Assert.Equal(withOne, withThree);
+        GameBoard open = TestMaps.Blank(TestMaps.Terrain(surfaces: [("J6", Surface.Forest), ("F9", Surface.Forest), ("H6", Surface.Forest)]), size: 11);
+        Coord at = TestMaps.At("F6");
+        Assert.Equal(
+            TerrainEditRules.LegalTargets(open.Map, at, withOne.WorkshopActive),
+            TerrainEditRules.LegalTargets(open.Map, at, withThree.WorkshopActive));
+        Assert.Contains(TerrainEdit.Burn(TestMaps.At("H6")), TerrainEditRules.LegalTargets(open.Map, at, withThree.WorkshopActive));
+        Assert.DoesNotContain(TerrainEdit.Burn(TestMaps.At("J6")), TerrainEditRules.LegalTargets(open.Map, at, withThree.WorkshopActive));
+        Assert.DoesNotContain(TerrainEdit.Burn(TestMaps.At("F9")), TerrainEditRules.LegalTargets(open.Map, at, withThree.WorkshopActive));
+    }
 }

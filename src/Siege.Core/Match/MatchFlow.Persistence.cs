@@ -87,6 +87,8 @@ public sealed partial class MatchFlow
                 DeployLimit = r.Effects.DeployLimit,
                 HeldTypeCount = r.Effects.HeldTypeCount,
                 Emblems = [.. r.Effects.EmblemCounts.Select(kv => new HandStockEntry(kv.Key, kv.Value))],
+                RelaySources = [.. r.Effects.RelaySources.Select(kv => new RelaySourceSaveData { Relic = kv.Key.ToNotation(), Bonus = kv.Value })],
+                WorkshopActive = r.Effects.WorkshopActive,
                 ControlledRelics = [.. r.ControlledRelics.Select(c => c.ToNotation())],
                 Power = r.Power,
             })],
@@ -131,7 +133,10 @@ public sealed partial class MatchFlow
         MatchSaveData data = Parse(json);
         RequireMap(map, data);
         GameSeed seed = GameSeed.Parse(data.Seed!);
-        return RestoreCore(map, GameBoard.Restore(map, data.Board!), seed, RelicGenerator.Generate(map, seed), data);
+        // more-pieces-relics D8：存档只存种子，信物分布按存档的内容集重新生成——缺字段的旧存档按 v1（与 RestoreCore 的回填同一口径），
+        // 否则旧存档会按新局缺省 v2 的权重表重建出另一份分布。
+        ContentSet contentSet = ContentSets.RequireValid(data.ContentSet ?? ContentSets.Legacy);
+        return RestoreCore(map, GameBoard.Restore(map, data.Board!), seed, RelicGenerator.Generate(map, seed, contentSet), data);
     }
 
     /// <summary>测试专用：在未校验的合成地图与手工信物分布上恢复。</summary>
@@ -263,8 +268,11 @@ public sealed partial class MatchFlow
         {
             var player = new PlayerId(r.Player);
             var entries = r.Hand.ToImmutableSortedDictionary(h => h.Type, h => new HandEntry(h.Carried, h.Gained));
+            // more-pieces-relics D12 / Migration 3：旧存档的弃赛快照没有驿站来源与工坊标记 → 缺省为空 / 否。
             var effects = new EffectSnapshot(player, r.MajorRound, r.RevealCount, r.FreePickCount, r.EffectTypeSlots, r.DeployLimit,
-                r.Emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), r.HeldTypeCount);
+                r.Emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), r.HeldTypeCount,
+                (r.RelaySources ?? []).ToImmutableSortedDictionary(s => Coord.Parse(s.Relic!), s => s.Bonus),
+                r.WorkshopActive ?? false);
             match._resignations.Add(new ResignationSnapshot(player, r.MajorRound, r.Board!, new HandPrivateView(player, entries, r.HandPhase, r.TypeSlots),
                 effects, [.. r.ControlledRelics.Select(Coord.Parse)], r.Power));
         }
@@ -412,9 +420,23 @@ public sealed class ResignationSaveData
 
     public List<HandStockEntry> Emblems { get; set; } = [];
 
+    /// <summary>弃赛快照的驿站来源（more-pieces-relics）；旧存档无此字段（<c>null</c>）→ 空。</summary>
+    public List<RelaySourceSaveData>? RelaySources { get; set; }
+
+    /// <summary>弃赛快照的工坊标记（more-pieces-relics）；旧存档无此字段（<c>null</c>）→ 否。</summary>
+    public bool? WorkshopActive { get; set; }
+
     public List<string> ControlledRelics { get; set; } = [];
 
     public BigInteger Power { get; set; }
+}
+
+/// <summary>一枚驿站的加成来源：驿站坐标（围棋记法）与该枚的展示数加成。</summary>
+public sealed class RelaySourceSaveData
+{
+    public string? Relic { get; set; }
+
+    public int Bonus { get; set; }
 }
 
 public sealed class StandingSaveData

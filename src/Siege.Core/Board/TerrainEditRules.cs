@@ -16,6 +16,9 @@ namespace Siege.Core.Board;
 /// 既不是敌串的气也切不断敌串（段 B 实测 20 局 97 次改造致提子 0 次）；放宽后 T-3「改造先于提子」才真正成立。
 /// 边的两端本身仍 MUST 几何相邻且都在棋盘内。</para>
 /// <para><b>没有逆向动作</b>（R-5）：已架桥的深水格、已有栅栏的边、已是草地的格都不是合法目标。</para>
+/// <para><b>工坊</b>（more-pieces-relics D5）：本小回合快照标记工坊生效时，格目标另含与落点同行 / 同列、直线距离恰为 2 的格（"隔一格"，至多 4 格），
+/// 中间那格不设任何条件；斜向与直线距离 3 及以上的格仍不是格目标。边目标的范围不变。格目标候选只在 <see cref="CellTargets"/> 一处给出，
+/// 枚举与拒绝理由共用它。</para>
 /// <para><b>批内唯一与"不链式"不在本类</b>：本类只按传入的这一份地形判定单次改造，
 /// 而"按批次开始前的地形判定"与"同一目标批内唯一"是批次层的事（<c>BatchRehearsal</c>）。</para>
 /// </remarks>
@@ -29,7 +32,13 @@ public static class TerrainEditRules
     /// AI 的候选枚举、界面的可改造目标高亮与合法性判定共用这一份，MUST NOT 各自再遍历一遍四邻。
     /// 没有任何合法目标时返回空——此时匠人仍然可以落子（裁决 T-6）。
     /// </summary>
-    public static ImmutableArray<TerrainEdit> LegalTargets(MapData map, Coord artisanCell)
+    public static ImmutableArray<TerrainEdit> LegalTargets(MapData map, Coord artisanCell) => LegalTargets(map, artisanCell, workshop: false);
+
+    /// <summary>
+    /// 同 <see cref="LegalTargets(MapData, Coord)"/>，<paramref name="workshop"/> 为本小回合快照的工坊标记（more-pieces-relics D5）：
+    /// 为真时格目标另含与落点同行 / 同列、直线距离恰为 2 的格；边目标不变。
+    /// </summary>
+    public static ImmutableArray<TerrainEdit> LegalTargets(MapData map, Coord artisanCell, bool workshop)
     {
         ArgumentNullException.ThrowIfNull(map);
         if (!map.Contains(artisanCell))
@@ -38,7 +47,7 @@ public static class TerrainEditRules
         }
 
         var found = new List<TerrainEdit>();
-        foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, artisanCell))
+        foreach (Coord n in CellTargets(map, artisanCell, workshop))
         {
             if (map.TerrainData.IsUnbridgedDeepWater(n))
             {
@@ -49,7 +58,10 @@ public static class TerrainEditRules
             {
                 found.Add(TerrainEdit.Burn(n));
             }
+        }
 
+        foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, artisanCell))
+        {
             // 边目标（T-11）：以该四邻格 n 为一端的全部边——m == artisanCell 给出原口径的 4 条内圈边，
             // 其余给出 12 条外圈边。不同的 n 之间不会撞车：两个四邻格互不相邻，外圈端点离落点是 2 格。
             foreach (Coord m in Adjacency.Neighbors(map.Width, map.Height, n))
@@ -67,11 +79,17 @@ public static class TerrainEditRules
     /// <summary>该改造是否是 <paramref name="artisanCell"/> 上匠人的合法目标。等价于出现在 <see cref="LegalTargets"/> 里。</summary>
     public static bool IsLegal(MapData map, Coord artisanCell, TerrainEdit edit) => Reject(map, artisanCell, edit) is null;
 
+    /// <summary>同 <see cref="IsLegal(MapData, Coord, TerrainEdit)"/>，带本小回合的工坊标记。</summary>
+    public static bool IsLegal(MapData map, Coord artisanCell, TerrainEdit edit, bool workshop) => Reject(map, artisanCell, edit, workshop) is null;
+
     /// <summary>
     /// 拒绝理由；合法时为 <c>null</c>。判定与 <see cref="LegalTargets"/> 同源——本方法只负责把"为什么不在合法集合里"说清楚，
     /// MUST NOT 与 <see cref="LegalTargets"/> 出现口径分歧（守门：<c>改造合法性Tests.拒绝理由与合法目标集合一致</c>）。
     /// </summary>
-    public static string? Reject(MapData map, Coord artisanCell, TerrainEdit edit)
+    public static string? Reject(MapData map, Coord artisanCell, TerrainEdit edit) => Reject(map, artisanCell, edit, workshop: false);
+
+    /// <summary>同 <see cref="Reject(MapData, Coord, TerrainEdit)"/>，<paramref name="workshop"/> 为本小回合快照的工坊标记。</summary>
+    public static string? Reject(MapData map, Coord artisanCell, TerrainEdit edit, bool workshop)
     {
         ArgumentNullException.ThrowIfNull(map);
         if (!map.Contains(artisanCell))
@@ -80,12 +98,13 @@ public static class TerrainEditRules
         }
 
         ImmutableArray<Coord> neighbors = Adjacency.Neighbors(map.Width, map.Height, artisanCell);
+        ImmutableArray<Coord> cellTargets = CellTargets(map, artisanCell, workshop);
         switch (edit.Kind)
         {
             case TerrainEditKind.Bridge:
-                if (!neighbors.Contains(edit.Cell))
+                if (!cellTargets.Contains(edit.Cell))
                 {
-                    return $"改造目标与匠人落点不是几何四邻：{artisanCell.ToNotation()} 与 {edit.Cell.ToNotation()}。";
+                    return OutOfCellRange(artisanCell, edit.Cell, workshop);
                 }
 
                 if (map.SurfaceAt(edit.Cell) != Surface.DeepWater)
@@ -98,9 +117,9 @@ public static class TerrainEditRules
                     : null;
 
             case TerrainEditKind.Burn:
-                if (!neighbors.Contains(edit.Cell))
+                if (!cellTargets.Contains(edit.Cell))
                 {
-                    return $"改造目标与匠人落点不是几何四邻：{artisanCell.ToNotation()} 与 {edit.Cell.ToNotation()}。";
+                    return OutOfCellRange(artisanCell, edit.Cell, workshop);
                 }
 
                 return map.SurfaceAt(edit.Cell) != Surface.Forest
@@ -131,4 +150,37 @@ public static class TerrainEditRules
                 throw new ArgumentOutOfRangeException(nameof(edit), edit.Kind, "未知改造类型。");
         }
     }
+
+    /// <summary>工坊的"隔一格"偏移：同行 / 同列、直线距离恰为 2（不含斜向，不含更远）。</summary>
+    private static readonly (int Dx, int Dy)[] WorkshopOffsets = [(0, -2), (-2, 0), (2, 0), (0, 2)];
+
+    /// <summary>
+    /// 格目标（搭桥 / 烧林）的候选格：几何四邻；<paramref name="workshop"/> 为真时再加棋盘内同行 / 同列直线距离 2 的格（D5）。
+    /// <see cref="LegalTargets(MapData, Coord, bool)"/> 与 <see cref="Reject(MapData, Coord, TerrainEdit, bool)"/> 共用这一份。
+    /// </summary>
+    private static ImmutableArray<Coord> CellTargets(MapData map, Coord artisanCell, bool workshop)
+    {
+        ImmutableArray<Coord> neighbors = Adjacency.Neighbors(map.Width, map.Height, artisanCell);
+        if (!workshop)
+        {
+            return neighbors;
+        }
+
+        ImmutableArray<Coord>.Builder cells = neighbors.ToBuilder();
+        foreach ((int dx, int dy) in WorkshopOffsets)
+        {
+            int x = artisanCell.X + dx;
+            int y = artisanCell.Y + dy;
+            if (x >= 0 && y >= 0 && x < map.Width && y < map.Height)
+            {
+                cells.Add(new Coord(x, y));
+            }
+        }
+
+        return cells.ToImmutable();
+    }
+
+    private static string OutOfCellRange(Coord artisanCell, Coord target, bool workshop) => workshop
+        ? $"改造目标超出工坊扩展后的范围：{artisanCell.ToNotation()} 与 {target.ToNotation()}（工坊生效时格目标为几何四邻或同行 / 同列隔一格）。"
+        : $"改造目标与匠人落点不是几何四邻：{artisanCell.ToNotation()} 与 {target.ToNotation()}。";
 }

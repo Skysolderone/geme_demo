@@ -27,6 +27,16 @@ internal static class RelicFixtures
 
     internal static RelicContent Emblem(PieceType piece, int count = 1) => new(RelicType.SchoolEmblem, count, piece);
 
+    // more-pieces-relics：四类新信物只有 +1（relic-effects「六类原型信物的效果」）。
+
+    internal static RelicContent Encampment() => new(RelicType.Encampment, 1);
+
+    internal static RelicContent Pincer() => new(RelicType.Pincer, 1);
+
+    internal static RelicContent Relay() => new(RelicType.Relay, 1);
+
+    internal static RelicContent Workshop() => new(RelicType.Workshop, 1);
+
     /// <summary>
     /// 一张 9×9 合成盘面 + 手工指定内容的信物账本。信物格全部标为公共区标准档（内容既已手工指定，分区只影响记录）。
     /// </summary>

@@ -137,14 +137,17 @@ public class 总势力Tests
         string Rel(string f) => Path.GetRelativePath(src, f).Replace(Path.DirectorySeparatorChar, '/');
         // more-pieces-relics 段 A：PieceEffects.cs 成为 OwnershipOf( 与 OwnershipKind.Exclusive 的合法读者——界碑子加值（D2）按空格归属三态逐格读
         // 传入的覆盖表（与领地分同一份 CoverageMap，由 PowerCalculator 传入），不另算覆盖；只读判定结果，不统计领地分。
+        // more-pieces-relics 段 B：信物控制判定由 RelicLedger 的私有方法抽成 RelicControl.Of（RelicControl.cs）——账本第 5 步重算与
+        // 势力计算读取计分信物（D3）共用这一份，OwnershipOf( 多一个读者、OwnershipKind.Exclusive 由 RelicLedger.cs 移到 RelicControl.cs；
+        // RelicLedger.cs 仍在 OwnershipOf( 名单里（第 4 步揭示逐格读归属）。
         var readers = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["OwnershipOf("] = ["Siege.Core/Ai/BatchEvaluator.cs", "Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+            ["OwnershipOf("] = ["Siege.Core/Ai/BatchEvaluator.cs", "Siege.Core/Relics/RelicControl.cs", "Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
             ["SourcesOf("] = ["Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
             ["UniqueCoverer("] = ["Siege.Core/Scoring/CoverageMap.cs"],
             ["CoverageOf("] = ["Siege.Core/Scoring/CoverageMap.cs"],
             ["ExclusiveCellsOf("] = ["Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PowerCalculator.cs"],
-            ["OwnershipKind.Exclusive"] = ["Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+            ["OwnershipKind.Exclusive"] = ["Siege.Core/Relics/RelicControl.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
         };
         Dictionary<string, string> texts = sources.ToDictionary(Rel, File.ReadAllText, StringComparer.Ordinal);
         foreach ((string token, string[] expected) in readers)

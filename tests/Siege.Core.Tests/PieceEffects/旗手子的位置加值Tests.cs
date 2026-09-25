@@ -53,6 +53,13 @@ public class 旗手子的位置加值Tests
         PowerSnapshot snapshot = PowerCalculator.Compute(board);
         Assert.True(snapshot.Coverage.OwnershipOf(TestMaps.At("F7")).IsControlledBy(TestMaps.P1));   // 前提：F7 由 B 控制
         Assert.Equal(6, snapshot.GroupContaining(TestMaps.P0, "F6").BannerBonus);
+
+        // more-pieces-relics 段 B：势力计算多了"已知信物内容"输入（D3；预演与 AI 只传已揭示的公开内容）。
+        // 只知道 F7（已揭示）而不知道 G6（未揭示）时，旗手照样按位置计 2 个信物格——旗手不读这份输入。
+        // 段 A M-A2 的真正变异（旗手只数已知内容里的格）由这一条落地。
+        var revealedOnly = new Dictionary<Coord, Relics.RelicType> { [TestMaps.At("F7")] = Relics.RelicType.Command };
+        Assert.Equal(6, PowerCalculator.Compute(board, RelicFixtures.AllActive(TestMaps.P0, TestMaps.P1), revealedOnly)
+            .GroupContaining(TestMaps.P0, "F6").BannerBonus);
     }
 
     [Fact]

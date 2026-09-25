@@ -8,8 +8,8 @@ namespace Siege.Core.Relics;
 /// <summary>一个信物格的生成结果：坐标、内容、所属分区与预算档位。</summary>
 public sealed record RelicPlacement(Coord Coord, RelicContent Content, RelicCellSpec Spec)
 {
-    /// <summary>该枚信物的稀有度分（按其分区的权重表）。</summary>
-    public int Rarity => RelicWeights.RarityOf(Spec.Zone, Content);
+    /// <summary>该枚信物在内容集 <paramref name="set"/> 下的稀有度分（按其分区的权重表与该内容集的稀有度刻度）。</summary>
+    public int RarityIn(ContentSet set) => RelicWeights.RarityOf(Spec.Zone, Content, set);
 
     public override string ToString() => $"{Coord.ToNotation()} {Spec.Zone}/{Spec.Budget} {Content}";
 }
@@ -25,11 +25,25 @@ public sealed record RelicGenerationRecord(
     bool Converged,
     int Rerolls)
 {
+    /// <summary>
+    /// 生成时的对局内容集（more-pieces-relics D8）。生成器按 <see cref="RelicGenerationOptions.ContentSet"/> 写入；
+    /// 测试手工构造的记录缺省为 <see cref="ContentSets.Default"/>。<see cref="Serialize"/> 不输出它（v1 的导出文本与改动前逐字节相同）。
+    /// </summary>
+    public ContentSet ContentSet { get; init; } = ContentSets.Default;
+
+    /// <summary>某枚信物按本记录内容集计的稀有度分。</summary>
+    public int RarityOf(RelicPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        return placement.RarityIn(ContentSet);
+    }
+
     /// <summary>值相等：逐格比较分布（<see cref="ImmutableArray{T}"/> 默认是引用相等，对记录没有意义）。</summary>
     public bool Equals(RelicGenerationRecord? other) =>
         other is not null
         && Seed == other.Seed
         && MapId == other.MapId
+        && ContentSet == other.ContentSet
         && Converged == other.Converged
         && Rerolls == other.Rerolls
         && Placements.SequenceEqual(other.Placements);
@@ -39,6 +53,7 @@ public sealed record RelicGenerationRecord(
         var hash = new HashCode();
         hash.Add(Seed);
         hash.Add(MapId);
+        hash.Add(ContentSet);
         hash.Add(Converged);
         hash.Add(Rerolls);
         foreach (RelicPlacement placement in Placements)

@@ -157,4 +157,20 @@ public class 私人征募面板Tests
         Assert.Equal(nextDirect, second.CandidateTypes);
         Assert.NotSame(first, second);
     }
+
+    [Fact]
+    public void 驿站生效()
+    {
+        // more-pieces-relics MODIFIED：小回合开始时控制 1 枚驿站、1 枚探勘、1 枚军令 → 面板展示 5 + 1 + 2 = 8 枚候选
+        // （探勘 +1；驿站计除自身外的 2 枚受控信物 +2）。走真实对局流程：P0 直接占据三枚信物，小回合开始时生成快照、进入征募。
+        MatchFlow match = MatchFixtures.Started(relics: [("G4", RelicFixtures.Relay()), ("H4", RelicFixtures.Prospecting()), ("J4", RelicFixtures.Command())])
+            .AtRound(7, MatchFixtures.All)
+            .Stones(MatchFixtures.P0, "G4", "H4", "J4");
+
+        match.BeginTurn();
+        RecruitPanelView panel = match.EnterRecruit();
+
+        Assert.Equal(8, panel.ShowCount);
+        Assert.Equal(3, panel.FreePickCount);
+    }
 }

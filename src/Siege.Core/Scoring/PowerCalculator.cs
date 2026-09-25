@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
+using Siege.Core.Relics;
 
 namespace Siege.Core.Scoring;
 
@@ -41,15 +42,22 @@ public static class PowerCalculator
     /// 计算一条棋串的军势明细。<paramref name="coverage"/> 是同一盘面的覆盖表（界碑子的独占判定读它，与领地分同一份，不另算覆盖）。
     /// 七项位置加值先求和、再与基础军势相加、最后整体乘倍率（more-pieces-relics：四种新来源与原三项一样被倍率放大）。
     /// </summary>
-    public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group)
+    public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group) =>
+        Evaluate(board, coverage, group, ScoringRelicCounts.None);
+
+    /// <summary>
+    /// 同 <see cref="Evaluate(GameBoard, CoverageMap, Group)"/>，另计棋串所有者控制的计分信物（more-pieces-relics D3）：
+    /// 连营并入连珠加值、犄角并入协同加值，与其余位置加值一起被倍率放大。
+    /// </summary>
+    public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group, ScoringRelicCounts relics)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(coverage);
         ArgumentNullException.ThrowIfNull(group);
 
         int baseTotal = PieceEffects.BaseTotal(board, group);
-        int lineBonus = PieceEffects.LineBonus(board, group);
-        int synergyBonus = PieceEffects.SynergyBonus(board, group);
+        int lineBonus = PieceEffects.LineBonus(board, group, relics.Encampments);
+        int synergyBonus = PieceEffects.SynergyBonus(board, group, relics.Pincers);
         int highGroundBonus = PieceEffects.HighGroundBonus(board, group);
         int bannerBonus = PieceEffects.BannerBonus(board, group);
         int chainBonus = PieceEffects.ChainBonus(board, group);
@@ -69,7 +77,7 @@ public static class PowerCalculator
     public static PowerSnapshot Compute(GameBoard board)
     {
         ArgumentNullException.ThrowIfNull(board);
-        return ComputeCore(board, roster: null);
+        return ComputeCore(board, roster: null, knownRelics: null);
     }
 
     /// <summary>
@@ -77,14 +85,66 @@ public static class PowerCalculator
     /// 盘面上出现名册外的玩家几乎一定是接线错误，抛 <see cref="SiegeRuleException"/> 而不是静默视为参赛中。
     /// 名册列出但盘面上没有棋子的玩家（例如刚被提光）势力为 0，仍按状态参与名次。
     /// </summary>
+    /// <remarks>本重载不读任何计分信物（连营 / 犄角视为无人控制）——等同于传入空的已知信物内容。</remarks>
     public static PowerSnapshot Compute(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(roster);
-        return ComputeCore(board, roster);
+        return ComputeCore(board, roster, knownRelics: null);
     }
 
-    private static PowerSnapshot ComputeCore(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster)
+    /// <summary>
+    /// 全量计算并读取计分信物（more-pieces-relics D3，relic-effects「计分信物：连营与犄角」）。
+    /// <paramref name="knownRelics"/> 是调用方<b>已知</b>的信物内容（坐标 → 类型）：正式结算传真实内容（<see cref="RelicLedger.TrueContents"/>），
+    /// 预演与 AI 只传批次开始前已揭示的公开内容。控制不由调用方给出，而是在本次计算里按同一份覆盖表与名册现算
+    /// （唯一实现 <see cref="RelicControl.Of"/>）：争议 / 无人控制不生效，已弃赛 / 已出局者控制的（封锁）不为其加分。
+    /// 只按当前盘面，不经效果快照——失去控制的那一次重算里立即失效。
+    /// </summary>
+    public static PowerSnapshot Compute(
+        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, IReadOnlyDictionary<Coord, RelicType> knownRelics)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(roster);
+        ArgumentNullException.ThrowIfNull(knownRelics);
+        return ComputeCore(board, roster, knownRelics);
+    }
+
+    /// <summary>
+    /// 某玩家此刻控制的连营 / 犄角枚数。只看 <paramref name="knownRelics"/> 里列出的格；控制经 <see cref="RelicControl.Of"/> 判定，
+    /// 只有 <see cref="RelicControl.GrantsEffectTo"/>（参赛中且控制）才计。
+    /// </summary>
+    private static ScoringRelicCounts ScoringRelicsOf(
+        PlayerId player, CoverageMap coverage, IReadOnlyDictionary<Coord, RelicType>? knownRelics, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster)
+    {
+        if (knownRelics is null)
+        {
+            return ScoringRelicCounts.None;
+        }
+
+        int encampments = 0;
+        int pincers = 0;
+        foreach ((Coord coord, RelicType type) in knownRelics)
+        {
+            if (type is not (RelicType.Encampment or RelicType.Pincer) || !RelicControl.Of(coverage, coord, roster).GrantsEffectTo(player))
+            {
+                continue;
+            }
+
+            if (type == RelicType.Encampment)
+            {
+                encampments++;
+            }
+            else
+            {
+                pincers++;
+            }
+        }
+
+        return new ScoringRelicCounts(encampments, pincers);
+    }
+
+    private static PowerSnapshot ComputeCore(
+        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster, IReadOnlyDictionary<Coord, RelicType>? knownRelics)
     {
         CoverageMap coverage = CoverageMap.Compute(board);
         ImmutableArray<Group> allGroups = board.AllGroups();
@@ -107,9 +167,10 @@ public static class PowerCalculator
             PlayerStatus status = roster is null ? PlayerStatus.Active : roster[player];
             ImmutableArray<Coord> exclusive = coverage.ExclusiveCellsOf(player);
             ImmutableArray<Coord> scored = [.. exclusive.Where(c => ScoresTerritory(board.Map, c))];
+            ScoringRelicCounts relics = ScoringRelicsOf(player, coverage, knownRelics, roster);
             ImmutableArray<GroupPower> groups = allGroups
                 .Where(g => g.Owner == player)
-                .Select(g => Evaluate(board, coverage, g))
+                .Select(g => Evaluate(board, coverage, g, relics))
                 .ToImmutableArray();
 
             BigInteger groupTotal = BigInteger.Zero;

@@ -18,14 +18,17 @@ namespace Siege.Core.Relics;
 public static class RelicGenerator
 {
     /// <summary>
-    /// 流派徽记可绑定的棋子类型：原六种的显式列表（= 内容集 v1 的类型，more-pieces-relics D8）。MUST NOT 用 <c>Enum.GetValues</c>——
-    /// <see cref="PieceType"/> 末尾追加了四种新棋子，按枚举取会把抽签从 6 选 1 变成 10 选 1，同种子的信物分布整体改变。
-    /// 段 A 生成器尚不区分内容集（v1 / v2 都绑原六种）；按内容集分流（v2 绑定十种）属段 B（tasks 2.2）。
+    /// 流派徽记可绑定的棋子类型 = 该对局内容集的全部棋子类型（<see cref="ContentSets.PieceTypesOf"/> 的显式清单：v1 原六种、v2 十种）。
+    /// MUST NOT 用 <c>Enum.GetValues</c>：<see cref="PieceType"/> 末尾追加了四种新棋子，v1 若随之变成 10 选 1，同种子的信物分布会整体改变。
     /// </summary>
-    private static readonly PieceType[] EmblemPieces = [.. ContentSets.PieceTypesOf(ContentSet.V1)];
+    private static ImmutableArray<PieceType> EmblemPiecesOf(ContentSet set) => ContentSets.PieceTypesOf(set);
 
     /// <summary>按默认参数生成。</summary>
     public static RelicGenerationRecord Generate(MapData map, GameSeed seed) => Generate(map, seed, RelicGenerationOptions.Default);
+
+    /// <summary>按默认参数、指定对局内容集生成（more-pieces-relics D8）。</summary>
+    public static RelicGenerationRecord Generate(MapData map, GameSeed seed, ContentSet contentSet) =>
+        Generate(map, seed, RelicGenerationOptions.Default with { ContentSet = ContentSets.RequireValid(contentSet) });
 
     /// <summary>按指定参数生成。同一地图 + 同一种子 + 同一参数 → 逐格一致。</summary>
     public static RelicGenerationRecord Generate(MapData map, GameSeed seed, RelicGenerationOptions options)
@@ -47,16 +50,23 @@ public static class RelicGenerator
         // 第二阶段：出生区预算校正。
         (bool converged, int rerolls) = BalanceBirthZones(map, placements, stream, options);
 
-        return new RelicGenerationRecord(seed, map.Id, [.. placements], converged, rerolls);
+        return new RelicGenerationRecord(seed, map.Id, [.. placements], converged, rerolls) { ContentSet = options.ContentSet };
     }
 
     /// <summary>抽一枚信物：类型 → 升级判定 → 徽记绑定的棋子类型。三次消费的顺序固定，任何改动都会改变同种子的结果。</summary>
+    /// <remarks>
+    /// more-pieces-relics D7：升级判定只对有高阶版的类型（<see cref="RelicContent.HasAdvancedTier"/>，即原有六类）执行；
+    /// 连营、犄角、驿站、工坊<b>不消费</b>升级抽签——消费顺序为「抽类型 → 仅原有六类做升级判定 → 仅流派徽记抽绑定类型」。
+    /// v1 表里没有新四类，这条分支对 v1 不起作用，v1 的消费序列与改动前逐次相同。
+    /// </remarks>
     private static RelicContent Draw(RandomStream stream, RelicCellSpec spec, RelicGenerationOptions options)
     {
-        RelicType type = RelicWeights.Order[stream.WeightedPick(RelicWeights.TableOf(spec.Zone))];
-        int upgradePermille = spec.Zone == RelicZone.BirthZone ? 0 : options.UpgradePermilleOf(spec.Budget);
+        ContentSet set = options.ContentSet;
+        RelicType type = RelicWeights.OrderOf(set)[stream.WeightedPick(RelicWeights.TableOf(spec.Zone, set))];
+        int upgradePermille = spec.Zone == RelicZone.BirthZone || !RelicContent.HasAdvancedTier(type) ? 0 : options.UpgradePermilleOf(spec.Budget);
         int magnitude = upgradePermille > 0 && stream.NextPermille(upgradePermille) ? 2 : 1;
-        PieceType? emblemPiece = type == RelicType.SchoolEmblem ? EmblemPieces[stream.NextInt(EmblemPieces.Length)] : null;
+        ImmutableArray<PieceType> emblemPieces = EmblemPiecesOf(set);
+        PieceType? emblemPiece = type == RelicType.SchoolEmblem ? emblemPieces[stream.NextInt(emblemPieces.Length)] : null;
         return new RelicContent(type, magnitude, emblemPiece);
     }
 
@@ -96,7 +106,7 @@ public static class RelicGenerator
                 return (false, rerolls);
             }
 
-            int victim = MostDeviatingCell(zones, worstZone, placements);
+            int victim = MostDeviatingCell(zones, worstZone, placements, options.ContentSet);
             RelicCellSpec spec = placements[victim].Spec;
             placements[victim] = placements[victim] with { Content = Draw(stream, spec, options) };
             rerolls++;
@@ -116,7 +126,7 @@ public static class RelicGenerator
         long total = 0;
         foreach ((int zone, List<int> cells) in zones)
         {
-            (long score, int duplicates) = ZoneScore(cells, placements);
+            (long score, int duplicates) = ZoneScore(cells, placements, options.ContentSet);
             scores[zone] = (score, duplicates);
             total += score;
         }
@@ -149,14 +159,14 @@ public static class RelicGenerator
     }
 
     /// <summary>出生区评分 = 稀有度之和；同时数出同类型重复枚数（每多一枚同类型计 1）。</summary>
-    private static (long Score, int Duplicates) ZoneScore(List<int> cells, RelicPlacement[] placements)
+    private static (long Score, int Duplicates) ZoneScore(List<int> cells, RelicPlacement[] placements, ContentSet set)
     {
         long score = 0;
         int duplicates = 0;
         var seen = new HashSet<RelicType>();
         foreach (int i in cells)
         {
-            score += placements[i].Rarity;
+            score += placements[i].RarityIn(set);
             if (!seen.Add(placements[i].Content.Type))
             {
                 duplicates++;
@@ -170,7 +180,7 @@ public static class RelicGenerator
     /// 最小改动原则：在偏差最大的出生区里挑稀有度离「单格目标」最远的那一枚。
     /// 单格目标 = 全部出生区信物的平均稀有度；同区重复类型的那一枚优先（它正是惩罚的来源）；并列按坐标字典序取最小。
     /// </summary>
-    private static int MostDeviatingCell(SortedDictionary<int, List<int>> zones, int worstZone, RelicPlacement[] placements)
+    private static int MostDeviatingCell(SortedDictionary<int, List<int>> zones, int worstZone, RelicPlacement[] placements, ContentSet set)
     {
         long sum = 0;
         int n = 0;
@@ -178,7 +188,7 @@ public static class RelicGenerator
         {
             foreach (int i in cells)
             {
-                sum += placements[i].Rarity;
+                sum += placements[i].RarityIn(set);
                 n++;
             }
         }
@@ -191,7 +201,7 @@ public static class RelicGenerator
         foreach (int i in candidates)
         {
             bool duplicate = !seen.Add(placements[i].Content.Type);
-            long key = Math.Abs(placements[i].Rarity - target) + (duplicate ? RelicWeights.RarityScale : 0);
+            long key = Math.Abs(placements[i].RarityIn(set) - target) + (duplicate ? RelicWeights.RarityScaleOf(set) : 0);
             if (key > bestKey)
             {
                 bestKey = key;

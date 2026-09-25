@@ -132,10 +132,11 @@ public static class BatchPreviewBuilder
         ];
 
         // 改造目标按批次开始前的地形（board.Map）枚举，与预演第 1 步同源；合法性只走 TerrainEditRules 这一份实现。
+        // 工坊（more-pieces-relics D5）按本小回合快照经批次上下文传入，与预演第 1 步的判定同一个输入。
         ImmutableArray<EditOutlook> editOptions =
         [
             .. ordered.Where(p => p.Type == TerrainEditRules.EditorType)
-                .Select(p => new EditOutlook(p.Coord, p.Edit, TerrainEditRules.LegalTargets(board.Map, p.Coord))),
+                .Select(p => new EditOutlook(p.Coord, p.Edit, TerrainEditRules.LegalTargets(board.Map, p.Coord, context.WorkshopActive))),
         ];
 
         if (rehearsal.IsPass || rehearsal.ProjectedBoard is not { } projected)

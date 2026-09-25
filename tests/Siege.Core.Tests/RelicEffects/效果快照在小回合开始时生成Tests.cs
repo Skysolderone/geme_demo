@@ -107,6 +107,27 @@ public class 效果快照在小回合开始时生成Tests
     }
 
     [Fact]
+    public void 驿站按快照时的控制计数()
+    {
+        // more-pieces-relics MODIFIED：小回合开始时控制 1 枚驿站与另外 2 枚信物 → 本小回合展示数 5 + 2 = 7；
+        // 本小回合的批次（走真实结算驱动器）又占领 1 枚信物 → 已生成的快照仍为 7；下一小回合（控制不变）为 5 + 3 = 8。
+        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(
+            ("C3", RelicFixtures.Relay()), ("C5", RelicFixtures.Command()), ("C7", RelicFixtures.Depot()), ("G5", RelicFixtures.Conscription()));
+        board.Place("C3", TestMaps.P0).Place("C5", TestMaps.P0).Place("C7", TestMaps.P0);
+        ledger.Settle(board, 1);
+        var driver = new SettlementDriver(board, new BoardHistory(), new RelicHooks(ledger) { MajorRound = 1 });
+
+        EffectSnapshot before = ledger.SnapshotFor(TestMaps.P0, board, 0, 1);
+        Assert.Equal(7, before.RevealCount);
+
+        Assert.True(driver.Confirm(BatchFixtures.Context(board, TestMaps.P0, before.DeployLimit), [BatchFixtures.P("G5")]).Confirmed);
+
+        Assert.Equal(new RelicControl(RelicControlKind.Controlled, TestMaps.P0), ledger.ControlOf(TestMaps.At("G5")));
+        Assert.Equal(7, before.RevealCount);
+        Assert.Equal(8, ledger.SnapshotFor(TestMaps.P0, board, 0, 2).RevealCount);
+    }
+
+    [Fact]
     public void 先手玩家夺走后手信物()
     {
         // 设计文档 §5.1：后手 P1 上一大回合控制探勘 E7（E8 唯一覆盖）。本大回合先手 P0 先行动：落 E6 使 E7 争议。
@@ -158,6 +179,25 @@ public class 效果快照在小回合开始时生成Tests
 
         Assert.All(typeof(EffectSnapshot).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public),
             f => Assert.True(f.IsInitOnly, $"字段 {f.Name} 非只读"));
+    }
+
+    [Fact]
+    public void 快照值相等含驿站来源与工坊标记()
+    {
+        // more-pieces-relics tasks 2.4：快照是值对象，驿站来源与工坊标记参与值相等与哈希——只差其中一项的两份快照不相等；逐项相同则相等且哈希相同。
+        EffectSnapshot Make(int relayBonus, bool workshop) => new(
+            TestMaps.P0, 3, 5 + relayBonus, 3, 5, 3, System.Collections.Immutable.ImmutableSortedDictionary<PieceType, int>.Empty, 1,
+            System.Collections.Immutable.ImmutableSortedDictionary<Coord, int>.Empty.Add(TestMaps.At("C3"), relayBonus), workshop);
+
+        Assert.Equal(Make(1, true), Make(1, true));
+        Assert.Equal(Make(1, true).GetHashCode(), Make(1, true).GetHashCode());
+        Assert.NotEqual(Make(1, true), Make(1, false));
+        EffectSnapshot a = new(TestMaps.P0, 3, 6, 3, 5, 3, System.Collections.Immutable.ImmutableSortedDictionary<PieceType, int>.Empty, 1,
+            System.Collections.Immutable.ImmutableSortedDictionary<Coord, int>.Empty.Add(TestMaps.At("C3"), 1));
+        EffectSnapshot b = new(TestMaps.P0, 3, 6, 3, 5, 3, System.Collections.Immutable.ImmutableSortedDictionary<PieceType, int>.Empty, 1,
+            System.Collections.Immutable.ImmutableSortedDictionary<Coord, int>.Empty.Add(TestMaps.At("E5"), 1));
+        Assert.NotEqual(a, b);   // 展示数相同、驿站来源不同
+        Assert.Equal(1, a.RelayBonus);
     }
 
     [Fact]

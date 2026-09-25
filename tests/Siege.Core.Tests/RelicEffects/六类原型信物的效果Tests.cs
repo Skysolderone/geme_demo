@@ -1,4 +1,6 @@
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
+using Siege.Core.Determinism;
 using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.RelicEffectsSpec;
@@ -92,5 +94,43 @@ public class 六类原型信物的效果Tests
         Assert.Equal(280, snapshot.AdjustedWeight(PieceType.Basic, 40));
         Assert.Equal(80, snapshot.AdjustedWeight(PieceType.Fortress, 20));
         Assert.Equal((5, 3, 5, 3), (snapshot.RevealCount, snapshot.FreePickCount, snapshot.TypeSlots, snapshot.DeployLimit));
+    }
+
+    [Fact]
+    public void 新四类信物没有高阶版()
+    {
+        // more-pieces-relics MODIFIED（D7）：连营、犄角、驿站、工坊只有基础版——构造强度 +2 即响亮失败；
+        // 用任意种子在任意地图上生成，每一枚新四类的强度都为 +1。v2、各内置图、种子 0–999，只跑信物生成、不跑对局。
+        foreach (RelicType fresh in new[] { RelicType.Encampment, RelicType.Pincer, RelicType.Relay, RelicType.Workshop })
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => new RelicContent(fresh, 2));
+            Assert.Equal(1, new RelicContent(fresh, 1).Magnitude);
+            Assert.False(RelicContent.HasAdvancedTier(fresh));
+        }
+
+        foreach (RelicType original in new[] { RelicType.Prospecting, RelicType.Conscription, RelicType.Depot, RelicType.Command, RelicType.Vanguard, RelicType.SchoolEmblem })
+        {
+            Assert.True(RelicContent.HasAdvancedTier(original));
+        }
+
+        int fresh4 = 0;
+        foreach (string mapId in MapCatalog.BuiltinIds)
+        {
+            MapData map = MapCatalog.Resolve(mapId);
+            for (ulong seed = 0; seed < 1000; seed++)
+            {
+                foreach (RelicPlacement p in RelicGenerator.Generate(map, new GameSeed(seed), ContentSet.V2).Placements)
+                {
+                    if (RelicWeights.IndexOf(p.Content.Type) >= 6)
+                    {
+                        fresh4++;
+                        Assert.Equal(1, p.Content.Magnitude);
+                    }
+                }
+            }
+        }
+
+        // 样本口径下界：新四类确实被生成过，不是"一枚都没有所以恒为 +1"。
+        Assert.True(fresh4 > 1000, $"新四类只生成了 {fresh4} 枚");
     }
 }

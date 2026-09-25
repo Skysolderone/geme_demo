@@ -84,6 +84,35 @@ public class 对局持久化Tests
         Assert.Equal(match.Serialize(), restored.Serialize());
     }
 
+    [Fact]
+    public void 弃赛快照的驿站来源与工坊标记随存档往返且旧存档缺省为空与否()
+    {
+        // more-pieces-relics tasks 2.4 / Migration 3：弃赛快照里的 EffectSnapshot 多了驿站来源与工坊标记——
+        // ① 新存档写出并往返（值相等含这两项）；② 旧存档（无这两个字段）恢复为"无驿站来源、工坊未生效"，其余字段照旧。
+        MatchFlow match = MatchFixtures.Started(relics: [("G4", RelicFixtures.Relay()), ("H4", RelicFixtures.Workshop()), ("J4", RelicFixtures.Command())])
+            .AtRound(7, MatchFixtures.All)
+            .Stones(MatchFixtures.P3, "G4", "H4", "J4");
+        match.Resign(MatchFixtures.P3);
+        EffectSnapshot saved = match.Resignations.Single().Effects;
+        Assert.Equal([(TestMaps.At("G4"), 2)], saved.RelaySources.Select(kv => (kv.Key, kv.Value)));
+        Assert.True(saved.WorkshopActive);
+        Assert.Equal(7, saved.RevealCount);
+
+        string json = match.Serialize();
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        Assert.Equal(saved, restored.Resignations.Single().Effects);
+        Assert.Equal(json, restored.Serialize());
+
+        System.Text.Json.Nodes.JsonObject root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+        System.Text.Json.Nodes.JsonObject resignation = root["Resignations"]![0]!.AsObject();
+        Assert.True(resignation.Remove("RelaySources"));
+        Assert.True(resignation.Remove("WorkshopActive"));
+        EffectSnapshot legacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, root.ToJsonString()).Resignations.Single().Effects;
+        Assert.Empty(legacy.RelaySources);
+        Assert.False(legacy.WorkshopActive);
+        Assert.Equal((7, 6), (legacy.RevealCount, legacy.DeployLimit));   // 第 7 大回合基础 5 + 军令 1
+    }
+
     private static string PowerText(MatchFlow m)
     {
         Scoring.PowerSnapshot s = m.Scoreboard.Latest!;

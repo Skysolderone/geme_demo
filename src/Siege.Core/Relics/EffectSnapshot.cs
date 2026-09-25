@@ -42,7 +42,9 @@ public sealed record EffectSnapshot
         int typeSlots,
         int deployLimit,
         ImmutableSortedDictionary<PieceType, int> emblemCounts,
-        int heldTypeCount)
+        int heldTypeCount,
+        ImmutableSortedDictionary<Coord, int>? relaySources = null,
+        bool workshopActive = false)
     {
         ArgumentNullException.ThrowIfNull(emblemCounts);
         if (heldTypeCount < 0)
@@ -58,6 +60,8 @@ public sealed record EffectSnapshot
         DeployLimit = deployLimit;
         EmblemCounts = emblemCounts;
         HeldTypeCount = heldTypeCount;
+        RelaySources = relaySources ?? ImmutableSortedDictionary<Coord, int>.Empty;
+        WorkshopActive = workshopActive;
     }
 
     /// <summary>快照所属玩家。</summary>
@@ -66,7 +70,7 @@ public sealed record EffectSnapshot
     /// <summary>生成时所在的大回合。</summary>
     public int MajorRound { get; }
 
-    /// <summary>征募展示数（默认 5，探勘 +）。</summary>
+    /// <summary>征募展示数（默认 5，探勘 +，驿站 +）。驿站的部分另见 <see cref="RelaySources"/>。</summary>
     public int RevealCount { get; }
 
     /// <summary>免费选取数（默认 3，征召 +）。</summary>
@@ -83,6 +87,21 @@ public sealed record EffectSnapshot
 
     /// <summary>快照生成时玩家持有的棋子类型数（由手牌层提供的输入，原样携带）。</summary>
     public int HeldTypeCount { get; }
+
+    /// <summary>
+    /// 驿站加成的逐枚来源（more-pieces-relics D4，relic-effects「驿站的展示数加成」）：受控驿站坐标 → 该枚的加成
+    /// （快照时该玩家受控信物总枚数 − 1，含其他驿站与先锋，每枚按 1 计）。已并入 <see cref="RevealCount"/>；没有驿站时为空。
+    /// </summary>
+    public ImmutableSortedDictionary<Coord, int> RelaySources { get; }
+
+    /// <summary>驿站加成合计（已含在 <see cref="RevealCount"/> 里）。</summary>
+    public int RelayBonus => RelaySources.Values.Sum();
+
+    /// <summary>
+    /// 工坊生效（more-pieces-relics D5）：快照时控制至少一枚工坊。本小回合匠人的格改造目标可隔一格；多枚与一枚相同，不叠加。
+    /// 本小回合新占领的工坊不改变它（快照是不可变值对象），下一小回合起生效。
+    /// </summary>
+    public bool WorkshopActive { get; }
 
     /// <summary>超限种数：持有类型数超出槽位的部分，0 即合法。大于 0 时征募流程在整类弃牌前不得进行。</summary>
     public int OverflowTypeCount => Math.Max(0, HeldTypeCount - TypeSlots);
@@ -114,7 +133,9 @@ public sealed record EffectSnapshot
         && TypeSlots == other.TypeSlots
         && DeployLimit == other.DeployLimit
         && HeldTypeCount == other.HeldTypeCount
-        && EmblemCounts.SequenceEqual(other.EmblemCounts);
+        && WorkshopActive == other.WorkshopActive
+        && EmblemCounts.SequenceEqual(other.EmblemCounts)
+        && RelaySources.SequenceEqual(other.RelaySources);
 
     public override int GetHashCode()
     {
@@ -126,10 +147,17 @@ public sealed record EffectSnapshot
         hash.Add(TypeSlots);
         hash.Add(DeployLimit);
         hash.Add(HeldTypeCount);
+        hash.Add(WorkshopActive);
         foreach ((PieceType piece, int count) in EmblemCounts)
         {
             hash.Add(piece);
             hash.Add(count);
+        }
+
+        foreach ((Coord relay, int bonus) in RelaySources)
+        {
+            hash.Add(relay);
+            hash.Add(bonus);
         }
 
         return hash.ToHashCode();

@@ -36,6 +36,12 @@ public sealed record BatchContext
     /// <summary>手牌库存：按棋子类型的数量映射。缺失的类型视为 0。</summary>
     public required IReadOnlyDictionary<PieceType, int> Stock { get; init; }
 
+    /// <summary>
+    /// 本小回合工坊是否生效（more-pieces-relics D5）：来自效果快照的 <c>WorkshopActive</c>，生效时匠人的格改造目标可隔一格。
+    /// 缺省 <c>false</c>——不经对局流程构造的上下文（单元测试、旧调用点）与改动前行为相同。
+    /// </summary>
+    public bool WorkshopActive { get; init; }
+
     /// <summary>某类型的库存数量，缺失视为 0。</summary>
     public int StockOf(PieceType type) => Stock.TryGetValue(type, out int count) ? count : 0;
 

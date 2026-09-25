@@ -165,7 +165,10 @@ public class 对局配置公开完整地图标识Tests
         static (string Relics, string Order, string Zones) Open()
         {
             // flag-contest：黄金选区钉在引入冒险概率之前，写死 p = 0。
-            MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FrontierMapV2.Id), new GameSeed(42), Four, MatchOptions.Immediate with { FlagRisk = 0 });
+            // more-pieces-relics 段 B（tasks 2.7，归因：信物分布）：信物黄金摘要是原六类的分布，新局缺省 v2 的千分制十类表使之整体改变；
+            // 本测试钉的是"地图生成器不与对局共享随机状态"，与内容集无关——写死 v1（= 改动前的生成），黄金值不重建。
+            MatchFlow match = MatchFlow.Create(
+                MapCatalog.Resolve(FrontierMapV2.Id), new GameSeed(42), Four, MatchOptions.Immediate with { FlagRisk = 0, ContentSet = ContentSet.V1 });
             var choices = match.PlantPrototype();
             return (match.Relics.Generation.Serialize(), string.Join(",", match.ActionOrder.Select(p => p.Value)), string.Join(",", choices.Select(c => c.Zone)));
         }

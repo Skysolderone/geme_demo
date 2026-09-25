@@ -34,9 +34,19 @@ public sealed class PowerScoreboard
     public MultiplierPeak? Peak { get; private set; }
 
     /// <summary>对当前盘面全量重算并替换 <see cref="Latest"/>；<paramref name="majorRound"/> 只用于倍率峰值遥测的轮次标记。</summary>
-    public PowerSnapshot Recalculate(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound)
+    public PowerSnapshot Recalculate(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound) =>
+        Track(PowerCalculator.Compute(board, roster), majorRound);
+
+    /// <summary>
+    /// 同 <see cref="Recalculate(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, int)"/>，并按 <paramref name="knownRelics"/> 读取计分信物
+    /// （more-pieces-relics D3）。正式对局的结算第 5 步、弃赛 / 大回合结束 / 恢复时的重算都走本重载，传真实信物内容。
+    /// </summary>
+    public PowerSnapshot Recalculate(
+        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound, IReadOnlyDictionary<Coord, Relics.RelicType> knownRelics) =>
+        Track(PowerCalculator.Compute(board, roster, knownRelics), majorRound);
+
+    private PowerSnapshot Track(PowerSnapshot snapshot, int majorRound)
     {
-        PowerSnapshot snapshot = PowerCalculator.Compute(board, roster);
         Latest = snapshot;
         Version++;
         TrackPeak(snapshot, majorRound);

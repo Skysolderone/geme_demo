@@ -79,7 +79,9 @@ public sealed partial class MatchFlow
     {
         ArgumentNullException.ThrowIfNull(map);
         GameBoard board = GameBoard.Load(map);
-        return Build(map, board, seed, players, RelicGenerator.Generate(map, seed), options ?? MatchOptions.Default);
+        options ??= MatchOptions.Default;
+        // more-pieces-relics D8：信物按本局内容集的权重表与徽记绑定集合生成（v1 与改动前逐格相同）。
+        return Build(map, board, seed, players, RelicGenerator.Generate(map, seed, options.ContentSet), options);
     }
 
     /// <summary>测试专用：跳过地图校验并使用手工指定的信物分布。</summary>
@@ -330,6 +332,7 @@ public sealed partial class MatchFlow
             DeployLimit = _snapshot!.DeployLimit,
             LegalRange = LegalRangeFor(player),
             Stock = hand.Entries.ToDictionary(kv => kv.Key, kv => kv.Value.Total),
+            WorkshopActive = _snapshot.WorkshopActive,
         };
         _batch = new StagedBatch(Board, context);
         SetStage(TurnStage.Deploy, player);
@@ -485,7 +488,8 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(context.Board, roster);
-        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound));
+        // more-pieces-relics D3：正式结算按真实信物内容读取计分信物（连营 / 犄角），控制在同一次计算里按结算后盘面现算。
+        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound, Relics.TrueContents()));
     }
 
     private void OnCheckEndConditions(SettlementContext context)
@@ -652,7 +656,7 @@ public sealed partial class MatchFlow
     {
         int completed = MajorRound;
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
-        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed);
+        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, Relics.TrueContents());
         MarkEstablishedPower(power);
         ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.ReadInitiativeBonuses(Board, roster);
         int active = ActiveCount;
@@ -702,7 +706,7 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(Board, roster);
-        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1)));
+        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1), Relics.TrueContents()));
     }
 
     /// <summary>流程事件的<b>唯一</b>发出点。</summary>

@@ -132,11 +132,14 @@ public class 改造合法性Tests
         Assert.Contains("林地", TerrainEditRules.Reject(board.Map, TestMaps.At("B2"), TerrainEdit.Burn(TestMaps.At("B3")))!);
     }
 
-    [Fact]
-    public void 拒绝理由与合法目标集合一致()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void 拒绝理由与合法目标集合一致(bool workshop)
     {
         // 守门：Reject 与 LegalTargets 是同一个判定的两个出口，口径 MUST NOT 分歧。
         // 穷举全盘每个落点 × 全盘每个格目标 × 全盘每一条几何边（不止以落点为端的那些，T-11 后外圈边必须进穷举）。
+        // more-pieces-relics 2.6：工坊标记是改造合法性的输入，两种取值各穷举一遍（工坊为真时隔一格的格目标也必须两边一致）。
         GameBoard board = Board();
 
         // 全盘所有几何相邻的边，外加若干"两端不相邻 / 出界"的坏边——Reject 必须逐条与集合一致。
@@ -158,7 +161,7 @@ public class 改造合法性Tests
         int legal = 0;
         foreach (Coord cell in board.AllCoords())
         {
-            var targets = TerrainEditRules.LegalTargets(board.Map, cell).ToHashSet();
+            var targets = TerrainEditRules.LegalTargets(board.Map, cell, workshop).ToHashSet();
             var candidates = new List<TerrainEdit>(edges);
             foreach (Coord n in board.AllCoords())
             {
@@ -169,8 +172,8 @@ public class 改造合法性Tests
             foreach (TerrainEdit edit in candidates)
             {
                 bool inSet = targets.Contains(edit);
-                Assert.Equal(inSet, TerrainEditRules.IsLegal(board.Map, cell, edit));
-                Assert.Equal(inSet, TerrainEditRules.Reject(board.Map, cell, edit) is null);
+                Assert.Equal(inSet, TerrainEditRules.IsLegal(board.Map, cell, edit, workshop));
+                Assert.Equal(inSet, TerrainEditRules.Reject(board.Map, cell, edit, workshop) is null);
                 legal += inSet ? 1 : 0;
             }
 
@@ -180,6 +183,113 @@ public class 改造合法性Tests
 
         // 样本口径下界：这盘面确实存在合法目标，不是"两边都恒为空"的假绿。
         Assert.True(legal > 0, "样本里一个合法目标都没有，这条守门什么都没证明。");
+
+        // 工坊为真时确实穷举到了隔一格的格目标（B4 → D4 深水，距离 2），否则"工坊一轮"与无工坊一轮没有区别。
+        Assert.Equal(workshop, TerrainEditRules.LegalTargets(board.Map, TestMaps.At("B4"), workshop).Contains(TerrainEdit.Bridge(TestMaps.At("D4"))));
+    }
+
+    // ---------- more-pieces-relics：工坊扩大格目标（terrain-edit「匠人落子即改造」新 Scenario） ----------
+
+    /// <summary>11×11 空盘，按用例放地表；上下文带本小回合的工坊标记。</summary>
+    private static (GameBoard Board, BatchContext Context) WorkshopScene(bool workshop, params (string Cell, Surface Surface)[] surfaces)
+    {
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: surfaces), size: 11);
+        return (board, BatchFixtures.Context(board, TestMaps.P0) with { WorkshopActive = workshop });
+    }
+
+    [Fact]
+    public void 工坊下隔一格搭桥()
+    {
+        // 规格 Scenario：工坊生效，匠人落在 F6，对未架桥深水 H6 搭桥，G6 是任意格——这里 G6 放一枚敌子（中间格的占用不限）→ 合法，结算后 H6 带桥。
+        (GameBoard board, BatchContext context) = WorkshopScene(true, ("H6", Surface.DeepWater));
+        board.Place("G6", TestMaps.P1);
+        Assert.Contains(TerrainEdit.Bridge(TestMaps.At("H6")), TerrainEditRules.LegalTargets(board.Map, TestMaps.At("F6"), workshop: true));
+
+        SettlementOutcome outcome = BatchFixtures.Driver(board).Confirm(context, [BatchFixtures.Artisan("F6", TerrainEdit.Bridge(TestMaps.At("H6")))]);
+
+        Assert.True(outcome.Confirmed, outcome.Failure?.Message);
+        Assert.True(board.Map.HasBridge(TestMaps.At("H6")));
+    }
+
+    [Fact]
+    public void 工坊下隔着深水烧林()
+    {
+        // 规格 Scenario：工坊生效，匠人落在 F6，F7 是未架桥深水，对林地 F8 烧林 → 合法，F8 结算后变为草地。
+        (GameBoard board, BatchContext context) = WorkshopScene(true, ("F7", Surface.DeepWater), ("F8", Surface.Forest));
+
+        SettlementOutcome outcome = BatchFixtures.Driver(board).Confirm(context, [BatchFixtures.Artisan("F6", TerrainEdit.Burn(TestMaps.At("F8")))]);
+
+        Assert.True(outcome.Confirmed, outcome.Failure?.Message);
+        Assert.Equal(Surface.Grass, board.Map.SurfaceAt(TestMaps.At("F8")));
+    }
+
+    [Fact]
+    public void 无工坊不得隔一格()
+    {
+        // 规格 Scenario：工坊未生效，匠人落在 F6，对深水 H6 搭桥 → 批次非法，原因指出该目标不相邻。
+        (GameBoard board, BatchContext context) = WorkshopScene(false, ("H6", Surface.DeepWater));
+
+        BatchFailure? failure = new StagedBatch(board, context).Stage(TestMaps.At("F6"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("H6")));
+
+        Assert.Equal(BatchFailureKind.TerrainEditIllegal, failure!.Kind);
+        Assert.Contains("不是几何四邻", failure.Message);
+        Assert.DoesNotContain(TerrainEdit.Bridge(TestMaps.At("H6")), TerrainEditRules.LegalTargets(board.Map, TestMaps.At("F6")));
+    }
+
+    [Theory]
+    [InlineData("G7")]
+    [InlineData("J6")]
+    [InlineData("F9")]
+    [InlineData("E8")]
+    public void 工坊不含斜向与更远的格(string target)
+    {
+        // 规格 Scenario：工坊生效，匠人落在 F6，对林地 G7（斜向）或 J6（直线距离 3）烧林 → 批次非法，原因指出超出工坊扩展后的范围。
+        // 另补 F9（纵向距离 3）与 E8（"日"字位，曼哈顿距离 3）——"隔一格"只是同行 / 同列距离恰为 2。
+        (GameBoard board, BatchContext context) = WorkshopScene(true, (target, Surface.Forest));
+
+        BatchFailure? failure = new StagedBatch(board, context).Stage(TestMaps.At("F6"), PieceType.Artisan, TerrainEdit.Burn(TestMaps.At(target)));
+
+        Assert.Equal(BatchFailureKind.TerrainEditIllegal, failure!.Kind);
+        Assert.Contains("超出工坊扩展后的范围", failure.Message);
+
+        // 格目标恰为四邻 4 格 + 直线距离 2 的 4 格（棋盘中央）：工坊生效时每个落点至多新增 4 个格目标。
+        GameBoard allForest = TestMaps.Blank(
+            TestMaps.Terrain(surfaces: [.. TestMaps.Blank(size: 11).AllCoords().Select(c => (c.ToNotation(), Surface.Forest))]), size: 11);
+        Coord[] cells = [.. TerrainEditRules.LegalTargets(allForest.Map, TestMaps.At("F6"), workshop: true)
+            .Where(e => e.Kind == TerrainEditKind.Burn).Select(e => e.Cell).Order()];
+        Assert.Equal(["D6", "E6", "F4", "F5", "F7", "F8", "G6", "H6"], cells.Order().Notations().Order());
+    }
+
+    [Fact]
+    public void 工坊不扩大边目标()
+    {
+        // 规格 Scenario：工坊生效，匠人落在 F6，指定 F8–F9 之间的边立栅 → 批次非法，原因指出该边两端都不是匠人落点的几何四邻格。
+        // 边目标仍是 16 条（与无工坊时同一集合）。
+        (GameBoard board, BatchContext context) = WorkshopScene(true);
+
+        BatchFailure? failure = new StagedBatch(board, context).Stage(
+            TestMaps.At("F6"), PieceType.Artisan, TerrainEdit.Fence(TestMaps.At("F8"), TestMaps.At("F9")));
+
+        Assert.Equal(BatchFailureKind.TerrainEditIllegal, failure!.Kind);
+        Assert.Contains("两端都不是匠人落点的几何四邻格", failure.Message);
+        Assert.Equal(
+            TerrainEditRules.LegalTargets(board.Map, TestMaps.At("F6")).Where(e => e.Kind == TerrainEditKind.Fence),
+            TerrainEditRules.LegalTargets(board.Map, TestMaps.At("F6"), workshop: true).Where(e => e.Kind == TerrainEditKind.Fence));
+        Assert.Equal(16, TerrainEditRules.LegalTargets(board.Map, TestMaps.At("F6"), workshop: true).Count(e => e.Kind == TerrainEditKind.Fence));
+    }
+
+    [Fact]
+    public void 新棋子不得改造()
+    {
+        // 规格 Scenario：给一枚旗手子指定改造目标 → 批次非法，原因指出只有匠人能改造（"其余九种棋子"：四种新棋子一并覆盖）。
+        GameBoard board = Forested();
+        foreach (PieceType type in new[] { PieceType.Bannerman, PieceType.Chain, PieceType.Sentry, PieceType.Boundary })
+        {
+            BatchFailure? failure = Batch(board).Stage(TestMaps.At("E4"), type, TerrainEdit.Burn(TestMaps.At("F4")));
+
+            Assert.Equal(BatchFailureKind.TerrainEditIllegal, failure!.Kind);
+            Assert.Contains("只有匠人能改造", failure.Message);
+        }
     }
 
     [Fact]

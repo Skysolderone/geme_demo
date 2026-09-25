@@ -11,22 +11,33 @@ public class 区域强度预算Tests
 {
     private static readonly MapData Map = FourPlayerBaseMap.Create();
 
-    /// <summary>在测试里独立复算：各出生区总稀有度（权重倒数 × 10000 取整，高阶 ×2）。</summary>
+    /// <summary>
+    /// more-pieces-relics 段 B：本类各用例的字面量（稀有度 222 / 2000、预算 600 / 690 / 780、不收敛图的稀有度集合）都出自 v1 的百分制表，
+    /// 生成改为按对局内容集取表后显式钉在 v1；v2 的千分制刻度另在 `稀有度按权重倒数计分且高阶两倍计` / `高风险区预算更高` 里补断言。
+    /// </summary>
+    private static readonly RelicGenerationOptions V1 = RelicGenerationOptions.Default with { ContentSet = ContentSet.V1 };
+
+    /// <summary>在测试里独立复算：各出生区总稀有度（权重倒数 × 刻度取整，高阶 ×2；刻度 v1 为 10000、v2 为 100000）。</summary>
     private static long[] ZoneRarities(RelicGenerationRecord record)
     {
         long[] sums = new long[Map.BirthZones.Length];
+        int scale = record.ContentSet == ContentSet.V1 ? 10000 : 100000;
         foreach (RelicPlacement p in record.Placements.Where(p => p.Spec.Zone == RelicZone.BirthZone))
         {
-            int weight = RelicWeights.WeightOf(RelicZone.BirthZone, p.Content.Type);
-            sums[Map.BirthZoneOf(p.Coord)!.Value] += 10000 / weight * p.Content.Magnitude;
+            int weight = RelicWeights.WeightOf(RelicZone.BirthZone, p.Content.Type, record.ContentSet);
+            sums[Map.BirthZoneOf(p.Coord)!.Value] += scale / weight * p.Content.Magnitude;
         }
 
         return sums;
     }
 
-    [Fact]
-    public void 出生区稀有度均衡()
+    [Theory]
+    [InlineData(ContentSet.V1)]
+    [InlineData(ContentSet.V2)]
+    public void 出生区稀有度均衡(ContentSet set)
     {
+        // more-pieces-relics 段 B：v1 / v2 各跑一遍（v2 稀有度刻度 100000，独立复算见 ZoneRarities）。
+        // tasks 2.3 实测 10000 个种子的未收敛率：标准图 v1 24.29% → v2 19.48%（其余内置图同向下降），未恶化。
         // 裁决记录 2：各出生区总稀有度与均值的偏差 ≤ 8%。对 500 个种子中标记为「已收敛」的生成结果逐个核验；
         // 同时断言收敛并非稀有事件（≥ 50% 的种子收敛），否则 8% 约束形同虚设。
         // 变异验证 M-G8：IsBalanced 的比较改为 `deviation * 1_000 > allowed`（容差放大 1000 倍）→ 红 1（本测试）；
@@ -34,7 +45,8 @@ public class 区域强度预算Tests
         int converged = 0;
         for (ulong seed = 0; seed < 500; seed++)
         {
-            RelicGenerationRecord record = RelicGenerator.Generate(Map, new GameSeed(seed));
+            RelicGenerationRecord record = RelicGenerator.Generate(Map, new GameSeed(seed), V1 with { ContentSet = set });
+            Assert.Equal(set, record.ContentSet);
             if (!record.Converged)
             {
                 continue;
@@ -61,7 +73,7 @@ public class 区域强度预算Tests
         // 生成必须在重试上限内返回：不死循环、不抛错、标记未收敛、保留权重抽取结果，且同样可复现。
         // 变异验证 M-G10：BalanceBirthZones 在超限时 throw → 红 1（本测试）；M-G11：去掉 `rerolls >= MaxRerolls` 的退出 → 本测试超时（用 5 秒守门）。
         MapData map = UnbalancedMap();
-        RelicGenerationOptions strict = RelicGenerationOptions.Default with { RarityTolerancePermille = 0, MaxRerolls = 50 };
+        RelicGenerationOptions strict = V1 with { RarityTolerancePermille = 0, MaxRerolls = 50 };
         var timer = System.Diagnostics.Stopwatch.StartNew();
 
         RelicGenerationRecord record = RelicGenerator.Generate(map, new GameSeed(3), strict);
@@ -136,8 +148,8 @@ public class 区域强度预算Tests
             return (same, zones);
         }
 
-        (int penalized, int penalizedZones) = Count(RelicGenerationOptions.Default);
-        (int free, int freeZones) = Count(RelicGenerationOptions.Default with { SameTypePenaltyPermille = 0 });
+        (int penalized, int penalizedZones) = Count(V1);
+        (int free, int freeZones) = Count(V1 with { SameTypePenaltyPermille = 0 });
 
         Assert.True(penalized > 0, "惩罚不得把同类型组合完全禁止");
         long penalizedPermille = penalized * 1000L / penalizedZones;
@@ -171,14 +183,25 @@ public class 区域强度预算Tests
         // design.md D2 / 规格「稀有度 SHALL 按类型权重的倒数计分，效果 +2 的高阶信物按 2 倍计」。
         // 出生区：先锋 5% → 2000，徽记 45% → 222；公共区：军令 15% → 666，+2 军令 → 1332，双倍徽记（30%）→ 666。
         // 变异验证 K-6（trellis-check）：RarityOf 去掉 `* content.Magnitude` → 红 2（本测试、高风险区预算更高）。此前该变异 0 红。
-        Assert.Equal(2000, RelicWeights.RarityOf(RelicZone.BirthZone, RelicFixtures.Vanguard()));
-        Assert.Equal(222, RelicWeights.RarityOf(RelicZone.BirthZone, RelicFixtures.Emblem(PieceType.Basic)));
-        Assert.Equal(666, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Command()));
-        Assert.Equal(1332, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Command(2)));
-        Assert.Equal(666, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Emblem(PieceType.Basic, count: 2)));
+        Assert.Equal(2000, RelicWeights.RarityOf(RelicZone.BirthZone, RelicFixtures.Vanguard(), ContentSet.V1));
+        Assert.Equal(222, RelicWeights.RarityOf(RelicZone.BirthZone, RelicFixtures.Emblem(PieceType.Basic), ContentSet.V1));
+        Assert.Equal(666, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Command(), ContentSet.V1));
+        Assert.Equal(1332, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Command(2), ContentSet.V1));
+        Assert.Equal(666, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Emblem(PieceType.Basic, count: 2), ContentSet.V1));
         Assert.Equal(
-            2 * RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Depot()),
-            RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Depot(2)));
+            2 * RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Depot(), ContentSet.V1),
+            RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Depot(2), ContentSet.V1));
+
+        // more-pieces-relics D6：v2 千分制、刻度 100000——先锋 40‰ → 2500，徽记 360‰ → 277，新四类出生区 50‰ → 2000、公共区 70‰ → 1428；
+        // 军令公共区 108‰ → 925，+2 军令 → 1850。v1 刻度保持 10000（上面各值与改动前逐位相同）。
+        Assert.Equal(10000, RelicWeights.RarityScaleOf(ContentSet.V1));
+        Assert.Equal(100000, RelicWeights.RarityScaleOf(ContentSet.V2));
+        Assert.Equal(2500, RelicWeights.RarityOf(RelicZone.BirthZone, RelicFixtures.Vanguard(), ContentSet.V2));
+        Assert.Equal(277, RelicWeights.RarityOf(RelicZone.BirthZone, RelicFixtures.Emblem(PieceType.Basic), ContentSet.V2));
+        Assert.Equal(2000, RelicWeights.RarityOf(RelicZone.BirthZone, new RelicContent(RelicType.Workshop, 1), ContentSet.V2));
+        Assert.Equal(1428, RelicWeights.RarityOf(RelicZone.Contested, new RelicContent(RelicType.Encampment, 1), ContentSet.V2));
+        Assert.Equal(925, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Command(), ContentSet.V2));
+        Assert.Equal(1850, RelicWeights.RarityOf(RelicZone.Contested, RelicFixtures.Command(2), ContentSet.V2));
     }
 
     [Fact]
@@ -187,13 +210,19 @@ public class 区域强度预算Tests
         // 预算 = 单格期望稀有度：出生区不升级为 600，Standard 档按 15% 升级为 690，High 档（中央 / 咽喉旁）按 30% 升级为 780，逐级严格更高。
         // 交叉检查：基准图 High 档信物格都在公共区；2000 个种子下 High 档格的平均稀有度严格高于出生区格。
         // 变异验证 M-G14：BudgetOf 对 High 返回 baseline（不乘升级率）→ 红 1（本测试）。
-        RelicGenerationOptions options = RelicGenerationOptions.Default;
+        RelicGenerationOptions options = V1;
         Assert.True(options.BudgetOf(BudgetTier.High) > options.BudgetOf(BudgetTier.Birth));
         Assert.True(options.BudgetOf(BudgetTier.Standard) > options.BudgetOf(BudgetTier.Birth));
         Assert.Equal(600, options.BudgetOf(BudgetTier.Birth));
         Assert.Equal(690, options.BudgetOf(BudgetTier.Standard));
         Assert.Equal(780, options.BudgetOf(BudgetTier.High));
         Assert.True(options.BudgetOf(BudgetTier.High) > options.BudgetOf(BudgetTier.Standard));
+
+        // more-pieces-relics D6 / D7：v2 每类的"权重占比 × 稀有度"仍为 100，但升级只作用于原六类——预算 = 600 × (1 + 升级率) + 400。
+        RelicGenerationOptions v2 = RelicGenerationOptions.Default with { ContentSet = ContentSet.V2 };
+        Assert.Equal(1000, v2.BudgetOf(BudgetTier.Birth));
+        Assert.Equal(1090, v2.BudgetOf(BudgetTier.Standard));
+        Assert.Equal(1180, v2.BudgetOf(BudgetTier.High));
 
         Coord[] highCells = [.. Map.RelicCells.Where(kv => kv.Value.Budget == BudgetTier.High).Select(kv => kv.Key)];
         Assert.NotEmpty(highCells);
@@ -205,16 +234,16 @@ public class 区域强度预算Tests
         long birthCount = 0;
         for (ulong seed = 0; seed < 2000; seed++)
         {
-            foreach (RelicPlacement p in RelicGenerator.Generate(Map, new GameSeed(seed)).Placements)
+            foreach (RelicPlacement p in RelicGenerator.Generate(Map, new GameSeed(seed), options).Placements)
             {
                 if (p.Spec.Budget == BudgetTier.High)
                 {
-                    highRarity += p.Rarity;
+                    highRarity += p.RarityIn(ContentSet.V1);
                     highCount++;
                 }
                 else if (p.Spec.Budget == BudgetTier.Birth)
                 {
-                    birthRarity += p.Rarity;
+                    birthRarity += p.RarityIn(ContentSet.V1);
                     birthCount++;
                 }
             }

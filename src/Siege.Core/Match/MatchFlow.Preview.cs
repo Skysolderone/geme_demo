@@ -65,7 +65,7 @@ public sealed partial class MatchFlow
             }
 
             result.Add(new PlayerStructure(player, status, new StructureParameters(
-                Parameter(EffectSnapshot.BaseRevealCount, snapshot.RevealCount, RelicType.Prospecting, granted),
+                Parameter(EffectSnapshot.BaseRevealCount, snapshot.RevealCount, RelicType.Prospecting, granted, snapshot.RelaySources),
                 Parameter(EffectSnapshot.BaseFreePickCount, snapshot.FreePickCount, RelicType.Conscription, granted),
                 Parameter(EffectSnapshot.BaseTypeSlots, snapshot.TypeSlots, RelicType.Depot, granted),
                 Parameter(EffectSnapshot.BaseDeployLimitFor(snapshot.MajorRound), snapshot.DeployLimit, RelicType.Command, granted))));
@@ -74,13 +74,18 @@ public sealed partial class MatchFlow
         return result.MoveToImmutable();
     }
 
-    /// <summary>来源只有两类（restore-go-core-rules D7）：<paramref name="baseValue"/>（默认值 / 分阶段基础值）与各枚信物。</summary>
+    /// <summary>
+    /// 来源只有两类（restore-go-core-rules D7）：<paramref name="baseValue"/>（默认值 / 分阶段基础值）与各枚信物。
+    /// 展示数另含驿站（more-pieces-relics D4）：逐枚列出，每枚的加成直接取快照的 <see cref="EffectSnapshot.RelaySources"/>（唯一实现在账本），不在此重算。
+    /// </summary>
     private static StructureParameter Parameter(
-        int baseValue, int value, RelicType type, ImmutableArray<RelicPublicState> granted)
+        int baseValue, int value, RelicType type, ImmutableArray<RelicPublicState> granted,
+        ImmutableSortedDictionary<Coord, int>? relaySources = null)
     {
         ImmutableArray<ParameterSource> sources =
         [
             .. granted.Where(s => s.Content!.Value.Type == type).Select(s => new ParameterSource(s.Coord, type, s.Content!.Value.Magnitude)),
+            .. (relaySources ?? ImmutableSortedDictionary<Coord, int>.Empty).Select(kv => new ParameterSource(kv.Key, RelicType.Relay, kv.Value)),
         ];
         int relics = sources.Sum(s => s.Magnitude);
         if (baseValue + relics != value)
@@ -94,7 +99,8 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 顺序预测（tactical-ui D7）：假设本大回合此刻结束，按 <see cref="EndMajorRound"/> 的同一组输入生成先手值明细与下一轮顺序。
-    /// 势力走 <see cref="PowerCalculator.Compute(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus})"/>（不经势力榜，避免推进版本号与峰值遥测），
+    /// 势力走 <see cref="PowerCalculator.Compute(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, IReadOnlyDictionary{Coord, RelicType})"/>
+    /// （不经势力榜，避免推进版本号与峰值遥测；与 <see cref="EndMajorRound"/> 同一份真实信物内容——已结算盘面上受控信物必已揭示，不泄露内容），
     /// 先手修正在账本副本上读取，公式与同值链走 <see cref="InitiativeOrder"/>。
     /// </summary>
     private InitiativeReport? ForecastInitiative(IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
@@ -106,7 +112,7 @@ public sealed partial class MatchFlow
         }
 
         int completed = MajorRound;
-        PowerSnapshot power = PowerCalculator.Compute(Board, roster);
+        PowerSnapshot power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
         ImmutableSortedDictionary<PlayerId, int> bonuses =
             RelicLedger.Restore(Relics.Generation, Relics.ExportState()).ReadInitiativeBonuses(Board, roster);
 

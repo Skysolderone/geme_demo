@@ -102,7 +102,13 @@ public static class PieceEffects
     /// 经气边相邻的同玩家棋子必然同串，因此只需检查所有者与类型，无需再做棋串判定。
     /// 方向步进从 <see cref="GameBoard.LibertyNeighbors"/> 的结果中挑选，不在此处手写邻居偏移或地形过滤。
     /// </remarks>
-    public static int LineBonus(GameBoard board, Group group)
+    public static int LineBonus(GameBoard board, Group group) => LineBonus(board, group, encampments: 0);
+
+    /// <summary>
+    /// 同 <see cref="LineBonus(GameBoard, Group)"/>，另计连营（more-pieces-relics D3）：棋串所有者控制 <paramref name="encampments"/> 枚连营时，
+    /// 每条长度 <c>L ≥ 2</c> 的线再加 <c>encampments × L</c>，即每线 <c>L × (L − 1) + k × L</c>。额外加值属于连珠来源、随之被倍率放大。
+    /// </summary>
+    public static int LineBonus(GameBoard board, Group group, int encampments)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(group);
@@ -115,8 +121,8 @@ public static class PieceEffects
                 continue;
             }
 
-            bonus += RunBonus(board, stone, group.Owner, dx: 1, dy: 0);
-            bonus += RunBonus(board, stone, group.Owner, dx: 0, dy: 1);
+            bonus += RunBonus(board, stone, group.Owner, dx: 1, dy: 0, encampments);
+            bonus += RunBonus(board, stone, group.Owner, dx: 0, dy: 1, encampments);
         }
 
         return bonus;
@@ -126,7 +132,16 @@ public static class PieceEffects
     /// 协同子位置加值：棋串中每枚协同子按"该棋串中除协同子以外的棋子类型种数"每种 2 点，
     /// 即 <c>协同子数量 × 其他类型数 × 2</c>。纯协同子棋串为 0（裁决记录 2）。
     /// </summary>
-    public static int SynergyBonus(GameBoard board, Group group)
+    public static int SynergyBonus(GameBoard board, Group group) => SynergyBonus(board, group, pincers: 0);
+
+    /// <summary>协同子每种其他类型的基础加值。</summary>
+    public const int SynergyPerType = 2;
+
+    /// <summary>
+    /// 同 <see cref="SynergyBonus(GameBoard, Group)"/>，另计犄角（more-pieces-relics D3）：棋串所有者控制 <paramref name="pincers"/> 枚犄角时，
+    /// 每种类型的加值由 2 变为 <c>2 + k</c>，即 <c>协同子数量 × 其他类型数 × (2 + k)</c>。额外加值属于协同来源、随之被倍率放大。
+    /// </summary>
+    public static int SynergyBonus(GameBoard board, Group group, int pincers)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(group);
@@ -146,7 +161,7 @@ public static class PieceEffects
             }
         }
 
-        return synergyCount * otherTypes.Count * 2;
+        return synergyCount * otherTypes.Count * (SynergyPerType + pincers);
     }
 
     /// <summary>
@@ -317,7 +332,7 @@ public static class PieceEffects
     }
 
     /// <summary>从 <paramref name="start"/> 沿 (dx, dy) 方向的极长连珠线；若 <paramref name="start"/> 不是该线起点则返回 0，避免子区间重复计分。</summary>
-    private static int RunBonus(GameBoard board, Coord start, PlayerId owner, int dx, int dy)
+    private static int RunBonus(GameBoard board, Coord start, PlayerId owner, int dx, int dy, int encampments)
     {
         if (Step(board, start, -dx, -dy) is { } previous && IsLineStoneOf(board, previous, owner))
         {
@@ -332,7 +347,7 @@ public static class PieceEffects
             current = next;
         }
 
-        return length >= 2 ? length * (length - 1) : 0;
+        return length >= 2 ? (length * (length - 1)) + (encampments * length) : 0;
     }
 
     /// <summary>在气边邻居中挑出位于 (dx, dy) 方向的那一格；越界或无气边（崖壁 / 深水 / 栅栏）则为 <c>null</c>。</summary>

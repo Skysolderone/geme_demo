@@ -140,3 +140,157 @@
 5. 表现层占位：`GroupPowerView`（`PreviewPresentation`）只有连珠 / 协同 / 高地三项字段，位置加值文案也只列三项（总数含新来源，三项之和对不上）；`势力层领地与高地Tests` 的恒等式因此仍是三项（视图没有新字段），随势力层七项拆分（段 D 4.2）一并改。Godot 四种新轮廓共用一枚方柱。属段 C / D。
 6. `默认评价权重的校准Tests.校准后截断率达标` 读缺省配置，现在跑在 v2 上（与 flag-contest 对缺省 p 的处理一致：钉校准值本身的测试读默认值），段 A 下仍绿；若应与内容集脱钩可写死 v1。
 7. `.trellis/spec/core/boundaries.md` 单一实现表尚未登记四项新加值（`PieceEffects.Banner/Chain/Sentry/BoundaryBonus`，只经 `LibertyNeighbors` / 传入的 `CoverageMap`）与 `ContentSets.PieceTypesOf`（内容集类型清单唯一来源），是否在本 change 收尾时补。
+
+## 段 B：四类信物、生成权重与工坊（tasks 2.1–2.7）
+
+基线（段 A 提交 854d371）：`dotnet test -c Release` 通过 1484 / 跳过 5 / 失败 0。段末：通过 1526 / 跳过 5 / 失败 0（新增 42 条用例，含 Theory 行）。
+
+### 改动文件
+
+- Core 规则：`Relics/RelicContent.cs`（`RelicType` 末尾追加 `Encampment, Pincer, Relay, Workshop`；`HasAdvancedTier` 是"哪些类型可升级"的唯一定义，构造拒绝新四类强度 2）、
+  `Relics/RelicWeights.cs`（重写：`Order` 十类、`OrderOf / TableOf(zone, set) / TotalOf / RarityScaleOf / WeightOf / RarityOf` 全部按内容集，删掉不带内容集的旧重载与 `RarityScale` 常量）、
+  `Relics/RelicGenerationOptions.cs`（`ContentSet`，缺省 v2；`BudgetOf` 按内容集、升级只计原六类）、`Relics/RelicGenerationRecord.cs`（记录 `ContentSet` 进值相等；`RelicPlacement.Rarity` 改为 `RarityIn(set)`，记录上 `RarityOf(placement)`；`Serialize()` 不变）、
+  `Relics/RelicGenerator.cs`（`Generate(map, seed, ContentSet)`；`Draw` 按内容集取表、新四类不消费升级抽签、徽记绑定 `ContentSets.PieceTypesOf(set)`；重抽与惩罚按内容集的稀有度刻度）、
+  `Relics/EffectSnapshot.cs`（`RelaySources`（坐标 → 该枚加成）/ `RelayBonus` / `WorkshopActive`，进值相等与哈希；构造多两个可选参数）、
+  `Relics/RelicLedger.cs`（快照：驿站、工坊；`TrueContents()`；控制判定抽走）、`Relics/RelicControl.cs`（`RelicControl.Of`：控制判定唯一实现，账本第 5 步与势力计算共用）、
+  `Scoring/ScoringRelicCounts.cs`（新）、`Scoring/PieceEffects.cs`（`LineBonus(…, encampments)` / `SynergyBonus(…, pincers)`、`SynergyPerType`）、`Scoring/PowerCalculator.cs`（`Compute(board, roster, knownRelics)`、`Evaluate(…, ScoringRelicCounts)`）、`Scoring/PowerScoreboard.cs`（带已知内容的重算重载）、
+  `Board/TerrainEditRules.cs`（`LegalTargets / IsLegal / Reject` 带工坊参数的重载，旧签名 = 否；格目标候选 `CellTargets` 一处给出）、`Batch/BatchContext.cs`（`WorkshopActive`）、`Batch/BatchRehearsal.cs`、`Preview/BatchPreview.cs`、
+  `Match/MatchFlow.cs`（建局按内容集生成信物；三处势力榜重算传 `Relics.TrueContents()`；`EnterDeploy` 从快照带工坊）、`Match/MatchFlow.Persistence.cs`（恢复按存档内容集生成信物；弃赛快照存驿站来源与工坊）、`Match/MatchFlow.Preview.cs`（展示数来源逐枚列驿站；顺序预测传真实内容）。
+- 最小占位（穷举 switch 缺项即抛，v2 局一揭示新信物就崩；均标注属段 C）：`Ai/RelicEstimate.cs`（`ValueOf` 补 D10 初值 驿站 6 / 工坊 4 / 连营 3 / 犄角 3；先验表与期望暂钉 v1 百分制表，AI 行为与改动前相同）、`Siege.Presentation/Text/Labels.cs`（`Relic` 补四个名称）。终端 `BoardRenderer.RelicName / RelicLetter` 有兜底不抛，未动。
+
+### 2.1 测试（先红）
+
+新增 Requirement 类（`tests/Siege.Core.Tests/RelicEffects/`）：`驿站的展示数加成Tests`（6）、`工坊扩大匠人的格改造范围Tests`（3，其中「控制工坊即标记生效」另走一遍真实对局流程：快照 → 部署上下文 → 隔一格暂放）、`计分信物连营与犄角Tests`（7 + 2.5 的性质测试 1）。
+既有类追加 MODIFIED 的新 Scenario：`六类原型信物的效果Tests.新四类信物没有高阶版`、`效果快照在小回合开始时生成Tests.驿站按快照时的控制计数`、`同类信物叠加且无统一硬上限Tests.工坊不按数值相加`；
+`出生区信物权重Tests`：`新四类在出生区各约5`、`内容集v1保持旧表`、`徽记可绑定匠人`（改 Theory v1 / v2）、`权重分布收敛`（改 v2 表）；`公共争夺区信物权重与高阶升级Tests`：`新四类不升级`、`新四类在公共区各约7`、`v2随机消费顺序与规格一致`、`高阶比例`（改 Theory）；
+`改造合法性Tests`：`工坊下隔一格搭桥`、`工坊下隔着深水烧林`、`无工坊不得隔一格`、`工坊不含斜向与更远的格`（Theory：G7 / J6 / F9 / E8）、`工坊不扩大边目标`、`新棋子不得改造`；`私人征募面板Tests.驿站生效`；
+`改造在预演中的呈现Tests.工坊下列出隔一格目标`（batch-preview 该 Scenario 是 2.6"批次预演按快照传入"的验证，放在本段；同 Requirement 的两条计分信物预演 Scenario 留段 C 3.5）。
+2.4 追加（值对象 / 存档字段）：`效果快照在小回合开始时生成Tests.快照值相等含驿站来源与工坊标记`、`对局持久化Tests.弃赛快照的驿站来源与工坊标记随存档往返且旧存档缺省为空与否`——写于 2.4、在实现之后，由变异 MB-S6 / MB-S7 证其会红。
+
+先红记录：先落 API 骨架（枚举四值、`RelicWeights` 按内容集的表、`EffectSnapshot` 两个新属性恒空 / 否、`BatchContext.WorkshopActive`、`TerrainEditRules` 工坊重载忽略参数、`PowerCalculator.Compute(…, knownRelics)` 计数恒 0、`HasAdvancedTier` 恒真、生成器 `Draw` 强制按 v1 取表），红都是断言红：
+全量红 36 = 本段新增 / 改写的 35 条 + `总势力Tests.领地计分直接取空格归属结果`（OwnershipOf 读者名单，见改写表）。骨架态就绿的：`无工坊不得隔一格`、`工坊不扩大边目标`、`新棋子不得改造`、`争议不生效`、`内容集v1保持旧表`、`高阶比例(V1)`、`徽记可绑定匠人(V1)`、`拒绝理由与合法目标集合一致(False)`——描述的是不变量或 v1 行为，分别由 MB-W4 / MB-W3 / MB-W8 / MB-P2 / MB-G2（`内容集v1保持旧表`、`徽记可绑定匠人(V1)`）/ MB-W4（`拒绝理由…(False)`）证其会红；`高阶比例(V1)` 沿用改写前已记录的 M-G6 / M-G7。
+`工坊扩大匠人的格改造范围Tests.控制工坊即标记生效` 里"真实对局流程"那一段（快照 → 部署上下文 → 隔一格暂放）同样是实现之后补的，由 MB-W6 证其会红。
+
+### 2.2 生成（D6 / D7 / D8）
+
+- v1 = 原百分制两表 + 刻度 10000 + 徽记六种，v2 = 千分制两表 + 刻度 100000（= 100 × 表合计）+ 徽记十种；升级判定与消费只对原六类（`HasAdvancedTier`）。
+- 建局 `MatchFlow.Create` 按 `MatchOptions.ContentSet` 生成；`MatchFlow.Restore` **先按存档内容集（缺字段按 v1）再生成**（原先在解析内容集之前就按缺省生成）。
+- v1 逐格一致：动生成器之前用临时测试抓取各内置图种子 0–499 的 `Serialize()` 拼接 SHA-256 与未收敛局数（改动前代码，已删临时测试），`内容集v1保持旧表` 钉住这 4 个黄金值。
+- 分布（标准图 v5，10000 种子只跑生成；第一阶段 MaxRerolls = 0，单位 0.01%）：
+
+| 分区 | 内容集 | 徽记 / 探勘 / 兵站 / 征召 / 军令 / 先锋 / 连营 / 犄角 / 驿站 / 工坊 | 期望 |
+|---|---|---|---|
+| 出生区 | v1 | 45.11 / 19.88 / 15.14 / 7.92 / 7.00 / 4.92 / – | 45 / 20 / 15 / 8 / 7 / 5 |
+| 出生区 | v2 | 35.82 / 16.01 / 12.17 / 6.22 / 5.47 / 4.06 / 5.21 / 5.07 / 4.97 / 4.97 | 36 / 16 / 12 / 6.4 / 5.6 / 4 / 5 × 4 |
+| 公共区 | v1 | 29.95 / 15.20 / 10.09 / 14.94 / 14.81 / 14.98 / – | 30 / 15 / 10 / 15 / 15 / 15 |
+| 公共区 | v2 | 21.38 / 11.04 / 7.05 / 10.76 / 10.82 / 10.92 / 6.98 / 7.10 / 6.97 / 6.93 | 21.6 / 10.8 / 7.2 / 10.8 × 3 / 7 × 4 |
+
+  公共区原六类升级率：v1 17.9%、v2 17.6%（该图 4 Standard + 1 High，期望 18%）；新四类升级 0。测试口径（合成 4:2 图 / 标准图、容差 ±5‰–±10‰）见各用例注释。
+
+### 2.3 出生区预算收敛（10000 个种子只跑生成，临时测试，已删）
+
+| 地图 | v1 未收敛 | v1 平均重抽 | v2 未收敛 | v2 平均重抽 |
+|---|---|---|---|---|
+| siege-4p-base-v5 | 24.29% | 57.83 | 19.48% | 51.39 |
+| siege-2p-base-v1 | 19.50% | 43.36 | 12.82% | 29.93 |
+| siege-3p-base-v1 | 22.34% | 50.58 | 16.07% | 39.69 |
+| siege-frontier-v2 | 52.25% | 118.09 | 33.27% | 87.84 |
+
+v2 全部四张图都**下降**，未恶化，不提负责人。第二阶段校正后的出生区终态分布（标准图 v2）：徽记 27.9 / 探勘 22.4 / 兵站 16.8 / 征召 10.7 / 军令 6.0 / 先锋 1.2 / 新四类各约 3.7%（v1：42.4 / 30.9 / 15.5 / 6.3 / 3.8 / 0.9）——校正把高稀有度类型挤出出生区，新四类（稀有度 2000）同样被压低，与既有机制一致，只报告。
+`区域强度预算Tests.出生区稀有度均衡` 改为 v1 / v2 各跑一遍（v2 收敛率满足该用例的 ≥ 50% 下界）。
+
+### 2.4 效果快照（D4 / D5）
+
+- 驿站：`BuildSnapshot` 数出本玩家 `GrantsEffectTo` 的全部信物（含先锋、其他驿站，每枚按 1 计），每枚驿站加 `总数 − 1`，逐枚记入 `RelaySources` 并并入 `RevealCount`；来源拆分（`PublishSupplement`）直接取 `RelaySources`，不重算，一致性抛出照常把关。只控制驿站本身时来源列一条 +0（见待决 4）。
+- 工坊：受控即置 `WorkshopActive`，不叠加。连营 / 犄角在快照里 `break`（计分信物不进快照）。
+- 弃赛快照存档：`ResignationSaveData.RelaySources`（列表）/ `WorkshopActive`（可空），缺字段 → 空 / 否。
+
+### 2.5 计分信物（D3）
+
+- `PowerCalculator.Compute(board, roster, knownRelics)`：对已知内容里的连营 / 犄角逐格用 `RelicControl.Of`（与账本同一份）按本次覆盖表与名册判定控制，只计 `GrantsEffectTo`（参赛中且控制）；连营并入 `LineBonus`（每线 `+k × L`）、犄角并入 `SynergyBonus`（每种 `2 + k`），与其余位置加值一起被倍率放大。旧签名 = 无计分信物。
+- 正式结算（结算第 5 步、大回合结束、弃赛 / 恢复重算）与顺序预测传 `Relics.TrueContents()`。预演、AI（`BatchPreview` / `BatchEvaluator`）与终端仍走旧签名，属段 C 3.3 / 3.5（见待决 3）。
+- 性质测试：v2、标准图种子 0–149 的生成 + 种子驱动随机盘面（十种类型、四名所有者，1/3 密度），结算（揭示 + 控制）后"真实内容"与"已揭示内容"两种输入的势力明细逐项相同；样本下界：≥ 8 个盘面的势力确实受计分信物影响（种子 0–59 实测 6 个，故取 150 个种子）。
+
+### 2.6 工坊（D5）
+
+- `TerrainEditRules.CellTargets`：几何四邻 ∪（工坊）同行 / 同列距离 2 的棋盘内格；`LegalTargets` 与 `Reject` 共用。边目标仍按几何四邻枚举。工坊为真时越界的格目标报"超出工坊扩展后的范围"，为假时仍报原文案"不是几何四邻"。
+- 批次层：`BatchContext.WorkshopActive` ← `EnterDeploy` 取本小回合快照；`BatchRehearsal` 第 1 步与 `BatchPreview` 的改造目标枚举都传它。AI 的 `HeuristicTurnController.EditOptions` / K 预筛回退仍走无工坊旧签名（段 C 3.3）。
+- 守门 `拒绝理由与合法目标集合一致` 改 Theory，工坊真 / 假各穷举一遍，并断言工坊一轮确实穷举到隔一格目标。
+
+### 2.7 v2 依赖走法的期望（归因）
+
+本段改动后全量只有两条既有测试因 v2 分叉，均为"信物分布"一类，且二者的黄金值本身就是**引入新信物之前**的分布、测试钉的是随机子流互不扰动（与内容集无关），故写死 v1、黄金值不重建：
+`原型插旗替代路径Tests.选区不扰动其他随机`（种子 42 标准图的逐格分布）、`对局配置公开完整地图标识Tests.地图种子不扰动对局随机`（边疆图信物摘要）。
+其余依赖 AI 走法的黄金哈希 / 样本在段 A 已写死 v1（探针 P1 / P3），本段没有新的分叉；未挑种子。探针 PB-2（`ContentSets.Default` V2 → V1，全量跑）红 9，与段 A P2 的 9 条逐条相同（全是按设计断言 v2 缺省的用例），**本段新增 / 改写的用例与未改写的既有用例在 v1 下 0 红**。
+
+### 变异验证
+
+脚本沿用段 A 的 `mut.py`（二进制读写、按文件行尾归一锚点、`count == 1`、finally 还原并逐字节比对、`os.utime`、`DOTNET_CLI_UI_LANGUAGE=en`），每条先 `dotnet build siege.sln -c Release` 再全量 `dotnet test -c Release --no-build`。29 条变异 + 1 个探针全部编译通过、restored = True；跑完后对全部未提交文件做 SHA-256 比对，与跑前 0 差异。
+
+| 变异 | 改动 | 红 | 红的用例 |
+|---|---|---|---|
+| MB-G1 | 新四类照常消费升级抽签（结果丢弃） | 1 | v2随机消费顺序与规格一致 |
+| MB-G2 | 徽记绑定改回 `Enum.GetValues`（v1 也 10 选 1） | 8 | 内容集v1保持旧表、徽记可绑定匠人(V1)、v1逐步相同、两条黄金哈希、选区 / 地图种子不扰动、批量执行并汇总 |
+| MB-G3 | 稀有度刻度恒 100000（v1 也按千分制刻度） | 2 | 稀有度按权重倒数计分且高阶两倍计、高风险区预算更高 |
+| MB-G4 | 恢复存档时 v1 存档按 v2 生成 | 1 | 旧存档照常读取 |
+| MB-G5 | 建局不按对局内容集生成（恒 v2） | 10 | v1逐步相同、旧存档照常读取、两条黄金哈希、选区 / 地图种子不扰动、揭示时间可查、地形可离线重建、类型计数与明细自洽、批量执行并汇总 |
+| MB-G6 | 新四类允许强度 +2 | 1 | 新四类信物没有高阶版 |
+| MB-S1 | 驿站不计其他驿站（`总数 − 驿站数`） | 1 | 两枚驿站互相计入 |
+| MB-S2 | 驿站计入争议信物 | 1 | 争议信物不计 |
+| MB-S3 | 高阶信物按强度计枚数 | 1 | 高阶信物按1枚计 |
+| MB-S4 | 工坊当小回合生效（`WorkshopActive` 改为回读账本的活视图） | 2 | 新占工坊下一小回合生效、弃赛快照往返 |
+| MB-S5 | 驿站加成不并入展示数 | 7 | 驿站 4 条、驿站按快照时的控制计数、驿站生效（征募面板）、弃赛快照往返 |
+| MB-S6 | 弃赛快照存档漏写驿站来源 | 1 | 弃赛快照的驿站来源与工坊标记随存档往返… |
+| MB-S7 | 快照值相等漏比驿站来源 | 1 | 快照值相等含驿站来源与工坊标记 |
+| MB-S8 | 结构参数来源不列驿站 | 1 | 与探勘相加（一致性校验抛出） |
+| MB-P1 | 连营 / 犄角走快照（每名玩家小回合开始时冻结计数，[ThreadStatic] 探针） | 6 | 失去控制立即失效 + 5 条纯计算用例（探针为线程静态、同线程前一局的冻结值泄漏过来——附带红，不作守门依据） |
+| MB-P2 | 争议仍生效 | 2 | 争议不生效、失去控制立即失效 |
+| MB-P3 | 弃赛者享受（封锁也计） | 1 | 弃赛者不因计分信物得分 |
+| MB-P4 | 连营加值挪到倍率之外 | 5 | 连营加值被倍率放大、连营加成、两枚连营、失去控制立即失效、弃赛者不因计分信物得分 |
+| MB-P5 | 结算第 5 步不传真实内容 | 1 | 失去控制立即失效 |
+| MB-P6 | 犄角不生效 | 2 | 犄角加成、已结算盘面上真实内容与已揭示内容结果相同 |
+| M-A2r | **段 A M-A2 的真正变异**：旗手只数"已知信物内容"里的格（预演 / AI 传的是已揭示内容） | 6 | 旗手「不看揭示与控制」「同一信物格分别为两枚旗手子计分」「站在信物格上并邻接另一信物格」、七来源可溯源、新来源一并被倍率放大、千例随机局面预演与结算一致 |
+| MB-W1 | 工坊格目标含斜角 | 4 | 工坊不含斜向与更远的格 ×4 |
+| MB-W2 | 工坊扩到距离 3 | 6 | 工坊不含斜向与更远的格 ×4、工坊不按数值相加、多枚工坊不叠加 |
+| MB-W3 | 工坊扩了边目标（枚举与拒绝两侧） | 1 | 工坊不扩大边目标 |
+| MB-W4 | 无工坊也能隔一格 | 7 | 无工坊不得隔一格、拒绝理由与合法目标集合一致(False)、控制工坊即标记生效、新占工坊下一小回合生效、工坊下列出隔一格目标、v1逐步相同、V4 黄金哈希（AI 改造枚举变多） |
+| MB-W5 | 批次预演第 1 步不传工坊 | 9 | 工坊下隔一格搭桥 / 隔着深水烧林、工坊不含斜向 ×4、三条工坊效果用例 |
+| MB-W6 | `EnterDeploy` 不从快照带工坊 | 1 | 控制工坊即标记生效（对局流程段） |
+| MB-W7 | 富预演的改造目标不传工坊 | 1 | 工坊下列出隔一格目标 |
+| MB-W8 | 新四种棋子可携带改造 | 1 | 新棋子不得改造 |
+| PB-2（探针） | `ContentSets.Default` V2 → V1 | 9 | 与段 A P2 相同的 9 条 v2 缺省断言 |
+
+### 既有测试改写（逐条理由）
+
+| 测试 | 改写 | 理由 |
+|---|---|---|
+| `区域强度预算Tests`（全类） | 生成钉 v1（`V1` 选项）；`RarityOf / WeightOf` 显式传 v1；`.Rarity` → `RarityIn(V1)`；另补 v2 刻度（2500 / 277 / 2000 / 1428 / 925 / 1850）与 v2 预算（1000 / 1090 / 1180）断言；`出生区稀有度均衡` 改 Theory v1 / v2 | 字面量（222 / 2000、600 / 690 / 780、不收敛图的稀有度集合）出自 v1 百分制表；API 改为按内容集（删了不带内容集的重载） |
+| `出生区信物权重Tests.权重分布收敛` | 期望改为 v2 千分制十类表；v1 旧表断言原样移到 `内容集v1保持旧表` | 规格 MODIFIED；缺省 v2 |
+| `出生区信物权重Tests.徽记可绑定匠人` | Fact → Theory（v2 十种 / v1 六种），v2 种子 6000、容差 ±15‰ | 规格 MODIFIED（段 A 待决 3 按"v2 十种显式列表、v1 原六种"落地） |
+| `公共争夺区…Tests.高阶比例` | Fact → Theory（v2 / v1），升级率只统计原六类 | 规格 MODIFIED："统计公共区信物中属于原有六类的部分" |
+| `公共争夺区…Tests.基准图上公共信物升级率落在宽口径` | 升级率分母改为原六类枚数 | 同上（新四类不升级会把总体率稀释到约 13%） |
+| `公共争夺区…Tests.高档升级率严格高于标准档` | 生成钉 v1 | 钉的是两档升级率本身；v2 下新四类稀释两档，区间是按"全部可升级"写的 |
+| `总势力Tests.领地计分直接取空格归属结果` | `OwnershipOf(` 名单加 `RelicControl.cs`；`OwnershipKind.Exclusive` 名单 `RelicLedger.cs` → `RelicControl.cs` | 控制判定从账本私有方法抽成 `RelicControl.Of`，供势力计算读取计分信物共用（避免第二实现）；名单要求"新读者改表并写明理由" |
+| `改造合法性Tests.拒绝理由与合法目标集合一致` | Fact → Theory（工坊真 / 假），加工坊轮确实含隔一格目标的下界 | tasks 2.6：守门扩到工坊为真 |
+| `旗手子的位置加值Tests.不看揭示与控制` | 追加一条"只知 F7 不知 G6 的已知内容"输入下仍为 6 | 势力计算多了已知信物内容输入；让段 A 的 M-A2 真正变异有落点 |
+| `原型插旗替代路径Tests.选区不扰动其他随机`、`对局配置公开完整地图标识Tests.地图种子不扰动对局随机` | 写死 v1 | 见 2.7 |
+
+### 段末自验
+
+- `dotnet build siege.sln`：0 警告 0 错误；`dotnet build src/godot/Siege.Godot.csproj`：0 警告 0 错误。
+- `dotnet test -c Release`：通过 1526 / 跳过 5 / 失败 0。
+- `openspec validate more-pieces-relics --strict`：valid。
+- 未跑批量对局、未跑 200 局与慢测试；10000 种子统计只跑信物生成；全程同一时间只有一个 dotnet。
+
+### 待决（交主会话 / 段 C–D）
+
+1. 最小占位：`RelicEstimate.ValueOf` 已含 D10 初值（驿站 6 / 工坊 4 / 连营 3 / 犄角 3），先验表与期望仍钉 v1 百分制（v2 局的未揭示期望因此仍是 5 / 6，不是 D10 的 5 / 5）；段 C 3.2 改按内容集取表与表合计归一，届时"ValueOf 新四类"那部分已绿，先红只能落在期望值上。`Labels.Relic` 四个名称同属占位。
+2. AI 改造枚举（`HeuristicTurnController.EditOptions` 与预筛回退）仍用无工坊旧签名：v2 局里 AI 控制工坊也不会隔一格改造（合法集合的子集，不违规）。段 C 3.3。
+3. 预演（`BatchPreviewBuilder`）、AI 评价（`BatchEvaluator`）、终端预演仍用无计分信物的 `Compute`：段 C 之前，v2 局里只要有人控制已揭示的连营 / 犄角，预演势力就低于结算（不只是"首次揭示那一批"）。段 C 3.3 / 3.5。
+   新暴露面：`RelicLedger.TrueContents()` 是 public、返回全部（含未揭示）内容，`MatchFlow.Relics` 也是 public，`Siege.Core/Ai` 同程序集可以调到它——D3 明令预演 / AI 只用已揭示内容。建议段 C 3.3 接 AI 时把 `TrueContents(` 加进 `正式对战AI的信息边界Tests` 的 `Siege.Core/Ai` 禁 token 表（本段未加）。
+4. 只控制驿站本身时，结构参数来源里列一条"驿站 +0"（规格"逐枚列出"的字面做法）；手牌面板文案是否隐藏 +0 由段 C / D 定。
+5. `RelicGenerationRecord.Serialize()` 首行不含内容集（为保 v1 导出文本逐字节不变）；离线只凭首行复现 v2 分布需另读日志首部的内容集。是否在首行追加 `;content=` 请定。
+6. `BalanceAnalyzer.Selection` 的信物类型列表仍是 `Enum.GetNames<RelicType>()`（与段 A 留下的棋子列表同样），v1 报告的选择率段落会多出四个 0 行；按内容集展开属段 C 3.7。
+7. 段 A 待决 6（`校准后截断率达标_种子1至200` 读缺省配置）现在跑在 v2 且会揭示新信物；该用例是 200 局慢测试、默认跳过，本段未跑、未改。
+8. `.trellis/spec/core/boundaries.md` 单一实现表可补：`RelicControl.Of`（信物控制判定）、`RelicContent.HasAdvancedTier`（可升级类型）、`TerrainEditRules.CellTargets`（含工坊的格目标候选）、`RelicLedger.BuildSnapshot` 的驿站加成——与段 A 待决 7 一并在收尾时定。
+9. 段 A 待决 2（生成不区分内容集）、待决 3 的徽记部分已在本段落地。

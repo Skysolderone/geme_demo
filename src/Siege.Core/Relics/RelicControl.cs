@@ -1,4 +1,5 @@
 using Siege.Core.Board;
+using Siege.Core.Scoring;
 
 namespace Siege.Core.Relics;
 
@@ -27,6 +28,43 @@ public readonly record struct RelicControl(RelicControlKind Kind, PlayerId? Hold
 
     /// <summary>该信物的效果是否应进入 <paramref name="player"/> 的快照：只有「参赛中且控制」才算。</summary>
     public bool GrantsEffectTo(PlayerId player) => Kind == RelicControlKind.Controlled && Holder == player;
+
+    /// <summary>
+    /// 控制判定的<b>唯一实现</b>：读 <see cref="CoverageMap.OwnershipOf"/>（已把「直接占据优先于唯一覆盖」合成一个查询），
+    /// 按名册把弃赛 / 出局者的控制标为封锁。<paramref name="roster"/> 为 <c>null</c> 时盘面上的全部玩家视为参赛中（单元测试便利）。
+    /// 信物账本的第 5 步重算与势力计算读取计分信物（more-pieces-relics D3）共用这一份，MUST NOT 各写一份。
+    /// </summary>
+    public static RelicControl Of(CoverageMap coverage, Coord coord, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster)
+    {
+        ArgumentNullException.ThrowIfNull(coverage);
+        CellOwnership ownership = coverage.OwnershipOf(coord);
+        return ownership.Kind switch
+        {
+            OwnershipKind.Occupied or OwnershipKind.Exclusive => Resolve(ownership.Owner!.Value, roster, coord),
+            OwnershipKind.Contested => Contested,
+            OwnershipKind.Neutral => Uncontrolled,
+            OwnershipKind.Obstacle => throw new SiegeRuleException($"信物格 {coord.ToNotation()} 是障碍格：地图数据不一致。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(coord), ownership.Kind, "未知归属。"),
+        };
+    }
+
+    private static RelicControl Resolve(PlayerId owner, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster, Coord coord)
+    {
+        if (roster is null)
+        {
+            return new RelicControl(RelicControlKind.Controlled, owner);
+        }
+
+        if (!roster.TryGetValue(owner, out PlayerStatus status))
+        {
+            throw new SiegeRuleException(
+                $"盘面上出现名册外的玩家 {owner}（控制信物格 {coord.ToNotation()}）：信物控制的名册必须列出盘面上的每一名玩家，包括已弃赛与已出局者。");
+        }
+
+        return status == PlayerStatus.Active
+            ? new RelicControl(RelicControlKind.Controlled, owner)
+            : new RelicControl(RelicControlKind.Blocked, owner);
+    }
 
     public override string ToString() => Holder is { } h ? $"{Kind}({h})" : Kind.ToString();
 }

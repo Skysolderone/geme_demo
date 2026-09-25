@@ -48,6 +48,13 @@ public sealed class RelicLedger
     /// <summary>某格的公开状态；不是信物格时抛出。</summary>
     public RelicPublicState PublicStateOf(Coord coord) => Require(coord).ToPublic();
 
+    /// <summary>
+    /// 全部信物的<b>真实</b>内容类型（坐标 → 类型，字典序）：正式结算的势力计算用它读取计分信物（more-pieces-relics D3）。
+    /// 只供流程层的正式结算与测试使用；预演与 AI 只能用批次开始前已揭示的公开内容（<see cref="PublicStates"/>）。
+    /// </summary>
+    public ImmutableSortedDictionary<Coord, RelicType> TrueContents() =>
+        _relics.Values.ToImmutableSortedDictionary(r => r.Coord, r => r.Content.Type);
+
     /// <summary>全部信物的公开状态，字典序。</summary>
     public ImmutableArray<RelicPublicState> PublicStates() => [.. _relics.Values.Select(r => r.ToPublic())];
 
@@ -207,46 +214,25 @@ public sealed class RelicLedger
         return bonuses.ToImmutable();
     }
 
-    /// <summary>控制判定的唯一实现：读 <see cref="CoverageMap.OwnershipOf"/>，按名册把弃赛 / 出局者的控制标为封锁。</summary>
+    /// <summary>重算全部信物的控制归属：逐格调用控制判定的唯一实现 <see cref="RelicControl.Of"/>。</summary>
     private void RecalculateCore(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster)
     {
         CoverageMap coverage = CoverageMap.Compute(board);
         foreach (RelicState relic in _relics.Values)
         {
-            CellOwnership ownership = coverage.OwnershipOf(relic.Coord);
-            relic.Control = ownership.Kind switch
-            {
-                OwnershipKind.Occupied or OwnershipKind.Exclusive => Resolve(ownership.Owner!.Value, roster, relic.Coord),
-                OwnershipKind.Contested => RelicControl.Contested,
-                OwnershipKind.Neutral => RelicControl.Uncontrolled,
-                OwnershipKind.Obstacle => throw new SiegeRuleException($"信物格 {relic.Coord.ToNotation()} 是障碍格：地图数据不一致。"),
-                _ => throw new ArgumentOutOfRangeException(nameof(ownership), ownership.Kind, "未知归属。"),
-            };
+            relic.Control = RelicControl.Of(coverage, relic.Coord, roster);
         }
-    }
-
-    private static RelicControl Resolve(PlayerId owner, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster, Coord coord)
-    {
-        if (roster is null)
-        {
-            return new RelicControl(RelicControlKind.Controlled, owner);
-        }
-
-        if (!roster.TryGetValue(owner, out PlayerStatus status))
-        {
-            throw new SiegeRuleException(
-                $"盘面上出现名册外的玩家 {owner}（控制信物格 {coord.ToNotation()}）：信物控制的名册必须列出盘面上的每一名玩家，包括已弃赛与已出局者。");
-        }
-
-        return status == PlayerStatus.Active
-            ? new RelicControl(RelicControlKind.Controlled, owner)
-            : new RelicControl(RelicControlKind.Blocked, owner);
     }
 
     /// <summary>
     /// 按当前控制状态汇总非先锋信物。同类直接相加，无任何硬上限。
     /// 输入只有信物控制与当前大回合（restore-go-core-rules D7）：展示数 / 选取数 = 默认值 + 信物，部署上限 = 分阶段基础值 + 军令。
     /// </summary>
+    /// <remarks>
+    /// more-pieces-relics：驿站（D4）是"驿站加成"的唯一实现——每枚受控驿站加「受控信物总枚数 − 1」（总枚数含先锋与其他驿站，每枚按 1 计，
+    /// 只数 <see cref="RelicControl.GrantsEffectTo"/> 的，争议 / 无人控制 / 封锁都不计）；工坊（D5）只置一个布尔标记，多枚不叠加。
+    /// 连营 / 犄角是计分信物，不进快照（在势力计算时按当前控制读取）。
+    /// </remarks>
     private EffectSnapshot BuildSnapshot(PlayerId player, int heldTypeCount, int majorRound)
     {
         int reveal = EffectSnapshot.BaseRevealCount;
@@ -254,6 +240,9 @@ public sealed class RelicLedger
         int slots = EffectSnapshot.BaseTypeSlots;
         int deploy = EffectSnapshot.BaseDeployLimitFor(majorRound);
         var emblems = new SortedDictionary<PieceType, int>();
+        var relays = new List<Coord>();
+        int controlled = 0;
+        bool workshop = false;
 
         foreach (RelicState relic in _relics.Values)
         {
@@ -261,6 +250,8 @@ public sealed class RelicLedger
             {
                 continue;
             }
+
+            controlled++;
 
             RelicContent content = relic.Content;
             switch (content.Type)
@@ -284,12 +275,27 @@ public sealed class RelicLedger
                 case RelicType.Vanguard:
                     // 先锋不进小回合快照：它在大回合结束时由 ReadInitiativeBonuses 另行读取。
                     break;
+                case RelicType.Relay:
+                    relays.Add(relic.Coord);
+                    break;
+                case RelicType.Workshop:
+                    workshop = true;
+                    break;
+                case RelicType.Encampment:
+                case RelicType.Pincer:
+                    // 计分信物不进快照：势力计算时按当前控制读取（PowerCalculator，D3）。
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(content), content.Type, "未知信物类型。");
             }
         }
 
-        var snapshot = new EffectSnapshot(player, majorRound, reveal, freePick, slots, deploy, emblems.ToImmutableSortedDictionary(), heldTypeCount);
+        // 驿站：每枚计除自身以外的全部受控信物（含其他驿站与先锋），逐枚列出来源并并入展示数。
+        ImmutableSortedDictionary<Coord, int> relaySources = relays.ToImmutableSortedDictionary(c => c, _ => controlled - 1);
+        reveal += relaySources.Values.Sum();
+
+        var snapshot = new EffectSnapshot(
+            player, majorRound, reveal, freePick, slots, deploy, emblems.ToImmutableSortedDictionary(), heldTypeCount, relaySources, workshop);
         if (DeployLimitPeak is null || snapshot.DeployLimit > DeployLimitPeak.DeployLimit)
         {
             DeployLimitPeak = new DeployLimitPeak(snapshot.DeployLimit, majorRound, player);

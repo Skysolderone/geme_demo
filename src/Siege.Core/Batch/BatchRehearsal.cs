@@ -100,7 +100,7 @@ public static class BatchRehearsal
             }
 
             // 合法性唯一实现；按批次开始前的地形判定（本批的改造还没应用到 board.Map 上）。
-            if (TerrainEditRules.Reject(board.Map, c, edit) is { } reason)
+            if (TerrainEditRules.Reject(board.Map, c, edit, context.WorkshopActive) is { } reason)
             {
                 return BatchFailure.IllegalEdit(c, edit, reason);
             }

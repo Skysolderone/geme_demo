@@ -22,6 +22,20 @@ public enum RelicType
 
     /// <summary>流派徽记：提高绑定棋子类型的征募权重。</summary>
     SchoolEmblem,
+
+    // more-pieces-relics D9：以下四类只在末尾追加（存档可能按整数写枚举），都没有 +2 版本（relic-effects「六类原型信物的效果」）。
+
+    /// <summary>连营（计分信物）：持有者每条长度 L ≥ 2 的连珠线额外 +L 位置加值。势力计算时按当前控制读取，不进快照。</summary>
+    Encampment,
+
+    /// <summary>犄角（计分信物）：持有者协同子每种类型的加值 +1。势力计算时按当前控制读取，不进快照。</summary>
+    Pincer,
+
+    /// <summary>驿站：持有者每控制一枚其他信物，征募展示数 +1（小回合开始的效果快照读取）。</summary>
+    Relay,
+
+    /// <summary>工坊：持有者匠人的格改造目标可隔一格（快照读取，不叠加）。</summary>
+    Workshop,
 }
 
 /// <summary>
@@ -40,6 +54,11 @@ public readonly record struct RelicContent
             throw new ArgumentOutOfRangeException(nameof(magnitude), magnitude, "信物强度只有 +1 与 +2 两档。");
         }
 
+        if (magnitude == 2 && !HasAdvancedTier(type))
+        {
+            throw new ArgumentOutOfRangeException(nameof(magnitude), magnitude, $"{type} 没有高阶版，强度只能为 +1（more-pieces-relics D7）。");
+        }
+
         if (type == RelicType.SchoolEmblem && emblemPiece is null)
         {
             throw new ArgumentException("流派徽记 MUST 绑定一种具体棋子类型。", nameof(emblemPiece));
@@ -54,6 +73,17 @@ public readonly record struct RelicContent
         Magnitude = magnitude;
         EmblemPiece = emblemPiece;
     }
+
+    /// <summary>
+    /// 该类信物是否有高阶版（+2 / 双倍徽记）：原有六类有，连营、犄角、驿站、工坊没有（more-pieces-relics D7）。
+    /// 生成器的升级判定与本构造的强度校验都读这里，是"哪些类型可升级"的唯一定义。
+    /// </summary>
+    public static bool HasAdvancedTier(RelicType type) => type switch
+    {
+        RelicType.Prospecting or RelicType.Conscription or RelicType.Depot or RelicType.Command or RelicType.Vanguard or RelicType.SchoolEmblem => true,
+        RelicType.Encampment or RelicType.Pincer or RelicType.Relay or RelicType.Workshop => false,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知信物类型。"),
+    };
 
     /// <summary>信物类型。</summary>
     public RelicType Type { get; }

@@ -124,7 +124,9 @@ public class 原型插旗替代路径Tests
             "C11 BirthZone/Birth SchoolEmblemx1(Basic)", "L11 BirthZone/Birth SchoolEmblemx1(Artisan)", "B12 BirthZone/Birth SchoolEmblemx1(Basic)",
             "M12 BirthZone/Birth SchoolEmblemx1(Fortress)",
         ];
-        MatchFlow match = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(42), MatchFixtures.All, NoRisk);
+        // more-pieces-relics 段 B（tasks 2.7，归因：信物分布）：黄金值是引入新信物之前的原六类分布；新局缺省内容集 v2 改用千分制十类表，
+        // 同种子的分布整体改变。本测试钉的是"选区不扰动 relic-gen / setup 子流"，与内容集无关——写死 v1（= 改动前的生成），黄金值不重建。
+        MatchFlow match = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(42), MatchFixtures.All, NoRisk with { ContentSet = ContentSet.V1 });
 
         match.PlantPrototype();
 
