@@ -145,7 +145,7 @@ public static class BatchPreviewBuilder
                 context.DeployLimit, [], [], [], [], editOptions);
         }
 
-        ImmutableArray<CapturedGroup> captures = GroupCaptures(board, rehearsal.Captures);
+        ImmutableArray<CapturedGroup> captures = GroupCaptures(board, projected, rehearsal.Captures);
 
         // 计分信物（more-pieces-relics D3 / batch-preview「计分信物与新棋子的预演」）：只用批次开始前已揭示的公开内容，
         // 本批将首次揭示的信物不计入任何玩家的预演势力（其内容只显示为"将揭示"）；预演与正式结算的差异只来自它。
@@ -173,8 +173,16 @@ public static class BatchPreviewBuilder
             context.DeployLimit, captures, own, changes, willReveal, editOptions);
     }
 
-    /// <summary>把平铺的提子集合按正式盘面上的棋串分组。放置己方棋子不改变敌方棋串结构，且提子总是整串，故正式盘面上的棋串即被提棋串。</summary>
-    private static ImmutableArray<CapturedGroup> GroupCaptures(GameBoard board, ImmutableArray<CapturedStone> captures)
+    /// <summary>
+    /// 把平铺的提子集合按<b>提子那一刻</b>的棋串分组：被提的总是整串，而提子发生在本批改造之后（§6.3 第 3 步先于第 4 步），
+    /// 所以按改造后的气边（<paramref name="projected"/> 的地形）把同一玩家的提子连成块，每一块就是一条被提棋串。
+    /// </summary>
+    /// <remarks>
+    /// 原先按批次开始前的正式盘面取棋串（"放置己方棋子不改变敌方棋串结构"）：匠人立栅之后这条前提不再成立——
+    /// 本批的栅栏可以把一条敌串切成两半、只提其中被围的一半，按旧棋串分组就会抛"预计提子不是整串"（more-pieces-relics 段 D 在 v2 自动演示里撞到）。
+    /// 一致性核对保留：每一块都必须落在正式盘面上同一玩家的同一条棋串里（改造只会切开棋串、不会连起棋串）。
+    /// </remarks>
+    private static ImmutableArray<CapturedGroup> GroupCaptures(GameBoard board, GameBoard projected, ImmutableArray<CapturedStone> captures)
     {
         var remaining = new SortedDictionary<Coord, CapturedStone>();
         foreach (CapturedStone stone in captures)
@@ -186,20 +194,30 @@ public static class BatchPreviewBuilder
         while (remaining.Count > 0)
         {
             Coord first = remaining.Keys.First();
-            Group group = board.GroupAt(first)
+            Group before = board.GroupAt(first)
                 ?? throw new SiegeRuleException($"预计提子 {first.ToNotation()} 在正式盘面上为空：预演与盘面不一致。");
-            ImmutableArray<CapturedStone>.Builder stones = ImmutableArray.CreateBuilder<CapturedStone>(group.Size);
-            foreach (Coord c in group.Stones)
+            remaining.Remove(first, out CapturedStone seed);
+            var stones = new List<CapturedStone> { seed };
+            var frontier = new Stack<Coord>([first]);
+            while (frontier.Count > 0)
             {
-                if (!remaining.Remove(c, out CapturedStone stone))
+                foreach (Coord n in projected.LibertyNeighbors(frontier.Pop()))
                 {
-                    throw new SiegeRuleException($"预计提子不是整串：{group} 中的 {c.ToNotation()} 不在提子集合里。");
+                    if (remaining.TryGetValue(n, out CapturedStone next) && next.Owner == seed.Owner)
+                    {
+                        remaining.Remove(n);
+                        stones.Add(next);
+                        frontier.Push(n);
+                    }
                 }
-
-                stones.Add(stone);
             }
 
-            groups.Add(new CapturedGroup(group.Owner, stones.MoveToImmutable()));
+            if (before.Owner != seed.Owner || stones.Any(s => !before.Stones.Contains(s.Coord)))
+            {
+                throw new SiegeRuleException($"预计提子不在正式盘面的同一条棋串里：{before} 与 {string.Join(",", stones.Select(s => s.Coord.ToNotation()))}。");
+            }
+
+            groups.Add(new CapturedGroup(seed.Owner, [.. stones.OrderBy(s => s.Coord)]));
         }
 
         return groups.ToImmutable();

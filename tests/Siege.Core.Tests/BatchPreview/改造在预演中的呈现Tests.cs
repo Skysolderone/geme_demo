@@ -214,4 +214,54 @@ public class 改造在预演中的呈现Tests
         Assert.DoesNotContain(artisan.Targets, t => t.IsChosen);
         Assert.Equal(far.Edge, Assert.Single(shown.EdgeHighlights, h => h.Kind == HighlightKind.ChosenEdit).Edge);
     }
+
+    [Fact]
+    public void 立栅切开的敌串只列被提的那一半()
+    {
+        // batch-preview 第 4 项「按应用改造后的地形计算」：本批立的栅栏把一条敌串切成两半、只有一半被提时，预演的预计提子按改造后的棋串分组。
+        // more-pieces-relics 段 D 在 v2 自动演示里撞到：分组原先按批次开始前的盘面取棋串（"放置己方棋子不改变敌方棋串结构"——立栅之后不再成立），
+        // 被提的半串对不上整串，抛"预计提子不是整串"，图形版每帧重建预演都抛。
+        // 盘面：P1 的 E5–F5 两子成串；P0 已有 F6、G5。P0 暂放匠人 F4 并立栅 E5–F5（F5 在 F4 的十字五格区域内，E5–F5 是外轮廓边）。
+        //   改造后 F5 的四邻：E5 被栅栏隔断、F4 / F6 / G5 为 P0 → 无气被提；E5 仍有 D5 / E4 / E6 三口气，留在盘上。
+        // 先红：改动前本用例抛 SiegeRuleException（预计提子不是整串：P1[E5,F5] 中的 E5 不在提子集合里）。
+        GameBoard board = TestMaps.Blank(size: 9)
+            .Place("E5", P1).Place("F5", P1)
+            .Place("F6", P0).Place("G5", P0);
+        TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("F5"));
+
+        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0), [BatchFixtures.Artisan("F4", fence)],
+            new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
+
+        Assert.True(preview.IsLegal);
+        CapturedGroup captured = Assert.Single(preview.Captures);
+        Assert.Equal(P1, captured.Owner);
+        Assert.Equal(["F5"], captured.Stones.Select(s => s.Coord).Notations());
+
+        // 与正式结算同源：批次预演第 4 步（BatchRehearsal）给出的平铺提子集合也只有 F5，E5 留在预演盘面上。
+        RehearsalResult rehearsal = BatchRehearsal.Rehearse(board, BatchFixtures.Context(board, P0), [BatchFixtures.Artisan("F4", fence)], new BoardHistory());
+        Assert.Equal(["F5"], rehearsal.Captures.Select(s => s.Coord).Notations());
+        Assert.Equal(new Occupant(P1, PieceType.Basic), rehearsal.ProjectedBoard![TestMaps.At("E5")].Occupant);
+    }
+
+    [Fact]
+    public void 立栅切开且两半都被提时分列两串()
+    {
+        // 同上一条：分组必须按改造后的气边，而不只是"不抛"。P1 的 E5–F5 两子成串，P0 已围住 D5 / E4 / E6 / F6 / G5，只剩 F4 一口气。
+        // P0 暂放匠人 F4 并立栅 E5–F5：改造后 E5、F5 各成一串且都无气 → 两条被提棋串 [E5]、[F5]，不是一条 [E5, F5]。
+        // （不立栅时 F4 落下同样提走整串，那是一条两子棋串——对照断言。）
+        GameBoard board = TestMaps.Blank(size: 9)
+            .Place("E5", P1).Place("F5", P1)
+            .Place("D5", P0).Place("E4", P0).Place("E6", P0).Place("F6", P0).Place("G5", P0);
+
+        Core.Preview.BatchPreview fenced = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0),
+            [BatchFixtures.Artisan("F4", TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("F5")))],
+            new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
+        Assert.True(fenced.IsLegal);
+        Assert.Equal([["E5"], ["F5"]], fenced.Captures.Select(g => g.Stones.Select(s => s.Coord).Notations().ToArray()).OrderBy(g => g[0], StringComparer.Ordinal));
+
+        Core.Preview.BatchPreview plain = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0),
+            [new Placement(TestMaps.At("F4"), PieceType.Artisan, null)],
+            new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
+        Assert.Equal(["E5", "F5"], Assert.Single(plain.Captures).Stones.Select(s => s.Coord).Notations());
+    }
 }
