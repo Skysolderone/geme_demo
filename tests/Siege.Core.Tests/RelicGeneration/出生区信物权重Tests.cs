@@ -76,7 +76,9 @@ public class 出生区信物权重Tests
             }
         }
 
-        Assert.Equal(Enum.GetValues<PieceType>().Order(), counts.Keys);
+        // more-pieces-relics 段 A 改写：PieceType 末尾追加四种新棋子后，徽记绑定集合改为原六种的显式列表（= 内容集 v1，生成与改动前逐格相同）；
+        // 按内容集分流（v2 绑定十种）属段 B（tasks 2.2），届时本断言按内容集改写。
+        Assert.Equal(ContentSets.PieceTypesOf(ContentSet.V1).Order(), counts.Keys);
         Assert.True(total > 6000, $"样本量 {total} 太小，不足以判断分布。");
         foreach ((PieceType piece, int n) in counts)
         {

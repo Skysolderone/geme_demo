@@ -135,14 +135,16 @@ public class 总势力Tests
         // ③ 覆盖表查询与领地判据的调用者名单（相对 src/，统一用 / 分隔）。
         string src = Path.Combine(root.FullName, "src");
         string Rel(string f) => Path.GetRelativePath(src, f).Replace(Path.DirectorySeparatorChar, '/');
+        // more-pieces-relics 段 A：PieceEffects.cs 成为 OwnershipOf( 与 OwnershipKind.Exclusive 的合法读者——界碑子加值（D2）按空格归属三态逐格读
+        // 传入的覆盖表（与领地分同一份 CoverageMap，由 PowerCalculator 传入），不另算覆盖；只读判定结果，不统计领地分。
         var readers = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["OwnershipOf("] = ["Siege.Core/Ai/BatchEvaluator.cs", "Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+            ["OwnershipOf("] = ["Siege.Core/Ai/BatchEvaluator.cs", "Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
             ["SourcesOf("] = ["Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
             ["UniqueCoverer("] = ["Siege.Core/Scoring/CoverageMap.cs"],
             ["CoverageOf("] = ["Siege.Core/Scoring/CoverageMap.cs"],
             ["ExclusiveCellsOf("] = ["Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PowerCalculator.cs"],
-            ["OwnershipKind.Exclusive"] = ["Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+            ["OwnershipKind.Exclusive"] = ["Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
         };
         Dictionary<string, string> texts = sources.ToDictionary(Rel, File.ReadAllText, StringComparer.Ordinal);
         foreach ((string token, string[] expected) in readers)

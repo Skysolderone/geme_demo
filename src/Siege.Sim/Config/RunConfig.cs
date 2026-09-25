@@ -97,6 +97,13 @@ public sealed record RunConfig
     /// </summary>
     public int? FlagRisk { get; init; }
 
+    /// <summary>
+    /// 对局内容集（<see cref="MatchOptions.ContentSet"/>，more-pieces-relics D8；v1 = 原六 + 六，v2 = 十 + 十）：<c>null</c> = 新建的局取 <see cref="ContentSets.Default"/>（v2），
+    /// 并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 v1 重建
+    /// （v1 与引入之前逐步相同）。按枚举名写出（"V1" / "V2"）。
+    /// </summary>
+    public ContentSet? ContentSet { get; init; }
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -195,6 +202,11 @@ public sealed record RunConfig
             throw new ArgumentException("冒险概率须为 0–100 的整数百分比（0 = 不冒险，与引入之前逐项相同）。");
         }
 
+        if (ContentSet is { } contentSet && !Enum.IsDefined(contentSet))
+        {
+            throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
+        }
+
         if (FullEventSamplePermille is < 0 or > 1000)
         {
             throw new ArgumentException("抽样千分比须在 0..1000。");
@@ -228,7 +240,8 @@ public sealed record RunConfig
     /// <summary>
     /// 把"按地图自动"的候选格上限与缺省停手阈值、缺省冒险概率落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K、阈值与 p。
     /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
-    /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分）。幂等。
+    /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分），
+    /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1）。幂等。
     /// </summary>
     public RunConfig ResolvedFor(MapData map)
     {
@@ -237,7 +250,9 @@ public sealed record RunConfig
             ? this with { CandidateCellLimit = auto }
             : this;
         resolved = resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
-        return resolved.FlagRisk is null ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
+        resolved = resolved.FlagRisk is null ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
+        // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
+        return resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
     }
 
     /// <summary>

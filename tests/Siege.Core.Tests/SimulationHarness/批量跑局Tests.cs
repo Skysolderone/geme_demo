@@ -21,7 +21,9 @@ public class 批量跑局Tests
         // "200 个种子"的规模走 CLI（Siege.Sim run --count 200）；这里用 6 个种子、3 大回合验证机制：每局一个日志文件 + 配置 + 汇总。
         // 配置可完整序列化并随结果保存（implement 6.1）。
         // 变异验证：本类以 M-B16（见 并行不改变结果）为准，该变异同时使本测试红。
-        RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, turnLimit: 12, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500 };
+        // more-pieces-relics 段 A：「终局大回合在 1–3」「完整 / 仅快照各有」等断言依赖走法 → 写死内容集 v1（与引入内容集之前逐步相同）；
+        // "未配置的内容集落成 v2 写进 config.json 与首部"由 默认评价权重的校准Tests.引用未校准维度产出的数据 与 对局内容集Tests.新局缺省v2 钉住。
+        RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, turnLimit: 12, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500, ContentSet = ContentSet.V1 };
         string dir = SimFixtures.TempDir("batch");
 
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);

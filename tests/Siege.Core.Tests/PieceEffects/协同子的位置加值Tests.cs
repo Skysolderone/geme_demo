@@ -65,4 +65,20 @@ public class 协同子的位置加值Tests
         Assert.Equal(0, snapshot.GroupContaining(TestMaps.P0, "B2").SynergyBonus);
         Assert.Equal(2, snapshot.GroupContaining(TestMaps.P0, "G7").SynergyBonus);
     }
+
+    [Fact]
+    public void 新类型计入类型数()
+    {
+        // more-pieces-relics 规格 piece-effects「新类型计入类型数」：协同子×1、旗手子×1、铁链子×1、普通子×1 → 除协同子外类型数 3 → 3 × 2 = 6。
+        // 盘面无信物格（旗手加值 0）；铁链另给 4 − 1 = 3，与协同来源分开记账。
+        GameBoard board = TestMaps.Blank(size: 9)
+            .Place("B2", TestMaps.P0, PieceType.Synergy).Place("C2", TestMaps.P0, PieceType.Bannerman)
+            .Place("D2", TestMaps.P0, PieceType.Chain).Place("E2", TestMaps.P0, PieceType.Basic);
+
+        GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+
+        Assert.Equal(6, group.SynergyBonus);
+        Assert.Equal(3, group.ChainBonus);
+        Assert.Equal(4 + 6 + 3, group.Power);
+    }
 }

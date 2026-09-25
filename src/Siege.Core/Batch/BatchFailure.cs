@@ -148,6 +148,10 @@ public sealed record BatchFailure(
         PieceType.Multiplier => "倍增子",
         PieceType.Synergy => "协同子",
         PieceType.Artisan => "匠人",
+        PieceType.Bannerman => "旗手子",
+        PieceType.Chain => "铁链子",
+        PieceType.Sentry => "哨兵子",
+        PieceType.Boundary => "界碑子",
         _ => type.ToString(),
     };
 }

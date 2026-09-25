@@ -1,10 +1,10 @@
 ## 1. 段 A：四种棋子的规则与计分（Siege.Core）
 
-- [ ] 1.1 先写测试：`piece-effects` 四条 ADDED（旗手 / 铁链 / 哨兵 / 界碑）与四条 MODIFIED 的新 Scenario、`power-score` 两条 MODIFIED 的新 Scenario（七项来源、新来源被倍率放大）。验证：新增用例全部先红，既有用例不动。
-- [ ] 1.2 `PieceType` 末尾追加四值（D9）；`PieceEffects.BasePower` 四种各 1；`GameBoard` 类型码 `N C T K`。验证：盘面序列化往返测试含十种类型；一份只含 `B F L M S A` 的旧盘面串照常恢复；类型码两两不同的守门测试。
-- [ ] 1.3 实现 D1 / D2：`BannerBonus / ChainBonus / SentryBonus / BoundaryBonus`；`SynergyBonus` 类型数覆盖十种；`GroupPower` 与势力明细扩为七项来源；`PowerCalculator` 汇总。验证：1.1 全绿；变异逐项应红——旗手改用几何四邻（栅栏 / 崖壁 Scenario）、旗手读揭示状态（不看揭示 Scenario）、铁链用棋子数而非 −1（单子 Scenario）、哨兵计入己方棋子、哨兵不计弃赛者、界碑滤掉荒漠（荒漠 Scenario）、界碑计入争议格、任一新来源不乘倍率。
-- [ ] 1.4 征募棋池十档（新四种各 8，代码显式标注未校准，不可配置）与 D8 对局内容集骨架：`MatchOptions.ContentSet`（缺省 v2）、存档 / 日志首部 / 批次配置字段、缺字段按 v1 并留痕；v1 棋池只含原六种。先写 `recruitment`「初始配置与基础棋池」「流派徽记调整征募权重」的新 Scenario 与 `match-setup`「对局内容集」四个 Scenario（先红）。验证：转绿；变异——v1 仍抽到新棋子应红；缺字段按 v2 恢复应红。
-- [ ] 1.5 守门：依赖走法的黄金哈希 / 期望写死 v1，数值不变（`match-setup`「v1 逐步相同」）；若分叉，探针归因，不挑种子凑绿。全部 `dotnet test -c Release` 绿。
+- [x] 1.1 先写测试：`piece-effects` 四条 ADDED（旗手 / 铁链 / 哨兵 / 界碑）与四条 MODIFIED 的新 Scenario、`power-score` 两条 MODIFIED 的新 Scenario（七项来源、新来源被倍率放大）。验证：新增用例全部先红，既有用例不动。
+- [x] 1.2 `PieceType` 末尾追加四值（D9）；`PieceEffects.BasePower` 四种各 1；`GameBoard` 类型码 `N C T K`。验证：盘面序列化往返测试含十种类型；一份只含 `B F L M S A` 的旧盘面串照常恢复；类型码两两不同的守门测试。
+- [x] 1.3 实现 D1 / D2：`BannerBonus / ChainBonus / SentryBonus / BoundaryBonus`；`SynergyBonus` 类型数覆盖十种；`GroupPower` 与势力明细扩为七项来源；`PowerCalculator` 汇总。验证：1.1 全绿；变异逐项应红——旗手改用几何四邻（栅栏 / 崖壁 Scenario）、旗手读揭示状态（不看揭示 Scenario）、铁链用棋子数而非 −1（单子 Scenario）、哨兵计入己方棋子、哨兵不计弃赛者、界碑滤掉荒漠（荒漠 Scenario）、界碑计入争议格、任一新来源不乘倍率。
+- [x] 1.4 征募棋池十档（新四种各 8，代码显式标注未校准，不可配置）与 D8 对局内容集骨架：`MatchOptions.ContentSet`（缺省 v2）、存档 / 日志首部 / 批次配置字段、缺字段按 v1 并留痕；v1 棋池只含原六种。先写 `recruitment`「初始配置与基础棋池」「流派徽记调整征募权重」的新 Scenario 与 `match-setup`「对局内容集」四个 Scenario（先红）。验证：转绿；变异——v1 仍抽到新棋子应红；缺字段按 v2 恢复应红。
+- [x] 1.5 守门：依赖走法的黄金哈希 / 期望写死 v1，数值不变（`match-setup`「v1 逐步相同」）；若分叉，探针归因，不挑种子凑绿。全部 `dotnet test -c Release` 绿。
 
 ## 2. 段 B：四类信物与生成权重（含工坊）
 

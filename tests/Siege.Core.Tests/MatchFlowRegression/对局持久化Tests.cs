@@ -138,7 +138,8 @@ public class 对局持久化Tests
         // 两条腿（testing.md 持久化守门）：① 非回填值 18 往返，逐字段比活对象 + 再存档逐字节相等；
         // ② 剥掉 ArtisanWeight 字段的旧存档 → 回填 10、ArtisanWeightBackfilled 为 true。
         // 变异验证见测试报告 M-A6（Serialize 不写 ArtisanWeight）。
-        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { ArtisanWeight = 18 });
+        // more-pieces-relics 段 A：下面用六档字面量表独立抽面板，依赖征募序列 → 写死内容集 v1（v1 棋池与引入新棋子之前相同）。
+        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { ArtisanWeight = 18, ContentSet = ContentSet.V1 });
         Assert.Equal(18, match.ArtisanWeight);
         Assert.False(match.ArtisanWeightBackfilled);
 

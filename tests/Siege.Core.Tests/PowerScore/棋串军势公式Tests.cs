@@ -273,4 +273,19 @@ public class 棋串军势公式Tests
             }
         }
     }
+
+    [Fact]
+    public void 新来源一并被倍率放大()
+    {
+        // more-pieces-relics 规格 power-score「新来源一并被倍率放大」：信物格上的旗手子、铁链子、倍增子各 1 枚连成，旗手子没有其他相邻信物格 →
+        // 基础 3，旗手 3、铁链 3 − 1 = 2，棋串军势 ⌊(3 + 3 + 2) × 1.5⌋ = 12。
+        GameBoard board = TestMaps.WithRelicCells(["C5"])
+            .Place("C5", TestMaps.P0, PieceType.Bannerman).Place("D5", TestMaps.P0, PieceType.Chain).Place("E5", TestMaps.P0, PieceType.Multiplier);
+
+        GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((3, 3, 2, 1), (group.BaseTotal, group.BannerBonus, group.ChainBonus, group.MultiplierCount));
+        Assert.Equal(5, group.PositionBonus);
+        Assert.Equal(12, group.Power);
+    }
 }

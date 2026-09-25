@@ -31,7 +31,8 @@ public class 势力明细Tests
             BigInteger recomputed = player.ExclusiveCells.Length;
             foreach (GroupPower g in player.Groups)
             {
-                Assert.Equal(g.LineBonus + g.SynergyBonus + g.HighGroundBonus, g.PositionBonus);
+                // more-pieces-relics 段 A 改写：规格「位置加值可溯源」来源扩为七项，恒等式按七项之和写（本盘面只有原六种棋子，新四项为 0，值不变）。
+                Assert.Equal(g.LineBonus + g.SynergyBonus + g.HighGroundBonus + g.BannerBonus + g.ChainBonus + g.SentryBonus + g.BoundaryBonus, g.PositionBonus);
                 // testing.md「"可复算"守门必须用测试内独立算式」：不调用 GroupPowerOf / Multiplier.Apply，
                 // 在测试里写 ⌊(基础 + 加值) × 3^n / 2^n⌋，n = 倍增子数量（不封顶）。
                 BigInteger expected = (g.BaseTotal + g.PositionBonus) * BigInteger.Pow(3, g.MultiplierCount) / BigInteger.Pow(2, g.MultiplierCount);
@@ -222,5 +223,44 @@ public class 势力明细Tests
         }
 
         return (BigInteger.Parse(text.Remove(dot, 1)), denominator);
+    }
+
+    [Fact]
+    public void 位置加值七来源可溯源()
+    {
+        // more-pieces-relics 规格 power-score「位置加值可溯源」（七部分）：位置加值 14 拆成连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑，七者之和为 14。
+        // 第 6 行 C6 旗手（C6、C5 为信物格 → 3 × 2 = 6）、D6 铁链（6 子棋串 → 5）、E6 哨兵（E7 有敌子 → 2）、F6 界碑、G6 / H6 普通子；
+        // 界碑 F6 的空邻格 F5 由 A 独占（+1），F7 同时被 E7 的敌子覆盖、为争议格（0）。连珠 / 协同 / 高地均为 0。军势 = 基础 6 + 14 = 20。
+        GameBoard board = TestMaps.WithRelicCells(["C6", "C5"])
+            .Place("C6", TestMaps.P0, PieceType.Bannerman).Place("D6", TestMaps.P0, PieceType.Chain).Place("E6", TestMaps.P0, PieceType.Sentry)
+            .Place("F6", TestMaps.P0, PieceType.Boundary).Place("G6", TestMaps.P0).Place("H6", TestMaps.P0)
+            .Place("E7", TestMaps.P1);
+
+        GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "C6");
+
+        Assert.Equal((0, 0, 0, 6, 5, 2, 1),
+            (group.LineBonus, group.SynergyBonus, group.HighGroundBonus, group.BannerBonus, group.ChainBonus, group.SentryBonus, group.BoundaryBonus));
+        Assert.Equal(14, group.PositionBonus);
+        Assert.Equal(group.LineBonus + group.SynergyBonus + group.HighGroundBonus + group.BannerBonus + group.ChainBonus + group.SentryBonus + group.BoundaryBonus,
+            group.PositionBonus);
+        Assert.Equal(6 + 14, group.Power);
+    }
+
+    [Fact]
+    public void 不含新棋子的棋串新来源为0()
+    {
+        // more-pieces-relics 规格 power-score「不含新棋子的棋串新来源为 0」：与「位置加值三来源可溯源」同一盘面（只含原六种棋子）→
+        // 旗手、铁链、哨兵、界碑四项均为 0，其余各项与引入新棋子之前相同（连珠 6 / 协同 4 / 高地 4，军势 20）。
+        TerrainData terrain = TestMaps.Terrain(heights: [("B2", 1), ("C2", 1), ("D2", 1), ("E2", 1), ("F2", 1), ("G2", 1)]);
+        GameBoard board = TestMaps.Blank(terrain, size: 9)
+            .Place("B2", TestMaps.P0, PieceType.Line).Place("C2", TestMaps.P0, PieceType.Line).Place("D2", TestMaps.P0, PieceType.Line)
+            .Place("E2", TestMaps.P0, PieceType.Synergy).Place("F2", TestMaps.P0).Place("G2", TestMaps.P0)
+            .Place("B3", TestMaps.P1).Place("C3", TestMaps.P1).Place("D3", TestMaps.P1).Place("E3", TestMaps.P1);
+
+        GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((0, 0, 0, 0), (group.BannerBonus, group.ChainBonus, group.SentryBonus, group.BoundaryBonus));
+        Assert.Equal((6, 4, 4, 14), (group.LineBonus, group.SynergyBonus, group.HighGroundBonus, group.PositionBonus));
+        Assert.Equal(20, group.Power);
     }
 }

@@ -12,9 +12,11 @@ public class 六种棋子的轮廓语言Tests
         // 设计文档 §20 / 裁决 6：普通子简洁圆润（圆头兵）、堡垒子塔楼体块（塔楼）、连珠子表现连接（双球连杆）、倍增子放射状（金字塔）、协同子多节点聚合（多瓣水晶）。
         // 数据层：每种棋子恰有一条标识，几何标识与轮廓语言各自两两不同。去色小尺寸缩略图可辨归阶段 B + 人工检查清单。
         // 变异验证 M-PS1：PieceStyleTable 中协同子的轮廓改为 PieceSilhouette.Pyramid → 本测试红 1。
+        // more-pieces-relics 段 A 改写：类型增至十种，表必须覆盖全部枚举值（v2 局的新棋子查不到即抛）；段 A 按 D11 补四条占位标识，6 → 10。
+        // 新四种的造型断言与灰度可辨属段 D（tasks 4.1 / 4.2）。
         Assert.Equal(Enum.GetValues<PieceType>().Order(), PieceStyleTable.All.Select(s => s.Type).Order());
-        Assert.Equal(6, PieceStyleTable.All.Select(s => s.Silhouette).Distinct().Count());
-        Assert.Equal(6, PieceStyleTable.All.Select(s => s.Language).Distinct().Count());
+        Assert.Equal(10, PieceStyleTable.All.Select(s => s.Silhouette).Distinct().Count());
+        Assert.Equal(10, PieceStyleTable.All.Select(s => s.Language).Distinct().Count());
 
         Assert.Equal((PieceSilhouette.RoundPawn, SilhouetteLanguage.Rounded), Style(PieceType.Basic));
         Assert.Equal((PieceSilhouette.Tower, SilhouetteLanguage.TowerMass), Style(PieceType.Fortress));

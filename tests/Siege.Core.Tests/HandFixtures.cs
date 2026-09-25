@@ -20,6 +20,10 @@ internal static class HandFixtures
     internal static HandLedger Ledger(GameSeed? seed = null, params PlayerId[] players) =>
         new(players.Length == 0 ? [P0, P1, P2, P3] : players, seed ?? Seed);
 
+    /// <summary>指定对局内容集的四人账本（more-pieces-relics D8），匠人取默认权重。</summary>
+    internal static HandLedger Ledger(ContentSet contentSet, GameSeed? seed = null) =>
+        new([P0, P1, P2, P3], seed ?? Seed, RecruitWeights.DefaultArtisanWeight, contentSet);
+
     /// <summary>按账本当前持有类型数构造快照；不传徽记时为无信物默认值。</summary>
     internal static EffectSnapshot Snapshot(
         HandLedger ledger,

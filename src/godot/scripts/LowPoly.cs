@@ -78,6 +78,12 @@ public static class LowPoly
         PieceSilhouette.CrystalCluster => CrystalParts(body),
         PieceSilhouette.Scaffold => ScaffoldParts(body, faction),
 
+        // more-pieces-relics 段 A 最小占位：v2 局会出现四种新棋子，缺项即抛。先给一枚统一的方柱，正式几何（竖杆方旗 / 双环 / 交叉双矛 / 石碑）在段 D。
+        PieceSilhouette.Pennant or PieceSilhouette.ChainLinks or PieceSilhouette.CrossedSpears or PieceSilhouette.Stele =>
+        [
+            Mesh(new BoxMesh { Size = new Vector3(0.26f, 0.36f, 0.26f) }, Visuals.Matte(body), new Vector3(0f, BaseHeight + 0.18f, 0f)),
+        ],
+
         _ => throw new System.ArgumentOutOfRangeException(nameof(silhouette), silhouette, "未知棋子轮廓。"),
     };
 

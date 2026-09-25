@@ -54,8 +54,10 @@ public class 各棋子势力占比Tests
         // （检查阶段变异 M-C1a / M-C1b 实证：去掉匠人项全绿）。这里另起一份 Standard 难度的小样本（2 局 × 3 大回合，约 1 秒）把匠人真正放上盘面。
         // 变异验证 M-MR6a：MatchSession.PieceCountsOf 把 Basic / Fortress 的键写反 → 红 1（本测试）；M-MR6b：把 Line / Synergy 写反 → 红 1（本测试）；
         // M-C1a（去掉 Base 等式的匠人项）、M-C1b（otherTypes 去掉匠人）→ 各红 1（本测试）。
+        // more-pieces-relics 段 A：样本口径下界（有匠人、匠人与协同同串）依赖走法 → 写死内容集 v1；类型计数的键集合按内容集（v1 六种），
+        // v2 局十种键由 对局内容集Tests.新局缺省v2 钉住。
         List<MatchLog> withArtisan = BatchRunner.Execute(
-            SimFixtures.Config(count: 2, seedStart: 11, turnLimit: 12, difficulty: AiDifficulty.Standard), parallelism: 1);
+            SimFixtures.Config(count: 2, seedStart: 11, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
         List<GroupEntry> groups =
             [.. SimFixtures.Sample.Value.Concat(withArtisan).SelectMany(l => l.Turns).SelectMany(t => t.PlayersState).SelectMany(p => p.Groups)];
         Assert.NotEmpty(groups);
@@ -67,7 +69,7 @@ public class 各棋子势力占比Tests
         foreach (GroupEntry g in groups)
         {
             Dictionary<string, int> c = Assert.IsType<Dictionary<string, int>>(g.PieceCounts);
-            Assert.Equal(Enum.GetNames<PieceType>(), c.Keys.ToArray());
+            Assert.Equal(ContentSets.PieceTypesOf(ContentSet.V1).Select(t => t.ToString()), c.Keys.ToArray());   // 两份样本都是 v1：键 = 原六种（改写前为 Enum.GetNames，枚举追加四值后不再等于 v1 的键集合）
             Assert.Equal(g.Stones.Count, c.Values.Sum());
             Assert.Equal(g.MultiplierCount, c["Multiplier"]);
             Assert.Equal(g.Base, c["Basic"] * 1 + c["Fortress"] * 4 + c["Line"] + c["Multiplier"] + c["Synergy"] + c["Artisan"]);
@@ -185,7 +187,7 @@ public class 各棋子势力占比Tests
             SynergyBonus = g.SynergyBonus,
             MultiplierCount = g.MultiplierCount,
             Power = g.Power,
-            PieceCounts = Siege.Sim.Running.MatchSession.PieceCountsOf(board, g),
+            PieceCounts = Siege.Sim.Running.MatchSession.PieceCountsOf(board, g, ContentSet.V1),   // more-pieces-relics：键集合按内容集，原六种盘面取 v1
         };
         MatchLog log = SimFixtures.Synthetic(
             41,

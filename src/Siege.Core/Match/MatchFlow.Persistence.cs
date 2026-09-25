@@ -45,6 +45,7 @@ public sealed partial class MatchFlow
             Seed = Seed.ToString(),
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
             ArtisanWeight = ArtisanWeight,
+            ContentSet = ContentSet,
             Phase = Phase,
             MajorRound = MajorRound,
             Order = [.. _order.Select(p => p.Value)],
@@ -201,19 +202,25 @@ public sealed partial class MatchFlow
         ImmutableArray<PlayerId> players = [.. data.Players.Select(p => new PlayerId(p.Player)).Order()];
         // artisan-terrain-edit R-2 / R-6：旧存档没有匠人权重字段 → 按标准局初值 10 回填，并在 ArtisanWeightBackfilled 上留痕。
         bool artisanWeightBackfilled = data.ArtisanWeight is null;
+        // more-pieces-relics D8：旧存档没有内容集字段 → 那局只可能是原六 + 六，按 v1 恢复（同种子重建出同一份征募序列），ContentSetBackfilled 留痕。
+        // MUST NOT 按新局缺省 v2 回填——那会静默换一个棋池。
+        bool contentSetBackfilled = data.ContentSet is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
             ArtisanWeight = data.ArtisanWeight ?? MatchOptions.DefaultArtisanWeight,
+            ContentSet = data.ContentSet ?? ContentSets.Legacy,
         };
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
+        ContentSets.RequireValid(options.ContentSet);
         var match = new MatchFlow(
             map, board, seed, players,
             RelicLedger.Restore(relicRecord, data.Relics ?? throw new FormatException("存档缺少信物账本。")),
-            HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight),
+            HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight, options.ContentSet),
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
+        match.ContentSetBackfilled = contentSetBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
 
@@ -297,6 +304,12 @@ public sealed class MatchSaveData
 
     /// <summary>匠人征募权重（artisan-terrain-edit R-2）。旧存档无此字段（<c>null</c>）→ 恢复时回填 <see cref="MatchOptions.DefaultArtisanWeight"/>。</summary>
     public int? ArtisanWeight { get; set; }
+
+    /// <summary>
+    /// 对局内容集（more-pieces-relics D8，按枚举名写出）。旧存档无此字段（<c>null</c>）→ 恢复时按 v1（<see cref="ContentSets.Legacy"/>），
+    /// <see cref="MatchFlow.ContentSetBackfilled"/> 为 <c>true</c>。
+    /// </summary>
+    public ContentSet? ContentSet { get; set; }
 
     /// <summary>
     /// 本结构未声明的字段。其余未知字段照旧宽容；已废弃字段在

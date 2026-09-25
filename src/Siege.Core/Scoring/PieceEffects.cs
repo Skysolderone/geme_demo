@@ -73,7 +73,10 @@ public readonly record struct Multiplier
 /// <remarks>规格：openspec/changes/add-territory-power/specs/piece-effects</remarks>
 public static class PieceEffects
 {
-    /// <summary>基础军势：普通子 1、堡垒子 4、连珠子 1、倍增子 1、协同子 1、匠人 1（artisan-terrain-edit 裁决 T-1）。</summary>
+    /// <summary>
+    /// 基础军势：普通子 1、堡垒子 4、连珠子 1、倍增子 1、协同子 1、匠人 1（artisan-terrain-edit 裁决 T-1）、
+    /// 旗手子 / 铁链子 / 哨兵子 / 界碑子各 1（more-pieces-relics 裁决 ②：四者只提供位置加值，基础军势与普通子同为 1）。
+    /// </summary>
     public static int BasePower(PieceType type) => type switch
     {
         PieceType.Basic => 1,
@@ -82,6 +85,10 @@ public static class PieceEffects
         PieceType.Multiplier => 1,
         PieceType.Synergy => 1,
         PieceType.Artisan => 1,
+        PieceType.Bannerman => 1,
+        PieceType.Chain => 1,
+        PieceType.Sentry => 1,
+        PieceType.Boundary => 1,
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
 
@@ -166,6 +173,126 @@ public static class PieceEffects
                 {
                     bonus++;
                     break;
+                }
+            }
+        }
+
+        return bonus;
+    }
+
+    /// <summary>旗手子每个信物格的加值（more-pieces-relics 裁决记录）。</summary>
+    public const int BannerPerRelicCell = 3;
+
+    /// <summary>哨兵子每个气边相邻非己方棋子的加值。</summary>
+    public const int SentryPerForeignStone = 2;
+
+    /// <summary>界碑子每个气边相邻己方独占空格的加值。</summary>
+    public const int BoundaryPerExclusiveCell = 1;
+
+    /// <summary>
+    /// 旗手子位置加值（more-pieces-relics D1，唯一实现）：棋串中每枚旗手子 b，统计「b 所在格 ∪ 与 b 有气边的格」中的信物格个数 k，提供 <c>3 × k</c>。
+    /// </summary>
+    /// <remarks>
+    /// 信物格按地图静态位置（<see cref="Cell.IsRelicCell"/>，来自 <see cref="MapData.RelicCells"/>）判定，MUST NOT 读揭示状态、内容或控制者；
+    /// 邻格只经 <see cref="GameBoard.LibertyNeighbors"/>（栅栏、崖壁、未架桥深水隔开的信物格不计），不另写几何邻接或覆盖判断。
+    /// 集合里每个格至多出现一次，同一信物格对同一枚旗手子只计一次；对不同旗手子各计一次。
+    /// </remarks>
+    public static int BannerBonus(GameBoard board, Group group)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(group);
+
+        int bonus = 0;
+        foreach (Coord stone in group.Stones)
+        {
+            if (TypeAt(board, stone) != PieceType.Bannerman)
+            {
+                continue;
+            }
+
+            int relicCells = board[stone].IsRelicCell ? 1 : 0;
+            foreach (Coord n in board.LibertyNeighbors(stone))
+            {
+                if (board[n].IsRelicCell)
+                {
+                    relicCells++;
+                }
+            }
+
+            bonus += BannerPerRelicCell * relicCells;
+        }
+
+        return bonus;
+    }
+
+    /// <summary>
+    /// 铁链子位置加值（唯一实现）：每枚铁链子为所在棋串提供"棋串棋子数 − 1"，棋子数计全部棋子、不论类型。
+    /// 棋串取自唯一的棋串判定（<see cref="GameBoard.GroupAt"/> / <see cref="GameBoard.AllGroups"/>，沿气边），本方法只读 <see cref="Group.Size"/>。
+    /// </summary>
+    public static int ChainBonus(GameBoard board, Group group)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(group);
+        int chains = group.Stones.Count(stone => TypeAt(board, stone) == PieceType.Chain);
+        return chains * (group.Size - 1);
+    }
+
+    /// <summary>
+    /// 哨兵子位置加值（唯一实现）：棋串中每枚哨兵子 s，与 s 有<b>气边</b>、且其上棋子的所有者不是 s 所有者的每一格提供 2 点。
+    /// 任意对手与已弃赛玩家的遗留棋子一视同仁（不看玩家状态）；邻格只经 <see cref="GameBoard.LibertyNeighbors"/>，不用几何四邻或覆盖。
+    /// </summary>
+    public static int SentryBonus(GameBoard board, Group group)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(group);
+
+        int bonus = 0;
+        foreach (Coord stone in group.Stones)
+        {
+            if (TypeAt(board, stone) != PieceType.Sentry)
+            {
+                continue;
+            }
+
+            foreach (Coord n in board.LibertyNeighbors(stone))
+            {
+                if (board[n].Occupant is { } other && other.Owner != group.Owner)
+                {
+                    bonus += SentryPerForeignStone;
+                }
+            }
+        }
+
+        return bonus;
+    }
+
+    /// <summary>
+    /// 界碑子位置加值（唯一实现，design.md D2）：棋串中每枚界碑子 t，与 t 有<b>气边</b>、且按空格归属三态为 t 的所有者<b>独占</b>的每个空格提供 1 点。
+    /// </summary>
+    /// <remarks>
+    /// 独占判定只读传入的 <paramref name="coverage"/>（<see cref="CoverageMap.OwnershipOf"/>，与领地分同一份覆盖表），MUST NOT 另算覆盖；
+    /// 不看地表——独占的荒漠格计入（荒漠只在"归属 → 领地分"一步被滤掉，裁决 ⑦）。争议格、中立格（含空林地）不计。
+    /// </remarks>
+    public static int BoundaryBonus(GameBoard board, CoverageMap coverage, Group group)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(coverage);
+        ArgumentNullException.ThrowIfNull(group);
+
+        int bonus = 0;
+        foreach (Coord stone in group.Stones)
+        {
+            if (TypeAt(board, stone) != PieceType.Boundary)
+            {
+                continue;
+            }
+
+            foreach (Coord n in board.LibertyNeighbors(stone))
+            {
+                CellOwnership ownership = coverage.OwnershipOf(n);
+                if (ownership.Kind == OwnershipKind.Exclusive && ownership.Owner == group.Owner)
+                {
+                    bonus += BoundaryPerExclusiveCell;
                 }
             }
         }

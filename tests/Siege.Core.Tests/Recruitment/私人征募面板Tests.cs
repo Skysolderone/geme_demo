@@ -130,7 +130,8 @@ public class 私人征募面板Tests
         // 设计文档 §5.3：展示 5 选 3 → 未选的 2 枚不进手牌，也不出现在下一小回合的面板中（下一面板是 recruit 子流的下 5 次抽取）。
         // 变异验证 M-R12：EnterRecruit 沿用上一次的候选（跨回合结转）→ 红 4（本测试 + 征募记录完整 + 两个分布用例）。
         GameSeed seed = HandFixtures.Seed;
-        HandLedger ledger = HandFixtures.Ledger(seed);
+        // more-pieces-relics 段 A：期望序列用六档字面量表独立抽取，依赖征募序列 → 写死内容集 v1（v1 棋池与引入新棋子之前相同）。
+        HandLedger ledger = HandFixtures.Ledger(ContentSet.V1, seed);
         PlayerHandAccess access = HandFixtures.Begin(ledger, HandFixtures.P0);
         RecruitPanelView first = access.EnterRecruit();
         access.Pick(0);

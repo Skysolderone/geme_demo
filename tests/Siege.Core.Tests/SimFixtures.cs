@@ -69,6 +69,8 @@ internal static class SimFixtures
     {
         PassThreshold = PreCalibrationPassThreshold,
         FlagRisk = 0,
+        // more-pieces-relics D8：新局缺省内容集 v2 会改变征募序列；这些样本与黄金值都在引入内容集之前钉下，写死 v1（v1 与引入之前逐步相同）。
+        ContentSet = ContentSet.V1,
         Players = [.. config.Players.Select(p => p with { Weights = PreCalibrationWeights })],
     };
 

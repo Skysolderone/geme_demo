@@ -470,6 +470,10 @@ public sealed class GameBoard
         'M' => PieceType.Multiplier,
         'S' => PieceType.Synergy,
         'A' => PieceType.Artisan,
+        'N' => PieceType.Bannerman,
+        'C' => PieceType.Chain,
+        'T' => PieceType.Sentry,
+        'K' => PieceType.Boundary,
         _ => throw new FormatException($"未知棋子类型码：'{code}'。"),
     };
 
@@ -532,6 +536,10 @@ public sealed class GameBoard
         PieceType.Multiplier => 'M',
         PieceType.Synergy => 'S',
         PieceType.Artisan => 'A',
+        PieceType.Bannerman => 'N',
+        PieceType.Chain => 'C',
+        PieceType.Sentry => 'T',
+        PieceType.Boundary => 'K',
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
 }

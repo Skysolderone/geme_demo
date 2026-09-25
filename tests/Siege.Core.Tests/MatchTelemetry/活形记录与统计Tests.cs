@@ -151,7 +151,8 @@ public class 活形记录与统计Tests
         // ① 每条快照都带活形字段（新日志不是 null），旧日志判据才站得住；
         // ② 预演阶段"破坏活形"的计数 = 细粒度 Rehearsal 事件里同类别的条数（两条独立写入路径互证）；样本口径下界 > 0；
         // ③ 终局快照的逐玩家活形状态 = 测试侧在活对局上独立数出来的值；样本口径下界：终局至少一条活形棋串。
-        RunConfig config = SimFixtures.Config(count: 1, seedStart: 1, turnLimit: 40, difficulty: AiDifficulty.Standard);
+        // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
+        RunConfig config = SimFixtures.Config(count: 1, seedStart: 1, turnLimit: 40, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 };
         MatchSession session = MatchSession.Create(config, config.SeedAt(0));
         MatchLog log = RoundTrip(session.Run());
 

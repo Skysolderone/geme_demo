@@ -1,4 +1,5 @@
 using Siege.Core.Ai;
+using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Sim.Play;
 
@@ -30,7 +31,7 @@ public class 边疆图终端试玩脚本Tests
         // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：脚本里的征募编号与行动顺序依赖 AI 实际走法（默认值下 AI 一子不落，第 2 大回合起失步；段 D2 改写）。
         int exit = PlayCommand.Run(
             42, 4, 1, AiDifficulty.Easy, new StringReader(script), output, MapCatalog.Resolve(FrontierMapV2.Id),
-            weights: SimFixtures.PreCalibrationWeights, passThreshold: SimFixtures.PreCalibrationPassThreshold, flagRisk: 0);
+            weights: SimFixtures.PreCalibrationWeights, passThreshold: SimFixtures.PreCalibrationPassThreshold, flagRisk: 0, contentSet: ContentSet.V1);   // more-pieces-relics：写死内容集 v1
 
         string text = output.ToString();
         string[] lines = [.. text.Split('\n').Select(l => l.TrimEnd('\r'))];

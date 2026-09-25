@@ -42,7 +42,8 @@ public class 地形改造日志与分析Tests
         // life-single-stone 1.3 第五次重挑：单子不成活后 AI 走法随之变，种子 53 一次改造都没有（改造 0 / 4 / 5、致提子 0 / 0 / 1，第一条下界响亮失败）。
         // 同一份写死权重与阈值重扫种子 1–200（临时探针；探针先在去掉单子上限的二进制上复现了 53–55 的 改造 1 / 5 / 3、致提子 1 / 1 / 1）：
         // 58 局有致提子；取最小的连续且每局都有改造的 1–3：改造 3 / 3 / 6 次、致提子 1 / 0 / 0 次。断言与期望均未改，只换样本。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20 };
+        // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20, ContentSet = ContentSet.V1 };
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 
@@ -95,8 +96,9 @@ public class 地形改造日志与分析Tests
     {
         // 段 F 6.4e 改名（原 真实跑局把改造写进日志且可离线重建地形）：测试名 = Scenario 名；「地形可离线重建」的正题在同名方法里，这里是附带的第二条腿。
         // 「改造可查」+「地形可离线重建」：走真实跑局（Standard——Easy 结构性地几乎不落匠人）→ 日志往返 → 重放。
+        // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard), parallelism: 1);
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
 
         // 每一条小回合快照都带改造字段（没有改造就是空表），首部带匠人权重。
         Assert.All(logs, l => Assert.All(l.Turns, t => Assert.NotNull(t.Edits)));
@@ -296,8 +298,9 @@ public class 地形改造日志与分析Tests
     public void 真实批次的第11项分析自洽()
     {
         // 真实跑局上跑一遍分析：分母自洽、动作次数与日志逐条对得上。
+        // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard), parallelism: 1);
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
         TerrainEditSection t = BalanceAnalyzer.Analyze(logs).TerrainEdits;
 
         Assert.Equal(logs.Count, t.Matches);

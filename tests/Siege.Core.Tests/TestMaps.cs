@@ -69,6 +69,15 @@ internal static class TestMaps
             TerrainData = terrain ?? TerrainData.Flat,
         };
 
+    /// <summary>
+    /// 带信物格的 <paramref name="size"/>×<paramref name="size"/> 空盘（more-pieces-relics 旗手子测试）：信物格只是地图静态位置，
+    /// 分区与档位对计分无影响，一律记为公共区标准档。
+    /// </summary>
+    internal static GameBoard WithRelicCells(string[] relicCells, TerrainData? terrain = null, int size = 11) =>
+        GameBoard.LoadUnvalidated(Synthetic(size, maxPlayers: 4,
+            relics: relicCells.Select(c => KeyValuePair.Create(At(c), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard))),
+            terrain: terrain));
+
     /// <summary>取该地图前 <paramref name="count"/> 个格（先行后列），用于凑出精确的障碍占比。</summary>
     internal static Coord[] FirstCells(this MapData map, int count) => [.. map.AllCoords().Take(count)];
 

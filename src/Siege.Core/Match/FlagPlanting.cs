@@ -41,6 +41,12 @@ public sealed record MatchOptions
     /// p = 0 时锁定结果与引入冒险概率之前逐项相同。只作用于 <see cref="MatchFlow.PlantPrototype"/>，与正式的同时插旗无关。
     /// </summary>
     public int FlagRisk { get; init; } = DefaultFlagRisk;
+
+    /// <summary>
+    /// 对局内容集（more-pieces-relics D8，match-setup「对局内容集」）：v1 = 原六种棋子 + 原六类信物，v2 = 十 + 十。新局缺省 v2（<see cref="ContentSets.Default"/>）。
+    /// 属于对局配置：开局固定、始终公开，入存档、日志首部与批次配置；恢复缺该字段的旧存档按 v1（<see cref="MatchFlow.ContentSetBackfilled"/> 留痕）。
+    /// </summary>
+    public ContentSet ContentSet { get; init; } = ContentSets.Default;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

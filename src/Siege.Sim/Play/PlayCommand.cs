@@ -20,9 +20,11 @@ internal static class PlayCommand
     /// 依赖 AI 实际走法的脚本测试用这两项写死权重与阈值，使脚本不随默认值校准而失步（testing.md「依赖 AI 实际怎么走的断言要把权重写死」）。</param>
     /// <param name="flagRisk">测试接缝：原型插旗的冒险概率；<c>null</c> = 对局配置缺省值（<see cref="MatchOptions.DefaultFlagRisk"/>）。终端入口不传（flag-contest D2，同上）。
     /// 依赖出生区与走法的脚本测试写死 0，使脚本不随缺省冒险概率变化而失步。</param>
+    /// <param name="contentSet">测试接缝：对局内容集；<c>null</c> = 对局配置缺省值（<see cref="ContentSets.Default"/>，v2）。终端入口不传（more-pieces-relics D8）。
+    /// 依赖走法的脚本测试写死 v1（征募棋池随内容集变），使脚本不随缺省内容集变化而失步。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
-        EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null)
+        EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null, ContentSet? contentSet = null)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? map.MaxPlayers;
@@ -42,8 +44,9 @@ internal static class PlayCommand
         ulong seed = seedArg ?? (ulong)Stopwatch.GetTimestamp();
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         PlayerId me = players[seat - 1];
-        MatchFlow match = MatchFlow.Create(
-            map, new GameSeed(seed), players, flagRisk is int risk ? MatchOptions.Immediate with { FlagRisk = risk } : MatchOptions.Immediate);
+        MatchOptions options = flagRisk is int risk ? MatchOptions.Immediate with { FlagRisk = risk } : MatchOptions.Immediate;
+        options = contentSet is { } set ? options with { ContentSet = set } : options;
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
         var render = new BoardRenderer(output);
 
         output.WriteLine();

@@ -138,4 +138,39 @@ public class 倍增子的棋串倍率Tests
         board.Place(new Coord(3, 5), TestMaps.P0, tail);
         return board;
     }
+
+    [Fact]
+    public void 倍率放大新棋子加值()
+    {
+        // more-pieces-relics 规格 piece-effects「倍率放大新棋子加值」：铁链子×2、普通子×1、倍增子×1，无其他位置加值 →
+        // 基础 4，铁链加值 2 × (4 − 1) = 6，棋串军势 ⌊(4 + 6) × 1.5⌋ = 15（不放大会得 ⌊4 × 1.5⌋ + 6 = 12）。
+        GameBoard board = TestMaps.Blank()
+            .Place("C5", TestMaps.P0, PieceType.Chain).Place("D5", TestMaps.P0, PieceType.Chain)
+            .Place("E5", TestMaps.P0).Place("F5", TestMaps.P0, PieceType.Multiplier);
+
+        GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((4, 6, 1), (group.BaseTotal, group.ChainBonus, group.MultiplierCount));
+        Assert.Equal(15, group.Power);
+    }
+
+    [Fact]
+    public void 倍率作用于哨兵与界碑加值()
+    {
+        // Requirement 正文：倍率作用于"基础 + 位置加值（连珠、协同、高地、旗手、铁链、哨兵、界碑）"。旗手、铁链由上一条与 power-score「新来源一并被倍率放大」钉住，
+        // 这里补哨兵与界碑（两者都不放大时各自的错值写在旁边）。
+        // ① 哨兵 F6 + 倍增 G6，敌子 F5、F7 → 哨兵 2 × 2 = 4，基础 2 → ⌊6 × 1.5⌋ = 9（不放大：⌊2 × 1.5⌋ + 4 = 7）。
+        GameBoard sentry = TestMaps.Blank()
+            .Place("F6", TestMaps.P0, PieceType.Sentry).Place("G6", TestMaps.P0, PieceType.Multiplier)
+            .Place("F5", TestMaps.P1).Place("F7", TestMaps.P1);
+        GroupPower s = PowerCalculator.Compute(sentry).GroupContaining(TestMaps.P0, "F6");
+        Assert.Equal((2, 4, 1), (s.BaseTotal, s.SentryBonus, s.MultiplierCount));
+        Assert.Equal(9, s.Power);
+
+        // ② 界碑 F6 + 倍增 G6，四周无敌子 → 界碑邻格 E6 / F5 / F7 为独占空格 = 3，基础 2 → ⌊5 × 1.5⌋ = 7（不放大：⌊2 × 1.5⌋ + 3 = 6）。
+        GameBoard boundary = TestMaps.Blank().Place("F6", TestMaps.P0, PieceType.Boundary).Place("G6", TestMaps.P0, PieceType.Multiplier);
+        GroupPower b = PowerCalculator.Compute(boundary).GroupContaining(TestMaps.P0, "F6");
+        Assert.Equal((2, 3, 1), (b.BaseTotal, b.BoundaryBonus, b.MultiplierCount));
+        Assert.Equal(7, b.Power);
+    }
 }

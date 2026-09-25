@@ -10,7 +10,7 @@ namespace Siege.Core.Scoring;
 /// </summary>
 /// <remarks>
 /// <para>公式（restore-go-core-rules D1）：<c>棋串军势 = ⌊(基础军势总和 + 位置加值) × 3^n / 2^n⌋</c>，<c>n = 倍增子数量</c>、不封顶；
-/// 位置加值 = 连珠 + 协同 + 高地，三项先求和、再与基础军势相加、最后整体乘倍率，对每条棋串各取整一次。</para>
+/// 位置加值 = 连珠 + 协同 + 高地 + 旗手 + 铁链 + 哨兵 + 界碑（more-pieces-relics 由三项扩为七项），先求和、再与基础军势相加、最后整体乘倍率，对每条棋串各取整一次。</para>
 /// <para><c>总势力 = 计分独占空格数 + 全部棋串军势之和</c>（D2）：独占空格直接取 <see cref="CoverageMap.ExclusiveCellsOf"/> 的空格归属结果，
 /// 本类不另行统计覆盖；再经 <see cref="ScoresTerritory"/> 过滤掉荒漠（terrain-surfaces D4）。争议格、中立格（含空林地格）不计分，
 /// 棋子所在格只算军势，领地分不进倍率，不对总势力二次取整。</para>
@@ -21,7 +21,7 @@ namespace Siege.Core.Scoring;
 public static class PowerCalculator
 {
     /// <summary>
-    /// 棋串军势公式：<paramref name="baseTotal"/> 与 <paramref name="positionBonus"/>（连珠 + 协同 + 高地）先相加，
+    /// 棋串军势公式：<paramref name="baseTotal"/> 与 <paramref name="positionBonus"/>（连珠 + 协同 + 高地 + 旗手 + 铁链 + 哨兵 + 界碑）先相加，
     /// 再经唯一的 <see cref="Multiplier.Apply"/> 整体乘倍率并向下取整；<paramref name="multiplierCount"/> 即倍率指数，不封顶。
     /// </summary>
     public static BigInteger GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount) =>
@@ -37,19 +37,29 @@ public static class PowerCalculator
         return map.SurfaceAt(cell) != Surface.Desert;
     }
 
-    /// <summary>计算一条棋串的军势明细。</summary>
-    public static GroupPower Evaluate(GameBoard board, Group group)
+    /// <summary>
+    /// 计算一条棋串的军势明细。<paramref name="coverage"/> 是同一盘面的覆盖表（界碑子的独占判定读它，与领地分同一份，不另算覆盖）。
+    /// 七项位置加值先求和、再与基础军势相加、最后整体乘倍率（more-pieces-relics：四种新来源与原三项一样被倍率放大）。
+    /// </summary>
+    public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group)
     {
         ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(coverage);
         ArgumentNullException.ThrowIfNull(group);
 
         int baseTotal = PieceEffects.BaseTotal(board, group);
         int lineBonus = PieceEffects.LineBonus(board, group);
         int synergyBonus = PieceEffects.SynergyBonus(board, group);
         int highGroundBonus = PieceEffects.HighGroundBonus(board, group);
+        int bannerBonus = PieceEffects.BannerBonus(board, group);
+        int chainBonus = PieceEffects.ChainBonus(board, group);
+        int sentryBonus = PieceEffects.SentryBonus(board, group);
+        int boundaryBonus = PieceEffects.BoundaryBonus(board, coverage, group);
         int multiplierCount = PieceEffects.MultiplierCount(board, group);
-        BigInteger power = GroupPowerOf(baseTotal, lineBonus + synergyBonus + highGroundBonus, multiplierCount);
-        return new GroupPower(group.Owner, group.Stones, baseTotal, lineBonus, synergyBonus, highGroundBonus, multiplierCount, power);
+        int positionBonus = lineBonus + synergyBonus + highGroundBonus + bannerBonus + chainBonus + sentryBonus + boundaryBonus;
+        BigInteger power = GroupPowerOf(baseTotal, positionBonus, multiplierCount);
+        return new GroupPower(group.Owner, group.Stones, baseTotal, lineBonus, synergyBonus, highGroundBonus,
+            bannerBonus, chainBonus, sentryBonus, boundaryBonus, multiplierCount, power);
     }
 
     /// <summary>
@@ -99,7 +109,7 @@ public static class PowerCalculator
             ImmutableArray<Coord> scored = [.. exclusive.Where(c => ScoresTerritory(board.Map, c))];
             ImmutableArray<GroupPower> groups = allGroups
                 .Where(g => g.Owner == player)
-                .Select(g => Evaluate(board, g))
+                .Select(g => Evaluate(board, coverage, g))
                 .ToImmutableArray();
 
             BigInteger groupTotal = BigInteger.Zero;

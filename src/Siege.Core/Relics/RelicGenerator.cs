@@ -17,7 +17,12 @@ namespace Siege.Core.Relics;
 /// </remarks>
 public static class RelicGenerator
 {
-    private static readonly PieceType[] EmblemPieces = Enum.GetValues<PieceType>();
+    /// <summary>
+    /// 流派徽记可绑定的棋子类型：原六种的显式列表（= 内容集 v1 的类型，more-pieces-relics D8）。MUST NOT 用 <c>Enum.GetValues</c>——
+    /// <see cref="PieceType"/> 末尾追加了四种新棋子，按枚举取会把抽签从 6 选 1 变成 10 选 1，同种子的信物分布整体改变。
+    /// 段 A 生成器尚不区分内容集（v1 / v2 都绑原六种）；按内容集分流（v2 绑定十种）属段 B（tasks 2.2）。
+    /// </summary>
+    private static readonly PieceType[] EmblemPieces = [.. ContentSets.PieceTypesOf(ContentSet.V1)];
 
     /// <summary>按默认参数生成。</summary>
     public static RelicGenerationRecord Generate(MapData map, GameSeed seed) => Generate(map, seed, RelicGenerationOptions.Default);

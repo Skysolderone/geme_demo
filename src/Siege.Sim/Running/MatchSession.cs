@@ -69,6 +69,11 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的匠人权重为 {config.ArtisanWeight}，对局配置却为 {match.ArtisanWeight}。");
         }
 
+        if (config.ContentSet is { } contentSet && contentSet != match.ContentSet)
+        {
+            throw new SiegeRuleException($"跑局配置的内容集为 {contentSet}，对局配置却为 {match.ContentSet}。");
+        }
+
         Runner = new MatchRunner(match);
         Seed = match.Seed;
         bool sampled = Seed.Stream(SampleStream).NextPermille(config.FullEventSamplePermille);
@@ -128,8 +133,11 @@ public sealed class MatchSession
         PlayerId[] players = config.PlayerIds();
         // 冒险概率（flag-contest D2）：新建的局已由 ResolvedFor 落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时没有冒险，按 0 重建。
         int flagRisk = config.FlagRisk ?? (recorded ? 0 : MatchOptions.DefaultFlagRisk);
+        // 内容集（more-pieces-relics D8）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时只有原六 + 六，按 v1 重建。
+        ContentSet contentSet = config.ContentSet ?? (recorded ? ContentSets.Legacy : ContentSets.Default);
         MatchFlow match = MatchFlow.Create(
-            map, new GameSeed(seed), players, MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk });
+            map, new GameSeed(seed), players,
+            MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk, ContentSet = contentSet });
         // 选区的唯一实现在 Core（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区；否则区数不多于人数上限时顺排
         // （p = 0 时 P<i> → 区 <i>，与此前逐项相同），多于时由种子的独立子流均匀选区。
         match.PlantPrototype();
@@ -578,7 +586,7 @@ public sealed class MatchSession
                     HighGroundBonus = g.HighGroundBonus,
                     MultiplierCount = g.MultiplierCount,
                     Power = g.Power,
-                    PieceCounts = PieceCountsOf(view.Board, g),
+                    PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
                 })],
             });
         }
@@ -586,11 +594,14 @@ public sealed class MatchSession
         return list;
     }
 
-    /// <summary>棋串各棋子类型的数量（六种全写，含 0，按枚举顺序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。</summary>
-    internal static Dictionary<string, int> PieceCountsOf(GameBoard board, GroupPower group)
+    /// <summary>
+    /// 棋串各棋子类型的数量（本局内容集的全部类型都写，含 0，按固定类型次序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。
+    /// 键集合取自内容集（more-pieces-relics D8，<see cref="ContentSets.PieceTypesOf"/>）而不是整个枚举：v1 局的日志与引入新棋子之前逐字节相同，v2 局写十种。
+    /// </summary>
+    internal static Dictionary<string, int> PieceCountsOf(GameBoard board, GroupPower group, ContentSet contentSet)
     {
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (PieceType type in Enum.GetValues<PieceType>())
+        foreach (PieceType type in ContentSets.PieceTypesOf(contentSet))
         {
             counts[type.ToString()] = 0;
         }

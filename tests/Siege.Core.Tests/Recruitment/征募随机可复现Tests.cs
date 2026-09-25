@@ -143,7 +143,8 @@ public class 征募随机可复现Tests
     {
         // 面板候选 == 对 GameSeed.Recruit 子流直接做 WeightedPick 的结果；用 relic-gen 或 setup 子流都对不上。
         // 变异验证 M-R23（见上）→ 红 3，含本测试；M-R24：EnterRecruit 用 Random.Shared.Next → 红 11，含本测试与源码扫描；M-R4：等概率 NextInt → 红 5，含本测试。
-        HandLedger ledger = HandFixtures.Ledger();
+        // more-pieces-relics 段 A：期望序列用六档字面量表独立抽取 → 写死内容集 v1（v1 棋池与引入新棋子之前相同）。
+        HandLedger ledger = HandFixtures.Ledger(ContentSet.V1);
         PlayerHandAccess access = HandFixtures.Begin(ledger, HandFixtures.P0, reveal: 8);
         RecruitPanelView panel = access.EnterRecruit();
 

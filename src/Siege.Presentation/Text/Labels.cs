@@ -47,6 +47,11 @@ public static class Labels
         PieceType.Multiplier => "倍增子",
         PieceType.Synergy => "协同子",
         PieceType.Artisan => "匠人",
+        // more-pieces-relics 段 A 最小占位：v2 局的征募面板与手牌里会出现新棋子，本方法是穷举 switch、缺项即抛；完整表现（图例、手牌面板来源）在段 C / D。
+        PieceType.Bannerman => "旗手子",
+        PieceType.Chain => "铁链子",
+        PieceType.Sentry => "哨兵子",
+        PieceType.Boundary => "界碑子",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知棋子类型。"),
     };
 

@@ -135,6 +135,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.All(config.Players, p => Assert.Null(p.Weights));
         Assert.Null(config.PassThreshold);
         Assert.Null(config.FlagRisk);   // flag-contest D2：未配置的冒险概率同样落成缺省值写进记录
+        Assert.Null(config.ContentSet);   // more-pieces-relics D8：未配置的内容集同样落成缺省 v2 写进记录
         string dir = SimFixtures.TempDir("calibration-provenance");
         BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
 
@@ -154,8 +155,8 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 反面：只改一个未扫档维度，记录随之不同——口径不同的两份数据从记录上就区分得开，不会被当成同口径直接比较。
         EvaluationWeights other = EvaluationWeights.Default with { Growth = EvaluationWeights.Default.Growth + 1 };
         RunConfig changed = config with { Players = [.. config.Players.Select(p => p with { Weights = other })] };
-        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk }).Effective().ToJson());
-        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk }).Effective().ToJson());
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default }).Effective().ToJson());
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default }).Effective().ToJson());
     }
 
     /// <summary>

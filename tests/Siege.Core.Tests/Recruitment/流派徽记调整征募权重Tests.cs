@@ -20,7 +20,8 @@ public class 流派徽记调整征募权重Tests
         EffectSnapshot snapshot = HandFixtures.Snapshot(ledger, HandFixtures.P0, emblems: [(PieceType.Multiplier, 1)]);
 
         Assert.Equal(21 * 4, RecruitWeights.AdjustedWeightOf(snapshot, PieceType.Multiplier));
-        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 21 * 4, 10 * 4, 10 * 4], RecruitWeights.AdjustedTable(snapshot));
+        // more-pieces-relics 段 A 改写：缺省内容集 v2，表由六档扩为十档（新四种 8 × 4），其余不变。
+        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 21 * 4, 10 * 4, 10 * 4, 8 * 4, 8 * 4, 8 * 4, 8 * 4], RecruitWeights.AdjustedTable(snapshot));
     }
 
     [Fact]
@@ -33,11 +34,12 @@ public class 流派徽记调整征募权重Tests
         EffectSnapshot snapshot = HandFixtures.Snapshot(ledger, HandFixtures.P0, emblems: [(PieceType.Artisan, 1)]);
 
         Assert.Equal(10 * 7, RecruitWeights.AdjustedWeightOf(snapshot, PieceType.Artisan));
-        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 12 * 4, 10 * 4, 10 * 7], RecruitWeights.AdjustedTable(snapshot));
+        // more-pieces-relics 段 A 改写：缺省内容集 v2，表由六档扩为十档（新四种 8 × 4），其余不变。
+        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 12 * 4, 10 * 4, 10 * 7, 8 * 4, 8 * 4, 8 * 4, 8 * 4], RecruitWeights.AdjustedTable(snapshot));
 
         // 对局配置把匠人基础权重改成 18 时，徽记公式照常叠在它上面：18 × 7 = 126。
         Assert.Equal(18 * 7, RecruitWeights.AdjustedWeightOf(snapshot, PieceType.Artisan, artisanWeight: 18));
-        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 12 * 4, 10 * 4, 18 * 7], RecruitWeights.AdjustedTable(snapshot, artisanWeight: 18));
+        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 12 * 4, 10 * 4, 18 * 7, 8 * 4, 8 * 4, 8 * 4, 8 * 4], RecruitWeights.AdjustedTable(snapshot, artisanWeight: 18));
     }
 
     [Fact]
@@ -66,7 +68,8 @@ public class 流派徽记调整征募权重Tests
         // 实现清单 3.3：归一化在抽取时由整数累积权重完成。堡垒子徽记数量 4 → 权重 80，总和 40+80+18+12+10 = 160，堡垒子占 50%（默认时 20%）。
         // 5000 个候选位，±3 个百分点。
         // 变异验证 M-R7：EnterRecruit 用 RecruitWeights.BaseWeights 抽样而不是 AdjustedTable → 红 1（本测试：堡垒子回到 20%）。
-        HandLedger ledger = HandFixtures.Ledger();
+        // more-pieces-relics 段 A：期望占比按六档表的总权重算 → 写死内容集 v1（v1 棋池与引入新棋子之前相同）。
+        HandLedger ledger = HandFixtures.Ledger(ContentSet.V1);
         int fortress = 0;
         for (int turn = 0; turn < 500; turn++)
         {
@@ -90,7 +93,7 @@ public class 流派徽记调整征募权重Tests
         for (ulong v = 1; v <= 200; v++)
         {
             var seed = new GameSeed(v);
-            HandLedger ledger = HandFixtures.Ledger(seed);
+            HandLedger ledger = HandFixtures.Ledger(ContentSet.V1, seed);   // more-pieces-relics 段 A：期望序列用六档字面量表 → 写死 v1
             PlayerHandAccess access = HandFixtures.Begin(ledger, HandFixtures.P0);
             RecruitPanelView panel = access.EnterRecruit();
             Assert.Equal(5, panel.ShowCount);
@@ -104,5 +107,16 @@ public class 流派徽记调整征募权重Tests
         }
 
         Assert.True(sawTriple, "200 个种子里没有一个面板出现 ≥3 枚普通子：候选位不是独立抽取。");
+    }
+
+    [Fact]
+    public void 新棋子徽记调权()
+    {
+        // more-pieces-relics 规格 recruitment「新棋子徽记调权」：1 枚旗手子流派徽记 → 8 × (1 + 0.75) = 14；整数形式 8 × 7 = 56 = 14 × 4；其余类型不变。
+        HandLedger ledger = HandFixtures.Ledger();
+        EffectSnapshot snapshot = HandFixtures.Snapshot(ledger, HandFixtures.P0, emblems: [(PieceType.Bannerman, 1)]);
+
+        Assert.Equal(14 * 4, RecruitWeights.AdjustedWeightOf(snapshot, PieceType.Bannerman));
+        Assert.Equal([40 * 4, 20 * 4, 18 * 4, 12 * 4, 10 * 4, 10 * 4, 14 * 4, 8 * 4, 8 * 4, 8 * 4], RecruitWeights.AdjustedTable(snapshot));
     }
 }

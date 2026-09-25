@@ -109,7 +109,8 @@ public sealed partial class MatchFlow
 
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         PrototypeZoneAssignment.RequireValidFlagRisk(options.FlagRisk);
-        return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed, options.ArtisanWeight), new BoardHistory(), options);
+        ContentSets.RequireValid(options.ContentSet);
+        return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet), new BoardHistory(), options);
     }
 
     // ---------- 组成部分 ----------
@@ -137,6 +138,12 @@ public sealed partial class MatchFlow
 
     /// <summary>恢复自不含匠人权重字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultArtisanWeight"/> 回填。</summary>
     public bool ArtisanWeightBackfilled { get; private set; }
+
+    /// <summary>对局内容集（more-pieces-relics D8）。对局配置，始终公开，入存档。</summary>
+    public ContentSet ContentSet => Options.ContentSet;
+
+    /// <summary>恢复自不含内容集字段的旧存档时为 <c>true</c>：按 v1（<see cref="ContentSets.Legacy"/>）回填。</summary>
+    public bool ContentSetBackfilled { get; private set; }
 
     /// <summary>
     /// 恢复自不含地图内容摘要的旧存档（map-generator 之前）时为 <c>true</c>：恢复时<b>跳过了</b>"地图不一致"的比对——
@@ -462,7 +469,7 @@ public sealed partial class MatchFlow
         GameBoard board = Board.Clone();
         // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
         // 活形分析在同一份副本上做，与 Board / BoardSerialized 同一时刻（life-shape D6）。
-        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, Stage, CurrentPlayer, _order, PlayerStates, board,
+        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order, PlayerStates, board,
             Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board));
     }
 

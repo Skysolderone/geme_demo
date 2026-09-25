@@ -105,8 +105,9 @@ public class 两位数行号贯通Tests
         // 真实跑局：两名 Easy AI 在竖长图上跑 1 个大回合。0 号区在第 25–29 行，保护期内 P0 只能落在那里，
         // 所以 P0 的落点必然全是两位数行号——样本口径下界：P0 确实落了子。
         MapData map = Tall();
+        // more-pieces-relics 段 A：跑局配置经 PinPreCalibration 写死内容集 v1（样本下界依赖走法），对局配置须与之一致（MatchSession 核对二者）。
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate);
+            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         match.PlantSequentially([(P0, 0), (P1, 1)]);
         // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：样本下界"P0 落了子"依赖走法（默认阈值 80 下简单难度第 1 大回合可能一子不落；段 D2 改写）。
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 2, players: 2)));

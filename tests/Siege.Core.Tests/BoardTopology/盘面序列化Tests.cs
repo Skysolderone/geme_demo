@@ -44,13 +44,14 @@ public class 盘面序列化Tests
     }
 
     [Fact]
-    public void 六种类型的盘面码两两不同且往返保留类型()
+    public void 十种类型的盘面码两两不同且往返保留类型()
     {
-        // 设计文档 §6.2 + artisan-terrain-edit 段 A：盘面序列化是存档的表示（同形比对键由它投影、不含类型），六种棋子类型 MUST 各有一个码。
+        // 设计文档 §6.2 + artisan-terrain-edit 段 A：盘面序列化是存档的表示（同形比对键由它投影、不含类型），每种棋子类型 MUST 各有一个码。
         // 漏码会在匠人落子后存档时抛 FormatException（响亮），撞码则是**静默**的：读回来变成另一种棋子、两个不同盘面还会被判成同形。
         // 变异验证 M-C2（检查阶段）：GameBoard 的 Artisan 码由 'A' 改成 'S'（与协同子撞码）→ 补本测试前全绿 826（缺口），补后本测试红。
+        // more-pieces-relics 段 A 改写（tasks 1.2）：类型增至十种（旗手 N / 铁链 C / 哨兵 T / 界碑 K，D9），6 → 10；方法名随之改为"十种"。
         PieceType[] all = Enum.GetValues<PieceType>();
-        Assert.Equal(6, all.Length);
+        Assert.Equal(10, all.Length);
         var texts = new List<string>();
         foreach (PieceType type in all)
         {
@@ -129,5 +130,36 @@ public class 盘面序列化Tests
         SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => overflow.Serialize());
         Assert.Contains("0–15", ex.Message, StringComparison.Ordinal);
         Assert.Contains("16", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 只含原六种类型码的旧盘面串照常恢复()
+    {
+        // more-pieces-relics tasks 1.2 / Migration Plan 1：类型码只新增、不改旧码——引入新棋子之前写出的盘面串（只含 B F L M S A）照常恢复，
+        // 各格类型不变，再导出逐字节相同。串是字面量（不由当前实现生成），行 0 起、每格"所有者十六进制 + 类型码"。
+        const string legacy = "0B1F------/--0L--2M--/----0S----/--------3A/----------";
+        GameBoard board = GameBoard.RestoreUnvalidated(TestMaps.Blank(size: 5).Map, legacy);
+
+        Assert.Equal(new Occupant(TestMaps.P0, PieceType.Basic), board[new Coord(0, 0)].Occupant);
+        Assert.Equal(new Occupant(TestMaps.P1, PieceType.Fortress), board[new Coord(1, 0)].Occupant);
+        Assert.Equal(new Occupant(TestMaps.P0, PieceType.Line), board[new Coord(1, 1)].Occupant);
+        Assert.Equal(new Occupant(new PlayerId(2), PieceType.Multiplier), board[new Coord(3, 1)].Occupant);
+        Assert.Equal(new Occupant(TestMaps.P0, PieceType.Synergy), board[new Coord(2, 2)].Occupant);
+        Assert.Equal(new Occupant(new PlayerId(3), PieceType.Artisan), board[new Coord(4, 3)].Occupant);
+        Assert.Equal(6, board.AllCoords().Count(c => board[c].Occupant is not null));
+        Assert.Equal(legacy, board.Serialize());
+    }
+
+    [Fact]
+    public void 新四种类型码固定为NCTK()
+    {
+        // more-pieces-relics D9：旗手 N、铁链 C、哨兵 T、界碑 K（与 B F L M S A 不撞）。码写进存档与日志，钉死字面值，改码即旧存档读错类型。
+        (PieceType Type, char Code)[] expected = [(PieceType.Bannerman, 'N'), (PieceType.Chain, 'C'), (PieceType.Sentry, 'T'), (PieceType.Boundary, 'K')];
+        foreach ((PieceType type, char code) in expected)
+        {
+            GameBoard board = TestMaps.Blank(size: 3);
+            board.Place(new Coord(0, 0), TestMaps.P0, type);
+            Assert.Equal($"0{code}----/------/------", board.Serialize());
+        }
     }
 }

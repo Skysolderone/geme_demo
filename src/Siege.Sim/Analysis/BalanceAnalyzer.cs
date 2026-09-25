@@ -1253,7 +1253,9 @@ public static class BalanceAnalyzer
 
     private static PieceShareSection PieceShares(List<MatchLog> logs)
     {
-        PieceType[] types = Enum.GetValues<PieceType>();
+        // 类型列表按内容集（more-pieces-relics D8）：样本里只有 v1 对局（含首部缺内容集的旧日志）时列原六种，报告与引入新棋子之前逐字节相同；
+        // 有 v2 对局时列十种。完整的"按内容集展开 / v1 单列不适用"属段 C（tasks 3.7）。
+        PieceType[] types = [.. ContentSets.PieceTypesOf(logs.Any(l => l.Header.Config.ContentSet == ContentSet.V2) ? ContentSet.V2 : ContentSet.V1)];
         var stones = types.ToDictionary(t => t, _ => 0L);
         var power = types.ToDictionary(t => t, _ => BigInteger.Zero);
         int matches = 0;

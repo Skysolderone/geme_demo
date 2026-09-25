@@ -117,7 +117,7 @@ public class 各入口按地图标识选图Tests
         //（入口 Program.Play 只做"标识 → 地图"的解析后把地图传给 PlayCommand.Run，解析本身由上面几条钉住）。
         // 人选 3 号台后其余三名 AI 由种子选区：互不相同、不与人重复、都在 1–6 内。
         var output = new StringWriter();
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader("9\n0\n3\n"), output, FrontierFixtures.Map(), flagRisk: 0);   // flag-contest：写死冒险概率 0
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader("9\n0\n3\n"), output, FrontierFixtures.Map(), flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：写死冒险概率 0；more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);
@@ -144,8 +144,8 @@ public class 各入口按地图标识选图Tests
         // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：默认阈值 80 下简单难度第 1 大回合全员 Pass、对局即终局，走不到第 3 大回合（段 D2 改写）。
         EvaluationWeights w = SimFixtures.PreCalibrationWeights;
         const int t = SimFixtures.PreCalibrationPassThreshold;
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, flagRisk: 0);
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0);
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
 
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());

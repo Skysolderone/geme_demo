@@ -13,6 +13,10 @@ namespace Siege.Core.Scoring;
 /// <param name="LineBonus">来自连珠线的位置加值。</param>
 /// <param name="SynergyBonus">来自协同子的位置加值。</param>
 /// <param name="HighGroundBonus">来自高地压制的位置加值（每枚棋子至多 1 点）。</param>
+/// <param name="BannerBonus">来自旗手子的位置加值（more-pieces-relics D1）。</param>
+/// <param name="ChainBonus">来自铁链子的位置加值。</param>
+/// <param name="SentryBonus">来自哨兵子的位置加值。</param>
+/// <param name="BoundaryBonus">来自界碑子的位置加值。</param>
 /// <param name="MultiplierCount">倍增子数量 n，即倍率指数（不封顶）。</param>
 /// <param name="Power">取整后军势：<c>⌊(基础 + 加值) × 3^n / 2^n⌋</c>，逐棋串各取整一次（restore-go-core-rules D1：加值被倍率放大）。任意精度整数，不溢出。</param>
 public sealed record GroupPower(
@@ -22,17 +26,23 @@ public sealed record GroupPower(
     int LineBonus,
     int SynergyBonus,
     int HighGroundBonus,
+    int BannerBonus,
+    int ChainBonus,
+    int SentryBonus,
+    int BoundaryBonus,
     int MultiplierCount,
     BigInteger Power)
 {
-    /// <summary>位置加值总计 = 连珠来源 + 协同来源 + 高地来源（design.md D3：分来源记账）。</summary>
-    public int PositionBonus => LineBonus + SynergyBonus + HighGroundBonus;
+    /// <summary>
+    /// 位置加值总计 = 连珠 + 协同 + 高地 + 旗手 + 铁链 + 哨兵 + 界碑七项来源（design.md D3：分来源记账；more-pieces-relics D1 由三项扩为七项）。
+    /// </summary>
+    public int PositionBonus => LineBonus + SynergyBonus + HighGroundBonus + BannerBonus + ChainBonus + SentryBonus + BoundaryBonus;
 
     /// <summary>倍率 <c>1.5^n</c> 的精确表示（分子 <c>3^n</c>、分母 <c>2^n</c>），不封顶。</summary>
     public Multiplier Multiplier => new(MultiplierCount);
 
     public override string ToString() =>
-        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] (基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus})) ×{Multiplier} = {Power}";
+        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] (基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus}/旗手{BannerBonus}/铁链{ChainBonus}/哨兵{SentryBonus}/界碑{BoundaryBonus})) ×{Multiplier} = {Power}";
 }
 
 /// <summary>

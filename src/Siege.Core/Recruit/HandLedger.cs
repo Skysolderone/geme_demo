@@ -34,6 +34,9 @@ public sealed class HandLedger
     private readonly int _artisanWeight;
     private int _sequence;
 
+    /// <summary>对局内容集（more-pieces-relics D8）：决定征募棋池有哪些类型。与匠人权重一样全程只在这里持有一份。</summary>
+    public ContentSet ContentSet { get; }
+
     /// <summary>建立账本（匠人权重取默认 10）。</summary>
     public HandLedger(IEnumerable<PlayerId> players, GameSeed seed)
         : this(players, seed, RecruitWeights.DefaultArtisanWeight)
@@ -45,10 +48,17 @@ public sealed class HandLedger
     /// <paramref name="artisanWeight"/> 是对局配置的匠人征募权重（artisan-terrain-edit R-2），全程只在这里持有一份。
     /// </summary>
     public HandLedger(IEnumerable<PlayerId> players, GameSeed seed, int artisanWeight)
+        : this(players, seed, artisanWeight, ContentSets.Default)
+    {
+    }
+
+    /// <summary>建立账本，并带上对局内容集（<paramref name="contentSet"/> 决定棋池类型：v1 六种、v2 十种）。</summary>
+    public HandLedger(IEnumerable<PlayerId> players, GameSeed seed, int artisanWeight, ContentSet contentSet)
     {
         ArgumentNullException.ThrowIfNull(players);
         RecruitWeights.RequireValidArtisanWeight(artisanWeight);
         _artisanWeight = artisanWeight;
+        ContentSet = ContentSets.RequireValid(contentSet);
         foreach (PlayerId player in players)
         {
             if (_players.ContainsKey(player))
@@ -308,11 +318,15 @@ public sealed class HandLedger
     public static HandLedger Restore(GameSeed seed, HandLedgerState state) =>
         Restore(seed, state, RecruitWeights.DefaultArtisanWeight);
 
-    /// <summary>从 <see cref="Export"/> 的结果恢复账本，并带上对局配置的匠人征募权重。</summary>
-    public static HandLedger Restore(GameSeed seed, HandLedgerState state, int artisanWeight)
+    /// <summary>从 <see cref="Export"/> 的结果恢复账本，并带上对局配置的匠人征募权重（内容集取缺省）。</summary>
+    public static HandLedger Restore(GameSeed seed, HandLedgerState state, int artisanWeight) =>
+        Restore(seed, state, artisanWeight, ContentSets.Default);
+
+    /// <summary>从 <see cref="Export"/> 的结果恢复账本，并带上对局配置的匠人征募权重与内容集（二者由对局存档给出，账本状态本身不含）。</summary>
+    public static HandLedger Restore(GameSeed seed, HandLedgerState state, int artisanWeight, ContentSet contentSet)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var ledger = new HandLedger(state.Players.Select(p => new PlayerId(p.Player)), seed, artisanWeight);
+        var ledger = new HandLedger(state.Players.Select(p => new PlayerId(p.Player)), seed, artisanWeight, contentSet);
         foreach (PlayerHandState saved in state.Players)
         {
             PlayerState target = ledger._players[new PlayerId(saved.Player)];
@@ -390,7 +404,8 @@ public sealed class HandLedger
         }
 
         // D3 / D4：权重按当前快照现算，每个候选位独立抽取、允许重复；只消费 recruit 子流。
-        int[] table = RecruitWeights.AdjustedTable(snapshot, _artisanWeight);
+        // 表长随内容集（more-pieces-relics D8）：v1 六档，与引入新棋子之前的累积权重逐位相同；下标对 Order 通用（v1 是 v2 的前缀）。
+        int[] table = RecruitWeights.AdjustedTable(snapshot, _artisanWeight, ContentSet);
         ImmutableArray<PieceType>.Builder candidates = ImmutableArray.CreateBuilder<PieceType>(snapshot.RevealCount);
         for (int i = 0; i < snapshot.RevealCount; i++)
         {

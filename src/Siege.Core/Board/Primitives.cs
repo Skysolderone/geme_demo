@@ -13,7 +13,11 @@ public enum Terrain
     Obstacle,
 }
 
-/// <summary>六种原型棋子。基础军势与效果属于计分层，本层只负责类型标识。</summary>
+/// <summary>
+/// 棋子类型。基础军势与效果属于计分层，本层只负责类型标识。
+/// 枚举值只在末尾追加（more-pieces-relics D9）：存档 / 日志可能按整数写枚举，插在中间会改变旧值的含义；
+/// 固定类型次序（征募表、预筛代表类型）即枚举次序。对局内容集 v1 只含前六种（见 <see cref="ContentSets"/>）。
+/// </summary>
 public enum PieceType
 {
     /// <summary>普通子，基础军势 1。</summary>
@@ -33,6 +37,18 @@ public enum PieceType
 
     /// <summary>匠人，基础军势 1；能力只在落子瞬间改造地形（见 <c>terrain-edit</c>），落子后与普通子完全相同。</summary>
     Artisan,
+
+    /// <summary>旗手子，基础军势 1；自身格与气边邻格中每个信物格 +3 位置加值（more-pieces-relics）。</summary>
+    Bannerman,
+
+    /// <summary>铁链子，基础军势 1；为所在棋串提供"棋串棋子数 − 1"位置加值。</summary>
+    Chain,
+
+    /// <summary>哨兵子，基础军势 1；气边邻格上每个非己方棋子 +2 位置加值。</summary>
+    Sentry,
+
+    /// <summary>界碑子，基础军势 1；气边邻格中每个己方独占空格 +1 位置加值。</summary>
+    Boundary,
 }
 
 /// <summary>信物格所属的强度预算分区。</summary>
