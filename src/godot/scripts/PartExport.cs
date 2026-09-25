@@ -8,7 +8,7 @@ namespace Siege.Godot;
 /// </summary>
 /// <remarks>
 /// 同色同粗糙度的材质合并成一份 <c>materials/*.tres</c>，各部件场景外部引用它（改一处材质，全部部件跟着变）；网格作为场景内子资源内嵌。
-/// 变体只导出"看得出差别"的那几档：岩石 / 遗迹的朝向随 variant 连续变，取前 4 档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
+/// 变体只导出"看得出差别"的那几档（档数见 <see cref="TerrainParts"/>）：岩石 / 遗迹的朝向随 variant 连续变，取前 4 档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
 /// </remarks>
 public static class PartExport
 {
@@ -19,50 +19,15 @@ public static class PartExport
         string materialDir = $"{dir}/materials";
         DirAccess.MakeDirRecursiveAbsolute(ProjectSettings.GlobalizePath(materialDir));
 
+        // 部件清单与变体档数只在 TerrainParts 一处（棋盘加载资源用的也是这张表）。导出一律走程序生成，不读已有资源——资源是它的快照。
         var parts = new List<(string Name, Node3D Node)>();
-        for (int v = 0; v < 4; v++)
+        foreach (TerrainParts.Kind kind in TerrainParts.All)
         {
-            parts.Add(($"rock_{v}", LowPoly.Rock(v)));
-            parts.Add(($"ruins_{v}", LowPoly.Ruins(v)));
+            for (int v = 0; v < kind.Variants; v++)
+            {
+                parts.Add((Path.GetFileNameWithoutExtension(kind.FileName(v)), kind.Build(v)));
+            }
         }
-
-        for (int v = 0; v < 7; v++)
-        {
-            parts.Add(($"pines_{v}", LowPoly.Pines(v)));
-        }
-
-        for (int v = 0; v < 3; v++)
-        {
-            parts.Add(($"trees_{v}", LowPoly.Trees(v)));
-        }
-
-        // 新地表（terrain-surfaces）：荒漠朝向按 variant % 2、侧臂按 variant % 3，取 0–5 共 6 档。
-        for (int v = 0; v < 6; v++)
-        {
-            parts.Add(($"desert_{v}", LowPoly.Desert(v)));
-        }
-
-        // 沼泽：水洼布局按 variant % 3、朝向按 variant % 2，取 0–5。
-        for (int v = 0; v < 6; v++)
-        {
-            parts.Add(($"marsh_{v}", LowPoly.Marsh(v)));
-        }
-
-        // 岩台：裂纹条数与碎石朝向按 variant % 2、裂纹转角按 variant，取 0–3。
-        for (int v = 0; v < 4; v++)
-        {
-            parts.Add(($"crag_{v}", LowPoly.Crag(v)));
-        }
-
-        // 浅滩：水纹朝向与鹅卵石颗数按 variant % 2、石子大小按 variant % 3，取 0–5。
-        for (int v = 0; v < 6; v++)
-        {
-            parts.Add(($"shallows_{v}", LowPoly.Shallows(v)));
-        }
-
-        parts.Add(("fence_x", LowPoly.Fence(alongX: true)));
-        parts.Add(("fence_z", LowPoly.Fence(alongX: false)));
-        parts.Add(("bridge", LowPoly.Bridge()));
 
         var materials = new Dictionary<string, StandardMaterial3D>();
         int failures = 0;

@@ -82,6 +82,8 @@ public sealed partial class BoardView : Node3D
 
         // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次；地形被改造后 Refresh 也会再搭一次（见 TerrainKeyOf）。
         Clear(this);
+        int loadedBefore = TerrainParts.LoadedCount;
+        int generatedBefore = TerrainParts.GeneratedCount;
         _zoneOwners = zoneOwners;
         _terrainKey = TerrainKeyOf(board);
         _tileMaterials.Clear();
@@ -159,7 +161,7 @@ public sealed partial class BoardView : Node3D
                 _tileBase[cell.Coord] = water;
                 if (cell.HasBridge)
                 {
-                    Node3D bridge = LowPoly.Bridge();
+                    Node3D bridge = TerrainParts.Create(TerrainParts.Bridge);
                     bridge.Position = waterCenter;
                     tiles.AddChild(bridge);
                 }
@@ -183,7 +185,7 @@ public sealed partial class BoardView : Node3D
                 // 障碍格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
                 color = Visuals.TileObstacle;
                 int pick = unchecked((int)(((uint)(cell.Coord.X * 73856093) ^ (uint)(cell.Coord.Y * 19349663)) % 100u));
-                Node3D obstacle = pick < 40 ? LowPoly.Rock(variant++) : pick < 82 ? LowPoly.Pines(variant++) : LowPoly.Ruins(variant++);
+                Node3D obstacle = TerrainParts.Create(pick < 40 ? TerrainParts.Rock : pick < 82 ? TerrainParts.Pines : TerrainParts.Ruins, variant++);
                 obstacle.Position = center;
                 _decoration.AddChild(obstacle);
             }
@@ -225,7 +227,7 @@ public sealed partial class BoardView : Node3D
 
             if (playable && cell.Surface == Surface.Forest)
             {
-                Node3D trees = LowPoly.Trees(variant++);
+                Node3D trees = TerrainParts.Create(TerrainParts.Trees, variant++);
                 trees.Position = center;
                 _decoration.AddChild(trees);
             }
@@ -233,28 +235,28 @@ public sealed partial class BoardView : Node3D
             // 新地表的形状提示（terrain-surfaces S-8）：和林地的小树一样放在装饰层，渲染在一切判读信息之下。
             if (playable && cell.Surface == Surface.Desert)
             {
-                Node3D desert = LowPoly.Desert(variant++);
+                Node3D desert = TerrainParts.Create(TerrainParts.Desert, variant++);
                 desert.Position = center;
                 _decoration.AddChild(desert);
             }
 
             if (playable && cell.Surface == Surface.Marsh)
             {
-                Node3D marsh = LowPoly.Marsh(variant++);
+                Node3D marsh = TerrainParts.Create(TerrainParts.Marsh, variant++);
                 marsh.Position = center;
                 _decoration.AddChild(marsh);
             }
 
             if (playable && cell.Surface == Surface.Crag)
             {
-                Node3D crag = LowPoly.Crag(variant++);
+                Node3D crag = TerrainParts.Create(TerrainParts.Crag, variant++);
                 crag.Position = center;
                 _decoration.AddChild(crag);
             }
 
             if (playable && cell.Surface == Surface.Shallows)
             {
-                Node3D shallows = LowPoly.Shallows(variant++);
+                Node3D shallows = TerrainParts.Create(TerrainParts.Shallows, variant++);
                 shallows.Position = center;
                 _decoration.AddChild(shallows);
             }
@@ -271,6 +273,9 @@ public sealed partial class BoardView : Node3D
         }
 
         AddFloatingIsland(board, apron);
+
+        // 自证地形部件的来源：有资源时应当全部来自资源（TerrainParts），程序生成数为 0。
+        GD.Print($"[parts] 本次搭建地形部件：资源 {TerrainParts.LoadedCount - loadedBefore} 件、程序生成 {TerrainParts.GeneratedCount - generatedBefore} 件（{TerrainParts.Directory}）");
 
         BuildCoordinateLabels();
 
@@ -576,7 +581,7 @@ public sealed partial class BoardView : Node3D
         int level = Math.Max(LevelOf(fence.A) ?? 0, LevelOf(fence.B) ?? 0);
         Vector3 a = BoardGeometry.Center(fence.A, _width, _height, level);
         Vector3 b = BoardGeometry.Center(fence.B, _width, _height, level);
-        Node3D post = LowPoly.Fence(alongX: fence.A.X == fence.B.X);
+        Node3D post = TerrainParts.Create(fence.A.X == fence.B.X ? TerrainParts.FenceX : TerrainParts.FenceZ);
         post.Position = (a + b) * 0.5f;
         parent.AddChild(post);
     }
