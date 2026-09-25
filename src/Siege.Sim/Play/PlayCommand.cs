@@ -17,9 +17,11 @@ internal static class PlayCommand
     /// <param name="weights">测试接缝：AI 评价权重；<c>null</c> = 默认权重表。终端入口不传（ai-eye R12：终端对局一律用缺省值，不加选项）。</param>
     /// <param name="passThreshold">测试接缝：AI 停手阈值；<c>null</c> = 难度预设的缺省值。终端入口不传（同上）。
     /// 依赖 AI 实际走法的脚本测试用这两项写死权重与阈值，使脚本不随默认值校准而失步（testing.md「依赖 AI 实际怎么走的断言要把权重写死」）。</param>
+    /// <param name="flagRisk">测试接缝：原型插旗的冒险概率；<c>null</c> = 对局配置缺省值（<see cref="MatchOptions.DefaultFlagRisk"/>）。终端入口不传（flag-contest D2，同上）。
+    /// 依赖出生区与走法的脚本测试写死 0，使脚本不随缺省冒险概率变化而失步。</param>
     public static int Run(
         ulong? seedArg, int playerCount, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
-        EvaluationWeights? weights = null, int? passThreshold = null)
+        EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null)
     {
         map ??= MapCatalog.Resolve(null);
         AiSearchConfig search = AiSearchConfig.ForMap(difficulty, map.PlayableCount, cellLimit);
@@ -38,7 +40,8 @@ internal static class PlayCommand
         ulong seed = seedArg ?? (ulong)Stopwatch.GetTimestamp();
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         PlayerId me = players[seat - 1];
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate);
+        MatchFlow match = MatchFlow.Create(
+            map, new GameSeed(seed), players, flagRisk is int risk ? MatchOptions.Immediate with { FlagRisk = risk } : MatchOptions.Immediate);
         var render = new BoardRenderer(output);
 
         output.WriteLine();
@@ -61,7 +64,8 @@ internal static class PlayCommand
         try
         {
             int zone = ChooseZone(match, me, map, input, output, render);
-            // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4）：标准图按编号顺排，平台多于人数的图由种子选区。
+            // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区，
+            // 否则标准图按编号顺排，平台多于人数的图由种子选区。
             ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
 
             var runner = new MatchRunner(match);

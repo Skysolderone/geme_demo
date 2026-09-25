@@ -26,7 +26,7 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 地图规格档（标准 / 边疆）的分流 | `MapValidator` 里"规则 → 处理方式"的一张声明表（frontier-map D2）。校验器别处不得出现对规格档的分支，下游（对局、AI、Sim、表现层、`src/godot/`）不得读 `Profile`——要按图的大小分流就读可落子格数（如 `AiSearchConfig.DefaultCellLimitFor`）。守门在 `地图规格档Tests` / `边疆档静态校验Tests`，属性模式、强转比较等绕法已做过变异 |
 | "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省恒为 `siege-4p-base-v5`。加内置图只在 `Builtins` 表加一行（含面向人的显示名，`BuiltinMaps`）。生成图 `gen:<种子>[:p<N>]` 也只经它解析——`FrontierMapGenerator` 的唯一生产调用方就是 `MapCatalog`；选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`） |
 | 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——生成器一旦改版，同一 `gen:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
-| 原型插旗路径的 AI 选区 | `PrototypeZoneAssignment`（见 `determinism.md` 的 `zone-pick`）；三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门） |
+| 原型插旗路径的 AI 选区（含冒险概率） | `PrototypeZoneAssignment`（见 `determinism.md` 的 `zone-pick` 与 `flag-risk`）；三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门） |
 | AI 候选格上限的缺省值 | `AiSearchConfig.ForMap` / `DefaultCellLimitFor`（可落子格 > 150 取 24，否则 0）；显式配置含 0 优先；实际生效值进 `config.json` 与日志首部，`Replayer` 按首部重建、缺项按不限制 |
 | 相机位姿 | 纯计算在 `Siege.Presentation.Camera`（状态只有注视点与距离，俯角恒 60°、朝向恒定——缩放若带俯角变化，拾取会在某个缩放档静默出错）；`src/godot/` 只采输入，写相机节点的唯一位置是 `BoardView.ApplyCameraPose` |
 | 图形版命令行 | `LaunchArgs`：只校验 `--` 之后的用户参数，合法选项集合唯一来自读取动作，未知 / 带错值一律退出码 1 并列出合法选项；全仓没有第二个读原始命令行的地方 |

@@ -33,7 +33,7 @@ public class 防死锁硬停Tests
         // 变异验证 M-RC3（check）：硬停改为 `return false` 且会话收尾把未终局对局记成 MajorRoundLimit 终局 → 红 1（本测试：IsFailed 为 false）。
         Assert.Equal(1_000, RunConfig.DefaultMaxTurns);
 
-        RunConfig config = SimFixtures.Config(retention: EventRetention.SnapshotsOnly) with { MaxTurns = 30, TurnLimit = 0 };   // 截断关闭（0），只剩硬停兜底
+        RunConfig config = SimFixtures.Config(retention: EventRetention.SnapshotsOnly) with { MaxTurns = 30, TurnLimit = 0, FlagRisk = 0 };   // flag-contest：写死冒险概率 0   // 截断关闭（0），只剩硬停兜底
         MatchSession session = AlwaysPlacing(config, 302);
 
         MatchLog log = session.Run();

@@ -61,10 +61,14 @@ internal static class SimFixtures
     /// <summary>ai-eye 4.5 定值之前（段 B–D1）实际生效的缺省停手阈值（段 B 初值 20；现缺省为校准值 80）。</summary>
     internal const int PreCalibrationPassThreshold = 20;
 
-    /// <summary>把配置的权重与停手阈值写死为 4.5 定值之前的缺省（见 <see cref="PreCalibrationWeights"/>）。</summary>
+    /// <summary>
+    /// 把配置的权重与停手阈值写死为 4.5 定值之前的缺省（见 <see cref="PreCalibrationWeights"/>），冒险概率写死为 0（flag-contest 1.3：
+    /// 这些样本的黄金值钉在引入冒险概率之前，p = 0 时锁定结果逐项不变；不写死则缺省 p = 15 会让部分种子开局同区、走法随之变）。
+    /// </summary>
     internal static RunConfig PinPreCalibration(RunConfig config) => config with
     {
         PassThreshold = PreCalibrationPassThreshold,
+        FlagRisk = 0,
         Players = [.. config.Players.Select(p => p with { Weights = PreCalibrationWeights })],
     };
 

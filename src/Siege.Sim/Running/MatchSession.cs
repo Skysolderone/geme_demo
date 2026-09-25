@@ -107,7 +107,7 @@ public sealed class MatchSession
     /// <summary>
     /// <paramref name="recorded"/> 为 <c>true</c> 即按日志首部的配置原样重建（回放）：不把候选格上限按地图落成缺省值，
     /// 首部没有该项就是不限制——否则该项出现之前的大图旧日志会被按新缺省 K 重跑而中途分歧，重建出的首部也会多出一项。
-    /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。
+    /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。冒险概率同理：首部没有该项按 0（不冒险）重建。
     /// </summary>
     internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded)
     {
@@ -126,8 +126,12 @@ public sealed class MatchSession
         }
 
         PlayerId[] players = config.PlayerIds();
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight });
-        // 选区的唯一实现在 Core（frontier-map D4）：区数不多于人数上限时 P<i> → 区 <i>（与此前逐项相同），否则由种子的独立子流均匀选区。
+        // 冒险概率（flag-contest D2）：新建的局已由 ResolvedFor 落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时没有冒险，按 0 重建。
+        int flagRisk = config.FlagRisk ?? (recorded ? 0 : MatchOptions.DefaultFlagRisk);
+        MatchFlow match = MatchFlow.Create(
+            map, new GameSeed(seed), players, MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk });
+        // 选区的唯一实现在 Core（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区；否则区数不多于人数上限时顺排
+        // （p = 0 时 P<i> → 区 <i>，与此前逐项相同），多于时由种子的独立子流均匀选区。
         match.PlantPrototype();
         return new MatchSession(match, config, recorded);
     }

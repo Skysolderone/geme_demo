@@ -34,7 +34,9 @@ public class 批量跑局Tests
         // config.json 写实际生效配置——未显式配置的权重填默认表（旧期望 config.ToJson() 原样 → 新期望 Effective()）。
         // ai-eye 段 B：未配置的停手阈值同样落成实际生效的缺省值写入（ai-decision「停手阈值」：实际生效的阈值 MUST 写入批次配置记录）。
         Assert.Null(config.PassThreshold);
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold }).Effective().ToJson(), saved.ToJson());
+        // flag-contest D2：未配置的冒险概率同样落成缺省值 15 写入（不落成就无法与"首部缺该项 = 旧日志 = 0"区分）。
+        Assert.Null(config.FlagRisk);
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
         Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
@@ -43,7 +45,7 @@ public class 批量跑局Tests
         Assert.All(logs, l =>
         {
             Assert.NotNull(l.Result);
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率
             Assert.InRange(l.Result!.MajorRound, 1, 3);
         });
 

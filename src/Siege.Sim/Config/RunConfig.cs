@@ -58,7 +58,7 @@ public sealed record RunConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool MapPerMatch { get; init; }
 
-    /// <summary>各玩家配置；玩家编号即下标（P0、P1……），插旗时 P<i>i</i> 锁定出生区 <i>i</i>。</summary>
+    /// <summary>各玩家配置；玩家编号即下标（P0、P1……）。标准图上冒险概率为 0 时插旗 P<i>i</i> 锁定出生区 <i>i</i>，否则见 <see cref="FlagRisk"/>。</summary>
     public List<PlayerAiConfig> Players { get; init; } = [new(), new(), new(), new()];
 
     /// <summary>首个种子；第 <i>i</i> 局的种子 = SeedStart + i。</summary>
@@ -89,6 +89,13 @@ public sealed record RunConfig
     /// 与候选格上限同口径：只作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家——显式的剪枝参数（含其中的阈值）原样生效。命令行 <c>--pass-threshold</c>。
     /// </summary>
     public int? PassThreshold { get; init; }
+
+    /// <summary>
+    /// 原型插旗的冒险概率（<see cref="MatchOptions.FlagRisk"/>，flag-contest D2；0–100）：<c>null</c> = 新建的局取 <see cref="MatchOptions.DefaultFlagRisk"/>，
+    /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 0 重建
+    /// （p = 0 与引入之前逐项相同）。命令行 <c>--flag-risk</c>。
+    /// </summary>
+    public int? FlagRisk { get; init; }
 
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
@@ -183,6 +190,11 @@ public sealed record RunConfig
             throw new ArgumentException("停手阈值须为非负整数（0 = 严格提高即保留）。");
         }
 
+        if (FlagRisk is < 0 or > 100)
+        {
+            throw new ArgumentException("冒险概率须为 0–100 的整数百分比（0 = 不冒险，与引入之前逐项相同）。");
+        }
+
         if (FullEventSamplePermille is < 0 or > 1000)
         {
             throw new ArgumentException("抽样千分比须在 0..1000。");
@@ -214,9 +226,9 @@ public sealed record RunConfig
         this with { Players = [.. Players.Select(p => p with { Weights = p.Weights ?? EvaluationWeights.Default })] };
 
     /// <summary>
-    /// 把"按地图自动"的候选格上限与缺省停手阈值落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K 与阈值。
-    /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>
-    /// （缺省非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分）。幂等。
+    /// 把"按地图自动"的候选格上限与缺省停手阈值、缺省冒险概率落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K、阈值与 p。
+    /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
+    /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分）。幂等。
     /// </summary>
     public RunConfig ResolvedFor(MapData map)
     {
@@ -224,7 +236,8 @@ public sealed record RunConfig
         RunConfig resolved = CandidateCellLimit is null && AiSearchConfig.DefaultCellLimitFor(map.PlayableCount) is > 0 and int auto
             ? this with { CandidateCellLimit = auto }
             : this;
-        return resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
+        resolved = resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
+        return resolved.FlagRisk is null ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
     }
 
     /// <summary>

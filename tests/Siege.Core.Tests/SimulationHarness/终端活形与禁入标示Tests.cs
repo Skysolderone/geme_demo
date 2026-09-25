@@ -125,7 +125,7 @@ public class 终端活形与禁入标示Tests
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(31, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output);
+        int exit = PlayCommand.Run(31, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, flagRisk: 0);   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0
         string text = output.ToString();
 
         Assert.Equal(0, exit);

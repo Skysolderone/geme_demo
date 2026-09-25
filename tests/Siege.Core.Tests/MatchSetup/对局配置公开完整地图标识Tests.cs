@@ -164,7 +164,8 @@ public class 对局配置公开完整地图标识Tests
         // 生成器不与对局共享任何随机状态。
         static (string Relics, string Order, string Zones) Open()
         {
-            MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FrontierMapV2.Id), new GameSeed(42), Four, MatchOptions.Immediate);
+            // flag-contest：黄金选区钉在引入冒险概率之前，写死 p = 0。
+            MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FrontierMapV2.Id), new GameSeed(42), Four, MatchOptions.Immediate with { FlagRisk = 0 });
             var choices = match.PlantPrototype();
             return (match.Relics.Generation.Serialize(), string.Join(",", match.ActionOrder.Select(p => p.Value)), string.Join(",", choices.Select(c => c.Zone)));
         }

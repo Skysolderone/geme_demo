@@ -265,7 +265,26 @@ public sealed record BalanceReport(
     EndingSection Ending,
     MapScaleSection MapScale,
     TerritoryShareSection TerritoryShare,
-    LifeShapeSection LifeShape);
+    LifeShapeSection LifeShape,
+    SharedZoneSection SharedZones);
+
+/// <summary>
+/// 插旗同区（flag-contest D3，只报告）：同区 = 该局日志首部锁定的出生区（<see cref="LogHeader.Zones"/>）里有两名及以上玩家落在同一个区；
+/// 同区玩家 = 与至少一名其他玩家同区的玩家。
+/// </summary>
+/// <param name="Matches">纳入局数（占比的分母，含截断局——同区是开局属性，与名次无关）。</param>
+/// <param name="SharedMatches">有同区的纳入局数。</param>
+/// <param name="SharedShare">有同区的局占纳入局的比例（无纳入局时为 NaN）。</param>
+/// <param name="RankedSharedMatches">有同区且有名次的局数（截断局没有名次与胜者，不计入名次与胜率）。</param>
+/// <param name="MeanSharedRank">同区玩家的平均终局名次（有名次局里每名同区玩家计一次；无样本时为 NaN）。</param>
+/// <param name="SharedWinRate">同区玩家的胜率（分母 = 有名次局里的同区玩家人次）。</param>
+public sealed record SharedZoneSection(
+    int Matches,
+    int SharedMatches,
+    double SharedShare,
+    int RankedSharedMatches,
+    double MeanSharedRank,
+    Proportion SharedWinRate);
 
 /// <summary>首次活形确立大回合的一个分组（均值与样本数）。</summary>
 public sealed record RoundStat(double Mean, int Samples);
@@ -359,7 +378,57 @@ public static class BalanceAnalyzer
             Ending(included, ranked.Count),
             MapScale(included),
             TerritoryShare(included),
-            LifeShape(included, rankable));
+            LifeShape(included, rankable),
+            SharedZones(included, ranked));
+    }
+
+    // ---------- 插旗同区（flag-contest D3） ----------
+
+    /// <param name="logs">全部纳入局：同区对局数与占比（同区是开局属性，截断局照样计）。</param>
+    /// <param name="ranked">有名次的局：同区玩家的名次与胜率（截断局没有名次与胜者，MUST NOT 以"未胜"计入）。</param>
+    private static SharedZoneSection SharedZones(List<MatchLog> logs, List<MatchLog> ranked)
+    {
+        int shared = logs.Count(l => SharedZonePlayers(l).Count > 0);
+        int rankedShared = 0, wins = 0;
+        var ranks = new List<double>();
+        foreach (MatchLog log in ranked)
+        {
+            List<int> players = SharedZonePlayers(log);
+            if (players.Count == 0)
+            {
+                continue;
+            }
+
+            rankedShared++;
+            foreach (int player in players)
+            {
+                StandingEntry standing = log.Result!.Standings.FirstOrDefault(s => s.Player == player)
+                    ?? throw new FormatException($"种子 {log.Header.Seed}：有名次的局里同区玩家 P{player} 没有终局名次。");
+                ranks.Add(standing.Rank);
+                wins += log.Result.Winners.Contains(player) ? 1 : 0;
+            }
+        }
+
+        return new SharedZoneSection(
+            logs.Count,
+            shared,
+            logs.Count == 0 ? double.NaN : (double)shared / logs.Count,
+            rankedShared,
+            Statistics.Mean(ranks),
+            Statistics.Wilson(wins, ranks.Count));
+    }
+
+    /// <summary>
+    /// 一局里的同区玩家（玩家编号升序）：日志首部锁定区（<see cref="LogHeader.Zones"/>，下标 = 玩家在 <see cref="LogHeader.Players"/> 里的位置）
+    /// 与至少一名其他玩家相同的玩家。未锁定（区号 &lt; 0）的不算。
+    /// </summary>
+    internal static List<int> SharedZonePlayers(MatchLog log)
+    {
+        List<int> zones = log.Header.Zones;
+        return [.. Enumerable.Range(0, zones.Count)
+            .Where(i => zones[i] >= 0 && zones.Count(z => z == zones[i]) > 1)
+            .Select(i => log.Header.Players[i])
+            .Order()];
     }
 
     // ---------- 活形（life-shape 4.2） ----------

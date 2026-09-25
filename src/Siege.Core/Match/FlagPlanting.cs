@@ -32,6 +32,15 @@ public sealed record MatchOptions
     /// 属于对局配置：开局固定、公开、入存档；对局进行中不可改。
     /// </summary>
     public int ArtisanWeight { get; init; } = DefaultArtisanWeight;
+
+    /// <summary>原型插旗路径的冒险概率缺省值（flag-contest：负责人 2026-09-25 裁决 15%，初值、未校准）。</summary>
+    public const int DefaultFlagRisk = 15;
+
+    /// <summary>
+    /// 原型插旗路径的冒险概率 p（flag-contest D1 / D2；0–100 的整数百分比）：未由人指定的玩家在它之前已有旗时，以 p% 加入一个已有人的出生区。
+    /// p = 0 时锁定结果与引入冒险概率之前逐项相同。只作用于 <see cref="MatchFlow.PlantPrototype"/>，与正式的同时插旗无关。
+    /// </summary>
+    public int FlagRisk { get; init; } = DefaultFlagRisk;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

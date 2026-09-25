@@ -29,6 +29,12 @@ public readonly record struct GameSeed(ulong Value)
     /// </summary>
     public const string ZonePick = "zone-pick";
 
+    /// <summary>
+    /// 原型插旗路径的冒险抽签子流名（flag-contest D1）：未由人指定的玩家在已有旗时抽一次 <c>[0,100)</c>，命中再在已有人的出生区里均匀选一个。
+    /// 独立命名，MUST NOT 扰动信物生成、首回合顺序、原型选区（<see cref="ZonePick"/>）与 AI 决策的既有序列。
+    /// </summary>
+    public const string FlagRisk = "flag-risk";
+
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
     private const ulong Golden = 0x9E3779B97F4A7C15UL;

@@ -108,6 +108,7 @@ public sealed partial class MatchFlow
         }
 
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
+        PrototypeZoneAssignment.RequireValidFlagRisk(options.FlagRisk);
         return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed, options.ArtisanWeight), new BoardHistory(), options);
     }
 
@@ -248,13 +249,14 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 原型替代路径的一站式入口（frontier-map D4）：<paramref name="manual"/> 是人工指定的那一名玩家及其区号，其余玩家的区由
-    /// <see cref="PrototypeZoneAssignment"/> 给出（区数不多于地图人数上限时按编号顺排，否则由种子的独立子流均匀选区），随后依次插旗并锁定。
+    /// <see cref="PrototypeZoneAssignment"/> 给出（此前已有旗时以对局配置的冒险概率 <see cref="MatchOptions.FlagRisk"/> 加入已有人的区——flag-contest D1；
+    /// 否则区数不多于地图人数上限时按编号顺排，多于时由种子的独立子流均匀选区），随后依次插旗并锁定。
     /// 批量跑局、终端版与图形版都走这里；返回每名玩家的选择（顺序同 <see cref="Players"/>）。
     /// </summary>
     public ImmutableArray<(PlayerId Player, int Zone)> PlantPrototype((PlayerId Player, int Zone)? manual = null)
     {
         RequirePhase(MatchPhase.FlagPlanting);
-        ImmutableArray<(PlayerId Player, int Zone)> choices = PrototypeZoneAssignment.Assign(Board.BaseMap, Seed, _players, manual);
+        ImmutableArray<(PlayerId Player, int Zone)> choices = PrototypeZoneAssignment.Assign(Board.BaseMap, Seed, _players, Options.FlagRisk, manual);
         PlantSequentially(choices);
         return choices;
     }

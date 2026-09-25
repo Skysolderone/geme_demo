@@ -170,6 +170,10 @@ public static class ReportWriter
         sb.AppendLine($"- 终局领地分占参赛玩家总势力：全批次平均 {Pct(ts.MeanShare)}（纳入 {ts.Matches} 局；排除缺领地分字段的旧日志 / 参赛玩家势力为 0 的局 {ts.Skipped} 局）");
         HighGroundSection hg = r.HighGround;
         sb.AppendLine($"- 终局高地加值占全部位置加值：{Pct(hg.HighGroundShare)}（{hg.FinalHighGroundBonus}/{hg.FinalPositionBonus}）");
+        sb.AppendLine("### 11. 插旗同区（flag-contest：原型插旗冒险概率；同区 = 日志首部锁定区里有两名及以上玩家同区；只报告）");
+        SharedZoneSection sz = r.SharedZones;
+        sb.AppendLine($"- 同区对局 {sz.SharedMatches} 局，占纳入局 {sz.Matches} 局的 {Pct(sz.SharedShare)}");
+        sb.AppendLine($"- 有名次的同区局 {sz.RankedSharedMatches} 局、同区玩家 {sz.SharedWinRate.Trials} 人次：平均名次 {Num(sz.MeanSharedRank)}，胜率 {sz.SharedWinRate}（截断局不计）");
         sb.AppendLine();
 
         sb.AppendLine("## §17-11 地形改造（artisan-terrain-edit）");
