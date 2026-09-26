@@ -75,7 +75,9 @@ public static class Replayer
         }
 
         // 原样使用首行配置：失败局自动提升为完整事件流、抽样由 sim-sample 子流决定，二者都只由种子 + 配置决定。
-        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true).Run();
+        // 带入按首部记录的各玩家带入重建（simulation-harness「可复现回放」），MUST NOT 按配置的带入数量重抽；首部缺该项的旧日志按无带入回放。
+        RecordedCarry? carry = header.CarryInOut is { } carryInOut ? new RecordedCarry(carryInOut, original.CarryIns) : null;
+        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true, carry).Run();
         return Compare(original, replayed);
     }
 

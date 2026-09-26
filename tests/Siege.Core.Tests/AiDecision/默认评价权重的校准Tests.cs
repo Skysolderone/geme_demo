@@ -164,8 +164,9 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 反面：只改一个未扫档维度，记录随之不同——口径不同的两份数据从记录上就区分得开，不会被当成同口径直接比较。
         EvaluationWeights other = EvaluationWeights.Default with { Growth = EvaluationWeights.Default.Growth + 1 };
         RunConfig changed = config with { Players = [.. config.Players.Select(p => p with { Weights = other })] };
-        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default }).Effective().ToJson());
-        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default }).Effective().ToJson());
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
+        // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
     }
 
     /// <summary>

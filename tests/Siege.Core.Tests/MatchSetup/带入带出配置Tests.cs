@@ -74,6 +74,11 @@ public class 带入带出配置Tests
         JsonNode saved = JsonNode.Parse(match.Serialize())!;
         Assert.False(saved["CarryInOut"]!.GetValue<bool>());
         Assert.Empty(saved["CarryIns"]!.AsArray());
+
+        // 日志首部同样写明（段 C）：不配置带入数量的跑局，首部开关写 false、带入写空表，不是缺字段。
+        JsonNode header = JsonNode.Parse(MatchSession.Create(SimFixtures.Config(turnLimit: 1), 5).Run().DeterministicText().Split('\n')[0])!;
+        Assert.False(header["CarryInOut"]!.GetValue<bool>());
+        Assert.Empty(header["CarryIns"]!.AsArray());
     }
 
     [Fact]

@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Siege.Core\Siege.Core.csproj" />
+    <!-- 补给等面向玩家的文案与图形版共用一份（carry-in-out 段 B 后裁决 3）；Siege.Presentation 同样零 Godot 依赖。 -->
+    <ProjectReference Include="..\Siege.Presentation\Siege.Presentation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

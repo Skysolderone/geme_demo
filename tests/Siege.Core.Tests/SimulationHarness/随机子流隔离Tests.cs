@@ -52,4 +52,31 @@ public class 随机子流隔离Tests
         Assert.Equal(new Siege.Core.Determinism.GameSeed(61).Stream(MatchSession.SampleStream).NextInt(1000), new Siege.Core.Determinism.GameSeed(61).Stream(MatchSession.SampleStream).NextInt(1000));
         Assert.Equal(MatchPhase.InProgress, MatchSession.Create(config, 61).Match.Phase);
     }
+
+    [Fact]
+    public void 带入子流不扰动其他子流()
+    {
+        // 规格 Scenario：同一种子下分别以 --carry-in 0 与 --carry-in 1 创建对局 → 两局的信物分布逐格相同，第 1 大回合行动顺序相同。
+        // AI 带入走独立子流 carry-ai、征召签走 carry-draft:<编号>（GameSeed.Stream 按名派生，互不消费），所以本条在结构上成立；
+        // 这里钉的是跑局入口没有绕开子流去动其他随机源。样本口径下界：--carry-in 1 的局确实每人带了 1 件、且至少一局开局手牌与 0 不同。
+        RunConfig config = SimFixtures.Config(turnLimit: 4);
+        int handsDiffer = 0;
+        foreach (ulong seed in new ulong[] { 1, 2, 3, 4, 5 })
+        {
+            MatchSession off = MatchSession.Create(config with { CarryIn = 0 }, seed);
+            MatchSession on = MatchSession.Create(config with { CarryIn = 1 }, seed);
+
+            Assert.False(off.Match.CarryInOut);
+            Assert.Empty(off.Match.CarryIns);
+            Assert.True(on.Match.CarryInOut);
+            Assert.Equal(4, on.Match.CarryIns.Count);
+            Assert.Equal(off.Match.Relics.Generation.Placements.Select(r => r.ToString()), on.Match.Relics.Generation.Placements.Select(r => r.ToString()));
+            Assert.Equal(off.Match.ActionOrder.Select(p => p.Value), on.Match.ActionOrder.Select(p => p.Value));
+            Assert.Equal(1, off.Match.MajorRound);
+            Assert.Equal(1, on.Match.MajorRound);
+            handsDiffer += off.Match.Players.Any(p => CarryInOut.CarryFixtures.HandText(off.Match, p) != CarryInOut.CarryFixtures.HandText(on.Match, p)) ? 1 : 0;
+        }
+
+        Assert.Equal(5, handsDiffer);
+    }
 }

@@ -17,10 +17,20 @@ namespace Siege.Core.Tests.CarryInOut;
 /// </remarks>
 public class 终端的带入选择弃赛与结算显示Tests
 {
+    /// <summary>
+    /// 脚本里 AI 的评价权重与停手阈值（段 B 后裁决 2，testing.md「依赖 AI 实际怎么走的断言要把权重写死」）：「弃赛命令」要靠 AI 把对局撑到第 6 大回合、
+    /// 弃赛后再自然终局，走法随权重变。这里抄写段 B 落定时的缺省值（ai-eye 定值），此后调默认权重不会让脚本失步。
+    /// </summary>
+    private static readonly EvaluationWeights ScriptWeights =
+        new(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 200, Threat: 25);
+
+    private const int ScriptPassThreshold = 80;
+
     private static (int Exit, string Text) Play(string script, CarryProfileStore? profile, ulong seed = 42)
     {
         var output = new StringWriter();
-        int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Easy, new StringReader(script), output, flagRisk: 0, contentSet: ContentSet.V1, profile: profile);
+        int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Easy, new StringReader(script), output,
+            weights: ScriptWeights, passThreshold: ScriptPassThreshold, flagRisk: 0, contentSet: ContentSet.V1, profile: profile);
         return (exit, output.ToString());
     }
 

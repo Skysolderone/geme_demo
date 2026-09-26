@@ -6,6 +6,7 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Preview;
@@ -80,12 +81,104 @@ public sealed class MatchSession
     /// <summary>本回合暂放的落点。</summary>
     public ImmutableArray<Placement> Staged => Match.CurrentBatch?.Placements ?? [];
 
-    /// <summary>开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（缺省四方标准地图），本机玩家坐第 <paramref name="seat"/> 位（1 起）。</summary>
-    public static MatchSession Create(MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int? cellLimit = null)
+    /// <summary>
+    /// 开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（缺省四方标准地图），本机玩家坐第 <paramref name="seat"/> 位（1 起）。
+    /// <paramref name="carryInOut"/> 为真即开启带入带出（carry-in-out D10）：本机玩家带 <paramref name="carry"/>（可为空），
+    /// 各 AI 按"与本机玩家同等数量"从 <c>carry-ai</c> 子流抽取（<see cref="CarryAi.ForHumanMatch"/>，与终端版同一实现）。关闭时对局选项与引入之前相同。
+    /// </summary>
+    public static MatchSession Create(MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int? cellLimit = null, bool carryInOut = false, CarryIn? carry = null)
     {
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, MatchOptions.Immediate);
-        return new MatchSession(match, players[seat - 1], seed, difficulty, cellLimit);
+        PlayerId me = players[seat - 1];
+        MatchOptions options = MatchOptions.Immediate;
+        if (carryInOut)
+        {
+            options = options with { CarryInOut = true, CarryIns = CarryAi.ForHumanMatch(new GameSeed(seed), players, me, carry, options.ContentSet) };
+        }
+
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
+        return new MatchSession(match, me, seed, difficulty, cellLimit);
+    }
+
+    // ---------- 带入带出（carry-in-out）：只接线，结算一律由 Core 的纯函数给出、档案一律经 CarryProfileStore ----------
+
+    private string _carryMatchId = string.Empty;
+
+    /// <summary>本局的档案存取；带入带出关闭（含 <c>--no-carry</c> 与全部自动化模式）时为 <c>null</c>。</summary>
+    public CarryProfileStore? CarryStore { get; private set; }
+
+    /// <summary>本机玩家本局的带出结算；尚未结算为 <c>null</c>。弃赛 / 出局即时结算，其余在终局结算，每局只结算一次。</summary>
+    public CarryOutResult? CarrySettled { get; private set; }
+
+    /// <summary>本机玩家的带入（征召签已在建局时解析出类型）；无带入为 <c>null</c>。</summary>
+    public CarryIn? MyCarry => Match.CarryIns.GetValueOrDefault(Me);
+
+    /// <summary>开局登记：扣除库存、写在途记录（<see cref="CarryProfileStore.Begin"/>）。<paramref name="matchId"/> 只用于"同一局只结算一次"。</summary>
+    public void BeginCarry(CarryProfileStore store, string matchId)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        store.Begin(matchId, MyCarry);
+        CarryStore = store;
+        _carryMatchId = matchId;
+    }
+
+    /// <summary>本机玩家此刻能否弃赛：对局进行中、本人仍在参赛，且处于小回合边界或本人的小回合内（与 <see cref="MatchFlow.Resign"/> 的前提一致）。</summary>
+    public bool CanResign => Match.Phase == MatchPhase.InProgress
+        && Match.StateOf(Me).Status == Siege.Core.Scoring.PlayerStatus.Active
+        && (Match.Stage == TurnStage.Idle || Match.CurrentPlayer == Me);
+
+    /// <summary>
+    /// 本机玩家弃赛（二次确认在界面上做）：规则层记弃赛快照与弃赛时势力名次；带入带出开启时立即结算并写档（design.md D5），此后的对局事件不再改变它。
+    /// 弃赛后 AI 继续把对局下完。
+    /// </summary>
+    public void Resign()
+    {
+        if (!CanResign)
+        {
+            return;
+        }
+
+        Match.Resign(Me);
+        ResignationSnapshot snapshot = Match.Resignations.Last(r => r.Player == Me);
+        RecruitPanel = null;
+        SelectedType = null;
+        LastFailure = null;
+        Notice = $"{Siege.Presentation.Text.Labels.Player(Me)} 弃赛（弃赛时势力 {snapshot.Power}，弃赛名次第 {snapshot.RankAtResign}）。此后由 AI 继续把对局下完。";
+        if (CarryStore is not null && CarrySettled is null)
+        {
+            CarrySettled = CarryOutSettlement.Resigned(Match.Players.Length, snapshot.RankAtResign!.Value, snapshot.MajorRound, MyCarry);
+            CarryStore.Settle(_carryMatchId, CarrySettled);
+        }
+
+        Rebuild();
+    }
+
+    /// <summary>
+    /// 每步之后调用：本机玩家出局即结算（补给丢失、带出 0），对局终局即按最终名次结算完赛者；已结算或带入带出关闭时什么也不做。
+    /// 返回本次新产生的结算（界面据此弹出结算面板），否则 <c>null</c>。
+    /// </summary>
+    public CarryOutResult? SettleCarryIfDue()
+    {
+        if (CarryStore is null || CarrySettled is not null)
+        {
+            return null;
+        }
+
+        if (Match.StateOf(Me).Status == Siege.Core.Scoring.PlayerStatus.Eliminated)
+        {
+            CarrySettled = CarryOutSettlement.Eliminated(MyCarry);
+        }
+        else if (IsOver)
+        {
+            CarrySettled = CarryOutSettlement.Settle(Match.Result, Match.Resignations, Match.CarryIns, Match.Players)[Me];
+        }
+        else
+        {
+            return null;
+        }
+
+        CarryStore.Settle(_carryMatchId, CarrySettled);
+        return CarrySettled;
     }
 
     /// <summary>某格属于哪个出生区；不是出生区格为 <c>null</c>。</summary>

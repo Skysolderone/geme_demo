@@ -1,8 +1,14 @@
+using System.Collections.Immutable;
 using System.Numerics;
 using System.Text.Json;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
+using Siege.Core.Carry;
+using Siege.Core.Determinism;
 using Siege.Core.Match;
+using Siege.Core.Scoring;
+using Siege.Core.Tests.CarryInOut;
 using Siege.Core.Recruit;
 using Siege.Core.Relics;
 using Siege.Sim.Config;
@@ -351,6 +357,137 @@ public class 对局日志的记录内容Tests
             BatchFixtures.Artisan("E5", TerrainEdit.Bridge(Coord.Parse("E7"))),
             BatchFixtures.Artisan("C5", TerrainEdit.Bridge(Coord.Parse("D5")))));
         return (session.Run(), match);
+    }
+
+    // ---------- carry-in-out：首部带入、带出结算、旧日志 ----------
+
+    [Fact]
+    public void 首部记录带入()
+    {
+        // 规格 Scenario：玩家 1 带入换型令（堡垒子）、玩家 2 带入征召签（抽得哨兵子）、玩家 3 与 4 带入备用子 → 日志首部逐名记录这四项带入与开关状态。
+        // 征召签的抽得类型只由种子与玩家编号决定（carry-draft:1 子流）：取第一颗让玩家 2 抽得哨兵子的种子。
+        // 两条腿：写出文本 → 解析 → 逐项比对活对象（对局配置里的带入）；首部字面值由测试写死。
+        ulong seed = FirstSeed(s => CarryCandidates.Draw(new GameSeed(s), MatchFixtures.P1, ContentSet.V2) == PieceType.Sentry);
+        var carries = new Dictionary<int, CarryIn>
+        {
+            [0] = new(SupplyKind.Commission, PieceType.Fortress),
+            [1] = new(SupplyKind.DraftLot),
+            [2] = new(SupplyKind.SpareStone),
+            [3] = new(SupplyKind.SpareStone),
+        };
+        MatchSession session = CarriedSession(seed, carries, turnLimit: 4);
+        MatchLog live = session.Run();
+        MatchLog log = MatchLog.Parse(live.FullText());
+
+        Assert.Equal(true, log.Header.CarryInOut);
+        Assert.Equal(["0:Commission:Fortress", "1:DraftLot:Sentry", "2:SpareStone:-", "3:SpareStone:-"], log.Header.CarryIns!.Select(e => $"{e.Player}:{e.Supply}:{e.Type ?? "-"}"));
+        Assert.True(log.CarryInOut);
+        Assert.Equal(CarryFixtures.CarryText(session.Match.CarryIns), CarryFixtures.CarryText(log.CarryIns));
+        Assert.Equal("P0:Commission>Fortress P1:DraftLot>Sentry P2:SpareStone>- P3:SpareStone>-", CarryFixtures.CarryText(log.CarryIns));
+        Assert.Equal(live.DeterministicText(), log.DeterministicText());
+
+        // 反面：首部带入解析不了即响亮失败，不静默当成无带入。
+        MatchLog broken = MatchLog.Parse(live.FullText().Replace("\"Supply\":\"DraftLot\"", "\"Supply\":\"Lottery\"", StringComparison.Ordinal));
+        Assert.Throws<FormatException>(() => broken.CarryIns);
+    }
+
+    [Fact]
+    public void 带出结算可查()
+    {
+        // 规格 Scenario：开启带入带出的一局中玩家 4 在第 6 大回合以弃赛时势力名次第 2 弃赛 → 日志中可查到玩家 4 的结算：弃赛、名次 2、带出 8、补给返还。
+        // 局面同 主动弃赛Tests.弃赛时势力名次：C（P2）已出局；A（P0）严格高于 D（P3），B（P1）与 D 相等 → D 第 2。
+        // 随后 B 也弃赛，A 成为唯一参赛者，规则终局（只剩一名参赛玩家）。样本的每名玩家都取非缺省值：完赛 24、出局 0 丢失、两名弃赛者、返还为真。
+        MatchFlow match = MatchFixtures.Started(options: CarryFixtures.On(ContentSet.V1,
+                (0, CarryFixtures.Spare), (2, CarryFixtures.Commission(PieceType.Line)), (3, CarryFixtures.Commission(PieceType.Fortress))))
+            .AtRound(6, MatchFixtures.All)
+            .Stones(MatchFixtures.P2, "A9")
+            .Stones(MatchFixtures.P1, "J1")
+            .Stones(MatchFixtures.P3, "J9");
+        match.PlayTurn("A8", "B9");
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P2).Status);   // 前提：C 已出局
+        match.Resign(MatchFixtures.P3);
+        Assert.Equal(2, match.Resignations.Single().RankAtResign);                        // 前提：D 的弃赛名次第 2
+        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config());
+        match.Resign(MatchFixtures.P1);
+        Assert.Equal(2, match.Resignations[1].RankAtResign);                              // 前提：B 的弃赛名次也是第 2
+
+        MatchLog log = MatchLog.Parse(session.Run().FullText());
+
+        Assert.Equal(nameof(EndReason.LastPlayerStanding), log.Result!.Reason);
+        Assert.Equal(
+            // B 弃赛时：A 严格更高、D（已弃赛，计入）与 B 相等 → B 也是第 2，带出 8；B 未带入，无可返还。
+            ["0:Finished:1:24:SpareStone:-:False", "1:Resigned:2:8:-:-:False", "2:Eliminated:-:0:Commission:Line:False", "3:Resigned:2:8:Commission:Fortress:True"],
+            log.Result.CarryOut!.Select(e => $"{e.Player}:{e.Outcome}:{e.Rank?.ToString() ?? "-"}:{e.Points}:{e.Supply ?? "-"}:{e.Type ?? "-"}:{e.Returned}"));
+
+        // 弃赛事件带弃赛时势力名次（match-telemetry 第 7 条"弃赛（含弃赛时势力名次）"）：与弃赛快照逐条相同。
+        LogEvent resigned = log.Events.Single(e => e.Type == LogEventType.PlayerResigned && e.Player == 3);
+        Assert.Equal(2, resigned.Values!["RankAtResign"]);
+    }
+
+    [Fact]
+    public void 旧日志按无带入解析()
+    {
+        // 规格 Scenario：离线解析一份引入带入带出之前产生的日志 → 解析成功，开关读为关闭，每名玩家的带入读为无，没有带出结算。
+        // 样本两份：合成旧日志；一份新写出的带入日志删掉全部带入字段（首部两项、配置的带入数量、结果的带出结算——引入之前的日志结构就是如此）。
+        MatchLog synthetic = MatchLog.Parse(SimFixtures.Synthetic(3, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(1, [0])).FullText());
+        Assert.Null(synthetic.Header.CarryInOut);
+        Assert.Null(synthetic.Header.CarryIns);
+        Assert.Null(synthetic.Header.Config.CarryIn);
+        Assert.False(synthetic.CarryInOut);
+        Assert.Empty(synthetic.CarryIns);
+        Assert.Null(synthetic.Result!.CarryOut);
+
+        MatchLog carried = CarriedSession(7, new Dictionary<int, CarryIn> { [1] = new(SupplyKind.SpareStone) }, turnLimit: 4).Run();
+        Assert.True(carried.CarryInOut);                         // 反面：删字段之前确实是带入局
+        Assert.NotNull(carried.Result!.CarryOut);
+        string[] lines = carried.FullText().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var header = System.Text.Json.Nodes.JsonNode.Parse(lines[0])!.AsObject();
+        Assert.True(header.Remove("CarryInOut") && header.Remove("CarryIns") && header["Config"]!.AsObject().Remove("CarryIn"), "新首部应写出三项");
+        var result = System.Text.Json.Nodes.JsonNode.Parse(lines[^1])!.AsObject();
+        Assert.True(result.Remove("CarryOut"), "新结果行应写出带出结算");
+        lines[0] = header.ToJsonString();
+        lines[^1] = result.ToJsonString();
+
+        MatchLog legacy = MatchLog.Parse(string.Join('\n', lines));
+
+        Assert.False(legacy.CarryInOut);
+        Assert.Empty(legacy.CarryIns);
+        Assert.Null(legacy.Result!.CarryOut);
+        Assert.Equal(carried.Turns.Count, legacy.Turns.Count);
+    }
+
+    /// <summary>第一颗满足条件的种子（1 起，至多 400 颗）。</summary>
+    private static ulong FirstSeed(Func<ulong, bool> ok)
+    {
+        for (ulong s = 1; s <= 400; s++)
+        {
+            if (ok(s))
+            {
+                return s;
+            }
+        }
+
+        throw new InvalidOperationException("1–400 里没有满足条件的种子。");
+    }
+
+    /// <summary>
+    /// 一局开启带入带出、各玩家带入由测试指定的真实会话（缺省图、内容集 v2、Easy）：与 <c>Siege.Sim.Running.MatchSession.Create</c> 同样先落成配置再建局插旗，
+    /// 只是带入不从种子抽，而是像人机对局那样由外部给出——这样的带入不可由种子推出，回放必须读首部。
+    /// </summary>
+    internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, CarryIn> carries, int turnLimit)
+    {
+        MapData map = MapCatalog.Resolve(null);
+        RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate with
+        {
+            ArtisanWeight = config.ArtisanWeight,
+            FlagRisk = config.FlagRisk!.Value,
+            ContentSet = config.ContentSet!.Value,
+            CarryInOut = true,
+            CarryIns = carries.ToImmutableSortedDictionary(kv => new PlayerId(kv.Key), kv => kv.Value),
+        });
+        match.PlantPrototype();
+        return MatchSession.ForMatch(match, config);
     }
 
     /// <summary>按给定暂放（含改造）部署、不征募的脚本控制者。</summary>

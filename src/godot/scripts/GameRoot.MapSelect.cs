@@ -260,6 +260,7 @@ public sealed partial class GameRoot
 
         _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit);
         _select = null;
+        BeginSupply(_previewMap);   // 带入带出开启时：选图之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
         _board.Build(_session.World.Board(), _session.ZoneOwners);
         if (_board.Rig.IsOverview)
         {

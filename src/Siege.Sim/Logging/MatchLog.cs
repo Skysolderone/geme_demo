@@ -56,6 +56,38 @@ public sealed class MatchLog
     /// </summary>
     public Siege.Core.Board.ContentSet ContentSet => Header.Config.ContentSet ?? Siege.Core.Board.ContentSets.Legacy;
 
+    /// <summary>本局是否开启带入带出（首部 <see cref="LogHeader.CarryInOut"/>）。引入带入带出之前的旧日志缺该项，按关闭读。</summary>
+    public bool CarryInOut => Header.CarryInOut ?? false;
+
+    /// <summary>
+    /// 各玩家的带入（首部 <see cref="LogHeader.CarryIns"/>，解析成对局配置的形状）。旧日志缺该项，按全员无带入读；
+    /// 补给名或类型名解析不了即 <see cref="FormatException"/>（不静默当成无带入）。
+    /// </summary>
+    public System.Collections.Immutable.ImmutableSortedDictionary<Siege.Core.Board.PlayerId, Siege.Core.Carry.CarryIn> CarryIns
+    {
+        get
+        {
+            var carries = System.Collections.Immutable.ImmutableSortedDictionary.CreateBuilder<Siege.Core.Board.PlayerId, Siege.Core.Carry.CarryIn>();
+            foreach (CarryInEntry entry in Header.CarryIns ?? [])
+            {
+                var carry = new Siege.Core.Carry.CarryIn(
+                    ParseName<Siege.Core.Carry.SupplyKind>(entry.Supply, "补给"),
+                    entry.Type is null ? null : ParseName<Siege.Core.Board.PieceType>(entry.Type, "棋子类型"));
+                if (!carries.TryAdd(new Siege.Core.Board.PlayerId(entry.Player), carry))
+                {
+                    throw new FormatException($"日志首部的带入重复记录了玩家 {entry.Player}。");
+                }
+            }
+
+            return carries.ToImmutable();
+        }
+    }
+
+    /// <summary>按枚举名解析（区分大小写、不接受数字）；解析不了即 <see cref="FormatException"/>。</summary>
+    private static T ParseName<T>(string text, string what)
+        where T : struct, Enum =>
+        Enum.GetNames<T>().Contains(text, StringComparer.Ordinal) ? Enum.Parse<T>(text) : throw new FormatException($"日志首部的带入里有未知{what} {text}。");
+
     /// <summary>本局是否用过调试 AI 或发生过人工接管（design.md D7：默认排除）。</summary>
     public bool IsContaminated => (Result?.UsedDebugAi ?? Failure?.UsedDebugAi ?? false)
         || (Result?.Takeovers.Count ?? Failure?.Takeovers.Count ?? 0) > 0;
@@ -291,6 +323,49 @@ public sealed record LogHeader
 
     /// <summary>本局实际采用的事件保留策略（抽样 / 失败提升后的结果）。</summary>
     public EventRetention Retention { get; init; }
+
+    /// <summary>
+    /// 带入带出开关（carry-in-out / match-telemetry 第 1 条）。取自对局本身：新日志总是写出（关闭时写 <c>false</c>）；
+    /// 引入带入带出之前的旧日志为 <c>null</c>，按关闭读（<see cref="MatchLog.CarryInOut"/>），回放按旧日志重建、首部仍不写它。
+    /// </summary>
+    public bool? CarryInOut { get; init; }
+
+    /// <summary>
+    /// 各玩家的带入（按玩家编号升序；无带入的玩家不列）：补给种类、换型令指定类型 / 征召签抽得类型。新日志总是写出（无人带入时为空表），
+    /// 旧日志为 <c>null</c>，按全员无带入读（<see cref="MatchLog.CarryIns"/>）。回放按它重建开局手牌（simulation-harness「可复现回放」）。
+    /// </summary>
+    public List<CarryInEntry>? CarryIns { get; init; }
+}
+
+/// <summary>日志首部的一名玩家的带入：补给种类名（<see cref="Siege.Core.Carry.SupplyKind"/>）与换入类型名（备用子为 <c>null</c>）。</summary>
+public sealed record CarryInEntry
+{
+    public int Player { get; init; }
+
+    public required string Supply { get; init; }
+
+    public string? Type { get; init; }
+}
+
+/// <summary>
+/// 结果行的一名玩家的带出结算（match-telemetry 第 7 条）：结局类别（<see cref="Siege.Core.Carry.CarryOutcome"/> 名）、所用名次（出局 / 未结算为 <c>null</c>）、
+/// 带出补给点、带入的补给（无带入为 <c>null</c>）与它是否返还。截断局全员为 <c>Unsettled</c>。
+/// </summary>
+public sealed record CarryOutEntry
+{
+    public int Player { get; init; }
+
+    public required string Outcome { get; init; }
+
+    public int? Rank { get; init; }
+
+    public int Points { get; init; }
+
+    public string? Supply { get; init; }
+
+    public string? Type { get; init; }
+
+    public bool Returned { get; init; }
 }
 
 /// <summary>
@@ -712,6 +787,12 @@ public sealed record LogResult
     public long? TotalMs { get; init; }
 
     public List<long>? MajorRoundMs { get; init; }
+
+    /// <summary>
+    /// 带出结算（按玩家编号升序，每名玩家一条）：只在带入带出开启的局写出；关闭的局与旧日志为 <c>null</c>（无带出结算）。
+    /// 截断局全员 <c>Unsettled</c>（carry-in-out「中途退出与截断」）。
+    /// </summary>
+    public List<CarryOutEntry>? CarryOut { get; init; }
 }
 
 public sealed record StandingEntry

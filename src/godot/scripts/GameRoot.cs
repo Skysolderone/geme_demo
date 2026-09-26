@@ -98,6 +98,9 @@ public sealed partial class GameRoot : Node3D
             string? mapId = args.Text("map", "地图标识或地图文件路径");
             ReadScreenshotArg(args.Text("screenshot", "截图路径[:第几帧]"));
 
+            // --profile=<档案路径> / --no-carry / --carry-preview=：带入带出（carry-in-out D10，见 GameRoot.Carry）。自动化模式一律关闭、不读写档案。
+            ReadCarryArgs(args, Unattended);
+
             // --export-parts=<目录>：把地形 / 设施部件导出成 .tscn（PartExport），导完即退出，不建局。
             string? exportParts = args.Text("export-parts", "导出目录（如 res://parts/terrain）");
 
@@ -150,6 +153,7 @@ public sealed partial class GameRoot : Node3D
             {
                 MapData map = MapCatalog.Resolve(mapId);
                 _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, cellLimit);
+                BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
             }
         }
         catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException or MapGenerationException)
@@ -172,6 +176,8 @@ public sealed partial class GameRoot : Node3D
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
         Connect();
         ConnectMapSelect();
+        ConnectCarry();
+        ShowCarryPreview();
 
         GD.Print(Selecting
             ? $"[siege] 选图界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=<标识> 可跳过选图）"
@@ -248,6 +254,7 @@ public sealed partial class GameRoot : Node3D
                 + $"面板 ({panel.Position.X:0}, {panel.Position.Y:0}) {panel.Size.X:0}×{panel.Size.Y:0}，对局面板 {(_hud.MapSelectOpen ? "隐藏" : "显示")}");
         }
 
+        GD.Print(CarryShotLine());
         GD.Print($"[siege] 落成反馈：{(_flash.Edits.IsEmpty ? "无" : string.Join("、", _flash.Edits.Select(Labels.TerrainEdit)))}");
 
         // 渲染开销读数（frontier-map 5.6）：帧率受垂直同步封顶，绘制调用数才反映"750 格要不要合批"。
@@ -357,10 +364,18 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
-        if (Selecting)
+        if (Selecting || Supplying)
         {
-            // 选图阶段：不推进对局、不采悬停与平移；只剩定帧截图这一条无人值守路径（--map-select --screenshot）。
-            ProcessMapSelect();
+            // 选图 / 补给阶段：不推进对局、不采悬停与平移；只剩定帧截图这一条无人值守路径（--map-select --screenshot、--carry-preview=supply --screenshot）。
+            if (Selecting)
+            {
+                ProcessMapSelect();
+            }
+            else
+            {
+                ProcessSupply();
+            }
+
             _frame++;
             if (_screenshotFrame >= 0 && _frame >= _screenshotFrame)
             {
@@ -372,6 +387,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         Drive(delta);
+        CheckCarrySettlement();
         UpdateCamera(delta);
         UpdateHover();
 
@@ -471,8 +487,15 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
+        if (Supplying)
+        {
+            RefreshSupply();
+            return;
+        }
+
         _hud.OverviewActive = _board.Rig.IsOverview;
         _hud.Refresh(_session, _layers, _handPanel);
+        RefreshCarry();
     }
 
     private async void CaptureWhenDrawn(string path)
@@ -987,6 +1010,8 @@ public sealed partial class GameRoot : Node3D
         {
             _mouseInside = false;
         }
+
+        OnCarryNotification(what);
     }
 
     /// <inheritdoc/>
@@ -1001,7 +1026,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         // 选图阶段不认领相机键（map-generator D8）：相机本来就锁在预览位姿，而 W A S D / 空格 / 方向键 / 退格要能落到种子输入框。
-        if (@event is not InputEventKey || _session is null || Selecting)
+        if (@event is not InputEventKey || _session is null || Selecting || Supplying)
         {
             return;
         }
@@ -1044,8 +1069,8 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        // 选图阶段不接受落子、插旗、缩放与信息层按键：点棋盘无效果（map-selection「预览阶段 MUST NOT 接受落子与插旗」）。
-        if (Selecting)
+        // 选图阶段不接受落子、插旗、缩放与信息层按键：点棋盘无效果（map-selection「预览阶段 MUST NOT 接受落子与插旗」）。补给阶段同样（对局尚未建立）。
+        if (Selecting || Supplying)
         {
             return;
         }

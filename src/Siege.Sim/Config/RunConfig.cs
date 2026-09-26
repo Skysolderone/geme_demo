@@ -104,6 +104,14 @@ public sealed record RunConfig
     /// </summary>
     public ContentSet? ContentSet { get; init; }
 
+    /// <summary>
+    /// 每名 AI 玩家的带入数量（carry-in-out D11 / simulation-harness「批量跑局」；取 0 或 1）：0 = 关闭带入带出，批次与引入之前逐局相同；
+    /// 1 = 开启，每名 AI 按 <see cref="Siege.Core.Carry.CarryAi.Draw"/> 从 <c>carry-ai</c> 子流随机带入 1 件补给，带出结算只写日志、不读写任何档案。
+    /// <c>null</c> = 未配置，新建的局由 <see cref="ResolvedFor"/> 落成 0 写进 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，
+    /// 回放不读它——带入按首部记录的各玩家带入重建（<see cref="Logging.LogHeader.CarryIns"/>）。命令行 <c>--carry-in</c>。
+    /// </summary>
+    public int? CarryIn { get; init; }
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -207,6 +215,16 @@ public sealed record RunConfig
             throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
         }
 
+        if (CarryIn is { } carryIn && carryIn is not (0 or 1))
+        {
+            throw new ArgumentException($"带入数量须为 0 或 1（每名玩家每局至多带入 1 件补给；0 = 关闭带入带出），实际为 {carryIn}。");
+        }
+
+        if (CarryIn == 1 && !Siege.Core.Carry.CarryPoints.Supports(Players.Count))
+        {
+            throw new ArgumentException($"{Players.Count} 人局没有名次补给点表（只有 2–4 人），不能开启带入。");
+        }
+
         if (FullEventSamplePermille is < 0 or > 1000)
         {
             throw new ArgumentException("抽样千分比须在 0..1000。");
@@ -241,7 +259,7 @@ public sealed record RunConfig
     /// 把"按地图自动"的候选格上限与缺省停手阈值、缺省冒险概率落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K、阈值与 p。
     /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
     /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分），
-    /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1）。幂等。
+    /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1），带入数量未配置时落成 0（关闭）。幂等。
     /// </summary>
     public RunConfig ResolvedFor(MapData map)
     {
@@ -252,7 +270,9 @@ public sealed record RunConfig
         resolved = resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
         resolved = resolved.FlagRisk is null ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
-        return resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
+        resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
+        // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
+        return resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
     }
 
     /// <summary>

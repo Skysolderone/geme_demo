@@ -5,6 +5,7 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
@@ -14,6 +15,11 @@ using Siege.Sim.Config;
 using Siege.Sim.Logging;
 
 namespace Siege.Sim.Running;
+
+/// <summary>
+/// 按日志首部重建（回放）时的带入带出：首部记录的开关与各玩家带入（征召签已是抽得的类型）。<c>null</c> 即首部缺该项的旧日志——按关闭、全员无带入重建，重建出的首部也不写这两项。
+/// </summary>
+internal sealed record RecordedCarry(bool CarryInOut, ImmutableSortedDictionary<PlayerId, CarryIn> CarryIns);
 
 /// <summary>
 /// 一局的跑局会话：建局、装 AI、逐小回合驱动 <see cref="MatchRunner"/>、记日志、到终局或小回合数截断（restore-go-core-rules D5，记 turn_limit、无名次）、捕获失败。
@@ -45,9 +51,12 @@ public sealed class MatchSession
     private int _editCursor;
     private bool _finished;
     private bool _truncated;
+    private readonly bool _carryHeader;
 
-    private MatchSession(MatchFlow match, RunConfig config, bool recorded = false)
+    /// <param name="carryHeader">首部是否写带入带出两项：新局与带该项的日志的回放为 <c>true</c>；按缺该项的旧日志回放为 <c>false</c>（重建出的首部与原首部逐字节相同）。</param>
+    private MatchSession(MatchFlow match, RunConfig config, bool recorded = false, bool carryHeader = true)
     {
+        _carryHeader = carryHeader;
         Match = match ?? throw new ArgumentNullException(nameof(match));
         Config = (config ?? throw new ArgumentNullException(nameof(config))).Validated();
         // 回放（recorded）：首部配置里没有候选格上限 = 这局当时就是不限制（小图省略，或该项出现之前的旧日志），MUST NOT 再按地图自动取。
@@ -72,6 +81,11 @@ public sealed class MatchSession
         if (config.ContentSet is { } contentSet && contentSet != match.ContentSet)
         {
             throw new SiegeRuleException($"跑局配置的内容集为 {contentSet}，对局配置却为 {match.ContentSet}。");
+        }
+
+        if (config.CarryIn == 1 && !match.CarryInOut)
+        {
+            throw new SiegeRuleException("跑局配置的带入数量为 1，对局却没有开启带入带出。");
         }
 
         Runner = new MatchRunner(match);
@@ -115,7 +129,7 @@ public sealed class MatchSession
     /// 首部没有该项就是不限制——否则该项出现之前的大图旧日志会被按新缺省 K 重跑而中途分歧，重建出的首部也会多出一项。
     /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。冒险概率同理：首部没有该项按 0（不冒险）重建。
     /// </summary>
-    internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded)
+    internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
@@ -136,13 +150,29 @@ public sealed class MatchSession
         int flagRisk = config.FlagRisk ?? (recorded ? 0 : MatchOptions.DefaultFlagRisk);
         // 内容集（more-pieces-relics D8）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时只有原六 + 六，按 v1 重建。
         ContentSet contentSet = config.ContentSet ?? (recorded ? ContentSets.Legacy : ContentSets.Default);
+        // 带入带出（carry-in-out D11）：新建的局按带入数量从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
+        // 按日志首部重建时只读首部记录的带入（征召签已是抽得的类型），MUST NOT 按配置或种子重抽——人机对局的带入不可由种子推出。首部缺该项 = 旧日志 = 关闭。
+        bool carryInOut;
+        ImmutableSortedDictionary<PlayerId, CarryIn> carryIns;
+        if (recorded)
+        {
+            carryInOut = carry?.CarryInOut ?? false;
+            carryIns = carry?.CarryIns ?? ImmutableSortedDictionary<PlayerId, CarryIn>.Empty;
+        }
+        else
+        {
+            int count = config.CarryIn ?? 0;
+            carryInOut = count == 1;
+            carryIns = CarryAi.Draw(new GameSeed(seed), players, count, contentSet);
+        }
+
         MatchFlow match = MatchFlow.Create(
             map, new GameSeed(seed), players,
-            MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk, ContentSet = contentSet });
+            MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk, ContentSet = contentSet, CarryInOut = carryInOut, CarryIns = carryIns });
         // 选区的唯一实现在 Core（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区；否则区数不多于人数上限时顺排
         // （p = 0 时 P<i> → 区 <i>，与此前逐项相同），多于时由种子的独立子流均匀选区。
         match.PlantPrototype();
-        return new MatchSession(match, config, recorded);
+        return new MatchSession(match, config, recorded, carryHeader: !recorded || carry is not null);
     }
 
     /// <summary>测试接缝：对已插旗的对局（可以是未校验的合成地图）建会话。</summary>
@@ -665,8 +695,13 @@ public sealed class MatchSession
 
                     Add(_turn, completed, LogEventType.MajorRoundEnded, null, e.Detail, values: values);
                     break;
-                case FlowEventKind.PlayerEliminated:
                 case FlowEventKind.PlayerResigned:
+                    // match-telemetry 第 7 条：弃赛含弃赛时势力名次（取自弃赛快照，唯一算法在 Core 的 ResignationRank）。旧存档恢复的弃赛记录没有名次，不写。
+                    int? rank = Match.Resignations.LastOrDefault(snapshot => snapshot.Player == e.Player)?.RankAtResign;
+                    Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail,
+                        values: rank is { } resignRank ? new Dictionary<string, BigInteger> { ["RankAtResign"] = resignRank } : null);
+                    break;
+                case FlowEventKind.PlayerEliminated:
                 case FlowEventKind.MatchEnded:
                 case FlowEventKind.FlagsLocked:
                     Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail);
@@ -729,8 +764,31 @@ public sealed class MatchSession
             RelicRerolls = gen.Rerolls,
             DebugAiPlayers = [.. Runner.Annotations.DebugAiPlayers.Select(p => p.Value)],
             Retention = retention,
+            // 带入带出（match-telemetry 第 1 条）：新日志总是写明（关闭时 false / 空表）；按缺该项的旧日志回放时不写，重建首部与原首部相同。
+            CarryInOut = _carryHeader ? Match.CarryInOut : null,
+            CarryIns = _carryHeader
+                ? [.. Match.CarryIns.Select(kv => new CarryInEntry { Player = kv.Key.Value, Supply = kv.Value.Kind.ToString(), Type = kv.Value.Type?.ToString() })]
+                : null,
         };
     }
+
+    /// <summary>
+    /// 带出结算（match-telemetry 第 7 条）：只在带入带出开启的局写；结算一律由 Core 的纯函数 <see cref="CarryOutSettlement.Settle"/> 给出，
+    /// 截断局（<paramref name="result"/> 为 <c>null</c>）全员未结算。批量跑局不读写任何档案。
+    /// </summary>
+    private List<CarryOutEntry>? CarryOutEntries(MatchResult? result) =>
+        !Match.CarryInOut
+            ? null
+            : [.. CarryOutSettlement.Settle(result, Match.Resignations, Match.CarryIns, Match.Players).Select(kv => new CarryOutEntry
+            {
+                Player = kv.Key.Value,
+                Outcome = kv.Value.Outcome.ToString(),
+                Rank = kv.Value.Rank,
+                Points = kv.Value.Points,
+                Supply = kv.Value.CarryIn?.Kind.ToString(),
+                Type = kv.Value.CarryIn?.Type?.ToString(),
+                Returned = kv.Value.Returned,
+            })];
 
     /// <summary>出生区的边长：格子外接矩形的较长边（生成图与手工边疆图的平台都是整块正方形，平台内无障碍）。</summary>
     private static int SideOf(IEnumerable<Coord> zone)
@@ -798,6 +856,7 @@ public sealed class MatchSession
             DeployLimitPeak = Match.Relics.DeployLimitPeak?.DeployLimit,
             TotalMs = _total.ElapsedMilliseconds,
             MajorRoundMs = [.. _majorRoundMs],
+            CarryOut = CarryOutEntries(result),
         };
 
         return new MatchLog

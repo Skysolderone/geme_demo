@@ -1,13 +1,18 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Text.Json;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.Carry;
+using Siege.Core.Tests.AiDecision;
+using Siege.Core.Tests.CarryInOut;
 using Siege.Sim.Analysis;
 using Siege.Sim.Cli;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
+using GameSeed = Siege.Core.Determinism.GameSeed;
 
 namespace Siege.Core.Tests.SimulationHarness;
 
@@ -38,7 +43,9 @@ public class 批量跑局Tests
         Assert.Null(config.PassThreshold);
         // flag-contest D2：未配置的冒险概率同样落成缺省值 15 写入（不落成就无法与"首部缺该项 = 旧日志 = 0"区分）。
         Assert.Null(config.FlagRisk);
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk }).Effective().ToJson(), saved.ToJson());
+        // carry-in-out 段 C：未配置的带入数量落成 0 写入（写明关闭）。
+        Assert.Null(config.CarryIn);
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
         Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
@@ -47,7 +54,7 @@ public class 批量跑局Tests
         Assert.All(logs, l =>
         {
             Assert.NotNull(l.Result);
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率；carry-in-out 段 C：带入数量落成 0
             Assert.InRange(l.Result!.MajorRound, 1, 3);
         });
 
@@ -167,6 +174,12 @@ public class 批量跑局Tests
                 Assert.False(text.Contains(token, StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} 含 {token}");
             }
 
+            // 墙钟 TimeProvider：除下面显式登记的唯一一处之外一律不得出现（Program.cs 另行按"恰好一处、位置固定"断言）。
+            if (Path.GetFileName(file) != "Program.cs")
+            {
+                Assert.False(text.Contains("TimeProvider", StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} 含 TimeProvider（Sim 的墙钟只登记了 Program.PlayProfile 一处）");
+            }
+
             if (!file.Contains($"{Path.DirectorySeparatorChar}Analysis{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             {
                 foreach (string token in new[] { "double", "float", "decimal", "Math.Round", "Math.Floor", "Math.Ceiling" })
@@ -175,6 +188,24 @@ public class 批量跑局Tests
                 }
             }
         }
+
+        // 显式登记的唯一例外（carry-in-out 段 B 后裁决 1）：Program.PlayProfile 把 TimeProvider.System.GetLocalNow 注入档案存取，只用于损坏备份的文件名
+        // （规格要求 profile.json.corrupt-<yyyyMMdd-HHmmss>；Core 永不读时钟，时钟由入口注入），不进对局、日志与配置。恰好一处，且位于 PlayProfile 之内。
+        // 变异 M-G1：Running/MatchSession.cs 加一处 TimeProvider.System → 红；M-G2：Program.cs 再加一处 → 红（Single）。
+        string program = File.ReadAllText(Path.Combine(root, "Program.cs"));
+        System.Text.RegularExpressions.Match clock = System.Text.RegularExpressions.Regex.Matches(program, "TimeProvider").Single();
+        int playProfile = program.IndexOf("CarryProfileStore? PlayProfile(CommandLine cli)", StringComparison.Ordinal);
+        int nextMember = program.IndexOf("MaterializeMapRequest(string? mapId", StringComparison.Ordinal);
+        Assert.True(playProfile > 0 && nextMember > playProfile && clock.Index > playProfile && clock.Index < nextMember, "唯一的 TimeProvider 必须在 PlayProfile 之内");
+        Assert.Contains("TimeProvider.System.GetLocalNow)", program, StringComparison.Ordinal);
+
+        // 图形版同样由入口注入墙钟（src/godot 不在解决方案里，按源码扫描）：全部脚本里恰好一处，在带入带出的入口文件 GameRoot.Carry.cs。
+        string scripts = Path.Combine(Determinism.随机子流隔离Tests.SourceRoot(), "src", "godot", "scripts");
+        (string Name, int Count)[] godotClocks = [.. Directory.GetFiles(scripts, "*.cs")
+            .Select(f => (Path.GetFileName(f), System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f), "TimeProvider").Count))
+            .Where(x => x.Item2 > 0)];
+        Assert.Equal([("GameRoot.Carry.cs", 1)], godotClocks);
+        Assert.Contains("TimeProvider.System.GetLocalNow)", File.ReadAllText(Path.Combine(scripts, "GameRoot.Carry.cs")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -196,6 +227,99 @@ public class 批量跑局Tests
     }
 
     // ---------- strict-cli：命令行 MUST NOT 静默忽略无法识别的选项 ----------
+
+    // ---------- carry-in-out：--carry-in ----------
+
+    [Fact]
+    public void 缺省关闭带入()
+    {
+        // 规格 Scenario：不传 --carry-in 执行一批对局 → 配置记录写明带入数量 0，每局日志与引入带入带出之前逐局相同。
+        // "逐局相同"用既有黄金哈希钉住（种子 31、Standard、24 个小回合，写死定值之前的权重，同 候选格上限Tests.缺省不限制时标准图整局与改动前逐步相同）；
+        // 首部只多出写明关闭的三项（配置的带入数量 0、开关 false、带入空表），结果行没有带出结算。
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
+        Assert.Null(config.CarryIn);
+        string dir = SimFixtures.TempDir("carry-default");
+
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+
+        using (JsonDocument written = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json"))))
+        {
+            Assert.Equal(0, written.RootElement.GetProperty("CarryIn").GetInt32());
+        }
+
+        MatchLog log = MatchLog.Read(Directory.GetFiles(dir, "match-*.jsonl").Single());
+        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(log));
+        Assert.Equal(0, log.Header.Config.CarryIn);
+        Assert.Equal(false, log.Header.CarryInOut);
+        Assert.Equal([], log.Header.CarryIns!);
+        Assert.Null(log.Result!.CarryOut);
+        Assert.False(log.CarryInOut);
+    }
+
+    [Fact]
+    public void 开启带入()
+    {
+        // 规格 Scenario：以 --carry-in 1、种子 1–20 执行 4 人 AI 对局 → 每局 4 名 AI 各带入 1 件补给并写入日志首部，同一种子重跑时带入逐项相同，
+        // 用户目录下的档案不被读写。机制验证只跑每局 4 个小回合（截断局：带出结算全员未结算）；20 局完整冒烟走 CLI（tasks 3.4）。
+        string before = RealProfileDir.State();
+        RunConfig config = SimFixtures.Config(count: 20, seedStart: 1, turnLimit: 4) with { CarryIn = 1 };
+
+        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: 4);
+
+        Assert.Equal(20, logs.Count);
+        Assert.All(logs, log =>
+        {
+            Assert.False(log.IsFailed);
+            Assert.True(log.CarryInOut);
+            Assert.Equal([0, 1, 2, 3], log.Header.CarryIns!.Select(e => e.Player));
+            // 与规格口径独立复算：每名 AI 的带入 = carry-ai 子流按编号升序抽取、征召签再经 carry-draft:<编号> 解析（CarryAi / CarryCandidates 各有纯函数测试）。
+            ImmutableSortedDictionary<PlayerId, CarryIn> drawn = CarryAi.Draw(new GameSeed(log.Seed), CarryFixtures.Four, 1, ContentSet.V2);
+            Assert.Equal(
+                CarryFixtures.CarryText(drawn.ToImmutableSortedDictionary(kv => kv.Key, kv => kv.Value.Kind == SupplyKind.DraftLot
+                    ? kv.Value with { Type = CarryCandidates.Draw(new GameSeed(log.Seed), kv.Key, ContentSet.V2) }
+                    : kv.Value)),
+                CarryFixtures.CarryText(log.CarryIns));
+            Assert.All(log.Result!.CarryOut!, e => Assert.Equal("Unsettled", e.Outcome));   // 截断局不结算（carry-in-out「中途退出与截断」）
+            Assert.Equal(4, log.Result.CarryOut!.Count);
+        });
+
+        // 样本口径下界：三种补给都出现过。
+        Assert.Equal(["Commission", "DraftLot", "SpareStone"], logs.SelectMany(l => l.Header.CarryIns!).Select(e => e.Supply).Distinct().Order(StringComparer.Ordinal));
+
+        // 同一种子重跑：带入逐项相同。
+        MatchLog again = BatchRunner.Execute(config with { Count = 1, SeedStart = 7 }, parallelism: 1)[0];
+        MatchLog first = logs.Single(l => l.Seed == 7);
+        Assert.Equal(CarryFixtures.CarryText(first.CarryIns), CarryFixtures.CarryText(again.CarryIns));
+        Assert.Equal(SimFixtures.TurnTexts(first.Turns), SimFixtures.TurnTexts(again.Turns));   // 首部配置的种子 / 局数不同，只比走法
+
+        Assert.Equal(before, RealProfileDir.State());
+    }
+
+    [Theory]
+    [InlineData("2")]
+    [InlineData("-1")]
+    public void 非法带入数量(string value)
+    {
+        // 规格 Scenario：以 --carry-in 2 执行 → 入口报错退出，不回退到缺省值；不写出任何输出。配置文件里写非法值同样报错。
+        string outDir = Path.Combine(SimFixtures.TempDir("carry-illegal"), "out");
+        var err = new StringWriter();
+        TextWriter saved = Console.Error;
+        int code;
+        try
+        {
+            Console.SetError(err);
+            code = Siege.Sim.Program.Main(["run", "--out", outDir, "--count", "1", "--seed", "1", "--carry-in", value]);
+        }
+        finally
+        {
+            Console.SetError(saved);
+        }
+
+        Assert.NotEqual(0, code);
+        Assert.False(Directory.Exists(outDir));
+        Assert.Contains("带入数量", err.ToString(), StringComparison.Ordinal);
+        Assert.Throws<ArgumentException>(() => RunConfig.FromJson($"{{ \"CarryIn\": {value} }}"));
+    }
 
     [Fact]
     public void 未知选项被拒绝()
