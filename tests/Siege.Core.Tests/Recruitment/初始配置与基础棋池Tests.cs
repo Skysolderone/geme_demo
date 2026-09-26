@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
+using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
@@ -228,5 +230,43 @@ public class 初始配置与基础棋池Tests
         {
             Assert.InRange(counts[i], expectedCounts[i] - 250, expectedCounts[i] + 250);
         }
+    }
+
+    [Fact]
+    public void 带入改变开局手牌()
+    {
+        // carry-in-out 规格 Scenario（recruitment「初始配置与基础棋池」）：A 带入换型令（堡垒子）、B 未带入 → A 普通子 × 4 + 堡垒子 × 1，B 普通子 × 5；
+        // 征募子流未被消费，第 1 大回合第一位行动者的征募候选与全员不带入时相同。
+        // 对照局：同一种子、同一真实地图、关闭带入带出。另把 P3 也放上征召签，让"解析征召签"这一步也在建局里发生。
+        MapData map = MapCatalog.Resolve(MapCatalog.DefaultId);
+        PlayerId[] four = [new(0), new(1), new(2), new(3)];
+        var seed = new GameSeed(23);
+        MatchFlow carried = MatchFlow.Create(map, seed, four, MatchOptions.Immediate with
+        {
+            CarryInOut = true,
+            CarryIns = ImmutableSortedDictionary<PlayerId, CarryIn>.Empty
+                .Add(four[0], new CarryIn(SupplyKind.Commission, PieceType.Fortress))
+                .Add(four[3], new CarryIn(SupplyKind.DraftLot)),
+        });
+        MatchFlow plain = MatchFlow.Create(map, seed, four, MatchOptions.Immediate);
+
+        Assert.Equal("Basic×4+0 Fortress×1+0", Siege.Core.Tests.CarryInOut.CarryFixtures.HandText(carried, four[0]));
+        Assert.Equal("Basic×5+0", Siege.Core.Tests.CarryInOut.CarryFixtures.HandText(carried, four[1]));
+        Assert.Equal(0, carried.Hands.Export().RecruitConsumed);
+        Assert.Equal(0, plain.Hands.Export().RecruitConsumed);
+
+        carried.PlantPrototype();
+        plain.PlantPrototype();
+        Assert.Equal(plain.ActionOrder, carried.ActionOrder);
+        Assert.Equal(
+            plain.Relics.Generation.Placements.Select(p => $"{p.Coord.ToNotation()}:{p.Content}"),
+            carried.Relics.Generation.Placements.Select(p => $"{p.Coord.ToNotation()}:{p.Content}"));
+
+        carried.BeginTurn();
+        plain.BeginTurn();
+        ImmutableArray<PieceType> withCarry = carried.EnterRecruit().CandidateTypes;
+        ImmutableArray<PieceType> without = plain.EnterRecruit().CandidateTypes;
+        Assert.Equal(5, without.Length);
+        Assert.Equal(without, withCarry);
     }
 }

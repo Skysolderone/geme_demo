@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
 using Siege.Core.Relics;
@@ -112,7 +113,19 @@ public sealed partial class MatchFlow
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         PrototypeZoneAssignment.RequireValidFlagRisk(options.FlagRisk);
         ContentSets.RequireValid(options.ContentSet);
-        return new MatchFlow(map, board, seed, list, new RelicLedger(relics), new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet), new BoardHistory(), options);
+        // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
+        // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
+        if (options.CarryIns.Count > 0)
+        {
+            ImmutableSortedDictionary<PlayerId, CarryIn> carryIns = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, list, options.ContentSet, seed);
+            if (!ReferenceEquals(carryIns, options.CarryIns))
+            {
+                options = options with { CarryIns = carryIns };
+            }
+        }
+
+        return new MatchFlow(map, board, seed, list, new RelicLedger(relics),
+            new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet, options.CarryIns), new BoardHistory(), options);
     }
 
     // ---------- 组成部分 ----------
@@ -146,6 +159,15 @@ public sealed partial class MatchFlow
 
     /// <summary>恢复自不含内容集字段的旧存档时为 <c>true</c>：按 v1（<see cref="ContentSets.Legacy"/>）回填。</summary>
     public bool ContentSetBackfilled { get; private set; }
+
+    /// <summary>带入带出开关（carry-in-out，match-setup「带入带出配置」）。对局配置，始终公开，入存档。</summary>
+    public bool CarryInOut => Options.CarryInOut;
+
+    /// <summary>各玩家的带入（征召签为建局时抽得的类型）。对局配置，始终公开，入存档；关闭时为空。</summary>
+    public ImmutableSortedDictionary<PlayerId, CarryIn> CarryIns => Options.CarryIns;
+
+    /// <summary>恢复自不含带入带出字段的旧存档时为 <c>true</c>：按"关闭、全员无带入"回填。</summary>
+    public bool CarryInOutBackfilled { get; private set; }
 
     /// <summary>
     /// 恢复自不含地图内容摘要的旧存档（map-generator 之前）时为 <c>true</c>：恢复时<b>跳过了</b>"地图不一致"的比对——
@@ -428,7 +450,10 @@ public sealed partial class MatchFlow
             : Relics.SnapshotFor(player, Board, Roster, Hands.HeldTypeCount(player), MajorRound);
         ImmutableArray<Coord> controlled = [.. Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(player)).Select(s => s.Coord)];
         BigInteger power = Scoreboard.Latest?.Of(player).Total ?? BigInteger.Zero;
-        _resignations.Add(new ResignationSnapshot(player, MajorRound, Board.Serialize(), hand, effects, controlled, power));
+        // carry-in-out D5：弃赛时势力名次在改状态之前一次算定（此刻全部玩家的总势力；出局者不计，此前已弃赛者计入）。只供带出结算读取，不进 FinalStandings。
+        int rankAtResign = ResignationRank.Compute(player, _players.Select(p =>
+            (p, _records[p].Status, Scoreboard.Latest?.Of(p).Total ?? BigInteger.Zero)));
+        _resignations.Add(new ResignationSnapshot(player, MajorRound, Board.Serialize(), hand, effects, controlled, power, rankAtResign));
 
         if (inOwnTurn)
         {
@@ -474,7 +499,8 @@ public sealed partial class MatchFlow
         // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
         // 活形分析在同一份副本上做，与 Board / BoardSerialized 同一时刻（life-shape D6）。
         return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order, PlayerStates, board,
-            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board));
+            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board),
+            CarryInOut, CarryIns);
     }
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------

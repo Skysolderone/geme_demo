@@ -35,6 +35,18 @@ public readonly record struct GameSeed(ulong Value)
     /// </summary>
     public const string FlagRisk = "flag-risk";
 
+    /// <summary>
+    /// AI 带入的抽取子流名（carry-in-out D7）：按玩家编号升序为每名 AI 抽补给种类（及换型令的类型）。
+    /// 独立命名，MUST NOT 扰动信物生成、征募、流程初始化、原型选区、冒险抽签与 AI 决策的既有序列。
+    /// </summary>
+    public const string CarryAi = "carry-ai";
+
+    /// <summary>
+    /// 某名玩家征召签的抽签子流名 <c>carry-draft:&lt;玩家编号&gt;</c>（carry-in-out D7，编号从 0 起）。每名玩家一条，
+    /// 任一玩家的征召签结果与其他玩家带了什么无关；同样 MUST NOT 扰动任何既有子流。
+    /// </summary>
+    public static string CarryDraft(int player) => $"carry-draft:{player}";
+
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
     private const ulong Golden = 0x9E3779B97F4A7C15UL;

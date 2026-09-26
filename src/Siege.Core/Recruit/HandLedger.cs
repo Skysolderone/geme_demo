@@ -54,6 +54,17 @@ public sealed class HandLedger
 
     /// <summary>建立账本，并带上对局内容集（<paramref name="contentSet"/> 决定棋池类型：v1 六种、v2 十种）。</summary>
     public HandLedger(IEnumerable<PlayerId> players, GameSeed seed, int artisanWeight, ContentSet contentSet)
+        : this(players, seed, artisanWeight, contentSet, null)
+    {
+    }
+
+    /// <summary>
+    /// 建立账本，并按各玩家的带入调整开局手牌（carry-in-out「补给种类与开局效果」，<see cref="Carry.Supplies.InitialHand"/>）：
+    /// 无带入 5 枚普通子；备用子 6 枚；征召签 / 换型令 4 枚普通子 + 1 枚换入类型（征召签须已解析）。全部计入回合前基数。
+    /// 开局手牌的构造 MUST NOT 消费 <c>recruit</c> 子流——征募序列与全员不带入时相同。
+    /// </summary>
+    public HandLedger(
+        IEnumerable<PlayerId> players, GameSeed seed, int artisanWeight, ContentSet contentSet, IReadOnlyDictionary<PlayerId, Carry.CarryIn>? carryIns)
     {
         ArgumentNullException.ThrowIfNull(players);
         RecruitWeights.RequireValidArtisanWeight(artisanWeight);
@@ -67,7 +78,11 @@ public sealed class HandLedger
             }
 
             var state = new PlayerState();
-            state.Hand[PieceType.Basic] = new HandEntry(InitialBasicCount, 0);
+            foreach ((PieceType type, int count) in Carry.Supplies.InitialHand(carryIns?.GetValueOrDefault(player)))
+            {
+                state.Hand[type] = new HandEntry(count, 0);
+            }
+
             _players.Add(player, state);
         }
 

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
 using Siege.Core.Relics;
@@ -46,6 +47,8 @@ public sealed partial class MatchFlow
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
             ArtisanWeight = ArtisanWeight,
             ContentSet = ContentSet,
+            CarryInOut = CarryInOut,
+            CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
             Phase = Phase,
             MajorRound = MajorRound,
             Order = [.. _order.Select(p => p.Value)],
@@ -91,6 +94,7 @@ public sealed partial class MatchFlow
                 WorkshopActive = r.Effects.WorkshopActive,
                 ControlledRelics = [.. r.ControlledRelics.Select(c => c.ToNotation())],
                 Power = r.Power,
+                RankAtResign = r.RankAtResign,
             })],
             Result = Result is null ? null : new ResultSaveData
             {
@@ -210,14 +214,20 @@ public sealed partial class MatchFlow
         // more-pieces-relics D8：旧存档没有内容集字段 → 那局只可能是原六 + 六，按 v1 恢复（同种子重建出同一份征募序列），ContentSetBackfilled 留痕。
         // MUST NOT 按新局缺省 v2 回填——那会静默换一个棋池。
         bool contentSetBackfilled = data.ContentSet is null;
+        // carry-in-out D8：旧存档没有带入带出字段 → 那局只可能是关闭、全员无带入，按此回填并在 CarryInOutBackfilled 留痕。
+        bool carryInOutBackfilled = data.CarryInOut is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
             ArtisanWeight = data.ArtisanWeight ?? MatchOptions.DefaultArtisanWeight,
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
+            CarryInOut = data.CarryInOut ?? false,
+            CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
         };
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
+        // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
+        _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
         var match = new MatchFlow(
             map, board, seed, players,
             RelicLedger.Restore(relicRecord, data.Relics ?? throw new FormatException("存档缺少信物账本。")),
@@ -226,6 +236,7 @@ public sealed partial class MatchFlow
             options);
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
         match.ContentSetBackfilled = contentSetBackfilled;
+        match.CarryInOutBackfilled = carryInOutBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
 
@@ -274,7 +285,7 @@ public sealed partial class MatchFlow
                 (r.RelaySources ?? []).ToImmutableSortedDictionary(s => Coord.Parse(s.Relic!), s => s.Bonus),
                 r.WorkshopActive ?? false);
             match._resignations.Add(new ResignationSnapshot(player, r.MajorRound, r.Board!, new HandPrivateView(player, entries, r.HandPhase, r.TypeSlots),
-                effects, [.. r.ControlledRelics.Select(Coord.Parse)], r.Power));
+                effects, [.. r.ControlledRelics.Select(Coord.Parse)], r.Power, r.RankAtResign));
         }
 
         if (data.Result is { } result)
@@ -318,6 +329,15 @@ public sealed class MatchSaveData
     /// <see cref="MatchFlow.ContentSetBackfilled"/> 为 <c>true</c>。
     /// </summary>
     public ContentSet? ContentSet { get; set; }
+
+    /// <summary>
+    /// 带入带出开关（carry-in-out D8）。旧存档无此字段（<c>null</c>）→ 恢复时按关闭，<see cref="MatchFlow.CarryInOutBackfilled"/> 为 <c>true</c>。
+    /// 新存档恒写出（关闭也写 <c>false</c>）。
+    /// </summary>
+    public bool? CarryInOut { get; set; }
+
+    /// <summary>各玩家的带入（征召签记录抽得的类型）；旧存档无此字段（<c>null</c>）→ 全员无带入。</summary>
+    public List<CarryInSaveData>? CarryIns { get; set; }
 
     /// <summary>
     /// 本结构未声明的字段。其余未知字段照旧宽容；已废弃字段在
@@ -429,6 +449,19 @@ public sealed class ResignationSaveData
     public List<string> ControlledRelics { get; set; } = [];
 
     public BigInteger Power { get; set; }
+
+    /// <summary>弃赛时势力名次（carry-in-out D5）；旧存档无此字段（<c>null</c>）→ 恢复后为空，MUST NOT 重算。</summary>
+    public int? RankAtResign { get; set; }
+}
+
+/// <summary>一名玩家的带入：玩家编号、补给种类（按名字写出）与换入类型（备用子为 <c>null</c>）。</summary>
+public sealed class CarryInSaveData
+{
+    public int Player { get; set; }
+
+    public Carry.SupplyKind Kind { get; set; }
+
+    public PieceType? Type { get; set; }
 }
 
 /// <summary>一枚驿站的加成来源：驿站坐标（围棋记法）与该枚的展示数加成。</summary>

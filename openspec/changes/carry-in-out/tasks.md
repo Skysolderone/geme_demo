@@ -1,12 +1,12 @@
 ## 1. 段 A：Core 规则、补给效果、结算、对局配置与存档兼容（Siege.Core）
 
-- [ ] 1.1 先写测试：`carry-in-out` 中「补给种类与开局效果」「换型候选类型」「名次补给点表」「完赛结算」「弃赛结算」「出局结算」的全部 Scenario（结算部分只测纯函数）、`match-setup`「带入带出配置」六个 Scenario、`recruitment`「带入改变开局手牌」、`elimination-endgame`「主动弃赛」新增的三个 Scenario。验证：新增用例全部先红，既有用例不动。
-- [ ] 1.2 `Siege.Core.Carry`：`SupplyKind`（`SpareStone / DraftLot / Commission`，末尾追加式枚举）、`CarryIn(Kind, PieceType?)`、价格表与名次点数表（代码显式标注未校准）、`CarryCandidates.Of(ContentSet)`（去掉普通子 / 倍增子 / 匠人，按基础权重）。验证：候选类型的 v1 / v2 Scenario 绿；守门测试——对任一名次 r 和任一补给，`⌈P(r)/2⌉ > 价格` 恒成立（改表或改价导致违反时应红）；变异——候选含倍增子、候选含匠人、v1 候选含旗手子，逐项应红。
-- [ ] 1.3 `MatchOptions.CarryInOut` / `CarryIns`（缺省关闭 / 空；关闭时有带入则拒绝；换型令类型不在候选内则拒绝）；`GameSeed.CarryAi` 与 `CarryDraft(int player)`；`MatchFlow.Create` 解析征召签并写回配置；`HandLedger` 按带入构造初始手牌，不消费 `recruit`。验证：1.1 中开局手牌类 Scenario 转绿；变异——征召签改用共享子流（"与本机玩家的选择无关"应红）、初始手牌构造消费了 `recruit`（"不扰动征募序列"应红）、备用子给出 5 + 2 枚，逐项应红。
-- [ ] 1.4 弃赛时势力名次：`MatchFlow.Resign` 计算并写入 `ResignationSnapshot.RankAtResign`，`FinalStandings` 不读取它。验证：`elimination-endgame` 新 Scenario 绿；变异——计入出局者、只在参赛者中排、并列取较低名次、`FinalStandings` 改用弃赛名次（"弃赛名次不影响最终名次"应红），逐项应红。
-- [ ] 1.5 结算纯函数 `CarryOutSettlement`：输入对局结果（或弃赛 / 出局事件）、带入与人数，输出结局类别、所用名次、点数与是否返还；完赛全额且不返还、弃赛 `⌊P/2⌋` 且返还、出局 0 且丢失、截断为未结算。验证：结算类 Scenario 全绿；变异——弃赛用最终名次、弃赛向上取整、出局仍返还、完赛也返还、并列取位置而非共享名次，逐项应红。
-- [ ] 1.6 存档：`MatchSaveData.CarryInOut` / `CarryIns`、`ResignationSaveData.RankAtResign`（全部可空）；缺字段按关闭回填，并用 `CarryInOutBackfilled` 留痕；`MatchPublicView` 暴露开关与各玩家带入。验证：「旧存档按无带入读取」「新存档往返」「弃赛名次随存档往返」「带入公开」绿；一份既有旧存档夹具照常恢复；变异——缺字段回填为开启应红。
-- [ ] 1.7 守门："关闭时逐步相同"与"开启但无人带入时逐步相同"。走法、征募与结算序列的黄金哈希和期望一律不改；若出现分叉，先用探针归因，不挑种子凑绿。存档原文或日志首部原文的快照测试（如有）只因新增的关闭字段而变化，按新增字段重建并逐项归因，不算规则回归。`dotnet test -c Release` 全绿。
+- [x] 1.1 先写测试：`carry-in-out` 中「补给种类与开局效果」「换型候选类型」「名次补给点表」「完赛结算」「弃赛结算」「出局结算」的全部 Scenario（结算部分只测纯函数）、`match-setup`「带入带出配置」六个 Scenario、`recruitment`「带入改变开局手牌」、`elimination-endgame`「主动弃赛」新增的三个 Scenario。验证：新增用例全部先红，既有用例不动。
+- [x] 1.2 `Siege.Core.Carry`：`SupplyKind`（`SpareStone / DraftLot / Commission`，末尾追加式枚举）、`CarryIn(Kind, PieceType?)`、价格表与名次点数表（代码显式标注未校准）、`CarryCandidates.Of(ContentSet)`（去掉普通子 / 倍增子 / 匠人，按基础权重）。验证：候选类型的 v1 / v2 Scenario 绿；守门测试——对任一名次 r 和任一补给，`⌈P(r)/2⌉ > 价格` 恒成立（改表或改价导致违反时应红）；变异——候选含倍增子、候选含匠人、v1 候选含旗手子，逐项应红。
+- [x] 1.3 `MatchOptions.CarryInOut` / `CarryIns`（缺省关闭 / 空；关闭时有带入则拒绝；换型令类型不在候选内则拒绝）；`GameSeed.CarryAi` 与 `CarryDraft(int player)`；`MatchFlow.Create` 解析征召签并写回配置；`HandLedger` 按带入构造初始手牌，不消费 `recruit`。验证：1.1 中开局手牌类 Scenario 转绿；变异——征召签改用共享子流（"与本机玩家的选择无关"应红）、初始手牌构造消费了 `recruit`（"不扰动征募序列"应红）、备用子给出 5 + 2 枚，逐项应红。
+- [x] 1.4 弃赛时势力名次：`MatchFlow.Resign` 计算并写入 `ResignationSnapshot.RankAtResign`，`FinalStandings` 不读取它。验证：`elimination-endgame` 新 Scenario 绿；变异——计入出局者、只在参赛者中排、并列取较低名次、`FinalStandings` 改用弃赛名次（"弃赛名次不影响最终名次"应红），逐项应红。
+- [x] 1.5 结算纯函数 `CarryOutSettlement`：输入对局结果（或弃赛 / 出局事件）、带入与人数，输出结局类别、所用名次、点数与是否返还；完赛全额且不返还、弃赛 `⌊P/2⌋` 且返还、出局 0 且丢失、截断为未结算。验证：结算类 Scenario 全绿；变异——弃赛用最终名次、弃赛向上取整、出局仍返还、完赛也返还、并列取位置而非共享名次，逐项应红。
+- [x] 1.6 存档：`MatchSaveData.CarryInOut` / `CarryIns`、`ResignationSaveData.RankAtResign`（全部可空）；缺字段按关闭回填，并用 `CarryInOutBackfilled` 留痕；`MatchPublicView` 暴露开关与各玩家带入。验证：「旧存档按无带入读取」「新存档往返」「弃赛名次随存档往返」「带入公开」绿；一份既有旧存档夹具照常恢复；变异——缺字段回填为开启应红。
+- [x] 1.7 守门："关闭时逐步相同"与"开启但无人带入时逐步相同"。走法、征募与结算序列的黄金哈希和期望一律不改；若出现分叉，先用探针归因，不挑种子凑绿。存档原文或日志首部原文的快照测试（如有）只因新增的关闭字段而变化，按新增字段重建并逐项归因，不算规则回归。`dotnet test -c Release` 全绿。
 
 ## 2. 段 B：档案读写、AI 带入、终端
 

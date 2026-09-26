@@ -117,8 +117,94 @@ public class 主动弃赛Tests
         Assert.Equal(new[] { "H8" }, snapshot.ControlledRelics.Notations());
         Assert.Equal(powerBefore, snapshot.Power);
         Assert.Equal(powerBefore, match.StateOf(MatchFixtures.P3).PowerAtResign);
+        Assert.Equal(1, snapshot.RankAtResign);   // carry-in-out：快照含弃赛时势力名次（盘面上只有 P3 有子，第 1）
 
         Assert.Equal(TurnStage.Idle, match.Stage);
         Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+    }
+
+    /// <summary>
+    /// 第 6 大回合、顺序 P0 → P3 的局面：P2 在 A9 的单子被 P0 落 A8 / B9 提走而出局（曾建立正势力、势力归零），P1 与 P3 各有一个角上单子。
+    /// 返回时 P0 的小回合已结束，停在小回合边界。
+    /// </summary>
+    private static MatchFlow WithEliminatedC()
+    {
+        MatchFlow match = MatchFixtures.Started().AtRound(6, MatchFixtures.All)
+            .Stones(MatchFixtures.P2, "A9")
+            .Stones(MatchFixtures.P1, "J1")
+            .Stones(MatchFixtures.P3, "J9");
+        match.PlayTurn("A8", "B9");
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P2).Status);   // 前提：C 已出局
+        return match;
+    }
+
+    private static BigInteger PowerOf(MatchFlow match, PlayerId player) => match.Scoreboard.Latest!.Of(player).Total;
+
+    [Fact]
+    public void 弃赛时势力名次()
+    {
+        // 规格 Scenario：C 已出局，D 以总势力 30 弃赛，A = 50、B = 30 → D 的弃赛时势力名次为第 2（只有 A 严格更高，与 B 并列共享）。
+        // 数值不同、结构相同的真实局面：A（P0）严格高于 D（P3），B（P1）与 D 相等，C（P2）已出局。算式本身的算例见 carry-in-out「弃赛结算」纯函数测试。
+        MatchFlow match = WithEliminatedC();
+        Assert.True(PowerOf(match, MatchFixtures.P0) > PowerOf(match, MatchFixtures.P3), "前提：A 严格高于 D");
+        Assert.Equal(PowerOf(match, MatchFixtures.P1), PowerOf(match, MatchFixtures.P3));
+
+        match.Resign(MatchFixtures.P3);
+
+        Assert.Equal(2, match.Resignations.Single().RankAtResign);
+    }
+
+    [Fact]
+    public void 此前已弃赛者计入弃赛名次()
+    {
+        // 规格正文：弃赛时名次在未出局玩家中排，此前已弃赛者也计入。B（P1）先以 3 子弃赛、之后 D（P3）以 1 子弃赛：
+        // B 此刻势力仍高于 D → D 第 2（只在参赛者中排会得出第 1：P0 / P2 盘面无子，势力 0）。
+        MatchFlow match = MatchFixtures.Started().AtRound(6, MatchFixtures.All)
+            .Stones(MatchFixtures.P1, "G1", "H1", "J1")
+            .Stones(MatchFixtures.P3, "J9");
+        match.Resign(MatchFixtures.P1);
+        Assert.True(PowerOf(match, MatchFixtures.P1) > PowerOf(match, MatchFixtures.P3), "前提：已弃赛的 B 此刻势力高于 D");
+
+        match.Resign(MatchFixtures.P3);
+
+        Assert.Equal(1, match.Resignations[0].RankAtResign);
+        Assert.Equal(2, match.Resignations[1].RankAtResign);
+    }
+
+    [Fact]
+    public void 弃赛名次不影响最终名次()
+    {
+        // 规格 Scenario：D 以弃赛时势力名次第 1 弃赛，其余三名玩家都完赛 → 最终名次中 D 为第 4，排在三名完赛者之后。
+        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All)
+            .Stones(MatchFixtures.P3, "G9", "H9", "J9", "J8")
+            .Stones(MatchFixtures.P0, "A1");
+        match.Resign(MatchFixtures.P3);
+        Assert.Equal(1, match.Resignations.Single().RankAtResign);
+
+        match.PassTurn();
+        match.PassTurn();
+        match.PassTurn();   // 三名参赛者整轮 Pass → 终局
+
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Standing d = match.Result!.Of(MatchFixtures.P3);
+        Assert.Equal(StandingGroup.Resigned, d.Group);
+        Assert.Equal(4, d.Rank);
+        Assert.All(match.Result.Standings.Where(s => s.Player != MatchFixtures.P3), s => Assert.True(s.Rank < d.Rank));
+    }
+
+    [Fact]
+    public void 弃赛名次随存档往返()
+    {
+        // 规格 Scenario：保存一局已有玩家弃赛的对局并恢复 → 该弃赛者的弃赛时势力名次与保存时相同。
+        // 样本名次为 2（非空、非 1），往返同时证伪"写入路径漏写"（缺字段恢复为空）。
+        MatchFlow match = WithEliminatedC();
+        match.Resign(MatchFixtures.P3);
+        Assert.Equal(2, match.Resignations.Single().RankAtResign);
+        string json = match.Serialize();
+
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+
+        Assert.Equal(match.Resignations.Single().RankAtResign, restored.Resignations.Single().RankAtResign);
+        Assert.Equal(json, restored.Serialize());
     }
 }

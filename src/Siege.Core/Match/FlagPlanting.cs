@@ -47,6 +47,18 @@ public sealed record MatchOptions
     /// 属于对局配置：开局固定、始终公开，入存档、日志首部与批次配置；恢复缺该字段的旧存档按 v1（<see cref="MatchFlow.ContentSetBackfilled"/> 留痕）。
     /// </summary>
     public ContentSet ContentSet { get; init; } = ContentSets.Default;
+
+    /// <summary>
+    /// 带入带出开关（carry-in-out，match-setup「带入带出配置」）：是否对本局进行带出结算。缺省关闭。
+    /// 属于对局配置：开局固定、始终公开，入存档；恢复缺该字段的旧存档按关闭（<see cref="MatchFlow.CarryInOutBackfilled"/> 留痕）。
+    /// </summary>
+    public bool CarryInOut { get; init; }
+
+    /// <summary>
+    /// 各玩家的带入（每人至多 1 件，缺省全员无带入）。关闭时 MUST 为空。征召签的类型在建局时抽出并写回（<see cref="MatchFlow.Options"/> 里是解析后的值）。
+    /// 关闭时，或开启但全员无带入时，对局与引入带入带出之前逐步相同。
+    /// </summary>
+    public ImmutableSortedDictionary<PlayerId, Carry.CarryIn> CarryIns { get; init; } = ImmutableSortedDictionary<PlayerId, Carry.CarryIn>.Empty;
 }
 
 /// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>

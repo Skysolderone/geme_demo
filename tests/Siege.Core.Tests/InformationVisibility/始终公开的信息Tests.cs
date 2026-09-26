@@ -1,5 +1,6 @@
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Carry;
 using Siege.Core.Match;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Visibility;
@@ -120,5 +121,25 @@ public class 始终公开的信息Tests
                 LifeShapeFixtures.Describe(Siege.Core.Board.LifeShapeReport.Analyze(view.Board)),
                 LifeShapeFixtures.Describe(life));
         }
+    }
+
+    [Fact]
+    public void 带入公开()
+    {
+        // carry-in-out 规格 Scenario（information-visibility 第 7 条）：插旗阶段任意玩家查询对手信息 → 可读到每名玩家的带入，
+        // 如"玩家2：征召签 → 堡垒子；玩家3：无"。公开视图给的是建局时解析后的值（征召签带抽得类型），与对局配置逐项相同。
+        MatchFlow match = MatchFixtures.Create(options: Siege.Core.Tests.CarryInOut.CarryFixtures.On(
+            (1, new CarryIn(SupplyKind.DraftLot)), (2, new CarryIn(SupplyKind.Commission, PieceType.Fortress))));
+        Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
+
+        MatchPublicView view = match.Publish();
+        Assert.True(view.CarryInOut);
+        Assert.Equal(new CarryIn(SupplyKind.Commission, PieceType.Fortress), view.CarryIns[MatchFixtures.P2]);
+        Assert.Equal(SupplyKind.DraftLot, view.CarryIns[P1].Kind);
+        Assert.NotNull(view.CarryIns[P1].Type);
+        Assert.False(view.CarryIns.ContainsKey(MatchFixtures.P3));
+        Assert.Equal(
+            Siege.Core.Tests.CarryInOut.CarryFixtures.CarryText(match.CarryIns),
+            Siege.Core.Tests.CarryInOut.CarryFixtures.CarryText(view.CarryIns));
     }
 }
