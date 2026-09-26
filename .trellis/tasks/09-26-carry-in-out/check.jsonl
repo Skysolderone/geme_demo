@@ -1,0 +1,7 @@
+{"file": "openspec/changes/carry-in-out/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/carry-in-out/design.md", "reason": "规格"}
+{"file": "openspec/changes/carry-in-out/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/carry-in-out/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "核心约定"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "核心约定"}
+{"file": ".trellis/spec/core/testing.md", "reason": "核心约定"}
