@@ -18,6 +18,18 @@ internal sealed class PlayQuitException : Exception
 }
 
 /// <summary>
+/// 玩家在自己的小回合里输入 <c>resign</c> / <c>弃赛</c> 并确认（carry-in-out D10）。由 <see cref="PlayCommand"/> 在小回合外层接住后调用
+/// <c>MatchFlow.Resign</c>——控制者回调里不能直接弃赛：运行器在部署返回后还要确认批次。
+/// </summary>
+internal sealed class PlayResignException : Exception
+{
+    public PlayResignException()
+        : base("玩家弃赛。")
+    {
+    }
+}
+
+/// <summary>
 /// 终端里的人类控制者：每个阶段打印需要的信息并读命令。只经 <see cref="ITurnController"/> 递入的本人句柄操作，
 /// 看到的是公开快照 + 自己的手牌，与正式 AI 的信息边界相同。
 /// </summary>
@@ -30,12 +42,14 @@ internal sealed class ConsoleController : ITurnController
     private readonly TextReader _in;
     private readonly TextWriter _out;
     private readonly BoardRenderer _render;
+    private readonly string? _quitWarning;
 
     /// <param name="supplement">公开补充载荷（结构参数的来源拆分，<c>MatchFlow.PublishSupplement</c>）：征募阶段列出展示数来源（含驿站）。</param>
     /// <param name="preview">本人暂放批次的富预演（<c>MatchFlow.PreviewCurrentBatch</c>）：预演命令的势力、将揭示格与匠人的全部合法改造目标都取自它，终端不自己算。</param>
+    /// <param name="quitWarning">本机玩家有带入时 <c>q</c> 先打印的提示（carry-in-out「中途退出与截断」），并要求确认；<c>null</c> = 直接退出（未带入或关闭带入带出）。</param>
     public ConsoleController(
         PlayerId me, Func<MatchPublicView> observe, Func<PublicSupplement> supplement, Func<BatchPreview> preview,
-        TextReader input, TextWriter output)
+        TextReader input, TextWriter output, string? quitWarning = null)
     {
         _me = me;
         _observe = observe;
@@ -44,6 +58,7 @@ internal sealed class ConsoleController : ITurnController
         _in = input;
         _out = output;
         _render = new BoardRenderer(output);
+        _quitWarning = quitWarning;
     }
 
     // ---------- 第 2 阶段 ----------
@@ -347,7 +362,7 @@ internal sealed class ConsoleController : ITurnController
         _out.WriteLine("  D4 A B:D5  匠人带改造（B:搭桥 / F:D4-E4 立栅 / X:烧林），v 预演列出全部合法目标");
         _out.WriteLine("  -D4    撤回 D4      c 清空      v 预演（看提子与势力变化）");
         _out.WriteLine("  ok     确认落子     pass 本回合不落子（撤销本回合征募）");
-        _out.WriteLine("  b 看盘  s 看各家状态  q 退出游戏");
+        _out.WriteLine("  b 看盘  s 看各家状态  resign 弃赛  q 退出游戏");
     }
 
     private void PrintHand(HandPrivateView hand)
@@ -357,22 +372,47 @@ internal sealed class ConsoleController : ITurnController
         _out.WriteLine($"你的手牌：{entries}    类型槽 {hand.OccupiedSlots}/{hand.TypeSlots?.ToString() ?? "-"}");
     }
 
+    /// <summary>
+    /// 读一行命令。输入耗尽即退出；<c>q</c> 退出（有带入时先提示并确认）；<c>resign</c> / <c>弃赛</c> 二次确认后弃赛。
+    /// 取消的退出 / 弃赛不当作本阶段的输入，继续读下一行。
+    /// </summary>
     private string Read()
     {
-        string? line = _in.ReadLine();
-        if (line is null)
+        while (true)
         {
-            throw new PlayQuitException();
-        }
+            string? line = _in.ReadLine();
+            if (line is null)
+            {
+                throw new PlayQuitException();
+            }
 
-        line = line.Trim();
-        if (line is "q" or "quit" or "exit")
-        {
-            throw new PlayQuitException();
-        }
+            line = line.Trim();
+            if (line is "q" or "quit" or "exit")
+            {
+                if (_quitWarning is null || Confirm(_quitWarning + "确认退出？(y/N) "))
+                {
+                    throw new PlayQuitException();
+                }
 
-        return line;
+                continue;
+            }
+
+            if (line is "resign" or "弃赛")
+            {
+                if (Confirm("弃赛后你不再行动，遗留棋子照常计入盘面，最终名次排在所有完赛者之后。确认弃赛？(y/N) "))
+                {
+                    throw new PlayResignException();
+                }
+
+                continue;
+            }
+
+            return line;
+        }
     }
+
+    /// <summary>二次确认：只有 y / yes / 是 算确认；输入耗尽即退出。</summary>
+    private bool Confirm(string prompt) => PlayCommand.Confirm(prompt, _in, _out);
 
     private void Try(Action action)
     {

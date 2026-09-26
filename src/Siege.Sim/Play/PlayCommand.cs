@@ -4,6 +4,7 @@ using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 
@@ -22,9 +23,12 @@ internal static class PlayCommand
     /// 依赖出生区与走法的脚本测试写死 0，使脚本不随缺省冒险概率变化而失步。</param>
     /// <param name="contentSet">测试接缝：对局内容集；<c>null</c> = 对局配置缺省值（<see cref="ContentSets.Default"/>，v2）。终端入口不传（more-pieces-relics D8）。
     /// 依赖走法的脚本测试写死 v1（征募棋池随内容集变），使脚本不随缺省内容集变化而失步。</param>
+    /// <param name="profile">带入带出的档案存取（carry-in-out D10）；<c>null</c> = 关闭带入带出、不读写任何档案（缺省）。
+    /// 入口 <c>Program.Play</c> 缺省传缺省档案、<c>--no-carry</c> 传 <c>null</c>；脚本化测试不传即关闭，不碰真实用户目录，只在需要时注入临时档案。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
-        EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null, ContentSet? contentSet = null)
+        EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null, ContentSet? contentSet = null,
+        CarryProfileStore? profile = null)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? map.MaxPlayers;
@@ -46,8 +50,38 @@ internal static class PlayCommand
         PlayerId me = players[seat - 1];
         MatchOptions options = flagRisk is int risk ? MatchOptions.Immediate with { FlagRisk = risk } : MatchOptions.Immediate;
         options = contentSet is { } set ? options with { ContentSet = set } : options;
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
         var render = new BoardRenderer(output);
+
+        // 带入带出（carry-in-out）：开启时在建局之前读档、处理残留在途记录、兑换与选择带入；AI 按本机玩家的带入数从 carry-ai 子流抽取。
+        // 档案来自更新的版本或人数没有点数表时，本局按关闭进行（store 为 null）。关闭时对局选项不变，与引入带入带出之前逐步相同。
+        CarryProfileStore? store = null;
+        if (profile is not null)
+        {
+            CarryIn? mine;
+            try
+            {
+                (store, mine) = CarryTerminal.Prepare(profile, playerCount, options.ContentSet, input, output, render);
+            }
+            catch (PlayQuitException)
+            {
+                output.WriteLine();
+                output.WriteLine($"已退出。种子 {seed}，用 --seed {seed} 可以重开这一局。");
+                return 0;
+            }
+
+            if (store is not null)
+            {
+                options = options with { CarryInOut = true, CarryIns = CarryAi.ForHumanMatch(new GameSeed(seed), players, me, mine, options.ContentSet) };
+            }
+        }
+
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
+        // 对局标识：只用于在途记录的"同一局只结算一次"。种子 + 计时器读数（不参与任何对局随机）。
+        string matchId = $"{seed:X16}-{Stopwatch.GetTimestamp():X}";
+        CarryIn? myCarry = match.CarryIns.GetValueOrDefault(me);   // 征召签在建局时已解析出类型
+        store?.Begin(matchId, myCarry);
+        string? quitWarning = store is not null && myCarry is not null ? "退出将丢失带入的补给；弃赛可返还补给并带出 50%。" : null;
+        CarryOutResult? settled = null;
 
         output.WriteLine();
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
@@ -64,11 +98,18 @@ internal static class PlayCommand
         output.WriteLine("终局：只剩一名参赛玩家、棋盘填满或一整轮所有人都 Pass；曾有势力而势力降到 0 即出局。");
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
+        if (store is not null)
+        {
+            // 所有玩家的带入从插旗阶段起公开（information-visibility），取自公开视图。
+            output.WriteLine(CarryTerminal.CarryListText(match.Publish().CarryIns, me));
+            output.WriteLine("对局中输入 resign（或 弃赛）可弃赛：返还带入的补给，并按弃赛时的势力名次带出一半补给点（保护期内为 0）。");
+        }
+
         output.WriteLine();
 
         try
         {
-            int zone = ChooseZone(match, me, map, input, output, render);
+            int zone = ChooseZone(match, me, map, input, output, render, quitWarning);
             // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区，
             // 否则标准图按编号顺排，平台多于人数的图由种子选区。
             ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
@@ -77,7 +118,7 @@ internal static class PlayCommand
             foreach (PlayerId p in players)
             {
                 runner.SetController(p, p == me
-                    ? new ConsoleController(me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch, input, output)
+                    ? new ConsoleController(me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch, input, output, quitWarning)
                     : HeuristicAi.Create(match, p, difficulty, weights, search));
             }
 
@@ -94,9 +135,42 @@ internal static class PlayCommand
                     output.Write($"{BoardRenderer.Label(current, me)} 思考中… ");
                 }
 
-                runner.RunTurn();
+                bool resigned = false;
+                try
+                {
+                    runner.RunTurn();
+                }
+                catch (PlayResignException)
+                {
+                    // 本机玩家在自己的小回合里弃赛：此时仍在该小回合内（阶段非 Idle），走 Resign 的"当前行动玩家任意阶段弃赛"分支。
+                    match.Resign(me);
+                    ResignationSnapshot snapshot = match.Resignations.Last(r => r.Player == me);
+                    render.Line($"{BoardRenderer.Label(me, me)} 弃赛（弃赛时势力 {snapshot.Power}）。此后由 AI 继续把对局下完。", ConsoleColor.Red);
+                    if (store is not null)
+                    {
+                        // 弃赛立即结算并写档（design.md D5）：弃赛时势力名次的点数一半；保护期内为 0；补给返还。之后的对局事件不再改变它。
+                        settled = CarryOutSettlement.Resigned(players.Length, snapshot.RankAtResign!.Value, snapshot.MajorRound, myCarry);
+                        store.Settle(matchId, settled);
+                        render.Line(CarryTerminal.ResignText(settled), ConsoleColor.Yellow);
+                    }
+
+                    resigned = true;
+                }
+
                 MatchPublicView after = match.Publish();
-                Summarize(before, after, current, me, output, render);
+                if (!resigned)
+                {
+                    Summarize(before, after, current, me, output, render);
+                }
+
+                if (store is not null && settled is null && match.StateOf(me).Status == Core.Scoring.PlayerStatus.Eliminated)
+                {
+                    // 出局立即结算（carry-in-out「出局结算」）：补给丢失、带出 0，之后的对局事件不再改变它。
+                    settled = CarryOutSettlement.Eliminated(myCarry);
+                    store.Settle(matchId, settled);
+                    render.Line(CarryTerminal.EliminatedText(settled), ConsoleColor.Red);
+                }
+
                 if (match.Phase == MatchPhase.InProgress && match.MajorRound != round)
                 {
                     render.Line($"── 第 {round} 大回合结束 ──", ConsoleColor.DarkYellow);
@@ -107,6 +181,19 @@ internal static class PlayCommand
             output.WriteLine();
             render.Board(final, me);
             PrintResult(match.Result!, me, output, render);
+            if (store is not null)
+            {
+                // 局终结算（只在带入带出开启时——implement 段 A 待决「入口只在开关开启时结算」）：弃赛 / 出局已在当时结算过，这里只补完赛者；结算只写一次。
+                if (settled is null)
+                {
+                    settled = CarryOutSettlement.Settle(match.Result, match.Resignations, match.CarryIns, match.Players)[me];
+                    store.Settle(matchId, settled);
+                }
+
+                render.Line(CarryTerminal.SettlementText(settled), ConsoleColor.Yellow);
+                output.WriteLine(CarryTerminal.ProfileText(store.Current));
+            }
+
             return 0;
         }
         catch (PlayQuitException)
@@ -117,7 +204,7 @@ internal static class PlayCommand
         }
     }
 
-    private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, BoardRenderer render)
+    private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, BoardRenderer render, string? quitWarning)
     {
         render.Board(match.Publish(), me, zones: true);
         output.WriteLine();
@@ -128,7 +215,12 @@ internal static class PlayCommand
             line = line.Trim();
             if (line is "q" or "quit")
             {
-                throw new PlayQuitException();
+                if (quitWarning is null || Confirm(quitWarning + "确认退出？(y/N) ", input, output))
+                {
+                    throw new PlayQuitException();
+                }
+
+                continue;
             }
 
             if (int.TryParse(line, out int z) && z >= 1 && z <= map.BirthZones.Length)
@@ -136,6 +228,14 @@ internal static class PlayCommand
                 return z - 1;
             }
         }
+    }
+
+    /// <summary>二次确认（退出 / 弃赛）：只有 y / yes / 是 算确认；输入耗尽即退出。</summary>
+    internal static bool Confirm(string prompt, TextReader input, TextWriter output)
+    {
+        output.Write(prompt);
+        string answer = input.ReadLine() ?? throw new PlayQuitException();
+        return answer.Trim() is "y" or "Y" or "yes" or "是";
     }
 
     /// <summary>对比前后快照，说明这一小回合发生了什么。</summary>

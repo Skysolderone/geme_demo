@@ -66,6 +66,7 @@ public static class Program
     {
         Console.WriteLine("用法：");
         Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
         Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine("                [--map <地图id或文件>] [--players <人数，缺省取地图人数上限>] [--difficulty <Easy|Standard|Hard>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
@@ -89,10 +90,41 @@ public static class Program
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
+        Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
         mapId = MaterializeMapRequest(mapId, Console.Out, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
-        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, Console.In, Console.Out, map, cellLimit);
+        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, Console.In, Console.Out, map, cellLimit, profile: profile);
+    }
+
+    /// <summary>
+    /// play 的档案选项（carry-in-out D10）：缺省开启带入带出、读写缺省档案（<see cref="Core.Carry.CarryProfileStore.DefaultPath"/>）；
+    /// <c>--profile &lt;路径&gt;</c> 改用其他文件；<c>--no-carry</c> 关闭带入带出、不读写任何档案（返回 <c>null</c>）。严格解析：
+    /// <c>--no-carry</c> 不带值（后面跟了非选项的词即报错，不静默当成未给），<c>--profile</c> 必须给路径，两者不能同时给出。
+    /// 只构造存取、不做任何 I/O。
+    /// </summary>
+    internal static Core.Carry.CarryProfileStore? PlayProfile(CommandLine cli)
+    {
+        ArgumentNullException.ThrowIfNull(cli);
+        string? noCarry = cli.GetOrNull("no-carry");
+        string? path = cli.GetOrNull("profile");
+        if (noCarry is not null && noCarry != "true")
+        {
+            throw new ArgumentException($"--no-carry 是开关，不带值（给出了 {noCarry}）。");
+        }
+
+        if (path == "true")
+        {
+            throw new ArgumentException("--profile 需要档案路径：--profile <路径>。");
+        }
+
+        if (noCarry is not null && path is not null)
+        {
+            throw new ArgumentException("--no-carry 关闭带入带出、不读写档案，不能与 --profile 同时给出。");
+        }
+
+        // 档案损坏时备份文件名要带本地时间：Core 不读时钟，由入口注入。这是 Sim 里唯一一处取墙钟，只进备份文件名，不参与任何对局、日志或配置记录。
+        return noCarry is not null ? null : new Core.Carry.CarryProfileStore(path ?? Core.Carry.CarryProfileStore.DefaultPath(), TimeProvider.System.GetLocalNow);
     }
 
     /// <summary>
