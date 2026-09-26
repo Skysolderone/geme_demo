@@ -49,6 +49,8 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 弃赛者的势力值 SHALL 继续显示并标记为"已弃赛"。
 
+系统 SHALL 在弃赛时刻记录该玩家的**弃赛时势力名次**：`1 + 此刻总势力严格高于弃赛者的未出局玩家数`（参赛者与此前已弃赛者都计入，出局者不计），并列共享较高名次。该名次 SHALL 写入弃赛快照并随存档往返，供 `carry-in-out`「弃赛结算」读取；它 MUST NOT 参与最终名次的计算——弃赛者的最终名次仍按「终局名次与并列判定」排在所有完赛者之后。
+
 #### Scenario: 弃赛后停止行动
 - **WHEN** 玩家 D 在第 6 大回合主动弃赛
 - **THEN** 第 7 大回合起 D 不再获得小回合、不再征募、其先锋信物不再提供先手修正
@@ -67,7 +69,19 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 #### Scenario: 弃赛快照可记录
 - **WHEN** 玩家 D 弃赛
-- **THEN** 系统记录其弃赛时的盘面、手牌与资源快照，供未来的带入带出系统读取
+- **THEN** 系统记录其弃赛时的盘面、手牌、资源快照与弃赛时势力名次，带入带出结算从中读取名次
+
+#### Scenario: 弃赛时势力名次
+- **WHEN** 4 人局玩家 C 已出局，D 以总势力 30 弃赛，此刻 A = 50、B = 30
+- **THEN** D 的弃赛时势力名次为第 2（只有 A 严格更高，与 B 并列共享）
+
+#### Scenario: 弃赛名次不影响最终名次
+- **WHEN** D 以弃赛时势力名次第 1 弃赛，其余三名玩家都完赛
+- **THEN** 最终名次中 D 为第 4，排在三名完赛者之后
+
+#### Scenario: 弃赛名次随存档往返
+- **WHEN** 保存一局已有玩家弃赛的对局并恢复
+- **THEN** 恢复后该弃赛者的弃赛时势力名次与保存时相同
 
 ### Requirement: 三类终局条件
 

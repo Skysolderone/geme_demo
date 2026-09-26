@@ -13,6 +13,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 4. 已揭示信物的位置、类型与强度，以及各信物的控制状态。
 5. 每名玩家的当前势力、势力明细（领地分与各棋串军势）、行动顺序与公开属性。
 6. 每条棋串的活形状态（活 / 未定 / 死）、各已确定活形棋串的眼空间，以及每名玩家的禁入格集合。
+7. 带入带出开关与每名玩家的带入（补给种类，换型令的指定类型与征召签的抽得类型），从插旗阶段起公开。这会让其他玩家知道带入者开局手牌的构成；开局手牌本就是公开规则决定的固定配置，开局之后的手牌数量仍按 `hand-management`「手牌的信息边界」隐藏。
 
 #### Scenario: 改造结果公开
 - **WHEN** 某玩家的匠人架起一座桥
@@ -29,6 +30,10 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 #### Scenario: 活形状态公开
 - **WHEN** 任意玩家查询盘面上任一棋串
 - **THEN** 可读到其活形状态；若为已确定活形，可读到其眼空间格集合
+
+#### Scenario: 带入公开
+- **WHEN** 插旗阶段任意玩家查询对手信息
+- **THEN** 可读到每名玩家的带入，例如"玩家2：征召签 → 堡垒子；玩家3：无"
 
 ### Requirement: 必须隐藏的信息
 

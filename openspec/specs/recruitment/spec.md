@@ -5,7 +5,7 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 ## Requirements
 ### Requirement: 初始配置与基础棋池
 
-系统 SHALL 在对局开始时为每名玩家发放 5 枚普通子作为初始手牌。
+系统 SHALL 在对局开始时为每名玩家发放 5 枚普通子作为初始手牌。带入了补给的玩家，其初始手牌 SHALL 按 `carry-in-out`「补给种类与开局效果」调整（至多多 1 枚普通子，或把 1 枚普通子换成 1 枚候选类型的棋子）；初始手牌的构造 MUST NOT 消费征募子流。未带入补给的玩家的初始手牌 MUST 与引入带入带出之前相同。
 
 全部玩家 SHALL 共用同一基础棋池，其基础权重为：普通子 40、堡垒子 20、连珠子 18、倍增子 12、协同子 10、匠人 10、旗手子 8、铁链子 8、哨兵子 8、界碑子 8。匠人的权重 SHALL 为对局配置，用于扫档校准；未显式配置时取 10。四种新棋子的权重 8 是未校准的初值，MUST 在代码中显式标注未校准，且不可配置。
 
@@ -34,6 +34,10 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 #### Scenario: 内容集 v1 的棋池
 - **WHEN** 在内容集 v1 下以默认配置统计基础棋池
 - **THEN** 只有六种类型，权重为 40 / 20 / 18 / 12 / 10 / 10
+
+#### Scenario: 带入改变开局手牌
+- **WHEN** 玩家 A 带入换型令（指定堡垒子），玩家 B 未带入
+- **THEN** A 的初始手牌为普通子 × 4、堡垒子 × 1，B 的初始手牌为普通子 × 5；征募子流未被消费，第 1 大回合第一位行动者的征募候选与全员不带入时相同
 
 ### Requirement: 流派徽记调整征募权重
 
