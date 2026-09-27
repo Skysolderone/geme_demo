@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace Siege.Core.Ai;
 
 /// <summary>
-/// AI 难度（设计文档 §15.2）。简单只看即时收益与眼位、贪心一条；标准 / 高难扩大候选数量与评价深度，MUST NOT 读隐藏信息。
-/// 活形硬约束与停手阈值对三档一律生效（ai-eye D7：它们是对局收敛的底线，不是强度手段）；眼位维同样三档生效（ai-eye R26），威胁维从标准难度起生效。
+/// AI 难度（设计文档 §15.2）。简单只看即时收益与眼位、贪心一条；标准 / 高难扩大候选数量与评价深度；专家在高难的候选生成之上做一层前瞻（expert-lookahead）。
+/// 任何难度 MUST NOT 读隐藏信息。活形硬约束与停手阈值对四档一律生效（ai-eye D7：它们是对局收敛的底线，不是强度手段）；眼位维同样四档生效（ai-eye R26），威胁维从标准难度起生效。
+/// 次序即序号：新档只在末尾追加，既有三档的名称与序号 MUST NOT 改变（日志、配置按名称读写，旧数据按序号也不漂移）。
 /// </summary>
 public enum AiDifficulty
 {
@@ -14,6 +17,9 @@ public enum AiDifficulty
 
     /// <summary>高难：九维评价，M = 32，N 更大。</summary>
     Hard,
+
+    /// <summary>专家（expert-lookahead）：候选生成与高难完全相同，再对自身评价前 <see cref="AiSearchConfig.LookaheadWidth"/> 个非空候选做一层前瞻重排。</summary>
+    Expert,
 }
 
 /// <summary>
@@ -36,8 +42,22 @@ public enum AiDifficulty
 /// 构造参数的缺省值是 0 而不是 <see cref="DefaultPassThreshold"/>：该项出现之前记录的剪枝参数（配置 / 日志首部里的 <c>Search</c>）缺这个字段，
 /// 当时的保留条件就是严格提高，按 0 读入才能原样重建。
 /// </param>
-public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchCount, bool ImmediateOnly, int CandidateCellLimit = 0, int PassThreshold = 0)
+/// <param name="LookaheadWidth">
+/// 前瞻宽度 W（expert-lookahead D9，非负整数）：0 与 1 都表示不前瞻；大于 1 时对自身评价前 W 个非空候选各模拟下一名对手的回应后重排（<see cref="ExpertLookahead"/>）。
+/// 简单 / 标准 / 高难预设为 0，专家预设为 <see cref="DefaultLookaheadWidth"/>。为 0 时序列化 MUST NOT 写出该字段——三档旧难度的配置记录与日志首部与引入之前逐字节相同；
+/// 缺该字段的旧记录按 0 读入（同 <see cref="PassThreshold"/> 的先例）。
+/// </param>
+public sealed record AiSearchConfig(
+    int CandidatePointCount,
+    int CandidateBatchCount,
+    bool ImmediateOnly,
+    int CandidateCellLimit = 0,
+    int PassThreshold = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0)
 {
+    /// <summary>专家预设的前瞻宽度（负责人裁决 2026-09-26：前 K = 4 个候选；规格里 K 专指候选格上限，故称 W）。</summary>
+    public const int DefaultLookaheadWidth = 4;
+
     /// <summary>可落子格数超过它的地图算"大图"：各入口未显式配置 K 时取 <see cref="LargeMapCellLimit"/>，否则取 0。</summary>
     public const int LargeMapPlayableThreshold = 150;
 
@@ -70,12 +90,16 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
     /// <summary>高难。</summary>
     public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold);
 
+    /// <summary>专家：候选生成同高难（N 24 / M 32、同一扰动子流、同一停手阈值），另加前瞻宽度 <see cref="DefaultLookaheadWidth"/>。</summary>
+    public static readonly AiSearchConfig Expert = Hard with { LookaheadWidth = DefaultLookaheadWidth };
+
     /// <summary>某难度的默认参数。</summary>
     public static AiSearchConfig ForDifficulty(AiDifficulty difficulty) => difficulty switch
     {
         AiDifficulty.Easy => Easy,
         AiDifficulty.Standard => Standard,
         AiDifficulty.Hard => Hard,
+        AiDifficulty.Expert => Expert,
         _ => throw new ArgumentOutOfRangeException(nameof(difficulty), difficulty, "未知难度。"),
     };
 
@@ -92,7 +116,7 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
     public static AiSearchConfig ForMap(AiDifficulty difficulty, int playableCells, int? cellLimit = null) =>
         ForDifficulty(difficulty) with { CandidateCellLimit = cellLimit ?? DefaultCellLimitFor(playableCells) };
 
-    /// <summary>参数校验：N、M 至少为 1；K 与停手阈值非负。</summary>
+    /// <summary>参数校验：N、M 至少为 1；K、停手阈值与前瞻宽度非负。</summary>
     public AiSearchConfig Validated()
     {
         if (CandidatePointCount < 1 || CandidateBatchCount < 1)
@@ -108,6 +132,11 @@ public sealed record AiSearchConfig(int CandidatePointCount, int CandidateBatchC
         if (PassThreshold < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(PassThreshold), "停手阈值须为非负整数（0 = 严格提高即保留）。");
+        }
+
+        if (LookaheadWidth < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(LookaheadWidth), "前瞻宽度须为非负整数（0 与 1 = 不前瞻）。");
         }
 
         return this;

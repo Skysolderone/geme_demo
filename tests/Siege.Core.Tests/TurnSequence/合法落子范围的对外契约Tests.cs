@@ -70,7 +70,9 @@ public class 合法落子范围的对外契约Tests
     public void 禁入扣除只在LegalRangeFor且与预演共用同一查询()
     {
         // 守门（tasks 2.4，段 D 按裁决 R12 收窄；原名 禁入只在契约一处扣除且与预演共用同一查询）：
-        // ① 源码：从某个格集合里**扣除**禁入格，全仓（Siege.Core、Siege.Sim、Siege.Presentation、src/godot）只有 MatchFlow.LegalRangeFor 一处。
+        // ① 源码：从某个格集合里**扣除**禁入格，全仓（Siege.Core、Siege.Sim、Siege.Presentation、src/godot）只有一处。
+        //    expert-lookahead D7 把合法落子范围抽成只读公开量的纯函数 PublicRules.LegalRange（对局流程的 MatchFlow.LegalRangeFor 与专家前瞻共用），
+        //    这一处随之从 MatchFlow.cs:LegalRangeFor 移到 PublicRules.cs:LegalRange（段 A 改写期望值；"只有一处"不变）。
         //    读取禁入格（ForbiddenCellsFor / IsForbiddenFor / ProtectedCellsOf）对表现、终端、分析放开——那是标示与统计，不是第二份合法范围。
         //    "扣除"认三种形状：Except / ExceptWith 的实参里取禁入格；Where 里对 IsForbiddenFor 取反；RemoveWhere / RemoveAll 里判禁入。
         //    挡不住所有绕法（testing.md「违禁 token 清单挡不住照抄一份算式」），靠 ② 的行为比对兜底。
@@ -87,7 +89,7 @@ public class 合法落子范围的对外契约Tests
         Assert.True(files.Length > 120, $"扫描口径过小：只扫到 {files.Length} 个文件。");
         Assert.Contains(files, f => f.EndsWith("BoardView.cs", StringComparison.Ordinal));   // 口径含 Godot
 
-        Assert.Equal(["MatchFlow.cs:LegalRangeFor"], DeductionsOf(files));
+        Assert.Equal(["PublicRules.cs:LegalRange"], DeductionsOf(files));
 
         // 读取放开的反面：扫描口径里确实有契约之外的读取者（终端、表现层、预演），它们不算扣除。
         Assert.Contains("BoardRenderer.cs", CallersOf(files, "ForbiddenCellsFor"));

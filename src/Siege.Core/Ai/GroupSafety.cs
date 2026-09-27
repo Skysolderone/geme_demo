@@ -17,6 +17,12 @@ public readonly record struct GroupSafety(int Liberties, int EyeValueSum, int Di
     /// <summary>敌方一个小回合至少能落这么多子（基础部署上限），气数不超过它的棋串一手就能被提光。</summary>
     public const int DangerLiberties = 3;
 
+    /// <summary>
+    /// 只剩 ≤ 1 口气时每枚棋子的危险扣分（<see cref="Score"/> 的 danger 项）。专家前瞻的前瞻后分数对"决策起点在盘、被模拟回应提走"的己方棋子按它计入安全维
+    /// （expert-lookahead 裁决 2026-09-27 段 A 中），两处共用这一个常数。
+    /// </summary>
+    public const int AtariDangerPerStone = 12;
+
     /// <summary>气数项的封顶。</summary>
     public const int LibertyCap = 4;
 
@@ -51,7 +57,7 @@ public readonly record struct GroupSafety(int Liberties, int EyeValueSum, int Di
 
             long danger = Liberties switch
             {
-                <= 1 => (long)Size * 12,
+                <= 1 => (long)Size * AtariDangerPerStone,
                 2 => (long)Size * 8,
                 DangerLiberties => (long)Size * 4,
                 _ => 0,

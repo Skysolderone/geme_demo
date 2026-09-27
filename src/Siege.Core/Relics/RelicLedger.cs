@@ -179,40 +179,24 @@ public sealed class RelicLedger
     {
         ArgumentNullException.ThrowIfNull(board);
         RecalculateCore(board, roster: null);
-        return SumVanguard(board.AllGroups().Select(g => g.Owner).Distinct());
+        return PublicRelicEffects.InitiativeBonusesFromKnown(board.AllGroups().Select(g => g.Owner).Distinct(), Known());
     }
 
     /// <summary>
     /// 大回合结束：读取全部先锋信物，输出每名<b>参赛中</b>玩家的先手修正（无先锋为 0）。
     /// 这是先锋唯一的读取时机；已弃赛 / 已出局者不在输出中——他们不再获得先手收益。
+    /// 汇总经公开先锋修正的唯一实现 <see cref="PublicRelicEffects.InitiativeBonuses(IEnumerable{PlayerId}, IEnumerable{RelicPublicState})"/>（expert-lookahead D7），传本账本的内容。
     /// </summary>
     public ImmutableSortedDictionary<PlayerId, int> ReadInitiativeBonuses(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(roster);
         RecalculateCore(board, roster);
-        return SumVanguard(roster.Where(kv => kv.Value == PlayerStatus.Active).Select(kv => kv.Key));
+        return PublicRelicEffects.InitiativeBonusesFromKnown(roster.Where(kv => kv.Value == PlayerStatus.Active).Select(kv => kv.Key), Known());
     }
 
-    private ImmutableSortedDictionary<PlayerId, int> SumVanguard(IEnumerable<PlayerId> players)
-    {
-        ImmutableSortedDictionary<PlayerId, int>.Builder bonuses = ImmutableSortedDictionary.CreateBuilder<PlayerId, int>();
-        foreach (PlayerId player in players)
-        {
-            int bonus = 0;
-            foreach (RelicState relic in _relics.Values)
-            {
-                if (relic.Content.Type == RelicType.Vanguard && relic.Control.GrantsEffectTo(player))
-                {
-                    bonus += relic.Content.Magnitude;
-                }
-            }
-
-            bonuses[player] = bonus;
-        }
-
-        return bonuses.ToImmutable();
-    }
+    /// <summary>公开效果纯函数的输入：逐枚的控制（最近一次重算的结果）与本账本的内容，坐标序。</summary>
+    private IEnumerable<KnownRelic> Known() => _relics.Values.Select(r => new KnownRelic(r.Coord, r.Control, r.Content));
 
     /// <summary>重算全部信物的控制归属：逐格调用控制判定的唯一实现 <see cref="RelicControl.Of"/>。</summary>
     private void RecalculateCore(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster)
@@ -227,6 +211,7 @@ public sealed class RelicLedger
     /// <summary>
     /// 按当前控制状态汇总非先锋信物。同类直接相加，无任何硬上限。
     /// 输入只有信物控制与当前大回合（restore-go-core-rules D7）：展示数 / 选取数 = 默认值 + 信物，部署上限 = 分阶段基础值 + 军令。
+    /// 部署上限与工坊经公开部署上限的唯一实现 <see cref="PublicRelicEffects.Deploy(PlayerId, int, IEnumerable{RelicPublicState})"/>（expert-lookahead D7），传本账本的内容。
     /// </summary>
     /// <remarks>
     /// more-pieces-relics：驿站（D4）是"驿站加成"的唯一实现——每枚受控驿站加「受控信物总枚数 − 1」（总枚数含先锋与其他驿站，每枚按 1 计，
@@ -238,11 +223,10 @@ public sealed class RelicLedger
         int reveal = EffectSnapshot.BaseRevealCount;
         int freePick = EffectSnapshot.BaseFreePickCount;
         int slots = EffectSnapshot.BaseTypeSlots;
-        int deploy = EffectSnapshot.BaseDeployLimitFor(majorRound);
+        PublicDeployEffects deployEffects = PublicRelicEffects.DeployFromKnown(player, majorRound, Known());
         var emblems = new SortedDictionary<PieceType, int>();
         var relays = new List<Coord>();
         int controlled = 0;
-        bool workshop = false;
 
         foreach (RelicState relic in _relics.Values)
         {
@@ -266,7 +250,8 @@ public sealed class RelicLedger
                     slots += content.Magnitude;
                     break;
                 case RelicType.Command:
-                    deploy += content.Magnitude;
+                case RelicType.Workshop:
+                    // 部署上限与工坊（D5，多枚不叠加）：已由 PublicRelicEffects.Deploy 汇总。
                     break;
                 case RelicType.SchoolEmblem:
                     PieceType piece = content.EmblemPiece!.Value;
@@ -277,9 +262,6 @@ public sealed class RelicLedger
                     break;
                 case RelicType.Relay:
                     relays.Add(relic.Coord);
-                    break;
-                case RelicType.Workshop:
-                    workshop = true;
                     break;
                 case RelicType.Encampment:
                 case RelicType.Pincer:
@@ -295,7 +277,8 @@ public sealed class RelicLedger
         reveal += relaySources.Values.Sum();
 
         var snapshot = new EffectSnapshot(
-            player, majorRound, reveal, freePick, slots, deploy, emblems.ToImmutableSortedDictionary(), heldTypeCount, relaySources, workshop);
+            player, majorRound, reveal, freePick, slots, deployEffects.DeployLimit, emblems.ToImmutableSortedDictionary(), heldTypeCount, relaySources,
+            deployEffects.WorkshopActive);
         if (DeployLimitPeak is null || snapshot.DeployLimit > DeployLimitPeak.DeployLimit)
         {
             DeployLimitPeak = new DeployLimitPeak(snapshot.DeployLimit, majorRound, player);

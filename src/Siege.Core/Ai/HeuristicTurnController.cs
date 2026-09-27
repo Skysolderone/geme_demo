@@ -26,7 +26,9 @@ public sealed class HeuristicTurnController : ITurnController
     public const int PerturbationWindow = 3;
 
     private readonly Func<MatchPublicView> _observe;
-    private readonly RandomStream _perturbation;
+
+    /// <summary>扰动子流；只有前瞻里的模拟对手为 <c>null</c>（它只走 k = 0 的无扰动贪心，D5 (a)），此时任何扰动都会响亮失败。</summary>
+    private readonly RandomStream? _perturbation;
     private readonly Func<RelicPublicState, int>? _relicValue;
     private readonly Func<GameBoard, LifeShapeReport>? _lifeQuery;
     private readonly bool _cacheLife;
@@ -57,10 +59,26 @@ public sealed class HeuristicTurnController : ITurnController
         Func<RelicPublicState, int>? relicValue,
         Func<GameBoard, LifeShapeReport>? lifeQuery = null,
         bool cacheLife = true)
+        : this(player, observe, difficulty, weights, config, relicValue, lifeQuery, cacheLife,
+            perturbation ?? throw new ArgumentNullException(nameof(perturbation)))
+    {
+    }
+
+    /// <summary>构造本体。<paramref name="perturbation"/> 只在 <see cref="ForSimulation"/> 里为 <c>null</c>。</summary>
+    private HeuristicTurnController(
+        PlayerId player,
+        Func<MatchPublicView> observe,
+        AiDifficulty difficulty,
+        EvaluationWeights? weights,
+        AiSearchConfig? config,
+        Func<RelicPublicState, int>? relicValue,
+        Func<GameBoard, LifeShapeReport>? lifeQuery,
+        bool cacheLife,
+        RandomStream? perturbation)
     {
         Player = player;
         _observe = observe ?? throw new ArgumentNullException(nameof(observe));
-        _perturbation = perturbation ?? throw new ArgumentNullException(nameof(perturbation));
+        _perturbation = perturbation;
         Difficulty = difficulty;
         Weights = weights ?? EvaluationWeights.Default;
         Config = (config ?? AiSearchConfig.ForDifficulty(difficulty)).Validated();
@@ -94,10 +112,32 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>最近一次部署的选择；尚未部署过为 <c>null</c>。</summary>
     public CandidateBatch? LastChoice { get; private set; }
 
+    /// <summary>最近一次部署的前瞻记录（expert-lookahead）：前瞻宽度为 0（简单 / 标准 / 高难）时恒为 <c>null</c>。</summary>
+    public LookaheadRecord? LastLookahead { get; private set; }
+
     /// <summary>
     /// 为当前公开快照建立评价器（供外部检视单个批次的分解）。<see cref="Deploy"/> 每次决策新建一个：活形分析的决策内缓存挂在评价器上，随之丢弃（ai-eye D5）。
     /// </summary>
     public BatchEvaluator CreateEvaluator() => CreateEvaluator(_observe());
+
+    /// <summary>
+    /// 前瞻里的模拟对手（expert-lookahead D5）：对 <paramref name="responder"/> 固定观察投影视图 <paramref name="view"/>，标准难度、不持有任何随机流。
+    /// <paramref name="config"/> 须只取一条贪心（M = 1，只走 k = 0 的无扰动次序）——一旦走到扰动即抛出，零随机消费由此在结构上成立。
+    /// </summary>
+    internal static HeuristicTurnController ForSimulation(
+        PlayerId responder, MatchPublicView view, EvaluationWeights weights, AiSearchConfig config,
+        Func<GameBoard, LifeShapeReport>? lifeQuery, bool cacheLife)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(config);
+        if (config.CandidateBatchCount != 1 || config.LookaheadWidth != 0)
+        {
+            throw new ArgumentException("模拟对手只取一条无扰动贪心、不前瞻。", nameof(config));
+        }
+
+        return new HeuristicTurnController(
+            responder, () => view, AiDifficulty.Standard, weights, config, relicValue: null, lifeQuery, cacheLife, perturbation: null);
+    }
 
     private BatchEvaluator CreateEvaluator(MatchPublicView view) => new(Player, view, Weights, Config.ImmediateOnly, _relicValue, _lifeQuery, _cacheLife);
 
@@ -217,7 +257,11 @@ public sealed class HeuristicTurnController : ITurnController
 
     // ---------- 第 4 阶段 ----------
 
-    /// <summary>单点筛选 → 贪心 + 种子扰动组合 → 确定性选优；最终把选中的批次摆回 <paramref name="batch"/>。</summary>
+    /// <summary>
+    /// 单点筛选 → 贪心 + 种子扰动组合 → 确定性选优；最终把选中的批次摆回 <paramref name="batch"/>。
+    /// 前瞻宽度大于 0（专家）时，"确定性选优"换成一层前瞻（<see cref="ExpertLookahead"/>）：候选生成（含扰动子流的消费）与高难完全相同，
+    /// 前瞻在去重之后、复摆之前接入，只在非空候选之间重排，并留下前瞻记录（<see cref="LastLookahead"/>）。
+    /// </summary>
     public void Deploy(StagedBatch batch, Func<RehearsalResult> rehearse)
     {
         ArgumentNullException.ThrowIfNull(batch);
@@ -234,6 +278,7 @@ public sealed class HeuristicTurnController : ITurnController
         {
             LastCandidates = [];
             LastChoice = null;
+            LastLookahead = Config.LookaheadWidth > 0 ? LookaheadRecord.Passed : null;
             _decisions.Add("D:pass");
             return;
         }
@@ -251,7 +296,18 @@ public sealed class HeuristicTurnController : ITurnController
         }
 
         LastCandidates = [.. candidates];
-        CandidateBatch choice = CandidateSelection.Best(candidates);
+        CandidateBatch choice;
+        if (Config.LookaheadWidth > 0)
+        {
+            var lookahead = new ExpertLookahead(Player, view, evaluator, Weights, Config, _lifeQuery, _cacheLife);
+            (choice, LastLookahead) = lookahead.Choose(candidates, batch, rehearse);
+        }
+        else
+        {
+            choice = CandidateSelection.Best(candidates);
+            LastLookahead = null;
+        }
+
         LastChoice = choice;
 
         batch.Clear();
@@ -459,10 +515,11 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>种子驱动的局部扰动：位置 i 与 [i, i + 窗口) 内的一个位置交换。消费次数只取决于 N。</summary>
     private ImmutableArray<PointScore> Perturb(ImmutableArray<PointScore> ranking)
     {
+        RandomStream perturbation = _perturbation ?? throw new InvalidOperationException("前瞻的模拟对手不持有随机流，不得扰动（expert-lookahead D5）。");
         PointScore[] list = [.. ranking];
         for (int i = 0; i < list.Length - 1; i++)
         {
-            int j = i + _perturbation.NextInt(Math.Min(PerturbationWindow, list.Length - i));
+            int j = i + perturbation.NextInt(Math.Min(PerturbationWindow, list.Length - i));
             (list[i], list[j]) = (list[j], list[i]);
         }
 

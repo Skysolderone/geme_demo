@@ -1,8 +1,13 @@
 using System.Collections.Immutable;
+using System.Security.Cryptography;
+using System.Text;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Sim.Config;
+using Siege.Sim.Logging;
+using Siege.Sim.Running;
 
 namespace Siege.Core.Tests.AiDecision;
 
@@ -121,4 +126,69 @@ public class 难度分级Tests
         Assert.Equal(a, b);
         Assert.True(compared >= 1);
     }
+
+    [Fact]
+    public void 难度名称与次序()
+    {
+        // expert-lookahead MODIFIED「难度分级」：四档依次为简单、标准、高难、专家；专家在末尾追加，既有三档的名称与序号不变。
+        // 专家预设 = 高难 + 前瞻宽度 4（design D9）；三档旧预设与改动前逐字段相等（字面量取自 HEAD 03d45f6 的预设）。
+        // 变异 M-A2a：Expert 插在 Hard 之前（Hard 序号变 3）→ 见段 A 实施记录。
+        Assert.Equal(["Easy", "Standard", "Hard", "Expert"], Enum.GetNames<AiDifficulty>());
+        Assert.Equal([0, 1, 2, 3], Enum.GetValues<AiDifficulty>().Select(d => (int)d));
+        Assert.Equal(2, (int)AiDifficulty.Hard);
+        Assert.Equal(3, (int)AiDifficulty.Expert);
+
+        Assert.Equal(new AiSearchConfig(6, 1, true, 0, 80), AiSearchConfig.Easy);
+        Assert.Equal(new AiSearchConfig(12, 8, false, 0, 80), AiSearchConfig.Standard);
+        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 80), AiSearchConfig.Hard);
+        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 80, LookaheadWidth: 4), AiSearchConfig.Expert);
+        Assert.Equal(AiSearchConfig.Expert, AiSearchConfig.ForDifficulty(AiDifficulty.Expert));
+        Assert.Equal(AiSearchConfig.Expert with { CandidateCellLimit = 24 }, AiSearchConfig.ForMap(AiDifficulty.Expert, 411));
+        Assert.All([AiDifficulty.Easy, AiDifficulty.Standard, AiDifficulty.Hard], d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).LookaheadWidth));
+    }
+
+    /// <summary>
+    /// 三档旧难度的黄金值：v5、种子 1、4 名同难度 AI 整局（不截断），写死权重（段 A 开工时的缺省）、阈值 80、冒险概率 0、内容集 v2。
+    /// 取自引入专家难度<b>之前</b>的代码（HEAD 03d45f6）的实际运行结果：小回合数、确定性文本行数、确定性文本（含日志首部）的 SHA-256、四名 AI 决策日志的 SHA-256。
+    /// </summary>
+    [Theory]
+    [InlineData(AiDifficulty.Easy, 72, 2364, "277336FE7188875FD00EF369ACB354C3666B99B50A93BDCF4E406D438AF72576", "987D1695B6134D25B72D56EE379FB234FE8DCCD99AE07DC092866F1AD4AE8F4C")]
+    [InlineData(AiDifficulty.Standard, 28, 416, "29353FC976C82867E9DD76AE7229223B876146D5DA53F523366824A7A407736A", "6E6FEFBE0739612BA168AC511BE466F117954A47654F091635B1A242E7807604")]
+    [InlineData(AiDifficulty.Hard, 26, 494, "135B8E7AB5DB8CACC2FFB59C7ED4ACF43B797970B087BDDAF9981AAFBDFF66BC", "3F9D8A31F38EFD6950846DABCA60AA89ED81899E2AEECE9637AEE0803E7576F6")]
+    public void 三档旧难度逐步不变(AiDifficulty difficulty, int turns, int lines, string logHash, string decisionHash)
+    {
+        // expert-lookahead MODIFIED「难度分级」：简单 / 标准 / 高难的每一步决策、日志的确定性文本（含首部）与改动前逐项相同。
+        // 守门型测试：黄金值在改动前的代码上钉下，改动前即绿（设计如此），改动后仍须绿。
+        // 除本条外，既有黄金哈希（候选格上限Tests.V4GoldenTurnHash 等）一字未改。
+        PlayerAiConfig[] players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })];
+        MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(players), 1);
+        MatchLog log = session.Run();
+        string text = log.DeterministicText();
+        string decisions = string.Join("\n", session.Match.Players.Select(p => $"{p}: {string.Join(" | ", session.AiOf(p)!.Decisions)}"));
+
+        Assert.Null(log.Failure);
+        Assert.Equal(turns, log.Turns.Count);
+        Assert.Equal(lines, text.Split('\n').Length);
+        Assert.Equal(logHash, Sha256(text));
+        Assert.Equal(decisionHash, Sha256(decisions));
+        Assert.All(session.Match.Players, p => Assert.Null(session.AiOf(p)!.LastLookahead));
+    }
+
+    [Fact]
+    public void 专家难度不越权()
+    {
+        // MODIFIED「难度分级」Scenario「高难度不越权」扩到专家：专家与其余三档是同一个控制者类型 + 纯数值配置；
+        // 前瞻组件（每次决策新建、不经控制者的实例字段可达）单列为闭包根，同样不得触及违禁类型，且不持有任何随机流（D5）。
+        HeuristicTurnController expert = HeuristicAi.Create(MatchFixtures.Started(), AiFixtures.P0, AiDifficulty.Expert);
+        Assert.Equal(AiSearchConfig.Expert, expert.Config);
+        Assert.Empty(AiFixtures.Violations(typeof(HeuristicTurnController)));
+        Assert.Empty(AiFixtures.Violations(typeof(ExpertLookahead)));
+        ImmutableHashSet<Type> lookahead = AiFixtures.ReachableTypes(typeof(ExpertLookahead));
+        Assert.Contains(typeof(MatchPublicView), lookahead);
+        Assert.Contains(typeof(BatchEvaluator), lookahead);
+        Assert.DoesNotContain(typeof(Siege.Core.Determinism.RandomStream), lookahead);
+        Assert.Contains(typeof(LookaheadRecord), AiFixtures.ReachableTypes(typeof(HeuristicTurnController)));
+    }
+
+    private static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }

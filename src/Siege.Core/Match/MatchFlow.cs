@@ -26,7 +26,7 @@ namespace Siege.Core.Match;
 public sealed partial class MatchFlow
 {
     /// <summary>构筑保护期的大回合数（设计文档 §4.2：第 1–3 大回合）。</summary>
-    public const int BuildProtectionRounds = 3;
+    public const int BuildProtectionRounds = PublicRules.BuildProtectionRounds;
 
     private readonly ImmutableArray<PlayerId> _players;
     private readonly SortedDictionary<PlayerId, PlayerRecord> _records = [];
@@ -406,20 +406,16 @@ public sealed partial class MatchFlow
     /// <summary>
     /// 对 <c>add-batch-deployment</c> 的契约（design.md D5）：第 1–3 大回合为该玩家锁定的出生区格集合（同区玩家自然共享），
     /// 从第 4 大回合起为全图可落子格集合。出生区数据本身不带限制，限制只由本方法按当前大回合序号决定。
-    /// 两种情况都扣除该玩家的禁入格（life-shape，turn-sequence「合法落子范围的对外契约」）：禁入只在这里扣除，
+    /// 两种情况都扣除该玩家的禁入格（life-shape，turn-sequence「合法落子范围的对外契约」），
     /// 查询走 <see cref="LifeShapeReport.ForbiddenCellsFor"/>（唯一实现，与预演第 1 步同源），界面与 AI 不自行判断。
+    /// 计算委托给只读公开量的纯函数 <see cref="PublicRules.LegalRange"/>（expert-lookahead D7：对局流程与专家前瞻共用唯一实现，禁入只在那里扣除）。
+    /// 可落子格按当前地形现算（这里曾是建局时算好的缓存字段，地形可变之后它是过期数据，2.6 缓存排查第 1 条）。
     /// </summary>
     public IReadOnlySet<Coord> LegalRangeFor(PlayerId player)
     {
         RequirePhase(MatchPhase.InProgress);
         int zone = Require(player).BirthZone ?? throw new SiegeRuleException($"玩家 {player} 尚未锁定出生区。");
-
-        // 可落子格按当前地形现算：本局架出来的桥必须立刻成为合法落点。
-        // 这里曾是建局时算好的缓存字段，地形可变之后它是过期数据（2.6 缓存排查第 1 条）。
-        IEnumerable<Coord> range = MajorRound <= BuildProtectionRounds
-            ? Map.BirthZones[zone]
-            : Board.AllCoords().Where(c => Board[c].Terrain == Terrain.Playable);
-        return range.Except(LifeShapeReport.Analyze(Board).ForbiddenCellsFor(player)).ToImmutableHashSet();
+        return PublicRules.LegalRange(Board, MajorRound, zone, player, LifeShapeReport.Analyze(Board));
     }
 
     // ---------- 弃赛 ----------
@@ -558,10 +554,8 @@ public sealed partial class MatchFlow
             return;
         }
 
-        List<PlayerId> zeroed = [.. _players.Where(p =>
-            _records[p].Status == PlayerStatus.Active
-            && _records[p].HasEstablishedPower
-            && power.Of(p).Total == BigInteger.Zero)];
+        // 判据经唯一实现 PublicRules.Eliminated（expert-lookahead D7，前瞻按候选判定名册时共用）。
+        List<PlayerId> zeroed = [.. PublicRules.Eliminated(_players.Select(StateOf), power)];
         if (zeroed.Count == 0)
         {
             return;
