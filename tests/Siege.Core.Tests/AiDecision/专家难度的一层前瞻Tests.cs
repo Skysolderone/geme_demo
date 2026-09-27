@@ -144,11 +144,26 @@ public class 专家难度的一层前瞻Tests
 
         Assert.True(hardDecisions.Count >= 5, $"玩家 1 只有 {hardDecisions.Count} 次决策");
         Assert.Equal(hardDecisions, w1Decisions);
-        Assert.Equal(SimFixtures.TurnTexts(hardLog.Turns), SimFixtures.TurnTexts(w1Log.Turns));
+
+        // 段 B 2.3 起前瞻宽度 > 0 的控制者每次部署都留前瞻记录：宽度 1 的专家只会记"不前瞻"或 Pass，其余玩家没有记录。
+        // 日志比对因此先去掉前瞻记录这一项（它是决策的派生物，不影响走法），其余逐项相同。
+        TurnSnapshot[] seat1 = [.. w1Log.Turns.Where(t => t.Player == P1.Value)];
+        Assert.NotEmpty(seat1);
+        Assert.All(seat1, t => Assert.Contains(t.Lookahead!.Status, new[] { nameof(LookaheadStatus.NotApplied), nameof(LookaheadStatus.Pass) }));
+        Assert.All(w1Log.Turns.Where(t => t.Player != P1.Value), t => Assert.Null(t.Lookahead));
+        var w1Stripped = new MatchLog
+        {
+            Header = w1Log.Header,
+            Turns = [.. w1Log.Turns.Select(t => t with { Lookahead = null })],
+            Events = w1Log.Events,
+            Result = w1Log.Result,
+            Failure = w1Log.Failure,
+        };
+        Assert.Equal(SimFixtures.TurnTexts(hardLog.Turns), SimFixtures.TurnTexts(w1Stripped.Turns));
 
         // 首部之外的确定性文本（小回合、事件、终局，去耗时）逐行相同；首部因玩家 1 的难度与搜索配置不同而不同。
         string[] hardBody = hardLog.DeterministicText().Split('\n')[1..];
-        string[] w1Body = w1Log.DeterministicText().Split('\n')[1..];
+        string[] w1Body = w1Stripped.DeterministicText().Split('\n')[1..];
         Assert.True(hardBody.Length > 100, $"只有 {hardBody.Length} 行");
         Assert.Equal(hardBody, w1Body);
     }

@@ -21,6 +21,12 @@ public enum EventRetention
 /// <summary>一名玩家的 AI 配置。<see cref="DebugAi"/> 为 <c>true</c> 时用调试 AI（测试专用，日志标注、分析默认排除）。</summary>
 public sealed record PlayerAiConfig
 {
+    /// <summary>
+    /// 难度。配置文件与日志首部按名称读写，读入经 Core 的唯一解析 <see cref="AiDifficultyNames"/>（属性级转换器优先于序列化选项里的
+    /// <see cref="JsonStringEnumConverter"/>——后者会接受数字与数字串）：数字、未知名称、空值与 <c>null</c> 在跑局之前报错（expert-lookahead D10）。
+    /// 写出仍是规范名称，既有配置记录与日志首部逐字节不变。
+    /// </summary>
+    [JsonConverter(typeof(AiDifficultyNameConverter))]
     public AiDifficulty Difficulty { get; init; } = AiDifficulty.Standard;
 
     /// <summary>七维权重；<c>null</c> 用 <see cref="EvaluationWeights.Default"/>。</summary>
@@ -30,6 +36,26 @@ public sealed record PlayerAiConfig
     public AiSearchConfig? Search { get; init; }
 
     public bool DebugAi { get; init; }
+}
+
+/// <summary>
+/// <see cref="PlayerAiConfig.Difficulty"/> 的读写：读入只认字符串名称并经 <see cref="AiDifficultyNames.Parse"/>，不合法抛 <see cref="ArgumentException"/>（列出可用名称）；
+/// 写出为枚举名（与 <see cref="JsonStringEnumConverter"/> 的输出相同）。
+/// </summary>
+internal sealed class AiDifficultyNameConverter : JsonConverter<AiDifficulty>
+{
+    public override bool HandleNull => true;
+
+    public override AiDifficulty Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType == JsonTokenType.String
+            ? AiDifficultyNames.Parse(reader.GetString())
+            : throw new ArgumentException($"玩家难度须写成名称字符串（{AiDifficultyNames.Usage}），不接受数字或 {reader.TokenType}。");
+
+    public override void Write(Utf8JsonWriter writer, AiDifficulty value, JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        writer.WriteStringValue(value.ToString());
+    }
 }
 
 /// <summary>
@@ -272,7 +298,18 @@ public sealed record RunConfig
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
-        return resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
+        resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
+        // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，
+        // 使"专家、前瞻宽度 4"如实可查、回放按首部重建。落成值与会话建 AI 时按难度取的完全相同（候选格上限与停手阈值取上面已落成的值），走法不变。
+        // 必须放在候选格上限与停手阈值落成之后。前瞻宽度为 0 的三档旧难度不落成（Search 保持缺省），配置记录与首部与引入之前逐字节相同。
+        return resolved.Players.Any(p => p.Search is null && AiSearchConfig.ForDifficulty(p.Difficulty).LookaheadWidth > 0)
+            ? resolved with
+            {
+                Players = [.. resolved.Players.Select(p => p.Search is null && AiSearchConfig.ForDifficulty(p.Difficulty).LookaheadWidth > 0
+                    ? p with { Search = AiSearchConfig.ForMap(p.Difficulty, map.PlayableCount, resolved.CandidateCellLimit ?? 0) with { PassThreshold = resolved.PassThreshold!.Value } }
+                    : p)],
+            }
+            : resolved;
     }
 
     /// <summary>

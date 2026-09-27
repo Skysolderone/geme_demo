@@ -88,6 +88,15 @@ public sealed class MatchLog
         where T : struct, Enum =>
         Enum.GetNames<T>().Contains(text, StringComparer.Ordinal) ? Enum.Parse<T>(text) : throw new FormatException($"日志首部的带入里有未知{what} {text}。");
 
+    /// <summary>带前瞻记录的小回合（专家的部署决策，expert-lookahead）。旧日志与只含非专家的日志为空。</summary>
+    public IEnumerable<TurnSnapshot> LookaheadTurns => Turns.Where(t => t.Lookahead is not null);
+
+    /// <summary>
+    /// 某玩家实际生效的前瞻宽度：取首部配置里该玩家的搜索配置（<c>Players[].Search.LookaheadWidth</c>）。缺搜索配置或缺该字段
+    /// （引入专家难度之前的旧日志、非专家玩家）按 0 读。
+    /// </summary>
+    public int LookaheadWidthOf(int player) => Header.Config.Players[player].Search?.LookaheadWidth ?? 0;
+
     /// <summary>本局是否用过调试 AI 或发生过人工接管（design.md D7：默认排除）。</summary>
     public bool IsContaminated => (Result?.UsedDebugAi ?? Failure?.UsedDebugAi ?? false)
         || (Result?.Takeovers.Count ?? Failure?.Takeovers.Count ?? 0) > 0;
@@ -581,8 +590,91 @@ public sealed record TurnSnapshot
     /// </summary>
     public LifeTurnEntry? Life { get; init; }
 
+    /// <summary>
+    /// 专家前瞻记录（expert-lookahead / match-telemetry「专家前瞻的记录」）：行动玩家本小回合的部署决策是专家（前瞻宽度大于 0）时写出，
+    /// 大回合 / 小回合 / 玩家由本快照给出。非专家的小回合与引入之前的旧日志为 <c>null</c>，不写出——只含简单 / 标准 / 高难的日志与改动前逐字节相同。
+    /// 只含确定性内容（不含墙钟耗时），回放时重新产生、随确定性文本逐行核对。
+    /// 属性级 <c>WhenWritingNull</c>（同 <see cref="RelaySources"/>）：任何序列化选项下都不写出 <c>null</c>，既有快照文本与黄金哈希不变。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LookaheadLogEntry? Lookahead { get; init; }
+
     /// <summary>小回合墙钟耗时（毫秒）；只记录，不参与任何决定。</summary>
     public long? ElapsedMs { get; init; }
+}
+
+/// <summary>
+/// 专家一次部署决策的前瞻记录（match-telemetry「专家前瞻的记录」第 2–4 项；第 1 项由所在快照给出）。取自 Core 的 <see cref="Siege.Core.Ai.LookaheadRecord"/>，
+/// 分数为不失真的十进制整数。
+/// </summary>
+public sealed record LookaheadLogEntry
+{
+    /// <summary>前瞻状态：<c>Applied</c>（已前瞻）/ <c>NotApplied</c>（不前瞻：宽度不大于 1 或前瞻集只有 1 个候选）/ <c>Pass</c>（候选生成只得到空批次）。</summary>
+    public required string Status { get; init; }
+
+    /// <summary>前瞻集（按候选选择规则排序）；Pass 时为空表。</summary>
+    public List<LookaheadCandidateEntry> Candidates { get; init; } = [];
+
+    /// <summary>被选候选在 <see cref="Candidates"/> 中的下标；Pass 为 −1。</summary>
+    public int Chosen { get; init; }
+
+    /// <summary>被选候选是否与前瞻集的第一个（即同一局面上高难的选择）不同。</summary>
+    public bool Changed { get; init; }
+
+    /// <summary>模拟对手一方的预演次数（确定性计数，不是耗时）。</summary>
+    public int SimulatedRehearsals { get; init; }
+
+    /// <summary>被选候选；Pass 为 <c>null</c>。</summary>
+    [JsonIgnore]
+    public LookaheadCandidateEntry? ChosenCandidate => Chosen >= 0 && Chosen < Candidates.Count ? Candidates[Chosen] : null;
+
+    /// <summary>由 Core 的前瞻记录转写。</summary>
+    public static LookaheadLogEntry From(Siege.Core.Ai.LookaheadRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        return new LookaheadLogEntry
+        {
+            Status = record.Status.ToString(),
+            Candidates = [.. record.Entries.Select(e => new LookaheadCandidateEntry
+            {
+                Batch = e.CandidateKey,
+                Before = e.ScoreBefore,
+                Responder = e.Responder?.Value,
+                ResponderRound = e.ResponderRound,
+                DeployLimit = e.SimulatedDeployLimit,
+                Response = e.ResponseKey,
+                After = e.ScoreAfter,
+            })],
+            Chosen = record.ChosenIndex,
+            Changed = record.ChangedChoice,
+            SimulatedRehearsals = record.SimulatedRehearsals,
+        };
+    }
+}
+
+/// <summary>前瞻集中的一个候选（match-telemetry「专家前瞻的记录」第 3 项）。</summary>
+public sealed record LookaheadCandidateEntry
+{
+    /// <summary>候选的批次键（形如 <c>E5:Basic,F5:Basic</c>）。</summary>
+    public required string Batch { get; init; }
+
+    /// <summary>前瞻前分数：候选自身的加权总分。</summary>
+    public BigInteger Before { get; init; }
+
+    /// <summary>下一名对手的玩家编号；没有（只剩自己）为 <c>null</c>，不写出。</summary>
+    public int? Responder { get; init; }
+
+    /// <summary>下一名对手的行动大回合；没有对手为 <c>null</c>。</summary>
+    public int? ResponderRound { get; init; }
+
+    /// <summary>模拟部署上限（= 模拟对手持有的普通子数）；没有对手为 <c>null</c>。</summary>
+    public int? DeployLimit { get; init; }
+
+    /// <summary>模拟回应的批次键：Pass 为空串；没有对手为 <c>null</c>。</summary>
+    public string? Response { get; init; }
+
+    /// <summary>前瞻后分数：回应之后的局面上、以决策起点为"前"的加权总分；不做模拟时等于 <see cref="Before"/>。</summary>
+    public BigInteger After { get; init; }
 }
 
 public sealed record PlayerEntry

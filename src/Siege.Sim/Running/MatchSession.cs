@@ -477,6 +477,8 @@ public sealed class MatchSession
                 BreaksRehearsed = _trace.IllegalRehearsals.Count(r => r.Failure.Kind == BatchFailureKind.BreaksLife),
                 BreaksRejected = _trace.Rejections.Count(r => r.Failure.Kind == BatchFailureKind.BreaksLife),
             },
+            // 专家前瞻记录（match-telemetry「专家前瞻的记录」）：只有前瞻宽度 > 0 的控制者本小回合做了部署决策才有；其余为 null、不写出。
+            Lookahead = _trace.Lookahead is { } lookahead ? LookaheadLogEntry.From(lookahead) : null,
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
             RelaySources = RelaySourcesEntry(_trace.Effects, Match.ContentSet),

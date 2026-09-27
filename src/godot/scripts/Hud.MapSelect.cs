@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Siege.Core.Ai;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Style;
+using Siege.Presentation.Text;
 
 namespace Siege.Godot;
 
 /// <summary>
-/// HUD 的开局选图面板（map-generator D7 / D8）：清单、种子输入框、"换一张"、平台数 − / +、完整标识、"开始"。
+/// HUD 的开局选图面板（map-generator D7 / D8）：清单、种子输入框、"换一张"、平台数 − / +、完整标识、AI 难度（expert-lookahead D10）、"开始"。
 /// </summary>
 /// <remarks>
 /// 本类<b>不持有任何选图状态、不自带地图清单</b>：每一项文案与可用性都取自 <see cref="MapSelectModel"/>，操作只经事件转发给主场景。
@@ -16,6 +18,7 @@ namespace Siege.Godot;
 public sealed partial class Hud
 {
     private readonly List<Button> _mapOptionButtons = [];
+    private readonly List<Button> _difficultyButtons = [];
     private Control? _selectRoot;
     private PanelContainer? _selectPanel;
     private LineEdit _mapSeedInput = null!;
@@ -39,6 +42,9 @@ public sealed partial class Hud
 
     /// <summary>平台数 −1 / +1。</summary>
     public event Action<int>? MapPlatformsAdjusted;
+
+    /// <summary>点选 AI 难度（四档之一）。</summary>
+    public event Action<AiDifficulty>? MapDifficultyPicked;
 
     /// <summary>点"开始"。</summary>
     public event Action? MapStartPressed;
@@ -88,6 +94,14 @@ public sealed partial class Hud
         _mapInfoText.Text = mapInfo;
         _mapNotice.Text = model.Notice;
         _mapNotice.Visible = model.Notice.Length > 0;
+
+        for (int i = 0; i < _difficultyButtons.Count; i++)
+        {
+            bool active = MapSelectModel.DifficultyOptions[i] == model.Difficulty;
+            Button button = _difficultyButtons[i];
+            button.Text = (active ? "● " : "○ ") + Labels.Difficulty(MapSelectModel.DifficultyOptions[i]);
+            button.AddThemeColorOverride("font_color", active ? Ui.PanelBorder : Ui.InfoText);
+        }
     }
 
     /// <summary>确认开局之后：撤掉选图面板，恢复对局面板。</summary>
@@ -101,6 +115,7 @@ public sealed partial class Hud
             _selectRoot = null;
             _selectPanel = null;
             _mapOptionButtons.Clear();
+            _difficultyButtons.Clear();
         }
 
         _root.Visible = true;
@@ -178,6 +193,21 @@ public sealed partial class Hud
         body.AddChild(Ui.Text("命令行加 --map=<标识> 可直接重开这张图。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
         _mapNotice = Ui.Text(string.Empty, Ui.DangerText, UiTheme.BodyFontPx - 1, wrap: true);
         body.AddChild(_mapNotice);
+
+        // AI 难度（expert-lookahead D10）：四档，缺省标准（命令行 --difficulty= 预选）；只用现有控件（与地图清单同样的按钮 + 选中标记）。
+        body.AddChild(Ui.Separator());
+        body.AddChild(Ui.Heading("AI 难度"));
+        var difficultyRow = new HBoxContainer();
+        foreach (AiDifficulty difficulty in MapSelectModel.DifficultyOptions)
+        {
+            Button option = Ui.Action(Labels.Difficulty(difficulty), 78);
+            option.Pressed += () => MapDifficultyPicked?.Invoke(difficulty);
+            _difficultyButtons.Add(option);
+            difficultyRow.AddChild(option);
+        }
+
+        body.AddChild(difficultyRow);
+        body.AddChild(Ui.Text($"命令行加 --difficulty=<{AiDifficultyNames.Usage}> 可预选难度。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
 
         body.AddChild(Ui.Separator());
         Button start = Ui.Action("开始");

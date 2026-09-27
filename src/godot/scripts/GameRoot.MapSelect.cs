@@ -44,7 +44,7 @@ public sealed partial class GameRoot
     /// </summary>
     private MatchSession BeginMapSelect(string? preselect)
     {
-        _select = new MapSelectModel(NewMapSeed());
+        _select = new MapSelectModel(NewMapSeed(), _difficulty);
         if (preselect is not null && !_select.TrySelectId(preselect))
         {
             throw new System.FormatException($"--map-select 只能预选内置地图或完整的生成图标识，{preselect} 不在选图界面的清单里。");
@@ -72,6 +72,11 @@ public sealed partial class GameRoot
         _hud.MapRerollPressed += () => OnSelectionChanged(_select?.Reroll(NewMapSeed()));
         _hud.MapPlatformsAdjusted += delta => OnSelectionChanged(_select?.AdjustPlatforms(delta));
         _hud.MapStartPressed += StartMatch;
+        _hud.MapDifficultyPicked += difficulty =>
+        {
+            _select?.SelectDifficulty(difficulty);
+            _dirty = true;
+        };
     }
 
     /// <summary>
@@ -258,7 +263,8 @@ public sealed partial class GameRoot
             throw new System.InvalidOperationException($"选图界面确认的是 {id}，预览的却是 {_previewMap.Id}。");
         }
 
-        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit);
+        _difficulty = _select.Difficulty;
+        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, _difficulty, _cellLimit);
         _select = null;
         BeginSupply(_previewMap);   // 带入带出开启时：选图之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
         _board.Build(_session.World.Board(), _session.ZoneOwners);
@@ -271,6 +277,6 @@ public sealed partial class GameRoot
         _hud.HideMapSelect();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
         _dirty = true;
-        GD.Print($"[siege] 地图 {id}，对局种子 {_matchSeed}，你是 {Labels.Player(_session.Me)}{(_autoDemo ? $"，自动演示模式（{(_rounds == 0 ? "跑到终局" : $"跑满 {_rounds} 个大回合停止")}）" : string.Empty)}");
+        GD.Print($"[siege] 地图 {id}，对局种子 {_matchSeed}，你是 {Labels.Player(_session.Me)}，{DifficultyText()}{(_autoDemo ? $"，自动演示模式（{(_rounds == 0 ? "跑到终局" : $"跑满 {_rounds} 个大回合停止")}）" : string.Empty)}");
     }
 }

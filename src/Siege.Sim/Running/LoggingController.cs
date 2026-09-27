@@ -37,6 +37,12 @@ internal sealed class TurnTrace
     /// </summary>
     internal EffectSnapshot? Effects { get; set; }
 
+    /// <summary>
+    /// 本小回合部署决策的前瞻记录（expert-lookahead / match-telemetry「专家前瞻的记录」）：装饰器在内层 <c>Deploy</c> 之后从启发式 AI 取下。
+    /// 前瞻宽度为 0 的控制者（简单 / 标准 / 高难）没有记录，保持 <c>null</c>；每小回合清空，避免把上一小回合的记录写进本小回合。
+    /// </summary>
+    internal LookaheadRecord? Lookahead { get; set; }
+
     /// <summary>当前小回合效果快照的读取委托（会话挂 <c>MatchFlow.CurrentSnapshot</c>）；为 <c>null</c> 时不采集。不随 <see cref="Reset"/> 清空。</summary>
     internal Func<EffectSnapshot?>? SnapshotSource { get; set; }
 
@@ -51,6 +57,7 @@ internal sealed class TurnTrace
         Rejections.Clear();
         Batch = null;
         Effects = null;
+        Lookahead = null;
     }
 }
 
@@ -99,6 +106,7 @@ internal sealed class LoggingController(ITurnController inner, TurnTrace trace) 
 
             return result;
         });
+        trace.Lookahead = Heuristic?.LastLookahead;
     }
 
     public bool OnRejected(StagedBatch batch, BatchFailure failure)

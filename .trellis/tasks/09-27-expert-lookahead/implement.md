@@ -200,3 +200,188 @@
 - `openspec validate expert-lookahead --strict`：通过。
 - tasks.md 第 1 组 1.1–1.11 全部勾选。
 - 仍待段 B 处理的只剩原待决 4：未显式给 Search 的专家，日志首部要记前瞻宽度，属于 2.3。
+
+## 段 B——入口、遥测、设计文档、冒烟与回归（tasks 2.1–2.7）
+
+### 结论先行
+
+- 第 2 组 2.1–2.7 全部完成。
+  - 默认套件 1754 通过、0 失败、6 跳过（段 A 末为 1732 / 0 / 6，本段新增 22 条）。
+  - 两处 `dotnet build` 均为 0 警告 0 错误；`openspec validate expert-lookahead --strict` 通过。
+- 三档旧难度逐步不变：
+  - 「三档旧难度逐步不变」的三档黄金值、`候选格上限Tests.V4GoldenTurnHash` 等既有黄金哈希一字未改。
+  - 4 名标准在 v5 种子 1 上的整局确定性文本，SHA-256 仍为改动前钉下的 `29353FC9…07736A`。
+- 20 局冒烟（1 专家 + 3 标准）只报告，未调任何数值：
+  - 专家胜 5 / 20 = 25%，与均等基线持平；平均名次 2.25。
+  - 前瞻改变了选择 2 / 128 次（1.6%）。
+- 真实 `%APPDATA%\Siege` 在段末仍不存在。
+
+### 改动文件
+
+| 文件 | 内容 |
+|---|---|
+| `src/Siege.Core/Ai/AiDifficultyNames.cs` | 新增，难度名称的唯一解析：`TryParse` / `Parse` / `Usage`。只认四个成员名，不区分大小写，不去空白；拒绝数字、未知名称和空值。`Parse` 抛 `ArgumentException`，消息列出 `Easy\|Standard\|Hard\|Expert`。放在 Core 是因为 Godot 不引用 Sim |
+| `src/Siege.Sim/Program.cs` | `play` / `run` 的 `Enum.Parse` 换成 `AiDifficultyNames.Parse`；两处用法说明改为 `--difficulty <{Usage}>`。`Execute` 增加 `playInput` / `playOutput` 测试接缝，原因是 `play` 开头设置 `Console.InputEncoding` 时，运行时会丢弃 `Console.SetIn` 换上的输入 |
+| `src/Siege.Sim/Config/RunConfig.cs` | ① `PlayerAiConfig.Difficulty` 挂属性级转换器 `AiDifficultyNameConverter`：读入只认字符串并经共用解析，数字 token、`"3"`、`""`、`null` 一律抛 `ArgumentException`；写出仍为枚举名，首部逐字节不变。② `ResolvedFor` 末尾新增一步（原待决 4）：未显式给 `Search`、而难度预设带前瞻的玩家（即专家），落成 `ForMap(难度, 可落子格, 已落成的 K) with { PassThreshold = 已落成的阈值 }` 写进 config.json 与首部。落成值与会话建 AI 时按难度取的值相同 |
+| `src/Siege.Sim/Logging/MatchLog.cs` | ① `TurnSnapshot.Lookahead`（`LookaheadLogEntry?`），带属性级 `WhenWritingNull`。② 新增 `LookaheadLogEntry`：状态、前瞻集、被选下标、是否改变选择、模拟对手预演次数。③ 新增 `LookaheadCandidateEntry`：批次键、前瞻前 / 后分数（`BigInteger`）、下一名对手、行动大回合、模拟部署上限、回应批次键。④ `MatchLog.LookaheadTurns`；`LookaheadWidthOf(player)`，缺 `Search` 或缺该字段时按 0 |
+| `src/Siege.Sim/Running/LoggingController.cs` | 新增 `TurnTrace.Lookahead`，每小回合 `Reset` 时清空。装饰器在内层 `Deploy` 之后取 `Heuristic?.LastLookahead`，所以上一小回合的记录不会写进本小回合 |
+| `src/Siege.Sim/Running/MatchSession.cs` | 小回合快照写入 `Lookahead = LookaheadLogEntry.From(trace)` |
+| `src/Siege.Sim/Running/Replayer.cs` | 只补注释：前瞻宽度随首部 `Players[].Search` 重建，前瞻记录随确定性文本逐行核对，无需新代码 |
+| `src/Siege.Sim/Play/PlayCommand.cs` | 前瞻宽度 > 0 时，开局行追加"（前瞻宽度 4）"；三档旧难度的这一行逐字不变。新增测试接缝 `onAi`：每名 AI 控制者建好后回调一次 |
+| `src/Siege.Presentation/MapSelect/MapSelectModel.cs` | 难度选择：构造参数 `difficulty`（预选，缺省标准）、`DifficultyOptions`（四档，按枚举次序）、`Difficulty`、`SelectDifficulty`（确认开局后拒绝；未定义值抛异常） |
+| `src/Siege.Presentation/Text/Labels.cs` | 新增 `Difficulty`：简单 / 标准 / 高难 / 专家 |
+| `src/godot/scripts/GameRoot.cs` | ① `--difficulty=` 在结算之前经 `args.Value<AiDifficulty>(…, AiDifficultyNames.TryParse)` 读取。② 无人值守（自动演示 / 拾取自检 / 截图）时同时给出 `--difficulty=`，抛 `FormatException` 退出。③ `_difficulty = difficulty ?? Standard`，直接建局的路径用 `_difficulty`。④ 日志：启动行打"AI 难度 专家（Expert，前瞻宽度 4）"；AI 小回合有前瞻记录时打一行 `[ai]`；选图截图的自证行加上"AI 难度 X" |
+| `src/godot/scripts/GameRoot.MapSelect.cs` | 改为 `new MapSelectModel(NewMapSeed(), _difficulty)`；接上 `MapDifficultyPicked`；「开始」时取 `_difficulty = _select.Difficulty` 建局。预览会话仍写死标准：此时未插旗，AI 不行动 |
+| `src/godot/scripts/GameRoot.Carry.cs` | 补给确认后的两处建局改用 `_difficulty` |
+| `src/godot/scripts/Hud.MapSelect.cs` | 选图面板加"AI 难度"一行：四个 `Ui.Action` 按钮，选中标记（●/○）与地图清单同样式，另加一行命令行提示。只用现有控件，面板宽度仍为 360 |
+| `src/godot/scripts/MatchSession.cs` | 新增 `LastAiLookahead`：AI 小回合结束后读该控制者的 `LastLookahead`，转成一行文字；前瞻宽度为 0 的三档为 null |
+| `2026-09-10-siege-core-gameplay-design-v1.md` | v1.15 → v1.16，见下文 2.5 |
+| 测试 | 新增 4 个测试类共 22 条：`SimulationHarness/各入口的难度选项Tests.cs`（8 个方法、11 条）、`SimulationHarness/终端专家对局Tests.cs`（1）、`MatchTelemetry/专家前瞻的记录Tests.cs`（6）、`MapSelection/选图界面难度选择Tests.cs`（4）。另改写 1 条既有测试，见下文 |
+
+### 先红后绿
+
+- **2.1**：
+  - 先落骨架：`AiDifficultyNames` 的方法体抛 `NotImplementedException`；`Execute` 加接缝；日志类型只定义、不写入。
+  - 再写 `各入口的难度选项Tests`。初跑 11 条，红 9、绿 2。
+  - 绿的两条是守门型，改动前就该绿：「缺省仍为标准」「真实档案目录不被触碰」。
+- **2.3**：
+  - 写 `专家前瞻的记录Tests` 时，写入端尚未实现。初跑红 4、绿 2。
+  - 绿的两条同样是守门型：「非专家没有前瞻记录」「旧日志照常解析」。
+  - 此时 2.1 的「逐玩家难度」也仍是红的。实现写入端后全部转绿。
+- **2.4**：
+  - `MapSelectModel` / `Labels` 骨架抛异常，`选图界面难度选择Tests` 4 条全红；实现后转绿。
+  - 其中「图形版难度参数…」一度因测试自身的定位写法而红：被测的读取调用跨了行。改为容许空白的正则后转绿，断言内容不变。
+- **2.2 没有独立的先红**：
+  - 终端开局行与 `onAi` 接缝是随 2.1「名称不区分大小写」一起实现的，那一条先红过。
+  - `终端专家对局Tests` 写在实现之后，改由 M-B2 证明它会红。
+- **种子选择**：用探针选定，条件为 v5、写死权重、种子 1–5，整局和 16 小回合各跑一轮。探针文件已删除。
+  - 选种子 3 的整局：已前瞻 6 次、Pass 4 次、"前瞻改变选择" 1 次。
+  - 选种子 2 的 16 小回合（1 名隐式专家 + 1 名显式 W = 2 专家）：两名专家都有已前瞻。
+- **整段复审**：
+  - 全量首跑红 7 条，其中 6 条出自同一原因：`SimFixtures.TurnTexts` 用缺省序列化选项，会把 `"Lookahead":null` 写进每条快照，导致 6 个快照黄金哈希变化。
+  - 修法：给该属性加属性级 `WhenWritingNull`，与 `RelaySources` 同一先例。加上后这 6 条全绿，黄金值一字未改。
+  - 这等于一次自然变异，证明这 6 条既有守门能挡住"快照多写一项"。
+  - 第 7 条是下面这条既有测试。
+
+### 既有测试改写（1 条）
+
+- 测试：`AiDecision/专家难度的一层前瞻Tests.前瞻宽度为1时与高难逐步相同`（段 A）。
+- 原断言：W = 1 专家与高难的小回合快照，以及首部以外的确定性文本，逐项相同。
+- 变红原因：2.3 之后，前瞻宽度 > 0 的控制者每次部署都留一条记录（W = 1 时只会记 NotApplied / Pass），快照因此多了 `Lookahead` 一项。
+- 改法：
+  - 先断言玩家 1 的每个小回合都有记录，状态只能是 NotApplied 或 Pass；其余玩家都没有记录。
+  - 再去掉前瞻记录，与高难逐项比较。
+  - 决策序列相同的断言不动。
+- 规格 Scenario 的 THEN 只要求"每一步决策逐步相同"，所以这是按新遥测收紧后的等价改写。
+
+### 变异验证
+
+脚本沿用段 A 的纪律：
+- 二进制读写，逐文件探测行尾，锚点命中恰为 1 次。
+- 还原放在 `finally`，还原后逐字节校验并执行 `os.utime`；备份文件名带时间戳。
+- 设 `DOTNET_CLI_UI_LANGUAGE=en`，从 `Passed!` / `Failed!` 统计行取数。
+
+过滤集共 104 条，覆盖：各入口的难度选项、专家前瞻的记录、终端专家对局、MapSelection、可复现回放、批量跑局Tests、难度分级、专家难度的一层前瞻。基线全绿；13 条变异跑完后收尾重跑仍全绿；`git diff --stat` 与跑前逐字节相同。
+
+| 编号 | 变异 | 红 | 红的用例 |
+|---|---|---|---|
+| M-B1a | `play` / `run` 恢复 `Enum.Parse(…, ignoreCase: true)` | 5 | 数字难度被拒绝 × 4、未知难度被拒绝（空值） |
+| M-B1b | 配置文件绕过共用解析：转换器改为 `Enum.Parse`，并接受数字 token | 1 | 未知难度被拒绝（配置文件分支） |
+| M-B2 | 终端建 AI 时，专家用高难的搜索配置 | 2 | 专家难度开局_AI按专家决策、名称不区分大小写 |
+| M-B3a | 非专家也写前瞻记录：控制者没有记录时写一条 Pass | 10 | 非专家没有前瞻记录、三档旧难度逐步不变 × 3、旧日志照常解析、缺省仍为标准、逐玩家难度、前瞻前后分数可查、前瞻宽度为1时与高难逐步相同、既有「批量跑局Tests.缺省关闭带入」 |
+| M-B3b | 前瞻记录写入墙钟：预演次数加上时间戳余数 | 2 | 前瞻前后分数可查、回放核对前瞻记录 |
+| M-B3c | 回放不读首部的前瞻宽度（归 0） | 1 | 回放核对前瞻记录 |
+| M-B3c' | 回放不读首部的前瞻宽度（回落到难度预设 4） | 1 | 回放核对前瞻记录（靠样本里显式 W = 2 的那名专家） |
+| M-B3d | `ResolvedFor` 不落成专家的搜索配置 | 3 | 批量跑局选专家、逐玩家难度、回放核对前瞻记录 |
+| M-B4a | 选图「开始」建局时仍写死标准 | 1 | 建局用所选难度_只有预览固定标准 |
+| M-B4b | 去掉无人值守时对 `--difficulty=` 的拒绝 | 1 | 无人值守固定标准难度 |
+| M-B4c | 图形版改用 `Enum.TryParse` | 1 | 图形版难度参数经共用解析且在结算之前读取 |
+| M-B4d | `SelectDifficulty` 不检查是否已确认开局 | 1 | 难度选择缺省标准_四档按次序_可预选可切换 |
+| （自然） | `TurnSnapshot.Lookahead` 不加属性级 `WhenWritingNull` | 6 | 既有快照黄金哈希 6 条（见上） |
+
+### 2.2 终端（偏差）
+
+- 终端 `play` 不写对局日志，所以 tasks 2.2 要求的"断言 AI 玩家的日志首部记有专家与前瞻宽度 4"写不成。改用两处核对：
+  - 开局行"对手 3 名 Expert AI（前瞻宽度 4）"：宽度取自实际建 AI 时用的搜索配置。
+  - `onAi` 接缝：3 名 AI 的 `Config` 等于 `Expert` 预设（阈值写死为 80）；每名至少决策 2 次，且都留有前瞻记录。
+- 脚本与既有终端脚本同形：选 1 号区 → 第 1 大回合落 B1 → 第 2 大回合 Pass → 在第 3 大回合的提示处输入耗尽后退出。权重、阈值、冒险概率与内容集（v1）全部写死。
+- 既有终端脚本测试未改动，保持绿。
+
+### 2.4 Godot
+
+构建为 Debug；`$G` = `Godot_v4.7.2-stable_mono_win64_console.exe`，参数带 `--path src/godot`。
+
+| 命令 | 结果 |
+|---|---|
+| `$G --headless … --quit-after 3000 -- --auto-demo` | EXIT 0。日志为"AI 难度 标准（Standard，前瞻宽度 0）"，没有 `[ai]` 行；开局对准自检通过 |
+| `… -- --auto-demo --pick-check` | EXIT 0；105 / 105 ×2，失败 0 |
+| `… -- --map-select --auto-demo` | EXIT 0；选图自检 10 步全过，建局为标准难度 |
+| `… -- --auto-demo --difficulty=Expert` | EXIT 1；报"--auto-demo / --pick-check / --screenshot 固定标准难度，不接受 --difficulty=。" |
+| `… -- --difficulty=3 --map=siege-4p-base-v5 --no-carry`（另测 `=Master`） | EXIT 1；报"无效：应为难度名称（Easy\|Standard\|Hard\|Expert，不区分大小写）"，并列出合法选项表 |
+| `… --quit-after 200 -- --difficulty=expert --map=siege-4p-base-v5 --no-carry --seed=7` | EXIT 0；日志为"AI 难度 专家（Expert，前瞻宽度 4）"。非无人值守时对局停在等人插旗，AI 不会行动 |
+| 临时探针：只在文件里临时把拒绝条件改成运行时恒假，跑 `--auto-demo --difficulty=Expert` | EXIT 0；开局即专家。4 个大回合内共 12 条 `[ai] … 专家前瞻：Applied，前瞻集 3–4 个，选第 1 个 […]（前瞻前 → 后）`。跑完后逐字节还原、刷新 mtime、重新构建（0 警告），并确认 DLL 时间晚于源文件 |
+| `$G --path src/godot -- --map-select --screenshot=E:/wws/geme_demo/art/expert-lookahead/map-select-difficulty.png:40`（非 headless） | EXIT 0；1600×900，第 40 帧。自证行为"面板 (14, 14) 360×633，对局面板 隐藏；AI 难度 标准"。截图只存盘、未读回，**交负责人过目** |
+
+"`--difficulty=Expert` 后 AI 按专家决策"在无人值守模式下无法自动实测：自检固定为标准，而非无人值守时要有人插旗，对局才会开始。现有证据只有三项：临时探针、开局行，以及 Sim 侧对同一个 `HeuristicAi.Create(…, Expert, config: ForMap(Expert))` 的测试。见待决 1。
+
+### 2.5 设计文档 v1.15 → v1.16 人工核对清单
+
+| 项 | 文档 | 规格 / 代码 | 一致 |
+|---|---|---|---|
+| 版本行 | v1.16，最近一次为 expert-lookahead | — | ✔ |
+| §15.1 前瞻的公平信息 | "只用公开信息与自己的私有信息，对手按部署上限枚普通子建模；未揭示信物保持未揭示、按先验估值" | ai-decision「前瞻模拟的公平信息」第 1、5 项 | ✔ |
+| 难度表专家列 | 九维 / ✔ / 24 / 32 / 前瞻宽度 4（其余三档为 —） | `AiSearchConfig.Expert = Hard with { LookaheadWidth = 4 }`；Hard 为 N 24 / M 32 | ✔ |
+| 停手阈值共用 | "各档共用（专家与高难同一口径）" | 「难度分级」：对全部难度生效 | ✔ |
+| 机制 | 去掉空批次后取前 W 个；B1 → 标准启发式回应 → B2；以决策起点为"前"、用同一评价器；同分取原次序；不重判活形；起点棋子被提走时每枚扣 12 | 「一层前瞻」第 2–7 步；`GroupSafety.AtariDangerPerStone = 12` | ✔ |
+| W 为 0 / 1 | "0 与 1 都表示不前瞻" | 第 3 步与宽度定义 | ✔ |
+| 下一名对手 | 跳过弃赛、出局、被本候选打到出局者；专家为末位时，跨大回合经先手值的唯一实现预测；种子兜底以玩家编号代替；只剩本人时不模拟 | 「前瞻中的下一名对手」第 1–4 项 | ✔ |
+| 停手口径 | 阈值与活形硬约束只在前瞻之前生效；Pass 不进前瞻集；不因前瞻而 Pass | 「前瞻中的停手口径」 | ✔ |
+| 对手模型 | D = 基础值 + B1 上受控的已揭示军令；落子范围与流程同一实现；用本人权重；K 与阈值随本局；单条无扰动贪心；同形历史 = 起点 + B1 | 「前瞻模拟的公平信息」第 1–4、6 项 | ✔ |
+| 耗时 | ≤ 4 × 高难；实测 1.36，代理约 1.20 | 「确定性与耗时」；段 A 实测 1.360 / 1.198 | ✔ |
+| 遥测 | 宽度写入首部，为 0 时不写；每次部署一条记录 | ai-decision 宽度段；match-telemetry | ✔ |
+| §18.2 | "完整博弈树 AI"未改 | tasks 2.5 | ✔ |
+| §19 第 4 项 | "首期已由 expert-lookahead（v1.16）实现……多层搜索仍不做" | design.md Migration 第 5 项 | ✔ |
+| 变更记录 | 新增一行，含依据与冒烟数据；数值与下文 2.6 表相同 | 冒烟摘要 | ✔ |
+
+注：难度表列头沿用文档原有的"困难"，正文写作"困难（高难）"；规格与代码用"高难"。本次没有改列头。
+
+### 2.6 冒烟（20 局，只报告）
+
+- **配置**：`siege-4p-base-v5`、种子 1–20、内容集 V2，`Players` = Expert、Standard × 3；其余取缺省（截断 600、缺省权重、阈值 80、K = 0）。命令行只给 `--out` / `--config` / `--serial`。
+- **配置核对**：已打开落盘的 `config.json` 逐项核对：
+  - 专家的 `Search` 为 24 / 32，阈值 80，`LookaheadWidth` 4。
+  - 三名标准的 `Search` 为空。
+  - 四名玩家的权重都是缺省九维。
+- **数据**：`sim-out/expert-lookahead/smoke20/`，含 20 份日志、`config.json`、`input-config.json`、一次性脚本 `smoke_report.py` 与摘要 `smoke-summary.txt`。串行运行，批次墙钟 146.7 s。
+
+| 指标 | 值 |
+|---|---|
+| 截断 / 终局原因 | 截断 0；终局 20 / 20 都是整轮 Pass（AllPassed） |
+| 结束大回合 | 平均 8.95，中位 8，范围 7–22 |
+| 专家胜率 | 5 / 20 = 25%，无并列（均等基线 25%）；各座位胜局 P0 5 / P1 6 / P2 5 / P3 4 |
+| 专家平均名次 | 2.25；名次 1 / 2 / 3 / 4 分别 5 / 8 / 4 / 3 局 |
+| 单小回合耗时（串行，取日志 `ElapsedMs`） | 专家 n = 171，中位 439 ms，p90 866 ms；标准 n = 515，中位 106 ms，p90 207 ms |
+| 同上，只看非 Pass 小回合 | 专家中位 414 ms，p90 731 ms；标准中位 103 ms，p90 233 ms |
+| 专家 / 标准中位数之比 | 约 4.1。注意这是与标准比，不是验收口径；验收口径是与高难比 ≤ 4 倍，段 A 同局面计时为 1.36 |
+| 前瞻状态 | 共 171 次决策：已前瞻 128、不前瞻 2、Pass 41。已前瞻时前瞻集为 2 / 3 / 4 个的各 9 / 27 / 92 次 |
+| 前瞻改变选择 | 占已前瞻 2 / 128（1.6%），占全部决策 1.2% |
+| 被选候选"前瞻后 − 前"分数差（128 次） | < 0 共 77 次，= 0 共 28 次，> 0 共 23 次；最小 −501，P10 −145，P25 −116，中位 −8，P75 0，P90 16，最大 54 |
+
+样本只有 20 局，胜率的置信区间约 ±20 个百分点，因此只报告、不下"专家更强 / 更弱"的结论。未跑对照组，未调任何数值。
+
+### 段末自验
+
+- `dotnet build siege.sln`：0 警告 0 错误。
+- `dotnet build src/godot/Siege.Godot.csproj`：0 警告 0 错误。
+- `dotnet test -c Release`：1754 通过、0 失败、6 跳过，退出码 0。
+- `openspec validate expert-lookahead --strict`：通过。
+- `%APPDATA%\Siege`：不存在。本段所有 `play` 用例都带 `--no-carry`，Godot 的非无人值守启动也一律带 `--no-carry`。
+- tasks.md 2.1–2.7 已勾选。
+
+### 待决
+
+1. **无人值守时给出 `--difficulty=`**：现按 D10"固定标准"的字面处理，同时给出即报错退出。代价是"`--difficulty=Expert` 后 AI 按专家决策"只能靠临时探针或人工试玩来验证。备选做法：显式给出 `--difficulty=` 时，自动演示改用该难度；不给时仍为标准。请负责人裁决。
+2. **2.2 的偏差**：终端不写日志，改用开局行与 `onAi` 接缝核对，详见上文 2.2。
+3. **专家决策耗时的体感**：冒烟中专家单小回合中位 0.44 s、p90 0.87 s、最大 1.14 s。Godot 的 AI 回合跑在主线程上，每个专家回合会多卡约半秒。本次未做人工试玩核实，design.md Risks 已有记录。
+4. **"前瞻改变选择"只有 1.6%**：被选候选的前瞻后分数中位比前瞻前低 8，多数情况下前瞻只是确认了高难的选择。这只是报告项，不在本 change 内调整。
+5. **已知不一致（理论缺口，不影响任何现有日志）**：难度为专家、但首部没有 `Search` 的玩家，`MatchLog.LookaheadWidthOf` 读 0，回放（`AttachConfigured` 按难度取 `ForMap(Expert)`）却按 4 重建。写入端 `ResolvedFor` 保证新日志里专家一定带 `Search`，所以这种首部不会产生；本段未改代码。

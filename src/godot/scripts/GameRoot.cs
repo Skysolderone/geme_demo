@@ -51,6 +51,12 @@ public sealed partial class GameRoot : Node3D
     private bool _shotOverview;
     private bool _shotPower;
     private bool _shotGroups;
+
+    /// <summary>
+    /// 本局 AI 难度（expert-lookahead D10）：<c>--difficulty=&lt;名称&gt;</c> 或选图界面的难度选择，缺省标准。
+    /// 无人值守（自动演示 / 拾取自检 / 截图）固定标准。
+    /// </summary>
+    private AiDifficulty _difficulty = AiDifficulty.Standard;
     private bool _dirty = true;
     private bool _mouseInside;
     private bool _opened;
@@ -106,6 +112,11 @@ public sealed partial class GameRoot : Node3D
 
             // --piece-gallery=<PNG 路径>：不建局，拍一张十种棋子轮廓对照图后退出（more-pieces-relics 段 D 人工检查清单用，见 PieceGallery）。
             string? pieceGallery = args.Text("piece-gallery", "PNG 输出路径");
+
+            // --difficulty=<名称>：AI 难度（expert-lookahead D10），经 Core 的唯一解析——只认 Easy / Standard / Hard / Expert（不区分大小写），
+            // 数字与未知名称由结算报错退出，不回落到标准。未给出取标准；进入选图界面时作为难度选择的预选。
+            AiDifficulty? difficulty = args.Value<AiDifficulty>(
+                "difficulty", $"难度名称（{AiDifficultyNames.Usage}，不区分大小写）", t => AiDifficultyNames.TryParse(t, out AiDifficulty d) ? d : null);
             args.EnsureRecognized();
             if (exportParts is not null)
             {
@@ -130,6 +141,14 @@ public sealed partial class GameRoot : Node3D
                 throw new System.FormatException("--map-select 下没有人点「开始」：--pick-check 须与 --auto-demo 同用（先自动走完选图再自检拾取）。");
             }
 
+            // 自动演示、拾取自检与截图模式固定标准难度（simulation-harness「各入口的难度选项」）：同时给出 --difficulty= 即报错，不静默忽略。
+            if (difficulty is not null && Unattended)
+            {
+                throw new System.FormatException("--auto-demo / --pick-check / --screenshot 固定标准难度，不接受 --difficulty=。");
+            }
+
+            _difficulty = difficulty ?? AiDifficulty.Standard;
+
             _pause = _autoDemo ? 0d : AiPauseSeconds;
             _matchSeed = seed;
             _rounds = rounds;
@@ -152,7 +171,7 @@ public sealed partial class GameRoot : Node3D
             else
             {
                 MapData map = MapCatalog.Resolve(mapId);
-                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, cellLimit);
+                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, _difficulty, cellLimit);
                 BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
             }
         }
@@ -181,7 +200,7 @@ public sealed partial class GameRoot : Node3D
 
         GD.Print(Selecting
             ? $"[siege] 选图界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=<标识> 可跳过选图）"
-            : $"[siege] 地图 {_session.Match.Map.Id}，对局种子 {seed}，你是 {Labels.Player(_session.Me)}{(_autoDemo ? $"，自动演示模式（{(rounds == 0 ? "跑到终局" : $"跑满 {rounds} 个大回合停止")}）" : string.Empty)}");
+            : $"[siege] 地图 {_session.Match.Map.Id}，对局种子 {seed}，你是 {Labels.Player(_session.Me)}，{DifficultyText()}{(_autoDemo ? $"，自动演示模式（{(rounds == 0 ? "跑到终局" : $"跑满 {rounds} 个大回合停止")}）" : string.Empty)}");
     }
 
     /// <summary>
@@ -251,7 +270,7 @@ public sealed partial class GameRoot : Node3D
         {
             Rect2 panel = _hud.MapSelectRect;
             GD.Print($"[siege] 选图界面：选中「{_select!.Options[_select.SelectedIndex].Title}」，完整标识 {_select.CurrentId}，{PreviewInfo()}；全局预览 {(_board.Rig.IsOverview ? "开" : "关（一屏看全）")}；"
-                + $"面板 ({panel.Position.X:0}, {panel.Position.Y:0}) {panel.Size.X:0}×{panel.Size.Y:0}，对局面板 {(_hud.MapSelectOpen ? "隐藏" : "显示")}");
+                + $"面板 ({panel.Position.X:0}, {panel.Position.Y:0}) {panel.Size.X:0}×{panel.Size.Y:0}，对局面板 {(_hud.MapSelectOpen ? "隐藏" : "显示")}；AI 难度 {Labels.Difficulty(_select.Difficulty)}");
         }
 
         GD.Print(CarryShotLine());
@@ -696,6 +715,11 @@ public sealed partial class GameRoot : Node3D
         }
 
         _flash = _session.RunAiTurn();
+        if (_session.LastAiLookahead is { } lookahead)
+        {
+            GD.Print($"[ai] {lookahead}");   // 专家的前瞻记录（会话日志可查）；前瞻宽度为 0 的三档不打
+        }
+
         _flashTimer = FlashSeconds;
         _aiTimer = _pause;
         _dirty = true;
@@ -894,6 +918,10 @@ public sealed partial class GameRoot : Node3D
             _hud.SetHoverReadout(HoverReadout.Of(hover, _session.World.Board()));
         }
     }
+
+    /// <summary>本局 AI 难度的一行说明（启动日志）：显示名、枚举名与实际生效的前瞻宽度。</summary>
+    private string DifficultyText() =>
+        $"AI 难度 {Labels.Difficulty(_session.Difficulty)}（{_session.Difficulty}，前瞻宽度 {_session.Search.LookaheadWidth}）";
 
     /// <summary>无人值守（自动演示 / 定帧截图 / 拾取自检）：不采贴边推屏，画面才可复现——指针恰好停在窗口边上不该改变截图。</summary>
     private bool Unattended => _autoDemo || _pickCheck || _screenshotFrame >= 0 || _shotPending;

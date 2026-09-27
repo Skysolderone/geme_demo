@@ -25,10 +25,11 @@ internal static class PlayCommand
     /// 依赖走法的脚本测试写死 v1（征募棋池随内容集变），使脚本不随缺省内容集变化而失步。</param>
     /// <param name="profile">带入带出的档案存取（carry-in-out D10）；<c>null</c> = 关闭带入带出、不读写任何档案（缺省）。
     /// 入口 <c>Program.Play</c> 缺省传缺省档案、<c>--no-carry</c> 传 <c>null</c>；脚本化测试不传即关闭，不碰真实用户目录，只在需要时注入临时档案。</param>
+    /// <param name="onAi">测试接缝：每名 AI 玩家的控制者建好后回调一次（终端不写对局日志，脚本测试经它核对 AI 的难度、搜索配置与前瞻记录）。终端入口不传。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null, ContentSet? contentSet = null,
-        CarryProfileStore? profile = null)
+        CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? map.MaxPlayers;
@@ -93,7 +94,9 @@ internal static class PlayCommand
                 + (GeneratedMapId.IsGenerated(mapId) ? $"——随机生成图，用 --map {mapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
         }
 
-        output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI");
+        // 专家（前瞻宽度 > 0）另写明实际生效的前瞻宽度；其余三档这一行与引入专家之前逐字相同。
+        string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;
+        output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI{lookahead}");
         output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
         output.WriteLine("终局：只剩一名参赛玩家、棋盘填满或一整轮所有人都 Pass；曾有势力而势力降到 0 即出局。");
 
@@ -117,9 +120,15 @@ internal static class PlayCommand
             var runner = new MatchRunner(match);
             foreach (PlayerId p in players)
             {
-                runner.SetController(p, p == me
-                    ? new ConsoleController(me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch, input, output, quitWarning)
-                    : HeuristicAi.Create(match, p, difficulty, weights, search));
+                if (p == me)
+                {
+                    runner.SetController(p, new ConsoleController(me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch, input, output, quitWarning));
+                    continue;
+                }
+
+                HeuristicTurnController ai = HeuristicAi.Create(match, p, difficulty, weights, search);
+                onAi?.Invoke(p, ai);
+                runner.SetController(p, ai);
             }
 
             output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Player, me)}→{BirthZoneLabel.Number(c.Zone)}号区"))}");

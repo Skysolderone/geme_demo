@@ -35,6 +35,8 @@ public sealed record ReplayResult(bool Identical, int LineCount, int? FirstDiver
 /// <summary>
 /// 可复现回放（simulation-harness「可复现回放」）：只凭日志首行的种子 + 配置重跑一局，与原日志逐行比对。
 /// 失败局同样适用——重跑应在同一小回合抛出同类异常，且此前各行一致。
+/// 专家的前瞻宽度随首部配置里该玩家的搜索配置（<c>Players[].Search.LookaheadWidth</c>，缺字段按 0）重建；前瞻记录不是回放输入，
+/// 重跑时重新产生，随确定性文本逐行核对（expert-lookahead / match-telemetry「专家前瞻的记录」）。
 /// </summary>
 public static class Replayer
 {

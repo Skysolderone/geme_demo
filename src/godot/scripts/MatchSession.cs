@@ -54,6 +54,12 @@ public sealed class MatchSession
     /// <summary>当前观察者世界。每次状态变化后整体重建，两份快照必然同一时刻。</summary>
     public ViewerWorld World { get; private set; }
 
+    /// <summary>
+    /// 最近一个 AI 小回合的前瞻记录（一行文字，expert-lookahead）：该 AI 的前瞻宽度大于 0（专家）时才有，其余难度为 <c>null</c>。
+    /// 只读 AI 控制者自己留下的 <see cref="LookaheadRecord"/>，供启动日志核对"AI 按专家决策"。
+    /// </summary>
+    public string? LastAiLookahead { get; private set; }
+
     /// <summary>最近一次被拒绝的操作说明；无则为 <c>null</c>。</summary>
     public FailurePresentation? LastFailure { get; private set; }
 
@@ -436,6 +442,9 @@ public sealed class MatchSession
         MatchPublicView before = Match.Publish();
         _runner.RunTurn();
         MatchPublicView after = Match.Publish();
+        LastAiLookahead = (_runner.ControllerOf(actor) as HeuristicTurnController)?.LastLookahead is { } lookahead
+            ? LookaheadText(actor, lookahead)
+            : null;
 
         ImmutableArray<Coord>.Builder placed = ImmutableArray.CreateBuilder<Coord>();
         ImmutableArray<Coord>.Builder captured = ImmutableArray.CreateBuilder<Coord>();
@@ -462,6 +471,12 @@ public sealed class MatchSession
         // 改造的落成反馈不在这里算：AI 与人类两条路径都由 GameRoot 按默认棋盘视图的 Edits 增量统一给出（TurnFlash.Edits）。
         return new TurnFlash(placed.ToImmutable(), captured.ToImmutable(), []);
     }
+
+    private string LookaheadText(PlayerId actor, LookaheadRecord record) =>
+        $"{Siege.Presentation.Text.Labels.Player(actor)} {Siege.Presentation.Text.Labels.Difficulty(Difficulty)}前瞻：{record.Status}，前瞻集 {record.Entries.Length} 个"
+        + (record.Chosen is { } chosen
+            ? $"，选第 {record.ChosenIndex + 1} 个 [{chosen.CandidateKey}]（前瞻前 {chosen.ScoreBefore} → 后 {chosen.ScoreAfter}）{(record.ChangedChoice ? "，前瞻改变了选择" : string.Empty)}"
+            : string.Empty);
 
     /// <summary>无人值守演示：把整理手牌阶段推过去（超出槽位时整类弃牌），停在征募面板。</summary>
     public void AutoAdvanceToRecruit()

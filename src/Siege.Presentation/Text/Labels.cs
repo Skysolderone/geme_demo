@@ -105,6 +105,16 @@ public static class Labels
         _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知档位。"),
     };
 
+    /// <summary>AI 难度的显示名（expert-lookahead：图形版选图界面的难度选择）。</summary>
+    public static string Difficulty(Siege.Core.Ai.AiDifficulty difficulty) => difficulty switch
+    {
+        Siege.Core.Ai.AiDifficulty.Easy => "简单",
+        Siege.Core.Ai.AiDifficulty.Standard => "标准",
+        Siege.Core.Ai.AiDifficulty.Hard => "高难",
+        Siege.Core.Ai.AiDifficulty.Expert => "专家",
+        _ => throw new ArgumentOutOfRangeException(nameof(difficulty), difficulty, "未知难度。"),
+    };
+
     /// <summary>玩家显示名：阵营名 + 编号，如「红方(P0)」。阵营映射只在 <see cref="FactionTable"/> 一处。</summary>
     public static string Player(PlayerId player) => $"{FactionTable.For(player).Name}({player})";
 

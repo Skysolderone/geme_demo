@@ -1,4 +1,5 @@
 using System.Globalization;
+using Siege.Core.Ai;
 using Siege.Core.Board.Maps;
 
 namespace Siege.Presentation.MapSelect;
@@ -31,10 +32,13 @@ public sealed class MapSelectModel
     private readonly MapOption[] _options;
     private State _current;
     private State _accepted;
+    private AiDifficulty _difficulty;
 
     /// <summary>以调用方注入的初始地图种子建模：缺省选中目录的缺省地图；第一次切到"随机图"时用的就是这个种子。</summary>
-    public MapSelectModel(ulong initialMapSeed)
+    /// <param name="difficulty">难度的预选（expert-lookahead D10：图形版 <c>--difficulty=</c>），缺省标准。</param>
+    public MapSelectModel(ulong initialMapSeed, AiDifficulty difficulty = AiDifficulty.Standard)
     {
+        _difficulty = Defined(difficulty);
         _options = [.. MapCatalog.BuiltinMaps.Select(m => new MapOption(m.Title, m.Id)), new MapOption("随机图", null)];
         int selected = Array.FindIndex(_options, o => o.BuiltinId == MapCatalog.DefaultId);
         _current = new State(Math.Max(selected, 0), initialMapSeed, MapGenParameters.DefaultPlatforms, MapGenParameters.RandomPick.NewSurfaces);
@@ -65,6 +69,22 @@ public sealed class MapSelectModel
 
     /// <summary>是否已确认开局。确认之后不再接受任何操作。</summary>
     public bool IsConfirmed { get; private set; }
+
+    /// <summary>难度选择的选项：四档，按枚举次序（显示名见 <c>Labels.Difficulty</c>）。</summary>
+    public static IReadOnlyList<AiDifficulty> DifficultyOptions { get; } = Enum.GetValues<AiDifficulty>();
+
+    /// <summary>所选难度（开局时交给建局）。</summary>
+    public AiDifficulty Difficulty => _difficulty;
+
+    /// <summary>选择难度。不影响地图标识与预览；确认开局后不再接受。</summary>
+    public void SelectDifficulty(AiDifficulty difficulty)
+    {
+        EnsureOpen();
+        _difficulty = Defined(difficulty);
+    }
+
+    private static AiDifficulty Defined(AiDifficulty difficulty) =>
+        Enum.IsDefined(difficulty) ? difficulty : throw new ArgumentOutOfRangeException(nameof(difficulty), difficulty, "未知难度。");
 
     /// <summary>平台数还能不能减。</summary>
     public bool CanDecreasePlatforms => IsRandomSelected && _current.Platforms > MapGenParameters.MinPlatforms;

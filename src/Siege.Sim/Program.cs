@@ -25,8 +25,10 @@ public static class Program
     /// <summary>
     /// 入口本体。<paramref name="mapSeedSource"/> 是"随机取一个地图种子"的来源：只在地图选项是裸 <c>gen</c> 时调用一次，
     /// <c>play</c> / <c>map</c> / <c>run</c> 三个子命令共用。生产入口传时钟；测试注入固定值，不留依赖墙钟的测试。
+    /// <paramref name="playInput"/> / <paramref name="playOutput"/> 是 <c>play</c> 的测试接缝（<c>null</c> 即控制台）：<c>play</c> 开头设置控制台编码时，
+    /// 运行时会丢弃经 <c>Console.SetIn</c> 换上的输入，脚本化的终端测试只能从这里注入。
     /// </summary>
-    internal static int Execute(string[] args, Func<ulong> mapSeedSource)
+    internal static int Execute(string[] args, Func<ulong> mapSeedSource, TextReader? playInput = null, TextWriter? playOutput = null)
     {
         ArgumentNullException.ThrowIfNull(mapSeedSource);
         try
@@ -40,7 +42,7 @@ public static class Program
             var cli = new CommandLine(args.Skip(1));
             return args[0] switch
             {
-                "play" => Play(cli, mapSeedSource),
+                "play" => Play(cli, mapSeedSource, playInput ?? Console.In, playOutput ?? Console.Out),
                 "map" => ExportMap(cli, mapSeedSource),
                 "run" => Run(cli, mapSeedSource),
                 "replay" => Replay(cli),
@@ -65,11 +67,11 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine("  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <Easy|Standard|Hard>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
         Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
-        Console.WriteLine("                [--map <地图id或文件>] [--players <人数，缺省取地图人数上限>] [--difficulty <Easy|Standard|Hard>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
+        Console.WriteLine($"                [--map <地图id或文件>] [--players <人数，缺省取地图人数上限>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（ai-eye 校准值）>] [--flag-risk <原型插旗冒险概率 0–100，缺省 {Core.Match.MatchOptions.DefaultFlagRisk}>]（AI 权重只能经 --config 的 Players[].Weights 指定；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重）");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
@@ -81,21 +83,22 @@ public static class Program
 
     // ---------- play ----------
 
-    private static int Play(CommandLine cli, Func<ulong> mapSeedSource)
+    private static int Play(CommandLine cli, Func<ulong> mapSeedSource, TextReader input, TextWriter output)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
         ulong? seed = cli.Has("seed") ? cli.GetUInt64("seed", 0) : null;
-        var difficulty = Enum.Parse<Core.Ai.AiDifficulty>(cli.Get("difficulty", "Standard"), ignoreCase: true);
+        // 难度名称经 Core 的唯一解析（expert-lookahead D10）：数字、未知名称在开局之前报错并列出可用名称，不回落到标准。
+        var difficulty = Core.Ai.AiDifficultyNames.Parse(cli.Get("difficulty", nameof(Core.Ai.AiDifficulty.Standard)));
         int? players = cli.Has("players") ? cli.GetInt("players", 0) : null;   // 不给人数 = 地图的人数上限（small-maps D3）
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
         Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
-        mapId = MaterializeMapRequest(mapId, Console.Out, mapSeedSource);
+        mapId = MaterializeMapRequest(mapId, output, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
-        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, Console.In, Console.Out, map, cellLimit, profile: profile);
+        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile);
     }
 
     /// <summary>
@@ -331,7 +334,7 @@ public static class Program
         if (cli.Has("players") || cli.Has("difficulty"))
         {
             int players = cli.GetInt("players", config.PlayerCount);
-            var difficulty = Enum.Parse<Core.Ai.AiDifficulty>(cli.Get("difficulty", config.Players[0].Difficulty.ToString()), ignoreCase: true);
+            var difficulty = Core.Ai.AiDifficultyNames.Parse(cli.Get("difficulty", config.Players[0].Difficulty.ToString()));   // 同一处严格解析（D10）
             config = config with { Players = [.. Enumerable.Range(0, players).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
         }
 
