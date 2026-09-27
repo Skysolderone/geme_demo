@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- engagement-diagnosis 专用诊断跑局器：不进 siege.sln、不改 src。只旁观 AI 部署决策并复算候选统计。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <NoWarn>$(NoWarn);CS1591;CA1031;CA1305;CA1307;CA1310;CA1812;IDE0005;IDE0008;IDE0011;IDE0058;IDE0161</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Siege.Sim\Siege.Sim.csproj" />
+  </ItemGroup>
+
+</Project>
