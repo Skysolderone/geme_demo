@@ -100,9 +100,10 @@ def select(rows, log=print):
         se = math.sqrt(pmin * (1 - pmin) / 20)
         band = [s for s in pool if s['nocap'] / 20 <= pmin + se + 1e-12]
         log(f"  第 2 步 无提子带：p_min = {pmin:.2f}，SE = {se:.4f}，进带条件 ≤ {pmin + se:.4f}（≤ {math.floor((pmin + se) * 20 + 1e-9)} 局）→ {[s['dir'] for s in band]}")
-        full = [s for s in band if s['r3'][1] == 20 and s['r3'][0] == 20]
+        # 段 B 后裁决："不得全胜"指 D9 分母内全胜（胜数 = 分母，分母已剔除并列与截断局）。
+        full = [s for s in band if s['r3'][1] > 0 and s['r3'][0] == s['r3'][1]]
         kept = [s for s in band if s not in full]
-        log(f"  第 3 步 剔除 R3 领先者 20/20：剔除 {[s['dir'] for s in full]} → {[s['dir'] for s in kept]}")
+        log(f"  第 3 步 剔除 R3 领先者分母内全胜：剔除 {[s['dir'] for s in full]} → {[s['dir'] for s in kept]}")
         if kept:
             break
         vetoed.update(s['dir'] for s in band)

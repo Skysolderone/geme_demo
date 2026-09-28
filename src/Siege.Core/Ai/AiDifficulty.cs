@@ -38,7 +38,7 @@ public enum AiDifficulty
 /// </param>
 /// <param name="PassThreshold">
 /// 停手阈值（ai-eye D4，非负整数，单位为加权总分）：贪心组批逐枚加入落点时，这一枚使整批加权总分的提升<b>严格大于</b>它才保留，否则撤回；
-/// 一枚都没保留即 Pass。取 0 时退化为"严格提高"，与引入本参数之前逐步相同。三档难度的预设都取 <see cref="DefaultPassThreshold"/>（裁决 R1：三档共用）。
+/// 一枚都没保留即 Pass。取 0 时退化为"严格提高"，与引入本参数之前逐步相同。四档难度的预设都取 <see cref="DefaultPassThreshold"/>（裁决 R1：共用；专家档见 expert-lookahead）。
 /// 构造参数的缺省值是 0 而不是 <see cref="DefaultPassThreshold"/>：该项出现之前记录的剪枝参数（配置 / 日志首部里的 <c>Search</c>）缺这个字段，
 /// 当时的保留条件就是严格提高，按 0 读入才能原样重建。
 /// </param>
