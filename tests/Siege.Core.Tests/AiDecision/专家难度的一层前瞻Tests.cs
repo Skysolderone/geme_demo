@@ -384,7 +384,7 @@ public class 专家难度的一层前瞻Tests
             JsonSerializer.Serialize(AiSearchConfig.Standard with { PassThreshold = LookaheadFixtures.PassThreshold }));
         Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
             JsonSerializer.Serialize(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        // expert-strength 1.3：专家预设新增多样补充上限 8 与两层权重（段 A 暂取 1000‰），非 0 即写出，字段次序接在前瞻宽度之后——专家一行的期望按此更新；
+        // expert-strength 1.3：专家预设新增多样补充上限 8 与两层权重 λ* = 1000‰（段 B 扫档选定），非 0 即写出，字段次序接在前瞻宽度之后——专家一行的期望按此更新；
         // 三档旧难度的三行一字不改（两项为 0 不写出）。
         Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000}""",
             JsonSerializer.Serialize(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold }));

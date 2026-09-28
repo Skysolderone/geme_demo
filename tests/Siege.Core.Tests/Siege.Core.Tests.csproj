@@ -17,6 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- expert-strength 2.1：本 change 之前的真实专家日志（sim-out/expert-lookahead/smoke20 取一局，gzip） -->
+    <None Include="MatchTelemetry\Fixtures\*.jsonl.gz" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

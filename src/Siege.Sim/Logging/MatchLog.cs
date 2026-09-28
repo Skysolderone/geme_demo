@@ -97,6 +97,12 @@ public sealed class MatchLog
     /// </summary>
     public int LookaheadWidthOf(int player) => Header.Config.Players[player].Search?.LookaheadWidth ?? 0;
 
+    /// <summary>某玩家实际生效的多样补充上限（expert-strength D7）：口径同 <see cref="LookaheadWidthOf"/>，缺搜索配置或缺该字段按 0 读。</summary>
+    public int DiverseSupplementLimitOf(int player) => Header.Config.Players[player].Search?.DiverseSupplementLimit ?? 0;
+
+    /// <summary>某玩家实际生效的两层权重（千分数，expert-strength D7）：口径同 <see cref="LookaheadWidthOf"/>，缺搜索配置或缺该字段按 0 读。</summary>
+    public int TwoPlyWeightPermilleOf(int player) => Header.Config.Players[player].Search?.TwoPlyWeightPermille ?? 0;
+
     /// <summary>本局是否用过调试 AI 或发生过人工接管（design.md D7：默认排除）。</summary>
     public bool IsContaminated => (Result?.UsedDebugAi ?? Failure?.UsedDebugAi ?? false)
         || (Result?.Takeovers.Count ?? Failure?.Takeovers.Count ?? 0) > 0;
@@ -624,6 +630,17 @@ public sealed record LookaheadLogEntry
     /// <summary>模拟对手一方的预演次数（确定性计数，不是耗时）。</summary>
     public int SimulatedRehearsals { get; init; }
 
+    /// <summary>
+    /// 多样补充的排除重跑做的预演次数（expert-strength D8 / D9，确定性计数）。为 0 时不写出（与 <see cref="Siege.Core.Ai.LookaheadRecord.ToText"/> 同一规则），
+    /// 一层配置下的记录与改动前逐字节相同；缺字段的旧日志按 0 读。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int SupplementRehearsals { get; init; }
+
+    /// <summary>两层扫描的单点预演次数（expert-strength D8 / D9）。为 0 时不写出，缺字段按 0 读。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int TwoPlyRehearsals { get; init; }
+
     /// <summary>被选候选；Pass 为 <c>null</c>。</summary>
     [JsonIgnore]
     public LookaheadCandidateEntry? ChosenCandidate => Chosen >= 0 && Chosen < Candidates.Count ? Candidates[Chosen] : null;
@@ -643,11 +660,15 @@ public sealed record LookaheadLogEntry
                 ResponderRound = e.ResponderRound,
                 DeployLimit = e.SimulatedDeployLimit,
                 Response = e.ResponseKey,
+                TwoPlyBonus = e.TwoPlyBonus,
                 After = e.ScoreAfter,
+                Source = e.Source,
             })],
             Chosen = record.ChosenIndex,
             Changed = record.ChangedChoice,
             SimulatedRehearsals = record.SimulatedRehearsals,
+            SupplementRehearsals = record.SupplementRehearsals,
+            TwoPlyRehearsals = record.TwoPlyRehearsals,
         };
     }
 }
@@ -673,8 +694,22 @@ public sealed record LookaheadCandidateEntry
     /// <summary>模拟回应的批次键：Pass 为空串；没有对手为 <c>null</c>。</summary>
     public string? Response { get; init; }
 
-    /// <summary>前瞻后分数：回应之后的局面上、以决策起点为"前"的加权总分；不做模拟时等于 <see cref="Before"/>。</summary>
+    /// <summary>
+    /// 两层加分（expert-strength D4 / D9）：⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋，不失真的十进制整数。为 0 时不写出，
+    /// 缺字段（本 change 之前的日志）按 0 读；一层分数 = <see cref="After"/> − 本项。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public BigInteger TwoPlyBonus { get; init; }
+
+    /// <summary>前瞻后分数：一层分数（回应之后的局面上、以决策起点为"前"的加权总分）与 <see cref="TwoPlyBonus"/> 之和；不做模拟时等于 <see cref="Before"/>（另加 B1 上的两层加分，见 Core 记录）。</summary>
     public BigInteger After { get; init; }
+
+    /// <summary>
+    /// 候选来源（expert-strength D3 / D9）：<c>Original</c>（原排序）/ <c>Supplement</c>（多样补充）。原排序是缺省值，不写出——
+    /// 一层配置下的记录与改动前逐字节相同；缺字段（本 change 之前的日志）按原排序读。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public Siege.Core.Ai.CandidateSource Source { get; init; }
 }
 
 public sealed record PlayerEntry

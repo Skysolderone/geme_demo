@@ -76,7 +76,7 @@ public sealed record AiSearchConfig(
     public const int DefaultDiverseSupplementLimit = 8;
 
     /// <summary>
-    /// 专家预设的两层权重 λ（千分数）。<b>段 A 暂取 1000‰</b>（实验 E5 口径，expert-strength 裁决 Open Questions 7）；段 B（tasks 2.3）按扫档准则从 250 / 500 / 1000 中选定后替换。
+    /// 专家预设的两层权重 λ*（千分数）= 1000‰：expert-strength 段 B 扫档（250 / 500 / 1000 各 20 局）三档与高难配对的"好 − 差"同为 −3，按设计文档 D10 准则取平均名次最低的 1000（2.65）；扩样结果见设计文档 v1.18 §15.2。
     /// </summary>
     public const int DefaultTwoPlyWeightPermille = 1000;
 
