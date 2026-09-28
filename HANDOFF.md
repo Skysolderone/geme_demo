@@ -71,7 +71,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 2. `openspec/changes/archive/<日期>-<change>/design.md` 末尾的“裁决记录”：设计文档没写到的地方以它判定。
 3. `.trellis/spec/core/`：`index` / `boundaries` / `determinism` / `coordinates` / `testing`，都是踩过的坑，**必读**。
 4. `.trellis/workspace/rubioc/journal-1.md`：各会话的结论与待办；`.trellis/tasks/archive/2026-09/<任务>/implement.md`：逐段记录。
-5. 历史参考：`openspec/ROADMAP.md`（停在 09-15）、`art/*/README.md`（各项人工检查清单）。
+5. 路线图 `openspec/ROADMAP.md`（已完成 / 未完成）；历史参考：`art/*/README.md`（各项人工检查清单）。
 
 ## 已完成的 change（2026-09-21 起）
 
@@ -117,7 +117,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 5. **需要负责人亲自试玩**：带入带出链路（用临时 `--profile`）、专家难度、人对 3 名 AI 打一局边疆图（检查清单在 `.trellis/tasks/archive/2026-09/09-23-ai-eye/implement.md` 段 E）。
 6. **需要负责人看截图**：`art/carry-in-out/`、`art/expert-lookahead/`、`art/more-pieces/`（十种棋子灰度对照）、`art/surfaces-v1/`；另有 `sim-out/small-maps/*.png`、`sim-out/life-shape/*-groups.png`。
 7. **设计文档中还没做的部分**：联网同步与匹配（§19-5），正式美术与音效（§18.2）。局外永久成长明确不做（§21.6）。
-8. 小项：分支 `wip/match-flow` 早已合入 main，但 `origin/HEAD` 仍指向它，可以删除或改指向（需要先问负责人）；终端的出局 / 完赛结算没有脚本测试（journal 09-26）；种子 1–200 的截断慢测试在阈值改动后没有复核。
+8. 小项：GitHub 默认分支已于 2026-09-28 改为 `main`（旧分支 `wip/match-flow` 已合入，保留未删）；终端的出局 / 完赛结算没有脚本测试（journal 09-26）；种子 1–200 的截断慢测试在阈值改动后没有复核。
 
 ## 执行流程与工作约定
 
