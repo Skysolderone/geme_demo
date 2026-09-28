@@ -25,7 +25,7 @@ internal static class LookaheadFixtures
     internal static readonly EvaluationWeights Weights =
         new(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 200, Threat: 25);
 
-    /// <summary>写死的停手阈值（= 段 A 开工时的 <see cref="AiSearchConfig.DefaultPassThreshold"/>）。</summary>
+    /// <summary>写死的停手阈值（= expert-lookahead 段 A 开工时的 <see cref="AiSearchConfig.DefaultPassThreshold"/>；v2-recalibration 段 A 把缺省改为 20 之后仍写死 80，依赖它的黄金值一字不改）。</summary>
     internal const int PassThreshold = 80;
 
     /// <summary>专家配置：高难的候选生成 + 前瞻宽度（不经 <see cref="AiSearchConfig.Expert"/> 预设，预设另有测试钉住）。</summary>

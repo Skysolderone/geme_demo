@@ -13,28 +13,28 @@
 
 ## 1. 段 A：停手阈值在 V2 上复核（扫档、选定、落地、守门）
 
-- [ ] 1.1 写 4 份配置文件（design.md D1）：
+- [x] 1.1 写 4 份配置文件（design.md D1）：
   - `siege-4p-base-v5`，4 × Standard；
   - `Weights` 逐玩家等于当前 `EvaluationWeights.Default`；
   - `PassThreshold` 分别为 0 / 20 / 40 / 80，其余项按「通用约束」。
   - 验证：人工核对 4 份文件只在 `PassThreshold` 上不同（`git diff --no-index` 两两比对）。
-- [ ] 1.2 跑 4 批 × 20 局，输出到 `sim-out/v2-recalibration/pass-<X>/`。
+- [x] 1.2 跑 4 批 × 20 局，输出到 `sim-out/v2-recalibration/pass-<X>/`。
   - 验证：每批 20 局无失败；`config.json` 逐项核对通过，核对结果写进 implement 记录。
-- [ ] 1.3 忠实性对照（D1）：`pass-80` / `pass-0` 与诊断 `sim-out/engagement-diagnosis/b06-*` / `b07-*` 逐种子比对结束大回合、终局原因、总提子与胜者。
+- [x] 1.3 忠实性对照（D1）：`pass-80` / `pass-0` 与诊断 `sim-out/engagement-diagnosis/b06-*` / `b07-*` 逐种子比对结束大回合、终局原因、总提子与胜者。
   - 预期：一致，整局无提子 8/20、3/20，总提子 31、107。
   - 不一致即停下归因，不继续选档。
   - 验证：比对表写进 implement 记录。
-- [ ] 1.4 统计四档：截断、整局无提子、已终局局平均结束大回合、第 3 大回合领先者胜（写明分母）、总提子、Pass 率；按 D2 的四步选档，写出每一步的候选集与带宽数值。
+- [x] 1.4 统计四档：截断、整局无提子、已终局局平均结束大回合、第 3 大回合领先者胜（写明分母）、总提子、Pass 率；按 D2 的四步选档，写出每一步的候选集与带宽数值。
   - 四档截断都超过 1/20 时停下报告，不落地。
   - 验证：选档表与计算过程写进 implement 记录，回报主会话。
-- [ ] 1.5 条件冒烟（D3，只在选定值 ≠ 80 时做）：
+- [x] 1.5 条件冒烟（D3，只在选定值 ≠ 80 时做）：
   - v5、V2、种子 1–20、带入 0、阈值取选定值，跑两批：简单 × 4 → `sim-out/v2-recalibration/easy20-pass<X>/`；专家 + 标准 × 3 → `expert20-pass<X>/`。
   - 对照：简单对诊断 b08（截断 0/20，最长 44 大回合）；专家对 `sim-out/expert-lookahead/smoke20/`（截断 0）。
   - 判据：截断 ≤ 1/20，且简单难度无"第 1 大回合全员一子不落即终局"。
   - 回退即停下报告（Open Question 3），不调阈值。
   - 选定值为 80 时本项记"不适用"并写明理由。
   - 验证：两批结果与判据逐项写进 implement 记录。
-- [ ] 1.6 审计依赖走法、且读缺省阈值或缺省权重的既有测试（D12），逐个写死阈值 80 与改动前的权重。至少包括：
+- [x] 1.6 审计依赖走法、且读缺省阈值或缺省权重的既有测试（D12），逐个写死阈值 80 与改动前的权重。至少包括：
   - `难度分级Tests.三档旧难度逐步不变`：确认 `LookaheadFixtures.V5Config` 已写死；未写死则补上；
   - `候选格上限Tests` 的黄金哈希；
   - 终端脚本测试（`PlayCommand` 的 `weights` / `passThreshold` 接缝）；
@@ -42,13 +42,13 @@
   - 验证：
     - 清单写进 implement 记录；
     - 变异：临时把 `DefaultPassThreshold` 改为 81 跑默认套件，只有守门类测试（1.7 所列）变红，任何保真度测试不红；还原后逐字节校验。
-- [ ] 1.7 先改守门测试（先红）：
+- [x] 1.7 先改守门测试（先红）：
   - `默认评价权重的校准Tests.默认停手阈值被改动`：期望改为选定值；口径证据串改为"v2-recalibration""V2""种子 1–20""20 局""sim-out/v2-recalibration/pass-"与"0 / 20 / 40 / 80"；删掉"ai-eye 段 D 校准 / 种子 1–200 / 200 局 / {值} / 160"等旧断言。
   - `难度分级Tests` 的四档预设断言：`new AiSearchConfig(…, 80)` 改为选定值。
   - 断言 `PassThresholdCalibrationStatus` 不再以 `ScoringExtendedStatus` 结尾（阈值已在 V2 上复核）；九维 `CalibrationOf` 仍以它结尾。
   - 兜底：`grep -rn "PassThresholdCalibrationStatus\|DefaultPassThreshold\|, 80)" tests/`，逐条归为"守门（跟随新值）"或"保真度（写死 80，归 1.6）"，清单写进 implement 记录。`规则变更使校准失效` 等按子串核对口径的测试同样归入此处。
   - 验证：新断言在旧实现上红（选定值仍为 80 时，口径串断言照样红）。
-- [ ] 1.8 落地：
+- [x] 1.8 落地：
   - `AiSearchConfig.DefaultPassThreshold` 取选定值；
   - 重写它的 XML 注释：V2 复核的条件、四档"截断 / 整局无提子 / 已终局局平均结束大回合"、选档过程、数据目录，保留 ai-eye（V1、200 局）的历史一句并标注"V1 内容集"；
   - 改写 `PassThresholdCalibrationStatus`；
@@ -59,9 +59,9 @@
   - 验证：
     - 1.7 的断言转绿；
     - 变异：实现取选定值 + 1（守门应红）、口径串漏写"20 局"（守门应红），逐项还原并逐字节校验。
-- [ ] 1.9 200 局慢测试只改说明（裁决 6）：`校准后截断率达标_种子1至200` 的注释与 `AssertTruncation` 的 XML 说明写明"停手阈值经 V2 20 局复核变更后，本慢测试的结论未经复核；v2-recalibration 未运行"。上限 10 局不改，不运行。
+- [x] 1.9 200 局慢测试只改说明（裁决 6）：`校准后截断率达标_种子1至200` 的注释与 `AssertTruncation` 的 XML 说明写明"停手阈值经 V2 20 局复核变更后，本慢测试的结论未经复核；v2-recalibration 未运行"。上限 10 局不改，不运行。
   - 验证：`git diff` 确认只改了注释；默认套件版 `校准后截断率达标`（20 局，≤ 1）照常跑。
-- [ ] 1.10 段 A 回归：
+- [x] 1.10 段 A 回归：
   - `dotnet build` 零警告；`dotnet test -c Release` 默认套件全绿（不跑 Slow / Perf）；
   - `校准后截断率达标`（默认套件版）在新缺省阈值下绿；
   - 既有黄金哈希与期望一字未改（`git diff` 的测试文件中黄金值行为零）。

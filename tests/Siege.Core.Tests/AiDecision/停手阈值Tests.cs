@@ -192,12 +192,14 @@ public class 停手阈值Tests
     /// 孤子局面：P0 在指定格落普通子，四邻全是空格、周围没有任何棋子（不连串、不提子、不成眼）。
     /// 简单难度只算即时势力、敌损、眼位三维；孤子势力增量 = 棋串军势 1 + 独占领地 4 = 5。权重写死为定值前缺省（眼位 0）并把 PowerGain 取 6
     /// （testing.md「依赖 AI 实际怎么走的断言要把权重写死」），每枚孤子的边际提升恰为 6 × 5 = 30（spec Scenario 的算例；proposal：简单难度空盘单子加权收益约 30，过不了阈值 80）。
+    /// 停手阈值同样写死为 80（Scenario 原文的"停手阈值为 80"），不读 <see cref="AiSearchConfig.DefaultPassThreshold"/>：v2-recalibration 段 A 把缺省阈值改为 20 后，
+    /// 提升 30 会越过缺省阈值，「有子后恢复阈值」的撤回就不再成立（1.6 审计：缺省阈值 80 → 81 / 20 两次探针均红 3 条，写死后不红）。
     /// </summary>
     private static HeuristicTurnController LoneStones(MatchFlow match, int limit, params string[] range)
     {
         (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, limit, range);
         HeuristicTurnController ai = DeployWith(
-            match, AiDifficulty.Easy, AiSearchConfig.Easy with { PassThreshold = AiSearchConfig.DefaultPassThreshold }, SimFixtures.PreCalibrationWeights with { PowerGain = 6 }, batch, driver);
+            match, AiDifficulty.Easy, AiSearchConfig.Easy with { PassThreshold = 80 }, SimFixtures.PreCalibrationWeights with { PowerGain = 6 }, batch, driver);
 
         Assert.Equal(80, ai.Config.PassThreshold);
         Assert.Equal(range.Length, ai.LastPointRanking.Length);

@@ -138,10 +138,11 @@ public class 难度分级Tests
         Assert.Equal(2, (int)AiDifficulty.Hard);
         Assert.Equal(3, (int)AiDifficulty.Expert);
 
-        Assert.Equal(new AiSearchConfig(6, 1, true, 0, 80), AiSearchConfig.Easy);
-        Assert.Equal(new AiSearchConfig(12, 8, false, 0, 80), AiSearchConfig.Standard);
-        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 80), AiSearchConfig.Hard);
-        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 80, LookaheadWidth: 4), AiSearchConfig.Expert);
+        // v2-recalibration 段 A（1.7）：四档预设的停手阈值随缺省值由 80 改为 20（V2 复核选定值，四档共用）；其余字段与 HEAD 03d45f6 相同。
+        Assert.Equal(new AiSearchConfig(6, 1, true, 0, 20), AiSearchConfig.Easy);
+        Assert.Equal(new AiSearchConfig(12, 8, false, 0, 20), AiSearchConfig.Standard);
+        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20), AiSearchConfig.Hard);
+        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, LookaheadWidth: 4), AiSearchConfig.Expert);
         Assert.Equal(AiSearchConfig.Expert, AiSearchConfig.ForDifficulty(AiDifficulty.Expert));
         Assert.Equal(AiSearchConfig.Expert with { CandidateCellLimit = 24 }, AiSearchConfig.ForMap(AiDifficulty.Expert, 411));
         Assert.All([AiDifficulty.Easy, AiDifficulty.Standard, AiDifficulty.Hard], d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).LookaheadWidth));
