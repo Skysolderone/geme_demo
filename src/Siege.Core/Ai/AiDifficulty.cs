@@ -18,7 +18,10 @@ public enum AiDifficulty
     /// <summary>高难：九维评价，M = 32，N 更大。</summary>
     Hard,
 
-    /// <summary>专家（expert-lookahead）：候选生成与高难完全相同，再对自身评价前 <see cref="AiSearchConfig.LookaheadWidth"/> 个非空候选做一层前瞻重排。</summary>
+    /// <summary>
+    /// 专家（expert-lookahead / expert-strength）：候选生成与高难完全相同，按落点格集合去重并以排除重跑补足落点不同的候选（多样候选，零随机），
+    /// 再对前瞻集做一层前瞻、加上近似两层加分后重排。
+    /// </summary>
     Expert,
 }
 
@@ -47,16 +50,35 @@ public enum AiDifficulty
 /// 简单 / 标准 / 高难预设为 0，专家预设为 <see cref="DefaultLookaheadWidth"/>。为 0 时序列化 MUST NOT 写出该字段——三档旧难度的配置记录与日志首部与引入之前逐字节相同；
 /// 缺该字段的旧记录按 0 读入（同 <see cref="PassThreshold"/> 的先例）。
 /// </param>
+/// <param name="DiverseSupplementLimit">
+/// 多样补充上限 S（expert-strength D2 / D3 / D7，非负整数）：前瞻集按落点格集合去重后不足前瞻宽度个时，排除重跑（不扰动的贪心组批）的次数上限。
+/// 0 = 多样候选关闭——既不去重也不补足，前瞻集与 expert-lookahead 逐项相同。简单 / 标准 / 高难预设为 0，专家预设为 <see cref="DefaultDiverseSupplementLimit"/>。
+/// 为 0 时不写出，缺字段按 0 读（与 <see cref="LookaheadWidth"/> 同一口径）。
+/// </param>
+/// <param name="TwoPlyWeightPermille">
+/// 两层权重 λ（expert-strength D4 / D7，千分数，非负整数）：前瞻后分数 = 一层分数 + ⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋。
+/// 0 = 不计两层加分、不做两层扫描。简单 / 标准 / 高难预设为 0，专家预设为 <see cref="DefaultTwoPlyWeightPermille"/>。为 0 时不写出，缺字段按 0 读。
+/// </param>
 public sealed record AiSearchConfig(
     int CandidatePointCount,
     int CandidateBatchCount,
     bool ImmediateOnly,
     int CandidateCellLimit = 0,
     int PassThreshold = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DiverseSupplementLimit = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0)
 {
     /// <summary>专家预设的前瞻宽度（负责人裁决 2026-09-26：前 K = 4 个候选；规格里 K 专指候选格上限，故称 W）。</summary>
     public const int DefaultLookaheadWidth = 4;
+
+    /// <summary>专家预设的多样补充上限 S（expert-strength D3：与实验 E4 的补充次数相同，不扫档）。</summary>
+    public const int DefaultDiverseSupplementLimit = 8;
+
+    /// <summary>
+    /// 专家预设的两层权重 λ（千分数）。<b>段 A 暂取 1000‰</b>（实验 E5 口径，expert-strength 裁决 Open Questions 7）；段 B（tasks 2.3）按扫档准则从 250 / 500 / 1000 中选定后替换。
+    /// </summary>
+    public const int DefaultTwoPlyWeightPermille = 1000;
 
     /// <summary>可落子格数超过它的地图算"大图"：各入口未显式配置 K 时取 <see cref="LargeMapCellLimit"/>，否则取 0。</summary>
     public const int LargeMapPlayableThreshold = 150;
@@ -97,8 +119,16 @@ public sealed record AiSearchConfig(
     /// <summary>高难。</summary>
     public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold);
 
-    /// <summary>专家：候选生成同高难（N 24 / M 32、同一扰动子流、同一停手阈值），另加前瞻宽度 <see cref="DefaultLookaheadWidth"/>。</summary>
-    public static readonly AiSearchConfig Expert = Hard with { LookaheadWidth = DefaultLookaheadWidth };
+    /// <summary>
+    /// 专家：候选生成同高难（N 24 / M 32、同一扰动子流、同一停手阈值），另加前瞻宽度 <see cref="DefaultLookaheadWidth"/>、
+    /// 多样补充上限 <see cref="DefaultDiverseSupplementLimit"/> 与两层权重 <see cref="DefaultTwoPlyWeightPermille"/>（expert-strength D7）。
+    /// </summary>
+    public static readonly AiSearchConfig Expert = Hard with
+    {
+        LookaheadWidth = DefaultLookaheadWidth,
+        DiverseSupplementLimit = DefaultDiverseSupplementLimit,
+        TwoPlyWeightPermille = DefaultTwoPlyWeightPermille,
+    };
 
     /// <summary>某难度的默认参数。</summary>
     public static AiSearchConfig ForDifficulty(AiDifficulty difficulty) => difficulty switch
@@ -123,7 +153,7 @@ public sealed record AiSearchConfig(
     public static AiSearchConfig ForMap(AiDifficulty difficulty, int playableCells, int? cellLimit = null) =>
         ForDifficulty(difficulty) with { CandidateCellLimit = cellLimit ?? DefaultCellLimitFor(playableCells) };
 
-    /// <summary>参数校验：N、M 至少为 1；K、停手阈值与前瞻宽度非负。</summary>
+    /// <summary>参数校验：N、M 至少为 1；K、停手阈值、前瞻宽度、多样补充上限与两层权重非负。</summary>
     public AiSearchConfig Validated()
     {
         if (CandidatePointCount < 1 || CandidateBatchCount < 1)
@@ -144,6 +174,16 @@ public sealed record AiSearchConfig(
         if (LookaheadWidth < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(LookaheadWidth), "前瞻宽度须为非负整数（0 与 1 = 不前瞻）。");
+        }
+
+        if (DiverseSupplementLimit < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(DiverseSupplementLimit), "多样补充上限须为非负整数（0 = 多样候选关闭）。");
+        }
+
+        if (TwoPlyWeightPermille < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(TwoPlyWeightPermille), "两层权重须为非负整数（千分数；0 = 不计两层加分）。");
         }
 
         return this;

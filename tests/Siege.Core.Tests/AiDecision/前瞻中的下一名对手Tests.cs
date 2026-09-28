@@ -153,7 +153,7 @@ public class 前瞻中的下一名对手Tests
     /// 第 2 大回合、顺序 P0（专家）→ P1 → P2 → P3，P2 / P3 已弃赛（只剩 P0 与 P1）。P1 在盘上只有 B2 一子（曾建立正势力），
     /// 被 P0 的 A2 / C2 / B1 围住、只剩一口气 B3——在 P0 的出生区里。P0 的部署上限放到 9：贪心组批会走完全部候选落点，每个候选都含 B3。
     /// </summary>
-    private static MatchFlow LastOpponentPosition()
+    internal static MatchFlow LastOpponentPosition()
     {
         MatchFlow match = MatchFixtures.Started().AtRound(2, [P0, P1, P2, P3])
             .Stones(P0, "A2", "C2", "B1").Stones(P1, "B2").Stones(P2, "B8").Stones(P3, "H8");

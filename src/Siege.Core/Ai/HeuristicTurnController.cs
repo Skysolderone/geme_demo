@@ -130,9 +130,9 @@ public sealed class HeuristicTurnController : ITurnController
     {
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(config);
-        if (config.CandidateBatchCount != 1 || config.LookaheadWidth != 0)
+        if (config.CandidateBatchCount != 1 || config.LookaheadWidth != 0 || config.DiverseSupplementLimit != 0 || config.TwoPlyWeightPermille != 0)
         {
-            throw new ArgumentException("模拟对手只取一条无扰动贪心、不前瞻。", nameof(config));
+            throw new ArgumentException("模拟对手只取一条无扰动贪心、不前瞻（也不做多样补充与两层加分）。", nameof(config));
         }
 
         return new HeuristicTurnController(
@@ -261,6 +261,8 @@ public sealed class HeuristicTurnController : ITurnController
     /// 单点筛选 → 贪心 + 种子扰动组合 → 确定性选优；最终把选中的批次摆回 <paramref name="batch"/>。
     /// 前瞻宽度大于 0（专家）时，"确定性选优"换成一层前瞻（<see cref="ExpertLookahead"/>）：候选生成（含扰动子流的消费）与高难完全相同，
     /// 前瞻在去重之后、复摆之前接入，只在非空候选之间重排，并留下前瞻记录（<see cref="LastLookahead"/>）。
+    /// 多样补充上限大于 0 时，前瞻集不足前瞻宽度个即以排除重跑补足（expert-strength D2 / D3）：把某一格的全部单点从本次决策的原排序（k = 0，不扰动）里拿掉，
+    /// 同一停手阈值、同一活形硬约束、同一部署上限下重跑一次贪心组批——贪心本身不改，不消费任何随机。
     /// </summary>
     public void Deploy(StagedBatch batch, Func<RehearsalResult> rehearse)
     {
@@ -299,8 +301,19 @@ public sealed class HeuristicTurnController : ITurnController
         CandidateBatch choice;
         if (Config.LookaheadWidth > 0)
         {
+            int supplementRehearsals = 0;
+            RehearsalResult CountedRehearse()
+            {
+                supplementRehearsals++;
+                return rehearse();
+            }
+
+            CandidateBatch Rerun(Coord excluded) =>
+                Greedy([.. ranking.Where(p => p.Coord != excluded)], batch, CountedRehearse, evaluator, passThreshold);
+
             var lookahead = new ExpertLookahead(Player, view, evaluator, Weights, Config, _lifeQuery, _cacheLife);
-            (choice, LastLookahead) = lookahead.Choose(candidates, batch, rehearse);
+            (choice, LookaheadRecord record) = lookahead.Choose(candidates, batch, rehearse, Config.DiverseSupplementLimit > 0 ? Rerun : null);
+            LastLookahead = supplementRehearsals == 0 ? record : record with { SupplementRehearsals = supplementRehearsals };
         }
         else
         {
@@ -339,7 +352,7 @@ public sealed class HeuristicTurnController : ITurnController
         ImmutableArray<Coord> cells = [.. context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
         if (Config.CandidateCellLimit > 0 && cells.Length > Config.CandidateCellLimit && !types.IsEmpty)
         {
-            cells = PrefilterCells(cells, types, batch, rehearse, evaluator);
+            cells = PrefilterCells(cells, types, batch, rehearse, evaluator, Config.CandidateCellLimit);
         }
 
         LastCandidateCells = cells;
@@ -381,7 +394,8 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>
     /// 候选格预筛（frontier-map 裁决 12）：用代表类型（持有类型里枚举序最前的一种——枚举序即固定类型次序：普通、堡垒、连珠、倍增、协同、匠人、
     /// 旗手、铁链、哨兵、界碑，more-pieces-relics D9）、不带改造，对每格预演一次得格分，
-    /// 取前 K 格（同分按坐标序），按坐标序返回。不消费随机流。
+    /// 取前 K（<paramref name="cellLimit"/>）格（同分按坐标序），按坐标序返回。不消费随机流。
+    /// 专家的两层扫描（<see cref="ExpertLookahead.BestSingleGain"/>）复用同一实现（expert-strength D4：候选格上限按单点排序同一预筛口径）。
     /// 格分只算既有七维、不做活形查询（ai-eye D5，<see cref="BatchEvaluator.EvaluatePrefilter"/>）；进入完整枚举的 ≤ K 格才算九维。
     /// 代表类型在某格落不下（自杀手等）而手里有匠人时，该格退而用匠人逐个合法改造目标预演，格分取其中最高的合法总分。
     /// </summary>
@@ -395,8 +409,8 @@ public sealed class HeuristicTurnController : ITurnController
     /// <para>仍有的偏差：代表类型落得下的格只按"不带改造"计分，改造带来的额外收益不进格分（那是完整枚举的事）；
     /// 同形禁则比对的盘面序列化含棋子类型，代表类型因同形被拒而别的类型不被拒的格会漏掉（极罕见，未处理）。</para>
     /// </remarks>
-    private ImmutableArray<Coord> PrefilterCells(
-        ImmutableArray<Coord> cells, ImmutableArray<PieceType> types, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+    internal static ImmutableArray<Coord> PrefilterCells(
+        ImmutableArray<Coord> cells, ImmutableArray<PieceType> types, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int cellLimit)
     {
         BatchContext context = batch.Context;
         PieceType representative = types[0];
@@ -439,7 +453,7 @@ public sealed class HeuristicTurnController : ITurnController
         return [.. scored
             .OrderByDescending(s => s.Total)
             .ThenBy(s => s.Cell)
-            .Take(Config.CandidateCellLimit)
+            .Take(cellLimit)
             .Select(s => s.Cell)
             .Order()];
     }

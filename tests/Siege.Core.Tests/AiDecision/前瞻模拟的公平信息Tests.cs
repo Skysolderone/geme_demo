@@ -15,7 +15,7 @@ namespace Siege.Core.Tests.AiDecision;
 public class 前瞻模拟的公平信息Tests
 {
     /// <summary>第 5 大回合、顺序 P0（专家）→ P3，P0 与下一名对手 P1 在盘面中部接触。</summary>
-    private static MatchFlow ContactPosition(params (PieceType Type, int Count)[] p1Hand)
+    internal static MatchFlow ContactPosition(params (PieceType Type, int Count)[] p1Hand)
     {
         MatchFlow match = AiFixtures.Round5()
             .Stones(P0, "D5", "E5", "E4")
@@ -40,6 +40,40 @@ public class 前瞻模拟的公平信息Tests
         Assert.Equal(LookaheadStatus.Applied, a.Status);
         Assert.All(a.Entries, e => Assert.Equal(P1, e.Responder));
         Assert.Contains(a.Entries, e => CoordsOf(e.ResponseKey!).Length >= 3);
+        Assert.Equal(a.ToText(), b.ToText());
+        Assert.Equal(few.LastChoice!.Key, many.LastChoice!.Key);
+
+        // expert-strength：打开多样候选与两层加分（专家预设的 S 8、λ 1000‰，阈值同上）后同样逐项相同——前瞻集（含来源）、两层加分、前瞻后分数与选择。
+        // 样本口径：至少一个候选的两层加分为正。变异 E-F1（两层扫描经测试接缝读对手真实手牌）→ 见段 A 实施记录。
+        LookaheadRecord presetFew = Record(Decide(ContactPosition((PieceType.Basic, 2)), AiDifficulty.Expert, StrengthConfig()));
+        LookaheadRecord presetMany = Record(Decide(ContactPosition((PieceType.Basic, 9), (PieceType.Fortress, 3)), AiDifficulty.Expert, StrengthConfig()));
+        Assert.Contains(presetFew.Entries, e => e.TwoPlyBonus > 0);
+        Assert.Equal(presetFew.ToText(), presetMany.ToText());
+    }
+
+    [Fact]
+    public void 其余对手的隐藏信息不影响两层加分()
+    {
+        // 两局的公开状态与专家本人手牌逐项相同，只有不是下一名对手的另一名对手（P2；下一名对手是 P1）的真实手牌不同：普通子 × 2 / 普通子 × 9 与堡垒子 × 3。
+        // 专家（多样补充与两层加分都打开）每个候选的两层加分、前瞻记录与最终选择逐项相同。
+        // 其余对手的征募面板只在其本人的小回合生成，决策起点并不存在，无从另设（记入段 A 实施记录）。
+        // 变异 E-F1（两层扫描经测试接缝读对手真实手牌）→ 见段 A 实施记录。
+        MatchFlow Position(params (PieceType Type, int Count)[] p2Hand)
+        {
+            MatchFlow match = ContactPosition((PieceType.Basic, 4));
+            match.Debug.SeedHand(P2, p2Hand);
+            return match;
+        }
+
+        HeuristicTurnController few = Decide(Position((PieceType.Basic, 2)), AiDifficulty.Expert, StrengthConfig());
+        HeuristicTurnController many = Decide(Position((PieceType.Basic, 9), (PieceType.Fortress, 3)), AiDifficulty.Expert, StrengthConfig());
+        LookaheadRecord a = Record(few);
+        LookaheadRecord b = Record(many);
+
+        Assert.Equal(LookaheadStatus.Applied, a.Status);
+        Assert.All(a.Entries, e => Assert.NotEqual(P2, e.Responder));
+        Assert.Contains(a.Entries, e => e.TwoPlyBonus > 0);
+        Assert.Equal(a.Entries.Select(e => e.TwoPlyBonus), b.Entries.Select(e => e.TwoPlyBonus));
         Assert.Equal(a.ToText(), b.ToText());
         Assert.Equal(few.LastChoice!.Key, many.LastChoice!.Key);
     }
@@ -144,6 +178,12 @@ public class 前瞻模拟的公平信息Tests
         Assert.Contains(a.Entries, e => CoordsOf(e.CandidateKey).Any(c => IsAdjacentOrOn(c, TestMaps.At("E5"))));
         Assert.Equal(a.ToText(), b.ToText());
         Assert.Equal(command.LastChoice!.Key, depot.LastChoice!.Key);
+
+        // expert-strength：打开多样候选与两层加分后同样逐项相同（两层扫描在 B2 上只按期望估值未揭示信物，不读内容）。
+        LookaheadRecord presetCommand = Record(Decide(HiddenRelicPosition(RelicFixtures.Command(2)), AiDifficulty.Expert, StrengthConfig()));
+        LookaheadRecord presetDepot = Record(Decide(HiddenRelicPosition(RelicFixtures.Depot()), AiDifficulty.Expert, StrengthConfig()));
+        Assert.Contains(presetCommand.Entries, e => e.TwoPlyBonus > 0);
+        Assert.Equal(presetCommand.ToText(), presetDepot.ToText());
     }
 
     private static bool IsAdjacentOrOn(Coord c, Coord target) => Math.Abs(c.X - target.X) + Math.Abs(c.Y - target.Y) <= 1;
@@ -159,10 +199,18 @@ public class 前瞻模拟的公平信息Tests
         Assert.Empty(AiFixtures.Violations(typeof(HeuristicTurnController)));
         Assert.Empty(AiFixtures.Violations(typeof(ExpertLookahead)));
         Assert.Contains(typeof(BatchEvaluator), AiFixtures.ReachableTypes(typeof(ExpertLookahead)));
+        // expert-strength：多样补充与两层加分的新入口类型（每次决策内新建，不经 ExpertLookahead 的字段可达）逐个列为根。
+        // 变异 E-F3（Simulation 加一个 HandLedger 成员）→ 见段 A 实施记录。
+        Assert.Empty(AiFixtures.Violations(typeof(ExpertLookahead.Simulation)));
+        Assert.Empty(AiFixtures.Violations(typeof(ExpertLookahead.LookaheadMember)));
+        Assert.Contains(typeof(MatchPublicView), AiFixtures.ReachableTypes(typeof(ExpertLookahead.Simulation)));
 
         string root = PresentationFixtures.RepoRoot();
         string[] aiFiles = Directory.GetFiles(Path.Combine(root, "src", "Siege.Core", "Ai"), "*.cs", SearchOption.AllDirectories);
         Assert.Contains(aiFiles, f => Path.GetFileName(f) == "ExpertLookahead.cs");
+        // expert-strength：多样补充与两层加分的新代码都在已扫描的 ExpertLookahead.cs / HeuristicTurnController.cs 里（不新增文件、不新增入口类型）——口径下界。
+        Assert.Contains("TwoPlyBonusOn", File.ReadAllText(aiFiles.Single(f => Path.GetFileName(f) == "ExpertLookahead.cs")), StringComparison.Ordinal);
+        Assert.Contains("DiverseSupplementLimit", File.ReadAllText(aiFiles.Single(f => Path.GetFileName(f) == "HeuristicTurnController.cs")), StringComparison.Ordinal);
         Assert.DoesNotContain(aiFiles, f => LifeShape.空区与封闭眼空间Tests.StripComments(File.ReadAllText(f)).Contains("TrueContents(", StringComparison.Ordinal));
 
         Assert.Equal(["PublicRelicEffects.cs", "PublicRules.cs"], PureRuleFiles.Select(Path.GetFileName));

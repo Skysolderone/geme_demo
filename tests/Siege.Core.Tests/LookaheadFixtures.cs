@@ -32,6 +32,17 @@ internal static class LookaheadFixtures
     internal static AiSearchConfig ExpertConfig(int passThreshold = 0, int width = 4) =>
         AiSearchConfig.Hard with { PassThreshold = passThreshold, LookaheadWidth = width };
 
+    /// <summary>
+    /// 一层配置（expert-strength D6 / G1）：专家预设关掉多样候选与两层加分（多样补充上限 0、两层权重 0），其余与专家预设相同。
+    /// 凡钉一层前瞻行为的既有测试改用它，断言与期望值一字不改；它的走法由 G1 黄金值（<c>专家难度的一层前瞻Tests.一层配置与改动前的专家逐步相同</c>）钉住。
+    /// </summary>
+    internal static AiSearchConfig OneLayerConfig(int passThreshold = PassThreshold) =>
+        AiSearchConfig.Expert with { PassThreshold = passThreshold, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0 };
+
+    /// <summary>专家配置另开多样候选与两层加分（其余同 <see cref="ExpertConfig"/>：高难的候选生成 + 前瞻宽度 4，停手阈值显式给出）。</summary>
+    internal static AiSearchConfig StrengthConfig(int passThreshold = 0, int permille = AiSearchConfig.DefaultTwoPlyWeightPermille, int supplement = AiSearchConfig.DefaultDiverseSupplementLimit, int width = 4) =>
+        ExpertConfig(passThreshold, width) with { TwoPlyWeightPermille = permille, DiverseSupplementLimit = supplement };
+
     /// <summary>高难配置。</summary>
     internal static AiSearchConfig HardConfig(int passThreshold = 0) => AiSearchConfig.Hard with { PassThreshold = passThreshold };
 
@@ -49,6 +60,23 @@ internal static class LookaheadFixtures
 
     internal static HeuristicTurnController DecideHard(MatchFlow match, int passThreshold = 0) =>
         Decide(match, AiDifficulty.Hard, HardConfig(passThreshold));
+
+    /// <summary>
+    /// 当前玩家开到部署阶段，按决策起点的公开快照直接建一个前瞻引擎（不做决策）：返回引擎、快照、本人批次上下文与只含决策起点盘面的同形历史。
+    /// 两层加分的构造口径（下一手的上下文、单点扫描）在这里逐项取样。
+    /// </summary>
+    internal static (ExpertLookahead Engine, MatchPublicView View, BatchContext Mine, BoardHistory History) Engine(
+        MatchFlow match, AiSearchConfig config, EvaluationWeights? weights = null)
+    {
+        StagedBatch batch = match.OpenDeploy();
+        MatchPublicView view = match.Publish();
+        PlayerId me = match.CurrentPlayer!.Value;
+        EvaluationWeights w = weights ?? Weights;
+        var history = new BoardHistory();
+        history.Record(view.BoardSerialized);
+        var evaluator = new BatchEvaluator(me, view, w, config.ImmediateOnly);
+        return (new ExpertLookahead(me, view, evaluator, w, config, lifeQuery: null, cacheLife: true), view, batch.Context, history);
+    }
 
     /// <summary>专家的前瞻记录（必须存在）。</summary>
     internal static LookaheadRecord Record(HeuristicTurnController ai) =>
@@ -186,6 +214,11 @@ internal static class SyntheticCandidates
 {
     internal static CandidateBatch Of(string cells, long powerGain) =>
         new([.. LookaheadFixtures.CoordsOf(cells).Select(c => new Placement(c, PieceType.Basic))],
+            new EvaluationBreakdown([(BigInteger)powerGain, 0, 0, 0, 0, 0, 0, 0, 0], LookaheadFixtures.Weights));
+
+    /// <summary>带类型的合成候选：<paramref name="placements"/> 形如 <c>C1:Basic,C2:Fortress</c>，次序即批次内落点次序（贪心接受的次序）。</summary>
+    internal static CandidateBatch Typed(string placements, long powerGain) =>
+        new([.. placements.Split(',').Select(p => new Placement(Coord.Parse(p.Split(':')[0]), Enum.Parse<PieceType>(p.Split(':')[1])))],
             new EvaluationBreakdown([(BigInteger)powerGain, 0, 0, 0, 0, 0, 0, 0, 0], LookaheadFixtures.Weights));
 
     internal static CandidateBatch Pass(long supply) =>

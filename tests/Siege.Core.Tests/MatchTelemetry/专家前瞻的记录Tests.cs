@@ -17,9 +17,15 @@ public class 专家前瞻的记录Tests
 {
     private static readonly PlayerId P0 = LookaheadFixtures.P0;
 
-    /// <summary>1 名专家（P0，未显式给搜索配置）+ 3 名标准，v5 种子 3 整局：日志与 P0 每个小回合的活记录（小回合序号 → 记录）。</summary>
+    /// <summary>
+    /// 1 名专家（P0）+ 3 名标准，v5 种子 3 整局：日志与 P0 每个小回合的活记录（小回合序号 → 记录）。
+    /// expert-strength 1.3：本样本钉的是一层前瞻的记录（"种子 3 恰有一次改变选择"等），改为显式的一层配置（专家预设 + 多样补充上限 0 + 两层权重 0，
+    /// 阈值 80、候选格上限 0）——与改动前"未显式给搜索配置"时首部落成的搜索配置逐字段相同，断言一字不改。未显式给配置的专家见「回放核对前瞻记录」。
+    /// </summary>
     private static readonly Lazy<(MatchLog Log, Dictionary<int, LookaheadRecord?> Live)> ExpertSample = new(() =>
-        RunCapturing(LookaheadFixtures.V5Config(Expert, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), 3, P0));
+        RunCapturing(LookaheadFixtures.V5Config(OneLayerExpert, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), 3, P0));
+
+    private static PlayerAiConfig OneLayerExpert => new() { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.OneLayerConfig() };
 
     private static PlayerAiConfig Expert => new() { Difficulty = AiDifficulty.Expert };
 

@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -27,6 +29,15 @@ public class 前瞻中的停手口径Tests
         Assert.Empty(record.Entries);
         Assert.Equal(-1, record.ChosenIndex);
         Assert.Equal(0, record.SimulatedRehearsals);
+
+        // expert-strength：专家预设（多样补充上限 8、两层权重 1000‰）同样 Pass，不做多样补充，也不做两层扫描。
+        HeuristicTurnController preset = Decide(Position(), AiDifficulty.Expert, AiSearchConfig.Expert with { PassThreshold = unreachable });
+        Assert.True(preset.LastChoice!.IsPass);
+        LookaheadRecord presetRecord = Record(preset);
+        Assert.Equal(LookaheadStatus.Pass, presetRecord.Status);
+        Assert.Equal(0, presetRecord.SupplementRehearsals);
+        Assert.Equal(0, presetRecord.TwoPlyRehearsals);
+        Assert.Equal(0, presetRecord.SimulatedRehearsals);
     }
 
     /// <summary>
@@ -129,6 +140,57 @@ public class 前瞻中的停手口径Tests
         }
 
         return result;
+    }
+
+    [Fact]
+    public void 两层单点不受停手阈值()
+    {
+        // 规格：停手阈值 20、两层权重 1000‰、下一手最佳单点增量 12 → 两层加分 12（下限 0 是裁决口径，两层单点 MUST NOT 施加停手阈值）。
+        // 取样：同一局面、同一两层权重（1000‰），停手阈值 0 与 1 000 000 两个引擎给出同一个两层加分，且为正、远低于后者的阈值——
+        // 若两层扫描施加阈值，后者必为 0。
+        // 变异 E-T8（两层单点只计边际增量大于停手阈值者）→ 见段 A 实施记录。
+        static MatchFlow Position() => AiFixtures.Round5().Stones(P0, "D5", "E5").Stones(P1, "F5", "F6").Stones(P2, "B8").Stones(P3, "H2");
+        (ExpertLookahead low, MatchPublicView lowView, BatchContext lowMine, BoardHistory lowHistory) = Engine(Position(), StrengthConfig(passThreshold: 0));
+        (ExpertLookahead high, MatchPublicView highView, BatchContext highMine, BoardHistory highHistory) = Engine(Position(), StrengthConfig(passThreshold: 1_000_000));
+
+        BigInteger a = low.TwoPlyBonusOn(lowView, lowHistory, lowMine);
+        BigInteger b = high.TwoPlyBonusOn(highView, highHistory, highMine);
+
+        Assert.True(a > 0, a.ToString());
+        Assert.True(a < 1_000_000, a.ToString());
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void 两层单点受活形硬约束()
+    {
+        // 规格：某候选之后，专家下一手增量最高的单点不提子且会使己方一条已确定活形失去活形，次高的合法单点增量为 30 → 最高者不计入，两层加分按次高者计。
+        // 取样：P0 左下活形两个单格眼 A1、C1（活形硬约束Tests.TwoEyes）；下一手单点限定在 {A1, J5}、类型倍增子，权重只留势力增量（写死：眼位与安全维为 0，
+        // 否则填眼永远是负分，"最高者是拆活形的单点"这一前提无从成立）。A1 填眼：规则合法、不提子、失去活形，原始总分高于 J5（先用断言钉住）；
+        // J5（P1 的 J4 / J6 之间，一口气）合法且通过活形硬约束 → 最大单点增量 = J5 的总分。
+        // 变异 E-T1（两层扫描改用 Evaluate，不过活形硬约束）→ 见段 A 实施记录。
+        var powerOnly = new EvaluationWeights(PowerGain: 10, EnemyLoss: 0, Relic: 0, Safety: 0, Growth: 0, Initiative: 0, Supply: 0, Eye: 0, Threat: 0);
+        MatchFlow match = 活形硬约束Tests.TwoEyes().Stones(P1, "J4", "J6").Stones(P2, "B8").Stones(P3, "H8");
+        (ExpertLookahead engine, MatchPublicView view, BatchContext mine, BoardHistory history) = Engine(match, StrengthConfig(), powerOnly);
+        BatchContext held = mine with { Stock = new Dictionary<PieceType, int> { [PieceType.Multiplier] = 1 } };
+        BatchContext next = engine.NextMoveContext(view, held)! with { LegalRange = ImmutableHashSet.Create(TestMaps.At("A1"), TestMaps.At("J5")) };
+
+        var evaluator = new BatchEvaluator(P0, view, powerOnly, immediateOnly: false);
+        ImmutableArray<Placement> fill = [new Placement(TestMaps.At("A1"), PieceType.Multiplier)];
+        RehearsalResult filled = BatchRehearsal.Rehearse(view.Board, next, fill, history);
+        Assert.True(filled.IsLegal, filled.Failure?.Message);
+        Assert.Empty(filled.Captures);
+        Assert.NotEqual(LifeState.Alive, LifeShapeReport.Analyze(filled.ProjectedBoard!).GroupLifeAt(TestMaps.At("B2"))!.Life);
+        Assert.False(evaluator.TryEvaluate(fill, filled, next, out _));
+        ImmutableArray<Placement> j5 = [new Placement(TestMaps.At("J5"), PieceType.Multiplier)];
+        RehearsalResult other = BatchRehearsal.Rehearse(view.Board, next, j5, history);
+        Assert.True(other.IsLegal, other.Failure?.Message);
+        Assert.True(evaluator.TryEvaluate(j5, other, next, out EvaluationBreakdown? second));
+        Assert.True(evaluator.Evaluate(fill, filled, next).Total > second.Total, $"{evaluator.Evaluate(fill, filled, next).Total} / {second.Total}");
+        Assert.True(second.Total > 0);
+
+        Assert.Equal(second.Total, engine.BestSingleGain(view, next, history));
+        Assert.Equal(2, engine.TwoPlyRehearsals);
     }
 
     [Fact]
