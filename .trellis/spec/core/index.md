@@ -1,7 +1,7 @@
 # 规则内核开发规范（Siege.Core / Siege.Sim）
 
 > 适用于 `src/Siege.Core`、`src/Siege.Sim`、`tests/Siege.Core.Tests`。
-> 表现层规范见 `.trellis/spec/presentation/index.md`。
+> 表现层（`Siege.Presentation` / Godot）暂无独立规范目录，约定散见本目录与 `openspec/specs/`（tactical-layers、visual-style-baseline 等）。
 
 ## Pre-Development Checklist
 

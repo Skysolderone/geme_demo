@@ -58,6 +58,8 @@ check 阶段做变异时工作树里还有实现方**未提交**的改动，`git
 
 规则：还原后 `touch`（`os.utime(path, None)`）被动过的每个源文件，再跑确认；或者干脆用不保留 mtime 的 `shutil.copy` / `cp`（不带 `-p`）。**逐字节校验只证明内容对，不证明构建产物对。** 判断信号：确认跑的失败数恰好等于上一条变异的失败数。
 
+**Godot 在编辑器外运行读的是 Debug 程序集**：只做 Release 构建会让 Godot 自检跑到旧代码（restore-go-core-rules 段 F 踩到）。凡是 Godot 相关的验证（`--auto-demo`、`--pick-check`、截图），之前必须先 `dotnet build src/godot/Siege.Godot.csproj`（Debug）。
+
 ### 同一个量存在于结果对象与活对象，两处都要断言
 
 终局轮次既在 `MatchResult.MajorRound` 里，也在 `match.MajorRound` 里。round-cap 的 check 变异 M-RC1（终局后仍推进 `MajorRound`）只靠活对象那条断言才红。凡是"快照 / 结果"与"权威状态"并存的量，测试两边都钉住。
