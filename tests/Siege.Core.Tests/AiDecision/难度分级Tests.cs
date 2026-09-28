@@ -142,8 +142,11 @@ public class 难度分级Tests
         Assert.Equal(new AiSearchConfig(6, 1, true, 0, 20), AiSearchConfig.Easy);
         Assert.Equal(new AiSearchConfig(12, 8, false, 0, 20), AiSearchConfig.Standard);
         Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20), AiSearchConfig.Hard);
-        // expert-strength 1.3：专家预设 = 高难 + 前瞻宽度 4 + 多样补充上限 8 + 两层权重 λ* = 1000‰（段 B 扫档选定，与段 A 暂取值相同，字面量不变）；三档旧预设三行一字不改、两项为 0。
-        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, LookaheadWidth: 4, DiverseSupplementLimit: 8, TwoPlyWeightPermille: 1000), AiSearchConfig.Expert);
+        // expert-strength：专家预设退回一层（负责人裁决 2026-09-28，段 B 后：扩样配对 好 7 / 同 33 / 差 20，p = 0.019）= 高难 + 前瞻宽度 4，
+        // 多样补充上限与两层权重为 0（可配置项，Search 显式给出才生效）；三档旧预设三行一字不改、两项为 0。
+        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, LookaheadWidth: 4), AiSearchConfig.Expert);
+        Assert.Equal(0, AiSearchConfig.Expert.DiverseSupplementLimit);
+        Assert.Equal(0, AiSearchConfig.Expert.TwoPlyWeightPermille);
         Assert.All([AiDifficulty.Easy, AiDifficulty.Standard, AiDifficulty.Hard], d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).DiverseSupplementLimit));
         Assert.All([AiDifficulty.Easy, AiDifficulty.Standard, AiDifficulty.Hard], d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).TwoPlyWeightPermille));
         Assert.Equal(AiSearchConfig.Expert, AiSearchConfig.ForDifficulty(AiDifficulty.Expert));

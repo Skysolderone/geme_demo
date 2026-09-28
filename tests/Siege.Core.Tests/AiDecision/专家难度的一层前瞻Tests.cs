@@ -177,12 +177,13 @@ public class 专家难度的一层前瞻Tests
     public void 前瞻宽度为1且关闭多样候选时与高难逐步相同()
     {
         // G2（expert-strength D6；沿用 expert-lookahead 的"前瞻宽度为 1 时与高难逐步相同"，改配置）：
-        // v5、种子 1、整局：玩家 1 为"前瞻宽度 1、多样补充上限 0、两层权重取专家预设值、其余同专家"的配置，对照同座位的高难，其余三名标准。每一步决策与日志的小回合 / 事件逐项相同。
+        // v5、种子 1、整局：玩家 1 为"前瞻宽度 1、多样补充上限 0、两层权重 1000‰（显式给出）、其余同专家预设"的配置，对照同座位的高难，其余三名标准。每一步决策与日志的小回合 / 事件逐项相同。
+        // 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后两层权重不再取预设值，改为显式 1000‰——否则 E-G3（W = 1 时仍计两层加分）在 λ = 0 下测不到。
         // D1：前瞻集去掉空批次再取第一个，与高难在含空批次的集合上 CandidateSelection.Best 一致（非空候选总分严格大于空批次）。
         // 变异 M-A9（前瞻里消费一次 ai-<玩家>）→ 见 expert-lookahead 段 A 实施记录；变异 E-G3（W = 1 时仍计两层加分）→ 见 expert-strength 段 A 实施记录。
         (MatchLog hardLog, IReadOnlyList<string> hardDecisions) = RunSeat1(AiDifficulty.Hard, AiSearchConfig.Hard);
-        AiSearchConfig w1Config = AiSearchConfig.Expert with { LookaheadWidth = 1, DiverseSupplementLimit = 0 };
-        Assert.Equal(AiSearchConfig.DefaultTwoPlyWeightPermille, w1Config.TwoPlyWeightPermille);
+        AiSearchConfig w1Config = AiSearchConfig.Expert with { LookaheadWidth = 1, DiverseSupplementLimit = 0, TwoPlyWeightPermille = StrengthPermille };
+        Assert.Equal(1000, w1Config.TwoPlyWeightPermille);
         (MatchLog w1Log, IReadOnlyList<string> w1Decisions) = RunSeat1(AiDifficulty.Expert, w1Config);
 
         Assert.True(hardDecisions.Count >= 5, $"玩家 1 只有 {hardDecisions.Count} 次决策");
@@ -227,6 +228,21 @@ public class 专家难度的一层前瞻Tests
         (3, 20, "2DA476BC7318C10FB6293DEB9969333F86068FF9AE8A6896ED2292CE3950B204", 5797, 10, "BF4A832E6A7011FEB8F2791C366CE223302EB5205F89A7FEAA3E2343D56D62DF"),
     ];
 
+    /// <summary>G1 口径的一局：座位 1（P0）按 <paramref name="search"/> 做专家，与 <see cref="G1Golden"/> 逐项比对。</summary>
+    private static void AssertG1(AiSearchConfig search, ulong seed)
+    {
+        (IReadOnlyList<string> decisions, long consumed, List<string> records) = RunExpertSeat0(search, seed);
+        string actual = $"{seed} {decisions.Count} {Sha256(decisions)} {consumed} {records.Count} {Sha256(records)}";
+
+        // 样本口径：该局专家确有已前瞻的决策，决策不止几条，扰动子流确被消费。
+        Assert.True(decisions.Count >= 10, actual);
+        Assert.True(consumed > 0, actual);
+        Assert.Contains(records, r => r.StartsWith(nameof(LookaheadStatus.Applied), StringComparison.Ordinal));
+        (ulong Seed, int Decisions, string DecisionsHash, long Consumed, int Records, string RecordsHash) golden = G1Golden.SingleOrDefault(g => g.Seed == seed);
+        Assert.True(golden.Seed == seed, "缺黄金值：" + actual);
+        Assert.Equal($"{golden.Seed} {golden.Decisions} {golden.DecisionsHash} {golden.Consumed} {golden.Records} {golden.RecordsHash}", actual);
+    }
+
     /// <summary>v5 整局：座位 1（P0）按 <paramref name="search"/> 做专家，其余三名标准；返回 P0 的决策序列、ai-P0 子流消费次数与每次部署的前瞻记录文本。</summary>
     internal static (IReadOnlyList<string> Decisions, long Consumed, List<string> Records) RunExpertSeat0(AiSearchConfig search, ulong seed)
     {
@@ -252,16 +268,23 @@ public class 专家难度的一层前瞻Tests
     {
         // G1（expert-strength D6）：前瞻宽度 4、多样补充上限 0、两层权重 0、其余同专家预设的配置，在 v5 种子 1–3 上（1 专家 + 3 标准）
         // 与改动之前的专家实现逐项相同：决策序列、ai-P0 子流消费次数、前瞻记录的确定性文本。黄金值见 G1Golden（改动前取下）。
-        (IReadOnlyList<string> decisions, long consumed, List<string> records) = RunExpertSeat0(OneLayerConfig(), seed);
-        string actual = $"{seed} {decisions.Count} {Sha256(decisions)} {consumed} {records.Count} {Sha256(records)}";
+        AssertG1(OneLayerConfig(), seed);
+    }
 
-        // 样本口径：该局专家确有已前瞻的决策，决策不止几条，扰动子流确被消费。
-        Assert.True(decisions.Count >= 10, actual);
-        Assert.True(consumed > 0, actual);
-        Assert.Contains(records, r => r.StartsWith(nameof(LookaheadStatus.Applied), StringComparison.Ordinal));
-        (ulong Seed, int Decisions, string DecisionsHash, long Consumed, int Records, string RecordsHash) golden = G1Golden.SingleOrDefault(g => g.Seed == seed);
-        Assert.True(golden.Seed == seed, "缺黄金值：" + actual);
-        Assert.Equal($"{golden.Seed} {golden.Decisions} {golden.DecisionsHash} {golden.Consumed} {golden.Records} {golden.RecordsHash}", actual);
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void 缺省预设的专家与改动前的专家逐步相同(ulong seed)
+    {
+        // 预设退回一层（负责人裁决 2026-09-28，段 B 后：扩样配对 好 7 / 同 33 / 差 20，p = 0.019，λ = 1000‰、S = 8 的专家弱于高难）：
+        // 缺省专家预设（只改停手阈值为夹具写死的 80）在 v5 种子 1–3 上与 G1 黄金值（改动前的专家）逐项相同。
+        // 另钉解析路径：未显式给 Search 的专家玩家，会话落成的搜索配置就是这份预设（v5 不触发候选格上限）。
+        // 变异 E-P1 / E-P2（预设的多样补充上限改回 8 / 两层权重改回 1000）→ 本测试红（见预设退回记录）。
+        AiSearchConfig preset = AiSearchConfig.Expert with { PassThreshold = PassThreshold };
+        MatchSession session = MatchSession.Create(V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, Standard, Standard, Standard), seed);
+        Assert.Equal(preset, session.AiOf(P0)!.Config);
+        AssertG1(preset, seed);
     }
 
     /// <summary>v5 种子 1 整局：玩家 1 按给定难度与显式搜索配置，其余三名标准；返回日志与玩家 1 的决策日志。</summary>
@@ -384,20 +407,22 @@ public class 专家难度的一层前瞻Tests
             JsonSerializer.Serialize(AiSearchConfig.Standard with { PassThreshold = LookaheadFixtures.PassThreshold }));
         Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
             JsonSerializer.Serialize(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        // expert-strength 1.3：专家预设新增多样补充上限 8 与两层权重 λ* = 1000‰（段 B 扫档选定），非 0 即写出，字段次序接在前瞻宽度之后——专家一行的期望按此更新；
-        // 三档旧难度的三行一字不改（两项为 0 不写出）。
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000}""",
+        // expert-strength：专家预设退回一层（负责人裁决 2026-09-28，段 B 后：多样补充上限 0、两层权重 0，为 0 不写出）——专家一行回到 expert-lookahead 时的字面量；
+        // 三档旧难度的三行一字不改。两项非 0 即写出、字段次序接在前瞻宽度之后，由显式 S 8 / λ 1000 的配置钉住。
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""",
             JsonSerializer.Serialize(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold }));
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000}""",
+            JsonSerializer.Serialize(ExpandedExpert with { PassThreshold = LookaheadFixtures.PassThreshold }));
         // 一层配置（两项为 0）的序列化与 expert-lookahead 时代的专家预设逐字节相同。
         Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""",
             JsonSerializer.Serialize(OneLayerConfig()));
 
-        // 1 名专家 + 3 名标准的配置记录：只有专家那一名带前瞻宽度 4。
+        // 1 名专家（显式 S 8 / λ 1000）+ 3 名标准的配置记录：只有专家那一名带前瞻宽度 4 与两项。
         var config = new RunConfig
         {
             Players =
             [
-                new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = AiSearchConfig.Expert },
+                new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert },
                 new PlayerAiConfig { Difficulty = AiDifficulty.Standard, Search = AiSearchConfig.Standard },
                 new PlayerAiConfig { Difficulty = AiDifficulty.Standard, Search = AiSearchConfig.Standard },
                 new PlayerAiConfig { Difficulty = AiDifficulty.Standard, Search = AiSearchConfig.Standard },
@@ -430,12 +455,14 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold }, old);
         Assert.Equal(4, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(AiSearchConfig.Expert))!.LookaheadWidth);
 
-        // expert-strength：多样补充上限与两层权重同一口径——缺字段按 0 读；旧专家记录（只有前瞻宽度 4）读为一层配置；新预设往返不丢两项。
+        // expert-strength：多样补充上限与两层权重同一口径——缺字段按 0 读；旧专家记录（只有前瞻宽度 4）读为一层配置，即退回后的专家预设；显式两项往返不丢。
         Assert.Equal(0, old.DiverseSupplementLimit);
         Assert.Equal(0, old.TwoPlyWeightPermille);
         const string legacyExpert = """{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""";
         Assert.Equal(OneLayerConfig(), JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));
+        Assert.Equal(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));
         Assert.Equal(AiSearchConfig.Expert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(AiSearchConfig.Expert)));
+        Assert.Equal(ExpandedExpert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(ExpandedExpert)));
 
         // 宽度 0 的控制者不产生前瞻记录（与引入之前的行为一致）。
         HeuristicTurnController hard = HeuristicAi.Create(AtariPosition(), P0, AiDifficulty.Hard, Weights, old);

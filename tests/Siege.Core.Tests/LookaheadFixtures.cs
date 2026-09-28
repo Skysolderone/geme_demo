@@ -34,14 +34,28 @@ internal static class LookaheadFixtures
 
     /// <summary>
     /// 一层配置（expert-strength D6 / G1）：专家预设关掉多样候选与两层加分（多样补充上限 0、两层权重 0），其余与专家预设相同。
+    /// 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后它与预设逐字段相同（阈值除外）；仍显式清零两项，使 G1 不随预设改动。
     /// 凡钉一层前瞻行为的既有测试改用它，断言与期望值一字不改；它的走法由 G1 黄金值（<c>专家难度的一层前瞻Tests.一层配置与改动前的专家逐步相同</c>）钉住。
     /// </summary>
     internal static AiSearchConfig OneLayerConfig(int passThreshold = PassThreshold) =>
         AiSearchConfig.Expert with { PassThreshold = passThreshold, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0 };
 
+    /// <summary>段 B 扩样用的两层权重（千分数）：λ = 1000‰。专家预设已退回一层（负责人裁决 2026-09-28，段 B 后），打开两层加分的测试一律在 <c>Search</c> 里显式给出。</summary>
+    internal const int StrengthPermille = 1000;
+
+    /// <summary>段 B 扩样用的多样补充上限：S = 8。专家预设已退回 0，打开多样候选的测试一律显式给出。</summary>
+    internal const int StrengthSupplement = 8;
+
     /// <summary>专家配置另开多样候选与两层加分（其余同 <see cref="ExpertConfig"/>：高难的候选生成 + 前瞻宽度 4，停手阈值显式给出）。</summary>
-    internal static AiSearchConfig StrengthConfig(int passThreshold = 0, int permille = AiSearchConfig.DefaultTwoPlyWeightPermille, int supplement = AiSearchConfig.DefaultDiverseSupplementLimit, int width = 4) =>
+    internal static AiSearchConfig StrengthConfig(int passThreshold = 0, int permille = StrengthPermille, int supplement = StrengthSupplement, int width = 4) =>
         ExpertConfig(passThreshold, width) with { TwoPlyWeightPermille = permille, DiverseSupplementLimit = supplement };
+
+    /// <summary>
+    /// 专家预设显式打开多样候选（S = 8）与两层加分（λ = 1000‰）：段 B 扩样的专家配置。预设退回一层之后，
+    /// 原先"跑专家预设、依赖预设带补充 / 两层"的测试改用它，断言不改。
+    /// </summary>
+    internal static AiSearchConfig ExpandedExpert =>
+        AiSearchConfig.Expert with { DiverseSupplementLimit = StrengthSupplement, TwoPlyWeightPermille = StrengthPermille };
 
     /// <summary>高难配置。</summary>
     internal static AiSearchConfig HardConfig(int passThreshold = 0) => AiSearchConfig.Hard with { PassThreshold = passThreshold };

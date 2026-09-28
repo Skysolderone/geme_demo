@@ -294,7 +294,7 @@ public class 专家前瞻的记录Tests
     [Fact]
     public void 回放核对前瞻记录()
     {
-        // 1 名未显式给搜索配置的专家（首部落成专家预设：前瞻宽度 4、多样补充上限 8、两层权重 λ*）+ 1 名显式前瞻宽度 2、多样补充上限 8、两层权重 750‰ 的专家
+        // 1 名未显式给搜索配置的专家（首部落成专家预设：前瞻宽度 4；预设已退回一层，多样补充上限与两层权重为 0、不写出）+ 1 名显式前瞻宽度 2、多样补充上限 8、两层权重 750‰ 的专家
         // + 2 名标准；回放按首部重建三项配置，重新产生的每条前瞻记录与日志逐项相同。
         // 显式配置的那名让"回放不读首部的前瞻宽度 / 两层权重"两种写法（归 0 / 回落到难度预设）都会分歧。
         // 变异 M-B3c（回放不读首部的前瞻宽度）、E-B3（回放不读首部的两层权重）→ 本测试红。
@@ -308,9 +308,11 @@ public class 专家前瞻的记录Tests
         Assert.Contains("\"LookaheadWidth\":2", header, StringComparison.Ordinal);
         MatchLog original = MatchLog.Read(path);
         Assert.Equal([4, 2, 0, 0], Enumerable.Range(0, 4).Select(original.LookaheadWidthOf));
-        Assert.Equal([AiSearchConfig.DefaultDiverseSupplementLimit, 8, 0, 0], Enumerable.Range(0, 4).Select(original.DiverseSupplementLimitOf));
-        Assert.Equal([AiSearchConfig.DefaultTwoPlyWeightPermille, SamplePermille, 0, 0], Enumerable.Range(0, 4).Select(original.TwoPlyWeightPermilleOf));
+        Assert.Equal([0, 8, 0, 0], Enumerable.Range(0, 4).Select(original.DiverseSupplementLimitOf));
+        Assert.Equal([0, SamplePermille, 0, 0], Enumerable.Range(0, 4).Select(original.TwoPlyWeightPermilleOf));
         Assert.Contains($"\"TwoPlyWeightPermille\":{SamplePermille}", header, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(header, "TwoPlyWeightPermille"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(header, "DiverseSupplementLimit"));
         Assert.Contains(original.LookaheadTurns, t => t.Player == 1 && t.Lookahead!.Candidates.Any(c => c.TwoPlyBonus > 0));
         Assert.Contains(original.LookaheadTurns, t => t.Player == 0 && t.Lookahead!.Status == nameof(LookaheadStatus.Applied));
         Assert.Contains(original.LookaheadTurns, t => t.Player == 1 && t.Lookahead!.Status == nameof(LookaheadStatus.Applied));

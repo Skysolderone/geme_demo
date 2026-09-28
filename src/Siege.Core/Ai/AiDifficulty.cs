@@ -52,12 +52,12 @@ public enum AiDifficulty
 /// </param>
 /// <param name="DiverseSupplementLimit">
 /// 多样补充上限 S（expert-strength D2 / D3 / D7，非负整数）：前瞻集按落点格集合去重后不足前瞻宽度个时，排除重跑（不扰动的贪心组批）的次数上限。
-/// 0 = 多样候选关闭——既不去重也不补足，前瞻集与 expert-lookahead 逐项相同。简单 / 标准 / 高难预设为 0，专家预设为 <see cref="DefaultDiverseSupplementLimit"/>。
+/// 0 = 多样候选关闭——既不去重也不补足，前瞻集与 expert-lookahead 逐项相同。四档预设都为 0（专家预设已退回一层，见 <see cref="Expert"/>）；可配置项，<c>Search</c> 显式给出时生效。
 /// 为 0 时不写出，缺字段按 0 读（与 <see cref="LookaheadWidth"/> 同一口径）。
 /// </param>
 /// <param name="TwoPlyWeightPermille">
 /// 两层权重 λ（expert-strength D4 / D7，千分数，非负整数）：前瞻后分数 = 一层分数 + ⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋。
-/// 0 = 不计两层加分、不做两层扫描。简单 / 标准 / 高难预设为 0，专家预设为 <see cref="DefaultTwoPlyWeightPermille"/>。为 0 时不写出，缺字段按 0 读。
+/// 0 = 不计两层加分、不做两层扫描。四档预设都为 0（专家预设已退回一层，见 <see cref="Expert"/>）；可配置项，<c>Search</c> 显式给出时生效。为 0 时不写出，缺字段按 0 读。
 /// </param>
 public sealed record AiSearchConfig(
     int CandidatePointCount,
@@ -71,14 +71,6 @@ public sealed record AiSearchConfig(
 {
     /// <summary>专家预设的前瞻宽度（负责人裁决 2026-09-26：前 K = 4 个候选；规格里 K 专指候选格上限，故称 W）。</summary>
     public const int DefaultLookaheadWidth = 4;
-
-    /// <summary>专家预设的多样补充上限 S（expert-strength D3：与实验 E4 的补充次数相同，不扫档）。</summary>
-    public const int DefaultDiverseSupplementLimit = 8;
-
-    /// <summary>
-    /// 专家预设的两层权重 λ*（千分数）= 1000‰：expert-strength 段 B 扫档（250 / 500 / 1000 各 20 局）三档与高难配对的"好 − 差"同为 −3，按设计文档 D10 准则取平均名次最低的 1000（2.65）；扩样结果见设计文档 v1.18 §15.2。
-    /// </summary>
-    public const int DefaultTwoPlyWeightPermille = 1000;
 
     /// <summary>可落子格数超过它的地图算"大图"：各入口未显式配置 K 时取 <see cref="LargeMapCellLimit"/>，否则取 0。</summary>
     public const int LargeMapPlayableThreshold = 150;
@@ -120,14 +112,17 @@ public sealed record AiSearchConfig(
     public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold);
 
     /// <summary>
-    /// 专家：候选生成同高难（N 24 / M 32、同一扰动子流、同一停手阈值），另加前瞻宽度 <see cref="DefaultLookaheadWidth"/>、
-    /// 多样补充上限 <see cref="DefaultDiverseSupplementLimit"/> 与两层权重 <see cref="DefaultTwoPlyWeightPermille"/>（expert-strength D7）。
+    /// 专家：候选生成同高难（N 24 / M 32、同一扰动子流、同一停手阈值），另加前瞻宽度 <see cref="DefaultLookaheadWidth"/> 的一层前瞻（expert-lookahead）。
+    /// 多样补充上限与两层权重为 0——<b>预设退回一层</b>（负责人裁决 2026-09-28，expert-strength 段 B 后）：v5、V2、阈值 20、1 被测 + 3 标准、
+    /// 成对种子 1–60 扩样中，S = 8、λ = 1000‰ 的专家弱于高难——配对名次 好 7 / 同 33 / 差 20（符号检验 p = 0.019），胜 6 / 60 对 12 / 60，
+    /// 平均名次 2.867 对 2.533（设计文档 v1.18 §15.2）。退回后的预设与改动前的专家逐步相同（守门：
+    /// <c>专家难度的一层前瞻Tests.缺省预设的专家与改动前的专家逐步相同</c>）。多样候选与近似两层保留为可配置项，在 <c>Search</c> 里显式给出时生效；归因实验另开。
     /// </summary>
     public static readonly AiSearchConfig Expert = Hard with
     {
         LookaheadWidth = DefaultLookaheadWidth,
-        DiverseSupplementLimit = DefaultDiverseSupplementLimit,
-        TwoPlyWeightPermille = DefaultTwoPlyWeightPermille,
+        DiverseSupplementLimit = 0,
+        TwoPlyWeightPermille = 0,
     };
 
     /// <summary>某难度的默认参数。</summary>

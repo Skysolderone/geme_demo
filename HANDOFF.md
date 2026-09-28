@@ -40,7 +40,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 **地图标识**（三个入口共用 `MapCatalog`）：`siege-4p-base-v5`（缺省）/ `siege-2p-base-v1` / `siege-3p-base-v1` / `siege-frontier-v2` / `gen:<地图种子>[:p5–8][:s1]` / 地图文件路径。只写 `gen` 时随机取一个种子并打印完整标识（带 `:s1`，即投放新地表）。
 **难度**：`Easy|Standard|Hard|Expert`，不区分大小写，不接受数字（`AiDifficultyNames`），缺省 Standard。
 
-## 现行规则与关键数值速览（设计文档 v1.17）
+## 现行规则与关键数值速览（设计文档 v1.18）
 
 - **势力** = 领地分（独占空格数，荒漠不计）+ 全部棋串军势；军势 = ⌊(基础 + 位置加值) × 1.5ⁿ⌋，**不封顶**，用 BigInteger 计算（§10.1）。
 - **部署上限**：第 1–3 大回合 3，第 4–6 大回合 4，第 7 大回合起 5，军令信物在此之上叠加（§5.4）。征募固定展示 5 张、免费取 3 张，已删除落后补偿（§5.3）。
@@ -53,7 +53,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 - **内容集**：v1 = 原来六种棋子 + 六类信物；v2 = 十种 + 十类。新局缺省用 v2；缺少内容集字段的旧存档或旧日志按 v1 处理（§8.1）。
 - **插旗冒险概率** p = 15（初值，未校准；p = 0 时与旧行为逐项相同）（§4.1）。
 - **AI**（§15.2）：九维评价，其中眼位 200 / 安全 35 / 威胁 25 已在 V1 上校准，其余六维沿用旧值，在 V2 上未重扫。**停手阈值 20**（在 V2 上复核，旧值 80）；己方盘上无子时阈值取 0。**2 人图专属权重覆盖为 Eye 50**，其余地图都用缺省表。
-- **难度**（§15.2）：简单只看三维；候选点 / 候选批次：简单 6/1、标准 12/8、困难 24/32、**专家**在困难的基础上加一层前瞻，宽度 W = 4，模拟下一名对手回应一次。可落子格超过 150 的大图自动启用候选格上限 K = 24。
+- **难度**（§15.2）：简单只看三维；候选点 / 候选批次：简单 6/1、标准 12/8、困难 24/32、**专家**在困难的基础上加一层前瞻，宽度 W = 4，模拟下一名对手回应一次。`expert-strength`（v1.18）新增的多样候选（多样补充上限 S）与近似两层加分（两层权重 λ‰）是可配置项，只在配置文件 `Search` 显式给出时生效；扩样结果为负（S = 8、λ = 1000‰ 的专家弱于困难），专家预设已退回一层（S = 0、λ = 0，与 v1.17 的专家逐步相同）。可落子格超过 150 的大图自动启用候选格上限 K = 24。
 - **带入带出**（§21）：备用子 3 点、征召签 2 点、换型令 4 点，每局至多带 1 件；名次补给点（4 人局）为 24/16/12/10。三种结局：完赛全额、补给不返还；弃赛带出 50% 并返还补给（保护期内带出 0）；出局带出 0、补给丢失。AI 带入的件数与本机玩家相同；价格与点数都是初值。
 
 ## 地图
@@ -67,7 +67,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 
 ## 权威来源（按优先级）
 
-1. `openspec/specs/`（31 个能力，Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.17**，文末有变更记录，§15.2 列出已知问题）。`Siege-玩法介绍-v1.docx` 是玩家向介绍稿，与设计文档冲突时以 md 为准。
+1. `openspec/specs/`（31 个能力，Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.18**，文末有变更记录，§15.2 列出已知问题）。`Siege-玩法介绍-v1.docx` 是玩家向介绍稿，与设计文档冲突时以 md 为准。
 2. `openspec/changes/archive/<日期>-<change>/design.md` 末尾的“裁决记录”：设计文档没写到的地方以它判定。
 3. `.trellis/spec/core/`：`index` / `boundaries` / `determinism` / `coordinates` / `testing`，都是踩过的坑，**必读**。
 4. `.trellis/workspace/rubioc/journal-1.md`：各会话的结论与待办；`.trellis/tasks/archive/2026-09/<任务>/implement.md`：逐段记录。
@@ -91,6 +91,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 | 09-27 | `expert-lookahead` | 专家难度一层前瞻，难度名严格解析（v1.16） |
 | 09-27 | `engagement-diagnosis` | 只是诊断（Trellis 任务，不是 openspec change）：2 人图不交战的原因是地图结构；负责人裁决规则不改 |
 | 09-28 | `v2-recalibration` | 在 V2 上复核停手阈值，80 → 20；2 人图专属权重覆盖为 Eye 50（v1.17） |
+| 09-28 | `expert-strength`（已实施、未归档） | 专家的多样候选与近似两层加分，作为可配置项保留；扩样结果为负，专家预设退回一层（v1.18） |
 
 更早的 change（首轮原型 8 项、去围棋化三轮等）都已归档，对应口径已被上表覆盖。
 
@@ -103,6 +104,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
   - `2p-eye50-el8`：2 人图。整局无提子 13/20，平均第 8.35 大回合结束。
   - `easy20-pass20`（简单难度，截断 0/20）、`expert20-pass20`（1 专家 + 3 标准，截断 0/20）。
   - 同目录的 `pass-0/40/80` 与 `2p-eye*` 是扫档的其余档位。
+- **专家强度（V2、阈值 20）**：`sim-out/expert-strength/`（诊断 H0 / E0–E6）与 `v118/`（高难 3 批、λ 扫档 3 批、专家扩样 2 批，共 160 局；配对 好 7 / 同 33 / 差 20，p = 0.019）。
 - **V2、但停手阈值是 80**：`engagement-diagnosis/b01–b09`（`b10` 是 V1）、`more-pieces-relics/smoke20`、`carry-in-out/smoke20`、`expert-lookahead/smoke20`（专家胜 5/20，前瞻改变选择的比例只有 1.6%）。
 - **V1 口径（只作历史参考）**：`ai-eye-*`（其中 `ai-eye-pass-80` 是当年的选定组合，另有 `ai-eye-final-gen` / `-frontier` / `-easy-eye`）、`life-shape/baseline200`、`life-single-stone`、`r8-explore`、`restore-smoke20`、`small-maps/*-smoke20`、`superko-occupancy`、`pass-threshold-first-stone`、`flag-contest`。
 - **已作废**（规则回归之前的计分口径）：`sites-*`、`artisan-*`、`terrain-v3`、`baseline`、`safety*`、`denser-map-*` 等，09-21 之前的目录都属于这一类。
@@ -112,7 +114,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 
 1. **2 人图仍有 13/20 局整局无提子**：原因是地图结构（保护期结束时对方区已被封死，近侧侧翼容易做贴墙眼）。可以考虑做 2 人图 v2（`engagement-diagnosis`，§3.3）。
 2. **V2 上九维权重没有完整重扫**；边疆图、生成图在阈值 20 下都没有复核，边疆图只有 V1 的 81 局部分样本（§15.2 已知问题第 2 条）。
-3. **专家强度提升不明显**：胜率 5/20，与均等基线相同。可以考虑调整前瞻宽度、对手模型或评价口径（journal 09-27）。
+3. **专家强度仍待提升**：一层前瞻的专家 20 局胜 4–5 局，与高难相近。`expert-strength`（v1.18）加的多样候选 + 近似两层（S = 8、λ = 1000‰）让前瞻改变 41% 的选择，但 v5 成对种子 1–60 扩样中弱于高难：配对 好 7 / 同 33 / 差 20，胜 6/60 对 12/60，平均名次 2.87 对 2.53，符号检验 p = 0.019。专家预设因此退回一层，两项保留为可配置项；下一步先归因（专家落子更少、Pass 更多），另开 change（设计文档 §15.2）。
 4. **简单难度多人近循环**：V2 下 0/20 截断，V1 下 4/20，负责人裁决不改规则（§15.2 已知问题第 1 条）。
 5. **需要负责人亲自试玩**：带入带出链路（用临时 `--profile`）、专家难度、人对 3 名 AI 打一局边疆图（检查清单在 `.trellis/tasks/archive/2026-09/09-23-ai-eye/implement.md` 段 E）。
 6. **需要负责人看截图**：`art/carry-in-out/`、`art/expert-lookahead/`、`art/more-pieces/`（十种棋子灰度对照）、`art/surfaces-v1/`；另有 `sim-out/small-maps/*.png`、`sim-out/life-shape/*-groups.png`。

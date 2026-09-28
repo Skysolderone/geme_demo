@@ -15,13 +15,16 @@ namespace Siege.Core.Tests.AiDecision;
 /// <summary>规格：ai-decision（expert-lookahead）—— Requirement: 专家前瞻的确定性与耗时</summary>
 public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
 {
-    /// <summary>v5、种子 1、整局：P1 为专家（预设、写死阈值 80），其余三名标准；返回日志确定性文本与 P1 每次部署的前瞻记录文本。</summary>
+    /// <summary>
+    /// v5、种子 1、整局：P1 为专家（显式打开多样候选 S = 8 与两层加分 λ = 1000‰，写死阈值 80），其余三名标准；返回日志确定性文本与 P1 每次部署的前瞻记录文本。
+    /// 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后，本类改用 <see cref="LookaheadFixtures.ExpandedExpert"/>，断言不改——两项作为可配置项仍须确定、不消费新随机、耗时受限。
+    /// </summary>
     internal static (string Text, List<string> Records, List<LookaheadRecord> Raw) RunExpertSeat1(bool cacheLife)
     {
         MatchSession session = MatchSession.Create(
-            V5Config(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = AiSearchConfig.Expert with { PassThreshold = PassThreshold } }, Standard, Standard), 1);
+            V5Config(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard), 1);
         HeuristicTurnController inner = HeuristicAi.Create(session.Match, P1, AiDifficulty.Expert, Weights,
-            AiSearchConfig.Expert with { PassThreshold = PassThreshold }, lifeQuery: null, cacheLife);
+            ExpandedExpert with { PassThreshold = PassThreshold }, lifeQuery: null, cacheLife);
         var recorder = new LookaheadRecorder(inner);
         session.SetController(P1, recorder);
         MatchLog log = session.Run();
@@ -57,7 +60,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         Assert.Equal(text.Split('\n'), off.Split('\n'));
         Assert.Equal(records, recordsOff);
         Assert.Contains(records, r => r.StartsWith(nameof(LookaheadStatus.Applied), StringComparison.Ordinal));
-        // expert-strength：专家预设下多样补充与两层加分确实参与了这局（记录文本里有非零的补充 / 两层计数）。
+        // expert-strength：显式打开的多样补充与两层加分确实参与了这局（记录文本里有非零的补充 / 两层计数）。
         Assert.Contains(records, r => r.Contains(" two=", StringComparison.Ordinal));
         Assert.Contains(records, r => r.Contains(" sup=", StringComparison.Ordinal));
     }
@@ -69,7 +72,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         // 前瞻组件的类型闭包里没有随机流与种子——对局中不会出现新的子流名，其余子流的位置无从被改动。
         // 局面取 v5 种子 1 上一局 4 名标准 AI 对局的部署局面，每 3 个取 1（与耗时代理同一探针）。
         // 变异 M-A6c（模拟对手用专家的扰动流做完整的标准 M = 8）、M-A9（前瞻里消费一次 ai-<玩家>）→ 见段 A 实施记录。
-        // expert-strength：专家取新预设（多样补充上限 8、两层权重 1000‰）——排除重跑与两层扫描同样不消费随机；
+        // expert-strength：专家显式打开多样补充上限 8、两层权重 1000‰（预设已退回一层）——排除重跑与两层扫描同样不消费随机；
         // 前瞻集的第一个逐局面等于高难的选择（「前瞻集第一个仍是高难的选择」的真实局面取样）。样本口径：确有局面做过排除重跑、做过两层扫描。
         // 变异 E-D5 / E-R1（排除重跑用扰动排序 / 两层扫描消费 ai-<玩家>）→ 见 expert-strength 段 A 实施记录。
         int compared = 0;
@@ -79,7 +82,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         ProbePositions(every: 3, (match, batch) =>
         {
             (HeuristicTurnController hard, _, RandomStream hardStream) = Shadow(match, batch.Context, AiDifficulty.Hard, AiSearchConfig.Hard);
-            (HeuristicTurnController expert, _, RandomStream expertStream) = Shadow(match, batch.Context, AiDifficulty.Expert, AiSearchConfig.Expert);
+            (HeuristicTurnController expert, _, RandomStream expertStream) = Shadow(match, batch.Context, AiDifficulty.Expert, ExpandedExpert);
             Assert.Equal(hardStream.Consumed, expertStream.Consumed);
             Assert.Equal(hard.LastCandidates.Select(c => c.Key), expert.LastCandidates.Select(c => c.Key));
             LookaheadRecord record = expert.LastLookahead!;
@@ -111,7 +114,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     public void 预演次数代理计入新增部分()
     {
         // D12 / expert-strength D8 确定性代理（默认套件）：v5 种子 1–3、4 名标准 AI 对局的固定局面集（四个座位的全部部署决策每 3 个取 1，见 LookaheadFixtures.ProbePositions 的说明），
-        // 统计专家（预设：多样补充上限 8、两层权重 1000‰）与高难每次决策的预演次数，断言总次数之比 ≤ 4，并输出总比值与三部分占比。
+        // 统计专家（显式多样补充上限 8、两层权重 1000‰；预设已退回一层）与高难每次决策的预演次数，断言总次数之比 ≤ 4，并输出总比值与三部分占比。
         // 专家一方 = 经 rehearse 委托的预演（单点排序、贪心组批、多样补充的排除重跑、候选 B1）+ 模拟对手的预演 + 两层扫描的单点预演。
         // 计时口径见 专家前瞻耗时计时Tests。
         long hardTotal = 0;
@@ -123,7 +126,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         int positions = ProbePositions(every: 3, (match, batch) =>
         {
             (_, int hardRehearsals, _) = Shadow(match, batch.Context, AiDifficulty.Hard, AiSearchConfig.Hard);
-            (HeuristicTurnController expert, int expertRehearsals, _) = Shadow(match, batch.Context, AiDifficulty.Expert, AiSearchConfig.Expert);
+            (HeuristicTurnController expert, int expertRehearsals, _) = Shadow(match, batch.Context, AiDifficulty.Expert, ExpandedExpert);
             LookaheadRecord record = expert.LastLookahead!;
             hardTotal += hardRehearsals;
             expertTotal += expertRehearsals + record.SimulatedRehearsals + record.TwoPlyRehearsals;

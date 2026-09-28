@@ -30,8 +30,8 @@ public class 前瞻中的停手口径Tests
         Assert.Equal(-1, record.ChosenIndex);
         Assert.Equal(0, record.SimulatedRehearsals);
 
-        // expert-strength：专家预设（多样补充上限 8、两层权重 1000‰）同样 Pass，不做多样补充，也不做两层扫描。
-        HeuristicTurnController preset = Decide(Position(), AiDifficulty.Expert, AiSearchConfig.Expert with { PassThreshold = unreachable });
+        // expert-strength：显式打开多样补充上限 8、两层权重 1000‰（专家预设已退回一层）同样 Pass，不做多样补充，也不做两层扫描。
+        HeuristicTurnController preset = Decide(Position(), AiDifficulty.Expert, ExpandedExpert with { PassThreshold = unreachable });
         Assert.True(preset.LastChoice!.IsPass);
         LookaheadRecord presetRecord = Record(preset);
         Assert.Equal(LookaheadStatus.Pass, presetRecord.Status);

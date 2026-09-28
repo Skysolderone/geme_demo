@@ -43,7 +43,7 @@ public class 前瞻模拟的公平信息Tests
         Assert.Equal(a.ToText(), b.ToText());
         Assert.Equal(few.LastChoice!.Key, many.LastChoice!.Key);
 
-        // expert-strength：打开多样候选与两层加分（专家预设的 S 8、λ 1000‰，阈值同上）后同样逐项相同——前瞻集（含来源）、两层加分、前瞻后分数与选择。
+        // expert-strength：打开多样候选与两层加分（显式 S 8、λ 1000‰——专家预设已退回一层，阈值同上）后同样逐项相同——前瞻集（含来源）、两层加分、前瞻后分数与选择。
         // 样本口径：至少一个候选的两层加分为正。变异 E-F1（两层扫描经测试接缝读对手真实手牌）→ 见段 A 实施记录。
         LookaheadRecord presetFew = Record(Decide(ContactPosition((PieceType.Basic, 2)), AiDifficulty.Expert, StrengthConfig()));
         LookaheadRecord presetMany = Record(Decide(ContactPosition((PieceType.Basic, 9), (PieceType.Fortress, 3)), AiDifficulty.Expert, StrengthConfig()));
