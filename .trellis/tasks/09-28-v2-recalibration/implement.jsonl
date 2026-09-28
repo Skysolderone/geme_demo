@@ -1,0 +1,8 @@
+{"file": "openspec/changes/v2-recalibration/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/v2-recalibration/design.md", "reason": "规格"}
+{"file": "openspec/changes/v2-recalibration/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/v2-recalibration/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/tasks/archive/2026-09/09-27-engagement-diagnosis/research/findings.md", "reason": "诊断结论与裁决"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "核心约定"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "核心约定"}
+{"file": ".trellis/spec/core/testing.md", "reason": "核心约定"}

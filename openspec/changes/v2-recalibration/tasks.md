@@ -1,0 +1,158 @@
+## 通用约束（三段一律适用）
+
+- **依赖走法的既有测试**：按 `.trellis/spec/core/testing.md`「依赖 AI 实际怎么走的断言要把权重写死，不跟随默认值」处理——在测试里写死改动前的权重与停手阈值后保持不变。既有黄金值、期望与种子一字不改。**不许挑种子、不许重生黄金值凑绿**；出现分叉先用探针归因。
+- **跑局**：
+  - 严禁 200 局。200 局规模的慢测试（`[SlowFact]` / `Category=Slow`）不跑，受影响的只改说明文字。
+  - 每批 20 局，一律用 `Siege.Sim run --config <配置文件> --out <目录>`（Release），不传 `--difficulty` / `--players`。
+  - 配置文件逐玩家写死 `Weights`，并写明 `PassThreshold`、`ContentSet: "V2"`、`CarryIn: 0`、`TurnLimit: 600`、`SeedStart: 1`、`Count: 20`。
+  - 每批跑完打开该批 `config.json`，逐项核对地图、内容集、阈值与每名玩家的权重，不一致即作废重跑。
+- **数据与统计**：
+  - 数据目录：`sim-out/v2-recalibration/`；配置文件放本 change 对应 trellis 任务的 `research/configs/`。
+  - 统计复用诊断脚本 `.trellis/tasks/archive/2026-09/09-27-engagement-diagnosis/research/summarize.py` / `table.py`，口径与诊断相同；缺 `diag-*.jsonl` 的项跳过。命令用 `python`。
+- **一次只跑一件事**：跑局在前台串行进行，不与第二个 agent 或后台 dotnet 并行。
+
+## 1. 段 A：停手阈值在 V2 上复核（扫档、选定、落地、守门）
+
+- [ ] 1.1 写 4 份配置文件（design.md D1）：
+  - `siege-4p-base-v5`，4 × Standard；
+  - `Weights` 逐玩家等于当前 `EvaluationWeights.Default`；
+  - `PassThreshold` 分别为 0 / 20 / 40 / 80，其余项按「通用约束」。
+  - 验证：人工核对 4 份文件只在 `PassThreshold` 上不同（`git diff --no-index` 两两比对）。
+- [ ] 1.2 跑 4 批 × 20 局，输出到 `sim-out/v2-recalibration/pass-<X>/`。
+  - 验证：每批 20 局无失败；`config.json` 逐项核对通过，核对结果写进 implement 记录。
+- [ ] 1.3 忠实性对照（D1）：`pass-80` / `pass-0` 与诊断 `sim-out/engagement-diagnosis/b06-*` / `b07-*` 逐种子比对结束大回合、终局原因、总提子与胜者。
+  - 预期：一致，整局无提子 8/20、3/20，总提子 31、107。
+  - 不一致即停下归因，不继续选档。
+  - 验证：比对表写进 implement 记录。
+- [ ] 1.4 统计四档：截断、整局无提子、已终局局平均结束大回合、第 3 大回合领先者胜（写明分母）、总提子、Pass 率；按 D2 的四步选档，写出每一步的候选集与带宽数值。
+  - 四档截断都超过 1/20 时停下报告，不落地。
+  - 验证：选档表与计算过程写进 implement 记录，回报主会话。
+- [ ] 1.5 条件冒烟（D3，只在选定值 ≠ 80 时做）：
+  - v5、V2、种子 1–20、带入 0、阈值取选定值，跑两批：简单 × 4 → `sim-out/v2-recalibration/easy20-pass<X>/`；专家 + 标准 × 3 → `expert20-pass<X>/`。
+  - 对照：简单对诊断 b08（截断 0/20，最长 44 大回合）；专家对 `sim-out/expert-lookahead/smoke20/`（截断 0）。
+  - 判据：截断 ≤ 1/20，且简单难度无"第 1 大回合全员一子不落即终局"。
+  - 回退即停下报告（Open Question 3），不调阈值。
+  - 选定值为 80 时本项记"不适用"并写明理由。
+  - 验证：两批结果与判据逐项写进 implement 记录。
+- [ ] 1.6 审计依赖走法、且读缺省阈值或缺省权重的既有测试（D12），逐个写死阈值 80 与改动前的权重。至少包括：
+  - `难度分级Tests.三档旧难度逐步不变`：确认 `LookaheadFixtures.V5Config` 已写死；未写死则补上；
+  - `候选格上限Tests` 的黄金哈希；
+  - 终端脚本测试（`PlayCommand` 的 `weights` / `passThreshold` 接缝）；
+  - 其他 `AiSearchConfig.Standard` / `ForDifficulty` 直接跑整局的测试。
+  - 验证：
+    - 清单写进 implement 记录；
+    - 变异：临时把 `DefaultPassThreshold` 改为 81 跑默认套件，只有守门类测试（1.7 所列）变红，任何保真度测试不红；还原后逐字节校验。
+- [ ] 1.7 先改守门测试（先红）：
+  - `默认评价权重的校准Tests.默认停手阈值被改动`：期望改为选定值；口径证据串改为"v2-recalibration""V2""种子 1–20""20 局""sim-out/v2-recalibration/pass-"与"0 / 20 / 40 / 80"；删掉"ai-eye 段 D 校准 / 种子 1–200 / 200 局 / {值} / 160"等旧断言。
+  - `难度分级Tests` 的四档预设断言：`new AiSearchConfig(…, 80)` 改为选定值。
+  - 断言 `PassThresholdCalibrationStatus` 不再以 `ScoringExtendedStatus` 结尾（阈值已在 V2 上复核）；九维 `CalibrationOf` 仍以它结尾。
+  - 兜底：`grep -rn "PassThresholdCalibrationStatus\|DefaultPassThreshold\|, 80)" tests/`，逐条归为"守门（跟随新值）"或"保真度（写死 80，归 1.6）"，清单写进 implement 记录。`规则变更使校准失效` 等按子串核对口径的测试同样归入此处。
+  - 验证：新断言在旧实现上红（选定值仍为 80 时，口径串断言照样红）。
+- [ ] 1.8 落地：
+  - `AiSearchConfig.DefaultPassThreshold` 取选定值；
+  - 重写它的 XML 注释：V2 复核的条件、四档"截断 / 整局无提子 / 已终局局平均结束大回合"、选档过程、数据目录，保留 ai-eye（V1、200 局）的历史一句并标注"V1 内容集"；
+  - 改写 `PassThresholdCalibrationStatus`；
+  - `EvaluationWeights.CalibrationStatus` 与 `ScoringExtendedStatus` 注释里关于停手阈值的表述；
+  - `Siege.Sim/Program.cs` 用法串里的"（ai-eye 校准值）"。
+  - `EvaluationWeights.Default` 的 XML 注释与 `CalibrationOf` 中 Eye / Safety / Threat 三维的口径串，补"内容集 V1"（规格「默认评价权重的校准」要求在代码注释里注明内容集口径）。取值不动。
+  - 把选定值与四档数据写进本 change 的 `specs/ai-decision/spec.md`「默认评价权重的校准」。
+  - 验证：
+    - 1.7 的断言转绿；
+    - 变异：实现取选定值 + 1（守门应红）、口径串漏写"20 局"（守门应红），逐项还原并逐字节校验。
+- [ ] 1.9 200 局慢测试只改说明（裁决 6）：`校准后截断率达标_种子1至200` 的注释与 `AssertTruncation` 的 XML 说明写明"停手阈值经 V2 20 局复核变更后，本慢测试的结论未经复核；v2-recalibration 未运行"。上限 10 局不改，不运行。
+  - 验证：`git diff` 确认只改了注释；默认套件版 `校准后截断率达标`（20 局，≤ 1）照常跑。
+- [ ] 1.10 段 A 回归：
+  - `dotnet build` 零警告；`dotnet test -c Release` 默认套件全绿（不跑 Slow / Perf）；
+  - `校准后截断率达标`（默认套件版）在新缺省阈值下绿；
+  - 既有黄金哈希与期望一字未改（`git diff` 的测试文件中黄金值行为零）。
+
+## 2. 段 B：2 人图地图专属权重覆盖（机制先写测试、先红后绿，然后扫档、选定、落地）
+
+- [ ] 2.1 先写测试（先红）：`ai-decision` ADDED「地图专属评价权重覆盖」与 `simulation-harness` ADDED「各入口的地图专属 AI 权重」的全部 Scenario。
+  - 覆盖表取值未定，断言一律写成"等于该地图登记的覆盖表"与"等于默认表"。
+  - 「覆盖作用于简单难度」「显式权重整表优先」用测试接缝注入与默认表不同的表来断言：接缝是解析函数的纯函数重载，接受登记表参数，不引入可变静态。
+  - 「选档否决领先者全胜」是跑局选档的流程约束，不写单元测试，由 2.7 的选档记录逐步核对来验收。
+  - 图形版 Scenario 用源码扫描断言 `src/godot/scripts/MatchSession.cs` 经唯一实现取权重，并在 2.4 做一次人工核对。
+  - 「旧日志不套覆盖」用一份首部权重为空的 2 人图旧日志夹具，取 `sim-out/engagement-diagnosis/b01-2p-std/` 中一局的首部改写，或由测试现场生成。
+  - 验证：新增用例全部先红（编译失败也算红，须在提交记录里注明）；既有用例不动。
+- [ ] 2.2 实现机制（design.md D4–D8）：
+  - 在 `Siege.Core/Ai`、`EvaluationWeights.Default` 旁边，加覆盖登记表、"按地图标识取权重"的唯一实现、覆盖校准口径函数；
+  - 以**占位**登记 `siege-2p-base-v1`：取值 = `Default`，口径标"占位：取值同缺省表，待 v2-recalibration 段 B 扫档"（D10）；
+  - `RunConfig.ResolvedFor(map)` 只对登记地图、未显式配置权重的玩家落成；
+  - `PlayCommand.Run` 取 `weights ?? 按地图取权重(map.Id)`；
+  - Godot `MatchSession` 建 AI 时传入按地图取得的权重；
+  - `HeuristicTurnController` 的 `?? Default` 回落不改；
+  - 用法说明写明优先级，以及 `--difficulty` / `--players` 会丢弃配置文件权重。
+  - 验证：2.1 全部转绿。变异（逐项应红，逐项还原并逐字节校验）：
+    - 把按地图取权重放进 `HeuristicTurnController` 回落（「旧日志不套覆盖」应红）；
+    - 对未登记地图也落成（「未登记的地图首部逐字节不变」应红）；
+    - 显式权重与覆盖逐维合并（「显式权重整表优先」应红）；
+    - 终端入口不取覆盖（「终端入口取覆盖」应红）；
+    - 给 `siege-3p-base-v1` 加登记（「覆盖只作用于登记的地图」应红）。
+- [ ] 2.3 机制段回归（占位值 = `Default`，走法零变化）：
+  - 两处 `dotnet build` 零警告；`dotnet test -c Release` 默认套件全绿；
+  - 既有黄金哈希一字未改；
+  - v5 / 3 人图一局的首部与 `config.json` 与改动前逐字节相同。
+  - 2 人图新日志首部多出权重，属预期：日志确定性文本以外的对局走法逐步相同，用同种子新旧两局的决策序列比对。
+- [ ] 2.4 图形版人工核对：Godot 选 `siege-2p-base-v1` 开局，会话日志或调试输出里 AI 权重等于登记表；选 v5 等于默认表。
+  - 验证：Debug 构建零警告；核对结果写进 implement 记录。
+- [ ] 2.5 扫档（等段 A 的阈值落地后开始，D9）：
+  - 写第 1–5 批配置文件：`siege-2p-base-v1`，2 × Standard，`PassThreshold` = 段 A 选定值；(Eye, EnemyLoss) = (200, 8) / (100, 8) / (50, 8) / (200, 16) / (200, 24)，其余七维等于 `Default`。
+  - 跑 5 批 × 20 局，输出到 `sim-out/v2-recalibration/2p-eye<E>-el<L>/`。
+  - 验证：每批 `config.json` 逐项核对通过；5 批无失败。
+- [ ] 2.6 条件批次（D9）：
+  - 按第 1–5 批的统计确定 e*、l*。两者各自比基线的无提子比例至少低 1 个二项标准误时，跑第 6 批 (e*, l*)；第 6 批按准则优于两条单维时，最多再补第 7–8 批邻点。
+  - 总批次不超过 8；不触发时写明未触发的数值理由。
+  - 验证：触发判定的计算写进 implement 记录；批次数 ≤ 8。
+- [ ] 2.7 选档（D9 五步）：
+  - 统计各批截断、整局无提子、第 3 大回合领先者胜（写明分母）、已终局局平均结束大回合、总提子，写出每一步的候选集、带宽与剔除情况。
+  - 选中基线，或候选耗尽 → 按 Open Question 2 的缺省执行（删除占位登记、机制保留、如实报告），跳过 2.9 的取值部分。
+  - 验证：选档表写进 implement 记录，回报主会话；标明是否用到第 5 条并列打破。
+- [ ] 2.8 审计以 `TwoPlayerBaseMap` 或 `siege-2p-base-v1` 跑 AI、断言依赖走法的既有测试（含 small-maps 相关测试、终端 2 人图脚本测试），逐个写死权重 = `Default` 与阈值。
+  - 另一类也要审：用 2 人图夹具比对 `config.Effective().ToJson()` 与落盘 `config.json` / 首部的配置记录测试（`批量跑局Tests` 那种写法）。处理方式是让期望侧也经过 `ResolvedFor(map)`，不改期望值。
+  - 验证：变异——临时把覆盖表的 Eye 改为 1 跑默认套件，只有覆盖守门类测试红，保真度测试不红；还原后逐字节校验。
+- [ ] 2.9 先改守门（先红）后落地：
+  - 守门：扩展 `默认评价权重的校准Tests`，钉覆盖表的键集合、与 `Default` 的逐维差异；口径含"siege-2p-base-v1""V2""种子 1–20""20 局"、停手阈值与数据目录，且不含"占位"；源码注释与口径常量一致。先在占位实现上红。
+  - 落地：写入选定值，以正式校准记录替换占位口径，并把选定值与各档数据写进本 change 的 `specs/ai-decision/spec.md`「地图专属评价权重覆盖」。
+  - 验证：
+    - 守门转绿；
+    - 变异：覆盖某维取值 + 1（应红）、口径漏写数据目录（应红），逐项还原并逐字节校验。
+- [ ] 2.10 段 B 回归：
+  - 两处 `dotnet build` 零警告；`dotnet test -c Release` 默认套件全绿（不跑 Slow）；
+  - 既有黄金哈希一字未改；
+  - 按 2.9 的取值，在 `siege-2p-base-v1` 种子 1 上跑一局并回放，逐步一致。
+
+## 3. 段 C：设计文档同步（v1.16 → v1.17）与全量回归
+
+- [ ] 3.1 §15.2「停手阈值」：缺省值改为段 A 的选定值，删掉"= 8 × 即时势力增量权重 10"之类不再成立的比例依据（选回 80 则保留），并写明"v2-recalibration 在内容集 V2 上以每档 20 局复核"。
+  - 验证：文中数值与 `AiSearchConfig.DefaultPassThreshold` 一致（人工核对清单写进 implement 记录）。
+- [ ] 3.2 §15.2「校准口径」：
+  - ai-eye 一段标注"内容集 V1"；
+  - 新增 V2 复核一段：条件、四档数据、选档过程、数据目录，注明"小样本、胜率类只看方向""80 为档位上界"，以及"只在 v5 上复核，边疆图 / 生成图未复核"。
+  - 验证：与 `PassThresholdCalibrationStatus` 与规格「默认评价权重的校准」逐项一致。
+- [ ] 3.3 §15.2 新增"地图专属评价权重"一段：
+  - 内容：它是 AI 配置、不进地图；只登记 2 人图；优先级（显式 > 地图覆盖 > 缺省表，整表生效）；作用于全部难度（扫档只在标准难度上做）；不改停手阈值；配置记录与首部落成、旧日志不套覆盖；按地图标识键，地图文件复用内置标识即被套用（可用首部摘要核对）；2 人图的取值、选档过程与数据目录。
+  - 若 2.7 走了"不登记"分支，改写为"机制已就位、2 人图扫档无更优档"。
+  - 验证：与规格 ADDED 两条 Requirement 逐项一致。
+- [ ] 3.4 §15.2 已知问题第 1 条（简单难度截断）按实际口径改写（裁决 4）：
+  - V2 下 0 / 20（诊断 b08，最长 44 大回合）、V1 下 4 / 20（种子 1 / 3 / 10 / 12，诊断 b10 与 `pass-threshold-first-stone` easy20 一致）；
+  - 机制：多人近循环（最后 60 小回合提子 98–100%、棋子数首末相同、落点集中 6–12 格），盘面键从不严格重复，同形禁则不命中；
+  - 不改规则；ai-eye 的 200 局 18%（同形修正前、V1）保留为历史口径。
+  - 验证：数字与诊断 `findings.md` Q3 表逐项一致。
+- [ ] 3.5 §15.2 已知问题补一条落后者诊断结论（裁决 3，只一句）：落后者可落空间随名次递减，主因是禁入格；Pass 的直接原因是没有正收益点；阈值只对垫底者有明显影响；按"落后就要挨打"接受，不改。
+  - 验证：与 `findings.md` Q2 结论一致。
+- [ ] 3.6 V1 标注（裁决 4）：
+  - §3.3 冒烟表与其后一段标"内容集 V1"，并把"2 人图几乎不交战……留给后续小图校准"改为指向本 change 的地图专属权重（2.7 走了"不登记"分支时，改为"机制已就位、2 人图扫档无更优档"，与 3.3 对齐）；
+  - §15.2 校准口径与已知问题中的 ai-eye / easy20 数据标 V1；
+  - §16「当前实测」（restore-smoke20）与「life-shape 200 局基线」标 V1。
+  - 兜底：`grep -n "smoke20\|easy20\|200 局\|baseline200" 2026-09-10-siege-core-gameplay-design-v1.md` 逐条判定是否早于内容集 V2（早于即补标注），结果写进 implement 记录。
+  - 验证：grep 清单中每条都有"已标 / 不适用"的判定。
+- [ ] 3.7 文档版本：首部 v1.16 → v1.17（"最近一次为 v2-recalibration"）；变更记录加一行，列出章节、阈值选定值与口径、2 人图覆盖、已知问题改写、V1 标注、各批数据目录与总局数。
+  - 验证：人工核对变更记录与本 change 产物一致。
+- [ ] 3.8 全量回归：
+  - 两处 `dotnet build`（`siege.sln` 与 Godot 工程）零警告；
+  - `dotnet test -c Release` 默认套件全绿（不跑 Slow / Perf，不跑 200 局规模的慢测试）；
+  - 既有黄金值一字未改；
+  - `openspec validate v2-recalibration --strict` 通过。
+- [ ] 3.9 跑局总账：列出本 change 实际跑过的每一批（目录、配置、局数）。
+  - 验证：总局数 ≤ 280，没有任何一批超过 20 局。
