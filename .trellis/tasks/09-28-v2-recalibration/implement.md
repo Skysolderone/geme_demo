@@ -203,3 +203,197 @@
 
 - 段 B 的 2 人图扫档要在阈值 20 下进行（D9）。诊断 b01–b03 是在阈值 80 / 0 / 40 下跑的，不是阈值 20 的数据。
 - 设计文档 §15.2 / §3.3 / §16 的同步属于段 C（3.1 要把 80 改为 20，并删掉"= 8 × 即时势力增量权重 10"）。
+
+## 段 B：2 人图地图专属权重覆盖（tasks.md 第 2 组，2026-09-28）
+
+结论：选定 **Eye 50、EnemyLoss 8**，其余七维等于 `Default`。登记为 `siege-2p-base-v1 → Default with { Eye = 50 }`。
+
+- 扫档共 5 批 × 20 = **100 局**，第 6–8 批未触发。
+- 另跑了若干单局对照，不计入批次：机制前后各 5 局（2.3）、种子 1 一局加回放（2.10）、Godot 无头演示 4 次（2.4，每次 2 个大回合）。
+- 没有超过 20 局的批次，也没有跑 200 局慢测试。
+
+### 2.1 先写测试（先红）
+
+新增 21 个用例，Scenario 名即方法名：
+
+- `AiDecision/地图专属评价权重覆盖Tests`，共 8 条：
+  - 两人图未显式配置权重时取覆盖
+  - 未登记的地图取默认表（覆盖 v5、3 人图、`gen:12345` 与边疆图）
+  - 显式权重整表优先
+  - 覆盖作用于简单难度
+  - 覆盖只作用于登记的地图
+  - 覆盖表被改动
+  - 覆盖不改人类玩家的合法操作
+  - 按地图取权重只有一处实现且只由三个入口调用：源码扫描，样本下界为 150 个文件，并配反面命中
+- `SimulationHarness/各入口的地图专属AI权重Tests`，共 11 条：
+  - 未登记的地图首部逐字节不变：Theory × 4，覆盖 v5、3 人图、边疆图与 `gen:12345`
+  - 批量跑局在两人图上落成覆盖
+  - 显式权重不被覆盖替换
+  - 新日志按首部回放
+  - 旧日志不套覆盖：夹具现场生成，走 recorded 路径，阈值 80、V2、首部权重为空
+  - 终端入口取覆盖
+  - 图形版入口取覆盖（源码扫描）
+  - 重建玩家列表后按覆盖取值（CLI 加 `--difficulty`）
+- `停手阈值Tests.地图覆盖不改阈值`，1 条：Scenario 属于 MODIFIED「停手阈值」。
+- `默认评价权重的校准Tests.两人图覆盖表的校准记录随值一起更新`，1 条：2.9 的守门。
+
+要点：
+
+- 需要"覆盖不同于默认表"才能分辨的断言，经纯函数重载注入登记表 `Probe`（Eye 7 / EnemyLoss 3）。重载有两个：`EvaluationWeights.ForMapId(id, explicit, table)` 与 `RunConfig.ResolvedFor(map, table)`，另有 `PlayCommand.Run(mapOverrides:)` 接缝。没有引入可变静态。
+- 「未登记的地图首部逐字节不变」的 8 个 SHA-256（首部 + `config.json`，四张图各两个）是在改动 `src/` 之前、用同一份测试配置实跑后钉下的。
+- 红的证据分两步：
+  1. 编译失败，按错误码计：`ForMapId` 24 处、`MapOverrides` 26 处、`MapOverrideCalibrationOf` 6 处、`ResolvedFor` 双参 8 处、`mapOverrides` 参数 2 处。
+  2. 补上只有签名、没有行为的骨架后，断言层红 12 条。另外 8 条在骨架下就是绿的：4 条首部黄金、未登记取默认表、显式不被替换、旧日志不套覆盖、合法操作不变。它们都是"不改变"类 Scenario，符合预期。
+- 既有用例未改动。唯一例外是在 `停手阈值Tests` 与 `默认评价权重的校准Tests` 两个类的末尾各追加了一个方法。
+
+### 2.2 机制实现
+
+- `Siege.Core/Ai/EvaluationWeights.cs`：
+  - `MapOverrides`：只读 `ImmutableSortedDictionary`，登记项为独立实例；
+  - `ForMapId(mapId, explicit = null)`：按"显式 > 覆盖 > 缺省"整表取值的唯一实现；
+  - `internal ForMapId(mapId, explicit, table)`：接受登记表参数的纯函数重载；
+  - `MapOverrideCalibrationOf(mapId)`：返回登记项的校准口径；
+  - `TwoPlayerOverrideCalibrationStatus`：口径为单个字面量。
+- `Siege.Sim/Config/RunConfig.cs`：
+  - `ResolvedFor(map)` 委托给 `ResolvedFor(map, table)`；
+  - 只在地图登记了覆盖、且有未显式配置权重的玩家时，落成 `ForMapId(map.Id, p.Weights, table)`；
+  - 这一步放在前瞻宽度那段 `return` 之前，保持幂等；
+  - XML 说明已同步。
+- `Siege.Sim/Play/PlayCommand.cs`：建 AI 前取 `aiWeights = ForMapId(map.Id, weights, mapOverrides ?? MapOverrides)`。建 AI 仍写在一行里，因为既有守门 `候选格上限Tests.三个入口共用同一处阈值逻辑` 按行扫 `search)`，第一次拆成多行时它红了，已改回。
+- `src/godot/scripts/MatchSession.cs`：新增 `Weights = EvaluationWeights.ForMapId(match.Map.Id)`，`ChooseZone` 建 AI 时传 `Weights`，签名不变。`GameRoot.DifficultyText` 的启动日志加打 AI 评价权重。
+- `HeuristicTurnController` 的 `weights ?? Default` 回落未改。
+- `Program.cs` 用法串补上优先级（配置文件权重 > 地图专属覆盖 > 缺省表，整表生效），并写明 `--difficulty` / `--players` 会丢弃配置文件权重，之后改按覆盖、再按缺省表取值。
+- 变异：跑全量套件，占位值 = Default。脚本二进制读写，锚点命中恰为 1，`finally` 中还原，逐字节校验后用 `os.utime` 刷新。
+
+| 编号 | 改动 | 结果 |
+|---|---|---|
+| M-B2-1 | `HeuristicTurnController` 回落改为 `ForMapId(observe().MapId)` | 红 1：按地图取权重只有一处实现…（占位期行为不可分辨，由源码扫描兜住） |
+| M-B2-2 | `ResolvedFor` 去掉"地图有登记"条件 | 红 5：未登记的地图首部逐字节不变 × 4、批量跑局Tests.批量执行并汇总 |
+| M-B2-3 | 显式与覆盖逐维合并（Eye / EnemyLoss 等于缺省时取覆盖） | 红 1：显式权重整表优先 |
+| M-B2-4 | 终端入口 `aiWeights = weights` | 红 1：终端入口取覆盖 |
+| M-B2-5 | 登记表加 `siege-3p-base-v1` | 红 4：未登记的地图取默认表、覆盖只作用于登记的地图、覆盖表被改动、未登记的地图首部逐字节不变（3p） |
+
+### 2.3 机制段回归（占位值 = Default）
+
+- 两处 `dotnet build`：0 警告。`dotnet test -c Release`：通过 1774、跳过 6、失败 0，退出码 0（段 A 末为 1754 + 新增 20）。
+- 同一命令 `run --map <图> --seed 1 --count 1` 分别在改动前（`sim-out/v2-recalibration/mech-pre/`）和改动后（`mech-post/`）各跑一次，逐字节比对：
+  - v5 / 3 人图 / 边疆图（`--turn-limit 40`）/ `gen:12345`（`--turn-limit 40`）：首部与 `config.json` 逐字节相同；其余各行去掉 `ElapsedMs` / `MajorRoundMs` / `TotalMs` 三个耗时字段后全部一致（174 / 119 / 189 / 178 行）。
+  - 2 人图：`config.json` 逐字节相同（`Effective()` 原本就填默认表）；首部只多出 `Players[].Weights`，去掉后相同；其余 70 行去掉耗时后一致，决策序列逐步相同。
+- `git diff tests/` 没有删除行，既有黄金值一字未改。
+
+### 2.4 图形版人工核对
+
+- `dotnet build src/godot/Siege.Godot.csproj`（Debug）：0 警告。
+- 无头自检 `--headless --path src/godot --quit-after 3000 -- --auto-demo --rounds=2 --map=<图>`，两张图退出码都是 0，启动日志 `[siege] 地图 …` 一行中：
+  - 落地后：`siege-2p-base-v1` 为 `AI 评价权重 EvaluationWeights { … Eye = 50, Threat = 25 }`，等于登记表；`siege-4p-base-v5` 为 `Eye = 200`，等于默认表。
+  - 占位期先跑过一次，两张图都是 `Eye = 200`，只能证明接线，不能证明机制。
+
+### 2.5 扫档
+
+- 配置由 `research/mkcfg2p.py` 生成，输出 `research/configs/2p-eye{200,100,50}-el8.json` 与 `2p-eye200-el{16,24}.json`：
+  - `siege-2p-base-v1`，2 × Standard，`PassThreshold` 20，其余字段同段 A；
+  - 九维逐玩家写死，只改 Eye / EnemyLoss。
+- `git diff --no-index` 核对：每份与基线只差 Eye 或 EnemyLoss 的两行；基线与诊断 `b01-2p-std.json` 只差 `PassThreshold` 一行（80 → 20）。
+- 命令：`Siege.Sim.exe run --config <cfg> --out sim-out/v2-recalibration/2p-eye<E>-el<L>`（Release），没有传 `--difficulty` / `--players`。五批串行，退出码都是 0，`FailedFiles` 为空，每批 20 局，各约 5 秒。
+- `research/sweep2p.py` 逐批核对 `config.json` 的地图、内容集、阈值 20、带入、截断、种子、局数、人数、难度，每名玩家的九维权重（按目录名的期望值）以及 `Search` 为空。结果 **CONFIG ALL OK**。
+- 另用诊断 `summarize.py` 为每批写了 `engagement-summary.json`，`table.py` 的输出与下表一致。注意诊断脚本的 R3 列按并列局计入分母的旧口径，五批依次为 13/20、9/20、13/20、13/20、13/20，只作参照。
+
+### 2.6 条件批次：未触发
+
+- e* 为 Eye 50：只有它在 {100, 50} 的无提子带内（13 < 17）。l* 为 EnemyLoss 16：16 / 24 都是 19/20，在第 5 条并列打破中 16 离基线更近。
+- 触发线按基线比例计算：p_b = 18/20 = 0.90，SE = √(0.9 × 0.1 / 20) = 0.0671，两档都须 ≤ 0.833，即 ≤ 16 局。e* 为 13/20，达线；l* 为 19/20，高于基线，未达线。
+- 只有眼位一维有效，不做组合。批次数 5，未超过 8。
+
+### 2.7 选档（D9）
+
+统计口径（`research/sweep2p.py`）：
+
+- 截断、整局无提子、已终局局平均结束大回合、总提子、Pass 率与诊断 `summarize.py` 相同。
+- 第 3 大回合领先者按 D9 口径：取第 3 大回合最后一个快照里总势力的唯一最高者，并列局与截断局都不计入分母。
+- 并列局的剔除路径确认走到过：在段 A 的 v5 数据上各批剔除 1–3 局；在本段五批中各剔除 1–2 局。
+
+| (Eye, EnemyLoss) | 截断 | 整局无提子 | 已终局局平均结束 R（范围） | R3 领先者胜（D9） | 总提子 | Pass 率（全程 / R4+） |
+|---|---|---|---|---|---|---|
+| (200, 8) 基线 | 0/20 | 18/20 | 8.30（3–11） | 11/18（剔除并列 2） | 2 | 17.6% / 26.8% |
+| (100, 8) | 0/20 | 17/20 | 7.90（3–10） | 7/18（剔除并列 2） | 3 | 15.4% / 23.7% |
+| (50, 8) | 0/20 | 13/20 | 8.35（3–10） | 11/18（剔除并列 2） | 9 | 14.0% / 21.4% |
+| (200, 16) | 0/20 | 19/20 | 8.50（3–11） | 12/19（剔除并列 1） | 3 | 17.8% / 26.7% |
+| (200, 24) | 0/20 | 19/20 | 8.50（3–11） | 12/19（剔除并列 1） | 3 | 17.2% / 25.7% |
+
+五步：
+
+1. **截断**：五档都是 0/20，全部入选。
+2. **无提子带**：p_min = 13/20 = 0.65（Eye 50），SE = √(0.65 × 0.35 / 20) = 0.1067，进带条件为比例 ≤ 0.7567，即 ≤ 15 局。带内只有 (50, 8)。
+3. **领先者全胜否决**：(50, 8) 为 11/18，不是 20/20，不剔除。诊断 b09 在阈值 80 下 Eye 50 为 20/20，阈值 20 下没有复现。
+4. **结束大回合**：8.35 在 [7, 10] 内，距离为 0。
+5. **并列打破**：带内只剩一档，没有用到。
+
+- 选中 (50, 8)，不是基线，所以不走 Open Question 2 的"删除登记"分支。
+- 总提子、Pass 率只作记录，不参与选档（裁决 ⑤）。
+
+### 2.8 审计：依赖 2 人图走法的既有测试
+
+- 逐个审查以 2 人图跑 AI 的既有用例：
+  - `各入口按地图标识选图Tests.两人图可选…` 与 `参赛人数缺省取地图人数上限…`：4 个小回合截断，只断言人数与地图标识；终端 2 人图用 Easy，输入 `q` 即退出。
+  - `两人基准地图Tests`、`出生区信物权重Tests`、`选图视图模型Tests`：不跑 AI。
+- 另一类是比对 `Effective().ToJson()` 与落盘配置的测试：`批量跑局Tests:48`、`默认评价权重的校准Tests:183/185` 都跑在 v5 上，不受影响。
+- 结论：没有需要写死权重的保真度测试，也没有需要让期望侧经过 `ResolvedFor` 的配置记录测试。
+- 实测变异：
+  - M-B8-1，在占位期把覆盖表的 Eye 改为 1，跑全量：**红 1**，只有 `覆盖表被改动`（守门）。
+  - M-B9-1，落地后把 Eye 从 50 改为 51：同样只红守门。
+  - 可见所有保真度测试都不读登记表的具体取值。
+- 本段新增的管道用例里，依赖走法的只有两处样本下界（"至少一个落子小回合""≥ 8 个小回合"）。它们在 Eye 200 和 Eye 50 下都成立。
+
+### 2.9 守门先红后落地
+
+- 新增 `默认评价权重的校准Tests.两人图覆盖表的校准记录随值一起更新`，钉住以下内容：
+  - 键集合恰为 `[siege-2p-base-v1]`；
+  - 逐维只有 Eye = 50，其余八维等于 `Default`；
+  - 口径包含 "v2-recalibration" / 地图 / "2 名标准难度" / "内容集 V2" / "种子 1–20" / "20 局" / "小样本" / `停手阈值 {DefaultPassThreshold}` / "sim-out/v2-recalibration/2p-eye"；
+  - 五个档位各匹配一组 `→ 截断 / 无提子 / 平均结束 / R3 胜/分母`；
+  - 包含 `选定 ({Eye}, {EnemyLoss})`，且这个档位在档位清单里；
+  - 口径与源码都不含"占位"；
+  - 口径是源码中的单个字面量；
+  - 源码包含 `Default with { Eye = 50 }`。
+- 先红：在占位实现上跑，第一条断言就失败（Expected 50 / Actual 200）。
+- 落地：
+  - 登记值改为 `Default with { Eye = 50 }`；
+  - `TwoPlayerOverrideCalibrationStatus` 换成正式记录，写明条件、五档数据、选定值、"Eye 50 为档位下界"与数据目录；
+  - XML 注释写明选档五步、2 × 2 组合未触发的理由、b09 未复现、只在标准难度上扫档；
+  - `EvaluationWeights.cs` 中已不含"占位"；
+  - 本 change 的 `specs/ai-decision/spec.md`「地图专属评价权重覆盖」补上结果表与选档过程。
+- 守门转绿。落地后 `地图专属评价权重覆盖Tests.覆盖表被改动` 中"取值 = Default ⇔ 含占位"的两边同为假，仍然为绿。
+- 变异（全量套件）：
+
+| 编号 | 改动 | 结果 |
+|---|---|---|
+| M-B9-1 | 覆盖表 Eye 50 → 51 | 红 1：两人图覆盖表的校准记录随值一起更新 |
+| M-B9-2 | 口径删掉"数据目录 sim-out/v2-recalibration/2p-eye<E>-el<L>" | 红 1：同上 |
+| M-B9-3t | 只改测试：期望的差异维由 Eye 换成 EnemyLoss | 红 1：同上（测试不是照抄实现） |
+
+### 2.10 段 B 回归
+
+- `dotnet build siege.sln`：0 警告。`dotnet build src/godot/Siege.Godot.csproj`：0 警告。
+- `dotnet test -c Release`：通过 1775、跳过 6、失败 0，退出码 0。1775 = 1754 + 新增 21，没有运行 Slow / Perf。
+- `git diff tests/` 没有删除行，既有黄金哈希与期望一字未改。
+- 在 `siege-2p-base-v1` 种子 1 上跑一局（`sim-out/v2-recalibration/2p-final-seed1/`，17 个小回合，AllPassed）：首部与 `config.json` 中两名玩家的 Eye 都是 50、EnemyLoss 都是 8，阈值 20。`replay --file` 结果为"回放一致：81 行逐字节相同"。
+- `openspec validate v2-recalibration --strict`：通过。
+
+### 跑局总账（段 B）
+
+| 目录 | 配置 | 局数 |
+|---|---|---|
+| sim-out/v2-recalibration/2p-eye200-el8 | research/configs/2p-eye200-el8.json | 20 |
+| sim-out/v2-recalibration/2p-eye100-el8 | research/configs/2p-eye100-el8.json | 20 |
+| sim-out/v2-recalibration/2p-eye50-el8 | research/configs/2p-eye50-el8.json | 20 |
+| sim-out/v2-recalibration/2p-eye200-el16 | research/configs/2p-eye200-el16.json | 20 |
+| sim-out/v2-recalibration/2p-eye200-el24 | research/configs/2p-eye200-el24.json | 20 |
+| 批次合计 | | 100（段 A + B = 220，未超过 280） |
+| 单局对照（非批次） | mech-pre / mech-post 各 5 局、2p-final-seed1 1 局 + 回放、Godot 无头演示 4 次 | — |
+
+### 待决 / 交后续段
+
+1. **D9 口径与段 A 表格不一致**：按 D9 口径复算段 A 四批的 R3 领先者胜，结果为 0 → 14/19、20 → 11/19、40 → 13/19、80 → 11/18，每批都有并列局被剔除。段 A 的 implement 记录与 spec.md 表格用的是"并列计入分母"的旧口径，分别写作 15/20、12/20、14/20、13/20。段 A 已提交，这里没有回改；这一项不参与阈值选档。是否在段 C 重标口径，交主会话决定。
+2. **"20/20 全胜否决"按字面实现**：D9 分母剔除并列局后，本段五批的分母都是 18 或 19，字面意义上的 20/20 已不可能出现。脚本按字面实现，本次没有任何一档在分母内全胜，不影响结果。若负责人的本意是"分母内 100%"，需要改判口径。
+3. **覆盖对其他难度同样生效**：覆盖作用于 2 人图上的全部难度，但只在标准难度上扫过档（Open Question 1 按缺省执行，没有补批）。段 C 需要在 §15.2 中注明。
+4. **Eye 50 是档位下界**：50 以下没有数据，已写入口径。

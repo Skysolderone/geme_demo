@@ -285,11 +285,17 @@ public sealed record RunConfig
     /// 把"按地图自动"的候选格上限与缺省停手阈值、缺省冒险概率落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K、阈值与 p。
     /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
     /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分），
-    /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1），带入数量未配置时落成 0（关闭）。幂等。
+    /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1），带入数量未配置时落成 0（关闭）。
+    /// 本局地图登记了地图专属评价权重覆盖（<see cref="EvaluationWeights.MapOverrides"/>）时，未显式配置权重的玩家落成覆盖表（首部权重为空 = 旧日志 = 缺省表）；
+    /// 未登记的地图不动权重。幂等。
     /// </summary>
-    public RunConfig ResolvedFor(MapData map)
+    public RunConfig ResolvedFor(MapData map) => ResolvedFor(map, EvaluationWeights.MapOverrides);
+
+    /// <summary>同 <see cref="ResolvedFor(MapData)"/>，地图专属权重的登记表由参数给出（测试接缝，纯函数）。</summary>
+    internal RunConfig ResolvedFor(MapData map, IReadOnlyDictionary<string, EvaluationWeights> mapOverrides)
     {
         ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(mapOverrides);
         RunConfig resolved = CandidateCellLimit is null && AiSearchConfig.DefaultCellLimitFor(map.PlayableCount) is > 0 and int auto
             ? this with { CandidateCellLimit = auto }
             : this;
@@ -299,6 +305,14 @@ public sealed record RunConfig
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
         resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
+        // 地图专属评价权重（v2-recalibration D6）：只对登记了覆盖的地图、未显式配置权重的玩家，把覆盖表落成显式权重写进 config.json 与首部
+        // （与停手阈值落成同一先例），回放按首部重建；取值经 Core 的唯一实现（显式 > 覆盖 > 缺省表，整表）。
+        // 未登记的地图原样返回，配置记录与首部与引入之前逐字节相同。必须放在下面前瞻宽度那段之前（它直接 return）。
+        if (mapOverrides.ContainsKey(map.Id) && resolved.Players.Any(p => p.Weights is null))
+        {
+            resolved = resolved with { Players = [.. resolved.Players.Select(p => p with { Weights = EvaluationWeights.ForMapId(map.Id, p.Weights, mapOverrides) })] };
+        }
+
         // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，
         // 使"专家、前瞻宽度 4"如实可查、回放按首部重建。落成值与会话建 AI 时按难度取的完全相同（候选格上限与停手阈值取上面已落成的值），走法不变。
         // 必须放在候选格上限与停手阈值落成之后。前瞻宽度为 0 的三档旧难度不落成（Search 保持缺省），配置记录与首部与引入之前逐字节相同。

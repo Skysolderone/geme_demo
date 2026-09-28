@@ -919,9 +919,9 @@ public sealed partial class GameRoot : Node3D
         }
     }
 
-    /// <summary>本局 AI 难度的一行说明（启动日志）：显示名、枚举名与实际生效的前瞻宽度。</summary>
+    /// <summary>本局 AI 难度的一行说明（启动日志）：显示名、枚举名、实际生效的前瞻宽度与评价权重（地图专属覆盖或缺省表，v2-recalibration 2.4 人工核对用）。</summary>
     private string DifficultyText() =>
-        $"AI 难度 {Labels.Difficulty(_session.Difficulty)}（{_session.Difficulty}，前瞻宽度 {_session.Search.LookaheadWidth}）";
+        $"AI 难度 {Labels.Difficulty(_session.Difficulty)}（{_session.Difficulty}，前瞻宽度 {_session.Search.LookaheadWidth}），AI 评价权重 {_session.Weights}";
 
     /// <summary>无人值守（自动演示 / 定帧截图 / 拾取自检）：不采贴边推屏，画面才可复现——指针恰好停在窗口边上不该改变截图。</summary>
     private bool Unattended => _autoDemo || _pickCheck || _screenshotFrame >= 0 || _shotPending;

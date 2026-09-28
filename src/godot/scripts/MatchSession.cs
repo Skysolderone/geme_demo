@@ -33,6 +33,8 @@ public sealed class MatchSession
         Difficulty = difficulty;
         // AI 候选格上限：未显式给出时按地图的可落子格数取（阈值逻辑在 Core，与批量 / 终端版共用）。
         Search = AiSearchConfig.ForMap(difficulty, match.Map.PlayableCount, cellLimit).Validated();
+        // AI 评价权重（v2-recalibration D6）：本局地图登记了地图专属覆盖就取覆盖，否则取缺省表——经 Core 的唯一实现，不自带对照表。
+        Weights = EvaluationWeights.ForMapId(match.Map.Id);
         World = BuildWorld();
     }
 
@@ -50,6 +52,9 @@ public sealed class MatchSession
 
     /// <summary>AI 的剪枝参数（含候选格上限 K）。</summary>
     public AiSearchConfig Search { get; }
+
+    /// <summary>AI 的评价权重：本局地图的地图专属覆盖（v2-recalibration），未登记即缺省表。启动日志打印它，供人工核对。</summary>
+    public EvaluationWeights Weights { get; }
 
     /// <summary>当前观察者世界。每次状态变化后整体重建，两份快照必然同一时刻。</summary>
     public ViewerWorld World { get; private set; }
@@ -210,7 +215,7 @@ public sealed class MatchSession
         _runner = new MatchRunner(Match);
         foreach (PlayerId player in Match.Players.Where(p => p != Me))
         {
-            _runner.SetController(player, HeuristicAi.Create(Match, player, Difficulty, config: Search));
+            _runner.SetController(player, HeuristicAi.Create(Match, player, Difficulty, Weights, Search));
         }
 
         Notice = $"出生区锁定。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";

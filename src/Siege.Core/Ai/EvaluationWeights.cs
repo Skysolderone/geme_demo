@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace Siege.Core.Ai;
 
 /// <summary>九个评价维度（设计文档 §15.2；ai-eye 在末尾追加 8、9 两维），顺序即分解数组下标——前七维的下标不得变动。</summary>
@@ -94,6 +96,54 @@ public sealed record EvaluationWeights(
     /// </summary>
     public static readonly EvaluationWeights Default = new(
         PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 200, Threat: 25);
+
+    /// <summary>
+    /// 2 人图（<c>siege-2p-base-v1</c>）覆盖表的校准口径（ai-decision「地图专属评价权重覆盖」，v2-recalibration 段 B，design D9 / D10）。
+    /// <para>条件：2 名标准难度、内容集 V2、带入 0、小回合数截断 600、种子 1–20、每档 20 局，停手阈值写死为段 A 选定的 20；九维逐玩家写死，只改 Eye / EnemyLoss，其余七维等于 <see cref="Default"/>。
+    /// 各档写作"截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜"，领先者胜按 D9 口径：第 3 大回合结束时总势力的唯一最高者，并列局不计入分母。</para>
+    /// <para>选档（D9 五步）：五档截断均为 0；整局无提子最低 13 / 20（Eye 50），带宽 √(0.65 × 0.35 / 20) ≈ 0.107，比例 ≤ 0.757（≤ 15 局）进带，只有 Eye 50 一档；
+    /// 其第 3 大回合领先者胜 11 / 18，未全胜，不被否决；平均结束大回合 8.35 在 7–10 内。没有用到第 5 条（并列打破）。
+    /// 第 6–8 批（2 × 2 组合）未触发：触发线为基线无提子比例减 1 个标准误（0.90 − 0.067 → ≤ 16 局），Eye 50 为 13 / 20 达线，EnemyLoss 两档（16 / 24）都是 19 / 20，反而高于基线。</para>
+    /// <para>Eye 50 是本次档位的下界，50 以下没有数据；诊断 engagement-diagnosis b09（停手阈值 80）下 Eye 50 的第 3 大回合领先者曾 20 / 20 全胜，停手阈值 20 下没有复现。
+    /// 只在标准难度上扫档；覆盖同样作用于 2 人图上的简单、高难与专家（design D7），这些难度未另行扫档。</para>
+    /// </summary>
+    public const string TwoPlayerOverrideCalibrationStatus = "v2-recalibration 段 B 校准：siege-2p-base-v1、2 名标准难度、内容集 V2、种子 1–20、每档 20 局（小样本，胜率类只看方向）、停手阈值 20、带入 0、截断 600；档位 (Eye, EnemyLoss) = (200, 8) / (100, 8) / (50, 8) / (200, 16) / (200, 24)，各档 截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜（唯一领先者，并列局不计入分母）：(200, 8) → 0 / 18 / 8.30 / 11/18；(100, 8) → 0 / 17 / 7.90 / 7/18；(50, 8) → 0 / 13 / 8.35 / 11/18；(200, 16) → 0 / 19 / 8.50 / 12/19；(200, 24) → 0 / 19 / 8.50 / 12/19；选定 (50, 8)（无提子带只含此档，领先者未全胜，平均结束大回合在 7–10 内）；Eye 50 为档位下界；数据目录 sim-out/v2-recalibration/2p-eye<E>-el<L>";
+
+    /// <summary>
+    /// 地图专属评价权重覆盖（v2-recalibration，ai-decision「地图专属评价权重覆盖」，design D4–D8）："地图标识 → 整表权重"的只读登记表。
+    /// 它是 AI 配置，不是规则：不进地图数据、不改停手阈值与搜索参数；按 <see cref="Board.MapData.Id"/>（= 日志首部的地图标识）登记，
+    /// 覆盖值写成"缺省表 + 显式差异"。只给 2 人图登记，3 人图、v5、边疆图、生成图与地图文件都不登记（取 <see cref="Default"/>）。
+    /// 每一项的校准口径见 <see cref="MapOverrideCalibrationOf"/>；守门 <c>默认评价权重的校准Tests</c> / <c>地图专属评价权重覆盖Tests</c> 钉住键集合、取值与口径。
+    /// <para>地图文件若自带与内置图相同的 <c>id</c> 会被套上覆盖（按标识键、不按摘要键）；首部的 <c>MapDigest</c> 可事后核对。</para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, EvaluationWeights> MapOverrides { get; } =
+        ImmutableSortedDictionary.CreateRange(StringComparer.Ordinal, [
+            // v2-recalibration 段 B 扫档选定（口径见 TwoPlayerOverrideCalibrationStatus）：眼位由 200 降到 50，其余八维跟随缺省表。
+            KeyValuePair.Create("siege-2p-base-v1", Default with { Eye = 50 }),
+        ]);
+
+    /// <summary>
+    /// 按地图标识取权重的唯一实现（批量跑局的落成、终端与图形版建 AI 三个入口共用，design D5 / D6）。优先级：
+    /// 显式权重（配置文件逐玩家的权重，或回放时日志首部记录的权重）&gt; 该地图登记的覆盖 &gt; <see cref="Default"/>。
+    /// 显式权重整表生效，不与覆盖逐维合并。不分难度（design D7：简单难度只读其中三维，专家前瞻的模拟对手沿用专家本人的权重）。
+    /// <para>AI 层 <c>HeuristicTurnController</c> 的 <c>weights ?? Default</c> 回落 MUST NOT 改调本函数：首部权重为空的旧日志回放时要按缺省表重建。</para>
+    /// </summary>
+    public static EvaluationWeights ForMapId(string mapId, EvaluationWeights? explicitWeights = null) => ForMapId(mapId, explicitWeights, MapOverrides);
+
+    /// <summary>同 <see cref="ForMapId(string, EvaluationWeights?)"/>，登记表由参数给出（纯函数；测试接缝注入与缺省表不同的登记表，不引入可变静态）。</summary>
+    internal static EvaluationWeights ForMapId(string mapId, EvaluationWeights? explicitWeights, IReadOnlyDictionary<string, EvaluationWeights> overrides)
+    {
+        ArgumentNullException.ThrowIfNull(mapId);
+        ArgumentNullException.ThrowIfNull(overrides);
+        return explicitWeights ?? (overrides.TryGetValue(mapId, out EvaluationWeights? table) ? table : Default);
+    }
+
+    /// <summary>某地图覆盖表的校准口径；未登记的地图为 <c>null</c>。</summary>
+    public static string? MapOverrideCalibrationOf(string mapId) => mapId switch
+    {
+        "siege-2p-base-v1" => TwoPlayerOverrideCalibrationStatus,
+        _ => null,
+    };
 
     /// <summary>
     /// 某维度默认值的校准口径：扫过档的三维返回"内容集 / 地图 / 局数 / 种子 / 档位 / 数据目录"（ai-eye 段 D 在内容集 V1 上扫档），其余六维返回 <see cref="NotSweptStatus"/>；

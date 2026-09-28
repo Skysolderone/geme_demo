@@ -16,7 +16,7 @@ internal static class PlayCommand
     /// <param name="playerCountArg">参赛人数；<c>null</c> = 地图的人数上限 <see cref="MapData.MaxPlayers"/>（small-maps D3：2 人图开 2 人局，4 人图照旧 4 人）。</param>
     /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
     /// <param name="cellLimit">AI 候选格上限 K；<c>null</c> 按地图的可落子格数自动取（<see cref="AiSearchConfig.ForMap"/>），0 = 不限制。</param>
-    /// <param name="weights">测试接缝：AI 评价权重；<c>null</c> = 默认权重表。终端入口不传（ai-eye R12：终端对局一律用缺省值，不加选项）。</param>
+    /// <param name="weights">测试接缝：AI 评价权重（整表）；<c>null</c> = 本局地图登记的地图专属覆盖，未登记即默认权重表（v2-recalibration D6，经 <see cref="EvaluationWeights.ForMapId(string, EvaluationWeights?)"/>）。终端入口不传（ai-eye R12：终端对局一律用缺省值，不加选项）。</param>
     /// <param name="passThreshold">测试接缝：AI 停手阈值；<c>null</c> = 难度预设的缺省值。终端入口不传（同上）。
     /// 依赖 AI 实际走法的脚本测试用这两项写死权重与阈值，使脚本不随默认值校准而失步（testing.md「依赖 AI 实际怎么走的断言要把权重写死」）。</param>
     /// <param name="flagRisk">测试接缝：原型插旗的冒险概率；<c>null</c> = 对局配置缺省值（<see cref="MatchOptions.DefaultFlagRisk"/>）。终端入口不传（flag-contest D2，同上）。
@@ -26,10 +26,12 @@ internal static class PlayCommand
     /// <param name="profile">带入带出的档案存取（carry-in-out D10）；<c>null</c> = 关闭带入带出、不读写任何档案（缺省）。
     /// 入口 <c>Program.Play</c> 缺省传缺省档案、<c>--no-carry</c> 传 <c>null</c>；脚本化测试不传即关闭，不碰真实用户目录，只在需要时注入临时档案。</param>
     /// <param name="onAi">测试接缝：每名 AI 玩家的控制者建好后回调一次（终端不写对局日志，脚本测试经它核对 AI 的难度、搜索配置与前瞻记录）。终端入口不传。</param>
+    /// <param name="mapOverrides">测试接缝：地图专属评价权重的登记表；<c>null</c> = <see cref="EvaluationWeights.MapOverrides"/>。终端入口不传；测试注入与缺省表不同的登记表以分辨"取了覆盖"。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null, ContentSet? contentSet = null,
-        CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null)
+        CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null,
+        IReadOnlyDictionary<string, EvaluationWeights>? mapOverrides = null)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? map.MaxPlayers;
@@ -118,6 +120,8 @@ internal static class PlayCommand
             ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
 
             var runner = new MatchRunner(match);
+            // 地图专属评价权重（v2-recalibration D6）：入口未给权重时取本局地图的覆盖，未登记取缺省表——经 Core 的唯一实现，不自带对照。
+            EvaluationWeights aiWeights = EvaluationWeights.ForMapId(map.Id, weights, mapOverrides ?? EvaluationWeights.MapOverrides);
             foreach (PlayerId p in players)
             {
                 if (p == me)
@@ -126,7 +130,7 @@ internal static class PlayCommand
                     continue;
                 }
 
-                HeuristicTurnController ai = HeuristicAi.Create(match, p, difficulty, weights, search);
+                HeuristicTurnController ai = HeuristicAi.Create(match, p, difficulty, aiWeights, search);
                 onAi?.Invoke(p, ai);
                 runner.SetController(p, ai);
             }

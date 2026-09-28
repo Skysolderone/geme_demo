@@ -295,6 +295,54 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.DoesNotContain("未校准（", src, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void 两人图覆盖表的校准记录随值一起更新()
+    {
+        // 规格：ai-decision「地图专属评价权重覆盖」Scenario「覆盖表被改动」（v2-recalibration 段 B 2.9，design D10）：
+        // 钉住覆盖表的键集合、与默认表的逐维差异，以及机读的校准口径（地图 / 内容集 / 种子 / 局数 / 停手阈值 / 档位 / 各档数据 / 选定值 / 数据目录），
+        // 且口径与源码一致、不再是占位。改任一维或增删登记的地图而不同时更新口径 → 本测试红。变异记录见任务 09-28-v2-recalibration 的 implement.md「段 B」。
+        const string id = "siege-2p-base-v1";
+        Assert.Equal([id], EvaluationWeights.MapOverrides.Keys);
+        EvaluationWeights table = EvaluationWeights.MapOverrides[id];
+
+        // 逐维：只有 Eye 与默认表不同（扫档选定 Eye 50、EnemyLoss 8），其余八维跟随默认表。
+        var diff = new Dictionary<EvaluationDimension, int> { [EvaluationDimension.Eye] = 50 };
+        foreach (EvaluationDimension d in Enum.GetValues<EvaluationDimension>())
+        {
+            Assert.Equal(diff.TryGetValue(d, out int v) ? v : EvaluationWeights.Default.Of(d), table.Of(d));
+        }
+
+        string status = EvaluationWeights.MapOverrideCalibrationOf(id)!;
+        Assert.NotNull(status);
+        foreach (string evidence in new[]
+                 {
+                     "v2-recalibration", id, "2 名标准难度", "内容集 V2", "种子 1–20", "20 局", "小样本", $"停手阈值 {AiSearchConfig.DefaultPassThreshold}",
+                     "sim-out/v2-recalibration/2p-eye",
+                 })
+        {
+            Assert.Contains(evidence, status, StringComparison.Ordinal);
+        }
+
+        // 五个档位各有一组"截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜"；选定档在档位清单里且等于覆盖表的取值。
+        const string tiers = "(200, 8) / (100, 8) / (50, 8) / (200, 16) / (200, 24)";
+        Assert.Contains(tiers, status, StringComparison.Ordinal);
+        foreach (string tier in tiers.Split(" / "))
+        {
+            Assert.Matches(System.Text.RegularExpressions.Regex.Escape(tier) + @" → \d+ / \d+ / \d+\.\d+ / \d+/\d+", status);
+        }
+
+        string chosen = $"({table.Eye}, {table.EnemyLoss})";
+        Assert.Contains(chosen, tiers, StringComparison.Ordinal);
+        Assert.Contains($"选定 {chosen}", status, StringComparison.Ordinal);
+
+        // 不再是占位；源码里的口径与常量一致（单个字面量，注释改了常量不改或反之都会红）。
+        string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "EvaluationWeights.cs"));
+        Assert.DoesNotContain("占位", status, StringComparison.Ordinal);
+        Assert.DoesNotContain("占位", src, StringComparison.Ordinal);
+        Assert.Contains(status, src, StringComparison.Ordinal);
+        Assert.Contains($"Default with {{ Eye = {table.Eye} }}", src, StringComparison.Ordinal);
+    }
+
     /// <summary>一局的过程投影（快照 + 事件），不含首行 header——header 里带配置 JSON，会把"权重填没填"本身混进比对。</summary>
     private static string Play(MatchLog log) =>
         string.Join("\n", SimFixtures.TurnTexts(log.Turns))

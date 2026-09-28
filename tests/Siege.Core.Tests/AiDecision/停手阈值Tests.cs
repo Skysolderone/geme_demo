@@ -344,4 +344,23 @@ public class 停手阈值Tests
         Assert.False(Directory.Exists(badDir));
         Assert.Contains("停手阈值", err.ToString(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void 地图覆盖不改阈值()
+    {
+        // 规格 Scenario「地图覆盖不改阈值」（v2-recalibration 段 B，design D8）：2 人图登记了评价权重覆盖，未显式配置阈值的批量跑局开局，
+        // 批次配置记录与日志首部里的停手阈值等于默认停手阈值，与 v5 上相同；覆盖只动权重。
+        Assert.True(EvaluationWeights.MapOverrides.ContainsKey(Board.Maps.TwoPlayerBaseMap.Id), "2 人图没有登记覆盖，本条是空证。");
+        (_, string twoConfig, MatchLog twoLog) = SimulationHarness.各入口的地图专属AI权重Tests.RunOneRaw(
+            "threshold-2p", SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig(Board.Maps.TwoPlayerBaseMap.Id, 2));
+        (_, string fourConfig, MatchLog fourLog) = SimulationHarness.各入口的地图专属AI权重Tests.RunOneRaw(
+            "threshold-v5", SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig(Board.Maps.FourPlayerBaseMap.Id, 4));
+
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, RunConfig.FromJson(twoConfig).PassThreshold);
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, twoLog.Header.Config.PassThreshold);
+        Assert.Equal(fourLog.Header.Config.PassThreshold, twoLog.Header.Config.PassThreshold);
+        Assert.Equal(RunConfig.FromJson(fourConfig).PassThreshold, RunConfig.FromJson(twoConfig).PassThreshold);
+        Assert.All(twoLog.Header.Config.Players, p => Assert.Null(p.Search));   // 搜索参数也不随覆盖落成（标准难度不落成 Search）
+        Assert.All(twoLog.Header.Config.Players, p => Assert.NotNull(p.Weights));   // 反面：覆盖确实落成了
+    }
 }
