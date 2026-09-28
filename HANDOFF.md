@@ -117,7 +117,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 5. **需要负责人亲自试玩**：带入带出链路（用临时 `--profile`）、专家难度、人对 3 名 AI 打一局边疆图（检查清单在 `.trellis/tasks/archive/2026-09/09-23-ai-eye/implement.md` 段 E）。
 6. **需要负责人看截图**：`art/carry-in-out/`、`art/expert-lookahead/`、`art/more-pieces/`（十种棋子灰度对照）、`art/surfaces-v1/`；另有 `sim-out/small-maps/*.png`、`sim-out/life-shape/*-groups.png`。
 7. **设计文档中还没做的部分**：联网同步与匹配（§19-5），正式美术与音效（§18.2）。局外永久成长明确不做（§21.6）。
-8. 小项：GitHub 默认分支已于 2026-09-28 改为 `main`（旧分支 `wip/match-flow` 已合入，保留未删）；终端的出局 / 完赛结算没有脚本测试（journal 09-26）；种子 1–200 的截断慢测试在阈值改动后没有复核。
+8. 小项：GitHub 默认分支已于 2026-09-28 改为 `main`（旧分支 `wip/match-flow` 已合入并于同日删除）；终端的出局 / 完赛结算没有脚本测试（journal 09-26）；种子 1–200 的截断慢测试在阈值改动后没有复核。
 
 ## 执行流程与工作约定
 
