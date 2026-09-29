@@ -50,6 +50,12 @@ public sealed class InputBindings
     /// </summary>
     public const string CycleEditAction = "siege_cycle_edit";
 
+    /// <summary>
+    /// 征募面板收起 / 展开（recruit-panel-collapse D2）：键鼠 V、手柄 Back（View / Select 键）。两者此前都未占用；
+    /// 手柄的方向键、A / B / X / Y、左右肩键、右摇杆按下都已有用途，Back 语义上正是"看全场"。
+    /// </summary>
+    public const string RecruitCollapseAction = "siege_recruit_collapse";
+
     /// <summary>相机平移（viewport-camera 裁决 5）：方向键与 W A S D，与贴边推屏等速，可同时按两个方向。</summary>
     public const string CameraLeftAction = "siege_camera_left";
 
@@ -104,8 +110,9 @@ public sealed class InputBindings
         Register(BackAction, new InputEventKey { PhysicalKeycode = Key.Escape }, new InputEventJoypadButton { ButtonIndex = JoyButton.B });
         Register(ToggleModeAction, new InputEventKey { PhysicalKeycode = Key.T });
         Register(CycleEditAction, new InputEventKey { PhysicalKeycode = Key.E }, new InputEventJoypadButton { ButtonIndex = JoyButton.LeftShoulder });
+        Register(RecruitCollapseAction, new InputEventKey { PhysicalKeycode = Key.V }, new InputEventJoypadButton { ButtonIndex = JoyButton.Back });
 
-        // 相机：与上面的键都不重（已用 1–4 / Tab / H / Enter / P / Esc / T / E / F12 / 鼠标右键）。
+        // 相机：与上面的键都不重（已用 1–4 / Tab / H / Enter / P / Esc / T / E / V / F12 / 鼠标右键）。
         Register(CameraOverviewAction, new InputEventKey { PhysicalKeycode = Key.M });
         Register(CameraLeftAction, new InputEventKey { PhysicalKeycode = Key.A }, new InputEventKey { PhysicalKeycode = Key.Left });
         Register(CameraRightAction, new InputEventKey { PhysicalKeycode = Key.D }, new InputEventKey { PhysicalKeycode = Key.Right });

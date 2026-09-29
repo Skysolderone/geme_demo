@@ -32,6 +32,7 @@ public sealed partial class GameRoot : Node3D
 
     private readonly TacticalLayerState _layers = new();
     private readonly HandPanelState _handPanel = new();
+    private readonly RecruitPanelCollapse _recruitCollapse = new();
     private readonly InputBindings _bindings = new();
     private MatchSession _session = null!;
     private BoardView _board = null!;
@@ -51,6 +52,7 @@ public sealed partial class GameRoot : Node3D
     private bool _shotOverview;
     private bool _shotPower;
     private bool _shotGroups;
+    private bool _shotRecruitCollapsed;
 
     /// <summary>
     /// 本局 AI 难度（expert-lookahead D10）：<c>--difficulty=&lt;名称&gt;</c> 或选图界面的难度选择，缺省标准。
@@ -88,6 +90,11 @@ public sealed partial class GameRoot : Node3D
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
 
+            // --shot-recruit-collapsed：截征募面板的展开 / 收起两张（recruit-panel-collapse 1.3，仅截图用）。须与 --auto-demo 和 --screenshot= 同用：
+            // 到达截图帧之后，等本机玩家下一次进入征募阶段（自动演示已选取一枚）再截；第一张为展开（--screenshot 给的路径），
+            // 随后经与 V 键同一入口收起，再截一张（同名加 -collapsed）。
+            _shotRecruitCollapsed = args.Flag("shot-recruit-collapsed");
+
             // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
             // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
             bool mapSelect = args.Flag("map-select");
@@ -118,6 +125,11 @@ public sealed partial class GameRoot : Node3D
             AiDifficulty? difficulty = args.Value<AiDifficulty>(
                 "difficulty", $"难度名称（{AiDifficultyNames.Usage}，不区分大小写）", t => AiDifficultyNames.TryParse(t, out AiDifficulty d) ? d : null);
             args.EnsureRecognized();
+            if (_shotRecruitCollapsed && (!_autoDemo || _screenshotFrame < 0))
+            {
+                throw new System.FormatException("--shot-recruit-collapsed 须与 --auto-demo 和 --screenshot= 同用。");
+            }
+
             if (exportParts is not null)
             {
                 SetProcess(false);
@@ -325,6 +337,7 @@ public sealed partial class GameRoot : Node3D
             _handPanel.ClickButton();
             _dirty = true;
         };
+        _hud.RecruitCollapsePressed += ToggleRecruitCollapse;
         _hud.LayerModePressed += () =>
         {
             _layers.SetMode(_layers.Mode == LayerInputMode.HoldToShow ? LayerInputMode.ClickToToggle : LayerInputMode.HoldToShow);
@@ -344,6 +357,22 @@ public sealed partial class GameRoot : Node3D
             _dirty = true;
         }
     }
+
+    /// <summary>
+    /// 征募面板收起 / 展开（V 键、面板上的"收起"按钮、点顶部提示条同一入口，recruit-panel-collapse）：先把当前征募阶段同步给状态模型，
+    /// 再交给模型切换——"在不在本机征募阶段、手牌面板开没开"的判断都在模型里，这里不复写。
+    /// </summary>
+    private void ToggleRecruitCollapse()
+    {
+        SyncRecruitCollapse();
+        if (_recruitCollapse.Toggle(_handPanel.IsOpen))
+        {
+            _dirty = true;
+        }
+    }
+
+    /// <summary>把当前是否处在本机征募阶段（及是哪一次）告诉收起状态模型；换了阶段模型自己重置为展开。</summary>
+    private void SyncRecruitCollapse() => _recruitCollapse.Sync(RecruitPhaseKey.Of(_session.World.Public.View, _session.Me));
 
     /// <summary>按钮点选信息层：与按键走同一个可见性状态机（D5），只是进入 / 退出的触发条件不同——判断本身在状态机里，这里不复写。</summary>
     private void ToggleLayer(TacticalLayer layer)
@@ -448,12 +477,20 @@ public sealed partial class GameRoot : Node3D
             ToggleOverview();
         }
 
-        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame)
+        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady())
         {
             _screenshotFrame = -1;
             BeginCapture();
         }
     }
+
+    /// <summary>
+    /// 截图时机：未给 <c>--shot-recruit-collapsed</c> 时恒为真（既有截图行为不变）；给了则要等本机玩家处在征募阶段、
+    /// 自动演示已选取一枚（征募面板显示"已选"）的那一帧。
+    /// </summary>
+    private bool RecruitShotReady() =>
+        !_shotRecruitCollapsed
+        || (_session.IsMyTurn && _session.Match.Stage == TurnStage.Recruit && _session.RecruitPanel is { PicksMade: > 0 });
 
     /// <summary>
     /// 进入截图流程：<b>先把盖住棋盘的面板全部关掉</b>再重刷一次，等本帧绘制完成后才取画面。
@@ -492,6 +529,12 @@ public sealed partial class GameRoot : Node3D
             ? groups.Groups.Count(g => g.Mark == GroupMark.Alive)
             : 0;
         GD.Print($"[life-shape] 截图取景：当前行动 {(_session.Match.CurrentPlayer is { } actor ? Labels.Player(actor) : "无")}，禁入格 {shotBoard.Cells.Count(c => c.Block == PlacementBlock.LifeForbidden)}，已活棋串 {alive}，棋串读法 {(_layers.Active == TacticalLayer.Board && _layers.Reading == BoardReading.Groups ? "开" : "关")}");
+        if (_shotRecruitCollapsed)
+        {
+            CaptureRecruitPairWhenDrawn(_screenshotPath);
+            return;
+        }
+
         CaptureWhenDrawn(_screenshotPath);
     }
 
@@ -513,7 +556,8 @@ public sealed partial class GameRoot : Node3D
         }
 
         _hud.OverviewActive = _board.Rig.IsOverview;
-        _hud.Refresh(_session, _layers, _handPanel);
+        SyncRecruitCollapse();
+        _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse);
         RefreshCarry();
     }
 
@@ -522,6 +566,51 @@ public sealed partial class GameRoot : Node3D
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         Capture(path);
         GetTree().Quit(0);
+    }
+
+    /// <summary>
+    /// <c>--shot-recruit-collapsed</c>：同一帧局面先截展开，再经 <see cref="ToggleRecruitCollapse"/>（与 V 键同一入口）收起、重刷、等下一帧绘制完成截收起。
+    /// 演示在截图流程中已冻结，两张图只差面板与提示条。
+    /// </summary>
+    private async void CaptureRecruitPairWhenDrawn(string path)
+    {
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        PrintRecruitShot();
+        Capture(path);
+
+        ToggleRecruitCollapse();
+        _dirty = false;
+        RefreshViews();
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        string collapsed = System.IO.Path.ChangeExtension(path, null) + "-collapsed" + System.IO.Path.GetExtension(path);
+        PrintRecruitShot();
+        Capture(collapsed);
+        GetTree().Quit(_recruitCollapse.IsCollapsed && _hud.RecruitBarOpen && !_hud.CenterPanelOpen ? 0 : 1);
+    }
+
+    /// <summary>
+    /// 征募截图的取景自证（testing.md「截图取图要等本帧绘制完成」第 ③ 条）：面板 / 提示条开关、提示条矩形，
+    /// 以及棋盘四边坐标标注的锚点投影到屏幕后落在提示条（外扩 20 像素，约一个标注字的半宽）内的个数——应为 0。
+    /// </summary>
+    private void PrintRecruitShot()
+    {
+        Rect2 bar = _hud.RecruitBarRect;
+        Rect2 grown = bar.Grow(20f);
+        Rect2 view = GetViewport().GetVisibleRect();
+        int width = _session.Match.Map.Width;
+        int height = _session.Match.Map.Height;
+        Vector3[] anchors =
+        [
+            .. Enumerable.Range(0, width).SelectMany(x => new[] { BoardGeometry.ColumnLabelAnchor(x, width, height, far: false), BoardGeometry.ColumnLabelAnchor(x, width, height, far: true) }),
+            .. Enumerable.Range(0, height).SelectMany(y => new[] { BoardGeometry.RowLabelAnchor(y, width, height, right: false), BoardGeometry.RowLabelAnchor(y, width, height, right: true) }),
+        ];
+        Vector2[] onScreen = [.. anchors.Where(a => !_board.Camera.IsPositionBehind(a)).Select(a => _board.Camera.UnprojectPosition(a)).Where(view.HasPoint)];
+        int covered = _hud.RecruitBarOpen ? onScreen.Count(grown.HasPoint) : 0;
+        RecruitPanelView? panel = _session.RecruitPanel;
+        GD.Print($"[recruit-collapse] 第 {_session.Match.MajorRound} 大回合征募：面板 {(_recruitCollapse.IsCollapsed ? "收起" : "展开")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}，"
+            + $"提示条 {(_hud.RecruitBarOpen ? $"开 ({bar.Position.X:0}, {bar.Position.Y:0}) {bar.Size.X:0}×{bar.Size.Y:0}" : "关")}；"
+            + $"展示 {panel?.ShowCount} 已选 {panel?.PicksMade} 还可选 {panel?.PicksRemaining}；"
+            + $"坐标标注 共 {anchors.Length} 个、画面内 {onScreen.Length} 个、落在提示条内 {covered} 个");
     }
 
     /// <summary>
@@ -1142,6 +1231,10 @@ public sealed partial class GameRoot : Node3D
         {
             _handPanel.ClickButton();
             _dirty = true;
+        }
+        else if (@event.IsActionPressed(InputBindings.RecruitCollapseAction))
+        {
+            ToggleRecruitCollapse();
         }
         else if (@event.IsActionPressed(InputBindings.BackAction))
         {

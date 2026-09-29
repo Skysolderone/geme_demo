@@ -41,6 +41,8 @@ public sealed partial class Hud : CanvasLayer
     private HBoxContainer _layerButtons = null!;
     private VBoxContainer _centerBody = null!;
     private PanelContainer _centerPanel = null!;
+    private PanelContainer _recruitBar = null!;
+    private Button _recruitBarButton = null!;
     private Label _notice = null!;
     private Label _hoverReadout = null!;
 
@@ -55,6 +57,9 @@ public sealed partial class Hud : CanvasLayer
 
     /// <summary>征募完成，进入部署。</summary>
     public event Action? RecruitFinished;
+
+    /// <summary>征募面板的"收起"按钮或顶部提示条被点（与 V 键同一入口，recruit-panel-collapse）。</summary>
+    public event Action? RecruitCollapsePressed;
 
     /// <summary>确认批次。</summary>
     public event Action? ConfirmPressed;
@@ -93,6 +98,7 @@ public sealed partial class Hud : CanvasLayer
         BuildPreviewPanel();
         BuildLayerPanel();
         BuildCenterPanel();
+        BuildRecruitBar();
 
         _notice = Ui.Text(string.Empty, Ui.MutedText);
         _notice.HorizontalAlignment = HorizontalAlignment.Center;
@@ -225,6 +231,29 @@ public sealed partial class Hud : CanvasLayer
     }
 
     /// <summary>
+    /// 征募面板收起后的顶部提示条（recruit-panel-collapse D3）：顶部居中、通知条（66–90）之下的一条窄条，整条可点、点了展开。
+    /// 横向只占画布中心 ±260：画布宽恒 ≥ 1600（stretch = expand），左缘 ≥ 540，不碰左侧信息层面板（右缘 392）与右上排名面板（左缘 ≥ 1300）。
+    /// 与中央面板分开：<see cref="CenterPanelOpen"/> 的截图取景语义不变。
+    /// </summary>
+    private void BuildRecruitBar()
+    {
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(3);
+        _recruitBar = panel;
+        _recruitBarButton = Ui.Action(string.Empty);
+        _recruitBarButton.Pressed += () => RecruitCollapsePressed?.Invoke();
+        body.AddChild(_recruitBarButton);
+        Ui.Anchor(_recruitBar, 0.5f, 0f, -260f, 96f, 260f, 134f);
+        _root.AddChild(panel);
+        panel.Visible = false;
+    }
+
+    /// <summary>征募提示条此刻是否显示（截图取景自证）。</summary>
+    public bool RecruitBarOpen => _recruitBar.Visible;
+
+    /// <summary>征募提示条在屏幕上的矩形（截图取景自证：不得压住棋盘四边坐标标注）。</summary>
+    public Rect2 RecruitBarRect => _recruitBar.GetGlobalRect();
+
+    /// <summary>
     /// 中央面板（终局结算 / 插旗提示 / 手牌信息 / 征募）此刻是否显示。
     /// 截图自检用：除插旗提示外它都压在棋盘上，取景时必须为 <c>false</c>（见 <c>GameRoot.BeginCapture</c>）。
     /// </summary>
@@ -240,11 +269,12 @@ public sealed partial class Hud : CanvasLayer
     // ---------- 刷新 ----------
 
     /// <summary>按当前对局状态刷新全部面板。只在状态变化时调用，不逐帧重建。</summary>
-    public void Refresh(MatchSession session, TacticalLayerState layers, HandPanelState handPanel)
+    public void Refresh(MatchSession session, TacticalLayerState layers, HandPanelState handPanel, RecruitPanelCollapse recruitCollapse)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(handPanel);
+        ArgumentNullException.ThrowIfNull(recruitCollapse);
         ViewerWorld world = session.World;
 
         RefreshTurnBanner(session, world, layers);
@@ -255,7 +285,7 @@ public sealed partial class Hud : CanvasLayer
         RefreshActions(session, world);
         RefreshPreview(world);
         RefreshLayerPanel(world, layers);
-        RefreshCenter(session, world, handPanel);
+        RefreshCenter(session, world, handPanel, recruitCollapse);
         _notice.Text = session.Notice;
     }
 
@@ -551,9 +581,10 @@ public sealed partial class Hud : CanvasLayer
         }
     }
 
-    private void RefreshCenter(MatchSession session, ViewerWorld world, HandPanelState handPanel)
+    private void RefreshCenter(MatchSession session, ViewerWorld world, HandPanelState handPanel, RecruitPanelCollapse recruitCollapse)
     {
         Ui.Clear(_centerBody);
+        _recruitBar.Visible = false;
         if (session.IsOver && session.Match.Result is { } result)
         {
             CenterBox(0.5f, 700f, 220f);
@@ -587,8 +618,18 @@ public sealed partial class Hud : CanvasLayer
 
         if (session.RecruitPanel is { } panel && session.IsMyTurn && session.Match.Stage == TurnStage.Recruit)
         {
+            // 收起 / 展开由 Presentation 的状态模型决定；面板内容吃模型透传的那一份，提示条文案取模型的（本类不拼）。
+            RecruitCenterView view = recruitCollapse.Present(panel);
+            if (view.IsCollapsed)
+            {
+                _recruitBarButton.Text = view.BarText;
+                _recruitBar.Visible = true;
+                _centerPanel.Visible = false;
+                return;
+            }
+
             CenterBox(0.5f, 520f, 330f);
-            BuildRecruit(panel);
+            BuildRecruit(view.Panel);
             _centerPanel.Visible = true;
             return;
         }
@@ -611,9 +652,15 @@ public sealed partial class Hud : CanvasLayer
         }
 
         _centerBody.AddChild(Ui.Separator());
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
         Button done = Ui.Action("完成征募，进入部署", 300);
         done.Pressed += () => RecruitFinished?.Invoke();
-        _centerBody.AddChild(done);
+        row.AddChild(done);
+        Button collapse = Ui.Action("收起 [V]", 120);
+        collapse.Pressed += () => RecruitCollapsePressed?.Invoke();
+        row.AddChild(collapse);
+        _centerBody.AddChild(row);
     }
 
     private void BuildHandInfo(HandInfoPanelView panel)
