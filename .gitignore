@@ -19,3 +19,5 @@ sim-out/
 out/
 cfg-safety*.json
 .codegraph/
+# Godot 导出产物（Windows 可执行包）
+build/
