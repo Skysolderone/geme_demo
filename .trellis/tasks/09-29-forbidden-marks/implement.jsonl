@@ -1,0 +1,6 @@
+{"file": "openspec/changes/forbidden-marks/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/forbidden-marks/design.md", "reason": "规格"}
+{"file": "openspec/changes/forbidden-marks/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/forbidden-marks/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/Godot Debug"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现表与分层"}

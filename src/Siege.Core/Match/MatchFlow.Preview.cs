@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Preview;
 using Siege.Core.Relics;
@@ -21,6 +22,23 @@ public sealed partial class MatchFlow
     {
         RequireStage(TurnStage.Deploy);
         return BatchPreviewBuilder.Build(Board, _batch!.Context, _batch.Placements, History, Roster, Relics, MajorRound);
+    }
+
+    /// <summary>
+    /// 当前行动玩家的单子禁手（forbidden-marks D1）：合法落子范围内、未被暂放占用的每个空格，在当前暂放批次之上再落一子是否会被判
+    /// 破坏活形 / 自杀手 / 同形。没有当前行动玩家（插旗、终局）为 <c>null</c>。任何阶段可用：不在部署阶段时暂放为空、范围取
+    /// <see cref="LegalRangeFor"/>。结果依赖当前行动玩家的暂放，只交给该玩家本人。零副作用。
+    /// </summary>
+    public ForbiddenMoveReport? ForbiddenMovesOfCurrentPlayer()
+    {
+        if (CurrentPlayer is not { } player)
+        {
+            return null;
+        }
+
+        return _batch is { } batch
+            ? ForbiddenMoves.Query(Board, player, batch.Context.LegalRange, batch.Placements, History)
+            : ForbiddenMoves.Query(Board, player, LegalRangeFor(player), [], History);
     }
 
     /// <summary>

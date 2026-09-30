@@ -29,13 +29,16 @@ internal static class PresentationFixtures
 
     // ---------- 世界组装（阶段 B 的调用序列即此） ----------
 
-    /// <summary>观察者 <paramref name="viewer"/> 此刻能看到的世界：公开快照 + 补充载荷 + 本人手牌 + 本人部署时的富预演。</summary>
+    /// <summary>
+    /// 观察者 <paramref name="viewer"/> 此刻能看到的世界：公开快照 + 补充载荷 + 本人手牌 + 本人部署时的富预演 + 轮到本人行动时的单子禁手
+    /// （forbidden-marks D6；与图形版会话的组装序列相同）。
+    /// </summary>
     internal static ViewerWorld World(this MatchFlow match, PlayerId viewer)
     {
-        PreviewResult? preview = match.Phase == MatchPhase.InProgress && match.CurrentPlayer == viewer && match.Stage == TurnStage.Deploy
-            ? match.PreviewCurrentBatch()
-            : null;
-        return ViewerWorld.Build(viewer, match.Publish(), match.PublishSupplement(), match.Hands.AccessFor(viewer).PrivateView(), preview);
+        bool mine = match.Phase == MatchPhase.InProgress && match.CurrentPlayer == viewer;
+        PreviewResult? preview = mine && match.Stage == TurnStage.Deploy ? match.PreviewCurrentBatch() : null;
+        ForbiddenMoveReport? forbidden = mine ? match.ForbiddenMovesOfCurrentPlayer() : null;
+        return ViewerWorld.Build(viewer, match.Publish(), match.PublishSupplement(), match.Hands.AccessFor(viewer).PrivateView(), preview, forbidden);
     }
 
     internal static PublicWorld PublicWorldOf(this MatchFlow match) => PublicWorld.From(match.Publish(), match.PublishSupplement());

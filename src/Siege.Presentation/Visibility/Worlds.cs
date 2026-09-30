@@ -1,3 +1,4 @@
+using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Preview;
@@ -54,12 +55,13 @@ public sealed class PublicWorld
 /// </remarks>
 public sealed class ViewerWorld
 {
-    private ViewerWorld(PlayerId viewer, PublicWorld world, HandPrivateView ownHand, BatchPreview? ownPreview)
+    private ViewerWorld(PlayerId viewer, PublicWorld world, HandPrivateView ownHand, BatchPreview? ownPreview, ForbiddenMoveReport? ownForbidden)
     {
         Viewer = viewer;
         Public = world;
         OwnHand = ownHand;
         OwnPreview = ownPreview;
+        OwnForbidden = ownForbidden;
     }
 
     /// <summary>观察者。</summary>
@@ -74,11 +76,24 @@ public sealed class ViewerWorld
     /// <summary>本人部署阶段的富预演；不在本人部署阶段时为 <c>null</c>。</summary>
     public BatchPreview? OwnPreview { get; }
 
+    /// <summary>
+    /// 本人的单子禁手（forbidden-marks D6）：只在轮到本人行动时有，否则为 <c>null</c>。它按本人的暂放批次算出，与 <see cref="OwnPreview"/>
+    /// 同属本人的私有部分，不进公开世界。
+    /// </summary>
+    public ForbiddenMoveReport? OwnForbidden { get; }
+
     /// <summary>是否轮到本人行动。</summary>
     public bool IsViewerTurn => Public.View.CurrentPlayer == Viewer && Public.View.Stage != TurnStage.Idle;
 
-    /// <summary>默认棋盘（正式盘面 + 统一的未知信物标记）。</summary>
-    public DefaultBoardView Board() => DefaultBoardView.From(Public);
+    /// <summary>
+    /// 本人看到的默认棋盘：公开的默认棋盘（正式盘面 + 统一的未知信物标记），轮到本人行动时叠上本人的单子禁手。
+    /// 不轮到本人时与 <see cref="DefaultBoardView.From"/> 的结果相同——别人的回合不显示单子禁手。
+    /// </summary>
+    public DefaultBoardView Board()
+    {
+        DefaultBoardView board = DefaultBoardView.From(Public);
+        return OwnForbidden is null ? board : board.WithForbidden(OwnForbidden);
+    }
 
     /// <summary>本人部署阶段的预演呈现；不在本人部署阶段为 <c>null</c>。</summary>
     public PreviewPresentation? Preview(LibertyThresholds? thresholds = null) =>
@@ -92,9 +107,13 @@ public sealed class ViewerWorld
         TacticalLayer layer, BoardReading reading = BoardReading.Ownership, LibertyThresholds? thresholds = null) =>
         TacticalLayers.Build(Public, layer, reading, thresholds);
 
-    /// <summary>组装。<paramref name="ownPreview"/> 只在本人处于部署阶段时传入。</summary>
+    /// <summary>
+    /// 组装。<paramref name="ownPreview"/> 只在本人处于部署阶段时传入；<paramref name="ownForbidden"/> 只在轮到本人行动时传入
+    /// （属于他人、或当前行动玩家不是本人即抛出：别人的禁手依赖别人的暂放，结构上不得进入观察者视图）。
+    /// </summary>
     public static ViewerWorld Build(
-        PlayerId viewer, MatchPublicView view, PublicSupplement supplement, HandPrivateView ownHand, BatchPreview? ownPreview)
+        PlayerId viewer, MatchPublicView view, PublicSupplement supplement, HandPrivateView ownHand, BatchPreview? ownPreview,
+        ForbiddenMoveReport? ownForbidden = null)
     {
         ArgumentNullException.ThrowIfNull(ownHand);
         PublicWorld world = PublicWorld.From(view, supplement);
@@ -116,11 +135,24 @@ public sealed class ViewerWorld
             }
         }
 
+        if (ownForbidden is not null)
+        {
+            if (ownForbidden.Player != viewer)
+            {
+                throw new ArgumentException($"单子禁手属于 {ownForbidden.Player}，观察者是 {viewer}：他人的禁手不得进入观察者视图。", nameof(ownForbidden));
+            }
+
+            if (view.CurrentPlayer != viewer)
+            {
+                throw new ArgumentException("只有轮到本人行动时才有单子禁手。", nameof(ownForbidden));
+            }
+        }
+
         if (!view.Players.Any(p => p.Player == viewer))
         {
             throw new ArgumentException($"观察者 {viewer} 不在本局名单中。", nameof(viewer));
         }
 
-        return new ViewerWorld(viewer, world, ownHand, ownPreview);
+        return new ViewerWorld(viewer, world, ownHand, ownPreview, ownForbidden);
     }
 }

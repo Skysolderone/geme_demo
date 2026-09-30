@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Relics;
 
@@ -46,10 +47,21 @@ public sealed record BoardCellView(
     RelicType? RevealedType,
     PlayerId? LifeForbiddenBy)
 {
-    /// <summary>该格为什么落不下（对当前行动玩家）。超出合法落子范围不在此列——范围来自合法落子范围契约，默认棋盘不推断它。</summary>
+    /// <summary>
+    /// 该格对<b>观察者本人</b>是不是单子禁手（forbidden-marks：自杀手 / 同形 / 破坏活形）及其原因；不是为 <c>null</c>。
+    /// 只在观察者自己的默认棋盘上、轮到他行动时才有（<see cref="ViewerWorld.Board"/> 叠加）——它依赖本人的暂放批次，
+    /// 从公开世界构建的默认棋盘上恒为 <c>null</c>。值原样取自 Core 的单子禁手查询，本层不判气、提子、同形与活形。
+    /// </summary>
+    public ForbiddenMove? Forbidden { get; init; }
+
+    /// <summary>
+    /// 该格为什么落不下（对当前行动玩家）。超出合法落子范围不在此列——范围来自合法落子范围契约，默认棋盘不推断它。
+    /// 先后：地形 → 活棋禁入 → 单子禁手（禁入格不在合法落子范围里，不会同时是单子禁手）。
+    /// </summary>
     public PlacementBlock Block =>
         Terrain == Terrain.Obstacle ? PlacementBlock.Terrain
         : LifeForbiddenBy is not null ? PlacementBlock.LifeForbidden
+        : Forbidden is { } move ? Style.PlacementBlocks.Of(move.Kind)
         : PlacementBlock.None;
 }
 
@@ -67,6 +79,15 @@ public enum PlacementBlock
 
     /// <summary>活棋禁入：他人已确定活形棋串的眼空间。</summary>
     LifeForbidden,
+
+    /// <summary>单子禁手 · 破坏活形：在当前暂放之上再落这一子，整批会使他人的已确定活形棋串失去活形。</summary>
+    BreaksLife,
+
+    /// <summary>单子禁手 · 自杀手：落下后（整批提子之后）己方仍有棋串无气。</summary>
+    Suicide,
+
+    /// <summary>单子禁手 · 同形：落下后盘面与某次历史提交的盘面重复。</summary>
+    Superko,
 }
 
 /// <summary>默认棋盘（不打开任何信息层时）。</summary>
@@ -80,16 +101,59 @@ public enum PlacementBlock
 /// MUST NOT 据此把新设施画得与预置设施不同——设施本身一律从 <see cref="Fences"/> / <see cref="BoardCellView.HasBridge"/> /
 /// <see cref="BoardCellView.Surface"/> 读，那三处根本分不出新旧。
 /// </param>
+/// <param name="Boards">
+/// 棋盘清单（board-map D2 / D10）：原样取自地图数据，供渲染层画棋盘台面的边框与格线、区分出生棋盘与公共棋盘；Godot 不自行推断。
+/// 旧地图的清单为空，画面不变。清单是静态数据，不随对局变化。
+/// </param>
 public sealed record DefaultBoardView(
     int Width,
     int Height,
     ImmutableArray<BoardCellView> Cells,
     ImmutableArray<FenceEdge> Fences,
-    ImmutableArray<TerrainEdit> Edits)
+    ImmutableArray<TerrainEdit> Edits,
+    ImmutableArray<BoardPlate> Boards)
 {
     /// <summary>某格。</summary>
     public BoardCellView CellAt(Coord coord) =>
         Cells.FirstOrDefault(c => c.Coord == coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标超出棋盘范围。");
+
+    /// <summary>
+    /// 叠上观察者本人的单子禁手（forbidden-marks D4 / D6）：禁手格的 <see cref="BoardCellView.Forbidden"/> 取查询结果，其余格不变。
+    /// 查询结果里的格 MUST 都是棋盘上的空格，否则抛出——查询与盘面不是同一时刻的。
+    /// </summary>
+    public DefaultBoardView WithForbidden(ForbiddenMoveReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (report.Moves.IsDefaultOrEmpty)
+        {
+            return this;
+        }
+
+        var moves = report.Moves.ToDictionary(m => m.Coord);
+        ImmutableArray<BoardCellView> cells =
+        [
+            .. Cells.Select(cell =>
+            {
+                if (!moves.Remove(cell.Coord, out ForbiddenMove? move))
+                {
+                    return cell;
+                }
+
+                if (cell.Occupant is not null || cell.Terrain != Terrain.Playable)
+                {
+                    throw new ArgumentException($"禁手格 {cell.Coord.ToNotation()} 在默认棋盘上不是空的可落子格：查询与盘面不是同一时刻的。", nameof(report));
+                }
+
+                return cell with { Forbidden = move };
+            }),
+        ];
+        if (moves.Count > 0)
+        {
+            throw new ArgumentException($"禁手格 {moves.Keys.Order().First().ToNotation()} 不在棋盘上。", nameof(report));
+        }
+
+        return this with { Cells = cells };
+    }
 
     /// <summary>从公开世界构建：只读盘面格子视图与信物公开状态。</summary>
     public static DefaultBoardView From(PublicWorld world)
@@ -125,6 +189,7 @@ public sealed record DefaultBoardView(
         return new DefaultBoardView(
             board.Width, board.Height, cells,
             [.. board.Map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B)],
-            board.TerrainEdits);
+            board.TerrainEdits,
+            board.Map.Boards.IsDefault ? [] : board.Map.Boards);
     }
 }

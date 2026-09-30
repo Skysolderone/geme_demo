@@ -159,30 +159,33 @@ public static class BatchRehearsal
             return Rejected(shapeFailure, projected: null);
         }
 
-        // 第 3 步：在副本上模拟放置整个批次
-        GameBoard projected = board.Clone();
-        foreach (Placement placement in placements)
-        {
-            projected.Place(placement.Coord, context.Player, placement.Type);
-        }
+        return Settle(board, context.Player, placements, history, before);
+    }
 
-        // 第 4 步：同时应用本批次的全部改造（terrain-edit「改造先于提子生效」/ 裁决 T-3）。
-        // 顺序不可调换：立栅能敲掉敌串最后一口气而直接提子，对称地，堵死自己就是自杀手。
-        projected.ApplyTerrainEdits(EditsOf(placements));
+    /// <summary>
+    /// 第 3–8 步的<b>唯一</b>实现，<see cref="Rehearse"/> 在第 1–2 步通过后进入这里。单子禁手查询（<see cref="ForbiddenMoves"/>，forbidden-marks D1）
+    /// 也从这里进入：它的候选取自合法落子范围里未被暂放占用的空格、暂放本身已过第 1 步，而额度与库存（第 2 步）按规格不参与。
+    /// <paramref name="placements"/> MUST 非空且已满足第 1 步；<paramref name="before"/> 是 <paramref name="board"/> 的活形分析。
+    /// </summary>
+    internal static RehearsalResult Settle(
+        GameBoard board, PlayerId player, IReadOnlyList<Placement> placements, BoardHistory history, LifeShapeReport before)
+    {
+        // 第 3–4 步
+        GameBoard projected = Project(board, player, placements);
 
         // 第 5 步：一次性求出全部无气敌串的并集，再统一移除
-        ImmutableArray<CapturedStone> captures = CaptureResolver.FindCaptured(projected, context.Player);
+        ImmutableArray<CapturedStone> captures = CaptureResolver.FindCaptured(projected, player);
         projected.RemoveStones(captures.Select(s => s.Coord));
 
         // 第 6 步：破坏活形（life-shape D4，结果导向）——在提子之后看
-        if (BrokenLife(before, projected, context.Player) is { } broken)
+        if (BrokenLife(before, projected, player) is { } broken)
         {
             return Rejected(BatchFailure.BreaksLife(broken.Owner, broken.Stones, [.. placements]), projected, captures);
         }
 
         // 第 7 步：提子后重算当前玩家的全部棋串（裁决记录 2：全量，不收窄到受影响子集）
         var dead = new SortedSet<Coord>();
-        foreach (Group group in projected.GroupsOf(context.Player))
+        foreach (Group group in projected.GroupsOf(player))
         {
             if (projected.IsCaptured(group))
             {
@@ -196,13 +199,32 @@ public static class BatchRehearsal
         }
 
         // 第 8 步：结算后盘面与任一历史提交同形即拒绝。比较的是同形比对键（每格占用者 + 设施与地表，不含棋子类型），投影在 BoardHistory 内经 GameBoard.SuperkoKey 完成
-        if (history.FindDuplicate(projected.Serialize()) is { } sequence)
+        if (DuplicateOf(history, projected) is { } sequence)
         {
             return Rejected(BatchFailure.Superko(sequence, [.. placements.Select(p => p.Coord)]), projected, captures);
         }
 
         return new RehearsalResult(IsLegal: true, IsPass: false, Failure: null, captures, projected);
     }
+
+    /// <summary>第 3–4 步：在副本上放置整个批次，再同时应用本批次的全部改造；返回的副本尚未提子。</summary>
+    internal static GameBoard Project(GameBoard board, PlayerId player, IReadOnlyList<Placement> placements)
+    {
+        // 第 3 步：在副本上模拟放置整个批次
+        GameBoard projected = board.Clone();
+        foreach (Placement placement in placements)
+        {
+            projected.Place(placement.Coord, player, placement.Type);
+        }
+
+        // 第 4 步：同时应用本批次的全部改造（terrain-edit「改造先于提子生效」/ 裁决 T-3）。
+        // 顺序不可调换：立栅能敲掉敌串最后一口气而直接提子，对称地，堵死自己就是自杀手。
+        projected.ApplyTerrainEdits(EditsOf(placements));
+        return projected;
+    }
+
+    /// <summary>第 8 步的比对：<paramref name="settled"/>（结算后盘面）与哪一次历史提交同形；不同形为 <c>null</c>。</summary>
+    internal static int? DuplicateOf(BoardHistory history, GameBoard settled) => history.FindDuplicate(settled.Serialize());
 
     /// <summary>
     /// 第 6 步：批次开始前每条所有者不是 <paramref name="mover"/> 的已确定活形棋串，按其原有棋子在副本上所在的棋串重查；
