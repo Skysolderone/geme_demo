@@ -147,6 +147,7 @@ public sealed partial class GameRoot
         _hud.SupplySkipPressed += () => FinishSupply(null);
         _hud.ResignConfirmed += () =>
         {
+            CutShow();   // 演出中弃赛：演出先以终态结束（settlement-show A5）
             _session.Resign();
             _dirty = true;
             ShowCarrySettlement(_session.CarrySettled);

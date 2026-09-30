@@ -12,6 +12,7 @@ using Siege.Core.Match;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
 using Siege.Presentation.Preview;
+using Siege.Presentation.Show;
 using Siege.Presentation.Visibility;
 
 namespace Siege.Godot;
@@ -24,6 +25,7 @@ public sealed class MatchSession
 {
     private readonly Dictionary<int, PlayerId> _zoneOwners = [];
     private MatchRunner? _runner;
+    private ImmutableArray<SettlementBeat>? _pendingBeats;
 
     private MatchSession(MatchFlow match, PlayerId me, ulong seed, AiDifficulty difficulty, int? cellLimit)
     {
@@ -76,6 +78,17 @@ public sealed class MatchSession
 
     /// <summary>手牌栏里选中的棋子类型（决定点格子时放什么）。</summary>
     public PieceType? SelectedType { get; set; }
+
+    /// <summary>
+    /// 取走最近一次结算的节拍序列（settlement-show 3.1）：AI 小回合与本机玩家确认 / Pass 两条路径都在结算后生成一份（<see cref="SettlementBeats.Generate(MatchPublicView, MatchPublicView, CaptureRecord?, bool)"/>），
+    /// 图形侧取走后交给演出时间线；没有待取的为 <c>null</c>。节拍只读公开快照与结算记录，不改变对局状态。
+    /// </summary>
+    public ImmutableArray<SettlementBeat>? TakeSettlementBeats()
+    {
+        ImmutableArray<SettlementBeat>? beats = _pendingBeats;
+        _pendingBeats = null;
+        return beats;
+    }
 
     /// <summary>出生区 → 玩家（插旗锁定后才有）。</summary>
     public IReadOnlyDictionary<int, PlayerId> ZoneOwners => _zoneOwners;
@@ -406,6 +419,8 @@ public sealed class MatchSession
             return;
         }
 
+        // 结算前快照取确认之前已持有的观察者世界里的公开快照（design.md D1），不额外发布。
+        MatchPublicView before = World.Public.View;
         SettlementOutcome outcome = Match.Confirm();
         if (!outcome.Confirmed)
         {
@@ -419,6 +434,9 @@ public sealed class MatchSession
         RecruitPanel = null;
         Notice = "已确认落子。";
         Rebuild();
+
+        // 本机玩家自己的结算：有结算记录（按放置顺序），落子节拍压缩为一次整体确认闪动（design.md A2）。
+        _pendingBeats = SettlementBeats.Generate(before, World.Public.View, outcome.CaptureRecord, compressPlacement: true);
     }
 
     /// <summary>第 5 阶段：Pass（0 落子）。</summary>
@@ -429,11 +447,15 @@ public sealed class MatchSession
             return;
         }
 
+        MatchPublicView before = World.Public.View;
         Match.Pass();
         LastFailure = null;
         RecruitPanel = null;
         Notice = "本回合 Pass。";
         Rebuild();
+
+        // Pass 没有结算记录：势力不变得空序列、势力有变只得势力重算节拍。
+        _pendingBeats = SettlementBeats.Generate(before, World.Public.View, record: null);
     }
 
     /// <summary>跑完一个 AI 小回合，返回落子与被提子的演出数据。</summary>
@@ -451,30 +473,20 @@ public sealed class MatchSession
             ? LookaheadText(actor, lookahead)
             : null;
 
-        ImmutableArray<Coord>.Builder placed = ImmutableArray.CreateBuilder<Coord>();
-        ImmutableArray<Coord>.Builder captured = ImmutableArray.CreateBuilder<Coord>();
-        foreach (Coord coord in after.Board.AllCoords())
-        {
-            Occupant? was = before.Board[coord].Occupant;
-            Occupant? now = after.Board[coord].Occupant;
-            if (now is { } n && was is null && n.Owner == actor)
-            {
-                placed.Add(coord);
-            }
-            else if (was is not null && now is null)
-            {
-                captured.Add(coord);
-            }
-        }
+        // 运行器不返回结算记录（design.md D1）：落子与被提棋子只凭两份快照的盘面之差得出，落子按坐标字典序。
+        // 现有"回合高亮"里的落子格 / 被提格两项由节拍取代，不再单独计算（D6）。
+        ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(before, after, record: null);
+        _pendingBeats = beats;
+        TurnFlash flash = TurnFlash.Of(beats);
 
         string who = Siege.Presentation.Text.Labels.Player(actor);
-        Notice = placed.Count == 0
+        Notice = flash.Placed.IsEmpty
             ? $"{who} Pass。"
-            : $"{who} 落子 {placed.Count} 枚" + (captured.Count == 0 ? "。" : $"，提走 {captured.Count} 子。");
+            : $"{who} 落子 {flash.Placed.Length} 枚" + (flash.Captured.IsEmpty ? "。" : $"，提走 {flash.Captured.Length} 子。");
         Rebuild();
 
         // 改造的落成反馈不在这里算：AI 与人类两条路径都由 GameRoot 按默认棋盘视图的 Edits 增量统一给出（TurnFlash.Edits）。
-        return new TurnFlash(placed.ToImmutable(), captured.ToImmutable(), []);
+        return flash;
     }
 
     private string LookaheadText(PlayerId actor, LookaheadRecord record) =>
@@ -582,7 +594,11 @@ public sealed class MatchSession
         PublicSupplement supplement = Match.PublishSupplement();
         HandPrivateView hand = Match.Hands.AccessFor(Me).PrivateView();
         BatchPreview? preview = Match.Stage == TurnStage.Deploy && Match.CurrentPlayer == Me ? Match.PreviewCurrentBatch() : null;
-        return ViewerWorld.Build(Me, view, supplement, hand, preview);
+
+        // 单子禁手（forbidden-marks D6）：只在轮到本机玩家行动时取；AI 回合、插旗与终局不取、不显示。
+        // 世界只在状态变化后重建（盘面、行动玩家、暂放任一变化都会走到这里），所以查询不逐帧跑。结果由规则内核给出，本类不判气、提子、同形与活形。
+        ForbiddenMoveReport? forbidden = IsMyTurn ? Match.ForbiddenMovesOfCurrentPlayer() : null;
+        return ViewerWorld.Build(Me, view, supplement, hand, preview, forbidden);
     }
 
     private void Guard(Action action)

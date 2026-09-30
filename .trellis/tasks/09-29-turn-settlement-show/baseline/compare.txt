@@ -1,0 +1,17 @@
+turn-settlement-show 基线（改动前，含 board-map / forbidden-marks 未提交改动）与回归（改动后）比对
+命令：Godot_v4.7.2 console，项目 src/godot，--path 后 -- 参数如下
+
+[0.1 基线]（本目录）
+  auto-demo-v5.log        --headless -- --auto-demo                       => 共 53 帧，退出码 0，演示停止于第 5 大回合
+  screenshot-v5-f40.png   -- --auto-demo --screenshot=<path>:40           => 1600×900，第 40 帧，第 4 大回合；sha256 见 .sha256
+  pick-check-v5.log       --headless -- --auto-demo --pick-check          => 105/105，通过，退出码 0
+
+[4.1 回归]（after/）
+  auto-demo-v5.log        => 共 53 帧，退出码 0；日志除 [perf] 计时与新增 [show] 行外逐行相同
+  screenshot-v5-f40.png   => 取景自证行（截图 / 势力栏 / 独占格 / 棋子 / 本局改造 / 落成反馈 / 势力排名面板）逐字相同；
+                             像素差分 bbox (574,283)-(1000,646)，即地图中央水面（时间驱动的水波着色器）：差异像素全部为水色
+                             （蓝主导），bbox 之外 0 像素差异；改动后两次同参数运行（after/ 与 after/…-run2）在同一 bbox 内也有差异
+                             （max 通道差 ≤ 24），证明该区域是壁钟噪声而非演出引入。
+  pick-check-v5.log       => 105/105，通过，退出码 0
+  board1-rounds2.log      --headless -- --auto-demo --map=board:1 --rounds=2        => 27 帧，退出码 0
+  map-select-rounds2.log  --headless -- --map-select --auto-demo --rounds=2         => 41 帧，退出码 0

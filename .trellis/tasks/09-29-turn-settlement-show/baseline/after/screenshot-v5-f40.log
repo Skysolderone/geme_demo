@@ -1,0 +1,44 @@
+Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.341 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060 Ti
+
+[parts] 本次搭建地形部件：资源 48 件、程序生成 0 件（res://parts/terrain）
+[siege] 地图 siege-4p-base-v5，对局种子 20260915，你是 红方(P0)，AI 难度 标准（Standard，前瞻宽度 0），AI 评价权重 EvaluationWeights { PowerGain = 10, EnemyLoss = 8, Relic = 6, Safety = 35, Growth = 4, Initiative = 20, Supply = 2, Eye = 200, Threat = 25 }，自动演示模式（跑满 4 个大回合停止）
+[parts] 本次搭建地形部件：资源 48 件、程序生成 0 件（res://parts/terrain）
+[show] 第 1 帧 AI结算：节拍 2（落子 3 / 提子 0 / 势力 4），零时长
+[auto-demo] 第 5 帧暂放匠人 B1：已选 立栅 A1–A2，可改造目标 9 个（桥 0 / 栅 9 / 林 0）；格目标 无；工坊 未生效
+[terrain-edit] 第 11 帧、第 1 大回合落成：立栅 A1–A2
+[parts] 本次搭建地形部件：资源 49 件、程序生成 0 件（res://parts/terrain）
+[show] 第 12 帧 本机结算：节拍 2（落子 1 / 提子 0 / 势力 3），零时长
+[show] 第 12 帧 AI结算：节拍 2（落子 3 / 提子 0 / 势力 3），零时长
+[show] 第 13 帧 AI结算：节拍 2（落子 3 / 提子 0 / 势力 2），零时长
+[show] 第 14 帧 AI结算：节拍 2（落子 2 / 提子 0 / 势力 1），零时长
+[show] 第 15 帧 AI结算：节拍 2（落子 3 / 提子 0 / 势力 2），零时长
+[auto-demo] 第 19 帧暂放匠人 C1：已选 立栅 A1–B1，可改造目标 10 个（桥 0 / 栅 10 / 林 0）；格目标 无；工坊 未生效
+[terrain-edit] 第 25 帧、第 2 大回合落成：立栅 A1–B1
+[parts] 本次搭建地形部件：资源 50 件、程序生成 0 件（res://parts/terrain）
+[show] 第 26 帧 本机结算：节拍 2（落子 1 / 提子 0 / 势力 1），零时长
+[show] 第 26 帧 AI结算：节拍 2（落子 3 / 提子 0 / 势力 2），零时长
+[show] 第 27 帧 AI结算：节拍 2（落子 2 / 提子 0 / 势力 1），零时长
+[terrain-edit] 第 27 帧、第 3 大回合落成：立栅 B11–B12
+[parts] 本次搭建地形部件：资源 51 件、程序生成 0 件（res://parts/terrain）
+[show] 第 28 帧 AI结算：节拍 0（落子 0 / 提子 0 / 势力 0），零时长
+[auto-demo] 第 32 帧暂放匠人 D1：已选 立栅 B1–C1，可改造目标 10 个（桥 0 / 栅 10 / 林 0）；格目标 无；工坊 未生效
+[terrain-edit] 第 38 帧、第 3 大回合落成：立栅 B1–C1
+[parts] 本次搭建地形部件：资源 52 件、程序生成 0 件（res://parts/terrain）
+[show] 第 39 帧 本机结算：节拍 2（落子 1 / 提子 0 / 势力 1），零时长
+[show] 第 39 帧 AI结算：节拍 2（落子 1 / 提子 0 / 势力 2），零时长
+[life-shape] 截图取景：当前行动 紫方(P3)，禁入格 13，已活棋串 4，棋串读法 关
+[siege] 截图 E:/wws/geme_demo/.trellis/tasks/09-29-turn-settlement-show/baseline/after/screenshot-v5-f40.png：Ok（1600×900，第 40 帧，第 4 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+[siege] 势力栏：红方(P0) 势力 6（领地 3 + 棋串 3）；蓝方(P1) 势力 24（领地 8 + 棋串 16）；金方(P2) 势力 26（领地 7 + 棋串 19）；紫方(P3) 势力 27（领地 7 + 棋串 20）
+[siege] 独占格 25（红方(P0) 3、蓝方(P1) 8、金方(P2) 7、紫方(P3) 7）
+[siege] 势力排名面板 左 1243 右 1586 / 视口宽 1600：完整可见
+[siege] 棋子：普通子 4（L2、M2、B12、L13）；堡垒子 2（M11、D13）；连珠子 7（M3、N3、M4、A11、B11、L12、M12）；倍增子 2（C12、K13）；协同子 2（L4、C10）；匠人 4（B1、C1、D1、B13）；哨兵子 1（B10）；界碑子 1（K11）
+[siege] 本局改造 4 处：立栅 A1–A2、立栅 A1–B1、立栅 B11–B12、立栅 B1–C1
+[carry] 补给面板 关，结算面板 关；补给 —；档案存取 无（不读写档案）
+[siege] 落成反馈：无
+[show] 截图时演出：无（遮罩为空，画面即结算后快照）
+[perf] 帧率 16，单帧处理 221.5 ms，绘制调用 1868，对象 2473，图元 40375；相机注视点 (0, 0) 距离 18.854
+
+--- stderr ---
+
+--- exit 0 (4.9s) ---
