@@ -326,7 +326,7 @@ public sealed class BatchEvaluator
         var sb = new StringBuilder((board.Width * board.Height) + 16);
         foreach (Coord c in board.AllCoords())
         {
-            sb.Append(board[c].Occupant is { } occupant ? (char)('A' + occupant.Owner.Value) : '.');
+            sb.Append(board.OccupantAt(c) is { } occupant ? (char)('A' + occupant.Owner.Value) : '.');
         }
 
         ImmutableArray<TerrainEdit> edits = board.TerrainEdits;

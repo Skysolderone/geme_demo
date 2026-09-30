@@ -41,7 +41,7 @@ public static class CaptureResolver
 
             foreach (Coord stone in group.Stones)
             {
-                Occupant occupant = board[stone].Occupant
+                Occupant occupant = board.OccupantAt(stone)
                     ?? throw new SiegeRuleException($"候选棋串与盘面不一致：{stone.ToNotation()} 已为空。");
                 captured[stone] = new CapturedStone(stone, occupant.Owner, occupant.Type);
             }

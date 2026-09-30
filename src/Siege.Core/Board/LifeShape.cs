@@ -71,7 +71,8 @@ public sealed class GroupLife
 /// <remarks>
 /// <para>纯计算、只读盘面：棋子来自 <see cref="GameBoard.AllGroups"/>，邻接只来自 <see cref="GameBoard.LibertyNeighbors"/>——
 /// 无气边的方向（障碍、未架桥深水、崖壁、栅栏、棋盘外沿）不产生邻格，天然是墙，不另写判定（design D1）。</para>
-/// <para>不接名册：所有者从棋子读出，弃赛 / 出局者遗留的活形照常产生禁入。不缓存、不入存档（design D5）。</para>
+/// <para>不接名册：所有者从棋子读出，弃赛 / 出局者遗留的活形照常产生禁入。不入存档（design D5）；不做增量——唯一的记忆化是
+/// <see cref="GameBoard.LifeMemo"/>（ai-turn-speed D2）：同一盘面实例在没有任何写入原语之间再次分析时返回同一份全量结果，写入之后整份重算。</para>
 /// <para>确定性：内部只用按 <c>y * 宽 + x</c> 编址的数组与按坐标序构造的列表，不遍历无序集合。</para>
 /// <para>规格：openspec/changes/life-shape/specs/life-shape；单子不成活见 openspec/changes/life-single-stone（「活形三态」MODIFIED）。</para>
 /// </remarks>
@@ -99,10 +100,22 @@ public sealed class LifeShapeReport
     /// <summary>全部眼空间（封闭空区，不论眼值与所属棋串死活），按首格坐标序。</summary>
     public ImmutableArray<EyeSpace> EyeSpaces { get; }
 
-    /// <summary>对盘面做一次全量活形分析。</summary>
+    /// <summary>对盘面做一次全量活形分析（盘面自上次分析以来未变即返回同一份结果，见 <see cref="GameBoard.LifeMemo"/>）。</summary>
     public static LifeShapeReport Analyze(GameBoard board)
     {
         ArgumentNullException.ThrowIfNull(board);
+        if (board.LifeMemo is { } memo)
+        {
+            return memo;
+        }
+
+        LifeShapeReport report = AnalyzeCore(board);
+        board.LifeMemo = report;
+        return report;
+    }
+
+    private static LifeShapeReport AnalyzeCore(GameBoard board)
+    {
         int width = board.Width;
         int size = width * board.Height;
 

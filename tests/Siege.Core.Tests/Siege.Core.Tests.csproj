@@ -19,6 +19,8 @@
   <ItemGroup>
     <!-- expert-strength 2.1：本 change 之前的真实专家日志（sim-out/expert-lookahead/smoke20 取一局，gzip） -->
     <None Include="MatchTelemetry\Fixtures\*.jsonl.gz" CopyToOutputDirectory="PreserveNewest" />
+    <!-- ai-turn-speed 1.1：改动前钉入的固定种子 AI 决策序列基线（v5 到终局、board:1 限 12 大回合） -->
+    <None Include="AiDecision\Fixtures\*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

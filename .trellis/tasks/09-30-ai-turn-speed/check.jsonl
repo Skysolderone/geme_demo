@@ -1,0 +1,7 @@
+{"file": "openspec/changes/ai-turn-speed/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/ai-turn-speed/design.md", "reason": "规格"}
+{"file": "openspec/changes/ai-turn-speed/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/ai-turn-speed/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/Godot Debug"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "随机与遍历次序不得改变"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "单一实现表"}

@@ -56,7 +56,8 @@ public readonly record struct CellOwnership(OwnershipKind Kind, PlayerId? Owner)
 /// 不向比自身高 2 的格覆盖，栅栏不挡。覆盖目标由 <see cref="GameBoard.CoverageTargets"/> 给出（唯一实现在 <see cref="Adjacency.CoverageTargets"/>），
 /// 不在此处手写偏移或地形过滤。</para>
 /// <para>按格存"覆盖者数量 + 唯一覆盖者"（design.md D1），三态判定与唯一覆盖查询都是 O(1) 读取。
-/// 每次调用 <see cref="Compute"/> 全量重算，不做增量、不缓存（D2）。</para>
+/// 每次调用 <see cref="Compute"/> 全量重算，不做增量、不缓存（D2）。内部按格只记"第一名覆盖者"，出现第二名不同的覆盖者时才建集合
+/// （ai-turn-speed D2「数据结构」：绝大多数格只有一名覆盖者，不为每格分配集合），结果与逐格建集合逐项相同。</para>
 /// <para>规格：openspec/changes/add-territory-power/specs/coverage-territory</para>
 /// </remarks>
 public sealed class CoverageMap
@@ -82,12 +83,14 @@ public sealed class CoverageMap
         ArgumentNullException.ThrowIfNull(board);
         int width = board.Width;
         int height = board.Height;
-        var coverers = new HashSet<PlayerId>?[width * height];
-        var sources = new ImmutableArray<CoverageSource>.Builder?[width * height];
+        int size = width * height;
+        var first = new PlayerId?[size];
+        var others = new HashSet<PlayerId>?[size];
+        var sources = new List<CoverageSource>?[size];
 
         foreach (Coord c in board.AllCoords())
         {
-            if (board[c].Occupant is not { } occupant)
+            if (board.OccupantAt(c) is not { } occupant)
             {
                 continue;
             }
@@ -96,26 +99,34 @@ public sealed class CoverageMap
             {
                 // CoverageTargets 已排除越界、障碍、未架桥深水、林地与崖上格；覆盖到此为止，不再向更远的格传递。
                 int index = Index(width, target);
-                (coverers[index] ??= []).Add(occupant.Owner);
-                (sources[index] ??= ImmutableArray.CreateBuilder<CoverageSource>()).Add(new CoverageSource(c, Adjacency.AreAdjacent(c, target)));
+                if (first[index] is not { } holder)
+                {
+                    first[index] = occupant.Owner;
+                }
+                else if (holder != occupant.Owner)
+                {
+                    (others[index] ??= [holder]).Add(occupant.Owner);
+                }
+
+                (sources[index] ??= []).Add(new CoverageSource(c, Adjacency.AreAdjacent(c, target)));
             }
         }
 
-        var coverage = new CellCoverage[width * height];
-        var ownership = new CellOwnership[width * height];
+        var coverage = new CellCoverage[size];
+        var ownership = new CellOwnership[size];
+        var sourceArrays = new ImmutableArray<CoverageSource>[size];
         foreach (Coord c in board.AllCoords())
         {
             int index = Index(width, c);
-            HashSet<PlayerId>? set = coverers[index];
-            CellCoverage cell = set is null
+            CellCoverage cell = first[index] is not { } holder
                 ? CellCoverage.None
-                : new CellCoverage(set.Count, set.Count == 1 ? set.Single() : null);
+                : others[index] is { } set ? new CellCoverage(set.Count, null) : new CellCoverage(1, holder);
             coverage[index] = cell;
             ownership[index] = Resolve(board[c], cell);
+            sourceArrays[index] = sources[index] is { } list ? [.. list] : ImmutableArray<CoverageSource>.Empty;
         }
 
-        return new CoverageMap(width, height, coverage, ownership,
-            [.. sources.Select(b => b is null ? ImmutableArray<CoverageSource>.Empty : b.ToImmutable())]);
+        return new CoverageMap(width, height, coverage, ownership, sourceArrays);
     }
 
     /// <summary>覆盖查询：该格有几名不同的覆盖者，以及唯一覆盖者是谁。被占据的格同样记录覆盖，占据优先由 <see cref="OwnershipOf"/> 处理。</summary>
