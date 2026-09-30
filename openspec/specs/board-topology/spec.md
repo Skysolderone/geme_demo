@@ -5,7 +5,9 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 ## Requirements
 ### Requirement: 坐标记法
 
-系统 SHALL 采用围棋记法作为格子的权威标识：**列字母 + 行数字**，列字母自左向右按围棋惯例跳过 `I`，行数字自下而上从 `1` 起编号。列字母的个数由棋盘宽度决定：11 列为 `A B C D E F G H J K L`，13 列为 `A B C D E F G H J K L M N`。
+系统 SHALL 采用围棋记法作为格子的权威标识：**列标 + 行数字**，列标自左向右按围棋惯例跳过 `I`，行数字自下而上从 `1` 起编号。列标的个数由棋盘宽度决定：11 列为 `A B C D E F G H J K L`，13 列为 `A B C D E F G H J K L M N`。
+
+前 25 列的列标是单个字母 `A`–`Z`（跳过 `I`）。第 26 列起的列标是两个字母：第 26 列为 `AA`，其后依次为 `AB`……`AZ`、`BA`……，两位都取自同一张跳过 `I` 的字母表。解析时 MUST 取最长的字母前缀作为列标。前 25 列的记法 MUST 与引入双字母列标之前完全相同。
 
 对局日志、规格文本、错误信息与任何面向人的输出 MUST 使用该记法。实现内部 MAY 使用数值索引，但 MUST 提供与围棋记法的双向映射，且该映射 MUST 是唯一实现。
 
@@ -20,6 +22,18 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 #### Scenario: 双向映射唯一
 - **WHEN** 把任意格标识转换为内部索引再转换回来
 - **THEN** 得到完全相同的标识，且全项目只存在一处映射实现
+
+#### Scenario: 第 26 列起用双字母
+- **WHEN** 枚举一张 28 列地图最右侧四列的列标
+- **THEN** 结果依次为 `Z`、`AA`、`AB`、`AC`
+
+#### Scenario: 双字母同样跳过 I
+- **WHEN** 查询第 33 列与第 34 列的列标
+- **THEN** 结果为 `AH` 与 `AJ`，不存在 `AI`
+
+#### Scenario: 双字母坐标往返
+- **WHEN** 解析 `AB12` 再转回记法
+- **THEN** 得到第 27 列、第 12 行，转回的记法为 `AB12`
 
 ### Requirement: 棋盘格子状态模型
 
