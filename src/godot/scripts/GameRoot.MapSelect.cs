@@ -47,7 +47,7 @@ public sealed partial class GameRoot
         _select = new MapSelectModel(NewMapSeed(), _difficulty);
         if (preselect is not null && !_select.TrySelectId(preselect))
         {
-            throw new System.FormatException($"--map-select 只能预选内置地图或完整的生成图标识，{preselect} 不在选图界面的清单里。");
+            throw new System.FormatException($"--map-select 只能预选内置地图、完整的生成图标识或完整的棋盘图标识，{preselect} 不在选图界面的清单里。");
         }
 
         MatchSession preview = PreviewSession();
@@ -71,6 +71,7 @@ public sealed partial class GameRoot
         _hud.MapSeedSubmitted += text => OnSelectionChanged(_select?.SubmitSeed(text));
         _hud.MapRerollPressed += () => OnSelectionChanged(_select?.Reroll(NewMapSeed()));
         _hud.MapPlatformsAdjusted += delta => OnSelectionChanged(_select?.AdjustPlatforms(delta));
+        _hud.MapBoardsAdjusted += delta => OnSelectionChanged(_select?.AdjustBoards(delta));
         _hud.MapStartPressed += StartMatch;
         _hud.MapDifficultyPicked += difficulty =>
         {
@@ -138,13 +139,16 @@ public sealed partial class GameRoot
 
     /// <summary>
     /// 无人值守自检（<c>--map-select --auto-demo</c>）：每帧一步，把选图操作经与面板事件<b>同一组处理函数</b>走一遍——
-    /// 随机图 → 换一张 → 平台数 +1 → 非法种子 → 合法种子 → 逐个内置图 → 回到进入时的那一项 → 开始；随后照常自动演示。
+    /// 随机图 → 换一张 → 平台数 +1 → 非法种子 → 合法种子 → 棋盘图 → 换一张 → 棋盘数 +1 → 逐个内置图 → 回到进入时的那一项 → 开始；随后照常自动演示。
     /// 任何一步不符预期即以退出码 1 结束（否则选图 → 建局这条路径只有人工能验）。
     /// </summary>
     private void SelfCheckMapSelect()
     {
         MapSelectModel model = _select!;
-        int builtins = model.Options.Count - 1;
+        int[] builtins = [.. Enumerable.Range(0, model.Options.Count).Where(i => model.Options[i].Kind == MapOptionKind.Builtin)];
+        int random = Enumerable.Range(0, model.Options.Count).First(i => model.Options[i].IsRandom);
+        int boardOption = Enumerable.Range(0, model.Options.Count).First(i => model.Options[i].IsBoard);
+        const int FirstBuiltinStep = 8;
         int step = _selectStep++;
         string before = model.CurrentId;
         string what;
@@ -168,7 +172,7 @@ public sealed partial class GameRoot
         if (step == 0)
         {
             what = "选中随机图";
-            OnSelectionChanged(model.Select(builtins));
+            OnSelectionChanged(model.Select(random));
             ok = model.IsRandomSelected && _session.Match.Map.Id == model.CurrentId;
         }
         else if (step == 1)
@@ -195,13 +199,42 @@ public sealed partial class GameRoot
             OnSelectionChanged(model.SubmitSeed("12345"));
             ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && _session.Match.Map.Id == model.CurrentId;
         }
-        else if (step < 5 + builtins)
+        else if (step == 5)
         {
-            what = $"选中第 {step - 4} 项内置图";
-            OnSelectionChanged(model.Select(step - 5));
-            ok = !model.IsRandomSelected && _session.Match.Map.Id == model.CurrentId;
+            // 棋盘图（board-map D9）：种子沿用上一步输入的 12345，棋盘数是进入时的值；预览的地图带棋盘清单，块数与面板一致。
+            what = "选中棋盘图";
+            OnSelectionChanged(model.Select(boardOption));
+            ok = model.IsBoardSelected && model.MapSeed == 12345UL && _session.Match.Map.Id == model.CurrentId
+                && _session.World.Board().Boards.Length == model.BoardCount;
         }
-        else if (step == 5 + builtins)
+        else if (step == 6)
+        {
+            what = "棋盘图换一张";
+            int boardsBefore = model.BoardCount;
+            OnSelectionChanged(model.Reroll(NewMapSeed()));
+            ok = model.IsBoardSelected && model.CurrentId != before && model.BoardCount == boardsBefore && _session.Match.Map.Id == model.CurrentId
+                && _session.World.Board().Boards.Length == model.BoardCount;
+        }
+        else if (step == 7)
+        {
+            what = "棋盘数 +1（到上限则 −1）";
+            int boardsBefore = model.BoardCount;
+            ulong seedBefore = model.MapSeed;
+            int delta = model.CanIncreaseBoards ? +1 : -1;
+            OnSelectionChanged(model.AdjustBoards(delta));
+            ok = model.CurrentId != before && model.BoardCount == boardsBefore + delta && model.MapSeed == seedBefore
+                && _session.Match.Map.Id == model.CurrentId && _session.World.Board().Boards.Length == model.BoardCount
+                && model.CurrentId.EndsWith($":n{model.BoardCount}", System.StringComparison.Ordinal) == (model.BoardCount != BoardMapParameters.DefaultBoards);
+        }
+        else if (step < FirstBuiltinStep + builtins.Length)
+        {
+            int option = builtins[step - FirstBuiltinStep];
+            what = $"选中第 {step - FirstBuiltinStep + 1} 项内置图";
+            OnSelectionChanged(model.Select(option));
+            ok = model.Options[option].Kind == MapOptionKind.Builtin && !model.IsSeededSelected && _session.Match.Map.Id == model.CurrentId
+                && _session.World.Board().Boards.IsEmpty;
+        }
+        else if (step == FirstBuiltinStep + builtins.Length)
         {
             what = "回到进入时的那一项";
             ok = model.TrySelectId(_selectEntryId);
@@ -238,14 +271,8 @@ public sealed partial class GameRoot
         return count;
     }
 
-    /// <summary>当前预览地图的一行说明：读默认棋盘视图模型，不读地图、不判规则。</summary>
-    private string PreviewInfo()
-    {
-        DefaultBoardView board = _session.World.Board();
-        int zones = board.Cells.Where(c => c.BirthZone is not null).Select(c => c.BirthZone).Distinct().Count();
-        int playable = board.Cells.Count(c => c.Terrain == Terrain.Playable);
-        return $"{board.Width}×{board.Height}，{zones} 个出生区，可落子 {playable} 格";
-    }
+    /// <summary>当前预览地图的一行说明（尺寸、出生区数、可落子格数，棋盘图另有棋盘数）：文案由表现层给出，读默认棋盘视图模型，不读地图、不判规则。</summary>
+    private string PreviewInfo() => MapPreviewInfo.Of(_session.World.Board());
 
     /// <summary>
     /// 点"开始"：按视图模型确认的标识建真正的对局，进入插旗；相机退出全局预览回到平时的初始位姿（最远缩放、地图中心）。

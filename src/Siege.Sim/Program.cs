@@ -77,6 +77,7 @@ public static class Program
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  地图标识：内置图 / 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
+        Console.WriteLine("            board:<地图种子>[:n<棋盘数 7–10>]（随机生成的棋盘图）；只写 board 即随机取一个地图种子并打印完整标识。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
     }
@@ -132,12 +133,20 @@ public static class Program
     }
 
     /// <summary>
-    /// 裸 <c>gen</c>（"随机取一个地图种子"）：规则内核不读时钟，取种子只在入口最外层做。取到后拼成完整标识、打印给用户，再交给
+    /// 裸 <c>gen</c> / 裸 <c>board</c>（"随机取一个地图种子"）：规则内核不读时钟，取种子只在入口最外层做。取到后拼成完整标识、打印给用户，再交给
     /// <see cref="MapCatalog"/>；裸 <c>gen</c> MUST NOT 进入 Core，也 MUST NOT 写进任何记录（配置记录、日志首部）。其余标识原样返回，
     /// 此时 <paramref name="mapSeedSource"/> 不被调用。
     /// </summary>
     internal static string? MaterializeMapRequest(string? mapId, TextWriter output, Func<ulong> mapSeedSource)
     {
+        if (BoardMapId.IsBareRequest(mapId))
+        {
+            // 裸 board（board-map D7）：同一个取种子来源，拼成棋盘图的完整标识（缺省棋盘数）。
+            string boardId = BoardMapId.Format(mapSeedSource(), BoardMapParameters.Default);
+            output.WriteLine($"随机取了一个地图种子：本次地图为 {boardId}（用 --map {boardId} 可重开同一张图）");
+            return boardId;
+        }
+
         if (!GeneratedMapId.IsBareRequest(mapId))
         {
             return mapId;
@@ -223,7 +232,8 @@ public static class Program
         Console.Write("    ");
         for (int x = 0; x < map.Width; x++)
         {
-            Console.Write($"{Coord.ColumnLetters[x]}  ");
+            // 每列三个字符宽：双字母列标（第 26 列起）只是少补一个空格。
+            Console.Write($"{new Coord(x, 0).Column,-3}");
         }
 
         Console.WriteLine();

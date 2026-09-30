@@ -282,18 +282,30 @@ public class 各入口支持生成图Tests
         Assert.All(generatorCallers, p => Assert.StartsWith("Siege.Core/Board/Maps/", p, StringComparison.Ordinal));
         Assert.Contains("Siege.Core/Board/Maps/MapCatalog.cs", generatorCallers);   // 反面：目录确实在调
 
+        // board-map 段 B：棋盘档生成器同理，只经目录调用。
+        string[] boardCallers = [.. files.Where(f => f.Text.Contains("BoardMapGenerator.", StringComparison.Ordinal)).Select(f => f.Path).Order(StringComparer.Ordinal)];
+        Assert.All(boardCallers, p => Assert.StartsWith("Siege.Core/Board/Maps/", p, StringComparison.Ordinal));
+        Assert.Contains("Siege.Core/Board/Maps/MapCatalog.cs", boardCallers);
+
         string[] bareReaders = [.. files.Where(f => f.Text.Contains("IsBareRequest(", StringComparison.Ordinal)).Select(f => f.Path).Order(StringComparer.Ordinal)];
         Assert.Equal(
-            ["Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Core/Board/Maps/MapGenParameters.cs", "Siege.Sim/Config/RunConfig.cs", "Siege.Sim/Program.cs", "godot/scripts/GameRoot.cs"],
+            ["Siege.Core/Board/Maps/BoardMapParameters.cs", "Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Core/Board/Maps/MapGenParameters.cs", "Siege.Sim/Config/RunConfig.cs", "Siege.Sim/Program.cs", "godot/scripts/GameRoot.cs"],
             bareReaders);
+
+        // 裸 board（board-map D7）的识别点更少：目录（拒绝它）、批量 / 终端入口、图形版入口；标识的唯一实现在 BoardMapParameters.cs。
+        string[] bareBoardReaders = [.. files.Where(f => f.Text.Contains("BoardMapId.IsBareRequest(", StringComparison.Ordinal)).Select(f => f.Path).Order(StringComparer.Ordinal)];
+        Assert.Equal(["Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Sim/Program.cs", "godot/scripts/GameRoot.cs"], bareBoardReaders);
         string program = files.Single(f => f.Path == "Siege.Sim/Program.cs").Text;
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"Stopwatch\.GetTimestamp\(\)"));          // 缺省来源 ClockMapSeed
         // 段 C 检查（裁决 4）：三个入口取到的时间戳都先经同一个折叠函数折成九位以内的短种子（本断言与下面图形版那条随之更新）。
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"=> GeneratedMapId\.FriendlySeed\(\(ulong\)System\.Diagnostics\.Stopwatch\.GetTimestamp\(\)\);"));
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"GeneratedMapId\.Format\(mapSeedSource\(\)"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"BoardMapId\.Format\(mapSeedSource\(\)"));
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(program, @"mapSeedSource\(\)").Count);   // 两种裸标识各取一次，别无他处
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"=> Execute\(args, ClockMapSeed\)"));
         string gameRoot = files.Single(f => f.Path == "godot/scripts/GameRoot.cs").Text;
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(gameRoot, @"GeneratedMapId\.Format\(GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(gameRoot, @"BoardMapId\.Format\(GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
 
         // 规则内核永不读时钟（裸 gen 的种子不可能在 Core 里取）。
         Assert.DoesNotContain(files, f => f.Path.StartsWith("Siege.Core/", StringComparison.Ordinal)

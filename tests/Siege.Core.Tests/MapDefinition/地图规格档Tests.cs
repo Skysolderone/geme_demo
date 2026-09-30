@@ -69,6 +69,62 @@ public class 地图规格档Tests
     }
 
     [Fact]
+    public void 棋盘档读写往返()
+    {
+        // Scenario（board-map）：棋盘档地图导出再读入 → 规格档仍为棋盘，棋盘清单与其余字段逐项相等。
+        // 夹具宽 29 列：1 号出生棋盘在双字母列上，漏改列标解析时这里读不回来。
+        MapData original = BoardMapFixtures.Map();
+
+        string json = MapFile.ToJson(original);
+        MapData restored = MapFile.FromJson(json);
+
+        Assert.Contains("\"Profile\": \"Board\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Boards\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"AB9\"", json, StringComparison.Ordinal);
+        Assert.Equal(MapProfile.Board, restored.Profile);
+        Assert.Equal(3, restored.Boards.Length);
+        Assert.Equal(original.Boards.AsEnumerable(), restored.Boards.AsEnumerable());
+        Assert.Equal(new BoardPlate(Coord.Parse("X5"), 5, 5, BoardPlateKind.Birth), restored.Boards[1]);
+        Assert.Equal(new BoardPlate(Coord.Parse("L3"), 9, 9, BoardPlateKind.Public), restored.Boards[2]);
+        Assert.Equal(original.Id, restored.Id);
+        Assert.Equal(original.Width, restored.Width);
+        Assert.Equal(original.Height, restored.Height);
+        Assert.Equal(original.MaxPlayers, restored.MaxPlayers);
+        Assert.Equal(original.Obstacles.Order(), restored.Obstacles.Order());
+        Assert.Equal(original.BirthZones.Length, restored.BirthZones.Length);
+        for (int i = 0; i < original.BirthZones.Length; i++)
+        {
+            Assert.Equal(original.BirthZones[i].Order(), restored.BirthZones[i].Order());
+        }
+
+        Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
+        Assert.Equal(original.ChokePoints.Order(), restored.ChokePoints.Order());
+        Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
+        Assert.Equal(original.DistanceTolerance, restored.DistanceTolerance);
+        Assert.Equal(original.MinTwoEyeArea, restored.MinTwoEyeArea);
+        Assert.Equal(json, MapFile.ToJson(restored));
+    }
+
+    [Fact]
+    public void 棋盘档按自己的声明行校验_未定义的规格档值仍被拒绝而不是抛异常()
+    {
+        // board-map 段 B：棋盘档有了声明行。合规的 4 人棋盘档图被接受（逐条 Scenario 见 棋盘档预算与校验Tests）；
+        // 段 A 的 29×13 2 人夹具不合棋盘档的规模（行数不足 20 行），按棋盘档自己的规则被拒绝，而不是"没有声明表"。
+        Assert.True(MapValidator.Validate(BoardMapFixtures.FourPlayerMap()).IsValid);
+        GameBoard.Load(BoardMapFixtures.FourPlayerMap());
+
+        MapValidationResult small = MapValidator.Validate(BoardMapFixtures.Map());
+        Assert.Equal("MAP_TOO_SHORT", Assert.Single(small.Failures).Code);
+        Assert.Throws<MapValidationException>(() => GameBoard.Load(BoardMapFixtures.Map()));
+
+        // 没有声明行的只剩未定义的取值（只可能来自手工构造）：报成拒绝项并说明原因，不崩。
+        MapData unknown = BoardMapFixtures.FourPlayerMap() with { Profile = (MapProfile)9 };
+        MapValidationFailure failure = Assert.Single(MapValidator.Validate(unknown).Failures);
+        Assert.Equal("MAP_PROFILE_UNKNOWN", failure.Code);
+        Assert.Throws<MapValidationException>(() => GameBoard.Load(unknown));
+    }
+
+    [Fact]
     public void 未定义的规格档数字被指名报出()
     {
         string json = MapFile.ToJson(FrontierFixtures.Map()).Replace("\"Profile\": \"Frontier\"", "\"Profile\": 7", StringComparison.Ordinal);

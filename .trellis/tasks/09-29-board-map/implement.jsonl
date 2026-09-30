@@ -1,0 +1,7 @@
+{"file": "openspec/changes/board-map/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/board-map/design.md", "reason": "规格"}
+{"file": "openspec/changes/board-map/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/board-map/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/Godot Debug"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "生成器确定性"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "坐标记法唯一映射"}

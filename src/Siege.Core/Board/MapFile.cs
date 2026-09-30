@@ -35,6 +35,10 @@ public static class MapFile
             MaxPlayers = map.MaxPlayers,
             // 标准档不写出：四份既有 maps/*.json 逐字节不变；缺字段按标准档读入（frontier-map 1.1）。
             Profile = map.Profile == MapProfile.Standard ? null : map.Profile,
+            // 空清单不写出：既有地图的导出文件与引入棋盘清单之前逐字节相同（board-map D2）。
+            Boards = map.Boards.IsDefaultOrEmpty
+                ? null
+                : [.. map.Boards.Select(b => new BoardDto { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Kind = b.Kind })],
             Obstacles = Sorted(map.Obstacles),
             BirthZones = [.. map.BirthZones.Select(Sorted)],
             RelicCells = map.RelicCells
@@ -91,6 +95,7 @@ public static class MapFile
             Height = dto.Height,
             MaxPlayers = dto.MaxPlayers,
             Profile = ParseProfile(dto.Profile),
+            Boards = ParseBoards(dto.Boards),
             Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
             RelicCells = relicCells.ToImmutableDictionary(
@@ -116,7 +121,38 @@ public static class MapFile
         MapProfile value = profile ?? MapProfile.Standard;
         return Enum.IsDefined(value)
             ? value
-            : throw new FormatException($"地图文件的 Profile 为 {(int)value}：规格档只能是 Standard（标准）/ Frontier（边疆）。");
+            : throw new FormatException($"地图文件的 Profile 为 {(int)value}：规格档只能是 Standard（标准）/ Frontier（边疆）/ Board（棋盘）。");
+    }
+
+    /// <summary>
+    /// 棋盘清单缺省为空（旧地图文件没有该字段）。这里只管"读得成一块矩形"：类别是已定义的取值、宽高为正；
+    /// 边长区间、棋盘内无障碍、出生棋盘与出生区对应等属于静态校验，不在文件格式里判。
+    /// </summary>
+    private static ImmutableArray<BoardPlate> ParseBoards(List<BoardDto>? boards)
+    {
+        if (boards is null)
+        {
+            return [];
+        }
+
+        ImmutableArray<BoardPlate>.Builder plates = ImmutableArray.CreateBuilder<BoardPlate>(boards.Count);
+        for (int i = 0; i < boards.Count; i++)
+        {
+            BoardDto dto = Required(boards[i], $"Boards[{i}]");
+            if (!Enum.IsDefined(dto.Kind))
+            {
+                throw new FormatException($"地图文件的 Boards[{i}] 的 Kind 为 {(int)dto.Kind}：棋盘类别只能是 Birth（出生）/ Public（公共）。");
+            }
+
+            if (dto.Width < 1 || dto.Height < 1)
+            {
+                throw new FormatException($"地图文件的 Boards[{i}] 为 {dto.Width}×{dto.Height}：棋盘的宽与高必须为正。");
+            }
+
+            plates.Add(new BoardPlate(Coord.Parse(Required(dto.Origin, $"Boards[{i}].Origin")), dto.Width, dto.Height, dto.Kind));
+        }
+
+        return plates.MoveToImmutable();
     }
 
     /// <summary>
@@ -301,9 +337,13 @@ public static class MapFile
 
         public int MaxPlayers { get; set; }
 
-        /// <summary>规格档（Standard 标准 / Frontier 边疆）。省略即标准档；标准档写出时也省略。</summary>
+        /// <summary>规格档（Standard 标准 / Frontier 边疆 / Board 棋盘）。省略即标准档；标准档写出时也省略。</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public MapProfile? Profile { get; set; }
+
+        /// <summary>棋盘清单（board-map）。省略即空清单；空清单写出时也省略。</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<BoardDto>? Boards { get; set; }
 
         public List<string> Obstacles { get; set; } = [];
 
@@ -342,6 +382,18 @@ public static class MapFile
         /// </summary>
         [JsonExtensionData]
         public Dictionary<string, JsonElement> Unknown { get; set; } = [];
+    }
+
+    /// <summary>棋盘清单的一项：左下角坐标（围棋记法）、宽、高、类别。</summary>
+    private sealed class BoardDto
+    {
+        public string Origin { get; set; } = string.Empty;
+
+        public int Width { get; set; }
+
+        public int Height { get; set; }
+
+        public BoardPlateKind Kind { get; set; }
     }
 
     private sealed class RelicDto

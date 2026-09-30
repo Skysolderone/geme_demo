@@ -16,7 +16,7 @@ public class 地图文件健壮性Tests
     [InlineData("{}", "无法解析为围棋记法坐标")]                              // 缺 CentralEntrance
     [InlineData("{\"CentralEntrance\":\"I5\"}", "\"I5\"")]                    // I 不是合法列字母
     [InlineData("{\"CentralEntrance\":\"A0\"}", "\"A0\"")]                    // 行号自 1 起
-    [InlineData("{\"CentralEntrance\":\"ZZ99\"}", "\"ZZ99\"")]
+    [InlineData("{\"CentralEntrance\":\"ZZZ99\"}", "\"ZZZ99\"")]              // 列标至多两个字母（board-map D6 起 ZZ99 是合法坐标）
     [InlineData("{\"CentralEntrance\":\"F6\",\"Obstacles\":[null]}", "<null>")]
     public void 畸形字段抛出可诊断的FormatException(string json, string expectedFragment)
     {

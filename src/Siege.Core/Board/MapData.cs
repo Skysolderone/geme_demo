@@ -42,6 +42,12 @@ public sealed record MapData
     /// <summary>出生区，下标即出生区编号。</summary>
     public required ImmutableArray<ImmutableHashSet<Coord>> BirthZones { get; init; }
 
+    /// <summary>
+    /// 棋盘清单（board-map D2），缺省为空（旧地图与既有测试不必显式给出）。出生棋盘与出生区一一对应、次序一致。
+    /// 只用于静态校验与呈现，对局规则不读它；标准档与边疆档地图的清单必须为空。
+    /// </summary>
+    public ImmutableArray<BoardPlate> Boards { get; init; } = [];
+
     /// <summary>信物格及其分区与预算档位。</summary>
     public required ImmutableDictionary<Coord, RelicCellSpec> RelicCells { get; init; }
 

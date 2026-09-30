@@ -93,6 +93,18 @@ public static class Visuals
     /// <summary>断柱遗迹的浅色石材（装饰层）。</summary>
     public static readonly Color RuinStone = Color.Color8(160, 152, 138);
 
+    /// <summary>
+    /// 公共棋盘的边框（board-map D10）：不属于任何阵营的浅石色。与四个阵营主色、插旗阶段的出生区提示色（金）、
+    /// 锁定后无主出生平台的褪色（冷灰）都拉得开，出生棋盘与公共棋盘一眼可分。
+    /// </summary>
+    public static readonly Color PublicBoardFrame = Color.Color8(232, 228, 214);
+
+    /// <summary>棋盘台面的格线（board-map D10）：压暗的墨色细线，只画在棋盘清单里的棋盘之内。</summary>
+    public static readonly Color BoardGridLine = Color.Color8(52, 60, 48);
+
+    /// <summary>通道（board-map D10）：棋盘之间的窄路，取土路色，与棋盘台面的草地色分开。</summary>
+    public static readonly Color CorridorPath = TileRoad;
+
     /// <summary>障碍岩石（装饰层）。</summary>
     public static readonly Color TileObstacle = Color.Color8(118, 150, 96);
 

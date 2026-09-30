@@ -20,7 +20,7 @@ public class 坐标记法Tests
     public void 列字母跳过I(int width, string expected)
     {
         // 列字母个数由棋盘宽度决定：11 列到 L，13 列到 N；都不含 I
-        string letters = new(Enumerable.Range(0, width).Select(x => new Coord(x, 0).Column).ToArray());
+        string letters = string.Concat(Enumerable.Range(0, width).Select(x => new Coord(x, 0).Column));
 
         Assert.Equal(expected, letters);
         Assert.DoesNotContain('I', letters);
@@ -117,15 +117,82 @@ public class 坐标记法Tests
     }
 
     [Fact]
-    public void 列字母共25个且第26列构造被拒()
+    public void 列字母共25个且超出列标上限构造被拒()
     {
-        // tasks 1.6 算例：25 列字母为 A…Z 跳 I；第 26 列构造被拒。
-        string letters = new(Enumerable.Range(0, 25).Select(x => new Coord(x, 0).Column).ToArray());
+        // tasks 1.6 算例：25 列字母为 A…Z 跳 I。
+        // board-map D6 之后第 26 列是 AA，不再被拒；被拒的是超出列标上限（25 + 25×25 列）的列。
+        string letters = string.Concat(Enumerable.Range(0, 25).Select(x => new Coord(x, 0).Column));
 
         Assert.Equal("ABCDEFGHJKLMNOPQRSTUVWXYZ", letters);
         Assert.Equal(25, Coord.ColumnLetters.Length);
-        Assert.Throws<ArgumentOutOfRangeException>(() => new Coord(25, 0));
+        Assert.Equal("AA1", new Coord(25, 0).ToNotation());
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Coord(Coord.MaxColumns, 0));
         Assert.False(Coord.TryParse("I27", out _));
+    }
+
+    // ---------- board-map 1.1：第 26 列起双字母列标（D6） ----------
+
+    [Fact]
+    public void 第26列起用双字母()
+    {
+        // Scenario：28 列地图最右侧四列的列标依次为 Z、AA、AB、AC。
+        const int width = 28;
+        string[] columns = [.. Enumerable.Range(width - 4, 4).Select(x => $"{new Coord(x, 0).Column}")];
+
+        Assert.Equal(["Z", "AA", "AB", "AC"], columns);
+
+        // 前 25 列的记法与引入双字母之前完全相同：仍是字母表里的单个字母。
+        for (int x = 0; x < 25; x++)
+        {
+            Assert.Equal(Coord.ColumnLetters[x].ToString(), $"{new Coord(x, 0).Column}");
+            Assert.Equal($"{Coord.ColumnLetters[x]}7", new Coord(x, 6).ToNotation());
+        }
+    }
+
+    [Fact]
+    public void 双字母同样跳过I()
+    {
+        // Scenario：第 33 列与第 34 列的列标为 AH 与 AJ，不存在 AI。
+        Assert.Equal("AH", $"{new Coord(32, 0).Column}");
+        Assert.Equal("AJ", $"{new Coord(33, 0).Column}");
+        Assert.False(Coord.TryParse("AI5", out _));
+        Assert.False(Coord.TryParse("IA5", out _));
+
+        // 首位同样跳过 I：H 行之后是 J 行（HZ → JA）。
+        Assert.Equal("HZ", $"{new Coord(25 + (7 * 25) + 24, 0).Column}");
+        Assert.Equal("JA", $"{new Coord(25 + (8 * 25), 0).Column}");
+    }
+
+    [Fact]
+    public void 双字母坐标往返()
+    {
+        // Scenario：解析 AB12 → 第 27 列、第 12 行，转回的记法为 AB12。
+        Coord ab12 = Coord.Parse("AB12");
+        Assert.Equal((26, 11), (ab12.X, ab12.Y));
+        Assert.Equal(12, ab12.Row);
+        Assert.Equal("AB12", ab12.ToNotation());
+        Assert.Equal(ab12, Coord.Parse("ab12"));
+
+        // 列标上限 25 + 25×25 列：全部列逐个往返恒等，记法两两不同；再多一列构造被拒。
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (int x = 0; x < Coord.MaxColumns; x++)
+        {
+            Coord original = new(x, 11);
+            Assert.Equal(original, Coord.Parse(original.ToNotation()));
+            Assert.True(seen.Add(original.ToNotation()), original.ToNotation());
+        }
+
+        Assert.Equal(25 + (25 * 25), Coord.MaxColumns);
+        Assert.Equal("ZZ1", new Coord(Coord.MaxColumns - 1, 0).ToNotation());
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Coord(Coord.MaxColumns, 0));
+
+        // 解析取最长的字母前缀：三个字母不是合法列标，字母之后必须是行号。
+        Assert.False(Coord.TryParse("ABC1", out _));
+        Assert.False(Coord.TryParse("AB", out _));
+        Assert.False(Coord.TryParse("A1B", out _));
+
+        // 排序仍按数值：先行后列，Z 列之后是 AA 列（字符串序会把 AA1 排到 B1 前面）。
+        Assert.Equal(["B1", "Z1", "AA1", "A2"], new[] { "A2", "AA1", "Z1", "B1" }.Select(Coord.Parse).Order().Select(c => c.ToNotation()));
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>

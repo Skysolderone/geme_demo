@@ -322,7 +322,8 @@ internal sealed class BoardRenderer
         _out.Write("    ");
         for (int x = 0; x < width; x++)
         {
-            _out.Write($" {Coord.ColumnLetters[x]} ");
+            // 每列三个字符宽：单字母列标后补一个空格，双字母列标（第 26 列起）正好占满。
+            _out.Write($" {new Coord(x, 0).Column,-2}");
         }
 
         _out.WriteLine();

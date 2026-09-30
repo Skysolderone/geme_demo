@@ -9,7 +9,7 @@ using Siege.Presentation.Text;
 namespace Siege.Godot;
 
 /// <summary>
-/// HUD 的开局选图面板（map-generator D7 / D8）：清单、种子输入框、"换一张"、平台数 − / +、完整标识、AI 难度（expert-lookahead D10）、"开始"。
+/// HUD 的开局选图面板（map-generator D7 / D8；board-map D9）：清单、种子输入框、"换一张"、平台数 − / +、棋盘数 − / +、完整标识、AI 难度（expert-lookahead D10）、"开始"。
 /// </summary>
 /// <remarks>
 /// 本类<b>不持有任何选图状态、不自带地图清单</b>：每一项文案与可用性都取自 <see cref="MapSelectModel"/>，操作只经事件转发给主场景。
@@ -27,6 +27,9 @@ public sealed partial class Hud
     private Button _mapFewer = null!;
     private Button _mapMore = null!;
     private Label _mapPlatforms = null!;
+    private Button _mapFewerBoards = null!;
+    private Button _mapMoreBoards = null!;
+    private Label _mapBoards = null!;
     private Label _mapIdText = null!;
     private Label _mapInfoText = null!;
     private Label _mapNotice = null!;
@@ -42,6 +45,9 @@ public sealed partial class Hud
 
     /// <summary>平台数 −1 / +1。</summary>
     public event Action<int>? MapPlatformsAdjusted;
+
+    /// <summary>棋盘数 −1 / +1（选中棋盘图时）。</summary>
+    public event Action<int>? MapBoardsAdjusted;
 
     /// <summary>点选 AI 难度（四档之一）。</summary>
     public event Action<AiDifficulty>? MapDifficultyPicked;
@@ -77,19 +83,22 @@ public sealed partial class Hud
             button.AddThemeColorOverride("font_color", active ? Ui.PanelBorder : Ui.InfoText);
         }
 
-        bool random = model.IsRandomSelected;
+        bool seeded = model.IsSeededSelected;
         if (_mapSeedInput.Text != model.SeedText)
         {
             _mapSeedInput.Text = model.SeedText;
             _mapSeedInput.CaretColumn = model.SeedText.Length;
         }
 
-        _mapSeedInput.Editable = random;
-        _mapSeedApply.Disabled = !random;
-        _mapReroll.Disabled = !random;
+        _mapSeedInput.Editable = seeded;
+        _mapSeedApply.Disabled = !seeded;
+        _mapReroll.Disabled = !seeded;
         _mapFewer.Disabled = !model.CanDecreasePlatforms;
         _mapMore.Disabled = !model.CanIncreasePlatforms;
         _mapPlatforms.Text = model.PlatformCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _mapFewerBoards.Disabled = !model.CanDecreaseBoards;
+        _mapMoreBoards.Disabled = !model.CanIncreaseBoards;
+        _mapBoards.Text = model.BoardCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _mapIdText.Text = model.CurrentId;
         _mapInfoText.Text = mapInfo;
         _mapNotice.Text = model.Notice;
@@ -146,7 +155,7 @@ public sealed partial class Hud
         }
 
         body.AddChild(Ui.Separator());
-        body.AddChild(Ui.Heading("随机图（选中「随机图」后可调）"));
+        body.AddChild(Ui.Heading("按种子生成（选中「棋盘图」或「随机图」后可调）"));
 
         var seedRow = new HBoxContainer();
         seedRow.AddChild(Ui.Text("地图种子"));
@@ -183,6 +192,22 @@ public sealed partial class Hud
         _mapMore.Pressed += () => MapPlatformsAdjusted?.Invoke(+1);
         tuneRow.AddChild(_mapMore);
         body.AddChild(tuneRow);
+
+        // 棋盘数（board-map D7：7–10）只对棋盘图起作用，平台数只对随机图起作用；不适用的一组按钮禁用。
+        var boardsRow = new HBoxContainer();
+        boardsRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
+        boardsRow.AddChild(Ui.Text("棋盘数"));
+        _mapFewerBoards = Ui.Action("−", 34);
+        _mapFewerBoards.Pressed += () => MapBoardsAdjusted?.Invoke(-1);
+        boardsRow.AddChild(_mapFewerBoards);
+        _mapBoards = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 2);
+        _mapBoards.HorizontalAlignment = HorizontalAlignment.Center;
+        _mapBoards.CustomMinimumSize = new Vector2(26f, 0f);
+        boardsRow.AddChild(_mapBoards);
+        _mapMoreBoards = Ui.Action("+", 34);
+        _mapMoreBoards.Pressed += () => MapBoardsAdjusted?.Invoke(+1);
+        boardsRow.AddChild(_mapMoreBoards);
+        body.AddChild(boardsRow);
 
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("完整地图标识"));

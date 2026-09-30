@@ -106,9 +106,10 @@ public class 地图随机源Tests
         string[] generatorNames =
         [
             "MapRandom.cs", "MapGenParameters.cs", "FrontierMapGenerator.cs", "FrontierSurfaces.cs",   // FrontierSurfaces：terrain-surfaces 新地表投放
+            "BoardMapGenerator.cs", "BoardMapLayout.cs", "BoardMapParameters.cs",                        // board-map 段 B：棋盘档生成器
             .. Directory.EnumerateFiles(Path.Combine(core, "Board", "Maps"), "FrontierMapLayout*.cs").Select(path => Path.GetFileName(path)!),
         ];
-        Assert.True(generatorNames.Length >= 11, $"样本口径：只认出 {generatorNames.Length} 个生成器文件。");
+        Assert.True(generatorNames.Length >= 14, $"样本口径：只认出 {generatorNames.Length} 个生成器文件。");
         string[] generatorFiles = [.. generatorNames.Select(name => Path.Combine(core, "Board", "Maps", name))];
         Assert.All(generatorFiles, path => Assert.DoesNotContain("GameSeed", File.ReadAllText(path), StringComparison.Ordinal));
         Assert.Contains(generatorFiles, path => File.ReadAllText(path).Contains("MapRandom.ForAttempt", StringComparison.Ordinal));   // 反面：扫到的确实是生成器
@@ -126,7 +127,7 @@ public class 地图随机源Tests
         string[] matchFiles = [.. Directory.EnumerateFiles(Path.Combine(core, "Match"), "*.cs", SearchOption.AllDirectories)];
         Assert.True(matchFiles.Length >= 10, $"样本口径：Match 目录只扫到 {matchFiles.Length} 个文件。");
         Assert.Contains(matchFiles, path => File.ReadAllText(path).Contains("GameSeed", StringComparison.Ordinal));                 // 反面：对局流程确实在用对局种子
-        var mapSeedToken = new Regex(@"FrontierMapGenerator|FrontierMapLayout|MapGenParameters|GeneratedMapId|MapRandom|GeneratedMap\b|(?i:mapseed)");
+        var mapSeedToken = new Regex(@"FrontierMapGenerator|FrontierMapLayout|MapGenParameters|GeneratedMapId|MapRandom|GeneratedMap\b|BoardMap\w+|GeneratedBoardMap|(?i:mapseed)");
         Assert.Empty(matchFiles.Where(path => mapSeedToken.IsMatch(File.ReadAllText(path))).Select(path => Path.GetFileName(path)));
     }
 }

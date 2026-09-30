@@ -261,7 +261,7 @@ internal sealed class ConsoleController : ITurnController
     {
         if (!batch.Board.Map.Contains(coord))
         {
-            _out.WriteLine($"棋盘上没有 {coord.ToNotation()}（列 A–{Coord.ColumnLetters[batch.Board.Map.Width - 1]}，行 1–{batch.Board.Map.Height}）。");
+            _out.WriteLine($"棋盘上没有 {coord.ToNotation()}（列 A–{new Coord(batch.Board.Map.Width - 1, 0).Column}，行 1–{batch.Board.Map.Height}）。");
             return;
         }
 

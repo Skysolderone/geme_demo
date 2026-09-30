@@ -47,7 +47,11 @@ public class 选图界面守门Tests
         Assert.Equal(["Siege.Presentation/MapSelect/MapSelectModel.cs"], optionBuilders);
         string model = files.Single(f => f.Path == "Siege.Presentation/MapSelect/MapSelectModel.cs").Text;
         Assert.Contains("MapCatalog.BuiltinMaps", model, StringComparison.Ordinal);
-        Assert.Contains("MapCatalog.DefaultId", model, StringComparison.Ordinal);
+        // board-map D9：选图界面的预选项改为棋盘图，视图模型不再引用目录的缺省地图标识（原先这里断言它出现）；
+        // 批量 / 终端入口的缺省地图仍由目录的缺省标识决定，见「棋盘档生成图标识Tests」。棋盘图与随机图的标识一律经各自的唯一实现拼出。
+        Assert.Contains("BoardMapId.Format(", model, StringComparison.Ordinal);
+        Assert.Contains("GeneratedMapId.Format(", model, StringComparison.Ordinal);
+        Assert.DoesNotMatch(new Regex(@"""(board|gen):", RegexOptions.CultureInvariant), model);   // 不手拼标识
 
         // 内置图面向人的显示名同样只登记在目录里（裁决 3）：界面层出现任何一个显示名的字面量，就是自带了"标识 → 名字"对照表。
         // 变异 MC-20：Hud 选图面板里自带显示名对照表 → 本测试红。禁用词取自目录本身，新增内置图自动纳入。
@@ -76,7 +80,8 @@ public class 选图界面守门Tests
         // 变异 MC-10：选图阶段绕过目录、按文件自行读图 → 本测试红。
         (string Path, string Text)[] files = SelectionSources();
 
-        var banned = new Regex(@"FrontierMapGenerator|FrontierMapLayout|MapRandom|MapFile\.|new MapData\(|new TerrainData\(", RegexOptions.CultureInvariant);
+        // 变异 M-C3（board-map 段 C，实跑）：选图阶段直接调棋盘档生成器出图 → 本测试红（红 1）。
+        var banned = new Regex(@"FrontierMapGenerator|FrontierMapLayout|BoardMapGenerator|BoardMapLayout|MapRandom|MapFile\.|new MapData\(|new TerrainData\(", RegexOptions.CultureInvariant);
         Assert.Empty(files.Where(f => banned.IsMatch(f.Text)).Select(f => f.Path));
 
         // 视图模型只产出标识，不解析地图；解析发生在图形版入口，且只经目录。
@@ -89,6 +94,7 @@ public class 选图界面守门Tests
 
         // 反面：被禁的记号在目录里确实命中。
         Assert.Matches(banned, File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")));
+        Assert.Contains("BoardMapGenerator.Generate(", File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
     }
 
     [Fact]
