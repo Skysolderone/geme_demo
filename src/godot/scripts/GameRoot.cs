@@ -12,6 +12,7 @@ using Siege.Presentation.Camera;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
+using Siege.Presentation.Show;
 using Siege.Presentation.Text;
 using Siege.Presentation.Visibility;
 
@@ -38,6 +39,18 @@ public sealed partial class GameRoot : Node3D
     private BoardView _board = null!;
     private Hud _hud = null!;
     private TurnFlash _flash = TurnFlash.None;
+
+    /// <summary>
+    /// 结算演出时间线（settlement-show D2 / D5）：未播完时主循环不推进对局。无人值守下以零时长创建（创建即播完，D8），
+    /// 对局开始、演出播完或弃赛终止后为 <see cref="ShowTimeline.Finished"/>。
+    /// </summary>
+    private ShowTimeline _show = ShowTimeline.Finished;
+
+    /// <summary>演出播完后要挂上的"回合高亮"（落子格 / 被提格，由节拍推出）：玩家提速看完后仍能找到刚才发生的位置（D6）。</summary>
+    private TurnFlash _pendingFlash = TurnFlash.None;
+
+    /// <summary><c>--shot-show=placement|capture|power|banner</c>：截图等到含该节拍的结算、在该节拍进行中取图（仅截图用，见 <see cref="ShotShowWants"/>）。</summary>
+    private string? _shotShow;
     private double _aiTimer;
     private double _flashTimer;
     private double _pause = AiPauseSeconds;
@@ -47,12 +60,18 @@ public sealed partial class GameRoot : Node3D
     private int _screenshotFrame = -1;
     private string _screenshotPath = string.Empty;
     private bool _shotPending;
+
+    /// <summary><c>--shot-show=banner</c> 截到终局横幅后不立即退出：继续把演出播完，自证终局面板此前关、播完后开（settlement-show-callouts「横幅节拍」）。</summary>
+    private bool _verifyResultAfterShow;
     private bool _autoDemo;
     private bool _pickCheck;
     private bool _shotOverview;
     private bool _shotPower;
+    private int? _shotBoard;
     private bool _shotGroups;
     private bool _shotRecruitCollapsed;
+    private bool _shotForbidden;
+    private Coord? _shotCell;
 
     /// <summary>
     /// 本局 AI 难度（expert-lookahead D10）：<c>--difficulty=&lt;名称&gt;</c> 或选图界面的难度选择，缺省标准。
@@ -87,6 +106,10 @@ public sealed partial class GameRoot : Node3D
             // 势力层的文字面板在左侧、不盖棋盘中心；手牌信息面板照旧收起。
             _shotPower = args.Flag("shot-power");
 
+            // --shot-board=<棋盘清单下标>：截图前把相机对准棋盘清单里的第几块棋盘（board-map 3.4：给负责人看一块棋盘的近景，仅截图用）。
+            // 须与 --screenshot= 同用；下标越界报错退出。棋盘的外接矩形取自视图模型的棋盘清单。
+            _shotBoard = args.Value<int>("shot-board", "棋盘清单下标（非负整数，截图时对准该棋盘）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
+
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
 
@@ -94,6 +117,19 @@ public sealed partial class GameRoot : Node3D
             // 到达截图帧之后，等本机玩家下一次进入征募阶段（自动演示已选取一枚）再截；第一张为展开（--screenshot 给的路径），
             // 随后经与 V 键同一入口收起，再截一张（同名加 -collapsed）。
             _shotRecruitCollapsed = args.Flag("shot-recruit-collapsed");
+
+            // --shot-forbidden：截一张带单子禁手标记的图（forbidden-marks 2.4，仅截图用）。须与 --auto-demo 和 --screenshot= 同用：
+            // 到达截图帧之后，等轮到本机玩家、处在部署阶段且默认棋盘上至少有一个单子禁手的那一帧再截；未给 --overview / --shot-cell= 时
+            // 相机对准其中第一个禁手格（缩放不变）。演示跑完仍没等到即以退出码 1 结束。
+            _shotForbidden = args.Flag("shot-forbidden");
+
+            // --shot-cell=<记法坐标>：截图前把相机注视点移到该格（缩放不变；仅截图用，如截底边的列标）。须与 --screenshot= 同用。
+            string? shotCell = args.Text("shot-cell", "围棋记法坐标（如 AB1）");
+
+            // --shot-show=placement|capture|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
+            // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、power = 势力重算、banner = 横幅），
+            // 该次演出按正常时长播放（其余无人值守结算仍为零时长），以固定 16 ms/帧推进到该节拍进行中（见 ShotShowReady）取图。不给此项时无人值守路径与引入演出之前完全相同。
+            _shotShow = args.Text("shot-show", "placement / capture / power / banner（等该节拍进行中再截图）");
 
             // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
             // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
@@ -128,6 +164,41 @@ public sealed partial class GameRoot : Node3D
             if (_shotRecruitCollapsed && (!_autoDemo || _screenshotFrame < 0))
             {
                 throw new System.FormatException("--shot-recruit-collapsed 须与 --auto-demo 和 --screenshot= 同用。");
+            }
+
+            if (_shotForbidden && (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed))
+            {
+                throw new System.FormatException("--shot-forbidden 须与 --auto-demo 和 --screenshot= 同用，且不与 --shot-recruit-collapsed 同用。");
+            }
+
+            if (_shotShow is not null)
+            {
+                if (_shotShow is not ("placement" or "capture" or "power" or "banner"))
+                {
+                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power 或 banner。");
+                }
+
+                if (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed || _shotForbidden)
+                {
+                    throw new System.FormatException("--shot-show= 须与 --auto-demo 和 --screenshot= 同用，且不与 --shot-recruit-collapsed / --shot-forbidden 同用。");
+                }
+            }
+
+            if (shotCell is not null)
+            {
+                if (_screenshotFrame < 0 || _shotOverview || mapSelect || _shotBoard is not null)
+                {
+                    throw new System.FormatException("--shot-cell= 须与 --screenshot= 同用，且不与 --overview / --map-select / --shot-board= 同用。");
+                }
+
+                _shotCell = Coord.TryParse(shotCell, out Coord parsed)
+                    ? parsed
+                    : throw new System.FormatException($"--shot-cell={shotCell} 无效：应为围棋记法坐标（如 AB1）。");
+            }
+
+            if (_shotBoard is not null && (_screenshotFrame < 0 || _shotOverview || mapSelect))
+            {
+                throw new System.FormatException("--shot-board= 须与 --screenshot= 同用，且不与 --overview / --map-select 同用。");
             }
 
             if (exportParts is not null)
@@ -172,6 +243,13 @@ public sealed partial class GameRoot : Node3D
             if (GeneratedMapId.IsBareRequest(mapId))
             {
                 mapId = GeneratedMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapGenParameters.RandomPick);
+                GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
+            }
+
+            // --map=board（board-map D7）：同上，拼成棋盘图的完整标识（缺省棋盘数）。
+            if (BoardMapId.IsBareRequest(mapId))
+            {
+                mapId = BoardMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), BoardMapParameters.Default);
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
@@ -287,6 +365,19 @@ public sealed partial class GameRoot : Node3D
 
         GD.Print(CarryShotLine());
         GD.Print($"[siege] 落成反馈：{(_flash.Edits.IsEmpty ? "无" : string.Join("、", _flash.Edits.Select(Labels.TerrainEdit)))}");
+
+        // 结算演出的取景自证（settlement-show 3.3 / 3.4）：截图那一帧时间线停在哪个节拍、进度多少，遮罩里隐藏 / 出现中 / 仍显示的被提棋子与滚动中的势力显示值。
+        ShowMask shownMask = _show.Mask();
+        GD.Print(_show.IsFinished
+            ? "[show] 截图时演出：无（遮罩为空，画面即结算后快照）"
+            : $"[show] 截图时演出：当前节拍 {_show.Current?.GetType().Name ?? "空序列停顿"}，进度 {_show.ProgressPermille}‰，时长模式 {_show.Duration}；"
+                + $"隐藏 {shownMask.Hidden.Count} 枚，出现中 {string.Join("、", shownMask.Appearing.OrderBy(k => k.Key).Select(k => $"{k.Key.ToNotation()} {k.Value}‰"))}，"
+                + $"仍显示被提 {string.Join("、", shownMask.StillShown.Select(p => $"{p.Coord.ToNotation()}({Labels.Player(p.Owner)})"))} 淡出 {shownMask.CaptureFadePermille}‰，"
+                + $"势力显示 {string.Join("；", shownMask.Power.OrderBy(k => k.Key.Value).Select(k => $"{Labels.Player(k.Key)} {k.Value.Change.OldValue}→{k.Value.Change.NewValue} 现显示 {k.Value.Value} {k.Value.Change.DeltaText}{(k.Value.Rolling ? " 滚动中" : " 旧值")}{(k.Value.Change.RankChanged ? $" 名次 {k.Value.Change.OldRank}→{k.Value.Change.NewRank}" : string.Empty)}{(k.Value.Stage is PowerStage.Territory or PowerStage.Group ? $"（{k.Value.StageText} 段内 {k.Value.StagePermille}‰）" : k.Value.Stage == PowerStage.Hold ? "（定格）" : string.Empty)}"))}；"
+                // settlement-show-callouts 2.2：飘字 / 提子合计 / 信物闪光 / 横幅也进自证行（全部取自遮罩，图像里看到的就是这些）。
+                + $"飘字 {shownMask.Callouts.Length} 条{(shownMask.Callouts.IsEmpty ? string.Empty : "（" + string.Join("、", shownMask.Callouts.Select(c => $"{c.Coord.ToNotation()} {c.Text} 年龄 {c.AgePermille}‰")) + "）")}，"
+                + $"合计 {shownMask.CaptureSummary ?? "无"}，信物闪光 {(shownMask.RelicFlash.IsEmpty ? "无" : string.Join("、", shownMask.RelicFlash.OrderBy(k => k.Key).Select(k => $"{k.Key.ToNotation()} {k.Value}‰")))}，"
+                + $"横幅 {(shownMask.Banner is { } shownBanner ? $"「{shownBanner.Text}」第 {shownBanner.Index + 1}/{shownBanner.Count} 条 {shownBanner.ProgressPermille}‰" : "无")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}");
 
         // 渲染开销读数（frontier-map 5.6）：帧率受垂直同步封顶，绘制调用数才反映"750 格要不要合批"。
         CameraPose pose = _board.Rig.Pose;
@@ -434,6 +525,7 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
+        TakeLocalShow();
         Drive(delta);
         CheckCarrySettlement();
         UpdateCamera(delta);
@@ -477,11 +569,47 @@ public sealed partial class GameRoot : Node3D
             ToggleOverview();
         }
 
-        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady())
+        // --shot-board：截图前两帧把相机对准指定的那块棋盘（只用于截近景）。
+        if (_shotBoard is { } plateIndex && _screenshotFrame >= 0 && _frame >= _screenshotFrame - 2)
+        {
+            _shotBoard = null;
+            if (!FrameBoardForShot(plateIndex))
+            {
+                return;
+            }
+        }
+
+        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null)
         {
             _screenshotFrame = -1;
             BeginCapture();
         }
+    }
+
+    /// <summary>
+    /// <c>--shot-board=</c>：把相机对准棋盘清单里的第 <paramref name="index"/> 块棋盘——注视点取其外接矩形中心，
+    /// 距离取"整块可见并在四周各留开局余量"（与开局对准出生平台同一口径，经视图模型夹取）。下标越界以退出码 1 结束。
+    /// </summary>
+    private bool FrameBoardForShot(int index)
+    {
+        ImmutableArray<BoardPlate> plates = _session.World.Board().Boards;
+        if (index >= plates.Length || CameraHome.Platform(plates[index].Cells(), _board.PlaneCenterOf) is not { } rect)
+        {
+            GD.PrintErr($"[siege] 错误：--shot-board={index} 越界，本图的棋盘清单共 {plates.Length} 块。");
+            SetProcess(false);
+            GetTree().Quit(1);
+            return false;
+        }
+
+        Vector2 size = SyncAspect();
+        float pad = 1f + (2f * BoardCamera.OpeningMargin);
+        float aspect = size.X > 0f && size.Y > 0f ? size.X / size.Y : 16f / 9f;
+        _board.Rig.Set(new CameraPose(rect.CenterX, rect.CenterZ, BoardCamera.DistanceToShow(System.Math.Max(rect.Depth + pad, (rect.Width + pad) / aspect))));
+        ApplyCamera("截图对准棋盘");
+        _dirty = true;
+        BoardPlate plate = plates[index];
+        GD.Print($"[siege] 截图取景：棋盘清单第 {index} 块（{(plate.Kind == BoardPlateKind.Birth ? "出生" : "公共")}棋盘，{plate.Width}×{plate.Height}，左下角 {plate.Origin.ToNotation()}），共 {plates.Length} 块");
+        return true;
     }
 
     /// <summary>
@@ -491,6 +619,68 @@ public sealed partial class GameRoot : Node3D
     private bool RecruitShotReady() =>
         !_shotRecruitCollapsed
         || (_session.IsMyTurn && _session.Match.Stage == TurnStage.Recruit && _session.RecruitPanel is { PicksMade: > 0 });
+
+    /// <summary>
+    /// 截图时机：未给 <c>--shot-forbidden</c> 时恒为真（既有截图行为不变）；给了则要等轮到本机玩家、处在部署阶段
+    /// （征募面板已关，不盖棋盘）且默认棋盘上至少有一个单子禁手的那一帧。有没有禁手只读视图模型。
+    /// </summary>
+    private bool ForbiddenShotReady() =>
+        !_shotForbidden
+        || (_session.IsMyTurn && _session.Match.Stage == TurnStage.Deploy && _session.World.Board().Cells.Any(c => c.Forbidden is not null));
+
+    /// <summary>
+    /// <c>--shot-cell=</c> / <c>--shot-forbidden</c>：把相机注视点移到指定格（后者取第一个单子禁手格），缩放不变。
+    /// 全局预览下不动相机。格不在棋盘上以退出码 1 结束。
+    /// </summary>
+    private bool AimForShot()
+    {
+        DefaultBoardView board = _session.World.Board();
+        Coord? target = _shotCell ?? (_shotForbidden ? board.Cells.FirstOrDefault(c => c.Forbidden is not null)?.Coord : null);
+        if (target is { } cell && !_board.Rig.IsOverview)
+        {
+            if (cell.X >= board.Width || cell.Y >= board.Height)
+            {
+                GD.PrintErr($"[siege] 错误：--shot-cell={cell.ToNotation()} 不在本图棋盘上（{board.Width}×{board.Height}）。");
+                SetProcess(false);
+                GetTree().Quit(1);
+                return false;
+            }
+
+            SyncAspect();
+            (float x, float z) = _board.PlaneCenterOf(cell);
+            _board.Rig.Set(new CameraPose(x, z, _board.Rig.Pose.Distance));
+            ApplyCamera("截图对准格");
+        }
+
+        if (_shotForbidden || _shotCell is not null)
+        {
+            BoardCellView[] marked = [.. board.Cells.Where(c => c.Forbidden is not null)];
+            GD.Print($"[forbidden-marks] 截图取景：当前行动 {(_session.Match.CurrentPlayer is { } actor ? Labels.Player(actor) : "无")}"
+                + $"（{(_session.IsMyTurn ? "本机玩家" : "非本机玩家")}），单子禁手 {marked.Length} 格"
+                + $"（自杀手 {marked.Count(c => c.Block == PlacementBlock.Suicide)} / 同形 {marked.Count(c => c.Block == PlacementBlock.Superko)} / 破坏活形 {marked.Count(c => c.Block == PlacementBlock.BreaksLife)}）"
+                + $"{(marked.Length == 0 ? string.Empty : "：" + string.Join("、", marked.Take(12).Select(c => HoverReadout.Of(c.Coord, board))))}"
+                + $"；全局预览 {(_board.Rig.IsOverview ? "开" : "关")}，对准 {(target is { } t && !_board.Rig.IsOverview ? t.ToNotation() : "未动")}，"
+                + $"地图 {board.Width}×{board.Height}，末列列标 {new Coord(board.Width - 1, 0).Column}（字号 {Siege.Presentation.Style.CoordinateLabelStyle.ColumnFontSizeOf(new Coord(board.Width - 1, 0).Column)}）");
+
+            // 底边列标的取景自证：锚点（BoardGeometry 的唯一映射）投影到屏幕后落在画面内的有哪些、相邻两个相距多少像素。
+            Rect2 screen = GetViewport().GetVisibleRect();
+            (string Column, Vector2 At)[] shown =
+            [
+                .. Enumerable.Range(0, board.Width)
+                    .Select(x => (Column: new Coord(x, 0).Column, Anchor: BoardGeometry.ColumnLabelAnchor(x, board.Width, board.Height, far: false)))
+                    .Where(l => !_board.Camera.IsPositionBehind(l.Anchor))
+                    .Select(l => (l.Column, At: _board.Camera.UnprojectPosition(l.Anchor)))
+                    .Where(l => screen.HasPoint(l.At)),
+            ];
+            GD.Print(shown.Length == 0
+                ? "[forbidden-marks] 底边列标：画面内 0 个"
+                : $"[forbidden-marks] 底边列标：画面内 {shown.Length} 个（{shown[0].Column}–{shown[^1].Column}，其中双字母 {shown.Count(l => l.Column.Length > 1)} 个），"
+                    + $"屏幕纵坐标 {shown.Min(l => l.At.Y):0}–{shown.Max(l => l.At.Y):0} / 视口高 {screen.Size.Y:0}，"
+                    + $"相邻列标相距 {(shown.Length > 1 ? (shown[^1].At.X - shown[0].At.X) / (shown.Length - 1) : 0f):0.0} 像素");
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// 进入截图流程：<b>先把盖住棋盘的面板全部关掉</b>再重刷一次，等本帧绘制完成后才取画面。
@@ -520,6 +710,11 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
+        if (!AimForShot())
+        {
+            return;
+        }
+
         _dirty = false;
         RefreshViews();
 
@@ -541,7 +736,8 @@ public sealed partial class GameRoot : Node3D
     /// <summary>把当前状态刷到棋盘与 HUD。选图阶段 HUD 只显示选图面板（对局面板隐藏），棋盘照常刷新——预览与插旗前的盘面是同一条渲染路径。</summary>
     private void RefreshViews()
     {
-        _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover);
+        ShowMask mask = _show.Mask();
+        _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover, mask);
         _hud.SetHoverReadout(HoverReadout.Of(_hover, _session.World.Board())); // life-shape 3.4：盘面变了（如新成活形），悬停格的禁入读数随之刷新
         if (Selecting)
         {
@@ -557,7 +753,8 @@ public sealed partial class GameRoot : Node3D
 
         _hud.OverviewActive = _board.Rig.IsOverview;
         SyncRecruitCollapse();
-        _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse);
+        // 演出未播完时终局面板不显示（settlement-show-callouts「横幅节拍」：终局面板在横幅播完后才出现）；无人值守零时长下时间线创建即播完，行为不变。
+        _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse, mask, deferResult: ShowPlaying);
         RefreshCarry();
     }
 
@@ -565,6 +762,14 @@ public sealed partial class GameRoot : Node3D
     {
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         Capture(path);
+        if (_shotShow == "banner" && _session.IsOver && ShowPlaying)
+        {
+            // 终局横幅：截图已存盘，解冻继续播完演出，由 FinishShow 打印"横幅播完后中央面板开"的自证行再退出。
+            _verifyResultAfterShow = true;
+            _shotPending = false;
+            return;
+        }
+
         GetTree().Quit(0);
     }
 
@@ -757,6 +962,14 @@ public sealed partial class GameRoot : Node3D
 
     private void Drive(double delta)
     {
+        // 结算演出播放中（settlement-show D5）：不调用任何推进对局的入口——不跑 AI 小回合、不推进本机玩家阶段、不收尾。
+        // 镜头与信息层的输入在 _Process 里另行处理，不受影响。无人值守下时间线创建即播完，永远不进这里。
+        if (!_show.IsFinished)
+        {
+            AdvanceShow(delta);
+            return;
+        }
+
         // 自动演示的停止点（--rounds）：表现层自己的无人值守收尾，不改对局状态、不产生名次。
         if (_session.IsOver || (_autoDemo && _rounds > 0 && _session.Match.MajorRound > _rounds))
         {
@@ -803,16 +1016,150 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        _flash = _session.RunAiTurn();
+        TurnFlash flash = _session.RunAiTurn();
         if (_session.LastAiLookahead is { } lookahead)
         {
             GD.Print($"[ai] {lookahead}");   // 专家的前瞻记录（会话日志可查）；前瞻宽度为 0 的三档不打
         }
 
-        _flashTimer = FlashSeconds;
-        _aiTimer = _pause;
-        _dirty = true;
+        ImmutableArray<SettlementBeat> beats = _session.TakeSettlementBeats() ?? [];
+        if (Unattended && !ShotShowWants(beats))
+        {
+            // 无人值守（D8）：节拍照常生成、时间线零时长；高亮与 AI 小回合之间的停顿保持引入演出之前的数值，帧序列不变。
+            BeginShow(beats, ShowDuration.Zero, "AI");
+            _flash = flash;
+            _flashTimer = FlashSeconds;
+            _aiTimer = _pause;
+            _dirty = true;
+            return;
+        }
+
+        // 有人在看：演出时长取代 AI 小回合之间的固定停顿（D5）；落子格 / 被提格的高亮等演出播完再挂（D6）。
+        _pendingFlash = flash;
+        BeginShow(beats, ShowDuration.Normal, "AI");
+        _aiTimer = 0d;
     }
+
+    // ---------- 结算演出（settlement-show）：节拍来自会话层，时间线与遮罩都在 Siege.Presentation.Show，这里只推进、取遮罩、画 ----------
+
+    /// <summary>演出是否正在播放。</summary>
+    private bool ShowPlaying => !_show.IsFinished;
+
+    /// <summary>
+    /// 本机玩家确认 / Pass 后（输入处理里已结算并重建世界）把会话层生成的节拍取来开演；无人值守（自动演示自己也会确认）零时长。
+    /// 本机路径引入演出之前没有落子 / 被提高亮，无人值守下也照旧不挂，画面与基线相同。
+    /// </summary>
+    private void TakeLocalShow()
+    {
+        if (_session.TakeSettlementBeats() is not { } beats)
+        {
+            return;
+        }
+
+        if (Unattended && !ShotShowWants(beats))
+        {
+            BeginShow(beats, ShowDuration.Zero, "本机");
+            return;
+        }
+
+        _pendingFlash = TurnFlash.Of(beats);
+        BeginShow(beats, ShowDuration.Normal, "本机");
+    }
+
+    /// <summary>建时间线并打一行节拍数（3.1）。正常时长下先清掉上一回合残留的落子 / 被提高亮（改造落成一项原样保留）。</summary>
+    private void BeginShow(ImmutableArray<SettlementBeat> beats, ShowDuration duration, string who)
+    {
+        _show = new ShowTimeline(beats, duration);
+        GD.Print($"[show] 第 {_frame} 帧 {who}结算：节拍 {beats.Length}"
+            + $"（落子 {beats.OfType<PlacementBeat>().Sum(b => b.Pieces.Length)} / 提子 {beats.OfType<CaptureBeat>().Sum(b => b.Pieces.Length)}"
+            + $" / 信物 {beats.OfType<RelicRevealBeat>().Sum(b => b.Relics.Length)} / 势力 {beats.OfType<PowerBeat>().Sum(b => b.Changes.Length)} / 横幅 {beats.OfType<BannerBeat>().Sum(b => b.Banners.Length)}）"
+            + (duration == ShowDuration.Zero ? "，零时长" : $"，{_show.TotalDurationMs} ms"));
+        if (duration == ShowDuration.Normal)
+        {
+            _flash = _flash with { Placed = [], Captured = [] };
+            _dirty = true;
+        }
+    }
+
+    /// <summary>
+    /// 每帧推进时间线（D2）：帧间隔折成整数毫秒；按住空格或鼠标左键即提速 4 倍（D4，Open Questions 裁决）。跨过的节拍由遮罩自然呈现终态。
+    /// 逐帧只重画棋子层与势力排名栏；播完挂上高亮并做一次完整刷新（遮罩已空，画面即结算后快照）。
+    /// </summary>
+    private void AdvanceShow(double delta)
+    {
+        bool shot = _shotShow is not null && _screenshotFrame >= 0;
+        int ms = shot ? 16 : System.Math.Max(1, (int)System.Math.Round(delta * 1000d));
+        bool fast = !shot && (Input.IsActionPressed(InputBindings.CameraHomeAction) || Input.IsMouseButtonPressed(MouseButton.Left));
+        _show.Advance(ms, fast);
+        if (shot && ShotShowTarget(_show.Current) && ShotShowReady())
+        {
+            // 该节拍进行到取图点：冻结在此帧取图（BeginCapture 会带当前遮罩完整刷新一次）。
+            _screenshotFrame = -1;
+            BeginCapture();
+            return;
+        }
+
+        if (_show.IsFinished)
+        {
+            FinishShow();
+            return;
+        }
+
+        ShowMask mask = _show.Mask();
+        _board.RefreshShow(_session.World, _layers.Treatment, mask);
+        _hud.RefreshShow(_session.World, mask);
+    }
+
+    /// <summary>
+    /// <c>--shot-show</c> 的取图点：势力节拍要等到有玩家处在领地 / 军势段且段内过了三成（数字仍放大、段文案可见——只有一段时半拍处已经定格，看不到"领地 +a"）；
+    /// 其余节拍取进行到一半。
+    /// </summary>
+    private bool ShotShowReady() => _shotShow == "power"
+        ? _show.Mask().Power.Values.Any(d => d.Stage is PowerStage.Territory or PowerStage.Group && d.StagePermille >= 300)
+        : _show.ProgressPermille >= 500;
+
+    /// <summary>演出播完：挂上本次落子格 / 被提格的高亮（保留现有固定时长再清除，D6），完整刷新一次。</summary>
+    private void FinishShow()
+    {
+        _flash = _pendingFlash with { Edits = _flash.Edits };
+        _pendingFlash = TurnFlash.None;
+        _flashTimer = FlashSeconds;
+        _dirty = true;
+        if (_verifyResultAfterShow)
+        {
+            _verifyResultAfterShow = false;
+            _dirty = false;
+            RefreshViews();
+            GD.Print($"[show] 第 {_frame} 帧 横幅播完：遮罩 {(_show.Mask().IsEmpty ? "空" : "非空")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}（终局面板 {(_session.IsOver ? "应显示" : "无终局")}）");
+            SetProcess(false);
+            GetTree().Quit(_hud.CenterPanelOpen ? 0 : 1);
+        }
+    }
+
+    /// <summary>演出中弃赛（design.md A5）：演出立即以终态结束（时间线换成已播完的实例、遮罩为空），再处理弃赛。不给时间线加"跳到结尾"的入口。</summary>
+    private void CutShow()
+    {
+        if (!ShowPlaying)
+        {
+            return;
+        }
+
+        _show = ShowTimeline.Finished;
+        FinishShow();
+    }
+
+    /// <summary><c>--shot-show</c> 是否要把这次结算按正常时长播（到达截图帧之后、且序列里含所选节拍）。</summary>
+    private bool ShotShowWants(ImmutableArray<SettlementBeat> beats) =>
+        _shotShow is not null && _screenshotFrame >= 0 && _frame >= _screenshotFrame && beats.Any(ShotShowTarget);
+
+    private bool ShotShowTarget(SettlementBeat? beat) => _shotShow switch
+    {
+        "placement" => beat is PlacementBeat,
+        "capture" => beat is CaptureBeat,
+        "power" => beat is PowerBeat,
+        "banner" => beat is BannerBeat,
+        _ => false,
+    };
 
     /// <summary>
     /// 无人值守演示的单帧步进：每帧只走一步，让 HUD 在每个阶段都真正渲染一次
@@ -957,6 +1304,21 @@ public sealed partial class GameRoot : Node3D
             ? $"[auto-demo] 演示停止：跑满 {_rounds} 个大回合（--rounds 停止点，不是终局；对局停在第 {_session.Match.MajorRound} 大回合）；{standings}"
             : $"[auto-demo] 终局：第 {result.MajorRound} 大回合，{Names.End(result.Reason)}；{standings}");
         GD.Print($"[perf] 启动到首帧 {_firstFrameMsec} ms，启动到终局 {Time.GetTicksMsec()} ms，共 {_frame} 帧");
+        if (_shotForbidden && _screenshotFrame >= 0)
+        {
+            // 演示跑完也没等到"轮到本机玩家且盘上有单子禁手"的那一帧：响亮失败，不留在结算画面空等。
+            GD.PrintErr("[siege] 错误：--shot-forbidden 直到演示结束都没有等到带单子禁手的本机玩家部署阶段。换一个 --seed= 或加大 --rounds=。");
+            GetTree().Quit(1);
+            return;
+        }
+
+        if (_shotShow is not null && _screenshotFrame >= 0)
+        {
+            GD.PrintErr($"[siege] 错误：--shot-show={_shotShow} 直到演示结束都没有等到含该节拍的结算。换一个 --seed= 或加大 --rounds=。");
+            GetTree().Quit(1);
+            return;
+        }
+
         if (_screenshotFrame >= 0)
         {
             // 还等着截图：留在结算画面，由 --screenshot 的帧号或 --quit-after 决定何时退出，
@@ -1142,6 +1504,15 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
+        // 演出期间按住鼠标左键提速（settlement-show「提速」，Open Questions 裁决）：指针不在界面控件上时先于棋盘点选认领，按住状态由 AdvanceShow 逐帧轮询。
+        // 指针在控件上时不认领——信息层按钮、弃赛按钮在演出期间仍可点（3.7 / A5）；确认 / Pass 此刻本就不是本机小回合，会话层不接受。
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left } && _session is not null && !Selecting && !Supplying && ShowPlaying
+            && GetViewport().GuiGetHoveredControl() is null)
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         // 选图阶段不认领相机键（map-generator D8）：相机本来就锁在预览位姿，而 W A S D / 空格 / 方向键 / 退格要能落到种子输入框。
         if (@event is not InputEventKey || _session is null || Selecting || Supplying)
         {
@@ -1159,8 +1530,12 @@ public sealed partial class GameRoot : Node3D
 
             if (action == InputBindings.CameraHomeAction && @event.IsActionPressed(action))
             {
-                FocusHome(opening: false);
-                _dirty = true;
+                // 演出期间空格是提速（按住状态由 AdvanceShow 逐帧轮询），不回家；非演出期间仍是镜头回家。
+                if (!ShowPlaying)
+                {
+                    FocusHome(opening: false);
+                    _dirty = true;
+                }
             }
             else if (action == InputBindings.CameraOverviewAction && @event.IsActionPressed(action))
             {

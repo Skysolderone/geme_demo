@@ -10,6 +10,7 @@ using Siege.Core.Scoring;
 using Siege.Presentation.Camera;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
+using Siege.Presentation.Show;
 using Siege.Presentation.Style;
 using Siege.Presentation.Visibility;
 
@@ -27,6 +28,14 @@ public sealed record TurnFlash(ImmutableArray<Coord> Placed, ImmutableArray<Coor
 {
     /// <summary>无演出。</summary>
     public static readonly TurnFlash None = new([], [], []);
+
+    /// <summary>
+    /// 由结算节拍序列得到本次落子格与被提格（settlement-show D6：两项的数据来源并入节拍生成，不再单独计算）；改造落成一项留空，由 GameRoot 按 Edits 增量给出。
+    /// </summary>
+    public static TurnFlash Of(ImmutableArray<SettlementBeat> beats) => new(
+        [.. beats.OfType<PlacementBeat>().SelectMany(b => b.Pieces).Select(p => p.Coord)],
+        [.. beats.OfType<CaptureBeat>().SelectMany(b => b.Pieces).Select(p => p.Coord)],
+        []);
 
     /// <summary>是否为空。</summary>
     public bool IsEmpty => Placed.IsEmpty && Captured.IsEmpty && Edits.IsEmpty;
@@ -51,6 +60,7 @@ public sealed partial class BoardView : Node3D
     private Node3D _overlay = null!;
     private Node3D _pieces = null!;
     private Node3D _preview = null!;
+    private Node3D _show = null!;
     private MeshInstance3D _cursor = null!;
     private WorldEnvironment _environment = null!;
     private IReadOnlyDictionary<int, PlayerId> _zoneOwners = new Dictionary<int, PlayerId>();
@@ -114,6 +124,16 @@ public sealed partial class BoardView : Node3D
             .GroupBy(kv => kv.Value)
             .ToDictionary(g => g.Key, g => (g.Min(kv => kv.Key.X), g.Min(kv => kv.Key.Y), g.Max(kv => kv.Key.X), g.Max(kv => kv.Key.Y)));
         HashSet<Coord> blocked = [.. board.Cells.Where(c => c.Terrain != Terrain.Playable).Select(c => c.Coord)];
+
+        // 棋盘台面（board-map D10）：只在棋盘清单非空的地图上生效；清单为空（全部既有地图）时下面每一处都走原路径，画面不变。
+        // 哪些格属于哪块棋盘一律读清单，不从格子数据推断；"可落子且不属于任何棋盘"即通道（D2 的定义）。
+        ImmutableArray<BoardPlate> plates = board.Boards.IsDefault ? [] : board.Boards;
+        bool plated = !plates.IsEmpty;
+        bool OnPlate(Coord c) => plates.Any(p => p.Contains(c));
+
+        // 出生区的归属色：插旗前统一提示色；锁定后有主的取阵营主色，无主的褪成中性色。出生区描边与出生棋盘边框共用。
+        Color ZoneColorOf(int zone) =>
+            zoneOwners.TryGetValue(zone, out PlayerId holder) ? Visuals.FactionColorOf(holder) : zoneOwners.Count > 0 ? Visuals.Neutral : Visuals.BirthHint;
 
         // 某格朝 (dx, dy) 方向是不是出生区的外缘：邻格不属于同一区即是；区外接矩形之内的不可落子格（平台里的岩石洞）不算外缘，否则洞的四周也会描一圈。
         bool IsZoneEdge(Coord c, int zone, int dx, int dy)
@@ -180,6 +200,11 @@ public sealed partial class BoardView : Node3D
                 Surface.Shallows => Visuals.TileShallows,
                 _ => Visuals.TilePlayable,
             };
+            if (plated && playable && !OnPlate(cell.Coord))
+            {
+                color = Visuals.CorridorPath;
+            }
+
             if (!playable)
             {
                 // 障碍格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
@@ -194,8 +219,8 @@ public sealed partial class BoardView : Node3D
                 // 插旗阶段还没有归属，先用统一的出生区高亮让玩家看得见可点的区域；锁定后有主的平台改染该阵营主色，
                 // 没人选的平台（平台数 > 人数的地图，frontier-map D9）褪成中性色——区号独立于玩家色，几个平台都一样处理。
                 // 归属靠外缘描边读出来，地砖只淡淡带一点色，草地本色留着（整片染色会把红 / 金混成土褐、土黄）。
-                bool owned = zoneOwners.TryGetValue(zone, out PlayerId owner);
-                Color zoneColor = owned ? Visuals.FactionColorOf(owner) : zoneOwners.Count > 0 ? Visuals.Neutral : Visuals.BirthHint;
+                bool owned = zoneOwners.ContainsKey(zone);
+                Color zoneColor = ZoneColorOf(zone);
                 color = color.Lerp(zoneColor, owned ? 0.10f : zoneOwners.Count > 0 ? 0.08f : 0.30f);
 
                 StandardMaterial3D edge = Visuals.Flat(zoneColor);
@@ -264,7 +289,19 @@ public sealed partial class BoardView : Node3D
             StandardMaterial3D material = Visuals.Matte(color);
             _tileMaterials[cell.Coord] = material;
             _tileBase[cell.Coord] = color;
+            if (plated && !playable)
+            {
+                // 场景格只作装饰：铺满整格、不留缝也不垫衬底，相邻场景格连成一片——不出现会被读成"可落子"的格线。
+                AddSceneSlab(tiles, center, material);
+                continue;
+            }
+
             AddTileStack(tiles, center, cell.Height, material);
+        }
+
+        if (plated)
+        {
+            AddBoardPlates(plates, zoneOf, ZoneColorOf);
         }
 
         foreach (FenceEdge fence in board.Fences)
@@ -285,6 +322,8 @@ public sealed partial class BoardView : Node3D
         AddChild(_pieces);
         _preview = new Node3D { Name = "Preview" };
         AddChild(_preview);
+        _show = new Node3D { Name = "Show" };
+        AddChild(_show);
 
         _cursor = new MeshInstance3D
         {
@@ -544,6 +583,82 @@ public sealed partial class BoardView : Node3D
         });
     }
 
+    /// <summary>场景格（棋盘档的障碍格）的地面：一整块铺满格距的面砖，与相邻场景格无缝相接。</summary>
+    private static void AddSceneSlab(Node3D parent, Vector3 top, StandardMaterial3D surface)
+    {
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize) },
+            MaterialOverride = surface,
+            Position = top - new Vector3(0f, BoardGeometry.TileHeight * 0.5f, 0f),
+        });
+    }
+
+    /// <summary>
+    /// 棋盘台面（visual-style-baseline「棋盘台面的可视表现」）：每块棋盘沿外接矩形描一圈边框、内部画格线。
+    /// 出生棋盘的边框沿用出生区的归属色，公共棋盘用中性色。外接矩形与类别取自视图模型的棋盘清单；
+    /// 位置一律由 <see cref="BoardGeometry.Center(Coord, int, int, int)"/> 的格心推出（边线 = 相邻两格格心的中点，外缘 = 角格格心外推半格）。
+    /// </summary>
+    private void AddBoardPlates(ImmutableArray<BoardPlate> plates, Dictionary<Coord, int> zoneOf, Func<int, Color> zoneColorOf)
+    {
+        var root = new Node3D { Name = "BoardPlates" };
+        AddChild(root);
+
+        const float half = BoardGeometry.CellSize * 0.5f;
+        const float lineWidth = 0.035f;
+        const float lineHeight = 0.006f;
+        const float frameWidth = 0.14f;
+        const float frameHeight = 0.07f;
+        StandardMaterial3D ink = Visuals.Flat(Visuals.BoardGridLine);
+
+        foreach (BoardPlate plate in plates)
+        {
+            int level = LevelOf(plate.Origin) ?? 0;
+            Vector3 a = BoardGeometry.Center(plate.Origin, _width, _height, level);
+            Vector3 b = BoardGeometry.Center(new Coord(plate.Origin.X + plate.Width - 1, plate.Origin.Y + plate.Height - 1), _width, _height, level);
+            float minX = Math.Min(a.X, b.X) - half, maxX = Math.Max(a.X, b.X) + half;
+            float minZ = Math.Min(a.Z, b.Z) - half, maxZ = Math.Max(a.Z, b.Z) + half;
+            float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
+            float top = a.Y;
+
+            // 内部格线：压在地砖之间的缝上，略高于面砖、低于一切叠加标记（标记最低在 +0.008）。
+            for (int column = 1; column < plate.Width; column++)
+            {
+                Vector3 left = BoardGeometry.Center(new Coord(plate.Origin.X + column - 1, plate.Origin.Y), _width, _height, level);
+                Vector3 right = BoardGeometry.Center(new Coord(plate.Origin.X + column, plate.Origin.Y), _width, _height, level);
+                root.AddChild(Strip(new Vector3(lineWidth, lineHeight, maxZ - minZ), new Vector3((left.X + right.X) * 0.5f, top + (lineHeight * 0.5f), midZ), ink));
+            }
+
+            for (int row = 1; row < plate.Height; row++)
+            {
+                Vector3 near = BoardGeometry.Center(new Coord(plate.Origin.X, plate.Origin.Y + row - 1), _width, _height, level);
+                Vector3 far = BoardGeometry.Center(new Coord(plate.Origin.X, plate.Origin.Y + row), _width, _height, level);
+                root.AddChild(Strip(new Vector3(maxX - minX, lineHeight, lineWidth), new Vector3(midX, top + (lineHeight * 0.5f), (near.Z + far.Z) * 0.5f), ink));
+            }
+
+            // 边框：骑在外接矩形的外缘上，四角补齐。
+            Color color = plate.Kind == BoardPlateKind.Birth && zoneOf.TryGetValue(plate.Origin, out int zone)
+                ? zoneColorOf(zone)
+                : Visuals.PublicBoardFrame;
+            StandardMaterial3D frame = Visuals.Flat(color);
+            float y = top + (frameHeight * 0.5f);
+            float spanX = maxX - minX + frameWidth;
+            float spanZ = maxZ - minZ + frameWidth;
+            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, minZ), frame));
+            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, maxZ), frame));
+            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ), frame));
+            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ), frame));
+        }
+
+        static MeshInstance3D Strip(Vector3 size, Vector3 position, StandardMaterial3D material) => new()
+        {
+            Mesh = new BoxMesh { Size = size },
+            MaterialOverride = material,
+            Position = position,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+    }
+
     /// <summary>深水面低于同层地砖上表面的距离：够让相邻地砖露出一段侧面，读得出"沟"。</summary>
     private const float WaterDrop = 0.10f;
 
@@ -607,7 +722,8 @@ public sealed partial class BoardView : Node3D
         SceneTreatment treatment,
         LibertyThresholds thresholds,
         TurnFlash flash,
-        Coord? focus = null)
+        Coord? focus = null,
+        ShowMask? mask = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(treatment);
@@ -633,6 +749,7 @@ public sealed partial class BoardView : Node3D
         Clear(_overlay);
         Clear(_pieces);
         Clear(_preview);
+        Clear(_show);
 
         // 水面流动层与装饰对比同步压淡：信息层打开时它不该比判读信息更抢眼。
         Visuals.WaterFlow.SetShaderParameter("dim", 0.35f + (0.65f * treatment.DecorationContrastPercent / 100f));
@@ -644,8 +761,9 @@ public sealed partial class BoardView : Node3D
 
         PreviewPresentation? preview = world.Preview(thresholds);
         DrawRelicMarkers(board);
-        DrawLifeSeals(board);
-        DrawPieces(board, treatment);
+        DrawPlacementMarks(board);
+        DrawPieces(board, treatment, mask ?? ShowMask.Empty);
+        DrawShow(mask ?? ShowMask.Empty);
         DrawLayer(content);
         DrawPreview(preview, focus);
         DrawFlash(flash);
@@ -703,38 +821,198 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>
-    /// 默认棋盘上当前行动玩家的禁入格（tactical-layers「活形与禁入格的标示」）：压暗底 + 所有者阵营色方框 + 叉。
-    /// 哪些格禁入、归谁，一律读 <see cref="BoardCellView.Block"/> / <see cref="BoardCellView.LifeForbiddenBy"/>，本类不判活形。
-    /// 地形不可落子靠地形本身、范围外不加标记（<see cref="PlacementBlocks.StyleOf"/>），三者外观互不相同。
+    /// 默认棋盘上"落不下"的标记（tactical-layers「活形与禁入格的标示」「单子禁手的标示」）：活棋禁入 = 压暗底 + 所有者阵营色方框 + 叉，
+    /// 破坏活形再加一枚角标，自杀手 = 红色叉，同形 = 橙色叉 + 圆环。
+    /// 哪一格是哪一类、归谁，一律读 <see cref="BoardCellView.Block"/> 与 <see cref="PlacementBlocks"/>；图元组成读 <see cref="PlacementBlocks.PartsOf"/>，
+    /// 本类不判气、提子、同形与活形，也不按类别分支。地形不可落子靠地形本身、范围外不加标记。
+    /// 尺寸读 <see cref="PlacementMarkGeometry"/>（visual-style-baseline「禁手标记的远近可辨」）：全局预览下放大加粗，近景是引入之前的尺寸。
     /// </summary>
-    private void DrawLifeSeals(DefaultBoardView board)
+    private void DrawPlacementMarks(DefaultBoardView board)
     {
+        PlacementMarkGeometry geometry = PlacementMarkGeometry.For(Rig.IsOverview);
+        float span = geometry.CrossSpan / 1000f * BoardGeometry.CellSize;
+        float stroke = geometry.CrossStroke / 1000f * BoardGeometry.CellSize;
+        float frame = geometry.FrameStroke / 1000f * BoardGeometry.CellSize;
+        float accent = geometry.AccentSize / 1000f * BoardGeometry.CellSize;
         foreach (BoardCellView cell in board.Cells)
         {
-            if (PlacementBlocks.StyleOf(cell.Block) != PlacementMarkStyle.LifeSeal || cell.LifeForbiddenBy is not { } owner)
+            PlacementMarkStyle style = PlacementBlocks.StyleOf(cell.Block);
+            PlacementMarkParts parts = PlacementBlocks.PartsOf(style);
+            if (parts == PlacementMarkParts.None)
             {
                 continue;
             }
 
-            Color faction = Visuals.FactionColorOf(owner);
-            AddTint(cell.Coord, Visuals.ForbiddenShade, 0.45f);
-            AddRing(_overlay, cell.Coord, faction, false, 0.03f);
-            AddCross(cell.Coord, faction, _overlay);
+            Color color = PlacementBlocks.TintOf(style) switch
+            {
+                PlacementMarkTint.OwnerFaction when PlacementBlocks.OwnerOf(cell) is { } owner => Visuals.FactionColorOf(owner),
+                PlacementMarkTint.Red => Visuals.Urgent,
+                PlacementMarkTint.Orange => Visuals.Danger,
+                _ => Visuals.Neutral,
+            };
+
+            if (parts.HasFlag(PlacementMarkParts.Shade))
+            {
+                AddTint(cell.Coord, Visuals.ForbiddenShade, 0.45f);
+            }
+
+            if (parts.HasFlag(PlacementMarkParts.Frame))
+            {
+                AddRing(_overlay, cell.Coord, color, false, 0.03f, frame);
+            }
+
+            if (parts.HasFlag(PlacementMarkParts.Cross))
+            {
+                AddCross(cell.Coord, color, _overlay, span, stroke);
+            }
+
+            if (parts.HasFlag(PlacementMarkParts.Ring))
+            {
+                AddCircle(cell.Coord, color, span, accent);
+            }
+
+            if (parts.HasFlag(PlacementMarkParts.CornerBadge))
+            {
+                AddCornerBadge(cell.Coord, color.Lerp(Colors.White, 0.65f), accent);
+            }
         }
     }
 
-    private void DrawPieces(DefaultBoardView board, SceneTreatment treatment)
+    /// <summary>同形标记的圆环：平放在格面上，套在叉的外面（不超出地砖）。</summary>
+    private void AddCircle(Coord coord, Color color, float crossSpan, float width)
+    {
+        float outer = Mathf.Min(BoardGeometry.TileSize * 0.5f, (crossSpan * 0.5f) + width);
+        _overlay.AddChild(new MeshInstance3D
+        {
+            Mesh = new TorusMesh { InnerRadius = outer - width, OuterRadius = outer, Rings = 24, RingSegments = 6 },
+            MaterialOverride = Visuals.Flat(color),
+            Position = CenterOf(coord) + new Vector3(0f, 0.04f, 0f),
+            Scale = new Vector3(1f, 0.25f, 1f),
+        });
+    }
+
+    /// <summary>破坏活形标记的角标：格子右上角的一枚小方块（形状通道，去色后仍与活棋禁入的印记可分）。</summary>
+    private void AddCornerBadge(Coord coord, Color color, float accent)
+    {
+        float size = accent * 2.2f;
+        float offset = (BoardGeometry.TileSize * 0.5f) - (size * 0.5f);
+        _overlay.AddChild(new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(size, 0.03f, size) },
+            MaterialOverride = Visuals.Flat(color),
+            Position = CenterOf(coord) + new Vector3(offset, 0.055f, -offset),
+        });
+    }
+
+    /// <summary>
+    /// 结算演出的逐帧刷新（settlement-show 3.3）：只重画棋子一层与演出层——按遮罩隐藏尚未落下的、让落下中的长出来、让被提的按原归属留在原格淡出，
+    /// 再画飘字与信物闪光（settlement-show-callouts D6）。其余层（叠加层、预览、高亮）不在演出里逐帧变化，留给状态变化时的 <see cref="Refresh"/>。
+    /// </summary>
+    public void RefreshShow(ViewerWorld world, SceneTreatment treatment, ShowMask mask)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(treatment);
+        ArgumentNullException.ThrowIfNull(mask);
+        Clear(_pieces);
+        Clear(_show);
+        DrawPieces(world.Board(), treatment, mask);
+        DrawShow(mask);
+    }
+
+    /// <summary>
+    /// 演出层（settlement-show-callouts D6）：格上飘字与信物闪光，全部由遮罩推出、不回写视图模型。
+    /// 飘字用 <see cref="Label"/> 的坐标标注画法（平铺、不用 billboard——见其注释），字号按相机远近两档（<see cref="CalloutLabelStyle"/>），
+    /// 随年龄上浮并在后半段淡出；信物闪光是既有信物标记外的一圈亮环，随进度衰减。
+    /// </summary>
+    private void DrawShow(ShowMask mask)
+    {
+        foreach ((Coord coord, int permille) in mask.RelicFlash)
+        {
+            // 亮环随进度衰减：线宽由粗变细、透明度由实变淡。
+            float fade = 1f - (permille / 1000f);
+            var ring = new Node3D();
+            AddRing(ring, coord, Visuals.RelicRevealed, false, 0.05f, 0.05f + (0.07f * fade));
+            foreach (Node child in ring.GetChildren())
+            {
+                Translucent(child, 0.2f + (0.8f * fade));
+            }
+
+            _show.AddChild(ring);
+        }
+
+        CalloutLabelStyle style = CalloutLabelStyle.For(Rig.IsOverview);
+        foreach (Callout callout in mask.Callouts)
+        {
+            float t = callout.AgePermille / 1000f;
+            float alpha = t < 0.5f ? 1f : 1f - ((t - 0.5f) * 2f);
+            Color color = callout.Kind switch
+            {
+                CalloutKind.Capture => Visuals.Urgent,
+                CalloutKind.Relic => Visuals.RelicRevealed,
+                _ => Visuals.CoordinateLabel,
+            };
+            Label3D label = Label(callout.Text, CenterOf(callout.Coord) + new Vector3(0f, 0.16f + (0.5f * t), -0.28f), style.FontSize, style.OutlineSize);
+            label.Modulate = new Color(color, alpha);
+            label.OutlineModulate = new Color(Visuals.CoordinateLabelOutline, alpha);
+            label.NoDepthTest = true;
+            label.RenderPriority = 2;
+            _show.AddChild(label);
+        }
+    }
+
+    /// <summary>
+    /// 按演出遮罩画棋子（design.md D6）：棋盘视图模型已是终态，遮罩只决定"此刻画不画、画多大、多透明"，不回写视图模型。
+    /// 遮罩为空即终态：每格占用者原样画出。
+    /// </summary>
+    private void DrawPieces(DefaultBoardView board, SceneTreatment treatment, ShowMask mask)
     {
         foreach (BoardCellView cell in board.Cells)
         {
-            if (cell.Occupant is not { } occupant)
+            if (cell.Occupant is not { } occupant || mask.Hidden.Contains(cell.Coord))
             {
                 continue;
             }
 
             Node3D piece = BuildPiece(occupant, treatment.PieceEmphasisPercent);
             piece.Position = CenterOf(cell.Coord);
+            if (mask.Appearing.TryGetValue(cell.Coord, out int permille))
+            {
+                // 出现动画：从 35% 长到 100%，同时从格面下方 0.12 抬到原位。
+                float t = permille / 1000f;
+                piece.Scale = Vector3.One * (0.35f + (0.65f * t));
+                piece.Position += new Vector3(0f, -0.12f * (1f - t), 0f);
+            }
+
             _pieces.AddChild(piece);
+        }
+
+        // 提子节拍尚未播完的被提棋子：按原归属、原类型留在原格；节拍进行中按进度淡出并略缩。
+        float fade = mask.CaptureFadePermille / 1000f;
+        foreach (CapturedPiece captured in mask.StillShown)
+        {
+            Node3D piece = BuildPiece(new Occupant(captured.Owner, captured.Type), treatment.PieceEmphasisPercent);
+            piece.Position = CenterOf(captured.Coord);
+            if (fade > 0f)
+            {
+                piece.Scale = Vector3.One * (1f - (0.4f * fade));
+                SetTransparency(piece, fade);
+            }
+
+            _pieces.AddChild(piece);
+        }
+    }
+
+    /// <summary>给一枚棋子节点下的全部几何体设透明度（0 不透明 … 1 全透明）。</summary>
+    private static void SetTransparency(Node root, float transparency)
+    {
+        if (root is GeometryInstance3D geometry)
+        {
+            geometry.Transparency = transparency;
+        }
+
+        foreach (Node child in root.GetChildren())
+        {
+            SetTransparency(child, transparency);
         }
     }
 
@@ -1055,7 +1333,7 @@ public sealed partial class BoardView : Node3D
         });
     }
 
-    private void AddCross(Coord coord, Color color, Node3D? parent = null)
+    private void AddCross(Coord coord, Color color, Node3D? parent = null, float span = 0.62f, float stroke = 0.07f)
     {
         Vector3 center = CenterOf(coord) + new Vector3(0f, 0.045f, 0f);
         StandardMaterial3D material = Visuals.Flat(color);
@@ -1063,7 +1341,7 @@ public sealed partial class BoardView : Node3D
         {
             (parent ?? _preview).AddChild(new MeshInstance3D
             {
-                Mesh = new BoxMesh { Size = new Vector3(0.62f, 0.02f, 0.07f) },
+                Mesh = new BoxMesh { Size = new Vector3(span, 0.02f, stroke) },
                 MaterialOverride = material,
                 Position = center,
                 RotationDegrees = new Vector3(0f, i == 0 ? 45f : -45f, 0f),
@@ -1072,12 +1350,11 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>格子轮廓环。<paramref name="dashed"/> 为虚线（预计提子），否则实线（警示 / 落子演出）。</summary>
-    private void AddRing(Node3D parent, Coord coord, Color color, bool dashed, float y)
+    private void AddRing(Node3D parent, Coord coord, Color color, bool dashed, float y, float thickness = 0.055f)
     {
         Vector3 center = CenterOf(coord) + new Vector3(0f, y, 0f);
         StandardMaterial3D material = Visuals.Flat(color);
         const float half = BoardGeometry.TileSize * 0.5f;
-        const float thickness = 0.055f;
         float[] offsets = dashed ? [-0.30f, 0f, 0.30f] : [0f];
         float length = dashed ? 0.20f : BoardGeometry.TileSize;
         for (int side = 0; side < 4; side++)
@@ -1124,9 +1401,12 @@ public sealed partial class BoardView : Node3D
 
         for (int x = 0; x < _width; x++)
         {
-            string text = new Coord(x, 0).Column.ToString();
-            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: false)));
-            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: true)));
+            // 双字母列标（第 26 列起）用较小字号，相邻两个之间留有空隙；单字母列标的字号不变（visual-style-baseline「双字母列标不重叠」）。
+            string text = new Coord(x, 0).Column;
+            int size = CoordinateLabelStyle.ColumnFontSizeOf(text);
+            int outline = CoordinateLabelStyle.ColumnOutlineSizeOf(text);
+            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: false), size, outline));
+            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: true), size, outline));
         }
 
         for (int y = 0; y < _height; y++)
@@ -1147,18 +1427,19 @@ public sealed partial class BoardView : Node3D
     /// 所以这个缺陷靠"扫一眼截图"发现不了，必须逐字辨认。对局相机本身是固定的（见 <see cref="Build"/> 里的
     /// <see cref="Camera3D"/>，没有任何旋转绑定），不存在"转到背面"的情形，平铺没有代价。（board-coordinates D2 修订）
     /// </remarks>
-    private static Label3D Label(string text, Vector3 position) => new()
+    private static Label3D Label(
+        string text, Vector3 position, int fontSize = CoordinateLabelStyle.FontSize, int outlineSize = CoordinateLabelStyle.OutlineSize) => new()
     {
         Text = text,
         Position = position,
-        FontSize = 96,
+        FontSize = fontSize,
         // FixedSize：标注在屏幕上大小恒定，不随距相机远近缩放。坐标是读数不是景物，
         // 近边的 A 与远边的 A 必须一样大——否则近端会胀到压住底部面板，远端小到看不清。
         FixedSize = true,
         PixelSize = 0.00035f,
         Modulate = Visuals.CoordinateLabel,
         OutlineModulate = Visuals.CoordinateLabelOutline,
-        OutlineSize = 10,
+        OutlineSize = outlineSize,
         Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
         RotationDegrees = new Vector3(-90f, 0f, 0f),
         NoDepthTest = false,

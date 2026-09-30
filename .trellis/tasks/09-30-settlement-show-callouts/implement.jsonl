@@ -1,0 +1,7 @@
+{"file": "openspec/changes/settlement-show-callouts/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/settlement-show-callouts/design.md", "reason": "规格"}
+{"file": "openspec/changes/settlement-show-callouts/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/settlement-show-callouts/specs/", "type": "directory", "reason": "规格"}
+{"file": "openspec/changes/turn-settlement-show/design.md", "reason": "前置 change 的节拍与时间线设计"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/mtime/Godot Debug"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "分层"}

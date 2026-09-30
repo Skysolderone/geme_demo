@@ -99,8 +99,13 @@ public sealed record GroupPowerView(
     int MultiplierCount,
     string MultiplierText,
     BigInteger Power,
-    string FormulaText)
+    string FormulaText,
+    string ShortFormulaText)
 {
+    /// <summary>
+    /// 由棋串军势明细投影。<see cref="FormulaText"/>（势力层 / 预演的完整算式）与 <see cref="ShortFormulaText"/>（结算演出飘字的短算式，
+    /// settlement-show-callouts 裁决 1）在这里由同一份数值一次生成：短算式只列非零项——"(5+2)×1.5 = 10"；无加值 "5×1.5 = 7"；无倍增 "5+2 = 7"；两者都无 "5"。
+    /// </summary>
     public static GroupPowerView From(GroupPower power)
     {
         ArgumentNullException.ThrowIfNull(power);
@@ -117,10 +122,19 @@ public sealed record GroupPowerView(
         string bonus = power.PositionBonus == 0
             ? "位置加值 0"
             : $"位置加值 {power.PositionBonus}（{string.Join(" / ", parts)}）";
+        string sum = power.PositionBonus == 0 ? $"{power.BaseTotal}" : $"{power.BaseTotal}+{power.PositionBonus}";
+        string shortFormula = (power.MultiplierCount, power.PositionBonus) switch
+        {
+            (0, 0) => sum,
+            (0, _) => $"{sum} = {power.Power}",
+            (_, 0) => $"{sum}×{multiplier} = {power.Power}",
+            _ => $"({sum})×{multiplier} = {power.Power}",
+        };
         return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus,
             power.BannerBonus, power.ChainBonus, power.SentryBonus, power.BoundaryBonus, power.PositionBonus,
             power.MultiplierCount, multiplier, power.Power,
-            $"（基础 {power.BaseTotal} + {bonus}）× {multiplier} = {power.Power}");
+            $"（基础 {power.BaseTotal} + {bonus}）× {multiplier} = {power.Power}",
+            shortFormula);
     }
 }
 

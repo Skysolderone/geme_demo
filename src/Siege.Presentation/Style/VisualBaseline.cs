@@ -248,9 +248,9 @@ public static class GroupMarks
 }
 
 /// <summary>
-/// 默认棋盘上"落不下"的三类在外观上的手法（tactical-layers「活形与禁入格的标示」）。
+/// 默认棋盘上"落不下"的各类在外观上的手法（tactical-layers「活形与禁入格的标示」「单子禁手的标示」）。
 /// 地形不可落子由地形本身（岩石 / 深水）表达，不加标记；超出合法落子范围不加标记（合法落点另有标记，范围外即"没有合法标记"）；
-/// 活棋禁入加一枚禁入印记（叉 + 所有者阵营色的方框），三者互不相同。
+/// 活棋禁入加一枚禁入印记（叉 + 所有者阵营色的方框）；单子禁手三类各有一种带叉的标记。各类的图元组成见 <see cref="PlacementBlocks.PartsOf"/>，两两不同。
 /// </summary>
 public enum PlacementMarkStyle
 {
@@ -262,6 +262,73 @@ public enum PlacementMarkStyle
 
     /// <summary>禁入印记：叉 + 所有者阵营色方框。</summary>
     LifeSeal,
+
+    /// <summary>破坏活形：禁入印记（压暗底 + 所有者阵营色方框 + 叉）再加一枚角标。</summary>
+    BreaksLifeSeal,
+
+    /// <summary>自杀手：红色叉，无方框、不压暗。</summary>
+    SuicideCross,
+
+    /// <summary>同形：橙色叉 + 圆环。</summary>
+    SuperkoCross,
+}
+
+/// <summary>落点标记由哪些图元组成（形状通道）。颜色是第二通道：去色之后各类标记仍靠图元组成区分。</summary>
+[Flags]
+public enum PlacementMarkParts
+{
+    /// <summary>没有图元。</summary>
+    None = 0,
+
+    /// <summary>压暗底。</summary>
+    Shade = 1,
+
+    /// <summary>沿格边的方框。</summary>
+    Frame = 2,
+
+    /// <summary>叉。</summary>
+    Cross = 4,
+
+    /// <summary>格子一角的角标。</summary>
+    CornerBadge = 8,
+
+    /// <summary>格心的圆环。</summary>
+    Ring = 16,
+}
+
+/// <summary>落点标记的颜色来源。</summary>
+public enum PlacementMarkTint
+{
+    /// <summary>不上色（没有标记）。</summary>
+    None,
+
+    /// <summary>活形所有者的阵营色。</summary>
+    OwnerFaction,
+
+    /// <summary>红。</summary>
+    Red,
+
+    /// <summary>橙。</summary>
+    Orange,
+}
+
+/// <summary>
+/// 落点标记的尺寸（visual-style-baseline「禁手标记的远近可辨」），单位是格心间距的千分数。
+/// </summary>
+/// <param name="CrossSpan">叉的每一划的长度。</param>
+/// <param name="CrossStroke">叉的每一划的宽度。</param>
+/// <param name="FrameStroke">方框的线宽。</param>
+/// <param name="AccentSize">角标的边长 / 圆环的线宽。</param>
+public sealed record PlacementMarkGeometry(int CrossSpan, int CrossStroke, int FrameStroke, int AccentSize)
+{
+    /// <summary>近景：叉与方框是引入本条之前的尺寸（叉 0.62 × 0.07、方框线宽 0.055），MUST NOT 改动。</summary>
+    public static readonly PlacementMarkGeometry Near = new(CrossSpan: 620, CrossStroke: 70, FrameStroke: 55, AccentSize: 60);
+
+    /// <summary>全局预览：放大加粗。叉占到格边长的八成多，线宽约为近景的三倍。</summary>
+    public static readonly PlacementMarkGeometry Overview = new(CrossSpan: 860, CrossStroke: 210, FrameStroke: 150, AccentSize: 170);
+
+    /// <summary>按相机是否处于全局预览取尺寸。</summary>
+    public static PlacementMarkGeometry For(bool overview) => overview ? Overview : Near;
 }
 
 /// <summary>落点阻断类别的呈现：手法与指向时的原因文案。</summary>
@@ -275,17 +342,84 @@ public static class PlacementBlocks
         PlacementBlock.None => PlacementMarkStyle.NoMarker,
         PlacementBlock.Terrain => PlacementMarkStyle.TerrainSurface,
         PlacementBlock.LifeForbidden => PlacementMarkStyle.LifeSeal,
+        PlacementBlock.BreaksLife => PlacementMarkStyle.BreaksLifeSeal,
+        PlacementBlock.Suicide => PlacementMarkStyle.SuicideCross,
+        PlacementBlock.Superko => PlacementMarkStyle.SuperkoCross,
         _ => throw new ArgumentOutOfRangeException(nameof(block), block, "未知阻断类别。"),
     };
 
-    /// <summary>指向该格时的原因（不含所有者；所有者由 <see cref="Camera.HoverReadout"/> 拼上）。</summary>
+    /// <summary>单子禁手类别 → 默认棋盘阻断类别的<b>唯一</b>映射。</summary>
+    public static PlacementBlock Of(Siege.Core.Batch.ForbiddenMoveKind kind) => kind switch
+    {
+        Siege.Core.Batch.ForbiddenMoveKind.BreaksLife => PlacementBlock.BreaksLife,
+        Siege.Core.Batch.ForbiddenMoveKind.Suicide => PlacementBlock.Suicide,
+        Siege.Core.Batch.ForbiddenMoveKind.Superko => PlacementBlock.Superko,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知禁手类别。"),
+    };
+
+    /// <summary>某种手法由哪些图元组成（forbidden-marks D4）。带叉的四种两两不同；渲染层按它取图元，不按类别分支。</summary>
+    public static PlacementMarkParts PartsOf(PlacementMarkStyle style) => style switch
+    {
+        PlacementMarkStyle.TerrainSurface or PlacementMarkStyle.NoMarker => PlacementMarkParts.None,
+        PlacementMarkStyle.LifeSeal => PlacementMarkParts.Shade | PlacementMarkParts.Frame | PlacementMarkParts.Cross,
+        PlacementMarkStyle.BreaksLifeSeal => PlacementMarkParts.Shade | PlacementMarkParts.Frame | PlacementMarkParts.Cross | PlacementMarkParts.CornerBadge,
+        PlacementMarkStyle.SuicideCross => PlacementMarkParts.Cross,
+        PlacementMarkStyle.SuperkoCross => PlacementMarkParts.Cross | PlacementMarkParts.Ring,
+        _ => throw new ArgumentOutOfRangeException(nameof(style), style, "未知落点标记手法。"),
+    };
+
+    /// <summary>某种手法的颜色来源。</summary>
+    public static PlacementMarkTint TintOf(PlacementMarkStyle style) => style switch
+    {
+        PlacementMarkStyle.TerrainSurface or PlacementMarkStyle.NoMarker => PlacementMarkTint.None,
+        PlacementMarkStyle.LifeSeal or PlacementMarkStyle.BreaksLifeSeal => PlacementMarkTint.OwnerFaction,
+        PlacementMarkStyle.SuicideCross => PlacementMarkTint.Red,
+        PlacementMarkStyle.SuperkoCross => PlacementMarkTint.Orange,
+        _ => throw new ArgumentOutOfRangeException(nameof(style), style, "未知落点标记手法。"),
+    };
+
+    /// <summary>指向该格时的原因类别名（不含所有者与序号；完整文案见 <see cref="ReasonOf"/>）。</summary>
     public static string ReasonText(PlacementBlock block) => block switch
     {
         PlacementBlock.None => string.Empty,
         PlacementBlock.Terrain => "地形不可落子",
         PlacementBlock.LifeForbidden => "活棋禁入",
+        PlacementBlock.BreaksLife => "破坏活形",
+        PlacementBlock.Suicide => "自杀手",
+        PlacementBlock.Superko => "同形",
         _ => throw new ArgumentOutOfRangeException(nameof(block), block, "未知阻断类别。"),
     };
+
+    /// <summary>
+    /// 指向某格时的完整原因文案（forbidden-marks D4）；无阻断为空串。活棋禁入 / 破坏活形带所有者，同形带重复的提交序号，
+    /// 自杀手写明"落下后"（整批判定：暂放变了结论会变）。所有者取该格的禁手 / 禁入数据，本方法不判规则。
+    /// </summary>
+    public static string ReasonOf(BoardCellView cell)
+    {
+        ArgumentNullException.ThrowIfNull(cell);
+        PlacementBlock block = cell.Block;
+        string name = ReasonText(block);
+        return block switch
+        {
+            PlacementBlock.LifeForbidden => $"{name}（{Text.Labels.Player(cell.LifeForbiddenBy!.Value)}）",
+            PlacementBlock.BreaksLife => $"{name}（{Text.Labels.Player(cell.Forbidden!.LifeOwner!.Value)}）",
+            PlacementBlock.Suicide => $"{name}：落下后无气",
+            PlacementBlock.Superko => $"{name}：与第 {cell.Forbidden!.DuplicateOfSequence!.Value} 次提交的盘面重复",
+            _ => name,
+        };
+    }
+
+    /// <summary>该格标记的所有者（阵营色来源）：活棋禁入 / 破坏活形为活形所有者，其余为 <c>null</c>。</summary>
+    public static Siege.Core.Board.PlayerId? OwnerOf(BoardCellView cell)
+    {
+        ArgumentNullException.ThrowIfNull(cell);
+        return cell.Block switch
+        {
+            PlacementBlock.LifeForbidden => cell.LifeForbiddenBy,
+            PlacementBlock.BreaksLife => cell.Forbidden!.LifeOwner,
+            _ => null,
+        };
+    }
 }
 
 /// <summary>信息层打开时对场景的临时处理（§20：压低饱和度与装饰对比，只突出当前层）。百分比整数，100 = 原样。</summary>
@@ -339,4 +473,54 @@ public static class UiTheme
 
     /// <summary>手游式大按钮的下限：任何按钮高度 MUST 低于它。</summary>
     public const int MobileStyleButtonHeightPx = 56;
+}
+
+/// <summary>
+/// 棋盘四边坐标标注的字号（visual-style-baseline「棋盘坐标标注」「双字母列标不重叠」）。标注在屏幕上大小恒定，相邻列标的间距却随镜头拉远而变小：
+/// 双字母列标（第 26 列起 <c>AA</c>、<c>AB</c>……）用较小字号，使它的宽度不超过一个单字母列标，相邻两个之间留有空隙。
+/// 单字母列标与行号的字号、描边 MUST 与引入双字母列标之前相同。
+/// </summary>
+public static class CoordinateLabelStyle
+{
+    /// <summary>单字母列标与行号的字号（引入本条之前的值）。</summary>
+    public const int FontSize = 96;
+
+    /// <summary>单字母列标与行号的描边宽度（引入本条之前的值）。</summary>
+    public const int OutlineSize = 10;
+
+    /// <summary>双字母列标的字号：两个字的总宽不超过一个 <see cref="FontSize"/> 字号的宽字母。</summary>
+    public const int WideColumnFontSize = 50;
+
+    /// <summary>双字母列标的描边宽度（随字号缩小，否则描边会把两个字糊在一起）。</summary>
+    public const int WideColumnOutlineSize = 6;
+
+    /// <summary>某个列标的字号。<paramref name="column"/> 取自坐标类型的列字母，本类不拼字母表。</summary>
+    public static int ColumnFontSizeOf(string column)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(column);
+        return column.Length > 1 ? WideColumnFontSize : FontSize;
+    }
+
+    /// <summary>某个列标的描边宽度。</summary>
+    public static int ColumnOutlineSizeOf(string column)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(column);
+        return column.Length > 1 ? WideColumnOutlineSize : OutlineSize;
+    }
+}
+
+/// <summary>
+/// 结算演出飘字（settlement-show-callouts D6）的字号与描边：与坐标标注同一画法（平铺、不用 billboard），按相机远近两档——
+/// 全局预览下放大（沿用禁手标记 <see cref="PlacementMarkGeometry"/> 的远近两档思路），近景取小（相邻落子的算式互相错开）。整数，不进浮点。
+/// </summary>
+public sealed record CalloutLabelStyle(int FontSize, int OutlineSize)
+{
+    /// <summary>近景：比单字母坐标标注小一半。</summary>
+    public static readonly CalloutLabelStyle Near = new(FontSize: 48, OutlineSize: 6);
+
+    /// <summary>全局预览：放大到坐标标注的四分之三。</summary>
+    public static readonly CalloutLabelStyle Overview = new(FontSize: 72, OutlineSize: 8);
+
+    /// <summary>按相机是否处于全局预览取尺寸。</summary>
+    public static CalloutLabelStyle For(bool overview) => overview ? Overview : Near;
 }

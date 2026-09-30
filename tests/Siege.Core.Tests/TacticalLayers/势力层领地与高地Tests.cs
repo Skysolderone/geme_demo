@@ -110,6 +110,7 @@ public class 势力层领地与高地Tests
         // 段 A 改写：文案顺序随公式改为"（基础 + 加值）× 倍率"；无倍增子，军势 ⌊(2 + 2) × 1⌋ = 4（新旧同值）。
         Assert.Equal(4, truth.Power);
         Assert.Equal("（基础 2 + 位置加值 2（连珠 0 / 协同 0 / 高地 2））× 1 = 4", group.Power.FormulaText);
+        Assert.Equal("2+2 = 4", group.Power.ShortFormulaText);   // settlement-show-callouts 裁决 1：短算式与完整算式同一处生成、只列非零项
 
         // more-pieces-relics 段 D 改写：视图扩为七项来源（段 A 待决 5），恒等式随之改为七项；本盘面只有普通子，四项新来源为 0、文案不列。
         Assert.Equal((0, 0, 0, 0), (group.Power.BannerBonus, group.Power.ChainBonus, group.Power.SentryBonus, group.Power.BoundaryBonus));
@@ -149,6 +150,7 @@ public class 势力层领地与高地Tests
             + group.Power.BannerBonus + group.Power.ChainBonus + group.Power.SentryBonus + group.Power.BoundaryBonus);
         Assert.Equal(9, group.Power.Power);
         Assert.Equal("（基础 3 + 位置加值 6（连珠 0 / 协同 0 / 高地 0 / 铁链 4 / 哨兵 2））× 1 = 9", group.Power.FormulaText);
+        Assert.Equal("3+6 = 9", group.Power.ShortFormulaText);
     }
 
     [Fact]
@@ -168,6 +170,7 @@ public class 势力层领地与高地Tests
         Assert.Equal((truth.BannerBonus, truth.BoundaryBonus), (group.Power.BannerBonus, group.Power.BoundaryBonus));
         Assert.Equal((3, 3, 6, 8), (group.Power.BannerBonus, group.Power.BoundaryBonus, group.Power.PositionBonus, (int)group.Power.Power));
         Assert.Equal("（基础 2 + 位置加值 6（连珠 0 / 协同 0 / 高地 0 / 旗手 3 / 界碑 3））× 1 = 8", group.Power.FormulaText);
+        Assert.Equal("2+6 = 8", group.Power.ShortFormulaText);
     }
 
     [Fact]
@@ -186,6 +189,7 @@ public class 势力层领地与高地Tests
         Assert.Equal((5, 3, "7.59375"), (five.Power.MultiplierCount, five.HeatLevel, five.Power.MultiplierText));
         Assert.Equal(37, five.Power.Power);
         Assert.Equal("（基础 5 + 位置加值 0）× 7.59375 = 37", five.Power.FormulaText);
+        Assert.Equal("5×7.59375 = 37", five.Power.ShortFormulaText);
         Assert.Equal((2, 2), (two.Power.MultiplierCount, two.HeatLevel));
     }
 

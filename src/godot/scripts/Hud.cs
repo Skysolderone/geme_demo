@@ -9,6 +9,7 @@ using Siege.Core.Scoring;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
+using Siege.Presentation.Show;
 using Siege.Presentation.Style;
 using Siege.Presentation.Text;
 using Siege.Presentation.Visibility;
@@ -44,6 +45,8 @@ public sealed partial class Hud : CanvasLayer
     private PanelContainer _recruitBar = null!;
     private Button _recruitBarButton = null!;
     private Label _notice = null!;
+    private Label _showCaption = null!;
+    private Label _showBanner = null!;
     private Label _hoverReadout = null!;
 
     /// <summary>点选手牌类型（决定下一次点格子放什么）。</summary>
@@ -105,6 +108,22 @@ public sealed partial class Hud : CanvasLayer
         // 通知条放在顶部顺序条之下：13×13 + 60° 相机下棋盘近边的行 / 列标注已经贴到底部 HUD 上沿，放底部会压住近边字母。
         Ui.Anchor(_notice, 0.5f, 0f, -420f, 66f, 420f, 90f);
         _root.AddChild(_notice);
+
+        // 结算演出的顶部合计（"提 N 子"）与中央横幅（"金方出局" / "对局结束"，settlement-show-callouts D6）：
+        // 都只在演出遮罩给出文案时可见，由 RefreshShow 逐帧刷新；横幅放中央面板的位置（此时终局面板尚未显示）。
+        _showCaption = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 4);
+        _showCaption.HorizontalAlignment = HorizontalAlignment.Center;
+        Ui.Anchor(_showCaption, 0.5f, 0f, -300f, 92f, 300f, 122f);
+        _showCaption.Visible = false;
+        _root.AddChild(_showCaption);
+        _showBanner = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx * 3);
+        _showBanner.HorizontalAlignment = HorizontalAlignment.Center;
+        _showBanner.VerticalAlignment = VerticalAlignment.Center;
+        _showBanner.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _showBanner.AddThemeConstantOverride("outline_size", 8);
+        Ui.Anchor(_showBanner, 0.5f, 0.5f, -400f, -60f, 400f, 60f);
+        _showBanner.Visible = false;
+        _root.AddChild(_showBanner);
 
         // 悬停格坐标读数（viewport-camera）：固定在回合横幅右侧。需要推屏的地图上四边标注经常不在画面内，读坐标靠它。
         _hoverReadout = Ui.Text(string.Empty, Ui.InfoText, UiTheme.BodyFontPx + 2);
@@ -268,8 +287,10 @@ public sealed partial class Hud : CanvasLayer
 
     // ---------- 刷新 ----------
 
-    /// <summary>按当前对局状态刷新全部面板。只在状态变化时调用，不逐帧重建。</summary>
-    public void Refresh(MatchSession session, TacticalLayerState layers, HandPanelState handPanel, RecruitPanelCollapse recruitCollapse)
+    /// <summary>按当前对局状态刷新全部面板。只在状态变化时调用，不逐帧重建（演出期间逐帧变化的只有势力排名栏，见 <see cref="RefreshRank"/>）。</summary>
+    /// <param name="mask">结算演出遮罩（settlement-show D6）；<c>null</c> 即无演出。</param>
+    /// <param name="deferResult">演出尚未播完：终局面板暂不显示，等横幅播完（settlement-show-callouts「横幅节拍」）。</param>
+    public void Refresh(MatchSession session, TacticalLayerState layers, HandPanelState handPanel, RecruitPanelCollapse recruitCollapse, ShowMask? mask = null, bool deferResult = false)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(layers);
@@ -279,14 +300,43 @@ public sealed partial class Hud : CanvasLayer
 
         RefreshTurnBanner(session, world, layers);
         RefreshOrderBar(world);
-        RefreshRank(world);
+        RefreshRank(world, mask ?? ShowMask.Empty);
         RefreshHand(session, world);
         RefreshLayerButtons(layers, handPanel);
         RefreshActions(session, world);
         RefreshPreview(world);
         RefreshLayerPanel(world, layers);
-        RefreshCenter(session, world, handPanel, recruitCollapse);
+        RefreshCenter(session, world, handPanel, recruitCollapse, deferResult);
+        RefreshShowOverlay(mask ?? ShowMask.Empty);
         _notice.Text = session.Notice;
+    }
+
+    /// <summary>演出逐帧刷新（settlement-show-callouts D6）：势力排名栏的分段到账与数字弹跳、顶部提子合计、中央横幅。由 GameRoot 每帧调用。</summary>
+    public void RefreshShow(ViewerWorld world, ShowMask mask)
+    {
+        ArgumentNullException.ThrowIfNull(mask);
+        RefreshRank(world, mask);
+        RefreshShowOverlay(mask);
+    }
+
+    /// <summary>顶部合计与横幅：文案来自遮罩；横幅在本条前 20% 淡入、后 25% 淡出，其余时候全亮。透明度只在这里由千分比折算，Presentation 不出浮点。</summary>
+    private void RefreshShowOverlay(ShowMask mask)
+    {
+        _showCaption.Text = mask.CaptureSummary ?? string.Empty;
+        _showCaption.Visible = mask.CaptureSummary is not null;
+
+        if (mask.Banner is { } banner)
+        {
+            float p = banner.ProgressPermille / 1000f;
+            float alpha = p < 0.2f ? p / 0.2f : p > 0.75f ? (1f - p) / 0.25f : 1f;
+            _showBanner.Text = banner.Text;
+            _showBanner.Modulate = new Color(1f, 1f, 1f, Math.Clamp(alpha, 0f, 1f));
+            _showBanner.Visible = true;
+        }
+        else
+        {
+            _showBanner.Visible = false;
+        }
     }
 
     private void RefreshTurnBanner(MatchSession session, ViewerWorld world, TacticalLayerState layers)
@@ -315,8 +365,15 @@ public sealed partial class Hud : CanvasLayer
         _orderButton.Text = $"行动顺序：{order}　[5] 展开顺序层";
     }
 
-    private void RefreshRank(ViewerWorld world)
+    /// <summary>
+    /// 势力排名栏（settlement-show 3.4）。<paramref name="mask"/> 里有该玩家的势力显示时按遮罩画：势力重算节拍播放前显示旧值与旧名次；
+    /// 播放中显示滚动中的整数插值、带符号增量与名次变动提示；播完遮罩为空，回到视图模型（结算后快照）的值，增量标记随之消失。
+    /// 演出期间由 GameRoot 逐帧调用；其余时候随 <see cref="Refresh"/> 在状态变化时刷新。
+    /// </summary>
+    public void RefreshRank(ViewerWorld world, ShowMask mask)
     {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(mask);
         Ui.Clear(_rankBody);
         var power = (PowerLayerContent)world.Layer(TacticalLayer.Power);
         if (power.Players.IsDefaultOrEmpty)
@@ -325,7 +382,11 @@ public sealed partial class Hud : CanvasLayer
             return;
         }
 
-        foreach (PlayerPowerRowView row in power.Players.OrderBy(p => p.Rank ?? int.MaxValue).ThenBy(p => p.Player.Value))
+        // 行序：节拍播放前按旧名次（画面保持结算前的样子），播放中及之后按新名次。
+        int? ShownRank(PlayerPowerRowView row) =>
+            mask.Power.TryGetValue(row.Player, out PowerDisplay? shown) && !shown.Rolling ? shown.Change.OldRank : row.Rank;
+
+        foreach (PlayerPowerRowView row in power.Players.OrderBy(p => ShownRank(p) ?? int.MaxValue).ThenBy(p => p.Player.Value))
         {
             var line = new HBoxContainer();
             line.AddThemeConstantOverride("separation", 6);
@@ -333,8 +394,43 @@ public sealed partial class Hud : CanvasLayer
             var icon = new EmblemIcon { CustomMinimumSize = new Vector2(16f, 16f), MouseFilter = Control.MouseFilterEnum.Ignore };
             icon.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
             line.AddChild(icon);
-            string rank = row.Rank is int r ? $"第 {r} 名" : "—";
+            string rank = ShownRank(row) is int r ? $"第 {r} 名" : "—";
             string suffix = row.StatusText is null ? string.Empty : $"（{row.StatusText}）";
+            if (mask.Power.TryGetValue(row.Player, out PowerDisplay? display))
+            {
+                // 演出中间态（settlement-show-callouts D2 分段到账）：总势力按段滚动（领地段 → 军势段 → 定格，整数插值 D7），
+                // 段首数字放大 1.3 倍、段内回落（缩放只在这里由段内千分比折算成整数字号）；段内标"领地 +a" / "军势 +b"，定格后标总增量；名次变动提示随滚动显示。
+                bool bouncing = display.Stage is PowerStage.Territory or PowerStage.Group;
+                int fontSize = bouncing
+                    ? UiTheme.BodyFontPx + (UiTheme.BodyFontPx * 3 * (1000 - display.StagePermille) / 10000)
+                    : UiTheme.BodyFontPx;
+                string delta = bouncing ? $"　{display.StageText}" : display.Stage == PowerStage.Hold ? $"　{display.Change.DeltaText}" : string.Empty;
+                System.Numerics.BigInteger shown = display.Stage switch
+                {
+                    PowerStage.Territory => display.Change.TerritoryDelta,
+                    PowerStage.Group => display.Change.GroupDelta,
+                    _ => display.Change.Delta,
+                };
+                string rankHint = display.Rolling && display.Change.RankText is { } rankText
+                    ? $"　{rankText}{(display.Change.NewRank < display.Change.OldRank ? " ↑" : " ↓")}"
+                    : string.Empty;
+                Color textColor = row.StatusText is null ? Ui.InfoText : Ui.MutedText;
+                line.AddChild(Ui.Text($"{rank}　{faction.Name}　势力 ", textColor));
+                line.AddChild(Ui.Text(Labels.CompactPower(display.Value), textColor, fontSize));
+                if (suffix.Length > 0)
+                {
+                    line.AddChild(Ui.Text(suffix, Ui.MutedText));
+                }
+
+                if (delta.Length > 0 || rankHint.Length > 0)
+                {
+                    line.AddChild(Ui.Text($"{delta}{rankHint}", shown.Sign < 0 ? Ui.DangerText : Visuals.ToColor(faction.Primary), bouncing ? fontSize : null));
+                }
+
+                _rankBody.AddChild(line);
+                continue;
+            }
+
             // 概览栏：势力拆成"领地 + 棋串"，≥ 10^6 缩写（restore-go-core-rules 段 E）；精确值在势力层明细里。
             line.AddChild(Ui.Text($"{rank}　{faction.Name}　{row.CompactText}{suffix}",
                 row.StatusText is null ? Ui.InfoText : Ui.MutedText));
@@ -581,11 +677,11 @@ public sealed partial class Hud : CanvasLayer
         }
     }
 
-    private void RefreshCenter(MatchSession session, ViewerWorld world, HandPanelState handPanel, RecruitPanelCollapse recruitCollapse)
+    private void RefreshCenter(MatchSession session, ViewerWorld world, HandPanelState handPanel, RecruitPanelCollapse recruitCollapse, bool deferResult)
     {
         Ui.Clear(_centerBody);
         _recruitBar.Visible = false;
-        if (session.IsOver && session.Match.Result is { } result)
+        if (session.IsOver && session.Match.Result is { } result && !deferResult)
         {
             CenterBox(0.5f, 700f, 220f);
             BuildResult(result, session.Me);
