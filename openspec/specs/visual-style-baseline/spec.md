@@ -212,3 +212,19 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **WHEN** 查看 `siege-4p-base-v5` 的坐标标注
 - **THEN** 画面与引入本条之前相同
 
+### Requirement: 大图渲染开销
+
+图形版在场景格数量很大的地图上 SHALL 以合批方式绘制场景装饰与场景面砖：绘制调用数 MUST NOT 随场景格数线性增长。结算演出期间 SHALL 只更新发生变化的棋子，MUST NOT 每帧整层重建棋子。合批与增量更新 MUST NOT 改变任何画面：同参数的定帧截图在时间驱动的动画区域之外 MUST 与改动前逐像素相同。
+
+#### Scenario: 绘制调用不随场景格线性增长
+- **WHEN** 分别在 `board:1`（约 500 个场景格）与 `board:1:n10`（约 1000 个以上场景格）上读取静止帧的绘制调用数
+- **THEN** 后者不超过前者的 1.5 倍
+
+#### Scenario: 画面不变
+- **WHEN** 以相同参数对 `board:1` 与 `siege-4p-base-v5` 各取一张定帧截图，与引入本条之前的截图逐像素比较
+- **THEN** `board:1` 没有任何像素差异；v5 的差异只落在水面动画区域内
+
+#### Scenario: 演出期间不整层重建
+- **WHEN** 结算演出进行中连续两帧之间只有一枚棋子的出现进度发生变化
+- **THEN** 这一帧只更新该棋子节点，其余棋子节点保持原实例
+
