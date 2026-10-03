@@ -221,3 +221,4 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - `show-sound-cues` 提交 `bc77588`，`.uid` 由 headless `--editor --quit` 生成（可行，约 1 分钟）并提交 `8192b64`；`ai-turn-speed` / `show-sound-cues` OpenSpec 归档 `c71c0a1`、Trellis 归档 `f5d5a8d`。
 - 负责人授权全部由实施方决定：棋盘图长局 / 封门裁决为 **A 接受长局**（设计文档 §3.3 与变更记录已写明理由：长度随格数线性；"被封"只是几何指标，保护期后全盘可落子）。音效音色 / 音量未实机试听，参数表 `ShowSounds.Table` 待负责人反馈后再调。
 - 当前无进行中的 change / Trellis 任务。
+- （10-03 续）`board-render-perf`：原方案前提错（以为开销在场景装饰；实测 72%–76% 的绘制调用来自可落子地砖的独立网格与材质）。两轮后 board:1 静止帧绘制调用 4097 → 792、n10 / n7 之比 1.635 → 1.179，14 张截图 0 像素差异；演出期间棋子增量重画。截图证据在 `sim-out/board-render-perf/`（不入库）。剩余大头是棋子（每枚若干独立网格与材质）与水面，未做。
