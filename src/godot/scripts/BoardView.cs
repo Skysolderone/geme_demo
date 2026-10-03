@@ -53,10 +53,26 @@ public sealed record TurnFlash(ImmutableArray<Coord> Placed, ImmutableArray<Coor
 /// </remarks>
 public sealed partial class BoardView : Node3D
 {
-    private readonly Dictionary<Coord, StandardMaterial3D> _tileMaterials = [];
-    private readonly Dictionary<Coord, Color> _tileBase = [];
+    // 地面材质的归并（board-render-perf 2.3）：同基色的面砖共用一份材质、同尺寸的盒子共用一份网格，节点照旧逐格各建——
+    // 渲染器把"同网格 + 同材质"的节点合成一次绘制。全部随 Build 重建，不跨 Build 复用（材质的颜色会被压暗改写）。
+    private readonly List<(StandardMaterial3D Material, Color Base)> _tileMaterials = [];
+    private readonly Dictionary<Color, StandardMaterial3D> _surfaceMaterials = [];
+    private readonly Dictionary<Color, StandardMaterial3D> _linerMaterials = [];
+    private readonly Dictionary<Color, StandardMaterial3D> _flatMaterials = [];
+    private readonly Dictionary<Vector3, BoxMesh> _boxMeshes = [];
     private readonly Dictionary<Coord, int> _levels = [];
     private Node3D _decoration = null!;
+    private Node3D _batch = null!;
+    private readonly Dictionary<string, PartBatch?> _partBatches = [];
+    private float? _batchScale;
+    private int _unbatchedObstacles;
+    private int _partMultiMeshes;
+    private readonly Dictionary<Coord, PieceNode> _boardPieces = [];
+    private readonly Dictionary<Coord, PieceNode> _capturedPieces = [];
+    private int _pieceEmphasis = -1;
+    private int _showFrames;
+    private PieceRedraw _lastShowRedraw;
+    private PieceRedraw _totalShowRedraw;
     private Node3D _overlay = null!;
     private Node3D _pieces = null!;
     private Node3D _preview = null!;
@@ -97,8 +113,15 @@ public sealed partial class BoardView : Node3D
         _zoneOwners = zoneOwners;
         _terrainKey = TerrainKeyOf(board);
         _tileMaterials.Clear();
-        _tileBase.Clear();
+        _surfaceMaterials.Clear();
+        _linerMaterials.Clear();
+        _flatMaterials.Clear();
+        _boxMeshes.Clear();
         _levels.Clear();
+        _partBatches.Clear();
+        _unbatchedObstacles = 0;
+        _boardPieces.Clear();
+        _capturedPieces.Clear();
         _width = board.Width;
         _height = board.Height;
 
@@ -114,6 +137,8 @@ public sealed partial class BoardView : Node3D
 
         _decoration = new Node3D { Name = "Decoration" };
         AddChild(_decoration);
+        _batch = new Node3D { Name = "DecorationBatch" };
+        AddChild(_batch);
 
         var tiles = new Node3D { Name = "Tiles" };
         AddChild(tiles);
@@ -156,6 +181,8 @@ public sealed partial class BoardView : Node3D
         }
 
         int variant = 0;
+        StandardMaterial3D? slabMaterial = null;
+        List<Vector3> slabTops = [];
         float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
         foreach (BoardCellView cell in board.Cells)
         {
@@ -177,8 +204,7 @@ public sealed partial class BoardView : Node3D
                 // 深水：水面低于同层地砖，不可落子；架桥后桥面与地砖齐平、可落子。
                 Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
                 Color water = Visuals.DeepWater;
-                _tileMaterials[cell.Coord] = AddWater(tiles, waterCenter, water);
-                _tileBase[cell.Coord] = water;
+                _tileMaterials.Add((AddWater(tiles, waterCenter, water), water));
                 if (cell.HasBridge)
                 {
                     Node3D bridge = TerrainParts.Create(TerrainParts.Bridge);
@@ -210,9 +236,8 @@ public sealed partial class BoardView : Node3D
                 // 障碍格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
                 color = Visuals.TileObstacle;
                 int pick = unchecked((int)(((uint)(cell.Coord.X * 73856093) ^ (uint)(cell.Coord.Y * 19349663)) % 100u));
-                Node3D obstacle = TerrainParts.Create(pick < 40 ? TerrainParts.Rock : pick < 82 ? TerrainParts.Pines : TerrainParts.Ruins, variant++);
-                obstacle.Position = center;
-                _decoration.AddChild(obstacle);
+                // 同一变体的各格合成 MultiMesh 画（board-render-perf D2）：挑选规则、变体序号与逐格变换都不变。
+                AddObstacle(pick < 40 ? TerrainParts.Rock : pick < 82 ? TerrainParts.Pines : TerrainParts.Ruins, variant++, center);
             }
             else if (cell.BirthZone is int zone)
             {
@@ -223,7 +248,7 @@ public sealed partial class BoardView : Node3D
                 Color zoneColor = ZoneColorOf(zone);
                 color = color.Lerp(zoneColor, owned ? 0.10f : zoneOwners.Count > 0 ? 0.08f : 0.30f);
 
-                StandardMaterial3D edge = Visuals.Flat(zoneColor);
+                StandardMaterial3D edge = FlatOf(zoneColor);
                 foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                 {
                     if (!IsZoneEdge(cell.Coord, zone, dx, dy))
@@ -236,7 +261,7 @@ public sealed partial class BoardView : Node3D
                     float offset = (BoardGeometry.CellSize * 0.5f) - (strip * 0.5f);
                     tiles.AddChild(new MeshInstance3D
                     {
-                        Mesh = new BoxMesh { Size = dx != 0 ? new Vector3(strip, 0.03f, BoardGeometry.CellSize) : new Vector3(BoardGeometry.CellSize, 0.03f, strip) },
+                        Mesh = BoxOf(dx != 0 ? new Vector3(strip, 0.03f, BoardGeometry.CellSize) : new Vector3(BoardGeometry.CellSize, 0.03f, strip)),
                         MaterialOverride = edge,
                         Position = center + new Vector3(dx * offset, 0.015f, -dy * offset),
                         CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -286,17 +311,24 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(shallows);
             }
 
-            StandardMaterial3D material = Visuals.Matte(color);
-            _tileMaterials[cell.Coord] = material;
-            _tileBase[cell.Coord] = color;
+            // 场景格只作装饰：铺满整格、不留缝也不垫衬底，相邻场景格连成一片——不出现会被读成"可落子"的格线。
+            // 场景格同色（障碍格不参与明暗交替），合成一个 MultiMesh（board-render-perf D2）。
+            // 面砖材质按基色共用（2.3）：同基色的格拿到同一份，压暗时每份改一次。
+            StandardMaterial3D material = SurfaceOf(color);
             if (plated && !playable)
             {
-                // 场景格只作装饰：铺满整格、不留缝也不垫衬底，相邻场景格连成一片——不出现会被读成"可落子"的格线。
-                AddSceneSlab(tiles, center, material);
+                slabMaterial = material;
+                slabTops.Add(center);
                 continue;
             }
 
-            AddTileStack(tiles, center, cell.Height, material);
+            AddTileStack(tiles, center, cell.Height, material, color);
+        }
+
+        BuildPartBatches();
+        if (slabMaterial is not null)
+        {
+            AddSceneSlabs(tiles, slabTops, slabMaterial);
         }
 
         if (plated)
@@ -313,6 +345,10 @@ public sealed partial class BoardView : Node3D
 
         // 自证地形部件的来源：有资源时应当全部来自资源（TerrainParts），程序生成数为 0。
         GD.Print($"[parts] 本次搭建地形部件：资源 {TerrainParts.LoadedCount - loadedBefore} 件、程序生成 {TerrainParts.GeneratedCount - generatedBefore} 件（{TerrainParts.Directory}）");
+        PartBatch[] batches = [.. _partBatches.Values.OfType<PartBatch>()];
+        GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_partMultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
+            + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
+        GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份");
 
         BuildCoordinateLabels();
 
@@ -548,7 +584,7 @@ public sealed partial class BoardView : Node3D
     private static readonly StandardMaterial3D SlopeMaterial = Visuals.Matte(Visuals.SlopeSide);
     private static readonly StandardMaterial3D CliffMaterial = Visuals.Matte(Visuals.CliffSide);
 
-    private static void AddTileStack(Node3D parent, Vector3 top, int level, StandardMaterial3D surface)
+    private void AddTileStack(Node3D parent, Vector3 top, int level, StandardMaterial3D surface, Color color)
     {
         const float half = BoardGeometry.TileHeight * 0.5f;
         float bandBottom = -half;
@@ -558,7 +594,7 @@ public sealed partial class BoardView : Node3D
             parent.AddChild(new MeshInstance3D
             {
                 // 侧面色带铺满整格（CellSize）：高台读作一整块实心的土 / 岩，而不是一根根立柱之间透着黑缝。
-                Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, bandTop - bandBottom, BoardGeometry.CellSize) },
+                Mesh = BoxOf(new Vector3(BoardGeometry.CellSize, bandTop - bandBottom, BoardGeometry.CellSize)),
                 MaterialOverride = layer == 1 ? SlopeMaterial : CliffMaterial,
                 Position = new Vector3(top.X, (bandTop + bandBottom) * 0.5f, top.Z),
             });
@@ -567,31 +603,282 @@ public sealed partial class BoardView : Node3D
 
         // 面砖之下垫一块铺满整格的薄衬底，颜色取面砖压暗：面砖之间那 0.10 的缝露出的就是它——
         // 网格线仍然清楚（visual-style-baseline「方格边界始终清晰」），但是同色系的细线，不再是黑缝。
+        // 衬底色由面砖基色推出、不参与信息层压暗（不登记进压暗表）。
         const float liner = 0.03f;
         parent.AddChild(new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, liner, BoardGeometry.CellSize) },
-            MaterialOverride = Visuals.Matte(surface.AlbedoColor.Darkened(0.30f)),
+            Mesh = BoxOf(new Vector3(BoardGeometry.CellSize, liner, BoardGeometry.CellSize)),
+            MaterialOverride = LinerOf(color),
             Position = top - new Vector3(0f, BoardGeometry.TileHeight - (liner * 0.5f), 0f),
         });
 
         parent.AddChild(new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize) },
+            Mesh = BoxOf(new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize)),
             MaterialOverride = surface,
             Position = top - new Vector3(0f, half, 0f),
         });
     }
 
-    /// <summary>场景格（棋盘档的障碍格）的地面：一整块铺满格距的面砖，与相邻场景格无缝相接。</summary>
-    private static void AddSceneSlab(Node3D parent, Vector3 top, StandardMaterial3D surface)
+    /// <summary>某基色的面砖材质：同基色共用一份，并登记进压暗表（<see cref="Refresh"/> 按基色整批改色）。</summary>
+    private StandardMaterial3D SurfaceOf(Color color)
     {
-        parent.AddChild(new MeshInstance3D
+        if (!_surfaceMaterials.TryGetValue(color, out StandardMaterial3D? material))
         {
+            material = Visuals.Matte(color);
+            _surfaceMaterials[color] = material;
+            _tileMaterials.Add((material, color));
+        }
+
+        return material;
+    }
+
+    /// <summary>某基色面砖的衬底材质（基色压暗三成）：同基色共用一份。</summary>
+    private StandardMaterial3D LinerOf(Color color)
+    {
+        if (!_linerMaterials.TryGetValue(color, out StandardMaterial3D? material))
+        {
+            material = Visuals.Matte(color.Darkened(0.30f));
+            _linerMaterials[color] = material;
+        }
+
+        return material;
+    }
+
+    /// <summary>某颜色的不受光材质（出生区描边条、棋盘边框）：同色共用一份。只给搭建后不再改色的地形件用。</summary>
+    private StandardMaterial3D FlatOf(Color color)
+    {
+        if (!_flatMaterials.TryGetValue(color, out StandardMaterial3D? material))
+        {
+            material = Visuals.Flat(color);
+            _flatMaterials[color] = material;
+        }
+
+        return material;
+    }
+
+    /// <summary>某尺寸的盒网格：同尺寸共用一份（尺寸按浮点逐位相等才算同一份，不做近似归并）。</summary>
+    private BoxMesh BoxOf(Vector3 size)
+    {
+        if (!_boxMeshes.TryGetValue(size, out BoxMesh? mesh))
+        {
+            mesh = new BoxMesh { Size = size };
+            _boxMeshes[size] = mesh;
+        }
+
+        return mesh;
+    }
+
+    /// <summary>
+    /// 场景格（棋盘档的障碍格）的地面：每格一整块铺满格距的面砖，与相邻场景格无缝相接。
+    /// 全图同一个网格、同一份材质，合成一个 <see cref="MultiMesh"/>（board-render-perf D2）：每格一个实例，位置与逐格各建一块时相同。
+    /// </summary>
+    private static void AddSceneSlabs(Node3D parent, List<Vector3> tops, StandardMaterial3D surface)
+    {
+        var slabs = new MultiMesh
+        {
+            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
             Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize) },
-            MaterialOverride = surface,
-            Position = top - new Vector3(0f, BoardGeometry.TileHeight * 0.5f, 0f),
-        });
+            InstanceCount = tops.Count,
+        };
+        for (int i = 0; i < tops.Count; i++)
+        {
+            slabs.SetInstanceTransform(i, new Transform3D(Basis.Identity, tops[i] - new Vector3(0f, BoardGeometry.TileHeight * 0.5f, 0f)));
+        }
+
+        parent.AddChild(new MultiMeshInstance3D { Multimesh = slabs, MaterialOverride = surface });
+    }
+
+    // ---------- 障碍装饰合批（board-render-perf D2） ----------
+
+    /// <summary>
+    /// 一种障碍装饰变体（如 <c>pines_3</c>）的合批：模板是该档资源的一份隐藏实例，模板下每个子网格一个 <see cref="MultiMesh"/>，每个放置格一个实例。
+    /// 实例变换不另写一份算式——把模板根摆到格心（缩放照 <see cref="Refresh"/> 对逐格节点的做法设）后读回子网格的全局变换，
+    /// 即逐格各建一份节点时引擎会算出的那个变换，画面因此不变。
+    /// </summary>
+    private sealed class PartBatch(Node3D template, MeshInstance3D[] parts)
+    {
+        public Node3D Template { get; } = template;
+
+        public MeshInstance3D[] Parts { get; } = parts;
+
+        public List<Vector3> Centers { get; } = [];
+
+        public MultiMesh[] Meshes { get; } = new MultiMesh[parts.Length];
+
+        /// <summary>各子网格在所属 MultiMesh 里的起始实例序号（形状与材质相同的子网格跨变体共用一个 MultiMesh）。</summary>
+        public int[] Offsets { get; } = new int[parts.Length];
+    }
+
+    /// <summary>在某格放一件障碍装饰：该变体能合批就只登记格心，否则保留逐格各建一件节点的原画法。</summary>
+    private void AddObstacle(TerrainParts.Kind kind, int variant, Vector3 center)
+    {
+        string key = kind.FileName(variant);
+        if (!_partBatches.TryGetValue(key, out PartBatch? batch))
+        {
+            batch = NewPartBatch(kind, variant);
+            _partBatches[key] = batch;
+        }
+
+        if (batch is null)
+        {
+            Node3D obstacle = TerrainParts.Create(kind, variant);
+            obstacle.Position = center;
+            _decoration.AddChild(obstacle);
+            _unbatchedObstacles++;
+            return;
+        }
+
+        TerrainParts.CountLoaded();
+        batch.Centers.Add(center);
+    }
+
+    /// <summary>
+    /// 该变体的合批模板；不能合批时为 <c>null</c>：没有资源（程序生成的造型逐格不同），或模板不是"根下一层、各带一个网格、不带逐面材质"的形状
+    /// （MultiMesh 只能整批给一个网格配一份覆盖材质）。
+    /// </summary>
+    private PartBatch? NewPartBatch(TerrainParts.Kind kind, int variant)
+    {
+        if (TerrainParts.Template(kind, variant) is not { } template)
+        {
+            return null;
+        }
+
+        MeshInstance3D[] parts = [.. template.GetChildren().OfType<MeshInstance3D>()];
+        if (!template.Visible || parts.Length == 0 || parts.Length != template.GetChildCount() || !parts.All(IsPlainPart))
+        {
+            template.Free();
+            return null;
+        }
+
+        // 模板留在场景树里（隐藏、不画）：读全局变换要在树内；随 Build 开头的 Clear 一并释放。
+        template.Visible = false;
+        _batch.AddChild(template);
+        return new PartBatch(template, parts);
+    }
+
+    private static bool IsPlainPart(MeshInstance3D part) =>
+        part.Mesh is { } mesh
+        && part.Visible
+        && part.GetChildCount() == 0
+        && part.MaterialOverlay is null
+        && part.Transparency == 0f
+        && Enumerable.Range(0, mesh.GetSurfaceCount()).All(surface => part.GetSurfaceOverrideMaterial(surface) is null);
+
+    /// <summary>
+    /// 全部格登记完之后建 MultiMesh 并写入实例变换。形状参数相同、覆盖材质与投影设置也相同的子网格归入同一个 MultiMesh（D2「同一网格 + 同一材质」）——
+    /// 几个变体里其实是同一个石块 / 同一段树干，只是摆放不同，摆放由实例变换承担。网格 / 覆盖材质 / 投影设置照抄模板。
+    /// </summary>
+    private void BuildPartBatches()
+    {
+        var groups = new Dictionary<(string Shape, Rid Material, GeometryInstance3D.ShadowCastingSetting Shadow, uint Layers), List<(PartBatch Batch, int Part)>>();
+        foreach (PartBatch batch in _partBatches.Values.OfType<PartBatch>())
+        {
+            for (int p = 0; p < batch.Parts.Length; p++)
+            {
+                MeshInstance3D part = batch.Parts[p];
+                var key = (ShapeKeyOf(part.Mesh), part.MaterialOverride?.GetRid() ?? default, part.CastShadow, part.Layers);
+                if (!groups.TryGetValue(key, out List<(PartBatch Batch, int Part)>? members))
+                {
+                    members = [];
+                    groups[key] = members;
+                }
+
+                members.Add((batch, p));
+            }
+        }
+
+        foreach (List<(PartBatch Batch, int Part)> members in groups.Values)
+        {
+            MeshInstance3D first = members[0].Batch.Parts[members[0].Part];
+            var mesh = new MultiMesh
+            {
+                TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+                Mesh = first.Mesh,
+                InstanceCount = members.Sum(m => m.Batch.Centers.Count),
+            };
+            int offset = 0;
+            foreach ((PartBatch batch, int p) in members)
+            {
+                batch.Meshes[p] = mesh;
+                batch.Offsets[p] = offset;
+                offset += batch.Centers.Count;
+            }
+
+            _batch.AddChild(new MultiMeshInstance3D
+            {
+                Multimesh = mesh,
+                MaterialOverride = first.MaterialOverride,
+                CastShadow = first.CastShadow,
+                Layers = first.Layers,
+            });
+        }
+
+        _partMultiMeshes = groups.Count;
+        _batchScale = null;
+        WritePartTransforms();
+    }
+
+    /// <summary>
+    /// 网格的形状键：不带自身材质与额外选项的盒 / 球 / 柱按生成参数逐位比较（参数相同即顶点相同）；其余网格（如美术替换的模型）只认同一份资源。
+    /// </summary>
+    private static string ShapeKeyOf(Mesh mesh)
+    {
+        static string F(float v) => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+        if (mesh is PrimitiveMesh { Material: null, FlipFaces: false, AddUV2: false } primitive && primitive.CustomAabb == default)
+        {
+            switch (primitive)
+            {
+                case BoxMesh box:
+                    return $"box {F(box.Size.X)} {F(box.Size.Y)} {F(box.Size.Z)} {box.SubdivideWidth} {box.SubdivideHeight} {box.SubdivideDepth}";
+                case SphereMesh sphere:
+                    return $"sphere {F(sphere.Radius)} {F(sphere.Height)} {sphere.RadialSegments} {sphere.Rings} {sphere.IsHemisphere}";
+                case CylinderMesh cylinder:
+                    return $"cylinder {F(cylinder.TopRadius)} {F(cylinder.BottomRadius)} {F(cylinder.Height)} {cylinder.RadialSegments} {cylinder.Rings} {cylinder.CapTop} {cylinder.CapBottom}";
+                default:
+                    break;
+            }
+        }
+
+        return $"rid {mesh.GetRid().Id}";
+    }
+
+    /// <summary>
+    /// 信息层压暗时装饰整体缩小（<see cref="SceneTreatment.DecorationContrastPercent"/>）：逐格节点是各自绕格心缩放，
+    /// 合批的实例照同样的做法——在模板根上设缩放，再重写全部实例变换。缩放没变就不重写。
+    /// </summary>
+    private void ScalePartBatches(float scale)
+    {
+        if (_batchScale == scale)
+        {
+            return;
+        }
+
+        _batchScale = scale;
+        foreach (PartBatch batch in _partBatches.Values.OfType<PartBatch>())
+        {
+            batch.Template.Scale = Vector3.One * scale;
+        }
+
+        WritePartTransforms();
+    }
+
+    private void WritePartTransforms()
+    {
+        // 合批层与装饰层一样直接挂在本节点下、不带变换；本节点也不带变换时，模板子网格的全局变换就是实例相对合批层的变换（引擎算的）。
+        // 否则退回在这里相乘（数值上等价，不保证最后一位相同）。
+        bool readBack = IsInsideTree() && _batch.GlobalTransform == Transform3D.Identity;
+        foreach (PartBatch batch in _partBatches.Values.OfType<PartBatch>())
+        {
+            for (int i = 0; i < batch.Centers.Count; i++)
+            {
+                batch.Template.Position = batch.Centers[i];
+                for (int p = 0; p < batch.Parts.Length; p++)
+                {
+                    batch.Meshes[p].SetInstanceTransform(batch.Offsets[p] + i, readBack ? batch.Parts[p].GlobalTransform : batch.Template.Transform * batch.Parts[p].Transform);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -640,7 +927,7 @@ public sealed partial class BoardView : Node3D
             Color color = plate.Kind == BoardPlateKind.Birth && zoneOf.TryGetValue(plate.Origin, out int zone)
                 ? zoneColorOf(zone)
                 : Visuals.PublicBoardFrame;
-            StandardMaterial3D frame = Visuals.Flat(color);
+            StandardMaterial3D frame = FlatOf(color);
             float y = top + (frameHeight * 0.5f);
             float spanX = maxX - minX + frameWidth;
             float spanZ = maxZ - minZ + frameWidth;
@@ -650,9 +937,9 @@ public sealed partial class BoardView : Node3D
             root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ), frame));
         }
 
-        static MeshInstance3D Strip(Vector3 size, Vector3 position, StandardMaterial3D material) => new()
+        MeshInstance3D Strip(Vector3 size, Vector3 position, StandardMaterial3D material) => new()
         {
-            Mesh = new BoxMesh { Size = size },
+            Mesh = BoxOf(size),
             MaterialOverride = material,
             Position = position,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -746,17 +1033,22 @@ public sealed partial class BoardView : Node3D
             ornament.Scale = Vector3.One * decorationScale;
         }
 
+        ScalePartBatches(decorationScale);
+
+        // 完整刷新仍然整层重建棋子（board-render-perf D3）：终态与非演出路径完全一致；新节点由 DrawPieces 登记进表，供随后的演出帧增量比对。
         Clear(_overlay);
         Clear(_pieces);
+        _boardPieces.Clear();
+        _capturedPieces.Clear();
         Clear(_preview);
         Clear(_show);
 
         // 水面流动层与装饰对比同步压淡：信息层打开时它不该比判读信息更抢眼。
         Visuals.WaterFlow.SetShaderParameter("dim", 0.35f + (0.65f * treatment.DecorationContrastPercent / 100f));
 
-        foreach ((Coord coord, StandardMaterial3D material) in _tileMaterials)
+        foreach ((StandardMaterial3D material, Color baseColor) in _tileMaterials)
         {
-            material.AlbedoColor = Visuals.Damp(_tileBase[coord], Math.Max(treatment.DecorationContrastPercent, 55));
+            material.AlbedoColor = Visuals.Damp(baseColor, Math.Max(treatment.DecorationContrastPercent, 55));
         }
 
         PreviewPresentation? preview = world.Preview(thresholds);
@@ -907,17 +1199,27 @@ public sealed partial class BoardView : Node3D
     /// <summary>
     /// 结算演出的逐帧刷新（settlement-show 3.3）：只重画棋子一层与演出层——按遮罩隐藏尚未落下的、让落下中的长出来、让被提的按原归属留在原格淡出，
     /// 再画飘字与信物闪光（settlement-show-callouts D6）。其余层（叠加层、预览、高亮）不在演出里逐帧变化，留给状态变化时的 <see cref="Refresh"/>。
+    /// 棋子层<b>不整层重建</b>（board-render-perf D3）：只动这一帧与上一帧相比变了的那几枚，其余节点保持原实例。
     /// </summary>
     public void RefreshShow(ViewerWorld world, SceneTreatment treatment, ShowMask mask)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(treatment);
         ArgumentNullException.ThrowIfNull(mask);
-        Clear(_pieces);
         Clear(_show);
-        DrawPieces(world.Board(), treatment, mask);
+        _lastShowRedraw = DrawPieces(world.Board(), treatment, mask);
+        _totalShowRedraw += _lastShowRedraw;
+        _showFrames++;
         DrawShow(mask);
     }
+
+    /// <summary>
+    /// 演出逐帧重画的自证读数（board-render-perf 2.2）：本进程里走过多少个演出帧、最近一个演出帧与累计各新建 / 销毁 / 原位更新了多少枚棋子节点。
+    /// 取图那一帧走的是完整 <see cref="Refresh"/>，不计入。
+    /// </summary>
+    public string ShowRedrawReadout() =>
+        $"演出帧 {_showFrames} 个；上一演出帧棋子节点 新建 {_lastShowRedraw.Created} / 销毁 {_lastShowRedraw.Freed} / 原位更新 {_lastShowRedraw.Updated} / 保持原实例 {_lastShowRedraw.Kept}；"
+        + $"累计 新建 {_totalShowRedraw.Created} / 销毁 {_totalShowRedraw.Freed} / 原位更新 {_totalShowRedraw.Updated}";
 
     /// <summary>
     /// 演出层（settlement-show-callouts D6）：格上飘字与信物闪光，全部由遮罩推出、不回写视图模型。
@@ -960,12 +1262,79 @@ public sealed partial class BoardView : Node3D
         }
     }
 
+    /// <summary>棋子层里一枚已画出的棋子（board-render-perf D3）：节点、占用者，以及画它时的进度（盘上棋子 = 出现进度 ‰，不在出现动画里为 -1；被提棋子 = 淡出进度 ‰）。</summary>
+    private sealed record PieceNode(Node3D Node, Occupant Occupant, int Progress);
+
+    /// <summary>一次棋子层重画动了多少节点。</summary>
+    private readonly record struct PieceRedraw(int Created, int Freed, int Updated, int Kept)
+    {
+        public static PieceRedraw operator +(PieceRedraw a, PieceRedraw b) => new(a.Created + b.Created, a.Freed + b.Freed, a.Updated + b.Updated, a.Kept + b.Kept);
+    }
+
     /// <summary>
     /// 按演出遮罩画棋子（design.md D6）：棋盘视图模型已是终态，遮罩只决定"此刻画不画、画多大、多透明"，不回写视图模型。
     /// 遮罩为空即终态：每格占用者原样画出。
     /// </summary>
-    private void DrawPieces(DefaultBoardView board, SceneTreatment treatment, ShowMask mask)
+    /// <remarks>
+    /// 对着"坐标 → 棋子节点"表做（board-render-perf D3）：该有而没有的新建、不该有的销毁、只是进度变了的原位改、其余不动。
+    /// 完整 <see cref="Refresh"/> 先清空棋子层与表再调本方法，等于整层重建；<see cref="RefreshShow"/> 不清，只动变化的那几枚。
+    /// 两条路径共用 <see cref="PosePiece"/> 一份摆位算式。
+    /// </remarks>
+    private PieceRedraw DrawPieces(DefaultBoardView board, SceneTreatment treatment, ShowMask mask)
     {
+        int created = 0, freed = 0, updated = 0, kept = 0;
+        if (treatment.PieceEmphasisPercent != _pieceEmphasis)
+        {
+            // 棋子强调变了（信息层开关）：每枚的颜色都要换，整层重建。
+            freed = _boardPieces.Count + _capturedPieces.Count;
+            Clear(_pieces);
+            _boardPieces.Clear();
+            _capturedPieces.Clear();
+            _pieceEmphasis = treatment.PieceEmphasisPercent;
+        }
+
+        void Sync(Dictionary<Coord, PieceNode> table, Coord coord, Occupant occupant, int progress, bool captured)
+        {
+            if (table.TryGetValue(coord, out PieceNode? shown) && shown.Occupant == occupant)
+            {
+                if (shown.Progress == progress)
+                {
+                    kept++;
+                    return;
+                }
+
+                PosePiece(shown.Node, coord, progress, captured);
+                table[coord] = shown with { Progress = progress };
+                updated++;
+                return;
+            }
+
+            if (shown is not null)
+            {
+                _pieces.RemoveChild(shown.Node);
+                shown.Node.QueueFree();
+                freed++;
+            }
+
+            Node3D piece = BuildPiece(occupant, treatment.PieceEmphasisPercent);
+            PosePiece(piece, coord, progress, captured);
+            _pieces.AddChild(piece);
+            table[coord] = new PieceNode(piece, occupant, progress);
+            created++;
+        }
+
+        void Drop(Dictionary<Coord, PieceNode> table, HashSet<Coord> wanted)
+        {
+            foreach (Coord coord in table.Keys.Where(c => !wanted.Contains(c)).ToList())
+            {
+                _pieces.RemoveChild(table[coord].Node);
+                table[coord].Node.QueueFree();
+                table.Remove(coord);
+                freed++;
+            }
+        }
+
+        HashSet<Coord> onBoard = [];
         foreach (BoardCellView cell in board.Cells)
         {
             if (cell.Occupant is not { } occupant || mask.Hidden.Contains(cell.Coord))
@@ -973,33 +1342,48 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
-            Node3D piece = BuildPiece(occupant, treatment.PieceEmphasisPercent);
-            piece.Position = CenterOf(cell.Coord);
-            if (mask.Appearing.TryGetValue(cell.Coord, out int permille))
-            {
-                // 出现动画：从 35% 长到 100%，同时从格面下方 0.12 抬到原位。
-                float t = permille / 1000f;
-                piece.Scale = Vector3.One * (0.35f + (0.65f * t));
-                piece.Position += new Vector3(0f, -0.12f * (1f - t), 0f);
-            }
-
-            _pieces.AddChild(piece);
+            onBoard.Add(cell.Coord);
+            Sync(_boardPieces, cell.Coord, occupant, mask.Appearing.TryGetValue(cell.Coord, out int permille) ? permille : -1, captured: false);
         }
+
+        Drop(_boardPieces, onBoard);
 
         // 提子节拍尚未播完的被提棋子：按原归属、原类型留在原格；节拍进行中按进度淡出并略缩。
-        float fade = mask.CaptureFadePermille / 1000f;
+        HashSet<Coord> stillShown = [];
         foreach (CapturedPiece captured in mask.StillShown)
         {
-            Node3D piece = BuildPiece(new Occupant(captured.Owner, captured.Type), treatment.PieceEmphasisPercent);
-            piece.Position = CenterOf(captured.Coord);
-            if (fade > 0f)
-            {
-                piece.Scale = Vector3.One * (1f - (0.4f * fade));
-                SetTransparency(piece, fade);
-            }
-
-            _pieces.AddChild(piece);
+            stillShown.Add(captured.Coord);
+            Sync(_capturedPieces, captured.Coord, new Occupant(captured.Owner, captured.Type), mask.CaptureFadePermille, captured: true);
         }
+
+        Drop(_capturedPieces, stillShown);
+        return new PieceRedraw(created, freed, updated, kept);
+    }
+
+    /// <summary>
+    /// 摆一枚棋子：位置、缩放（被提棋子还有透明度）每次整份写一遍，新建与原位更新走同一份算式。
+    /// </summary>
+    private void PosePiece(Node3D piece, Coord coord, int progress, bool captured)
+    {
+        Vector3 position = CenterOf(coord);
+        float scale = 1f;
+        if (captured)
+        {
+            // 淡出：按进度变透明并略缩；节拍还没轮到时进度为 0，原样留在原格。
+            float fade = progress / 1000f;
+            scale = 1f - (0.4f * fade);
+            SetTransparency(piece, fade);
+        }
+        else if (progress >= 0)
+        {
+            // 出现动画：从 35% 长到 100%，同时从格面下方 0.12 抬到原位。
+            float t = progress / 1000f;
+            scale = 0.35f + (0.65f * t);
+            position += new Vector3(0f, -0.12f * (1f - t), 0f);
+        }
+
+        piece.Position = position;
+        piece.Scale = Vector3.One * scale;
     }
 
     /// <summary>给一枚棋子节点下的全部几何体设透明度（0 不透明 … 1 全透明）。</summary>

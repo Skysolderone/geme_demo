@@ -1,0 +1,1 @@
+截图（42 张，约 22 MB）已移到 sim-out/board-render-perf/（不入库）；本目录保留日志、sha256 与比对结论。

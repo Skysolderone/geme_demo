@@ -1,0 +1,6 @@
+{"file": "openspec/changes/board-render-perf/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/board-render-perf/design.md", "reason": "规格"}
+{"file": "openspec/changes/board-render-perf/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/board-render-perf/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Godot Debug 构建、自检与截图做法"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "Godot 层不含规则计算"}

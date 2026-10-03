@@ -50,14 +50,7 @@ public static class TerrainParts
     /// <summary>取一件部件：有资源就实例化资源，否则程序生成。返回节点原点在地砖上表面（与 <see cref="LowPoly"/> 同一约定）。</summary>
     public static Node3D Create(Kind kind, int variant = 0)
     {
-        string path = $"{Directory}/{kind.FileName(variant)}";
-        if (!Cache.TryGetValue(path, out PackedScene? scene))
-        {
-            scene = ResourceLoader.Exists(path) ? ResourceLoader.Load<PackedScene>(path) : null;
-            Cache[path] = scene;
-        }
-
-        if (scene?.Instantiate() is Node3D node)
+        if (SceneOf(kind, variant)?.Instantiate() is Node3D node)
         {
             LoadedCount++;
             return node;
@@ -65,5 +58,26 @@ public static class TerrainParts
 
         GeneratedCount++;
         return kind.Build(variant);
+    }
+
+    /// <summary>
+    /// 合批用的模板（board-render-perf D2）：该档资源的一份实例，<b>不计数</b>；没有资源时返回 <c>null</c>——
+    /// 程序生成的造型随 <paramref name="variant"/> 连续变化（朝向不按档数取模），归并不成有限几种，调用方应退回 <see cref="Create"/> 逐件画。
+    /// </summary>
+    public static Node3D? Template(Kind kind, int variant) => SceneOf(kind, variant)?.Instantiate() as Node3D;
+
+    /// <summary>合批放置了一件来自资源的部件（实例由 MultiMesh 画，不再各建节点）：只记数，让启动日志的"资源 N 件"仍是放置件数。</summary>
+    public static void CountLoaded() => LoadedCount++;
+
+    private static PackedScene? SceneOf(Kind kind, int variant)
+    {
+        string path = $"{Directory}/{kind.FileName(variant)}";
+        if (!Cache.TryGetValue(path, out PackedScene? scene))
+        {
+            scene = ResourceLoader.Exists(path) ? ResourceLoader.Load<PackedScene>(path) : null;
+            Cache[path] = scene;
+        }
+
+        return scene;
     }
 }

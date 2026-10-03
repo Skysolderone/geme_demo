@@ -1,0 +1,80 @@
+board-render-perf 3.1 / 3.2：改后（合批 + 演出增量重画，after/）与基线（本目录，改动前 HEAD 71d4ff8）比对
+参数与基线逐字相同（见 readings.txt）；像素差分 = python + PIL 逐像素比较 RGBA，输出差异像素数与 bbox
+
+[board1-still-f10]
+    像素：差异像素 0，bbox 无
+    改前 [perf] 帧率 1，单帧处理 146.1 ms，绘制调用 4097，对象 10265，图元 187480
+    改后 [perf] 帧率 1，单帧处理 130.8 ms，绘制调用 2873，对象 3249，图元 187480
+    [batch] 障碍装饰合批 517 格：变体 15 种、MultiMesh 96 个、实例 3088 个；未合批（逐格各建节点）0 格；场景面砖 517 格、MultiMesh 1 个
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件 => 改后 [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件
+
+[board1-show-placement]
+    像素：差异像素 0，bbox 无
+    改前 [perf] 帧率 22，单帧处理 162.0 ms，绘制调用 2936，对象 6684，图元 124629
+    改后 [perf] 帧率 13，单帧处理 138.2 ms，绘制调用 2161，对象 2325，图元 254315
+    [batch] 障碍装饰合批 517 格：变体 15 种、MultiMesh 96 个、实例 3088 个；未合批（逐格各建节点）0 格；场景面砖 517 格、MultiMesh 1 个
+    [parts] 本次搭建地形部件：资源 518 件、程序生成 0 件 => 改后 [parts] 本次搭建地形部件：资源 518 件、程序生成 0 件
+    [show] 取景自证行：与基线逐字相同
+    [show-perf] 演出帧 7 个；上一演出帧棋子节点 新建 0 / 销毁 0 / 原位更新 1 / 保持原实例 15；累计 新建 0 / 销毁 0 / 原位更新 7
+
+[board1n10-still-f10]
+    像素：差异像素 0，bbox 无
+    改前 [perf] 帧率 2，单帧处理 191.1 ms，绘制调用 6698，对象 19418，图元 366878
+    改后 [perf] 帧率 6，单帧处理 228.9 ms，绘制调用 4317，对象 4682，图元 366878
+    [batch] 障碍装饰合批 1061 格：变体 15 种、MultiMesh 96 个、实例 6404 个；未合批（逐格各建节点）0 格；场景面砖 1061 格、MultiMesh 1 个
+    [parts] 本次搭建地形部件：资源 1061 件、程序生成 0 件 => 改后 [parts] 本次搭建地形部件：资源 1061 件、程序生成 0 件
+
+[v5-still-f40]
+    像素：差异像素 0，bbox 无
+    改前 [perf] 帧率 18，单帧处理 103.8 ms，绘制调用 1868，对象 2473，图元 40375
+    改后 [perf] 帧率 25，单帧处理 132.7 ms，绘制调用 1845，对象 2157，图元 40375
+    [batch] 障碍装饰合批 36 格：变体 14 种、MultiMesh 91 个、实例 249 个；未合批（逐格各建节点）0 格；场景面砖 0 格、MultiMesh 0 个
+    [parts] 本次搭建地形部件：资源 52 件、程序生成 0 件 => 改后 [parts] 本次搭建地形部件：资源 52 件、程序生成 0 件
+
+[board1-power-f10]
+    像素：差异像素 0，bbox 无
+    改前 [perf] 帧率 6，单帧处理 176.4 ms，绘制调用 4117，对象 10457，图元 188196
+    改后 [perf] 帧率 4，单帧处理 146.1 ms，绘制调用 2893，对象 3441，图元 188196
+    [batch] 障碍装饰合批 517 格：变体 15 种、MultiMesh 96 个、实例 3088 个；未合批（逐格各建节点）0 格；场景面砖 517 格、MultiMesh 1 个
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件 => 改后 [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件
+
+[v5-show-capture]
+    像素：差异像素 0，bbox 无
+    改前 [perf] 帧率 54，单帧处理 75.2 ms，绘制调用 2247，对象 2848，图元 45845
+    改后 [perf] 帧率 59，单帧处理 52.5 ms，绘制调用 2224，对象 2532，图元 45845
+    [batch] 障碍装饰合批 36 格：变体 14 种、MultiMesh 91 个、实例 249 个；未合批（逐格各建节点）0 格；场景面砖 0 格、MultiMesh 0 个
+    [parts] 本次搭建地形部件：资源 51 件、程序生成 0 件 => 改后 [parts] 本次搭建地形部件：资源 51 件、程序生成 0 件
+    [show] 取景自证行：与基线逐字相同
+    [show-perf] 演出帧 81 个；上一演出帧棋子节点 新建 0 / 销毁 0 / 原位更新 1 / 保持原实例 35；累计 新建 4 / 销毁 0 / 原位更新 81
+
+[3.2 读数结论]
+    board:1 静止帧绘制调用 4097 -> 2873（改前的 0.701；design D5 要求 <= 1/5 即 <= 819：未达到）
+    board:1:n10 静止帧绘制调用 6698 -> 4317；n10 / n7 = 6698/4097 = 1.635（改前） -> 4317/2873 = 1.503（改后；规格 Scenario 要求 <= 1.5：差 8 次，未达到）
+    对象数 board:1 10265 -> 3249，n10 19418 -> 4682，n10 / n7 = 1.441
+    演出进行中 / 静止帧 单帧处理 = 138.2 / 130.8 = 1.06（D5 要求 <= 1.5；注意该读数是最近一秒内的最大值，含启动搭建帧）
+
+[剩余绘制调用的构成]（改后；临时计数行在无头模式数 Build 之后各子树的可绘制节点，数完已删）
+    board:1    ：Tiles 1058 网格节点 + 1 MultiMesh；BoardPlates 115；Island 63；坐标标注 128；DecorationBatch 96 MultiMesh；底座 / 光标 2 => 1463 个，绘制调用 2873 = 1.96 次 / 节点（主通道 + 阴影）
+    board:1:n10：Tiles 1680 + 1；BoardPlates 175；Island 74；坐标标注 172；DecorationBatch 96；2 => 2200 个，绘制调用 4317 = 1.96 次 / 节点
+    v5         ：Tiles 546；Decoration（林地小树等未合批的地表装饰）24；DecorationBatch 91；Island 44；坐标标注 52；2
+    结论：剩余调用的 72%–76% 是可落子地砖（面砖 + 衬底 + 侧面色带，每块独立网格 + 独立材质），随可落子格数增长；场景格不再贡献逐格调用。
+
+[增量路径的像素验证]（一次性实验，代码未保留）
+    临时让完整 Refresh 也不清棋子层（环境变量开关），于是取图帧画面完全出自增量路径；board1-show-placement / v5-still-f40 / v5-show-capture 三张与基线差异像素均为 0。实验后已还原源码并重建，after/ 下各图出自还原后的构建。
+
+[日志对照] 六份窗口日志除 [perf] / [batch] / [show-perf] / 截图路径行外与基线逐行比较：
+    board1-still-f10：逐行相同
+    board1-show-placement：逐行相同
+    board1n10-still-f10：逐行相同
+    v5-still-f40：逐行相同
+    board1-power-f10：逐行相同
+    v5-show-capture：逐行相同
+
+[3.3 回归]
+    dotnet build siege.sln -c Release：0 个警告 0 个错误；dotnet build src/godot/Siege.Godot.csproj（Debug）：0 个警告 0 个错误
+    dotnet test siege.sln -c Release：Failed 0, Passed 2041, Skipped 9, Total 2050
+    --headless --auto-demo：共 53 帧，退出码 0（after/headless-auto-demo-v5.log）
+    --headless --auto-demo --pick-check（v5）：105/105 通过，退出码 0
+    --headless --auto-demo --pick-check --map=board:1 与 --pick-check --map=board:1：471/471 通过，退出码 0
+    --headless --map-select --auto-demo --rounds=2：共 41 帧，退出码 0
+    openspec validate board-render-perf --strict：valid

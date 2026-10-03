@@ -75,6 +75,8 @@ public sealed partial class GameRoot : Node3D
     private bool _shotPower;
     private int? _shotBoard;
     private bool _shotGroups;
+    private bool _shotOwnership;
+    private double _perfSampleSeconds;
     private bool _shotRecruitCollapsed;
     private bool _shotForbidden;
     private Coord? _shotCell;
@@ -118,6 +120,13 @@ public sealed partial class GameRoot : Node3D
 
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
+
+            // --shot-ownership：截图时打开盘面层的归属读法（board-render-perf 2.3：验证地砖归并后信息层着色与压暗不变，仅截图用）。
+            _shotOwnership = args.Flag("shot-ownership");
+
+            // --perf-sample=<秒>：取图之后画面保持冻结再跑这么多秒，打印这段时间的稳态帧率与渲染读数后退出（board-render-perf 2.3，仅窗口模式取图路径）。
+            // 既有 [perf] 行在取图那一刻打印，帧率 / 单帧处理是引擎"最近一秒"的读数，启动后不久取图时含搭建帧；这里量的是同一幅静止画面的稳态。
+            _perfSampleSeconds = args.Value<double>("perf-sample", "正数（取图后冻结采样的秒数）", t => double.TryParse(t, System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0d ? v : null) ?? 0d;
 
             // --shot-recruit-collapsed：截征募面板的展开 / 收起两张（recruit-panel-collapse 1.3，仅截图用）。须与 --auto-demo 和 --screenshot= 同用：
             // 到达截图帧之后，等本机玩家下一次进入征募阶段（自动演示已选取一枚）再截；第一张为展开（--screenshot 给的路径），
@@ -396,6 +405,12 @@ public sealed partial class GameRoot : Node3D
                 + $"飘字 {shownMask.Callouts.Length} 条{(shownMask.Callouts.IsEmpty ? string.Empty : "（" + string.Join("、", shownMask.Callouts.Select(c => $"{c.Coord.ToNotation()} {c.Text} 年龄 {c.AgePermille}‰")) + "）")}，"
                 + $"合计 {shownMask.CaptureSummary ?? "无"}，信物闪光 {(shownMask.RelicFlash.IsEmpty ? "无" : string.Join("、", shownMask.RelicFlash.OrderBy(k => k.Key).Select(k => $"{k.Key.ToNotation()} {k.Value}‰")))}，"
                 + $"横幅 {(shownMask.Banner is { } shownBanner ? $"「{shownBanner.Text}」第 {shownBanner.Index + 1}/{shownBanner.Count} 条 {shownBanner.ProgressPermille}‰" : "无")}，中央面板 {(_hud.CenterPanelOpen ? "开" : "关")}");
+
+        // 演出逐帧重画的自证（board-render-perf 2.2）：另起一行，上面那条取景自证行保持原样可与基线逐字比对。只在演出进行中取图时打印。
+        if (!_show.IsFinished)
+        {
+            GD.Print($"[show-perf] {_board.ShowRedrawReadout()}");
+        }
 
         // 渲染开销读数（frontier-map 5.6）：帧率受垂直同步封顶，绘制调用数才反映"750 格要不要合批"。
         CameraPose pose = _board.Rig.Pose;
@@ -728,6 +743,15 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
+        if (_shotOwnership)
+        {
+            _layers.Toggle(TacticalLayer.Board);
+            if (_layers.Reading != BoardReading.Ownership)
+            {
+                _layers.CycleReading();
+            }
+        }
+
         if (!AimForShot())
         {
             return;
@@ -786,6 +810,24 @@ public sealed partial class GameRoot : Node3D
             _verifyResultAfterShow = true;
             _shotPending = false;
             return;
+        }
+
+        if (_perfSampleSeconds > 0d && DisplayServer.GetName() != "headless")
+        {
+            // 稳态采样（board-render-perf 2.3）：取图流程已冻结驱动与刷新，画面就是刚存盘的那一幅；数这段时间实际画了多少帧。
+            ulong start = Time.GetTicksUsec();
+            int frames = 0;
+            while ((Time.GetTicksUsec() - start) / 1e6d < _perfSampleSeconds)
+            {
+                await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                frames++;
+            }
+
+            double seconds = (Time.GetTicksUsec() - start) / 1e6d;
+            GD.Print($"[perf-steady] 取图后冻结 {seconds:0.00} 秒共 {frames} 帧：平均 {frames / seconds:0.0} 帧/秒（帧间隔 {seconds * 1000d / frames:0.00} ms）；"
+                + $"引擎最近一秒读数 帧率 {Performance.GetMonitor(Performance.Monitor.TimeFps):0}，单帧处理 {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000d:0.00} ms；"
+                + $"绘制调用 {Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame):0}，对象 {Performance.GetMonitor(Performance.Monitor.RenderTotalObjectsInFrame):0}，"
+                + $"图元 {Performance.GetMonitor(Performance.Monitor.RenderTotalPrimitivesInFrame):0}；垂直同步 {DisplayServer.WindowGetVsyncMode()}");
         }
 
         GetTree().Quit(0);

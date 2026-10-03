@@ -1,0 +1,60 @@
+board-render-perf 1.1 基线（改动前，HEAD 71d4ff8，见 provenance.txt；窗口模式，Vulkan Forward+，RTX 5060 Ti）
+命令：Godot_v4.7.2 console --path E:/wws/geme_demo/src/godot -- <参数>
+
+[board1-still-f10] --auto-demo --overview --map=board:1 --screenshot=<png>:10
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [siege] 截图 E:/wws/geme_demo/.trellis/tasks/10-03-board-render-perf/baseline/board1-still-f10.png：Ok（1600×900，第 10 帧，第 1 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+    [show] 截图时演出：无（遮罩为空，画面即结算后快照）
+    [perf] 帧率 1，单帧处理 146.1 ms，绘制调用 4097，对象 10265，图元 187480；相机注视点 (0, 0) 距离 33.798
+
+[board1-show-placement] --auto-demo --map=board:1 --seed=7 --rounds=2 --screenshot=<png>:20 --shot-show=placement
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 518 件、程序生成 0 件（res://parts/terrain）
+    [siege] 截图 E:/wws/geme_demo/.trellis/tasks/10-03-board-render-perf/baseline/board1-show-placement.png：Ok（1600×900，第 35 帧，第 3 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+    [show] 截图时演出：当前节拍 PlacementBeat，进度 512‰，时长模式 Normal；隐藏 0 枚，出现中 F10 512‰，仍显示被提  淡出 0‰，势力显示 红方(P0) 4→7 现显示 4 +3 旧值；飘字 1 条（F10 匠人 · 2 年龄 213‰），合计 无，信物闪光 无，横幅 无，中央面板 关
+    [perf] 帧率 22，单帧处理 162.0 ms，绘制调用 2936，对象 6684，图元 124629；相机注视点 (-10.922, 0.5) 距离 12.646
+
+[board1n10-still-f10] --auto-demo --overview --map=board:1:n10 --screenshot=<png>:10
+    [parts] 本次搭建地形部件：资源 1061 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 1061 件、程序生成 0 件（res://parts/terrain）
+    [siege] 截图 E:/wws/geme_demo/.trellis/tasks/10-03-board-render-perf/baseline/board1n10-still-f10.png：Ok（1600×900，第 10 帧，第 1 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+    [show] 截图时演出：无（遮罩为空，画面即结算后快照）
+    [perf] 帧率 2，单帧处理 191.1 ms，绘制调用 6698，对象 19418，图元 366878；相机注视点 (0, 0) 距离 56.791
+
+[v5-still-f40] --auto-demo --screenshot=<png>:40
+    [parts] 本次搭建地形部件：资源 48 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 48 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 49 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 50 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 51 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 52 件、程序生成 0 件（res://parts/terrain）
+    [siege] 截图 E:/wws/geme_demo/.trellis/tasks/10-03-board-render-perf/baseline/v5-still-f40.png：Ok（1600×900，第 40 帧，第 4 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+    [show] 截图时演出：无（遮罩为空，画面即结算后快照）
+    [perf] 帧率 18，单帧处理 103.8 ms，绘制调用 1868，对象 2473，图元 40375；相机注视点 (0, 0) 距离 18.854
+
+[board1-still-f10-run2] 同 board1-still-f10（同构建第二次，sha256 与第一次相同 => 棋盘图静止帧无时间驱动噪声）
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [siege] 截图 E:/wws/geme_demo/.trellis/tasks/10-03-board-render-perf/baseline/board1-still-f10-run2.png：Ok（1600×900，第 10 帧，第 1 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+    [show] 截图时演出：无（遮罩为空，画面即结算后快照）
+    [perf] 帧率 6，单帧处理 163.3 ms，绘制调用 4097，对象 10265，图元 187480；相机注视点 (0, 0) 距离 33.798
+
+[board1-power-f10] --auto-demo --overview --map=board:1 --shot-power --screenshot=<png>:10（附加：信息层打开，压暗处理生效）
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 517 件、程序生成 0 件（res://parts/terrain）
+    [siege] 截图 E:/wws/geme_demo/.trellis/tasks/10-03-board-render-perf/baseline/board1-power-f10.png：Ok（1600×900，第 10 帧，第 1 大回合，信息层 势力，手牌信息面板 关，中央面板 关）
+    [show] 截图时演出：无（遮罩为空，画面即结算后快照）
+    [perf] 帧率 6，单帧处理 176.4 ms，绘制调用 4117，对象 10457，图元 188196；相机注视点 (0, 0) 距离 33.798
+
+[v5-show-capture] --auto-demo --seed=7 --rounds=8 --screenshot=<png>:20 --shot-show=capture（附加：board:1 上 seed 7/11/3 × rounds 12 均无提子节拍，改在 v5 取）
+    [parts] 本次搭建地形部件：资源 48 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 48 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 49 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 50 件、程序生成 0 件（res://parts/terrain）
+    [parts] 本次搭建地形部件：资源 51 件、程序生成 0 件（res://parts/terrain）
+    [siege] 截图 E:/wws/geme_demo/.trellis/tasks/10-03-board-render-perf/baseline/v5-show-capture.png：Ok（1600×900，第 136 帧，第 5 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+    [show] 截图时演出：当前节拍 CaptureBeat，进度 520‰，时长模式 Normal；隐藏 0 枚，出现中 ，仍显示被提 B1(红方(P0)) 淡出 520‰，势力显示 红方(P0) 8→5 现显示 8 −3 旧值；金方(P2) 60→78 现显示 60 +18 旧值；飘字 2 条（F12 堡垒子 · 4 年龄 936‰、B1 提 年龄 520‰），合计 提 1 子，信物闪光 无，横幅 无，中央面板 关
+    [perf] 帧率 54，单帧处理 75.2 ms，绘制调用 2247，对象 2848，图元 45845；相机注视点 (0, 0) 距离 18.854
+

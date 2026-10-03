@@ -1,0 +1,7 @@
+HEAD: 71d4ff8ad10c741802545a9567336bdf0b6191ef
+git status --short:
+?? .trellis/tasks/10-03-board-render-perf/
+?? openspec/changes/board-render-perf/
+git diff --stat -- src (应为空):
+(以上为空即基线生成于改动前)
+Sat Oct  3 15:11:15     2026
