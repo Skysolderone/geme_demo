@@ -214,3 +214,10 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 待负责人：验收清单已交（三张禁手截图、两张地图截图、两张演出截图在 art/ 下）；是否 commit 由负责人定。
 - （09-30 续）`settlement-show-callouts`：落子飘字（类型名 + `GroupPowerView.ShortFormulaText` 短算式）、提子飘字与合计、势力两段到账（领地 / 军势各 350 ms + 定格）、信物揭示节拍、出局 / 终局横幅（终局面板延后到横幅播完）。零时长与 53 帧基线不变。本会话最后一次全量：2025 通过 / 8 跳过 / 0 失败。四个 change 均未提交，等负责人人工验收与提交指示。
 - （09-30 续 2）负责人已自行提交并归档前四个 change（`1a718ad`/`842465b`/`d25110a`）。`ai-turn-speed` 提交 `6a9d716`：决策逐步不变（v5 + board:1 决策序列基线逐字节相同），board:1 中盘单个 AI 小回合 1562 → 132 ms；GameBoard 版本号记忆化、地图实例记忆化邻接、CoverageMap 惰性集合。`show-sound-cues`（未提交）：程序合成六段占位音、提示导出纯函数、`--mute`、无人值守零音频节点，53 帧不变；`ShowSounds.cs` 的 .uid 需负责人开一次编辑器生成。仍待负责人：棋盘图长局 / 封门裁决（A/B/C/D）。
+
+
+## Session: 2026-10-03 — 收尾
+
+- `show-sound-cues` 提交 `bc77588`，`.uid` 由 headless `--editor --quit` 生成（可行，约 1 分钟）并提交 `8192b64`；`ai-turn-speed` / `show-sound-cues` OpenSpec 归档 `c71c0a1`、Trellis 归档 `f5d5a8d`。
+- 负责人授权全部由实施方决定：棋盘图长局 / 封门裁决为 **A 接受长局**（设计文档 §3.3 与变更记录已写明理由：长度随格数线性；"被封"只是几何指标，保护期后全盘可落子）。音效音色 / 音量未实机试听，参数表 `ShowSounds.Table` 待负责人反馈后再调。
+- 当前无进行中的 change / Trellis 任务。
