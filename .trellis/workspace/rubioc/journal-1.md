@@ -213,3 +213,4 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - `turn-settlement-show`（另一会话规划、本会话实施）：节拍生成 + 时间线在 Presentation.Show，Godot 接线；提速按住空格 / 左键（负责人 09-30 裁决）；无人值守零时长，53 帧基线一致。4.4 人工试玩未做。
 - 待负责人：验收清单已交（三张禁手截图、两张地图截图、两张演出截图在 art/ 下）；是否 commit 由负责人定。
 - （09-30 续）`settlement-show-callouts`：落子飘字（类型名 + `GroupPowerView.ShortFormulaText` 短算式）、提子飘字与合计、势力两段到账（领地 / 军势各 350 ms + 定格）、信物揭示节拍、出局 / 终局横幅（终局面板延后到横幅播完）。零时长与 53 帧基线不变。本会话最后一次全量：2025 通过 / 8 跳过 / 0 失败。四个 change 均未提交，等负责人人工验收与提交指示。
+- （09-30 续 2）负责人已自行提交并归档前四个 change（`1a718ad`/`842465b`/`d25110a`）。`ai-turn-speed` 提交 `6a9d716`：决策逐步不变（v5 + board:1 决策序列基线逐字节相同），board:1 中盘单个 AI 小回合 1562 → 132 ms；GameBoard 版本号记忆化、地图实例记忆化邻接、CoverageMap 惰性集合。`show-sound-cues`（未提交）：程序合成六段占位音、提示导出纯函数、`--mute`、无人值守零音频节点，53 帧不变；`ShowSounds.cs` 的 .uid 需负责人开一次编辑器生成。仍待负责人：棋盘图长局 / 封门裁决（A/B/C/D）。

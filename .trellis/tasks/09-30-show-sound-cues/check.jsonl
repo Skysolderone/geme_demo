@@ -1,0 +1,7 @@
+{"file": "openspec/changes/show-sound-cues/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/show-sound-cues/design.md", "reason": "规格"}
+{"file": "openspec/changes/show-sound-cues/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/show-sound-cues/specs/", "type": "directory", "reason": "规格"}
+{"file": "openspec/specs/settlement-show/spec.md", "reason": "既有演出规格"}
+{"file": ".trellis/spec/core/testing.md", "reason": "守门/变异/Godot Debug"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "分层：Presentation 无浮点无引擎"}

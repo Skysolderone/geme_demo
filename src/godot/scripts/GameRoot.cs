@@ -65,6 +65,12 @@ public sealed partial class GameRoot : Node3D
     private bool _verifyResultAfterShow;
     private bool _autoDemo;
     private bool _pickCheck;
+
+    /// <summary><c>--mute</c>：不创建音效节点、不合成波形（show-sound-cues D3）。</summary>
+    private bool _mute;
+
+    /// <summary>结算演出的占位音效（show-sound-cues D2 / D3）；<c>--mute</c> 或无人值守下为 <c>null</c>，场景树里没有任何音频节点。</summary>
+    private ShowSounds? _sounds;
     private bool _shotOverview;
     private bool _shotPower;
     private int? _shotBoard;
@@ -160,6 +166,9 @@ public sealed partial class GameRoot : Node3D
             // 数字与未知名称由结算报错退出，不回落到标准。未给出取标准；进入选图界面时作为难度选择的预选。
             AiDifficulty? difficulty = args.Value<AiDifficulty>(
                 "difficulty", $"难度名称（{AiDifficultyNames.Usage}，不区分大小写）", t => AiDifficultyNames.TryParse(t, out AiDifficulty d) ? d : null);
+
+            // --mute：结算演出不发任何声音（show-sound-cues）。只有这一个音量开关，没有设置界面。
+            _mute = args.Flag("mute");
             args.EnsureRecognized();
             if (_shotRecruitCollapsed && (!_autoDemo || _screenshotFrame < 0))
             {
@@ -236,6 +245,15 @@ public sealed partial class GameRoot : Node3D
             _matchSeed = seed;
             _rounds = rounds;
             _cellLimit = cellLimit;
+
+            // 结算演出的占位音效（show-sound-cues D3）：--mute 或无人值守（演出零时长）下不创建节点、不合成波形——
+            // 场景树里没有任何音频节点，自动演示的帧数与截图与引入音效之前相同。
+            if (!_mute && !Unattended)
+            {
+                _sounds = new ShowSounds { Name = "ShowSounds" };
+                AddChild(_sounds);
+                GD.Print($"[sound] 结算演出占位音效：合成 {_sounds.VoiceCount} 段波形，播放器 {ShowSounds.PoolSize} 个（--mute 关闭）");
+            }
 
             // --map=gen：随机取一个地图种子。规则内核不读时钟，取种子只在入口最外层做；时间戳折成九位以内的短种子（与选图界面"换一张"同一个折叠函数），
             // 拼成完整标识、打印出来，再交给 MapCatalog。
@@ -1078,8 +1096,15 @@ public sealed partial class GameRoot : Node3D
         {
             _flash = _flash with { Placed = [], Captured = [] };
             _dirty = true;
+
+            // 创建瞬间的提示（show-sound-cues D1）：首拍在进度 0 就已"当前"（势力 0 ms 即领地段、提子 / 信物 / 横幅 0 ms 即显示），没有 Advance 跨越它，
+            // 以空遮罩为"前"导出一次。无人值守下 _sounds 为 null，且零时长遮罩恒空。
+            _sounds?.Play(SoundCues.Between(ShowMask.Empty, _show.Mask(), []), FastHeld());
         }
     }
+
+    /// <summary>提速是否按住（空格或鼠标左键，settlement-show D4）：时间线推进与音效降音量共用这一判定。</summary>
+    private static bool FastHeld() => Input.IsActionPressed(InputBindings.CameraHomeAction) || Input.IsMouseButtonPressed(MouseButton.Left);
 
     /// <summary>
     /// 每帧推进时间线（D2）：帧间隔折成整数毫秒；按住空格或鼠标左键即提速 4 倍（D4，Open Questions 裁决）。跨过的节拍由遮罩自然呈现终态。
@@ -1089,8 +1114,16 @@ public sealed partial class GameRoot : Node3D
     {
         bool shot = _shotShow is not null && _screenshotFrame >= 0;
         int ms = shot ? 16 : System.Math.Max(1, (int)System.Math.Round(delta * 1000d));
-        bool fast = !shot && (Input.IsActionPressed(InputBindings.CameraHomeAction) || Input.IsMouseButtonPressed(MouseButton.Left));
-        _show.Advance(ms, fast);
+        bool fast = !shot && FastHeld();
+
+        // 音效提示（show-sound-cues D1）：推进前后的遮罩与跨过的节拍交给纯函数导出，再按序号交给播放器池；有音效节点时才取前遮罩。
+        ShowMask? heard = _sounds is null ? null : _show.Mask();
+        ImmutableArray<SettlementBeat> crossed = _show.Advance(ms, fast);
+        if (heard is not null)
+        {
+            _sounds!.Play(SoundCues.Between(heard, _show.Mask(), crossed), fast);
+        }
+
         if (shot && ShotShowTarget(_show.Current) && ShotShowReady())
         {
             // 该节拍进行到取图点：冻结在此帧取图（BeginCapture 会带当前遮罩完整刷新一次）。
@@ -1287,6 +1320,18 @@ public sealed partial class GameRoot : Node3D
         _demoStep = 0;
     }
 
+    /// <summary>整棵子树里的音频播放节点数（<see cref="AudioStreamPlayer"/> / 2D / 3D）。</summary>
+    private static int CountAudioNodes(Node node)
+    {
+        int count = node is AudioStreamPlayer or AudioStreamPlayer2D or AudioStreamPlayer3D ? 1 : 0;
+        foreach (Node child in node.GetChildren())
+        {
+            count += CountAudioNodes(child);
+        }
+
+        return count;
+    }
+
     private void FinishAutoDemo()
     {
         if (!_autoDemo)
@@ -1304,6 +1349,8 @@ public sealed partial class GameRoot : Node3D
             ? $"[auto-demo] 演示停止：跑满 {_rounds} 个大回合（--rounds 停止点，不是终局；对局停在第 {_session.Match.MajorRound} 大回合）；{standings}"
             : $"[auto-demo] 终局：第 {result.MajorRound} 大回合，{Names.End(result.Reason)}；{standings}");
         GD.Print($"[perf] 启动到首帧 {_firstFrameMsec} ms，启动到终局 {Time.GetTicksMsec()} ms，共 {_frame} 帧");
+        // show-sound-cues 2.2 自证：无人值守下场景树里 MUST 没有任何音频播放节点（遍历整棵树数出来，不是看 _sounds 是否为 null）。
+        GD.Print($"[sound] 音频节点 {CountAudioNodes(GetTree().Root)}（无人值守：不创建音效节点、不合成波形）");
         if (_shotForbidden && _screenshotFrame >= 0)
         {
             // 演示跑完也没等到"轮到本机玩家且盘上有单子禁手"的那一帧：响亮失败，不留在结算画面空等。
