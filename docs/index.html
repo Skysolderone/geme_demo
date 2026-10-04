@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>围杀 Siege — 围棋式围杀 × 地块争夺的回合制策略构筑</title>
+<meta name="description" content="《围杀 Siege》：2–4 人共享棋盘的回合制策略构筑游戏原型。围棋式围杀、地块争夺与“加值 × 倍率”成长。提供 macOS 与 Windows 下载。">
+<meta property="og:title" content="围杀 Siege">
+<meta property="og:description" content="围棋式围杀 × 地块争夺 × 加值乘倍率的回合制策略构筑原型。">
+<meta property="og:image" content="assets/hero.jpg">
+<style>
+  :root {
+    --ground: #f4f1e8;
+    --surface: #fffdf7;
+    --ink: #1f2530;
+    --muted: #5b6472;
+    --line: #ddd6c4;
+    --sky-top: #8fc0e8;
+    --sky-low: #dcecf7;
+    --gold: #b98a1e;
+    --gold-ink: #7a5a0c;
+    --panel: #232a36;
+    --panel-ink: #f2efe6;
+    --grass: #5f9a3a;
+    --red: #d9483b;
+    --blue: #3f7fd6;
+    --amber: #e0b23c;
+    --purple: #8f5fc7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #171b22;
+      --surface: #1f252f;
+      --ink: #ece8dc;
+      --muted: #a2aab6;
+      --line: #343c49;
+      --sky-top: #1d3a55;
+      --sky-low: #1a2430;
+      --gold: #d9ae4a;
+      --gold-ink: #e6c268;
+      --panel: #11151b;
+      --panel-ink: #ece8dc;
+      --grass: #86bf5c;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 16px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--gold-ink); text-underline-offset: 3px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  }
+  header.top .wrap { display: flex; align-items: center; gap: 20px; min-height: 52px; flex-wrap: wrap; }
+  .brand { color: var(--panel-ink); font-weight: 700; letter-spacing: .04em; text-decoration: none; margin-right: auto; }
+  .brand b { color: var(--amber); font-weight: 700; }
+  nav { display: flex; gap: 18px; flex-wrap: wrap; }
+  nav a { color: var(--panel-ink); opacity: .82; text-decoration: none; font-size: 14px; }
+  nav a:hover { opacity: 1; }
+
+  .hero { background: linear-gradient(var(--sky-top), var(--sky-low) 62%, var(--ground)); padding-block: 56px 28px; }
+  .factions { display: flex; gap: 6px; margin-bottom: 18px; }
+  .factions i { width: 26px; height: 6px; border-radius: 3px; display: block; }
+  h1 { font-size: clamp(40px, 8vw, 68px); line-height: 1.1; margin: 0 0 14px; letter-spacing: .02em; }
+  h1 small { display: block; font-size: .3em; font-weight: 600; letter-spacing: .32em; color: var(--muted); margin-top: 10px; }
+  .lead { font-size: clamp(17px, 2.4vw, 21px); max-width: 34em; margin: 0 0 26px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-flex; flex-direction: column; justify-content: center;
+    min-width: 200px; padding: 11px 20px; border-radius: 8px; text-decoration: none;
+    background: var(--panel); color: var(--panel-ink); border: 1px solid var(--gold);
+    font-weight: 700; line-height: 1.35;
+  }
+  .btn span { font-weight: 400; font-size: 12.5px; opacity: .78; }
+  .btn:hover { background: color-mix(in srgb, var(--panel) 86%, var(--gold)); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); min-width: 0; }
+  .note { font-size: 13.5px; color: var(--muted); margin: 14px 0 0; }
+  .shot { margin: 34px 0 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 18px 40px -22px rgba(20, 30, 50, .55); background: var(--surface); }
+
+  section { padding-block: 52px 8px; }
+  h2 { font-size: clamp(24px, 4vw, 32px); margin: 0 0 6px; line-height: 1.25; }
+  h2::before { content: ""; display: block; width: 34px; height: 4px; background: var(--gold); border-radius: 2px; margin-bottom: 14px; }
+  .sub { color: var(--muted); margin: 0 0 24px; max-width: 44em; }
+  h3 { font-size: 18px; margin: 0 0 6px; }
+
+  .loop { list-style: none; padding: 0; margin: 0 0 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: step; }
+  .loop li { counter-increment: step; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px 14px; font-size: 14.5px; line-height: 1.6; }
+  .loop li::before { content: counter(step, decimal-leading-zero); display: block; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--gold-ink); font-size: 13px; letter-spacing: .08em; }
+  .loop strong { display: block; font-size: 16px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 16px; border-top: 4px solid var(--c, var(--gold)); }
+  .card p { margin: 0; font-size: 15px; color: var(--muted); }
+
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  figure.wide { grid-column: 1 / -1; }
+  figcaption { padding: 10px 14px 12px; font-size: 14px; color: var(--muted); }
+  figcaption b { color: var(--ink); }
+
+  .dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .dl .card ol { margin: 10px 0 0; padding-left: 1.3em; font-size: 15px; }
+  .dl .card li { margin-bottom: 4px; }
+  .dl .btn { margin: 4px 0 6px; }
+  code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 1px 6px; border-radius: 4px; }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; background: var(--surface); white-space: nowrap; }
+  pre { background: var(--panel); color: var(--panel-ink); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; }
+  pre code { background: none; padding: 0; }
+
+  .tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td:first-child { white-space: nowrap; }
+
+  .log { border-left: 3px solid var(--gold); padding: 2px 0 2px 16px; }
+  .log time { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .log ul { margin: 8px 0 0; padding-left: 1.2em; }
+
+  footer { margin-top: 56px; padding-block: 26px 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top">围杀 <b>Siege</b></a>
+    <nav>
+      <a href="#play">玩法</a>
+      <a href="#shots">截图</a>
+      <a href="#download">下载</a>
+      <a href="#controls">操作</a>
+      <a href="https://github.com/Skysolderone/geme_demo">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap">
+      <div class="factions" aria-hidden="true">
+        <i style="background:var(--red)"></i><i style="background:var(--blue)"></i><i style="background:var(--amber)"></i><i style="background:var(--purple)"></i>
+      </div>
+      <h1>围杀 Siege<small>回合制策略构筑 · 原型</small></h1>
+      <p class="lead">2–4 人共用一张棋盘。像围棋一样围住对手的棋串把它提走，同时抢地块、找信物，把“加值 × 倍率”滚成一次高风险的势力爆发。</p>
+      <div class="cta">
+        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-macos.zip">下载 macOS 版<span>Apple 芯片与 Intel 通用 · 约 126 MB</span></a>
+        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-windows-x64.zip">下载 Windows 版<span>64 位 · 约 74 MB</span></a>
+        <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
+      </div>
+      <p class="note">当前版本 v0.1.0（2026-10-04）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <div class="shot"><img src="assets/hero.jpg" width="1600" height="900" alt="标准 13×13 地图上的四方对局：四角是四个阵营的出生高台，中间一条环形河把中岛围住，盘面上已有金、紫、蓝三方的棋子"></div>
+    </div>
+  </div>
+
+  <section id="play">
+    <div class="wrap">
+      <h2>怎么玩</h2>
+      <p class="sub">棋盘空间博弈约占六成，随机构筑约占四成。标准局 20–30 分钟，不设固定轮数。胜负应当能用落点、阵型和取舍来解释，而不是刷新运气。</p>
+
+      <ol class="loop">
+        <li><strong>探索信物</strong>把棋子的覆盖铺到信物格上，翻开并控制它。</li>
+        <li><strong>定向征募</strong>每回合从展示的候选里挑棋子进手牌。</li>
+        <li><strong>批次落子</strong>一次暂放多枚，看完预演再整批确认。</li>
+        <li><strong>围杀与占地</strong>断掉对手棋串的气就提走；独占的空格算领地。</li>
+        <li><strong>势力与先手</strong>领地加棋串军势就是势力；势力排名高的，下一大回合先行动。</li>
+      </ol>
+
+      <div class="cards">
+        <div class="card" style="--c:var(--red)">
+          <h3>围棋式围杀</h3>
+          <p>相连的己方棋子组成棋串、共享气。气被堵死，整串被提走；自杀手、同形与破坏活形的落点会事先打叉。</p>
+        </div>
+        <div class="card" style="--c:var(--amber)">
+          <h3>加值 × 倍率</h3>
+          <p>十种棋子各有分工：堡垒子加值、倍增子给整串乘倍率、连珠子与协同子看阵型。棋串越长越值钱，也越容易被切断。</p>
+        </div>
+        <div class="card" style="--c:var(--grass)">
+          <h3>会改变规则的地形</h3>
+          <p>三档高度（崖壁断气、居高临下）、深水与桥、林地、栅栏，以及荒漠、沼泽、岩台、浅滩。匠人落子时还能搭桥、立栅、烧林。</p>
+        </div>
+        <div class="card" style="--c:var(--blue)">
+          <h3>看得见的判读</h3>
+          <p>盘面、势力、信物、顺序四个信息层随时切换；每次落子前都有预演，告诉你会提走什么、势力怎么变。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="shots">
+    <div class="wrap">
+      <h2>截图</h2>
+      <p class="sub">全部是游戏内实拍。地图元素是引擎里程序建模的低多边形部件，不用贴图。</p>
+      <div class="gallery">
+        <figure class="wide"><img src="assets/near.jpg" width="1600" height="900" loading="lazy" alt="拉近的中岛：金、紫、蓝三方的棋子隔着河与桥对峙，带阵营色方框的叉是已活棋串的禁入点">
+          <figcaption><b>中岛争夺。</b>带阵营色方框的叉是已活棋串的禁入点（眼位），对手不能往里落子。</figcaption></figure>
+        <figure><img src="assets/terrain.jpg" width="1200" height="620" loading="lazy" alt="高台边缘的近景：草地地砖带倒角，崖壁是岩灰分层，下面是土色缓坡，河岸有一圈石沿">
+          <figcaption><b>地形。</b>高度差 1 是土色缓坡，高度差 2 是带岩缝的崖壁；深水低于地砖，岸边一圈石沿。</figcaption></figure>
+        <figure><img src="assets/pieces.jpg" width="1320" height="600" loading="lazy" alt="十种棋子的轮廓对照：连珠子、铁链子、堡垒子、界碑子、普通子、匠人、旗手子、倍增子、协同子、哨兵子">
+          <figcaption><b>十种棋子。</b>每种的轮廓都不同，去掉颜色也分得开。</figcaption></figure>
+        <figure><img src="assets/layer-power.jpg" width="1600" height="900" loading="lazy" alt="势力信息层：场景压暗，各方独占的格子按阵营色着色">
+          <figcaption><b>势力层。</b>场景压暗，只突出各方的独占格与棋串军势。</figcaption></figure>
+        <figure><img src="assets/layer-ownership.jpg" width="1600" height="900" loading="lazy" alt="盘面信息层的归属读法：空格按归属着色">
+          <figcaption><b>盘面层。</b>空格归谁、哪里有争议，一眼可读。</figcaption></figure>
+        <figure class="wide"><img src="assets/board-map.jpg" width="1600" height="900" loading="lazy" alt="棋盘档生成图的全局预览：五块出生棋盘和几块公共大棋盘由土路通道连起来，其余是岩石与树林">
+          <figcaption><b>棋盘档地图。</b>随机生成：几块出生棋盘与公共棋盘由通道相连，图上这张有 45 列。按 <kbd>M</kbd> 切到全局预览。</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <h2>下载与安装</h2>
+      <p class="sub">这是原型版本，没有购买开发者证书，所以两个系统第一次打开时都会拦一下。下面是放行的办法。</p>
+      <div class="dl">
+        <div class="card" style="--c:var(--ink)">
+          <h3>macOS</h3>
+          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-macos.zip">Siege-macos.zip<span>macOS 11 及以上（Intel 机型 10.15 及以上）</span></a>
+          <ol>
+            <li>解压，得到 <code>Siege.app</code>，可以拖进“应用程序”。</li>
+            <li>第一次不要双击：按住 <kbd>Control</kbd> 点它（或右键）→“打开”→ 再点“打开”。</li>
+            <li>如果仍被拦下：系统设置 → 隐私与安全性 → 页面下方点“仍要打开”。</li>
+          </ol>
+        </div>
+        <div class="card" style="--c:var(--ink)">
+          <h3>Windows</h3>
+          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-windows-x64.zip">Siege-windows-x64.zip<span>Windows 10 / 11，64 位</span></a>
+          <ol>
+            <li>解压整个 <code>Siege</code> 文件夹（三样东西要放在一起，别只拿出 exe）。</li>
+            <li>运行 <code>Siege.exe</code>。</li>
+            <li>出现“Windows 已保护你的电脑”时：点“更多信息”→“仍要运行”。</li>
+          </ol>
+        </div>
+      </div>
+      <p class="note">显卡需要支持 Vulkan（Windows）或 Metal（macOS）。不需要另装 .NET，运行时已经打在包里。遇到问题请到 <a href="https://github.com/Skysolderone/geme_demo/issues">Issues</a> 反馈。</p>
+    </div>
+  </section>
+
+  <section id="controls">
+    <div class="wrap">
+      <h2>操作</h2>
+      <p class="sub">不带参数启动会先进选图界面：四张内置图（标准 13×13、双人 9×9、三人 11×11、边疆 25×30）或随机图，再选 AI 难度。</p>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>做什么</th><th>怎么做</th></tr></thead>
+          <tbody>
+            <tr><td>开局</td><td>点一块出生区插旗 → 进入征募</td></tr>
+            <tr><td>落子</td><td>左下手牌选棋子类型 → 点格子暂放 → 右侧看预演 → <kbd>Enter</kbd> 整批确认</td></tr>
+            <tr><td>跳过</td><td><kbd>P</kbd> Pass</td></tr>
+            <tr><td>信息层</td><td><kbd>1</kbd> 盘面　<kbd>2</kbd> 势力　<kbd>3</kbd> 信物　<kbd>4</kbd> 顺序；<kbd>Tab</kbd> 切换盘面读法；<kbd>T</kbd> 切换按住 / 点击显示</td></tr>
+            <tr><td>手牌</td><td><kbd>H</kbd> 打开手牌面板；<kbd>V</kbd> 收起征募面板</td></tr>
+            <tr><td>匠人</td><td><kbd>E</kbd> 轮换地形改造目标（搭桥 / 立栅 / 烧林）</td></tr>
+            <tr><td>视角</td><td>方向键或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 平移，滚轮缩放，<kbd>M</kbd> 全局预览，<kbd>空格</kbd> 回到自家</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="source">
+    <div class="wrap">
+      <h2>从源码运行</h2>
+      <p class="sub">需要 Godot 4.7.2 .NET 版与 .NET 8 SDK。规则内核是纯 C#，不依赖引擎，自带测试。</p>
+<pre><code>git clone https://github.com/Skysolderone/geme_demo.git
+cd geme_demo
+dotnet build src/godot/Siege.Godot.csproj
+godot --path src/godot                       # 进选图界面
+godot --path src/godot -- --map=board:1      # 直接开一张棋盘档地图</code></pre>
+    </div>
+  </section>
+
+  <section id="changelog">
+    <div class="wrap">
+      <h2>更新记录</h2>
+      <div class="log">
+        <h3>v0.1.0 <time datetime="2026-10-04">2026-10-04</time></h3>
+        <ul>
+          <li>第一个可下载的版本：macOS 通用包与 Windows 64 位包。</li>
+          <li>地图元素全套精修：地砖倒角、缓坡与崖壁分层、河床与河岸石沿、新的桥与栅栏、重建的岩石树木与遗迹、外圈石沿。</li>
+          <li>十种棋子、八种地表、四档 AI 难度、棋盘档随机地图、结算演出与音效、带入带出。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">《围杀 Siege》核心原型 · 源码与问题反馈：<a href="https://github.com/Skysolderone/geme_demo">github.com/Skysolderone/geme_demo</a></div>
+</footer>
+
+</body>
+</html>

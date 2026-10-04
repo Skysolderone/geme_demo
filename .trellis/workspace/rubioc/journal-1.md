@@ -232,3 +232,4 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 环境：本机 Godot 4.7.2 .NET 装在 `~/Applications/godot-4.7.2-mono/`，构建 Godot 工程要 `-p:RestoreConfigFile=~/Applications/godot-4.7.2-mono/nuget.config`（仓库里的 `nuget.config` 是 Windows 路径，没动）。
 - 遗留：本机 `dotnet test` 11 条 Core / Sim 日志黄金哈希红（干净的 00a6747 上同样红，原因未查，疑与平台有关）——需在 Windows 机上确认本 change 之后全绿；五个实现提交加归档提交尚未推送。`LowPolyMesh.cs.uid` 已用无头编辑器生成并提交。
 - 当前无进行中的 change / Trellis 任务。
+- （10-04 续）发布网站与下载包：`docs/` 是 GitHub Pages 发布页（需在仓库 Settings → Pages 选 `main` / `/docs`），下载按钮指向 Releases 的固定文件名 `Siege-macos.zip` / `Siege-windows-x64.zip`；`tools/export-release.sh <版本>` 在 Mac 上导出两个包到 `build/`（不入库）。macOS 包本机验过能跑；Windows 包只验了结构。Release 由负责人在网页上手动建并上传。
