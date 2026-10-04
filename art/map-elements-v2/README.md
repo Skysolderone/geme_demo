@@ -1,6 +1,6 @@
 # map-elements-v2 人工检查清单
 
-OpenSpec change `map-elements-v2`（地图元素全套精修与部件化）。规格：`openspec/changes/map-elements-v2/specs/visual-style-baseline/spec.md`。
+OpenSpec change `map-elements-v2`（地图元素全套精修与部件化）。规格已并入 `openspec/specs/visual-style-baseline/spec.md`；change 归档在 `openspec/changes/archive/2026-10-04-map-elements-v2/`（设计与「实施修正」F-1 – F-16 在其中的 `design.md`）。
 段 A–E 全部做完（2026-10-04）。负责人授权实施方自行决策（"后续任何处理按照你的决策来"），所以下面各表的"负责人确认"一栏留给事后过目；实施方的决策清单见文末。
 
 **先看这三张**：`final/compare-v5.png`（对局默认镜头，左改前、右改后）、`final/compare-v5-near-B9.png`（近景，上改前、下改后）、`final/compare-board1.png`（棋盘图，左改前、右改后）。
