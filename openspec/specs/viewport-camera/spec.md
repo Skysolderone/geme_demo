@@ -68,7 +68,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 
 对局中按空格键 SHALL 把相机注视点移到本机玩家出生平台的中心（同样经夹取），缩放距离不变。插旗阶段尚未选区时，空格键 SHALL 把相机移到地图中心。
 
-相机 MUST NOT 因其他玩家行动而自动移动。
+除「跟随对手行动」所述的跟随与返回之外，相机 MUST NOT 自动移动。
 
 #### Scenario: 开局对准自家
 - **WHEN** 本机玩家在 `siege-frontier-v2` 上锁定 3 号平台，第 1 大回合开始
@@ -85,10 +85,6 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 #### Scenario: 空格回家
 - **WHEN** 本机玩家把画面推到地图另一端后按空格
 - **THEN** 画面中心回到自己的出生平台，缩放距离不变
-
-#### Scenario: 不跟随对手
-- **WHEN** 轮到其他玩家行动并在画面之外落子
-- **THEN** 相机位置不变
 
 ### Requirement: 全局预览
 
@@ -176,4 +172,42 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 #### Scenario: 不在格上
 - **WHEN** 指针悬停在深水外的空白处或界面面板上
 - **THEN** 读数为空
+
+### Requirement: 跟随对手行动
+
+其他玩家的结算以正常时长演出、且跟随开启时，相机 SHALL 在演出开始前平滑移到该次结算涉及的格（落子、被提、新揭示信物）的外接矩形中心，缩放距离不变，注视点经「边界夹取」；移动期间演出 MUST NOT 推进。涉及的格全部已在当前画面的中央区域内时，相机 MUST NOT 移动。没有涉及任何格的结算（Pass）不移动相机。
+
+第一次跟随之前 SHALL 记下本机玩家的画面；轮到本机玩家行动时 SHALL 平滑回到该画面。连续多名对手行动之间不返回。
+
+本机玩家在对手行动期间做了任何相机操作（平移、缩放、回家、全局预览）之后，到他下一次行动开始之前，相机 MUST NOT 再跟随，也 MUST NOT 自动返回。
+
+跟随默认开启，SHALL 能用一个按键随时切换，当前状态在界面上可见。全局预览下不跟随。演出时长为零（无人值守运行）时相机 MUST NOT 因其他玩家行动而移动。本机玩家自己的结算不触发跟随。
+
+#### Scenario: 画面外落子跟过去
+- **WHEN** 跟随开启，其他玩家在当前画面之外落子，结算以正常时长演出
+- **THEN** 相机先平滑移到落子处（缩放不变），到位之后落子节拍才开始
+
+#### Scenario: 画面中央的落子不动
+- **WHEN** 其他玩家的落子全部在当前画面的中央区域内
+- **THEN** 相机位置不变，演出立即开始
+
+#### Scenario: 轮到本机返回
+- **WHEN** 相机跟随过对手之后轮到本机玩家行动
+- **THEN** 相机平滑回到跟随之前的画面
+
+#### Scenario: 手动操作后不再抢镜头
+- **WHEN** 本机玩家在对手行动期间平移了相机，随后另一名对手在画面外落子
+- **THEN** 相机不移动；轮到本机玩家时也不自动返回
+
+#### Scenario: 关闭后不跟随
+- **WHEN** 本机玩家用按键关闭跟随，其他玩家在画面外落子
+- **THEN** 相机位置不变
+
+#### Scenario: Pass 不移动
+- **WHEN** 其他玩家 Pass
+- **THEN** 相机位置不变
+
+#### Scenario: 无人值守不移动
+- **WHEN** 自动演示运行到终局
+- **THEN** 开局对准之后相机位姿没有因其他玩家行动而变化
 
