@@ -1163,6 +1163,7 @@ public sealed partial class BoardView : Node3D
         DrawPlacementMarks(board);
         DrawPieces(board, treatment, mask ?? ShowMask.Empty);
         DrawShow(mask ?? ShowMask.Empty);
+        DrawGroupPower(world, reading, thresholds);
         DrawLayer(content);
         DrawPreview(preview, focus);
         DrawFlash(flash);
@@ -1591,6 +1592,33 @@ public sealed partial class BoardView : Node3D
             }
         }
     }
+
+    /// <summary>
+    /// 棋串军势常驻标注（tactical-layers「棋串军势常驻标注」）：不开信息层也在每条棋串上标出军势。
+    /// 标在哪一格、写什么都由 Presentation 的 <see cref="GroupPowerLabels"/> 给出（数值取势力层内容），这里只画；全局预览下太密，不画。
+    /// 画法同坐标标注（平铺、屏幕上大小恒定），阵营色字；放在格子的右前角（棋子底座半径 0.36 之外、林地小树不占这个角），
+    /// 不盖住棋子轮廓与格心的标记，也不与从格心上方升起的落子飘字相撞。
+    /// 随完整刷新更新：演出进行中不变，播完那次刷新换成结算后的数值。
+    /// </summary>
+    private void DrawGroupPower(ViewerWorld world, BoardReading reading, LibertyThresholds thresholds)
+    {
+        if (Rig.IsOverview || world.Layer(TacticalLayer.Power, reading, thresholds) is not PowerLayerContent power)
+        {
+            return;
+        }
+
+        foreach (GroupPowerLabel item in GroupPowerLabels.Of(power))
+        {
+            Label3D label = Label(item.Text, CenterOf(item.Coord) + new Vector3(0.33f, 0.12f, 0.34f), GroupPowerFontSize, GroupPowerOutlineSize);
+            label.Modulate = Visuals.FactionColorOf(item.Owner).Lightened(0.75f);
+            label.OutlineModulate = Visuals.FactionColorOf(item.Owner).Darkened(0.45f);
+            label.NoDepthTest = true;
+            _overlay.AddChild(label);
+        }
+    }
+
+    private const int GroupPowerFontSize = 88;
+    private const int GroupPowerOutlineSize = 20;
 
     private void DrawPower(PowerLayerContent power)
     {

@@ -112,7 +112,7 @@ public class UI层不含规则计算Tests
         // frontier-map 段 C 的唯一豁免：相机视图模型（Siege.Presentation.Camera，design D6「逻辑与引擎分离」）。注视点、距离、夹取是连续几何量，
         // 且 v4 位姿要与旧固定相机的 float 算式逐位相等，只能用 float；它不承载任何计分 / 倍率 / 规则数据（规则调用另有 IL 扫描禁止）。
         // 豁免按<b>类型名单</b>而不是按命名空间放行：往该命名空间里新塞一个带浮点的类型仍会红（变异 M-C2）；名单里的类型必须真实存在（防名单腐烂）。
-        string[] cameraTypes = ["PlaneRect", "CameraPose", "BoardCamera", "EdgePan", "CameraHome"];
+        string[] cameraTypes = ["PlaneRect", "CameraPose", "BoardCamera", "EdgePan", "CameraHome", "CameraFollow"];
         Type[] exempt = [.. PresentationAssembly.GetTypes().Where(t => RootOf(t) is { Namespace: "Siege.Presentation.Camera" } root && cameraTypes.Contains(root.Name))];
         Assert.Equal(cameraTypes.Order(), exempt.Where(t => !t.IsNested).Select(t => t.Name).Order());
 

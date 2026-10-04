@@ -38,10 +38,10 @@ public class 信物揭示节拍Tests
         Assert.Equal(600, RelicRevealBeat.Ms);
         Assert.Equal(["H2", "F6"], reveal.Relics.Select(r => r.Coord.ToNotation()));
 
-        // 播放：该格闪光并弹出信物名（进度 500‰ 时闪光 500、飘字年龄 500）。
+        // 播放：该格闪光并弹出信物名（进度 500‰ 时闪光 500；飘字寿命 1.4 秒，300 ms 时年龄 300 × 1000 / 1400 = 214）。
         var timeline = new ShowTimeline([reveal, beats[3]], ShowDuration.Normal);
         timeline.Advance(300);
-        Assert.Equal("飘字[H2:Relic:兵站 +1:500,F6:Relic:军令 +1:500] 合计[] 闪光[H2:500,F6:500] 横幅[]", CalloutText(timeline.Mask()));
+        Assert.Equal("飘字[H2:Relic:兵站 +1:214,F6:Relic:军令 +1:214] 合计[] 闪光[H2:500,F6:500] 横幅[]", CalloutText(timeline.Mask()));
         timeline.Advance(300);
         Assert.IsType<PowerBeat>(timeline.Current);
         Assert.Empty(timeline.Mask().RelicFlash);

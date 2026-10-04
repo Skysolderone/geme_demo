@@ -75,7 +75,11 @@ public sealed class InputBindings
     public const string CameraOverviewAction = "siege_camera_overview";
 
     /// <summary>全部相机按键动作：这些键在到达界面控件之前就被认领（否则空格会按下获得焦点的按钮、方向键会挪动按钮焦点）。</summary>
-    public static readonly string[] CameraKeyActions = [CameraLeftAction, CameraRightAction, CameraUpAction, CameraDownAction, CameraHomeAction, CameraOverviewAction];
+    /// <summary>对手行动时镜头跟随的开关（follow-opponent，默认 F）。</summary>
+    public const string CameraFollowAction = "siege_camera_follow";
+
+    public static readonly string[] CameraKeyActions =
+        [CameraLeftAction, CameraRightAction, CameraUpAction, CameraDownAction, CameraHomeAction, CameraOverviewAction, CameraFollowAction];
 
     /// <summary>已注册的全部信息层动作。</summary>
     public IReadOnlyList<(string Action, InputDevice Device, string Binding)> LayerActions => _actions;
@@ -114,6 +118,7 @@ public sealed class InputBindings
 
         // 相机：与上面的键都不重（已用 1–4 / Tab / H / Enter / P / Esc / T / E / V / F12 / 鼠标右键）。
         Register(CameraOverviewAction, new InputEventKey { PhysicalKeycode = Key.M });
+        Register(CameraFollowAction, new InputEventKey { PhysicalKeycode = Key.F });
         Register(CameraLeftAction, new InputEventKey { PhysicalKeycode = Key.A }, new InputEventKey { PhysicalKeycode = Key.Left });
         Register(CameraRightAction, new InputEventKey { PhysicalKeycode = Key.D }, new InputEventKey { PhysicalKeycode = Key.Right });
         Register(CameraUpAction, new InputEventKey { PhysicalKeycode = Key.W }, new InputEventKey { PhysicalKeycode = Key.Up });

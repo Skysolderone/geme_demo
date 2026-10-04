@@ -67,6 +67,9 @@ public sealed class MatchSession
     /// </summary>
     public string? LastAiLookahead { get; private set; }
 
+    /// <summary>最近一次 <see cref="RunAiTurn"/> 的行动者（对手回合摘要与镜头跟随用）；还没有 AI 行动过为 <c>null</c>。</summary>
+    public PlayerId? LastAiActor { get; private set; }
+
     /// <summary>最近一次被拒绝的操作说明；无则为 <c>null</c>。</summary>
     public FailurePresentation? LastFailure { get; private set; }
 
@@ -466,6 +469,7 @@ public sealed class MatchSession
             return TurnFlash.None;
         }
 
+        LastAiActor = actor;
         MatchPublicView before = Match.Publish();
         _runner.RunTurn();
         MatchPublicView after = Match.Publish();

@@ -515,8 +515,8 @@ public static class CoordinateLabelStyle
 /// </summary>
 public sealed record CalloutLabelStyle(int FontSize, int OutlineSize)
 {
-    /// <summary>近景：比单字母坐标标注小一半。</summary>
-    public static readonly CalloutLabelStyle Near = new(FontSize: 48, OutlineSize: 6);
+    /// <summary>近景（follow-opponent D6 加大：原 48 / 6）。</summary>
+    public static readonly CalloutLabelStyle Near = new(FontSize: 72, OutlineSize: 10);
 
     /// <summary>全局预览：放大到坐标标注的四分之三。</summary>
     public static readonly CalloutLabelStyle Overview = new(FontSize: 72, OutlineSize: 8);

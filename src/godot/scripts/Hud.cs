@@ -45,6 +45,7 @@ public sealed partial class Hud : CanvasLayer
     private PanelContainer _recruitBar = null!;
     private Button _recruitBarButton = null!;
     private Label _notice = null!;
+    private Label _turnSummary = null!;
     private Label _showCaption = null!;
     private Label _showBanner = null!;
     private Label _hoverReadout = null!;
@@ -109,6 +110,30 @@ public sealed partial class Hud : CanvasLayer
         Ui.Anchor(_notice, 0.5f, 0f, -420f, 66f, 420f, 90f);
         _root.AddChild(_notice);
 
+        // 对手回合摘要：占通知行的位置，字大一号、带描边（压在棋盘上也读得清）。
+        _turnSummary = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 4);
+        _turnSummary.HorizontalAlignment = HorizontalAlignment.Center;
+        _turnSummary.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _turnSummary.AddThemeConstantOverride("outline_size", 6);
+        _turnSummary.AddThemeStyleboxOverride("normal", new StyleBoxFlat
+        {
+            // 深色半透明底：摘要压在棋盘与列标上也读得清；宽度随文案（外面套一个居中容器）。
+            BgColor = new Color(0.07f, 0.09f, 0.12f, 0.84f),
+            ContentMarginLeft = 16f,
+            ContentMarginRight = 16f,
+            ContentMarginTop = 3f,
+            ContentMarginBottom = 4f,
+            CornerRadiusTopLeft = 6,
+            CornerRadiusTopRight = 6,
+            CornerRadiusBottomLeft = 6,
+            CornerRadiusBottomRight = 6,
+        });
+        _turnSummary.Visible = false;
+        var summaryBox = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        Ui.Anchor(summaryBox, 0.5f, 0f, -620f, 60f, 620f, 96f);
+        summaryBox.AddChild(_turnSummary);
+        _root.AddChild(summaryBox);
+
         // 结算演出的顶部合计（"提 N 子"）与中央横幅（"金方出局" / "对局结束"，settlement-show-callouts D6）：
         // 都只在演出遮罩给出文案时可见，由 RefreshShow 逐帧刷新；横幅放中央面板的位置（此时终局面板尚未显示）。
         _showCaption = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 4);
@@ -142,6 +167,24 @@ public sealed partial class Hud : CanvasLayer
 
     /// <summary>相机当前是否处于全局预览（由主场景在刷新前同步，按钮据此显示按下态）。</summary>
     public bool OverviewActive { get; set; }
+
+    /// <summary>点了"跟随"按钮（与 F 键同一入口，follow-opponent）。</summary>
+    public event Action? FollowPressed;
+
+    /// <summary>对手行动时镜头是否跟随（由主场景在刷新前同步）。</summary>
+    public bool FollowActive { get; set; } = true;
+
+    /// <summary>
+    /// 对手回合摘要（settlement-show「对手回合摘要」）：文案由 Presentation 的 <c>TurnSummary</c> 给出，这里只显示，用行动者的阵营色。
+    /// 传 <c>null</c> 收起。显示期间通知行让位：对手行动时它说的是同一件事（只是没有数值），不再显示；
+    /// 轮到本机时通知行要给操作反馈，挪到摘要下面一行（见 <see cref="Refresh"/>）。
+    /// </summary>
+    public void SetTurnSummary(string? text, Color color)
+    {
+        _turnSummary.Text = text ?? string.Empty;
+        _turnSummary.Visible = text is not null;
+        _turnSummary.AddThemeColorOverride("font_color", color.Lightened(0.35f));
+    }
 
     private void BuildTurnBanner()
     {
@@ -203,7 +246,7 @@ public sealed partial class Hud : CanvasLayer
         _layerButtons = new HBoxContainer();
         _layerButtons.AddThemeConstantOverride("separation", 4);
         body.AddChild(_layerButtons);
-        Ui.Anchor(panel, 0.5f, 1f, -318f, -50f, 318f, -10f);
+        Ui.Anchor(panel, 0.5f, 1f, -366f, -50f, 366f, -10f);
         _root.AddChild(panel);
     }
 
@@ -309,6 +352,9 @@ public sealed partial class Hud : CanvasLayer
         RefreshCenter(session, world, handPanel, recruitCollapse, deferResult);
         RefreshShowOverlay(mask ?? ShowMask.Empty);
         _notice.Text = session.Notice;
+        bool summarised = _turnSummary.Visible;
+        _notice.Visible = !summarised || session.IsMyTurn;
+        Ui.Anchor(_notice, 0.5f, 0f, -420f, summarised ? 98f : 66f, 420f, summarised ? 122f : 90f);
     }
 
     /// <summary>演出逐帧刷新（settlement-show-callouts D6）：势力排名栏的分段到账与数字弹跳、顶部提子合计、中央横幅。由 GameRoot 每帧调用。</summary>
@@ -504,6 +550,11 @@ public sealed partial class Hud : CanvasLayer
         Button mode = Ui.Toggle(layers.Mode == LayerInputMode.HoldToShow ? "按住 [T]" : "点击 [T]", false, 76);
         mode.Pressed += () => LayerModePressed?.Invoke();
         _layerButtons.AddChild(mode);
+
+        // 镜头跟随对手（follow-opponent）：默认开，按下态即开。
+        Button follow = Ui.Toggle("跟随 [F]", FollowActive, 92);
+        follow.Pressed += () => FollowPressed?.Invoke();
+        _layerButtons.AddChild(follow);
 
         // 全局预览：只在一屏看不全的地图上给（v4 整盘本来就看得全，按钮没有意义，画面也保持不变）。
         if (CameraHintVisible)

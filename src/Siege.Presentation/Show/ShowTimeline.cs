@@ -62,7 +62,7 @@ public enum CalloutKind
 public sealed record Callout(Coord Coord, string Text, CalloutKind Kind, int AgePermille)
 {
     /// <summary>飘字寿命（毫秒）：出现后上浮并在此时间内淡出，可跨到下一节拍。</summary>
-    public const int LifetimeMs = 600;
+    public const int LifetimeMs = 1400;
 }
 
 /// <summary>当前显示的横幅（settlement-show-callouts D3）：文案、在本节拍里的序号与总数、本条内进度（0..1000‰）。</summary>

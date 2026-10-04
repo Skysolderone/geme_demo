@@ -46,6 +46,9 @@ public sealed partial class GameRoot : Node3D
     /// </summary>
     private ShowTimeline _show = ShowTimeline.Finished;
 
+    /// <summary>对手行动时的镜头跟随（follow-opponent）：状态机在 Presentation，这里只在开演前问一次、移动期间逐帧取位姿写给相机视图模型。</summary>
+    private readonly CameraFollow _follow = new();
+
     /// <summary>演出播完后要挂上的"回合高亮"（落子格 / 被提格，由节拍推出）：玩家提速看完后仍能找到刚才发生的位置（D6）。</summary>
     private TurnFlash _pendingFlash = TurnFlash.None;
 
@@ -483,11 +486,21 @@ public sealed partial class GameRoot : Node3D
         _hud.LayerPressed += ToggleLayer;
         _hud.ReadingPressed += CycleReading;
         _hud.OverviewPressed += ToggleOverview;
+        _hud.FollowPressed += ToggleFollow;
+    }
+
+    /// <summary>镜头跟随开关（按钮与 F 键同一入口）。</summary>
+    private void ToggleFollow()
+    {
+        bool on = _follow.Toggle();
+        GD.Print($"[camera] 第 {_frame} 帧 跟随对手：{(on ? "开" : "关")}");
+        _dirty = true;
     }
 
     /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。</summary>
     private void ToggleOverview()
     {
+        _follow.ManualInput(opponentActing: !_session.IsMyTurn);
         if (_board.Rig.ToggleOverview())
         {
             ApplyCamera("全局预览");
@@ -808,6 +821,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _hud.OverviewActive = _board.Rig.IsOverview;
+        _hud.FollowActive = _follow.Enabled;
         SyncRecruitCollapse();
         // 演出未播完时终局面板不显示（settlement-show-callouts「横幅节拍」：终局面板在横幅播完后才出现）；无人值守零时长下时间线创建即播完，行为不变。
         _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse, mask, deferResult: ShowPlaying);
@@ -1040,8 +1054,19 @@ public sealed partial class GameRoot : Node3D
         // 镜头与信息层的输入在 _Process 里另行处理，不受影响。无人值守下时间线创建即播完，永远不进这里。
         if (!_show.IsFinished)
         {
-            AdvanceShow(delta);
+            // 镜头还在去对手落点的路上（follow-opponent D2）：演出不推进，到位了落子飘字才开始。
+            if (!_follow.IsTravelling)
+            {
+                AdvanceShow(delta);
+            }
+
             return;
+        }
+
+        // 轮到本机玩家（follow-opponent D4）：解除"本轮不再跟随"，跟随过就回到原来的画面（移动由 UpdateCamera 逐帧推进）。
+        if (_session.IsMyTurn && (_follow.HasReturnPose || _follow.Suppressed) && _follow.OwnTurnStarted(_board.Rig.Pose))
+        {
+            GD.Print($"[camera] 第 {_frame} 帧 轮到本机：返回跟随之前的画面");
         }
 
         // 自动演示的停止点（--rounds）：表现层自己的无人值守收尾，不改对局状态、不产生名次。
@@ -1111,7 +1136,37 @@ public sealed partial class GameRoot : Node3D
         // 有人在看：演出时长取代 AI 小回合之间的固定停顿（D5）；落子格 / 被提格的高亮等演出播完再挂（D6）。
         _pendingFlash = flash;
         BeginShow(beats, ShowDuration.Normal, "AI");
+        FollowOpponent(beats);
         _aiTimer = 0d;
+    }
+
+    /// <summary>
+    /// 对手的结算以正常时长开演（follow-opponent）：挂上回合摘要，并问跟随状态机要不要把镜头移过去。
+    /// 目标点是这次结算涉及的格（落子、被提、新揭示信物）的格心；要不要动、动到哪、怎么回来都在 <see cref="CameraFollow"/> 里。
+    /// </summary>
+    private void FollowOpponent(ImmutableArray<SettlementBeat> beats)
+    {
+        if (_session.LastAiActor is { } actor)
+        {
+            _hud.SetTurnSummary(TurnSummary.Of(actor, beats), Visuals.FactionColorOf(actor));
+        }
+
+        (float X, float Z)[] points =
+        [
+            .. beats.SelectMany(beat => beat switch
+            {
+                PlacementBeat placement => placement.Pieces.Select(p => p.Coord),
+                CaptureBeat capture => capture.Pieces.Select(p => p.Coord),
+                RelicRevealBeat reveal => reveal.Relics.Select(r => r.Coord),
+                _ => [],
+            }).Select(_board.PlaneCenterOf),
+        ];
+        SyncAspect();
+        BoardCamera rig = _board.Rig;
+        if (_follow.Begin(rig.Pose, rig.VisibleWidth, rig.VisibleDepth, rig.IsOverview, points))
+        {
+            GD.Print($"[camera] 第 {_frame} 帧 跟随对手：{points.Length} 个目标格不在画面中央，镜头移过去");
+        }
     }
 
     // ---------- 结算演出（settlement-show）：节拍来自会话层，时间线与遮罩都在 Siege.Presentation.Show，这里只推进、取遮罩、画 ----------
@@ -1137,6 +1192,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _pendingFlash = TurnFlash.Of(beats);
+        _hud.SetTurnSummary(null, default);
         BeginShow(beats, ShowDuration.Normal, "本机");
     }
 
@@ -1499,7 +1555,17 @@ public sealed partial class GameRoot : Node3D
 
         if (right != 0f || up != 0f)
         {
+            // 本机玩家自己推了镜头：跟随让位（对手行动期间推的，这一轮不再抢镜头）。
+            _follow.ManualInput(opponentActing: !_session.IsMyTurn);
             _board.Rig.Pan(right, up, (float)delta);
+        }
+        else if (_follow.IsTravelling)
+        {
+            // 跟随 / 返回途中：位姿由状态机插值，夹取仍由视图模型做。--shot-show 下与演出一样按固定 16 ms 推进，截图可复现。
+            int ms = _shotShow is not null ? 16 : System.Math.Max(1, (int)System.Math.Round(delta * 1000d));
+            _board.Rig.Set(_follow.Advance(ms));
+            ApplyCamera("跟随对手");
+            return;
         }
 
         ApplyCamera("输入");
@@ -1524,7 +1590,8 @@ public sealed partial class GameRoot : Node3D
         {
             // 开局对准之后，无人值守模式下没有任何输入：位姿再变就是相机在"自己动"（规格：MUST NOT 因其他玩家行动而自动移动）。
             // --overview 为截全图主动切的全局预览不算在内。
-            _poseChangesAfterOpening += _opened && why != "全局预览" ? 1 : 0;
+            // 跟随对手只发生在正常时长的演出上（--shot-show 截图用），自动演示全程零时长、不会跟——同样不计。
+            _poseChangesAfterOpening += _opened && why != "全局预览" && why != "跟随对手" ? 1 : 0;
             CameraPose pose = _board.Rig.Pose;
             GD.Print($"[camera] 第 {_frame} 帧（{why}）注视点 ({pose.FocusX:0.###}, {pose.FocusZ:0.###})，距离 {pose.Distance:0.###}");
         }
@@ -1576,7 +1643,7 @@ public sealed partial class GameRoot : Node3D
             return !_board.Camera.IsPositionBehind(corner) && view.HasPoint(_board.Camera.UnprojectPosition(corner));
         }));
         bool ok = inside == cells.Length && cells.Length > 0 && _poseChangesAfterOpening == 0;
-        GD.Print($"[camera] 开局对准自检：出生平台 {cells.Length} 格，整格在画面内 {inside}；开局对准之后位姿变化 {_poseChangesAfterOpening} 次（对手行动时相机不得移动）；{(ok ? "通过" : "失败")}");
+        GD.Print($"[camera] 开局对准自检：出生平台 {cells.Length} 格，整格在画面内 {inside}；开局对准之后位姿变化 {_poseChangesAfterOpening} 次（无人值守下相机不得因对手行动移动）；{(ok ? "通过" : "失败")}");
         return ok;
     }
 
@@ -1636,6 +1703,7 @@ public sealed partial class GameRoot : Node3D
                 // 演出期间空格是提速（按住状态由 AdvanceShow 逐帧轮询），不回家；非演出期间仍是镜头回家。
                 if (!ShowPlaying)
                 {
+                    _follow.ManualInput(opponentActing: !_session.IsMyTurn);
                     FocusHome(opening: false);
                     _dirty = true;
                 }
@@ -1643,6 +1711,10 @@ public sealed partial class GameRoot : Node3D
             else if (action == InputBindings.CameraOverviewAction && @event.IsActionPressed(action))
             {
                 ToggleOverview();
+            }
+            else if (action == InputBindings.CameraFollowAction && @event.IsActionPressed(action))
+            {
+                ToggleFollow();
             }
 
             GetViewport().SetInputAsHandled();
@@ -1674,6 +1746,7 @@ public sealed partial class GameRoot : Node3D
         if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown } wheel)
         {
             bool wasOverview = _board.Rig.IsOverview;
+            _follow.ManualInput(opponentActing: !_session.IsMyTurn);
             _board.Rig.Zoom(wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1);
             ApplyCamera("缩放");
             _dirty |= wasOverview != _board.Rig.IsOverview;
