@@ -222,3 +222,13 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 负责人授权全部由实施方决定：棋盘图长局 / 封门裁决为 **A 接受长局**（设计文档 §3.3 与变更记录已写明理由：长度随格数线性；"被封"只是几何指标，保护期后全盘可落子）。音效音色 / 音量未实机试听，参数表 `ShowSounds.Table` 待负责人反馈后再调。
 - 当前无进行中的 change / Trellis 任务。
 - （10-03 续）`board-render-perf`：原方案前提错（以为开销在场景装饰；实测 72%–76% 的绘制调用来自可落子地砖的独立网格与材质）。两轮后 board:1 静止帧绘制调用 4097 → 792、n10 / n7 之比 1.635 → 1.179，14 张截图 0 像素差异；演出期间棋子增量重画。截图证据在 `sim-out/board-render-perf/`（不入库）。剩余大头是棋子（每枚若干独立网格与材质）与水面，未做。
+
+
+## Session: 2026-10-04 — map-elements-v2
+
+- `map-elements-v2`（地图元素全套精修与部件化）在 **Mac（Apple M3 / Metal）** 上做完并归档：提交 `e9a7ea1`（前置 + 段 A）、`9356632`（B）、`c5c464c`（C）、`6308c00`（D）、`40c6cc5`（E）。负责人先定"在本机做"，段 A 之后授权实施方全权决策；决策清单在 `art/map-elements-v2/README.md` 文末。
+- 做了什么：新增 `LowPolyMesh`（Builder：倒角板 / 分层侧面 / 多面岩块 / 方盒 / 棱台 / 多边形片 / 条带 / 折板，整数散列，顶点色当亮度系数）；部件目录 11 类 → 24 类、资源 79 件；地块、水系、桥与栅栏、障碍与点缀、外圈石沿、出生区亮条、台面边框、浮岛全部取部件，缺失时退回程序建模（`board:1` 两种来源 0 像素差）。
+- 读数（本机静止帧绘制调用）：v5 642 → 512、`board:1` 520 → 472、`board:1:n10` 466 → 444、`gen:12345:s1` 1317 → 728；`board:1` 合批与 `--no-batch` 0 像素差（改前因岩石的非均匀缩放相差 54042 像素）。
+- 环境：本机 Godot 4.7.2 .NET 装在 `~/Applications/godot-4.7.2-mono/`，构建 Godot 工程要 `-p:RestoreConfigFile=~/Applications/godot-4.7.2-mono/nuget.config`（仓库里的 `nuget.config` 是 Windows 路径，没动）。
+- 遗留：本机 `dotnet test` 11 条 Core / Sim 日志黄金哈希红（干净的 00a6747 上同样红，原因未查，疑与平台有关）——需在 Windows 机上确认本 change 之后全绿；五个实现提交加归档提交尚未推送。`LowPolyMesh.cs.uid` 已用无头编辑器生成并提交。
+- 当前无进行中的 change / Trellis 任务。
