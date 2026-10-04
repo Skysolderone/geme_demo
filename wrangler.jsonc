@@ -1,0 +1,10 @@
+// Cloudflare 上的发布页：把 docs/ 作为静态资源部署（Workers 静态资源，Cloudflare Pages 的后继方式）。
+// 部署：npx wrangler deploy     游戏包不在这里（单文件上限 25 MB），放在 GitHub Releases。
+{
+  "name": "siege",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./docs",
+    "not_found_handling": "404-page"
+  }
+}

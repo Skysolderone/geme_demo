@@ -233,3 +233,4 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 遗留：本机 `dotnet test` 11 条 Core / Sim 日志黄金哈希红（干净的 00a6747 上同样红，原因未查，疑与平台有关）——需在 Windows 机上确认本 change 之后全绿；五个实现提交加归档提交尚未推送。`LowPolyMesh.cs.uid` 已用无头编辑器生成并提交。
 - 当前无进行中的 change / Trellis 任务。
 - （10-04 续）发布网站与下载包：`docs/` 是 GitHub Pages 发布页（需在仓库 Settings → Pages 选 `main` / `/docs`），下载按钮指向 Releases 的固定文件名 `Siege-macos.zip` / `Siege-windows-x64.zip`；`tools/export-release.sh <版本>` 在 Mac 上导出两个包到 `build/`（不入库）。macOS 包本机验过能跑；Windows 包只验了结构。Release 由负责人在网页上手动建并上传。
+- （10-04 续 2）发布落地：网页改放 **Cloudflare**（Workers 静态资源，`wrangler.jsonc` 指向 `docs/`，`npx wrangler deploy` 即更新）→ https://siege.wws741.workers.dev ；GitHub Pages 没有开。Release `v0.1.0` 已用 `gh` 建好并上传两个包，网页下载按钮走 `releases/latest/download/…`。仓库主页链接已指向发布页。发新版流程：`tools/export-release.sh <版本>` → `gh release create v<版本> build/Siege-*.zip` → 改 `docs/index.html` 的版本号与更新记录 → `npx wrangler deploy`。
