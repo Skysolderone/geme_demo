@@ -140,12 +140,21 @@ public static class LowPolyMesh
     public sealed class Builder
     {
         private readonly SurfaceTool _tool = Begin();
+        private Transform3D _frame = Transform3D.Identity;
         private Transform3D _at = Transform3D.Identity;
+
+        /// <summary>整件部件的总变换（整体转向 / 镜像）：之后每次 <see cref="At(Transform3D)"/> 给的摆放都再套上它。</summary>
+        public Builder Within(Transform3D frame)
+        {
+            _frame = frame;
+            _at = frame;
+            return this;
+        }
 
         /// <summary>之后加入的形状都先经这个变换。</summary>
         public Builder At(Transform3D transform)
         {
-            _at = transform;
+            _at = _frame * transform;
             return this;
         }
 

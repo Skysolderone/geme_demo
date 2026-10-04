@@ -10,7 +10,7 @@ namespace Siege.Godot;
 /// 同色同粗糙度的材质合并成一份 <c>materials/*.tres</c>，各部件场景外部引用它（改一处材质，全部部件跟着变）；网格作为场景内子资源内嵌。
 /// 带顶点色亮度系数的材质（<see cref="Visuals.Shaded"/>）另存为 <c>shaded_*.tres</c>，文件名取还原后的底色；由棋盘覆盖材质的部件带的是中性白那一份。
 /// <see cref="LowPolyMesh"/> 建的网格内嵌进场景；导出时每件部件建两遍、逐项比对顶点数组，不一致即记为失败（确定性自检）。
-/// 变体只导出"看得出差别"的那几档（档数见 <see cref="TerrainParts"/>）：岩石 / 遗迹的朝向随 variant 连续变，取前 4 档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
+/// 每类部件导出 <see cref="TerrainParts"/> 里登记的全部档数。
 /// </remarks>
 public static class PartExport
 {

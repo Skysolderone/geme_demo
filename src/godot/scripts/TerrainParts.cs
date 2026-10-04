@@ -13,7 +13,7 @@ namespace Siege.Godot;
 /// 信息层压暗、出生区淡染、明暗棋盘格都只改那份材质的底色。</para>
 /// <para><b>单网格部件</b>（地块类）不逐格实例化场景：<see cref="ShapeOf"/> 把网格、局部变换与内置材质取出来缓存，棋盘逐格只建一个网格节点。</para>
 /// <para>资源是 <see cref="LowPoly"/> 的烘焙快照，也可以被美术替换成正式模型：只要文件名不变、原点仍在地砖上表面，棋盘就直接用新模型。</para>
-/// <para>代价：程序生成里连续变化的量（岩石 / 松树的朝向）在加载资源时只剩导出的那几档。</para>
+/// <para>各部件的造型只有目录里登记的那几档：程序建模按档数取模，与资源版是同一组造型。</para>
 /// <para>每条路径的 <see cref="PackedScene"/> 只加载一次并缓存；不存在的路径也记下，不重复探测。</para>
 /// </remarks>
 public static class TerrainParts
@@ -30,9 +30,9 @@ public static class TerrainParts
         public string FileName(int variant) => Variants == 1 ? $"{Name}.tscn" : $"{Name}_{((variant % Variants) + Variants) % Variants}.tscn";
     }
 
-    public static readonly Kind Rock = new("rock", 4, LowPoly.Rock);
-    public static readonly Kind Ruins = new("ruins", 4, LowPoly.Ruins);
-    public static readonly Kind Pines = new("pines", 7, LowPoly.Pines);
+    public static readonly Kind Rock = new("rock", 6, LowPoly.Rock);
+    public static readonly Kind Ruins = new("ruins", 6, LowPoly.Ruins);
+    public static readonly Kind Pines = new("pines", 8, LowPoly.Pines);
     public static readonly Kind Trees = new("trees", 3, LowPoly.Trees);
     public static readonly Kind Desert = new("desert", 6, LowPoly.Desert);
     public static readonly Kind Marsh = new("marsh", 6, LowPoly.Marsh);
@@ -84,12 +84,12 @@ public static class TerrainParts
         }
 
         GeneratedCount++;
-        return kind.Build(variant);
+        return kind.Build(((variant % kind.Variants) + kind.Variants) % kind.Variants);
     }
 
     /// <summary>
     /// 合批用的模板（board-render-perf D2）：该档资源的一份实例，<b>不计数</b>；没有资源时返回 <c>null</c>——
-    /// 程序生成的造型随 <paramref name="variant"/> 连续变化（朝向不按档数取模），归并不成有限几种，调用方应退回 <see cref="Create"/> 逐件画。
+    /// 没有资源就没有可复用的模板实例，调用方应退回 <see cref="Create"/> 逐件画（程序建模）。
     /// </summary>
     public static Node3D? Template(Kind kind, int variant) => SceneOf(kind, variant)?.Instantiate() as Node3D;
 
