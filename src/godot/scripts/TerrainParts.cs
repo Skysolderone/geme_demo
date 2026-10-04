@@ -53,12 +53,21 @@ public static class TerrainParts
     public static readonly Kind WaterBed = new("water_bed", 2, LowPoly.WaterBed, "水格的地砖上表面中心", Recolored: true);
     public static readonly Kind BankLip = new("bank_lip", 3, LowPoly.BankLip, "水格一条边的中点（地砖上表面高度），边沿 X 轴、水在 +Z 一侧");
 
+    // 外框与底座（段 D）。
+    public static readonly Kind Rim = new("rim", 3, LowPoly.Rim, "底座边缘一段的中点（底座顶面高度），段沿 X 轴、棋盘在 +Z 一侧");
+    public static readonly Kind ZoneStrip = new("zone_strip", 1, _ => LowPoly.ZoneStrip(), "格边中点（地砖上表面高度），条沿 Z 轴、格外在 +X 一侧", Recolored: true);
+    public static readonly Kind PlateFrame = new("plate_frame", 2, LowPoly.PlateFrame, "边框一段的中点（地砖上表面高度）；第 0 档是沿 X 轴的一段，第 1 档是角块", Recolored: true);
+    public static readonly Kind IslandLayer = new("island_layer", 3, LowPoly.IslandLayer, "岩层顶面中心（单位尺寸，由棋盘缩放）");
+    public static readonly Kind IslandSpike = new("island_spike", 4, LowPoly.IslandSpike, "垂岩高度中点（单位尺寸，由棋盘缩放）");
+    public static readonly Kind Cloud = new("cloud", 3, LowPoly.Cloud, "云心（单位尺寸，由棋盘缩放）");
+
     /// <summary>全部部件，导出顺序即此顺序。</summary>
     public static readonly Kind[] All =
     [
         Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge,
         TileTop, SideSlope, SideCliff, Liner, SceneSlab,
         WaterBed, BankLip,
+        Rim, ZoneStrip, PlateFrame, IslandLayer, IslandSpike, Cloud,
     ];
 
     /// <summary>单网格部件取出来的"形"：网格、网格节点在部件里的局部变换、部件自带的材质（覆盖材质的部件不用它）、是否来自资源。</summary>

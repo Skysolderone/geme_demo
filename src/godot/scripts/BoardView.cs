@@ -60,6 +60,7 @@ public sealed partial class BoardView : Node3D
     private readonly Dictionary<Color, StandardMaterial3D> _surfaceMaterials = [];
     private readonly Dictionary<Color, StandardMaterial3D> _linerMaterials = [];
     private readonly Dictionary<Color, StandardMaterial3D> _flatMaterials = [];
+    private readonly Dictionary<Color, StandardMaterial3D> _frameMaterials = [];
     private readonly Dictionary<Vector3, BoxMesh> _boxMeshes = [];
     private readonly Dictionary<Coord, int> _levels = [];
     private Node3D _decoration = null!;
@@ -123,6 +124,7 @@ public sealed partial class BoardView : Node3D
         _surfaceMaterials.Clear();
         _linerMaterials.Clear();
         _flatMaterials.Clear();
+        _frameMaterials.Clear();
         _boxMeshes.Clear();
         _levels.Clear();
         _partBatches.Clear();
@@ -141,6 +143,8 @@ public sealed partial class BoardView : Node3D
             MaterialOverride = Visuals.Matte(Visuals.IslandRim),
             Position = new Vector3(0f, BoardGeometry.TopY - WaterDrop - (BoardGeometry.TileHeight * 0.5f), 0f),
         });
+
+        AddRim(apron);
 
         _decoration = new Node3D { Name = "Decoration" };
         AddChild(_decoration);
@@ -278,16 +282,11 @@ public sealed partial class BoardView : Node3D
                         continue;
                     }
 
-                    // Coord 的 y 向上（北）对应世界 −Z。描边条贴在格内侧边缘、略高于面砖，不占落点。
-                    const float strip = 0.07f;
-                    float offset = (BoardGeometry.CellSize * 0.5f) - (strip * 0.5f);
-                    tiles.AddChild(new MeshInstance3D
-                    {
-                        Mesh = BoxOf(dx != 0 ? new Vector3(strip, 0.03f, BoardGeometry.CellSize) : new Vector3(BoardGeometry.CellSize, 0.03f, strip)),
-                        MaterialOverride = edge,
-                        Position = center + new Vector3(dx * offset, 0.015f, -dy * offset),
-                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                    });
+                    // Coord 的 y 向上（北）对应世界 −Z。亮条（部件 zone_strip）嵌在这条边的砖缝里：贴着地砖的倒角与立面走，不浮在面砖上、不占落点。
+                    // 部件的格外一侧是 +X：东边不转，北 / 西 / 南依次多转四分之一圈。
+                    int turns = dx == 1 ? 0 : dy == 1 ? 1 : dx == -1 ? 2 : 3;
+                    const float halfCell = BoardGeometry.CellSize * 0.5f;
+                    AddShape(tiles, TerrainParts.ZoneStrip, 0, new Transform3D(QuarterTurns[turns], center + new Vector3(dx * halfCell, 0f, -dy * halfCell)), edge, shadow: false);
                 }
             }
 
@@ -455,6 +454,35 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>
+    /// 外圈石沿（map-elements-v2 D5，部件 <c>rim</c>）：沿底座四边逐段摆一圈石板，压在底座顶面的最外 <see cref="LowPoly.RimDepth"/>。
+    /// 坐标标注在它里侧至少 0.65 处的 h=0 平面上，不受影响。每边的段数取边长的整数格数，各段沿边长方向略微拉伸到恰好铺满；
+    /// 东西两边让出两头的角（南北两边铺到角上），四角不重叠。
+    /// </summary>
+    private void AddRim(float apron)
+    {
+        var rim = new Node3D { Name = "Rim" };
+        AddChild(rim);
+        float spanX = (_width + apron) * BoardGeometry.CellSize;
+        float spanZ = (_height + apron) * BoardGeometry.CellSize;
+        float y = BoardGeometry.TopY - WaterDrop;
+        int piece = 0;
+        foreach ((int dx, int dy, int turns) in BankSides)
+        {
+            bool alongX = dx == 0;
+            float length = alongX ? spanX : spanZ - (2f * LowPoly.RimDepth);
+            int count = Math.Max(1, (int)MathF.Round(length));
+            float step = length / count;
+            for (int i = 0; i < count; i++)
+            {
+                float along = (-length * 0.5f) + ((i + 0.5f) * step);
+                Vector3 anchor = alongX ? new Vector3(along, y, -dy * spanZ * 0.5f) : new Vector3(dx * spanX * 0.5f, y, along);
+                int pick = (int)(LowPolyMesh.Hash(piece++, 977) & 0x7FFFFFFF);
+                AddShape(rim, TerrainParts.Rim, pick, new Transform3D(QuarterTurns[turns] * Basis.FromScale(new Vector3(step, 1f, 1f)), anchor), null);
+            }
+        }
+    }
+
+    /// <summary>
     /// 浮空岛（纯装饰，visual-style-baseline「悬浮于奇幻世界中的立体战争沙盘」）：底座之下逐层收窄的岩体与垂下的石笋、
     /// 岛下的云海、以及地图边缘深水格外侧垂落的瀑布。全部在底座平面之下或地图外接矩形之外，不进拾取、不遮挡任何格。
     /// 形状只由地图尺寸与格坐标决定，不用随机数——同一张图永远同一副样子。
@@ -467,32 +495,26 @@ public sealed partial class BoardView : Node3D
         float baseTop = BoardGeometry.TopY - WaterDrop - BoardGeometry.TileHeight;
         float spanX = (_width + apron) * BoardGeometry.CellSize;
         float spanZ = (_height + apron) * BoardGeometry.CellSize;
-        StandardMaterial3D earth = Visuals.Matte(Visuals.SlopeSide.Darkened(0.12f), 1f);
-        StandardMaterial3D rock = Visuals.Matte(Visuals.CliffSide.Darkened(0.10f), 1f);
-        StandardMaterial3D deepRock = Visuals.Matte(Visuals.CliffSide.Darkened(0.30f), 1f);
 
-        // 逐层收窄的岩体：一层土、两层岩，越往下越窄越暗。
-        (float Shrink, float Thickness, StandardMaterial3D Material)[] layers =
+        // 逐层收窄的岩体（部件 island_layer，单位尺寸按层缩放）：一层土、两层岩、两层深岩，越往下越窄越暗；各层转向不同。
+        (float Shrink, float Thickness, int Variant)[] layers =
         [
-            (0.985f, 0.9f, earth),
-            (0.90f, 1.6f, rock),
-            (0.72f, 2.2f, rock),
-            (0.48f, 2.6f, deepRock),
-            (0.22f, 2.4f, deepRock),
+            (0.985f, 0.9f, 0),
+            (0.90f, 1.6f, 1),
+            (0.72f, 2.2f, 1),
+            (0.48f, 2.6f, 2),
+            (0.22f, 2.4f, 2),
         ];
         float y = baseTop;
-        foreach ((float shrink, float thickness, StandardMaterial3D material) in layers)
+        for (int i = 0; i < layers.Length; i++)
         {
-            island.AddChild(new MeshInstance3D
-            {
-                Mesh = new BoxMesh { Size = new Vector3(spanX * shrink, thickness, spanZ * shrink) },
-                MaterialOverride = material,
-                Position = new Vector3(0f, y - (thickness * 0.5f), 0f),
-            });
+            (float shrink, float thickness, int layerVariant) = layers[i];
+            var scale = Basis.FromScale(new Vector3(spanX * shrink, thickness, spanZ * shrink));
+            AddShape(island, TerrainParts.IslandLayer, layerVariant, new Transform3D(scale * QuarterTurns[i & 3], new Vector3(0f, y, 0f)), null);
             y -= thickness;
         }
 
-        // 沿底座四边垂下的石笋：位置与长短按序号散列。
+        // 沿底座四边垂下的垂岩（部件 island_spike，单位尺寸按长短缩放）：位置与长短按序号散列。
         int count = Math.Max(10, (_width + _height) / 2);
         for (int i = 0; i < count; i++)
         {
@@ -504,30 +526,19 @@ public sealed partial class BoardView : Node3D
             var at = alongX
                 ? new Vector3(t * spanX * 0.92f, baseTop - 0.9f - (length * 0.5f), side * spanZ * 0.46f)
                 : new Vector3(side * spanX * 0.46f, baseTop - 0.9f - (length * 0.5f), t * spanZ * 0.92f);
-            island.AddChild(new MeshInstance3D
-            {
-                Mesh = new CylinderMesh { TopRadius = 0.55f + (length * 0.12f), BottomRadius = 0.02f, Height = length, RadialSegments = 5, Rings = 0 },
-                MaterialOverride = (i % 3) == 0 ? deepRock : rock,
-                Position = at,
-                RotationDegrees = new Vector3(0f, i * 37f, 0f),
-            });
+            float radius = 0.55f + (length * 0.12f);
+            AddShape(island, TerrainParts.IslandSpike, i, new Transform3D(QuarterTurns[(i >> 2) & 3] * Basis.FromScale(new Vector3(radius, length, radius)), at), null);
         }
 
-        // 云海：岛下与四周的几团扁平白云（不投影、不受光）。
-        StandardMaterial3D cloud = Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f));
+        // 云海：岛下与四周的几团扁平白云（部件 cloud，不投影、不受光）。
         float reach = Math.Max(spanX, spanZ);
         for (int i = 0; i < 26; i++)
         {
             float angle = i * 2.399963f;
             float radius = reach * (0.50f + (0.42f * ((i * 7) % 5) / 4f));
             float size = reach * (0.07f + (0.03f * (i % 3)));
-            island.AddChild(new MeshInstance3D
-            {
-                Mesh = new SphereMesh { Radius = size, Height = size * 0.55f, RadialSegments = 8, Rings = 3 },
-                MaterialOverride = cloud,
-                Position = new Vector3(MathF.Cos(angle) * radius, baseTop - 5.5f - (i % 4 * 1.1f), MathF.Sin(angle) * radius * 0.9f),
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            });
+            var at = new Vector3(MathF.Cos(angle) * radius, baseTop - 5.5f - (i % 4 * 1.1f), MathF.Sin(angle) * radius * 0.9f);
+            AddShape(island, TerrainParts.Cloud, i, new Transform3D(QuarterTurns[i & 3] * Basis.FromScale(Vector3.One * size * 0.62f), at), null, shadow: false);
         }
 
         // 瀑布：贴着地图边缘的深水格，沿外侧垂下一道水帘，落到云海里。
@@ -634,7 +645,11 @@ public sealed partial class BoardView : Node3D
     /// 摆一件单网格部件：锚点放到 <paramref name="anchor"/>，绕 Y 转 <paramref name="turns"/> 个四分之一圈（地块类部件四向对称，转了仍占同一块地方）。
     /// <paramref name="material"/> 为 <c>null</c> 时用部件自带的材质。
     /// </summary>
-    private static void AddShape(Node3D parent, TerrainParts.Kind kind, int variant, int turns, Vector3 anchor, Material? material)
+    private static void AddShape(Node3D parent, TerrainParts.Kind kind, int variant, int turns, Vector3 anchor, Material? material) =>
+        AddShape(parent, kind, variant, new Transform3D(QuarterTurns[turns & 3], anchor), material);
+
+    /// <summary>同上，摆放直接给变换（带缩放的部件：外圈石沿按边长拉伸、浮岛岩层按地图大小缩放）。<paramref name="shadow"/> 为假时不投影。</summary>
+    private static void AddShape(Node3D parent, TerrainParts.Kind kind, int variant, Transform3D placement, Material? material, bool shadow = true)
     {
         TerrainParts.Shape shape = TerrainParts.ShapeOf(kind, variant);
         TerrainParts.CountPlaced(shape);
@@ -642,7 +657,8 @@ public sealed partial class BoardView : Node3D
         {
             Mesh = shape.Mesh,
             MaterialOverride = material ?? shape.Material,
-            Transform = new Transform3D(QuarterTurns[turns & 3], anchor) * shape.Local,
+            Transform = placement * shape.Local,
+            CastShadow = shadow ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
         });
     }
 
@@ -671,7 +687,19 @@ public sealed partial class BoardView : Node3D
         return material;
     }
 
-    /// <summary>某颜色的不受光材质（出生区描边条、棋盘边框）：同色共用一份。只给搭建后不再改色的地形件用。</summary>
+    /// <summary>某颜色的台面边框材质（受光，带顶点色亮度系数）：同色共用一份。搭建后不再改色。</summary>
+    private StandardMaterial3D FrameOf(Color color)
+    {
+        if (!_frameMaterials.TryGetValue(color, out StandardMaterial3D? material))
+        {
+            material = Visuals.Shaded(color);
+            _frameMaterials[color] = material;
+        }
+
+        return material;
+    }
+
+    /// <summary>某颜色的不受光材质（出生区亮条、台面格线）：同色共用一份。只给搭建后不再改色的地形件用。</summary>
     private StandardMaterial3D FlatOf(Color color)
     {
         if (!_flatMaterials.TryGetValue(color, out StandardMaterial3D? material))
@@ -937,8 +965,6 @@ public sealed partial class BoardView : Node3D
         const float half = BoardGeometry.CellSize * 0.5f;
         const float lineWidth = 0.035f;
         const float lineHeight = 0.006f;
-        const float frameWidth = 0.14f;
-        const float frameHeight = 0.07f;
         StandardMaterial3D ink = Visuals.Flat(Visuals.BoardGridLine);
 
         foreach (BoardPlate plate in plates)
@@ -966,18 +992,32 @@ public sealed partial class BoardView : Node3D
                 root.AddChild(Strip(new Vector3(maxX - minX, lineHeight, lineWidth), new Vector3(midX, top + (lineHeight * 0.5f), (near.Z + far.Z) * 0.5f), ink));
             }
 
-            // 边框：骑在外接矩形的外缘上，四角补齐。
+            // 边框（部件 plate_frame）：骑在外接矩形的外缘上，每格一段、四角各一块；凸起 0.05，不遮挡边缘格。
             Color color = plate.Kind == BoardPlateKind.Birth && zoneOf.TryGetValue(plate.Origin, out int zone)
                 ? zoneColorOf(zone)
                 : Visuals.PublicBoardFrame;
-            StandardMaterial3D frame = FlatOf(color);
-            float y = top + (frameHeight * 0.5f);
-            float spanX = maxX - minX + frameWidth;
-            float spanZ = maxZ - minZ + frameWidth;
-            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, minZ), frame));
-            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, maxZ), frame));
-            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ), frame));
-            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ), frame));
+            StandardMaterial3D frame = FrameOf(color);
+            for (int column = 0; column < plate.Width; column++)
+            {
+                float x = BoardGeometry.Center(new Coord(plate.Origin.X + column, plate.Origin.Y), _width, _height, level).X;
+                AddShape(root, TerrainParts.PlateFrame, 0, new Transform3D(Basis.Identity, new Vector3(x, top, minZ)), frame, shadow: false);
+                AddShape(root, TerrainParts.PlateFrame, 0, new Transform3D(Basis.Identity, new Vector3(x, top, maxZ)), frame, shadow: false);
+            }
+
+            for (int row = 0; row < plate.Height; row++)
+            {
+                float z = BoardGeometry.Center(new Coord(plate.Origin.X, plate.Origin.Y + row), _width, _height, level).Z;
+                AddShape(root, TerrainParts.PlateFrame, 0, new Transform3D(QuarterTurns[1], new Vector3(minX, top, z)), frame, shadow: false);
+                AddShape(root, TerrainParts.PlateFrame, 0, new Transform3D(QuarterTurns[1], new Vector3(maxX, top, z)), frame, shadow: false);
+            }
+
+            foreach (float x in new[] { minX, maxX })
+            {
+                foreach (float z in new[] { minZ, maxZ })
+                {
+                    AddShape(root, TerrainParts.PlateFrame, 1, new Transform3D(Basis.Identity, new Vector3(x, top, z)), frame, shadow: false);
+                }
+            }
         }
 
         MeshInstance3D Strip(Vector3 size, Vector3 position, StandardMaterial3D material) => new()

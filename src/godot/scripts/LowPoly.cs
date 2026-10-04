@@ -708,7 +708,113 @@ public static class LowPoly
         return Part("BankLip", (mesh.Commit(), Visuals.Shaded(Visuals.Pebble, 1f)));
     }
 
+    // ---------- 外框与底座（map-elements-v2 段 D） ----------
+
+    /// <summary>外圈石沿占底座边缘的宽度与高出底座的高度。坐标标注离底座边缘至少 0.95，石沿压不到它。</summary>
+    public const float RimDepth = 0.30f;
+
+    /// <summary>
+    /// 外圈石沿（一段一件）：沿底座边缘排开的三四块倒角石板，压在底座顶面上、高出 0.08。
+    /// 原点在这一段的中点、底座顶面高度；段沿 X 轴（长 1），棋盘在 +Z 一侧。
+    /// </summary>
+    public static Node3D Rim(int variant)
+    {
+        var mesh = new LowPolyMesh.Builder();
+        int seed = 601 + variant;
+        int stones = 3 + (variant % 2);
+        float cursor = -0.5f;
+        for (int i = 0; i < stones; i++)
+        {
+            float next = i == stones - 1 ? 0.5f : -0.5f + ((i + 1f + (0.25f * LowPolyMesh.Signed(seed, i))) / stones);
+            float top = 0.08f - (0.03f * LowPolyMesh.Unit(seed, 16 + i));
+            float depth = RimDepth * (0.82f + (0.18f * LowPolyMesh.Unit(seed, 32 + i)));
+            mesh.At(new Vector3((cursor + next) * 0.5f, top, depth * 0.5f));
+            mesh.Slab(new Vector3(next - cursor - 0.02f, top + 0.01f, depth), 0.025f, 1f + (0.06f * LowPolyMesh.Signed(seed, 48 + i)), seed + i, 0.03f);
+            cursor = next;
+        }
+
+        return Part("Rim", (mesh.Commit(), Visuals.Shaded(Visuals.IslandRim.Lightened(0.22f), 1f)));
+    }
+
+    /// <summary>
+    /// 出生区嵌入亮条（一条边一件）：贴着地砖边缘的倒角与立面走、再铺到格边的一张折板——嵌在砖缝里，不浮在地砖上。
+    /// 原点在格边中点、地砖上表面高度；条沿 Z 轴（长一格），格外在 +X 一侧。材质由棋盘覆盖为归属色（不受光）。
+    /// </summary>
+    public static Node3D ZoneStrip()
+    {
+        const float gap = (BoardGeometry.CellSize - BoardGeometry.TileSize) * 0.5f;
+        Vector2[] profile =
+        [
+            new(-gap - TileBevel - 0.012f, 0.004f),
+            new(-gap - TileBevel, 0.004f),
+            new(-gap + 0.003f, -TileBevel + 0.003f),
+            new(-gap + 0.003f, -BoardGeometry.TileHeight + LinerHeight + 0.004f),
+            new(0f, -BoardGeometry.TileHeight + LinerHeight + 0.004f),
+        ];
+        return Part("ZoneStrip", (new LowPolyMesh.Builder().Sheet(profile, BoardGeometry.CellSize).Commit(), Visuals.Flat(Colors.White)));
+    }
+
+    /// <summary>棋盘台面边框的宽度与凸起高度（visual-style-baseline：凸起不超过 0.05，不遮挡边缘格）。</summary>
+    public const float FrameWidth = 0.14f;
+
+    public const float FrameHeight = 0.05f;
+
+    /// <summary>
+    /// 棋盘台面边框（一段一件）：第 0 档是骑在棋盘外缘上的一段倒角条（沿 X 轴、长一格），第 1 档是四角的方块。
+    /// 原点在这一段的中点、地砖上表面高度。材质由棋盘覆盖为边框色。
+    /// </summary>
+    public static Node3D PlateFrame(int variant) => Single(
+        "PlateFrame",
+        LowPolyMesh.BeveledSlab(new Vector3(variant == 0 ? BoardGeometry.CellSize : FrameWidth, FrameHeight, FrameWidth), 0.018f),
+        Visuals.Shaded(Colors.White),
+        new Vector3(0f, FrameHeight, 0f));
+
+    /// <summary>
+    /// 浮岛岩层（单位尺寸，棋盘按地图大小缩放）：分层的岩块，顶边一圈岩沿。第 0 档土色、第 1 档岩灰、第 2 档深岩。原点在顶面中心。
+    /// </summary>
+    public static Node3D IslandLayer(int variant)
+    {
+        Color color = variant switch
+        {
+            0 => Visuals.SlopeSide.Darkened(0.12f),
+            1 => Visuals.CliffSide.Darkened(0.10f),
+            _ => Visuals.CliffSide.Darkened(0.30f),
+        };
+        return Single("IslandLayer", LowPolyMesh.Strata(Vector3.One, bands: 3, jitter: 0.012f, seed: 701 + variant, ledge: true), Visuals.Shaded(color, 1f));
+    }
+
+    /// <summary>
+    /// 浮岛垂岩（单位尺寸：顶面半径 1、高 1，尖朝下；棋盘按长短缩放）：一根主锥，后两档旁边多一根小锥。前后各两档分别是岩灰与深岩。原点在高度中点。
+    /// </summary>
+    public static Node3D IslandSpike(int variant)
+    {
+        int seed = 721 + variant;
+        var mesh = new LowPolyMesh.Builder();
+        mesh.At(Vector3.Zero, new Vector3(0f, variant * 31f, 0f)).Cone(0.03f, 1f, 1f, 6, 1f, seed, 0.08f);
+        if (variant >= 2)
+        {
+            mesh.At(new Vector3(0.75f, 0.2f, 0.3f), new Vector3(0f, variant * 17f, 0f)).Cone(0.02f, 0.5f, 0.6f, 5, 0.94f, seed + 9, 0.08f);
+        }
+
+        return Part("IslandSpike", (mesh.Commit(), Visuals.Shaded(Visuals.CliffSide.Darkened(variant % 2 == 0 ? 0.10f : 0.30f), 1f)));
+    }
+
+    /// <summary>云团（单位尺寸，棋盘按大小缩放）：三团压扁的多面体叠成一朵，不受光、半透明。原点在云心。</summary>
+    public static Node3D Cloud(int variant)
+    {
+        int seed = 741 + variant;
+        var flat = new Vector3(1f, 0.28f, 1f);
+        var mesh = new LowPolyMesh.Builder();
+        mesh.At(Vector3.Zero, new Vector3(0f, variant * 40f, 0f), flat).Rock(1f, 8, 0.10f, seed);
+        mesh.At(new Vector3(0.85f, 0.03f, 0.25f + (0.1f * variant)), default, flat).Rock(0.62f, 7, 0.12f, seed + 30);
+        mesh.At(new Vector3(-0.75f, -0.02f, -0.30f + (0.12f * variant)), default, flat).Rock(0.55f, 7, 0.12f, seed + 60);
+        return Part("Cloud", (mesh.Commit(), Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f))));
+    }
+
     // ---------- 地块部件（map-elements-v2 段 A）：单网格，由 BoardView 取网格逐格摆放 ----------
+
+    /// <summary>地砖顶板倒角的收进量与下沉量。</summary>
+    public const float TileBevel = 0.045f;
 
     /// <summary>砖缝衬底的厚度。</summary>
     public const float LinerHeight = 0.03f;
@@ -719,7 +825,7 @@ public static class LowPoly
     /// </summary>
     public static Node3D TileTop(int variant) => Single(
         "TileTop",
-        LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize), 0.045f, seed: 11 + variant, facet: 0.035f),
+        LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize), TileBevel, seed: 11 + variant, facet: 0.035f),
         Visuals.Shaded(Colors.White));
 
     /// <summary>第 1 层侧面（缓坡）：铺满整格、高一层的土色块，三条土层。原点在这层带的顶面中心。</summary>

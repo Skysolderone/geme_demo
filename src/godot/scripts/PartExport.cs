@@ -8,7 +8,7 @@ namespace Siege.Godot;
 /// </summary>
 /// <remarks>
 /// 同色同粗糙度的材质合并成一份 <c>materials/*.tres</c>，各部件场景外部引用它（改一处材质，全部部件跟着变）；网格作为场景内子资源内嵌。
-/// 带顶点色亮度系数的材质（<see cref="Visuals.Shaded"/>）另存为 <c>shaded_*.tres</c>，文件名取还原后的底色；由棋盘覆盖材质的部件带的是中性白那一份。
+/// 带顶点色亮度系数的材质（<see cref="Visuals.Shaded"/>）另存为 <c>shaded_*.tres</c>，文件名取还原后的底色；不受光的材质存为 <c>flat_*.tres</c>；由棋盘覆盖材质的部件带的是中性白那一份。
 /// <see cref="LowPolyMesh"/> 建的网格内嵌进场景；导出时每件部件建两遍、逐项比对顶点数组，不一致即记为失败（确定性自检）。
 /// 每类部件导出 <see cref="TerrainParts"/> 里登记的全部档数。
 /// </remarks>
@@ -76,9 +76,11 @@ public static class PartExport
             if (child is MeshInstance3D { MaterialOverride: StandardMaterial3D m } mesh)
             {
                 // 带顶点色亮度系数的材质底色里含增益，起名用还原后的底色；与同色的普通哑光材质分开存。
-                string key = m.VertexColorUseAsAlbedo
-                    ? $"shaded_{LowPolyMesh.BaseOf(m.AlbedoColor).ToHtml(false)}_r{m.Roughness * 100f:0}"
-                    : $"matte_{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}";
+                string key = m.ShadingMode == BaseMaterial3D.ShadingModeEnum.Unshaded
+                    ? $"flat_{m.AlbedoColor.ToHtml(true)}"
+                    : m.VertexColorUseAsAlbedo
+                        ? $"shaded_{LowPolyMesh.BaseOf(m.AlbedoColor).ToHtml(false)}_r{m.Roughness * 100f:0}"
+                        : $"matte_{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}";
                 if (!materials.TryGetValue(key, out StandardMaterial3D? shared))
                 {
                     shared = m;

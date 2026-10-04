@@ -1,0 +1,20 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/flat_ffffffff.tres" id="1_pow71"]
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_goeta"]
+_surfaces = [{
+"aabb": AABB(-0.107000016, -0.085999995, -0.5, 0.107000016, 0.089999996, 1),
+"attribute_data": PackedByteArray("6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 24,
+"vertex_data": PackedByteArray("0yLbvW8SgzsAAAC/Xo/CvW8SgzsAAAC/Xo/CvW8SgzsAAAA/0yLbvW8SgzsAAAC/Xo/CvW8SgzsAAAA/0yLbvW8SgzsAAAA/Xo/CvW8SgzsAAAC/FoNAvTIILL0AAAC/FoNAvTIILL0AAAA/Xo/CvW8SgzsAAAC/FoNAvTIILL0AAAA/Xo/CvW8SgzsAAAA/FoNAvTIILL0AAAC/FoNAvcQgsL0AAAC/FoNAvcQgsL0AAAA/FoNAvTIILL0AAAC/FoNAvcQgsL0AAAA/FoNAvTIILL0AAAA/FoNAvcQgsL0AAAC/AAAAAMQgsL0AAAC/AAAAAMQgsL0AAAA/FoNAvcQgsL0AAAC/AAAAAMQgsL0AAAA/FoNAvcQgsL0AAAA//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/or5bwYBTUdWivlvBgFNR1aK+W8GAU1HVor5bwYBTUdWivlvBgFNR1aK+W8GAU1HV////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/")
+}]
+
+[node name="ZoneStrip" type="Node3D" unique_id=244156894]
+
+[node name="@MeshInstance3D@216" type="MeshInstance3D" parent="." unique_id=324397284]
+material_override = ExtResource("1_pow71")
+mesh = SubResource("ArrayMesh_goeta")

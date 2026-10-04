@@ -1,0 +1,21 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/shaded_ffffff_r90.tres" id="1_f2b6m"]
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_xq05o"]
+_surfaces = [{
+"aabb": AABB(-0.07, -0.05, -0.07, 0.14, 0.05, 0.14),
+"attribute_data": PackedByteArray("6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 54,
+"vertex_data": PackedByteArray("9P1UvQAAAAD0/VS99P1UPQAAAAD0/VS99P1UPQAAAAD0/VQ99P1UvQAAAAD0/VS99P1UPQAAAAD0/VQ99P1UvQAAAAD0/VQ99P1UPQAAAAD0/VS9KVyPPbx0k7wpXI899P1UPQAAAAD0/VQ99P1UPQAAAAD0/VS9KVyPPbx0k7wpXI+9KVyPPbx0k7wpXI89KVyPPbx0k7wpXI+9KVyPPc3MTL0pXI89KVyPPbx0k7wpXI89KVyPPbx0k7wpXI+9KVyPPc3MTL0pXI+9KVyPPc3MTL0pXI899P1UvQAAAAD0/VS99P1UvQAAAAD0/VQ9KVyPvbx0k7wpXI899P1UvQAAAAD0/VS9KVyPvbx0k7wpXI89KVyPvbx0k7wpXI+9KVyPvbx0k7wpXI+9KVyPvbx0k7wpXI89KVyPvc3MTL0pXI89KVyPvbx0k7wpXI+9KVyPvc3MTL0pXI89KVyPvc3MTL0pXI+99P1UvQAAAAD0/VQ99P1UPQAAAAD0/VQ9KVyPPbx0k7wpXI899P1UvQAAAAD0/VQ9KVyPPbx0k7wpXI89KVyPvbx0k7wpXI89KVyPvbx0k7wpXI89KVyPPbx0k7wpXI89KVyPPc3MTL0pXI89KVyPvbx0k7wpXI89KVyPPc3MTL0pXI89KVyPvc3MTL0pXI899P1UvQAAAAD0/VS9KVyPPbx0k7wpXI+99P1UPQAAAAD0/VS99P1UvQAAAAD0/VS9KVyPvbx0k7wpXI+9KVyPPbx0k7wpXI+9KVyPvbx0k7wpXI+9KVyPPc3MTL0pXI+9KVyPPbx0k7wpXI+9KVyPvbx0k7wpXI+9KVyPvc3MTL0pXI+9KVyPPc3MTL0pXI+9/3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//7//v1RVVNX/v/+/VFVU1f+//79UVVTV/7//v1RVVNX/v/+/VFVU1f+//79UVVTV////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//z//v1RVqar/P/+/VFWpqv8//79UVamq/z//v1RVqar/P/+/VFWpqv8//79UVamqAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//3//v1RVqar/f/+/VFWpqv9//79UVamq/3//v1RVqar/f/+/VFWpqv9//79UVamq/3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA/7///6oqVJX/v///qipUlf+///+qKlSV/7///6oqVJX/v///qipUlf+///+qKlSV//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
+}]
+
+[node name="PlateFrame1" type="Node3D" unique_id=1470819148]
+
+[node name="@MeshInstance3D@220" type="MeshInstance3D" parent="." unique_id=813194982]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+material_override = ExtResource("1_f2b6m")
+mesh = SubResource("ArrayMesh_xq05o")

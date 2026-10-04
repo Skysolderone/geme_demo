@@ -145,3 +145,18 @@ dotnet test tests/Siege.Core.Tests -v q                                         
 | 3.2 | 形状约束与灰度可辨 | 沼泽无锥形树冠；岩台石沿 0.03；浅滩点缀顶 0.03（鹅卵石压扁到 0.03 以内）；灰度图见 `stage-c/` |
 
 绘制调用：v5 533、`board:1` 497、`board:1:n10` 468、`gen:12345:s1` 750（改前 642 / 520 / 466 / 1317）。`--pick-check` 三张图通过；测试失败集合与本机基线相同。
+
+### 段 D——外框与底座（2026-10-04）
+
+改动：`LowPoly` 新增 `Rim` / `ZoneStrip` / `PlateFrame` / `IslandLayer` / `IslandSpike` / `Cloud`；`BoardView` 新增 `AddRim`，出生区亮条、台面边框、浮岛岩层 / 垂岩 / 云团改为取部件（`AddShape` 加带变换与不投影的重载）；
+`PartExport` 支持不受光材质（`flat_*.tres`）。实施修正 F-13 – F-16。
+
+| tasks | 验证项 | 结果 |
+|---|---|---|
+| 4.1 | v5 单字母列标字形、位置不变 | 与改前逐像素比对：底边列标带 34040 像素 0 差异；差异图上棋盘与石沿之间整圈无变化（`stage-d/v5-diff-vs-before.png`） |
+| 4.1 | 45 列棋盘图双字母列标不相接 | `stage-d/board1-overview.png` / `board1-labels.png` |
+| 4.2 | 出生 / 公共可分；边缘格棋子底座完整；v5 无台面边框 | `stage-d/board1-board0.png`、`board1-board0-f60.png`、`v5.png` |
+| 4.3 | 全局预览 | `stage-d/board1-overview.png`（v5 一屏看全，`--overview` 不动相机） |
+
+绘制调用：v5 512、`board:1` 472、`board:1:n10` 444、`gen:12345:s1` 728。`--pick-check` 三张图通过；测试失败集合与本机基线相同。
+说明：底座之下的岩层与垂岩在 60° 俯角的对局相机与全局预览下都被底座挡住，改前改后都看不到；截图只能验证云团与外圈石沿。
