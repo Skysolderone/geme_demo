@@ -49,11 +49,16 @@ public static class TerrainParts
     public static readonly Kind Liner = new("liner", 1, _ => LowPoly.Liner(), "衬底中心", Recolored: true);
     public static readonly Kind SceneSlab = new("scene_slab", 1, _ => LowPoly.SceneSlab(), Recolored: true);
 
+    // 水系（段 B）。
+    public static readonly Kind WaterBed = new("water_bed", 2, LowPoly.WaterBed, "水格的地砖上表面中心", Recolored: true);
+    public static readonly Kind BankLip = new("bank_lip", 3, LowPoly.BankLip, "水格一条边的中点（地砖上表面高度），边沿 X 轴、水在 +Z 一侧");
+
     /// <summary>全部部件，导出顺序即此顺序。</summary>
     public static readonly Kind[] All =
     [
         Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge,
         TileTop, SideSlope, SideCliff, Liner, SceneSlab,
+        WaterBed, BankLip,
     ];
 
     /// <summary>单网格部件取出来的"形"：网格、网格节点在部件里的局部变换、部件自带的材质（覆盖材质的部件不用它）、是否来自资源。</summary>

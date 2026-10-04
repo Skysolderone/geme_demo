@@ -565,58 +565,132 @@ public static class LowPoly
     }
 
     /// <summary>
-    /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
+    /// 一段栅栏（terrain-model 边属性；map-elements-v2 段 B 重建）：三根带柱帽的立柱 + 两道略下垂的横杆，沿一格边长立起，厚度只有 0.05，
     /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
-    /// 返回节点原点在缝中心、地砖上表面。
+    /// 外形不超出改前的包围盒（长 0.96、厚 0.05、高 0.30）。整件一个网格、一份木色材质，明暗靠亮度系数。返回节点原点在缝中心、地砖上表面。
     /// </summary>
     public static Node3D Fence(bool alongX)
     {
-        var root = new Node3D { Name = "Fence" };
-        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
-        float length = BoardGeometry.TileSize + 0.06f;
+        var mesh = new LowPolyMesh.Builder();
+        Transform3D frame = alongX ? Transform3D.Identity : new Transform3D(new Basis(Vector3.Up, Mathf.Pi * 0.5f), Vector3.Zero);
+        void At(Vector3 position, float tiltDegrees = 0f) =>
+            mesh.At(frame * new Transform3D(new Basis(Vector3.Back, Mathf.DegToRad(tiltDegrees)), position));
+
+        const float post = 0.40f;
         for (int i = -1; i <= 1; i++)
         {
-            float offset = i * 0.40f;
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.05f, 0.30f, 0.05f) }, timber,
-                alongX ? new Vector3(offset, 0.15f, 0f) : new Vector3(0f, 0.15f, offset)));
+            At(new Vector3(i * post, 0.135f, 0f));
+            mesh.Box(new Vector3(0.042f, 0.27f, 0.042f), 0.97f + (0.04f * i));
+            At(new Vector3(i * post, 0.285f, 0f));
+            mesh.Box(new Vector3(0.05f, 0.03f, 0.05f), 1.09f);
         }
 
-        foreach (float y in new[] { 0.11f, 0.23f })
+        // 横杆：每一跨分成两段，中点比两端低一点（略下垂）；两端各探出一小截。
+        const float sag = 0.014f;
+        float tilt = Mathf.RadToDeg(Mathf.Atan2(sag, post * 0.5f));
+        foreach (float y in new[] { 0.11f, 0.225f })
         {
-            root.AddChild(Mesh(new BoxMesh { Size = alongX ? new Vector3(length, 0.035f, 0.03f) : new Vector3(0.03f, 0.035f, length) }, timber,
-                new Vector3(0f, y, 0f)));
-        }
-
-        return root;
-    }
-
-    /// <summary>
-    /// 预置桥（terrain-model 设施）：一块木板面 + 四根角柱，铺在深水格上，面与同层地砖齐平——桥格是普通可落子格，
-    /// 棋子与标记照常放在面上。角柱只有 0.07 见方，不遮挡落点。返回节点原点在桥面（地砖上表面）。
-    /// </summary>
-    public static Node3D Bridge()
-    {
-        var root = new Node3D { Name = "Bridge" };
-        StandardMaterial3D deck = Visuals.Matte(Visuals.BridgeDeck, 1f);
-        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
-        const float half = BoardGeometry.TileSize * 0.5f;
-        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.06f, BoardGeometry.TileSize) }, deck, new Vector3(0f, -0.03f, 0f)));
-
-        // 板缝：三条深色细槽，让桥面在缩略图里也读得出"木板"。
-        for (int i = -1; i <= 1; i++)
-        {
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.004f, 0.02f) }, timber, new Vector3(0f, 0.002f, i * 0.28f)));
-        }
-
-        foreach (float sx in new[] { -half + 0.05f, half - 0.05f })
-        {
-            foreach (float sz in new[] { -half + 0.05f, half - 0.05f })
+            for (int span = -1; span <= 0; span++)
             {
-                root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.07f, 0.16f, 0.07f) }, timber, new Vector3(sx, 0.05f, sz)));
+                float left = span * post;
+                At(new Vector3(left + (post * 0.25f), y - (sag * 0.5f), 0f), -tilt);
+                mesh.Box(new Vector3(post * 0.5f, 0.032f, 0.028f), 0.93f);
+                At(new Vector3(left + (post * 0.75f), y - (sag * 0.5f), 0f), tilt);
+                mesh.Box(new Vector3(post * 0.5f, 0.032f, 0.028f), 0.93f);
+            }
+
+            foreach (int end in new[] { -1, 1 })
+            {
+                At(new Vector3(end * (post + 0.04f), y, 0f));
+                mesh.Box(new Vector3(0.08f, 0.032f, 0.028f), 0.93f);
             }
         }
 
-        return root;
+        return Part("Fence", (mesh.Commit(), Visuals.Shaded(Visuals.Timber, 1f)));
+    }
+
+    /// <summary>
+    /// 预置桥（terrain-model 设施；map-elements-v2 段 B 重建）：六块带缝的桥板 + 两侧低栏杆 + 板下纵梁与四根桥墩，铺在深水格上，
+    /// 桥面与同层地砖齐平——桥格是普通可落子格，棋子与标记照常放在面上。栏杆贴在两侧边缘（棋子底座之外）、高 0.125，不遮挡落点。
+    /// 通行方向沿 X 轴（桥板横铺、栏杆在 ±Z 两侧）；棋盘按两头接的是哪两格把它转到位。
+    /// 水面以上的外形不超出改前的包围盒（0.9 见方、高 0.13）；桥墩在桥面之下探进水里。返回节点原点在桥面（地砖上表面）。
+    /// </summary>
+    public static Node3D Bridge()
+    {
+        const float half = BoardGeometry.TileSize * 0.5f;
+        var deck = new LowPolyMesh.Builder();
+        const int planks = 6;
+        float pitch = BoardGeometry.TileSize / planks;
+        for (int i = 0; i < planks; i++)
+        {
+            // 桥板之间留 0.014 的缝，露出下面的纵梁；各板亮度略有出入。
+            deck.At(new Vector3(-half + ((i + 0.5f) * pitch), -0.022f, 0f));
+            deck.Box(new Vector3(pitch - 0.014f, 0.044f, BoardGeometry.TileSize - 0.05f), 1f + (0.06f * LowPolyMesh.Signed(91, i)));
+        }
+
+        var timber = new LowPolyMesh.Builder();
+        foreach (float z in new[] { -0.28f, 0.28f })
+        {
+            timber.At(new Vector3(0f, -0.062f, z));
+            timber.Box(new Vector3(BoardGeometry.TileSize, 0.036f, 0.07f), 0.82f);
+        }
+
+        foreach (float z in new[] { -half + 0.03f, half - 0.03f })
+        {
+            // 栏杆：两端立柱 + 一道扶手。
+            foreach (float x in new[] { -half + 0.04f, half - 0.04f })
+            {
+                timber.At(new Vector3(x, 0.035f, z));
+                timber.Box(new Vector3(0.06f, 0.16f, 0.06f), 1f);
+                timber.At(new Vector3(x * 0.78f, -0.115f, z * 0.86f));
+                timber.Box(new Vector3(0.07f, 0.11f, 0.07f), 0.78f);
+            }
+
+            timber.At(new Vector3(0f, 0.105f, z));
+            timber.Box(new Vector3(BoardGeometry.TileSize - 0.06f, 0.035f, 0.035f), 1.05f);
+            timber.At(new Vector3(0f, 0.045f, z));
+            timber.Box(new Vector3(BoardGeometry.TileSize - 0.14f, 0.022f, 0.022f), 0.92f);
+        }
+
+        return Part("Bridge", (deck.Commit(), Visuals.Shaded(Visuals.BridgeDeck, 1f)), (timber.Commit(), Visuals.Shaded(Visuals.Timber, 1f)));
+    }
+
+    // ---------- 水系（map-elements-v2 段 B） ----------
+
+    /// <summary>
+    /// 河床（深水格的水体）：铺满整格的一块，顶面分成几个亮度略有出入的小面（水深浅的变化）。水是不透明的，所以河床就是看得见的那片水色；
+    /// 流纹层照旧盖在上面。原点在水格的地砖上表面中心，水面比它低 <see cref="BoardView.WaterDrop"/>（留 0.008 防止与底座共面闪烁）。材质由棋盘覆盖为全图共用的水色。
+    /// </summary>
+    public static Node3D WaterBed(int variant) => Single(
+        "WaterBed",
+        LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize), 0f, seed: 71 + variant, facet: 0.03f),
+        Visuals.Shaded(Colors.White, 0.55f),
+        new Vector3(0f, -BoardView.WaterDrop + 0.008f, 0f));
+
+    /// <summary>河岸石沿占水格边缘的宽度（design O-2：一格宽的河两侧各让出这么多，水面仍宽 0.88）。</summary>
+    public const float BankLipDepth = 0.06f;
+
+    /// <summary>
+    /// 河岸石沿（一条边一件）：沿水格的一条边排开的四五块小石，只占水格边缘 <see cref="BankLipDepth"/>，顶面在水面之上、地砖上表面之下。
+    /// 原点在这条边的中点、地砖上表面高度；边沿 X 轴，水在 +Z 一侧。
+    /// </summary>
+    public static Node3D BankLip(int variant)
+    {
+        var mesh = new LowPolyMesh.Builder();
+        int seed = 101 + variant;
+        int stones = 4 + (variant % 2);
+        float cursor = -0.5f;
+        for (int i = 0; i < stones; i++)
+        {
+            float next = i == stones - 1 ? 0.5f : -0.5f + ((i + 1f + (0.28f * LowPolyMesh.Signed(seed, i))) / stones);
+            float top = -0.028f - (0.022f * LowPolyMesh.Unit(seed, 16 + i));
+            float depth = BankLipDepth * (0.8f + (0.2f * LowPolyMesh.Unit(seed, 32 + i)));
+            mesh.At(new Vector3((cursor + next) * 0.5f, top, depth * 0.5f));
+            mesh.Slab(new Vector3(next - cursor - 0.012f, BoardView.WaterDrop + top + 0.02f, depth), 0.012f, 1f + (0.07f * LowPolyMesh.Signed(seed, 48 + i)));
+            cursor = next;
+        }
+
+        return Part("BankLip", (mesh.Commit(), Visuals.Shaded(Visuals.Pebble, 1f)));
     }
 
     // ---------- 地块部件（map-elements-v2 段 A）：单网格，由 BoardView 取网格逐格摆放 ----------
@@ -662,6 +736,18 @@ public static class LowPoly
     {
         var root = new Node3D { Name = name };
         root.AddChild(Mesh(mesh, material, position));
+        return root;
+    }
+
+    /// <summary>多网格部件：根下一层，每个网格一个节点（各带一份材质），都在原点、不带变换——摆放已烘进顶点。</summary>
+    private static Node3D Part(string name, params (Mesh Mesh, Material Material)[] meshes)
+    {
+        var root = new Node3D { Name = name };
+        foreach ((Mesh mesh, Material material) in meshes)
+        {
+            root.AddChild(Mesh(mesh, material, Vector3.Zero));
+        }
+
         return root;
     }
 

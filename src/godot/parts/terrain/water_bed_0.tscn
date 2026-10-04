@@ -1,0 +1,21 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/shaded_ffffff_r55.tres" id="1_vj6f8"]
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_ucdwo"]
+_surfaces = [{
+"aabb": AABB(-0.5, -0.12, -0.5, 1, 0.12, 1),
+"attribute_data": PackedByteArray("6enp/+np6f/p6en/7Ozs/+zs7P/s7Oz/6enp/+np6f/p6en/5+fn/+fn5//n5+f/7u7u/+7u7v/u7u7/6urq/+rq6v/q6ur/7Ozs/+zs7P/s7Oz/6Ojo/+jo6P/o6Oj/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 48,
+"vertex_data": PackedByteArray("BMpYvQAAAADqt6Y8AAAAvwAAAAAAAAC/RqqBPQAAAAAAAAC/BMpYvQAAAADqt6Y8RqqBPQAAAAAAAAC/AAAAPwAAAAAAAAC/BMpYvQAAAADqt6Y8AAAAPwAAAAAAAAC/AAAAPwAAAACOENG8BMpYvQAAAADqt6Y8AAAAPwAAAACOENG8AAAAPwAAAAAAAAA/BMpYvQAAAADqt6Y8AAAAPwAAAAAAAAA/KsAUvgAAAAAAAAA/BMpYvQAAAADqt6Y8KsAUvgAAAAAAAAA/AAAAvwAAAAAAAAA/BMpYvQAAAADqt6Y8AAAAvwAAAAAAAAA/AAAAvwAAAACcvRs+BMpYvQAAAADqt6Y8AAAAvwAAAACcvRs+AAAAvwAAAAAAAAC/AAAAPwAAAAAAAAC/AAAAP4/C9b0AAAA/AAAAPwAAAAAAAAA/AAAAPwAAAAAAAAC/AAAAP4/C9b0AAAC/AAAAP4/C9b0AAAA/AAAAvwAAAAAAAAC/AAAAvwAAAAAAAAA/AAAAv4/C9b0AAAA/AAAAvwAAAAAAAAC/AAAAv4/C9b0AAAA/AAAAv4/C9b0AAAC/AAAAvwAAAAAAAAA/AAAAPwAAAAAAAAA/AAAAP4/C9b0AAAA/AAAAvwAAAAAAAAA/AAAAP4/C9b0AAAA/AAAAv4/C9b0AAAA/AAAAvwAAAAAAAAC/AAAAP4/C9b0AAAC/AAAAPwAAAAAAAAC/AAAAvwAAAAAAAAC/AAAAv4/C9b0AAAC/AAAAP4/C9b0AAAC//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
+}]
+
+[node name="WaterBed0" type="Node3D" unique_id=1363257370]
+
+[node name="@MeshInstance3D@672" type="MeshInstance3D" parent="." unique_id=2135276589]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.092, 0)
+material_override = ExtResource("1_vj6f8")
+mesh = SubResource("ArrayMesh_ucdwo")

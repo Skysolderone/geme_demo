@@ -1,0 +1,24 @@
+Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org
+Metal 4.0 - Forward+ - Using Device #0: Apple - Apple M3 (Apple9)
+
+[parts] 本次搭建地形部件：资源 529 件、程序生成 0 件（res://parts/terrain）
+[batch] 障碍装饰合批 36 格：变体 13 种、子网格 86 个归入 MultiMesh 57 个、实例 253 个；未合批（逐格各建节点）0 格；场景面砖 0 格、MultiMesh 0 个
+[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 14 份、衬底材质 14 份、描边 / 边框材质 1 份、盒网格 2 份
+[siege] 地图 surfaces-demo，对局种子 20260915，你是 红方(P0)，AI 难度 标准（Standard，前瞻宽度 0），AI 评价权重 EvaluationWeights { PowerGain = 10, EnemyLoss = 8, Relic = 6, Safety = 35, Growth = 4, Initiative = 20, Supply = 2, Eye = 200, Threat = 25 }，自动演示模式（跑满 4 个大回合停止）
+[parts] 本次搭建地形部件：资源 529 件、程序生成 0 件（res://parts/terrain）
+[batch] 障碍装饰合批 36 格：变体 13 种、子网格 86 个归入 MultiMesh 57 个、实例 253 个；未合批（逐格各建节点）0 格；场景面砖 0 格、MultiMesh 0 个
+[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 20 份、衬底材质 20 份、描边 / 边框材质 4 份、盒网格 2 份
+[camera] 第 1 帧（截图对准格）注视点 (0, -0)，距离 11.133
+[forbidden-marks] 截图取景：当前行动 金方(P2)（非本机玩家），单子禁手 0 格（自杀手 0 / 同形 0 / 破坏活形 0）；全局预览 关，对准 G7，地图 13×13，末列列标 N（字号 96）
+[forbidden-marks] 底边列标：画面内 0 个
+[life-shape] 截图取景：当前行动 金方(P2)，禁入格 0，已活棋串 0，棋串读法 关
+[siege] 截图 /private/tmp/claude-501/-Users-rubioc-game-demo/7e1ee93e-3a5a-4ce2-99be-45ae1e24f24b/scratchpad/b/surfaces-demo-near-G7.png：Ok（1600×900，第 1 帧，第 1 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+[siege] 势力栏：红方(P0) 势力 0（领地 0 + 棋串 0）；蓝方(P1) 势力 0（领地 0 + 棋串 0）；金方(P2) 势力 0（领地 0 + 棋串 0）；紫方(P3) 势力 0（领地 0 + 棋串 0）
+[siege] 独占格 0（）
+[siege] 势力排名面板 左 1266 右 1586 / 视口宽 1600：完整可见
+[siege] 棋子：
+[siege] 本局改造 0 处：
+[carry] 补给面板 关，结算面板 关；补给 —；档案存取 无（不读写档案）
+[siege] 落成反馈：无
+[show] 截图时演出：无（遮罩为空，画面即结算后快照）
+[perf] 帧率 1，单帧处理 0.0 ms，绘制调用 725，对象 1715，图元 61371；相机注视点 (0, -0) 距离 11.133

@@ -187,6 +187,10 @@ public sealed partial class BoardView : Node3D
             return !hole;
         }
 
+        // 按坐标查格子（视图模型里的格子，只读地表 / 桥——渲染用，不是规则）：河岸石沿与桥的朝向要看邻格。
+        Dictionary<Coord, BoardCellView> cellAt = board.Cells.ToDictionary(c => c.Coord);
+        StandardMaterial3D? waterMaterial = null;
+
         int variant = 0;
         StandardMaterial3D? slabMaterial = null;
         List<Vector3> slabTops = [];
@@ -210,12 +214,23 @@ public sealed partial class BoardView : Node3D
             {
                 // 深水：水面低于同层地砖，不可落子；架桥后桥面与地砖齐平、可落子。
                 Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
-                Color water = Visuals.DeepWater;
-                _tileMaterials.Add((AddWater(tiles, waterCenter, water), water, false));
+                if (waterMaterial is null)
+                {
+                    // 全图水格共用一份水色材质（map-elements-v2 D4），登记进压暗表一次。
+                    waterMaterial = Visuals.Shaded(Visuals.DeepWater, 0.55f);
+                    _tileMaterials.Add((waterMaterial, Visuals.DeepWater, true));
+                }
+
+                AddWater(tiles, waterCenter, cell, cellAt, waterMaterial);
                 if (cell.HasBridge)
                 {
+                    // 桥沿通行方向摆：两头接的是东西两格就沿 X（部件的缺省朝向），是南北两格就转四分之一圈。
+                    bool Walkable(int dx, int dy) =>
+                        CellAt(cellAt, cell.Coord.X + dx, cell.Coord.Y + dy) is { } next && (next.Surface != Surface.DeepWater || next.HasBridge);
+                    int alongX = (Walkable(1, 0) ? 1 : 0) + (Walkable(-1, 0) ? 1 : 0);
+                    int alongZ = (Walkable(0, 1) ? 1 : 0) + (Walkable(0, -1) ? 1 : 0);
                     Node3D bridge = TerrainParts.Create(TerrainParts.Bridge);
-                    bridge.Position = waterCenter;
+                    bridge.Transform = new Transform3D(QuarterTurns[alongZ > alongX ? 1 : 0], waterCenter);
                     tiles.AddChild(bridge);
                 }
 
@@ -975,34 +990,50 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>深水面低于同层地砖上表面的距离：够让相邻地砖露出一段侧面，读得出"沟"。</summary>
-    private const float WaterDrop = 0.10f;
+    internal const float WaterDrop = 0.10f;
 
-    /// <summary>深水格：比同层地砖低 <see cref="WaterDrop"/> 的蓝色水面 + 两道浅色波纹（装饰，贴在水面上）。返回水面材质以便信息层降饱和。</summary>
+    /// <summary>某坐标上的格子（视图模型）；盘外为 <c>null</c>——<see cref="Coord"/> 不接受负坐标，先判界再构造。</summary>
+    private static BoardCellView? CellAt(Dictionary<Coord, BoardCellView> cellAt, int x, int y) =>
+        x >= 0 && y >= 0 && cellAt.TryGetValue(new Coord(x, y), out BoardCellView? cell) ? cell : null;
+
     private static readonly PlaneMesh FlowPlane = new() { Size = new Vector2(BoardGeometry.CellSize, BoardGeometry.CellSize), Orientation = PlaneMesh.OrientationEnum.Y };
 
-    private static StandardMaterial3D AddWater(Node3D parent, Vector3 top, Color color)
+    // 河岸石沿的朝向：部件的边沿 X 轴、岸在 −Z 一侧；(dx, dy) 是从水格指向岸的方向（Coord 的 y 向北 = 世界 −Z）。
+    private static readonly (int Dx, int Dy, int Turns)[] BankSides = [(0, 1, 0), (-1, 0, 1), (0, -1, 2), (1, 0, 3)];
+
+    /// <summary>
+    /// 深水格（map-elements-v2 D4）：河床 <c>water_bed</c>（比同层地砖低 <see cref="WaterDrop"/> 的水色块，铺满整格——相邻水格连成一条河）、
+    /// 贴在水面上的流纹层（不变）、以及每条挨着岸的边上一件河岸石沿 <c>bank_lip</c>。
+    /// "这条边挨着的是不是水"读的是视图模型里邻格的地表；地图边缘的边也算岸，除非那里是河道出口（挂瀑布的地方，判据与瀑布相同）。
+    /// </summary>
+    private void AddWater(Node3D parent, Vector3 top, BoardCellView cell, Dictionary<Coord, BoardCellView> cellAt, StandardMaterial3D water)
     {
-        StandardMaterial3D material = Visuals.Matte(color, 0.55f);
-        const float drop = WaterDrop;
-        parent.AddChild(new MeshInstance3D
-        {
-            // 水体铺满整格：相邻水格连成一片，河才读作"一条在流的河"而不是一格格水池。
-            Mesh = new BoxMesh { Size = new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize) },
-            MaterialOverride = material,
-            // 水面比底座顶面高出一丝：两者原本同高，会 z-fight，大片水格闪成底座的颜色。
-            Position = top - new Vector3(0f, drop - 0.008f + (BoardGeometry.TileHeight * 0.5f), 0f),
-        });
+        int pick = (int)(LowPolyMesh.Hash(cell.Coord.X, cell.Coord.Y) & 0x7FFFFFFF);
+        AddShape(parent, TerrainParts.WaterBed, pick, pick >> 4, top, water);
 
         // 流动层：全图共用一份按世界坐标画波纹的材质，相邻格的纹路自然接上（Visuals.WaterFlow）。
         parent.AddChild(new MeshInstance3D
         {
             Mesh = FlowPlane,
             MaterialOverride = Visuals.WaterFlow,
-            Position = top + new Vector3(0f, -drop + 0.012f, 0f),
+            Position = top + new Vector3(0f, -WaterDrop + 0.012f, 0f),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
 
-        return material;
+        foreach ((int dx, int dy, int turns) in BankSides)
+        {
+            bool IsWater(int x, int y) => CellAt(cellAt, x, y) is { Surface: Surface.DeepWater };
+            int nx = cell.Coord.X + dx, ny = cell.Coord.Y + dy;
+            bool outside = nx < 0 || ny < 0 || nx >= _width || ny >= _height;
+            bool fallExit = outside && !cell.HasBridge && IsWater(cell.Coord.X - dx, cell.Coord.Y - dy);
+            if (IsWater(nx, ny) || fallExit)
+            {
+                continue;
+            }
+
+            float halfCell = BoardGeometry.CellSize * 0.5f;
+            AddShape(parent, TerrainParts.BankLip, pick + turns, turns, top + new Vector3(dx * halfCell, 0f, -dy * halfCell), null);
+        }
     }
 
     /// <summary>栅栏沿两格的公共边立起：放在两格格心的中点（即缝上）、取两格中较高一层的地砖面。</summary>
