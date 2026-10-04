@@ -8,6 +8,8 @@ namespace Siege.Godot;
 /// </summary>
 /// <remarks>
 /// 同色同粗糙度的材质合并成一份 <c>materials/*.tres</c>，各部件场景外部引用它（改一处材质，全部部件跟着变）；网格作为场景内子资源内嵌。
+/// 带顶点色亮度系数的材质（<see cref="Visuals.Shaded"/>）另存为 <c>shaded_*.tres</c>，文件名取还原后的底色；由棋盘覆盖材质的部件带的是中性白那一份。
+/// <see cref="LowPolyMesh"/> 建的网格内嵌进场景；导出时每件部件建两遍、逐项比对顶点数组，不一致即记为失败（确定性自检）。
 /// 变体只导出"看得出差别"的那几档（档数见 <see cref="TerrainParts"/>）：岩石 / 遗迹的朝向随 variant 连续变，取前 4 档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
 /// </remarks>
 public static class PartExport
@@ -21,16 +23,30 @@ public static class PartExport
 
         // 部件清单与变体档数只在 TerrainParts 一处（棋盘加载资源用的也是这张表）。导出一律走程序生成，不读已有资源——资源是它的快照。
         var parts = new List<(string Name, Node3D Node)>();
+        int failures = 0;
         foreach (TerrainParts.Kind kind in TerrainParts.All)
         {
+            int triangles = 0;
             for (int v = 0; v < kind.Variants; v++)
             {
-                parts.Add((Path.GetFileNameWithoutExtension(kind.FileName(v)), kind.Build(v)));
+                string name = Path.GetFileNameWithoutExtension(kind.FileName(v));
+                Node3D node = kind.Build(v);
+                Node3D again = kind.Build(v);
+                if (!SameMeshes(node, again))
+                {
+                    GD.PrintErr($"[export-parts] {name} 两次建模的顶点数组不一致（建模里用了不确定的量）");
+                    failures++;
+                }
+
+                again.Free();
+                triangles = Math.Max(triangles, TrianglesOf(node));
+                parts.Add((name, node));
             }
+
+            GD.Print($"[export-parts] {kind.Name} ×{kind.Variants}：锚点 {kind.Anchor}，材质{(kind.Recolored ? "由棋盘覆盖（中性白）" : "内置")}，单件最多 {triangles} 个三角形");
         }
 
         var materials = new Dictionary<string, StandardMaterial3D>();
-        int failures = 0;
         foreach ((string name, Node3D node) in parts)
         {
             node.Name = ToPascal(name);
@@ -59,11 +75,14 @@ public static class PartExport
             child.Owner = root;
             if (child is MeshInstance3D { MaterialOverride: StandardMaterial3D m } mesh)
             {
-                string key = $"{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}";
+                // 带顶点色亮度系数的材质底色里含增益，起名用还原后的底色；与同色的普通哑光材质分开存。
+                string key = m.VertexColorUseAsAlbedo
+                    ? $"shaded_{LowPolyMesh.BaseOf(m.AlbedoColor).ToHtml(false)}_r{m.Roughness * 100f:0}"
+                    : $"matte_{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}";
                 if (!materials.TryGetValue(key, out StandardMaterial3D? shared))
                 {
                     shared = m;
-                    string path = $"{materialDir}/matte_{key}.tres";
+                    string path = $"{materialDir}/{key}.tres";
                     Error saved = ResourceSaver.Save(shared, path);
                     if (saved != Error.Ok)
                     {
@@ -80,6 +99,43 @@ public static class PartExport
 
             ShareMaterials(root, child, materials, materialDir, ref failures);
         }
+    }
+
+    private static IEnumerable<MeshInstance3D> MeshNodes(Node node) =>
+        node.GetChildren().SelectMany(child => (child is MeshInstance3D mesh ? new[] { mesh } : []).Concat(MeshNodes(child)));
+
+    private static int TrianglesOf(Node3D part) => MeshNodes(part).Sum(m => m.Mesh?.GetFaces().Length / 3 ?? 0);
+
+    /// <summary>两件部件的各个网格是否逐项相同：变换相同，且每个表面的顶点、法线、顶点色数组逐项相等。</summary>
+    private static bool SameMeshes(Node3D a, Node3D b)
+    {
+        MeshInstance3D[] left = [.. MeshNodes(a)], right = [.. MeshNodes(b)];
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < left.Length; i++)
+        {
+            Mesh? x = left[i].Mesh, y = right[i].Mesh;
+            if (left[i].Transform != right[i].Transform || x is null || y is null || x.GetSurfaceCount() != y.GetSurfaceCount())
+            {
+                return false;
+            }
+
+            for (int surface = 0; surface < x.GetSurfaceCount(); surface++)
+            {
+                global::Godot.Collections.Array p = x.SurfaceGetArrays(surface), q = y.SurfaceGetArrays(surface);
+                if (!p[(int)Mesh.ArrayType.Vertex].AsVector3Array().SequenceEqual(q[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+                    || !p[(int)Mesh.ArrayType.Normal].AsVector3Array().SequenceEqual(q[(int)Mesh.ArrayType.Normal].AsVector3Array())
+                    || !p[(int)Mesh.ArrayType.Color].AsColorArray().SequenceEqual(q[(int)Mesh.ArrayType.Color].AsColorArray()))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private static string ToPascal(string name) =>

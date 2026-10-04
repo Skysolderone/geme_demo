@@ -1,0 +1,20 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/shaded_ffffff_r90.tres" id="1_66e7y"]
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_xsyhd"]
+_surfaces = [{
+"aabb": AABB(-0.45, -0.12, -0.45, 0.9, 0.12, 0.9),
+"attribute_data": PackedByteArray("6urq/+rq6v/q6ur/5eXl/+Xl5f/l5eX/7e3t/+3t7f/t7e3/6enp/+np6f/p6en/6Ojo/+jo6P/o6Oj/5eXl/+Xl5f/l5eX/4ODg/+Dg4P/g4OD/5OTk/+Tk5P/k5OT/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/9PT0//T09P/09PT/9PT0//T09P/09PT/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 72,
+"vertex_data": PackedByteArray("McBLOwAAAABDMe89KFzPvgAAAAAoXM++DVC0PQAAAAAoXM++McBLOwAAAABDMe89DVC0PQAAAAAoXM++KFzPPgAAAAAoXM++McBLOwAAAABDMe89KFzPPgAAAAAoXM++KFzPPgAAAADE0+w9McBLOwAAAABDMe89KFzPPgAAAADE0+w9KFzPPgAAAAAoXM8+McBLOwAAAABDMe89KFzPPgAAAAAoXM8+Ob2/vQAAAAAoXM8+McBLOwAAAABDMe89Ob2/vQAAAAAoXM8+KFzPvgAAAAAoXM8+McBLOwAAAABDMe89KFzPvgAAAAAoXM8+KFzPvgAAAADCH568McBLOwAAAABDMe89KFzPvgAAAADCH568KFzPvgAAAAAoXM++KFzPPgAAAAAoXM++ZmbmPuxROL1mZuY+KFzPPgAAAAAoXM8+KFzPPgAAAAAoXM++ZmbmPuxROL1mZua+ZmbmPuxROL1mZuY+ZmbmPuxROL1mZua+ZmbmPo/C9b1mZuY+ZmbmPuxROL1mZuY+ZmbmPuxROL1mZua+ZmbmPo/C9b1mZua+ZmbmPo/C9b1mZuY+KFzPvgAAAAAoXM++KFzPvgAAAAAoXM8+ZmbmvuxROL1mZuY+KFzPvgAAAAAoXM++ZmbmvuxROL1mZuY+ZmbmvuxROL1mZua+ZmbmvuxROL1mZua+ZmbmvuxROL1mZuY+Zmbmvo/C9b1mZuY+ZmbmvuxROL1mZua+Zmbmvo/C9b1mZuY+Zmbmvo/C9b1mZua+KFzPvgAAAAAoXM8+KFzPPgAAAAAoXM8+ZmbmPuxROL1mZuY+KFzPvgAAAAAoXM8+ZmbmPuxROL1mZuY+ZmbmvuxROL1mZuY+ZmbmvuxROL1mZuY+ZmbmPuxROL1mZuY+ZmbmPo/C9b1mZuY+ZmbmvuxROL1mZuY+ZmbmPo/C9b1mZuY+Zmbmvo/C9b1mZuY+KFzPvgAAAAAoXM++ZmbmPuxROL1mZua+KFzPPgAAAAAoXM++KFzPvgAAAAAoXM++ZmbmvuxROL1mZua+ZmbmPuxROL1mZua+ZmbmvuxROL1mZua+ZmbmPo/C9b1mZua+ZmbmPuxROL1mZua+ZmbmvuxROL1mZua+Zmbmvo/C9b1mZua+ZmbmPo/C9b1mZua+/3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//7//v1RVVNX/v/+/VFVU1f+//79UVVTV/7//v1RVVNX/v/+/VFVU1f+//79UVVTV////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//z//v1RVqqr/P/+/VFWqqv8//79UVaqq/z//v1RVqqr/P/+/VFWqqv8//79UVaqqAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//3//v1RVqqr/f/+/VFWqqv9//79UVaqq/3//v1RVqqr/f/+/VFWqqv9//79UVaqq/3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA/7///6oqVJX/v///qipUlf+///+qKlSV/7///6oqVJX/v///qipUlf+///+qKlSV//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
+}]
+
+[node name="TileTop0" type="Node3D" unique_id=1337237690]
+
+[node name="@MeshInstance3D@680" type="MeshInstance3D" parent="." unique_id=222744158]
+material_override = ExtResource("1_66e7y")
+mesh = SubResource("ArrayMesh_xsyhd")

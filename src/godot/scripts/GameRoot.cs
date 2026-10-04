@@ -76,10 +76,12 @@ public sealed partial class GameRoot : Node3D
     private int? _shotBoard;
     private bool _shotGroups;
     private bool _shotOwnership;
+    private bool _noBatch;
     private double _perfSampleSeconds;
     private bool _shotRecruitCollapsed;
     private bool _shotForbidden;
     private Coord? _shotCell;
+    private int _shotZoom;
 
     /// <summary>
     /// 本局 AI 难度（expert-lookahead D10）：<c>--difficulty=&lt;名称&gt;</c> 或选图界面的难度选择，缺省标准。
@@ -124,6 +126,9 @@ public sealed partial class GameRoot : Node3D
             // --shot-ownership：截图时打开盘面层的归属读法（board-render-perf 2.3：验证地砖归并后信息层着色与压暗不变，仅截图用）。
             _shotOwnership = args.Flag("shot-ownership");
 
+            // --no-batch：障碍装饰与场景铺面不合批，逐格各建节点（map-elements-v2 0.2，仅调试用）：与缺省的合批画法各取一张定帧图，核对「合批不改画面」。
+            _noBatch = args.Flag("no-batch");
+
             // --perf-sample=<秒>：取图之后画面保持冻结再跑这么多秒，打印这段时间的稳态帧率与渲染读数后退出（board-render-perf 2.3，仅窗口模式取图路径）。
             // 既有 [perf] 行在取图那一刻打印，帧率 / 单帧处理是引擎"最近一秒"的读数，启动后不久取图时含搭建帧；这里量的是同一幅静止画面的稳态。
             _perfSampleSeconds = args.Value<double>("perf-sample", "正数（取图后冻结采样的秒数）", t => double.TryParse(t, System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0d ? v : null) ?? 0d;
@@ -140,6 +145,9 @@ public sealed partial class GameRoot : Node3D
 
             // --shot-cell=<记法坐标>：截图前把相机注视点移到该格（缩放不变；仅截图用，如截底边的列标）。须与 --screenshot= 同用。
             string? shotCell = args.Text("shot-cell", "围棋记法坐标（如 AB1）");
+
+            // --shot-zoom=<档数>：截图前把相机拉近这么多档（与滚轮同一入口；map-elements-v2 1.4：给负责人看地块造型的近景，仅截图用）。须与 --shot-cell= 同用。
+            _shotZoom = args.Value<int>("shot-zoom", "正整数（截图前拉近的滚轮档数）", t => int.TryParse(t, out int v) && v > 0 ? v : null) ?? 0;
 
             // --shot-show=placement|capture|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
             // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、power = 势力重算、banner = 横幅），
@@ -200,6 +208,11 @@ public sealed partial class GameRoot : Node3D
                 {
                     throw new System.FormatException("--shot-show= 须与 --auto-demo 和 --screenshot= 同用，且不与 --shot-recruit-collapsed / --shot-forbidden 同用。");
                 }
+            }
+
+            if (_shotZoom > 0 && shotCell is null)
+            {
+                throw new System.FormatException("--shot-zoom= 须与 --shot-cell= 同用。");
             }
 
             if (shotCell is not null)
@@ -302,7 +315,7 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        _board = new BoardView { Name = "Board" };
+        _board = new BoardView { Name = "Board", NoBatch = _noBatch };
         AddChild(_board);
         _board.Build(_session.World.Board(), _session.ZoneOwners);
 
@@ -681,6 +694,7 @@ public sealed partial class GameRoot : Node3D
 
             SyncAspect();
             (float x, float z) = _board.PlaneCenterOf(cell);
+            _board.Rig.Zoom(_shotZoom);
             _board.Rig.Set(new CameraPose(x, z, _board.Rig.Pose.Distance));
             ApplyCamera("截图对准格");
         }

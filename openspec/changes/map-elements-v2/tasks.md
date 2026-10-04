@@ -1,18 +1,18 @@
 ## 0. 前置
 
-- [ ] 0.1 改前基线：窗口模式下对 `siege-4p-base-v5`、`board:1`、`board:1:n10`、`gen:12345:s1` 各取一张定帧截图和一组 `[perf]` 读数（绘制调用数、单帧耗时），存到 `art/map-elements-v2/before/`，数字写进实现记录。验证：4 张图和 4 组读数齐全。
+- [x] 0.1 改前基线：窗口模式下对 `siege-4p-base-v5`、`board:1`、`board:1:n10`、`gen:12345:s1` 各取一张定帧截图和一组 `[perf]` 读数（绘制调用数、单帧耗时），存到 `art/map-elements-v2/before/`，数字写进实现记录。验证：4 张图和 4 组读数齐全。
 - [ ] 0.2 `--no-batch` 调试开关：打开后障碍与场景铺面改为逐格建节点。验证：在 `board:1` 上开与不开各截一张定帧图，逐像素相同（规格「合批不改画面」）；严格 CLI 认这个选项。
 
 ## 1. 段 A——建模工具与地块
 
-- [ ] 1.1 `LowPolyMesh`：`BeveledSlab` / `Strata` / `FacetRock` / `Prism` / `Ribbon`，用整数散列做抖动和色差。验证：同一 seed 构建两次网格，顶点数组逐项相同；`LowPoly.Prism` 改为调用它之后，棋子画面不变（对比 `--piece-gallery` 输出逐像素相同）。
-- [ ] 1.2 部件目录扩展：`Kind` 加锚点说明；新增 `tile_top`（3 档）、`side_slope`（2）、`side_cliff`（3）、`liner`、`scene_slab`；需要覆盖材质的部件导出时带中性白材质。验证：`--export-parts` 导出成功，日志列出新增部件。
-- [ ] 1.3 `AddTileStack` / `AddSceneSlabs` 改为取部件（design D3），材质覆盖为按底色共用的那一份，顶点色当亮度系数用。验证：
+- [x] 1.1 `LowPolyMesh`：`BeveledSlab` / `Strata` / `FacetRock` / `Prism` / `Ribbon`，用整数散列做抖动和色差。验证：同一 seed 构建两次网格，顶点数组逐项相同；`LowPoly.Prism` 改为调用它之后，棋子画面不变（对比 `--piece-gallery` 输出逐像素相同）。
+- [x] 1.2 部件目录扩展：`Kind` 加锚点说明；新增 `tile_top`（3 档）、`side_slope`（2）、`side_cliff`（3）、`liner`、`scene_slab`；需要覆盖材质的部件导出时带中性白材质。验证：`--export-parts` 导出成功，日志列出新增部件。
+- [x] 1.3 `AddTileStack` / `AddSceneSlabs` 改为取部件（design D3），材质覆盖为按底色共用的那一份，顶点色当亮度系数用。验证：
   - 搭建日志：资源数 = 全部、程序建模 = 0；
   - 信息层打开时地砖照常压暗（截图）；
   - 出生区淡染和明暗棋盘格照常；
   - `--pick-check` 在 v5、`gen:12345:s1`、`board:1` 上通过。
-- [ ] 1.4 段 A 截图：v5 近景（缓坡与崖壁同屏）、七种地表同屏的演示图（`art/surfaces-v1/surfaces-demo.json`）彩色和灰度，放进 `art/map-elements-v2/`。验证：负责人确认地块方向，确认后才进入段 B。
+- [x] 1.4 段 A 截图：v5 近景（缓坡与崖壁同屏）、七种地表同屏的演示图（`art/surfaces-v1/surfaces-demo.json`）彩色和灰度，放进 `art/map-elements-v2/`。验证：负责人确认地块方向，确认后才进入段 B。
 
 ## 2. 段 B——水系与设施
 

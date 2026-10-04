@@ -619,62 +619,53 @@ public static class LowPoly
         return root;
     }
 
+    // ---------- 地块部件（map-elements-v2 段 A）：单网格，由 BoardView 取网格逐格摆放 ----------
+
+    /// <summary>砖缝衬底的厚度。</summary>
+    public const float LinerHeight = 0.03f;
+
     /// <summary>
-    /// 程序化直棱柱（低多边形硬边）：<paramref name="profile"/> 是 XY 平面上的凸多边形，沿 Z 轴居中拉伸 <paramref name="depth"/>。
-    /// 每个面按"朝外"方向定绕序与法线，不依赖输入多边形的顺逆时针。
+    /// 地砖顶板（七种地表共用）：0.9 见方、厚 <see cref="BoardGeometry.TileHeight"/>，顶面四边倒角，顶面分成几个带亮度细差的小面。
+    /// 原点在地砖上表面中心。材质是中性白，棋盘按底色换成共用的那一份。
     /// </summary>
-    private static ArrayMesh Prism(Vector2[] profile, float depth)
+    public static Node3D TileTop(int variant) => Single(
+        "TileTop",
+        LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize), 0.045f, seed: 11 + variant, facet: 0.035f),
+        Visuals.Shaded(Colors.White));
+
+    /// <summary>第 1 层侧面（缓坡）：铺满整格、高一层的土色块，三条土层。原点在这层带的顶面中心。</summary>
+    public static Node3D SideSlope(int variant) => Single(
+        "SideSlope",
+        LowPolyMesh.Strata(new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 3, jitter: 0.018f, seed: 31 + variant),
+        Visuals.Shaded(Visuals.SlopeSide));
+
+    /// <summary>第 2 层侧面（崖壁）：岩灰块，四条岩层、顶边一圈外突的岩沿、每面两道竖向岩缝——读起来比缓坡陡。原点同上。</summary>
+    public static Node3D SideCliff(int variant) => Single(
+        "SideCliff",
+        LowPolyMesh.Strata(new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 4, jitter: 0.03f, seed: 51 + variant, ledge: true, cracks: 2),
+        Visuals.Shaded(Visuals.CliffSide));
+
+    /// <summary>砖缝衬底：铺满整格的薄板，原点在衬底中心。材质由棋盘按底色覆盖。</summary>
+    public static Node3D Liner() => Single(
+        "Liner",
+        LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.CellSize, LinerHeight, BoardGeometry.CellSize), 0f),
+        Visuals.Shaded(Colors.White),
+        new Vector3(0f, LinerHeight * 0.5f, 0f));
+
+    /// <summary>场景格铺面：铺满整格、不倒角（相邻场景格连成一片，不出现格线）。原点在上表面中心。材质由棋盘覆盖。</summary>
+    public static Node3D SceneSlab() => Single(
+        "SceneSlab",
+        LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize), 0f),
+        Visuals.Shaded(Colors.White));
+
+    private static Node3D Single(string name, Mesh mesh, Material material, Vector3 position = default)
     {
-        var tool = new SurfaceTool();
-        tool.Begin(global::Godot.Mesh.PrimitiveType.Triangles);
-        float half = depth * 0.5f;
-
-        Vector2 centroid = Vector2.Zero;
-        foreach (Vector2 p in profile)
-        {
-            centroid += p;
-        }
-
-        centroid /= profile.Length;
-        for (int i = 1; i + 1 < profile.Length; i++)
-        {
-            PrismFace(tool, At(profile[0], half), At(profile[i], half), At(profile[i + 1], half), Vector3.Back);
-            PrismFace(tool, At(profile[0], -half), At(profile[i], -half), At(profile[i + 1], -half), Vector3.Forward);
-        }
-
-        for (int i = 0; i < profile.Length; i++)
-        {
-            Vector2 a = profile[i];
-            Vector2 b = profile[(i + 1) % profile.Length];
-            Vector2 edge = b - a;
-            var outward2 = new Vector2(edge.Y, -edge.X);
-            if (outward2.Dot(((a + b) * 0.5f) - centroid) < 0f)
-            {
-                outward2 = -outward2;
-            }
-
-            var outward = new Vector3(outward2.X, outward2.Y, 0f);
-            PrismFace(tool, At(a, half), At(b, half), At(b, -half), outward);
-            PrismFace(tool, At(a, half), At(b, -half), At(a, -half), outward);
-        }
-
-        return tool.Commit();
-
-        static Vector3 At(Vector2 p, float z) => new(p.X, p.Y, z);
+        var root = new Node3D { Name = name };
+        root.AddChild(Mesh(mesh, material, position));
+        return root;
     }
 
-    /// <summary>棱柱的一个三角面：Godot 以顺时针（从正面看）为正面，按期望的朝外法线调整绕序。</summary>
-    private static void PrismFace(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 outward)
-    {
-        Vector3 normal = outward.Normalized();
-        bool counterClockwise = (b - a).Cross(c - a).Dot(outward) > 0f;
-        tool.SetNormal(normal);
-        tool.AddVertex(a);
-        tool.SetNormal(normal);
-        tool.AddVertex(counterClockwise ? c : b);
-        tool.SetNormal(normal);
-        tool.AddVertex(counterClockwise ? b : c);
-    }
+    private static ArrayMesh Prism(Vector2[] profile, float depth) => LowPolyMesh.Prism(profile, depth);
 
     /// <summary>贴在地砖上的扁平方形标记（叠加层用）。</summary>
     public static PlaneMesh Marker(float size) => new() { Size = new Vector2(size, size), Orientation = PlaneMesh.OrientationEnum.Y };

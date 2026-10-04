@@ -1,0 +1,20 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/shaded_ffffff_r90.tres" id="1_m1mr1"]
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_n7q8y"]
+_surfaces = [{
+"aabb": AABB(-0.5, -0.12, -0.5, 1, 0.12, 1),
+"attribute_data": PackedByteArray("6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/3Nzc/9zc3P/c3Nz/"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 30,
+"vertex_data": PackedByteArray("AAAAvwAAAAAAAAC/AAAAPwAAAAAAAAC/AAAAPwAAAAAAAAA/AAAAvwAAAAAAAAC/AAAAPwAAAAAAAAA/AAAAvwAAAAAAAAA/AAAAPwAAAIAAAAC/AAAAP4/C9b0AAAA/AAAAPwAAAIAAAAA/AAAAPwAAAIAAAAC/AAAAP4/C9b0AAAC/AAAAP4/C9b0AAAA/AAAAvwAAAIAAAAC/AAAAvwAAAIAAAAA/AAAAv4/C9b0AAAA/AAAAvwAAAIAAAAC/AAAAv4/C9b0AAAA/AAAAv4/C9b0AAAC/AAAAvwAAAIAAAAA/AAAAPwAAAIAAAAA/AAAAP4/C9b0AAAA/AAAAvwAAAIAAAAA/AAAAP4/C9b0AAAA/AAAAv4/C9b0AAAA/AAAAvwAAAIAAAAC/AAAAP4/C9b0AAAC/AAAAPwAAAIAAAAC/AAAAvwAAAIAAAAC/AAAAv4/C9b0AAAC/AAAAP4/C9b0AAAC//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
+}]
+
+[node name="SceneSlab" type="Node3D" unique_id=1567786912]
+
+[node name="@MeshInstance3D@698" type="MeshInstance3D" parent="." unique_id=1023766260]
+material_override = ExtResource("1_m1mr1")
+mesh = SubResource("ArrayMesh_n7q8y")

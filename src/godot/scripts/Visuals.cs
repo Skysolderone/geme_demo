@@ -178,6 +178,21 @@ public static class Visuals
         Metallic = 0f,
     };
 
+    /// <summary>
+    /// 带顶点色亮度系数的哑光材质（map-elements-v2 D1）：给 <see cref="LowPolyMesh"/> 建的网格用，最终颜色 = <paramref name="albedo"/> × 顶点色系数。
+    /// 之后要改色一律走 <see cref="SetShaded"/>（底色里含一份增益，见 <see cref="LowPolyMesh.Albedo"/>）。
+    /// </summary>
+    public static StandardMaterial3D Shaded(Color albedo, float roughness = 0.9f) => new()
+    {
+        AlbedoColor = LowPolyMesh.Albedo(albedo),
+        Roughness = roughness,
+        Metallic = 0f,
+        VertexColorUseAsAlbedo = true,
+    };
+
+    /// <summary>改 <see cref="Shaded"/> 材质的底色。</summary>
+    public static void SetShaded(StandardMaterial3D material, Color albedo) => material.AlbedoColor = LowPolyMesh.Albedo(albedo);
+
     /// <summary>自发光材质（用于标记与高亮，保证在任何光照下都读得出来）。</summary>
     public static StandardMaterial3D Glow(Color albedo, float energy, bool translucent)
     {

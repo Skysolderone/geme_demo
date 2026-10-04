@@ -1,0 +1,6 @@
+{"file": "openspec/changes/map-elements-v2/proposal.md", "reason": "规格"}
+{"file": "openspec/changes/map-elements-v2/design.md", "reason": "规格"}
+{"file": "openspec/changes/map-elements-v2/tasks.md", "reason": "规格"}
+{"file": "openspec/changes/map-elements-v2/specs/", "type": "directory", "reason": "规格"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Godot Debug 构建、自检与截图做法"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "Godot 层不含规则计算"}
