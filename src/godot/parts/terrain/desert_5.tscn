@@ -37,16 +37,16 @@ _surfaces = [{
 "vertex_data": PackedByteArray("QHjIvnJoET1PCJM+RoQwvnJoET0ZN4k+JIAsvnJoET3lKqA+QHjIvnJoET1PCJM+JIAsvnJoET3lKqA+L3bGvnJoET0b/Kk+QHjIvmASAzpPCJM+JIAsvmASAzrlKqA+RoQwvmASAzoZN4k+QHjIvmASAzpPCJM+L3bGvmASAzob/Kk+JIAsvmASAzrlKqA+RoQwvnJoET0ZN4k+JIAsvmASAzrlKqA+JIAsvnJoET3lKqA+RoQwvnJoET0ZN4k+RoQwvmASAzoZN4k+JIAsvmASAzrlKqA+QHjIvnJoET1PCJM+L3bGvnJoET0b/Kk+L3bGvmASAzob/Kk+QHjIvnJoET1PCJM+L3bGvmASAzob/Kk+QHjIvmASAzpPCJM+L3bGvnJoET0b/Kk+JIAsvnJoET3lKqA+JIAsvmASAzrlKqA+L3bGvnJoET0b/Kk+JIAsvmASAzrlKqA+L3bGvmASAzob/Kk+QHjIvnJoET1PCJM+RoQwvmASAzoZN4k+RoQwvnJoET0ZN4k+QHjIvnJoET1PCJM+QHjIvmASAzpPCJM+RoQwvmASAzoZN4k+9IaivilcDz2Ikbk+mvmPvilcDz1uqWg+vGJ4vilcDz1YQ3M+9IaivilcDz2Ikbk+vGJ4vilcDz1YQ3M+uL6OvilcDz193r4+9IaivgrXozuIkbk+vGJ4vgrXoztYQ3M+mvmPvgrXoztuqWg+9IaivgrXozuIkbk+uL6OvgrXozt93r4+vGJ4vgrXoztYQ3M+mvmPvilcDz1uqWg+vGJ4vgrXoztYQ3M+vGJ4vilcDz1YQ3M+mvmPvilcDz1uqWg+mvmPvgrXoztuqWg+vGJ4vgrXoztYQ3M+9IaivilcDz2Ikbk+uL6OvilcDz193r4+uL6OvgrXozt93r4+9IaivilcDz2Ikbk+uL6OvgrXozt93r4+9IaivgrXozuIkbk+uL6OvilcDz193r4+vGJ4vilcDz1YQ3M+vGJ4vgrXoztYQ3M+uL6OvilcDz193r4+vGJ4vgrXoztYQ3M+uL6OvgrXozt93r4+9IaivilcDz2Ikbk+mvmPvgrXoztuqWg+mvmPvilcDz1uqWg+9IaivilcDz2Ikbk+9IaivgrXozuIkbk+mvmPvgrXoztuqWg+/3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//38AAAAA/7//fwAAAAD/v/9/AAAAAP+//38AAAAA/7//fwAAAAD/v/9/AAAAAP+///9LijmKjL///0uKOYqMv///S4o5ioy///9LijmKjL///0uKOYqMv///S4o5ioy/TAr/fzmKjL9MCv9/OYqMv0wK/385ioy/TAr/fzmKjL9MCv9/OYqMv0wK/385ioy/S4r/f8V1joVLiv9/xXWOhUuK/3/FdY6FS4r/f8V1joVLiv9/xXWOhUuK/3/FdY6FAACy9cV1joUAALL1xXWOhQAAsvXFdY6FAACy9cV1joUAALL1xXWOhQAAsvXFdY6F/3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//38AAAAA/7//fwAAAAD/v/9/AAAAAP+//38AAAAA/7//fwAAAAD/v/9/AAAAAP+////y5JiZOpD///LkmJk6kP//8uSYmTqQ///y5JiZOpD///LkmJk6kP//8uSYmTqQ8mT/f5iZOpDyZP9/mJk6kPJk/3+YmTqQ8mT/f5iZOpDyZP9/mJk6kPJk/3+YmTqQ8uT/f2Vmkbzy5P9/ZWaRvPLk/39lZpG88uT/f2Vmkbzy5P9/ZWaRvPLk/39lZpG8AAAMm2VmkbwAAAybZWaRvAAADJtlZpG8AAAMm2VmkbwAAAybZWaRvAAADJtlZpG8")
 }]
 
-[node name="Desert5" type="Node3D" unique_id=596021753]
+[node name="Desert5" type="Node3D" unique_id=603491074]
 
-[node name="@MeshInstance3D@102" type="MeshInstance3D" parent="." unique_id=1456103660]
+[node name="@MeshInstance3D@102" type="MeshInstance3D" parent="." unique_id=285345033]
 material_override = ExtResource("1_7unoj")
 mesh = SubResource("ArrayMesh_3qnx7")
 
-[node name="@MeshInstance3D@103" type="MeshInstance3D" parent="." unique_id=981694618]
+[node name="@MeshInstance3D@103" type="MeshInstance3D" parent="." unique_id=1389140893]
 material_override = ExtResource("2_whtnt")
 mesh = SubResource("ArrayMesh_gq37p")
 
-[node name="@MeshInstance3D@104" type="MeshInstance3D" parent="." unique_id=653822522]
+[node name="@MeshInstance3D@104" type="MeshInstance3D" parent="." unique_id=1058521626]
 material_override = ExtResource("3_k3j2r")
 mesh = SubResource("ArrayMesh_1xmxm")

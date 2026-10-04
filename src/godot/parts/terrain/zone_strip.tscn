@@ -13,8 +13,8 @@ _surfaces = [{
 "vertex_data": PackedByteArray("0yLbvW8SgzsAAAC/Xo/CvW8SgzsAAAC/Xo/CvW8SgzsAAAA/0yLbvW8SgzsAAAC/Xo/CvW8SgzsAAAA/0yLbvW8SgzsAAAA/Xo/CvW8SgzsAAAC/FoNAvTIILL0AAAC/FoNAvTIILL0AAAA/Xo/CvW8SgzsAAAC/FoNAvTIILL0AAAA/Xo/CvW8SgzsAAAA/FoNAvTIILL0AAAC/FoNAvcQgsL0AAAC/FoNAvcQgsL0AAAA/FoNAvTIILL0AAAC/FoNAvcQgsL0AAAA/FoNAvTIILL0AAAA/FoNAvcQgsL0AAAC/AAAAAMQgsL0AAAC/AAAAAMQgsL0AAAA/FoNAvcQgsL0AAAC/AAAAAMQgsL0AAAA/FoNAvcQgsL0AAAA//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/or5bwYBTUdWivlvBgFNR1aK+W8GAU1HVor5bwYBTUdWivlvBgFNR1aK+W8GAU1HV////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/")
 }]
 
-[node name="ZoneStrip" type="Node3D" unique_id=244156894]
+[node name="ZoneStrip" type="Node3D" unique_id=1416173260]
 
-[node name="@MeshInstance3D@216" type="MeshInstance3D" parent="." unique_id=324397284]
+[node name="@MeshInstance3D@216" type="MeshInstance3D" parent="." unique_id=1034514920]
 material_override = ExtResource("1_pow71")
 mesh = SubResource("ArrayMesh_goeta")

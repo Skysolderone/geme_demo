@@ -13,9 +13,9 @@ _surfaces = [{
 "vertex_data": PackedByteArray("tMj2vgAAAAD0/VS9tMj2PgAAAAD0/VS9tMj2PgAAAAD0/VQ9tMj2vgAAAAD0/VS9tMj2PgAAAAD0/VQ9tMj2vgAAAAD0/VQ9tMj2PgAAAAD0/VS9AAAAP7x0k7wpXI89tMj2PgAAAAD0/VQ9tMj2PgAAAAD0/VS9AAAAP7x0k7wpXI+9AAAAP7x0k7wpXI89AAAAP7x0k7wpXI+9AAAAP83MTL0pXI89AAAAP7x0k7wpXI89AAAAP7x0k7wpXI+9AAAAP83MTL0pXI+9AAAAP83MTL0pXI89tMj2vgAAAAD0/VS9tMj2vgAAAAD0/VQ9AAAAv7x0k7wpXI89tMj2vgAAAAD0/VS9AAAAv7x0k7wpXI89AAAAv7x0k7wpXI+9AAAAv7x0k7wpXI+9AAAAv7x0k7wpXI89AAAAv83MTL0pXI89AAAAv7x0k7wpXI+9AAAAv83MTL0pXI89AAAAv83MTL0pXI+9tMj2vgAAAAD0/VQ9tMj2PgAAAAD0/VQ9AAAAP7x0k7wpXI89tMj2vgAAAAD0/VQ9AAAAP7x0k7wpXI89AAAAv7x0k7wpXI89AAAAv7x0k7wpXI89AAAAP7x0k7wpXI89AAAAP83MTL0pXI89AAAAv7x0k7wpXI89AAAAP83MTL0pXI89AAAAv83MTL0pXI89tMj2vgAAAAD0/VS9AAAAP7x0k7wpXI+9tMj2PgAAAAD0/VS9tMj2vgAAAAD0/VS9AAAAv7x0k7wpXI+9AAAAP7x0k7wpXI+9AAAAv7x0k7wpXI+9AAAAP83MTL0pXI+9AAAAP7x0k7wpXI+9AAAAv7x0k7wpXI+9AAAAv83MTL0pXI+9AAAAP83MTL0pXI+9/3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//7//v1RVVNX/v/+/VFVU1f+//79UVVTV/7//v1RVVNX/v/+/VFVU1f+//79UVVTV////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//z//v1RVqar/P/+/VFWpqv8//79UVamq/z//v1RVqar/P/+/VFWpqv8//79UVamqAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//3//v1RVqar/f/+/VFWpqv9//79UVamq/3//v1RVqar/f/+/VFWpqv9//79UVamq/3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA/7///6oqVJX/v///qipUlf+///+qKlSV/7///6oqVJX/v///qipUlf+///+qKlSV//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
 }]
 
-[node name="PlateFrame0" type="Node3D" unique_id=950820400]
+[node name="PlateFrame0" type="Node3D" unique_id=620150473]
 
-[node name="@MeshInstance3D@218" type="MeshInstance3D" parent="." unique_id=2019704954]
+[node name="@MeshInstance3D@218" type="MeshInstance3D" parent="." unique_id=1332479739]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
 material_override = ExtResource("1_j7vho")
 mesh = SubResource("ArrayMesh_gtbcx")

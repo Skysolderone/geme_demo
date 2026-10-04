@@ -1,0 +1,27 @@
+Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org
+
+[export-parts] rock ×6：锚点 地砖上表面中心，材质内置，单件最多 72 个三角形
+[export-parts] ruins ×6：锚点 地砖上表面中心，材质内置，单件最多 148 个三角形
+[export-parts] pines ×8：锚点 地砖上表面中心，材质内置，单件最多 168 个三角形
+[export-parts] trees ×3：锚点 地砖上表面中心，材质内置，单件最多 120 个三角形
+[export-parts] desert ×6：锚点 地砖上表面中心，材质内置，单件最多 116 个三角形
+[export-parts] marsh ×6：锚点 地砖上表面中心，材质内置，单件最多 189 个三角形
+[export-parts] crag ×4：锚点 地砖上表面中心，材质内置，单件最多 204 个三角形
+[export-parts] shallows ×6：锚点 地砖上表面中心，材质内置，单件最多 132 个三角形
+[export-parts] fence_x ×1：锚点 地砖上表面中心，材质内置，单件最多 216 个三角形
+[export-parts] fence_z ×1：锚点 地砖上表面中心，材质内置，单件最多 216 个三角形
+[export-parts] bridge ×1：锚点 地砖上表面中心，材质内置，单件最多 240 个三角形
+[export-parts] tile_top ×3：锚点 地砖上表面中心，材质由棋盘覆盖（中性白），单件最多 24 个三角形
+[export-parts] side_slope ×2：锚点 该层带的顶面中心，材质内置，单件最多 42 个三角形
+[export-parts] side_cliff ×3：锚点 该层带的顶面中心，材质内置，单件最多 146 个三角形
+[export-parts] liner ×1：锚点 衬底中心，材质由棋盘覆盖（中性白），单件最多 10 个三角形
+[export-parts] scene_slab ×1：锚点 地砖上表面中心，材质由棋盘覆盖（中性白），单件最多 10 个三角形
+[export-parts] water_bed ×2：锚点 水格的地砖上表面中心，材质由棋盘覆盖（中性白），单件最多 16 个三角形
+[export-parts] bank_lip ×3：锚点 水格一条边的中点（地砖上表面高度），边沿 X 轴、水在 +Z 一侧，材质内置，单件最多 90 个三角形
+[export-parts] rim ×3：锚点 底座边缘一段的中点（底座顶面高度），段沿 X 轴、棋盘在 +Z 一侧，材质内置，单件最多 96 个三角形
+[export-parts] zone_strip ×1：锚点 格边中点（地砖上表面高度），条沿 Z 轴、格外在 +X 一侧，材质由棋盘覆盖（中性白），单件最多 8 个三角形
+[export-parts] plate_frame ×2：锚点 边框一段的中点（地砖上表面高度）；第 0 档是沿 X 轴的一段，第 1 档是角块，材质由棋盘覆盖（中性白），单件最多 18 个三角形
+[export-parts] island_layer ×3：锚点 岩层顶面中心（单位尺寸，由棋盘缩放），材质内置，单件最多 42 个三角形
+[export-parts] island_spike ×4：锚点 垂岩高度中点（单位尺寸，由棋盘缩放），材质内置，单件最多 44 个三角形
+[export-parts] cloud ×3：锚点 云心（单位尺寸，由棋盘缩放），材质内置，单件最多 148 个三角形
+[export-parts] 部件 79 / 79、共享材质 25 → res://parts/terrain

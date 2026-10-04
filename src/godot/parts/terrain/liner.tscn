@@ -10,12 +10,12 @@ _surfaces = [{
 "primitive": 3,
 "uv_scale": Vector4(0, 0, 0, 0),
 "vertex_count": 30,
-"vertex_data": PackedByteArray("AAAAvwAAAAAAAAC/AAAAPwAAAAAAAAC/AAAAPwAAAAAAAAA/AAAAvwAAAAAAAAC/AAAAPwAAAAAAAAA/AAAAvwAAAAAAAAA/AAAAPwAAAIAAAAC/AAAAP4/C9bwAAAA/AAAAPwAAAIAAAAA/AAAAPwAAAIAAAAC/AAAAP4/C9bwAAAC/AAAAP4/C9bwAAAA/AAAAvwAAAIAAAAC/AAAAvwAAAIAAAAA/AAAAv4/C9bwAAAA/AAAAvwAAAIAAAAC/AAAAv4/C9bwAAAA/AAAAv4/C9bwAAAC/AAAAvwAAAIAAAAA/AAAAPwAAAIAAAAA/AAAAP4/C9bwAAAA/AAAAvwAAAIAAAAA/AAAAP4/C9bwAAAA/AAAAv4/C9bwAAAA/AAAAvwAAAIAAAAC/AAAAP4/C9bwAAAC/AAAAPwAAAIAAAAC/AAAAvwAAAIAAAAC/AAAAv4/C9bwAAAC/AAAAP4/C9bwAAAC//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
+"vertex_data": PackedByteArray("AAAAvwAAAAAAAAC/AAAAPwAAAAAAAAC/AAAAPwAAAAAAAAA/AAAAvwAAAAAAAAC/AAAAPwAAAAAAAAA/AAAAvwAAAAAAAAA/AAAAPwAAAAAAAAC/AAAAP4/C9bwAAAA/AAAAPwAAAAAAAAA/AAAAPwAAAAAAAAC/AAAAP4/C9bwAAAC/AAAAP4/C9bwAAAA/AAAAvwAAAAAAAAC/AAAAvwAAAAAAAAA/AAAAv4/C9bwAAAA/AAAAvwAAAAAAAAC/AAAAv4/C9bwAAAA/AAAAv4/C9bwAAAC/AAAAvwAAAAAAAAA/AAAAPwAAAAAAAAA/AAAAP4/C9bwAAAA/AAAAvwAAAAAAAAA/AAAAP4/C9bwAAAA/AAAAv4/C9bwAAAA/AAAAvwAAAAAAAAC/AAAAP4/C9bwAAAC/AAAAPwAAAAAAAAC/AAAAvwAAAAAAAAC/AAAAv4/C9bwAAAC/AAAAP4/C9bwAAAC//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+/////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+//3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA")
 }]
 
-[node name="Liner" type="Node3D" unique_id=1156362834]
+[node name="Liner" type="Node3D" unique_id=1838393083]
 
-[node name="@MeshInstance3D@696" type="MeshInstance3D" parent="." unique_id=2067125094]
+[node name="@MeshInstance3D@196" type="MeshInstance3D" parent="." unique_id=1453750722]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 0)
 material_override = ExtResource("1_70xgx")
 mesh = SubResource("ArrayMesh_1rgt1")
