@@ -121,8 +121,8 @@ dotnet test tests/Siege.Core.Tests
 网页在 Cloudflare（Workers 静态资源，配置见 `wrangler.jsonc`），游戏包在 GitHub Releases。网页的下载按钮指向固定文件名 `Siege-macos.zip` 与 `Siege-windows-x64.zip`，所以文件名不能改，Release 也不要标成 prerelease。
 
 ```bash
-tools/export-release.sh 0.2.0     # 导出两个包到 build/（不入库）
-gh release create v0.2.0 build/Siege-macos.zip build/Siege-windows-x64.zip
+tools/export-release.sh 0.3.0     # 导出两个包到 build/（不入库）
+gh release create v0.3.0 build/Siege-macos.zip build/Siege-windows-x64.zip
 # 改 docs/index.html 里的版本号、包大小与更新记录
 npx wrangler deploy               # 更新网页
 ```

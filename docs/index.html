@@ -162,7 +162,7 @@
         <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-windows-x64.zip">下载 Windows 版<span>64 位 · 约 74 MB</span></a>
         <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
       </div>
-      <p class="note">当前版本 v0.1.0（2026-10-04）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <p class="note">当前版本 v0.2.0（2026-10-04）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
       <div class="shot"><img src="assets/hero.jpg" width="1600" height="900" alt="标准 13×13 地图上的四方对局：四角是四个阵营的出生高台，中间一条环形河把中岛围住，盘面上已有金、紫、蓝三方的棋子"></div>
     </div>
   </div>
@@ -195,7 +195,7 @@
         </div>
         <div class="card" style="--c:var(--blue)">
           <h3>看得见的判读</h3>
-          <p>盘面、势力、信物、顺序四个信息层随时切换；每次落子前都有预演，告诉你会提走什么、势力怎么变。</p>
+          <p>盘面、势力、信物、顺序四个信息层随时切换；每次落子前都有预演，告诉你会提走什么、势力怎么变。每条棋串旁常驻标着它的军势。</p>
         </div>
       </div>
     </div>
@@ -208,6 +208,8 @@
       <div class="gallery">
         <figure class="wide"><img src="assets/near.jpg" width="1600" height="900" loading="lazy" alt="拉近的中岛：金、紫、蓝三方的棋子隔着河与桥对峙，带阵营色方框的叉是已活棋串的禁入点">
           <figcaption><b>中岛争夺。</b>带阵营色方框的叉是已活棋串的禁入点（眼位），对手不能往里落子。</figcaption></figure>
+        <figure class="wide"><img src="assets/follow.jpg" width="1600" height="900" loading="lazy" alt="棋盘档地图上金方落子：镜头已移到金方的棋盘，顶部有一条金方这一回合的摘要，落子处有带算式的飘字，棋子旁标着棋串军势">
+          <figcaption><b>看得见对手怎么走。</b>对手落子时镜头自动跟过去，顶部一行摘要写明他落了什么、势力涨了多少；轮到你再回到原来的画面。</figcaption></figure>
         <figure><img src="assets/terrain.jpg" width="1200" height="620" loading="lazy" alt="高台边缘的近景：草地地砖带倒角，崖壁是岩灰分层，下面是土色缓坡，河岸有一圈石沿">
           <figcaption><b>地形。</b>高度差 1 是土色缓坡，高度差 2 是带岩缝的崖壁；深水低于地砖，岸边一圈石沿。</figcaption></figure>
         <figure><img src="assets/pieces.jpg" width="1320" height="600" loading="lazy" alt="十种棋子的轮廓对照：连珠子、铁链子、堡垒子、界碑子、普通子、匠人、旗手子、倍增子、协同子、哨兵子">
@@ -265,6 +267,7 @@
             <tr><td>手牌</td><td><kbd>H</kbd> 打开手牌面板；<kbd>V</kbd> 收起征募面板</td></tr>
             <tr><td>匠人</td><td><kbd>E</kbd> 轮换地形改造目标（搭桥 / 立栅 / 烧林）</td></tr>
             <tr><td>视角</td><td>方向键或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 平移，滚轮缩放，<kbd>M</kbd> 全局预览，<kbd>空格</kbd> 回到自家</td></tr>
+            <tr><td>看对手</td><td>对手落子时镜头自动跟过去、轮到你再回来；<kbd>F</kbd> 开关跟随。对手行动期间你自己动了镜头，这一轮就不再跟</td></tr>
           </tbody>
         </table>
       </div>
@@ -287,6 +290,14 @@ godot --path src/godot -- --map=board:1      # 直接开一张棋盘档地图</c
     <div class="wrap">
       <h2>更新记录</h2>
       <div class="log">
+        <h3>v0.2.0 <time datetime="2026-10-04">2026-10-04</time></h3>
+        <ul>
+          <li>镜头跟随：对手落子不在画面中央时镜头平滑跟过去，轮到你再回来；<kbd>F</kbd> 开关。</li>
+          <li>对手回合摘要：落了几枚什么子、提了几枚、势力涨跌及领地 / 军势分项。</li>
+          <li>落子与提子的飘字停留更久、字更大；每条棋串旁常驻显示军势。</li>
+        </ul>
+      </div>
+      <div class="log" style="margin-top:22px">
         <h3>v0.1.0 <time datetime="2026-10-04">2026-10-04</time></h3>
         <ul>
           <li>第一个可下载的版本：macOS 通用包与 Windows 64 位包。</li>
