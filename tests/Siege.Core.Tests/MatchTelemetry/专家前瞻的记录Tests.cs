@@ -151,7 +151,8 @@ public class 专家前瞻的记录Tests
         // 一层配置（多样补充上限 0、两层权重 0）下的专家日志：确定性文本整份与改动前逐字节相同。黄金值在 expert-strength 2.1 改日志端之前、
         // 同一样本上取下（G1 已证一层配置走法不变，所以当时的文本就是"改动前"的文本）；G1 黄金值只钉 ToText()，这里钉 JSON。
         (MatchLog log, _) = ExpertSample.Value;
-        string text = log.DeterministicText();
+        // formation-tiers D2：V5Config 钉计分规则 v1；确定性文本比引入阵型之前只多首部配置里的一项，去掉后与黄金值比（黄金值不重录）。
+        string text = SimFixtures.StripScoringV1(log.DeterministicText());
         Assert.Equal(39, log.Turns.Count);
         Assert.Equal(10, log.LookaheadTurns.Count());
         Assert.Equal("078C5B1778226D464689A8CA559BCCBD27357C26D1E21AA57EA99E2AF007D972", Sha256(text));
@@ -257,7 +258,7 @@ public class 专家前瞻的记录Tests
         MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(
             LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), 1);
         MatchLog log = session.Run();
-        string text = log.DeterministicText();
+        string text = SimFixtures.StripScoringV1(log.DeterministicText());   // formation-tiers D2：同上，除首部的计分规则版本一项外逐字节相同
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
         Assert.Equal(28, log.Turns.Count);

@@ -49,6 +49,14 @@ public sealed record MatchOptions
     public ContentSet ContentSet { get; init; } = ContentSets.Default;
 
     /// <summary>
+    /// 计分规则版本（formation-tiers D2，match-setup「计分规则版本」）：v1 = 不计阵型（军势与引入阵型之前逐项相同），v2 = 计阵型。
+    /// 新局缺省 v2（<see cref="ScoringVersions.Default"/>）。属于对局配置：开局固定、始终公开，入存档、日志首部与批次配置；
+    /// 恢复缺该字段的旧存档按 v1（<see cref="MatchFlow.ScoringVersionBackfilled"/> 留痕）。与 <see cref="ContentSet"/> 相互独立。
+    /// 对局内的一切计分（势力快照、预演、禁手预筛、AI 评价与前瞻、显示）MUST 使用它。
+    /// </summary>
+    public ScoringVersion ScoringVersion { get; init; } = ScoringVersions.Default;
+
+    /// <summary>
     /// 带入带出开关（carry-in-out，match-setup「带入带出配置」）：是否对本局进行带出结算。缺省关闭。
     /// 属于对局配置：开局固定、始终公开，入存档；恢复缺该字段的旧存档按关闭（<see cref="MatchFlow.CarryInOutBackfilled"/> 留痕）。
     /// </summary>

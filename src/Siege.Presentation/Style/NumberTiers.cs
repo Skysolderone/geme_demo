@@ -8,11 +8,13 @@ namespace Siege.Presentation.Style;
 /// 军势揭示、势力栏到账与棋串军势常驻标注共用这<b>一个</b>入口；引擎层不取档，只读呈现层给出的档位。
 /// 档位只影响呈现，不参与任何规则计算、比较或排序。
 /// </summary>
-/// <remarks>阈值是初值（2026-10-05 的 10 局实测分布），数值规则调整后需重定；改阈值只改 <see cref="Thresholds"/> 一处。</remarks>
+/// <remarks>阈值按计分规则 v2（formation-tiers，阵型）的 20 局实测重定（2026-10-05，负责人裁决：8 / 16 / 32 / 64）：
+/// v2 下军势揭示各档约 64% / 14% / 8% / 3% / 11%，行动方军势增量约 36% / 28% / 14% / 6% / 16%。
+/// 此前的初值 4 / 8 / 16 / 32 取自 v1 计分的 10 局实测。数值规则再调整后需重定；改阈值只改 <see cref="Thresholds"/> 一处。</remarks>
 public static class NumberTier
 {
     /// <summary>各档的下界（升序）：绝对值每达到一个下界升一档。只做整数比较，不经浮点。</summary>
-    private static readonly ImmutableArray<int> Thresholds = [4, 8, 16, 32];
+    private static readonly ImmutableArray<int> Thresholds = [8, 16, 32, 64];
 
     /// <summary>最低档（一档）。</summary>
     public const int Lowest = 1;
@@ -20,7 +22,7 @@ public static class NumberTier
     /// <summary>最高档（五档）。</summary>
     public static int Highest => Lowest + Thresholds.Length;
 
-    /// <summary>取档：绝对值小于 4 为一档，4–7 二档，8–15 三档，16–31 四档，32 及以上五档。</summary>
+    /// <summary>取档：绝对值小于 8 为一档，8–15 二档，16–31 三档，32–63 四档，64 及以上五档。</summary>
     public static int Of(BigInteger value)
     {
         BigInteger magnitude = BigInteger.Abs(value);

@@ -4,7 +4,8 @@ using Siege.Core.Board;
 namespace Siege.Core.Scoring;
 
 /// <summary>
-/// 倍增子倍率 <c>1.5^n</c> 的精确表示：分子 <c>3^n</c>、分母 <c>2^n</c>，<c>n = 倍增子数量</c>，不设任何封顶（restore-go-core-rules D1）。
+/// 倍率 <c>1.5^n</c> 的精确表示：分子 <c>3^n</c>、分母 <c>2^n</c>，<c>n</c> = 倍率指数 = 倍增子数量 + 阵型阶数（formation-tiers D1；计分规则 v1 下阵型恒 0），
+/// 倍增子数量不设任何封顶（restore-go-core-rules D1）。
 /// 计分路径上 MUST NOT 出现二进制浮点——取整对边界值极其敏感，整数运算才能保证跨平台、跨架构结果一致。
 /// </summary>
 /// <remarks>
@@ -28,7 +29,7 @@ public readonly record struct Multiplier
         Count = count;
     }
 
-    /// <summary>倍增子数量 n，即倍率指数。</summary>
+    /// <summary>倍率指数 n（倍增子数量 + 阵型阶数）。</summary>
     public int Count { get; }
 
     /// <summary>分子 <c>3^n</c>。</summary>

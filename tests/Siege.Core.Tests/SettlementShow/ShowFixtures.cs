@@ -91,6 +91,10 @@ internal static class ShowFixtures
         new(owner, [.. cells.Select(Coord.Parse)], BaseTotal: baseTotal, LineBonus: bonus, SynergyBonus: 0, HighGroundBonus: 0,
             BannerBonus: 0, ChainBonus: 0, SentryBonus: 0, BoundaryBonus: 0, MultiplierCount: multipliers, Power: power);
 
+    /// <summary>带阵型阶数的棋串军势明细（formation-tiers 的算例多给一个阵型阶数；军势同样按算例原样给出）。</summary>
+    internal static GroupPower Formed(PlayerId owner, int baseTotal, int bonus, int multipliers, int formation, BigInteger power, params string[] cells) =>
+        Group(owner, baseTotal, bonus, multipliers, power, cells) with { FormationTier = formation };
+
     /// <summary>遮罩里军势揭示条目的文本投影："落点:累计文案:步文案:步档位:步内进度:末步/未到:末步档位:结果年龄"。</summary>
     internal static string RevealText(ShowMask mask) =>
         string.Join(",", mask.Reveals.Select(r => $"{r.Coord.ToNotation()}:{r.RunningText}:{r.StepText}:{r.StepTier}:{r.StepPermille}:{(r.AtFinal ? "末步" : "未到")}:{r.FinalTier}:{r.ResultAgePermille}"));

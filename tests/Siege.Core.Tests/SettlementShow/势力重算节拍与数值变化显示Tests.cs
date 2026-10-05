@@ -105,22 +105,23 @@ public class 势力重算节拍与数值变化显示Tests
     [Fact]
     public void 放大幅度按档()
     {
-        // 玩家 A 领地 +3、军势 +20：领地段段首放大 1.3 倍（一档），军势段段首放大 1.8 倍（四档）；总增量 +23 也是四档。
-        var change = new PowerChange(P1, 20, 43, 1, 1, TerritoryDelta: 3, GroupDelta: 20);
+        // 档位按 formation-tiers 段 C 的阈值 8 / 16 / 32 / 64 手算（一档 < 8、二档 8–15、三档 16–31、四档 32–63、五档 ≥ 64）。
+        // 玩家 A 领地 +3、军势 +40：领地段段首放大 1.3 倍（一档），军势段段首放大 1.8 倍（四档）；总增量 +43 也是四档。
+        var change = new PowerChange(P1, 20, 63, 1, 1, TerritoryDelta: 3, GroupDelta: 40);
         Assert.Equal((1, 4, 4), (change.TerritoryTier, change.GroupTier, change.TotalTier));
         Assert.Equal(130, NumberTierStyle.For(change.TierOf(PowerStage.Territory)).RankScalePercent);
         Assert.Equal(180, NumberTierStyle.For(change.TierOf(PowerStage.Group)).RankScalePercent);
 
-        // 三个档位各取各的增量：领地 +30（四档）、军势 +3（一档）、总增量 +33（五档）。
-        var mixed = new PowerChange(P1, 20, 53, 1, 1, TerritoryDelta: 30, GroupDelta: 3);
+        // 三个档位各取各的增量：领地 +62（四档）、军势 +3（一档）、总增量 +65（五档）。
+        var mixed = new PowerChange(P1, 20, 85, 1, 1, TerritoryDelta: 62, GroupDelta: 3);
         Assert.Equal((4, 1, 5), (mixed.TierOf(PowerStage.Territory), mixed.TierOf(PowerStage.Group), mixed.TierOf(PowerStage.Hold)));
         Assert.Equal(5, mixed.TierOf(PowerStage.Pending));
 
-        // 一至五档依次 1.3、1.45、1.6、1.8、2.0 倍（增量 3 / 5 / 9 / 20 / 40；负增量按绝对值取档）。
+        // 一至五档依次 1.3、1.45、1.6、1.8、2.0 倍（增量 3 / 10 / 20 / 40 / 80；负增量按绝对值取档）。
         Assert.Equal(
             [130, 145, 160, 180, 200],
-            new[] { 3, 5, 9, 20, 40 }.Select(delta => NumberTierStyle.For(new PowerChange(P1, 50, 50 + delta, 1, 1, TerritoryDelta: delta, GroupDelta: 0).TerritoryTier).RankScalePercent));
-        Assert.Equal(180, NumberTierStyle.For(new PowerChange(P2, 50, 30, 1, 1, TerritoryDelta: 0, GroupDelta: -20).GroupTier).RankScalePercent);
+            new[] { 3, 10, 20, 40, 80 }.Select(delta => NumberTierStyle.For(new PowerChange(P1, 50, 50 + delta, 1, 1, TerritoryDelta: delta, GroupDelta: 0).TerritoryTier).RankScalePercent));
+        Assert.Equal(180, NumberTierStyle.For(new PowerChange(P2, 50, 10, 1, 1, TerritoryDelta: 0, GroupDelta: -40).GroupTier).RankScalePercent);
 
         // 遮罩里的势力显示带着这条变化：引擎层按当前段读档位（不自己取档），未开始 / 定格读总增量的档。
         var timeline = new ShowTimeline([new PowerBeat([change])], ShowDuration.Normal);

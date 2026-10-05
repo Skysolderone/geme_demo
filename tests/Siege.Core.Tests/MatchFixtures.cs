@@ -5,6 +5,7 @@ using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Core.Relics;
+using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests;
 
@@ -19,11 +20,20 @@ internal static class MatchFixtures
 
     internal static readonly GameSeed Seed = new(0x5EED_0912_2026UL);
 
+    /// <summary>
+    /// 本夹具的缺省对局配置：插旗立即，<b>计分规则显式钉 v1</b>（formation-tiers D2）。夹具上的既有算例——设计文档旧算例与各 change 的手算期望值——
+    /// 都是按不计阵型写的，不重录；v1 与引入阵型之前逐步相同。要测阵型的用例显式传 <see cref="V2"/>。
+    /// </summary>
+    internal static readonly MatchOptions V1 = MatchOptions.Immediate with { ScoringVersion = ScoringVersion.V1 };
+
+    /// <summary>计分规则 v2（计阵型）的对局配置，其余同 <see cref="V1"/>。</summary>
+    internal static readonly MatchOptions V2 = MatchOptions.Immediate with { ScoringVersion = ScoringVersion.V2 };
+
     /// <summary>2 人局（catch-up-recruit「2 人局」算例）：只插旗、各 50 枚普通子，摆到第 <paramref name="majorRound"/> 大回合、指定顺序。</summary>
     internal static MatchFlow TwoPlayer(MatchOptions? options = null, int majorRound = 5, PlayerId[]? order = null)
     {
         MapData map = Map();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, Seed, [P0, P1], Relics(map), options ?? MatchOptions.Immediate);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, Seed, [P0, P1], Relics(map), options ?? V1);
         match.Debug.SeedHand(P0, (PieceType.Basic, 50));
         match.Debug.SeedHand(P1, (PieceType.Basic, 50));
         match.PlantSequentially([(P0, 0), (P1, 1)]);
@@ -78,7 +88,7 @@ internal static class MatchFixtures
         return new RelicGenerationRecord(Seed, map.Id, placements, Converged: true, Rerolls: 0);
     }
 
-    /// <summary>创建一局但停在插旗阶段。</summary>
+    /// <summary>创建一局但停在插旗阶段。<paramref name="options"/> 缺省为 <see cref="V1"/>。</summary>
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
         Create(null, seed, options, relics);
 
@@ -86,17 +96,17 @@ internal static class MatchFixtures
     internal static MatchFlow Create(TerrainData? terrain, GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
     {
         MapData map = Map(terrain, [.. relics.Select(r => r.Cell)]);
-        return MatchFlow.CreateUnvalidated(map, seed ?? Seed, All, Relics(map, relics), options);
+        return MatchFlow.CreateUnvalidated(map, seed ?? Seed, All, Relics(map, relics), options ?? V1);
     }
 
-    /// <summary>创建一局并依次插旗（默认各占各的出生区），给每人 50 枚普通子，进入第 1 大回合。<paramref name="options"/> 缺省为 <see cref="MatchOptions.Immediate"/>。</summary>
+    /// <summary>创建一局并依次插旗（默认各占各的出生区），给每人 50 枚普通子，进入第 1 大回合。<paramref name="options"/> 缺省为 <see cref="V1"/>（插旗立即、计分规则 v1）。</summary>
     internal static MatchFlow Started(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
         Started(null, seed, zones, options, relics);
 
     /// <summary>同上，另可指定地形。</summary>
     internal static MatchFlow Started(TerrainData? terrain, GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
     {
-        MatchFlow match = Create(terrain, seed, options ?? MatchOptions.Immediate, relics);
+        MatchFlow match = Create(terrain, seed, options ?? V1, relics);
         zones ??= [0, 1, 2, 3];
         foreach (PlayerId p in All)
         {

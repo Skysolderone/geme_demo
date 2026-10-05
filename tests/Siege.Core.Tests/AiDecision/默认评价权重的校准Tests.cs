@@ -180,9 +180,9 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 反面：只改一个未扫档维度，记录随之不同——口径不同的两份数据从记录上就区分得开，不会被当成同口径直接比较。
         EvaluationWeights other = EvaluationWeights.Default with { Growth = EvaluationWeights.Default.Growth + 1 };
         RunConfig changed = config with { Players = [.. config.Players.Select(p => p with { Weights = other })] };
-        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
-        // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。
-        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).Effective().ToJson());
+        // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。formation-tiers D2：未配置的计分规则版本同样落成缺省 v2 写入。
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).Effective().ToJson());
     }
 
     /// <summary>
@@ -293,6 +293,34 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.DoesNotContain("取 40 一半收敛", src, StringComparison.Ordinal);
         Assert.DoesNotContain("待 ai-eye", src, StringComparison.Ordinal);
         Assert.DoesNotContain("未校准（", src, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 计分规则v2下标注未校准()
+    {
+        // formation-tiers design D4（testing.md「规则变更后，权重 MUST 先重新标注为未校准」）：阵型改了计分口径，九维权重、停手阈值与 2 人图覆盖表
+        // 都是在计分规则 v1 下取得的——取值不改、评价函数不改，但 MUST 带"计分规则 v2 下未校准"的显式标注，直到负责人按验证跑局裁决。
+        // 机读常量一处（EvaluationWeights.FormationScoringStatus），四处依据段（九维的校准口径、默认权重、2 人图覆盖表、缺省停手阈值）各自点名引用它。
+        // 措辞说明：上一条守门禁止 EvaluationWeights.cs 出现字面量「未校准（」（ai-eye 校准后清掉的旧标注），所以写作「计分规则 v2 下未校准」。
+        // 变异（实跑）：M-A1 删掉 DefaultPassThreshold 依据段里的这段标注 → 本测试红。
+        Assert.StartsWith("计分规则 v2 下未校准", EvaluationWeights.FormationScoringStatus, StringComparison.Ordinal);
+        Assert.Contains("停手阈值", EvaluationWeights.FormationScoringStatus, StringComparison.Ordinal);
+        Assert.Contains("2 人图覆盖表", EvaluationWeights.FormationScoringStatus, StringComparison.Ordinal);
+
+        string ai = Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai");
+        string weights = File.ReadAllText(Path.Combine(ai, "EvaluationWeights.cs"));
+        string difficulty = File.ReadAllText(Path.Combine(ai, "AiDifficulty.cs"));
+        Assert.Contains(EvaluationWeights.FormationScoringStatus, weights, StringComparison.Ordinal);
+        // 九维校准口径、默认权重、2 人图覆盖表三段各一处 + 常量自己的说明。
+        Assert.True(System.Text.RegularExpressions.Regex.Matches(weights, "<b>计分规则 v2 下未校准</b>").Count >= 3);
+        Assert.True(System.Text.RegularExpressions.Regex.Matches(weights, "<see cref=\"FormationScoringStatus\"/>").Count >= 3);
+        // 缺省停手阈值的依据段与其校准口径常量的说明各引用一次。
+        Assert.Contains("<b>计分规则 v2 下未校准</b>", difficulty, StringComparison.Ordinal);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(difficulty, "EvaluationWeights\\.FormationScoringStatus").Count);
+
+        // 取值未改（改值是负责人裁决之后的事）。
+        Assert.Equal(new EvaluationWeights(PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 200, Threat: 25), EvaluationWeights.Default);
+        Assert.Equal(20, AiSearchConfig.DefaultPassThreshold);
     }
 
     [Fact]

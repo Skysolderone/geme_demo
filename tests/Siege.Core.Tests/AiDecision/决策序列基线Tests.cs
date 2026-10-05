@@ -50,7 +50,9 @@ internal static class DecisionSequence
     /// </summary>
     internal static string Export(string mapId, ulong seed, int maxMajorRounds)
     {
-        var config = new RunConfig { MapId = mapId, SeedStart = seed, Count = 1, TurnLimit = 0 };
+        // formation-tiers D2：基线钉在引入阵型之前，显式指定计分规则 v1（v1 与引入之前逐步相同），不重录；其余仍取跑局层缺省。
+        // 首部注释行不加这一项——那会改动基线文件的字节。
+        var config = new RunConfig { MapId = mapId, SeedStart = seed, Count = 1, TurnLimit = 0, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
         MatchSession session = MatchSession.Create(config, seed);
         MatchFlow match = session.Match;
         var sb = new StringBuilder();

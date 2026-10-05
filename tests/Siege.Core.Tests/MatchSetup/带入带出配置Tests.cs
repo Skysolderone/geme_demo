@@ -41,6 +41,7 @@ public class 带入带出配置Tests
                 ArtisanWeight = config.ArtisanWeight,
                 FlagRisk = config.FlagRisk!.Value,
                 ContentSet = config.ContentSet!.Value,
+                ScoringVersion = config.ScoringVersion!.Value,   // formation-tiers D2：PinPreCalibration 钉 v1，黄金哈希不重录
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
             });

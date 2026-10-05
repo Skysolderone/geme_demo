@@ -60,14 +60,14 @@ public class 结算节拍序列的生成Tests
     {
         // 规格算例（tiered-number-show 改）：P1 在 C3、C4 落子并提掉 P2 的 D3，势力 P1 5→9、P2 6→4
         // → 落子(C3,C4) → 提子(D3) → 军势揭示(C3、C4 所在棋串) → 势力(P1 +4, P2 −2)。
-        // 结算后快照的棋串明细：P1 的 C3-C4（基础 2、加值 4、倍增子 1 → 军势 9）与 P2 的 E5（军势 4，不含本次落子、不揭示）。
+        // 结算后快照的棋串明细：P1 的 C3-C4（基础 2、加值 4、倍增子 1 → 军势 9，阈值 8 / 16 / 32 / 64 下二档）与 P2 的 E5（军势 4，不含本次落子、不揭示）。
         (GameBoard before, GameBoard after, ImmutableArray<PowerReading> pb, ImmutableArray<PowerReading> pa) = CaptureExample();
         SettlementSide beforeSide = Side(before, [.. pb]);
         SettlementSide afterSide = Side(after, [.. pa]) with { Groups = [Group(P2, 4, 0, 0, 4, "E5"), Group(P1, 2, 4, 1, 9, "C3", "C4")] };
 
         ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(beforeSide, afterSide, Order("C3", "C4"));
         Assert.Equal(
-            "落子[C3:Basic:P1,C4:Basic:P1]\n提子[D3:P2]\n揭示[C3:P1:9:2@1/220|2+4@1/220|(2+4)×1.5@2/220|(2+4)×1.5 = 9@3/220]\n势力[P1:5->9(+4):2->1,P2:6->4(−2):1->2]",
+            "落子[C3:Basic:P1,C4:Basic:P1]\n提子[D3:P2]\n揭示[C3:P1:9:2@1/220|2+4@1/220|(2+4)×1.5@1/220|(2+4)×1.5 = 9@2/220]\n势力[P1:5->9(+4):2->1,P2:6->4(−2):1->2]",
             Text(beats));
         Assert.Equal([typeof(PlacementBeat), typeof(CaptureBeat), typeof(PowerRevealBeat), typeof(PowerBeat)], beats.Select(b => b.GetType()));
 

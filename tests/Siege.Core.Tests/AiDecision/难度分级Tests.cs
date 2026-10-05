@@ -170,7 +170,8 @@ public class 难度分级Tests
         PlayerAiConfig[] players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })];
         MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(players), 1);
         MatchLog log = session.Run();
-        string text = log.DeterministicText();
+        // formation-tiers D2：V5Config 钉计分规则 v1；v1 局的确定性文本比引入阵型之前只多首部配置里的一项，去掉后与黄金值比（黄金值不重录）。
+        string text = SimFixtures.StripScoringV1(log.DeterministicText());
         string decisions = string.Join("\n", session.Match.Players.Select(p => $"{p}: {string.Join(" | ", session.AiOf(p)!.Decisions)}"));
 
         Assert.Null(log.Failure);

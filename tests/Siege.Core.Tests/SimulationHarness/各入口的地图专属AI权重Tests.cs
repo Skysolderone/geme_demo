@@ -24,7 +24,12 @@ public class 各入口的地图专属AI权重Tests
     [InlineData("gen:12345", 4, "E167132EDC2BCE5D1CF3D7099B4DE9DFD2FD7444B27C462AC2165B62180E83AB", "AEF5452CF232262658666587791310C2AFA8424B1353A5331916A756AC879CBF")]
     public void 未登记的地图首部逐字节不变(string mapId, int players, string headerHash, string configHash)
     {
-        (string header, string config, _) = RunOneRaw($"unregistered-{mapId.Replace(':', '_')}", BlankConfig(mapId, players));
+        // formation-tiers D2：黄金值钉在引入计分规则版本之前——显式跑 v1，首部与 config.json 比当时只多配置里的一项 "ScoringVersion":"V1"，
+        // 去掉这一项（StripScoringV1 先断言它恰好出现一次）后与黄金值逐字节比；黄金值不重录。
+        (string header, string config, _) = RunOneRaw(
+            $"unregistered-{mapId.Replace(':', '_')}", BlankConfig(mapId, players) with { ScoringVersion = Core.Scoring.ScoringVersion.V1 });
+        header = SimFixtures.StripScoringV1(header);
+        config = SimFixtures.StripScoringV1(config);
 
         Assert.Equal(headerHash, Sha256(header));
         Assert.Equal(configHash, Sha256(config));

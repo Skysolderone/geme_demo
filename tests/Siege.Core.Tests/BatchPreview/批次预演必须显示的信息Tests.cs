@@ -93,6 +93,34 @@ public class 批次预演必须显示的信息Tests
     }
 
     [Fact]
+    public void 军势预览分开写倍增与阵型()
+    {
+        // formation-tiers D5（段 C）：计分规则 v2 的对局里，预演的军势算式把倍增倍率与阵型倍率分开写，倍增在前。
+        // 盘面：9×9、第 5 大回合，P0 已有 C5、D5 普通子与 E5 倍增子；暂放 F5 普通子连成 4 枚 → 倍增子 1、阵型一阶（3–4 枚），
+        // 倍率指数 2，军势 ⌊4 × 9 / 4⌋ = 9。阵型阶数取自 Core 预演的明细（呈现层不数棋子）。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.V2).AtRound(5).Stones(P0, "C5", "D5").Pieces(P0, PieceType.Multiplier, "E5");
+        match.BeginTurn();
+        match.EnterRecruit();
+        StagedBatch batch = match.EnterDeploy();
+        Assert.Null(batch.Stage(Coord.Parse("F5"), PieceType.Basic));
+
+        PreviewPresentation shown = PreviewPresentation.Build(match.PreviewCurrentBatch(), match.Hands.AccessFor(P0).PrivateView(), LibertyThresholds.Default);
+        GroupPowerView power = Assert.Single(shown.OwnGroups, g => g.ContainsPlacement).Power!;
+        Assert.Equal((1, "1.5", 1, "1.5", 9), (power.MultiplierCount, power.MultiplierText, power.FormationTier, power.FormationText, (int)power.Power));
+        Assert.Equal("（基础 4 + 位置加值 0）× 1.5 × 阵型 1.5 = 9", power.FormulaText);
+        Assert.Equal("4×1.5×1.5 = 9", power.ShortFormulaText);
+
+        // 同一手在 v1 局里：阵型恒 0，算式与引入阵型之前逐字相同（⌊4 × 1.5⌋ = 6）。
+        MatchFlow v1 = MatchFixtures.Started(options: MatchFixtures.V1).AtRound(5).Stones(P0, "C5", "D5").Pieces(P0, PieceType.Multiplier, "E5");
+        v1.BeginTurn();
+        v1.EnterRecruit();
+        Assert.Null(v1.EnterDeploy().Stage(Coord.Parse("F5"), PieceType.Basic));
+        GroupPowerView old = Assert.Single(PreviewPresentation.Build(v1.PreviewCurrentBatch(), v1.Hands.AccessFor(P0).PrivateView(), LibertyThresholds.Default).OwnGroups, g => g.ContainsPlacement).Power!;
+        Assert.Equal("（基础 4 + 位置加值 0）× 1.5 = 6", old.FormulaText);
+        Assert.Equal("4×1.5 = 6", old.ShortFormulaText);
+    }
+
+    [Fact]
     public void 显示势力与排名变化()
     {
         // 规格算例：势力 45 → 62、排名第 3 → 第 2；裁决 1：他人被挤动的名次也要显示。11×11 空盘，四方各据一列：

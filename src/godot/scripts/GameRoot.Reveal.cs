@@ -29,14 +29,18 @@ public sealed partial class GameRoot
     /// <summary>预览循环播放时两遍之间的停顿（秒）。</summary>
     private const double RevealPreviewPauseSeconds = 1.2;
 
-    /// <summary>示例棋串（基础、位置加值、倍增子数量、军势）：军势依次落在一至五档。后两条是规格算例（"四步揭示""高档末步定格"）。</summary>
-    private static readonly (int Base, int Bonus, int Multipliers, int Power)[] RevealSampleGroups =
+    /// <summary>
+    /// 示例棋串（基础、位置加值、倍增子数量、阵型阶数、军势）：军势依次落在一至五档（formation-tiers 裁决的阈值 8 / 16 / 32 / 64）。
+    /// 军势是写死的字面量（引擎层不算军势），与"⌊(基础 + 加值) × 1.5^(倍增子 + 阵型)⌋"自洽；第一、三条是规格算例（"只有阵型""阵型多一步"），
+    /// 第二、四条是"四步揭示""高档末步定格"，第三、五条是"倍增 + 阵型"。阵型阶数照明细原样给，示例棋串只占一格（只做展示）。
+    /// </summary>
+    private static readonly (int Base, int Bonus, int Multipliers, int Formation, int Power)[] RevealSampleGroups =
     [
-        (3, 0, 0, 3),      // 一档：只有基础军势，一步
-        (4, 2, 0, 6),      // 二档：4+2 = 6
-        (5, 2, 1, 10),     // 三档：(5+2)×1.5 = 10
-        (9, 3, 1, 18),     // 四档：(9+3)×1.5 = 18，一圈亮环
-        (20, 4, 1, 36),    // 五档：(20+4)×1.5 = 36，两圈亮环 + 轻震
+        (3, 0, 0, 1, 4),       // 一档：3×1.5 = 4（只有阵型，三步）
+        (5, 2, 1, 0, 10),      // 二档：(5+2)×1.5 = 10
+        (5, 2, 1, 2, 23),      // 三档：(5+2)×1.5×2.25 = 23（倍增 + 阵型，五步）
+        (20, 4, 1, 0, 36),     // 四档：(20+4)×1.5 = 36，一圈亮环
+        (10, 4, 1, 3, 70),     // 五档：(10+4)×1.5×3.375 = 70，两圈亮环 + 轻震
     ];
 
     private string? _revealPreview;
@@ -115,7 +119,7 @@ public sealed partial class GameRoot
                 SentryBonus: 0,
                 BoundaryBonus: 0,
                 MultiplierCount: sample.Multipliers,
-                Power: sample.Power))),
+                Power: sample.Power) { FormationTier = sample.Formation })),
         ];
     }
 

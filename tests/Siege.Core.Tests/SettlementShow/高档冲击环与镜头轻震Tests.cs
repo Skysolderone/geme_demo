@@ -9,7 +9,8 @@ namespace Siege.Core.Tests.SettlementShow;
 /// <summary>
 /// 规格：settlement-show —— Requirement: 高档冲击环与镜头轻震（tiered-number-show 1.3，design.md D4）。
 /// 亮环与轻震都由时间线的状态纯函数地给出：自条目末步开始起，亮环 400 ms（四档一圈、五档两圈），五档轻震 250 ms；一至三档没有；零时长下不出现。
-/// 算例用规格的两条四步棋串：军势 18（四档，末步 660 ms 开始、440 ms）与军势 36（五档，末步 660 ms 开始、660 ms），其后接势力节拍让演出不提前结束。
+/// 算例用两条四步棋串：军势 36（四档，末步 660 ms 开始、440 ms）与军势 66（五档，末步 660 ms 开始、660 ms），其后接势力节拍让演出不提前结束。
+/// formation-tiers 段 C：阈值改为 8 / 16 / 32 / 64（四档 32–63、五档 ≥ 64），原算例 18 / 36 各降一档，按新阈值换成 36（⌊(20+4)×1.5⌋）与 66（⌊(40+4)×1.5⌋）。
 /// </summary>
 /// <remarks>
 /// 变异验证（tiered-number-show 段 A）。每条变异由脚本做：二进制读入原文并另存备份 → 断言锚点恰命中 1 次 → 改写 → 跑 SettlementShow + TacticalLayers 两个命名空间（基线 215 通过 / 2 跳过）→ finally 里重新写回原文（mtime 随之刷新）并逐字节比对；全部还原后确认跑 0 红。
@@ -35,11 +36,11 @@ public class 高档冲击环与镜头轻震Tests
         ],
         duration);
 
-    /// <summary>军势 18（⌊(10+2)×1.5⌋）：四档。</summary>
-    private static ShowTimeline TierFour() => Timeline(10, 2, 18);
+    /// <summary>军势 36（⌊(20+4)×1.5⌋）：四档（32–63）。</summary>
+    private static ShowTimeline TierFour() => Timeline(20, 4, 36);
 
-    /// <summary>军势 36（⌊(20+4)×1.5⌋）：五档。</summary>
-    private static ShowTimeline TierFive(ShowDuration duration = ShowDuration.Normal) => Timeline(20, 4, 36, duration);
+    /// <summary>军势 66（⌊(40+4)×1.5⌋）：五档（≥ 64）。</summary>
+    private static ShowTimeline TierFive(ShowDuration duration = ShowDuration.Normal) => Timeline(40, 4, 66, duration);
 
     /// <summary>末步的开始时刻：前三步各 220 ms。</summary>
     private const int FinalStartMs = 660;
@@ -89,8 +90,8 @@ public class 高档冲击环与镜头轻震Tests
     [Fact]
     public void 低档没有()
     {
-        // 末步为三档（军势 10）：逐毫秒走完整场演出（揭示 880 ms + 势力 900 ms），自始至终没有亮环、画面不震。
-        ShowTimeline timeline = Timeline(5, 2, 10);
+        // 末步为三档（军势 18 = ⌊(10+2)×1.5⌋，16–31）：逐毫秒走完整场演出（揭示 880 ms + 势力 900 ms），自始至终没有亮环、画面不震。
+        ShowTimeline timeline = Timeline(10, 2, 18);
         int shownFrames = 0;
         for (int ms = 0; !timeline.IsFinished; ms++)
         {
@@ -103,8 +104,8 @@ public class 高档冲击环与镜头轻震Tests
         // 样本口径下界：条目确实一直在显示（否则上面的"没有"是对着空遮罩说的）。
         Assert.Equal(880 + 900, shownFrames);
 
-        // 一、二档同样没有。
-        foreach ((int baseTotal, int bonus, long power) in new[] { (1, 1, 3L), (3, 1, 6L) })
+        // 一、二档同样没有（军势 3 一档、军势 10 二档）。
+        foreach ((int baseTotal, int bonus, long power) in new[] { (1, 1, 3L), (5, 2, 10L) })
         {
             ShowTimeline low = Timeline(baseTotal, bonus, power);
             low.Advance(FinalStartMs + 100);
@@ -147,7 +148,7 @@ public class 高档冲击环与镜头轻震Tests
         Assert.True(timeline.Mask().IsEmpty);
 
         // 正常时长下遮罩不空：新增的中间态计入"遮罩是否为空"（只有军势揭示一个节拍，遮罩里没有别的中间态可以代替它们）。
-        var only = new ShowTimeline([new PowerRevealBeat([RevealEntry.From(Group(P1, 20, 4, 1, 36, "D4"))])], ShowDuration.Normal);
+        var only = new ShowTimeline([new PowerRevealBeat([RevealEntry.From(Group(P1, 40, 4, 1, 66, "D4"))])], ShowDuration.Normal);
         only.Advance(FinalStartMs + 100);
         ShowMask shown = only.Mask();
         Assert.Equal((1, 1, true, 4), (shown.Reveals.Length, shown.Rings.Length, shown.ShakePermille is not null, shown.RevealStepTiers.Length));
@@ -160,7 +161,7 @@ public class 高档冲击环与镜头轻震Tests
         // 八条一步的五档棋串：各步之和 8 × 660 = 5280 ms → 压缩到 1600 ms，条目每 200 ms 开始一条，短于轻震的 250 ms。
         // 第 210 ms：第 1 条的轻震进度 840‰ 尚未结束，第 2 条刚开始 10 ms——只给后开始的那一个（40‰）；两条的亮环各自都在。
         string[] cells = ["A1", "C1", "E1", "G1", "A3", "C3", "E3", "G3"];
-        ImmutableArray<RevealEntry> entries = [.. cells.Select(c => RevealEntry.From(Group(P1, 40, 0, 0, 40, c)))];
+        ImmutableArray<RevealEntry> entries = [.. cells.Select(c => RevealEntry.From(Group(P1, 70, 0, 0, 70, c)))];   // 军势 70：五档
         var beat = new PowerRevealBeat(entries);
         Assert.Equal((5280, 1600, 200), (beat.RawDurationMs, beat.DurationMs, beat.StepStartMs(1, 0)));
 

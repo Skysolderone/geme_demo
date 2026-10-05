@@ -55,6 +55,8 @@ public sealed record EvaluationWeights(
     /// （口径见 <c>AiSearchConfig.PassThresholdCalibrationStatus</c>）；九维取值未随之改动。
     /// <para>守门测试 <c>默认评价权重的校准Tests</c> 断言本常量、<see cref="CalibrationOf"/> 与 <see cref="Default"/> 的每一维同步。
     /// 以未单独扫档维度的当前默认值产出的基线数据，引用时 MUST 注明权重口径，MUST NOT 与别的权重口径下的数据直接比较。</para>
+    /// <para><b>计分规则 v2 下未校准</b>：以上全部是在计分规则 v1（不计阵型）下取得的；formation-tiers 把新局缺省改为计分规则 v2（阵型）之后未重扫，
+    /// 见 <see cref="FormationScoringStatus"/>。本常量的文字记录的是 v1 下的校准经过，保持原样。</para>
     /// </summary>
     public const string CalibrationStatus = "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）；more-pieces-relics 扩展计分后未重扫";
 
@@ -64,6 +66,15 @@ public sealed record EvaluationWeights(
     /// 引用时 MUST 注明这一口径。停手阈值已由 v2-recalibration 段 A 在内容集 V2 上复核，<c>AiSearchConfig.PassThresholdCalibrationStatus</c> 不再带本补注。
     /// </summary>
     public const string ScoringExtendedStatus = "more-pieces-relics 扩展计分后未重扫";
+
+    /// <summary>
+    /// formation-tiers（design D4）之后的补注：阵型（计分规则 v2）让成档的棋串军势成倍跳升，势力的数值分布随之改变；而九维默认权重、
+    /// 缺省停手阈值（<c>AiSearchConfig.DefaultPassThreshold</c>）与 2 人图覆盖表（<see cref="MapOverrides"/>）全部是在计分规则 v1（不计阵型）下取得的——
+    /// 在新局缺省的计分规则 v2 下它们一律<b>未校准</b>，取值未改。评价函数与搜索也未改：各维仍取"结算后 − 开始前"，跨过门槛的跳升自然进入势力维；
+    /// AI 不做跨门槛的多步规划，属已知限制。以这些取值在计分规则 v2 下产出的数据，引用时 MUST 注明这一口径（testing.md「计分口径一变，默认权重必须重扫」）；
+    /// 是否改动由负责人按 formation-tiers D6 的验证跑局（v1 / v2 × 停手阈值 10 / 20 / 40）裁决。
+    /// </summary>
+    public const string FormationScoringStatus = "计分规则 v2 下未校准：九维权重、停手阈值与 2 人图覆盖表均在计分规则 v1（不计阵型）下取得，formation-tiers 引入阵型后未重扫";
 
     /// <summary>未单独扫档维度的标注（<see cref="CalibrationOf"/> 对这六维返回它）。</summary>
     public const string NotSweptStatus = "沿用旧值、新规则下未单独扫档";
@@ -93,6 +104,7 @@ public sealed record EvaluationWeights(
     /// 已终局局平均结束大回合 9.81、第 3 大回合领先者胜率 70.9%（只记录，不作否决）。</para>
     /// <para>改任何一维仍须双向扫档、同种子同地图同内容集不少于 200 局（或经负责人裁决的更小规模，须写明局数并注明小样本）的前后对照，并连同本段、<see cref="CalibrationStatus"/> 与 <see cref="CalibrationOf"/> 一起更新；
     /// 计分、出局、终局或活形规则再变更时，校准随之失效，须重新标注。</para>
+    /// <para><b>计分规则 v2 下未校准</b>：formation-tiers 引入阵型后，上面的扫档结论只对计分规则 v1 成立；v2 下九维均未重扫（<see cref="FormationScoringStatus"/>）。</para>
     /// </summary>
     public static readonly EvaluationWeights Default = new(
         PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 200, Threat: 25);
@@ -106,6 +118,7 @@ public sealed record EvaluationWeights(
     /// 第 6–8 批（2 × 2 组合）未触发：触发线为基线无提子比例减 1 个标准误（0.90 − 0.067 → ≤ 16 局），Eye 50 为 13 / 20 达线，EnemyLoss 两档（16 / 24）都是 19 / 20，反而高于基线。</para>
     /// <para>Eye 50 是本次档位的下界，50 以下没有数据；诊断 engagement-diagnosis b09（停手阈值 80）下 Eye 50 的第 3 大回合领先者曾 20 / 20 全胜，停手阈值 20 下没有复现。
     /// 只在标准难度上扫档；覆盖同样作用于 2 人图上的简单、高难与专家（design D7），这些难度未另行扫档。</para>
+    /// <para><b>计分规则 v2 下未校准</b>：本表在计分规则 v1（不计阵型）下扫出；formation-tiers 引入阵型后未重扫（<see cref="FormationScoringStatus"/>）。</para>
     /// </summary>
     public const string TwoPlayerOverrideCalibrationStatus = "v2-recalibration 段 B 校准：siege-2p-base-v1、2 名标准难度、内容集 V2、种子 1–20、每档 20 局（小样本，胜率类只看方向）、停手阈值 20、带入 0、截断 600；档位 (Eye, EnemyLoss) = (200, 8) / (100, 8) / (50, 8) / (200, 16) / (200, 24)，各档 截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜（唯一领先者，并列局不计入分母）：(200, 8) → 0 / 18 / 8.30 / 11/18；(100, 8) → 0 / 17 / 7.90 / 7/18；(50, 8) → 0 / 13 / 8.35 / 11/18；(200, 16) → 0 / 19 / 8.50 / 12/19；(200, 24) → 0 / 19 / 8.50 / 12/19；选定 (50, 8)（无提子带只含此档，领先者未全胜，平均结束大回合在 7–10 内）；Eye 50 为档位下界；数据目录 sim-out/v2-recalibration/2p-eye<E>-el<L>";
 

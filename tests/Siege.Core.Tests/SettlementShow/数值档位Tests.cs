@@ -14,9 +14,14 @@ namespace Siege.Core.Tests.SettlementShow;
 /// <summary>
 /// 规格：settlement-show —— Requirement: 数值档位（tiered-number-show 1.1，design.md D1）。
 /// 算例即规格两个场景；样式表的期望值逐格抄自 design.md D1 的分档样式表（不是抄实现）。
+/// formation-tiers 段 C：阈值按负责人裁决（计分规则 v2 的 20 局实测，2026-10-05）由 4 / 8 / 16 / 32 改为 8 / 16 / 32 / 64——
+/// 一档 &lt; 8、二档 8–15、三档 16–31、四档 32–63、五档 ≥ 64；下面各边界算例按新阈值手算重写（每个下界取"下界 − 1"与"下界"两侧）。
 /// </summary>
 /// <remarks>
 /// 变异验证（tiered-number-show 段 A）。每条变异由脚本做：二进制读入原文并另存备份 → 断言锚点恰命中 1 次 → 改写 → 跑 SettlementShow + TacticalLayers 两个命名空间（基线 215 通过 / 2 跳过）→ finally 里重新写回原文（mtime 随之刷新）并逐字节比对；全部还原后确认跑 0 红。
+/// formation-tiers 段 C 复做（阈值已为 [8, 16, 32, 64]；脚本做法同下，只跑 SettlementShow / TacticalLayers / VisualStyleBaseline / BatchPreview 四个命名空间，基线 290 通过）：
+/// M-FC5「阈值 16 改成 17」——<c>[8, 16, 32, 64]</c> 改为 <c>[8, 17, 32, 64]</c> → 红 2（边界取档 value=16、三处呈现同一数值同一档 value=16）。
+/// 以下为 tiered-number-show 段 A 时（旧阈值）的记录：
 /// M-T1「阈值 8 改成 9」——<c>NumberTier.Thresholds</c> 的 <c>[4, 8, 16, 32]</c> 改为 <c>[4, 9, 16, 32]</c> → 红 2（边界取档 value=8、三处呈现同一数值同一档 value=8）。
 /// M-T2「不取绝对值」——<c>BigInteger.Abs(value)</c> 改为 <c>value</c> → 红 6（负数按绝对值 4 条、三处呈现同一数值同一档 value=−20、势力重算节拍与数值变化显示Tests.放大幅度按档）。
 /// M-T3「样式表改一格」——四档 <c>RankScalePercent: 180</c> 改为 <c>170</c> → 红 2（分档样式表 tier=4、势力重算节拍与数值变化显示Tests.放大幅度按档）。
@@ -33,14 +38,14 @@ public class 数值档位Tests
 {
     [Theory]
     [InlineData("0", 1)]
-    [InlineData("3", 1)]
-    [InlineData("4", 2)]
-    [InlineData("7", 2)]
-    [InlineData("8", 3)]
-    [InlineData("15", 3)]
-    [InlineData("16", 4)]
-    [InlineData("31", 4)]
-    [InlineData("32", 5)]
+    [InlineData("7", 1)]
+    [InlineData("8", 2)]
+    [InlineData("15", 2)]
+    [InlineData("16", 3)]
+    [InlineData("31", 3)]
+    [InlineData("32", 4)]
+    [InlineData("63", 4)]
+    [InlineData("64", 5)]
     [InlineData("1000000", 5)]
     [InlineData("1000000000000000000000000000000", 5)]   // 10^30：任意精度整数，取档不经定宽整数与浮点
     public void 边界取档(string value, int tier)
@@ -49,10 +54,10 @@ public class 数值档位Tests
     }
 
     [Theory]
-    [InlineData("-20", 4)]
-    [InlineData("-3", 1)]
-    [InlineData("-4", 2)]
-    [InlineData("-32", 5)]
+    [InlineData("-20", 3)]
+    [InlineData("-7", 1)]
+    [InlineData("-8", 2)]
+    [InlineData("-64", 5)]
     [InlineData("-1000000000000000000000000000000", 5)]
     public void 负数按绝对值(string value, int tier)
     {
@@ -134,15 +139,15 @@ public class 数值档位Tests
     }
 
     [Theory]
-    [InlineData(3, 1)]
-    [InlineData(4, 2)]
-    [InlineData(7, 2)]
-    [InlineData(8, 3)]
-    [InlineData(15, 3)]
-    [InlineData(16, 4)]
-    [InlineData(31, 4)]
-    [InlineData(32, 5)]
-    [InlineData(-20, 4)]
+    [InlineData(7, 1)]
+    [InlineData(8, 2)]
+    [InlineData(15, 2)]
+    [InlineData(16, 3)]
+    [InlineData(31, 3)]
+    [InlineData(32, 4)]
+    [InlineData(63, 4)]
+    [InlineData(64, 5)]
+    [InlineData(-20, 3)]
     public void 三处呈现同一数值同一档(int value, int tier)
     {
         // 军势揭示、势力栏到账、常驻标注共用一张表：同一个数在三处读出同一档（期望档位写死，不调取档入口）。
@@ -243,6 +248,6 @@ public class 数值档位Tests
         // 档位只影响呈现：同一档里军势不同的两条棋串，军势揭示仍按军势（不是档位）从小到大排。
         ImmutableArray<PlacedPiece> placed = [new(Coord.Parse("C3"), PieceType.Basic, P1), new(Coord.Parse("G7"), PieceType.Basic, P1)];
         ImmutableArray<RevealEntry> entries = SettlementBeats.RevealEntries(placed, [Group(P1, 15, 0, 0, 15, "C3"), Group(P1, 9, 0, 0, 9, "G7")]);
-        Assert.Equal(["G7:9:3", "C3:15:3"], entries.Select(e => $"{e.Coord.ToNotation()}:{e.Power}:{e.FinalTier}"));
+        Assert.Equal(["G7:9:2", "C3:15:2"], entries.Select(e => $"{e.Coord.ToNotation()}:{e.Power}:{e.FinalTier}"));
     }
 }

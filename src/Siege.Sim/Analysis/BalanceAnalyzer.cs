@@ -1340,6 +1340,16 @@ public static class BalanceAnalyzer
 
     // ---------- §17.4 高倍率棋串 ----------
 
+    /// <summary>
+    /// 一条棋串里归倍增子的放大量。阵型 0 阶：日志里的精确军势 − 基础 − 全部位置加值（原算式）。
+    /// 阵型 ≥ 一阶：<c>⌊(基础 + 位置加值) × 1.5^倍增子数量⌋ − (基础 + 位置加值)</c>，经唯一的 <see cref="Siege.Core.Scoring.Multiplier.Apply"/>。
+    /// </summary>
+    internal static BigInteger AmplifiedByMultipliers(GroupEntry g)
+    {
+        BigInteger sum = (BigInteger)g.Base + PositionBonusOf(g);
+        return (g.FormationTier ?? 0) == 0 ? g.Power - sum : new Siege.Core.Scoring.Multiplier(g.MultiplierCount).Apply(sum) - sum;
+    }
+
     private static MultiplierSection Multiplier(List<MatchLog> logs)
     {
         var distribution = new SortedDictionary<int, int>();
@@ -1398,7 +1408,10 @@ public static class BalanceAnalyzer
             {
                 // restore-go-core-rules：倍率整体放大"基础 + 位置加值"，放大部分 = 日志里的精确军势 − 基础 − 全部位置加值，整块归倍增子。
                 // more-pieces-relics（段 A 待决 3）："全部位置加值"是七项来源——四种新来源若不减，会被整块算给倍增子；它们各自归旗手 / 铁链 / 哨兵 / 界碑。
-                BigInteger amplified = g.Power - g.Base - PositionBonusOf(g);
+                // formation-tiers D3：计阵型的棋串（日志记录的阵型阶数 > 0）里，归倍增子的只是倍增子自己放大的那部分——按"倍增子数量"单独施加倍率；
+                // 阵型多放大的部分（按总指数 GroupEntry.Multiplier 还原的军势 − 这部分）不属于任何棋子类型，与高地加值一样不计入归因。
+                // 阵型 0 阶（v1 局、旧日志、小棋串）走原算式，结果与引入阵型之前逐项相同。阶数只读日志，不在这里数棋子。
+                BigInteger amplified = AmplifiedByMultipliers(g);
                 foreach (PieceType type in types)
                 {
                     int count = g.PieceCounts!.TryGetValue(type.ToString(), out int n) ? n : 0;
