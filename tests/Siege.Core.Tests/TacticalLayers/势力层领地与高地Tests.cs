@@ -193,6 +193,27 @@ public class 势力层领地与高地Tests
         Assert.Equal((2, 2), (two.Power.MultiplierCount, two.HeatLevel));
     }
 
+    [Fact]
+    public void 热区按倍率指数取档()
+    {
+        // formation-tiers D5（段 C）：热区显示档位 = min(倍增子数量 + 阵型阶数, 3)，取自明细的倍率指数，呈现层不数棋子。
+        // 计分规则 v2、9×9、第 5 大回合：P0 C5–G5 一排（C5、D5 倍增子，E5–G5 普通子）→ 倍增子 2、5 枚阵型二阶，指数 4 → 热区 3；
+        // 军势 ⌊5 × 81 / 16⌋ = ⌊25.3125⌋ = 25。P1 C2–E2 三枚普通子 → 倍增子 0、阵型一阶，指数 1 → 热区 1（按倍增子数会是 0）；军势 ⌊3 × 1.5⌋ = 4。
+        MatchFlow match = MatchFixtures.Started(options: MatchFixtures.V2).AtRound(5)
+            .Pieces(P0, PieceType.Multiplier, "C5", "D5").Stones(P0, "E5", "F5", "G5").Stones(P1, "C2", "D2", "E2");
+
+        var layer = (PowerLayerContent)match.World(P3).Layer(TacticalLayer.Power);
+        GroupScoreView five = Assert.Single(layer.Groups, g => g.Owner == P0);
+        GroupScoreView three = Assert.Single(layer.Groups, g => g.Owner == P1);
+
+        Assert.Equal((2, 2, 3, 25), (five.Power.MultiplierCount, five.Power.FormationTier, five.HeatLevel, (int)five.Power.Power));
+        Assert.Equal("（基础 5 + 位置加值 0）× 2.25 × 阵型 2.25 = 25", five.Power.FormulaText);
+        Assert.Equal("5×2.25×2.25 = 25", five.Power.ShortFormulaText);
+        Assert.Equal((0, 1, 1, 4), (three.Power.MultiplierCount, three.Power.FormationTier, three.HeatLevel, (int)three.Power.Power));
+        Assert.Equal("（基础 3 + 位置加值 0）× 阵型 1.5 = 4", three.Power.FormulaText);
+        Assert.Equal("3×1.5 = 4", three.Power.ShortFormulaText);
+    }
+
     [Theory]
     [InlineData("0", "0")]
     [InlineData("999999", "999999")]

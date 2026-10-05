@@ -180,7 +180,8 @@ public enum GroupMark
 
 // ---------- 势力层 ----------
 
-/// <summary>势力层的一条棋串分数与倍率热区等级（= min(倍增子数量, <see cref="MaxHeatLevel"/>)，0 表示无倍率）。
+/// <summary>势力层的一条棋串分数与倍率热区等级（= min(倍率指数, <see cref="MaxHeatLevel"/>)，倍率指数 = 倍增子数量 + 阵型阶数（formation-tiers D5，
+/// 取 <see cref="GroupPower.MultiplierExponent"/>）；0 表示无倍率）。
 /// 热区等级只是显示档位（柱高 / 着色），到 <see cref="MaxHeatLevel"/> 为止不再加高；它不是倍率封顶，军势与倍率文字始终取精确值。</summary>
 public sealed record GroupScoreView(PlayerId Owner, ImmutableArray<Coord> Stones, GroupPowerView Power, int HeatLevel)
 {
@@ -423,7 +424,7 @@ public static class TacticalLayers
         }
 
         return new PowerLayerContent(
-            [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), Math.Min(g.MultiplierCount, GroupScoreView.MaxHeatLevel)))],
+            [.. power.Players.SelectMany(p => p.Groups).Select(g => new GroupScoreView(g.Owner, g.Stones, GroupPowerView.From(g), Math.Min(g.MultiplierExponent, GroupScoreView.MaxHeatLevel)))],
             [.. power.Players.Select(p => new PlayerPowerRowView(p.Player, p.Status, p.Total, p.TerritoryScore, p.GroupScore, power.RankOf(p.Player), Labels.Status(p.Status)))],
             [.. power.Players.SelectMany(p => p.ExclusiveCells.Select(c => new TerritoryCellView(c, TerritoryState.Exclusive, p.Player, p.ScoredCells.Contains(c)))).OrderBy(c => c.Coord)]);
     }

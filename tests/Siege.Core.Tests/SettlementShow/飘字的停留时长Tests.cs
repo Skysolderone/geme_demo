@@ -86,11 +86,11 @@ public class 飘字的停留时长Tests
     [Fact]
     public void 高档停留更久()
     {
-        // 两个一步条目：军势 3（一档，0 ms 开始、220 ms）与军势 40（五档，220 ms 开始、660 ms）；其后势力（900 ms）与两条横幅（1600 ms），演出全长 3380 ms，不提前结束。
+        // 两个一步条目：军势 3（一档，0 ms 开始、220 ms）与军势 70（五档 ≥ 64，220 ms 开始、660 ms）；其后势力（900 ms）与两条横幅（1600 ms），演出全长 3380 ms，不提前结束。
         // 一档的结果自末步开始 1400 ms 后不再显示；五档的结果到 2200 ms 才不再显示。
         var timeline = new ShowTimeline(
             [
-                new PowerRevealBeat([RevealEntry.From(Group(P1, 3, 0, 0, 3, "C3")), RevealEntry.From(Group(P1, 40, 0, 0, 40, "G7"))]),
+                new PowerRevealBeat([RevealEntry.From(Group(P1, 3, 0, 0, 3, "C3")), RevealEntry.From(Group(P1, 70, 0, 0, 70, "G7"))]),
                 new PowerBeat([new PowerChange(P1, 3, 5, 1, 1)]),
                 new BannerBeat([BannerBeat.EliminatedText(P2), BannerBeat.MatchEndedText]),
             ],
@@ -101,7 +101,7 @@ public class 飘字的停留时长Tests
         timeline.Advance(219);
         Assert.Equal(["C3"], timeline.Mask().Reveals.Select(r => r.Coord.ToNotation()));
         timeline.Advance(1);
-        Assert.Equal("C3:3:3:1:1000:末步:1:157,G7:40:40:5:0:末步:5:0", RevealText(timeline.Mask()));
+        Assert.Equal("C3:3:3:1:1000:末步:1:157,G7:70:70:5:0:末步:5:0", RevealText(timeline.Mask()));
 
         timeline.Advance(1399 - 220);
         Assert.Equal(["C3", "G7"], timeline.Mask().Reveals.Select(r => r.Coord.ToNotation()));
@@ -109,13 +109,13 @@ public class 飘字的停留时长Tests
         Assert.Equal(["G7"], timeline.Mask().Reveals.Select(r => r.Coord.ToNotation()));
 
         timeline.Advance(220 + 2199 - 1400);   // 五档末步开始后 2199 ms
-        Assert.Equal("G7:40:40:5:1000:末步:5:999", RevealText(timeline.Mask()));
+        Assert.Equal("G7:70:70:5:1000:末步:5:999", RevealText(timeline.Mask()));
         timeline.Advance(1);   // 2200 ms：五档的结果停留满
         Assert.False(timeline.IsFinished);
         Assert.Empty(timeline.Mask().Reveals);
 
-        // 二、三、四档的停留：1400 / 1600 / 1900 ms（一步条目，军势 5 / 10 / 20）。
-        foreach ((int power, int holdMs) in new[] { (5, 1400), (10, 1600), (20, 1900) })
+        // 二、三、四档的停留：1400 / 1600 / 1900 ms（一步条目，军势 10 / 20 / 40，阈值 8 / 16 / 32 / 64）。
+        foreach ((int power, int holdMs) in new[] { (10, 1400), (20, 1600), (40, 1900) })
         {
             var one = new ShowTimeline(
                 [
@@ -134,19 +134,19 @@ public class 飘字的停留时长Tests
     [Fact]
     public void 揭示条目逐步推进()
     {
-        // 四步条目（军势 10：档位一、一、二、三）：自第一步开始起持续显示，逐步给出累计文案、最新一步与步内进度；未到末步时结果年龄为 0。
+        // 四步条目（军势 18 = ⌊(10+2)×1.5⌋，三档：档位一、一、二、三）：自第一步开始起持续显示，逐步给出累计文案、最新一步与步内进度；未到末步时结果年龄为 0。
         var timeline = new ShowTimeline(
-            [new PowerRevealBeat([RevealEntry.From(Group(P1, 5, 2, 1, 10, "C3"))]), new PowerBeat([new PowerChange(P1, 3, 5, 1, 1)])],
+            [new PowerRevealBeat([RevealEntry.From(Group(P1, 10, 2, 1, 18, "C3"))]), new PowerBeat([new PowerChange(P1, 3, 5, 1, 1)])],
             ShowDuration.Normal);
-        Assert.Equal("C3:5:5:1:0:未到:3:0", RevealText(timeline.Mask()));
+        Assert.Equal("C3:10:10:1:0:未到:3:0", RevealText(timeline.Mask()));
         timeline.Advance(330);
-        Assert.Equal("C3:5+2:+2:1:500:未到:3:0", RevealText(timeline.Mask()));
+        Assert.Equal("C3:10+2:+2:1:500:未到:3:0", RevealText(timeline.Mask()));
         timeline.Advance(220);
-        Assert.Equal("C3:(5+2)×1.5:×1.5:2:500:未到:3:0", RevealText(timeline.Mask()));
+        Assert.Equal("C3:(10+2)×1.5:×1.5:2:500:未到:3:0", RevealText(timeline.Mask()));
         timeline.Advance(220);
-        Assert.Equal("C3:(5+2)×1.5 = 10:= 10:3:500:末步:3:68", RevealText(timeline.Mask()));   // 末步开始后 110 ms：110 / 1600
+        Assert.Equal("C3:(10+2)×1.5 = 18:= 18:3:500:末步:3:68", RevealText(timeline.Mask()));   // 末步开始后 110 ms：110 / 1600
         timeline.Advance(330);
         Assert.IsType<PowerBeat>(timeline.Current);
-        Assert.Equal("C3:(5+2)×1.5 = 10:= 10:3:1000:末步:3:275", RevealText(timeline.Mask()));   // 440 / 1600
+        Assert.Equal("C3:(10+2)×1.5 = 18:= 18:3:1000:末步:3:275", RevealText(timeline.Mask()));   // 440 / 1600
     }
 }

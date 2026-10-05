@@ -91,6 +91,21 @@ public class 落子与提子节拍的内容Tests
         Assert.Equal("5+2 = 7", GroupPowerView.From(group with { MultiplierCount = 0, Power = 7 }).ShortFormulaText);
         Assert.Equal("5", GroupPowerView.From(group with { LineBonus = 0, MultiplierCount = 0, Power = 5 }).ShortFormulaText);
 
+        // formation-tiers D5（段 C）：阵型一阶以上时倍增与阵型分开写、倍增在前，只列非 1 的因子；阵型 0 阶的文案与上面逐字相同。
+        // 规格算例：基础 5、位置加值 2、倍增子 1、阵型二阶 → ⌊7 × 1.5 × 2.25⌋ = ⌊23.625⌋ = 23。
+        GroupPowerView formed = GroupPowerView.From(group with { FormationTier = 2, Power = 23 });
+        Assert.Equal("（基础 5 + 位置加值 2（连珠 2 / 协同 0 / 高地 0））× 1.5 × 阵型 2.25 = 23", formed.FormulaText);
+        Assert.Equal("(5+2)×1.5×2.25 = 23", formed.ShortFormulaText);
+        Assert.Equal((1, "1.5", 2, "2.25"), (formed.MultiplierCount, formed.MultiplierText, formed.FormationTier, formed.FormationText));
+        Assert.Equal(view.FormulaText, GroupPowerView.From(group with { FormationTier = 0 }).FormulaText);
+        // 没有倍增子、只有阵型：完整算式不写 "× 1"；短算式只有阵型因子（无加值 ⌊5 × 1.5⌋ = 7，有加值 ⌊7 × 1.5⌋ = 10）。
+        GroupPowerView onlyFormation = GroupPowerView.From(group with { LineBonus = 0, MultiplierCount = 0, FormationTier = 1, Power = 7 });
+        Assert.Equal("（基础 5 + 位置加值 0）× 阵型 1.5 = 7", onlyFormation.FormulaText);
+        Assert.Equal("5×1.5 = 7", onlyFormation.ShortFormulaText);
+        Assert.Equal("(5+2)×1.5 = 10", GroupPowerView.From(group with { MultiplierCount = 0, FormationTier = 1, Power = 10 }).ShortFormulaText);
+        // 倍增子多枚、阵型四阶：两个因子各自是精确十进制（1.5^2 = 2.25、1.5^4 = 5.0625），军势 ⌊7 × 3^6 / 2^6⌋ = ⌊79.734…⌋ = 79。
+        Assert.Equal("(5+2)×2.25×5.0625 = 79", GroupPowerView.From(group with { MultiplierCount = 2, FormationTier = 4, Power = 79 }).ShortFormulaText);
+
         // 结算后快照里没有棋串明细：飘字照样是类型名，没有军势揭示节拍。
         ImmutableArray<SettlementBeat> bare = SettlementBeats.Generate(Side(before, Reading(P1, 0, 3, 1)), Side(after, Reading(P1, 0, 10, 1)), Order("C3"));
         Assert.Equal("堡垒子", Assert.Single(Assert.IsType<PlacementBeat>(bare[0]).Pieces).CalloutText);

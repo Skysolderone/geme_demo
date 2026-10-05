@@ -23,6 +23,7 @@ public class UI层不含规则计算Tests
         typeof(LibertySnapshot), typeof(global::Siege.Core.Match.InitiativeOrder), typeof(FinalStandings), typeof(Adjacency), typeof(MapValidator),
         typeof(RelicLedger), typeof(RelicGenerator), typeof(HandLedger), typeof(PlayerHandAccess), typeof(PowerScoreboard),
         typeof(MatchFlow), typeof(MatchRunner), typeof(SettlementDriver), typeof(StagedBatch), typeof(BoardHistory), typeof(FlagPlanting),
+        typeof(FormationTiers),   // formation-tiers 段 C：阵型阶数取自势力明细 GroupPower.FormationTier，表现层不按棋子数自己定阶
     ];
 
     /// <summary>只读类型上的计算 / 写入方法：盘面的棋串、气、邻接、写盘；覆盖表的重算；倍率的乘法取整。</summary>
@@ -65,7 +66,7 @@ public class UI层不含规则计算Tests
         // 反面：扫描器确实能看到表现层对 Core 只读成员的调用（否则"空"可能只是没扫到）
         string[] seen = [.. IlReferences(PresentationAssembly).Where(r => r.Target is MethodBase).Select(r => $"{r.Target.DeclaringType!.Name}.{r.Target.Name}").Distinct()];
         Assert.Contains("CoverageMap.OwnershipOf", seen);
-        Assert.Contains("GroupPower.get_Multiplier", seen);
+        Assert.Contains("GroupPower.get_FormationTier", seen);   // formation-tiers 段 C：算式分开写倍增与阵型两个因子，不再读总倍率 get_Multiplier
         Assert.Contains("Coord.ToNotation", seen);
     }
 

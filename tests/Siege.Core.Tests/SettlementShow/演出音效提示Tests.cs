@@ -89,7 +89,7 @@ public class 演出音效提示Tests
         Assert.Equal("Placement", Step(timeline, 250));            // C3 出现
         Assert.Equal("Placement,Capture", Step(timeline, 250));    // 500 ms：C4 出现并跨入提子节拍
         Assert.Equal(string.Empty, Step(timeline, 100));           // 提子进行中不重复
-        Assert.Equal("Group:2", Step(timeline, 500));              // 1100 ms：跨入势力节拍，领地增量为 0 → 直接军势段，只响军势（P1 +4 二档、P2 −2 一档，取最高）
+        Assert.Equal("Group", Step(timeline, 500));                // 1100 ms：跨入势力节拍，领地增量为 0 → 直接军势段，只响军势（P1 +4、P2 −2，阈值 8 / 16 / 32 / 64 下都是一档）
         Assert.Equal(string.Empty, Step(timeline, 900));           // 播完
         Assert.True(timeline.IsFinished);
     }
@@ -114,8 +114,9 @@ public class 演出音效提示Tests
     [Fact]
     public void 两段到账两声()
     {
-        // P1 领地 +3（一档）、军势 +6（二档）：领地段 0–350 ms、军势段 350–700 ms、定格到 900 ms。
-        var timeline = new ShowTimeline([new PowerBeat([new PowerChange(P1, 5, 14, 2, 1, 3, 6)])], ShowDuration.Normal);
+        // P1 领地 +3（一档）、军势 +12（二档）：领地段 0–350 ms、军势段 350–700 ms、定格到 900 ms。
+        // （formation-tiers 段 C：阈值 4 / 8 / 16 / 32 → 8 / 16 / 32 / 64，本类各增量与军势按新阈值加倍取值，档位不变。）
+        var timeline = new ShowTimeline([new PowerBeat([new PowerChange(P1, 5, 20, 2, 1, 3, 12)])], ShowDuration.Normal);
         Assert.Equal("Territory", Start(timeline));
         Assert.Equal(string.Empty, Step(timeline, 100));
         Assert.Equal("Group:2", Step(timeline, 250));              // 350 ms：进入军势段
@@ -125,7 +126,7 @@ public class 演出音效提示Tests
         Assert.True(timeline.IsFinished);
 
         // 提速下单帧跨过两段：两声都要有。
-        var fast = new ShowTimeline([new PowerBeat([new PowerChange(P1, 5, 14, 2, 1, 3, 6)])], ShowDuration.Normal);
+        var fast = new ShowTimeline([new PowerBeat([new PowerChange(P1, 5, 20, 2, 1, 3, 12)])], ShowDuration.Normal);
         Assert.Equal("Territory", Start(fast));
         Assert.Equal("Group:2", Step(fast, 100, fast: true));    // 400 ms
     }
@@ -134,18 +135,18 @@ public class 演出音效提示Tests
     public void 领地段为零只响军势()
     {
         // 只有军势增量：Pending → 军势段，没有领地段就没有"领地到账"。
-        var timeline = new ShowTimeline([new PowerBeat([new PowerChange(P1, 5, 9, 2, 1)])], ShowDuration.Normal);
-        Assert.Equal("Group:2", Start(timeline));                  // 军势 +4：二档
+        var timeline = new ShowTimeline([new PowerBeat([new PowerChange(P1, 5, 13, 2, 1)])], ShowDuration.Normal);
+        Assert.Equal("Group:2", Start(timeline));                  // 军势 +8：二档
         Assert.Equal(string.Empty, Step(timeline, 900));
     }
 
     [Fact]
     public void 同帧合并()
     {
-        // 两名玩家同时进入领地段，增量 +3（一档）与 +9（三档）→ 只导出一个"领地到账"，档位取最高的三档；
-        // 同时进入军势段同理：+6（二档）与 −3（一档）→ 一个"军势到账"、二档。
-        PowerChange p1 = new(P1, 5, 14, 2, 1, 3, 6);
-        PowerChange p2 = new(P2, 6, 12, 1, 2, 9, -3);
+        // 两名玩家同时进入领地段，增量 +3（一档）与 +18（三档）→ 只导出一个"领地到账"，档位取最高的三档；
+        // 同时进入军势段同理：+12（二档）与 −3（一档）→ 一个"军势到账"、二档。
+        PowerChange p1 = new(P1, 5, 20, 2, 1, 3, 12);
+        PowerChange p2 = new(P2, 6, 21, 1, 2, 18, -3);
         var timeline = new ShowTimeline([new PowerBeat([p1, p2])], ShowDuration.Normal);
         ImmutableArray<SoundCue> territory = SoundCues.Between(ShowMask.Empty, timeline.Mask(), []);
         Assert.Equal(new SoundCue(SoundCueKind.Territory, 3), Assert.Single(territory));
@@ -163,9 +164,9 @@ public class 演出音效提示Tests
     [Fact]
     public void 揭示逐步发声且档位递增()
     {
-        // 军势揭示节拍中一个四步条目（军势 10：档位一、一、二、三），每步 220 ms：四次导出各一个"揭示"，档位依次一、一、二、三。
+        // 军势揭示节拍中一个四步条目（军势 21 = ⌊(10+4)×1.5⌋：档位一、一、二、三），每步 220 ms：四次导出各一个"揭示"，档位依次一、一、二、三。
         // 第一步在节拍进度 0 就开始——节拍排在首位时由创建瞬间的那一次调用导出，其后三次推进各一步。
-        ImmutableArray<SettlementBeat> beats = [new PowerRevealBeat([RevealEntry.From(Group(P1, 5, 2, 1, 10, "C3"))])];
+        ImmutableArray<SettlementBeat> beats = [new PowerRevealBeat([RevealEntry.From(Group(P1, 10, 4, 1, 21, "C3"))])];
         var timeline = new ShowTimeline(beats, ShowDuration.Normal);
         ImmutableArray<SoundCue> first = SoundCues.Between(ShowMask.Empty, timeline.Mask(), []);
         Assert.Equal(new SoundCue(SoundCueKind.Reveal, 1), Assert.Single(first));
@@ -189,7 +190,7 @@ public class 演出音效提示Tests
         Assert.Equal("Reveal:2", Step(merged, 500));
         Assert.Equal("Reveal:3", Step(merged, 5000));
         Assert.True(merged.IsFinished);
-        var jump = new ShowTimeline([new PlacementBeat(Pieces(1)), beats[0], new PowerBeat([new PowerChange(P1, 5, 14, 2, 1, 3, 6)])], ShowDuration.Normal);
+        var jump = new ShowTimeline([new PlacementBeat(Pieces(1)), beats[0], new PowerBeat([new PowerChange(P1, 5, 20, 2, 1, 3, 12)])], ShowDuration.Normal);
         Assert.Equal("Placement,Reveal:3,Territory", Step(jump, 250 + 880));   // 落子 → 揭示（整拍跨过）→ 进入领地段：同帧按节拍顺序排
         Assert.Equal("Group:2", Step(jump, 350));
 
@@ -198,15 +199,15 @@ public class 演出音效提示Tests
             [SoundCueKind.Placement, SoundCueKind.Capture, SoundCueKind.Relic, SoundCueKind.Reveal, SoundCueKind.Territory, SoundCueKind.Group, SoundCueKind.Banner],
             Enum.GetValues<SoundCueKind>());
 
-        // 取最高档而不是最后一步的档：一帧里先开始前一条目的末步（军势 20，四档），再开始后一条目的第一步（军势 36 的第一步，二档）→ 四档。
+        // 取最高档而不是最后一步的档：一帧里先开始前一条目的末步（军势 40，四档），再开始后一条目的第一步（军势 72 = ⌊(40+8)×1.5⌋ 的第一步，二档）→ 四档。
         var across = new ShowTimeline(
-            [new PlacementBeat(Pieces(1)), new PowerRevealBeat([RevealEntry.From(Group(P1, 20, 0, 0, 20, "C3")), RevealEntry.From(Group(P1, 20, 4, 1, 36, "G7"))])],
+            [new PlacementBeat(Pieces(1)), new PowerRevealBeat([RevealEntry.From(Group(P1, 40, 0, 0, 40, "C3")), RevealEntry.From(Group(P1, 40, 8, 1, 72, "G7"))])],
             ShowDuration.Normal);
         Assert.Equal("Placement,Reveal:4", Step(across, 250 + 440 + 10));
 
-        // 两个条目（军势 3 一步、军势 36 四步：档位一 | 二、三、四、五）：跨条目连续数步，逐步照各步的档位发声。
+        // 两个条目（军势 3 一步、军势 72 四步：档位一 | 二、三、四、五）：跨条目连续数步，逐步照各步的档位发声。
         var two = new ShowTimeline(
-            [new PowerRevealBeat([RevealEntry.From(Group(P1, 3, 0, 0, 3, "C3")), RevealEntry.From(Group(P1, 20, 4, 1, 36, "G7"))])],
+            [new PowerRevealBeat([RevealEntry.From(Group(P1, 3, 0, 0, 3, "C3")), RevealEntry.From(Group(P1, 40, 8, 1, 72, "G7"))])],
             ShowDuration.Normal);
         Assert.Equal("Reveal", Start(two));
         Assert.Equal(["Reveal:2", "Reveal:3", "Reveal:4", "Reveal:5"], Enumerable.Range(0, 4).Select(_ => Step(two, 220)));
@@ -235,7 +236,7 @@ public class 演出音效提示Tests
     public void 零时长无提示()
     {
         // 首拍是势力（进度 0 即领地段）、末拍横幅：正常时长下创建就有声，零时长下创建与推进都没有任何提示。
-        ImmutableArray<SettlementBeat> beats = [new PowerBeat([new PowerChange(P1, 5, 14, 2, 1, 3, 6)]), new BannerBeat([BannerBeat.MatchEndedText])];
+        ImmutableArray<SettlementBeat> beats = [new PowerBeat([new PowerChange(P1, 5, 20, 2, 1, 3, 12)]), new BannerBeat([BannerBeat.MatchEndedText])];
         Assert.Equal("Territory", Start(new ShowTimeline(beats, ShowDuration.Normal)));
 
         var zero = new ShowTimeline(beats, ShowDuration.Zero);
@@ -245,8 +246,8 @@ public class 演出音效提示Tests
         Assert.Equal(string.Empty, Step(zero, 5000, fast: true));
         Assert.Equal(string.Empty, Text(SoundCues.Between(ShowMask.Empty, ShowMask.Empty, [])));
 
-        // 首拍是军势揭示（军势 36：第一步二档）：正常时长下创建就有"揭示"，零时长下创建与推进都没有。
-        ImmutableArray<SettlementBeat> reveal = [new PowerRevealBeat([RevealEntry.From(Group(P1, 20, 4, 1, 36, "C3"))])];
+        // 首拍是军势揭示（军势 72：第一步二档）：正常时长下创建就有"揭示"，零时长下创建与推进都没有。
+        ImmutableArray<SettlementBeat> reveal = [new PowerRevealBeat([RevealEntry.From(Group(P1, 40, 8, 1, 72, "C3"))])];
         Assert.Equal("Reveal:2", Start(new ShowTimeline(reveal, ShowDuration.Normal)));
         var zeroReveal = new ShowTimeline(reveal, ShowDuration.Zero);
         Assert.Equal(string.Empty, Start(zeroReveal));
@@ -262,8 +263,8 @@ public class 演出音效提示Tests
             new PlacementBeat(Pieces(2)),                                                                      // 0–500
             new CaptureBeat([new CapturedPiece(Coord.Parse("D3"), P2, PieceType.Basic)]),                      // 500–1100
             new RelicRevealBeat([new RevealedRelic(Coord.Parse("E5"), "烽火")]),                               // 1100–1700
-            new PowerRevealBeat([RevealEntry.From(Group(P1, 5, 2, 1, 10, "C3"))]),                             // 1700–2580：四步 1700 / 1920 / 2140 / 2360，档位一、一、二、三
-            new PowerBeat([new PowerChange(P1, 5, 14, 2, 1, 3, 6), new PowerChange(P2, 6, 4, 1, 2, -1, -1)]),  // 2580–3480：领地 2580、军势 2930（+6 二档）
+            new PowerRevealBeat([RevealEntry.From(Group(P1, 10, 4, 1, 21, "C3"))]),                            // 1700–2580：四步 1700 / 1920 / 2140 / 2360，档位一、一、二、三
+            new PowerBeat([new PowerChange(P1, 5, 20, 2, 1, 3, 12), new PowerChange(P2, 6, 4, 1, 2, -1, -1)]), // 2580–3480：领地 2580、军势 2930（+12 二档）
             new BannerBeat([BannerBeat.EliminatedText(P2), BannerBeat.MatchEndedText]),                        // 3480–5080：第 2 条 4280
         ];
 

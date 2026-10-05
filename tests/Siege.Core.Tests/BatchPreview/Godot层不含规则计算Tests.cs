@@ -57,6 +57,8 @@ public class Godot层不含规则计算Tests
             // life-shape 3.4：活形状态、眼空间与禁入格一律经 Siege.Presentation 视图模型（LibertyGroupView.Life / BoardCellView.LifeForbiddenBy / HoverReadout）到达，
             // Godot 侧 MUST NOT 直接碰活形报告——既不调 Analyze 重算，也不读公开视图里的 LifeShapeReport（否则就是在引擎层再写一份"谁的禁入"判断）。
             "LifeShapeReport", ".LifeShape.",
+            // formation-tiers 段 C：阵型阶数只取自势力明细（GroupPower.FormationTier / 揭示条目），Godot 侧不调门槛表的唯一实现自己按棋子数定阶。
+            "FormationTiers",
         ];
 
         string[] violations =

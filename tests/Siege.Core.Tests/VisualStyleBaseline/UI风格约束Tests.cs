@@ -43,10 +43,11 @@ public class UI风格约束Tests
         Assert.True(ImpactRing.DurationMs <= 400, $"亮环时长 {ImpactRing.DurationMs}");
         Assert.True(NumberTierStyle.All.Max(s => s.ShakeMs) <= 250, $"轻震时长 {NumberTierStyle.All.Max(s => s.ShakeMs)}");
 
-        // 一次结算揭示出五档的军势（规格算例：基础 20、加值 4、倍增子 1、军势 36），逐毫秒走完整场演出：
-        // 画面上的中间态只有揭示条目（数字）、至多两圈亮环与轻震；亮环累计不超过 400 ms，轻震累计不超过 250 ms。
-        var group = new GroupPower(new PlayerId(1), [Coord.Parse("D4")], BaseTotal: 20, LineBonus: 4, SynergyBonus: 0, HighGroundBonus: 0,
-            BannerBonus: 0, ChainBonus: 0, SentryBonus: 0, BoundaryBonus: 0, MultiplierCount: 1, Power: 36);
+        // 一次结算揭示出五档的军势，逐毫秒走完整场演出：画面上的中间态只有揭示条目（数字）、至多两圈亮环与轻震；亮环累计不超过 400 ms，轻震累计不超过 250 ms。
+        // formation-tiers 段 C：阈值改为 8 / 16 / 32 / 64 后，原算例军势 36 只到四档（不轻震），换成带阵型的五档算例——
+        // 基础 10、加值 4、倍增子 1、阵型三阶：⌊14 × 1.5^4⌋ = ⌊14 × 81 / 16⌋ = 70（≥ 64，五档），五步 220 × 4 + 660 = 1540 ms。
+        var group = new GroupPower(new PlayerId(1), [Coord.Parse("D4")], BaseTotal: 10, LineBonus: 4, SynergyBonus: 0, HighGroundBonus: 0,
+            BannerBonus: 0, ChainBonus: 0, SentryBonus: 0, BoundaryBonus: 0, MultiplierCount: 1, Power: 70) { FormationTier = 3 };
         var timeline = new ShowTimeline(
             [new PowerRevealBeat([RevealEntry.From(group)]), new PowerBeat([new PowerChange(new PlayerId(1), 3, 5, 1, 1)])],
             ShowDuration.Normal);
@@ -62,7 +63,7 @@ public class UI风格约束Tests
         }
 
         // 样本口径下界：五档确实触发了亮环与轻震（否则上面的"不超过"是对着空遮罩说的），条目自始至终在显示。
-        Assert.Equal((400, 250, 1320 + 900), (ringMs, shakeMs, revealMs));
+        Assert.Equal((400, 250, 1540 + 900), (ringMs, shakeMs, revealMs));
 
         // 不使用粒子：引擎层（src/godot 不在 siege.sln 里，IL 守门扫不到）的脚本里不得出现任何粒子节点或粒子材质。源码文本扫描，配样本下界与反面命中。
         Regex particles = new(@"(?i)particle\w*");

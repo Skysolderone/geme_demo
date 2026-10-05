@@ -80,7 +80,9 @@ public sealed record RevealEntry(Coord Coord, PlayerId Owner, BigInteger Power, 
 
     /// <summary>
     /// 把军势算式拆成依次出现的步骤，只列非零项，口径与势力层短算式（<see cref="GroupPowerView.ShortFormulaText"/>）相同：
-    /// 基础军势 →（加值非零）"+加值" →（有倍增子）"×倍率" →（有加值或倍率）"= 军势"。既无加值也无倍率的棋串只有一步，这一步就是结果（design.md A3）。
+    /// 基础军势 →（加值非零）"+加值" →（有倍增子）"×倍增倍率" →（阵型一阶以上）"×阵型倍率" →（有加值、倍增或阵型任一项）"= 军势"
+    /// （formation-tiers D5：倍增与阵型分开写、倍增在前，因子序列取 <see cref="GroupPowerView.Factors"/>，阵型阶数取自明细、不数棋子）。
+    /// 既无加值也无倍率的棋串只有一步，这一步就是结果（design.md A3）。
     /// 末步的累计文案与短算式逐字相同（守门：军势揭示节拍Tests.末步累计文案等于短算式）。
     /// 档位：末步取军势的数值档位 T；共 n 步时第 i 步（0 起）= max(1, T − (n − 1 − i))，即往前每步降一档、降到一档为止（A2：不保证严格递增）。
     /// 时长：每步 <see cref="PowerRevealBeat.StepMs"/>，末步取样式表的末步时长。
@@ -88,7 +90,7 @@ public sealed record RevealEntry(Coord Coord, PlayerId Owner, BigInteger Power, 
     public static ImmutableArray<RevealStep> StepsOf(GroupPowerView view)
     {
         ArgumentNullException.ThrowIfNull(view);
-        var texts = new List<(string Text, string Running)>(4);
+        var texts = new List<(string Text, string Running)>(5);
         string running = $"{view.BaseTotal}";
         texts.Add((running, running));
         if (view.PositionBonus != 0)
@@ -97,10 +99,12 @@ public sealed record RevealEntry(Coord Coord, PlayerId Owner, BigInteger Power, 
             texts.Add(($"+{view.PositionBonus}", running));
         }
 
-        if (view.MultiplierCount != 0)
+        ImmutableArray<string> factors = view.Factors;
+        for (int f = 0; f < factors.Length; f++)
         {
-            running = view.PositionBonus != 0 ? $"({running})×{view.MultiplierText}" : $"{running}×{view.MultiplierText}";
-            texts.Add(($"×{view.MultiplierText}", running));
+            // 第一个因子出现时，有加值就把前面的和括起来；之后的因子直接接在后面。
+            running = f == 0 && view.PositionBonus != 0 ? $"({running})×{factors[f]}" : $"{running}×{factors[f]}";
+            texts.Add(($"×{factors[f]}", running));
         }
 
         if (texts.Count > 1)

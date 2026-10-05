@@ -85,7 +85,13 @@ public sealed record CaptureView(PlayerId Owner, ImmutableArray<Coord> Stones, s
 
 /// <summary>棋串军势明细的呈现。全部数值来自 Core 的 <see cref="GroupPower"/>，本类只拼文字；倍率文字用 <see cref="Multiplier.ToString"/>。
 /// 公式文案按 restore-go-core-rules D1 的顺序拼：基础军势与位置加值先相加、整体乘倍率；取整值直接取 <see cref="GroupPower.Power"/>（任意精度整数）。
-/// 位置加值的来源拆分与 Core 一样是七项（连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑，more-pieces-relics D1），逐项原样转录，不另算。</summary>
+/// 位置加值的来源拆分与 Core 一样是七项（连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑，more-pieces-relics D1），逐项原样转录，不另算。
+/// 倍率拆成两个因子分开写（formation-tiers D5）：倍增倍率 1.5^倍增子数量（<see cref="MultiplierText"/>）与阵型倍率 1.5^阵型阶数（<see cref="FormationText"/>），
+/// 两者之积即 Core 的总倍率 <see cref="GroupPower.Multiplier"/>；阵型阶数取自明细 <see cref="GroupPower.FormationTier"/>，本层不数棋子。</summary>
+/// <param name="MultiplierCount">倍增子数量（倍增子的枚数）。</param>
+/// <param name="MultiplierText">倍增倍率 1.5^倍增子数量 的精确十进制文字（没有倍增子为 "1"）。</param>
+/// <param name="FormationTier">阵型阶数 0–4（计分规则 v1 恒 0）。</param>
+/// <param name="FormationText">阵型倍率 1.5^阵型阶数 的精确十进制文字（0 阶为 "1"）。</param>
 public sealed record GroupPowerView(
     int BaseTotal,
     int LineBonus,
@@ -98,18 +104,48 @@ public sealed record GroupPowerView(
     int PositionBonus,
     int MultiplierCount,
     string MultiplierText,
+    int FormationTier,
+    string FormationText,
     BigInteger Power,
     string FormulaText,
     string ShortFormulaText)
 {
     /// <summary>
+    /// 军势算式里依次出现的倍率因子（formation-tiers D5）：有倍增子时倍增倍率在前，阵型一阶以上时阵型倍率在后；倍率为 1 的因子不列。
+    /// 短算式与军势揭示（<c>RevealEntry.StepsOf</c>）都按这个序列拼"×因子"，两处同源。
+    /// </summary>
+    public ImmutableArray<string> Factors
+    {
+        get
+        {
+            ImmutableArray<string>.Builder factors = ImmutableArray.CreateBuilder<string>(2);
+            if (MultiplierCount != 0)
+            {
+                factors.Add(MultiplierText);
+            }
+
+            if (FormationTier != 0)
+            {
+                factors.Add(FormationText);
+            }
+
+            return factors.ToImmutable();
+        }
+    }
+
+    /// <summary>
     /// 由棋串军势明细投影。<see cref="FormulaText"/>（势力层 / 预演的完整算式）与 <see cref="ShortFormulaText"/>（结算演出飘字的短算式，
-    /// settlement-show-callouts 裁决 1）在这里由同一份数值一次生成：短算式只列非零项——"(5+2)×1.5 = 10"；无加值 "5×1.5 = 7"；无倍增 "5+2 = 7"；两者都无 "5"。
+    /// settlement-show-callouts 裁决 1）在这里由同一份数值一次生成：短算式只列非零项与非 1 的因子——"(5+2)×1.5 = 10"；无加值 "5×1.5 = 7"；
+    /// 无倍增 "5+2 = 7"；两者都无 "5"；带阵型 "(5+2)×1.5×2.25 = 23"（倍增在前、阵型在后），只有阵型 "3×1.5 = 4"。
+    /// 完整算式在阵型 0 阶时与引入阵型之前逐字相同："（基础 5 + 位置加值 2（…））× 1.5 = 10"（没有倍增子写 "× 1"）；
+    /// 阵型一阶以上时追加阵型因子："（基础 5 + 位置加值 2（…））× 1.5 × 阵型 2.25 = 23"，此时没有倍增子则不写 "× 1"："（基础 3 + 位置加值 0）× 阵型 1.5 = 4"。
+    /// 两个倍率文字都由 <see cref="Multiplier.ToString"/> 给出（精确十进制，不经浮点）。
     /// </summary>
     public static GroupPowerView From(GroupPower power)
     {
         ArgumentNullException.ThrowIfNull(power);
-        string multiplier = power.Multiplier.ToString();
+        string multiplier = new Multiplier(power.MultiplierCount).ToString();
+        string formation = new Multiplier(power.FormationTier).ToString();
         // 来源拆分（more-pieces-relics：七项）：连珠 / 协同 / 高地照旧恒列；旗手 / 铁链 / 哨兵 / 界碑只在非 0 时列出——
         // v1 局它们恒为 0，恒列只会给每条棋串多挂四个 0。略去的项为 0，各项之和仍等于位置加值；数值字段七项都在。
         string[] parts =
@@ -123,18 +159,29 @@ public sealed record GroupPowerView(
             ? "位置加值 0"
             : $"位置加值 {power.PositionBonus}（{string.Join(" / ", parts)}）";
         string sum = power.PositionBonus == 0 ? $"{power.BaseTotal}" : $"{power.BaseTotal}+{power.PositionBonus}";
-        string shortFormula = (power.MultiplierCount, power.PositionBonus) switch
-        {
-            (0, 0) => sum,
-            (0, _) => $"{sum} = {power.Power}",
-            (_, 0) => $"{sum}×{multiplier} = {power.Power}",
-            _ => $"({sum})×{multiplier} = {power.Power}",
-        };
-        return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus,
+        string factors = power.FormationTier == 0
+            ? $"× {multiplier}"
+            : power.MultiplierCount == 0 ? $"× 阵型 {formation}" : $"× {multiplier} × 阵型 {formation}";
+        var view = new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus,
             power.BannerBonus, power.ChainBonus, power.SentryBonus, power.BoundaryBonus, power.PositionBonus,
-            power.MultiplierCount, multiplier, power.Power,
-            $"（基础 {power.BaseTotal} + {bonus}）× {multiplier} = {power.Power}",
-            shortFormula);
+            power.MultiplierCount, multiplier, power.FormationTier, formation, power.Power,
+            $"（基础 {power.BaseTotal} + {bonus}）{factors} = {power.Power}",
+            string.Empty);
+        return view with { ShortFormulaText = ShortFormula(sum, power.PositionBonus != 0, view.Factors, power.Power) };
+    }
+
+    /// <summary>
+    /// 短算式："和"后依次接"×因子"（有加值且有因子时把和括起来），有加值或任一因子时末尾接" = 军势"；否则只有"和"本身。
+    /// </summary>
+    private static string ShortFormula(string sum, bool hasBonus, ImmutableArray<string> factors, BigInteger power)
+    {
+        if (factors.IsEmpty)
+        {
+            return hasBonus ? $"{sum} = {power}" : sum;
+        }
+
+        string head = hasBonus ? $"({sum})" : sum;
+        return $"{head}{string.Concat(factors.Select(f => $"×{f}"))} = {power}";
     }
 }
 

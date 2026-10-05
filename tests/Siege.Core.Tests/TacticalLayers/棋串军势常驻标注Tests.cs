@@ -86,8 +86,8 @@ public class 棋串军势常驻标注Tests
     [Fact]
     public void 标注带档位()
     {
-        // 三条棋串，军势 1、10、40 → 档位一、三、五；字号按分档样式表依次增大，一档与分档之前相同（88）。
-        ImmutableArray<GroupPowerLabel> labels = Labels(Group(P1, 1, "D4"), Group(P2, 10, "K9"), Group(P2, 40, "A1", "A2", "B2"));
+        // 三条棋串，军势 1、20、70 → 档位一、三、五（阈值 8 / 16 / 32 / 64）；字号按分档样式表依次增大，一档与分档之前相同（88）。
+        ImmutableArray<GroupPowerLabel> labels = Labels(Group(P1, 1, "D4"), Group(P2, 20, "K9"), Group(P2, 70, "A1", "A2", "B2"));
         Assert.Equal([1, 3, 5], labels.Select(l => l.Tier));
 
         int[] fonts = [.. labels.Select(l => NumberTierStyle.For(l.Tier).GroupLabelFontSize)];
@@ -95,7 +95,7 @@ public class 棋串军势常驻标注Tests
         Assert.True(fonts[0] < fonts[1] && fonts[1] < fonts[2]);
 
         // 档位只是多带的一项：落点、归属、文案不变；超大军势（10^30）仍是五档。
-        Assert.Equal(["D4:1", "K9:10", "A2:40"], labels.Select(l => $"{l.Coord.ToNotation()}:{l.Text}"));
+        Assert.Equal(["D4:1", "K9:20", "A2:70"], labels.Select(l => $"{l.Coord.ToNotation()}:{l.Text}"));
         Assert.Equal(5, Assert.Single(Labels(Group(P1, BigInteger.Pow(10, 30), "D4"))).Tier);
     }
 
@@ -134,7 +134,7 @@ public class 棋串军势常驻标注Tests
     /// <summary>棋串甲：军势 3（一档，结果停留 1400 ms），算式「2+1 = 3」三步——前两步各 220 ms，末步在揭示节拍开始后 440 ms 开始。</summary>
     private static readonly GroupPower Alpha = ShowFixtures.Group(P1, 2, 1, 0, 3, "D4", "E4", "F4");
 
-    /// <summary>棋串乙：军势 5（二档），只有一步。</summary>
+    /// <summary>棋串乙：军势 5（一档；formation-tiers 段 C 阈值改为 8 / 16 / 32 / 64 之前是二档），只有一步。</summary>
     private static readonly GroupPower Beta = ShowFixtures.Group(P2, 5, 0, 0, 5, "K9");
 
     /// <summary>军势揭示节拍的开始时刻：落子 1 枚 250 ms + 提子 600 ms。</summary>
@@ -305,7 +305,7 @@ public class 棋串军势常驻标注Tests
     public void 压缩的揭示节拍下显现进度与结果年龄同源()
     {
         // 检查阶段补（design.md D1「由时间线状态推出」）。算例取 军势揭示节拍Tests「超过上限按比例压缩 / 压缩后遮罩与音效按压缩后的时刻」的同一组：
-        // 三条四步棋串（军势 9 / 10 / 12，都是三档，结果停留 1600 ms），各步之和 2640 ms → 整拍 1600 ms，
+        // 三条四步棋串（军势 9 / 10 / 12，阈值 8 / 16 / 32 / 64 下都是二档，结果停留 1400 ms），各步之和 2640 ms → 整拍 1600 ms，
         // 三条的末步分别开始于节拍内 400、933、1466 ms（未压缩是 660、1540、2420 ms）。
         GroupPower f6 = ShowFixtures.Group(P1, 4, 2, 1, 9, "F6");
         GroupPower c3 = ShowFixtures.Group(P1, 5, 2, 1, 10, "C3");
@@ -320,12 +320,12 @@ public class 棋串军势常驻标注Tests
         Assert.Equal("F6", Assert.Single(timeline.Mask().Reveals).Coord.ToNotation());
         Assert.Equal("C3:0,F6:0,H9:0", LabelText(timeline.Mask()));
 
-        // 节拍内 1500 ms（军势揭示仍是当前节拍）：结果年龄按压缩后的末步时刻计——1100、567、34 ms ÷ 1600 → 687、354、21‰；
-        // 显现进度 max(0, (年龄 − 500) × 2) → F6 374‰，另两条 0。若按未压缩的 660 ms 起算，F6 会是 (840 × 1000 ÷ 1600 − 500) × 2 = 50‰。
+        // 节拍内 1500 ms（军势揭示仍是当前节拍）：结果年龄按压缩后的末步时刻计——1100、567、34 ms ÷ 1400 → 785、405、24‰；
+        // 显现进度 max(0, (年龄 − 500) × 2) → F6 570‰，另两条 0。若按未压缩的 660 ms 起算，F6 会是 (840 × 1000 ÷ 1400 − 500) × 2 = 200‰。
         timeline.Advance(1300);
         Assert.IsType<PowerRevealBeat>(timeline.Current);
-        Assert.Equal([687, 354, 21], timeline.Mask().Reveals.Select(r => r.ResultAgePermille));
-        Assert.Equal("C3:0,F6:374,H9:0", LabelText(timeline.Mask()));
+        Assert.Equal([785, 405, 24], timeline.Mask().Reveals.Select(r => r.ResultAgePermille));
+        Assert.Equal("C3:0,F6:570,H9:0", LabelText(timeline.Mask()));
 
         // 逐毫秒走完整场：列着的揭示条目，其落点的显现进度恒等于由该条目的结果年龄按 D1 算式（测试内独立写）算出的值；
         // 表里另外的落点只能是尚未轮到的条目（进度 0）——到过末步又不在揭示条目里的（结果停留满）不得再列。
@@ -356,9 +356,9 @@ public class 棋串军势常驻标注Tests
             full.Advance(1);
         }
 
-        // 样本口径下界：三条都走完了淡入段——结果年龄 ≥ 501‰ 即末步开始后 802..1599 ms，每条 798 ms。
+        // 样本口径下界：三条都走完了淡入段——结果年龄 ≥ 501‰（⌊ms × 1000 ÷ 1400⌋ ≥ 501）即末步开始后 702..1399 ms，每条 698 ms。
         Assert.Equal(3, reachedFinal.Count);
-        Assert.Equal(3 * 798, fadingMs);
+        Assert.Equal(3 * 698, fadingMs);
     }
 
     [Fact]

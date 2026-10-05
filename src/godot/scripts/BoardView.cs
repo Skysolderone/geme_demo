@@ -1822,7 +1822,7 @@ public sealed partial class BoardView : Node3D
             AddTint(cell.Coord, Visuals.FactionColorOf(cell.Owner!.Value), cell.Scored ? 0.5f : 0.18f);
         }
 
-        // 倍率热区：柱高按显示档位 HeatLevel（min(倍增子数量, 3)），只是显示档位，不是倍率封顶。
+        // 倍率热区：柱高按显示档位 HeatLevel（min(倍增子数量 + 阵型阶数, 3)，formation-tiers D5），只是显示档位，不是倍率封顶。
         foreach (GroupScoreView group in power.Groups.Where(g => g.HeatLevel > 0))
         {
             foreach (Coord stone in group.Stones)
