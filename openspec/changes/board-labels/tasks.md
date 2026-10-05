@@ -5,14 +5,14 @@
 
 ## 2. Godot 接线、守门与截图（段 B）
 
-- [ ] 2.1 坐标标注按让位进度画透明度（D1 引擎层部分）；遮罩为空时复原。
-- [ ] 2.2 `DrawReveals` 算式行改用结果色与下限（D2）；`DrawGroupPower` 改用呈现层配色、描边下限与角位（D3 / D4）；`Visuals.CoordinateLabel*` 改为从呈现层取；`Ui.MutedText` 从 `UiTheme` 取（D5）。
-- [ ] 2.3 源码守门（D6 第二条、D5 的守门）并配变异；hud-theme / hud-panels 守门继续通过。
-- [ ] 2.4 画面验证（D7）：改前改后同帧对比存 `art/board-labels/before|after/`，逐张看过并写进实现记录；让位范围按截图调好。
-- [ ] 2.5 收尾：两处构建 0 警告；全量失败名单与改动前相同；`--auto-demo` 帧数不变；`--pick-check` 通过。
+- [x] 2.1 坐标标注按让位进度画透明度（D1 引擎层部分）；遮罩为空时复原。
+- [x] 2.2 `DrawReveals` 算式行改用结果色与下限（D2）；`DrawGroupPower` 改用呈现层配色、描边下限与角位（D3 / D4）；`Visuals.CoordinateLabel*` 改为从呈现层取；`Ui.MutedText` 从 `UiTheme` 取（D5）。
+- [x] 2.3 源码守门（D6 第二条、D5 的守门）并配变异；hud-theme / hud-panels 守门继续通过。
+- [x] 2.4 画面验证（D7）：改前改后同帧对比存 `art/board-labels/before|after/`，逐张看过并写进实现记录；让位范围按截图调好。
+- [x] 2.5 收尾：两处构建 0 警告；全量失败名单与改动前相同；`--auto-demo` 帧数不变；`--pick-check` 通过。
 
 ## 3. 验收与文档（主会话）
 
-- [ ] 3.1 `openspec validate board-labels --strict`；把 main 合进本分支后重跑 2.5。
-- [ ] 3.2 设计文档 §20 补一句，变更记录升一版。
+- [x] 3.1 `openspec validate board-labels --strict`；把 main 合进本分支后重跑 2.5。
+- [x] 3.2 设计文档 §20 补一句，变更记录升一版。
 - [ ] 3.3 负责人看改前改后对比图。

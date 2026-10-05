@@ -52,8 +52,9 @@ public class 双字母列标不重叠Tests
         Assert.All(Columns(13), c => Assert.Equal(1, c.Length));
 
         string view = File.ReadAllText(Path.Combine(RepoRoot(), "src", "godot", "scripts", "BoardView.cs"));
-        Assert.Contains("labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: false)));", view, StringComparison.Ordinal);
-        Assert.Contains("labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: true)));", view, StringComparison.Ordinal);
+        // board-labels 段 B：左右行数字的节点要按行下标记住（坐标标注让位），写法由直接 AddChild 改为先记进表再 AddChild；仍取缺省字号（不走列标字号）。
+        Assert.Contains("_leftRowLabels[y] = Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: false));", view, StringComparison.Ordinal);
+        Assert.Contains("_rightRowLabels[y] = Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: true));", view, StringComparison.Ordinal);
         Assert.Contains("int fontSize = CoordinateLabelStyle.FontSize, int outlineSize = CoordinateLabelStyle.OutlineSize", view, StringComparison.Ordinal);
         Assert.DoesNotContain("FontSize = 96", view, StringComparison.Ordinal);
     }

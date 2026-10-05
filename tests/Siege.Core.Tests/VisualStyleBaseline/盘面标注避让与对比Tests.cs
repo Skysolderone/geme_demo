@@ -14,7 +14,7 @@ namespace Siege.Core.Tests.VisualStyleBaseline;
 /// 规格：visual-style-baseline —— Requirement: 盘面标注的避让与对比（board-labels 段 A）。
 /// 坐标标注让位走真实的演出时间线（<see cref="ShowTimeline.Mask"/> → <see cref="CoordinateLabelYield.Of"/>），不手拼遮罩；
 /// 颜色、字号、描边的期望值是按 design.md D2 / D3 的式子在测试里独立算出的字面量（算法见各条注释）。
-/// 「次要文字透明度」在本段只断言常量；引擎层脚本不另写数值的扫描归段 B。
+/// 引擎层接线的源码守门（含「次要文字透明度」的引擎层不另写数值）在同一个类的 <c>盘面标注避让与对比Tests.Engine.cs</c>（段 B）。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 A；脚本做法：二进制读入原文、另存带时间戳的备份 → 断言锚点恰命中 1 次 → 改写 → 跑 VisualStyleBaseline + TacticalLayers + SettlementShow 三个命名空间
@@ -39,7 +39,7 @@ namespace Siege.Core.Tests.VisualStyleBaseline;
 /// C3「PermilleAt 不把负数夹到 0」红 1、C7「ShownMs 取当前步内时刻」红 1（均为 淡出且取最小 的补充断言；补测前两条都是 0 红）；
 /// C4「CornerOf 写成 x ≥ 宽」红 1（最右一列换角，宽 1 断言）。复跑 M-Y7、M-S2 各红 1。
 /// </remarks>
-public class 盘面标注避让与对比Tests
+public partial class 盘面标注避让与对比Tests
 {
     private static readonly PlayerId P1 = new(1);
     private static readonly PlayerId P2 = new(2);
@@ -258,27 +258,48 @@ public class 盘面标注避让与对比Tests
     [Fact]
     public void 最右一列换角()
     {
-        // 13 列：锚格在 N 列（x = 12）→ 左前角；M 列、A 列 → 右前角。角位按锚格判断，不按棋串里最右的棋子：
-        // L5-M5-N5 的锚格是 M5（右前角），N4-N5-N6 的锚格是 N5（左前角）。
+        // 13 列：锚格在 N 列（x = 12）且同一行左邻不是另一条标注的锚格 → 左前角；M 列、A 列 → 右前角（board-labels D4 / D8-1）。
+        // 角位按锚格判断，不按棋串里最右的棋子：L8-M8-N8 的锚格是 M8（右前角），N4-N5-N6 的锚格是 N5（左前角）。
+        // N11 的左邻 M11 没有标注（M10 在下一行），所以换角；N5 的左邻 M5 也没有标注。
         var content = new PowerLayerContent(
-            [View(P1, "N5"), View(P1, "M5"), View(P2, "A1"), View(P2, "L5", "M5", "N5"), View(P1, "N4", "N5", "N6")], [], []);
+            [View(P1, "N11"), View(P1, "M10"), View(P2, "A1"), View(P2, "L8", "M8", "N8"), View(P1, "N4", "N5", "N6")], [], []);
         ImmutableArray<GroupPowerLabel> labels = GroupPowerLabels.Of(content, Size);
         Assert.Equal(
-            ["N5:FrontLeft", "M5:FrontRight", "A1:FrontRight", "M5:FrontRight", "N5:FrontLeft"],
+            ["N11:FrontLeft", "M10:FrontRight", "A1:FrontRight", "M8:FrontRight", "N5:FrontLeft"],
             labels.Select(l => $"{l.Coord.ToNotation()}:{l.Corner}"));
 
         // 同一格在更宽的棋盘上不是最右一列 → 右前角。
         Assert.Equal(LabelCorner.FrontRight, Assert.Single(GroupPowerLabels.Of(new PowerLayerContent([View(P1, "N5")], [], []), 19)).Corner);
 
-        // 退化：宽 1 的棋盘上唯一一列就是最右一列 → 左前角（按 x == 宽 − 1，check 段 A 补）。
-        Assert.Equal(LabelCorner.FrontLeft, GroupPowerLabels.CornerOf(Coord.Parse("A3"), 1));
+        // 退化：宽 1 的棋盘上唯一一列就是最右一列 → 左前角（按 x == 宽 − 1，check 段 A 补）；左邻有标注时右前角。
+        Assert.Equal(LabelCorner.FrontLeft, GroupPowerLabels.CornerOf(Coord.Parse("A3"), 1, leftNeighborLabeled: false));
+        Assert.Equal(LabelCorner.FrontRight, GroupPowerLabels.CornerOf(Coord.Parse("N3"), Size, leftNeighborLabeled: true));
+    }
+
+    [Fact]
+    public void 左邻也有标注时不换角()
+    {
+        // 规格（D8-1）：同一行里最右一列与它左邻各是一条标注的锚格 → 两条都是右前角（N11 若换到左前角，会与 M11 右前角的数挤在 M、N 之间读成一个数）。
+        // 变异（段 B 补改，GroupPowerLabels.cs；跑 VisualStyleBaseline + TacticalLayers + SettlementShow，基线 311 通过）：
+        // D8-M1「CornerOf 忽略左邻条件」→ 红 2（本条、最右一列换角）；D8-M2「左邻判成右邻（x + 1）」→ 红 1（本条）；
+        // D8-M3「去掉 x > 0 判界」→ 红 3（最右一列换角，及 棋串军势常驻标注Tests 的 数值与势力层一致 / 标注带档位：A 列锚格构造负坐标抛异常）。
+        var content = new PowerLayerContent([View(P1, "M11"), View(P2, "N11")], [], []);
+        Assert.Equal(
+            ["M11:FrontRight", "N11:FrontRight"],
+            GroupPowerLabels.Of(content, Size).Select(l => $"{l.Coord.ToNotation()}:{l.Corner}"));
+
+        // 左邻在相邻行不算：M10 + N11 → N11 仍换到左前角。
+        Assert.Equal(
+            ["M10:FrontRight", "N11:FrontLeft"],
+            GroupPowerLabels.Of(new PowerLayerContent([View(P1, "M10"), View(P2, "N11")], [], []), Size).Select(l => $"{l.Coord.ToNotation()}:{l.Corner}"));
     }
 
     [Fact]
     public void 次要文字透明度()
     {
-        // 规格：次要文字的透明度定义在 UiTheme（千分比）。引擎层不另写数值的扫描归段 B。
+        // 规格：次要文字的透明度定义在 UiTheme（千分比）；引擎层脚本里没有另写的透明度数值（源码扫描见 MutedText只由UiTheme的千分比换算，段 B）。
         Assert.Equal(620, UiTheme.MutedTextAlphaPermille);
+        MutedText只由UiTheme的千分比换算();
     }
 
     private static GroupScoreView View(PlayerId owner, params string[] cells)

@@ -15,11 +15,11 @@ public static class Visuals
     /// <summary>浮空岛的岛缘（棋盘外圈、坐标标注所在的那一圈）：压暗的暖色岩石，浅色标注字在上面读得清。</summary>
     public static readonly Color IslandRim = Color.Color8(92, 82, 74);
 
-    /// <summary>棋盘四边坐标标注的字色。棋盘外是深色背景，深灰字读不出来，取浅色并配深色描边。</summary>
-    public static readonly Color CoordinateLabel = Color.Color8(206, 202, 190);
+    /// <summary>棋盘四边坐标标注的字色。棋盘外是深色背景，深灰字读不出来，取浅色并配深色描边。取值在呈现层（board-labels D3），这里只翻译。</summary>
+    public static readonly Color CoordinateLabel = ToColor(BoardLabelStyle.CoordinateLabel);
 
-    /// <summary>坐标标注的描边色：压住浅色字在亮地砖上的反差不足。</summary>
-    public static readonly Color CoordinateLabelOutline = Color.Color8(18, 19, 23);
+    /// <summary>坐标标注的描边色：压住浅色字在亮地砖上的反差不足。取值在呈现层（常驻标注的描边也用它）。</summary>
+    public static readonly Color CoordinateLabelOutline = ToColor(BoardLabelStyle.CoordinateLabelOutline);
 
     /// <summary>可落子地砖（草地，terrain-model 缺省地表）。</summary>
     public static readonly Color TilePlayable = Color.Color8(138, 190, 88);

@@ -50,8 +50,8 @@ public static class Ui
     /// <summary>警示色。</summary>
     public static Color DangerText => Visuals.ToColor(UiTheme.DangerText);
 
-    /// <summary>次要文字色。</summary>
-    public static Color MutedText => Visuals.ToColor(UiTheme.InfoText) with { A = 0.62f };
+    /// <summary>次要文字色：正文色乘以 <see cref="UiTheme.MutedTextAlphaPermille"/> 的透明度（board-labels D5；这里只做千分比到 0–1 的换算）。</summary>
+    public static Color MutedText => Visuals.ToColor(UiTheme.InfoText) with { A = UiTheme.MutedTextAlphaPermille / 1000f };
 
     /// <summary>按钮某一状态在主题里的样式盒名。</summary>
     public static string StyleboxNameOf(ButtonState state) => state switch

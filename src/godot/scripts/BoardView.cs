@@ -88,6 +88,18 @@ public sealed partial class BoardView : Node3D
 
     /// <summary>本进程里演出逐帧刷新重画了多少次常驻标注层（完整刷新不计）；只经 <see cref="GroupLabelRedrawReadout"/> 对外给读数。</summary>
     private int _groupLabelShowRedraws;
+
+    /// <summary>远边（<c>y = 高 − 1</c> 一侧）列字母节点，按列下标索引（board-labels D1）：让位只动它们的透明度。近边列字母不让位，不记。</summary>
+    private Label3D[] _farColumnLabels = [];
+
+    /// <summary>左边（<c>x = 0</c> 一侧）行数字节点，按行下标索引。</summary>
+    private Label3D[] _leftRowLabels = [];
+
+    /// <summary>右边（<c>x = 宽 − 1</c> 一侧）行数字节点，按行下标索引。</summary>
+    private Label3D[] _rightRowLabels = [];
+
+    /// <summary>坐标标注上一次是不是照着非空的让位结果画的：是的话下一次即使结果空了也要再画一遍（复原到完全显示）；否则不碰。</summary>
+    private bool _coordinatesYielded;
     private Node3D _pieces = null!;
     private Node3D _preview = null!;
     private Node3D _show = null!;
@@ -1228,6 +1240,7 @@ public sealed partial class BoardView : Node3D
         DrawPieces(board, treatment, mask ?? ShowMask.Empty);
         SetShake(mask?.ShakePermille);
         DrawShow(mask ?? ShowMask.Empty);
+        DrawCoordinateYield(mask ?? ShowMask.Empty);
 
         // 常驻标注：标在哪、写什么随完整刷新更新；画不画、多透明照当前遮罩（演出开始那一帧的完整刷新就不把将要揭示的棋串标注画出来）。
         _groupLabels = Rig.IsOverview || world.Layer(TacticalLayer.Power, reading, thresholds) is not PowerLayerContent power ? [] : GroupPowerLabels.Of(power, _width);
@@ -1389,6 +1402,7 @@ public sealed partial class BoardView : Node3D
         _showFrames++;
         SetShake(mask.ShakePermille);
         DrawShow(mask);
+        DrawCoordinateYield(mask);
         if (!mask.GroupLabelPermille.IsEmpty || _groupLabelsMasked)
         {
             DrawGroupPower(mask);
@@ -1529,9 +1543,10 @@ public sealed partial class BoardView : Node3D
 
             if (formula.Length > 0)
             {
-                int fontSize = Math.Max(RevealFormulaMinFontSize, style.RevealFontSize * RevealFormulaPercent / 100);
-                Label3D trail = Label(formula, at + new Vector3(0f, 0f, -0.5f * (mainHeight + (fontSize * unit))), fontSize, style.RevealOutlineSize * fontSize / style.RevealFontSize);
-                trail.Modulate = new Color(color.Lerp(Colors.White, 0.4f), alpha);
+                // 算式行（board-labels D2）：颜色与结果同为该步的揭示色、字号与描边带下限，三者都由呈现层的 BoardLabelStyle 给出，这里只翻译。
+                int fontSize = BoardLabelStyle.RevealFormulaFontSizeOf(reveal.StepTier);
+                Label3D trail = Label(formula, at + new Vector3(0f, 0f, -0.5f * (mainHeight + (fontSize * unit))), fontSize, BoardLabelStyle.RevealFormulaOutlineOf(reveal.StepTier));
+                trail.Modulate = new Color(Visuals.ToColor(BoardLabelStyle.RevealFormulaColorOf(reveal.StepTier)), alpha);
                 trail.OutlineModulate = new Color(Visuals.CoordinateLabelOutline, alpha);
                 trail.NoDepthTest = true;
                 trail.RenderPriority = 4;
@@ -1540,12 +1555,6 @@ public sealed partial class BoardView : Node3D
             }
         }
     }
-
-    /// <summary>末步之后挪到结果上方的那一行算式，字号取结果字号的这个百分比（描边同比例），但不小于 <see cref="RevealFormulaMinFontSize"/>。</summary>
-    private const int RevealFormulaPercent = 60;
-
-    /// <summary>算式行的最小字号：一、二档的结果字号本来就小，再按比例缩就读不清了。</summary>
-    private const int RevealFormulaMinFontSize = 64;
 
     /// <summary>
     /// 揭示条目这一步的弹出缩放：步首放大到样式表的弹出幅度，步内按 (1 − 进度)² 回落到原大小；该步结束后（进度保持 1000‰）恒为 1。
@@ -1801,16 +1810,28 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
-            // 字号与描边按该棋串军势的数值档位取样式表（tiered-number-show D6）；档位由 Presentation 给出，颜色仍是阵营色。
+            // 字号与描边按该棋串军势的数值档位取样式表（tiered-number-show D6）；档位由 Presentation 给出。
+            // 字色与描边色、描边下限、放在哪个角都由呈现层给出（board-labels D3 / D4）：这里只把 Rgba 翻成 Color、把角位翻成偏移。
             float alpha = shown / 1000f;
             NumberTierStyle style = NumberTierStyle.For(item.Tier);
-            Label3D label = Label(item.Text, CenterOf(item.Coord) + new Vector3(0.33f, 0.12f, 0.34f), style.GroupLabelFontSize, style.GroupLabelOutlineSize);
-            label.Modulate = new Color(Visuals.FactionColorOf(item.Owner).Lightened(0.75f), alpha);
-            label.OutlineModulate = new Color(Visuals.FactionColorOf(item.Owner).Darkened(0.45f), alpha);
+            (Rgba text, Rgba outline) = BoardLabelStyle.GroupLabelColors(item.Owner);
+            Label3D label = Label(item.Text, CenterOf(item.Coord) + GroupLabelOffsetOf(item.Corner), style.GroupLabelFontSize, BoardLabelStyle.GroupLabelOutlineFor(style.GroupLabelOutlineSize));
+            label.Modulate = new Color(Visuals.ToColor(text), alpha);
+            label.OutlineModulate = new Color(Visuals.ToColor(outline), alpha);
             label.NoDepthTest = true;
             _groupLabelLayer.AddChild(label);
         }
     }
+
+    /// <summary>
+    /// 常驻标注相对锚格中心的偏移（board-labels D4）：右前角 (0.33, 0.12, 0.34)；左前角左右对称 (−0.33, 0.12, 0.34)——同样在棋子底座半径之外、不与格心飘字相撞。
+    /// 用哪个角由呈现层随标注给出（锚格在最右一列时是左前角），这里不看列号。
+    /// </summary>
+    private static Vector3 GroupLabelOffsetOf(LabelCorner corner) => corner switch
+    {
+        LabelCorner.FrontLeft => new Vector3(-0.33f, 0.12f, 0.34f),
+        _ => new Vector3(0.33f, 0.12f, 0.34f),
+    };
 
     private void DrawPower(PowerLayerContent power)
     {
@@ -2110,6 +2131,12 @@ public sealed partial class BoardView : Node3D
         var labels = new Node3D { Name = "CoordinateLabels" };
         AddChild(labels);
 
+        // 让位要动的三排标注按下标记住（board-labels D1）；重搭即换一批新节点，它们一律完全显示，上一次的让位状态作废。
+        _farColumnLabels = new Label3D[_width];
+        _leftRowLabels = new Label3D[_height];
+        _rightRowLabels = new Label3D[_height];
+        _coordinatesYielded = false;
+
         for (int x = 0; x < _width; x++)
         {
             // 双字母列标（第 26 列起）用较小字号，相邻两个之间留有空隙；单字母列标的字号不变（visual-style-baseline「双字母列标不重叠」）。
@@ -2117,15 +2144,52 @@ public sealed partial class BoardView : Node3D
             int size = CoordinateLabelStyle.ColumnFontSizeOf(text);
             int outline = CoordinateLabelStyle.ColumnOutlineSizeOf(text);
             labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: false), size, outline));
-            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: true), size, outline));
+            _farColumnLabels[x] = Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: true), size, outline);
+            labels.AddChild(_farColumnLabels[x]);
         }
 
         for (int y = 0; y < _height; y++)
         {
             string text = new Coord(0, y).Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: false)));
-            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: true)));
+            _leftRowLabels[y] = Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: false));
+            _rightRowLabels[y] = Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: true));
+            labels.AddChild(_leftRowLabels[y]);
+            labels.AddChild(_rightRowLabels[y]);
         }
+    }
+
+    /// <summary>
+    /// 坐标标注让位（visual-style-baseline「盘面标注的避让与对比」，board-labels D1）：哪些标注让位、此刻显现多少全由 <see cref="CoordinateLabelYield.Of"/> 按遮罩与棋盘尺寸给出，
+    /// 这里只把千分比翻成字与描边的透明度。不读揭示条目、不比较格子、不判断重叠。
+    /// 结果为空（没有揭示条目、演出结束、零时长）且上一次也没让位时不碰节点；上一次让过位则把三排全部复原到完全显示。
+    /// </summary>
+    private void DrawCoordinateYield(ShowMask mask)
+    {
+        CoordinateYieldView yielded = CoordinateLabelYield.Of(mask, _width, _height);
+        if (yielded.IsEmpty && !_coordinatesYielded)
+        {
+            return;
+        }
+
+        _coordinatesYielded = !yielded.IsEmpty;
+        for (int x = 0; x < _farColumnLabels.Length; x++)
+        {
+            ShowCoordinateLabel(_farColumnLabels[x], yielded.FarColumn(x));
+        }
+
+        for (int y = 0; y < _leftRowLabels.Length; y++)
+        {
+            ShowCoordinateLabel(_leftRowLabels[y], yielded.LeftRow(y));
+            ShowCoordinateLabel(_rightRowLabels[y], yielded.RightRow(y));
+        }
+    }
+
+    /// <summary>按显现进度（‰）设一个坐标标注的字与描边透明度；色相不变。</summary>
+    private static void ShowCoordinateLabel(Label3D label, int permille)
+    {
+        float alpha = permille / 1000f;
+        label.Modulate = new Color(Visuals.CoordinateLabel, alpha);
+        label.OutlineModulate = new Color(Visuals.CoordinateLabelOutline, alpha);
     }
 
     /// <summary>标注的像素尺寸：字号 × 本值 × 离相机的纵深 = 标注在世界里的大小（<c>FixedSize</c> 按纵深放大，屏幕上恒定）。</summary>
