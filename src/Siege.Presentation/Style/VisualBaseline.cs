@@ -449,30 +449,257 @@ public static class LayerVisuals
 }
 
 /// <summary>
+/// HUD 面板的三级（visual-style-baseline「面板分级」）。每个面板都属于其中一级，级别由控件工厂的参数给出。
+/// 判断口径：玩家在上面读主信息或做决定的是主面板；承载一排按钮或一段说明文字的是次面板；临时出现、压在棋盘上的一行字是提示条。
+/// </summary>
+public enum PanelTier
+{
+    /// <summary>主面板（含对话框）。</summary>
+    Primary,
+
+    /// <summary>次面板（工具条与说明）。</summary>
+    Secondary,
+
+    /// <summary>提示条（临时出现的一行提示）：没有边框，圆角大于另两级。</summary>
+    Hint,
+}
+
+/// <summary>按钮的三种语义（visual-style-baseline「按钮状态与语义」）。</summary>
+public enum ButtonKind
+{
+    /// <summary>默认。</summary>
+    Default,
+
+    /// <summary>主操作：金色的边框与文字。</summary>
+    Primary,
+
+    /// <summary>危险操作：警示色的边框与文字。</summary>
+    Danger,
+}
+
+/// <summary>按钮的五种状态。次序与名字对应引擎主题里按钮的五个样式盒（常态 / 悬停 / 按下 / 禁用 / 焦点）。</summary>
+public enum ButtonState
+{
+    /// <summary>常态。</summary>
+    Normal,
+
+    /// <summary>悬停。</summary>
+    Hover,
+
+    /// <summary>按下。</summary>
+    Pressed,
+
+    /// <summary>禁用：盖过语义。</summary>
+    Disabled,
+
+    /// <summary>键盘焦点：叠画在当前状态之上的一圈金边，不填充。</summary>
+    Focus,
+}
+
+/// <summary>一级面板的样式值。<see cref="BorderWidthPx"/> 为 0 即没有边框（此时 <see cref="Border"/> 是全透明色，不参与绘制）。</summary>
+public sealed record UiPanelStyle(Rgba Fill, Rgba Border, int BorderWidthPx, int CornerRadiusPx);
+
+/// <summary>样式盒的一条边：颜色与线宽（px）。</summary>
+public readonly record struct UiEdge(Rgba Color, int WidthPx);
+
+/// <summary>
+/// 按钮在某个（语义、状态、是否选中）下的一组样式值。引擎层只把它逐项翻成样式盒与字色，不做任何判断。
+/// <see cref="DrawFill"/> 为 false 时不画底色（键盘焦点：只画边框，叠在当前状态之上），此时 <see cref="Fill"/> 是全透明色。
+/// 四条边各自带颜色与线宽：选中的可切换按钮底边是 2 像素金色，其余三边是 1 像素的默认边框色。
+/// </summary>
+public sealed record UiButtonStyle(
+    Rgba Fill, bool DrawFill, UiEdge Left, UiEdge Top, UiEdge Right, UiEdge Bottom, Rgba Text, int CornerRadiusPx, int PaddingXPx);
+
+/// <summary>
 /// 默认 UI 的风格基准（§20：深色半透明面板、克制金色边框、高对比信息色、PC 策略游戏信息密度）。
 /// 尺寸以 1080p 参考分辨率计，Godot 层按实际分辨率缩放。
+/// HUD 样式取值的唯一来源（hud-theme D1）：面板三级、按钮五态与三种语义加选中、字号阶梯、间距阶梯都在这里，
+/// 引擎层只经 <see cref="PanelStyleOf"/> / <see cref="ButtonStyleOf"/> 查表，不做亮度、对比度或"禁用盖过语义"之类的判断。
 /// </summary>
 public static class UiTheme
 {
+    /// <summary>主面板底色。</summary>
     public static readonly Rgba PanelFill = new(18, 20, 26, 208);
 
+    /// <summary>主面板边框（金色）；也是主操作按钮、选中按钮与键盘焦点圈的金色。</summary>
     public static readonly Rgba PanelBorder = new(184, 146, 72);
 
     public static readonly Rgba InfoText = new(236, 232, 220);
 
     public static readonly Rgba DangerText = new(236, 96, 80);
 
+    /// <summary>次面板底色：比主面板亮、更透。</summary>
+    public static readonly Rgba SecondaryPanelFill = new(30, 34, 42, 192);
+
+    /// <summary>次面板边框：压暗的金色；分隔线也用它。</summary>
+    public static readonly Rgba SecondaryPanelBorder = new(96, 86, 62);
+
+    /// <summary>提示条底色（回合摘要横幅原先内联的 0.07 / 0.09 / 0.12 / 0.84 换成 8 位）。</summary>
+    public static readonly Rgba HintFill = new(18, 23, 31, 214);
+
+    /// <summary>按钮常态底色。</summary>
+    public static readonly Rgba ButtonFill = new(38, 42, 52, 236);
+
+    /// <summary>按钮悬停底色。</summary>
+    public static readonly Rgba ButtonHoverFill = new(56, 61, 75, 240);
+
+    /// <summary>按钮按下底色。</summary>
+    public static readonly Rgba ButtonPressedFill = new(24, 27, 34, 240);
+
+    /// <summary>按钮禁用底色。</summary>
+    public static readonly Rgba ButtonDisabledFill = new(30, 32, 38, 150);
+
+    /// <summary>默认按钮的边框（中性色）。</summary>
+    public static readonly Rgba ButtonBorder = new(74, 78, 90);
+
+    /// <summary>禁用按钮的边框。</summary>
+    public static readonly Rgba ButtonDisabledBorder = new(52, 54, 60);
+
+    /// <summary>禁用按钮的文字。</summary>
+    public static readonly Rgba ButtonDisabledText = new(132, 130, 124);
+
     /// <summary>边框线宽（px）。</summary>
     public const int BorderWidthPx = 1;
+
+    /// <summary>选中的可切换按钮的底边线宽（px）：比其余三边宽，灰度下也认得出。</summary>
+    public const int SelectedEdgeWidthPx = 2;
+
+    /// <summary>主面板、次面板与按钮的圆角（px）。</summary>
+    public const int CornerRadiusPx = 3;
+
+    /// <summary>提示条的圆角（px）。</summary>
+    public const int HintCornerRadiusPx = 6;
 
     /// <summary>标准按钮高度（px）。</summary>
     public const int ButtonHeightPx = 30;
 
-    /// <summary>正文字号（px）。</summary>
-    public const int BodyFontPx = 15;
+    /// <summary>按钮左右内边距（px）。</summary>
+    public const int ButtonPaddingXPx = 10;
+
+    /// <summary>字号阶梯第一级：注释（px）。</summary>
+    public const int Caption = 13;
+
+    /// <summary>字号阶梯第二级：按钮与次要正文（px）。</summary>
+    public const int Small = 14;
+
+    /// <summary>字号阶梯第三级：正文（px）。</summary>
+    public const int Body = 15;
+
+    /// <summary>字号阶梯第四级：标题（px）。</summary>
+    public const int Title = 17;
+
+    /// <summary>字号阶梯第五级：横幅（px）。</summary>
+    public const int Banner = 19;
+
+    /// <summary>正文字号（px）。<see cref="Body"/> 的别名。</summary>
+    public const int BodyFontPx = Body;
+
+    /// <summary>
+    /// 字号阶梯，由小到大。HUD 的字号只取其中的值；结算演出期间由呈现层按数值档位给出的放大字号不在此列。
+    /// </summary>
+    public static readonly ImmutableArray<int> FontLadder = [Caption, Small, Body, Title, Banner];
+
+    /// <summary>间距阶梯第一级（px）。</summary>
+    public const int Space0 = 0;
+
+    /// <summary>间距阶梯第二级（px）。</summary>
+    public const int Space1 = 2;
+
+    /// <summary>间距阶梯第三级（px）。</summary>
+    public const int Space2 = 4;
+
+    /// <summary>间距阶梯第四级（px）。</summary>
+    public const int Space3 = 6;
+
+    /// <summary>间距阶梯第五级（px）。</summary>
+    public const int Space4 = 8;
+
+    /// <summary>间距阶梯第六级（px）。</summary>
+    public const int Space5 = 12;
+
+    /// <summary>间距阶梯，由小到大。HUD 容器的间距与面板内边距只取其中的值。</summary>
+    public static readonly ImmutableArray<int> SpaceLadder = [Space0, Space1, Space2, Space3, Space4, Space5];
 
     /// <summary>手游式大按钮的下限：任何按钮高度 MUST 低于它。</summary>
     public const int MobileStyleButtonHeightPx = 56;
+
+    /// <summary>不参与绘制的占位色（没有边框的边、不填充的底）。</summary>
+    private static readonly Rgba NoColor = new(0, 0, 0, 0);
+
+    /// <summary>某一级面板的样式值。主面板的底色、边框、线宽与圆角就是引入分级之前的面板。</summary>
+    public static UiPanelStyle PanelStyleOf(PanelTier tier) => tier switch
+    {
+        PanelTier.Primary => new UiPanelStyle(PanelFill, PanelBorder, BorderWidthPx, CornerRadiusPx),
+        PanelTier.Secondary => new UiPanelStyle(SecondaryPanelFill, SecondaryPanelBorder, BorderWidthPx, CornerRadiusPx),
+        PanelTier.Hint => new UiPanelStyle(HintFill, NoColor, 0, HintCornerRadiusPx),
+        _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知面板级别。"),
+    };
+
+    /// <summary>
+    /// 按钮在（语义、状态、是否选中）下的样式值。规则都在这里，调用方不必再判断：
+    /// <list type="bullet">
+    /// <item>禁用盖过语义：禁用时底色、边框色、文字色一律取禁用那一组，不看 <paramref name="kind"/>。</item>
+    /// <item>选中（只对默认语义的可切换按钮有定义）：金色文字，加一条 2 像素的金色底边，其余三边同默认按钮。
+    /// 禁用的选中按钮颜色同样全部变灰，但底边仍比其余三边宽——"哪一项被选中"不随禁用丢失。</item>
+    /// <item>键盘焦点：不填充，四边各 1 像素金色；文字色取该按钮常态的文字色。它叠画在当前状态之上，所以不带选中的宽底边。</item>
+    /// </list>
+    /// </summary>
+    public static UiButtonStyle ButtonStyleOf(ButtonKind kind, ButtonState state, bool selected = false)
+    {
+        if (selected && kind != ButtonKind.Default)
+        {
+            throw new ArgumentException($"选中只对默认语义的可切换按钮有定义，收到 {kind}。", nameof(selected));
+        }
+
+        (Rgba border, Rgba text) = kind switch
+        {
+            ButtonKind.Default => (ButtonBorder, InfoText),
+            ButtonKind.Primary => (PanelBorder, PanelBorder),
+            ButtonKind.Danger => (DangerText, DangerText),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知按钮语义。"),
+        };
+        if (selected)
+        {
+            text = PanelBorder;
+        }
+
+        switch (state)
+        {
+            case ButtonState.Disabled:
+            {
+                var side = new UiEdge(ButtonDisabledBorder, BorderWidthPx);
+                UiEdge bottom = selected ? side with { WidthPx = SelectedEdgeWidthPx } : side;
+                return Box(ButtonDisabledFill, drawFill: true, side, bottom, ButtonDisabledText);
+            }
+
+            case ButtonState.Focus:
+            {
+                var ring = new UiEdge(PanelBorder, BorderWidthPx);
+                return Box(NoColor, drawFill: false, ring, ring, text);
+            }
+
+            case ButtonState.Normal:
+            case ButtonState.Hover:
+            case ButtonState.Pressed:
+            {
+                Rgba fill = state switch
+                {
+                    ButtonState.Hover => ButtonHoverFill,
+                    ButtonState.Pressed => ButtonPressedFill,
+                    _ => ButtonFill,
+                };
+                var side = new UiEdge(border, BorderWidthPx);
+                UiEdge bottom = selected ? new UiEdge(PanelBorder, SelectedEdgeWidthPx) : side;
+                return Box(fill, drawFill: true, side, bottom, text);
+            }
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(state), state, "未知按钮状态。");
+        }
+    }
+
+    private static UiButtonStyle Box(Rgba fill, bool drawFill, UiEdge side, UiEdge bottom, Rgba text) =>
+        new(fill, drawFill, Left: side, Top: side, Right: side, Bottom: bottom, text, CornerRadiusPx, ButtonPaddingXPx);
 }
 
 /// <summary>
