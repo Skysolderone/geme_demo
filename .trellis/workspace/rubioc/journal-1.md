@@ -291,3 +291,46 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: HUD 主题统一（hud-theme）：面板三级、按钮五态与语义、字号与间距阶梯、样式总览页
+
+**Date**: 2026-10-05
+**Task**: HUD 主题统一（hud-theme）：面板三级、按钮五态与语义、字号与间距阶梯、样式总览页
+**Branch**: `feat/hud-theme`
+
+### Summary
+
+克制精修方向的 HUD 主题：取值集中到 UiTheme，Godot 主题按类型下发，选中底边自定义样式盒，--ui-gallery= 总览页，源码扫描守门；负责人过目后取值保持，合入 main 并推送。
+
+### Main Changes
+
+- **起因**：负责人要求做界面样式（业务改动由另一会话并行）；裁决范围「HUD 主题统一」、方向「克制精修」，看完改前改后截图后裁决取值保持。
+- **做法**：独立工作树 `.claude/worktrees/hud-theme`、分支 `feat/hud-theme`，不碰主工作树；完成后不切分支，用 `git fetch . feat/hud-theme:main` 快进 main。
+- **内容**：面板三级（主 / 次 / 提示条）；按钮五态与三种语义，选中态是金字加 2 像素金色底边（`Ui.EdgeStripBox`，StyleBoxFlat 只有一个边框色）；字号阶梯 13 / 14 / 15 / 17 / 19、间距阶梯 0 / 2 / 4 / 6 / 8 / 12；样式总览页 `--ui-gallery=<PNG 路径>`。取值全在 `UiTheme`，HUD 脚本只说"是什么"，写法由源码扫描守门。设计文档 v1.24。
+- **验证**：全量 2147 通过 / 11 失败 / 9 跳过，失败名单与改动前逐条相同；两处构建 0 警告；`--auto-demo` 53 帧不变；`--pick-check` 105/105；变异 段 A 95 条、段 B 44 条全部变红。截图在 `art/hud-theme/before|after/`。
+- **留意**：
+  - 新守门禁止 HUD 脚本里首参为字面量的目标类型 `new(…)`（含 `Vector2`）、写死颜色、字号加减、间距数字、逐处改按钮字色；改 `Hud*.cs` 时走 `Ui` 工厂与 `UiTheme` 的名字。
+  - 遗留：对局「开局插旗」面板末行被裁半行（改动前就有）；`Ui.MutedText` 的透明度 0.62 未进 `UiTheme`；回合摘要横幅新内边距与征募收起条未在截图里出现过。
+  - 主工作树当时在另一会话的 `feat/formation-tiers`（基于 `ccafe40`），合入 main 时需与 hud-theme 合并，`Hud*.cs` 可能有逐行冲突。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7eaa99d` | (see git log) |
+| `7799184` | (see git log) |
+| `4ab3af2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
