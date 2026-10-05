@@ -31,6 +31,9 @@ public class 棋串军势常驻标注Tests
     private static readonly PlayerId P1 = new(1);
     private static readonly PlayerId P2 = new(2);
 
+    /// <summary>标注用例的棋盘宽度（board-labels D4 起 <see cref="GroupPowerLabels.Of"/> 要棋盘宽度判断最右一列）：取得比用例里最右的列宽，角位一律右前角。</summary>
+    private const int BoardWidth = 19;
+
     private static GroupScoreView Group(PlayerId owner, BigInteger power, params string[] cells)
     {
         ImmutableArray<Coord> stones = [.. cells.Select(Coord.Parse)];
@@ -39,7 +42,7 @@ public class 棋串军势常驻标注Tests
         return new GroupScoreView(owner, stones, GroupPowerView.From(detail), 0);
     }
 
-    private static ImmutableArray<GroupPowerLabel> Labels(params GroupScoreView[] groups) => GroupPowerLabels.Of(new PowerLayerContent([.. groups], [], []));
+    private static ImmutableArray<GroupPowerLabel> Labels(params GroupScoreView[] groups) => GroupPowerLabels.Of(new PowerLayerContent([.. groups], [], []), BoardWidth);
 
     [Fact]
     public void 单子棋串()
@@ -410,7 +413,7 @@ public class 棋串军势常驻标注Tests
         // ⑥ 标注列表只在完整刷新里取（全局预览下为空——规格「全局预览下不显示标注」），取完紧接着照当前遮罩画；别处不改它（另一处是字段声明的初值）。
         string refresh = PresentationFixtures.MethodBody(view, "public void Refresh(\n        ViewerWorld world,");
         Assert.Matches(
-            @"_groupLabels\s*=\s*Rig\.IsOverview\s*\|\|\s*world\.Layer\(TacticalLayer\.Power,\s*reading,\s*thresholds\)\s*is\s+not\s+PowerLayerContent\s+power\s*\?\s*\[\]\s*:\s*GroupPowerLabels\.Of\(power\)\s*;"
+            @"_groupLabels\s*=\s*Rig\.IsOverview\s*\|\|\s*world\.Layer\(TacticalLayer\.Power,\s*reading,\s*thresholds\)\s*is\s+not\s+PowerLayerContent\s+power\s*\?\s*\[\]\s*:\s*GroupPowerLabels\.Of\(power,\s*_width\)\s*;"
             + @"\s*DrawGroupPower\(mask\s*\?\?\s*ShowMask\.Empty\)\s*;",
             refresh);
         Assert.Equal(2, Regex.Matches(view, @"(?<![A-Za-z_.])_groupLabels\s*=(?!=)").Count);

@@ -168,7 +168,7 @@ public class 数值档位Tests
 
         // 常驻标注。
         var content = new PowerLayerContent([new GroupScoreView(P1, group.Stones, GroupPowerView.From(group), 0)], [], []);
-        Assert.Equal(tier, Assert.Single(GroupPowerLabels.Of(content)).Tier);
+        Assert.Equal(tier, Assert.Single(GroupPowerLabels.Of(content, boardWidth: 19)).Tier);
     }
 
     [Fact]

@@ -82,6 +82,7 @@ public sealed record BannerDisplay(string Text, int Index, int Count, int Progre
 /// <param name="AtFinal">是否已到末步（结果已出）。</param>
 /// <param name="FinalTier">末步档位（= 该棋串军势的数值档位）。</param>
 /// <param name="ResultAgePermille">结果年龄（0..1000‰，自末步开始按结果停留时长计）；未到末步为 0。</param>
+/// <param name="ShownMs">条目已显示的毫秒数（自其第一步开始起，按演出内时刻计；board-labels D1：坐标标注让位的淡出进度只由它决定）。</param>
 public sealed record RevealDisplay(
     Coord Coord,
     PlayerId Owner,
@@ -91,7 +92,8 @@ public sealed record RevealDisplay(
     int StepPermille,
     bool AtFinal,
     int FinalTier,
-    int ResultAgePermille);
+    int ResultAgePermille,
+    int ShownMs);
 
 /// <summary>
 /// 高档冲击环（settlement-show「高档冲击环与镜头轻震」）：军势揭示条目末步为四档时所在格一圈向外扩散的亮环、五档两圈，自末步开始持续 <see cref="DurationMs"/>。
@@ -454,7 +456,7 @@ public sealed class ShowTimeline
 
             HoldLabel(groupLabels, entry.Coord, LabelPermilleAt(resultAge));
 
-            reveals.Add(new RevealDisplay(entry.Coord, entry.Owner, step.RunningText, step.Text, step.Tier, within, atFinal, entry.FinalTier, resultAge));
+            reveals.Add(new RevealDisplay(entry.Coord, entry.Owner, step.RunningText, step.Text, step.Tier, within, atFinal, entry.FinalTier, resultAge, sinceBeatMs - beat.StepStartMs(e, 0)));
         }
     }
 

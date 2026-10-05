@@ -279,7 +279,7 @@ public class 军势揭示节拍Tests
             Assert.Equal(anchor, RevealEntry.From(group).Coord.ToNotation());
 
             var content = new PowerLayerContent([new GroupScoreView(P1, group.Stones, GroupPowerView.From(group), 0)], [], []);
-            Assert.Equal(anchor, Assert.Single(GroupPowerLabels.Of(content)).Coord.ToNotation());
+            Assert.Equal(anchor, Assert.Single(GroupPowerLabels.Of(content, boardWidth: 19)).Coord.ToNotation());
         }
     }
 

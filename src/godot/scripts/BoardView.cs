@@ -1230,7 +1230,7 @@ public sealed partial class BoardView : Node3D
         DrawShow(mask ?? ShowMask.Empty);
 
         // 常驻标注：标在哪、写什么随完整刷新更新；画不画、多透明照当前遮罩（演出开始那一帧的完整刷新就不把将要揭示的棋串标注画出来）。
-        _groupLabels = Rig.IsOverview || world.Layer(TacticalLayer.Power, reading, thresholds) is not PowerLayerContent power ? [] : GroupPowerLabels.Of(power);
+        _groupLabels = Rig.IsOverview || world.Layer(TacticalLayer.Power, reading, thresholds) is not PowerLayerContent power ? [] : GroupPowerLabels.Of(power, _width);
         DrawGroupPower(mask ?? ShowMask.Empty);
         DrawLayer(content);
         DrawPreview(preview, focus);

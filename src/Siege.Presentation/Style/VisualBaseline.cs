@@ -526,6 +526,11 @@ public static class UiTheme
 
     public static readonly Rgba InfoText = new(236, 232, 220);
 
+    /// <summary>
+    /// 次要文字的透明度（‰，board-labels D5）：次要文字色 = <see cref="InfoText"/> 乘以这个透明度。引擎层的 <c>Ui.MutedText</c> 只做 ‰ → 0..1 的换算，不另写数值。
+    /// </summary>
+    public const int MutedTextAlphaPermille = 620;
+
     public static readonly Rgba DangerText = new(236, 96, 80);
 
     /// <summary>次面板底色：比主面板亮、更透。</summary>

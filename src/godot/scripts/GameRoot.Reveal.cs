@@ -147,7 +147,7 @@ public sealed partial class GameRoot
         ImmutableArray<RevealEntry> entries = RevealSampleEntries();
         return ShowMask.Empty with
         {
-            Reveals = [.. entries.Select(e => new RevealDisplay(e.Coord, e.Owner, e.Steps[^1].RunningText, e.Steps[^1].Text, e.FinalTier, PowerInterpolation.FullPermille, true, e.FinalTier, 0))],
+            Reveals = [.. entries.Select(e => new RevealDisplay(e.Coord, e.Owner, e.Steps[^1].RunningText, e.Steps[^1].Text, e.FinalTier, PowerInterpolation.FullPermille, true, e.FinalTier, 0, Siege.Presentation.Layers.CoordinateLabelYield.FadeMs))],
             Rings =
             [
                 .. entries.Where(e => NumberTierStyle.For(e.FinalTier).RingCount > 0)
@@ -328,7 +328,7 @@ public sealed partial class GameRoot
         // 常驻标注的档位分布（只在没有全局预览时画）：各档各几条，字号取样式表；另打遮罩给的显现进度表（被揭示棋串此刻画不画、多透明）。
         if (_session.World.Layer(Siege.Presentation.Layers.TacticalLayer.Power) is Siege.Presentation.Layers.PowerLayerContent power)
         {
-            ImmutableArray<Siege.Presentation.Layers.GroupPowerLabel> labels = Siege.Presentation.Layers.GroupPowerLabels.Of(power);
+            ImmutableArray<Siege.Presentation.Layers.GroupPowerLabel> labels = Siege.Presentation.Layers.GroupPowerLabels.Of(power, _session.World.Board().Width);
             GD.Print($"[show-tier] 常驻标注 {labels.Length} 条{(_board.Rig.IsOverview ? "（全局预览下不画）" : string.Empty)}："
                 + string.Join("、", labels.GroupBy(l => l.Tier).OrderBy(g => g.Key).Select(g =>
                     $"{g.Key} 档 {g.Count()} 条（字号 {NumberTierStyle.For(g.Key).GroupLabelFontSize}：{string.Join(" ", g.Select(l => $"{l.Coord.ToNotation()}={l.Text}"))}）"))
