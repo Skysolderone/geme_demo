@@ -111,23 +111,9 @@ public sealed partial class Hud : CanvasLayer
         _root.AddChild(_notice);
 
         // 对手回合摘要：占通知行的位置，字大一号、带描边（压在棋盘上也读得清）。
-        _turnSummary = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 4);
+        // 提示条一级的深色半透明底：摘要压在棋盘与列标上也读得清；宽度随文案（外面套一个居中容器）。
+        _turnSummary = Ui.HintBanner(string.Empty, Ui.PanelBorder);
         _turnSummary.HorizontalAlignment = HorizontalAlignment.Center;
-        _turnSummary.AddThemeColorOverride("font_outline_color", Colors.Black);
-        _turnSummary.AddThemeConstantOverride("outline_size", 6);
-        _turnSummary.AddThemeStyleboxOverride("normal", new StyleBoxFlat
-        {
-            // 深色半透明底：摘要压在棋盘与列标上也读得清；宽度随文案（外面套一个居中容器）。
-            BgColor = new Color(0.07f, 0.09f, 0.12f, 0.84f),
-            ContentMarginLeft = 16f,
-            ContentMarginRight = 16f,
-            ContentMarginTop = 3f,
-            ContentMarginBottom = 4f,
-            CornerRadiusTopLeft = 6,
-            CornerRadiusTopRight = 6,
-            CornerRadiusBottomLeft = 6,
-            CornerRadiusBottomRight = 6,
-        });
         _turnSummary.Visible = false;
         var summaryBox = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         Ui.Anchor(summaryBox, 0.5f, 0f, -620f, 60f, 620f, 96f);
@@ -136,22 +122,20 @@ public sealed partial class Hud : CanvasLayer
 
         // 结算演出的顶部合计（"提 N 子"）与中央横幅（"金方出局" / "对局结束"，settlement-show-callouts D6）：
         // 都只在演出遮罩给出文案时可见，由 RefreshShow 逐帧刷新；横幅放中央面板的位置（此时终局面板尚未显示）。
-        _showCaption = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 4);
+        _showCaption = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.Banner);
         _showCaption.HorizontalAlignment = HorizontalAlignment.Center;
         Ui.Anchor(_showCaption, 0.5f, 0f, -300f, 92f, 300f, 122f);
         _showCaption.Visible = false;
         _root.AddChild(_showCaption);
-        _showBanner = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx * 3);
+        _showBanner = Ui.ShowBanner(string.Empty, Ui.PanelBorder);
         _showBanner.HorizontalAlignment = HorizontalAlignment.Center;
         _showBanner.VerticalAlignment = VerticalAlignment.Center;
-        _showBanner.AddThemeColorOverride("font_outline_color", Colors.Black);
-        _showBanner.AddThemeConstantOverride("outline_size", 8);
         Ui.Anchor(_showBanner, 0.5f, 0.5f, -400f, -60f, 400f, 60f);
         _showBanner.Visible = false;
         _root.AddChild(_showBanner);
 
         // 悬停格坐标读数（viewport-camera）：固定在回合横幅右侧。需要推屏的地图上四边标注经常不在画面内，读坐标靠它。
-        _hoverReadout = Ui.Text(string.Empty, Ui.InfoText, UiTheme.BodyFontPx + 2);
+        _hoverReadout = Ui.Text(string.Empty, Ui.InfoText, UiTheme.Title);
         Ui.Anchor(_hoverReadout, 0f, 0f, 334f, 28f, 470f, 54f);
         _root.AddChild(_hoverReadout);
     }
@@ -188,15 +172,15 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildTurnBanner()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 8);
+        row.AddThemeConstantOverride("separation", UiTheme.Space4);
         _turnEmblem = new EmblemIcon { CustomMinimumSize = new Vector2(34f, 34f), MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddChild(_turnEmblem);
         var texts = new VBoxContainer();
-        texts.AddThemeConstantOverride("separation", 0);
+        texts.AddThemeConstantOverride("separation", UiTheme.Space0);
         _turnTitle = Ui.Text("—");
-        _turnSubtitle = Ui.Text("—", Ui.MutedText, UiTheme.BodyFontPx - 2);
+        _turnSubtitle = Ui.Text("—", Ui.MutedText, UiTheme.Caption);
         texts.AddChild(_turnTitle);
         texts.AddChild(_turnSubtitle);
         row.AddChild(texts);
@@ -207,7 +191,7 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildOrderBar()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(6);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space3, UiTheme.Space1);
         _orderButton = Ui.Action("行动顺序");
         _orderButton.Pressed += () => LayerPressed?.Invoke(TacticalLayer.Order);
         body.AddChild(_orderButton);
@@ -217,10 +201,10 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildRankPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         body.AddChild(Ui.Heading("势力排名"));
         _rankBody = new VBoxContainer();
-        _rankBody.AddThemeConstantOverride("separation", 1);
+        _rankBody.AddThemeConstantOverride("separation", UiTheme.Space1);
         body.AddChild(_rankBody);
         Ui.Anchor(panel, 1f, 0f, -300f, 14f, -14f, 146f);
         // 贴右上角：内容比最小宽度宽时向左长（缺省 End 会向右长出屏幕——restore-go-core-rules 段 E 截图里"领地 + 棋串"那半行被截掉）。
@@ -231,10 +215,10 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildHandBar()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         body.AddChild(Ui.Heading("手牌（点选后再点格子落子）"));
         _handBody = new VBoxContainer();
-        _handBody.AddThemeConstantOverride("separation", 2);
+        _handBody.AddThemeConstantOverride("separation", UiTheme.Space1);
         body.AddChild(_handBody);
         Ui.Anchor(panel, 0f, 1f, 14f, -186f, 378f, -58f);
         _root.AddChild(panel);
@@ -242,9 +226,9 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildLayerButtons()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(6);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space3, UiTheme.Space1);
         _layerButtons = new HBoxContainer();
-        _layerButtons.AddThemeConstantOverride("separation", 4);
+        _layerButtons.AddThemeConstantOverride("separation", UiTheme.Space2);
         body.AddChild(_layerButtons);
         Ui.Anchor(panel, 0.5f, 1f, -366f, -50f, 366f, -10f);
         _root.AddChild(panel);
@@ -252,7 +236,7 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildActionPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         _actionBody = body;
         Ui.Anchor(panel, 1f, 1f, -300f, -186f, -14f, -58f);
         _root.AddChild(panel);
@@ -260,11 +244,11 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildPreviewPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         _previewPanel = panel;
         body.AddChild(Ui.Heading("批次预演"));
         _previewBody = new VBoxContainer();
-        _previewBody.AddThemeConstantOverride("separation", 2);
+        _previewBody.AddThemeConstantOverride("separation", UiTheme.Space1);
         body.AddChild(_previewBody);
         Ui.Anchor(panel, 1f, 0f, -340f, 158f, -14f, 560f);
         _root.AddChild(panel);
@@ -272,10 +256,10 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildLayerPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space4, UiTheme.Space1);
         _layerPanel = panel;
         _layerBody = new VBoxContainer();
-        _layerBody.AddThemeConstantOverride("separation", 2);
+        _layerBody.AddThemeConstantOverride("separation", UiTheme.Space1);
         body.AddChild(_layerBody);
         Ui.Anchor(panel, 0f, 0f, 14f, 92f, 392f, 600f);
         _root.AddChild(panel);
@@ -284,7 +268,7 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildCenterPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(12, 4);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space5, UiTheme.Space2);
         _centerPanel = panel;
         _centerBody = body;
         CenterBox(0.5f, 660f, 480f);
@@ -299,7 +283,7 @@ public sealed partial class Hud : CanvasLayer
     /// </summary>
     private void BuildRecruitBar()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(3);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space2, UiTheme.Space1);
         _recruitBar = panel;
         _recruitBarButton = Ui.Action(string.Empty);
         _recruitBarButton.Pressed += () => RecruitCollapsePressed?.Invoke();
@@ -376,7 +360,7 @@ public sealed partial class Hud : CanvasLayer
             float p = banner.ProgressPermille / 1000f;
             float alpha = p < 0.2f ? p / 0.2f : p > 0.75f ? (1f - p) / 0.25f : 1f;
             _showBanner.Text = banner.Text;
-            _showBanner.Modulate = new Color(1f, 1f, 1f, Math.Clamp(alpha, 0f, 1f));
+            _showBanner.Modulate = Colors.White with { A = Math.Clamp(alpha, 0f, 1f) };
             _showBanner.Visible = true;
         }
         else
@@ -435,7 +419,7 @@ public sealed partial class Hud : CanvasLayer
         foreach (PlayerPowerRowView row in power.Players.OrderBy(p => ShownRank(p) ?? int.MaxValue).ThenBy(p => p.Player.Value))
         {
             var line = new HBoxContainer();
-            line.AddThemeConstantOverride("separation", 6);
+            line.AddThemeConstantOverride("separation", UiTheme.Space3);
             FactionStyle faction = FactionTable.For(row.Player);
             var icon = new EmblemIcon { CustomMinimumSize = new Vector2(16f, 16f), MouseFilter = Control.MouseFilterEnum.Ignore };
             icon.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
@@ -513,7 +497,7 @@ public sealed partial class Hud : CanvasLayer
         OwnHandAreaView own = world.HandPanel().Own;
         bool mustDiscard = session.IsMyTurn && session.Match.Stage == TurnStage.OrganizeHand;
         string slots = own.TypeSlots is int s ? $"{own.OccupiedSlots} / {s}" : $"{own.OccupiedSlots} / —";
-        _handBody.AddChild(Ui.Text($"类型槽 {slots}　本轮新征募 {own.PendingGained} 枚", Ui.MutedText, UiTheme.BodyFontPx - 2));
+        _handBody.AddChild(Ui.Text($"类型槽 {slots}　本轮新征募 {own.PendingGained} 枚", Ui.MutedText, UiTheme.Caption));
 
         if (own.Rows.IsDefaultOrEmpty)
         {
@@ -601,16 +585,16 @@ public sealed partial class Hud : CanvasLayer
         _actionBody.AddChild(Ui.Text($"部署额度 {preview.QuotaText}"));
         if (preview.PassWarning is { } warning)
         {
-            _actionBody.AddChild(Ui.Text(warning, Ui.DangerText, UiTheme.BodyFontPx - 2, wrap: true));
+            _actionBody.AddChild(Ui.Text(warning, Ui.DangerText, UiTheme.Caption, wrap: true));
         }
 
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 4);
-        Button confirm = Ui.Action("确认落子 [Enter]", 132);
+        row.AddThemeConstantOverride("separation", UiTheme.Space2);
+        Button confirm = Ui.Action("确认落子 [Enter]", minWidth: 132);
         confirm.Disabled = !preview.CanConfirm;
         confirm.Pressed += () => ConfirmPressed?.Invoke();
         row.AddChild(confirm);
-        Button pass = Ui.Action("Pass [P]", 78);
+        Button pass = Ui.Action("Pass [P]", minWidth: 78);
         pass.Pressed += () => PassPressed?.Invoke();
         row.AddChild(pass);
         _actionBody.AddChild(row);
@@ -633,14 +617,14 @@ public sealed partial class Hud : CanvasLayer
         _previewBody.AddChild(Ui.Text($"额度 {preview.QuotaText}"));
         foreach (HandCostView cost in preview.HandCosts)
         {
-            _previewBody.AddChild(Ui.Text("消耗 " + cost.Text, Ui.MutedText, UiTheme.BodyFontPx - 1));
+            _previewBody.AddChild(Ui.Text("消耗 " + cost.Text, Ui.MutedText, UiTheme.Small));
         }
 
         if (preview.Failure is { } failure)
         {
             _previewBody.AddChild(Ui.Separator());
             _previewBody.AddChild(Ui.Text(failure.Title, Ui.DangerText));
-            _previewBody.AddChild(Ui.Text(failure.Detail, Ui.DangerText, UiTheme.BodyFontPx - 1, wrap: true));
+            _previewBody.AddChild(Ui.Text(failure.Detail, Ui.DangerText, UiTheme.Small, wrap: true));
         }
 
         // 改造（artisan-terrain-edit 4.1 第 1 / 7 项）：每枚暂放匠人一行"落点 → 已选动作与目标（可选目标 N 个）"。
@@ -813,7 +797,7 @@ public sealed partial class Hud : CanvasLayer
         foreach (RecruitCandidateView candidate in panel.Candidates)
         {
             string suffix = candidate.IsPicked ? "（已选）" : candidate.IsSelectable ? string.Empty : $"（不可选：{candidate.Reason}）";
-            Button button = Ui.Action($"[{candidate.Index + 1}] {Labels.Piece(candidate.Type)}{suffix}", 300);
+            Button button = Ui.Action($"[{candidate.Index + 1}] {Labels.Piece(candidate.Type)}{suffix}", minWidth: 300);
             button.Alignment = HorizontalAlignment.Left;
             button.Disabled = candidate.IsPicked || !candidate.IsSelectable;
             int index = candidate.Index;
@@ -823,11 +807,11 @@ public sealed partial class Hud : CanvasLayer
 
         _centerBody.AddChild(Ui.Separator());
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 8);
-        Button done = Ui.Action("完成征募，进入部署", 300);
+        row.AddThemeConstantOverride("separation", UiTheme.Space4);
+        Button done = Ui.Action("完成征募，进入部署", minWidth: 300);
         done.Pressed += () => RecruitFinished?.Invoke();
         row.AddChild(done);
-        Button collapse = Ui.Action("收起 [V]", 120);
+        Button collapse = Ui.Action("收起 [V]", minWidth: 120);
         collapse.Pressed += () => RecruitCollapsePressed?.Invoke();
         row.AddChild(collapse);
         _centerBody.AddChild(row);
@@ -840,7 +824,7 @@ public sealed partial class Hud : CanvasLayer
         _centerBody.AddChild(Ui.Text($"■ 我方 {Labels.Player(own.Player)}　类型槽 {own.OccupiedSlots} / {own.TypeSlots?.ToString() ?? "—"}　余 {own.FreeSlots?.ToString() ?? "—"}", Ui.InfoText));
         foreach (OwnHandRowView row in own.Rows)
         {
-            _centerBody.AddChild(Ui.Text("　" + row.Text, Ui.InfoText, UiTheme.BodyFontPx - 1));
+            _centerBody.AddChild(Ui.Text("　" + row.Text, Ui.InfoText, UiTheme.Small));
         }
 
         AddStructure(own.Structure);
@@ -855,25 +839,25 @@ public sealed partial class Hud : CanvasLayer
             AddStructure(opponent.Structure);
         }
 
-        _centerBody.AddChild(Ui.Text("对手只公开手牌「类型」，不含数量、征募候选与暂放批次。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        _centerBody.AddChild(Ui.Text("对手只公开手牌「类型」，不含数量、征募候选与暂放批次。", Ui.MutedText, UiTheme.Caption, wrap: true));
     }
 
     private void AddStructure(StructureView? structure)
     {
         if (structure is null)
         {
-            _centerBody.AddChild(Ui.Text("　结构参数：—（非参赛玩家不显示）", Ui.MutedText, UiTheme.BodyFontPx - 2));
+            _centerBody.AddChild(Ui.Text("　结构参数：—（非参赛玩家不显示）", Ui.MutedText, UiTheme.Caption));
             return;
         }
 
         string text = string.Join("　", new[] { structure.RevealCount.Text, structure.FreePickCount.Text, structure.TypeSlots.Text, structure.DeployLimit.Text });
-        _centerBody.AddChild(Ui.Text("　" + text, Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        _centerBody.AddChild(Ui.Text("　" + text, Ui.MutedText, UiTheme.Caption, wrap: true));
     }
 
     private void BuildResult(MatchResult result, PlayerId me)
     {
         _centerBody.AddChild(Ui.Heading($"对局结束：第 {result.MajorRound} 大回合，{Names.End(result.Reason)}"));
-        _centerBody.AddChild(Ui.Text(Names.Outcome(result, me), Ui.PanelBorder, UiTheme.BodyFontPx + 4));
+        _centerBody.AddChild(Ui.Text(Names.Outcome(result, me), Ui.PanelBorder, UiTheme.Banner));
         _centerBody.AddChild(Ui.Separator());
         foreach (Standing standing in result.Standings)
         {
@@ -895,7 +879,7 @@ public sealed partial class Hud : CanvasLayer
         body.AddChild(Ui.Heading(title));
         foreach (string line in items)
         {
-            body.AddChild(Ui.Text(line, color, UiTheme.BodyFontPx - 1, wrap: true));
+            body.AddChild(Ui.Text(line, color, UiTheme.Small, wrap: true));
         }
     }
 
@@ -903,10 +887,10 @@ public sealed partial class Hud : CanvasLayer
     {
         var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0f, 420f), SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         var inner = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        inner.AddThemeConstantOverride("separation", 1);
+        inner.AddThemeConstantOverride("separation", UiTheme.Space1);
         foreach ((string text, Color color) in lines)
         {
-            inner.AddChild(Ui.Text(text, color, UiTheme.BodyFontPx - 2, wrap: true));
+            inner.AddChild(Ui.Text(text, color, UiTheme.Caption, wrap: true));
         }
 
         scroll.AddChild(inner);

@@ -80,7 +80,7 @@ public sealed partial class Hud
             bool active = i == model.SelectedIndex;
             Button button = _mapOptionButtons[i];
             button.Text = (active ? "● " : "○ ") + model.Options[i].Title;
-            button.AddThemeColorOverride("font_color", active ? Ui.PanelBorder : Ui.InfoText);
+            Ui.Select(button, active);
         }
 
         bool seeded = model.IsSeededSelected;
@@ -109,7 +109,7 @@ public sealed partial class Hud
             bool active = MapSelectModel.DifficultyOptions[i] == model.Difficulty;
             Button button = _difficultyButtons[i];
             button.Text = (active ? "● " : "○ ") + Labels.Difficulty(MapSelectModel.DifficultyOptions[i]);
-            button.AddThemeColorOverride("font_color", active ? Ui.PanelBorder : Ui.InfoText);
+            Ui.Select(button, active);
         }
     }
 
@@ -137,13 +137,13 @@ public sealed partial class Hud
         AddChild(_selectRoot);
 
         // 面板靠左：背景是当前地图的全局预览，地图主体在画面中央，不去挡它。
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(12, 6);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space5, UiTheme.Space3);
         Ui.Anchor(panel, 0f, 0f, 14f, 14f, 374f, 14f);
         panel.GrowVertical = Control.GrowDirection.End;
         _selectRoot.AddChild(panel);
         _selectPanel = panel;
 
-        body.AddChild(Ui.Text("选择地图", Ui.PanelBorder, UiTheme.BodyFontPx + 4));
+        body.AddChild(Ui.Text("选择地图", Ui.PanelBorder, UiTheme.Banner));
         for (int i = 0; i < model.Options.Count; i++)
         {
             int index = i;
@@ -166,29 +166,28 @@ public sealed partial class Hud
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0f, UiTheme.ButtonHeightPx),
         };
-        _mapSeedInput.AddThemeFontSizeOverride("font_size", UiTheme.BodyFontPx);
         _mapSeedInput.TextSubmitted += text => MapSeedSubmitted?.Invoke(text);
         seedRow.AddChild(_mapSeedInput);
-        _mapSeedApply = Ui.Action("生成", 56);
+        _mapSeedApply = Ui.Action("生成", minWidth: 56);
         _mapSeedApply.Pressed += () => MapSeedSubmitted?.Invoke(_mapSeedInput.Text);
         seedRow.AddChild(_mapSeedApply);
         body.AddChild(seedRow);
-        body.AddChild(Ui.Text("输入种子后回车（或点「生成」）。", Ui.MutedText, UiTheme.BodyFontPx - 2));
+        body.AddChild(Ui.Text("输入种子后回车（或点「生成」）。", Ui.MutedText, UiTheme.Caption));
 
         var tuneRow = new HBoxContainer();
-        _mapReroll = Ui.Action("换一张", 96);
+        _mapReroll = Ui.Action("换一张", minWidth: 96);
         _mapReroll.Pressed += () => MapRerollPressed?.Invoke();
         tuneRow.AddChild(_mapReroll);
         tuneRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
         tuneRow.AddChild(Ui.Text("平台数"));
-        _mapFewer = Ui.Action("−", 34);
+        _mapFewer = Ui.Action("−", minWidth: 34);
         _mapFewer.Pressed += () => MapPlatformsAdjusted?.Invoke(-1);
         tuneRow.AddChild(_mapFewer);
-        _mapPlatforms = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 2);
+        _mapPlatforms = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.Title);
         _mapPlatforms.HorizontalAlignment = HorizontalAlignment.Center;
         _mapPlatforms.CustomMinimumSize = new Vector2(26f, 0f);
         tuneRow.AddChild(_mapPlatforms);
-        _mapMore = Ui.Action("+", 34);
+        _mapMore = Ui.Action("+", minWidth: 34);
         _mapMore.Pressed += () => MapPlatformsAdjusted?.Invoke(+1);
         tuneRow.AddChild(_mapMore);
         body.AddChild(tuneRow);
@@ -197,26 +196,26 @@ public sealed partial class Hud
         var boardsRow = new HBoxContainer();
         boardsRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
         boardsRow.AddChild(Ui.Text("棋盘数"));
-        _mapFewerBoards = Ui.Action("−", 34);
+        _mapFewerBoards = Ui.Action("−", minWidth: 34);
         _mapFewerBoards.Pressed += () => MapBoardsAdjusted?.Invoke(-1);
         boardsRow.AddChild(_mapFewerBoards);
-        _mapBoards = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 2);
+        _mapBoards = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.Title);
         _mapBoards.HorizontalAlignment = HorizontalAlignment.Center;
         _mapBoards.CustomMinimumSize = new Vector2(26f, 0f);
         boardsRow.AddChild(_mapBoards);
-        _mapMoreBoards = Ui.Action("+", 34);
+        _mapMoreBoards = Ui.Action("+", minWidth: 34);
         _mapMoreBoards.Pressed += () => MapBoardsAdjusted?.Invoke(+1);
         boardsRow.AddChild(_mapMoreBoards);
         body.AddChild(boardsRow);
 
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("完整地图标识"));
-        _mapIdText = Ui.Text(string.Empty, Ui.InfoText, UiTheme.BodyFontPx + 2, wrap: true);
+        _mapIdText = Ui.Text(string.Empty, Ui.InfoText, UiTheme.Title, wrap: true);
         body.AddChild(_mapIdText);
-        _mapInfoText = Ui.Text(string.Empty, Ui.MutedText, UiTheme.BodyFontPx - 1, wrap: true);
+        _mapInfoText = Ui.Text(string.Empty, Ui.MutedText, UiTheme.Small, wrap: true);
         body.AddChild(_mapInfoText);
-        body.AddChild(Ui.Text("命令行加 --map=<标识> 可直接重开这张图。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
-        _mapNotice = Ui.Text(string.Empty, Ui.DangerText, UiTheme.BodyFontPx - 1, wrap: true);
+        body.AddChild(Ui.Text("命令行加 --map=<标识> 可直接重开这张图。", Ui.MutedText, UiTheme.Caption, wrap: true));
+        _mapNotice = Ui.Text(string.Empty, Ui.DangerText, UiTheme.Small, wrap: true);
         body.AddChild(_mapNotice);
 
         // AI 难度（expert-lookahead D10）：四档，缺省标准（命令行 --difficulty= 预选）；只用现有控件（与地图清单同样的按钮 + 选中标记）。
@@ -225,18 +224,17 @@ public sealed partial class Hud
         var difficultyRow = new HBoxContainer();
         foreach (AiDifficulty difficulty in MapSelectModel.DifficultyOptions)
         {
-            Button option = Ui.Action(Labels.Difficulty(difficulty), 78);
+            Button option = Ui.Action(Labels.Difficulty(difficulty), minWidth: 78);
             option.Pressed += () => MapDifficultyPicked?.Invoke(difficulty);
             _difficultyButtons.Add(option);
             difficultyRow.AddChild(option);
         }
 
         body.AddChild(difficultyRow);
-        body.AddChild(Ui.Text($"命令行加 --difficulty=<{AiDifficultyNames.Usage}> 可预选难度。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        body.AddChild(Ui.Text($"命令行加 --difficulty=<{AiDifficultyNames.Usage}> 可预选难度。", Ui.MutedText, UiTheme.Caption, wrap: true));
 
         body.AddChild(Ui.Separator());
-        Button start = Ui.Action("开始");
-        start.AddThemeColorOverride("font_color", Ui.PanelBorder);
+        Button start = Ui.Action("开始", ButtonKind.Primary);
         start.Pressed += () => MapStartPressed?.Invoke();
         body.AddChild(start);
     }

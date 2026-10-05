@@ -80,7 +80,7 @@ public sealed partial class Hud
         AddChild(_carryRoot);
 
         // 补给选择面板：靠左（与选图面板同位），背景是插旗前的盘面。
-        (PanelContainer supply, VBoxContainer supplyBody) = Ui.Panel(12, 6);
+        (PanelContainer supply, VBoxContainer supplyBody) = Ui.Panel(PanelTier.Primary, UiTheme.Space5, UiTheme.Space3);
         Ui.Anchor(supply, 0f, 0f, 14f, 14f, 454f, 14f);
         supply.GrowVertical = Control.GrowDirection.End;
         supply.Visible = false;
@@ -89,17 +89,16 @@ public sealed partial class Hud
         _supplyBody = supplyBody;
 
         // 对局中的带入一栏 + 弃赛按钮：左下，手牌栏之上。
-        (PanelContainer bar, VBoxContainer barBody) = Ui.Panel(6, 2);
+        (PanelContainer bar, VBoxContainer barBody) = Ui.Panel(PanelTier.Secondary, UiTheme.Space3, UiTheme.Space1);
         Ui.Anchor(bar, 0f, 1f, 14f, -250f, 378f, -194f);
         bar.GrowVertical = Control.GrowDirection.Begin;
         bar.Visible = false;
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 6);
-        _carryBarText = Ui.Text(string.Empty, Ui.InfoText, UiTheme.BodyFontPx - 2, wrap: true);
+        row.AddThemeConstantOverride("separation", UiTheme.Space3);
+        _carryBarText = Ui.Text(string.Empty, Ui.InfoText, UiTheme.Caption, wrap: true);
         _carryBarText.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(_carryBarText);
-        _resignButton = Ui.Action("弃赛", 64);
-        _resignButton.AddThemeColorOverride("font_color", Ui.DangerText);
+        _resignButton = Ui.Action("弃赛", ButtonKind.Danger, minWidth: 64);
         _resignButton.Pressed += () => ShowConfirm(
             "确认弃赛？弃赛后不再行动，AI 继续把对局下完。带入带出开启时：返还带入的补给，并按弃赛时的势力名次带出一半补给点（构筑保护期内为 0）。",
             "确认弃赛", () => ResignConfirmed?.Invoke());
@@ -109,7 +108,7 @@ public sealed partial class Hud
         _carryBar = bar;
 
         // 结算面板：居中偏上，窄条，不整块盖住棋盘。
-        (PanelContainer settlement, VBoxContainer settlementBody) = Ui.Panel(12, 6);
+        (PanelContainer settlement, VBoxContainer settlementBody) = Ui.Panel(PanelTier.Primary, UiTheme.Space5, UiTheme.Space3);
         Ui.Anchor(settlement, 0.5f, 0f, -260f, 110f, 260f, 110f);
         settlement.GrowVertical = Control.GrowDirection.End;
         settlement.Visible = false;
@@ -118,7 +117,7 @@ public sealed partial class Hud
         _settlementBody = settlementBody;
 
         // 二次确认框：居中。
-        (PanelContainer confirm, VBoxContainer confirmBody) = Ui.Panel(12, 6);
+        (PanelContainer confirm, VBoxContainer confirmBody) = Ui.Panel(PanelTier.Primary, UiTheme.Space5, UiTheme.Space3);
         Ui.Anchor(confirm, 0.5f, 0.5f, -240f, -70f, 240f, -70f);
         confirm.GrowVertical = Control.GrowDirection.End;
         confirm.Visible = false;
@@ -138,16 +137,16 @@ public sealed partial class Hud
         VBoxContainer body = _supplyBody!;
         Ui.Clear(body);
 
-        body.AddChild(Ui.Text("补给（开局前）" + (data.Preview ? "　· 预览" : string.Empty), Ui.PanelBorder, UiTheme.BodyFontPx + 4));
+        body.AddChild(Ui.Text("补给（开局前）" + (data.Preview ? "　· 预览" : string.Empty), Ui.PanelBorder, UiTheme.Banner));
         foreach (string notice in data.Notices)
         {
-            body.AddChild(Ui.Text(notice, Ui.DangerText, UiTheme.BodyFontPx - 2, wrap: true));
+            body.AddChild(Ui.Text(notice, Ui.DangerText, UiTheme.Caption, wrap: true));
         }
 
         body.AddChild(Ui.Text("补给只改开局手牌，每局至多带入 1 件；局终按名次带出补给点（4 人局 24 / 16 / 12 / 10），弃赛带出一半并返还补给，出局补给丢失。",
-            Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+            Ui.MutedText, UiTheme.Caption, wrap: true));
         body.AddChild(Ui.Separator());
-        body.AddChild(Ui.Text(CarryTexts.Stock(data.Current), Ui.InfoText, UiTheme.BodyFontPx + 1));
+        body.AddChild(Ui.Text(CarryTexts.Stock(data.Current), Ui.InfoText, UiTheme.Title));
 
         foreach (SupplyKind kind in Supplies.Order)
         {
@@ -155,11 +154,11 @@ public sealed partial class Hud
             int stock = data.Current.StockOf(kind);
             body.AddChild(Ui.Separator());
             body.AddChild(Ui.Text($"{CarryTexts.Supply(kind)}　价 {price}　库存 {stock}", Ui.PanelBorder));
-            body.AddChild(Ui.Text(CarryTexts.Effect(kind), Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+            body.AddChild(Ui.Text(CarryTexts.Effect(kind), Ui.MutedText, UiTheme.Caption, wrap: true));
 
             var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 6);
-            Button exchange = Ui.Action($"兑换（{price} 点）", 110);
+            row.AddThemeConstantOverride("separation", UiTheme.Space3);
+            Button exchange = Ui.Action($"兑换（{price} 点）", minWidth: 110);
             exchange.Disabled = !data.CarryAllowed || data.Current.Points < price;
             SupplyKind captured = kind;
             exchange.Pressed += () => SupplyExchangePressed?.Invoke(captured);
@@ -169,7 +168,6 @@ public sealed partial class Hud
             if (kind == SupplyKind.Commission)
             {
                 types = new OptionButton { CustomMinimumSize = new Vector2(110f, UiTheme.ButtonHeightPx) };
-                types.AddThemeFontSizeOverride("font_size", UiTheme.BodyFontPx);
                 foreach (CarryCandidate candidate in data.Candidates)
                 {
                     types.AddItem(Labels.Piece(candidate.Type));
@@ -181,7 +179,7 @@ public sealed partial class Hud
                 row.AddChild(types);
             }
 
-            Button carry = Ui.Action("带入并开始", 110);
+            Button carry = Ui.Action("带入并开始", minWidth: 110);
             carry.Disabled = !data.CarryAllowed || stock < 1;
             ImmutableArray<CarryCandidate> candidates = data.Candidates;
             carry.Pressed += () => SupplyCarryPressed?.Invoke(captured,
@@ -192,12 +190,11 @@ public sealed partial class Hud
 
         if (data.Feedback.Length > 0)
         {
-            body.AddChild(Ui.Text(data.Feedback, Ui.InfoText, UiTheme.BodyFontPx - 1, wrap: true));
+            body.AddChild(Ui.Text(data.Feedback, Ui.InfoText, UiTheme.Small, wrap: true));
         }
 
         body.AddChild(Ui.Separator());
-        Button skip = Ui.Action("不带入，开始");
-        skip.AddThemeColorOverride("font_color", Ui.PanelBorder);
+        Button skip = Ui.Action("不带入，开始", ButtonKind.Primary);
         skip.Pressed += () => SupplySkipPressed?.Invoke();
         body.AddChild(skip);
     }
@@ -228,9 +225,9 @@ public sealed partial class Hud
         EnsureCarryRoot();
         VBoxContainer body = _settlementBody!;
         Ui.Clear(body);
-        body.AddChild(Ui.Text("带出结算", Ui.PanelBorder, UiTheme.BodyFontPx + 4));
-        body.AddChild(Ui.Text(headline, Ui.InfoText, UiTheme.BodyFontPx + 2, wrap: true));
-        body.AddChild(Ui.Text(detail, Ui.MutedText, UiTheme.BodyFontPx - 1, wrap: true));
+        body.AddChild(Ui.Text("带出结算", Ui.PanelBorder, UiTheme.Banner));
+        body.AddChild(Ui.Text(headline, Ui.InfoText, UiTheme.Title, wrap: true));
+        body.AddChild(Ui.Text(detail, Ui.MutedText, UiTheme.Small, wrap: true));
         Button close = Ui.Action("关闭");
         close.Pressed += () => _settlementPanel!.Visible = false;
         body.AddChild(close);
@@ -246,16 +243,15 @@ public sealed partial class Hud
         Ui.Clear(body);
         body.AddChild(Ui.Text(text, Ui.InfoText, wrap: true));
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 8);
-        Button ok = Ui.Action(yes, 110);
-        ok.AddThemeColorOverride("font_color", Ui.DangerText);
+        row.AddThemeConstantOverride("separation", UiTheme.Space4);
+        Button ok = Ui.Action(yes, ButtonKind.Danger, minWidth: 110);
         ok.Pressed += () =>
         {
             _confirmPanel!.Visible = false;
             onYes();
         };
         row.AddChild(ok);
-        Button cancel = Ui.Action("取消", 80);
+        Button cancel = Ui.Action("取消", minWidth: 80);
         cancel.Pressed += () => _confirmPanel!.Visible = false;
         row.AddChild(cancel);
         body.AddChild(row);

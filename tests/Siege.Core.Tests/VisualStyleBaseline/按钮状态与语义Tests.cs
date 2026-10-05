@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Siege.Presentation.Style;
 
 namespace Siege.Core.Tests.VisualStyleBaseline;
@@ -268,5 +269,44 @@ public class 按钮状态与语义Tests
         Assert.Throws<ArgumentOutOfRangeException>(() => Of((ButtonKind)99, ButtonState.Normal));
         Assert.Throws<ArgumentOutOfRangeException>(() => Of((ButtonKind)99, ButtonState.Disabled));
         Assert.Throws<ArgumentOutOfRangeException>(() => Of(ButtonKind.Default, (ButtonState)99));
+    }
+
+    /// <summary>
+    /// 规格「语义不靠逐处改色」：HUD 脚本里没有对按钮设置样式盒覆盖或字号覆盖的调用，主操作、危险操作、选中都经由控件工厂的参数（hud-theme D5 / D7 第二组）。
+    /// 回合摘要的阵营色字（<c>SetTurnSummary</c>）是内容不是主题（D5），整个方法体从扫描文本中剔除；其余位置一律不得逐处改字色。
+    /// 变异验证（hud-theme 段 B，往脚本里注入违例；口径同 <see cref="面板分级Tests.每个面板都有级别"/>）：B-1「开始按钮补回 AddThemeColorOverride("font_color", …)」、
+    /// B-3「演出横幅透明度写回 new Color(1f, 1f, 1f, …)」、B-4「不带入开始去掉 ButtonKind.Primary」、B-6「选图难度按钮改回逐处改字色、去掉 Ui.Select」各 → 红 1（本条）；
+    /// B-2「弃赛按钮加 AddThemeStyleboxOverride(」→ 红 2（+ 面板 每个面板都有级别）；B-5「总览页样例加 AddThemeFontSizeOverride(」→ 红 2（+ 样式总览页 与对局界面同源）；
+    /// G-6「总览页写 new Color(0.5f, …)」→ 红 2（+ 样式总览页 与对局界面同源）。
+    /// 段 B 检查补的绕过形状（补守门前 0 红，补后）：X-3「new Color("#ff3030")」、X-4「Color warn = new(0.9f, 0.2f, 0.2f)」、X-11「关闭按钮 SelfModulate = Ui.PanelBorder」各 → 红 1（本条）；
+    /// 补之前就会红的：X-10「Color.FromHtml(…)」→ 红 1（本条）；X-8「按钮直接写 ThemeTypeVariation 指选中变体」→ 红 2（+ 面板 每个面板都有级别）。
+    /// </summary>
+    [Fact]
+    public void 语义不靠逐处改色()
+    {
+        Dictionary<string, string> code = HudScriptScan.HudAndGallery();
+        string summary = PresentationFixtures.MethodBody(code["Hud.cs"], "public void SetTurnSummary(string? text, Color color)");
+        Assert.Matches(@"AddThemeColorOverride\(""font_color""", summary); // 反面命中：被剔除的正是那一处内容字色
+        Dictionary<string, string> scanned = code.ToDictionary(kv => kv.Key, kv => kv.Key == "Hud.cs" ? kv.Value.Replace(summary, string.Empty, StringComparison.Ordinal) : kv.Value);
+
+        // 不覆盖样式盒、字号与字色（字色覆盖只查 font_ 开头的颜色项：描边色等也算按钮外观）。
+        var overrides = new Regex(@"AddThemeStyleboxOverride\(|AddThemeFontSizeOverride\(|AddThemeColorOverride\(\s*""font_");
+        Assert.Empty(HudScriptScan.Hits(scanned, overrides));
+
+        // 没有写死的颜色：带数字或字符串的 new Color(、Color8、Color.FromHtml / FromHsv 之类、首参是字面量的目标类型 new(…)（HUD 脚本一律写明类型）。
+        // 整体透明度写成 Colors.White with { A = … }（D5），Modulate 只允许这一种写法——按钮不能靠染色表达语义。
+        var literalColor = new Regex(@"new\s+Color\s*\(\s*[-\d.""]|Color8\s*\(|FromHtml\s*\(|Color\.From\w+\s*\(|new\s*\(\s*[-\d.""]|Modulate\s*=(?!\s*Colors\.White\s+with\s*\{)");
+        Assert.Empty(HudScriptScan.Hits(code, literalColor));
+        Assert.Single(HudScriptScan.Hits(code, new Regex(@"Modulate\s*=")));  // 反面命中：放行的正是演出横幅那一处透明度
+
+        // 语义经工厂参数：主操作两处（开始、不带入开始）、危险两处（弃赛、确认框的确认），选图的地图与难度两组经 Ui.Select。
+        string hud = string.Concat(HudScriptScan.HudScripts.Select(n => code[n]));
+        Assert.True(Regex.Matches(hud, @"ButtonKind\.Primary").Count >= 2, "主操作应经 ButtonKind.Primary");
+        Assert.True(Regex.Matches(hud, @"ButtonKind\.Danger").Count >= 2, "危险操作应经 ButtonKind.Danger");
+        Assert.Equal(2, Regex.Matches(PresentationFixtures.MethodBody(code["Hud.MapSelect.cs"], "public void ShowMapSelect(MapSelectModel model, string mapInfo)"), @"Ui\.Select\(").Count);
+
+        // 反面命中：控件工厂里确实有字号覆盖（Ui.Text）——正则写错时上面恒真；写死颜色的判据在别的引擎层脚本里确实命中。
+        Assert.Matches(overrides, PresentationFixtures.GodotScriptCode(HudScriptScan.Factory));
+        Assert.Matches(literalColor, PresentationFixtures.GodotScriptCode("Visuals.cs"));
     }
 }

@@ -576,6 +576,30 @@ public static class UiTheme
     /// <summary>按钮左右内边距（px）。</summary>
     public const int ButtonPaddingXPx = 10;
 
+    /// <summary>按钮上下内边距（px，hud-theme D8-2）。按钮高度仍由 <see cref="ButtonHeightPx"/> 的最小尺寸撑开。</summary>
+    public const int ButtonPaddingYPx = Space2;
+
+    /// <summary>提示条左右内边距（px，hud-theme D8-3；回合摘要横幅原先的 16 不在间距阶梯上）。</summary>
+    public const int HintPaddingXPx = Space5;
+
+    /// <summary>提示条上下内边距（px，hud-theme D8-3；原先上 3 / 下 4）。</summary>
+    public const int HintPaddingYPx = Space2;
+
+    /// <summary>
+    /// 结算演出中央横幅（"金方出局" / "对局结束"）的字号（px，hud-theme D8-4；原先引擎层写的是正文字号 × 3）。
+    /// 演出字号，规格写明不受字号阶梯限制。
+    /// </summary>
+    public const int ShowBannerPx = 45;
+
+    /// <summary>压在棋盘上的文字（提示条、演出横幅）的描边色。</summary>
+    public static readonly Rgba TextOutline = new(0, 0, 0);
+
+    /// <summary>提示条文字的描边宽度（px；回合摘要横幅原有的值）。</summary>
+    public const int HintOutlinePx = 6;
+
+    /// <summary>演出横幅文字的描边宽度（px；原有的值）。</summary>
+    public const int ShowBannerOutlinePx = 8;
+
     /// <summary>字号阶梯第一级：注释（px）。</summary>
     public const int Caption = 13;
 

@@ -184,6 +184,10 @@ public sealed partial class GameRoot : Node3D
             // --piece-gallery=<PNG 路径>：不建局，拍一张十种棋子轮廓对照图后退出（more-pieces-relics 段 D 人工检查清单用，见 PieceGallery）。
             string? pieceGallery = args.Text("piece-gallery", "PNG 输出路径");
 
+            // --ui-gallery=<PNG 路径>：不建局，拍一张 HUD 样式总览（三级面板、按钮三种语义 × 五种状态、选中 / 未选中、字号阶梯）后退出（hud-theme D6，见 UiGallery）。
+            // 路径给绝对路径；截图失败或文件没生成以退出码 1 结束。
+            string? uiGallery = args.Text("ui-gallery", "PNG 输出路径（绝对路径）");
+
             // --difficulty=<名称>：AI 难度（expert-lookahead D10），经 Core 的唯一解析——只认 Easy / Standard / Hard / Expert（不区分大小写），
             // 数字与未知名称由结算报错退出，不回落到标准。未给出取标准；进入选图界面时作为难度选择的预选。
             AiDifficulty? difficulty = args.Value<AiDifficulty>(
@@ -253,6 +257,15 @@ public sealed partial class GameRoot : Node3D
                 SetProcessInput(false);
                 SetProcessUnhandledInput(false);
                 AddChild(new PieceGallery(pieceGallery) { Name = "PieceGallery" });
+                return;
+            }
+
+            if (uiGallery is not null)
+            {
+                SetProcess(false);
+                SetProcessInput(false);
+                SetProcessUnhandledInput(false);
+                AddChild(new UiGallery(uiGallery) { Name = "UiGallery" });
                 return;
             }
 
