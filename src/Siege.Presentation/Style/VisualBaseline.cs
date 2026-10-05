@@ -564,6 +564,9 @@ public static class UiTheme
     /// <summary>选中的可切换按钮的底边线宽（px）：比其余三边宽，灰度下也认得出。</summary>
     public const int SelectedEdgeWidthPx = 2;
 
+    /// <summary>势力排名里本机玩家那一行行首金色竖条的宽度（px，hud-panels D2）。</summary>
+    public const int ViewerMarkWidthPx = 3;
+
     /// <summary>主面板、次面板与按钮的圆角（px）。</summary>
     public const int CornerRadiusPx = 3;
 

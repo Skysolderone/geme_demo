@@ -1,0 +1,5 @@
+{"file": "openspec/changes/hud-panels/design.md", "reason": "本 change 的设计与摆放方案"}
+{"file": "openspec/changes/hud-panels/tasks.md", "reason": "分段任务与验证项"}
+{"file": "openspec/changes/hud-panels/specs/visual-style-baseline/spec.md", "reason": "验收基准：规格增量"}
+{"file": "openspec/specs/visual-style-baseline/spec.md", "reason": "hud-theme 已入主规格的面板 / 按钮 / 阶梯要求（守门继续生效）"}
+{"file": ".trellis/spec/core/testing.md", "reason": "测试、变异、表现层画面验证与源码扫描守门的约定"}
