@@ -252,3 +252,19 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 - **WHEN** 在 `siege-2p-base-v1` 上以带显式权重的配置文件执行批量跑局，同时给了难度参数
 - **THEN** 配置文件里的权重被丢弃，批次配置记录中两名玩家的权重等于 2 人图覆盖表
 
+### Requirement: 批量跑局的计分规则版本
+
+批量跑局的配置 SHALL 能指定计分规则版本（v1 / v2），缺省 v2；实际生效值 SHALL 写入该批的配置记录。未识别的取值 MUST 报错退出，MUST NOT 静默回退到缺省值。终端版与图形版的新局一律使用缺省值。
+
+#### Scenario: 指定 v1 跑一批
+- **WHEN** 以计分规则 v1 跑一批对局
+- **THEN** 该批的配置记录与每局日志首部都写着 v1，各局与引入阵型之前同一配置的结果逐项相同
+
+#### Scenario: 缺省 v2
+- **WHEN** 不指定计分规则版本跑一批对局
+- **THEN** 配置记录写着 v2
+
+#### Scenario: 未识别的取值
+- **WHEN** 把计分规则版本指定为 `v3`
+- **THEN** 报错退出，不产出对局
+

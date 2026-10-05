@@ -1,6 +1,6 @@
 # 10-05-formation-tiers
 
-> 规格权威：`openspec/changes/formation-tiers/`（proposal / design / specs / tasks）。
+> 规格权威：`openspec/changes/archive/2026-10-05-formation-tiers/`（proposal / design / specs / tasks）。
 
 数值规则第二步（负责人 2026-10-05：先呈现、后数值）。棋串规模阶梯"阵型"：棋子数达到 3 / 5 / 8 / 12 枚为一至四阶，阶数加进倍率指数（每级 ×1.5，与倍增子连乘，四阶封顶）。作为计分规则版本 v2 引入：新局缺省 v2，旧存档与旧日志按 v1，批量跑局可配置。
 

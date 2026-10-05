@@ -22,6 +22,6 @@
 
 ## 4. 验收与文档
 
-- [ ] 4.1 设计文档 §9.2 / §10.1 / §14.4 / §15.2 与变更记录升版；HANDOFF 的规则速览同步。验证：人工检查。
-- [ ] 4.2 `openspec validate formation-tiers --strict` 通过；归档；journal。验证：命令退出码 0。
+- [x] 4.1 设计文档 §9.2 / §10.1 / §14.4 / §15.2 与变更记录升版；HANDOFF 的规则速览同步。验证：人工检查。
+- [x] 4.2 `openspec validate formation-tiers --strict` 通过；归档；journal。验证：命令退出码 0。
 - [ ] 4.3 在 Windows 机上复核全量测试全绿（本机 11 条黄金值原本就红）。验证：人工检查。

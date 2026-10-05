@@ -261,7 +261,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **THEN** 每条棋串两处的军势相同
 
 #### Scenario: 标注带档位
-- **WHEN** 盘上有三条棋串，军势分别为 1、10、40
+- **WHEN** 盘上有三条棋串，军势分别为 1、20、70
 - **THEN** 三条标注的档位依次为一档、三档、五档，字号依次增大
 
 #### Scenario: 揭示之前不显示
