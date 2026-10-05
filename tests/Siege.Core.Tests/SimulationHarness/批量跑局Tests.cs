@@ -45,7 +45,9 @@ public class 批量跑局Tests
         Assert.Null(config.FlagRisk);
         // carry-in-out 段 C：未配置的带入数量落成 0 写入（写明关闭）。
         Assert.Null(config.CarryIn);
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
+        // formation-tiers D2：未配置的计分规则版本同样落成缺省值 v2 写入（不落成就无法与"首部缺该项 = 旧日志 = v1"区分）。
+        Assert.Null(config.ScoringVersion);
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
         Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
@@ -54,7 +56,7 @@ public class 批量跑局Tests
         Assert.All(logs, l =>
         {
             Assert.NotNull(l.Result);
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率；carry-in-out 段 C：带入数量落成 0
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率；carry-in-out 段 C：带入数量落成 0；formation-tiers D2：计分规则版本落成缺省 v2
             Assert.InRange(l.Result!.MajorRound, 1, 3);
         });
 

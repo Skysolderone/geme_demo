@@ -19,7 +19,7 @@ namespace Siege.Sim.Logging;
 /// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
 /// <item><term>4. 每次地形改造（大回合、小回合、改造方、动作、目标、是否致提子）</term><description><see cref="TurnSnapshot.Edits"/>（大回合 / 小回合由所在快照给出；是否经工坊扩展 <see cref="TerrainEditEntry.ViaWorkshop"/>）；配置的匠人权重在 <see cref="LogHeader.ArtisanWeight"/></description></item>
 /// <item><term>5. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）；<see cref="TurnSnapshot.ShowCount"/>（驿站来源 <see cref="TurnSnapshot.RelaySources"/>、工坊 <see cref="TurnSnapshot.WorkshopActive"/>）/ <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
-/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍增子数量、倍率与最终军势；每名玩家的领地分</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>BannerBonus</c> / <c>ChainBonus</c> / <c>SentryBonus</c> / <c>BoundaryBonus</c>（七项来源；另有连营 / 犄角子拆分）/ <c>MultiplierCount</c>（即倍率指数，倍率 = 1.5^n 由它得出）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；
+/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍增子数量、倍率与最终军势；每名玩家的领地分</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>BannerBonus</c> / <c>ChainBonus</c> / <c>SentryBonus</c> / <c>BoundaryBonus</c>（七项来源；另有连营 / 犄角子拆分）/ <c>MultiplierCount</c>（倍增子的枚数）/ <c>FormationTier</c>（阵型阶数，formation-tiers D3；倍率指数 = 二者之和，总倍率 = 1.5^n 由 <see cref="GroupEntry.Multiplier"/> 还原）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；
 /// <see cref="PlayerEntry.TerritoryScore"/>（独占空格数）与 <see cref="PlayerEntry.Total"/>（= 领地分 + Σ军势）。势力与军势一律精确十进制整数（JSON 数字，不加引号、无指数）</description></item>
 /// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果与结束原因</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="PlayerEntry.HasEstablishedPower"/>（出局判据的"曾建立正势力"标记）；
 /// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因三类之一（LastPlayerStanding / BoardFull / AllPassed），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
@@ -55,6 +55,11 @@ public sealed class MatchLog
     /// 本局的对局内容集（match-telemetry 第 1 条；记在首部配置 <see cref="RunConfig.ContentSet"/>）。首部缺该项的旧日志按 v1 读（more-pieces-relics D8）。
     /// </summary>
     public Siege.Core.Board.ContentSet ContentSet => Header.Config.ContentSet ?? Siege.Core.Board.ContentSets.Legacy;
+
+    /// <summary>
+    /// 本局的计分规则版本（match-telemetry「阵型的记录」；记在首部配置 <see cref="RunConfig.ScoringVersion"/>）。首部缺该项的旧日志按 v1 读（formation-tiers D2）。
+    /// </summary>
+    public ScoringVersion ScoringVersion => Header.Config.ScoringVersion ?? ScoringVersions.Legacy;
 
     /// <summary>本局是否开启带入带出（首部 <see cref="LogHeader.CarryInOut"/>）。引入带入带出之前的旧日志缺该项，按关闭读。</summary>
     public bool CarryInOut => Header.CarryInOut ?? false;
@@ -782,8 +787,26 @@ public sealed record GroupEntry
     [JsonIgnore]
     public int NewSourceBonus => (BannerBonus ?? 0) + (ChainBonus ?? 0) + (SentryBonus ?? 0) + (BoundaryBonus ?? 0);
 
-    /// <summary>倍增子数量，即倍率指数（restore-go-core-rules：不封顶，"生效倍率指数"字段已删；旧日志里的该字段读入时忽略）。</summary>
+    /// <summary>倍增子数量（倍增子的枚数；restore-go-core-rules：不封顶，"生效倍率指数"字段已删；旧日志里的该字段读入时忽略）。倍率指数见 <see cref="MultiplierExponent"/>。</summary>
     public int MultiplierCount { get; init; }
+
+    /// <summary>
+    /// 阵型阶数 0–4（formation-tiers D3，取自 <c>GroupPower.FormationTier</c>）。只在计分规则 v1 之外的对局写出（含 0）；
+    /// v1 局与引入阵型之前的旧日志没有该字段（<c>null</c>），按 0 读。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? FormationTier { get; init; }
+
+    /// <summary>倍率指数 = 倍增子数量 + 阵型阶数（缺字段按 0）。只读派生量，不写进日志。</summary>
+    [JsonIgnore]
+    public int MultiplierExponent => MultiplierCount + (FormationTier ?? 0);
+
+    /// <summary>
+    /// 本串的总倍率 <c>1.5^(倍增子数量 + 阵型阶数)</c>——分析端由日志还原倍率的<b>唯一</b>一处（match-telemetry「阵型的记录」）：
+    /// 阶数只读日志里记录的值，MUST NOT 在分析端按棋子数重算。只读派生量，不写进日志。
+    /// </summary>
+    [JsonIgnore]
+    public Multiplier Multiplier => new(MultiplierExponent);
 
     /// <summary>取整后军势，精确整数。</summary>
     public BigInteger Power { get; init; }
@@ -966,8 +989,12 @@ public sealed record RelicRevealEntry
 
 public sealed record PeakEntry
 {
-    /// <summary>峰值串的倍增子数量（峰值按它取），即倍率指数。</summary>
+    /// <summary>峰值串的倍增子数量（峰值按它取）。</summary>
     public int MultiplierCount { get; init; }
+
+    /// <summary>峰值串在峰值出现时的阵型阶数（formation-tiers D3）。只在计分规则 v1 之外的对局写出；缺该字段（v1 局 / 旧日志）按 0 读。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? FormationTier { get; init; }
 
     public int MajorRound { get; init; }
 

@@ -181,7 +181,7 @@ public class 棋盘清单Tests
     private static MatchLog AiRun(MapData map)
     {
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
+            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchFixtures.V1 with { ContentSet = ContentSet.V1 });   // 计分规则同样随 PinPreCalibration 钉 v1（formation-tiers D2）
         match.PlantSequentially([(P0, 0), (P1, 1)]);
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 6, players: 2)));
         return MatchLog.Parse(session.Run().FullText());

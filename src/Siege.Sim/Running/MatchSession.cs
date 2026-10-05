@@ -83,6 +83,11 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的内容集为 {contentSet}，对局配置却为 {match.ContentSet}。");
         }
 
+        if (config.ScoringVersion is { } scoring && scoring != match.ScoringVersion)
+        {
+            throw new SiegeRuleException($"跑局配置的计分规则版本为 {scoring}，对局配置却为 {match.ScoringVersion}。");
+        }
+
         if (config.CarryIn == 1 && !match.CarryInOut)
         {
             throw new SiegeRuleException("跑局配置的带入数量为 1，对局却没有开启带入带出。");
@@ -150,6 +155,8 @@ public sealed class MatchSession
         int flagRisk = config.FlagRisk ?? (recorded ? 0 : MatchOptions.DefaultFlagRisk);
         // 内容集（more-pieces-relics D8）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时只有原六 + 六，按 v1 重建。
         ContentSet contentSet = config.ContentSet ?? (recorded ? ContentSets.Legacy : ContentSets.Default);
+        // 计分规则版本（formation-tiers D2）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时不计阵型，按 v1 重建。
+        ScoringVersion scoringVersion = config.ScoringVersion ?? (recorded ? ScoringVersions.Legacy : ScoringVersions.Default);
         // 带入带出（carry-in-out D11）：新建的局按带入数量从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
         // 按日志首部重建时只读首部记录的带入（征召签已是抽得的类型），MUST NOT 按配置或种子重抽——人机对局的带入不可由种子推出。首部缺该项 = 旧日志 = 关闭。
         bool carryInOut;
@@ -168,7 +175,11 @@ public sealed class MatchSession
 
         MatchFlow match = MatchFlow.Create(
             map, new GameSeed(seed), players,
-            MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk, ContentSet = contentSet, CarryInOut = carryInOut, CarryIns = carryIns });
+            MatchOptions.Immediate with
+            {
+                ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk, ContentSet = contentSet, ScoringVersion = scoringVersion,
+                CarryInOut = carryInOut, CarryIns = carryIns,
+            });
         // 选区的唯一实现在 Core（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区；否则区数不多于人数上限时顺排
         // （p = 0 时 P<i> → 区 <i>，与此前逐项相同），多于时由种子的独立子流均匀选区。
         match.PlantPrototype();
@@ -627,6 +638,7 @@ public sealed class MatchSession
                     EncampmentBonus = NewField(g.EncampmentBonus, view.ContentSet),
                     PincerBonus = NewField(g.PincerBonus, view.ContentSet),
                     MultiplierCount = g.MultiplierCount,
+                    FormationTier = FormationField(g.FormationTier, view.ScoringVersion),
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
                 })],
@@ -643,6 +655,12 @@ public sealed class MatchSession
     internal static bool WritesNewContent(ContentSet contentSet) => contentSet != ContentSet.V1;
 
     private static int? NewField(int value, ContentSet contentSet) => WritesNewContent(contentSet) ? value : null;
+
+    /// <summary>
+    /// formation-tiers D3：阵型阶数只在计分规则 v1 之外的对局写出（含 0），v1 局一律不写（<c>null</c>，JSON 里整项省略），
+    /// 使 v1 局的棋串条目与引入阵型之前逐字节相同。旧日志与 v1 日志读入时按 0。
+    /// </summary>
+    internal static int? FormationField(int tier, ScoringVersion scoring) => scoring == ScoringVersion.V1 ? null : tier;
 
     /// <summary>快照记录的驿站来源：坐标 → 该枚驿站的展示数加成（含 +0，逐枚），直接取效果快照的 <see cref="EffectSnapshot.RelaySources"/>（唯一实现在账本）。</summary>
     internal static Dictionary<string, int>? RelaySourcesEntry(EffectSnapshot? effects, ContentSet contentSet) =>
@@ -849,6 +867,7 @@ public sealed class MatchSession
             Peak = peak is null ? null : new PeakEntry
             {
                 MultiplierCount = peak.MultiplierCount,
+                FormationTier = FormationField(peak.FormationTier, Match.ScoringVersion),
                 MajorRound = peak.MajorRound,
                 Player = peak.Player.Value,
                 Power = peak.Power,

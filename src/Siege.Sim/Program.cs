@@ -73,6 +73,7 @@ public static class Program
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <地图id或文件>] [--players <人数，缺省取地图人数上限>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>] [--flag-risk <原型插旗冒险概率 0–100，缺省 {Core.Match.MatchOptions.DefaultFlagRisk}>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
+        Console.WriteLine($"                [--scoring <计分规则版本 {Core.Scoring.ScoringVersions.Usage}，缺省 {Core.Scoring.ScoringVersions.Default.ToString().ToLowerInvariant()}（v2 计阵型；v1 不计阵型，与引入阵型之前逐步相同）>]");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
@@ -360,6 +361,8 @@ public static class Program
             CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
             PassThreshold = cli.Has("pass-threshold") ? cli.GetInt("pass-threshold", 0) : config.PassThreshold,
             FlagRisk = cli.Has("flag-risk") ? cli.GetInt("flag-risk", 0) : config.FlagRisk,
+            // formation-tiers D2：严格解析（v1 / v2），未识别的取值报错退出，不回退到缺省值。
+            ScoringVersion = cli.GetOrNull("scoring") is { } scoring ? Core.Scoring.ScoringVersions.Parse(scoring) : config.ScoringVersion,
             CarryIn = cli.Has("carry-in") ? cli.GetInt("carry-in", 0) : config.CarryIn,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),

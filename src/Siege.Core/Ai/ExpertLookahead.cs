@@ -442,7 +442,7 @@ internal sealed class ExpertLookahead
         ArgumentNullException.ThrowIfNull(board);
         GameBoard copy = board.Clone();
         ImmutableSortedDictionary<PlayerId, PlayerStatus> roster = view.Players.ToImmutableSortedDictionary(p => p.Player, p => p.Status);
-        PowerSnapshot power = PowerCalculator.Compute(copy, roster, RevealedRelics.Of(view.Relics));
+        PowerSnapshot power = PowerCalculator.Compute(copy, roster, RevealedRelics.Of(view.Relics), view.ScoringVersion);
         ImmutableArray<RelicPublicState> relics = [.. view.Relics.Select(r => r with { Control = RelicControl.Of(power.Coverage, r.Coord, roster) })];
 
         // 「曾建立正势力」置位在出局检查之前（与 MatchFlow 的结算顺序一致；置位只会让总势力 > 0 的玩家变真，不改变谁出局）。
@@ -510,7 +510,7 @@ internal sealed class ExpertLookahead
     {
         ImmutableSortedDictionary<PlayerId, PlayerStatus> roster = projected.Players.ToImmutableSortedDictionary(p => p.Player, p => p.Status);
         ImmutableArray<PlayerId> active = [.. projected.Players.Where(p => p.IsActive).Select(p => p.Player)];
-        PowerSnapshot power = PowerCalculator.Compute(projected.Board, roster, RevealedRelics.Of(view.Relics));
+        PowerSnapshot power = PowerCalculator.Compute(projected.Board, roster, RevealedRelics.Of(view.Relics), view.ScoringVersion);
         ImmutableArray<RelicPublicState> relics = [.. projected.Relics.Select(r => r with { Control = RelicControl.Of(power.Coverage, r.Coord, roster) })];
         ImmutableSortedDictionary<PlayerId, int> bonuses = PublicRelicEffects.InitiativeBonuses(active, relics);
 

@@ -166,7 +166,8 @@ public class 对局日志的记录内容Tests
         // 远超 2^63；第 11 行 12 格为 P0 独占（领地分 12，非零）。经日志写入函数 → 文本 → 解析，逐位与对局内的势力明细比。
         // 写出端形状见 军势精确整数遥测Tests（JSON 数字、不加引号、无指数）。
         MapData map = MatchFixtures.Map() with { Id = "test-match-12x12", Width = 12, Height = 12 };
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
+        // formation-tiers D2：算例按不计阵型写（120 枚倍增子 → 指数 120），显式钉计分规则 v1。
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchFixtures.V1);
         match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
         for (int y = 0; y < 10; y++)
         {

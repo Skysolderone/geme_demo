@@ -17,8 +17,8 @@ namespace Siege.Core.Scoring;
 /// <param name="ChainBonus">来自铁链子的位置加值。</param>
 /// <param name="SentryBonus">来自哨兵子的位置加值。</param>
 /// <param name="BoundaryBonus">来自界碑子的位置加值。</param>
-/// <param name="MultiplierCount">倍增子数量 n，即倍率指数（不封顶）。</param>
-/// <param name="Power">取整后军势：<c>⌊(基础 + 加值) × 3^n / 2^n⌋</c>，逐棋串各取整一次（restore-go-core-rules D1：加值被倍率放大）。任意精度整数，不溢出。</param>
+/// <param name="MultiplierCount">倍增子数量（倍增子的枚数，不封顶）。倍率指数 = 本项 + <see cref="FormationTier"/>（formation-tiers D3）。</param>
+/// <param name="Power">取整后军势：<c>⌊(基础 + 加值) × 3^n / 2^n⌋</c>，<c>n</c> = 倍率指数，逐棋串各取整一次（restore-go-core-rules D1：加值被倍率放大）。任意精度整数，不溢出。</param>
 public sealed record GroupPower(
     PlayerId Owner,
     ImmutableArray<Coord> Stones,
@@ -47,11 +47,21 @@ public sealed record GroupPower(
     /// <summary><see cref="SynergyBonus"/> 中由犄角带来的额外部分（同上，并入协同来源的子拆分）。</summary>
     public int PincerBonus { get; init; }
 
-    /// <summary>倍率 <c>1.5^n</c> 的精确表示（分子 <c>3^n</c>、分母 <c>2^n</c>），不封顶。</summary>
-    public Multiplier Multiplier => new(MultiplierCount);
+    /// <summary>
+    /// 阵型阶数 0–4（formation-tiers D1 / D3）：按整条棋串的棋子数取（3 / 5 / 8 / 12 枚为一至四阶，唯一实现 <see cref="FormationTiers"/>），
+    /// 计分规则 v1 下恒为 0。由唯一构造点 <see cref="PowerCalculator.Evaluate(GameBoard, CoverageMap, Group, ScoringRelicCounts, ScoringVersion)"/> 给出；
+    /// 表现层与遥测读它，不自己数棋子。手工构造的明细缺省 0。
+    /// </summary>
+    public int FormationTier { get; init; }
+
+    /// <summary>倍率指数 = 倍增子数量 + 阵型阶数。</summary>
+    public int MultiplierExponent => MultiplierCount + FormationTier;
+
+    /// <summary>总倍率 <c>1.5^n</c> 的精确表示（分子 <c>3^n</c>、分母 <c>2^n</c>），<c>n</c> = <see cref="MultiplierExponent"/>（含阵型），不封顶。</summary>
+    public Multiplier Multiplier => new(MultiplierExponent);
 
     public override string ToString() =>
-        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] (基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus}/旗手{BannerBonus}/铁链{ChainBonus}/哨兵{SentryBonus}/界碑{BoundaryBonus})) ×{Multiplier} = {Power}";
+        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] (基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus}/旗手{BannerBonus}/铁链{ChainBonus}/哨兵{SentryBonus}/界碑{BoundaryBonus})) ×{Multiplier}{(FormationTier == 0 ? string.Empty : $"(阵型{FormationTier}阶)")} = {Power}";
 }
 
 /// <summary>

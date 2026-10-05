@@ -107,7 +107,10 @@ public sealed record BatchPreview(
 /// </summary>
 public static class BatchPreviewBuilder
 {
-    /// <summary>组装富预演。<paramref name="roster"/> 与 <paramref name="majorRound"/> 由流程层提供，含义同结算第 4、5 步。</summary>
+    /// <summary>
+    /// 组装富预演。<paramref name="roster"/> 与 <paramref name="majorRound"/> 由流程层提供，含义同结算第 4、5 步。
+    /// <b>不带版本 = 计分规则 v1</b>（formation-tiers D2：不计阵型）：只留给旧算例测试，产品代码 MUST NOT 调用。
+    /// </summary>
     public static BatchPreview Build(
         GameBoard board,
         BatchContext context,
@@ -115,7 +118,22 @@ public static class BatchPreviewBuilder
         BoardHistory history,
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster,
         RelicLedger relics,
-        int majorRound)
+        int majorRound) =>
+        Build(board, context, placements, history, roster, relics, majorRound, ScoringVersions.Legacy);
+
+    /// <summary>
+    /// 组装富预演，军势与势力变化按计分规则版本 <paramref name="scoring"/> 计算（formation-tiers D2：与正式结算第 5 步同一版本，
+    /// 预演给出的阵型与确认后的结算结果相同）。对局经 <c>MatchFlow.Preview</c> 传入本局的版本。
+    /// </summary>
+    public static BatchPreview Build(
+        GameBoard board,
+        BatchContext context,
+        IReadOnlyList<Placement> placements,
+        BoardHistory history,
+        IReadOnlyDictionary<PlayerId, PlayerStatus> roster,
+        RelicLedger relics,
+        int majorRound,
+        ScoringVersion scoring)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(context);
@@ -150,14 +168,14 @@ public static class BatchPreviewBuilder
         // 计分信物（more-pieces-relics D3 / batch-preview「计分信物与新棋子的预演」）：只用批次开始前已揭示的公开内容，
         // 本批将首次揭示的信物不计入任何玩家的预演势力（其内容只显示为"将揭示"）；预演与正式结算的差异只来自它。
         ImmutableSortedDictionary<Coord, RelicType> known = RevealedRelics.Of(relics.PublicStates());
-        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, known) : null;
+        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, known, scoring) : null;
         ImmutableArray<GroupOutlook> own = OwnGroups(projected, context.Player, ordered, rehearsal.Failure, after);
 
         ImmutableArray<PowerChange> changes = [];
         ImmutableArray<Coord> willReveal = [];
         if (after is not null)
         {
-            PowerSnapshot before = PowerCalculator.Compute(board, roster, known);
+            PowerSnapshot before = PowerCalculator.Compute(board, roster, known, scoring);
             changes =
             [
                 .. after.Players.Select(p =>

@@ -7,6 +7,10 @@ using Siege.Presentation.Preview;
 namespace Siege.Core.Tests.PowerScore;
 
 /// <summary>规格：power-score —— Requirement: 棋串军势公式</summary>
+/// <remarks>
+/// formation-tiers（D1 / D2）：引入阵型之前的场景按规格一律是"计分规则 v1 下"——它们走不带版本的计分入口，其语义固定为 v1
+/// （由 <see cref="v1不计阵型"/> 钉住"不带版本 = v1"），期望值一字未改。阵型的六个场景在文件末尾，显式按 v2 计分（<see cref="ScoringFixtures.Score"/>）。
+/// </remarks>
 public class 棋串军势公式Tests
 {
     [Fact]
@@ -288,5 +292,142 @@ public class 棋串军势公式Tests
         Assert.Equal((3, 3, 2, 1), (group.BaseTotal, group.BannerBonus, group.ChainBonus, group.MultiplierCount));
         Assert.Equal(5, group.PositionBonus);
         Assert.Equal(12, group.Power);
+    }
+
+    // ---------- formation-tiers：阵型（计分规则 v2） ----------
+    // 变异验证（formation-tiers 段 A，实跑，记录见任务 implement 记录）：
+    //   （段 A 检查按实跑结果核对过本表。）
+    //   M-F1 FormationTiers.Thresholds 的首个门槛 3 → 4：红「三枚成一阶」「分裂后降阶」「各阶门槛」等（段 A 检查补跑）。
+    //   M-F2 FormationTiers.TierOf(int) 的 >= 改 >：红「三枚成一阶」「分裂后降阶」「v1不计阵型」「各阶门槛」的 5 / 8 / 12 三行等；
+    //        「阵型与倍增子连乘」不红（6 枚不在门槛上）。
+    //   M-F3 PowerCalculator.GroupPowerOf 四参形态丢掉 formationTier（指数只取倍增子数量）：红全部 v2 场景（「两枚不成阵」本就 0 阶，除外）。
+    //   M-F4 FormationTiers.TierOf(scoring, n) 的 V1 分支改为按棋子数取阶：红「v1不计阵型」与全套既有 v1 算例（全量新增 83 红）。
+    //   M-F5 门槛表去掉封顶（追加第五个门槛 16）：红「各阶门槛」全部 7 行（每行都钉了门槛表与 MaxTier；按数值只有 20 枚一行会变，101 → 151）。
+
+    /// <summary>第 2 行（<paramref name="count"/> 超过 9 枚时折到第 3 行，两行上下相连成一条棋串）放 <paramref name="count"/> 枚 P0 普通子。</summary>
+    private static GameBoard Basics(int count)
+    {
+        GameBoard board = TestMaps.Blank(size: 11);
+        for (int i = 0; i < count; i++)
+        {
+            board.Place(new Coord(1 + (i % 9), 2 + (i / 9)), TestMaps.P0, PieceType.Basic);
+        }
+
+        return board;
+    }
+
+    [Fact]
+    public void 三枚成一阶()
+    {
+        // formation-tiers power-score 规格：计分规则 v2 下 3 枚普通子、无位置加值 → 阵型一阶、倍率指数 1、军势 ⌊3 × 1.5⌋ = 4。
+        GroupPower group = Assert.Single(Basics(3).Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((3, 0, 0), (group.BaseTotal, group.PositionBonus, group.MultiplierCount));
+        Assert.Equal(1, group.FormationTier);
+        Assert.Equal(1, group.MultiplierExponent);
+        Assert.Equal("1.5", group.Multiplier.ToString());
+        Assert.Equal(4, group.Power);
+    }
+
+    [Fact]
+    public void 两枚不成阵()
+    {
+        // formation-tiers power-score 规格：计分规则 v2 下 2 枚普通子 → 阵型 0 阶，军势 2（1 枚同理，军势 1）。
+        GroupPower two = Assert.Single(Basics(2).Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+        GroupPower one = Assert.Single(Basics(1).Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((0, 2), (two.FormationTier, (int)two.Power));
+        Assert.Equal((0, 1), (one.FormationTier, (int)one.Power));
+        Assert.Equal("1", two.Multiplier.ToString());
+    }
+
+    [Theory]
+    // formation-tiers power-score 规格「各阶门槛」：5 / 8 / 12 / 20 枚普通子 → 二 / 三 / 四 / 四阶，
+    // 军势 ⌊5 × 2.25⌋ = 11、⌊8 × 3.375⌋ = 27、⌊12 × 81 / 16⌋ = 60、⌊20 × 81 / 16⌋ = 101（四阶封顶：20 枚不升到五阶）。
+    [InlineData(5, 2, 11)]
+    [InlineData(8, 3, 27)]
+    [InlineData(12, 4, 60)]
+    [InlineData(20, 4, 101)]
+    // 门槛两侧（design D1：1–2 枚 0 阶，3–4 一阶，5–7 二阶，8–11 三阶，12 起四阶）；军势为测试内独立整数式 n × 3^t / 2^t。
+    [InlineData(4, 1, 6)]     // ⌊4 × 1.5⌋
+    [InlineData(7, 2, 15)]    // ⌊7 × 2.25⌋ = ⌊15.75⌋
+    [InlineData(11, 3, 37)]   // ⌊11 × 3.375⌋ = ⌊37.125⌋
+    public void 各阶门槛(int stones, int tier, int power)
+    {
+        GroupPower group = Assert.Single(Basics(stones).Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+
+        Assert.Equal(stones, group.Stones.Length);   // 样本口径：确实连成了一条棋串
+        Assert.Equal(tier, group.FormationTier);
+        Assert.Equal(power, group.Power);
+        Assert.Equal((BigInteger)stones * BigInteger.Pow(3, tier) / BigInteger.Pow(2, tier), group.Power);   // 独立算式，不回调被测公式
+        Assert.Equal([3, 5, 8, 12], FormationTiers.Thresholds);
+        Assert.Equal(4, FormationTiers.MaxTier);
+    }
+
+    [Fact]
+    public void 阵型与倍增子连乘()
+    {
+        // formation-tiers power-score 规格：计分规则 v2 下 普通子×3 + 堡垒子×1 + 倍增子×2、无位置加值 → 基础 9、棋子数 6 → 阵型二阶，
+        // 倍率指数 2 + 2 = 4，军势 ⌊9 × 81 / 16⌋ = ⌊45.5625⌋ = 45（同一条棋串在 v1 下是设计文档 §10.1 的 20）。
+        GameBoard board = TestMaps.Blank(size: 9).PlaceStandardGroup(TestMaps.P0, row: 2);
+
+        GroupPower group = Assert.Single(board.Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((9, 0), (group.BaseTotal, group.PositionBonus));
+        Assert.Equal((2, 2, 4), (group.MultiplierCount, group.FormationTier, group.MultiplierExponent));
+        Assert.Equal("5.0625", group.Multiplier.ToString());
+        Assert.Equal(45, group.Power);
+        Assert.Equal(45, PowerCalculator.GroupPowerOf(baseTotal: 9, positionBonus: 0, multiplierCount: 2, formationTier: 2));
+        Assert.Equal(20, Assert.Single(board.Score(ScoringVersion.V1).Of(TestMaps.P0).Groups).Power);
+    }
+
+    [Fact]
+    public void 分裂后降阶()
+    {
+        // formation-tiers power-score 规格：计分规则 v2 下 5 枚普通子的棋串被立栅分成 3 枚与 2 枚 → 分裂前 11；分裂后 ⌊3 × 1.5⌋ = 4 与 2。
+        // 阵型不是状态：同一块盘面改造之后重算即降阶。x = 1..5 一排，栅栏立在第 3、4 枚之间（气边被切断，棋串分裂）。
+        GameBoard board = Basics(5);
+        Assert.Equal(11, Assert.Single(board.Score(ScoringVersion.V2).Of(TestMaps.P0).Groups).Power);
+
+        board.ApplyTerrainEdits([TerrainEdit.Parse($"F:{new Coord(3, 2).ToNotation()}-{new Coord(4, 2).ToNotation()}")]);
+
+        GroupPower[] groups = [.. board.Score(ScoringVersion.V2).Of(TestMaps.P0).Groups];
+        Assert.Equal(2, groups.Length);
+        GroupPower three = groups.Single(g => g.Stones.Length == 3);
+        GroupPower two = groups.Single(g => g.Stones.Length == 2);
+        Assert.Equal((1, 4), (three.FormationTier, (int)three.Power));
+        Assert.Equal((0, 2), (two.FormationTier, (int)two.Power));
+
+        // 被提子同理：从 5 枚里拿走一端的 1 枚剩 4 枚 → 二阶降一阶，⌊4 × 1.5⌋ = 6。
+        GameBoard captured = Basics(5);
+        captured.RemoveStones([new Coord(5, 2)]);
+        GroupPower four = Assert.Single(captured.Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+        Assert.Equal((1, 6), (four.FormationTier, (int)four.Power));
+    }
+
+    [Fact]
+    public void v1不计阵型()
+    {
+        // formation-tiers power-score 规格：计分规则 v1 下 12 枚普通子 → 阵型 0 阶，军势 12（v2 下同一条是四阶 60）。
+        // 同时钉住 design D2：不带版本的计分入口语义固定为 v1——本文件前面的全部旧算例、以及 PieceEffects / CoverageTerritory 等按盘面断言的旧测试都经它计分。
+        GameBoard board = Basics(12);
+
+        GroupPower v1 = Assert.Single(board.Score(ScoringVersion.V1).Of(TestMaps.P0).Groups);
+        GroupPower unversioned = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
+        GroupPower v2 = Assert.Single(board.Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+
+        Assert.Equal((0, 12), (v1.FormationTier, (int)v1.Power));
+        Assert.Equal("1", v1.Multiplier.ToString());
+        Assert.Equal((0, 12), (unversioned.FormationTier, (int)unversioned.Power));
+        Assert.Equal((4, 60), (v2.FormationTier, (int)v2.Power));
+        Assert.Equal(ScoringVersion.V1, ScoringVersions.Legacy);
+        Assert.All(Enumerable.Range(0, 30), n => Assert.Equal(0, FormationTiers.TierOf(ScoringVersion.V1, n)));
+
+        // 不带版本的其余入口同为 v1：带名册的两个 Compute 重载、势力榜的三参 Recalculate、公式的三参形态。
+        var roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
+        Assert.Equal(12, PowerCalculator.Compute(board, roster).Of(TestMaps.P0).Total - PowerCalculator.Compute(board, roster).Of(TestMaps.P0).TerritoryScore);
+        Assert.Equal(12, Assert.Single(PowerCalculator.Compute(board, roster, new Dictionary<Coord, Siege.Core.Relics.RelicType>()).Of(TestMaps.P0).Groups).Power);
+        Assert.Equal(12, Assert.Single(new PowerScoreboard().Recalculate(board, roster, majorRound: 1).Of(TestMaps.P0).Groups).Power);
+        Assert.Equal(12, PowerCalculator.GroupPowerOf(baseTotal: 12, positionBonus: 0, multiplierCount: 0));
     }
 }

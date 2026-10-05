@@ -13,6 +13,8 @@ namespace Siege.Core.Match;
 /// 大回合上限、碾压起始大回合与落后补偿开关三项配置及碾压候选状态已随 restore-go-core-rules（裁决 #4 / #7 / #15）删除，视图里不再有对应字段。
 /// <see cref="ArtisanWeight"/> 是匠人征募权重（artisan-terrain-edit R-2）：开局固定、始终公开、插旗阶段即可读。
 /// <see cref="ContentSet"/> 是对局内容集（more-pieces-relics D8）：同样开局固定、始终公开、插旗阶段即可读。
+/// <see cref="ScoringVersion"/> 是计分规则版本（formation-tiers D2）：同样开局固定、始终公开、插旗阶段即可读；<see cref="Power"/> 即按它算出，
+/// AI 评价、专家前瞻与表现层凡需重算或解释军势，一律读这一项，不自带缺省。
 /// <see cref="CarryInOut"/> / <see cref="CarryIns"/> 是带入带出开关与各玩家的带入（carry-in-out，information-visibility 第 7 条）：
 /// 开局固定、始终公开、插旗阶段即可读；征召签给出的是建局时抽得的类型。
 /// <see cref="MapId"/> 是完整的地图标识（map-generator D3：对生成图即 <c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c>，凭它能重新得到同一张图），
@@ -30,6 +32,7 @@ public sealed record MatchPublicView(
     int MajorRound,
     int ArtisanWeight,
     ContentSet ContentSet,
+    ScoringVersion ScoringVersion,
     TurnStage Stage,
     PlayerId? CurrentPlayer,
     ImmutableArray<PlayerId> ActionOrder,

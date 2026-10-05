@@ -43,7 +43,8 @@ public class 地形改造日志与分析Tests
         // 同一份写死权重与阈值重扫种子 1–200（临时探针；探针先在去掉单子上限的二进制上复现了 53–55 的 改造 1 / 5 / 3、致提子 1 / 1 / 1）：
         // 58 局有致提子；取最小的连续且每局都有改造的 1–3：改造 3 / 3 / 6 次、致提子 1 / 0 / 0 次。断言与期望均未改，只换样本。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20, ContentSet = ContentSet.V1 };
+        // formation-tiers D2：同理，样本口径下界依赖走法 → 计分规则写死 v1（v1 与引入阵型之前逐步相同），不换样本。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20, ContentSet = ContentSet.V1, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 

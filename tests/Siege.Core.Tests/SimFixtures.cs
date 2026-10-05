@@ -71,6 +71,8 @@ internal static class SimFixtures
         FlagRisk = 0,
         // more-pieces-relics D8：新局缺省内容集 v2 会改变征募序列；这些样本与黄金值都在引入内容集之前钉下，写死 v1（v1 与引入之前逐步相同）。
         ContentSet = ContentSet.V1,
+        // formation-tiers D2：新局缺省计分规则 v2（阵型）会改变势力与 AI 走法；这些样本与黄金值都在引入阵型之前钉下，写死 v1（v1 与引入之前逐步相同）。
+        ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1,
         Players = [.. config.Players.Select(p => p with { Weights = PreCalibrationWeights })],
     };
 
@@ -92,6 +94,19 @@ internal static class SimFixtures
         }
 
         return session.Run();
+    }
+
+    /// <summary>
+    /// formation-tiers D2 / D3：计分规则 v1 的日志与批次配置记录，比引入阵型之前只多出配置里的一项 <c>"ScoringVersion":"V1"</c>
+    /// （日志首部的 <c>Config</c> 与 <c>config.json</c> 各一处；棋串条目与峰值的阵型阶数在 v1 局不写）。钉在引入之前的逐字节黄金值按
+    /// "除这一项外逐字节相同"比对：先断言这一项<b>恰好出现一次</b>（v1 确实写了进去、且没有别处多写），再去掉它（缩进文本连同所在行）。
+    /// 黄金值本身一字不改。
+    /// </summary>
+    internal static string StripScoringV1(string text)
+    {
+        var field = new System.Text.RegularExpressions.Regex("[ \\t]*\"ScoringVersion\": ?\"V1\",(\\r?\\n)?");
+        Assert.Single(field.Matches(text));
+        return field.Replace(text, string.Empty);
     }
 
     /// <summary>独立的临时目录（每次调用都清空重建）。</summary>

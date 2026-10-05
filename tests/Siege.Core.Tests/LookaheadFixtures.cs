@@ -109,7 +109,10 @@ internal static class LookaheadFixtures
 
     // ---------- v5 真实对局 ----------
 
-    /// <summary>v5 上的一局：玩家配置逐名给出，写死权重 / 阈值 / 冒险概率 / 内容集，不截断。</summary>
+    /// <summary>
+    /// v5 上的一局：玩家配置逐名给出，写死权重 / 阈值 / 冒险概率 / 内容集 / 计分规则，不截断。
+    /// 计分规则钉 v1（formation-tiers D2）：本夹具上的黄金值与局面集都在引入阵型之前取下，不重录。
+    /// </summary>
     internal static RunConfig V5Config(params PlayerAiConfig[] players) => new()
     {
         Players = [.. players.Select(p => p with { Weights = Weights })],
@@ -119,6 +122,7 @@ internal static class LookaheadFixtures
         PassThreshold = PassThreshold,
         FlagRisk = 0,
         ContentSet = ContentSet.V2,
+        ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1,
         EventRetention = EventRetention.Full,
         FullEventSamplePermille = 0,
     };

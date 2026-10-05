@@ -113,6 +113,7 @@ public sealed partial class MatchFlow
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         PrototypeZoneAssignment.RequireValidFlagRisk(options.FlagRisk);
         ContentSets.RequireValid(options.ContentSet);
+        ScoringVersions.RequireValid(options.ScoringVersion);
         // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
         // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
         if (options.CarryIns.Count > 0)
@@ -159,6 +160,12 @@ public sealed partial class MatchFlow
 
     /// <summary>恢复自不含内容集字段的旧存档时为 <c>true</c>：按 v1（<see cref="ContentSets.Legacy"/>）回填。</summary>
     public bool ContentSetBackfilled { get; private set; }
+
+    /// <summary>计分规则版本（formation-tiers D2）。对局配置，始终公开，入存档；本局的每一次势力计算都按它。</summary>
+    public ScoringVersion ScoringVersion => Options.ScoringVersion;
+
+    /// <summary>恢复自不含计分规则版本字段的旧存档时为 <c>true</c>：按 v1（<see cref="ScoringVersions.Legacy"/>）回填。</summary>
+    public bool ScoringVersionBackfilled { get; private set; }
 
     /// <summary>带入带出开关（carry-in-out，match-setup「带入带出配置」）。对局配置，始终公开，入存档。</summary>
     public bool CarryInOut => Options.CarryInOut;
@@ -494,7 +501,7 @@ public sealed partial class MatchFlow
         GameBoard board = Board.Clone();
         // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
         // 活形分析在同一份副本上做，与 Board / BoardSerialized 同一时刻（life-shape D6）。
-        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order, PlayerStates, board,
+        return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, ScoringVersion, Stage, CurrentPlayer, _order, PlayerStates, board,
             Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board),
             CarryInOut, CarryIns);
     }
@@ -512,7 +519,7 @@ public sealed partial class MatchFlow
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(context.Board, roster);
         // more-pieces-relics D3：正式结算按真实信物内容读取计分信物（连营 / 犄角），控制在同一次计算里按结算后盘面现算。
-        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound, Relics.TrueContents()));
+        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound, Relics.TrueContents(), ScoringVersion));
     }
 
     private void OnCheckEndConditions(SettlementContext context)
@@ -677,7 +684,7 @@ public sealed partial class MatchFlow
     {
         int completed = MajorRound;
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
-        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, Relics.TrueContents());
+        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, Relics.TrueContents(), ScoringVersion);
         MarkEstablishedPower(power);
         ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.ReadInitiativeBonuses(Board, roster);
         int active = ActiveCount;
@@ -727,7 +734,7 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(Board, roster);
-        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1), Relics.TrueContents()));
+        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1), Relics.TrueContents(), ScoringVersion));
     }
 
     /// <summary>流程事件的<b>唯一</b>发出点。</summary>

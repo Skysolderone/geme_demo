@@ -263,4 +263,72 @@ public class 势力明细Tests
         Assert.Equal((6, 4, 4, 14), (group.LineBonus, group.SynergyBonus, group.HighGroundBonus, group.PositionBonus));
         Assert.Equal(20, group.Power);
     }
+
+    [Fact]
+    public void 明细含阵型阶数()
+    {
+        // formation-tiers power-score 规格「明细含阵型阶数」：计分规则 v2 下 普通子×3 + 堡垒子×1 + 倍增子×2 →
+        // 倍增子数量 2（保持"倍增子的枚数"原义）、阵型阶数 2、倍率 5.0625（含阵型的总倍率）、军势 45，
+        // 且 ⌊(基础 + 位置加值) × 1.5^(倍增子数量 + 阵型阶数)⌋ = 军势——复算用测试内独立整数式（testing.md「可复算守门必须用独立算式」）。
+        // 变异验证（formation-tiers 段 A，实跑）：M-F6 PowerCalculator.Evaluate 不把阵型阶数写进明细（FormationTier 恒 0，军势仍按阵型算）→ 本测试红；
+        //   M-F7 GroupPower.Multiplier 只取倍增子数量（不含阵型）→ 本测试红（"2.25" ≠ "5.0625"）。
+        GameBoard board = TestMaps.Blank(size: 9).PlaceStandardGroup(TestMaps.P0, row: 2);
+
+        GroupPower group = Assert.Single(board.Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+
+        Assert.Equal(2, group.MultiplierCount);
+        Assert.Equal(2, group.FormationTier);
+        Assert.Equal("5.0625", group.Multiplier.ToString());
+        Assert.Equal(45, group.Power);
+        int exponent = group.MultiplierCount + group.FormationTier;
+        Assert.Equal((BigInteger)(group.BaseTotal + group.PositionBonus) * BigInteger.Pow(3, exponent) / BigInteger.Pow(2, exponent), group.Power);
+        Assert.Equal((81, 16), ((int)group.Multiplier.Numerator, (int)group.Multiplier.Denominator));
+
+        // 带位置加值的一条（连珠 3 枚成线 + 协同 1 枚 + 普通 2 枚，共 6 枚 → 二阶、无倍增子）：阵型同样放大"基础 + 位置加值"之和。
+        GameBoard mixed = TestMaps.Blank(size: 9)
+            .Place("B2", TestMaps.P0, PieceType.Line).Place("C2", TestMaps.P0, PieceType.Line).Place("D2", TestMaps.P0, PieceType.Line)
+            .Place("E2", TestMaps.P0, PieceType.Synergy).Place("F2", TestMaps.P0).Place("G2", TestMaps.P0);
+        GroupPower withBonus = Assert.Single(mixed.Score(ScoringVersion.V2).Of(TestMaps.P0).Groups);
+        Assert.True(withBonus.PositionBonus > 0, "样本口径：这条棋串应有位置加值");
+        Assert.Equal((0, 2), (withBonus.MultiplierCount, withBonus.FormationTier));
+        Assert.Equal((BigInteger)(withBonus.BaseTotal + withBonus.PositionBonus) * 9 / 4, withBonus.Power);
+
+        // 明细仍可复算总势力：领地分 + 全部棋串军势 = 总势力（v2 下同样成立）。
+        PlayerPower player = mixed.Score(ScoringVersion.V2).Of(TestMaps.P0);
+        Assert.Equal(player.TerritoryScore + player.GroupPowerSum(), player.Total);
+    }
+
+    [Fact]
+    public void 遥测峰值保留阵型阶数()
+    {
+        // formation-tiers power-score「势力明细」正文：遥测中的倍率峰值记录 SHALL 保留倍增子数量与阵型阶数。
+        // 计分规则 v2 下 8 枚倍增子连成一串：倍增子数量 8、阵型三阶（8 枚）、总倍率 1.5^11、军势 ⌊8 × 3^11 / 2^11⌋ = ⌊691.98…⌋ = 691。
+        // 峰值仍按倍增子数量取（design D3：倍增子数量保持原义）：只有阵型、没有倍增子的棋串不产生峰值。
+        // 变异验证（实跑）：M-F8 PowerScoreboard.TrackPeak 不带出阵型阶数 → 本测试红。
+        var roster = ScoringFixtures.Roster((TestMaps.P0, PlayerStatus.Active));
+        var none = new Dictionary<Coord, Siege.Core.Relics.RelicType>();
+        GameBoard board = TestMaps.Blank(size: 11);
+        for (int x = 1; x <= 5; x++)
+        {
+            board.Place(new Coord(x, 5), TestMaps.P0, PieceType.Basic);
+        }
+
+        var scoreboard = new PowerScoreboard();
+        scoreboard.Recalculate(board, roster, majorRound: 1, none, ScoringVersion.V2);
+        Assert.Equal(2, Assert.Single(scoreboard.Latest!.Of(TestMaps.P0).Groups).FormationTier);
+        Assert.Null(scoreboard.Peak);
+
+        for (int x = 1; x <= 8; x++)
+        {
+            board.Place(new Coord(x, 2), TestMaps.P0, PieceType.Multiplier);
+        }
+
+        scoreboard.Recalculate(board, roster, majorRound: 2, none, ScoringVersion.V2);
+
+        MultiplierPeak peak = scoreboard.Peak!;
+        Assert.Equal((8, 3, 2), (peak.MultiplierCount, peak.FormationTier, peak.MajorRound));
+        Assert.Equal(8 * BigInteger.Pow(3, 11) / BigInteger.Pow(2, 11), peak.Power);
+        Assert.Equal(691, peak.Power);
+        Assert.Equal(new Multiplier(11), peak.Multiplier);
+    }
 }

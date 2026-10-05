@@ -34,6 +34,7 @@ public sealed class BatchEvaluator
     private readonly ImmutableSortedDictionary<PlayerId, PlayerStatus> _roster;
     private readonly ImmutableArray<RelicPublicState> _relics;
     private readonly ImmutableSortedDictionary<Coord, RelicType> _knownRelics;
+    private readonly ScoringVersion _scoring;
     private readonly PowerSnapshot _before;
     private readonly long _relicBefore;
     private readonly long _safetyBefore;
@@ -80,7 +81,9 @@ public sealed class BatchEvaluator
         // 计分信物（连营 / 犄角，more-pieces-relics D3）只用批次开始前已揭示的公开内容：结算前后两次势力计算共用这一份，
         // 本批将首次揭示的信物不在其中，其计分效果不进"即时势力增量"（只按未揭示期望进信物维）。
         _knownRelics = RevealedRelics.Of(view.Relics);
-        _before = PowerCalculator.Compute(view.Board, _roster, _knownRelics);
+        // 计分规则版本（formation-tiers D2 / D4）取公开视图里本局的那一项：评价函数不改，跨过阵型门槛的跳升经"结算后 − 开始前"自然进入势力维。
+        _scoring = view.ScoringVersion;
+        _before = PowerCalculator.Compute(view.Board, _roster, _knownRelics, _scoring);
         _rankBefore = _before.RankOf(me);
         _relicBefore = RelicScore(_before.Coverage);
 
@@ -145,7 +148,7 @@ public sealed class BatchEvaluator
         }
 
         GameBoard after = result.ProjectedBoard;
-        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _knownRelics);
+        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _knownRelics, _scoring);
 
         raw[(int)EvaluationDimension.PowerGain] = afterPower.Of(_me).Total - _before.Of(_me).Total;
 

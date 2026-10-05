@@ -92,11 +92,17 @@ public sealed record AiSearchConfig(
     /// <c>sim-out/ai-eye-pass-*</c>、<c>sim-out/ai-eye-eye-200</c>）。当时简单难度在阈值 80 下 v5 种子 1–200 截断 36 / 200（按裁决 R26 下放眼位维之后，
     /// <c>sim-out/ai-eye-final-easy-eye</c>）；这些数据都在内容集 V1 上取得，不与上面的 V2 数据直接比较。</para>
     /// 改值须连同本段与 <see cref="PassThresholdCalibrationStatus"/> 一起更新（守门：<c>默认评价权重的校准Tests.默认停手阈值被改动</c>）。
+    /// <para><b>计分规则 v2 下未校准</b>：阈值 20 是在计分规则 v1（不计阵型）下复核的；formation-tiers 引入阵型后势力增量的量级变了（成阵的一手可多出数倍），
+    /// 同一个阈值在 v2 下的松紧未经验证（<see cref="EvaluationWeights.FormationScoringStatus"/>）。是否改动由负责人按 formation-tiers D6 的
+    /// 验证跑局（阈值 10 / 20 / 40）裁决，本 change 不自行改值。</para>
     /// </summary>
     public const int DefaultPassThreshold = 20;
 
     /// <summary>默认停手阈值的校准口径（ai-decision「默认评价权重的校准」要求的显式标注）。</summary>
-    /// <remarks>v2-recalibration 段 A 在内容集 V2 上复核后改写，不再带"more-pieces-relics 扩展计分后未重扫"的补注（九维权重仍带，见 <see cref="EvaluationWeights.ScoringExtendedStatus"/>）。</remarks>
+    /// <remarks>
+    /// v2-recalibration 段 A 在内容集 V2 上复核后改写，不再带"more-pieces-relics 扩展计分后未重扫"的补注（九维权重仍带，见 <see cref="EvaluationWeights.ScoringExtendedStatus"/>）。
+    /// 这里的"V2"指<b>内容集</b>；计分规则 v2（阵型，formation-tiers）下未校准，见 <see cref="EvaluationWeights.FormationScoringStatus"/>。
+    /// </remarks>
     public const string PassThresholdCalibrationStatus = "v2-recalibration 段 A 复核（内容集 V2、小样本）：siege-4p-base-v5、4 人标准难度、带入 0、种子 1–20、每档 20 局；0 / 20 / 40 / 80 四档（截断 / 整局无提子 / 已终局局平均结束大回合：0 → 0 / 3 / 9.15；20 → 0 / 3 / 9.25；40 → 0 / 5 / 9.05；80 → 0 / 8 / 8.40）；选定 20（0 与 20 无提子并列最低、均在 7–10，取离 80 最近）；80 为档位上界、非完整双向扫档；sim-out/v2-recalibration/pass-*";
 
     /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>

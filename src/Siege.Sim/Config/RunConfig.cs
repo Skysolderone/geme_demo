@@ -39,6 +39,22 @@ public sealed record PlayerAiConfig
 }
 
 /// <summary>
+/// <see cref="RunConfig.ScoringVersion"/> 的读写（formation-tiers D2）：读入只认字符串名称并经 <see cref="ScoringVersions.Parse"/>，不合法抛 <see cref="ArgumentException"/>
+/// （列出可用名称）——缺省的枚举转换器会把数字静默当成枚举值、把未知名称变成入口不受控的 <c>JsonException</c>。写出为枚举名（"V1" / "V2"）。
+/// 未写该项（或写 <c>null</c>）不经本转换器，读成"未配置"。
+/// </summary>
+internal sealed class ScoringVersionNameConverter : JsonConverter<ScoringVersion>
+{
+    public override ScoringVersion Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType == JsonTokenType.String
+            ? ScoringVersions.Parse(reader.GetString())
+            : throw new ArgumentException($"计分规则版本须写成名称字符串（{ScoringVersions.Usage}），不接受数字或 {reader.TokenType}。");
+
+    public override void Write(Utf8JsonWriter writer, ScoringVersion value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString());
+}
+
+/// <summary>
 /// <see cref="PlayerAiConfig.Difficulty"/> 的读写：读入只认字符串名称并经 <see cref="AiDifficultyNames.Parse"/>，不合法抛 <see cref="ArgumentException"/>（列出可用名称）；
 /// 写出为枚举名（与 <see cref="JsonStringEnumConverter"/> 的输出相同）。
 /// </summary>
@@ -129,6 +145,15 @@ public sealed record RunConfig
     /// （v1 与引入之前逐步相同）。按枚举名写出（"V1" / "V2"）。
     /// </summary>
     public ContentSet? ContentSet { get; init; }
+
+    /// <summary>
+    /// 计分规则版本（<see cref="MatchOptions.ScoringVersion"/>，formation-tiers D2；v1 = 不计阵型，v2 = 计阵型）：<c>null</c> = 新建的局取 <see cref="ScoringVersions.Default"/>（v2），
+    /// 并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 v1 重建
+    /// （v1 与引入之前逐步相同）。按枚举名写出（"V1" / "V2"）。与 <see cref="ContentSet"/> 相互独立。命令行 <c>--scoring v1|v2</c>。
+    /// 读入经 Core 的唯一解析 <see cref="ScoringVersions.Parse"/>（属性级转换器，与命令行同一处）：未识别的取值、数字一律报错，MUST NOT 静默回退到缺省值。
+    /// </summary>
+    [JsonConverter(typeof(ScoringVersionNameConverter))]
+    public ScoringVersion? ScoringVersion { get; init; }
 
     /// <summary>
     /// 每名 AI 玩家的带入数量（carry-in-out D11 / simulation-harness「批量跑局」；取 0 或 1）：0 = 关闭带入带出，批次与引入之前逐局相同；
@@ -241,6 +266,11 @@ public sealed record RunConfig
             throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
         }
 
+        if (ScoringVersion is { } scoring && !Enum.IsDefined(scoring))
+        {
+            throw new ArgumentException($"计分规则版本须为 V1 或 V2，实际为 {scoring}。");
+        }
+
         if (CarryIn is { } carryIn && carryIn is not (0 or 1))
         {
             throw new ArgumentException($"带入数量须为 0 或 1（每名玩家每局至多带入 1 件补给；0 = 关闭带入带出），实际为 {carryIn}。");
@@ -285,7 +315,8 @@ public sealed record RunConfig
     /// 把"按地图自动"的候选格上限与缺省停手阈值、缺省冒险概率落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K、阈值与 p。
     /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
     /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分），
-    /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1），带入数量未配置时落成 0（关闭）。
+    /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1），计分规则版本未配置时一律落成 <see cref="ScoringVersions.Default"/>
+    /// （同理：首部缺该项 = 旧日志 = v1），带入数量未配置时落成 0（关闭）。
     /// 本局地图登记了地图专属评价权重覆盖（<see cref="EvaluationWeights.MapOverrides"/>）时，未显式配置权重的玩家落成覆盖表（首部权重为空 = 旧日志 = 缺省表）；
     /// 未登记的地图不动权重。幂等。
     /// </summary>
@@ -303,6 +334,8 @@ public sealed record RunConfig
         resolved = resolved.FlagRisk is null ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
+        // 计分规则版本同理（formation-tiers D2）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
+        resolved = resolved.ScoringVersion is null ? resolved with { ScoringVersion = ScoringVersions.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
         resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
         // 地图专属评价权重（v2-recalibration D6）：只对登记了覆盖的地图、未显式配置权重的玩家，把覆盖表落成显式权重写进 config.json 与首部

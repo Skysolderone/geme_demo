@@ -23,6 +23,16 @@ internal static class ScoringFixtures
         return board;
     }
 
+    /// <summary>
+    /// 按计分规则版本对盘面计分（formation-tiers）：名册 = 盘面上出现的玩家、全员参赛中，无已知信物。走产品代码的带版本入口。
+    /// </summary>
+    internal static PowerSnapshot Score(this GameBoard board, ScoringVersion scoring) =>
+        PowerCalculator.Compute(
+            board,
+            board.AllGroups().Select(g => g.Owner).Distinct().ToDictionary(p => p, _ => PlayerStatus.Active),
+            System.Collections.Immutable.ImmutableDictionary<Coord, Siege.Core.Relics.RelicType>.Empty,
+            scoring);
+
     internal static GroupPower GroupContaining(this PowerSnapshot snapshot, PlayerId player, string notation) =>
         snapshot.Of(player).Groups.Single(g => g.Stones.Contains(TestMaps.At(notation)));
 
