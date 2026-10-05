@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.RegularExpressions;
 using Siege.Core.Board;
 using Siege.Presentation.Show;
 using static Siege.Core.Tests.SettlementShow.ShowFixtures;
@@ -20,6 +21,9 @@ namespace Siege.Core.Tests.SettlementShow;
 /// M-I7「亮环圈数恒为 1」→ 红 3（五档两圈并轻震、轻震结束、同一时刻至多一个轻震）。
 /// M-T6「三档也有亮环」（样式表三档圈数 0 改 1）→ 红 2（低档没有、数值档位Tests.分档样式表 tier=3）。
 /// 零时长守卫的既有变异 M-SC2（<c>Mask()</c> 去掉 <c>IsFinished ||</c>）复跑：红 6，含本类 零时长下不出现。
+/// 段 B（引擎层接线）补一条源码扫描 引擎层的轻震偏移是进度的确定函数，变异两条（脚本同上，只跑本类，基线 7 通过）：
+/// M-B1「偏移里混入随机」——<c>src/godot/scripts/BoardView.cs</c> 的 <c>ShakeOffsetOf</c> 把横向分量乘上 <c>GD.Randf()</c> → 红 1（引擎层的轻震偏移是进度的确定函数）。
+/// M-B2「偏移不取自遮罩的进度」——<c>BoardView.RefreshShow</c> 里 <c>SetShake(mask.ShakePermille)</c> 改为 <c>SetShake(_showFrames)</c> → 红 1（同上）。
 /// </remarks>
 public class 高档冲击环与镜头轻震Tests
 {
@@ -170,5 +174,27 @@ public class 高档冲击环与镜头轻震Tests
         Assert.Equal("环[G3×2:750] 震[]", ImpactText(timeline.Mask()));
         timeline.Advance(100);
         Assert.Equal("环[] 震[]", ImpactText(timeline.Mask()));
+    }
+
+    [Fact]
+    public void 引擎层的轻震偏移是进度的确定函数()
+    {
+        // 规格：轻震的偏移 MUST 是进度的确定函数，不得使用随机。呈现层只给进度（上面各条），偏移在引擎层折算——
+        // src/godot 不在 siege.sln 里，IL 守门扫不到，用源码文本扫描补上（配样本下界与反面命中）：
+        // 画演出层、写相机节点的 BoardView.cs 里不得出现任何随机源或时钟读数；偏移函数的入参只有千分比，且两处刷新都把遮罩给的进度原样交给它。
+        string path = Path.Combine(PresentationFixtures.RepoRoot(), "src", "godot", "scripts", "BoardView.cs");
+        string view = File.ReadAllText(path);
+        Assert.True(view.Length >= 50_000, $"只读到 {view.Length} 字符");
+
+        Regex nondeterministic = new(@"(?i)rand\w*|stopwatch|datetime|getticks\w*");
+        Assert.Empty(nondeterministic.Matches(view).Select(m => m.Value).Distinct());
+        Assert.Matches(nondeterministic, "float jitter = GD.Randf();");
+        Assert.Matches(nondeterministic, "var rng = new RandomNumberGenerator();");
+        Assert.Matches(nondeterministic, "ulong now = Time.GetTicksMsec();");
+
+        Assert.Single(Regex.Matches(view, @"static\s+Vector3\s+ShakeOffsetOf\s*\(\s*int\s+permille\s*\)"));
+        Assert.Equal(
+            ["SetShake(mask.ShakePermille)", "SetShake(mask?.ShakePermille)"],
+            Regex.Matches(view, @"(?<![A-Za-z])SetShake\(([^)]*)\)").Select(m => m.Value).Where(v => !v.Contains("int?", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
     }
 }

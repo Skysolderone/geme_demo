@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Siege.Core.Board;
 using Siege.Presentation.Camera;
 using static Siege.Core.Tests.ViewportCamera.CameraFixtures;
@@ -232,5 +233,57 @@ public class 回到出生平台Tests
         camera.Open(null);
 
         Assert.Equal(new CameraPose(0f, 0f, distance), camera.Pose);
+    }
+
+    [Fact]
+    public void 轻震不改相机状态()
+    {
+        // tiered-number-show（design.md D8）：轻震只是画面的临时偏移，MUST NOT 改变相机的注视点与缩放距离，结束后画面回到轻震前的位置。
+        // 相机状态（注视点、距离）只在视图模型 BoardCamera 里，它没有任何轻震入口；轻震全在引擎层的 BoardView——
+        // src/godot 不在 siege.sln 里，IL 守门与行为测试都够不着，用源码文本扫描钉住接线（配样本下界与反面命中）：
+        // ① 偏移只存在 _shake 一个字段里，只有 SetShake 给它赋值；② 写相机节点只有 WriteCamera 一处，偏移只在那里叠加（眼位与注视点各一次）；
+        // ③ 轻震的三个方法（SetShake / ShakeOffsetOf / WriteCamera）都不碰视图模型（Rig），也不改"已写入的位姿"。
+        //
+        // 变异验证（tiered-number-show 段 B 检查，脚本：二进制读写、锚点恰命中 1 次、finally 还原并逐字节比对、刷新 mtime；加这条之前下面两条都是 0 红）：
+        // MC-1「偏移写回视图模型」——BoardView.SetShake 的 _shake = offset; 之后加一行 Rig.Set(new CameraPose(Rig.Pose.FocusX + offset.X, …)) → 红 1（本条）。
+        // MC-5「WriteCamera 之外再写一次相机节点」——同处加一行 Camera.Position += offset; → 红 1（本条）。
+        string view = PresentationFixtures.GodotScriptCode("BoardView.cs");
+        Assert.True(view.Length >= 40_000, $"只读到 {view.Length} 字符");
+
+        string setShake = PresentationFixtures.MethodBody(view, "public void SetShake(int? permille)");
+        string offsetOf = PresentationFixtures.MethodBody(view, "public static Vector3 ShakeOffsetOf(int permille)");
+        string write = PresentationFixtures.MethodBody(view, "private void WriteCamera(CameraPose pose)");
+        string apply = PresentationFixtures.MethodBody(view, "public bool ApplyCameraPose()");
+
+        Regex assignsShake = new(@"\b_shake\s*[-+*/]?=(?!=)");
+        Assert.Equal(2, assignsShake.Matches(view).Count);   // 字段初值 + SetShake 里的一次
+        Assert.Single(assignsShake.Matches(setShake));
+
+        Regex writesCameraNode = new(@"\bCamera\s*\.\s*(?:(?:Global)?(?:Position|Transform|Rotation\w*|Basis)\s*[-+*/]?=(?!=)|(?:LookAt\w*|Translate\w*|Rotate\w*|Set\w+)\s*\()");
+        Assert.Equal(2, writesCameraNode.Matches(view).Count);
+        Assert.Equal(2, writesCameraNode.Matches(write).Count);
+        Assert.Equal(2, Regex.Matches(write, @"\+\s*_shake\b").Count);
+        Assert.Equal(2, Regex.Matches(view, @"\+\s*_shake\b").Count);
+
+        // 主场景只把遮罩给的进度交给 SetShake，不自己算偏移、不直接写相机节点。
+        foreach (string script in new[] { "GameRoot.cs", "GameRoot.Reveal.cs" })
+        {
+            string root = PresentationFixtures.GodotScriptCode(script);
+            Assert.DoesNotMatch(writesCameraNode, root);
+            Assert.DoesNotMatch(@"ShakeOffsetOf\s*\(", root);
+        }
+
+        Regex touchesViewModel = new(@"\bRig\b|\b_appliedPose\s*=(?!=)");
+        Assert.DoesNotMatch(touchesViewModel, setShake);
+        Assert.DoesNotMatch(touchesViewModel, offsetOf);
+        Assert.DoesNotMatch(touchesViewModel, write);
+
+        // 反面命中：同一组判据在"确实读写视图模型 / 相机节点"的写法上扫得到。
+        Assert.Matches(touchesViewModel, apply);
+        Assert.Matches(touchesViewModel, "Rig.Set(new CameraPose(Rig.Pose.FocusX + offset.X, Rig.Pose.FocusZ + offset.Z, Rig.Pose.Distance));");
+        Assert.Matches(writesCameraNode, "Camera.Position += offset;");
+        Assert.Matches(writesCameraNode, "Camera.GlobalPosition = eye;");
+        Assert.Matches(writesCameraNode, "Camera.Translate(offset);");
+        Assert.Matches(assignsShake, "_shake += drift;");
     }
 }

@@ -413,4 +413,32 @@ internal static class PresentationFixtures
 
         return dir ?? throw new InvalidOperationException("找不到 siege.sln 所在目录。");
     }
+
+    // ---------- 引擎层（src/godot，不在 siege.sln 里）的源码文本扫描 ----------
+
+    /// <summary>
+    /// 读一个引擎层脚本并去掉注释（<c>//</c> 到行尾，含文档注释）：扫描判据只看代码，注释里提到某个名字不算"用到"。
+    /// 行尾统一成 LF；字符串字面量里的 <c>//</c>（如 <c>res://</c>）也会被截掉，对"某个标识符是否出现"这类判据无影响。
+    /// </summary>
+    internal static string GodotScriptCode(string fileName)
+    {
+        string text = File.ReadAllText(Path.Combine(RepoRoot(), "src", "godot", "scripts", fileName)).Replace("\r\n", "\n", StringComparison.Ordinal);
+        return System.Text.RegularExpressions.Regex.Replace(text, @"//[^\n]*", string.Empty);
+    }
+
+    /// <summary>
+    /// 取类里一个带花括号方法体的成员全文（从签名到与它同缩进的收尾花括号）。签名 MUST 恰好出现一次——
+    /// 改名、改参数表或被复制一份都响亮失败，而不是静默扫到空串。
+    /// </summary>
+    internal static string MethodBody(string code, string signature)
+    {
+        int start = code.IndexOf(signature, StringComparison.Ordinal);
+        if (start < 0 || code.IndexOf(signature, start + signature.Length, StringComparison.Ordinal) >= 0)
+        {
+            throw new InvalidOperationException($"签名「{signature}」应恰好出现一次。");
+        }
+
+        int end = code.IndexOf("\n    }", start, StringComparison.Ordinal);
+        return end > start ? code[start..end] : throw new InvalidOperationException($"找不到「{signature}」的方法体结尾。");
+    }
 }

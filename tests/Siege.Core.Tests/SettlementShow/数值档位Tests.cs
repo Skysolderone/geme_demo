@@ -23,6 +23,11 @@ namespace Siege.Core.Tests.SettlementShow;
 /// M-T4「只改测试不改实现」——本类 分档样式表 的二、三档 <c>InlineData</c> 字号 84 与 100 对调 → 红 2（tier=2、tier=3）：期望值不是照抄实现。
 /// M-T5「引擎层自己取档」——<c>src/godot/scripts/Hud.cs</c> 的 <c>RefreshRank</c> 里加一行 <c>_ = Siege.Presentation.Style.NumberTier.Of(display.Value);</c> → 红 1（引擎层不取档）。
 /// M-T6「三档也有亮环」——三档 <c>RingCount: 0</c> 改为 <c>1</c> → 红 2（分档样式表 tier=3、高档冲击环与镜头轻震Tests.低档没有）。
+/// 段 B 检查补一条源码扫描 引擎层只按呈现层给的档位查样式表（加这条之前下面四条都是 0 红；脚本同上，只跑相关六个测试类）：
+/// MC-2「亮环圈数写死」——<c>BoardView.DrawRings</c> 的 <c>i &lt; ring.Count</c> 改为 <c>i &lt; 1</c> → 红 1（本条）。
+/// MC-6「势力栏放大写死 130%」——<c>Hud.RankFontPx</c> 的 <c>extraPercent</c> 改为常量 30（不查样式表）→ 红 1（本条）。
+/// MC-7「揭示条目恒取一档样式」——<c>BoardView.DrawReveals</c> 的 <c>NumberTierStyle.For(reveal.StepTier)</c> 改为 <c>For(1)</c> → 红 1（本条）。
+/// MC-8「常驻标注恒取一档样式」——<c>BoardView.DrawGroupPower</c> 的 <c>NumberTierStyle.For(item.Tier)</c> 改为 <c>For(1)</c> → 红 1（本条）。
 /// </remarks>
 public class 数值档位Tests
 {
@@ -185,6 +190,51 @@ public class 数值档位Tests
         ];
         Assert.Contains("GroupPowerLabels.cs", callers);
         Assert.Contains("SettlementBeats.cs", callers);
+    }
+
+    [Fact]
+    public void 引擎层只按呈现层给的档位查样式表()
+    {
+        // design.md D1 / D4：引擎层只照着遮罩画——档位读呈现层给出的，再去查样式表；亮环的圈数与进度读遮罩。
+        // 上一条只挡"调用取档入口"，挡不住"查样式表时写死档位 / 干脆不查表"。同样是源码文本扫描（去掉注释后只看代码）：
+        // ① NumberTierStyle.For 的实参只能是呈现层对象上的档位成员（…Tier、TierOf(…)，或按档位分组后的 Key），不得是字面量、局部量或算式；
+        // ② 样式表里归引擎层画的各列，在画它的那个脚本里确有读者（少一列 = 那一处没按档）；
+        // ③ 亮环的圈数与进度取自遮罩条目，画棋盘的脚本不自己查"几圈 / 震多久 / 停多久"（那是时间线的事）。
+        string[] names = ["BoardView.cs", "Hud.cs", "ShowSounds.cs", "GameRoot.cs", "GameRoot.Reveal.cs"];
+        Dictionary<string, string> code = names.ToDictionary(n => n, PresentationFixtures.GodotScriptCode);
+        Assert.True(code.Values.Sum(t => t.Length) >= 100_000, $"只扫到 {code.Values.Sum(t => t.Length)} 字符");
+
+        Regex lookup = new(@"NumberTierStyle\s*\.\s*For\s*\(((?:[^()]|\([^()]*\))*)\)");
+        string[] arguments = [.. code.Values.SelectMany(t => lookup.Matches(t)).Select(m => m.Groups[1].Value.Trim()).Distinct().Order(StringComparer.Ordinal)];
+        Assert.True(arguments.Length >= 6, $"只扫到 {arguments.Length} 种实参：{string.Join(" | ", arguments)}");
+        Regex givenByPresentation = new(@"^[A-Za-z_]\w*(?:\.\w+)*\.(?:\w*Tier|Key|TierOf\(\w+(?:\.\w+)*\))$");
+        Assert.Empty(arguments.Where(a => !givenByPresentation.IsMatch(a)));
+        Assert.DoesNotMatch(givenByPresentation, "1");
+        Assert.DoesNotMatch(givenByPresentation, "tier");
+        Assert.DoesNotMatch(givenByPresentation, "reveal.StepTier + 1");
+        Assert.DoesNotMatch(givenByPresentation, "Math.Min(reveal.StepTier, 3)");
+
+        (string Script, string Column)[] readers =
+        [
+            ("BoardView.cs", nameof(NumberTierStyle.RevealFontSize)),
+            ("BoardView.cs", nameof(NumberTierStyle.RevealOutlineSize)),
+            ("BoardView.cs", nameof(NumberTierStyle.PopPermille)),
+            ("BoardView.cs", nameof(NumberTierStyle.RevealColor)),
+            ("BoardView.cs", nameof(NumberTierStyle.GroupLabelFontSize)),
+            ("BoardView.cs", nameof(NumberTierStyle.GroupLabelOutlineSize)),
+            ("Hud.cs", nameof(NumberTierStyle.RankScalePercent)),
+            ("ShowSounds.cs", nameof(NumberTierStyle.PitchSemitones)),
+        ];
+        Assert.Empty(readers.Where(r => !Regex.IsMatch(code[r.Script], $@"\.\s*{r.Column}\b")).Select(r => $"{r.Script} 不读 {r.Column}"));
+
+        string rings = PresentationFixtures.MethodBody(code["BoardView.cs"], "private void DrawRings(ShowMask mask)");
+        Assert.Matches(@"foreach\s*\(\s*ImpactRing\s+ring\s+in\s+mask\.Rings\s*\)", rings);
+        Assert.Matches(@"<\s*ring\.Count\b", rings);
+        Assert.Matches(@"\bring\.ProgressPermille\b", rings);
+        Regex timelineColumns = new($@"\b(?:{nameof(NumberTierStyle.RingCount)}|{nameof(NumberTierStyle.ShakeMs)}|{nameof(NumberTierStyle.ResultHoldMs)}|{nameof(NumberTierStyle.FinalStepMs)})\b");
+        Assert.DoesNotMatch(timelineColumns, code["BoardView.cs"]);
+        Assert.DoesNotMatch(timelineColumns, code["Hud.cs"]);
+        Assert.Matches(timelineColumns, "for (int i = 0; i < NumberTierStyle.For(tier).RingCount; i++)");
     }
 
     [Fact]

@@ -445,11 +445,10 @@ public sealed partial class Hud : CanvasLayer
             if (mask.Power.TryGetValue(row.Player, out PowerDisplay? display))
             {
                 // 演出中间态（settlement-show-callouts D2 分段到账）：总势力按段滚动（领地段 → 军势段 → 定格，整数插值 D7），
-                // 段首数字放大 1.3 倍、段内回落（缩放只在这里由段内千分比折算成整数字号）；段内标"领地 +a" / "军势 +b"，定格后标总增量；名次变动提示随滚动显示。
+                // 段首数字按本段增量的数值档位放大（一至五档 1.3 / 1.45 / 1.6 / 1.8 / 2.0 倍，tiered-number-show D5）、段内回落，见 RankFontPx；
+                // 段内标"领地 +a" / "军势 +b"（字号随放大同步，颜色不分档），定格后标总增量；名次变动提示随滚动显示。
                 bool bouncing = display.Stage is PowerStage.Territory or PowerStage.Group;
-                int fontSize = bouncing
-                    ? UiTheme.BodyFontPx + (UiTheme.BodyFontPx * 3 * (1000 - display.StagePermille) / 10000)
-                    : UiTheme.BodyFontPx;
+                int fontSize = RankFontPx(display);
                 string delta = bouncing ? $"　{display.StageText}" : display.Stage == PowerStage.Hold ? $"　{display.Change.DeltaText}" : string.Empty;
                 System.Numerics.BigInteger shown = display.Stage switch
                 {
@@ -468,9 +467,17 @@ public sealed partial class Hud : CanvasLayer
                     line.AddChild(Ui.Text(suffix, Ui.MutedText));
                 }
 
-                if (delta.Length > 0 || rankHint.Length > 0)
+                Color deltaColor = shown.Sign < 0 ? Ui.DangerText : Visuals.ToColor(faction.Primary);
+                if (delta.Length > 0)
                 {
-                    line.AddChild(Ui.Text($"{delta}{rankHint}", shown.Sign < 0 ? Ui.DangerText : Visuals.ToColor(faction.Primary), bouncing ? fontSize : null));
+                    line.AddChild(Ui.Text(delta, deltaColor, bouncing ? fontSize : null));
+                }
+
+                // 名次提示另起一个标签、保持正文字号，不随段首放大：面板贴右上角向左长，五档 200% 时连它一起放大，
+                // 这一行会长到压住顶部的行动顺序条（1600 宽下约 100 像素）；放大只作用于数字与本段增量。
+                if (rankHint.Length > 0)
+                {
+                    line.AddChild(Ui.Text(rankHint, deltaColor));
                 }
 
                 _rankBody.AddChild(line);
@@ -482,6 +489,22 @@ public sealed partial class Hud : CanvasLayer
                 row.StatusText is null ? Ui.InfoText : Ui.MutedText));
             _rankBody.AddChild(line);
         }
+    }
+
+    /// <summary>
+    /// 势力栏分段到账时数字的字号（像素）：领地段 / 军势段的段首放大到样式表的"势力栏放大"幅度（按本段增量的数值档位，档位由 Presentation 给出），
+    /// 段内线性回落到正文字号；其余时候（未开始 / 定格）就是正文字号。缩放只在这里由段内千分比折算成整数字号。
+    /// </summary>
+    public static int RankFontPx(PowerDisplay display)
+    {
+        ArgumentNullException.ThrowIfNull(display);
+        if (display.Stage is not (PowerStage.Territory or PowerStage.Group))
+        {
+            return UiTheme.BodyFontPx;
+        }
+
+        int extraPercent = NumberTierStyle.For(display.Change.TierOf(display.Stage)).RankScalePercent - 100;
+        return UiTheme.BodyFontPx + (UiTheme.BodyFontPx * extraPercent * (1000 - display.StagePermille) / 100000);
     }
 
     private void RefreshHand(MatchSession session, ViewerWorld world)

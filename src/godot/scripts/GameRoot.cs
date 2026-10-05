@@ -52,7 +52,7 @@ public sealed partial class GameRoot : Node3D
     /// <summary>演出播完后要挂上的"回合高亮"（落子格 / 被提格，由节拍推出）：玩家提速看完后仍能找到刚才发生的位置（D6）。</summary>
     private TurnFlash _pendingFlash = TurnFlash.None;
 
-    /// <summary><c>--shot-show=placement|capture|power|banner</c>：截图等到含该节拍的结算、在该节拍进行中取图（仅截图用，见 <see cref="ShotShowWants"/>）。</summary>
+    /// <summary><c>--shot-show=placement|capture|reveal|power|banner</c>：截图等到含该节拍的结算、在该节拍进行中取图（仅截图用，见 <see cref="ShotShowWants"/>）。</summary>
     private string? _shotShow;
     private double _aiTimer;
     private double _flashTimer;
@@ -152,10 +152,10 @@ public sealed partial class GameRoot : Node3D
             // --shot-zoom=<档数>：截图前把相机拉近这么多档（与滚轮同一入口；map-elements-v2 1.4：给负责人看地块造型的近景，仅截图用）。须与 --shot-cell= 同用。
             _shotZoom = args.Value<int>("shot-zoom", "正整数（截图前拉近的滚轮档数）", t => int.TryParse(t, out int v) && v > 0 ? v : null) ?? 0;
 
-            // --shot-show=placement|capture|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
-            // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、power = 势力重算、banner = 横幅），
+            // --shot-show=placement|capture|reveal|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，tiered-number-show 2.5，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
+            // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、reveal = 军势揭示、power = 势力重算、banner = 横幅），
             // 该次演出按正常时长播放（其余无人值守结算仍为零时长），以固定 16 ms/帧推进到该节拍进行中（见 ShotShowReady）取图。不给此项时无人值守路径与引入演出之前完全相同。
-            _shotShow = args.Text("shot-show", "placement / capture / power / banner（等该节拍进行中再截图）");
+            _shotShow = args.Text("shot-show", "placement / capture / reveal / power / banner（等该节拍进行中再截图）");
 
             // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
             // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
@@ -174,7 +174,9 @@ public sealed partial class GameRoot : Node3D
             ReadScreenshotArg(args.Text("screenshot", "截图路径[:第几帧]"));
 
             // --profile=<档案路径> / --no-carry / --carry-preview=：带入带出（carry-in-out D10，见 GameRoot.Carry）。自动化模式一律关闭、不读写档案。
-            ReadCarryArgs(args, Unattended);
+            // --reveal-preview=play|ladder / --reveal-at=<毫秒>：军势揭示的逐档预览（tiered-number-show D9，见 GameRoot.Reveal）。只做展示，同样关闭带入带出。
+            ReadRevealArgs(args);
+            ReadCarryArgs(args, Unattended || RevealPreviewing);
 
             // --export-parts=<目录>：把地形 / 设施部件导出成 .tscn（PartExport），导完即退出，不建局。
             string? exportParts = args.Text("export-parts", "导出目录（如 res://parts/terrain）");
@@ -202,9 +204,9 @@ public sealed partial class GameRoot : Node3D
 
             if (_shotShow is not null)
             {
-                if (_shotShow is not ("placement" or "capture" or "power" or "banner"))
+                if (_shotShow is not ("placement" or "capture" or "reveal" or "power" or "banner"))
                 {
-                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power 或 banner。");
+                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、reveal、power 或 banner。");
                 }
 
                 if (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed || _shotForbidden)
@@ -213,6 +215,7 @@ public sealed partial class GameRoot : Node3D
                 }
             }
 
+            CheckRevealArgs(mapSelect);
             if (_shotZoom > 0 && shotCell is null)
             {
                 throw new System.FormatException("--shot-zoom= 须与 --shot-cell= 同用。");
@@ -297,7 +300,8 @@ public sealed partial class GameRoot : Node3D
             }
 
             // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图（v5）、跳过选图（既有自检命令不变）。
-            if (mapSelect || (mapId is null && !Unattended))
+            // 军势揭示预览同样跳过选图（缺省图上直接看），不进补给阶段。
+            if (mapSelect || (mapId is null && !Unattended && !RevealPreviewing))
             {
                 _session = BeginMapSelect(mapId);
             }
@@ -410,8 +414,10 @@ public sealed partial class GameRoot : Node3D
         GD.Print($"[siege] 落成反馈：{(_flash.Edits.IsEmpty ? "无" : string.Join("、", _flash.Edits.Select(Labels.TerrainEdit)))}");
 
         // 结算演出的取景自证（settlement-show 3.3 / 3.4）：截图那一帧时间线停在哪个节拍、进度多少，遮罩里隐藏 / 出现中 / 仍显示的被提棋子与滚动中的势力显示值。
-        ShowMask shownMask = _show.Mask();
-        GD.Print(_show.IsFinished
+        ShowMask shownMask = ShownMask();
+        GD.Print(_revealStill is not null
+            ? "[show] 截图时演出：定格预览（--reveal-preview=ladder，遮罩为手工拼的五档终态，不在时间线上）"
+            : _show.IsFinished
             ? "[show] 截图时演出：无（遮罩为空，画面即结算后快照）"
             : $"[show] 截图时演出：当前节拍 {_show.Current?.GetType().Name ?? "空序列停顿"}，进度 {_show.ProgressPermille}‰，时长模式 {_show.Duration}；"
                 + $"隐藏 {shownMask.Hidden.Count} 枚，出现中 {string.Join("、", shownMask.Appearing.OrderBy(k => k.Key).Select(k => $"{k.Key.ToNotation()} {k.Value}‰"))}，"
@@ -427,6 +433,9 @@ public sealed partial class GameRoot : Node3D
         {
             GD.Print($"[show-perf] {_board.ShowRedrawReadout()}");
         }
+
+        // 数值分档的自证（tiered-number-show 2.5）：揭示条目 / 亮环 / 轻震 / 势力栏放大与常驻标注的档位，同样另起一行。
+        PrintTierShot(shownMask);
 
         // 渲染开销读数（frontier-map 5.6）：帧率受垂直同步封顶，绘制调用数才反映"750 格要不要合批"。
         CameraPose pose = _board.Rig.Pose;
@@ -638,7 +647,8 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
-        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null)
+        // --shot-show= 与 --reveal-at= 的取图时机各自在演出推进里判定（AdvanceShow / DriveRevealPreview），不走这条定帧路径。
+        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null && _revealAtMs < 0)
         {
             _screenshotFrame = -1;
             BeginCapture();
@@ -805,7 +815,7 @@ public sealed partial class GameRoot : Node3D
     /// <summary>把当前状态刷到棋盘与 HUD。选图阶段 HUD 只显示选图面板（对局面板隐藏），棋盘照常刷新——预览与插旗前的盘面是同一条渲染路径。</summary>
     private void RefreshViews()
     {
-        ShowMask mask = _show.Mask();
+        ShowMask mask = ShownMask();
         _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover, mask);
         _hud.SetHoverReadout(HoverReadout.Of(_hover, _session.World.Board())); // life-shape 3.4：盘面变了（如新成活形），悬停格的禁入读数随之刷新
         if (Selecting)
@@ -858,7 +868,8 @@ public sealed partial class GameRoot : Node3D
                 + $"图元 {Performance.GetMonitor(Performance.Monitor.RenderTotalPrimitivesInFrame):0}；垂直同步 {DisplayServer.WindowGetVsyncMode()}");
         }
 
-        GetTree().Quit(0);
+        // 轻震自检（tiered-number-show 2.4）：取图前播过的轻震若改了相机状态，图照存、退出码 1。
+        GetTree().Quit(_shakeDrifted ? 1 : 0);
     }
 
     /// <summary>
@@ -1050,6 +1061,13 @@ public sealed partial class GameRoot : Node3D
 
     private void Drive(double delta)
     {
+        // 军势揭示预览（--reveal-preview=）：只播示例节拍，不推进对局。
+        if (RevealPreviewing)
+        {
+            DriveRevealPreview(delta);
+            return;
+        }
+
         // 结算演出播放中（settlement-show D5）：不调用任何推进对局的入口——不跑 AI 小回合、不推进本机玩家阶段、不收尾。
         // 镜头与信息层的输入在 _Process 里另行处理，不受影响。无人值守下时间线创建即播完，永远不进这里。
         if (!_show.IsFinished)
@@ -1200,9 +1218,13 @@ public sealed partial class GameRoot : Node3D
     private void BeginShow(ImmutableArray<SettlementBeat> beats, ShowDuration duration, string who)
     {
         _show = new ShowTimeline(beats, duration);
+        _showClockMs = 0;
+        RevealEntry[] reveals = [.. beats.OfType<PowerRevealBeat>().SelectMany(b => b.Entries)];
         GD.Print($"[show] 第 {_frame} 帧 {who}结算：节拍 {beats.Length}"
             + $"（落子 {beats.OfType<PlacementBeat>().Sum(b => b.Pieces.Length)} / 提子 {beats.OfType<CaptureBeat>().Sum(b => b.Pieces.Length)}"
-            + $" / 信物 {beats.OfType<RelicRevealBeat>().Sum(b => b.Relics.Length)} / 势力 {beats.OfType<PowerBeat>().Sum(b => b.Changes.Length)} / 横幅 {beats.OfType<BannerBeat>().Sum(b => b.Banners.Length)}）"
+            + $" / 信物 {beats.OfType<RelicRevealBeat>().Sum(b => b.Relics.Length)}"
+            + $" / 揭示 {reveals.Length}{(reveals.Length == 0 ? string.Empty : $"·最高 {reveals.Max(e => e.FinalTier)} 档")}"
+            + $" / 势力 {beats.OfType<PowerBeat>().Sum(b => b.Changes.Length)} / 横幅 {beats.OfType<BannerBeat>().Sum(b => b.Banners.Length)}）"
             + (duration == ShowDuration.Zero ? "，零时长" : $"，{_show.TotalDurationMs} ms"));
         if (duration == ShowDuration.Normal)
         {
@@ -1211,7 +1233,10 @@ public sealed partial class GameRoot : Node3D
 
             // 创建瞬间的提示（show-sound-cues D1）：首拍在进度 0 就已"当前"（势力 0 ms 即领地段、提子 / 信物 / 横幅 0 ms 即显示），没有 Advance 跨越它，
             // 以空遮罩为"前"导出一次。无人值守下 _sounds 为 null，且零时长遮罩恒空。
-            _sounds?.Play(SoundCues.Between(ShowMask.Empty, _show.Mask(), []), FastHeld());
+            if (_sounds is not null || CueLog)
+            {
+                EmitCues(SoundCues.Between(ShowMask.Empty, _show.Mask(), []), FastHeld());
+            }
         }
     }
 
@@ -1228,13 +1253,9 @@ public sealed partial class GameRoot : Node3D
         int ms = shot ? 16 : System.Math.Max(1, (int)System.Math.Round(delta * 1000d));
         bool fast = !shot && FastHeld();
 
-        // 音效提示（show-sound-cues D1）：推进前后的遮罩与跨过的节拍交给纯函数导出，再按序号交给播放器池；有音效节点时才取前遮罩。
-        ShowMask? heard = _sounds is null ? null : _show.Mask();
-        ImmutableArray<SettlementBeat> crossed = _show.Advance(ms, fast);
-        if (heard is not null)
-        {
-            _sounds!.Play(SoundCues.Between(heard, _show.Mask(), crossed), fast);
-        }
+        // 音效提示（show-sound-cues D1）：推进前后的遮罩与跨过的节拍交给纯函数导出，再按序号交给播放器池；有音效节点（或要打印提示）时才取前遮罩。
+        // 轻震进度也在这一步交给棋盘（见 StepShow）。
+        ShowMask mask = StepShow(ms, fast);
 
         if (shot && ShotShowTarget(_show.Current) && ShotShowReady())
         {
@@ -1250,22 +1271,29 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        ShowMask mask = _show.Mask();
         _board.RefreshShow(_session.World, _layers.Treatment, mask);
         _hud.RefreshShow(_session.World, mask);
     }
 
     /// <summary>
     /// <c>--shot-show</c> 的取图点：势力节拍要等到有玩家处在领地 / 军势段且段内过了三成（数字仍放大、段文案可见——只有一段时半拍处已经定格，看不到"领地 +a"）；
+    /// 军势揭示节拍要等到最后一个条目（军势最大的那条）到末步且步内过了三成（结果已出、弹出未落尽，四 / 五档的亮环与轻震正在进行）；
     /// 其余节拍取进行到一半。
     /// </summary>
-    private bool ShotShowReady() => _shotShow == "power"
-        ? _show.Mask().Power.Values.Any(d => d.Stage is PowerStage.Territory or PowerStage.Group && d.StagePermille >= 300)
-        : _show.ProgressPermille >= 500;
+    private bool ShotShowReady() => _shotShow switch
+    {
+        "power" => _show.Mask().Power.Values.Any(d => d.Stage is PowerStage.Territory or PowerStage.Group && d.StagePermille >= 300),
+        "reveal" => _show.Current is PowerRevealBeat beat
+            && _show.Mask().Reveals.LastOrDefault() is { AtFinal: true, StepPermille: >= 300 } last && last.Coord == beat.Entries[^1].Coord,
+        _ => _show.ProgressPermille >= 500,
+    };
 
     /// <summary>演出播完：挂上本次落子格 / 被提格的高亮（保留现有固定时长再清除，D6），完整刷新一次。</summary>
     private void FinishShow()
     {
+        // 演出结束（含演出中弃赛被截断）：轻震偏移立即归零，不等下一次完整刷新。
+        _board.SetShake(null);
+        TrackShake(null);
         _flash = _pendingFlash with { Edits = _flash.Edits };
         _pendingFlash = TurnFlash.None;
         _flashTimer = FlashSeconds;
@@ -1301,6 +1329,7 @@ public sealed partial class GameRoot : Node3D
     {
         "placement" => beat is PlacementBeat,
         "capture" => beat is CaptureBeat,
+        "reveal" => beat is PowerRevealBeat,
         "power" => beat is PowerBeat,
         "banner" => beat is BannerBeat,
         _ => false,
@@ -1750,6 +1779,12 @@ public sealed partial class GameRoot : Node3D
             _board.Rig.Zoom(wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1);
             ApplyCamera("缩放");
             _dirty |= wasOverview != _board.Rig.IsOverview;
+            return;
+        }
+
+        // 军势揭示预览只做展示：不接受落子、插旗与对局按键（缩放与平移照常，演出期间按住左键 / 空格提速照常）。
+        if (RevealPreviewing)
+        {
             return;
         }
 

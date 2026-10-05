@@ -86,6 +86,7 @@ public sealed partial class BoardView : Node3D
     private int _width;
     private int _height;
     private CameraPose? _appliedPose;
+    private Vector3 _shake = Vector3.Zero;
 
     /// <summary>
     /// 调试开关（<c>--no-batch</c>，map-elements-v2 D6）：障碍装饰与场景铺面不合批，逐格各建节点。
@@ -598,9 +599,58 @@ public sealed partial class BoardView : Node3D
         CameraPose pose = Rig.Pose;
         bool changed = pose != _appliedPose;
         _appliedPose = pose;
-        Camera.Position = new Vector3(pose.Eye.X, pose.Eye.Y, pose.Eye.Z);
-        Camera.LookAt(new Vector3(pose.Target.X, pose.Target.Y, pose.Target.Z), Vector3.Up);
+        WriteCamera(pose);
         return changed;
+    }
+
+    /// <summary>
+    /// 相机节点的写入点：视图模型的位姿 + 镜头轻震的临时偏移（tiered-number-show D8）。偏移同时加在眼位与注视点上——画面整体平移、朝向与俯角不变，
+    /// 且<b>不写回</b>视图模型：注视点、缩放、跟随状态机都不知道它，轻震一过相机就回到位姿本身。
+    /// </summary>
+    private void WriteCamera(CameraPose pose)
+    {
+        Camera.Position = new Vector3(pose.Eye.X, pose.Eye.Y, pose.Eye.Z) + _shake;
+        Camera.LookAt(new Vector3(pose.Target.X, pose.Target.Y, pose.Target.Z) + _shake, Vector3.Up);
+    }
+
+    /// <summary>镜头轻震的幅度（世界单位，约 0.06 格；全局预览下同样按格计）。</summary>
+    public const float ShakeAmplitude = 0.06f * BoardGeometry.CellSize;
+
+    /// <summary>
+    /// 轻震偏移：进度（0..1000‰）的<b>确定函数</b>——横向往复三次、纵深方向往复五次（幅度减半），整体按 (1 − 进度)² 衰减；不用随机。
+    /// 进度 0 与进度满时都为零，起止不跳。
+    /// </summary>
+    public static Vector3 ShakeOffsetOf(int permille)
+    {
+        float t = Math.Clamp(permille, 0, 1000) / 1000f;
+        float decay = (1f - t) * (1f - t);
+        return new Vector3(
+            ShakeAmplitude * decay * Mathf.Sin(Mathf.Tau * 3f * t),
+            0f,
+            0.5f * ShakeAmplitude * decay * Mathf.Sin(Mathf.Tau * 5f * t));
+    }
+
+    /// <summary>当前叠加在相机上的轻震偏移（自证读数用）；不在轻震中为零。</summary>
+    public Vector3 ShakeOffset => _shake;
+
+    /// <summary>相机节点相对"视图模型位姿的眼位"的实际偏差（自证读数用）：不在轻震中应为 0。</summary>
+    public float CameraOffsetFromPose =>
+        _appliedPose is { } pose ? Camera.Position.DistanceTo(new Vector3(pose.Eye.X, pose.Eye.Y, pose.Eye.Z)) : 0f;
+
+    /// <summary>按遮罩给的轻震进度更新偏移并立即写到相机节点（位姿取上一次已写入的那份，不吞掉视图模型尚未写入的位姿变化）。</summary>
+    public void SetShake(int? permille)
+    {
+        Vector3 offset = permille is { } p ? ShakeOffsetOf(p) : Vector3.Zero;
+        if (offset == _shake)
+        {
+            return;
+        }
+
+        _shake = offset;
+        if (_appliedPose is { } pose)
+        {
+            WriteCamera(pose);
+        }
     }
 
     /// <summary>某格格心在棋盘平面上的 (x, z)：相机回家目标用。仍是 <see cref="BoardGeometry.Center(Coord, int, int)"/> 那一份映射。</summary>
@@ -1162,6 +1212,7 @@ public sealed partial class BoardView : Node3D
         DrawRelicMarkers(board);
         DrawPlacementMarks(board);
         DrawPieces(board, treatment, mask ?? ShowMask.Empty);
+        SetShake(mask?.ShakePermille);
         DrawShow(mask ?? ShowMask.Empty);
         DrawGroupPower(world, reading, thresholds);
         DrawLayer(content);
@@ -1318,6 +1369,7 @@ public sealed partial class BoardView : Node3D
         _lastShowRedraw = DrawPieces(world.Board(), treatment, mask);
         _totalShowRedraw += _lastShowRedraw;
         _showFrames++;
+        SetShake(mask.ShakePermille);
         DrawShow(mask);
     }
 
@@ -1333,6 +1385,7 @@ public sealed partial class BoardView : Node3D
     /// 演出层（settlement-show-callouts D6）：格上飘字与信物闪光，全部由遮罩推出、不回写视图模型。
     /// 飘字用 <see cref="Label"/> 的坐标标注画法（平铺、不用 billboard——见其注释），字号按相机远近两档（<see cref="CalloutLabelStyle"/>），
     /// 随年龄上浮并在后半段淡出；信物闪光是既有信物标记外的一圈亮环，随进度衰减。
+    /// 高档冲击环与军势揭示条目（tiered-number-show D4）画在最后：见 <see cref="DrawRings"/> / <see cref="DrawReveals"/>。
     /// </summary>
     private void DrawShow(ShowMask mask)
     {
@@ -1368,6 +1421,112 @@ public sealed partial class BoardView : Node3D
             label.RenderPriority = 2;
             _show.AddChild(label);
         }
+
+        DrawRings(mask);
+        DrawReveals(mask);
+    }
+
+    /// <summary>
+    /// 高档冲击环（tiered-number-show D4）：圈数与进度照遮罩给的值，每一圈从格心向外扩散、由粗变细、由实变淡；第二圈晚 <see cref="RingStagger"/> 出发。
+    /// 贴着格面画的扁平圆环（与格子轮廓的方环、信物闪光可分），颜色取同格揭示条目的末步档位色。
+    /// </summary>
+    private void DrawRings(ShowMask mask)
+    {
+        foreach (ImpactRing ring in mask.Rings)
+        {
+            // 亮环只有 0.4 秒、结果至少停留 1.4 秒：同格的揭示条目必在；万一不在，用近白。档位读遮罩给的，不在这里取档。
+            RevealDisplay? at = mask.Reveals.FirstOrDefault(r => r.Coord == ring.Coord);
+            Color color = at is null ? Visuals.EditDone : Visuals.ToColor(NumberTierStyle.For(at.FinalTier).RevealColor);
+            for (int i = 0; i < ring.Count; i++)
+            {
+                float t = ((ring.ProgressPermille / 1000f) - (i * RingStagger)) / (1f - (i * RingStagger));
+                if (t <= 0f)
+                {
+                    continue;
+                }
+
+                float eased = 1f - ((1f - t) * (1f - t));
+                float radius = BoardGeometry.CellSize * (0.30f + (1.05f * eased));
+                float half = 0.5f * (0.20f - (0.14f * t));
+                _show.AddChild(new MeshInstance3D
+                {
+                    Mesh = new TorusMesh { InnerRadius = radius - half, OuterRadius = radius + half, Rings = 40, RingSegments = 4 },
+                    MaterialOverride = Visuals.Flat(new Color(color.Lightened(0.35f), 0.95f * (1f - (t * t)))),
+                    Position = CenterOf(ring.Coord) + new Vector3(0f, 0.06f, 0f),
+                    Scale = new Vector3(1f, 0.1f, 1f),
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+            }
+        }
+    }
+
+    /// <summary>两圈亮环之间的出发间隔（占亮环全程的比例）。</summary>
+    private const float RingStagger = 0.3f;
+
+    /// <summary>
+    /// 军势揭示条目（tiered-number-show D4 / 2.1）：浮在棋串标注格的棋子上方、置顶绘制。字号、描边、颜色按遮罩给的步档位取样式表，
+    /// 每一步出现时按 <see cref="PopScaleOf"/> 弹出；到末步后结果是主角——大字只写这一步的结果（"= 10"），算式缩成小一号的一行挪到上方；
+    /// 随结果年龄上浮并在后半段淡出。未到末步时整行就是累计算式，逐步变长、逐档变大。
+    /// </summary>
+    private void DrawReveals(ShowMask mask)
+    {
+        foreach (RevealDisplay reveal in mask.Reveals)
+        {
+            NumberTierStyle style = NumberTierStyle.For(reveal.StepTier);
+            float age = reveal.ResultAgePermille / 1000f;
+            float alpha = age < 0.5f ? 1f : 1f - ((age - 0.5f) * 2f);
+            Color color = Visuals.ToColor(style.RevealColor);
+
+            // 末步：大字 = 这一步新出现的结果，其余算式挪到上方的小字行；只有一步的条目（无加值无倍率）没有小字行。
+            string formula = reveal.AtFinal && reveal.RunningText.EndsWith(reveal.StepText, StringComparison.Ordinal)
+                ? reveal.RunningText[..^reveal.StepText.Length].TrimEnd()
+                : string.Empty;
+            string main = reveal.AtFinal && formula.Length > 0 ? reveal.StepText : reveal.RunningText;
+
+            // 标注在屏幕上大小恒定，它在世界里占多高取决于离相机的纵深：按纵深把字号折成世界长度，大字的下沿才能在任何缩放下都压在棋子头顶、两行才贴合。
+            Vector3 foot = CenterOf(reveal.Coord) + new Vector3(0f, 0.95f + (0.5f * age), -0.05f);
+            float unit = LabelPixelSize * Mathf.Max(0.1f, -(Camera.GlobalTransform.AffineInverse() * foot).Z);
+            float mainHeight = style.RevealFontSize * unit;
+            Vector3 at = foot + new Vector3(0f, 0f, -0.5f * mainHeight);
+
+            Label3D label = Label(main, at, style.RevealFontSize, style.RevealOutlineSize);
+            label.Scale = Vector3.One * PopScaleOf(reveal);
+            label.Modulate = new Color(color, alpha);
+            label.OutlineModulate = new Color(Visuals.CoordinateLabelOutline, alpha);
+            label.NoDepthTest = true;
+            label.RenderPriority = 4;
+            label.OutlineRenderPriority = 3;
+            _show.AddChild(label);
+
+            if (formula.Length > 0)
+            {
+                int fontSize = Math.Max(RevealFormulaMinFontSize, style.RevealFontSize * RevealFormulaPercent / 100);
+                Label3D trail = Label(formula, at + new Vector3(0f, 0f, -0.5f * (mainHeight + (fontSize * unit))), fontSize, style.RevealOutlineSize * fontSize / style.RevealFontSize);
+                trail.Modulate = new Color(color.Lerp(Colors.White, 0.4f), alpha);
+                trail.OutlineModulate = new Color(Visuals.CoordinateLabelOutline, alpha);
+                trail.NoDepthTest = true;
+                trail.RenderPriority = 4;
+                trail.OutlineRenderPriority = 3;
+                _show.AddChild(trail);
+            }
+        }
+    }
+
+    /// <summary>末步之后挪到结果上方的那一行算式，字号取结果字号的这个百分比（描边同比例），但不小于 <see cref="RevealFormulaMinFontSize"/>。</summary>
+    private const int RevealFormulaPercent = 60;
+
+    /// <summary>算式行的最小字号：一、二档的结果字号本来就小，再按比例缩就读不清了。</summary>
+    private const int RevealFormulaMinFontSize = 64;
+
+    /// <summary>
+    /// 揭示条目这一步的弹出缩放：步首放大到样式表的弹出幅度，步内按 (1 − 进度)² 回落到原大小；该步结束后（进度保持 1000‰）恒为 1。
+    /// 缩放只在这里由千分比折算，Presentation 不出浮点。
+    /// </summary>
+    public static float PopScaleOf(RevealDisplay reveal)
+    {
+        ArgumentNullException.ThrowIfNull(reveal);
+        float rest = 1f - (Math.Clamp(reveal.StepPermille, 0, 1000) / 1000f);
+        return 1f + (((NumberTierStyle.For(reveal.StepTier).PopPermille - 1000) / 1000f) * rest * rest);
     }
 
     /// <summary>棋子层里一枚已画出的棋子（board-render-perf D3）：节点、占用者，以及画它时的进度（盘上棋子 = 出现进度 ‰，不在出现动画里为 -1；被提棋子 = 淡出进度 ‰）。</summary>
@@ -1596,7 +1755,7 @@ public sealed partial class BoardView : Node3D
     /// <summary>
     /// 棋串军势常驻标注（tactical-layers「棋串军势常驻标注」）：不开信息层也在每条棋串上标出军势。
     /// 标在哪一格、写什么都由 Presentation 的 <see cref="GroupPowerLabels"/> 给出（数值取势力层内容），这里只画；全局预览下太密，不画。
-    /// 画法同坐标标注（平铺、屏幕上大小恒定），阵营色字；放在格子的右前角（棋子底座半径 0.36 之外、林地小树不占这个角），
+    /// 画法同坐标标注（平铺、屏幕上大小恒定），阵营色字，字号按军势的数值档位逐档加大；放在格子的右前角（棋子底座半径 0.36 之外、林地小树不占这个角），
     /// 不盖住棋子轮廓与格心的标记，也不与从格心上方升起的落子飘字相撞。
     /// 随完整刷新更新：演出进行中不变，播完那次刷新换成结算后的数值。
     /// </summary>
@@ -1609,16 +1768,15 @@ public sealed partial class BoardView : Node3D
 
         foreach (GroupPowerLabel item in GroupPowerLabels.Of(power))
         {
-            Label3D label = Label(item.Text, CenterOf(item.Coord) + new Vector3(0.33f, 0.12f, 0.34f), GroupPowerFontSize, GroupPowerOutlineSize);
+            // 字号与描边按该棋串军势的数值档位取样式表（tiered-number-show D6）；档位由 Presentation 给出，颜色仍是阵营色。
+            NumberTierStyle style = NumberTierStyle.For(item.Tier);
+            Label3D label = Label(item.Text, CenterOf(item.Coord) + new Vector3(0.33f, 0.12f, 0.34f), style.GroupLabelFontSize, style.GroupLabelOutlineSize);
             label.Modulate = Visuals.FactionColorOf(item.Owner).Lightened(0.75f);
             label.OutlineModulate = Visuals.FactionColorOf(item.Owner).Darkened(0.45f);
             label.NoDepthTest = true;
             _overlay.AddChild(label);
         }
     }
-
-    private const int GroupPowerFontSize = 88;
-    private const int GroupPowerOutlineSize = 20;
 
     private void DrawPower(PowerLayerContent power)
     {
@@ -1936,6 +2094,9 @@ public sealed partial class BoardView : Node3D
         }
     }
 
+    /// <summary>标注的像素尺寸：字号 × 本值 × 离相机的纵深 = 标注在世界里的大小（<c>FixedSize</c> 按纵深放大，屏幕上恒定）。</summary>
+    private const float LabelPixelSize = 0.00035f;
+
     /// <summary>
     /// 一个坐标标注：绕 X 轴 −90° 平铺在棋盘平面上，与地砖共面，像围棋棋盘边缘印刷的坐标。
     /// </summary>
@@ -1955,7 +2116,7 @@ public sealed partial class BoardView : Node3D
         // FixedSize：标注在屏幕上大小恒定，不随距相机远近缩放。坐标是读数不是景物，
         // 近边的 A 与远边的 A 必须一样大——否则近端会胀到压住底部面板，远端小到看不清。
         FixedSize = true,
-        PixelSize = 0.00035f,
+        PixelSize = LabelPixelSize,
         Modulate = Visuals.CoordinateLabel,
         OutlineModulate = Visuals.CoordinateLabelOutline,
         OutlineSize = outlineSize,

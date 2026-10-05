@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.RegularExpressions;
 using Siege.Core.Board;
 using Siege.Presentation.Show;
 using static Siege.Core.Tests.SettlementShow.ShowFixtures;
@@ -28,6 +29,9 @@ namespace Siege.Core.Tests.SettlementShow;
 /// M-SD6「取最后一步的档」——<c>Math.Max(highest, started[i])</c> 改为 <c>started[i]</c> → 红 1（揭示逐步发声且档位递增 的跨条目一帧）。
 /// M-SD7「步的开始时刻不算已开始」——<c>PowerRevealBeat.StepTiersStartedBy</c> 里 <c>&gt;</c> 改为 <c>&gt;=</c> → 红 4（揭示逐步发声且档位递增、序列确定性、零时长无提示、军势揭示节拍Tests.压缩后遮罩与音效按压缩后的时刻）。
 /// M-SD8「枚举里揭示挪到横幅之后」→ 红 1（揭示逐步发声且档位递增 的枚举序断言）。
+/// 段 B 检查补一条源码扫描 引擎层的音效参数表覆盖每种提示且只有三种按档升调（加这条之前下面两条都是 0 红；脚本同上，只跑相关六个测试类）：
+/// MC-3「参数表缺揭示一行」——<c>src/godot/scripts/ShowSounds.cs</c> 的 <c>Table</c> 把揭示那一行注释掉 → 红 1（本条）。
+/// MC-4「全部种类都升调」——<c>ShowSounds.SemitonesOf</c> 去掉种类判断、一律取样式表的半音数 → 红 1（本条）。
 /// </remarks>
 public class 演出音效提示Tests
 {
@@ -295,5 +299,33 @@ public class 演出音效提示Tests
             ],
             first);
         Assert.Equal(first, Run());
+    }
+
+    [Fact]
+    public void 引擎层的音效参数表覆盖每种提示且只有三种按档升调()
+    {
+        // 规格：图形版按提示播放程序合成的短音；揭示、领地到账与军势到账的音高随档位升高（design.md D7：其余四种音不变）。
+        // 播放器在 src/godot（不在 siege.sln 里）：参数表缺一种提示，编译与 dotnet test 都看不见，要到运行时播到那一声才抛异常——用源码文本扫描补上（去掉注释后只看代码）。
+        string sounds = PresentationFixtures.GodotScriptCode("ShowSounds.cs");
+        Assert.True(sounds.Length >= 3_000, $"只读到 {sounds.Length} 字符");
+
+        // ① 参数表每种提示恰一行，顺序同枚举。
+        Assert.Equal(
+            Enum.GetNames<SoundCueKind>(),
+            Regex.Matches(sounds, @"(?m)^\s*new\(SoundCueKind\.(\w+),").Select(m => m.Groups[1].Value));
+
+        // ② 播放时不按种类跳过任何一种（段 A 过渡期曾点名跳过"揭示"），音高每次都按提示重设（否则上一声的升调会留在播放器上）。
+        string play = PresentationFixtures.MethodBody(sounds, "public void Play(ImmutableArray<SoundCue> cues, bool fast)");
+        Assert.DoesNotMatch(@"SoundCueKind\s*\.", play);
+        Assert.Single(Regex.Matches(play, @"\.PitchScale\s*=\s*PitchScaleOf\(cue\)\s*;"));
+
+        // ③ 升调只作用于揭示 / 领地到账 / 军势到账，半音数取样式表（档位是提示带来的），其余恒为 0；音高倍率只由它折算。
+        System.Text.RegularExpressions.Match semitones = Regex.Match(sounds, @"static\s+int\s+SemitonesOf\s*\(\s*SoundCue\s+cue\s*\)\s*=>([^;]*);");
+        Assert.True(semitones.Success, "找不到 SemitonesOf");
+        Assert.Equal(
+            [nameof(SoundCueKind.Group), nameof(SoundCueKind.Reveal), nameof(SoundCueKind.Territory)],
+            Regex.Matches(semitones.Groups[1].Value, @"SoundCueKind\.(\w+)").Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal));
+        Assert.Matches(@"^\s*cue\.Kind\s+is\s+[\w.\s]+\?\s*NumberTierStyle\.For\(cue\.Tier\)\.PitchSemitones\s*:\s*0\s*$", semitones.Groups[1].Value);
+        Assert.Matches(@"static\s+float\s+PitchScaleOf\s*\(\s*SoundCue\s+cue\s*\)\s*=>[^;]*\bSemitonesOf\(cue\)[^;]*;", sounds);
     }
 }
