@@ -1,6 +1,6 @@
 # 10-05-tiered-number-show
 
-> 规格权威：`openspec/changes/tiered-number-show/`（proposal / design / specs / tasks）。
+> 规格权威：`openspec/changes/archive/2026-10-05-tiered-number-show/`（proposal / design / specs / tasks）。
 
 数值呈现五档递增（负责人 2026-10-05）：按数值大小分五档（阈值 4 / 8 / 16 / 32）；新增军势揭示节拍（逐串依次、逐步揭示算式）；五档字形、四五档冲击环、五档镜头轻震；势力栏到账与棋串常驻标注按档；音效按档升调。只改 `Siege.Presentation` 与 `src/godot`，`Siege.Core` / `Siege.Sim` 与规则数值不动。
 
