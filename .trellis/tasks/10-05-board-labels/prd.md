@@ -1,10 +1,10 @@
 # 10-05-board-labels
 
-> 规格权威：`openspec/changes/board-labels/`（proposal / design / specs / tasks）。
+> 规格权威：`openspec/changes/archive/2026-10-05-board-labels/`（已归档，主规格已同步；3.3 负责人 2026-10-06 过目，保持不变，让位残留 150‰ 也保持）。
 
 盘面标注可读性加 `MutedText` 收尾（负责人 2026-10-06："所有都需要"；重叠时坐标标注让位）：军势揭示期间被条目压到的远边列字母 / 左右行数字淡出（呈现层按格子邻域给进度）；算式行与结果同色、描边与字号有下限；常驻标注配色由呈现层给出（深色统一描边、四阵营亮度差 ≥ 120）、最右一列换到左前角；`Ui.MutedText` 的透明度进 `UiTheme`。规则、计分、演出节奏、存档、日志不变。
 
-验收：`openspec/changes/board-labels/tasks.md` 各条的验证项。
+验收：`openspec/changes/archive/2026-10-05-board-labels/tasks.md` 各条的验证项（全部勾选）。
 
 约束：
 - 在工作树 `.claude/worktrees/board-labels`、分支 `feat/board-labels` 上做，基于 main `f3108b1`；不要碰主工作树，不要切分支。
