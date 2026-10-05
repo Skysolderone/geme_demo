@@ -68,7 +68,7 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 
 对局中按空格键 SHALL 把相机注视点移到本机玩家出生平台的中心（同样经夹取），缩放距离不变。插旗阶段尚未选区时，空格键 SHALL 把相机移到地图中心。
 
-除「跟随对手行动」所述的跟随与返回之外，相机 MUST NOT 自动移动。
+除「跟随对手行动」所述的跟随与返回之外，相机 MUST NOT 自动移动。settlement-show「高档冲击环与镜头轻震」的轻震只是画面的临时偏移：MUST NOT 改变相机的注视点与缩放距离，结束后画面 MUST 回到轻震前的位置；无人值守运行（零时长）下不出现。
 
 #### Scenario: 开局对准自家
 - **WHEN** 本机玩家在 `siege-frontier-v2` 上锁定 3 号平台，第 1 大回合开始
@@ -85,6 +85,10 @@ TBD - created by archiving change frontier-map. Update Purpose after archive.
 #### Scenario: 空格回家
 - **WHEN** 本机玩家把画面推到地图另一端后按空格
 - **THEN** 画面中心回到自己的出生平台，缩放距离不变
+
+#### Scenario: 轻震不改相机状态
+- **WHEN** 一次五档的军势揭示触发镜头轻震并播完
+- **THEN** 相机的注视点与缩放距离与轻震之前相同
 
 ### Requirement: 全局预览
 

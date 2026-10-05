@@ -238,7 +238,9 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 默认棋盘 SHALL 在每条棋串上标出该棋串当前的军势，不需要打开任何信息层。数值 MUST 取自势力明细（与势力层同一份），大数按势力栏的缩写规则显示。每条棋串只标一处：离棋串重心最近的那枚棋子，并列时取坐标序最小的。标注使用所有者的阵营色。全局预览下不显示标注。
 
-呈现层只给出"标在哪一格、写什么"；引擎层 MUST NOT 计算军势或重心。
+标注的字号 SHALL 按该棋串军势的数值档位（settlement-show「数值档位」）逐档加大：一档与分档之前的字号相同，每高一档字号更大。呈现层 SHALL 随每条标注给出其档位。
+
+呈现层只给出"标在哪一格、写什么、第几档"；引擎层 MUST NOT 计算军势、重心或档位。
 
 #### Scenario: 单子棋串
 - **WHEN** 盘上有一条只有 1 枚普通子的棋串，军势 1
@@ -255,4 +257,8 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 #### Scenario: 数值与势力层一致
 - **WHEN** 同一局面下查看势力层的棋串分数与常驻标注
 - **THEN** 每条棋串两处的军势相同
+
+#### Scenario: 标注带档位
+- **WHEN** 盘上有三条棋串，军势分别为 1、10、40
+- **THEN** 三条标注的档位依次为一档、三档、五档，字号依次增大
 

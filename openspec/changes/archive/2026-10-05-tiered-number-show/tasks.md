@@ -18,6 +18,6 @@
 
 ## 3. 验收与文档
 
-- [ ] 3.1 设计文档 §14.4 增补数值档位、军势揭示、亮环与轻震，变更记录 v1.21 → v1.22；README 若提到飘字内容则同步。验证：人工检查。
-- [ ] 3.2 `openspec validate tiered-number-show --strict` 通过；`art/tiered-number-show/README.md` 写人工检查清单与决策清单。验证：命令退出码 0。
+- [x] 3.1 设计文档 §14.4 增补数值档位、军势揭示、亮环与轻震，变更记录 v1.21 → v1.22；README 若提到飘字内容则同步。验证：人工检查。
+- [x] 3.2 `openspec validate tiered-number-show --strict` 通过；`art/tiered-number-show/README.md` 写人工检查清单与决策清单。验证：命令退出码 0。
 - [ ] 3.3 负责人试玩一局（人对 3 名 AI），确认档位观感、节奏与音量；反馈记入 journal，作为后续数值 change 的输入。验证：人工检查。

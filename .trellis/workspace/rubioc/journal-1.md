@@ -235,3 +235,15 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - （10-04 续）发布网站与下载包：`docs/` 是 GitHub Pages 发布页（需在仓库 Settings → Pages 选 `main` / `/docs`），下载按钮指向 Releases 的固定文件名 `Siege-macos.zip` / `Siege-windows-x64.zip`；`tools/export-release.sh <版本>` 在 Mac 上导出两个包到 `build/`（不入库）。macOS 包本机验过能跑；Windows 包只验了结构。Release 由负责人在网页上手动建并上传。
 - （10-04 续 2）发布落地：网页改放 **Cloudflare**（Workers 静态资源，`wrangler.jsonc` 指向 `docs/`，`npx wrangler deploy` 即更新）→ https://siege.wws741.workers.dev ；GitHub Pages 没有开。Release `v0.1.0` 已用 `gh` 建好并上传两个包，网页下载按钮走 `releases/latest/download/…`。仓库主页链接已指向发布页。发新版流程：`tools/export-release.sh <版本>` → `gh release create v<版本> build/Siege-*.zip` → 改 `docs/index.html` 的版本号与更新记录 → `npx wrangler deploy`。
 - （10-04 续 3）`follow-opponent`：对手行动时镜头跟过去、轮到本机再回来（默认开，`F` 关；状态机 `CameraFollow` 在呈现层，推翻了 viewport-camera 的"不跟随对手"），对手回合摘要条，飘字寿命 0.6 → 1.4 秒，棋串军势常驻标注。新增 19 条测试、8 条变异全抓到；无人值守下相机仍不动（自检口径改为"无人值守下相机不得因对手行动移动"）。返回 / 让位 / 关闭的接线没有自动化验证，等负责人实际玩一局反馈。发布页与 Release 还是 v0.1.0，没有这个功能，下次发版再更新。
+
+
+## Session: 2026-10-05 — tiered-number-show（数值呈现五档递增）
+
+- 负责人反馈"游戏数值需要呈现效果更强烈一点，产生层级递增"。先跑 10 局取分布（v5、4 名标准 AI、种子 1–10）：落子所在棋串军势中位 4、90 分位 13、最大 106，带倍率的落子只占 24%，终局势力中位 56——数字本身偏小。负责人五项裁决：**先呈现、后数值**；按数值大小分档；五档、阈值 4 / 8 / 16 / 32；全套手段（字形分档、冲击环、逐步揭示、震屏）；揭示逐串依次、上限 1.6 秒。其余十条初值一次确认，授权按表执行到底。
+- 分支 `feat/tiered-number-show`（**未合入 main、未推送**）：`c2123d1` 段 A（呈现层：`NumberTier` / `NumberTierStyle`、`PowerRevealBeat`、遮罩加揭示 / 亮环 / 轻震、音效提示带档位）→ `601bd5b` 段 B（Godot：揭示条目、亮环、轻震、势力栏与常驻标注按档、揭示音与按档升调、`--reveal-preview=play|ladder`）→ 段 C（设计文档 v1.22、归档、本节）。2138 条 = 2118 通过 / 11 失败 / 9 跳过，失败集合与本机基线逐条相同；变异 67 条全红；`--auto-demo` 53 帧不变、相机位姿变化 0 次；`--pick-check` 三张图通过。
+- 实施中改了两处初值：四、五档末步加定格 0.44 / 0.66 秒（最大的棋串排在最后，结果停留会被演出结束截断）；势力栏增量文案不分档着色（红色已用于负增量）。检查阶段另定：名次变动提示不跟着段首放大。
+- 教训写进 `testing.md`：引擎层硬约束要自带源码扫描守门（段 B 交付时 8 条引擎层变异全绿）；运行期自证要在分辨得出问题的位姿上做并给非零退出码；按节拍个数断言在新增节拍后会假绿；`--screenshot=` 要绝对路径。
+- **待负责人**：试玩一局（人对 3 名 AI）确认档位观感、节奏（每回合演出估算 1.45 → 2.2 秒）与音量；音效完全没试听（揭示音、五档升一个八度是否刺耳）；`--reveal-preview=play` 可不开对局循环看五档。截图与清单在 `art/tiered-number-show/`。满意后把分支快进合入 main。
+- 已知不足：一、二档与现状一样小；档位色与阵营色无关（蓝方棋串的五档结果是红字）；全局预览下相邻棋串同回合揭示互相压住；四位数势力配五档增量与名次变动时势力栏可能蹭到行动顺序条。
+- **下一步**：负责人试玩反馈之后另开数值规则 change（让数值本身拉开层级），届时档位阈值重定（只改 `NumberTier.Thresholds` 一处）。发布页与 Release 仍是 v0.2.0，没有本功能。
+- 工作区里的 `.trellis/tasks/10-05-gamedev-agent-skills/` 是别的会话建的未跟踪目录，本会话没有动。
