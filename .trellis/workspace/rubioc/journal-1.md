@@ -385,3 +385,44 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: 盘面标注可读性（board-labels）：坐标让位、算式与常驻标注对比、最右列换角；MutedText 进主题
+
+**Date**: 2026-10-06
+**Task**: 盘面标注可读性（board-labels）：坐标让位、算式与常驻标注对比、最右列换角；MutedText 进主题
+**Branch**: `feat/board-labels`
+
+### Summary
+
+揭示期间被压的坐标标注淡出、算式行同色加下限、常驻标注深色描边与换角、MutedText 透明度进 UiTheme；负责人过目后保持，合入 main 并推送。
+
+### Main Changes
+
+- **起因**：负责人要求样式剩余两项都做（盘面标注可读性、`MutedText` 进主题），裁决重叠时坐标标注让位；看完改前改后截图后保持（含让位残留 150‰）。期间 main 有发布页 v0.3.0 文档提交，已合进分支。
+- **内容**：揭示期间被压到的远边列字母 / 左右行数字淡到 150‰，消失即恢复（呈现层 `CoordinateLabelYield` 按格子邻域给进度）；算式行与结果同色、字号 / 描边有下限；常驻标注统一深色描边、四阵营亮度差 ≥ 120；最右一列且左邻无标注时放左前角；`UiTheme.MutedTextAlphaPermille`。设计文档 v1.27。
+- **过程中的裁决**：换角初版让 M11=1 与 N11=4 读成"14"，收窄为左邻无标注才换；一张侧边截图拍在淡出开始前一刻、证明不了"413"已消除，补拍同帧淡出后的对照（before 用段 B 前的 `git archive` 快照拍）。
+- **验证**：全量 2219 通过 / 11 失败 / 9 跳过，失败名单与基线逐条相同；`--auto-demo` 53 帧；`--pick-check` v5 / board:1 / frontier 通过；检查方用临时探针证实演出结束那一帧坐标透明度回到 1.000。截图 `art/board-labels/before|after/`（含取景日志）。
+- **留意**：
+  - 坐标标注的节点表与 `.Reveals` 的读取位置都被源码守门钉住（按目录扫）；要在 `BoardView` 别处读揭示条目，先改守门。
+  - 样式工作的三项（hud-theme、hud-panels、board-labels）至此做完。剩余候选回到 ROADMAP：2 人图交战不足、V2 权重重扫、专家强度、联网、正式美术音效。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `34cc23e` | (see git log) |
+| `a0d03a4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
