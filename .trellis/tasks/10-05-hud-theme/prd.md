@@ -1,10 +1,10 @@
 # 10-05-hud-theme
 
-> 规格权威：`openspec/changes/hud-theme/`（proposal / design / specs / tasks）。
+> 规格权威：`openspec/changes/archive/2026-10-05-hud-theme/`（已归档，主规格已同步）（proposal / design / specs / tasks）。
 
 HUD 主题统一（负责人 2026-10-05）：范围取「HUD 主题统一」，视觉方向取「克制精修」。面板三级、按钮五态与三种语义加选中态、字号阶梯 13 / 14 / 15 / 17 / 19、间距阶梯 0 / 2 / 4 / 6 / 8 / 12、样式总览页 `--ui-gallery=`。只改 `Siege.Presentation` 的 `UiTheme` 与 `src/godot` 的 `Ui.cs` / `Hud*.cs`（加一个总览页脚本和启动参数）；不改布局、不改显示的内容，`Siege.Core` / `Siege.Sim` 与规则数值不动。
 
-验收：`openspec/changes/hud-theme/tasks.md` 各条的验证项。
+验收：`openspec/changes/archive/2026-10-05-hud-theme/tasks.md` 各条的验证项（全部勾选；3.3 负责人 2026-10-05 过目，取值保持不变）。
 
 约束：
 - 在工作树 `.claude/worktrees/hud-theme`、分支 `feat/hud-theme` 上做，基于本地 main `ccafe40`；业务改动由另一会话在主工作树做，不要碰主工作树，不要切分支。
