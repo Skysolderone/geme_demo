@@ -117,6 +117,7 @@ artisan-terrain-edit 段 C 的 8 张截图全部作废重拍，三处系统性�
 - **`--screenshot=` 给相对路径会存盘失败（`FileNotFound`）而退出码仍是 0**。一律给绝对路径，并照上面那条另查文件存在。`--headless` 配 `--screenshot=` 会停在等绘制完成、不退出：取图不要加 `--headless`。
 
 - **"HUD 脚本不得写死样式"这类扫描，要按绕过写法逐条做变异**（hud-theme 段 B 实证）。实现方的扫描对下面 6 种写法 0 红，检查方逐条补了规则：间距项名写成字符串常量再传数字；`new Color("#…")`；目标类型推断的 `new(0.9f, …)`；字号直接写数字传给工厂；运算符在前的 `1 + BodyFontPx`；面板建好后改 `ThemeTypeVariation` 换级。同时补上了 `Color.From…(` 与用 `Modulate` / `SelfModulate` 染色代替语义两种。写这类守门时把这张清单当最低变异集，并给每条规则配一条"对已知违例样本必须命中"的反面断言。
+- **源码扫描的文件范围不要写死文件名**（hud-panels 段 B 实证）。hud-theme 的扫描只认 `Hud.cs` / `Hud.MapSelect.cs` / `Hud.Carry.cs` 三个文件名，新起一个 `Hud.Panels.cs` partial 文件放写死的颜色就 0 红。改为按模式扫目录（`Hud*.cs`），并断言已知文件都在其中。同理，"方法体里不得拼文字"只扫方法体时，把拼接挪进私有辅助方法即可绕过：要么扫整份文件，要么对交给 `Ui.Text` 等工厂的文字实参做白名单（只允许来自呈现层视图字段）。
 - **Godot 的 `StyleBoxFlat` 只有一个边框色**。四边不同色（如选中态的金色底边加中性色三边）要用 C# 的 `StyleBox` 子类覆写 `_Draw`：先画一个 `StyleBoxFlat`，再叠一条矩形。Godot 4.7.2 .NET 下运行期新建的实例直接生效，不需要 `[GlobalClass]`（hud-theme `Ui.EdgeStripBox`）。
 
 ### "共用同一套状态机"最容易在最外层被复写

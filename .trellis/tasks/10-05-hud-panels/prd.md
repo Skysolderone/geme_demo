@@ -1,10 +1,10 @@
 # 10-05-hud-panels
 
-> 规格权威：`openspec/changes/hud-panels/`（proposal / design / specs / tasks）。
+> 规格权威：`openspec/changes/archive/2026-10-05-hud-panels/`（已归档，主规格已同步；3.3 负责人 2026-10-05 过目，保持不变）。
 
 信息面板重排版（负责人 2026-10-05 裁决为样式工作的下一项）：势力排名按列对齐并标出自家一行，行动顺序改成带徽记的条并用"金字 + 金色底边"标当前行动者，手牌名称与数量分列，修「开局插旗」提示的裁字。按列文字由呈现层新文件 `Hud/HudPanelRows.cs` 给出，引擎层只摆放。显示的信息不增不减；规则、计分、存档、日志不变。
 
-验收：`openspec/changes/hud-panels/tasks.md` 各条的验证项。
+验收：`openspec/changes/archive/2026-10-05-hud-panels/tasks.md` 各条的验证项（全部勾选）。
 
 约束：
 - 在工作树 `.claude/worktrees/hud-panels`、分支 `feat/hud-panels` 上做，基于 main `4066c6a`；不要碰主工作树，不要切分支。
