@@ -247,3 +247,46 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 已知不足：一、二档与现状一样小；档位色与阵营色无关（蓝方棋串的五档结果是红字）；全局预览下相邻棋串同回合揭示互相压住；四位数势力配五档增量与名次变动时势力栏可能蹭到行动顺序条。
 - **下一步**：负责人试玩反馈之后另开数值规则 change（让数值本身拉开层级），届时档位阈值重定（只改 `NumberTier.Thresholds` 一处）。发布页与 Release 仍是 v0.2.0，没有本功能。
 - 工作区里的 `.trellis/tasks/10-05-gamedev-agent-skills/` 是别的会话建的未跟踪目录，本会话没有动。
+
+
+## Session 1: 引入三个 Godot agent skill；评估 awesome-godot 与一批候选插件
+
+**Date**: 2026-10-05
+**Task**: 引入三个 Godot agent skill；评估 awesome-godot 与一批候选插件
+**Branch**: `main`
+
+### Summary
+
+从 awesome-gamedev-agent-skills 固定提交原样装入 godot-shaders / godot-csharp / godot-ui-control，随附许可证与来源说明；打击感、镜头、粒子、主题类插件与 godot-mcp 评估为不加。
+
+### Main Changes
+
+- **起因**：负责人让看 `godotengine/awesome-godot` 有什么可用，随后贴来一批候选（打击感插件、主题工具、粒子与 shader 库、Phantom Camera、agent skill 合集、godot-mcp）。
+- **装了什么**：从 `gamedev-skills/awesome-gamedev-agent-skills`（Apache-2.0，固定提交 `d4b0e35`）原样复制 `godot-shaders`、`godot-csharp`、`godot-ui-control` 到 `.claude/skills/`；许可证、`NOTICE` 与来源说明（含校验和与升级步骤）在 `.claude/third-party/awesome-gamedev-agent-skills/`。
+- **负责人裁决**：装三个引擎向的。主会话推荐的是只装 `godot-shaders`，另两个是入门内容、与项目先例重复，代价是多占两条 skill 描述的上下文。
+- **评估为不加的**（理由记在归档任务的 `prd.md`）：
+  - Juicee / Game Feel Flow、Phantom Camera、`game-feel` skill：都靠 Tween、计时器或时间缩放自驱动，与"演出由 `Siege.Presentation` 按时间算出"（零时长、按住提速、定帧基线）对不上。
+  - 粒子与 VFX 库：`visual-style-baseline` 禁过量粒子。
+  - ThemeGen：UI 已在 C# 里用代码构造样式；godot-liquid-ui 仓库没有许可证，不能拷代码。
+  - godot-mcp：只管启动、抓日志与编辑 `.tscn`，本项目节点在 C# 里构造，增益很小。
+- **留意**：`godot-ui-control/SKILL.md` 第 23、123 行各有一句把 UI 过渡指向未安装的 `godot-animation`（Tween），遇到时以 `openspec/specs/settlement-show` 为准。`docs/` 是发布页静态目录，第三方声明不要放进去。
+- **验证**：实现、检查、主会话三次独立克隆上游该提交，`diff -r` / `cmp` 逐字节相同。无代码改动，未跑测试。未推送。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `553e78c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
