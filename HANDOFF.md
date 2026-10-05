@@ -17,7 +17,7 @@
 ```powershell
 & "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --map=siege-2p-base-v1 --difficulty=Expert --profile=%TEMP%\siege-try.json
 ```
-- 用户参数全部由 `src/godot/scripts/GameRoot.cs` / `GameRoot.Carry.cs` 经 `LaunchArgs` 严格解析，拼错会退出（退出码 1）：`--map=` `--seed=` `--difficulty=` `--cell-limit=` `--rounds=` `--profile=` `--no-carry` `--auto-demo` `--pick-check` `--screenshot=<路径>[:帧]` `--overview` `--shot-power` `--shot-groups` `--map-select` `--carry-preview=supply|settlement` `--export-parts=` `--piece-gallery=` `--shot-show=placement|capture|reveal|power|banner` `--reveal-preview=play|ladder` `--reveal-at=<毫秒>`。
+- 用户参数全部由 `src/godot/scripts/GameRoot.cs` / `GameRoot.Carry.cs` 经 `LaunchArgs` 严格解析，拼错会退出（退出码 1）：`--map=` `--seed=` `--difficulty=` `--cell-limit=` `--rounds=` `--profile=` `--no-carry` `--auto-demo` `--pick-check` `--screenshot=<路径>[:帧]` `--overview` `--shot-power` `--shot-groups` `--map-select` `--carry-preview=supply|settlement` `--export-parts=` `--piece-gallery=` `--ui-gallery=` `--shot-show=placement|capture|reveal|power|banner` `--reveal-preview=play|ladder` `--reveal-at=<毫秒>`。
 - `--auto-demo` / `--pick-check` / `--screenshot=` 固定使用标准难度（同时给 `--difficulty=` 会报错），并关闭带入带出。
 - 操作：点出生区插旗 → 征募 → 左下手牌选类型、点格子暂放 → 右侧看预演 → Enter 确认 / P 键 Pass；有“弃赛”按钮。
 - 按键：1/2/3/4 分别看盘面、势力、信物、顺序层；Tab 切换盘面读法；H 打开手牌面板；T 切换按住 / 点击；E 轮换改造目标；M 切到全局预览；方向键或 WASD 平移；空格回到自家（`InputBindings.cs`）。
