@@ -162,7 +162,7 @@
         <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-windows-x64.zip">下载 Windows 版<span>64 位 · 约 74 MB</span></a>
         <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
       </div>
-      <p class="note">当前版本 v0.2.0（2026-10-04）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <p class="note">当前版本 v0.3.0（2026-10-06）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
       <div class="shot"><img src="assets/hero.jpg" width="1600" height="900" alt="标准 13×13 地图上的四方对局：四角是四个阵营的出生高台，中间一条环形河把中岛围住，盘面上已有金、紫、蓝三方的棋子"></div>
     </div>
   </div>
@@ -187,7 +187,7 @@
         </div>
         <div class="card" style="--c:var(--amber)">
           <h3>加值 × 倍率</h3>
-          <p>十种棋子各有分工：堡垒子加值、倍增子给整串乘倍率、连珠子与协同子看阵型。棋串越长越值钱，也越容易被切断。</p>
+          <p>十种棋子各有分工：堡垒子加值、倍增子给整串乘 1.5 倍，连珠子与协同子看排布。棋串连到 3 / 5 / 8 / 12 枚各升一阶<b>阵型</b>，每阶再乘 1.5——越长越值钱，也越容易被切断。</p>
         </div>
         <div class="card" style="--c:var(--grass)">
           <h3>会改变规则的地形</h3>
@@ -195,7 +195,7 @@
         </div>
         <div class="card" style="--c:var(--blue)">
           <h3>看得见的判读</h3>
-          <p>盘面、势力、信物、顺序四个信息层随时切换；每次落子前都有预演，告诉你会提走什么、势力怎么变。每条棋串旁常驻标着它的军势。</p>
+          <p>盘面、势力、信物、顺序四个信息层随时切换；每次落子前都有预演，告诉你会提走什么、势力怎么变。结算时算式一步步揭示，数值越大字越大、越红。</p>
         </div>
       </div>
     </div>
@@ -208,8 +208,10 @@
       <div class="gallery">
         <figure class="wide"><img src="assets/near.jpg" width="1600" height="900" loading="lazy" alt="拉近的中岛：金、紫、蓝三方的棋子隔着河与桥对峙，带阵营色方框的叉是已活棋串的禁入点">
           <figcaption><b>中岛争夺。</b>带阵营色方框的叉是已活棋串的禁入点（眼位），对手不能往里落子。</figcaption></figure>
-        <figure class="wide"><img src="assets/follow.jpg" width="1600" height="900" loading="lazy" alt="棋盘档地图上金方落子：镜头已移到金方的棋盘，顶部有一条金方这一回合的摘要，落子处有带算式的飘字，棋子旁标着棋串军势">
+        <figure class="wide"><img src="assets/follow.jpg" width="1600" height="900" loading="lazy" alt="棋盘档地图上金方落子：镜头已移到金方的棋盘，顶部有一条金方这一回合的摘要，落子处有棋子类型的飘字，棋子旁标着棋串军势">
           <figcaption><b>看得见对手怎么走。</b>对手落子时镜头自动跟过去，顶部一行摘要写明他落了什么、势力涨了多少；轮到你再回到原来的画面。</figcaption></figure>
+        <figure class="wide"><img src="assets/reveal.jpg" width="1600" height="900" loading="lazy" alt="紫方落子后，左上角棋串上方逐步揭示出军势算式“(6+12)×1.5×2.25 = 60”，大号橙字加一圈亮环；顶部摘要写着紫方势力 +55">
+          <figcaption><b>数值一步步长出来。</b>结算时每条刚落子的棋串依次揭示算式：基础、加值、倍增、阵型，最后是结果。数值分五档，越高字越大、颜色越热，高档还有亮环和轻微震屏。</figcaption></figure>
         <figure><img src="assets/terrain.jpg" width="1200" height="620" loading="lazy" alt="高台边缘的近景：草地地砖带倒角，崖壁是岩灰分层，下面是土色缓坡，河岸有一圈石沿">
           <figcaption><b>地形。</b>高度差 1 是土色缓坡，高度差 2 是带岩缝的崖壁；深水低于地砖，岸边一圈石沿。</figcaption></figure>
         <figure><img src="assets/pieces.jpg" width="1320" height="600" loading="lazy" alt="十种棋子的轮廓对照：连珠子、铁链子、堡垒子、界碑子、普通子、匠人、旗手子、倍增子、协同子、哨兵子">
@@ -290,6 +292,15 @@ godot --path src/godot -- --map=board:1      # 直接开一张棋盘档地图</c
     <div class="wrap">
       <h2>更新记录</h2>
       <div class="log">
+        <h3>v0.3.0 <time datetime="2026-10-06">2026-10-06</time></h3>
+        <ul>
+          <li>新规则<b>阵型</b>：棋串连到 3 / 5 / 8 / 12 枚依次为一至四阶，每阶让整串军势再乘 1.5，与倍增子叠加。旧存档仍按旧规则计分。</li>
+          <li>军势揭示：结算时每条刚落子的棋串依次揭示算式（基础 → 加值 → 倍增 → 阵型 → 结果），数值分五档，字号、颜色、亮环与音高逐档递增，最高档轻微震屏。</li>
+          <li>势力栏到账、棋串旁的常驻军势也按档放大；揭示期间该棋串的常驻数字先隐藏，不再重复显示。</li>
+          <li>界面主题统一：面板分三级，按钮状态与字号、间距成套。</li>
+        </ul>
+      </div>
+      <div class="log" style="margin-top:22px">
         <h3>v0.2.0 <time datetime="2026-10-04">2026-10-04</time></h3>
         <ul>
           <li>镜头跟随：对手落子不在画面中央时镜头平滑跟过去，轮到你再回来；<kbd>F</kbd> 开关。</li>
