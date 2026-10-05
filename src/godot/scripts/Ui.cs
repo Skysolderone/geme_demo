@@ -309,6 +309,50 @@ public static class Ui
         button.ThemeTypeVariation = selected ? SelectedButtonVariation : ButtonType;
     }
 
+    /// <summary>
+    /// 按钮里的子控件要用的字色（hud-panels D4）：子 <c>Label</c> 不跟按钮的主题字色走，按"语义 + 是否选中"取按钮常态的字色，
+    /// 与按钮自己的文字同一份取值（选中 → 金色、危险 → 警示色、否则正文色）。
+    /// </summary>
+    public static Color ButtonTextColor(ButtonKind kind, bool selected) =>
+        Visuals.ToColor(UiTheme.ButtonStyleOf(kind, ButtonState.Normal, selected).Text);
+
+    /// <summary>
+    /// 把一组子控件铺进按钮（hud-panels D3 / D4）：按钮文字置空，<paramref name="content"/> 铺满按钮、左右各让出按钮内边距
+    /// （<see cref="UiTheme.ButtonPaddingXPx"/>），并且不接鼠标——点击仍落在按钮上。<paramref name="content"/> 之下后加的子控件须自己设 <c>MouseFilter = Ignore</c>。
+    /// </summary>
+    public static void FillButton(Button button, Control content)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+        ArgumentNullException.ThrowIfNull(content);
+        button.Text = string.Empty;
+        content.MouseFilter = Control.MouseFilterEnum.Ignore;
+        content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        content.OffsetLeft = UiTheme.ButtonPaddingXPx;
+        content.OffsetRight = -UiTheme.ButtonPaddingXPx;
+        content.OffsetTop = 0f;
+        content.OffsetBottom = 0f;
+        button.AddChild(content);
+    }
+
+    /// <summary>
+    /// 一块实色条（不接鼠标、纵向居中）：自家标记竖条、当前行动者的底边（hud-panels D2 / D3）。宽或高传 0 即随容器撑开。
+    /// </summary>
+    public static ColorRect Bar(Color color, float width, float height) => new()
+    {
+        Color = color,
+        CustomMinimumSize = new Vector2(width, height),
+        MouseFilter = Control.MouseFilterEnum.Ignore,
+        SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+    };
+
+    /// <summary>与 <see cref="Bar"/> 同尺寸的空占位（不画任何东西、不接鼠标），让列与行在没有标记时仍对齐。</summary>
+    public static Control Spacer(float width, float height) => new()
+    {
+        CustomMinimumSize = new Vector2(width, height),
+        MouseFilter = Control.MouseFilterEnum.Ignore,
+        SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+    };
+
     /// <summary>横向分隔（线色与上下留白来自主题）。</summary>
     public static HSeparator Separator() => new();
 

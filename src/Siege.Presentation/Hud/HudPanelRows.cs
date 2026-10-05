@@ -18,8 +18,12 @@ namespace Siege.Presentation.Hud;
 /// <param name="NameText">阵营列：阵营名。</param>
 /// <param name="PowerValue">势力列要显示的数：演出中取滚动中的显示值，否则取总势力。引擎层据此配合 <c>RankFontPx</c> 定字号。</param>
 /// <param name="PowerText">势力列的文字：<see cref="PowerValue"/> 的缩写（与概览栏同一份缩写规则）。</param>
-/// <param name="DetailText">明细列：领地与棋串的拆分；有状态时状态文字在前、拆分在后；演出中为本段增量 / 总增量与名次变动提示。可能为空串（演出未开始）。</param>
-/// <param name="DetailIsDelta">明细里是否含演出增量或名次变动提示：为真时引擎层用增量色，否则用次要色。</param>
+/// <param name="DetailText">明细列：领地与棋串的拆分；有状态时状态文字在前、拆分在后；演出中为本段增量 / 总增量与名次变动提示。可能为空串（演出未开始）。
+/// 恒等于 <paramref name="DetailStatusText"/>、<paramref name="DetailRestText"/>、<paramref name="DetailRankHintText"/> 三段中非空者依次用全角空格连接。</param>
+/// <param name="DetailStatusText">明细的状态部分（出局 / 弃赛的状态文字）；没有状态为 <c>null</c>。引擎层恒用次要色画它（hud-panels D9-6）。</param>
+/// <param name="DetailRestText">明细的增量部分：平时是拆分，演出中是本段增量 / 总增量；可能为空串。引擎层按 <paramref name="DetailIsDelta"/> / <paramref name="DeltaIsNegative"/> 取色，领地段 / 军势段随段首放大。</param>
+/// <param name="DetailRankHintText">明细的名次变动提示（"名次 a → b ↑ / ↓"，只在滚动期间）；没有为 <c>null</c>。颜色与增量相同，字号恒为正文字号、不随段首放大。</param>
+/// <param name="DetailIsDelta">明细里是否含演出增量或名次变动提示：为真时引擎层对增量部分与名次提示用增量色，否则用次要色。</param>
 /// <param name="DeltaIsNegative">演出中当前显示的那段增量是否为负（领地段取领地增量、军势段取军势增量、其余取总增量）：为真时增量色取警示色，否则取阵营色。只在 <see cref="DetailIsDelta"/> 为真时有意义。</param>
 /// <param name="IsMuted">玩家有状态（出局 / 弃赛）：整行次要。</param>
 /// <param name="IsViewer">本机玩家的那一行：引擎层在行首画金色竖条（宽 <see cref="UiTheme.ViewerMarkWidthPx"/>）。</param>
@@ -30,6 +34,9 @@ public sealed record RankRowView(
     BigInteger PowerValue,
     string PowerText,
     string DetailText,
+    string? DetailStatusText,
+    string DetailRestText,
+    string? DetailRankHintText,
     bool DetailIsDelta,
     bool DeltaIsNegative,
     bool IsMuted,
@@ -59,6 +66,9 @@ public sealed record HandRowView(PieceType Type, string NameText, string CountTe
 /// </summary>
 public static class HudPanelRows
 {
+    /// <summary>行动顺序条的标题（引擎层放在条目之前，hud-panels D9-5：重排前按钮文字以"行动顺序："开头，不得隐式删掉）。</summary>
+    public const string OrderTitleText = "行动顺序";
+
     /// <summary>行动顺序条末尾的快捷键提示。</summary>
     public const string OrderHintText = "[5] 顺序层";
 
@@ -77,11 +87,9 @@ public static class HudPanelRows
         int? rank = display is { Rolling: false } ? display.Change.OldRank : row.Rank;
         BigInteger value = display?.Value ?? row.Total;
 
-        var parts = new List<string>();
-        if (row.StatusText is not null)
-        {
-            parts.Add(row.StatusText);
-        }
+        // 状态、增量（或拆分）、名次提示三段各自单列（D9-6）：状态恒为次要色；增量随段首放大；名次提示保持正文字号（五档放大时不压顶部顺序条）。
+        string rest = string.Empty;
+        string? rankHint = null;
 
         bool isDelta = false;
         bool negative = false;
@@ -95,13 +103,13 @@ public static class HudPanelRows
             };
             if (delta is not null)
             {
-                parts.Add(delta);
+                rest = delta;
                 isDelta = true;
             }
 
             if (display.Rolling && display.Change.RankText is { } rankText)
             {
-                parts.Add($"{rankText}{(display.Change.NewRank < display.Change.OldRank ? " ↑" : " ↓")}");
+                rankHint = $"{rankText}{(display.Change.NewRank < display.Change.OldRank ? " ↑" : " ↓")}";
                 isDelta = true;
             }
 
@@ -116,16 +124,20 @@ public static class HudPanelRows
         else
         {
             // 有状态的行同样给拆分（hud-panels D9-1）：状态在前、拆分在后，弃赛者的领地与棋串不因重排读不到。
-            parts.Add($"领地 {row.TerritoryScore} + 棋串 {Labels.CompactPower(row.GroupScore)}");
+            rest = $"领地 {row.TerritoryScore} + 棋串 {Labels.CompactPower(row.GroupScore)}";
         }
 
+        string detail = string.Join("　", new[] { row.StatusText, rest, rankHint }.Where(s => !string.IsNullOrEmpty(s)));
         return new RankRowView(
             row.Player,
             rank is int r ? $"第 {r} 名" : "—",
             FactionTable.For(row.Player).Name,
             value,
             Labels.CompactPower(value),
-            string.Join("　", parts),
+            detail,
+            row.StatusText,
+            rest,
+            rankHint,
             isDelta,
             isDelta && negative,
             row.StatusText is not null,

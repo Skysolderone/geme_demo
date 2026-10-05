@@ -7,6 +7,7 @@ using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 using Siege.Presentation.Hand;
+using Siege.Presentation.Hud;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Show;
@@ -31,6 +32,7 @@ public sealed partial class Hud : CanvasLayer
     private Label _turnTitle = null!;
     private Label _turnSubtitle = null!;
     private Button _orderButton = null!;
+    private HBoxContainer _orderContent = null!;
     private VBoxContainer _rankBody = null!;
     private PanelContainer _rankPanel = null!;
     private VBoxContainer _handBody = null!;
@@ -42,6 +44,9 @@ public sealed partial class Hud : CanvasLayer
     private HBoxContainer _layerButtons = null!;
     private VBoxContainer _centerBody = null!;
     private PanelContainer _centerPanel = null!;
+
+    /// <summary>中央面板此刻是插旗提示（高度由内容撑开）：延迟的 <see cref="FitCenterHeight"/> 只在它为真时生效。</summary>
+    private bool _centerFitsContent;
     private PanelContainer _recruitBar = null!;
     private Button _recruitBarButton = null!;
     private Label _notice = null!;
@@ -192,8 +197,14 @@ public sealed partial class Hud : CanvasLayer
     private void BuildOrderBar()
     {
         (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space3, UiTheme.Space1);
-        _orderButton = Ui.Action("行动顺序");
+        _orderButton = Ui.Action(string.Empty);
         _orderButton.Pressed += () => LayerPressed?.Invoke(TacticalLayer.Order);
+        // 按钮里放一条居中的徽记条（hud-panels D3）：整条仍是这一个按钮，点了切换顺序层；子控件一律不接鼠标。
+        var center = new CenterContainer();
+        Ui.FillButton(_orderButton, center);
+        _orderContent = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _orderContent.AddThemeConstantOverride("separation", UiTheme.Space2);
+        center.AddChild(_orderContent);
         body.AddChild(_orderButton);
         Ui.Anchor(panel, 0.5f, 0f, -290f, 14f, 290f, 60f);
         _root.AddChild(panel);
@@ -308,6 +319,15 @@ public sealed partial class Hud : CanvasLayer
     /// <summary>「势力排名」面板在屏幕上的矩形（截图取景自证：右边界不得超出视口）。</summary>
     public Rect2 RankPanelRect => _rankPanel.GetGlobalRect();
 
+    /// <summary>中央面板的高度收到内容的最小高度（宽度不动）：插旗提示的高度由内容撑开（hud-panels D5）。</summary>
+    private void FitCenterHeight()
+    {
+        if (_centerFitsContent && IsInstanceValid(_centerPanel) && _centerPanel.Visible)
+        {
+            _centerPanel.Size = _centerPanel.Size with { Y = _centerPanel.GetCombinedMinimumSize().Y };
+        }
+    }
+
     /// <summary>中央面板按内容定尺寸——插旗提示只占一条，不该盖住棋盘。</summary>
     private void CenterBox(float anchorY, float width, float height) =>
         Ui.Anchor(_centerPanel, 0.5f, anchorY, -width * 0.5f, -height * 0.5f, width * 0.5f, height * 0.5f);
@@ -386,13 +406,45 @@ public sealed partial class Hud : CanvasLayer
         };
     }
 
+    /// <summary>
+    /// 行动顺序条（hud-panels D3）：标题、按顺序的"徽记 + 阵营名"条目、条目间的 ›、末尾快捷键提示，文字全部取自 <see cref="HudPanelRows.OrderBar"/>。
+    /// 当前行动者金字 + 金色底边（不只靠颜色）；其他条目底下放同高的空占位，各条目的名字在同一条基线上。
+    /// </summary>
     private void RefreshOrderBar(ViewerWorld world)
     {
-        MatchPublicView view = world.Public.View;
-        string order = view.ActionOrder.IsDefaultOrEmpty
-            ? "未定"
-            : string.Join(" > ", view.ActionOrder.Select(p => FactionTable.For(p).Name + (p == view.CurrentPlayer ? "◀" : string.Empty)));
-        _orderButton.Text = $"行动顺序：{order}　[5] 展开顺序层";
+        OrderBarView bar = HudPanelRows.OrderBar(world.Public.View);
+        Ui.Clear(_orderContent);
+        _orderContent.AddChild(Ui.Text(HudPanelRows.OrderTitleText, Ui.MutedText, UiTheme.Caption));
+        _orderContent.AddChild(Ui.Spacer(UiTheme.Space3, 0f));
+        if (bar.EmptyText is { } empty)
+        {
+            _orderContent.AddChild(Ui.Text(empty, Ui.InfoText, UiTheme.Small));
+        }
+
+        for (int i = 0; i < bar.Entries.Length; i++)
+        {
+            OrderBarEntry entry = bar.Entries[i];
+            if (i > 0)
+            {
+                _orderContent.AddChild(Ui.Text("›", Ui.MutedText, UiTheme.Small));
+            }
+
+            FactionStyle faction = FactionTable.For(entry.Player);
+            var item = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+            item.AddThemeConstantOverride("separation", UiTheme.Space0);
+            var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            line.AddThemeConstantOverride("separation", UiTheme.Space1);
+            var icon = new EmblemIcon { CustomMinimumSize = new Vector2(14f, 14f), MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+            icon.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
+            line.AddChild(icon);
+            line.AddChild(Ui.Text(entry.NameText, entry.IsCurrent ? Ui.PanelBorder : Ui.InfoText, UiTheme.Small));
+            item.AddChild(line);
+            item.AddChild(entry.IsCurrent ? Ui.Bar(Ui.PanelBorder, 0f, UiTheme.SelectedEdgeWidthPx) : Ui.Spacer(0f, UiTheme.SelectedEdgeWidthPx));
+            _orderContent.AddChild(item);
+        }
+
+        _orderContent.AddChild(Ui.Spacer(UiTheme.Space3, 0f));
+        _orderContent.AddChild(Ui.Text(bar.HintText, Ui.MutedText, UiTheme.Caption));
     }
 
     /// <summary>
@@ -416,63 +468,68 @@ public sealed partial class Hud : CanvasLayer
         int? ShownRank(PlayerPowerRowView row) =>
             mask.Power.TryGetValue(row.Player, out PowerDisplay? shown) && !shown.Rolling ? shown.Change.OldRank : row.Rank;
 
+        // 六列（hud-panels D2）：自家标记、徽记、名次、阵营、势力（右对齐）、明细。列宽由最宽的一格决定，各行自然对齐。
+        // 每行的文字整份取自 HudPanelRows.RankRow（演出前旧名次 / 演出中滚动值 / 明细规则都在那里），这里只摆放与取色。
+        var grid = new GridContainer { Columns = 6, MouseFilter = Control.MouseFilterEnum.Ignore };
+        grid.AddThemeConstantOverride("h_separation", UiTheme.Space3);
+        grid.AddThemeConstantOverride("v_separation", UiTheme.Space1);
         foreach (PlayerPowerRowView row in power.Players.OrderBy(p => ShownRank(p) ?? int.MaxValue).ThenBy(p => p.Player.Value))
         {
-            var line = new HBoxContainer();
-            line.AddThemeConstantOverride("separation", UiTheme.Space3);
-            FactionStyle faction = FactionTable.For(row.Player);
-            var icon = new EmblemIcon { CustomMinimumSize = new Vector2(16f, 16f), MouseFilter = Control.MouseFilterEnum.Ignore };
+            PowerDisplay? display = mask.Power.TryGetValue(row.Player, out PowerDisplay? shown) ? shown : null;
+            RankRowView view = HudPanelRows.RankRow(row, display, world.Viewer);
+            FactionStyle faction = FactionTable.For(view.Player);
+            Color textColor = view.IsMuted ? Ui.MutedText : Ui.InfoText;
+
+            // 自家标记：本机玩家一条金色竖条，其他行同尺寸空占位（不靠文字颜色区分，D2）。
+            grid.AddChild(view.IsViewer
+                ? Ui.Bar(Ui.PanelBorder, UiTheme.ViewerMarkWidthPx, 16f)
+                : Ui.Spacer(UiTheme.ViewerMarkWidthPx, 16f));
+
+            var icon = new EmblemIcon { CustomMinimumSize = new Vector2(16f, 16f), MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
             icon.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
-            line.AddChild(icon);
-            string rank = ShownRank(row) is int r ? $"第 {r} 名" : "—";
-            string suffix = row.StatusText is null ? string.Empty : $"（{row.StatusText}）";
-            if (mask.Power.TryGetValue(row.Player, out PowerDisplay? display))
+            grid.AddChild(icon);
+            // 一行里势力列放大时行变高，其余各格纵向居中（下同）。
+            grid.AddChild(Centered(Ui.Text(view.RankText, textColor)));
+            grid.AddChild(Centered(Ui.Text(view.NameText, textColor)));
+
+            // 势力列：演出中按段首放大的字号（呈现层给档位、RankFontPx 折算），其余时候正文字号；放大时这一格变宽，整列跟着变宽。
+            Label powerLabel = Ui.Text(view.PowerText, textColor, display is null ? UiTheme.Body : RankFontPx(display));
+            powerLabel.HorizontalAlignment = HorizontalAlignment.Right;
+            grid.AddChild(Centered(powerLabel));
+
+            // 明细列：状态部分恒为次要色（D9-6），其余部分演出增量取增量色（负数警示色、否则阵营色），平时次要色。不截断（D9-1）。
+            var detail = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            detail.AddThemeConstantOverride("separation", UiTheme.Space3);
+            if (view.DetailStatusText is { } status)
             {
-                // 演出中间态（settlement-show-callouts D2 分段到账）：总势力按段滚动（领地段 → 军势段 → 定格，整数插值 D7），
-                // 段首数字按本段增量的数值档位放大（一至五档 1.3 / 1.45 / 1.6 / 1.8 / 2.0 倍，tiered-number-show D5）、段内回落，见 RankFontPx；
-                // 段内标"领地 +a" / "军势 +b"（字号随放大同步，颜色不分档），定格后标总增量；名次变动提示随滚动显示。
-                bool bouncing = display.Stage is PowerStage.Territory or PowerStage.Group;
-                int fontSize = RankFontPx(display);
-                string delta = bouncing ? $"　{display.StageText}" : display.Stage == PowerStage.Hold ? $"　{display.Change.DeltaText}" : string.Empty;
-                System.Numerics.BigInteger shown = display.Stage switch
-                {
-                    PowerStage.Territory => display.Change.TerritoryDelta,
-                    PowerStage.Group => display.Change.GroupDelta,
-                    _ => display.Change.Delta,
-                };
-                string rankHint = display.Rolling && display.Change.RankText is { } rankText
-                    ? $"　{rankText}{(display.Change.NewRank < display.Change.OldRank ? " ↑" : " ↓")}"
-                    : string.Empty;
-                Color textColor = row.StatusText is null ? Ui.InfoText : Ui.MutedText;
-                line.AddChild(Ui.Text($"{rank}　{faction.Name}　势力 ", textColor));
-                line.AddChild(Ui.Text(Labels.CompactPower(display.Value), textColor, fontSize));
-                if (suffix.Length > 0)
-                {
-                    line.AddChild(Ui.Text(suffix, Ui.MutedText));
-                }
-
-                Color deltaColor = shown.Sign < 0 ? Ui.DangerText : Visuals.ToColor(faction.Primary);
-                if (delta.Length > 0)
-                {
-                    line.AddChild(Ui.Text(delta, deltaColor, bouncing ? fontSize : null));
-                }
-
-                // 名次提示另起一个标签、保持正文字号，不随段首放大：面板贴右上角向左长，五档 200% 时连它一起放大，
-                // 这一行会长到压住顶部的行动顺序条（1600 宽下约 100 像素）；放大只作用于数字与本段增量。
-                if (rankHint.Length > 0)
-                {
-                    line.AddChild(Ui.Text(rankHint, deltaColor));
-                }
-
-                _rankBody.AddChild(line);
-                continue;
+                detail.AddChild(Centered(Ui.Text(status, Ui.MutedText, UiTheme.Caption)));
             }
 
-            // 概览栏：势力拆成"领地 + 棋串"，≥ 10^6 缩写（restore-go-core-rules 段 E）；精确值在势力层明细里。
-            line.AddChild(Ui.Text($"{rank}　{faction.Name}　{row.CompactText}{suffix}",
-                row.StatusText is null ? Ui.InfoText : Ui.MutedText));
-            _rankBody.AddChild(line);
+            Color restColor = !view.DetailIsDelta ? Ui.MutedText : view.DeltaIsNegative ? Ui.DangerText : Visuals.ToColor(faction.Primary);
+            if (view.DetailRestText.Length > 0)
+            {
+                // 领地段 / 军势段：本段增量与段首数字一起弹（tiered-number-show），字号同势力列；定格与平时仍是注释字号。
+                int restSize = display is { Stage: PowerStage.Territory or PowerStage.Group } ? RankFontPx(display) : UiTheme.Caption;
+                detail.AddChild(Centered(Ui.Text(view.DetailRestText, restColor, restSize)));
+            }
+
+            // 名次提示另起一个标签、恒为正文字号，不随段首放大：面板贴右上角向左长，五档 200% 时连它一起放大会压住顶部的行动顺序条。
+            if (view.DetailRankHintText is { } rankHint)
+            {
+                detail.AddChild(Centered(Ui.Text(rankHint, restColor, UiTheme.Body)));
+            }
+
+            grid.AddChild(detail);
         }
+
+        _rankBody.AddChild(grid);
+    }
+
+    /// <summary>文字在所在格里纵向居中（格比文字高时：势力排名里放大的势力列、按钮里的两列）。</summary>
+    private static Label Centered(Label label)
+    {
+        label.VerticalAlignment = VerticalAlignment.Center;
+        return label;
     }
 
     /// <summary>
@@ -505,15 +562,27 @@ public sealed partial class Hud : CanvasLayer
             return;
         }
 
+        // 每类一个按钮，按钮里左右两列（hud-panels D4）：类型名靠左、数量靠右，文字取自 HudPanelRows.HandRow。
+        // 选中仍由按钮主题画金色底边；子 Label 不随按钮状态变色，字色按"语义 + 是否选中"取按钮常态的字色。
         foreach (OwnHandRowView row in own.Rows)
         {
-            bool selected = session.SelectedType == row.Type;
-            Button button = Ui.Toggle((selected ? "▶ " : "　") + row.Text, selected);
-            button.Alignment = HorizontalAlignment.Left;
-            PieceType type = row.Type;
+            HandRowView view = HudPanelRows.HandRow(row, mustDiscard);
+            bool selected = !mustDiscard && session.SelectedType == view.Type;
+            Button button = view.Kind == ButtonKind.Default ? Ui.Toggle(string.Empty, selected) : Ui.Action(string.Empty, view.Kind);
+            Color color = Ui.ButtonTextColor(view.Kind, selected);
+            var columns = new HBoxContainer();
+            columns.AddThemeConstantOverride("separation", UiTheme.Space3);
+            Label name = Centered(Ui.Text(view.NameText, color, UiTheme.Small));
+            name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            columns.AddChild(name);
+            Label count = Centered(Ui.Text(view.CountText, color, UiTheme.Small));
+            count.HorizontalAlignment = HorizontalAlignment.Right;
+            columns.AddChild(count);
+            Ui.FillButton(button, columns);
+
+            PieceType type = view.Type;
             if (mustDiscard)
             {
-                button.Text = $"弃掉整类：{row.Text}";
                 button.Pressed += () => DiscardRequested?.Invoke(type);
             }
             else
@@ -738,6 +807,7 @@ public sealed partial class Hud : CanvasLayer
     private void RefreshCenter(MatchSession session, ViewerWorld world, HandPanelState handPanel, RecruitPanelCollapse recruitCollapse, bool deferResult)
     {
         Ui.Clear(_centerBody);
+        _centerFitsContent = false;
         _recruitBar.Visible = false;
         if (session.IsOver && session.Match.Result is { } result && !deferResult)
         {
@@ -750,7 +820,8 @@ public sealed partial class Hud : CanvasLayer
         if (session.AwaitingZone)
         {
             // 插旗提示放左列（信息层面板的位置，此时它是隐藏的）：居中放在顶部会盖住棋盘远边的列标注（terrain-model 6.3）。
-            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, CameraHintVisible ? 268f : 222f);
+            // 只定左、上、右，底边等于顶边：高度由内容撑开（hud-panels D5；原先写死 130 / 176 像素，换行后最后一行被裁掉一半）。
+            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, 92f);
             _centerBody.AddChild(Ui.Heading("开局插旗"));
             _centerBody.AddChild(Ui.Text("点棋盘上任意一块染色的出生区地砖，即可把旗插在那一区。", Ui.InfoText, wrap: true));
             _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的出生区落子（构筑保护期）。", Ui.MutedText, wrap: true));
@@ -759,6 +830,9 @@ public sealed partial class Hud : CanvasLayer
                 _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));
             }
             _centerPanel.Visible = true;
+            _centerFitsContent = true;
+            // 换行文字要等摆进面板宽度之后才知道自己几行高：本帧布局完成后再按最小尺寸收一次高度（D5）。
+            Callable.From(FitCenterHeight).CallDeferred();
             return;
         }
 

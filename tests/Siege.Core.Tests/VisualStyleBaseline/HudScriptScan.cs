@@ -8,8 +8,30 @@ namespace Siege.Core.Tests.VisualStyleBaseline;
 /// </summary>
 internal static class HudScriptScan
 {
-    /// <summary>三个 HUD 脚本。</summary>
-    internal static readonly string[] HudScripts = ["Hud.cs", "Hud.MapSelect.cs", "Hud.Carry.cs"];
+    /// <summary>
+    /// HUD 脚本：<c>src/godot/scripts</c> 下全部 <c>Hud*.cs</c>（<c>Hud</c> 是 partial 类，新起一个 partial 文件也在扫描范围内——
+    /// 原先写死三个文件名，把违例挪进 <c>Hud.Panels.cs</c> 就整个逃出全部 HUD 守门，hud-panels 段 B 检查方补）。
+    /// 已知的三个文件必须都在（口径下界）。
+    /// </summary>
+    internal static string[] HudScripts
+    {
+        get
+        {
+            string[] names =
+            [
+                .. Directory.GetFiles(Path.Combine(PresentationFixtures.RepoRoot(), "src", "godot", "scripts"), "Hud*.cs")
+                    .Select(Path.GetFileName)
+                    .OfType<string>()
+                    .Order(StringComparer.Ordinal),
+            ];
+            foreach (string known in new[] { "Hud.cs", "Hud.MapSelect.cs", "Hud.Carry.cs" })
+            {
+                Assert.Contains(known, names);
+            }
+
+            return names;
+        }
+    }
 
     /// <summary>样式总览页脚本。</summary>
     internal const string Gallery = "UiGallery.cs";
