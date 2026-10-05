@@ -76,6 +76,18 @@ public sealed partial class BoardView : Node3D
     private PieceRedraw _lastShowRedraw;
     private PieceRedraw _totalShowRedraw;
     private Node3D _overlay = null!;
+
+    /// <summary>棋串军势常驻标注自成一层（reveal-label-handoff D2）：演出逐帧刷新时只在需要时清掉重画这一层，不动叠加层的其余内容。</summary>
+    private Node3D _groupLabelLayer = null!;
+
+    /// <summary>最近一次完整刷新给出的常驻标注（标在哪一格、写什么、第几档都来自 Presentation）；全局预览下为空。演出期间对局不推进，逐帧重画沿用这一份。</summary>
+    private ImmutableArray<GroupPowerLabel> _groupLabels = [];
+
+    /// <summary>常驻标注层上一次是不是照着非空的显现进度表画的：是的话下一个演出帧还要再画一次（表空了，被隐藏的标注要回来）。</summary>
+    private bool _groupLabelsMasked;
+
+    /// <summary>本进程里演出逐帧刷新重画了多少次常驻标注层（完整刷新不计）；只经 <see cref="GroupLabelRedrawReadout"/> 对外给读数。</summary>
+    private int _groupLabelShowRedraws;
     private Node3D _pieces = null!;
     private Node3D _preview = null!;
     private Node3D _show = null!;
@@ -376,6 +388,8 @@ public sealed partial class BoardView : Node3D
 
         _overlay = new Node3D { Name = "Overlay" };
         AddChild(_overlay);
+        _groupLabelLayer = new Node3D { Name = "GroupLabels" };
+        AddChild(_groupLabelLayer);
         _pieces = new Node3D { Name = "Pieces" };
         AddChild(_pieces);
         _preview = new Node3D { Name = "Preview" };
@@ -1214,7 +1228,10 @@ public sealed partial class BoardView : Node3D
         DrawPieces(board, treatment, mask ?? ShowMask.Empty);
         SetShake(mask?.ShakePermille);
         DrawShow(mask ?? ShowMask.Empty);
-        DrawGroupPower(world, reading, thresholds);
+
+        // 常驻标注：标在哪、写什么随完整刷新更新；画不画、多透明照当前遮罩（演出开始那一帧的完整刷新就不把将要揭示的棋串标注画出来）。
+        _groupLabels = Rig.IsOverview || world.Layer(TacticalLayer.Power, reading, thresholds) is not PowerLayerContent power ? [] : GroupPowerLabels.Of(power);
+        DrawGroupPower(mask ?? ShowMask.Empty);
         DrawLayer(content);
         DrawPreview(preview, focus);
         DrawFlash(flash);
@@ -1358,6 +1375,7 @@ public sealed partial class BoardView : Node3D
     /// <summary>
     /// 结算演出的逐帧刷新（settlement-show 3.3）：只重画棋子一层与演出层——按遮罩隐藏尚未落下的、让落下中的长出来、让被提的按原归属留在原格淡出，
     /// 再画飘字与信物闪光（settlement-show-callouts D6）。其余层（叠加层、预览、高亮）不在演出里逐帧变化，留给状态变化时的 <see cref="Refresh"/>。
+    /// 例外是棋串军势常驻标注那一层（reveal-label-handoff D2）：遮罩的显现进度表里有内容、或上一次是照着非空的表画的，就重画；其余时候不动。
     /// 棋子层<b>不整层重建</b>（board-render-perf D3）：只动这一帧与上一帧相比变了的那几枚，其余节点保持原实例。
     /// </summary>
     public void RefreshShow(ViewerWorld world, SceneTreatment treatment, ShowMask mask)
@@ -1371,6 +1389,11 @@ public sealed partial class BoardView : Node3D
         _showFrames++;
         SetShake(mask.ShakePermille);
         DrawShow(mask);
+        if (!mask.GroupLabelPermille.IsEmpty || _groupLabelsMasked)
+        {
+            DrawGroupPower(mask);
+            _groupLabelShowRedraws++;
+        }
     }
 
     /// <summary>
@@ -1380,6 +1403,12 @@ public sealed partial class BoardView : Node3D
     public string ShowRedrawReadout() =>
         $"演出帧 {_showFrames} 个；上一演出帧棋子节点 新建 {_lastShowRedraw.Created} / 销毁 {_lastShowRedraw.Freed} / 原位更新 {_lastShowRedraw.Updated} / 保持原实例 {_lastShowRedraw.Kept}；"
         + $"累计 新建 {_totalShowRedraw.Created} / 销毁 {_totalShowRedraw.Freed} / 原位更新 {_totalShowRedraw.Updated}";
+
+    /// <summary>
+    /// 常驻标注层在演出逐帧刷新里重画次数的自证读数（reveal-label-handoff 2.1）。做法同 <see cref="ShowRedrawReadout"/>：计数留在本类，对外只给一段文案。
+    /// 取图那一帧走的是完整 <see cref="Refresh"/>，不计入——这个数用来自证逐帧那条路径也走到了。
+    /// </summary>
+    public string GroupLabelRedrawReadout() => $"演出帧里这一层重画 {_groupLabelShowRedraws} 次";
 
     /// <summary>
     /// 演出层（settlement-show-callouts D6）：格上飘字与信物闪光，全部由遮罩推出、不回写视图模型。
@@ -1754,27 +1783,32 @@ public sealed partial class BoardView : Node3D
 
     /// <summary>
     /// 棋串军势常驻标注（tactical-layers「棋串军势常驻标注」）：不开信息层也在每条棋串上标出军势。
-    /// 标在哪一格、写什么都由 Presentation 的 <see cref="GroupPowerLabels"/> 给出（数值取势力层内容），这里只画；全局预览下太密，不画。
+    /// 标在哪一格、写什么都由 Presentation 的 <see cref="GroupPowerLabels"/> 给出（数值取势力层内容，完整刷新时取一次），这里只画；全局预览下太密，不画。
     /// 画法同坐标标注（平铺、屏幕上大小恒定），阵营色字，字号按军势的数值档位逐档加大；放在格子的右前角（棋子底座半径 0.36 之外、林地小树不占这个角），
     /// 不盖住棋子轮廓与格心的标记，也不与从格心上方升起的落子飘字相撞。
-    /// 随完整刷新更新：演出进行中不变，播完那次刷新换成结算后的数值。
+    /// 结算演出期间被揭示的棋串照遮罩给的显现进度画（reveal-label-handoff D2）：进度 0 不画，其余按进度取透明度（字与描边同乘），不在表里的照常。
+    /// 进度一律读遮罩，这里不看揭示条目、不自己算。
     /// </summary>
-    private void DrawGroupPower(ViewerWorld world, BoardReading reading, LibertyThresholds thresholds)
+    private void DrawGroupPower(ShowMask mask)
     {
-        if (Rig.IsOverview || world.Layer(TacticalLayer.Power, reading, thresholds) is not PowerLayerContent power)
+        Clear(_groupLabelLayer);
+        _groupLabelsMasked = !mask.GroupLabelPermille.IsEmpty;
+        foreach (GroupPowerLabel item in _groupLabels)
         {
-            return;
-        }
+            int shown = mask.GroupLabelPermille.TryGetValue(item.Coord, out int permille) ? permille : PowerInterpolation.FullPermille;
+            if (shown <= 0)
+            {
+                continue;
+            }
 
-        foreach (GroupPowerLabel item in GroupPowerLabels.Of(power))
-        {
             // 字号与描边按该棋串军势的数值档位取样式表（tiered-number-show D6）；档位由 Presentation 给出，颜色仍是阵营色。
+            float alpha = shown / 1000f;
             NumberTierStyle style = NumberTierStyle.For(item.Tier);
             Label3D label = Label(item.Text, CenterOf(item.Coord) + new Vector3(0.33f, 0.12f, 0.34f), style.GroupLabelFontSize, style.GroupLabelOutlineSize);
-            label.Modulate = Visuals.FactionColorOf(item.Owner).Lightened(0.75f);
-            label.OutlineModulate = Visuals.FactionColorOf(item.Owner).Darkened(0.45f);
+            label.Modulate = new Color(Visuals.FactionColorOf(item.Owner).Lightened(0.75f), alpha);
+            label.OutlineModulate = new Color(Visuals.FactionColorOf(item.Owner).Darkened(0.45f), alpha);
             label.NoDepthTest = true;
-            _overlay.AddChild(label);
+            _groupLabelLayer.AddChild(label);
         }
     }
 

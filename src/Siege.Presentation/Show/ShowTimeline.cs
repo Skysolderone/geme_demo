@@ -122,6 +122,11 @@ public sealed record ImpactRing(Coord Coord, int Count, int ProgressPermille)
 /// <param name="ShakePermille">镜头轻震的进度（0..1000‰，自五档末步开始 0.25 秒）；不在轻震中为 <c>null</c>。同一时刻至多一个：
 /// 两个五档末步的轻震重叠时取后开始的那个。偏移量由引擎层按进度的确定函数算出，不用随机。</param>
 /// <param name="RevealStepTiers">军势揭示节拍<b>进行中</b>已经开始的各步的档位，按开始顺序；节拍未开始或已播完为空。只供音效提示数出一帧里新开始了哪几步（D7），引擎层不画它。</param>
+/// <param name="GroupLabelPermille">
+/// 被揭示棋串的常驻标注显现进度（reveal-label-handoff D1）：落点（与常驻标注同一格）→ 显现进度（0..1000‰，不含 1000）。
+/// 军势揭示节拍将要揭示或正在揭示的棋串列在这里：揭示结果停留过半之前为 0（不画），之后随结果的淡出线性淡入；条目消失后不再列出。
+/// <b>不在表里的落点一律完全显示</b>。
+/// </param>
 public sealed record ShowMask(
     ImmutableHashSet<Coord> Hidden,
     ImmutableDictionary<Coord, int> Appearing,
@@ -135,18 +140,19 @@ public sealed record ShowMask(
     ImmutableArray<RevealDisplay> Reveals,
     ImmutableArray<ImpactRing> Rings,
     int? ShakePermille,
-    ImmutableArray<int> RevealStepTiers)
+    ImmutableArray<int> RevealStepTiers,
+    ImmutableDictionary<Coord, int> GroupLabelPermille)
 {
     /// <summary>空遮罩：画面即终态。</summary>
     public static readonly ShowMask Empty = new(
         [], ImmutableDictionary<Coord, int>.Empty, [], 0, ImmutableDictionary<PlayerId, PowerDisplay>.Empty,
-        [], null, ImmutableDictionary<Coord, int>.Empty, null, [], [], null, []);
+        [], null, ImmutableDictionary<Coord, int>.Empty, null, [], [], null, [], ImmutableDictionary<Coord, int>.Empty);
 
     /// <summary>遮罩是否为空（没有任何中间态）。</summary>
     public bool IsEmpty =>
         Hidden.IsEmpty && Appearing.IsEmpty && StillShown.IsEmpty && CaptureFadePermille == 0 && Power.IsEmpty
         && Callouts.IsEmpty && CaptureSummary is null && RelicFlash.IsEmpty && Banner is null
-        && Reveals.IsEmpty && Rings.IsEmpty && ShakePermille is null && RevealStepTiers.IsEmpty;
+        && Reveals.IsEmpty && Rings.IsEmpty && ShakePermille is null && RevealStepTiers.IsEmpty && GroupLabelPermille.IsEmpty;
 }
 
 /// <summary>
@@ -275,6 +281,7 @@ public sealed class ShowTimeline
         ImmutableArray<ImpactRing>.Builder rings = ImmutableArray.CreateBuilder<ImpactRing>();
         int? shake = null;
         ImmutableArray<int> revealStepTiers = [];
+        ImmutableDictionary<Coord, int>.Builder groupLabels = ImmutableDictionary.CreateBuilder<Coord, int>();
         int progress = ProgressPermille;
         int nowMs = _startOfCurrentMs + _elapsedMs;
 
@@ -306,7 +313,7 @@ public sealed class ShowTimeline
 
                     break;
                 case PowerRevealBeat reveal:
-                    AddReveals(reveal, nowMs - startMs, reveals, rings, ref shake);
+                    AddReveals(reveal, nowMs - startMs, reveals, rings, groupLabels, ref shake);
                     if (i == _index)
                     {
                         revealStepTiers = reveal.StepTiersStartedBy(_elapsedMs);
@@ -344,6 +351,17 @@ public sealed class ShowTimeline
                     }
 
                     break;
+                case PowerRevealBeat reveal:
+                    if (!current)
+                    {
+                        // 尚未播到军势揭示节拍（落子 / 提子 / 信物节拍期间）：将要揭示的棋串一律先不显示常驻标注——盘面视图已是终态，标注写的就是揭示的结果。
+                        foreach (RevealEntry entry in reveal.Entries)
+                        {
+                            HoldLabel(groupLabels, entry.Coord, 0);
+                        }
+                    }
+
+                    break;
                 case PowerBeat beat:
                     foreach (PowerChange change in beat.Changes)
                     {
@@ -369,19 +387,22 @@ public sealed class ShowTimeline
 
         return new ShowMask(
             hidden.ToImmutable(), appearing.ToImmutable(), stillShown, fade, power.ToImmutable(), callouts.ToImmutable(), captureSummary, relicFlash.ToImmutable(), banner,
-            reveals.ToImmutable(), rings.ToImmutable(), shake, revealStepTiers);
+            reveals.ToImmutable(), rings.ToImmutable(), shake, revealStepTiers, groupLabels.ToImmutable());
     }
 
     /// <summary>
     /// 军势揭示节拍在其开始后 <paramref name="sinceBeatMs"/> 毫秒时的中间态（tiered-number-show D4）：逐条目给出最新一步与结果年龄，
     /// 末步为四、五档的条目在末步开始后 <see cref="ImpactRing.DurationMs"/> 内带亮环，五档末步开始后 <see cref="NumberTierStyle.ShakeMs"/> 内轻震。
     /// 都按演出内的绝对时刻推出，节拍播完后条目、亮环与轻震照样按各自的时长走完（演出播完即空）。
+    /// 同时给出各条目所在棋串的常驻标注显现进度（reveal-label-handoff D1）：尚未轮到、未到末步的条目为 0，到末步后按结果年龄取
+    /// <see cref="LabelPermilleAt"/>，结果停留满即不再列出（标注完全显示）。
     /// </summary>
     private static void AddReveals(
         PowerRevealBeat beat,
         int sinceBeatMs,
         ImmutableArray<RevealDisplay>.Builder reveals,
         ImmutableArray<ImpactRing>.Builder rings,
+        ImmutableDictionary<Coord, int>.Builder groupLabels,
         ref int? shake)
     {
         for (int e = 0; e < beat.Entries.Length; e++)
@@ -389,8 +410,9 @@ public sealed class ShowTimeline
             RevealEntry entry = beat.Entries[e];
             if (sinceBeatMs < beat.StepStartMs(e, 0))
             {
-                // 条目逐个依次播放：这一条尚未轮到，后面的更晚。
-                break;
+                // 条目逐个依次播放：这一条尚未轮到（后面的更晚，同样走到这里）——条目不列，但它的常驻标注先隐藏着。
+                HoldLabel(groupLabels, entry.Coord, 0);
+                continue;
             }
 
             int last = entry.Steps.Length - 1;
@@ -430,9 +452,21 @@ public sealed class ShowTimeline
                 resultAge = sinceFinalMs * PowerInterpolation.FullPermille / style.ResultHoldMs;
             }
 
+            HoldLabel(groupLabels, entry.Coord, LabelPermilleAt(resultAge));
+
             reveals.Add(new RevealDisplay(entry.Coord, entry.Owner, step.RunningText, step.Text, step.Tier, within, atFinal, entry.FinalTier, resultAge));
         }
     }
+
+    /// <summary>
+    /// 常驻标注在揭示结果年龄 <paramref name="resultAgePermille"/>（‰）时的显现进度（reveal-label-handoff D1）：max(0, (年龄 − 500) × 2)——
+    /// 结果停留的前半段保持隐藏，后半段（结果淡出时）线性淡入。未到末步的条目结果年龄为 0，即隐藏。
+    /// </summary>
+    private static int LabelPermilleAt(int resultAgePermille) => Math.Max(0, (resultAgePermille - (PowerInterpolation.FullPermille / 2)) * 2);
+
+    /// <summary>把一个落点记进显现进度表；同一落点被列多次时取较小的那个（只要还有一条没揭示完，就按最隐藏的算）。</summary>
+    private static void HoldLabel(ImmutableDictionary<Coord, int>.Builder groupLabels, Coord coord, int permille) =>
+        groupLabels[coord] = groupLabels.TryGetValue(coord, out int held) ? Math.Min(held, permille) : permille;
 
     /// <summary>年龄在 0..寿命 之内的飘字才活跃（尚未出现或已淡完的不列）。</summary>
     private static void AddCallout(ImmutableArray<Callout>.Builder callouts, Coord coord, string text, CalloutKind kind, int ageMs)

@@ -290,3 +290,4 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 ### Next Steps
 
 - None - task complete
+- （10-05 续）`reveal-label-handoff`：负责人看过后指出"本来棋子放置后已经有个数值了，现在重复显示了"——常驻标注一结算就按终态显示新军势，军势揭示又在同一格揭示同一个数（设计时漏了，`reveal-real-tier5.png` 上"= 111"与"111"同屏）。修法：遮罩加 `GroupLabelPermille`，被揭示棋串的标注演出期间隐藏，揭示结果停留过半时随其淡出而淡入。2146 条 = 2126 通过 / 11 失败 / 9 跳过；变异 23 条全红；53 帧基线不变。设计文档 v1.23。**教训**：在某一格新增一种数值呈现之前，先列出这一格上已经常驻显示的数值，裁决谁让位；本次检查方另挑的 8 条变异有 7 条交付时不红，引擎层与"三条目以上 / 压缩节拍"这类边界仍要靠检查阶段补。已合入 main，未推送。

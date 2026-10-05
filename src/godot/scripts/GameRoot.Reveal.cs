@@ -321,13 +321,16 @@ public sealed partial class GameRoot
             + $" 段内 {k.Value.StagePermille}‰ 现字号 {Hud.RankFontPx(k.Value)} px（正文 {UiTheme.BodyFontPx} px）"));
         GD.Print($"[show-tier] 揭示条目 {mask.Reveals.Length} 条：{reveals}；亮环 {rings}；轻震 {shaking}；势力栏放大 {(rank.Length == 0 ? "无" : rank)}");
 
-        // 常驻标注的档位分布（只在没有全局预览时画）：各档各几条，字号取样式表。
+        // 常驻标注的档位分布（只在没有全局预览时画）：各档各几条，字号取样式表；另打遮罩给的显现进度表（被揭示棋串此刻画不画、多透明）。
         if (_session.World.Layer(Siege.Presentation.Layers.TacticalLayer.Power) is Siege.Presentation.Layers.PowerLayerContent power)
         {
             ImmutableArray<Siege.Presentation.Layers.GroupPowerLabel> labels = Siege.Presentation.Layers.GroupPowerLabels.Of(power);
             GD.Print($"[show-tier] 常驻标注 {labels.Length} 条{(_board.Rig.IsOverview ? "（全局预览下不画）" : string.Empty)}："
                 + string.Join("、", labels.GroupBy(l => l.Tier).OrderBy(g => g.Key).Select(g =>
-                    $"{g.Key} 档 {g.Count()} 条（字号 {NumberTierStyle.For(g.Key).GroupLabelFontSize}：{string.Join(" ", g.Select(l => $"{l.Coord.ToNotation()}={l.Text}"))}）")));
+                    $"{g.Key} 档 {g.Count()} 条（字号 {NumberTierStyle.For(g.Key).GroupLabelFontSize}：{string.Join(" ", g.Select(l => $"{l.Coord.ToNotation()}={l.Text}"))}）"))
+                + "；遮罩给的显现进度（reveal-label-handoff：0 不画，其余按进度取透明度，不在表里的完全显示）"
+                + (mask.GroupLabelPermille.IsEmpty ? "空" : string.Join("、", mask.GroupLabelPermille.OrderBy(k => k.Key).Select(k => $"{k.Key.ToNotation()} {k.Value}‰")))
+                + $"；{_board.GroupLabelRedrawReadout()}");
         }
     }
 }
