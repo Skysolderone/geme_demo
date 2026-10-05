@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
 using Siege.Presentation.Show;
+using Siege.Presentation.Style;
 using static Siege.Core.Tests.SettlementShow.ShowFixtures;
 
 namespace Siege.Core.Tests.SettlementShow;
@@ -14,6 +15,10 @@ namespace Siege.Core.Tests.SettlementShow;
 /// <remarks>
 /// 变异验证 M-C1「分项之和不等于总增量」——<c>SettlementBeats.PowerChanges</c> 里 <c>now.GroupScore - was.GroupScore</c> 改为 <c>… + 1</c> → 红 1（分项之和等于总增量）。
 /// 还原后逐字节校验、刷新 mtime，44/44 绿。
+/// tiered-number-show 1.4 增「放大幅度按档」（design.md D5）。变异（脚本做法与记录见 数值档位Tests）：
+/// M-P1「军势段取领地增量的档」——<c>PowerChange.GroupTier</c> 改为 <c>NumberTier.Of(TerritoryDelta)</c> → 红 7（本类 放大幅度按档、演出音效提示Tests 六条）。
+/// M-P2「军势段读总增量的档」——<c>PowerChange.TierOf</c> 里 <c>PowerStage.Group => GroupTier</c> 改为 <c>TotalTier</c> → 红 9（本类 放大幅度按档、数值档位Tests.三处呈现同一数值同一档 八条）。
+/// M-T3「样式表四档势力栏放大 180 改 170」→ 红 2（本类 放大幅度按档、数值档位Tests.分档样式表 tier=4）。
 /// </remarks>
 public class 势力重算节拍与数值变化显示Tests
 {
@@ -95,6 +100,38 @@ public class 势力重算节拍与数值变化显示Tests
         Assert.Equal("名次 2 → 1", change.RankText);
         Assert.Null(new PowerChange(P2, 6, 4, null, null, TerritoryDelta: 0, GroupDelta: -2).RankText);
         Assert.Null(new PowerChange(P3, 6, 4, 1, 1, TerritoryDelta: 0, GroupDelta: -2).RankText);
+    }
+
+    [Fact]
+    public void 放大幅度按档()
+    {
+        // 玩家 A 领地 +3、军势 +20：领地段段首放大 1.3 倍（一档），军势段段首放大 1.8 倍（四档）；总增量 +23 也是四档。
+        var change = new PowerChange(P1, 20, 43, 1, 1, TerritoryDelta: 3, GroupDelta: 20);
+        Assert.Equal((1, 4, 4), (change.TerritoryTier, change.GroupTier, change.TotalTier));
+        Assert.Equal(130, NumberTierStyle.For(change.TierOf(PowerStage.Territory)).RankScalePercent);
+        Assert.Equal(180, NumberTierStyle.For(change.TierOf(PowerStage.Group)).RankScalePercent);
+
+        // 三个档位各取各的增量：领地 +30（四档）、军势 +3（一档）、总增量 +33（五档）。
+        var mixed = new PowerChange(P1, 20, 53, 1, 1, TerritoryDelta: 30, GroupDelta: 3);
+        Assert.Equal((4, 1, 5), (mixed.TierOf(PowerStage.Territory), mixed.TierOf(PowerStage.Group), mixed.TierOf(PowerStage.Hold)));
+        Assert.Equal(5, mixed.TierOf(PowerStage.Pending));
+
+        // 一至五档依次 1.3、1.45、1.6、1.8、2.0 倍（增量 3 / 5 / 9 / 20 / 40；负增量按绝对值取档）。
+        Assert.Equal(
+            [130, 145, 160, 180, 200],
+            new[] { 3, 5, 9, 20, 40 }.Select(delta => NumberTierStyle.For(new PowerChange(P1, 50, 50 + delta, 1, 1, TerritoryDelta: delta, GroupDelta: 0).TerritoryTier).RankScalePercent));
+        Assert.Equal(180, NumberTierStyle.For(new PowerChange(P2, 50, 30, 1, 1, TerritoryDelta: 0, GroupDelta: -20).GroupTier).RankScalePercent);
+
+        // 遮罩里的势力显示带着这条变化：引擎层按当前段读档位（不自己取档），未开始 / 定格读总增量的档。
+        var timeline = new ShowTimeline([new PowerBeat([change])], ShowDuration.Normal);
+        PowerDisplay territory = timeline.Mask().Power[P1];
+        Assert.Equal((PowerStage.Territory, 1), (territory.Stage, territory.Change.TierOf(territory.Stage)));
+        timeline.Advance(350);
+        PowerDisplay group = timeline.Mask().Power[P1];
+        Assert.Equal((PowerStage.Group, 4), (group.Stage, group.Change.TierOf(group.Stage)));
+        timeline.Advance(350);
+        PowerDisplay hold = timeline.Mask().Power[P1];
+        Assert.Equal((PowerStage.Hold, 4), (hold.Stage, hold.Change.TierOf(hold.Stage)));
     }
 
     [Fact]

@@ -511,7 +511,8 @@ public static class CoordinateLabelStyle
 
 /// <summary>
 /// 结算演出飘字（settlement-show-callouts D6）的字号与描边：与坐标标注同一画法（平铺、不用 billboard），按相机远近两档——
-/// 全局预览下放大（沿用禁手标记 <see cref="PlacementMarkGeometry"/> 的远近两档思路），近景取小（相邻落子的算式互相错开）。整数，不进浮点。
+/// 全局预览下放大（沿用禁手标记 <see cref="PlacementMarkGeometry"/> 的远近两档思路），近景取小（相邻落子的飘字互相错开）。整数，不进浮点。
+/// 军势揭示条目不用这张表：它按数值档位取 <see cref="NumberTierStyle"/>（tiered-number-show D1，远近同一张表）。
 /// </summary>
 public sealed record CalloutLabelStyle(int FontSize, int OutlineSize)
 {

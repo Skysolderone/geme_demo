@@ -5,6 +5,7 @@ using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Relics;
 using Siege.Core.Scoring;
+using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Style;
 using Siege.Presentation.Text;
@@ -12,13 +13,13 @@ using Siege.Presentation.Text;
 namespace Siege.Presentation.Show;
 
 /// <summary>
-/// 落子节拍里的一枚棋子：坐标、类型、归属（取自结算后公开快照的盘面），以及该格所在棋串在结算后快照里的军势短算式（settlement-show-callouts D1、裁决 1）。
-/// <paramref name="Formula"/> 为 <c>null</c> 即结算后快照里没有含该格的棋串（理论上不会），飘字只显示类型名。
+/// 落子节拍里的一枚棋子：坐标、类型、归属（取自结算后公开快照的盘面）。
+/// 军势算式不在这里（tiered-number-show D3）：由军势揭示节拍 <see cref="PowerRevealBeat"/> 逐步给出。
 /// </summary>
-public readonly record struct PlacedPiece(Coord Coord, PieceType Type, PlayerId Owner, string? Formula = null)
+public readonly record struct PlacedPiece(Coord Coord, PieceType Type, PlayerId Owner)
 {
-    /// <summary>飘字文案：棋子类型名 + " · " + 军势短算式（<see cref="GroupPowerView.ShortFormulaText"/>，与势力层 <see cref="GroupPowerView.FormulaText"/> 同一处生成、同一份数值）。</summary>
-    public string CalloutText => Formula is null ? Labels.Piece(Type) : $"{Labels.Piece(Type)} · {Formula}";
+    /// <summary>飘字文案：只有棋子类型名（<see cref="Labels.Piece"/>）。</summary>
+    public string CalloutText => Labels.Piece(Type);
 }
 
 /// <summary>提子节拍里的一枚被提棋子：坐标与原归属（原归属与类型都取自结算前公开快照的盘面；类型只为按原样画出淡出中的棋子）。</summary>
@@ -56,6 +57,72 @@ public enum PowerStage
 public readonly record struct PowerStageDisplay(PowerStage Stage, int StagePermille, BigInteger Value, string? StageText);
 
 /// <summary>
+/// 军势揭示条目里的一步（tiered-number-show D2）：这一步新出现的文案（"5" / "+2" / "×1.5" / "= 10"）、到这一步为止的累计文案
+/// （"5" / "5+2" / "(5+2)×1.5" / "(5+2)×1.5 = 10"）、这一步的数值档位与基准时长（毫秒；整拍超上限时按比例压缩，见 <see cref="PowerRevealBeat.StepStartMs"/>）。
+/// </summary>
+public sealed record RevealStep(string Text, string RunningText, int Tier, int DurationMs);
+
+/// <summary>
+/// 军势揭示节拍的一个条目：一条含本次落子的棋串。落点与常驻标注同一格（<see cref="GroupPowerLabels.AnchorOf"/>），
+/// 军势与算式各项原样取自结算后快照的棋串军势明细，不重算。
+/// </summary>
+public sealed record RevealEntry(Coord Coord, PlayerId Owner, BigInteger Power, ImmutableArray<RevealStep> Steps)
+{
+    /// <summary>末步的档位 = 该棋串军势的数值档位：决定末步时长、结果停留、亮环圈数与是否轻震。</summary>
+    public int FinalTier => Steps[^1].Tier;
+
+    /// <summary>由一条棋串军势明细投影：落点取常驻标注的落点，步骤见 <see cref="StepsOf"/>。</summary>
+    public static RevealEntry From(GroupPower group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        return new RevealEntry(GroupPowerLabels.AnchorOf(group.Stones), group.Owner, group.Power, StepsOf(GroupPowerView.From(group)));
+    }
+
+    /// <summary>
+    /// 把军势算式拆成依次出现的步骤，只列非零项，口径与势力层短算式（<see cref="GroupPowerView.ShortFormulaText"/>）相同：
+    /// 基础军势 →（加值非零）"+加值" →（有倍增子）"×倍率" →（有加值或倍率）"= 军势"。既无加值也无倍率的棋串只有一步，这一步就是结果（design.md A3）。
+    /// 末步的累计文案与短算式逐字相同（守门：军势揭示节拍Tests.末步累计文案等于短算式）。
+    /// 档位：末步取军势的数值档位 T；共 n 步时第 i 步（0 起）= max(1, T − (n − 1 − i))，即往前每步降一档、降到一档为止（A2：不保证严格递增）。
+    /// 时长：每步 <see cref="PowerRevealBeat.StepMs"/>，末步取样式表的末步时长。
+    /// </summary>
+    public static ImmutableArray<RevealStep> StepsOf(GroupPowerView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        var texts = new List<(string Text, string Running)>(4);
+        string running = $"{view.BaseTotal}";
+        texts.Add((running, running));
+        if (view.PositionBonus != 0)
+        {
+            running = $"{running}+{view.PositionBonus}";
+            texts.Add(($"+{view.PositionBonus}", running));
+        }
+
+        if (view.MultiplierCount != 0)
+        {
+            running = view.PositionBonus != 0 ? $"({running})×{view.MultiplierText}" : $"{running}×{view.MultiplierText}";
+            texts.Add(($"×{view.MultiplierText}", running));
+        }
+
+        if (texts.Count > 1)
+        {
+            running = $"{running} = {view.Power}";
+            texts.Add(($"= {view.Power}", running));
+        }
+
+        int finalTier = NumberTier.Of(view.Power);
+        int last = texts.Count - 1;
+        ImmutableArray<RevealStep>.Builder steps = ImmutableArray.CreateBuilder<RevealStep>(texts.Count);
+        for (int i = 0; i <= last; i++)
+        {
+            int tier = Math.Max(NumberTier.Lowest, finalTier - (last - i));
+            steps.Add(new RevealStep(texts[i].Text, texts[i].Running, tier, i == last ? NumberTierStyle.For(finalTier).FinalStepMs : PowerRevealBeat.StepMs));
+        }
+
+        return steps.MoveToImmutable();
+    }
+}
+
+/// <summary>
 /// 势力重算节拍的一条：旧值、新值、旧名次、新名次，以及领地分增量与棋串军势增量（两者之和恒等于总增量，settlement-show「势力重算节拍与数值变化显示」）。
 /// 名次为 <c>null</c> 表示该玩家没有势力名次（已弃赛 / 已出局，design.md A6），此时不显示名次变动提示。
 /// </summary>
@@ -90,6 +157,23 @@ public sealed record PowerChange(PlayerId Player, BigInteger OldValue, BigIntege
 
     /// <summary>军势段时长（毫秒）：增量为 0 则跳过。</summary>
     public int GroupMs => GroupDelta.IsZero ? 0 : PowerBeat.SegmentMs;
+
+    /// <summary>领地增量的数值档位（tiered-number-show D5）：领地段的段首放大幅度与到账音的音高按它取样式表。</summary>
+    public int TerritoryTier => NumberTier.Of(TerritoryDelta);
+
+    /// <summary>军势增量的数值档位。</summary>
+    public int GroupTier => NumberTier.Of(GroupDelta);
+
+    /// <summary>总增量的数值档位。</summary>
+    public int TotalTier => NumberTier.Of(Delta);
+
+    /// <summary>某一段显示的增量所在的档：领地段取领地增量、军势段取军势增量，其余（未开始 / 定格）取总增量。引擎层只读它，不自己取档。</summary>
+    public int TierOf(PowerStage stage) => stage switch
+    {
+        PowerStage.Territory => TerritoryTier,
+        PowerStage.Group => GroupTier,
+        _ => TotalTier,
+    };
 
     /// <summary>
     /// 节拍内已过 <paramref name="elapsedMs"/> 毫秒时的显示（design.md D2）：领地段 → 军势段 → 定格，分项为 0 的段跳过、时长让给定格；
@@ -133,7 +217,8 @@ public sealed record PowerChange(PlayerId Player, BigInteger OldValue, BigIntege
 }
 
 /// <summary>
-/// 结算演出的一个节拍（design.md D3）。封闭集合：落子 → 提子 → 信物揭示 → 势力重算 → 横幅（settlement-show-callouts D3 插入后两种，不改已有节拍）。
+/// 结算演出的一个节拍（design.md D3）。封闭集合：落子 → 提子 → 信物揭示 → 军势揭示 → 势力重算 → 横幅
+/// （settlement-show-callouts D3 插入信物揭示与横幅，tiered-number-show D2 插入军势揭示，都不改已有节拍的时长）。
 /// 时长为整数毫秒——表现层不用浮点（determinism.md）。
 /// </summary>
 public abstract record SettlementBeat
@@ -187,6 +272,81 @@ public sealed record RelicRevealBeat(ImmutableArray<RevealedRelic> Relics) : Set
     public override int DurationMs => Ms;
 }
 
+/// <summary>
+/// 军势揭示节拍（settlement-show「军势揭示节拍」，tiered-number-show D2）：结算后含本次落子的棋串每条一个条目，按军势从小到大逐条依次播放，
+/// 每条把算式一步步长成结果（前一条目的末步结束后下一条目才开始）。排在信物揭示之后、势力重算之前：算式对应提子完成后的棋串，数字紧接着流到势力栏。
+/// 每步 0.22 秒，末步四档 0.44 秒、五档 0.66 秒；各步时长之和超过 1.6 秒时整拍取 1.6 秒，各步的开始时刻按比例压缩（整数运算，A7：高档定格一并压短）。
+/// 本机玩家自己的结算同样完整播放——只有落子节拍压缩。
+/// </summary>
+public sealed record PowerRevealBeat(ImmutableArray<RevealEntry> Entries) : SettlementBeat
+{
+    /// <summary>每一步的基准时长（毫秒）；末步按档位取 <see cref="NumberTierStyle.FinalStepMs"/>。</summary>
+    public const int StepMs = 220;
+
+    /// <summary>整拍上限（毫秒）。</summary>
+    public const int MaxMs = 1600;
+
+    /// <summary>未压缩的各步时长之和（毫秒）。</summary>
+    public int RawDurationMs => Entries.Sum(e => e.Steps.Sum(s => s.DurationMs));
+
+    /// <inheritdoc/>
+    public override int DurationMs => Math.Min(RawDurationMs, MaxMs);
+
+    /// <summary>
+    /// 第 <paramref name="entry"/> 个条目第 <paramref name="step"/> 步（都从 0 起）相对节拍开始的开始时刻（毫秒）：
+    /// 未压缩的开始时刻 × 整拍 ÷ 各步之和（整数除法；未超上限时比例为 1，即未压缩的开始时刻本身）。
+    /// </summary>
+    public int StepStartMs(int entry, int step) => Scale(RawStartMs(entry, step));
+
+    /// <summary>该步的结束时刻（毫秒）= 下一步的开始时刻；全拍最后一步为整拍时长。</summary>
+    public int StepEndMs(int entry, int step) => Scale(RawStartMs(entry, step) + Entries[entry].Steps[step].DurationMs);
+
+    /// <summary>
+    /// 节拍内已过 <paramref name="elapsedMs"/> 毫秒时已经开始的各步的档位，按开始顺序（跨条目连续排）。负的已过时间为空；
+    /// 传入不小于整拍时长的值即全部步骤。音效提示据此得知一帧里新开始了哪几步（design.md D7）。
+    /// </summary>
+    public ImmutableArray<int> StepTiersStartedBy(int elapsedMs)
+    {
+        ImmutableArray<int>.Builder tiers = ImmutableArray.CreateBuilder<int>();
+        for (int e = 0; e < Entries.Length; e++)
+        {
+            for (int k = 0; k < Entries[e].Steps.Length; k++)
+            {
+                if (StepStartMs(e, k) > elapsedMs)
+                {
+                    return tiers.ToImmutable();
+                }
+
+                tiers.Add(Entries[e].Steps[k].Tier);
+            }
+        }
+
+        return tiers.ToImmutable();
+    }
+
+    private long RawStartMs(int entry, int step)
+    {
+        long raw = 0;
+        for (int e = 0; e < entry; e++)
+        {
+            raw += Entries[e].Steps.Sum(s => s.DurationMs);
+        }
+
+        for (int k = 0; k < step; k++)
+        {
+            raw += Entries[entry].Steps[k].DurationMs;
+        }
+
+        return raw;
+    }
+
+    private int Scale(long rawMs)
+    {
+        long total = RawDurationMs;
+        return total <= 0 ? 0 : (int)(rawMs * DurationMs / total);
+    }
+}
+
 /// <summary>势力重算节拍：每名有变化玩家分段到账（领地 0.35 秒 → 军势 0.35 秒 → 定格），整拍 0.9 秒。</summary>
 public sealed record PowerBeat(ImmutableArray<PowerChange> Changes) : SettlementBeat
 {
@@ -217,7 +377,7 @@ public sealed record BannerBeat(ImmutableArray<string> Banners) : SettlementBeat
 }
 
 /// <summary>
-/// 结算的一侧（结算前或结算后）供节拍生成读取的公开数据：盘面、势力读数、逐棋串军势明细（落子飘字的算式）、信物公开状态（揭示）、玩家状态（出局）、有无终局结果。
+/// 结算的一侧（结算前或结算后）供节拍生成读取的公开数据：盘面、势力读数、逐棋串军势明细（军势揭示的算式）、信物公开状态（揭示）、玩家状态（出局）、有无终局结果。
 /// 全部取自公开快照，不含任何私有信息。
 /// </summary>
 public sealed record SettlementSide(
@@ -258,6 +418,7 @@ public sealed record SettlementSide(
 /// 结算记录只用于给落子排序（放置顺序）；没有记录（AI 小回合经运行器推进）时按坐标字典序（<see cref="Coord.CompareTo"/>）。</para>
 /// <para>势力与名次变化取两份快照势力明细之差（总势力、竞争名次、领地分、棋串军势）。结算前没有势力快照（本局首次结算前）时旧值按 0、旧名次按无。</para>
 /// <para>信物揭示取两份快照信物公开状态之差（<c>IsRevealed</c> 假 → 真）；横幅取玩家状态之差（变为出局）与终局结果由无变有（settlement-show-callouts D1 / D3）。</para>
+/// <para>军势揭示取"盘面之差得出的本次落子"与结算后快照的棋串军势明细（tiered-number-show D2）：数值一律原样转录，不重算军势。</para>
 /// </remarks>
 public static class SettlementBeats
 {
@@ -287,15 +448,18 @@ public static class SettlementBeats
         return Generate(SettlementSide.Of(before, [.. powerBefore]), SettlementSide.Of(after, [.. powerAfter]), placementOrder, compressPlacement);
     }
 
-    /// <summary>由结算前后两侧的公开数据生成节拍序列：落子 → 提子 → 信物揭示 → 势力重算 → 横幅，内容为空的节拍省略。</summary>
+    /// <summary>
+    /// 由结算前后两侧的公开数据生成节拍序列：落子 → 提子 → 信物揭示 → 军势揭示 → 势力重算 → 横幅，内容为空的节拍省略。
+    /// <paramref name="compressPlacement"/> 只压缩落子节拍；军势揭示节拍不随之压缩（tiered-number-show D2）。
+    /// </summary>
     public static ImmutableArray<SettlementBeat> Generate(SettlementSide before, SettlementSide after, ImmutableArray<Placement>? placementOrder, bool compressPlacement = false)
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
 
-        ImmutableArray<SettlementBeat>.Builder beats = ImmutableArray.CreateBuilder<SettlementBeat>(5);
+        ImmutableArray<SettlementBeat>.Builder beats = ImmutableArray.CreateBuilder<SettlementBeat>(6);
 
-        ImmutableArray<PlacedPiece> placed = PlacedPieces(before.Board, after.Board, after.Groups, placementOrder);
+        ImmutableArray<PlacedPiece> placed = PlacedPieces(before.Board, after.Board, placementOrder);
         if (!placed.IsEmpty)
         {
             beats.Add(new PlacementBeat(placed, compressPlacement));
@@ -311,6 +475,12 @@ public static class SettlementBeats
         if (!revealed.IsEmpty)
         {
             beats.Add(new RelicRevealBeat(revealed));
+        }
+
+        ImmutableArray<RevealEntry> reveals = RevealEntries(placed, after.Groups);
+        if (!reveals.IsEmpty)
+        {
+            beats.Add(new PowerRevealBeat(reveals));
         }
 
         ImmutableArray<PowerChange> changes = PowerChanges(before.Power, after.Power);
@@ -390,14 +560,35 @@ public static class SettlementBeats
         return banners.ToImmutable();
     }
 
-    private static ImmutableArray<PlacedPiece> PlacedPieces(GameBoard before, GameBoard after, ImmutableArray<GroupPower> groups, ImmutableArray<Placement>? order)
+    /// <summary>
+    /// 军势揭示条目（tiered-number-show D2）：结算后含至少一枚本次落子的棋串各一条（同一条棋串落几枚都只揭示一次），按军势升序、同值按落点坐标序。
+    /// 只读结算后一侧的棋串军势明细，不重算军势；没有落子或没有棋串明细时为空（节拍省略）。被提子后对手棋串的变化不揭示（A4）。
+    /// </summary>
+    public static ImmutableArray<RevealEntry> RevealEntries(ImmutableArray<PlacedPiece> placed, ImmutableArray<GroupPower> groups)
+    {
+        if (placed.IsDefaultOrEmpty || groups.IsDefaultOrEmpty)
+        {
+            return [];
+        }
+
+        var placedAt = new HashSet<Coord>(placed.Select(p => p.Coord));   // 只做成员判断，不遍历
+        return
+        [
+            .. groups.Where(g => !g.Stones.IsDefaultOrEmpty && g.Stones.Any(placedAt.Contains))
+                .Select(RevealEntry.From)
+                .OrderBy(e => e.Power)
+                .ThenBy(e => e.Coord),
+        ];
+    }
+
+    private static ImmutableArray<PlacedPiece> PlacedPieces(GameBoard before, GameBoard after, ImmutableArray<Placement>? order)
     {
         var byCoord = new SortedDictionary<Coord, PlacedPiece>();
         foreach (Coord coord in after.AllCoords())
         {
             if (after[coord].Occupant is { } now && before[coord].Occupant is null)
             {
-                byCoord[coord] = new PlacedPiece(coord, now.Type, now.Owner, FormulaAt(groups, coord));
+                byCoord[coord] = new PlacedPiece(coord, now.Type, now.Owner);
             }
         }
 
@@ -423,25 +614,6 @@ public static class SettlementBeats
 
         ordered.AddRange(byCoord.Values);
         return ordered.ToImmutable();
-    }
-
-    /// <summary>该格所在棋串在结算后快照里的军势短算式：与势力层算式同一处生成（<see cref="GroupPowerView.From"/>，只列非零项）；没有含该格的棋串为 <c>null</c>。</summary>
-    private static string? FormulaAt(ImmutableArray<GroupPower> groups, Coord coord)
-    {
-        if (groups.IsDefault)
-        {
-            return null;
-        }
-
-        foreach (GroupPower group in groups)
-        {
-            if (group.Stones.Contains(coord))
-            {
-                return GroupPowerView.From(group).ShortFormulaText;
-            }
-        }
-
-        return null;
     }
 
     private static ImmutableArray<CapturedPiece> CapturedPieces(GameBoard before, GameBoard after)

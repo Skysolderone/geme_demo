@@ -33,17 +33,17 @@ public partial class ShowSounds : Node
     }
 
     /// <summary>一段占位音的合成参数：波形、起止频率（双音在中点切换）、时长、每秒衰减（越大越快；0 = 不衰减）、峰值。</summary>
-    private readonly record struct Voice(SoundCue Cue, Wave Wave, double StartHz, double EndHz, int DurationMs, double DecayPerSecond, double Gain);
+    private readonly record struct Voice(SoundCueKind Cue, Wave Wave, double StartHz, double EndHz, int DurationMs, double DecayPerSecond, double Gain);
 
     /// <summary>D2 参数表（时长 60–250 ms 为设计值，横幅 400 ms）。</summary>
     private static readonly Voice[] Table =
     [
-        new(SoundCue.Placement, Wave.Triangle, 880, 880, 60, 50, 0.45),     // 落子"嗒"：三角波 + 快速衰减
-        new(SoundCue.Capture, Wave.Noise, 0, 0, 120, 25, 0.5),              // 提子"啪"：噪声 + 衰减
-        new(SoundCue.Relic, Wave.Sine, 1320, 1760, 180, 8, 0.4),            // 信物"叮"：正弦双音 1320 → 1760
-        new(SoundCue.Territory, Wave.Sine, 440, 440, 200, 12, 0.5),         // 领地到账"咣"：正弦 + 中等衰减
-        new(SoundCue.Group, Wave.Sine, 330, 330, 250, 6, 0.8),              // 军势到账：更低、更慢衰减、音量更大
-        new(SoundCue.Banner, Wave.Sine, 220, 220, 400, 4, 0.6),             // 横幅低音
+        new(SoundCueKind.Placement, Wave.Triangle, 880, 880, 60, 50, 0.45),     // 落子"嗒"：三角波 + 快速衰减
+        new(SoundCueKind.Capture, Wave.Noise, 0, 0, 120, 25, 0.5),              // 提子"啪"：噪声 + 衰减
+        new(SoundCueKind.Relic, Wave.Sine, 1320, 1760, 180, 8, 0.4),            // 信物"叮"：正弦双音 1320 → 1760
+        new(SoundCueKind.Territory, Wave.Sine, 440, 440, 200, 12, 0.5),         // 领地到账"咣"：正弦 + 中等衰减
+        new(SoundCueKind.Group, Wave.Sine, 330, 330, 250, 6, 0.8),              // 军势到账：更低、更慢衰减、音量更大
+        new(SoundCueKind.Banner, Wave.Sine, 220, 220, 400, 4, 0.6),             // 横幅低音
     ];
 
     private readonly AudioStreamWav[] _streams = new AudioStreamWav[Table.Length];
@@ -79,19 +79,27 @@ public partial class ShowSounds : Node
         float volume = fast ? FastVolumeDb : 0f;
         foreach (SoundCue cue in cues)
         {
+            // tiered-number-show 段 A：提示带档位、新增"揭示"一种。揭示短音与按档升调在段 B 接入，此前只有"揭示"这一种不发声；
+            // 豁免只点名这一种——其余种类缺表仍由 IndexOf 抛出（响亮失败），不因这条过渡而被一并吞掉。段 B 给参数表补上揭示后删掉这个分支。
+            if (cue.Kind == SoundCueKind.Reveal)
+            {
+                continue;
+            }
+
+            int voice = IndexOf(cue.Kind);
             AudioStreamPlayer? free = System.Array.Find(_players, p => !p.Playing);
             if (free is null)
             {
                 return;
             }
 
-            free.Stream = _streams[IndexOf(cue)];
+            free.Stream = _streams[voice];
             free.VolumeDb = volume;
             free.Play();
         }
     }
 
-    private static int IndexOf(SoundCue cue)
+    private static int IndexOf(SoundCueKind cue)
     {
         for (int i = 0; i < Table.Length; i++)
         {

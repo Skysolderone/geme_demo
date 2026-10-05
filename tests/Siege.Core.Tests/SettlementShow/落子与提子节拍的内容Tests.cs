@@ -10,9 +10,14 @@ using static Siege.Core.Tests.SettlementShow.ShowFixtures;
 namespace Siege.Core.Tests.SettlementShow;
 
 /// <summary>
-/// 规格：settlement-show —— Requirement: 落子与提子节拍的内容（turn-settlement-show 1.2；settlement-show-callouts 1.1 增飘字与合计）。
-/// 飘字算例取自 settlement-show-callouts spec「落子飘字带算式」：堡垒子所在棋串基础 5、位置加值 2、倍增子 1 枚 → 军势 ⌊7 × 1.5⌋ = 10。
+/// 规格：settlement-show —— Requirement: 落子与提子节拍的内容（turn-settlement-show 1.2；settlement-show-callouts 1.1 增飘字与合计；
+/// tiered-number-show 1.2 / design.md D3 改：落子飘字只有类型名，算式移到军势揭示节拍）。
+/// 飘字算例取自规格「落子飘字只有类型名」：堡垒子所在棋串基础 5、位置加值 2、倍增子 1 枚 → 军势 ⌊7 × 1.5⌋ = 10。
 /// </summary>
+/// <remarks>
+/// 变异验证（tiered-number-show 段 A；脚本做法与记录见 数值档位Tests）：M-D3「落子飘字仍带后缀」——<c>PlacedPiece.CalloutText</c> 改为
+/// <c>$"{Labels.Piece(Type)} · "</c> → 红 3（落子飘字只有类型名、飘字寿命跨节拍、结算节拍序列的生成Tests.三种节拍的数据模型）。
+/// </remarks>
 public class 落子与提子节拍的内容Tests
 {
     private static readonly GameBoard Before = Stones(("D3", P2));
@@ -50,11 +55,10 @@ public class 落子与提子节拍的内容Tests
     }
 
     [Fact]
-    public void 落子飘字带算式()
+    public void 落子飘字只有类型名()
     {
         // C3 落一枚堡垒子，结算后它所在棋串（C3、C4）基础 5、连珠 2、倍增 1 枚 → 军势 10。
-        // 飘字 = 棋子类型名（Labels.Piece）+ " · " + 该棋串的军势短算式（GroupPowerView.ShortFormulaText，只列非零项），
-        // 与势力层的完整算式 FormulaText 由同一个 GroupPowerView 生成、数值一致（裁决 1：不复制拼法，也不改势力层）。
+        // 落子节拍中 C3 的飘字只有棋子类型名（Labels.Piece：堡垒子）；算式"(5+2)×1.5 = 10"出现在军势揭示节拍（末步的累计文案）。
         GameBoard before = Stones(("C4", P1));
         GameBoard after = Stones(("C4", P1));
         after.Place("C3", P1, PieceType.Fortress);
@@ -64,24 +68,33 @@ public class 落子与提子节拍的内容Tests
 
         ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(Side(before, Reading(P1, 0, 3, 1)), afterSide, Order("C3"));
         PlacedPiece piece = Assert.Single(Assert.IsType<PlacementBeat>(beats[0]).Pieces);
+        Assert.Equal("堡垒子", piece.CalloutText);
+        Assert.Equal(Labels.Piece(PieceType.Fortress), piece.CalloutText);
+
         GroupPowerView view = GroupPowerView.From(group);
-        Assert.Equal(view.ShortFormulaText, piece.Formula);
-        Assert.Equal("堡垒子 · (5+2)×1.5 = 10", piece.CalloutText);
-        Assert.Equal(Labels.Piece(PieceType.Fortress) + " · " + view.ShortFormulaText, piece.CalloutText);
+        RevealEntry entry = Assert.Single(Assert.IsType<PowerRevealBeat>(beats[1]).Entries);
+        Assert.Equal("(5+2)×1.5 = 10", entry.Steps[^1].RunningText);
+        Assert.Equal(view.ShortFormulaText, entry.Steps[^1].RunningText);
         Assert.Equal("（基础 5 + 位置加值 2（连珠 2 / 协同 0 / 高地 0））× 1.5 = 10", view.FormulaText);   // 势力层算式一字不改
         Assert.EndsWith($"= {view.Power}", view.FormulaText);
         Assert.EndsWith($"= {view.Power}", view.ShortFormulaText);
+
+        // 播放中：落子飘字（遮罩里的 Callout）同样只有类型名，算式只在揭示条目里。
+        var timeline = new ShowTimeline(beats, ShowDuration.Normal);
+        timeline.Advance(250 + 700);
+        ShowMask mask = timeline.Mask();
+        Assert.Equal(["C3:Placement:堡垒子"], mask.Callouts.Select(c => $"{c.Coord.ToNotation()}:{c.Kind}:{c.Text}"));
+        Assert.Equal(["C3:(5+2)×1.5 = 10"], mask.Reveals.Select(r => $"{r.Coord.ToNotation()}:{r.RunningText}"));
 
         // 短算式只列非零项：无加值 → "5×1.5 = 7"；无倍增 → "5+2 = 7"；两者都无 → "5"。
         Assert.Equal("5×1.5 = 7", GroupPowerView.From(group with { LineBonus = 0, Power = 7 }).ShortFormulaText);
         Assert.Equal("5+2 = 7", GroupPowerView.From(group with { MultiplierCount = 0, Power = 7 }).ShortFormulaText);
         Assert.Equal("5", GroupPowerView.From(group with { LineBonus = 0, MultiplierCount = 0, Power = 5 }).ShortFormulaText);
 
-        // 找不到棋串（快照里没有含该格的棋串）时只显示类型名。
+        // 结算后快照里没有棋串明细：飘字照样是类型名，没有军势揭示节拍。
         ImmutableArray<SettlementBeat> bare = SettlementBeats.Generate(Side(before, Reading(P1, 0, 3, 1)), Side(after, Reading(P1, 0, 10, 1)), Order("C3"));
-        PlacedPiece unknown = Assert.Single(Assert.IsType<PlacementBeat>(bare[0]).Pieces);
-        Assert.Null(unknown.Formula);
-        Assert.Equal("堡垒子", unknown.CalloutText);
+        Assert.Equal("堡垒子", Assert.Single(Assert.IsType<PlacementBeat>(bare[0]).Pieces).CalloutText);
+        Assert.DoesNotContain(bare, b => b is PowerRevealBeat);
     }
 
     [Fact]
@@ -123,19 +136,19 @@ public class 落子与提子节拍的内容Tests
     {
         // design.md D4：每枚棋子开始出现时飘字同时出现，寿命内淡出，可跨到下一节拍。寿命 1.4 秒（follow-opponent D6，原 0.6 秒）。
         // 两枚落子（0.5 秒拍）后接势力节拍（0.9 秒）：第 1 枚 0 ms 出现、第 2 枚 250 ms 出现；年龄千分比 = 年龄 × 1000 / 1400。
-        var placement = new PlacementBeat([new PlacedPiece(Coord.Parse("C3"), PieceType.Basic, P1, "1"), new PlacedPiece(Coord.Parse("C4"), PieceType.Fortress, P1)]);
+        var placement = new PlacementBeat([new PlacedPiece(Coord.Parse("C3"), PieceType.Basic, P1), new PlacedPiece(Coord.Parse("C4"), PieceType.Fortress, P1)]);
         var timeline = new ShowTimeline([placement, new PowerBeat([new PowerChange(P1, 3, 5, 1, 1)])], ShowDuration.Normal);
         Assert.Equal(1400, Callout.LifetimeMs);
 
         timeline.Advance(100);
-        Assert.Equal(["C3:Placement:普通子 · 1:71"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:71"], timeline.Mask().Callouts.Select(Line));
         timeline.Advance(200);
-        Assert.Equal(["C3:Placement:普通子 · 1:214", "C4:Placement:堡垒子:35"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:214", "C4:Placement:堡垒子:35"], timeline.Mask().Callouts.Select(Line));
         timeline.Advance(300);
         Assert.IsType<PowerBeat>(timeline.Current);
-        Assert.Equal(["C3:Placement:普通子 · 1:428", "C4:Placement:堡垒子:250"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:428", "C4:Placement:堡垒子:250"], timeline.Mask().Callouts.Select(Line));
         timeline.Advance(300);
-        Assert.Equal(["C3:Placement:普通子 · 1:642", "C4:Placement:堡垒子:464"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:642", "C4:Placement:堡垒子:464"], timeline.Mask().Callouts.Select(Line));
 
         // 演出播完（共 1400 ms）：遮罩为空，飘字随之消失。
         timeline.Advance(500);
@@ -158,7 +171,7 @@ public class 落子与提子节拍的内容Tests
     public void 节拍内容只取自公开信息()
     {
         // 节拍类型的闭包里不得出现私有视图、暂放批次、征募面板等私有类型（information-visibility）。
-        foreach (Type root in new[] { typeof(PlacementBeat), typeof(CaptureBeat), typeof(PowerBeat), typeof(RelicRevealBeat), typeof(BannerBeat), typeof(ShowMask) })
+        foreach (Type root in new[] { typeof(PlacementBeat), typeof(CaptureBeat), typeof(PowerBeat), typeof(RelicRevealBeat), typeof(PowerRevealBeat), typeof(BannerBeat), typeof(ShowMask) })
         {
             Assert.Empty(PresentationFixtures.PrivateLeaks(root));
         }

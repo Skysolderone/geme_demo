@@ -74,9 +74,30 @@ internal static class ShowFixtures
         CaptureBeat c => $"提子[{string.Join(",", c.Pieces.Select(x => $"{x.Coord.ToNotation()}:P{x.Owner.Value}"))}]",
         PowerBeat w => $"势力[{string.Join(",", w.Changes.Select(x => $"P{x.Player.Value}:{x.OldValue}->{x.NewValue}({x.DeltaText}):{x.OldRank?.ToString() ?? "-"}->{x.NewRank?.ToString() ?? "-"}"))}]",
         RelicRevealBeat r => $"信物[{string.Join(",", r.Relics.Select(x => $"{x.Coord.ToNotation()}:{x.Name}"))}]",
+        PowerRevealBeat v => $"揭示[{string.Join(",", v.Entries.Select(Text))}]",
         BannerBeat b => $"横幅[{string.Join(",", b.Banners)}]",
         _ => beat.ToString()!,
     };
+
+    /// <summary>军势揭示条目的文本投影："落点:归属:军势:累计文案@档位/时长|…"（逐步）。</summary>
+    internal static string Text(RevealEntry entry) =>
+        $"{entry.Coord.ToNotation()}:P{entry.Owner.Value}:{entry.Power}:{string.Join("|", entry.Steps.Select(s => $"{s.RunningText}@{s.Tier}/{s.DurationMs}"))}";
+
+    /// <summary>
+    /// 一条棋串军势明细（tiered-number-show 的算例都只给"基础 / 位置加值 / 倍增子 / 军势"四个数：位置加值全记在连珠一项）。
+    /// 军势按算例原样给出，不在夹具里算——节拍生成只转录，不重算。
+    /// </summary>
+    internal static GroupPower Group(PlayerId owner, int baseTotal, int bonus, int multipliers, BigInteger power, params string[] cells) =>
+        new(owner, [.. cells.Select(Coord.Parse)], BaseTotal: baseTotal, LineBonus: bonus, SynergyBonus: 0, HighGroundBonus: 0,
+            BannerBonus: 0, ChainBonus: 0, SentryBonus: 0, BoundaryBonus: 0, MultiplierCount: multipliers, Power: power);
+
+    /// <summary>遮罩里军势揭示条目的文本投影："落点:累计文案:步文案:步档位:步内进度:末步/未到:末步档位:结果年龄"。</summary>
+    internal static string RevealText(ShowMask mask) =>
+        string.Join(",", mask.Reveals.Select(r => $"{r.Coord.ToNotation()}:{r.RunningText}:{r.StepText}:{r.StepTier}:{r.StepPermille}:{(r.AtFinal ? "末步" : "未到")}:{r.FinalTier}:{r.ResultAgePermille}"));
+
+    /// <summary>遮罩里亮环与轻震的文本投影："环[格×圈数:进度,…] 震[进度或空]"。</summary>
+    internal static string ImpactText(ShowMask mask) =>
+        $"环[{string.Join(",", mask.Rings.Select(r => $"{r.Coord.ToNotation()}×{r.Count}:{r.ProgressPermille}"))}] 震[{mask.ShakePermille?.ToString() ?? string.Empty}]";
 
     /// <summary>遮罩的文本投影。</summary>
     internal static string Text(ShowMask mask) =>

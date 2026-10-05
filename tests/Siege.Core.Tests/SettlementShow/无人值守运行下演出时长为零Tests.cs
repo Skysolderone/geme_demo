@@ -11,6 +11,10 @@ namespace Siege.Core.Tests.SettlementShow;
 /// <remarks>
 /// 变异验证 M-S3「零时长模式仍占推进」——<c>ShowTimeline</c> 构造函数里 <c>IsFinished = duration == ShowDuration.Zero</c> 改为 <c>IsFinished = false</c> → 红 1（零时长模式创建即播完）。
 /// 零时长模式节拍序列照常生成 不看 IsFinished，按设计不红。还原后 30/30 绿。
+/// tiered-number-show 段 A 检查复跑 M-S3（SettlementShow + TacticalLayers + VisualStyleBaseline，基线 240 通过 / 2 跳过）：红 5——上面的"红 1"是首版时的数，
+/// 此后各 change 陆续加了零时长守门：本类 零时长模式创建即播完、横幅节拍Tests.无人值守仍零时长、演出音效提示Tests.零时长无提示、
+/// 落子与提子节拍的内容Tests.飘字寿命跨节拍、高档冲击环与镜头轻震Tests.零时长下不出现。
+/// 同批复跑 M-SC2（<c>Mask()</c> 去掉 <c>IsFinished ||</c>）：红 6（上面五条，加 飘字的停留时长Tests.揭示结果跨到势力节拍）。
 /// </remarks>
 public class 无人值守运行下演出时长为零Tests
 {

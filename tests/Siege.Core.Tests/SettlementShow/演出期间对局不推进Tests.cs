@@ -34,20 +34,21 @@ public class 演出期间对局不推进Tests
         // 且生成节拍 / 推进时间线前后对局指纹不变——演出只读快照，不改变任何对局状态。
         MatchFlow shown = Start();
         MatchFlow zero = Start();
-        var beatCounts = new List<int>();
+        var beatKinds = new List<string>();
         foreach (string[] cells in Script)
         {
-            string a = Step(shown, cells, ShowDuration.Normal, beatCounts);
+            string a = Step(shown, cells, ShowDuration.Normal, beatKinds);
             string b = Step(zero, cells, ShowDuration.Zero, null);
             Assert.Equal(a, b);
             Assert.Equal(PresentationFixtures.Fingerprint(shown), PresentationFixtures.Fingerprint(zero));
         }
 
-        // 脚本确实覆盖了三种节拍：至少一步含提子节拍（B2 被提）。
-        Assert.Contains(3, beatCounts);
+        // 脚本确实覆盖了各种节拍：至少一步是"落子 → 提子 → 军势揭示 → 势力"（B2 被提；tiered-number-show 起落子的结算带军势揭示节拍）。
+        // 按节拍类型断言而不是按个数：加入军势揭示后"落子 + 揭示 + 势力"也是 3 个，按个数数不出有没有提子。
+        Assert.Contains("PlacementBeat,CaptureBeat,PowerRevealBeat,PowerBeat", beatKinds);
     }
 
-    private static string Step(MatchFlow match, string[] cells, ShowDuration duration, List<int>? beatCounts)
+    private static string Step(MatchFlow match, string[] cells, ShowDuration duration, List<string>? beatKinds)
     {
         MatchPublicView before = match.Publish();
         SettlementOutcome outcome = match.PlayTurn(cells);
@@ -55,7 +56,7 @@ public class 演出期间对局不推进Tests
         string fingerprint = PresentationFixtures.Fingerprint(match);
 
         ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(before, after, outcome.CaptureRecord);
-        beatCounts?.Add(beats.Length);
+        beatKinds?.Add(string.Join(",", beats.Select(b => b.GetType().Name)));
         var timeline = new ShowTimeline(beats, duration);
         int frames = 0;
         while (!timeline.IsFinished)

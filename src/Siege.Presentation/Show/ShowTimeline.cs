@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
+using Siege.Presentation.Style;
 
 namespace Siege.Presentation.Show;
 
@@ -48,7 +49,7 @@ public sealed record PowerDisplay(BigInteger Value, PowerChange Change, int Prog
 /// <summary>飘字的来源。</summary>
 public enum CalloutKind
 {
-    /// <summary>落子：类型名 + 军势算式。</summary>
+    /// <summary>落子：类型名（军势算式由军势揭示条目 <see cref="RevealDisplay"/> 给出，tiered-number-show D3）。</summary>
     Placement,
 
     /// <summary>提子："提"。</summary>
@@ -69,6 +70,42 @@ public sealed record Callout(Coord Coord, string Text, CalloutKind Kind, int Age
 public sealed record BannerDisplay(string Text, int Index, int Count, int ProgressPermille);
 
 /// <summary>
+/// 一条正在显示的军势揭示条目（tiered-number-show D4）：自其第一步开始起持续显示，结果自末步开始起按末步档位停留（<see cref="NumberTierStyle.ResultHoldMs"/>），
+/// 可跨到后续节拍；尚未轮到的条目不列，结果停留满即不再列。全部是整数——弹出缩放、上浮与淡出由引擎层按进度折算。
+/// </summary>
+/// <param name="Coord">落点（与该棋串常驻标注同一格）。</param>
+/// <param name="Owner">棋串所有者。</param>
+/// <param name="RunningText">到最新一步为止的累计文案（"5+2"）；到末步即完整短算式。</param>
+/// <param name="StepText">最新一步新出现的文案（"+2"）。</param>
+/// <param name="StepTier">最新一步的档位：字号、颜色、描边、弹出幅度按它取样式表。</param>
+/// <param name="StepPermille">最新一步内的进度（0..1000‰；该步结束后保持 1000）。</param>
+/// <param name="AtFinal">是否已到末步（结果已出）。</param>
+/// <param name="FinalTier">末步档位（= 该棋串军势的数值档位）。</param>
+/// <param name="ResultAgePermille">结果年龄（0..1000‰，自末步开始按结果停留时长计）；未到末步为 0。</param>
+public sealed record RevealDisplay(
+    Coord Coord,
+    PlayerId Owner,
+    string RunningText,
+    string StepText,
+    int StepTier,
+    int StepPermille,
+    bool AtFinal,
+    int FinalTier,
+    int ResultAgePermille);
+
+/// <summary>
+/// 高档冲击环（settlement-show「高档冲击环与镜头轻震」）：军势揭示条目末步为四档时所在格一圈向外扩散的亮环、五档两圈，自末步开始持续 <see cref="DurationMs"/>。
+/// </summary>
+/// <param name="Coord">所在格。</param>
+/// <param name="Count">圈数（四档 1、五档 2）。</param>
+/// <param name="ProgressPermille">进度（0..1000‰，不含 1000：满即不再列）。</param>
+public sealed record ImpactRing(Coord Coord, int Count, int ProgressPermille)
+{
+    /// <summary>亮环自末步开始起的持续时长（毫秒）。</summary>
+    public const int DurationMs = 400;
+}
+
+/// <summary>
 /// 演出遮罩（design.md D6）：由时间线当前状态推出的"画面中间态"，纯显示层、不回写任何视图模型。
 /// </summary>
 /// <param name="Hidden">落子节拍尚未播到的棋子：绘制时隐藏。</param>
@@ -80,6 +117,11 @@ public sealed record BannerDisplay(string Text, int Index, int Count, int Progre
 /// <param name="CaptureSummary">提子节拍进行中的合计文案"提 N 子"；其余时候 <c>null</c>。</param>
 /// <param name="RelicFlash">信物揭示节拍进行中闪光的信物格及其进度（0..1000‰）。</param>
 /// <param name="Banner">横幅节拍进行中当前显示的横幅；其余时候 <c>null</c>。</param>
+/// <param name="Reveals">正在显示的军势揭示条目（tiered-number-show D4），按条目顺序（军势从小到大）。</param>
+/// <param name="Rings">正在扩散的高档冲击环（四档一圈、五档两圈）。</param>
+/// <param name="ShakePermille">镜头轻震的进度（0..1000‰，自五档末步开始 0.25 秒）；不在轻震中为 <c>null</c>。同一时刻至多一个：
+/// 两个五档末步的轻震重叠时取后开始的那个。偏移量由引擎层按进度的确定函数算出，不用随机。</param>
+/// <param name="RevealStepTiers">军势揭示节拍<b>进行中</b>已经开始的各步的档位，按开始顺序；节拍未开始或已播完为空。只供音效提示数出一帧里新开始了哪几步（D7），引擎层不画它。</param>
 public sealed record ShowMask(
     ImmutableHashSet<Coord> Hidden,
     ImmutableDictionary<Coord, int> Appearing,
@@ -89,17 +131,22 @@ public sealed record ShowMask(
     ImmutableArray<Callout> Callouts,
     string? CaptureSummary,
     ImmutableDictionary<Coord, int> RelicFlash,
-    BannerDisplay? Banner)
+    BannerDisplay? Banner,
+    ImmutableArray<RevealDisplay> Reveals,
+    ImmutableArray<ImpactRing> Rings,
+    int? ShakePermille,
+    ImmutableArray<int> RevealStepTiers)
 {
     /// <summary>空遮罩：画面即终态。</summary>
     public static readonly ShowMask Empty = new(
         [], ImmutableDictionary<Coord, int>.Empty, [], 0, ImmutableDictionary<PlayerId, PowerDisplay>.Empty,
-        [], null, ImmutableDictionary<Coord, int>.Empty, null);
+        [], null, ImmutableDictionary<Coord, int>.Empty, null, [], [], null, []);
 
     /// <summary>遮罩是否为空（没有任何中间态）。</summary>
     public bool IsEmpty =>
         Hidden.IsEmpty && Appearing.IsEmpty && StillShown.IsEmpty && CaptureFadePermille == 0 && Power.IsEmpty
-        && Callouts.IsEmpty && CaptureSummary is null && RelicFlash.IsEmpty && Banner is null;
+        && Callouts.IsEmpty && CaptureSummary is null && RelicFlash.IsEmpty && Banner is null
+        && Reveals.IsEmpty && Rings.IsEmpty && ShakePermille is null && RevealStepTiers.IsEmpty;
 }
 
 /// <summary>
@@ -224,10 +271,14 @@ public sealed class ShowTimeline
         string? captureSummary = null;
         ImmutableDictionary<Coord, int>.Builder relicFlash = ImmutableDictionary.CreateBuilder<Coord, int>();
         BannerDisplay? banner = null;
+        ImmutableArray<RevealDisplay>.Builder reveals = ImmutableArray.CreateBuilder<RevealDisplay>();
+        ImmutableArray<ImpactRing>.Builder rings = ImmutableArray.CreateBuilder<ImpactRing>();
+        int? shake = null;
+        ImmutableArray<int> revealStepTiers = [];
         int progress = ProgressPermille;
         int nowMs = _startOfCurrentMs + _elapsedMs;
 
-        // 已播过与当前的节拍：飘字按各自出现时刻计年龄（D4，可跨节拍）。
+        // 已播过与当前的节拍：飘字与军势揭示条目按各自出现时刻计年龄（D4，可跨节拍）。
         int startMs = 0;
         for (int i = 0; i <= _index && i < Beats.Length; i++)
         {
@@ -251,6 +302,14 @@ public sealed class ShowTimeline
                     foreach (RevealedRelic relic in reveal.Relics)
                     {
                         AddCallout(callouts, relic.Coord, relic.Name, CalloutKind.Relic, nowMs - startMs);
+                    }
+
+                    break;
+                case PowerRevealBeat reveal:
+                    AddReveals(reveal, nowMs - startMs, reveals, rings, ref shake);
+                    if (i == _index)
+                    {
+                        revealStepTiers = reveal.StepTiersStartedBy(_elapsedMs);
                     }
 
                     break;
@@ -308,7 +367,71 @@ public sealed class ShowTimeline
             }
         }
 
-        return new ShowMask(hidden.ToImmutable(), appearing.ToImmutable(), stillShown, fade, power.ToImmutable(), callouts.ToImmutable(), captureSummary, relicFlash.ToImmutable(), banner);
+        return new ShowMask(
+            hidden.ToImmutable(), appearing.ToImmutable(), stillShown, fade, power.ToImmutable(), callouts.ToImmutable(), captureSummary, relicFlash.ToImmutable(), banner,
+            reveals.ToImmutable(), rings.ToImmutable(), shake, revealStepTiers);
+    }
+
+    /// <summary>
+    /// 军势揭示节拍在其开始后 <paramref name="sinceBeatMs"/> 毫秒时的中间态（tiered-number-show D4）：逐条目给出最新一步与结果年龄，
+    /// 末步为四、五档的条目在末步开始后 <see cref="ImpactRing.DurationMs"/> 内带亮环，五档末步开始后 <see cref="NumberTierStyle.ShakeMs"/> 内轻震。
+    /// 都按演出内的绝对时刻推出，节拍播完后条目、亮环与轻震照样按各自的时长走完（演出播完即空）。
+    /// </summary>
+    private static void AddReveals(
+        PowerRevealBeat beat,
+        int sinceBeatMs,
+        ImmutableArray<RevealDisplay>.Builder reveals,
+        ImmutableArray<ImpactRing>.Builder rings,
+        ref int? shake)
+    {
+        for (int e = 0; e < beat.Entries.Length; e++)
+        {
+            RevealEntry entry = beat.Entries[e];
+            if (sinceBeatMs < beat.StepStartMs(e, 0))
+            {
+                // 条目逐个依次播放：这一条尚未轮到，后面的更晚。
+                break;
+            }
+
+            int last = entry.Steps.Length - 1;
+            int k = last;
+            while (k > 0 && sinceBeatMs < beat.StepStartMs(e, k))
+            {
+                k--;
+            }
+
+            RevealStep step = entry.Steps[k];
+            int stepStart = beat.StepStartMs(e, k);
+            int stepMs = beat.StepEndMs(e, k) - stepStart;
+            int within = stepMs <= 0 ? PowerInterpolation.FullPermille : Math.Min(PowerInterpolation.FullPermille, (sinceBeatMs - stepStart) * PowerInterpolation.FullPermille / stepMs);
+            bool atFinal = k == last;
+            int resultAge = 0;
+            if (atFinal)
+            {
+                NumberTierStyle style = NumberTierStyle.For(entry.FinalTier);
+                int sinceFinalMs = sinceBeatMs - stepStart;
+                if (style.RingCount > 0 && sinceFinalMs < ImpactRing.DurationMs)
+                {
+                    rings.Add(new ImpactRing(entry.Coord, style.RingCount, sinceFinalMs * PowerInterpolation.FullPermille / ImpactRing.DurationMs));
+                }
+
+                if (style.ShakeMs > 0 && sinceFinalMs < style.ShakeMs)
+                {
+                    // 同一时刻至多一个：条目按时间先后遍历，后开始的覆盖先开始的。
+                    shake = sinceFinalMs * PowerInterpolation.FullPermille / style.ShakeMs;
+                }
+
+                if (sinceFinalMs >= style.ResultHoldMs)
+                {
+                    // 结果停留满：不再列。
+                    continue;
+                }
+
+                resultAge = sinceFinalMs * PowerInterpolation.FullPermille / style.ResultHoldMs;
+            }
+
+            reveals.Add(new RevealDisplay(entry.Coord, entry.Owner, step.RunningText, step.Text, step.Tier, within, atFinal, entry.FinalTier, resultAge));
+        }
     }
 
     /// <summary>年龄在 0..寿命 之内的飘字才活跃（尚未出现或已淡完的不列）。</summary>
