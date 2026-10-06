@@ -37,7 +37,7 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 其他子命令：`map --map <标识> [--out 文件]`（打印文本图、导出地图）、`replay --file <match-*.jsonl>`。不带参数运行会打印完整用法（`src/Siege.Sim/Program.cs` `PrintUsage`）。
 
 **选项归属（已与代码核对）**：`--flag-risk`、`--pass-threshold`、`--carry-in` 只有 `run` 有，`play` 和图形版都没有；内容集没有命令行开关，新局一律用 v2。
-**地图标识**（三个入口共用 `MapCatalog`）：`siege-4p-base-v5`（缺省）/ `siege-2p-base-v1` / `siege-3p-base-v1` / `siege-frontier-v2` / `gen:<地图种子>[:p5–8][:s1]` / 地图文件路径。只写 `gen` 时随机取一个种子并打印完整标识（带 `:s1`，即投放新地表）。
+**地图标识**（三个入口共用 `MapCatalog`）：`siege-4p-base-v5`（缺省）/ `siege-2p-base-v1` / `siege-3p-base-v1` / `siege-frontier-v2` / `gen:<地图种子>[:p5–8][:s1]` / `board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]`（互不连通的棋盘组，2026-10-06 `board-isolated-gen`）/ 地图文件路径。只写 `gen` 时随机取一个种子并打印完整标识（带 `:s1`，即投放新地表）。
 **难度**：`Easy|Standard|Hard|Expert`，不区分大小写，不接受数字（`AiDifficultyNames`），缺省 Standard。
 
 ## 现行规则与关键数值速览（设计文档 v1.18）
