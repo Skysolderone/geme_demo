@@ -426,3 +426,43 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 棋盘地形 ①：棋盘档改为互不连通的棋盘组（board-isolated-gen）
+
+**Date**: 2026-10-06
+**Task**: 棋盘地形 ①：棋盘档改为互不连通的棋盘组（board-isolated-gen）
+**Branch**: `feat/board-terrain`
+
+### Summary
+
+按负责人'局部战斗在一块棋盘内'裁决立母任务 board-terrain；第一个 change 去通道、公共 7–15、支持 2/3/4 人、校验器豁免，冒烟 11 局通过；负责人过目保持，合入 main 并推送。
+
+### Main Changes
+
+- **起因**：负责人 2026-10-06："一个局部战斗应当在一块棋盘之内；整个地形由 5×5 到 15×15 的棋盘组成。" 逐条裁决后立母任务 `board-terrain`（三个子 change），本次做第一个 `board-isolated-gen`。
+- **母任务裁决**：棋盘互不连通；出生 5–7 / 公共 7–15；所有地图都改棋盘组成；旧地图彻底删除；内置图 = 生成器 + 固定种子；缺省换新图、AI 另开校准；出生棋盘 = 人数 + 1；预算按人数缩放；规则测试全部改写到新棋盘图（不保留 v5 夹具）；主战场宽高 ≥ 11；公共 7–8 放 1 个信物。
+- **本次内容**：去通道（棋盘间只有场景、至少隔 2 格）、人数 2–4、标识 `board:<种子>[:p][:n]`、整组重抽、人数进随机流、校验器声明表 `Reach` 豁免、预算三行。设计文档 v1.28。
+- **过程中的裁决**：缩边收敛 → 整组重抽（公共棋盘被压小）；同种子不同人数共享公共棋盘 → 人数进随机流；2 人棋盘数 4–6 → 4–5。
+- **验证**：全量失败名单与基线相同；冒烟 11 局全部走完、全部整轮 Pass 终局（52–74 大回合，AI 每步中位 37–74 ms）；截图 `art/board-isolated-gen/`。
+- **下一步**：② `builtin-board-maps`（固定种子内置图、入口缺省切换、Godot 通道染色清理、选图界面人数）→ ③ `retire-legacy-maps`（删旧地图、规则测试改写、黄金值重定、旧存档明确报错）→ AI 校准。注意：画面上场景格占大半（4 人约 40×41 图面 450 格），负责人看过保持；全局预览远边双字母列标挤成一串，另议。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `faf2987` | (see git log) |
+| `1ac06c5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
