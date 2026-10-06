@@ -111,7 +111,7 @@ artisan-terrain-edit 段 C 的 8 张截图全部作废重拍，三处系统性�
 - **`Coord` 不接受负坐标**：读邻格先判界再构造，不要 `new Coord(x - 1, y)` 之后才查表。
 - **重导部件**（`--export-parts`）：没改的旧 `.tscn` 也会变（随机 `unique_id` 与节点名）。中间阶段导出后把没改的恢复为 HEAD，只提交真正变化的；收尾时清空目录全量重导一次，顺带删掉不再被引用的共享材质。
 - **两次建模逐项相同**这类确定性要求，做成导出时的自检（每件建两遍、比顶点 / 法线 / 顶点色数组），并用"散列里混入随机数"的变异证明它会红。
-- **本机（macOS）环境**：仓库里的 `src/godot/nuget.config` 写死了 Windows 路径，构建 Godot 工程要另给 `-p:RestoreConfigFile=<本机配置>`；`dotnet test` 在本机有 11 条 Core / Sim 日志黄金哈希红测（干净的 00a6747 上同样红，原因未查），收尾判据用"失败集合与改动前逐条相同"，并在记录里写明。
+- **本机（macOS）环境**：仓库里的 `src/godot/nuget.config` 写死了 Windows 路径，构建 Godot 工程要另给 `-p:RestoreConfigFile=<本机配置>`；`dotnet test` 曾在本机有 11 条 Core / Sim 日志黄金哈希红测，retire-legacy-maps 段 0 查明并修掉（见下文「被哈希的文本不得含机器相关值」），此后判据是**全量全绿**。
 - **引擎层的硬约束，交付时 MUST 自带源码扫描守门**（tiered-number-show 段 B 实证）。`src/godot` 不在 sln 里，单元测试碰不到它：段 B 交付时检查方做的 8 条引擎层变异（轻震偏移写回视图模型、亮环圈数写死、势力栏放大写死 130%、揭示与标注恒取一档、音效参数表缺一种、全部种类都升调）`dotnet test` 全绿。凡是规格里写了"引擎层 MUST NOT 算 X / 只读呈现层给的 Y / 不写回 Z"的条目，就在测试里读脚本源码（`PresentationFixtures.GodotScriptCode` 去注释、`MethodBody` 取方法体且签名须恰好出现一次）断言写法，并用对应变异证明会红。代价是这些守门钉在写法上，重构方法时要同步改测试。
 - **运行期自证要在分辨得出问题的位姿上做，失败 MUST 给非零退出码**。`siege-4p-base-v5` 最远一档下注视点被夹在 (0, 0)：注入"轻震偏移写回相机状态"之后，自证行在 v5 上仍打印"相同"，换 `board:1` 才打印"不同"——而当时文案归因为"期间有镜头输入"、退出码仍是 0。验"某操作不改相机状态"一类的读数，用相机能自由移动的图，并让无人值守下的不一致直接以退出码 1 结束。
 - **`--screenshot=` 给相对路径会存盘失败（`FileNotFound`）而退出码仍是 0**。一律给绝对路径，并照上面那条另查文件存在。`--headless` 配 `--screenshot=` 会停在等绘制完成、不退出：取图不要加 `--headless`。
@@ -168,6 +168,21 @@ Easy 难度的跑局从不出现连珠成线，Sim 快照"连珠计数"的写入
 一条测试的第一个红断言会挡住后面所有断言，后面那些**从未被执行过**。match-flow 的 `小回合边界存档恢复后状态完全一致` 修好第 30 行的前提错误后，第 61 行才暴露出一个恒假断言（见下）。规则：修红测不是"让它绿"，而是把该测试从头到尾当新测试审一遍，并对新暴露的断言补变异验证。
 
 同类根因：测试注释里"P0 落 E5 使 P2 出局"这种**因果声明必须用断言钉住**（`Assert.Equal(PlayerStatus.Eliminated, match.StateOf(P2).Status)`），否则前提错了（P2 其实在 B8 还有子）只会在很远的下游断言以莫名其妙的数字失败。
+
+## 被哈希的文本不得含机器相关值，哈希前统一行尾（retire-legacy-maps 段 0）
+
+黄金值哈希比对的文本（日志首部、确定性文本、`config.json`、分析报告）里只要混进一个随机器变的值，黄金值就只在钉它的那台机器上绿。本机 11 条"已知红测"就是这样来的，查明前一直以"失败名单与改动前相同"凑合：
+
+| 根因 | 条数 | 证据 |
+|---|---|---|
+| `RunConfig.EffectiveParallelism`（并行度 0 时 = `Environment.ProcessorCount`）是只读属性、没有 `JsonIgnore`，被写进日志首部 `Config` | 6（`三档旧难度逐步不变` ×3、`专家前瞻的记录Tests` ×3） | 设 `DOTNET_PROCESSOR_COUNT=28` 这 6 条转绿；把 `"EffectiveParallelism":28` 插回本机文本的 `"PlayerCount":4` 之后，哈希与 Windows 钉的黄金值逐一相等 |
+| `config.json`（缩进 JSON）与分析报告（`AppendLine`）在 .NET 8 下按 `Environment.NewLine` 换行，Windows CRLF、macOS LF | 5（`未登记的地图首部逐字节不变` ×4 的 config 哈希、`内容集v1的报告…逐字节相同`） | 把本机输出的 LF 换成 CRLF 再哈希，与黄金值逐一相等 |
+
+规则：
+- 被哈希的文本 MUST NOT 含核数、路径、时钟、主机名、`Environment.NewLine` 等机器 / 平台相关值。要记录运行环境，记**请求值**（`Parallelism`）或放到不参与哈希的字段里。现行做法：`EffectiveParallelism` 加 `[JsonIgnore]`，JSON 里的同名字段改由 `RunConfig.RecordedParallelism` 写出——显式给了并行度时写请求值（与改动前逐字节相同，`Parallelism > 0` 的黄金值不变），为 0 时不写；读旧日志时原样保留旧值（旧日志逐字节往返），读配置文件（`FromJson`）时丢弃。
+- 哈希前一律经 `SimFixtures.Sha256Lf` 归一为 LF；新写的哈希比对不要自己 `SHA256.HashData(Encoding.UTF8.GetBytes(text))`。读入的黄金值文件由 `.gitattributes` 钉为 `eol=lf`。
+- 守门 `被哈希文本不含机器相关值Tests`：同一局用两种实际并行度跑，首部与 `config.json` 逐字节相同且只出现请求值；`Sha256Lf` 对 CRLF / LF 同值。M-P4（`Sha256Lf` 不归一）在 macOS 上只有这一类会红——本机输出本来就是 LF，黄金值测试察觉不到，这正是要单独守的原因。
+- 验证跨机器口径时，本机用 `DOTNET_PROCESSOR_COUNT=8` 与 `=28` 各跑一次全量；行尾差异本机复现不了，靠上面的归一与守门。
 
 ## 持久化守门
 

@@ -113,6 +113,13 @@ internal static class SimFixtures
         return field.Replace(text, string.Empty);
     }
 
+    /// <summary>
+    /// 文本统一为 LF 后的 SHA-256（大写十六进制）。<c>config.json</c>（缩进 JSON）与分析报告（<c>AppendLine</c>）在 .NET 8 下按
+    /// <c>Environment.NewLine</c> 换行：Windows 为 CRLF、macOS / Linux 为 LF。被哈希比对的文本一律先经此归一，黄金值才能跨机器通用（retire-legacy-maps D0）。
+    /// </summary>
+    internal static string Sha256Lf(string text) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.Replace("\r\n", "\n", StringComparison.Ordinal))));
+
     /// <summary>独立的临时目录（每次调用都清空重建）。</summary>
     internal static string TempDir(string name)
     {

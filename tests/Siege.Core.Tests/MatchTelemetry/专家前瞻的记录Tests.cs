@@ -155,7 +155,9 @@ public class 专家前瞻的记录Tests
         string text = SimFixtures.StripScoringV1(log.DeterministicText());
         Assert.Equal(39, log.Turns.Count);
         Assert.Equal(10, log.LookaheadTurns.Count());
-        Assert.Equal("078C5B1778226D464689A8CA559BCCBD27357C26D1E21AA57EA99E2AF007D972", Sha256(text));
+        // retire-legacy-maps D0：首部不再写实际核数（Parallelism = 0 时省略 EffectiveParallelism）；原值 078C5B17… 含 Windows 机的 "EffectiveParallelism":28，
+        // 新值按同一文本重算，把该字段插回 "PlayerCount":4 之后哈希与原值相等（已核对）。
+        Assert.Equal("D22D937F9B92A10C95F138AD40BCBBF98F27814BC967F4DE98A836CF8B351814", Sha256(text));
         Assert.DoesNotContain("\"Source\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"TwoPly", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"SupplementRehearsals\"", text, StringComparison.Ordinal);
@@ -262,7 +264,8 @@ public class 专家前瞻的记录Tests
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
         Assert.Equal(28, log.Turns.Count);
-        Assert.Equal("29353FC976C82867E9DD76AE7229223B876146D5DA53F523366824A7A407736A", Sha256(text));
+        // retire-legacy-maps D0：与 难度分级Tests 标准档同步重定（原值 29353FC9… 含 "EffectiveParallelism":28）。
+        Assert.Equal("24C909F70AD1E3BDEE8C28E02D76F509FD45D15D5765EBED4A9B0B35F24E2487", Sha256(text));
     }
 
     [Fact]

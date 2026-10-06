@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
@@ -18,10 +16,13 @@ public class 各入口的地图专属AI权重Tests
     [Theory]
     // 黄金值取自引入本机制之前的实现（v2-recalibration 段 B 2.1，提交 925af6f 之上、src/ 未改动时实跑）：
     // 同一份未显式配置权重的配置在未登记覆盖的地图上跑种子 1 的一局，日志首部与批次 config.json 的 SHA-256。
-    [InlineData("siege-4p-base-v5", 4, "34C451BCF092C3CCAFDDE9A6C1B1FDF7DA6299532B009E76530E8E99EA0D61CE", "3BF58B4CE6CED42B7DCEAB9B5C8C6AAEA47790446684299BCC6C0F8DD95EF1EE")]
-    [InlineData("siege-3p-base-v1", 3, "F8CD1029BA7D4BEFFFE502A4E5DC4BA2B1B8990415BA82925DE0FFE627A6F7C0", "7FB1FA1E455C45E771AF708134BC919C959DB93C5492BEA80AC4FFAFCA650B0C")]
-    [InlineData("siege-frontier-v2", 4, "A239B7FD8549E784EE1223F575C678596CD30B623805C9E72E4EB37DDEC53D7A", "3CCE95C7127E98F7C9FF8F1B1CB0C6BDC6061D1CA57C68ED03F7AE76CF6D4E16")]
-    [InlineData("gen:12345", 4, "E167132EDC2BCE5D1CF3D7099B4DE9DFD2FD7444B27C462AC2165B62180E83AB", "AEF5452CF232262658666587791310C2AFA8424B1353A5331916A756AC879CBF")]
+    // retire-legacy-maps D0：config.json 是缩进 JSON、按 Environment.NewLine 换行，原黄金值是 Windows（CRLF）上的哈希，macOS 上必红。
+    // 改为 LF 归一后哈希（Sha256 → SimFixtures.Sha256Lf），config 四个值按同一文本重算：把本机输出转成 CRLF 后的哈希与原值逐一相等（已核对），
+    // 即只换了行尾口径、内容未变。原值：v5 3BF58B4C…、3p 7FB1FA1E…、边疆 3CCE95C7…、gen AEF5452C…。首部是单行，四个首部值不变。
+    [InlineData("siege-4p-base-v5", 4, "34C451BCF092C3CCAFDDE9A6C1B1FDF7DA6299532B009E76530E8E99EA0D61CE", "97EFBB69208C9B45E34741F1FB1003EA60C5CE9BE86D27A0625416C1E33B0E64")]
+    [InlineData("siege-3p-base-v1", 3, "F8CD1029BA7D4BEFFFE502A4E5DC4BA2B1B8990415BA82925DE0FFE627A6F7C0", "E4EEA5166ED10A1C0D6F6CCEE4FE40D0EB7C7D0A57DAF4F4C14E0E1F792F08FE")]
+    [InlineData("siege-frontier-v2", 4, "A239B7FD8549E784EE1223F575C678596CD30B623805C9E72E4EB37DDEC53D7A", "A3C49989A0089DC17FCA98E83E98030E098C64B914B045CCE0CFF7CDCC05CDA1")]
+    [InlineData("gen:12345", 4, "E167132EDC2BCE5D1CF3D7099B4DE9DFD2FD7444B27C462AC2165B62180E83AB", "01B8407BF1399C69B3E7BF928010B2E29F6045D0F35AA5389265284660A70964")]
     public void 未登记的地图首部逐字节不变(string mapId, int players, string headerHash, string configHash)
     {
         // formation-tiers D2：黄金值钉在引入计分规则版本之前——显式跑 v1，首部与 config.json 比当时只多配置里的一项 "ScoringVersion":"V1"，
@@ -224,5 +225,6 @@ public class 各入口的地图专属AI权重Tests
         return (header, File.ReadAllText(Path.Combine(dir, "config.json")), MatchLog.Parse(log));
     }
 
-    internal static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+    /// <summary>LF 归一后的 SHA-256（见 <see cref="SimFixtures.Sha256Lf"/>）。</summary>
+    internal static string Sha256(string text) => SimFixtures.Sha256Lf(text);
 }

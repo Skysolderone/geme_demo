@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Siege.Core.Board;
 using Siege.Core.Relics;
 using Siege.Sim.Analysis;
@@ -138,25 +136,28 @@ public class 平衡分析方向Tests
         // 段 B 待决 6：分析器的棋子 / 信物列表按内容集展开，v1 样本的报告不因枚举追加四值而多出 0 行；
         // 新增的第 12 项对 v1 对局只单列"不适用"。黄金值取自引入新内容之前的提交（ad78d50，同一共用样本、去掉耗时字段后渲染）的 SHA-256：
         // 共用样本（4 局 Easy、写死 v1）146 行、名次样本 152 行。去掉第 12 项那一段后逐字节相同。
+        // retire-legacy-maps D0：报告按 Environment.NewLine 换行，原黄金值是 Windows（CRLF）上的哈希（83302588… / 19E3B957…），macOS 上必红。
+        // 改为先统一成 LF 再拆行、哈希；两个值按同一文本重算，把本机报告转成 CRLF 后的哈希与原值逐一相等（已核对），只换了行尾口径。
         static string Hash(IEnumerable<MatchLog> logs)
         {
-            string report = ReportWriter.Render(BalanceAnalyzer.Analyze([.. logs.Select(l => MatchLog.Parse(l.DeterministicText()))]));
+            string report = ReportWriter.Render(BalanceAnalyzer.Analyze([.. logs.Select(l => MatchLog.Parse(l.DeterministicText()))]))
+                .Replace("\r\n", "\n", StringComparison.Ordinal);
             string[] lines = report.Split('\n');
             int start = Array.FindIndex(lines, l => l.StartsWith("### 12. ", StringComparison.Ordinal));
             Assert.True(start > 0, "报告里没有第 12 项");
             int end = start;
-            while (end < lines.Length && lines[end].TrimEnd('\r').Length > 0)
+            while (end < lines.Length && lines[end].Length > 0)
             {
                 end++;
             }
 
             Assert.Contains(lines[start..end], l => l.Contains("本项不适用", StringComparison.Ordinal));
             string stripped = string.Join('\n', lines[..start].Concat(lines[end..]));
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stripped)));
+            return SimFixtures.Sha256Lf(stripped);
         }
 
-        Assert.Equal("83302588F50D3B8B52A75D7DFFF1261561B0073AF56D3C319212DF3D7F651FF1", Hash(SimFixtures.Sample.Value));
-        Assert.Equal("19E3B957D93FC0877760093116CB09E1DF2AC441C510AF7FF315D86217AB9B04", Hash(SimFixtures.RankedSample.Value));
+        Assert.Equal("6D06EA22C789523E751AD9DB0A8F976177C25A709083063B4EE3F6DFC0BD46E0", Hash(SimFixtures.Sample.Value));
+        Assert.Equal("5346A5F1DDECA4FFA7442F815C1B08279D6E2FD2B368588A743A0F7494CD8F63", Hash(SimFixtures.RankedSample.Value));
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

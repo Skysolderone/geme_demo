@@ -158,10 +158,13 @@ public class 难度分级Tests
     /// 三档旧难度的黄金值：v5、种子 1、4 名同难度 AI 整局（不截断），写死权重（段 A 开工时的缺省）、阈值 80、冒险概率 0、内容集 v2。
     /// 取自引入专家难度<b>之前</b>的代码（HEAD 03d45f6）的实际运行结果：小回合数、确定性文本行数、确定性文本（含日志首部）的 SHA-256、四名 AI 决策日志的 SHA-256。
     /// </summary>
+    /// <remarks>
+    /// retire-legacy-maps D0：日志首部不再写实际核数（<c>Parallelism</c> = 0 时省略 <c>EffectiveParallelism</c>）。原 logHash 含 Windows 机的 <c>"EffectiveParallelism":28</c>，本机必红；新值按同一份文本重算——把该字段插回 <c>"PlayerCount":4</c> 之后，哈希与原值逐一相等（已核对），只少了这一项。原值：Easy 277336FE…、Standard 29353FC9…、Hard 135B8E7A…。
+    /// </remarks>
     [Theory]
-    [InlineData(AiDifficulty.Easy, 72, 2364, "277336FE7188875FD00EF369ACB354C3666B99B50A93BDCF4E406D438AF72576", "987D1695B6134D25B72D56EE379FB234FE8DCCD99AE07DC092866F1AD4AE8F4C")]
-    [InlineData(AiDifficulty.Standard, 28, 416, "29353FC976C82867E9DD76AE7229223B876146D5DA53F523366824A7A407736A", "6E6FEFBE0739612BA168AC511BE466F117954A47654F091635B1A242E7807604")]
-    [InlineData(AiDifficulty.Hard, 26, 494, "135B8E7AB5DB8CACC2FFB59C7ED4ACF43B797970B087BDDAF9981AAFBDFF66BC", "3F9D8A31F38EFD6950846DABCA60AA89ED81899E2AEECE9637AEE0803E7576F6")]
+    [InlineData(AiDifficulty.Easy, 72, 2364, "3DD30C9631862F2509921E9D565C83FAED64821F6F7E75C306756CC2174A964A", "987D1695B6134D25B72D56EE379FB234FE8DCCD99AE07DC092866F1AD4AE8F4C")]
+    [InlineData(AiDifficulty.Standard, 28, 416, "24C909F70AD1E3BDEE8C28E02D76F509FD45D15D5765EBED4A9B0B35F24E2487", "6E6FEFBE0739612BA168AC511BE466F117954A47654F091635B1A242E7807604")]
+    [InlineData(AiDifficulty.Hard, 26, 494, "AF2535C3101E7B003349693702AEBE34CEED0F388098F94C27BA781FCE0F80EE", "3F9D8A31F38EFD6950846DABCA60AA89ED81899E2AEECE9637AEE0803E7576F6")]
     public void 三档旧难度逐步不变(AiDifficulty difficulty, int turns, int lines, string logHash, string decisionHash)
     {
         // expert-lookahead MODIFIED「难度分级」：简单 / 标准 / 高难的每一步决策、日志的确定性文本（含首部）与改动前逐项相同。

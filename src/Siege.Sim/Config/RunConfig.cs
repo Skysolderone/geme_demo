@@ -203,8 +203,24 @@ public sealed record RunConfig
     /// <summary>玩家编号列表。</summary>
     public PlayerId[] PlayerIds() => [.. Enumerable.Range(0, Players.Count).Select(i => new PlayerId(i))];
 
-    /// <summary>有效并行度。</summary>
+    /// <summary>有效并行度（运行期取值，0 = 本机处理器数）。不序列化：日志首部与 <c>config.json</c> 会被哈希比对，不得含机器相关值（retire-legacy-maps D0）。</summary>
+    [JsonIgnore]
     public int EffectiveParallelism => Parallelism > 0 ? Parallelism : Environment.ProcessorCount;
+
+    private int? _recordedParallelism;
+
+    /// <summary>
+    /// 首部 / <c>config.json</c> 里的 <c>EffectiveParallelism</c> 字段（只用于记录，不参与运行）。新配置只在显式给了 <see cref="Parallelism"/> 时写出（等于请求值），
+    /// <see cref="Parallelism"/> = 0 时不写——此前写的是实际核数，同一局在 28 核与 8 核机器上首部不同（retire-legacy-maps D0）。
+    /// 读入旧日志时原样保留其记录值，使旧日志解析后再写出逐字节不变；读入配置文件（<see cref="FromJson"/>）时丢弃，不把上一批的核数带进新批次。
+    /// 声明位置即原 <c>EffectiveParallelism</c> 的位置，保持首部字段次序不变。
+    /// </summary>
+    [JsonPropertyName("EffectiveParallelism")]
+    public int? RecordedParallelism
+    {
+        get => _recordedParallelism ?? (Parallelism > 0 ? Parallelism : null);
+        init => _recordedParallelism = value;
+    }
 
     /// <summary>基本校验：人数、局数、上限。</summary>
     public RunConfig Validated()
@@ -390,6 +406,7 @@ public sealed record RunConfig
             }
         }
 
-        return (JsonSerializer.Deserialize<RunConfig>(json, JsonOptions) ?? throw new FormatException("配置 JSON 为空。")).Validated();
+        RunConfig config = JsonSerializer.Deserialize<RunConfig>(json, JsonOptions) ?? throw new FormatException("配置 JSON 为空。");
+        return (config with { RecordedParallelism = null }).Validated();
     }
 }
