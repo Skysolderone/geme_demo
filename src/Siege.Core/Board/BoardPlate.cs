@@ -13,7 +13,7 @@ public enum BoardPlateKind
 /// <summary>
 /// 棋盘清单的一项（board-map D2）：一块轴对齐矩形棋盘的外接矩形（左下角坐标、宽、高）与类别。
 /// 清单只用于静态校验与呈现，MUST NOT 参与气、提子、覆盖、保护期、计分与信物的任何结算——
-/// 对局规则、AI 与结算流程都不读它。通道不入清单。
+/// 对局规则、AI 与结算流程都不读它。
 /// </summary>
 /// <remarks>规格：openspec/changes/board-map/specs/map-definition —— Requirement: 棋盘清单</remarks>
 /// <param name="Origin">左下角格。</param>

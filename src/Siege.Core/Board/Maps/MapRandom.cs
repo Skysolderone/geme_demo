@@ -47,17 +47,24 @@ internal static class MapRandom
     }
 
     /// <summary>
-    /// 棋盘档生成（board-map D7）的第 <paramref name="attempt"/> 个随机源（0 起）：只由（地图种子, 序号）决定，
+    /// 棋盘档生成（board-map D7）的第 <paramref name="attempt"/> 个随机源（0 起）：只由（地图种子, 人数, 序号）决定，
     /// 用独立的域常量，与 <see cref="ForAttempt"/>、<see cref="ForSurfaces"/> 的任何取值都不同构——引入它不改变任何 <c>gen:</c> 图。
+    /// 人数进入派生（board-isolated-gen：4 人也一样），同一种子的 2 / 3 / 4 人图互不共享棋盘布局。
     /// </summary>
-    internal static RandomStream ForBoardAttempt(ulong mapSeed, int attempt)
+    internal static RandomStream ForBoardAttempt(ulong mapSeed, int players, int attempt)
     {
         if (attempt < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(attempt), attempt, "尝试序号不得为负。");
         }
 
-        ulong root = SplitMix64.Mix(mapSeed ^ BoardDomain) ^ SplitMix64.Mix((ulong)attempt ^ BoardAttemptDomain);
+        if (players < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(players), players, "人数至少为 1。");
+        }
+
+        ulong root = SplitMix64.Mix(mapSeed ^ BoardDomain) ^ SplitMix64.Mix((ulong)attempt ^ BoardAttemptDomain)
+            ^ SplitMix64.Mix((ulong)players ^ BoardPlayersDomain);
         ulong s0 = SplitMix64.Next(ref root);
         ulong s1 = SplitMix64.Next(ref root);
         ulong s2 = SplitMix64.Next(ref root);
@@ -65,7 +72,8 @@ internal static class MapRandom
         return new RandomStream("map-board", s0, s1, s2, s3);
     }
 
-    /// <summary>域分隔常量：棋盘档的地图种子一侧与序号一侧各一个，与边疆档的两个域常量都不同。</summary>
+    /// <summary>域分隔常量：棋盘档的地图种子一侧、序号一侧与人数一侧各一个，与边疆档的两个域常量都不同。</summary>
     private const ulong BoardDomain = 0x6B0A_94D7_E1C3_52F8UL;
     private const ulong BoardAttemptDomain = 0xD2F4_8A61_3B7C_E905UL;
+    private const ulong BoardPlayersDomain = 0x9E37_51C4_0AF8_2D6BUL;
 }

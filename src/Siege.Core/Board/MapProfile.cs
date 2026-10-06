@@ -14,8 +14,8 @@ public enum MapProfile
     Frontier = 1,
 
     /// <summary>
-    /// 棋盘档（board-map D1）：全部可落子格要么属于某块棋盘（见 <see cref="MapData.Boards"/>），要么属于连接两块棋盘的窄通道。
-    /// 只定 4 人；预算与校验见校验器声明表的棋盘档一行。
+    /// 棋盘档（board-map D1、board-isolated-gen）：全部可落子格都属于某块棋盘（见 <see cref="MapData.Boards"/>），棋盘之间只隔场景、互不连通。
+    /// 定 2 / 3 / 4 人；预算与校验见校验器声明表的棋盘档一行。
     /// </summary>
     Board = 2,
 }

@@ -1,0 +1,30 @@
+{
+  "id": "board-terrain",
+  "name": "board-terrain",
+  "title": "地形改为互不连通的棋盘组（母任务）",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "rubioc",
+  "assignee": "rubioc",
+  "createdAt": "2026-10-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "feat/board-terrain",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-06-board-isolated-gen",
+    "10-06-builtin-board-maps",
+    "10-06-retire-legacy-maps"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -5,28 +5,35 @@ using Siege.Core.Board.Maps;
 namespace Siege.Core.Tests;
 
 /// <summary>
-/// 棋盘档生成图测试的共用设施（board-map 段 B）：按（种子, 棋盘数）缓存生成结果，以及<b>不读生成器内部状态</b>、只从地图数据反推的通道分组——
-/// 布局断言以地图数据为准，不与生成器共用一份实现。
+/// 棋盘档生成图测试的共用设施（board-map 段 B、board-isolated-gen 段 A）：按（种子, 人数, 棋盘数）缓存生成结果，
+/// 以及<b>不读生成器内部状态</b>、只从地图数据反推的查询——布局断言以地图数据为准，不与生成器共用一份实现。
 /// </summary>
 internal static class BoardGenFixtures
 {
-    private static readonly ConcurrentDictionary<(ulong Seed, int Boards), GeneratedBoardMap> Cache = new();
+    private static readonly ConcurrentDictionary<(ulong Seed, int Players, int Boards), GeneratedBoardMap> Cache = new();
 
-    /// <summary>种子 1–20 × 棋盘数 7–10：规格「生成图通过校验」「规模落在目标带」的样本口径，共 80 张。</summary>
-    public static IEnumerable<(ulong Seed, int Boards)> Sample()
-    {
-        for (int boards = BoardMapParameters.MinBoards; boards <= BoardMapParameters.MaxBoards; boards++)
-        {
-            for (ulong seed = 1; seed <= 20; seed++)
-            {
-                yield return (seed, boards);
-            }
-        }
-    }
+    /// <summary>各人数的合法棋盘数（规格「棋盘档生成参数」：4 人 7–10、3 人 5–8、2 人 4–5；测试内独立写出，不读参数类）。</summary>
+    public static readonly (int Players, int[] Boards)[] Ranges =
+    [
+        (4, [7, 8, 9, 10]),
+        (3, [5, 6, 7, 8]),
+        (2, [4, 5]),
+    ];
 
-    public static GeneratedBoardMap Generated(ulong seed, int boards = BoardMapParameters.DefaultBoards) =>
-        Cache.GetOrAdd((seed, boards), key =>
-            BoardMapGenerator.GenerateDetailed(key.Seed, new BoardMapParameters { BoardCount = key.Boards }));
+    /// <summary>（人数, 棋盘数）的全部合法组合：规格「生成图通过校验」「规模落在目标带」的参数口径，共 10 组。</summary>
+    public static IEnumerable<(int Players, int Boards)> Configurations() =>
+        Ranges.SelectMany(r => r.Boards.Select(n => (r.Players, n)));
+
+    /// <summary>种子 1–20 × 全部合法（人数, 棋盘数）：共 200 张。</summary>
+    public static IEnumerable<(ulong Seed, int Players, int Boards)> Sample() =>
+        Configurations().SelectMany(c => Enumerable.Range(1, 20).Select(seed => ((ulong)seed, c.Players, c.Boards)));
+
+    /// <summary>标识（测试内拼写，不经 <see cref="BoardMapId.Format"/>），只用于失败消息。</summary>
+    public static string Label(ulong seed, int players, int boards) => $"board:{seed}:p{players}:n{boards}";
+
+    public static GeneratedBoardMap Generated(ulong seed, int boards = 7, int players = 4) =>
+        Cache.GetOrAdd((seed, players, boards), key =>
+            BoardMapGenerator.GenerateDetailed(key.Seed, new BoardMapParameters { Players = key.Players, BoardCount = key.Boards }));
 
     /// <summary>该格所在棋盘在清单里的下标；不在任何棋盘内为 −1。</summary>
     public static int BoardOf(MapData map, Coord c)
@@ -42,54 +49,7 @@ internal static class BoardGenFixtures
         return -1;
     }
 
-    /// <summary>一条通道：格子（坐标序）与它沿四邻贴着的棋盘下标（升序去重）。</summary>
-    public sealed record Corridor(Coord[] Cells, int[] Boards)
-    {
-        public int Columns => Cells.Max(c => c.X) - Cells.Min(c => c.X) + 1;
-
-        public int Rows => Cells.Max(c => c.Y) - Cells.Min(c => c.Y) + 1;
-    }
-
-    /// <summary>不属于任何棋盘的可落子格，按几何四邻分组；按组内最小坐标的坐标序。</summary>
-    public static List<Corridor> Corridors(MapData map)
-    {
-        var corridors = new List<Corridor>();
-        var seen = new HashSet<Coord>();
-        foreach (Coord start in map.AllCoords().Where(c => map.IsPlayable(c) && BoardOf(map, c) < 0))
-        {
-            if (!seen.Add(start))
-            {
-                continue;
-            }
-
-            var cells = new List<Coord>();
-            var touched = new SortedSet<int>();
-            var queue = new Queue<Coord>([start]);
-            while (queue.Count > 0)
-            {
-                Coord current = queue.Dequeue();
-                cells.Add(current);
-                foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, current))
-                {
-                    int board = BoardOf(map, n);
-                    if (board >= 0)
-                    {
-                        touched.Add(board);
-                    }
-                    else if (map.IsPlayable(n) && seen.Add(n))
-                    {
-                        queue.Enqueue(n);
-                    }
-                }
-            }
-
-            corridors.Add(new Corridor([.. cells.Order()], [.. touched]));
-        }
-
-        return corridors;
-    }
-
-    /// <summary>文本图：数字 = 出生棋盘格（编号）、<c>+</c> 公共棋盘格、<c>:</c> 通道、<c>r</c> / <c>o</c> / <c>R</c> 信物（出生 / 标准 / 高档）、<c>#</c> 障碍。上北下南。</summary>
+    /// <summary>文本图：数字 = 出生棋盘格（编号）、<c>+</c> 公共棋盘格、<c>:</c> 棋盘外的可落子格（合规图上不应出现）、<c>r</c> / <c>o</c> / <c>R</c> 信物（出生 / 标准 / 高档）、<c>#</c> 障碍。上北下南。</summary>
     public static string TextArt(MapData map)
     {
         var text = new System.Text.StringBuilder();

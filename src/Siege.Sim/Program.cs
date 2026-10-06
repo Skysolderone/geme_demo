@@ -78,7 +78,7 @@ public static class Program
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("  地图标识：内置图 / 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
-        Console.WriteLine("            board:<地图种子>[:n<棋盘数 7–10>]（随机生成的棋盘图）；只写 board 即随机取一个地图种子并打印完整标识。");
+        Console.WriteLine("            board:<地图种子>[:p<人数 2–4>][:n<棋盘数，4 人 7–10、3 人 5–8、2 人 4–5>]（随机生成的棋盘图，棋盘互不连通）；只写 board 即随机取一个地图种子（4 人）并打印完整标识。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
     }

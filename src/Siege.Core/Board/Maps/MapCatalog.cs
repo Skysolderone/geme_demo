@@ -3,7 +3,7 @@ namespace Siege.Core.Board.Maps;
 /// <summary>
 /// "地图标识 → 地图"的唯一解析（frontier-map D5）：批量跑局、终端版与图形版三个入口共用这一份，MUST NOT 各自维护地图清单。
 /// 内置图按标识直接给；<c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c> 交给边疆档生成器（map-generator D3）；
-/// <c>board:&lt;地图种子&gt;[:n&lt;棋盘数&gt;]</c> 交给棋盘档生成器（board-map D7）；其余视为地图文件路径（或 <c>maps/&lt;标识&gt;.json</c>）。
+/// <c>board:&lt;地图种子&gt;[:p&lt;人数&gt;][:n&lt;棋盘数&gt;]</c> 交给棋盘档生成器（board-map D7、board-isolated-gen D1）；其余视为地图文件路径（或 <c>maps/&lt;标识&gt;.json</c>）。
 /// 解析不了就报错并列出可用标识，MUST NOT 静默回落到缺省地图。
 /// </summary>
 /// <remarks>
@@ -71,7 +71,7 @@ public static class MapCatalog
             if (BoardMapId.IsBareRequest(id))
             {
                 throw new FormatException(
-                    $"地图标识 {BoardMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {BoardMapId.Prefix}:12345 或 {BoardMapId.Prefix}:12345:n9。");
+                    $"地图标识 {BoardMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {BoardMapId.Prefix}:12345、{BoardMapId.Prefix}:12345:n9 或 {BoardMapId.Prefix}:12345:p3。");
             }
 
             return BoardMapGenerator.Generate(id);
@@ -81,7 +81,7 @@ public static class MapCatalog
         if (!File.Exists(path))
         {
             throw new FileNotFoundException(
-                $"找不到地图 {id}：既不是内置地图，也不是存在的地图文件。可用的地图标识：{string.Join("、", BuiltinIds)}；随机生成图写作 {GeneratedMapId.Prefix}:<地图种子>[:p<平台数 {MapGenParameters.MinPlatforms}–{MapGenParameters.MaxPlatforms}>]（如 {GeneratedMapId.Prefix}:12345）；随机生成的棋盘图写作 {BoardMapId.Prefix}:<地图种子>[:n<棋盘数 {BoardMapParameters.MinBoards}–{BoardMapParameters.MaxBoards}>]（如 {BoardMapId.Prefix}:12345）；也可以给地图文件（.json）的路径。",
+                $"找不到地图 {id}：既不是内置地图，也不是存在的地图文件。可用的地图标识：{string.Join("、", BuiltinIds)}；随机生成图写作 {GeneratedMapId.Prefix}:<地图种子>[:p<平台数 {MapGenParameters.MinPlatforms}–{MapGenParameters.MaxPlatforms}>]（如 {GeneratedMapId.Prefix}:12345）；随机生成的棋盘图写作 {BoardMapId.Prefix}:<地图种子>[:p<人数 {BoardMapParameters.MinPlayers}–{BoardMapParameters.MaxPlayers}>][:n<棋盘数>]（棋盘数随人数：{BoardMapParameters.AllRangesText()}；如 {BoardMapId.Prefix}:12345、{BoardMapId.Prefix}:12345:p3）；也可以给地图文件（.json）的路径。",
                 path);
         }
 

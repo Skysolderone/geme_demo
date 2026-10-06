@@ -201,7 +201,10 @@ public class 边疆档静态校验Tests
         // board-map 段 B 修正：棋盘档的行数区间（20–50）是声明行的新字段 RowRange（同理不叫 Height），也只读一次；标准档与边疆档行数不限。
         // 变异 M-B3（段 B 实跑）：在 ValidatePockets 前加 `if (rules.PlateList is null && …恒假) { return …; }` → 本测试红 1。
         Assert.DoesNotMatch(@"MaxWidth|MaxHeight|const\s+int\s+\w*(Width|Height)", source);
-        foreach (string field in new[] { "SupportedPlayers", "Budgets", "ZonesMustExceedPlayers", "Distance", "ColumnRange", "RowRange", "PlateList" })
+        // board-isolated-gen D4：可达性三项（目标不可达是否拒绝、到中央入口的通路、必须标注咽喉）是声明行的新字段 Reach 及其三个成员，同样各只读一次。
+        // 变异 V8（段 A 实跑）：在 Validate 里查预算之前加 `if (rules.Reach.RequireChokes && map.Width < 0) { return …; }` → 本测试红 1。
+        // 变异 V10（段 A 实跑）：边疆档声明行 Reach (true, true, true) → (false, true, true) → 边疆档不可达仍拒绝 红 1（标准 / 边疆档的可达性处理没被棋盘档带偏）。
+        foreach (string field in new[] { "SupportedPlayers", "Budgets", "ZonesMustExceedPlayers", "Distance", "ColumnRange", "RowRange", "PlateList", "Reach", "RejectUnreachableTargets", "RequireEntrancePath", "RequireChokes" })
         {
             MatchCollection fieldReads = Regex.Matches(source, @"\.\s*" + field + @"(?![\w])");
             Assert.True(

@@ -84,10 +84,13 @@ public static class MapValidator
     /// （2 / 3 人图尚未定稿），此项不校验。边疆档只定 4 人（300–420 / 5–8 区且多于人数 / 单区 20–225 / 信物 14–24，验证版估值）。
     /// 与规格档无关的"容得下 9 枚基础部署"下界对所有地图一律生效。
     /// </para>
-    /// 棋盘档（board-map D1 / D8）只定 4 人（250–1000 / 出生区恰 5 个 / 单区 25–49 / 信物 7–20，估值）。
+    /// 棋盘档（board-map D1 / D8、board-isolated-gen D4）定 2 / 3 / 4 人（4 人 250–1000 / 出生区恰 5 个 / 信物 7–25；3 人 190–750 / 4 个 / 5–20；
+    /// 2 人 125–500 / 3 个 / 4–15；单区一律 25–49；估值）：出生区数 = 人数 + 1。
     /// 外接尺寸区间与棋盘清单的处理方式同样是声明行的字段：标准档与边疆档宽度至多 25 列（列标只用单个字母，frontier-map 裁决 7）、行数不限、清单必须为空；
-    /// 棋盘档列数与行数各 20–50（2026-09-29 裁决：尺寸按摆放结果裁出）、清单不得为空，并按清单规则逐块校验棋盘与通道。
-    /// 各档共用、不在表里的规则：必死口袋、桥在深水、栅栏在邻格、到中央入口可达、信物格合法、保护期容量、目标不可达。
+    /// 棋盘档列数与行数各 15–60（尺寸按摆放结果裁出）、清单不得为空，并按清单规则逐块校验棋盘、棋盘之外不得有可落子格。
+    /// 可达性三项也是声明行的字段（board-isolated-gen D4：棋盘档的棋盘互不连通，不可达是常态）：
+    /// 目标不可达是否拒绝、出生区到中央入口必须有通路、必须标注咽喉——标准档与边疆档三项都要求，棋盘档三项都豁免（距离只报告，不可达记为"不可达"）。
+    /// 各档共用、不在表里的规则：必死口袋、桥在深水、栅栏在邻格、信物格合法、保护期容量。
     /// 旋转对称不在校验器里（<see cref="MapSymmetry"/> 只由标准档基准图的测试调用）。
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
@@ -105,7 +108,8 @@ public static class MapValidator
                 DistanceHandling.RejectOnImbalance,
                 ColumnRange: (0, 25),
                 RowRange: null,
-                PlateList: null),
+                PlateList: null,
+                Reach: new(true, true, true)),
             [MapProfile.Frontier] = new(
                 "边疆档验证版只提供 4 人的预算表，2 / 3 人边疆图尚未设计",
                 new Dictionary<int, Budget>
@@ -116,21 +120,25 @@ public static class MapValidator
                 DistanceHandling.AlwaysReport,
                 ColumnRange: (0, 25),
                 RowRange: null,
-                PlateList: null),
+                PlateList: null,
+                Reach: new(true, true, true)),
             [MapProfile.Board] = new(
-                "棋盘档只提供 4 人的预算表，2 / 3 人棋盘图尚未设计",
+                "棋盘档只提供 2 / 3 / 4 人的预算表",
                 new Dictionary<int, Budget>
                 {
-                    [4] = new(250, 1000, 7, 20, (5, 5), (25, 49)),
+                    [2] = new(125, 500, 4, 15, (3, 3), (25, 49)),
+                    [3] = new(190, 750, 5, 20, (4, 4), (25, 49)),
+                    [4] = new(250, 1000, 7, 25, (5, 5), (25, 49)),
                 }.ToImmutableDictionary(),
                 ZonesMustExceedPlayers: true,
                 DistanceHandling.AlwaysReport,
-                ColumnRange: (20, 50),
-                RowRange: (20, 50),
-                PlateList: new((5, 15), (5, 7), MinGap: 2, CorridorWidth: (3, 4), CorridorLength: (2, 4))),
+                ColumnRange: (15, 60),
+                RowRange: (15, 60),
+                PlateList: new((7, 15), (5, 7), MinGap: 2),
+                Reach: new(false, false, false)),
         }.ToImmutableDictionary();
 
-    /// <summary>距离均衡（规则第 1 条）的处理方式。目标不可达不在此列——两档都拒绝。</summary>
+    /// <summary>距离均衡（规则第 1 条）的极差处理方式。目标不可达不在此列——由声明行的可达性字段决定（标准 / 边疆拒绝，棋盘档只报告）。</summary>
     private enum DistanceHandling
     {
         /// <summary>极差超容差即拒绝；不超则无输出。</summary>
@@ -151,18 +159,22 @@ public static class MapValidator
         DistanceHandling Distance,
         (int Min, int Max) ColumnRange,
         (int Min, int Max)? RowRange,
-        PlateRules? PlateList);
+        PlateRules? PlateList,
+        Reachability Reach);
 
     /// <summary>
-    /// 棋盘清单规则（board-map「棋盘档预算与校验」第 1–7 条的数值）：棋盘边长区间、出生棋盘边长区间、棋盘两两的最小间隔、
-    /// 通道的宽度区间与长度区间。
+    /// 可达性三项的处理（board-isolated-gen D4）：目标不可达即拒绝（否则报告项里记"不可达"）、
+    /// 每个出生区必须有沿气边到中央入口的通路（规则第 7 条）、必须显式标注咽喉。
+    /// </summary>
+    private readonly record struct Reachability(bool RejectUnreachableTargets, bool RequireEntrancePath, bool RequireChokes);
+
+    /// <summary>
+    /// 棋盘清单规则（「棋盘档预算与校验」第 1–4 条的数值）：公共棋盘边长区间、出生棋盘边长区间、棋盘两两的最小间隔。
     /// </summary>
     private sealed record PlateRules(
-        (int Min, int Max) Side,
+        (int Min, int Max) PublicSide,
         (int Min, int Max) BirthSide,
-        int MinGap,
-        (int Min, int Max) CorridorWidth,
-        (int Min, int Max) CorridorLength);
+        int MinGap);
 
     /// <summary>一档人数的规模预算。</summary>
     private readonly record struct Budget(
@@ -208,11 +220,16 @@ public static class MapValidator
         ValidateBudgets(map, rules, budget, f);
         ValidateBirthZones(map, budget, f);
         ValidateRelicCells(map, f);
-        ValidateLandmarks(map, f);
+        Reachability reach = rules.Reach;
+        ValidateLandmarks(map, reach.RequireChokes, f);
         ValidateTolerance(map, f);
         ValidatePockets(map, f);
-        ValidateBirthZoneConnectivity(map, f);
-        ValidateDistanceBalance(map, rules.Distance, f);
+        if (reach.RequireEntrancePath)
+        {
+            ValidateBirthZoneConnectivity(map, f);
+        }
+
+        ValidateDistanceBalance(map, rules.Distance, reach.RejectUnreachableTargets, f);
 
         return new MapValidationResult(f.ToImmutable());
     }
@@ -270,8 +287,8 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 棋盘清单（board-map「棋盘清单」「棋盘档预算与校验」第 1–7 条）。<paramref name="declared"/> 为 <c>null</c> 的档清单必须为空；
-    /// 否则清单不得为空，并逐块校验棋盘、逐条校验通道。返回 <c>false</c> 表示清单与该档根本不符，后面的规则不必再跑。
+    /// 棋盘清单（board-map「棋盘清单」「棋盘档预算与校验」第 1–5 条）。<paramref name="declared"/> 为 <c>null</c> 的档清单必须为空；
+    /// 否则清单不得为空，并逐块校验棋盘、检查棋盘之外没有可落子格。返回 <c>false</c> 表示清单与该档根本不符，后面的规则不必再跑。
     /// </summary>
     private static bool ValidatePlateList(MapData map, PlateRules? declared, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -300,8 +317,7 @@ public static class MapValidator
         ValidatePlateGaps(map, plates, f);
         ValidateBirthPlates(map, f);
         ValidateFlatScenery(map, owner, f);
-        ValidateCorridors(map, plates, owner, f);
-        ValidatePlateConnectivity(map, owner, f);
+        ValidateSceneryCells(map, owner, f);
         return true;
     }
 
@@ -316,7 +332,7 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 第 1、2 条：棋盘在盘内、边长在区间内，外接矩形内每一格都是 h=0 草地的可落子格。
+    /// 第 1、2 条：棋盘在盘内、边长在区间内（公共 / 出生各自的区间），外接矩形内每一格都是 h=0 草地的可落子格。
     /// 返回"格 → 所属棋盘下标"的表（不属于任何棋盘为 −1；重叠时取清单里靠前的一块，重叠本身由间隔规则报出）。
     /// </summary>
     private static int[,] ValidatePlateCells(MapData map, PlateRules plates, ImmutableArray<MapValidationFailure>.Builder f)
@@ -330,13 +346,13 @@ public static class MapValidator
         for (int i = 0; i < map.Boards.Length; i++)
         {
             BoardPlate plate = map.Boards[i];
-            (int Min, int Max) side = plate.Kind == BoardPlateKind.Birth ? plates.BirthSide : plates.Side;
+            bool birth = plate.Kind == BoardPlateKind.Birth;
+            (int Min, int Max) side = birth ? plates.BirthSide : plates.PublicSide;
             if (plate.Width < side.Min || plate.Width > side.Max || plate.Height < side.Min || plate.Height > side.Max)
             {
-                string birth = plate.Kind == BoardPlateKind.Birth ? $"，出生棋盘 {plates.BirthSide.Min}–{plates.BirthSide.Max}" : string.Empty;
                 f.Add(new MapValidationFailure(
                     "BOARD_SIZE_OUT_OF_RANGE",
-                    $"{Describe(plate)} 的宽与高必须各在合法边长 {plates.Side.Min}–{plates.Side.Max} 之内{birth}。",
+                    $"{Describe(plate)} 的宽与高必须各在{(birth ? "出生" : "公共")}棋盘的合法边长 {side.Min}–{side.Max} 之内。",
                     [plate.Origin]));
             }
 
@@ -450,7 +466,7 @@ public static class MapValidator
         }
     }
 
-    /// <summary>第 6、7 条：全图不得有深水；信物格必须在棋盘内（通道格不得是信物格）。</summary>
+    /// <summary>第 4、5 条：全图不得有深水；信物格必须在棋盘内。</summary>
     private static void ValidateFlatScenery(MapData map, int[,] owner, ImmutableArray<MapValidationFailure>.Builder f)
     {
         ImmutableArray<Coord> water = [.. map.AllCoords().Where(c => map.SurfaceAt(c) == Surface.DeepWater)];
@@ -458,7 +474,7 @@ public static class MapValidator
         {
             f.Add(new MapValidationFailure(
                 "BOARD_MAP_DEEP_WATER",
-                "棋盘档地图不得含深水格（含架了桥的）：棋盘与通道之外的格子必须全部是障碍格。",
+                "棋盘档地图不得含深水格（含架了桥的）：棋盘之外的格子必须全部是障碍格。",
                 water));
         }
 
@@ -469,193 +485,23 @@ public static class MapValidator
         if (!strayRelics.IsEmpty)
         {
             f.Add(new MapValidationFailure(
-                "RELIC_OUTSIDE_BOARD", "信物格必须位于棋盘内，通道格不得是信物格。", strayRelics));
+                "RELIC_OUTSIDE_BOARD", "信物格必须位于棋盘内。", strayRelics));
         }
     }
 
     /// <summary>
-    /// 第 4、6 条：不属于任何棋盘的可落子格按几何四邻分组。一组不挨任何棋盘 → 场景里的可落子格；
-    /// 否则它是一条通道，必须是填满的直条、两端各贴一块棋盘（两块不同）、侧面不贴棋盘，宽与长各在区间内，格子高度为 0。
+    /// 第 4 条：不属于任何棋盘的格子必须全部是障碍格（board-isolated-gen：取消通道，棋盘之间只隔场景）。
+    /// 棋盘外的可落子格一律拒绝，一条拒绝项列出全部这样的格（坐标序）——由此不同棋盘的格子之间不存在四邻接。
     /// </summary>
-    private static void ValidateCorridors(MapData map, PlateRules plates, int[,] owner, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateSceneryCells(MapData map, int[,] owner, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        bool Loose(int x, int y) =>
-            x >= 0 && y >= 0 && x < map.Width && y < map.Height && owner[x, y] < 0 && map.IsPlayable(new Coord(x, y));
-
-        int PlateAt(int x, int y) => x >= 0 && y >= 0 && x < map.Width && y < map.Height ? owner[x, y] : -1;
-
-        var seen = new bool[Math.Max(0, map.Width), Math.Max(0, map.Height)];
-        foreach (Coord start in map.AllCoords())
+        ImmutableArray<Coord> loose = [.. map.AllCoords().Where(c => owner[c.X, c.Y] < 0 && map.IsPlayable(c)).Order()];
+        if (!loose.IsEmpty)
         {
-            if (seen[start.X, start.Y] || !Loose(start.X, start.Y))
-            {
-                continue;
-            }
-
-            var cells = new List<Coord>();
-            var queue = new Queue<Coord>();
-            queue.Enqueue(start);
-            seen[start.X, start.Y] = true;
-            while (queue.Count > 0)
-            {
-                Coord current = queue.Dequeue();
-                cells.Add(current);
-                foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, current))
-                {
-                    if (!seen[n.X, n.Y] && Loose(n.X, n.Y))
-                    {
-                        seen[n.X, n.Y] = true;
-                        queue.Enqueue(n);
-                    }
-                }
-            }
-
-            ImmutableArray<Coord> group = [.. cells.Order()];
-            bool touchesPlate = group.Any(c =>
-                PlateAt(c.X - 1, c.Y) >= 0 || PlateAt(c.X + 1, c.Y) >= 0 || PlateAt(c.X, c.Y - 1) >= 0 || PlateAt(c.X, c.Y + 1) >= 0);
-            if (!touchesPlate)
-            {
-                f.Add(new MapValidationFailure(
-                    "SCENERY_CELL_PLAYABLE",
-                    "棋盘之外有既不属于任何通道也不是障碍的可落子格：不属于棋盘与通道的格子必须全部是障碍格。",
-                    group));
-                continue;
-            }
-
-            ImmutableArray<Coord> sloped = [.. group.Where(c => map.HeightAt(c) != 0)];
-            if (!sloped.IsEmpty)
-            {
-                f.Add(new MapValidationFailure(
-                    "CORRIDOR_CELL_NOT_FLAT", "通道格的高度必须为 0。", sloped));
-            }
-
-            int x0 = group.Min(c => c.X);
-            int x1 = group.Max(c => c.X);
-            int y0 = group.Min(c => c.Y);
-            int y1 = group.Max(c => c.Y);
-            int w = x1 - x0 + 1;
-            int h = y1 - y0 + 1;
-            if (group.Length != w * h)
-            {
-                f.Add(new MapValidationFailure(
-                    "CORRIDOR_NOT_STRAIGHT", "通道必须是一条直条（填满的矩形），中途不得分叉、拐弯或与别的通道相邻。", group));
-                continue;
-            }
-
-            // 一端"整端贴着同一块棋盘"：该端每一格的外侧邻格都属于同一块棋盘；返回其下标，否则 −1。
-            int End(bool horizontal, bool low)
-            {
-                int found = -1;
-                for (int k = 0; k < (horizontal ? h : w); k++)
-                {
-                    int plate = horizontal
-                        ? PlateAt(low ? x0 - 1 : x1 + 1, y0 + k)
-                        : PlateAt(x0 + k, low ? y0 - 1 : y1 + 1);
-                    if (plate < 0 || (found >= 0 && plate != found))
-                    {
-                        return -1;
-                    }
-
-                    found = plate;
-                }
-
-                return found;
-            }
-
-            // 一侧"完全不贴棋盘"。
-            bool Clear(bool horizontal, bool low)
-            {
-                for (int k = 0; k < (horizontal ? h : w); k++)
-                {
-                    int plate = horizontal
-                        ? PlateAt(low ? x0 - 1 : x1 + 1, y0 + k)
-                        : PlateAt(x0 + k, low ? y0 - 1 : y1 + 1);
-                    if (plate >= 0)
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-
-            bool Joins(bool horizontal)
-            {
-                int a = End(horizontal, low: true);
-                int b = End(horizontal, low: false);
-                return a >= 0 && b >= 0 && a != b && Clear(!horizontal, low: true) && Clear(!horizontal, low: false);
-            }
-
-            bool alongRow = Joins(horizontal: true);
-            if (!alongRow && !Joins(horizontal: false))
-            {
-                f.Add(new MapValidationFailure(
-                    "CORRIDOR_ENDS_INVALID",
-                    "通道必须恰与两块不同的棋盘相邻：两端各贴一块棋盘，侧面不得贴着棋盘。",
-                    group));
-                continue;
-            }
-
-            int length = alongRow ? w : h;
-            int width = alongRow ? h : w;
-            if (width < plates.CorridorWidth.Min || width > plates.CorridorWidth.Max)
-            {
-                f.Add(new MapValidationFailure(
-                    width > plates.CorridorWidth.Max ? "CORRIDOR_TOO_WIDE" : "CORRIDOR_TOO_NARROW",
-                    $"通道宽 {width} 格，超出合法宽度 {plates.CorridorWidth.Min}–{plates.CorridorWidth.Max}。",
-                    group));
-            }
-
-            if (length < plates.CorridorLength.Min || length > plates.CorridorLength.Max)
-            {
-                f.Add(new MapValidationFailure(
-                    "CORRIDOR_LENGTH_OUT_OF_RANGE",
-                    $"通道长 {length} 格，超出合法长度 {plates.CorridorLength.Min}–{plates.CorridorLength.Max}。",
-                    group));
-            }
-        }
-    }
-
-    /// <summary>第 5 条：全部棋盘经通道沿气边连成一片。从清单第一块在盘内的棋盘出发，到不了的棋盘逐块报出。</summary>
-    private static void ValidatePlateConnectivity(MapData map, int[,] owner, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        var reachedPlates = new bool[map.Boards.Length];
-        int first = -1;
-        foreach (Coord c in map.AllCoords())
-        {
-            if (owner[c.X, c.Y] >= 0 && (first < 0 || owner[c.X, c.Y] < first))
-            {
-                first = owner[c.X, c.Y];
-            }
-        }
-
-        if (first < 0)
-        {
-            return;
-        }
-
-        int root = first;
-        Dictionary<Coord, int> dist = MultiSourceDistances(map, map.AllCoords().Where(c => owner[c.X, c.Y] == root));
-        foreach (Coord c in map.AllCoords())
-        {
-            if (owner[c.X, c.Y] >= 0 && dist.ContainsKey(c))
-            {
-                reachedPlates[owner[c.X, c.Y]] = true;
-            }
-        }
-
-        for (int i = 0; i < map.Boards.Length; i++)
-        {
-            BoardPlate plate = map.Boards[i];
-            bool inside = plate.Width > 0 && plate.Height > 0
-                && plate.Origin.X + plate.Width <= map.Width && plate.Origin.Y + plate.Height <= map.Height;
-            if (inside && i != root && !reachedPlates[i])
-            {
-                f.Add(new MapValidationFailure(
-                    "BOARD_ISOLATED",
-                    $"{Describe(plate)} 没有经通道与{Describe(map.Boards[root])} 沿气边连通：全部棋盘必须连成一片。",
-                    [plate.Origin]));
-            }
+            f.Add(new MapValidationFailure(
+                "SCENERY_CELL_PLAYABLE",
+                "棋盘之外有可落子格：不属于任何棋盘的格子必须全部是障碍格，棋盘之间不得相连。",
+                loose));
         }
     }
 
@@ -888,7 +734,8 @@ public static class MapValidator
         }
     }
 
-    private static void ValidateLandmarks(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    /// <summary>中央入口与咽喉格必须可落子；<paramref name="requireChokes"/> 为真时还必须显式标注咽喉（棋盘档豁免）。</summary>
+    private static void ValidateLandmarks(MapData map, bool requireChokes, ImmutableArray<MapValidationFailure>.Builder f)
     {
         if (map.TerrainAt(map.CentralEntrance) != Terrain.Playable)
         {
@@ -904,7 +751,7 @@ public static class MapValidator
                 "CHOKE_NOT_PLAYABLE", "标注的咽喉格必须位于可落子格上。", badChokes));
         }
 
-        if (map.ChokePoints.IsEmpty)
+        if (requireChokes && map.ChokePoints.IsEmpty)
         {
             f.Add(new MapValidationFailure(
                 "CHOKE_NOT_ANNOTATED",
@@ -1047,10 +894,12 @@ public static class MapValidator
     /// <summary>
     /// 距离均衡：各出生区到最近公共信物格、中央入口与主要咽喉的最短落子距离
     /// （沿气边——崖壁、栅栏、未架桥深水挡住的路不算路），两两差值不得超过容差。
-    /// 任一出生区到任一目标不可达：一律拒绝。极差：按 <paramref name="handling"/>——超容差即拒绝，或不论极差多少都把逐区距离作为报告项给出
-    /// （边疆档平台大小与远近本就不等，见规格档声明表）。
+    /// 任一出生区到任一目标不可达：<paramref name="rejectUnreachable"/> 为真即拒绝；为假（棋盘档：棋盘互不连通）时三类目标一律作为报告项给出，
+    /// 不可达记为"不可达"（本图没有的目标同样记"不可达"），不计极差。极差：按 <paramref name="handling"/>——超容差即拒绝，
+    /// 或不论极差多少都把逐区距离作为报告项给出（边疆档平台大小与远近本就不等，见规格档声明表）。
     /// </summary>
-    private static void ValidateDistanceBalance(MapData map, DistanceHandling handling, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateDistanceBalance(
+        MapData map, DistanceHandling handling, bool rejectUnreachable, ImmutableArray<MapValidationFailure>.Builder f)
     {
         if (map.BirthZones.IsDefaultOrEmpty)
         {
@@ -1059,7 +908,8 @@ public static class MapValidator
 
         foreach (BirthZoneDistance metric in DistanceTable(map))
         {
-            if (metric.Targets.IsDefaultOrEmpty)
+            bool noTargets = metric.Targets.IsDefaultOrEmpty;
+            if (noTargets && rejectUnreachable)
             {
                 continue;
             }
@@ -1069,11 +919,25 @@ public static class MapValidator
             {
                 if (metric.Distances[z] is null)
                 {
-                    f.Add(new MapValidationFailure(
-                        "LANDMARK_UNREACHABLE",
-                        $"{BirthZoneLabel.Of(z)} 无法到达{metric.Name}。", metric.Targets));
                     complete = false;
+                    if (rejectUnreachable)
+                    {
+                        f.Add(new MapValidationFailure(
+                            "LANDMARK_UNREACHABLE",
+                            $"{BirthZoneLabel.Of(z)} 无法到达{metric.Name}。", metric.Targets));
+                    }
                 }
+            }
+
+            if (!complete && !rejectUnreachable)
+            {
+                string partial = string.Join("，", metric.Distances.Select((d, z) => $"{BirthZoneLabel.Of(z)} = {(d is { } v ? v.ToString(System.Globalization.CultureInfo.InvariantCulture) : "不可达")}"));
+                string none = noTargets ? $"（本图没有{metric.Name}）" : string.Empty;
+                f.Add(new MapValidationFailure(
+                    "BIRTH_ZONE_DISTANCE_REPORT",
+                    $"各出生区到{metric.Name}的最短落子距离：{partial}{none}；有出生区不可达，不计极差（只报告，不因不可达拒绝）。",
+                    ImmutableArray<Coord>.Empty) { Severity = MapFindingSeverity.Report });
+                continue;
             }
 
             if (!complete)

@@ -6,12 +6,17 @@ using Siege.Sim.Running;
 
 namespace Siege.Core.Tests.MapGeneration;
 
-/// <summary>规格：openspec/changes/board-map/specs/map-generation —— Requirement: 棋盘档生成图标识</summary>
+/// <summary>规格：openspec/changes/board-isolated-gen/specs/map-generation —— Requirement: 棋盘档生成图标识</summary>
 /// <remarks>
 /// 变异验证（board-map 段 B 实跑，每条只跑本类）：
 /// M-B15 BoardMapId.Format 恒省略 :n 段 → 红 4：非缺省棋盘数保留；
 /// M-B16 MapCatalog 不再拒绝裸 board → 红 1：裸 board 不进规则内核；
 /// M-B17 Program.MaterializeMapRequest 把裸 board 原样返回 → 红 2：裸 board 不入记录、裸 board 不进规则内核。
+/// board-isolated-gen 段 A（只跑本类）：
+/// I1 Format 恒写 :p 段 → 红 8：人数段 ×2、非缺省棋盘数保留 ×3、标识往返、裸 board 两条；
+/// I2 Format 的 :n 省略判据改用 4 人缺省 7 → 红 2：人数段（p3 / p2 两行）；
+/// I3 Parse 接受 :n 在 :p 之前 → 红 1：非法标识（n7:p3）；
+/// I4 Parse 不查人数范围 → 红 3：非法标识（p5 / p1 / p7）。
 /// </remarks>
 [Collection(SimulationHarness.ConsoleRedirect.Collection)]
 public class 棋盘档生成图标识Tests
@@ -23,7 +28,7 @@ public class 棋盘档生成图标识Tests
         Assert.Equal("board:42", BoardMapId.Normalize("board:42:n7"));
         Assert.Equal("board:42", BoardMapId.Normalize(" board:42 "));
         Assert.Equal("board:42", BoardMapId.Format(42, BoardMapParameters.Default));
-        Assert.Equal((42UL, 7), (BoardMapId.Parse("board:42").MapSeed, BoardMapId.Parse("board:42").Parameters.BoardCount));
+        Assert.Equal((42UL, 4, 7), (BoardMapId.Parse("board:42").MapSeed, BoardMapId.Parse("board:42").Parameters.Players, BoardMapId.Parse("board:42").Parameters.BoardCount));
 
         Assert.Equal("board:42", BoardMapGenerator.Generate("board:42:n7").Id);
         Assert.Equal("board:42", MapCatalog.Resolve("board:42:n7").Id);
@@ -35,19 +40,39 @@ public class 棋盘档生成图标识Tests
     }
 
     [Theory]
-    [InlineData(8)]
-    [InlineData(9)]
-    [InlineData(10)]
-    public void 非缺省棋盘数保留(int boards)
+    [InlineData("board:42:p4:n9", "board:42:n9")]
+    [InlineData("board:42:p3:n6", "board:42:p3")]
+    [InlineData("board:42:p4", "board:42")]
+    [InlineData("board:42:p2:n5", "board:42:p2")]
+    public void 人数段(string given, string normalized)
     {
-        // Scenario：把 board:42:n9 规范化 → board:42:n9。
-        string id = $"board:42:n{boards}";
+        // Scenario：把 board:42:p4:n9 与 board:42:p3:n6 规范化 → 分别得到 board:42:n9 与 board:42:p3（4 人省略 :p、该人数的缺省棋盘数省略 :n）。
+        Assert.Equal(normalized, BoardMapId.Normalize(given));
+        (ulong seed, BoardMapParameters parameters) = BoardMapId.Parse(given);
+        Assert.Equal(normalized, BoardMapId.Format(seed, parameters));
+        MapData map = MapCatalog.Resolve(given);
+        Assert.Equal(normalized, map.Id);
+        Assert.Equal(parameters.Players, map.MaxPlayers);
+    }
+
+    [Theory]
+    [InlineData(4, 8)]
+    [InlineData(4, 9)]
+    [InlineData(4, 10)]
+    [InlineData(3, 5)]
+    [InlineData(3, 8)]
+    [InlineData(2, 4)]
+    public void 非缺省棋盘数保留(int players, int boards)
+    {
+        // Scenario：非缺省棋盘数保留，如 board:42:p2:n4 → board:42:p2:n4（4 人：board:42:n9 → board:42:n9）。
+        // 规格原例 board:42:p2:n6 随 2 人收窄为 4–5 成了非法标识（见 非法标识 的 p2:n6 行）。
+        string id = players == 4 ? $"board:42:n{boards}" : $"board:42:p{players}:n{boards}";
 
         Assert.Equal(id, BoardMapId.Normalize(id));
-        Assert.Equal(boards, BoardMapId.Parse(id).Parameters.BoardCount);
-        Assert.Equal(id, BoardMapId.Format(42, new BoardMapParameters { BoardCount = boards }));
+        Assert.Equal((players, boards), (BoardMapId.Parse(id).Parameters.Players, BoardMapId.Parse(id).Parameters.BoardCount));
+        Assert.Equal(id, BoardMapId.Format(42, new BoardMapParameters { Players = players, BoardCount = boards }));
         MapData map = MapCatalog.Resolve(id);
-        Assert.Equal((id, boards), (map.Id, map.Boards.Length));
+        Assert.Equal((id, boards, players), (map.Id, map.Boards.Length, map.MaxPlayers));
     }
 
     [Theory]
@@ -55,10 +80,20 @@ public class 棋盘档生成图标识Tests
     [InlineData("board:42:n11")]
     [InlineData("board:42:n6")]
     [InlineData("board:42:n5")]
+    [InlineData("board:42:p5")]
+    [InlineData("board:42:p1")]
+    [InlineData("board:42:p7")]
+    [InlineData("board:42:n7:p3")]
+    [InlineData("board:42:p3:p3")]
+    [InlineData("board:42:p3:n9")]
+    [InlineData("board:42:p2:n3")]
+    [InlineData("board:42:p2:n6")]
+    [InlineData("board:42:p3:n6:n6")]
+    [InlineData("board:42:p")]
+    [InlineData("board:42:p+3")]
     [InlineData("board:")]
     [InlineData("board:42:")]
     [InlineData("board:42:n")]
-    [InlineData("board:42:p7")]
     [InlineData("board:42:n7:n7")]
     [InlineData("board:42:n7:s1")]
     [InlineData("board:-1")]
@@ -69,21 +104,27 @@ public class 棋盘档生成图标识Tests
     [InlineData("Board:42")]
     public void 非法标识(string id)
     {
-        // Scenario：请求地图 board:abc 或 board:42:n11 → 报错并给出标识格式与棋盘数范围 7–10。
+        // Scenario：请求地图 board:abc、board:42:n11、board:42:p5 或 board:42:n7:p3 → 报错并给出标识格式、合法人数与该人数的棋盘数范围。
         FormatException parse = Assert.Throws<FormatException>(() => BoardMapId.Parse(id));
-        Assert.Contains("board:<地图种子>[:n<棋盘数>]", parse.Message, StringComparison.Ordinal);
-        Assert.Contains("7–10", parse.Message, StringComparison.Ordinal);
+        AssertHelp(parse.Message);
 
         if (BoardMapId.IsBoardMap(id))
         {
-            FormatException resolve = Assert.Throws<FormatException>(() => MapCatalog.Resolve(id));
-            Assert.Contains("board:<地图种子>[:n<棋盘数>]", resolve.Message, StringComparison.Ordinal);
-            Assert.Contains("7–10", resolve.Message, StringComparison.Ordinal);
+            AssertHelp(Assert.Throws<FormatException>(() => MapCatalog.Resolve(id)).Message);
 
             // 入口：报错退出，不回落到缺省地图。
             (int code, _, string err) = RunMain("map", "--map", id);
             Assert.Equal(1, code);
-            Assert.Contains("7–10", err, StringComparison.Ordinal);
+            AssertHelp(err);
+        }
+
+        static void AssertHelp(string message)
+        {
+            Assert.Contains("board:<地图种子>[:p<人数>][:n<棋盘数>]", message, StringComparison.Ordinal);
+            Assert.Contains("合法人数 2–4", message, StringComparison.Ordinal);
+            Assert.Contains("4 人 7–10", message, StringComparison.Ordinal);
+            Assert.Contains("3 人 5–8", message, StringComparison.Ordinal);
+            Assert.Contains("2 人 4–5", message, StringComparison.Ordinal);
         }
     }
 
@@ -158,7 +199,8 @@ public class 棋盘档生成图标识Tests
     public void 未知标识的可用清单里说明棋盘图写法()
     {
         FileNotFoundException unknown = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve("no-such-map"));
-        Assert.Contains("board:<地图种子>", unknown.Message, StringComparison.Ordinal);
+        Assert.Contains("board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]", unknown.Message, StringComparison.Ordinal);
+        Assert.Contains("4 人 7–10", unknown.Message, StringComparison.Ordinal);
         Assert.Contains("gen:<地图种子>", unknown.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(MapCatalog.BuiltinIds, BoardMapId.IsBoardMap);
         Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.DefaultId);   // 缺省地图不变（design D9）

@@ -8,14 +8,24 @@ using Siege.Core.Determinism;
 namespace Siege.Core.Tests.MapGeneration;
 
 /// <summary>
-/// 规格：openspec/changes/board-map/specs/map-generation —— Requirement: 棋盘档生成参数
+/// 规格：openspec/changes/board-isolated-gen/specs/map-generation —— Requirement: 棋盘档生成参数
 /// （含「地图种子与确定性」「校验闭环」对棋盘档生成同样生效的部分）。规范：.trellis/spec/core/determinism.md。
 /// </summary>
 /// <remarks>
 /// 变异验证（board-map 段 B 实跑，每条只跑本类）：
 /// M-B10 MapRandom.ForBoardAttempt 改用边疆档的派生式（Mix(种子) ^ Mix(序号 ^ AttemptDomain)）→ 红 2：随机序列互不相同、黄金值；
 /// M-B12 边疆档域常量 AttemptDomain 末位 D → E → 红 1：边疆档生成图不变；
-/// M-B13 BoardMapLayout.Corridors 里加一个 `new HashSet&lt;int&gt;` → 红 1：源码守门。
+/// M-B13 BoardMapLayout 里加一个 `new HashSet&lt;int&gt;` → 红 1：源码守门。
+/// board-isolated-gen 段 A（只跑本类，红数按 Theory 行计）：
+/// P1 MaxBoardsFor 上限 +1 → 红 8：棋盘数越界 ×3、棋盘数下限随人数 ×4、缺省参数 ×1；
+/// P2 MinBoardsFor 对 2 / 3 人也取"出生 + 2" → 红 8：棋盘数下限随人数 ×4、棋盘数决定公共棋盘数 ×2、图面不留多余空白、校验闭环；
+/// P3 不给棋盘数时恒取 4 人缺省 7 → 红 2：按人数的缺省棋盘数 ×2；
+/// P4 裁切留白 2 → 3 → 红 1：图面不留多余空白（只跑该测试）；
+/// 2 人收窄为 4–5 后重跑：P1 红 9（多了 二人棋盘数6越界）、P2 红 9（同上）、P3 红 2、P4 红 1；
+/// P6 MapRandom.ForBoardAttempt 去掉人数一项 → 红 7：同种子不同人数的公共棋盘互不相同 ×5、随机序列互不相同、黄金值；
+/// R1 重抽上限 MaxSizeDraws 200 → 1（等于不重抽）：2 人 n6 删除后本类 0 红（各档在 64 次尝试内仍能抽成），
+/// 改由 棋盘档布局规则Tests.边长整组重抽 守住 → 红 3；
+/// P7 2 人公共棋盘上限改回 3（棋盘数上限 6）→ 红 3：二人棋盘数6越界、棋盘数下限随人数（2 人两行，报文区间变成 4–6）。
 /// </remarks>
 public class 棋盘档生成参数Tests
 {
@@ -27,72 +37,124 @@ public class 棋盘档生成参数Tests
     [Theory]
     [InlineData(11)]
     [InlineData(6)]
-    [InlineData(5)]
     [InlineData(0)]
     public void 棋盘数越界(int boards)
     {
-        // Scenario：请求棋盘数 11 → 报错并指出合法范围 7–10；不静默夹取。
+        // Scenario：请求 4 人、棋盘数 11 → 报错并指出 4 人的合法范围 7–10；不静默夹取。
         var parameters = new BoardMapParameters { BoardCount = boards };
 
         ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapGenerator.Generate(1, parameters));
 
-        Assert.Contains("7–10", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("4 人 7–10", ex.Message, StringComparison.Ordinal);
         Assert.Throws<ArgumentOutOfRangeException>(parameters.EnsureValid);
+        Assert.Contains("4 人 7–10", Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapId.Format(1, parameters)).Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(2, 3, "2 人 4–5")]
+    [InlineData(2, 7, "2 人 4–5")]
+    [InlineData(3, 4, "3 人 5–8")]
+    [InlineData(3, 9, "3 人 5–8")]
+    public void 棋盘数下限随人数(int players, int boards, string range)
+    {
+        // Scenario：请求 2 人、棋盘数 3 → 报错并指出 2 人的合法范围 4–5（3 人同理 5–8）。标识入口同样报出。
+        var parameters = new BoardMapParameters { Players = players, BoardCount = boards };
+
+        Assert.Contains(range, Assert.Throws<ArgumentOutOfRangeException>(parameters.EnsureValid).Message, StringComparison.Ordinal);
+        Assert.Contains(range, Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapGenerator.Generate(1, parameters)).Message, StringComparison.Ordinal);
+        string id = $"board:1:p{players}:n{boards}";
+        Assert.Contains(range, Assert.Throws<FormatException>(() => BoardMapId.Parse(id)).Message, StringComparison.Ordinal);
+        Assert.Contains(range, Assert.Throws<FormatException>(() => MapCatalog.Resolve(id)).Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void 棋盘数6不再合法()
+    public void 二人棋盘数6越界()
     {
-        // Scenario：请求棋盘数 6 的棋盘图 → 报错并指出合法范围 7–10。
-        // 2026-09-29 裁决：6 块时唯一的公共棋盘需要 5 条通道，与"每块棋盘 1–4 条"矛盾，下限提到 7。
-        // 变异 M-B2b-2（段 B 修正实跑）：MinBoards 改回 6 → 本测试红。
-        Assert.Equal((7, 10), (BoardMapParameters.MinBoards, BoardMapParameters.MaxBoards));
-        var parameters = new BoardMapParameters { BoardCount = 6 };
+        // 主会话裁决（2026-10-06）：2 人合法棋盘数收窄为 4–5（公共棋盘 1–2 块）。请求 2 人、棋盘数 6 → 报错并指出 2 人的合法范围 4–5。
+        // 变异 P7（2 人公共棋盘上限改回 3，即棋盘数上限 6）→ 本测试红（连同 棋盘数下限随人数 2 人两行共红 3）。
+        var parameters = new BoardMapParameters { Players = 2, BoardCount = 6 };
 
-        Assert.Contains("7–10", Assert.Throws<ArgumentOutOfRangeException>(parameters.EnsureValid).Message, StringComparison.Ordinal);
-        Assert.Contains("7–10", Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapGenerator.Generate(1, parameters)).Message, StringComparison.Ordinal);
-        Assert.Contains("7–10", Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapId.Format(1, parameters)).Message, StringComparison.Ordinal);
-        Assert.Contains("7–10", Assert.Throws<FormatException>(() => BoardMapId.Parse("board:1:n6")).Message, StringComparison.Ordinal);
-        Assert.Contains("7–10", Assert.Throws<FormatException>(() => BoardMapGenerator.Generate("board:1:n6")).Message, StringComparison.Ordinal);
-        Assert.Contains("7–10", Assert.Throws<FormatException>(() => MapCatalog.Resolve("board:1:n6")).Message, StringComparison.Ordinal);
+        Assert.Contains("2 人 4–5", Assert.Throws<ArgumentOutOfRangeException>(parameters.EnsureValid).Message, StringComparison.Ordinal);
+        Assert.Contains("2 人 4–5", Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapGenerator.Generate(1, parameters)).Message, StringComparison.Ordinal);
+        Assert.Contains("2 人 4–5", Assert.Throws<FormatException>(() => BoardMapId.Parse("board:1:p2:n6")).Message, StringComparison.Ordinal);
+        Assert.Contains("2 人 4–5", Assert.Throws<FormatException>(() => MapCatalog.Resolve("board:1:p2:n6")).Message, StringComparison.Ordinal);
+        Assert.Equal(5, new BoardMapParameters { Players = 2, BoardCount = 5 }.BoardCount);   // 上限 5 本身合法
+        new BoardMapParameters { Players = 2, BoardCount = 5 }.EnsureValid();
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(1)]
+    [InlineData(0)]
+    public void 人数越界(int players)
+    {
+        // Scenario：请求 5 人或 1 人的棋盘图 → 报错并指出合法人数 2–4。
+        var parameters = new BoardMapParameters { Players = players };
+
+        Assert.Contains("合法人数 2–4", Assert.Throws<ArgumentOutOfRangeException>(parameters.EnsureValid).Message, StringComparison.Ordinal);
+        Assert.Contains("合法人数 2–4", Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapGenerator.Generate(1, parameters)).Message, StringComparison.Ordinal);
+        Assert.Contains("合法人数 2–4", Assert.Throws<FormatException>(() => BoardMapId.Parse($"board:1:p{players}")).Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void 缺省棋盘数()
+    public void 缺省参数()
     {
-        // Scenario：只给地图种子、不给棋盘数 → 恰有 7 块棋盘，出生 5、公共 2；人数 4、规格档为棋盘档。
+        // Scenario：只给地图种子、不给人数与棋盘数 → 4 人图，恰有 7 块棋盘，其中出生棋盘 5 块、公共棋盘 2 块；规格档为棋盘档。
         MapData map = BoardMapGenerator.Generate(3);
 
         Assert.Equal(7, map.Boards.Length);
         Assert.Equal(5, map.Boards.Count(b => b.Kind == BoardPlateKind.Birth));
         Assert.Equal(2, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
         Assert.Equal((4, MapProfile.Board, 5), (map.MaxPlayers, map.Profile, map.BirthZones.Length));
-        Assert.Equal((7, 5, 2), (BoardMapParameters.DefaultBoards, BoardMapParameters.BirthBoards, BoardMapParameters.Default.PublicBoards));
+        Assert.Equal((4, 7, 5, 2), (BoardMapParameters.Default.Players, BoardMapParameters.Default.BoardCount, BoardMapParameters.Default.BirthBoards, BoardMapParameters.Default.PublicBoards));
+        Assert.Equal((7, 10, 7), (BoardMapParameters.MinBoards, BoardMapParameters.MaxBoards, BoardMapParameters.DefaultBoards));   // 4 人常量与按人数的查询一致
+        Assert.Equal((7, 10, 7), (BoardMapParameters.MinBoardsFor(4), BoardMapParameters.MaxBoardsFor(4), BoardMapParameters.DefaultBoardsFor(4)));
     }
 
     [Theory]
-    [InlineData(7)]
-    [InlineData(8)]
-    [InlineData(9)]
-    [InlineData(10)]
-    public void 棋盘数决定公共棋盘数(int boards)
+    [InlineData(3, 6, 4, 2)]   // Scenario「3 人缺省」：6 块，出生 4、公共 2
+    [InlineData(2, 5, 3, 2)]
+    public void 按人数的缺省棋盘数(int players, int boards, int births, int publics)
     {
-        MapData map = BoardGenFixtures.Generated(2, boards).Map;
+        // Scenario：给地图种子与人数 3、不给棋盘数 → 恰有 6 块棋盘，其中出生棋盘 4 块、公共棋盘 2 块。地图的人数上限 = 3。
+        var parameters = new BoardMapParameters { Players = players };
+        MapData map = BoardMapGenerator.Generate(3, parameters);
+
+        Assert.Equal(boards, parameters.BoardCount);
+        Assert.Equal(boards, map.Boards.Length);
+        Assert.Equal(births, map.Boards.Count(b => b.Kind == BoardPlateKind.Birth));
+        Assert.Equal(publics, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
+        Assert.Equal((players, births), (map.MaxPlayers, map.BirthZones.Length));
+        Assert.Equal($"board:3:p{players}", map.Id);
+    }
+
+    [Theory]
+    [InlineData(4, 7)]
+    [InlineData(4, 10)]
+    [InlineData(3, 5)]
+    [InlineData(3, 8)]
+    [InlineData(2, 4)]
+    [InlineData(2, 5)]
+    public void 棋盘数决定公共棋盘数(int players, int boards)
+    {
+        // 出生棋盘数 = 人数 + 1，公共棋盘数 = 棋盘数 − 出生棋盘数（测试内独立算式）；区间两端都取。
+        MapData map = BoardGenFixtures.Generated(2, boards, players).Map;
 
         Assert.Equal(boards, map.Boards.Length);
-        Assert.Equal(5, map.Boards.Count(b => b.Kind == BoardPlateKind.Birth));
-        Assert.Equal(boards - 5, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
+        Assert.Equal(players + 1, map.Boards.Count(b => b.Kind == BoardPlateKind.Birth));
+        Assert.Equal(boards - players - 1, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
+        Assert.Equal(players, map.MaxPlayers);
     }
 
     [Theory]
-    [InlineData(1UL, 8)]
-    [InlineData(12345UL, 7)]
-    [InlineData(987654321UL, 9)]
-    [InlineData(18446744073709551615UL, 10)]
-    public void 同种子同图(ulong seed, int boards)
+    [InlineData(1UL, 4, 8)]
+    [InlineData(12345UL, 4, 7)]
+    [InlineData(987654321UL, 3, 6)]
+    [InlineData(18446744073709551615UL, 2, 5)]
+    public void 同种子同图(ulong seed, int players, int boards)
     {
-        // Scenario：同一地图种子与棋盘数生成两次 → 尺寸、棋盘清单与全部格子逐项相同。两次都不走缓存。
-        var parameters = new BoardMapParameters { BoardCount = boards };
+        // Scenario：同一地图种子、人数与棋盘数生成两次 → 尺寸、棋盘清单与全部格子逐项相同。两次都不走缓存。
+        var parameters = new BoardMapParameters { Players = players, BoardCount = boards };
         GeneratedBoardMap first = BoardMapGenerator.GenerateDetailed(seed, parameters);
         GeneratedBoardMap second = BoardMapGenerator.GenerateDetailed(seed, parameters);
 
@@ -108,32 +170,32 @@ public class 棋盘档生成参数Tests
     [Fact]
     public void 图面不留多余空白()
     {
-        // Scenario：检查任一棋盘档生成图 → 最靠外的棋盘或通道格到地图四条外缘的距离都恰为 2 格。
-        // 「地图外接尺寸由摆放结果决定：取全部棋盘与通道的实际外接范围，四周各留 2 格场景，列数与行数各自独立、各在 20–50」。
-        // 断言从地图数据反推：可落子格（棋盘 + 通道）的外接范围，不读生成器的工作态。
-        // 变异 M-B2b-1（段 B 修正实跑）：裁切留白 2 → 3 → 本测试红。
+        // Scenario：检查任一棋盘档生成图 → 最靠外的棋盘格到地图四条外缘的距离都恰为 2 格。
+        // 「地图外接尺寸由摆放结果决定：取全部棋盘的实际外接范围，四周各留 2 格场景，列数与行数各自独立、各在 15–60」。
+        // 断言从地图数据反推：可落子格的外接范围，不读生成器的工作态。样本：全部 200 张。
         var widths = new SortedSet<int>();
         var heights = new SortedSet<int>();
         int nonSquare = 0;
-        foreach ((ulong seed, int boards) in BoardGenFixtures.Sample())
+        foreach ((ulong seed, int players, int boards) in BoardGenFixtures.Sample())
         {
-            MapData map = BoardGenFixtures.Generated(seed, boards).Map;
+            MapData map = BoardGenFixtures.Generated(seed, boards, players).Map;
+            string id = BoardGenFixtures.Label(seed, players, boards);
             Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
             Assert.Equal(map.PlayableCount, playable.Length);
             (int west, int south) = (playable.Min(c => c.X), playable.Min(c => c.Y));
             (int east, int north) = (map.Width - 1 - playable.Max(c => c.X), map.Height - 1 - playable.Max(c => c.Y));
             Assert.True(
                 (west, east, south, north) == (2, 2, 2, 2),
-                $"board:{seed}:n{boards}（{map.Width}×{map.Height}）到西 / 东 / 南 / 北外缘的距离为 {west} / {east} / {south} / {north}。");
+                $"{id}（{map.Width}×{map.Height}）到西 / 东 / 南 / 北外缘的距离为 {west} / {east} / {south} / {north}。");
 
-            // 棋盘的外接范围与"棋盘 + 通道"的外接范围相同：通道夹在两块棋盘之间，不会伸到最外面。
+            // 可落子格只有棋盘格：两种外接范围相同。
             Assert.Equal(
                 (2, 2, map.Width - 3, map.Height - 3),
                 (map.Boards.Min(b => b.Origin.X), map.Boards.Min(b => b.Origin.Y),
                     map.Boards.Max(b => b.Origin.X + b.Width - 1), map.Boards.Max(b => b.Origin.Y + b.Height - 1)));
 
-            Assert.InRange(map.Width, 20, 50);
-            Assert.InRange(map.Height, 20, 50);
+            Assert.InRange(map.Width, 15, 60);
+            Assert.InRange(map.Height, 15, 60);
             widths.Add(map.Width);
             heights.Add(map.Height);
             nonSquare += map.Width != map.Height ? 1 : 0;
@@ -144,23 +206,54 @@ public class 棋盘档生成参数Tests
     }
 
     [Fact]
-    public void 不同种子不同图_棋盘数是标识的一部分()
+    public void 不同种子不同图_人数与棋盘数是标识的一部分()
     {
-        string[] layouts = [.. Enumerable.Range(1, 20).Select(seed => string.Join(
-            ";", BoardGenFixtures.Generated((ulong)seed).Map.Boards.Select(b => $"{b.Origin},{b.Width},{b.Height}")))];
-        Assert.True(layouts.Distinct(StringComparer.Ordinal).Count() >= 19, "种子 1–20 的棋盘布局重复超过 1 张。");
+        foreach ((int players, int boards) in new[] { (4, 7), (3, 6), (2, 5) })
+        {
+            string[] layouts = [.. Enumerable.Range(1, 20).Select(seed => string.Join(
+                ";", BoardGenFixtures.Generated((ulong)seed, boards, players).Map.Boards.Select(b => $"{b.Origin},{b.Width},{b.Height}")))];
+            Assert.True(layouts.Distinct(StringComparer.Ordinal).Count() >= 19, $"{players} 人：种子 1–20 的棋盘布局重复超过 1 张。");
+        }
+
         Assert.NotEqual(MapFile.ToJson(BoardGenFixtures.Generated(5, 7).Map), MapFile.ToJson(BoardGenFixtures.Generated(5, 8).Map));
+        // 同种子、同棋盘数、不同人数：标识不同，出生棋盘数也不同。
+        MapData four = BoardGenFixtures.Generated(5, 7).Map;
+        MapData three = BoardGenFixtures.Generated(5, 7, 3).Map;
+        Assert.Equal(("board:5", "board:5:p3:n7"), (four.Id, three.Id));
+        Assert.Equal((5, 4), (four.BirthZones.Length, three.BirthZones.Length));
+    }
+
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    [InlineData(4UL)]
+    [InlineData(5UL)]
+    public void 同种子不同人数的公共棋盘互不相同(ulong seed)
+    {
+        // 人数进入棋盘档随机流（主会话裁决）：同一种子的 2 / 3 / 4 人缺省图，公共棋盘清单（位置与宽高）两两不同。
+        // 变异 P6（MapRandom.ForBoardAttempt 去掉人数那一项）→ 本测试 5 行全红（抽样先抽公共棋盘，同种子的公共棋盘边长序列相同）。
+        string[] publics = [.. new[] { 2, 3, 4 }.Select(players => string.Join(";", BoardGenFixtures.Generated(seed, players + 3, players).Map.Boards
+            .Where(b => b.Kind == BoardPlateKind.Public).Select(b => $"{b.Origin.ToNotation()},{b.Width}x{b.Height}")))];
+        Assert.All(publics, text => Assert.NotEmpty(text));
+        Assert.Equal(3, publics.Distinct(StringComparer.Ordinal).Count());
+
+        // 只比宽高序列（不看位置）也两两不同：差别来自抽样，不只是摆放。
+        string[] sizes = [.. new[] { 2, 3, 4 }.Select(players => string.Join(";", BoardGenFixtures.Generated(seed, players + 3, players).Map.Boards
+            .Where(b => b.Kind == BoardPlateKind.Public).Select(b => $"{b.Width}x{b.Height}")))];
+        Assert.Equal(3, sizes.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
     public void 校验闭环_返回的地图必过静态校验_尝试次数留有余量()
     {
         Assert.Equal(64, BoardMapGenerator.DefaultMaxAttempts);
-        foreach ((ulong seed, int boards) in BoardGenFixtures.Sample())
+        foreach ((ulong seed, int players, int boards) in BoardGenFixtures.Sample())
         {
-            GeneratedBoardMap g = BoardGenFixtures.Generated(seed, boards);
-            Assert.True(MapValidator.Validate(g.Map).IsValid, $"board:{seed}:n{boards}");
+            GeneratedBoardMap g = BoardGenFixtures.Generated(seed, boards, players);
+            Assert.True(MapValidator.Validate(g.Map).IsValid, BoardGenFixtures.Label(seed, players, boards));
             Assert.InRange(g.Attempt, 0, 31);   // 留一半余量：逼近上限说明构造式保证在退化
+            Assert.Equal(g.Attempt, g.Discarded.Length);
         }
 
         // 上限 0 是参数错误。
@@ -170,13 +263,14 @@ public class 棋盘档生成参数Tests
     [Fact]
     public void 经地图文件往返后逐项相同()
     {
-        foreach (ulong seed in new ulong[] { 1, 2, 3 })
+        foreach ((ulong seed, int players) in new (ulong, int)[] { (1, 4), (2, 3), (3, 2) })
         {
-            MapData map = BoardGenFixtures.Generated(seed).Map;
+            MapData map = BoardGenFixtures.Generated(seed, BoardGenFixtures.Ranges.Single(r => r.Players == players).Boards[1], players).Map;
             string json = MapFile.ToJson(map);
             MapData restored = MapFile.FromJson(json);
             Assert.Equal(json, MapFile.ToJson(restored));
             Assert.Equal(map.Boards.AsEnumerable(), restored.Boards.AsEnumerable());
+            Assert.Equal(players, restored.MaxPlayers);
             Assert.True(MapValidator.Validate(restored).IsValid);
         }
     }
@@ -186,10 +280,10 @@ public class 棋盘档生成参数Tests
     {
         // 「棋盘档生成 MUST 使用与边疆档生成互不相同的随机序列，且同样只由地图种子与尝试序号决定」。
         // 变异 M-B10（段 B 实跑）：ForBoardAttempt 改用边疆档的域常量 → 本测试红。
-        Assert.Equal(Take(MapRandom.ForBoardAttempt(12345, 3), 64), Take(MapRandom.ForBoardAttempt(12345, 3), 64));
+        Assert.Equal(Take(MapRandom.ForBoardAttempt(12345, 4, 3), 64), Take(MapRandom.ForBoardAttempt(12345, 4, 3), 64));
         foreach (ulong seed in new ulong[] { 0, 1, 12345, ulong.MaxValue })
         {
-            string[] board = [.. Enumerable.Range(0, 512).Select(k => string.Join(",", Take(MapRandom.ForBoardAttempt(seed, k), 8)))];
+            string[] board = [.. Enumerable.Range(0, 512).Select(k => string.Join(",", Take(MapRandom.ForBoardAttempt(seed, 4, k), 8)))];
             Assert.Equal(512, board.Distinct(StringComparer.Ordinal).Count());
             string[] frontier =
             [
@@ -199,14 +293,19 @@ public class 棋盘档生成参数Tests
             Assert.Empty(board.Intersect(frontier, StringComparer.Ordinal));
         }
 
-        Assert.NotEqual(Take(MapRandom.ForBoardAttempt(7, 1), 8), Take(MapRandom.ForBoardAttempt(8, 0), 8));
-        Assert.Throws<ArgumentOutOfRangeException>(() => MapRandom.ForBoardAttempt(1, -1));
+        Assert.NotEqual(Take(MapRandom.ForBoardAttempt(7, 4, 1), 8), Take(MapRandom.ForBoardAttempt(8, 4, 0), 8));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MapRandom.ForBoardAttempt(1, 4, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MapRandom.ForBoardAttempt(1, 0, 0));
+
+        // 人数进入派生（board-isolated-gen）：同一种子与序号，2 / 3 / 4 人的随机源两两不同。
+        string[] byPlayers = [.. new[] { 2, 3, 4 }.Select(p => string.Join(",", Take(MapRandom.ForBoardAttempt(12345, p, 0), 8)))];
+        Assert.Equal(3, byPlayers.Distinct(StringComparer.Ordinal).Count());
 
         // 也不与对局的任何一条命名子流同构。
         var game = new GameSeed(12345);
         foreach (string name in new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.ZonePick })
         {
-            Assert.NotEqual(Take(MapRandom.ForBoardAttempt(12345, 0), 8), Take(game.Stream(name), 8));
+            Assert.NotEqual(Take(MapRandom.ForBoardAttempt(12345, 4, 0), 8), Take(game.Stream(name), 8));
         }
     }
 
@@ -214,20 +313,22 @@ public class 棋盘档生成参数Tests
     public void 棋盘档随机源与生成图的黄金值()
     {
         // 钉住派生方式与生成器本身：它们一变，同一个 board: 标识就会生成另一张图，旧日志按标识重建地图随之失效。
-        // 黄金值取自段 B 修正二（2026-09-30 裁决：通道 3–4 格宽、出生棋盘两条出路、公共棋盘 9–11、目标带 300–800）完成后的实跑；随机源派生式未变，前两个数不动。
-        // 段 B 原值为 44×44、摘要 04B085ED…8E0B（尺寸阶梯）；段 B 修正为 42×42、可落子 540、摘要 B1065BDD…9574。红了不等于错——确认要改再更新此值，并在实施记录里写明。
-        Assert.Equal(new[] { GoldenA, GoldenB }, Take(MapRandom.ForBoardAttempt(12345, 0), 2));
+        // 黄金值取自 board-isolated-gen 段 A 补改（人数进入棋盘档随机流、边长整组重抽）完成后的实跑——board-isolated-gen 重定；
+        // 人数进入派生，前两个数（4 人第 0 个随机源的头两个值）随之改变，旧值 16155176619714753925 / 3336457412782954627。
+        // 历次旧值：board-map 段 B 原值 44×44、摘要 04B085ED…8E0B；段 B 修正 42×42、可落子 540、摘要 B1065BDD…9574；
+        // 段 B 修正二 24×40、可落子 468、摘要 21C2717A…8840；board-isolated-gen 段 A 初版 38×44、可落子 457、摘要 14E954C4…F92D。红了不等于错——确认要改再更新此值，并在实施记录里写明。
+        Assert.Equal(new[] { GoldenA, GoldenB }, Take(MapRandom.ForBoardAttempt(12345, 4, 0), 2));
         GeneratedBoardMap g = BoardMapGenerator.GenerateDetailed(12345);
         Assert.Equal(("board:12345", GoldenPlayable, GoldenWidth, GoldenHeight), (g.Map.Id, g.Map.PlayableCount, g.Map.Width, g.Map.Height));
         Assert.True(GoldenDigest == Digest(g.Map), $"board:12345 的导出文本摘要变了：现为 {Digest(g.Map)}。");
     }
 
-    private const ulong GoldenA = 16155176619714753925UL;
-    private const ulong GoldenB = 3336457412782954627UL;
-    private const int GoldenPlayable = 468;
-    private const int GoldenWidth = 24;
-    private const int GoldenHeight = 40;
-    private const string GoldenDigest = "21C2717A45A37DBEAA8D71F8EC504E3FEB6055B41567E0E9D2112CA4F3858840";
+    private const ulong GoldenA = 14574461902476217853UL;
+    private const ulong GoldenB = 14705341623990255760UL;
+    private const int GoldenPlayable = 463;
+    private const int GoldenWidth = 42;
+    private const int GoldenHeight = 44;
+    private const string GoldenDigest = "4366325614F6E6C4C37E4A051C4340536237C20EF06C91DF900AECD8CA8075CB";
 
     [Fact]
     public void 边疆档生成图不变()
@@ -331,8 +432,10 @@ public class 棋盘档生成参数Tests
         // 生成器：散列容器只有灌数据用的不可变 builder，且任何 builder 都不出现在 foreach / LINQ 的数据源位置；地图数据自带的散列容器只许计数与查询。
         Assert.DoesNotMatch(@"(?<!Immutable)\b(HashSet|Dictionary)<", generator);
         string[] builders = [.. Regex.Matches(generator, @"var (\w+) = Immutable(?:HashSet|Dictionary)\.CreateBuilder").Select(m => m.Groups[1].Value)];
-        Assert.True(builders.Length >= 3, $"样本口径：只认出 {builders.Length} 个 builder。");
-        Assert.All(builders, name => Assert.DoesNotMatch($@"\bin {name}\b|\b{name}\.(Select|Where|First|Order|ToArray|ToList)", generator));
+        // board-isolated-gen：咽喉 builder 随通道删除，按 var 声明的剩障碍与信物两个；出生区 builder 是按下标存取的数组 zoneBuilders，另扫它。
+        Assert.True(builders.Length >= 2, $"样本口径：只认出 {builders.Length} 个 builder。");
+        Assert.All(builders.Append("zoneBuilders"), name => Assert.DoesNotMatch($@"\bin {name}\b|\b{name}\.(Select|Where|First|Order|ToArray|ToList)", generator));
+        Assert.Contains("zoneBuilders[i].ToImmutable()", generator, StringComparison.Ordinal);
         Assert.DoesNotMatch(@"foreach\s*\([^)]*\bin\s+map\.(Obstacles|RelicCells|ChokePoints|BirthZones\[)|\bmap\.\w+(\.\w+)*\.(First|FirstOrDefault|Last|ElementAt|Take|Skip)\(", generator);
 
         foreach (string source in new[] { layout, generator, parameters })
