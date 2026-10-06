@@ -238,7 +238,7 @@ public class 初始配置与基础棋池Tests
         // carry-in-out 规格 Scenario（recruitment「初始配置与基础棋池」）：A 带入换型令（堡垒子）、B 未带入 → A 普通子 × 4 + 堡垒子 × 1，B 普通子 × 5；
         // 征募子流未被消费，第 1 大回合第一位行动者的征募候选与全员不带入时相同。
         // 对照局：同一种子、同一真实地图、关闭带入带出。另把 P3 也放上征召签，让"解析征召签"这一步也在建局里发生。
-        MapData map = MapCatalog.Resolve(MapCatalog.DefaultId);
+        MapData map = MapCatalog.Resolve(FourPlayerBaseMap.Id);   // builtin-board-maps D4：缺省地图已换成棋盘图，显式钉回 v5
         PlayerId[] four = [new(0), new(1), new(2), new(3)];
         var seed = new GameSeed(23);
         MatchFlow carried = MatchFlow.Create(map, seed, four, MatchOptions.Immediate with

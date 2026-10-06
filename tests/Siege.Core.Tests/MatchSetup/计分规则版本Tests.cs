@@ -73,7 +73,7 @@ public class 计分规则版本Tests
         Assert.Equal(ScoringVersion.V2, MatchOptions.Default.ScoringVersion);
         Assert.Equal(ScoringVersion.V2, MatchOptions.Immediate.ScoringVersion);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(5), Four);
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
         Assert.Equal(ScoringVersion.V2, match.ScoringVersion);
         Assert.False(match.ScoringVersionBackfilled);
@@ -324,7 +324,7 @@ public class 计分规则版本Tests
     {
         // 0 不是合法版本（显式编号 1 / 2）：对局配置、跑局配置、计分入口与存档里的非法值都要响亮失败，不静默当成某个版本。
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(1), Four, MatchOptions.Immediate with { ScoringVersion = 0 }));
+            MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(1), Four, MatchOptions.Immediate with { ScoringVersion = 0 }));
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { ScoringVersion = (ScoringVersion)3 }).Validated());
         Assert.Throws<ArgumentOutOfRangeException>(() => TestMaps.Blank().Place("C5", P0).Score((ScoringVersion)3));
         Assert.Throws<ArgumentOutOfRangeException>(() => FormationTiers.TierOf(0, 5));
@@ -335,7 +335,7 @@ public class 计分规则版本Tests
         Assert.ThrowsAny<Exception>(() => MatchFlow.Restore(session.Match.Board.BaseMap, node.ToJsonString()));
 
         // 会话核对跑局配置与对局配置的版本一致（与内容集同一做法）。
-        MatchFlow v2 = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(1), Four, MatchOptions.Immediate with { FlagRisk = 0 });
+        MatchFlow v2 = MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(1), Four, MatchOptions.Immediate with { FlagRisk = 0 });
         v2.PlantPrototype();
         Assert.Throws<SiegeRuleException>(() => MatchSession.ForMatch(v2, SimFixtures.Config() with { ScoringVersion = ScoringVersion.V1 }));
     }

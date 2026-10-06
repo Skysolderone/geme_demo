@@ -115,6 +115,7 @@ internal static class LookaheadFixtures
     /// </summary>
     internal static RunConfig V5Config(params PlayerAiConfig[] players) => new()
     {
+        MapId = Siege.Core.Board.Maps.FourPlayerBaseMap.Id,   // builtin-board-maps D4：缺省地图已换，显式钉回 v5
         Players = [.. players.Select(p => p with { Weights = Weights })],
         SeedStart = 1,
         Count = 1,

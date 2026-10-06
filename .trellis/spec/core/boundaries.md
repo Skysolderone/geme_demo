@@ -24,7 +24,7 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 覆盖数据（谁覆盖了哪格、来源棋子、是否几何相邻） | `CoverageMap.Compute` 一次算出；`SourcesOf(c)` 只读查询（信物控制、盘面层差集原因都消费它，不自行遍历） |
 | 高地压制加值 | `PieceEffects.HighGroundBonus(board, group)`；覆盖目标只经 `GameBoard.CoverageTargets` 取得，不另写邻接或崖壁判断；"严格更低"用 `Map.HeightAt` 比较目标格与自身格；`PowerCalculator` 是唯一消费者，表现层只读 `GroupPower.HighGroundBonus` |
 | 地图规格档（标准 / 边疆）的分流 | `MapValidator` 里"规则 → 处理方式"的一张声明表（frontier-map D2）。校验器别处不得出现对规格档的分支，下游（对局、AI、Sim、表现层、`src/godot/`）不得读 `Profile`——要按图的大小分流就读可落子格数（如 `AiSearchConfig.DefaultCellLimitFor`）。守门在 `地图规格档Tests` / `边疆档静态校验Tests`，属性模式、强转比较等绕法已做过变异 |
-| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省恒为 `siege-4p-base-v5`。加内置图只在 `Builtins` 表加一行（含面向人的显示名，`BuiltinMaps`）。生成图 `gen:<种子>[:p<N>]` 也只经它解析——`FrontierMapGenerator` 的唯一生产调用方就是 `MapCatalog`；选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`） |
+| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省为 `MapCatalog.DefaultId`（builtin-board-maps 起 = 4 人内置棋盘图 `siege-4p-board-v1`；此前是 `siege-4p-base-v5`，依赖 v5 读数的测试与命令须显式指定它）。内置棋盘图是 `board:` 生成图的别名（`MapCatalog.BuiltinBoards`：内置名 → 生成图标识 + 显示名；加载时生成后把 `Id` 改写为内置名），内容由导出摘要黄金值守住（`内置棋盘图Tests.内容不变`），变了就按下文 D6 升号。加内置图只在 `Builtins` 表加一行（含面向人的显示名，`BuiltinMaps`）。生成图 `gen:<种子>[:p<N>]` 也只经它解析——`FrontierMapGenerator` 的唯一生产调用方就是 `MapCatalog`；选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`） |
 | 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——生成器一旦改版，同一 `gen:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
 | 原型插旗路径的 AI 选区（含冒险概率） | `PrototypeZoneAssignment`（见 `determinism.md` 的 `zone-pick` 与 `flag-risk`）；三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门） |
 | AI 候选格上限的缺省值 | `AiSearchConfig.ForMap` / `DefaultCellLimitFor`（可落子格 > 150 取 24，否则 0）；显式配置含 0 优先；实际生效值进 `config.json` 与日志首部，`Replayer` 按首部重建、缺项按不限制 |
@@ -45,7 +45,7 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 盘面同形比对键（superko-occupancy） | `GameBoard.SuperkoKey(serialized)`：由 `Serialize()` 的输出投影，每格只留占用者、去掉类型码，改造段原样保留；唯一调用方 `BoardHistory`（"比对键 → 最早提交序号"索引，新增与读档共用 `Append`），预演第 8 步只经 `FindDuplicate(projected.Serialize())` 到达。`Serialize()` 本身仍含类型（存档、日志、结算核对、弃赛快照），不得为同形另写一份逐格遍历。守门 `盘面同形禁则Tests.同形比对键投影只有一处实现`（扫整个 `src/` 含 `src/godot`：`SuperkoKey(` 只在 GameBoard / BoardHistory；类型码集合字面量形状零命中），变异 M-K3 / M-K4 已证红 |
 | 单子禁手查询（自杀手 / 同形 / 破坏活形的事先标示，forbidden-marks） | `Siege.Core.Batch.ForbiddenMoves`：唯一实现，按"当前暂放批次之上再落这一子"整批判定，内部复用预演（不另写气、同形或活形判断），结果与完整合法性预演逐格一致。生产调用方只有 `MatchFlow.ForbiddenMovesOfCurrentPlayer`；`Siege.Presentation` / `src/godot` 只读其结果做标示与原因文案，不自判 |
 | 预演第 3–8 步的内部入口 | `BatchRehearsal.Settle`（`internal`）：`BatchRehearsal.Rehearse` 与 `ForbiddenMoves` 共用这一份，不得为单子查询另抄一份结算步骤 |
-| 棋盘档生成与标识（board-map） | `BoardMapGenerator` / `BoardMapId`（`Siege.Core.Board.Maps`）：`board:<种子>[:n<棋盘数>]` 的解析、规范化与生成只此一处；`BoardMapGenerator` 的唯一生产调用方是 `MapCatalog`，入口与选图视图模型只经 `BoardMapId` 产出 / 解析标识（裸 `board` 的随机取种子在入口最外层），不直接调生成器。棋盘清单 `MapData.Boards` 只用于静态校验与呈现，**不参与结算**——气、提子、覆盖、保护期、计分、信物与 AI 都不读它 |
+| 棋盘档生成与标识（board-map） | `BoardMapGenerator` / `BoardMapId`（`Siege.Core.Board.Maps`）：`board:<种子>[:p<人数>][:n<棋盘数>]` 的解析、规范化与生成只此一处；`BoardMapGenerator` 的唯一生产调用方是 `MapCatalog`，入口与选图视图模型只经 `BoardMapId` 产出 / 解析标识（裸 `board` 的随机取种子在入口最外层），不直接调生成器。棋盘清单 `MapData.Boards` 只用于静态校验与呈现，**不参与结算**——气、提子、覆盖、保护期、计分、信物与 AI 都不读它 |
 | 规则计算 | `Siege.Core`——表现层只消费预演结果，绝不自己算 |
 
 写新代码前先搜一遍是否已有实现。重复实现的典型症状：领地层说独占、信物层判争议。

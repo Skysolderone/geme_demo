@@ -46,7 +46,7 @@ public class 地图子命令Tests
     {
         (int code, string text, _) = RunMain("map");
         Assert.Equal(0, code);
-        Assert.Contains("地图 siege-4p-base-v5  13×13", text, StringComparison.Ordinal);
+        Assert.Contains("地图 siege-4p-board-v1  39×41", text, StringComparison.Ordinal);   // builtin-board-maps D3：缺省为 4 人内置棋盘图（board:5，39×41）
 
         (int badCode, _, string err) = RunMain("map", "--mapp", "siege-frontier-v2");
         Assert.NotEqual(0, badCode);

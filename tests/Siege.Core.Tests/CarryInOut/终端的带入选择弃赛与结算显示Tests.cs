@@ -30,6 +30,7 @@ public class 终端的带入选择弃赛与结算显示Tests
     {
         var output = new StringWriter();
         int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Easy, new StringReader(script), output,
+            Board.Maps.FourPlayerBaseMap.Create(),   // builtin-board-maps D4：脚本坐标与走法是 v5 上的，显式钉回 v5
             weights: ScriptWeights, passThreshold: ScriptPassThreshold, flagRisk: 0, contentSet: ContentSet.V1, profile: profile);
         return (exit, output.ToString());
     }

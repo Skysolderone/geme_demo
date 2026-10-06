@@ -153,7 +153,7 @@ public class 两人基准地图Tests
         BuiltinMapInfo info = Assert.Single(MapCatalog.BuiltinMaps, m => m.Id == TwoPlayerBaseMap.Id);
         Assert.Equal("双人图 9×9", info.Title);
         Assert.Equal(1, MapCatalog.BuiltinIds.ToList().IndexOf(TwoPlayerBaseMap.Id));
-        Assert.Equal(MapCatalog.DefaultId, MapCatalog.BuiltinIds[0]);
+        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.BuiltinIds[0]);   // builtin-board-maps：缺省地图改为 4 人内置棋盘图（排在手工图之后），表首仍是标准图
         Assert.Equal(MapFile.ToJson(Map()), MapFile.ToJson(MapCatalog.Resolve(TwoPlayerBaseMap.Id)));
     }
 

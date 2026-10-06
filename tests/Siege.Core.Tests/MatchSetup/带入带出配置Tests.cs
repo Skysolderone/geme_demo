@@ -65,7 +65,7 @@ public class 带入带出配置Tests
         Assert.False(MatchOptions.Immediate.CarryInOut);
         Assert.Empty(MatchOptions.Immediate.CarryIns);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(5), Four);
         Assert.False(match.CarryInOut);
         Assert.Empty(match.CarryIns);
         Assert.False(match.CarryInOutBackfilled);

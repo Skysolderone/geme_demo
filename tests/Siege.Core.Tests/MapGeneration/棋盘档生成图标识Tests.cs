@@ -203,7 +203,7 @@ public class 棋盘档生成图标识Tests
         Assert.Contains("4 人 7–10", unknown.Message, StringComparison.Ordinal);
         Assert.Contains("gen:<地图种子>", unknown.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(MapCatalog.BuiltinIds, BoardMapId.IsBoardMap);
-        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.DefaultId);   // 缺省地图不变（design D9）
+        Assert.Equal("siege-4p-board-v1", MapCatalog.DefaultId);   // 缺省地图是内置棋盘图的别名（builtin-board-maps D3），不是 board: 标识本身
     }
 
     private static (int Code, string Out, string Error) RunMain(params string[] args) =>

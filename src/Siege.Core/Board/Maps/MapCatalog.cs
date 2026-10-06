@@ -14,6 +14,18 @@ namespace Siege.Core.Board.Maps;
 public static class MapCatalog
 {
     /// <summary>
+    /// 内置棋盘图（builtin-board-maps D2）：每张都是某个固定棋盘档生成图标识的别名。加载时按该标识生成，再把地图数据里的标识改写为内置名。
+    /// 种子由负责人 2026-10-06 选定。内置图内容一变（生成器或这里的生成图标识改动导致导出文件不同），内置名 MUST 升号（<c>-v2</c>……），
+    /// 由导出摘要的黄金值守住（<c>.trellis/spec/core/boundaries.md</c>「内置图内容一变，标识必须递增」）。
+    /// </summary>
+    public static IReadOnlyList<BuiltinBoardAlias> BuiltinBoards { get; } =
+    [
+        new("siege-4p-board-v1", "board:5", "四人棋盘图（7 块）"),
+        new("siege-3p-board-v1", "board:55:p3", "三人棋盘图（6 块）"),
+        new("siege-2p-board-v1", "board:23:p2", "双人棋盘图（5 块）"),
+    ];
+
+    /// <summary>
     /// 内置地图表：标识、面向人的显示名、生成器。新增内置图只在这里加一行。
     /// 显示名也登记在这里（map-generator 裁决 3）：选图界面从本表读，界面层不得另带"标识 → 名字"的对照表。
     /// </summary>
@@ -23,10 +35,13 @@ public static class MapCatalog
         (TwoPlayerBaseMap.Id, "双人图 9×9", TwoPlayerBaseMap.Create),
         (ThreePlayerBaseMap.Id, "三人图 11×11", ThreePlayerBaseMap.Create),
         (FrontierMapV2.Id, "边疆图 25×30（手工）", FrontierMapV2.Create),
+        .. BuiltinBoards.Select(b => (b.Id, b.Title, (Func<MapData>)(() => CreateBoardAlias(b)))),
     ];
 
-    /// <summary>缺省地图标识：任何入口未给地图选项时加载它。</summary>
-    public const string DefaultId = FourPlayerBaseMap.Id;
+    /// <summary>
+    /// 缺省地图标识：批量、终端与图形三个入口未给地图选项时加载它（builtin-board-maps D3：4 人内置棋盘图；图形版缺省先进选图界面）。
+    /// </summary>
+    public const string DefaultId = "siege-4p-board-v1";
 
     /// <summary>可用的内置地图标识，按登记顺序。</summary>
     public static IReadOnlyList<string> BuiltinIds { get; } = [.. Builtins.Select(b => b.Id)];
@@ -87,7 +102,16 @@ public static class MapCatalog
 
         return MapFile.FromJson(File.ReadAllText(path));
     }
+
+    /// <summary>内置棋盘图：按登记的生成图标识生成，把地图数据里的标识改写为内置名；其余内容与生成图逐项相同。</summary>
+    private static MapData CreateBoardAlias(BuiltinBoardAlias alias) => BoardMapGenerator.Generate(alias.SourceId) with { Id = alias.Id };
 }
 
 /// <summary>内置地图的一项登记：地图标识与面向人的显示名（选图界面的选项标题）。</summary>
 public sealed record BuiltinMapInfo(string Id, string Title);
+
+/// <summary>
+/// 内置棋盘图的一项登记：内置名、它所别名的棋盘档生成图标识（<c>board:&lt;种子&gt;[:p&lt;人数&gt;][:n&lt;棋盘数&gt;]</c>，规范写法）与面向人的显示名。
+/// 显示名写成字面量（选图界面守门要求显示名登记在本文件里），其中的人数与棋盘数须与生成图标识一致（守门 <c>内置棋盘图Tests</c>）。
+/// </summary>
+public sealed record BuiltinBoardAlias(string Id, string SourceId, string Title);

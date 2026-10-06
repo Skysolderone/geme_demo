@@ -237,13 +237,13 @@ public class 边疆档基准地图Tests
     [Fact]
     public void 已收录但不是缺省地图()
     {
-        // 规格 Scenario「不是缺省地图」：不带地图选项 → siege-4p-base-v5；边疆图只能按标识显式选到。
+        // 规格 Scenario「不是缺省地图」：不带地图选项 → siege-4p-board-v1（builtin-board-maps 起）；边疆图只能按标识显式选到。
         // 变异 M-B3：MapCatalog.DefaultId 改成 FrontierMapV2.Id → 本测试红。
         Assert.Contains(FrontierMapV2.Id, MapCatalog.BuiltinIds);
         Assert.Equal(FrontierMapV2.Id, MapCatalog.Resolve("siege-frontier-v2").Id);
         Assert.NotEqual(FrontierMapV2.Id, MapCatalog.DefaultId);
-        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.Resolve(null).Id);
-        Assert.Equal(FourPlayerBaseMap.Id, new Siege.Sim.Config.RunConfig().MapId);
+        Assert.Equal("siege-4p-board-v1", MapCatalog.Resolve(null).Id);
+        Assert.Equal("siege-4p-board-v1", new Siege.Sim.Config.RunConfig().MapId);
         Assert.Equal(MapFile.ToJson(FrontierMapV2.Create()), MapFile.ToJson(MapCatalog.Resolve(FrontierMapV2.Id)));
     }
 

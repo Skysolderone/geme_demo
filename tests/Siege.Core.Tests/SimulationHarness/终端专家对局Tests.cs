@@ -21,6 +21,7 @@ public class 终端专家对局Tests
         var output = new StringWriter();
         int exit = PlayCommand.Run(
             42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nB1 B\nv\nok\n\npass\n"), output,
+            Board.Maps.FourPlayerBaseMap.Create(),   // builtin-board-maps D4：脚本坐标是 v5 的，显式钉回 v5
             weights: LookaheadFixtures.Weights, passThreshold: LookaheadFixtures.PassThreshold, flagRisk: 0, contentSet: ContentSet.V1,
             onAi: (p, ai) => ais.Add(p, ai));
         string text = output.ToString();

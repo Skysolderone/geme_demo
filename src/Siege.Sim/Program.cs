@@ -77,7 +77,7 @@ public static class Program
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
         Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
-        Console.WriteLine("  地图标识：内置图 / 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
+        Console.WriteLine($"  地图标识：内置图（{string.Join("、", MapCatalog.BuiltinIds)}；不给 --map 即缺省 {MapCatalog.DefaultId}）/ 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
         Console.WriteLine("            board:<地图种子>[:p<人数 2–4>][:n<棋盘数，4 人 7–10、3 人 5–8、2 人 4–5>]（随机生成的棋盘图，棋盘互不连通）；只写 board 即随机取一个地图种子（4 人）并打印完整标识。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
@@ -162,7 +162,8 @@ public static class Program
 
     /// <summary>
     /// 地图工具：打印一张地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、校验结果与报告项）；
-    /// 内置图另导出 maps/&lt;id&gt;.json（权威地图文件）。<c>--map</c> 缺省为缺省地图；给地图文件路径时只打印不导出（不回写设计师的文件）。
+    /// 内置图（含内置棋盘图，文件名用内置名、不含冒号）另导出 maps/&lt;id&gt;.json（权威地图文件）。<c>--map</c> 缺省为缺省地图（<see cref="MapCatalog.DefaultId"/>）；
+    /// 给地图文件路径或生成图标识（<c>gen:</c> / <c>board:</c>，标识里有冒号）时只打印不导出，生成图要落盘用 <c>--out</c> 或对应的内置名。
     /// <c>--out</c> 把这张图另存为指定文件（生成图只有这一条落盘的路）；目标不得是内置图的权威文件（<see cref="RequireNotAuthoritativeMapFile"/>）。
     /// </summary>
     private static int ExportMap(CommandLine cli, Func<ulong> mapSeedSource)

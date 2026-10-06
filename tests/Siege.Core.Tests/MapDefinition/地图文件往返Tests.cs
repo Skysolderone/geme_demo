@@ -82,7 +82,7 @@ public class 地图文件往返Tests
     public void v3历史文件仍可读入并通过校验()
     {
         // maps/siege-4p-base-v3.json 是历史存档，没有 Sites 字段（v4 才加的）。据点校验取消后它不再因规则 8 被拒——
-        // 它与 v5 的差别只剩 Id。本条同时钉住"缺省地图是 v5"。
+        // 它与 v5 的差别只剩 Id。本条同时钉住"缺省地图"（builtin-board-maps D3 起为 4 人内置棋盘图 siege-4p-board-v1，不再是 v5）。
         string path = Path.Combine(RepoRoot(), "maps", "siege-4p-base-v3.json");
         string text = File.ReadAllText(path);
         Assert.DoesNotContain("\"Sites\"", text, StringComparison.Ordinal);
@@ -91,7 +91,7 @@ public class 地图文件往返Tests
 
         Assert.Equal("siege-4p-base-v3", v3.Id);
         Assert.True(MapValidator.Validate(v3).IsValid);
-        Assert.Equal("siege-4p-base-v5", new Siege.Sim.Config.RunConfig().MapId);
+        Assert.Equal("siege-4p-board-v1", new Siege.Sim.Config.RunConfig().MapId);
         Assert.Equal("siege-4p-base-v5", FourPlayerBaseMap.Create().Id);
     }
 

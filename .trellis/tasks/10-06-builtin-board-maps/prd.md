@@ -29,3 +29,11 @@
 
 - 扫种子 1–200（缺省棋盘数），硬条件：主战场宽高 ≥ 13、公共棋盘不全同形、出生面积 30–42；按可落子格离中位数排序，每种人数 3 个候选，出图 `art/builtin-board-maps/candidates/`。
 - **负责人 2026-10-06 选定**：`siege-4p-board-v1` = `board:5`（465 格、39×41、出生 5×7 ×5、主战场 13×14、第二战场 9×12）；`siege-3p-board-v1` = `board:55:p3`（433 格、39×38、出生 6×7 ×4、主战场 13×15、另一块 7×10）；`siege-2p-board-v1` = `board:23:p2`（366 格、32×35、出生 6×6 ×3、主战场 15×13、另一块 7×9）。
+
+### 段 C（2026-10-06，内置图与缺省切换）
+
+- `MapCatalog.BuiltinBoards`：`siege-4p-board-v1` → `board:5`、`siege-3p-board-v1` → `board:55:p3`、`siege-2p-board-v1` → `board:23:p2`，显示名"四人 / 三人 / 双人棋盘图（n 块）"；`DefaultId = siege-4p-board-v1`。新增 `内置棋盘图Tests` 13 条（含检查方补的"不登记 AI 权重"），摘要黄金值三条。
+- 终端一律打印地图行；`board:` 标识的 `map` 导出只打印、不写盘，落盘用内置名或 `--out`。
+- 测试：`SimFixtures.Config` 与 `LookaheadFixtures.V5Config` 钉回 v5，恢复大部分依赖缺省地图的测试；A 组 8 条改为断言新缺省，B 组与调研未列的若干测试显式指定 v5。检查方逐条复核 38 个用到夹具的文件，没有测试因钉回而失去意义。
+- 全量失败名单与改动前相同；Release 同机耗时 47 s → 44 s。Godot `--auto-demo` 新缺省与 v5 各 53 帧。
+- 变异：实现 9 + 检查 7 条全部变红。

@@ -23,7 +23,7 @@ public class 终端对局Tests
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, Board.Maps.FourPlayerBaseMap.Create(), flagRisk: 0, contentSet: ContentSet.V1);   // builtin-board-maps D4：脚本坐标是 v5 的，显式钉回 v5   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);

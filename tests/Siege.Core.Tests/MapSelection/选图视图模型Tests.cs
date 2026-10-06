@@ -49,10 +49,12 @@ public class 选图视图模型Tests
         // 变异 M-C1（board-map 段 C，实跑）：构造函数的预选项改回目录缺省图（v5）→ MapSelection 过滤下红 6（含本测试）。
         var model = new MapSelectModel(InitialSeed);
 
-        Assert.Equal(6, model.Options.Count);
+        // builtin-board-maps 段 C：目录在手工图之后多登记了三张内置棋盘图，清单随之 6 → 9（过渡态；段 D 按新规格把清单改为只列内置棋盘图与随机棋盘图）。
+        Assert.Equal(9, model.Options.Count);
         Assert.Equal([null, .. MapCatalog.BuiltinIds, null], model.Options.Select(o => o.BuiltinId));
         Assert.Equal(
-            [MapOptionKind.Board, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Random],
+            [MapOptionKind.Board, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin,
+                MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Random],
             model.Options.Select(o => o.Kind));
         // 选项标题是目录登记的显示名（裁决 3）：视图模型不自带"标识 → 名字"对照表。变异 MC-21：标题退回显示标识 → 本测试红。
         Assert.Equal(MapCatalog.BuiltinMaps.Select(m => m.Title), model.Options.Where(o => o.Kind == MapOptionKind.Builtin).Select(o => o.Title));
@@ -75,8 +77,8 @@ public class 选图视图模型Tests
         Assert.NotEqual(MapCatalog.DefaultId, model.CurrentId);
         Assert.Equal(string.Empty, model.Notice);
 
-        // 批量 / 终端入口的缺省地图不受影响（design D9）。
-        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.DefaultId);
+        // 批量 / 终端入口的缺省地图由目录决定（board-map D9；builtin-board-maps D3 起为 4 人内置棋盘图），与选图界面的预选项无关。
+        Assert.Equal("siege-4p-board-v1", MapCatalog.DefaultId);
     }
 
     [Fact]

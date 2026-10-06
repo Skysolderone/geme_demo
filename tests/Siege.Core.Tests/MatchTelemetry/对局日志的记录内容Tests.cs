@@ -34,7 +34,7 @@ public class 对局日志的记录内容Tests
         MatchLog log = MatchLog.Read(path);
 
         // 1. 地图、种子、完整信物分布及揭示时间
-        Assert.Equal("siege-4p-base-v5", log.Header.MapId); // scoring-sites：RunConfig 默认地图切到 v4
+        Assert.Equal("siege-4p-base-v5", log.Header.MapId); // 样本来自 SimFixtures.Config，显式钉 v5（builtin-board-maps D4）；"未给地图 → 首部记缺省图"由 内置棋盘图Tests.缺省地图 守住
         Assert.Equal(live.Header.Seed, log.Header.Seed);
         Assert.NotEmpty(log.Header.Relics);
         Assert.All(log.Header.Relics, r => Assert.True(Coord.TryParse(r.Coord, out _) && Enum.TryParse<Relics.RelicType>(r.Type, out _)));
@@ -477,7 +477,7 @@ public class 对局日志的记录内容Tests
     /// </summary>
     internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, CarryIn> carries, int turnLimit)
     {
-        MapData map = MapCatalog.Resolve(null);
+        MapData map = MapCatalog.Resolve(FourPlayerBaseMap.Id);   // builtin-board-maps D4：与 SimFixtures.Config 同钉 v5（缺省地图已换）
         RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate with
         {

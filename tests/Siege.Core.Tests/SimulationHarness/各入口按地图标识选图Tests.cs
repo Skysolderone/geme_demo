@@ -20,17 +20,25 @@ internal static class ConsoleRedirect
 public class 各入口按地图标识选图Tests
 {
     [Fact]
-    public void 缺省地图不变()
+    public void 缺省地图()
     {
-        // 未给地图选项 → siege-4p-base-v5。三个入口的缺省都取自目录的同一个常量。
-        // 变异 M-A9：MapCatalog.DefaultId 换成 siege-4p-base-v3 → 本测试红（全套共红 39：所有走缺省地图的入口都跟着变）。
-        Assert.Equal("siege-4p-base-v5", MapCatalog.DefaultId);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve(null).Id);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve("  ").Id);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve("siege-4p-base-v5").Id);
-        Assert.Equal("siege-4p-base-v5", new Siege.Sim.Config.RunConfig().MapId);
-        Assert.Contains("siege-4p-base-v5", MapCatalog.BuiltinIds);
-        Assert.Equal(MapFile.ToJson(FourPlayerBaseMap.Create()), MapFile.ToJson(MapCatalog.Resolve(null)));
+        // 规格 Scenario（builtin-board-maps / simulation-harness）：不带地图选项启动终端版 → 加载 siege-4p-board-v1，终端输出打印地图标识。
+        // 三个入口的缺省都取自目录的同一个常量。原名「缺省地图不变」（缺省为 v5），builtin-board-maps D3 改为 4 人内置棋盘图。
+        // 变异 B-C1：MapCatalog.DefaultId 改回 siege-4p-base-v5 → 本测试红（全量新增红 7）；变异 B-C7：PlayCommand 改回"缺省地图不打印地图行" → 全量只红本测试。
+        Assert.Equal("siege-4p-board-v1", MapCatalog.DefaultId);
+        Assert.Equal("siege-4p-board-v1", MapCatalog.Resolve(null).Id);
+        Assert.Equal("siege-4p-board-v1", MapCatalog.Resolve("  ").Id);
+        Assert.Equal("siege-4p-board-v1", new Siege.Sim.Config.RunConfig().MapId);
+        Assert.Contains("siege-4p-board-v1", MapCatalog.BuiltinIds);
+        Assert.Equal(MapFile.ToJson(MapCatalog.Resolve("siege-4p-board-v1")), MapFile.ToJson(MapCatalog.Resolve(null)));
+
+        // 终端版：不给地图 → 棋盘图开局，首部打印地图标识（棋盘图标识便于复现）。第一个提示处输入 q 退出。
+        var output = new StringWriter();
+        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), output, flagRisk: 0));
+        string text = output.ToString();
+        Assert.Single(text.Split('\n'), l => l.StartsWith("地图 siege-4p-board-v1（39×41，5 个出生区）", StringComparison.Ordinal));
+        Assert.Contains("选择你的出生区（1–5）", text, StringComparison.Ordinal);
+        Assert.Contains("对手 3 名", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -132,28 +140,40 @@ public class 各入口按地图标识选图Tests
         Assert.All(zones, z => Assert.InRange(z, 1, 6));
     }
 
+    /// <summary>
+    /// 本 change 之前不带地图选项（缺省 v5）时 <see cref="显式指定旧地图"/> 那段脚本的终端转录的 SHA-256（UTF-8、行尾 \n）。
+    /// 取自 builtin-board-maps 段 C 之前的提交 4419e22：当时"缺省 ≡ 显式 v5"由原测试「显式选缺省地图与不带选项逐字相同」钉住且为绿。
+    /// </summary>
+    private const string PreChangeDefaultTranscriptSha256 = "6168D6B9C2F4C8ED41949AC6298960B49923B97F8F1C0BBA3E0CA44BC2E98679";
+
     [Fact]
-    public void 显式选缺省地图与不带选项逐字相同()
+    public void 显式指定旧地图()
     {
-        // tasks 2.2：不带 --map 时同种子对局与改动前逐步相同。改动前后的完整转录对比是一次性做的（记录在任务 implement.md 段 A）；
-        // 这里长期钉住的是"缺省 ≡ 显式给 v4"，并配行数下界与字段级断言，防止两边一起只剩首行（testing.md）。
+        // 规格 Scenario（builtin-board-maps / simulation-harness）：以 siege-4p-base-v5 启动终端版 → 与本 change 之前不带地图选项启动时在同一种子下逐步相同。
+        // 原名「显式选缺省地图与不带选项逐字相同」。本 change 起终端版一律打印地图行（D3），所以显式 v5 的转录比改动前多恰好一行"地图 siege-4p-base-v5（…）"，
+        // 去掉这一行后与改动前的缺省转录逐字节相同（黄金值）。配行数下界与字段级断言，防止转录只剩首行（testing.md）。
+        // 变异 B-C8：PlayCommand 的地图行多打一个空格 → 本测试红（全量新增红 3）；换种子 / 换地图 → 黄金值红。
+        // 黄金值的取得：在 4419e22 的源码快照上用同一段脚本、不给地图跑一次并取哈希（当时缺省即 v5，转录无地图行）。
         string script = "2\n" + string.Concat(Enumerable.Repeat("\npass\n", 3));   // 段 C：大回合上限删除，改为 3 个小回合后输入耗尽退出（原 40 行 + 上限 3 收尾）；   // 每个小回合：空行 = 不征募，pass = 不落子
-        var implicitOut = new StringWriter();
         var explicitOut = new StringWriter();
 
         // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：默认阈值 80 下简单难度第 1 大回合全员 Pass、对局即终局，走不到第 3 大回合（段 D2 改写）。
         EvaluationWeights w = SimFixtures.PreCalibrationWeights;
         const int t = SimFixtures.PreCalibrationPassThreshold;
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
         PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
 
-        string text = implicitOut.ToString();
-        Assert.Equal(text, explicitOut.ToString());
-        Assert.True(text.Split('\n').Length > 100, "转录过短，对局没有真正进行。");
-        Assert.Contains("选择你的出生区（1–4）", text, StringComparison.Ordinal);
-        Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
-        Assert.Contains("已退出。种子 7", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("地图 ", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);   // 缺省地图不多打一行，转录与改动前一致
+        string text = explicitOut.ToString().Replace("\r\n", "\n", StringComparison.Ordinal);
+        List<string> lines = [.. text.Split('\n')];
+        Assert.Equal("地图 siege-4p-base-v5（13×13，4 个出生区）", Assert.Single(lines, l => l.StartsWith("地图 ", StringComparison.Ordinal)));
+        Assert.Equal(2, lines.FindIndex(l => l.StartsWith("地图 ", StringComparison.Ordinal)));   // 紧跟在标题行之后
+        lines.RemoveAt(2);
+        string preChange = string.Join('\n', lines);
+
+        Assert.True(lines.Count > 100, "转录过短，对局没有真正进行。");
+        Assert.Contains("选择你的出生区（1–4）", preChange, StringComparison.Ordinal);
+        Assert.Contains("第 3 大回合", preChange, StringComparison.Ordinal);
+        Assert.Contains("已退出。种子 7", preChange, StringComparison.Ordinal);
+        Assert.Equal(PreChangeDefaultTranscriptSha256, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(preChange))));
     }
 
     [Fact]

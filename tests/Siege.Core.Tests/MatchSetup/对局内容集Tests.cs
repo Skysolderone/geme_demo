@@ -91,7 +91,7 @@ public class 对局内容集Tests
         Assert.Equal(ContentSet.V2, MatchOptions.Default.ContentSet);
         Assert.Equal(ContentSet.V2, MatchOptions.Immediate.ContentSet);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(5), Four);
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
         Assert.Equal(ContentSet.V2, match.ContentSet);
         Assert.False(match.ContentSetBackfilled);
@@ -180,7 +180,7 @@ public class 对局内容集Tests
     {
         // 0 不是合法内容集（显式编号 1 / 2）：对局配置、跑局配置与存档里的非法值都要响亮失败，不静默当成某个内容集。
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(1), Four, MatchOptions.Immediate with { ContentSet = 0 }));
+            MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(1), Four, MatchOptions.Immediate with { ContentSet = 0 }));
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { ContentSet = (ContentSet)3 }).Validated());
 
         MatchSession session = Played(ContentSet.V1, seed: 11, turns: 4);

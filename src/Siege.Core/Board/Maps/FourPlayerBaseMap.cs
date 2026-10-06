@@ -26,7 +26,7 @@ namespace Siege.Core.Board.Maps;
 /// </remarks>
 public static class FourPlayerBaseMap
 {
-    /// <summary>地图标识，也是各入口的缺省地图（<see cref="MapCatalog.DefaultId"/>）。</summary>
+    /// <summary>地图标识。builtin-board-maps 起不再是缺省地图（缺省见 <see cref="MapCatalog.DefaultId"/>）；依赖本图读数的测试与命令显式指定它。</summary>
     public const string Id = "siege-4p-base-v5";
 
     private const int Size = 13;

@@ -14,7 +14,7 @@ namespace Siege.Sim.Play;
 internal static class PlayCommand
 {
     /// <param name="playerCountArg">参赛人数；<c>null</c> = 地图的人数上限 <see cref="MapData.MaxPlayers"/>（small-maps D3：2 人图开 2 人局，4 人图照旧 4 人）。</param>
-    /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
+    /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>，4 人内置棋盘图）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
     /// <param name="cellLimit">AI 候选格上限 K；<c>null</c> 按地图的可落子格数自动取（<see cref="AiSearchConfig.ForMap"/>），0 = 不限制。</param>
     /// <param name="weights">测试接缝：AI 评价权重（整表）；<c>null</c> = 本局地图登记的地图专属覆盖，未登记即默认权重表（v2-recalibration D6，经 <see cref="EvaluationWeights.ForMapId(string, EvaluationWeights?)"/>）。终端入口不传（ai-eye R12：终端对局一律用缺省值，不加选项）。</param>
     /// <param name="passThreshold">测试接缝：AI 停手阈值；<c>null</c> = 难度预设的缺省值。终端入口不传（同上）。
@@ -88,13 +88,11 @@ internal static class PlayCommand
 
         output.WriteLine();
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
-        if (map.Id != MapCatalog.DefaultId)
-        {
-            // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
-            string mapId = match.Publish().MapId;
-            output.WriteLine($"地图 {mapId}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）"
-                + (GeneratedMapId.IsGenerated(mapId) ? $"——随机生成图，用 --map {mapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
-        }
+        // 一律打印地图标识（builtin-board-maps D3：缺省地图也打印，棋盘图便于复现）。
+        // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
+        string shownMapId = match.Publish().MapId;
+        output.WriteLine($"地图 {shownMapId}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）"
+            + (GeneratedMapId.IsGenerated(shownMapId) ? $"——随机生成图，用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
 
         // 专家（前瞻宽度 > 0）另写明实际生效的前瞻宽度；其余三档这一行与引入专家之前逐字相同。
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;

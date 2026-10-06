@@ -16,12 +16,16 @@ namespace Siege.Core.Tests;
 /// </summary>
 internal static class SimFixtures
 {
-    /// <summary>基准图 4 人 Easy 配置。</summary>
+    /// <summary>
+    /// 基准图（<c>siege-4p-base-v5</c>）4 人 Easy 配置。地图显式写死 v5（builtin-board-maps D4）：缺省地图换成 4 人内置棋盘图之后，
+    /// 依赖本夹具的黄金值、样本口径与"与改动前逐步相同"断言仍钉在 v5 上，不随缺省漂移（第三个 change 再改写到棋盘图）。
+    /// </summary>
     internal static RunConfig Config(
         int count = 1, ulong seedStart = 1, int? turnLimit = null, AiDifficulty difficulty = AiDifficulty.Easy,
         EventRetention retention = EventRetention.Full, int players = 4, int? injectFailureAtTurn = null, bool compress = false) =>
         new()
         {
+            MapId = Siege.Core.Board.Maps.FourPlayerBaseMap.Id,
             Players = [.. Enumerable.Range(0, players).Select(_ => new PlayerAiConfig { Difficulty = difficulty })],
             SeedStart = seedStart,
             Count = count,
