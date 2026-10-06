@@ -1,10 +1,10 @@
 # 10-06-board-isolated-gen（母任务 10-06-board-terrain 的子任务 ①）
 
-> 规格权威：`openspec/changes/board-isolated-gen/`（proposal / design / specs / tasks）。负责人裁决全文见母任务 `prd.md`。影响面调研：`research/disconnected-boards-impact.md`。
+> 规格权威：`openspec/changes/archive/2026-10-06-board-isolated-gen/`（已归档，主规格已同步；4.3 负责人 2026-10-06 过目，保持不变）。负责人裁决全文见母任务 `prd.md`。影响面调研：`research/disconnected-boards-impact.md`。
 
 棋盘档生成器改为互不连通的棋盘组：取消通道；出生棋盘 5–7（人数 + 1 块），公共棋盘 7–15、最大一块宽高 ≥ 11；支持 2 / 3 / 4 人；预算按人数缩放；信物按公共棋盘较短边 7–8 / 9–10 / 11–15 放 1 / 2 / 3 个；标识 `board:<种子>[:p<人数>][:n<棋盘数>]`。校验器对棋盘档豁免可达性与咽喉、新增"棋盘之外无可落子格"。`标准` / `边疆` 档与 `gen:` 不动。
 
-验收：`openspec/changes/board-isolated-gen/tasks.md` 各条的验证项。
+验收：`openspec/changes/archive/2026-10-06-board-isolated-gen/tasks.md` 各条的验证项。
 
 约束：
 - 在工作树 `.claude/worktrees/board-terrain`、分支 `feat/board-terrain` 上做，基于 main `c3448ae`；不要碰主工作树，不要切分支。
