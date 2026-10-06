@@ -466,3 +466,46 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: 棋盘地形 ②：内置棋盘图与缺省切换（builtin-board-maps）
+
+**Date**: 2026-10-06
+**Task**: 棋盘地形 ②：内置棋盘图与缺省切换（builtin-board-maps）
+**Branch**: `feat/board-terrain`
+
+### Summary
+
+出生棋盘同尺寸、三张内置棋盘图（board:5 / 55:p3 / 23:p2）、各入口缺省改为 siege-4p-board-v1、选图界面只留棋盘图且人数可调；负责人过目保持，合入 main 并推送。
+
+### Main Changes
+
+- **内容**：母任务 `board-terrain` 第二个 change。出生棋盘同尺寸（生成器每图只抽一次、可转 90°；校验器拒绝不一）；三张内置棋盘图 `siege-4p-board-v1` = `board:5`、`siege-3p-board-v1` = `board:55:p3`、`siege-2p-board-v1` = `board:23:p2`（负责人从 9 个候选中看图选定），摘要黄金值守住升号；三个入口缺省改为 `siege-4p-board-v1`；选图界面只列内置棋盘图与随机棋盘图（人数 2–4）；清理通道死代码。设计文档 v1.29。
+- **负责人裁决**：调研发现"出生棋盘全部同尺寸"的种子在 4 / 3 人下几乎不存在 → 改生成器；内置图用别名、每种人数一张；依赖缺省地图的测试钉回 v5（全量否则从 1 分钟涨到 19 分钟）。
+- **验证**：全量失败名单与改动前相同；选图自检 11 步通过；`--map-select` 自检后与直接 `--auto-demo` 的盘面摘要同为 `160306D6C0261897`；新缺省 `--pick-check` 465 / 465。
+- **留意**：
+  - 依赖 v5 读数的命令须显式 `--map=siege-4p-base-v5`；`SimFixtures.Config` 与 `LookaheadFixtures.V5Config` 钉在 v5，第三个 change 改写。
+  - 自动演示收尾新增 `[auto-demo] 盘面摘要` 行，可用来比对两条启动路径。
+  - 发布页仍是 v0.3.0 的内容（旧地图），下次发版时一起更新。
+- **下一步**：③ `retire-legacy-maps`（删 v5 / 2p / 3p / 边疆 / `gen:` 与 `maps/` 历史 json；约 44 个规则测试文件与 `gen:` / 边疆相关 200 多处引用改写到新棋盘图；黄金值重定；旧存档 / 日志明确报错）→ AI 校准。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4419e22` | (see git log) |
+| `6d08247` | (see git log) |
+| `57212b5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
