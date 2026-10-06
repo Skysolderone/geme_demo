@@ -104,7 +104,7 @@ public sealed partial class GameRoot : Node3D
         _bindings.Install();
 
         // 命令行：先把全部选项读完，再结算未知选项（LaunchArgs：合法选项集合 = 读取过的名字，没有第二张表）。
-        // --map=<地图标识或文件>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5）。缺省 v5（MapCatalog.DefaultId）；
+        // --map=<地图标识或文件>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5）。缺省是 4 人内置棋盘图（MapCatalog.DefaultId，builtin-board-maps D3）；
         // 选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
         ulong seed;
         int rounds;
@@ -299,6 +299,13 @@ public sealed partial class GameRoot : Node3D
             // --map=gen：随机取一个地图种子。规则内核不读时钟，取种子只在入口最外层做；时间戳折成九位以内的短种子（与选图界面"换一张"同一个折叠函数），
             // 拼成完整标识、打印出来，再交给 MapCatalog。
             // 地图种子与上面的对局种子各取各的，互不相干（map-generator D2 / D3）。
+            // --map-select 只接受内置棋盘图或完整的棋盘图标识作预选（map-selection「开局选图界面」：未带种子的随机请求 MUST 报错退出），
+            // 所以裸 gen / board 在补种子之前就拒绝，不让它被补成完整标识后混进预选。
+            if (mapSelect && (GeneratedMapId.IsBareRequest(mapId) || BoardMapId.IsBareRequest(mapId)))
+            {
+                throw new System.FormatException($"--map-select 不接受未带种子的随机请求 --map={mapId?.Trim()}：请给完整的棋盘图标识（如 --map=board:12345）或内置棋盘图标识。");
+            }
+
             if (GeneratedMapId.IsBareRequest(mapId))
             {
                 mapId = GeneratedMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapGenParameters.RandomPick);
@@ -312,7 +319,7 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
-            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图（v5）、跳过选图（既有自检命令不变）。
+            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取目录的缺省图（4 人内置棋盘图）、跳过选图；依赖 v5 读数的自检命令须显式给 --map=。
             // 军势揭示预览同样跳过选图（缺省图上直接看），不进补给阶段。
             if (mapSelect || (mapId is null && !Unattended && !RevealPreviewing))
             {
@@ -1502,6 +1509,11 @@ public sealed partial class GameRoot : Node3D
         GD.Print(result is null
             ? $"[auto-demo] 演示停止：跑满 {_rounds} 个大回合（--rounds 停止点，不是终局；对局停在第 {_session.Match.MajorRound} 大回合）；{standings}"
             : $"[auto-demo] 终局：第 {result.MajorRound} 大回合，{Names.End(result.Reason)}；{standings}");
+        // 盘面摘要（builtin-board-maps 段 D 检查）：同一地图与对局种子下两次演示逐步相同，则停下时的盘面（含棋子类型与改造）逐字节相同、摘要相同。
+        // 用于核对 map-selection「强制进入选图的自检选项」：--map-select --auto-demo --map=X 与直接 --auto-demo --map=X 的对局过程相同。
+        string boardDigest = System.Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(_session.Match.Board.Serialize())))[..16];
+        GD.Print($"[auto-demo] 盘面摘要 {boardDigest}：地图 {_session.Match.Map.Id}，对局种子 {_matchSeed}，第 {_session.Match.MajorRound} 大回合");
         GD.Print($"[perf] 启动到首帧 {_firstFrameMsec} ms，启动到终局 {Time.GetTicksMsec()} ms，共 {_frame} 帧");
         // show-sound-cues 2.2 自证：无人值守下场景树里 MUST 没有任何音频播放节点（遍历整棵树数出来，不是看 _sounds 是否为 null）。
         GD.Print($"[sound] 音频节点 {CountAudioNodes(GetTree().Root)}（无人值守：不创建音效节点、不合成波形）");

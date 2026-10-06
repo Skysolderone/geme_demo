@@ -7,31 +7,27 @@ using Siege.Presentation.Visibility;
 namespace Siege.Core.Tests.MapSelection;
 
 /// <summary>
-/// 规格：openspec/changes/map-generator/specs/map-selection —— Requirement: 开局选图界面（tasks 3.1，视图模型部分）；
-/// openspec/changes/board-map/specs/map-selection 改动了预选项（棋盘图）并新增棋盘图的种子 / 换一张 / 棋盘数。
+/// 规格：openspec/changes/builtin-board-maps/specs/map-selection —— Requirement: 开局选图界面（视图模型部分，tasks 4.1）。
+/// 清单只有三张内置棋盘图与随机棋盘图；随机棋盘图有种子、人数（2–4）与棋盘数（范围随人数）。
 /// 视图模型只产出"地图标识"；地图一律由调用方经 <see cref="MapCatalog.Resolve"/> 得到，成功后 <c>Accept</c>、失败则 <c>RollBack</c>。
 /// </summary>
 public class 选图视图模型Tests
 {
     private const ulong InitialSeed = 424242UL;
 
-    private static MapSelectModel RandomSelected(ulong initialSeed = InitialSeed)
+    /// <summary>选中随机棋盘图（4 人、缺省 7 块、种子即初始种子）并接受。</summary>
+    private static MapSelectModel BoardSelected(ulong initialSeed = InitialSeed)
     {
         var model = new MapSelectModel(initialSeed);
-        Assert.True(model.Select(model.Options.Count - 1));
+        Assert.True(model.Select(BoardIndex(model)));
         model.Accept();
+        Assert.Equal($"board:{initialSeed}", model.CurrentId);
         return model;
     }
 
-    /// <summary>选中第一张内置图（清单里棋盘图在最前，内置图从第 1 项起）。</summary>
-    private static MapSelectModel BuiltinSelected(ulong initialSeed = InitialSeed)
-    {
-        var model = new MapSelectModel(initialSeed);
-        Assert.True(model.Select(1));
-        model.Accept();
-        Assert.Equal(MapCatalog.BuiltinIds[0], model.CurrentId);
-        return model;
-    }
+    private static int BoardIndex(MapSelectModel model) => model.Options.ToList().FindIndex(o => o.IsBoard);
+
+    private static int IndexOf(MapSelectModel model, string builtinId) => model.Options.ToList().FindIndex(o => o.BuiltinId == builtinId);
 
     /// <summary>某张图的默认棋盘视图模型（尚未插旗的对局，与选图界面的预览同构）。</summary>
     private static DefaultBoardView ViewOf(MapData map)
@@ -42,244 +38,123 @@ public class 选图视图模型Tests
     }
 
     [Fact]
-    public void 缺省进入选图_预选棋盘图且已取好种子_清单是棋盘图加目录内置表加随机图()
+    public void 缺省进入选图()
     {
-        // 规格（board-map / map-selection）Scenario「缺省进入选图」：预选项是棋盘图，列表另有标准图、2 人图、3 人图、手工边疆图与随机图。
-        // 变异 MC-1：清单改成视图模型里自带的字面量数组 → 守门「选图界面不自带地图清单」红；
-        // 变异 M-C1（board-map 段 C，实跑）：构造函数的预选项改回目录缺省图（v5）→ MapSelection 过滤下红 6（含本测试）。
+        // 规格 Scenario「缺省进入选图」：预选项是 siege-4p-board-v1，列表另有 3 人与 2 人内置棋盘图和随机棋盘图。
+        // 变异 M-D1（builtin-board-maps 段 D，实跑）：预选项改为随机棋盘图 → MapSelection 与各入口选图过滤下红 22（含本测试）；
+        // 变异 M-D2（实跑）：清单改回目录的全部内置图 → 红 6（含本测试与「旧地图不在界面上」）。
         var model = new MapSelectModel(InitialSeed);
 
-        // builtin-board-maps 段 C：目录在手工图之后多登记了三张内置棋盘图，清单随之 6 → 9（过渡态；段 D 按新规格把清单改为只列内置棋盘图与随机棋盘图）。
-        Assert.Equal(9, model.Options.Count);
-        Assert.Equal([null, .. MapCatalog.BuiltinIds, null], model.Options.Select(o => o.BuiltinId));
-        Assert.Equal(
-            [MapOptionKind.Board, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin,
-                MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Random],
-            model.Options.Select(o => o.Kind));
-        // 选项标题是目录登记的显示名（裁决 3）：视图模型不自带"标识 → 名字"对照表。变异 MC-21：标题退回显示标识 → 本测试红。
-        Assert.Equal(MapCatalog.BuiltinMaps.Select(m => m.Title), model.Options.Where(o => o.Kind == MapOptionKind.Builtin).Select(o => o.Title));
-        Assert.Equal(MapCatalog.BuiltinIds, MapCatalog.BuiltinMaps.Select(m => m.Id));
-        Assert.True(Assert.Single(model.Options, o => o.IsRandom).Title.Contains("随机", StringComparison.Ordinal));
-        Assert.True(Assert.Single(model.Options, o => o.IsBoard).Title.Contains("棋盘", StringComparison.Ordinal));
-        Assert.Equal(FourPlayerBaseMap.Id, model.Options[1].BuiltinId);
-        Assert.Equal(TwoPlayerBaseMap.Id, model.Options[2].BuiltinId);
-        Assert.Equal(ThreePlayerBaseMap.Id, model.Options[3].BuiltinId);
-        Assert.Equal(FrontierMapV2.Id, model.Options[4].BuiltinId);
+        Assert.Equal(4, model.Options.Count);
+        Assert.Equal(["siege-4p-board-v1", "siege-3p-board-v1", "siege-2p-board-v1", null], model.Options.Select(o => o.BuiltinId));
+        Assert.Equal([MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Builtin, MapOptionKind.Board], model.Options.Select(o => o.Kind));
+        // 选项标题是目录登记的显示名（裁决 3）：视图模型不自带"标识 → 名字"对照表。
+        Assert.Equal(MapCatalog.BuiltinBoards.Select(b => b.Title), model.Options.Where(o => o.Kind == MapOptionKind.Builtin).Select(o => o.Title));
+        Assert.Equal(["四人棋盘图（7 块）", "三人棋盘图（6 块）", "双人棋盘图（5 块）"], MapCatalog.BuiltinBoards.Select(b => b.Title));
+        Assert.Contains("随机", Assert.Single(model.Options, o => o.IsBoard).Title, StringComparison.Ordinal);
 
-        // 预选棋盘图，种子即调用方注入的那个（"已取好一个地图种子"），棋盘数缺省 7、标识省略 :n 段。
         Assert.Equal(0, model.SelectedIndex);
-        Assert.True(model.IsBoardSelected);
-        Assert.False(model.IsRandomSelected);
-        Assert.Equal(InitialSeed, model.MapSeed);
-        Assert.Equal("424242", model.SeedText);
-        Assert.Equal(7, model.BoardCount);
-        Assert.Equal("board:424242", model.CurrentId);
-        Assert.NotEqual(MapCatalog.DefaultId, model.CurrentId);
+        Assert.Equal("siege-4p-board-v1", model.CurrentId);
+        Assert.Equal(MapCatalog.DefaultId, model.CurrentId);
+        Assert.False(model.IsBoardSelected);
         Assert.Equal(string.Empty, model.Notice);
+        // 选中内置棋盘图时随机棋盘图的调节不可用；种子已取好，切到随机棋盘图时用它。
+        Assert.False(model.CanIncreasePlayers || model.CanDecreasePlayers || model.CanIncreaseBoards || model.CanDecreaseBoards);
+        Assert.Equal((InitialSeed, "424242", 4, 7), (model.MapSeed, model.SeedText, model.Players, model.BoardCount));
 
-        // 批量 / 终端入口的缺省地图由目录决定（board-map D9；builtin-board-maps D3 起为 4 人内置棋盘图），与选图界面的预选项无关。
-        Assert.Equal("siege-4p-board-v1", MapCatalog.DefaultId);
+        // 背景预览：按当前标识解析出的就是 4 人内置棋盘图。
+        MapData map = MapCatalog.Resolve(model.CurrentId);
+        Assert.Equal(("siege-4p-board-v1", 4, 7), (map.Id, map.MaxPlayers, map.Boards.Length));
     }
 
     [Fact]
-    public void 选中棋盘图_显示种子棋盘数与地图尺寸()
+    public void 旧地图不在界面上()
     {
-        // 规格：选中棋盘图时 SHALL 显示当前地图种子、棋盘数与地图尺寸。种子与棋盘数在视图模型上；
-        // 尺寸取自按标识解析出的地图的默认棋盘视图模型（界面的一行说明由 MapPreviewInfo 给出，不读地图、不自行出图）。
+        // 规格 Scenario「旧地图不在界面上」：列表里没有 v5、2p / 3p 标准图、边疆图与边疆档随机图；按标识预选它们也不行（--map-select 下报错退出）。
+        // 变异 M-D3（实跑）：TrySelectId 对目录里任一内置标识都接受 → 红 1（本测试）。
+        var model = new MapSelectModel(InitialSeed);
+        string[] legacy = [FourPlayerBaseMap.Id, TwoPlayerBaseMap.Id, ThreePlayerBaseMap.Id, FrontierMapV2.Id];
+        Assert.All(legacy, id => Assert.Contains(id, MapCatalog.BuiltinIds));   // 样本口径：它们仍登记在目录里（命令行可用）
+        Assert.DoesNotContain(model.Options, o => o.BuiltinId is not null && legacy.Contains(o.BuiltinId));
+        Assert.DoesNotContain(model.Options, o => o.Title.Contains("边疆", StringComparison.Ordinal));
+        Assert.All(model.Options, o => Assert.Contains(o.Kind, new[] { MapOptionKind.Builtin, MapOptionKind.Board }));
+
+        foreach (string bad in legacy.Concat(["gen:12345", "gen:12345:p7", "gen", "board", "board:abc", "board:1:n6", "board:1:n11", "board:1:p5",
+                     "board:1:p3:n9", "board:1:p2:n6", "board:1:n9:x", "boards:1", "no-such-map", "maps/x.json", ""]))
+        {
+            Assert.False(model.TrySelectId(bad), bad);
+            Assert.Equal("siege-4p-board-v1", model.CurrentId);
+        }
+
+        // 旧地图仍可经共用解析直接建局（不经选图界面）。
+        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.Resolve(FourPlayerBaseMap.Id).Id);
+    }
+
+    [Fact]
+    public void 选中随机棋盘图_显示种子人数棋盘数与地图尺寸()
+    {
+        // 规格：选中随机棋盘图时 SHALL 显示当前地图种子、人数、棋盘数与地图尺寸。尺寸取自按标识解析出的地图的默认棋盘视图模型（MapPreviewInfo）。
         var model = new MapSelectModel(InitialSeed);
         Assert.True(model.TrySelectId("board:1"));
-        Assert.Equal((1UL, 7, "1"), (model.MapSeed, model.BoardCount, model.SeedText));
+        Assert.True(model.IsBoardSelected);
+        Assert.Equal((1UL, 4, 7, "1"), (model.MapSeed, model.Players, model.BoardCount, model.SeedText));
 
         MapData map = MapCatalog.Resolve(model.CurrentId);
-        Assert.Equal(model.CurrentId, map.Id);
-        Assert.Equal(model.BoardCount, map.Boards.Length);
+        Assert.Equal((model.CurrentId, model.BoardCount, model.Players), (map.Id, map.Boards.Length, map.MaxPlayers));
         DefaultBoardView view = ViewOf(map);
         string info = MapPreviewInfo.Of(view);
-
-        Assert.InRange(map.Width, 20, 50);
-        Assert.InRange(map.Height, 20, 50);
-        Assert.StartsWith($"{map.Width}×{map.Height}，", info, StringComparison.Ordinal);
+        Assert.StartsWith($"{map.Width}×{map.Height}，5 个出生区，", info, StringComparison.Ordinal);
         Assert.Contains("棋盘 7 块（出生 5、公共 2）", info, StringComparison.Ordinal);
         int playable = view.Cells.Count(c => c.Terrain == Terrain.Playable);
         Assert.True(playable >= 250, $"样本口径：可落子只有 {playable} 格。");
         Assert.Contains($"可落子 {playable} 格", info, StringComparison.Ordinal);
-
-        // 棋盘数不同，说明随之不同（样本取非缺省值）。
-        Assert.True(model.AdjustBoards(+2));
-        MapData nine = MapCatalog.Resolve(model.CurrentId);
-        Assert.Contains("棋盘 9 块（出生 5、公共 4）", MapPreviewInfo.Of(ViewOf(nine)), StringComparison.Ordinal);
 
         // 棋盘清单为空的地图：说明里没有棋盘一项，与引入棋盘图之前的文案相同。
         Assert.Equal("13×13，4 个出生区，可落子 105 格", MapPreviewInfo.Of(ViewOf(FourPlayerBaseMap.Create())));
     }
 
     [Fact]
-    public void 调整棋盘数_按当前种子重新生成_完整标识以n9结尾()
+    public void 换一张()
     {
-        // 规格 Scenario「调整棋盘数」：棋盘数从 7 调到 9 → 按当前种子重新生成，完整标识以 :n9 结尾。
-        // 变异 M-C2a（board-map 段 C，实跑）：标识的棋盘数恒取缺省值（不带 :n）→ MapSelection 过滤下红 4（含本测试）；
-        // 变异 M-C2b（实跑）：调整棋盘数只改数、报告"标识未变"（调用方因此不重新生成）→ 红 3（含本测试）。
-        var model = new MapSelectModel(InitialSeed);
-        model.Accept();
-        Assert.True(model.CanIncreaseBoards);
-        Assert.False(model.CanDecreaseBoards);   // 缺省 7 即下限
-        Assert.False(model.AdjustBoards(-1));
-        Assert.Equal("board:424242", model.CurrentId);
-
+        // 规格 Scenario「换一张」：种子变化，界面显示新的完整标识；人数与棋盘数不变。变异 M-D4（实跑）：Reroll 忽略注入值 → 红 2（含本测试）。
+        MapSelectModel model = BoardSelected();
+        Assert.True(model.AdjustPlayers(-1));
         Assert.True(model.AdjustBoards(+1));
-        Assert.Equal("board:424242:n8", model.CurrentId);
-        Assert.True(model.AdjustBoards(+1));
-
-        Assert.Equal(9, model.BoardCount);
-        Assert.Equal(InitialSeed, model.MapSeed);   // 种子不变
-        Assert.Equal("board:424242:n9", model.CurrentId);
-        Assert.EndsWith(":n9", model.CurrentId, StringComparison.Ordinal);
-        MapData map = MapCatalog.Resolve(model.CurrentId);
-        Assert.Equal((model.CurrentId, 9), (map.Id, map.Boards.Length));
-        Assert.Equal(4, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
-
-        Assert.True(model.AdjustBoards(+1));
-        Assert.Equal("board:424242:n10", model.CurrentId);
-        Assert.False(model.CanIncreaseBoards);
-        Assert.False(model.AdjustBoards(+1));
-        Assert.Equal(BoardMapParameters.MaxBoards, model.BoardCount);
-
-        // 调回缺省 7：省略 :n 段。
-        Assert.True(model.AdjustBoards(-3));
-        Assert.Equal("board:424242", model.CurrentId);
-        Assert.Equal(BoardMapParameters.MinBoards, model.BoardCount);
-
-        // 平台数是随机图（边疆档）的参数，选中棋盘图时不起作用；反之亦然。
-        Assert.False(model.AdjustPlatforms(+1));
-        Assert.False(model.CanIncreasePlatforms || model.CanDecreasePlatforms);
-        Assert.True(model.AdjustBoards(+2));
-        Assert.True(model.Select(model.Options.Count - 1));
-        Assert.False(model.AdjustBoards(+1));
-        Assert.False(model.CanIncreaseBoards || model.CanDecreaseBoards);
-        Assert.Equal("gen:424242:s1", model.CurrentId);
-        // 切回棋盘图，棋盘数还在。
-        Assert.True(model.Select(0));
-        Assert.Equal("board:424242:n9", model.CurrentId);
-    }
-
-    [Fact]
-    public void 棋盘图_种子输入与换一张_按新种子生成()
-    {
-        // 规格：选中棋盘图时提供同样的种子输入与换一张。
-        var model = new MapSelectModel(InitialSeed);
-        model.Accept();
-        Assert.True(model.AdjustBoards(+1));
+        Assert.Equal("board:424242:p3:n7", model.CurrentId);
 
         Assert.True(model.Reroll(987654321UL));
-        Assert.Equal("board:987654321:n8", model.CurrentId);   // 换一张保持棋盘数
-        Assert.Equal("987654321", model.SeedText);
+        Assert.Equal((987654321UL, "987654321", "board:987654321:p3:n7"), (model.MapSeed, model.SeedText, model.CurrentId));
         Assert.True(model.Reroll(987654321UL));                // 注入值恰与当前相同：仍然要"换"
-        Assert.Equal("board:987654322:n8", model.CurrentId);
+        Assert.Equal("board:987654322:p3:n7", model.CurrentId);
 
-        Assert.True(model.SubmitSeed(" 12345 "));
-        Assert.Equal("board:12345:n8", model.CurrentId);
-        Assert.Equal(MapFile.ToJson(MapCatalog.Resolve("board:12345:n8")), MapFile.ToJson(MapCatalog.Resolve(model.CurrentId)));
-        model.Accept();
-
-        Assert.False(model.SubmitSeed("abc"));
-        Assert.Contains("非负整数", model.Notice, StringComparison.Ordinal);
-        Assert.Equal("board:12345:n8", model.CurrentId);
-        Assert.Equal("abc", model.SeedText);
-
-        // 生成失败回滚：回到上一张成功的棋盘图，棋盘数一并恢复。
-        Assert.True(model.AdjustBoards(+2));
-        model.RollBack("失败");
-        Assert.Equal("board:12345:n8", model.CurrentId);
-        Assert.Equal(8, model.BoardCount);
+        // 内置棋盘图选中时不起作用。
+        Assert.True(model.Select(0));
+        Assert.False(model.Reroll(1UL));
+        Assert.Equal("siege-4p-board-v1", model.CurrentId);
     }
 
     [Fact]
-    public void 按标识预选棋盘图_完整标识可用_裸请求与写错的拒绝()
+    public void 输入种子复现()
     {
-        // 规格：--map-select 与 --map=board:12345 同给时，该标识只作为选图界面的预选项。
-        var model = new MapSelectModel(InitialSeed);
-        Assert.True(model.Select(1));
-
-        Assert.True(model.TrySelectId(" board:12345 "));
-        Assert.True(model.IsBoardSelected);
-        Assert.Equal(0, model.SelectedIndex);
-        Assert.Equal("board:12345", model.CurrentId);
-        Assert.Equal((12345UL, "12345", 7), (model.MapSeed, model.SeedText, model.BoardCount));
-
-        Assert.True(model.TrySelectId("board:42:n9"));
-        Assert.Equal(("board:42:n9", 9), (model.CurrentId, model.BoardCount));
-        Assert.True(model.TrySelectId("board:42:n7"));   // 规范化：缺省棋盘数省略
-        Assert.Equal("board:42", model.CurrentId);
-
-        foreach (string bad in new[] { "board", "board:abc", "board:1:n6", "board:1:n11", "board:1:p7", "board:1:n9:x", "boards:1" })
-        {
-            Assert.False(model.TrySelectId(bad), bad);
-            Assert.Equal("board:42", model.CurrentId);
-        }
-    }
-
-    [Fact]
-    public void 选中随机图_显示注入的地图种子与缺省平台数_标识规范化()
-    {
-        MapSelectModel model = RandomSelected();
-
-        Assert.True(model.IsRandomSelected);
-        Assert.Equal(InitialSeed, model.MapSeed);
-        Assert.Equal(MapGenParameters.DefaultPlatforms, model.PlatformCount);
-        Assert.Equal("424242", model.SeedText);
-        Assert.Equal("gen:424242:s1", model.CurrentId);   // 缺省平台数省略 :p6
-
-        // 切回内置图再切回来，种子与平台数都还在。
-        Assert.True(model.AdjustPlatforms(+1));
-        Assert.True(model.Select(2));
-        Assert.Equal(MapCatalog.BuiltinIds[1], model.CurrentId);   // 清单第 0 项是棋盘图，内置图下标顺延 1
-        int random = model.Options.Count - 1;   // "随机图"恒在最后（small-maps 起内置图多了一张，不写死下标）
-        Assert.True(model.Select(random));
-        Assert.Equal("gen:424242:p7:s1", model.CurrentId);
-
-        // 选中已选中的那一项：标识没变，不必重搭预览。
-        Assert.False(model.Select(random));
-        Assert.Throws<ArgumentOutOfRangeException>(() => model.Select(model.Options.Count));
-        Assert.Throws<ArgumentOutOfRangeException>(() => model.Select(-1));
-    }
-
-    [Fact]
-    public void 换一张_种子取调用方注入的值_标识随之变化()
-    {
-        // 规格 Scenario「换一张」。变异 MC-3：Reroll 忽略注入值 → 本测试红。
-        MapSelectModel model = RandomSelected();
-        string before = model.CurrentId;
-
-        Assert.True(model.Reroll(987654321UL));
-
-        Assert.Equal(987654321UL, model.MapSeed);
-        Assert.Equal("987654321", model.SeedText);
-        Assert.Equal("gen:987654321:s1", model.CurrentId);
-        Assert.NotEqual(before, model.CurrentId);
-
-        // 注入值恰好与当前种子相同：仍然要"换"。
-        model.Accept();
-        Assert.True(model.Reroll(987654321UL));
-        Assert.NotEqual("gen:987654321:s1", model.CurrentId);
-    }
-
-    [Fact]
-    public void 输入种子复现_同种子同平台数得到同一标识与同一张地图()
-    {
-        // 规格 Scenario「输入种子复现」：两次启动（两个视图模型，初始种子不同）输入同一个种子、平台数相同。
-        MapSelectModel first = RandomSelected(1UL);
-        MapSelectModel second = RandomSelected(2UL);
+        // 规格 Scenario「输入种子复现」：两次启动（初始种子不同）输入同一个种子、人数与棋盘数相同 → 同一张图。
+        MapSelectModel first = BoardSelected(1UL);
+        MapSelectModel second = BoardSelected(2UL);
         Assert.NotEqual(first.CurrentId, second.CurrentId);
 
         Assert.True(first.SubmitSeed("12345"));
         Assert.True(second.SubmitSeed(" 12345 "));
-        Assert.True(first.AdjustPlatforms(+1));
-        Assert.True(second.AdjustPlatforms(+1));
+        Assert.True(first.AdjustPlayers(-2));
+        Assert.True(second.AdjustPlayers(-2));
 
-        Assert.Equal("gen:12345:p7:s1", first.CurrentId);
+        Assert.Equal("board:12345:p2", first.CurrentId);
         Assert.Equal(first.CurrentId, second.CurrentId);
         Assert.Equal(MapFile.ToJson(MapCatalog.Resolve(first.CurrentId)), MapFile.ToJson(MapCatalog.Resolve(second.CurrentId)));
         Assert.Equal("12345", second.SeedText);
+
+        // 与前导零、首尾空白无关；与当前相同的种子不重搭。
+        Assert.False(second.SubmitSeed("12345"));
+        Assert.True(second.SubmitSeed("007"));
+        Assert.Equal(("board:7:p2", "7"), (second.CurrentId, second.SeedText));
     }
 
     [Theory]
@@ -290,118 +165,157 @@ public class 选图视图模型Tests
     [InlineData("+7")]
     [InlineData("1.5")]
     [InlineData("12 34")]
-    [InlineData("5:p7")]
+    [InlineData("5:p3")]
     [InlineData("0x10")]
     [InlineData("１２３")]
     [InlineData("18446744073709551616")]
-    public void 非法种子_提示须为非负整数_当前图不变(string text)
+    public void 非法种子(string text)
     {
-        // 规格 Scenario「非法种子」。变异 MC-4：非法输入时把种子置 0 → 本测试红。
-        MapSelectModel model = RandomSelected();
-        Assert.True(model.AdjustPlatforms(+2));
+        // 规格 Scenario「非法种子」：提示种子须为非负整数，当前地图不变。变异 M-D5（实跑）：非法输入时把种子置 0 → 红 11（本测试全部数据行）。
+        MapSelectModel model = BoardSelected();
+        Assert.True(model.AdjustPlayers(-1));
         model.Accept();
 
         Assert.False(model.SubmitSeed(text));
 
         Assert.Contains("非负整数", model.Notice, StringComparison.Ordinal);
-        Assert.Equal("gen:424242:p8:s1", model.CurrentId);
-        Assert.Equal(InitialSeed, model.MapSeed);
-        Assert.Equal(8, model.PlatformCount);
+        Assert.Equal("board:424242:p3", model.CurrentId);
+        Assert.Equal((InitialSeed, 3, 6), (model.MapSeed, model.Players, model.BoardCount));
         Assert.Equal(text, model.SeedText);   // 输入框保留用户敲的内容，方便改
 
         // 随后一次合法输入清掉提示。
         Assert.True(model.SubmitSeed("18446744073709551615"));
         Assert.Equal(string.Empty, model.Notice);
-        Assert.Equal("gen:18446744073709551615:p8:s1", model.CurrentId);
+        Assert.Equal("board:18446744073709551615:p3", model.CurrentId);
     }
 
     [Fact]
-    public void 输入与当前相同的种子_不重搭_前导零按数值()
+    public void 调整人数()
     {
-        MapSelectModel model = RandomSelected();
+        // 规格 Scenario「调整人数」：随机棋盘图人数 4 → 3 → 棋盘数变为 6，按当前种子重新生成 3 人图，完整标识以 :p3 结尾。
+        // 变异 M-D6（实跑）：改人数时保留原棋盘数（7 对 3 人也合法）→ 红 16（含本测试）；
+        // 变异 M-D7（实跑）：标识的人数恒取 4（IdOf 不传人数）→ 红 18（含本测试）。
+        MapSelectModel model = BoardSelected();
+        Assert.True(model.AdjustBoards(+2));
+        Assert.Equal("board:424242:n9", model.CurrentId);
 
-        Assert.False(model.SubmitSeed("424242"));
-        Assert.Equal(string.Empty, model.Notice);
-        Assert.True(model.SubmitSeed("007"));
-        Assert.Equal("gen:7:s1", model.CurrentId);
-        Assert.Equal("7", model.SeedText);
+        Assert.True(model.CanDecreasePlayers);
+        Assert.False(model.CanIncreasePlayers);
+        Assert.False(model.AdjustPlayers(+1));    // 4 已是上限：不夹取、不变
+
+        Assert.True(model.AdjustPlayers(-1));
+        Assert.Equal((3, 6, InitialSeed), (model.Players, model.BoardCount, model.MapSeed));
+        Assert.EndsWith(":p3", model.CurrentId, StringComparison.Ordinal);
+        Assert.Equal("board:424242:p3", model.CurrentId);
+        MapData three = MapCatalog.Resolve(model.CurrentId);
+        Assert.Equal((3, 6, 4), (three.MaxPlayers, three.Boards.Length, three.Boards.Count(b => b.Kind == BoardPlateKind.Birth)));
+
+        Assert.True(model.AdjustPlayers(-1));
+        Assert.Equal(("board:424242:p2", 2, 5), (model.CurrentId, model.Players, model.BoardCount));
+        Assert.False(model.CanDecreasePlayers);
+        Assert.False(model.AdjustPlayers(-1));
+        Assert.Equal(2, model.Players);
+
+        // 回到 4 人：棋盘数回到 7、:p 段省略。
+        Assert.True(model.AdjustPlayers(+2));
+        Assert.Equal(("board:424242", 4, 7), (model.CurrentId, model.Players, model.BoardCount));
+
+        // 内置棋盘图选中时不起作用；切回随机棋盘图人数还在。
+        Assert.True(model.AdjustPlayers(-1));
+        Assert.True(model.Select(1));
+        Assert.False(model.AdjustPlayers(-1));
+        Assert.Equal("siege-3p-board-v1", model.CurrentId);
+        Assert.True(model.Select(BoardIndex(model)));
+        Assert.Equal("board:424242:p3", model.CurrentId);
     }
 
-    [Fact]
-    public void 平台数在5到8之间调整_到边界不再变化()
+    [Theory]
+    [InlineData(4, 7, 10)]
+    [InlineData(3, 5, 8)]
+    [InlineData(2, 4, 5)]
+    public void 调整棋盘数_范围随人数(int players, int min, int max)
     {
-        // 变异 MC-5：上界放宽到 9 → 本测试红（Format 会抛出）。
-        MapSelectModel model = RandomSelected();
-        Assert.True(model.CanDecreasePlatforms && model.CanIncreasePlatforms);
+        // 规格：棋盘数在该人数的合法范围内调整（4 人 7–10、3 人 5–8、2 人 4–5），到边界不再变化（不夹取）。
+        // 变异 M-D8（实跑）：棋盘数下限恒取 4 人的 7 → 红 2（3 人与 2 人两组）。
+        MapSelectModel model = BoardSelected();
+        Assert.Equal(players != 4, model.AdjustPlayers(players - 4));
+        int def = model.BoardCount;
+        Assert.Equal(BoardMapParameters.DefaultBoardsFor(players), def);
 
-        Assert.True(model.AdjustPlatforms(-1));
-        Assert.Equal("gen:424242:p5:s1", model.CurrentId);
-        Assert.False(model.CanDecreasePlatforms);
-        Assert.False(model.AdjustPlatforms(-1));
-        Assert.Equal(5, model.PlatformCount);
+        while (model.CanDecreaseBoards)
+        {
+            Assert.True(model.AdjustBoards(-1));
+        }
 
-        Assert.True(model.AdjustPlatforms(+1));
-        Assert.Equal("gen:424242:s1", model.CurrentId);
-        Assert.True(model.AdjustPlatforms(+1));
-        Assert.True(model.AdjustPlatforms(+1));
-        Assert.Equal("gen:424242:p8:s1", model.CurrentId);
-        Assert.False(model.CanIncreasePlatforms);
-        Assert.False(model.AdjustPlatforms(+1));
-        Assert.Equal(MapGenParameters.MaxPlatforms, model.PlatformCount);
-        Assert.Equal(MapGenParameters.MinPlatforms, 5);
-    }
+        Assert.Equal(min, model.BoardCount);
+        Assert.False(model.AdjustBoards(-1));
+        Assert.Equal(min, model.BoardCount);
+        while (model.CanIncreaseBoards)
+        {
+            Assert.True(model.AdjustBoards(+1));
+        }
 
-    [Fact]
-    public void 选中内置图时_种子与平台数操作不起作用()
-    {
-        MapSelectModel model = BuiltinSelected();
-
-        Assert.False(model.Reroll(1UL));
-        Assert.False(model.SubmitSeed("12345"));
-        Assert.False(model.AdjustPlatforms(+1));
+        Assert.Equal(max, model.BoardCount);
         Assert.False(model.AdjustBoards(+1));
-        Assert.False(model.CanIncreasePlatforms || model.CanDecreasePlatforms);
-        Assert.False(model.CanIncreaseBoards || model.CanDecreaseBoards);
-
-        Assert.Equal(MapCatalog.BuiltinIds[0], model.CurrentId);
-        Assert.Equal(BoardMapParameters.DefaultBoards, model.BoardCount);
-        Assert.Equal(InitialSeed, model.MapSeed);
-        Assert.Equal(MapGenParameters.DefaultPlatforms, model.PlatformCount);
+        Assert.Equal(max != def, model.CurrentId.EndsWith($":n{max}", StringComparison.Ordinal));   // 2 人的上限 5 即缺省值，省略 :n 段
+        MapData map = MapCatalog.Resolve(model.CurrentId);
+        Assert.Equal((players, max), (map.MaxPlayers, map.Boards.Length));
     }
 
     [Fact]
-    public void 生成失败_回到上一张成功的图并给出提示()
+    public void 调整棋盘数()
     {
-        // 地图由调用方解析；解析 / 建预览失败（如生成器耗尽尝试次数）时调用方 RollBack：回到上一次 Accept 的状态，面板显示原因。
-        // 变异 MC-6：RollBack 只置提示、不恢复状态 → 本测试红。
-        MapSelectModel model = RandomSelected();
-        Assert.True(model.Reroll(5UL));
-        model.Accept();
+        // 规格 Scenario「调整棋盘数」：4 人随机棋盘图棋盘数 7 → 9 → 按当前种子重新生成 9 块棋盘的图，完整标识以 :n9 结尾。
+        // 变异 M-D9（实跑）：调整棋盘数只改数、报告"标识未变"（调用方因此不重新生成）→ 红 6（含本测试）。
+        MapSelectModel model = BoardSelected();
+        Assert.False(model.CanDecreaseBoards);   // 缺省 7 即下限
+        Assert.True(model.AdjustBoards(+1));
+        Assert.Equal("board:424242:n8", model.CurrentId);
+        Assert.True(model.AdjustBoards(+1));
 
-        Assert.True(model.Reroll(6UL));
-        Assert.True(model.AdjustPlatforms(+1));
-        model.RollBack("地图生成失败：尝试次数耗尽。");
+        Assert.Equal((9, InitialSeed, 4), (model.BoardCount, model.MapSeed, model.Players));
+        Assert.EndsWith(":n9", model.CurrentId, StringComparison.Ordinal);
+        MapData map = MapCatalog.Resolve(model.CurrentId);
+        Assert.Equal((model.CurrentId, 9), (map.Id, map.Boards.Length));
+        Assert.Equal(4, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
 
-        Assert.Equal("gen:5:s1", model.CurrentId);
-        Assert.Equal(5UL, model.MapSeed);
-        Assert.Equal("5", model.SeedText);
-        Assert.Equal(MapGenParameters.DefaultPlatforms, model.PlatformCount);
-        Assert.Equal("地图生成失败：尝试次数耗尽。", model.Notice);
-
-        // 从内置图切到随机图时失败：回到内置图那一项。
-        MapSelectModel fromBuiltin = BuiltinSelected();
-        Assert.True(fromBuiltin.Select(fromBuiltin.Options.Count - 1));
-        fromBuiltin.RollBack("失败");
-        Assert.False(fromBuiltin.IsRandomSelected);
-        Assert.Equal(MapCatalog.BuiltinIds[0], fromBuiltin.CurrentId);
+        // 调回缺省 7：省略 :n 段。
+        Assert.True(model.AdjustBoards(-2));
+        Assert.Equal("board:424242", model.CurrentId);
     }
 
     [Fact]
-    public void 确认开局_给出已接受的标识_与按它解析出的地图标识一致()
+    public void 强制进入选图的自检选项_按标识预选随机棋盘图带上人数()
     {
-        // 规格 Scenario「确认后开局」：日志首部的地图标识取 MapData.Id；每一项各验一遍"界面显示的标识 == 解析出的地图的标识"。
+        // 规格 Scenario「强制进入选图的自检选项」：--map-select --map=board:12345 → 预选随机棋盘图 board:12345。
+        // 调研指出的旧缺陷：board:x:p3 预选后丢掉人数、CurrentId 变成另一张 4 人图。变异 M-D10（实跑）：TrySelectId 不带上人数 → 红 1（本测试）。
+        var model = new MapSelectModel(InitialSeed);
+
+        Assert.True(model.TrySelectId(" board:12345 "));
+        Assert.True(model.IsBoardSelected);
+        Assert.Equal(BoardIndex(model), model.SelectedIndex);
+        Assert.Equal(("board:12345", 12345UL, "12345", 4, 7), (model.CurrentId, model.MapSeed, model.SeedText, model.Players, model.BoardCount));
+
+        Assert.True(model.TrySelectId("board:6:p3"));
+        Assert.Equal(("board:6:p3", 3, 6), (model.CurrentId, model.Players, model.BoardCount));
+        Assert.True(model.TrySelectId("board:6:p2:n4"));
+        Assert.Equal(("board:6:p2:n4", 2, 4), (model.CurrentId, model.Players, model.BoardCount));
+        Assert.True(model.TrySelectId("board:42:p4:n7"));   // 规范化：缺省人数与缺省棋盘数都省略
+        Assert.Equal(("board:42", 4, 7), (model.CurrentId, model.Players, model.BoardCount));
+
+        // 内置棋盘图按内置名预选。
+        Assert.True(model.TrySelectId("siege-2p-board-v1"));
+        Assert.Equal((2, "siege-2p-board-v1"), (model.SelectedIndex, model.CurrentId));
+        Assert.False(model.IsBoardSelected);
+    }
+
+    [Fact]
+    public void 确认后开局()
+    {
+        // 规格 Scenario「确认后开局」：日志首部的地图标识取 MapData.Id；每一项各验一遍"界面显示的标识 == 解析出的地图的标识"，人数 = 地图人数上限。
         int options = new MapSelectModel(12345UL).Options.Count;
-        Assert.True(options >= 6, $"样本口径：只有 {options} 项。");
+        Assert.Equal(4, options);
+        int[] expectedPlayers = [4, 3, 2, 4];
         for (int i = 0; i < options; i++)
         {
             var model = new MapSelectModel(12345UL);
@@ -414,71 +328,74 @@ public class 选图视图模型Tests
             string confirmed = model.Confirm();
 
             Assert.Equal(shown, confirmed);
-            Assert.Equal(confirmed, MapCatalog.Resolve(confirmed).Id);
+            MapData map = MapCatalog.Resolve(confirmed);
+            Assert.Equal((confirmed, expectedPlayers[i]), (map.Id, map.MaxPlayers));
             Assert.True(model.IsConfirmed);
             Assert.Throws<InvalidOperationException>(() => model.Select(0));
             Assert.Throws<InvalidOperationException>(() => model.Reroll(1UL));
             Assert.Throws<InvalidOperationException>(() => model.SubmitSeed("1"));
-            Assert.Throws<InvalidOperationException>(() => model.AdjustPlatforms(1));
+            Assert.Throws<InvalidOperationException>(() => model.AdjustPlayers(-1));
             Assert.Throws<InvalidOperationException>(() => model.AdjustBoards(1));
+            Assert.Throws<InvalidOperationException>(() => model.TrySelectId("board:1"));
         }
 
         // 还没被接受的候选（预览尚未搭成功）不会被带进对局：确认给出的是上一次接受的标识。
-        MapSelectModel pending = RandomSelected();
+        MapSelectModel pending = BoardSelected();
         Assert.True(pending.Reroll(99UL));
-        Assert.Equal("gen:424242:s1", pending.Confirm());
-        Assert.Equal("gen:424242:s1", pending.CurrentId);
+        Assert.Equal("board:424242", pending.Confirm());
+        Assert.Equal("board:424242", pending.CurrentId);
     }
 
     [Fact]
-    public void 随机图缺省开新地表_预选标识保持原值_换一张一律开()
+    public void 生成失败_回到上一张成功的图并给出提示()
     {
-        // terrain-surfaces design D7：选图界面随机出的生成图带 :s1；按标识预选时照标识原样（不带 :s1 就是不开），
-        // 其后"换一张"一律开；输入种子、调平台数保持当前开关。
-        // 变异验证 M-S5e（实跑）：Reroll 不改开关 → 本测试红。
-        var model = new MapSelectModel(InitialSeed);
-        Assert.True(model.TrySelectId("gen:42"));
-        Assert.Equal("gen:42", model.CurrentId);
-        Assert.True(model.SubmitSeed("43"));
-        Assert.Equal("gen:43", model.CurrentId);
-        Assert.True(model.AdjustPlatforms(+1));   // 调平台数同样保持"关"
-        Assert.Equal("gen:43:p7", model.CurrentId);
-        Assert.True(model.AdjustPlatforms(-1));
-        Assert.True(model.Reroll(77UL));
-        Assert.Equal("gen:77:s1", model.CurrentId);
-        Assert.True(model.AdjustPlatforms(+1));
-        Assert.Equal("gen:77:p7:s1", model.CurrentId);
-        Assert.Contains(Surface.Desert, MapCatalog.Resolve(model.CurrentId).TerrainData.Surfaces.Values);
+        // 解析 / 建预览失败时调用方 RollBack：回到上一次 Accept 的状态（含人数与棋盘数），面板显示原因。
+        // 变异 M-D11（实跑）：RollBack 只置提示、不恢复状态 → 红 1（本测试）。
+        MapSelectModel model = BoardSelected();
+        Assert.True(model.Reroll(5UL));
+        model.Accept();
+
+        Assert.True(model.Reroll(6UL));
+        Assert.True(model.AdjustPlayers(-1));
+        model.RollBack("地图生成失败：尝试次数耗尽。");
+
+        Assert.Equal(("board:5", 5UL, "5", 4, 7), (model.CurrentId, model.MapSeed, model.SeedText, model.Players, model.BoardCount));
+        Assert.Equal("地图生成失败：尝试次数耗尽。", model.Notice);
+
+        // 从内置棋盘图切到随机棋盘图时失败：回到内置棋盘图那一项。
+        var fromBuiltin = new MapSelectModel(InitialSeed);
+        Assert.True(fromBuiltin.Select(BoardIndex(fromBuiltin)));
+        fromBuiltin.RollBack("失败");
+        Assert.False(fromBuiltin.IsBoardSelected);
+        Assert.Equal("siege-4p-board-v1", fromBuiltin.CurrentId);
     }
 
     [Fact]
-    public void 按标识预选_内置图与生成图标识可用_其余拒绝()
+    public void 选中内置棋盘图时_种子人数与棋盘数操作不起作用()
     {
-        // 供 --map-select --map=<标识>（仅截图 / 自检）预选一项。
         var model = new MapSelectModel(InitialSeed);
+        Assert.True(model.Select(IndexOf(model, "siege-3p-board-v1")));
+        model.Accept();
 
-        Assert.True(model.TrySelectId(MapCatalog.BuiltinIds[1]));
-        Assert.Equal(2, model.SelectedIndex);   // 清单第 0 项是棋盘图
-        Assert.Equal(MapCatalog.BuiltinIds[1], model.CurrentId);
-        Assert.True(model.TrySelectId(" gen:12345:p7 "));
-        Assert.True(model.IsRandomSelected);
-        Assert.Equal("gen:12345:p7", model.CurrentId);
-        Assert.Equal("12345", model.SeedText);
-        Assert.True(model.TrySelectId("gen:42:p6"));
-        Assert.Equal("gen:42", model.CurrentId);
+        Assert.False(model.Reroll(1UL));
+        Assert.False(model.SubmitSeed("12345"));
+        Assert.False(model.AdjustPlayers(-1));
+        Assert.False(model.AdjustBoards(+1));
+        Assert.False(model.CanIncreasePlayers || model.CanDecreasePlayers || model.CanIncreaseBoards || model.CanDecreaseBoards);
+        Assert.Equal("siege-3p-board-v1", model.CurrentId);
+        Assert.Equal((InitialSeed, 4, 7), (model.MapSeed, model.Players, model.BoardCount));
 
-        foreach (string bad in new[] { "gen", "gen:abc", "gen:1:p99", "no-such-map", "maps/x.json", "" })
-        {
-            Assert.False(model.TrySelectId(bad), bad);
-            Assert.Equal("gen:42", model.CurrentId);
-        }
+        // 选中已选中的那一项：标识没变，不必重搭预览；越界下标抛出。
+        Assert.False(model.Select(IndexOf(model, "siege-3p-board-v1")));
+        Assert.Throws<ArgumentOutOfRangeException>(() => model.Select(model.Options.Count));
+        Assert.Throws<ArgumentOutOfRangeException>(() => model.Select(-1));
     }
 
     [Fact]
     public void 时间戳折成便于人读写的种子_九位以内_相邻输入散开()
     {
         // 变异 MC-7：FriendlySeed 原样返回 → 本测试红（超过九位、相邻输入只差 1）。
-        // 折叠函数在 Core 的标识唯一实现旁（三个入口共用：图形版裸 gen、选图界面"换一张"、批量 / 终端版裸 gen）。
+        // 折叠函数在 Core 的标识唯一实现旁（三个入口共用：图形版裸 gen / board、选图界面"换一张"、批量 / 终端版裸 gen）。
         ulong[] raws = [0UL, 1UL, 2UL, 1789820032123456UL, 1789820032123457UL, ulong.MaxValue];
         ulong[] seeds = [.. raws.Select(GeneratedMapId.FriendlySeed)];
 

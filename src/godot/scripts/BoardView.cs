@@ -187,10 +187,9 @@ public sealed partial class BoardView : Node3D
         HashSet<Coord> blocked = [.. board.Cells.Where(c => c.Terrain != Terrain.Playable).Select(c => c.Coord)];
 
         // 棋盘台面（board-map D10）：只在棋盘清单非空的地图上生效；清单为空（全部既有地图）时下面每一处都走原路径，画面不变。
-        // 哪些格属于哪块棋盘一律读清单，不从格子数据推断；"可落子且不属于任何棋盘"即通道（D2 的定义）。
+        // 哪些格属于哪块棋盘一律读清单，不从格子数据推断；棋盘之间没有通道（builtin-board-maps D6），棋盘之外全是场景格。
         ImmutableArray<BoardPlate> plates = board.Boards.IsDefault ? [] : board.Boards;
         bool plated = !plates.IsEmpty;
-        bool OnPlate(Coord c) => plates.Any(p => p.Contains(c));
 
         // 出生区的归属色：插旗前统一提示色；锁定后有主的取阵营主色，无主的褪成中性色。出生区描边与出生棋盘边框共用。
         Color ZoneColorOf(int zone) =>
@@ -277,11 +276,6 @@ public sealed partial class BoardView : Node3D
                 Surface.Shallows => Visuals.TileShallows,
                 _ => Visuals.TilePlayable,
             };
-            if (plated && playable && !OnPlate(cell.Coord))
-            {
-                color = Visuals.CorridorPath;
-            }
-
             if (!playable)
             {
                 // 障碍格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。

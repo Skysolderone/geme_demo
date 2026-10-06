@@ -13,7 +13,7 @@
 > 终端是 **Windows PowerShell**：exe 路径带引号时，前面要加 `&`；给 Godot 传参数时先写 `--%`，自定义参数一律放在 `--` 之后，并写成 `--名=值`。
 > **试玩带入带出时请用临时档案**：缺省档案是真实的 `%APPDATA%\Siege\profile.json`（终端和图形版共用）。
 
-**图形版（推荐）**。不带 `--map=` 启动时，先进入选图界面。界面上可以选四张内置图（标准 13×13、双人 9×9、三人 11×11、边疆 25×30）或随机图，也可以选难度。
+**图形版（推荐）**。不带 `--map=` 启动时，先进入选图界面。界面上只有三张内置棋盘图（四人 / 三人 / 双人，缺省预选四人）与随机棋盘图（可调人数 2–4、棋盘数、种子），也可以选难度。旧地图（v5、双人 / 三人标准图、边疆图、`gen:`）不在界面上，仍可用 `--map=` 直接开（第三个 change 删除）。
 ```powershell
 & "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --map=siege-2p-base-v1 --difficulty=Expert --profile=%TEMP%\siege-try.json
 ```
@@ -30,14 +30,14 @@ dotnet run --project src/Siege.Sim -c Release -- play --map siege-3p-base-v1 --d
 
 **批量跑局与分析**（每个配置不超过 20 局，见下文约定）
 ```powershell
-dotnet run --project src/Siege.Sim -c Release -- run --out sim-out/<目录> --map siege-4p-base-v5 --seed 1 --count 20 --difficulty Standard --flag-risk 15 --carry-in 0
+dotnet run --project src/Siege.Sim -c Release -- run --out sim-out/<目录> --map siege-4p-board-v1 --seed 1 --count 20 --difficulty Standard --flag-risk 15 --carry-in 0
 dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 ```
 `run` 另有这些选项：`--config <json>`（逐玩家的权重、内容集 `ContentSet` 只能在这里配）`--players` `--parallel` `--serial` `--turn-limit`（缺省 600，0 = 不截断）`--artisan-weight`（缺省 10）`--cell-limit` `--pass-threshold`（缺省 20）`--flag-risk`（插旗冒险概率 0–100，缺省 15）`--carry-in 0|1`（缺省 0 = 关闭）`--map-per-match` `--retention` `--sample-permille` `--gzip`。
 其他子命令：`map --map <标识> [--out 文件]`（打印文本图、导出地图）、`replay --file <match-*.jsonl>`。不带参数运行会打印完整用法（`src/Siege.Sim/Program.cs` `PrintUsage`）。
 
 **选项归属（已与代码核对）**：`--flag-risk`、`--pass-threshold`、`--carry-in` 只有 `run` 有，`play` 和图形版都没有；内容集没有命令行开关，新局一律用 v2。
-**地图标识**（三个入口共用 `MapCatalog`）：`siege-4p-base-v5`（缺省）/ `siege-2p-base-v1` / `siege-3p-base-v1` / `siege-frontier-v2` / `gen:<地图种子>[:p5–8][:s1]` / `board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]`（互不连通的棋盘组，2026-10-06 `board-isolated-gen`）/ 地图文件路径。只写 `gen` 时随机取一个种子并打印完整标识（带 `:s1`，即投放新地表）。
+**地图标识**（三个入口共用 `MapCatalog`）：`siege-4p-board-v1`（缺省，= `board:5`）/ `siege-3p-board-v1`（= `board:55:p3`）/ `siege-2p-board-v1`（= `board:23:p2`）/ 旧图 `siege-4p-base-v5`（依赖 v5 读数的命令与测试须显式指定）/ `siege-2p-base-v1` / `siege-3p-base-v1` / `siege-frontier-v2` / `gen:<地图种子>[:p5–8][:s1]` / `board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]`（互不连通的棋盘组，2026-10-06 `board-isolated-gen`）/ 地图文件路径。只写 `gen` 时随机取一个种子并打印完整标识（带 `:s1`，即投放新地表）。
 **难度**：`Easy|Standard|Hard|Expert`，不区分大小写，不接受数字（`AiDifficultyNames`），缺省 Standard。
 
 ## 现行规则与关键数值速览（设计文档 v1.18）
@@ -155,7 +155,7 @@ opsx:propose 开 change（proposal + design + specs + tasks）→ task.py create
 - .NET SDK **8.0.425**；Release 与 Debug 都需要构建（Godot 读 Debug）。`dotnet test` 的输出是中文且为 GBK 编码，脚本里要设 `DOTNET_CLI_UI_LANGUAGE=en` 并用 `Failed` 抓失败名，红绿以退出码为准。
 - Godot **4.7.2 .NET**（`Godot.NET.Sdk/4.7.2`）：`D:\software\godot\Godot_v4.7.2-stable_mono_win64\`，命令行用 `..._console.exe`。
   - 构建 C#：`--headless --path src/godot --build-solutions --quit`
-  - 拾取自检（换相机、层高或地图后必须跑）：`--headless --path src/godot -- --auto-demo --pick-check [--map=<标识>]`
+  - 拾取自检（换相机、层高或地图后必须跑）：`--headless --path src/godot -- --auto-demo --pick-check [--map=<标识>]`；不给 `--map` 时走新缺省 `siege-4p-board-v1`（465 格），`--auto-demo` 的 53 帧在 v5 与新缺省上相同（自动演示固定跑 4 个大回合）
 - codegraph 索引在 `.codegraph/`（已 gitignore）；`trellis-implement` / `trellis-check` 两个 agent 已配置 `mcp__codegraph__*`。
 - 工作树：`.claude/worktrees/` 已清空，`terrain-surfaces` 的 worktree 与分支都已删除（合入于 `254964e`）。
 

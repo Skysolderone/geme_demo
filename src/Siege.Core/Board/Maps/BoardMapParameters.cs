@@ -23,15 +23,6 @@ public sealed record BoardMapParameters
     /// <summary>缺省人数：标识里省略 <c>:p&lt;N&gt;</c> 段时即此值。</summary>
     public const int DefaultPlayers = 4;
 
-    /// <summary>缺省人数（4 人）的棋盘数下限；其他人数见 <see cref="MinBoardsFor"/>。选图界面在第二个 change 之前只出 4 人图，读的是这三个常量。</summary>
-    public const int MinBoards = 7;
-
-    /// <summary>缺省人数（4 人）的棋盘数上限；其他人数见 <see cref="MaxBoardsFor"/>。</summary>
-    public const int MaxBoards = 10;
-
-    /// <summary>缺省人数（4 人）的缺省棋盘数；其他人数见 <see cref="DefaultBoardsFor"/>。</summary>
-    public const int DefaultBoards = 7;
-
     /// <summary>缺省参数：4 人、7 块棋盘。</summary>
     public static BoardMapParameters Default { get; } = new();
 

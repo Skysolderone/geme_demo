@@ -102,9 +102,6 @@ public static class Visuals
     /// <summary>棋盘台面的格线（board-map D10）：压暗的墨色细线，只画在棋盘清单里的棋盘之内。</summary>
     public static readonly Color BoardGridLine = Color.Color8(52, 60, 48);
 
-    /// <summary>通道（board-map D10）：棋盘之间的窄路，取土路色，与棋盘台面的草地色分开。</summary>
-    public static readonly Color CorridorPath = TileRoad;
-
     /// <summary>障碍岩石（装饰层）。</summary>
     public static readonly Color TileObstacle = Color.Color8(118, 150, 96);
 

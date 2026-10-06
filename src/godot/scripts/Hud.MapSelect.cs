@@ -9,7 +9,8 @@ using Siege.Presentation.Text;
 namespace Siege.Godot;
 
 /// <summary>
-/// HUD 的开局选图面板（map-generator D7 / D8；board-map D9）：清单、种子输入框、"换一张"、平台数 − / +、棋盘数 − / +、完整标识、AI 难度（expert-lookahead D10）、"开始"。
+/// HUD 的开局选图面板（map-generator D7 / D8；builtin-board-maps D5）：清单（内置棋盘图 + 随机棋盘图）、随机棋盘图的种子输入框、"换一张"、人数 − / +、棋盘数 − / +、
+/// 完整标识与尺寸说明、AI 难度（expert-lookahead D10）、"开始"。选中内置棋盘图时随机棋盘图的那一组控件整组隐藏。
 /// </summary>
 /// <remarks>
 /// 本类<b>不持有任何选图状态、不自带地图清单</b>：每一项文案与可用性都取自 <see cref="MapSelectModel"/>，操作只经事件转发给主场景。
@@ -24,9 +25,10 @@ public sealed partial class Hud
     private LineEdit _mapSeedInput = null!;
     private Button _mapSeedApply = null!;
     private Button _mapReroll = null!;
-    private Button _mapFewer = null!;
-    private Button _mapMore = null!;
-    private Label _mapPlatforms = null!;
+    private Control _mapSeededGroup = null!;
+    private Button _mapFewerPlayers = null!;
+    private Button _mapMorePlayers = null!;
+    private Label _mapPlayers = null!;
     private Button _mapFewerBoards = null!;
     private Button _mapMoreBoards = null!;
     private Label _mapBoards = null!;
@@ -43,10 +45,10 @@ public sealed partial class Hud
     /// <summary>点"换一张"。</summary>
     public event Action? MapRerollPressed;
 
-    /// <summary>平台数 −1 / +1。</summary>
-    public event Action<int>? MapPlatformsAdjusted;
+    /// <summary>人数 −1 / +1（选中随机棋盘图时）。</summary>
+    public event Action<int>? MapPlayersAdjusted;
 
-    /// <summary>棋盘数 −1 / +1（选中棋盘图时）。</summary>
+    /// <summary>棋盘数 −1 / +1（选中随机棋盘图时）。</summary>
     public event Action<int>? MapBoardsAdjusted;
 
     /// <summary>点选 AI 难度（四档之一）。</summary>
@@ -83,7 +85,9 @@ public sealed partial class Hud
             Ui.Select(button, active);
         }
 
-        bool seeded = model.IsSeededSelected;
+        // 随机棋盘图的种子与调节控件只在选中它时出现；内置棋盘图只显示完整标识与尺寸说明。
+        bool seeded = model.IsBoardSelected;
+        _mapSeededGroup.Visible = seeded;
         if (_mapSeedInput.Text != model.SeedText)
         {
             _mapSeedInput.Text = model.SeedText;
@@ -93,9 +97,9 @@ public sealed partial class Hud
         _mapSeedInput.Editable = seeded;
         _mapSeedApply.Disabled = !seeded;
         _mapReroll.Disabled = !seeded;
-        _mapFewer.Disabled = !model.CanDecreasePlatforms;
-        _mapMore.Disabled = !model.CanIncreasePlatforms;
-        _mapPlatforms.Text = model.PlatformCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _mapFewerPlayers.Disabled = !model.CanDecreasePlayers;
+        _mapMorePlayers.Disabled = !model.CanIncreasePlayers;
+        _mapPlayers.Text = model.Players.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _mapFewerBoards.Disabled = !model.CanDecreaseBoards;
         _mapMoreBoards.Disabled = !model.CanIncreaseBoards;
         _mapBoards.Text = model.BoardCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -154,8 +158,12 @@ public sealed partial class Hud
             body.AddChild(option);
         }
 
-        body.AddChild(Ui.Separator());
-        body.AddChild(Ui.Heading("按种子生成（选中「棋盘图」或「随机图」后可调）"));
+        // 随机棋盘图的一组控件（种子、换一张、人数、棋盘数）收在一个容器里，选中内置棋盘图时整组隐藏。
+        var seeded = new VBoxContainer();
+        _mapSeededGroup = seeded;
+        body.AddChild(seeded);
+        seeded.AddChild(Ui.Separator());
+        seeded.AddChild(Ui.Heading("随机棋盘图"));
 
         var seedRow = new HBoxContainer();
         seedRow.AddChild(Ui.Text("地图种子"));
@@ -171,28 +179,29 @@ public sealed partial class Hud
         _mapSeedApply = Ui.Action("生成", minWidth: 56);
         _mapSeedApply.Pressed += () => MapSeedSubmitted?.Invoke(_mapSeedInput.Text);
         seedRow.AddChild(_mapSeedApply);
-        body.AddChild(seedRow);
-        body.AddChild(Ui.Text("输入种子后回车（或点「生成」）。", Ui.MutedText, UiTheme.Caption));
+        seeded.AddChild(seedRow);
+        seeded.AddChild(Ui.Text("输入种子后回车（或点「生成」）。", Ui.MutedText, UiTheme.Caption));
 
+        // 换一张 + 人数（2–4）：改人数时棋盘数回到该人数的缺省值，按当前种子重新生成（规则在视图模型里）。
         var tuneRow = new HBoxContainer();
         _mapReroll = Ui.Action("换一张", minWidth: 96);
         _mapReroll.Pressed += () => MapRerollPressed?.Invoke();
         tuneRow.AddChild(_mapReroll);
         tuneRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-        tuneRow.AddChild(Ui.Text("平台数"));
-        _mapFewer = Ui.Action("−", minWidth: 34);
-        _mapFewer.Pressed += () => MapPlatformsAdjusted?.Invoke(-1);
-        tuneRow.AddChild(_mapFewer);
-        _mapPlatforms = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.Title);
-        _mapPlatforms.HorizontalAlignment = HorizontalAlignment.Center;
-        _mapPlatforms.CustomMinimumSize = new Vector2(26f, 0f);
-        tuneRow.AddChild(_mapPlatforms);
-        _mapMore = Ui.Action("+", minWidth: 34);
-        _mapMore.Pressed += () => MapPlatformsAdjusted?.Invoke(+1);
-        tuneRow.AddChild(_mapMore);
-        body.AddChild(tuneRow);
+        tuneRow.AddChild(Ui.Text("人数"));
+        _mapFewerPlayers = Ui.Action("−", minWidth: 34);
+        _mapFewerPlayers.Pressed += () => MapPlayersAdjusted?.Invoke(-1);
+        tuneRow.AddChild(_mapFewerPlayers);
+        _mapPlayers = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.Title);
+        _mapPlayers.HorizontalAlignment = HorizontalAlignment.Center;
+        _mapPlayers.CustomMinimumSize = new Vector2(26f, 0f);
+        tuneRow.AddChild(_mapPlayers);
+        _mapMorePlayers = Ui.Action("+", minWidth: 34);
+        _mapMorePlayers.Pressed += () => MapPlayersAdjusted?.Invoke(+1);
+        tuneRow.AddChild(_mapMorePlayers);
+        seeded.AddChild(tuneRow);
 
-        // 棋盘数（board-map D7：7–10）只对棋盘图起作用，平台数只对随机图起作用；不适用的一组按钮禁用。
+        // 棋盘数（范围随人数：4 人 7–10、3 人 5–8、2 人 4–5）；到边界时对应按钮禁用。
         var boardsRow = new HBoxContainer();
         boardsRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
         boardsRow.AddChild(Ui.Text("棋盘数"));
@@ -206,7 +215,7 @@ public sealed partial class Hud
         _mapMoreBoards = Ui.Action("+", minWidth: 34);
         _mapMoreBoards.Pressed += () => MapBoardsAdjusted?.Invoke(+1);
         boardsRow.AddChild(_mapMoreBoards);
-        body.AddChild(boardsRow);
+        seeded.AddChild(boardsRow);
 
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("完整地图标识"));

@@ -107,7 +107,6 @@ public class 棋盘档生成参数Tests
         Assert.Equal(2, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
         Assert.Equal((4, MapProfile.Board, 5), (map.MaxPlayers, map.Profile, map.BirthZones.Length));
         Assert.Equal((4, 7, 5, 2), (BoardMapParameters.Default.Players, BoardMapParameters.Default.BoardCount, BoardMapParameters.Default.BirthBoards, BoardMapParameters.Default.PublicBoards));
-        Assert.Equal((7, 10, 7), (BoardMapParameters.MinBoards, BoardMapParameters.MaxBoards, BoardMapParameters.DefaultBoards));   // 4 人常量与按人数的查询一致
         Assert.Equal((7, 10, 7), (BoardMapParameters.MinBoardsFor(4), BoardMapParameters.MaxBoardsFor(4), BoardMapParameters.DefaultBoardsFor(4)));
     }
 

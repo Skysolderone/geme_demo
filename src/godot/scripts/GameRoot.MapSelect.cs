@@ -47,7 +47,9 @@ public sealed partial class GameRoot
         _select = new MapSelectModel(NewMapSeed(), _difficulty);
         if (preselect is not null && !_select.TrySelectId(preselect))
         {
-            throw new System.FormatException($"--map-select 只能预选内置地图、完整的生成图标识或完整的棋盘图标识，{preselect} 不在选图界面的清单里。");
+            // 选图界面只列内置棋盘图与随机棋盘图（builtin-board-maps D5）：标准档 / 边疆档内置图、gen: 生成图、地图文件与写错的标识都不是界面上的项，
+            // 预选不了就报错退出，不静默忽略预选（不带 --map-select 时这些标识照旧直接建局）。
+            throw new System.FormatException($"--map-select 只能预选内置棋盘图或完整的棋盘图标识（board:<种子>[:p<人数>][:n<棋盘数>]），{preselect} 不在选图界面的清单里；不带 --map-select 时可用 --map={preselect} 直接建局。");
         }
 
         MatchSession preview = PreviewSession();
@@ -70,7 +72,7 @@ public sealed partial class GameRoot
         _hud.MapOptionPicked += index => OnSelectionChanged(_select?.Select(index));
         _hud.MapSeedSubmitted += text => OnSelectionChanged(_select?.SubmitSeed(text));
         _hud.MapRerollPressed += () => OnSelectionChanged(_select?.Reroll(NewMapSeed()));
-        _hud.MapPlatformsAdjusted += delta => OnSelectionChanged(_select?.AdjustPlatforms(delta));
+        _hud.MapPlayersAdjusted += delta => OnSelectionChanged(_select?.AdjustPlayers(delta));
         _hud.MapBoardsAdjusted += delta => OnSelectionChanged(_select?.AdjustBoards(delta));
         _hud.MapStartPressed += StartMatch;
         _hud.MapDifficultyPicked += difficulty =>
@@ -139,16 +141,15 @@ public sealed partial class GameRoot
 
     /// <summary>
     /// 无人值守自检（<c>--map-select --auto-demo</c>）：每帧一步，把选图操作经与面板事件<b>同一组处理函数</b>走一遍——
-    /// 随机图 → 换一张 → 平台数 +1 → 非法种子 → 合法种子 → 棋盘图 → 换一张 → 棋盘数 +1 → 逐个内置图 → 回到进入时的那一项 → 开始；随后照常自动演示。
+    /// 随机棋盘图 → 换一张 → 人数 −1（已是下限则 +1）→ 棋盘数 +1（到上限则 −1）→ 非法种子 → 合法种子 → 逐个内置棋盘图 → 回到进入时的那一项 → 开始；随后照常自动演示。
     /// 任何一步不符预期即以退出码 1 结束（否则选图 → 建局这条路径只有人工能验）。
     /// </summary>
     private void SelfCheckMapSelect()
     {
         MapSelectModel model = _select!;
         int[] builtins = [.. Enumerable.Range(0, model.Options.Count).Where(i => model.Options[i].Kind == MapOptionKind.Builtin)];
-        int random = Enumerable.Range(0, model.Options.Count).First(i => model.Options[i].IsRandom);
         int boardOption = Enumerable.Range(0, model.Options.Count).First(i => model.Options[i].IsBoard);
-        const int FirstBuiltinStep = 8;
+        const int FirstBuiltinStep = 6;
         int step = _selectStep++;
         string before = model.CurrentId;
         string what;
@@ -169,53 +170,39 @@ public sealed partial class GameRoot
             _selectEntryOrphans = orphans;
         }
 
+        // 预览与面板一致：预览地图就是当前标识，块数与人数（地图人数上限）都与面板显示的相同。
+        bool BoardPreviewMatches() =>
+            model.IsBoardSelected && _session.Match.Map.Id == model.CurrentId
+            && _session.World.Board().Boards.Length == model.BoardCount && _previewMap!.MaxPlayers == model.Players;
+
         if (step == 0)
         {
-            what = "选中随机图";
-            OnSelectionChanged(model.Select(random));
-            ok = model.IsRandomSelected && _session.Match.Map.Id == model.CurrentId;
+            what = "选中随机棋盘图";
+            OnSelectionChanged(model.Select(boardOption));
+            ok = BoardPreviewMatches();
         }
         else if (step == 1)
         {
             what = "换一张";
+            int playersBefore = model.Players;
+            int boardsBefore = model.BoardCount;
             OnSelectionChanged(model.Reroll(NewMapSeed()));
-            ok = model.CurrentId != before && _session.Match.Map.Id == model.CurrentId;
+            ok = model.CurrentId != before && model.Players == playersBefore && model.BoardCount == boardsBefore && BoardPreviewMatches();
         }
         else if (step == 2)
         {
-            what = "平台数 +1（到上限则 −1）";
-            OnSelectionChanged(model.AdjustPlatforms(model.CanIncreasePlatforms ? +1 : -1));
-            ok = model.CurrentId != before && _session.Match.Map.Id == model.CurrentId;
+            // 改人数：棋盘数回到该人数的缺省值、种子不变；标识的 :p 段只在非 4 人时出现。
+            int delta = model.CanDecreasePlayers ? -1 : +1;
+            what = $"人数 {(delta < 0 ? "−1" : "+1")}";
+            int playersBefore = model.Players;
+            ulong seedBefore = model.MapSeed;
+            OnSelectionChanged(model.AdjustPlayers(delta));
+            ok = model.CurrentId != before && model.Players == playersBefore + delta && model.MapSeed == seedBefore
+                && model.BoardCount == BoardMapParameters.DefaultBoardsFor(model.Players)
+                && model.CurrentId.Contains($":p{model.Players}", System.StringComparison.Ordinal) == (model.Players != BoardMapParameters.DefaultPlayers)
+                && BoardPreviewMatches();
         }
         else if (step == 3)
-        {
-            what = "输入非法种子 abc";
-            OnSelectionChanged(model.SubmitSeed("abc"));
-            ok = model.CurrentId == before && model.Notice.Length > 0 && _session.Match.Map.Id == before;
-        }
-        else if (step == 4)
-        {
-            what = "输入种子 12345";
-            OnSelectionChanged(model.SubmitSeed("12345"));
-            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && _session.Match.Map.Id == model.CurrentId;
-        }
-        else if (step == 5)
-        {
-            // 棋盘图（board-map D9）：种子沿用上一步输入的 12345，棋盘数是进入时的值；预览的地图带棋盘清单，块数与面板一致。
-            what = "选中棋盘图";
-            OnSelectionChanged(model.Select(boardOption));
-            ok = model.IsBoardSelected && model.MapSeed == 12345UL && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Boards.Length == model.BoardCount;
-        }
-        else if (step == 6)
-        {
-            what = "棋盘图换一张";
-            int boardsBefore = model.BoardCount;
-            OnSelectionChanged(model.Reroll(NewMapSeed()));
-            ok = model.IsBoardSelected && model.CurrentId != before && model.BoardCount == boardsBefore && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Boards.Length == model.BoardCount;
-        }
-        else if (step == 7)
         {
             what = "棋盘数 +1（到上限则 −1）";
             int boardsBefore = model.BoardCount;
@@ -223,16 +210,30 @@ public sealed partial class GameRoot
             int delta = model.CanIncreaseBoards ? +1 : -1;
             OnSelectionChanged(model.AdjustBoards(delta));
             ok = model.CurrentId != before && model.BoardCount == boardsBefore + delta && model.MapSeed == seedBefore
-                && _session.Match.Map.Id == model.CurrentId && _session.World.Board().Boards.Length == model.BoardCount
-                && model.CurrentId.EndsWith($":n{model.BoardCount}", System.StringComparison.Ordinal) == (model.BoardCount != BoardMapParameters.DefaultBoards);
+                && model.CurrentId.EndsWith($":n{model.BoardCount}", System.StringComparison.Ordinal) == (model.BoardCount != BoardMapParameters.DefaultBoardsFor(model.Players))
+                && BoardPreviewMatches();
+        }
+        else if (step == 4)
+        {
+            what = "输入非法种子 abc";
+            OnSelectionChanged(model.SubmitSeed("abc"));
+            ok = model.CurrentId == before && model.Notice.Length > 0 && _session.Match.Map.Id == before;
+        }
+        else if (step == 5)
+        {
+            what = "输入种子 12345";
+            OnSelectionChanged(model.SubmitSeed("12345"));
+            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && BoardPreviewMatches();
         }
         else if (step < FirstBuiltinStep + builtins.Length)
         {
+            // 内置棋盘图：不是随机棋盘图（种子与调节控件隐藏），预览的是带棋盘清单的棋盘档地图，出生棋盘数 = 地图人数上限 + 1。
             int option = builtins[step - FirstBuiltinStep];
-            what = $"选中第 {step - FirstBuiltinStep + 1} 项内置图";
+            what = $"选中第 {step - FirstBuiltinStep + 1} 项内置棋盘图";
             OnSelectionChanged(model.Select(option));
-            ok = model.Options[option].Kind == MapOptionKind.Builtin && !model.IsSeededSelected && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Boards.IsEmpty;
+            DefaultBoardView view = _session.World.Board();
+            ok = model.Options[option].Kind == MapOptionKind.Builtin && !model.IsBoardSelected && _session.Match.Map.Id == model.CurrentId
+                && !view.Boards.IsEmpty && view.Boards.Count(b => b.Kind == BoardPlateKind.Birth) == _previewMap!.MaxPlayers + 1;
         }
         else if (step == FirstBuiltinStep + builtins.Length)
         {

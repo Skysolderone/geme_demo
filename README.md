@@ -62,7 +62,7 @@ Godot 4 的 C# 工程不能导出网页版，所以没有在线试玩。
 dotnet build src/godot/Siege.Godot.csproj -p:RestoreConfigFile=<你的 nuget.config>
 
 godot --path src/godot                                # 进选图界面
-godot --path src/godot -- --map=siege-4p-base-v5      # 直接开指定地图
+godot --path src/godot -- --map=siege-3p-board-v1     # 直接开指定地图
 godot --path src/godot -- --map=board:1 --difficulty=Hard
 ```
 
@@ -81,7 +81,7 @@ dotnet run --project src/Siege.Sim -c Release -- play --map siege-3p-base-v1 --d
 
 ### 地图与难度
 
-- 地图标识（图形版、终端版、批量跑局共用）：`siege-4p-base-v5`（缺省，13×13）、`siege-2p-base-v1`、`siege-3p-base-v1`、`siege-frontier-v2`（25×30）、`gen:<种子>`（随机图）、`board:<种子>`（棋盘档随机图），或一个地图 JSON 文件的路径。
+- 地图由互不连通的棋盘组成（一个局部战斗在一块棋盘之内）。地图标识（图形版、终端版、批量跑局共用）：内置棋盘图 `siege-4p-board-v1`（缺省）、`siege-3p-board-v1`、`siege-2p-board-v1`；随机棋盘图 `board:<种子>[:p<人数 2–4>][:n<棋盘数>]`；或一个地图 JSON 文件的路径。旧地图 `siege-4p-base-v5` 等仍可用 `--map=` 指定，将在后续版本删除。
 - 难度：`Easy` / `Standard` / `Hard` / `Expert`，缺省 `Standard`。
 
 ## 工程结构

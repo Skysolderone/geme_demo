@@ -15,13 +15,13 @@
 
 ## 4. 选图界面与清理（段 D）
 
-- [ ] 4.1 `MapSelectModel` / `Hud.MapSelect` / `GameRoot.MapSelect` 按 D5 改；自检步骤按新规格；hud-theme / hud-panels 守门继续通过。
-- [ ] 4.2 删通道死代码（D6）。
-- [ ] 4.3 画面验证（D7）：选图界面三张、新缺省图 `--auto-demo` 帧数与 `--pick-check`、v5 `--auto-demo` 53 帧；存 `art/builtin-board-maps/`。
-- [ ] 4.4 两处构建 0 警告；全量失败名单与改动前相同。
+- [x] 4.1 `MapSelectModel` / `Hud.MapSelect` / `GameRoot.MapSelect` 按 D5 改；自检步骤按新规格；hud-theme / hud-panels 守门继续通过。
+- [x] 4.2 删通道死代码（D6）。
+- [x] 4.3 画面验证（D7）：选图界面三张、新缺省图 `--auto-demo` 帧数与 `--pick-check`、v5 `--auto-demo` 53 帧；存 `art/builtin-board-maps/`。
+- [x] 4.4 两处构建 0 警告；全量失败名单与改动前相同。
 
 ## 5. 验收与文档（主会话）
 
-- [ ] 5.1 `openspec validate builtin-board-maps --strict`；main 合进本分支后重跑 4.4。
-- [ ] 5.2 设计文档 §3、HANDOFF、README、发布页、`boundaries.md` 的缺省地图与命令示例同步；变更记录升一版。
+- [x] 5.1 `openspec validate builtin-board-maps --strict`；main 合进本分支后重跑 4.4。
+- [x] 5.2 设计文档 §3、HANDOFF、README、发布页、`boundaries.md` 的缺省地图与命令示例同步；变更记录升一版。
 - [ ] 5.3 负责人看截图。

@@ -232,52 +232,34 @@ public class 各入口按地图标识选图Tests
         Assert.DoesNotContain(scripts, s => s.Name != "LaunchArgs.cs" && s.Text.Contains("StartsWith(\"--", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void 两人图可选_选中确认后建局恰有2名玩家()
+    [Theory]
+    [InlineData("siege-2p-board-v1", 2)]
+    [InlineData("siege-3p-board-v1", 3)]
+    public void 两人与三人棋盘图可选_选中确认后建局人数等于地图人数上限(string builtinId, int players)
     {
-        // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 A 只有 2 人图）：选图清单可选到 2 人图，
-        // 变异 M-S5：Program.Run 的缺省人数不改写（条件加 `&& maxPlayers < 0`）→ 本测试与下一条共红 2。
-        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 2 名玩家。选图模型只产出标识，建局走批量入口的同一份解析。
+        // 规格：builtin-board-maps / map-selection —— Scenario「2 人与 3 人棋盘图可选」：选图清单可选到 2 人与 3 人内置棋盘图，
+        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 2 / 3 名玩家。选图模型只产出标识，建局走批量入口的同一份解析。
+        // 变异 M-S5：Program.Run 的缺省人数不改写（条件加 `&& maxPlayers < 0`）→ 红 3（本测试两组 + 下一条，builtin-board-maps 段 D 实跑）。
         var model = new Siege.Presentation.MapSelect.MapSelectModel(1);
-        int index = model.Options.ToList().FindIndex(o => o.BuiltinId == TwoPlayerBaseMap.Id);
-        Assert.True(index >= 0, "选图清单里没有 2 人图。");
+        int index = model.Options.ToList().FindIndex(o => o.BuiltinId == builtinId);
+        Assert.True(index >= 0, $"选图清单里没有 {builtinId}。");
         Assert.True(model.Select(index));
         model.Accept();
         string id = model.Confirm();
-        Assert.Equal(TwoPlayerBaseMap.Id, id);
+        Assert.Equal(builtinId, id);
 
-        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunOne("pick-2p", "--map", id);
-        Assert.Equal(2, recorded.PlayerCount);
-        Assert.Equal(TwoPlayerBaseMap.Id, recorded.MapId);
-        Assert.Equal(TwoPlayerBaseMap.Id, log.Header.MapId);
-        Assert.Equal(2, log.Header.Players.Count);
-    }
-
-    [Fact]
-    public void 三人图可选_选中确认后建局恰有3名玩家()
-    {
-        // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 B 补 3 人图）：选图清单可选到 3 人图，
-        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 3 名玩家。
-        var model = new Siege.Presentation.MapSelect.MapSelectModel(1);
-        int index = model.Options.ToList().FindIndex(o => o.BuiltinId == ThreePlayerBaseMap.Id);
-        Assert.True(index >= 0, "选图清单里没有 3 人图。");
-        Assert.True(model.Select(index));
-        model.Accept();
-        string id = model.Confirm();
-        Assert.Equal(ThreePlayerBaseMap.Id, id);
-
-        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunOne("pick-3p", "--map", id);
-        Assert.Equal(3, recorded.PlayerCount);
-        Assert.Equal(ThreePlayerBaseMap.Id, recorded.MapId);
-        Assert.Equal(ThreePlayerBaseMap.Id, log.Header.MapId);
-        Assert.Equal(3, log.Header.Players.Count);
+        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunOne("pick-" + builtinId, "--map", id);
+        Assert.Equal(players, recorded.PlayerCount);
+        Assert.Equal(builtinId, recorded.MapId);
+        Assert.Equal(builtinId, log.Header.MapId);
+        Assert.Equal(players, log.Header.Players.Count);
     }
 
     [Fact]
     public void 参赛人数缺省取地图人数上限_显式人数照旧()
     {
         // small-maps D3：批量配置 / 终端 / 图形版在未指定人数时用 map.MaxPlayers；显式给人数时仍按给定值；4 人图行为不变。
-        // 变异（各红本测试）：M-S4 PlayCommand 缺省写死 `?? 4`；M-S5 批量缺省不改写（共红 2，另一条是上面的「两人图可选」）；
+        // 变异（各红本测试）：M-S4 PlayCommand 缺省写死 `?? 4`；M-S5 批量缺省不改写（另红上面的「两人与三人棋盘图可选」两组）；
         // M-S6 配置文件写了 Players 也当未指定；M-S7 src/godot/scripts/GameRoot.cs 建局人数 Min(4, map.MaxPlayers) 改成 4。
         // 批量入口：命令行不给 --players
         Assert.Equal(2, RunOne("default-2p", "--map", TwoPlayerBaseMap.Id).Config.PlayerCount);
