@@ -180,9 +180,10 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 反面：只改一个未扫档维度，记录随之不同——口径不同的两份数据从记录上就区分得开，不会被当成同口径直接比较。
         EvaluationWeights other = EvaluationWeights.Default with { Growth = EvaluationWeights.Default.Growth + 1 };
         RunConfig changed = config with { Players = [.. config.Players.Select(p => p with { Weights = other })] };
-        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).Effective().ToJson());
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit }).Effective().ToJson());
         // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。formation-tiers D2：未配置的计分规则版本同样落成缺省 v2 写入。
-        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).Effective().ToJson());
+        // retire-legacy-maps 段 A：夹具地图为 4 人棋盘图（> 150 格），未配置的候选格上限落成 24 写入。
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit }).Effective().ToJson());
     }
 
     /// <summary>
@@ -194,7 +195,11 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
     /// </summary>
     private void AssertTruncation(int count, int maxTruncated)
     {
-        RunConfig config = SimFixtures.Config(count: count, seedStart: 1, turnLimit: RunConfig.DefaultTurnLimit, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly);
+        // retire-legacy-maps 段 A1：本条是 v5 上校准结论的守门（校准批次就在 v5 上跑），显式钉回 v5，不随夹具改到棋盘图——
+        // 棋盘图上权重"未在新地图上校准"（母任务裁决 6），整局 600 小回合的 20 局在 4 人棋盘图上约 4 分钟 CPU，也进不了默认套件。
+        // 段 B 删 v5 前须裁决：删除，或随 AI 校准 change 改钉到棋盘图。
+        RunConfig config = SimFixtures.Config(count: count, seedStart: 1, turnLimit: RunConfig.DefaultTurnLimit, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly)
+            with { MapId = FourPlayerBaseMap.Id };
         Assert.Equal(FourPlayerBaseMap.Id, config.MapId);
         Assert.All(config.Players, p => Assert.Null(p.Weights));
         Assert.Null(config.PassThreshold);

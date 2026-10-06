@@ -22,10 +22,10 @@ namespace Siege.Core.Tests.SimulationHarness;
 [Collection(ConsoleRedirect.Collection)]
 public class 批量跑局的计分规则版本Tests
 {
-    /// <summary>既有口径的批次配置文件：种子 31、标准难度、24 个小回合，权重 / 阈值 / 冒险概率 / 内容集写死，<b>不写</b>计分规则版本。</summary>
+    /// <summary>既有口径的批次配置文件：4 人棋盘图、种子 <see cref="候选格上限Tests.GoldenSeed"/>（retire-legacy-maps 段 A 前为 v5 种子 31）、标准难度、<see cref="候选格上限Tests.GoldenTurns"/> 个小回合（段 A 前为 24），权重 / 阈值 / 冒险概率 / 内容集写死，<b>不写</b>计分规则版本。</summary>
     private static string ConfigFile(string dir, ScoringVersion? scoring = null)
     {
-        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)) with
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 候选格上限Tests.GoldenSeed, turnLimit: 候选格上限Tests.GoldenTurns, difficulty: AiDifficulty.Standard)) with
         {
             ScoringVersion = scoring,
             Parallelism = 1,
@@ -46,7 +46,7 @@ public class 批量跑局的计分规则版本Tests
     public void 指定v1跑一批()
     {
         // 规格 Scenario：以计分规则 v1 跑一批对局 → 该批的配置记录与每局日志首部都写着 v1，各局与引入阵型之前同一配置的结果逐项相同。
-        // "引入之前同一配置的结果"= 候选格上限Tests.V4GoldenTurnHash（种子 31、Standard、24 个小回合，引入阵型之前钉下，一字未改）。
+        // "引入之前同一配置的结果"= 候选格上限Tests.BoardGoldenTurnHash：4 人棋盘图、种子 GoldenSeed（11）、Standard、GoldenTurns（12）个小回合（retire-legacy-maps 段 A 改钉为本 change 的基线；原为 v5 种子 31、在引入本项之前钉下）。
         // 命令行优先于配置文件：文件里写 V2、命令行给 v1 → 生效 v1。
         string dir = SimFixtures.TempDir("scoring-v1");
         string outDir = Path.Combine(dir, "out");
@@ -59,8 +59,8 @@ public class 批量跑局的计分规则版本Tests
         Assert.Equal(2, logs.Count);
         Assert.All(logs, l => Assert.Equal(ScoringVersion.V1, l.Header.Config.ScoringVersion));
         Assert.All(headers, h => Assert.Contains("\"ScoringVersion\":\"V1\"", h, StringComparison.Ordinal));
-        Assert.All(logs, l => Assert.True(l.Turns.Count >= 24, $"小回合 {l.Turns.Count}"));
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(logs[0]));
+        Assert.All(logs, l => Assert.True(l.Turns.Count >= 候选格上限Tests.GoldenTurns, $"小回合 {l.Turns.Count}"));
+        Assert.Equal(候选格上限Tests.BoardGoldenTurnHash, 候选格上限Tests.TurnHash(logs[0]));
         Assert.All(logs, l => Assert.All(l.Turns.SelectMany(t => t.PlayersState).SelectMany(p => p.Groups), g => Assert.Null(g.FormationTier)));
 
         // 对照：同一份配置文件按 v2 跑 → 配置记录与首部写 v2，结果不同（版本确实抵达了对局），棋串条目带阵型阶数。
@@ -79,7 +79,7 @@ public class 批量跑局的计分规则版本Tests
         Assert.True(code == 0, err);
         (RunConfig savedFile, _, List<MatchLog> logsFile, _) = ReadBatch(outFile);
         Assert.Equal(ScoringVersion.V1, savedFile.ScoringVersion);
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(logsFile[0]));
+        Assert.Equal(候选格上限Tests.BoardGoldenTurnHash, 候选格上限Tests.TurnHash(logsFile[0]));
     }
 
     [Fact]

@@ -156,8 +156,10 @@ public class 平衡分析方向Tests
             return SimFixtures.Sha256Lf(stripped);
         }
 
-        Assert.Equal("6D06EA22C789523E751AD9DB0A8F976177C25A709083063B4EE3F6DFC0BD46E0", Hash(SimFixtures.Sample.Value));
-        Assert.Equal("5346A5F1DDECA4FFA7442F815C1B08279D6E2FD2B368588A743A0F7494CD8F63", Hash(SimFixtures.RankedSample.Value));
+        // retire-legacy-maps 段 A：共用样本改到 4 人棋盘图，两个哈希在新样本上改钉为本 change 的基线（报告 151 行、名次样本 156 行）。
+        // 原 v5 值 6D06EA22… / 5346A5F1…（D0 之前为 Windows CRLF 下的 83302588… / 19E3B957…）。
+        Assert.Equal("5E321D10EB5B0AF4FFE0EE5A68A0FCF1F3446B16F310C9E02BF3AB909E950E84", Hash(SimFixtures.Sample.Value));
+        Assert.Equal("5AEB1A002E6E13B6D981B102D24A36957B61E76A83A8B3A5707D16B304D67604", Hash(SimFixtures.RankedSample.Value));
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

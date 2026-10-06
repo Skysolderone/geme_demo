@@ -57,10 +57,12 @@ public class 前瞻的近似两层加分Tests
         Assert.Equal(new BigInteger(100), b - a);
         Assert.Equal(1, ExpertLookahead.SelectIndex([a, b]));
 
-        // 真实局面：v5 种子 1 的固定局面集上，两层加分（1000‰、多样候选关闭）至少改变一次选择（相对一层配置），且改变时被选者的加分严格更高。
+        // 真实局面：固定局面集上，两层加分（1000‰、多样候选关闭）至少改变一次选择（相对一层配置），且改变时被选者的加分严格更高。
+        // retire-legacy-maps 段 A：局面集由 v5 种子 1 整局改为 4 人棋盘图种子 1 的前 20 个小回合（每 2 个取 1 → 10 个局面，恰为下面的下界）。
+        // 两层扫描在 465 格的大图上逐格预演，单个局面的代价是 v5 的数倍，截断取 20 而不是夹具的 24。
         int compared = 0;
         int changed = 0;
-        ProbePositions(every: 2, (match, batch) =>
+        ProbePositionsOn(BoardConfig(Standard, Standard, Standard, Standard) with { TurnLimit = 20 }, every: 2, (match, batch) =>
         {
             (HeuristicTurnController one, _, _) = Shadow(match, batch.Context, AiDifficulty.Expert, ExpertConfig(PassThreshold));
             (HeuristicTurnController two, _, _) = Shadow(match, batch.Context, AiDifficulty.Expert, StrengthConfig(PassThreshold, supplement: 0));

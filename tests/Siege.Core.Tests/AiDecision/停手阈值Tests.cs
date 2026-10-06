@@ -18,12 +18,15 @@ public class 停手阈值Tests
 {
     /// <summary>
     /// 严格提高实现（ai-eye 段 B 2.2 完成、2.3 之前：活形硬约束已生效，保留条件仍是 <c>next.Total &gt; current.Total</c>）的实际运行结果——
-    /// v4、种子 31、4 名 Standard AI、24 个小回合，全部小回合快照（去耗时）逐行拼接后的 SHA-256（口径同 <see cref="候选格上限Tests.TurnHash"/>）。
+    /// v4、种子 31（retire-legacy-maps 段 A 起为 4 人棋盘图、种子 11，见下）、4 名 Standard AI、24 个小回合，全部小回合快照（去耗时）逐行拼接后的 SHA-256（口径同 <see cref="候选格上限Tests.TurnHash"/>）。
     /// 阈值取 0 时本 change 的实现 MUST 逐步重现它。
     /// <para>life-single-stone（规则变更）重建：8EEC49A7…04679FC8 → DCB7CC7C…CD39033E。去掉单子上限的探针下旧值逐字节复现；
-    /// 分叉与 <see cref="候选格上限Tests.V4GoldenTurnHash"/> 同源（第 1 个小回合只差活形记录，第 2 个小回合 P0 的匠人 D3 → B3），归因见那里的注释。</para>
+    /// 分叉与当时的 v5 黄金哈希同源（第 1 个小回合只差活形记录，第 2 个小回合 P0 的匠人 D3 → B3）。</para>
+    /// <para>retire-legacy-maps 段 A：改钉到 4 人棋盘图、种子 <see cref="候选格上限Tests.GoldenSeed"/>（11）、<see cref="候选格上限Tests.GoldenTurns"/>（12）个小回合（v5 种子 31、24 个小回合的值 DCB7CC7C…CD39033E 作废）。
+    /// 新值是本 change 的实现在阈值 0 下的实际运行——"严格提高实现"那一版代码早已不在，这里钉的是"阈值 0 的走法从此不变"，
+    /// 并保留反面对照：同一局缺省阈值 20 下走法不同（第 5 个小回合起分叉，探针实测）。</para>
     /// </summary>
-    private const string StrictImprovementTurnHash = "DCB7CC7CAC326562BD7FFFDE813172AD8494335298F4B2EBDC44BD17CD39033E";
+    private const string StrictImprovementTurnHash = "00F6B86A2F815A870BA5FDAC2FCD3EB849278E15225DFC078C9675BB5F25DD1B";
 
     private static readonly PlayerId Me = AiFixtures.P0;
 
@@ -138,20 +141,20 @@ public class 停手阈值Tests
         // 规格：阈值 0 时保留条件退化为"加权总分严格提高"，决策与不含本配置的实现逐步相同。
         // 对照值取自严格提高实现的实际运行（见 StrictImprovementTurnHash）；种子 1–20 的离线决策序列比对另见 implement 记录。
         // 变异 M-B14（会话建 AI 时不传跑局配置的阈值，即实际按缺省 20 跑）→ 红 2（本测试、阈值进入记录）。
-        // M-B6（> 改 >=）在本样本上不红：种子 31 前 24 个小回合里没有边际提升恰为 0 的候选，阈值 0 下 > 与 >= 走法相同；该变异由「零收益不落子」「恰等于阈值不落子」挡住。
+        // M-B6（> 改 >=）在本样本上不红（v5 种子 31 时的记录，棋盘图样本未重验）：种子 31 前 24 个小回合里没有边际提升恰为 0 的候选，阈值 0 下 > 与 >= 走法相同；该变异由「零收益不落子」「恰等于阈值不落子」挡住。
         // ai-eye 段 D2（4.5）：九维权重写死为对照实现当时的缺省（Eye / Threat = 0）。本测试钉的是"阈值 0 = 严格提高"，不是默认权重；
         // 默认权重改为校准值（Eye 200、Threat 25）后若仍跟随缺省，对照哈希就不再是"严格提高实现"的产物（testing.md「校准与保真度分离」）。
-        RunConfig zero = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)) with { PassThreshold = 0 };
+        RunConfig zero = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 候选格上限Tests.GoldenSeed, turnLimit: 候选格上限Tests.GoldenTurns, difficulty: AiDifficulty.Standard)) with { PassThreshold = 0 };
         MatchLog log = BatchRunner.Execute(zero, parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
-        Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
+        Assert.True(log.Turns.Count >= 候选格上限Tests.GoldenTurns, $"小回合 {log.Turns.Count}");
         Assert.Equal(0, log.Header.Config.PassThreshold);
         string hash = 候选格上限Tests.TurnHash(log);
         Assert.True(StrictImprovementTurnHash == hash, $"阈值 0 的小回合快照哈希：{hash}");
 
         // 反面：缺省阈值下同一局走法不同——否则"阈值确实传到了 AI"无从证明。
-        Assert.NotEqual(StrictImprovementTurnHash, 候选格上限Tests.V4GoldenTurnHash);
+        Assert.NotEqual(StrictImprovementTurnHash, 候选格上限Tests.BoardGoldenTurnHash);
     }
 
     [Fact]
@@ -293,7 +296,7 @@ public class 停手阈值Tests
         // 该项出现之前的日志首部没有 PassThreshold：当时的保留条件就是"严格提高"（= 阈值 0）。回放 MUST 按 0 重建，重建的首部也不得多出一项。
         // 样本：阈值 0 跑出的局去掉这一项。它与缺省阈值下的同一局走法不同（「阈值为0时零变化」的反面），所以按缺省重建必然分歧。
         // 变异 M-B10（按首部重建时缺字段取缺省阈值而不是 0）→ 红 1（本测试）。
-        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard);
+        RunConfig config = SimFixtures.Config(seedStart: 候选格上限Tests.GoldenSeed, turnLimit: 候选格上限Tests.GoldenTurns, difficulty: AiDifficulty.Standard);   // retire-legacy-maps 段 A：4 人棋盘图（原 v5 种子 31）
         MatchLog zero = BatchRunner.Execute(config with { PassThreshold = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"PassThreshold\":0,", text, StringComparison.Ordinal);

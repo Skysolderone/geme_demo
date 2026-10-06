@@ -147,12 +147,14 @@ public class 活形记录与统计Tests
     [Fact]
     public void 真实跑局的活形字段自洽()
     {
-        // 真实跑局（Standard，v5，完整事件流）：
+        // 真实跑局（Standard，4 人棋盘图，完整事件流）：
         // ① 每条快照都带活形字段（新日志不是 null），旧日志判据才站得住；
         // ② 预演阶段"破坏活形"的计数 = 细粒度 Rehearsal 事件里同类别的条数（两条独立写入路径互证）；样本口径下界 > 0；
         // ③ 终局快照的逐玩家活形状态 = 测试侧在活对局上独立数出来的值；样本口径下界：终局至少一条活形棋串。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
-        RunConfig config = SimFixtures.Config(count: 1, seedStart: 1, turnLimit: 40, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 };
+        // retire-legacy-maps 段 A：夹具改到 4 人棋盘图后种子 1 → 6。探针（40 个小回合，种子 1–6）：只有种子 6 的预演里出现"破坏活形"（10 次），
+        // 种子 1–3 终局没有活形棋串；60 个小回合下也只有种子 6 有破坏活形。样本口径断言一条不放宽，只换种子。
+        RunConfig config = SimFixtures.Config(count: 1, seedStart: 6, turnLimit: 40, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 };
         MatchSession session = MatchSession.Create(config, config.SeedAt(0));
         MatchLog log = RoundTrip(session.Run());
 
@@ -178,7 +180,7 @@ public class 活形记录与统计Tests
 
         Assert.True(last.Players.Sum(p => p.AliveGroups) > 0, "终局没有任何活形棋串，逐玩家比对是空证。");
 
-        // R8 贴地形小空区：测试侧独立算——盘内几何方向数用坐标算术，与气边邻居数比较；样本口径下界 > 0（v5 的岩石 / 深水切出很多小空区）。
+        // R8 贴地形小空区：测试侧独立算——盘内几何方向数用坐标算术，与气边邻居数比较；样本口径下界 > 0（棋盘图上是棋盘边缘贴场景格的小空区；原 v5 是岩石 / 深水）。
         GameBoard board = session.Match.Board;
         int InBoard(Coord c) => (c.X > 0 ? 1 : 0) + (c.X < board.Width - 1 ? 1 : 0) + (c.Y > 0 ? 1 : 0) + (c.Y < board.Height - 1 ? 1 : 0);
         int terrainSmall = life.EyeSpaces.Count(s => life.GroupsOf(s).Any(g => g.Life == LifeState.Alive)

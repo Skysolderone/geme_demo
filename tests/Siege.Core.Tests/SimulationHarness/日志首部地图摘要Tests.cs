@@ -30,7 +30,7 @@ public class 日志首部地图摘要Tests
         Assert.Equal(gen.Header.MapDigest, MatchLog.Parse(gen.FullText()).Header.MapDigest);
         Assert.Contains($"\"MapDigest\":\"{gen.Header.MapDigest}\"", gen.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
-        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(FourPlayerBaseMap.Create()), l.Header.MapDigest));
+        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(MapCatalog.Resolve(SimFixtures.Board4)), l.Header.MapDigest));   // retire-legacy-maps 段 A：样本图 v5 → 4 人棋盘图
         MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
         Assert.Equal(Expect(FrontierMapV2.Create()), frontier.Header.MapDigest);
         Assert.NotEqual(gen.Header.MapDigest, frontier.Header.MapDigest);

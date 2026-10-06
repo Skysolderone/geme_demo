@@ -44,7 +44,13 @@ public class 地形改造日志与分析Tests
         // 58 局有致提子；取最小的连续且每局都有改造的 1–3：改造 3 / 3 / 6 次、致提子 1 / 0 / 0 次。断言与期望均未改，只换样本。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
         // formation-tiers D2：同理，样本口径下界依赖走法 → 计分规则写死 v1（v1 与引入阵型之前逐步相同），不换样本。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20, ContentSet = ContentSet.V1, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
+        // retire-legacy-maps 段 A 第六次重挑（夹具 v5 → 4 人棋盘图）：棋盘图上只有立栅一种改造有合法目标。同一份写死权重与阈值下探针：
+        // 24 个小回合内种子 1–40 共 86 次改造、致提子 0 次；64 个小回合内种子 1–24 有 3 局各 1 次致提子（种子 4、14 在第 58 个小回合，种子 20 在第 63 个）。
+        // 64 个小回合一局约 6–8 s，进不了默认套件。改把匠人权重由缺省 10 提到 100（征募里多出匠人、立栅机会随之增多；本测试钉的是日志保真度，
+        // 匠人权重只是样本配置）：同一份写死权重与阈值下 32 个小回合内种子 1–24 共 338 次改造、无一局零改造，致提子出现在种子 3（第 11 个小回合）、
+        // 4（第 12 个）、6（第 6 / 9 / 11 个）。取连续的 4–6、截断 8 个小回合（种子 6 第 6 个小回合那次致提子在内）。每局的断言与期望均未改，只换样本。
+        RunConfig config = SimFixtures.Config(count: 3, seedStart: 4, turnLimit: 8, difficulty: AiDifficulty.Standard)
+            with { ArtisanWeight = 100, PassThreshold = 20, ContentSet = ContentSet.V1, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
 
@@ -84,7 +90,7 @@ public class 地形改造日志与分析Tests
             Assert.NotEqual(Shape(actual), Shape(TerrainWriter.ApplyAll(start, replayed[..^1])));
         }
 
-        // 样本口径下界之二：这三局里确实有"致提子的改造"，上面那条逐条转录才真的校到了 CausedCapture
+        // 样本口径下界之二：这三局里确实有"致提子的改造"（种子 6 第 6 个小回合），上面那条逐条转录才真的校到了 CausedCapture
         // （T-11 之后立栅致提子是第 11 项的主力指标；单局样本里它可能恰好全是 false）。
         Assert.Contains(records, r => r.CausedCapture);
 
@@ -92,14 +98,20 @@ public class 地形改造日志与分析Tests
             (m.TerrainData.Bridges.Count, m.TerrainData.Fences.Count, m.AllCoords().Count(c => m.SurfaceAt(c) == Surface.Forest));
     }
 
+    /// <summary>
+    /// 「改造可查」与「真实批次的第11项分析自洽」共用的真实批次（Standard、种子 1–3、24 个小回合、写死内容集 v1）。两条原本各跑一遍同配置的批次；
+    /// retire-legacy-maps 段 A 换到 4 人棋盘图后每局耗时是 v5 的 3 倍，改为只跑一次（对局确定，两次的日志逐字节相同）。
+    /// </summary>
+    private static readonly Lazy<List<MatchLog>> StandardBatch = new(() => BatchRunner.Execute(
+        SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 3));
+
     [Fact]
     public void 改造可查()
     {
         // 段 F 6.4e 改名（原 真实跑局把改造写进日志且可离线重建地形）：测试名 = Scenario 名；「地形可离线重建」的正题在同名方法里，这里是附带的第二条腿。
         // 「改造可查」+「地形可离线重建」：走真实跑局（Standard——Easy 结构性地几乎不落匠人）→ 日志往返 → 重放。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
-        List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
+        List<MatchLog> logs = StandardBatch.Value;
 
         // 每一条小回合快照都带改造字段（没有改造就是空表），首部带匠人权重。
         Assert.All(logs, l => Assert.All(l.Turns, t => Assert.NotNull(t.Edits)));
@@ -122,7 +134,7 @@ public class 地形改造日志与分析Tests
         // 离线重建：按日志顺序把改造重放到开局地图上，结果与该局终局地形逐格一致。
         foreach (MatchLog log in logs)
         {
-            MapData start = Siege.Core.Board.Maps.FourPlayerBaseMap.Create();
+            MapData start = Siege.Core.Board.Maps.MapCatalog.Resolve(log.Header.MapId);   // retire-legacy-maps 段 A：按日志首部的地图（4 人棋盘图），不写死 v5
             MapData replayed = TerrainWriter.ApplyAll(
                 start, log.Turns.SelectMany(t => t.Edits!).Select(e => TerrainEdit.Parse(e.Target)));
 
@@ -300,8 +312,7 @@ public class 地形改造日志与分析Tests
     {
         // 真实跑局上跑一遍分析：分母自洽、动作次数与日志逐条对得上。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
-        List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
+        List<MatchLog> logs = StandardBatch.Value;
         TerrainEditSection t = BalanceAnalyzer.Analyze(logs).TerrainEdits;
 
         Assert.Equal(logs.Count, t.Matches);

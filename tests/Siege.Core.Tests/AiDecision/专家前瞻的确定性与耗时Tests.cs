@@ -16,15 +16,17 @@ namespace Siege.Core.Tests.AiDecision;
 public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
 {
     /// <summary>
-    /// v5、种子 1、整局：P1 为专家（显式打开多样候选 S = 8 与两层加分 λ = 1000‰，写死阈值 80），其余三名标准；返回日志确定性文本与 P1 每次部署的前瞻记录文本。
+    /// 4 人棋盘图、种子 1、截断 20 小回合（retire-legacy-maps 段 A；原为 v5 整局）：P1 为专家（显式打开多样候选 S = 8 与两层加分 λ = 1000‰，写死阈值 80），其余三名标准；
+    /// 返回日志确定性文本与 P1 每次部署的前瞻记录文本。截断取 20 而不是夹具的 24：P1 恰有 5 次部署（「同局面同决策」的样本下界），本类跑三局，每局省约 1/6。
     /// 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后，本类改用 <see cref="LookaheadFixtures.ExpandedExpert"/>，断言不改——两项作为可配置项仍须确定、不消费新随机、耗时受限。
     /// </summary>
     internal static (string Text, List<string> Records, List<LookaheadRecord> Raw) RunExpertSeat1(bool cacheLife)
     {
         MatchSession session = MatchSession.Create(
-            V5Config(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard), 1);
-        HeuristicTurnController inner = HeuristicAi.Create(session.Match, P1, AiDifficulty.Expert, Weights,
-            ExpandedExpert with { PassThreshold = PassThreshold }, lifeQuery: null, cacheLife);
+            BoardConfig(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard) with { TurnLimit = 20 }, 1);
+        AiSearchConfig search = WithMapCellLimit(ExpandedExpert with { PassThreshold = PassThreshold }, session.Match.Map.PlayableCount)!;
+        Assert.Equal(search, session.AiOf(P1)!.Config);   // 替换进去的控制者与会话按配置建出的同口径（含该图的候选格上限 24）
+        HeuristicTurnController inner = HeuristicAi.Create(session.Match, P1, AiDifficulty.Expert, Weights, search, lifeQuery: null, cacheLife);
         var recorder = new LookaheadRecorder(inner);
         session.SetController(P1, recorder);
         MatchLog log = session.Run();
@@ -32,15 +34,29 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         return (log.DeterministicText(), recorder.Records, recorder.Raw);
     }
 
-    private static readonly Lazy<(string Text, List<string> Records, List<LookaheadRecord> Raw)> CachedRun = new(() => RunExpertSeat1(cacheLife: true));
+    /// <summary>
+    /// 本类要的三局（开缓存、开缓存再跑一次、关缓存）在第一次用到时一起起跑、各自在线程池上并行（retire-legacy-maps 段 A：4 人棋盘图上
+    /// 一局约 5 s，三局串行会让本类成为全量测试的尾巴）。三局互相独立、各自确定，并行不改变结果。
+    /// </summary>
+    private static readonly Lazy<Task<(string Text, List<string> Records, List<LookaheadRecord> Raw)>> CachedTask = new(() => Task.Run(() => RunExpertSeat1(cacheLife: true)));
+    private static readonly Lazy<Task<(string Text, List<string> Records, List<LookaheadRecord> Raw)>> AgainTask = new(() => Task.Run(() => RunExpertSeat1(cacheLife: true)));
+    private static readonly Lazy<Task<(string Text, List<string> Records, List<LookaheadRecord> Raw)>> OffTask = new(() => Task.Run(() => RunExpertSeat1(cacheLife: false)));
+
+    private static (string Text, List<string> Records, List<LookaheadRecord> Raw) Await(Lazy<Task<(string Text, List<string> Records, List<LookaheadRecord> Raw)>> run)
+    {
+        _ = CachedTask.Value;
+        _ = AgainTask.Value;
+        _ = OffTask.Value;
+        return run.Value.GetAwaiter().GetResult();
+    }
 
     [Fact]
     public void 同局面同决策()
     {
         // 用相同种子与配置重放一局含专家的对局 → 专家每一步的前瞻集、下一名对手、模拟回应、前瞻后分数与选择逐项相同。
         // 样本口径：至少一次已前瞻、至少一次模拟回应非 Pass。
-        (string text, List<string> records, List<LookaheadRecord> raw) = CachedRun.Value;
-        (string again, List<string> recordsAgain, _) = RunExpertSeat1(cacheLife: true);
+        (string text, List<string> records, List<LookaheadRecord> raw) = Await(CachedTask);
+        (string again, List<string> recordsAgain, _) = Await(AgainTask);
 
         Assert.True(records.Count >= 5, $"专家只有 {records.Count} 次部署");
         Assert.Contains(raw, r => r.Status == LookaheadStatus.Applied && r.Entries.Any(e => !string.IsNullOrEmpty(e.ResponseKey)));
@@ -54,8 +70,8 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     {
         // 同一配置与种子下，分别开、关决策内活形缓存跑一局含专家的对局 → 两份日志的确定性文本逐行相同，前瞻记录逐条相同。
         // 模拟对手沿用专家的缓存开关（它的评价器同样是决策内新建）。
-        (string text, List<string> records, _) = CachedRun.Value;
-        (string off, List<string> recordsOff, _) = RunExpertSeat1(cacheLife: false);
+        (string text, List<string> records, _) = Await(CachedTask);
+        (string off, List<string> recordsOff, _) = Await(OffTask);
 
         Assert.Equal(text.Split('\n'), off.Split('\n'));
         Assert.Equal(records, recordsOff);
@@ -70,7 +86,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     {
         // 同一局面分别由专家与高难做一次部署决策：两者对 ai-<玩家> 子流的消费次数相同（前瞻不消费随机，D5 (a)）；
         // 前瞻组件的类型闭包里没有随机流与种子——对局中不会出现新的子流名，其余子流的位置无从被改动。
-        // 局面取 v5 种子 1 上一局 4 名标准 AI 对局的部署局面，每 3 个取 1（与耗时代理同一探针）。
+        // 局面取 4 人棋盘图种子 1 上一局 4 名标准 AI 对局（截断 24）的部署局面，每 3 个取 1（retire-legacy-maps 段 A；原为 v5）。
         // 变异 M-A6c（模拟对手用专家的扰动流做完整的标准 M = 8）、M-A9（前瞻里消费一次 ai-<玩家>）→ 见段 A 实施记录。
         // expert-strength：专家显式打开多样补充上限 8、两层权重 1000‰（预设已退回一层）——排除重跑与两层扫描同样不消费随机；
         // 前瞻集的第一个逐局面等于高难的选择（「前瞻集第一个仍是高难的选择」的真实局面取样）。样本口径：确有局面做过排除重跑、做过两层扫描。
@@ -123,7 +139,10 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         long simulated = 0;
         long twoPly = 0;
         var rounds = new List<int>();
-        int positions = ProbePositions(every: 3, (match, batch) =>
+        // retire-legacy-maps 段 A1：本条暂钉 v5（待裁决）。改到 4 人棋盘图（截断 24、显式配置补候选格上限 24）后实测：
+        // every 3 → 24 个局面、比值 5.528；every 2 → 36 个局面、高难 18416 / 专家 106271、比值 5.771——超过本条的上限 4。
+        // 断言不放宽，交主会话裁决（多样补充 + 两层加分的专家在大图上的预演代价），段 B 删 v5 前必须定下。
+        int positions = ProbePositionsOn(LegacyV5Config(Standard, Standard, Standard, Standard), every: 3, (match, batch) =>
         {
             (_, int hardRehearsals, _) = Shadow(match, batch.Context, AiDifficulty.Hard, AiSearchConfig.Hard);
             (HeuristicTurnController expert, int expertRehearsals, _) = Shadow(match, batch.Context, AiDifficulty.Expert, ExpandedExpert);

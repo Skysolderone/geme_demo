@@ -130,7 +130,9 @@ public class 可复现回放Tests
         Assert.Equal(5, failed.Turns.Count);
         // 首部配置 = 跑局配置（阈值已显式写死；"未配置的阈值落成缺省值写入首部"由 停手阈值Tests.阈值进入记录 钉住）。
         // carry-in-out 段 C：未配置的带入数量落成 0 写进首部（写明关闭），期望随之补上这一项。
-        Assert.Equal((config with { CarryIn = 0 }).ToJson(), failed.Header.Config.ToJson());
+        // retire-legacy-maps 段 A：夹具地图为 4 人棋盘图（> 150 格），未配置的候选格上限同样落成按地图的缺省 24 写进首部。
+        Assert.Null(config.CandidateCellLimit);
+        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit }).ToJson(), failed.Header.Config.ToJson());
         // 失败局强制保留完整事件流（含细粒度事件），不受 SnapshotsOnly 影响
         Assert.Equal(EventRetention.Full, failed.Header.Retention);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.Candidates);

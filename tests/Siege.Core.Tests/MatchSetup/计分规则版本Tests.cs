@@ -73,7 +73,7 @@ public class 计分规则版本Tests
         Assert.Equal(ScoringVersion.V2, MatchOptions.Default.ScoringVersion);
         Assert.Equal(ScoringVersion.V2, MatchOptions.Immediate.ScoringVersion);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(SimFixtures.Board4), new GameSeed(5), Four);
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
         Assert.Equal(ScoringVersion.V2, match.ScoringVersion);
         Assert.False(match.ScoringVersionBackfilled);
@@ -81,7 +81,9 @@ public class 计分规则版本Tests
         Assert.Equal("V2", JsonNode.Parse(match.Serialize())!["ScoringVersion"]!.GetValue<string>());
 
         // 跑局：配置里不写 → 新建的局取 v2，并落成具体值写进日志首部；公开视图里的势力就是按 v2 算的（样本里出现了成阵的棋串）。
-        RunConfig unset = SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 24, difficulty: AiDifficulty.Standard)) with { ScoringVersion = null };
+        // retire-legacy-maps 段 A：4 人棋盘图上种子 1 的前 24 个小回合没有 3 枚以上的棋串（标准 AI 在大图上分散落子），样本口径不成立；
+        // 改用种子 2（探针种子 1–12：1、4、7 无成阵棋串），截断 16 个小回合。
+        RunConfig unset = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 2, turnLimit: 16, difficulty: AiDifficulty.Standard)) with { ScoringVersion = null };
         MatchLog log = BatchRunner.Execute(unset, parallelism: 1)[0];
         Assert.Equal(ScoringVersion.V2, log.Header.Config.ScoringVersion);
         Assert.Equal(ScoringVersion.V2, log.ScoringVersion);
@@ -93,9 +95,9 @@ public class 计分规则版本Tests
     public void 旧存档按v1()
     {
         // 规格 Scenario：恢复一个在引入阵型之前保存的存档 → 恢复成功，计分规则版本为 v1，各玩家势力与保存时一致。
-        // 旧存档的样本：v1 对局跑 24 个小回合后存档，再删掉 ScoringVersion 字段（引入之前的存档结构就是如此，其余字段不变）。
+        // 旧存档的样本：v1 对局跑 16 个小回合（retire-legacy-maps 段 A 前为 24）后存档，再删掉 ScoringVersion 字段（引入之前的存档结构就是如此，其余字段不变）。
         // 样本口径：这块盘面按 v2 重算的势力与 v1 不同——否则"回填成 v2"也会得到同样的势力，守门是空证。
-        MatchSession session = Played(ScoringVersion.V1, seed: 31, turns: 24);
+        MatchSession session = Played(ScoringVersion.V1, seed: 31, turns: 16);   // retire-legacy-maps 段 A：4 人棋盘图，24 → 16 个小回合
         MatchFlow match = session.Match;
         string saved = AiFixtures.PowerText(match);
         Assert.NotEqual(saved, PowerTextUnder(match, ScoringVersion.V2));
@@ -120,17 +122,17 @@ public class 计分规则版本Tests
     public void v1逐步相同()
     {
         // 规格 Scenario：以计分规则 v1 用同一种子与同一配置重跑一局此前记录过的 AI 对局 → 每一步的批次与结算结果与引入本项之前逐项相同。
-        // "此前记录过"= 候选格上限Tests.V4GoldenTurnHash：种子 31、Standard、24 个小回合，早在引入阵型之前钉下
-        // （快照含每步落子、提子、手牌类型、征募面板规模与逐棋串势力明细），黄金值一字未改。
+        // "此前记录过"= 候选格上限Tests.BoardGoldenTurnHash：4 人棋盘图、种子 GoldenSeed（11）、Standard、GoldenTurns（12）个小回合（retire-legacy-maps 段 A 改钉为本 change 的基线；原为 v5 种子 31、在引入本项之前钉下）
+        // （快照含每步落子、提子、手牌类型、征募面板规模与逐棋串势力明细）。
         // 反面：同一配置按 v2 跑出的局不同——否则版本没有抵达对局，守门是空证。
-        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 候选格上限Tests.GoldenSeed, turnLimit: 候选格上限Tests.GoldenTurns, difficulty: AiDifficulty.Standard));
 
         MatchLog v1 = BatchRunner.Execute(config with { ScoringVersion = ScoringVersion.V1 }, parallelism: 1)[0];
         MatchLog v2 = BatchRunner.Execute(config with { ScoringVersion = ScoringVersion.V2 }, parallelism: 1)[0];
 
         Assert.Equal(ScoringVersion.V1, v1.Header.Config.ScoringVersion);
-        Assert.True(v1.Turns.Count >= 24, $"小回合 {v1.Turns.Count}");
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(v1));
+        Assert.True(v1.Turns.Count >= 候选格上限Tests.GoldenTurns, $"小回合 {v1.Turns.Count}");
+        Assert.Equal(候选格上限Tests.BoardGoldenTurnHash, 候选格上限Tests.TurnHash(v1));
         Assert.NotEqual(候选格上限Tests.TurnHash(v1), 候选格上限Tests.TurnHash(v2));
 
         // v1 局的棋串条目不写阵型阶数（JSON 里整项省略），小回合文本因此与引入之前逐字节相同。
@@ -144,7 +146,9 @@ public class 计分规则版本Tests
         // 规格 Scenario：保存一局计分规则为 v2 的对局并恢复 → 恢复后的计分规则版本仍为 v2，各玩家势力与保存时一致。
         // v2 不是回填值（缺字段回填 v1），所以本用例同时证伪"写入路径漏写"（testing.md「带回填兜底的字段，写入路径要用非回填值证伪」）。
         // 样本口径：存档时盘面上有成阵的棋串，且按 v1 重算的势力不同。再各自续跑 8 个小回合：恢复局与原局的势力明细逐步相同。
-        MatchSession session = Played(ScoringVersion.V2, seed: 31, turns: 24);
+        // retire-legacy-maps 段 A：改到 4 人棋盘图后种子 31 → 2。续跑 8 个小回合逐步相同依赖样本：AI 的 ai-<玩家> 扰动子流是控制者状态、不进存档，
+        // 恢复局的 AI 从子流起点重新取数；探针种子 1–12 只有 2、3、5、8 在 8 个小回合内走法不受影响（其余在第 0–5 个小回合分叉）。v5 种子 31 当时恰好不受影响。
+        MatchSession session = Played(ScoringVersion.V2, seed: 2, turns: 24);
         MatchFlow match = session.Match;
         string saved = AiFixtures.PowerText(match);
         Assert.Contains(match.Scoreboard.Latest!.Players.SelectMany(p => p.Groups), g => g.FormationTier > 0);
@@ -279,7 +283,7 @@ public class 计分规则版本Tests
             ScoringVersion = ScoringVersion.V2,
         };
         MatchSession session = MatchSession.Create(config, 31);
-        for (int i = 0; i < 24; i++)
+        for (int i = 0; i < 16; i++)   // retire-legacy-maps 段 A：4 人棋盘图，24 → 16 个小回合（下面"至少 60 个候选位"的下界 16 × 5 仍满足）
         {
             Assert.True(session.RunTurn());
         }
@@ -324,7 +328,7 @@ public class 计分规则版本Tests
     {
         // 0 不是合法版本（显式编号 1 / 2）：对局配置、跑局配置、计分入口与存档里的非法值都要响亮失败，不静默当成某个版本。
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(1), Four, MatchOptions.Immediate with { ScoringVersion = 0 }));
+            MatchFlow.Create(MapCatalog.Resolve(SimFixtures.Board4), new GameSeed(1), Four, MatchOptions.Immediate with { ScoringVersion = 0 }));
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { ScoringVersion = (ScoringVersion)3 }).Validated());
         Assert.Throws<ArgumentOutOfRangeException>(() => TestMaps.Blank().Place("C5", P0).Score((ScoringVersion)3));
         Assert.Throws<ArgumentOutOfRangeException>(() => FormationTiers.TierOf(0, 5));
@@ -335,7 +339,7 @@ public class 计分规则版本Tests
         Assert.ThrowsAny<Exception>(() => MatchFlow.Restore(session.Match.Board.BaseMap, node.ToJsonString()));
 
         // 会话核对跑局配置与对局配置的版本一致（与内容集同一做法）。
-        MatchFlow v2 = MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(1), Four, MatchOptions.Immediate with { FlagRisk = 0 });
+        MatchFlow v2 = MatchFlow.Create(MapCatalog.Resolve(SimFixtures.Board4), new GameSeed(1), Four, MatchOptions.Immediate with { FlagRisk = 0 });
         v2.PlantPrototype();
         Assert.Throws<SiegeRuleException>(() => MatchSession.ForMatch(v2, SimFixtures.Config() with { ScoringVersion = ScoringVersion.V1 }));
     }

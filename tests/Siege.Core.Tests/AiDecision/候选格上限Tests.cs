@@ -58,7 +58,30 @@ public class 候选格上限Tests
     // 快照只差活形记录——旧记录里单子 C12（与 B10-B11 共享平台角 8 格眼空间、眼值 2）的"确立"事件消失；第 2 个小回合（P0）起走法分叉：
     // 旧落点 C2 连珠 + D3 匠人（立 D2–E2）两枚单子共享同一块 11 格眼空间、各自"确立"活形，新落点 C2 连珠 + B3 匠人（立 A2–B2）。
     // 旧日志各小回合快照里的单子活形条数由 1 增到 26，新日志恒为 0。新值连跑两次一致。
-    internal const string V4GoldenTurnHash = "35E25329A68CDF9ADE5DD1EE424E923F8A01CB5C27D474CD047CBAC68B88D3D7";
+    // retire-legacy-maps 段 A：改钉到 4 人棋盘图（SimFixtures.Board4）。上面的历次重建都是 v4 / v5、种子 31 上的；最后的 v5 值 35E25329…8B88D3D7 作废。
+    // 新基线 = 4 人棋盘图、种子 GoldenSeed（11）、4 名 Standard、GoldenTurns（12）个小回合、权重 / 阈值 / 冒险概率 / 内容集 / 计分规则写死（PinPreCalibration）、
+    // 候选格上限按地图缺省（465 格 > 150 → 24）。种子由 31 改为 11：棋盘图上种子 31 的前 24 个小回合里阈值 0 与缺省阈值 20 走法相同（探针种子 1–12：
+    // 3、7、8、10 两者相同），「停手阈值Tests.阈值为0时零变化」的反面对照因此不成立；种子 11 在第 5 个小回合即分叉。
+    internal const string BoardGoldenTurnHash = "0963D262DFD1B6B7D39037C435A8BA98EF370F324B6AE7F727811EC7206C7109";
+
+    /// <summary>
+    /// 本 change 黄金值的对局种子（retire-legacy-maps 段 A：原 v5 上为 31，选 11 的依据见 <see cref="BoardGoldenTurnHash"/>）。
+    /// 引用 <see cref="BoardGoldenTurnHash"/> 的各条"逐步相同"测试一律用它，不各写一份字面量。
+    /// </summary>
+    internal const ulong GoldenSeed = 11;
+
+    /// <summary>
+    /// 本 change 黄金值的小回合数截断（retire-legacy-maps 段 A：原 v5 上为 24）。4 人棋盘图上标准 AI 每小回合约 90 ms、是 v5 的 3 倍，
+    /// 引用 <see cref="BoardGoldenTurnHash"/> 的十余局都按 24 跑会让全量测试耗时超过改动前的 2 倍；取 12 个小回合（3 个大回合），
+    /// 阈值 0 / 20 在第 5 个小回合即分叉，内容集 v1 / v2、计分规则 v1 / v2、带入开 / 关的反面对照在 12 个小回合内都成立（各测试的 NotEqual 断言钉住）。
+    /// </summary>
+    internal const int GoldenTurns = 12;
+
+    /// <summary>
+    /// 同一局显式不限制候选格（K = 0）的快照哈希（retire-legacy-maps 段 A 钉下）。v5 只有 105 格，缺省 K 就是 0，「缺省不限制」与 <see cref="BoardGoldenTurnHash"/> 是同一局；
+    /// 棋盘图上缺省 K 是 24，"不限制"只能显式给 0，于是分成两个哈希。
+    /// </summary>
+    internal const string UnlimitedTurnHash = "BF9041AF7549B362089CE4BCE3BE6D3CCB57CCD4E70AEEA4C097F1FDAF3E4E6C";
 
     internal static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
@@ -101,14 +124,17 @@ public class 候选格上限Tests
         // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 本测试红。
         // 段 A check 实跑：在重建后的黄金哈希上 M-K1 仍红 36（含本测试）——哈希虽是段 A 后重生成的，但不是自证的。
         // ai-eye 段 D2（4.5）：黄金哈希产自定值之前的缺省（Eye / Threat 0、停手阈值 20），权重与阈值写死为该口径——本测试钉的是"K 缺省不改变走法"，不是默认权重。
+        // retire-legacy-maps 段 A：4 人棋盘图 465 格，缺省 K = 24；"不限制"在这张图上只能显式给 0（K = 0 走"不预筛"分支，M-K1 仍然打得到），
+        // 对照哈希 UnlimitedTurnHash 在本 change 钉下。缺省 K 的那一局由 BoardGoldenTurnHash 钉住（对局内容集 / 计分规则 / 带入带出 / 批量跑局共用）。
         MatchLog log = BatchRunner.Execute(
-            SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)), parallelism: 1)[0];
+            SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: GoldenSeed, turnLimit: GoldenTurns, difficulty: AiDifficulty.Standard)) with { CandidateCellLimit = 0 }, parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
-        Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
-        Assert.Null(log.Header.Config.CandidateCellLimit);
+        Assert.True(log.Turns.Count >= GoldenTurns, $"小回合 {log.Turns.Count}");
+        Assert.Equal(0, log.Header.Config.CandidateCellLimit);
         string hash = TurnHash(log);
-        Assert.True(V4GoldenTurnHash == hash, $"种子 31 的小回合快照哈希变了：现为 {hash}。");
+        Assert.True(UnlimitedTurnHash == hash, $"种子 {GoldenSeed} 不限制候选格的小回合快照哈希变了：现为 {hash}。");
+        Assert.NotEqual(UnlimitedTurnHash, BoardGoldenTurnHash);   // 缺省 K = 24 确实预筛了：与不限制的那一局不同
     }
 
     [Fact]
@@ -385,10 +411,11 @@ public class 候选格上限Tests
     [Fact]
     public void 启用后同种子两次运行逐步相同()
     {
-        // v4（105 格）上显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
-        // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局——实测 K = 8 在这个种子上与不限制逐步相同，证明不了 K 传到了 AI。
+        // 显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
+        // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局（原在 v4 上实测 K = 8 与不限制逐步相同）。
+        // retire-legacy-maps 段 A：改到 4 人棋盘图种子 GoldenSeed；该图缺省 K = 24，所以另断言与缺省那一局也不同。
         static MatchLog Run() => BatchRunner.Execute(
-            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { CandidateCellLimit = 2 }, parallelism: 1)[0];
+            SimFixtures.Config(seedStart: GoldenSeed, turnLimit: GoldenTurns, difficulty: AiDifficulty.Standard) with { CandidateCellLimit = 2 }, parallelism: 1)[0];
 
         // 变异 M-K9：Sim 的 MatchSession 建 AI 时不传跑局配置的 K → 与不限制的那一局相同 → 本测试红。
         MatchLog a = Run();
@@ -396,7 +423,8 @@ public class 候选格上限Tests
 
         Assert.False(a.IsFailed);
         Assert.Equal(TurnHash(a), TurnHash(b));
-        Assert.NotEqual(V4GoldenTurnHash, TurnHash(a));   // K 确实传到了 AI：与不限制的那一局不同
+        Assert.NotEqual(UnlimitedTurnHash, TurnHash(a));   // K 确实传到了 AI：与不限制的那一局不同
+        Assert.NotEqual(BoardGoldenTurnHash, TurnHash(a));   // 也不同于按地图缺省 K = 24 的那一局
         Assert.Equal(2, a.Header.Config.CandidateCellLimit);
     }
 
@@ -410,10 +438,11 @@ public class 候选格上限Tests
         Assert.Equal(AiSearchConfig.LargeMapCellLimit, AiSearchConfig.DefaultCellLimitFor(AiSearchConfig.LargeMapPlayableThreshold + 1));
         Assert.True(AiSearchConfig.LargeMapCellLimit > 0);
 
-        int v4 = MapCatalog.Resolve(FourPlayerBaseMap.Id).PlayableCount;   // builtin-board-maps D4：缺省地图已换成棋盘图，"小图"显式取 v5
-        int frontier = MapCatalog.Resolve(FrontierMapV2.Id).PlayableCount;
+        // retire-legacy-maps 段 A："大图"由边疆图改为 4 人棋盘图；"小图"仍显式取 v5——内置图里已没有 ≤ 150 格的地图（三张棋盘图都 > 150），段 B 删 v5 时须另定。
+        int v4 = MapCatalog.Resolve(FourPlayerBaseMap.Id).PlayableCount;
+        int frontier = MapCatalog.Resolve(SimFixtures.Board4).PlayableCount;
         Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"v4 可落子格 {v4}");
-        Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"边疆图可落子格 {frontier}");
+        Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"4 人棋盘图可落子格 {frontier}");
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.ForDifficulty(d), AiSearchConfig.ForMap(d, v4)));
         Assert.Equal(StandardWith(AiSearchConfig.LargeMapCellLimit), AiSearchConfig.ForMap(AiDifficulty.Standard, frontier));
         Assert.Equal(AiSearchConfig.Standard, AiSearchConfig.ForMap(AiDifficulty.Standard, frontier, cellLimit: 0));
@@ -461,7 +490,8 @@ public class 候选格上限Tests
     {
         // 该项出现之前的边疆图日志首部没有 CandidateCellLimit：当时就是不限制。回放 MUST NOT 按今天的大图缺省 K 重跑，重建的首部也不得多出一项。
         // 变异 M-K12：Replayer 改回不带 recorded 的 MatchSession.Create → 重建首部多出该项、第 1 行即分歧 → 本测试红。
-        RunConfig frontier = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
+        RunConfig frontier = SimFixtures.Config(turnLimit: 4);   // retire-legacy-maps 段 A：大图由边疆图改为 4 人棋盘图（夹具缺省）
+        Assert.Equal(SimFixtures.Board4, frontier.MapId);
         MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"CandidateCellLimit\":0,", text, StringComparison.Ordinal);
@@ -518,9 +548,10 @@ public class 候选格上限Tests
     [Fact]
     public void 批次配置记录写入实际生效的上限()
     {
-        // 边疆图、Easy、1 个大回合（保护期内只有自家平台可落，跑得快）。读 config.json 原文，不经反序列化，避免缺省值掩盖漏写。
+        // 大图（retire-legacy-maps 段 A：边疆图 → 4 人棋盘图，夹具缺省）、Easy、1 个大回合。读 config.json 原文，不经反序列化，避免缺省值掩盖漏写。
         // 变异 M-K8：BatchRunner.ExecuteToDirectory 去掉 ResolvedFor → config.json 不含该项 → 本测试红。
-        RunConfig auto = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
+        RunConfig auto = SimFixtures.Config(turnLimit: 4);
+        Assert.Equal(SimFixtures.Board4, auto.MapId);
         string autoDir = SimFixtures.TempDir("cell-limit-auto");
         BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1);
         Assert.Contains($"\"CandidateCellLimit\": {AiSearchConfig.LargeMapCellLimit}", File.ReadAllText(Path.Combine(autoDir, "config.json")), StringComparison.Ordinal);
@@ -532,9 +563,9 @@ public class 候选格上限Tests
         BatchRunner.ExecuteToDirectory(auto with { CandidateCellLimit = 0 }, zeroDir, parallelism: 1);
         Assert.Contains("\"CandidateCellLimit\": 0", File.ReadAllText(Path.Combine(zeroDir, "config.json")), StringComparison.Ordinal);
 
-        // 标准图：配置记录与引入本项之前一样，不多出这一项。
+        // 标准图：配置记录与引入本项之前一样，不多出这一项。retire-legacy-maps 段 A：内置图里已没有 ≤ 150 格的小图，这里显式钉 v5，段 B 删 v5 时须另定。
         string v4Dir = SimFixtures.TempDir("cell-limit-v4");
-        BatchRunner.ExecuteToDirectory(SimFixtures.Config(turnLimit: 4), v4Dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(SimFixtures.Config(turnLimit: 4) with { MapId = FourPlayerBaseMap.Id }, v4Dir, parallelism: 1);
         Assert.DoesNotContain("CandidateCellLimit", File.ReadAllText(Path.Combine(v4Dir, "config.json")), StringComparison.Ordinal);
     }
 }

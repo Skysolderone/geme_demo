@@ -29,7 +29,8 @@ public class 专家前瞻耗时计时Tests(ITestOutputHelper output)
         var hard = new List<long>();
         var expert = new List<long>();
         int index = 0;
-        int positions = ProbePositions(every: 3, (match, batch) =>
+        // retire-legacy-maps 段 A1：与 专家前瞻的确定性与耗时Tests.预演次数代理计入新增部分 同步暂钉 v5（棋盘图上预演次数比值超过 4，待主会话裁决）。
+        int positions = ProbePositionsOn(LegacyV5Config(Standard, Standard, Standard, Standard), every: 3, (match, batch) =>
         {
             long Time(AiDifficulty difficulty, AiSearchConfig config)
             {

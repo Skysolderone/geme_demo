@@ -92,13 +92,14 @@ public class 公开规则纯函数Tests
     [InlineData(3UL)]
     public void v5真实对局每个小回合新旧两条路径逐项相等(ulong seed)
     {
-        // v5、种子 1–3、4 名标准 AI 整局，每个小回合（部署阶段）比对：
+        // 4 人棋盘图（retire-legacy-maps 段 A；原为 v5 整局，测试名沿用规格 Scenario 名）、种子 1–3、4 名标准 AI、20 个小回合，每个小回合（部署阶段）比对：
         // ① 合法落子范围：旧实现（抄自改动前的 MatchFlow.LegalRangeFor）＝ 对局下发的批次上下文 ＝ 纯函数读公开快照；
         // ② 部署上限与工坊：旧实现（抄自改动前 RelicLedger.BuildSnapshot 的军令 / 工坊部分，读真实内容）＝ 批次上下文 ＝ 纯函数读公开快照；
         // ③ 先锋修正：旧实现（抄自改动前的 SumVanguard）＝ 账本（委托后）＝ 纯函数读公开快照；
         // ④ 出局：此刻没有"应出局而仍参赛"的玩家，每个已出局者都满足判据（旧判据）。
         int checkedTurns = 0;
-        MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed);
+        // retire-legacy-maps 段 A：4 人棋盘图（原 v5 整局）、截断 20 个小回合——每个小回合比对一次，恰够下面"至少 20 个小回合"的下界。
+        MatchSession session = MatchSession.Create(BoardConfig(Standard, Standard, Standard, Standard) with { TurnLimit = 20 }, seed);
         foreach (PlayerId player in session.Match.Players)
         {
             HeuristicTurnController inner = session.AiOf(player)!;

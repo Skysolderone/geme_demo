@@ -104,7 +104,9 @@ public class 原型插旗替代路径Tests
     [InlineData(20260919UL, 2, new[] { 1, 0 })]
     public void 批量侧顺排与首回合顺序和改动前逐项相同(ulong seed, int players, int[] firstOrder)
     {
-        Siege.Sim.Running.MatchSession session = Siege.Sim.Running.MatchSession.Create(SimFixtures.Config(players: players) with { FlagRisk = 0 }, seed);
+        // retire-legacy-maps 段 A1：本条钉的是"区数 = 地图人数上限"的顺排路径（P<i> → 区 i），棋盘图出生棋盘 = 人数 + 1，永远走种子选区，
+        // 造不出这个前提；夹具改到棋盘图后显式钉回 v5，与本文件其余直接用 v5 的规则测试一起留给 A2 / 段 B 定（改合成图或随规格删改）。
+        Siege.Sim.Running.MatchSession session = Siege.Sim.Running.MatchSession.Create(SimFixtures.Config(players: players) with { FlagRisk = 0, MapId = FourPlayerBaseMap.Id }, seed);
 
         Assert.Equal(Enumerable.Range(0, players).Select(i => (int?)i), session.Match.PlayerStates.Select(s => s.BirthZone));
         Assert.Equal(firstOrder, session.Match.ActionOrder.Select(p => p.Value));

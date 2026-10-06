@@ -186,9 +186,12 @@ public class 活形分析的决策内缓存Tests
     }
 
     /// <summary>开 / 关缓存各跑一次，逐行比对确定性文本（含候选、预演、落子分解事件）；返回比对过的小回合数与事件数。</summary>
-    private static (int Turns, int Events) AssertCacheNeutral(RunConfig config, ulong seed)
+    private static (int Turns, int Events) AssertCacheNeutral(RunConfig config, ulong seed) => AssertCacheNeutral(config, seed, out _);
+
+    /// <summary>同上，另交出开缓存那一局的日志（调用方复用它，不必再跑一次）。</summary>
+    private static (int Turns, int Events) AssertCacheNeutral(RunConfig config, ulong seed, out MatchLog on)
     {
-        MatchLog on = Play(config, seed, cacheLife: true);
+        on = Play(config, seed, cacheLife: true);
         MatchLog off = Play(config, seed, cacheLife: false);
         Assert.False(on.IsFailed, on.Failure?.ToString());
         ReplayResult diff = Replayer.Compare(off, on);
@@ -200,16 +203,18 @@ public class 活形分析的决策内缓存Tests
     [Fact]
     public void 缓存开关不改变决策序列()
     {
-        // 缩小版（默认套件）：v5、种子 31、4 名 Standard AI、24 个小回合、完整事件流。完整版见下面两条慢测试（种子 1–20：标准图跑到终局，边疆图截断 80 个小回合）。
+        // 缩小版（默认套件）：4 人棋盘图（retire-legacy-maps 段 A；原为 v5）、种子 31、4 名 Standard AI、24 个小回合、完整事件流。
+        // （试过 16 个小回合：事件只有 84 条，低于下面的样本下界 100，不放宽，仍取 24。）完整版见下面两条慢测试（种子 1–20：标准图跑到终局，边疆图截断 80 个小回合）。
         // 变异 M-C11（指纹漏掉第 1 行）→ 红 11（含本测试、同一决策内重复盘面只分析一次与眼位 / 活形中性 / 硬约束的多条算例）：这类"缓存改变结果"的错误在这里以整局分歧出现。
         // 变异 M-C10（指纹只记有子 / 无子、不记所有者）→ 0 红，是等价变异：同一决策内的候选盘面都是"同一个批次前盘面 + 本人落子 − 被提的子"，
         // 占用格集合相同则所有者必相同；所有者只在跨决策时才区分得开——又一条缓存不得跨决策的理由。所有者仍留在指纹里。
         // 替换 AI 本身不改变走法：会话自己装的 AI 跑出同一份日志。
         RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard);
-        (int turns, int events) = AssertCacheNeutral(config, 31);
+        (int turns, int events) = AssertCacheNeutral(config, 31, out MatchLog on);
         Assert.True(turns >= 24, $"小回合 {turns}");
         Assert.True(events >= 100, $"事件 {events}");
-        Assert.Equal(Play(config, 31, cacheLife: null).DeterministicText(), Play(config, 31, cacheLife: true).DeterministicText());
+        // retire-legacy-maps 段 A：复用上面开缓存的那一局（原来这里再跑一次开缓存的局，同配置同种子逐步相同，只是多花一局）。
+        Assert.Equal(Play(config, 31, cacheLife: null).DeterministicText(), on.DeterministicText());
     }
 
     [SlowFact]

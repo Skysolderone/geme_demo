@@ -55,13 +55,13 @@ public class 阵型的记录Tests
         Assert.Null(v1Entry.FormationTier);
         Assert.Equal((5, 0), ((int)v1Entry.Power, v1Entry.MultiplierExponent));
 
-        // ② 真实跑局（v2、标准难度、种子 31 / 32、各 40 个小回合）：首部写 v2；每条棋串条目都写了阶数，且等于按棋子数查独立阶梯；
+        // ② 真实跑局（v2、标准难度、4 人棋盘图种子 31 / 32、各 16 个小回合；retire-legacy-maps 段 A 由 v5 各 40 个小回合改来，样本口径不变）：首部写 v2；每条棋串条目都写了阶数，且等于按棋子数查独立阶梯；
         //    样本口径：确有成阵的棋串（非默认值，testing.md「期望值是 0 / null 的遥测断言抓不到写入端漏写」）。落盘文本往返后读回同样的值。
-        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(count: 2, seedStart: 31, turnLimit: 40, difficulty: AiDifficulty.Standard)) with
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(count: 2, seedStart: 31, turnLimit: 16, difficulty: AiDifficulty.Standard)) with
         {
             ScoringVersion = ScoringVersion.V2,
         };
-        List<MatchLog> logs = [.. BatchRunner.Execute(config, parallelism: 1).Select(l => MatchLog.Parse(l.FullText()))];
+        List<MatchLog> logs = [.. BatchRunner.Execute(config, parallelism: 2).Select(l => MatchLog.Parse(l.FullText()))];
         Assert.All(logs, log =>
         {
             Assert.Equal(ScoringVersion.V2, log.Header.Config.ScoringVersion);
@@ -113,7 +113,8 @@ public class 阵型的记录Tests
 
         // ② 现跑的 v1 局去掉首部配置里的这一项，就是引入之前的日志形状：照常解析、按 v1 回放逐行一致。
         //    样本口径：同一种子按 v2 跑出的局不同（否则按 v2 回放也会"一致"，守门是空证）。
-        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
+        // retire-legacy-maps 段 A：4 人棋盘图上改用黄金值同口径的种子与截断（候选格上限Tests.GoldenSeed / GoldenTurns；原 v5 种子 31、24 个小回合）。
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: AiDecision.候选格上限Tests.GoldenSeed, turnLimit: AiDecision.候选格上限Tests.GoldenTurns, difficulty: AiDifficulty.Standard));
         MatchLog v1 = BatchRunner.Execute(config with { ScoringVersion = ScoringVersion.V1 }, parallelism: 1)[0];
         MatchLog v2 = BatchRunner.Execute(config with { ScoringVersion = ScoringVersion.V2 }, parallelism: 1)[0];
         Assert.NotEqual(SimFixtures.TurnTexts(v1.Turns), SimFixtures.TurnTexts(v2.Turns));
@@ -125,7 +126,7 @@ public class 阵型的记录Tests
 
         ReplayResult replay = Replayer.Replay(old);
         Assert.True(replay.Identical, replay.ToString());
-        Assert.True(replay.LineCount >= 25, $"比对行数 {replay.LineCount}");
+        Assert.True(replay.LineCount >= 13, $"比对行数 {replay.LineCount}");   // 首部 + GoldenTurns（12）个小回合（retire-legacy-maps 段 A：原 24 个小回合时为 25）
         Assert.Null(replay.Replayed.Header.Config.ScoringVersion);
 
         // 会话层：新建的局缺字段取 v2 并落成具体值；按首部重建的局缺字段取 v1，有字段取记录值（v2 的日志同样可回放）。

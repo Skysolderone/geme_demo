@@ -16,16 +16,20 @@ namespace Siege.Core.Tests;
 /// </summary>
 internal static class SimFixtures
 {
+    /// <summary>跑局夹具的 4 人地图：4 人内置棋盘图（retire-legacy-maps D1；此前钉 <c>siege-4p-base-v5</c>）。写成字面量而不是 <c>MapCatalog.DefaultId</c>，不随缺省漂移。</summary>
+    internal const string Board4 = "siege-4p-board-v1";
+
     /// <summary>
-    /// 基准图（<c>siege-4p-base-v5</c>）4 人 Easy 配置。地图显式写死 v5（builtin-board-maps D4）：缺省地图换成 4 人内置棋盘图之后，
-    /// 依赖本夹具的黄金值、样本口径与"与改动前逐步相同"断言仍钉在 v5 上，不随缺省漂移（第三个 change 再改写到棋盘图）。
+    /// 4 人内置棋盘图（<see cref="Board4"/>）Easy 配置。retire-legacy-maps 段 A 起由 <c>siege-4p-base-v5</c> 改钉到棋盘图：
+    /// 依赖本夹具的黄金值、样本口径与"逐步相同"基线在新图上重钉为本 change 的基线（逐条记录在各测试注释里）。
+    /// 截断缺省 4 × 人数小回合不变（4 人棋盘图上 Easy 每小回合约 30–80 ms，16 小回合的样本仍在秒级）。
     /// </summary>
     internal static RunConfig Config(
         int count = 1, ulong seedStart = 1, int? turnLimit = null, AiDifficulty difficulty = AiDifficulty.Easy,
         EventRetention retention = EventRetention.Full, int players = 4, int? injectFailureAtTurn = null, bool compress = false) =>
         new()
         {
-            MapId = Siege.Core.Board.Maps.FourPlayerBaseMap.Id,
+            MapId = Board4,
             Players = [.. Enumerable.Range(0, players).Select(_ => new PlayerAiConfig { Difficulty = difficulty })],
             SeedStart = seedStart,
             Count = count,
@@ -43,8 +47,9 @@ internal static class SimFixtures
     /// 需要匠人上盘的遥测守门要自己起 <see cref="Siege.Core.Ai.AiDifficulty.Standard"/> 的小样本——见 <c>各棋子势力占比Tests.真实跑局快照的类型计数与明细自洽</c>。
     /// </summary>
     /// <remarks>权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省（<see cref="PinPreCalibration"/>）：大量遥测 / 日志 / 分析测试的样本口径（4 局全是截断局等）
-    /// 依赖这四局的实际走法，不应随校准值与 R26（简单难度算眼位）漂移（段 D2 改写）。</remarks>
-    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(PinPreCalibration(Config(count: 4, seedStart: 11)), parallelism: 1));
+    /// 依赖这四局的实际走法，不应随校准值与 R26（简单难度算眼位）漂移（段 D2 改写）。
+    /// retire-legacy-maps 段 A：样本改在 4 人棋盘图上；四局并行跑（4 人棋盘图每小回合是 v5 的 3 倍耗时，几十条测试排队等它）；并行不改变结果由 <c>批量跑局Tests.并行不改变结果</c> 守住。</remarks>
+    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(PinPreCalibration(Config(count: 4, seedStart: 11)), parallelism: 4));
 
     /// <summary>
     /// 有名次的真实样本（restore-go-core-rules 段 E）：规则层删掉大回合上限与碾压之后，<see cref="Sample"/> 的 4 局全是 <c>turn_limit</c> 截断局、胜者全空，
@@ -52,7 +57,8 @@ internal static class SimFixtures
     /// 让除"幸存者"外的三人弃赛 → 以规则原因「只剩一名参赛玩家」终局，名次取自规则层。幸存者按局轮换（第 i 局为 P<i>i</i>），
     /// 于是"第 3 大回合领先者是否获胜"在四局里不是恒真也不是恒假。弃赛不算污染（<see cref="MatchLog.IsContaminated"/> 只看调试 AI 与人工接管）。
     /// </summary>
-    internal static readonly Lazy<List<MatchLog>> RankedSample = new(() => [.. Enumerable.Range(0, 4).Select(i => RankedMatch(11UL + (ulong)i, survivor: i))]);
+    /// <remarks>retire-legacy-maps 段 A：四局互相独立，并行跑、按局序收集（AsOrdered），结果与逐局串行相同。</remarks>
+    internal static readonly Lazy<List<MatchLog>> RankedSample = new(() => [.. Enumerable.Range(0, 4).AsParallel().AsOrdered().Select(i => RankedMatch(11UL + (ulong)i, survivor: i))]);
 
     /// <summary>
     /// ai-eye 4.5 定值之前（段 B–D1）实际生效的缺省权重：七维旧值、<c>Eye</c> / <c>Threat</c> 为 0。

@@ -55,10 +55,11 @@ public class 对局内容集Tests
         Assert.Equal(match.Relics.Generation, restored.Relics.Generation);
         Assert.Equal(RelicStates(match), RelicStates(restored));
 
-        // 后续征募：恢复后的局再跑 24 个小回合，全部候选都在原六种之内。
+        // 后续征募：恢复后的局再跑 12 个小回合，全部候选都在原六种之内。retire-legacy-maps 段 A：续跑由 24 改为 12（4 人棋盘图每小回合是 v5 的 3 倍耗时）；
+        // 每小回合展示至少 5 个候选位，12 个小回合恰够下面"不少于 60 个候选位"的样本下界，下界不放宽。
         int before = restored.Hands.Records.Count;
         MatchSession resumed = MatchSession.ForMatch(restored, session.Config);
-        for (int i = 0; i < 24 && resumed.RunTurn(); i++)
+        for (int i = 0; i < 12 && resumed.RunTurn(); i++)
         {
         }
 
@@ -71,16 +72,16 @@ public class 对局内容集Tests
     public void v1逐步相同()
     {
         // 规格 Scenario：以内容集 v1 用同一种子与同一配置重跑一局此前记录过的 AI 对局 → 每一步与引入内容集之前逐项相同。
-        // "此前记录过"= 候选格上限Tests.V4GoldenTurnHash：种子 31、Standard、24 个小回合，在引入内容集之前钉下（快照含每步落子、提子、手牌类型、征募面板规模与势力明细）。
+        // "此前记录过"= 候选格上限Tests.BoardGoldenTurnHash：4 人棋盘图、种子 GoldenSeed（11）、Standard、GoldenTurns（12）个小回合（retire-legacy-maps 段 A 改钉为本 change 的基线；原为 v5 种子 31、在引入本项之前钉下）（快照含每步落子、提子、手牌类型、征募面板规模与势力明细）。
         // 反面：同一配置按 v2 跑出的局不同——否则内容集没有抵达对局，守门是空证。
-        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 候选格上限Tests.GoldenSeed, turnLimit: 候选格上限Tests.GoldenTurns, difficulty: AiDifficulty.Standard));
 
         MatchLog v1 = BatchRunner.Execute(config with { ContentSet = ContentSet.V1 }, parallelism: 1)[0];
         MatchLog v2 = BatchRunner.Execute(config with { ContentSet = ContentSet.V2 }, parallelism: 1)[0];
 
         Assert.Equal(ContentSet.V1, v1.Header.Config.ContentSet);
-        Assert.True(v1.Turns.Count >= 24, $"小回合 {v1.Turns.Count}");
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(v1));
+        Assert.True(v1.Turns.Count >= 候选格上限Tests.GoldenTurns, $"小回合 {v1.Turns.Count}");
+        Assert.Equal(候选格上限Tests.BoardGoldenTurnHash, 候选格上限Tests.TurnHash(v1));
         Assert.NotEqual(候选格上限Tests.TurnHash(v1), 候选格上限Tests.TurnHash(v2));
     }
 
@@ -91,7 +92,7 @@ public class 对局内容集Tests
         Assert.Equal(ContentSet.V2, MatchOptions.Default.ContentSet);
         Assert.Equal(ContentSet.V2, MatchOptions.Immediate.ContentSet);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(SimFixtures.Board4), new GameSeed(5), Four);
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
         Assert.Equal(ContentSet.V2, match.ContentSet);
         Assert.False(match.ContentSetBackfilled);
@@ -180,7 +181,7 @@ public class 对局内容集Tests
     {
         // 0 不是合法内容集（显式编号 1 / 2）：对局配置、跑局配置与存档里的非法值都要响亮失败，不静默当成某个内容集。
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            MatchFlow.Create(MapCatalog.Resolve(FourPlayerBaseMap.Id), new GameSeed(1), Four, MatchOptions.Immediate with { ContentSet = 0 }));
+            MatchFlow.Create(MapCatalog.Resolve(SimFixtures.Board4), new GameSeed(1), Four, MatchOptions.Immediate with { ContentSet = 0 }));
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { ContentSet = (ContentSet)3 }).Validated());
 
         MatchSession session = Played(ContentSet.V1, seed: 11, turns: 4);

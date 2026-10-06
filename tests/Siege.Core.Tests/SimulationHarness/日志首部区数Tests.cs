@@ -27,7 +27,8 @@ public class 日志首部区数Tests
         Assert.Equal(6, MatchLog.Parse(frontier.FullText()).Header.ZoneCount);
         Assert.Contains("\"ZoneCount\":6", frontier.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
-        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(4, l.Header.ZoneCount));
+        // retire-legacy-maps 段 A：样本图 v5（4 区）→ 4 人棋盘图（出生棋盘 = 人数 + 1 = 5 区）。
+        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(5, l.Header.ZoneCount));
     }
 
     [Fact]
@@ -35,7 +36,9 @@ public class 日志首部区数Tests
     {
         // 旧日志（frontier-map 之前）首部没有 ZoneCount：读入为 null，不抛；分析端回填为"被选到过的最大区号 + 1"——
         // 旧日志全部来自区数 = 人数的标准档图，回填值即真值，各区胜率段与加字段之前逐项相同。
-        MatchLog current = SimFixtures.Sample.Value[0];
+        // retire-legacy-maps 段 A1：本条的前提是"区数 = 人数"的标准档日志，棋盘图（区数 = 人数 + 1）造不出这种样本，显式钉 v5 跑一局；
+        // 段 B 删 v5 前须改成入库的旧日志夹具（analyze 不读地图，旧日志照常可分析，design 已知歧义 7）。
+        MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 16) with { MapId = FourPlayerBaseMap.Id }, parallelism: 1)[0];
         string text = current.FullText();
         Assert.Contains("\"ZoneCount\":4,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":4,", string.Empty, StringComparison.Ordinal));
@@ -54,18 +57,18 @@ public class 日志首部区数Tests
     {
         // ZoneCount 进了确定性文本（它不是耗时字段）：回放 frontier-map 之前的旧日志时，重建的首部多出这一项，
         // 逐行比对在第 1 行（首部）报分歧——与历次加首部字段的效果相同，不静默放过、也不伪造一致；而对局本身逐步相同。
-        MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4), parallelism: 1)[0];
+        MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4), parallelism: 1)[0];   // retire-legacy-maps 段 A：4 人棋盘图，5 区
         string text = current.DeterministicText();
-        Assert.Contains("\"ZoneCount\":4,", text, StringComparison.Ordinal);
-        MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":4,", string.Empty, StringComparison.Ordinal));
+        Assert.Contains("\"ZoneCount\":5,", text, StringComparison.Ordinal);
+        MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":5,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.ZoneCount);
 
         ReplayResult replay = Replayer.Replay(old);
 
         Assert.False(replay.Identical);
         Assert.Equal(1, replay.FirstDivergentLine);
-        Assert.Contains("\"ZoneCount\":4", replay.Actual, StringComparison.Ordinal);
-        Assert.Equal(4, replay.Replayed.Header.ZoneCount);
+        Assert.Contains("\"ZoneCount\":5", replay.Actual, StringComparison.Ordinal);
+        Assert.Equal(5, replay.Replayed.Header.ZoneCount);
         Assert.Equal(SimFixtures.TurnTexts(old.Turns), SimFixtures.TurnTexts(replay.Replayed.Turns));
         Assert.Equal(old.DeterministicText().Split('\n')[1..], replay.Replayed.DeterministicText().Split('\n')[1..]);
 

@@ -1,6 +1,4 @@
 using System.Collections.Immutable;
-using System.Security.Cryptography;
-using System.Text;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -155,33 +153,48 @@ public class 难度分级Tests
     }
 
     /// <summary>
-    /// 三档旧难度的黄金值：v5、种子 1、4 名同难度 AI 整局（不截断），写死权重（段 A 开工时的缺省）、阈值 80、冒险概率 0、内容集 v2。
-    /// 取自引入专家难度<b>之前</b>的代码（HEAD 03d45f6）的实际运行结果：小回合数、确定性文本行数、确定性文本（含日志首部）的 SHA-256、四名 AI 决策日志的 SHA-256。
+    /// 三档旧难度的黄金值：4 人棋盘图、种子 1、4 名同难度 AI、截断 16 小回合（<see cref="LookaheadFixtures.DifficultyTurnLimit"/>），写死权重（段 A 开工时的缺省）、阈值 80、冒险概率 0、内容集 v2。
+    /// 记小回合数、确定性文本行数、确定性文本（含日志首部）的 SHA-256、四名 AI 决策日志的 SHA-256（哈希前统一 LF）。
+    /// 原值取自引入专家难度<b>之前</b>的代码（HEAD 03d45f6）在 v5 整局上的实际运行结果；retire-legacy-maps 段 A 改钉为本 change 的基线（见下）。
     /// </summary>
     /// <remarks>
+    /// retire-legacy-maps 段 A：改到 4 人棋盘图后重钉。原 v5 值 Easy 72 / 2364 / 3DD30C96… / 987D1695…、Standard 28 / 416 / 24C909F7… / 6E6FEFBE…、
+    /// Hard 26 / 494 / AF2535C3… / 3F9D8A31…。新图上 Easy 第 2 大回合即全员停手（8 小回合，结束原因 AllPassed——465 格的大图上简单难度的候选越不过阈值 80；
+    /// 它的 logHash 随首部的截断值变，决策哈希与截断无关），
+    /// 标准 / 高难跑满截断 16。
     /// retire-legacy-maps D0：日志首部不再写实际核数（<c>Parallelism</c> = 0 时省略 <c>EffectiveParallelism</c>）。原 logHash 含 Windows 机的 <c>"EffectiveParallelism":28</c>，本机必红；新值按同一份文本重算——把该字段插回 <c>"PlayerCount":4</c> 之后，哈希与原值逐一相等（已核对），只少了这一项。原值：Easy 277336FE…、Standard 29353FC9…、Hard 135B8E7A…。
     /// </remarks>
     [Theory]
-    [InlineData(AiDifficulty.Easy, 72, 2364, "3DD30C9631862F2509921E9D565C83FAED64821F6F7E75C306756CC2174A964A", "987D1695B6134D25B72D56EE379FB234FE8DCCD99AE07DC092866F1AD4AE8F4C")]
-    [InlineData(AiDifficulty.Standard, 28, 416, "24C909F70AD1E3BDEE8C28E02D76F509FD45D15D5765EBED4A9B0B35F24E2487", "6E6FEFBE0739612BA168AC511BE466F117954A47654F091635B1A242E7807604")]
-    [InlineData(AiDifficulty.Hard, 26, 494, "AF2535C3101E7B003349693702AEBE34CEED0F388098F94C27BA781FCE0F80EE", "3F9D8A31F38EFD6950846DABCA60AA89ED81899E2AEECE9637AEE0803E7576F6")]
+    [InlineData(AiDifficulty.Easy, 8, 42, "6C3E47C44DF3A629C55DB4DDD85FBAC19A029C7DC96EECB54561FCA6EBB3E8EF", "7EA25B22BC119F92087E3401BDE114688F175AE305AD86E6039BDEE51603FDAB")]
+    [InlineData(AiDifficulty.Standard, 16, 110, "AB9700F65CED8E927379F541CA189A927F7D13B5FEB947D88AC8460426716144", "9F0D02FFE33AFC61B5DCAC0F22D576512F200540D76C35FE66E616EB1188A79A")]
+    [InlineData(AiDifficulty.Hard, 16, 177, "87DC7A931CD1B91D251E52A5A23BD6A5D999CCC82348009EF5A68FB7F2B16168", "E7CB46752822B5BC47477409A585B3AC034EA88E64353ACD4B567D5940B032A8")]
     public void 三档旧难度逐步不变(AiDifficulty difficulty, int turns, int lines, string logHash, string decisionHash)
     {
         // expert-lookahead MODIFIED「难度分级」：简单 / 标准 / 高难的每一步决策、日志的确定性文本（含首部）与改动前逐项相同。
         // 守门型测试：黄金值在改动前的代码上钉下，改动前即绿（设计如此），改动后仍须绿。
-        // 除本条外，既有黄金哈希（候选格上限Tests.V4GoldenTurnHash 等）一字未改。
+        // （expert-lookahead 当时：除本条外，既有黄金哈希一字未改。retire-legacy-maps 段 A 起本条与 候选格上限Tests.BoardGoldenTurnHash 等一起在 4 人棋盘图上改钉为本 change 的基线。）
         PlayerAiConfig[] players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })];
-        MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(players), 1);
-        MatchLog log = session.Run();
-        // formation-tiers D2：V5Config 钉计分规则 v1；v1 局的确定性文本比引入阵型之前只多首部配置里的一项，去掉后与黄金值比（黄金值不重录）。
+        MatchSession session;
+        MatchLog log;
+        if (difficulty == AiDifficulty.Standard)
+        {
+            (session, log) = LookaheadFixtures.FourStandardSeed1.Value;   // 与 专家前瞻的记录Tests.非专家没有前瞻记录 同一局，共用一次运行
+        }
+        else
+        {
+            session = MatchSession.Create(LookaheadFixtures.BoardConfig(players) with { TurnLimit = LookaheadFixtures.DifficultyTurnLimit }, 1);
+            log = session.Run();
+        }
+
+        // formation-tiers D2：BoardConfig 钉计分规则 v1；v1 局的确定性文本比引入阵型之前只多首部配置里的一项，去掉后与黄金值比（黄金值不重录）。
         string text = SimFixtures.StripScoringV1(log.DeterministicText());
         string decisions = string.Join("\n", session.Match.Players.Select(p => $"{p}: {string.Join(" | ", session.AiOf(p)!.Decisions)}"));
 
         Assert.Null(log.Failure);
         Assert.Equal(turns, log.Turns.Count);
         Assert.Equal(lines, text.Split('\n').Length);
-        Assert.Equal(logHash, Sha256(text));
-        Assert.Equal(decisionHash, Sha256(decisions));
+        Assert.Equal(logHash, SimFixtures.Sha256Lf(text));
+        Assert.Equal(decisionHash, SimFixtures.Sha256Lf(decisions));
         Assert.All(session.Match.Players, p => Assert.Null(session.AiOf(p)!.LastLookahead));
     }
 
@@ -200,6 +213,4 @@ public class 难度分级Tests
         Assert.DoesNotContain(typeof(Siege.Core.Determinism.RandomStream), lookahead);
         Assert.Contains(typeof(LookaheadRecord), AiFixtures.ReachableTypes(typeof(HeuristicTurnController)));
     }
-
-    private static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }

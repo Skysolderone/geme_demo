@@ -11,7 +11,7 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests;
 
 /// <summary>
-/// expert-lookahead 的公共夹具：写死的权重与搜索配置、单次决策、v5 真实对局上的局面探针。
+/// expert-lookahead 的公共夹具：写死的权重与搜索配置、单次决策、4 人棋盘图真实对局上的局面探针（retire-legacy-maps 段 A 之前为 v5）。
 /// 依赖 AI 实际走法的断言一律写死权重（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），不读 <see cref="EvaluationWeights.Default"/>。
 /// </summary>
 internal static class LookaheadFixtures
@@ -107,19 +107,27 @@ internal static class LookaheadFixtures
         return match.RehearseBatch(batch, [.. cells.Select(c => (c, PieceType.Basic))]);
     }
 
-    // ---------- v5 真实对局 ----------
+    // ---------- 4 人棋盘图真实对局 ----------
 
     /// <summary>
-    /// v5 上的一局：玩家配置逐名给出，写死权重 / 阈值 / 冒险概率 / 内容集 / 计分规则，不截断。
-    /// 计分规则钉 v1（formation-tiers D2）：本夹具上的黄金值与局面集都在引入阵型之前取下，不重录。
+    /// 4 人棋盘图上本夹具的小回合截断。v5 上一局标准 AI 整局约 30–40 小回合、0.7 s；
+    /// 4 人棋盘图整局 180–200 小回合、约 13 s（retire-legacy-maps 段 A 实测，种子 1–3），整局跑不进单元测试。
+    /// 取 24（= 6 个大回合）：每局约 2 s，4 名标准 AI 共 24 次部署决策，与 v5 整局的决策数同一量级。各测试按样本需要另给更短的截断（逐处注明）。
     /// </summary>
-    internal static RunConfig V5Config(params PlayerAiConfig[] players) => new()
+    internal const int BoardTurnLimit = 24;
+
+    /// <summary>
+    /// 4 人内置棋盘图（<see cref="SimFixtures.Board4"/>）上的一局：玩家配置逐名给出，写死权重 / 阈值 / 冒险概率 / 内容集 / 计分规则，
+    /// 截断于 <see cref="BoardTurnLimit"/> 小回合（retire-legacy-maps D1：此前为 v5 整局，不截断）。
+    /// 计分规则钉 v1（formation-tiers D2）。本夹具上的黄金值与局面集在 retire-legacy-maps 段 A 重钉。
+    /// </summary>
+    internal static RunConfig BoardConfig(params PlayerAiConfig[] players) => new()
     {
-        MapId = Siege.Core.Board.Maps.FourPlayerBaseMap.Id,   // builtin-board-maps D4：缺省地图已换，显式钉回 v5
-        Players = [.. players.Select(p => p with { Weights = Weights })],
+        MapId = SimFixtures.Board4,
+        Players = [.. players.Select(p => p with { Weights = Weights, Search = WithMapCellLimit(p.Search, BoardPlayable.Value) })],
         SeedStart = 1,
         Count = 1,
-        TurnLimit = 600,
+        TurnLimit = BoardTurnLimit,
         PassThreshold = PassThreshold,
         FlagRisk = 0,
         ContentSet = ContentSet.V2,
@@ -130,21 +138,66 @@ internal static class LookaheadFixtures
 
     internal static PlayerAiConfig Standard => new() { Difficulty = AiDifficulty.Standard };
 
+    /// <summary><c>难度分级Tests.三档旧难度逐步不变</c> 与 <see cref="FourStandardSeed1"/> 的小回合截断（16，四个大回合；高难每局约 3 s）。</summary>
+    internal const int DifficultyTurnLimit = 16;
+
     /// <summary>
-    /// 固定局面集（expert-lookahead D12）：<c>siege-4p-base-v5</c>、种子 1–3（或 <paramref name="seeds"/>）、4 名标准 AI 的真实对局中的部署决策，按全局决策序号每 <paramref name="every"/> 个取一个。
+    /// 4 名标准 AI、种子 1 的一局（<see cref="BoardConfig"/>，截断 <see cref="DifficultyTurnLimit"/>）：<c>难度分级Tests.三档旧难度逐步不变</c> 的标准档与 <c>专家前瞻的记录Tests.非专家没有前瞻记录</c>
+    /// 钉的是同一局同一个黄金值，共用一次运行（retire-legacy-maps 段 A：4 人棋盘图上一局约 2 s）。返回会话（已跑完）与日志。
+    /// </summary>
+    internal static readonly Lazy<(MatchSession Session, Siege.Sim.Logging.MatchLog Log)> FourStandardSeed1 = new(() =>
+    {
+        MatchSession session = MatchSession.Create(BoardConfig(Standard, Standard, Standard, Standard) with { TurnLimit = DifficultyTurnLimit }, 1);
+        return (session, session.Run());
+    });
+
+    /// <summary>
+    /// 段 A 之前的 v5 整局配置（不截断）。retire-legacy-maps 段 A1 只留给"在棋盘图上结论改变、待主会话裁决"的测试，段 B 删 v5 时一并处理。
+    /// </summary>
+    internal static RunConfig LegacyV5Config(params PlayerAiConfig[] players) =>
+        BoardConfig(players) with { MapId = Siege.Core.Board.Maps.FourPlayerBaseMap.Id, TurnLimit = 600, Players = [.. players.Select(p => p with { Weights = Weights })] };
+
+    /// <summary>4 人棋盘图的可落子格数（只算一次）。</summary>
+    private static readonly Lazy<int> BoardPlayable = new(() => Siege.Core.Board.Maps.MapCatalog.Resolve(SimFixtures.Board4).PlayableCount);
+
+    /// <summary>4 人棋盘图的可落子格数。</summary>
+    internal static int BoardPlayableCells => BoardPlayable.Value;
+
+    /// <summary>
+    /// 显式给出的搜索配置若未设候选格上限（0），补上该图的缺省上限（<see cref="AiSearchConfig.DefaultCellLimitFor"/>：可落子格 &gt; 150 取 24）。
+    /// retire-legacy-maps 段 A：v5 只有 105 格、缺省上限就是 0，显式配置与未配置的玩家同口径；换到 465 格的棋盘图后，未配置的玩家经
+    /// <see cref="AiSearchConfig.ForMap"/> 取 24，显式配置的却全盘枚举——两者不再同口径（"缺省预设的专家与一层配置逐步相同"随之失真），且专家单步耗时放大一个量级。
+    /// 补上之后显式与未配置的玩家仍按同一上限生成候选，与三个入口对<b>未显式配置</b>搜索参数的玩家在该图上的实际生效值一致。
+    /// 注意这是测试侧的口径归一，<b>不是</b>产品行为：产品里显式给出的 <c>Search</c> 原样生效（<c>MatchSession.AttachConfigured</c>），
+    /// <c>CandidateCellLimit</c> 缺省 0 = 不限制，跑局级的 <c>CandidateCellLimit</c> / <c>--cell-limit</c> 也不作用于它——
+    /// 用 <c>run --config</c> 给 <c>Players[].Search</c> 而不写候选格上限时，大图上该玩家全盘枚举（retire-legacy-maps 段 A1 检查记录，待主会话裁决）。
+    /// </summary>
+    internal static AiSearchConfig? WithMapCellLimit(AiSearchConfig? search, int playableCells) =>
+        search is { CandidateCellLimit: 0 } s ? s with { CandidateCellLimit = AiSearchConfig.DefaultCellLimitFor(playableCells) } : search;
+
+    /// <summary>
+    /// 固定局面集（expert-lookahead D12）：4 人棋盘图（<see cref="BoardConfig"/>，截断 <see cref="BoardTurnLimit"/>）、种子 1–3（或 <paramref name="seeds"/>）、4 名标准 AI 的真实对局中的部署决策，按全局决策序号每 <paramref name="every"/> 个取一个。
     /// 在每个入选局面上调用 <paramref name="probe"/>（对局此刻停在部署阶段），随后由原 AI 照常决策——对局走法与不探针时相同。
     /// </summary>
     /// <remarks>
     /// 规格写的是"玩家 1 的每次部署决策（不少于 30 个）"，但 v5 种子 1–3 上 4 名标准 AI 的对局只有 7 + 7 + 9 = 23 次玩家 1 的部署（段 A 实测），
-    /// 达不到 30；这里改取四个座位的全部部署决策（共 92 次）按固定间隔抽样（记入段 A 实施记录的待决项）。
+    /// 达不到 30；这里改取四个座位的全部部署决策按固定间隔抽样（记入段 A 实施记录的待决项）。retire-legacy-maps 段 A 改到 4 人棋盘图、
+    /// 截断 24 小回合后，种子 1–3 共 72 次部署决策（每局 24 个小回合各一次）。
     /// </remarks>
-    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
+    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds) =>
+        ProbePositionsOn(BoardConfig(Standard, Standard, Standard, Standard), every, probe, seeds);
+
+    /// <summary>
+    /// 同 <see cref="ProbePositions"/>，但局面取自给定配置的对局。只给"棋盘图上结论变了、待主会话裁决"的测试暂时钉回 v5 用
+    /// （<see cref="LegacyV5Config"/>，retire-legacy-maps 段 A1 报告逐条列出）。
+    /// </summary>
+    internal static int ProbePositionsOn(RunConfig config, int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
     {
         int decision = 0;
         int probed = 0;
         foreach (ulong seed in seeds.Length == 0 ? [1, 2, 3] : seeds)
         {
-            MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed);
+            MatchSession session = MatchSession.Create(config, seed);
             foreach (PlayerId player in session.Match.Players)
             {
                 HeuristicTurnController inner = session.AiOf(player)!;
@@ -171,6 +224,8 @@ internal static class LookaheadFixtures
     internal static (HeuristicTurnController Ai, int Rehearsals, Siege.Core.Determinism.RandomStream Stream) Shadow(
         MatchFlow match, BatchContext context, AiDifficulty difficulty, AiSearchConfig config)
     {
+        // 与对局里的 AI 同口径：显式配置未设候选格上限时补上该图的缺省上限（见 WithMapCellLimit）。
+        config = WithMapCellLimit(config, match.Map.PlayableCount)!;
         var batch = new StagedBatch(match.Board, context);
         int rehearsals = 0;
         Siege.Core.Determinism.RandomStream stream = match.Seed.Stream(HeuristicAi.StreamName(context.Player));

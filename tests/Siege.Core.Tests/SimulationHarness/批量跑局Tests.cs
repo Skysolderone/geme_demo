@@ -28,7 +28,8 @@ public class 批量跑局Tests
         // 变异验证：本类以 M-B16（见 并行不改变结果）为准，该变异同时使本测试红。
         // more-pieces-relics 段 A：「终局大回合在 1–3」「完整 / 仅快照各有」等断言依赖走法 → 写死内容集 v1（与引入内容集之前逐步相同）；
         // "未配置的内容集落成 v2 写进 config.json 与首部"由 默认评价权重的校准Tests.引用未校准维度产出的数据 与 对局内容集Tests.新局缺省v2 钉住。
-        RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, turnLimit: 12, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500, ContentSet = ContentSet.V1 };
+        // retire-legacy-maps 段 A：4 人棋盘图上截断由 12 改为 8 个小回合（2 个大回合；本类与其他重定向控制台的类串行，是全量测试的尾巴）。
+        RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, turnLimit: 8, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500, ContentSet = ContentSet.V1 };
         string dir = SimFixtures.TempDir("batch");
 
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);
@@ -47,16 +48,18 @@ public class 批量跑局Tests
         Assert.Null(config.CarryIn);
         // formation-tiers D2：未配置的计分规则版本同样落成缺省值 v2 写入（不落成就无法与"首部缺该项 = 旧日志 = v1"区分）。
         Assert.Null(config.ScoringVersion);
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
+        // retire-legacy-maps 段 A：夹具地图换成 4 人棋盘图（465 格 > 150），未配置的候选格上限落成按地图的缺省 24 写入（v5 上为 0、不写出）。
+        Assert.Null(config.CandidateCellLimit);
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
-        Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
+        Assert.Equal((21UL, 6, 8, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）；retire-legacy-maps 段 A：12 → 8
 
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
         Assert.Equal(Enumerable.Range(21, 6).Select(i => (ulong)i), logs.Select(l => l.Seed));
         Assert.All(logs, l =>
         {
             Assert.NotNull(l.Result);
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率；carry-in-out 段 C：带入数量落成 0；formation-tiers D2：计分规则版本落成缺省 v2
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率；carry-in-out 段 C：带入数量落成 0；formation-tiers D2：计分规则版本落成缺省 v2
             Assert.InRange(l.Result!.MajorRound, 1, 3);
         });
 
@@ -84,7 +87,8 @@ public class 批量跑局Tests
         // 变异验证 M-B16：MatchSession.Create 用 Interlocked 递增的静态计数器异或种子 → 红 5（本测试、批量执行并汇总、纯AI局可凭种子复现、失败局可复现、子流互不干扰）。
         // 变异验证 M-C5（check）：DeterministicText 只序列化 header → 原先两条文本断言恒真（header 含种子，逐字节相等与"不同种子不同"都成立）；
         // 补上行数下界与快照 / 事件逐条比对后 → 红 2（本测试、纯AI局可凭种子复现）。
-        RunConfig config = SimFixtures.Config(count: 6, seedStart: 31, turnLimit: 12);
+        // retire-legacy-maps 段 A：4 人棋盘图上截断由 12 改为 8 个小回合（每小回合是 v5 的 3 倍耗时；本类与其他重定向控制台的类串行，是全量测试的尾巴）。
+        RunConfig config = SimFixtures.Config(count: 6, seedStart: 31, turnLimit: 8);
 
         List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1);
         List<MatchLog> parallel = BatchRunner.Execute(config, parallelism: 4);
@@ -236,9 +240,9 @@ public class 批量跑局Tests
     public void 缺省关闭带入()
     {
         // 规格 Scenario：不传 --carry-in 执行一批对局 → 配置记录写明带入数量 0，每局日志与引入带入带出之前逐局相同。
-        // "逐局相同"用既有黄金哈希钉住（种子 31、Standard、24 个小回合，写死定值之前的权重，同 候选格上限Tests.缺省不限制时标准图整局与改动前逐步相同）；
+        // "逐局相同"用黄金哈希钉住（候选格上限Tests.BoardGoldenTurnHash：4 人棋盘图、种子 GoldenSeed（11）、Standard、GoldenTurns（12）个小回合（retire-legacy-maps 段 A 改钉为本 change 的基线；原为 v5 种子 31、在引入本项之前钉下），写死定值之前的权重）；
         // 首部只多出写明关闭的三项（配置的带入数量 0、开关 false、带入空表），结果行没有带出结算。
-        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
+        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 候选格上限Tests.GoldenSeed, turnLimit: 候选格上限Tests.GoldenTurns, difficulty: AiDifficulty.Standard));
         Assert.Null(config.CarryIn);
         string dir = SimFixtures.TempDir("carry-default");
 
@@ -250,7 +254,7 @@ public class 批量跑局Tests
         }
 
         MatchLog log = MatchLog.Read(Directory.GetFiles(dir, "match-*.jsonl").Single());
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(log));
+        Assert.Equal(候选格上限Tests.BoardGoldenTurnHash, 候选格上限Tests.TurnHash(log));
         Assert.Equal(0, log.Header.Config.CarryIn);
         Assert.Equal(false, log.Header.CarryInOut);
         Assert.Equal([], log.Header.CarryIns!);
