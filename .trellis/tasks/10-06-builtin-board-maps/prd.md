@@ -1,12 +1,12 @@
 # 10-06-builtin-board-maps（母任务 10-06-board-terrain 的子任务 ②）
 
-> 规格权威：`openspec/changes/builtin-board-maps/`（proposal / design / specs / tasks）。负责人裁决全文见母任务 `prd.md`。影响面调研：`research/builtin-and-defaults.md`。
+> 规格权威：`openspec/changes/archive/2026-10-06-builtin-board-maps/`（已归档，主规格已同步；5.3 负责人 2026-10-06 过目，保持不变）。负责人裁决全文见母任务 `prd.md`。影响面调研：`research/builtin-and-defaults.md`。
 
 出生棋盘同尺寸（生成器每张图只抽一次，摆放可转 90°；校验器拒绝不一）；三张内置棋盘图 `siege-4p/3p/2p-board-v1`（`board:` 别名，摘要黄金值守门）；三个入口缺省改为 `siege-4p-board-v1`；选图界面只列内置棋盘图与随机棋盘图、人数 2–4 可调；清理 Godot 通道死代码；依赖缺省地图的既有测试显式钉回 v5。
 
 负责人 2026-10-06 裁决：出生棋盘同尺寸（改生成器）、内置图用别名、每种人数一张、测试钉回 v5；内置图种子由实现方按口径挑候选、出图后负责人选定（段 B 之后暂停等负责人）。
 
-验收：`openspec/changes/builtin-board-maps/tasks.md` 各条的验证项。
+验收：`openspec/changes/archive/2026-10-06-builtin-board-maps/tasks.md` 各条的验证项。
 
 约束：
 - 工作树 `.claude/worktrees/board-terrain`、分支 `feat/board-terrain`，基于 main `c4a9e23`；不碰主工作树、不切分支。

@@ -221,7 +221,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 - 信物格：边长 5–6 的平台各 1 个，边长 7–9 的平台各 2 个，公共争夺区 7 个（其中至少 1 个高档位于中央入口附近）；共 16 个。
 - 可落子格总数 MUST 落在边疆档 4 人区间内。
 
-该图 MUST NOT 成为任何入口的缺省地图；批量与终端入口的缺省为 `siege-4p-base-v5`，图形版选图界面的预选项见 `map-selection`。
+该图 MUST NOT 成为任何入口的缺省地图；各入口的缺省地图见「内置棋盘图」，图形版选图界面的预选项见 `map-selection`。
 
 #### Scenario: 平台规模
 - **WHEN** 统计 `siege-frontier-v2` 的出生区
@@ -249,7 +249,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 
 #### Scenario: 不是缺省地图
 - **WHEN** 不带地图选项启动批量跑局或终端版
-- **THEN** 加载的是 `siege-4p-base-v5`
+- **THEN** 加载的是 `siege-4p-board-v1`，不是 `siege-frontier-v2`
 
 ### Requirement: 2 人基准地图
 
@@ -311,7 +311,7 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 
 `棋盘` 档地图 SHALL 在加载时满足下列校验，任一不通过即拒绝加载并给出具体原因：
 
-1. 每块棋盘是轴对齐矩形；`出生` 棋盘的宽与高各在 5–7，`公共` 棋盘的宽与高各在 7–15。
+1. 每块棋盘是轴对齐矩形；`出生` 棋盘的宽与高各在 5–7，且全部出生棋盘的 {宽, 高} 无序对相同；`公共` 棋盘的宽与高各在 7–15。
 2. 棋盘外接矩形内的每一格 MUST 是可落子格，高度为 0、地表为草地；棋盘内 MUST NOT 有障碍、深水、桥与栅栏（含棋盘边界上的栅栏）。
 3. 棋盘外接矩形两两 MUST NOT 重叠，且两两至少间隔 2 格。
 4. 不属于任何棋盘的格子 MUST 全部是障碍格；棋盘档地图 MUST NOT 含深水格。由此不同棋盘的格子之间 MUST NOT 存在四邻接。
@@ -338,6 +338,10 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 - **WHEN** 加载一张棋盘档地图，其某块公共棋盘为 6×9
 - **THEN** 系统拒绝加载并指出该棋盘与公共棋盘的合法边长 7–15
 
+#### Scenario: 出生棋盘尺寸不一
+- **WHEN** 加载一张棋盘档地图，其出生棋盘有 6×6 也有 5×7
+- **THEN** 系统拒绝加载并指出尺寸不一的出生棋盘
+
 #### Scenario: 出生棋盘越界
 - **WHEN** 加载一张棋盘档地图，其某块出生棋盘为 8×6
 - **THEN** 系统拒绝加载并指出该棋盘与出生棋盘的合法边长 5–7
@@ -353,4 +357,32 @@ TBD - created by archiving change add-board-core. Update Purpose after archive.
 #### Scenario: 合法 2 人棋盘图
 - **WHEN** 加载一张含 3 块出生棋盘与 1 块 11×11 公共棋盘、规模合规的 2 人棋盘档地图
 - **THEN** 系统接受该地图，并在报告项中给出每个出生区到三类目标的距离（公共目标记为"不可达"）
+
+### Requirement: 内置棋盘图
+
+系统 SHALL 登记三张内置棋盘图：`siege-4p-board-v1`（4 人）、`siege-3p-board-v1`（3 人）、`siege-2p-board-v1`（2 人）。每张内置棋盘图是某个固定棋盘档生成图标识（`board:<种子>[:p<人数>][:n<棋盘数>]`）的别名：加载时按该标识生成，地图数据里的标识写内置名。别名与生成图标识的对应、显示名 MUST 登记在共用的那一份内置地图表里。
+
+内置棋盘图的内容一旦改变（生成器或别名对应的标识变化导致导出文件不同），标识 MUST 升号（`-v2`……）；系统 SHALL 用导出摘要的黄金值守住这一点。
+
+`siege-4p-board-v1` SHALL 是批量、终端与图形三个入口在未给地图选项时的缺省地图（图形版缺省进入选图界面，见 `map-selection`）。内置棋盘图 MUST NOT 登记地图专属 AI 权重（`ai-decision`），在其上运行的 AI 是未校准状态。
+
+#### Scenario: 缺省地图
+- **WHEN** 不带地图选项启动批量跑局或终端版
+- **THEN** 加载的是 `siege-4p-board-v1`，对局日志首部记录的地图标识为 `siege-4p-board-v1`
+
+#### Scenario: 内置棋盘图通过校验
+- **WHEN** 加载三张内置棋盘图
+- **THEN** 都是棋盘档、都通过棋盘档静态校验，人数上限依次为 4、3、2
+
+#### Scenario: 别名与生成图同内容
+- **WHEN** 比较 `siege-4p-board-v1` 与其登记的生成图标识所生成的地图
+- **THEN** 除地图标识外，尺寸、棋盘清单、出生区、信物格与全部格子逐项相同
+
+#### Scenario: 内容不变
+- **WHEN** 导出三张内置棋盘图
+- **THEN** 各自的导出摘要与登记的黄金值相同
+
+#### Scenario: 导出文件名合法
+- **WHEN** 以 `map --map siege-4p-board-v1` 导出地图文件
+- **THEN** 文件名为 `siege-4p-board-v1.json`，不含冒号
 

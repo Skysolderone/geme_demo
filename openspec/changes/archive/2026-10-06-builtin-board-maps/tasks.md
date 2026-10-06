@@ -24,4 +24,4 @@
 
 - [x] 5.1 `openspec validate builtin-board-maps --strict`；main 合进本分支后重跑 4.4。
 - [x] 5.2 设计文档 §3、HANDOFF、README、发布页、`boundaries.md` 的缺省地图与命令示例同步；变更记录升一版。
-- [ ] 5.3 负责人看截图。
+- [x] 5.3 负责人看截图。
