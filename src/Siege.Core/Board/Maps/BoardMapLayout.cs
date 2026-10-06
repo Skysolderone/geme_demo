@@ -12,7 +12,7 @@ namespace Siege.Core.Board.Maps;
 /// 公共棋盘只贴公共棋盘；出生棋盘优先贴公共棋盘（构图上"出生棋盘靠着公共棋盘"），贴不上才贴已摆的出生棋盘。这只是构图，没有规则含义。</para>
 /// <para><b>确定性</b>（<c>.trellis/spec/core/determinism.md</c>）：工作态全部是按 <c>[列, 行]</c> 下标的二维数组与按构造次序排列的列表，
 /// 遍历一律双循环或列表下标序；不使用任何按散列次序遍历的容器；随机只来自构造时传入的那一条序列；全程整数运算。
-/// 候选先按固定次序（宿主下标 → 方向 → 间隔 → 偏移）收集成列表，再用随机数取下标——并列由枚举次序打破。</para>
+/// 候选先按固定次序（出生棋盘的朝向 → 宿主下标 → 方向 → 间隔 → 偏移）收集成列表，再用随机数取下标——并列由枚举次序打破。</para>
 /// <para><b>尺寸</b>：棋盘先摆在固定大小的工作区里；摆完后取全部棋盘的实际外接范围，四周各留 <see cref="EdgeMargin"/> 格场景裁出图面，
 /// 列数与行数各自独立。裁切之后本类的全部坐标（<see cref="Grid"/>、<see cref="Boards"/>、<see cref="Relics"/>、<see cref="Entrance"/>）都在图面坐标系里。</para>
 /// <para>任何一步走不下去（工作区放不下、裁出的尺寸越界、信物放不下）就返回 <c>false</c> 并说明原因，由调用方换下一次尝试；不产出半张图。</para>
@@ -112,8 +112,9 @@ internal sealed class BoardMapLayout
     internal const int MaxSizeDraws = 200;
 
     /// <summary>
-    /// 抽各棋盘的边长（design D2"预算抽样"）：出生棋盘宽高各在 5–7、主战场（第一块公共棋盘）各在 11–15、其余公共棋盘各在 7–15，均匀独立抽取；
-    /// Σ 面积不在目标带、或面积最大的公共棋盘宽高不都 ≥ <see cref="MainMinSide"/>，就在同一条随机序列上整组重抽——不缩边、不放边，
+    /// 抽各棋盘的边长（design D2"预算抽样"、builtin-board-maps D1）：主战场（第一块公共棋盘）宽高各在 11–15、其余公共棋盘各在 7–15，均匀独立抽取；
+    /// 出生棋盘<b>每组只抽一次</b>宽与高（各在 5–7 均匀），全部出生棋盘都用这一个尺寸（负责人 2026-10-06：开局空间必须对等；摆放时可转 90°，见 <see cref="Placements"/>）。
+    /// Σ 面积不在目标带、或面积最大的公共棋盘宽高不都 ≥ <see cref="MainMinSide"/>，就在同一条随机序列上整组重抽（出生尺寸是整组里的一项）——不缩边、不放边，
     /// 被接受的那一组边长服从原分布在条件下的分布，公共棋盘不会被压向下限。重抽 <see cref="MaxSizeDraws"/> 组仍不合格即本次尝试作废。
     /// 棋盘之间没有通道，可落子格就是 Σ 棋盘面积。<paramref name="draws"/> 是实际抽了几组（只供诊断）。
     /// </summary>
@@ -124,25 +125,26 @@ internal sealed class BoardMapLayout
         var rolled = new int[2 * (birthCount + publicCount)];
         var floor = new int[rolled.Length];
         var ceiling = new int[rolled.Length];
-        for (int i = 0; i < rolled.Length; i++)
+        for (int i = 2 * birthCount; i < rolled.Length; i++)
         {
-            int board = i / 2;
-            bool birth = board < birthCount;
-            floor[i] = birth ? BirthMinSide : board == birthCount ? MainMinSide : PublicMinSide;
-            ceiling[i] = birth ? BirthMaxSide : PublicMaxSide;
+            floor[i] = i / 2 == birthCount ? MainMinSide : PublicMinSide;
+            ceiling[i] = PublicMaxSide;
         }
 
         for (draws = 1; draws <= MaxSizeDraws; draws++)
         {
-            // 抽样次序：公共棋盘在前（先定大局），出生棋盘在后；每块先宽后高。
+            // 抽样次序：公共棋盘在前（先定大局，每块先宽后高），出生棋盘在后（整组一次：先宽后高）。
             for (int i = 2 * birthCount; i < rolled.Length; i++)
             {
                 rolled[i] = floor[i] + rng.NextInt(ceiling[i] - floor[i] + 1);
             }
 
-            for (int i = 0; i < 2 * birthCount; i++)
+            int birthWidth = BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1);
+            int birthHeight = BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1);
+            for (int board = 0; board < birthCount; board++)
             {
-                rolled[i] = floor[i] + rng.NextInt(ceiling[i] - floor[i] + 1);
+                rolled[2 * board] = birthWidth;
+                rolled[(2 * board) + 1] = birthHeight;
             }
 
             int area = Area(rolled);
@@ -300,13 +302,27 @@ internal sealed class BoardMapLayout
     }
 
     /// <summary>
-    /// 全部合法的摆放位置：宿主为已摆的公共棋盘（<paramref name="publicHosts"/>）或出生棋盘，按宿主下标 → 方向（东、西、北、南）→ 间隔 → 偏移的次序；
-    /// 投影与宿主至少重叠 1 格。
+    /// 全部合法的摆放位置：宿主为已摆的公共棋盘（<paramref name="publicHosts"/>）或出生棋盘，按朝向 → 宿主下标 → 方向（东、西、北、南）→ 间隔 → 偏移的次序；
+    /// 投影与宿主至少重叠 1 格。出生棋盘有两种朝向——先 <c>(宽, 高)</c>、再转 90° 的 <c>(高, 宽)</c>（宽高相等时只有一种），同一张图的出生棋盘因此尺寸相同、朝向可不同
+    /// （builtin-board-maps D1）；公共棋盘只按抽到的宽高摆。
     /// </summary>
     private List<Rect> Placements(int board, bool publicHosts)
     {
-        BoardSize size = _sizes[board];
         var found = new List<Rect>();
+        BoardSize drawn = _sizes[board];
+        int orientations = IsBirth(board) && drawn.Width != drawn.Height ? 2 : 1;
+        for (int orientation = 0; orientation < orientations; orientation++)
+        {
+            BoardSize size = orientation == 0 ? drawn : new BoardSize(drawn.Height, drawn.Width);
+            CollectPlacements(size, publicHosts, found);
+        }
+
+        return found;
+    }
+
+    /// <summary>按宿主下标 → 方向 → 间隔 → 偏移的次序，把 <paramref name="size"/> 这一朝向的合法位置追加到 <paramref name="found"/>。</summary>
+    private void CollectPlacements(BoardSize size, bool publicHosts, List<Rect> found)
+    {
         int hostFrom = publicHosts ? _births : 0;
         int hostTo = publicHosts ? _sizes.Length : _births;
         for (int host = hostFrom; host < hostTo; host++)
@@ -343,8 +359,6 @@ internal sealed class BoardMapLayout
                 }
             }
         }
-
-        return found;
     }
 
     /// <summary>棋盘放得下：离工作区外缘 ≥ 2 格；向四周各扩 <see cref="MinGap"/> 格（含对角）不碰任何棋盘。</summary>

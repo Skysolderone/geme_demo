@@ -316,6 +316,7 @@ public static class MapValidator
         int[,] owner = ValidatePlateCells(map, plates, f);
         ValidatePlateGaps(map, plates, f);
         ValidateBirthPlates(map, f);
+        ValidateBirthPlateSizes(map, f);
         ValidateFlatScenery(map, owner, f);
         ValidateSceneryCells(map, owner, f);
         return true;
@@ -464,6 +465,34 @@ public static class MapValidator
                     [births[i].Origin]));
             }
         }
+    }
+
+    /// <summary>
+    /// 第 1 条后半（builtin-board-maps D1）：全部出生棋盘的 {宽, 高} 无序对相同——开局空间对等，转 90° 摆放算同尺寸。
+    /// 违例时按尺寸分组列出每块出生棋盘（以第一块出生棋盘的尺寸为准，坐标给出与它不同的那些）。
+    /// </summary>
+    private static void ValidateBirthPlateSizes(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        BoardPlate[] births = [.. map.Boards.Where(b => b.Kind == BoardPlateKind.Birth)];
+        if (births.Length == 0)
+        {
+            return;
+        }
+
+        static (int Short, int Long) SizeOf(BoardPlate b) => (Math.Min(b.Width, b.Height), Math.Max(b.Width, b.Height));
+
+        (int Short, int Long) reference = SizeOf(births[0]);
+        BoardPlate[] odd = [.. births.Where(b => SizeOf(b) != reference)];
+        if (odd.Length == 0)
+        {
+            return;
+        }
+
+        f.Add(new MapValidationFailure(
+            "BIRTH_BOARD_SIZE_MISMATCH",
+            $"出生棋盘尺寸不一：{string.Join("、", births.Select(Describe))}；全部出生棋盘的宽与高必须相同（可转 90°），"
+                + $"与第一块（{reference.Short}×{reference.Long}）不同的有 {odd.Length} 块。",
+            [.. odd.Select(b => b.Origin)]));
     }
 
     /// <summary>第 4、5 条：全图不得有深水；信物格必须在棋盘内。</summary>

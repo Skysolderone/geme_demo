@@ -49,7 +49,8 @@ public static class BoardMapGenerator
         GenerateDetailed(mapSeed, parameters, maxAttempts, fixedBirths: null, fixedPublics: null);
 
     /// <summary>
-    /// 测试入口：棋盘边长不抽样、直接用给定的（出生棋盘数 = 人数 + 1、公共棋盘数与参数一致，第一块公共棋盘放在中央），
+    /// 测试入口：棋盘边长不抽样、直接用给定的（出生棋盘数 = 人数 + 1 且宽高相同、公共棋盘数与参数一致，第一块公共棋盘放在中央；
+    /// 出生棋盘按第一块的宽高或其转置摆放），
     /// 其余（摆放、布点、校验闭环）与公开入口完全相同。两个数组要么都给、要么都不给。
     /// </summary>
     internal static GeneratedBoardMap GenerateDetailed(
@@ -66,6 +67,11 @@ public static class BoardMapGenerator
             || (fixedBirths is not null && (fixedBirths.Length != parameters.BirthBoards || fixedPublics!.Length != parameters.PublicBoards)))
         {
             throw new ArgumentException($"给定边长时，出生棋盘必须恰 {parameters.BirthBoards} 块（人数 + 1）、公共棋盘数必须与参数一致。");
+        }
+
+        if (fixedBirths is not null && fixedBirths.Any(b => b != fixedBirths[0] && b != new BoardSize(fixedBirths[0].Height, fixedBirths[0].Width)))
+        {
+            throw new ArgumentException("给定边长时，全部出生棋盘的宽高必须相同（可转 90°）：同一张图的出生棋盘尺寸相同。");
         }
 
         string id = BoardMapId.Format(mapSeed, parameters);

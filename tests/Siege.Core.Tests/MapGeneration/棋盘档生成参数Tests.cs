@@ -316,7 +316,9 @@ public class 棋盘档生成参数Tests
         // 黄金值取自 board-isolated-gen 段 A 补改（人数进入棋盘档随机流、边长整组重抽）完成后的实跑——board-isolated-gen 重定；
         // 人数进入派生，前两个数（4 人第 0 个随机源的头两个值）随之改变，旧值 16155176619714753925 / 3336457412782954627。
         // 历次旧值：board-map 段 B 原值 44×44、摘要 04B085ED…8E0B；段 B 修正 42×42、可落子 540、摘要 B1065BDD…9574；
-        // 段 B 修正二 24×40、可落子 468、摘要 21C2717A…8840；board-isolated-gen 段 A 初版 38×44、可落子 457、摘要 14E954C4…F92D。红了不等于错——确认要改再更新此值，并在实施记录里写明。
+        // 段 B 修正二 24×40、可落子 468、摘要 21C2717A…8840；board-isolated-gen 段 A 初版 38×44、可落子 457、摘要 14E954C4…F92D；
+        // board-isolated-gen 终版 42×44、可落子 463、摘要 43663256…75CB（builtin-board-maps 段 A 出生棋盘改为同尺寸、可转 90° 后重定为现值；随机源头两个值不变）。
+        // 红了不等于错——确认要改再更新此值，并在实施记录里写明。
         Assert.Equal(new[] { GoldenA, GoldenB }, Take(MapRandom.ForBoardAttempt(12345, 4, 0), 2));
         GeneratedBoardMap g = BoardMapGenerator.GenerateDetailed(12345);
         Assert.Equal(("board:12345", GoldenPlayable, GoldenWidth, GoldenHeight), (g.Map.Id, g.Map.PlayableCount, g.Map.Width, g.Map.Height));
@@ -325,10 +327,10 @@ public class 棋盘档生成参数Tests
 
     private const ulong GoldenA = 14574461902476217853UL;
     private const ulong GoldenB = 14705341623990255760UL;
-    private const int GoldenPlayable = 463;
-    private const int GoldenWidth = 42;
-    private const int GoldenHeight = 44;
-    private const string GoldenDigest = "4366325614F6E6C4C37E4A051C4340536237C20EF06C91DF900AECD8CA8075CB";
+    private const int GoldenPlayable = 539;
+    private const int GoldenWidth = 46;
+    private const int GoldenHeight = 37;
+    private const string GoldenDigest = "1C82BE295057F1E0BF797F1C5B9FDCF14C5EE9D256FA5E58B730C8907167A329";
 
     [Fact]
     public void 边疆档生成图不变()

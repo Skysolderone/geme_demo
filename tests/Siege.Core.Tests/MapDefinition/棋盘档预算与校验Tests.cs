@@ -18,6 +18,13 @@ namespace Siege.Core.Tests.MapDefinition;
 /// V7 尺寸区间下限 15 → 16 → 红 1：棋盘档的尺寸与清单要求；
 /// V9 不可达时不出报告项（ValidateDistanceBalance 的报告分支加运行时恒假条件；连同 生成图通过校验 一起跑）→ 红 12（2 人收窄后重跑）：合法2人棋盘图、棋盘档不可达只报告、生成图通过校验 ×10；
 /// T2 只改测试不改实现：规模预算按人数 的 3 人与 2 人期望对调 → 红 2。
+/// builtin-board-maps 段 A（出生棋盘同尺寸；跑 FullyQualifiedName~棋盘档）：
+/// S1 尺寸一致判据改成运行时恒放行（odd.Length >= 0 即返回）→ 红 3：出生棋盘尺寸不一、出生棋盘越界(7×6)、出生棋盘越界(8×6)；
+/// S2 尺寸比较不认转向（无序对改成 (宽, 高)）→ 红 2：出生棋盘尺寸不一（7×5 / 5×7 被拒）、棋盘档布局规则Tests.出生棋盘尺寸逐图抽取且可转向（生成器只能交出不转向的图）；
+/// S3 报出的坐标改成全部出生棋盘（不只是尺寸不同的）→ 红 1：出生棋盘尺寸不一。
+/// 段 A 检查补：C6 尺寸只比短边（SizeOf 返回 (短边, 0)）、C7 只比长边（(0, 长边)）→ 补"只差一条边"样本前各红 0，补后各红 1：出生棋盘尺寸不一；
+/// C3 只比面积 → 红 0，属等价变异（5–7 内六种无序尺寸面积 25 / 30 / 35 / 36 / 42 / 49 两两不同）；
+/// C5 在 ValidateBirthPlateSizes 里加 `map.Profile != MapProfile.Board && 恒假` 的分支 → 红 1：边疆档静态校验Tests.校验器对规格档的分支只在声明表里。
 /// </remarks>
 public class 棋盘档预算与校验Tests
 {
@@ -80,17 +87,102 @@ public class 棋盘档预算与校验Tests
     public void 出生棋盘越界(int width, int height, bool rejected)
     {
         // Scenario：某块出生棋盘为 8×6 → 拒绝并指出该棋盘与出生棋盘的合法边长 5–7。把 4 号出生棋盘（A 的南侧）换成 width×height，北边仍与 A 隔 2 行。
+        // builtin-board-maps D1 之后：其余出生棋盘都是 5×5，换成别的尺寸另报"出生棋盘尺寸不一"——边长区间这一条只看 BOARD_SIZE_OUT_OF_RANGE 的有无。
         var birth = new BoardPlate(new Coord(10, 6 - height), width, height, BoardPlateKind.Birth);
         MapData map = BoardMapFixtures.Build("test-board-birth-size", 36, 25, Boards.SetItem(4, birth), []);
         map = map with { RelicCells = map.RelicCells.Remove(new Coord(12, 3)).Add(new Coord(11, 6 - height + 1), new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)) };
 
         MapValidationResult result = MapValidator.Validate(map);
 
-        Assert.Equal(rejected ? ["BOARD_SIZE_OUT_OF_RANGE"] : [], Codes(result));
+        var expected = new List<string>();
         if (rejected)
         {
-            Assert.Contains("出生棋盘的合法边长 5–7", result.Failures[0].Message, StringComparison.Ordinal);
-            Assert.Contains($"{width}×{height}", result.Failures[0].Message, StringComparison.Ordinal);
+            expected.Add("BOARD_SIZE_OUT_OF_RANGE");
+        }
+
+        if ((width, height) != (5, 5))
+        {
+            expected.Add("BIRTH_BOARD_SIZE_MISMATCH");
+        }
+
+        Assert.Equal(expected.Order(StringComparer.Ordinal), Codes(result).Order(StringComparer.Ordinal));
+        if (rejected)
+        {
+            MapValidationFailure range = Assert.Single(result.Failures, f => f.Code == "BOARD_SIZE_OUT_OF_RANGE");
+            Assert.Contains("出生棋盘的合法边长 5–7", range.Message, StringComparison.Ordinal);
+            Assert.Contains($"{width}×{height}", range.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// 40×30 的 2 人棋盘档图：公共棋盘 11×11（M11–W21）居中，西 / 东 / 南各一块出生棋盘，与公共棋盘各隔 2 格；尺寸由参数给出。
+    /// 信物 3 + 3 = 6，中央入口 = 公共棋盘中心 (17, 15)。可落子 = 三块出生棋盘面积 + 121。
+    /// </summary>
+    private static MapData MixedBirths(BoardPlate west, BoardPlate east, BoardPlate south)
+    {
+        var center = new BoardPlate(new Coord(12, 10), 11, 11, BoardPlateKind.Public);
+        MapData map = BoardMapFixtures.Build("test-board-birth-sizes", 2, 40, 30, [west, east, south, center], []);
+        return map with
+        {
+            RelicCells = new (int X, int Y, RelicZone Zone, BudgetTier Budget)[]
+            {
+                (6, 14, RelicZone.BirthZone, BudgetTier.Birth),
+                (27, 15, RelicZone.BirthZone, BudgetTier.Birth),
+                (16, 4, RelicZone.BirthZone, BudgetTier.Birth),
+                (17, 15, RelicZone.Contested, BudgetTier.High),
+                (14, 12, RelicZone.Contested, BudgetTier.Standard),
+                (20, 18, RelicZone.Contested, BudgetTier.Standard),
+            }.ToImmutableDictionary(r => new Coord(r.X, r.Y), r => new RelicCellSpec(r.Zone, r.Budget)),
+            CentralEntrance = new Coord(17, 15),
+        };
+    }
+
+    [Fact]
+    public void 出生棋盘尺寸不一()
+    {
+        // Scenario（builtin-board-maps）：出生棋盘有 6×6 也有 5×7 → 拒绝并指出尺寸不一的出生棋盘。
+        // 变异记录见类注释 S1–S3。
+        var west = new BoardPlate(new Coord(4, 12), 6, 6, BoardPlateKind.Birth);
+        var east = new BoardPlate(new Coord(25, 12), 5, 7, BoardPlateKind.Birth);
+        var south = new BoardPlate(new Coord(14, 2), 6, 6, BoardPlateKind.Birth);
+        MapData mixed = MixedBirths(west, east, south);
+        Assert.Equal(36 + 35 + 36 + 121, mixed.PlayableCount);
+
+        MapValidationResult result = MapValidator.Validate(mixed);
+
+        MapValidationFailure failure = Assert.Single(result.Failures);
+        Assert.Equal("BIRTH_BOARD_SIZE_MISMATCH", failure.Code);
+        Assert.Equal([east.Origin], failure.Coords.AsEnumerable());
+        Assert.Contains("出生棋盘尺寸不一", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("6×6", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("5×7", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(east.Origin.ToNotation(), failure.Message, StringComparison.Ordinal);
+        Assert.Throws<MapValidationException>(() => GameBoard.Load(mixed));
+
+        // 反面对照：三块都是 6×6 → 接受。
+        MapValidationResult same = MapValidator.Validate(MixedBirths(west, east with { Width = 6, Height = 6 }, south));
+        Assert.True(same.IsValid, same.ToString());
+
+        // 转 90° 算同尺寸：7×5、5×7、7×5 → 接受（无序对相同）。
+        MapValidationResult rotated = MapValidator.Validate(MixedBirths(
+            new BoardPlate(new Coord(3, 12), 7, 5, BoardPlateKind.Birth), east, new BoardPlate(new Coord(14, 3), 7, 5, BoardPlateKind.Birth)));
+        Assert.True(rotated.IsValid, rotated.ToString());
+
+        // 只差一条边也要拒绝（检查阶段补：上面 6×6 / 5×7 两条边都不同，只比短边或只比长边的变异 C6 / C7 都放得过）。
+        // 短边相同、长边不同：5×6、5×7、5×6；长边相同、短边不同：7×6、5×7、7×6。两组都只报东侧那块 5×7。
+        foreach ((BoardPlate w, BoardPlate s) in new[]
+        {
+            (new BoardPlate(new Coord(5, 12), 5, 6, BoardPlateKind.Birth), new BoardPlate(new Coord(14, 2), 5, 6, BoardPlateKind.Birth)),
+            (new BoardPlate(new Coord(3, 12), 7, 6, BoardPlateKind.Birth), new BoardPlate(new Coord(14, 2), 7, 6, BoardPlateKind.Birth)),
+        })
+        {
+            MapValidationResult oneSide = MapValidator.Validate(MixedBirths(w, east, s));
+            MapValidationFailure f = Assert.Single(oneSide.Failures);
+            Assert.Equal("BIRTH_BOARD_SIZE_MISMATCH", f.Code);
+            Assert.Equal([east.Origin], f.Coords.AsEnumerable());
+
+            MapValidationResult fixedUp = MapValidator.Validate(MixedBirths(w, east with { Width = w.Width, Height = w.Height }, s));
+            Assert.True(fixedUp.IsValid, fixedUp.ToString());   // 对照：把东侧换成同尺寸即接受，证明拒绝只来自尺寸
         }
     }
 
@@ -303,8 +395,9 @@ public class 棋盘档预算与校验Tests
     [Fact]
     public void 棋盘两两至少间隔2格()
     {
-        // 校验第 3 条。把 3 号出生棋盘（B 的北侧）向西挪到 x = 16 并加宽到 7（x 16–22）：与 2 号出生棋盘（x 10–14）只隔 1 列。
-        ImmutableArray<BoardPlate> boards = Boards.SetItem(3, new BoardPlate(new Coord(16, 19), 7, 5, BoardPlateKind.Birth));
+        // 校验第 3 条。把 3 号出生棋盘（B 的北侧）向西挪到 x = 16（x 16–20）：与 2 号出生棋盘（x 10–14）只隔 1 列。
+        // builtin-board-maps D1 之前这里还把它加宽到 7；出生棋盘须同尺寸之后保持 5×5，免得另报尺寸不一。
+        ImmutableArray<BoardPlate> boards = Boards.SetItem(3, new BoardPlate(new Coord(16, 19), 5, 5, BoardPlateKind.Birth));
         MapData map = BoardMapFixtures.Build("test-board-gap", 36, 25, boards, []);
         map = map with { RelicCells = map.RelicCells.Remove(new Coord(24, 21)).Add(new Coord(18, 21), new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)) };
 

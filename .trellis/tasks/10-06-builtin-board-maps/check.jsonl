@@ -1,1 +1,12 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/10-06-board-terrain/prd.md", "reason": "母任务：负责人裁决全文"}
+{"file": "openspec/changes/builtin-board-maps/design.md", "reason": "本 change 的设计与初值"}
+{"file": "openspec/changes/builtin-board-maps/tasks.md", "reason": "分段任务与验证项"}
+{"file": "openspec/changes/builtin-board-maps/specs/map-generation/spec.md", "reason": "规格增量：出生棋盘同尺寸"}
+{"file": "openspec/changes/builtin-board-maps/specs/map-definition/spec.md", "reason": "规格增量：内置棋盘图、校验"}
+{"file": "openspec/changes/builtin-board-maps/specs/map-selection/spec.md", "reason": "规格增量：选图界面"}
+{"file": "openspec/changes/builtin-board-maps/specs/simulation-harness/spec.md", "reason": "规格增量：入口缺省"}
+{"file": "openspec/changes/builtin-board-maps/specs/visual-style-baseline/spec.md", "reason": "规格增量：去掉通道"}
+{"file": ".trellis/tasks/10-06-builtin-board-maps/research/builtin-and-defaults.md", "reason": "影响面调研（代码位置、52 条测试分组、选种数据）"}
+{"file": ".trellis/spec/core/testing.md", "reason": "测试、变异、截图验证、源码守门约定"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "确定性约定"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内置图升号、单一实现等边界"}

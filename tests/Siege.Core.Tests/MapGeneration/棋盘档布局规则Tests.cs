@@ -20,6 +20,12 @@ namespace Siege.Core.Tests.MapGeneration;
 /// L6 出生棋盘数 = 人数 + 2 → 红 94（本类除 边长整组重抽 外全部：校验预算对不上，生成作废到上限）；
 /// L7 生成器在第 1 块棋盘东侧留一格可落子格、校验器的"棋盘外可落子格"判据改成运行时恒假 → 红 20：棋盘之外只有场景 ×10、棋盘互不连通 ×10；
 /// T1 只改测试不改实现：规模落在目标带 里 3 人与 2 人的目标带对调 → 红 4（防测试照抄实现的算式 75p–200p）。
+/// builtin-board-maps 段 A（出生棋盘同尺寸；跑 FullyQualifiedName~棋盘档，红数按 Theory 行计）：
+/// B1 抽样改回每块出生棋盘各抽宽高、校验器的尺寸一致判据同时改成运行时恒放行（odd.Length >= 0 即返回）→ 红 17：出生棋盘同尺寸 ×10、边长整组重抽 ×3、黄金值，
+///    外加 棋盘档预算与校验Tests 的 出生棋盘尺寸不一、出生棋盘越界 ×2（校验器那一半）；
+/// B2 出生棋盘不转向（朝向数恒 1）→ 红 1：出生棋盘尺寸逐图抽取且可转向；
+/// B3 出生尺寸恒 6×6（仍消耗两个随机数）→ 红 3：出生棋盘尺寸逐图抽取且可转向、边长覆盖整个区间、黄金值；
+/// G1 去掉测试入口"给定出生尺寸不一即报参数错误"（条件加运行时恒假）→ 红 1：资源布点。
 /// </remarks>
 public class 棋盘档布局规则Tests
 {
@@ -90,6 +96,38 @@ public class 棋盘档布局规则Tests
         }
     }
 
+    [Theory]
+    [MemberData(nameof(Configurations))]
+    public void 出生棋盘同尺寸(int players, int boards)
+    {
+        // Scenario（builtin-board-maps）：对 2、3、4 人，用地图种子 1 到 20 与该人数的每个合法棋盘数各生成一张 → 每张图的全部出生棋盘的 {宽, 高} 无序对相同。
+        // 变异记录见类注释 B1–B3。
+        foreach ((string id, MapData map) in Maps(players, boards))
+        {
+            (int, int)[] sizes = [.. map.Boards.Where(b => b.Kind == BoardPlateKind.Birth).Select(b => (Math.Min(b.Width, b.Height), Math.Max(b.Width, b.Height)))];
+            Assert.Equal(players + 1, sizes.Length);
+            Assert.True(sizes.All(s => s == sizes[0]), $"{id}：出生棋盘尺寸为 {string.Join("、", map.Boards.Where(b => b.Kind == BoardPlateKind.Birth).Select(b => $"{b.Width}×{b.Height}"))}。");
+        }
+    }
+
+    [Fact]
+    public void 出生棋盘尺寸逐图抽取且可转向()
+    {
+        // 样本口径（防"同尺寸"靠写死一个尺寸做到、或转向这条路从没走到）：200 张里出生棋盘的无序尺寸不止一种，
+        // 且确有图的出生棋盘同时出现 w×h 与 h×w 两种朝向（w ≠ h）。
+        var kinds = new SortedSet<(int, int)>();
+        int rotated = 0;
+        foreach ((ulong seed, int players, int boards) in BoardGenFixtures.Sample())
+        {
+            BoardPlate[] births = [.. BoardGenFixtures.Generated(seed, boards, players).Map.Boards.Where(b => b.Kind == BoardPlateKind.Birth)];
+            kinds.Add((Math.Min(births[0].Width, births[0].Height), Math.Max(births[0].Width, births[0].Height)));
+            rotated += births.Any(b => b.Width != b.Height) && births.Select(b => (b.Width, b.Height)).Distinct().Count() > 1 ? 1 : 0;
+        }
+
+        Assert.True(kinds.Count >= 4, $"样本里出生棋盘只有 {kinds.Count} 种尺寸。");
+        Assert.True(rotated > 0, "样本里没有一张图的出生棋盘出现两种朝向。");
+    }
+
     [Fact]
     public void 边长覆盖整个区间()
     {
@@ -128,6 +166,7 @@ public class 棋盘档布局规则Tests
             int area = births.Sum(b => b.Width * b.Height) + publics.Sum(b => b.Width * b.Height);
             Assert.InRange(area, min, max);
             Assert.All(births, b => Assert.True(b.Width is >= 5 and <= 7 && b.Height is >= 5 and <= 7));
+            Assert.All(births, b => Assert.Equal(births[0], b));   // builtin-board-maps D1：每组只抽一次出生尺寸
             Assert.True(publics[0].Width >= 11 && publics[0].Height >= 11 && publics[0].Width <= 15 && publics[0].Height <= 15);
             Assert.All(publics, b => Assert.True(b.Width is >= 7 and <= 15 && b.Height is >= 7 and <= 15));
             redrawn += draws > 1 ? 1 : 0;
@@ -241,16 +280,19 @@ public class 棋盘档布局规则Tests
     {
         // Scenario：4 人、棋盘数 8、三块公共棋盘分别为 7×8、9×10 与 11×11 → 信物格共 11 个：出生棋盘 5 个、公共棋盘 1 + 2 + 3 个，11×11 棋盘上有 1 个高档。
         // 边长不靠找种子：测试入口直接给定各棋盘的宽高（第一块公共棋盘放在中央），其余（摆放、布点、校验闭环）与公开入口同一条路。
-        BoardSize[] births = [new(5, 5), new(6, 5), new(7, 7), new(5, 7), new(6, 6)];
+        // builtin-board-maps D1：出生棋盘同尺寸，给定 5 块 6×5（摆放时可转成 5×6）；给定尺寸不一的出生棋盘是参数错误。
+        BoardSize[] births = [new(6, 5), new(6, 5), new(6, 5), new(6, 5), new(6, 5)];
         BoardSize[] publics = [new(11, 11), new(9, 10), new(7, 8)];
         MapData map = BoardMapGenerator.GenerateDetailed(
             4242, new BoardMapParameters { BoardCount = 8 }, BoardMapGenerator.DefaultMaxAttempts, births, publics).Map;
+        Assert.Throws<ArgumentException>(() => BoardMapGenerator.GenerateDetailed(
+            4242, new BoardMapParameters { BoardCount = 8 }, BoardMapGenerator.DefaultMaxAttempts, [new(6, 5), new(5, 6), new(6, 6), new(6, 5), new(6, 5)], publics));
 
         Assert.True(MapValidator.Validate(map).IsValid);
         BoardPlate small = Assert.Single(map.Boards, b => b.Kind == BoardPlateKind.Public && b.Width * b.Height == 56);
         BoardPlate middle = Assert.Single(map.Boards, b => b.Kind == BoardPlateKind.Public && b.Width * b.Height == 90);
         BoardPlate large = Assert.Single(map.Boards, b => b.Kind == BoardPlateKind.Public && b.Width == 11 && b.Height == 11);
-        Assert.Equal(births.Select(b => (b.Width, b.Height)), map.Boards.Take(5).Select(b => (b.Width, b.Height)));
+        Assert.All(map.Boards.Take(5), b => Assert.Equal((5, 6), (Math.Min(b.Width, b.Height), Math.Max(b.Width, b.Height))));
 
         Assert.Equal(11, map.RelicCells.Count);
         Assert.All(map.Boards.Take(5), b => Assert.Single(map.RelicCells.Keys, b.Contains));

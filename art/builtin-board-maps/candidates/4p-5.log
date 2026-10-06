@@ -1,0 +1,29 @@
+Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org
+Metal 4.0 - Forward+ - Using Device #0: Apple - Apple M3 (Apple9)
+
+[parts] 本次搭建地形部件：资源 3809 件、程序生成 0 件（res://parts/terrain）
+[batch] 障碍装饰合批 1134 格：变体 20 种、子网格 29 个归入 MultiMesh 29 个、实例 1660 个；未合批（逐格各建节点）0 格；场景面砖 1134 格、MultiMesh 1 个
+[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 5 份、衬底材质 4 份、描边 / 边框材质 1 份、盒网格 8 份
+[siege] 地图 board:5，对局种子 20260915，你是 红方(P0)，AI 难度 标准（Standard，前瞻宽度 0），AI 评价权重 EvaluationWeights { PowerGain = 10, EnemyLoss = 8, Relic = 6, Safety = 35, Growth = 4, Initiative = 20, Supply = 2, Eye = 200, Threat = 25 }，自动演示模式（跑满 12 个大回合停止）
+[parts] 本次搭建地形部件：资源 3809 件、程序生成 0 件（res://parts/terrain）
+[batch] 障碍装饰合批 1134 格：变体 20 种、子网格 29 个归入 MultiMesh 29 个、实例 1660 个；未合批（逐格各建节点）0 格；场景面砖 1134 格、MultiMesh 1 个
+[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 13 份、衬底材质 12 份、描边 / 边框材质 5 份、盒网格 8 份
+[camera] 第 0 帧（开局对准出生平台）注视点 (11.422, -9)，距离 12.646
+[show] 第 1 帧 AI结算：节拍 4（落子 3 / 提子 0 / 信物 1 / 揭示 3·最高 1 档 / 势力 4 / 横幅 0），零时长
+[camera] 第 5 帧（全局预览）注视点 (0, 0)，距离 51.043
+[auto-demo] 第 5 帧暂放匠人 AH27：已选 立栅 AF27–AG27，可改造目标 16 个（桥 0 / 栅 16 / 林 0）；格目标 无；工坊 未生效
+[life-shape] 截图取景：当前行动 红方(P0)，禁入格 0，已活棋串 0，棋串读法 关
+[siege] 截图 /Users/rubioc/game_demo/.claude/worktrees/board-terrain/art/builtin-board-maps/candidates/4p-5.png：Ok（1600×900，第 7 帧，第 1 大回合，信息层 关，手牌信息面板 关，中央面板 关）
+[siege] 势力栏：红方(P0) 势力 0（领地 0 + 棋串 0）；蓝方(P1) 势力 0（领地 0 + 棋串 0）；金方(P2) 势力 14（领地 8 + 棋串 6）；紫方(P3) 势力 0（领地 0 + 棋串 0）
+[siege] 独占格 8（金方(P2) 8）
+[siege] 势力排名面板 左 1300 右 1586 / 视口宽 1600：完整可见
+[siege] 棋子：堡垒子 1（E10）；连珠子 2（D11、F11）
+[siege] 本局改造 0 处：
+[siege] 暂放：AH27 匠人 + 立栅 AF27–AG27
+[siege] 改造高亮：AH27 已选 立栅 AF27–AG27，候选 桥 0 / 栅 16 / 林 0（格目标 无）；工坊 未生效
+[carry] 补给面板 关，结算面板 关；补给 —；档案存取 无（不读写档案）
+[siege] 落成反馈：无
+[show] 截图时演出：无（遮罩为空，画面即结算后快照）
+[show-tier] 揭示条目 0 条：无；亮环 无；轻震 无（相机节点相对位姿的偏移 0）；势力栏放大 无
+[show-tier] 常驻标注 3 条（全局预览下不画）：1 档 3 条（字号 88：E10=4 D11=1 F11=1）；遮罩给的显现进度（reveal-label-handoff：0 不画，其余按进度取透明度，不在表里的完全显示）空；演出帧里这一层重画 0 次
+[perf] 帧率 2，单帧处理 183.3 ms，绘制调用 964，对象 3780，图元 359289；相机注视点 (0, 0) 距离 51.043
