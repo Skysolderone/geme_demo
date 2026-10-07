@@ -1,12 +1,12 @@
 # 10-06-retire-legacy-maps（母任务 10-06-board-terrain 的子任务 ③）
 
-> 规格权威：`openspec/changes/retire-legacy-maps/`（proposal / design / specs / tasks）。负责人裁决全文见母任务 `prd.md`。调研：`research/legacy-removal.md`（总览与 Q1–Q12）、`product-code.md`、`tests-and-golden.md`、`saves-and-docs.md`。
+> 规格权威：`openspec/changes/archive/2026-10-07-retire-legacy-maps/`（proposal / design / specs / tasks）。负责人裁决全文见母任务 `prd.md`。调研：`research/legacy-removal.md`（总览与 Q1–Q12）、`product-code.md`、`tests-and-golden.md`、`saves-and-docs.md`。
 
 删除旧地图（v5 / 2p / 3p / 边疆 / `gen:` / `maps/*.json`）；测试全部迁到棋盘图或合成盘面；黄金值重定且两台机器通用；旧标识明确报错；校验器收口；文档与规格同步。
 
 负责人 2026-10-06 裁决：不可达地形规则本 change 保留、另开 change 定；工坊信物不动、记为已知问题；先修跨机器红测（段 0）；一个 change 内分段，全部做完再看。Q3–Q12 按调研建议（见 design「已知歧义」）。
 
-验收：`openspec/changes/retire-legacy-maps/tasks.md` 各条的验证项。段 0 之后判据为"全量全绿"。
+验收：`openspec/changes/archive/2026-10-07-retire-legacy-maps/tasks.md` 各条的验证项。段 0 之后判据为"全量全绿"。
 
 约束：
 - 工作树 `.claude/worktrees/board-terrain`、分支 `feat/board-terrain`，基于 main `7be3f3b`；不碰主工作树、不切分支。

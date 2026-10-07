@@ -1,7 +1,7 @@
 {"file": ".trellis/tasks/10-06-board-terrain/prd.md", "reason": "母任务：负责人裁决全文"}
-{"file": "openspec/changes/retire-legacy-maps/proposal.md", "reason": "本 change 的范围"}
-{"file": "openspec/changes/retire-legacy-maps/design.md", "reason": "本 change 的设计与已知歧义"}
-{"file": "openspec/changes/retire-legacy-maps/tasks.md", "reason": "分段任务与验证项"}
+{"file": "openspec/changes/archive/2026-10-07-retire-legacy-maps/proposal.md", "reason": "本 change 的范围"}
+{"file": "openspec/changes/archive/2026-10-07-retire-legacy-maps/design.md", "reason": "本 change 的设计与已知歧义"}
+{"file": "openspec/changes/archive/2026-10-07-retire-legacy-maps/tasks.md", "reason": "分段任务与验证项"}
 {"file": ".trellis/tasks/10-06-retire-legacy-maps/research/legacy-removal.md", "reason": "调研总览：规模、拆段、Q1–Q12"}
 {"file": ".trellis/tasks/10-06-retire-legacy-maps/research/product-code.md", "reason": "调研：产品代码与地形去留"}
 {"file": ".trellis/tasks/10-06-retire-legacy-maps/research/tests-and-golden.md", "reason": "调研：测试分组与黄金值清单"}
