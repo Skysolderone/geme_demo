@@ -117,12 +117,12 @@ public class 各入口按地图标识选图Tests
     }
 
     [Fact]
-    public void 选边疆图()
+    public void 区数多于人数的棋盘图()
     {
         // 规格 Scenario：以边疆图启动终端版 → 插旗提示列出 1–6 号平台。frontier-v1 在段 B 才有，这里用测试内构造的 6 平台图
         //（入口 Program.Play 只做"标识 → 地图"的解析后把地图传给 PlayCommand.Run，解析本身由上面几条钉住）。
         // 人选 3 号台后其余三名 AI 由种子选区：互不相同、不与人重复、都在区号范围内。
-        // retire-legacy-maps 段 C：边疆档删除，地图换成 4 人合规棋盘档图（5 块出生棋盘，区数仍多于人数）；提示随之列 1–5。方法名沿用规格 Scenario 名，段 D 随规格改。
+        // retire-legacy-maps 段 C：边疆档删除，地图换成 4 人合规棋盘档图（5 块出生棋盘，区数仍多于人数）；提示随之列 1–5。段 D 随规格 Scenario 由「选边疆图」改名为「区数多于人数的棋盘图」。
         var output = new StringWriter();
         int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader("9\n0\n3\n"), output, BoardMapFixtures.FourPlayerMap(), flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：写死冒险概率 0；more-pieces-relics：写死内容集 v1
         string text = output.ToString();

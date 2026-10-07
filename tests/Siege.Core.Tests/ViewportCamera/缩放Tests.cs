@@ -78,7 +78,7 @@ public class 缩放Tests
     }
 
     [Fact]
-    public void v4的初始位姿与旧固定相机逐位相等()
+    public void 小图的初始位姿与旧固定相机逐位相等()
     {
         // 旧 BoardView 固定相机的算式，原样抄在测试里（独立算式，不调用视图模型的任何常量）：
         //   span = Max(w, h) + 2 × FarLabelMargin；distance = 14.6 × span ÷ 12.7；target = (0, 0.2, 0.3)；
@@ -102,7 +102,7 @@ public class 缩放Tests
     [InlineData(4f / 3f)]
     [InlineData(16f / 9f)]
     [InlineData(21f / 9f)]
-    public void v4的最远距离不随横向窗口宽高比变化(float aspect)
+    public void 小图的最远距离不随横向窗口宽高比变化(float aspect)
     {
         float expected = 14.6f * (Small.Height + (2f * 1.7f)) / 12.7f;   // retire-legacy-maps 段 A2：原写死 v5 的 13 行，改按小图尺寸推算
         Assert.Equal(expected, new BoardCamera(BoundsOf(Small), aspect).Farthest);

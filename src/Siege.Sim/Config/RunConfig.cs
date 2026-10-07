@@ -101,7 +101,7 @@ public sealed record RunConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool MapPerMatch { get; init; }
 
-    /// <summary>各玩家配置；玩家编号即下标（P0、P1……）。标准图上冒险概率为 0 时插旗 P<i>i</i> 锁定出生区 <i>i</i>，否则见 <see cref="FlagRisk"/>。</summary>
+    /// <summary>各玩家配置；玩家编号即下标（P0、P1……）。冒险概率为 0 时，出生区数不多于人数上限的图（现只有合成图）插旗 P<i>i</i> 锁定出生区 <i>i</i>，棋盘图（人数 + 1 区）由种子选区；冒险见 <see cref="FlagRisk"/>。</summary>
     public List<PlayerAiConfig> Players { get; init; } = [new(), new(), new(), new()];
 
     /// <summary>首个种子；第 <i>i</i> 局的种子 = SeedStart + i。</summary>
@@ -336,7 +336,7 @@ public sealed record RunConfig
 
     /// <summary>
     /// 把"按地图自动"的候选格上限与缺省停手阈值、缺省冒险概率落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K、阈值与 p。
-    /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
+    /// K 已显式配置、或自动值为 0（小图）时不写（小图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
     /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分），
     /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1），计分规则版本未配置时一律落成 <see cref="ScoringVersions.Default"/>
     /// （同理：首部缺该项 = 旧日志 = v1），带入数量未配置时落成 0（关闭）。

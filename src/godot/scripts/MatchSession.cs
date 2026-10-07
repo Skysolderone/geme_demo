@@ -213,7 +213,7 @@ public sealed class MatchSession
 
     /// <summary>
     /// 插旗：本机玩家选定出生区，其余玩家的区由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：
-    /// 标准图按编号顺排，平台多于人数的图由种子选区），随后锁定并开始第 1 大回合。
+    /// 出生区数不多于人数上限的图按编号顺排，区数多于人数的图——棋盘图为人数 + 1——由种子选区），随后锁定并开始第 1 大回合。
     /// </summary>
     public void ChooseZone(int zone)
     {

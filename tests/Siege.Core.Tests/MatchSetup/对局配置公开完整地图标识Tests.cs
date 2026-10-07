@@ -130,7 +130,7 @@ public class 对局配置公开完整地图标识Tests
     }
 
     [Fact]
-    public void 内置图上的存档_地图标识仍是内置图的标识()
+    public void 内置图存档_地图标识仍是内置图的标识()
     {
         // 规格 Scenario「旧存档不受影响」：引入生成图没有改存档里地图标识的写法；按它解析回来的仍是那张内置图。
         // retire-legacy-maps 段 A2：内置图由边疆图 v2 改为 4 人内置棋盘图——它是 board: 生成图的别名，存档里记的仍是内置名而不是 board: 标识。
@@ -142,6 +142,37 @@ public class 对局配置公开完整地图标识Tests
         MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(json)), json);
         Assert.Equal(SimFixtures.Board4, restored.Publish().MapId);
         Assert.Equal(json, restored.Serialize());
+    }
+
+    [Theory]
+    [InlineData("siege-4p-base-v5")]
+    [InlineData("siege-frontier-v2")]
+    [InlineData("gen:12345")]
+    public void 引用已删除地图的旧存档(string retiredId)
+    {
+        // 规格：match-setup「对局配置公开完整地图标识」Scenario「引用已删除地图的旧存档」（retire-legacy-maps 段 D 收尾补）。
+        // 产品里没有读档入口（MatchFlow.Restore 只有 Core API），这里按 API 的恢复流程走：读存档里的标识 → MapCatalog.Resolve → Restore。
+        // 旧存档的格式取自当前存档（内置棋盘图上插旗后保存），只把 MapId 改写成已删除的标识、去掉摘要（旧存档本来就可能没有）——
+        // 地图标识这一关之前的读法与旧存档相同（SavedMapId 只读这一个字段）。
+        // 变异 D-S1（段 D 实跑）：MapCatalog.IsRetired 开头加运行期恒真的 `if (id.Length >= 0) return false;` → 旧标识落到文件路径解析、
+        // 抛普通 FileNotFoundException 而不是 RetiredMapException，本测试红 3（三行全红）。
+        MatchFlow match = MatchFixturesOnBuiltin(SimFixtures.Board4);
+        match.PlantPrototype();
+        System.Text.Json.Nodes.JsonNode node = System.Text.Json.Nodes.JsonNode.Parse(match.Serialize())!;
+        node["MapId"] = retiredId;
+        Assert.True(node.AsObject().Remove("MapDigest"));
+        string legacy = node.ToJsonString();
+
+        Assert.Equal(retiredId, MatchFlow.SavedMapId(legacy));
+        RetiredMapException ex = Assert.Throws<RetiredMapException>(() => MapCatalog.Resolve(MatchFlow.SavedMapId(legacy)));
+        Assert.Equal(retiredId, ex.MapId);
+        Assert.Contains($"地图 {retiredId} 已删除", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("旧存档", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(SimFixtures.Board4, ex.Message, StringComparison.Ordinal);   // 列出现有地图
+
+        // 不恢复对局：拿一张现有地图硬套也不行——标识不符即拒绝，不在另一张图上静默恢复。
+        FormatException mismatch = Assert.Throws<FormatException>(() => MatchFlow.Restore(MapCatalog.Resolve(SimFixtures.Board4), legacy));
+        Assert.Contains(retiredId, mismatch.Message, StringComparison.Ordinal);
     }
 
     [Theory]

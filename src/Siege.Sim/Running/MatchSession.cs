@@ -126,7 +126,7 @@ public sealed class MatchSession
 
     // ---------- 建局 ----------
 
-    /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
+    /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、原型插旗（经 Core 的 <c>MatchFlow.PlantPrototype</c>：棋盘图出生区为人数 + 1，由种子选区；只有出生区数不多于人数上限的合成图才是 P<i>i</i> → 出生区 <i>i</i> 顺排）。</summary>
     public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null) => Create(config, seed, map, recorded: false);
 
     /// <summary>

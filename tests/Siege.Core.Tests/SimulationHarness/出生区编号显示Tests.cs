@@ -14,10 +14,10 @@ namespace Siege.Core.Tests.SimulationHarness;
 public class 出生区编号显示Tests
 {
     [Fact]
-    public void 六区图的插旗棋盘快照()
+    public void 区数多于四的插旗棋盘快照()
     {
         // retire-legacy-maps 段 C：夹具由 6 平台的边疆档小图（边疆档已删除）换成 4 人合规棋盘档图 BoardMapFixtures.FourPlayerMap（36×25，5 块出生棋盘）：
-        // 区数仍多于 4，"编号显示不假定不超过 4"照样被问到（5 号区）。方法名沿用规格 Scenario 名，段 D 随规格改。
+        // 区数仍多于 4，"编号显示不假定不超过 4"照样被问到（5 号区）。段 D 收尾由「六区图的插旗棋盘快照」改名。
         // 期望行由夹具的棋盘摆放手工写出（不经渲染器）：
         //   第 2 行（y=1）：5 号出生棋盘 K–O（x 10–14），其余是场景格 #；
         //   第 13 行（y=12）：1 号出生棋盘 B–F（x 1–5，D13 是出生区信物 ?）、公共棋盘 A J–R（x 8–16，N13 是中央入口的高档信物）、

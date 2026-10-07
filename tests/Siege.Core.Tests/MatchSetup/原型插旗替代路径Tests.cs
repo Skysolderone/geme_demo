@@ -98,7 +98,7 @@ public class 原型插旗替代路径Tests
     [InlineData(7UL, 4, 1, 3, new[] { 3, 0, 1, 2 })]    // 人选最后一个区：其余从头顺排（手算：next 从 0 起，永远碰不到 3）
     [InlineData(7UL, 3, 2, 3, new[] { 0, 3, 1 })]       // 4 区图上 3 人局：区数 4 > 参赛 3 人，仍是顺排（判据是地图人数上限，不是参赛人数）
     [InlineData(9UL, 2, 1, 1, new[] { 1, 0 })]          // 4 区图上 2 人局
-    public void 标准图上人工选区后的顺排与改动前逐项相同(ulong seed, int players, int seat, int zone, int[] expected)
+    public void 四区合成图上人工选区后的顺排与改动前逐项相同(ulong seed, int players, int seat, int zone, int[] expected)
     {
         // 变异 M-A21：判据由"区数 > 地图人数上限"改成"区数 > 参赛人数" → 4 区图上的 2 / 3 人局变成种子选区，本测试红（段 A2 前与已删的批量侧那条共红 5）。
         PlayerId[] ids = [.. Enumerable.Range(0, players).Select(i => new PlayerId(i))];
@@ -221,10 +221,10 @@ public class 原型插旗替代路径Tests
     }
 
     [Fact]
-    public void 中立平台()
+    public void 中立出生棋盘()
     {
-        // 规格 Scenario：6 个平台上 4 名玩家锁定 4 个不同平台 → 其余 2 个平台不属于任何玩家的保护期范围。
-        // retire-legacy-maps 段 C：地图换成 5 区的 ZonePickMap，中立区由 2 个变 1 个。
+        // 规格 Scenario「中立出生棋盘」：5 个出生区、人数上限 4 的地图上 4 名玩家锁定 4 个不同出生区 → 其余 1 个不属于任何玩家的保护期范围，保护期后人人可落。
+        // retire-legacy-maps 段 C：地图换成 5 区的 ZonePickMap，中立区由 2 个变 1 个；段 D 随规格 Scenario 由「中立平台」改名为「中立出生棋盘」。
         MapData map = ZonePickMap;
         MatchFlow match = MatchFlow.Create(map, new GameSeed(7), MatchFixtures.All, NoRisk);
 

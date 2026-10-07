@@ -7,7 +7,7 @@ namespace Siege.Core.Tests.ViewportCamera;
 public class 边界夹取Tests
 {
     [Fact]
-    public void v4在最远缩放下两个方向都锁中线()
+    public void 小图在最远缩放下两个方向都锁中线()
     {
         var camera = new BoardCamera(BoundsOf(Small));
         PlaneRect feasible = camera.Feasible;

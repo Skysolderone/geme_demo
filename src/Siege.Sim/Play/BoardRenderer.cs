@@ -307,7 +307,7 @@ internal sealed class BoardRenderer
 
     /// <summary>
     /// 插旗阶段的区号底色：一律中性色，与区号无关、也不借用玩家色（frontier-map D9）。
-    /// 区号只在插旗阶段显示，此时还没有任何平台有主人；出生区可以多于玩家（边疆档 5–8 个），"第 z 区 = 第 z 名玩家的颜色"不成立。
+    /// 区号只在插旗阶段显示，此时还没有任何平台有主人；出生区可以多于玩家（棋盘图为人数 + 1 个），"第 z 区 = 第 z 名玩家的颜色"不成立。
     /// </summary>
     internal const ConsoleColor ZoneColor = ConsoleColor.White;
 

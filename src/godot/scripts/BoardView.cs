@@ -461,7 +461,7 @@ public sealed partial class BoardView : Node3D
         // 俯视相机：俯角恒为 60°。h=2 高台（0.70 高）在这个角度下向远处只投 0.70 / tan 60° ≈ 0.40 格的遮挡，
         // 小于半格——紧贴崖壁身后的 h=0 格格心仍露出来，能被点到（--pick-check 多位姿钉住）；45° 时会被挡住。
         // 崖壁侧面在 60° 下仍有 cos 60° = 0.5 的投影高度，看得见。位姿（注视点、距离）全部来自视图模型：
-        // 一屏看全的地图（v4）在最远缩放下两方向锁中线，与引入推屏之前的固定相机逐位相同。
+        // 一屏看全的地图（如合成小图；现有内置棋盘图都看不全）在最远缩放下两方向锁中线，与引入推屏之前的固定相机逐位相同。
         float outer = (0.5f * BoardGeometry.CellSize) + BoardGeometry.FarLabelMargin;
         var bounds = new PlaneRect(minX - outer, minZ - outer, maxX + outer, maxZ + outer);
         if (Rig is null || Rig.Bounds != bounds)

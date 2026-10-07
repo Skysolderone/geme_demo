@@ -119,8 +119,9 @@ public class 候选格上限Tests
     // ---------- K = 0：零变化 ----------
 
     [Fact]
-    public void 缺省不限制时标准图整局与改动前逐步相同()
+    public void 显式0不限制_整局与钉下的不限制基线逐步相同且与缺省K不同()
     {
+        // 规格 Scenario「显式 0 不限制」（retire-legacy-maps 段 D 由「缺省不限制时标准图整局与改动前逐步相同」改名）。
         // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 本测试红。
         // 段 A check 实跑：在重建后的黄金哈希上 M-K1 仍红 36（含本测试）——哈希虽是段 A 后重生成的，但不是自证的。
         // ai-eye 段 D2（4.5）：黄金哈希产自定值之前的缺省（Eye / Threat 0、停手阈值 20），权重与阈值写死为该口径——本测试钉的是"K 缺省不改变走法"，不是默认权重。
@@ -138,9 +139,9 @@ public class 候选格上限Tests
     }
 
     [Fact]
-    public void 难度默认参数不写上限按地图取缺省()
+    public void 小图零变化_难度默认参数不写上限按地图取缺省()
     {
-        // retire-legacy-maps 段 A2（主会话裁决 1，原名「难度默认参数不启用上限」）：四档预设不写候选格上限（null），实际生效值按地图取：
+        // 规格 Scenario「小图零变化」（段 D 由「难度默认参数不写上限按地图取缺省」改名）。retire-legacy-maps 段 A2（主会话裁决 1，原名「难度默认参数不启用上限」）：四档预设不写候选格上限（null），实际生效值按地图取：
         // 小图（≤ 150 格）0 = 不限制，与改名前的断言等价；大图取缺省 K。
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Null(AiSearchConfig.ForDifficulty(d).CandidateCellLimit));
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).CellLimitOn(AiSearchConfig.LargeMapPlayableThreshold)));
@@ -198,6 +199,42 @@ public class 候选格上限Tests
     }
 
     [Fact]
+    public void 显式搜索配置未写K时取跑局级值()
+    {
+        // 规格：ai-decision「候选格上限」Scenario「显式搜索配置未写 K 时取跑局级值」（retire-legacy-maps 段 D 收尾补）。
+        // 配置文件给每名玩家显式写了搜索配置但没写 K，在 4 人棋盘图上跑局：跑局级给了 K = 7 → 玩家生效 7；跑局级未给 → 按地图缺省 24。
+        // 三处都要是具体数值：会话里的 AI、config.json 原文（逐名玩家的 Search，读 JSON 节点、不经反序列化）与日志首部。
+        // 变异 D-K1（段 D 实跑）：RunConfig.ResolvedFor 落成显式 Search 的缺项时改按地图缺省、不读跑局级 K → 本测试红 1。
+        // 变异 D-K2（段 D 实跑，0 红、等价变异）：MatchSession.AttachConfigured 的 `?? CellLimit` 改按地图缺省——新建的局在建会话之前已由 ResolvedFor 落成具体值，
+        // 这条回退只剩按首部重建的旧日志走得到（由「显式剪枝参数未写上限时按地图取缺省」的 recorded 段钉住）。
+        RunConfig baseConfig = WithSearch(SimFixtures.Config(turnLimit: 1, difficulty: AiDifficulty.Standard), AiSearchConfig.Standard);
+        Assert.Equal(SimFixtures.Board4, baseConfig.MapId);
+        Assert.Null(baseConfig.CandidateCellLimit);
+        Assert.All(baseConfig.Players, p => Assert.Null(p.Search!.CandidateCellLimit));   // 前提：显式 Search 确实没写 K
+
+        foreach ((int? runLevel, int expected) in new (int?, int)[] { (7, 7), (null, AiSearchConfig.LargeMapCellLimit) })
+        {
+            RunConfig config = baseConfig with { CandidateCellLimit = runLevel };
+
+            MatchSession session = MatchSession.Create(config, 1);
+            Assert.All(session.Match.Players, p => Assert.Equal(expected, session.AiOf(p)!.Config.CandidateCellLimit));
+
+            string dir = SimFixtures.TempDir($"cell-limit-explicit-search-{runLevel?.ToString() ?? "unset"}");
+            BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+            using (JsonDocument json = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json"))))
+            {
+                JsonElement[] players = [.. json.RootElement.GetProperty("Players").EnumerateArray()];
+                Assert.Equal(4, players.Length);
+                Assert.All(players, p => Assert.Equal(expected, p.GetProperty("Search").GetProperty("CandidateCellLimit").GetInt32()));
+            }
+
+            MatchLog log = MatchLog.Read(Directory.EnumerateFiles(dir, "match-*.jsonl").Single());
+            Assert.Equal(4, log.Header.Config.Players.Count);
+            Assert.All(log.Header.Config.Players, p => Assert.Equal(expected, p.Search!.CandidateCellLimit));
+        }
+    }
+
+    [Fact]
     public void 未写上限的AI在大图上按缺省上限预筛()
     {
         // Core 侧：直接装配的 AI（不经跑局会话）配置未写上限时，按开局地图的可落子格数取缺省（AiSearchConfig.CellLimitOn）。
@@ -251,7 +288,7 @@ public class 候选格上限Tests
     }
 
     [Fact]
-    public void 未写上限时按开局地图取缺省_局中架桥不让上限跳档()
+    public void 局中改造不让上限跳档_未写上限时按开局地图取缺省()
     {
         // retire-legacy-maps 段 A2 检查补：CellLimitOn 读的是开局地图（GameBoard.BaseMap）的可落子格数，不是改造后的当前地图。
         // 棋盘图上不会架出桥，"读当前地图"在内置图上是等价变异，只能用合成图钉：13×12 合成图开局恰 150 格可落子（阈值本身，不算大图），

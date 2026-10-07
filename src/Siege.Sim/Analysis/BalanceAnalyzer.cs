@@ -1458,7 +1458,7 @@ public static class BalanceAnalyzer
         // 首部区数与被选区号取较大者：首部偏小（手改日志 / 混批）时不得把越界区的样本静默丢掉。
         int zones = all.Count == 0 ? 0 : all.Max(l => Math.Max(l.Header.ZoneCount ?? 0, l.Header.Zones.Count == 0 ? 0 : l.Header.Zones.Max() + 1));
         // 基线 = 1 / 参赛人数：各区胜率的分母是"该区被选中的局数"，被选中的区上那名玩家的期望胜率是 1/人数，与地图有几个区无关。
-        // 出生区多于玩家的图（边疆档 6 区 4 人）若按 1/区数 = 1/6 取基线，公平的 25% 会被系统性判成"显著偏高"（frontier-map 2.4）。
+        // 出生区多于玩家的图（棋盘图 4 人 5 区；当年引入时是边疆档 6 区 4 人）若按 1/区数取基线，公平的 25% 会被系统性判成"显著偏高"（frontier-map 2.4）。
         double baseline = zones == 0 ? double.NaN : 1.0 / all[0].Header.Players.Count;
         List<MatchLog> converged = [.. logs.Where(l => l.Header.RelicsConverged)];
         List<MatchLog> notConverged = [.. logs.Where(l => !l.Header.RelicsConverged)];

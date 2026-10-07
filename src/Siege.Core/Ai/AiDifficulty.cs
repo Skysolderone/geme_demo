@@ -85,11 +85,11 @@ public sealed record AiSearchConfig(
     /// （<c>sim-out/v2-recalibration/pass-*</c>；80 / 0 两档与诊断 engagement-diagnosis b06 / b07 逐局相同）。
     /// 选档：① 截断 ≤ 1 / 20，四档全过；② 无提子最低 3 / 20（0、20 两档），带宽 1 个二项标准误 √(0.15 × 0.85 / 20) ≈ 0.080，比例 ≤ 0.230 进带，
     /// 40（0.25）与 80（0.40）出带；③ 0 与 20 的平均结束大回合都落在 7–10，距离同为 0；④ 取离现值 80 最近者 → 20。
-    /// 80 是档位上界，本次不是完整的双向扫档（V1 下 80 → 160 无提子陡升，方向上不支持提高）；只在 v5 上复核，边疆图 / 生成图未复核。
+    /// 80 是档位上界，本次不是完整的双向扫档（V1 下 80 → 160 无提子陡升，方向上不支持提高）；只在 v5 上复核（v5 与当时的边疆图 / 生成图都已于 retire-legacy-maps 删除），棋盘图上未复核。
     /// 选定值不是 80，按 design D3 另跑两批冒烟（同地图、同种子、同阈值 20）：简单 × 4 截断 0 / 20、最长 24 大回合、无"第 1 大回合全员一子不落即终局"
     /// （<c>sim-out/v2-recalibration/easy20-pass20</c>）；1 专家 + 3 标准截断 0 / 20（<c>sim-out/v2-recalibration/expert20-pass20</c>），均未回退。
     /// 四档难度共用（ai-eye 裁决 R1）。
-    /// <para>历史口径（内容集 V1）：ai-eye 段 D 校准为 80——<c>siege-4p-base-v5</c>、种子 1–200、每档 200 局，0 / 10 / 20 / 40 / 80 / 160 六档
+    /// <para>历史口径（内容集 V1）：ai-eye 段 D 校准为 80——<c>siege-4p-base-v5</c>（<see cref="EvaluationWeights.RetiredCalibrationMapNote"/>）、种子 1–200、每档 200 局，0 / 10 / 20 / 40 / 80 / 160 六档
     /// （0 → 3.5% / 29.0% / 12.24；10 → 4.0% / 32.0% / 11.49；20 → 4.0% / 32.5% / 10.59；40 → 2.5% / 36.0% / 11.15；80 → 1.0% / 32.0% / 9.81；160 → 0% / 73.5% / 7.73，
     /// <c>sim-out/ai-eye-pass-*</c>、<c>sim-out/ai-eye-eye-200</c>）。当时简单难度在阈值 80 下 v5 种子 1–200 截断 36 / 200（按裁决 R26 下放眼位维之后，
     /// <c>sim-out/ai-eye-final-easy-eye</c>）；这些数据都在内容集 V1 上取得，不与上面的 V2 数据直接比较。</para>
@@ -107,7 +107,10 @@ public sealed record AiSearchConfig(
     /// </remarks>
     public const string PassThresholdCalibrationStatus = "v2-recalibration 段 A 复核（内容集 V2、小样本）：siege-4p-base-v5（该图已于 retire-legacy-maps 删除，棋盘图上未校准）、4 人标准难度、带入 0、种子 1–20、每档 20 局；0 / 20 / 40 / 80 四档（截断 / 整局无提子 / 已终局局平均结束大回合：0 → 0 / 3 / 9.15；20 → 0 / 3 / 9.25；40 → 0 / 5 / 9.05；80 → 0 / 8 / 8.40）；选定 20（0 与 20 无提子并列最低、均在 7–10，取离 80 最近）；80 为档位上界、非完整双向扫档；sim-out/v2-recalibration/pass-*";
 
-    /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>
+    /// <summary>
+    /// 大图的缺省候选格上限。依据是已删除的边疆图上的实测（当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录；
+    /// 边疆图已于 retire-legacy-maps 删除）——<b>棋盘图上未复核</b>，留给 AI 校准 change。
+    /// </summary>
     public const int LargeMapCellLimit = 24;
 
     /// <summary>简单：贪心一条、只看即时收益与眼位。</summary>

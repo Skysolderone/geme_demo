@@ -5,7 +5,7 @@
 - 发布页：<https://siege.wws741.workers.dev>
 - 下载：[macOS](https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-macos.zip) · [Windows 64 位](https://github.com/Skysolderone/geme_demo/releases/latest/download/Siege-windows-x64.zip) · [全部版本](https://github.com/Skysolderone/geme_demo/releases)
 
-![标准 13×13 地图上的四方对局](docs/assets/hero.jpg)
+![四方对局（截图拍摄于已删除的标准 13×13 地图，v0.3.0）](docs/assets/hero.jpg)
 
 ## 目录
 
@@ -74,14 +74,14 @@ godot --path src/godot -- --map=board:1 --difficulty=Hard
 ### 终端版
 
 ```bash
-dotnet run --project src/Siege.Sim -c Release -- play --map siege-3p-base-v1 --difficulty Hard --no-carry
+dotnet run --project src/Siege.Sim -c Release -- play --map siege-3p-board-v1 --difficulty Hard --no-carry
 ```
 
 对局中输入 `resign` 弃赛，`q` 退出。不带参数运行会打印完整用法。
 
 ### 地图与难度
 
-- 地图由互不连通的棋盘组成（一个局部战斗在一块棋盘之内）。地图标识（图形版、终端版、批量跑局共用）：内置棋盘图 `siege-4p-board-v1`（缺省）、`siege-3p-board-v1`、`siege-2p-board-v1`；随机棋盘图 `board:<种子>[:p<人数 2–4>][:n<棋盘数>]`；或一个地图 JSON 文件的路径。旧地图 `siege-4p-base-v5` 等仍可用 `--map=` 指定，将在后续版本删除。
+- 地图由互不连通的棋盘组成（一个局部战斗在一块棋盘之内）。地图标识（图形版、终端版、批量跑局共用）：内置棋盘图 `siege-4p-board-v1`（缺省）、`siege-3p-board-v1`、`siege-2p-board-v1`；随机棋盘图 `board:<种子>[:p<人数 2–4>][:n<棋盘数>]`；或一个地图 JSON 文件的路径（`Siege.Sim map --map <标识> --out <文件>` 导出）。旧地图（`siege-4p-base-v5`、双人 / 三人标准图、边疆图与 `gen:` 随机图）已删除：给这些标识会报“已删除”并退出，引用它们的旧存档与旧日志无法再加载（`analyze` 仍可分析旧日志）。
 - 难度：`Easy` / `Standard` / `Hard` / `Expert`，缺省 `Standard`。
 
 ## 工程结构
@@ -95,7 +95,6 @@ src/
     scripts/            C# 脚本（BoardView 搭棋盘、LowPoly / LowPolyMesh 程序建模、TerrainParts 部件目录）
     parts/terrain/      地图部件资源（由 --export-parts 从程序建模烘出，不手改）
 tests/Siege.Core.Tests/ 规则、视图模型与守门测试
-maps/                   内置地图的 JSON（双人、三人两张直接嵌入 Siege.Core；其余在代码里定义，这里是与代码保持一致的导出件）
 docs/                   发布页（静态网页，部署在 Cloudflare）
 tools/export-release.sh 导出可下载的游戏包
 art/                    各次改动的截图与人工检查清单

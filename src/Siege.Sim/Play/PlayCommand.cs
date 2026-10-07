@@ -114,7 +114,7 @@ internal static class PlayCommand
         {
             int zone = ChooseZone(match, me, map, input, output, render, quitWarning);
             // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区，
-            // 否则标准图按编号顺排，平台多于人数的图由种子选区。
+            // 否则出生区数不多于人数上限的图（现只有合成图）按编号顺排，区数多于人数的图（棋盘图为人数 + 1）由种子选区。
             ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
 
             var runner = new MatchRunner(match);

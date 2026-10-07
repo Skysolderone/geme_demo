@@ -1,0 +1,3 @@
+Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org
+
+[siege] 错误：地图 siege-4p-base-v5 已删除（retire-legacy-maps：所有地图都由互不连通的棋盘组成；引用它的旧存档与旧日志不再支持加载）。现有地图：siege-4p-board-v1、siege-3p-board-v1、siege-2p-board-v1；随机生成的棋盘图写作 board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]（棋盘数随人数：4 人 7–10（缺省 7，其中出生棋盘 5 块）、3 人 5–8（缺省 6，其中出生棋盘 4 块）、2 人 4–5（缺省 5，其中出生棋盘 3 块）；如 board:12345、board:12345:p3）；也可以给地图文件（.json）的路径。

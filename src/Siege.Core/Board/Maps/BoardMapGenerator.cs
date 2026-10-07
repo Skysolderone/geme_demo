@@ -14,7 +14,7 @@ public sealed record GeneratedBoardMap(MapData Map, int Attempt, ImmutableArray<
 /// <summary>
 /// 棋盘档 2 / 3 / 4 人地图的确定性生成器（board-map D3–D8、board-isolated-gen D1–D3 / D5）：<c>(地图种子, 参数) → MapData</c>。
 /// 同一种子与参数在任何机器上得到逐字节相同的地图；全程整数运算，随机只来自 <see cref="MapRandom.ForBoardAttempt"/>，
-/// 不读时钟与环境，也拿不到对局种子。与边疆档生成器互不相干：随机序列不同构，源码不共用工作态。
+/// 不读时钟与环境，也拿不到对局种子。是现存唯一的地图生成器（边疆档生成器 <c>gen:</c> 已于 retire-legacy-maps 删除）。
 /// </summary>
 /// <remarks>
 /// <para><b>校验闭环</b>：第 k 次尝试（k 从 0 起）先抽各棋盘的边长（按原分布整组重抽直到落进人数对应的目标带，至多 200 组，仍不进即作废），

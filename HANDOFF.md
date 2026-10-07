@@ -1,21 +1,22 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-09-28（`v2-recalibration` 归档后，HEAD `f47c1ec`，main 与 origin/main 一致）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-10-07（母任务 `board-terrain` 第三个 change `retire-legacy-maps` 段 D，工作树 `.claude/worktrees/board-terrain`、分支 `feat/board-terrain`，**尚未合入 main**；段 0–C 已提交至 `d174c4f`）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 本次只同步了地图、AI 校准口径、测试判据与待办几处；其余小节仍是 2026-09-28 的口径，以设计文档 v1.30 与 journal 为准。
 > 读完本文即可在新会话中继续，不需要翻聊天记录。最近进度以 `.trellis/workspace/rubioc/journal-1.md` 最后一节为准。
 
 ## 一句话
 
-《围杀 Siege》：2–4 人共享棋盘的回合制策略构筑游戏，玩法是围棋式提子加上征募构筑。现在已经可以玩：规则回到围棋内核（领地 + 军势、活形与活棋禁入），有四张内置图和随机生成图，十种棋子、十类信物，四档 AI（含一层前瞻的专家），带入带出也已做完。
-规则内核 `src/Siege.Core`（.NET 8，零 Godot 依赖，AI 在 `Ai/`）；批量跑局、分析与终端版在 `src/Siege.Sim`；视图模型在 `src/Siege.Presentation`；3D 表现层在 `src/godot`（Godot 4.7.2 .NET 版，不在 `siege.sln` 里）。测试 `dotnet test -c Release`：**1775 通过 / 6 门控跳过**（2026-09-28 实测，约 3 分钟）。
+《围杀 Siege》：2–4 人共享棋盘的回合制策略构筑游戏，玩法是围棋式提子加上征募构筑。现在已经可以玩：规则回到围棋内核（领地 + 军势、活形与活棋禁入），**所有地图都由互不连通的棋盘组成**（三张内置棋盘图 2 / 3 / 4 人 + 随机棋盘图，旧地图已删除），十种棋子、十类信物，四档 AI（含一层前瞻的专家，**未在棋盘图上校准**），带入带出也已做完。
+规则内核 `src/Siege.Core`（.NET 8，零 Godot 依赖，AI 在 `Ai/`）；批量跑局、分析与终端版在 `src/Siege.Sim`；视图模型在 `src/Siege.Presentation`；3D 表现层在 `src/godot`（Godot 4.7.2 .NET 版，不在 `siege.sln` 里）。测试 `dotnet test`：**2147 通过 / 0 失败 / 8 门控跳过**（2026-10-07 本机 macOS 实测，缺省与 `DOTNET_PROCESSOR_COUNT=28` 各一次）。判据是**全量全绿**：原来的 11 条本机红测（被哈希文本含 CPU 核数与行尾）已在 `retire-legacy-maps` 段 0 修掉（`.trellis/spec/core/testing.md`「被哈希的文本不得含机器相关值」）。测试迁到 465 格的棋盘图后总耗时约为迁移前的 2 倍（同机对照 1.95–2.27×）。
 
 ## 现在就能玩
 
 > 终端是 **Windows PowerShell**：exe 路径带引号时，前面要加 `&`；给 Godot 传参数时先写 `--%`，自定义参数一律放在 `--` 之后，并写成 `--名=值`。
 > **试玩带入带出时请用临时档案**：缺省档案是真实的 `%APPDATA%\Siege\profile.json`（终端和图形版共用）。
 
-**图形版（推荐）**。不带 `--map=` 启动时，先进入选图界面。界面上只有三张内置棋盘图（四人 / 三人 / 双人，缺省预选四人）与随机棋盘图（可调人数 2–4、棋盘数、种子），也可以选难度。旧地图（v5、双人 / 三人标准图、边疆图、`gen:`）不在界面上，仍可用 `--map=` 直接开（第三个 change 删除）。
+**图形版（推荐）**。不带 `--map=` 启动时，先进入选图界面。界面上只有三张内置棋盘图（四人 / 三人 / 双人，缺省预选四人）与随机棋盘图（可调人数 2–4、棋盘数、种子），也可以选难度。旧地图（v5、双人 / 三人标准图、边疆图、`gen:`）已删除，`--map=` 给旧标识会报“已删除”并退出（退出码 1）。
 ```powershell
-& "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --map=siege-2p-base-v1 --difficulty=Expert --profile=%TEMP%\siege-try.json
+& "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --map=siege-2p-board-v1 --difficulty=Expert --profile=%TEMP%\siege-try.json
 ```
 - 用户参数全部由 `src/godot/scripts/GameRoot.cs` / `GameRoot.Carry.cs` 经 `LaunchArgs` 严格解析，拼错会退出（退出码 1）：`--map=` `--seed=` `--difficulty=` `--cell-limit=` `--rounds=` `--profile=` `--no-carry` `--auto-demo` `--pick-check` `--screenshot=<路径>[:帧]` `--overview` `--shot-power` `--shot-groups` `--map-select` `--carry-preview=supply|settlement` `--export-parts=` `--piece-gallery=` `--ui-gallery=` `--shot-show=placement|capture|reveal|power|banner` `--reveal-preview=play|ladder` `--reveal-at=<毫秒>`。
 - `--auto-demo` / `--pick-check` / `--screenshot=` 固定使用标准难度（同时给 `--difficulty=` 会报错），并关闭带入带出。
@@ -24,7 +25,7 @@
 
 **终端版**
 ```powershell
-dotnet run --project src/Siege.Sim -c Release -- play --map siege-3p-base-v1 --difficulty Hard --profile $env:TEMP\siege-try.json
+dotnet run --project src/Siege.Sim -c Release -- play --map siege-3p-board-v1 --difficulty Hard --profile $env:TEMP\siege-try.json
 ```
 可用选项：`--seed` `--players`（缺省取地图人数上限）`--seat` `--difficulty` `--map` `--cell-limit` `--profile <路径>` `--no-carry`（关闭带入带出，不读写档案；不能与 `--profile` 同时给）。对局中输入 `resign` / `弃赛` 弃赛，`q` 退出。
 
@@ -33,11 +34,11 @@ dotnet run --project src/Siege.Sim -c Release -- play --map siege-3p-base-v1 --d
 dotnet run --project src/Siege.Sim -c Release -- run --out sim-out/<目录> --map siege-4p-board-v1 --seed 1 --count 20 --difficulty Standard --flag-risk 15 --carry-in 0
 dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 ```
-`run` 另有这些选项：`--config <json>`（逐玩家的权重、内容集 `ContentSet` 只能在这里配）`--players` `--parallel` `--serial` `--turn-limit`（缺省 600，0 = 不截断）`--artisan-weight`（缺省 10）`--cell-limit` `--pass-threshold`（缺省 20）`--flag-risk`（插旗冒险概率 0–100，缺省 15）`--carry-in 0|1`（缺省 0 = 关闭）`--map-per-match` `--retention` `--sample-permille` `--gzip`。
-其他子命令：`map --map <标识> [--out 文件]`（打印文本图、导出地图）、`replay --file <match-*.jsonl>`。不带参数运行会打印完整用法（`src/Siege.Sim/Program.cs` `PrintUsage`）。
+`run` 另有这些选项：`--config <json>`（逐玩家的权重、内容集 `ContentSet` 只能在这里配）`--players` `--parallel` `--serial` `--turn-limit`（缺省 600，0 = 不截断）`--artisan-weight`（缺省 10）`--cell-limit` `--pass-threshold`（缺省 20）`--flag-risk`（插旗冒险概率 0–100，缺省 15）`--carry-in 0|1`（缺省 0 = 关闭）`--map-per-match`（起始标识须为 `board:<种子>[:p<人数>][:n<棋盘数>]`，第 i 局种子 + i）`--retention` `--sample-permille` `--gzip`。
+其他子命令：`map --map <标识> [--out 文件]`（打印文本图、距离报告与校验结果；**只有给 `--out` 才写文件**，不再往 `maps/` 导出）、`replay --file <match-*.jsonl>`（引用已删除地图的旧日志报“已删除”）、`analyze --dir <目录>`（不读地图，旧日志照常分析）。不带参数运行会打印完整用法（`src/Siege.Sim/Program.cs` `PrintUsage`）。
 
 **选项归属（已与代码核对）**：`--flag-risk`、`--pass-threshold`、`--carry-in` 只有 `run` 有，`play` 和图形版都没有；内容集没有命令行开关，新局一律用 v2。
-**地图标识**（三个入口共用 `MapCatalog`）：`siege-4p-board-v1`（缺省，= `board:5`）/ `siege-3p-board-v1`（= `board:55:p3`）/ `siege-2p-board-v1`（= `board:23:p2`）/ 旧图 `siege-4p-base-v5`（依赖 v5 读数的命令与测试须显式指定）/ `siege-2p-base-v1` / `siege-3p-base-v1` / `siege-frontier-v2` / `gen:<地图种子>[:p5–8][:s1]` / `board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]`（互不连通的棋盘组，2026-10-06 `board-isolated-gen`）/ 地图文件路径。只写 `gen` 时随机取一个种子并打印完整标识（带 `:s1`，即投放新地表）。
+**地图标识**（三个入口共用 `MapCatalog`）：`siege-4p-board-v1`（缺省，= `board:5`）/ `siege-3p-board-v1`（= `board:55:p3`）/ `siege-2p-board-v1`（= `board:23:p2`）/ `board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]`（互不连通的棋盘组）/ 显式地图文件路径（`map --out` 导出的文件可直接用；`maps/<标识>.json` 隐式回落已删除）。只写 `board` 时随机取一个种子并打印完整标识。**已删除**：`siege-4p-base-v1`–`v5`、`siege-2p-base-v1`、`siege-3p-base-v1`、`siege-frontier-v1` / `v2`、`gen` / `gen:…`——各入口报“地图 <标识> 已删除”并列出现有地图，退出码 1，不写输出；标准档 / 边疆档的地图文件同样被拒绝。
 **难度**：`Easy|Standard|Hard|Expert`，不区分大小写，不接受数字（`AiDifficultyNames`），缺省 Standard。
 
 ## 现行规则与关键数值速览（设计文档 v1.18）
@@ -52,22 +53,22 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 - **十类信物**：探勘 / 征召 / 兵站 / 军令 / 先锋 / 流派徽记 / 连营 / 犄角 / 驿站 / 工坊（§8.1）。
 - **内容集**：v1 = 原来六种棋子 + 六类信物；v2 = 十种 + 十类。新局缺省用 v2；缺少内容集字段的旧存档或旧日志按 v1 处理（§8.1）。
 - **插旗冒险概率** p = 15（初值，未校准；p = 0 时与旧行为逐项相同）（§4.1）。
-- **AI**（§15.2）：九维评价，其中眼位 200 / 安全 35 / 威胁 25 已在 V1 上校准，其余六维沿用旧值，在 V2 上未重扫。**停手阈值 20**（在 V2 上复核，旧值 80）；己方盘上无子时阈值取 0。**2 人图专属权重覆盖为 Eye 50**，其余地图都用缺省表。
-- **难度**（§15.2）：简单只看三维；候选点 / 候选批次：简单 6/1、标准 12/8、困难 24/32、**专家**在困难的基础上加一层前瞻，宽度 W = 4，模拟下一名对手回应一次。`expert-strength`（v1.18）新增的多样候选（多样补充上限 S）与近似两层加分（两层权重 λ‰）是可配置项，只在配置文件 `Search` 显式给出时生效；扩样结果为负（S = 8、λ = 1000‰ 的专家弱于困难），专家预设已退回一层（S = 0、λ = 0，与 v1.17 的专家逐步相同）。可落子格超过 150 的大图自动启用候选格上限 K = 24。
+- **AI**（§15.2）：九维评价，其中眼位 200 / 安全 35 / 威胁 25 已在 V1 上校准，其余六维沿用旧值，在 V2 上未重扫。**停手阈值 20**（在 V2 上复核，旧值 80）；己方盘上无子时阈值取 0。以上全部在**已删除的 v5** 上校准，**棋盘图上未校准**（代码口径带补注）。地图专属权重覆盖表**为空**（原 2 人图 Eye 50 随该图删除，机制保留）。
+- **难度**（§15.2）：简单只看三维；候选点 / 候选批次：简单 6/1、标准 12/8、困难 24/32、**专家**在困难的基础上加一层前瞻，宽度 W = 4，模拟下一名对手回应一次。`expert-strength`（v1.18）新增的多样候选（多样补充上限 S）与近似两层加分（两层权重 λ‰）是可配置项，只在配置文件 `Search` 显式给出时生效；扩样结果为负（S = 8、λ = 1000‰ 的专家弱于困难），专家预设已退回一层（S = 0、λ = 0，与 v1.17 的专家逐步相同）。候选格上限 K：未写 = 按开局地图取缺省（可落子格 > 150 取 24，三张内置棋盘图都是 24），显式 0 = 不限制，配置文件显式给了 `Search` 却没写 K 时取跑局级 `--cell-limit`，日志首部一律写落成值。
 - **带入带出**（§21）：备用子 3 点、征召签 2 点、换型令 4 点，每局至多带 1 件；名次补给点（4 人局）为 24/16/12/10。三种结局：完赛全额、补给不返还；弃赛带出 50% 并返还补给（保护期内带出 0）；出局带出 0、补给丢失。AI 带入的件数与本机玩家相同；价格与点数都是初值。
 
 ## 地图
 
-- **地图数据权威来源**：`siege-2p-base-v1` / `siege-3p-base-v1` 以手写的 `maps/*.json` 为准，编译时嵌入 `Siege.Core`（`Siege.Core.csproj` 的 EmbeddedResource）；v5 与边疆图由代码生成（`FourPlayerBaseMap.cs` / `FrontierMapV2.cs`），`maps/` 下的同名 json 是 `map` 子命令的导出物。`maps/siege-4p-base-v1/v2/v3.json` 只作历史参考，v1、v2 无法加载。
-- **v5**：13×13、C4 对称，可落子 105 格，4 个出生区各 13 格（h=2），中央岛靠 4 座桥进出，信物 13 个（§3.3）。
-- **2 人图**：9×9、C2 对称，可落子 61 格，信物 7 个；**3 人图**：11×11、竖轴镜像，可落子 86 格，信物 10 个（§3.3）。
-- **边疆图**：25×30，6 个平台即出生区，前三大回合只能落自家平台。候选格上限 K = 24 自动启用。
-- **生成器**：`gen:<种子>`，尺寸 25×30、4 人，平台 5–8 个（缺省 6），`:s1` 表示投放荒漠 / 沼泽 / 岩台 / 浅滩。日志与存档里记录地图摘要，生成器一改，旧日志会报“地图不一致”。
+- **所有地图都由互不连通的棋盘组成**（母任务 `board-terrain`，设计文档 §3.2 / §3.3）：棋盘是内部只有 h=0 草地的矩形，棋盘之间只隔障碍场景格，相邻、气、提子、领地都只在本棋盘内成立；保护期（前 3 大回合）只能落自家出生棋盘。
+- 出生棋盘 = 人数 + 1，宽高 5–7、同一张图同尺寸；公共棋盘宽高 7–15，主战场 ≥ 11、中心是中央入口。棋盘数 4 人 7–10、3 人 5–8、2 人 4–5。生成目标带 4 人 300–800、3 人 225–600、2 人 150–400 格。
+- **内置棋盘图**：`siege-4p-board-v1`（= `board:5`，465 格、39×41）/ `siege-3p-board-v1`（= `board:55:p3`，433 格）/ `siege-2p-board-v1`（= `board:23:p2`，366 格）；内容一变标识升号（导出摘要黄金值守门）。
+- 地图规格档只剩棋盘档；标准档只作合成测试盘面的缺省值，校验器读到即报“标准档已删除”。日志与存档记录地图摘要，生成器一改，`board:` 旧日志会报“地图不一致”。
+- **地形**：棋盘图上不产生高度、深水、桥、林地、土路与四种新地表，这些规则保留待用（另开 change 定去留）；栅栏可由匠人立栅产生，搭桥 / 烧林在棋盘图上没有目标。
 - 内置图内容一变，标识就要升号（`.trellis/spec/core/boundaries.md`）。
 
 ## 权威来源（按优先级）
 
-1. `openspec/specs/`（31 个能力，Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.18**，文末有变更记录，§15.2 列出已知问题）。`Siege-玩法介绍-v1.docx` 是玩家向介绍稿，与设计文档冲突时以 md 为准。
+1. `openspec/specs/`（31 个能力，Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.30**，文末有变更记录，§15.2 列出已知问题）。`Siege-玩法介绍-v1.docx` 是玩家向介绍稿，与设计文档冲突时以 md 为准。
 2. `openspec/changes/archive/<日期>-<change>/design.md` 末尾的“裁决记录”：设计文档没写到的地方以它判定。
 3. `.trellis/spec/core/`：`index` / `boundaries` / `determinism` / `coordinates` / `testing`，都是踩过的坑，**必读**。
 4. `.trellis/workspace/rubioc/journal-1.md`：各会话的结论与待办；`.trellis/tasks/archive/2026-09/<任务>/implement.md`：逐段记录。
@@ -92,6 +93,8 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 | 09-27 | `engagement-diagnosis` | 只是诊断（Trellis 任务，不是 openspec change）：2 人图不交战的原因是地图结构；负责人裁决规则不改 |
 | 09-28 | `v2-recalibration` | 在 V2 上复核停手阈值，80 → 20；2 人图专属权重覆盖为 Eye 50（v1.17） |
 | 09-28 | `expert-strength`（已实施、未归档） | 专家的多样候选与近似两层加分，作为可配置项保留；扩样结果为负，专家预设退回一层（v1.18） |
+| 09-29 – 10-06 | `board-map` / `board-isolated-gen` / `builtin-board-maps` | 棋盘档地图：互不连通的棋盘、2 / 3 / 4 人、三张内置棋盘图并成为各入口缺省（v1.19、v1.28、v1.29） |
+| 10-07 | `retire-legacy-maps`（分支 `feat/board-terrain`，未合入、未归档） | 删除 v5 / 2p / 3p / 边疆 / `gen:` / `maps/*.json`，旧标识明确报错；校验器只剩棋盘档；测试迁到棋盘图并重钉黄金值；修跨机器红测（v1.30）。**BREAKING**：旧存档 / 旧日志无法加载 |
 
 更早的 change（首轮原型 8 项、去围棋化三轮等）都已归档，对应口径已被上表覆盖。
 
@@ -99,7 +102,9 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 
 > **负责人：不再跑 200 局**。复核、基线和慢测试的 200 局版本都不安排；需要数据时先问可以接受的规模，默认每个配置不超过 20 局。
 
-- **现行口径（内容集 V2、停手阈值 20、缺省权重）**：`sim-out/v2-recalibration/`
+> **以下数据全部在已删除的 v5 / 2 人图 / 边疆图上取得**，只作历史参考；棋盘图上只有 `board-isolated-gen` 的 11 局冒烟（设计文档 §3.3），同口径基线待 AI 校准 change。
+
+- **v5 口径（内容集 V2、停手阈值 20、缺省权重）**：`sim-out/v2-recalibration/`
   - `pass-20`：v5、4 名标准 AI、种子 1–20。截断 0/20，整局无提子 3/20，已终局的对局平均在第 9.25 大回合结束，提子 118。
   - `2p-eye50-el8`：2 人图。整局无提子 13/20，平均第 8.35 大回合结束。
   - `easy20-pass20`（简单难度，截断 0/20）、`expert20-pass20`（1 专家 + 3 标准，截断 0/20）。
@@ -112,14 +117,17 @@ dotnet run --project src/Siege.Sim -c Release -- analyze --dir sim-out/<目录>
 
 ## 已知问题与待办（按优先级）
 
-1. **2 人图仍有 13/20 局整局无提子**：原因是地图结构（保护期结束时对方区已被封死，近侧侧翼容易做贴墙眼）。可以考虑做 2 人图 v2（`engagement-diagnosis`，§3.3）。
-2. **V2 上九维权重没有完整重扫**；边疆图、生成图在阈值 20 下都没有复核，边疆图只有 V1 的 81 局部分样本（§15.2 已知问题第 2 条）。
-3. **专家强度仍待提升**：一层前瞻的专家 20 局胜 4–5 局，与高难相近。`expert-strength`（v1.18）加的多样候选 + 近似两层（S = 8、λ = 1000‰）让前瞻改变 41% 的选择，但 v5 成对种子 1–60 扩样中弱于高难：配对 好 7 / 同 33 / 差 20，胜 6/60 对 12/60，平均名次 2.87 对 2.53，符号检验 p = 0.019。专家预设因此退回一层，两项保留为可配置项；下一步先归因（专家落子更少、Pass 更多），另开 change（设计文档 §15.2）。
-4. **简单难度多人近循环**：V2 下 0/20 截断，V1 下 4/20，负责人裁决不改规则（§15.2 已知问题第 1 条）。
-5. **需要负责人亲自试玩**：带入带出链路（用临时 `--profile`）、专家难度、人对 3 名 AI 打一局边疆图（检查清单在 `.trellis/tasks/archive/2026-09/09-23-ai-eye/implement.md` 段 E）。
-6. **需要负责人看截图**：`art/carry-in-out/`、`art/expert-lookahead/`、`art/more-pieces/`（十种棋子灰度对照）、`art/surfaces-v1/`；另有 `sim-out/small-maps/*.png`、`sim-out/life-shape/*-groups.png`。
-7. **设计文档中还没做的部分**：联网同步与匹配（§19-5），正式美术与音效（§18.2）。局外永久成长明确不做（§21.6）。
-8. 小项：GitHub 默认分支已于 2026-09-28 改为 `main`（旧分支 `wip/match-flow` 已合入并于同日删除）；终端的出局 / 完赛结算没有脚本测试（journal 09-26）；种子 1–200 的截断慢测试在阈值改动后没有复核。
+1. **AI 未在棋盘图上校准**：九维权重与停手阈值都是在已删除的 v5 上定的（母任务裁决 6），棋盘图冒烟全部整轮 Pass 终局、52–74 大回合；下一步另开 AI 校准 change（每配置 ≤ 20 局）。内置棋盘图是否登记地图专属权重也在那里定。
+2. **专家耗时超出原规格上限**：打开多样补充 S = 8、两层 λ = 1000‰ 的专家在棋盘图上计时中位数是高难的 **6.16 倍**（预演次数代理 5.53–5.77），原规格上限 4 倍是 v5 上的口径；断言已删、只输出比值，由 AI 校准 change 重定。
+3. **地形规则在棋盘图上没有来源**：高度 / 崖壁 / 高地压制、深水 / 桥 / 搭桥、林地 / 烧林、土路、荒漠 / 沼泽 / 岩台 / 浅滩都不产生，规则与测试保留待用；删除还是给棋盘图加地形，另开 change 定（负责人 2026-10-06 裁决）。
+4. **工坊信物在棋盘图上无效果**：它只扩搭桥 / 烧林的格目标，棋盘图上恒为空，但仍按权重生成；随第 3 条或内容校准处理（移出权重表要新开内容集版本）。
+5. **Windows 待复跑**：段 0 的跨机器修复只在 macOS 上验证（缺省、`DOTNET_PROCESSOR_COUNT=3 / 8 / 28` 全绿），Windows 上需复跑一次全量确认。
+6. **测试耗时约为迁移前 2 倍**：同机对照 1.95–2.27×，最慢集中在专家前瞻类与 ConsoleRedirect 串行集合；是否再压由负责人定。
+7. **专家强度仍待提升**：一层前瞻的专家与高难相近，`expert-strength` 的多样候选 + 近似两层在 v5 扩样中弱于高难，预设已退回一层（设计文档 §15.2）；在棋盘图上要随 AI 校准重新评估。
+8. **简单难度多人近循环**（v5 数据）：负责人裁决不改规则（§15.2 已知问题第 1 条）。
+9. **需要负责人亲自试玩 / 看图**：棋盘图上人对 3 名 AI 打一局；带入带出链路（用临时 `--profile`）；`art/` 下各项截图（`art/*/README.md`；用旧图的复拍脚本已不能直接复跑）。
+10. **设计文档中还没做的部分**：联网同步与匹配（§19-5），正式美术与音效（§18.2）。局外永久成长明确不做（§21.6）。
+11. 小项：产品里没有读档入口，旧存档的“已删除”报错只落在 Core API 层；终端的出局 / 完赛结算没有脚本测试（journal 09-26）；发布页 `docs/index.html` 仍描述 v0.3.0 的“四张内置图”，下次发版时改。
 
 ## 执行流程与工作约定
 
@@ -155,7 +163,7 @@ opsx:propose 开 change（proposal + design + specs + tasks）→ task.py create
 - .NET SDK **8.0.425**；Release 与 Debug 都需要构建（Godot 读 Debug）。`dotnet test` 的输出是中文且为 GBK 编码，脚本里要设 `DOTNET_CLI_UI_LANGUAGE=en` 并用 `Failed` 抓失败名，红绿以退出码为准。
 - Godot **4.7.2 .NET**（`Godot.NET.Sdk/4.7.2`）：`D:\software\godot\Godot_v4.7.2-stable_mono_win64\`，命令行用 `..._console.exe`。
   - 构建 C#：`--headless --path src/godot --build-solutions --quit`
-  - 拾取自检（换相机、层高或地图后必须跑）：`--headless --path src/godot -- --auto-demo --pick-check [--map=<标识>]`；不给 `--map` 时走新缺省 `siege-4p-board-v1`（465 格），`--auto-demo` 的 53 帧在 v5 与新缺省上相同（自动演示固定跑 4 个大回合）
+  - 拾取自检（换相机、层高或地图后必须跑）：`--headless --path src/godot -- --auto-demo --pick-check [--map=<标识>]`；不给 `--map` 时走缺省 `siege-4p-board-v1`（465 格；自动演示固定跑 4 个大回合）
 - codegraph 索引在 `.codegraph/`（已 gitignore）；`trellis-implement` / `trellis-check` 两个 agent 已配置 `mcp__codegraph__*`。
 - 工作树：`.claude/worktrees/` 已清空，`terrain-surfaces` 的 worktree 与分支都已删除（合入于 `254964e`）。
 

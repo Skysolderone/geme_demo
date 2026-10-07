@@ -3,16 +3,16 @@ using Siege.Core.Board;
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
-/// frontier-map tasks 3.4：<c>map</c> 子命令能按地图标识打印边疆图的文本图（高度 / 地表 / 桥 / 栅栏 / 平台编号 / 信物）与校验报告项
+/// frontier-map tasks 3.4：<c>map</c> 子命令能按地图标识打印文本图（高度 / 地表 / 桥 / 栅栏 / 出生区编号 / 信物；retire-legacy-maps 起请求的是棋盘图，桥 / 栅栏等地形在棋盘图上不产生）与校验报告项
 /// （各平台到五类目标的距离）；不带选项仍是缺省地图。retire-legacy-maps 段 C 起子命令只在给 <c>--out</c> 时落盘，不再往当前工作目录的 <c>maps/</c> 导出内置图。
 /// </summary>
 [Collection(ConsoleRedirect.Collection)]
 public class 地图子命令Tests
 {
     [Fact]
-    public void 按标识打印边疆图的文本图与距离报告项()
+    public void 按标识打印棋盘图的文本图与距离报告项()
     {
-        // retire-legacy-maps 段 A2：请求的地图由边疆图 v2 改为 2 人内置棋盘图（非缺省图，M-B12 照样打得到）；方法名沿用规格 Scenario 名，段 D 随规格改。
+        // retire-legacy-maps 段 A2：请求的地图由边疆图 v2 改为 2 人内置棋盘图（非缺省图，M-B12 照样打得到）；段 D 收尾由「按标识打印边疆图的…」改名。
         // 边疆图上的桥 / 林地 / 栅栏三项文本图断言删除：棋盘图上这三种地形不存在（当前所有地图都不产生），文本图图例的写法仍由 map 子命令代码负责。
         // 变异 M-B12：ExportMap 不读 --map → 打出来的是缺省 4 人棋盘图（且 --map 成了未知选项），本测试红。
         (int code, string text, string err) = RunMain("map", "--map", SimFixtures.Board2);

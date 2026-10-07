@@ -20,10 +20,10 @@
 
 ## 4. 文档与规格（段 D）
 
-- [ ] 4.1 openspec 增量规格补全（D4），`openspec validate retire-legacy-maps --strict`。
-- [ ] 4.2 设计文档 §3 重写并升版；HANDOFF、README、ROADMAP、发布页、`art/*/README.md` 同步。
+- [x] 4.1 openspec 增量规格补全（D4），`openspec validate retire-legacy-maps --strict`。
+- [x] 4.2 设计文档 §3 重写并升版；HANDOFF、README、ROADMAP、发布页、`art/*/README.md` 同步。（发布页 `docs/index.html` 本 change 不改：已发布的 v0.3.0 包仍是旧内置图，随下次发版同步，见 HANDOFF。）
 
 ## 5. 验收（主会话）
 
-- [ ] 5.1 Godot：`--auto-demo` 与 `--pick-check`（缺省图）、选图自检通过；两处构建 0 警告；全量全绿。
+- [x] 5.1 Godot：`--auto-demo` 与 `--pick-check`（缺省图）、选图自检通过；两处构建 0 警告；全量全绿。
 - [ ] 5.2 负责人过目。

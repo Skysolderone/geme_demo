@@ -23,9 +23,9 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 围棋记法 ↔ 内部索引映射 | `Siege.Core` 坐标类型 |
 | 覆盖数据（谁覆盖了哪格、来源棋子、是否几何相邻） | `CoverageMap.Compute` 一次算出；`SourcesOf(c)` 只读查询（信物控制、盘面层差集原因都消费它，不自行遍历） |
 | 高地压制加值 | `PieceEffects.HighGroundBonus(board, group)`；覆盖目标只经 `GameBoard.CoverageTargets` 取得，不另写邻接或崖壁判断；"严格更低"用 `Map.HeightAt` 比较目标格与自身格；`PowerCalculator` 是唯一消费者，表现层只读 `GroupPower.HighGroundBonus` |
-| 地图规格档（标准 / 边疆）的分流 | `MapValidator` 里"规则 → 处理方式"的一张声明表（frontier-map D2）。校验器别处不得出现对规格档的分支，下游（对局、AI、Sim、表现层、`src/godot/`）不得读 `Profile`——要按图的大小分流就读可落子格数（如 `AiSearchConfig.DefaultCellLimitFor`）。守门在 `地图规格档Tests` / `边疆档静态校验Tests`，属性模式、强转比较等绕法已做过变异 |
-| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省为 `MapCatalog.DefaultId`（builtin-board-maps 起 = 4 人内置棋盘图 `siege-4p-board-v1`；此前是 `siege-4p-base-v5`，依赖 v5 读数的测试与命令须显式指定它）。内置棋盘图是 `board:` 生成图的别名（`MapCatalog.BuiltinBoards`：内置名 → 生成图标识 + 显示名；加载时生成后把 `Id` 改写为内置名），内容由导出摘要黄金值守住（`内置棋盘图Tests.内容不变`），变了就按下文 D6 升号。加内置图只在 `Builtins` 表加一行（含面向人的显示名，`BuiltinMaps`）。生成图 `gen:<种子>[:p<N>]` 也只经它解析——`FrontierMapGenerator` 的唯一生产调用方就是 `MapCatalog`；选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`） |
-| 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——生成器一旦改版，同一 `gen:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
+| 地图规格档的分流 | `MapValidator` 里"规则 → 处理方式"的声明表（frontier-map D2）。retire-legacy-maps 段 C 起声明表只剩棋盘档一行，另有一张"已删除的规格档"表（`RetiredProfiles`：标准档 → 报 `MAP_PROFILE_RETIRED` 并拒绝，缺 `Profile` 字段的旧地图文件按标准档读入后同样被拒）；边疆档的枚举成员已删除，文件里写着它时 `MapFile.FromJson` 读入即报"已删除"。规格档枚举的字面量只允许出现在这两张表里，地图的规格档属性只在 `RulesOf` 读一次；校验器别处不得出现对规格档的分支，下游（对局、AI、Sim、表现层、`src/godot/`）不得读 `Profile`——要按图的大小分流就读可落子格数（如 `AiSearchConfig.DefaultCellLimitFor`）。守门在 `规格档分流守门Tests`（含"拒绝码必须是白名单内整串字面量"，防 `"DEAD_" + "POCKET"` 式拼接绕过）/ `地图规格档Tests`，属性模式、强转比较等绕法已做过变异 |
+| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省为 `MapCatalog.DefaultId`（builtin-board-maps 起 = 4 人内置棋盘图 `siege-4p-board-v1`）。内置棋盘图是 `board:` 生成图的别名（`MapCatalog.BuiltinBoards`：内置名 → 生成图标识 + 显示名；加载时生成后把 `Id` 改写为内置名），内容由导出摘要黄金值守住（`内置棋盘图Tests.内容不变`），变了就按下文 D6 升号。加内置图只在 `BuiltinBoards` 表加一行（含面向人的显示名，`BuiltinMaps`）。已删除的旧标识（`RetiredIds`：`siege-4p-base-v1`–`v5`、`siege-2p-base-v1`、`siege-3p-base-v1`、`siege-frontier-v1` / `v2`，另加裸 `gen` 与 `gen:` 前缀）在文件路径解析之前即抛 `RetiredMapException`（派生自 `FileNotFoundException`，各入口现有的地图错误捕获直接接住），报"已删除"并列出现有地图；`maps/<标识>.json` 隐式回落已删除，只认显式文件路径（retire-legacy-maps D2，守门 `已删除地图明确报错Tests`）。棋盘档生成图 `board:` 也只经它解析（见下文"棋盘档生成与标识"一行）；选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`） |
+| 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——生成器一旦改版，同一 `board:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
 | 原型插旗路径的 AI 选区（含冒险概率） | `PrototypeZoneAssignment`（见 `determinism.md` 的 `zone-pick` 与 `flag-risk`）；三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门） |
 | AI 候选格上限的缺省值 | `AiSearchConfig.ForMap` / `DefaultCellLimitFor`（可落子格 > 150 取 24，否则 0）；显式配置含 0 优先；实际生效值进 `config.json` 与日志首部，`Replayer` 按首部重建、缺项按不限制 |
 | 相机位姿 | 纯计算在 `Siege.Presentation.Camera`（状态只有注视点与距离，俯角恒 60°、朝向恒定——缩放若带俯角变化，拾取会在某个缩放档静默出错）；`src/godot/` 只采输入，写相机节点的唯一位置是 `BoardView.ApplyCameraPose` |
@@ -61,12 +61,12 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 
 ### 内置图内容一变，标识必须递增（restore-go-core-rules D6）
 
-内置图（`MapCatalog.Builtins` 里的 `siege-4p-base-vN` / `siege-frontier-vN`）的**任何**内容变化——地形、信物格、出生区，或像据点这样整类字段的增删——MUST 同时递增标识，MUST NOT 沿用旧标识。先例：v3 → v4（加计分格，裁决 S-9）、v4 → v5 与 frontier v1 → v2（摘除据点）。
+内置图（现为 `MapCatalog.BuiltinBoards` 里的 `siege-<人数>p-board-vN`）的**任何**内容变化——地形、信物格、出生区、棋盘清单，或整类字段的增删（包括只改 `MapFile` 导出格式、使导出摘要变化）——MUST 同时递增标识，MUST NOT 沿用旧标识。先例（均已于 retire-legacy-maps 删除）：v3 → v4（加计分格，裁决 S-9）、v4 → v5 与 frontier v1 → v2（摘除据点）。retire-legacy-maps 因此不动 `MapData` 字段与 `MapFile` 导出格式，三张内置棋盘图的摘要保持不变（`内置棋盘图Tests.内容不变`）。
 
 - 理由：日志首部、存档、扫档 `config.json` 只记标识与 `MapFile.Digest`；沿用旧标识会让"同一个标识"在不同时期指向两张图，旧数据与新数据被静默混比。
-- 旧标识 MUST 从 `Builtins` 删除，请求时报"未知地图"；`maps/<旧标识>.json` 也不得留在仓库里——否则 `MapCatalog.Resolve` 的"`maps/<标识>.json` 文件回落"会把旧标识悄悄复活（守门 `各入口按地图标识选图Tests.改名前的旧地图标识报未知地图`）。
-- 类名随标识走（`FrontierMapV1` → `FrontierMapV2`）：标识升号而类名不动是陷阱。
-- 生成图 `gen:` 标识不含生成器版本段，生成器改动后同一标识产出不同的图是**已接受**的不兼容（D6）；对应的生成确定性黄金值随之重建，并在实现记录里写明原因。
+- 旧标识 MUST 从内置表删除并登记进 `MapCatalog.RetiredIds`，请求时报"已删除"（守门 `各入口按地图标识选图Tests.改名前的旧地图标识报已删除`、`已删除地图明确报错Tests`）。`maps/<标识>.json` 隐式回落已于 retire-legacy-maps 删除，`maps/` 目录也已不存在；即便本地残留同名文件，也只有显式给出文件路径才会读它。
+- 类名随标识走（历史先例 `FrontierMapV1` → `FrontierMapV2`）：标识升号而类名不动是陷阱。
+- 生成图 `board:` 标识不含生成器版本段，生成器改动后同一标识产出不同的图是**已接受**的不兼容（D6，`board-isolated-gen` / `builtin-board-maps` 都发生过）；对应的生成确定性黄金值随之重建，并在实现记录里写明原因。内置棋盘图是 `board:` 的别名，生成器一改它的摘要就变，必须升号。
 
 ### 气与覆盖是两套边，不再恒等（terrain-model）
 

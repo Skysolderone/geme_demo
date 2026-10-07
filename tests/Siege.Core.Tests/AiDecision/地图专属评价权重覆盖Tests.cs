@@ -131,9 +131,9 @@ public class 地图专属评价权重覆盖Tests
     }
 
     [Fact]
-    public void 覆盖只作用于登记的地图()
+    public void 缺省登记表为空()
     {
-        // 规格 Scenario：覆盖表的全部键恰为登记的地图。原钉"恰为 siege-2p-base-v1 一项"；
+        // 规格 Scenario「缺省登记表为空」（段 D 由「覆盖只作用于登记的地图」改名）：覆盖表的全部键恰为登记的地图。原钉"恰为 siege-2p-base-v1 一项"；
         // retire-legacy-maps 段 B 删除该条目（机制保留，design D2 / 已知歧义 4）→ 缺省登记表为空，内置棋盘图不登记（留给 AI 校准 change）。
         Assert.Empty(EvaluationWeights.MapOverrides);
         Assert.All(MapCatalog.BuiltinIds, id => Assert.False(EvaluationWeights.MapOverrides.ContainsKey(id)));

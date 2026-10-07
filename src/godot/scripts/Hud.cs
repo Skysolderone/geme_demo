@@ -145,7 +145,7 @@ public sealed partial class Hud : CanvasLayer
         _root.AddChild(_hoverReadout);
     }
 
-    /// <summary>插旗提示里是否带一行推屏说明：只在一屏看不全的地图上显示（一屏看全的 v4 上插旗画面保持原样）。</summary>
+    /// <summary>插旗提示里是否带一行推屏说明：只在一屏看不全的地图上显示（一屏看全的小图上插旗画面保持原样）。</summary>
     public bool CameraHintVisible { get; set; }
 
     /// <summary>悬停格坐标读数。文本由 Presentation 的 <c>HoverReadout</c> 给出（即 <c>Coord</c> 的记法），本类不拼坐标；空串即不显示。</summary>
@@ -632,7 +632,7 @@ public sealed partial class Hud : CanvasLayer
         follow.Pressed += () => FollowPressed?.Invoke();
         _layerButtons.AddChild(follow);
 
-        // 全局预览：只在一屏看不全的地图上给（v4 整盘本来就看得全，按钮没有意义，画面也保持不变）。
+        // 全局预览：只在一屏看不全的地图上给（一屏看全的小图上按钮没有意义，画面也保持不变）。
         if (CameraHintVisible)
         {
             Button overview = Ui.Toggle("全局 [M]", OverviewActive, 92);

@@ -206,9 +206,9 @@ public class 地图静态校验规则Tests
     }
 
     [Fact]
-    public void 中央入口与咽喉必须位于可落子格()
+    public void 中央入口必须位于可落子格_标了咽喉也须可落子()
     {
-        // retire-legacy-maps 段 B：原在 v5 上同时堵住中央入口与一个咽喉；中央入口改在 4 人内置棋盘图上验。
+        // 规格 Scenario「中央入口必须位于可落子格」（段 D 由「中央入口与咽喉必须位于可落子格」改名）。retire-legacy-maps 段 B：原在 v5 上同时堵住中央入口与一个咽喉；中央入口改在 4 人内置棋盘图上验。
         // 段 C：咽喉原在边疆档小图上验（边疆档已删除）。棋盘档不要求标注咽喉，但字段仍在、标了就必须可落子：
         // 在内置棋盘图上把坐标序第一个空闲格（公共棋盘里）标为咽喉 → 合法；再把它堵成岩石 → 报 CHOKE_NOT_PLAYABLE 且只指向它。
         // 变异 MC-S4（段 C 实跑）：咽喉可落子判据加恒假条件 → 本测试红 1。
@@ -263,9 +263,9 @@ public class 地图静态校验规则Tests
     [InlineData(Surface.Marsh)]
     [InlineData(Surface.Crag)]
     [InlineData(Surface.Shallows)]
-    public void 出生区内四种新地表都被拒(Surface surface)
+    public void 棋盘内的新地表被拒_出生棋盘内四种新地表都被拒(Surface surface)
     {
-        // retire-legacy-maps 段 C 检查补：原 BIRTH_ZONE_SPECIAL_SURFACE（出生区内不得有荒漠 / 沼泽 / 岩台 / 浅滩）随标准 / 边疆档删除，
+        // 规格 Scenario「棋盘内的新地表被拒」（段 D 改名）。retire-legacy-maps 段 C 检查补：原 BIRTH_ZONE_SPECIAL_SURFACE（出生区内不得有荒漠 / 沼泽 / 岩台 / 浅滩）随标准 / 边疆档删除，
         // 删除的依据是"棋盘档的出生区恰是出生棋盘、棋盘内每格必须是 h=0 草地"——这里把这条依据钉住：出生区 2 坐标序第一格标成新地表，
         // 必须被拒绝、且拒绝项指向该格（棋盘规则 BOARD_CELL_NOT_FLAT_GRASS 接住了原规则的职责）。
         // 变异 MC-S5（检查方实跑）：ValidatePlateCells 的"非草地"判据改成只看高度 → 本测试红 4。

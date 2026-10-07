@@ -129,9 +129,9 @@ public class 回到出生平台Tests
     }
 
     [Fact]
-    public void 贴边的大平台整个可见_1号平台8行8列全部在画面内_注视点允许偏离平台中心()
+    public void 贴边的出生区整个可见_1号出生区8行8列全部在画面内_注视点允许偏离区中心()
     {
-        // retire-legacy-maps 段 B：原名「…1号平台9行9列…」（段 A2 的 27×32 大图 1 号平台 9×9）；自定大图换成 23×34 后 1 号平台为 8×8，期望按新图重推。
+        // retire-legacy-maps 段 D：随规格 Scenario 由「贴边的大平台整个可见_1号平台8行8列…」改名。段 B：原名「…1号平台9行9列…」（段 A2 的 27×32 大图 1 号平台 9×9）；自定大图换成 23×34 后 1 号平台为 8×8，期望按新图重推。
         IEnumerable<Coord> zone1 = Large.BirthZones[0];
         Assert.Equal("A25", new Coord(zone1.Min(c => c.X), zone1.Min(c => c.Y)).ToNotation());
         Assert.Equal("H32", new Coord(zone1.Max(c => c.X), zone1.Max(c => c.Y)).ToNotation());
@@ -165,7 +165,7 @@ public class 回到出生平台Tests
     [InlineData(4f / 3f)]
     [InlineData(21f / 9f)]
     [InlineData(0.75f)]
-    public void 开局对准自家_边疆图六个平台开局时都整个可见(float aspect)   // 方法名沿用规格 Scenario 名；retire-legacy-maps 段 B 起为自定 5 平台大图（段 A2 为 6 平台）
+    public void 开局对准自家_大图五个出生区开局时都整个可见(float aspect)   // retire-legacy-maps：原名「开局对准自家_边疆图六个平台开局时都整个可见」，段 B 起为自定 5 区大图（段 A2 为 6 区）
     {
         Assert.Equal(5, Large.BirthZones.Length);
         for (int zone = 0; zone < Large.BirthZones.Length; zone++)

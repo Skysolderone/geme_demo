@@ -11,12 +11,12 @@
 | `relic-gen` | 信物内容生成（开局一次性） |
 | `recruit` | 每小回合的征募候选抽取 |
 | `setup` | 插旗后的首回合顺序、以及其他流程初始化 |
-| `zone-pick` | 原型插旗路径的 AI 选区（frontier-map）。**只在出生区数 > 地图支持的最大人数时派生**；相等时走按编号顺排、不消费任何随机——v4 上的既有对局因此逐步不变（`PrototypeZoneAssignment` 是三个入口共用的唯一实现） |
+| `zone-pick` | 原型插旗路径的 AI 选区（frontier-map）。**只在出生区数 > 地图支持的最大人数时派生**——棋盘档地图出生区恒为人数 + 1，现行地图一律走这一支；相等时走按编号顺排、不消费任何随机（引入时为保 v4 既有对局逐步不变；retire-legacy-maps 删除标准档后，只有经 `CreateUnvalidated` 构造的出生区数 = 人数的合成盘面还会走到顺排，代码保留）。`PrototypeZoneAssignment` 是三个入口共用的唯一实现 |
 | `flag-risk` | 原型插旗路径的冒险抽签（flag-contest D1）。未由人指定的玩家**此前已有旗时**抽一次 `[0,100)`，小于冒险概率 p 再用同一子流在已有人的出生区（升序去重）里等概率选一个；否则走 `zone-pick` / 顺排，且原规则的状态（顺排游标、`zone-pick` 子流、空闲表）只在走原规则时推进——p = 0 时本子流虽被抽取，锁定结果与引入之前逐项相同。同在 `PrototypeZoneAssignment` 里 |
 
 改变其中一条子流的**消费次数**，MUST NOT 影响其他子流的取值。
 
-**地图随机源不在这张表里，也不是 `GameSeed` 的子流**（map-generator D2）。生成图 `gen:<地图种子>[:p<N>]` 用一条只由（地图种子, 尝试序号）决定的整数序列（`MapRandom.ForAttempt`，与对局随机源同一份 PRNG 实现），两边互不可见：生成器文件里不得出现 `GameSeed`，`Siege.Core/Match` 下不得出现地图种子类型——对局流程只拿到生成好的 `MapData` 与标识字符串。Core 永不读时钟：裸 `gen` 的地图种子只在三个入口最外层取（经 `GeneratedMapId.FriendlySeed` 折成九位以内），取完即拼成完整标识，裸 `gen` 不得写进任何记录。生成路径上同样禁浮点、禁散列容器遍历、禁时钟与环境（源码扫描守门）。
+**地图随机源不在这张表里，也不是 `GameSeed` 的子流**（map-generator D2）。棋盘档生成图 `board:<地图种子>[:p<人数>][:n<棋盘数>]` 用一条只由（地图种子, 人数, 尝试序号）决定的整数序列（`MapRandom.ForBoardAttempt`，与对局随机源同一份 PRNG 实现；边疆档的 `ForAttempt` / `ForSurfaces` 已随 `gen:` 于 retire-legacy-maps 删除），两边互不可见：生成器文件里不得出现 `GameSeed`，`Siege.Core/Match` 下不得出现地图种子类型——对局流程只拿到生成好的 `MapData` 与标识字符串。Core 永不读时钟：裸 `board` 的地图种子只在三个入口最外层取（经 `BoardMapId.FriendlySeed` 折成九位以内；retire-legacy-maps 由已删除的 `GeneratedMapId` 迁来），取完即拼成完整标识，裸 `board` 不得写进任何记录。生成路径上同样禁浮点、禁散列容器遍历、禁时钟与环境（源码扫描守门）。
 
 **为什么。** 若共用一条序列，玩家改一个征募决策就会让后续所有随机取值偏移，"改一个决策重放整局"立刻失效，调试与回归都会变得极难。
 

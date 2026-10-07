@@ -90,9 +90,9 @@ public class 公开规则纯函数Tests
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]
-    public void v5真实对局每个小回合新旧两条路径逐项相等(ulong seed)
+    public void 棋盘图真实对局每个小回合新旧两条路径逐项相等(ulong seed)
     {
-        // 4 人棋盘图（retire-legacy-maps 段 A；原为 v5 整局，测试名沿用规格 Scenario 名）、种子 1–3、4 名标准 AI、20 个小回合，每个小回合（部署阶段）比对：
+        // 4 人棋盘图（retire-legacy-maps 段 A；原为 v5 整局；retire-legacy-maps 段 D 收尾由「v5真实对局…」改名）、种子 1–3、4 名标准 AI、20 个小回合，每个小回合（部署阶段）比对：
         // ① 合法落子范围：旧实现（抄自改动前的 MatchFlow.LegalRangeFor）＝ 对局下发的批次上下文 ＝ 纯函数读公开快照；
         // ② 部署上限与工坊：旧实现（抄自改动前 RelicLedger.BuildSnapshot 的军令 / 工坊部分，读真实内容）＝ 批次上下文 ＝ 纯函数读公开快照；
         // ③ 先锋修正：旧实现（抄自改动前的 SumVanguard）＝ 账本（委托后）＝ 纯函数读公开快照；

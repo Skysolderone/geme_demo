@@ -294,6 +294,61 @@ public class 默认评价权重的校准Tests
     }
 
     [Fact]
+    public void 校准地图已删除的补注()
+    {
+        // 规格：ai-decision「默认评价权重的校准」Scenario「校准地图已删除的补注」（retire-legacy-maps 段 D 收尾补）。
+        // 九维权重与停手阈值都是在 siege-4p-base-v5 上扫的档，该图已删除：每处写到它的校准口径（机读常量与两份源码的依据段）都必须紧跟补注，
+        // 补注不得与地图分离（例如挪到种子范围之后）。源码里的写法只有三种：字面量补注、<see cref="RetiredCalibrationMapNote"/>、
+        // <see cref="EvaluationWeights.RetiredCalibrationMapNote"/>；补注常量自己的说明段（"都在 v5 上做，该图已删除"）豁免。
+        // 变异 D-C1（段 D 实跑）：EvaluationWeights.CalibrationOf(Threat) 的口径去掉补注 → 本测试红。
+        // 变异 D-C2（段 D 实跑）：AiDifficulty 历史口径段把 <see cref> 补注挪到"种子 1–200"之后（与地图分离）→ 本测试红（只有本测试守这段注释）。
+        string note = EvaluationWeights.RetiredCalibrationMapNote;
+        const string map = "siege-4p-base-v5";
+
+        int machine = 0;
+        foreach (string status in Enum.GetValues<EvaluationDimension>().Select(EvaluationWeights.CalibrationOf).Append(AiSearchConfig.PassThresholdCalibrationStatus))
+        {
+            int at = status.IndexOf(map, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                continue;
+            }
+
+            machine++;
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(status, map));
+            Assert.StartsWith($"{map}（{note}）", status[at..], StringComparison.Ordinal);
+        }
+
+        Assert.True(machine >= 4, $"样本口径：写到 {map} 的机读口径只有 {machine} 条（应为 Eye / Safety / Threat 与停手阈值）");
+
+        string ai = Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai");
+        string[] followers =
+        [
+            $"（{note}）",
+            "</c>（<see cref=\"RetiredCalibrationMapNote\"/>）",
+            "</c>（<see cref=\"EvaluationWeights.RetiredCalibrationMapNote\"/>）",
+        ];
+        foreach ((string file, int minimum) in new[] { ("EvaluationWeights.cs", 5), ("AiDifficulty.cs", 3) })
+        {
+            string src = File.ReadAllText(Path.Combine(ai, file));
+            int[] hits = [.. System.Text.RegularExpressions.Regex.Matches(src, map).Select(m => m.Index)];
+            Assert.True(hits.Length >= minimum, $"样本口径：{file} 里只有 {hits.Length} 处 {map}");
+            foreach (int at in hits)
+            {
+                string rest = src[(at + map.Length)..];
+                if (rest.StartsWith("</c> 上做，该图已删除", StringComparison.Ordinal))
+                {
+                    continue;   // 补注常量自己的说明段
+                }
+
+                Assert.True(
+                    followers.Any(f => rest.StartsWith(f, StringComparison.Ordinal)),
+                    $"{file}：第 {src[..at].Count(ch => ch == '\n') + 1} 行的 {map} 之后没有紧跟补注：{rest[..Math.Min(40, rest.Length)]}");
+            }
+        }
+    }
+
+    [Fact]
     public void 地图覆盖表为空且无校准口径()
     {
         // 规格：ai-decision「地图专属评价权重覆盖」Scenario「覆盖表被改动」。原名「两人图覆盖表的校准记录随值一起更新」，钉的是唯一一项

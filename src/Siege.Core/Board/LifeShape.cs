@@ -78,7 +78,7 @@ public sealed class GroupLife
 /// </remarks>
 public sealed class LifeShapeReport
 {
-    /// <summary>眼空间上限（格数，含）。design D1 / 裁决 #11，边疆档不放宽（裁决 R1）。</summary>
+    /// <summary>眼空间上限（格数，含）。design D1 / 裁决 #11；当年在边疆档上也不放宽（裁决 R1，边疆档已于 retire-legacy-maps 删除），棋盘图同样不放宽。</summary>
     public const int EyeSpaceMax = 12;
 
     private readonly int _width;
