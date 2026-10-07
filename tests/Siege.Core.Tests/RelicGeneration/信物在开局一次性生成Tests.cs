@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.RelicGeneration;
 /// <summary>规格：relic-generation —— Requirement: 信物在开局一次性生成</summary>
 public class 信物在开局一次性生成Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    private static readonly MapData Map = MapCatalog.Resolve(SimFixtures.Board4);   // retire-legacy-maps 段 A2：由 v5 改到 4 人内置棋盘图（10 个信物格：出生区 5、公共区 4 标准 + 1 高档）
 
     [Fact]
     public void 种子可复现()

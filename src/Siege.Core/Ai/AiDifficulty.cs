@@ -34,7 +34,9 @@ public enum AiDifficulty
 /// <param name="CandidateBatchCount">候选批次数 M。</param>
 /// <param name="ImmediateOnly">只评价即时收益与眼位（简单难度；眼位自 ai-eye R26 起计入，字段名沿用以保持配置与日志首部兼容）。</param>
 /// <param name="CandidateCellLimit">
-/// 候选格上限 K（frontier-map 裁决 12）：0 = 不限制（缺省，与引入本参数之前逐步相同）。大于 0 且合法空格多于 K 时，
+/// 候选格上限 K（frontier-map 裁决 12）：<c>null</c> = 未写，按地图取缺省（<see cref="CellLimitOn"/>：可落子格多于 <see cref="LargeMapPlayableThreshold"/> 取
+/// <see cref="LargeMapCellLimit"/>，否则 0；retire-legacy-maps 段 A 起，此前未写即 0）；0 = 显式不限制；大于 0 = 显式上限。四档预设都不写。
+/// 未写时不序列化；该项出现之前的旧记录缺这个字段，由跑局层按首部重建时补成 0（当时就是不限制），不经地图缺省。大于 0 且合法空格多于 K 时，
 /// 先用一种代表类型对每格预演一次得格分（代表类型落不下而持有匠人的格，退而用匠人带改造的最高合法总分），
 /// 取前 K 格（同分按坐标序），再只对这 K 格做完整的"类型 × 改造目标"枚举。
 /// N / M 是在穷举<b>之后</b>截断，管不住大图上的预演次数；K 在穷举之前截断。不改评估函数、不消费随机流。
@@ -63,7 +65,7 @@ public sealed record AiSearchConfig(
     int CandidatePointCount,
     int CandidateBatchCount,
     bool ImmediateOnly,
-    int CandidateCellLimit = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? CandidateCellLimit = null,
     int PassThreshold = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DiverseSupplementLimit = 0,
@@ -148,8 +150,15 @@ public sealed record AiSearchConfig(
     public static int DefaultCellLimitFor(int playableCells) => playableCells > LargeMapPlayableThreshold ? LargeMapCellLimit : 0;
 
     /// <summary>
+    /// 本配置在可落子格数为 <paramref name="playableCells"/> 的地图上实际生效的候选格上限：写了（含 0）取所写值，未写按 <see cref="DefaultCellLimitFor"/> 取。
+    /// AI 决策（单点排序与专家的两层扫描）只经它读 K。
+    /// </summary>
+    public int CellLimitOn(int playableCells) => CandidateCellLimit ?? DefaultCellLimitFor(playableCells);
+
+    /// <summary>
     /// 某难度在某张地图上的参数：<paramref name="cellLimit"/> 显式给出（含 0 = 不限制）优先，
-    /// 未给出按 <see cref="DefaultCellLimitFor"/> 取。小图上与 <see cref="ForDifficulty"/> 相等。
+    /// 未给出按 <see cref="DefaultCellLimitFor"/> 取。结果总是写明具体值（不为 <c>null</c>）：小图上是显式 0，
+    /// 与 <see cref="ForDifficulty"/>（未写）在该图上的生效值相同、但不相等（retire-legacy-maps 段 A2 起预设不写上限）。
     /// </summary>
     public static AiSearchConfig ForMap(AiDifficulty difficulty, int playableCells, int? cellLimit = null) =>
         ForDifficulty(difficulty) with { CandidateCellLimit = cellLimit ?? DefaultCellLimitFor(playableCells) };

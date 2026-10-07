@@ -7,13 +7,14 @@ using Xunit.Abstractions;
 
 namespace Siege.Core.Tests.MatchFlowRegression;
 
-/// <summary>implement 8.4：占位随机策略（种子驱动）端到端连跑 100 局 4 人对局，无死锁、无非法状态。</summary>
+/// <summary>implement 8.4：占位随机策略（种子驱动）端到端连跑 100 局 4 人对局，无死锁、无非法状态（retire-legacy-maps 段 A2 起在 4 人内置棋盘图上）。</summary>
 public class 百局端到端Tests(ITestOutputHelper output)
 {
     [Fact]
     public void 连续一百局四人对局无死锁无非法状态()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 A2：由 v5 改到 4 人内置棋盘图（465 格，随机策略平均 45 个大回合，单线程跑 100 局约 45 s）。
+        // 100 局互相独立、各自只由种子决定，改为并行跑完再按种子顺序汇总——每局的不变量断言与汇总口径都不变，只是不再串行。
         PlayerId[] players = [new(0), new(1), new(2), new(3)];
         var reasons = new SortedDictionary<EndReason, int>();
         var winners = new SortedDictionary<PlayerId, int>();
@@ -22,10 +23,11 @@ public class 百局端到端Tests(ITestOutputHelper output)
         int leaderAtRound3Wins = 0;
         int leaderAtRound3Samples = 0;
 
-        for (ulong s = 1; s <= 100; s++)
+        var games = new (MatchResult Result, PlayerId FirstMover, InitiativeReport? Third)[100];
+        Parallel.For(0, games.Length, i =>
         {
-            var seed = new GameSeed(s);
-            MatchFlow match = MatchFlow.Create(map, seed, players, MatchOptions.Immediate);
+            var seed = new GameSeed((ulong)(i + 1));
+            MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(SimFixtures.Board4), seed, players, MatchOptions.Immediate);
             match.PlantSequentially(players.Select((p, i) => (p, i)));
             var runner = new MatchRunner(match);
             foreach (PlayerId p in players)
@@ -36,7 +38,11 @@ public class 百局端到端Tests(ITestOutputHelper output)
             PlayerId firstMover = match.ActionOrder[0];
             MatchResult result = runner.RunToEnd(maxTurns: 4000);
             AssertInvariants(match, result);
+            games[i] = (result, firstMover, match.InitiativeReports.FirstOrDefault(r => r.CompletedMajorRound == 3));
+        });
 
+        foreach ((MatchResult result, PlayerId firstMover, InitiativeReport? third) in games)
+        {
             rounds.Add(result.MajorRound);
             reasons[result.Reason] = reasons.TryGetValue(result.Reason, out int n) ? n + 1 : 1;
             foreach (PlayerId w in result.Winners)
@@ -49,7 +55,6 @@ public class 百局端到端Tests(ITestOutputHelper output)
                 firstPositionWins++;
             }
 
-            InitiativeReport? third = match.InitiativeReports.FirstOrDefault(r => r.CompletedMajorRound == 3);
             if (third is not null && !result.HasTies)
             {
                 leaderAtRound3Samples++;

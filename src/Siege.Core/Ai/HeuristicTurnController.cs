@@ -350,9 +350,11 @@ public sealed class HeuristicTurnController : ITurnController
         BatchContext context = batch.Context;
         ImmutableArray<PieceType> types = [.. context.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order()];
         ImmutableArray<Coord> cells = [.. context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
-        if (Config.CandidateCellLimit > 0 && cells.Length > Config.CandidateCellLimit && !types.IsEmpty)
+        // 候选格上限按开局地图的可落子格数取缺省（未写时）：改造架出的桥格不让 K 在局中跳档。
+        int cellLimit = Config.CellLimitOn(batch.Board.BaseMap.PlayableCount);
+        if (cellLimit > 0 && cells.Length > cellLimit && !types.IsEmpty)
         {
-            cells = PrefilterCells(cells, types, batch, rehearse, evaluator, Config.CandidateCellLimit);
+            cells = PrefilterCells(cells, types, batch, rehearse, evaluator, cellLimit);
         }
 
         LastCandidateCells = cells;

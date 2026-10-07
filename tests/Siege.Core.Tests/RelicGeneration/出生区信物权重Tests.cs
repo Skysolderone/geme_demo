@@ -10,25 +10,25 @@ namespace Siege.Core.Tests.RelicGeneration;
 /// <summary>规格：relic-generation —— Requirement: 出生区信物权重</summary>
 public class 出生区信物权重Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    private static readonly MapData Map = RelicBalanceFixtures.Map();   // retire-legacy-maps 段 A2：由 v5 改为专为同区多枚信物设计的合成图（4 区 × 2 枚、12×8，期望值在新图上重算）
 
     [Fact]
     public void 出生区无高阶信物()
     {
-        // 4 人基准图 8 个出生区信物格；2000 个种子下强度全为 +1（徽记为单枚等效）。
+        // 合成图 8 个出生区信物格（retire-legacy-maps 段 A2；原为 4 人基准图，同为 8 格）；2000 个种子下强度全为 +1（徽记为单枚等效）。
         // 变异验证 M-G4：Draw 里去掉 `spec.Zone == BirthZone ? 0 :`，改用 options.UpgradePermilleOf(spec.Budget) 且 Birth 档给 200 → 红 1（本测试）。
         for (ulong seed = 0; seed < 2000; seed++)
         {
             RelicGenerationRecord record = RelicGenerator.Generate(Map, new GameSeed(seed));
             RelicPlacement[] birth = [.. record.Placements.Where(p => p.Spec.Zone == RelicZone.BirthZone)];
-            Assert.Equal(8, birth.Length);
+            Assert.Equal(RelicBalanceFixtures.BirthCells, birth.Length);
             Assert.All(birth, p => Assert.False(p.Content.IsAdvanced, $"种子 {seed} 出生区 {p} 为高阶"));
             Assert.All(birth, p => Assert.Equal(1, p.Content.Magnitude));
         }
     }
 
     /// <summary>
-    /// 第一阶段（MaxRerolls = 0）出生区类型计数，按 <see cref="RelicWeights.Order"/> 下标。10000 种子 × 8 格 = 80000 样本。
+    /// 第一阶段（MaxRerolls = 0）出生区类型计数，按 <see cref="RelicWeights.Order"/> 下标。10000 种子 × 8 格 = 80000 样本（Samples）。
     /// 只跑信物生成，不跑对局（tasks 2.2）。
     /// </summary>
     private static int[] StageOneBirthCounts(ContentSet set)
@@ -48,9 +48,12 @@ public class 出生区信物权重Tests
             }
         }
 
-        Assert.Equal(80000, total);
+        Assert.Equal(Samples, total);
         return counts;
     }
+
+    /// <summary>第一阶段分布的样本数：10000 种子 × 出生区信物格数。</summary>
+    private const int Samples = 10000 * RelicBalanceFixtures.BirthCells;
 
     [Fact]
     public void 权重分布收敛()
@@ -63,7 +66,7 @@ public class 出生区信物权重Tests
         int[] expected = [360, 160, 120, 64, 56, 40, 50, 50, 50, 50];
         for (int i = 0; i < expected.Length; i++)
         {
-            Assert.InRange(counts[i] * 1000 / 80000, expected[i] - 10, expected[i] + 10);
+            Assert.InRange(counts[i] * 1000 / Samples, expected[i] - 10, expected[i] + 10);
         }
     }
 
@@ -75,26 +78,27 @@ public class 出生区信物权重Tests
         int[] counts = StageOneBirthCounts(ContentSet.V2);
         foreach (RelicType fresh in new[] { RelicType.Encampment, RelicType.Pincer, RelicType.Relay, RelicType.Workshop })
         {
-            Assert.InRange(counts[RelicWeights.IndexOf(fresh)] * 1000 / 80000, 45, 55);
+            Assert.InRange(counts[RelicWeights.IndexOf(fresh)] * 1000 / Samples, 45, 55);
         }
 
         int[] original = [450, 200, 150, 80, 70, 50];   // v1 的千分比，× 80% 即 v2
         for (int i = 0; i < original.Length; i++)
         {
-            Assert.InRange(counts[i] * 1000 / 80000, (original[i] * 8 / 10) - 5, (original[i] * 8 / 10) + 5);
+            Assert.InRange(counts[i] * 1000 / Samples, (original[i] * 8 / 10) - 5, (original[i] * 8 / 10) + 5);
         }
     }
 
     /// <summary>
     /// 引入新信物之前（段 A 提交 854d371 的代码）用 <c>Generate(map, seed)</c> 对各内置图种子 0–499 生成、逐局 <c>Serialize()</c> 拼接后的 SHA-256，
     /// 以及未收敛局数。段 B 动生成器之前抓取（临时测试，已删除）。
+    /// retire-legacy-maps 段 A2：四行原值（v5 66836BA8… / 128、2 人 3BA92151… / 108、3 人 C35D114B… / 106、边疆 v2 06C13EEE… / 251）随四张旧图删除而作废——
+    /// 黄金值钉的是"那几张图上的生成结果"，图没了无从比对，且负责人裁决不保留旧图作测试夹具。改为在专设合成图 <see cref="RelicBalanceFixtures"/>
+    /// 上重钉为本 change 的基线（取自段 A2 的实际运行，不再是"引入新信物之前"的值）：此后 v1 生成路径的任何改动都会让它红。
+    /// 反面对照：同一张图按 v2 生成的拼接文本与之不同（内容集确实抵达生成器）。
     /// </summary>
-    private static readonly (string MapId, string Sha256, int Unconverged)[] PreChangeGolden =
+    private static readonly (string Sha256, int Unconverged)[] PreChangeGolden =
     [
-        ("siege-4p-base-v5", "66836BA88F895F1C439C7836B03207591DEA4FBF2234BCC98C1AB19584565C88", 128),
-        ("siege-2p-base-v1", "3BA92151471C3409FB64793F41322C2E26C595EFA9B7E5835530B35DB97A488F", 108),
-        ("siege-3p-base-v1", "C35D114B0589A705DF622EC5E076343D7CFD82ED6EC2EF1173E6EA550F2407E6", 106),
-        ("siege-frontier-v2", "06C13EEE966899CE2FE54DF2F241748F3DB8A74F879D639F54B0FFC127AD057B", 251),
+        ("5A117B22A130EC65595F7C03354177A740D4C59C14B0121EE924809C3C54EC77", 109),
     ];
 
     [Fact]
@@ -102,9 +106,10 @@ public class 出生区信物权重Tests
     {
         // 规格「内容集 v1 保持旧表」：同一种子在 v1 下的生成结果与引入新信物之前逐格一致（含收敛标记与重抽次数），不出现任何新四类。
         // 期望值是改动前抓取的黄金哈希（见 PreChangeGolden），不是由当前实现推出来的。
-        foreach ((string mapId, string sha256, int unconverged) in PreChangeGolden)
+        foreach ((string sha256, int unconverged) in PreChangeGolden)
         {
-            MapData map = MapCatalog.Resolve(mapId);
+            MapData map = RelicBalanceFixtures.Map();
+            string mapId = map.Id;
             var text = new StringBuilder();
             int notConverged = 0;
             for (ulong seed = 0; seed < 500; seed++)
@@ -119,8 +124,16 @@ public class 出生区信物权重Tests
                 notConverged += record.Converged ? 0 : 1;
             }
 
-            Assert.Equal(unconverged, notConverged);
-            Assert.Equal(sha256, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()))));
+            string actual = $"{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())))} / {notConverged}";
+            Assert.True($"{sha256} / {unconverged}" == actual, $"v1 生成结果变了：现为 {actual}");
+
+            var v2 = new StringBuilder();
+            for (ulong seed = 0; seed < 500; seed++)
+            {
+                v2.Append(RelicGenerator.Generate(map, new GameSeed(seed), ContentSet.V2).Serialize());
+            }
+
+            Assert.NotEqual(text.ToString(), v2.ToString());
         }
 
         // v1 第一阶段分布仍是百分制旧表 45 / 20 / 15 / 8 / 7 / 5（改写前 `权重分布收敛` 的断言原样移到这里）。

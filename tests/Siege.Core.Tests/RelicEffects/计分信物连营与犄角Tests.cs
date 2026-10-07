@@ -142,10 +142,10 @@ public class 计分信物连营与犄角Tests
     public void 已结算盘面上真实内容与已揭示内容结果相同()
     {
         // 规格正文（D3）：在任一已结算盘面上，按真实信物内容与按已揭示的公开内容计算的势力 MUST 相同——受控信物必然已被覆盖或占据，因而必然已揭示。
-        // 性质测试（tasks 2.5）：v2、标准图、种子 0–149 的信物生成 + 种子驱动的随机盘面（十种棋子类型随机、所有者随机），不跑整局；
+        // 性质测试（tasks 2.5）：v2、4 人内置棋盘图（retire-legacy-maps 段 A2 之前为标准图 v5）、种子 0–149 的信物生成 + 种子驱动的随机盘面（十种棋子类型随机、所有者随机），不跑整局；
         // 每个盘面先做一次"结算"（第 4 步揭示 + 第 5 步重算控制），再比较两种输入下全部玩家的势力明细。
         // 样本口径下界：足够多的盘面上计分信物确实改变了势力（与"不传已知内容"不同），否则两边相等是恒真。
-        MapData map = FourPlayerBaseMap.Create();
+        MapData map = MapCatalog.Resolve(SimFixtures.Board4);
         PlayerId[] players = [TestMaps.P0, TestMaps.P1, RelicFixtures.P2, RelicFixtures.P3];
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = RelicFixtures.AllActive(players);
         PieceType[] types = [.. ContentSets.PieceTypesOf(ContentSet.V2)];

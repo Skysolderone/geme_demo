@@ -8,29 +8,29 @@ namespace Siege.Core.Tests.ViewportCamera;
 /// <summary>规格：viewport-camera —— Requirement: 回到出生平台（tasks 4.4）。</summary>
 public class 回到出生平台Tests
 {
-    /// <summary>边疆图 3 号平台（内部索引 2）：外接矩形 R22–X28，贴着地图右上角。</summary>
-    private static IEnumerable<Coord> Zone3 => Frontier.BirthZones[2];
+    /// <summary>大图 3 号平台（内部索引 2）：外接矩形 U24–AA30，贴着地图右上角（retire-legacy-maps 段 A2 起为自定合成图，原为边疆图 R22–X28）。</summary>
+    private static IEnumerable<Coord> Zone3 => Large.BirthZones[2];
 
-    /// <summary>边疆图 5 号平台（内部索引 4）：外接矩形 E13–J17，在地图中部偏左。</summary>
-    private static IEnumerable<Coord> Zone5 => Frontier.BirthZones[4];
+    /// <summary>大图 5 号平台（内部索引 4）：外接矩形 E14–J18，在地图中部偏左。</summary>
+    private static IEnumerable<Coord> Zone5 => Large.BirthZones[4];
 
     [Fact]
     public void 出生平台中心是出生区格子的外接矩形中心()
     {
-        // 样本自证：3 号平台的外接矩形确实是 R22–X28（列 R..X = 索引 16..22，行 22..28 = 索引 21..27）。
-        Assert.Equal("R22", new Coord(Zone3.Min(c => c.X), Zone3.Min(c => c.Y)).ToNotation());
-        Assert.Equal("X28", new Coord(Zone3.Max(c => c.X), Zone3.Max(c => c.Y)).ToNotation());
+        // 样本自证：3 号平台的外接矩形确实是 U24–AA30（列 U..AA = 索引 19..25，行 24..30 = 索引 23..29）。
+        Assert.Equal("U24", new Coord(Zone3.Min(c => c.X), Zone3.Min(c => c.Y)).ToNotation());
+        Assert.Equal("AA30", new Coord(Zone3.Max(c => c.X), Zone3.Max(c => c.Y)).ToNotation());
 
-        (float x, float z) = CameraHome.Target(Zone3, CenterOf(Frontier), BoundsOf(Frontier));
+        (float x, float z) = CameraHome.Target(Zone3, CenterOf(Large), BoundsOf(Large));
 
-        // 25 列：列中线索引 12；30 行：行中线索引 14.5。外接矩形中心 = 列 19、行 24 → x = +7，z = −9.5。
-        Assert.Equal(7f, x);
-        Assert.Equal(-9.5f, z);
+        // 27 列：列中线索引 13；32 行：行中线索引 15.5。外接矩形中心 = 列 22、行 26 → x = +9，z = −10.5。
+        Assert.Equal(9f, x);
+        Assert.Equal(-10.5f, z);
 
-        // 5 号平台 E13–J17（列索引 4..8、行索引 12..16）→ 列 6、行 14 → x = −6，z = +0.5。
-        Assert.Equal("E13", new Coord(Zone5.Min(c => c.X), Zone5.Min(c => c.Y)).ToNotation());
-        Assert.Equal("J17", new Coord(Zone5.Max(c => c.X), Zone5.Max(c => c.Y)).ToNotation());
-        Assert.Equal((-6f, 0.5f), CameraHome.Target(Zone5, CenterOf(Frontier), BoundsOf(Frontier)));
+        // 5 号平台 E14–J18（列索引 4..8、行索引 13..17）→ 列 6、行 15 → x = −7，z = +0.5。
+        Assert.Equal("E14", new Coord(Zone5.Min(c => c.X), Zone5.Min(c => c.Y)).ToNotation());
+        Assert.Equal("J18", new Coord(Zone5.Max(c => c.X), Zone5.Max(c => c.Y)).ToNotation());
+        Assert.Equal((-7f, 0.5f), CameraHome.Target(Zone5, CenterOf(Large), BoundsOf(Large)));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class 回到出生平台Tests
     [Fact]
     public void 未选区时回家目标是地图中心()
     {
-        (float x, float z) = CameraHome.Target([], CenterOf(Frontier), new PlaneRect(-10f, -20f, 30f, 40f));
+        (float x, float z) = CameraHome.Target([], CenterOf(Large), new PlaneRect(-10f, -20f, 30f, 40f));
 
         Assert.Equal(10f, x);
         Assert.Equal(10f, z);
@@ -56,7 +56,7 @@ public class 回到出生平台Tests
     [Fact]
     public void 空格回家_只改注视点不改距离()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(10);
         for (int i = 0; i < 600; i++)
         {
@@ -64,21 +64,21 @@ public class 回到出生平台Tests
         }
 
         float distance = camera.Pose.Distance;
-        Assert.True(camera.Pose.FocusX < -6f && camera.Pose.FocusZ > 0.5f, "确实已推到地图另一端（左下）");
-        (float x, float z) = CameraHome.Target(Zone5, CenterOf(Frontier), BoundsOf(Frontier));
+        Assert.True(camera.Pose.FocusX < -7f && camera.Pose.FocusZ > 0.5f, "确实已推到地图另一端（左下）");
+        (float x, float z) = CameraHome.Target(Zone5, CenterOf(Large), BoundsOf(Large));
 
         camera.Home(x, z);
 
         Assert.Equal(distance, camera.Pose.Distance);
-        Assert.Equal(-6f, camera.Pose.FocusX);
+        Assert.Equal(-7f, camera.Pose.FocusX);
         Assert.Equal(0.5f, camera.Pose.FocusZ);
     }
 
     [Fact]
     public void 回家结果同样经过夹取()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
-        (float x, float z) = CameraHome.Target(Zone3, CenterOf(Frontier), BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
+        (float x, float z) = CameraHome.Target(Zone3, CenterOf(Large), BoundsOf(Large));
 
         // 最远缩放：横向锁中线，纵向可行范围很窄
         camera.Home(x, z);
@@ -92,67 +92,68 @@ public class 回到出生平台Tests
     public void 平台外接矩形取格心的最小最大_与行列方向无关()
     {
         // 行向 −Z：centerOf(最小行) 的 z 反而更大，矩形仍须 Min ≤ Max。
-        PlaneRect zone3 = CameraHome.Platform(Zone3, CenterOf(Frontier))!.Value;
-        Assert.Equal(new PlaneRect(4f, -12.5f, 10f, -6.5f), zone3);
-        Assert.Equal((zone3.CenterX, zone3.CenterZ), CameraHome.Target(Zone3, CenterOf(Frontier), BoundsOf(Frontier)));
+        PlaneRect zone3 = CameraHome.Platform(Zone3, CenterOf(Large))!.Value;
+        Assert.Equal(new PlaneRect(6f, -13.5f, 12f, -7.5f), zone3);   // 格心：列 19..25 → x 6..12，行 23..29 → z −7.5..−13.5
+        Assert.Equal((zone3.CenterX, zone3.CenterZ), CameraHome.Target(Zone3, CenterOf(Large), BoundsOf(Large)));
 
-        Assert.Null(CameraHome.Platform([], CenterOf(Frontier)));
+        Assert.Null(CameraHome.Platform([], CenterOf(Large)));
     }
 
     [Fact]
     public void 开局对准自家_3号平台整个可见且四周留约2格()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
-        camera.Open(CameraHome.Platform(Zone3, CenterOf(Frontier)));
+        var camera = new BoardCamera(BoundsOf(Large));
+        camera.Open(CameraHome.Platform(Zone3, CenterOf(Large)));
 
         // 7×7 平台：纵向要显示 7 + 2 × 2 = 11 格 → 距离 = 14.6 × 11 ÷ 12.7 ≈ 12.65（16:9 下纵向是瓶颈）。
         Assert.Equal(14.6f * 11f / 12.7f, camera.Pose.Distance, 3);
         Assert.InRange(camera.Pose.Distance, camera.Nearest + 1f, camera.Farthest - 1f);
         Assert.Equal(11f, camera.VisibleDepth, 3);
 
-        // 16:9 下横向所见 19.6 格，3 号平台（中心 x = 7）离右缘只有 7.2：注视点被夹到可行矩形右缘（偏离中心是允许的），纵向精确居中。
+        // 16:9 下横向所见 19.6 格，3 号平台（中心 x = 9）离右缘（13.5 + 1.7 = 15.2）只有 6.2：注视点被夹到可行矩形右缘（偏离中心是允许的），纵向精确居中。
         PlaneRect feasible = camera.Feasible;
         Assert.Equal(feasible.MaxX, camera.Pose.FocusX);
-        Assert.InRange(camera.Pose.FocusX, 4f, 7f);
-        Assert.Equal(-9.5f, camera.Pose.FocusZ, 3);
+        Assert.InRange(camera.Pose.FocusX, 4f, 9f);
+        Assert.True(camera.Pose.FocusX < 9f, "确实被夹取（偏离平台中心）");
+        Assert.Equal(-10.5f, camera.Pose.FocusZ, 3);
         Assert.InRange(camera.Pose.FocusX, feasible.MinX, feasible.MaxX);
         Assert.InRange(camera.Pose.FocusZ, feasible.MinZ, feasible.MaxZ);
 
         // 真实透视投影下：7 行 7 列（含 h=2 台面高度）连同四周 2 格余量全部在画面内；余量不是越大越好——再多 2.5 格就出画面了。
         Assert.Equal(7, Zone3.Select(c => c.X).Distinct().Count());
         Assert.Equal(7, Zone3.Select(c => c.Y).Distinct().Count());
-        Assert.True(ZoneInFrame(camera.Pose, 16f / 9f, Frontier, Zone3, margin: 2f));
-        Assert.False(ZoneInFrame(camera.Pose, 16f / 9f, Frontier, Zone3, margin: 4.5f));
+        Assert.True(ZoneInFrame(camera.Pose, 16f / 9f, Large, Zone3, margin: 2f));
+        Assert.False(ZoneInFrame(camera.Pose, 16f / 9f, Large, Zone3, margin: 4.5f));
     }
 
     [Fact]
     public void 贴边的大平台整个可见_1号平台9行9列全部在画面内_注视点允许偏离平台中心()
     {
-        IEnumerable<Coord> zone1 = Frontier.BirthZones[0];
-        Assert.Equal("A21", new Coord(zone1.Min(c => c.X), zone1.Min(c => c.Y)).ToNotation());
-        Assert.Equal("J29", new Coord(zone1.Max(c => c.X), zone1.Max(c => c.Y)).ToNotation());
+        IEnumerable<Coord> zone1 = Large.BirthZones[0];
+        Assert.Equal("A23", new Coord(zone1.Min(c => c.X), zone1.Min(c => c.Y)).ToNotation());
+        Assert.Equal("J31", new Coord(zone1.Max(c => c.X), zone1.Max(c => c.Y)).ToNotation());
         Assert.Equal(9, zone1.Select(c => c.X).Distinct().Count());
         Assert.Equal(9, zone1.Select(c => c.Y).Distinct().Count());
 
-        var camera = new BoardCamera(BoundsOf(Frontier));
-        camera.Open(CameraHome.Platform(zone1, CenterOf(Frontier)));
+        var camera = new BoardCamera(BoundsOf(Large));
+        camera.Open(CameraHome.Platform(zone1, CenterOf(Large)));
 
         // 9×9：纵向 9 + 4 = 13 格 → 14.6 × 13 ÷ 12.7 ≈ 14.94，远于最近限值（旧做法停在最近限值 8.05，纵向只看得到约 7 行）。
         Assert.Equal(14.6f * 13f / 12.7f, camera.Pose.Distance, 3);
         Assert.True(camera.VisibleDepth >= 9f + 4f - 1e-3f);
 
-        // 贴左缘：注视点被夹到可行矩形左缘，偏离平台中心（x = −8）——允许；纵向不受夹取影响。
+        // 贴左缘：注视点被夹到可行矩形左缘，偏离平台中心（x = 4 − 13 = −9）——允许；纵向不受夹取影响（中心 z = −(26 − 15.5) = −10.5）。
         Assert.Equal(camera.Feasible.MinX, camera.Pose.FocusX);
-        Assert.True(camera.Pose.FocusX > -8f + 1f, $"注视点 x = {camera.Pose.FocusX}");
-        Assert.Equal(-9.5f, camera.Pose.FocusZ, 3);
+        Assert.True(camera.Pose.FocusX > -9f + 1f, $"注视点 x = {camera.Pose.FocusX}");
+        Assert.Equal(-10.5f, camera.Pose.FocusZ, 3);
 
-        // 线性近似下：平台（格边）整个落在所见范围内。
-        Assert.True(camera.Pose.FocusX - (camera.VisibleWidth * 0.5f) <= -12.5f);
-        Assert.True(camera.Pose.FocusZ - (camera.VisibleDepth * 0.5f) <= -14f && camera.Pose.FocusZ + (camera.VisibleDepth * 0.5f) >= -5f);
+        // 线性近似下：平台（格边）整个落在所见范围内：x 从 −13.5，z 从 −15 到 −6。
+        Assert.True(camera.Pose.FocusX - (camera.VisibleWidth * 0.5f) <= -13.5f);
+        Assert.True(camera.Pose.FocusZ - (camera.VisibleDepth * 0.5f) <= -15f && camera.Pose.FocusZ + (camera.VisibleDepth * 0.5f) >= -6f);
 
         // 真实透视投影下：全部格子整个在画面内。贴着地图边的一侧余量只到标注外圈（1.7 格），且透视下画面近处比线性近似略窄，
         // 所以靠边一侧的近角余量约 1 格——"约 2 格"只对不贴边的方向成立（纵向）。
-        Assert.True(ZoneInFrame(camera.Pose, 16f / 9f, Frontier, zone1, margin: 1f));
+        Assert.True(ZoneInFrame(camera.Pose, 16f / 9f, Large, zone1, margin: 1f));
     }
 
     [Theory]
@@ -160,15 +161,15 @@ public class 回到出生平台Tests
     [InlineData(4f / 3f)]
     [InlineData(21f / 9f)]
     [InlineData(0.75f)]
-    public void 开局对准自家_边疆图六个平台开局时都整个可见(float aspect)
+    public void 开局对准自家_边疆图六个平台开局时都整个可见(float aspect)   // 方法名沿用规格 Scenario 名；retire-legacy-maps 段 A2 起为自定 6 平台大图
     {
-        Assert.Equal(6, Frontier.BirthZones.Length);
-        for (int zone = 0; zone < Frontier.BirthZones.Length; zone++)
+        Assert.Equal(6, Large.BirthZones.Length);
+        for (int zone = 0; zone < Large.BirthZones.Length; zone++)
         {
-            var camera = new BoardCamera(BoundsOf(Frontier), aspect);
-            camera.Open(CameraHome.Platform(Frontier.BirthZones[zone], CenterOf(Frontier)));
+            var camera = new BoardCamera(BoundsOf(Large), aspect);
+            camera.Open(CameraHome.Platform(Large.BirthZones[zone], CenterOf(Large)));
 
-            Assert.True(ZoneInFrame(camera.Pose, aspect, Frontier, Frontier.BirthZones[zone]), $"{zone + 1} 号平台开局没有整个落在画面内（宽高比 {aspect}）");
+            Assert.True(ZoneInFrame(camera.Pose, aspect, Large, Large.BirthZones[zone]), $"{zone + 1} 号平台开局没有整个落在画面内（宽高比 {aspect}）");
             Assert.InRange(camera.Pose.Distance, camera.Nearest, camera.Farthest);
             PlaneRect feasible = camera.Feasible;
             Assert.InRange(camera.Pose.FocusX, feasible.MinX, feasible.MaxX);
@@ -183,11 +184,11 @@ public class 回到出生平台Tests
     [Fact]
     public void 开局对准自家_距离双向设定_已拉到最近的相机会被拉远到平台整个可见()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(200);
         Assert.Equal(camera.Nearest, camera.Pose.Distance);
 
-        camera.Open(CameraHome.Platform(Zone3, CenterOf(Frontier)));
+        camera.Open(CameraHome.Platform(Zone3, CenterOf(Large)));
 
         Assert.Equal(14.6f * 11f / 12.7f, camera.Pose.Distance, 3);
     }
@@ -195,8 +196,8 @@ public class 回到出生平台Tests
     [Fact]
     public void 开局对准自家_竖长窗口下横向成为瓶颈()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier), 0.75f);
-        camera.Open(CameraHome.Platform(Zone3, CenterOf(Frontier)));
+        var camera = new BoardCamera(BoundsOf(Large), 0.75f);
+        camera.Open(CameraHome.Platform(Zone3, CenterOf(Large)));
 
         // 横向要显示 11 格 → 纵向等效 11 ÷ 0.75。
         Assert.Equal(14.6f * (11f / 0.75f) / 12.7f, camera.Pose.Distance, 3);
@@ -205,9 +206,9 @@ public class 回到出生平台Tests
     [Fact]
     public void 小图开局不动相机_一屏看全的地图上锁定前后位姿相同()
     {
-        var camera = new BoardCamera(BoundsOf(V4));
+        var camera = new BoardCamera(BoundsOf(Small));
         CameraPose initial = camera.Pose;
-        PlaneRect? platform = CameraHome.Platform(V4.BirthZones[0], CenterOf(V4));
+        PlaneRect? platform = CameraHome.Platform(Small.BirthZones[0], CenterOf(Small));
         Assert.NotEqual(0f, platform!.Value.CenterX);
 
         camera.Open(platform);
@@ -225,7 +226,7 @@ public class 回到出生平台Tests
     [Fact]
     public void 开局对准自家_未选区时等同回到地图中心_距离不变()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(8);
         camera.Pan(1f, 1f, 0.5f);
         float distance = camera.Pose.Distance;

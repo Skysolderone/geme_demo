@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.RelicGeneration;
 /// <summary>规格：relic-generation —— Requirement: 生成结果可完整记录</summary>
 public class 生成结果可完整记录Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    private static readonly MapData Map = MapCatalog.Resolve(SimFixtures.Board4);   // retire-legacy-maps 段 A2：由 v5 改到 4 人内置棋盘图（10 个信物格：出生区 5、公共区 4 标准 + 1 高档）
 
     [Fact]
     public void 分布可导出()
@@ -41,7 +41,7 @@ public class 生成结果可完整记录Tests
         }
 
         // 离线复现：从记录取种子，在同一地图上重新生成
-        RelicGenerationRecord replay = RelicGenerator.Generate(FourPlayerBaseMap.Create(), GameSeed.Parse(lines[0].Split(';')[0]["seed=".Length..]));
+        RelicGenerationRecord replay = RelicGenerator.Generate(MapCatalog.Resolve(SimFixtures.Board4), GameSeed.Parse(lines[0].Split(';')[0]["seed=".Length..]));
         Assert.Equal(record.Placements, replay.Placements);
         Assert.Equal(record.Converged, replay.Converged);
     }

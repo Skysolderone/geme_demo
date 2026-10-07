@@ -347,9 +347,10 @@ internal sealed class ExpertLookahead
 
         ImmutableArray<PieceType> types = [.. next.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order()];
         ImmutableArray<Coord> cells = [.. next.LegalRange.Where(c => after.Board[c].IsPlayableEmpty).Order()];
-        if (_config.CandidateCellLimit > 0 && cells.Length > _config.CandidateCellLimit && !types.IsEmpty)
+        int cellLimit = _config.CellLimitOn(after.Board.BaseMap.PlayableCount);
+        if (cellLimit > 0 && cells.Length > cellLimit && !types.IsEmpty)
         {
-            cells = HeuristicTurnController.PrefilterCells(cells, types, staged, Rehearse, evaluator, _config.CandidateCellLimit);
+            cells = HeuristicTurnController.PrefilterCells(cells, types, staged, Rehearse, evaluator, cellLimit);
         }
 
         BigInteger? best = null;

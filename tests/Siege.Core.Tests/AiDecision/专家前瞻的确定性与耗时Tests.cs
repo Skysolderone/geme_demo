@@ -20,11 +20,15 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     /// 返回日志确定性文本与 P1 每次部署的前瞻记录文本。截断取 20 而不是夹具的 24：P1 恰有 5 次部署（「同局面同决策」的样本下界），本类跑三局，每局省约 1/6。
     /// 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后，本类改用 <see cref="LookaheadFixtures.ExpandedExpert"/>，断言不改——两项作为可配置项仍须确定、不消费新随机、耗时受限。
     /// </summary>
+    /// <remarks>
+    /// retire-legacy-maps 段 A2：改到 2 人棋盘图（P0 标准、P1 专家）、截断 18 小回合——P1 有 9 次部署（≥「同局面同决策」的下界 5），
+    /// 确定性文本仍多于 100 行（截断 12 时只有 74 行、过不了行数下界，所以取 18），每局的标准 AI 决策由 15 降到 9，压全量测试耗时。
+    /// </remarks>
     internal static (string Text, List<string> Records, List<LookaheadRecord> Raw) RunExpertSeat1(bool cacheLife)
     {
         MatchSession session = MatchSession.Create(
-            BoardConfig(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard) with { TurnLimit = 20 }, 1);
-        AiSearchConfig search = WithMapCellLimit(ExpandedExpert with { PassThreshold = PassThreshold }, session.Match.Map.PlayableCount)!;
+            Board2Config(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }) with { TurnLimit = 18 }, 1);
+        AiSearchConfig search = ExpandedExpert with { PassThreshold = PassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit };   // 显式配置没写上限，会话按 465 格落成 24（段 A2 裁决 1）
         Assert.Equal(search, session.AiOf(P1)!.Config);   // 替换进去的控制者与会话按配置建出的同口径（含该图的候选格上限 24）
         HeuristicTurnController inner = HeuristicAi.Create(session.Match, P1, AiDifficulty.Expert, Weights, search, lifeQuery: null, cacheLife);
         var recorder = new LookaheadRecorder(inner);
@@ -62,7 +66,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         Assert.Contains(raw, r => r.Status == LookaheadStatus.Applied && r.Entries.Any(e => !string.IsNullOrEmpty(e.ResponseKey)));
         Assert.Equal(records, recordsAgain);
         Assert.Equal(text, again);
-        Assert.True(text.Split('\n').Length > 100);
+        Assert.True(text.Split('\n').Length > 100, $"确定性文本只有 {text.Split('\n').Length} 行");
     }
 
     [Fact]
@@ -129,8 +133,8 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     [Fact]
     public void 预演次数代理计入新增部分()
     {
-        // D12 / expert-strength D8 确定性代理（默认套件）：v5 种子 1–3、4 名标准 AI 对局的固定局面集（四个座位的全部部署决策每 3 个取 1，见 LookaheadFixtures.ProbePositions 的说明），
-        // 统计专家（显式多样补充上限 8、两层权重 1000‰；预设已退回一层）与高难每次决策的预演次数，断言总次数之比 ≤ 4，并输出总比值与三部分占比。
+        // D12 / expert-strength D8 确定性代理（默认套件）：4 人棋盘图种子 1、4 名标准 AI 对局的固定局面集（四个座位的全部部署决策每 3 个取 1，见 LookaheadFixtures.ProbePositions 的说明），
+        // 统计专家（显式多样补充上限 8、两层权重 1000‰；预设已退回一层）与高难每次决策的预演次数，输出总比值与三部分占比（比值上限见下方段 A2 说明）。
         // 专家一方 = 经 rehearse 委托的预演（单点排序、贪心组批、多样补充的排除重跑、候选 B1）+ 模拟对手的预演 + 两层扫描的单点预演。
         // 计时口径见 专家前瞻耗时计时Tests。
         long hardTotal = 0;
@@ -139,10 +143,10 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
         long simulated = 0;
         long twoPly = 0;
         var rounds = new List<int>();
-        // retire-legacy-maps 段 A1：本条暂钉 v5（待裁决）。改到 4 人棋盘图（截断 24、显式配置补候选格上限 24）后实测：
-        // every 3 → 24 个局面、比值 5.528；every 2 → 36 个局面、高难 18416 / 专家 106271、比值 5.771——超过本条的上限 4。
-        // 断言不放宽，交主会话裁决（多样补充 + 两层加分的专家在大图上的预演代价），段 B 删 v5 前必须定下。
-        int positions = ProbePositionsOn(LegacyV5Config(Standard, Standard, Standard, Standard), every: 3, (match, batch) =>
+        // retire-legacy-maps 段 A2（主会话裁决 2）：改到 4 人棋盘图（截断 16、种子 1，每 4 个部署决策取 1 → 4 个局面，第 1–4 大回合各 1 个）。v5 上成立的两条断言删除：
+        // 「局面不少于 30 个」与「总次数之比 ≤ 4」——比值是 AI 在 v5 上的性能结论，棋盘图上实测 5.528（every 3）/ 5.771（every 2），
+        // 记入 AI 校准待办，由 AI 校准 change 在棋盘图上重定。本条余下守"代理把三部分新增预演都计入"，比值只输出不断言。
+        int positions = ProbePositionsOn(BoardConfig(Standard, Standard, Standard, Standard) with { TurnLimit = 16 }, every: 4, (match, batch) =>
         {
             (_, int hardRehearsals, _) = Shadow(match, batch.Context, AiDifficulty.Hard, AiSearchConfig.Hard);
             (HeuristicTurnController expert, int expertRehearsals, _) = Shadow(match, batch.Context, AiDifficulty.Expert, ExpandedExpert);
@@ -153,18 +157,17 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
             simulated += record.SimulatedRehearsals;
             twoPly += record.TwoPlyRehearsals;
             rounds.Add(match.MajorRound);
-        });
+        }, 1);
 
         double ratio = (double)expertTotal / hardTotal;
         output.WriteLine($"局面 {positions} 个（第 1–3 大回合 {rounds.Count(r => r <= 3)}、第 4 大回合以后 {rounds.Count(r => r >= 4)}）；预演次数 高难 {hardTotal}、专家 {expertTotal}，比值 {ratio:F3}");
         output.WriteLine($"专家新增部分：多样补充 {supplement}（{100.0 * supplement / expertTotal:F1}%）、模拟对手 {simulated}（{100.0 * simulated / expertTotal:F1}%）、两层扫描 {twoPly}（{100.0 * twoPly / expertTotal:F1}%）");
-        Assert.True(positions >= 30, $"局面只有 {positions} 个");
+        Assert.True(positions >= 4, $"局面只有 {positions} 个");   // 样本口径下界：种子 1 截断 16 小回合共 16 个部署决策，每 4 个取 1
         Assert.Contains(rounds, r => r <= 3);
         Assert.Contains(rounds, r => r >= 4);
         Assert.True(supplement > 0, "多样补充的预演未被计入");
         Assert.True(simulated > 0, "模拟对手的预演未被计入");
         Assert.True(twoPly > 0, "两层扫描的预演未被计入");
         Assert.True(expertTotal > hardTotal + simulated + twoPly, "专家的预演次数应多于高难加上模拟对手与两层扫描（多样补充确实经 rehearse 被计入）");
-        Assert.True(ratio <= 4.0, $"预演次数比值 {ratio:F3} 超过 4");
     }
 }

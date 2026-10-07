@@ -29,11 +29,12 @@ public class 活形分析性能基线Tests
 
     [PerfTheory]
     [Trait("Category", "Perf")]
-    [InlineData("siege-4p-base-v5")]
-    [InlineData("siege-frontier-v2")]
+    // retire-legacy-maps 段 A2：v5 / 边疆图 v2 两行改为 4 人 / 2 人内置棋盘图（同为种子 7、中盘 40 个小回合）。
+    [InlineData(SimFixtures.Board4)]
+    [InlineData(SimFixtures.Board2)]
     public void 中盘全盘活形分析不超过含气棋串计算的三倍(string mapId)
     {
-        RunConfig config = SimFixtures.Config(turnLimit: 0) with { MapId = mapId };
+        RunConfig config = SimFixtures.Config(turnLimit: 0, players: mapId == SimFixtures.Board2 ? 2 : 4) with { MapId = mapId };
         MatchSession session = MatchSession.Create(config, 7);
         int turns = 0;
         while (turns < MidGameTurns && session.RunTurn())

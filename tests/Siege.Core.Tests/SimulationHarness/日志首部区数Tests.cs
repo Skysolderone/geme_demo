@@ -14,18 +14,25 @@ public class 日志首部区数Tests
     [Fact]
     public void 真实跑局把区数写进首部并经文本往返()
     {
-        // 走真实写入路径（合成日志是手填值，漏写照样绿）：边疆图 6 区 4 人，首部 ZoneCount = 6 ≠ 参赛人数 4 ≠ 被选到的最大区号 + 1（不恒等），
-        // 确定性文本与完整文本两条往返都保留；标准图样本为 4。
+        // 走真实写入路径（合成日志是手填值，漏写照样绿）：区数多于人数的图上首部 ZoneCount ≠ 参赛人数 ≠ 被选到的最大区号 + 1（不恒等），
+        // 确定性文本与完整文本两条往返都保留。
+        // retire-legacy-maps 段 A2：样本由边疆图 v2（6 区 4 人、种子 7）改为 4 人棋盘图（5 区 4 人）；种子取"最后一个出生棋盘（5 号）没人选"的第一颗，
+        // 否则被选到的最大区号 + 1 恰为 5，与区数恒等、测不出是否真的写了区数（样本口径，不是凑期望值）。
         // 变异 M-B5：MatchSession.BuildHeader 不写 ZoneCount → 本测试红。
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
+        Siege.Core.Board.MapData map = MapCatalog.Resolve(SimFixtures.Board4);
+        Siege.Core.Board.PlayerId[] ids = [.. Enumerable.Range(0, 4).Select(i => new Siege.Core.Board.PlayerId(i))];
+        ulong seed = Enumerable.Range(1, 50).Select(i => (ulong)i).First(s =>
+            Siege.Core.Match.PrototypeZoneAssignment.Assign(map, new Siege.Core.Determinism.GameSeed(s), ids, Siege.Core.Match.MatchOptions.DefaultFlagRisk).All(c => c.Zone < 4));
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4), seed).Run();
 
         Assert.False(frontier.IsFailed, frontier.Failure?.Message);
-        Assert.Equal(FrontierMapV2.Id, frontier.Header.MapId);
-        Assert.Equal(6, frontier.Header.ZoneCount);
+        Assert.Equal(SimFixtures.Board4, frontier.Header.MapId);
+        Assert.Equal(5, frontier.Header.ZoneCount);
         Assert.Equal(4, frontier.Header.Zones.Count);
-        Assert.Equal(6, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);
-        Assert.Equal(6, MatchLog.Parse(frontier.FullText()).Header.ZoneCount);
-        Assert.Contains("\"ZoneCount\":6", frontier.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
+        Assert.True(frontier.Header.Zones.Max() + 1 < 5, $"被选区号 {string.Join(",", frontier.Header.Zones)}");
+        Assert.Equal(5, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);
+        Assert.Equal(5, MatchLog.Parse(frontier.FullText()).Header.ZoneCount);
+        Assert.Contains("\"ZoneCount\":5", frontier.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
         // retire-legacy-maps 段 A：样本图 v5（4 区）→ 4 人棋盘图（出生棋盘 = 人数 + 1 = 5 区）。
         Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(5, l.Header.ZoneCount));
@@ -36,10 +43,13 @@ public class 日志首部区数Tests
     {
         // 旧日志（frontier-map 之前）首部没有 ZoneCount：读入为 null，不抛；分析端回填为"被选到过的最大区号 + 1"——
         // 旧日志全部来自区数 = 人数的标准档图，回填值即真值，各区胜率段与加字段之前逐项相同。
-        // retire-legacy-maps 段 A1：本条的前提是"区数 = 人数"的标准档日志，棋盘图（区数 = 人数 + 1）造不出这种样本，显式钉 v5 跑一局；
-        // 段 B 删 v5 前须改成入库的旧日志夹具（analyze 不读地图，旧日志照常可分析，design 已知歧义 7）。
-        MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 16) with { MapId = FourPlayerBaseMap.Id }, parallelism: 1)[0];
-        string text = current.FullText();
+        // retire-legacy-maps 段 A2：本条的前提是"区数 = 人数"的标准档日志，棋盘图（区数 = 人数 + 1）造不出这种样本；改为入库的日志夹具
+        // （段 A2 用 v5 跑出：Siege.Sim run --map siege-4p-base-v5 --count 1 --turn-limit 8 --retention SnapshotsOnly --gzip，4 区 4 人、首部 ZoneCount 4）。
+        // 解析与分析都不读地图（MatchLog.Parse / BalanceAnalyzer，design 已知歧义 7），v5 删除后照常可用。
+        string text = ReadGzip(Path.Combine(AppContext.BaseDirectory, "MatchTelemetry", "Fixtures", "legacy-v5-zonecount-seed1.jsonl.gz"));
+        MatchLog current = MatchLog.Parse(text);
+        Assert.Equal(4, current.Header.Zones.Count);
+        Assert.Equal([0, 1, 2, 3], current.Header.Zones.Order());
         Assert.Contains("\"ZoneCount\":4,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":4,", string.Empty, StringComparison.Ordinal));
 
@@ -50,6 +60,14 @@ public class 日志首部区数Tests
         BirthZoneSection fromNew = BalanceAnalyzer.Analyze([current]).BirthZones;
         Assert.Equal(4, fromOld.ZoneCount);
         Assert.Equal(fromNew.All.Select(z => (z.Zone, z.Picks, z.WinRate.Successes)), fromOld.All.Select(z => (z.Zone, z.Picks, z.WinRate.Successes)));
+    }
+
+    private static string ReadGzip(string path)
+    {
+        using FileStream file = File.OpenRead(path);
+        using var gzip = new System.IO.Compression.GZipStream(file, System.IO.Compression.CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip, System.Text.Encoding.UTF8);
+        return reader.ReadToEnd();
     }
 
     [Fact]

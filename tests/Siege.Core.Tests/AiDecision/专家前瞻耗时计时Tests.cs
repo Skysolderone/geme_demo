@@ -8,8 +8,9 @@ namespace Siege.Core.Tests.AiDecision;
 
 /// <summary>
 /// 规格：ai-decision（expert-lookahead）—— Requirement: 专家前瞻的确定性与耗时 / Scenario: 耗时上限（计时口径，design D12）。
-/// Release、同一进程、同一局面集（v5 种子 1–3、4 名标准 AI 对局的部署局面，每 3 个取 1，同 <see cref="LookaheadFixtures.ProbePositions"/>）；
-/// 每个局面按 ABBA（高难、专家、专家、高难）交替测单次 <c>Deploy</c> 耗时，丢掉前 3 个局面作预热；比较两组中位数，专家 ≤ 4 × 高难；输出中位数、p90 与比值。
+/// Release、同一进程、同一局面集（4 人棋盘图种子 1–3、4 名标准 AI 对局的部署局面，每 3 个取 1，同 <see cref="LookaheadFixtures.ProbePositions"/>；retire-legacy-maps 段 A2 之前为 v5）；
+/// 每个局面按 ABBA（高难、专家、专家、高难）交替测单次 <c>Deploy</c> 耗时，丢掉前 3 个局面作预热；输出两组中位数、p90 与比值。
+/// retire-legacy-maps 段 A2（主会话裁决 2）：「专家 ≤ 4 × 高难」与「局面不少于 30 个」两条断言删除——那是 v5 上的性能结论，棋盘图上的上限由 AI 校准 change 重定。
 /// 专家一方取 <see cref="LookaheadFixtures.ExpandedExpert"/>（显式 S = 8、λ = 1000‰）：专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后，
 /// 本测试量的是最耗时的可配置项；预设（一层配置）的耗时低于它。
 /// </summary>
@@ -22,15 +23,14 @@ public class 专家前瞻耗时计时Tests(ITestOutputHelper output)
 
     [PerfTheory]
     [Trait("Category", "Perf")]
-    [InlineData("siege-4p-base-v5")]
+    [InlineData(SimFixtures.Board4)]
     public void 专家单次部署耗时中位数不超过高难的四倍(string mapId)
     {
-        Assert.Equal("siege-4p-base-v5", mapId);
+        Assert.Equal(SimFixtures.Board4, mapId);
         var hard = new List<long>();
         var expert = new List<long>();
         int index = 0;
-        // retire-legacy-maps 段 A1：与 专家前瞻的确定性与耗时Tests.预演次数代理计入新增部分 同步暂钉 v5（棋盘图上预演次数比值超过 4，待主会话裁决）。
-        int positions = ProbePositionsOn(LegacyV5Config(Standard, Standard, Standard, Standard), every: 3, (match, batch) =>
+        int positions = ProbePositions(every: 3, (match, batch) =>
         {
             long Time(AiDifficulty difficulty, AiSearchConfig config)
             {
@@ -57,9 +57,8 @@ public class 专家前瞻耗时计时Tests(ITestOutputHelper output)
         output.WriteLine($"局面 {positions} 个（预热丢弃 {Warmup} 个），每组样本 {hard.Count}");
         output.WriteLine($"高难：中位数 {hardMedian:F1} ms，p90 {Percentile(hard, 0.9):F1} ms");
         output.WriteLine($"专家：中位数 {expertMedian:F1} ms，p90 {Percentile(expert, 0.9):F1} ms");
-        output.WriteLine($"中位数比值 专家 / 高难 = {ratio:F3}（上限 {MaxRatio}）");
-        Assert.True(positions >= 30, $"局面只有 {positions} 个");
-        Assert.True(ratio <= MaxRatio, $"专家耗时中位数是高难的 {ratio:F3} 倍，超过 {MaxRatio}");
+        output.WriteLine($"中位数比值 专家 / 高难 = {ratio:F3}（v5 上的上限 {MaxRatio}，棋盘图上不断言）");
+        Assert.True(hard.Count > 0 && expert.Count > 0, $"局面只有 {positions} 个，预热后没有样本");
     }
 
     private static double Percentile(List<long> ticks, double q)

@@ -30,7 +30,7 @@ public class 终端的带入选择弃赛与结算显示Tests
     {
         var output = new StringWriter();
         int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Easy, new StringReader(script), output,
-            Board.Maps.FourPlayerBaseMap.Create(),   // builtin-board-maps D4：脚本坐标与走法是 v5 上的，显式钉回 v5
+            Board.Maps.MapCatalog.Resolve(SimFixtures.Board4),   // retire-legacy-maps 段 A2：由 v5 改到 4 人内置棋盘图（脚本里本机玩家从不落子，不含坐标）
             weights: ScriptWeights, passThreshold: ScriptPassThreshold, flagRisk: 0, contentSet: ContentSet.V1, profile: profile);
         return (exit, output.ToString());
     }
@@ -88,7 +88,10 @@ public class 终端的带入选择弃赛与结算显示Tests
 
         script.Append("resign\ny\n");
 
-        (int exit, string text) = Play(script.ToString(), temp.Store());
+        // retire-legacy-maps 段 A2：换到 4 人棋盘图后种子 42 走不到弃赛——三名简单 AI 在第 5 大回合末起整轮 Pass，对局在第 6 大回合轮到本机之前就以"一整轮所有人都 Pass"终局。
+        // 探针种子 1–30（同脚本、同权重与阈值）：17 颗能在第 6 大回合弃赛，其中种子 27 弃赛后最快自然终局（其余要再跑一百多个小回合）；改用种子 27，断言一条不改。
+        // （试过把阈值改成 20：能弃赛，但弃赛后要跑到棋盘图的自然终局，单测 89 s。）
+        (int exit, string text) = Play(script.ToString(), temp.Store(), seed: 27);
 
         Assert.Equal(0, exit);
         Assert.Contains("你：换型令 → 堡垒子", text, StringComparison.Ordinal);

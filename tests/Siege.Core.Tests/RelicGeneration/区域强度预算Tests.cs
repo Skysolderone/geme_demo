@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.RelicGeneration;
 /// <summary>规格：relic-generation —— Requirement: 区域强度预算</summary>
 public class 区域强度预算Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    private static readonly MapData Map = RelicBalanceFixtures.Map();   // retire-legacy-maps 段 A2：由 v5 改为专为同区多枚信物设计的合成图（4 区 × 2 枚、12×8，期望值在新图上重算）
 
     /// <summary>
     /// more-pieces-relics 段 B：本类各用例的字面量（稀有度 222 / 2000、预算 600 / 690 / 780、不收敛图的稀有度集合）都出自 v1 的百分制表，
@@ -57,8 +57,9 @@ public class 区域强度预算Tests
             long total = sums.Sum();
             foreach (long sum in sums)
             {
-                // |sum − total/4| ≤ total/4 × 8%  ⇔  |sum×4 − total| × 100 ≤ total × 8
-                Assert.True(Math.Abs((sum * 4) - total) * 100 <= total * 8, $"种子 {seed} 出生区稀有度 {string.Join("/", sums)} 偏差超过 8%");
+                // |sum − total/N| ≤ total/N × 8%  ⇔  |sum×N − total| × 100 ≤ total × 8（N = 出生区数；retire-legacy-maps 段 A2 起 N 由图给出，原写死 4）
+                int n = sums.Length;
+                Assert.True(Math.Abs((sum * n) - total) * 100 <= total * 8, $"种子 {seed} 出生区稀有度 {string.Join("/", sums)} 偏差超过 8%");
             }
         }
 

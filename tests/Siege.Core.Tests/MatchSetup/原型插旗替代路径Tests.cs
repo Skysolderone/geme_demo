@@ -15,6 +15,20 @@ public class 原型插旗替代路径Tests
     /// </summary>
     private static readonly MatchOptions NoRisk = MatchOptions.Immediate with { FlagRisk = 0 };
 
+    /// <summary>
+    /// 区数 = 地图人数上限（4 个出生区、最多 4 人）的合成 9×9 图（<see cref="MatchFixtures.Map(string[])"/>，带 5 个公共信物格）。
+    /// retire-legacy-maps 段 A2：顺排路径（P<i> → 区 i、人工选区后跳过）的用例由 v5 改到它——棋盘图出生棋盘 = 人数 + 1，永远走种子选区，
+    /// 产品里已没有能走到顺排的地图（段 C 决定是否删该分支）。顺排只看区数、人数上限与人工选择，与地图几何无关，原黄金值照用。
+    /// </summary>
+    private static MapData SequentialMap => MatchFixtures.Map("C5", "E3", "E5", "E7", "G5");
+
+    /// <summary>在 <see cref="SequentialMap"/> 上建局（跳过地图校验，信物照常按 relic-gen 子流生成）。</summary>
+    private static MatchFlow CreateSequential(GameSeed seed, PlayerId[] ids, MatchOptions options)
+    {
+        MapData map = SequentialMap;
+        return MatchFlow.CreateUnvalidated(map, seed, ids, Relics.RelicGenerator.Generate(map, seed, options.ContentSet), options);
+    }
+
     [Fact]
     public void 调试依次插旗()
     {
@@ -65,7 +79,7 @@ public class 原型插旗替代路径Tests
     {
         // 规格 Scenario（flag-contest 改写）：4 个出生区的地图上、冒险概率为 0，本机玩家选 2 号区，其余三名 AI 按编号顺序占用 1、3、4 号区。
         // 变异 M-A13：Sequential 里去掉"取到人选的区就跳过" → 红（AI 会与人同区）。
-        MatchFlow match = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(42), MatchFixtures.All, NoRisk);
+        MatchFlow match = CreateSequential(new GameSeed(42), MatchFixtures.All, NoRisk);
 
         var choices = match.PlantPrototype((MatchFixtures.P1, 1));
 
@@ -81,59 +95,46 @@ public class 原型插旗替代路径Tests
     [InlineData(42UL, 4, 2, 0, new[] { 1, 0, 2, 3 })]   // 人坐 2 号位选 1 号区：玩家 1 被挤到 2 号区
     [InlineData(7UL, 4, 4, 2, new[] { 0, 1, 3, 2 })]    // 人坐末位选 3 号区：玩家 3 跳过它取 4 号区
     [InlineData(7UL, 4, 1, 3, new[] { 3, 0, 1, 2 })]    // 人选最后一个区：其余从头顺排（手算：next 从 0 起，永远碰不到 3）
-    [InlineData(7UL, 3, 2, 3, new[] { 0, 3, 1 })]       // v4 上 3 人局：区数 4 > 参赛 3 人，仍是顺排（判据是地图人数上限，不是参赛人数）
-    [InlineData(9UL, 2, 1, 1, new[] { 1, 0 })]          // v4 上 2 人局
+    [InlineData(7UL, 3, 2, 3, new[] { 0, 3, 1 })]       // 4 区图上 3 人局：区数 4 > 参赛 3 人，仍是顺排（判据是地图人数上限，不是参赛人数）
+    [InlineData(9UL, 2, 1, 1, new[] { 1, 0 })]          // 4 区图上 2 人局
     public void 标准图上人工选区后的顺排与改动前逐项相同(ulong seed, int players, int seat, int zone, int[] expected)
     {
-        // 变异 M-A21：判据由"区数 > 地图人数上限"改成"区数 > 参赛人数" → v4 上的 2 / 3 人局变成种子选区，本测试与批量侧那条共红 5。
+        // 变异 M-A21：判据由"区数 > 地图人数上限"改成"区数 > 参赛人数" → 4 区图上的 2 / 3 人局变成种子选区，本测试红（段 A2 前与已删的批量侧那条共红 5）。
         PlayerId[] ids = [.. Enumerable.Range(0, players).Select(i => new PlayerId(i))];
-        MatchFlow match = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(seed), ids, NoRisk);
+        MatchFlow match = CreateSequential(new GameSeed(seed), ids, NoRisk);
 
         match.PlantPrototype((ids[seat - 1], zone));
 
         Assert.Equal(expected.Select(z => (int?)z), match.PlayerStates.Select(s => s.BirthZone));
     }
 
-    [Theory]
-    // 黄金值（改动前批量侧 MatchSession.Create 的实际结果）：无人工选择时 P<i> → 区 i；首回合顺序只取决于种子与人数。
-    [InlineData(1UL, 4, new[] { 0, 3, 2, 1 })]
-    [InlineData(42UL, 4, new[] { 3, 0, 2, 1 })]
-    [InlineData(20260919UL, 4, new[] { 1, 2, 3, 0 })]
-    [InlineData(1UL, 3, new[] { 1, 2, 0 })]
-    [InlineData(20260919UL, 3, new[] { 0, 2, 1 })]
-    [InlineData(20260919UL, 2, new[] { 1, 0 })]
-    public void 批量侧顺排与首回合顺序和改动前逐项相同(ulong seed, int players, int[] firstOrder)
-    {
-        // retire-legacy-maps 段 A1：本条钉的是"区数 = 地图人数上限"的顺排路径（P<i> → 区 i），棋盘图出生棋盘 = 人数 + 1，永远走种子选区，
-        // 造不出这个前提；夹具改到棋盘图后显式钉回 v5，与本文件其余直接用 v5 的规则测试一起留给 A2 / 段 B 定（改合成图或随规格删改）。
-        Siege.Sim.Running.MatchSession session = Siege.Sim.Running.MatchSession.Create(SimFixtures.Config(players: players) with { FlagRisk = 0, MapId = FourPlayerBaseMap.Id }, seed);
-
-        Assert.Equal(Enumerable.Range(0, players).Select(i => (int?)i), session.Match.PlayerStates.Select(s => s.BirthZone));
-        Assert.Equal(firstOrder, session.Match.ActionOrder.Select(p => p.Value));
-    }
+    // retire-legacy-maps 段 A2（主会话裁决 2）：「批量侧顺排与首回合顺序和改动前逐项相同」删除——它经批量入口 MatchSession.Create 走
+    // "区数 = 地图人数上限"的顺排，批量入口只接受目录里的地图，而现存内置图都是出生棋盘 = 人数 + 1，这条产品路径已不可达。
+    // 顺排本身仍由上面两条（合成图上直接调 PlantPrototype）钉住；首回合顺序只取决于种子与人数，由「选区不扰动其他随机」钉住。
 
     [Fact]
     public void 选区不扰动其他随机()
     {
         // 规格 Scenario：4 个出生区的标准地图上用某种子开局 → 信物内容、首回合顺序与引入本规则之前逐项相同。
-        // 黄金值：改动前 v4、种子 42、4 人的信物分布（RelicPlacement.ToString 逐格）与首回合顺序 P3 > P0 > P2 > P1。
-        // 变异 M-A14：PlantPrototype 里多消费一次 MatchFlow 自己持有的 setup 子流（模拟选区借用 setup 实例）→ 首回合顺序变，本测试、上一条与 6 平台那条共红 8。
-        string[] golden =
-        [
-            "B2 BirthZone/Birth SchoolEmblemx1(Basic)", "M2 BirthZone/Birth SchoolEmblemx1(Basic)", "C3 BirthZone/Birth SchoolEmblemx1(Artisan)",
-            "L3 BirthZone/Birth SchoolEmblemx1(Fortress)", "G5 Contested/Standard SchoolEmblemx1(Multiplier)", "E7 Contested/Standard SchoolEmblemx1(Artisan)",
-            "G7 Contested/High SchoolEmblemx2(Basic)", "J7 Contested/Standard Conscription+1", "G9 Contested/Standard SchoolEmblemx1(Basic)",
-            "C11 BirthZone/Birth SchoolEmblemx1(Basic)", "L11 BirthZone/Birth SchoolEmblemx1(Artisan)", "B12 BirthZone/Birth SchoolEmblemx1(Basic)",
-            "M12 BirthZone/Birth SchoolEmblemx1(Fortress)",
-        ];
-        // more-pieces-relics 段 B（tasks 2.7，归因：信物分布）：黄金值是引入新信物之前的原六类分布；新局缺省内容集 v2 改用千分制十类表，
-        // 同种子的分布整体改变。本测试钉的是"选区不扰动 relic-gen / setup 子流"，与内容集无关——写死 v1（= 改动前的生成），黄金值不重建。
-        MatchFlow match = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(42), MatchFixtures.All, NoRisk with { ContentSet = ContentSet.V1 });
+        // 黄金值：改动前 v4、种子 42、4 人的首回合顺序 P3 > P0 > P2 > P1（只取决于种子与人数，与地图无关）。
+        // retire-legacy-maps 段 A2：由 v5 改到合成 4 区图（SequentialMap）。原信物分布黄金值是 v4 的地图内容，随图作废；改为自包含对照——
+        // 同种子下"顺排选区"与"全部手工指定成另一组区"两局的信物分布与首回合顺序逐项相同（与 6 平台那条同一形状），并钉住首回合顺序黄金值。
+        // 变异 M-A14：PlantPrototype 里多消费一次 MatchFlow 自己持有的 setup 子流（模拟选区借用 setup 实例）→ 首回合顺序变，本测试与 6 平台那条红。
+        // 段 A2 检查注：合成图跳过校验、信物由 CreateSequential 在建局前用 relic-gen 子流生成后传入，两局信物逐项相同在这里是构造上成立的（不守门）；
+        // 守住的是首回合顺序黄金值与"顺排 / 手工选区两局顺序相同"。经 MatchFlow.Create 内部生成的信物不受地图生成扰动，由「对局配置公开完整地图标识Tests.地图种子不扰动对局随机」钉住。
+        MatchOptions v1 = NoRisk with { ContentSet = ContentSet.V1 };
+        MatchFlow match = CreateSequential(new GameSeed(42), MatchFixtures.All, v1);
+        MatchFlow manual = CreateSequential(new GameSeed(42), MatchFixtures.All, v1);
 
         match.PlantPrototype();
+        manual.PlantSequentially([(MatchFixtures.P0, 3), (MatchFixtures.P1, 3), (MatchFixtures.P2, 1), (MatchFixtures.P3, 0)]);
 
-        Assert.Equal(golden, match.Relics.Generation.Placements.Select(p => p.ToString()));
+        Assert.Equal(new int?[] { 0, 1, 2, 3 }, match.PlayerStates.Select(s => s.BirthZone));   // 走的是顺排
+        Assert.NotEqual(manual.PlayerStates.Select(s => s.BirthZone), match.PlayerStates.Select(s => s.BirthZone));   // 样本口径：两局选区不同
+        Assert.Equal(5, match.Relics.Generation.Placements.Length);
+        Assert.Equal(manual.Relics.Generation.Placements.Select(p => p.ToString()), match.Relics.Generation.Placements.Select(p => p.ToString()));
         Assert.Equal(new[] { 3, 0, 2, 1 }, match.ActionOrder.Select(p => p.Value));
+        Assert.Equal(manual.ActionOrder, match.ActionOrder);
     }
 
     [Fact]
@@ -296,9 +297,9 @@ public class 原型插旗替代路径Tests
     {
         // 规格 Scenario：冒险概率为 0，用任意种子与任意人工选择开局 → 锁定结果与引入冒险概率之前逐项相同。
         // 期望取自测试内对"引入冒险概率之前"两支规则的独立复算（OldAssign：顺排游标跳过人选 / zone-pick 子流在升序空闲表里等概率抽），不调用被测实现。
-        // 覆盖：标准图（v5，区数 = 人数上限）与 6 平台图，2–4 人，无人工选择 + 每个座位 × 每个区。
+        // 覆盖：区数 = 人数上限的 4 区图（retire-legacy-maps 段 A2 起为合成图 SequentialMap，此前 v5）与 6 平台图，2–4 人，无人工选择 + 每个座位 × 每个区。
         int cases = 0;
-        foreach (MapData map in new[] { FourPlayerBaseMap.Create(), FrontierFixtures.Map() })
+        foreach (MapData map in new[] { SequentialMap, FrontierFixtures.Map() })
         {
             int zoneCount = map.BirthZones.Length;
             for (ulong seed = 1; seed <= 12; seed++)
@@ -331,7 +332,7 @@ public class 原型插旗替代路径Tests
         MatchOptions always = MatchOptions.Immediate with { FlagRisk = 100 };
         foreach (ulong seed in new ulong[] { 1, 42, 20260925 })
         {
-            MatchFlow match = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(seed), MatchFixtures.All, always);
+            MatchFlow match = CreateSequential(new GameSeed(seed), MatchFixtures.All, always);
             var choices = match.PlantPrototype((MatchFixtures.P1, 1));
 
             Assert.All(choices, c => Assert.Equal(1, c.Zone));
@@ -340,7 +341,7 @@ public class 原型插旗替代路径Tests
         }
 
         // 它之前没有任何已插旗时直接占用空闲出生区：无人工选择时 P0 按原规则取区（标准图顺排 → 1 号区；6 平台图 → zone-pick 的第一次抽取），其余全部跟进。
-        MatchFlow batch = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(42), MatchFixtures.All, always);
+        MatchFlow batch = CreateSequential(new GameSeed(42), MatchFixtures.All, always);
         batch.PlantPrototype();
         Assert.Equal(new int?[] { 0, 0, 0, 0 }, batch.PlayerStates.Select(s => s.BirthZone));
 
@@ -363,9 +364,9 @@ public class 原型插旗替代路径Tests
         int differs = 0;
         for (ulong seed = 1; seed <= 12; seed++)
         {
-            MatchFlow a = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(seed), MatchFixtures.All, risky);
-            MatchFlow b = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(seed), MatchFixtures.All, risky);
-            MatchFlow zero = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(seed), MatchFixtures.All, NoRisk);
+            MatchFlow a = CreateSequential(new GameSeed(seed), MatchFixtures.All, risky);
+            MatchFlow b = CreateSequential(new GameSeed(seed), MatchFixtures.All, risky);
+            MatchFlow zero = CreateSequential(new GameSeed(seed), MatchFixtures.All, NoRisk);
             a.PlantPrototype((MatchFixtures.P1, 1));
             b.PlantPrototype((MatchFixtures.P1, 1));
             zero.PlantPrototype((MatchFixtures.P1, 1));
@@ -393,7 +394,7 @@ public class 原型插旗替代路径Tests
         Assert.Equal(5, new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.ZonePick, GameSeed.FlagRisk }.Distinct().Count());
 
         int hits = 0, cases = 0;
-        foreach (MapData map in new[] { FourPlayerBaseMap.Create(), FrontierFixtures.Map() })
+        foreach (MapData map in new[] { SequentialMap, FrontierFixtures.Map() })
         {
             foreach (int p in new[] { 15, 50 })
             {
@@ -423,8 +424,8 @@ public class 原型插旗替代路径Tests
         foreach (int bad in new[] { -1, 101 })
         {
             Assert.ThrowsAny<ArgumentException>(() =>
-                MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(1), MatchFixtures.All, MatchOptions.Immediate with { FlagRisk = bad }));
-            Assert.ThrowsAny<ArgumentException>(() => PrototypeZoneAssignment.Assign(FourPlayerBaseMap.Create(), new GameSeed(1), MatchFixtures.All, bad));
+                MatchFlow.Create(Board4Map, new GameSeed(1), MatchFixtures.All, MatchOptions.Immediate with { FlagRisk = bad }));
+            Assert.ThrowsAny<ArgumentException>(() => PrototypeZoneAssignment.Assign(Board4Map, new GameSeed(1), MatchFixtures.All, bad));
         }
 
         Assert.Equal(15, MatchOptions.DefaultFlagRisk);
@@ -432,7 +433,7 @@ public class 原型插旗替代路径Tests
         Assert.Equal(MatchOptions.DefaultFlagRisk, MatchOptions.Immediate.FlagRisk);
         foreach (int ok in new[] { 0, 100 })
         {
-            MatchFlow match = MatchFlow.Create(FourPlayerBaseMap.Create(), new GameSeed(1), MatchFixtures.All, MatchOptions.Immediate with { FlagRisk = ok });
+            MatchFlow match = MatchFlow.Create(Board4Map, new GameSeed(1), MatchFixtures.All, MatchOptions.Immediate with { FlagRisk = ok });
             Assert.Equal(ok, match.Options.FlagRisk);
         }
     }
@@ -454,6 +455,9 @@ public class 原型插旗替代路径Tests
         Assert.Equal(MatchOptions.DefaultFlagRisk, defaulted.Header.Config.FlagRisk);
         Assert.Equal(MatchOptions.DefaultFlagRisk, Siege.Sim.Running.MatchSession.Create(unset, 1).Match.Options.FlagRisk);
     }
+
+    /// <summary>4 人内置棋盘图（retire-legacy-maps 段 A2：只当"一张通过校验的 4 人图"用的地方由 v5 改到它）。</summary>
+    private static MapData Board4Map => MapCatalog.Resolve(SimFixtures.Board4);
 
     /// <summary>直接调唯一实现，取各玩家锁定的区号（顺序同 <paramref name="ids"/>）。</summary>
     private static int[] AssignZones(MapData map, ulong seed, PlayerId[] ids, int flagRisk, (PlayerId Player, int Zone)? manual) =>

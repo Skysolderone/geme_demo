@@ -9,11 +9,14 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// <summary>
 /// map-generator tasks 2.4（design D5）：日志首部记地图内容摘要；回放重建地图后先比摘要，不同即在首部报"地图不一致"并停止；
 /// 旧日志缺该字段跳过比对；内置图同样写摘要。规格：simulation-harness「各入口支持生成图」—— Scenario: 回放重建生成图 / 生成器变了。
+/// retire-legacy-maps 段 A2：生成图样本由 <c>gen:12345</c>（边疆档）改为 <c>board:12345</c>（棋盘档，同为"按标识重新生成"），内置图样本由边疆图 v2 改为 4 人内置棋盘图。
 /// </summary>
 public class 日志首部地图摘要Tests
 {
+    private const string GeneratedId = "board:12345";
+
     private static readonly Lazy<MatchLog> Gen12345 = new(() =>
-        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "gen:12345" }, seed: 5).Run());
+        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = GeneratedId }, seed: 5).Run());
 
     [Fact]
     public void 真实跑局把开局地图的摘要写进首部并经文本往返_内置图同样写()
@@ -25,14 +28,14 @@ public class 日志首部地图摘要Tests
 
         MatchLog gen = Gen12345.Value;
         Assert.False(gen.IsFailed, gen.Failure?.Message);
-        Assert.Equal(Expect(FrontierMapGenerator.Generate(12345)), gen.Header.MapDigest);
+        Assert.Equal(Expect(MapCatalog.Resolve(GeneratedId)), gen.Header.MapDigest);
         Assert.Equal(gen.Header.MapDigest, MatchLog.Parse(gen.DeterministicText()).Header.MapDigest);
         Assert.Equal(gen.Header.MapDigest, MatchLog.Parse(gen.FullText()).Header.MapDigest);
         Assert.Contains($"\"MapDigest\":\"{gen.Header.MapDigest}\"", gen.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
         Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(MapCatalog.Resolve(SimFixtures.Board4)), l.Header.MapDigest));   // retire-legacy-maps 段 A：样本图 v5 → 4 人棋盘图
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
-        Assert.Equal(Expect(FrontierMapV2.Create()), frontier.Header.MapDigest);
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4, players: 2) with { MapId = SimFixtures.Board2 }, seed: 7).Run();
+        Assert.Equal(Expect(MapCatalog.Resolve(SimFixtures.Board2)), frontier.Header.MapDigest);
         Assert.NotEqual(gen.Header.MapDigest, frontier.Header.MapDigest);
     }
 
@@ -46,7 +49,7 @@ public class 日志首部地图摘要Tests
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Null(replay.MapMismatch);
-        Assert.Equal("gen:12345", replay.Replayed.Header.MapId);
+        Assert.Equal(GeneratedId, replay.Replayed.Header.MapId);
         Assert.Equal(original.Turns.Count, replay.Replayed.Turns.Count);
         Assert.True(original.Turns.Count > 4);
     }
@@ -59,7 +62,7 @@ public class 日志首部地图摘要Tests
         // ② 调用方给的地图被人改了一格（标识没变）。
         // 变异 MB-6：Replayer 去掉摘要比对 → 本测试红（①只在首部分歧但重跑了整局；②带着另一张图跑出中途分歧）。
         MatchLog original = MatchLog.Parse(Gen12345.Value.DeterministicText());
-        string otherDigest = MapFile.Digest(FrontierMapGenerator.Generate(12346));
+        string otherDigest = MapFile.Digest(MapCatalog.Resolve("board:12346"));
         var stale = new MatchLog { Header = original.Header with { MapDigest = otherDigest }, Turns = original.Turns, Events = original.Events, Result = original.Result };
 
         ReplayResult fromStale = Replayer.Replay(stale);
@@ -68,7 +71,7 @@ public class 日志首部地图摘要Tests
         Assert.Equal(1, fromStale.FirstDivergentLine);
         Assert.NotNull(fromStale.MapMismatch);
         Assert.Contains("地图不一致", fromStale.ToString(), StringComparison.Ordinal);
-        Assert.Contains("gen:12345", fromStale.MapMismatch, StringComparison.Ordinal);
+        Assert.Contains(GeneratedId, fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Contains(otherDigest, fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Contains(original.Header.MapDigest!, fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Empty(fromStale.Replayed.Turns);                       // 没有重跑
@@ -76,8 +79,8 @@ public class 日志首部地图摘要Tests
         Assert.Contains(otherDigest, fromStale.Expected, StringComparison.Ordinal);
         Assert.Contains(original.Header.MapDigest!, fromStale.Actual, StringComparison.Ordinal);
 
-        // ② 改一格：把一个不是出生区 / 信物的岩石格挖掉（导出文本里把它从 Obstacles 移走），标识仍是 gen:12345。
-        MapData map = FrontierMapGenerator.Generate(12345);
+        // ② 改一格：把一个不是出生区 / 信物的岩石格挖掉（导出文本里把它从 Obstacles 移走），标识仍是 board:12345。
+        MapData map = MapCatalog.Resolve(GeneratedId);
         MapData tampered = TamperOneCell(map);
         Assert.Equal(map.Id, tampered.Id);
         Assert.NotEqual(MapFile.Digest(map), MapFile.Digest(tampered));

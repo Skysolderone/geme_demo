@@ -121,7 +121,8 @@ public sealed record RunConfig
     /// <summary>
     /// AI 候选格上限 K（<see cref="AiSearchConfig.CandidateCellLimit"/>，frontier-map 裁决 12）：<c>null</c> = 按地图的可落子格数自动取
     /// （<see cref="AiSearchConfig.DefaultCellLimitFor"/>：大图取缺省 K，其余 0）；0 = 不限制；大于 0 = 显式上限。
-    /// 只作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家——显式的剪枝参数原样生效。命令行 <c>--cell-limit</c>。
+    /// 作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家，以及显式剪枝参数里没写候选格上限的玩家（retire-legacy-maps 段 A）；
+    /// 显式写了的（含 0）原样生效。命令行 <c>--cell-limit</c>。
     /// </summary>
     public int? CandidateCellLimit { get; init; }
 
@@ -360,6 +361,16 @@ public sealed record RunConfig
         if (mapOverrides.ContainsKey(map.Id) && resolved.Players.Any(p => p.Weights is null))
         {
             resolved = resolved with { Players = [.. resolved.Players.Select(p => p with { Weights = EvaluationWeights.ForMapId(map.Id, p.Weights, mapOverrides) })] };
+        }
+
+        // 显式剪枝参数里没写候选格上限（retire-legacy-maps 段 A）：落成本局生效的 K（上面已落成的跑局级值，小图未配置为 0），
+        // 首部如实记录、回放按首部重建；写了的（含 0 = 不限制）原样不动。与会话建 AI 时取的值相同，走法不变。
+        if (resolved.Players.Any(p => p.Search is { CandidateCellLimit: null }))
+        {
+            resolved = resolved with
+            {
+                Players = [.. resolved.Players.Select(p => p.Search is { CandidateCellLimit: null } s ? p with { Search = s with { CandidateCellLimit = resolved.CandidateCellLimit ?? 0 } } : p)],
+            };
         }
 
         // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，

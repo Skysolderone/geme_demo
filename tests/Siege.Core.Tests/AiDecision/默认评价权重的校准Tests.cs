@@ -11,7 +11,7 @@ using Xunit.Abstractions;
 namespace Siege.Core.Tests.AiDecision;
 
 /// <summary>规格：ai-decision —— Requirement: 默认评价权重的校准</summary>
-public class 默认评价权重的校准Tests(ITestOutputHelper output)
+public class 默认评价权重的校准Tests
 {
     [Theory]
     // ai-eye 段 D 校准（v5、种子 1–200、4 人标准难度、每档 200 局）：Eye / Safety / Threat 三维扫过档，其余六维沿用旧值、新规则下未单独扫档
@@ -64,7 +64,8 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "AiDifficulty.cs"));
         string status = AiSearchConfig.PassThresholdCalibrationStatus;
         const string tiers = "0 / 20 / 40 / 80";
-        foreach (string evidence in new[] { "v2-recalibration", FourPlayerBaseMap.Id, "V2", "种子 1–20", "20 局", "小样本", tiers, "sim-out/v2-recalibration/pass-" })
+        // 产品文本里的校准地图仍写 siege-4p-base-v5（历史口径，段 D 处理）；retire-legacy-maps 段 A2 起按字面量比对，不再引用地图类。
+        foreach (string evidence in new[] { "v2-recalibration", "siege-4p-base-v5", "V2", "种子 1–20", "20 局", "小样本", tiers, "sim-out/v2-recalibration/pass-" })
         {
             Assert.Contains(evidence, status, StringComparison.Ordinal);
         }
@@ -105,7 +106,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
             if (swept.Contains(d))
             {
                 // v2-recalibration 1.8：三维的扫档在内容集 V1 上完成（缺省内容集已是 V2），口径 MUST 注明内容集。
-                foreach (string evidence in new[] { "ai-eye 段 D 校准", "内容集 V1", FourPlayerBaseMap.Id, "种子 1–200", "200 局", "sim-out/ai-eye-" })
+                foreach (string evidence in new[] { "ai-eye 段 D 校准", "内容集 V1", "siege-4p-base-v5", "种子 1–200", "200 局", "sim-out/ai-eye-" })
                 {
                     Assert.Contains(evidence, status, StringComparison.Ordinal);
                 }
@@ -135,16 +136,8 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.NotEqual(20, EvaluationWeights.Default.Safety);
     }
 
-    // 变异（只改测试，段 D2）：M-D2-6t 截断计数取反（Truncated → !Truncated）→ 红 1（本测试）；M-D2-7t 样本下界放大到 10000 × 局数 → 红 1（本测试，下界是活的）。
-    // 完整版（种子 1–200）实测截断 2 局（101、171），上限 10 局——那是 ai-eye 在内容集 V1、停手阈值 80 下的结论。
-    // v2-recalibration 段 A：缩小版在新缺省（内容集 V2、停手阈值 20）下照常运行；CLI 对照 sim-out/v2-recalibration/pass-20（种子 1–20 截断 0）。
-    [Fact]
-    public void 校准后截断率达标() => AssertTruncation(count: 20, maxTruncated: 1);
-
-    // 停手阈值经 V2 20 局复核变更后（80 → 20），本慢测试的结论未经复核；v2-recalibration 未运行（负责人 2026-09-28 裁决 ⑥：严禁 200 局）。上限 10 局不改。
-    [SlowFact]
-    [Trait("Category", "Slow")]
-    public void 校准后截断率达标_种子1至200() => AssertTruncation(count: 200, maxTruncated: 10);
+    // retire-legacy-maps 段 A2（主会话裁决 2）：「校准后截断率达标」（种子 1–20 至多截断 1 局）与慢测试版（种子 1–200 至多 10 局）删除——
+    // 它们守的是 AI 在 siege-4p-base-v5 上的校准结论，棋盘图上权重"未在新地图上校准"（母任务裁决 6），由 AI 校准 change 在棋盘图上重定。
 
     [Fact]
     public void 引用未校准维度产出的数据()
@@ -184,38 +177,6 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。formation-tiers D2：未配置的计分规则版本同样落成缺省 v2 写入。
         // retire-legacy-maps 段 A：夹具地图为 4 人棋盘图（> 150 格），未配置的候选格上限落成 24 写入。
         Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, ScoringVersion = Core.Scoring.ScoringVersions.Default, CarryIn = 0, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit }).Effective().ToJson());
-    }
-
-    /// <summary>
-    /// 与校准批次同口径：<c>siege-4p-base-v5</c>、种子 1 起、4 名 Standard AI、未显式配置权重与停手阈值（取默认）、小回合数截断 600。
-    /// 缩小版（默认套件）种子 1–20、截断至多 1 局（5%）；完整版种子 1–200、至多 10 局（规格原文）。
-    /// CLI 对照：<c>sim-out/ai-eye-pass-80</c> 截断 2 局（种子 101、171），种子 1–20 无截断（内容集 V1、停手阈值 80）。
-    /// 停手阈值经 V2 20 局复核变更后（v2-recalibration 段 A，80 → 20），完整版（种子 1–200）的结论未经复核；v2-recalibration 未运行完整版。
-    /// 缩小版的 V2 对照：<c>sim-out/v2-recalibration/pass-20</c>（种子 1–20 截断 0）。
-    /// </summary>
-    private void AssertTruncation(int count, int maxTruncated)
-    {
-        // retire-legacy-maps 段 A1：本条是 v5 上校准结论的守门（校准批次就在 v5 上跑），显式钉回 v5，不随夹具改到棋盘图——
-        // 棋盘图上权重"未在新地图上校准"（母任务裁决 6），整局 600 小回合的 20 局在 4 人棋盘图上约 4 分钟 CPU，也进不了默认套件。
-        // 段 B 删 v5 前须裁决：删除，或随 AI 校准 change 改钉到棋盘图。
-        RunConfig config = SimFixtures.Config(count: count, seedStart: 1, turnLimit: RunConfig.DefaultTurnLimit, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly)
-            with { MapId = FourPlayerBaseMap.Id };
-        Assert.Equal(FourPlayerBaseMap.Id, config.MapId);
-        Assert.All(config.Players, p => Assert.Null(p.Weights));
-        Assert.Null(config.PassThreshold);
-
-        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: Environment.ProcessorCount);
-        Assert.Equal(count, logs.Count);
-        Assert.All(logs, l => Assert.False(l.IsFailed));
-        Assert.All(logs, l => Assert.Equal(AiSearchConfig.DefaultPassThreshold, l.Header.Config.PassThreshold));
-
-        // 样本口径下界：AI 真的在落子。一子不落的局全部 AllPassed、截断为 0，是空证（段 D2 简单难度在阈值 80 下即如此）。
-        int placingTurns = logs.Sum(l => l.Turns.Count(t => !t.Passed));
-        Assert.True(placingTurns >= 10 * count, $"{count} 局只有 {placingTurns} 个落子小回合");
-
-        ulong[] truncated = [.. logs.Where(l => l.Result!.Truncated).Select(l => l.Seed).Order()];
-        output.WriteLine($"种子 1–{count}：截断 {truncated.Length} 局（{string.Join("、", truncated)}），落子小回合 {placingTurns}");
-        Assert.True(truncated.Length <= maxTruncated, $"截断 {truncated.Length} 局 > {maxTruncated}：{string.Join("、", truncated)}");
     }
 
     [Fact]

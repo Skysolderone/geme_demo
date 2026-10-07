@@ -16,18 +16,19 @@ public class 终端对局Tests
         // life-shape 段 B：原脚本 Pass 两次、在第 4 大回合的提示处耗尽；活棋禁入 / 破坏活形生效后 AI 第 4 大回合走法变了（与改动前逐行比对：前 3 个大回合相同），
         // 玩家2 在轮到你之前提走了你唯一的 B1，你出局、对局自动跑到终局，永远走不到"输入耗尽"。改为只 Pass 一次、在第 3 大回合的提示处耗尽——
         // 保护期内别家不能进你的出生区，这一步不再依赖 AI 的走法；断言未改。
-        var script = new System.Text.StringBuilder("1\n1\nB1 B\nv\nok\n");
+        // retire-legacy-maps 段 A2：由 v5 改到 4 人内置棋盘图（缺省地图），出生区 1 是 AH27–AL33 的 5×7 出生棋盘，落子改在它的左下角 AH27。
+        var script = new System.Text.StringBuilder("1\n1\nAH27 B\nv\nok\n");
         for (int i = 0; i < 1; i++)
         {
             script.Append("\npass\n");
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, Board.Maps.FourPlayerBaseMap.Create(), flagRisk: 0, contentSet: ContentSet.V1);   // builtin-board-maps D4：脚本坐标是 v5 的，显式钉回 v5   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, Board.Maps.MapCatalog.Resolve(SimFixtures.Board4), flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);
-        Assert.Contains("玩家1(你) 落子 B1B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 AH27B", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 42", text, StringComparison.Ordinal);
 

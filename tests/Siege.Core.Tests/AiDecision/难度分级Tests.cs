@@ -117,7 +117,8 @@ public class 难度分级Tests
         ImmutableHashSet<Type> closure = AiFixtures.ReachableTypes(typeof(HeuristicTurnController));
         Assert.Empty(AiFixtures.Violations(typeof(HeuristicTurnController)));
         Assert.Equal(ImmutableHashSet.Create(typeof(AiSearchConfig)), AiFixtures.ReachableTypes(typeof(AiSearchConfig)));
-        Assert.All(typeof(AiSearchConfig).GetProperties(), p => Assert.True(p.PropertyType == typeof(int) || p.PropertyType == typeof(bool), p.Name));
+        // retire-legacy-maps 段 A2：候选格上限改为可空整数（未写 = 按地图取缺省），仍只有整数与布尔。
+        Assert.All(typeof(AiSearchConfig).GetProperties(), p => Assert.True(p.PropertyType == typeof(int) || p.PropertyType == typeof(int?) || p.PropertyType == typeof(bool), p.Name));
         Assert.Contains(typeof(MatchPublicView), closure);
 
         (string a, string b, int compared) = 对隐藏信息的概率估计Tests.RunUntilReveal(AiDifficulty.Hard);
@@ -137,12 +138,13 @@ public class 难度分级Tests
         Assert.Equal(3, (int)AiDifficulty.Expert);
 
         // v2-recalibration 段 A（1.7）：四档预设的停手阈值随缺省值由 80 改为 20（V2 复核选定值，四档共用）；其余字段与 HEAD 03d45f6 相同。
-        Assert.Equal(new AiSearchConfig(6, 1, true, 0, 20), AiSearchConfig.Easy);
-        Assert.Equal(new AiSearchConfig(12, 8, false, 0, 20), AiSearchConfig.Standard);
-        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20), AiSearchConfig.Hard);
+        // retire-legacy-maps 段 A2（主会话裁决 1）：四档预设的候选格上限由 0（不限制）改为不写（null = 按地图取缺省：小图 0、大图 24），其余字段不变。
+        Assert.Equal(new AiSearchConfig(6, 1, true, null, 20), AiSearchConfig.Easy);
+        Assert.Equal(new AiSearchConfig(12, 8, false, null, 20), AiSearchConfig.Standard);
+        Assert.Equal(new AiSearchConfig(24, 32, false, null, 20), AiSearchConfig.Hard);
         // expert-strength：专家预设退回一层（负责人裁决 2026-09-28，段 B 后：扩样配对 好 7 / 同 33 / 差 20，p = 0.019）= 高难 + 前瞻宽度 4，
         // 多样补充上限与两层权重为 0（可配置项，Search 显式给出才生效）；三档旧预设三行一字不改、两项为 0。
-        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, LookaheadWidth: 4), AiSearchConfig.Expert);
+        Assert.Equal(new AiSearchConfig(24, 32, false, null, 20, LookaheadWidth: 4), AiSearchConfig.Expert);
         Assert.Equal(0, AiSearchConfig.Expert.DiverseSupplementLimit);
         Assert.Equal(0, AiSearchConfig.Expert.TwoPlyWeightPermille);
         Assert.All([AiDifficulty.Easy, AiDifficulty.Standard, AiDifficulty.Hard], d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).DiverseSupplementLimit));

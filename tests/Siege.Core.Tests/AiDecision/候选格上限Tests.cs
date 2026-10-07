@@ -138,10 +138,159 @@ public class 候选格上限Tests
     }
 
     [Fact]
-    public void 难度默认参数不启用上限()
+    public void 难度默认参数不写上限按地图取缺省()
     {
-        Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).CandidateCellLimit));
-        Assert.Equal(0, HeuristicAi.Create(OpenPosition(), AiFixtures.P0).Config.CandidateCellLimit);
+        // retire-legacy-maps 段 A2（主会话裁决 1，原名「难度默认参数不启用上限」）：四档预设不写候选格上限（null），实际生效值按地图取：
+        // 小图（≤ 150 格）0 = 不限制，与改名前的断言等价；大图取缺省 K。
+        Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Null(AiSearchConfig.ForDifficulty(d).CandidateCellLimit));
+        Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).CellLimitOn(AiSearchConfig.LargeMapPlayableThreshold)));
+        Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(24, AiSearchConfig.ForDifficulty(d).CellLimitOn(AiSearchConfig.LargeMapPlayableThreshold + 1)));
+        DeployTrace small = DeployOnce(OpenPosition(), AiSearchConfig.Standard);
+        Assert.Null(small.Ai.Config.CandidateCellLimit);
+        Assert.Equal(small.Empties, small.Ai.LastCandidateCells.Length);   // 9×9 合成图上不预筛
+    }
+
+    /// <summary>可落子格不超过 150 的合成小图（9×9 = 81 格，<see cref="MatchFixtures.Map(string[])"/>）：retire-legacy-maps 段 A2 起"小图"情形一律用它（内置图都 &gt; 150 格）。</summary>
+    private static MapData SmallMap => MatchFixtures.Map();
+
+    // ---------- 显式剪枝参数未写上限（retire-legacy-maps 段 A2，主会话裁决 1） ----------
+
+    private static RunConfig WithSearch(RunConfig config, AiSearchConfig search) =>
+        config with { Players = [.. config.Players.Select(p => p with { Search = search })] };
+
+    [Fact]
+    public void 显式剪枝参数未写上限时按地图取缺省()
+    {
+        // 产品路径（run --config 给 Players[].Search 而不写 CandidateCellLimit）：未写 → 大图 24、小图 0；写 0 → 不限制；写 K → K。
+        // 新建的局把落成值写进首部（RunConfig.ResolvedFor），按首部重建（回放）时首部里没有该项的旧记录按 0（当时不限制），不取地图缺省。
+        // 变异 A2-K1：MatchSession.AttachConfigured 对显式 Search 不补上限（原样传入）→ 本测试红（会话侧 null ≠ 24）。
+        // 变异 A2-K2：ResolvedFor 不把显式 Search 的上限落成具体值 → 本测试红（首部 null）。
+        // 变异 A2-K3：按首部重建时显式 Search 的缺项改取地图缺省 → 本测试红（recorded 断言）。
+        RunConfig large = WithSearch(SimFixtures.Config(turnLimit: 4, difficulty: AiDifficulty.Standard), AiSearchConfig.Standard);
+        Assert.True(MapCatalog.Resolve(large.MapId).PlayableCount > AiSearchConfig.LargeMapPlayableThreshold);
+        Assert.All(large.Players, p => Assert.Null(p.Search!.CandidateCellLimit));
+
+        MatchSession unset = MatchSession.Create(large, 1);
+        Assert.All(unset.Match.Players, p => Assert.Equal(AiSearchConfig.LargeMapCellLimit, unset.AiOf(p)!.Config.CandidateCellLimit));
+        Assert.All(unset.Config.Players, p => Assert.Equal(AiSearchConfig.LargeMapCellLimit, p.Search!.CandidateCellLimit));   // 首部记落成值
+
+        foreach (int k in new[] { 0, 5 })
+        {
+            MatchSession set = MatchSession.Create(WithSearch(large, AiSearchConfig.Standard with { CandidateCellLimit = k }), 1);
+            Assert.All(set.Match.Players, p => Assert.Equal(k, set.AiOf(p)!.Config.CandidateCellLimit));
+            Assert.All(set.Config.Players, p => Assert.Equal(k, p.Search!.CandidateCellLimit));
+        }
+
+        // 跑局级显式给了 K（--cell-limit）：显式 Search 未写上限的玩家同样取它。
+        MatchSession runLevel = MatchSession.Create(large with { CandidateCellLimit = 7 }, 1);
+        Assert.All(runLevel.Match.Players, p => Assert.Equal(7, runLevel.AiOf(p)!.Config.CandidateCellLimit));
+
+        // 按首部重建：显式 Search 缺上限 = 该项出现之前的旧记录，当时就是不限制。
+        MatchSession recorded = MatchSession.Create(large, 1, map: null, recorded: true);
+        Assert.All(recorded.Match.Players, p => Assert.Equal(0, recorded.AiOf(p)!.Config.CandidateCellLimit));
+
+        // 小图：未写 → 0（会话与首部）。
+        MatchFlow small = MatchFixtures.Started();
+        Assert.True(small.Map.PlayableCount <= AiSearchConfig.LargeMapPlayableThreshold, $"合成图 {small.Map.PlayableCount} 格");
+        MatchSession smallSession = MatchSession.ForMatch(small, WithSearch(SimFixtures.Config(turnLimit: 1, difficulty: AiDifficulty.Standard), AiSearchConfig.Standard));
+        Assert.All(small.Players, p => Assert.Equal(0, smallSession.AiOf(p)!.Config.CandidateCellLimit));
+        Assert.All(large.ResolvedFor(SmallMap).Players, p => Assert.Equal(0, p.Search!.CandidateCellLimit));
+    }
+
+    [Fact]
+    public void 未写上限的AI在大图上按缺省上限预筛()
+    {
+        // Core 侧：直接装配的 AI（不经跑局会话）配置未写上限时，按开局地图的可落子格数取缺省（AiSearchConfig.CellLimitOn）。
+        // 4 人棋盘图开局第一手：保护期内合法范围 = 本人出生棋盘（5–7 边长，≥ 25 格 > 24）。
+        // 变异 A2-K4：CellLimitOn 改成 `CandidateCellLimit ?? 0`（未写即不限制）→ 本测试红。
+        static DeployTrace Board(AiSearchConfig config)
+        {
+            MatchFlow match = MatchSession.Create(SimFixtures.Config(turnLimit: 4, difficulty: AiDifficulty.Standard), 1).Match;
+            PlayerId me = match.CurrentPlayer!.Value;
+            HeuristicTurnController ai = HeuristicAi.Create(match, me, AiDifficulty.Standard, config: config);
+            StagedBatch batch = match.OpenDeploy();
+            int empties = batch.Context.LegalRange.Count(c => batch.Board[c].IsPlayableEmpty);
+            ai.Deploy(batch, match.Rehearse);
+            return new DeployTrace(ai, 0, empties, 0, string.Empty);
+        }
+
+        DeployTrace unset = Board(AiSearchConfig.Standard);
+        Assert.True(unset.Empties > AiSearchConfig.LargeMapCellLimit, $"合法空格 {unset.Empties}");
+        Assert.Equal(AiSearchConfig.LargeMapCellLimit, unset.Ai.LastCandidateCells.Length);
+        DeployTrace zero = Board(AiSearchConfig.Standard with { CandidateCellLimit = 0 });
+        Assert.Equal(zero.Empties, zero.Ai.LastCandidateCells.Length);
+        DeployTrace five = Board(AiSearchConfig.Standard with { CandidateCellLimit = 5 });
+        Assert.Equal(5, five.Ai.LastCandidateCells.Length);
+    }
+
+    [Fact]
+    public void 未写上限的专家两层扫描同样按地图缺省预筛()
+    {
+        // retire-legacy-maps 段 A2 检查补：专家的两层扫描（ExpertLookahead.BestSingleGain）经 CellLimitOn 读 K。A2 删掉夹具 WithMapCellLimit 之后，
+        // 直接装配的专家（LookaheadFixtures.Shadow 传 null K）在 4 人棋盘图上靠它取 24；此前没有测试钉住这一路径。
+        // 4 人棋盘图种子 1 前 4 个部署局面（保护期内对手的合法范围 = 其出生棋盘，≥ 25 格 > 24）：未写 K 的两层预演次数与显式 24 相同、与显式 0（不限制）不同。
+        // 变异 M-A2C-7：BestSingleGain 改为 `_config.CandidateCellLimit ?? 0`（未写即不限制）→ 本测试红。
+        AiSearchConfig unset = LookaheadFixtures.ExpandedExpert with { PassThreshold = LookaheadFixtures.PassThreshold };
+        Assert.Null(unset.CandidateCellLimit);
+        long unsetTotal = 0, k24Total = 0, unlimitedTotal = 0;
+        int positions = LookaheadFixtures.ProbePositionsOn(LookaheadFixtures.BoardConfig(
+            LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 4 }, every: 1, (match, batch) =>
+        {
+            int TwoPly(AiSearchConfig config) =>
+                LookaheadFixtures.Shadow(match, batch.Context, AiDifficulty.Expert, config).Ai.LastLookahead!.TwoPlyRehearsals;
+            unsetTotal += TwoPly(unset);
+            k24Total += TwoPly(unset with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit });
+            unlimitedTotal += TwoPly(unset with { CandidateCellLimit = 0 });
+        }, 1);
+
+        Assert.True(positions >= 4, $"局面 {positions} 个");
+        Assert.True(unsetTotal > 0, "两层扫描没有发生（样本口径）");
+        Assert.Equal(k24Total, unsetTotal);
+        // 反面：显式 0 确实走了另一条路（不预筛；预筛本身也计入两层预演次数，所以只断言不同、不断言大小）。
+        Assert.NotEqual(unlimitedTotal, unsetTotal);
+    }
+
+    [Fact]
+    public void 未写上限时按开局地图取缺省_局中架桥不让上限跳档()
+    {
+        // retire-legacy-maps 段 A2 检查补：CellLimitOn 读的是开局地图（GameBoard.BaseMap）的可落子格数，不是改造后的当前地图。
+        // 棋盘图上不会架出桥，"读当前地图"在内置图上是等价变异，只能用合成图钉：13×12 合成图开局恰 150 格可落子（阈值本身，不算大图），
+        // 中央 G6 一格未架桥深水；对局中把它架成桥后当前地图 151 格（越过阈值），未写上限的 AI 仍按开局的 150 格取 0（不预筛）。
+        // 变异 M-A2C-1：HeuristicTurnController.RankPoints 改读 batch.Board.Map.PlayableCount → 本测试红（候选格被截到 24）。
+        static ImmutableHashSet<Coord> Corner(int x0, int y0) =>
+            [.. Enumerable.Range(0, 9).Select(i => new Coord(x0 + (i % 3), y0 + (i / 3)))];
+
+        TerrainData terrain = TestMaps.Terrain(surfaces: [("G6", Surface.DeepWater)]);
+        MapData map = new()
+        {
+            TerrainData = terrain,
+            Id = "test-cell-limit-13x12",
+            Width = 13,
+            Height = 12,
+            MaxPlayers = 4,
+            Obstacles = [.. new[] { "F5", "H5", "F7", "H7", "G8" }.Select(Coord.Parse)],
+            BirthZones = [Corner(0, 0), Corner(10, 0), Corner(0, 9), Corner(10, 9)],
+            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
+            ChokePoints = [],
+            CentralEntrance = Coord.Parse("G4"),
+        };
+        Assert.Equal(AiSearchConfig.LargeMapPlayableThreshold, map.PlayableCount);
+
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchFixtures.V1);
+        foreach (PlayerId p in MatchFixtures.All)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 50));
+        }
+
+        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
+        match.AtRound(5, [AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3]);
+        match.Board.ApplyTerrainEdits([TerrainEdit.Bridge(Coord.Parse("G6"))]);
+        Assert.Equal(AiSearchConfig.LargeMapPlayableThreshold, match.Board.BaseMap.PlayableCount);
+        Assert.Equal(AiSearchConfig.LargeMapPlayableThreshold + 1, match.Board.Map.PlayableCount);   // 前提：当前地图确已越过阈值
+
+        DeployTrace trace = DeployOnce(match, AiSearchConfig.Standard);
+        Assert.True(trace.Empties > AiSearchConfig.LargeMapCellLimit, $"合法空格 {trace.Empties}");
+        Assert.Equal(trace.Empties, trace.Ai.LastCandidateCells.Length);
     }
 
     // ---------- K > 0 ----------
@@ -438,14 +587,15 @@ public class 候选格上限Tests
         Assert.Equal(AiSearchConfig.LargeMapCellLimit, AiSearchConfig.DefaultCellLimitFor(AiSearchConfig.LargeMapPlayableThreshold + 1));
         Assert.True(AiSearchConfig.LargeMapCellLimit > 0);
 
-        // retire-legacy-maps 段 A："大图"由边疆图改为 4 人棋盘图；"小图"仍显式取 v5——内置图里已没有 ≤ 150 格的地图（三张棋盘图都 > 150），段 B 删 v5 时须另定。
-        int v4 = MapCatalog.Resolve(FourPlayerBaseMap.Id).PlayableCount;
+        // retire-legacy-maps 段 A："大图"由边疆图改为 4 人棋盘图。段 A2："小图"由 v5 改为合成 9×9 图（内置图都 > 150 格）；
+        // 预设不再写上限（null），ForMap 在小图上落成显式 0，与预设的生效值相同。
+        int v4 = SmallMap.PlayableCount;
         int frontier = MapCatalog.Resolve(SimFixtures.Board4).PlayableCount;
-        Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"v4 可落子格 {v4}");
+        Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"小图可落子格 {v4}");
         Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"4 人棋盘图可落子格 {frontier}");
-        Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.ForDifficulty(d), AiSearchConfig.ForMap(d, v4)));
+        Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.ForDifficulty(d) with { CandidateCellLimit = 0 }, AiSearchConfig.ForMap(d, v4)));
         Assert.Equal(StandardWith(AiSearchConfig.LargeMapCellLimit), AiSearchConfig.ForMap(AiDifficulty.Standard, frontier));
-        Assert.Equal(AiSearchConfig.Standard, AiSearchConfig.ForMap(AiDifficulty.Standard, frontier, cellLimit: 0));
+        Assert.Equal(StandardWith(0), AiSearchConfig.ForMap(AiDifficulty.Standard, frontier, cellLimit: 0));
         Assert.Equal(StandardWith(5), AiSearchConfig.ForMap(AiDifficulty.Standard, v4, cellLimit: 5));
     }
 
@@ -563,9 +713,9 @@ public class 候选格上限Tests
         BatchRunner.ExecuteToDirectory(auto with { CandidateCellLimit = 0 }, zeroDir, parallelism: 1);
         Assert.Contains("\"CandidateCellLimit\": 0", File.ReadAllText(Path.Combine(zeroDir, "config.json")), StringComparison.Ordinal);
 
-        // 标准图：配置记录与引入本项之前一样，不多出这一项。retire-legacy-maps 段 A：内置图里已没有 ≤ 150 格的小图，这里显式钉 v5，段 B 删 v5 时须另定。
-        string v4Dir = SimFixtures.TempDir("cell-limit-v4");
-        BatchRunner.ExecuteToDirectory(SimFixtures.Config(turnLimit: 4) with { MapId = FourPlayerBaseMap.Id }, v4Dir, parallelism: 1);
-        Assert.DoesNotContain("CandidateCellLimit", File.ReadAllText(Path.Combine(v4Dir, "config.json")), StringComparison.Ordinal);
+        // 小图：配置记录与引入本项之前一样，不多出这一项。retire-legacy-maps 段 A2：内置图都 > 150 格，改用合成 9×9 图直接验落成
+        //（BatchRunner.ExecuteToDirectory 写的就是 ResolvedFor 的结果，M-K8 由上面两段钉住）；正反两面：同一配置在大图上落成 24。
+        Assert.DoesNotContain("CandidateCellLimit", auto.ResolvedFor(SmallMap).ToJson(), StringComparison.Ordinal);
+        Assert.Contains($"\"CandidateCellLimit\": {AiSearchConfig.LargeMapCellLimit}", auto.ResolvedFor(MapCatalog.Resolve(auto.MapId)).ToJson(), StringComparison.Ordinal);
     }
 }

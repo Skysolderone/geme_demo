@@ -19,7 +19,7 @@ public class 棋盘格子状态模型Tests
     [Fact]
     public void 信物格可正常落子()
     {
-        GameBoard board = GameBoard.LoadUnvalidated(FourPlayerBaseMapData());
+        GameBoard board = GameBoard.LoadUnvalidated(RelicMap());
         Coord relic = TestMaps.At("B2");
         Assert.True(board[relic].IsRelicCell);
 
@@ -46,15 +46,17 @@ public class 棋盘格子状态模型Tests
     {
         // "棋盘外沿与障碍具有相同的封堵语义"这句话在数据层的落点：
         // 越界格的地形 MUST 就是障碍，而不是靠每个调用方各自记得先判边界。
-        MapData map = FourPlayerBaseMapData();
+        MapData map = RelicMap();
 
-        // v3 基准图 13×13：(13, 0) / (0, 13) 刚好越界一格；G7 是盘内可落子格（中央入口）。
-        Assert.False(map.Contains(new Coord(13, 0)));
-        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(13, 0)));
-        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(0, 13)));
+        // 合成 9×9 图（retire-legacy-maps 段 A2，此前 v3 / v5 13×13）：(9, 0) / (0, 9) 刚好越界一格；G7 是盘内可落子格。
+        Assert.False(map.Contains(new Coord(9, 0)));
+        Assert.True(map.Contains(new Coord(8, 0)));
+        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(9, 0)));
+        Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(0, 9)));
         Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(24, 99)));
         Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("G7")));
     }
 
-    private static MapData FourPlayerBaseMapData() => Siege.Core.Board.Maps.FourPlayerBaseMap.Create();
+    /// <summary>B2 是信物格的合成 9×9 图（retire-legacy-maps 段 A2：此前用 v5，B2 是其出生区信物格）。</summary>
+    private static MapData RelicMap() => MatchFixtures.Map("B2");
 }

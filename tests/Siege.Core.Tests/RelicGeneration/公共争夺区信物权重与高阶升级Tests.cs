@@ -188,14 +188,17 @@ public class 公共争夺区信物权重与高阶升级Tests
     public void 基准图上公共信物升级率落在宽口径()
     {
         // terrain-model 裁决 35（B-7）：`高阶比例` 换到合成 4:2 图后没有统计测试在真实基准图上跑。
-        // restore-go-core-rules 起基准图为 v5（地形与信物格同 v3 / v4）。
-        // v3（siege-4p-base-v3，C4）公共区 = 桥头 4 Standard（150‰）+ 岛心 1 High（300‰），均值 (4×150 + 300) / 5 = 180‰；
+        // restore-go-core-rules 起基准图为 v5（地形与信物格同 v3 / v4）；retire-legacy-maps 段 A2 改为 4 人内置棋盘图——
+        // 它的公共区同样是 4 个标准档 + 1 个高档（中央入口），均值 (4×150 + 300) / 5 = 180‰，宽口径与总数 50000 原样适用。
+        // 原 v3（siege-4p-base-v3，C4）公共区 = 桥头 4 Standard（150‰）+ 岛心 1 High（300‰），均值 (4×150 + 300) / 5 = 180‰；
         // 宽口径 [15%, 21%]（"约 20%"的升级口径在 4+1 分布下的容许带），种子数与统计方式沿用 `高阶比例`（10000 种子）。
         // 先钉 50000 = 10000 × 5：公共区少展开一个轨道（段 B N-2 的形状）本条先红，不会被宽口径吞掉。
         // 变异验证 M-D3：两档升级率同改 300‰ → 本测试红（30% 越上界）；不用 "High 300 → 150"（恰压 15.0% 下界，抽样噪声下红绿不定）。
         // more-pieces-relics 段 B 改写：缺省内容集 v2 的新四类不升级（D7），升级率只统计原有六类（规格「高阶比例」的新口径）；分母另记原六类枚数。
-        MapData v3 = FourPlayerBaseMap.Create();
-        Assert.Equal("siege-4p-base-v5", v3.Id);
+        MapData v3 = MapCatalog.Resolve(SimFixtures.Board4);
+        Assert.Equal(SimFixtures.Board4, v3.Id);
+        Assert.Equal(4, v3.RelicCells.Values.Count(s => s.Zone == RelicZone.Contested && s.Budget == BudgetTier.Standard));
+        Assert.Equal(1, v3.RelicCells.Values.Count(s => s.Zone == RelicZone.Contested && s.Budget == BudgetTier.High));
 
         int total = 0;
         int original = 0;

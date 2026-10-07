@@ -13,7 +13,7 @@ public class AI带入Tests
     private static readonly PlayerId[] Four = CarryFixtures.Four;
     private static readonly PlayerId Me = Four[0];
 
-    private static MapData Map => MapCatalog.Resolve(FourPlayerBaseMap.Id);   // builtin-board-maps D4：缺省地图已换成棋盘图，显式钉回 v5
+    private static MapData Map => MapCatalog.Resolve(SimFixtures.Board4);   // retire-legacy-maps 段 A2：由 v5 改到 4 人内置棋盘图
 
     /// <summary>人机对局的建局：本机玩家 P0 的选择 + AI 的抽取，开启带入带出。</summary>
     private static MatchFlow Create(GameSeed seed, CarryIn? mine, ContentSet set = ContentSet.V2) =>

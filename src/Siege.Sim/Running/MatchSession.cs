@@ -113,7 +113,7 @@ public sealed class MatchSession
 
     public RunConfig Config { get; }
 
-    /// <summary>本局未显式配置剪枝参数的 AI 实际生效的候选格上限 K（0 = 不限制）。</summary>
+    /// <summary>本局未显式配置剪枝参数（或显式配置里没写候选格上限）的 AI 实际生效的候选格上限 K（0 = 不限制）。</summary>
     public int CellLimit { get; }
 
     /// <summary>本局未显式配置剪枝参数的 AI 实际生效的停手阈值（ai-eye D4）。</summary>
@@ -192,8 +192,12 @@ public sealed class MatchSession
     private void AttachConfigured(PlayerId player, PlayerAiConfig ai)
     {
         // 显式的剪枝参数原样生效；未配置时按难度取，候选格上限取跑局配置的值，仍未给出则按地图大小取（阈值逻辑在 Core，三个入口共用）。
+        // 显式的剪枝参数里没写候选格上限（retire-legacy-maps 段 A）：同样取本局生效的 K（跑局配置的值，未给出按地图大小；按首部重建时未给出 = 0）——
+        // 新建的局已由 RunConfig.ResolvedFor 把它落成具体值写进首部，这里只剩该项出现之前的旧日志（缺字段 = 当时不限制）走到 0。
         // 停手阈值同样只作用于未显式配置剪枝参数的玩家（显式的 Search 自带阈值）。
-        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold });
+        AiSearchConfig search = ai.Search is { } explicitSearch
+            ? explicitSearch with { CandidateCellLimit = explicitSearch.CandidateCellLimit ?? CellLimit }
+            : AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold };
         if (ai.DebugAi)
         {
             DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, search);

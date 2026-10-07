@@ -12,7 +12,7 @@ public class 动态相机下的拾取正确Tests
     [Fact]
     public void 自检位姿共7个_中心_四角夹取位_最近_最远()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         IReadOnlyList<(string Name, CameraPose Pose)> poses = camera.CheckPoses();
 
         Assert.Equal(["中心", "左上角", "右上角", "左下角", "右下角", "最近", "最远"], poses.Select(p => p.Name));
@@ -37,7 +37,7 @@ public class 动态相机下的拾取正确Tests
     [Fact]
     public void 取自检位姿不改变相机当前状态()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(7);
         camera.Pan(1f, -1f, 0.3f);
         CameraPose before = camera.Pose;
@@ -50,16 +50,16 @@ public class 动态相机下的拾取正确Tests
     [Fact]
     public void 一屏看全的地图上最远位姿就是旧固定相机()
     {
-        var camera = new BoardCamera(BoundsOf(V4));
+        var camera = new BoardCamera(BoundsOf(Small));
         CameraPose farthest = camera.CheckPoses().Single(p => p.Name == "最远").Pose;
 
-        Assert.Equal(new CameraPose(0f, 0f, 14.6f * (13f + (2f * 1.7f)) / 12.7f), farthest);
+        Assert.Equal(new CameraPose(0f, 0f, 14.6f * (Small.Height + (2f * 1.7f)) / 12.7f), farthest);   // retire-legacy-maps 段 A2：原写死 v5 的 13 行
     }
 
     [Fact]
     public void 全部自检位姿俯角相同()
     {
-        foreach (MapDataPose item in new[] { V4, Frontier }.SelectMany(m => new BoardCamera(BoundsOf(m)).CheckPoses().Select(p => new MapDataPose(m.Id, p.Pose))))
+        foreach (MapDataPose item in new[] { Small, Large }.SelectMany(m => new BoardCamera(BoundsOf(m)).CheckPoses().Select(p => new MapDataPose(m.Id, p.Pose))))
         {
             Assert.Equal(60.0, PitchOf(item.Pose), 3);
         }

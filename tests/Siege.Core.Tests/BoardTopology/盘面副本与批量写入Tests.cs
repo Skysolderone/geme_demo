@@ -69,14 +69,16 @@ public class 盘面副本与批量写入Tests
     [Fact]
     public void 副本不重跑校验()
     {
-        // 诱饵：把咽喉标注清空，这张图 MUST 过不了静态校验。
+        // 诱饵：在 4 人棋盘图的出生棋盘里放一块障碍，这张图 MUST 过不了静态校验（retire-legacy-maps 段 A2：此前是清空 v5 的咽喉标注）。
         // 若 Clone() 偷偷走了 Load，就会在这里抛 MapValidationException。
-        MapData bait = FourPlayerBaseMap.Create() with { ChokePoints = ImmutableHashSet<Coord>.Empty };
-        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "CHOKE_NOT_ANNOTATED");
+        MapData board4 = MapCatalog.Resolve(SimFixtures.Board4);
+        Coord[] birth = [.. board4.BirthZones[0].Order()];
+        MapData bait = board4 with { Obstacles = board4.Obstacles.Add(birth[0]) };
+        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "BOARD_CELL_NOT_PLAYABLE");
         Assert.Throws<MapValidationException>(() => GameBoard.Load(bait));
 
         GameBoard board = GameBoard.LoadUnvalidated(bait);
-        board.Place(TestMaps.At("G7"), TestMaps.P0, PieceType.Basic);   // v3：F6 是岩石，G7 是中央入口
+        board.Place(birth[1], TestMaps.P0, PieceType.Basic);
 
         GameBoard clone = board.Clone();
 

@@ -115,8 +115,9 @@ public class 终端活形与禁入标示Tests
     [Fact]
     public void 脚本对局里出现禁入与已活标示()
     {
-        // 脚本化终端测试：v5 图、种子 31，人类坐 1 号位、选 1 号区后每个小回合都 Pass；AI（Standard）按规则落子。
-        // life-shape 段 B 实测种子 31 第 4 大回合盘上已有活形棋串（v5 贴地形的小空区很容易成活，R8）。
+        // 脚本化终端测试：4 人内置棋盘图（retire-legacy-maps 段 A2；原为 v5 种子 31）、种子 1，人类坐 1 号位、选 1 号区后每个小回合都 Pass；AI（Standard）按规则落子。
+        // life-shape 段 B 当时实测 v5 种子 31 第 4 大回合盘上已有活形棋串。段 A2 换图时种子随之重挑：棋盘图上种子 31 的 3 名 AI 到第 17 大回合都没有活形棋串
+        //（盘上既无 @ 也无 x）；探针种子 1–24 每局 Pass 12 次，13 颗在前十几个大回合内出现别家活形的眼，取其中最早出现的种子 1（不是凑期望值：断言一条不改）。
         // 样本口径下界：输出的棋盘行里必须真的出现 "@" 与 "x" 标记，并且图例同步出现——否则上面的逐格断言只证明了渲染函数，不证明终端对局真的走到了它。
         var script = new System.Text.StringBuilder("1\n");
         for (int i = 0; i < 8; i++)
@@ -125,7 +126,7 @@ public class 终端活形与禁入标示Tests
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(31, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, Board.Maps.FourPlayerBaseMap.Create(), flagRisk: 0, contentSet: ContentSet.V1);   // builtin-board-maps D4：脚本坐标是 v5 的，显式钉回 v5   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, Board.Maps.MapCatalog.Resolve(SimFixtures.Board4), flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);

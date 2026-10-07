@@ -9,7 +9,7 @@ public class 全局预览Tests
     [Fact]
     public void 切入全局预览_整盘一屏可见且注视点在地图中心()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(6);
         camera.Pan(-1f, 1f, 2f);
 
@@ -19,7 +19,7 @@ public class 全局预览Tests
         PlaneRect bounds = camera.Bounds;
         Assert.Equal(bounds.CenterX, camera.Pose.FocusX);
         Assert.Equal(bounds.CenterZ, camera.Pose.FocusZ);
-        Assert.True(camera.Pose.Distance > BoardCamera.FarthestCap, "全局预览要越过平时的最远上限才看得全边疆图");
+        Assert.True(camera.Pose.Distance > BoardCamera.FarthestCap, "全局预览要越过平时的最远上限才看得全大图");
         Assert.True(camera.VisibleDepth >= bounds.Depth);
         Assert.True(camera.VisibleWidth >= bounds.Width);
     }
@@ -27,7 +27,7 @@ public class 全局预览Tests
     [Fact]
     public void 再切一次_回到切入前的位姿()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(6);
         camera.Pan(-1f, 1f, 2f);
         CameraPose before = camera.Pose;
@@ -42,7 +42,7 @@ public class 全局预览Tests
     [Fact]
     public void 全局预览中_推屏与拉远无效()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.ToggleOverview();
         CameraPose overview = camera.Pose;
 
@@ -56,7 +56,7 @@ public class 全局预览Tests
     [Fact]
     public void 全局预览中拉近_退出预览并从最远缩放继续()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.ToggleOverview();
 
         camera.Zoom(1);
@@ -68,7 +68,7 @@ public class 全局预览Tests
     [Fact]
     public void 全局预览中回家_退出预览_距离回到切入前_注视点到家()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(6);
         float distance = camera.Pose.Distance;
         camera.ToggleOverview();
@@ -85,7 +85,7 @@ public class 全局预览Tests
     [Fact]
     public void 全局预览不改俯角_位姿仍只由注视点与距离决定()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         CameraPose normal = camera.Pose;
         camera.ToggleOverview();
         CameraPose overview = camera.Pose;
@@ -98,7 +98,7 @@ public class 全局预览Tests
     [Fact]
     public void 窗口变形时_全局预览仍整盘可见()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.ToggleOverview();
 
         camera.SetAspect(4f / 3f);
@@ -111,7 +111,7 @@ public class 全局预览Tests
     [Fact]
     public void 一屏看全的地图上_没有全局预览可切()
     {
-        var camera = new BoardCamera(BoundsOf(V4));
+        var camera = new BoardCamera(BoundsOf(Small));
         CameraPose before = camera.Pose;
 
         Assert.False(camera.ToggleOverview());
@@ -123,9 +123,9 @@ public class 全局预览Tests
     [Fact]
     public void 开局对准与自检置位都会退出全局预览()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.ToggleOverview();
-        camera.Open(CameraHome.Platform(Frontier.BirthZones[4], CenterOf(Frontier)));
+        camera.Open(CameraHome.Platform(Large.BirthZones[4], CenterOf(Large)));
         Assert.False(camera.IsOverview);
         Assert.True(camera.Pose.Distance <= camera.Farthest);
 

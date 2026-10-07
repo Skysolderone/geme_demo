@@ -9,9 +9,10 @@ namespace Siege.Core.Tests.MatchTelemetry;
 
 /// <summary>
 /// 规格：expert-lookahead / match-telemetry —— Requirement: 专家前瞻的记录。
-/// 样本一律写死权重与停手阈值（<see cref="LookaheadFixtures.BoardConfig"/>：4 人棋盘图、截断 24 小回合、候选格上限 24）。
-/// retire-legacy-maps 段 A 重挑种子（原为 v5 整局种子 3）：探针种子 1–24 中只有种子 22 同时有已前瞻、Pass 与恰好一次"前瞻改变选择"
-/// （其余种子要么没有 Pass——截断 24 内专家很少停手——要么改变选择 0 / 2 次）。
+/// 样本一律写死权重与停手阈值（<see cref="LookaheadFixtures.BoardConfig"/> / <see cref="LookaheadFixtures.Board2Config"/>，候选格上限按地图取 24）。
+/// retire-legacy-maps 段 A 重挑种子（原为 v5 整局种子 3 → 4 人棋盘图种子 22、截断 24）；段 A2 为压耗时改到 2 人棋盘图、截断 12（专家 6 次部署）：
+/// 探针种子 1–40 在 2 人图截断 12 / 16 内都有已前瞻与真实模拟回应，恰好一次"前瞻改变选择"的有 7、12、13、16、31、37，取最小的 7；
+/// 但 2 人图 16 个小回合内没有一颗种子出现专家自然 Pass，Pass 记录改由单独的小样本（停手阈值写死为极大值，专家每手都停）取得。
 /// 日志端的每条记录都与跑局时从活控制者取下的 <see cref="LookaheadRecord"/> 逐项比对（写入端漏写 / 写错在这里红，而不是只证明"读得出来"）。
 /// </summary>
 public class 专家前瞻的记录Tests
@@ -19,15 +20,23 @@ public class 专家前瞻的记录Tests
     private static readonly PlayerId P0 = LookaheadFixtures.P0;
 
     /// <summary>
-    /// 1 名专家（P0）+ 3 名标准，4 人棋盘图种子 22、截断 24：日志与 P0 每个小回合的活记录（小回合序号 → 记录）。
+    /// 1 名专家（P0）+ 1 名标准，2 人棋盘图种子 <see cref="ExpertSeed"/>、截断 12（retire-legacy-maps 段 A2；段 A 为 4 人棋盘图种子 22、截断 24）：日志与 P0 每个小回合的活记录（小回合序号 → 记录）。
     /// expert-strength 1.3：本样本钉的是一层前瞻的记录（"恰有一次改变选择"等），改为显式的一层配置（专家预设 + 多样补充上限 0 + 两层权重 0，
     /// 阈值 80、候选格上限按地图取 24）——与"未显式给搜索配置"时首部落成的搜索配置逐字段相同。未显式给配置的专家见「回放核对前瞻记录」。
     /// </summary>
     private static readonly Lazy<(MatchLog Log, Dictionary<int, LookaheadRecord?> Live)> ExpertSample = new(() =>
-        RunCapturing(LookaheadFixtures.BoardConfig(OneLayerExpert, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), ExpertSeed, P0));
+        RunCapturing(LookaheadFixtures.Board2Config(OneLayerExpert, LookaheadFixtures.Standard) with { TurnLimit = 12 }, ExpertSeed, P0));
 
-    /// <summary>一层专家样本的种子（retire-legacy-maps 段 A：原 v5 种子 3 → 4 人棋盘图种子 22，挑选依据见类注释）。</summary>
-    private const ulong ExpertSeed = 22;
+    /// <summary>一层专家样本的种子（retire-legacy-maps 段 A：原 v5 种子 3 → 4 人棋盘图种子 22；段 A2：→ 2 人棋盘图种子 7，挑选依据见类注释）。</summary>
+    private const ulong ExpertSeed = 7;
+
+    /// <summary>
+    /// Pass 记录的样本（retire-legacy-maps 段 A2）：同一一层专家，停手阈值写死为 1 000 000（任何批次的加权总分提升都越不过它），2 人棋盘图种子 1、截断 4——专家的每次部署都是 Pass。
+    /// 2 人图短截断里专家不会自然停手，原"整局样本里恰好有一次 Pass"的取法不再可用。
+    /// </summary>
+    private static readonly Lazy<(MatchLog Log, Dictionary<int, LookaheadRecord?> Live)> PassSample = new(() =>
+        RunCapturing(LookaheadFixtures.Board2Config(
+            new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.OneLayerConfig(passThreshold: 1_000_000) }, LookaheadFixtures.Standard) with { TurnLimit = 4 }, 1, P0));
 
     private static PlayerAiConfig OneLayerExpert => new() { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.OneLayerConfig() };
 
@@ -39,11 +48,14 @@ public class 专家前瞻的记录Tests
     /// </summary>
     private const int SamplePermille = 750;
 
-    /// <summary>显式打开多样候选（上限 8）与两层加分（<see cref="SamplePermille"/>）的专家，阈值 80、候选格上限 0（经夹具在 4 人棋盘图上补为 24）。</summary>
+    /// <summary>
+    /// 显式打开多样候选（上限 8）与两层加分（<see cref="SamplePermille"/>）的专家，阈值 80、候选格上限不写（产品路径按 4 人棋盘图落成 24）。
+    /// retire-legacy-maps 段 A2：原写 <c>CandidateCellLimit = 0</c> 再由夹具 <c>WithMapCellLimit</c> 补成 24；夹具删除后显式 0 会真的不限制，故改为不写，口径与段 A1 相同。
+    /// </summary>
     private static PlayerAiConfig StrengthExpert(int width = 4) => new()
     {
         Difficulty = AiDifficulty.Expert,
-        Search = LookaheadFixtures.StrengthConfig(LookaheadFixtures.PassThreshold, permille: SamplePermille, supplement: 8, width: width) with { CandidateCellLimit = 0 },
+        Search = LookaheadFixtures.StrengthConfig(LookaheadFixtures.PassThreshold, permille: SamplePermille, supplement: 8, width: width),
     };
 
     /// <summary>
@@ -52,9 +64,13 @@ public class 专家前瞻的记录Tests
     /// 样本截断在 16 个小回合（专家 4 次部署）：上述样本口径在第 15 个小回合之前都已出现，比夹具的 24 省三分之一。
     /// </summary>
     private static readonly Lazy<(MatchLog Log, Dictionary<int, LookaheadRecord?> Live)> StrengthSample = new(() =>
-        RunCapturing(LookaheadFixtures.BoardConfig(StrengthExpert(), LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 16 }, StrengthSeed, P0));
+        RunCapturing(LookaheadFixtures.Board2Config(StrengthExpert(), LookaheadFixtures.Standard) with { TurnLimit = 12 }, StrengthSeed, P0));
 
-    private const ulong StrengthSeed = 4;
+    /// <summary>
+    /// retire-legacy-maps 段 A2：为压耗时改到 2 人棋盘图、截断 12（专家 6 次部署）。探针种子 1–30：16 颗同时有多样补充成员、非零两层加分、两类新增预演
+    /// 且选中过多样补充成员，取最小的 1（段 A 为 4 人图种子 4、截断 16）。
+    /// </summary>
+    private const ulong StrengthSeed = 1;
 
     /// <summary>本 change 之前的真实专家日志：expert-lookahead 冒烟 `sim-out/expert-lookahead/smoke20/match-0000000000000008.jsonl`（gzip，原文 226 365 字节）。</summary>
     private static string LegacyExpertLogPath => Path.Combine(AppContext.BaseDirectory, "MatchTelemetry", "Fixtures", "expert-lookahead-smoke20-match-0000000000000008.jsonl.gz");
@@ -111,7 +127,7 @@ public class 专家前瞻的记录Tests
     {
         (MatchLog log, _) = ExpertSample.Value;
         LookaheadLogEntry[] records = [.. MatchLog.Parse(log.FullText()).LookaheadTurns.Select(t => t.Lookahead!)];
-        LookaheadLogEntry changed = Assert.Single(records, r => r.Changed);   // 样本口径：种子 22 恰有一次（retire-legacy-maps 段 A 探针；原 v5 种子 3）
+        LookaheadLogEntry changed = Assert.Single(records, r => r.Changed);   // 样本口径：2 人棋盘图种子 7 恰有一次（retire-legacy-maps 段 A2 探针；段 A 为 4 人图种子 22，原 v5 种子 3）
         Assert.True(changed.Chosen >= 1);
         LookaheadCandidateEntry first = changed.Candidates[0];
         LookaheadCandidateEntry chosen = changed.ChosenCandidate!;
@@ -124,14 +140,19 @@ public class 专家前瞻的记录Tests
     [Fact]
     public void 不前瞻与Pass也有记录()
     {
-        // Pass：专家在截断前有一次 Pass（种子 22；原 v5 样本是整局以整轮 Pass 结束），记录状态为 Pass、前瞻集为空、下标 −1。
-        (MatchLog log, Dictionary<int, LookaheadRecord?> live) = ExpertSample.Value;
+        // Pass：专家停手时记录状态为 Pass、前瞻集为空、下标 −1。retire-legacy-maps 段 A2：样本由"一层专家整局里自然出现的一次 Pass"（段 A 为 4 人图种子 22，原 v5 整局以整轮 Pass 结束）
+        // 改为 PassSample（停手阈值写死为极大值，专家每手都停）；写入路径与读回比对不变。
+        (MatchLog log, Dictionary<int, LookaheadRecord?> live) = PassSample.Value;
         LookaheadLogEntry[] pass = [.. MatchLog.Parse(log.FullText()).LookaheadTurns.Select(t => t.Lookahead!).Where(l => l.Status == nameof(LookaheadStatus.Pass))];
         Assert.NotEmpty(pass);
         Assert.All(pass, l => Assert.Empty(l.Candidates));
         Assert.All(pass, l => Assert.Equal(-1, l.Chosen));
         Assert.All(pass, l => Assert.Null(l.ChosenCandidate));
         Assert.Contains(live.Values, r => r!.Status == LookaheadStatus.Pass);
+        // 段 A2 检查补：Pass 样本独立之后不再经「前瞻前后分数可查」的逐项比对，这里把每条日志记录与活记录逐项比一遍（写入端漏写 / 写错 Pass 记录在这里红）。
+        TurnSnapshot[] passTurns = [.. MatchLog.Parse(log.FullText()).Turns.Where(t => t.Player == P0.Value)];
+        Assert.Equal(live.Count, passTurns.Length);
+        Assert.All(passTurns, t => Assert.Equal(LiveText(live[t.Turn]!), LogText(t.Lookahead!)));
 
         // 不前瞻：前瞻宽度 1 的专家（经配置文件的 Search 显式给出）每次非 Pass 的决策都记"不前瞻"，前瞻集只有 1 个候选、前后分数相同、无对手。
         RunConfig w1 = LookaheadFixtures.BoardConfig(
@@ -155,14 +176,16 @@ public class 专家前瞻的记录Tests
     public void 一层配置的记录与改动前相同()
     {
         // 一层配置（多样补充上限 0、两层权重 0）下的专家日志：确定性文本整份逐字节钉住。原黄金值在 expert-strength 2.1 改日志端之前于 v5 种子 3 取下；
-        // retire-legacy-maps 段 A 在 4 人棋盘图种子 22 上改钉为本 change 的基线（G1 黄金值只钉 ToText()，这里钉 JSON）。
+        // retire-legacy-maps 段 A 在 4 人棋盘图种子 22 上改钉为本 change 的基线（G1 黄金值只钉 ToText()，这里钉 JSON）；
+        // 段 A2 为压耗时改到 2 人棋盘图种子 7、截断 12 再钉一次（段 A 值 24 小回合 / 6 条 / E811AA53…）。
         (MatchLog log, _) = ExpertSample.Value;
         // formation-tiers D2：BoardConfig 钉计分规则 v1；确定性文本比引入阵型之前只多首部配置里的一项，去掉后与黄金值比（黄金值不重录）。
         string text = SimFixtures.StripScoringV1(log.DeterministicText());
         // retire-legacy-maps 段 A：原 v5 值 39 小回合 / 10 条前瞻记录 / D22D937F…（D0 之前为 078C5B17…，含 "EffectiveParallelism":28）。
-        Assert.Equal(24, log.Turns.Count);
+        Assert.Equal(12, log.Turns.Count);
         Assert.Equal(6, log.LookaheadTurns.Count());
-        Assert.Equal("E811AA532007D65F3FF7D043A7D2CE20A5E7CF6E39F88E7631E9B8C243609FCC", SimFixtures.Sha256Lf(text));
+        string hash = SimFixtures.Sha256Lf(text);
+        Assert.True(hash == "25CB562F84C47D0B2E01F15544B1A4C25AAB6C4819EAA1D8CC20343C1D64C359", $"一层专家日志的确定性文本变了：现为 {hash}");
         Assert.DoesNotContain("\"Source\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"TwoPly", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"SupplementRehearsals\"", text, StringComparison.Ordinal);
@@ -308,7 +331,7 @@ public class 专家前瞻的记录Tests
         // 显式配置的那名让"回放不读首部的前瞻宽度 / 两层权重"两种写法（归 0 / 回落到难度预设）都会分歧。
         // 变异 M-B3c（回放不读首部的前瞻宽度）、E-B3（回放不读首部的两层权重）→ 本测试红。
         PlayerAiConfig w2 = StrengthExpert(width: 2) with { Search = StrengthExpert(width: 2).Search! with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit } };
-        RunConfig config = LookaheadFixtures.BoardConfig(Expert, w2, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 12 };   // retire-legacy-maps 段 A：16 → 12（4 人棋盘图）
+        RunConfig config = LookaheadFixtures.BoardConfig(Expert, w2, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 8 };   // retire-legacy-maps 段 A：16 → 12（4 人棋盘图）；段 A2：12 → 8（两名专家各 2 次部署，样本口径断言照旧成立）
         MatchLog log = MatchSession.Create(config, 2).Run();
         string path = log.WriteTo(SimFixtures.TempDir("lookahead-replay"));
 

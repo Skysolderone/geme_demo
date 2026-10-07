@@ -35,8 +35,10 @@ public class 冒险概率记录Tests
         Assert.Throws<ArgumentException>(() => RunConfig.FromJson((unset with { FlagRisk = 101 }).ToJson()));
 
         // 新建的局把缺省值落成具体数值（ResolvedFor），不落成就无法与"首部缺该项 = 旧日志 = 0"区分。
-        Assert.Equal(MatchOptions.DefaultFlagRisk, unset.ResolvedFor(FourPlayerBaseMap.Create()).FlagRisk);
-        Assert.Equal(37, (unset with { FlagRisk = 37 }).ResolvedFor(FourPlayerBaseMap.Create()).FlagRisk);
+        // retire-legacy-maps 段 A2：落成用的地图由 v5 改为夹具地图（4 人内置棋盘图）。
+        MapData map = MapCatalog.Resolve(unset.MapId);
+        Assert.Equal(MatchOptions.DefaultFlagRisk, unset.ResolvedFor(map).FlagRisk);
+        Assert.Equal(37, (unset with { FlagRisk = 37 }).ResolvedFor(map).FlagRisk);
     }
 
     [Fact]
@@ -45,13 +47,15 @@ public class 冒险概率记录Tests
         // 该项出现之前的日志首部没有 FlagRisk：当时的原型选区没有冒险（= p 0）。回放 MUST 按 0 重建，重建的首部也不得多出一项。
         // 样本：p = 0 跑出的局去掉这一项。样本种子取"缺省 p 下锁定结果与 p = 0 不同"的第一颗（样本口径，不是凑期望值）——
         // 否则"按缺省 p 重建"与"按 0 重建"得到同一局，回放守门是空证。
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 A2：挑种子用的地图改为与跑局同一张（夹具的 4 人内置棋盘图）；段 A1 之后跑局已在棋盘图上、这里仍按 v5 挑，口径不一致。
+        MapData map = MapCatalog.Resolve(SimFixtures.Board4);
         PlayerId[] ids = [.. Enumerable.Range(0, 4).Select(i => new PlayerId(i))];
         ulong seed = Enumerable.Range(1, 200).Select(i => (ulong)i).First(s =>
             !PrototypeZoneAssignment.Assign(map, new GameSeed(s), ids, MatchOptions.DefaultFlagRisk)
                 .SequenceEqual(PrototypeZoneAssignment.Assign(map, new GameSeed(s), ids, 0)));
 
         RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: seed, turnLimit: 8)) with { FlagRisk = null };
+        Assert.Equal(map.Id, config.MapId);
         MatchLog zero = BatchRunner.Execute(config with { FlagRisk = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"FlagRisk\":0,", text, StringComparison.Ordinal);

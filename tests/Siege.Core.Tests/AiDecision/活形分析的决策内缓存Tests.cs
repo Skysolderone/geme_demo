@@ -203,13 +203,14 @@ public class 活形分析的决策内缓存Tests
     [Fact]
     public void 缓存开关不改变决策序列()
     {
-        // 缩小版（默认套件）：4 人棋盘图（retire-legacy-maps 段 A；原为 v5）、种子 31、4 名 Standard AI、24 个小回合、完整事件流。
-        // （试过 16 个小回合：事件只有 84 条，低于下面的样本下界 100，不放宽，仍取 24。）完整版见下面两条慢测试（种子 1–20：标准图跑到终局，边疆图截断 80 个小回合）。
+        // 缩小版（默认套件）：2 人棋盘图（retire-legacy-maps 段 A2；段 A1 为 4 人棋盘图、原为 v5）、种子 31、2 名 Standard AI、24 个小回合、完整事件流。
+        // 改到 2 人图只为压全量测试耗时：同样 24 个小回合，每名 AI 的决策数翻倍，样本下界（小回合 ≥ 24、事件 ≥ 100）不变。
+        // 完整版见下面两条慢测试（种子 1–20，4 人 / 2 人棋盘图各截断 80 个小回合）。
         // 变异 M-C11（指纹漏掉第 1 行）→ 红 11（含本测试、同一决策内重复盘面只分析一次与眼位 / 活形中性 / 硬约束的多条算例）：这类"缓存改变结果"的错误在这里以整局分歧出现。
         // 变异 M-C10（指纹只记有子 / 无子、不记所有者）→ 0 红，是等价变异：同一决策内的候选盘面都是"同一个批次前盘面 + 本人落子 − 被提的子"，
         // 占用格集合相同则所有者必相同；所有者只在跨决策时才区分得开——又一条缓存不得跨决策的理由。所有者仍留在指纹里。
         // 替换 AI 本身不改变走法：会话自己装的 AI 跑出同一份日志。
-        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard);
+        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard, players: 2) with { MapId = SimFixtures.Board2 };
         (int turns, int events) = AssertCacheNeutral(config, 31, out MatchLog on);
         Assert.True(turns >= 24, $"小回合 {turns}");
         Assert.True(events >= 100, $"事件 {events}");
@@ -217,21 +218,21 @@ public class 活形分析的决策内缓存Tests
         Assert.Equal(Play(config, 31, cacheLife: null).DeterministicText(), on.DeterministicText());
     }
 
+    // retire-legacy-maps 段 A2：两条慢测试由 v5（跑到终局）/ 边疆图（截断 80）改到 4 人 / 2 人内置棋盘图（各截断 80）；方法名随之改。
     [SlowFact]
     [Trait("Category", "Slow")]
-    public void 缓存开关不改变决策序列_标准图种子1至20() => RunSeeds(FourPlayerBaseMap.Id, turnLimit: 600);
+    public void 缓存开关不改变决策序列_4人棋盘图种子1至20() => RunSeeds(SimFixtures.Board4, players: 4, turnLimit: 80);
 
     [SlowFact]
     [Trait("Category", "Slow")]
-    public void 缓存开关不改变决策序列_边疆图种子1至20() => RunSeeds(FrontierMapV2.Id, turnLimit: 80);
+    public void 缓存开关不改变决策序列_2人棋盘图种子1至20() => RunSeeds(SimFixtures.Board2, players: 2, turnLimit: 80);
 
     /// <summary>
-    /// 种子 1–20、4 名 Standard AI、完整事件流。标准图跑到终局（跑局缺省截断 600，实测每局 27–33 个小回合）；
-    /// 边疆图截断在 80 个小回合（20 个大回合）：段 C 实测每小回合约 2.5 s，跑满 600 小回合的 20 × 2 局要数小时。
+    /// 种子 1–20、全员 Standard AI、完整事件流，截断在 80 个小回合：棋盘图整局 180–200 个小回合（段 A1 实测），跑到终局的 20 × 2 局进不了慢测试的时间预算。
     /// </summary>
-    private static void RunSeeds(string mapId, int turnLimit)
+    private static void RunSeeds(string mapId, int players, int turnLimit)
     {
-        RunConfig config = SimFixtures.Config(turnLimit: turnLimit, difficulty: AiDifficulty.Standard) with { MapId = mapId };
+        RunConfig config = SimFixtures.Config(turnLimit: turnLimit, difficulty: AiDifficulty.Standard, players: players) with { MapId = mapId };
         var results = new (int Turns, int Events)[20];
         Parallel.For(0, 20, new ParallelOptions { MaxDegreeOfParallelism = 10 }, i => results[i] = AssertCacheNeutral(config, (ulong)(i + 1)));
         Assert.All(results, r => Assert.True(r.Turns > 0));

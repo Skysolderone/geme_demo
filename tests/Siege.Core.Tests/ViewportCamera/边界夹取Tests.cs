@@ -9,7 +9,7 @@ public class 边界夹取Tests
     [Fact]
     public void v4在最远缩放下两个方向都锁中线()
     {
-        var camera = new BoardCamera(BoundsOf(V4));
+        var camera = new BoardCamera(BoundsOf(Small));
         PlaneRect feasible = camera.Feasible;
 
         Assert.Equal(0f, feasible.MinX);
@@ -23,9 +23,9 @@ public class 边界夹取Tests
     [Fact]
     public void 可行矩形等于外接矩形向内收缩所见范围之半()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(8);
-        PlaneRect bounds = BoundsOf(Frontier);
+        PlaneRect bounds = BoundsOf(Large);
         PlaneRect feasible = camera.Feasible;
 
         Assert.Equal(bounds.MinX + (camera.VisibleWidth * 0.5f), feasible.MinX, 3);
@@ -38,7 +38,7 @@ public class 边界夹取Tests
     [Fact]
     public void 推到尽头_持续向左推注视点停在可行矩形左缘()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(8);
         float left = camera.Feasible.MinX;
         float z = camera.Pose.FocusZ;
@@ -52,17 +52,17 @@ public class 边界夹取Tests
         Assert.Equal(z, camera.Pose.FocusZ);
 
         // 画面中心仍落在地图上
-        PlaneRect bounds = BoundsOf(Frontier);
+        PlaneRect bounds = BoundsOf(Large);
         Assert.InRange(camera.Pose.FocusX, bounds.MinX, bounds.MaxX);
     }
 
     [Fact]
     public void 某方向所见不小于地图跨度时该方向锁中线_另一方向仍可推()
     {
-        // 边疆图 25 × 30 竖长：最远缩放（上限 28）下横向所见 ≥ 地图宽，纵向不够。
-        var camera = new BoardCamera(BoundsOf(Frontier));
-        Assert.True(camera.VisibleWidth >= BoundsOf(Frontier).Width);
-        Assert.True(camera.VisibleDepth < BoundsOf(Frontier).Depth);
+        // 大图 27 × 32 竖长（retire-legacy-maps 段 A2 起为自定合成图，原为边疆图 25 × 30）：最远缩放（上限 28）下横向所见 ≥ 地图宽，纵向不够。
+        var camera = new BoardCamera(BoundsOf(Large));
+        Assert.True(camera.VisibleWidth >= BoundsOf(Large).Width);
+        Assert.True(camera.VisibleDepth < BoundsOf(Large).Depth);
 
         camera.Pan(1f, 1f, 0.5f);
 
@@ -73,7 +73,7 @@ public class 边界夹取Tests
     [Fact]
     public void 拉远后重新夹取_在一角拉到最远注视点被拉回()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(200);
         for (int i = 0; i < 1200; i++)
         {
@@ -97,7 +97,7 @@ public class 边界夹取Tests
     [Fact]
     public void 直接给出界位姿也会被夹取()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Set(new CameraPose(999f, -999f, 0.01f));
 
         Assert.Equal(camera.Nearest, camera.Pose.Distance);

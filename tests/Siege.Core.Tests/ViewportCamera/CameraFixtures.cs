@@ -1,5 +1,5 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Board.Maps;
 using Siege.Presentation.Camera;
 
 namespace Siege.Core.Tests.ViewportCamera;
@@ -10,9 +10,43 @@ internal static class CameraFixtures
     /// <summary>坐标标注外圈的边距（与引擎侧 <c>BoardGeometry.FarLabelMargin</c> 同值；旧固定相机的跨度公式用的就是它）。</summary>
     internal const float Margin = 1.7f;
 
-    internal static MapData V4 => MapCatalog.Resolve("siege-4p-base-v5");
+    /// <summary>
+    /// "整盘一屏可见"的小图（retire-legacy-maps 段 A2 自定）：11×11（方形：旧固定相机按 max(宽, 高) 取跨度，只在方形图上与"一屏看全"的距离相同）、四个角落的 3×3 出生区（0 左下、1 右下、2 右上、3 左上）。
+    /// 相机只读地图的宽高与出生区格；内置棋盘图都是大图，造不出"最远缩放一屏看全"的情形。
+    /// </summary>
+    internal static MapData Small { get; } = SmallMap();
 
-    internal static MapData Frontier => MapCatalog.Resolve("siege-frontier-v2");
+    /// <summary>
+    /// 相机要推屏 / 夹取的大图（retire-legacy-maps 段 A2 自定）：27×32（竖长：最远缩放时横向看全、纵向看不全），六个矩形出生平台，0 起索引闭区间：
+    /// 0 = 9×9 贴左缘（x 0–8、y 22–30）；1 = 8×8（x 18–25、y 1–8）；2 = 7×7 贴右上（x 19–25、y 23–29）；3 = 6×6（x 3–8、y 2–7）；
+    /// 4 = 5×5 中部偏左（x 4–8、y 13–17）；5 = 5×5（x 17–21、y 13–17）。各测试的期望值按这张图的尺寸独立推算。
+    /// </summary>
+    internal static MapData Large { get; } = LargeMap();
+
+    private static MapData Synthetic(string id, int width, int height, ImmutableArray<ImmutableHashSet<Coord>> zones) => new()
+    {
+        Id = id,
+        Width = width,
+        Height = height,
+        MaxPlayers = zones.Length,
+        Obstacles = [],
+        BirthZones = zones,
+        RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
+        ChokePoints = [],
+        CentralEntrance = new Coord(width / 2, height / 2),
+    };
+
+    private static ImmutableHashSet<Coord> Rect(int x0, int x1, int y0, int y1) =>
+        [.. Enumerable.Range(x0, x1 - x0 + 1).SelectMany(x => Enumerable.Range(y0, y1 - y0 + 1).Select(y => new Coord(x, y)))];
+
+    private static MapData SmallMap() =>
+        Synthetic("test-camera-small-11x11", 11, 11, [Rect(0, 2, 0, 2), Rect(8, 10, 0, 2), Rect(8, 10, 8, 10), Rect(0, 2, 8, 10)]);
+
+    private static MapData LargeMap() =>
+        Synthetic("test-camera-large-27x32", 27, 32,
+        [
+            Rect(0, 8, 22, 30), Rect(18, 25, 1, 8), Rect(19, 25, 23, 29), Rect(3, 8, 2, 7), Rect(4, 8, 13, 17), Rect(17, 21, 13, 17),
+        ]);
 
     /// <summary>格心间距 1、棋盘以原点为中心：外接矩形 = 全部格子 + 四周各 <see cref="Margin"/>。</summary>
     internal static PlaneRect BoundsOf(int width, int height) =>

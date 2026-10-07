@@ -121,10 +121,11 @@ internal static class LookaheadFixtures
     /// 截断于 <see cref="BoardTurnLimit"/> 小回合（retire-legacy-maps D1：此前为 v5 整局，不截断）。
     /// 计分规则钉 v1（formation-tiers D2）。本夹具上的黄金值与局面集在 retire-legacy-maps 段 A 重钉。
     /// </summary>
+    /// <remarks>显式给出的 <c>Search</c> 不写候选格上限时，由产品路径按地图取缺省（465 格 → 24，retire-legacy-maps 段 A2 主会话裁决 1；此前测试夹具 <c>WithMapCellLimit</c> 代补）。</remarks>
     internal static RunConfig BoardConfig(params PlayerAiConfig[] players) => new()
     {
         MapId = SimFixtures.Board4,
-        Players = [.. players.Select(p => p with { Weights = Weights, Search = WithMapCellLimit(p.Search, BoardPlayable.Value) })],
+        Players = [.. players.Select(p => p with { Weights = Weights, })],
         SeedStart = 1,
         Count = 1,
         TurnLimit = BoardTurnLimit,
@@ -137,6 +138,12 @@ internal static class LookaheadFixtures
     };
 
     internal static PlayerAiConfig Standard => new() { Difficulty = AiDifficulty.Standard };
+
+    /// <summary>
+    /// 2 人内置棋盘图（<see cref="SimFixtures.Board2"/>）上的一局：其余同 <see cref="BoardConfig"/>（写死权重 / 阈值 / 冒险概率 / 内容集 / 计分规则，截断 <see cref="BoardTurnLimit"/>）。
+    /// retire-legacy-maps 段 A2：耗时大的专家 / 前瞻类测试在样本下界仍成立时改到它（同样的小回合数下每名玩家的决策数翻倍）。
+    /// </summary>
+    internal static RunConfig Board2Config(PlayerAiConfig first, PlayerAiConfig second) => BoardConfig(first, second) with { MapId = SimFixtures.Board2 };
 
     /// <summary><c>难度分级Tests.三档旧难度逐步不变</c> 与 <see cref="FourStandardSeed1"/> 的小回合截断（16，四个大回合；高难每局约 3 s）。</summary>
     internal const int DifficultyTurnLimit = 16;
@@ -151,29 +158,11 @@ internal static class LookaheadFixtures
         return (session, session.Run());
     });
 
-    /// <summary>
-    /// 段 A 之前的 v5 整局配置（不截断）。retire-legacy-maps 段 A1 只留给"在棋盘图上结论改变、待主会话裁决"的测试，段 B 删 v5 时一并处理。
-    /// </summary>
-    internal static RunConfig LegacyV5Config(params PlayerAiConfig[] players) =>
-        BoardConfig(players) with { MapId = Siege.Core.Board.Maps.FourPlayerBaseMap.Id, TurnLimit = 600, Players = [.. players.Select(p => p with { Weights = Weights })] };
-
     /// <summary>4 人棋盘图的可落子格数（只算一次）。</summary>
     private static readonly Lazy<int> BoardPlayable = new(() => Siege.Core.Board.Maps.MapCatalog.Resolve(SimFixtures.Board4).PlayableCount);
 
     /// <summary>4 人棋盘图的可落子格数。</summary>
     internal static int BoardPlayableCells => BoardPlayable.Value;
-
-    /// <summary>
-    /// 显式给出的搜索配置若未设候选格上限（0），补上该图的缺省上限（<see cref="AiSearchConfig.DefaultCellLimitFor"/>：可落子格 &gt; 150 取 24）。
-    /// retire-legacy-maps 段 A：v5 只有 105 格、缺省上限就是 0，显式配置与未配置的玩家同口径；换到 465 格的棋盘图后，未配置的玩家经
-    /// <see cref="AiSearchConfig.ForMap"/> 取 24，显式配置的却全盘枚举——两者不再同口径（"缺省预设的专家与一层配置逐步相同"随之失真），且专家单步耗时放大一个量级。
-    /// 补上之后显式与未配置的玩家仍按同一上限生成候选，与三个入口对<b>未显式配置</b>搜索参数的玩家在该图上的实际生效值一致。
-    /// 注意这是测试侧的口径归一，<b>不是</b>产品行为：产品里显式给出的 <c>Search</c> 原样生效（<c>MatchSession.AttachConfigured</c>），
-    /// <c>CandidateCellLimit</c> 缺省 0 = 不限制，跑局级的 <c>CandidateCellLimit</c> / <c>--cell-limit</c> 也不作用于它——
-    /// 用 <c>run --config</c> 给 <c>Players[].Search</c> 而不写候选格上限时，大图上该玩家全盘枚举（retire-legacy-maps 段 A1 检查记录，待主会话裁决）。
-    /// </summary>
-    internal static AiSearchConfig? WithMapCellLimit(AiSearchConfig? search, int playableCells) =>
-        search is { CandidateCellLimit: 0 } s ? s with { CandidateCellLimit = AiSearchConfig.DefaultCellLimitFor(playableCells) } : search;
 
     /// <summary>
     /// 固定局面集（expert-lookahead D12）：4 人棋盘图（<see cref="BoardConfig"/>，截断 <see cref="BoardTurnLimit"/>）、种子 1–3（或 <paramref name="seeds"/>）、4 名标准 AI 的真实对局中的部署决策，按全局决策序号每 <paramref name="every"/> 个取一个。
@@ -188,8 +177,7 @@ internal static class LookaheadFixtures
         ProbePositionsOn(BoardConfig(Standard, Standard, Standard, Standard), every, probe, seeds);
 
     /// <summary>
-    /// 同 <see cref="ProbePositions"/>，但局面取自给定配置的对局。只给"棋盘图上结论变了、待主会话裁决"的测试暂时钉回 v5 用
-    /// （<see cref="LegacyV5Config"/>，retire-legacy-maps 段 A1 报告逐条列出）。
+    /// 同 <see cref="ProbePositions"/>，但局面取自给定配置的对局（如改截断）。
     /// </summary>
     internal static int ProbePositionsOn(RunConfig config, int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
     {
@@ -224,8 +212,7 @@ internal static class LookaheadFixtures
     internal static (HeuristicTurnController Ai, int Rehearsals, Siege.Core.Determinism.RandomStream Stream) Shadow(
         MatchFlow match, BatchContext context, AiDifficulty difficulty, AiSearchConfig config)
     {
-        // 与对局里的 AI 同口径：显式配置未设候选格上限时补上该图的缺省上限（见 WithMapCellLimit）。
-        config = WithMapCellLimit(config, match.Map.PlayableCount)!;
+        // 显式配置未写候选格上限时，AI 按开局地图的可落子格数取缺省（AiSearchConfig.CellLimitOn），与对局里的 AI 同口径。
         var batch = new StagedBatch(match.Board, context);
         int rehearsals = 0;
         Siege.Core.Determinism.RandomStream stream = match.Seed.Stream(HeuristicAi.StreamName(context.Player));

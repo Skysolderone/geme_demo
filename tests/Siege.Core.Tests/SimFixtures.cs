@@ -19,6 +19,9 @@ internal static class SimFixtures
     /// <summary>跑局夹具的 4 人地图：4 人内置棋盘图（retire-legacy-maps D1；此前钉 <c>siege-4p-base-v5</c>）。写成字面量而不是 <c>MapCatalog.DefaultId</c>，不随缺省漂移。</summary>
     internal const string Board4 = "siege-4p-board-v1";
 
+    /// <summary>2 人内置棋盘图（366 格）：retire-legacy-maps 段 A2 起，耗时大的专家 / 前瞻类测试在样本下界仍成立时改到它。</summary>
+    internal const string Board2 = "siege-2p-board-v1";
+
     /// <summary>
     /// 4 人内置棋盘图（<see cref="Board4"/>）Easy 配置。retire-legacy-maps 段 A 起由 <c>siege-4p-base-v5</c> 改钉到棋盘图：
     /// 依赖本夹具的黄金值、样本口径与"逐步相同"基线在新图上重钉为本 change 的基线（逐条记录在各测试注释里）。

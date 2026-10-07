@@ -83,7 +83,17 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
     /// </remarks>
     private static MatchFlow Played(string mapId, ulong seed, int turns, out MatchRunner runner, bool skipProtection = false)
     {
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(mapId), new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate);
+        MatchFlow match;
+        if (mapId == SmallMapId)
+        {
+            MapData small = MatchFixtures.Map("C5", "E3", "E5", "E7", "G5");
+            match = MatchFlow.CreateUnvalidated(small, new GameSeed(seed), MatchFixtures.All, Relics.RelicGenerator.Generate(small, new GameSeed(seed)), MatchOptions.Immediate);
+        }
+        else
+        {
+            match = MatchFlow.Create(MapCatalog.Resolve(mapId), new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate);
+        }
+
         match.PlantPrototype();
         if (skipProtection)
         {
@@ -108,9 +118,15 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
         return match;
     }
 
+    /// <summary>
+    /// 合成 9×9 小图（<see cref="MatchFixtures.Map(string[])"/>，四个 3×3 角落出生区、5 个公共信物格，跳过地图校验）的标记。
+    /// retire-legacy-maps 段 A2：默认套件里"自然走完保护期、下到有接触的中盘"的两行由 v5 改到它——棋盘图上同样的局面要 24 个小回合（约 25 秒，见慢测试版）。
+    /// </summary>
+    private const string SmallMapId = "small-9x9";
+
     [Theory]
-    [InlineData("siege-4p-base-v5", 7UL, 14, 3, 4, false, true)]
-    [InlineData("siege-4p-base-v5", 11UL, 16, 3, 3, false, true)]
+    [InlineData(SmallMapId, 7UL, 14, 3, 4, false, true)]
+    [InlineData(SmallMapId, 11UL, 16, 3, 3, false, true)]
     [InlineData("board:1", 3UL, 5, 2, 2, true, false)]
     public void 与完整预演一致(string mapId, ulong seed, int firstTurns, int step, int checkpoints, bool skipProtection, bool requireContact) =>
         Compare(mapId, seed, firstTurns, step, checkpoints, skipProtection, requireContact);

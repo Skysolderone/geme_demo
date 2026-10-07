@@ -14,21 +14,22 @@ public class 终端专家对局Tests
     [Fact]
     public void 专家难度开局_AI按专家决策()
     {
-        // 脚本同 终端对局Tests：选 1 号区，第 1 大回合落 B1 并确认，第 2 大回合 Pass，第 3 大回合提示处输入耗尽干净退出（保护期内不依赖 AI 走法）。
+        // 脚本同 终端对局Tests：选 1 号区，第 1 大回合落 AH27 并确认，第 2 大回合 Pass，第 3 大回合提示处输入耗尽干净退出（保护期内不依赖 AI 走法）。
+        // retire-legacy-maps 段 A2：由 v5（落 B1）改到 4 人内置棋盘图（出生区 1 = AH27–AL33 的出生棋盘）。
         // 权重与停手阈值写死（testing.md「依赖 AI 实际怎么走的断言要把权重写死」）。
         // 变异 M-B2（终端建 AI 时用高难的搜索配置）→ 本测试红。
         var ais = new Dictionary<PlayerId, HeuristicTurnController>();
         var output = new StringWriter();
         int exit = PlayCommand.Run(
-            42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nB1 B\nv\nok\n\npass\n"), output,
-            Board.Maps.FourPlayerBaseMap.Create(),   // builtin-board-maps D4：脚本坐标是 v5 的，显式钉回 v5
+            42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nAH27 B\nv\nok\n\npass\n"), output,
+            Board.Maps.MapCatalog.Resolve(SimFixtures.Board4),
             weights: LookaheadFixtures.Weights, passThreshold: LookaheadFixtures.PassThreshold, flagRisk: 0, contentSet: ContentSet.V1,
             onAi: (p, ai) => ais.Add(p, ai));
         string text = output.ToString();
 
         Assert.Equal(0, exit);
         Assert.Contains("对手 3 名 Expert AI（前瞻宽度 4）", text, StringComparison.Ordinal);
-        Assert.Contains("玩家1(你) 落子 B1B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 AH27B", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 42", text, StringComparison.Ordinal);
 
@@ -36,7 +37,7 @@ public class 终端专家对局Tests
         Assert.All(ais.Values, ai =>
         {
             Assert.Equal(AiSearchConfig.DefaultLookaheadWidth, ai.Config.LookaheadWidth);
-            Assert.Equal(AiSearchConfig.Expert with { CandidateCellLimit = ai.Config.CandidateCellLimit, PassThreshold = LookaheadFixtures.PassThreshold }, ai.Config);
+            Assert.Equal(AiSearchConfig.Expert with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, PassThreshold = LookaheadFixtures.PassThreshold }, ai.Config);   // 465 格 → 候选格上限 24
             Assert.True(ai.Decisions.Count >= 2, $"只做了 {ai.Decisions.Count} 次决策");   // 样本口径：两个大回合里每名 AI 都部署过
             Assert.NotNull(ai.LastLookahead);   // 专家的每次部署决策都留前瞻记录（宽度 0 的控制者恒为 null）
         });

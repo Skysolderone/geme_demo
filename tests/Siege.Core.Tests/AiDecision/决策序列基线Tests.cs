@@ -19,7 +19,8 @@ namespace Siege.Core.Tests.AiDecision;
 public class 决策序列基线Tests
 {
     [Theory]
-    [InlineData("siege-4p-base-v5", 1UL, 0, "decisions-siege-4p-base-v5-seed1.txt")]
+    // retire-legacy-maps 段 A2：v5 那一行（种子 1 跑到终局，基线 decisions-siege-4p-base-v5-seed1.txt）随 v5 删除，夹具文件一并删除；
+    // 棋盘图上的同一守门由下面 board:1 一行承担（design D2「删只测旧图的测试与对应黄金值」）。
     [InlineData("board:1", 1UL, 12, "decisions-board1-seed1.txt")]
     public void 决策序列与基线相同(string mapId, ulong seed, int maxMajorRounds, string fixture)
     {

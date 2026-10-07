@@ -60,9 +60,11 @@ public class 前瞻的近似两层加分Tests
         // 真实局面：固定局面集上，两层加分（1000‰、多样候选关闭）至少改变一次选择（相对一层配置），且改变时被选者的加分严格更高。
         // retire-legacy-maps 段 A：局面集由 v5 种子 1 整局改为 4 人棋盘图种子 1 的前 20 个小回合（每 2 个取 1 → 10 个局面，恰为下面的下界）。
         // 两层扫描在 465 格的大图上逐格预演，单个局面的代价是 v5 的数倍，截断取 20 而不是夹具的 24。
+        // 段 A2：再改为前 10 个小回合、每个部署决策都取（10 个局面，恰为下界 10；单测由约 22 s 降到约 9 s，全量测试里它原是最后收尾的一条）。
+        // 试过改到 2 人棋盘图（种子 1、2 各 10 个局面）：两层加分一次都没改变选择（反面不成立），且单测只省约 5 s，维持 4 人图。
         int compared = 0;
         int changed = 0;
-        ProbePositionsOn(BoardConfig(Standard, Standard, Standard, Standard) with { TurnLimit = 20 }, every: 2, (match, batch) =>
+        ProbePositionsOn(BoardConfig(Standard, Standard, Standard, Standard) with { TurnLimit = 10 }, every: 1, (match, batch) =>
         {
             (HeuristicTurnController one, _, _) = Shadow(match, batch.Context, AiDifficulty.Expert, ExpertConfig(PassThreshold));
             (HeuristicTurnController two, _, _) = Shadow(match, batch.Context, AiDifficulty.Expert, StrengthConfig(PassThreshold, supplement: 0));

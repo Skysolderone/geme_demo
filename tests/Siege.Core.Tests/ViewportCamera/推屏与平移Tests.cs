@@ -8,7 +8,7 @@ public class 推屏与平移Tests
 {
     private static BoardCamera FrontierZoomedIn()
     {
-        var camera = new BoardCamera(BoundsOf(Frontier));
+        var camera = new BoardCamera(BoundsOf(Large));
         camera.Zoom(6);
         return camera;
     }
@@ -66,9 +66,9 @@ public class 推屏与平移Tests
     [Fact]
     public void 平移速度与距离成正比()
     {
-        var near = new BoardCamera(BoundsOf(Frontier));
+        var near = new BoardCamera(BoundsOf(Large));
         near.Zoom(10);
-        var far = new BoardCamera(BoundsOf(Frontier));
+        var far = new BoardCamera(BoundsOf(Large));
         far.Zoom(4);
         float ratio = far.Pose.Distance / near.Pose.Distance;
         Assert.True(ratio > 1.5f);
@@ -97,7 +97,7 @@ public class 推屏与平移Tests
     [Fact]
     public void 小地图上等价于固定相机_最远缩放下任意平移意图位姿不变()
     {
-        var camera = new BoardCamera(BoundsOf(V4));
+        var camera = new BoardCamera(BoundsOf(Small));
         CameraPose initial = camera.Pose;
 
         foreach ((float right, float up) in new[] { (1f, 0f), (-1f, 0f), (0f, 1f), (0f, -1f), (1f, 1f), (-1f, -1f) })
