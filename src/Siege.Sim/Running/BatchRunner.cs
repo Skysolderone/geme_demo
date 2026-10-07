@@ -87,14 +87,30 @@ public static class BatchRunner
         return [.. results.OrderBy(l => l.Seed)];
     }
 
+    /// <summary>
+    /// 地图必须能经校验加载，否则抛 <see cref="MapValidationException"/>（与 <see cref="GameBoard.Load"/> 同一判据）。入口在开跑 / 开局之前调用，
+    /// 让显式给的地图文件（如缺规格档字段、按已删除的标准档读入的旧文件）在写盘或读档之前就报出校验结果（retire-legacy-maps 段 C）。
+    /// </summary>
+    public static void RequireLoadable(MapData map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        MapValidationResult result = MapValidator.Validate(map);
+        if (!result.IsValid)
+        {
+            throw new MapValidationException(result);
+        }
+    }
+
     /// <summary>执行并把配置、每局日志与汇总写进 <paramref name="outputDir"/>。</summary>
     public static BatchSummary ExecuteToDirectory(RunConfig config, string outputDir, int parallelism, TextWriter? progress = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         // 先解析地图再建输出目录：未知地图标识要在写出任何东西之前报错（strict-cli D4：半份输出比没有输出更糟）。
-        // 每局换图时解析的是第 0 局的图（同样起到"先验证再写盘"的作用）；生成图的可落子格都在边疆档区间内，按它落成的 K 对每一局都成立。
+        // 每局换图时解析的是第 0 局的图（同样起到"先验证再写盘"的作用）；候选格上限按第 0 局的图落成一次、对每一局沿用（board: 生成图的可落子格预算 4 人 300–800、3 人 225–600、2 人 150–400，
+        // 只有恰为 150 格的 2 人图会落在"大于 150 取 24"分档的另一侧，此时沿用第 0 局的 K，未单独处理）。
         config.Validated();
         MapData map = MapCatalog.Resolve(config.MapIdAt(0));
+        RequireLoadable(map);   // 过不了校验的地图文件同样在写出任何东西之前报错（否则在并行跑局里以 AggregateException 崩溃、留下半份输出）
         // 候选格上限先按地图落成具体值，config.json 记录的就是实际生效的 K（小图上原样不变）。
         config = config.ResolvedFor(map);
         Directory.CreateDirectory(outputDir);

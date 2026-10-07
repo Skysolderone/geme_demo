@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.MapSelection;
 /// </summary>
 public class 选图界面守门Tests
 {
-    private static readonly string Src = Path.Combine(FrontierFixtures.RepoRoot(), "src");
+    private static readonly string Src = Path.Combine(TestMaps.RepoRoot(), "src");
 
     /// <summary>选图界面的全部源码：表现层的选图视图模型 + 图形版脚本。</summary>
     private static (string Path, string Text)[] SelectionSources()

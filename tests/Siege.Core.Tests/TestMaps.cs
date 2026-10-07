@@ -89,6 +89,30 @@ internal static class TestMaps
 
     internal static Coord At(string notation) => Coord.Parse(notation);
 
+    /// <summary>左下角 (<paramref name="x0"/>, <paramref name="y0"/>)、宽 <paramref name="w"/> 高 <paramref name="h"/> 的矩形格集（先行后列）。</summary>
+    internal static IEnumerable<Coord> Rect(int x0, int y0, int w, int h) =>
+        from y in Enumerable.Range(y0, h)
+        from x in Enumerable.Range(x0, w)
+        select new Coord(x, y);
+
+    /// <summary>不在任何出生区、不是信物、不是中央入口或咽喉的可落子格（先行后列），供测试增补信物 / 障碍。</summary>
+    internal static Coord[] FreeCells(MapData map) =>
+        [.. map.AllCoords().Where(c =>
+            map.IsPlayable(c) && map.BirthZoneOf(c) is null && !map.RelicCells.ContainsKey(c)
+            && c != map.CentralEntrance && !map.ChokePoints.Contains(c))];
+
+    /// <summary>仓库根目录（含 <c>siege.sln</c>）。retire-legacy-maps 段 C 由已删除的边疆档测试夹具迁来。</summary>
+    internal static string RepoRoot()
+    {
+        string? dir = AppContext.BaseDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "siege.sln")))
+        {
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        return dir ?? throw new InvalidOperationException("找不到仓库根目录（siege.sln）。");
+    }
+
     internal static string[] Notations(this IEnumerable<Coord> coords) =>
         coords.Select(c => c.ToNotation()).ToArray();
 }

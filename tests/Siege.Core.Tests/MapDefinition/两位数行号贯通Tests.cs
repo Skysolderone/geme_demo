@@ -26,7 +26,7 @@ public class 两位数行号贯通Tests
             Height = 32,
             MaxPlayers = 2,
             Obstacles = [Coord.Parse("Z30")],
-            BirthZones = [[.. FrontierFixtures.Rect(0, 24, 5, 5)], [.. FrontierFixtures.Rect(20, 0, 5, 5)]],
+            BirthZones = [[.. TestMaps.Rect(0, 24, 5, 5)], [.. TestMaps.Rect(20, 0, 5, 5)]],
             RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty.Add(Coord.Parse("C28"), new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)),
             ChokePoints = [Coord.Parse("M27")],
             CentralEntrance = Coord.Parse("N16"),

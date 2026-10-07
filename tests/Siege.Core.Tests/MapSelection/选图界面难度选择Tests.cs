@@ -13,7 +13,7 @@ namespace Siege.Core.Tests.MapSelection;
 /// </summary>
 public class 选图界面难度选择Tests
 {
-    private static readonly string Scripts = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
+    private static readonly string Scripts = Path.Combine(TestMaps.RepoRoot(), "src", "godot", "scripts");
 
     [Fact]
     public void 难度选择缺省标准_四档按次序_可预选可切换()

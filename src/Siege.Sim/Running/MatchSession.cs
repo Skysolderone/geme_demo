@@ -814,7 +814,7 @@ public sealed class MatchSession
                 Returned = kv.Value.Returned,
             })];
 
-    /// <summary>出生区的边长：格子外接矩形的较长边（生成图与手工边疆图的平台都是整块正方形，平台内无障碍）。</summary>
+    /// <summary>出生区的边长：格子外接矩形的较长边（棋盘档的出生区就是整块出生棋盘，棋盘内无障碍；出生棋盘全部同尺寸）。</summary>
     private static int SideOf(IEnumerable<Coord> zone)
     {
         Coord[] cells = [.. zone];

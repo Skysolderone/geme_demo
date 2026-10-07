@@ -9,7 +9,7 @@ using Siege.Sim.Running;
 namespace Siege.Sim;
 
 /// <summary>
-/// 批量跑局程序（裁决 11）。子命令：<c>map</c>（打印并导出基准地图）、<c>run</c>（批量跑局）、<c>replay</c>（凭种子 + 配置重跑比对）、
+/// 批量跑局程序（裁决 11）。子命令：<c>map</c>（打印地图，给 <c>--out</c> 才导出）、<c>run</c>（批量跑局）、<c>replay</c>（凭种子 + 配置重跑比对）、
 /// <c>analyze</c>（只读日志目录出平衡报告）。
 /// </summary>
 public static class Program
@@ -50,7 +50,9 @@ public static class Program
                 _ => Unknown(args[0]),
             };
         }
-        catch (Exception ex) when (ex is ArgumentException or FormatException or FileNotFoundException or SiegeRuleException or MapGenerationException)
+        // MapValidationException：显式给的地图文件过不了校验（retire-legacy-maps 段 C 起最常见的是缺规格档字段的旧地图文件，按已删除的标准档读入后被拒），
+        // 报校验结果、退出码 1，不得以未处理异常崩溃。
+        catch (Exception ex) when (ex is ArgumentException or FormatException or FileNotFoundException or SiegeRuleException or MapGenerationException or MapValidationException)
         {
             Console.Error.WriteLine($"错误：{ex.Message}");
             return 1;
@@ -69,7 +71,7 @@ public static class Program
         Console.WriteLine("用法：");
         Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
-        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
+        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <地图id或文件>] [--players <人数，缺省取地图人数上限>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>] [--flag-risk <原型插旗冒险概率 0–100，缺省 {Core.Match.MatchOptions.DefaultFlagRisk}>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
@@ -100,6 +102,7 @@ public static class Program
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
         mapId = MaterializeMapRequest(mapId, output, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
+        BatchRunner.RequireLoadable(map);   // 过不了校验的地图文件在读档、打印补给之前报错
         return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile);
     }
 
@@ -154,17 +157,16 @@ public static class Program
     // ---------- map ----------
 
     /// <summary>
-    /// 地图工具：打印一张地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、校验结果与报告项）；
-    /// 内置图（含内置棋盘图，文件名用内置名、不含冒号）另导出 maps/&lt;id&gt;.json（权威地图文件）。<c>--map</c> 缺省为缺省地图（<see cref="MapCatalog.DefaultId"/>）；
-    /// 给地图文件路径或棋盘图标识（<c>board:</c>，标识里有冒号）时只打印不导出，生成图要落盘用 <c>--out</c> 或对应的内置名。
-    /// <c>--out</c> 把这张图另存为指定文件（生成图只有这一条落盘的路）；目标不得是内置图的权威文件（<see cref="RequireNotAuthoritativeMapFile"/>）。
+    /// 地图工具：打印一张地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、校验结果与报告项）。<c>--map</c> 缺省为缺省地图（<see cref="MapCatalog.DefaultId"/>）。
+    /// 只有给了 <c>--out</c> 才把这张图导出到指定文件（导出的文件可直接当 <c>--map</c> 用）；不给就只打印、不写任何文件。
+    /// retire-legacy-maps 段 C：内置图全部由棋盘生成器产出（内容由导出摘要黄金值守住），不再有 <c>maps/&lt;id&gt;.json</c> 权威文件，
+    /// 原"按内置标识请求时另导出到 maps/"与"--out 不得指向权威文件"的守护随之删除。
     /// </summary>
     private static int ExportMap(CommandLine cli, Func<ulong> mapSeedSource)
     {
         string? mapId = cli.GetOrNull("map");
         string? outPath = cli.GetOrNull("out");
         cli.EnsureRecognized();   // map 只认 --map / --out；结算在导出之前（strict-cli 2.4）
-        RequireNotAuthoritativeMapFile(outPath);   // 先于一切输出：手滑不得覆盖内置图的权威文件
         mapId = MaterializeMapRequest(mapId, Console.Out, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);
         MapValidationResult result = MapValidator.Validate(map);
@@ -236,8 +238,8 @@ public static class Program
         Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区  r 出生区信物  o 公共信物  R 公共高档信物");
         Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =）  F 林地  . 土路  D 荒漠  M 沼泽  P 岩台  S 浅滩   格间 | 与行间 -- 为栅栏");
 
-        // --out：把这张图导出到指定文件（map-generator 2.6）。生成图靠它落成普通地图文件——标识里有冒号，做不了 Windows 文件名，
-        // 而且 maps/ 是内置图的权威目录，查看生成图不得往里写。导出的文件按路径加载，与按标识生成的地图逐项相同。
+        // --out：把这张图导出到指定文件（map-generator 2.6），这是 map 子命令唯一的落盘路径。棋盘图标识里有冒号，做不了 Windows 文件名，
+        // 要长期保存一张图就靠它落成普通地图文件；导出的文件按路径加载，与按标识生成的地图逐项相同。
         if (outPath is not null)
         {
             if (Path.GetDirectoryName(Path.GetFullPath(outPath)) is { Length: > 0 } outDir)
@@ -250,44 +252,7 @@ public static class Program
             Console.WriteLine($"已导出 {outPath}（用 --map {outPath} 可加载这张图）");
         }
 
-        // 只导出"按内置标识请求"的图。判据是请求的标识而不是读到的 map.Id：设计师拿一份 v4 的副本改了地形、Id 没改，
-        // `map --map 副本.json` 只是想看一眼，不得因此覆盖 maps/ 里的权威文件。
-        string requested = string.IsNullOrWhiteSpace(mapId) ? MapCatalog.DefaultId : mapId.Trim();
-        if (!MapCatalog.BuiltinIds.Contains(requested))
-        {
-            return 0;
-        }
-
-        // 导出地图文件，供设计师脱离代码维护
-        Directory.CreateDirectory("maps");
-        string path = Path.Combine("maps", $"{map.Id}.json");
-        File.WriteAllText(path, MapFile.ToJson(map));
-        Console.WriteLine();
-        Console.WriteLine($"已导出 {path}");
         return 0;
-    }
-
-    /// <summary>
-    /// <c>map --out</c> 的目标 MUST NOT 是内置图的权威文件（任一 <c>maps/</c> 目录下的 <c>&lt;内置标识&gt;.json</c>）：那些文件只由"按内置标识请求"的导出维护，
-    /// 拿别的图（尤其是生成图）覆盖上去，地图文件与同名内置图就对不上了。文件此刻存在与否都拒绝；<c>maps/</c> 下的其它文件名允许。
-    /// 判据只看路径本身（与当前目录无关），文件名与目录名不分大小写（Windows）。
-    /// </summary>
-    private static void RequireNotAuthoritativeMapFile(string? outPath)
-    {
-        if (outPath is null)
-        {
-            return;
-        }
-
-        string full = Path.GetFullPath(outPath);
-        string file = Path.GetFileName(full);
-        string? directory = Path.GetFileName(Path.GetDirectoryName(full));
-        if (string.Equals(directory, "maps", StringComparison.OrdinalIgnoreCase)
-            && MapCatalog.BuiltinIds.Any(id => string.Equals(file, id + ".json", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new ArgumentException(
-                $"--out {outPath} 指向内置地图的权威文件（maps/ 下的 {file}），拒绝覆盖。请换一个文件名；要更新权威文件，用 map --map {Path.GetFileNameWithoutExtension(file)}（不带 --out）。");
-        }
     }
 
     /// <summary>文本图的单格两字符：高度数字 + 标记。岩石与未架桥深水不可落子，画成 ## / ~~，桥格按可落子格画并标 =。</summary>

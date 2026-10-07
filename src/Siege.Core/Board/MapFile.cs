@@ -33,8 +33,9 @@ public static class MapFile
             Width = map.Width,
             Height = map.Height,
             MaxPlayers = map.MaxPlayers,
-            // 标准档不写出：四份既有 maps/*.json 逐字节不变；缺字段按标准档读入（frontier-map 1.1）。
-            Profile = map.Profile == MapProfile.Standard ? null : map.Profile,
+            // 缺省档（标准档，retire-legacy-maps 起已删除）不写出；缺字段按它读入、随后被校验器以"已删除"拒绝（frontier-map 1.1）。
+            // 其余档写出枚举名（棋盘档 "Board"）——与改用字符串之前 JsonStringEnumConverter 的写法逐字节相同，内置棋盘图摘要不变。
+            Profile = map.Profile == MapProfile.Standard ? null : JsonSerializer.SerializeToElement(map.Profile.ToString()),
             // 空清单不写出：既有地图的导出文件与引入棋盘清单之前逐字节相同（board-map D2）。
             Boards = map.Boards.IsDefaultOrEmpty
                 ? null
@@ -115,13 +116,51 @@ public static class MapFile
         };
     }
 
-    /// <summary>规格档缺省为标准档；写成数字且不是已定义的档位时响亮失败（字符串形式的未知值由 JSON 反序列化直接拒绝）。</summary>
-    private static MapProfile ParseProfile(MapProfile? profile)
+    /// <summary>边疆档在枚举里的旧取值（retire-legacy-maps 段 C 删除枚举成员前为 1）：文件里写成数字 1 时同样报"已删除"。</summary>
+    private const int RetiredFrontierValue = 1;
+
+    /// <summary>
+    /// 规格档：省略（或 <c>null</c>）即缺省档 <see cref="MapProfile.Standard"/>（随后由校验器以"标准档已删除"拒绝）；
+    /// 枚举名不分大小写、数字须是已定义的取值。边疆档（<c>"Frontier"</c> 或旧取值 1）已于 retire-legacy-maps 删除，读到即响亮失败并说明；
+    /// 其余未知取值同样响亮失败。
+    /// </summary>
+    private static MapProfile ParseProfile(JsonElement? profile)
     {
-        MapProfile value = profile ?? MapProfile.Standard;
-        return Enum.IsDefined(value)
-            ? value
-            : throw new FormatException($"地图文件的 Profile 为 {(int)value}：规格档只能是 Standard（标准）/ Frontier（边疆）/ Board（棋盘）。");
+        if (profile is not { } element || element.ValueKind == JsonValueKind.Null)
+        {
+            return MapProfile.Standard;
+        }
+
+        const string allowed = "规格档只能是 Board（棋盘）；Standard（标准）与 Frontier（边疆）已于 retire-legacy-maps 删除。";
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+            {
+                string text = element.GetString()!.Trim();
+                if (string.Equals(text, "Frontier", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new FormatException($"地图文件的 Profile 为 {text}：边疆档已于 retire-legacy-maps 删除，所有地图都由互不连通的棋盘组成。");
+                }
+
+                string? name = Enum.GetNames<MapProfile>().FirstOrDefault(n => string.Equals(n, text, StringComparison.OrdinalIgnoreCase));
+                return name is not null
+                    ? Enum.Parse<MapProfile>(name)
+                    : throw new FormatException($"地图文件的 Profile 为 {text}：{allowed}");
+            }
+
+            case JsonValueKind.Number when element.TryGetInt32(out int number):
+                if (number == RetiredFrontierValue)
+                {
+                    throw new FormatException($"地图文件的 Profile 为 {number}（边疆档）：边疆档已于 retire-legacy-maps 删除，所有地图都由互不连通的棋盘组成。");
+                }
+
+                return Enum.IsDefined((MapProfile)number)
+                    ? (MapProfile)number
+                    : throw new FormatException($"地图文件的 Profile 为 {number}：{allowed}");
+
+            default:
+                throw new FormatException($"地图文件的 Profile 不是规格档名：{element.GetRawText()}。{allowed}");
+        }
     }
 
     /// <summary>
@@ -337,9 +376,12 @@ public static class MapFile
 
         public int MaxPlayers { get; set; }
 
-        /// <summary>规格档（Standard 标准 / Frontier 边疆 / Board 棋盘）。省略即标准档；标准档写出时也省略。</summary>
+        /// <summary>
+        /// 规格档名（现行只有 Board 棋盘）。省略即缺省档（标准档，已删除）；缺省档写出时也省略。
+        /// 按原始 JSON 读入而不是枚举：已删除的 Frontier 要给出明确报错（见 <see cref="ParseProfile"/>），交给枚举转换器只会得到一条通用的 JSON 异常。
+        /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public MapProfile? Profile { get; set; }
+        public JsonElement? Profile { get; set; }
 
         /// <summary>棋盘清单（board-map）。省略即空清单；空清单写出时也省略。</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -63,7 +63,7 @@ public class 各入口的地图专属AI权重Tests
         Assert.Contains("\"Weights\"", withProbe.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
         // 批量入口与会话建局都经同一个落成（取缺省登记表的那个重载）：任一处绕开它，"登记了就落成"在产品里就不成立。
-        string running = Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Sim", "Running");
+        string running = Path.Combine(TestMaps.RepoRoot(), "src", "Siege.Sim", "Running");
         Assert.Contains("config = config.ResolvedFor(map);", File.ReadAllText(Path.Combine(running, "BatchRunner.cs")), StringComparison.Ordinal);
         Assert.Contains("config = config.ResolvedFor(map);", File.ReadAllText(Path.Combine(running, "MatchSession.cs")), StringComparison.Ordinal);
     }
@@ -171,7 +171,7 @@ public class 各入口的地图专属AI权重Tests
     {
         // 规格 Scenario：图形版开局 → AI 权重按本局地图标识取（登记了覆盖取覆盖，否则默认表）。src/godot 不在解决方案里，按 testing.md 用源码扫描：
         // 建 AI 的唯一一处传入按本局地图标识取得的权重，不自带对照表、不直接读默认表。
-        string scripts = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
+        string scripts = Path.Combine(TestMaps.RepoRoot(), "src", "godot", "scripts");
         string[] files = Directory.GetFiles(scripts, "*.cs");
         Assert.True(files.Length >= 10, $"样本口径：只扫到 {files.Length} 个脚本。");
 

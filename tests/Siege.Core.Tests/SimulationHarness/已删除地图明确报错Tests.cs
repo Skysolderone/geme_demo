@@ -139,7 +139,7 @@ public class 已删除地图明确报错Tests
         Directory.CreateDirectory("maps");
         try
         {
-            File.WriteAllText(relative, MapFile.ToJson(FrontierFixtures.Map()));
+            File.WriteAllText(relative, MapFile.ToJson(BoardMapFixtures.FourPlayerMap()));   // retire-legacy-maps 段 C：样本由边疆档小图换成 4 人合规棋盘档图
 
             FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve(name));
             Assert.IsNotType<RetiredMapException>(ex);
@@ -147,8 +147,8 @@ public class 已删除地图明确报错Tests
             Assert.Contains("现有地图：", ex.Message, StringComparison.Ordinal);
 
             // 同一份文件给显式路径（相对、绝对）都能加载。
-            Assert.Equal("test-frontier-6", MapCatalog.Resolve(relative).Id);
-            Assert.Equal("test-frontier-6", MapCatalog.Resolve(Path.GetFullPath(relative)).Id);
+            Assert.Equal("test-board-4p", MapCatalog.Resolve(relative).Id);
+            Assert.Equal("test-board-4p", MapCatalog.Resolve(Path.GetFullPath(relative)).Id);
         }
         finally
         {
@@ -161,16 +161,55 @@ public class 已删除地图明确报错Tests
 
         // 已删除的旧标识即使恰有同名文件也不复活：判定在文件解析之前。
         string retiredFile = Path.Combine(SimFixtures.TempDir("retired-same-name"), "siege-4p-base-v5");
-        File.WriteAllText(retiredFile, MapFile.ToJson(FrontierFixtures.Map()));
-        Assert.Equal("test-frontier-6", MapCatalog.Resolve(retiredFile).Id);   // 路径不是裸标识：照常加载
+        File.WriteAllText(retiredFile, MapFile.ToJson(BoardMapFixtures.FourPlayerMap()));
+        Assert.Equal("test-board-4p", MapCatalog.Resolve(retiredFile).Id);   // 路径不是裸标识：照常加载
         Assert.Throws<RetiredMapException>(() => MapCatalog.Resolve("siege-4p-base-v5"));
+    }
+
+    [Theory]
+    [InlineData("missing", "标准档已于 retire-legacy-maps 删除")]
+    [InlineData("\"Standard\"", "标准档已于 retire-legacy-maps 删除")]
+    [InlineData("\"Frontier\"", "边疆档已于 retire-legacy-maps 删除")]
+    [InlineData("\"Hexagon\"", "Profile 为 Hexagon")]
+    public void 旧档位地图文件在批量与终端入口报明确错误且不写输出(string profile, string expected)
+    {
+        // retire-legacy-maps 段 C 检查补：缺 Profile 字段的旧地图文件（旧 maps/*.json 全是这种）按已删除的标准档读入、被校验器拒绝；
+        // 写着边疆档 / 未知档名的文件在读入时报 FormatException。四种都必须由入口报"错误：…"、退出码 1，不得以未处理异常崩溃，run 不得留下半份输出。
+        // 变异 MC-E1（检查方实跑）：Program.Execute 的 catch 去掉 MapValidationException、BatchRunner 去掉开跑前校验 → 前两行红（run 以 AggregateException 崩溃）。
+        // 变异 MC-E2（检查方实跑）：只去掉开跑前校验 → 前两行红（输出目录已写出 config.json）。
+        string dir = SimFixtures.TempDir("retired-profile-" + profile.Trim('"'));
+        string text = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId));
+        Assert.Contains("\n  \"Profile\": \"Board\",", text.Replace("\r\n", "\n"), StringComparison.Ordinal);
+        string legacy = profile == "missing"
+            ? text.Replace("\r\n", "\n").Replace("\n  \"Profile\": \"Board\",", string.Empty, StringComparison.Ordinal)
+            : text.Replace("\"Profile\": \"Board\"", $"\"Profile\": {profile}", StringComparison.Ordinal);
+        Assert.NotEqual(text, legacy);
+        string file = Path.Combine(dir, "old-map.json");
+        File.WriteAllText(file, legacy);
+
+        string outDir = Path.Combine(dir, "out");
+        (int runCode, _, string runErr) = RunMain("run", "--out", outDir, "--map", file, "--count", "1", "--seed", "1", "--turn-limit", "2", "--serial");
+        Assert.Equal(1, runCode);
+        Assert.StartsWith("错误：", runErr, StringComparison.Ordinal);
+        Assert.Contains(expected, runErr, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outDir));
+
+        (int playCode, string playOut, string playErr) = RunMain("play", "--map", file, "--seed", "1", "--no-carry");
+        Assert.Equal(1, playCode);
+        Assert.Contains(expected, playErr, StringComparison.Ordinal);
+        Assert.DoesNotContain("围杀 Siege · 终端对局", playOut, StringComparison.Ordinal);
+
+        // 反面：原样的棋盘档文件经同一入口照常开跑。
+        string okFile = Path.Combine(dir, "board-map.json");
+        File.WriteAllText(okFile, text);
+        Assert.Equal(0, RunMain("run", "--out", Path.Combine(dir, "ok"), "--map", okFile, "--count", "1", "--seed", "1", "--turn-limit", "2", "--serial").Code);
     }
 
     [Fact]
     public void 入口与图形版的地图错误捕获接得住已删除异常()
     {
         // RetiredMapException 派生自 FileNotFoundException：Program 与 GameRoot 的 catch 都按 FileNotFoundException 接（src/godot 不在 sln 里，源码扫描）。
-        string root = FrontierFixtures.RepoRoot();
+        string root = TestMaps.RepoRoot();
         string program = File.ReadAllText(Path.Combine(root, "src", "Siege.Sim", "Program.cs"));
         string gameRoot = File.ReadAllText(Path.Combine(root, "src", "godot", "scripts", "GameRoot.cs"));
         Assert.Matches(@"catch \(Exception ex\) when \(ex is [^)]*FileNotFoundException", program);

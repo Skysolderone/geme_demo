@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 
@@ -70,14 +71,31 @@ public class 地图文件健壮性Tests
     {
         // JSON 对象的重复键由序列化器"后者胜出"地吞掉，坐标记法的大小写差异同样会折叠成同一格。
         // 这里钉住：折叠后信物格数量变了，人数适配预算会报出来——不会带着"丢了一个信物格"的地图开局。
-        MapData folded = MapFile.FromJson(
-            "{\"CentralEntrance\":\"F6\",\"Width\":11,\"Height\":11,\"MaxPlayers\":4,"
-            + "\"RelicCells\":{\"D4\":{\"Zone\":\"Contested\",\"Budget\":\"High\"},"
-            + "\"d4\":{\"Zone\":\"Contested\",\"Budget\":\"High\"}}}");
+        // retire-legacy-maps 段 C：原是缺规格档字段的 11×11 手写 JSON（读入为标准档，标准档已删除，校验到档位即止、报不到信物数）；
+        // 改为 4 人合规棋盘档图只留 6 个信物格（5 个出生棋盘 + 1 个公共）的导出文本，再写进一条与那个公共信物格只差大小写的重复键：
+        // 文件里写了 7 条（恰为 4 人下限 7），折叠成 6 条 → 报"少于下限 7"。变异 MC-S5（段 C 实跑）：4 人信物下限 7 → 6 → 本测试红。
+        MapData board = BoardMapFixtures.FourPlayerMap();
+        Coord contested = board.RelicCells.Keys.Where(c => board.RelicCells[c].Zone == RelicZone.Contested).Order().First();
+        MapData six = board with
+        {
+            RelicCells = board.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone || kv.Key == contested).ToImmutableDictionary(),
+        };
+        Assert.Equal(6, six.RelicCells.Count);
+        string lower = contested.ToNotation().ToLowerInvariant();
+        Assert.NotEqual(contested.ToNotation(), lower);   // 样本口径：记法里确有字母可压成小写
+        string json = MapFile.ToJson(six);
+        string injected = json.Replace(
+            "\"RelicCells\": {",
+            $"\"RelicCells\": {{ \"{lower}\": {{ \"Zone\": \"Contested\", \"Budget\": \"{six.RelicCells[contested].Budget}\" }},",
+            StringComparison.Ordinal);
+        Assert.NotEqual(json, injected);
 
-        Assert.Single(folded.RelicCells);
-        Assert.Contains(
-            MapValidator.Validate(folded).Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
+        MapData folded = MapFile.FromJson(injected);
+
+        Assert.Equal(6, folded.RelicCells.Count);
+        MapValidationFailure failure = Assert.Single(MapValidator.Validate(folded).Failures);
+        Assert.Equal("RELIC_COUNT_OUT_OF_RANGE", failure.Code);
+        Assert.Contains("少于下限 7", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]

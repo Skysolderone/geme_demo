@@ -49,7 +49,7 @@ public class 生成图上的拾取自检口径Tests
     {
         // src/godot 不在解决方案里，只能做源码文本扫描。变异 MC-17：去掉 !centered 条件（居中的格也按遮挡放过）→ 本测试红；
         // 变异 MC-18：去掉"每格至少一次严格往返"→ 本测试红；变异 MC-19：画面内无格对所有位姿都放过 → 本测试红。
-        string root = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts", "GameRoot.cs"));
+        string root = File.ReadAllText(Path.Combine(TestMaps.RepoRoot(), "src", "godot", "scripts", "GameRoot.cs"));
 
         // 段 C 检查收紧：例外只给"纵深方向被夹取、落在注视点远侧"的格，且只认紧邻的更高更近的格。
         // 横向夹取不在例外内——否则"缩放带 5° 俯角变化"在 v4 上会被当成遮挡放过（实测 B5 → B4，变异 MC-22）。

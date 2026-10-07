@@ -21,12 +21,12 @@ public sealed record MapData
     /// <summary>外接高度（行数）。</summary>
     public required int Height { get; init; }
 
-    /// <summary>该地图支持的最大人数。标准档出生区数量 MUST 与之相等；边疆档出生区（平台）数 MUST 多于它。</summary>
+    /// <summary>该地图支持的最大人数。棋盘档出生区（出生棋盘）数 MUST 恰为它 + 1。</summary>
     public required int MaxPlayers { get; init; }
 
     /// <summary>
-    /// 规格档，缺省 <see cref="MapProfile.Standard"/>（旧地图与既有测试不必显式给出）。只供 <see cref="MapValidator"/> 选预算表与校验处理方式，
-    /// 对局规则不读它（frontier-map D1）。
+    /// 规格档，缺省 <see cref="MapProfile.Standard"/>（已删除的标准档：经 Unvalidated 入口构造的合成盘面不必显式给出，经校验加载会被拒绝）。
+    /// 只供 <see cref="MapValidator"/> 选预算表与校验处理方式，对局规则不读它（frontier-map D1）。
     /// </summary>
     public MapProfile Profile { get; init; } = MapProfile.Standard;
 
@@ -44,29 +44,37 @@ public sealed record MapData
 
     /// <summary>
     /// 棋盘清单（board-map D2），缺省为空（旧地图与既有测试不必显式给出）。出生棋盘与出生区一一对应、次序一致。
-    /// 只用于静态校验与呈现，对局规则不读它；标准档与边疆档地图的清单必须为空。
+    /// 只用于静态校验与呈现，对局规则不读它；棋盘档地图的清单不得为空。
     /// </summary>
     public ImmutableArray<BoardPlate> Boards { get; init; } = [];
 
     /// <summary>信物格及其分区与预算档位。</summary>
     public required ImmutableDictionary<Coord, RelicCellSpec> RelicCells { get; init; }
 
-    /// <summary>设计师显式标注的主要咽喉格。不做自动识别——自动识别的错误会静默污染距离均衡校验。</summary>
+    /// <summary>
+    /// 显式标注的主要咽喉格（只进距离报告的"最近咽喉"一项，标了就必须可落子）。棋盘档生成器恒写空；
+    /// 标准档 / 边疆档"必须标注咽喉"的规则已于 retire-legacy-maps 删除，字段保留以免改变内置棋盘图的导出摘要。
+    /// </summary>
     public required ImmutableHashSet<Coord> ChokePoints { get; init; }
 
     /// <summary>中央入口。</summary>
     public required Coord CentralEntrance { get; init; }
 
-    /// <summary>出生区距离均衡容差，默认 1。逐图放宽 MUST 同时给出 <see cref="ToleranceRelaxReason"/>。</summary>
+    /// <summary>
+    /// 出生区距离均衡容差，默认 1。retire-legacy-maps 段 C 起校验器不再读它（距离只报告），字段与导出格式保留以免改变内置棋盘图的导出摘要。
+    /// </summary>
     public int DistanceTolerance { get; init; } = 1;
 
-    /// <summary>放宽距离容差的理由。容差大于默认值时必填。</summary>
+    /// <summary>放宽距离容差的理由（校验器不再读，见 <see cref="DistanceTolerance"/>）。</summary>
     public string? ToleranceRelaxReason { get; init; }
 
-    /// <summary>形成两眼所需的最小格数，默认 8（保守取值）。</summary>
+    /// <summary>
+    /// 形成两眼所需的最小格数，默认 8。原用于必死口袋校验，该规则只服务标准档 / 边疆档的不规则出生区，已于 retire-legacy-maps 段 C 删除；
+    /// 字段与导出格式保留以免改变内置棋盘图的导出摘要。
+    /// </summary>
     public int MinTwoEyeArea { get; init; } = 8;
 
-    /// <summary>必死口袋校验的显式豁免格。</summary>
+    /// <summary>必死口袋校验的显式豁免格（校验器不再读，见 <see cref="MinTwoEyeArea"/>）。</summary>
     public ImmutableHashSet<Coord> PocketExemptions { get; init; } = ImmutableHashSet<Coord>.Empty;
 
     /// <summary>每条豁免的理由，按豁免格记录。</summary>

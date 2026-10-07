@@ -18,7 +18,8 @@ public class 原型插旗替代路径Tests
     /// <summary>
     /// 区数 = 地图人数上限（4 个出生区、最多 4 人）的合成 9×9 图（<see cref="MatchFixtures.Map(string[])"/>，带 5 个公共信物格）。
     /// retire-legacy-maps 段 A2：顺排路径（P<i> → 区 i、人工选区后跳过）的用例由 v5 改到它——棋盘图出生棋盘 = 人数 + 1，永远走种子选区，
-    /// 产品里已没有能走到顺排的地图（段 C 决定是否删该分支）。顺排只看区数、人数上限与人工选择，与地图几何无关，原黄金值照用。
+    /// 产品里已没有能走到顺排的地图（段 C 裁定保留该分支：规则层对任意地图的全函数、跳过校验的合成图仍走到它，理由见 PrototypeZoneAssignment 注释）。
+    /// 顺排只看区数、人数上限与人工选择，与地图几何无关，原黄金值照用。
     /// </summary>
     private static MapData SequentialMap => MatchFixtures.Map("C5", "E3", "E5", "E7", "G5");
 
@@ -141,8 +142,9 @@ public class 原型插旗替代路径Tests
     public void 区数多于人数时种子选区()
     {
         // 规格 Scenario：6 个平台的地图上用同一对局种子、同一人工选择重复开局两次 → 三名 AI 两次锁定的平台完全相同，互不重复，也不与人工选择重复。
+        // retire-legacy-maps 段 C：地图换成 5 区的 ZonePickMap（区数仍多于人数上限）。换图后重跑 M-A15 → 本类红 5（含本测试）。
         // 变异 M-A15：Seeded 抽中后不从空闲表里移除 → 出现重复，红。
-        MapData map = FrontierFixtures.Map();
+        MapData map = ZonePickMap;
         var seen = new HashSet<string>();
         for (ulong seed = 1; seed <= 40; seed++)
         {
@@ -152,14 +154,14 @@ public class 原型插旗替代路径Tests
             Assert.Equal(first, second);
             Assert.Equal(4, first[1]);                          // 人（P1）选的 5 号台原样保留
             Assert.Equal(4, first.Distinct().Count());          // 互不同区，也不与人重复
-            Assert.All(first, z => Assert.InRange(z, 0, 5));
+            Assert.All(first, z => Assert.InRange(z, 0, 4));
             seen.Add(string.Join(",", first));
         }
 
-        // 由种子驱动而不是写死：40 颗种子至少抽出 10 种不同的组合（5×4×3 = 60 种等概率），且每个平台都有 AI 选到过——
+        // 由种子驱动而不是写死：40 颗种子至少抽出 10 种不同的组合（4×3×2 = 24 种等概率；段 C 前 6 区为 5×4×3 = 60 种），且每个区都有 AI 选到过——
         // "AI 永远挤在前几个编号"正是本规则要消灭的现状。
         Assert.True(seen.Count >= 10, $"40 颗种子只抽出 {seen.Count} 种组合。");
-        Assert.Equal(new[] { 0, 1, 2, 3, 5 }, seen.SelectMany(s => s.Split(',').Select(int.Parse)).Where(z => z != 4).Distinct().Order());
+        Assert.Equal(new[] { 0, 1, 2, 3 }, seen.SelectMany(s => s.Split(',').Select(int.Parse)).Where(z => z != 4).Distinct().Order());
     }
 
     [Fact]
@@ -167,16 +169,16 @@ public class 原型插旗替代路径Tests
     {
         // 6 平台图上的自包含强测：同种子下，AI 由种子选区 vs 全部手工指定成另一组区，信物分布与首回合顺序逐项相同——
         // 选区子流（zone-pick）独立命名，消费多少次都不影响 relic-gen 与 setup。
-        MapData map = FrontierFixtures.Map();
+        MapData map = ZonePickMap;
         var seed = new GameSeed(20260919);
         MatchFlow seeded = MatchFlow.Create(map, seed, MatchFixtures.All, NoRisk);
         MatchFlow manual = MatchFlow.Create(map, seed, MatchFixtures.All, NoRisk);
 
         seeded.PlantPrototype();
-        manual.PlantSequentially([(MatchFixtures.P0, 5), (MatchFixtures.P1, 5), (MatchFixtures.P2, 0), (MatchFixtures.P3, 0)]);
+        manual.PlantSequentially([(MatchFixtures.P0, 4), (MatchFixtures.P1, 4), (MatchFixtures.P2, 0), (MatchFixtures.P3, 0)]);   // 段 C：区号 5 → 4（5 区图）
 
         Assert.NotEqual(manual.PlayerStates.Select(s => s.BirthZone), seeded.PlayerStates.Select(s => s.BirthZone));   // 样本口径：两局的选区确实不同
-        Assert.Equal(16, seeded.Relics.Generation.Placements.Length);
+        Assert.Equal(9, seeded.Relics.Generation.Placements.Length);   // 段 C：ZonePickMap 的信物格数（原 6 平台图 16）
         Assert.Equal(manual.Relics.Generation.Placements.Select(p => p.ToString()), seeded.Relics.Generation.Placements.Select(p => p.ToString()));
         Assert.Equal(manual.ActionOrder, seeded.ActionOrder);
         Assert.NotEqual(GameSeed.ZonePick, GameSeed.Setup);
@@ -191,12 +193,12 @@ public class 原型插旗替代路径Tests
         // 这里用测试内的独立复算（直接从种子派生同名子流），不调用被测的选区函数。
         // 变异 M-A22：Seeded 改从 GameSeed.Setup 同名子流派生 → 本测试红（行为上不扰动 setup 实例，其他测试抓不到）。
         Assert.Equal("zone-pick", GameSeed.ZonePick);
-        MapData map = FrontierFixtures.Map();
+        MapData map = ZonePickMap;
         int differs = 0;
         for (ulong seed = 1; seed <= 20; seed++)
         {
             RandomStream stream = new GameSeed(seed).Stream("zone-pick");
-            List<int> free = [0, 1, 2, 3, 5];   // 人（P1）占 4
+            List<int> free = [0, 1, 2, 3];   // 人（P1）占 4（段 C：5 区图，原 6 区为 [0, 1, 2, 3, 5]）
             var expected = new List<int>();
             foreach (int player in new[] { 0, 1, 2, 3 })
             {
@@ -222,14 +224,15 @@ public class 原型插旗替代路径Tests
     public void 中立平台()
     {
         // 规格 Scenario：6 个平台上 4 名玩家锁定 4 个不同平台 → 其余 2 个平台不属于任何玩家的保护期范围。
-        MapData map = FrontierFixtures.Map();
+        // retire-legacy-maps 段 C：地图换成 5 区的 ZonePickMap，中立区由 2 个变 1 个。
+        MapData map = ZonePickMap;
         MatchFlow match = MatchFlow.Create(map, new GameSeed(7), MatchFixtures.All, NoRisk);
 
         var choices = match.PlantPrototype((MatchFixtures.P0, 2));
 
         int[] taken = [.. choices.Select(c => c.Zone)];
-        int[] neutral = [.. Enumerable.Range(0, 6).Except(taken)];
-        Assert.Equal(2, neutral.Length);
+        int[] neutral = [.. Enumerable.Range(0, 5).Except(taken)];
+        Assert.Single(neutral);
         foreach ((PlayerId player, int zone) in choices)
         {
             var range = match.LegalRangeFor(player);
@@ -255,7 +258,7 @@ public class 原型插旗替代路径Tests
         // 而没有任何行为测试会红；只能做源码文本扫描。判据：入口层（Siege.Sim 全部 + src/godot/scripts 全部）不得直接调
         // PlantSequentially(、不得自己派生选区子流；三个调用点确实调了 PlantPrototype(。
         // 变异 M-C5：src/godot/scripts/MatchSession.cs 的 ChooseZone 改回 Match.PlantSequentially(…) → 本测试红 1（检查阶段补，此前 0 红）。
-        string root = FrontierFixtures.RepoRoot();
+        string root = TestMaps.RepoRoot();
         string[] entryFiles =
         [
             .. Directory.EnumerateFiles(Path.Combine(root, "src", "Siege.Sim"), "*.cs", SearchOption.AllDirectories),
@@ -297,9 +300,10 @@ public class 原型插旗替代路径Tests
     {
         // 规格 Scenario：冒险概率为 0，用任意种子与任意人工选择开局 → 锁定结果与引入冒险概率之前逐项相同。
         // 期望取自测试内对"引入冒险概率之前"两支规则的独立复算（OldAssign：顺排游标跳过人选 / zone-pick 子流在升序空闲表里等概率抽），不调用被测实现。
-        // 覆盖：区数 = 人数上限的 4 区图（retire-legacy-maps 段 A2 起为合成图 SequentialMap，此前 v5）与 6 平台图，2–4 人，无人工选择 + 每个座位 × 每个区。
+        // 覆盖：区数 = 人数上限的 4 区图（retire-legacy-maps 段 A2 起为合成图 SequentialMap，此前 v5）与区数多于人数上限的 5 区图（段 C 起为 ZonePickMap，此前 6 平台图），
+        // 2–4 人，无人工选择 + 每个座位 × 每个区。
         int cases = 0;
-        foreach (MapData map in new[] { SequentialMap, FrontierFixtures.Map() })
+        foreach (MapData map in new[] { SequentialMap, ZonePickMap })
         {
             int zoneCount = map.BirthZones.Length;
             for (ulong seed = 1; seed <= 12; seed++)
@@ -340,16 +344,16 @@ public class 原型插旗替代路径Tests
             Assert.Equal(MatchPhase.InProgress, match.Phase);
         }
 
-        // 它之前没有任何已插旗时直接占用空闲出生区：无人工选择时 P0 按原规则取区（标准图顺排 → 1 号区；6 平台图 → zone-pick 的第一次抽取），其余全部跟进。
+        // 它之前没有任何已插旗时直接占用空闲出生区：无人工选择时 P0 按原规则取区（4 区图顺排 → 1 号区；5 区图 → zone-pick 的第一次抽取，段 C 前为 6 平台图），其余全部跟进。
         MatchFlow batch = CreateSequential(new GameSeed(42), MatchFixtures.All, always);
         batch.PlantPrototype();
         Assert.Equal(new int?[] { 0, 0, 0, 0 }, batch.PlayerStates.Select(s => s.BirthZone));
 
-        MapData frontier = FrontierFixtures.Map();
+        MapData zonePick = ZonePickMap;
         for (ulong seed = 1; seed <= 6; seed++)
         {
-            int first = new GameSeed(seed).Stream("zone-pick").NextInt(6);
-            MatchFlow match = MatchFlow.Create(frontier, new GameSeed(seed), MatchFixtures.All, always);
+            int first = new GameSeed(seed).Stream("zone-pick").NextInt(5);
+            MatchFlow match = MatchFlow.Create(zonePick, new GameSeed(seed), MatchFixtures.All, always);
             match.PlantPrototype();
             Assert.Equal(Enumerable.Repeat((int?)first, 4), match.PlayerStates.Select(s => s.BirthZone));
         }
@@ -394,7 +398,7 @@ public class 原型插旗替代路径Tests
         Assert.Equal(5, new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.ZonePick, GameSeed.FlagRisk }.Distinct().Count());
 
         int hits = 0, cases = 0;
-        foreach (MapData map in new[] { SequentialMap, FrontierFixtures.Map() })
+        foreach (MapData map in new[] { SequentialMap, ZonePickMap })
         {
             foreach (int p in new[] { 15, 50 })
             {
@@ -455,6 +459,13 @@ public class 原型插旗替代路径Tests
         Assert.Equal(MatchOptions.DefaultFlagRisk, defaulted.Header.Config.FlagRisk);
         Assert.Equal(MatchOptions.DefaultFlagRisk, Siege.Sim.Running.MatchSession.Create(unset, 1).Match.Options.FlagRisk);
     }
+
+    /// <summary>
+    /// 区数多于人数上限、走种子选区的合规图：4 人棋盘档手写图（5 块出生棋盘、9 个信物格，<see cref="BoardMapFixtures.FourPlayerMap"/>）。
+    /// retire-legacy-maps 段 C：原是 6 平台的边疆档小图（边疆档已删除）；种子选区只看区数、人数上限与人工选择，期望值都由测试内独立复算，
+    /// 换图后随区数 6 → 5 改写的只有区号范围、组合数、中立区个数与信物格数这几处字面量。
+    /// </summary>
+    private static MapData ZonePickMap => BoardMapFixtures.FourPlayerMap();
 
     /// <summary>4 人内置棋盘图（retire-legacy-maps 段 A2：只当"一张通过校验的 4 人图"用的地方由 v5 改到它）。</summary>
     private static MapData Board4Map => MapCatalog.Resolve(SimFixtures.Board4);

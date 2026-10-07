@@ -604,7 +604,7 @@ public class 候选格上限Tests
     {
         // src/godot 不在 siege.sln 里，只能做源码文本扫描（testing.md）；配样本口径下界与反面命中。
         // 变异 M-K6：把 src/godot/scripts/MatchSession.cs 的建 AI 一行改回 HeuristicAi.Create(Match, player, Difficulty) → 本测试红。M-K10：终端版同样改回 → 本测试红。
-        string root = FrontierFixtures.RepoRoot();
+        string root = TestMaps.RepoRoot();
         string[][] entries =
         [
             ["src", "Siege.Sim", "Play", "PlayCommand.cs"],

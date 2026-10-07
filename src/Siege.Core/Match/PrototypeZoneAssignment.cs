@@ -14,13 +14,19 @@ namespace Siege.Core.Match;
 /// <item><description><b>冒险</b>（flag-contest D1）：此前已有旗时，先用独立子流 <see cref="GameSeed.FlagRisk"/> 抽一次 <c>[0,100)</c>，小于冒险概率 p
 /// 就在"已有人的出生区"（按区号升序去重）里用同一子流均匀选一个；此前没有任何旗时不抽、直接走下面的原规则。</description></item>
 /// <item><description>否则走<b>原规则</b>占用空闲出生区：
-/// 出生区数 ≤ 地图人数上限（标准档：相等）→ 按编号顺排：玩家按编号依次取下一个区号，取到人选的那个区就跳过；
-/// 出生区数 &gt; 地图人数上限（边疆档）→ 由对局种子派生独立子流 <see cref="GameSeed.ZonePick"/>，在尚未被占用的区里均匀抽取。</description></item>
+/// 出生区数 &gt; 地图人数上限（棋盘档恒如此：出生棋盘数 = 人数 + 1）→ 由对局种子派生独立子流 <see cref="GameSeed.ZonePick"/>，在尚未被占用的区里均匀抽取；
+/// 出生区数 ≤ 地图人数上限 → 按编号顺排：玩家按编号依次取下一个区号，取到人选的那个区就跳过。</description></item>
 /// </list>
 /// 原规则的状态（顺排游标、<see cref="GameSeed.ZonePick"/> 子流、空闲表）<b>只在走原规则时推进</b>；冒险只加入已有人的区、不会新占空闲区，
 /// 所以 p = 0 时冒险子流虽被抽取、锁定结果与引入冒险概率之前逐项相同——批量侧无人工选择时即 P<i>i</i> → 区 <i>i</i>，既有种子的对局逐步不变。
-/// 判据用的是<b>地图人数上限</b>而不是实际参赛人数：v4 上的 2 / 3 人局区数（4）多于参赛人数，若按参赛人数判会从顺排变成随机，
+/// 判据用的是<b>地图人数上限</b>而不是实际参赛人数：4 区图上的 2 / 3 人局区数多于参赛人数，若按参赛人数判会从顺排变成随机，
 /// 破坏既有对局的可复现。本类不读规格档——对局规则不感知规格档（D1）。
+/// <para>
+/// 顺排分支在产品里已不可达（retire-legacy-maps 段 C 核实：能经校验加载的只有棋盘档，出生区数恒多于人数上限；
+/// 原先走顺排的标准档地图已删除）。保留它是有意的：本类是对局规则层对任意 <see cref="MapData"/> 的全函数，跳过校验的建局入口
+/// （<c>MatchFlow.CreateUnvalidated</c>，测试与 Sim 可见）上的合成小图仍会走到这里；删掉就得为"区数 ≤ 人数上限"另定一种行为
+/// （报错或改走种子选区），那是规则与确定性契约的改动（determinism.md 的 zone-pick 一行），不属于删旧图。
+/// </para>
 /// 规格：openspec/changes/frontier-map、flag-contest/specs/match-setup —— Requirement: 原型插旗替代路径
 /// </remarks>
 public static class PrototypeZoneAssignment

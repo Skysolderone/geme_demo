@@ -5,7 +5,11 @@ using Regex = System.Text.RegularExpressions.Regex;
 
 namespace Siege.Core.Tests.MapDefinition;
 
-/// <summary>规格：frontier-map / map-definition —— Requirement: 地图规格档</summary>
+/// <summary>
+/// 规格：frontier-map / board-map / retire-legacy-maps · map-definition —— Requirement: 地图规格档。
+/// retire-legacy-maps 段 C：边疆档枚举成员删除、标准档只作缺省值保留且被校验器以"已删除"拒绝；
+/// 原「规格档读写往返」（边疆档往返）随边疆档删除，非缺省档的往返由「棋盘档读写往返」守（变异 M-A1 / M-A2 同样会让它红）。
+/// </summary>
 public class 地图规格档Tests
 {
     [Fact]
@@ -32,40 +36,7 @@ public class 地图规格档Tests
         string json = MapFile.ToJson(standard);
         Assert.DoesNotContain("\"Profile\"", json, StringComparison.Ordinal);
         Assert.Equal(json, MapFile.ToJson(MapFile.FromJson(json)));
-        Assert.Contains("\"Profile\"", MapFile.ToJson(standard with { Profile = MapProfile.Frontier }), StringComparison.Ordinal);   // 反面：非缺省档写出字段
-    }
-
-    [Fact]
-    public void 规格档读写往返()
-    {
-        // Scenario：边疆档地图导出再读入 → 规格档仍为边疆，其余字段逐项相等。
-        // 「写出时漏字段」只有往返测试抓得到（testing.md）；边疆 ≠ 缺省值，漏写 / 漏读都会读回标准档。
-        // 变异 M-A1：MapFile.ToJson 不写 Profile（恒 null）→ 本测试红。变异 M-A2：FromJson 不读 Profile → 本测试红。
-        MapData original = FrontierFixtures.Map();
-
-        string json = MapFile.ToJson(original);
-        MapData restored = MapFile.FromJson(json);
-
-        Assert.Contains("\"Profile\": \"Frontier\"", json, StringComparison.Ordinal);
-        Assert.Equal(MapProfile.Frontier, restored.Profile);
-        Assert.Equal(original.Id, restored.Id);
-        Assert.Equal(original.Width, restored.Width);
-        Assert.Equal(original.Height, restored.Height);
-        Assert.Equal(original.MaxPlayers, restored.MaxPlayers);
-        Assert.Equal(original.Obstacles.Order(), restored.Obstacles.Order());
-        Assert.Equal(6, restored.BirthZones.Length);
-        for (int i = 0; i < original.BirthZones.Length; i++)
-        {
-            Assert.Equal(original.BirthZones[i].Order(), restored.BirthZones[i].Order());
-        }
-
-        Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
-        Assert.Equal(original.ChokePoints.Order(), restored.ChokePoints.Order());
-        Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
-        Assert.Equal(original.DistanceTolerance, restored.DistanceTolerance);
-        Assert.Equal(original.MinTwoEyeArea, restored.MinTwoEyeArea);
-        Assert.Equal(json, MapFile.ToJson(restored));
-        Assert.True(MapValidator.Validate(restored).IsValid);
+        Assert.Contains("\"Profile\": \"Board\"", MapFile.ToJson(standard with { Profile = MapProfile.Board }), StringComparison.Ordinal);   // 反面：非缺省档写出字段（retire-legacy-maps 段 C：原用边疆档）
     }
 
     [Fact]
@@ -127,10 +98,74 @@ public class 地图规格档Tests
     [Fact]
     public void 未定义的规格档数字被指名报出()
     {
-        string json = MapFile.ToJson(FrontierFixtures.Map()).Replace("\"Profile\": \"Frontier\"", "\"Profile\": 7", StringComparison.Ordinal);
+        // retire-legacy-maps 段 C：底图由边疆档小图换成 4 人内置棋盘图的导出文本。
+        string json = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId));
+        Assert.Contains("\"Profile\": \"Board\"", json, StringComparison.Ordinal);
+
+        var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json.Replace("\"Profile\": \"Board\"", "\"Profile\": 7", StringComparison.Ordinal)));
+        Assert.Contains("Profile 为 7", ex.Message, StringComparison.Ordinal);
+
+        // 未知的档名同样指名报出（改用原始 JSON 读入后不再交给枚举转换器，报的是 FormatException 而不是 JsonException）。
+        var named = Assert.Throws<FormatException>(() => MapFile.FromJson(json.Replace("\"Profile\": \"Board\"", "\"Profile\": \"Hexagon\"", StringComparison.Ordinal)));
+        Assert.Contains("Profile 为 Hexagon", named.Message, StringComparison.Ordinal);
+
+        // 档名不分大小写（与原枚举转换器一致），数字形式的已定义取值照常读入。
+        Assert.Equal(MapProfile.Board, MapFile.FromJson(json.Replace("\"Profile\": \"Board\"", "\"Profile\": \"board\"", StringComparison.Ordinal)).Profile);
+        Assert.Equal(MapProfile.Board, MapFile.FromJson(json.Replace("\"Profile\": \"Board\"", "\"Profile\": 2", StringComparison.Ordinal)).Profile);
+    }
+
+    [Theory]
+    [InlineData("\"Frontier\"")]
+    [InlineData("\"frontier\"")]
+    [InlineData("1")]
+    public void 写着边疆档的地图文件读入即报已删除(string value)
+    {
+        // retire-legacy-maps 段 C：边疆档（枚举名 Frontier、原取值 1）的枚举成员删除。地图文件写着它时 MUST 明确报"边疆档已删除"，
+        // 不得报成通用的"未知规格档"或 JSON 异常，更不得被当成别的档读入。
+        // 变异 MC-P1（段 C 实跑）：ParseProfile 去掉字符串 Frontier 的专门分支 → 前两行落到"未知档名"的报文，本测试红 2。
+        // 变异 MC-P2（段 C 实跑）：ParseProfile 去掉数字 1 的专门分支 → 第三行落到"未知取值"的报文，本测试红 1。
+        string json = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId))
+            .Replace("\"Profile\": \"Board\"", $"\"Profile\": {value}", StringComparison.Ordinal);
+        Assert.Contains($"\"Profile\": {value}", json, StringComparison.Ordinal);
 
         var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
-        Assert.Contains("Profile", ex.Message, StringComparison.Ordinal);
+
+        Assert.Contains("边疆档已于 retire-legacy-maps 删除", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void 标准档与缺规格档字段的地图被拒绝并报已删除(bool explicitStandard)
+    {
+        // retire-legacy-maps 段 C：标准档删除。缺 Profile 字段的旧地图文件（或显式写 Standard）照常读入为标准档，
+        // 随后校验器只报一条 MAP_PROFILE_RETIRED（"标准档已于 retire-legacy-maps 删除"）并拒绝加载，不往下跑任何规则、不出报告项。
+        // 底图是合法的 4 人内置棋盘图：换回棋盘档即通过——拒绝只来自档位。
+        // 变异 MC-V1（段 C 实跑）：RetiredProfiles 表里删掉标准档那一行 → 落到 MAP_PROFILE_UNKNOWN，本测试红 2（连同 规格档分流守门 共红 3）。
+        // 变异 MC-V2（段 C 实跑）：已删除档报出后不提前返回 → 另报 MAP_PROFILE_UNKNOWN（拒绝项不再只有一条），本测试红 2。
+        // 变异 MC-W1（段 C 实跑）：MapFile 把档位写成数字 → 本类 9 条与 内置棋盘图Tests.内容不变 ×3 共红 12（三张内置棋盘图摘要由后者守住）。
+        MapData board = MapCatalog.Resolve(MapCatalog.DefaultId);
+        string text = MapFile.ToJson(board);
+        string legacy = explicitStandard
+            ? text.Replace("\"Profile\": \"Board\"", "\"Profile\": \"Standard\"", StringComparison.Ordinal)
+            : Regex.Replace(text, "\n  \"Profile\": \"Board\",", string.Empty);
+        Assert.NotEqual(text, legacy);
+        MapData map = MapFile.FromJson(legacy);
+        Assert.Equal(MapProfile.Standard, map.Profile);
+
+        MapValidationResult result = MapValidator.Validate(map);
+
+        MapValidationFailure failure = Assert.Single(result.Failures);
+        Assert.Equal("MAP_PROFILE_RETIRED", failure.Code);
+        Assert.Contains("标准档已于 retire-legacy-maps 删除", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(result.Reports);
+        MapValidationException ex = Assert.Throws<MapValidationException>(() => GameBoard.Load(map));
+        Assert.Contains("标准档已于 retire-legacy-maps 删除", ex.Message, StringComparison.Ordinal);
+
+        // 反面：同一张图标回棋盘档即通过（且有三条距离报告项），证明拒绝只因档位。
+        MapValidationResult asBoard = MapValidator.Validate(map with { Profile = MapProfile.Board });
+        Assert.True(asBoard.IsValid, asBoard.ToString());
+        Assert.Equal(3, asBoard.Reports.Length);
     }
 
     [Fact]
@@ -156,9 +191,9 @@ public class 地图规格档Tests
     public void 规格档只被地图数据文件格式与校验器引用()
     {
         // D1 接口契约：下游（对局、AI、表现层、入口）不感知规格档。规格档枚举的类型名只允许出现在
-        // 定义处、地图数据、文件格式、校验器，以及内置地图的生成器目录（段 B 的边疆图要在那里标规格档）。
-        // 变异 M-A8：在 Siege.Core/Match/MatchFlow.cs 注入一句读 MapProfile.Frontier 的分支 → 本测试红。
-        string src = Path.Combine(FrontierFixtures.RepoRoot(), "src");
+        // 定义处、地图数据、文件格式、校验器，以及内置地图的生成器目录（棋盘档生成器在那里标规格档）。
+        // 变异 M-A8：在 Siege.Core/Match/MatchFlow.cs 注入一句读 MapProfile.Board 的分支 → 本测试红（retire-legacy-maps 段 C 前写的是 Frontier）。
+        string src = Path.Combine(TestMaps.RepoRoot(), "src");
         string[] allowed =
         [
             Path.Combine("Siege.Core", "Board", "MapProfile.cs"),
@@ -187,10 +222,9 @@ public class 地图规格档Tests
 
         // 白名单里的 MapData 不得替下游包一层：`public bool IsFrontier => Profile == …` 之后，任何人读 `map.IsFrontier` 都不含上面两个记号。
         // MapData.cs 里裸标识符 Profile 只允许出现一次——属性声明本身。
-        // 变异 M-C4：在 MapData 里加 `public bool IsFrontier => Profile != MapProfile.Standard;` → 本测试红 1。
+        // 变异 M-C4：在 MapData 里加 `public bool IsBoard => Profile == MapProfile.Board;` → 本测试红 1（retire-legacy-maps 段 C 前写的是 IsFrontier）。
         string mapData = File.ReadAllText(Path.Combine(src, "Siege.Core", "Board", "MapData.cs"));
         Assert.Contains("public MapProfile Profile { get; init; }", mapData, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(mapData, @"(?<![\w])Profile(?![\w])"));
     }
-
 }

@@ -13,6 +13,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// retire-legacy-maps 段 B：gen: 生成图（边疆档生成器）删除，只测 gen: 的五条随之删除——目录按 gen: 解析、裸 gen 不进内核与非法标识、
 /// 入口把裸 gen 落成完整标识、以裸 gen 批量跑局、终端版玩 gen: 图；裸 board 的同类断言在 棋盘档生成图标识Tests，
 /// 已删除标识的报错在 已删除地图明确报错Tests。其余四条（日志首部、map 子命令导出与权威文件守护、生成器只经目录调用）改到 board: 图上。
+/// 段 C：内置图不再有 maps/ 权威文件，map 子命令只在给 --out 时落盘；"--out 不得指向权威文件"的守护删除，原测试改为"maps/ 下的同名文件不会顶替内置图"。
 /// </summary>
 [Collection(ConsoleRedirect.Collection)]
 public class 各入口支持生成图Tests
@@ -63,7 +64,7 @@ public class 各入口支持生成图Tests
     {
         // 规格 Scenario「导出再加载」。变异 MB-4：map 子命令对生成图也按 map.Id 往 maps/ 写 → 本测试红（maps/ 下出现文件或抛异常）。
         // retire-legacy-maps 段 B：样本由 gen:12345 改为 board:12345；仓库里的 maps/ 目录随旧图删除，"不往仓库 maps/ 写"改为"仓库里不出现 maps/"。
-        string repoMaps = Path.Combine(FrontierFixtures.RepoRoot(), "maps");
+        string repoMaps = Path.Combine(TestMaps.RepoRoot(), "maps");
         Assert.False(Directory.Exists(repoMaps));
         MapData expected = BoardMapGenerator.Generate("board:12345");
         (int code, string text, string err) = RunMain("map", "--map", "board:12345");
@@ -97,39 +98,35 @@ public class 各入口支持生成图Tests
     }
 
     [Fact]
-    public void 地图子命令的out不得指向内置图的权威文件_同目录下的新文件名允许()
+    public void 地图子命令的out可写任意路径_maps目录下的同名文件不顶替内置图()
     {
-        // 段 B 检查（负责人裁决 5）：防手滑 `map --map board:12345 --out maps/siege-4p-board-v1.json` 覆盖内置图的导出文件。
-        // retire-legacy-maps 段 B：请求的图由 gen:12345 改为 board:12345，示例文件名由已删除的 v5 / 边疆图改为内置棋盘图。
-        // 只在临时目录与测试工作目录里试，绝不碰仓库的 maps/（变异下也不会写坏它）。变异 CB-5：去掉这道检查 → 本测试红。
-        string root = SimFixtures.TempDir("map-out-guard");
-        string mapsDir = Path.Combine(root, "maps");
-        foreach (string builtin in MapCatalog.BuiltinIds)
-        {
-            string target = Path.Combine(mapsDir, builtin + ".json");
-            (int code, string text, string err) = RunMain("map", "--map", "board:12345", "--out", target);
+        // 原「地图子命令的out不得指向内置图的权威文件_同目录下的新文件名允许」（段 B 检查，负责人裁决 5：防手滑覆盖 maps/ 里的内置图导出文件）。
+        // retire-legacy-maps 段 C：内置图全部由棋盘生成器产出、内容由导出摘要黄金值守住，不再有 maps/<内置名>.json 权威文件；
+        // 段 B 又删除了 MapCatalog 的 maps/<标识>.json 隐式回落——那份文件写成什么都顶替不了内置图，守护失去对象，随之删除。
+        // 本测试改为钉住这两点的组合：--out 指向 maps/<内置名>.json 照常导出；工作目录 maps/ 下放一份被改过的同名文件，按内置名解析出的仍是生成器的那张图。
+        // 变异 MC-M1（段 C 实跑）：MapCatalog.Resolve 恢复"maps/<标识>.json 存在就读它"的回落（放在内置表之前）→ 本测试红（连同 已删除地图明确报错 一条共红 2）。
+        // 只在临时目录与测试工作目录里试，绝不碰仓库根（仓库里没有 maps/，由 各入口按地图标识选图Tests 钉住）。
+        string root = SimFixtures.TempDir("map-out-any");
+        string target = Path.Combine(root, "maps", SimFixtures.Board2 + ".json");
+        (int code, string text, string err) = RunMain("map", "--map", "board:12345", "--out", target);
+        Assert.True(code == 0, err);
+        Assert.Contains($"已导出 {target}", text, StringComparison.Ordinal);
+        Assert.Equal(MapFile.Digest(MapCatalog.Resolve("board:12345")), MapFile.Digest(MapCatalog.Resolve(target)));
 
-            Assert.Equal(1, code);
-            Assert.Contains("权威文件", err, StringComparison.Ordinal);
-            Assert.Contains(builtin, err, StringComparison.Ordinal);
-            Assert.Equal(string.Empty, text);               // 先于一切输出
-            Assert.False(Directory.Exists(mapsDir));        // 什么都没写，连目录都没建
-        }
-
-        // 文件已存在、大小写不同（Windows 上是同一个文件）、相对路径：一律拒绝，原文件逐字节不变。
-        Directory.CreateDirectory(Path.Combine(root, "Maps"));
-        string existing = Path.Combine(root, "Maps", "siege-2p-board-v1".ToUpperInvariant() + ".JSON");
-        File.WriteAllText(existing, "原样");
-        // （请求的是生成图而不是内置图：内置图的导出另会往工作目录的 maps/ 写，变异下会留垃圾。）
-        Assert.Equal(1, RunMain("map", "--map", "board:12345", "--out", existing).Code);
-        Assert.Equal("原样", File.ReadAllText(existing));
-
-        string relative = Path.Combine("maps", MapCatalog.DefaultId + ".json");
+        string builtinDigest = MapFile.Digest(MapCatalog.Resolve(SimFixtures.Board2));
+        string relative = Path.Combine("maps", SimFixtures.Board2 + ".json");
         bool hadMaps = Directory.Exists("maps");
+        Assert.False(File.Exists("siege.sln"), "测试工作目录不应是仓库根。");
         try
         {
-            Assert.Equal(1, RunMain("map", "--map", "board:12345", "--out", relative).Code);
-            Assert.False(File.Exists(relative));
+            Directory.CreateDirectory("maps");
+            File.WriteAllText(relative, File.ReadAllText(target));   // 与内置图同名、内容却是 board:12345
+            Assert.NotEqual(builtinDigest, MapFile.Digest(MapCatalog.Resolve(relative)));   // 样本口径：那份文件确实是另一张图
+
+            MapData resolved = MapCatalog.Resolve(SimFixtures.Board2);
+
+            Assert.Equal(SimFixtures.Board2, resolved.Id);
+            Assert.Equal(builtinDigest, MapFile.Digest(resolved));
         }
         finally
         {
@@ -138,20 +135,11 @@ public class 各入口支持生成图Tests
                 File.Delete(relative);
             }
 
-            if (!hadMaps && Directory.Exists("maps"))
+            if (!hadMaps && Directory.Exists("maps") && !Directory.EnumerateFileSystemEntries("maps").Any())
             {
                 Directory.Delete("maps");
             }
         }
-
-        // maps/ 下的新文件名允许；不在 maps/ 目录里的同名文件也允许（那不是权威文件）。
-        string fresh = Path.Combine(mapsDir, "my-board-12345.json");
-        (int freshCode, _, string freshErr) = RunMain("map", "--map", "board:12345", "--out", fresh);
-        Assert.True(freshCode == 0, freshErr);
-        Assert.Equal(MapFile.Digest(MapCatalog.Resolve("board:12345")), MapFile.Digest(MapCatalog.Resolve(fresh)));
-        string elsewhere = Path.Combine(root, "scratch", "siege-2p-board-v1.json");
-        Assert.Equal(0, RunMain("map", "--map", "board:12345", "--out", elsewhere).Code);
-        Assert.True(File.Exists(elsewhere));
     }
 
     [Fact]
@@ -164,7 +152,7 @@ public class 各入口支持生成图Tests
         // 原名「生成器只经目录调用_裸gen只在入口最外层取种子」：retire-legacy-maps 段 B 删除 gen:（边疆档生成器 FrontierMapGenerator、GeneratedMapId），
         // 只针对它们的断言删除，识别裸标识的位置收窄为棋盘图的三处；折叠函数 FriendlySeed 由 GeneratedMapId 迁到 BoardMapId。
         // 变异 MB-14：在 BatchRunner 里直接调 BoardMapGenerator.Generate → 本测试红；MB-15：在 PlayCommand 里加一处 IsBareRequest → 本测试红。
-        string src = Path.Combine(FrontierFixtures.RepoRoot(), "src");
+        string src = Path.Combine(TestMaps.RepoRoot(), "src");
         (string Path, string Text)[] files =
         [
             .. Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories)

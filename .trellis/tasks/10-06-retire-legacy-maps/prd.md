@@ -50,3 +50,11 @@
 - 测试：整删 13 个只测旧图 / `gen:` 的文件，部分删除若干；新增 `已删除地图明确报错Tests`；相机 `Large` 换 23×34 五平台自定布局；检查方补"棋盘生成尝试耗尽报错""终端棋盘生成图提示"两条丢失覆盖。用例 2368 → 2181（2179 通过 / 8 跳过）。
 - 全量全绿（缺省与 28 核）；两处构建 0 警告；Godot 缺省 `--auto-demo` / `--pick-check` / 选图自检通过，`--map=siege-4p-base-v5`、`gen:1` 报错退出。耗时同机 ABBA 2.09–2.27×（最慢集中在段 A 迁图后的专家前瞻类与 ConsoleRedirect 串行集合），待负责人定。
 - 留给段 C：`FrontierFixtures`（41 处，含"显式路径可加载"样本）、`PocketBase`、标准档合成图随档位删除换底图；批量顺排代码；`map` 子命令"权威文件"导出；`MapFile.cs:36`、`MatchSession.cs:817`、`MapData.cs:24/47` 等过时注释。产品无读档入口，存档"已删除"报错只在 Core API 层。
+
+### 段 C（2026-10-07，校验器收口）
+
+- 删 `MapProfile.Frontier`、声明表 Standard / Frontier 两行与只服务旧档的规则（距离失衡拒绝、三项可达性、`ColumnRange`、`BOARDS_NOT_ALLOWED`、容差、必死口袋、出生区新地表禁令、`BIRTH_ZONE_COUNT_MISMATCH`）；逐条论证在棋盘档上不可达或被覆盖（必死口袋：出生区 = 整块 ≥25 格平地出生棋盘 > 8；新地表禁令被 `BOARD_CELL_NOT_FLAT_GRASS` 覆盖，检查方补回棋盘图上"四种新地表都被拒"）。`RetiredProfiles`：标准档 / 缺 Profile 报 `MAP_PROFILE_RETIRED` 并拒绝；文件写边疆档读入即报"已删除"。`MapData` / `MapFile` 不动，三张内置图摘要与导出逐字节不变。
+- 检查方修一处真实缺陷：缺 Profile 的旧地图文件让 `run` / `play` 以未处理异常崩溃（退出码 134，`run` 还写出了半份输出）→ 入口接住 `MapValidationException`、`BatchRunner.RequireLoadable` 开跑前校验；补入口级测试。规格档分流守门补"拒绝码必须是白名单内整串字面量"，堵住 `"DEAD_" + "POCKET"` 拼接绕过。
+- `map` 子命令只在 `--out` 时落盘（不再写 `maps/` 权威文件）。批量顺排选区代码**保留**（主会话接受：16 个测试文件经 `CreateUnvalidated` 的 4 区合成图依赖它，改它属确定性契约变更）。
+- 已知且接受：棋盘档不再校验容差 / 豁免字段（校验器已不读）；`ReportDistances` 的"全部可达"分支在合法棋盘图上不可达；每局换图 K 按第 0 局的图落成（棋盘图最小 2 人约 207 格 > 150，不会跨档）。
+- 全量 2147 通过 / 0 失败 / 8 跳过（缺省与 28 核）；两处构建 0 警告；Godot 缺省 `--auto-demo` 通过。耗时同机对 `16d8167` 约 1.95×（噪声大，段 C 与段 B 持平）。

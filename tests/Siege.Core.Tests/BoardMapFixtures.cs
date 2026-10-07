@@ -37,7 +37,7 @@ internal static class BoardMapFixtures
             MaxPlayers = 2,
             Profile = MapProfile.Board,
             Boards = boards,
-            Obstacles = [.. FrontierFixtures.Rect(0, 0, 29, 13).Where(c => !playable.Contains(c))],
+            Obstacles = [.. TestMaps.Rect(0, 0, 29, 13).Where(c => !playable.Contains(c))],
             BirthZones = [[.. Birth0.Cells()], [.. Birth1.Cells()]],
             RelicCells = new (int X, int Y, RelicZone Zone, BudgetTier Budget)[]
             {
@@ -117,7 +117,7 @@ internal static class BoardMapFixtures
             MaxPlayers = players,
             Profile = MapProfile.Board,
             Boards = boards,
-            Obstacles = [.. FrontierFixtures.Rect(0, 0, width, height).Where(c => !playable.Contains(c))],
+            Obstacles = [.. TestMaps.Rect(0, 0, width, height).Where(c => !playable.Contains(c))],
             BirthZones = [.. boards.Where(b => b.Kind == BoardPlateKind.Birth).Select(b => (ImmutableHashSet<Coord>)[.. b.Cells()])],
             RelicCells = FourRelics.Where(kv => playable.Contains(kv.Key)).ToImmutableDictionary(),
             ChokePoints = [],
@@ -149,7 +149,7 @@ internal static class BoardMapFixtures
             MaxPlayers = 2,
             Profile = MapProfile.Board,
             Boards = boards,
-            Obstacles = [.. FrontierFixtures.Rect(0, 0, 28, 21).Where(c => !playable.Contains(c))],
+            Obstacles = [.. TestMaps.Rect(0, 0, 28, 21).Where(c => !playable.Contains(c))],
             BirthZones = [.. boards.Where(b => b.Kind == BoardPlateKind.Birth).Select(b => (ImmutableHashSet<Coord>)[.. b.Cells()])],
             RelicCells = new (int X, int Y, RelicZone Zone, BudgetTier Budget)[]
             {

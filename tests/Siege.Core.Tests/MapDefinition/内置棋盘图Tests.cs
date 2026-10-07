@@ -160,20 +160,28 @@ public class 内置棋盘图Tests
     public void 导出文件名合法()
     {
         // 规格 Scenario：以 map --map siege-4p-board-v1 导出 → 文件名为 siege-4p-board-v1.json，不含冒号。
-        // board: 标识本身含冒号（Windows 文件名非法），按它请求只打印、不往 maps/ 写；要落盘用内置名或 --out。
-        // 变异 B-C6a：Program.ExportMap 的导出文件名改用别名的生成图标识 → 只红本测试；B-C6b：按 board: 标识请求也导出 → 红 2（含本测试）。
+        // retire-legacy-maps 段 C：内置图不再有 maps/ 权威文件，map 子命令只在给 --out 时落盘、文件名由 --out 决定（规格 Scenario 段 D 随之改写）：
+        // 按内置名请求、不给 --out → 只打印、不写任何文件；给 --out <目录>/siege-4p-board-v1.json → 写出的内容与该内置图的导出文本逐字节相同，可再按路径加载。
+        // board: 标识本身含冒号（Windows 文件名非法），按它请求同样只打印。
+        // 变异 MC-M2（段 C 实跑）：ExportMap 恢复"按内置标识请求时另写 maps/<id>.json" → 本测试与 地图子命令Tests.给地图文件路径时只打印不导出 共红 2。
         CleanExports();
         try
         {
             (int code, string text) = RunMap("map", "--map", "siege-4p-board-v1");
             Assert.Equal(0, code);
-            string expected = Path.Combine("maps", "siege-4p-board-v1.json");
-            Assert.Contains($"已导出 {expected}", text, StringComparison.Ordinal);
-            Assert.Equal(["siege-4p-board-v1.json"], Directory.GetFiles("maps").Select(Path.GetFileName));
-            Assert.Equal(MapFile.ToJson(MapCatalog.Resolve("siege-4p-board-v1")), File.ReadAllText(expected));
+            Assert.Contains("地图 siege-4p-board-v1  39×41", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("已导出", text, StringComparison.Ordinal);
+            Assert.False(Directory.Exists("maps"), "不给 --out 时写出了 maps/。");
+
+            string target = Path.Combine(SimFixtures.TempDir("builtin-board-export"), "siege-4p-board-v1.json");
+            (int outCode, string outText) = RunMap("map", "--map", "siege-4p-board-v1", "--out", target);
+            Assert.Equal(0, outCode);
+            Assert.Contains($"已导出 {target}", outText, StringComparison.Ordinal);
+            Assert.Equal(MapFile.ToJson(MapCatalog.Resolve("siege-4p-board-v1")), File.ReadAllText(target));
+            Assert.Equal("siege-4p-board-v1", MapCatalog.Resolve(target).Id);
+            Assert.False(Directory.Exists("maps"), "给了 --out 仍另写了 maps/。");
 
             // 反面：按 board: 标识请求同一张图，只打印、不写任何文件（更不会写出带冒号的文件名）。
-            CleanExports();
             (int boardCode, string boardText) = RunMap("map", "--map", "board:5");
             Assert.Equal(0, boardCode);
             Assert.Contains("地图 board:5  39×41", boardText, StringComparison.Ordinal);

@@ -352,7 +352,7 @@ public class 棋盘档生成参数Tests
     public void 棋盘档生成器源码不含散列次序遍历_浮点_时钟与环境_也不见对局种子()
     {
         // 守门（determinism.md：生成路径禁浮点、禁散列容器遍历、禁时钟与环境；生成器拿不到对局种子）。源码扫描，口径同边疆档生成器那一条。
-        string maps = Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Core", "Board", "Maps");
+        string maps = Path.Combine(TestMaps.RepoRoot(), "src", "Siege.Core", "Board", "Maps");
         string[] layoutFiles = [.. Directory.EnumerateFiles(maps, "BoardMapLayout*.cs").Order(StringComparer.Ordinal)];
         Assert.NotEmpty(layoutFiles);
         string layout = StripComments(string.Join("\n", layoutFiles.Select(File.ReadAllText)));
@@ -387,7 +387,7 @@ public class 棋盘档生成参数Tests
         }
 
         // 对局流程不见棋盘档的地图种子类型。
-        string[] matchFiles = [.. Directory.EnumerateFiles(Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Core", "Match"), "*.cs", SearchOption.AllDirectories)];
+        string[] matchFiles = [.. Directory.EnumerateFiles(Path.Combine(TestMaps.RepoRoot(), "src", "Siege.Core", "Match"), "*.cs", SearchOption.AllDirectories)];
         Assert.True(matchFiles.Length >= 10, $"样本口径：Match 目录只扫到 {matchFiles.Length} 个文件。");
         var token = new Regex(@"BoardMapGenerator|BoardMapLayout|BoardMapParameters|BoardMapId|GeneratedBoardMap");
         Assert.Empty(matchFiles.Where(path => token.IsMatch(File.ReadAllText(path))).Select(path => Path.GetFileName(path)));

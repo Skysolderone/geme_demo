@@ -12,11 +12,11 @@ namespace Siege.Core.Tests.MapDefinition;
 /// 变异验证（board-isolated-gen 段 A 实跑，改的都是 MapValidator.cs，只跑本类；红数按 Theory 行计）：
 /// V1 放过棋盘外的可落子格（ValidateSceneryCells 的判据改成运行时恒假）→ 红 3：棋盘之间有可落子格、场景里有可落子格、信物格必须在棋盘内；
 /// V2 / V3 / V4 棋盘档声明行 Reach 分别改为 (true, false, false) / (false, true, false) / (false, false, true)（不可达即拒绝 / 要求到中央入口的通路 / 要求标注咽喉）
-/// → 各红 21（凡以"合规图无拒绝项"为前提的用例全红，含 棋盘档不可达只报告、合法2人棋盘图、棋盘被孤立不再拒绝）；
+/// → 各红 21（凡以"合规图无拒绝项"为前提的用例全红，含 棋盘档不可达只报告、合法2人棋盘图、棋盘被孤立不再拒绝）——retire-legacy-maps 段 C 删除 Reach 字段与三条规则，此三条变异已无落点；
 /// V5 公共棋盘边长下限 7 → 6 → 红 2：公共棋盘小于7乘7（6×9 被接受、9×16 的报文区间变了）；
 /// V6 删除 3 人预算行 → 红 3：出生区数不等于人数加一、各人数都有预算(3)、规模预算按人数(3)；
 /// V7 尺寸区间下限 15 → 16 → 红 1：棋盘档的尺寸与清单要求；
-/// V9 不可达时不出报告项（ValidateDistanceBalance 的报告分支加运行时恒假条件；连同 生成图通过校验 一起跑）→ 红 12（2 人收窄后重跑）：合法2人棋盘图、棋盘档不可达只报告、生成图通过校验 ×10；
+/// V9 不可达时不出报告项（ValidateDistanceBalance——段 C 起为 ReportDistances——的报告分支加运行时恒假条件；连同 生成图通过校验 一起跑）→ 红 12（2 人收窄后重跑）：合法2人棋盘图、棋盘档不可达只报告、生成图通过校验 ×10；
 /// T2 只改测试不改实现：规模预算按人数 的 3 人与 2 人期望对调 → 红 2。
 /// builtin-board-maps 段 A（出生棋盘同尺寸；跑 FullyQualifiedName~棋盘档）：
 /// S1 尺寸一致判据改成运行时恒放行（odd.Length >= 0 即返回）→ 红 3：出生棋盘尺寸不一、出生棋盘越界(7×6)、出生棋盘越界(8×6)；
@@ -24,7 +24,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// S3 报出的坐标改成全部出生棋盘（不只是尺寸不同的）→ 红 1：出生棋盘尺寸不一。
 /// 段 A 检查补：C6 尺寸只比短边（SizeOf 返回 (短边, 0)）、C7 只比长边（(0, 长边)）→ 补"只差一条边"样本前各红 0，补后各红 1：出生棋盘尺寸不一；
 /// C3 只比面积 → 红 0，属等价变异（5–7 内六种无序尺寸面积 25 / 30 / 35 / 36 / 42 / 49 两两不同）；
-/// C5 在 ValidateBirthPlateSizes 里加 `map.Profile != MapProfile.Board && 恒假` 的分支 → 红 1：边疆档静态校验Tests.校验器对规格档的分支只在声明表里。
+/// C5 在 ValidateBirthPlateSizes 里加 `map.Profile != MapProfile.Board && 恒假` 的分支 → 红 1：边疆档静态校验Tests（段 C 起改名 规格档分流守门Tests）.校验器对规格档的分支只在声明表里。
 /// </remarks>
 public class 棋盘档预算与校验Tests
 {
@@ -265,7 +265,7 @@ public class 棋盘档预算与校验Tests
     public void 棋盘档不可达只报告()
     {
         // Scenario（「地图静态校验规则」第 1 / 7 条与咽喉的棋盘档写法）：合规棋盘档图各出生棋盘到不了公共信物格与中央入口 → 接受，这两类目标记为"不可达"。
-        // 同一张图换成标准档的可达性处理会被拒：用来证明"不可达"确实存在、不是因为可达才没报。
+        // "不可达"确实存在、不是因为可达才没报：由末尾的距离表断言证明（retire-legacy-maps 段 C 前另有"同一张图换成标准档的可达性处理会被拒"一句注释，标准档已删除）。
         MapData map = BoardMapFixtures.FourPlayerMap();
         Assert.Empty(map.ChokePoints);
         Assert.Equal((287, 7, 9), (map.PlayableCount, map.Boards.Length, map.RelicCells.Count));   // 5×25 + 2×81
@@ -273,7 +273,6 @@ public class 棋盘档预算与校验Tests
         MapValidationResult result = MapValidator.Validate(map);
 
         Assert.True(result.IsValid, result.ToString());
-        Assert.DoesNotContain(result.Failures, f => f.Code is "LANDMARK_UNREACHABLE" or "BIRTH_ZONE_ISOLATED" or "CHOKE_NOT_ANNOTATED");
         MapValidationFailure relic = Assert.Single(result.Reports, r => r.Message.Contains("最近公共信物", StringComparison.Ordinal));
         MapValidationFailure entrance = Assert.Single(result.Reports, r => r.Message.Contains("中央入口", StringComparison.Ordinal));
         foreach (MapValidationFailure report in new[] { relic, entrance })

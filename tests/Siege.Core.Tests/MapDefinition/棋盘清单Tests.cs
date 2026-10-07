@@ -19,7 +19,8 @@ public class 棋盘清单Tests
     {
         // Scenario：读入没有棋盘清单的地图文件再导出 → 棋盘清单为空，导出文件里没有该字段、往返稳定。
         // retire-legacy-maps 段 B：原逐张读七份 maps/*.json（随旧图删除），并与其中四份磁盘文件逐字节比；改为标准档 / 边疆档合成图的导出文本。
-        foreach (MapData source in new[] { TestMaps.Synthetic(size: 9, maxPlayers: 4), FrontierFixtures.Map() })
+        // 段 C：边疆档删除，只留没有清单的合成图（缺省档）——这里只测文件格式的读写，读入后的校验拒绝见 地图规格档Tests。
+        foreach (MapData source in new[] { TestMaps.Synthetic(size: 9, maxPlayers: 4) })
         {
             string disk = MapFile.ToJson(source);
             Assert.DoesNotContain("\"Boards\"", disk, StringComparison.Ordinal);
@@ -86,27 +87,6 @@ public class 棋盘清单Tests
         Assert.Equal(
             logWith.Events.Select(e => System.Text.Json.JsonSerializer.Serialize(e)),
             logWithout.Events.Select(e => System.Text.Json.JsonSerializer.Serialize(e)));
-    }
-
-    [Fact]
-    public void 标准档与边疆档地图带棋盘清单被拒绝()
-    {
-        // 「标准档与边疆档地图的棋盘清单 MUST 为空」：清单只属于棋盘档。
-        // retire-legacy-maps 段 B：标准档一侧原用 v5（合法图，带清单后恰报这一条）；v5 删除后标准档没有合法的整图，
-        // 改用标准档合成图：不带清单时不报本码，带清单时恰报一条本码（清单不合法属结构问题，报出后不再往下校验）。边疆档一侧仍是合法图、恰报这一条。
-        BoardPlate plate = new(new Coord(0, 0), 5, 5, BoardPlateKind.Public);
-        foreach (MapData map in new[] { TestMaps.Synthetic(size: 9, maxPlayers: 4), FrontierFixtures.Map() })
-        {
-            Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "BOARDS_NOT_ALLOWED");
-
-            MapValidationResult result = MapValidator.Validate(map with { Boards = [plate] });
-
-            MapValidationFailure failure = Assert.Single(result.Failures, f => f.Code == "BOARDS_NOT_ALLOWED");
-            Assert.Contains("棋盘清单", failure.Message, StringComparison.Ordinal);
-        }
-
-        Assert.True(MapValidator.Validate(FrontierFixtures.Map()).IsValid);
-        Assert.Single(MapValidator.Validate(FrontierFixtures.Map() with { Boards = [plate] }).Failures);
     }
 
     [Fact]

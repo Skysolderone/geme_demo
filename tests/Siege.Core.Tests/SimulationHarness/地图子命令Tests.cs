@@ -4,7 +4,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
 /// frontier-map tasks 3.4：<c>map</c> 子命令能按地图标识打印边疆图的文本图（高度 / 地表 / 桥 / 栅栏 / 平台编号 / 信物）与校验报告项
-/// （各平台到五类目标的距离）；不带选项仍是缺省地图。子命令会向当前工作目录的 <c>maps/</c> 导出内置图——测试进程的工作目录是测试输出目录，不碰仓库里的权威文件。
+/// （各平台到五类目标的距离）；不带选项仍是缺省地图。retire-legacy-maps 段 C 起子命令只在给 <c>--out</c> 时落盘，不再往当前工作目录的 <c>maps/</c> 导出内置图。
 /// </summary>
 [Collection(ConsoleRedirect.Collection)]
 public class 地图子命令Tests
@@ -56,29 +56,31 @@ public class 地图子命令Tests
     [Fact]
     public void 给地图文件路径时只打印不导出()
     {
-        // 设计师拿内置图的副本改地形（Id 没改）后 `map --map 副本.json` 只想看一眼：不得写出 maps/<内置标识>.json。
-        // 判据必须是"请求的是不是内置标识"，不是读到的 map.Id。变异 M-B14：改回按 map.Id 判 → 当前目录的 maps/ 被写出，本测试红。
-        // retire-legacy-maps 段 A2：副本由 v5 改为 2 人内置棋盘图。棋盘图在仓库里没有权威 json（内容由生成器与摘要黄金值守住），
-        // 原"仓库里的 maps/siege-4p-base-v5.json 逐字节不变"改为"仓库里不出现 maps/siege-2p-board-v1.json"。
+        // 原意：设计师拿内置图的副本改地形（Id 没改）后 `map --map 副本.json` 只想看一眼，不得写出 maps/<内置标识>.json（变异 M-B14）。
+        // retire-legacy-maps 段 C：内置图不再有 maps/ 权威文件，map 子命令不给 --out 就一律不落盘——按内置名请求（原先会写 maps/）与按文件路径请求都一样。
+        // 变异 MC-M2（段 C 实跑）：ExportMap 恢复"按内置标识请求时另写 maps/<id>.json" → 本测试与 内置棋盘图Tests.导出文件名合法 共红 2。
         string dir = SimFixtures.TempDir("map-subcommand-file");
         string copy = Path.Combine(dir, "my-copy.json");
         MapData edited = Siege.Core.Board.Maps.MapCatalog.Resolve(SimFixtures.Board2);
         File.WriteAllText(copy, MapFile.ToJson(edited));
         string exported = Path.Combine("maps", $"{edited.Id}.json");
-        string repoFile = Path.Combine(FrontierFixtures.RepoRoot(), "maps", $"{edited.Id}.json");
+        string repoFile = Path.Combine(TestMaps.RepoRoot(), "maps", $"{edited.Id}.json");
         Assert.False(File.Exists(repoFile), $"仓库里不应有 {repoFile}");
         CleanExports();
 
-        (int code, string text, string err) = RunMain("map", "--map", copy);
+        foreach (string request in new[] { copy, SimFixtures.Board2 })
+        {
+            (int code, string text, string err) = RunMain("map", "--map", request);
 
-        Assert.True(code == 0, err);
-        Assert.Contains("地图 siege-2p-board-v1  32×35", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("已导出", text, StringComparison.Ordinal);
-        Assert.False(File.Exists(exported), "按文件路径请求的地图被导出到了 maps/。");
-        Assert.False(File.Exists(repoFile), "按文件路径请求的地图被导出到了仓库的 maps/。");
+            Assert.True(code == 0, err);
+            Assert.Contains("地图 siege-2p-board-v1  32×35", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("已导出", text, StringComparison.Ordinal);
+            Assert.False(File.Exists(exported), $"map --map {request} 不给 --out 却导出到了 maps/。");
+            Assert.False(File.Exists(repoFile), "导出到了仓库的 maps/。");
+        }
     }
 
-    /// <summary>删掉本类在测试进程工作目录里导出的地图文件：留着会让目录的"maps/&lt;标识&gt;.json"文件回落替别的测试把图读回来，掩盖内置表的缺行。</summary>
+    /// <summary>删掉测试进程工作目录里的 maps/（变异下 map 子命令可能又往那里写）。retire-legacy-maps 段 B 起已没有"maps/&lt;标识&gt;.json"文件回落，留着也不会被读回。</summary>
     private static void CleanExports()
     {
         // 只清测试进程的工作目录（测试输出目录）；万一工作目录就是仓库根，绝不碰权威的 maps/。

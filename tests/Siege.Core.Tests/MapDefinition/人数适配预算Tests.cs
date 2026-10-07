@@ -4,100 +4,61 @@ using Siege.Core.Board.Maps;
 
 namespace Siege.Core.Tests.MapDefinition;
 
-/// <summary>规格：map-definition —— Requirement: 人数适配预算</summary>
+/// <summary>
+/// 规格：map-definition —— Requirement: 人数适配预算。
+/// retire-legacy-maps 段 C：标准档（2 / 3 / 4 人 50–65 / 75–90 / 95–110）与边疆档（4 人 300–420）的预算随两档删除，
+/// 本类改在棋盘档合规图（<see cref="BoardMapFixtures"/>）上验棋盘档的人数预算：可落子格上界、信物格下界与不支持的人数。
+/// 可落子格下界、信物格上界、出生区数 = 人数 + 1 与单区 25–49 见 <c>棋盘档预算与校验Tests</c>。
+/// 删除的用例：出生区数量必须等于最大人数（BIRTH_ZONE_COUNT_MISMATCH 只服务标准档）、两人 / 三人预算区间（标准档数值）、
+/// 边疆档按自己的区间校验、边疆档出生区数不得等于人数、边疆档出生区数区间端点、边疆档平台过小、边疆档单区下 / 上界端点、
+/// 边疆档可落子下 / 上界端点、边疆档信物数区间端点、边疆档两人三人报不支持。
+/// </summary>
 public class 人数适配预算Tests
 {
-    [Fact]
-    public void 格数超出预算()
+    [Theory]
+    [InlineData(4, 250, 1000)]
+    [InlineData(3, 190, 750)]
+    [InlineData(2, 125, 500)]
+    public void 格数超出预算(int players, int min, int max)
     {
-        // 规格 Scenario：4 人地图的可落子格为 130 → 拒绝并报告超出 95–110（terrain-model 裁决 D18）。
-        // 12×12 = 144 外接的合成图，只留 14 格障碍 → 可落子恰好 130，与规格算例逐字对上。
-        // （不再拿 v3 基准图裁尺寸：13×13 的地形数据在 12×12 上会越界，触发的是 TERRAIN_OUT_OF_BOUNDS。）
-        MapData plain = TestMaps.Synthetic(size: 12, maxPlayers: 4);
-        MapData oversized = plain with { Obstacles = [.. plain.FirstCells(14)] };
-        Assert.Equal(130, oversized.PlayableCount);
+        // 规格 Scenario：可落子格多于该人数预算上限 → 拒绝并报告超出区间（棋盘档 4 人 250–1000、3 人 190–750、2 人 125–500，区间取自规格、测试内独立写出）。
+        // 格局：人数 + 1 块 5×5 出生棋盘 + 两块 9×9 公共棋盘（合规），外接放宽到 60×25，再把坐标序前若干个场景格改成可落子，凑到恰为上限 / 上限 + 1。
+        // 场景格可落子会另报 SCENERY_CELL_PLAYABLE，这里只看可落子格那一条：上限本身不报、上限 + 1 报出。
+        // 变异（段 C 实跑）：MC-S1 2 人上限 500 → 600、MC-S1b 4 人上限 1000 → 1001 → 本测试对应行各红 1。
+        ImmutableArray<BoardPlate> boards = [.. BoardMapFixtures.FourBirths.Take(players + 1), BoardMapFixtures.FourPublicA, BoardMapFixtures.FourPublicB];
+        ImmutableHashSet<Coord> boardCells = [.. boards.SelectMany(b => b.Cells())];
+        Coord[] scenery = [.. TestMaps.Rect(0, 0, 60, 25).Where(c => !boardCells.Contains(c))];
+        MapData With(int playable) =>
+            BoardMapFixtures.Build($"test-board-over-{players}", players, 60, 25, boards, [.. scenery.Take(playable - boardCells.Count)]);
 
-        MapValidationResult result = MapValidator.Validate(oversized);
+        MapData atMax = With(max);
+        MapData over = With(max + 1);
+        Assert.Equal((max, max + 1), (atMax.PlayableCount, over.PlayableCount));
 
-        MapValidationFailure failure = Assert.Single(
-            result.Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("可落子格为 130", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("95–110", failure.Message, StringComparison.Ordinal);
+        MapValidationFailure failure = Assert.Single(MapValidator.Validate(over).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
+        Assert.Contains($"{players} 人地图的可落子格为 {max + 1}", failure.Message, StringComparison.Ordinal);
+        Assert.Contains($"{min}–{max}", failure.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(MapValidator.Validate(atMax).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
     }
 
     [Fact]
     public void 信物格数不足()
     {
-        // retire-legacy-maps 段 B：原在 v5 上删掉出生区信物（剩公共信物 9 个）；改为 10×10 标准档 4 人合成图只放 5 个公共信物。
-        MapData stripped = TestMaps.Synthetic(size: 10, maxPlayers: 4, relics: FiveContestedRelics());
+        // 规格 Scenario「信物格数不足」：信物格少于该人数下限 → 拒绝并报出方向与区间。
+        // retire-legacy-maps 段 C：原是 10×10 标准档 4 人合成图（13–15）；改为 4 人合规棋盘档图只留 5 个出生棋盘信物（棋盘档 4 人 7–25）。
+        // 变异 MC-S5（段 C 实跑）：4 人信物下限 7 → 6 → 本测试红（连同 棋盘档预算与校验 两条、地图文件健壮性 一条共红 4）。
+        MapData map = BoardMapFixtures.FourPlayerMap();
+        MapData stripped = map with { RelicCells = map.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).ToImmutableDictionary() };
+        Assert.Equal(5, stripped.RelicCells.Count);
 
         MapValidationResult result = MapValidator.Validate(stripped);
 
-        MapValidationFailure failure = Assert.Single(
-            result.Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
+        MapValidationFailure failure = Assert.Single(result.Failures);
+        Assert.Equal("RELIC_COUNT_OUT_OF_RANGE", failure.Code);
         Assert.Contains("信物格为 5", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("13–15", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("少于下限 13", failure.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void 出生区数量必须等于最大人数()
-    {
-        // 标准档：出生区数 = 人数。retire-legacy-maps 段 B：原在 v5 上去掉一个出生区；改为 10×10 标准档 4 人合成图，四个 3 格出生区去掉一个。
-        // （棋盘档出生区数 = 人数 + 1，不符时报的是区间码 BIRTH_ZONE_COUNT_OUT_OF_RANGE，不是本码。）
-        MapData map = TestMaps.Synthetic(size: 10, maxPlayers: 4) with
-        {
-            BirthZones = [.. Enumerable.Range(0, 4).Select(i => ImmutableHashSet.Create(new Coord(0, i * 2), new Coord(1, i * 2), new Coord(2, i * 2)))],
-        };
-        MapData missingZone = map with { BirthZones = map.BirthZones.RemoveAt(3) };
-
-        MapValidationResult result = MapValidator.Validate(missingZone);
-
-        Assert.Contains(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");
-        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");
-    }
-
-    [Fact]
-    public void 两人预算区间()
-    {
-        // 设计文档 §3.2：2 人 → 可落子 50–65、出生区 2、信物 7–9
-        // 规格 Scenario「信物格数不足」：2 人地图只有 5 个信物格 → 报告少于 7
-        MapData twoPlayer = TestMaps.Synthetic(size: 8, maxPlayers: 2, relics: FiveContestedRelics());
-
-        MapValidationResult result = MapValidator.Validate(twoPlayer);
-
-        Assert.DoesNotContain(result.Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE"); // 64 ∈ 50–65
-        MapValidationFailure relics = Assert.Single(result.Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
-        Assert.Contains("信物格为 5", relics.Message, StringComparison.Ordinal);
-        Assert.Contains("少于下限 7", relics.Message, StringComparison.Ordinal);
-        Assert.Contains("7–9", relics.Message, StringComparison.Ordinal);
-
-        // 49 格低于下限 50
-        MapValidationFailure tooSmall = Assert.Single(
-            MapValidator.Validate(TestMaps.Synthetic(size: 7, maxPlayers: 2)).Failures,
-            f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("50–65", tooSmall.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void 三人预算区间()
-    {
-        // 设计文档 §3.2：3 人 → 可落子 75–90、出生区 3、信物 10–12
-        MapData threePlayer = TestMaps.Synthetic(size: 10, maxPlayers: 3);
-
-        MapValidationResult result = MapValidator.Validate(threePlayer);
-
-        MapValidationFailure playable = Assert.Single(result.Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("可落子格为 100", playable.Message, StringComparison.Ordinal);
-        Assert.Contains("75–90", playable.Message, StringComparison.Ordinal);
-
-        MapValidationFailure relics = Assert.Single(result.Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
-        Assert.Contains("10–12", relics.Message, StringComparison.Ordinal);
-
-        // 9×9 = 81 ∈ 75–90
-        Assert.DoesNotContain(
-            MapValidator.Validate(TestMaps.Synthetic(size: 9, maxPlayers: 3)).Failures,
-            f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
+        Assert.Contains("7–25", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("少于下限 7", failure.Message, StringComparison.Ordinal);
+        Assert.True(MapValidator.Validate(map).IsValid);   // 反面：原图（9 个）通过
     }
 
     [Fact]
@@ -105,218 +66,8 @@ public class 人数适配预算Tests
     {
         MapData map = MapCatalog.Resolve(MapCatalog.DefaultId) with { MaxPlayers = 5 };   // retire-legacy-maps 段 B：原底图 v5
 
-        Assert.Contains(MapValidator.Validate(map).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
-    }
-
-    // ---------- frontier-map：边疆档 4 人预算（300–420 / 5–8 区且多于人数 / 单区 20–225 / 信物 14–24） ----------
-
-    [Fact]
-    public void 边疆档按自己的区间校验()
-    {
-        // 规格 Scenario：4 人边疆档，可落子 360、出生区 6、信物 16 → 规模校验通过；同样的数字标成标准档因可落子超出 95–110 被拒。
-        // 变异 M-A3：把声明表里边疆档的可落子区间改成标准档的 95–110 → 本测试红。
-        MapData frontier = FrontierFixtures.Map();
-        Assert.Equal(360, frontier.PlayableCount);
-        Assert.Equal(6, frontier.BirthZones.Length);
-        Assert.Equal(16, frontier.RelicCells.Count);
-
-        MapValidationResult accepted = MapValidator.Validate(frontier);
-        Assert.True(accepted.IsValid, accepted.ToString());
-        GameBoard.Load(frontier);   // 加载路径同样放行
-
-        MapValidationResult asStandard = MapValidator.Validate(frontier with { Profile = MapProfile.Standard });
-        MapValidationFailure playable = Assert.Single(asStandard.Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("可落子格为 360", playable.Message, StringComparison.Ordinal);
-        Assert.Contains("95–110", playable.Message, StringComparison.Ordinal);
-        Assert.Contains(asStandard.Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");   // 标准档：6 ≠ 4
-        Assert.Throws<MapValidationException>(() => GameBoard.Load(frontier with { Profile = MapProfile.Standard }));
-    }
-
-    [Fact]
-    public void 边疆档出生区数不得等于人数()
-    {
-        // 规格 Scenario：4 人边疆档出生区恰为 4 个 → 拒绝并报告低于 5–8 区间。
-        // 变异 M-A19：声明表里边疆档的 ZonesMustExceedPlayers 改成 false → 本测试红。
-        MapData frontier = FrontierFixtures.Map();
-        MapData fourZones = frontier with { BirthZones = [.. frontier.BirthZones.Take(4)] };
-
-        MapValidationResult result = MapValidator.Validate(fourZones);
-
-        MapValidationFailure count = Assert.Single(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("出生区为 4 个", count.Message, StringComparison.Ordinal);
-        Assert.Contains("低于下限 5", count.Message, StringComparison.Ordinal);
-        Assert.Contains("5–8", count.Message, StringComparison.Ordinal);
-        Assert.Contains(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_NOT_ABOVE_PLAYERS");
-        Assert.DoesNotContain(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");   // "必须等于人数"是标准档的报文
-    }
-
-    [Theory]
-    [InlineData(5, null)]
-    [InlineData(8, null)]
-    [InlineData(9, "高于上限 8")]
-    public void 边疆档出生区数区间端点(int zones, string? direction)
-    {
-        // 5 与 8 是区间端点（通过），9 紧贴上界之外。增补的三个区都是 ≥ 20 格的空地矩形，不与既有平台重叠。
-        MapData frontier = FrontierFixtures.Map();
-        ImmutableHashSet<Coord>[] extra =
-        [
-            [.. FrontierFixtures.Rect(0, 6, 5, 5)],
-            [.. FrontierFixtures.Rect(15, 6, 5, 5)],
-            [.. FrontierFixtures.Rect(5, 6, 2, 10)],
-        ];
-        MapData map = frontier with { BirthZones = [.. frontier.BirthZones.Concat(extra).Take(zones)] };
-        Assert.Equal(zones, map.BirthZones.Length);
-
-        MapValidationFailure[] count = [.. MapValidator.Validate(map).Failures.Where(f => f.Code.StartsWith("BIRTH_ZONE_COUNT", StringComparison.Ordinal))];
-
-        if (direction is null)
-        {
-            Assert.Empty(count);
-        }
-        else
-        {
-            Assert.Contains(direction, Assert.Single(count).Message, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void 边疆档平台过小()
-    {
-        // 规格 Scenario：某平台只有 12 个可落子格 → 拒绝并指出该平台编号与 20–225 区间。
-        // 变异 M-A23：声明表里单区下界 20 改成 12 → 本测试与「边疆档单区下界端点」红。
-        // 12 ≥ 9，所以触发的只是边疆档的单区区间，不是两档共用的"容不下 9 枚部署"。
-        MapData frontier = FrontierFixtures.Map();
-        MapData shrunk = frontier with { BirthZones = frontier.BirthZones.SetItem(2, [.. FrontierFixtures.Rect(0, 13, 3, 4)]) };
-        Assert.Equal(12, shrunk.BirthZones[2].Count(shrunk.IsPlayable));
-
-        MapValidationResult result = MapValidator.Validate(shrunk);
-
-        MapValidationFailure size = Assert.Single(result.Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
-        Assert.Contains("出生区 3 ", size.Message, StringComparison.Ordinal);
-        Assert.Contains("12 个可落子格", size.Message, StringComparison.Ordinal);
-        Assert.Contains("20–225", size.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(result.Failures, f => f.Code == "BIRTH_ZONE_TOO_SMALL");
-    }
-
-    [Theory]
-    [InlineData(19, false)]
-    [InlineData(20, true)]
-    public void 边疆档单区下界端点(int cells, bool accepted)
-    {
-        MapData frontier = FrontierFixtures.Map();
-        MapData map = frontier with { BirthZones = frontier.BirthZones.SetItem(2, [.. FrontierFixtures.Rect(0, 13, 5, 5).Take(cells)]) };
-
-        Assert.Equal(accepted, !MapValidator.Validate(map).Failures.Any(f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE"));
-    }
-
-    [Theory]
-    [InlineData(225, true)]
-    [InlineData(226, false)]
-    public void 边疆档单区上界端点(int cells, bool accepted)
-    {
-        // 单区 20–225 的上界（15×15）此前没有行为端点：检查阶段变异 M-C6（声明表 225 → 224）补测前只红 1——
-        // 「边疆档平台过小」里的报文文本 "20–225"，225 格的平台是否被接受没人问过；补测后红 3（本测试两行 + 那一条）。
-        // 3 号台换成左下角 15×15 的整块（226 时再多取相邻一列的一格）；它与别的平台重叠会另报别的码，这里只看单区规模这一条。
-        MapData frontier = FrontierFixtures.Map();
-        Coord[] big = [.. FrontierFixtures.Rect(0, 0, 15, 15), new Coord(15, 0)];
-        MapData map = frontier with { BirthZones = frontier.BirthZones.SetItem(2, [.. big.Take(cells)]) };
-        Assert.Equal(cells, map.BirthZones[2].Count(map.IsPlayable));
-
-        MapValidationFailure[] size = [.. MapValidator.Validate(map).Failures.Where(f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE")];
-
-        Assert.Equal(accepted, size.Length == 0);
-        Assert.All(size, f =>
-        {
-            Assert.Contains("出生区 3 ", f.Message, StringComparison.Ordinal);
-            Assert.Contains("20–225", f.Message, StringComparison.Ordinal);
-        });
-    }
-
-    [Theory]
-    [InlineData(299, false)]
-    [InlineData(300, true)]
-    public void 边疆档可落子下界端点(int playable, bool accepted)
-    {
-        MapData frontier = FrontierFixtures.Map();
-        MapData map = frontier with { Obstacles = [.. frontier.Obstacles, .. FrontierFixtures.FreeCells(frontier).Take(360 - playable)] };
-        Assert.Equal(playable, map.PlayableCount);
-
-        MapValidationFailure[] failures = [.. MapValidator.Validate(map).Failures.Where(f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE")];
-
-        Assert.Equal(accepted, failures.Length == 0);
-        Assert.All(failures, f => Assert.Contains("300–420", f.Message, StringComparison.Ordinal));
-    }
-
-    [Theory]
-    [InlineData(420, true)]
-    [InlineData(421, false)]
-    public void 边疆档可落子上界端点(int playable, bool accepted)
-    {
-        // 21×21 = 441 的合成图只用于触发这一条。
-        MapData plain = TestMaps.Synthetic(size: 21, maxPlayers: 4) with { Profile = MapProfile.Frontier };
-        MapData map = plain with { Obstacles = [.. plain.FirstCells(441 - playable)] };
-        Assert.Equal(playable, map.PlayableCount);
-
-        Assert.Equal(accepted, !MapValidator.Validate(map).Failures.Any(f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE"));
-    }
-
-    [Theory]
-    [InlineData(13, "少于下限 14")]
-    [InlineData(14, null)]
-    [InlineData(24, null)]
-    [InlineData(25, "多于上限 24")]
-    public void 边疆档信物数区间端点(int count, string? direction)
-    {
-        // 「只改测试不改实现」的变异 M-A20（testing.md：专治测试抄实现）：把本测试期望的区间文本换成单区格数的 20–225 → 越界的两行红，
-        // 说明信物与单区格数两个维度的期望值各自钉住了实现，而不是跟着实现走。
-        MapData frontier = FrontierFixtures.Map();
-        ImmutableDictionary<Coord, RelicCellSpec> relics = frontier.RelicCells;
-        foreach (Coord c in relics.Where(kv => kv.Value.Budget == BudgetTier.Standard).Select(kv => kv.Key).Order().Take(Math.Max(0, 16 - count)))
-        {
-            relics = relics.Remove(c);
-        }
-
-        foreach (Coord c in FrontierFixtures.FreeCells(frontier).Take(Math.Max(0, count - 16)))
-        {
-            relics = relics.Add(c, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard));
-        }
-
-        MapData map = frontier with { RelicCells = relics };
-        Assert.Equal(count, map.RelicCells.Count);
-
-        AssertRange(MapValidator.Validate(map), "RELIC_COUNT_OUT_OF_RANGE", direction, "14–24");
-    }
-
-    [Theory]
-    [InlineData(2)]
-    [InlineData(3)]
-    public void 边疆档两人三人报不支持(int players)
-    {
-        // 规格：验证版只定 4 人；2 / 3 人边疆图尚未设计，请求时 MUST 报"不支持"。同样人数的标准档是支持的（反面）。
-        MapData map = FrontierFixtures.Map() with { MaxPlayers = players };
-
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(map).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
-        Assert.Contains($"不支持的人数 {players}", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("边疆档", failure.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            MapValidator.Validate(map with { Profile = MapProfile.Standard }).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
+        Assert.Contains("不支持的人数 5", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("2 / 3 / 4", failure.Message, StringComparison.Ordinal);
     }
-
-    private static void AssertRange(MapValidationResult result, string code, string? direction, string range)
-    {
-        MapValidationFailure[] failures = [.. result.Failures.Where(f => f.Code == code)];
-        if (direction is null)
-        {
-            Assert.Empty(failures);
-            return;
-        }
-
-        MapValidationFailure failure = Assert.Single(failures);
-        Assert.Contains(direction, failure.Message, StringComparison.Ordinal);
-        Assert.Contains(range, failure.Message, StringComparison.Ordinal);
-    }
-
-    private static KeyValuePair<Coord, RelicCellSpec>[] FiveContestedRelics() =>
-        [.. new[] { "B2", "C3", "D4", "E5", "F6" }.Select(n => KeyValuePair.Create(
-            Coord.Parse(n), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)))];
 }

@@ -16,28 +16,34 @@ public class 出生区编号显示Tests
     [Fact]
     public void 六区图的插旗棋盘快照()
     {
-        // 期望行由夹具的平台摆放手工写出（不经渲染器）：
-        //   第 1 行（y=0）：1 号台 A–E、空地 F–P、2 号台 Q–U；
-        //   第 14 行（y=13）：3 号台 A–E、空地 F–H、6 号台 J–N（夹具的平台内已无营帐，map-generator 裁决 18）、空地 O、4 号台 P–T、空地 U。
-        MatchFlow match = MatchFlow.Create(FrontierFixtures.Map(), new GameSeed(3), MatchFixtures.All, MatchOptions.Immediate);
+        // retire-legacy-maps 段 C：夹具由 6 平台的边疆档小图（边疆档已删除）换成 4 人合规棋盘档图 BoardMapFixtures.FourPlayerMap（36×25，5 块出生棋盘）：
+        // 区数仍多于 4，"编号显示不假定不超过 4"照样被问到（5 号区）。方法名沿用规格 Scenario 名，段 D 随规格改。
+        // 期望行由夹具的棋盘摆放手工写出（不经渲染器）：
+        //   第 2 行（y=1）：5 号出生棋盘 K–O（x 10–14），其余是场景格 #；
+        //   第 13 行（y=12）：1 号出生棋盘 B–F（x 1–5，D13 是出生区信物 ?）、公共棋盘 A J–R（x 8–16，N13 是中央入口的高档信物）、
+        //   公共棋盘 B V–AD（x 20–28，Z13 是信物）、2 号出生棋盘 AG–AL（x 31–35，AJ13 是出生区信物）；
+        //   第 22 行（y=21）：3 号出生棋盘 K–O、4 号出生棋盘 X–AB（各自中格是出生区信物）。
+        // 变异 MC-R1（段 C 实跑）：区号改成 0 起的内部索引（不经 BirthZoneLabel）→ 本测试与「区号底色是中性色不借用玩家色」共红 2。
+        MatchFlow match = MatchFlow.Create(BoardMapFixtures.FourPlayerMap(), new GameSeed(3), MatchFixtures.All, MatchOptions.Immediate);
         var output = new StringWriter();
 
         new BoardRenderer(output).Board(match.Publish(), MatchFixtures.P0, zones: true);
 
         string[] lines = [.. output.ToString().Split('\n').Select(l => l.TrimEnd('\r'))];
-        Assert.Equal("  1  1  1  1  1  1  .  .  .  .  .  .  .  .  .  .  2  2  2  2  2  1", lines.Single(l => l.StartsWith("  1 ", StringComparison.Ordinal)));
-        Assert.Equal(" 14  3  3  3  3  3  .  .  .  6  6  6  6  6  .  4  4  4  4  4  .  14", lines.Single(l => l.StartsWith(" 14 ", StringComparison.Ordinal)));
+        Assert.Equal("  2  #  #  #  #  #  #  #  #  #  #  5  5  5  5  5  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  2", lines.Single(l => l.StartsWith("  2 ", StringComparison.Ordinal)));
+        Assert.Equal(" 13  #  1  1  ?  1  1  #  #  .  .  .  .  ?  .  .  .  .  #  #  #  .  .  .  .  ?  .  .  .  .  #  #  2  2  ?  2  2  13", lines.Single(l => l.StartsWith(" 13 ", StringComparison.Ordinal)));
+        Assert.Equal(" 22  #  #  #  #  #  #  #  #  #  #  3  3  ?  3  3  #  #  #  #  #  #  #  4  4  ?  4  4  #  #  #  #  #  #  #  #  #  22", lines.Single(l => l.StartsWith(" 22 ", StringComparison.Ordinal)));
 
-        // 六个区号都出现，且格数 = 平台 25 格 − 台内信物 1 = 24；没有 7 以上的区号。
+        // 五个区号都出现，且格数 = 出生棋盘 25 格 − 棋盘内信物 1 = 24；没有 6 以上的区号。
         string[] boardRows = [.. lines.Where(l => l.Length > 4 && char.IsDigit(l[2]) && l[3] == ' ')];
-        Assert.Equal(20, boardRows.Length);
-        string cells = string.Concat(boardRows.Select(l => l[4..(4 + (20 * 3))]));
-        for (int zone = 1; zone <= 6; zone++)
+        Assert.Equal(25, boardRows.Length);
+        string cells = string.Concat(boardRows.Select(l => l[4..(4 + (36 * 3))]));
+        for (int zone = 1; zone <= 5; zone++)
         {
             Assert.Equal(24, Enumerable.Range(0, cells.Length / 3).Count(i => cells.Substring(i * 3, 3) == $" {zone} "));
         }
 
-        Assert.DoesNotContain(" 7 ", cells, StringComparison.Ordinal);
+        Assert.DoesNotContain(" 6 ", cells, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -50,7 +56,7 @@ public class 出生区编号显示Tests
             Assert.NotEqual(BoardRenderer.ZoneColor, BoardRenderer.ColorOf(new PlayerId(p)));
         }
 
-        string source = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Sim", "Play", "BoardRenderer.cs"));
+        string source = File.ReadAllText(Path.Combine(TestMaps.RepoRoot(), "src", "Siege.Sim", "Play", "BoardRenderer.cs"));
         Assert.True(source.Length > 8_000, "样本口径：BoardRenderer.cs 过短。");
         Assert.DoesNotContain("new PlayerId(z)", source, StringComparison.Ordinal);
         Assert.Contains("BirthZoneLabel.Number(z)} \", ZoneColor)", source, StringComparison.Ordinal);   // 反面：区号那一格确实用中性色上色

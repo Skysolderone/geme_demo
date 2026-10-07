@@ -51,7 +51,7 @@ public class 地图随机源Tests
         // 变异验证 MG-2：在 BoardMapLayout.cs 的注释里写一处对局种子的类型名 → 本测试红（原在已删除的 FrontierMapLayout.cs 上做）；
         // MG-3：在 Siege.Core/Match/MatchFlow.cs 里加一句引用 BoardMapParameters 的语句 → 本测试红。
         // retire-legacy-maps 段 B：边疆档生成器文件全部删除，名单只剩棋盘档生成器与随机源。
-        string core = Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Core");
+        string core = Path.Combine(TestMaps.RepoRoot(), "src", "Siege.Core");
         string[] generatorNames =
         [
             "MapRandom.cs",

@@ -113,7 +113,8 @@ public class 选图视图模型Tests
 
         // 棋盘清单为空的地图：说明里没有棋盘一项，与引入棋盘图之前的文案相同。
         // retire-legacy-maps 段 B：原用 v5（13×13，4 区，105 格）；改用测试内构造的边疆档小图（20×20，6 区，360 格）。
-        Assert.Equal("20×20，6 个出生区，可落子 360 格", MapPreviewInfo.Of(ViewOf(FrontierFixtures.Map())));
+        // 段 C：边疆档删除，改用 4 人合规棋盘档图清空棋盘清单（36×25，5 区，287 格；视图模型经 Unvalidated 入口建局，不受校验影响）。
+        Assert.Equal("36×25，5 个出生区，可落子 287 格", MapPreviewInfo.Of(ViewOf(BoardMapFixtures.FourPlayerMap() with { Boards = [] })));
     }
 
     [Fact]

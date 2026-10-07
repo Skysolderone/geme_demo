@@ -80,21 +80,23 @@ public class 各入口按地图标识选图Tests
         }
 
         // 仓库里不再有 maps/ 目录（旧图的权威文件随 retire-legacy-maps 段 B 删除；隐式回落 maps/<标识>.json 也已删除）。
-        Assert.False(Directory.Exists(Path.Combine(FrontierFixtures.RepoRoot(), "maps")), "仓库里仍有 maps/ 目录。");
-        Assert.True(File.Exists(Path.Combine(FrontierFixtures.RepoRoot(), "siege.sln")));   // 反面：找对了仓库根
+        Assert.False(Directory.Exists(Path.Combine(TestMaps.RepoRoot(), "maps")), "仓库里仍有 maps/ 目录。");
+        Assert.True(File.Exists(Path.Combine(TestMaps.RepoRoot(), "siege.sln")));   // 反面：找对了仓库根
     }
 
     [Fact]
     public void 其余标识按文件路径读入()
     {
-        string path = Path.Combine(SimFixtures.TempDir("mapcatalog-file"), "my-frontier.json");
-        File.WriteAllText(path, MapFile.ToJson(FrontierFixtures.Map()));
+        // retire-legacy-maps 段 C：样本由边疆档小图换成 4 人合规棋盘档图（档位非缺省值，读回棋盘档才说明整份文件读进来了）。
+        string path = Path.Combine(SimFixtures.TempDir("mapcatalog-file"), "my-board.json");
+        File.WriteAllText(path, MapFile.ToJson(BoardMapFixtures.FourPlayerMap()));
 
         MapData map = MapCatalog.Resolve(path);
 
-        Assert.Equal("test-frontier-6", map.Id);
-        Assert.Equal(MapProfile.Frontier, map.Profile);
-        Assert.Equal(6, map.BirthZones.Length);
+        Assert.Equal("test-board-4p", map.Id);
+        Assert.Equal(MapProfile.Board, map.Profile);
+        Assert.Equal(5, map.BirthZones.Length);
+        Assert.Equal(7, map.Boards.Length);
     }
 
     [Fact]
@@ -119,21 +121,22 @@ public class 各入口按地图标识选图Tests
     {
         // 规格 Scenario：以边疆图启动终端版 → 插旗提示列出 1–6 号平台。frontier-v1 在段 B 才有，这里用测试内构造的 6 平台图
         //（入口 Program.Play 只做"标识 → 地图"的解析后把地图传给 PlayCommand.Run，解析本身由上面几条钉住）。
-        // 人选 3 号台后其余三名 AI 由种子选区：互不相同、不与人重复、都在 1–6 内。
+        // 人选 3 号台后其余三名 AI 由种子选区：互不相同、不与人重复、都在区号范围内。
+        // retire-legacy-maps 段 C：边疆档删除，地图换成 4 人合规棋盘档图（5 块出生棋盘，区数仍多于人数）；提示随之列 1–5。方法名沿用规格 Scenario 名，段 D 随规格改。
         var output = new StringWriter();
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader("9\n0\n3\n"), output, FrontierFixtures.Map(), flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：写死冒险概率 0；more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader("9\n0\n3\n"), output, BoardMapFixtures.FourPlayerMap(), flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：写死冒险概率 0；more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);
-        Assert.Contains("地图 test-frontier-6", text, StringComparison.Ordinal);
-        Assert.Contains("选择你的出生区（1–6）", text, StringComparison.Ordinal);
-        Assert.Equal(3, text.Split("选择你的出生区（1–6）").Length - 1);   // 9 与 0 越界被拒，第三次的 3 才被接受
+        Assert.Contains("地图 test-board-4p", text, StringComparison.Ordinal);
+        Assert.Contains("选择你的出生区（1–5）", text, StringComparison.Ordinal);
+        Assert.Equal(3, text.Split("选择你的出生区（1–5）").Length - 1);   // 9 与 0 越界被拒，第三次的 3 才被接受
         string locked = text.Split('\n').Single(l => l.Contains("出生区锁定：", StringComparison.Ordinal));
         Assert.Contains("玩家1(你)→3号区", locked, StringComparison.Ordinal);
         int[] zones = [.. System.Text.RegularExpressions.Regex.Matches(locked, @"→(\d+)号区").Select(m => int.Parse(m.Groups[1].Value))];
         Assert.Equal(4, zones.Length);
         Assert.Equal(4, zones.Distinct().Count());
-        Assert.All(zones, z => Assert.InRange(z, 1, 6));
+        Assert.All(zones, z => Assert.InRange(z, 1, 5));
     }
 
     [Fact]
@@ -143,7 +146,7 @@ public class 各入口按地图标识选图Tests
         // src/godot 不在 siege.sln 里，对 IL / 反射类守门隐身（testing.md），只能做源码文本扫描；配样本口径下界与反面命中。
         // 变异 M-A12：把 src/godot/scripts/MatchSession.cs 改回直接构造地图 → 本测试红。
         // retire-legacy-maps 段 B：被禁记号由 FourPlayerBaseMap（随旧图删除）改为棋盘档生成器 BoardMapGenerator——入口不得绕过目录自己出图。
-        string root = FrontierFixtures.RepoRoot();
+        string root = TestMaps.RepoRoot();
         string[] entryFiles =
         [
             Path.Combine(root, "src", "Siege.Sim", "Play", "PlayCommand.cs"),
@@ -176,7 +179,7 @@ public class 各入口按地图标识选图Tests
         // 规格：地图选项 MUST 在各入口的严格命令行解析中登记。图形版的合法选项集合 = LaunchArgs 上被读取过的名字，
         // 所以"登记"= 经 LaunchArgs 读取 + 结算在建局之前；任何直接翻 OS.GetCmdline*Args 的读取点都会绕过未知选项校验。
         // src/godot 不在解决方案里，只能做源码文本扫描（行为由 Godot 自检实测：--mapp=x / --auto-demo=1 / --rounds=abc 退出码 1）。
-        string dir = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
+        string dir = Path.Combine(TestMaps.RepoRoot(), "src", "godot", "scripts");
         (string Name, string Text)[] scripts = [.. Directory.GetFiles(dir, "*.cs").Order().Select(f => (Path.GetFileName(f), File.ReadAllText(f)))];
         Assert.True(scripts.Length >= 10, $"样本口径：只扫到 {scripts.Length} 个脚本。");
 
@@ -251,7 +254,7 @@ public class 各入口按地图标识选图Tests
 
         // 图形版（src/godot 不在解决方案里，只能源码扫描）：每一处建局的人数都取自地图的人数上限（Min(4, MaxPlayers)，
         // 标准档预算表只到 4 人，故恒等于 MaxPlayers；4 封顶是表现层配色只备 4 名玩家的保险）。此项在改动前已成立，由 Godot 自检实测 2 人图建局 2 名玩家。
-        string scripts = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
+        string scripts = Path.Combine(TestMaps.RepoRoot(), "src", "godot", "scripts");
         string[] creates = [.. Directory.GetFiles(scripts, "*.cs")
             .SelectMany(f => File.ReadLines(f))
             .Where(l => l.Contains("MatchSession.Create(", StringComparison.Ordinal))];
