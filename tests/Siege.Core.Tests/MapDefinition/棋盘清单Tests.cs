@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Presentation.Visibility;
 using Siege.Sim.Logging;
@@ -13,33 +14,27 @@ public class 棋盘清单Tests
     private static readonly PlayerId P0 = TestMaps.P0;
     private static readonly PlayerId P1 = TestMaps.P1;
 
-    [Theory]
-    [InlineData("siege-2p-base-v1", true)]
-    [InlineData("siege-3p-base-v1", true)]
-    [InlineData("siege-4p-base-v1", false)]
-    [InlineData("siege-4p-base-v2", false)]
-    [InlineData("siege-4p-base-v3", false)]
-    [InlineData("siege-4p-base-v5", true)]
-    [InlineData("siege-frontier-v2", true)]
-    public void 旧地图没有棋盘清单(string id, bool diskIsExport)
+    [Fact]
+    public void 旧地图没有棋盘清单()
     {
-        // Scenario：读入旧地图文件再导出 → 棋盘清单为空，导出文件与引入棋盘清单之前逐字节相同。
-        // 七张内置图全过一遍。其中四张的磁盘文件就是导出结果（"引入之前"的字节），直接与磁盘比；
-        // v1–v3 是手工保留的历史存档（带 _comment、v1 没有地形字段），磁盘文件本来就不等于导出结果，只比"导出里没有该字段且再往返稳定"。
-        string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", id + ".json"));
-        Assert.DoesNotContain("\"Boards\"", disk, StringComparison.Ordinal);
-
-        MapData map = MapFile.FromJson(disk);
-        string json = MapFile.ToJson(map);
-
-        Assert.False(map.Boards.IsDefault);
-        Assert.Empty(map.Boards);
-        Assert.DoesNotContain("\"Boards\"", json, StringComparison.Ordinal);
-        Assert.Equal(json, MapFile.ToJson(MapFile.FromJson(json)));
-        if (diskIsExport)
+        // Scenario：读入没有棋盘清单的地图文件再导出 → 棋盘清单为空，导出文件里没有该字段、往返稳定。
+        // retire-legacy-maps 段 B：原逐张读七份 maps/*.json（随旧图删除），并与其中四份磁盘文件逐字节比；改为标准档 / 边疆档合成图的导出文本。
+        foreach (MapData source in new[] { TestMaps.Synthetic(size: 9, maxPlayers: 4), FrontierFixtures.Map() })
         {
-            Assert.Equal(Normalize(disk), Normalize(json));
+            string disk = MapFile.ToJson(source);
+            Assert.DoesNotContain("\"Boards\"", disk, StringComparison.Ordinal);
+
+            MapData map = MapFile.FromJson(disk);
+            string json = MapFile.ToJson(map);
+
+            Assert.False(map.Boards.IsDefault);
+            Assert.Empty(map.Boards);
+            Assert.DoesNotContain("\"Boards\"", json, StringComparison.Ordinal);
+            Assert.Equal(disk, json);
+            Assert.Equal(json, MapFile.ToJson(MapFile.FromJson(json)));
         }
+
+        Assert.Contains("\"Boards\"", MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId)), StringComparison.Ordinal);   // 反面：棋盘图写出该字段
     }
 
     [Fact]
@@ -97,17 +92,21 @@ public class 棋盘清单Tests
     public void 标准档与边疆档地图带棋盘清单被拒绝()
     {
         // 「标准档与边疆档地图的棋盘清单 MUST 为空」：清单只属于棋盘档。
+        // retire-legacy-maps 段 B：标准档一侧原用 v5（合法图，带清单后恰报这一条）；v5 删除后标准档没有合法的整图，
+        // 改用标准档合成图：不带清单时不报本码，带清单时恰报一条本码（清单不合法属结构问题，报出后不再往下校验）。边疆档一侧仍是合法图、恰报这一条。
         BoardPlate plate = new(new Coord(0, 0), 5, 5, BoardPlateKind.Public);
-        foreach (MapData map in new[] { Siege.Core.Board.Maps.FourPlayerBaseMap.Create(), FrontierFixtures.Map() })
+        foreach (MapData map in new[] { TestMaps.Synthetic(size: 9, maxPlayers: 4), FrontierFixtures.Map() })
         {
-            Assert.True(MapValidator.Validate(map).IsValid);
+            Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "BOARDS_NOT_ALLOWED");
 
             MapValidationResult result = MapValidator.Validate(map with { Boards = [plate] });
 
-            MapValidationFailure failure = Assert.Single(result.Failures);
-            Assert.Equal("BOARDS_NOT_ALLOWED", failure.Code);
+            MapValidationFailure failure = Assert.Single(result.Failures, f => f.Code == "BOARDS_NOT_ALLOWED");
             Assert.Contains("棋盘清单", failure.Message, StringComparison.Ordinal);
         }
+
+        Assert.True(MapValidator.Validate(FrontierFixtures.Map()).IsValid);
+        Assert.Single(MapValidator.Validate(FrontierFixtures.Map() with { Boards = [plate] }).Failures);
     }
 
     [Fact]
@@ -187,5 +186,4 @@ public class 棋盘清单Tests
         return MatchLog.Parse(session.Run().FullText());
     }
 
-    private static string Normalize(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
 }

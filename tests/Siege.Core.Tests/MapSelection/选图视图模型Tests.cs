@@ -72,9 +72,11 @@ public class 选图视图模型Tests
     {
         // 规格 Scenario「旧地图不在界面上」：列表里没有 v5、2p / 3p 标准图、边疆图与边疆档随机图；按标识预选它们也不行（--map-select 下报错退出）。
         // 变异 M-D3（实跑）：TrySelectId 对目录里任一内置标识都接受 → 红 1（本测试）。
+        // retire-legacy-maps 段 B：四张旧图与 gen: 已从目录删除，命令行请求报"已删除"（见 已删除地图明确报错Tests）。
         var model = new MapSelectModel(InitialSeed);
-        string[] legacy = [FourPlayerBaseMap.Id, TwoPlayerBaseMap.Id, ThreePlayerBaseMap.Id, FrontierMapV2.Id];
-        Assert.All(legacy, id => Assert.Contains(id, MapCatalog.BuiltinIds));   // 样本口径：它们仍登记在目录里（命令行可用）
+        string[] legacy = ["siege-4p-base-v5", "siege-2p-base-v1", "siege-3p-base-v1", "siege-frontier-v2"];
+        Assert.All(legacy, id => Assert.DoesNotContain(id, MapCatalog.BuiltinIds));
+        Assert.All(legacy, id => Assert.Contains(id, MapCatalog.RetiredIds));
         Assert.DoesNotContain(model.Options, o => o.BuiltinId is not null && legacy.Contains(o.BuiltinId));
         Assert.DoesNotContain(model.Options, o => o.Title.Contains("边疆", StringComparison.Ordinal));
         Assert.All(model.Options, o => Assert.Contains(o.Kind, new[] { MapOptionKind.Builtin, MapOptionKind.Board }));
@@ -86,8 +88,8 @@ public class 选图视图模型Tests
             Assert.Equal("siege-4p-board-v1", model.CurrentId);
         }
 
-        // 旧地图仍可经共用解析直接建局（不经选图界面）。
-        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.Resolve(FourPlayerBaseMap.Id).Id);
+        // 旧地图经共用解析同样报"已删除"（原为"仍可直接建局"）。
+        Assert.All(legacy, id => Assert.Throws<RetiredMapException>(() => MapCatalog.Resolve(id)));
     }
 
     [Fact]
@@ -110,7 +112,8 @@ public class 选图视图模型Tests
         Assert.Contains($"可落子 {playable} 格", info, StringComparison.Ordinal);
 
         // 棋盘清单为空的地图：说明里没有棋盘一项，与引入棋盘图之前的文案相同。
-        Assert.Equal("13×13，4 个出生区，可落子 105 格", MapPreviewInfo.Of(ViewOf(FourPlayerBaseMap.Create())));
+        // retire-legacy-maps 段 B：原用 v5（13×13，4 区，105 格）；改用测试内构造的边疆档小图（20×20，6 区，360 格）。
+        Assert.Equal("20×20，6 个出生区，可落子 360 格", MapPreviewInfo.Of(ViewOf(FrontierFixtures.Map())));
     }
 
     [Fact]
@@ -395,14 +398,15 @@ public class 选图视图模型Tests
     public void 时间戳折成便于人读写的种子_九位以内_相邻输入散开()
     {
         // 变异 MC-7：FriendlySeed 原样返回 → 本测试红（超过九位、相邻输入只差 1）。
-        // 折叠函数在 Core 的标识唯一实现旁（三个入口共用：图形版裸 gen / board、选图界面"换一张"、批量 / 终端版裸 gen）。
+        // 折叠函数在 Core 的标识唯一实现旁（三个入口共用：图形版裸 board、选图界面"换一张"、批量 / 终端版裸 board；retire-legacy-maps 段 B 起裸 gen 报"已删除"）。
+        // 只钉性质、不钉黄金值：retire-legacy-maps 段 B 检查变异"第二个乘数末位 3 → 5"0 红——种子是打印给用户的完整标识的一部分，算式本身不影响复现。
         ulong[] raws = [0UL, 1UL, 2UL, 1789820032123456UL, 1789820032123457UL, ulong.MaxValue];
-        ulong[] seeds = [.. raws.Select(GeneratedMapId.FriendlySeed)];
+        ulong[] seeds = [.. raws.Select(BoardMapId.FriendlySeed)];   // retire-legacy-maps 段 B：由 GeneratedMapId 迁到 BoardMapId
 
         Assert.All(seeds, s => Assert.InRange(s, 0UL, 999_999_999UL));
         Assert.Equal(seeds.Length, seeds.Distinct().Count());
-        Assert.Equal(seeds, raws.Select(GeneratedMapId.FriendlySeed));   // 纯函数
-        Assert.Equal(1_000_000_000UL, GeneratedMapId.FriendlySeedLimit);
+        Assert.Equal(seeds, raws.Select(BoardMapId.FriendlySeed));   // 纯函数
+        Assert.Equal(1_000_000_000UL, BoardMapId.FriendlySeedLimit);
         long gap = Math.Abs((long)seeds[3] - (long)seeds[4]);
         Assert.True(gap > 1000, $"相邻时间戳折出的种子只差 {gap}。");
     }

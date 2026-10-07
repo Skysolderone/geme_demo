@@ -292,7 +292,7 @@ public sealed record LogHeader
 
     /// <summary>
     /// 本局<b>开局地图</b>的内容摘要（<see cref="Siege.Core.Board.MapFile.Digest"/>，map-generator D5）：对地图导出文本取的 SHA-256。内置图、生成图、地图文件一律写。
-    /// 回放按标识重建地图后先比它，不同即在首部报"地图不一致"并停止——生成器改版之后旧日志里的 <c>gen:</c> 标识会重建出另一张图，
+    /// 回放按标识重建地图后先比它，不同即在首部报"地图不一致"并停止——生成器改版之后旧日志里的 <c>board:</c> 标识会重建出另一张图，
     /// 带着它逐步比对只会得到一个看起来像非确定性 bug 的中途分歧。map-generator 之前的旧日志没有该字段（<c>null</c>）：跳过比对，MUST NOT 回填。
     /// </summary>
     public string? MapDigest { get; init; }

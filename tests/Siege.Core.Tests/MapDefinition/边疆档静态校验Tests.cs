@@ -122,10 +122,11 @@ public class 边疆档静态校验Tests
     public void 不对称的边疆图通过校验()
     {
         // tasks 1.4：对称检查不在 MapValidator 主流程里，边疆档 MUST NOT 被要求旋转对称。
-        // 样本口径：夹具确实不对称（否则本测试恒真）。
+        // 样本口径：夹具确实不对称（否则本测试恒真）。retire-legacy-maps 段 B：MapSymmetry 随旧图删除，改为测试内的独立判定——
+        // 绕中心旋转 180° 后出生区格集合（并集）不重合，即连二重旋转对称都不成立（C4 必含 C2）。
         MapData map = FrontierFixtures.Map();
-        Assert.False(MapSymmetry.IsC4Symmetric(map));
-        Assert.NotEmpty(MapSymmetry.RotationDefects(map));
+        HashSet<Coord> zones = [.. map.BirthZones.SelectMany(z => z)];
+        Assert.Contains(zones, c => !zones.Contains(new Coord(map.Width - 1 - c.X, map.Height - 1 - c.Y)));
 
         Assert.True(MapValidator.Validate(map).IsValid);
 
@@ -133,6 +134,7 @@ public class 边疆档静态校验Tests
         string source = File.ReadAllText(ValidatorPath());
         Assert.DoesNotContain("MapSymmetry.", source, StringComparison.Ordinal);
         Assert.DoesNotContain("IsC4Symmetric", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RotationDefects", source, StringComparison.Ordinal);
     }
 
     [Fact]

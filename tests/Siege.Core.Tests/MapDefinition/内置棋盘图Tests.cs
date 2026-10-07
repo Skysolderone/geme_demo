@@ -142,11 +142,14 @@ public class 内置棋盘图Tests
     public void 内置棋盘图不登记地图专属AI权重()
     {
         // 规格（Requirement 正文）：内置棋盘图 MUST NOT 登记地图专属 AI 权重，在其上运行的 AI 是未校准状态，取默认表。
-        // 2 人内置棋盘图与已登记覆盖的 siege-2p-base-v1 人数相同，最容易被顺手照抄一条覆盖。
-        // 变异 C-K1（check 实跑）：MapOverrides 加一行 siege-2p-board-v1 → 全量新增红 4（本测试 + 覆盖表钉值的三条：覆盖表被改动、覆盖只作用于登记的地图、两人图覆盖表的校准记录随值一起更新）。
-        Assert.Contains(TwoPlayerBaseMap.Id, Siege.Core.Ai.EvaluationWeights.MapOverrides.Keys);   // 反面：登记表本身非空、键确是地图标识
+        // 变异 C-K1（check 实跑）：MapOverrides 加一行 siege-2p-board-v1 → 全量新增红 4（本测试 + 覆盖表钉值的三条）。
+        // retire-legacy-maps 段 B：唯一一项 siege-2p-base-v1 随该图删除，登记表为空；原"登记表非空、键确是地图标识"的反面断言改为：
+        // 同一个按地图标识取权重的实现，在注入一张登记了该内置名的表时确实取到登记项——"不登记"不是因为键对不上。
         foreach (BuiltinBoardAlias alias in MapCatalog.BuiltinBoards)
         {
+            Siege.Core.Ai.EvaluationWeights probe = Siege.Core.Ai.EvaluationWeights.Default with { Eye = 7 };
+            var injected = new Dictionary<string, Siege.Core.Ai.EvaluationWeights> { [alias.Id] = probe };
+            Assert.Same(probe, Siege.Core.Ai.EvaluationWeights.ForMapId(MapCatalog.Resolve(alias.Id).Id, null, injected));
             Assert.False(Siege.Core.Ai.EvaluationWeights.MapOverrides.ContainsKey(alias.Id), $"{alias.Id} 不应登记覆盖。");
             Assert.Same(Siege.Core.Ai.EvaluationWeights.Default, Siege.Core.Ai.EvaluationWeights.ForMapId(alias.Id));
             Assert.Null(Siege.Core.Ai.EvaluationWeights.MapOverrideCalibrationOf(alias.Id));

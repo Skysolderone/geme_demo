@@ -11,26 +11,28 @@ public class 地图静态校验规则Tests
     public void 可落子格越界()
     {
         // 规格 Scenario：可落子格为 85 的 4 人地图 → 拒绝并报告超出 95–110 区间。
-        // v2 基准图恰是 85 格：它留在 maps/ 作历史存档，从 terrain-model 起不能加载（4.4）——这条测试同时钉住这一点。
-        string path = Path.Combine(RepoRoot(), "maps", "siege-4p-base-v2.json");
-        MapData v2 = MapFile.FromJson(File.ReadAllText(path));
-        Assert.Equal(85, v2.PlayableCount);
+        // retire-legacy-maps 段 B：原用 maps/siege-4p-base-v2.json（恰 85 格）与 v5 去掉全部岩石（141 格），两者随旧图删除；
+        // 改为合成图：10×10 留 15 格障碍 → 85；12×12 无障碍 → 144（上界同样要挡住：只测下界时把上界写成 200 不会红）。
+        MapData plain = TestMaps.Synthetic(size: 10, maxPlayers: 4);
+        MapData sparse = plain with { Obstacles = [.. plain.FirstCells(15)] };
+        Assert.Equal(85, sparse.PlayableCount);
 
         MapValidationFailure failure = Assert.Single(
-            MapValidator.Validate(v2).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
+            MapValidator.Validate(sparse).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
         Assert.Contains("可落子格为 85", failure.Message, StringComparison.Ordinal);
         Assert.Contains("95–110", failure.Message, StringComparison.Ordinal);
-        Assert.Throws<MapValidationException>(() => GameBoard.Load(v2));
+        Assert.Throws<MapValidationException>(() => GameBoard.Load(sparse));
 
-        // 上界 110 同样要挡住：区间只有下界有算例时，把上界写成 200 只会让消息文本变化，行为上一条测试都不红。
-        // v3 去掉全部岩石 → 105 + 36 = 141。
-        MapData tooOpen = FourPlayerBaseMap.Create() with { Obstacles = [] };
-        Assert.Equal(141, tooOpen.PlayableCount);
+        MapData tooOpen = TestMaps.Synthetic(size: 12, maxPlayers: 4);
+        Assert.Equal(144, tooOpen.PlayableCount);
 
         MapValidationFailure high = Assert.Single(
             MapValidator.Validate(tooOpen).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("可落子格为 141", high.Message, StringComparison.Ordinal);
+        Assert.Contains("可落子格为 144", high.Message, StringComparison.Ordinal);
         Assert.Contains("95–110", high.Message, StringComparison.Ordinal);
+
+        // 反面：区间内（10×10 留 0 格障碍 = 100）不报本码。
+        Assert.DoesNotContain(MapValidator.Validate(plain).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
     }
 
     [Fact]
@@ -113,20 +115,25 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 出生区可落子格超出区间()
     {
-        // 「出生区内的障碍 MUST NOT 使该区的可落子格少于 12」：把出生区 0 挖掉 2 格 → 11 格 → 报错。
-        MapData map = FourPlayerBaseMap.Create();
-        Coord[] extra = [.. map.BirthZones[0].Where(map.IsPlayable).Order().Take(2)];
-        MapData shrunk = map with { Obstacles = map.Obstacles.Union(extra) };
+        // 「出生区内的障碍 MUST NOT 使该区的可落子格少于 12」：出生区 0 只有 11 格 → 报错（标准档 4 人单区 12–14）。
+        // retire-legacy-maps 段 B：原在 v5 上挖掉出生区 0 的两格；改为 12×12 合成图，四个出生区各从第 1 / 4 / 7 / 10 行起占若干格（一行 12 格，多出的接到下一行）。
+        MapData Zones(int firstZoneCells) => TestMaps.Synthetic(size: 12, maxPlayers: 4) with
+        {
+            BirthZones = [Row(0, firstZoneCells), Row(3, 12), Row(6, 13), Row(9, 13)],
+        };
 
         MapValidationFailure failure = Assert.Single(
-            MapValidator.Validate(shrunk).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
+            MapValidator.Validate(Zones(11)).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
         Assert.Contains("出生区 1 有 11 个可落子格", failure.Message, StringComparison.Ordinal);
         Assert.Contains("12–14", failure.Message, StringComparison.Ordinal);
 
-        // 14 格是上界：把缓坡 E2 划进出生区 0（13 → 14）必须通过本条（距离随之失衡，那是另一条规则）。
-        MapData fourteen = map with { BirthZones = map.BirthZones.SetItem(0, map.BirthZones[0].Add(Coord.Parse("E2"))) };
-        Assert.DoesNotContain(
-            MapValidator.Validate(fourteen).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
+        // 14 格是上界：必须通过本条；15 格必须报出（上下界都钉住）。
+        Assert.DoesNotContain(MapValidator.Validate(Zones(14)).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
+        Assert.Contains(MapValidator.Validate(Zones(15)).Failures, f => f.Code == "BIRTH_ZONE_SIZE_OUT_OF_RANGE");
+
+        // 一行 12 格，超出的接到下一行（全图无障碍）：Row 的格数即可落子格数，且四个区互不重叠、不越界。
+        static ImmutableHashSet<Coord> Row(int y, int cells) =>
+            [.. Enumerable.Range(0, cells).Select(i => new Coord(i % 12, y + (i / 12)))];
     }
 
     [Fact]
@@ -134,7 +141,8 @@ public class 地图静态校验规则Tests
     {
         // 公共区的信物格被标成出生区档位，或出生区的信物格被标成公共区，都必须报错——
         // 分区标错会让信物生成用错强度预算，而那时已经在对局里了。
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成 4 人内置棋盘图（各档共用规则）。
+        MapData map = BoardMap();
         Coord inBirthZone = map.RelicCells.Keys.Order().First(c => map.BirthZoneOf(c) is not null);
         Coord contested = map.RelicCells.Keys.Order().First(c => map.BirthZoneOf(c) is null);
 
@@ -151,13 +159,14 @@ public class 地图静态校验规则Tests
         Assert.Equal(2, failures.Length);
         Assert.Contains(failures, f => f.Coords.Contains(inBirthZone));
         Assert.Contains(failures, f => f.Coords.Contains(contested));
+        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "RELIC_ZONE_MISMATCH");   // 反面：原图不报
     }
 
     [Fact]
     public void 出生区不得出现高阶预算信物()
     {
-        // 设计文档 §8.1：出生区不生成效果 +2 的高阶信物
-        MapData map = FourPlayerBaseMap.Create();
+        // 设计文档 §8.1：出生区不生成效果 +2 的高阶信物。retire-legacy-maps 段 B：底图由 v5 换成 4 人内置棋盘图。
+        MapData map = BoardMap();
         Coord inBirthZone = map.RelicCells.Keys.Order().First(c => map.BirthZoneOf(c) is not null);
         MapData upgraded = map with
         {
@@ -172,7 +181,8 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 出生区容不下九枚部署()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成 4 人内置棋盘图（"容得下 9 枚"对所有规格档一律生效）。
+        MapData map = BoardMap();
         MapData shrunk = map with
         {
             BirthZones = map.BirthZones.SetItem(
@@ -187,9 +197,9 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 出生区恰好九格时通过()
     {
-        // 阈值是"容得下 9 枚"，9 本身合法。本条只管 BIRTH_ZONE_TOO_SMALL 这一码；
-        // "每区 12–14 格"是另一条独立规则（BIRTH_ZONE_SIZE_OUT_OF_RANGE），由「出生区可落子格超出区间」把关。
-        MapData map = FourPlayerBaseMap.Create();
+        // 阈值是"容得下 9 枚"，9 本身合法。本条只管 BIRTH_ZONE_TOO_SMALL 这一码；单区格数区间是另一条独立规则。
+        // retire-legacy-maps 段 B：底图由 v5 换成 4 人内置棋盘图。
+        MapData map = BoardMap();
         MapData nineCells = map with
         {
             BirthZones = map.BirthZones.SetItem(
@@ -203,7 +213,8 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 出生区不得重叠()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成 4 人内置棋盘图。
+        MapData map = BoardMap();
         Coord shared = map.BirthZones[0].Order().First();
         MapData overlapping = map with { BirthZones = map.BirthZones.SetItem(1, map.BirthZones[1].Add(shared)) };
 
@@ -215,24 +226,28 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 中央入口与咽喉必须位于可落子格()
     {
-        MapData map = FourPlayerBaseMap.Create();
-        MapData broken = map with
-        {
-            Obstacles = map.Obstacles.Add(map.CentralEntrance).Add(map.ChokePoints.Order().First()),
-        };
+        // retire-legacy-maps 段 B：原在 v5 上同时堵住中央入口与一个咽喉。棋盘图不标咽喉（棋盘档豁免），
+        // 中央入口改在 4 人内置棋盘图上验，咽喉改在测试内构造的边疆档小图上验。
+        MapData board = BoardMap();
+        MapData blocked = board with { Obstacles = board.Obstacles.Add(board.CentralEntrance) };
+        Assert.Contains(MapValidator.Validate(blocked).Failures, f => f.Code == "CENTRAL_ENTRANCE_NOT_PLAYABLE");
+        Assert.DoesNotContain(MapValidator.Validate(board).Failures, f => f.Code == "CENTRAL_ENTRANCE_NOT_PLAYABLE");
 
-        var codes = MapValidator.Validate(broken).Failures.Select(f => f.Code).ToArray();
-
-        Assert.Contains("CENTRAL_ENTRANCE_NOT_PLAYABLE", codes);
-        Assert.Contains("CHOKE_NOT_PLAYABLE", codes);
+        MapData frontier = FrontierFixtures.Map();
+        Coord choke = frontier.ChokePoints.Order().First();
+        MapData broken = frontier with { Obstacles = frontier.Obstacles.Add(choke) };
+        MapValidationFailure failure = Assert.Single(MapValidator.Validate(broken).Failures, f => f.Code == "CHOKE_NOT_PLAYABLE");
+        Assert.Equal([choke], failure.Coords);
+        Assert.True(MapValidator.Validate(frontier).IsValid);
     }
 
     [Fact]
     public void 地标不可达被报出()
     {
-        // 用岩石把 F 列与第 6 行整条封死：出生区 0 的出口 E2/E3 撞在 F2/F3 上，它到中央入口、公共信物与咽喉都不可达。
+        // 用岩石把第 6 列（F）与第 6 行整条封死：出生区 0（A1–E5 平台）到中央入口、公共信物与咽喉都不可达。
         // 不可达 MUST 报错，MUST NOT 被"距离算不出来就跳过"静默吞掉。
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成测试内构造的边疆档小图（标准 / 边疆档拒绝不可达，棋盘档只报告）。
+        MapData map = FrontierFixtures.Map();
         MapData walled = map with
         {
             Obstacles = map.Obstacles.Union(
@@ -241,20 +256,23 @@ public class 地图静态校验规则Tests
         };
 
         Assert.Contains(MapValidator.Validate(walled).Failures, f => f.Code == "LANDMARK_UNREACHABLE");
-        Assert.Contains(MapValidator.Validate(walled).Failures, f => f.Code == "BIRTH_ZONE_ISOLATED");
+        Assert.Contains(MapValidator.Validate(walled).Failures, f => f.Code == "BIRTH_ZONE_ISOLATED" && f.Message.Contains("出生区 1", StringComparison.Ordinal));
+        Assert.True(MapValidator.Validate(map).IsValid);   // 反面：原图可达
     }
 
     [Fact]
     public void 尺寸非正与越界障碍被报出()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成 4 人内置棋盘图；越界障碍取外接范围之外的一格（原 (20,20) 在 39×41 的图内）。
+        MapData map = BoardMap();
+        Coord outside = new(map.Width + 1, map.Height + 1);
 
         Assert.Contains(
             MapValidator.Validate(map with { Width = 0 }).Failures,
             f => f.Code == "MAP_DIMENSION_INVALID");
         Assert.Contains(
-            MapValidator.Validate(map with { Obstacles = map.Obstacles.Add(new Coord(20, 20)) }).Failures,
-            f => f.Code == "OBSTACLE_OUT_OF_BOUNDS" && f.Coords.Contains(new Coord(20, 20)));
+            MapValidator.Validate(map with { Obstacles = map.Obstacles.Add(outside) }).Failures,
+            f => f.Code == "OBSTACLE_OUT_OF_BOUNDS" && f.Coords.Contains(outside));
         Assert.Contains(
             MapValidator.Validate(map with { Id = "  " }).Failures,
             f => f.Code == "MAP_ID_MISSING");
@@ -266,21 +284,35 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 出生区距离失衡()
     {
-        // 规格 Scenario：把咽喉标注收窄到只剩出生区 0 门前那座桥 G4，四个出生区到"最近咽喉"的距离立刻拉开
-        MapData lopsided = FourPlayerBaseMap.Create() with { ChokePoints = [Coord.Parse("G4")] };
+        // 规格 Scenario：咽喉标注只剩出生区 0 门前一格，各出生区到"最近咽喉"的距离立刻拉开 → 拒绝并报出各区距离。
+        // retire-legacy-maps 段 B：原在 v5 上把咽喉收窄到 G4；改为 8×8 合成图（标准档 2 人）：出生区 = A 列与 H 列整列，
+        // 中央入口 D5（A 列 3、H 列 4，极差 1 不超容差），咽喉只标 B5（A 列 1、H 列 6，极差 5 → 失衡）。
+        MapData lopsided = TestMaps.Synthetic(size: 8, maxPlayers: 2) with
+        {
+            BirthZones = [Column("A"), Column("H")],
+            ChokePoints = [Coord.Parse("B5")],
+            CentralEntrance = Coord.Parse("D5"),
+        };
 
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(lopsided).Failures, f => f.Code == "DISTANCE_IMBALANCE");
-        Assert.Contains("出生区 1 = 4", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 1 = 1", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 2 = 6", failure.Message, StringComparison.Ordinal);
         Assert.Contains("超出容差 1", failure.Message, StringComparison.Ordinal);
+
+        // 反面：咽喉改标在两区正中（D5 / E5 各一）→ 不失衡。
+        Assert.DoesNotContain(
+            MapValidator.Validate(lopsided with { ChokePoints = [Coord.Parse("D5"), Coord.Parse("E5")] }).Failures,
+            f => f.Code == "DISTANCE_IMBALANCE");
     }
 
     [Fact]
     public void 必死口袋()
     {
-        // 用岩石 B1 C2 D3 在出生区 0（A1–D4 减 A1 C4 D4 的 13 格高台）里封出 7 格死角（小于两眼所需的 8 格）：
-        // 高台四周本就是崖壁 / 岩石 / 深水，三块石头就够。剩下的 C1 D1 D2 经 D2–E2 缓坡仍与全盘连通，不会多出第二个口袋。
-        MapData map = FourPlayerBaseMap.Create();
+        // 在出生区 0（A1–D4 减 A1 C4 D4 的 13 格高台）里用岩石 B1 C2 D3 封出 7 格死角（小于两眼所需的 8 格）。
+        // 剩下的 C1 D1 D2 经出口 E2 仍与全盘连通，不会多出第二个口袋。
+        // retire-legacy-maps 段 B：原在 v5 的出生区 0 高台上做；改为 10×10 合成图 PocketBase()，用岩石围出同形的高台（见夹具注释），坐标与期望不变。
+        MapData map = PocketBase();
         MapData pocketed = map with
         {
             Obstacles = map.Obstacles.Union([Coord.Parse("B1"), Coord.Parse("C2"), Coord.Parse("D3")]),
@@ -290,6 +322,7 @@ public class 地图静态校验规则Tests
             MapValidator.Validate(pocketed).Failures, f => f.Code == "DEAD_POCKET");
         Assert.Contains("小于形成两眼所需的 8 格", failure.Message, StringComparison.Ordinal);
         Assert.Equal(["A2", "B2", "A3", "B3", "C3", "A4", "B4"], failure.Coords.Notations());
+        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "DEAD_POCKET");   // 反面：底图本身没有口袋
     }
 
     [Fact]
@@ -297,7 +330,8 @@ public class 地图静态校验规则Tests
     {
         // 规格："连通空区面积小于 8 即判失败"——8 本身是合法的，阈值是闭的下界。
         // 用岩石 B1 C1 D1 D2 D3 把出生区 0 圈出恰好 8 格（A2 B2 C2 A3 B3 C3 A4 B4），区内不剩别的格。
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成合成图 PocketBase()（同形高台），坐标与期望不变。
+        MapData map = PocketBase();
         MapData eightCellPocket = map with
         {
             Obstacles = map.Obstacles.Union([
@@ -366,7 +400,8 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 必死口袋可显式豁免()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成合成图 PocketBase()（同形高台）。
+        MapData map = PocketBase();
         var walls = new[] { Coord.Parse("B1"), Coord.Parse("C2"), Coord.Parse("D3") };
         MapData exempted = map with
         {
@@ -377,42 +412,59 @@ public class 地图静态校验规则Tests
         };
 
         Assert.DoesNotContain(MapValidator.Validate(exempted).Failures, f => f.Code == "DEAD_POCKET");
+        // 反面：去掉豁免就报（与「必死口袋」同一处口袋）。
+        Assert.Contains(MapValidator.Validate(exempted with { PocketExemptions = [] }).Failures, f => f.Code == "DEAD_POCKET");
     }
 
     [Fact]
     public void 豁免必须写明理由()
     {
-        MapData map = FourPlayerBaseMap.Create() with { PocketExemptions = [Coord.Parse("A2")] };
+        // retire-legacy-maps 段 B：底图由 v5 换成合成图 PocketBase()。
+        MapData map = PocketBase() with { PocketExemptions = [Coord.Parse("A2")] };
 
         Assert.Contains(
             MapValidator.Validate(map).Failures, f => f.Code == "POCKET_EXEMPTION_WITHOUT_REASON");
+        Assert.DoesNotContain(
+            MapValidator.Validate(map with { PocketExemptionReasons = ImmutableDictionary<Coord, string>.Empty.Add(Coord.Parse("A2"), "理由") }).Failures,
+            f => f.Code == "POCKET_EXEMPTION_WITHOUT_REASON");
     }
 
     [Fact]
     public void 信物格必须位于可落子格()
     {
-        MapData map = FourPlayerBaseMap.Create();
-        Assert.Contains(Coord.Parse("B2"), map.RelicCells.Keys);
-        MapData broken = map with { Obstacles = map.Obstacles.Add(Coord.Parse("B2")) };
+        // retire-legacy-maps 段 B：底图由 v5（信物格 B2）换成 4 人内置棋盘图，取坐标序第一个信物格。
+        MapData map = BoardMap();
+        Coord relic = map.RelicCells.Keys.Order().First();
+        MapData broken = map with { Obstacles = map.Obstacles.Add(relic) };
 
         Assert.Contains(
             MapValidator.Validate(broken).Failures,
-            f => f.Code == "RELIC_ON_NON_PLAYABLE" && f.Coords.Contains(Coord.Parse("B2")));
+            f => f.Code == "RELIC_ON_NON_PLAYABLE" && f.Coords.Contains(relic));
+        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "RELIC_ON_NON_PLAYABLE");
     }
 
     [Fact]
     public void 咽喉必须显式标注()
     {
-        MapData map = FourPlayerBaseMap.Create() with { ChokePoints = [] };
+        // retire-legacy-maps 段 B：底图由 v5 换成测试内构造的边疆档小图（标准 / 边疆档要求标注，棋盘档豁免）。
+        MapData map = FrontierFixtures.Map() with { ChokePoints = [] };
 
         Assert.Contains(MapValidator.Validate(map).Failures, f => f.Code == "CHOKE_NOT_ANNOTATED");
+        Assert.True(MapValidator.Validate(FrontierFixtures.Map()).IsValid);
     }
 
     [Fact]
     public void 放宽容差必须写明理由()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成 8×8 合成图（标准档 2 人，出生区 A / H 两列，入口与咽喉 D5）。
+        MapData map = TestMaps.Synthetic(size: 8, maxPlayers: 2) with
+        {
+            BirthZones = [Column("A"), Column("H")],
+            ChokePoints = [Coord.Parse("D5")],
+            CentralEntrance = Coord.Parse("D5"),
+        };
 
+        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "TOLERANCE_RELAX_WITHOUT_REASON");
         Assert.Contains(
             MapValidator.Validate(map with { DistanceTolerance = 3 }).Failures,
             f => f.Code == "TOLERANCE_RELAX_WITHOUT_REASON");
@@ -428,11 +480,31 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 校验不通过则拒绝加载()
     {
-        MapData map = FourPlayerBaseMap.Create() with { ChokePoints = [] };
+        // retire-legacy-maps 段 B：底图由 v5 换成测试内构造的边疆档小图。
+        MapData map = FrontierFixtures.Map() with { ChokePoints = [] };
 
         MapValidationException ex = Assert.Throws<MapValidationException>(() => GameBoard.Load(map));
 
         Assert.Contains(ex.Result.Failures, f => f.Code == "CHOKE_NOT_ANNOTATED");
+        GameBoard.Load(FrontierFixtures.Map());   // 反面：合法图照常加载
+    }
+
+    /// <summary>4 人内置棋盘图：各档共用规则的底图（retire-legacy-maps 段 B 起取代 v5）。</summary>
+    private static MapData BoardMap() => MapCatalog.Resolve(MapCatalog.DefaultId);
+
+    /// <summary>
+    /// 必死口袋类测试的底图（retire-legacy-maps 段 B，取代 v5 的出生区 0 高台）：10×10 标准档 4 人合成图，出生区 0 = A1–D4 减 A1 C4 D4 的 13 格，
+    /// A1 C4 D4 为岩石，并用岩石 E1 E3 E4、A5–E5 把它围成只留出口 E2 的高台（v5 上那圈是崖壁 / 岩石 / 深水，这里一律用岩石）。
+    /// 其余三个出生区为空集（本组测试只看出生区 0）。底图本身没有口袋：13 格高台经 E2 与外面 60 余格连成一片。
+    /// </summary>
+    private static MapData PocketBase()
+    {
+        string[] walls = ["A1", "C4", "D4", "E1", "E3", "E4", "A5", "B5", "C5", "D5", "E5"];
+        string[] zone = ["B1", "C1", "D1", "A2", "B2", "C2", "D2", "A3", "B3", "C3", "D3", "A4", "B4"];
+        return TestMaps.Synthetic(size: 10, maxPlayers: 4, obstacles: walls.Select(Coord.Parse)) with
+        {
+            BirthZones = [[.. zone.Select(Coord.Parse)], [], [], []],
+        };
     }
 
     /// <summary>「出生区被孤立」的夹具：9×9，出生区 0 = A1 B1 A2 B2，出生区 1 = J9，入口与咽喉 E5，地形由调用方给。</summary>
@@ -448,17 +520,6 @@ public class 地图静态校验规则Tests
     private static ImmutableHashSet<Coord> Column(string letter) =>
         [.. Enumerable.Range(1, 8).Select(row => Coord.Parse($"{letter}{row}"))];
 
-    private static string RepoRoot()
-    {
-        string? dir = AppContext.BaseDirectory;
-        while (dir is not null && !File.Exists(Path.Combine(dir, "siege.sln")))
-        {
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        return dir ?? throw new InvalidOperationException("找不到仓库根目录（siege.sln）。");
-    }
-
 
     [Fact]
     public void 出生区内有新地表()
@@ -466,7 +527,8 @@ public class 地图静态校验规则Tests
         // 规格 terrain-surfaces · map-definition 第 9 条：出生区内的格子 MUST NOT 是荒漠、沼泽、岩台或浅滩；报出生区编号、坐标与地表。
         // 取出生区 2（下标 1）坐标序第一个可落子格标为浅滩。
         // 变异验证 M-S0c（实跑）：ValidateBirthZones 漏掉 Shallows → 本测试与「出生区内四种新地表都被拒(Shallows)」各红 1。
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 段 B：底图由 v5 换成测试内构造的边疆档小图（棋盘档另由 BOARD_CELL_NOT_FLAT_GRASS 覆盖）。
+        MapData map = FrontierFixtures.Map();
         Coord cell = map.BirthZones[1].Where(map.IsPlayable).Order().First();
         MapData tainted = map with
         {
@@ -488,7 +550,7 @@ public class 地图静态校验规则Tests
     [InlineData(Surface.Shallows)]
     public void 出生区内四种新地表都被拒(Surface surface)
     {
-        MapData map = FourPlayerBaseMap.Create();
+        MapData map = FrontierFixtures.Map();   // retire-legacy-maps 段 B：原底图 v5
         Coord cell = map.BirthZones[0].Where(map.IsPlayable).Order().First();
         MapData tainted = map with
         {
@@ -503,7 +565,7 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario「公共区域的新地表不受限」：出生区之外标四种新地表，其余校验通过 → 接受。
         // 反面对照：原图本身必须通过（否则"接受"只是恰好没报这条）。
-        MapData map = FourPlayerBaseMap.Create();
+        MapData map = FrontierFixtures.Map();   // retire-legacy-maps 段 B：原底图 v5（棋盘图的公共棋盘同样只许平地草地）
         Assert.True(MapValidator.Validate(map).IsValid);
         Coord[] outside =
         [

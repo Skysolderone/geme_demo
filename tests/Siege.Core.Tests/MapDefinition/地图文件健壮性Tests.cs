@@ -81,24 +81,11 @@ public class 地图文件健壮性Tests
     }
 
     [Fact]
-    public void 磁盘上的基准地图文件与代码一致()
-    {
-        // maps/siege-4p-base-v5.json（文件名随 Id）是设计师维护的那一份；它若与代码里的基准图漂移，
-        // 就会出现"代码跑的图和设计师看的图不是同一张"。
-        // 文件名跟着地图 Id 走（denser-map 裁决 3），旧的 v1 / v2 / v3 留在 maps/ 只作对照，不参与本断言。
-        string path = Path.Combine(RepoRoot(), "maps", $"{FourPlayerBaseMap.Create().Id}.json");
-        MapData onDisk = MapFile.FromJson(File.ReadAllText(path));
-
-        Assert.Equal(MapFile.ToJson(FourPlayerBaseMap.Create()), MapFile.ToJson(onDisk));
-        Assert.True(MapValidator.Validate(onDisk).IsValid, MapValidator.Validate(onDisk).ToString());
-    }
-
-    [Fact]
     public void 全小写键名的地图能正确加载()
     {
-        // 设计师手写的键名不必与 DTO 的大小写一致。把基准图的全部 JSON 键名压成小写，
+        // 设计师手写的键名不必与 DTO 的大小写一致。把基准图（retire-legacy-maps 段 B 起为 4 人内置棋盘图）的全部 JSON 键名压成小写，
         // 往返后 MUST 与原图逐字节一致——包括嵌套的 zone / budget 与豁免理由。
-        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        string canonical = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId));
         string lowerKeys = System.Text.RegularExpressions.Regex.Replace(
             canonical, "\"([A-Za-z0-9_]+)\":", m => $"\"{m.Groups[1].Value.ToLowerInvariant()}\":");
         Assert.NotEqual(canonical, lowerKeys);
@@ -116,7 +103,7 @@ public class 地图文件健壮性Tests
         // PropertyNameCaseInsensitive 只管键名，枚举值走 JsonStringEnumConverter；
         // 它读取时同样不区分大小写。这里把 Zone / Budget 的全部枚举值压成小写钉住这一点，
         // 免得日后换转换器或加 JsonNamingPolicy 时静默变成"看起来能用的坏地图"。
-        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        string canonical = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId));
         string lowerValues = canonical
             .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"birthzone\"", StringComparison.Ordinal)
             .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"contested\"", StringComparison.Ordinal)
@@ -136,7 +123,7 @@ public class 地图文件健壮性Tests
     public void 未知枚举值的地图拒绝加载()
     {
         // 大小写宽容不等于任意字符串宽容：拼错的分区名 MUST 报错，不能落成默认值 BirthZone。
-        string broken = MapFile.ToJson(FourPlayerBaseMap.Create())
+        string broken = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId))
             .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"Contest\"", StringComparison.Ordinal);
 
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => MapFile.FromJson(broken));
@@ -146,7 +133,7 @@ public class 地图文件健壮性Tests
     public void 含未知字段的地图能正确加载()
     {
         // 地图文件里允许写 _comment 之类的说明字段：顶层与嵌套对象都不报错、不影响数据。
-        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        string canonical = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId));
         string withComments = canonical
             .Replace("{\n  \"Id\":", "{\n  \"_comment\": \"设计师备注：中央区与咽喉承担高预算\",\n  \"Id\":", StringComparison.Ordinal)
             .Replace("\"Zone\": \"Contested\",", "\"_comment\": \"公共区\",\n      \"Zone\": \"Contested\",", StringComparison.Ordinal);
@@ -187,9 +174,9 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 缺地形字段的旧文件按平地读入()
     {
-        // v2 文件（历史存档，已不能通过校验）没有地形字段 → 全 h=0、全草地、无桥无栅；可落子格仍是 85
-        string path = Path.Combine(RepoRoot(), "maps", "siege-4p-base-v2.json");
-        string text = File.ReadAllText(path);
+        // 没有地形字段的文件 → 全 h=0、全草地、无桥无栅。
+        // retire-legacy-maps 段 B：原读 maps/siege-4p-base-v2.json（随旧图删除，可落子 85）；改为手写一份不带地形字段的 3×3 文件（1 格岩石 → 可落子 8）。
+        string text = "{\"Id\":\"t\",\"Width\":3,\"Height\":3,\"MaxPlayers\":2,\"CentralEntrance\":\"B2\",\"Obstacles\":[\"A1\"]}";
         Assert.DoesNotContain("\"Heights\"", text, StringComparison.Ordinal);
 
         MapData onDisk = MapFile.FromJson(text);
@@ -198,7 +185,9 @@ public class 地图文件健壮性Tests
         Assert.Empty(onDisk.TerrainData.Surfaces);
         Assert.Empty(onDisk.TerrainData.Bridges);
         Assert.Empty(onDisk.TerrainData.Fences);
-        Assert.Equal(85, onDisk.PlayableCount);
+        Assert.Equal(8, onDisk.PlayableCount);
+        Assert.Equal(Surface.Grass, onDisk.SurfaceAt(Coord.Parse("C3")));
+        Assert.Equal(0, onDisk.HeightAt(Coord.Parse("C3")));
     }
 
     [Theory]
@@ -252,7 +241,4 @@ public class 地图文件健壮性Tests
             Assert.Contains(code, ex.Message, StringComparison.Ordinal);
         }
     }
-
-    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", ".."));
 }

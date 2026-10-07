@@ -400,7 +400,7 @@ public class 计分规则版本Tests
         string root = Path.Combine(PresentationFixtures.RepoRoot(), "src");
         string[] files = [.. Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Split(Path.DirectorySeparatorChar).Any(part => part is "bin" or "obj" or ".godot"))];
-        Assert.True(files.Length >= 170, $"样本口径：src 下只扫到 {files.Length} 个源文件");
+        Assert.True(files.Length >= 160, $"样本口径：src 下只扫到 {files.Length} 个源文件");   // retire-legacy-maps 段 B 删除旧图与边疆生成器 16 个文件后为 168（原下界 170）
         Assert.True(files.Count(f => f.Contains(Path.Combine("src", "godot", "scripts"), StringComparison.Ordinal)) >= 10, "样本口径：没扫到引擎层脚本");
 
         int calls = 0;

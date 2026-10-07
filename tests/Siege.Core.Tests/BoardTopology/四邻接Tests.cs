@@ -123,12 +123,9 @@ public class 四邻接Tests
                    // ③ TerrainEditRules：改造合法性的唯一实现。裁决 T-2 把改造目标口径定成**几何四邻**（不是气边——深水没有气边，
                    //    搭桥会变成不可能），所以它必须直接读几何邻居；它只接受 MapData，走不了 GameBoard.Neighbors。
                    //    名单只放这一个类型：任何第二处"自己遍历四邻判改造目标"的实现都会在这里红。
-                   || outer == typeof(TerrainEditRules)
+                   || outer == typeof(TerrainEditRules);
 
-                   // ④ FrontierSurfaces：生成器的新地表投放（terrain-surfaces D6）。规格按**几何四邻**定义"块"（同种地表沿几何四邻连通、
-                   //    浅滩块挨着主河），与气边无关——栅栏、崖壁都不该把一块地表切成两块；它只读 MapData，走不了 GameBoard.Neighbors。
-                   //    内部类型按全名比（测试程序集看得见 internal，但写成字符串免得把可见性绑进守门）。
-                   || outer.FullName == "Siege.Core.Board.Maps.FrontierSurfaces";
+                   // 原豁免 ④ FrontierSurfaces（新地表投放按几何四邻定义"块"）随 gen: 生成器于 retire-legacy-maps 段 B 删除，名单收窄。
 
                    // 原豁免 ⑤ MapValidator.ValidateCorridors（board-map 段 B，通道按几何四邻分组）随 board-isolated-gen 取消通道一并删除：
                    // 校验器里不再有任何直接的几何邻居遍历，名单收窄。
@@ -152,8 +149,8 @@ public class 四邻接Tests
         // 变异 A1（段 A 实跑）：在 MapValidator.ValidateSceneryCells 开头遍历一次 Adjacency.Neighbors → 本测试红 1。
         Assert.DoesNotContain(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(MapValidator));
 
-        // 豁免 ④ 按全名字符串比，类型改名后豁免会静默失效成摆设——这里钉住它确实命中了一个真实调用者。
-        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!).FullName == "Siege.Core.Board.Maps.FrontierSurfaces");
+        // retire-legacy-maps 段 B：豁免 ④ FrontierSurfaces 删除后，地图生成目录里没有任何直接的几何邻居遍历（原"豁免 ④ 命中真实调用者"的反面断言随之改写）。
+        Assert.DoesNotContain(adjacencyCallers, c => (Outermost(c.DeclaringType!).Namespace ?? string.Empty).StartsWith("Siege.Core.Board.Maps", StringComparison.Ordinal));
     }
 
     private static MethodBase[] CallersOf((MethodBase Caller, MemberInfo Target, OpCode OpCode)[] refs, Type declaringType, string methodName) =>

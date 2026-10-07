@@ -2,9 +2,9 @@ namespace Siege.Core.Board.Maps;
 
 /// <summary>
 /// "地图标识 → 地图"的唯一解析（frontier-map D5）：批量跑局、终端版与图形版三个入口共用这一份，MUST NOT 各自维护地图清单。
-/// 内置图按标识直接给；<c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c> 交给边疆档生成器（map-generator D3）；
-/// <c>board:&lt;地图种子&gt;[:p&lt;人数&gt;][:n&lt;棋盘数&gt;]</c> 交给棋盘档生成器（board-map D7、board-isolated-gen D1）；其余视为地图文件路径（或 <c>maps/&lt;标识&gt;.json</c>）。
-/// 解析不了就报错并列出可用标识，MUST NOT 静默回落到缺省地图。
+/// 内置棋盘图按标识直接给；<c>board:&lt;地图种子&gt;[:p&lt;人数&gt;][:n&lt;棋盘数&gt;]</c> 交给棋盘档生成器（board-map D7、board-isolated-gen D1）；
+/// 已删除的旧标识（retire-legacy-maps D2：标准档 / 2 人 / 3 人 / 边疆档内置图与 <c>gen:</c> 生成图）明确报"已删除"；其余视为显式给出的地图文件路径。
+/// 解析不了就报错并列出可用标识，MUST NOT 静默回落到缺省地图；也不再有 <c>maps/&lt;标识&gt;.json</c> 隐式回落（会让已删除的旧标识被旧文件复活）。
 /// </summary>
 /// <remarks>
 /// 放在规则内核里是因为图形版（<c>src/godot</c>）只引用 Core / Presentation，不得依赖批量项目（<c>.trellis/spec/core/boundaries.md</c>）。
@@ -31,12 +31,30 @@ public static class MapCatalog
     /// </summary>
     private static readonly (string Id, string Title, Func<MapData> Create)[] Builtins =
     [
-        (FourPlayerBaseMap.Id, "标准图 13×13", FourPlayerBaseMap.Create),
-        (TwoPlayerBaseMap.Id, "双人图 9×9", TwoPlayerBaseMap.Create),
-        (ThreePlayerBaseMap.Id, "三人图 11×11", ThreePlayerBaseMap.Create),
-        (FrontierMapV2.Id, "边疆图 25×30（手工）", FrontierMapV2.Create),
         .. BuiltinBoards.Select(b => (b.Id, b.Title, (Func<MapData>)(() => CreateBoardAlias(b)))),
     ];
+
+    /// <summary>
+    /// 已于 retire-legacy-maps 删除的内置图标识（D2）。请求它们（命令行、旧日志回放、旧存档恢复）一律报"已删除"并列出现有地图，
+    /// MUST NOT 落到文件路径解析——否则同名旧文件会把旧标识静默复活（<c>.trellis/spec/core/boundaries.md</c>「内置图内容一变，标识必须递增」）。
+    /// </summary>
+    public static IReadOnlyList<string> RetiredIds { get; } =
+    [
+        "siege-4p-base-v1", "siege-4p-base-v2", "siege-4p-base-v3", "siege-4p-base-v4", "siege-4p-base-v5",
+        "siege-2p-base-v1", "siege-3p-base-v1", "siege-frontier-v1", "siege-frontier-v2",
+    ];
+
+    /// <summary>已删除的边疆档生成图标识前缀：<c>gen</c> 与 <c>gen:&lt;…&gt;</c> 一族。</summary>
+    public const string RetiredGeneratedPrefix = "gen";
+
+    /// <summary>是否是已删除的地图标识（<see cref="RetiredIds"/> 之一，或 <c>gen</c> / <c>gen:</c> 前缀）。只看写法，不读文件。</summary>
+    public static bool IsRetired(string? mapId)
+    {
+        string id = mapId?.Trim() ?? string.Empty;
+        return RetiredIds.Contains(id)
+            || id == RetiredGeneratedPrefix
+            || id.StartsWith(RetiredGeneratedPrefix + ":", StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// 缺省地图标识：批量、终端与图形三个入口未给地图选项时加载它（builtin-board-maps D3：4 人内置棋盘图；图形版缺省先进选图界面）。
@@ -50,13 +68,14 @@ public static class MapCatalog
     public static IReadOnlyList<BuiltinMapInfo> BuiltinMaps { get; } = [.. Builtins.Select(b => new BuiltinMapInfo(b.Id, b.Title))];
 
     /// <summary>
-    /// 解析地图：<c>null</c> / 空白 → 缺省地图；内置标识 → 内置图；生成图标识 → 按其中的地图种子与参数生成；
-    /// 否则按文件路径、再按 <c>maps/&lt;标识&gt;.json</c> 读入。都不是则抛 <see cref="FileNotFoundException"/>，消息列出全部可用标识。
+    /// 解析地图：<c>null</c> / 空白 → 缺省地图；内置标识 → 内置图；已删除的旧标识 → 抛 <see cref="RetiredMapException"/>；
+    /// 棋盘图标识 → 按其中的地图种子与参数生成；否则按显式文件路径读入。都不是则抛 <see cref="FileNotFoundException"/>，消息列出全部可用标识。
     /// </summary>
     /// <remarks>
-    /// 裸 <c>gen</c>（"随机取一个地图种子"）不是完整标识：这里不读时钟，遇到即抛 <see cref="FormatException"/>。
-    /// 取种子只在三个入口的最外层做——入口用 <see cref="GeneratedMapId.IsBareRequest"/> 识别、取到种子后用
-    /// <see cref="GeneratedMapId.Format"/> 拼出完整标识、打印给用户，再交到这里。
+    /// 裸 <c>board</c>（"随机取一个地图种子"）不是完整标识：这里不读时钟，遇到即抛 <see cref="FormatException"/>。
+    /// 取种子只在三个入口的最外层做——入口用 <see cref="BoardMapId.IsBareRequest"/> 识别、取到种子后用
+    /// <see cref="BoardMapId.Format"/> 拼出完整标识、打印给用户，再交到这里。
+    /// <see cref="RetiredMapException"/> 派生自 <see cref="FileNotFoundException"/>，三个入口现有的"地图错误"捕获照常接住它。
     /// </remarks>
     public static MapData Resolve(string? mapId)
     {
@@ -69,15 +88,9 @@ public static class MapCatalog
             }
         }
 
-        if (GeneratedMapId.IsGenerated(id))
+        if (IsRetired(id))
         {
-            if (GeneratedMapId.IsBareRequest(id))
-            {
-                throw new FormatException(
-                    $"地图标识 {GeneratedMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {GeneratedMapId.Prefix}:12345 或 {GeneratedMapId.Prefix}:12345:p7。");
-            }
-
-            return FrontierMapGenerator.Generate(id);
+            throw new RetiredMapException(id, $"地图 {id} 已删除（retire-legacy-maps：所有地图都由互不连通的棋盘组成；引用它的旧存档与旧日志不再支持加载）。{AvailableText()}");
         }
 
         if (BoardMapId.IsBoardMap(id))
@@ -92,19 +105,36 @@ public static class MapCatalog
             return BoardMapGenerator.Generate(id);
         }
 
-        string path = File.Exists(id) ? id : Path.Combine("maps", id + ".json");
-        if (!File.Exists(path))
+        if (!File.Exists(id))
         {
-            throw new FileNotFoundException(
-                $"找不到地图 {id}：既不是内置地图，也不是存在的地图文件。可用的地图标识：{string.Join("、", BuiltinIds)}；随机生成图写作 {GeneratedMapId.Prefix}:<地图种子>[:p<平台数 {MapGenParameters.MinPlatforms}–{MapGenParameters.MaxPlatforms}>]（如 {GeneratedMapId.Prefix}:12345）；随机生成的棋盘图写作 {BoardMapId.Prefix}:<地图种子>[:p<人数 {BoardMapParameters.MinPlayers}–{BoardMapParameters.MaxPlayers}>][:n<棋盘数>]（棋盘数随人数：{BoardMapParameters.AllRangesText()}；如 {BoardMapId.Prefix}:12345、{BoardMapId.Prefix}:12345:p3）；也可以给地图文件（.json）的路径。",
-                path);
+            throw new FileNotFoundException($"找不到地图 {id}：既不是内置地图，也不是存在的地图文件。{AvailableText()}", id);
         }
 
-        return MapFile.FromJson(File.ReadAllText(path));
+        return MapFile.FromJson(File.ReadAllText(id));
     }
+
+    /// <summary>报错时附上的"现有地图"清单：内置标识、棋盘图标识写法与地图文件路径。</summary>
+    private static string AvailableText() =>
+        $"现有地图：{string.Join("、", BuiltinIds)}；随机生成的棋盘图写作 {BoardMapId.Prefix}:<地图种子>[:p<人数 {BoardMapParameters.MinPlayers}–{BoardMapParameters.MaxPlayers}>][:n<棋盘数>]（棋盘数随人数：{BoardMapParameters.AllRangesText()}；如 {BoardMapId.Prefix}:12345、{BoardMapId.Prefix}:12345:p3）；也可以给地图文件（.json）的路径。";
 
     /// <summary>内置棋盘图：按登记的生成图标识生成，把地图数据里的标识改写为内置名；其余内容与生成图逐项相同。</summary>
     private static MapData CreateBoardAlias(BuiltinBoardAlias alias) => BoardMapGenerator.Generate(alias.SourceId) with { Id = alias.Id };
+}
+
+/// <summary>
+/// 请求了已于 retire-legacy-maps 删除的地图标识（D2）。派生自 <see cref="FileNotFoundException"/>，
+/// 三个入口（批量 / 终端 / 图形）与回放现有的"地图错误"捕获都接得住，报文含"已删除"与现有地图清单。
+/// </summary>
+public sealed class RetiredMapException : FileNotFoundException
+{
+    public RetiredMapException(string mapId, string message)
+        : base(message, mapId)
+    {
+        MapId = mapId;
+    }
+
+    /// <summary>被请求的已删除标识（原样，已去首尾空白）。</summary>
+    public string MapId { get; }
 }
 
 /// <summary>内置地图的一项登记：地图标识与面向人的显示名（选图界面的选项标题）。</summary>

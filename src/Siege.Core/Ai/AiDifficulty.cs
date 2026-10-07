@@ -79,7 +79,7 @@ public sealed record AiSearchConfig(
 
     /// <summary>
     /// 默认停手阈值。<b>PassThreshold = 20</b>——v2-recalibration 段 A 在内容集 V2 上复核选定（负责人 2026-09-28 裁决 ①，design D1 / D2）：
-    /// <c>siege-4p-base-v5</c>、4 名标准难度 AI、内容集 V2、带入 0、小回合数截断 600、种子 1–20、每档 20 局（小样本，胜率类只看方向），
+    /// <c>siege-4p-base-v5</c>（<see cref="EvaluationWeights.RetiredCalibrationMapNote"/>）、4 名标准难度 AI、内容集 V2、带入 0、小回合数截断 600、种子 1–20、每档 20 局（小样本，胜率类只看方向），
     /// 九维权重逐玩家写死为当时的 <see cref="EvaluationWeights.Default"/>（Eye 200 / Safety 35 / Threat 25，未随之改动），档位 0 / 20 / 40 / 80。
     /// 每档写作"截断 / 整局无提子 / 已终局局的平均结束大回合"：0 → 0 / 3 / 9.15；20 → 0 / 3 / 9.25；40 → 0 / 5 / 9.05；80 → 0 / 8 / 8.40
     /// （<c>sim-out/v2-recalibration/pass-*</c>；80 / 0 两档与诊断 engagement-diagnosis b06 / b07 逐局相同）。
@@ -105,7 +105,7 @@ public sealed record AiSearchConfig(
     /// v2-recalibration 段 A 在内容集 V2 上复核后改写，不再带"more-pieces-relics 扩展计分后未重扫"的补注（九维权重仍带，见 <see cref="EvaluationWeights.ScoringExtendedStatus"/>）。
     /// 这里的"V2"指<b>内容集</b>；计分规则 v2（阵型，formation-tiers）下未校准，见 <see cref="EvaluationWeights.FormationScoringStatus"/>。
     /// </remarks>
-    public const string PassThresholdCalibrationStatus = "v2-recalibration 段 A 复核（内容集 V2、小样本）：siege-4p-base-v5、4 人标准难度、带入 0、种子 1–20、每档 20 局；0 / 20 / 40 / 80 四档（截断 / 整局无提子 / 已终局局平均结束大回合：0 → 0 / 3 / 9.15；20 → 0 / 3 / 9.25；40 → 0 / 5 / 9.05；80 → 0 / 8 / 8.40）；选定 20（0 与 20 无提子并列最低、均在 7–10，取离 80 最近）；80 为档位上界、非完整双向扫档；sim-out/v2-recalibration/pass-*";
+    public const string PassThresholdCalibrationStatus = "v2-recalibration 段 A 复核（内容集 V2、小样本）：siege-4p-base-v5（该图已于 retire-legacy-maps 删除，棋盘图上未校准）、4 人标准难度、带入 0、种子 1–20、每档 20 局；0 / 20 / 40 / 80 四档（截断 / 整局无提子 / 已终局局平均结束大回合：0 → 0 / 3 / 9.15；20 → 0 / 3 / 9.25；40 → 0 / 5 / 9.05；80 → 0 / 8 / 8.40）；选定 20（0 与 20 无提子并列最低、均在 7–10，取离 80 最近）；80 为档位上界、非完整双向扫档；sim-out/v2-recalibration/pass-*";
 
     /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>
     public const int LargeMapCellLimit = 24;

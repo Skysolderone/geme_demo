@@ -33,7 +33,7 @@ public sealed record MapOption(string Title, string? BuiltinId, MapOptionKind Ki
 /// 成功（预览也搭好）后调 <see cref="Accept"/>，失败（如生成器耗尽尝试次数）调 <see cref="RollBack"/> 回到上一张成功的图并显示原因。
 /// 改状态的操作返回"标识是否变了"——变了调用方才需要重新解析并重搭预览。</para>
 /// <para><b>不读时钟</b>："换一张"的新种子由调用方注入（规则内核与表现层都不取随机种子，取种子只在入口最外层）。</para>
-/// <para><b>预选项是目录的缺省地图</b>（builtin-board-maps D5：4 人内置棋盘图）。标准档、边疆档地图与 <c>gen:</c> 生成图不在清单上（仍可用命令行直接建局）。</para>
+/// <para><b>预选项是目录的缺省地图</b>（builtin-board-maps D5：4 人内置棋盘图）。清单之外的只有地图文件（可用命令行直接建局）；旧图与 <c>gen:</c> 生成图已于 retire-legacy-maps 删除。</para>
 /// <para>规格：openspec/changes/builtin-board-maps/specs/map-selection —— Requirement: 开局选图界面</para>
 /// </remarks>
 public sealed class MapSelectModel
@@ -139,7 +139,7 @@ public sealed class MapSelectModel
 
     /// <summary>
     /// 按地图标识预选一项（仅供截图 / 自检的启动选项）：内置棋盘图的内置名选中对应项；完整的棋盘图标识选中"随机棋盘图"并带上其中的种子、人数与棋盘数。
-    /// 其余（标准档 / 边疆档内置图、<c>gen:</c> 生成图、未带种子的随机请求、地图文件路径、写错的标识）返回 <c>false</c>、状态不变——它们不在选图界面的清单上。
+    /// 其余（已删除的旧标识、未带种子的随机请求、地图文件路径、写错的标识）返回 <c>false</c>、状态不变——它们不在选图界面的清单上。
     /// </summary>
     public bool TrySelectId(string? mapId)
     {

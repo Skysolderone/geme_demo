@@ -59,7 +59,7 @@ public class 边界夹取Tests
     [Fact]
     public void 某方向所见不小于地图跨度时该方向锁中线_另一方向仍可推()
     {
-        // 大图 27 × 32 竖长（retire-legacy-maps 段 A2 起为自定合成图，原为边疆图 25 × 30）：最远缩放（上限 28）下横向所见 ≥ 地图宽，纵向不够。
+        // 大图 23 × 34 竖长（retire-legacy-maps 段 B 起的自定合成图，见 CameraFixtures.Large）：最远缩放（上限 28）下横向所见 ≥ 地图宽，纵向不够。
         var camera = new BoardCamera(BoundsOf(Large));
         Assert.True(camera.VisibleWidth >= BoundsOf(Large).Width);
         Assert.True(camera.VisibleDepth < BoundsOf(Large).Depth);

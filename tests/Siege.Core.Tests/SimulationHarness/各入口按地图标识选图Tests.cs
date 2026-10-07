@@ -54,38 +54,34 @@ public class 各入口按地图标识选图Tests
         // 终端版入口
         (int playCode, string playErr) = RunMain("play", "--map", "no-such-map", "--seed", "1");
         Assert.NotEqual(0, playCode);
-        Assert.Contains("siege-4p-base-v5", playErr, StringComparison.Ordinal);
+        Assert.Contains("siege-4p-board-v1", playErr, StringComparison.Ordinal);   // retire-legacy-maps 段 B：可用清单原含 v5
 
         // 批量入口：报错且不写出任何输出
         string outDir = Path.Combine(SimFixtures.TempDir("mapcatalog-unknown"), "out");
         (int runCode, string runErr) = RunMain("run", "--out", outDir, "--map", "no-such-map", "--seed", "1");
         Assert.NotEqual(0, runCode);
-        Assert.Contains("siege-4p-base-v5", runErr, StringComparison.Ordinal);
+        Assert.Contains("siege-4p-board-v1", runErr, StringComparison.Ordinal);
         Assert.False(Directory.Exists(outDir));
     }
 
-    [Theory]
-    [InlineData("siege-4p-base-v4", "siege-4p-base-v5")]
-    [InlineData("siege-frontier-v1", "siege-frontier-v2")]
-    public void 改名前的旧地图标识报未知地图(string retired, string current)
+    [Fact]
+    public void 改名前的旧地图标识报已删除()
     {
-        // 规格：map-definition —— 内置图随据点摘除改名（tasks 2.3）。旧标识 MUST 报"找不到地图"并列出现名，
-        // MUST NOT 悄悄解析成新图——两张图的信物/地形虽然一样，但旧标识对应的权威文件已经不存在，
-        // 让它还能解析出图会掩盖"调用方仍在用旧标识"。
-        // 变异 M-B20：Builtins 表里把新标识写回旧标识 → 本测试红。
-        Assert.DoesNotContain(retired, MapCatalog.BuiltinIds);
-        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve(retired));
-        Assert.Contains("找不到地图", ex.Message, StringComparison.Ordinal);
-        Assert.Contains(retired, ex.Message, StringComparison.Ordinal);
-        Assert.Contains(current, ex.Message, StringComparison.Ordinal);
+        // 规格：map-definition —— 内置图改名 / 删除后旧标识 MUST NOT 悄悄解析成别的图，旧标识的权威文件也不得留在仓库里。
+        // 原 Theory（siege-4p-base-v4 → v5、siege-frontier-v1 → v2 报"找不到地图"并列出现名）：retire-legacy-maps 段 B 起 v5 与边疆 v2 本身也删除，
+        // 旧标识一律报"已删除"并列出现有地图（明细见 已删除地图明确报错Tests），这里只留"旧文件不得复活旧标识"一半。
+        // 变异 M-B20：Builtins 表里把新标识写回旧标识 → 本测试红（旧标识出现在内置清单里）。
+        foreach (string retired in new[] { "siege-4p-base-v4", "siege-frontier-v1" })
+        {
+            Assert.DoesNotContain(retired, MapCatalog.BuiltinIds);
+            RetiredMapException ex = Assert.Throws<RetiredMapException>(() => MapCatalog.Resolve(retired));
+            Assert.Contains("已删除", ex.Message, StringComparison.Ordinal);
+            Assert.Contains(MapCatalog.DefaultId, ex.Message, StringComparison.Ordinal);
+        }
 
-        // 反面：现名必须解析得出，否则上面那条"旧的报错"可以靠"两个都报错"恒真。
-        Assert.Equal(current, MapCatalog.Resolve(current).Id);
-
-        // 旧标识的权威文件也不得留在仓库里——留着的话 Resolve 会经 maps/<标识>.json 回落，旧标识悄悄复活。
-        Assert.False(
-            File.Exists(Path.Combine(FrontierFixtures.RepoRoot(), "maps", retired + ".json")),
-            $"maps/{retired}.json 仍在仓库里。");
+        // 仓库里不再有 maps/ 目录（旧图的权威文件随 retire-legacy-maps 段 B 删除；隐式回落 maps/<标识>.json 也已删除）。
+        Assert.False(Directory.Exists(Path.Combine(FrontierFixtures.RepoRoot(), "maps")), "仓库里仍有 maps/ 目录。");
+        Assert.True(File.Exists(Path.Combine(FrontierFixtures.RepoRoot(), "siege.sln")));   // 反面：找对了仓库根
     }
 
     [Fact]
@@ -106,7 +102,7 @@ public class 各入口按地图标识选图Tests
     {
         // tasks 2.2：--map 已在 play 的严格命令行解析里登记；拼错的 --mapp 按 strict-cli 报错，并建议 --map。
         // 变异 M-A11：Program.Play 不读 "map" 选项 → 合法的 --map 也成了未知选项，下面的反面断言红。
-        (int code, string err) = RunMain("play", "--mapp", "siege-4p-base-v5", "--seed", "1");
+        (int code, string err) = RunMain("play", "--mapp", "siege-4p-board-v1", "--seed", "1");
         Assert.NotEqual(0, code);
         Assert.Contains("--mapp", err, StringComparison.Ordinal);
         Assert.Contains("是否想用 --map？", err, StringComparison.Ordinal);
@@ -140,48 +136,13 @@ public class 各入口按地图标识选图Tests
         Assert.All(zones, z => Assert.InRange(z, 1, 6));
     }
 
-    /// <summary>
-    /// 本 change 之前不带地图选项（缺省 v5）时 <see cref="显式指定旧地图"/> 那段脚本的终端转录的 SHA-256（UTF-8、行尾 \n）。
-    /// 取自 builtin-board-maps 段 C 之前的提交 4419e22：当时"缺省 ≡ 显式 v5"由原测试「显式选缺省地图与不带选项逐字相同」钉住且为绿。
-    /// </summary>
-    private const string PreChangeDefaultTranscriptSha256 = "6168D6B9C2F4C8ED41949AC6298960B49923B97F8F1C0BBA3E0CA44BC2E98679";
-
-    [Fact]
-    public void 显式指定旧地图()
-    {
-        // 规格 Scenario（builtin-board-maps / simulation-harness）：以 siege-4p-base-v5 启动终端版 → 与本 change 之前不带地图选项启动时在同一种子下逐步相同。
-        // 原名「显式选缺省地图与不带选项逐字相同」。本 change 起终端版一律打印地图行（D3），所以显式 v5 的转录比改动前多恰好一行"地图 siege-4p-base-v5（…）"，
-        // 去掉这一行后与改动前的缺省转录逐字节相同（黄金值）。配行数下界与字段级断言，防止转录只剩首行（testing.md）。
-        // 变异 B-C8：PlayCommand 的地图行多打一个空格 → 本测试红（全量新增红 3）；换种子 / 换地图 → 黄金值红。
-        // 黄金值的取得：在 4419e22 的源码快照上用同一段脚本、不给地图跑一次并取哈希（当时缺省即 v5，转录无地图行）。
-        string script = "2\n" + string.Concat(Enumerable.Repeat("\npass\n", 3));   // 段 C：大回合上限删除，改为 3 个小回合后输入耗尽退出（原 40 行 + 上限 3 收尾）；   // 每个小回合：空行 = 不征募，pass = 不落子
-        var explicitOut = new StringWriter();
-
-        // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：默认阈值 80 下简单难度第 1 大回合全员 Pass、对局即终局，走不到第 3 大回合（段 D2 改写）。
-        EvaluationWeights w = SimFixtures.PreCalibrationWeights;
-        const int t = SimFixtures.PreCalibrationPassThreshold;
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
-
-        string text = explicitOut.ToString().Replace("\r\n", "\n", StringComparison.Ordinal);
-        List<string> lines = [.. text.Split('\n')];
-        Assert.Equal("地图 siege-4p-base-v5（13×13，4 个出生区）", Assert.Single(lines, l => l.StartsWith("地图 ", StringComparison.Ordinal)));
-        Assert.Equal(2, lines.FindIndex(l => l.StartsWith("地图 ", StringComparison.Ordinal)));   // 紧跟在标题行之后
-        lines.RemoveAt(2);
-        string preChange = string.Join('\n', lines);
-
-        Assert.True(lines.Count > 100, "转录过短，对局没有真正进行。");
-        Assert.Contains("选择你的出生区（1–4）", preChange, StringComparison.Ordinal);
-        Assert.Contains("第 3 大回合", preChange, StringComparison.Ordinal);
-        Assert.Contains("已退出。种子 7", preChange, StringComparison.Ordinal);
-        Assert.Equal(PreChangeDefaultTranscriptSha256, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(preChange))));
-    }
-
     [Fact]
     public void 三个入口都经同一份目录解析地图()
     {
         // 规格：三个入口 MUST 共用同一份"标识 → 地图"的解析，MUST NOT 各自维护地图清单。
         // src/godot 不在 siege.sln 里，对 IL / 反射类守门隐身（testing.md），只能做源码文本扫描；配样本口径下界与反面命中。
-        // 变异 M-A12：把 src/godot/scripts/MatchSession.cs 改回 FourPlayerBaseMap.Create() → 本测试红。
+        // 变异 M-A12：把 src/godot/scripts/MatchSession.cs 改回直接构造地图 → 本测试红。
+        // retire-legacy-maps 段 B：被禁记号由 FourPlayerBaseMap（随旧图删除）改为棋盘档生成器 BoardMapGenerator——入口不得绕过目录自己出图。
         string root = FrontierFixtures.RepoRoot();
         string[] entryFiles =
         [
@@ -193,7 +154,7 @@ public class 各入口按地图标识选图Tests
         Assert.True(entryFiles.Length >= 8, $"样本口径：只扫到 {entryFiles.Length} 个入口文件。");
         Assert.True(entryFiles.Sum(p => new FileInfo(p).Length) > 50_000, "样本口径：入口文件总量过小。");
 
-        Assert.Empty(entryFiles.Where(p => File.ReadAllText(p).Contains("FourPlayerBaseMap", StringComparison.Ordinal)).Select(Path.GetFileName));
+        Assert.Empty(entryFiles.Where(p => File.ReadAllText(p).Contains("BoardMapGenerator", StringComparison.Ordinal)).Select(Path.GetFileName));
         foreach (string[] entry in new[]
         {
             new[] { "src", "Siege.Sim", "Program.cs" },
@@ -205,7 +166,7 @@ public class 各入口按地图标识选图Tests
         }
 
         // 反面：被禁的记号在它的归属处（目录本身）确实命中；目录只有一份。
-        Assert.Contains("FourPlayerBaseMap", File.ReadAllText(Path.Combine(root, "src", "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
+        Assert.Contains("BoardMapGenerator", File.ReadAllText(Path.Combine(root, "src", "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
         Assert.Single(Directory.EnumerateFiles(Path.Combine(root, "src"), "MapCatalog.cs", SearchOption.AllDirectories));
     }
 
@@ -262,9 +223,9 @@ public class 各入口按地图标识选图Tests
         // 变异（各红本测试）：M-S4 PlayCommand 缺省写死 `?? 4`；M-S5 批量缺省不改写（另红上面的「两人与三人棋盘图可选」两组）；
         // M-S6 配置文件写了 Players 也当未指定；M-S7 src/godot/scripts/GameRoot.cs 建局人数 Min(4, map.MaxPlayers) 改成 4。
         // 批量入口：命令行不给 --players
-        Assert.Equal(2, RunOne("default-2p", "--map", TwoPlayerBaseMap.Id).Config.PlayerCount);
-        Assert.Equal(2, RunOne("default-2p-difficulty", "--map", TwoPlayerBaseMap.Id, "--difficulty", "Easy").Config.PlayerCount);
-        Assert.Equal(3, RunOne("default-3p", "--map", ThreePlayerBaseMap.Id).Config.PlayerCount);
+        Assert.Equal(2, RunOne("default-2p", "--map", "siege-2p-board-v1").Config.PlayerCount);
+        Assert.Equal(2, RunOne("default-2p-difficulty", "--map", "siege-2p-board-v1", "--difficulty", "Easy").Config.PlayerCount);
+        Assert.Equal(3, RunOne("default-3p", "--map", "siege-3p-board-v1").Config.PlayerCount);
         Assert.Equal(4, RunOne("default-4p", "--map", MapCatalog.DefaultId).Config.PlayerCount);
         Assert.Equal(4, RunOne("default-none").Config.PlayerCount);
         Assert.Equal(3, RunOne("explicit-3-on-4p", "--players", "3").Config.PlayerCount);
@@ -272,17 +233,18 @@ public class 各入口按地图标识选图Tests
         // 批量入口：配置文件不写 Players 也算"未指定"；写了就按写的。
         string dir = SimFixtures.TempDir("players-config");
         string noPlayers = Path.Combine(dir, "no-players.json");
-        File.WriteAllText(noPlayers, $"{{ \"MapId\": \"{TwoPlayerBaseMap.Id}\" }}");
+        File.WriteAllText(noPlayers, "{ \"MapId\": \"siege-2p-board-v1\" }");
         Assert.Equal(2, RunOne("config-no-players", "--config", noPlayers).Config.PlayerCount);
         string withPlayers = Path.Combine(dir, "with-players.json");
         File.WriteAllText(withPlayers, "{ \"Players\": [ { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" } ] }");
         Assert.Equal(3, RunOne("config-players", "--config", withPlayers).Config.PlayerCount);
 
-        // 终端入口：不给人数 → 地图人数上限（2 人图出生区 1–2、对手 1 名）；4 人图仍是 3 名对手。
+        // 终端入口：不给人数 → 地图人数上限（2 人棋盘图出生区 1–3、对手 1 名）；4 人图仍是 3 名对手。
+        // retire-legacy-maps 段 B：2 / 3 人图由 siege-2p-base-v1 / siege-3p-base-v1 改为 2 / 3 人内置棋盘图（出生区数 = 人数 + 1）。
         var twoOut = new StringWriter();
-        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), twoOut, TwoPlayerBaseMap.Create(), flagRisk: 0));
+        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), twoOut, MapCatalog.Resolve("siege-2p-board-v1"), flagRisk: 0));
         Assert.Contains("对手 1 名", twoOut.ToString(), StringComparison.Ordinal);
-        Assert.Contains("选择你的出生区（1–2）", twoOut.ToString(), StringComparison.Ordinal);
+        Assert.Contains("选择你的出生区（1–3）", twoOut.ToString(), StringComparison.Ordinal);
         var fourOut = new StringWriter();
         Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), fourOut, flagRisk: 0));
         Assert.Contains("对手 3 名", fourOut.ToString(), StringComparison.Ordinal);

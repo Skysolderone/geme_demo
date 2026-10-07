@@ -68,8 +68,7 @@ public class 选图界面守门Tests
 
         // 反面：被禁的记号在它的归属处（目录）确实命中。
         string catalog = File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs"));
-        Assert.Matches(banned, catalog);
-        Assert.Matches(banned, File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "FrontierMapV2.cs")));
+        Assert.Matches(banned, catalog);   // retire-legacy-maps 段 B：FrontierMapV2.cs 随旧图删除，反面命中只剩目录
     }
 
     [Fact]
@@ -107,7 +106,7 @@ public class 选图界面守门Tests
 
         // 图形版里取新地图种子的只有选图阶段这一处：时间戳先折成便于读写的短种子再交给视图模型。
         string stage = files.Single(f => f.Path == "godot/scripts/GameRoot.MapSelect.cs").Text;
-        Assert.Single(Regex.Matches(stage, @"GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
+        Assert.Single(Regex.Matches(stage, @"BoardMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));   // retire-legacy-maps 段 B：折叠函数由 GeneratedMapId 迁到 BoardMapId
         Assert.Single(Regex.Matches(stage, @"Stopwatch\."));
         Assert.DoesNotContain(files, f => f.Path.EndsWith("Hud.MapSelect.cs", StringComparison.Ordinal) && clock.IsMatch(f.Text));
     }

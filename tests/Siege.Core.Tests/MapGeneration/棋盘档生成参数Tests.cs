@@ -14,7 +14,7 @@ namespace Siege.Core.Tests.MapGeneration;
 /// <remarks>
 /// 变异验证（board-map 段 B 实跑，每条只跑本类）：
 /// M-B10 MapRandom.ForBoardAttempt 改用边疆档的派生式（Mix(种子) ^ Mix(序号 ^ AttemptDomain)）→ 红 2：随机序列互不相同、黄金值；
-/// M-B12 边疆档域常量 AttemptDomain 末位 D → E → 红 1：边疆档生成图不变；
+/// M-B12 边疆档域常量 AttemptDomain 末位 D → E → 红 1：边疆档生成图不变（retire-legacy-maps 段 B：边疆档随机源与该测试随 gen: 删除）；
 /// M-B13 BoardMapLayout 里加一个 `new HashSet&lt;int&gt;` → 红 1：源码守门。
 /// board-isolated-gen 段 A（只跑本类，红数按 Theory 行计）：
 /// P1 MaxBoardsFor 上限 +1 → 红 8：棋盘数越界 ×3、棋盘数下限随人数 ×4、缺省参数 ×1；
@@ -260,6 +260,29 @@ public class 棋盘档生成参数Tests
     }
 
     [Fact]
+    public void 校验闭环_尝试耗尽即报错并给出原因_不返回地图()
+    {
+        // 规格 map-generation「校验闭环」Scenario 尝试耗尽（对棋盘档同样生效）。retire-legacy-maps 段 B 检查补：原守门只在边疆档生成器上
+        // （生成校验闭环Tests.尝试耗尽即报错并给出原因_不返回地图，随 gen: 删除），棋盘档生成器的 MapGenerationException 路径此后零覆盖。
+        // 样本 200 张全部第 0 次就成（实测），自然失败触发不到耗尽路径；改用测试入口给定边长：5 块 5×5 + 2 块 7×7 = 223 格，
+        // 低于 4 人目标带下限 300，每次尝试都在"规模作废"一关落空（与公开入口同一条循环）。
+        // 变异（retire-legacy-maps 段 B 检查实跑全量）：GenerateDetailed 循环条件 `attempt < maxAttempts` 改成 `<=` → 只红本测试。
+        var parameters = new BoardMapParameters { Players = 4, BoardCount = 7 };
+        BoardSize[] births = [new(5, 5), new(5, 5), new(5, 5), new(5, 5), new(5, 5)];
+        BoardSize[] publics = [new(7, 7), new(7, 7)];
+        var ex = Assert.Throws<MapGenerationException>(() => BoardMapGenerator.GenerateDetailed(12345, parameters, 3, births, publics));
+        Assert.Contains("地图 board:12345 在 3 次尝试内", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("第 2 次尝试规模作废：可落子格 223 落在 4 人目标带 300–800 之外", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("第 3 次尝试", ex.Message, StringComparison.Ordinal);   // 恰试 3 次（序号 0–2），不多试
+
+        // 反面：同一入口给定落在目标带内的边长（资源布点 的那组）→ 返回通过校验的地图，不报错。
+        MapData ok = BoardMapGenerator.GenerateDetailed(
+            4242, new BoardMapParameters { BoardCount = 8 }, BoardMapGenerator.DefaultMaxAttempts,
+            [new(6, 5), new(6, 5), new(6, 5), new(6, 5), new(6, 5)], [new(11, 11), new(9, 10), new(7, 8)]).Map;
+        Assert.True(MapValidator.Validate(ok).IsValid);
+    }
+
+    [Fact]
     public void 经地图文件往返后逐项相同()
     {
         foreach ((ulong seed, int players) in new (ulong, int)[] { (1, 4), (2, 3), (3, 2) })
@@ -275,21 +298,15 @@ public class 棋盘档生成参数Tests
     }
 
     [Fact]
-    public void 棋盘档随机序列与边疆档互不相同()
+    public void 棋盘档随机序列只由种子人数与序号决定且互不重复()
     {
-        // 「棋盘档生成 MUST 使用与边疆档生成互不相同的随机序列，且同样只由地图种子与尝试序号决定」。
-        // 变异 M-B10（段 B 实跑）：ForBoardAttempt 改用边疆档的域常量 → 本测试红。
+        // 「棋盘档生成的随机序列只由地图种子、人数与尝试序号决定」。原名「棋盘档随机序列与边疆档互不相同」：
+        // retire-legacy-maps 段 B 删除边疆档随机源（ForAttempt / ForSurfaces），与它们互不相交的一段随之删除；派生方式另由下一条的黄金值钉住。
         Assert.Equal(Take(MapRandom.ForBoardAttempt(12345, 4, 3), 64), Take(MapRandom.ForBoardAttempt(12345, 4, 3), 64));
         foreach (ulong seed in new ulong[] { 0, 1, 12345, ulong.MaxValue })
         {
             string[] board = [.. Enumerable.Range(0, 512).Select(k => string.Join(",", Take(MapRandom.ForBoardAttempt(seed, 4, k), 8)))];
             Assert.Equal(512, board.Distinct(StringComparer.Ordinal).Count());
-            string[] frontier =
-            [
-                .. Enumerable.Range(0, 512).Select(k => string.Join(",", Take(MapRandom.ForAttempt(seed, k), 8))),
-                string.Join(",", Take(MapRandom.ForSurfaces(seed), 8)),
-            ];
-            Assert.Empty(board.Intersect(frontier, StringComparer.Ordinal));
         }
 
         Assert.NotEqual(Take(MapRandom.ForBoardAttempt(7, 4, 1), 8), Take(MapRandom.ForBoardAttempt(8, 4, 0), 8));
@@ -330,88 +347,6 @@ public class 棋盘档生成参数Tests
     private const int GoldenWidth = 46;
     private const int GoldenHeight = 37;
     private const string GoldenDigest = "1C82BE295057F1E0BF797F1C5B9FDCF14C5EE9D256FA5E58B730C8907167A329";
-
-    [Fact]
-    public void 边疆档生成图不变()
-    {
-        // Scenario：用地图种子 1 到 50 以 gen: 标识各生成一张 → 每张图的导出文件与引入棋盘档生成之前逐字节相同。
-        // 黄金值出处（直接比对，不是推断）：board-map 段 B 动手之前，用 `git archive HEAD` 把提交 149d899 的 Siege.Core 源码导出到临时目录
-        // 单独编译，逐个生成 gen:1..50、导出文本行尾归一为 LF 后取 SHA-256。即：这 50 个摘要来自"引入棋盘档（含段 A 的坐标记法与地图文件改动）之前"的代码。
-        // 其中 gen:1 / gen:7 与 生成确定性Tests 的既有黄金值相同（交叉印证取值方法）。
-        Assert.Equal(50, FrontierGolden.Length);
-        Assert.Equal(50, FrontierGolden.Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal("E726108A634E025733FE54FC6059CBE8E535C2F294E9C731E1C0EBF8D4B481DC", FrontierGolden[0]);
-        Assert.Equal("BC137EAEA5E4E9048FD0C89242F1BA929460D5EEC61DE42719633F27C29A8C50", FrontierGolden[6]);
-
-        var changed = new List<string>();
-        for (int i = 0; i < FrontierGolden.Length; i++)
-        {
-            ulong seed = (ulong)(i + 1);
-            MapData map = MapCatalog.Resolve($"gen:{seed}");
-            Assert.Equal($"gen:{seed}", map.Id);
-            Assert.Empty(map.Boards);
-            if (Digest(map) != FrontierGolden[i])
-            {
-                changed.Add($"gen:{seed}");
-            }
-        }
-
-        Assert.True(changed.Count == 0, "导出文本变了的边疆档生成图：" + string.Join("、", changed));
-    }
-
-    private static readonly string[] FrontierGolden =
-    [
-        "E726108A634E025733FE54FC6059CBE8E535C2F294E9C731E1C0EBF8D4B481DC",   // gen:1
-        "7E9D05514ED9EBFDA704EBFC18608BF07A1EE4A140E509834A1030B59AE0AE56",   // gen:2
-        "BA155B03828768B9B640845A3BAFF7343CD1875A73FA96FA31DEA78C86F110F7",   // gen:3
-        "FFE0FC028DC2FB84366EC6C8DCD94D636BB80D3991FA63A90F6D61FFEDACE333",   // gen:4
-        "47968088FBA02097936EBE8D5D59164C7156AFEFC82929C280C681D0F4043D8E",   // gen:5
-        "C36471E312ADB3AC76557CAF988C69EC26E6B06A481797A3E864B939773D5054",   // gen:6
-        "BC137EAEA5E4E9048FD0C89242F1BA929460D5EEC61DE42719633F27C29A8C50",   // gen:7
-        "020F49B1D2A29A807E440DE8819739B12234BC237C2FAA59D0134C85D00CA0B5",   // gen:8
-        "E3DA0DD353648CBAB3BBF2034DD5666731D08736FF532ECF207C714FBE843E9F",   // gen:9
-        "D0249BC2D857910FB844D7DC96FD453F11B058F8A0E9C8DED0346A6EBE2A9677",   // gen:10
-        "8A241A8843F72BBA311226D353EB7D3B6FD742AC73CEC8D1AC98A582D26B90A0",   // gen:11
-        "5E9931AA902C03ABEB30BCDDE906A24C4201BD87CBA43AF8B1CA8C72B567A123",   // gen:12
-        "856031DD3E16B5C809BBB6C9920758FD68E3B34F2F82D4176C29866F35828348",   // gen:13
-        "009D212A0F8BEC06592659B5D1DFCEFD28402BED0F8F565D2D441B2883736820",   // gen:14
-        "32BAA99F2FE2D025F7AD1BB85CC0F13F8277FC5B0EA41ABB82D791437284BD74",   // gen:15
-        "CACBBEB5B0E95F712A08E984122EC659AD4F9DCD9945643F58A7346D7D596CE9",   // gen:16
-        "91F67FBDB9BB312B5EC3037D2848E6B66C747C683B37AEC88397CA12B22E4973",   // gen:17
-        "F09500246398B0C300CEBF2EC956029C1E5A48D91A26D2A683F9C09149F890F8",   // gen:18
-        "672C6A8D81EFB25581D76E3E3C0AF631F974843A6BA7D2C6B16AB8FD1B92DF1A",   // gen:19
-        "60C3D99E7745A22985A820C96AFC2C9ADB17ED27BF1222FE75503DC53945EDEC",   // gen:20
-        "F596C5B405A14CA0B06325E439C1A180B2564B4112976FF1E9384BA4EF2C6DA0",   // gen:21
-        "9A4F09E86BFB8F1EBE2EC0AC645C7E252B2CE68428902A97BB110DAF27E85EBF",   // gen:22
-        "E63AFB5A6A9BA995690FE3CBC129BFBF3235C9AF8CB45A8DF66BFF6AB8C77147",   // gen:23
-        "3C58FAA622C42167F3CA423B665B2199304675859AC4676EB405E2F166CC4F00",   // gen:24
-        "B2D28BC8119EE4CC8ED3C36A7147723D5DE8426210149664266AA00EE014F51C",   // gen:25
-        "B8F1FC09A106BE742C4CB5A983BD2D37F2A5987E058BC0959932B3BD55A0117F",   // gen:26
-        "9B909F2A939393B54A936C49BFECD332DBAE1C3D18D7B0D0DDDBA2AB999D62A6",   // gen:27
-        "BBDE50A4D7A448FA0A839213007F8792B951AB6DD32D3B49DD03CFE0CD894CCC",   // gen:28
-        "C2DA2E539F7ED6E3189F3844AFDE3AB98C431F68A522148BEB77BDB2A234B91E",   // gen:29
-        "B482B152A4E4E7E18094D918B073363FF74F23E2FE4F60C5F77721342876B59D",   // gen:30
-        "B9CC490871F95AA7021A871ED4F1C02A9D3C4CDE17C37B8543D119355A297E01",   // gen:31
-        "54E5D6ED8332341AB84D6ECCC97EE9703BA904A7B94D45FF0856DA43D7135D97",   // gen:32
-        "FC8A6C10989DD5407F2644FBE7AC4065174F7150FE49F7F21D804CBAC3C85D08",   // gen:33
-        "97A3C13C76555A72A6CC23B5BD52D386C399FE77329DBA02256ECCD53924AFE0",   // gen:34
-        "4C81CCB67E42B3FE16EC6BD274E07E240306E6627646E09341716F97161FBBCE",   // gen:35
-        "A4EC79B29AA221721414A54E8DA8C78E695A54EC70C9DAE71368A663AE0E5E6A",   // gen:36
-        "C204E46D691370D97396990F01B091C9BC8C3458FCFA28E4E2EE3EA188C1907C",   // gen:37
-        "22B5A8BA7A90DA9C7524612DD74332F545D37685C7D69B5BCC7C1B031314D03B",   // gen:38
-        "B44A298062CA5AD5D4641519B0C4367765281AE37C5DF8992365E4C48AFE324B",   // gen:39
-        "11C3A41C7208C20B64B5C397193B3A22F0E70F65E055D033B11B6D0FD7861AD6",   // gen:40
-        "76358A568AA11F32355C12F88DEFB565C9D05A9048898D06767F1AFA30E97FC9",   // gen:41
-        "E1CCDE9FD11781A4928B05D4171BE803CA57C75267B842899B81852389D91A90",   // gen:42
-        "36DA8CB092EB912B2121C1C8C0BA0B3C6E5B9CC2D6DFA8F68EE8229DAFD12FC6",   // gen:43
-        "6C2C147286173DEDB8E52E97726E865074E02B74EB9F0E84A600FFD676592CE3",   // gen:44
-        "D92B29475B04000A15F44CEBF361BF6F1B5770C3F879CA73AC91CB2E25A925A4",   // gen:45
-        "EF026102F1E79C8B43634A20D7EA88210BA0CF3B4EF70DAD27C9053DFCC03126",   // gen:46
-        "85162A53142C3E84EDB4CEE637F8ECD800A64321BD8E5A2889C07CBED268BD50",   // gen:47
-        "D8C4B363C4BA1458F286D0D2628F54BA5F2AD285E6F69C190484D30355411D06",   // gen:48
-        "DA345D5E3180438B5382F06478F60AD8459FEF1A55FE6D9DF0DDAC57C6D5F091",   // gen:49
-        "7CE63435DC92547B8FCA5F27FC49857827335B9E96566BC03AE702035F577381",   // gen:50
-    ];
 
     [Fact]
     public void 棋盘档生成器源码不含散列次序遍历_浮点_时钟与环境_也不见对局种子()

@@ -296,30 +296,25 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[sound] 结算演出占位音效：合成 {_sounds.VoiceCount} 段波形，播放器 {ShowSounds.PoolSize} 个（--mute 关闭）");
             }
 
-            // --map=gen：随机取一个地图种子。规则内核不读时钟，取种子只在入口最外层做；时间戳折成九位以内的短种子（与选图界面"换一张"同一个折叠函数），
-            // 拼成完整标识、打印出来，再交给 MapCatalog。
+            // --map=board（board-map D7）：随机取一个地图种子。规则内核不读时钟，取种子只在入口最外层做；时间戳折成九位以内的短种子（与选图界面"换一张"同一个折叠函数），
+            // 拼成棋盘图的完整标识（缺省棋盘数）、打印出来，再交给 MapCatalog。
             // 地图种子与上面的对局种子各取各的，互不相干（map-generator D2 / D3）。
             // --map-select 只接受内置棋盘图或完整的棋盘图标识作预选（map-selection「开局选图界面」：未带种子的随机请求 MUST 报错退出），
-            // 所以裸 gen / board 在补种子之前就拒绝，不让它被补成完整标识后混进预选。
-            if (mapSelect && (GeneratedMapId.IsBareRequest(mapId) || BoardMapId.IsBareRequest(mapId)))
+            // 所以裸 board 在补种子之前就拒绝，不让它被补成完整标识后混进预选。
+            // 已删除的旧标识（v5 / 2p / 3p / 边疆、gen 与 gen:<…>）不在这里特判：MapCatalog.Resolve 报"已删除"（RetiredMapException 派生自 FileNotFoundException，由下面的 catch 报错退出 1）；
+            // 带 --map-select 时由选图视图模型拒绝预选，同样退出 1。
+            if (mapSelect && BoardMapId.IsBareRequest(mapId))
             {
                 throw new System.FormatException($"--map-select 不接受未带种子的随机请求 --map={mapId?.Trim()}：请给完整的棋盘图标识（如 --map=board:12345）或内置棋盘图标识。");
             }
 
-            if (GeneratedMapId.IsBareRequest(mapId))
-            {
-                mapId = GeneratedMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapGenParameters.RandomPick);
-                GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
-            }
-
-            // --map=board（board-map D7）：同上，拼成棋盘图的完整标识（缺省棋盘数）。
             if (BoardMapId.IsBareRequest(mapId))
             {
-                mapId = BoardMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), BoardMapParameters.Default);
+                mapId = BoardMapId.Format(BoardMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), BoardMapParameters.Default);
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
-            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取目录的缺省图（4 人内置棋盘图）、跳过选图；依赖 v5 读数的自检命令须显式给 --map=。
+            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取目录的缺省图（4 人内置棋盘图）、跳过选图；
             // 军势揭示预览同样跳过选图（缺省图上直接看），不进补给阶段。
             if (mapSelect || (mapId is null && !Unattended && !RevealPreviewing))
             {
@@ -957,7 +952,7 @@ public sealed partial class GameRoot : Node3D
     /// 此时拾到高台才是对的（规格：点在某格顶面的屏幕投影内即选中该格）。故不一致时分类：拾到的格层数严格更高、且离相机更近 → 记「遮挡」并打印，不算失败；
     /// 未命中、拾到同层或更低的格 → 失败。另要求每个可落子格至少在一个位姿下被验到。
     /// 注视地图中心的位姿（中心 / 最近 / 最远 / 全局预览）画面内 MUST 有可落子格；四个角位姿在随机生成图上可能整屏都是深水与障碍
-    /// （map-generator 3.5 实测 <c>gen:1:p5</c> 右上角），此时没有可验的格——打印出来、不算失败，由"每格至少验到一次"兜住覆盖面。</para>
+    /// （map-generator 3.5 在当时的边疆档生成图上实测右上角，该生成器已于 retire-legacy-maps 删除），此时没有可验的格——打印出来、不算失败，由"每格至少验到一次"兜住覆盖面。</para>
     /// </remarks>
     private bool RunPickCheck()
     {

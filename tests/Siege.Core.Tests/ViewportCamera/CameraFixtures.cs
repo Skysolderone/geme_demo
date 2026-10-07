@@ -17,9 +17,11 @@ internal static class CameraFixtures
     internal static MapData Small { get; } = SmallMap();
 
     /// <summary>
-    /// 相机要推屏 / 夹取的大图（retire-legacy-maps 段 A2 自定）：27×32（竖长：最远缩放时横向看全、纵向看不全），六个矩形出生平台，0 起索引闭区间：
-    /// 0 = 9×9 贴左缘（x 0–8、y 22–30）；1 = 8×8（x 18–25、y 1–8）；2 = 7×7 贴右上（x 19–25、y 23–29）；3 = 6×6（x 3–8、y 2–7）；
-    /// 4 = 5×5 中部偏左（x 4–8、y 13–17）；5 = 5×5（x 17–21、y 13–17）。各测试的期望值按这张图的尺寸独立推算。
+    /// 相机要推屏 / 夹取的大图（retire-legacy-maps 段 B 自定，取代段 A2 那张与边疆图 v2 平台表同形的 27×32）：23×34（竖长），五个正方形出生平台，0 起索引闭区间：
+    /// 0 = 8×8 贴左缘（x 0–7、y 24–31，A25–H32）；1 = 6×6 右下（x 15–20、y 2–7）；2 = 7×7 右上、离右缘 1 格（x 15–21、y 25–31，Q26–W32）；
+    /// 3 = 5×5 左下（x 2–6、y 3–7）；4 = 5×5 中部偏左（x 4–8、y 14–18，E15–J19）。列标跳过字母 I（围棋记法）：x 8 = J、15 = Q、21 = W。
+    /// <para>推导用的几个量（各测试按这张图独立推算）：格心 x = 列 − 11、z = −(行 − 16.5)；外接矩形 = 格子 ± 0.5 再外扩 1.7 → x ±13.2、z ±18.7。
+    /// 最远缩放取上限 28（一屏看全要约 43）：16:9 下纵向所见 28 × 12.7 ÷ 14.6 ≈ 24.4 &lt; 37.4（纵向可推），横向 ≈ 43.3 ≥ 26.4（横向锁中线）；4:3 下横向 ≈ 32.5 同样 ≥ 26.4。</para>
     /// </summary>
     internal static MapData Large { get; } = LargeMap();
 
@@ -43,9 +45,9 @@ internal static class CameraFixtures
         Synthetic("test-camera-small-11x11", 11, 11, [Rect(0, 2, 0, 2), Rect(8, 10, 0, 2), Rect(8, 10, 8, 10), Rect(0, 2, 8, 10)]);
 
     private static MapData LargeMap() =>
-        Synthetic("test-camera-large-27x32", 27, 32,
+        Synthetic("test-camera-large-23x34", 23, 34,
         [
-            Rect(0, 8, 22, 30), Rect(18, 25, 1, 8), Rect(19, 25, 23, 29), Rect(3, 8, 2, 7), Rect(4, 8, 13, 17), Rect(17, 21, 13, 17),
+            Rect(0, 7, 24, 31), Rect(15, 20, 2, 7), Rect(15, 21, 25, 31), Rect(2, 6, 3, 7), Rect(4, 8, 14, 18),
         ]);
 
     /// <summary>格心间距 1、棋盘以原点为中心：外接矩形 = 全部格子 + 四周各 <see cref="Margin"/>。</summary>

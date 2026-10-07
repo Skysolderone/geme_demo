@@ -92,8 +92,9 @@ public sealed record RunConfig
     public string MapId { get; init; } = MapCatalog.DefaultId;
 
     /// <summary>
-    /// 每局换图（map-generator D6）：<see cref="MapId"/> 须是生成图标识 <c>gen:&lt;起始地图种子&gt;[:p&lt;平台数&gt;]</c>，第 <i>i</i> 局用地图种子 <c>起始 + i</c>、
-    /// 平台数不变（<see cref="MapIdAt"/>）。起始地图种子与平台数就写在 <see cref="MapId"/> 里（平台数为缺省 6 时按规范化写法省略），不另设字段——
+    /// 每局换图（map-generator D6；retire-legacy-maps D2 起改为棋盘图）：<see cref="MapId"/> 须是棋盘图标识 <c>board:&lt;起始地图种子&gt;[:p&lt;人数&gt;][:n&lt;棋盘数&gt;]</c>，
+    /// 第 <i>i</i> 局用地图种子 <c>起始 + i</c>、人数与棋盘数不变（<see cref="MapIdAt"/>）。原 <c>gen:</c> 写法随边疆档生成器删除，开跑前报"已删除"。
+    /// 起始地图种子、人数与棋盘数就写在 <see cref="MapId"/> 里（取缺省值的段按规范化写法省略），不另设字段——
     /// 同一件事只有一处记录。各局的完整地图标识写入该局日志首部的 <see cref="Logging.LogHeader.MapId"/>；首部里的 <see cref="MapId"/> 仍是批次的起始标识。
     /// 为 <c>false</c> 时不写出（标准批次的配置记录与日志首部与引入本项之前逐字节相同）。命令行 <c>--map-per-match</c>。
     /// </summary>
@@ -189,7 +190,7 @@ public sealed record RunConfig
     /// <summary>第 <paramref name="index"/> 局的种子。</summary>
     public ulong SeedAt(int index) => checked(SeedStart + (ulong)index);
 
-    /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>gen:&lt;起始 + index&gt;[:p&lt;N&gt;]</c>（规范化），否则恒为 <see cref="MapId"/>。</summary>
+    /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>board:&lt;起始 + index&gt;[:p&lt;人数&gt;][:n&lt;棋盘数&gt;]</c>（规范化），否则恒为 <see cref="MapId"/>。</summary>
     public string MapIdAt(int index)
     {
         if (!MapPerMatch)
@@ -197,8 +198,8 @@ public sealed record RunConfig
             return MapId;
         }
 
-        (ulong start, MapGenParameters parameters) = GeneratedMapId.Parse(MapId);
-        return GeneratedMapId.Format(checked(start + (ulong)index), parameters);
+        (ulong start, BoardMapParameters parameters) = BoardMapId.Parse(MapId);
+        return BoardMapId.Format(checked(start + (ulong)index), parameters);
     }
 
     /// <summary>玩家编号列表。</summary>
@@ -243,14 +244,19 @@ public sealed record RunConfig
 
         if (MapPerMatch)
         {
-            if (!GeneratedMapId.IsGenerated(MapId) || GeneratedMapId.IsBareRequest(MapId))
+            if (MapCatalog.IsRetired(MapId))
             {
-                throw new ArgumentException($"每局换图要求地图标识是带起始地图种子的生成图标识（gen:<起始地图种子>[:p<平台数>]），实际为 {MapId}。");
+                throw new ArgumentException($"每局换图的地图标识 {MapId} 已删除（retire-legacy-maps：gen: 生成图与旧内置图不再支持）；请改用带起始地图种子的棋盘图标识 board:<起始地图种子>[:p<人数>][:n<棋盘数>]。");
+            }
+
+            if (!BoardMapId.IsBoardMap(MapId) || BoardMapId.IsBareRequest(MapId))
+            {
+                throw new ArgumentException($"每局换图要求地图标识是带起始地图种子的棋盘图标识（board:<起始地图种子>[:p<人数>][:n<棋盘数>]），实际为 {MapId}。");
             }
 
             try
             {
-                _ = MapIdAt(Count - 1);   // 格式、平台数范围与种子上溢在开跑之前报出
+                _ = MapIdAt(Count - 1);   // 格式、人数 / 棋盘数范围与种子上溢在开跑之前报出
             }
             catch (OverflowException)
             {

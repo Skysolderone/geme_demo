@@ -6,7 +6,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <summary>规格：map-definition —— Requirement: 出生区归属与共享</summary>
 public class 出生区归属Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    private static readonly MapData Map = MapCatalog.Resolve(MapCatalog.DefaultId);   // retire-legacy-maps 段 B：原为 v5，改 4 人内置棋盘图
 
     [Fact]
     public void 共享出生区()
@@ -22,9 +22,11 @@ public class 出生区归属Tests
         Coord[] before = LegalFor(TestMaps.P0);
         Assert.Equal(before, LegalFor(TestMaps.P1));
 
-        // terrain-model v3：出生区是 13 格 h=2 高台，区内无障碍，可落子的空格就是全部 13 格。
-        Assert.Equal(13, before.Length);
-        Assert.Equal(13, Map.BirthZones[lockedZone].Count);
+        // 棋盘图：出生区即出生棋盘整块（5–7 见方、区内无障碍），可落子的空格就是全部格子（原 v5 为 13 格高台）。
+        Coord[] plate = [.. Map.Boards.Where(b => b.Kind == BoardPlateKind.Birth).Select(b => b.Cells().ToArray()).Single(cells => cells.Contains(before[0]))];
+        Assert.Equal(plate.Length, before.Length);
+        Assert.Equal(plate.Length, Map.BirthZones[lockedZone].Count);
+        Assert.InRange(before.Length, 25, 49);
 
         board.Place(before[0], TestMaps.P0, PieceType.Basic);
         board.Place(before[1], TestMaps.P1, PieceType.Basic);

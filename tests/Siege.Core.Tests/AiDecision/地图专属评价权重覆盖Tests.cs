@@ -15,40 +15,44 @@ namespace Siege.Core.Tests.AiDecision;
 /// <remarks>
 /// 覆盖表的取值由扫档决定（段 B 2.9），本类的机制断言一律写成"等于该地图登记的覆盖表""等于默认表"；
 /// 需要"覆盖与默认表不同"才能分辨的断言（显式权重整表优先、覆盖作用于简单难度）经解析函数的纯函数重载注入 <see cref="Probe"/>，不引入可变静态。
+/// retire-legacy-maps 段 B（design D2 / 已知歧义 4）：唯一一项 siege-2p-base-v1 随该图删除，缺省登记表为空、机制保留；
+/// 原先读缺省表里 2 人图条目的断言一律改为注入 <see cref="Probe"/>（登记 2 人内置棋盘图），缺省表一侧改钉"为空、取默认表"。
 /// </remarks>
 public class 地图专属评价权重覆盖Tests
 {
-    /// <summary>测试接缝注入的登记表：2 人图一项，眼位与敌方损失两维与默认表不同（取值只为可分辨，与扫档无关）。</summary>
+    /// <summary>注入登记表里的地图：2 人内置棋盘图（retire-legacy-maps 段 B 起；此前为已删除的 siege-2p-base-v1）。</summary>
+    internal const string ProbeMapId = "siege-2p-board-v1";
+
+    /// <summary>测试接缝注入的登记表：2 人内置棋盘图一项，眼位与敌方损失两维与默认表不同（取值只为可分辨，与扫档无关）。</summary>
     internal static readonly IReadOnlyDictionary<string, EvaluationWeights> Probe =
-        ImmutableSortedDictionary.CreateRange(StringComparer.Ordinal, [KeyValuePair.Create(TwoPlayerBaseMap.Id, EvaluationWeights.Default with { Eye = 7, EnemyLoss = 3 })]);
+        ImmutableSortedDictionary.CreateRange(StringComparer.Ordinal, [KeyValuePair.Create(ProbeMapId, EvaluationWeights.Default with { Eye = 7, EnemyLoss = 3 })]);
 
     private static readonly IReadOnlyDictionary<string, EvaluationWeights> Empty = ImmutableSortedDictionary<string, EvaluationWeights>.Empty;
 
     [Fact]
-    public void 两人图未显式配置权重时取覆盖()
+    public void 登记了覆盖的地图未显式配置权重时取覆盖()
     {
-        // 规格 Scenario「2 人图未显式配置权重时取覆盖」：未显式配置权重 → 该地图登记的覆盖表，而不是默认表。
-        string id = TwoPlayerBaseMap.Create().Id;
-        Assert.Equal(TwoPlayerBaseMap.Id, id);
-        Assert.True(EvaluationWeights.MapOverrides.ContainsKey(id), "2 人图没有登记覆盖。");
-        Assert.Equal(EvaluationWeights.MapOverrides[id], EvaluationWeights.ForMapId(id));
-        Assert.Same(EvaluationWeights.MapOverrides[id], EvaluationWeights.ForMapId(id));   // 取的是登记表条目本身，不是等值的默认表
-        Assert.NotSame(EvaluationWeights.Default, EvaluationWeights.MapOverrides[id]);
+        // 规格 Scenario（原「2 人图未显式配置权重时取覆盖」）：未显式配置权重 → 该地图登记的覆盖表，而不是默认表。
+        // retire-legacy-maps 段 B：缺省登记表为空，登记由注入表 Probe 给出（2 人内置棋盘图）。
+        string id = MapCatalog.Resolve(ProbeMapId).Id;
+        Assert.Equal(ProbeMapId, id);
 
-        // 与默认表不同的登记表（接缝）：取到的恰是登记项，不是默认表。
+        // 登记表（接缝）：取到的恰是登记项本身，不是等值的默认表。
         EvaluationWeights probe = EvaluationWeights.ForMapId(id, null, Probe);
-        Assert.Equal(Probe[id], probe);
+        Assert.Same(Probe[id], probe);
         Assert.NotEqual(EvaluationWeights.Default, probe);
-        // 空登记表下同一地图取默认表：登记与否是唯一的分界。
-        Assert.Equal(EvaluationWeights.Default, EvaluationWeights.ForMapId(id, null, Empty));
+        // 空登记表下同一地图取默认表：登记与否是唯一的分界。缺省登记表当前为空，同样取默认表。
+        Assert.Same(EvaluationWeights.Default, EvaluationWeights.ForMapId(id, null, Empty));
+        Assert.Same(EvaluationWeights.Default, EvaluationWeights.ForMapId(id));
     }
 
     [Fact]
     public void 未登记的地图取默认表()
     {
-        // 规格 Scenario：v5、3 人图与一张生成图（另加边疆图）上未显式配置权重 → 默认表；登记表里有 2 人图也不影响它们。
-        string[] ids = [FourPlayerBaseMap.Id, ThreePlayerBaseMap.Id, MapCatalog.Resolve("gen:12345").Id, FrontierMapV2.Id];
-        Assert.Equal("gen:12345", ids[2]);
+        // 规格 Scenario：未登记的地图上未显式配置权重 → 默认表；登记表里有别的地图也不影响它们。
+        // retire-legacy-maps 段 B：样本由 v5 / 3 人图 / gen:12345 / 边疆图改为 4 人与 3 人内置棋盘图、一张 board: 生成图。
+        string[] ids = ["siege-4p-board-v1", "siege-3p-board-v1", MapCatalog.Resolve("board:12345").Id];
+        Assert.Equal("board:12345", ids[2]);
         foreach (string id in ids)
         {
             Assert.False(EvaluationWeights.MapOverrides.ContainsKey(id), $"{id} 不应登记覆盖。");
@@ -63,15 +67,15 @@ public class 地图专属评价权重覆盖Tests
     {
         // 规格 Scenario：2 人图上显式写了 Safety = 7、其余八维等于默认表的权重 → 恰为这张表；眼位与敌方损失取默认表的值，不取覆盖表的值（整表，不逐维合并）。
         EvaluationWeights explicitTable = EvaluationWeights.Default with { Safety = 7 };
-        EvaluationWeights resolved = EvaluationWeights.ForMapId(TwoPlayerBaseMap.Id, explicitTable, Probe);
+        EvaluationWeights resolved = EvaluationWeights.ForMapId(ProbeMapId, explicitTable, Probe);
         Assert.Same(explicitTable, resolved);
         Assert.Equal(EvaluationWeights.Default.Eye, resolved.Eye);
         Assert.Equal(EvaluationWeights.Default.EnemyLoss, resolved.EnemyLoss);
-        Assert.NotEqual(Probe[TwoPlayerBaseMap.Id].Eye, resolved.Eye);
-        Assert.Same(explicitTable, EvaluationWeights.ForMapId(TwoPlayerBaseMap.Id, explicitTable));
+        Assert.NotEqual(Probe[ProbeMapId].Eye, resolved.Eye);
+        Assert.Same(explicitTable, EvaluationWeights.ForMapId(ProbeMapId, explicitTable));
 
         // 批量入口的落成（RunConfig.ResolvedFor）经同一实现：显式的一名原样，未显式的一名取覆盖。
-        MapData map = TwoPlayerBaseMap.Create();
+        MapData map = MapCatalog.Resolve(ProbeMapId);
         RunConfig config = new()
         {
             MapId = map.Id,
@@ -87,7 +91,7 @@ public class 地图专属评价权重覆盖Tests
     public void 覆盖作用于简单难度()
     {
         // 规格 Scenario：2 人图上未显式配置权重的简单难度 AI → 权重等于覆盖表；眼位与敌方损失两维按覆盖表的值计入打分（design D7：解析不分难度）。
-        MapData map = TwoPlayerBaseMap.Create();
+        MapData map = MapCatalog.Resolve(ProbeMapId);
         EvaluationWeights expected = Probe[map.Id];
         RunConfig config = new()
         {
@@ -129,26 +133,28 @@ public class 地图专属评价权重覆盖Tests
     [Fact]
     public void 覆盖只作用于登记的地图()
     {
-        // 规格 Scenario：覆盖表的全部键恰为 siege-2p-base-v1 一项（3 人图与 v5 MUST NOT 登记）。
-        // 本条是唯一钉登记范围的测试：2 人图扫档若选中基线而删除登记（裁决 ②），只改这一条与 覆盖表被改动 的期望。
-        Assert.Equal([TwoPlayerBaseMap.Id], EvaluationWeights.MapOverrides.Keys);
+        // 规格 Scenario：覆盖表的全部键恰为登记的地图。原钉"恰为 siege-2p-base-v1 一项"；
+        // retire-legacy-maps 段 B 删除该条目（机制保留，design D2 / 已知歧义 4）→ 缺省登记表为空，内置棋盘图不登记（留给 AI 校准 change）。
+        Assert.Empty(EvaluationWeights.MapOverrides);
+        Assert.All(MapCatalog.BuiltinIds, id => Assert.False(EvaluationWeights.MapOverrides.ContainsKey(id)));
     }
 
     [Fact]
     public void 覆盖表被改动()
     {
         // 规格 Scenario：改覆盖表的任一维取值或增删登记的地图而不同时更新校准口径 → 守门失败。
-        // 段 B 2.2 占位阶段（D10）：取值同默认表 ⇔ 口径标"占位"；扫档选定后（2.9）改为钉正式口径。
+        // 登记的每一项都必须有指向扫档证据的口径；retire-legacy-maps 段 B 起表为空，未登记的地图（含已删除的旧标识）一律没有口径。
         foreach ((string id, EvaluationWeights table) in EvaluationWeights.MapOverrides)
         {
             string status = EvaluationWeights.MapOverrideCalibrationOf(id) ?? throw new Xunit.Sdk.XunitException($"{id} 登记了覆盖却没有校准口径。");
             Assert.Contains(id, status, StringComparison.Ordinal);
-            Assert.Contains("v2-recalibration", status, StringComparison.Ordinal);
-            Assert.Equal(table == EvaluationWeights.Default, status.Contains("占位", StringComparison.Ordinal));
+            Assert.NotEqual(EvaluationWeights.Default, table);
         }
 
-        string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "EvaluationWeights.cs"));
-        Assert.Contains(EvaluationWeights.MapOverrideCalibrationOf(TwoPlayerBaseMap.Id)!, src, StringComparison.Ordinal);
+        foreach (string id in MapCatalog.BuiltinIds.Concat(MapCatalog.RetiredIds))
+        {
+            Assert.Equal(EvaluationWeights.MapOverrides.ContainsKey(id), EvaluationWeights.MapOverrideCalibrationOf(id) is not null);
+        }
     }
 
     [Fact]
@@ -156,7 +162,7 @@ public class 地图专属评价权重覆盖Tests
     {
         // 规格 Scenario：同一局面上，"登记表为空"与"登记表含 2 人图覆盖"两种情形开局，人类玩家的合法落子范围相同。
         // 覆盖只进 AI 的评价：对局层（MatchFlow）根本不接收它——行为比对之外，另由源码扫描钉住"覆盖符号不出现在 AI 与入口以外"（见下一条）。
-        MapData map = TwoPlayerBaseMap.Create();
+        MapData map = MapCatalog.Resolve(ProbeMapId);
         PlayerId human = new(0), ai = new(1);
         string Range(IReadOnlyDictionary<string, EvaluationWeights> table)
         {

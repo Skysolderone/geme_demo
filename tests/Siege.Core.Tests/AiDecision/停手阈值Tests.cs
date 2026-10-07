@@ -351,19 +351,21 @@ public class 停手阈值Tests
     [Fact]
     public void 地图覆盖不改阈值()
     {
-        // 规格 Scenario「地图覆盖不改阈值」（v2-recalibration 段 B，design D8）：2 人图登记了评价权重覆盖，未显式配置阈值的批量跑局开局，
-        // 批次配置记录与日志首部里的停手阈值等于默认停手阈值，与 v5 上相同；覆盖只动权重。
-        Assert.True(EvaluationWeights.MapOverrides.ContainsKey(Board.Maps.TwoPlayerBaseMap.Id), "2 人图没有登记覆盖，本条是空证。");
-        (_, string twoConfig, MatchLog twoLog) = SimulationHarness.各入口的地图专属AI权重Tests.RunOneRaw(
-            "threshold-2p", SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig(Board.Maps.TwoPlayerBaseMap.Id, 2));
+        // 规格 Scenario「地图覆盖不改阈值」（v2-recalibration 段 B，design D8）：地图登记了评价权重覆盖，未显式配置阈值开局，
+        // 配置记录与日志首部里的停手阈值等于默认停手阈值，与未登记的地图上相同；覆盖只动权重。
+        // retire-legacy-maps 段 B：缺省登记表为空（siege-2p-base-v1 随该图删除），登记改由注入表给出（2 人内置棋盘图），经同一个落成 ResolvedFor；
+        // 对照组由 v5 改为 4 人内置棋盘图（未登记）。
+        Board.MapData two = Board.Maps.MapCatalog.Resolve(地图专属评价权重覆盖Tests.ProbeMapId);
+        RunConfig twoConfig = SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig(two.Id, 2).ResolvedFor(two, 地图专属评价权重覆盖Tests.Probe);
+        MatchLog twoLog = MatchSession.Create(twoConfig, 1, two).Run();
         (_, string fourConfig, MatchLog fourLog) = SimulationHarness.各入口的地图专属AI权重Tests.RunOneRaw(
-            "threshold-v5", SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig(Board.Maps.FourPlayerBaseMap.Id, 4));
+            "threshold-4p", SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig("siege-4p-board-v1", 4));
 
-        Assert.Equal(AiSearchConfig.DefaultPassThreshold, RunConfig.FromJson(twoConfig).PassThreshold);
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, twoConfig.PassThreshold);
         Assert.Equal(AiSearchConfig.DefaultPassThreshold, twoLog.Header.Config.PassThreshold);
         Assert.Equal(fourLog.Header.Config.PassThreshold, twoLog.Header.Config.PassThreshold);
-        Assert.Equal(RunConfig.FromJson(fourConfig).PassThreshold, RunConfig.FromJson(twoConfig).PassThreshold);
+        Assert.Equal(RunConfig.FromJson(fourConfig).PassThreshold, twoConfig.PassThreshold);
         Assert.All(twoLog.Header.Config.Players, p => Assert.Null(p.Search));   // 搜索参数也不随覆盖落成（标准难度不落成 Search）
-        Assert.All(twoLog.Header.Config.Players, p => Assert.NotNull(p.Weights));   // 反面：覆盖确实落成了
+        Assert.All(twoLog.Header.Config.Players, p => Assert.Equal(地图专属评价权重覆盖Tests.Probe[two.Id], p.Weights));   // 反面：覆盖确实落成了
     }
 }

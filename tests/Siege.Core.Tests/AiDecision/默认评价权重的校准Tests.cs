@@ -64,11 +64,13 @@ public class 默认评价权重的校准Tests
         string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "AiDifficulty.cs"));
         string status = AiSearchConfig.PassThresholdCalibrationStatus;
         const string tiers = "0 / 20 / 40 / 80";
-        // 产品文本里的校准地图仍写 siege-4p-base-v5（历史口径，段 D 处理）；retire-legacy-maps 段 A2 起按字面量比对，不再引用地图类。
-        foreach (string evidence in new[] { "v2-recalibration", "siege-4p-base-v5", "V2", "种子 1–20", "20 局", "小样本", tiers, "sim-out/v2-recalibration/pass-" })
+        // 产品文本里的校准地图仍写 siege-4p-base-v5（历史口径）；retire-legacy-maps 段 B 起紧跟"该图已删除、棋盘图上未校准"的补注（EvaluationWeights.RetiredCalibrationMapNote）。
+        foreach (string evidence in new[] { "v2-recalibration", $"siege-4p-base-v5（{EvaluationWeights.RetiredCalibrationMapNote}）", "V2", "种子 1–20", "20 局", "小样本", tiers, "sim-out/v2-recalibration/pass-" })
         {
             Assert.Contains(evidence, status, StringComparison.Ordinal);
         }
+
+        Assert.Equal("该图已于 retire-legacy-maps 删除，棋盘图上未校准", EvaluationWeights.RetiredCalibrationMapNote);
 
         // 选定值在档位清单里、口径写明选定值；四个档位各有"截断 / 整局无提子 / 已终局局平均结束大回合"一组数据。
         int[] tierValues = [.. tiers.Split(" / ").Select(int.Parse)];
@@ -77,7 +79,8 @@ public class 默认评价权重的校准Tests
         Assert.All(tierValues, t => Assert.Matches($@"(?<!\d){t} → \d+ / \d+ / \d+\.\d+", status));
 
         // ai-eye 的 V1、200 局口径不再是机读口径（它只作为历史写在注释里，并标注内容集 V1）。
-        Assert.DoesNotContain("未校准", status, StringComparison.Ordinal);
+        // retire-legacy-maps 段 B：口径里唯一允许出现的"未校准"是校准地图已删除的补注（上面已断言它紧跟 v5），去掉补注后不得再有。
+        Assert.DoesNotContain("未校准", status.Replace(EvaluationWeights.RetiredCalibrationMapNote, string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
         Assert.DoesNotContain("种子 1–200", status, StringComparison.Ordinal);
         Assert.DoesNotContain("sim-out/ai-eye-pass-", status, StringComparison.Ordinal);
         Assert.Contains(status, src, StringComparison.Ordinal);
@@ -106,7 +109,8 @@ public class 默认评价权重的校准Tests
             if (swept.Contains(d))
             {
                 // v2-recalibration 1.8：三维的扫档在内容集 V1 上完成（缺省内容集已是 V2），口径 MUST 注明内容集。
-                foreach (string evidence in new[] { "ai-eye 段 D 校准", "内容集 V1", "siege-4p-base-v5", "种子 1–200", "200 局", "sim-out/ai-eye-" })
+                // retire-legacy-maps 段 B：校准地图 v5 已删除，口径 MUST 紧跟"棋盘图上未校准"的补注。
+                foreach (string evidence in new[] { "ai-eye 段 D 校准", "内容集 V1", $"siege-4p-base-v5（{EvaluationWeights.RetiredCalibrationMapNote}）", "种子 1–200", "200 局", "sim-out/ai-eye-" })
                 {
                     Assert.Contains(evidence, status, StringComparison.Ordinal);
                 }
@@ -290,51 +294,23 @@ public class 默认评价权重的校准Tests
     }
 
     [Fact]
-    public void 两人图覆盖表的校准记录随值一起更新()
+    public void 地图覆盖表为空且无校准口径()
     {
-        // 规格：ai-decision「地图专属评价权重覆盖」Scenario「覆盖表被改动」（v2-recalibration 段 B 2.9，design D10）：
-        // 钉住覆盖表的键集合、与默认表的逐维差异，以及机读的校准口径（地图 / 内容集 / 种子 / 局数 / 停手阈值 / 档位 / 各档数据 / 选定值 / 数据目录），
-        // 且口径与源码一致、不再是占位。改任一维或增删登记的地图而不同时更新口径 → 本测试红。变异记录见任务 09-28-v2-recalibration 的 implement.md「段 B」。
-        const string id = "siege-2p-base-v1";
-        Assert.Equal([id], EvaluationWeights.MapOverrides.Keys);
-        EvaluationWeights table = EvaluationWeights.MapOverrides[id];
-
-        // 逐维：只有 Eye 与默认表不同（扫档选定 Eye 50、EnemyLoss 8），其余八维跟随默认表。
-        var diff = new Dictionary<EvaluationDimension, int> { [EvaluationDimension.Eye] = 50 };
-        foreach (EvaluationDimension d in Enum.GetValues<EvaluationDimension>())
+        // 规格：ai-decision「地图专属评价权重覆盖」Scenario「覆盖表被改动」。原名「两人图覆盖表的校准记录随值一起更新」，钉的是唯一一项
+        // siege-2p-base-v1（Eye 50，v2-recalibration 段 B 扫档选定）与它的校准口径。retire-legacy-maps 段 B（design D2 / 已知歧义 4）：
+        // 该图删除，条目随之删除，机制保留、表为空；口径常量 TwoPlayerOverrideCalibrationStatus 一并删除。
+        // 改为钉"表为空 ⇔ 无任何校准口径"：往表里加一项而不同时给口径（或反之）→ 本测试红。
+        Assert.Empty(EvaluationWeights.MapOverrides);
+        foreach (string id in MapCatalog.BuiltinIds.Concat(MapCatalog.RetiredIds).Append("board:12345"))
         {
-            Assert.Equal(diff.TryGetValue(d, out int v) ? v : EvaluationWeights.Default.Of(d), table.Of(d));
+            Assert.Null(EvaluationWeights.MapOverrideCalibrationOf(id));
+            Assert.Same(EvaluationWeights.Default, EvaluationWeights.ForMapId(id));
         }
 
-        string status = EvaluationWeights.MapOverrideCalibrationOf(id)!;
-        Assert.NotNull(status);
-        foreach (string evidence in new[]
-                 {
-                     "v2-recalibration", id, "2 名标准难度", "内容集 V2", "种子 1–20", "20 局", "小样本", $"停手阈值 {AiSearchConfig.DefaultPassThreshold}",
-                     "sim-out/v2-recalibration/2p-eye",
-                 })
-        {
-            Assert.Contains(evidence, status, StringComparison.Ordinal);
-        }
-
-        // 五个档位各有一组"截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜"；选定档在档位清单里且等于覆盖表的取值。
-        const string tiers = "(200, 8) / (100, 8) / (50, 8) / (200, 16) / (200, 24)";
-        Assert.Contains(tiers, status, StringComparison.Ordinal);
-        foreach (string tier in tiers.Split(" / "))
-        {
-            Assert.Matches(System.Text.RegularExpressions.Regex.Escape(tier) + @" → \d+ / \d+ / \d+\.\d+ / \d+/\d+", status);
-        }
-
-        string chosen = $"({table.Eye}, {table.EnemyLoss})";
-        Assert.Contains(chosen, tiers, StringComparison.Ordinal);
-        Assert.Contains($"选定 {chosen}", status, StringComparison.Ordinal);
-
-        // 不再是占位；源码里的口径与常量一致（单个字面量，注释改了常量不改或反之都会红）。
         string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "EvaluationWeights.cs"));
-        Assert.DoesNotContain("占位", status, StringComparison.Ordinal);
-        Assert.DoesNotContain("占位", src, StringComparison.Ordinal);
-        Assert.Contains(status, src, StringComparison.Ordinal);
-        Assert.Contains($"Default with {{ Eye = {table.Eye} }}", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("TwoPlayerOverrideCalibrationStatus", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("KeyValuePair.Create(", src, StringComparison.Ordinal);   // 登记表里没有任何一行登记
+        Assert.Contains("ImmutableSortedDictionary.Create<string, EvaluationWeights>(StringComparer.Ordinal)", src, StringComparison.Ordinal);   // 反面：表确是在这里建的空表
     }
 
     /// <summary>一局的过程投影（快照 + 事件），不含首行 header——header 里带配置 JSON，会把"权重填没填"本身混进比对。</summary>

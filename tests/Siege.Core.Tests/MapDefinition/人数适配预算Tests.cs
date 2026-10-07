@@ -28,18 +28,14 @@ public class 人数适配预算Tests
     [Fact]
     public void 信物格数不足()
     {
-        MapData map = FourPlayerBaseMap.Create();
-        MapData stripped = map with
-        {
-            RelicCells = map.RelicCells
-                .Where(kv => kv.Value.Zone == RelicZone.Contested)
-                .ToImmutableDictionary(kv => kv.Key, kv => kv.Value),
-        };
+        // retire-legacy-maps 段 B：原在 v5 上删掉出生区信物（剩公共信物 9 个）；改为 10×10 标准档 4 人合成图只放 5 个公共信物。
+        MapData stripped = TestMaps.Synthetic(size: 10, maxPlayers: 4, relics: FiveContestedRelics());
 
         MapValidationResult result = MapValidator.Validate(stripped);
 
         MapValidationFailure failure = Assert.Single(
             result.Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
+        Assert.Contains("信物格为 5", failure.Message, StringComparison.Ordinal);
         Assert.Contains("13–15", failure.Message, StringComparison.Ordinal);
         Assert.Contains("少于下限 13", failure.Message, StringComparison.Ordinal);
     }
@@ -47,12 +43,18 @@ public class 人数适配预算Tests
     [Fact]
     public void 出生区数量必须等于最大人数()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        // 标准档：出生区数 = 人数。retire-legacy-maps 段 B：原在 v5 上去掉一个出生区；改为 10×10 标准档 4 人合成图，四个 3 格出生区去掉一个。
+        // （棋盘档出生区数 = 人数 + 1，不符时报的是区间码 BIRTH_ZONE_COUNT_OUT_OF_RANGE，不是本码。）
+        MapData map = TestMaps.Synthetic(size: 10, maxPlayers: 4) with
+        {
+            BirthZones = [.. Enumerable.Range(0, 4).Select(i => ImmutableHashSet.Create(new Coord(0, i * 2), new Coord(1, i * 2), new Coord(2, i * 2)))],
+        };
         MapData missingZone = map with { BirthZones = map.BirthZones.RemoveAt(3) };
 
         MapValidationResult result = MapValidator.Validate(missingZone);
 
         Assert.Contains(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");
+        Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");
     }
 
     [Fact]
@@ -101,7 +103,7 @@ public class 人数适配预算Tests
     [Fact]
     public void 不支持的人数被拒绝()
     {
-        MapData map = FourPlayerBaseMap.Create() with { MaxPlayers = 5 };
+        MapData map = MapCatalog.Resolve(MapCatalog.DefaultId) with { MaxPlayers = 5 };   // retire-legacy-maps 段 B：原底图 v5
 
         Assert.Contains(MapValidator.Validate(map).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
     }

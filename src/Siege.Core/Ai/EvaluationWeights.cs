@@ -69,18 +69,26 @@ public sealed record EvaluationWeights(
 
     /// <summary>
     /// formation-tiers（design D4）之后的补注：阵型（计分规则 v2）让成档的棋串军势成倍跳升，势力的数值分布随之改变；而九维默认权重、
-    /// 缺省停手阈值（<c>AiSearchConfig.DefaultPassThreshold</c>）与 2 人图覆盖表（<see cref="MapOverrides"/>）全部是在计分规则 v1（不计阵型）下取得的——
+    /// 缺省停手阈值（<c>AiSearchConfig.DefaultPassThreshold</c>）与 2 人图覆盖表（<see cref="MapOverrides"/>，该表项已随 <c>siege-2p-base-v1</c> 于 retire-legacy-maps 删除，常量文字保留为历史口径）全部是在计分规则 v1（不计阵型）下取得的——
     /// 在新局缺省的计分规则 v2 下它们一律<b>未校准</b>，取值未改。评价函数与搜索也未改：各维仍取"结算后 − 开始前"，跨过门槛的跳升自然进入势力维；
     /// AI 不做跨门槛的多步规划，属已知限制。以这些取值在计分规则 v2 下产出的数据，引用时 MUST 注明这一口径（testing.md「计分口径一变，默认权重必须重扫」）；
     /// 是否改动由负责人按 formation-tiers D6 的验证跑局（v1 / v2 × 停手阈值 10 / 20 / 40）裁决。
     /// </summary>
     public const string FormationScoringStatus = "计分规则 v2 下未校准：九维权重、停手阈值与 2 人图覆盖表均在计分规则 v1（不计阵型）下取得，formation-tiers 引入阵型后未重扫";
 
+    /// <summary>
+    /// 校准所用地图已删除的补注（retire-legacy-maps 段 B）：ai-eye / v2-recalibration 的扫档都在 <c>siege-4p-base-v5</c> 上做，该图已删除；
+    /// 九维默认权重与停手阈值在棋盘图上<b>未校准</b>（母任务 board-terrain 裁决 6），由 AI 校准 change 在棋盘图上重定。
+    /// 凡校准口径里写到 v5 的地方都紧跟这条补注（<see cref="CalibrationOf"/> 三维、<c>AiSearchConfig.PassThresholdCalibrationStatus</c>）；
+    /// 补注在那些口径里写成字面量（守门要求口径以单个字面量出现在源码里），与本常量的一致性由 <c>默认评价权重的校准Tests</c> 校对。
+    /// </summary>
+    public const string RetiredCalibrationMapNote = "该图已于 retire-legacy-maps 删除，棋盘图上未校准";
+
     /// <summary>未单独扫档维度的标注（<see cref="CalibrationOf"/> 对这六维返回它）。</summary>
     public const string NotSweptStatus = "沿用旧值、新规则下未单独扫档";
 
     /// <summary>
-    /// 默认权重。校准口径（ai-eye 段 D，design D6，<b>内容集 V1</b>——缺省内容集已改为 V2，V2 上未重扫九维）：<c>siege-4p-base-v5</c>、种子 1–200、4 名标准难度 AI、每档 200 局、小回合数截断 600；
+    /// 默认权重。校准口径（ai-eye 段 D，design D6，<b>内容集 V1</b>——缺省内容集已改为 V2，V2 上未重扫九维）：<c>siege-4p-base-v5</c>（<see cref="RetiredCalibrationMapNote"/>）、种子 1–200、4 名标准难度 AI、每档 200 局、小回合数截断 600；
     /// 按 <c>Eye → PassThreshold → Safety → Threat</c> 顺序逐维双向扫档，其余维度固定。选档（design D6 第 3 条 + 裁决 R20 / R24）：
     /// 截断率 ≤ 5% → 整局无提子占比取最低档、并列带宽 1 个二项标准误 → 已终局局的平均结束大回合离 7–10 最近 → 再并列取离初值 / 上一选值最近。
     /// 下列每档写作"截断 / 整局无提子 / 已终局局的平均结束大回合"；数据目录均在 <c>sim-out/</c> 下，扫档表见任务 09-23-ai-eye 的 implement 记录（段 D1、D2）。
@@ -110,30 +118,16 @@ public sealed record EvaluationWeights(
         PowerGain: 10, EnemyLoss: 8, Relic: 6, Safety: 35, Growth: 4, Initiative: 20, Supply: 2, Eye: 200, Threat: 25);
 
     /// <summary>
-    /// 2 人图（<c>siege-2p-base-v1</c>）覆盖表的校准口径（ai-decision「地图专属评价权重覆盖」，v2-recalibration 段 B，design D9 / D10）。
-    /// <para>条件：2 名标准难度、内容集 V2、带入 0、小回合数截断 600、种子 1–20、每档 20 局，停手阈值写死为段 A 选定的 20；九维逐玩家写死，只改 Eye / EnemyLoss，其余七维等于 <see cref="Default"/>。
-    /// 各档写作"截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜"，领先者胜按 D9 口径：第 3 大回合结束时总势力的唯一最高者，并列局不计入分母。</para>
-    /// <para>选档（D9 五步）：五档截断均为 0；整局无提子最低 13 / 20（Eye 50），带宽 √(0.65 × 0.35 / 20) ≈ 0.107，比例 ≤ 0.757（≤ 15 局）进带，只有 Eye 50 一档；
-    /// 其第 3 大回合领先者胜 11 / 18，未全胜，不被否决；平均结束大回合 8.35 在 7–10 内。没有用到第 5 条（并列打破）。
-    /// 第 6–8 批（2 × 2 组合）未触发：触发线为基线无提子比例减 1 个标准误（0.90 − 0.067 → ≤ 16 局），Eye 50 为 13 / 20 达线，EnemyLoss 两档（16 / 24）都是 19 / 20，反而高于基线。</para>
-    /// <para>Eye 50 是本次档位的下界，50 以下没有数据；诊断 engagement-diagnosis b09（停手阈值 80）下 Eye 50 的第 3 大回合领先者曾 20 / 20 全胜，停手阈值 20 下没有复现。
-    /// 只在标准难度上扫档；覆盖同样作用于 2 人图上的简单、高难与专家（design D7），这些难度未另行扫档。</para>
-    /// <para><b>计分规则 v2 下未校准</b>：本表在计分规则 v1（不计阵型）下扫出；formation-tiers 引入阵型后未重扫（<see cref="FormationScoringStatus"/>）。</para>
-    /// </summary>
-    public const string TwoPlayerOverrideCalibrationStatus = "v2-recalibration 段 B 校准：siege-2p-base-v1、2 名标准难度、内容集 V2、种子 1–20、每档 20 局（小样本，胜率类只看方向）、停手阈值 20、带入 0、截断 600；档位 (Eye, EnemyLoss) = (200, 8) / (100, 8) / (50, 8) / (200, 16) / (200, 24)，各档 截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜（唯一领先者，并列局不计入分母）：(200, 8) → 0 / 18 / 8.30 / 11/18；(100, 8) → 0 / 17 / 7.90 / 7/18；(50, 8) → 0 / 13 / 8.35 / 11/18；(200, 16) → 0 / 19 / 8.50 / 12/19；(200, 24) → 0 / 19 / 8.50 / 12/19；选定 (50, 8)（无提子带只含此档，领先者未全胜，平均结束大回合在 7–10 内）；Eye 50 为档位下界；数据目录 sim-out/v2-recalibration/2p-eye<E>-el<L>";
-
-    /// <summary>
     /// 地图专属评价权重覆盖（v2-recalibration，ai-decision「地图专属评价权重覆盖」，design D4–D8）："地图标识 → 整表权重"的只读登记表。
     /// 它是 AI 配置，不是规则：不进地图数据、不改停手阈值与搜索参数；按 <see cref="Board.MapData.Id"/>（= 日志首部的地图标识）登记，
-    /// 覆盖值写成"缺省表 + 显式差异"。只给 2 人图登记，3 人图、v5、边疆图、生成图与地图文件都不登记（取 <see cref="Default"/>）。
+    /// 覆盖值写成"缺省表 + 显式差异"。<b>当前为空表</b>（retire-legacy-maps 段 B，design D2 / 已知歧义 4）：唯一一项 <c>siege-2p-base-v1</c>（Eye 50，
+    /// v2-recalibration 段 B 在该图上扫出、计分规则 v1 下取得，<b>计分规则 v2 下未校准</b>，见 <see cref="FormationScoringStatus"/>）随该图删除；机制保留，
+    /// 内置棋盘图是否登记覆盖留给 AI 校准 change。未登记的地图一律取 <see cref="Default"/>。
     /// 每一项的校准口径见 <see cref="MapOverrideCalibrationOf"/>；守门 <c>默认评价权重的校准Tests</c> / <c>地图专属评价权重覆盖Tests</c> 钉住键集合、取值与口径。
     /// <para>地图文件若自带与内置图相同的 <c>id</c> 会被套上覆盖（按标识键、不按摘要键）；首部的 <c>MapDigest</c> 可事后核对。</para>
     /// </summary>
     public static IReadOnlyDictionary<string, EvaluationWeights> MapOverrides { get; } =
-        ImmutableSortedDictionary.CreateRange(StringComparer.Ordinal, [
-            // v2-recalibration 段 B 扫档选定（口径见 TwoPlayerOverrideCalibrationStatus）：眼位由 200 降到 50，其余八维跟随缺省表。
-            KeyValuePair.Create("siege-2p-base-v1", Default with { Eye = 50 }),
-        ]);
+        ImmutableSortedDictionary.Create<string, EvaluationWeights>(StringComparer.Ordinal);
 
     /// <summary>
     /// 按地图标识取权重的唯一实现（批量跑局的落成、终端与图形版建 AI 三个入口共用，design D5 / D6）。优先级：
@@ -151,12 +145,12 @@ public sealed record EvaluationWeights(
         return explicitWeights ?? (overrides.TryGetValue(mapId, out EvaluationWeights? table) ? table : Default);
     }
 
-    /// <summary>某地图覆盖表的校准口径；未登记的地图为 <c>null</c>。</summary>
-    public static string? MapOverrideCalibrationOf(string mapId) => mapId switch
+    /// <summary>某地图覆盖表的校准口径；未登记的地图为 <c>null</c>。登记表为空（retire-legacy-maps），故恒为 <c>null</c>；新增登记时须同时在这里给出口径。</summary>
+    public static string? MapOverrideCalibrationOf(string mapId)
     {
-        "siege-2p-base-v1" => TwoPlayerOverrideCalibrationStatus,
-        _ => null,
-    };
+        ArgumentNullException.ThrowIfNull(mapId);
+        return null;
+    }
 
     /// <summary>
     /// 某维度默认值的校准口径：扫过档的三维返回"内容集 / 地图 / 局数 / 种子 / 档位 / 数据目录"（ai-eye 段 D 在内容集 V1 上扫档），其余六维返回 <see cref="NotSweptStatus"/>；
@@ -164,9 +158,9 @@ public sealed record EvaluationWeights(
     /// </summary>
     public static string CalibrationOf(EvaluationDimension dimension) => dimension switch
     {
-        EvaluationDimension.Eye => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 50 / 100 / 200 / 400 五档 + 停手阈值 80 下 100 / 200 / 400 复核；sim-out/ai-eye-eye-*、sim-out/ai-eye-eyecheck-*；" + ScoringExtendedStatus,
-        EvaluationDimension.Safety => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；10 / 20 / 35 / 50 / 70 五档；sim-out/ai-eye-safety-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
-        EvaluationDimension.Threat => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 25 / 50 / 100 五档；sim-out/ai-eye-threat-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
+        EvaluationDimension.Eye => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5（该图已于 retire-legacy-maps 删除，棋盘图上未校准）、种子 1–200、4 人标准难度、每档 200 局；0 / 50 / 100 / 200 / 400 五档 + 停手阈值 80 下 100 / 200 / 400 复核；sim-out/ai-eye-eye-*、sim-out/ai-eye-eyecheck-*；" + ScoringExtendedStatus,
+        EvaluationDimension.Safety => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5（该图已于 retire-legacy-maps 删除，棋盘图上未校准）、种子 1–200、4 人标准难度、每档 200 局；10 / 20 / 35 / 50 / 70 五档；sim-out/ai-eye-safety-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
+        EvaluationDimension.Threat => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5（该图已于 retire-legacy-maps 删除，棋盘图上未校准）、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 25 / 50 / 100 五档；sim-out/ai-eye-threat-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
         _ => NotSweptStatus + "；" + ScoringExtendedStatus,
     };
 

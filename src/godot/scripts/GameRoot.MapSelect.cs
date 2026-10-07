@@ -36,7 +36,7 @@ public sealed partial class GameRoot
     private bool Selecting => _select is not null;
 
     /// <summary>取一个新的地图种子：入口最外层读一次计数器，折成便于读写的短种子（视图模型与规则内核都不读时钟）。</summary>
-    private static ulong NewMapSeed() => GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp());
+    private static ulong NewMapSeed() => BoardMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp());
 
     /// <summary>
     /// 进入选图阶段并搭好第一张预览。<paramref name="preselect"/> 只来自 <c>--map-select --map=&lt;标识&gt;</c>（截图 / 自检）；
@@ -47,7 +47,7 @@ public sealed partial class GameRoot
         _select = new MapSelectModel(NewMapSeed(), _difficulty);
         if (preselect is not null && !_select.TrySelectId(preselect))
         {
-            // 选图界面只列内置棋盘图与随机棋盘图（builtin-board-maps D5）：标准档 / 边疆档内置图、gen: 生成图、地图文件与写错的标识都不是界面上的项，
+            // 选图界面只列内置棋盘图与随机棋盘图（builtin-board-maps D5）：已删除的旧标识（retire-legacy-maps）、地图文件与写错的标识都不是界面上的项，
             // 预选不了就报错退出，不静默忽略预选（不带 --map-select 时这些标识照旧直接建局）。
             throw new System.FormatException($"--map-select 只能预选内置棋盘图或完整的棋盘图标识（board:<种子>[:p<人数>][:n<棋盘数>]），{preselect} 不在选图界面的清单里；不带 --map-select 时可用 --map={preselect} 直接建局。");
         }

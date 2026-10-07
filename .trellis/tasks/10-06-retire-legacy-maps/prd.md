@@ -42,3 +42,11 @@
 - **黄金值**：`内容集v1保持旧表` 在合成图重钉并加 v1≠v2 反面对照；G1、一层记录改 2 人图重钉；`PassSample`（阈值写死极大）检查方补与活记录逐项比对。
 - **实现方漏报、检查方补列的删除**：v5 决策基线行与 `decisions-siege-4p-base-v5-seed1.txt`；`地图子命令Tests` 桥 / 林地 / 两种栅栏图例 4 条与边疆距离、第 15 行断言（前者在棋盘图上无对应，文本图图例这几种写法失去覆盖）；`选区不扰动其他随机` 的 v4 信物分布黄金值（改后的比较在构造上恒成立、不守门，注释已写明，信物生成由 `地图种子不扰动对局随机` 守）；`对局配置公开完整地图标识` 的边疆选区与信物摘要黄金值（改为测试内独立复算）。
 - 全量 2355 通过 / 0 失败 / 8 跳过；两处构建 0 警告。耗时同机 ABBA 2.11×（超 2 倍）：最慢含 gen / 边疆专属测试约 143 s，段 B 删除后复测。
+
+### 段 B（2026-10-07，删除旧地图）
+
+- 迁出 `MapGenerationException`（独立文件）与 `FriendlySeed`（→ `BoardMapId`）；删四张旧图、边疆生成器与 8 个 Layout 分部、`FrontierSurfaces`、`MapGenParameters` / `GeneratedMapId`、`MapSymmetry`、`MapRandom` 边疆随机源（16 个 .cs 共 3263 行），`maps/` 7 个 json 与嵌入资源。地形规则代码一行未动（检查方逐目录核对）。
+- `MapCatalog`：`RetiredIds` / `IsRetired`（含裸 `gen` 与 `gen:` 前缀）/ `RetiredMapException`（派生 `FileNotFoundException`，各入口现有 catch 直接接住）；删 `maps/<标识>.json` 隐式回落。`run` / `play` / `replay` / 图形版报"已删除"并列现有地图，退出码 1；`analyze` 照常分析旧日志。每局换图改 `board:`（种子逐局 +1）；覆盖表清空、机制保留；校准口径文字加"已删除、棋盘图上未校准"补注。
+- 测试：整删 13 个只测旧图 / `gen:` 的文件，部分删除若干；新增 `已删除地图明确报错Tests`；相机 `Large` 换 23×34 五平台自定布局；检查方补"棋盘生成尝试耗尽报错""终端棋盘生成图提示"两条丢失覆盖。用例 2368 → 2181（2179 通过 / 8 跳过）。
+- 全量全绿（缺省与 28 核）；两处构建 0 警告；Godot 缺省 `--auto-demo` / `--pick-check` / 选图自检通过，`--map=siege-4p-base-v5`、`gen:1` 报错退出。耗时同机 ABBA 2.09–2.27×（最慢集中在段 A 迁图后的专家前瞻类与 ConsoleRedirect 串行集合），待负责人定。
+- 留给段 C：`FrontierFixtures`（41 处，含"显式路径可加载"样本）、`PocketBase`、标准档合成图随档位删除换底图；批量顺排代码；`map` 子命令"权威文件"导出；`MapFile.cs:36`、`MatchSession.cs:817`、`MapData.cs:24/47` 等过时注释。产品无读档入口，存档"已删除"报错只在 Core API 层。

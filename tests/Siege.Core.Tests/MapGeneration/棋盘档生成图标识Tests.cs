@@ -135,9 +135,7 @@ public class 棋盘档生成图标识Tests
         Assert.True(BoardMapId.IsBareRequest(" board "));
         Assert.False(BoardMapId.IsBareRequest("board:1"));
         Assert.False(BoardMapId.IsBareRequest("gen"));
-        Assert.False(GeneratedMapId.IsBareRequest("board"));
-        Assert.False(GeneratedMapId.IsGenerated("board:1"));
-        Assert.False(BoardMapId.IsBoardMap("gen:1"));
+        Assert.False(BoardMapId.IsBoardMap("gen:1"));   // retire-legacy-maps 段 B：GeneratedMapId 删除，反向两条随之删除
         FormatException bare = Assert.Throws<FormatException>(() => MapCatalog.Resolve("board"));
         Assert.Contains("board:12345", bare.Message, StringComparison.Ordinal);
         Assert.Contains("随机取种子由入口完成", bare.Message, StringComparison.Ordinal);   // 是目录自己拒绝的，不是落到标识解析才报错
@@ -148,12 +146,13 @@ public class 棋盘档生成图标识Tests
         Assert.Equal("board:987654321", id);
         Assert.Contains("--map board:987654321", output.ToString(), StringComparison.Ordinal);
 
-        // 完整标识原样返回、不打印，也不去取种子；裸 gen 的行为不变。
+        // 完整标识原样返回、不打印，也不去取种子；裸 gen 已于 retire-legacy-maps 删除，入口原样返回、不取种子（交给目录报"已删除"）。
         var silent = new StringWriter();
         static ulong Never() => throw new InvalidOperationException("不是裸标识，不应取地图种子。");
         Assert.Equal("board:12345:n9", Siege.Sim.Program.MaterializeMapRequest("board:12345:n9", silent, Never));
         Assert.Equal(string.Empty, silent.ToString());
-        Assert.Equal("gen:5:s1", Siege.Sim.Program.MaterializeMapRequest("gen", new StringWriter(), () => 5UL));
+        Assert.Equal("gen", Siege.Sim.Program.MaterializeMapRequest("gen", silent, Never));
+        Assert.Equal(string.Empty, silent.ToString());
 
         // map 子命令走同一处：注入的种子出现在打印的完整标识里，随即按它出图并通过校验。
         (int code, string text, string err) = RunMain(() => 12345UL, "map", "--map", "board");
@@ -201,7 +200,7 @@ public class 棋盘档生成图标识Tests
         FileNotFoundException unknown = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve("no-such-map"));
         Assert.Contains("board:<地图种子>[:p<人数 2–4>][:n<棋盘数>]", unknown.Message, StringComparison.Ordinal);
         Assert.Contains("4 人 7–10", unknown.Message, StringComparison.Ordinal);
-        Assert.Contains("gen:<地图种子>", unknown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("gen:", unknown.Message, StringComparison.Ordinal);   // retire-legacy-maps 段 B：gen: 写法删除，可用清单里不再提它
         Assert.DoesNotContain(MapCatalog.BuiltinIds, BoardMapId.IsBoardMap);
         Assert.Equal("siege-4p-board-v1", MapCatalog.DefaultId);   // 缺省地图是内置棋盘图的别名（builtin-board-maps D3），不是 board: 标识本身
     }

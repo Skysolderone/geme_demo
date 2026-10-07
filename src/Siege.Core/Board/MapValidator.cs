@@ -91,7 +91,7 @@ public static class MapValidator
     /// 可达性三项也是声明行的字段（board-isolated-gen D4：棋盘档的棋盘互不连通，不可达是常态）：
     /// 目标不可达是否拒绝、出生区到中央入口必须有通路、必须标注咽喉——标准档与边疆档三项都要求，棋盘档三项都豁免（距离只报告，不可达记为"不可达"）。
     /// 各档共用、不在表里的规则：必死口袋、桥在深水、栅栏在邻格、信物格合法、保护期容量。
-    /// 旋转对称不在校验器里（<see cref="MapSymmetry"/> 只由标准档基准图的测试调用）。
+    /// 旋转对称不在校验器里（原 <c>MapSymmetry</c> 只由标准档基准图的测试调用，已随旧图于 retire-legacy-maps 删除）。
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
         new Dictionary<MapProfile, ProfileRules>

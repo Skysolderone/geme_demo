@@ -12,61 +12,9 @@ public class 地图随机源Tests
 {
     private static ulong[] Take(RandomStream stream, int count) => [.. Enumerable.Range(0, count).Select(_ => stream.NextUInt64())];
 
-    [Fact]
-    public void 同种子同尝试序号得到同一序列()
-    {
-        Assert.Equal(Take(MapRandom.ForAttempt(12345, 3), 64), Take(MapRandom.ForAttempt(12345, 3), 64));
-    }
-
-    [Fact]
-    public void 新地表投放子流独立于全部尝试子流()
-    {
-        // terrain-surfaces design D6：投放子流只由地图种子决定、可复现，且与任何一次尝试的布局子流都不同。
-        Assert.Equal(Take(MapRandom.ForSurfaces(12345), 64), Take(MapRandom.ForSurfaces(12345), 64));
-        ulong[] surfaces = Take(MapRandom.ForSurfaces(12345), 8);
-        for (int attempt = 0; attempt < FrontierMapGenerator.DefaultMaxAttempts; attempt++)
-        {
-            Assert.NotEqual(surfaces, Take(MapRandom.ForAttempt(12345, attempt), 8));
-        }
-
-        Assert.NotEqual(surfaces, Take(MapRandom.ForSurfaces(12346), 8));
-    }
-
-    [Fact]
-    public void 不同尝试序号或不同种子得到不同序列()
-    {
-        ulong[] baseline = Take(MapRandom.ForAttempt(12345, 0), 8);
-        for (int attempt = 1; attempt < 64; attempt++)
-        {
-            Assert.NotEqual(baseline, Take(MapRandom.ForAttempt(12345, attempt), 8));
-        }
-
-        Assert.NotEqual(baseline, Take(MapRandom.ForAttempt(12346, 0), 8));
-
-        // （种子, 序号）不是简单相加 / 异或：(s, k+1) 与 (s+1, k) 不得撞到同一序列。
-        Assert.NotEqual(Take(MapRandom.ForAttempt(7, 1), 8), Take(MapRandom.ForAttempt(8, 0), 8));
-        Assert.NotEqual(Take(MapRandom.ForAttempt(6, 1), 8), Take(MapRandom.ForAttempt(7, 0), 8));
-    }
-
-    [Fact]
-    public void 尝试序号为负即报错()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => MapRandom.ForAttempt(1, -1));
-    }
-
-    [Fact]
-    public void 地图随机源的黄金值()
-    {
-        // 钉住派生方式：它一变，同一个地图标识就会生成另一张图，旧日志按标识重建地图随之失效（design D4 / D5）。
-        // 变异验证 MG-1：把 MapRandom 的域分隔常量末位 D 改成 E → 本测试红。
-        Assert.Equal(new[] { GoldenA, GoldenB, GoldenC }, Take(MapRandom.ForAttempt(12345, 0), 3));
-        Assert.Equal(GoldenK1, MapRandom.ForAttempt(12345, 1).NextUInt64());
-    }
-
-    private const ulong GoldenA = 228866895567684773UL;
-    private const ulong GoldenB = 18280812252693126409UL;
-    private const ulong GoldenC = 17042747156771785144UL;
-    private const ulong GoldenK1 = 9807326605086137499UL;
+    // retire-legacy-maps 段 B：边疆档随机源（MapRandom.ForAttempt / ForSurfaces）随 gen: 生成器删除，只测它们的五条（同种子同序列、新地表子流独立、
+    // 不同序号不同序列、序号为负报错、ForAttempt 黄金值 GoldenA/B/C/K1）一并删除；棋盘档随机源的同类断言在 棋盘档生成参数Tests
+    // （「棋盘档随机序列只由种子人数与序号决定且互不重复」「棋盘档随机源与生成图的黄金值」）。
 
     [Fact]
     public void 对局四条子流的取值不因地图随机源而变()
@@ -89,7 +37,7 @@ public class 地图随机源Tests
     {
         // 同一个 64 位数既当地图种子又当对局种子时，地图序列也不等于对局的任何一条命名子流。
         var game = new GameSeed(12345);
-        ulong[] map = Take(MapRandom.ForAttempt(12345, 0), 8);
+        ulong[] map = Take(MapRandom.ForBoardAttempt(12345, 4, 0), 8);   // retire-legacy-maps 段 B：原用已删除的边疆档随机源 ForAttempt
         foreach (string name in new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.ZonePick })
         {
             Assert.NotEqual(map, Take(game.Stream(name), 8));
@@ -100,26 +48,27 @@ public class 地图随机源Tests
     public void 生成器不见对局种子_对局流程不见地图种子()
     {
         // 守门（design D2，源码扫描）。
-        // 变异验证 MG-2：在 FrontierMapLayout.cs 的注释里写一处对局种子的类型名 → 本测试红；
-        // MG-3：在 Siege.Core/Match/MatchFlow.cs 里加一句引用 MapGenParameters 的语句 → 本测试红。
+        // 变异验证 MG-2：在 BoardMapLayout.cs 的注释里写一处对局种子的类型名 → 本测试红（原在已删除的 FrontierMapLayout.cs 上做）；
+        // MG-3：在 Siege.Core/Match/MatchFlow.cs 里加一句引用 BoardMapParameters 的语句 → 本测试红。
+        // retire-legacy-maps 段 B：边疆档生成器文件全部删除，名单只剩棋盘档生成器与随机源。
         string core = Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Core");
         string[] generatorNames =
         [
-            "MapRandom.cs", "MapGenParameters.cs", "FrontierMapGenerator.cs", "FrontierSurfaces.cs",   // FrontierSurfaces：terrain-surfaces 新地表投放
-            "BoardMapGenerator.cs", "BoardMapLayout.cs", "BoardMapParameters.cs",                        // board-map 段 B：棋盘档生成器
-            .. Directory.EnumerateFiles(Path.Combine(core, "Board", "Maps"), "FrontierMapLayout*.cs").Select(path => Path.GetFileName(path)!),
+            "MapRandom.cs",
+            "BoardMapGenerator.cs", "BoardMapParameters.cs",                        // board-map 段 B：棋盘档生成器
+            .. Directory.EnumerateFiles(Path.Combine(core, "Board", "Maps"), "BoardMapLayout*.cs").Select(path => Path.GetFileName(path)!),
         ];
-        Assert.True(generatorNames.Length >= 14, $"样本口径：只认出 {generatorNames.Length} 个生成器文件。");
+        Assert.True(generatorNames.Length >= 4, $"样本口径：只认出 {generatorNames.Length} 个生成器文件。");
         string[] generatorFiles = [.. generatorNames.Select(name => Path.Combine(core, "Board", "Maps", name))];
         Assert.All(generatorFiles, path => Assert.DoesNotContain("GameSeed", File.ReadAllText(path), StringComparison.Ordinal));
-        Assert.Contains(generatorFiles, path => File.ReadAllText(path).Contains("MapRandom.ForAttempt", StringComparison.Ordinal));   // 反面：扫到的确实是生成器
+        Assert.Contains(generatorFiles, path => File.ReadAllText(path).Contains("MapRandom.ForBoardAttempt", StringComparison.Ordinal));   // 反面：扫到的确实是生成器
 
         // Maps 目录下凡是碰随机源或工作态的文件都在上面的名单里——新拆出来的生成器文件不会漏扫。
         // MapCatalog 是"标识 → 地图"的入口，段 B 接入时只许调用生成器，不许碰随机源。
         string[] touching =
         [
             .. Directory.EnumerateFiles(Path.Combine(core, "Board", "Maps"), "*.cs")
-                .Where(path => Regex.IsMatch(File.ReadAllText(path), "MapRandom|FrontierMapLayout"))
+                .Where(path => Regex.IsMatch(File.ReadAllText(path), "MapRandom|BoardMapLayout"))
                 .Select(path => Path.GetFileName(path)),
         ];
         Assert.All(touching, name => Assert.Contains(name, generatorNames));

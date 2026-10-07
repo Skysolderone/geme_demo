@@ -17,13 +17,13 @@ public static class Program
     public static int Main(string[] args) => Execute(args, ClockMapSeed);
 
     /// <summary>
-    /// 裸 <c>gen</c> 的地图种子缺省取自时钟——整个批量 / 终端程序里读时钟取地图种子的只有这一处（图形版入口另有一处），规则内核永不读时钟。
-    /// 时间戳经 <see cref="GeneratedMapId.FriendlySeed"/> 折成九位以内的短种子，与图形版（裸 <c>gen</c> 与选图界面"换一张"）同一个折叠函数。
+    /// 裸 <c>board</c> 的地图种子缺省取自时钟——整个批量 / 终端程序里读时钟取地图种子的只有这一处（图形版入口另有一处），规则内核永不读时钟。
+    /// 时间戳经 <see cref="BoardMapId.FriendlySeed"/> 折成九位以内的短种子，与图形版（裸 <c>board</c> 与选图界面"换一张"）同一个折叠函数。
     /// </summary>
-    private static ulong ClockMapSeed() => GeneratedMapId.FriendlySeed((ulong)System.Diagnostics.Stopwatch.GetTimestamp());
+    private static ulong ClockMapSeed() => BoardMapId.FriendlySeed((ulong)System.Diagnostics.Stopwatch.GetTimestamp());
 
     /// <summary>
-    /// 入口本体。<paramref name="mapSeedSource"/> 是"随机取一个地图种子"的来源：只在地图选项是裸 <c>gen</c> 时调用一次，
+    /// 入口本体。<paramref name="mapSeedSource"/> 是"随机取一个地图种子"的来源：只在地图选项是裸 <c>board</c> 时调用一次，
     /// <c>play</c> / <c>map</c> / <c>run</c> 三个子命令共用。生产入口传时钟；测试注入固定值，不留依赖墙钟的测试。
     /// <paramref name="playInput"/> / <paramref name="playOutput"/> 是 <c>play</c> 的测试接缝（<c>null</c> 即控制台）：<c>play</c> 开头设置控制台编码时，
     /// 运行时会丢弃经 <c>Console.SetIn</c> 换上的输入，脚本化的终端测试只能从这里注入。
@@ -75,9 +75,9 @@ public static class Program
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>] [--flag-risk <原型插旗冒险概率 0–100，缺省 {Core.Match.MatchOptions.DefaultFlagRisk}>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
         Console.WriteLine($"                [--scoring <计分规则版本 {Core.Scoring.ScoringVersions.Usage}，缺省 {Core.Scoring.ScoringVersions.Default.ToString().ToLowerInvariant()}（v2 计阵型；v1 不计阵型，与引入阵型之前逐步相同）>]");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
-        Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
+        Console.WriteLine("                [--map-per-match（每局换一张棋盘图：--map board:<起始地图种子>[:p<人数>][:n<棋盘数>]，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
-        Console.WriteLine($"  地图标识：内置图（{string.Join("、", MapCatalog.BuiltinIds)}；不给 --map 即缺省 {MapCatalog.DefaultId}）/ 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
+        Console.WriteLine($"  地图标识：内置棋盘图（{string.Join("、", MapCatalog.BuiltinIds)}；不给 --map 即缺省 {MapCatalog.DefaultId}）/ 地图文件路径；旧图与 gen: 生成图已于 retire-legacy-maps 删除。");
         Console.WriteLine("            board:<地图种子>[:p<人数 2–4>][:n<棋盘数，4 人 7–10、3 人 5–8、2 人 4–5>]（随机生成的棋盘图，棋盘互不连通）；只写 board 即随机取一个地图种子（4 人）并打印完整标识。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
@@ -134,9 +134,9 @@ public static class Program
     }
 
     /// <summary>
-    /// 裸 <c>gen</c> / 裸 <c>board</c>（"随机取一个地图种子"）：规则内核不读时钟，取种子只在入口最外层做。取到后拼成完整标识、打印给用户，再交给
-    /// <see cref="MapCatalog"/>；裸 <c>gen</c> MUST NOT 进入 Core，也 MUST NOT 写进任何记录（配置记录、日志首部）。其余标识原样返回，
-    /// 此时 <paramref name="mapSeedSource"/> 不被调用。
+    /// 裸 <c>board</c>（"随机取一个地图种子"）：规则内核不读时钟，取种子只在入口最外层做。取到后拼成完整标识、打印给用户，再交给
+    /// <see cref="MapCatalog"/>；裸 <c>board</c> MUST NOT 进入 Core，也 MUST NOT 写进任何记录（配置记录、日志首部）。其余标识原样返回
+    /// （裸 <c>gen</c> 也原样返回，由 <see cref="MapCatalog.Resolve"/> 报"已删除"），此时 <paramref name="mapSeedSource"/> 不被调用。
     /// </summary>
     internal static string? MaterializeMapRequest(string? mapId, TextWriter output, Func<ulong> mapSeedSource)
     {
@@ -148,14 +148,7 @@ public static class Program
             return boardId;
         }
 
-        if (!GeneratedMapId.IsBareRequest(mapId))
-        {
-            return mapId;
-        }
-
-        string id = GeneratedMapId.Format(mapSeedSource(), MapGenParameters.RandomPick);
-        output.WriteLine($"随机取了一个地图种子：本次地图为 {id}（用 --map {id} 可重开同一张图）");
-        return id;
+        return mapId;
     }
 
     // ---------- map ----------
@@ -163,7 +156,7 @@ public static class Program
     /// <summary>
     /// 地图工具：打印一张地图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、校验结果与报告项）；
     /// 内置图（含内置棋盘图，文件名用内置名、不含冒号）另导出 maps/&lt;id&gt;.json（权威地图文件）。<c>--map</c> 缺省为缺省地图（<see cref="MapCatalog.DefaultId"/>）；
-    /// 给地图文件路径或生成图标识（<c>gen:</c> / <c>board:</c>，标识里有冒号）时只打印不导出，生成图要落盘用 <c>--out</c> 或对应的内置名。
+    /// 给地图文件路径或棋盘图标识（<c>board:</c>，标识里有冒号）时只打印不导出，生成图要落盘用 <c>--out</c> 或对应的内置名。
     /// <c>--out</c> 把这张图另存为指定文件（生成图只有这一条落盘的路）；目标不得是内置图的权威文件（<see cref="RequireNotAuthoritativeMapFile"/>）。
     /// </summary>
     private static int ExportMap(CommandLine cli, Func<ulong> mapSeedSource)
@@ -371,15 +364,15 @@ public static class Program
         };
         bool serial = cli.Flag("serial");
         cli.EnsureRecognized();   // 读完所有选项、创建输出目录与跑局之前结算（strict-cli 2.4；先于 Validated 以便未知选项优先报出）
-        // 裸 gen 在这里就落成完整标识：config.json 与日志首部不得出现裸 gen（配置文件里写的裸 gen 同样处理）。
-        // 命令行 --map gen --map-per-match：起始地图种子取自 mapSeedSource，落成 gen:<起始> 后再校验，同样打印并记入 config.json。
-        // 只有配置文件里同时写"裸 gen + MapPerMatch"会在读入校验（RunConfig.FromJson）时报错——配置文件是要复用的记录，换图必须写明起始地图种子。
+        // 裸 board 在这里就落成完整标识：config.json 与日志首部不得出现裸 board（配置文件里写的裸 board 同样处理）。
+        // 命令行 --map board --map-per-match：起始地图种子取自 mapSeedSource，落成 board:<起始> 后再校验，同样打印并记入 config.json。
+        // 已删除的 gen / gen:<…> 不在这里处理：每局换图时由 Validated 报"已删除"，否则由 MapCatalog.Resolve 报。
         config = config with { MapId = MaterializeMapRequest(config.MapId, Console.Out, mapSeedSource)! };
         config.Validated();
         if (!cli.Has("players") && !declaresPlayers)
         {
-            // small-maps D3：命令行与配置文件都没给人数 → 取地图的人数上限（2 人图开 2 人局；4 人图、边疆图、生成图都是 4，行为不变）。
-            // 每局换图时各局的图人数上限相同（生成器固定 4 人），取首局的即可。难度沿用已定的玩家配置（命令行 --difficulty 或配置文件）。
+            // small-maps D3：命令行与配置文件都没给人数 → 取地图的人数上限（2 人图开 2 人局、3 人图开 3 人局、4 人图开 4 人局）。
+            // 每局换图时各局的人数段相同（board: 标识里的 :p 不变），取首局的即可。难度沿用已定的玩家配置（命令行 --difficulty 或配置文件）。
             int maxPlayers = MapCatalog.Resolve(config.MapIdAt(0)).MaxPlayers;
             if (maxPlayers != config.PlayerCount)
             {

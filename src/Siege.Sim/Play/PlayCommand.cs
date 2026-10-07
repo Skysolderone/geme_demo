@@ -89,10 +89,10 @@ internal static class PlayCommand
         output.WriteLine();
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
         // 一律打印地图标识（builtin-board-maps D3：缺省地图也打印，棋盘图便于复现）。
-        // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
+        // 完整地图标识取自公开视图（插旗阶段即公开）。棋盘图标识（board:）里带地图种子：与下一行的对局种子分开显示，二者互相独立。
         string shownMapId = match.Publish().MapId;
         output.WriteLine($"地图 {shownMapId}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）"
-            + (GeneratedMapId.IsGenerated(shownMapId) ? $"——随机生成图，用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
+            + (BoardMapId.IsBoardMap(shownMapId) ? $"——随机生成的棋盘图，用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
 
         // 专家（前瞻宽度 > 0）另写明实际生效的前瞻宽度；其余三档这一行与引入专家之前逐字相同。
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;

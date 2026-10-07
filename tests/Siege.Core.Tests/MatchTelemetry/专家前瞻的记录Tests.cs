@@ -250,7 +250,9 @@ public class 专家前瞻的记录Tests
     public void 本change之前的专家日志照常解析()
     {
         // expert-lookahead 冒烟的真实专家日志（首部只有前瞻宽度 4）：离线解析成功，候选来源读为原排序、两层加分读为 0，
-        // 前瞻后分数等于原文里的值；解析后再写出与原文逐字节相同（不多写新字段）；回放逐字节一致（一层配置 = 改动前的专家，G1）。
+        // 前瞻后分数等于原文里的值；解析后再写出与原文逐字节相同（不多写新字段）。
+        // retire-legacy-maps 段 B：这份日志钉在已删除的 siege-4p-base-v5 上，原"回放逐字节一致（一层配置 = 改动前的专家，G1）"一半不再可能——
+        // 回放改为断言报"已删除"（design D2：旧日志不再支持回放，analyze 照常）；G1 在棋盘图上的守门见「一层配置的记录与改动前相同」。
         string raw = ReadGzip(LegacyExpertLogPath);
         MatchLog legacy = MatchLog.Parse(raw);
         Assert.Equal(26, legacy.Turns.Count);
@@ -275,9 +277,9 @@ public class 专家前瞻的记录Tests
 
         Assert.Equal(raw, legacy.FullText());
 
-        ReplayResult replay = Replayer.Replay(legacy);
-        Assert.True(replay.Identical, replay.ToString());
-        Assert.Equal(lookahead.Select(t => LogText(t.Lookahead!)), replay.Replayed.LookaheadTurns.Select(t => LogText(t.Lookahead!)));
+        Assert.Equal("siege-4p-base-v5", legacy.Header.MapId);
+        Siege.Core.Board.Maps.RetiredMapException retired = Assert.Throws<Siege.Core.Board.Maps.RetiredMapException>(() => Replayer.Replay(legacy));
+        Assert.Contains("已删除", retired.Message, StringComparison.Ordinal);
     }
 
     [Fact]

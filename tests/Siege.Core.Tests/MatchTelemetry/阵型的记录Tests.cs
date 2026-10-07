@@ -92,8 +92,9 @@ public class 阵型的记录Tests
     {
         // 规格 Scenario：解析一份在引入阵型之前写出的日志 → 解析成功，计分规则版本为 v1，全部棋串的阵型阶数为 0。
         // ① 真实旧日志：expert-lookahead 冒烟留下的专家对局（仓库夹具，远早于本 change，v5、1 专家 + 3 标准、整局 26 个小回合）。
-        //    首部没有计分规则版本、棋串条目没有阵型阶数；按 v1 读。回放逐行一致——每个小回合的落子、提子与逐棋串势力明细都与当时记录的相同，
-        //    这是"v1 与引入阵型之前逐步相同"在真实旧数据上的直接证据（回放按首部重建：缺字段 → v1）。
+        //    首部没有计分规则版本、棋串条目没有阵型阶数；按 v1 读。
+        //    retire-legacy-maps 段 B：这份日志钉在已删除的 siege-4p-base-v5 上，原"按首部回放逐行一致"（v1 与引入阵型之前逐步相同的真实旧数据证据）不再可能，
+        //    改为断言回放报"已删除"；"缺字段按 v1 回放逐行一致"由下面第 ② 段在棋盘图上的现跑日志守住。
         string raw = ReadGzip(Path.Combine(AppContext.BaseDirectory, "MatchTelemetry", "Fixtures", "expert-lookahead-smoke20-match-0000000000000008.jsonl.gz"));
         Assert.DoesNotContain("ScoringVersion", raw, StringComparison.Ordinal);
         Assert.DoesNotContain("FormationTier", raw, StringComparison.Ordinal);
@@ -105,11 +106,8 @@ public class 阵型的记录Tests
         Assert.Contains(legacyGroups, g => g.Stones.Count >= 3);   // 样本口径：按 v2 本该成阵的棋串确实存在
         Assert.All(legacyGroups, g => Assert.Equal((null, g.MultiplierCount), (g.FormationTier, g.MultiplierExponent)));
 
-        ReplayResult legacyReplay = Replayer.Replay(legacy);
-        Assert.True(legacyReplay.Identical, legacyReplay.ToString());
-        Assert.True(legacyReplay.LineCount >= 27, $"比对行数 {legacyReplay.LineCount}");
-        Assert.Null(legacyReplay.Replayed.Header.Config.ScoringVersion);   // 重建的首部不多出一项
-        Assert.Equal(ScoringVersion.V1, legacyReplay.Replayed.ScoringVersion);
+        Assert.Equal("siege-4p-base-v5", legacy.Header.MapId);
+        Assert.Throws<Siege.Core.Board.Maps.RetiredMapException>(() => Replayer.Replay(legacy));
 
         // ② 现跑的 v1 局去掉首部配置里的这一项，就是引入之前的日志形状：照常解析、按 v1 回放逐行一致。
         //    样本口径：同一种子按 v2 跑出的局不同（否则按 v2 回放也会"一致"，守门是空证）。

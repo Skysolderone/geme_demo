@@ -8,31 +8,31 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <summary>规格：frontier-map / map-definition —— Requirement: 地图规格档</summary>
 public class 地图规格档Tests
 {
-    [Theory]
-    [InlineData("siege-4p-base-v1")]
-    [InlineData("siege-4p-base-v2")]
-    [InlineData("siege-4p-base-v3")]
-    [InlineData("siege-4p-base-v5")]
-    public void 缺省为标准档(string id)
+    [Fact]
+    public void 缺省为标准档()
     {
-        // Scenario：读入一张没有规格档字段的旧地图文件 → 规格档为标准。四份既有 maps/*.json 都没有该字段。
-        string text = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", id + ".json"));
-        Assert.DoesNotContain("\"Profile\"", text, StringComparison.Ordinal);
+        // Scenario：读入一张没有规格档字段的地图文件 → 规格档为标准。
+        // retire-legacy-maps 段 B：原读四份 maps/siege-4p-base-v1..v5.json（随旧图删除）；改为把棋盘图导出文本去掉 Profile 一行后读入。
+        string text = MapFile.ToJson(MapCatalog.Resolve(MapCatalog.DefaultId));
+        Assert.Contains("\"Profile\": \"Board\"", text, StringComparison.Ordinal);
+        string stripped = Regex.Replace(text, "\n  \"Profile\": \"Board\",", string.Empty);
+        Assert.DoesNotContain("\"Profile\"", stripped, StringComparison.Ordinal);
 
-        Assert.Equal(MapProfile.Standard, MapFile.FromJson(text).Profile);
+        Assert.Equal(MapProfile.Standard, MapFile.FromJson(stripped).Profile);
+        Assert.Equal(MapProfile.Board, MapFile.FromJson(text).Profile);   // 反面：带字段时读出的是棋盘档
     }
 
     [Fact]
-    public void 标准档写出时不带规格档字段且基准图文件逐字节不变()
+    public void 标准档写出时不带规格档字段()
     {
-        // 标准档省略该字段：磁盘上的 v5 文件与代码序列化结果仍逐字符相等（行尾归一后），不必重导四份 json。
-        MapData v5 = FourPlayerBaseMap.Create();
-        Assert.Equal(MapProfile.Standard, v5.Profile);
-        string json = MapFile.ToJson(v5);
+        // 标准档省略该字段（写出逐字节与引入规格档之前相同）。原名「标准档写出时不带规格档字段且基准图文件逐字节不变」：
+        // retire-legacy-maps 段 B 删除 v5 与磁盘上的 maps/siege-4p-base-v5.json，"与磁盘文件逐字节相同"一半随之删除；改用标准档合成图。
+        MapData standard = TestMaps.Synthetic(size: 9, maxPlayers: 4);
+        Assert.Equal(MapProfile.Standard, standard.Profile);
+        string json = MapFile.ToJson(standard);
         Assert.DoesNotContain("\"Profile\"", json, StringComparison.Ordinal);
-
-        string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", "siege-4p-base-v5.json"));
-        Assert.Equal(Normalize(disk), Normalize(json));
+        Assert.Equal(json, MapFile.ToJson(MapFile.FromJson(json)));
+        Assert.Contains("\"Profile\"", MapFile.ToJson(standard with { Profile = MapProfile.Frontier }), StringComparison.Ordinal);   // 反面：非缺省档写出字段
     }
 
     [Fact]
@@ -193,5 +193,4 @@ public class 地图规格档Tests
         Assert.Single(Regex.Matches(mapData, @"(?<![\w])Profile(?![\w])"));
     }
 
-    private static string Normalize(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
 }

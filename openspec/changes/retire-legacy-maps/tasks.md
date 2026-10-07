@@ -10,9 +10,9 @@
 
 ## 2. 删除（段 B）
 
-- [ ] 2.1 删旧图类、边疆生成器、新地表投放、`MapSymmetry`、`maps/*.json` 与嵌入资源；迁出 `MapGenerationException`、`FriendlySeed`（D2）。
-- [ ] 2.2 每局换图支持 `board:`；AI 覆盖表清空；删只测旧图的测试。
-- [ ] 2.3 `MapCatalog.Resolve` 对旧标识明确报错、删隐式文件回落。验证：`run` / `play` / `replay` / 图形版 `--map=siege-4p-base-v5` 与 `gen:1` 都报"已删除"；全量全绿；两处构建 0 警告。
+- [x] 2.1 删旧图类、边疆生成器、新地表投放、`MapSymmetry`、`maps/*.json` 与嵌入资源；迁出 `MapGenerationException`、`FriendlySeed`（D2）。
+- [x] 2.2 每局换图支持 `board:`；AI 覆盖表清空；删只测旧图的测试。
+- [x] 2.3 `MapCatalog.Resolve` 对旧标识明确报错、删隐式文件回落。验证：`run` / `play` / `replay` / 图形版 `--map=siege-4p-base-v5` 与 `gen:1` 都报"已删除"；全量全绿；两处构建 0 警告。
 
 ## 3. 校验器收口（段 C）
 

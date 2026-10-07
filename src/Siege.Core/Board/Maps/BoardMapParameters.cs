@@ -204,6 +204,24 @@ public static class BoardMapId
         return (seed, new BoardMapParameters { Players = p, BoardCount = n });
     }
 
+    /// <summary><see cref="FriendlySeed"/> 的取值上界（不含）：九位十进制数以内，便于读写与口头交流。</summary>
+    public const ulong FriendlySeedLimit = 1_000_000_000UL;
+
+    /// <summary>
+    /// 把一个原始计数（入口取的时间戳）折成便于人读写的地图种子：乘大奇数、异或移位两轮后取九位以内的十进制数。
+    /// 纯函数——时间戳由入口最外层取（Core 不读时钟）；三个入口"随机取一个地图种子"（裸 <c>board</c>、选图界面"换一张"）都经这里折一次，
+    /// 相邻两次取到的种子不挨着，也不和对局种子长得几乎一样。
+    /// （retire-legacy-maps 段 B 由已删除的 <c>GeneratedMapId</c> 原样迁来，算式不变。）
+    /// </summary>
+    public static ulong FriendlySeed(ulong raw)
+    {
+        ulong z = unchecked(raw * 0x9E3779B97F4A7C15UL);
+        z ^= z >> 32;
+        z = unchecked(z * 0xD6E8FEB86659FD93UL);
+        z ^= z >> 32;
+        return z % FriendlySeedLimit;
+    }
+
     /// <summary>把任一合法写法规范化（<c>board:42:n7</c> → <c>board:42</c>，<c>board:42:p4:n9</c> → <c>board:42:n9</c>）。</summary>
     public static string Normalize(string? mapId)
     {
