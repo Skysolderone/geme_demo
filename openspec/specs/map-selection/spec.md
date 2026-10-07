@@ -9,7 +9,7 @@ TBD - created by archiving change map-generator. Update Purpose after archive.
 
 图形版 SHALL 另提供启动选项 `--map-select`，**仅用于截图与无人值守自检**：给出时强制进入选图界面。它是上面"给了地图选项 MUST 跳过选图"的**显式例外**——与 `--map=<内置标识或完整生成图标识>` 同给时，该标识只作为选图界面的预选项而不直接建局（地图文件路径、未带种子的随机请求与写错的标识 MUST 报错退出）；与 `--auto-demo` 同给时，先把选图操作（选中随机棋盘图、换一张、调人数、调棋盘数、非法种子、合法种子、逐个内置棋盘图、开始）自动走一遍并逐步核对，任一步不符 MUST 以失败退出，通过后照常自动演示。未给 `--map-select` 时上面两条规则不变。
 
-选图界面 SHALL 只列出：三张内置棋盘图（`siege-4p-board-v1`、`siege-3p-board-v1`、`siege-2p-board-v1`）与随机棋盘图。标准档、边疆档地图与 `gen:` 生成图不出现在界面上（仍可用 `--map=` 指定，直到被删除）。未以 `--map` 预选时，进入界面的预选项 MUST 是 `siege-4p-board-v1`。三个入口在未指定参赛人数时 SHALL 以所选地图的人数上限作为参赛人数。内置图的选项标题 SHALL 用面向人的显示名，显示名 MUST 与标识一起登记在共用的那一份内置地图表里，界面层 MUST NOT 另带"标识 → 显示名"对照表。
+选图界面 SHALL 只列出：三张内置棋盘图（`siege-4p-board-v1`、`siege-3p-board-v1`、`siege-2p-board-v1`）与随机棋盘图。标准档、边疆档地图与 `gen:` 生成图已于 `retire-legacy-maps` 删除，既不在界面上，也不能用 `--map=` 指定（报"已删除"，见 `simulation-harness`「已删除地图标识明确报错」）。未以 `--map` 预选时，进入界面的预选项 MUST 是 `siege-4p-board-v1`。三个入口在未指定参赛人数时 SHALL 以所选地图的人数上限作为参赛人数。内置图的选项标题 SHALL 用面向人的显示名，显示名 MUST 与标识一起登记在共用的那一份内置地图表里，界面层 MUST NOT 另带"标识 → 显示名"对照表。
 
 选中随机棋盘图时 SHALL 显示当前地图种子、人数、棋盘数与地图尺寸，并提供：
 
@@ -27,7 +27,7 @@ TBD - created by archiving change map-generator. Update Purpose after archive.
 - **THEN** 先显示选图界面，预选项是 `siege-4p-board-v1`，列表另有 3 人与 2 人内置棋盘图和随机棋盘图，背景是当前选中地图的全局预览
 
 #### Scenario: 命令行指定则跳过
-- **WHEN** 以 `--map=siege-frontier-v2`、`--map=gen:12345` 或 `--map=board:12345` 启动图形版
+- **WHEN** 以 `--map=siege-3p-board-v1` 或 `--map=board:12345` 启动图形版
 - **THEN** 不显示选图界面，直接进入插旗阶段
 
 #### Scenario: 换一张
@@ -68,5 +68,9 @@ TBD - created by archiving change map-generator. Update Purpose after archive.
 
 #### Scenario: 旧地图不在界面上
 - **WHEN** 打开选图界面
-- **THEN** 列表里没有 `siege-4p-base-v5`、`siege-2p-base-v1`、`siege-3p-base-v1`、`siege-frontier-v2` 与边疆档随机图；以 `--map=siege-4p-base-v5` 启动仍直接建局
+- **THEN** 列表里没有 `siege-4p-base-v5`、`siege-2p-base-v1`、`siege-3p-base-v1`、`siege-frontier-v2` 与边疆档随机图
+
+#### Scenario: 已删除的地图不能用命令行指定
+- **WHEN** 以 `--map=siege-4p-base-v5` 或 `--map=gen:1` 启动图形版
+- **THEN** 报"已删除"并以退出码 1 退出，不进入选图界面也不建局
 

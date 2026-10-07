@@ -32,7 +32,7 @@ TBD - created by archiving change add-relic-system. Update Purpose after archive
 出生区 MUST NOT 生成效果 +2 的高阶结构信物，也 MUST NOT 生成等效为两枚普通徽记的高阶流派徽记。
 
 #### Scenario: 出生区无高阶信物
-- **WHEN** 用任意种子生成 4 人基准地图的信物
+- **WHEN** 用任意种子为一张 4 个出生区、每区 2 个信物格的地图生成信物
 - **THEN** 全部 8 个出生区信物的强度均为 +1（流派徽记为单枚等效）
 
 #### Scenario: 权重分布收敛
@@ -86,7 +86,7 @@ TBD - created by archiving change add-relic-system. Update Purpose after archive
 中央区、交通咽喉与高风险边缘区 SHALL 承担更高的强度预算。
 
 #### Scenario: 出生区稀有度均衡
-- **WHEN** 用任意种子生成 4 人基准地图
+- **WHEN** 用任意种子为一张 4 个出生区、每区 2 个信物格的地图生成信物
 - **THEN** 四个出生区的信物总稀有度与均值的偏差均不超过 8%
 
 #### Scenario: 重抽未收敛时的确定性兜底

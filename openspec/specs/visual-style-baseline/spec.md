@@ -184,7 +184,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 棋盘之外的场景格 SHALL 只作装饰，MUST NOT 出现任何会被读成"可落子"的格线或落点标记。
 
-哪些格属于哪块棋盘、棋盘的类别与外接矩形 MUST 取自视图模型中的棋盘清单，渲染层 MUST NOT 自行从格子数据推断棋盘。棋盘清单为空的地图（全部既有地图）MUST NOT 画台面边框与台面格线。
+哪些格属于哪块棋盘、棋盘的类别与外接矩形 MUST 取自视图模型中的棋盘清单，渲染层 MUST NOT 自行从格子数据推断棋盘。棋盘清单为空的地图 MUST NOT 画台面边框与台面格线（`retire-legacy-maps` 起可加载的地图都带棋盘清单，这一条只对不经校验构造的地图数据成立）。
 
 台面边框 SHALL 呈现为略高于地砖的凸起边沿（部件见「地图元素部件化」），MUST NOT 遮挡边缘格的落点与标记。
 
@@ -196,8 +196,8 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **WHEN** 同屏看到一块出生棋盘与一块公共棋盘
 - **THEN** 出生棋盘带出生区染色，公共棋盘为中性色边框
 
-#### Scenario: 既有地图不画台面
-- **WHEN** 打开 `siege-4p-base-v5`
+#### Scenario: 无棋盘清单的地图不画台面
+- **WHEN** 视图模型的棋盘清单为空
 - **THEN** 画面上没有台面边框与台面格线
 
 #### Scenario: 边框不遮挡边缘格
@@ -213,7 +213,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **THEN** 该格的叉清晰可见，可见范围不小于格边长的一半
 
 #### Scenario: 近景不变
-- **WHEN** 在标准图 `siege-4p-base-v5` 的缺省镜头下查看一个活棋禁入格
+- **WHEN** 在 `siege-4p-board-v1` 的开局镜头（对准自家出生棋盘）下查看一个活棋禁入格
 - **THEN** 标记外观与引入本条之前相同
 
 ### Requirement: 双字母列标不重叠
@@ -225,7 +225,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **THEN** `Z`、`AA`、`AB`、`AC` 逐个分开，相邻两个标注不相接
 
 #### Scenario: 单字母列标不变
-- **WHEN** 查看 `siege-4p-base-v5` 的坐标标注
+- **WHEN** 查看一张不超过 25 列的地图的坐标标注
 - **THEN** 各列标的字形、位置与间距与引入双字母列标之前相同（外圈石沿等背景变化不在此列）
 
 ### Requirement: 大图渲染开销
@@ -243,7 +243,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **THEN** 两张截图没有任何像素差异
 
 #### Scenario: 部件化不明显增加绘制调用
-- **WHEN** 在 `board:1` 与 `siege-4p-base-v5` 上分别读取部件化前后的静止帧绘制调用数
+- **WHEN** 在 `board:1` 上读取部件化前后的静止帧绘制调用数（原 `siege-4p-base-v5` 一项随该图删除）
 - **THEN** 部件化之后不高于之前的 1.2 倍
 
 #### Scenario: 演出期间不整层重建
@@ -261,7 +261,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 导出资源 SHALL 由程序建模烘焙得到；导出 MUST NOT 读取已有资源。
 
 #### Scenario: 全部元素来自资源
-- **WHEN** 资源目录完整，打开 `gen:12345:s1`
+- **WHEN** 资源目录完整，打开 `siege-4p-board-v1`
 - **THEN** 搭建日志显示本次地图元素全部来自资源，程序建模数为 0
 
 #### Scenario: 资源缺失时退回程序建模
@@ -269,11 +269,11 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **THEN** 棋盘照常搭建，日志显示资源数为 0、全部由程序建模，画面与有资源时的部件种类一致
 
 #### Scenario: 同图同画面
-- **WHEN** 以相同参数对 `siege-4p-base-v5` 连取两次定帧截图
-- **THEN** 水面动画区域之外逐像素相同
+- **WHEN** 以相同参数对 `siege-4p-board-v1` 连取两次定帧截图
+- **THEN** 时间驱动的动画区域之外逐像素相同
 
 #### Scenario: 拾取不变
-- **WHEN** 在 `siege-4p-base-v5` 与一张生成图上运行拾取自检
+- **WHEN** 在 `siege-4p-board-v1` 与一张 `board:` 生成图上运行拾取自检
 - **THEN** 每个可落子格都能拾取回自身，结果与引入本条之前相同
 
 ### Requirement: 地块与侧面的造型
