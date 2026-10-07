@@ -509,3 +509,51 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 棋盘地形 ③ retire-legacy-maps 收官
+
+**Date**: 2026-10-07
+**Task**: 棋盘地形 ③ retire-legacy-maps 收官
+**Branch**: `feat/board-terrain`
+
+### Summary
+
+删除旧地图与 gen:，测试迁棋盘图，校验器只留棋盘档，规格并入；母任务 board-terrain 完成
+
+### Main Changes
+
+## 棋盘地形母任务收官：③ retire-legacy-maps
+
+- 段 0：被哈希的日志首部去掉 CPU 核数（`RecordedParallelism`）、哈希前统一行尾，本机 11 条红测转绿。
+- 段 A1 / A2：跑局、夹具、规则、相机、终端、信物测试全部迁到内置棋盘图或自定合成图；黄金值重定并逐条记录。产品改动：AI 候选格上限未写时按开局地图取（>150 格 24，否则 0），显式 0 = 不限。
+- 段 B：删旧图类、边疆生成器、`gen:`、`maps/*.json`（约 3300 行）；旧标识与旧存档报"已删除"，退出码 1。
+- 段 C：校验器只留棋盘档；标准档报 `MAP_PROFILE_RETIRED`，文件写边疆档读入即报已删除；修缺 Profile 地图让 run / play 崩溃。
+- 段 D / E：45 条规格增量并入主规格；设计文档 v1.30；测试名对齐 Scenario；补地形 / 旧存档 / K 取值守门；Godot 自检与截图。
+- 全量 2155 / 0 / 8（缺省与 28 核）；两处构建 0 警告。负责人过目通过，耗时约 2× 按现状接受。
+- 后续：棋盘图 AI 校准（前瞻比 5.5–5.8、耗时比 6.16 > 4）；不可达地形规则去留；工坊信物无效；Windows 复跑；发布页随下次发版改。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `16d8167` | (see git log) |
+| `434ab07` | (see git log) |
+| `6c941ac` | (see git log) |
+| `1422be1` | (see git log) |
+| `d174c4f` | (see git log) |
+| `8c0dfbf` | (see git log) |
+| `16c11fc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

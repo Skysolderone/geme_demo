@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-10-06
+- **Total Sessions**: 7
+- **Last Active**: 2026-10-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~511 | Active |
+| `journal-1.md` | ~559 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-10-07 | 棋盘地形 ③ retire-legacy-maps 收官 | `16d8167`, `434ab07`, `6c941ac`, `1422be1`, `d174c4f`, `8c0dfbf`, `16c11fc` | `feat/board-terrain` |
 | 6 | 2026-10-06 | 棋盘地形 ②：内置棋盘图与缺省切换（builtin-board-maps） | `4419e22`, `6d08247`, `57212b5` | `feat/board-terrain` |
 | 5 | 2026-10-06 | 棋盘地形 ①：棋盘档改为互不连通的棋盘组（board-isolated-gen） | `faf2987`, `1ac06c5` | `feat/board-terrain` |
 | 4 | 2026-10-06 | 盘面标注可读性（board-labels）：坐标让位、算式与常驻标注对比、最右列换角；MutedText 进主题 | `34cc23e`, `a0d03a4` | `feat/board-labels` |
