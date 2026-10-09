@@ -68,4 +68,49 @@ internal static class MapRandom
     /// <summary>域分隔常量：棋盘档的地图种子一侧与序号一侧各一个，与边疆档的两个域常量都不同。</summary>
     private const ulong BoardDomain = 0x6B0A_94D7_E1C3_52F8UL;
     private const ulong BoardAttemptDomain = 0xD2F4_8A61_3B7C_E905UL;
+
+    /// <summary>
+    /// 链接档初始布局（board-link-mode D2）的第 <paramref name="attempt"/> 个随机源（0 起）：只由（地图种子, 序号）决定，
+    /// 用独立的域常量，与 <see cref="ForAttempt"/>、<see cref="ForSurfaces"/>、<see cref="ForBoardAttempt"/> 的任何取值都不同构——引入它不改变任何 <c>gen:</c> / <c>board:</c> 图。
+    /// </summary>
+    internal static RandomStream ForLinkAttempt(ulong mapSeed, int attempt)
+    {
+        if (attempt < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(attempt), attempt, "尝试序号不得为负。");
+        }
+
+        ulong root = SplitMix64.Mix(mapSeed ^ LinkDomain) ^ SplitMix64.Mix((ulong)attempt ^ LinkAttemptDomain);
+        ulong s0 = SplitMix64.Next(ref root);
+        ulong s1 = SplitMix64.Next(ref root);
+        ulong s2 = SplitMix64.Next(ref root);
+        ulong s3 = SplitMix64.Next(ref root);
+        return new RandomStream("map-link", s0, s1, s2, s3);
+    }
+
+    /// <summary>
+    /// 一次链接（board-link-mode D2：几何由（地图种子, X, Y）派生）的随机源：只由地图种子与两个战场标识决定，与链接序号、当前物化状态、对局种子都无关；
+    /// 两个标识按升序归一，<c>(1, 4)</c> 与 <c>(4, 1)</c> 得到同一条序列。它只在候选几何之间做偏好选择，候选集合本身由当前物化状态确定性枚举。
+    /// </summary>
+    internal static RandomStream ForLink(ulong mapSeed, int battlefieldX, int battlefieldY)
+    {
+        if (battlefieldX < 0 || battlefieldY < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(battlefieldX), $"战场标识不得为负：{battlefieldX}、{battlefieldY}。");
+        }
+
+        ulong low = (ulong)Math.Min(battlefieldX, battlefieldY);
+        ulong high = (ulong)Math.Max(battlefieldX, battlefieldY);
+        ulong root = SplitMix64.Mix(mapSeed ^ LinkDomain) ^ SplitMix64.Mix((low << 32 | high) ^ LinkPairDomain);
+        ulong s0 = SplitMix64.Next(ref root);
+        ulong s1 = SplitMix64.Next(ref root);
+        ulong s2 = SplitMix64.Next(ref root);
+        ulong s3 = SplitMix64.Next(ref root);
+        return new RandomStream("map-link-pair", s0, s1, s2, s3);
+    }
+
+    /// <summary>域分隔常量：链接档的地图种子一侧、初始布局尝试序号一侧、链接对一侧各一个，与上面全部域常量都不同。</summary>
+    private const ulong LinkDomain = 0x17E3_B9A4_6C2D_F581UL;
+    private const ulong LinkAttemptDomain = 0x8C4F_2A97_D5E6_031BUL;
+    private const ulong LinkPairDomain = 0x4A9D_E71C_28B6_F3D0UL;
 }

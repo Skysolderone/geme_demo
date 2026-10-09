@@ -88,7 +88,7 @@ public class 选图视图模型Tests
         Assert.True(model.TrySelectId("board:1"));
         Assert.Equal((1UL, 7, "1"), (model.MapSeed, model.BoardCount, model.SeedText));
 
-        MapData map = MapCatalog.Resolve(model.CurrentId);
+        MapData map = MapCatalog.Legacy.Resolve(model.CurrentId);
         Assert.Equal(model.CurrentId, map.Id);
         Assert.Equal(model.BoardCount, map.Boards.Length);
         DefaultBoardView view = ViewOf(map);
@@ -104,7 +104,7 @@ public class 选图视图模型Tests
 
         // 棋盘数不同，说明随之不同（样本取非缺省值）。
         Assert.True(model.AdjustBoards(+2));
-        MapData nine = MapCatalog.Resolve(model.CurrentId);
+        MapData nine = MapCatalog.Legacy.Resolve(model.CurrentId);
         Assert.Contains("棋盘 9 块（出生 5、公共 4）", MapPreviewInfo.Of(ViewOf(nine)), StringComparison.Ordinal);
 
         // 棋盘清单为空的地图：说明里没有棋盘一项，与引入棋盘图之前的文案相同。
@@ -132,7 +132,7 @@ public class 选图视图模型Tests
         Assert.Equal(InitialSeed, model.MapSeed);   // 种子不变
         Assert.Equal("board:424242:n9", model.CurrentId);
         Assert.EndsWith(":n9", model.CurrentId, StringComparison.Ordinal);
-        MapData map = MapCatalog.Resolve(model.CurrentId);
+        MapData map = MapCatalog.Legacy.Resolve(model.CurrentId);
         Assert.Equal((model.CurrentId, 9), (map.Id, map.Boards.Length));
         Assert.Equal(4, map.Boards.Count(b => b.Kind == BoardPlateKind.Public));
 
@@ -176,7 +176,7 @@ public class 选图视图模型Tests
 
         Assert.True(model.SubmitSeed(" 12345 "));
         Assert.Equal("board:12345:n8", model.CurrentId);
-        Assert.Equal(MapFile.ToJson(MapCatalog.Resolve("board:12345:n8")), MapFile.ToJson(MapCatalog.Resolve(model.CurrentId)));
+        Assert.Equal(MapFile.ToJson(MapCatalog.Legacy.Resolve("board:12345:n8")), MapFile.ToJson(MapCatalog.Legacy.Resolve(model.CurrentId)));
         model.Accept();
 
         Assert.False(model.SubmitSeed("abc"));
@@ -276,7 +276,7 @@ public class 选图视图模型Tests
 
         Assert.Equal("gen:12345:p7:s1", first.CurrentId);
         Assert.Equal(first.CurrentId, second.CurrentId);
-        Assert.Equal(MapFile.ToJson(MapCatalog.Resolve(first.CurrentId)), MapFile.ToJson(MapCatalog.Resolve(second.CurrentId)));
+        Assert.Equal(MapFile.ToJson(MapCatalog.Legacy.Resolve(first.CurrentId)), MapFile.ToJson(MapCatalog.Legacy.Resolve(second.CurrentId)));
         Assert.Equal("12345", second.SeedText);
     }
 
@@ -412,7 +412,7 @@ public class 选图视图模型Tests
             string confirmed = model.Confirm();
 
             Assert.Equal(shown, confirmed);
-            Assert.Equal(confirmed, MapCatalog.Resolve(confirmed).Id);
+            Assert.Equal(confirmed, MapCatalog.Legacy.Resolve(confirmed).Id);
             Assert.True(model.IsConfirmed);
             Assert.Throws<InvalidOperationException>(() => model.Select(0));
             Assert.Throws<InvalidOperationException>(() => model.Reroll(1UL));
@@ -446,7 +446,7 @@ public class 选图视图模型Tests
         Assert.Equal("gen:77:s1", model.CurrentId);
         Assert.True(model.AdjustPlatforms(+1));
         Assert.Equal("gen:77:p7:s1", model.CurrentId);
-        Assert.Contains(Surface.Desert, MapCatalog.Resolve(model.CurrentId).TerrainData.Surfaces.Values);
+        Assert.Contains(Surface.Desert, MapCatalog.Legacy.Resolve(model.CurrentId).TerrainData.Surfaces.Values);
     }
 
     [Fact]

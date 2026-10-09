@@ -145,7 +145,7 @@ public class 批量跑局Tests
         Assert.Equal(4, log.Header.Config.TurnLimit);
 
         // 反面：地图数据不含据点——写出的地图文本里没有该字段（段 B 守门）。
-        Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(MapCatalog.Resolve(log.Header.MapId)), StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(MapCatalog.Legacy.Resolve(log.Header.MapId)), StringComparison.Ordinal);
     }
 
     [Fact]

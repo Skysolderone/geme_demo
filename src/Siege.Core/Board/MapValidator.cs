@@ -105,7 +105,10 @@ public static class MapValidator
                 DistanceHandling.RejectOnImbalance,
                 ColumnRange: (0, 25),
                 RowRange: null,
-                PlateList: null),
+                PlateList: null,
+                Connectivity: PlateConnectivity.AllConnected,
+                RequireLandmarks: true,
+                BirthZonesMustReachEntrance: true),
             [MapProfile.Frontier] = new(
                 "边疆档验证版只提供 4 人的预算表，2 / 3 人边疆图尚未设计",
                 new Dictionary<int, Budget>
@@ -116,7 +119,10 @@ public static class MapValidator
                 DistanceHandling.AlwaysReport,
                 ColumnRange: (0, 25),
                 RowRange: null,
-                PlateList: null),
+                PlateList: null,
+                Connectivity: PlateConnectivity.AllConnected,
+                RequireLandmarks: true,
+                BirthZonesMustReachEntrance: true),
             [MapProfile.Board] = new(
                 "棋盘档只提供 4 人的预算表，2 / 3 人棋盘图尚未设计",
                 new Dictionary<int, Budget>
@@ -127,7 +133,28 @@ public static class MapValidator
                 DistanceHandling.AlwaysReport,
                 ColumnRange: (20, 50),
                 RowRange: (20, 50),
-                PlateList: new((5, 15), (5, 7), MinGap: 2, CorridorWidth: (3, 4), CorridorLength: (2, 4))),
+                PlateList: new((5, 15), (5, 7), MinGap: 2, CorridorWidth: (3, 4), CorridorLength: (2, 4)),
+                Connectivity: PlateConnectivity.AllConnected,
+                RequireLandmarks: true,
+                BirthZonesMustReachEntrance: true),
+
+            // 链接档（board-link-mode D2 / 裁决 A3）：可落子格 125（初始 5 块出生棋盘）–1600（链接后；A3 原定 1000，三块公共棋盘加六条长通道会超过）；
+            // 信物 5–14；出生区恰 5 个、各 25–49 格；棋盘清单与通道宽照棋盘档，通道长度不限（见 LinkMapGenerator）；
+            // 连通性按连通分量（每个分量须含出生棋盘），不要求到中央入口可达、不做距离均衡、不要求标注咽喉；画布列、行各 20–80。
+            [MapProfile.Link] = new(
+                "链接档只提供 4 人的预算表（本模式只有 4 人局）",
+                new Dictionary<int, Budget>
+                {
+                    [4] = new(125, 1600, 5, 14, (5, 5), (25, 49)),
+                }.ToImmutableDictionary(),
+                ZonesMustExceedPlayers: true,
+                DistanceHandling.Skip,
+                ColumnRange: (20, 80),
+                RowRange: (20, 80),
+                PlateList: new((5, 11), (5, 7), MinGap: 2, CorridorWidth: (3, 4), CorridorLength: (2, 80)),
+                Connectivity: PlateConnectivity.PerComponent,
+                RequireLandmarks: false,
+                BirthZonesMustReachEntrance: false),
         }.ToImmutableDictionary();
 
     /// <summary>距离均衡（规则第 1 条）的处理方式。目标不可达不在此列——两档都拒绝。</summary>
@@ -138,11 +165,25 @@ public static class MapValidator
 
         /// <summary>无论极差多少都把各出生区的距离作为报告项给出，不因极差拒绝。</summary>
         AlwaysReport,
+
+        /// <summary>不做距离校验（链接档：开局各出生棋盘彼此隔绝，没有共同可达的目标）。</summary>
+        Skip,
+    }
+
+    /// <summary>棋盘连通性（棋盘档规则第 5 条 vs 链接档）的处理方式。</summary>
+    private enum PlateConnectivity
+    {
+        /// <summary>全部棋盘须经通道连成一片。</summary>
+        AllConnected,
+
+        /// <summary>按连通分量校验：每个可落子格的几何连通分量都必须含至少一块出生棋盘（无主的公共棋盘 / 通道片即失败），分量之间不要求连通。</summary>
+        PerComponent,
     }
 
     /// <summary>
     /// 一个规格档的全部分流声明。外接宽度区间的下限为 0 表示不设下限（尺寸为正由结构校验负责）；行数区间为 <c>null</c> 表示行数不限；
-    /// 棋盘清单规则为 <c>null</c> 表示该档的棋盘清单必须为空。
+    /// 棋盘清单规则为 <c>null</c> 表示该档的棋盘清单必须为空；<c>RequireLandmarks</c> 为假时允许不标注咽喉；
+    /// <c>BirthZonesMustReachEntrance</c> 为假时不校验出生区到中央入口的通路。
     /// </summary>
     private sealed record ProfileRules(
         string SupportedPlayers,
@@ -151,7 +192,10 @@ public static class MapValidator
         DistanceHandling Distance,
         (int Min, int Max) ColumnRange,
         (int Min, int Max)? RowRange,
-        PlateRules? PlateList);
+        PlateRules? PlateList,
+        PlateConnectivity Connectivity,
+        bool RequireLandmarks,
+        bool BirthZonesMustReachEntrance);
 
     /// <summary>
     /// 棋盘清单规则（board-map「棋盘档预算与校验」第 1–7 条的数值）：棋盘边长区间、出生棋盘边长区间、棋盘两两的最小间隔、
@@ -190,13 +234,13 @@ public static class MapValidator
             // 没有声明行的只有未定义的取值（只可能来自手工构造）：拒绝加载并说明原因，不往下跑任何一条规则。
             f.Add(new MapValidationFailure(
                 "MAP_PROFILE_UNKNOWN",
-                "该规格档没有校验声明表：只有标准档、边疆档与棋盘档可以加载。",
+                "该规格档没有校验声明表：只有标准档、边疆档、棋盘档与链接档可以加载。",
                 ImmutableArray<Coord>.Empty));
             return new MapValidationResult(f.ToImmutable());
         }
 
         // 外接尺寸不合该档的区间、或棋盘清单与该档不符：规模已经不对，到此为止——后面的规则只会报出一堆派生失败。
-        if (!ValidateExtent(map, rules.ColumnRange, rules.RowRange, f) || !ValidatePlateList(map, rules.PlateList, f))
+        if (!ValidateExtent(map, rules.ColumnRange, rules.RowRange, f) || !ValidatePlateList(map, rules, f))
         {
             return new MapValidationResult(f.ToImmutable());
         }
@@ -208,10 +252,14 @@ public static class MapValidator
         ValidateBudgets(map, rules, budget, f);
         ValidateBirthZones(map, budget, f);
         ValidateRelicCells(map, f);
-        ValidateLandmarks(map, f);
+        ValidateLandmarks(map, rules.RequireLandmarks, f);
         ValidateTolerance(map, f);
         ValidatePockets(map, f);
-        ValidateBirthZoneConnectivity(map, f);
+        if (rules.BirthZonesMustReachEntrance)
+        {
+            ValidateBirthZoneConnectivity(map, f);
+        }
+
         ValidateDistanceBalance(map, rules.Distance, f);
 
         return new MapValidationResult(f.ToImmutable());
@@ -273,9 +321,9 @@ public static class MapValidator
     /// 棋盘清单（board-map「棋盘清单」「棋盘档预算与校验」第 1–7 条）。<paramref name="declared"/> 为 <c>null</c> 的档清单必须为空；
     /// 否则清单不得为空，并逐块校验棋盘、逐条校验通道。返回 <c>false</c> 表示清单与该档根本不符，后面的规则不必再跑。
     /// </summary>
-    private static bool ValidatePlateList(MapData map, PlateRules? declared, ImmutableArray<MapValidationFailure>.Builder f)
+    private static bool ValidatePlateList(MapData map, ProfileRules rules, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        if (declared is not { } plates)
+        if (rules.PlateList is not { } plates)
         {
             if (map.Boards.IsDefaultOrEmpty)
             {
@@ -301,7 +349,15 @@ public static class MapValidator
         ValidateBirthPlates(map, f);
         ValidateFlatScenery(map, owner, f);
         ValidateCorridors(map, plates, owner, f);
-        ValidatePlateConnectivity(map, owner, f);
+        if (rules.Connectivity == PlateConnectivity.PerComponent)
+        {
+            ValidateComponentsHaveBirthBoards(map, f);
+        }
+        else
+        {
+            ValidatePlateConnectivity(map, owner, f);
+        }
+
         return true;
     }
 
@@ -660,6 +716,24 @@ public static class MapValidator
     }
 
     /// <summary>
+    /// 链接档的连通性（board-link-mode D1 / 规格 link-map-generation「物化状态校验」）：按几何四邻导出可落子格的连通分量（<see cref="Battlefields"/>），
+    /// 每个分量都必须含至少一块出生棋盘——没有出生棋盘的公共棋盘 / 通道片是生成器缺陷。分量之间**不要求**连通：开局 5 块出生棋盘本就彼此隔绝。
+    /// </summary>
+    private static void ValidateComponentsHaveBirthBoards(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        foreach (Battlefield field in Battlefields.Of(map).All)
+        {
+            if (!field.HasBirthBoard)
+            {
+                f.Add(new MapValidationFailure(
+                    "BATTLEFIELD_WITHOUT_BIRTH_BOARD",
+                    $"有一片 {field.Cells.Length} 格的可落子格不含任何出生棋盘：每个战场都必须由出生棋盘长出来。",
+                    field.Cells));
+            }
+        }
+    }
+
+    /// <summary>
     /// 结构性前置校验。这些问题若不先报出来，后面的规则只会报出症状
     /// （"可落子格为 0"），把根因藏在一堆派生失败里。
     /// </summary>
@@ -888,7 +962,7 @@ public static class MapValidator
         }
     }
 
-    private static void ValidateLandmarks(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateLandmarks(MapData map, bool requireChokes, ImmutableArray<MapValidationFailure>.Builder f)
     {
         if (map.TerrainAt(map.CentralEntrance) != Terrain.Playable)
         {
@@ -904,7 +978,7 @@ public static class MapValidator
                 "CHOKE_NOT_PLAYABLE", "标注的咽喉格必须位于可落子格上。", badChokes));
         }
 
-        if (map.ChokePoints.IsEmpty)
+        if (requireChokes && map.ChokePoints.IsEmpty)
         {
             f.Add(new MapValidationFailure(
                 "CHOKE_NOT_ANNOTATED",
@@ -1052,7 +1126,8 @@ public static class MapValidator
     /// </summary>
     private static void ValidateDistanceBalance(MapData map, DistanceHandling handling, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        if (map.BirthZones.IsDefaultOrEmpty)
+        // 链接档不做距离校验（含"目标不可达"）：开局各出生棋盘彼此隔绝，没有共同可达的目标。
+        if (handling == DistanceHandling.Skip || map.BirthZones.IsDefaultOrEmpty)
         {
             return;
         }

@@ -26,8 +26,8 @@ public class 棋盘档生成图标识Tests
         Assert.Equal((42UL, 7), (BoardMapId.Parse("board:42").MapSeed, BoardMapId.Parse("board:42").Parameters.BoardCount));
 
         Assert.Equal("board:42", BoardMapGenerator.Generate("board:42:n7").Id);
-        Assert.Equal("board:42", MapCatalog.Resolve("board:42:n7").Id);
-        Assert.Equal(MapFile.ToJson(BoardMapGenerator.Generate(42)), MapFile.ToJson(MapCatalog.Resolve(" board:42:n7 ")));
+        Assert.Equal("board:42", MapCatalog.Legacy.Resolve("board:42:n7").Id);
+        Assert.Equal(MapFile.ToJson(BoardMapGenerator.Generate(42)), MapFile.ToJson(MapCatalog.Legacy.Resolve(" board:42:n7 ")));
 
         // 种子的整个取值范围都能往返。
         Assert.Equal("board:18446744073709551615", BoardMapId.Normalize("board:18446744073709551615"));
@@ -46,7 +46,7 @@ public class 棋盘档生成图标识Tests
         Assert.Equal(id, BoardMapId.Normalize(id));
         Assert.Equal(boards, BoardMapId.Parse(id).Parameters.BoardCount);
         Assert.Equal(id, BoardMapId.Format(42, new BoardMapParameters { BoardCount = boards }));
-        MapData map = MapCatalog.Resolve(id);
+        MapData map = MapCatalog.Legacy.Resolve(id);
         Assert.Equal((id, boards), (map.Id, map.Boards.Length));
     }
 
@@ -76,7 +76,7 @@ public class 棋盘档生成图标识Tests
 
         if (BoardMapId.IsBoardMap(id))
         {
-            FormatException resolve = Assert.Throws<FormatException>(() => MapCatalog.Resolve(id));
+            FormatException resolve = Assert.Throws<FormatException>(() => MapCatalog.Legacy.Resolve(id));
             Assert.Contains("board:<地图种子>[:n<棋盘数>]", resolve.Message, StringComparison.Ordinal);
             Assert.Contains("7–10", resolve.Message, StringComparison.Ordinal);
 
@@ -97,7 +97,7 @@ public class 棋盘档生成图标识Tests
         Assert.False(GeneratedMapId.IsBareRequest("board"));
         Assert.False(GeneratedMapId.IsGenerated("board:1"));
         Assert.False(BoardMapId.IsBoardMap("gen:1"));
-        FormatException bare = Assert.Throws<FormatException>(() => MapCatalog.Resolve("board"));
+        FormatException bare = Assert.Throws<FormatException>(() => MapCatalog.Legacy.Resolve("board"));
         Assert.Contains("board:12345", bare.Message, StringComparison.Ordinal);
         Assert.Contains("随机取种子由入口完成", bare.Message, StringComparison.Ordinal);   // 是目录自己拒绝的，不是落到标识解析才报错
 
@@ -118,7 +118,7 @@ public class 棋盘档生成图标识Tests
         (int code, string text, string err) = RunMain(() => 12345UL, "map", "--map", "board");
         Assert.True(code == 0, err);
         Assert.Contains("本次地图为 board:12345（", text, StringComparison.Ordinal);
-        MapData map = MapCatalog.Resolve("board:12345");
+        MapData map = MapCatalog.Legacy.Resolve("board:12345");
         Assert.Contains($"地图 board:12345  {map.Width}×{map.Height}", text, StringComparison.Ordinal);
         Assert.Contains("地图校验通过。", text, StringComparison.Ordinal);
         Assert.DoesNotContain("已导出", text, StringComparison.Ordinal);   // 生成图只打印，不往权威目录写
@@ -145,7 +145,7 @@ public class 棋盘档生成图标识Tests
         Assert.Equal("board:12345", log.Header.Config.MapId);
         Assert.Equal(5, log.Header.ZoneCount);
         Assert.DoesNotContain("\"board\"", log.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
-        Assert.Equal(MapFile.Digest(MapCatalog.Resolve("board:12345")), log.Header.MapDigest);
+        Assert.Equal(MapFile.Digest(MapCatalog.Legacy.Resolve("board:12345")), log.Header.MapDigest);
 
         // 回放按首部的标识重建同一张图。
         Assert.True(Replayer.Replay(MatchLog.Parse(log.DeterministicText())).Identical);
@@ -157,7 +157,7 @@ public class 棋盘档生成图标识Tests
     [Fact]
     public void 未知标识的可用清单里说明棋盘图写法()
     {
-        FileNotFoundException unknown = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve("no-such-map"));
+        FileNotFoundException unknown = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve("no-such-map"));
         Assert.Contains("board:<地图种子>", unknown.Message, StringComparison.Ordinal);
         Assert.Contains("gen:<地图种子>", unknown.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(MapCatalog.BuiltinIds, BoardMapId.IsBoardMap);

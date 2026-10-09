@@ -222,3 +222,12 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 负责人授权全部由实施方决定：棋盘图长局 / 封门裁决为 **A 接受长局**（设计文档 §3.3 与变更记录已写明理由：长度随格数线性；"被封"只是几何指标，保护期后全盘可落子）。音效音色 / 音量未实机试听，参数表 `ShowSounds.Table` 待负责人反馈后再调。
 - 当前无进行中的 change / Trellis 任务。
 - （10-03 续）`board-render-perf`：原方案前提错（以为开销在场景装饰；实测 72%–76% 的绘制调用来自可落子地砖的独立网格与材质）。两轮后 board:1 静止帧绘制调用 4097 → 792、n10 / n7 之比 1.635 → 1.179，14 张截图 0 像素差异；演出期间棋子增量重画。截图证据在 `sim-out/board-render-perf/`（不入库）。剩余大头是棋子（每枚若干独立网格与材质）与水面，未做。
+
+
+## Session: 2026-10-09 — board-link-mode（新整体模式）提案与段 A 开工
+
+- 负责人口述新模式：四人盲选隔绝出生棋盘（可重叠）、三大回合后未交战者随机配对、两棋盘间长出公共棋盘链接、两对都打完后胜者决赛；整个游戏只保留这一模式。逐项裁决 13 项 + Q1–Q10 全缺省，记录在 `openspec/changes/board-link-mode/proposal.md` 裁决表。
+- OpenSpec change `board-link-mode` 四产物齐全，`validate --strict` 通过，提交 `d7630bd`。新增能力 `battlefield`、`link-map-generation`；修改 15 个既有能力。顾问复审修正：终局条件改"只剩一个含在局玩家的战场"；带入保持全局公开；"三类终局条件""第 4 大回合的全图解禁"改 REMOVED + ADDED；生成器可行性改穷举真实链接序列。
+- 关键设计：战场 = 可落子格连通分量（D1）；地图增长复用"换 MapData 重建派生表"（A1）；配对是外部输入事件、不可复现但记录重放（D3）；按座位过滤的公开视图（D4）；旧地图降级为 `MapCatalog.Legacy` 夹具（D8 / A4，段 C 才拒绝旧标识）。
+- 段 A 实施裁决 A1–A5 全缺省，派发方式 1（单个 trellis-implement agent 顺序做 tasks 1.1–1.7）。Trellis 任务 `10-09-board-link-mode-a` 进行中，implement/check 上下文已挂。
+- 待：agent 回传 → check → 负责人过目 → 提交段 A → 段 B（对局流程）。

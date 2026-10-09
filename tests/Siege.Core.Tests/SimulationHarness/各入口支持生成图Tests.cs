@@ -19,14 +19,14 @@ public class 各入口支持生成图Tests
     public void 目录按生成图标识解析出的地图与直接调生成器逐项相同()
     {
         // 变异 MB-1：MapCatalog.Resolve 去掉 gen: 分支 → 落到文件路径分支报"找不到地图"，本测试红。
-        Assert.Equal(MapFile.ToJson(FrontierMapGenerator.Generate(12345)), MapFile.ToJson(MapCatalog.Resolve("gen:12345")));
+        Assert.Equal(MapFile.ToJson(FrontierMapGenerator.Generate(12345)), MapFile.ToJson(MapCatalog.Legacy.Resolve("gen:12345")));
         Assert.Equal(
             MapFile.ToJson(FrontierMapGenerator.Generate(987654321, new MapGenParameters { PlatformCount = 7 })),
-            MapFile.ToJson(MapCatalog.Resolve(" gen:987654321:p7 ")));
+            MapFile.ToJson(MapCatalog.Legacy.Resolve(" gen:987654321:p7 ")));
 
         // 标识规范化：gen:42:p6 解析出的地图标识是 gen:42；内置图不受影响，也不出现在"内置标识"清单里。
-        Assert.Equal("gen:42", MapCatalog.Resolve("gen:42:p6").Id);
-        Assert.Equal("gen:987654321:p7", MapCatalog.Resolve("gen:987654321:p7").Id);
+        Assert.Equal("gen:42", MapCatalog.Legacy.Resolve("gen:42:p6").Id);
+        Assert.Equal("gen:987654321:p7", MapCatalog.Legacy.Resolve("gen:987654321:p7").Id);
         Assert.DoesNotContain(MapCatalog.BuiltinIds, GeneratedMapId.IsGenerated);
     }
 
@@ -35,12 +35,12 @@ public class 各入口支持生成图Tests
     {
         // 规则内核不读时钟：裸 gen 到了目录这里直接报错（取种子是入口最外层的事）。
         // 变异 MB-2：MapCatalog 遇到裸 gen 时自己取一个固定种子生成 → 本测试红。
-        FormatException bare = Assert.Throws<FormatException>(() => MapCatalog.Resolve("gen"));
+        FormatException bare = Assert.Throws<FormatException>(() => MapCatalog.Legacy.Resolve("gen"));
         Assert.Contains("gen:12345", bare.Message, StringComparison.Ordinal);
 
-        FormatException notNumber = Assert.Throws<FormatException>(() => MapCatalog.Resolve("gen:abc"));
+        FormatException notNumber = Assert.Throws<FormatException>(() => MapCatalog.Legacy.Resolve("gen:abc"));
         Assert.Contains("gen:<地图种子>[:p<平台数>]", notNumber.Message, StringComparison.Ordinal);
-        FormatException outOfRange = Assert.Throws<FormatException>(() => MapCatalog.Resolve("gen:1:p99"));
+        FormatException outOfRange = Assert.Throws<FormatException>(() => MapCatalog.Legacy.Resolve("gen:1:p99"));
         Assert.Contains("5–8", outOfRange.Message, StringComparison.Ordinal);
 
         // 入口：报错退出、不回落到缺省地图，错误信息说明格式与范围。
@@ -52,7 +52,7 @@ public class 各入口支持生成图Tests
         Assert.Contains("gen:<地图种子>[:p<平台数>]", playErr, StringComparison.Ordinal);
 
         // 未知标识的可用清单里说明 gen:<种子> 这一写法。
-        FileNotFoundException unknown = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve("no-such-map"));
+        FileNotFoundException unknown = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve("no-such-map"));
         Assert.Contains("gen:<地图种子>", unknown.Message, StringComparison.Ordinal);
     }
 
@@ -138,7 +138,7 @@ public class 各入口支持生成图Tests
     public void 终端版玩生成图_插旗提示列出全部平台_地图标识与对局种子分开显示()
     {
         // 规格 Scenario「终端版玩生成图」：gen:12345 有 6 个平台；gen:12345:p8 有 8 个。脚本只选区，随后输入耗尽退出。
-        MapData map = MapCatalog.Resolve("gen:12345:p8");
+        MapData map = MapCatalog.Legacy.Resolve("gen:12345:p8");
         var output = new StringWriter();
 
         int exit = PlayCommand.Run(7, 4, 1, AiDifficulty.Easy, new StringReader("8\n"), output, map);
@@ -189,10 +189,10 @@ public class 各入口支持生成图Tests
 
         Assert.True(exportCode == 0, exportErr);
         Assert.Contains($"已导出 {exported}", exportText, StringComparison.Ordinal);
-        MapData loaded = MapCatalog.Resolve(exported);
+        MapData loaded = MapCatalog.Legacy.Resolve(exported);
         Assert.Equal("gen:12345", loaded.Id);
         Assert.Equal(MapFile.ToJson(FrontierMapGenerator.Generate("gen:12345")), MapFile.ToJson(loaded));
-        Assert.Equal(MapFile.Digest(MapCatalog.Resolve("gen:12345")), MapFile.Digest(loaded));
+        Assert.Equal(MapFile.Digest(MapCatalog.Legacy.Resolve("gen:12345")), MapFile.Digest(loaded));
         GameBoard.Load(loaded);   // 作为普通地图文件过同一套校验
 
         // 用导出的文件跑的局，回放时按文件重建，摘要对得上。
@@ -252,7 +252,7 @@ public class 各入口支持生成图Tests
         string fresh = Path.Combine(mapsDir, "my-gen-12345.json");
         (int freshCode, _, string freshErr) = RunMain("map", "--map", "gen:12345", "--out", fresh);
         Assert.True(freshCode == 0, freshErr);
-        Assert.Equal(MapFile.Digest(MapCatalog.Resolve("gen:12345")), MapFile.Digest(MapCatalog.Resolve(fresh)));
+        Assert.Equal(MapFile.Digest(MapCatalog.Legacy.Resolve("gen:12345")), MapFile.Digest(MapCatalog.Legacy.Resolve(fresh)));
         string elsewhere = Path.Combine(root, "scratch", FrontierMapV2.Id + ".json");
         Assert.Equal(0, RunMain("map", "--map", "gen:12345", "--out", elsewhere).Code);
         Assert.True(File.Exists(elsewhere));
@@ -289,7 +289,8 @@ public class 各入口支持生成图Tests
 
         string[] bareReaders = [.. files.Where(f => f.Text.Contains("IsBareRequest(", StringComparison.Ordinal)).Select(f => f.Path).Order(StringComparer.Ordinal)];
         Assert.Equal(
-            ["Siege.Core/Board/Maps/BoardMapParameters.cs", "Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Core/Board/Maps/MapGenParameters.cs", "Siege.Sim/Config/RunConfig.cs", "Siege.Sim/Program.cs", "godot/scripts/GameRoot.cs"],
+            // board-link-mode 段 A：链接图标识的唯一实现（LinkMapId）也识别裸 link；入口对裸 link 的处理在段 C / 段 D 接入。
+            ["Siege.Core/Board/Maps/BoardMapParameters.cs", "Siege.Core/Board/Maps/LinkMapId.cs", "Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Core/Board/Maps/MapGenParameters.cs", "Siege.Sim/Config/RunConfig.cs", "Siege.Sim/Program.cs", "godot/scripts/GameRoot.cs"],
             bareReaders);
 
         // 裸 board（board-map D7）的识别点更少：目录（拒绝它）、批量 / 终端入口、图形版入口；标识的唯一实现在 BoardMapParameters.cs。

@@ -116,7 +116,7 @@ public class 六类原型信物的效果Tests
         int fresh4 = 0;
         foreach (string mapId in MapCatalog.BuiltinIds)
         {
-            MapData map = MapCatalog.Resolve(mapId);
+            MapData map = MapCatalog.Legacy.Resolve(mapId);
             for (ulong seed = 0; seed < 1000; seed++)
             {
                 foreach (RelicPlacement p in RelicGenerator.Generate(map, new GameSeed(seed), ContentSet.V2).Placements)

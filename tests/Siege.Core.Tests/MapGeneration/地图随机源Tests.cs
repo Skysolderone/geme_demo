@@ -107,6 +107,7 @@ public class 地图随机源Tests
         [
             "MapRandom.cs", "MapGenParameters.cs", "FrontierMapGenerator.cs", "FrontierSurfaces.cs",   // FrontierSurfaces：terrain-surfaces 新地表投放
             "BoardMapGenerator.cs", "BoardMapLayout.cs", "BoardMapParameters.cs",                        // board-map 段 B：棋盘档生成器
+            "LinkMapGenerator.cs", "LinkMapId.cs",                                                        // board-link-mode 段 A：链接档生成器与标识
             .. Directory.EnumerateFiles(Path.Combine(core, "Board", "Maps"), "FrontierMapLayout*.cs").Select(path => Path.GetFileName(path)!),
         ];
         Assert.True(generatorNames.Length >= 14, $"样本口径：只认出 {generatorNames.Length} 个生成器文件。");

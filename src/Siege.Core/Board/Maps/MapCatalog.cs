@@ -3,8 +3,9 @@ namespace Siege.Core.Board.Maps;
 /// <summary>
 /// "地图标识 → 地图"的唯一解析（frontier-map D5）：批量跑局、终端版与图形版三个入口共用这一份，MUST NOT 各自维护地图清单。
 /// 内置图按标识直接给；<c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c> 交给边疆档生成器（map-generator D3）；
-/// <c>board:&lt;地图种子&gt;[:n&lt;棋盘数&gt;]</c> 交给棋盘档生成器（board-map D7）；其余视为地图文件路径（或 <c>maps/&lt;标识&gt;.json</c>）。
-/// 解析不了就报错并列出可用标识，MUST NOT 静默回落到缺省地图。
+/// <c>board:&lt;地图种子&gt;[:n&lt;棋盘数&gt;]</c> 交给棋盘档生成器（board-map D7）；其余视为地图文件路径（或 <c>maps/&lt;标识&gt;.json</c>）——
+/// 以上旧标识族自 board-link-mode 起全部收进 <see cref="Legacy"/>；<see cref="Resolve"/> 自己只认新模式的 <c>link:&lt;地图种子&gt;</c>（<see cref="LinkMapGenerator"/>），
+/// 段 A 仍把其余标识转交 <see cref="Legacy"/>，段 C 收口入口后不再转交。解析不了就报错并列出可用标识，MUST NOT 静默回落到缺省地图。
 /// </summary>
 /// <remarks>
 /// 放在规则内核里是因为图形版（<c>src/godot</c>）只引用 Core / Presentation，不得依赖批量项目（<c>.trellis/spec/core/boundaries.md</c>）。
@@ -35,57 +36,87 @@ public static class MapCatalog
     public static IReadOnlyList<BuiltinMapInfo> BuiltinMaps { get; } = [.. Builtins.Select(b => new BuiltinMapInfo(b.Id, b.Title))];
 
     /// <summary>
-    /// 解析地图：<c>null</c> / 空白 → 缺省地图；内置标识 → 内置图；生成图标识 → 按其中的地图种子与参数生成；
-    /// 否则按文件路径、再按 <c>maps/&lt;标识&gt;.json</c> 读入。都不是则抛 <see cref="FileNotFoundException"/>，消息列出全部可用标识。
+    /// 解析地图（board-link-mode D8 的段 A 形态）：<c>link:&lt;地图种子&gt;</c> → 链接档初始地图（<see cref="LinkMapGenerator"/>）；
+    /// 其余标识（<c>null</c> / 空白、内置图、<c>gen:</c>、<c>board:</c>、文件路径）转交 <see cref="Legacy"/>。
+    /// 段 C 收口玩家入口时本方法只接受 <c>link:</c>，旧标识族只能经 <see cref="Legacy"/> 到达。
     /// </summary>
     /// <remarks>
-    /// 裸 <c>gen</c>（"随机取一个地图种子"）不是完整标识：这里不读时钟，遇到即抛 <see cref="FormatException"/>。
-    /// 取种子只在三个入口的最外层做——入口用 <see cref="GeneratedMapId.IsBareRequest"/> 识别、取到种子后用
-    /// <see cref="GeneratedMapId.Format"/> 拼出完整标识、打印给用户，再交到这里。
+    /// 裸 <c>link</c>（"随机取一个地图种子"）不是完整标识：这里不读时钟，遇到即抛 <see cref="FormatException"/>。
+    /// 取种子只在入口的最外层做——入口用 <see cref="LinkMapId.IsBareRequest"/> 识别、取到种子后用 <see cref="LinkMapId.Format"/> 拼出完整标识再交到这里。
     /// </remarks>
     public static MapData Resolve(string? mapId)
     {
         string id = string.IsNullOrWhiteSpace(mapId) ? DefaultId : mapId.Trim();
-        foreach ((string builtinId, _, Func<MapData> create) in Builtins)
+        if (LinkMapId.IsLinkMap(id))
         {
-            if (id == builtinId)
-            {
-                return create();
-            }
-        }
-
-        if (GeneratedMapId.IsGenerated(id))
-        {
-            if (GeneratedMapId.IsBareRequest(id))
+            if (LinkMapId.IsBareRequest(id))
             {
                 throw new FormatException(
-                    $"地图标识 {GeneratedMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {GeneratedMapId.Prefix}:12345 或 {GeneratedMapId.Prefix}:12345:p7。");
+                    $"地图标识 {LinkMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {LinkMapId.Prefix}:1 或 {LinkMapId.Prefix}:12345。");
             }
 
-            return FrontierMapGenerator.Generate(id);
+            return LinkMapGenerator.Generate(id);
         }
 
-        if (BoardMapId.IsBoardMap(id))
+        return Legacy.Resolve(id);
+    }
+
+    /// <summary>
+    /// 旧地图族的解析（board-link-mode D8 / 规格 map-definition「旧地图降级为测试夹具」、map-generation「既有生成器降级为测试夹具」）：
+    /// 内置图、<c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c>（边疆档生成器）、<c>board:&lt;地图种子&gt;[:n&lt;棋盘数&gt;]</c>（棋盘档生成器）与地图文件路径。
+    /// 只供 Core 测试（围棋内核的回归护栏）与 <c>Siege.Sim map</c> 调试子命令使用，玩家入口不得到达；与引入本 change 之前的解析逐项相同。
+    /// </summary>
+    public static class Legacy
+    {
+        /// <summary>
+        /// 解析旧地图：<c>null</c> / 空白 → 缺省地图；内置标识 → 内置图；生成图标识 → 按其中的地图种子与参数生成；
+        /// 否则按文件路径、再按 <c>maps/&lt;标识&gt;.json</c> 读入。都不是则抛 <see cref="FileNotFoundException"/>，消息列出全部可用标识。
+        /// 裸 <c>gen</c> / <c>board</c> 同样不是完整标识，遇到即抛 <see cref="FormatException"/>。
+        /// </summary>
+        public static MapData Resolve(string? mapId)
         {
-            // 裸 board 同理：不是完整标识，取种子只在三个入口的最外层做。
-            if (BoardMapId.IsBareRequest(id))
+            string id = string.IsNullOrWhiteSpace(mapId) ? DefaultId : mapId.Trim();
+            foreach ((string builtinId, _, Func<MapData> create) in Builtins)
             {
-                throw new FormatException(
-                    $"地图标识 {BoardMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {BoardMapId.Prefix}:12345 或 {BoardMapId.Prefix}:12345:n9。");
+                if (id == builtinId)
+                {
+                    return create();
+                }
             }
 
-            return BoardMapGenerator.Generate(id);
-        }
+            if (GeneratedMapId.IsGenerated(id))
+            {
+                if (GeneratedMapId.IsBareRequest(id))
+                {
+                    throw new FormatException(
+                        $"地图标识 {GeneratedMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {GeneratedMapId.Prefix}:12345 或 {GeneratedMapId.Prefix}:12345:p7。");
+                }
 
-        string path = File.Exists(id) ? id : Path.Combine("maps", id + ".json");
-        if (!File.Exists(path))
-        {
-            throw new FileNotFoundException(
-                $"找不到地图 {id}：既不是内置地图，也不是存在的地图文件。可用的地图标识：{string.Join("、", BuiltinIds)}；随机生成图写作 {GeneratedMapId.Prefix}:<地图种子>[:p<平台数 {MapGenParameters.MinPlatforms}–{MapGenParameters.MaxPlatforms}>]（如 {GeneratedMapId.Prefix}:12345）；随机生成的棋盘图写作 {BoardMapId.Prefix}:<地图种子>[:n<棋盘数 {BoardMapParameters.MinBoards}–{BoardMapParameters.MaxBoards}>]（如 {BoardMapId.Prefix}:12345）；也可以给地图文件（.json）的路径。",
-                path);
-        }
+                return FrontierMapGenerator.Generate(id);
+            }
 
-        return MapFile.FromJson(File.ReadAllText(path));
+            if (BoardMapId.IsBoardMap(id))
+            {
+                // 裸 board 同理：不是完整标识，取种子只在三个入口的最外层做。
+                if (BoardMapId.IsBareRequest(id))
+                {
+                    throw new FormatException(
+                        $"地图标识 {BoardMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {BoardMapId.Prefix}:12345 或 {BoardMapId.Prefix}:12345:n9。");
+                }
+
+                return BoardMapGenerator.Generate(id);
+            }
+
+            string path = File.Exists(id) ? id : Path.Combine("maps", id + ".json");
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException(
+                    $"找不到地图 {id}：既不是内置地图，也不是存在的地图文件。可用的地图标识：{string.Join("、", BuiltinIds)}；随机生成图写作 {GeneratedMapId.Prefix}:<地图种子>[:p<平台数 {MapGenParameters.MinPlatforms}–{MapGenParameters.MaxPlatforms}>]（如 {GeneratedMapId.Prefix}:12345）；随机生成的棋盘图写作 {BoardMapId.Prefix}:<地图种子>[:n<棋盘数 {BoardMapParameters.MinBoards}–{BoardMapParameters.MaxBoards}>]（如 {BoardMapId.Prefix}:12345）；新模式的链接图写作 {LinkMapId.Prefix}:<地图种子>（如 {LinkMapId.Prefix}:1）；也可以给地图文件（.json）的路径。",
+                    path);
+            }
+
+            return MapFile.FromJson(File.ReadAllText(path));
+        }
     }
 }
 

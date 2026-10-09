@@ -54,7 +54,7 @@ public class 棋盘档生成参数Tests
         Assert.Contains("7–10", Assert.Throws<ArgumentOutOfRangeException>(() => BoardMapId.Format(1, parameters)).Message, StringComparison.Ordinal);
         Assert.Contains("7–10", Assert.Throws<FormatException>(() => BoardMapId.Parse("board:1:n6")).Message, StringComparison.Ordinal);
         Assert.Contains("7–10", Assert.Throws<FormatException>(() => BoardMapGenerator.Generate("board:1:n6")).Message, StringComparison.Ordinal);
-        Assert.Contains("7–10", Assert.Throws<FormatException>(() => MapCatalog.Resolve("board:1:n6")).Message, StringComparison.Ordinal);
+        Assert.Contains("7–10", Assert.Throws<FormatException>(() => MapCatalog.Legacy.Resolve("board:1:n6")).Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public class 棋盘档生成参数Tests
         for (int i = 0; i < FrontierGolden.Length; i++)
         {
             ulong seed = (ulong)(i + 1);
-            MapData map = MapCatalog.Resolve($"gen:{seed}");
+            MapData map = MapCatalog.Legacy.Resolve($"gen:{seed}");
             Assert.Equal($"gen:{seed}", map.Id);
             Assert.Empty(map.Boards);
             if (Digest(map) != FrontierGolden[i])

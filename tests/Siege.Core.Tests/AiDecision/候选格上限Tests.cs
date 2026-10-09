@@ -410,8 +410,8 @@ public class 候选格上限Tests
         Assert.Equal(AiSearchConfig.LargeMapCellLimit, AiSearchConfig.DefaultCellLimitFor(AiSearchConfig.LargeMapPlayableThreshold + 1));
         Assert.True(AiSearchConfig.LargeMapCellLimit > 0);
 
-        int v4 = MapCatalog.Resolve(null).PlayableCount;
-        int frontier = MapCatalog.Resolve(FrontierMapV2.Id).PlayableCount;
+        int v4 = MapCatalog.Legacy.Resolve(null).PlayableCount;
+        int frontier = MapCatalog.Legacy.Resolve(FrontierMapV2.Id).PlayableCount;
         Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"v4 可落子格 {v4}");
         Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"边疆图可落子格 {frontier}");
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.ForDifficulty(d), AiSearchConfig.ForMap(d, v4)));

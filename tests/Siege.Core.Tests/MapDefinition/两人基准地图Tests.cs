@@ -154,7 +154,7 @@ public class 两人基准地图Tests
         Assert.Equal("双人图 9×9", info.Title);
         Assert.Equal(1, MapCatalog.BuiltinIds.ToList().IndexOf(TwoPlayerBaseMap.Id));
         Assert.Equal(MapCatalog.DefaultId, MapCatalog.BuiltinIds[0]);
-        Assert.Equal(MapFile.ToJson(Map()), MapFile.ToJson(MapCatalog.Resolve(TwoPlayerBaseMap.Id)));
+        Assert.Equal(MapFile.ToJson(Map()), MapFile.ToJson(MapCatalog.Legacy.Resolve(TwoPlayerBaseMap.Id)));
     }
 
     [Fact]

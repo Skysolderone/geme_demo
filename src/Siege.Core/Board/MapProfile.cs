@@ -18,4 +18,10 @@ public enum MapProfile
     /// 只定 4 人；预算与校验见校验器声明表的棋盘档一行。
     /// </summary>
     Board = 2,
+
+    /// <summary>
+    /// 链接档（board-link-mode D2）：开局只有 5 块彼此隔绝的出生棋盘，公共棋盘与通道在对局中经「链接事件」确定性地长出来——
+    /// 唯一允许在对局中增长的规格档（<see cref="MapData.MapVersion"/> 随每次链接 +1）。只定 4 人；连通性按连通分量校验，不要求到中央入口可达。
+    /// </summary>
+    Link = 3,
 }

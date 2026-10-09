@@ -47,7 +47,7 @@ public class 地图专属评价权重覆盖Tests
     public void 未登记的地图取默认表()
     {
         // 规格 Scenario：v5、3 人图与一张生成图（另加边疆图）上未显式配置权重 → 默认表；登记表里有 2 人图也不影响它们。
-        string[] ids = [FourPlayerBaseMap.Id, ThreePlayerBaseMap.Id, MapCatalog.Resolve("gen:12345").Id, FrontierMapV2.Id];
+        string[] ids = [FourPlayerBaseMap.Id, ThreePlayerBaseMap.Id, MapCatalog.Legacy.Resolve("gen:12345").Id, FrontierMapV2.Id];
         Assert.Equal("gen:12345", ids[2]);
         foreach (string id in ids)
         {

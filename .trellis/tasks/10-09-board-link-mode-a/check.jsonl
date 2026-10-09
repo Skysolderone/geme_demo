@@ -1,0 +1,10 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/board-link-mode/design.md", "reason": "段 A 规格与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/battlefield/spec.md", "reason": "段 A 规格与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/link-map-generation/spec.md", "reason": "段 A 规格与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/map-definition/spec.md", "reason": "段 A 规格与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/map-generation/spec.md", "reason": "段 A 规格与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "段 A 规格与内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "段 A 规格与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "段 A 规格与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "段 A 规格与内核规范"}

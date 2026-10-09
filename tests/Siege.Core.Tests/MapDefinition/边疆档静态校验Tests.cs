@@ -173,13 +173,14 @@ public class 边疆档静态校验Tests
         // 表内各档的人数预算以 "}.ToImmutableDictionary()," 收尾（逗号），带分号的第一处才是声明表本身的结尾。
         int end = source.IndexOf("}.ToImmutableDictionary();", start, StringComparison.Ordinal);
         Assert.True(end > start, "找不到规格档声明表的结尾。");
-        Assert.True(end - start < 2_000, "声明表区间异常地长：结尾锚点可能匹配到了别处。");
+        Assert.True(end - start < 3_500, "声明表区间异常地长：结尾锚点可能匹配到了别处。");   // board-link-mode 段 A：四档各一行（链接行带说明注释）
 
         MatchCollection literals = Regex.Matches(source, @"MapProfile\s*\.\s*\w+");
         Assert.Contains(literals, m => m.Value.EndsWith("Standard", StringComparison.Ordinal));
         Assert.Contains(literals, m => m.Value.EndsWith("Frontier", StringComparison.Ordinal));
         Assert.Contains(literals, m => m.Value.EndsWith("Board", StringComparison.Ordinal));
-        Assert.Equal(3, literals.Count);   // 三档各一行，别无他处
+        Assert.Contains(literals, m => m.Value.EndsWith("Link", StringComparison.Ordinal));
+        Assert.Equal(4, literals.Count);   // 四档各一行，别无他处
         string[] scattered = [.. literals.Where(m => m.Index < start || m.Index > end).Select(m => $"{m.Value} @ 第 {LineOf(source, m.Index)} 行")];
         Assert.True(scattered.Length == 0, "规格档字面量出现在声明表之外：" + string.Join("；", scattered));
 
@@ -201,7 +202,8 @@ public class 边疆档静态校验Tests
         // board-map 段 B 修正：棋盘档的行数区间（20–50）是声明行的新字段 RowRange（同理不叫 Height），也只读一次；标准档与边疆档行数不限。
         // 变异 M-B3（段 B 实跑）：在 ValidatePockets 前加 `if (rules.PlateList is null && …恒假) { return …; }` → 本测试红 1。
         Assert.DoesNotMatch(@"MaxWidth|MaxHeight|const\s+int\s+\w*(Width|Height)", source);
-        foreach (string field in new[] { "SupportedPlayers", "Budgets", "ZonesMustExceedPlayers", "Distance", "ColumnRange", "RowRange", "PlateList" })
+        // board-link-mode 段 A：链接档的三个新字段（连通性模式、是否要求咽喉标注、出生区是否须到达中央入口）同样各只读一次。
+        foreach (string field in new[] { "SupportedPlayers", "Budgets", "ZonesMustExceedPlayers", "Distance", "ColumnRange", "RowRange", "PlateList", "Connectivity", "RequireLandmarks", "BirthZonesMustReachEntrance" })
         {
             MatchCollection fieldReads = Regex.Matches(source, @"\.\s*" + field + @"(?![\w])");
             Assert.True(
@@ -209,13 +211,19 @@ public class 边疆档静态校验Tests
                 $"声明表字段 {field} 只允许被一条规则读一次，实际 {fieldReads.Count} 次：" + string.Join("、", fieldReads.Select(m => $"第 {LineOf(source, m.Index)} 行")));
         }
 
-        // 距离处理方式的枚举字面量：表内三档各一次，表外只有 ValidateDistanceBalance 里的那一次比较。
+        // 距离处理方式的枚举字面量：表内四档各一次，表外只有 ValidateDistanceBalance 里的两次比较（跳过 / 只报告）。
         MatchCollection handlings = Regex.Matches(source, @"DistanceHandling\s*\.\s*\w+");
-        Assert.Equal(3, handlings.Count(m => m.Index > start && m.Index < end));
+        Assert.Equal(4, handlings.Count(m => m.Index > start && m.Index < end));
 
         // 棋盘清单里的棋盘类别不是规格档：它只在棋盘清单规则的几个函数里读，且这些函数只经 PlateList 那一次读取进入。
         Assert.Single(Regex.Matches(source, @"ValidatePlateList\s*\(map, rules"));
-        Assert.Equal(1, handlings.Count(m => m.Index < start || m.Index > end));
+        Assert.Equal(2, handlings.Count(m => m.Index < start || m.Index > end));
+        Assert.All(handlings.Where(m => m.Index < start || m.Index > end), m => Assert.True(source.LastIndexOf("ValidateDistanceBalance(", m.Index, StringComparison.Ordinal) > source.LastIndexOf("private static", m.Index, StringComparison.Ordinal) - 200));
+
+        // 棋盘连通性模式的枚举字面量：表内四档各一次，表外只有 ValidatePlateList 里的那一次比较。
+        MatchCollection connectivity = Regex.Matches(source, @"PlateConnectivity\s*\.\s*\w+");
+        Assert.Equal(4, connectivity.Count(m => m.Index > start && m.Index < end));
+        Assert.Equal(1, connectivity.Count(m => m.Index < start || m.Index > end));
     }
 
     private static int LineOf(string source, int index) => source.AsSpan(0, index).Count('\n') + 1;

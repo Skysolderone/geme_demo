@@ -192,7 +192,7 @@ public class 三人基准地图Tests
         Assert.Equal($"三人图 {map.Width}×{map.Height}", info.Title);
         Assert.Equal("三人图 11×11", info.Title);
         Assert.Equal(2, MapCatalog.BuiltinIds.ToList().IndexOf(ThreePlayerBaseMap.Id));
-        Assert.Equal(MapFile.ToJson(map), MapFile.ToJson(MapCatalog.Resolve(ThreePlayerBaseMap.Id)));
+        Assert.Equal(MapFile.ToJson(map), MapFile.ToJson(MapCatalog.Legacy.Resolve(ThreePlayerBaseMap.Id)));
     }
 
     [Fact]

@@ -35,14 +35,15 @@ public sealed class GameBoard
     private LifeShapeReport? _life;
 
     private GameBoard(MapData map)
-        : this(map, map, new Occupant?[map.Width * map.Height], [], new MapTables(map))
+        : this(map, map, map, new Occupant?[map.Width * map.Height], [], new MapTables(map))
     {
     }
 
     /// <summary>副本专用：直接接管一份已复制好的占用数组与改造列表，不经过 <see cref="Load"/>，不触发校验。</summary>
-    private GameBoard(MapData baseMap, MapData map, Occupant?[] occupants, List<TerrainEdit> edits, MapTables tables)
+    private GameBoard(MapData baseMap, MapData linkedMap, MapData map, Occupant?[] occupants, List<TerrainEdit> edits, MapTables tables)
     {
         BaseMap = baseMap;
+        LinkedMap = linkedMap;
         Map = map;
         _occupants = occupants;
         _edits = edits;
@@ -72,7 +73,7 @@ public sealed class GameBoard
     /// 副本与原盘面之后的修改互不可见；副本的棋串 / 活形记忆从零起。批次结算层的合法性预演在副本上进行，
     /// 这是"预演不污染正式盘面"得以成立的前提。
     /// </summary>
-    public GameBoard Clone() => new(BaseMap, Map, (Occupant?[])_occupants.Clone(), [.. _edits], _tables);
+    public GameBoard Clone() => new(BaseMap, LinkedMap, Map, (Occupant?[])_occupants.Clone(), [.. _edits], _tables);
 
     /// <summary>
     /// 地图数据。<b>地形不再是对局内的不变量</b>（artisan-terrain-edit）：每次改造经 <see cref="ApplyTerrainEdits"/> 换上一份新的
@@ -81,8 +82,14 @@ public sealed class GameBoard
     /// </summary>
     public MapData Map { get; private set; }
 
-    /// <summary>本局开局时的地图（不含对局中的改造）。存档、日志与"改造了什么"的比对读它。</summary>
+    /// <summary>本局开局时的地图（不含对局中的链接与改造）。存档、日志首部的地图摘要与"改造了什么"的比对读它。</summary>
     public MapData BaseMap { get; }
+
+    /// <summary>
+    /// 开局地图加上本局全部链接、<b>不含</b>改造的地图（board-link-mode D2）：链接生成器只在它之上增长（静态校验要求棋盘内无栅栏，
+    /// 而匠人的栅栏是对局状态，不属于地图数据），<see cref="Map"/> = 它 + 全部改造。没有链接时就是 <see cref="BaseMap"/>。
+    /// </summary>
+    public MapData LinkedMap { get; private set; }
 
     /// <summary>本局已完成的改造，按应用顺序。不可逆，只增不减（terrain-edit「改造不可逆」）。</summary>
     public ImmutableArray<TerrainEdit> TerrainEdits => [.. _edits];
@@ -485,11 +492,105 @@ public sealed class GameBoard
             return;
         }
 
-        Map = TerrainWriter.ApplyAll(Map, list);
-        _tables = new MapTables(Map);
+        ReplaceMap(TerrainWriter.ApplyAll(Map, list));
         _edits.AddRange(list);
+    }
+
+    /// <summary>
+    /// 战场导出（board-link-mode D1）：当前地图的可落子格连通分量，按地图实例记忆化（<see cref="Battlefields.Of"/>）。
+    /// 改造或链接换上新地图即自动换一份；棋串 / 气 / 覆盖 / 活形不读它。
+    /// </summary>
+    public Battlefields Battlefields => Battlefields.Of(Map);
+
+    /// <summary>
+    /// 最小写入原语：链接增长（board-link-mode D2 / 实现裁决 A1）——换上一份由 <c>LinkMapGenerator.Link(LinkedMap, …)</c> 产出、<b>只新增格</b>的新地图，
+    /// 把本局已有的改造重新落在它之上得到新的 <see cref="Map"/>，重建派生表；占用数组与改造列表不动。
+    /// 走与 <see cref="ApplyTerrainEdits"/> 相同的"换一份 MapData、重建 MapTables"路径。
+    /// <b>不做链接几何的判定</b>——那是生成器与校验器的事；这里只核对新地图确实是 <see cref="LinkedMap"/> 的"只增不改"扩展：
+    /// 画布、标识、地形、出生区、信物格与已有棋盘逐项不变，已可落子的格仍可落子，版本号恰 +1。任一不符即抛 <see cref="SiegeRuleException"/>，地图不变。
+    /// </summary>
+    public void ApplyLink(MapData grown)
+    {
+        ArgumentNullException.ThrowIfNull(grown);
+        string? mismatch = LinkMismatch(LinkedMap, grown);
+        if (mismatch is not null)
+        {
+            throw new SiegeRuleException($"链接产出的地图不是当前地图的只增扩展：{mismatch}");
+        }
+
+        LinkedMap = grown;
+        ReplaceMap(_edits.Count == 0 ? grown : TerrainWriter.ApplyAll(grown, [.. _edits]));
+    }
+
+    /// <summary>换地图的唯一路径（改造与链接共用，实现裁决 A1）：换上新 <see cref="MapData"/>、重建派生表、推进突变版本号令棋串 / 活形记忆失效。</summary>
+    private void ReplaceMap(MapData map)
+    {
+        Map = map;
+        _tables = new MapTables(map);
         _version++;
     }
+
+    /// <summary>"只增不改"核对的唯一实现；合格为 <c>null</c>，否则说明第一处不符。</summary>
+    private static string? LinkMismatch(MapData current, MapData grown)
+    {
+        if (grown.Width != current.Width || grown.Height != current.Height)
+        {
+            return $"画布由 {current.Width}×{current.Height} 变成 {grown.Width}×{grown.Height}（链接档画布整局不变）。";
+        }
+
+        if (grown.Id != current.Id)
+        {
+            return $"地图标识由 {current.Id} 变成 {grown.Id}。";
+        }
+
+        if (grown.MapVersion != current.MapVersion + 1)
+        {
+            return $"版本号应由 {current.MapVersion} 变成 {current.MapVersion + 1}，实际为 {grown.MapVersion}。";
+        }
+
+        if (!SameTerrain(grown.TerrainData, current.TerrainData))
+        {
+            return "地形数据（高度 / 地表 / 桥 / 栅栏）被改写。";
+        }
+
+        if (grown.BirthZones.Length != current.BirthZones.Length
+            || Enumerable.Range(0, current.BirthZones.Length).Any(i => !grown.BirthZones[i].SetEquals(current.BirthZones[i])))
+        {
+            return "出生区被改写。";
+        }
+
+        if (grown.Boards.Length < current.Boards.Length
+            || Enumerable.Range(0, current.Boards.Length).Any(i => grown.Boards[i] != current.Boards[i]))
+        {
+            return "已有棋盘清单被改写（链接只能往清单末尾追加）。";
+        }
+
+        foreach ((Coord c, RelicCellSpec spec) in current.RelicCells)
+        {
+            if (!grown.RelicCells.TryGetValue(c, out RelicCellSpec kept) || kept != spec)
+            {
+                return $"已有信物格 {c.ToNotation()} 被改写或删除。";
+            }
+        }
+
+        foreach (Coord c in current.AllCoords())
+        {
+            if (current.IsPlayable(c) && !grown.IsPlayable(c))
+            {
+                return $"已可落子的格 {c.ToNotation()} 变成了不可落子。";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>两份地形逐项相同：高度表、地表表、桥集合、栅栏集合（同一实例直接为真）。</summary>
+    private static bool SameTerrain(TerrainData a, TerrainData b) =>
+        ReferenceEquals(a, b)
+        || (a.Heights.Count == b.Heights.Count && a.Heights.All(kv => b.Heights.TryGetValue(kv.Key, out int h) && h == kv.Value)
+            && a.Surfaces.Count == b.Surfaces.Count && a.Surfaces.All(kv => b.Surfaces.TryGetValue(kv.Key, out Surface v) && v == kv.Value)
+            && a.Bridges.SetEquals(b.Bridges)
+            && a.Fences.SetEquals(b.Fences));
 
     /// <summary>最小写入原语：清除指定格的占用。</summary>
     public void Clear(Coord c)

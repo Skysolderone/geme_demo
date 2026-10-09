@@ -476,7 +476,7 @@ public class 对局日志的记录内容Tests
     /// </summary>
     internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, CarryIn> carries, int turnLimit)
     {
-        MapData map = MapCatalog.Resolve(null);
+        MapData map = MapCatalog.Legacy.Resolve(null);
         RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate with
         {

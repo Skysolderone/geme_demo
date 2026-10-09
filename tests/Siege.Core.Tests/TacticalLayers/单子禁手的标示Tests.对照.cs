@@ -83,7 +83,7 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
     /// </remarks>
     private static MatchFlow Played(string mapId, ulong seed, int turns, out MatchRunner runner, bool skipProtection = false)
     {
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(mapId), new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Legacy.Resolve(mapId), new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate);
         match.PlantPrototype();
         if (skipProtection)
         {

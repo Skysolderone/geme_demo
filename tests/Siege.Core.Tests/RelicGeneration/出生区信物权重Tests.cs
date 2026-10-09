@@ -104,7 +104,7 @@ public class 出生区信物权重Tests
         // 期望值是改动前抓取的黄金哈希（见 PreChangeGolden），不是由当前实现推出来的。
         foreach ((string mapId, string sha256, int unconverged) in PreChangeGolden)
         {
-            MapData map = MapCatalog.Resolve(mapId);
+            MapData map = MapCatalog.Legacy.Resolve(mapId);
             var text = new StringBuilder();
             int notConverged = 0;
             for (ulong seed = 0; seed < 500; seed++)

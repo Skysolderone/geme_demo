@@ -32,7 +32,7 @@ public class 带入带出配置Tests
     private static (MatchLog Log, string OpeningHands) Golden(bool carryInOut, ImmutableSortedDictionary<PlayerId, CarryIn> carryIns)
     {
         RunConfig raw = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
-        MapData map = MapCatalog.Resolve(raw.MapId);
+        MapData map = MapCatalog.Legacy.Resolve(raw.MapId);
         RunConfig config = raw.ResolvedFor(map);
         MatchFlow match = MatchFlow.Create(
             map, new GameSeed(31), config.PlayerIds(),
@@ -64,7 +64,7 @@ public class 带入带出配置Tests
         Assert.False(MatchOptions.Immediate.CarryInOut);
         Assert.Empty(MatchOptions.Immediate.CarryIns);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Legacy.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four);
         Assert.False(match.CarryInOut);
         Assert.Empty(match.CarryIns);
         Assert.False(match.CarryInOutBackfilled);

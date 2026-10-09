@@ -132,7 +132,12 @@ public class 四邻接Tests
 
                    // ⑤ MapValidator.ValidateCorridors（board-map 段 B）：规格把通道定义成"沿**几何四邻**连通的一组通道格"，与气边无关。
                    //    只放这一个方法，不放整个校验器：距离 / 连通 / 口袋仍须走气边（上面的 M-B2 照旧会红）。
-                   || (outer == typeof(MapValidator) && caller.Name == "ValidateCorridors");
+                   || (outer == typeof(MapValidator) && caller.Name == "ValidateCorridors")
+
+                   // ⑥ Battlefields（board-link-mode D1）：规格把战场定义成"沿**几何四邻**相连的可落子格的极大连通分量"，与气边无关——
+                   //    匠人立栅、崖壁都不得把一个战场切成两个，隔开两个战场的只有不可落子的场景格；它只读 MapData，走不了 GameBoard.Neighbors。
+                   //    只放这一个类型：棋串 / 气 / 覆盖 / 活形仍须走气边与覆盖关系。
+                   || outer == typeof(Battlefields);
         }
 
         static string Describe(MethodBase c) => $"{c.DeclaringType!.FullName}.{c.Name}";
@@ -151,6 +156,9 @@ public class 四邻接Tests
 
         // 豁免 ⑤ 按方法名比，改名后同样会静默失效——钉住它确实命中。
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(MapValidator) && c.Name == "ValidateCorridors");
+
+        // 豁免 ⑥：战场导出确实在直接枚举几何邻居（改走气边的话这里先红）。
+        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Battlefields));
 
         // 豁免 ④ 按全名字符串比，类型改名后豁免会静默失效成摆设——这里钉住它确实命中了一个真实调用者。
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!).FullName == "Siege.Core.Board.Maps.FrontierSurfaces");

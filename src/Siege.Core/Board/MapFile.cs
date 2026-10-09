@@ -39,6 +39,8 @@ public static class MapFile
             Boards = map.Boards.IsDefaultOrEmpty
                 ? null
                 : [.. map.Boards.Select(b => new BoardDto { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Kind = b.Kind })],
+            // 版本号为 0（初始地图与全部非链接档）不写出：既有地图的导出文件逐字节不变（board-link-mode 1.1）。
+            MapVersion = map.MapVersion == 0 ? null : map.MapVersion,
             Obstacles = Sorted(map.Obstacles),
             BirthZones = [.. map.BirthZones.Select(Sorted)],
             RelicCells = map.RelicCells
@@ -96,6 +98,7 @@ public static class MapFile
             MaxPlayers = dto.MaxPlayers,
             Profile = ParseProfile(dto.Profile),
             Boards = ParseBoards(dto.Boards),
+            MapVersion = ParseMapVersion(dto.MapVersion),
             Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
             RelicCells = relicCells.ToImmutableDictionary(
@@ -121,7 +124,16 @@ public static class MapFile
         MapProfile value = profile ?? MapProfile.Standard;
         return Enum.IsDefined(value)
             ? value
-            : throw new FormatException($"地图文件的 Profile 为 {(int)value}：规格档只能是 Standard（标准）/ Frontier（边疆）/ Board（棋盘）。");
+            : throw new FormatException($"地图文件的 Profile 为 {(int)value}：规格档只能是 Standard（标准）/ Frontier（边疆）/ Board（棋盘）/ Link（链接）。");
+    }
+
+    /// <summary>地图版本号缺省为 0（旧地图文件没有该字段）；负数只可能是手改出来的，响亮失败。</summary>
+    private static int ParseMapVersion(int? version)
+    {
+        int value = version ?? 0;
+        return value >= 0
+            ? value
+            : throw new FormatException($"地图文件的 MapVersion 为 {value}：地图版本号不得为负（初始地图为 0，每次链接 +1）。");
     }
 
     /// <summary>
@@ -337,13 +349,17 @@ public static class MapFile
 
         public int MaxPlayers { get; set; }
 
-        /// <summary>规格档（Standard 标准 / Frontier 边疆 / Board 棋盘）。省略即标准档；标准档写出时也省略。</summary>
+        /// <summary>规格档（Standard 标准 / Frontier 边疆 / Board 棋盘 / Link 链接）。省略即标准档；标准档写出时也省略。</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public MapProfile? Profile { get; set; }
 
         /// <summary>棋盘清单（board-map）。省略即空清单；空清单写出时也省略。</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<BoardDto>? Boards { get; set; }
+
+        /// <summary>地图版本号（board-link-mode）。省略即 0；0 写出时也省略。</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? MapVersion { get; set; }
 
         public List<string> Obstacles { get; set; } = [];
 

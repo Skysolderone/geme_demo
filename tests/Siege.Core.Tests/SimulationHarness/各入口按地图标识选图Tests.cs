@@ -25,12 +25,12 @@ public class 各入口按地图标识选图Tests
         // 未给地图选项 → siege-4p-base-v5。三个入口的缺省都取自目录的同一个常量。
         // 变异 M-A9：MapCatalog.DefaultId 换成 siege-4p-base-v3 → 本测试红（全套共红 39：所有走缺省地图的入口都跟着变）。
         Assert.Equal("siege-4p-base-v5", MapCatalog.DefaultId);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve(null).Id);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve("  ").Id);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Resolve("siege-4p-base-v5").Id);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve(null).Id);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve("  ").Id);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve("siege-4p-base-v5").Id);
         Assert.Equal("siege-4p-base-v5", new Siege.Sim.Config.RunConfig().MapId);
         Assert.Contains("siege-4p-base-v5", MapCatalog.BuiltinIds);
-        Assert.Equal(MapFile.ToJson(FourPlayerBaseMap.Create()), MapFile.ToJson(MapCatalog.Resolve(null)));
+        Assert.Equal(MapFile.ToJson(FourPlayerBaseMap.Create()), MapFile.ToJson(MapCatalog.Legacy.Resolve(null)));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class 各入口按地图标识选图Tests
     {
         // 规格 Scenario：以 no-such-map 启动任一入口 → 报错退出并列出可用地图标识，不开始对局，MUST NOT 静默回落到缺省地图。
         // 变异 M-A10：Resolve 找不到时 return 缺省地图 → 本测试红。
-        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve("no-such-map"));
+        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve("no-such-map"));
         Assert.Contains("no-such-map", ex.Message, StringComparison.Ordinal);
         Assert.NotEmpty(MapCatalog.BuiltinIds);
         Assert.All(MapCatalog.BuiltinIds, id => Assert.Contains(id, ex.Message, StringComparison.Ordinal));
@@ -66,13 +66,13 @@ public class 各入口按地图标识选图Tests
         // 让它还能解析出图会掩盖"调用方仍在用旧标识"。
         // 变异 M-B20：Builtins 表里把新标识写回旧标识 → 本测试红。
         Assert.DoesNotContain(retired, MapCatalog.BuiltinIds);
-        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Resolve(retired));
+        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve(retired));
         Assert.Contains("找不到地图", ex.Message, StringComparison.Ordinal);
         Assert.Contains(retired, ex.Message, StringComparison.Ordinal);
         Assert.Contains(current, ex.Message, StringComparison.Ordinal);
 
         // 反面：现名必须解析得出，否则上面那条"旧的报错"可以靠"两个都报错"恒真。
-        Assert.Equal(current, MapCatalog.Resolve(current).Id);
+        Assert.Equal(current, MapCatalog.Legacy.Resolve(current).Id);
 
         // 旧标识的权威文件也不得留在仓库里——留着的话 Resolve 会经 maps/<标识>.json 回落，旧标识悄悄复活。
         Assert.False(
@@ -86,7 +86,7 @@ public class 各入口按地图标识选图Tests
         string path = Path.Combine(SimFixtures.TempDir("mapcatalog-file"), "my-frontier.json");
         File.WriteAllText(path, MapFile.ToJson(FrontierFixtures.Map()));
 
-        MapData map = MapCatalog.Resolve(path);
+        MapData map = MapCatalog.Legacy.Resolve(path);
 
         Assert.Equal("test-frontier-6", map.Id);
         Assert.Equal(MapProfile.Frontier, map.Profile);
@@ -145,7 +145,7 @@ public class 各入口按地图标识选图Tests
         EvaluationWeights w = SimFixtures.PreCalibrationWeights;
         const int t = SimFixtures.PreCalibrationPassThreshold;
         PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Legacy.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
 
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());
