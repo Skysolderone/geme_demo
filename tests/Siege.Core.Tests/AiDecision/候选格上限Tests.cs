@@ -102,7 +102,7 @@ public class 候选格上限Tests
         // 段 A check 实跑：在重建后的黄金哈希上 M-K1 仍红 36（含本测试）——哈希虽是段 A 后重生成的，但不是自证的。
         // ai-eye 段 D2（4.5）：黄金哈希产自定值之前的缺省（Eye / Threat 0、停手阈值 20），权重与阈值写死为该口径——本测试钉的是"K 缺省不改变走法"，不是默认权重。
         MatchLog log = BatchRunner.Execute(
-            SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)), parallelism: 1)[0];
+            SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.False(log.IsFailed);
         Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
@@ -388,7 +388,7 @@ public class 候选格上限Tests
         // v4（105 格）上显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
         // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局——实测 K = 8 在这个种子上与不限制逐步相同，证明不了 K 传到了 AI。
         static MatchLog Run() => BatchRunner.Execute(
-            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { CandidateCellLimit = 2 }, parallelism: 1)[0];
+            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { CandidateCellLimit = 2 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         // 变异 M-K9：Sim 的 MatchSession 建 AI 时不传跑局配置的 K → 与不限制的那一局相同 → 本测试红。
         MatchLog a = Run();
@@ -462,22 +462,22 @@ public class 候选格上限Tests
         // 该项出现之前的边疆图日志首部没有 CandidateCellLimit：当时就是不限制。回放 MUST NOT 按今天的大图缺省 K 重跑，重建的首部也不得多出一项。
         // 变异 M-K12：Replayer 改回不带 recorded 的 MatchSession.Create → 重建首部多出该项、第 1 行即分歧 → 本测试红。
         RunConfig frontier = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
-        MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1)[0];
+        MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string text = zero.DeterministicText();
         Assert.Contains("\"CandidateCellLimit\":0,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"CandidateCellLimit\":0,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.Config.CandidateCellLimit);
 
-        ReplayResult replay = Replayer.Replay(old);
+        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Null(replay.Replayed.Header.Config.CandidateCellLimit);
 
         // 会话层：新建的局按地图取缺省 K 并写进首部配置；按首部重建的局不取。
-        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1).CellLimit);
-        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1).Config.CandidateCellLimit);
-        Assert.Equal(0, MatchSession.Create(frontier, 1, map: null, recorded: true).CellLimit);
-        Assert.Equal(7, MatchSession.Create(frontier with { CandidateCellLimit = 7 }, 1, map: null, recorded: true).CellLimit);
+        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1, resolveMap: MapCatalog.Legacy.Resolve).CellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1, resolveMap: MapCatalog.Legacy.Resolve).Config.CandidateCellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(0, MatchSession.Create(frontier, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).CellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(7, MatchSession.Create(frontier with { CandidateCellLimit = 7 }, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).CellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     // ---------- 配置记录 ----------
@@ -522,19 +522,19 @@ public class 候选格上限Tests
         // 变异 M-K8：BatchRunner.ExecuteToDirectory 去掉 ResolvedFor → config.json 不含该项 → 本测试红。
         RunConfig auto = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
         string autoDir = SimFixtures.TempDir("cell-limit-auto");
-        BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Contains($"\"CandidateCellLimit\": {AiSearchConfig.LargeMapCellLimit}", File.ReadAllText(Path.Combine(autoDir, "config.json")), StringComparison.Ordinal);
         MatchLog autoLog = MatchLog.Read(Directory.EnumerateFiles(autoDir, "match-*.jsonl").Single());
         Assert.Equal(AiSearchConfig.LargeMapCellLimit, autoLog.Header.Config.CandidateCellLimit);
 
         // 显式 0（不限制）优先于大图缺省，并如实写出。
         string zeroDir = SimFixtures.TempDir("cell-limit-zero");
-        BatchRunner.ExecuteToDirectory(auto with { CandidateCellLimit = 0 }, zeroDir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(auto with { CandidateCellLimit = 0 }, zeroDir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Contains("\"CandidateCellLimit\": 0", File.ReadAllText(Path.Combine(zeroDir, "config.json")), StringComparison.Ordinal);
 
         // 标准图：配置记录与引入本项之前一样，不多出这一项。
         string v4Dir = SimFixtures.TempDir("cell-limit-v4");
-        BatchRunner.ExecuteToDirectory(SimFixtures.Config(turnLimit: 4), v4Dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(SimFixtures.Config(turnLimit: 4), v4Dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.DoesNotContain("CandidateCellLimit", File.ReadAllText(Path.Combine(v4Dir, "config.json")), StringComparison.Ordinal);
     }
 }

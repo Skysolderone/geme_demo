@@ -2,15 +2,14 @@ namespace Siege.Core.Board.Maps;
 
 /// <summary>
 /// "地图标识 → 地图"的唯一解析（frontier-map D5）：批量跑局、终端版与图形版三个入口共用这一份，MUST NOT 各自维护地图清单。
-/// 内置图按标识直接给；<c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c> 交给边疆档生成器（map-generator D3）；
-/// <c>board:&lt;地图种子&gt;[:n&lt;棋盘数&gt;]</c> 交给棋盘档生成器（board-map D7）；其余视为地图文件路径（或 <c>maps/&lt;标识&gt;.json</c>）——
-/// 以上旧标识族自 board-link-mode 起全部收进 <see cref="Legacy"/>；<see cref="Resolve"/> 自己只认新模式的 <c>link:&lt;地图种子&gt;</c>（<see cref="LinkMapGenerator"/>），
-/// 段 A 仍把其余标识转交 <see cref="Legacy"/>，段 C 收口入口后不再转交。解析不了就报错并列出可用标识，MUST NOT 静默回落到缺省地图。
+/// 自 board-link-mode 起（D8 / 实现裁决 D7）<see cref="Resolve"/> <b>只</b>认新模式的 <c>link:&lt;地图种子&gt;</c>（<see cref="LinkMapGenerator"/>），
+/// 缺省地图为 <see cref="DefaultId"/>（<c>link:1</c>，Q4）；旧标识族（内置图、<c>gen:</c>、<c>board:</c>、地图文件路径）一律报错并说明只接受 <c>link:&lt;地图种子&gt;</c>，
+/// 只能经 <see cref="Legacy"/> 到达（Core 测试夹具与 <c>Siege.Sim map</c> 调试子命令）。解析不了就报错，MUST NOT 静默回落到缺省地图。
 /// </summary>
 /// <remarks>
 /// 放在规则内核里是因为图形版（<c>src/godot</c>）只引用 Core / Presentation，不得依赖批量项目（<c>.trellis/spec/core/boundaries.md</c>）。
 /// 这里只做解析，不做校验——校验在 <see cref="GameBoard.Load"/>（对局创建时）。
-/// 规格：openspec/changes/frontier-map/specs/simulation-harness —— Requirement: 各入口按地图标识选图
+/// 规格：openspec/changes/board-link-mode/specs/simulation-harness —— Requirement: 各入口按地图标识选图；map-definition —— 旧地图降级为测试夹具
 /// </remarks>
 public static class MapCatalog
 {
@@ -26,8 +25,8 @@ public static class MapCatalog
         (FrontierMapV2.Id, "边疆图 25×30（手工）", FrontierMapV2.Create),
     ];
 
-    /// <summary>缺省地图标识：任何入口未给地图选项时加载它。</summary>
-    public const string DefaultId = FourPlayerBaseMap.Id;
+    /// <summary>缺省地图标识（board-link-mode Q4 / 规格 map-selection「批量入口缺省」）：批量与终端入口未给地图选项时加载 <c>link:1</c>；图形版未给时进入新局界面。</summary>
+    public const string DefaultId = LinkMapId.Prefix + ":1";
 
     /// <summary>可用的内置地图标识，按登记顺序。</summary>
     public static IReadOnlyList<string> BuiltinIds { get; } = [.. Builtins.Select(b => b.Id)];
@@ -36,9 +35,8 @@ public static class MapCatalog
     public static IReadOnlyList<BuiltinMapInfo> BuiltinMaps { get; } = [.. Builtins.Select(b => new BuiltinMapInfo(b.Id, b.Title))];
 
     /// <summary>
-    /// 解析地图（board-link-mode D8 的段 A 形态）：<c>link:&lt;地图种子&gt;</c> → 链接档初始地图（<see cref="LinkMapGenerator"/>）；
-    /// 其余标识（<c>null</c> / 空白、内置图、<c>gen:</c>、<c>board:</c>、文件路径）转交 <see cref="Legacy"/>。
-    /// 段 C 收口玩家入口时本方法只接受 <c>link:</c>，旧标识族只能经 <see cref="Legacy"/> 到达。
+    /// 解析地图（board-link-mode D8 / 实现裁决 D7）：只接受 <c>link:&lt;地图种子&gt;</c> → 链接档初始地图（<see cref="LinkMapGenerator"/>）；<c>null</c> / 空白 → <see cref="DefaultId"/>。
+    /// 其余一切标识（内置图名、<c>gen:</c>、<c>board:</c>、文件路径、写错的标识）抛 <see cref="FormatException"/>，消息说明只接受 <c>link:&lt;地图种子&gt;</c>——旧标识族只能经 <see cref="Legacy"/>。
     /// </summary>
     /// <remarks>
     /// 裸 <c>link</c>（"随机取一个地图种子"）不是完整标识：这里不读时钟，遇到即抛 <see cref="FormatException"/>。
@@ -47,18 +45,20 @@ public static class MapCatalog
     public static MapData Resolve(string? mapId)
     {
         string id = string.IsNullOrWhiteSpace(mapId) ? DefaultId : mapId.Trim();
-        if (LinkMapId.IsLinkMap(id))
+        if (!LinkMapId.IsLinkMap(id))
         {
-            if (LinkMapId.IsBareRequest(id))
-            {
-                throw new FormatException(
-                    $"地图标识 {LinkMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {LinkMapId.Prefix}:1 或 {LinkMapId.Prefix}:12345。");
-            }
-
-            return LinkMapGenerator.Generate(id);
+            throw new FormatException(
+                $"地图标识 {id} 不受支持：玩家入口只接受 {LinkMapId.Prefix}:<地图种子>（例如 {DefaultId}、{LinkMapId.Prefix}:12345）。"
+                + "内置图、gen: 随机图、board: 棋盘图与地图文件已降级为测试夹具，不再由任何入口到达。");
         }
 
-        return Legacy.Resolve(id);
+        if (LinkMapId.IsBareRequest(id))
+        {
+            throw new FormatException(
+                $"地图标识 {LinkMapId.Prefix} 没有带地图种子：规则内核不读时钟，随机取种子由入口完成。请给完整标识，例如 {DefaultId} 或 {LinkMapId.Prefix}:12345。");
+        }
+
+        return LinkMapGenerator.Generate(id);
     }
 
     /// <summary>
@@ -68,10 +68,13 @@ public static class MapCatalog
     /// </summary>
     public static class Legacy
     {
+        /// <summary>旧地图族的缺省地图（v5）：夹具解析 <see cref="Resolve"/> 未给标识时加载它；批次配置 <c>RunConfig.MapId</c> 的内部缺省与 <c>map</c> 调试子命令的缺省也取它（实现裁决 C10，留到 retire-legacy-maps）。</summary>
+        public const string DefaultId = FourPlayerBaseMap.Id;
+
         /// <summary>
-        /// 解析旧地图：<c>null</c> / 空白 → 缺省地图；内置标识 → 内置图；生成图标识 → 按其中的地图种子与参数生成；
+        /// 解析旧地图：<c>null</c> / 空白 → <see cref="DefaultId"/>（v5）；内置标识 → 内置图；生成图标识 → 按其中的地图种子与参数生成；
         /// 否则按文件路径、再按 <c>maps/&lt;标识&gt;.json</c> 读入。都不是则抛 <see cref="FileNotFoundException"/>，消息列出全部可用标识。
-        /// 裸 <c>gen</c> / <c>board</c> 同样不是完整标识，遇到即抛 <see cref="FormatException"/>。
+        /// 裸 <c>gen</c> / <c>board</c> 同样不是完整标识，遇到即抛 <see cref="FormatException"/>。与引入 board-link-mode 之前的 <c>MapCatalog.Resolve</c> 逐项相同。
         /// </summary>
         public static MapData Resolve(string? mapId)
         {

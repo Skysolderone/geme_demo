@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Numerics;
 using System.Text.Json;
 using Siege.Core.Ai;
@@ -57,7 +58,7 @@ public class 各棋子势力占比Tests
         // more-pieces-relics 段 A：样本口径下界（有匠人、匠人与协同同串）依赖走法 → 写死内容集 v1；类型计数的键集合按内容集（v1 六种），
         // v2 局十种键由 对局内容集Tests.新局缺省v2 钉住。
         List<MatchLog> withArtisan = BatchRunner.Execute(
-            SimFixtures.Config(count: 2, seedStart: 11, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
+            SimFixtures.Config(count: 2, seedStart: 11, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         List<GroupEntry> groups =
             [.. SimFixtures.Sample.Value.Concat(withArtisan).SelectMany(l => l.Turns).SelectMany(t => t.PlayersState).SelectMany(p => p.Groups)];
         Assert.NotEmpty(groups);

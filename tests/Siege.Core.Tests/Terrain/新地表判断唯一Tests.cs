@@ -25,7 +25,7 @@ public class 新地表判断唯一Tests
         "Siege.Core/Board/Maps/FrontierSurfaces.cs",  // 生成：map-generation 新地表投放
         "Siege.Core/Scoring/PowerCalculator.cs",      // 规则：段 1 荒漠——独占计分谓词 ScoresTerritory
         "Siege.Core/Board/Adjacency.cs",              // 规则：段 2 沼泽源、段 3 岩台远格（覆盖关系唯一实现）
-        "Siege.Core/Board/GameBoard.cs",              // 规则：段 4 浅滩——"空格能否作为气"谓词 GivesLiberty
+        "Siege.Core/Board/GameBoard.MapTables.cs",    // 规则：段 4 浅滩——"空格能否作为气"谓词 GivesLiberty（board-link-mode 裁决 P7：派生表抽成 partial 文件，谓词随之搬入）
         "Siege.Presentation/Layers/LayerContents.cs", // 表现：盘面层差集原因查表（沼泽源）
         "Siege.Presentation/Text/Labels.cs",          // 映射：图例里各地表的一句规则说明
         "Siege.Sim/Program.cs",              // 映射：终端文本图字符

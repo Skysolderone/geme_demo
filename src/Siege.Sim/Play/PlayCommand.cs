@@ -101,7 +101,8 @@ internal static class PlayCommand
 
         output.WriteLine();
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
-        if (map.Id != MapCatalog.DefaultId)
+        // 地图那一行：旧地图族的缺省图（Legacy 夹具 v5）不多打一行，转录与改动前一致；其余地图（含玩家入口缺省的 link:1）都打印完整标识。
+        if (map.Id != MapCatalog.Legacy.DefaultId)
         {
             // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
             string mapId = match.Publish().MapId;

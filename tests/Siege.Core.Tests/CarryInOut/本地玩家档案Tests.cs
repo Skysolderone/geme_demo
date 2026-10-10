@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Carry;
 using Siege.Sim;
@@ -64,7 +65,7 @@ public class 本地玩家档案Tests
         Assert.False(File.Exists(temp.FilePath));
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(7, 4, 1, AiDifficulty.Easy, new StringReader("\n"), output, flagRisk: 0, contentSet: Board.ContentSet.V1, profile: store);
+        int exit = PlayCommand.Run(7, 4, 1, AiDifficulty.Easy, new StringReader("\n"), output, flagRisk: 0, contentSet: Board.ContentSet.V1, profile: store, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal(0, exit);
         Assert.True(File.Exists(temp.FilePath), "档案应写到 --profile 指定的路径");

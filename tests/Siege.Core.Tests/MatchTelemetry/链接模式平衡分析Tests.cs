@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Tests.SimulationHarness;
 using Siege.Sim.Analysis;
@@ -161,7 +162,7 @@ public class 链接模式平衡分析Tests
         // 内部分析接口仍能读旧日志（Legacy 夹具的分析回归测试）。反面：链接模式日志照常出报告。
         // 变异 MC-32：Program.Analyze 去掉地图标识检查 → 旧日志照常出报告、退出码 0，本测试红。
         string legacyDir = SimFixtures.TempDir("analyze-legacy");
-        MatchSession.Create(SimFixtures.Config(turnLimit: 4), 1).Run().WriteTo(legacyDir);
+        MatchSession.Create(SimFixtures.Config(turnLimit: 4), 1, resolveMap: MapCatalog.Legacy.Resolve).Run().WriteTo(legacyDir);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析
         (int code, _, string err) = LinkSimFixtures.RunMain(null, null, "analyze", "--dir", legacyDir);
         Assert.Equal(1, code);
         Assert.Contains("已移除的地图模式", err, StringComparison.Ordinal);

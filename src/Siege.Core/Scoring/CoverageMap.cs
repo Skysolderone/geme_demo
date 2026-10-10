@@ -126,7 +126,7 @@ public sealed class CoverageMap
                 continue;
             }
 
-            var c = new Coord(s % width, s / width);
+            Coord c = board.CoordOfIndex(s);
             foreach (Coord target in board.CoverageTargets(c))
             {
                 // CoverageTargets 已排除越界、障碍、未架桥深水、林地与崖上格；覆盖到此为止，不再向更远的格传递。
@@ -155,7 +155,7 @@ public sealed class CoverageMap
                         continue;
                     }
 
-                    var c = new Coord(s % width, s / width);
+                    Coord c = board.CoordOfIndex(s);
                     foreach (Coord target in board.CoverageTargets(c))
                     {
                         sources[cursor[ordinal[Index(width, target)]]++] = new CoverageSource(c, Adjacency.AreAdjacent(c, target));
@@ -241,7 +241,7 @@ public sealed class CoverageMap
     }
 
     /// <summary>某玩家的独占空格集合，按字典序排列。棋子所在格不在其中——那些格只通过棋子的基础军势计分。</summary>
-    /// <remarks>段 C2：只扫可落子格（序号升序即字典序）——不可落子格的归属恒为障碍，不可能是独占。</remarks>
+    /// <remarks>段 C2：只扫可落子格（序号升序即字典序）——不可落子格的归属恒为障碍，不可能是独占。格下标换回坐标走 <see cref="GameBoard.CoordOfIndex(int, int)"/>（实现裁决 P7）。</remarks>
     public ImmutableArray<Coord> ExclusiveCellsOf(PlayerId player)
     {
         ImmutableArray<Coord>.Builder cells = ImmutableArray.CreateBuilder<Coord>();
@@ -251,7 +251,7 @@ public sealed class CoverageMap
             if (ownership.Kind == OwnershipKind.Exclusive && ownership.Owner == player)
             {
                 int i = _playable[o];
-                cells.Add(new Coord(i % _width, i / _width));
+                cells.Add(GameBoard.CoordOfIndex(_width, i));
             }
         }
 

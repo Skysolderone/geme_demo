@@ -1,5 +1,6 @@
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Sim.Play;
 
 namespace Siege.Core.Tests.SimulationHarness;
@@ -22,7 +23,7 @@ public class 终端专家对局Tests
         int exit = PlayCommand.Run(
             42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nB1 B\nv\nok\n\npass\n"), output,
             weights: LookaheadFixtures.Weights, passThreshold: LookaheadFixtures.PassThreshold, flagRisk: 0, contentSet: ContentSet.V1,
-            onAi: (p, ai) => ais.Add(p, ai));
+            onAi: (p, ai) => ais.Add(p, ai), map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string text = output.ToString();
 
         Assert.Equal(0, exit);

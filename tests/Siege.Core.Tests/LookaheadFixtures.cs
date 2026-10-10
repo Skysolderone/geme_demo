@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Ai;
@@ -139,7 +140,7 @@ internal static class LookaheadFixtures
         int probed = 0;
         foreach (ulong seed in seeds.Length == 0 ? [1, 2, 3] : seeds)
         {
-            MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed);
+            MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
             foreach (PlayerId player in session.Match.Players)
             {
                 HeuristicTurnController inner = session.AiOf(player)!;

@@ -146,6 +146,19 @@ public sealed class RelicLedger
     }
 
     /// <summary>
+    /// 本账本的独立副本（表现层只读入口的试算用：<c>MatchFlow.PublishSupplement</c> 在副本上读结构参数与先手修正，不碰正式账本）：
+    /// 生成记录 + 链接追加的公共棋盘信物（<see cref="LinkedPlacements"/>，与链接模式恢复同一顺序：先追加再重放揭示）+ <see cref="ExportState"/>。
+    /// 旧模式没有链接信物，与 <c>Restore(Generation, ExportState())</c> 逐项相同；链接模式下若不带上链接信物，已揭示的公共棋盘信物会被当作"非信物格"而抛出（段 D-a 在图形版自检里实测）。
+    /// </summary>
+    public RelicLedger Copy()
+    {
+        var copy = new RelicLedger(Generation);
+        copy.Append(_linked);
+        copy.RestoreState(ExportState());
+        return copy;
+    }
+
+    /// <summary>
     /// 把 <see cref="ExportState"/> 的结果写回尚未有任何揭示的账本（<see cref="Restore"/> 与链接模式恢复共用：后者先重放链接追加公共棋盘信物，再调本方法）。
     /// 揭示按存档顺序重放；存档里出现非信物格即视为损坏。
     /// </summary>

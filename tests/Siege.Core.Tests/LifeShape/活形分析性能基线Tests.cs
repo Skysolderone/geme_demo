@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Diagnostics;
 using Siege.Core.Board;
 using Siege.Sim.Config;
@@ -34,7 +35,7 @@ public class 活形分析性能基线Tests
     public void 中盘全盘活形分析不超过含气棋串计算的三倍(string mapId)
     {
         RunConfig config = SimFixtures.Config(turnLimit: 0) with { MapId = mapId };
-        MatchSession session = MatchSession.Create(config, 7);
+        MatchSession session = MatchSession.Create(config, 7, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         int turns = 0;
         while (turns < MidGameTurns && session.RunTurn())
         {

@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Ai;
@@ -98,7 +99,7 @@ public class 公开规则纯函数Tests
         // ③ 先锋修正：旧实现（抄自改动前的 SumVanguard）＝ 账本（委托后）＝ 纯函数读公开快照；
         // ④ 出局：此刻没有"应出局而仍参赛"的玩家，每个已出局者都满足判据（旧判据）。
         int checkedTurns = 0;
-        MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed);
+        MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         foreach (PlayerId player in session.Match.Players)
         {
             HeuristicTurnController inner = session.AiOf(player)!;

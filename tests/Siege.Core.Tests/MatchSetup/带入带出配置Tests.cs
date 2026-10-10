@@ -64,7 +64,7 @@ public class 带入带出配置Tests
         Assert.False(MatchOptions.Immediate.CarryInOut);
         Assert.Empty(MatchOptions.Immediate.CarryIns);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Legacy.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Legacy.Resolve(MapCatalog.Legacy.DefaultId), new GameSeed(5), Four);
         Assert.False(match.CarryInOut);
         Assert.Empty(match.CarryIns);
         Assert.False(match.CarryInOutBackfilled);
@@ -76,7 +76,7 @@ public class 带入带出配置Tests
         Assert.Empty(saved["CarryIns"]!.AsArray());
 
         // 日志首部同样写明（段 C）：不配置带入数量的跑局，首部开关写 false、带入写空表，不是缺字段。
-        JsonNode header = JsonNode.Parse(MatchSession.Create(SimFixtures.Config(turnLimit: 1), 5).Run().DeterministicText().Split('\n')[0])!;
+        JsonNode header = JsonNode.Parse(MatchSession.Create(SimFixtures.Config(turnLimit: 1), 5, resolveMap: MapCatalog.Legacy.Resolve).Run().DeterministicText().Split('\n')[0])!;   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.False(header["CarryInOut"]!.GetValue<bool>());
         Assert.Empty(header["CarryIns"]!.AsArray());
     }

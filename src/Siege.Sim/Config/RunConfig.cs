@@ -73,7 +73,7 @@ public sealed record RunConfig
     public const int DefaultMaxTurns = 1_000;
 
     /// <summary>地图标识或地图 JSON 文件路径。</summary>
-    public string MapId { get; init; } = MapCatalog.DefaultId;
+    public string MapId { get; init; } = MapCatalog.Legacy.DefaultId;
 
     /// <summary>
     /// 每局换图（map-generator D6）：<see cref="MapId"/> 须是生成图标识 <c>gen:&lt;起始地图种子&gt;[:p&lt;平台数&gt;]</c>，第 <i>i</i> 局用地图种子 <c>起始 + i</c>、

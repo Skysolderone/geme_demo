@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
@@ -63,8 +64,8 @@ public class 插旗同区统计Tests
     {
         // 端到端（testing.md「真实跑局覆盖不到的写入路径，要补真实盘面端到端测试」）：冒险概率 100 的真实建局 → 首部锁定区全部相同 → 分析计为同区对局。
         // 对照：冒险概率 0 的同种子局互不同区。
-        MatchLog always = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4) with { FlagRisk = 100 }, parallelism: 1)[0];
-        MatchLog never = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4) with { FlagRisk = 0 }, parallelism: 1)[0];
+        MatchLog always = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4) with { FlagRisk = 100 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog never = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4) with { FlagRisk = 0 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Single(always.Header.Zones.Distinct());
         Assert.Equal(4, never.Header.Zones.Distinct().Count());

@@ -125,7 +125,8 @@ public sealed class MatchSession
     // ---------- 建局 ----------
 
     /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
-    public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null) => Create(config, seed, map, recorded: false);
+    public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null, Func<string, MapData>? resolveMap = null) =>
+        Create(config, seed, map, recorded: false, resolveMap: resolveMap);
 
     /// <summary>
     /// <paramref name="recorded"/> 为 <c>true</c> 即按日志首部的配置原样重建（回放）：不把候选格上限按地图落成缺省值，
@@ -136,7 +137,12 @@ public sealed class MatchSession
     /// 链接图对局的配对来源（board-link-mode D3 / Q10）：<c>null</c> 即新建的局——由配对种子（<see cref="RunConfig.PairingSeed"/>，缺省由对局种子派生）派生的工具层随机源
     /// <see cref="SeededPairingSource"/>；回放传按日志配对事件重放的 <see cref="RecordedPairingSource"/>。旧地图（Legacy 夹具）的对局不读它。
     /// </param>
-    internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null, IPairingSource? pairing = null)
+    /// <param name="resolveMap">
+    /// 未传 <paramref name="map"/> 时"标识 → 地图"的解析（board-link-mode 实现裁决 D7）：缺省 <see cref="MapCatalog.Resolve"/>，只认 <c>link:</c>；
+    /// Core 测试里的 Legacy 夹具显式传 <c>MapCatalog.Legacy.Resolve</c>。玩家入口（<c>Program</c>）不传。
+    /// </param>
+    internal static MatchSession Create(
+        RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null, IPairingSource? pairing = null, Func<string, MapData>? resolveMap = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
@@ -146,7 +152,7 @@ public sealed class MatchSession
             throw new ArgumentException("每局换图的配置不能由会话自行解析地图：请由调用方按本局的地图标识解析后传入。");
         }
 
-        map ??= MapCatalog.Resolve(config.MapId);
+        map ??= resolveMap is { } custom ? custom(config.MapId) : MapCatalog.Resolve(config.MapId);
         if (!recorded)
         {
             config = config.ResolvedFor(map);

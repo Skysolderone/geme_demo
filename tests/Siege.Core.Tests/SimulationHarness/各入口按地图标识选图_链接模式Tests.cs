@@ -100,7 +100,7 @@ public class 各入口按地图标识选图_链接模式Tests
         Assert.Equal(MatchMode.Link, link.Match.Mode);
         Assert.IsType<SeededPairingSource>(link.Match.PairingSource);
 
-        MatchSession legacy = MatchSession.Create(SimFixtures.Config(turnLimit: 1), 1);
+        MatchSession legacy = MatchSession.Create(SimFixtures.Config(turnLimit: 1), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析
         Assert.Equal(MatchMode.Legacy, legacy.Match.Mode);
         Assert.Null(legacy.Match.PairingSource);
     }

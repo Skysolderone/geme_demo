@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Diagnostics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
@@ -42,7 +43,7 @@ public class AI小回合耗时Tests(ITestOutputHelper output)
     private static List<long> TimeTurns(string mapId, ulong seed, Func<MatchSession, bool> from, int count)
     {
         var config = new RunConfig { MapId = mapId, SeedStart = seed, Count = 1, TurnLimit = 0 };
-        MatchSession session = MatchSession.Create(config, seed);
+        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         var samples = new List<long>();
         var timers = new Dictionary<PlayerId, TimingController>();
         foreach (PlayerId player in session.Match.Players)

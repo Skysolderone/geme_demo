@@ -5,50 +5,8 @@ using Siege.Core.Match;
 
 namespace Siege.Sim.Running;
 
-/// <summary>
-/// Sim 的配对来源（board-link-mode D3 / 规格 simulation-harness「各入口支持生成图」、Q10）：配对不是对局内的随机子流，结果由对局外部给出并作为事件记录。
-/// 来源名写进配对事件（match-telemetry 第 8 项）：真随机 <see cref="Random"/>、配对种子 <see cref="Seeded"/>、脚本 <see cref="ScriptedPairingSource.ScriptSource"/>。
-/// </summary>
-public static class PairingSourceNames
-{
-    /// <summary>真随机（终端版有人值守对局）。</summary>
-    public const string Random = "random";
-
-    /// <summary>由配对种子派生的工具层随机源（批量跑局；缺省配对种子由对局种子派生）。</summary>
-    public const string Seeded = "pairing-seed";
-}
-
-/// <summary>
-/// 一次配对的抽取（三种 Sim 来源共用）：首轮把候选洗牌后两两相配，候选为奇数时洗牌后的最后一名等待；决赛只有一种合法结果，直接取它。
-/// <paramref name="nextInt"/> 给出 [0, n) 的整数。
-/// </summary>
-internal static class PairingDraw
-{
-    internal static PairingDecision Draw(PairingRequest request, Func<int, int> nextInt, string source)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        if (request.Kind == PairingKind.Final)
-        {
-            return ScriptedPairingSource.Default(request) with { Source = source };
-        }
-
-        int[] order = [.. request.Candidates];
-        for (int i = order.Length - 1; i > 0; i--)
-        {
-            int j = nextInt(i + 1);
-            (order[i], order[j]) = (order[j], order[i]);
-        }
-
-        ImmutableArray<(int X, int Y)>.Builder pairs = ImmutableArray.CreateBuilder<(int X, int Y)>();
-        for (int i = 0; i + 1 < order.Length; i += 2)
-        {
-            pairs.Add((order[i], order[i + 1]));
-        }
-
-        return new PairingDecision(pairs.ToImmutable(), order.Length % 2 == 1 ? order[^1] : null) { Source = source };
-    }
-}
-
+// Sim 的配对来源（board-link-mode D3 / 规格 simulation-harness「各入口支持生成图」、Q10）：配对不是对局内的随机子流，结果由对局外部给出并作为事件记录。
+// 来源名（PairingSourceNames）与抽取写法（PairingDraw）在 Core，与图形版的真随机来源（Presentation）共用；本文件只提供随机数。
 /// <summary>
 /// 批量跑局的配对来源（Q10）：由配对种子派生的工具层随机源，<b>不是</b> <see cref="GameSeed"/> 的子流——不消费、不读取任何对局子流，
 /// 改变配对不扰动信物、征募、顺序与 AI 的随机（simulation-harness「随机子流隔离」）。与对局随机共用同一份 PRNG 实现（SplitMix64 展开 + xoshiro256**），

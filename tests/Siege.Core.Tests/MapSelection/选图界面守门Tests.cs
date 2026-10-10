@@ -42,16 +42,13 @@ public class 选图界面守门Tests
         var banned = new Regex(@"siege-\d+p|siege-frontier|FourPlayerBaseMap|FrontierMapV\d", RegexOptions.CultureInvariant);
         Assert.Empty(files.Where(f => banned.IsMatch(f.Text)).Select(f => f.Path));
 
-        // 选项只在视图模型里构造，且取自目录的内置表。
-        string[] optionBuilders = [.. files.Where(f => f.Text.Contains("new MapOption(", StringComparison.Ordinal)).Select(f => f.Path)];
-        Assert.Equal(["Siege.Presentation/MapSelect/MapSelectModel.cs"], optionBuilders);
+        // board-link-mode 裁决 D7：新局界面没有地图清单——任何选图源码里都不得再出现选项构造、目录的内置表或内置标识清单；
+        // 唯一的标识 link:<种子> 经链接图标识的唯一实现拼出，不手拼。
+        Assert.Empty(files.Where(f => f.Text.Contains("new MapOption(", StringComparison.Ordinal) || f.Text.Contains("MapCatalog.Builtin", StringComparison.Ordinal)).Select(f => f.Path));
         string model = files.Single(f => f.Path == "Siege.Presentation/MapSelect/MapSelectModel.cs").Text;
-        Assert.Contains("MapCatalog.BuiltinMaps", model, StringComparison.Ordinal);
-        // board-map D9：选图界面的预选项改为棋盘图，视图模型不再引用目录的缺省地图标识（原先这里断言它出现）；
-        // 批量 / 终端入口的缺省地图仍由目录的缺省标识决定，见「棋盘档生成图标识Tests」。棋盘图与随机图的标识一律经各自的唯一实现拼出。
-        Assert.Contains("BoardMapId.Format(", model, StringComparison.Ordinal);
-        Assert.Contains("GeneratedMapId.Format(", model, StringComparison.Ordinal);
-        Assert.DoesNotMatch(new Regex(@"""(board|gen):", RegexOptions.CultureInvariant), model);   // 不手拼标识
+        Assert.Contains("LinkMapId.Format(", model, StringComparison.Ordinal);
+        Assert.DoesNotMatch(new Regex(@"""(board|gen|link):", RegexOptions.CultureInvariant), model);   // 不手拼标识
+        Assert.DoesNotMatch(new Regex(@"BoardMapId|GeneratedMapId\.(Format|Parse)", RegexOptions.CultureInvariant), model);   // 旧标识族的拼装 / 解析不再出现
 
         // 内置图面向人的显示名同样只登记在目录里（裁决 3）：界面层出现任何一个显示名的字面量，就是自带了"标识 → 名字"对照表。
         // 变异 MC-20：Hud 选图面板里自带显示名对照表 → 本测试红。禁用词取自目录本身，新增内置图自动纳入。
@@ -81,7 +78,7 @@ public class 选图界面守门Tests
         (string Path, string Text)[] files = SelectionSources();
 
         // 变异 M-C3（board-map 段 C，实跑）：选图阶段直接调棋盘档生成器出图 → 本测试红（红 1）。
-        var banned = new Regex(@"FrontierMapGenerator|FrontierMapLayout|BoardMapGenerator|BoardMapLayout|MapRandom|MapFile\.|new MapData\(|new TerrainData\(", RegexOptions.CultureInvariant);
+        var banned = new Regex(@"FrontierMapGenerator|FrontierMapLayout|BoardMapGenerator|BoardMapLayout|LinkMapGenerator|MapRandom|MapFile\.|new MapData\(|new TerrainData\(", RegexOptions.CultureInvariant);
         Assert.Empty(files.Where(f => banned.IsMatch(f.Text)).Select(f => f.Path));
 
         // 视图模型只产出标识，不解析地图；解析发生在图形版入口，且只经目录。
@@ -95,6 +92,7 @@ public class 选图界面守门Tests
         // 反面：被禁的记号在目录里确实命中。
         Assert.Matches(banned, File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")));
         Assert.Contains("BoardMapGenerator.Generate(", File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
+        Assert.Contains("LinkMapGenerator.Generate(", File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
@@ -168,7 +169,7 @@ public class 难度分级Tests
         // 守门型测试：黄金值在改动前的代码上钉下，改动前即绿（设计如此），改动后仍须绿。
         // 除本条外，既有黄金哈希（候选格上限Tests.V4GoldenTurnHash 等）一字未改。
         PlayerAiConfig[] players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })];
-        MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(players), 1);
+        MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(players), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         MatchLog log = session.Run();
         string text = log.DeterministicText();
         string decisions = string.Join("\n", session.Match.Players.Select(p => $"{p}: {string.Join(" | ", session.AiOf(p)!.Decisions)}"));

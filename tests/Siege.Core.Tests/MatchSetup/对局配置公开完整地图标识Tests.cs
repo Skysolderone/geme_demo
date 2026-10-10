@@ -10,6 +10,7 @@ namespace Siege.Core.Tests.MatchSetup;
 /// 规格：openspec/changes/map-generator/specs/match-setup —— Requirement: 对局配置公开完整地图标识（tasks 2.3）；
 /// map-generation「地图种子与确定性」留给段 B 的两条 Scenario：对局种子不影响地图、地图种子不扰动对局随机。
 /// </summary>
+// board-link-mode 裁决 D7：非 link: 的旧存档由玩家入口 MatchFlow.Restore 拒绝；本类是 Legacy 夹具，改走等价内部口 MatchFlow.RestoreLegacy（校验与重建相同，只是不拒绝旧地图）。
 public class 对局配置公开完整地图标识Tests
 {
     private static readonly PlayerId[] Four = [new(0), new(1), new(2), new(3)];
@@ -61,7 +62,7 @@ public class 对局配置公开完整地图标识Tests
         Assert.Equal("gen:12345:p7", MatchFlow.SavedMapId(json));
 
         MapData rebuilt = MapCatalog.Legacy.Resolve(MatchFlow.SavedMapId(json));
-        MatchFlow restored = MatchFlow.Restore(rebuilt, json);
+        MatchFlow restored = MatchFlow.RestoreLegacy(rebuilt, json);
 
         Assert.Equal("gen:12345:p7", restored.Publish().MapId);
         Assert.Equal(MapFile.ToJson(match.Board.BaseMap), MapFile.ToJson(restored.Board.BaseMap));
@@ -71,7 +72,7 @@ public class 对局配置公开完整地图标识Tests
         Assert.Equal(json, restored.Serialize());
 
         // 给错图（同种子、缺省平台数）响亮失败，不静默在另一张图上恢复。
-        Assert.Throws<FormatException>(() => MatchFlow.Restore(MapCatalog.Legacy.Resolve("gen:12345"), json));
+        Assert.Throws<FormatException>(() => MatchFlow.RestoreLegacy(MapCatalog.Legacy.Resolve("gen:12345"), json));
     }
 
     [Theory]
@@ -88,7 +89,7 @@ public class 对局配置公开完整地图标识Tests
         string json = match.Serialize();
 
         Assert.Contains($"\"MapDigest\": \"{MapFile.Digest(map)}\"", json, StringComparison.Ordinal);
-        MatchFlow restored = MatchFlow.Restore(MapCatalog.Legacy.Resolve(MatchFlow.SavedMapId(json)), json);
+        MatchFlow restored = MatchFlow.RestoreLegacy(MapCatalog.Legacy.Resolve(MatchFlow.SavedMapId(json)), json);
         Assert.False(restored.MapDigestBackfilled);
         Assert.Equal(json, restored.Serialize());
 
@@ -100,7 +101,7 @@ public class 对局配置公开完整地图标识Tests
         MapData tampered = MapFile.FromJson(mapJson.Remove(mapJson.IndexOf(cell, StringComparison.Ordinal), cell.Length));
         Assert.Equal(map.Id, tampered.Id);
 
-        FormatException mismatch = Assert.Throws<FormatException>(() => MatchFlow.Restore(tampered, json));
+        FormatException mismatch = Assert.Throws<FormatException>(() => MatchFlow.RestoreLegacy(tampered, json));
         Assert.Contains("地图不一致", mismatch.Message, StringComparison.Ordinal);
         Assert.Contains(mapId, mismatch.Message, StringComparison.Ordinal);
         Assert.Contains(MapFile.Digest(map), mismatch.Message, StringComparison.Ordinal);
@@ -120,7 +121,7 @@ public class 对局配置公开完整地图标识Tests
         string legacy = node.ToJsonString();
         Assert.DoesNotContain("MapDigest", legacy, StringComparison.Ordinal);
 
-        MatchFlow fromLegacy = MatchFlow.Restore(MapCatalog.Legacy.Resolve(MatchFlow.SavedMapId(legacy)), legacy);
+        MatchFlow fromLegacy = MatchFlow.RestoreLegacy(MapCatalog.Legacy.Resolve(MatchFlow.SavedMapId(legacy)), legacy);
 
         Assert.True(fromLegacy.MapDigestBackfilled);
         Assert.False(match.MapDigestBackfilled);
@@ -136,7 +137,7 @@ public class 对局配置公开完整地图标识Tests
         string json = match.Serialize();
 
         Assert.Equal(FrontierMapV2.Id, MatchFlow.SavedMapId(json));
-        MatchFlow restored = MatchFlow.Restore(MapCatalog.Legacy.Resolve(MatchFlow.SavedMapId(json)), json);
+        MatchFlow restored = MatchFlow.RestoreLegacy(MapCatalog.Legacy.Resolve(MatchFlow.SavedMapId(json)), json);
         Assert.Equal(FrontierMapV2.Id, restored.Publish().MapId);
         Assert.Equal(json, restored.Serialize());
     }

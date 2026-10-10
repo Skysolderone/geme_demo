@@ -57,7 +57,10 @@ public class 生成图上的拾取自检口径Tests
         Assert.Contains("bool beyondFocus = at.FocusZ - z > 1e-3f;", root, StringComparison.Ordinal);
         Assert.Contains("bool adjacent = hit && picked.Y == cell.Coord.Y - 1 && System.Math.Abs(picked.X - cell.Coord.X) <= 1;", root, StringComparison.Ordinal);
         Assert.Contains("ok &= neverStrict.Length == 0;", root, StringComparison.Ordinal);
-        Assert.Contains("ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter);", root, StringComparison.Ordinal);
+        // board-link-mode 段 D-a（Link 口径）：链接图画布中心是场景格，近景注视中心整屏无可落子格是地图几何使然；只在"地图中心不是可落子格"时对该位姿记无可验，
+        // 其余地图（中心可落子）口径不变。centerPlayable 的判据写死为"地图中心格在可落子格清单里"，不得改成别的放宽条件。
+        Assert.Contains("bool centerPlayable = cells.Any(c => c.Coord == new Coord(width / 2, height / 2));", root, StringComparison.Ordinal);
+        Assert.Contains("ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter || !centerPlayable);", root, StringComparison.Ordinal);
         Assert.Contains("ok &= missed.Length == 0;", root, StringComparison.Ordinal);   // 角位姿放过"无可验"之后，覆盖面靠这一条兜住
     }
 }

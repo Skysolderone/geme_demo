@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Numerics;
 using System.Text.Json;
 using Siege.Core.Ai;
@@ -129,7 +130,7 @@ public class 专家难度的一层前瞻Tests
         // 替身（段 A）：sim-out 不入库，这里用"显式一层配置产出的日志"——两项为 0 不写出，首部与改动前的专家日志同形；一层配置与改动前的专家逐步相同由 G1 钉住。
         // 段 B（tasks 2.1）补真实的 expert-lookahead 冒烟日志夹具。
         RunConfig config = V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = OneLayerConfig() }, Standard, Standard, Standard) with { TurnLimit = 16 };
-        MatchLog log = MatchSession.Create(config, 1).Run();
+        MatchLog log = MatchSession.Create(config, 1, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string header = log.DeterministicText().Split('\n')[0];
         Assert.Contains("\"LookaheadWidth\":4", header, StringComparison.Ordinal);
         Assert.DoesNotContain("DiverseSupplementLimit", header, StringComparison.Ordinal);
@@ -141,7 +142,7 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(0, search.TwoPlyWeightPermille);
         Assert.Equal(OneLayerConfig(), search);
         Assert.Contains(old.LookaheadTurns, t => t.Lookahead!.Status == nameof(LookaheadStatus.Applied));
-        ReplayResult replay = Replayer.Replay(old);
+        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.True(replay.Identical, replay.ToString());
     }
 
@@ -247,7 +248,7 @@ public class 专家难度的一层前瞻Tests
     internal static (IReadOnlyList<string> Decisions, long Consumed, List<string> Records) RunExpertSeat0(AiSearchConfig search, ulong seed)
     {
         MatchSession session = MatchSession.Create(
-            V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard), seed);
+            V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Siege.Core.Determinism.RandomStream stream = session.Match.Seed.Stream(HeuristicAi.StreamName(P0));
         var inner = new HeuristicTurnController(P0, session.Match.Publish, stream, AiDifficulty.Expert, Weights, search);
         var recorder = new LookaheadRecorder(inner);
@@ -282,7 +283,7 @@ public class 专家难度的一层前瞻Tests
         // 另钉解析路径：未显式给 Search 的专家玩家，会话落成的搜索配置就是这份预设（v5 不触发候选格上限）。
         // 变异 E-P1 / E-P2（预设的多样补充上限改回 8 / 两层权重改回 1000）→ 本测试红（见预设退回记录）。
         AiSearchConfig preset = AiSearchConfig.Expert with { PassThreshold = PassThreshold };
-        MatchSession session = MatchSession.Create(V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, Standard, Standard, Standard), seed);
+        MatchSession session = MatchSession.Create(V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(preset, session.AiOf(P0)!.Config);
         AssertG1(preset, seed);
     }
@@ -291,7 +292,7 @@ public class 专家难度的一层前瞻Tests
     internal static (MatchLog Log, IReadOnlyList<string> Decisions) RunSeat1(AiDifficulty difficulty, AiSearchConfig search)
     {
         MatchSession session = MatchSession.Create(
-            V5Config(Standard, new PlayerAiConfig { Difficulty = difficulty, Search = search }, Standard, Standard), 1);
+            V5Config(Standard, new PlayerAiConfig { Difficulty = difficulty, Search = search }, Standard, Standard), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         HeuristicTurnController ai = session.AiOf(P1)!;
         Assert.Equal(search, ai.Config);
         MatchLog log = session.Run();

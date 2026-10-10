@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -16,7 +17,7 @@ public class 防死锁硬停Tests
 {
     private static MatchSession AlwaysPlacing(RunConfig config, ulong seed)
     {
-        MatchSession session = MatchSession.Create(config, seed);
+        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         foreach (PlayerId p in session.Match.Players)
         {
             session.SetController(p, new AlwaysPlaceController());

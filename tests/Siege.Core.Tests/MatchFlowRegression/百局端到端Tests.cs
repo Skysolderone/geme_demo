@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 namespace Siege.Core.Tests.MatchFlowRegression;
 
 /// <summary>implement 8.4：占位随机策略（种子驱动）端到端连跑 100 局 4 人对局，无死锁、无非法状态。</summary>
+// board-link-mode 裁决 D7：非 link: 的旧存档由玩家入口 MatchFlow.Restore 拒绝；本类是 Legacy 夹具，改走等价内部口 MatchFlow.RestoreLegacy（校验与重建相同，只是不拒绝旧地图）。
 public class 百局端到端Tests(ITestOutputHelper output)
 {
     [Fact]
@@ -98,6 +99,6 @@ public class 百局端到端Tests(ITestOutputHelper output)
         }
 
         // 存档往返
-        Assert.Equal(match.Serialize(), MatchFlow.Restore(match.Board.BaseMap, match.Serialize()).Serialize());
+        Assert.Equal(match.Serialize(), MatchFlow.RestoreLegacy(match.Board.BaseMap, match.Serialize()).Serialize());
     }
 }

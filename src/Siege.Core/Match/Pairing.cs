@@ -44,12 +44,58 @@ public sealed record PairingDecision(ImmutableArray<(int X, int Y)> Pairs, int? 
 /// <summary>
 /// 配对来源（board-link-mode D3 / 实现裁决 B3）：Core 自身 MUST NOT 为配对或等待者抽随机数，配对结果来自对局外部。
 /// <see cref="MatchFlow"/> 在大回合结束进入待配对 / 待决赛链接时调用挂接的来源（<see cref="MatchFlow.PairingSource"/>），
-/// 再按「配对事件由对局外部提供」的全部规则校验结果；不合法即抛错并停在待配对状态。真随机实现属段 C / D（Sim、Godot），不在 Core。
+/// 再按「配对事件由对局外部提供」的全部规则校验结果；不合法即抛错并停在待配对状态。真随机实现在 Sim（终端）与 Presentation（图形版），不在 Core；抽取写法共用 <see cref="PairingDraw"/>。
 /// </summary>
 public interface IPairingSource
 {
     /// <summary>给出一次配对事件的结果。</summary>
     PairingDecision Decide(PairingRequest request);
+}
+
+/// <summary>
+/// 配对结果的来源名（match-telemetry 第 8 项，写进配对事件）：真随机 <see cref="Random"/>（终端 / 图形版有人值守）、配对种子 <see cref="Seeded"/>（批量跑局）、
+/// 脚本 <see cref="ScriptedPairingSource.ScriptSource"/>（测试与无人值守自检）。段 D 从 Sim 移入 Core，供 Presentation 的真随机来源共用（不得引用 Sim）。
+/// </summary>
+public static class PairingSourceNames
+{
+    /// <summary>真随机（有人值守对局）。</summary>
+    public const string Random = "random";
+
+    /// <summary>由配对种子派生的工具层随机源（批量跑局；缺省配对种子由对局种子派生）。</summary>
+    public const string Seeded = "pairing-seed";
+}
+
+/// <summary>
+/// 一次配对的抽取（各随机来源共用的<b>唯一</b>写法；纯函数，随机数由调用方的 <c>nextInt</c> 给出）：首轮把候选洗牌后两两相配，候选为奇数时洗牌后的最后一名等待；
+/// 决赛只有一种合法结果，直接取它。Core 自身不产生随机数（board-link-mode D3）——真随机 / 配对种子的来源分别在 Presentation（图形版）与 Sim（终端、批量）。
+/// </summary>
+public static class PairingDraw
+{
+    /// <summary><paramref name="nextInt"/> 给出 <c>[0, n)</c> 的整数；<paramref name="source"/> 写进结果的 <see cref="PairingDecision.Source"/>。</summary>
+    public static PairingDecision Draw(PairingRequest request, Func<int, int> nextInt, string source)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(nextInt);
+        if (request.Kind == PairingKind.Final)
+        {
+            return ScriptedPairingSource.Default(request) with { Source = source };
+        }
+
+        int[] order = [.. request.Candidates];
+        for (int i = order.Length - 1; i > 0; i--)
+        {
+            int j = nextInt(i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+        }
+
+        ImmutableArray<(int X, int Y)>.Builder pairs = ImmutableArray.CreateBuilder<(int X, int Y)>();
+        for (int i = 0; i + 1 < order.Length; i += 2)
+        {
+            pairs.Add((order[i], order[i + 1]));
+        }
+
+        return new PairingDecision(pairs.ToImmutable(), order.Length % 2 == 1 ? order[^1] : null) { Source = source };
+    }
 }
 
 /// <summary>

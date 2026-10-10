@@ -154,8 +154,8 @@ public class 初始配置与基础棋池Tests
 
         // 跑局层接线：Scenario 的原话是"批量跑局把匠人权重配置为 18"，所以 RunConfig → MatchOptions 这一段也要钉住。
         // 变异验证 M-C3（检查阶段）：MatchSession.Create 不传 ArtisanWeight → 补本段前全绿 826（缺口），补后红 1（本测试）。
-        Assert.Equal(18, MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { ArtisanWeight = 18 }, seed: 5).Match.ArtisanWeight);
-        Assert.Equal(MatchOptions.DefaultArtisanWeight, MatchSession.Create(SimFixtures.Config(turnLimit: 4), seed: 5).Match.ArtisanWeight);
+        Assert.Equal(18, MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { ArtisanWeight = 18 }, seed: 5, resolveMap: MapCatalog.Legacy.Resolve).Match.ArtisanWeight);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(MatchOptions.DefaultArtisanWeight, MatchSession.Create(SimFixtures.Config(turnLimit: 4), seed: 5, resolveMap: MapCatalog.Legacy.Resolve).Match.ArtisanWeight);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]
@@ -238,7 +238,7 @@ public class 初始配置与基础棋池Tests
         // carry-in-out 规格 Scenario（recruitment「初始配置与基础棋池」）：A 带入换型令（堡垒子）、B 未带入 → A 普通子 × 4 + 堡垒子 × 1，B 普通子 × 5；
         // 征募子流未被消费，第 1 大回合第一位行动者的征募候选与全员不带入时相同。
         // 对照局：同一种子、同一真实地图、关闭带入带出。另把 P3 也放上征召签，让"解析征召签"这一步也在建局里发生。
-        MapData map = MapCatalog.Legacy.Resolve(MapCatalog.DefaultId);
+        MapData map = MapCatalog.Legacy.Resolve(MapCatalog.Legacy.DefaultId);
         PlayerId[] four = [new(0), new(1), new(2), new(3)];
         var seed = new GameSeed(23);
         MatchFlow carried = MatchFlow.Create(map, seed, four, MatchOptions.Immediate with

@@ -153,7 +153,7 @@ public class 两人基准地图Tests
         BuiltinMapInfo info = Assert.Single(MapCatalog.BuiltinMaps, m => m.Id == TwoPlayerBaseMap.Id);
         Assert.Equal("双人图 9×9", info.Title);
         Assert.Equal(1, MapCatalog.BuiltinIds.ToList().IndexOf(TwoPlayerBaseMap.Id));
-        Assert.Equal(MapCatalog.DefaultId, MapCatalog.BuiltinIds[0]);
+        Assert.Equal(MapCatalog.Legacy.DefaultId, MapCatalog.BuiltinIds[0]);   // board-link-mode 裁决 D7：缺省地图改为 link:1，v5 只剩 Legacy 夹具的缺省
         Assert.Equal(MapFile.ToJson(Map()), MapFile.ToJson(MapCatalog.Legacy.Resolve(TwoPlayerBaseMap.Id)));
     }
 

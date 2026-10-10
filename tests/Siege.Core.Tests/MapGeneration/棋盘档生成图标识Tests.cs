@@ -140,7 +140,7 @@ public class 棋盘档生成图标识Tests
         Assert.DoesNotContain("\"board\"", configText, StringComparison.Ordinal);
         Assert.Equal("board:12345", RunConfig.FromJson(configText).MapId);
 
-        MatchLog log = MatchLog.Parse(Assert.Single(BatchRunner.Execute(config, parallelism: 1, boardMap)).FullText());
+        MatchLog log = MatchLog.Parse(Assert.Single(BatchRunner.Execute(config, parallelism: 1, boardMap, resolveMap: MapCatalog.Legacy.Resolve)).FullText());   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.False(log.IsFailed, log.Failure?.Message);
         Assert.Equal("board:12345", log.Header.MapId);
         Assert.Equal("board:12345", log.Header.Config.MapId);
@@ -149,10 +149,10 @@ public class 棋盘档生成图标识Tests
         Assert.Equal(MapFile.Digest(MapCatalog.Legacy.Resolve("board:12345")), log.Header.MapDigest);
 
         // 回放按首部的标识重建同一张图。
-        Assert.True(Replayer.Replay(MatchLog.Parse(log.DeterministicText())).Identical);
+        Assert.True(Replayer.Replay(MatchLog.Parse(log.DeterministicText()), resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         // 绕过入口、把裸 board 直接交给会话 → 规则内核拒绝。
-        Assert.Throws<FormatException>(() => MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = " board " }, seed: 1));
+        Assert.Throws<FormatException>(() => MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = " board " }, seed: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public class 棋盘档生成图标识Tests
         Assert.Contains("board:<地图种子>", unknown.Message, StringComparison.Ordinal);
         Assert.Contains("gen:<地图种子>", unknown.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(MapCatalog.BuiltinIds, BoardMapId.IsBoardMap);
-        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.DefaultId);   // 缺省地图不变（design D9）
+        Assert.Equal(FourPlayerBaseMap.Id, MapCatalog.Legacy.DefaultId);   // 夹具缺省地图不变（design D9）；board-link-mode 裁决 D7：玩家入口缺省改为 link:1（MapCatalog.DefaultId）
     }
 
     private static (int Code, string Out, string Error) RunMain(params string[] args) =>

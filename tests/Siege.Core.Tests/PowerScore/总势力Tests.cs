@@ -122,7 +122,8 @@ public class 总势力Tests
             Assert.DoesNotContain(forbidden, calculator);
         }
 
-        string[] allowed = ["Adjacency.cs", "GameBoard.cs", "CoverageMap.cs", "PieceEffects.cs"];
+        // board-link-mode 裁决 P7：GameBoard 的地图派生表抽成 partial 文件 GameBoard.MapTables.cs，CoverageTargets( 的读者多出这一个文件名（同一个类、零行为改动）。
+        string[] allowed = ["Adjacency.cs", "GameBoard.cs", "GameBoard.MapTables.cs", "CoverageMap.cs", "PieceEffects.cs"];
         string[] sources = [.. new[] { "Siege.Core", "Siege.Sim", "Siege.Presentation", Path.Combine("godot", "scripts") }
             .SelectMany(dir => Directory.GetFiles(Path.Combine(root.FullName, "src", dir), "*.cs", SearchOption.AllDirectories))
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))];

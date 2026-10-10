@@ -169,7 +169,7 @@ public class 活形分析的决策内缓存Tests
     /// </summary>
     internal static MatchLog Play(RunConfig config, ulong seed, bool? cacheLife)
     {
-        MatchSession session = MatchSession.Create(config, seed);
+        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         if (cacheLife is { } cache)
         {
             for (int i = 0; i < session.Match.Players.Length; i++)

@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
@@ -40,7 +41,7 @@ internal static class SimFixtures
     /// </summary>
     /// <remarks>权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省（<see cref="PinPreCalibration"/>）：大量遥测 / 日志 / 分析测试的样本口径（4 局全是截断局等）
     /// 依赖这四局的实际走法，不应随校准值与 R26（简单难度算眼位）漂移（段 D2 改写）。</remarks>
-    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(PinPreCalibration(Config(count: 4, seedStart: 11)), parallelism: 1));
+    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(PinPreCalibration(Config(count: 4, seedStart: 11)), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
     /// <summary>
     /// 有名次的真实样本（restore-go-core-rules 段 E）：规则层删掉大回合上限与碾压之后，<see cref="Sample"/> 的 4 局全是 <c>turn_limit</c> 截断局、胜者全空，
@@ -81,7 +82,7 @@ internal static class SimFixtures
         // 停手阈值同样写死（ai-eye 段 B 待决 #8，段 D2 落实）：缺省阈值随 4.5 由 20 改为 80，不写死则 Easy 的走法随之变、样本口径断言跟着翻。
         // 写死的是本夹具建立时（段 B–D1）实际生效的缺省值，四局逐步不变；眼位权重为 0，R26（简单难度算眼位）也不改变走法。
         RunConfig config = PinPreCalibration(Config(turnLimit: 0));
-        MatchSession session = MatchSession.Create(config, seed);
+        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         while (session.Match.MajorRound <= 3 && session.RunTurn())
         {
         }

@@ -11,6 +11,7 @@ using Siege.Core.Recruit;
 using Siege.Presentation.Camera;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
+using Siege.Presentation.Pairing;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Show;
 using Siege.Presentation.Text;
@@ -66,6 +67,9 @@ public sealed partial class GameRoot : Node3D
     private bool _autoDemo;
     private bool _pickCheck;
 
+    /// <summary>链接图对局的配对来源（board-link-mode D3）：有人值守真随机、无人值守固定脚本；每次建局（含新局界面的预览会话）都挂同一个。</summary>
+    private IPairingSource _pairing = null!;
+
     /// <summary><c>--mute</c>：不创建音效节点、不合成波形（show-sound-cues D3）。</summary>
     private bool _mute;
 
@@ -99,8 +103,8 @@ public sealed partial class GameRoot : Node3D
         _bindings.Install();
 
         // 命令行：先把全部选项读完，再结算未知选项（LaunchArgs：合法选项集合 = 读取过的名字，没有第二张表）。
-        // --map=<地图标识或文件>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5）。缺省 v5（MapCatalog.DefaultId）；
-        // 选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
+        // --map=link:<地图种子>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5；board-link-mode 实现裁决 D7：只接受 link:，旧标识由 MapCatalog.Resolve 报错、退出码 1）。
+        // 未给时有人值守进新局界面、无人值守取 link:1（MapCatalog.DefaultId）；选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
         ulong seed;
         int rounds;
         try
@@ -159,7 +163,7 @@ public sealed partial class GameRoot : Node3D
 
             // --cell-limit=K：AI 候选格上限（0 = 不限制）；未给出由 Core 按地图的可落子格数取缺省值。
             int? cellLimit = args.Value<int>("cell-limit", "非负整数（AI 候选格上限，0 = 不限制）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
-            string? mapId = args.Text("map", "地图标识或地图文件路径");
+            string? mapId = args.Text("map", "地图标识（link:<地图种子>）");
             ReadScreenshotArg(args.Text("screenshot", "截图路径[:第几帧]"));
 
             // --profile=<档案路径> / --no-carry / --carry-preview=：带入带出（carry-in-out D10，见 GameRoot.Carry）。自动化模式一律关闭、不读写档案。
@@ -250,6 +254,10 @@ public sealed partial class GameRoot : Node3D
 
             _difficulty = difficulty ?? AiDifficulty.Standard;
 
+            // 配对来源（board-link-mode D3 / 实现裁决 D3）：有人值守用真随机（Presentation 的 RandomPairingSource），
+            // --auto-demo / --pick-check / --screenshot= 用 Core 内置的固定脚本（ScriptedPairingSource：候选按编号升序两两相配），使帧序列与截图可复现。
+            _pairing = Unattended ? new ScriptedPairingSource() : new RandomPairingSource();
+
             _pause = _autoDemo ? 0d : AiPauseSeconds;
             _matchSeed = seed;
             _rounds = rounds;
@@ -264,23 +272,16 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[sound] 结算演出占位音效：合成 {_sounds.VoiceCount} 段波形，播放器 {ShowSounds.PoolSize} 个（--mute 关闭）");
             }
 
-            // --map=gen：随机取一个地图种子。规则内核不读时钟，取种子只在入口最外层做；时间戳折成九位以内的短种子（与选图界面"换一张"同一个折叠函数），
-            // 拼成完整标识、打印出来，再交给 MapCatalog。
-            // 地图种子与上面的对局种子各取各的，互不相干（map-generator D2 / D3）。
-            if (GeneratedMapId.IsBareRequest(mapId))
+            // --map=link：随机取一个地图种子。规则内核不读时钟，取种子只在入口最外层做；时间戳折成九位以内的短种子（与新局界面"换一张"同一个折叠函数），
+            // 拼成完整标识、打印出来，再交给 MapCatalog。地图种子与上面的对局种子各取各的，互不相干（map-generator D2 / D3）。
+            // 旧的裸 gen / 裸 board 不再识别（board-link-mode 实现裁决 D7）：与其他旧标识一样由 MapCatalog.Resolve 报错退出。
+            if (LinkMapId.IsBareRequest(mapId))
             {
-                mapId = GeneratedMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapGenParameters.RandomPick);
+                mapId = LinkMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()));
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
-            // --map=board（board-map D7）：同上，拼成棋盘图的完整标识（缺省棋盘数）。
-            if (BoardMapId.IsBareRequest(mapId))
-            {
-                mapId = BoardMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), BoardMapParameters.Default);
-                GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
-            }
-
-            // 选图阶段（map-generator D7）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图（v5）、跳过选图（既有自检命令不变）。
+            // 新局界面（board-link-mode D8）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图 link:1、跳过新局界面（既有自检命令不变）。
             if (mapSelect || (mapId is null && !Unattended))
             {
                 _session = BeginMapSelect(mapId);
@@ -288,7 +289,7 @@ public sealed partial class GameRoot : Node3D
             else
             {
                 MapData map = MapCatalog.Resolve(mapId);
-                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, _difficulty, cellLimit);
+                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, _difficulty, cellLimit, pairing: _pairing);
                 BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
             }
         }
@@ -316,7 +317,7 @@ public sealed partial class GameRoot : Node3D
         ShowCarryPreview();
 
         GD.Print(Selecting
-            ? $"[siege] 选图界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=<标识> 可跳过选图）"
+            ? $"[siege] 新局界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=link:<地图种子> 可跳过新局界面）"
             : $"[siege] 地图 {_session.Match.Map.Id}，对局种子 {seed}，你是 {Labels.Player(_session.Me)}，{DifficultyText()}{(_autoDemo ? $"，自动演示模式（{(rounds == 0 ? "跑到终局" : $"跑满 {rounds} 个大回合停止")}）" : string.Empty)}");
     }
 
@@ -386,7 +387,7 @@ public sealed partial class GameRoot : Node3D
         if (Selecting)
         {
             Rect2 panel = _hud.MapSelectRect;
-            GD.Print($"[siege] 选图界面：选中「{_select!.Options[_select.SelectedIndex].Title}」，完整标识 {_select.CurrentId}，{PreviewInfo()}；全局预览 {(_board.Rig.IsOverview ? "开" : "关（一屏看全）")}；"
+            GD.Print($"[siege] 新局界面：地图种子 {_select!.MapSeed}，完整标识 {_select.CurrentId}，{PreviewInfo()}；全局预览 {(_board.Rig.IsOverview ? "开" : "关（一屏看全）")}；"
                 + $"面板 ({panel.Position.X:0}, {panel.Position.Y:0}) {panel.Size.X:0}×{panel.Size.Y:0}，对局面板 {(_hud.MapSelectOpen ? "隐藏" : "显示")}；AI 难度 {Labels.Difficulty(_select.Difficulty)}");
         }
 
@@ -558,9 +559,24 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        TakeLocalShow();
-        Drive(delta);
-        CheckCarrySettlement();
+        try
+        {
+            TakeLocalShow();
+            Drive(delta);
+            CheckCarrySettlement();
+        }
+        catch (System.Exception ex) when (Unattended)
+        {
+            // testing.md「自检中途抛异常 MUST 以非 0 退出」：引擎会把 _Process 里的异常记成错误后继续下一帧，自动演示照样跑完并报 0（段 D-a 实测：
+            // 链接后公开补充载荷抛出被吞掉三次、退出码仍为 0）。无人值守下在这里接住、打印、以 1 退出；有人值守照旧由引擎记录。
+            GD.PrintErr($"[siege] 错误：无人值守自检第 {_frame} 帧推进对局时抛出：{ex}");
+            SetProcess(false);
+            SetProcessInput(false);
+            SetProcessUnhandledInput(false);
+            GetTree().Quit(1);
+            return;
+        }
+
         UpdateCamera(delta);
         UpdateHover();
 
@@ -909,6 +925,9 @@ public sealed partial class GameRoot : Node3D
         BoardCellView[] cells = [.. _session.World.Board().Cells.Where(c => c.Terrain == Terrain.Playable)];
         CameraPose saved = _board.Rig.Pose;
         bool ok = cells.Length > 0;
+        // 注视地图中心的位姿画面内必须有格（testing.md）——前提是地图中心本身是可落子格。链接图（board-link-mode）的画布中心是五块出生棋盘之间的场景格，
+        // 近景注视中心时整屏无可落子格是地图几何使然、不是拾取坏了；此时只对该位姿记"无可验"（段 D-a 按 Link 口径放宽；战场范围的位姿由段 D-c / tasks 4.4 补）。
+        bool centerPlayable = cells.Any(c => c.Coord == new Coord(width / 2, height / 2));
 
         // ① 逐格居中
         var strict = new HashSet<Coord>();
@@ -1002,11 +1021,11 @@ public sealed partial class GameRoot : Node3D
 
             PlaneRect bounds = _board.Rig.Bounds;
             bool focusedOnCenter = Mathf.Abs(pose.FocusX - bounds.CenterX) < 1e-3f && Mathf.Abs(pose.FocusZ - bounds.CenterZ) < 1e-3f;
-            ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter);
+            ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter || !centerPlayable);
             GD.Print($"[pick-check] 位姿「{name}」注视点 ({pose.FocusX:0.###}, {pose.FocusZ:0.###}) 距离 {pose.Distance:0.###}：画面内可落子格 {inView}，"
                 + $"往返一致 {inView - failures.Count - occluded.Count}，被更近的高台遮挡 {occluded.Count}{(occluded.Count == 0 ? string.Empty : "（" + string.Join("、", occluded) + "）")}，"
                 + $"失败 {failures.Count}{(failures.Count == 0 ? string.Empty : "：" + string.Join("、", failures))}"
-                + (inView == 0 && !focusedOnCenter ? "（该角视野内没有可落子格，无可验）" : string.Empty));
+                + (inView == 0 && !focusedOnCenter ? "（该角视野内没有可落子格，无可验）" : inView == 0 && !centerPlayable ? "（地图中心是场景格，该位姿视野内没有可落子格，无可验）" : string.Empty));
         }
 
         _board.Rig.Set(saved);

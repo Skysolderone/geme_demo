@@ -83,7 +83,7 @@ public class 链接档地图标识与确定性Tests
     [Fact]
     public void 目录解析link标识()
     {
-        // D8（段 A 形态）：MapCatalog.Resolve 识别 link:<种子>，其余标识转交 Legacy；裸 link 不进规则内核。
+        // D8：MapCatalog.Resolve 识别 link:<种子>；裸 link 不进规则内核。
         Assert.Equal(MapFile.ToJson(LinkMapGenerator.Generate(7)), MapFile.ToJson(MapCatalog.Resolve(" link:7 ")));
         Assert.Equal("link:7", MapCatalog.Resolve("link:007").Id);
 
@@ -92,11 +92,18 @@ public class 链接档地图标识与确定性Tests
         Assert.Contains("link:1", bare.Message, StringComparison.Ordinal);
         Assert.Throws<FormatException>(() => MapCatalog.Resolve("link:x"));
 
-        // 旧标识族在段 A 仍由 Resolve 转交 Legacy，二者逐字节相同。
-        foreach (string legacy in new[] { null!, "siege-4p-base-v5", "gen:12345", "board:12345", FrontierMapV2.Id })
+        // board-link-mode 裁决 D7：段 D 收口后 Resolve 不再转交旧标识族——一律报错并说明只接受 link:<地图种子>；旧标识只经 Legacy（夹具）。
+        // 缺省（null / 空白）也从 v5 改为 link:1。
+        Assert.Equal("link:1", MapCatalog.Resolve(null).Id);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve(null).Id);
+        foreach (string legacy in new[] { "siege-4p-base-v5", "gen:12345", "board:12345", FrontierMapV2.Id, "gen", "board", "maps/x.json" })
         {
-            Assert.Equal(MapFile.ToJson(MapCatalog.Legacy.Resolve(legacy)), MapFile.ToJson(MapCatalog.Resolve(legacy)));
+            FormatException rejected = Assert.Throws<FormatException>(() => MapCatalog.Resolve(legacy));
+            Assert.Contains("只接受 link:<地图种子>", rejected.Message, StringComparison.Ordinal);
+            Assert.Contains(legacy, rejected.Message, StringComparison.Ordinal);
         }
+
+        Assert.Equal("gen:12345", MapCatalog.Legacy.Resolve("gen:12345").Id);   // 反面：夹具解析照常
 
         // Legacy 不认 link:（把它当文件路径找不到，并在可用标识里提到 link: 写法）。
         FileNotFoundException notLegacy = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve("link:1"));

@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -67,7 +68,7 @@ public class 可复现回放_链接模式Tests
         // 实现裁决 C3 / match-telemetry「旧日志被拒绝」：replay 命令拒绝地图标识不是 link: 的日志并提示属于已移除的地图模式；
         // 测试内部的回放接口（Replayer）仍能回放旧日志（Legacy 夹具的回归护栏）。
         // 变异 MC-11：Program.Replay 去掉地图标识检查 → 旧日志照常回放、退出码 0，本测试红。
-        MatchLog legacy = MatchSession.Create(SimFixtures.Config(turnLimit: 4), 1).Run();
+        MatchLog legacy = MatchSession.Create(SimFixtures.Config(turnLimit: 4), 1, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析
         Assert.Equal("siege-4p-base-v5", legacy.Header.MapId);
         string path = legacy.WriteTo(SimFixtures.TempDir("link-replay-legacy"));
 
@@ -76,7 +77,7 @@ public class 可复现回放_链接模式Tests
         Assert.Contains("已移除的地图模式", err, StringComparison.Ordinal);
         Assert.DoesNotContain("回放一致", output, StringComparison.Ordinal);
 
-        Assert.True(Replayer.ReplayFile(path).Identical);
+        Assert.True(Replayer.ReplayFile(path, resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：测试内部回放旧日志显式经 MapCatalog.Legacy
     }
 
     [Fact]

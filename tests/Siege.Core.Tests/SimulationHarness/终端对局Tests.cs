@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -23,7 +24,7 @@ public class 终端对局Tests
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, flagRisk: 0, contentSet: ContentSet.V1, map: MapCatalog.Legacy.Resolve(null));   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string text = output.ToString();
 
         Assert.Equal(0, exit);
@@ -71,7 +72,7 @@ public class 终端对局Tests
     public void 输入结束时干净退出()
     {
         var output = new StringWriter();
-        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output);
+        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal(0, exit);
         Assert.Contains("已退出。种子 7", output.ToString(), StringComparison.Ordinal);

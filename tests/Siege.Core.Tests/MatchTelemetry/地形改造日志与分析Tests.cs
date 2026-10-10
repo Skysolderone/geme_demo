@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -49,7 +50,7 @@ public class 地形改造日志与分析Tests
 
         for (int i = 0; i < config.Count; i++)
         {
-            MatchSession session = MatchSession.Create(config, config.SeedAt(i));
+            MatchSession session = MatchSession.Create(config, config.SeedAt(i), resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
             MatchLog log = session.Run();
             records.AddRange(session.Match.TerrainEdits);
 
@@ -98,7 +99,7 @@ public class 地形改造日志与分析Tests
         // 「改造可查」+「地形可离线重建」：走真实跑局（Standard——Easy 结构性地几乎不落匠人）→ 日志往返 → 重放。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         // 每一条小回合快照都带改造字段（没有改造就是空表），首部带匠人权重。
         Assert.All(logs, l => Assert.All(l.Turns, t => Assert.NotNull(t.Edits)));
@@ -147,7 +148,7 @@ public class 地形改造日志与分析Tests
             ArtisanWeight = 18,
         };
 
-        MatchLog log = BatchRunner.Execute(config, parallelism: 1).Single();
+        MatchLog log = BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve).Single();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal(18, log.Header.ArtisanWeight);
         Assert.Equal(18, log.Header.Config.ArtisanWeight);
@@ -158,7 +159,7 @@ public class 地形改造日志与分析Tests
 
         // 反向：默认配置下首部是 10，不是"永远写 18"。
         Assert.Equal(10, BatchRunner.Execute(
-            SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 12), parallelism: 1).Single().Header.ArtisanWeight);
+            SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 12), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve).Single().Header.ArtisanWeight);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]
@@ -300,7 +301,7 @@ public class 地形改造日志与分析Tests
         // 真实跑局上跑一遍分析：分母自洽、动作次数与日志逐条对得上。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         TerrainEditSection t = BalanceAnalyzer.Analyze(logs).TerrainEdits;
 
         Assert.Equal(logs.Count, t.Matches);

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
@@ -132,13 +133,35 @@ public sealed partial class MatchFlow
         Parse(json).MapId ?? throw new FormatException("对局存档里没有地图标识。");
 
     /// <summary>
-    /// 从 <see cref="Serialize"/> 的输出恢复。地图由调用方提供，其 <see cref="MapData.Id"/> 与内容摘要（<see cref="MapFile.Digest"/>）MUST 与存档一致；
+    /// 从 <see cref="Serialize"/> 的输出恢复（玩家入口）。地图由调用方提供，其 <see cref="MapData.Id"/> 与内容摘要（<see cref="MapFile.Digest"/>）MUST 与存档一致；
     /// 不一致抛 <see cref="FormatException"/>（"地图不一致"），MUST NOT 在另一张图上静默恢复。
+    /// 地图标识不是 <c>link:</c> 的旧存档一律拒绝并提示属于已移除的地图模式（board-link-mode Q6 / 实现裁决 D7，match-setup「旧存档被拒绝」）；
+    /// Core 测试里的 Legacy 夹具走 <see cref="RestoreLegacy"/>。
     /// </summary>
     public static MatchFlow Restore(MapData map, string json)
     {
         ArgumentNullException.ThrowIfNull(map);
         MatchSaveData data = Parse(json);
+        if (!LinkMapId.IsLinkMap(data.MapId))
+        {
+            throw new FormatException(
+                $"该存档属于已移除的地图模式（地图 {data.MapId ?? "（缺）"}），不再支持恢复：现在只接受 {LinkMapId.Prefix}:<地图种子> 上的链接模式对局存档。");
+        }
+
+        return RestoreChecked(map, data);
+    }
+
+    /// <summary>
+    /// 旧地图族夹具的恢复（Core 测试专用，围棋内核的回归护栏）：与 <see cref="Restore"/> 相同的校验与重建，只是不拒绝非 <c>link:</c> 的存档。
+    /// </summary>
+    internal static MatchFlow RestoreLegacy(MapData map, string json)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return RestoreChecked(map, Parse(json));
+    }
+
+    private static MatchFlow RestoreChecked(MapData map, MatchSaveData data)
+    {
         RequireMap(map, data);
         GameSeed seed = GameSeed.Parse(data.Seed!);
         // more-pieces-relics D8：存档只存种子，信物分布按存档的内容集重新生成——缺字段的旧存档按 v1（与 RestoreCore 的回填同一口径），

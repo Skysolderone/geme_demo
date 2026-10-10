@@ -38,11 +38,11 @@ public class 每局换图Tests
         Assert.Throws<ArgumentException>(() => Rotating(2, "gen:18446744073709551615").Validated());
 
         // 会话自己解析不了"本局是第几局"：不给地图就拒绝，而不是悄悄用起始那张图。
-        Assert.Throws<ArgumentException>(() => MatchSession.Create(Rotating(2), seed: 1));
+        Assert.Throws<ArgumentException>(() => MatchSession.Create(Rotating(2), seed: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         // 半份输出比没有输出更糟：非法配置不建输出目录。
         string dir = Path.Combine(SimFixtures.TempDir("rotate-invalid"), "out");
-        Assert.Throws<ArgumentException>(() => BatchRunner.ExecuteToDirectory(Rotating(2, "siege-4p-base-v5"), dir, parallelism: 1));
+        Assert.Throws<ArgumentException>(() => BatchRunner.ExecuteToDirectory(Rotating(2, "siege-4p-base-v5"), dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.False(Directory.Exists(dir));
     }
 
@@ -53,7 +53,7 @@ public class 每局换图Tests
         string dir = SimFixtures.TempDir("rotate-batch");
         RunConfig config = Rotating(3, "gen:100:p7");
 
-        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 2);
+        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 2, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal((3, 0), (summary.Completed, summary.Failed));
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
@@ -74,12 +74,12 @@ public class 每局换图Tests
         // 回放：只凭日志文件。本局的图取首部的地图标识（不是配置里的起始标识）。变异 MB-11：Replayer 一律按配置的 MapId 解析 → 第 2、3 局报地图不一致。
         foreach (MatchLog log in logs)
         {
-            ReplayResult replay = Replayer.Replay(log);
+            ReplayResult replay = Replayer.Replay(log, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
             Assert.True(replay.Identical, $"{log.Header.MapId}: {replay}");
         }
 
         // 串行与并行逐字节相同（换图不引入调度相关性）。
-        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1);
+        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(logs.Select(l => l.DeterministicText()), serial.Select(l => l.DeterministicText()));
     }
 
@@ -88,7 +88,7 @@ public class 每局换图Tests
     {
         // 首部 ZoneSides = 各出生区格子外接矩形的较长边；生成图的平台是正方形，应等于生成器报告的边长（测试内独立来源）。
         // 变异 MB-12：SideOf 少加 1（把"跨度"当边长）→ 本测试红。
-        List<MatchLog> logs = BatchRunner.Execute(Rotating(4, "gen:1:p8"), parallelism: 1);
+        List<MatchLog> logs = BatchRunner.Execute(Rotating(4, "gen:1:p8"), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         for (int i = 0; i < logs.Count; i++)
         {
@@ -99,7 +99,7 @@ public class 每局换图Tests
         }
 
         // 不换图的批次（哪怕是生成图）不写这一项。
-        MatchLog single = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "gen:1:p8" }, seed: 1).Run();
+        MatchLog single = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "gen:1:p8" }, seed: 1, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Null(single.Header.ZoneSides);
     }
 

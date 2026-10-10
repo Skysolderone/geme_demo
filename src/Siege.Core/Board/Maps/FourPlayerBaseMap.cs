@@ -26,7 +26,7 @@ namespace Siege.Core.Board.Maps;
 /// </remarks>
 public static class FourPlayerBaseMap
 {
-    /// <summary>地图标识，也是各入口的缺省地图（<see cref="MapCatalog.DefaultId"/>）。</summary>
+    /// <summary>地图标识，也是旧地图族夹具解析的缺省地图（<see cref="MapCatalog.Legacy.DefaultId"/>；玩家入口自 board-link-mode 起不可达）。</summary>
     public const string Id = "siege-4p-base-v5";
 
     private const int Size = 13;

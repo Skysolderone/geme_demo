@@ -97,7 +97,7 @@ public class 地图专属评价权重覆盖Tests
         };
         RunConfig resolved = config.ResolvedFor(map, Probe);
         Assert.All(resolved.Players, p => Assert.Equal(expected, p.Weights));
-        MatchSession session = MatchSession.Create(resolved, 1, map);
+        MatchSession session = MatchSession.Create(resolved, 1, map, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         foreach (PlayerId p in session.Match.Players)
         {
             HeuristicTurnController ai = session.AiOf(p)!;

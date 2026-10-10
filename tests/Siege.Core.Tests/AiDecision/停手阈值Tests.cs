@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -142,7 +143,7 @@ public class 停手阈值Tests
         // ai-eye 段 D2（4.5）：九维权重写死为对照实现当时的缺省（Eye / Threat = 0）。本测试钉的是"阈值 0 = 严格提高"，不是默认权重；
         // 默认权重改为校准值（Eye 200、Threat 25）后若仍跟随缺省，对照哈希就不再是"严格提高实现"的产物（testing.md「校准与保真度分离」）。
         RunConfig zero = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)) with { PassThreshold = 0 };
-        MatchLog log = BatchRunner.Execute(zero, parallelism: 1)[0];
+        MatchLog log = BatchRunner.Execute(zero, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.False(log.IsFailed);
         Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
@@ -164,7 +165,7 @@ public class 停手阈值Tests
         RunConfig blank = SimFixtures.Config(turnLimit: 4);
         Assert.Null(blank.PassThreshold);
         string dir = SimFixtures.TempDir("pass-threshold-default");
-        BatchRunner.ExecuteToDirectory(blank, dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(blank, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Contains($"\"PassThreshold\": {AiSearchConfig.DefaultPassThreshold}", File.ReadAllText(Path.Combine(dir, "config.json")), StringComparison.Ordinal);
         string file = Directory.EnumerateFiles(dir, "match-*.jsonl").Single();
         Assert.Contains($"\"PassThreshold\":{AiSearchConfig.DefaultPassThreshold},", File.ReadLines(file).First(), StringComparison.Ordinal);
@@ -175,7 +176,7 @@ public class 停手阈值Tests
             PassThreshold = 7,
             Players = [.. blank.Players.Select((p, i) => i == 1 ? p with { Search = AiSearchConfig.Easy with { PassThreshold = 3 } } : p)],
         };
-        MatchSession session = MatchSession.Create(mixed, 1);
+        MatchSession session = MatchSession.Create(mixed, 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         MatchLog log = session.Run();
         Assert.Equal([7, 3, 7, 7], session.Match.Players.Select(p => session.AiOf(p)!.Config.PassThreshold));
 
@@ -294,23 +295,23 @@ public class 停手阈值Tests
         // 样本：阈值 0 跑出的局去掉这一项。它与缺省阈值下的同一局走法不同（「阈值为0时零变化」的反面），所以按缺省重建必然分歧。
         // 变异 M-B10（按首部重建时缺字段取缺省阈值而不是 0）→ 红 1（本测试）。
         RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard);
-        MatchLog zero = BatchRunner.Execute(config with { PassThreshold = 0 }, parallelism: 1)[0];
+        MatchLog zero = BatchRunner.Execute(config with { PassThreshold = 0 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string text = zero.DeterministicText();
         Assert.Contains("\"PassThreshold\":0,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"PassThreshold\":0,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.Config.PassThreshold);
 
-        ReplayResult replay = Replayer.Replay(old);
+        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.True(replay.LineCount >= 25, $"比对行数 {replay.LineCount}");
         Assert.Null(replay.Replayed.Header.Config.PassThreshold);
 
         // 会话层：新建的局取缺省阈值并写进首部配置；按首部重建的局缺字段取 0，有字段取记录值。
-        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1).PassThreshold);
-        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1).Config.PassThreshold);
-        Assert.Equal(0, MatchSession.Create(config, 1, map: null, recorded: true).PassThreshold);
-        Assert.Equal(7, MatchSession.Create(config with { PassThreshold = 7 }, 1, map: null, recorded: true).PassThreshold);
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1, resolveMap: MapCatalog.Legacy.Resolve).PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1, resolveMap: MapCatalog.Legacy.Resolve).Config.PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(0, MatchSession.Create(config, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(7, MatchSession.Create(config with { PassThreshold = 7 }, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]

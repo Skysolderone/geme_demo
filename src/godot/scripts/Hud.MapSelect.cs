@@ -9,45 +9,30 @@ using Siege.Presentation.Text;
 namespace Siege.Godot;
 
 /// <summary>
-/// HUD 的开局选图面板（map-generator D7 / D8；board-map D9）：清单、种子输入框、"换一张"、平台数 − / +、棋盘数 − / +、完整标识、AI 难度（expert-lookahead D10）、"开始"。
+/// HUD 的新局面板（board-link-mode D8 / 实现裁决 D7，规格 map-selection「开局选图界面」）：当前地图种子与完整标识 <c>link:&lt;种子&gt;</c>、种子输入框、"换一张"、
+/// AI 难度（expert-lookahead D10）、"开始"。旧地图清单、平台数 / 棋盘数调节已删除——整个游戏只剩链接模式一种地图。
 /// </summary>
 /// <remarks>
-/// 本类<b>不持有任何选图状态、不自带地图清单</b>：每一项文案与可用性都取自 <see cref="MapSelectModel"/>，操作只经事件转发给主场景。
-/// 控件只搭一次、刷新时改属性（整块重搭会让输入框丢焦点与光标）。选图期间对局面板整体隐藏。
+/// 本类<b>不持有任何新局状态、不自带地图清单</b>：每一项文案与可用性都取自 <see cref="MapSelectModel"/>，操作只经事件转发给主场景。
+/// 控件只搭一次、刷新时改属性（整块重搭会让输入框丢焦点与光标）。新局期间对局面板整体隐藏。
 /// </remarks>
 public sealed partial class Hud
 {
-    private readonly List<Button> _mapOptionButtons = [];
     private readonly List<Button> _difficultyButtons = [];
     private Control? _selectRoot;
     private PanelContainer? _selectPanel;
     private LineEdit _mapSeedInput = null!;
     private Button _mapSeedApply = null!;
     private Button _mapReroll = null!;
-    private Button _mapFewer = null!;
-    private Button _mapMore = null!;
-    private Label _mapPlatforms = null!;
-    private Button _mapFewerBoards = null!;
-    private Button _mapMoreBoards = null!;
-    private Label _mapBoards = null!;
     private Label _mapIdText = null!;
     private Label _mapInfoText = null!;
     private Label _mapNotice = null!;
 
-    /// <summary>点选清单里的第几项。</summary>
-    public event Action<int>? MapOptionPicked;
-
-    /// <summary>在种子输入框里回车，或点"生成"：带上输入框原文。</summary>
+    /// <summary>在种子输入框里回车，或点"采用"：带上输入框原文。</summary>
     public event Action<string>? MapSeedSubmitted;
 
     /// <summary>点"换一张"。</summary>
     public event Action? MapRerollPressed;
-
-    /// <summary>平台数 −1 / +1。</summary>
-    public event Action<int>? MapPlatformsAdjusted;
-
-    /// <summary>棋盘数 −1 / +1（选中棋盘图时）。</summary>
-    public event Action<int>? MapBoardsAdjusted;
 
     /// <summary>点选 AI 难度（四档之一）。</summary>
     public event Action<AiDifficulty>? MapDifficultyPicked;
@@ -55,50 +40,32 @@ public sealed partial class Hud
     /// <summary>点"开始"。</summary>
     public event Action? MapStartPressed;
 
-    /// <summary>选图面板此刻是否显示。</summary>
+    /// <summary>新局面板此刻是否显示。</summary>
     public bool MapSelectOpen => _selectRoot is { Visible: true };
 
-    /// <summary>选图面板在屏幕上的矩形（截图自检打印用：核对面板靠左、没有盖到地图主体）。</summary>
+    /// <summary>新局面板在屏幕上的矩形（截图自检打印用：核对面板靠左、没有盖到地图主体）。</summary>
     public Rect2 MapSelectRect => _selectPanel?.GetGlobalRect() ?? default;
 
     /// <summary>
-    /// 显示 / 刷新选图面板，并隐藏对局面板。<paramref name="mapInfo"/> 是当前预览地图的一行说明（尺寸与出生区数，由主场景读棋盘视图模型给出）。
+    /// 显示 / 刷新新局面板，并隐藏对局面板。<paramref name="mapInfo"/> 是当前预览地图的一行说明（尺寸、出生棋盘数等，由主场景读棋盘视图模型给出）。
     /// </summary>
     public void ShowMapSelect(MapSelectModel model, string mapInfo)
     {
         ArgumentNullException.ThrowIfNull(model);
         if (_selectRoot is null)
         {
-            BuildMapSelect(model);
+            BuildMapSelect();
         }
 
         _root.Visible = false;
         _selectRoot!.Visible = true;
 
-        for (int i = 0; i < _mapOptionButtons.Count; i++)
-        {
-            bool active = i == model.SelectedIndex;
-            Button button = _mapOptionButtons[i];
-            button.Text = (active ? "● " : "○ ") + model.Options[i].Title;
-            button.AddThemeColorOverride("font_color", active ? Ui.PanelBorder : Ui.InfoText);
-        }
-
-        bool seeded = model.IsSeededSelected;
         if (_mapSeedInput.Text != model.SeedText)
         {
             _mapSeedInput.Text = model.SeedText;
             _mapSeedInput.CaretColumn = model.SeedText.Length;
         }
 
-        _mapSeedInput.Editable = seeded;
-        _mapSeedApply.Disabled = !seeded;
-        _mapReroll.Disabled = !seeded;
-        _mapFewer.Disabled = !model.CanDecreasePlatforms;
-        _mapMore.Disabled = !model.CanIncreasePlatforms;
-        _mapPlatforms.Text = model.PlatformCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _mapFewerBoards.Disabled = !model.CanDecreaseBoards;
-        _mapMoreBoards.Disabled = !model.CanIncreaseBoards;
-        _mapBoards.Text = model.BoardCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _mapIdText.Text = model.CurrentId;
         _mapInfoText.Text = mapInfo;
         _mapNotice.Text = model.Notice;
@@ -113,7 +80,7 @@ public sealed partial class Hud
         }
     }
 
-    /// <summary>确认开局之后：撤掉选图面板，恢复对局面板。</summary>
+    /// <summary>确认开局之后：撤掉新局面板，恢复对局面板。</summary>
     public void HideMapSelect()
     {
         if (_selectRoot is not null)
@@ -123,42 +90,31 @@ public sealed partial class Hud
             _selectRoot.QueueFree();
             _selectRoot = null;
             _selectPanel = null;
-            _mapOptionButtons.Clear();
             _difficultyButtons.Clear();
         }
 
         _root.Visible = true;
     }
 
-    private void BuildMapSelect(MapSelectModel model)
+    private void BuildMapSelect()
     {
         _selectRoot = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Theme = Ui.BuildTheme() };
         _selectRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_selectRoot);
 
-        // 面板靠左：背景是当前地图的全局预览，地图主体在画面中央，不去挡它。
+        // 面板靠左：背景是当前地图的 5 块出生棋盘占位，地图主体在画面中央，不去挡它。
         (PanelContainer panel, VBoxContainer body) = Ui.Panel(12, 6);
         Ui.Anchor(panel, 0f, 0f, 14f, 14f, 374f, 14f);
         panel.GrowVertical = Control.GrowDirection.End;
         _selectRoot.AddChild(panel);
         _selectPanel = panel;
 
-        body.AddChild(Ui.Text("选择地图", Ui.PanelBorder, UiTheme.BodyFontPx + 4));
-        for (int i = 0; i < model.Options.Count; i++)
-        {
-            int index = i;
-            Button option = Ui.Action(model.Options[i].Title);
-            option.Alignment = HorizontalAlignment.Left;
-            option.Pressed += () => MapOptionPicked?.Invoke(index);
-            _mapOptionButtons.Add(option);
-            body.AddChild(option);
-        }
+        body.AddChild(Ui.Text("开始新局", Ui.PanelBorder, UiTheme.BodyFontPx + 4));
+        body.AddChild(Ui.Text("四名玩家各盲选一块出生棋盘；三个大回合后随机配对、棋盘链接开战。地图由地图种子决定。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
 
         body.AddChild(Ui.Separator());
-        body.AddChild(Ui.Heading("按种子生成（选中「棋盘图」或「随机图」后可调）"));
-
+        body.AddChild(Ui.Heading("地图种子"));
         var seedRow = new HBoxContainer();
-        seedRow.AddChild(Ui.Text("地图种子"));
         _mapSeedInput = new LineEdit
         {
             MaxLength = 24,
@@ -169,45 +125,14 @@ public sealed partial class Hud
         _mapSeedInput.AddThemeFontSizeOverride("font_size", UiTheme.BodyFontPx);
         _mapSeedInput.TextSubmitted += text => MapSeedSubmitted?.Invoke(text);
         seedRow.AddChild(_mapSeedInput);
-        _mapSeedApply = Ui.Action("生成", 56);
+        _mapSeedApply = Ui.Action("采用", 56);
         _mapSeedApply.Pressed += () => MapSeedSubmitted?.Invoke(_mapSeedInput.Text);
         seedRow.AddChild(_mapSeedApply);
-        body.AddChild(seedRow);
-        body.AddChild(Ui.Text("输入种子后回车（或点「生成」）。", Ui.MutedText, UiTheme.BodyFontPx - 2));
-
-        var tuneRow = new HBoxContainer();
         _mapReroll = Ui.Action("换一张", 96);
         _mapReroll.Pressed += () => MapRerollPressed?.Invoke();
-        tuneRow.AddChild(_mapReroll);
-        tuneRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-        tuneRow.AddChild(Ui.Text("平台数"));
-        _mapFewer = Ui.Action("−", 34);
-        _mapFewer.Pressed += () => MapPlatformsAdjusted?.Invoke(-1);
-        tuneRow.AddChild(_mapFewer);
-        _mapPlatforms = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 2);
-        _mapPlatforms.HorizontalAlignment = HorizontalAlignment.Center;
-        _mapPlatforms.CustomMinimumSize = new Vector2(26f, 0f);
-        tuneRow.AddChild(_mapPlatforms);
-        _mapMore = Ui.Action("+", 34);
-        _mapMore.Pressed += () => MapPlatformsAdjusted?.Invoke(+1);
-        tuneRow.AddChild(_mapMore);
-        body.AddChild(tuneRow);
-
-        // 棋盘数（board-map D7：7–10）只对棋盘图起作用，平台数只对随机图起作用；不适用的一组按钮禁用。
-        var boardsRow = new HBoxContainer();
-        boardsRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-        boardsRow.AddChild(Ui.Text("棋盘数"));
-        _mapFewerBoards = Ui.Action("−", 34);
-        _mapFewerBoards.Pressed += () => MapBoardsAdjusted?.Invoke(-1);
-        boardsRow.AddChild(_mapFewerBoards);
-        _mapBoards = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx + 2);
-        _mapBoards.HorizontalAlignment = HorizontalAlignment.Center;
-        _mapBoards.CustomMinimumSize = new Vector2(26f, 0f);
-        boardsRow.AddChild(_mapBoards);
-        _mapMoreBoards = Ui.Action("+", 34);
-        _mapMoreBoards.Pressed += () => MapBoardsAdjusted?.Invoke(+1);
-        boardsRow.AddChild(_mapMoreBoards);
-        body.AddChild(boardsRow);
+        seedRow.AddChild(_mapReroll);
+        body.AddChild(seedRow);
+        body.AddChild(Ui.Text("输入种子后回车（或点「采用」）；「换一张」随机取一个新种子。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
 
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("完整地图标识"));
@@ -219,7 +144,7 @@ public sealed partial class Hud
         _mapNotice = Ui.Text(string.Empty, Ui.DangerText, UiTheme.BodyFontPx - 1, wrap: true);
         body.AddChild(_mapNotice);
 
-        // AI 难度（expert-lookahead D10）：四档，缺省标准（命令行 --difficulty= 预选）；只用现有控件（与地图清单同样的按钮 + 选中标记）。
+        // AI 难度（expert-lookahead D10）：四档，缺省标准（命令行 --difficulty= 预选）。
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("AI 难度"));
         var difficultyRow = new HBoxContainer();

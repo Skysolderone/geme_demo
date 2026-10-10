@@ -52,28 +52,28 @@ public class 冒险概率记录Tests
                 .SequenceEqual(PrototypeZoneAssignment.Assign(map, new GameSeed(s), ids, 0)));
 
         RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: seed, turnLimit: 8)) with { FlagRisk = null };
-        MatchLog zero = BatchRunner.Execute(config with { FlagRisk = 0 }, parallelism: 1)[0];
+        MatchLog zero = BatchRunner.Execute(config with { FlagRisk = 0 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string text = zero.DeterministicText();
         Assert.Contains("\"FlagRisk\":0,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"FlagRisk\":0,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.Config.FlagRisk);
 
-        ReplayResult replay = Replayer.Replay(old);
+        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.True(replay.LineCount >= 9, $"比对行数 {replay.LineCount}");
         Assert.Null(replay.Replayed.Header.Config.FlagRisk);
 
         // 会话层：新建的局取缺省值并写进首部配置；按首部重建的局缺字段取 0，有字段取记录值。
-        Assert.Equal(MatchOptions.DefaultFlagRisk, MatchSession.Create(config, seed).Match.Options.FlagRisk);
-        Assert.Equal(MatchOptions.DefaultFlagRisk, MatchSession.Create(config, seed).Config.FlagRisk);
-        Assert.Equal(0, MatchSession.Create(config, seed, map: null, recorded: true).Match.Options.FlagRisk);
-        Assert.Equal(37, MatchSession.Create(config with { FlagRisk = 37 }, seed, map: null, recorded: true).Match.Options.FlagRisk);
+        Assert.Equal(MatchOptions.DefaultFlagRisk, MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve).Match.Options.FlagRisk);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(MatchOptions.DefaultFlagRisk, MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve).Config.FlagRisk);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(0, MatchSession.Create(config, seed, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).Match.Options.FlagRisk);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(37, MatchSession.Create(config with { FlagRisk = 37 }, seed, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).Match.Options.FlagRisk);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         // 样本口径：这颗种子在缺省 p 下的真实建局确实与 p = 0 锁定结果不同。
         Assert.NotEqual(
-            MatchSession.Create(config with { FlagRisk = 0 }, seed).Match.PlayerStates.Select(s => s.BirthZone),
-            MatchSession.Create(config, seed).Match.PlayerStates.Select(s => s.BirthZone));
+            MatchSession.Create(config with { FlagRisk = 0 }, seed, resolveMap: MapCatalog.Legacy.Resolve).Match.PlayerStates.Select(s => s.BirthZone),   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve).Match.PlayerStates.Select(s => s.BirthZone));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     // board-link-mode 裁决 C7：原「命令行冒险概率写入配置记录」已删除——run 的 --flag-risk 选项按实现裁决 C2 删除（冒险概率只剩 Legacy 夹具的配置字段，裁决 C8）；

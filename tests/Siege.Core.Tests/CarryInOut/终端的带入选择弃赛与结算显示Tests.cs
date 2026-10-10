@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -30,7 +31,7 @@ public class 终端的带入选择弃赛与结算显示Tests
     {
         var output = new StringWriter();
         int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Easy, new StringReader(script), output,
-            weights: ScriptWeights, passThreshold: ScriptPassThreshold, flagRisk: 0, contentSet: ContentSet.V1, profile: profile);
+            weights: ScriptWeights, passThreshold: ScriptPassThreshold, flagRisk: 0, contentSet: ContentSet.V1, profile: profile, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         return (exit, output.ToString());
     }
 
@@ -231,7 +232,7 @@ public class 终端的带入选择弃赛与结算显示Tests
 
         string before = RealProfileDir.State();
         var output = new StringWriter();
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n\npass\n"), output);
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n\npass\n"), output, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(before, RealProfileDir.State());
     }
 }

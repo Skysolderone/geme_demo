@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Sim.Config;
@@ -18,12 +19,12 @@ public class 随机子流隔离Tests
         // 子流原语层的变异（M-D3：Stream 忽略名字）由 Determinism/随机子流隔离Tests 钉住，这里不重复。
         // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：前提"C 多消费征募子流"要求对局走满 3 个大回合（默认阈值 80 下种子 61 第 1 大回合全员 Pass；段 D2 改写）。
         RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 8));
-        MatchSession a = MatchSession.Create(config, 61);
-        MatchSession b = MatchSession.Create(config, 61);
+        MatchSession a = MatchSession.Create(config, 61, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession b = MatchSession.Create(config, 61, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         b.SetController(new PlayerId(0), new NoRecruitController(Ai.HeuristicAi.Create(
             b.Match, new PlayerId(0), Ai.AiDifficulty.Easy, SimFixtures.PreCalibrationWeights,
             Ai.AiSearchConfig.Easy with { PassThreshold = SimFixtures.PreCalibrationPassThreshold })));
-        MatchSession c = MatchSession.Create(config with { TurnLimit = 12 }, 61);
+        MatchSession c = MatchSession.Create(config with { TurnLimit = 12 }, 61, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         MatchLog logA = a.Run();
         MatchLog logB = b.Run();
@@ -43,14 +44,14 @@ public class 随机子流隔离Tests
         Assert.Equal(logA.Header.Zones, logC.Header.Zones);
 
         // 跑局层抽样子流与对局子流隔离：抽样千分比不同 → 对局内容一致（只有保留策略不同）
-        MatchLog d = MatchSession.Create(config with { FullEventSamplePermille = 1000 }, 61).Run();
+        MatchLog d = MatchSession.Create(config with { FullEventSamplePermille = 1000 }, 61, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(EventRetention.Full, d.Header.Retention);
         Assert.Equal(SimFixtures.TurnTexts(logA.Turns), SimFixtures.TurnTexts(d.Turns));
         Assert.Equal(logA.Result!.Winners, d.Result!.Winners);
 
         // 跑局层也只用命名子流：sim-sample 是种子的纯函数
         Assert.Equal(new Siege.Core.Determinism.GameSeed(61).Stream(MatchSession.SampleStream).NextInt(1000), new Siege.Core.Determinism.GameSeed(61).Stream(MatchSession.SampleStream).NextInt(1000));
-        Assert.Equal(MatchPhase.InProgress, MatchSession.Create(config, 61).Match.Phase);
+        Assert.Equal(MatchPhase.InProgress, MatchSession.Create(config, 61, resolveMap: MapCatalog.Legacy.Resolve).Match.Phase);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]
@@ -63,8 +64,8 @@ public class 随机子流隔离Tests
         int handsDiffer = 0;
         foreach (ulong seed in new ulong[] { 1, 2, 3, 4, 5 })
         {
-            MatchSession off = MatchSession.Create(config with { CarryIn = 0 }, seed);
-            MatchSession on = MatchSession.Create(config with { CarryIn = 1 }, seed);
+            MatchSession off = MatchSession.Create(config with { CarryIn = 0 }, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            MatchSession on = MatchSession.Create(config with { CarryIn = 1 }, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
             Assert.False(off.Match.CarryInOut);
             Assert.Empty(off.Match.CarryIns);

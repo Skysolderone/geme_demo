@@ -18,14 +18,14 @@ public static class Program
 
     /// <summary>
     /// 批量与终端入口的缺省地图（board-link-mode Q4 / 规格 map-selection「批量入口缺省」、simulation-harness「各入口按地图标识选图」）：未给地图选项时加载 <c>link:1</c>。
-    /// 只属于 <c>run</c> / <c>play</c> 两个入口；<c>map</c> 调试子命令与 Core 的 <see cref="MapCatalog.DefaultId"/>（Legacy 夹具的缺省）不变（实现裁决 C1）。
+    /// 只属于 <c>run</c> / <c>play</c> 两个入口；<c>map</c> 调试子命令与批次配置的内部缺省仍是 <see cref="MapCatalog.Legacy.DefaultId"/>（Legacy 夹具的 v5，实现裁决 C1 / C10）。与 Core 的 <see cref="MapCatalog.DefaultId"/> 同为 <c>link:1</c>。
     /// </summary>
     internal const string DefaultMapId = "link:1";
 
     /// <summary>
     /// 玩家入口的地图门（board-link-mode 实现裁决 C1）：<c>run</c> / <c>play</c> 只接受链接图 <c>link:&lt;地图种子&gt;</c>。旧标识族（内置图、<c>gen:</c>、<c>board:</c>、
     /// 地图文件路径）与解析不了的标识一律报错并说明，MUST NOT 静默回落到缺省地图。判定只看标识前缀（<see cref="LinkMapId.IsLinkMap"/>），
-    /// 格式错误的 <c>link:</c> 标识由随后的解析报出。<see cref="MapCatalog.Resolve"/> 本身仍转交旧标识（图形版在段 D 之前仍用旧地图），门只在 Sim 入口。
+    /// 格式错误的 <c>link:</c> 标识由随后的解析报出。段 D（实现裁决 D7）起 <see cref="MapCatalog.Resolve"/> 自身也只接受 <c>link:</c>，本门只是让入口先于解析给出更贴切的文案。
     /// </summary>
     internal static string RequireLinkMap(string mapId, string entry)
     {
@@ -298,7 +298,7 @@ public static class Program
 
         // 只导出"按内置标识请求"的图。判据是请求的标识而不是读到的 map.Id：设计师拿一份 v4 的副本改了地形、Id 没改，
         // `map --map 副本.json` 只是想看一眼，不得因此覆盖 maps/ 里的权威文件。
-        string requested = string.IsNullOrWhiteSpace(mapId) ? MapCatalog.DefaultId : mapId.Trim();
+        string requested = string.IsNullOrWhiteSpace(mapId) ? MapCatalog.Legacy.DefaultId : mapId.Trim();   // map 子命令的缺省仍是 Legacy 夹具的 v5（实现裁决 C10）
         if (!MapCatalog.BuiltinIds.Contains(requested))
         {
             return 0;

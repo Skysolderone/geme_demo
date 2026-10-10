@@ -73,12 +73,12 @@ public class 各入口的地图专属AI权重Tests
     {
         // 规格 Scenario：回放一局 2 人图上按覆盖落成权重的新日志 → 每一步决策与原局相同，重建出的首部与原首部逐字节相同。
         MapData map = TwoPlayerBaseMap.Create();
-        MatchLog original = MatchSession.Create(BlankConfig(map.Id, 2) with { TurnLimit = 16 }, 3, map).Run();
+        MatchLog original = MatchSession.Create(BlankConfig(map.Id, 2) with { TurnLimit = 16 }, 3, map, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.All(original.Header.Config.Players, p => Assert.Equal(EvaluationWeights.MapOverrides[map.Id], p.Weights));
         Assert.True(original.Turns.Count >= 8, $"样本只有 {original.Turns.Count} 个小回合");
         Assert.Contains(original.Turns, t => !t.Passed);   // 样本口径：AI 确实落过子
 
-        ReplayResult replay = Replayer.Replay(SimFixtures.Clone(original));
+        ReplayResult replay = Replayer.Replay(SimFixtures.Clone(original), resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.True(replay.Identical, $"第 {replay.FirstDivergentLine} 行分歧：{replay.Expected} ≠ {replay.Actual}");
         Assert.Equal(original.DeterministicText().Split('\n')[0], replay.Replayed.DeterministicText().Split('\n')[0]);
         Assert.Equal(SimFixtures.TurnTexts(original.Turns), SimFixtures.TurnTexts(replay.Replayed.Turns));
@@ -99,20 +99,20 @@ public class 各入口的地图专属AI权重Tests
             ContentSet = ContentSet.V2,
             CarryIn = 0,
         };
-        MatchLog old = MatchSession.Create(legacy, 3, map, recorded: true).Run();
+        MatchLog old = MatchSession.Create(legacy, 3, map, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.All(old.Header.Config.Players, p => Assert.Null(p.Weights));
         Assert.DoesNotContain("\"Weights\"", old.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
         Assert.True(old.Turns.Count >= 8, $"样本只有 {old.Turns.Count} 个小回合");
         Assert.Contains(old.Turns, t => !t.Passed);
 
-        ReplayResult replay = Replayer.Replay(SimFixtures.Clone(old));
+        ReplayResult replay = Replayer.Replay(SimFixtures.Clone(old), resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.True(replay.Identical, $"第 {replay.FirstDivergentLine} 行分歧：{replay.Expected} ≠ {replay.Actual}");
         Assert.All(replay.Replayed.Header.Config.Players, p => Assert.Null(p.Weights));
 
         // 旧日志的走法就是默认表的走法：与显式写默认表的同配置逐步相同（覆盖值与默认表不同之后，把按地图取权重塞进 AI 层回落会让本条红；
         // 占位期二者等值，由 地图专属评价权重覆盖Tests.按地图取权重只有一处实现且只由三个入口调用 的源码扫描兜住）。
         RunConfig asDefault = legacy with { Players = [.. legacy.Players.Select(p => p with { Weights = EvaluationWeights.Default })] };
-        MatchLog byDefault = MatchSession.Create(asDefault, 3, map, recorded: true).Run();
+        MatchLog byDefault = MatchSession.Create(asDefault, 3, map, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(SimFixtures.TurnTexts(old.Turns), SimFixtures.TurnTexts(byDefault.Turns));
     }
 
@@ -182,7 +182,7 @@ public class 各入口的地图专属AI权重Tests
         Assert.Equal(TwoPlayerBaseMap.Id, recorded.MapId);
         Assert.Equal(2, recorded.Players.Count);
         Assert.All(recorded.Players, p => Assert.Equal(expected, p.Weights));
-        MatchLog log = MatchLog.Parse(BatchRunner.Execute(resolved, parallelism: 1, map).Single().FullText());
+        MatchLog log = MatchLog.Parse(BatchRunner.Execute(resolved, parallelism: 1, map, resolveMap: MapCatalog.Legacy.Resolve).Single().FullText());   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.All(log.Header.Config.Players, p => Assert.Equal(expected, p.Weights));
     }
 
@@ -203,7 +203,7 @@ public class 各入口的地图专属AI权重Tests
     internal static (string Header, string Config, MatchLog Log) RunOneRaw(string name, RunConfig config)
     {
         string dir = SimFixtures.TempDir("map-weights-" + name);
-        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string log = File.ReadAllText(Directory.GetFiles(dir, "match-*.jsonl").Single());
         string header = log[..log.IndexOf('\n', StringComparison.Ordinal)].TrimEnd('\r');
         return (header, File.ReadAllText(Path.Combine(dir, "config.json")), MatchLog.Parse(log));

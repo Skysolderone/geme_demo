@@ -320,7 +320,7 @@ public sealed partial class MatchFlow
         return record;
     }
 
-    // ---------- 战场结算（2.6） ----------
+    // ---------- 战场结算（2.6；裁决 S10 / D6：判定与执行两步） ----------
 
     /// <summary>
     /// 大回合结束时的战场结算（battlefield「战场结算」，构筑期同样生效）：先给每名在局的单人战场玩家记一个等待大回合（构筑期之后），
@@ -328,6 +328,11 @@ public sealed partial class MatchFlow
     /// 只有 1 名在局玩家的战场不检查：既不因 Pass、也不因填满结算（裁决 S9）。
     /// 同一大回合结束时结算的全部落败者共享一个出局序号，名次按结算时的比较链跨战场统一排序（裁决 S7，见 <see cref="FinalStandings.ComputeLink"/>）。最后清空本大回合的 Pass 记录。
     /// </summary>
+    /// <remarks>
+    /// 裁决 S10：判定（<see cref="JudgeAtRoundEnd"/>，无副作用）与执行（<see cref="ExecuteSettlement"/>）分开——先手顺序预测（<c>ForecastInitiative</c>）
+    /// 在 Link 模式下复用同一份判定，口径"假设此刻结束、未行动者按未 Pass 算"。先全部判定再逐个执行与原先"逐战场判定即执行"等价：各战场的在局成员互不相交，
+    /// 判定只读本大回合开始前就定下的盘面、势力快照与 Pass 记录，执行只改落败者的状态。
+    /// </remarks>
     private void SettleAtRoundEnd(int completed)
     {
         if (completed > BuildProtectionRounds)
@@ -342,8 +347,27 @@ public sealed partial class MatchFlow
         }
 
         // 结算用的势力按此刻盘面现算（与终局名次同一口径）。
-        MarkEstablishedPower(Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents()));
+        PowerSnapshot power = Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents());
+        MarkEstablishedPower(power);
         int? order = null;
+        foreach (BattlefieldVerdict verdict in JudgeAtRoundEnd(power, _passedThisRound))
+        {
+            order ??= ++_eliminationSequence;
+            ExecuteSettlement(verdict, order);
+        }
+
+        _passedThisRound.Clear();
+    }
+
+    /// <summary>
+    /// 大回合结束时的结算判定（裁决 S10，<b>无副作用</b>）：按 <see cref="OccupiedBattlefields"/> 升序，对每个未结算、在局玩家 ≥ 2 的战场判
+    /// （a）<paramref name="passed"/> 含其全部在局玩家 → 整轮 Pass；（b）无可落子空格 → 填满；满足即给出判决（胜者与落败者按比较链排好）。
+    /// <paramref name="power"/> 是此刻盘面的势力快照：大回合结束时由势力榜重算给出，顺序预测时由 <see cref="PowerCalculator"/> 在不推进势力榜的情况下算出，二者同一口径。
+    /// </summary>
+    private ImmutableArray<BattlefieldVerdict> JudgeAtRoundEnd(PowerSnapshot power, IReadOnlySet<PlayerId> passed)
+    {
+        ImmutableArray<RelicPublicState> relics = Relics.PublicStates();
+        ImmutableArray<BattlefieldVerdict>.Builder verdicts = ImmutableArray.CreateBuilder<BattlefieldVerdict>();
         foreach (int id in OccupiedBattlefields())
         {
             ImmutableArray<PlayerId> members = ActivePlayersIn(id);
@@ -352,17 +376,16 @@ public sealed partial class MatchFlow
                 continue;
             }
 
-            SettlementReason? reason = members.All(_passedThisRound.Contains) ? SettlementReason.AllPassed
+            SettlementReason? reason = members.All(passed.Contains) ? SettlementReason.AllPassed
                 : !HasPlayableEmptyCell(id) ? SettlementReason.BoardFull
                 : null;
             if (reason is { } r)
             {
-                order ??= ++_eliminationSequence;
-                SettleBattlefield(id, r, order, winner: null);
+                verdicts.Add(Judge(id, r, power, relics, winner: null));
             }
         }
 
-        _passedThisRound.Clear();
+        return verdicts.ToImmutable();
     }
 
     /// <summary>战场内是否还有可落子空格（逐格读 <c>IsPlayableEmpty</c>，与全盘的 <see cref="GameBoard.HasPlayableEmptyCell"/> 同一判据）。</summary>
@@ -399,11 +422,21 @@ public sealed partial class MatchFlow
         OccupiedBattlefields() is [int only] && _settledBattlefields.Contains(only);
 
     /// <summary>
-    /// 结算一个战场（battlefield「战场结算」）：按 势力 → 控制信物数 → 独占空格数 → 盘面棋子数 排序（链全同时按种子兜底顺序 <c>SeedRank</c> 靠前者为胜者、不因并列而不结算，裁决 S6），
-    /// 第一名为胜者；其余在局玩家以"战场落败"出局，记录结算时的比较量（出局时势力可以大于 0）。<paramref name="winner"/> 非空时直接用它（减员结算与测试接缝）。
+    /// 以指定胜者结算一个战场（减员结算与测试接缝）：判定 + 执行各一次（<see cref="Judge"/> / <see cref="ExecuteSettlement"/>），不另写比较链。
     /// <paramref name="order"/> 为同批结算共享的出局序号；为 <c>null</c> 且有落败者时新取一个。
     /// </summary>
     private BattlefieldSettlementRecord SettleBattlefield(int battlefieldId, SettlementReason reason, int? order, PlayerId? winner)
+    {
+        PowerSnapshot power = Scoreboard.Latest ?? throw new SiegeRuleException("尚无势力快照，不能结算战场。");
+        return ExecuteSettlement(Judge(battlefieldId, reason, power, Relics.PublicStates(), winner), order);
+    }
+
+    /// <summary>
+    /// 结算判定的<b>唯一</b>比较链（battlefield「战场结算」，<b>无副作用</b>）：战场内在局玩家按 势力 → 控制信物数 → 独占空格数 → 盘面棋子数 排序
+    /// （链全同时按种子兜底顺序 <c>SeedRank</c> 靠前者为胜者、不因并列而不结算，裁决 S6），第一名为胜者、其余为落败者并给出名次（比较链全同者并列）。
+    /// <paramref name="winner"/> 非空时直接以它为胜者（减员结算与测试接缝），其余照常排序。
+    /// </summary>
+    private BattlefieldVerdict Judge(int battlefieldId, SettlementReason reason, PowerSnapshot power, ImmutableArray<RelicPublicState> relics, PlayerId? winner)
     {
         RequireLinkMode();
         if (_settledBattlefields.Contains(battlefieldId))
@@ -417,8 +450,6 @@ public sealed partial class MatchFlow
             throw new SiegeRuleException($"胜者 {forced} 不是战场 {BirthZoneLabel.Of(battlefieldId)} 的在局玩家。");
         }
 
-        PowerSnapshot power = Scoreboard.Latest ?? throw new SiegeRuleException("尚无势力快照，不能结算战场。");
-        ImmutableArray<RelicPublicState> relics = Relics.PublicStates();
         List<SettlementEntry> chain = [.. members
             .Select(p => new SettlementEntry(p, 0, power.Of(p).Total, relics.Count(s => s.Control.GrantsEffectTo(p)),
                 power.Of(p).ExclusiveCells.Length, Board.GroupsOf(p).Sum(g => g.Size)))
@@ -435,13 +466,22 @@ public sealed partial class MatchFlow
             entries.Add(chain[i] with { Rank = rank });
         }
 
-        int? eliminationOrder = chain.Count == 0 ? null : order ?? ++_eliminationSequence;
-        _settledBattlefields.Add(battlefieldId);
-        var record = new BattlefieldSettlementRecord(_settlements.Count + 1, MajorRound, battlefieldId, reason, top.Player, entries.ToImmutable(), eliminationOrder);
+        return new BattlefieldVerdict(battlefieldId, reason, entries.MoveToImmutable());
+    }
+
+    /// <summary>
+    /// 执行一份判决（battlefield「战场结算」）：标记战场已结算、写结算记录与事件；落败者以"战场落败"出局，记录结算时的比较量（出局时势力可以大于 0）。
+    /// <paramref name="order"/> 为同批结算共享的出局序号；为 <c>null</c> 且有落败者时新取一个。
+    /// </summary>
+    private BattlefieldSettlementRecord ExecuteSettlement(BattlefieldVerdict verdict, int? order)
+    {
+        int? eliminationOrder = verdict.Losers.Length == 0 ? null : order ?? ++_eliminationSequence;
+        _settledBattlefields.Add(verdict.Battlefield);
+        var record = new BattlefieldSettlementRecord(_settlements.Count + 1, MajorRound, verdict.Battlefield, verdict.Reason, verdict.Winner, verdict.Entries, eliminationOrder);
         _settlements.Add(record);
-        Emit(FlowEventKind.BattlefieldSettled, top.Player,
-            $"战场 {BirthZoneLabel.Of(battlefieldId)} 结算（{reason}）；胜者 {top.Player}；{string.Join(" ", record.Entries.Select(e => $"{e.Rank}.{e.Player}={e.Power}"))}");
-        foreach (SettlementEntry loser in record.Entries.Skip(1))
+        Emit(FlowEventKind.BattlefieldSettled, verdict.Winner,
+            $"战场 {BirthZoneLabel.Of(verdict.Battlefield)} 结算（{verdict.Reason}）；胜者 {verdict.Winner}；{string.Join(" ", record.Entries.Select(e => $"{e.Rank}.{e.Player}={e.Power}"))}");
+        foreach (SettlementEntry loser in verdict.Losers)
         {
             PlayerRecord r = _records[loser.Player];
             r.Status = PlayerStatus.Eliminated;
@@ -449,10 +489,20 @@ public sealed partial class MatchFlow
             r.EliminatedInMajorRound = MajorRound;
             r.EliminationReason = EliminationReason.BattlefieldDefeat;
             r.Defeat = loser;
-            Emit(FlowEventKind.PlayerEliminated, loser.Player, $"第 {eliminationOrder} 个出局（战场 {BirthZoneLabel.Of(battlefieldId)} 落败，势力 {loser.Power}）");
+            Emit(FlowEventKind.PlayerEliminated, loser.Player, $"第 {eliminationOrder} 个出局（战场 {BirthZoneLabel.Of(verdict.Battlefield)} 落败，势力 {loser.Power}）");
         }
 
         return record;
+    }
+
+    /// <summary>一个战场的结算判决（裁决 S10 的"判定"产物，尚未执行）：战场、原因、按比较链排好且带名次的全部在局玩家（胜者在前）。</summary>
+    private sealed record BattlefieldVerdict(int Battlefield, SettlementReason Reason, ImmutableArray<SettlementEntry> Entries)
+    {
+        /// <summary>胜者。</summary>
+        public PlayerId Winner => Entries[0].Player;
+
+        /// <summary>落败者（胜者之外的全部条目）。</summary>
+        public ImmutableArray<SettlementEntry> Losers => Entries[1..];
     }
 
     internal int DebugSeedRankOf(PlayerId player) => Require(player).SeedRank;

@@ -26,7 +26,9 @@ public class 各入口按地图标识选图Tests
     {
         // 未给地图选项 → siege-4p-base-v5。三个入口的缺省都取自目录的同一个常量。
         // 变异 M-A9：MapCatalog.DefaultId 换成 siege-4p-base-v3 → 本测试红（全套共红 39：所有走缺省地图的入口都跟着变）。
-        Assert.Equal("siege-4p-base-v5", MapCatalog.DefaultId);
+        // board-link-mode 裁决 D7：玩家入口的缺省地图改为 link:1（MapCatalog.DefaultId），v5 只剩 Legacy 夹具的缺省（MapCatalog.Legacy.DefaultId）；下面各断言随之改读 Legacy.DefaultId。
+        Assert.Equal("link:1", MapCatalog.DefaultId);
+        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.DefaultId);
         Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve(null).Id);
         Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve("  ").Id);
         Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve("siege-4p-base-v5").Id);
@@ -148,7 +150,7 @@ public class 各入口按地图标识选图Tests
         // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：默认阈值 80 下简单难度第 1 大回合全员 Pass、对局即终局，走不到第 3 大回合（段 D2 改写）。
         EvaluationWeights w = SimFixtures.PreCalibrationWeights;
         const int t = SimFixtures.PreCalibrationPassThreshold;
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Legacy.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
 
         string text = implicitOut.ToString();
@@ -223,14 +225,9 @@ public class 各入口按地图标识选图Tests
         // 变异 M-S5：Program.Run 的缺省人数不改写（条件加 `&& maxPlayers < 0`）→ 本测试与下一条共红 2。
         // board-link-mode 裁决 C7：批量入口只接受 link:，旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy，与 run 同一口径的
         // Program.RebuildPlayers / DefaultPlayerCount；M-S5 现落在 DefaultPlayerCount 的人数比较上）。
-        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 2 名玩家。选图模型只产出标识，建局走批量入口的同一份解析。
-        var model = new Siege.Presentation.MapSelect.MapSelectModel(1);
-        int index = model.Options.ToList().FindIndex(o => o.BuiltinId == TwoPlayerBaseMap.Id);
-        Assert.True(index >= 0, "选图清单里没有 2 人图。");
-        Assert.True(model.Select(index));
-        model.Accept();
-        string id = model.Confirm();
-        Assert.Equal(TwoPlayerBaseMap.Id, id);
+        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 2 名玩家。
+        // board-link-mode 裁决 D7：新局界面只剩 link: 一种地图、旧地图清单已删除，"选图清单可选到 2 人图"不再成立；本测试只保留夹具建局"缺省人数取地图上限"的口径。
+        string id = TwoPlayerBaseMap.Id;
 
         (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunLegacy(id);
         Assert.Equal(2, recorded.PlayerCount);
@@ -245,13 +242,8 @@ public class 各入口按地图标识选图Tests
         // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 B 补 3 人图）：选图清单可选到 3 人图，
         // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 3 名玩家。
         // board-link-mode 裁决 C7：旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy，见上一条）。
-        var model = new Siege.Presentation.MapSelect.MapSelectModel(1);
-        int index = model.Options.ToList().FindIndex(o => o.BuiltinId == ThreePlayerBaseMap.Id);
-        Assert.True(index >= 0, "选图清单里没有 3 人图。");
-        Assert.True(model.Select(index));
-        model.Accept();
-        string id = model.Confirm();
-        Assert.Equal(ThreePlayerBaseMap.Id, id);
+        // board-link-mode 裁决 D7：旧地图清单已删除（同上一条），只保留夹具建局"缺省人数取地图上限"的口径。
+        string id = ThreePlayerBaseMap.Id;
 
         (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunLegacy(id);
         Assert.Equal(3, recorded.PlayerCount);
@@ -273,7 +265,7 @@ public class 各入口按地图标识选图Tests
         Assert.Equal(2, RunLegacy(TwoPlayerBaseMap.Id).Config.PlayerCount);
         Assert.Equal(2, RunLegacy(TwoPlayerBaseMap.Id, difficulty: AiDifficulty.Easy).Config.PlayerCount);
         Assert.Equal(3, RunLegacy(ThreePlayerBaseMap.Id).Config.PlayerCount);
-        Assert.Equal(4, RunLegacy(MapCatalog.DefaultId).Config.PlayerCount);
+        Assert.Equal(4, RunLegacy(MapCatalog.Legacy.DefaultId).Config.PlayerCount);   // board-link-mode 裁决 D7：缺省地图改为 link:1，夹具的 v5 缺省改读 Legacy.DefaultId
         Assert.Equal(4, RunLegacy(null).Config.PlayerCount);
         Assert.Equal(3, RunLegacy(null, players: 3).Config.PlayerCount);
 
@@ -289,7 +281,7 @@ public class 各入口按地图标识选图Tests
         Assert.Contains("对手 1 名", twoOut.ToString(), StringComparison.Ordinal);
         Assert.Contains("选择你的出生区（1–2）", twoOut.ToString(), StringComparison.Ordinal);
         var fourOut = new StringWriter();
-        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), fourOut, flagRisk: 0));
+        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), fourOut, flagRisk: 0, map: MapCatalog.Legacy.Resolve(null)));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Contains("对手 3 名", fourOut.ToString(), StringComparison.Ordinal);
 
         // 图形版（src/godot 不在解决方案里，只能源码扫描）：每一处建局的人数都取自地图的人数上限（Min(4, MaxPlayers)，
@@ -320,7 +312,7 @@ public class 各入口按地图标识选图Tests
         }
 
         config = config.Validated().ResolvedFor(map);
-        MatchLog log = BatchRunner.Execute(config, parallelism: 1, map).Single();
+        MatchLog log = BatchRunner.Execute(config, parallelism: 1, map, resolveMap: MapCatalog.Legacy.Resolve).Single();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.False(log.IsFailed, log.Failure?.Message);
         return (config, log);
     }

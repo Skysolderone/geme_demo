@@ -13,7 +13,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 public class 日志首部地图摘要Tests
 {
     private static readonly Lazy<MatchLog> Gen12345 = new(() =>
-        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "gen:12345" }, seed: 5).Run());
+        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "gen:12345" }, seed: 5, resolveMap: MapCatalog.Legacy.Resolve).Run());   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
     [Fact]
     public void 真实跑局把开局地图的摘要写进首部并经文本往返_内置图同样写()
@@ -31,7 +31,7 @@ public class 日志首部地图摘要Tests
         Assert.Contains($"\"MapDigest\":\"{gen.Header.MapDigest}\"", gen.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
         Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(FourPlayerBaseMap.Create()), l.Header.MapDigest));
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7).Run();
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(Expect(FrontierMapV2.Create()), frontier.Header.MapDigest);
         Assert.NotEqual(gen.Header.MapDigest, frontier.Header.MapDigest);
     }
@@ -42,7 +42,7 @@ public class 日志首部地图摘要Tests
         // 规格 Scenario「回放重建生成图」：日志经文本往返后与内存里的地图对象彻底脱钩，回放只凭首部。
         MatchLog original = MatchLog.Parse(Gen12345.Value.FullText());
 
-        ReplayResult replay = Replayer.Replay(original);
+        ReplayResult replay = Replayer.Replay(original, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Null(replay.MapMismatch);
@@ -62,7 +62,7 @@ public class 日志首部地图摘要Tests
         string otherDigest = MapFile.Digest(FrontierMapGenerator.Generate(12346));
         var stale = new MatchLog { Header = original.Header with { MapDigest = otherDigest }, Turns = original.Turns, Events = original.Events, Result = original.Result };
 
-        ReplayResult fromStale = Replayer.Replay(stale);
+        ReplayResult fromStale = Replayer.Replay(stale, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.False(fromStale.Identical);
         Assert.Equal(1, fromStale.FirstDivergentLine);
@@ -82,7 +82,7 @@ public class 日志首部地图摘要Tests
         Assert.Equal(map.Id, tampered.Id);
         Assert.NotEqual(MapFile.Digest(map), MapFile.Digest(tampered));
 
-        ReplayResult fromTampered = Replayer.Replay(original, tampered);
+        ReplayResult fromTampered = Replayer.Replay(original, tampered, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.False(fromTampered.Identical);
         Assert.Equal(1, fromTampered.FirstDivergentLine);
@@ -90,7 +90,7 @@ public class 日志首部地图摘要Tests
         Assert.Empty(fromTampered.Replayed.Turns);
 
         // 对照：给的是同一张图 → 一致。
-        Assert.True(Replayer.Replay(original, map).Identical);
+        Assert.True(Replayer.Replay(original, map, resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class 日志首部地图摘要Tests
         MatchLog old = MatchLog.Parse(stripped);
         Assert.Null(old.Header.MapDigest);
 
-        ReplayResult replay = Replayer.Replay(old);
+        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Null(replay.MapMismatch);
         Assert.False(replay.Identical);
@@ -114,7 +114,7 @@ public class 日志首部地图摘要Tests
         Assert.Equal(old.DeterministicText().Split('\n')[1..], replay.Replayed.DeterministicText().Split('\n')[1..]);
 
         // 对照：带摘要的新日志回放逐行一致。
-        Assert.True(Replayer.Replay(MatchLog.Parse(text)).Identical);
+        Assert.True(Replayer.Replay(MatchLog.Parse(text), resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]

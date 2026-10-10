@@ -13,7 +13,7 @@ public class AI带入Tests
     private static readonly PlayerId[] Four = CarryFixtures.Four;
     private static readonly PlayerId Me = Four[0];
 
-    private static MapData Map => MapCatalog.Legacy.Resolve(MapCatalog.DefaultId);
+    private static MapData Map => MapCatalog.Legacy.Resolve(MapCatalog.Legacy.DefaultId);
 
     /// <summary>人机对局的建局：本机玩家 P0 的选择 + AI 的抽取，开启带入带出。</summary>
     private static MatchFlow Create(GameSeed seed, CarryIn? mine, ContentSet set = ContentSet.V2) =>

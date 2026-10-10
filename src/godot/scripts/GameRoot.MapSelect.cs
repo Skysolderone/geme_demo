@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Linq;
 using Godot;
 using Siege.Core.Ai;
 using Siege.Core.Board;
@@ -11,12 +10,14 @@ using Siege.Presentation.Visibility;
 namespace Siege.Godot;
 
 /// <summary>
-/// 建局之前的选图阶段（map-generator D7 / D8）：未给 <c>--map=</c> 且非无人值守时进入；确认后才建真正的对局、进入插旗。
+/// 建局之前的新局界面（board-link-mode D8 / 实现裁决 D7，规格 map-selection「开局选图界面」）：未给 <c>--map=</c> 且非无人值守时进入；
+/// 显示随机取好的地图种子与完整标识 <c>link:&lt;种子&gt;</c>，可输入种子、换一张、选难度，点"开始"才建真正的对局、进入插旗。旧地图清单已删除。
 /// </summary>
 /// <remarks>
-/// <para>选图状态机在零引擎依赖的 <see cref="MapSelectModel"/> 里，它只产出地图标识；地图一律经三个入口共用的目录解析，这里不自带清单、不自行出图。</para>
+/// <para>新局状态机在零引擎依赖的 <see cref="MapSelectModel"/> 里，它只产出地图标识；地图一律经三个入口共用的目录解析，这里不自带清单、不自行出图。</para>
 /// <para>预览不另写渲染：用候选地图建一个<b>尚未插旗</b>的会话，只为取它的默认棋盘视图模型交给 <see cref="BoardView.Build"/>（与开局插旗前的盘面同构）；
-/// 确认开局时按最终选择重新建局。一屏看不全的图切全局预览，一屏看全的图保持初始位姿。</para>
+/// 确认开局时按最终选择重新建局。一屏看不全的图切全局预览。背景应是 5 块出生棋盘的占位轮廓（规格「界面背景 SHALL 显示 5 块出生棋盘的占位轮廓，MUST NOT 显示棋盘内部布局」）——
+/// 段 D-a 先沿用现有渲染画 5 块出生棋盘，占位样式由段 D-b 定稿。</para>
 /// <para>该阶段不接受落子、插旗、推屏与缩放：<c>_Process</c> 不走 <c>Drive</c> / 悬停 / 平移，<c>_UnhandledInput</c> 整体不处理，
 /// <c>_Input</c> 不认领相机键——否则 W A S D、空格、方向键进不了种子输入框。</para>
 /// </remarks>
@@ -32,14 +33,14 @@ public sealed partial class GameRoot
     private int _selectEntryBoardNodes;
     private int _selectEntryOrphans;
 
-    /// <summary>是否处于选图阶段。</summary>
+    /// <summary>是否处于新局界面。</summary>
     private bool Selecting => _select is not null;
 
-    /// <summary>取一个新的地图种子：入口最外层读一次计数器，折成便于读写的短种子（视图模型与规则内核都不读时钟）。</summary>
+    /// <summary>取一个新的地图种子：入口最外层读一次计数器，折成便于读写的短种子（视图模型与规则内核都不读时钟）。三个入口共用同一个折叠函数。</summary>
     private static ulong NewMapSeed() => GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp());
 
     /// <summary>
-    /// 进入选图阶段并搭好第一张预览。<paramref name="preselect"/> 只来自 <c>--map-select --map=&lt;标识&gt;</c>（截图 / 自检）；
+    /// 进入新局界面并搭好第一张预览。<paramref name="preselect"/> 只来自 <c>--map-select --map=link:&lt;种子&gt;</c>（截图 / 自检），只作为预填种子；
     /// 启动时解析失败与其他命令行错误同样处理（由 <c>_Ready</c> 报错退出）。
     /// </summary>
     private MatchSession BeginMapSelect(string? preselect)
@@ -47,7 +48,7 @@ public sealed partial class GameRoot
         _select = new MapSelectModel(NewMapSeed(), _difficulty);
         if (preselect is not null && !_select.TrySelectId(preselect))
         {
-            throw new System.FormatException($"--map-select 只能预选内置地图、完整的生成图标识或完整的棋盘图标识，{preselect} 不在选图界面的清单里。");
+            throw new System.FormatException($"--map-select 只能用完整的链接图标识预填种子（{LinkMapId.Prefix}:<地图种子>），{preselect} 不是：新局界面只有 {LinkMapId.Prefix}: 一种地图。");
         }
 
         MatchSession preview = PreviewSession();
@@ -60,18 +61,15 @@ public sealed partial class GameRoot
     private MatchSession PreviewSession()
     {
         MapData map = MapCatalog.Resolve(_select!.CurrentId);
-        MatchSession preview = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit);
+        MatchSession preview = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit, pairing: _pairing);
         _previewMap = map;
         return preview;
     }
 
     private void ConnectMapSelect()
     {
-        _hud.MapOptionPicked += index => OnSelectionChanged(_select?.Select(index));
         _hud.MapSeedSubmitted += text => OnSelectionChanged(_select?.SubmitSeed(text));
         _hud.MapRerollPressed += () => OnSelectionChanged(_select?.Reroll(NewMapSeed()));
-        _hud.MapPlatformsAdjusted += delta => OnSelectionChanged(_select?.AdjustPlatforms(delta));
-        _hud.MapBoardsAdjusted += delta => OnSelectionChanged(_select?.AdjustBoards(delta));
         _hud.MapStartPressed += StartMatch;
         _hud.MapDifficultyPicked += difficulty =>
         {
@@ -97,19 +95,19 @@ public sealed partial class GameRoot
                 _session = PreviewSession();
                 _select.Accept();
                 _board.Build(_session.World.Board(), _session.ZoneOwners);
-                GD.Print($"[siege] 选图预览：{_select.CurrentId}");
+                GD.Print($"[siege] 新局预览：{_select.CurrentId}");
             }
             catch (System.Exception ex) when (ex is MapGenerationException or MapValidationException or System.FormatException or System.IO.FileNotFoundException)
             {
                 _select.RollBack($"这张图没有生成出来：{ex.Message}");
-                GD.PrintErr($"[siege] 选图预览失败：{ex.Message}");
+                GD.PrintErr($"[siege] 新局预览失败：{ex.Message}");
             }
         }
 
         _dirty = true;
     }
 
-    /// <summary>选图阶段的单帧：只同步宽高比、维持预览位姿、按需刷新；不推进对局、不采悬停与平移。</summary>
+    /// <summary>新局界面的单帧：只同步宽高比、维持预览位姿、按需刷新；不推进对局、不采悬停与平移。</summary>
     private void ProcessMapSelect()
     {
         SyncAspect();
@@ -138,23 +136,19 @@ public sealed partial class GameRoot
     }
 
     /// <summary>
-    /// 无人值守自检（<c>--map-select --auto-demo</c>）：每帧一步，把选图操作经与面板事件<b>同一组处理函数</b>走一遍——
-    /// 随机图 → 换一张 → 平台数 +1 → 非法种子 → 合法种子 → 棋盘图 → 换一张 → 棋盘数 +1 → 逐个内置图 → 回到进入时的那一项 → 开始；随后照常自动演示。
-    /// 任何一步不符预期即以退出码 1 结束（否则选图 → 建局这条路径只有人工能验）。
+    /// 无人值守自检（<c>--map-select --auto-demo</c>，规格 map-selection「强制进入新局界面的自检选项」）：每帧一步，把新局操作经与面板事件<b>同一组处理函数</b>走一遍——
+    /// 输入非法种子 → 输入合法种子 → 换一张 → 开始；随后照常自动演示。任何一步不符预期即以退出码 1 结束（否则新局 → 建局这条路径只有人工能验）。
     /// </summary>
     private void SelfCheckMapSelect()
     {
         MapSelectModel model = _select!;
-        int[] builtins = [.. Enumerable.Range(0, model.Options.Count).Where(i => model.Options[i].Kind == MapOptionKind.Builtin)];
-        int random = Enumerable.Range(0, model.Options.Count).First(i => model.Options[i].IsRandom);
-        int boardOption = Enumerable.Range(0, model.Options.Count).First(i => model.Options[i].IsBoard);
-        const int FirstBuiltinStep = 8;
         int step = _selectStep++;
         string before = model.CurrentId;
         string what;
         bool ok;
 
-        // 节点不泄漏：每步在上一帧的延迟释放落定之后读数。反复重搭预览之后，回到进入时那张图，棋盘子树的节点数与游离节点数都应回到进入时的值。
+        // 节点不泄漏：每步在上一帧的延迟释放落定之后读数。反复重搭预览之后，棋盘子树的节点数与游离节点数都应回到进入时的值（5 块出生棋盘的格数不随种子变，只随边长变——
+        // 开始那一步按"进入时的那张图"比，所以最后一步先把种子换回进入时的值再开始）。
         // 第 0 步此刻还没刷新过（标注、信物标记等由 Refresh 搭），先刷一次，与后面各步"搭完并刷新过"的状态同口径。
         if (step == 0)
         {
@@ -171,72 +165,26 @@ public sealed partial class GameRoot
 
         if (step == 0)
         {
-            what = "选中随机图";
-            OnSelectionChanged(model.Select(random));
-            ok = model.IsRandomSelected && _session.Match.Map.Id == model.CurrentId;
+            what = "输入非法种子 abc";
+            OnSelectionChanged(model.SubmitSeed("abc"));
+            ok = model.CurrentId == before && model.Notice.Length > 0 && model.SeedText == "abc" && _session.Match.Map.Id == before;
         }
         else if (step == 1)
         {
-            what = "换一张";
-            OnSelectionChanged(model.Reroll(NewMapSeed()));
-            ok = model.CurrentId != before && _session.Match.Map.Id == model.CurrentId;
+            what = "输入种子 12345";
+            OnSelectionChanged(model.SubmitSeed("12345"));
+            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && model.CurrentId == "link:12345" && _session.Match.Map.Id == model.CurrentId
+                && _session.World.Board().Boards.Length == 5;
         }
         else if (step == 2)
         {
-            what = "平台数 +1（到上限则 −1）";
-            OnSelectionChanged(model.AdjustPlatforms(model.CanIncreasePlatforms ? +1 : -1));
-            ok = model.CurrentId != before && _session.Match.Map.Id == model.CurrentId;
+            what = "换一张";
+            OnSelectionChanged(model.Reroll(NewMapSeed()));
+            ok = model.CurrentId != before && model.MapSeed != 12345UL && _session.Match.Map.Id == model.CurrentId && _session.World.Board().Boards.Length == 5;
         }
         else if (step == 3)
         {
-            what = "输入非法种子 abc";
-            OnSelectionChanged(model.SubmitSeed("abc"));
-            ok = model.CurrentId == before && model.Notice.Length > 0 && _session.Match.Map.Id == before;
-        }
-        else if (step == 4)
-        {
-            what = "输入种子 12345";
-            OnSelectionChanged(model.SubmitSeed("12345"));
-            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && _session.Match.Map.Id == model.CurrentId;
-        }
-        else if (step == 5)
-        {
-            // 棋盘图（board-map D9）：种子沿用上一步输入的 12345，棋盘数是进入时的值；预览的地图带棋盘清单，块数与面板一致。
-            what = "选中棋盘图";
-            OnSelectionChanged(model.Select(boardOption));
-            ok = model.IsBoardSelected && model.MapSeed == 12345UL && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Boards.Length == model.BoardCount;
-        }
-        else if (step == 6)
-        {
-            what = "棋盘图换一张";
-            int boardsBefore = model.BoardCount;
-            OnSelectionChanged(model.Reroll(NewMapSeed()));
-            ok = model.IsBoardSelected && model.CurrentId != before && model.BoardCount == boardsBefore && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Boards.Length == model.BoardCount;
-        }
-        else if (step == 7)
-        {
-            what = "棋盘数 +1（到上限则 −1）";
-            int boardsBefore = model.BoardCount;
-            ulong seedBefore = model.MapSeed;
-            int delta = model.CanIncreaseBoards ? +1 : -1;
-            OnSelectionChanged(model.AdjustBoards(delta));
-            ok = model.CurrentId != before && model.BoardCount == boardsBefore + delta && model.MapSeed == seedBefore
-                && _session.Match.Map.Id == model.CurrentId && _session.World.Board().Boards.Length == model.BoardCount
-                && model.CurrentId.EndsWith($":n{model.BoardCount}", System.StringComparison.Ordinal) == (model.BoardCount != BoardMapParameters.DefaultBoards);
-        }
-        else if (step < FirstBuiltinStep + builtins.Length)
-        {
-            int option = builtins[step - FirstBuiltinStep];
-            what = $"选中第 {step - FirstBuiltinStep + 1} 项内置图";
-            OnSelectionChanged(model.Select(option));
-            ok = model.Options[option].Kind == MapOptionKind.Builtin && !model.IsSeededSelected && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Boards.IsEmpty;
-        }
-        else if (step == FirstBuiltinStep + builtins.Length)
-        {
-            what = "回到进入时的那一项";
+            what = "回到进入时的种子";
             ok = model.TrySelectId(_selectEntryId);
             OnSelectionChanged(model.CurrentId != before);
             ok &= model.CurrentId == _selectEntryId && _session.Match.Map.Id == _selectEntryId;
@@ -271,11 +219,11 @@ public sealed partial class GameRoot
         return count;
     }
 
-    /// <summary>当前预览地图的一行说明（尺寸、出生区数、可落子格数，棋盘图另有棋盘数）：文案由表现层给出，读默认棋盘视图模型，不读地图、不判规则。</summary>
+    /// <summary>当前预览地图的一行说明（尺寸、出生区数、可落子格数、棋盘数）：文案由表现层给出，读默认棋盘视图模型，不读地图、不判规则。</summary>
     private string PreviewInfo() => MapPreviewInfo.Of(_session.World.Board());
 
     /// <summary>
-    /// 点"开始"：按视图模型确认的标识建真正的对局，进入插旗；相机退出全局预览回到平时的初始位姿（最远缩放、地图中心）。
+    /// 点"开始"：按视图模型确认的标识建真正的对局（链接模式，配对来源见 <c>_pairing</c>），进入插旗；相机退出全局预览回到平时的初始位姿。
     /// </summary>
     private void StartMatch()
     {
@@ -287,20 +235,20 @@ public sealed partial class GameRoot
         string id = _select.Confirm();
         if (_previewMap.Id != id)
         {
-            throw new System.InvalidOperationException($"选图界面确认的是 {id}，预览的却是 {_previewMap.Id}。");
+            throw new System.InvalidOperationException($"新局界面确认的是 {id}，预览的却是 {_previewMap.Id}。");
         }
 
         _difficulty = _select.Difficulty;
-        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, _difficulty, _cellLimit);
+        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, _difficulty, _cellLimit, pairing: _pairing);
         _select = null;
-        BeginSupply(_previewMap);   // 带入带出开启时：选图之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
+        BeginSupply(_previewMap);   // 带入带出开启时：新局之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
         _board.Build(_session.World.Board(), _session.ZoneOwners);
         if (_board.Rig.IsOverview)
         {
             _board.Rig.ToggleOverview();
         }
 
-        ApplyCamera("选图确认");
+        ApplyCamera("新局确认");
         _hud.HideMapSelect();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
         _dirty = true;

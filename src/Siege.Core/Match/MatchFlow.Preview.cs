@@ -64,7 +64,7 @@ public sealed partial class MatchFlow
     /// </summary>
     private ImmutableArray<PlayerStructure> StructuresOf(IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
-        RelicLedger copy = RelicLedger.Restore(Relics.Generation, Relics.ExportState());
+        RelicLedger copy = Relics.Copy();   // 含链接追加的公共棋盘信物（否则链接后已揭示的公共信物会被当作非信物格）
         ImmutableArray<PlayerStructure>.Builder result = ImmutableArray.CreateBuilder<PlayerStructure>(_players.Length);
         foreach (PlayerId player in _players)
         {
@@ -121,28 +121,55 @@ public sealed partial class MatchFlow
     /// （不经势力榜，避免推进版本号与峰值遥测；与 <see cref="EndMajorRound"/> 同一份真实信物内容——已结算盘面上受控信物必已揭示，不泄露内容），
     /// 先手修正在账本副本上读取，公式与同值链走 <see cref="InitiativeOrder"/>。
     /// </summary>
+    /// <remarks>
+    /// 链接模式（board-link-mode 裁决 S10 / D6）：大回合结束会先做战场结算，所以预测先用与 <c>SettleAtRoundEnd</c> <b>同一份</b>判定（<c>JudgeAtRoundEnd</c>，无副作用）
+    /// 算出此刻结束时会落败的玩家——口径"假设此刻结束、未行动者按未 Pass 算"（本大回合尚未行动的玩家不在 Pass 记录里）；落败者不进下一轮顺序，
+    /// 其余玩家的势力名次按剔除后的名册重算（与结算后 <see cref="EndMajorRound"/> 的重算同口径）。此刻结束会以"最后战场结算"终局时没有下一轮，返回 <c>null</c>。
+    /// 旧模式不进入这条分支，与引入之前逐字节相同。
+    /// </remarks>
     private InitiativeReport? ForecastInitiative(IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
-        int active = ActiveCount;
-        if (Phase != MatchPhase.InProgress || active == 0)
+        if (Phase != MatchPhase.InProgress || ActiveCount == 0)
         {
             return null;
         }
 
         int completed = MajorRound;
         PowerSnapshot power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
-        ImmutableSortedDictionary<PlayerId, int> bonuses =
-            RelicLedger.Restore(Relics.Generation, Relics.ExportState()).ReadInitiativeBonuses(Board, roster);
+        if (Mode == MatchMode.Link)
+        {
+            ImmutableArray<BattlefieldVerdict> verdicts = JudgeAtRoundEnd(power, _passedThisRound);
+            if (verdicts.Length > 0)
+            {
+                ImmutableHashSet<PlayerId> losers = [.. verdicts.SelectMany(v => v.Losers).Select(e => e.Player)];
+                roster = roster.ToImmutableSortedDictionary(kv => kv.Key, kv => losers.Contains(kv.Key) ? PlayerStatus.Eliminated : kv.Value);
+                ImmutableArray<int> occupied = [.. _players.Where(p => roster[p] == PlayerStatus.Active).Select(BattlefieldOf).Distinct()];
+                if (occupied is [int only] && (_settledBattlefields.Contains(only) || verdicts.Any(v => v.Battlefield == only)))
+                {
+                    return null;
+                }
+
+                power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
+            }
+        }
+
+        int active = roster.Count(kv => kv.Value == PlayerStatus.Active);
+        if (active == 0)
+        {
+            return null;
+        }
+
+        ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.Copy().ReadInitiativeBonuses(Board, roster);
 
         ImmutableArray<InitiativeEntry>.Builder entries = ImmutableArray.CreateBuilder<InitiativeEntry>(active);
         foreach (PlayerId player in _players)
         {
-            PlayerRecord record = _records[player];
-            if (record.Status != PlayerStatus.Active)
+            if (roster[player] != PlayerStatus.Active)
             {
                 continue;
             }
 
+            PlayerRecord record = _records[player];
             int rank = power.RankOf(player) ?? throw new SiegeRuleException($"参赛玩家 {player} 没有势力名次。");
             int bonus = bonuses.TryGetValue(player, out int b) ? b : 0;
             int? previous = completed >= 2 ? _order.IndexOf(player) : null;

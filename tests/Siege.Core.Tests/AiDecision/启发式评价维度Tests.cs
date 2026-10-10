@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
@@ -492,7 +493,7 @@ public class 启发式评价维度Tests
         // ai-eye 1.1：首部记录 AI 评价版本（design Risks「回放兼容」）；落子事件的分解值为九项。
         // Standard 难度：Easy 的非即时维恒 0，钉不住"分解值确实写的是这一维"。
         Siege.Sim.Logging.MatchLog log = Siege.Sim.Running.MatchSession
-            .Create(SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard), 41).Run();
+            .Create(SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard), 41, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         // 段 C（裁决 R10）：硬约束 + 阈值 + 预筛口径使走法变化，版本 2 → 3。
         Assert.Equal(3, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
@@ -523,12 +524,12 @@ public class 启发式评价维度Tests
         // 样本：当前二进制跑出的真实日志，只把首部版本改成 2 / 删掉——对局内容其实可重现，所以"没停下"就会回放一致，变异可见。
         // 变异 M-C7（去掉版本检查）→ 红 1（本测试）。变异 M-C8（缺字段当作当前版本：只比有值的版本）→ 红 1（本测试的 null 一轮）。
         Siege.Sim.Logging.MatchLog log = Siege.Sim.Running.MatchSession
-            .Create(SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard), 41).Run();
+            .Create(SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard), 41, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
         Assert.True(log.Turns.Count >= 8, $"小回合 {log.Turns.Count}");
 
         // 反面：同版本逐步一致。
-        Siege.Sim.Running.ReplayResult same = Siege.Sim.Running.Replayer.Replay(log);
+        Siege.Sim.Running.ReplayResult same = Siege.Sim.Running.Replayer.Replay(log, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.True(same.Identical, same.ToString());
         Assert.Null(same.AiVersionMismatch);
 
@@ -543,7 +544,7 @@ public class 启发式评价维度Tests
             };
             Assert.Equal(old, Siege.Sim.Logging.MatchLog.Parse(legacy.DeterministicText()).Header.AiEvaluationVersion);
 
-            Siege.Sim.Running.ReplayResult replay = Siege.Sim.Running.Replayer.Replay(legacy);
+            Siege.Sim.Running.ReplayResult replay = Siege.Sim.Running.Replayer.Replay(legacy, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
             Assert.False(replay.Identical);
             Assert.Equal(1, replay.FirstDivergentLine);

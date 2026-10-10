@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using static Siege.Core.Tests.LinkModeFixtures;
 
@@ -117,6 +118,32 @@ public class 链接模式存档Tests
         Assert.False(root.ContainsKey("Mode"));
         Assert.False(root.ContainsKey("Link"));
         Assert.Equal(MatchMode.Legacy, MatchFlow.RestoreUnvalidated(legacy.Map, legacy.Relics.Generation, json).Mode);
+    }
+
+    [Fact]
+    public void 旧存档被拒绝()
+    {
+        // match-setup Scenario「旧存档被拒绝」（Q6 / 实现裁决 D7）：恢复一个地图标识不是 link: 的旧存档 → 玩家入口 MatchFlow.Restore 拒绝读取并提示属于已移除的地图模式；
+        // Legacy 夹具走等价内部口 RestoreLegacy（校验与重建相同，只是不拒绝旧地图），围棋内核的回归护栏不受影响。
+        // 变异 M-D3（段 D-a 实跑）：Restore 去掉地图标识门 → 本测试红 1。
+        MapData v5 = MapCatalog.Legacy.Resolve(null);
+        MatchFlow legacy = MatchFlow.Create(v5, MatchFixtures.Seed, MatchFixtures.All);
+        legacy.PlantPrototype();
+        string json = legacy.Serialize();
+        Assert.Equal("siege-4p-base-v5", MatchFlow.SavedMapId(json));
+
+        FormatException ex = Assert.Throws<FormatException>(() => MatchFlow.Restore(v5, json));
+        Assert.Contains("已移除的地图模式", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("siege-4p-base-v5", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("link:<地图种子>", ex.Message, StringComparison.Ordinal);
+
+        MatchFlow restored = MatchFlow.RestoreLegacy(v5, json);
+        Assert.Equal(json, restored.Serialize());
+        Assert.Equal(MatchMode.Legacy, restored.Mode);
+
+        // 反面：链接模式存档照常经玩家入口恢复。
+        MatchFlow link = Started([0, 1, 3, 4]);
+        Assert.Equal(link.Serialize(), MatchFlow.Restore(Map, link.Serialize()).Serialize());
     }
 
     [Fact]

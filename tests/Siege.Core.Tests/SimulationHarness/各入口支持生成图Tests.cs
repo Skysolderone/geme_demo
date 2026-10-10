@@ -113,9 +113,9 @@ public class 各入口支持生成图Tests
 
         // 反例三：绕过入口、把裸 gen 直接交给批量 / 会话 → 规则内核拒绝，且不留半份输出。
         string direct = Path.Combine(SimFixtures.TempDir("run-bare-gen-direct"), "out");
-        Assert.Throws<FormatException>(() => BatchRunner.ExecuteToDirectory(SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = "gen" }, direct, parallelism: 1));
+        Assert.Throws<FormatException>(() => BatchRunner.ExecuteToDirectory(SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = "gen" }, direct, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.False(Directory.Exists(direct));
-        Assert.Throws<FormatException>(() => MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = " gen " }, seed: 1));
+        Assert.Throws<FormatException>(() => MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = " gen " }, seed: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ public class 各入口支持生成图Tests
         MapData map = MapCatalog.Legacy.Resolve(config.MapIdAt(0));
         config = config.ResolvedFor(map);
         File.WriteAllText(Path.Combine(dir, "config.json"), config.Effective().ToJson());
-        foreach (MatchLog log in BatchRunner.Execute(config, parallelism: 1, config.MapPerMatch ? null : map))
+        foreach (MatchLog log in BatchRunner.Execute(config, parallelism: 1, config.MapPerMatch ? null : map, resolveMap: MapCatalog.Legacy.Resolve))   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         {
             Assert.False(log.IsFailed, log.Failure?.Message);
             log.WriteTo(dir);
@@ -174,7 +174,7 @@ public class 各入口支持生成图Tests
     [Fact]
     public void 在生成图上跑局_日志首部的地图标识是完整标识_对局种子另记()
     {
-        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "gen:12345:p6" }, seed: 7).Run();
+        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "gen:12345:p6" }, seed: 7, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.False(log.IsFailed, log.Failure?.Message);
         Assert.Equal("gen:12345", log.Header.MapId);                   // 规范化标识
@@ -215,9 +215,9 @@ public class 各入口支持生成图Tests
         GameBoard.Load(loaded);   // 作为普通地图文件过同一套校验
 
         // 用导出的文件跑的局，回放时按文件重建，摘要对得上。
-        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = exported }, seed: 3).Run();
+        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = exported }, seed: 3, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal("gen:12345", log.Header.MapId);
-        Assert.True(Replayer.Replay(MatchLog.Parse(log.DeterministicText())).Identical);
+        Assert.True(Replayer.Replay(MatchLog.Parse(log.DeterministicText()), resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     [Fact]
@@ -314,7 +314,8 @@ public class 各入口支持生成图Tests
 
         // 裸 board（board-map D7）的识别点更少：目录（拒绝它）、批量 / 终端入口、图形版入口；标识的唯一实现在 BoardMapParameters.cs。
         string[] bareBoardReaders = [.. files.Where(f => f.Text.Contains("BoardMapId.IsBareRequest(", StringComparison.Ordinal)).Select(f => f.Path).Order(StringComparer.Ordinal)];
-        Assert.Equal(["Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Sim/Program.cs", "godot/scripts/GameRoot.cs"], bareBoardReaders);
+        // board-link-mode 裁决 D7：图形版只接受 link:，不再识别裸 board（与裸 gen 一样由 MapCatalog.Resolve 报错），识别点剩目录与 Program（map 子命令仍可打印旧标识）。
+        Assert.Equal(["Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Sim/Program.cs"], bareBoardReaders);
         string program = files.Single(f => f.Path == "Siege.Sim/Program.cs").Text;
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"Stopwatch\.GetTimestamp\(\)"));          // 缺省来源 ClockMapSeed
         // 段 C 检查（裁决 4）：三个入口取到的时间戳都先经同一个折叠函数折成九位以内的短种子（本断言与下面图形版那条随之更新）。
@@ -326,8 +327,9 @@ public class 各入口支持生成图Tests
         Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(program, @"mapSeedSource\(\)").Count);   // 三种裸标识各取一次，别无他处
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"=> Execute\(args, ClockMapSeed\)"));
         string gameRoot = files.Single(f => f.Path == "godot/scripts/GameRoot.cs").Text;
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(gameRoot, @"GeneratedMapId\.Format\(GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(gameRoot, @"BoardMapId\.Format\(GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
+        // board-link-mode 裁决 D7：图形版取随机地图种子只剩裸 link 一处（同一个折叠函数）；裸 gen / 裸 board 的落成已删除。
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(gameRoot, @"LinkMapId\.Format\(GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"(GeneratedMapId|BoardMapId)\.Format\("), gameRoot);
 
         // 规则内核永不读时钟（裸 gen 的种子不可能在 Core 里取）。
         Assert.DoesNotContain(files, f => f.Path.StartsWith("Siege.Core/", StringComparison.Ordinal)

@@ -31,7 +31,7 @@ public class 批量跑局Tests
         RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, turnLimit: 12, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500, ContentSet = ContentSet.V1 };
         string dir = SimFixtures.TempDir("batch");
 
-        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);
+        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal((6, 6, 0), (summary.Count, summary.Completed, summary.Failed));
         Assert.Equal(6, summary.Reasons.Values.Sum());
@@ -63,12 +63,12 @@ public class 批量跑局Tests
         Assert.Contains(logs, l => l.Header.Retention == EventRetention.SnapshotsOnly);
         Assert.All(logs.Where(l => l.Header.Retention == EventRetention.SnapshotsOnly), l => Assert.DoesNotContain(l.Events, e => LogEventType.IsFineGrained(e.Type)));
         Assert.Contains(logs.Where(l => l.Header.Retention == EventRetention.Full), l => l.Events.Any(e => e.Type == LogEventType.Candidates));
-        Assert.Equal(logs.Select(l => l.Header.Retention), BatchRunner.Execute(config, parallelism: 1).Select(l => l.Header.Retention));
+        Assert.Equal(logs.Select(l => l.Header.Retention), BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve).Select(l => l.Header.Retention));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         // 压缩输出同样可读
         RunConfig gz = config with { Count = 1, Compress = true };
         string gzDir = SimFixtures.TempDir("batch-gz");
-        BatchRunner.ExecuteToDirectory(gz, gzDir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(gz, gzDir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         string gzFile = Assert.Single(Directory.GetFiles(gzDir, "match-*.jsonl.gz"));
         // 首行 header 含 Count / Compress（本批不同），从第二行起逐字节一致
         Assert.Equal(logs[0].DeterministicText().Split('\n').Skip(1), MatchLog.Read(gzFile).DeterministicText().Split('\n').Skip(1));
@@ -84,8 +84,8 @@ public class 批量跑局Tests
         // 补上行数下界与快照 / 事件逐条比对后 → 红 2（本测试、纯AI局可凭种子复现）。
         RunConfig config = SimFixtures.Config(count: 6, seedStart: 31, turnLimit: 12);
 
-        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1);
-        List<MatchLog> parallel = BatchRunner.Execute(config, parallelism: 4);
+        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        List<MatchLog> parallel = BatchRunner.Execute(config, parallelism: 4, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal(6, serial.Count);
         Assert.Equal(serial.Select(l => l.Seed), parallel.Select(l => l.Seed));
@@ -124,7 +124,7 @@ public class 批量跑局Tests
         };
         string dir = SimFixtures.TempDir("sweep-config");
 
-        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         using JsonDocument json = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json")));
         Assert.Equal(18, json.RootElement.GetProperty("ArtisanWeight").GetInt32());
@@ -227,7 +227,7 @@ public class 批量跑局Tests
     public void 未知玩家一律抛SiegeRuleException()
     {
         // boundaries.md「未知玩家必须响亮失败」延伸到会话层：替换控制者 / 接管 / 交还一个不在名单的玩家都抛 SiegeRuleException。
-        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 4), 5);
+        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 4), 5, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         var stranger = new PlayerId(9);
         Assert.Throws<SiegeRuleException>(() => session.SetController(stranger, new BlindController()));
         Assert.Throws<SiegeRuleException>(() => session.TakeOver(stranger, new BlindController()));
@@ -237,7 +237,7 @@ public class 批量跑局Tests
         Assert.Equal(AiDifficulty.Easy, session.AiOf(new PlayerId(3))!.Difficulty);
 
         // 人数与地图不符也响亮失败
-        Assert.ThrowsAny<ArgumentException>(() => MatchSession.Create(SimFixtures.Config(players: 5), 5));
+        Assert.ThrowsAny<ArgumentException>(() => MatchSession.Create(SimFixtures.Config(players: 5), 5, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Throws<ArgumentException>(() => SimFixtures.Config(players: 1).Validated());
     }
 
@@ -255,7 +255,7 @@ public class 批量跑局Tests
         Assert.Null(config.CarryIn);
         string dir = SimFixtures.TempDir("carry-default");
 
-        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         using (JsonDocument written = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json"))))
         {
@@ -279,7 +279,7 @@ public class 批量跑局Tests
         string before = RealProfileDir.State();
         RunConfig config = SimFixtures.Config(count: 20, seedStart: 1, turnLimit: 4) with { CarryIn = 1 };
 
-        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: 4);
+        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: 4, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal(20, logs.Count);
         Assert.All(logs, log =>
@@ -302,7 +302,7 @@ public class 批量跑局Tests
         Assert.Equal(["Commission", "DraftLot", "SpareStone"], logs.SelectMany(l => l.Header.CarryIns!).Select(e => e.Supply).Distinct().Order(StringComparer.Ordinal));
 
         // 同一种子重跑：带入逐项相同。
-        MatchLog again = BatchRunner.Execute(config with { Count = 1, SeedStart = 7 }, parallelism: 1)[0];
+        MatchLog again = BatchRunner.Execute(config with { Count = 1, SeedStart = 7 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         MatchLog first = logs.Single(l => l.Seed == 7);
         Assert.Equal(CarryFixtures.CarryText(first.CarryIns), CarryFixtures.CarryText(again.CarryIns));
         Assert.Equal(SimFixtures.TurnTexts(first.Turns), SimFixtures.TurnTexts(again.Turns));   // 首部配置的种子 / 局数不同，只比走法
@@ -539,7 +539,7 @@ public class 批量跑局Tests
         Assert.Equal(600, RunConfig.DefaultTurnLimit);
         Assert.Equal(600, new RunConfig().TurnLimit);
 
-        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 10), 41);
+        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 10), 41, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         MatchLog log = MatchLog.Parse(session.Run().FullText());
 
         Assert.False(log.IsFailed);
@@ -606,8 +606,8 @@ public class 批量跑局Tests
         // 逐字节比对要钉住覆盖范围（testing.md）：快照条数 = 截断值、末条快照盘面有子；另逐条比对事件。
         // 反面：换一个更小的截断值，前面的小回合逐条相同——截断只是停止驱动，不改变走法。
         RunConfig config = SimFixtures.Config(turnLimit: 14);
-        MatchLog a = MatchSession.Create(config, 43).Run();
-        MatchLog b = MatchSession.Create(config, 43).Run();
+        MatchLog a = MatchSession.Create(config, 43, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog b = MatchSession.Create(config, 43, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.True(a.Result!.Truncated && b.Result!.Truncated);
         Assert.Equal((14, 14, 14), (a.Result.TurnCount, b.Result.TurnCount, a.Turns.Count));
@@ -618,7 +618,7 @@ public class 批量跑局Tests
             b.Events.Select(e => $"{e.Seq}:{e.Turn}:{e.Type}:{e.Player}:{e.Detail}"));
         Assert.Equal(a.DeterministicText(), b.DeterministicText());
 
-        MatchLog shorter = MatchSession.Create(SimFixtures.Config(turnLimit: 12), 43).Run();
+        MatchLog shorter = MatchSession.Create(SimFixtures.Config(turnLimit: 12), 43, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(12, shorter.Result!.TurnCount);
         Assert.Equal(SimFixtures.TurnTexts(a.Turns.Take(12)), SimFixtures.TurnTexts(shorter.Turns));
     }

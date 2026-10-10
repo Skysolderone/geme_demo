@@ -162,7 +162,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.Null(config.FlagRisk);   // flag-contest D2：未配置的冒险概率同样落成缺省值写进记录
         Assert.Null(config.ContentSet);   // more-pieces-relics D8：未配置的内容集同样落成缺省 v2 写进记录
         string dir = SimFixtures.TempDir("calibration-provenance");
-        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         RunConfig saved = RunConfig.FromJson(File.ReadAllText(Path.Combine(dir, "config.json")));
         Assert.Equal(AiSearchConfig.DefaultPassThreshold, saved.PassThreshold);
@@ -199,7 +199,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.All(config.Players, p => Assert.Null(p.Weights));
         Assert.Null(config.PassThreshold);
 
-        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: Environment.ProcessorCount);
+        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: Environment.ProcessorCount, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(count, logs.Count);
         Assert.All(logs, l => Assert.False(l.IsFailed));
         Assert.All(logs, l => Assert.Equal(AiSearchConfig.DefaultPassThreshold, l.Header.Config.PassThreshold));
@@ -221,7 +221,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         RunConfig blank = SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard);
         Assert.All(blank.Players, p => Assert.Null(p.Weights));
 
-        MatchSession session = MatchSession.Create(blank, 41);
+        MatchSession session = MatchSession.Create(blank, 41, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         MatchLog blankLog = session.Run();
         foreach (PlayerId p in session.Match.Players)
         {
@@ -232,7 +232,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 比的是快照 + 事件，不比 DeterministicText：首行 header 里带着配置 JSON，Weights 填不填本身就使整段文本不同，
         // 那样"相等"恒假、"不等"恒真，两条断言都不在守门。
         RunConfig asDefault = blank with { Players = [.. blank.Players.Select(p => p with { Weights = EvaluationWeights.Default })] };
-        MatchLog defaultLog = MatchSession.Create(asDefault, 41).Run();
+        MatchLog defaultLog = MatchSession.Create(asDefault, 41, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         // 比对配覆盖范围下界（testing.md M-C5）：投影砍到只剩一行时比对恒真。
         Assert.True(blankLog.Turns.Count >= 4, $"样本只有 {blankLog.Turns.Count} 个小回合");
@@ -245,7 +245,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         {
             Players = [.. blank.Players.Select(p => p with { Weights = EvaluationWeights.Default with { Safety = 200 } })],
         };
-        MatchLog otherLog = MatchSession.Create(other, 41).Run();
+        MatchLog otherLog = MatchSession.Create(other, 41, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.NotEqual(Play(blankLog), Play(otherLog));
     }
 

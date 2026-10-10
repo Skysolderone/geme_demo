@@ -1,3 +1,4 @@
+using Siege.Core.Board.Maps;
 using System.Collections.Immutable;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
@@ -22,7 +23,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     internal static (string Text, List<string> Records, List<LookaheadRecord> Raw) RunExpertSeat1(bool cacheLife)
     {
         MatchSession session = MatchSession.Create(
-            V5Config(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard), 1);
+            V5Config(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         HeuristicTurnController inner = HeuristicAi.Create(session.Match, P1, AiDifficulty.Expert, Weights,
             ExpandedExpert with { PassThreshold = PassThreshold }, lifeQuery: null, cacheLife);
         var recorder = new LookaheadRecorder(inner);

@@ -106,21 +106,31 @@ public sealed class MatchSession
     public ImmutableArray<Placement> Staged => Match.CurrentBatch?.Placements ?? [];
 
     /// <summary>
-    /// 开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（缺省四方标准地图），本机玩家坐第 <paramref name="seat"/> 位（1 起）。
+    /// 开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（链接图 <c>link:&lt;地图种子&gt;</c>），本机玩家坐第 <paramref name="seat"/> 位（1 起）。
+    /// 链接图一律以链接模式建局（board-link-mode 实现裁决 B1 / D7）并挂 <paramref name="pairing"/>（D3：有人值守真随机、无人值守固定脚本，由 <c>GameRoot</c> 决定）；
+    /// 其余地图是 Legacy 夹具（图形版入口已不可达），仍以旧模式建局、不挂来源。
     /// <paramref name="carryInOut"/> 为真即开启带入带出（carry-in-out D10）：本机玩家带 <paramref name="carry"/>（可为空），
     /// 各 AI 按"与本机玩家同等数量"从 <c>carry-ai</c> 子流抽取（<see cref="CarryAi.ForHumanMatch"/>，与终端版同一实现）。关闭时对局选项与引入之前相同。
     /// </summary>
-    public static MatchSession Create(MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int? cellLimit = null, bool carryInOut = false, CarryIn? carry = null)
+    public static MatchSession Create(
+        MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int? cellLimit = null, bool carryInOut = false, CarryIn? carry = null, IPairingSource? pairing = null)
     {
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         PlayerId me = players[seat - 1];
-        MatchOptions options = MatchOptions.Immediate;
+        bool link = LinkMapId.IsLinkMap(map.Id);
+        MatchOptions options = MatchOptions.Immediate with { Mode = link ? MatchMode.Link : MatchMode.Legacy };
         if (carryInOut)
         {
             options = options with { CarryInOut = true, CarryIns = CarryAi.ForHumanMatch(new GameSeed(seed), players, me, carry, options.ContentSet) };
         }
 
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
+        if (link)
+        {
+            // 配对由对局外部给出（battlefield「配对事件由对局外部提供」）：没有来源的链接图对局会停在待配对阶段，图形版没有人工配对界面，所以必须挂一个。
+            match.PairingSource = pairing ?? throw new ArgumentException("链接图对局必须挂配对来源：有人值守用真随机，无人值守用内置固定脚本。", nameof(pairing));
+        }
+
         return new MatchSession(match, me, seed, difficulty, cellLimit);
     }
 
@@ -209,8 +219,9 @@ public sealed class MatchSession
     public int? BirthZoneAt(Coord coord) => Match.Map.BirthZoneOf(coord);
 
     /// <summary>
-    /// 插旗：本机玩家选定出生区，其余玩家的区由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：
-    /// 标准图按编号顺排，平台多于人数的图由种子选区），随后锁定并开始第 1 大回合。
+    /// 插旗：本机玩家选定出生棋盘，其余玩家的棋盘由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：链接模式下三名 AI 用 <c>flag-pick</c> 子流盲选，
+    /// 可与本机玩家同区——board-link-mode 实现裁决 D2；旧模式按编号顺排 / 由种子选区），选中即锁定并开始第 1 大回合。
+    /// <see cref="ZoneOwners"/> 只记每块棋盘上<b>第一个</b>登记的玩家（旧模式一区一人；链接模式同区时只剩首位，段 D-b 改为按座位视图读取）。
     /// </summary>
     public void ChooseZone(int zone)
     {

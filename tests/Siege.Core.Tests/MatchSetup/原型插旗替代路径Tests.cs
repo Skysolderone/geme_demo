@@ -104,7 +104,7 @@ public class 原型插旗替代路径Tests
     [InlineData(20260919UL, 2, new[] { 1, 0 })]
     public void 批量侧顺排与首回合顺序和改动前逐项相同(ulong seed, int players, int[] firstOrder)
     {
-        Siege.Sim.Running.MatchSession session = Siege.Sim.Running.MatchSession.Create(SimFixtures.Config(players: players) with { FlagRisk = 0 }, seed);
+        Siege.Sim.Running.MatchSession session = Siege.Sim.Running.MatchSession.Create(SimFixtures.Config(players: players) with { FlagRisk = 0 }, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         Assert.Equal(Enumerable.Range(0, players).Select(i => (int?)i), session.Match.PlayerStates.Select(s => s.BirthZone));
         Assert.Equal(firstOrder, session.Match.ActionOrder.Select(p => p.Value));
@@ -441,16 +441,16 @@ public class 原型插旗替代路径Tests
         // 规格 Scenario：读取任意一局的对局日志首部 → 其中记录了本局生效的冒险概率。
         // 写入路径用非缺省值（37）证伪；缺省配置（未给 p）落成缺省值 15 写进首部与对局本身——不落成就无法与"首部缺该项 = 旧日志 = 0"区分。
         RunConfig set = SimFixtures.Config(turnLimit: 4) with { FlagRisk = 37 };
-        Siege.Sim.Logging.MatchLog log = Siege.Sim.Running.BatchRunner.Execute(set, parallelism: 1)[0];
+        Siege.Sim.Logging.MatchLog log = Siege.Sim.Running.BatchRunner.Execute(set, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(37, log.Header.Config.FlagRisk);
         Assert.Contains("\"FlagRisk\":37,", log.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
-        Assert.Equal(37, Siege.Sim.Running.MatchSession.Create(set, 1).Match.Options.FlagRisk);
+        Assert.Equal(37, Siege.Sim.Running.MatchSession.Create(set, 1, resolveMap: MapCatalog.Legacy.Resolve).Match.Options.FlagRisk);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
 
         RunConfig unset = SimFixtures.Config(turnLimit: 4);
         Assert.Null(unset.FlagRisk);
-        Siege.Sim.Logging.MatchLog defaulted = Siege.Sim.Running.BatchRunner.Execute(unset, parallelism: 1)[0];
+        Siege.Sim.Logging.MatchLog defaulted = Siege.Sim.Running.BatchRunner.Execute(unset, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
         Assert.Equal(MatchOptions.DefaultFlagRisk, defaulted.Header.Config.FlagRisk);
-        Assert.Equal(MatchOptions.DefaultFlagRisk, Siege.Sim.Running.MatchSession.Create(unset, 1).Match.Options.FlagRisk);
+        Assert.Equal(MatchOptions.DefaultFlagRisk, Siege.Sim.Running.MatchSession.Create(unset, 1, resolveMap: MapCatalog.Legacy.Resolve).Match.Options.FlagRisk);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
     }
 
     /// <summary>直接调唯一实现，取各玩家锁定的区号（顺序同 <paramref name="ids"/>）。</summary>
