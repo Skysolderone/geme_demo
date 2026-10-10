@@ -88,6 +88,13 @@ public sealed class MatchLog
         where T : struct, Enum =>
         Enum.GetNames<T>().Contains(text, StringComparer.Ordinal) ? Enum.Parse<T>(text) : throw new FormatException($"日志首部的带入里有未知{what} {text}。");
 
+    /// <summary>
+    /// 完整信物分布（match-telemetry 第 1 项）：首部的开局信物，加上按发生顺序的各次链接新增的公共棋盘信物（<see cref="LinkLogEntry.NewRelics"/>）。
+    /// 旧模式日志没有链接事件，即首部 <see cref="LogHeader.Relics"/>。
+    /// </summary>
+    public IEnumerable<RelicEntry> AllRelics =>
+        Header.Relics.Concat(Events.Where(e => e.Link is not null).OrderBy(e => e.Seq).SelectMany(e => e.Link!.NewRelics));
+
     /// <summary>是否为链接模式的局（首部 <see cref="LogHeader.Mode"/>）。</summary>
     public bool IsLinkMode => Header.Mode == nameof(Siege.Core.Match.MatchMode.Link);
 
@@ -938,6 +945,12 @@ public sealed record LinkLogEntry
     public string? PublicBoard { get; init; }
 
     public int CorridorCells { get; init; }
+
+    /// <summary>各条新增通道的长度（外接矩形的较长边），按生成器次序（负责人裁决 R3"通道长度不限"的复核项）。</summary>
+    public List<int> CorridorLengths { get; init; } = [];
+
+    /// <summary>链接后合并战场的可落子格数（开局 + 链接的地图、不含改造；负责人裁决 R4 可落子上限的复核项，决赛战场取决赛链接这一条）。</summary>
+    public int BattlefieldCells { get; init; }
 
     /// <summary>新增信物格及其内容（坐标字典序）。</summary>
     public List<RelicEntry> NewRelics { get; init; } = [];

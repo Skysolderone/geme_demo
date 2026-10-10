@@ -1,6 +1,7 @@
 using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Core.Tests.SimulationHarness;
@@ -19,6 +20,43 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// </remarks>
 public class 对局日志的记录内容_链接模式Tests
 {
+    [Fact]
+    public void 地形可离线重建()
+    {
+        // 规格正文「改造与链接记录 MUST 足以离线重建任意时刻的地形」的链接模式侧（段 C 质检补缺口；Legacy 侧见 地形改造日志与分析Tests.地形可离线重建）：
+        // 只读日志（文本往返后）——按首部标识重建开局地图、核对首部摘要；按发生顺序把每个链接事件的两个战场交给链接生成器，逐次核对链接后的地图摘要；
+        // 最后把全部改造重放上去，与这一局真实对局的终局地形逐格相同。
+        MatchSession session = MatchSession.Create(LinkSimFixtures.Config(turnLimit: 13), LinkSimFixtures.FourZoneSeed.Value);
+        MatchLog log = SimFixtures.Clone(session.Run());
+        List<LinkLogEntry> links = [.. log.Events.Where(e => e.Link is not null).OrderBy(e => e.Seq).Select(e => e.Link!)];
+        Assert.Equal(2, links.Count);   // 样本口径：两次链接
+
+        MapData map = MapCatalog.Resolve(log.Header.MapId);
+        Assert.Equal(log.Header.MapDigest, MapFile.Digest(map));
+        var digests = new List<string>();
+        foreach (LinkLogEntry link in links)
+        {
+            map = LinkMapGenerator.Link(map, link.X, link.Y).Map;
+            Assert.Equal(link.MapDigest, MapFile.Digest(map));
+            digests.Add(MapFile.Digest(map));
+        }
+
+        Assert.Equal(MapFile.Digest(session.Match.Board.LinkedMap), digests[^1]);
+        Assert.NotEqual(digests[0], digests[^1]);   // 反面：少重放一次链接就对不上
+
+        TerrainEdit[] edits = [.. log.Turns.SelectMany(t => t.Edits ?? []).Select(e => TerrainEdit.Parse(e.Target))];
+        Assert.NotEmpty(edits);   // 样本口径：本局确有改造（实测 2 次），改造那条腿才真的被比对
+        MapData rebuilt = TerrainWriter.ApplyAll(map, edits);
+        MapData actual = session.Match.Board.Map;
+        Assert.Equal(actual.TerrainData.Bridges, rebuilt.TerrainData.Bridges);
+        Assert.Equal(actual.TerrainData.Fences, rebuilt.TerrainData.Fences);
+        foreach (Coord c in actual.AllCoords())
+        {
+            Assert.Equal(actual.SurfaceAt(c), rebuilt.SurfaceAt(c));
+            Assert.Equal(actual.IsPlayable(c), rebuilt.IsPlayable(c));
+        }
+    }
+
     [Fact]
     public void 配对与链接可查()
     {

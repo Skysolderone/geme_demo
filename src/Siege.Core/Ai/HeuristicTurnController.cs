@@ -152,9 +152,31 @@ public sealed class HeuristicTurnController : ITurnController
     /// 本次决策实际生效的停手阈值（pass-threshold-first-stone D1，无子豁免）：批次开始前的正式盘面上该玩家没有任何棋子时为 0，
     /// 否则为配置值 <see cref="AiSearchConfig.PassThreshold"/>。只在决策入口按公开快照算一次，单点排序与贪心组批共用，
     /// 组批过程中不因已暂放的棋子而改变。<see cref="Config"/> 与日志首部仍记配置值（D2：豁免是盘面的确定性函数，回放按同一实现重建）。
+    /// <para>链接模式的落后者豁免（board-link-mode 裁决 C15，ai-decision「链接模式下落后者的停手阈值」）与无子豁免在这里同一处判定：
+    /// 见 <see cref="TrailsInBattlefield"/>。专家前瞻的模拟对手（<see cref="ForSimulation"/>）走同一个 <see cref="Deploy"/>、读投影视图，
+    /// 多样补充的排除重跑沿用本次算定的阈值——「前瞻中的停手口径」的复用点都经过这里，不另写一份。</para>
     /// </summary>
     private int EffectivePassThreshold(MatchPublicView view) =>
-        view.Board.GroupsOf(Player).IsEmpty ? 0 : Config.PassThreshold;
+        view.Board.GroupsOf(Player).IsEmpty || TrailsInBattlefield(view, Player) ? 0 : Config.PassThreshold;
+
+    /// <summary>
+    /// 裁决 C15：链接模式下 <paramref name="player"/> 所在战场还有其他在局玩家，且其当前总势力严格低于其中某一人（并列最高视为最高）。
+    /// 旧模式、尚无势力快照、未锁定出生棋盘、独自在单人战场等待时一律为 <c>false</c>（沿用缺省阈值）。同战场口径与按座位投影相同：
+    /// 出生棋盘落在本战场里的在局玩家（<see cref="PublicRules.BattlefieldOf"/>）。只读公开快照，关闭全知时同战场的势力仍完整可见。
+    /// </summary>
+    internal static bool TrailsInBattlefield(MatchPublicView view, PlayerId player)
+    {
+        if (view.Mode != MatchMode.Link || view.Power is not { } power
+            || view.Players.FirstOrDefault(p => p.Player == player)?.BirthZone is not int zone)
+        {
+            return false;
+        }
+
+        Battlefield field = PublicRules.BattlefieldOf(view.Board, zone);
+        BigInteger mine = power.Of(player).Total;
+        return view.Players.Any(p => p.Player != player && p.IsActive && p.BirthZone is int z && field.BirthZones.Contains(z)
+            && power.Of(p.Player).Total > mine);
+    }
 
     // ---------- 第 2 阶段 ----------
 

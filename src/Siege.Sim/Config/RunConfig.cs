@@ -119,7 +119,7 @@ public sealed record RunConfig
     /// <summary>
     /// 原型插旗的冒险概率（<see cref="MatchOptions.FlagRisk"/>，flag-contest D2；0–100）：<c>null</c> = 新建的局取 <see cref="MatchOptions.DefaultFlagRisk"/>，
     /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 0 重建
-    /// （p = 0 与引入之前逐项相同）。命令行 <c>--flag-risk</c>。
+    /// （p = 0 与引入之前逐项相同）。board-link-mode 实现裁决 C2 / C8：命令行 <c>--flag-risk</c> 已删除，本字段只留给 Legacy 夹具；链接图配置写了即报错。
     /// </summary>
     public int? FlagRisk { get; init; }
 

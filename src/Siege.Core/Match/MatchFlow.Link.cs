@@ -305,6 +305,7 @@ public sealed partial class MatchFlow
         {
             PublicBoard = result.PublicBoard,
             CorridorCells = result.Corridors.Sum(c => c.Cells().Count()),
+            Corridors = result.Corridors,
             MapDigest = MapFile.Digest(result.Map),
             NewRelics = relics,
         };

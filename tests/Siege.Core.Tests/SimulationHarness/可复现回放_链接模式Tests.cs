@@ -45,6 +45,23 @@ public class 可复现回放_链接模式Tests
     }
 
     [Fact]
+    public void 带入对局可回放()
+    {
+        // 规格 Scenario「带入对局可回放」的链接模式侧（段 C 质检补缺口）：开启带入（每名 AI 从 carry-ai 子流带入 1 件）的链接图对局，
+        // 回放按首部记录的带入重建开局手牌、按日志的配对事件重建链接，逐行一致。Legacy 侧由 可复现回放Tests.带入对局可回放 守。
+        MatchLog original = MatchSession.Create(Config(turnLimit: 13) with { CarryIn = 1 }, FourZoneSeed.Value).Run();
+        Assert.True(original.CarryInOut);                                        // 样本口径：开了带入
+        Assert.Equal(4, original.CarryIns.Count);
+        Assert.NotEmpty(original.EventsOf(LogEventType.PairingApplied));      // 样本口径：跑过了首轮配对与链接
+        Assert.NotEmpty(original.EventsOf(LogEventType.BattlefieldsLinked));
+
+        ReplayResult replay = Replayer.Replay(SimFixtures.Clone(original));
+
+        Assert.True(replay.Identical, replay.ToString());
+        Assert.Equal(original.DeterministicText(), replay.Replayed.DeterministicText());
+    }
+
+    [Fact]
     public void replay命令拒绝旧日志()
     {
         // 实现裁决 C3 / match-telemetry「旧日志被拒绝」：replay 命令拒绝地图标识不是 link: 的日志并提示属于已移除的地图模式；

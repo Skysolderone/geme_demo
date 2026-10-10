@@ -119,6 +119,9 @@ public sealed record LinkRecord(
     /// <summary>新增通道的格数。</summary>
     public int CorridorCells { get; init; }
 
+    /// <summary>新增的通道（外接矩形；长度 = 较长边），按生成器给出的次序。退化链接为一条直通道。只作记录（遥测：通道长度，负责人裁决 R3 复核项），不入存档。</summary>
+    public ImmutableArray<Board.Maps.LinkCorridor> Corridors { get; init; } = [];
+
     /// <summary>链接后（开局 + 链接、不含改造）地图的内容摘要（<see cref="MapFile.Digest"/>）。</summary>
     public string MapDigest { get; init; } = string.Empty;
 

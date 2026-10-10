@@ -783,6 +783,10 @@ public sealed class MatchSession
                             Degraded = linked.Degraded,
                             PublicBoard = linked.PublicBoard is { } plate ? $"{plate.Origin.ToNotation()} {plate.Width}×{plate.Height}" : null,
                             CorridorCells = linked.CorridorCells,
+                            CorridorLengths = [.. linked.Corridors.Select(c => c.Length)],
+                            // 合并后的战场 = 链接后地图（开局 + 链接，不含改造）里含战场 X 那块出生棋盘的连通分量。同一配对事件里的各对互不相交，
+                            // 此刻（整个配对事件执行完）按出生棋盘取仍是这一对合并出的战场；决赛那一条即决赛战场。
+                            BattlefieldCells = Battlefields.Of(Match.Board.LinkedMap).All.Single(f => f.BirthZones.Contains(linked.X)).Cells.Length,
                             NewRelics = [.. linked.NewRelics.Select(RelicEntryOf)],
                             MapDigest = linked.MapDigest,
                             Summary = linked.Summary,

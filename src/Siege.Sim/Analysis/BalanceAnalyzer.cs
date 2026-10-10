@@ -300,7 +300,11 @@ public sealed record BalanceReport(
     TerritoryShareSection TerritoryShare,
     LifeShapeSection LifeShape,
     SharedZoneSection SharedZones,
-    NewContentSection NewContent);
+    NewContentSection NewContent)
+{
+    /// <summary>链接模式统计（board-link-mode 3.5）；没有链接模式的纳入局时为 <c>null</c>，报告里整段不出现。</summary>
+    public LinkModeSection? LinkMode { get; init; }
+}
 
 /// <summary>
 /// 插旗同区（flag-contest D3，只报告）：同区 = 该局日志首部锁定的出生区（<see cref="LogHeader.Zones"/>）里有两名及以上玩家落在同一个区；
@@ -414,7 +418,10 @@ public static class BalanceAnalyzer
             TerritoryShare(included),
             LifeShape(included, rankable),
             SharedZones(included, ranked),
-            NewContent(included));
+            NewContent(included))
+        {
+            LinkMode = LinkModeAnalyzer.Analyze(included),
+        };
     }
 
     /// <summary>
@@ -1275,8 +1282,9 @@ public static class BalanceAnalyzer
                 }
             }
 
-            var typeOf = log.Header.Relics.ToDictionary(r => r.Coord, r => r.Type, StringComparer.Ordinal);
-            foreach (RelicEntry relic in log.Header.Relics)
+            // 完整信物分布含链接时新增的公共棋盘信物（match-telemetry 第 1 项）；旧模式日志没有链接事件，与首部相同。
+            var typeOf = log.AllRelics.ToDictionary(r => r.Coord, r => r.Type, StringComparer.Ordinal);
+            foreach (RelicEntry relic in log.AllRelics)
             {
                 relicCount[relic.Type] = relicCount.TryGetValue(relic.Type, out int n) ? n + 1 : 1;
             }

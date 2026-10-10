@@ -573,6 +573,14 @@ public static class Program
         string outPath = cli.Get("out", Path.Combine(dir, "report.txt"));
         cli.EnsureRecognized();   // 读完所有选项、读日志与写报告之前结算（strict-cli 2.4）
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
+        if (logs.FirstOrDefault(l => !LinkMapId.IsLinkMap(l.Header.MapId)) is { } retired)
+        {
+            // match-telemetry「旧日志被拒绝」（与 replay 同口径，实现裁决 C3）：analyze 命令只分析链接图的日志；
+            // 内部分析接口（BalanceAnalyzer）仍能读旧日志（Legacy 夹具的分析回归测试）。
+            throw new ArgumentException(
+                $"目录 {dir} 里种子 {retired.Header.Seed} 的日志地图标识为 {retired.Header.MapId}，属于已移除的地图模式（只接受 {LinkMapId.Prefix}:<地图种子> 对局的日志），analyze 不再分析它。");
+        }
+
         BalanceReport report = BalanceAnalyzer.Analyze(logs, options);
         string text = ReportWriter.Render(report);
         Console.WriteLine(text);
