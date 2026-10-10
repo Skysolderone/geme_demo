@@ -231,3 +231,5 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 关键设计：战场 = 可落子格连通分量（D1）；地图增长复用"换 MapData 重建派生表"（A1）；配对是外部输入事件、不可复现但记录重放（D3）；按座位过滤的公开视图（D4）；旧地图降级为 `MapCatalog.Legacy` 夹具（D8 / A4，段 C 才拒绝旧标识）。
 - 段 A 实施裁决 A1–A5 全缺省，派发方式 1（单个 trellis-implement agent 顺序做 tasks 1.1–1.7）。Trellis 任务 `10-09-board-link-mode-a` 进行中，implement/check 上下文已挂。
 - 待：agent 回传 → check → 负责人过目 → 提交段 A → 段 B（对局流程）。
+- （10-09 续）段 A 完成：R1–R6 实施偏离全部接受并同步规格（画布 73×73、32 种槽位白名单、通道长度不限、可落子 125–1600、链接规范次序、场景格立栅合法无效果）；质检通过，提交 `59c84ef`，任务 A 归档 `8a3a700`。2139 条测试，通过 2129，跳过 10。
+- （10-10）段 B 实现裁决 B1–B6 全缺省（核心：对局模式 Legacy / Link 并存到段 C，旧基线不动），提交 `917215d`。派单个 trellis-implement agent 先做 2.1–2.5，阶段回传后再做 2.6–2.10。

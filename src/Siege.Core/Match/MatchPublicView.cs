@@ -43,4 +43,11 @@ public sealed record MatchPublicView(
     MatchResult? Result,
     LifeShapeReport LifeShape,
     bool CarryInOut,
-    ImmutableSortedDictionary<PlayerId, Carry.CarryIn> CarryIns);
+    ImmutableSortedDictionary<PlayerId, Carry.CarryIn> CarryIns)
+{
+    /// <summary>
+    /// 对局模式（board-link-mode 实现裁决 B1）：对局配置，开局固定、始终公开。前瞻按公开量重算合法落子范围时要用它（<see cref="PublicRules.LegalRange"/>）。
+    /// 不是位置参数：缺省 <see cref="MatchMode.Legacy"/>，旧的构造写法不变。
+    /// </summary>
+    public MatchMode Mode { get; init; }
+}

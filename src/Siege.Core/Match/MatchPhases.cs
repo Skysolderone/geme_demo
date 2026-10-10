@@ -13,6 +13,16 @@ public enum MatchPhase
 
     /// <summary>已结束：<see cref="MatchFlow.Result"/> 可读。</summary>
     Ended,
+
+    /// <summary>
+    /// 链接模式（battlefield「阶段推进」）：第 3 大回合结束、首轮配对候选 ≥ 2，停在大回合边界等待外部提交配对事件
+    /// （<see cref="MatchFlow.ApplyPairing"/>，或挂接的 <see cref="MatchFlow.PairingSource"/> 当场给出）。旧模式永不进入。
+    /// 构筑期与交战期都是 <see cref="InProgress"/>（二者只差合法落子范围是否已随链接扩大，见 <see cref="MatchFlow.LinkStage"/>）。
+    /// </summary>
+    AwaitingPairing,
+
+    /// <summary>链接模式：全部多人战场已结算且在局玩家 ≥ 2，停在大回合边界等待决赛链接事件。旧模式永不进入。</summary>
+    AwaitingFinalLink,
 }
 
 /// <summary>
@@ -68,6 +78,12 @@ public enum FlowEventKind
     PlayerEliminated,
     PlayerResigned,
     MatchEnded,
+
+    /// <summary>链接模式：配对事件（首轮或决赛）被接受。旧模式永不发出。</summary>
+    PairingApplied,
+
+    /// <summary>链接模式：一次链接执行完毕（两个战场合并）。旧模式永不发出。</summary>
+    BattlefieldsLinked,
 }
 
 /// <summary>一条流程事件：种类、发生时的大回合、相关玩家（若有）与文字说明。</summary>

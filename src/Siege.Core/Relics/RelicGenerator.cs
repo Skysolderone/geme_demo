@@ -53,6 +53,20 @@ public static class RelicGenerator
         return new RelicGenerationRecord(seed, map.Id, [.. placements], converged, rerolls) { ContentSet = options.ContentSet };
     }
 
+    /// <summary>
+    /// 链接时公共棋盘的信物内容（board-link-mode D2 / 实现裁决 B6）：对链接新增的信物格按坐标字典序逐格抽取，权重表、升级概率与徽记绑定集合与开局生成同一份
+    /// （<see cref="Draw"/>），只消费独立子流 <see cref="GameSeed.RelicLink"/>（由对局种子与两个战场标识决定），MUST NOT 消费 <see cref="GameSeed.RelicGeneration"/>
+    /// 或任何既有子流；公共棋盘的信物不属于出生区，没有出生区预算校正。同一（对局种子, X, Y）与同一组信物格 → 逐格相同，与链接序号无关。
+    /// </summary>
+    public static ImmutableArray<RelicPlacement> GenerateLinked(
+        IEnumerable<KeyValuePair<Coord, RelicCellSpec>> cells, GameSeed seed, int battlefieldX, int battlefieldY, ContentSet contentSet)
+    {
+        ArgumentNullException.ThrowIfNull(cells);
+        RelicGenerationOptions options = RelicGenerationOptions.Default with { ContentSet = ContentSets.RequireValid(contentSet) };
+        RandomStream stream = seed.Stream(GameSeed.RelicLink(battlefieldX, battlefieldY));
+        return [.. cells.OrderBy(kv => kv.Key).Select(kv => new RelicPlacement(kv.Key, Draw(stream, kv.Value, options), kv.Value))];
+    }
+
     /// <summary>抽一枚信物：类型 → 升级判定 → 徽记绑定的棋子类型。三次消费的顺序固定，任何改动都会改变同种子的结果。</summary>
     /// <remarks>
     /// more-pieces-relics D7：升级判定只对有高阶版的类型（<see cref="RelicContent.HasAdvancedTier"/>，即原有六类）执行；

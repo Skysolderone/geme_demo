@@ -24,16 +24,35 @@ public static class PublicRules
     /// <param name="birthZone">该玩家锁定的出生区编号。</param>
     /// <param name="player">玩家。</param>
     /// <param name="life">对 <paramref name="board"/> 的活形分析（禁入格的唯一查询）。</param>
-    public static IReadOnlySet<Coord> LegalRange(GameBoard board, int majorRound, int birthZone, PlayerId player, LifeShapeReport life)
+    /// <param name="mode">
+    /// 对局模式（board-link-mode 实现裁决 B1）。<see cref="MatchMode.Link"/> 下任何大回合都是"该玩家所在战场的可落子格"
+    /// （turn-sequence「合法落子范围的对外契约」；战场 = 含其出生棋盘的连通分量，随链接扩大），不存在"第 4 大回合全图解禁"；
+    /// 缺省 <see cref="MatchMode.Legacy"/> 与引入模式之前逐字节相同。
+    /// </param>
+    public static IReadOnlySet<Coord> LegalRange(
+        GameBoard board, int majorRound, int birthZone, PlayerId player, LifeShapeReport life, MatchMode mode = MatchMode.Legacy)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(life);
 
         // 可落子格按当前地形现算：本局架出来的桥必须立刻成为合法落点（artisan-terrain-edit 2.6 缓存排查第 1 条）。
-        IEnumerable<Coord> range = majorRound <= BuildProtectionRounds
-            ? board.Map.BirthZones[birthZone]
-            : board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable);
+        IEnumerable<Coord> range = mode == MatchMode.Link
+            ? BattlefieldOf(board, birthZone).Cells
+            : majorRound <= BuildProtectionRounds
+                ? board.Map.BirthZones[birthZone]
+                : board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable);
         return range.Except(life.ForbiddenCellsFor(player)).ToImmutableHashSet();
+    }
+
+    /// <summary>
+    /// 含出生棋盘 <paramref name="birthZone"/> 的战场（按当前地图导出，<see cref="GameBoard.Battlefields"/>）。链接后它的标识可能是另一块编号更小的出生棋盘，
+    /// 所以按"含该出生区"而不是按标识查找。
+    /// </summary>
+    public static Battlefield BattlefieldOf(GameBoard board, int birthZone)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return board.Battlefields.All.SingleOrDefault(f => f.BirthZones.Contains(birthZone))
+            ?? throw new SiegeRuleException($"出生棋盘 {BirthZoneLabel.Of(birthZone)} 不属于任何战场。");
     }
 
     /// <summary>出局判据（elimination-endgame「出局判定」，restore-go-core-rules 裁决 #3）：曾建立正势力且当前总势力为 0。</summary>

@@ -36,6 +36,39 @@ public sealed class RelicLedger
     /// <summary>开局生成记录（种子 + 全部分布）。</summary>
     public RelicGenerationRecord Generation { get; }
 
+    private readonly List<RelicPlacement> _linked = [];
+
+    /// <summary>链接模式下随链接追加的公共棋盘信物（<see cref="Append"/>），按追加顺序。旧模式恒为空。</summary>
+    public IReadOnlyList<RelicPlacement> LinkedPlacements => _linked;
+
+    /// <summary>
+    /// 链接增长（board-link-mode 实现裁决 B6）：把新公共棋盘的信物追加进账本，初始为未揭示、无人控制。
+    /// 坐标已是信物格即抛 <see cref="SiegeRuleException"/>（链接 MUST NOT 改写已有格），账本不变。
+    /// </summary>
+    public void Append(IEnumerable<RelicPlacement> placements)
+    {
+        ArgumentNullException.ThrowIfNull(placements);
+        RelicPlacement[] added = [.. placements];
+        foreach (RelicPlacement placement in added)
+        {
+            if (_relics.ContainsKey(placement.Coord))
+            {
+                throw new SiegeRuleException($"信物格 {placement.Coord.ToNotation()} 已在账本中：链接不得改写已有信物。");
+            }
+        }
+
+        if (added.Select(p => p.Coord).Distinct().Count() != added.Length)
+        {
+            throw new SiegeRuleException("追加的信物格重复。");
+        }
+
+        foreach (RelicPlacement placement in added)
+        {
+            _relics.Add(placement.Coord, new RelicState(placement));
+            _linked.Add(placement);
+        }
+    }
+
     /// <summary>全部揭示事件，按发生顺序。</summary>
     public IReadOnlyList<RelicRevealEvent> RevealEvents => _reveals;
 

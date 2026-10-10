@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Determinism;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 
@@ -19,6 +20,12 @@ public sealed record MatchOptions
 
     /// <summary>插旗时限。<see cref="TimeSpan.Zero"/> 表示立即：宿主无需等待即可锁定。规则内核不持有计时器，到时由宿主调用 <see cref="FlagPlanting.LockAll"/>。</summary>
     public TimeSpan FlagTimeLimit { get; init; } = DefaultFlagTimeLimit;
+
+    /// <summary>
+    /// 对局模式（board-link-mode 实现裁决 B1）：缺省 <see cref="MatchMode.Legacy"/>，行为与引入本项之前逐字节相同；
+    /// <see cref="MatchMode.Link"/> 只能配链接图，不匹配即建局报错。属于对局配置：开局固定。
+    /// </summary>
+    public MatchMode Mode { get; init; } = MatchMode.Legacy;
 
     // restore-go-core-rules 裁决 #4 / #7 / #15：大回合上限、碾压起始大回合、落后者征募补偿开关三项配置整体删除。
     // 终局只剩「只剩一名参赛玩家 / 棋盘填满 / 整轮 Pass」三类，对局 MUST NOT 设置固定总轮数，也 MUST NOT 因势力领先幅度提前结束。
@@ -61,12 +68,22 @@ public sealed record MatchOptions
     public ImmutableSortedDictionary<PlayerId, Carry.CarryIn> CarryIns { get; init; } = ImmutableSortedDictionary<PlayerId, Carry.CarryIn>.Empty;
 }
 
-/// <summary>插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。</summary>
+/// <summary>
+/// 插旗阶段的匿名公开视图：每个出生区上有几面旗，<b>没有</b>任何身份字段（设计文档 §4.1）。
+/// 链接模式的盲选下 <see cref="FlagCountByZone"/> 为空——旗帜互不可见，公开视图 MUST NOT 暴露任何旗数（match-setup「匿名同时插旗」）；
+/// 本座位能看到的只有自己的那面旗，见 <see cref="FlagPlanting.ViewFor"/>。
+/// </summary>
 public sealed record FlagPublicView(ImmutableArray<int> FlagCountByZone, bool IsLocked)
 {
-    /// <summary>某出生区上的旗帜数。</summary>
+    /// <summary>某出生区上的旗帜数。盲选下没有旗数可读（抛 <see cref="IndexOutOfRangeException"/>）。</summary>
     public int FlagsAt(int zone) => FlagCountByZone[zone];
 }
+
+/// <summary>
+/// 某一座位在插旗阶段看到的旗帜（board-link-mode 实现裁决 B2，match-setup「匿名同时插旗」）：出生棋盘数、本座位自己选的那块（未选为 <c>null</c>）；
+/// 全部锁定后另含"与自己同一块棋盘的玩家"（含本人，升序），锁定前为空。MUST NOT 含任何其他棋盘上的旗与旗数。
+/// </summary>
+public sealed record SeatFlagView(PlayerId Seat, int ZoneCount, int? OwnZone, bool IsLocked, ImmutableArray<PlayerId> SameBoard);
 
 /// <summary>
 /// 匿名同时插旗（设计文档 §4.1）。旗帜只记位置；公开视图只暴露每区旗数，身份只在锁定后进入对局状态。
@@ -82,12 +99,22 @@ public sealed class FlagPlanting
     private readonly SortedDictionary<PlayerId, int> _flags = [];
     private readonly ImmutableArray<PlayerId> _players;
 
-    internal FlagPlanting(MapData map, ImmutableArray<PlayerId> players, TimeSpan timeLimit)
+    private readonly GameSeed _seed;
+
+    internal FlagPlanting(MapData map, ImmutableArray<PlayerId> players, TimeSpan timeLimit, MatchMode mode = MatchMode.Legacy, GameSeed seed = default)
     {
         Map = map;
         _players = players;
         TimeLimit = timeLimit;
+        IsBlind = mode == MatchMode.Link;
+        _seed = seed;
     }
+
+    /// <summary>
+    /// 是否盲选（链接模式，实现裁决 B2）：选中即锁定、旗帜互不可见、公开视图不含旗数；时限到时未选者由 <c>flag-pick</c> 子流均匀指定。
+    /// 旧模式为 <c>false</c>，行为与引入盲选之前逐字节相同。
+    /// </summary>
+    public bool IsBlind { get; }
 
     /// <summary>地图（地形、出生区、信物格位置全部公开）。</summary>
     public MapData Map { get; }
@@ -107,6 +134,11 @@ public sealed class FlagPlanting
     /// <summary>匿名公开视图。</summary>
     public FlagPublicView PublicView()
     {
+        if (IsBlind)
+        {
+            return new FlagPublicView([], IsLocked);
+        }
+
         int[] counts = new int[ZoneCount];
         foreach (int zone in _flags.Values)
         {
@@ -134,7 +166,30 @@ public sealed class FlagPlanting
             throw new ArgumentOutOfRangeException(nameof(zone), zone, $"出生区编号须在 0..{ZoneCount - 1}。");
         }
 
+        if (IsBlind && _flags.TryGetValue(player, out int locked))
+        {
+            // 盲选下选中即锁定（match-setup「匿名同时插旗」，design D4 / Q8）：改选会让玩家看到第二块棋盘的布局。
+            throw new SiegeRuleException($"盲选插旗选中即锁定：玩家 {player} 已锁定出生棋盘 {BirthZoneLabel.Of(locked)}，不能改选 {BirthZoneLabel.Of(zone)}。");
+        }
+
         _flags[player] = zone;
+    }
+
+    /// <summary>
+    /// 某一座位能看到的旗帜（实现裁决 B2）：只有自己那面旗；全部锁定后另含与自己同一块棋盘的玩家。两种模式都可调用。
+    /// </summary>
+    public SeatFlagView ViewFor(PlayerId seat)
+    {
+        if (!_players.Contains(seat))
+        {
+            throw new SiegeRuleException($"玩家 {seat} 不在本局名单中。");
+        }
+
+        int? own = FlagOf(seat);
+        ImmutableArray<PlayerId> same = IsLocked && own is { } zone
+            ? [.. _flags.Where(kv => kv.Value == zone).Select(kv => kv.Key)]
+            : [];
+        return new SeatFlagView(seat, ZoneCount, own, IsLocked, same);
     }
 
     /// <summary>某玩家当前的旗帜位置；尚未插旗为 <c>null</c>。只供该玩家本人的界面与锁定后的对局状态读取。</summary>
@@ -151,11 +206,14 @@ public sealed class FlagPlanting
             throw new SiegeRuleException("插旗已锁定。");
         }
 
-        foreach (PlayerId player in _players)
+        // 盲选：时限到时未选者用 flag-pick 子流在全部出生棋盘里均匀指定（每名玩家一次、按编号升序，与他人选了什么无关）。
+        ImmutableArray<int> picks = IsBlind ? PrototypeZoneAssignment.BlindPicks(_seed, _players, ZoneCount) : [];
+        for (int i = 0; i < _players.Length; i++)
         {
+            PlayerId player = _players[i];
             if (!_flags.ContainsKey(player))
             {
-                _flags[player] = LeastPopulatedZone();
+                _flags[player] = IsBlind ? picks[i] : LeastPopulatedZone();
             }
         }
 

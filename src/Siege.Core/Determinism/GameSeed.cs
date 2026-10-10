@@ -47,6 +47,19 @@ public readonly record struct GameSeed(ulong Value)
     /// </summary>
     public static string CarryDraft(int player) => $"carry-draft:{player}";
 
+    /// <summary>
+    /// 链接模式的盲选插旗子流名（board-link-mode 实现裁决 B2，match-setup「原型插旗替代路径」）：每名玩家按编号升序各抽一次 <c>[0, 出生棋盘数)</c>，
+    /// 未由人指定（原型路径）或时限到时尚未选择（正式插旗）的玩家取自己那一次的结果。不看任何已插的旗。
+    /// 独立命名，MUST NOT 扰动信物生成、首回合顺序、征募与 AI 决策的既有序列；旧模式不派生它。
+    /// </summary>
+    public const string FlagPick = "flag-pick";
+
+    /// <summary>
+    /// 链接时公共棋盘的信物内容子流名 <c>relic-link:&lt;X&gt;:&lt;Y&gt;</c>（board-link-mode D2 / 实现裁决 B6）：X &lt; Y 为被链接的两个战场标识。
+    /// 只由（对局种子, X, Y）决定，与链接序号和其他链接的先后无关；MUST NOT 消费任何既有子流。
+    /// </summary>
+    public static string RelicLink(int x, int y) => $"relic-link:{Math.Min(x, y)}:{Math.Max(x, y)}";
+
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
     private const ulong Golden = 0x9E3779B97F4A7C15UL;

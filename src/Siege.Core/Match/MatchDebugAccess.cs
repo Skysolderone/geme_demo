@@ -32,4 +32,10 @@ internal sealed class MatchDebugAccess
 
     /// <summary>盘面被测试直接改动后，重算势力与信物控制，让公开快照与盘面一致。</summary>
     internal void Recalculate() => _match.DebugRecalculate();
+
+    /// <summary>链接模式测试桩（2.6 前）：在小回合边界以给定胜者结算一个战场，其余在局玩家出局。</summary>
+    internal void SettleBattlefield(int battlefieldId, PlayerId winner) => _match.DebugSettleBattlefield(battlefieldId, winner);
+
+    /// <summary>链接模式：直接执行一次链接（绕过配对事件与规范次序），供"信物子流独立"按两种先后次序比对。</summary>
+    internal void Link(int x, int y) => _match.ExecuteLink(x, y, pairingSequence: 0);
 }

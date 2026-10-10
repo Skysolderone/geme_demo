@@ -137,6 +137,12 @@ public sealed class MatchRunner
             RunTurn();
         }
 
+        if (Match.Phase is MatchPhase.AwaitingPairing or MatchPhase.AwaitingFinalLink)
+        {
+            // 链接模式：对局停在大回合边界等配对事件（没有挂接配对来源）。Core 不替外部决定配对（实现裁决 B3）。
+            throw new SiegeRuleException($"对局停在 {Match.Phase}：请先提交配对事件（MatchFlow.ApplyPairing）或挂接配对来源（MatchFlow.PairingSource）。");
+        }
+
         return Match.Result!;
     }
 }

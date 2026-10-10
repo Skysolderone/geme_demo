@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
@@ -61,7 +62,7 @@ public sealed partial class MatchFlow
         Scoreboard = new PowerScoreboard();
         _setup = seed.Stream(GameSeed.Setup);
         _driver = new SettlementDriver(board, history, new Hooks(this));
-        Flags = new FlagPlanting(map, players, options.FlagTimeLimit);
+        Flags = new FlagPlanting(map, players, options.FlagTimeLimit, options.Mode, seed);
         foreach (PlayerId player in players)
         {
             _records.Add(player, new PlayerRecord());
@@ -110,6 +111,7 @@ public sealed partial class MatchFlow
             throw new ArgumentException($"地图 {map.Id} 最多支持 {map.MaxPlayers} 人，实际 {list.Length} 人。", nameof(players));
         }
 
+        RequireModeMatchesMap(options.Mode, map);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         PrototypeZoneAssignment.RequireValidFlagRisk(options.FlagRisk);
         ContentSets.RequireValid(options.ContentSet);
@@ -256,6 +258,8 @@ public sealed partial class MatchFlow
             Require(player).BirthZone = zone;
         }
 
+        RecordLockedFlagCounts(zones);
+
         _order = Shuffle(_players);
         ImmutableArray<PlayerId> tiebreak = Shuffle(_players);
         for (int i = 0; i < tiebreak.Length; i++)
@@ -287,7 +291,10 @@ public sealed partial class MatchFlow
     public ImmutableArray<(PlayerId Player, int Zone)> PlantPrototype((PlayerId Player, int Zone)? manual = null)
     {
         RequirePhase(MatchPhase.FlagPlanting);
-        ImmutableArray<(PlayerId Player, int Zone)> choices = PrototypeZoneAssignment.Assign(Board.BaseMap, Seed, _players, Options.FlagRisk, manual);
+        // 链接模式（实现裁决 B2）：flag-pick 子流均匀盲选，不看已插的旗、不用冒险概率；旧模式原样。
+        ImmutableArray<(PlayerId Player, int Zone)> choices = Mode == MatchMode.Link
+            ? PrototypeZoneAssignment.AssignBlind(Board.BaseMap, Seed, _players, manual)
+            : PrototypeZoneAssignment.Assign(Board.BaseMap, Seed, _players, Options.FlagRisk, manual);
         PlantSequentially(choices);
         return choices;
     }
@@ -415,7 +422,7 @@ public sealed partial class MatchFlow
     {
         RequirePhase(MatchPhase.InProgress);
         int zone = Require(player).BirthZone ?? throw new SiegeRuleException($"玩家 {player} 尚未锁定出生区。");
-        return PublicRules.LegalRange(Board, MajorRound, zone, player, LifeShapeReport.Analyze(Board));
+        return PublicRules.LegalRange(Board, MajorRound, zone, player, LifeShapeReport.Analyze(Board), Mode);
     }
 
     // ---------- 弃赛 ----------
@@ -496,7 +503,10 @@ public sealed partial class MatchFlow
         // 活形分析在同一份副本上做，与 Board / BoardSerialized 同一时刻（life-shape D6）。
         return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order, PlayerStates, board,
             Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board),
-            CarryInOut, CarryIns);
+            CarryInOut, CarryIns)
+        {
+            Mode = Options.Mode,
+        };
     }
 
     // ---------- 结算钩子（§6.3 顺序由 SettlementDriver 驱动） ----------
@@ -590,6 +600,12 @@ public sealed partial class MatchFlow
         if (active <= 1)
         {
             _pendingEnd = EndReason.LastPlayerStanding;
+        }
+        else if (Mode == MatchMode.Link)
+        {
+            // 链接模式（battlefield「战场结算」，elimination-endgame）：整轮 Pass 与填满不再直接结束对局，而是触发所在战场的结算（2.6）；
+            // 全局终局只剩"只剩一名参赛玩家"（与"只剩一个战场且已结算"，2.7）。
+            return;
         }
         else if (!Board.HasPlayableEmptyCell())
         {
@@ -719,6 +735,11 @@ public sealed partial class MatchFlow
         MajorRound = completed + 1;
         Emit(FlowEventKind.MajorRoundEnded, null,
             $"第 {completed} 大回合结束；先手值 {string.Join(" ", report.Entries.Select(e => $"{e.Player}={e.Value}(名次{e.Rank},修正{e.Bonus})"))}；下一轮 {string.Join(">", report.NextOrder)}");
+        if (Mode == MatchMode.Link)
+        {
+            // 链接模式的阶段转换全部在大回合结束时执行（battlefield「阶段推进」）：首轮配对、决赛触发。
+            AdvanceLinkPhase(completed);
+        }
     }
 
     // ---------- 内部 ----------
@@ -750,6 +771,24 @@ public sealed partial class MatchFlow
         }
 
         return [.. list];
+    }
+
+    /// <summary>
+    /// 模式与地图匹配（实现裁决 B1）：链接模式只能配链接图，链接图只能以链接模式建局；不匹配即建局报错。
+    /// 按地图标识判定（<see cref="LinkMapId.IsLinkMap"/>）：对局层不读规格档（boundaries「地图规格档的分流」），而链接本身也要从标识取地图种子。
+    /// </summary>
+    private static void RequireModeMatchesMap(MatchMode mode, MapData map)
+    {
+        bool linkMap = LinkMapId.IsLinkMap(map.Id);
+        if (mode == MatchMode.Link && !linkMap)
+        {
+            throw new ArgumentException($"链接模式只能配链接图（link:<地图种子>），地图 {map.Id} 不是。", nameof(map));
+        }
+
+        if (mode != MatchMode.Link && linkMap)
+        {
+            throw new ArgumentException($"链接图 {map.Id} 只能以链接模式建局（对局配置 Mode = Link），当前为 {mode}。", nameof(map));
+        }
     }
 
     private PlayerRecord Require(PlayerId player) =>
