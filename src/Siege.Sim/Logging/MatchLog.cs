@@ -88,6 +88,29 @@ public sealed class MatchLog
         where T : struct, Enum =>
         Enum.GetNames<T>().Contains(text, StringComparer.Ordinal) ? Enum.Parse<T>(text) : throw new FormatException($"日志首部的带入里有未知{what} {text}。");
 
+    /// <summary>是否为链接模式的局（首部 <see cref="LogHeader.Mode"/>）。</summary>
+    public bool IsLinkMode => Header.Mode == nameof(Siege.Core.Match.MatchMode.Link);
+
+    /// <summary>
+    /// 日志里的配对事件（回放输入，simulation-harness「可复现回放」），按发生顺序。种类或来源名解析不了即 <see cref="FormatException"/>。
+    /// </summary>
+    public List<Siege.Sim.Running.RecordedPairing> RecordedPairings() =>
+        [.. Events.Where(e => e.Pairing is not null).OrderBy(e => e.Seq).Select(e =>
+        {
+            PairingLogEntry p = e.Pairing!;
+            if (!Enum.TryParse(p.Kind, ignoreCase: false, out Siege.Core.Match.PairingKind kind) || !Enum.IsDefined(kind) || int.TryParse(p.Kind, out _))
+            {
+                throw new FormatException($"日志里的配对事件种类 {p.Kind} 无法解析。");
+            }
+
+            var decision = new Siege.Core.Match.PairingDecision(
+                [.. p.Pairs.Select(pair => pair.Count == 2 ? (pair[0], pair[1]) : throw new FormatException("日志里的配对须是两个战场。"))], p.Waiter)
+            {
+                Source = p.Source,
+            };
+            return new Siege.Sim.Running.RecordedPairing(kind, [.. p.Candidates], decision);
+        })];
+
     /// <summary>带前瞻记录的小回合（专家的部署决策，expert-lookahead）。旧日志与只含非专家的日志为空。</summary>
     public IEnumerable<TurnSnapshot> LookaheadTurns => Turns.Where(t => t.Lookahead is not null);
 
@@ -350,6 +373,19 @@ public sealed record LogHeader
     /// 旧日志为 <c>null</c>，按全员无带入读（<see cref="MatchLog.CarryIns"/>）。回放按它重建开局手牌（simulation-harness「可复现回放」）。
     /// </summary>
     public List<CarryInEntry>? CarryIns { get; init; }
+
+    /// <summary>
+    /// 对局模式（board-link-mode 实现裁决 B1 / C3）：只在链接模式的局写出 <c>"Link"</c>；旧模式（Legacy 夹具）的局与旧日志为 <c>null</c>，首部与引入之前逐字节相同。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mode { get; init; }
+
+    /// <summary>
+    /// 锁定时各出生棋盘上的旗数（match-telemetry 第 2 项；下标 = 出生棋盘编号 0 起，没人选的棋盘为 0）。只在链接模式的局写出；
+    /// 各玩家锁定的出生棋盘见 <see cref="Zones"/>。首轮配对候选 = 旗数恰为 1 的棋盘上仍在局者的战场。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<int>? LockedFlagCounts { get; init; }
 }
 
 /// <summary>日志首部的一名玩家的带入：补给种类名（<see cref="Siege.Core.Carry.SupplyKind"/>）与换入类型名（备用子为 <c>null</c>）。</summary>
@@ -736,6 +772,18 @@ public sealed record PlayerEntry
     public List<string> HandTypes { get; init; } = [];
 
     public List<GroupEntry> Groups { get; init; } = [];
+
+    /// <summary>出局原因（match-telemetry 第 11 项：<c>PowerZero</c> 势力归零 / <c>BattlefieldDefeat</c> 战场落败）。只在链接模式的局、已出局的玩家写出。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EliminationReason { get; init; }
+
+    /// <summary>战场落败时的势力（可以大于 0）。只在链接模式的局、战场落败的玩家写出。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BigInteger? PowerAtDefeat { get; init; }
+
+    /// <summary>作为等待者（单人战场的在局玩家，构筑期之后）度过的大回合数（match-telemetry 第 11 项）。只在链接模式的局写出（含 0）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? WaitingRounds { get; init; }
 }
 
 public sealed record GroupEntry
@@ -832,6 +880,106 @@ public sealed record LogEvent
 
     /// <summary>失败类别（<c>Rejected</c> / <c>Rehearsal</c>）。</summary>
     public string? FailureKind { get; init; }
+
+    /// <summary>出局原因（链接模式的 <c>PlayerEliminated</c> 事件：<c>PowerZero</c> / <c>BattlefieldDefeat</c>，出局时势力在 <see cref="Values"/> 的 <c>Power</c>）。旧模式不写。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Reason { get; init; }
+
+    /// <summary>配对事件（<c>PairingApplied</c>，match-telemetry 第 8 项）；回放从这里读配对结果。其余事件为 <c>null</c>。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PairingLogEntry? Pairing { get; init; }
+
+    /// <summary>链接事件（<c>BattlefieldsLinked</c>，match-telemetry 第 9 项）。其余事件为 <c>null</c>。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LinkLogEntry? Link { get; init; }
+
+    /// <summary>战场结算（<c>BattlefieldSettled</c>，match-telemetry 第 10 项）。其余事件为 <c>null</c>。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SettlementLogEntry? Settlement { get; init; }
+}
+
+/// <summary>一次配对事件（match-telemetry 第 8 项）：序号、种类、大回合、候选、规范次序的配对、等待者与来源（真随机 / 配对种子 / 脚本）。战场标识为出生棋盘编号 0 起。</summary>
+public sealed record PairingLogEntry
+{
+    public int Sequence { get; init; }
+
+    /// <summary><see cref="Siege.Core.Match.PairingKind"/> 名：<c>FirstRound</c> / <c>Final</c>。</summary>
+    public required string Kind { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public List<int> Candidates { get; init; } = [];
+
+    /// <summary>规范次序的配对，每项 <c>[X, Y]</c>（X &lt; Y）。</summary>
+    public List<List<int>> Pairs { get; init; } = [];
+
+    public int? Waiter { get; init; }
+
+    /// <summary>结果来源：<c>random</c>（真随机）/ <c>pairing-seed</c>（配对种子）/ <c>script</c>（脚本）/ <c>external</c>（外部未注明）。</summary>
+    public required string Source { get; init; }
+}
+
+/// <summary>一次链接事件（match-telemetry 第 9 项）：链接序号、所属配对、两个战场、新增公共棋盘的外接矩形、通道格数、是否退化、新增信物格及内容、链接后的地图版本与内容摘要。</summary>
+public sealed record LinkLogEntry
+{
+    public int Sequence { get; init; }
+
+    public int PairingSequence { get; init; }
+
+    public int X { get; init; }
+
+    public int Y { get; init; }
+
+    public int MapVersion { get; init; }
+
+    public bool Degraded { get; init; }
+
+    /// <summary>新增公共棋盘的外接矩形 <c>原点 宽×高</c>（围棋记法）；退化链接为 <c>null</c>。</summary>
+    public string? PublicBoard { get; init; }
+
+    public int CorridorCells { get; init; }
+
+    /// <summary>新增信物格及其内容（坐标字典序）。</summary>
+    public List<RelicEntry> NewRelics { get; init; } = [];
+
+    /// <summary>链接后（开局 + 链接、不含改造）地图的内容摘要；回放逐行比对它即核对"每次链接后的地图与原局逐格相同"。</summary>
+    public required string MapDigest { get; init; }
+
+    public required string Summary { get; init; }
+}
+
+/// <summary>一次战场结算（match-telemetry 第 10 项）：大回合、战场标识、原因（<c>AllPassed</c> / <c>BoardFull</c> / <c>Attrition</c>）、名次与各玩家势力、胜者。</summary>
+public sealed record SettlementLogEntry
+{
+    public int Sequence { get; init; }
+
+    public int MajorRound { get; init; }
+
+    public int Battlefield { get; init; }
+
+    public required string Reason { get; init; }
+
+    public int Winner { get; init; }
+
+    public int? EliminationOrder { get; init; }
+
+    public List<SettlementRankEntry> Entries { get; init; } = [];
+}
+
+/// <summary>战场结算的一名玩家：名次与结算时的比较量（势力 → 控制信物 → 独占空格 → 棋子数）。</summary>
+public sealed record SettlementRankEntry
+{
+    public int Player { get; init; }
+
+    public int Rank { get; init; }
+
+    public BigInteger Power { get; init; }
+
+    public int ControlledRelics { get; init; }
+
+    public int ExclusiveCells { get; init; }
+
+    public int Stones { get; init; }
 }
 
 /// <summary>事件类型常量。</summary>
@@ -851,6 +999,15 @@ public static class LogEventType
     public const string MatchEnded = "MatchEnded";
     public const string Takeover = "Takeover";
     public const string FlagsLocked = "FlagsLocked";
+
+    /// <summary>配对事件（链接模式，<see cref="LogEvent.Pairing"/>）。</summary>
+    public const string PairingApplied = "PairingApplied";
+
+    /// <summary>链接事件（链接模式，<see cref="LogEvent.Link"/>）。</summary>
+    public const string BattlefieldsLinked = "BattlefieldsLinked";
+
+    /// <summary>战场结算（链接模式，<see cref="LogEvent.Settlement"/>）。</summary>
+    public const string BattlefieldSettled = "BattlefieldSettled";
 
     /// <summary>暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试（life-shape 4.1）；预演环节的同类失败见细粒度 <see cref="Rehearsal"/> 与快照计数。</summary>
     public const string LifeRefused = "LifeRefused";
@@ -942,6 +1099,10 @@ public sealed record StandingEntry
     public int Stones { get; init; }
 
     public int? EliminationOrder { get; init; }
+
+    /// <summary>出局原因（<c>PowerZero</c> / <c>BattlefieldDefeat</c>）。只在链接模式的局、出局者写出。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EliminationReason { get; init; }
 }
 
 public sealed record TakeoverEntry

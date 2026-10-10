@@ -47,9 +47,10 @@ public class 各入口支持生成图Tests
         (int code, _, string err) = RunMain("map", "--map", "gen:1:p99");
         Assert.Equal(1, code);
         Assert.Contains("5–8", err, StringComparison.Ordinal);
+        // board-link-mode 裁决 C7：play 只接受 link:，gen: 在入口门报错（文案说明只接受 link:<地图种子>）；gen: 的格式说明由上面的 MapCatalog.Legacy 断言守住。
         (int playCode, _, string playErr) = RunMain("play", "--map", "gen:abc");
         Assert.Equal(1, playCode);
-        Assert.Contains("gen:<地图种子>[:p<平台数>]", playErr, StringComparison.Ordinal);
+        Assert.Contains("只接受 link:<地图种子>", playErr, StringComparison.Ordinal);
 
         // 未知标识的可用清单里说明 gen:<种子> 这一写法。
         FileNotFoundException unknown = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve("no-such-map"));
@@ -85,35 +86,53 @@ public class 各入口支持生成图Tests
     [Fact]
     public void 以裸gen批量跑局_配置记录与日志首部都是带种子的完整标识()
     {
-        // 规格 Scenario「裸 gen 不入记录」。走真实入口 run --map gen；"随机取的地图种子"由测试注入固定值（不依赖墙钟）。
+        // 规格 Scenario「裸 gen 不入记录」。"随机取的地图种子"由测试注入固定值（不依赖墙钟）。
+        // board-link-mode 裁决 C7：批量入口只接受 link:，改为不走命令行——裸 gen 经入口同一个落成函数（Program.MaterializeMapRequest）变成完整标识，
+        // 再经 MapCatalog.Legacy 直接建局、按批量的口径写出配置记录与日志（RunLegacyToDirectory）。
+        var printed = new StringWriter();
+        string id = Siege.Sim.Program.MaterializeMapRequest("gen", printed, () => 12345UL)!;
+        Assert.Contains("--map gen:12345:s1", printed.ToString(), StringComparison.Ordinal);   // 打印给用户
         string dir = SimFixtures.TempDir("run-bare-gen");
-        (int code, string text, string err) = RunMain(() => 12345UL, "run", "--out", dir, "--map", "gen", "--count", "1", "--difficulty", "Easy", "--turn-limit", "4", "--serial", "--sample-permille", "0");
-
-        Assert.True(code == 0, err);
+        RunLegacyToDirectory(SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = id }, dir);
         AssertRecordsOnly(dir, "gen:12345:s1", perMatch: false);
-        Assert.Contains("--map gen:12345:s1", text, StringComparison.Ordinal);   // 打印给用户
 
-        // 反例一：裸 gen 写在配置文件里（不经 --map）→ 同样在入口落成完整标识，落盘的 config.json 不是原样抄回去的。
-        string configFile = Path.Combine(SimFixtures.TempDir("run-bare-gen-config"), "in.json");
-        File.WriteAllText(configFile, (SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = "gen" }).ToJson());
-        Assert.Contains("\"gen\"", File.ReadAllText(configFile), StringComparison.Ordinal);
-        string fromFile = Path.Combine(Path.GetDirectoryName(configFile)!, "out");
-        (int fileCode, _, string fileErr) = RunMain(() => 12345UL, "run", "--out", fromFile, "--config", configFile, "--serial");
-        Assert.True(fileCode == 0, fileErr);
+        // 反例一：裸 gen 写在配置文件里 → 同样经落成函数变成完整标识，落盘的 config.json 不是原样抄回去的。
+        string configText = (SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = "gen" }).ToJson();
+        Assert.Contains("\"gen\"", configText, StringComparison.Ordinal);
+        RunConfig fromConfig = RunConfig.FromJson(configText);
+        string fromFile = SimFixtures.TempDir("run-bare-gen-config");
+        RunLegacyToDirectory(fromConfig with { MapId = Siege.Sim.Program.MaterializeMapRequest(fromConfig.MapId, TextWriter.Null, () => 12345UL)! }, fromFile);
         AssertRecordsOnly(fromFile, "gen:12345:s1", perMatch: false);
 
-        // 反例二：裸 gen + 每局换图（命令行）→ 起始地图种子取自同一来源，批次配置记 gen:<起始>，各局首部依次递增。
+        // 反例二：裸 gen + 每局换图 → 起始地图种子取自同一来源，批次配置记 gen:<起始>，各局首部依次递增。
         string rotating = SimFixtures.TempDir("run-bare-gen-rotate");
-        (int rotateCode, string rotateText, string rotateErr) = RunMain(() => 100UL, "run", "--out", rotating, "--map", "gen", "--map-per-match", "--count", "2", "--difficulty", "Easy", "--turn-limit", "4", "--serial", "--sample-permille", "0");
-        Assert.True(rotateCode == 0, rotateErr);
+        RunConfig rotate = SimFixtures.Config(count: 2, turnLimit: 4) with { MapId = Siege.Sim.Program.MaterializeMapRequest("gen", TextWriter.Null, () => 100UL)!, MapPerMatch = true };
+        Assert.Equal("gen:101:s1", rotate.MapIdAt(1));
+        RunLegacyToDirectory(rotate, rotating);
         AssertRecordsOnly(rotating, "gen:100:s1", perMatch: true);
-        Assert.Contains("每局换图 gen:100:s1..gen:101:s1", rotateText, StringComparison.Ordinal);
 
         // 反例三：绕过入口、把裸 gen 直接交给批量 / 会话 → 规则内核拒绝，且不留半份输出。
         string direct = Path.Combine(SimFixtures.TempDir("run-bare-gen-direct"), "out");
         Assert.Throws<FormatException>(() => BatchRunner.ExecuteToDirectory(SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = "gen" }, direct, parallelism: 1));
         Assert.False(Directory.Exists(direct));
         Assert.Throws<FormatException>(() => MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = " gen " }, seed: 1));
+    }
+
+    /// <summary>
+    /// board-link-mode 裁决 C7：旧地图不再能经 run 入口，按批量的口径（<see cref="BatchRunner.ExecuteToDirectory"/>：校验 → 按首局地图落成 → 写 config.json → 逐局写日志）
+    /// 直接跑局；首局地图经 <see cref="MapCatalog.Legacy"/> 解析。每局换图时各局的地图由批量层按标识逐局解析。
+    /// </summary>
+    private static void RunLegacyToDirectory(RunConfig config, string dir)
+    {
+        config = config.Validated();
+        MapData map = MapCatalog.Legacy.Resolve(config.MapIdAt(0));
+        config = config.ResolvedFor(map);
+        File.WriteAllText(Path.Combine(dir, "config.json"), config.Effective().ToJson());
+        foreach (MatchLog log in BatchRunner.Execute(config, parallelism: 1, config.MapPerMatch ? null : map))
+        {
+            Assert.False(log.IsFailed, log.Failure?.Message);
+            log.WriteTo(dir);
+        }
     }
 
     /// <summary>输出目录里的全部记录（config.json、每局日志首部及其内嵌配置）只出现带种子的完整标识，不出现裸 gen。</summary>
@@ -302,7 +321,9 @@ public class 各入口支持生成图Tests
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"=> GeneratedMapId\.FriendlySeed\(\(ulong\)System\.Diagnostics\.Stopwatch\.GetTimestamp\(\)\);"));
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"GeneratedMapId\.Format\(mapSeedSource\(\)"));
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"BoardMapId\.Format\(mapSeedSource\(\)"));
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(program, @"mapSeedSource\(\)").Count);   // 两种裸标识各取一次，别无他处
+        // board-link-mode 裁决 C7：裸 link 新增一次取种子（只在入口最外层），计数 2 → 3。
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"LinkMapId\.Format\(mapSeedSource\(\)"));
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(program, @"mapSeedSource\(\)").Count);   // 三种裸标识各取一次，别无他处
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"=> Execute\(args, ClockMapSeed\)"));
         string gameRoot = files.Single(f => f.Path == "godot/scripts/GameRoot.cs").Text;
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(gameRoot, @"GeneratedMapId\.Format\(GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));

@@ -1,6 +1,7 @@
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.Match;
 using Siege.Sim.Logging;
 
 namespace Siege.Sim.Running;
@@ -79,7 +80,10 @@ public static class Replayer
         // 原样使用首行配置：失败局自动提升为完整事件流、抽样由 sim-sample 子流决定，二者都只由种子 + 配置决定。
         // 带入按首部记录的各玩家带入重建（simulation-harness「可复现回放」），MUST NOT 按配置的带入数量重抽；首部缺该项的旧日志按无带入回放。
         RecordedCarry? carry = header.CarryInOut is { } carryInOut ? new RecordedCarry(carryInOut, original.CarryIns) : null;
-        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true, carry).Run();
+        // 链接模式（board-link-mode D3）：配对事件 MUST 从日志读取、MUST NOT 由种子推导——按记录逐次重放（来源名原样带回），链接随之按记录重建，
+        // 每次链接后的地图摘要随确定性文本逐行比对。旧模式日志没有配对事件，不挂来源。
+        IPairingSource? pairing = original.IsLinkMode ? new RecordedPairingSource(original.RecordedPairings()) : null;
+        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true, carry, pairing).Run();
         return Compare(original, replayed);
     }
 

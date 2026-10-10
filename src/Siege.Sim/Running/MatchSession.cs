@@ -49,6 +49,9 @@ public sealed class MatchSession
     private int _flowCursor;
     private int _recruitCursor;
     private int _editCursor;
+    private int _pairingCursor;
+    private int _linkCursor;
+    private int _settlementCursor;
     private bool _finished;
     private bool _truncated;
     private readonly bool _carryHeader;
@@ -129,7 +132,11 @@ public sealed class MatchSession
     /// 首部没有该项就是不限制——否则该项出现之前的大图旧日志会被按新缺省 K 重跑而中途分歧，重建出的首部也会多出一项。
     /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。冒险概率同理：首部没有该项按 0（不冒险）重建。
     /// </summary>
-    internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null)
+    /// <param name="pairing">
+    /// 链接图对局的配对来源（board-link-mode D3 / Q10）：<c>null</c> 即新建的局——由配对种子（<see cref="RunConfig.PairingSeed"/>，缺省由对局种子派生）派生的工具层随机源
+    /// <see cref="SeededPairingSource"/>；回放传按日志配对事件重放的 <see cref="RecordedPairingSource"/>。旧地图（Legacy 夹具）的对局不读它。
+    /// </param>
+    internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null, IPairingSource? pairing = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
@@ -166,9 +173,24 @@ public sealed class MatchSession
             carryIns = CarryAi.Draw(new GameSeed(seed), players, count, contentSet);
         }
 
+        // board-link-mode 实现裁决 C1：链接图 link: 的对局一律以链接模式建局并挂配对来源（冒险概率在链接模式下不读，C2）；其余地图是 Legacy 夹具，原样。
+        bool link = LinkMapId.IsLinkMap(map.Id);
         MatchFlow match = MatchFlow.Create(
             map, new GameSeed(seed), players,
-            MatchOptions.Immediate with { ArtisanWeight = config.ArtisanWeight, FlagRisk = flagRisk, ContentSet = contentSet, CarryInOut = carryInOut, CarryIns = carryIns });
+            MatchOptions.Immediate with
+            {
+                ArtisanWeight = config.ArtisanWeight,
+                FlagRisk = link ? MatchOptions.DefaultFlagRisk : flagRisk,
+                ContentSet = contentSet,
+                CarryInOut = carryInOut,
+                CarryIns = carryIns,
+                Mode = link ? MatchMode.Link : MatchMode.Legacy,
+            });
+        if (link)
+        {
+            match.PairingSource = pairing ?? new SeededPairingSource(seed, config.PairingSeed);
+        }
+
         // 选区的唯一实现在 Core（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区；否则区数不多于人数上限时顺排
         // （p = 0 时 P<i> → 区 <i>，与此前逐项相同），多于时由种子的独立子流均匀选区。
         match.PlantPrototype();
@@ -437,7 +459,13 @@ public sealed class MatchSession
 
         foreach (RelicPublicState now in after.Relics)
         {
-            RelicPublicState was = before.Relics.First(r => r.Coord == now.Coord);
+            // 链接模式：本小回合的链接新增的公共棋盘信物在 before 里没有（未揭示、无人控制；信物本身记在链接事件里）。旧模式恒能取到，行为不变。
+            RelicPublicState? was = before.Relics.FirstOrDefault(r => r.Coord == now.Coord);
+            if (was is null)
+            {
+                continue;
+            }
+
             if (was.RevealedInMajorRound is null && now.RevealedInMajorRound is { } round)
             {
                 Add(turn, round, LogEventType.Reveal, pid, now.Content!.Value.ToString(), coords: [now.Coord.ToNotation()]);
@@ -630,6 +658,10 @@ public sealed class MatchSession
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
                 })],
+                // match-telemetry 第 11 项（链接模式才写；旧模式为 null 不写出，与引入之前逐字节相同）。
+                EliminationReason = view.Mode == MatchMode.Link ? state.EliminationReason?.ToString() : null,
+                PowerAtDefeat = view.Mode == MatchMode.Link ? state.PowerAtDefeat : null,
+                WaitingRounds = view.Mode == MatchMode.Link ? state.WaitingRounds : null,
             });
         }
 
@@ -703,16 +735,95 @@ public sealed class MatchSession
                     Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail,
                         values: rank is { } resignRank ? new Dictionary<string, BigInteger> { ["RankAtResign"] = resignRank } : null);
                     break;
+                case FlowEventKind.PlayerEliminated when Match.Mode == MatchMode.Link && e.Player is { } eliminated:
+                    // match-telemetry 第 11 项：链接模式区分出局原因并记出局时势力（战场落败取结算时的势力，势力归零为 0）。
+                    PlayerFlowState state = Match.StateOf(eliminated);
+                    AddLink(e, new LogEvent
+                    {
+                        Type = e.Kind.ToString(),
+                        Player = eliminated.Value,
+                        Values = new Dictionary<string, BigInteger> { ["Power"] = state.PowerAtDefeat ?? BigInteger.Zero },
+                        Reason = state.EliminationReason?.ToString(),
+                    });
+                    break;
                 case FlowEventKind.PlayerEliminated:
                 case FlowEventKind.MatchEnded:
                 case FlowEventKind.FlagsLocked:
                     Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail);
+                    break;
+                case FlowEventKind.PairingApplied:
+                    PairingRecord pairing = Match.Pairings[_pairingCursor++];
+                    AddLink(e, new LogEvent
+                    {
+                        Type = LogEventType.PairingApplied,
+                        Pairing = new PairingLogEntry
+                        {
+                            Sequence = pairing.Sequence,
+                            Kind = pairing.Kind.ToString(),
+                            MajorRound = pairing.MajorRound,
+                            Candidates = [.. pairing.Candidates],
+                            Pairs = [.. pairing.Pairs.Select(p => new List<int> { p.X, p.Y })],
+                            Waiter = pairing.Waiter,
+                            Source = pairing.Source,
+                        },
+                    });
+                    break;
+                case FlowEventKind.BattlefieldsLinked:
+                    LinkRecord linked = Match.Links[_linkCursor++];
+                    AddLink(e, new LogEvent
+                    {
+                        Type = LogEventType.BattlefieldsLinked,
+                        Link = new LinkLogEntry
+                        {
+                            Sequence = linked.Sequence,
+                            PairingSequence = linked.PairingSequence,
+                            X = linked.X,
+                            Y = linked.Y,
+                            MapVersion = linked.MapVersion,
+                            Degraded = linked.Degraded,
+                            PublicBoard = linked.PublicBoard is { } plate ? $"{plate.Origin.ToNotation()} {plate.Width}×{plate.Height}" : null,
+                            CorridorCells = linked.CorridorCells,
+                            NewRelics = [.. linked.NewRelics.Select(RelicEntryOf)],
+                            MapDigest = linked.MapDigest,
+                            Summary = linked.Summary,
+                        },
+                    });
+                    break;
+                case FlowEventKind.BattlefieldSettled:
+                    BattlefieldSettlementRecord settled = Match.Settlements[_settlementCursor++];
+                    AddLink(e, new LogEvent
+                    {
+                        Type = LogEventType.BattlefieldSettled,
+                        Player = settled.Winner.Value,
+                        Settlement = new SettlementLogEntry
+                        {
+                            Sequence = settled.Sequence,
+                            MajorRound = settled.MajorRound,
+                            Battlefield = settled.Battlefield,
+                            Reason = settled.Reason.ToString(),
+                            Winner = settled.Winner.Value,
+                            EliminationOrder = settled.EliminationOrder,
+                            Entries = [.. settled.Entries.Select(x => new SettlementRankEntry
+                            {
+                                Player = x.Player.Value,
+                                Rank = x.Rank,
+                                Power = x.Power,
+                                ControlledRelics = x.ControlledRelics,
+                                ExclusiveCells = x.ExclusiveCells,
+                                Stones = x.Stones,
+                            })],
+                        },
+                    });
                     break;
                 default:
                     break;
             }
         }
     }
+
+    /// <summary>链接模式的结构化事件（配对 / 链接 / 战场结算 / 带原因的出局）：序号、小回合、大回合与说明取自流程事件，其余由调用方给出。</summary>
+    private void AddLink(FlowEvent e, LogEvent entry) =>
+        _events.Add(entry with { Seq = ++_eventSeq, Turn = _turn, MajorRound = e.MajorRound, Detail = e.Detail });
 
     private void Add(
         int turn, int majorRound, string type, int? player, string detail,
@@ -753,15 +864,7 @@ public sealed class MatchSession
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],
             FirstOrder = [.. _firstOrder],
-            Relics = [.. gen.Placements.Select(r => new RelicEntry
-            {
-                Coord = r.Coord.ToNotation(),
-                Zone = r.Spec.Zone.ToString(),
-                Budget = r.Spec.Budget.ToString(),
-                Type = r.Content.Type.ToString(),
-                Magnitude = r.Content.Magnitude,
-                EmblemPiece = r.Content.EmblemPiece?.ToString(),
-            })],
+            Relics = [.. gen.Placements.Select(RelicEntryOf)],
             RelicsConverged = gen.Converged,
             RelicRerolls = gen.Rerolls,
             DebugAiPlayers = [.. Runner.Annotations.DebugAiPlayers.Select(p => p.Value)],
@@ -771,8 +874,24 @@ public sealed class MatchSession
             CarryIns = _carryHeader
                 ? [.. Match.CarryIns.Select(kv => new CarryInEntry { Player = kv.Key.Value, Supply = kv.Value.Kind.ToString(), Type = kv.Value.Type?.ToString() })]
                 : null,
+            // 链接模式（match-telemetry 第 1、2 项，board-link-mode C3）：模式与锁定时各出生棋盘的旗数；旧模式不写，首部逐字节不变。
+            Mode = Match.Mode == MatchMode.Link ? nameof(MatchMode.Link) : null,
+            LockedFlagCounts = Match.Mode == MatchMode.Link
+                ? [.. Enumerable.Range(0, Match.Board.BaseMap.BirthZones.Length).Select(z => Match.LockedFlagCounts.GetValueOrDefault(z))]
+                : null,
         };
     }
+
+    /// <summary>信物分布的一项（首部的开局信物与链接事件的新增信物共用同一写法）。</summary>
+    private static RelicEntry RelicEntryOf(RelicPlacement r) => new()
+    {
+        Coord = r.Coord.ToNotation(),
+        Zone = r.Spec.Zone.ToString(),
+        Budget = r.Spec.Budget.ToString(),
+        Type = r.Content.Type.ToString(),
+        Magnitude = r.Content.Magnitude,
+        EmblemPiece = r.Content.EmblemPiece?.ToString(),
+    };
 
     /// <summary>
     /// 带出结算（match-telemetry 第 7 条）：只在带入带出开启的局写；结算一律由 Core 的纯函数 <see cref="CarryOutSettlement.Settle"/> 给出，
@@ -840,6 +959,7 @@ public sealed class MatchSession
                 ExclusiveCells = s.Input.ExclusiveCells,
                 Stones = s.Input.Stones,
                 EliminationOrder = s.Input.EliminationOrder,
+                EliminationReason = Match.Mode == MatchMode.Link ? Match.StateOf(s.Player).EliminationReason?.ToString() : null,
             })],
             Winners = [.. standings.Where(s => s.Rank == 1).Select(s => s.Player.Value)],
             UsedDebugAi = Runner.Annotations.UsedDebugAi,

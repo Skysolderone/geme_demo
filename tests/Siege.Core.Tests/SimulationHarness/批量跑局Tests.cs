@@ -180,6 +180,12 @@ public class 批量跑局Tests
                 Assert.False(text.Contains("TimeProvider", StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} 含 TimeProvider（Sim 的墙钟只登记了 Program.PlayProfile 一处）");
             }
 
+            // 真随机 RandomNumberGenerator：除下面显式登记的唯一一处（Running/PairingSources.cs）之外一律不得出现。
+            if (Path.GetFileName(file) != "PairingSources.cs")
+            {
+                Assert.False(text.Contains("RandomNumberGenerator", StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} 含 RandomNumberGenerator（Sim 的真随机只登记了 RandomPairingSource 一处）");
+            }
+
             if (!file.Contains($"{Path.DirectorySeparatorChar}Analysis{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             {
                 foreach (string token in new[] { "double", "float", "decimal", "Math.Round", "Math.Floor", "Math.Ceiling" })
@@ -198,6 +204,15 @@ public class 批量跑局Tests
         int nextMember = program.IndexOf("MaterializeMapRequest(string? mapId", StringComparison.Ordinal);
         Assert.True(playProfile > 0 && nextMember > playProfile && clock.Index > playProfile && clock.Index < nextMember, "唯一的 TimeProvider 必须在 PlayProfile 之内");
         Assert.Contains("TimeProvider.System.GetLocalNow)", program, StringComparison.Ordinal);
+
+        // 显式登记的唯一例外（board-link-mode 裁决 C9）：终端版有人值守对局的配对 MUST 用真随机源（规格 simulation-harness「各入口支持生成图」），
+        // 只给配对与等待者取数，配对结果作为对局事件记录、不进任何对局子流。恰好一处，且位于 RandomPairingSource 之内。
+        // 变异 MC-25：Running/MatchSession.cs 加一处 RandomNumberGenerator 用法 → 红。
+        string pairing = File.ReadAllText(Path.Combine(root, "Running", "PairingSources.cs"));
+        System.Text.RegularExpressions.Match entropy = System.Text.RegularExpressions.Regex.Matches(pairing, "RandomNumberGenerator").Single();
+        int randomSource = pairing.IndexOf("class RandomPairingSource", StringComparison.Ordinal);
+        int nextType = pairing.IndexOf("class RecordedPairingSource", StringComparison.Ordinal);
+        Assert.True(randomSource > 0 && nextType > randomSource && entropy.Index > randomSource && entropy.Index < nextType, "唯一的 RandomNumberGenerator 必须在 RandomPairingSource 之内");
 
         // 图形版同样由入口注入墙钟（src/godot 不在解决方案里，按源码扫描）：全部脚本里恰好一处，在带入带出的入口文件 GameRoot.Carry.cs。
         string scripts = Path.Combine(Determinism.随机子流隔离Tests.SourceRoot(), "src", "godot", "scripts");

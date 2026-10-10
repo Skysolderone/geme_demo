@@ -12,7 +12,7 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>规格：simulation-harness —— Requirement: 各入口的地图专属 AI 权重（v2-recalibration 段 B，design D5 / D6）</summary>
-[Collection(ConsoleRedirect.Collection)]   // 「重建玩家列表后按覆盖取值」经 Program.Main 重定向 Console.Error
+[Collection(ConsoleRedirect.Collection)]
 public class 各入口的地图专属AI权重Tests
 {
     [Theory]
@@ -164,35 +164,25 @@ public class 各入口的地图专属AI权重Tests
     {
         // 规格 Scenario：2 人图上以带显式权重的配置文件批量跑局、同时给了难度参数 → 配置文件里的权重被丢弃（既有行为，design D5），
         // 批次配置记录中两名玩家的权重等于 2 人图覆盖表；首部同样落成（占位期只有首部分辨得出"落成了覆盖"与"回落默认表"）。
-        string dir = SimFixtures.TempDir("map-weights-rebuild");
-        string file = Path.Combine(dir, "explicit.json");
+        // board-link-mode 裁决 C7：批量入口只接受 link:，2 人图改为不走命令行、经 MapCatalog.Legacy 直接建局——与 run 同一口径：
+        // 读配置文件 → 给了难度即重建玩家列表（Program.RebuildPlayers，丢弃文件里的权重）→ 文件写了 Players 不按地图改人数 → 按地图落成 → 跑局。
         RunConfig withWeights = new()
         {
             MapId = TwoPlayerBaseMap.Id,
             Players = [.. Enumerable.Range(0, 2).Select(_ => new PlayerAiConfig { Difficulty = AiDifficulty.Standard, Weights = EvaluationWeights.Default with { Eye = 100 } })],
         };
-        File.WriteAllText(file, withWeights.ToJson());
-        string outDir = Path.Combine(dir, "out");
-        var err = new StringWriter();
-        TextWriter saved = Console.Error;
-        int code;
-        try
-        {
-            Console.SetError(err);
-            code = Siege.Sim.Program.Main(["run", "--config", file, "--difficulty", "Standard", "--out", outDir, "--count", "1", "--seed", "1", "--turn-limit", "4", "--serial"]);
-        }
-        finally
-        {
-            Console.SetError(saved);
-        }
+        string json = withWeights.ToJson();
+        Assert.True(Siege.Sim.Program.DeclaresPlayers(json));
+        RunConfig rebuilt = Siege.Sim.Program.RebuildPlayers(RunConfig.FromJson(json), players: null, AiDifficulty.Standard) with { Count = 1, SeedStart = 1, TurnLimit = 4 };
+        MapData map = MapCatalog.Legacy.Resolve(rebuilt.MapId);
+        RunConfig resolved = rebuilt.Validated().ResolvedFor(map);
 
-        Assert.True(code == 0, err.ToString());
         EvaluationWeights expected = EvaluationWeights.MapOverrides[TwoPlayerBaseMap.Id];
-        RunConfig recorded = RunConfig.FromJson(File.ReadAllText(Path.Combine(outDir, "config.json")));
+        RunConfig recorded = RunConfig.FromJson(resolved.Effective().ToJson());   // 批次 config.json 的口径
         Assert.Equal(TwoPlayerBaseMap.Id, recorded.MapId);
         Assert.Equal(2, recorded.Players.Count);
         Assert.All(recorded.Players, p => Assert.Equal(expected, p.Weights));
-        MatchLog log = MatchLog.Parse(File.ReadAllText(Directory.GetFiles(outDir, "match-*.jsonl").Single()));
+        MatchLog log = MatchLog.Parse(BatchRunner.Execute(resolved, parallelism: 1, map).Single().FullText());
         Assert.All(log.Header.Config.Players, p => Assert.Equal(expected, p.Weights));
     }
 

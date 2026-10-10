@@ -27,11 +27,13 @@ internal static class PlayCommand
     /// 入口 <c>Program.Play</c> 缺省传缺省档案、<c>--no-carry</c> 传 <c>null</c>；脚本化测试不传即关闭，不碰真实用户目录，只在需要时注入临时档案。</param>
     /// <param name="onAi">测试接缝：每名 AI 玩家的控制者建好后回调一次（终端不写对局日志，脚本测试经它核对 AI 的难度、搜索配置与前瞻记录）。终端入口不传。</param>
     /// <param name="mapOverrides">测试接缝：地图专属评价权重的登记表；<c>null</c> = <see cref="EvaluationWeights.MapOverrides"/>。终端入口不传；测试注入与缺省表不同的登记表以分辨"取了覆盖"。</param>
+    /// <param name="pairingSource">测试接缝：链接图对局的配对来源；<c>null</c> = 真随机 <see cref="Running.RandomPairingSource"/>（规格 simulation-harness：有人值守对局 MUST 用真随机源）。
+    /// 终端入口不传；脚本测试注入固定配对使转录可复现。旧地图（Legacy 夹具）的对局不读它。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, int? flagRisk = null, ContentSet? contentSet = null,
         CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null,
-        IReadOnlyDictionary<string, EvaluationWeights>? mapOverrides = null)
+        IReadOnlyDictionary<string, EvaluationWeights>? mapOverrides = null, IPairingSource? pairingSource = null)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? map.MaxPlayers;
@@ -51,7 +53,11 @@ internal static class PlayCommand
         ulong seed = seedArg ?? (ulong)Stopwatch.GetTimestamp();
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         PlayerId me = players[seat - 1];
-        MatchOptions options = flagRisk is int risk ? MatchOptions.Immediate with { FlagRisk = risk } : MatchOptions.Immediate;
+        // board-link-mode 实现裁决 C1：链接图一律以链接模式建局（盲选插旗，冒险概率不读，C2）；其余地图是 Legacy 夹具，原样。
+        bool link = LinkMapId.IsLinkMap(map.Id);
+        MatchOptions options = link ? MatchOptions.Immediate with { Mode = MatchMode.Link }
+            : flagRisk is int risk ? MatchOptions.Immediate with { FlagRisk = risk }
+            : MatchOptions.Immediate;
         options = contentSet is { } set ? options with { ContentSet = set } : options;
         var render = new BoardRenderer(output);
 
@@ -79,6 +85,13 @@ internal static class PlayCommand
         }
 
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
+        if (link)
+        {
+            match.PairingSource = pairingSource ?? new Running.RandomPairingSource();
+        }
+
+        // 本机玩家读到的公开快照：链接模式按座位投影（其他战场的棋子、信物、势力与手牌类型不可见，information-visibility）；旧模式为全知公开快照。
+        Func<MatchPublicView> observe = link ? () => match.PublishSeatProjection(me) : match.Publish;
         // 对局标识：只用于在途记录的"同一局只结算一次"。种子 + 计时器读数（不参与任何对局随机）。
         string matchId = $"{seed:X16}-{Stopwatch.GetTimestamp():X}";
         CarryIn? myCarry = match.CarryIns.GetValueOrDefault(me);   // 征召签在建局时已解析出类型
@@ -92,7 +105,9 @@ internal static class PlayCommand
         {
             // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
             string mapId = match.Publish().MapId;
-            output.WriteLine($"地图 {mapId}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）"
+            output.WriteLine(link
+                ? $"地图 {mapId}（{map.BirthZones.Length} 块隔绝的出生棋盘）——用 --map {mapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关"
+                : $"地图 {mapId}（{map.Width}×{map.Height}，{map.BirthZones.Length} 个出生区）"
                 + (GeneratedMapId.IsGenerated(mapId) ? $"——随机生成图，用 --map {mapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关" : string.Empty));
         }
 
@@ -100,7 +115,10 @@ internal static class PlayCommand
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI{lookahead}");
         output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
-        output.WriteLine("终局：只剩一名参赛玩家、棋盘填满或一整轮所有人都 Pass；曾有势力而势力降到 0 即出局。");
+        output.WriteLine(link
+            ? "战场：前 3 个大回合各自在出生棋盘上构筑；第 3 大回合结束时独占一块棋盘的玩家被随机配对、棋盘之间长出公共棋盘连通；"
+                + "一个战场里全员在一个大回合内都 Pass、或战场填满即结算，势力最高者胜、其余出局；两对都分出胜负后胜者链接打决赛。曾有势力而势力降到 0 同样出局。"
+            : "终局：只剩一名参赛玩家、棋盘填满或一整轮所有人都 Pass；曾有势力而势力降到 0 即出局。");
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         if (store is not null)
@@ -114,7 +132,7 @@ internal static class PlayCommand
 
         try
         {
-            int zone = ChooseZone(match, me, map, input, output, render, quitWarning);
+            int zone = ChooseZone(match, me, map, input, output, render, quitWarning, link);
             // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区，
             // 否则标准图按编号顺排，平台多于人数的图由种子选区。
             ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
@@ -126,7 +144,7 @@ internal static class PlayCommand
             {
                 if (p == me)
                 {
-                    runner.SetController(p, new ConsoleController(me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch, input, output, quitWarning));
+                    runner.SetController(p, new ConsoleController(me, observe, match.PublishSupplement, match.PreviewCurrentBatch, input, output, quitWarning));
                     continue;
                 }
 
@@ -135,14 +153,31 @@ internal static class PlayCommand
                 runner.SetController(p, ai);
             }
 
-            output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Player, me)}→{BirthZoneLabel.Number(c.Zone)}号区"))}");
+            if (link)
+            {
+                // 盲选（match-setup「匿名同时插旗」）：锁定后只公开与自己同一块棋盘的玩家，不公开其他棋盘上有谁。
+                PlayerId[] mates = [.. choices.Where(c => c.Zone == zone && c.Player != me).Select(c => c.Player)];
+                output.WriteLine($"你锁定了 {BirthZoneLabel.Number(zone)} 号棋盘；" + (mates.Length == 0
+                    ? "这块棋盘上只有你。"
+                    : $"同一块棋盘上还有 {string.Join("、", mates.Select(p => BoardRenderer.Label(p, me)))}，你们就地开打。"));
+            }
+            else
+            {
+                output.WriteLine($"出生区锁定：{string.Join("  ", choices.Select(c => $"{BoardRenderer.Label(c.Player, me)}→{BirthZoneLabel.Number(c.Zone)}号区"))}");
+            }
+
             output.WriteLine($"第 1 大回合顺序随机：{string.Join(" > ", match.ActionOrder.Select(p => BoardRenderer.Label(p, me)))}");
 
+            int pairings = 0;
+            int links = 0;
+            int settlements = 0;
             while (match.Phase == MatchPhase.InProgress)
             {
                 PlayerId current = match.CurrentPlayer!.Value;
                 int round = match.MajorRound;
-                MatchPublicView before = match.Publish();
+                MatchPublicView before = observe();
+                // 行动者是否在本座位的战场里：在行动之前判定（本小回合结束时可能发生链接，之后再判会把刚展开的棋子算成这一手的落子）。
+                bool visibleActor = !link || match.BattlefieldOf(current) == match.BattlefieldOf(me);
                 if (current != me)
                 {
                     output.Write($"{BoardRenderer.Label(current, me)} 思考中… ");
@@ -170,10 +205,43 @@ internal static class PlayCommand
                     resigned = true;
                 }
 
-                MatchPublicView after = match.Publish();
+                MatchPublicView after = observe();
                 if (!resigned)
                 {
-                    Summarize(before, after, current, me, output, render);
+                    if (!visibleActor)
+                    {
+                        // 其他战场的行动不可见（information-visibility）：只报"已行动"。
+                        render.Line($"{BoardRenderer.Label(current, me)} 在其他战场行动完毕。", ConsoleColor.DarkGray);
+                    }
+                    else
+                    {
+                        Summarize(before, after, current, me, output, render);
+                    }
+                }
+
+                if (link)
+                {
+                    // 配对、链接与战场结算对所有玩家公开（battlefield / information-visibility：链接与结算是全局项）。
+                    for (; pairings < match.Pairings.Count; pairings++)
+                    {
+                        PairingRecord p = match.Pairings[pairings];
+                        render.Line($"── {(p.Kind == PairingKind.FirstRound ? "首轮配对" : "决赛链接")}：{string.Join("、", p.Pairs.Select(x => $"{BirthZoneLabel.Number(x.X)} 号与 {BirthZoneLabel.Number(x.Y)} 号战场"))}"
+                            + (p.Waiter is { } w ? $"；{BirthZoneLabel.Number(w)} 号战场等待决赛" : string.Empty) + " ──", ConsoleColor.Yellow);
+                    }
+
+                    for (; links < match.Links.Count; links++)
+                    {
+                        LinkRecord l = match.Links[links];
+                        render.Line($"   棋盘展开：{BirthZoneLabel.Number(l.X)} 号与 {BirthZoneLabel.Number(l.Y)} 号战场之间长出{(l.Degraded ? "一条直通道" : "一块公共棋盘")}，两个战场连通。", ConsoleColor.Yellow);
+                    }
+
+                    for (; settlements < match.Settlements.Count; settlements++)
+                    {
+                        BattlefieldSettlementRecord s = match.Settlements[settlements];
+                        render.Line($"── {BirthZoneLabel.Number(s.Battlefield)} 号战场结算：{BoardRenderer.Label(s.Winner, me)} 胜出"
+                            + (s.Entries.Length > 1 ? $"，{string.Join("、", s.Entries.Skip(1).Select(e => BoardRenderer.Label(e.Player, me)))} 战场落败出局" : string.Empty) + " ──",
+                            s.Entries.Any(e => e.Player == me) ? ConsoleColor.Red : ConsoleColor.Yellow);
+                    }
                 }
 
                 if (store is not null && settled is null && match.StateOf(me).Status == Core.Scoring.PlayerStatus.Eliminated)
@@ -190,7 +258,7 @@ internal static class PlayCommand
                 }
             }
 
-            MatchPublicView final = match.Publish();
+            MatchPublicView final = observe();
             output.WriteLine();
             render.Board(final, me);
             PrintResult(match.Result!, me, output, render);
@@ -217,13 +285,27 @@ internal static class PlayCommand
         }
     }
 
-    private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, BoardRenderer render, string? quitWarning)
+    private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, BoardRenderer render, string? quitWarning, bool link)
     {
-        render.Board(match.Publish(), me, zones: true);
+        if (link)
+        {
+            // 盲选（match-setup「开局信息公开范围」）：只列 5 块出生棋盘的占位（位置与边长，取自按座位视图），不画棋盘内部布局。
+            foreach (BoardPlaceholder p in match.PublishFor(me).Placeholders)
+            {
+                output.WriteLine($"  {BirthZoneLabel.Number(p.Zone)} 号棋盘：左下角 {p.Origin}，{p.Width}×{p.Height}");
+            }
+        }
+        else
+        {
+            render.Board(match.Publish(), me, zones: true);
+        }
+
         output.WriteLine();
         while (true)
         {
-            output.Write($"选择你的出生区（1–{map.BirthZones.Length}），前 3 个大回合只能在这里落子 > ");
+            output.Write(link
+                ? $"盲选出生棋盘：以上是 {map.BirthZones.Length} 块棋盘的占位（1–{map.BirthZones.Length}），看不到别人的旗，选中即锁定；前 3 个大回合只能在这块棋盘上落子 > "
+                : $"选择你的出生区（1–{map.BirthZones.Length}），前 3 个大回合只能在这里落子 > ");
             string? line = input.ReadLine() ?? throw new PlayQuitException();
             line = line.Trim();
             if (line is "q" or "quit")
@@ -294,6 +376,7 @@ internal static class PlayCommand
             EndReason.LastPlayerStanding => "只剩一名玩家",
             EndReason.AllPassed => "一整轮所有人都 Pass",
             EndReason.BoardFull => "棋盘已无空位",
+            EndReason.LastBattlefieldSettled => "最后一个战场结算",
             _ => result.Reason.ToString(),
         };
         output.WriteLine();

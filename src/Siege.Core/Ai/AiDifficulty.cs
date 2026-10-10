@@ -59,6 +59,12 @@ public enum AiDifficulty
 /// 两层权重 λ（expert-strength D4 / D7，千分数，非负整数）：前瞻后分数 = 一层分数 + ⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋。
 /// 0 = 不计两层加分、不做两层扫描。四档预设都为 0（专家预设已退回一层，见 <see cref="Expert"/>）；可配置项，<c>Search</c> 显式给出时生效。为 0 时不写出，缺字段按 0 读。
 /// </param>
+/// <param name="SeatVision">
+/// AI 全知开关（board-link-mode 实现裁决 C4 / 规格 ai-decision「正式对战 AI 的信息边界」第一版例外）：缺省 <c>false</c> = 全知（第一版例外：经全知视图读取其他战场的盘面与势力；
+/// 候选落点仍只来自合法落子范围）；<c>true</c> = 关闭全知——AI 读按座位投影的视图（<see cref="Match.MatchFlow.PublishSeatProjection"/>：未与本座位链接的战场上的棋子被去掉、
+/// 其上的信物呈未揭示、他人战场玩家的势力与手牌类型不可见），预演结果投影到同一口径。分流只在 <see cref="HeuristicAi.VisionFor"/> 一处；评价代码不读本项。
+/// 取布尔（配置对象只有整数与布尔，守门「难度分级 / 高难度不越权」）且以"全知"为 <c>false</c>：缺省值不写出，旧日志、旧配置的首部逐字节不变，缺字段按全知读。
+/// </param>
 public sealed record AiSearchConfig(
     int CandidatePointCount,
     int CandidateBatchCount,
@@ -67,7 +73,8 @@ public sealed record AiSearchConfig(
     int PassThreshold = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DiverseSupplementLimit = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool SeatVision = false)
 {
     /// <summary>专家预设的前瞻宽度（负责人裁决 2026-09-26：前 K = 4 个候选；规格里 K 专指候选格上限，故称 W）。</summary>
     public const int DefaultLookaheadWidth = 4;
@@ -184,3 +191,4 @@ public sealed record AiSearchConfig(
         return this;
     }
 }
+

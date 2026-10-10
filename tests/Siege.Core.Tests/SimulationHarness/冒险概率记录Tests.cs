@@ -76,41 +76,6 @@ public class 冒险概率记录Tests
             MatchSession.Create(config, seed).Match.PlayerStates.Select(s => s.BirthZone));
     }
 
-    [Fact]
-    public void 命令行冒险概率写入配置记录()
-    {
-        // 严格 CLI：--flag-risk 被认领并写进 config.json 与日志首部；越界 / 非整数在跑局之前报错、不写任何输出。
-        string outDir = Path.Combine(SimFixtures.TempDir("flag-risk-cli"), "out");
-        int code = Siege.Sim.Program.Main(
-            ["run", "--out", outDir, "--seed", "1", "--count", "1", "--turn-limit", "4", "--difficulty", "Easy", "--serial", "--flag-risk", "37"]);
-
-        Assert.Equal(0, code);
-        Assert.Contains("\"FlagRisk\": 37", File.ReadAllText(Path.Combine(outDir, "config.json")), StringComparison.Ordinal);
-        Assert.Contains("\"FlagRisk\":37,", File.ReadLines(Directory.GetFiles(outDir, "match-*.jsonl").Single()).First(), StringComparison.Ordinal);
-
-        foreach (string bad in new[] { "-1", "101", "abc" })
-        {
-            string badDir = Path.Combine(SimFixtures.TempDir($"flag-risk-cli-bad-{bad}"), "out");
-            TextWriter saved = Console.Error;
-            using var err = new StringWriter();
-            int result;
-            try
-            {
-                Console.SetError(err);
-                result = Siege.Sim.Program.Main(["run", "--out", badDir, "--seed", "1", "--count", "1", "--serial", "--flag-risk", bad]);
-            }
-            finally
-            {
-                Console.SetError(saved);
-            }
-
-            Assert.NotEqual(0, result);
-            Assert.False(Directory.Exists(badDir), $"--flag-risk {bad} 仍写出了输出目录。");
-            Assert.StartsWith("错误：", err.ToString(), StringComparison.Ordinal);
-            if (bad != "abc")
-            {
-                Assert.Contains("冒险概率", err.ToString(), StringComparison.Ordinal);   // 越界报出的是本项，不是别的校验碰巧失败
-            }
-        }
-    }
+    // board-link-mode 裁决 C7：原「命令行冒险概率写入配置记录」已删除——run 的 --flag-risk 选项按实现裁决 C2 删除（冒险概率只剩 Legacy 夹具的配置字段，裁决 C8）；
+    // 命令行不再认领该选项由 各入口按地图标识选图_链接模式Tests.冒险概率选项已删除 守住。
 }

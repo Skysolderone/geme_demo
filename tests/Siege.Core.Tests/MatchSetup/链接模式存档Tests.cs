@@ -152,6 +152,24 @@ public class 链接模式存档Tests
     }
 
     [Fact]
+    public void 链接恢复须四人()
+    {
+        // 裁决 S1（链接模式只有 4 人局）在恢复路径同样成立（段 B 质检遗留，tasks 3.0）：把一份 4 人链接模式存档手改成 3 人 → 恢复被拒，
+        // 报出的是人数（不是别处碰巧失败）；未改的原存档照常恢复（反面）。
+        // 变异 MC-23：RestoreCore 的人数校验传恒为 4 的人数（RequireModeMatchesMap(options.Mode, map, 4)）→ 本测试红（3 人存档被接受或在别处失败）。
+        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(1);
+        string json = match.Serialize();
+        Assert.Equal(json, MatchFlow.Restore(Map, json).Serialize());
+
+        JsonObject root = JsonNode.Parse(json)!.AsObject();
+        JsonArray players = root["Players"]!.AsArray();
+        Assert.Equal(4, players.Count);   // 样本口径：手改前确是 4 人
+        players.RemoveAt(3);
+        FormatException ex = Assert.Throws<FormatException>(() => MatchFlow.Restore(Map, root.ToJsonString()));
+        Assert.Contains("链接模式只有 4 人局，实际 3 人", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void 链接重放与存档不符即拒绝()
     {
         MatchFlow match = Started([0, 1, 3, 4]).PassRounds(3);

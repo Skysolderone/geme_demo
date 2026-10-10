@@ -89,6 +89,13 @@ public sealed class HeuristicTurnController : ITurnController
 
     public PlayerId Player { get; }
 
+    /// <summary>
+    /// 预演结果的读取口径（board-link-mode 实现裁决 C4）：关闭全知时由 <see cref="HeuristicAi.VisionFor"/> 给出，把对局的零副作用预演结果投影到与
+    /// 观察视图相同的口径（去掉未与本座位链接的战场上的棋子），使"预演前"（观察视图）与"预演后"（预演结果）同一口径——评价代码不改。
+    /// 全知（缺省）为 <c>null</c>，预演结果原样使用。
+    /// </summary>
+    internal Func<RehearsalResult, RehearsalResult>? RehearsalView { get; init; }
+
     public AiDifficulty Difficulty { get; }
 
     public EvaluationWeights Weights { get; }
@@ -268,6 +275,12 @@ public sealed class HeuristicTurnController : ITurnController
     {
         ArgumentNullException.ThrowIfNull(batch);
         ArgumentNullException.ThrowIfNull(rehearse);
+        if (RehearsalView is { } project)
+        {
+            Func<RehearsalResult> real = rehearse;
+            rehearse = () => project(real());
+        }
+
         MatchPublicView view = _observe();
         BatchEvaluator evaluator = CreateEvaluator(view);
         int passThreshold = EffectivePassThreshold(view);

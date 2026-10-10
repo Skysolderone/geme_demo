@@ -157,15 +157,33 @@ internal sealed class BoardRenderer
         ImmutableDictionary<Coord, PlayerId> forbidden = life.ForbiddenCellsFor(me)
             .ToImmutableDictionary(c => c, c => life.EyeSpaceAt(c)!.Owner);
 
-        WriteColumns(map.Width);
-        for (int y = map.Height - 1; y >= 0; y--)
+        // 链接模式（board-link-mode，information-visibility「其他战场不可见」）：只画本座位战场的外接矩形，矩形内不属于本战场的格留空（未展开）；
+        // 插旗阶段只画 5 块出生棋盘的占位（编号），不画棋盘内部布局（盲选）。旧模式画全图，与引入之前逐字相同。
+        (int x0, int y0, int x1, int y1, IReadOnlySet<Coord>? shown, bool placeholders) = Viewport(view, me, zones);
+        WriteColumns(x0, x1);
+        for (int y = y1; y >= y0; y--)
         {
             _out.Write($"{y + 1,3} ");
-            for (int x = 0; x < map.Width; x++)
+            for (int x = x0; x <= x1; x++)
             {
                 var c = new Coord(x, y);
                 Cell cell = board[c];
-                if (cell.Terrain == Terrain.Obstacle)
+                if (placeholders)
+                {
+                    if (map.BirthZoneOf(c) is { } placeholder)
+                    {
+                        Ink($" {BirthZoneLabel.Number(placeholder)} ", ZoneColor);
+                    }
+                    else
+                    {
+                        _out.Write("   ");
+                    }
+                }
+                else if (shown is not null && !shown.Contains(c))
+                {
+                    _out.Write("   ");
+                }
+                else if (cell.Terrain == Terrain.Obstacle)
                 {
                     // 不可落子格有两种：岩石与未架桥深水，只读地表区分（terrain-model 裁决 A-2），不做任何规则计算。
                     if (map.SurfaceAt(c) == Surface.DeepWater)
@@ -221,7 +239,7 @@ internal sealed class BoardRenderer
             _out.WriteLine($" {y + 1}");
         }
 
-        WriteColumns(map.Width);
+        WriteColumns(x0, x1);
         _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=岩石  ~=深水");
         _out.WriteLine($"        {AliveMark}=已活棋串(如 1B{AliveMark})  {ForbiddenMark}N=玩家N活形的眼(你禁入)");
 
@@ -243,6 +261,49 @@ internal sealed class BoardRenderer
         }
     }
 
+    /// <summary>
+    /// 画哪一块：旧模式全图；链接模式插旗阶段为 5 块出生棋盘的外接矩形（只画占位），此后为本座位所在战场的外接矩形，<c>shown</c> 为该战场的格。
+    /// 战场取自公开视图里的地形与本座位锁定的出生棋盘（<see cref="PublicRules.BattlefieldOf"/>），不做规则计算。
+    /// </summary>
+    private static (int X0, int Y0, int X1, int Y1, IReadOnlySet<Coord>? Shown, bool Placeholders) Viewport(MatchPublicView view, PlayerId me, bool zones)
+    {
+        MapData map = view.Board.Map;
+        if (view.Mode != MatchMode.Link)
+        {
+            return (0, 0, map.Width - 1, map.Height - 1, null, false);
+        }
+
+        int? zone = view.Players.FirstOrDefault(p => p.Player == me)?.BirthZone;
+        Coord[] cells;
+        IReadOnlySet<Coord>? shown;
+        if (zones || zone is null)
+        {
+            cells = [.. map.BirthZones.SelectMany(z => z)];
+            shown = null;
+        }
+        else
+        {
+            Battlefield field = PublicRules.BattlefieldOf(view.Board, zone.Value);
+            cells = [.. field.Cells];
+            shown = field.Cells.ToHashSet();
+        }
+
+        return (cells.Min(c => c.X), cells.Min(c => c.Y), cells.Max(c => c.X), cells.Max(c => c.Y), shown, zones || zone is null);
+    }
+
+    /// <summary>链接模式下某玩家是否与本座位同一战场（他人战场玩家的势力与手牌类型不显示）。旧模式恒为真。</summary>
+    private static bool SameBattlefield(MatchPublicView view, PlayerId me, PlayerId other)
+    {
+        if (view.Mode != MatchMode.Link || other == me)
+        {
+            return true;
+        }
+
+        int? mine = view.Players.FirstOrDefault(p => p.Player == me)?.BirthZone;
+        int? theirs = view.Players.FirstOrDefault(p => p.Player == other)?.BirthZone;
+        return mine is int a && theirs is int b && PublicRules.BattlefieldOf(view.Board, a).Id == PublicRules.BattlefieldOf(view.Board, b).Id;
+    }
+
     /// <summary>对局状态：大回合、行动顺序、各家势力与公开手牌类型、已揭示信物。</summary>
     public void Status(MatchPublicView view, PlayerId me)
     {
@@ -261,6 +322,13 @@ internal sealed class BoardRenderer
             string types = hand is null || hand.IsEmpty ? "无" : string.Join("", hand.Types.Select(Letter));
             string status = state.Status == PlayerStatus.Active ? "" : $"  [{state.Status}]";
             Ink($"  {Label(state.Player, me),-8}", ColorOf(state.Player), bright: state.Player == me);
+            if (!SameBattlefield(view, me, state.Player))
+            {
+                // 链接模式：他人战场玩家的势力、名次与手牌类型不可见（information-visibility / 裁决 Q1），只显示在局状态。
+                _out.WriteLine($" 其他战场（势力不可见）{status}");
+                continue;
+            }
+
             _out.WriteLine($" {PowerText(detail)}  名次 {rank}  手牌类型 {types}{status}");
         }
 
@@ -317,10 +385,10 @@ internal sealed class BoardRenderer
         _ => ConsoleColor.White,
     };
 
-    private void WriteColumns(int width)
+    private void WriteColumns(int x0, int x1)
     {
         _out.Write("    ");
-        for (int x = 0; x < width; x++)
+        for (int x = x0; x <= x1; x++)
         {
             // 每列三个字符宽：单字母列标后补一个空格，双字母列标（第 26 列起）正好占满。
             _out.Write($" {new Coord(x, 0).Column,-2}");

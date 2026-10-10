@@ -128,18 +128,19 @@ public class 棋盘档生成图标识Tests
     public void 裸board不入记录()
     {
         // Scenario：以 --map=board 启动一局并查看对局日志首部 → 记录的地图标识是带种子的完整标识。
-        // 走真实入口 run --map board，只跑 1 局、截断在 4 个小回合；"随机取的地图种子"由测试注入固定值。
-        string dir = SimFixtures.TempDir("run-bare-board");
-        (int code, string text, string err) = RunMain(
-            () => 12345UL, "run", "--out", dir, "--map", "board", "--count", "1", "--difficulty", "Easy", "--turn-limit", "4", "--serial", "--sample-permille", "0");
-
-        Assert.True(code == 0, err);
-        Assert.Contains("--map board:12345", text, StringComparison.Ordinal);
-        string configText = File.ReadAllText(Path.Combine(dir, "config.json"));
+        // 只跑 1 局、截断在 4 个小回合；"随机取的地图种子"由测试注入固定值。
+        // board-link-mode 裁决 C7：批量入口只接受 link:，改为不走命令行——裸 board 经入口同一个落成函数（Program.MaterializeMapRequest）变成完整标识，
+        // 再经 MapCatalog.Legacy 直接建局；配置记录取批量的口径（按地图落成后的 Effective，即 config.json 的写法）。
+        var printed = new StringWriter();
+        string id = Siege.Sim.Program.MaterializeMapRequest("board", printed, () => 12345UL)!;
+        Assert.Contains("--map board:12345", printed.ToString(), StringComparison.Ordinal);
+        MapData boardMap = MapCatalog.Legacy.Resolve(id);
+        RunConfig config = (SimFixtures.Config(count: 1, turnLimit: 4) with { MapId = id }).Validated().ResolvedFor(boardMap);
+        string configText = config.Effective().ToJson();
         Assert.DoesNotContain("\"board\"", configText, StringComparison.Ordinal);
         Assert.Equal("board:12345", RunConfig.FromJson(configText).MapId);
 
-        MatchLog log = Assert.Single(MatchLog.ReadDirectory(dir));
+        MatchLog log = MatchLog.Parse(Assert.Single(BatchRunner.Execute(config, parallelism: 1, boardMap)).FullText());
         Assert.False(log.IsFailed, log.Failure?.Message);
         Assert.Equal("board:12345", log.Header.MapId);
         Assert.Equal("board:12345", log.Header.Config.MapId);

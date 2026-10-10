@@ -17,6 +17,29 @@ public static class Program
     public static int Main(string[] args) => Execute(args, ClockMapSeed);
 
     /// <summary>
+    /// 批量与终端入口的缺省地图（board-link-mode Q4 / 规格 map-selection「批量入口缺省」、simulation-harness「各入口按地图标识选图」）：未给地图选项时加载 <c>link:1</c>。
+    /// 只属于 <c>run</c> / <c>play</c> 两个入口；<c>map</c> 调试子命令与 Core 的 <see cref="MapCatalog.DefaultId"/>（Legacy 夹具的缺省）不变（实现裁决 C1）。
+    /// </summary>
+    internal const string DefaultMapId = "link:1";
+
+    /// <summary>
+    /// 玩家入口的地图门（board-link-mode 实现裁决 C1）：<c>run</c> / <c>play</c> 只接受链接图 <c>link:&lt;地图种子&gt;</c>。旧标识族（内置图、<c>gen:</c>、<c>board:</c>、
+    /// 地图文件路径）与解析不了的标识一律报错并说明，MUST NOT 静默回落到缺省地图。判定只看标识前缀（<see cref="LinkMapId.IsLinkMap"/>），
+    /// 格式错误的 <c>link:</c> 标识由随后的解析报出。<see cref="MapCatalog.Resolve"/> 本身仍转交旧标识（图形版在段 D 之前仍用旧地图），门只在 Sim 入口。
+    /// </summary>
+    internal static string RequireLinkMap(string mapId, string entry)
+    {
+        if (!LinkMapId.IsLinkMap(mapId))
+        {
+            throw new ArgumentException(
+                $"{entry} 的地图标识 {mapId} 不受支持：只接受 {LinkMapId.Prefix}:<地图种子>（例如 {DefaultMapId}、{LinkMapId.Prefix}:12345；只写 {LinkMapId.Prefix} 即随机取一个地图种子）。"
+                + "内置图、gen:、board: 与地图文件属于已移除的地图模式，只作测试夹具（map 子命令仍可打印）。");
+        }
+
+        return mapId;
+    }
+
+    /// <summary>
     /// 裸 <c>gen</c> 的地图种子缺省取自时钟——整个批量 / 终端程序里读时钟取地图种子的只有这一处（图形版入口另有一处），规则内核永不读时钟。
     /// 时间戳经 <see cref="GeneratedMapId.FriendlySeed"/> 折成九位以内的短种子，与图形版（裸 <c>gen</c> 与选图界面"换一张"）同一个折叠函数。
     /// </summary>
@@ -67,18 +90,19 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <地图id或文件>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子，缺省 {DefaultMapId}>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
-        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出，导出的文件可直接当 --map 用）");
+        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--links <战场对，如 1-4,2-5，只用于 link:>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出；旧标识族仍可打印，夹具用途）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
-        Console.WriteLine($"                [--map <地图id或文件>] [--players <人数，缺省取地图人数上限>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
-        Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>] [--flag-risk <原型插旗冒险概率 0–100，缺省 {Core.Match.MatchOptions.DefaultFlagRisk}>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
+        Console.WriteLine($"                [--map <link:地图种子，缺省 {DefaultMapId}>] [--players <人数，缺省取地图人数上限>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
+        Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
+        Console.WriteLine("                [--pairing-seed <配对种子，非负整数；缺省由对局种子派生，同一批次可重复对比>]");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
-        Console.WriteLine("                [--map-per-match（每局换一张生成图：--map gen:<起始地图种子>[:p<平台数>]，第 i 局用 起始 + i）]");
+        Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
-        Console.WriteLine("  地图标识：内置图 / 地图文件路径 / gen:<地图种子>[:p<平台数 5–8>]（随机生成图）；只写 gen 即随机取一个地图种子并打印完整标识。");
-        Console.WriteLine("            board:<地图种子>[:n<棋盘数 7–10>]（随机生成的棋盘图）；只写 board 即随机取一个地图种子并打印完整标识。");
-        Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>");
+        Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
+        Console.WriteLine("            map 子命令另可打印旧标识族（内置图 / 地图文件 / gen: / board:，测试夹具用途）。");
+        Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
     }
 
@@ -97,6 +121,8 @@ public static class Program
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
         Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
+        // board-link-mode C1：不给地图选项即 link:1；只接受 link:，旧标识族报错（在任何取种子与解析之前）。
+        mapId = RequireLinkMap(string.IsNullOrWhiteSpace(mapId) ? DefaultMapId : mapId.Trim(), "play");
         mapId = MaterializeMapRequest(mapId, output, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
         return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile);
@@ -139,6 +165,14 @@ public static class Program
     /// </summary>
     internal static string? MaterializeMapRequest(string? mapId, TextWriter output, Func<ulong> mapSeedSource)
     {
+        if (LinkMapId.IsBareRequest(mapId))
+        {
+            // 裸 link（board-link-mode / 规格 simulation-harness「各入口支持生成图」）：同一个取种子来源，拼成链接图的完整标识。
+            string linkId = LinkMapId.Format(mapSeedSource());
+            output.WriteLine($"随机取了一个地图种子：本次地图为 {linkId}（用 --map {linkId} 可重开同一张图）");
+            return linkId;
+        }
+
         if (BoardMapId.IsBareRequest(mapId))
         {
             // 裸 board（board-map D7）：同一个取种子来源，拼成棋盘图的完整标识（缺省棋盘数）。
@@ -168,10 +202,17 @@ public static class Program
     {
         string? mapId = cli.GetOrNull("map");
         string? outPath = cli.GetOrNull("out");
-        cli.EnsureRecognized();   // map 只认 --map / --out；结算在导出之前（strict-cli 2.4）
+        string? links = cli.GetOrNull("links");
+        cli.EnsureRecognized();   // map 只认 --map / --links / --out；结算在导出之前（strict-cli 2.4）
         RequireNotAuthoritativeMapFile(outPath);   // 先于一切输出：手滑不得覆盖内置图的权威文件
         mapId = MaterializeMapRequest(mapId, Console.Out, mapSeedSource);
-        MapData map = MapCatalog.Resolve(mapId);
+        // 链接图经 MapCatalog.Resolve；旧标识族（夹具用途，board-link-mode D8）显式经 MapCatalog.Legacy——段 D 收口 Resolve 之后本子命令照常可用。
+        MapData map = LinkMapId.IsLinkMap(mapId) ? MapCatalog.Resolve(mapId) : MapCatalog.Legacy.Resolve(mapId);
+        if (links is not null)
+        {
+            map = SimulateLinks(map, links);
+        }
+
         MapValidationResult result = MapValidator.Validate(map);
         TerrainData terrain = map.TerrainData;
         Coord[] all = [.. map.AllCoords()];
@@ -273,6 +314,50 @@ public static class Program
     }
 
     /// <summary>
+    /// <c>map --links 1-4,2-5</c>（规格 simulation-harness「map 子命令模拟链接」）：在链接图的初始状态上依次执行给定的链接，打印每一步，返回最终地图。
+    /// 每一项是两块出生棋盘的编号（面向人 1–5）；执行时换算成各自所在战场的标识（= 战场内最小出生棋盘编号），所以已合并的战场可用其中任一块棋盘指代。
+    /// 只用于链接图；两块棋盘已在同一战场、编号越界、格式不对都报错。链接的几何与校验全部由 <see cref="LinkMapGenerator.Link(MapData, int, int)"/> 给出，这里不另算。
+    /// </summary>
+    internal static MapData SimulateLinks(MapData map, string links)
+    {
+        if (!LinkMapId.IsLinkMap(map.Id))
+        {
+            throw new ArgumentException($"--links 只用于链接图 {LinkMapId.Prefix}:<地图种子>，当前地图为 {map.Id}。");
+        }
+
+        string[] items = links.Split(',', StringSplitOptions.TrimEntries);
+        int step = 0;
+        foreach (string item in items)
+        {
+            string[] ends = item.Split('-', StringSplitOptions.TrimEntries);
+            if (ends.Length != 2
+                || !int.TryParse(ends[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int a)
+                || !int.TryParse(ends[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int b)
+                || a < 1 || b < 1 || a > map.BirthZones.Length || b > map.BirthZones.Length)
+            {
+                throw new ArgumentException($"--links 的每一项须为两块出生棋盘的编号 1–{map.BirthZones.Length}，写作 1-4，多项用逗号分隔（如 1-4,2-5）；无法解析 \"{item}\"。");
+            }
+
+            Battlefields fields = Battlefields.Of(map);
+            int x = fields.All.Single(f => f.BirthZones.Contains(a - 1)).Id;   // 输入解析：面向人的 1 起编号 → 内部 0 起
+            int y = fields.All.Single(f => f.BirthZones.Contains(b - 1)).Id;
+            if (x == y)
+            {
+                throw new ArgumentException($"--links 第 {step + 1} 项 {item}：出生棋盘 {a} 与 {b} 已在同一战场 {BirthZoneLabel.Of(x)}，不能再链接。");
+            }
+
+            LinkResult linked = LinkMapGenerator.Link(map, x, y);
+            map = linked.Map;
+            step++;
+            Console.WriteLine($"链接 #{step}：战场 {BirthZoneLabel.Of(Math.Min(x, y))} + {BirthZoneLabel.Of(Math.Max(x, y))}{(linked.Degraded ? "（退化直通道）" : string.Empty)}；地图版本 {map.MapVersion}；{linked.Summary}");
+        }
+
+        Console.WriteLine($"已模拟 {step} 次链接。棋盘清单：{string.Join("  ", map.Boards.Select(p => $"{p.Kind}@{p.Origin.ToNotation()} {p.Width}×{p.Height}"))}");
+        Console.WriteLine();
+        return map;
+    }
+
+    /// <summary>
     /// <c>map --out</c> 的目标 MUST NOT 是内置图的权威文件（任一 <c>maps/</c> 目录下的 <c>&lt;内置标识&gt;.json</c>）：那些文件只由"按内置标识请求"的导出维护，
     /// 拿别的图（尤其是生成图）覆盖上去，地图文件与同名内置图就对不上了。文件此刻存在与否都拒绝；<c>maps/</c> 下的其它文件名允许。
     /// 判据只看路径本身（与当前目录无关），文件名与目录名不分大小写（Windows）。
@@ -341,16 +426,15 @@ public static class Program
         RunConfig config = configText is not null ? RunConfig.FromJson(configText) : new RunConfig();
         bool declaresPlayers = configText is not null && DeclaresPlayers(configText);
 
-        if (cli.Has("players") || cli.Has("difficulty"))
-        {
-            int players = cli.GetInt("players", config.PlayerCount);
-            var difficulty = Core.Ai.AiDifficultyNames.Parse(cli.Get("difficulty", config.Players[0].Difficulty.ToString()));   // 同一处严格解析（D10）
-            config = config with { Players = [.. Enumerable.Range(0, players).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
-        }
+        config = RebuildPlayers(
+            config,
+            cli.Has("players") ? cli.GetInt("players", config.PlayerCount) : null,
+            cli.Has("difficulty") ? Core.Ai.AiDifficultyNames.Parse(cli.Get("difficulty", config.Players[0].Difficulty.ToString())) : null);   // 同一处严格解析（D10）
 
         config = config with
         {
-            MapId = cli.Get("map", config.MapId),
+            // board-link-mode C1：命令行与配置文件都没给地图 → link:1（RunConfig 自身的缺省仍是 Legacy 夹具的缺省地图，供 Core 测试直接建会话）。
+            MapId = cli.GetOrNull("map") ?? (configText is not null && DeclaresKey(configText, nameof(RunConfig.MapId)) ? config.MapId : DefaultMapId),
             MapPerMatch = cli.Flag("map-per-match") || config.MapPerMatch,
             SeedStart = cli.GetUInt64("seed", config.SeedStart),
             Count = cli.GetInt("count", config.Count),
@@ -359,7 +443,7 @@ public static class Program
             ArtisanWeight = cli.GetInt("artisan-weight", config.ArtisanWeight),
             CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
             PassThreshold = cli.Has("pass-threshold") ? cli.GetInt("pass-threshold", 0) : config.PassThreshold,
-            FlagRisk = cli.Has("flag-risk") ? cli.GetInt("flag-risk", 0) : config.FlagRisk,
+            PairingSeed = cli.Has("pairing-seed") ? cli.GetUInt64("pairing-seed", 0) : config.PairingSeed,
             CarryIn = cli.Has("carry-in") ? cli.GetInt("carry-in", 0) : config.CarryIn,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
@@ -370,18 +454,12 @@ public static class Program
         // 裸 gen 在这里就落成完整标识：config.json 与日志首部不得出现裸 gen（配置文件里写的裸 gen 同样处理）。
         // 命令行 --map gen --map-per-match：起始地图种子取自 mapSeedSource，落成 gen:<起始> 后再校验，同样打印并记入 config.json。
         // 只有配置文件里同时写"裸 gen + MapPerMatch"会在读入校验（RunConfig.FromJson）时报错——配置文件是要复用的记录，换图必须写明起始地图种子。
-        config = config with { MapId = MaterializeMapRequest(config.MapId, Console.Out, mapSeedSource)! };
+        config = config with { MapId = MaterializeMapRequest(RequireLinkMap(config.MapId.Trim(), "run"), Console.Out, mapSeedSource)! };
         config.Validated();
         if (!cli.Has("players") && !declaresPlayers)
         {
-            // small-maps D3：命令行与配置文件都没给人数 → 取地图的人数上限（2 人图开 2 人局；4 人图、边疆图、生成图都是 4，行为不变）。
-            // 每局换图时各局的图人数上限相同（生成器固定 4 人），取首局的即可。难度沿用已定的玩家配置（命令行 --difficulty 或配置文件）。
-            int maxPlayers = MapCatalog.Resolve(config.MapIdAt(0)).MaxPlayers;
-            if (maxPlayers != config.PlayerCount)
-            {
-                Core.Ai.AiDifficulty difficulty = config.Players[0].Difficulty;
-                config = config with { Players = [.. Enumerable.Range(0, maxPlayers).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
-            }
+            // 每局换图时各局的图人数上限相同（生成器固定 4 人），取首局的即可。
+            config = DefaultPlayerCount(config, MapCatalog.Resolve(config.MapIdAt(0)));
         }
 
         int parallelism = serial ? 1 : config.EffectiveParallelism;
@@ -393,12 +471,49 @@ public static class Program
         return summary.Failed == 0 ? 0 : 3;
     }
 
+    /// <summary>
+    /// 命令行给了人数或难度（design D5）：按给定人数与难度重建玩家列表，丢弃配置文件里的逐玩家设置（含权重）；未给的一项沿用配置（人数 = 现有人数，难度 = 首名玩家的难度）。
+    /// 两项都没给时原样返回。从 <c>run</c> 抽出的纯函数（board-link-mode 裁决 C7：旧地图的同一口径改由测试直接调用，不再经命令行）。
+    /// </summary>
+    internal static RunConfig RebuildPlayers(RunConfig config, int? players, Core.Ai.AiDifficulty? difficulty)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        if (players is null && difficulty is null)
+        {
+            return config;
+        }
+
+        Core.Ai.AiDifficulty chosen = difficulty ?? config.Players[0].Difficulty;
+        return config with { Players = [.. Enumerable.Range(0, players ?? config.PlayerCount).Select(_ => new PlayerAiConfig { Difficulty = chosen })] };
+    }
+
+    /// <summary>
+    /// small-maps D3：命令行与配置文件都没给人数时，参赛人数取地图的人数上限（2 人图开 2 人局；4 人图、边疆图、生成图、链接图都是 4，行为不变）；
+    /// 难度沿用已定的玩家配置。调用方负责判定"都没给人数"。从 <c>run</c> 抽出的纯函数（board-link-mode 裁决 C7，同上）。
+    /// </summary>
+    internal static RunConfig DefaultPlayerCount(RunConfig config, MapData firstMap)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(firstMap);
+        int maxPlayers = firstMap.MaxPlayers;
+        if (maxPlayers == config.PlayerCount)
+        {
+            return config;
+        }
+
+        Core.Ai.AiDifficulty difficulty = config.Players[0].Difficulty;
+        return config with { Players = [.. Enumerable.Range(0, maxPlayers).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
+    }
+
     /// <summary>配置文件是否写了 <c>Players</c>（与 <see cref="RunConfig.FromJson"/> 同口径：键名区分大小写）。没写即"未指定人数"。</summary>
-    private static bool DeclaresPlayers(string json)
+    internal static bool DeclaresPlayers(string json) => DeclaresKey(json, nameof(RunConfig.Players));
+
+    /// <summary>配置文件的顶层是否写了某键（与 <see cref="RunConfig.FromJson"/> 同口径：键名区分大小写）。</summary>
+    private static bool DeclaresKey(string json, string key)
     {
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
-            && doc.RootElement.TryGetProperty(nameof(RunConfig.Players), out _);
+            && doc.RootElement.TryGetProperty(key, out _);
     }
 
     // ---------- replay ----------
@@ -429,6 +544,13 @@ public static class Program
         // 两个分支都已把 file / dir / seed 读过（混用在上面就报错了），所以结算不需要任何"声明放行"的白名单。
         cli.EnsureRecognized();
         MatchLog original = MatchLog.Read(path);
+        if (!LinkMapId.IsLinkMap(original.Header.MapId))
+        {
+            // board-link-mode 实现裁决 C3：replay 命令只回放链接图的日志；测试内部的回放接口（Replayer）仍能回放旧日志（Legacy 夹具的回归护栏）。
+            throw new ArgumentException(
+                $"日志 {path} 的地图标识为 {original.Header.MapId}，属于已移除的地图模式（只接受 {LinkMapId.Prefix}:<地图种子> 对局的日志），replay 不再回放它。");
+        }
+
         Console.WriteLine($"回放 {path}：地图 {original.Header.MapId}，对局种子 {original.Header.Seed}，{original.Turns.Count} 小回合，{(original.IsFailed ? "失败局" : original.Result!.Reason)}");
         ReplayResult result = Replayer.Replay(original);
         Console.WriteLine(result);

@@ -124,6 +124,15 @@ public sealed record RunConfig
     public int? FlagRisk { get; init; }
 
     /// <summary>
+    /// 配对种子（board-link-mode Q10 / 规格 simulation-harness「各入口支持生成图」，命令行 <c>--pairing-seed</c>）：只用于链接图 <c>link:</c> 的对局，
+    /// 首轮配对与等待者由该种子与对局种子一起派生的工具层随机源决定（<see cref="Running.SeededPairingSource"/>，不是对局子流）；
+    /// <c>null</c> = 缺省，由对局种子派生，同一批次可重复对比。为 <c>null</c> 时不写出（旧模式的配置记录与日志首部逐字节不变）。
+    /// 回放不读它——配对按日志里的配对事件重建。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ulong? PairingSeed { get; init; }
+
+    /// <summary>
     /// 对局内容集（<see cref="MatchOptions.ContentSet"/>，more-pieces-relics D8；v1 = 原六 + 六，v2 = 十 + 十）：<c>null</c> = 新建的局取 <see cref="ContentSets.Default"/>（v2），
     /// 并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 v1 重建
     /// （v1 与引入之前逐步相同）。按枚举名写出（"V1" / "V2"）。
@@ -171,6 +180,12 @@ public sealed record RunConfig
             return MapId;
         }
 
+        if (LinkMapId.IsLinkMap(MapId))
+        {
+            // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>。
+            return LinkMapId.Format(checked(LinkMapId.Parse(MapId) + (ulong)index));
+        }
+
         (ulong start, MapGenParameters parameters) = GeneratedMapId.Parse(MapId);
         return GeneratedMapId.Format(checked(start + (ulong)index), parameters);
     }
@@ -201,9 +216,10 @@ public sealed record RunConfig
 
         if (MapPerMatch)
         {
-            if (!GeneratedMapId.IsGenerated(MapId) || GeneratedMapId.IsBareRequest(MapId))
+            bool link = LinkMapId.IsLinkMap(MapId) && !LinkMapId.IsBareRequest(MapId);
+            if (!link && (!GeneratedMapId.IsGenerated(MapId) || GeneratedMapId.IsBareRequest(MapId)))
             {
-                throw new ArgumentException($"每局换图要求地图标识是带起始地图种子的生成图标识（gen:<起始地图种子>[:p<平台数>]），实际为 {MapId}。");
+                throw new ArgumentException($"每局换图要求地图标识带起始地图种子：链接图 link:<起始地图种子>，或生成图 gen:<起始地图种子>[:p<平台数>]；实际为 {MapId}。");
             }
 
             try
@@ -234,6 +250,17 @@ public sealed record RunConfig
         if (FlagRisk is < 0 or > 100)
         {
             throw new ArgumentException("冒险概率须为 0–100 的整数百分比（0 = 不冒险，与引入之前逐项相同）。");
+        }
+
+        // board-link-mode 实现裁决 C2：链接图（唯一的玩家模式）废除冒险概率——盲选插旗看不见已插的旗，配置里写了即报错，不静默忽略。
+        if (FlagRisk is not null && LinkMapId.IsLinkMap(MapId))
+        {
+            throw new ArgumentException("冒险概率已废除（board-link-mode：盲选插旗），链接图 link: 的配置不得含 FlagRisk。");
+        }
+
+        if (PairingSeed is not null && !LinkMapId.IsLinkMap(MapId))
+        {
+            throw new ArgumentException($"配对种子只用于链接图 link:<地图种子>，当前地图为 {MapId}。");
         }
 
         if (ContentSet is { } contentSet && !Enum.IsDefined(contentSet))
@@ -300,7 +327,8 @@ public sealed record RunConfig
             ? this with { CandidateCellLimit = auto }
             : this;
         resolved = resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
-        resolved = resolved.FlagRisk is null ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
+        // 冒险概率只属于旧地图（Legacy 夹具）；链接图不落成、不写出（board-link-mode C2，match-telemetry 第 1 项"首部 MUST NOT 含冒险概率字段"）。
+        resolved = resolved.FlagRisk is null && !LinkMapId.IsLinkMap(map.Id) ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。

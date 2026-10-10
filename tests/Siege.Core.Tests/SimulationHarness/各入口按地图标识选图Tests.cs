@@ -1,8 +1,10 @@
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Play;
+using Siege.Sim.Running;
 
 namespace Siege.Core.Tests.SimulationHarness;
 
@@ -44,15 +46,16 @@ public class 各入口按地图标识选图Tests
         Assert.All(MapCatalog.BuiltinIds, id => Assert.Contains(id, ex.Message, StringComparison.Ordinal));
 
         // 终端版入口
+        // board-link-mode 裁决 C7：入口只接受 link:，未知标识在入口门报错（文案说明只接受 link:<地图种子>），可用旧标识清单改由上面的 MapCatalog.Legacy 断言守住。
         (int playCode, string playErr) = RunMain("play", "--map", "no-such-map", "--seed", "1");
         Assert.NotEqual(0, playCode);
-        Assert.Contains("siege-4p-base-v5", playErr, StringComparison.Ordinal);
+        Assert.Contains("只接受 link:<地图种子>", playErr, StringComparison.Ordinal);
 
         // 批量入口：报错且不写出任何输出
         string outDir = Path.Combine(SimFixtures.TempDir("mapcatalog-unknown"), "out");
         (int runCode, string runErr) = RunMain("run", "--out", outDir, "--map", "no-such-map", "--seed", "1");
         Assert.NotEqual(0, runCode);
-        Assert.Contains("siege-4p-base-v5", runErr, StringComparison.Ordinal);
+        Assert.Contains("只接受 link:<地图种子>", runErr, StringComparison.Ordinal);
         Assert.False(Directory.Exists(outDir));
     }
 
@@ -103,11 +106,12 @@ public class 各入口按地图标识选图Tests
         Assert.Contains("--mapp", err, StringComparison.Ordinal);
         Assert.Contains("是否想用 --map？", err, StringComparison.Ordinal);
 
-        // 反面：正确拼写的 --map 不因"未知选项"被拒——这里给一个不存在的地图，报的必须是找不到地图，而不是未知选项。
+        // 反面：正确拼写的 --map 不因"未知选项"被拒——这里给一个不存在的地图，报的必须是地图标识的错，而不是未知选项。
+        // board-link-mode 裁决 C7：入口门先于目录解析，报错文案由"找不到地图"改为"只接受 link:<地图种子>"。
         (int okCode, string okErr) = RunMain("play", "--map", "no-such-map");
         Assert.NotEqual(0, okCode);
         Assert.DoesNotContain("未知选项", okErr, StringComparison.Ordinal);
-        Assert.Contains("找不到地图", okErr, StringComparison.Ordinal);
+        Assert.Contains("只接受 link:<地图种子>", okErr, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -217,6 +221,8 @@ public class 各入口按地图标识选图Tests
     {
         // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 A 只有 2 人图）：选图清单可选到 2 人图，
         // 变异 M-S5：Program.Run 的缺省人数不改写（条件加 `&& maxPlayers < 0`）→ 本测试与下一条共红 2。
+        // board-link-mode 裁决 C7：批量入口只接受 link:，旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy，与 run 同一口径的
+        // Program.RebuildPlayers / DefaultPlayerCount；M-S5 现落在 DefaultPlayerCount 的人数比较上）。
         // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 2 名玩家。选图模型只产出标识，建局走批量入口的同一份解析。
         var model = new Siege.Presentation.MapSelect.MapSelectModel(1);
         int index = model.Options.ToList().FindIndex(o => o.BuiltinId == TwoPlayerBaseMap.Id);
@@ -226,7 +232,7 @@ public class 各入口按地图标识选图Tests
         string id = model.Confirm();
         Assert.Equal(TwoPlayerBaseMap.Id, id);
 
-        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunOne("pick-2p", "--map", id);
+        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunLegacy(id);
         Assert.Equal(2, recorded.PlayerCount);
         Assert.Equal(TwoPlayerBaseMap.Id, recorded.MapId);
         Assert.Equal(TwoPlayerBaseMap.Id, log.Header.MapId);
@@ -238,6 +244,7 @@ public class 各入口按地图标识选图Tests
     {
         // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 B 补 3 人图）：选图清单可选到 3 人图，
         // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 3 名玩家。
+        // board-link-mode 裁决 C7：旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy，见上一条）。
         var model = new Siege.Presentation.MapSelect.MapSelectModel(1);
         int index = model.Options.ToList().FindIndex(o => o.BuiltinId == ThreePlayerBaseMap.Id);
         Assert.True(index >= 0, "选图清单里没有 3 人图。");
@@ -246,7 +253,7 @@ public class 各入口按地图标识选图Tests
         string id = model.Confirm();
         Assert.Equal(ThreePlayerBaseMap.Id, id);
 
-        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunOne("pick-3p", "--map", id);
+        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunLegacy(id);
         Assert.Equal(3, recorded.PlayerCount);
         Assert.Equal(ThreePlayerBaseMap.Id, recorded.MapId);
         Assert.Equal(ThreePlayerBaseMap.Id, log.Header.MapId);
@@ -259,22 +266,22 @@ public class 各入口按地图标识选图Tests
         // small-maps D3：批量配置 / 终端 / 图形版在未指定人数时用 map.MaxPlayers；显式给人数时仍按给定值；4 人图行为不变。
         // 变异（各红本测试）：M-S4 PlayCommand 缺省写死 `?? 4`；M-S5 批量缺省不改写（共红 2，另一条是上面的「两人图可选」）；
         // M-S6 配置文件写了 Players 也当未指定；M-S7 src/godot/scripts/GameRoot.cs 建局人数 Min(4, map.MaxPlayers) 改成 4。
-        // 批量入口：命令行不给 --players
-        Assert.Equal(2, RunOne("default-2p", "--map", TwoPlayerBaseMap.Id).Config.PlayerCount);
-        Assert.Equal(2, RunOne("default-2p-difficulty", "--map", TwoPlayerBaseMap.Id, "--difficulty", "Easy").Config.PlayerCount);
-        Assert.Equal(3, RunOne("default-3p", "--map", ThreePlayerBaseMap.Id).Config.PlayerCount);
-        Assert.Equal(4, RunOne("default-4p", "--map", MapCatalog.DefaultId).Config.PlayerCount);
-        Assert.Equal(4, RunOne("default-none").Config.PlayerCount);
-        Assert.Equal(3, RunOne("explicit-3-on-4p", "--players", "3").Config.PlayerCount);
+        // 批量口径：不给人数
+        // board-link-mode 裁决 C7：批量入口只接受 link:，旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy：与 run 同一口径的
+        // Program.RebuildPlayers / DefaultPlayerCount / DeclaresPlayers）；不给地图即 RunConfig 的缺省（Legacy 夹具的缺省地图）。
+        // 命令行不给地图时的缺省 link:1 是 4 人，由 各入口按地图标识选图_链接模式Tests.缺省地图 守住。
+        Assert.Equal(2, RunLegacy(TwoPlayerBaseMap.Id).Config.PlayerCount);
+        Assert.Equal(2, RunLegacy(TwoPlayerBaseMap.Id, difficulty: AiDifficulty.Easy).Config.PlayerCount);
+        Assert.Equal(3, RunLegacy(ThreePlayerBaseMap.Id).Config.PlayerCount);
+        Assert.Equal(4, RunLegacy(MapCatalog.DefaultId).Config.PlayerCount);
+        Assert.Equal(4, RunLegacy(null).Config.PlayerCount);
+        Assert.Equal(3, RunLegacy(null, players: 3).Config.PlayerCount);
 
-        // 批量入口：配置文件不写 Players 也算"未指定"；写了就按写的。
-        string dir = SimFixtures.TempDir("players-config");
-        string noPlayers = Path.Combine(dir, "no-players.json");
-        File.WriteAllText(noPlayers, $"{{ \"MapId\": \"{TwoPlayerBaseMap.Id}\" }}");
-        Assert.Equal(2, RunOne("config-no-players", "--config", noPlayers).Config.PlayerCount);
-        string withPlayers = Path.Combine(dir, "with-players.json");
-        File.WriteAllText(withPlayers, "{ \"Players\": [ { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" } ] }");
-        Assert.Equal(3, RunOne("config-players", "--config", withPlayers).Config.PlayerCount);
+        // 批量口径：配置文件不写 Players 也算"未指定"；写了就按写的。
+        string noPlayers = $"{{ \"MapId\": \"{TwoPlayerBaseMap.Id}\" }}";
+        Assert.Equal(2, RunLegacy(null, noPlayers).Config.PlayerCount);
+        string withPlayers = "{ \"Players\": [ { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" } ] }";
+        Assert.Equal(3, RunLegacy(null, withPlayers).Config.PlayerCount);
 
         // 终端入口：不给人数 → 地图人数上限（2 人图出生区 1–2、对手 1 名）；4 人图仍是 3 名对手。
         var twoOut = new StringWriter();
@@ -295,14 +302,26 @@ public class 各入口按地图标识选图Tests
         Assert.All(creates, l => Assert.Contains(".MaxPlayers", l, StringComparison.Ordinal));
     }
 
-    /// <summary>经批量入口跑 1 局（4 个小回合截断），返回落盘的 config.json 与该局日志。</summary>
-    private static (Siege.Sim.Config.RunConfig Config, MatchLog Log) RunOne(string name, params string[] extra)
+    /// <summary>
+    /// board-link-mode 裁决 C7：旧地图不再能经 run 入口，改为与 run 同一口径直接建局跑 1 局（4 个小回合截断）——
+    /// 配置文件文本（可选）→ 按给定人数 / 难度重建玩家列表（<see cref="Siege.Sim.Program.RebuildPlayers"/>）→ 地图（<paramref name="mapId"/>，空则沿用配置）
+    /// 经 <see cref="MapCatalog.Legacy"/> 解析 → 都没给人数时取地图人数上限（<see cref="Siege.Sim.Program.DefaultPlayerCount"/>）→ 按地图落成 → 跑局。
+    /// 返回落成后的批次配置（即 config.json 的口径）与该局日志。
+    /// </summary>
+    private static (RunConfig Config, MatchLog Log) RunLegacy(string? mapId, string? configJson = null, int? players = null, AiDifficulty? difficulty = null)
     {
-        string outDir = Path.Combine(SimFixtures.TempDir("players-default-" + name), "out");
-        (int code, string err) = RunMain(["run", "--out", outDir, "--count", "1", "--seed", "1", "--turn-limit", "4", "--serial", .. extra]);
-        Assert.True(code == 0, err);
-        var config = Siege.Sim.Config.RunConfig.FromJson(File.ReadAllText(Path.Combine(outDir, "config.json")));
-        MatchLog log = MatchLog.Parse(File.ReadAllText(Directory.GetFiles(outDir, "match-*.jsonl").Single()));
+        RunConfig config = configJson is null ? new RunConfig() : RunConfig.FromJson(configJson);
+        config = Siege.Sim.Program.RebuildPlayers(config, players, difficulty);
+        config = config with { MapId = mapId ?? config.MapId, Count = 1, SeedStart = 1, TurnLimit = 4 };
+        MapData map = MapCatalog.Legacy.Resolve(config.MapId);
+        if (players is null && !(configJson is not null && Siege.Sim.Program.DeclaresPlayers(configJson)))
+        {
+            config = Siege.Sim.Program.DefaultPlayerCount(config, map);
+        }
+
+        config = config.Validated().ResolvedFor(map);
+        MatchLog log = BatchRunner.Execute(config, parallelism: 1, map).Single();
+        Assert.False(log.IsFailed, log.Failure?.Message);
         return (config, log);
     }
 
