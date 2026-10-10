@@ -1,1 +1,16 @@
 {"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/board-link-mode/proposal.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/design.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/battlefield/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/match-setup/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/turn-sequence/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/elimination-endgame/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/information-visibility/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/initiative-order/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/carry-in-out/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/match-telemetry/spec.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": ".trellis/tasks/archive/2026-10/10-09-board-link-mode-a/implement.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "段 B 规格、段 A 接线契约与内核规范"}
