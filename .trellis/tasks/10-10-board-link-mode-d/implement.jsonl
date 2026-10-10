@@ -1,1 +1,19 @@
 {"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/board-link-mode/proposal.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/design.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/tasks.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/map-selection/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/match-setup/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/information-visibility/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/viewport-camera/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/settlement-show/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/visual-style-baseline/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/simulation-harness/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "openspec/changes/board-link-mode/specs/battlefield/spec.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": ".trellis/tasks/archive/2026-10/10-09-board-link-mode-b/implement.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": ".trellis/tasks/archive/2026-10/10-10-board-link-mode-c/implement.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": ".trellis/tasks/archive/2026-10/10-10-board-link-mode-c2/check.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "段 D 规格、各段接线点与内核规范"}
+{"file": "HANDOFF.md", "reason": "段 D 规格、各段接线点与内核规范"}
