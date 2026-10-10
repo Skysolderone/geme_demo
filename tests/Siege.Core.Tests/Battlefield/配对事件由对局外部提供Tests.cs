@@ -2,6 +2,7 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
+using Siege.Core.Scoring;
 using static Siege.Core.Tests.LinkModeFixtures;
 
 namespace Siege.Core.Tests.Battlefield;
@@ -97,10 +98,7 @@ public class 配对事件由对局外部提供Tests
     [Fact]
     public void 决赛只接受唯一合法结果()
     {
-        MatchFlow match = Started([0, 0, 2, 2]).PassRounds(1);
-        match.Debug.SettleBattlefield(0, P1);
-        match.Debug.SettleBattlefield(2, P2);
-        match.PassRounds(2);
+        MatchFlow match = Started([0, 0, 2, 2]).PassRounds(3);
         Assert.Equal(MatchPhase.AwaitingFinalLink, match.Phase);
 
         Assert.Throws<SiegeRuleException>(() => match.ApplyPairing([(0, 2)], waiter: 2));
@@ -110,6 +108,31 @@ public class 配对事件由对局外部提供Tests
         match.ApplyPairing([(2, 0)]);      // 对内顺序无关紧要
         Assert.Equal(PairingKind.Final, match.Pairings.Single().Kind);
         Assert.Equal(LinkStage.Final, match.LinkStage);
+    }
+
+    [Fact]
+    public void 决赛候选超过两个时以最小编号为轴()
+    {
+        // 裁决 S2：决赛候选超过 2 个战场时，以编号最小的战场为轴、按编号升序依次链接——唯一合法结果。
+        // 4 人局在 S1 之下流程里到不了这种局面（决赛时恒为 2 个战场），这里钉住纯函数与规范次序。
+        PairingDecision only = ScriptedPairingSource.Default(new PairingRequest(PairingKind.Final, [4, 0, 2], 6));
+        Assert.Equal([(0, 2), (0, 4)], only.Canonical);
+        Assert.Null(only.Waiter);
+    }
+
+    [Fact]
+    public void 待配对与待决赛链接阶段不可弃赛()
+    {
+        // 裁决 S3：两个"待…"阶段内 MUST NOT 接受弃赛。
+        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(3);
+        Assert.Equal(MatchPhase.AwaitingPairing, match.Phase);
+        Assert.Throws<SiegeRuleException>(() => match.Resign(P0));
+        Assert.Equal(PlayerStatus.Active, match.StateOf(P0).Status);
+
+        MatchFlow final = Started([0, 0, 2, 2]).PassRounds(3);
+        Assert.Equal(MatchPhase.AwaitingFinalLink, final.Phase);
+        Assert.Throws<SiegeRuleException>(() => final.Resign(final.ActivePlayers[0]));
+        Assert.Equal(2, final.ActiveCount);
     }
 
     [Fact]

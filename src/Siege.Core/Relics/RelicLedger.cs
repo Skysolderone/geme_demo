@@ -141,20 +141,35 @@ public sealed class RelicLedger
     {
         ArgumentNullException.ThrowIfNull(state);
         var ledger = new RelicLedger(generation);
+        ledger.RestoreState(state);
+        return ledger;
+    }
+
+    /// <summary>
+    /// 把 <see cref="ExportState"/> 的结果写回尚未有任何揭示的账本（<see cref="Restore"/> 与链接模式恢复共用：后者先重放链接追加公共棋盘信物，再调本方法）。
+    /// 揭示按存档顺序重放；存档里出现非信物格即视为损坏。
+    /// </summary>
+    internal void RestoreState(RelicLedgerState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (_reveals.Count > 0)
+        {
+            throw new SiegeRuleException("账本已有揭示记录，不能再恢复。");
+        }
+
         foreach (RevealedRelic revealed in state.Revealed)
         {
             Coord coord = Coord.Parse(revealed.Coord);
-            if (!ledger._relics.TryGetValue(coord, out RelicState? relic))
+            if (!_relics.TryGetValue(coord, out RelicState? relic))
             {
                 throw new FormatException($"存档中的揭示记录指向非信物格 {revealed.Coord}。");
             }
 
             relic.MarkRevealed(revealed.MajorRound);
-            ledger._reveals.Add(new RelicRevealEvent(coord, relic.Content, revealed.MajorRound));
+            _reveals.Add(new RelicRevealEvent(coord, relic.Content, revealed.MajorRound));
         }
 
-        ledger.DeployLimitPeak = state.DeployLimitPeak;
-        return ledger;
+        DeployLimitPeak = state.DeployLimitPeak;
     }
 
     /// <summary>无名册重载：盘面上的全部玩家视为参赛中。只适用于尚无流程层状态的单元测试；正式对局 MUST 走带名册的重载。</summary>

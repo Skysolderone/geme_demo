@@ -51,8 +51,11 @@ public enum TurnStage
 }
 
 /// <summary>
-/// 三类终局条件（elimination-endgame「三类终局条件」，restore-go-core-rules 裁决 #4）。序列化名称稳定：存档与对局日志按名字写入。
-/// 本枚举 MUST NOT 再增加成员：对局 MUST NOT 设置固定总轮数或大回合上限，也 MUST NOT 因势力领先幅度提前结束
+/// 终局原因。序列化名称稳定：存档与对局日志按名字写入。
+/// 旧模式（<see cref="MatchMode.Legacy"/>）只用前三个成员——elimination-endgame「三类终局条件」（restore-go-core-rules 裁决 #4）；
+/// 链接模式只用 <see cref="LastPlayerStanding"/> 与 <see cref="LastBattlefieldSettled"/>——「两类终局条件」，优先级 只剩一名 &gt; 最后战场结算
+/// （board-link-mode 裁决 S4，2026-10-10 追加末位成员）。
+/// 除此之外本枚举 MUST NOT 再增加成员：对局 MUST NOT 设置固定总轮数或大回合上限，也 MUST NOT 因势力领先幅度提前结束
 /// （旧的 <c>MajorRoundLimit</c> / <c>PowerDominance</c> 已随 round-cap / dominance-victory 一并删除）。
 /// </summary>
 public enum EndReason
@@ -65,6 +68,12 @@ public enum EndReason
 
     /// <summary>条件 2：盘面不存在任何可落子的空格。</summary>
     BoardFull,
+
+    /// <summary>
+    /// 链接模式：只剩一个含在局玩家的战场且它已结算（battlefield「战场结算」，在大回合结束时判定）。
+    /// 结算落败者出局后只剩胜者一人时也记本原因（结算是终局的直接原因）；因弃赛或势力归零只剩一人时记 <see cref="LastPlayerStanding"/>。
+    /// </summary>
+    LastBattlefieldSettled,
 }
 
 /// <summary>流程事件种类。事件<b>只由</b> <see cref="MatchFlow"/> 在阶段切换点发出，其他模块 MUST NOT 自行发出流程事件。</summary>
@@ -84,6 +93,9 @@ public enum FlowEventKind
 
     /// <summary>链接模式：一次链接执行完毕（两个战场合并）。旧模式永不发出。</summary>
     BattlefieldsLinked,
+
+    /// <summary>链接模式：一个战场结算（整轮 Pass / 填满 / 减员）。旧模式永不发出。</summary>
+    BattlefieldSettled,
 }
 
 /// <summary>一条流程事件：种类、发生时的大回合、相关玩家（若有）与文字说明。</summary>

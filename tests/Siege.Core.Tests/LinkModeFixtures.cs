@@ -59,6 +59,63 @@ internal static class LinkModeFixtures
         return match;
     }
 
+    /// <summary>
+    /// 跑完当前大回合：<paramref name="movers"/> 里的玩家各落 1 子（合法范围内按坐标序第一个能暂放且能确认的空格；都不行就 Pass），其余 Pass。
+    /// 用来让某个多人战场"本大回合不是全员 Pass"、从而不被结算（battlefield「一方落子即不结算」）。
+    /// </summary>
+    internal static MatchFlow PlayRound(this MatchFlow match, params PlayerId[] movers)
+    {
+        int round = match.MajorRound;
+        while (match.Phase == MatchPhase.InProgress && match.MajorRound == round)
+        {
+            PlayerId player = match.CurrentPlayer!.Value;
+            if (movers.Contains(player))
+            {
+                match.PlaceOne();
+            }
+            else
+            {
+                match.PassTurn();
+            }
+        }
+
+        return match;
+    }
+
+    /// <summary>连续 <paramref name="rounds"/> 个大回合按 <see cref="PlayRound"/> 推进。</summary>
+    internal static MatchFlow PlayRounds(this MatchFlow match, int rounds, params PlayerId[] movers)
+    {
+        for (int i = 0; i < rounds; i++)
+        {
+            match.PlayRound(movers);
+        }
+
+        return match;
+    }
+
+    /// <summary>当前玩家落 1 子：合法范围内按坐标序取第一个能暂放、且整批能确认的空格；都不行就 Pass。</summary>
+    internal static void PlaceOne(this MatchFlow match)
+    {
+        PlayerId player = match.CurrentPlayer!.Value;
+        StagedBatch batch = match.ToDeploy();
+        foreach (Coord cell in match.LegalRangeFor(player).Order())
+        {
+            if (match.Board[cell].Occupant is not null || batch.Stage(cell, PieceType.Basic) is not null)
+            {
+                continue;
+            }
+
+            if (match.Confirm().Confirmed)
+            {
+                return;
+            }
+
+            batch.Clear();
+        }
+
+        match.Pass();
+    }
+
     /// <summary>连续 Pass 掉 <paramref name="rounds"/> 个大回合。</summary>
     internal static MatchFlow PassRounds(this MatchFlow match, int rounds)
     {

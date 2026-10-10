@@ -111,7 +111,7 @@ public sealed partial class MatchFlow
             throw new ArgumentException($"地图 {map.Id} 最多支持 {map.MaxPlayers} 人，实际 {list.Length} 人。", nameof(players));
         }
 
-        RequireModeMatchesMap(options.Mode, map);
+        RequireModeMatchesMap(options.Mode, map, list.Length);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         PrototypeZoneAssignment.RequireValidFlagRisk(options.FlagRisk);
         ContentSets.RequireValid(options.ContentSet);
@@ -239,7 +239,12 @@ public sealed partial class MatchFlow
     {
         PlayerRecord r = Require(player);
         return new PlayerFlowState(player, r.Status, r.HasEstablishedPower, r.BirthZone, r.LastRoundPosition,
-            r.EliminationOrder, r.EliminatedInMajorRound, r.ResignedInMajorRound, r.PowerAtResign);
+            r.EliminationOrder, r.EliminatedInMajorRound, r.ResignedInMajorRound, r.PowerAtResign)
+        {
+            EliminationReason = r.EliminationReason,
+            PowerAtDefeat = r.Defeat?.Power,
+            WaitingRounds = r.WaitingRounds,
+        };
     }
 
     public ImmutableArray<PlayerFlowState> PlayerStates => [.. _players.Select(StateOf)];
@@ -465,11 +470,17 @@ public sealed partial class MatchFlow
         }
 
         Hands.Resign(player);
+        Dictionary<int, int>? occupancy = Mode == MatchMode.Link ? OccupancyCounts() : null;
         record.Status = PlayerStatus.Resigned;
         record.ResignedInMajorRound = MajorRound;
         record.PowerAtResign = power;
         Emit(FlowEventKind.PlayerResigned, player, $"弃赛时势力 {power}");
         RecalculateDerived();
+        if (occupancy is not null)
+        {
+            // 链接模式：多人战场因弃赛只剩 1 人 → 减员结算（即时标记；势力按弃赛后的重算结果记录）。
+            SettleByAttrition(occupancy);
+        }
 
         if (inOwnTurn)
         {
@@ -529,6 +540,12 @@ public sealed partial class MatchFlow
     {
         // D2：连续 Pass 计数——落子 ≥1 枚即清零。
         _passStreak = context.IsPass ? _passStreak + 1 : 0;
+        if (Mode == MatchMode.Link && context.IsPass)
+        {
+            // 链接模式的整轮 Pass 按战场判定（battlefield「战场结算」），逐人记本大回合是否 Pass，不读全局计数。
+            _passedThisRound.Add(context.Player);
+        }
+
         CheckEliminations();
         CheckEndConditions();
     }
@@ -571,6 +588,7 @@ public sealed partial class MatchFlow
             return;
         }
 
+        Dictionary<int, int>? occupancy = Mode == MatchMode.Link ? OccupancyCounts() : null;
         int order = ++_eliminationSequence;
         foreach (PlayerId player in zeroed)
         {
@@ -578,7 +596,18 @@ public sealed partial class MatchFlow
             record.Status = PlayerStatus.Eliminated;
             record.EliminationOrder = order;
             record.EliminatedInMajorRound = MajorRound;
+            if (occupancy is not null)
+            {
+                record.EliminationReason = EliminationReason.PowerZero;
+            }
+
             Emit(FlowEventKind.PlayerEliminated, player, $"第 {order} 个出局（势力归零）");
+        }
+
+        if (occupancy is not null)
+        {
+            // 链接模式：多人战场因势力归零只剩 1 人 → 减员结算（即时标记）。
+            SettleByAttrition(occupancy);
         }
     }
 
@@ -627,6 +656,16 @@ public sealed partial class MatchFlow
         {
             PlayerRecord record = _records[player];
             PlayerPower detail = power.Of(player);
+            if (Mode == MatchMode.Link && record.Defeat is { } defeat)
+            {
+                // 战场落败者按结算时的比较量排名（elimination-endgame「终局名次与并列判定」第 2 条），不按终局时盘面。
+                inputs.Add(new StandingInput(player, record.Status, defeat.Power, defeat.ControlledRelics, defeat.ExclusiveCells, defeat.Stones, record.EliminationOrder)
+                {
+                    Reason = EliminationReason.BattlefieldDefeat,
+                });
+                continue;
+            }
+
             inputs.Add(new StandingInput(
                 player,
                 record.Status,
@@ -634,10 +673,13 @@ public sealed partial class MatchFlow
                 relics.Count(s => s.Control.GrantsEffectTo(player)),
                 detail.ExclusiveCells.Length,
                 Board.GroupsOf(player).Sum(g => g.Size),
-                record.EliminationOrder));
+                record.EliminationOrder)
+            {
+                Reason = record.EliminationReason,
+            });
         }
 
-        Result = new MatchResult(reason, MajorRound, FinalStandings.Compute(inputs));
+        Result = new MatchResult(reason, MajorRound, Mode == MatchMode.Link ? FinalStandings.ComputeLink(inputs) : FinalStandings.Compute(inputs));
         Phase = MatchPhase.Ended;
         _pendingEnd = null;
         Emit(FlowEventKind.MatchEnded, null, $"{reason}；名次 {string.Join(" ", Result.Standings.Select(s => $"{s.Rank}.{s.Player}"))}");
@@ -692,6 +734,17 @@ public sealed partial class MatchFlow
     private void EndMajorRound()
     {
         int completed = MajorRound;
+        if (Mode == MatchMode.Link)
+        {
+            // 链接模式：先逐战场结算（落败者不进下一轮顺序），再判"最后战场结算"终局（battlefield「战场结算」「阶段推进」）。
+            SettleAtRoundEnd(completed);
+            if (LastBattlefieldSettled())
+            {
+                Finish(EndReason.LastBattlefieldSettled);
+                return;
+            }
+        }
+
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, Relics.TrueContents());
         MarkEstablishedPower(power);
@@ -777,8 +830,14 @@ public sealed partial class MatchFlow
     /// 模式与地图匹配（实现裁决 B1）：链接模式只能配链接图，链接图只能以链接模式建局；不匹配即建局报错。
     /// 按地图标识判定（<see cref="LinkMapId.IsLinkMap"/>）：对局层不读规格档（boundaries「地图规格档的分流」），而链接本身也要从标识取地图种子。
     /// </summary>
-    private static void RequireModeMatchesMap(MatchMode mode, MapData map)
+    private static void RequireModeMatchesMap(MatchMode mode, MapData map, int players)
     {
+        if (mode == MatchMode.Link && players != 4)
+        {
+            // 裁决 3b / S1：链接模式只有 4 人局。
+            throw new ArgumentException($"链接模式只有 4 人局，实际 {players} 人。", nameof(players));
+        }
+
         bool linkMap = LinkMapId.IsLinkMap(map.Id);
         if (mode == MatchMode.Link && !linkMap)
         {
@@ -865,6 +924,15 @@ public sealed partial class MatchFlow
         internal int? ResignedInMajorRound { get; set; }
 
         internal BigInteger? PowerAtResign { get; set; }
+
+        /// <summary>链接模式的出局原因；旧模式恒为 <c>null</c>。</summary>
+        internal EliminationReason? EliminationReason { get; set; }
+
+        /// <summary>战场落败时的比较量（势力 / 信物 / 独占空格 / 棋子，名次比较链）；其他情形为 <c>null</c>。</summary>
+        internal SettlementEntry? Defeat { get; set; }
+
+        /// <summary>链接模式：作为等待者度过的大回合数。</summary>
+        internal int WaitingRounds { get; set; }
     }
 
     /// <summary>复合结算钩子：把 §6.3 各步转发到对应的层。本类不自行计算任何一步。</summary>

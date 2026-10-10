@@ -49,6 +49,9 @@ public sealed partial class MatchFlow
             ContentSet = ContentSet,
             CarryInOut = CarryInOut,
             CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
+            // 实现裁决 B5：模式与链接流程状态只在链接模式下写出；旧模式两项为 null、不写（存档逐字节同前）。
+            Mode = Mode == MatchMode.Link ? MatchMode.Link : null,
+            Link = ExportLink(),
             Phase = Phase,
             MajorRound = MajorRound,
             Order = [.. _order.Select(p => p.Value)],
@@ -111,6 +114,7 @@ public sealed partial class MatchFlow
                     ExclusiveCells = s.Input.ExclusiveCells,
                     Stones = s.Input.Stones,
                     EliminationOrder = s.Input.EliminationOrder,
+                    Reason = s.Input.Reason,
                 })],
             },
         };
@@ -140,7 +144,9 @@ public sealed partial class MatchFlow
         // more-pieces-relics D8：存档只存种子，信物分布按存档的内容集重新生成——缺字段的旧存档按 v1（与 RestoreCore 的回填同一口径），
         // 否则旧存档会按新局缺省 v2 的权重表重建出另一份分布。
         ContentSet contentSet = ContentSets.RequireValid(data.ContentSet ?? ContentSets.Legacy);
-        return RestoreCore(map, GameBoard.Restore(map, data.Board!), seed, RelicGenerator.Generate(map, seed, contentSet), data);
+        // 链接模式（B5 / 段 A 接线契约 3）：盘面先建空，等链接重放完再写入棋子与改造（见 RestoreLink）。
+        GameBoard board = data.Mode == MatchMode.Link ? GameBoard.Load(map) : GameBoard.Restore(map, data.Board!);
+        return RestoreCore(map, board, seed, RelicGenerator.Generate(map, seed, contentSet), data);
     }
 
     /// <summary>测试专用：在未校验的合成地图与手工信物分布上恢复。</summary>
@@ -148,7 +154,8 @@ public sealed partial class MatchFlow
     {
         MatchSaveData data = Parse(json);
         RequireMap(map, data);
-        return RestoreCore(map, GameBoard.RestoreUnvalidated(map, data.Board!), GameSeed.Parse(data.Seed!), relics, data);
+        GameBoard board = data.Mode == MatchMode.Link ? GameBoard.LoadUnvalidated(map) : GameBoard.RestoreUnvalidated(map, data.Board!);
+        return RestoreCore(map, board, GameSeed.Parse(data.Seed!), relics, data);
     }
 
     private static MatchSaveData Parse(string json)
@@ -223,14 +230,28 @@ public sealed partial class MatchFlow
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
             CarryInOut = data.CarryInOut ?? false,
             CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
+            // 实现裁决 B5：无模式字段的存档按旧模式读入。
+            Mode = data.Mode ?? MatchMode.Legacy,
         };
+        // 与建局同一处校验（裁决 B1 / S1）：链接图只能以链接模式恢复，链接模式只能是链接图、4 人。
+        try
+        {
+            RequireModeMatchesMap(options.Mode, map, players.Length);
+        }
+        catch (ArgumentException ex)
+        {
+            // 恢复路径的一切不符都以 FormatException 报出（与"地图不一致"等同口径）。
+            throw new FormatException($"存档的对局模式与地图不符：{ex.Message}", ex);
+        }
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
         // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
         _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
+        RelicLedgerState relicState = data.Relics ?? throw new FormatException("存档缺少信物账本。");
         var match = new MatchFlow(
             map, board, seed, players,
-            RelicLedger.Restore(relicRecord, data.Relics ?? throw new FormatException("存档缺少信物账本。")),
+            // 链接模式的揭示记录含公共棋盘信物，要等链接重放把它们追加进账本之后再恢复（RestoreLink）。
+            options.Mode == MatchMode.Link ? new RelicLedger(relicRecord) : RelicLedger.Restore(relicRecord, relicState),
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight, options.ContentSet),
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
@@ -239,6 +260,10 @@ public sealed partial class MatchFlow
         match.CarryInOutBackfilled = carryInOutBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
+        if (options.Mode == MatchMode.Link)
+        {
+            match.RestoreLink(data);
+        }
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -292,7 +317,10 @@ public sealed partial class MatchFlow
         {
             match.Result = new MatchResult(result.Reason, result.MajorRound, [.. result.Standings.Select(s =>
                 new Standing(s.Rank, new PlayerId(s.Player), s.Group,
-                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.ControlledRelics, s.ExclusiveCells, s.Stones, s.EliminationOrder)))]);
+                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.ControlledRelics, s.ExclusiveCells, s.Stones, s.EliminationOrder)
+                    {
+                        Reason = s.Reason,
+                    }))]);
         }
 
         if (data.Phase != MatchPhase.FlagPlanting)
@@ -338,6 +366,14 @@ public sealed class MatchSaveData
 
     /// <summary>各玩家的带入（征召签记录抽得的类型）；旧存档无此字段（<c>null</c>）→ 全员无带入。</summary>
     public List<CarryInSaveData>? CarryIns { get; set; }
+
+    /// <summary>对局模式（board-link-mode 实现裁决 B5）。只在链接模式下写出；缺字段（旧模式与旧存档）按 <see cref="MatchMode.Legacy"/> 读入。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MatchMode? Mode { get; set; }
+
+    /// <summary>链接模式的流程状态（配对、链接、战场结算、锁定旗数、阶段字段、出局原因与等待大回合数）。旧模式不写。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LinkSaveData? Link { get; set; }
 
     /// <summary>
     /// 本结构未声明的字段。其余未知字段照旧宽容；已废弃字段在
@@ -492,6 +528,10 @@ public sealed class StandingSaveData
     public int Stones { get; set; }
 
     public int? EliminationOrder { get; set; }
+
+    /// <summary>出局原因（链接模式）；旧模式不写。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public EliminationReason? Reason { get; set; }
 }
 
 public sealed class ResultSaveData

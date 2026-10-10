@@ -28,7 +28,13 @@ public sealed record StandingInput(
     int ControlledRelics,
     int ExclusiveCells,
     int Stones,
-    int? EliminationOrder);
+    int? EliminationOrder)
+{
+    /// <summary>
+    /// 出局原因（链接模式；旧模式与未出局为 <c>null</c>）。战场落败者的 <see cref="Power"/> 与其后三项是<b>结算时</b>的比较量。
+    /// </summary>
+    public EliminationReason? Reason { get; init; }
+}
 
 /// <summary>终局名次中的一项：竞争名次（并列共享同一名次）、玩家、所属分组。</summary>
 public sealed record Standing(int Rank, PlayerId Player, StandingGroup Group, StandingInput Input);
@@ -64,6 +70,32 @@ public static class FinalStandings
         return result.MoveToImmutable();
     }
 
+    /// <summary>
+    /// 链接模式的最终名次（board-link-mode，elimination-endgame「终局名次与并列判定」）：
+    /// ① 在局者（最后战场的胜者；只剩一名参赛玩家时即那一人）按比较链；② 出局者按出局先后倒序——同一出局序号内，战场落败者按结算时的比较链排序、
+    /// 只有链全同才共享名次，势力归零者共享名次；③ 弃赛者最后，按弃赛时势力。旧模式的 <see cref="Compute"/> 不受影响。
+    /// </summary>
+    public static ImmutableArray<Standing> ComputeLink(IEnumerable<StandingInput> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        StandingInput[] all = [.. inputs];
+
+        List<StandingInput> finishers = [.. all.Where(i => i.Status == PlayerStatus.Active).OrderBy(i => i, FinisherComparer.Instance).ThenBy(i => i.Player)];
+        List<StandingInput> eliminated = [.. all.Where(i => i.Status == PlayerStatus.Eliminated)
+            .OrderByDescending(i => i.EliminationOrder ?? throw new SiegeRuleException($"出局玩家 {i.Player} 没有出局序号。"))
+            .ThenBy(i => i, DefeatComparer.Instance)
+            .ThenBy(i => i.Player)];
+        List<StandingInput> resigned = [.. all.Where(i => i.Status == PlayerStatus.Resigned).OrderByDescending(i => i.Power).ThenBy(i => i.Player)];
+
+        ImmutableArray<Standing>.Builder result = ImmutableArray.CreateBuilder<Standing>(all.Length);
+        int position = 0;
+        Append(result, finishers, StandingGroup.Finisher, ref position, (a, b) => FinisherComparer.Instance.Compare(a, b) == 0);
+        Append(result, eliminated, StandingGroup.Eliminated, ref position, (a, b) =>
+            a.EliminationOrder == b.EliminationOrder && DefeatComparer.Instance.Compare(a, b) == 0);
+        Append(result, resigned, StandingGroup.Resigned, ref position, (a, b) => a.Power == b.Power);
+        return result.MoveToImmutable();
+    }
+
     /// <summary>竞争名次：与前一名完全相同则共享其名次，否则名次 = 当前位置。</summary>
     private static void Append(
         ImmutableArray<Standing>.Builder result,
@@ -82,6 +114,23 @@ public static class FinalStandings
             }
 
             result.Add(new Standing(rank, group[i].Player, kind, group[i]));
+        }
+    }
+
+    /// <summary>
+    /// 同一出局序号内的比较：两名都是战场落败者时按结算时的四级比较链（全同返回 0 → 共享名次）；否则（势力归零）返回 0——同次归零者共享名次。
+    /// </summary>
+    private sealed class DefeatComparer : IComparer<StandingInput>
+    {
+        internal static readonly DefeatComparer Instance = new();
+
+        public int Compare(StandingInput? a, StandingInput? b)
+        {
+            ArgumentNullException.ThrowIfNull(a);
+            ArgumentNullException.ThrowIfNull(b);
+            return a.Reason == EliminationReason.BattlefieldDefeat && b.Reason == EliminationReason.BattlefieldDefeat
+                ? FinisherComparer.Instance.Compare(a, b)
+                : 0;
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.Tests.LifeShape;
 
 namespace Siege.Core.Tests.MapGeneration;
 
@@ -305,7 +306,9 @@ public class 棋盘档布局规则Tests
         }
     }
 
-    [Fact]
+    // board-link-mode 裁决 S5（2026-10-10）：墙钟断言在并行全量里受负载影响偶发红，移入 Perf 类别（SIEGE_PERF=1 单独跑），断言本身不变。
+    [PerfFact]
+    [Trait("Category", "Perf")]
     public void 生成耗时()
     {
         // Scenario：生成任一棋盘档地图 → 耗时不超过 1 秒（含校验与重试）。不走缓存；先预热 JIT。

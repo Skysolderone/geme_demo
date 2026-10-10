@@ -140,9 +140,11 @@ public class 总势力Tests
         // more-pieces-relics 段 B：信物控制判定由 RelicLedger 的私有方法抽成 RelicControl.Of（RelicControl.cs）——账本第 5 步重算与
         // 势力计算读取计分信物（D3）共用这一份，OwnershipOf( 多一个读者、OwnershipKind.Exclusive 由 RelicLedger.cs 移到 RelicControl.cs；
         // RelicLedger.cs 仍在 OwnershipOf( 名单里（第 4 步揭示逐格读归属）。
+        // board-link-mode 段 B 裁决 S8：按座位视图 SeatPublicView.cs 成为 OwnershipOf( 的合法读者——information-visibility 第 3 项要求同战场内公开空格归属三态，
+        // 它对本座位可见的格逐格读势力快照里的同一份覆盖表（只读投影、不统计领地分），不另算覆盖；不写判据字面量，其余名单不变。
         var readers = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["OwnershipOf("] = ["Siege.Core/Ai/BatchEvaluator.cs", "Siege.Core/Relics/RelicControl.cs", "Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
+            ["OwnershipOf("] = ["Siege.Core/Ai/BatchEvaluator.cs", "Siege.Core/Match/SeatPublicView.cs", "Siege.Core/Relics/RelicControl.cs", "Siege.Core/Relics/RelicLedger.cs", "Siege.Core/Scoring/CoverageMap.cs", "Siege.Core/Scoring/PieceEffects.cs", "Siege.Presentation/Layers/LayerContents.cs"],
             ["SourcesOf("] = ["Siege.Core/Scoring/CoverageMap.cs", "Siege.Presentation/Layers/LayerContents.cs"],
             ["UniqueCoverer("] = ["Siege.Core/Scoring/CoverageMap.cs"],
             ["CoverageOf("] = ["Siege.Core/Scoring/CoverageMap.cs"],

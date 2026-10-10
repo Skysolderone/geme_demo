@@ -38,4 +38,7 @@ internal sealed class MatchDebugAccess
 
     /// <summary>链接模式：直接执行一次链接（绕过配对事件与规范次序），供"信物子流独立"按两种先后次序比对。</summary>
     internal void Link(int x, int y) => _match.ExecuteLink(x, y, pairingSequence: 0);
+
+    /// <summary>某玩家的种子兜底顺序（插旗锁定时由 setup 子流排出；战场结算比较链全同时定胜者）。</summary>
+    internal int SeedRankOf(PlayerId player) => _match.DebugSeedRankOf(player);
 }

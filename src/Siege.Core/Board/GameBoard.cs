@@ -402,6 +402,20 @@ public sealed class GameBoard
         return board;
     }
 
+    /// <summary>
+    /// 链接模式的存档恢复（段 A 接线契约 3）：在已重放完链接的空盘上写入盘面序列化（先改造、后棋子，改造落在增长后的地图上）。
+    /// 只能对没有棋子、没有改造的盘面调用。
+    /// </summary>
+    internal void LoadState(string serialized)
+    {
+        if (_edits.Count > 0 || AllCoords().Any(c => this[c].Occupant is not null))
+        {
+            throw new SiegeRuleException("只能在空盘上写入存档盘面。");
+        }
+
+        Fill(serialized);
+    }
+
     private void Fill(string serialized)
     {
         ArgumentNullException.ThrowIfNull(serialized);

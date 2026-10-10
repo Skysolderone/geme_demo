@@ -79,7 +79,7 @@ public class 战场内合法落子范围Tests
     public void 等待者可落子()
     {
         // Scenario：玩家 D 在单人战场 3 等待，轮到其小回合 → D 可征募并在战场 3 内落子，其合法落子范围不含任何其他战场的格。
-        MatchFlow match = Started([0, 0, 0, 2]).PassRounds(3);
+        MatchFlow match = Started([0, 0, 0, 2]).PlayRounds(3, P0);
         Assert.Equal(LinkStage.Fighting, match.LinkStage);
         Assert.Equal(match.Map.BirthZones[2], match.LegalRangeFor(P3));
         match.AtRound(4, [P3, P0, P1, P2]);
@@ -92,7 +92,7 @@ public class 战场内合法落子范围Tests
     public void 等待者无法越界()
     {
         // Scenario：等待者尝试在另一战场的空格暂放棋子 → 系统拒绝并说明不在合法落子范围内。
-        MatchFlow match = Started([0, 0, 0, 2]).PassRounds(3).AtRound(5, [P3, P0, P1, P2]);
+        MatchFlow match = Started([0, 0, 0, 2]).PlayRounds(3, P0).AtRound(5, [P3, P0, P1, P2]);
         StagedBatch batch = match.ToDeploy();
         BatchFailure? failure = batch.Stage(BirthCell(match.Map, 0, 1, 1), PieceType.Basic);
         Assert.Equal(BatchFailureKind.OutOfLegalRange, failure?.Kind);

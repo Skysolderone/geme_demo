@@ -24,6 +24,14 @@ public sealed record PairingRequest(PairingKind Kind, ImmutableArray<int> Candid
 /// </summary>
 public sealed record PairingDecision(ImmutableArray<(int X, int Y)> Pairs, int? Waiter)
 {
+    /// <summary>
+    /// 结果的来源（match-telemetry 第 8 项：真随机 / 配对种子 / 脚本），只作记录，不参与校验。外部未注明时为 <see cref="ExternalSource"/>。
+    /// </summary>
+    public string Source { get; init; } = ExternalSource;
+
+    /// <summary>未注明来源的外部提交。</summary>
+    public const string ExternalSource = "external";
+
     /// <summary>规范次序的配对：对内小者在前，各对按小者升序。</summary>
     public ImmutableArray<(int X, int Y)> Canonical =>
         [.. Pairs.Select(p => (Math.Min(p.X, p.Y), Math.Max(p.X, p.Y))).OrderBy(p => p.Item1).ThenBy(p => p.Item2)];
@@ -58,6 +66,9 @@ public sealed class ScriptedPairingSource : IPairingSource
         _script = new Queue<PairingDecision>(script);
     }
 
+    /// <summary>本来源给出的结果在记录里的来源名。</summary>
+    public const string ScriptSource = "script";
+
     /// <summary>已收到的请求，按顺序（测试读取）。</summary>
     public List<PairingRequest> Requests { get; } = [];
 
@@ -65,7 +76,7 @@ public sealed class ScriptedPairingSource : IPairingSource
     {
         ArgumentNullException.ThrowIfNull(request);
         Requests.Add(request);
-        return _script.Count > 0 ? _script.Dequeue() : Default(request);
+        return (_script.Count > 0 ? _script.Dequeue() : Default(request)) with { Source = ScriptSource };
     }
 
     /// <summary>确定性缺省：按编号升序两两相配，奇数时最大者等待。</summary>
@@ -88,12 +99,29 @@ public sealed class ScriptedPairingSource : IPairingSource
     }
 }
 
-/// <summary>一次被接受的配对事件（内存记录；日志与存档序列化属 2.9）。<paramref name="Sequence"/> 从 1 起。</summary>
-public sealed record PairingRecord(int Sequence, PairingKind Kind, int MajorRound, ImmutableArray<int> Candidates, ImmutableArray<(int X, int Y)> Pairs, int? Waiter);
+/// <summary>
+/// 一次被接受的配对事件（match-telemetry 第 8 项；随存档往返）。<paramref name="Sequence"/> 从 1 起；<paramref name="MajorRound"/> 为事件发生时（已推进到的）大回合；
+/// <paramref name="Pairs"/> 为规范次序；<paramref name="Source"/> 为结果来源（脚本 / 外部 / 段 C 的真随机与配对种子）。
+/// </summary>
+public sealed record PairingRecord(
+    int Sequence, PairingKind Kind, int MajorRound, ImmutableArray<int> Candidates, ImmutableArray<(int X, int Y)> Pairs, int? Waiter, string Source = PairingDecision.ExternalSource);
 
 /// <summary>
-/// 一次执行完的链接（内存记录）：链接序号（从 1 起）、所属配对事件序号、两个战场（X &lt; Y）、链接后的地图版本号、是否退化为直通道、
-/// 生成器给出的几何摘要、新增的信物格（坐标字典序）。
+/// 一次执行完的链接（match-telemetry 第 9 项；存档只存 (X, Y, 所属配对) 并在恢复时重放核对）：链接序号（从 1 起）、所属配对事件序号、两个战场（X &lt; Y）、
+/// 链接后的地图版本号、是否退化为直通道、生成器给出的几何摘要、新增的信物格（坐标字典序）。
 /// </summary>
 public sealed record LinkRecord(
-    int Sequence, int PairingSequence, int X, int Y, int MapVersion, bool Degraded, string Summary, ImmutableArray<Coord> NewRelicCells);
+    int Sequence, int PairingSequence, int X, int Y, int MapVersion, bool Degraded, string Summary, ImmutableArray<Coord> NewRelicCells)
+{
+    /// <summary>新增的公共棋盘（外接矩形即其原点与边长）；退化链接为 <c>null</c>。</summary>
+    public BoardPlate? PublicBoard { get; init; }
+
+    /// <summary>新增通道的格数。</summary>
+    public int CorridorCells { get; init; }
+
+    /// <summary>链接后（开局 + 链接、不含改造）地图的内容摘要（<see cref="MapFile.Digest"/>）。</summary>
+    public string MapDigest { get; init; } = string.Empty;
+
+    /// <summary>新增信物格及其内容（坐标字典序）。</summary>
+    public ImmutableArray<Relics.RelicPlacement> NewRelics { get; init; } = [];
+}

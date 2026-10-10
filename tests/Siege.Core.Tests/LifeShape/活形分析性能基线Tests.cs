@@ -93,6 +93,21 @@ public class 活形分析性能基线Tests
     }
 }
 
+/// <summary>
+/// 只在环境变量 <c>SIEGE_PERF=1</c> 时运行的计时 Fact（与 <see cref="PerfTheoryAttribute"/> 同一跳过方式）；默认套件里显示为 Skipped。
+/// board-link-mode 裁决 S5：无参数的墙钟测试（棋盘档 <c>生成耗时</c>）用它移入 Perf 类别，断言不变。
+/// </summary>
+public sealed class PerfFactAttribute : FactAttribute
+{
+    public PerfFactAttribute()
+    {
+        if (Environment.GetEnvironmentVariable("SIEGE_PERF") != "1")
+        {
+            Skip = "计时测试：设 SIEGE_PERF=1 后按 --filter \"Category=Perf\" 单独运行。";
+        }
+    }
+}
+
 /// <summary>只在环境变量 <c>SIEGE_PERF=1</c> 时运行的计时 Theory；默认套件里显示为 Skipped，而不是静默通过。</summary>
 public sealed class PerfTheoryAttribute : TheoryAttribute
 {

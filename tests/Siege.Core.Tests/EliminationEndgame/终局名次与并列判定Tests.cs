@@ -114,6 +114,30 @@ public class 终局名次与并列判定Tests
     }
 
     [Fact]
+    public void 旧模式流程中弃赛者排在势力归零出局者之前()
+    {
+        // 接线（board-link-mode 实现裁决 B1：旧模式名次逐字节不变）：同一局里既有势力归零出局者、又有弃赛者，Finish 在旧模式下走 Compute——
+        // 完赛者 > 弃赛者（按弃赛时势力）> 出局者。链接模式的 ComputeLink 把弃赛者排在出局者之后，两条规则在这一局上给出不同名次。
+        // 变异验证 M-C3（段 B check 实跑）：Finish 里 ComputeLink / Compute 的模式门反转 → 红 3：本测试、旧模式「三类终局条件Tests.唯一参赛者获胜」与链接模式「两类终局条件Tests.唯一参赛者获胜」
+        //（实施报告 M-B15 记"旧模式侧 0 红"，是只跑了链接相关类的缘故）。
+        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All)
+            .Stones(MatchFixtures.P1, "A1")
+            .Stones(MatchFixtures.P2, "J9")
+            .Stones(MatchFixtures.P0, "B1");
+
+        match.PlayTurn("A2");   // P0 提掉 A1 → P1 势力归零出局
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P1).Status);
+        match.Resign(MatchFixtures.P2);   // 弃赛时势力 > 0
+        match.Resign(MatchFixtures.P3);   // 弃赛时势力 0 → 只剩 P0
+
+        Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
+        Assert.True(match.Result.Of(MatchFixtures.P2).Input.Power > match.Result.Of(MatchFixtures.P3).Input.Power);
+        Assert.Equal(
+            new[] { (MatchFixtures.P0, 1, StandingGroup.Finisher), (MatchFixtures.P2, 2, StandingGroup.Resigned), (MatchFixtures.P3, 3, StandingGroup.Resigned), (MatchFixtures.P1, 4, StandingGroup.Eliminated) },
+            match.Result.Standings.Select(s => (s.Player, s.Rank, s.Group)));
+    }
+
+    [Fact]
     public void 信物相同比独占空格数()
     {
         // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、控制信物均为 2，独占空格数 14 与 9 → 14 者名次更高（段 C 改用规格算例数值，原为 3 与 1）。
