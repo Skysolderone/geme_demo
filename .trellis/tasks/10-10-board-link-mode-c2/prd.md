@@ -6,9 +6,9 @@
 
 ## Acceptance Criteria
 
-- [ ] 3b.1 剖析报告：两个局面（必要时加 38 秒小回合的复现）的前五项热点与占比
-- [ ] 3b.2 优化后链接图决策序列基线、v5 / board:1 基线、全部旧模式黄金值逐字节不变；`dotnet build` 零警告、`dotnet test -c Release` 全绿
-- [ ] 3b.3 改前 / 改后单小回合耗时中位与最大写进 implement.md
-- [ ] 3b.4 10 局小冒烟报告（C15 效果、耗时、对局长度）写进 implement.md
+- [x] 3b.1 剖析报告：两个局面（必要时加 38 秒小回合的复现）的前五项热点与占比
+- [x] 3b.2 优化后链接图决策序列基线、v5 / board:1 基线、全部旧模式黄金值逐字节不变；`dotnet build` 零警告、`dotnet test -c Release` 全绿
+- [x] 3b.3 改前 / 改后单小回合耗时中位与最大写进 implement.md
+- [x] 3b.4 10 局小冒烟报告（C15 效果、耗时、对局长度）写进 implement.md
 
 约束：子 agent 不得 git commit；批量只跑 3b.4 这一批 10 局；同一时间只跑一个 dotnet；理解代码优先 codegraph；不改 Presentation / godot、权重、规则判定。

@@ -1,5 +1,6 @@
+using System.Buffers;
 using System.Collections.Immutable;
-using System.Text;
+using System.Runtime.InteropServices;
 
 namespace Siege.Core.Board;
 
@@ -10,12 +11,12 @@ namespace Siege.Core.Board;
 /// <para>棋串、气、覆盖等全部是派生量，每次调用重算，不做增量维护。
 /// 设计文档 §9.2 / §10.1 要求实时重算；一次提子可能同时改变覆盖、棋串分裂、连珠断线与倍率，
 /// 增量维护的组合爆炸不可控。</para>
-/// <para>唯一的例外是<b>盘面未变时的记忆化</b>（ai-turn-speed D2）：全盘棋串（<see cref="AllGroups"/>）与活形报告（<see cref="LifeShapeReport.Analyze"/>）
-/// 按突变版本号记忆——每次写入原语（<see cref="Place"/> / <see cref="Clear"/> / <see cref="RemoveStones"/> / <see cref="ApplyTerrainEdits"/>）都让版本号 +1，
-/// 版本号不同即整份重算，副本从零起。它不是增量维护：命中时返回的是同一盘面上同一份全量结果，任何一次写入之后的第一次查询都重算。</para>
-/// <para>地图派生量（每格可落子 / 出生区 / 信物格、气边邻居、覆盖目标）按<b>当前 <see cref="MapData"/> 实例</b>逐格惰性记忆：
-/// 改造换上新地图即整表作废（<see cref="ApplyTerrainEdits"/>），副本与原盘面共用同一地图时共用同一张表。表里的每一项都由唯一实现
-/// （<see cref="MapData"/> 的查询与 <see cref="Adjacency"/>）算出，本类不另写地形判定。</para>
+/// <para>唯一的例外是<b>盘面未变时的记忆化</b>（ai-turn-speed D2；board-link-mode 段 C2 加上 <see cref="Serialize"/>）：全盘棋串（<see cref="AllGroups"/>）、活形报告（<see cref="LifeShapeReport.Analyze"/>）
+/// 与盘面序列化按突变版本号记忆——每次写入原语（<see cref="Place"/> / <see cref="Clear"/> / <see cref="RemoveStones"/> / <see cref="ApplyTerrainEdits"/> / <see cref="ApplyLink"/>）都让版本号 +1
+/// （空集合的 <see cref="RemoveStones"/> 什么都没写，不算写入），版本号不同即整份重算，副本从零起。它不是增量维护：命中时返回的是同一盘面上同一份全量结果，任何一次写入之后的第一次查询都重算。</para>
+/// <para>地图派生量（每格可落子 / 出生区 / 信物格、气边邻居、覆盖目标、可落子格清单）按<b>当前 <see cref="MapData"/> 实例</b>逐格惰性记忆：
+/// 改造换上新地图即换表（<see cref="ApplyTerrainEdits"/>：段 C2 起新表由旧表派生，只作废改造目标周围 2 格，与从零建表逐项相同），链接换图从零建表，
+/// 副本与原盘面共用同一地图时共用同一张表。表里的每一项都由唯一实现（<see cref="MapData"/> 的查询与 <see cref="Adjacency"/>）算出，本类不另写地形判定。</para>
 /// <para>几何四邻、气边与覆盖关系的唯一实现都在 <see cref="Adjacency"/>，本类只是委托：
 /// <see cref="Neighbors"/> 是几何邻居；棋串与气走 <see cref="LibertyNeighbors"/>；覆盖走 <see cref="CoverageTargets"/>。
 /// MUST NOT 在别处手写邻居偏移或地形过滤。</para>
@@ -33,6 +34,8 @@ public sealed class GameBoard
     private ImmutableArray<Group> _groups;
     private int _lifeVersion = -1;
     private LifeShapeReport? _life;
+    private int _serialVersion = -1;
+    private string? _serial;
 
     private GameBoard(MapData map)
         : this(map, map, map, new Occupant?[map.Width * map.Height], [], new MapTables(map))
@@ -118,6 +121,21 @@ public sealed class GameBoard
         RequireInBounds(c);
         return _occupants[Index(c)];
     }
+
+    /// <summary>
+    /// 全部格的占用者，按格下标（<c>y * 宽 + x</c>，即 <see cref="AllCoords"/> 的次序）只读暴露，供热路径整盘扫描（段 C2：不逐格经坐标枚举器与越界检查）。
+    /// 只读视图，与 <see cref="OccupantAt"/> 逐格相同；盘面之后的写入会反映在同一视图上，调用方不得跨写入持有。
+    /// </summary>
+    internal ReadOnlySpan<Occupant?> Occupants => _occupants;
+
+    /// <summary>
+    /// 当前地图全部可落子格的格下标，升序（即 <see cref="AllCoords"/> 里可落子的那些，次序不变）。按当前 <see cref="MapData"/> 实例的派生表记忆（与逐格可落子标志同一份），
+    /// 改造 / 链接换图即换表重算。供整盘扫描只走可落子格（段 C2）；不可落子格的结论由调用方按"不可落子"的既有口径给出。
+    /// </summary>
+    internal ImmutableArray<int> PlayableIndices => _tables.PlayableIndices();
+
+    /// <summary>格下标 → 该格在 <see cref="PlayableIndices"/> 里的序号，不可落子格为 −1（同一张派生表、同一次算出）。供按可落子格紧凑存放的派生表（段 C2：覆盖表）换算下标。</summary>
+    internal ImmutableArray<int> PlayableOrdinals => _tables.PlayableOrdinals();
 
     /// <summary>
     /// 活形报告的记忆槽（ai-turn-speed D2）：<see cref="LifeShapeReport.Analyze"/> 是唯一读写方——盘面版本号未变即返回上一次的全量结果，
@@ -224,29 +242,57 @@ public sealed class GameBoard
     public ImmutableArray<Coord> LibertiesOf(Group group)
     {
         ArgumentNullException.ThrowIfNull(group);
-        var seen = new bool[_occupants.Length];
-        var liberties = new List<int>();
-        foreach (Coord stone in group.Stones)
+
+        // 段 C2：不再为每次查询分配整张画布大小的去重表（73×73 画布上每条棋串一次 5 KB）——先收集全部候选格下标，
+        // 排序后去掉相邻重复，结果与"按格去重再排序"逐项相同（升序、无重复）。
+        int capacity = group.Stones.Length * 4;
+        int[] buffer = ArrayPool<int>.Shared.Rent(Math.Max(1, capacity));
+        try
         {
-            foreach (Coord n in LibertyNeighbors(stone))
+            int count = 0;
+            foreach (Coord stone in group.Stones)
             {
-                int ni = Index(n);
-                if (!seen[ni] && _occupants[ni] is null && _tables.GivesLibertyWhenEmpty(ni, n))
+                foreach (Coord n in LibertyNeighbors(stone))
                 {
-                    seen[ni] = true;
-                    liberties.Add(ni);
+                    int ni = Index(n);
+                    if (_occupants[ni] is null && _tables.GivesLibertyWhenEmpty(ni, n))
+                    {
+                        if (count == buffer.Length)
+                        {
+                            int[] larger = ArrayPool<int>.Shared.Rent(buffer.Length * 2);
+                            buffer.AsSpan(0, count).CopyTo(larger);
+                            ArrayPool<int>.Shared.Return(buffer);
+                            buffer = larger;
+                        }
+
+                        buffer[count++] = ni;
+                    }
                 }
             }
-        }
 
-        liberties.Sort();
-        ImmutableArray<Coord>.Builder coords = ImmutableArray.CreateBuilder<Coord>(liberties.Count);
-        foreach (int i in liberties)
+            Span<int> found = buffer.AsSpan(0, count);
+            found.Sort();
+            int unique = 0;
+            for (int k = 0; k < found.Length; k++)
+            {
+                if (k == 0 || found[k] != found[k - 1])
+                {
+                    found[unique++] = found[k];
+                }
+            }
+
+            ImmutableArray<Coord>.Builder coords = ImmutableArray.CreateBuilder<Coord>(unique);
+            for (int k = 0; k < unique; k++)
+            {
+                coords.Add(CoordAt(found[k]));
+            }
+
+            return coords.MoveToImmutable();
+        }
+        finally
         {
-            coords.Add(CoordAt(i));
+            ArrayPool<int>.Shared.Return(buffer);
         }
-
-        return coords.MoveToImmutable();
     }
 
     /// <summary>
@@ -341,43 +387,78 @@ public sealed class GameBoard
     /// </remarks>
     public string Serialize()
     {
-        var sb = new StringBuilder(Width * Height * 2 + Height);
-        for (int y = 0; y < Height; y++)
+        // board-link-mode 段 C2（裁决 C18 / P2）：按突变版本号记忆，与 LifeMemo 同一口径——任何写入原语之后的第一次调用重算，副本从零起。
+        // 预演第 8 步、结算核对与日志会对同一盘面多次序列化，73×73 画布上每次约 1 万字符。
+        if (_serialVersion == _version && _serial is not null)
         {
-            if (y > 0)
-            {
-                sb.Append('/');
-            }
-
-            for (int x = 0; x < Width; x++)
-            {
-                Occupant? occupant = _occupants[Index(new Coord(x, y))];
-                if (occupant is null)
-                {
-                    sb.Append("--");
-                }
-                else
-                {
-                    int owner = occupant.Value.Owner.Value;
-                    if (owner is < 0 or > 15)
-                    {
-                        throw new SiegeRuleException($"盘面序列化只支持玩家编号 0–15，实际为 {owner}。");
-                    }
-
-                    sb.Append(owner.ToString("X1"));
-                    sb.Append(TypeCode(occupant.Value.Type));
-                }
-            }
+            return _serial;
         }
 
-        if (_edits.Count > 0)
-        {
-            sb.Append(TerrainSeparator);
-            sb.Append(string.Join(",", _edits.Select(e => e.ToString()).Order(StringComparer.Ordinal)));
-        }
-
-        return sb.ToString();
+        string serialized = SerializeCore();
+        _serial = serialized;
+        _serialVersion = _version;
+        return serialized;
     }
+
+    /// <summary>
+    /// <see cref="Serialize"/> 的本体：一次算出总长、直接写进结果串（不经 StringBuilder 扩容、不逐格分配占用者编号串）。
+    /// 输出与逐格 <c>Append</c> 的写法逐字符相同：每格两字符（<c>--</c> 或"占用者一位大写十六进制 + 类型码"），行间 <c>/</c>，有改造时接 <c>|</c> 与按序数字典序排好的改造列表。
+    /// </summary>
+    private string SerializeCore()
+    {
+        int width = Width;
+        int height = Height;
+        string? tail = _edits.Count > 0
+            ? string.Join(",", _edits.Select(e => e.ToString()).Order(StringComparer.Ordinal))
+            : null;
+        int grid = height > 0 ? (width * height * 2) + (height - 1) : 0;
+        int length = grid + (tail is null ? 0 : tail.Length + 1);
+        return string.Create(length, (Board: this, Tail: tail), static (span, state) =>
+        {
+            GameBoard board = state.Board;
+            int w = board.Width;
+            int h = board.Height;
+            int k = 0;
+            for (int y = 0; y < h; y++)
+            {
+                if (y > 0)
+                {
+                    span[k++] = '/';
+                }
+
+                int row = y * w;
+                for (int x = 0; x < w; x++)
+                {
+                    Occupant? occupant = board._occupants[row + x];
+                    if (occupant is null)
+                    {
+                        span[k++] = '-';
+                        span[k++] = '-';
+                    }
+                    else
+                    {
+                        int owner = occupant.Value.Owner.Value;
+                        if (owner is < 0 or > 15)
+                        {
+                            throw new SiegeRuleException($"盘面序列化只支持玩家编号 0–15，实际为 {owner}。");
+                        }
+
+                        span[k++] = HexDigits[owner];
+                        span[k++] = TypeCode(occupant.Value.Type);
+                    }
+                }
+            }
+
+            if (state.Tail is { } edits)
+            {
+                span[k++] = TerrainSeparator;
+                edits.AsSpan().CopyTo(span[k..]);
+            }
+        });
+    }
+
+    /// <summary>占用者编号的一位大写十六进制（与 <c>owner.ToString("X1")</c> 对 0–15 逐字符相同）。</summary>
+    private const string HexDigits = "0123456789ABCDEF";
 
     /// <summary>棋子网格与改造段之间的分隔符。</summary>
     private const char TerrainSeparator = '|';
@@ -506,7 +587,8 @@ public sealed class GameBoard
             return;
         }
 
-        ReplaceMap(TerrainWriter.ApplyAll(Map, list));
+        MapData edited = TerrainWriter.ApplyAll(Map, list);
+        ReplaceMap(edited, MapTables.Derive(_tables, edited, list));
         _edits.AddRange(list);
     }
 
@@ -536,11 +618,14 @@ public sealed class GameBoard
         ReplaceMap(_edits.Count == 0 ? grown : TerrainWriter.ApplyAll(grown, [.. _edits]));
     }
 
-    /// <summary>换地图的唯一路径（改造与链接共用，实现裁决 A1）：换上新 <see cref="MapData"/>、重建派生表、推进突变版本号令棋串 / 活形记忆失效。</summary>
-    private void ReplaceMap(MapData map)
+    /// <summary>
+    /// 换地图的唯一路径（改造与链接共用，实现裁决 A1）：换上新 <see cref="MapData"/>、换派生表、推进突变版本号令棋串 / 活形 / 序列化记忆失效。
+    /// <paramref name="tables"/> 缺省即从零建表；改造路径传入由旧表派生的新表（<see cref="MapTables.Derive"/>，段 C2）。
+    /// </summary>
+    private void ReplaceMap(MapData map, MapTables? tables = null)
     {
         Map = map;
-        _tables = new MapTables(map);
+        _tables = tables ?? new MapTables(map);
         _version++;
     }
 
@@ -628,6 +713,12 @@ public sealed class GameBoard
             RequireInBounds(c);
         }
 
+        if (targets.Length == 0)
+        {
+            // 段 C2：空集合即什么都没写（预演第 5 步对无提子的批次也会调用），盘面未变，记忆（棋串 / 活形 / 序列化）照旧有效，不推进版本号。
+            return;
+        }
+
         foreach (Coord c in targets)
         {
             _occupants[Index(c)] = null;
@@ -639,6 +730,9 @@ public sealed class GameBoard
     private int Index(Coord c) => (c.Y * Width) + c.X;
 
     private Coord CoordAt(int index) => new(index % Width, index / Width);
+
+    /// <summary>格下标（<c>y * 宽 + x</c>）→ 坐标，与 <see cref="Occupants"/> / <see cref="PlayableIndices"/> 的下标同一口径（段 C2：供整盘扫描按下标找起点后换回坐标）。</summary>
+    internal Coord CoordOfIndex(int index) => CoordAt(index);
 
     private void RequireInBounds(Coord c)
     {
@@ -677,34 +771,45 @@ public sealed class GameBoard
     {
         ArgumentNullException.ThrowIfNull(serialized);
         int bar = serialized.IndexOf(TerrainSeparator, StringComparison.Ordinal);
-        string grid = bar >= 0 ? serialized[..bar] : serialized;
-        var sb = new StringBuilder(serialized.Length);
-        int column = 0;
-        foreach (char ch in grid)
+        ReadOnlySpan<char> grid = bar >= 0 ? serialized.AsSpan(0, bar) : serialized.AsSpan();
+
+        // 段 C2：写进租用缓冲区再一次成串（不经 StringBuilder），逐字符结果与按格 Append 相同。
+        char[] buffer = ArrayPool<char>.Shared.Rent(Math.Max(1, serialized.Length));
+        try
         {
-            if (ch == '/')
+            int k = 0;
+            int column = 0;
+            foreach (char ch in grid)
             {
-                RequireEvenRow(column, serialized);
-                column = 0;
-                sb.Append(ch);
-                continue;
+                if (ch == '/')
+                {
+                    RequireEvenRow(column, serialized);
+                    column = 0;
+                    buffer[k++] = ch;
+                    continue;
+                }
+
+                if (column % 2 == 0)
+                {
+                    buffer[k++] = ch;
+                }
+
+                column++;
             }
 
-            if (column % 2 == 0)
+            RequireEvenRow(column, serialized);
+            if (bar >= 0)
             {
-                sb.Append(ch);
+                serialized.AsSpan(bar).CopyTo(buffer.AsSpan(k));
+                k += serialized.Length - bar;
             }
 
-            column++;
+            return new string(buffer, 0, k);
         }
-
-        RequireEvenRow(column, serialized);
-        if (bar >= 0)
+        finally
         {
-            sb.Append(serialized, bar, serialized.Length - bar);
+            ArrayPool<char>.Shared.Return(buffer);
         }
-
-        return sb.ToString();
 
         static void RequireEvenRow(int length, string text)
         {
@@ -736,19 +841,143 @@ public sealed class GameBoard
     /// <see cref="MapData.RelicCells"/> / <see cref="Adjacency.LibertyNeighbors"/> / <see cref="Adjacency.CoverageTargets"/>），本类不含任何地形判定；
     /// 地图不可变，表随地图实例存亡——<see cref="GameBoard.ApplyTerrainEdits"/> 换地图即换表。
     /// </summary>
-    private sealed class MapTables(MapData map)
+    /// <remarks>
+    /// 段 C2（board-link-mode 裁决 C18 / P2）：改造换图时新表由旧表<b>派生</b>（<see cref="Derive"/>）——旧表里已算好的逐格项原样抄过来，
+    /// 只把改造目标周围 <see cref="EditReach"/> 格（切比雪夫距离）内的格作废、留待按新地图重算。派生表的每一项与在新地图上从零建表逐项相同
+    /// （<c>盘面派生量提速对照Tests.改造派生表与从零建表逐项相同</c> 穷举守门）：改造只改目标格的地表 / 桥或一条边的栅栏，不碰高度、障碍、出生区与信物格
+    /// （<see cref="TerrainWriter"/> 的每类改造只改目标格或目标边——若将来新增会改动邻格地形的改造，<see cref="Invalidate"/> 的中心必须一并包含那些格）；
+    /// 一格的可落子与地表标志只看本格，气边邻居只看本格与四邻及其间的栅栏（距离 1），覆盖目标最远经隔水 / 岩台远格到达距离 2 的格。
+    /// AI 每小回合对匠人的每个改造选项各预演一次，从零建表要对 73×73 画布逐格查一遍地图。
+    /// </remarks>
+    private sealed class MapTables
     {
+        /// <summary>改造使派生表作废的范围：改造目标格（栅栏取两端）周围切比雪夫距离不超过此值的格。覆盖目标的最远距离是 2。</summary>
+        internal const int EditReach = 2;
+
         private const byte Computed = 1;
         private const byte Playable = 2;
         private const byte LibertyWhenEmpty = 4;
         private const byte Relic = 8;
 
-        private readonly byte[] _flags = new byte[map.Width * map.Height];
-        private readonly int[] _zone = new int[map.Width * map.Height];
-        private readonly ImmutableArray<Coord>[] _liberty = new ImmutableArray<Coord>[map.Width * map.Height];
-        private readonly ImmutableArray<Coord>[] _coverage = new ImmutableArray<Coord>[map.Width * map.Height];
+        private readonly MapData map;
+        private readonly byte[] _flags;
+        private readonly int[] _zone;
+        private readonly ImmutableArray<Coord>[] _liberty;
+        private readonly ImmutableArray<Coord>[] _coverage;
+
+        private ImmutableArray<int> _playable;
+        private ImmutableArray<int> _ordinal;
+
+        public MapTables(MapData map)
+        {
+            this.map = map;
+            int size = map.Width * map.Height;
+            _flags = new byte[size];
+            _zone = new int[size];
+            _liberty = new ImmutableArray<Coord>[size];
+            _coverage = new ImmutableArray<Coord>[size];
+        }
+
+        private MapTables(MapData map, MapTables parent)
+        {
+            this.map = map;
+            _flags = (byte[])parent._flags.Clone();
+            _zone = (int[])parent._zone.Clone();
+            _liberty = (ImmutableArray<Coord>[])parent._liberty.Clone();
+            _coverage = (ImmutableArray<Coord>[])parent._coverage.Clone();
+        }
+
+        /// <summary>
+        /// 改造换图时的新表：<paramref name="edited"/> 必须是 <see cref="TerrainWriter.ApplyAll"/> 对 <paramref name="parent"/> 所属地图应用 <paramref name="edits"/> 的结果。
+        /// 画布、障碍、出生区与信物格不是同一份（同一实例）时不派生，从零建表。
+        /// </summary>
+        public static MapTables Derive(MapTables parent, MapData edited, IReadOnlyList<TerrainEdit> edits)
+        {
+            MapData old = parent.map;
+            if (old.Width != edited.Width || old.Height != edited.Height
+                || !ReferenceEquals(old.Obstacles, edited.Obstacles)
+                || old.BirthZones != edited.BirthZones
+                || !ReferenceEquals(old.RelicCells, edited.RelicCells))
+            {
+                return new MapTables(edited);
+            }
+
+            var tables = new MapTables(edited, parent);
+            foreach (TerrainEdit edit in edits)
+            {
+                if (edit.Kind == TerrainEditKind.Fence)
+                {
+                    tables.Invalidate(edit.Edge.A);
+                    tables.Invalidate(edit.Edge.B);
+                }
+                else
+                {
+                    tables.Invalidate(edit.Cell);
+                }
+            }
+
+            return tables;
+        }
+
+        /// <summary>作废 <paramref name="center"/> 周围 <see cref="EditReach"/> 格内（含越界裁剪）的全部逐格项。</summary>
+        private void Invalidate(Coord center)
+        {
+            int width = map.Width;
+            int height = map.Height;
+            for (int y = Math.Max(0, center.Y - EditReach); y <= Math.Min(height - 1, center.Y + EditReach); y++)
+            {
+                for (int x = Math.Max(0, center.X - EditReach); x <= Math.Min(width - 1, center.X + EditReach); x++)
+                {
+                    int i = (y * width) + x;
+                    _flags[i] = 0;
+                    _liberty[i] = default;
+                    _coverage[i] = default;
+                }
+            }
+        }
 
         public bool IsPlayable(int i, Coord c) => (Flags(i, c) & Playable) != 0;
+
+        /// <summary>全部可落子格的格下标，升序（即 <see cref="MapData.AllCoords"/> 的次序）；按本表逐格的可落子标志一次算出并记忆。</summary>
+        public ImmutableArray<int> PlayableIndices()
+        {
+            EnsurePlayable();
+            return _playable;
+        }
+
+        /// <summary>格下标 → 它在 <see cref="PlayableIndices"/> 里的序号；不可落子格为 −1。与前者同一次算出。</summary>
+        public ImmutableArray<int> PlayableOrdinals()
+        {
+            EnsurePlayable();
+            return _ordinal;
+        }
+
+        private void EnsurePlayable()
+        {
+            if (!_playable.IsDefault)
+            {
+                return;
+            }
+
+            int width = map.Width;
+            var ordinal = new int[_flags.Length];
+            ImmutableArray<int>.Builder playable = ImmutableArray.CreateBuilder<int>();
+            for (int i = 0; i < _flags.Length; i++)
+            {
+                if (IsPlayable(i, new Coord(i % width, i / width)))
+                {
+                    ordinal[i] = playable.Count;
+                    playable.Add(i);
+                }
+                else
+                {
+                    ordinal[i] = -1;
+                }
+            }
+
+            _ordinal = ImmutableCollectionsMarshal.AsImmutableArray(ordinal);
+            _playable = playable.ToImmutable();
+        }
 
         public Terrain TerrainAt(int i, Coord c) => IsPlayable(i, c) ? Terrain.Playable : Terrain.Obstacle;
 

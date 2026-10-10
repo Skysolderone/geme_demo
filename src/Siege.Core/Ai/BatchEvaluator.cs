@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
-using System.Text;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -320,22 +319,28 @@ public sealed class BatchEvaluator
     /// 活形分析的盘面指纹：逐格的占用者（不含棋子类型——活形查询只读棋串归属与气边，棋串归属不看类型）+ 对局中完成的地形改造（规范序）。
     /// 地形改造 MUST 在内：同一格落匠人、带不带改造，占用者网格相同而气边不同。只在单次决策内成立——底图（<see cref="GameBoard.BaseMap"/>）
     /// 不进指纹，同一次决策里它恒为同一份；跨对局两张不同的图可以有相同指纹，这也是缓存不得跨决策的原因之一。
+    /// 只供本类与守门测试（<c>盘面派生量提速对照Tests.活形缓存指纹与逐格写法相同</c>）读取。
     /// </summary>
-    private static string Fingerprint(GameBoard board)
+    internal static string Fingerprint(GameBoard board)
     {
-        var sb = new StringBuilder((board.Width * board.Height) + 16);
-        foreach (Coord c in board.AllCoords())
-        {
-            sb.Append(board.OccupantAt(c) is { } occupant ? (char)('A' + occupant.Owner.Value) : '.');
-        }
-
+        // 段 C2：按格下标（即 AllCoords 的次序）直接扫占用数组、一次成串；逐字符与逐格 Append 的写法相同。
         ImmutableArray<TerrainEdit> edits = board.TerrainEdits;
-        if (!edits.IsEmpty)
+        string? tail = edits.IsEmpty ? null : string.Join(',', edits.Select(e => e.ToString()).Order(StringComparer.Ordinal));
+        int cells = board.Occupants.Length;
+        return string.Create(cells + (tail is null ? 0 : tail.Length + 1), (Board: board, Tail: tail), static (span, state) =>
         {
-            sb.Append('|').AppendJoin(',', edits.Select(e => e.ToString()).Order(StringComparer.Ordinal));
-        }
+            ReadOnlySpan<Occupant?> occupants = state.Board.Occupants;
+            for (int i = 0; i < occupants.Length; i++)
+            {
+                span[i] = occupants[i] is { } occupant ? (char)('A' + occupant.Owner.Value) : '.';
+            }
 
-        return sb.ToString();
+            if (state.Tail is { } text)
+            {
+                span[occupants.Length] = '|';
+                text.AsSpan().CopyTo(span[(occupants.Length + 1)..]);
+            }
+        });
     }
 
     /// <summary>维度 4 的预筛口径：己方全部棋串按 <see cref="GroupSafety.AnalyzeWithoutLife"/> 的安全分之和（不查活形）。</summary>

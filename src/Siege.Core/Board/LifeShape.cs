@@ -73,7 +73,7 @@ public sealed class GroupLife
 /// 无气边的方向（障碍、未架桥深水、崖壁、栅栏、棋盘外沿）不产生邻格，天然是墙，不另写判定（design D1）。</para>
 /// <para>不接名册：所有者从棋子读出，弃赛 / 出局者遗留的活形照常产生禁入。不入存档（design D5）；不做增量——唯一的记忆化是
 /// <see cref="GameBoard.LifeMemo"/>（ai-turn-speed D2）：同一盘面实例在没有任何写入原语之间再次分析时返回同一份全量结果，写入之后整份重算。</para>
-/// <para>确定性：内部只用按 <c>y * 宽 + x</c> 编址的数组与按坐标序构造的列表，不遍历无序集合。</para>
+/// <para>确定性：内部只用按 <c>y * 宽 + x</c> 编址（段 C2 起按可落子格序号编址，序号升序即坐标序）的数组与按坐标序构造的列表，不遍历无序集合。</para>
 /// <para>规格：openspec/changes/life-shape/specs/life-shape；单子不成活见 openspec/changes/life-single-stone（「活形三态」MODIFIED）。</para>
 /// </remarks>
 public sealed class LifeShapeReport
@@ -82,12 +82,17 @@ public sealed class LifeShapeReport
     public const int EyeSpaceMax = 12;
 
     private readonly int _width;
+
+    /// <summary>格下标 → 可落子格序号（不可落子为 −1），取自盘面的地图派生表（段 C2）；下面两张表只为可落子格存放。</summary>
+    private readonly ImmutableArray<int> _slot;
     private readonly int[] _groupAt;
     private readonly int[] _eyeSpaceAt;
 
-    private LifeShapeReport(int width, int[] groupAt, int[] eyeSpaceAt, ImmutableArray<GroupLife> groups, ImmutableArray<EyeSpace> eyeSpaces)
+    private LifeShapeReport(
+        int width, ImmutableArray<int> slot, int[] groupAt, int[] eyeSpaceAt, ImmutableArray<GroupLife> groups, ImmutableArray<EyeSpace> eyeSpaces)
     {
         _width = width;
+        _slot = slot;
         _groupAt = groupAt;
         _eyeSpaceAt = eyeSpaceAt;
         Groups = groups;
@@ -116,8 +121,12 @@ public sealed class LifeShapeReport
 
     private static LifeShapeReport AnalyzeCore(GameBoard board)
     {
+        // 段 C2（board-link-mode 裁决 C18 / P2，决策不变的数据结构改写）：逐格表只为可落子格存放、按可落子格序号编址
+        // （序号升序即坐标序）——棋子、气与空区都只在可落子格上（气边两端都可落子），73×73 画布上省掉九成的逐格分配与扫描。
         int width = board.Width;
-        int size = width * board.Height;
+        ImmutableArray<int> playable = board.PlayableIndices;
+        ImmutableArray<int> slot = board.PlayableOrdinals;
+        int size = playable.Length;
 
         // ① 棋串：一次全盘枚举，按格记下所在棋串下标（空格为 -1）。
         ImmutableArray<Group> groups = board.AllGroups();
@@ -127,7 +136,7 @@ public sealed class LifeShapeReport
         {
             foreach (Coord stone in groups[g].Stones)
             {
-                groupAt[Index(width, stone)] = g;
+                groupAt[SlotOf(slot, width, stone)] = g;
             }
         }
 
@@ -139,7 +148,7 @@ public sealed class LifeShapeReport
             {
                 foreach (Coord n in board.LibertyNeighbors(stone))
                 {
-                    int ni = Index(width, n);
+                    int ni = SlotOf(slot, width, n);
                     isLiberty[ni] = groupAt[ni] < 0 && board.GivesLiberty(n);
                 }
             }
@@ -156,14 +165,15 @@ public sealed class LifeShapeReport
         var touching = new List<int>();
         int floodId = 0;
 
-        foreach (Coord start in board.AllCoords())
+        // 段 C2：按可落子格序号升序找起点（即 AllCoords 的坐标序），不经坐标枚举器逐格构造坐标。
+        for (int startIndex = 0; startIndex < size; startIndex++)
         {
-            int startIndex = Index(width, start);
             if (!isLiberty[startIndex] || floodOf[startIndex] != 0)
             {
                 continue;
             }
 
+            Coord start = board.CoordOfIndex(playable[startIndex]);
             floodId++;
             region.Clear();
             touching.Clear();
@@ -174,7 +184,7 @@ public sealed class LifeShapeReport
             {
                 foreach (Coord n in board.LibertyNeighbors(region[head]))
                 {
-                    int ni = Index(width, n);
+                    int ni = SlotOf(slot, width, n);
                     int g = groupAt[ni];
                     if (g >= 0)
                     {
@@ -231,7 +241,7 @@ public sealed class LifeShapeReport
         var eyeSpacesOfGroup = new List<EyeSpace>?[groups.Length];
         foreach ((ImmutableArray<Coord> cells, PlayerId owner, ImmutableArray<int> touchingGroups) in closed)
         {
-            var space = new EyeSpace(owner, cells, EyeValueOf(board, cells, eyeSpaceAt, width, eyeSpaces.Count), touchingGroups);
+            var space = new EyeSpace(owner, cells, EyeValueOf(board, cells, eyeSpaceAt, slot, width, eyeSpaces.Count), touchingGroups);
             eyeSpaces.Add(space);
             foreach (int g in touchingGroups)
             {
@@ -248,20 +258,22 @@ public sealed class LifeShapeReport
             lives.Add(new GroupLife(groups[g], StateOf(sum, groups[g].Size), sum, own));
         }
 
-        return new LifeShapeReport(width, groupAt, eyeSpaceAt, lives.MoveToImmutable(), [.. eyeSpaces]);
+        return new LifeShapeReport(width, slot, groupAt, eyeSpaceAt, lives.MoveToImmutable(), [.. eyeSpaces]);
     }
 
     /// <summary>该格棋子所在棋串的活形；空格返回 <c>null</c>。预演第 6 步（破坏活形）按棋子在副本上的所在棋串重查用它。</summary>
     public GroupLife? GroupLifeAt(Coord stone)
     {
-        int g = _groupAt[IndexChecked(stone)];
+        int i = IndexChecked(stone);
+        int g = i >= 0 ? _groupAt[i] : -1;
         return g >= 0 ? Groups[g] : null;
     }
 
     /// <summary>该空格所属的眼空间；不在任何封闭空区里返回 <c>null</c>。</summary>
     public EyeSpace? EyeSpaceAt(Coord cell)
     {
-        int e = _eyeSpaceAt[IndexChecked(cell)];
+        int i = IndexChecked(cell);
+        int e = i >= 0 ? _eyeSpaceAt[i] : -1;
         return e >= 0 ? EyeSpaces[e] : null;
     }
 
@@ -331,11 +343,11 @@ public sealed class LifeShapeReport
     /// 眼值（design D2）：先把本空区格登记进 <paramref name="eyeSpaceAt"/>，再按格数查表；
     /// 4 格时按空区内部的气边图判方四——四格连通且每格恰有 2 个区内气边邻格 ⇔ 成 4-环。
     /// </summary>
-    private static int EyeValueOf(GameBoard board, ImmutableArray<Coord> cells, int[] eyeSpaceAt, int width, int spaceIndex)
+    private static int EyeValueOf(GameBoard board, ImmutableArray<Coord> cells, int[] eyeSpaceAt, ImmutableArray<int> slot, int width, int spaceIndex)
     {
         foreach (Coord c in cells)
         {
-            eyeSpaceAt[Index(width, c)] = spaceIndex;
+            eyeSpaceAt[SlotOf(slot, width, c)] = spaceIndex;
         }
 
         return cells.Length switch
@@ -343,20 +355,20 @@ public sealed class LifeShapeReport
             1 => 1,
             2 => 0,
             3 => 1,
-            4 => IsRing(board, cells, eyeSpaceAt, width, spaceIndex) ? 0 : 2,
+            4 => IsRing(board, cells, eyeSpaceAt, slot, width, spaceIndex) ? 0 : 2,
             5 => 1,
             _ => 2,
         };
     }
 
-    private static bool IsRing(GameBoard board, ImmutableArray<Coord> cells, int[] eyeSpaceAt, int width, int spaceIndex)
+    private static bool IsRing(GameBoard board, ImmutableArray<Coord> cells, int[] eyeSpaceAt, ImmutableArray<int> slot, int width, int spaceIndex)
     {
         foreach (Coord c in cells)
         {
             int inside = 0;
             foreach (Coord n in board.LibertyNeighbors(c))
             {
-                if (eyeSpaceAt[Index(width, n)] == spaceIndex)
+                if (eyeSpaceAt[SlotOf(slot, width, n)] == spaceIndex)
                 {
                     inside++;
                 }
@@ -385,14 +397,30 @@ public sealed class LifeShapeReport
 
     private static int Index(int width, Coord c) => (c.Y * width) + c.X;
 
+    /// <summary>坐标 → 逐格表的序号；越界抛出，不可落子格为 −1（那里没有棋子，也不在任何空区里）。</summary>
     private int IndexChecked(Coord c)
     {
         int i = Index(_width, c);
-        if (c.X >= _width || i >= _groupAt.Length)
+        if (c.X >= _width || i >= _slot.Length)
         {
             throw new ArgumentOutOfRangeException(nameof(c), c.ToNotation(), "坐标超出棋盘范围。");
         }
 
-        return i;
+        return _slot[i];
+    }
+
+    /// <summary>
+    /// 分析途中的坐标 → 序号：棋子与气边两端都只可能在可落子格上（落子与气边都要求可落子，改造与链接只增不减可落子格），
+    /// 不可落子即盘面状态自相矛盾，响亮失败而不是静默当作空格。
+    /// </summary>
+    private static int SlotOf(ImmutableArray<int> slot, int width, Coord c)
+    {
+        int o = slot[Index(width, c)];
+        if (o < 0)
+        {
+            throw new SiegeRuleException($"活形分析遇到不可落子格上的棋子或气边：{c.ToNotation()}。");
+        }
+
+        return o;
     }
 }
