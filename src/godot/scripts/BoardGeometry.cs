@@ -59,18 +59,29 @@ public static class BoardGeometry
     /// 第 <paramref name="index"/> 列的字母标注锚点。<paramref name="far"/> 为 <c>true</c> 取棋盘远边（−Z），否则取近边。
     /// 位置由 <see cref="Center(Coord, int, int)"/>（h=0 平面）推出，不另算一份——标注与格子必须永远对齐（visual-style-baseline「棋盘坐标标注」）。
     /// </summary>
-    public static Vector3 ColumnLabelAnchor(int index, int width, int height, bool far)
+    public static Vector3 ColumnLabelAnchor(int index, int width, int height, bool far) =>
+        ColumnLabelAnchor(index, far ? height - 1 : 0, width, height, far);
+
+    /// <summary>
+    /// 第 <paramref name="index"/> 列的字母标注锚点，沿画幅边缘行 <paramref name="edgeRow"/>（当前战场 ∪ 占位的包围盒，board-link-mode 裁决 D26）：
+    /// 该行格心再向外加既有边距。旧地图的画幅就是整张图，边缘行为 0 / 末行，与上一个重载逐值相同。
+    /// </summary>
+    public static Vector3 ColumnLabelAnchor(int index, int edgeRow, int width, int height, bool far)
     {
-        Vector3 edge = Center(new Coord(index, far ? height - 1 : 0), width, height);
+        Vector3 edge = Center(new Coord(index, edgeRow), width, height);
         return edge with { Z = edge.Z + (far ? -FarLabelMargin : LabelMargin) };
     }
 
     /// <summary>
     /// 第 <paramref name="index"/> 行的数字标注锚点。<paramref name="right"/> 为 <c>true</c> 取棋盘右边（+X），否则取左边。
     /// </summary>
-    public static Vector3 RowLabelAnchor(int index, int width, int height, bool right)
+    public static Vector3 RowLabelAnchor(int index, int width, int height, bool right) =>
+        RowLabelAnchor(index, right ? width - 1 : 0, width, height, right);
+
+    /// <summary>第 <paramref name="index"/> 行的数字标注锚点，沿画幅边缘列 <paramref name="edgeColumn"/>（同上，列标 / 行号的换算只在这里）。</summary>
+    public static Vector3 RowLabelAnchor(int index, int edgeColumn, int width, int height, bool right)
     {
-        Vector3 edge = Center(new Coord(right ? width - 1 : 0, index), width, height);
+        Vector3 edge = Center(new Coord(edgeColumn, index), width, height);
         return edge with { X = edge.X + (right ? LabelMargin : -LabelMargin) };
     }
 

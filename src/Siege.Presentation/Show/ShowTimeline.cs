@@ -96,10 +96,19 @@ public sealed record ShowMask(
         [], ImmutableDictionary<Coord, int>.Empty, [], 0, ImmutableDictionary<PlayerId, PowerDisplay>.Empty,
         [], null, ImmutableDictionary<Coord, int>.Empty, null);
 
+    /// <summary>
+    /// 棋盘展开节拍 ①（board-link-mode 4.5）：正在升起的新增格及其进度（0..1000‰；0 = 尚未开始、仍在地面之下）。
+    /// 升起节拍之前（含之前的节拍播放中）这些格进度为 0；播完后不再出现。
+    /// </summary>
+    public ImmutableDictionary<Coord, int> Rising { get; init; } = ImmutableDictionary<Coord, int>.Empty;
+
+    /// <summary>棋盘展开节拍 ②：相机拉远的目标（合并后战场的格包围盒）与进度（0..1000‰）；只在该节拍进行中非空。</summary>
+    public (CoordRect Target, int Permille)? CameraPull { get; init; }
+
     /// <summary>遮罩是否为空（没有任何中间态）。</summary>
     public bool IsEmpty =>
         Hidden.IsEmpty && Appearing.IsEmpty && StillShown.IsEmpty && CaptureFadePermille == 0 && Power.IsEmpty
-        && Callouts.IsEmpty && CaptureSummary is null && RelicFlash.IsEmpty && Banner is null;
+        && Callouts.IsEmpty && CaptureSummary is null && RelicFlash.IsEmpty && Banner is null && Rising.IsEmpty && CameraPull is null;
 }
 
 /// <summary>
@@ -224,8 +233,34 @@ public sealed class ShowTimeline
         string? captureSummary = null;
         ImmutableDictionary<Coord, int>.Builder relicFlash = ImmutableDictionary.CreateBuilder<Coord, int>();
         BannerDisplay? banner = null;
+        ImmutableDictionary<Coord, int>.Builder rising = ImmutableDictionary.CreateBuilder<Coord, int>();
+        (CoordRect Target, int Permille)? cameraPull = null;
         int progress = ProgressPermille;
         int nowMs = _startOfCurrentMs + _elapsedMs;
+
+        // 棋盘展开（board-link-mode 4.5）：尚未播到的升起节拍里的格要先藏在地面之下、尚未显现的对方格要先藏起棋子——这些"未来节拍"也要在遮罩里体现。
+        for (int i = _index + 1; i < Beats.Length; i++)
+        {
+            switch (Beats[i])
+            {
+                case BoardRiseBeat rise:
+                    foreach (Coord c in rise.Cells)
+                    {
+                        rising[c] = 0;
+                    }
+
+                    break;
+                case OpponentRevealBeat reveal:
+                    foreach (Coord c in reveal.Cells)
+                    {
+                        hidden.Add(c);
+                    }
+
+                    break;
+                default:
+                    break;
+            }
+        }
 
         // 已播过与当前的节拍：飘字按各自出现时刻计年龄（D4，可跨节拍）。
         int startMs = 0;
@@ -303,12 +338,52 @@ public sealed class ShowTimeline
                     }
 
                     break;
+                case BoardRiseBeat rise:
+                    // 升起中：进度即升起程度；播过即到位（不再列入）。
+                    if (current)
+                    {
+                        foreach (Coord c in rise.Cells)
+                        {
+                            rising[c] = progress;
+                        }
+                    }
+
+                    break;
+                case CameraPullBeat pull:
+                    if (current)
+                    {
+                        cameraPull = (pull.Target, progress);
+                    }
+
+                    break;
+                case OpponentRevealBeat reveal:
+                    // 显现中：对方格上的棋子按进度出现（复用落子出现的渐显）；进度 0 仍隐藏；播过即正常绘制。
+                    if (current)
+                    {
+                        foreach (Coord c in reveal.Cells)
+                        {
+                            if (progress <= 0)
+                            {
+                                hidden.Add(c);
+                            }
+                            else if (progress < PowerInterpolation.FullPermille)
+                            {
+                                appearing[c] = progress;
+                            }
+                        }
+                    }
+
+                    break;
                 default:
                     break;
             }
         }
 
-        return new ShowMask(hidden.ToImmutable(), appearing.ToImmutable(), stillShown, fade, power.ToImmutable(), callouts.ToImmutable(), captureSummary, relicFlash.ToImmutable(), banner);
+        return new ShowMask(hidden.ToImmutable(), appearing.ToImmutable(), stillShown, fade, power.ToImmutable(), callouts.ToImmutable(), captureSummary, relicFlash.ToImmutable(), banner)
+        {
+            Rising = rising.ToImmutable(),
+            CameraPull = cameraPull,
+        };
     }
 
     /// <summary>年龄在 0..寿命 之内的飘字才活跃（尚未出现或已淡完的不列）。</summary>

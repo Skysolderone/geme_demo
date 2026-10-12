@@ -78,7 +78,8 @@ public sealed class BoardCamera
 
     private const float LockEpsilon = 1e-4f;
 
-    private readonly PlaneRect _bounds;
+    private PlaneRect _bounds;
+    private PlaneRect _focus;
     private float _aspect;
     private float _x;
     private float _z;
@@ -86,15 +87,18 @@ public sealed class BoardCamera
     private bool _overview;
     private CameraPose _beforeOverview;
 
-    /// <summary>以地图外接矩形（含坐标标注外圈）建相机：初始在地图中心、最远缩放。</summary>
-    public BoardCamera(PlaneRect bounds, float aspect = 16f / 9f)
+    /// <summary>
+    /// 以外接矩形（含坐标标注外圈）建相机：初始在矩形中心、最远缩放。
+    /// <paramref name="focus"/> 是"当前战场"的外接矩形（board-link-mode 4.4 / 裁决 D22 / D26）：全局预览以它一屏可见为准、注视点锁它的中心；
+    /// 未给出即等于 <paramref name="bounds"/>（旧地图：整张图就是唯一的战场，行为与引入之前逐位相同）。
+    /// <paramref name="bounds"/> 则是注视点可行矩形与最远缩放的依据——链接模式下取"当前战场 ∪ 5 个占位"的包围盒，所以能推到占位、看得见别人的占位。
+    /// </summary>
+    public BoardCamera(PlaneRect bounds, float aspect = 16f / 9f, PlaneRect? focus = null)
     {
-        if (!(bounds.Width > 0f) || !(bounds.Depth > 0f))
-        {
-            throw new ArgumentException("地图外接矩形必须有正的跨度。", nameof(bounds));
-        }
-
+        CheckRect(bounds, nameof(bounds));
         _bounds = bounds;
+        _focus = focus ?? bounds;
+        CheckRect(_focus, nameof(focus));
         _aspect = CheckedAspect(aspect);
         _x = bounds.CenterX;
         _z = bounds.CenterZ;
@@ -102,23 +106,54 @@ public sealed class BoardCamera
         Clamp();
     }
 
-    /// <summary>地图外接矩形。</summary>
+    /// <summary>注视点可行矩形的依据（旧地图：地图外接矩形；链接模式：当前战场 ∪ 占位的包围盒）。</summary>
     public PlaneRect Bounds => _bounds;
+
+    /// <summary>当前战场的外接矩形（全局预览与"一屏看全"的依据）。旧地图等于 <see cref="Bounds"/>。</summary>
+    public PlaneRect Focus => _focus;
+
+    /// <summary>
+    /// 重定界（board-link-mode 4.4：链接后可行矩形随战场扩大）：<b>保位姿</b>换上新的外接矩形与战场矩形，只按新矩形重夹一次——不复位到中心、不改缩放、
+    /// 不退出全局预览（预览中的距离与注视点按新战场重算）。矩形相同时什么都不变。
+    /// </summary>
+    public void Rebound(PlaneRect bounds, PlaneRect? focus = null)
+    {
+        CheckRect(bounds, nameof(bounds));
+        PlaneRect next = focus ?? bounds;
+        CheckRect(next, nameof(focus));
+        if (bounds == _bounds && next == _focus)
+        {
+            return;
+        }
+
+        _bounds = bounds;
+        _focus = next;
+        Clamp();
+    }
 
     /// <summary>当前位姿。</summary>
     public CameraPose Pose => new(_x, _z, _distance);
 
-    /// <summary>整盘一屏看全所需的距离。</summary>
-    public float FullViewDistance => MathF.Max(DistanceToShow(_bounds.Depth), DistanceToShow(_bounds.Width / _aspect));
+    /// <summary>当前战场（<see cref="Focus"/>）一屏看全所需的距离：全局预览切入时的距离。旧地图即整盘一屏所需距离。</summary>
+    public float FullViewDistance => MathF.Max(DistanceToShow(_focus.Depth), DistanceToShow(_focus.Width / _aspect));
 
-    /// <summary>最远限值 = min(整盘一屏所需距离, 上限)。</summary>
-    public float Farthest => MathF.Min(FullViewDistance, FarthestCap);
+    /// <summary>外接矩形（<see cref="Bounds"/>）一屏看全所需的距离。</summary>
+    public float BoundsViewDistance => MathF.Max(DistanceToShow(_bounds.Depth), DistanceToShow(_bounds.Width / _aspect));
+
+    /// <summary>最远限值 = min(外接矩形一屏所需距离, 上限)。</summary>
+    public float Farthest => MathF.Min(BoundsViewDistance, FarthestCap);
 
     /// <summary>最近限值：完整显示一个 5×5 平台；地图本身比它还小时退到最远限值。</summary>
     public float Nearest => MathF.Min(DistanceToShow(NearestSpan), Farthest);
 
-    /// <summary>最远缩放下整盘一屏可见（如 <c>siege-4p-base-v5</c>）：这类地图上相机等价于旧的固定相机。</summary>
-    public bool FitsOneScreen => FullViewDistance <= FarthestCap;
+    /// <summary>最远缩放下外接矩形一屏可见（如 <c>siege-4p-base-v5</c>）：这类地图上相机等价于旧的固定相机，开局对准不动相机。</summary>
+    public bool FitsOneScreen => BoundsViewDistance <= FarthestCap;
+
+    /// <summary>
+    /// 全局预览是否有意义（viewport-camera「全局预览」：当前战场一屏看全时 MUST NOT 出现按钮、M 键无效）：当前战场在最远上限下看不全才有。
+    /// 旧地图等于 <c>!FitsOneScreen</c>。
+    /// </summary>
+    public bool OverviewAvailable => FullViewDistance > FarthestCap;
 
     /// <summary>是否处于全局预览：整盘一屏可见，距离越过 <see cref="FarthestCap"/>，注视点锁在地图中心。</summary>
     public bool IsOverview => _overview;
@@ -201,7 +236,7 @@ public sealed class BoardCamera
     /// </summary>
     public bool ToggleOverview()
     {
-        if (FitsOneScreen)
+        if (!OverviewAvailable)
         {
             return false;
         }
@@ -259,7 +294,7 @@ public sealed class BoardCamera
 
         if (FitsOneScreen)
         {
-            // 整盘本来就看得全：锁定不动相机，玩家在插旗阶段拉近 / 推过的画面原样保留。
+            // 外接矩形本来就看得全（旧的小图）：锁定不动相机，玩家在插旗阶段拉近 / 推过的画面原样保留。
             return;
         }
 
@@ -318,6 +353,14 @@ public sealed class BoardCamera
         return poses;
     }
 
+    private static void CheckRect(PlaneRect rect, string name)
+    {
+        if (!(rect.Width > 0f) || !(rect.Depth > 0f))
+        {
+            throw new ArgumentException("外接矩形必须有正的跨度。", name);
+        }
+    }
+
     private static float CheckedAspect(float aspect) =>
         aspect > 0f && float.IsFinite(aspect) ? aspect : throw new ArgumentOutOfRangeException(nameof(aspect), "宽高比必须为正。");
 
@@ -337,9 +380,10 @@ public sealed class BoardCamera
     {
         if (_overview)
         {
+            // 预览锁在当前战场：距离取战场一屏可见、注视点取战场中心（旧地图的战场就是整张图）。
             _distance = FullViewDistance;
-            _x = _bounds.CenterX;
-            _z = _bounds.CenterZ;
+            _x = _focus.CenterX;
+            _z = _focus.CenterZ;
             return;
         }
 

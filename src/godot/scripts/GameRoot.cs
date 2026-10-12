@@ -67,6 +67,7 @@ public sealed partial class GameRoot : Node3D
     private bool _autoDemo;
     private bool _pickCheck;
     private int _seenLinks;
+    private string _seenStrip = string.Empty;
 
     /// <summary>链接图对局的配对来源（board-link-mode D3）：有人值守真随机、无人值守固定脚本；每次建局（含新局界面的预览会话）都挂同一个。</summary>
     private IPairingSource _pairing = null!;
@@ -149,7 +150,7 @@ public sealed partial class GameRoot : Node3D
             // --shot-show=placement|capture|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
             // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、power = 势力重算、banner = 横幅），
             // 该次演出按正常时长播放（其余无人值守结算仍为零时长），以固定 16 ms/帧推进到该节拍进行中（见 ShotShowReady）取图。不给此项时无人值守路径与引入演出之前完全相同。
-            _shotShow = args.Text("shot-show", "placement / capture / power / banner（等该节拍进行中再截图）");
+            _shotShow = args.Text("shot-show", "placement / capture / power / banner / expand / field（等该节拍进行中再截图）");
 
             // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
             // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
@@ -196,9 +197,9 @@ public sealed partial class GameRoot : Node3D
 
             if (_shotShow is not null)
             {
-                if (_shotShow is not ("placement" or "capture" or "power" or "banner"))
+                if (_shotShow is not ("placement" or "capture" or "power" or "banner" or "expand" or "field"))
                 {
-                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power 或 banner。");
+                    throw new System.FormatException($"--shot-show={_shotShow} 无效：应为 placement、capture、power、banner、expand 或 field。");
                 }
 
                 if (!_autoDemo || _screenshotFrame < 0 || _shotRecruitCollapsed || _shotForbidden)
@@ -312,6 +313,7 @@ public sealed partial class GameRoot : Node3D
         AddChild(_hud);
         _hud.Build();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
+        _hud.OverviewAvailable = _board.Rig.OverviewAvailable;
         Connect();
         ConnectMapSelect();
         ConnectCarry();
@@ -591,6 +593,13 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[terrain-edit] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合落成：{string.Join("、", fresh.Select(Labels.TerrainEdit))}");
             }
 
+            if (_session.EventStrip != _seenStrip)
+            {
+                // 他场结算的提示条（settlement-show「战场结算横幅」）：不阻塞输入，只打一行供自检与截图选帧。
+                _seenStrip = _session.EventStrip;
+                GD.Print($"[strip] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 提示条：{_seenStrip}");
+            }
+
             // 链接事件（board-link-mode D-b）：Godot 在这一帧感知到新链接（段 D-c 的"棋盘展开"节拍挂在这里）；随后的 RefreshViews 经地形指纹变化重搭本战场。
             IReadOnlyList<LinkRecord> links = _session.Match.Links;
             for (; _seenLinks < links.Count; _seenLinks++)
@@ -821,6 +830,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _hud.OverviewActive = _board.Rig.IsOverview;
+        _hud.OverviewAvailable = _board.Rig.OverviewAvailable;   // 链接后战场变大才出现"全局"按钮（viewport-camera「全局预览」）
         SyncRecruitCollapse();
         // 演出未播完时终局面板不显示（settlement-show-callouts「横幅节拍」：终局面板在横幅播完后才出现）；无人值守零时长下时间线创建即播完，行为不变。
         _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse, mask, deferResult: ShowPlaying);
@@ -936,9 +946,12 @@ public sealed partial class GameRoot : Node3D
         BoardCellView[] cells = [.. _session.World.Board().Cells.Where(c => c.Terrain == Terrain.Playable)];
         CameraPose saved = _board.Rig.Pose;
         bool ok = cells.Length > 0;
-        // 注视地图中心的位姿画面内必须有格（testing.md）——前提是地图中心本身是可落子格。链接图（board-link-mode）的画布中心是五块出生棋盘之间的场景格，
-        // 近景注视中心时整屏无可落子格是地图几何使然、不是拾取坏了；此时只对该位姿记"无可验"（段 D-a 按 Link 口径放宽；战场范围的位姿由段 D-c / tasks 4.4 补）。
-        bool centerPlayable = cells.Any(c => c.Coord == new Coord(width / 2, height / 2));
+        // board-link-mode D-c（回收 D12 / D24 的"无可验"例外）：注视中心的位姿不再注视画布中心，而是注视"画幅中心最近的可落子格"——
+        // 多位姿层的中心 / 最近 / 最远三档都以它为注视点，画面内必须有格的要求照旧成立。
+        // 没有可落子格（如插旗未锁定就跑自检）时注视画幅中心，随后按"可落子格 0"失败退出，不在这里抛异常。
+        PlaneRect frame = _board.Rig.Bounds;
+        (float centerX, float centerZ) = cells.Length == 0 ? (frame.CenterX, frame.CenterZ)
+            : _board.PlaneCenterOf(cells.OrderBy(c => Flat(_board.CenterOf(c.Coord) - new Vector3(frame.CenterX, 0f, frame.CenterZ))).ThenBy(c => c.Coord).First().Coord);
 
         // ① 逐格居中
         var strict = new HashSet<Coord>();
@@ -984,8 +997,10 @@ public sealed partial class GameRoot : Node3D
         // ② 7 个位姿
         var verified = new HashSet<Coord>();
         // 一屏看不全的地图另加"全局预览"一档：距离越过平时的最远上限，是拾取要另验的新距离段。
-        List<(string Name, System.Action Apply)> stages = [.. _board.Rig.CheckPoses().Select(p => (p.Name, (System.Action)(() => _board.Rig.Set(p.Pose))))];
-        if (!_board.Rig.FitsOneScreen)
+        // 四角位姿按画幅（当前战场 ∪ 占位的包围盒）取；注视中心的三档把注视点换到画幅中心最近的可落子格（距离不变，仍经视图模型夹取）。
+        List<(string Name, System.Action Apply)> stages = [.. _board.Rig.CheckPoses().Select(p => (p.Name, (System.Action)(() =>
+            _board.Rig.Set(p.Name is "中心" or "最近" or "最远" ? new CameraPose(centerX, centerZ, p.Pose.Distance) : p.Pose))))];
+        if (_board.Rig.OverviewAvailable)
         {
             stages.Add(("全局预览", () =>
             {
@@ -1030,13 +1045,13 @@ public sealed partial class GameRoot : Node3D
                 (blocked ? occluded : failures).Add(line);
             }
 
-            PlaneRect bounds = _board.Rig.Bounds;
-            bool focusedOnCenter = Mathf.Abs(pose.FocusX - bounds.CenterX) < 1e-3f && Mathf.Abs(pose.FocusZ - bounds.CenterZ) < 1e-3f;
-            ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter || !centerPlayable);
+            // 注视中心的三档画面内必须有格（testing.md）：注视点已换到最近的可落子格，所以不需要任何"无可验"例外（D-c 回收 D12 / D24）。
+            bool focusedOnCenter = name is "中心" or "最近" or "最远";
+            ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter);
             GD.Print($"[pick-check] 位姿「{name}」注视点 ({pose.FocusX:0.###}, {pose.FocusZ:0.###}) 距离 {pose.Distance:0.###}：画面内可落子格 {inView}，"
                 + $"往返一致 {inView - failures.Count - occluded.Count}，被更近的高台遮挡 {occluded.Count}{(occluded.Count == 0 ? string.Empty : "（" + string.Join("、", occluded) + "）")}，"
                 + $"失败 {failures.Count}{(failures.Count == 0 ? string.Empty : "：" + string.Join("、", failures))}"
-                + (inView == 0 && !focusedOnCenter ? "（该角视野内没有可落子格，无可验）" : inView == 0 && !centerPlayable ? "（地图中心是场景格，该位姿视野内没有可落子格，无可验）" : string.Empty));
+                + (inView == 0 && !focusedOnCenter ? "（该角视野内没有可落子格，无可验）" : string.Empty));
         }
 
         _board.Rig.Set(saved);
@@ -1162,8 +1177,15 @@ public sealed partial class GameRoot : Node3D
         _show = new ShowTimeline(beats, duration);
         GD.Print($"[show] 第 {_frame} 帧 {who}结算：节拍 {beats.Length}"
             + $"（落子 {beats.OfType<PlacementBeat>().Sum(b => b.Pieces.Length)} / 提子 {beats.OfType<CaptureBeat>().Sum(b => b.Pieces.Length)}"
-            + $" / 信物 {beats.OfType<RelicRevealBeat>().Sum(b => b.Relics.Length)} / 势力 {beats.OfType<PowerBeat>().Sum(b => b.Changes.Length)} / 横幅 {beats.OfType<BannerBeat>().Sum(b => b.Banners.Length)}）"
+            + $" / 信物 {beats.OfType<RelicRevealBeat>().Sum(b => b.Relics.Length)} / 势力 {beats.OfType<PowerBeat>().Sum(b => b.Changes.Length)} / 横幅 {beats.OfType<BannerBeat>().Sum(b => b.Banners.Length)}"
+            + $" / 展开 {beats.OfType<BoardRiseBeat>().Sum(b => b.Cells.Length)}+{beats.OfType<OpponentRevealBeat>().Sum(b => b.Cells.Length)} 格{(beats.OfType<CameraPullBeat>().Any() ? "、拉远" : string.Empty)}）"
             + (duration == ShowDuration.Zero ? "，零时长" : $"，{_show.TotalDurationMs} ms"));
+        foreach (string banner in beats.OfType<BannerBeat>().SelectMany(b => b.Banners).Where(t => t.StartsWith("战场", System.StringComparison.Ordinal) || t.StartsWith("棋盘展开", System.StringComparison.Ordinal)))
+        {
+            // 链接模式演出（settlement-show「战场结算横幅」「棋盘展开节拍」）：横幅文案打一行，供自检与截图选帧。
+            GD.Print($"[field] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 横幅：{banner}");
+        }
+
         if (duration == ShowDuration.Normal)
         {
             _flash = _flash with { Placed = [], Captured = [] };
@@ -1211,9 +1233,41 @@ public sealed partial class GameRoot : Node3D
         }
 
         ShowMask mask = _show.Mask();
+        ApplyCameraPull(mask);
         _board.RefreshShow(_session.World, _layers.Treatment, mask);
         _hud.RefreshShow(_session.World, mask);
     }
+
+    /// <summary>
+    /// 棋盘展开节拍 ②（settlement-show「棋盘展开节拍」）：相机从节拍开始时的位姿按进度移到"合并后战场一屏可见"的位姿——目标注视点为战场包围盒中心、
+    /// 距离取整块可见并留开局余量（与开局对准 / <c>--shot-board</c> 同一口径），每一步都经视图模型夹取，所以演出结束位姿必在可行矩形内（规格：不强制回家）。
+    /// 无人值守零时长遮罩恒空，不进这里。
+    /// </summary>
+    private void ApplyCameraPull(ShowMask mask)
+    {
+        if (mask.CameraPull is not { } pull)
+        {
+            _pullStart = null;
+            return;
+        }
+
+        _pullStart ??= _board.Rig.Pose;
+        (Coord low, Coord high) = pull.Target.Corners;
+        PlaneRect rect = CameraHome.Platform([low, high], _board.PlaneCenterOf)!.Value;
+        float aspect = _board.Rig.VisibleWidth / _board.Rig.VisibleDepth;
+        float pad = 1f + (2f * BoardCamera.OpeningMargin);
+        float distance = System.Math.Clamp(BoardCamera.DistanceToShow(System.Math.Max(rect.Depth + pad, (rect.Width + pad) / aspect)), _board.Rig.Nearest, _board.Rig.Farthest);
+        float t = System.Math.Clamp(pull.Permille, 0, 1000) / 1000f;
+        CameraPose from = _pullStart.Value;
+        _board.Rig.Set(new CameraPose(
+            from.FocusX + ((rect.CenterX - from.FocusX) * t),
+            from.FocusZ + ((rect.CenterZ - from.FocusZ) * t),
+            from.Distance + ((distance - from.Distance) * t)));
+        ApplyCamera("棋盘展开");
+    }
+
+    /// <summary>相机拉远节拍开始时的位姿（插值起点）；节拍之外为 <c>null</c>。</summary>
+    private CameraPose? _pullStart;
 
     /// <summary>
     /// <c>--shot-show</c> 的取图点：势力节拍要等到有玩家处在领地 / 军势段且段内过了三成（数字仍放大、段文案可见——只有一段时半拍处已经定格，看不到"领地 +a"）；
@@ -1263,6 +1317,8 @@ public sealed partial class GameRoot : Node3D
         "capture" => beat is CaptureBeat,
         "power" => beat is PowerBeat,
         "banner" => beat is BannerBeat,
+        "expand" => beat is BoardRiseBeat or OpponentRevealBeat,   // board-link-mode 4.5：棋盘展开中间帧（升起或对方盘面显现）
+        "field" => beat is BannerBeat field && field.Banners.Any(t => t.StartsWith("战场", System.StringComparison.Ordinal)),   // 战场胜出 / 落败横幅
         _ => false,
     };
 

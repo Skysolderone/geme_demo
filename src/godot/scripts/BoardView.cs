@@ -86,6 +86,21 @@ public sealed partial class BoardView : Node3D
     /// 一律先查它——不在视图里的格什么都不画，"信息层只在本战场的格上出现"由这一处守住。
     /// </summary>
     private HashSet<Coord> _visible = [];
+
+    /// <summary>每个可落子格搭出来的地砖节点（面砖、衬底、侧面色带、水面、桥）：棋盘展开节拍把新增格的地砖从地面之下升起时按格位移（board-link-mode 4.5）。</summary>
+    private readonly Dictionary<Coord, List<Node3D>> _tileNodes = [];
+
+    /// <summary>此刻被升起节拍压下去的格 → 下压量（世界单位）；节拍播完 / 完整刷新时复位。</summary>
+    private readonly Dictionary<Coord, float> _tileDrop = [];
+
+    /// <summary>本次搭建的画幅（格包围盒），供引擎侧的 pick-check 等读取。</summary>
+    private (Coord Low, Coord High) _extent;
+
+    /// <summary>画幅（当前战场 ∪ 占位的格包围盒）。</summary>
+    public (Coord Low, Coord High) Extent => _extent;
+
+    /// <summary>升起节拍开始时地砖所在的深度（世界单位）：藏在底座之下。</summary>
+    private const float RiseDepth = 1.6f;
     private string _terrainKey = string.Empty;
     private int _width;
     private int _height;
@@ -124,6 +139,8 @@ public sealed partial class BoardView : Node3D
         _flatMaterials.Clear();
         _boxMeshes.Clear();
         _levels.Clear();
+        _tileNodes.Clear();
+        _tileDrop.Clear();
         _partBatches.Clear();
         _unbatchedObstacles = 0;
         _boardPieces.Clear();
@@ -132,14 +149,26 @@ public sealed partial class BoardView : Node3D
         _height = board.Height;
         _visible = [.. board.Cells.Select(c => c.Coord)];
 
-        // 底座：盖住棋盘外圈的标注平面（标注在 h=0 平面上、离边缘格最远 FarLabelMargin），再向外留 0.45 格的边。
+        // 画幅（board-link-mode 裁决 D26 / tasks 4.4）：底座、坐标标注与相机可行矩形都以"当前战场 ∪ 5 个占位"的格包围盒为准，随链接扩大；
+        // 旧地图没有占位、视图含全图每一格，包围盒就是整张图，与引入之前逐值相同。格包围盒 → 平面矩形只经 BoardGeometry.Center 的那一份映射。
+        (Coord low, Coord high) = ExtentOf(board);
+        Vector3 lowCenter = BoardGeometry.Center(low, _width, _height);
+        Vector3 highCenter = BoardGeometry.Center(high, _width, _height);
+        float minX = Math.Min(lowCenter.X, highCenter.X), maxX = Math.Max(lowCenter.X, highCenter.X);
+        float minZ = Math.Min(lowCenter.Z, highCenter.Z), maxZ = Math.Max(lowCenter.Z, highCenter.Z);
+        float spanX = maxX - minX + BoardGeometry.CellSize;
+        float spanZ = maxZ - minZ + BoardGeometry.CellSize;
+        var frameCenter = new Vector3((minX + maxX) * 0.5f, 0f, (minZ + maxZ) * 0.5f);
+        _extent = (low, high);
+
+        // 底座：盖住画幅外圈的标注平面（标注在 h=0 平面上、离边缘格最远 FarLabelMargin），再向外留 0.45 格的边。
         // 顶面压到地砖上表面之下 WaterDrop：深水面与底座齐平、地砖高出一截，水才读得出是"沟"；地砖缝里露出的深色底座就是网格线。
         float apron = 2f * (BoardGeometry.FarLabelMargin + 0.45f);
         AddChild(new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3((_width + apron) * BoardGeometry.CellSize, BoardGeometry.TileHeight, (_height + apron) * BoardGeometry.CellSize) },
+            Mesh = new BoxMesh { Size = new Vector3(spanX + (apron * BoardGeometry.CellSize), BoardGeometry.TileHeight, spanZ + (apron * BoardGeometry.CellSize)) },
             MaterialOverride = Visuals.Matte(Visuals.IslandRim),
-            Position = new Vector3(0f, BoardGeometry.TopY - WaterDrop - (BoardGeometry.TileHeight * 0.5f), 0f),
+            Position = frameCenter + new Vector3(0f, BoardGeometry.TopY - WaterDrop - (BoardGeometry.TileHeight * 0.5f), 0f),
         });
 
         _decoration = new Node3D { Name = "Decoration" };
@@ -190,13 +219,6 @@ public sealed partial class BoardView : Node3D
         int variant = 0;
         StandardMaterial3D? slabMaterial = null;
         List<Vector3> slabTops = [];
-        // 地图外接矩形由画布四角的格心推出（格心只有 BoardGeometry.Center 一份映射），供相机夹取用。
-        // board-link-mode D-b：按画布而不是按视图里的格算——链接模式下视图只有本战场的格（插旗阶段甚至为空），而相机的可行矩形本段仍取整张画布
-        // （战场范围的夹取属段 D-c / tasks 4.4）；旧模式视图含全图每一格，与按格累计逐值相同。
-        // 画布以原点居中（BoardGeometry.Center 的唯一映射）：左下角 A1 的格心取负号就是对角那格的格心，不另写一份换算。
-        Vector3 cornerA = BoardGeometry.Center(new Coord(0, 0), _width, _height);
-        float minX = Math.Min(cornerA.X, -cornerA.X), maxX = Math.Max(cornerA.X, -cornerA.X);
-        float minZ = Math.Min(cornerA.Z, -cornerA.Z), maxZ = Math.Max(cornerA.Z, -cornerA.Z);
         foreach (BoardCellView cell in board.Cells)
         {
             bool playable = cell.Terrain == Terrain.Playable;
@@ -210,6 +232,7 @@ public sealed partial class BoardView : Node3D
                 // 深水：水面低于同层地砖，不可落子；架桥后桥面与地砖齐平、可落子。
                 Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
                 Color water = Visuals.DeepWater;
+                int firstWater = tiles.GetChildCount();
                 _tileMaterials.Add((AddWater(tiles, waterCenter, water), water));
                 if (cell.HasBridge)
                 {
@@ -218,6 +241,7 @@ public sealed partial class BoardView : Node3D
                     tiles.AddChild(bridge);
                 }
 
+                RegisterTiles(cell.Coord, tiles, firstWater);
                 continue;
             }
 
@@ -328,7 +352,9 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
+            int firstTile = tiles.GetChildCount();
             AddTileStack(tiles, center, cell.Height, material, color);
+            RegisterTiles(cell.Coord, tiles, firstTile);
         }
 
         BuildPartBatches();
@@ -349,7 +375,7 @@ public sealed partial class BoardView : Node3D
             AddFence(tiles, fence);
         }
 
-        AddFloatingIsland(board, apron);
+        AddFloatingIsland(board, apron, frameCenter, spanX + (apron * BoardGeometry.CellSize), spanZ + (apron * BoardGeometry.CellSize));
 
         // 自证地形部件的来源：有资源时应当全部来自资源（TerrainParts），程序生成数为 0。
         GD.Print($"[parts] 本次搭建地形部件：资源 {TerrainParts.LoadedCount - loadedBefore} 件、程序生成 {TerrainParts.GeneratedCount - generatedBefore} 件（{TerrainParts.Directory}）");
@@ -358,7 +384,7 @@ public sealed partial class BoardView : Node3D
             + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
         GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份");
 
-        BuildCoordinateLabels();
+        BuildCoordinateLabels(low, high);
 
         _overlay = new Node3D { Name = "Overlay" };
         AddChild(_overlay);
@@ -430,9 +456,21 @@ public sealed partial class BoardView : Node3D
         // 一屏看全的地图（v4）在最远缩放下两方向锁中线，与引入推屏之前的固定相机逐位相同。
         float outer = (0.5f * BoardGeometry.CellSize) + BoardGeometry.FarLabelMargin;
         var bounds = new PlaneRect(minX - outer, minZ - outer, maxX + outer, maxZ + outer);
-        if (Rig is null || Rig.Bounds != bounds)
+        // 当前战场的矩形（全局预览与"一屏看全"的依据，viewport-camera「全局预览」）：视图里有格就取格的包围盒，没有格（插旗未锁定、新局预览）就与画幅相同。
+        PlaneRect focus = bounds;
+        if (CameraHome.Platform(board.Cells.Select(c => c.Coord), PlaneCenterOf) is { } field)
         {
-            Rig = new BoardCamera(bounds);
+            focus = new PlaneRect(field.MinX - outer, field.MinZ - outer, field.MaxX + outer, field.MaxZ + outer);
+        }
+
+        if (Rig is null)
+        {
+            Rig = new BoardCamera(bounds, focus: focus);
+        }
+        else
+        {
+            // 链接后画幅扩大（board-link-mode 4.4）：保位姿重定界——不复位、不改缩放，开局对准之后的位姿自证照常成立。
+            Rig.Rebound(bounds, focus);
         }
 
         Camera = new Camera3D { Fov = CameraPose.FovDegrees };
@@ -445,14 +483,88 @@ public sealed partial class BoardView : Node3D
     /// 岛下的云海、以及地图边缘深水格外侧垂落的瀑布。全部在底座平面之下或地图外接矩形之外，不进拾取、不遮挡任何格。
     /// 形状只由地图尺寸与格坐标决定，不用随机数——同一张图永远同一副样子。
     /// </summary>
-    private void AddFloatingIsland(DefaultBoardView board, float apron)
+    /// <summary>本次视图里全部格（本战场）与全部占位格的包围盒（左下角、右上角）；没有任何格时退到整张画布。</summary>
+    private static (Coord Low, Coord High) ExtentOf(DefaultBoardView board)
+    {
+        int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+        foreach (Coord c in board.Cells.Select(c => c.Coord).Concat(board.Placeholders.SelectMany(p => p.Cells())))
+        {
+            minX = Math.Min(minX, c.X);
+            minY = Math.Min(minY, c.Y);
+            maxX = Math.Max(maxX, c.X);
+            maxY = Math.Max(maxY, c.Y);
+        }
+
+        return minX == int.MaxValue ? (new Coord(0, 0), new Coord(board.Width - 1, board.Height - 1)) : (new Coord(minX, minY), new Coord(maxX, maxY));
+    }
+
+    /// <summary>把 <paramref name="parent"/> 从第 <paramref name="first"/> 个子节点起新加的节点登记为某格的地砖（升起节拍按格位移用）。</summary>
+    private void RegisterTiles(Coord coord, Node3D parent, int first)
+    {
+        List<Node3D> nodes = [];
+        for (int i = first; i < parent.GetChildCount(); i++)
+        {
+            if (parent.GetChild(i) is Node3D node)
+            {
+                nodes.Add(node);
+            }
+        }
+
+        _tileNodes[coord] = nodes;
+    }
+
+    /// <summary>
+    /// 棋盘展开节拍 ①（board-link-mode 4.5）：遮罩里升起中的格按进度把地砖从 <see cref="RiseDepth"/> 之下抬到位；不在遮罩里的格复位。
+    /// 只改节点位移，不改视图模型；零时长演出遮罩恒空，这里什么都不做。
+    /// </summary>
+    private void ApplyRising(ShowMask mask)
+    {
+        foreach (Coord coord in _tileDrop.Keys.Where(c => !mask.Rising.ContainsKey(c)).ToArray())
+        {
+            Shift(coord, 0f);
+        }
+
+        foreach ((Coord coord, int permille) in mask.Rising)
+        {
+            Shift(coord, RiseDepth * (1000 - Math.Clamp(permille, 0, 1000)) / 1000f);
+        }
+
+        void Shift(Coord coord, float drop)
+        {
+            if (!_tileNodes.TryGetValue(coord, out List<Node3D>? nodes))
+            {
+                return;
+            }
+
+            float previous = _tileDrop.GetValueOrDefault(coord);
+            if (Math.Abs(previous - drop) < 1e-4f)
+            {
+                return;
+            }
+
+            foreach (Node3D node in nodes)
+            {
+                node.Position += new Vector3(0f, previous - drop, 0f);
+                node.Visible = drop < RiseDepth - 1e-3f;
+            }
+
+            if (drop <= 0f)
+            {
+                _tileDrop.Remove(coord);
+            }
+            else
+            {
+                _tileDrop[coord] = drop;
+            }
+        }
+    }
+
+    private void AddFloatingIsland(DefaultBoardView board, float apron, Vector3 frameCenter, float spanX, float spanZ)
     {
         var island = new Node3D { Name = "Island" };
         AddChild(island);
 
         float baseTop = BoardGeometry.TopY - WaterDrop - BoardGeometry.TileHeight;
-        float spanX = (_width + apron) * BoardGeometry.CellSize;
-        float spanZ = (_height + apron) * BoardGeometry.CellSize;
         StandardMaterial3D earth = Visuals.Matte(Visuals.SlopeSide.Darkened(0.12f), 1f);
         StandardMaterial3D rock = Visuals.Matte(Visuals.CliffSide.Darkened(0.10f), 1f);
         StandardMaterial3D deepRock = Visuals.Matte(Visuals.CliffSide.Darkened(0.30f), 1f);
@@ -473,7 +585,7 @@ public sealed partial class BoardView : Node3D
             {
                 Mesh = new BoxMesh { Size = new Vector3(spanX * shrink, thickness, spanZ * shrink) },
                 MaterialOverride = material,
-                Position = new Vector3(0f, y - (thickness * 0.5f), 0f),
+                Position = frameCenter + new Vector3(0f, y - (thickness * 0.5f), 0f),
             });
             y -= thickness;
         }
@@ -1087,6 +1199,7 @@ public sealed partial class BoardView : Node3D
             Build(board, _zoneOwners);
         }
 
+        ApplyRising(mask ?? ShowMask.Empty);   // 完整刷新：没有升起中的格就全部复位
         LayerContent? content = layer is { } active ? world.Layer(active, reading, thresholds) : null;
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
@@ -1277,8 +1390,16 @@ public sealed partial class BoardView : Node3D
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(treatment);
         ArgumentNullException.ThrowIfNull(mask);
+        DefaultBoardView board = world.Board();
+        if (TerrainKeyOf(board) != _terrainKey)
+        {
+            // 链接后第一帧演出（board-link-mode 4.5）：新增格的地砖要先搭出来，升起节拍才有东西可抬。重搭不改相机位姿（Rebound 保位姿）。
+            Build(board, _zoneOwners);
+        }
+
+        ApplyRising(mask);
         Clear(_show);
-        _lastShowRedraw = DrawPieces(world.Board(), treatment, mask);
+        _lastShowRedraw = DrawPieces(board, treatment, mask);
         _totalShowRedraw += _lastShowRedraw;
         _showFrames++;
         DrawShow(mask);
@@ -1882,26 +2003,31 @@ public sealed partial class BoardView : Node3D
     /// 文本一律取 <see cref="Coord.Column"/> / <see cref="Coord.Row"/>，位置一律取 <see cref="BoardGeometry"/> 的锚点（棋盘外圈 h=0 平面，
     /// 边缘格是高台也不影响）——本层不得再写一份跳过 <c>I</c> 的字母表，否则界面与日志迟早指向不同的格子。
     /// </summary>
-    private void BuildCoordinateLabels()
+    /// <summary>
+    /// 坐标标注沿画幅（当前战场 ∪ 占位的包围盒 <paramref name="low"/>..<paramref name="high"/>）边缘放，而不是整张画布边缘（board-link-mode 裁决 D26）：
+    /// 列标在包围盒的近边 / 远边行之外、行号在左右两列之外；锚点由 <see cref="BoardGeometry"/> 带边缘行 / 列的重载给出，这里不另算换算。
+    /// 旧地图的包围盒就是整张图，位置与引入之前逐值相同（边缘行列即 0 与末行末列）。
+    /// </summary>
+    private void BuildCoordinateLabels(Coord low, Coord high)
     {
         var labels = new Node3D { Name = "CoordinateLabels" };
         AddChild(labels);
 
-        for (int x = 0; x < _width; x++)
+        for (int x = low.X; x <= high.X; x++)
         {
             // 双字母列标（第 26 列起）用较小字号，相邻两个之间留有空隙；单字母列标的字号不变（visual-style-baseline「双字母列标不重叠」）。
             string text = new Coord(x, 0).Column;
             int size = CoordinateLabelStyle.ColumnFontSizeOf(text);
             int outline = CoordinateLabelStyle.ColumnOutlineSizeOf(text);
-            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: false), size, outline));
-            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, _width, _height, far: true), size, outline));
+            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, low.Y, _width, _height, far: false), size, outline));
+            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, high.Y, _width, _height, far: true), size, outline));
         }
 
-        for (int y = 0; y < _height; y++)
+        for (int y = low.Y; y <= high.Y; y++)
         {
             string text = new Coord(0, y).Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: false)));
-            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, _width, _height, right: true)));
+            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, low.X, _width, _height, right: false)));
+            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, high.X, _width, _height, right: true)));
         }
     }
 
@@ -1915,6 +2041,7 @@ public sealed partial class BoardView : Node3D
     /// 所以这个缺陷靠"扫一眼截图"发现不了，必须逐字辨认。对局相机本身是固定的（见 <see cref="Build"/> 里的
     /// <see cref="Camera3D"/>，没有任何旋转绑定），不存在"转到背面"的情形，平铺没有代价。（board-coordinates D2 修订）
     /// </remarks>
+
     private static Label3D Label(
         string text, Vector3 position, int fontSize = CoordinateLabelStyle.FontSize, int outlineSize = CoordinateLabelStyle.OutlineSize) => new()
     {

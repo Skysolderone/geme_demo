@@ -215,3 +215,96 @@ Godot：
 - 新局界面与插旗阶段的坐标标注（146 个 `Label3D`）仍沿画布边缘，远离占位；视觉上空旷，D-c 相机 / 标注一并处理。
 - 全局跑到终局 331 s（种子 5，156 大回合、两次链接后重建），比 D-a 的 142 s 长，差异来自对局长度，不是渲染。
 - 变异验证记录（全部实跑，红数写在各测试类注释）：M-E1 `ForSeat` 不过滤 Cells → 红 5；M-E2 `Layer` 对链接模式恒不过滤 → 红 1（第一次尝试的变异不编译，已换成可编译写法重跑）；M-E3 占位色改 (110,112,120) → 红 1；M-E4 `BatchPreviewBuilder` 改回 `RelicLedger.Restore(Generation, ExportState())` → 红 1。均 cp 备份 → 只建测试工程 → filter → cp 还原 → cmp 一致 → touch；还原后相关类重建全绿（13/13、76/76），无 `.mutbak` 残留。
+
+
+---
+
+# 段 D-c 实施报告
+
+> 派单：先修 D20（他战场玩家势力数值泄漏）→ tasks 4.4 相机与 D26 底座 → tasks 4.5 展开演出与结算横幅 → 自检与截图。未 commit；单 dotnet / Godot 顺序执行；图形版只引用 Core / Presentation；Godot 层不含规则计算；Presentation 零 Godot；规则 / AI / 子流未动。
+
+## 1. 完成情况与测试类（`tests/Siege.Core.Tests/`，新增 20 条，全量 2364 条：通过 2353、跳过 11）
+
+| 项 | 状态 | 测试类 |
+|---|---|---|
+| D20 他战场玩家只剩名字 + 在局 / 出局 / 弃赛 + 所在战场是否已结算 | 完成 | `InformationVisibility/他战场玩家数值不进HUD视图模型Tests`（5 条：势力行 / 顺序行 / 手牌对比面板 / 已结算状态文案 / 旧模式与同战场不遮蔽） |
+| 4.4 相机：可行矩形 = 当前战场 ∪ 5 个占位包围盒，全局预览与"一屏看全"按当前战场，链接后保位姿重定界 | 完成 | `ViewportCamera/战场范围的相机Tests`（5 条） |
+| 4.4 底座 / 坐标标注只盖画幅（D26） | 完成 | Godot 自证（`[camera]` 行、`--pick-check`）；旧地图逐值不变（`BoardGeometry` 新重载对边缘行列 0 / 末行末列退化为旧算式） |
+| D12 / D24 "无可验"例外回收 | 完成 | `ViewportCamera/生成图上的拾取自检口径Tests`（守门恢复为精确条件，D-c 注释） |
+| 4.5 棋盘展开节拍（升起 → 拉远 → 对方显现 → 横幅，约 2.5 s，本机不参与则空，无人值守零时长，提速照旧） | 完成 | `SettlementShow/棋盘展开节拍Tests`（5 条） |
+| 4.5 战场胜出 / 落败横幅、他场结算提示条、决赛不重复、落败横幅排在出局横幅之前 | 完成 | `SettlementShow/战场结算横幅Tests`（5 条） |
+
+变异验证（全部实跑，`cp` 备份 → 只建测试工程 → `--filter` → `cp` 还原 → `cmp` 一致 → `touch`；还原后相关类 193/193 全绿、无 `.mutbak` 残留；红数已回写各测试类 `<remarks>`）：
+M-F1 `ViewerWorld.IsConcealed` 恒假 → 红 4；M-F2 `BoardCamera.Rebound` 复位到中心 / 最远 → 红 1（第一次写法改只读属性不编译，换成改字段重跑）；M-F3 `OverviewAvailable` 改回 `!FitsOneScreen` → 红 1；M-F4 `Expansion` 不区分对方出生棋盘与公共棋盘 → 红 3；M-F5 `Expansion` 对无新增格也出横幅 → 红 1；M-F6 `Settlements` 终局也出横幅 / 提示条 → 红 1；M-F7 他场结算出横幅而不出提示条 → 红 2。
+
+## 2. 新增 / 修改文件
+
+Presentation（零 Godot）：
+- `src/Siege.Presentation/Show/LinkShowBeats.cs`（新）：`CoordRect`、`BoardRiseBeat`（700 ms）/ `CameraPullBeat`（500 ms）/ `OpponentRevealBeat`（600 ms）三种新节拍；`LinkShowBeats.Expansion(before, after, newOpponents)`（新增格 = 对方刚展开的出生棋盘 → 显现，其余 → 升起；相机目标 = 合并后战场包围盒；横幅"棋盘展开：与 X 交战"；总 2600 ms）；`Settlements(before, after, me, matchEnded)` → 横幅"战场胜出" / "战场落败（第 N 名）"或提示条"战场 出生区 N 已结算，胜者 X"；终局时两者都不出。`Splice(beats, settled, expansion)`：既有结算节拍末尾的出局 / 终局横幅与战场横幅并成一条、战场横幅在前（规格"先落败横幅再出局视图"），展开节拍永远最后。
+- `src/Siege.Presentation/Show/ShowTimeline.cs`：`ShowMask` 增 `Rising`（格 → 千分进度）与 `CameraPull`（目标矩形 + 千分进度）；`Mask()` 对未到的升起格给 0、未到的显现格列入 `Hidden`，当前节拍按进度给值。
+- `src/Siege.Presentation/Camera/BoardCamera.cs`：`Bounds`（可行矩形）与 `Focus`（当前战场）分离；`Rebound(bounds, focus)` 保位姿只重夹；`FullViewDistance` / `OverviewAvailable` / `FitsOneScreen` 按 `Focus`，`BoundsViewDistance` / `Farthest` 按 `Bounds`；不给 `focus` 时两者相同、旧地图逐位不变。
+- `src/Siege.Presentation/Visibility/Worlds.cs`：`IsConcealed(player)`（Link 且非本机且 `SeatPublicView.Players.SameBattlefield == false`）、`ConcealedStatusText`；`Layer()` 链接模式下对势力行 / 顺序行 `Conceal`，`HandPanel()` 对手区 `Conceal`。
+- `src/Siege.Presentation/Layers/LayerContents.cs`：`PlayerPowerRowView.Concealed / ConcealedText / Conceal(statusText)`、`OrderRowView.Concealed / ConcealedExplanation / Conceal()`。
+- `src/Siege.Presentation/Hand/HandInfoPanel.cs`：`OpponentHandAreaView.Concealed / Conceal(statusText)`。
+
+Godot（只接线、不算规则）：
+- `src/godot/scripts/BoardView.cs`：画幅 `(low, high)` = 当前战场 ∪ 占位格的包围盒；底座 / 浮岛按画幅定位与尺寸；坐标标注沿画幅边缘；`Rig` 首建 `new BoardCamera(bounds, focus: 战场包围盒)`，重搭时 `Rig.Rebound(bounds, focus)`；`_tileNodes / _tileDrop` 登记每格地砖节点，`ApplyRising(mask)` 按 `Rising` 进度把地砖从地面之下（`RiseDepth` 1.6）抬到位；`RefreshShow` 地形键变化先重搭再应用升起。
+- `src/godot/scripts/BoardGeometry.cs`：`ColumnLabelAnchor / RowLabelAnchor` 增带边缘行 / 列的重载，旧重载委托之（列标 / 行号换算仍只在这里）。
+- `src/godot/scripts/GameRoot.cs`：`_hud.OverviewAvailable` 随 `Rig`；`ApplyCameraPull(mask)` 按 `CameraPull` 进度从节拍起始位姿插值到目标矩形的回家位姿（经可行矩形夹取，演出结束留在该处不强制回家）；`--pick-check` 注视中心三档以"画幅中心最近的可落子格"为注视点、全局预览档以 `OverviewAvailable` 为条件、无可落子格时不抛异常；`--shot-show=expand|field`；`[strip]` / `[field]` 自证行；`BeginShow` 打印"展开 a+b 格、拉远"。
+- `src/godot/scripts/Hud.cs`：`OverviewAvailable` 门控"全局 [M]"按钮；`_eventStrip` 提示条（不阻塞）；排名栏 / 势力层 / 手牌面板对 `Concealed` 行只印名字与状态。
+- `src/godot/scripts/MatchSession.cs`：`EventStrip`、`_matesBefore`；本机 Confirm / Pass 与 `RunAiTurn` 前采 `boardBefore` / `settlementsBefore`，`Rebuild()` 后 `WithLinkBeats` 经 `LinkShowBeats.Splice` 接上 `Settlements(...)` 与 `Expansion(...)`。
+
+测试：
+- 新：`InformationVisibility/他战场玩家数值不进HUD视图模型Tests.cs`、`ViewportCamera/战场范围的相机Tests.cs`、`SettlementShow/棋盘展开节拍Tests.cs`、`SettlementShow/战场结算横幅Tests.cs`（均 CRLF）。
+- 改（既有断言，逐条）：
+  1. `ViewportCamera/生成图上的拾取自检口径Tests.cs` —— 回收 D12 / D24：守门恢复为 `ok &= failures.Count == 0 && (inView > 0 || !focusedOnCenter);`、`DoesNotContain("centerPlayable")`、`Contains("bool focusedOnCenter = name is \"中心\" or \"最近\" or \"最远\";")`（注释"board-link-mode D-c："）。
+  2. `VisualStyleBaseline/双字母列标不重叠Tests.cs`「单字母列标不变」—— 行号锚点字面量由 `BoardGeometry.RowLabelAnchor(y, _width, _height, right: …)` 改为 `BoardGeometry.RowLabelAnchor(y, low.X / high.X, _width, _height, right: …)`（D26 沿画幅放标注；所守的"行号不走列标字号"不变；注释"board-link-mode D-c："）。
+
+其它：`openspec/changes/board-link-mode/tasks.md` 勾选 4.4、4.5。`.trellis/workspace/rubioc/journal-1.md` 的未提交改动是主会话的，未动。
+
+## 3. 构建、全量、自检、终局跑
+
+- `dotnet build siege.sln -c Release`：0 警告 0 错误。`dotnet test tests/Siege.Core.Tests -c Release`：通过 2353 / 跳过 11 / 总计 2364。
+- `dotnet build src/godot/Siege.Godot.csproj`（Debug）后：
+  - `--auto-demo`（默认种子 20260915，4 大回合）退出 0；`[camera] 开局对准自检：出生平台 25 格，整格在画面内 25；位姿变化 0 次；通过`。
+  - `--auto-demo --pick-check` 退出 0：左下角 25/25、最近 17/17、最远 25/25（注视点 = 画幅中心最近的可落子格，距离 28 = 可行矩形含占位时的上限）、三个角位姿无可验（非注视中心档，照旧不算失败）；`可落子格 25，至少在一个位姿下验到 25；通过`。link:1 开局单块 5×5 一屏看全 → 不再有"全局预览"档（见 D28）。单跑 `--pick-check`（不带 `--auto-demo`，插旗未锁定）现以"可落子格 0 … 失败"退出 1，不再抛 `Sequence contains no elements`。
+  - `--map-select --auto-demo` 退出 0（选图自检 5 步通过、建局后开局对准 35/35 通过）。
+- 终局跑 `--auto-demo --rounds=0 --seed=5` 退出 0：156 大回合、1191 帧、246 s（`[perf] 启动到首帧 1433 ms，启动到终局 244795 ms`），0 条 ERROR；第 39 帧链接 #1（1+2，本机参与：`展开 252+35 格、拉远`）、第 104 帧提示条"战场 出生区 5 已结算，胜者 紫方(P3)"、第 1052 帧链接 #2（1+5，`展开 322+35 格、拉远`）、第 1190 帧终局。无人值守全部零时长、对局不推进的守门照旧（`Drive` 在 `!_show.IsFinished` 时直接返回）。
+- 种子扫描（`--rounds=30`，种子 1–8 顺序单跑）：种子 3 第 92 帧出"战场落败（第 2 名）"横幅（本机 P0 落败、对局未终局）；种子 7 第 51 帧"棋盘展开：与 蓝方(P1)、金方(P2) 交战"（两人同时成为同战场）。
+
+## 4. 截图（`art/board-link-mode/`，1600×900，非 headless，绝对路径，彩色 + `-gray` 灰度各一，共 8 张；未读入会话，按自证行与 PIL 统计判定）
+
+时间线：`d-c-expand-mid` / `d-c-strip-elsewhere` / `d-c-overview-field` 三张拍在 D29 的标注换算重载迁移之前（迁移只搬换算、坐标逐值不变，之后 `--auto-demo` / `--pick-check` / `--map-select` 自检已重跑）；`d-c-field-lost` 在 `Splice`（战场横幅排到出局横幅之前）之后重拍。
+
+| 文件 | 命令（`--path src/godot --`） | 内容 | 灰度均值 / 暗(<40) / 亮(≥200) |
+|---|---|---|---|
+| `d-c-expand-mid.png` | `--auto-demo --seed=5 --shot-show=expand --screenshot=…:39` | 展开演出中间帧：升起节拍进行到一半（公共棋盘与通道地砖抬到半高，对方出生棋盘仍隐藏，相机未拉远）；自证 `[show] 第 40 帧 本机结算：节拍 7（… 展开 252+35 格、拉远），4350 ms`、`[field] … 棋盘展开：与 金方(P2) 交战` | 125.3 / 4.6% / 6.2% |
+| `d-c-field-lost.png` | `--auto-demo --seed=3 --rounds=10 --shot-show=field --screenshot=…:90` | 战场落败横幅"战场落败（第 2 名）"（第 92 帧、第 8 大回合；节拍 2 = 势力 + 并成一条的横幅［战场落败 → 红方出局］，2500 ms，取横幅半程） | 122.0 / 4.3% / 5.3% |
+| `d-c-strip-elsewhere.png` | `--auto-demo --seed=5 --rounds=12 --screenshot=…:110` | 他场结算提示条"战场 出生区 5 已结算，胜者 紫方(P3)"（第 104 帧出现，第 110 帧截） | 130.0 / 7.0% / 15.4% |
+| `d-c-overview-field.png` | `--auto-demo --seed=5 --overview --screenshot=…:45` | 全局预览（当前战场 = 链接后的 1+2 合并战场）：`[camera] 第 43 帧（全局预览）注视点 (-0.5, 32)，距离 48.758`（注视合并战场中心，不是画布中心；其余占位不在预览范围内） | 142.8 / 11.2% / 33.0% |
+
+## 5. D-d 接线点
+
+- 自证行：`[link]`（新链接）、`[strip]`（提示条变化）、`[field]`（战场 / 展开横幅文案）、`[show]` 的"展开 a+b 格、拉远"，可直接做自检断言。
+- `--shot-show=expand`（升起 / 显现节拍半程）、`--shot-show=field`（战场胜出 / 落败横幅）已可用；提示条截图用普通 `--screenshot=…:N` 在 `[strip]` 之后几帧取。
+- 相机：`BoardCamera.Bounds / Focus / Rebound / OverviewAvailable / FitsOneScreen`；Godot 侧 `BoardView.Rig`、`GameRoot.ApplyCameraPull`。
+- 演出：`LinkShowBeats.Expansion / Settlements`，`ShowMask.Rising / CameraPull`，`BoardView.ApplyRising`。
+
+## 6. 偏离与需裁决（编号续 D27）
+
+| # | 事项 | 处理 | 建议 |
+|---|---|---|---|
+| D27 | 决赛战场结算即终局时，本机若早已出局 / 弃赛（不在决赛战场在局名单里），按"他场"逻辑会出提示条"战场 X 已结算，胜者 Y"（种子 5 终局跑第 1190 帧实测，本机 P0 此前因势力归零出局） | `Settlements` 在 `matchEnded` 时横幅与提示条都不出，只留既有终局横幅与终局面板；「决赛不重复」补断言 | 接受 |
+| D28 | HUD"全局 [M]"按钮与 `--pick-check` 的全局预览档都以 `OverviewAvailable`（当前战场一屏看不全）为条件；可推屏提示（`CameraHintVisible`）仍按可行矩形（含占位） | link:1 开局单块一屏看全 → 无全局预览档（D-b 时按整画布判有此档）；链接后战场变大自动出现 | 接受 |
+| D29 | 坐标标注沿画幅放（D26）与既有守门「单字母列标不变」的行号锚点字面量冲突 | 锚点换算迁入 `BoardGeometry` 带边缘行 / 列的重载（换算仍唯一），守门字面量相应更新并注释 | 接受 |
+| D30 | 相机可行矩形按 D26 含 5 个占位：插旗前后都可把相机推到占位处，"最远"档 = min(可行矩形一屏距离, 28)；回家锁定后仍是出生棋盘 + 边距（`CameraHome.Platform`），未锁定为占位包围盒中心 | 已实现 | 接受 |
+| D31 | 本机被势力归零出局后观战，原战场随后结算：`Entries` 只含在局玩家 → 本机按"他场"收提示条而非横幅（规格只写了"本机战场结算"与"他场结算"两种） | 按"不在在局名单 = 他场"处理 | 接受，或要求对已出局观战者出"你曾在的战场已结算"横幅 |
+| D32 | 他战场玩家的"所在战场已结算（胜出）"只按结算记录胜者判；出局 / 弃赛走 `Labels.Status`（"已出局 · 不再行动"等既有文案），没有另造"出局"短文案 | 已实现 | 接受 |
+| D33 | 展开演出的拉远节拍在有人值守下经 `ApplyCamera("棋盘展开")` 改位姿；`_poseChangesAfterOpening` 只在无人值守终局自证，零时长下拉远不发生，自证照常 0 次 | 已实现 | 接受 |
+| D34 | 本机战场落败那一回合既有 `SettlementBeats` 已出"红方出局"横幅，直接顺序拼接会先"出局"再"战场落败"，与规格"先落败横幅再出局视图"相反（种子 3 第 92 帧实测） | 加纯函数 `LinkShowBeats.Splice`：两条并成一条横幅节拍、战场横幅在前；补测试；重拍截图 | 接受 |
+
+遗留与风险：
+- Legacy 53 帧 Godot 基线仍不可在图形版复现（新局界面只认 `link:`，D-a 起）；旧模式只靠 Core / Presentation 测试与 `BoardCamera` 不给 `focus` 时逐位不变的测试守。
+- `--pick-check` 只验开局那一帧（第 2 帧），链接后合并战场的拾取没有自检覆盖（testing.md 已有同类说明）；可在 D-d 加"链接后重跑拾取"。
+- 他场结算提示条只保留最近一条（`EventStrip` 覆盖式），不排队、不自动消失。
+- 展开演出里对方盘面"显现"用既有 `Appearing` 遮罩（渐显），对方已揭示信物随格一起显现，没有单独的信物节拍。
