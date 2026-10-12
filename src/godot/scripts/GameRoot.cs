@@ -9,6 +9,7 @@ using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Presentation.Camera;
+using Siege.Presentation.Diagnostics;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Pairing;
@@ -67,7 +68,21 @@ public sealed partial class GameRoot : Node3D
     private bool _autoDemo;
     private bool _pickCheck;
     private int _seenLinks;
-    private string _seenStrip = string.Empty;
+    private int _seenPairings;
+    private int _seenSettlements;
+    private int _auditedBuildRound;
+    private int _visibleCells;
+
+    /// <summary>`--auto-demo` 全流程自检（board-link-mode tasks 4.6）：判定在 Presentation（<see cref="LinkDemoAudit"/>），这里只在相应时机喂数据、打 <c>[flow]</c> 行、按结论定退出码。</summary>
+    private readonly LinkDemoAudit _audit = new();
+
+    /// <summary>他场结算提示条队列（settlement-show「战场结算横幅」）：每条停留约 3 s 依次显示；无人值守且没有待截图时零时长（入队即丢）。</summary>
+    private NoticeQueue _strips = new(ShowDuration.Zero);
+    private string? _shownStrip;
+
+    /// <summary>`--pick-check` 的第二轮（board-link-mode D-d）：开局那轮通过后不退出，等本机参与的链接把战场合并、重搭完成的下一帧再跑一轮各位姿拾取。</summary>
+    private bool _pickCheckAfterLink;
+    private bool _pickCheckPending;
 
     /// <summary>链接图对局的配对来源（board-link-mode D3）：有人值守真随机、无人值守固定脚本；每次建局（含新局界面的预览会话）都挂同一个。</summary>
     private IPairingSource _pairing = null!;
@@ -259,6 +274,8 @@ public sealed partial class GameRoot : Node3D
             // 配对来源（board-link-mode D3 / 实现裁决 D3）：有人值守用真随机（Presentation 的 RandomPairingSource），
             // --auto-demo / --pick-check / --screenshot= 用 Core 内置的固定脚本（ScriptedPairingSource：候选按编号升序两两相配），使帧序列与截图可复现。
             _pairing = Unattended ? new ScriptedPairingSource() : new RandomPairingSource();
+            // 提示条队列：无人值守零时长；但有待截图时按正常时长（否则"他场结算提示条"那张图截不到），推进步长在截图模式下固定 16 ms / 帧，帧序列可复现。
+            _strips = new NoticeQueue(Unattended && _screenshotFrame < 0 ? ShowDuration.Zero : ShowDuration.Normal);
 
             _pause = _autoDemo ? 0d : AiPauseSeconds;
             _matchSeed = seed;
@@ -582,6 +599,7 @@ public sealed partial class GameRoot : Node3D
 
         UpdateCamera(delta);
         UpdateHover();
+        AdvanceStrips(delta);
 
         if (_dirty)
         {
@@ -593,11 +611,20 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[terrain-edit] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合落成：{string.Join("、", fresh.Select(Labels.TerrainEdit))}");
             }
 
-            if (_session.EventStrip != _seenStrip)
+            ImmutableArray<string> notices = _session.TakeNotices();
+            foreach (string notice in notices)
             {
-                // 他场结算的提示条（settlement-show「战场结算横幅」）：不阻塞输入，只打一行供自检与截图选帧。
-                _seenStrip = _session.EventStrip;
-                GD.Print($"[strip] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 提示条：{_seenStrip}");
+                // 他场结算的提示条（settlement-show「战场结算横幅」）：不阻塞输入；入显示队列（依次、每条约 3 s），并打一行供自检与截图选帧（零时长下只有这一行）。
+                GD.Print($"[strip] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 提示条：{notice}");
+            }
+
+            _strips.Enqueue(notices);
+
+            // 配对事件（board-link-mode tasks 4.6 全流程自检）：候选、配对、等待者、来源 = 脚本。
+            IReadOnlyList<PairingRecord> pairings = _session.Match.Pairings;
+            for (; _seenPairings < pairings.Count; _seenPairings++)
+            {
+                Flow(_audit.Pairing(pairings[_seenPairings]));
             }
 
             // 链接事件（board-link-mode D-b）：Godot 在这一帧感知到新链接（段 D-c 的"棋盘展开"节拍挂在这里）；随后的 RefreshViews 经地形指纹变化重搭本战场。
@@ -608,6 +635,22 @@ public sealed partial class GameRoot : Node3D
                 DefaultBoardView board = _session.World.Board();
                 GD.Print($"[link] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 链接 #{link.Sequence}：战场 {BirthZoneLabel.Of(link.X)} + {BirthZoneLabel.Of(link.Y)}"
                     + $"{(link.Degraded ? "（退化直通道）" : string.Empty)}；本机可见格 {board.Cells.Length}，已展开占位 {board.Placeholders.Count(p => p.Expanded)} / {board.Placeholders.Length}");
+                // 合并后的战场标识 = 两个旧标识中的小者：本机战场现在就是它，即本机参与了这次链接。
+                bool mine = _session.MyBattlefield == link.X;
+                Flow(_audit.Linked(link, mine, _visibleCells, board, _session.MyBattlefieldCells));
+                _visibleCells = board.Cells.Length;
+                if (mine && _pickCheckAfterLink)
+                {
+                    _pickCheckPending = true;   // 本帧随后 RefreshViews 重搭合并战场，下一帧再跑第二轮拾取
+                }
+            }
+
+            // 战场结算（tasks 4.6）：本机战场 → 横幅；他场 → 提示条；终局 → 都不出。横幅与提示条文案取自会话层最近一次结算接线的产物。
+            IReadOnlyList<BattlefieldSettlementRecord> settlements = _session.Match.Settlements;
+            for (; _seenSettlements < settlements.Count; _seenSettlements++)
+            {
+                (ImmutableArray<string> banners, ImmutableArray<string> shownNotices) = _session.LastSettlementShow;
+                Flow(_audit.Settled(settlements[_seenSettlements], _session.Me, _session.IsOver, banners, shownNotices));
             }
 
             RefreshViews();
@@ -622,6 +665,35 @@ public sealed partial class GameRoot : Node3D
             bool passed = false;
             try
             {
+                passed = RunPickCheck();
+            }
+            finally
+            {
+                if (!passed || !_autoDemo || _session.Match.Mode != MatchMode.Link)
+                {
+                    GetTree().Quit(passed ? 0 : 1);
+                }
+            }
+
+            if (passed && _autoDemo && _session.Match.Mode == MatchMode.Link)
+            {
+                // board-link-mode D-d：开局那轮通过后不退出，自动演示继续，等本机参与的链接把战场合并后再跑一轮（合并战场的全部可见格都要验到）。
+                _pickCheckAfterLink = true;
+                GD.Print("[pick-check] 开局一轮通过；继续自动演示，等本机参与的链接后在合并战场上重跑一轮");
+            }
+
+            return;
+        }
+
+        if (_pickCheckPending)
+        {
+            // 链接那一帧已重搭合并战场，这一帧相机与地砖都是新的：第二轮拾取，两轮都通过才算通过。
+            _pickCheckPending = false;
+            _pickCheckAfterLink = false;
+            bool passed = false;
+            try
+            {
+                GD.Print($"[pick-check] 第 {_frame} 帧 链接后第二轮（本机战场 {_session.MyBattlefieldCells} 格）");
                 passed = RunPickCheck();
             }
             finally
@@ -1090,6 +1162,9 @@ public sealed partial class GameRoot : Node3D
                 _board.Build(_session.World.Board(), _session.ZoneOwners);
                 FocusHome(opening: true);
                 _dirty = true;
+                DefaultBoardView locked = _session.World.Board();
+                _visibleCells = locked.Cells.Length;
+                Flow(_audit.FlagsLocked(locked, _session.World.OwnZone ?? -1, _session.MyBattlefieldCells));
             }
 
             return;
@@ -1099,6 +1174,14 @@ public sealed partial class GameRoot : Node3D
         {
             if (_autoDemo)
             {
+                int round = _session.Match.MajorRound;
+                if (round <= PublicRules.BuildProtectionRounds && _auditedBuildRound != round && _session.World.OwnZone is { } zone)
+                {
+                    // 构筑期（第 1–3 大回合）：合法落子范围只在自己的出生棋盘内（范围由 Core 唯一实现给出，这里只比对）。
+                    _auditedBuildRound = round;
+                    Flow(_audit.BuildingRange(round, _session.MyLegalRange, _session.Match.Map.BirthZones[zone]));
+                }
+
                 AutoStep();
                 _dirty = true;
                 return;
@@ -1476,6 +1559,18 @@ public sealed partial class GameRoot : Node3D
         GD.Print(result is null
             ? $"[auto-demo] 演示停止：跑满 {_rounds} 个大回合（--rounds 停止点，不是终局；对局停在第 {_session.Match.MajorRound} 大回合）；{standings}"
             : $"[auto-demo] 终局：第 {result.MajorRound} 大回合，{Names.End(result.Reason)}；{standings}");
+        if (result is not null)
+        {
+            Flow(_audit.Ended(result));
+        }
+
+        if (_rounds == 0)
+        {
+            // 跑到终局的全流程（tasks 4.6）：七步都必须见过；缺省 --rounds=4 只要求已见各步通过。
+            Flow(_audit.Completeness());
+        }
+
+        GD.Print($"[flow] 自检 {_audit.Lines.Count} 条，失败 {_audit.Lines.Count(l => !l.Ok)} 条，已见步骤：{string.Join(" → ", _audit.Seen)}；{(_audit.AllOk ? "通过" : "失败")}");
         GD.Print($"[perf] 启动到首帧 {_firstFrameMsec} ms，启动到终局 {Time.GetTicksMsec()} ms，共 {_frame} 帧");
         // show-sound-cues 2.2 自证：无人值守下场景树里 MUST 没有任何音频播放节点（遍历整棵树数出来，不是看 _sounds 是否为 null）。
         GD.Print($"[sound] 音频节点 {CountAudioNodes(GetTree().Root)}（无人值守：不创建音效节点、不合成波形）");
@@ -1494,6 +1589,14 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
+        if (_pickCheckAfterLink || _pickCheckPending)
+        {
+            // 第二轮拾取要等本机参与的链接：缺省种子的本机不在首轮链接里，须换种子（如 --seed=5：第 4 大回合链接 出生区 1 + 出生区 2）。
+            GD.PrintErr("[siege] 错误：--pick-check 直到演示结束都没有等到本机参与的链接，链接后的第二轮拾取没跑。换一个 --seed=（如 --seed=5）或加大 --rounds=。");
+            GetTree().Quit(1);
+            return;
+        }
+
         if (_screenshotFrame >= 0)
         {
             // 还等着截图：留在结算画面，由 --screenshot 的帧号或 --quit-after 决定何时退出，
@@ -1501,7 +1604,33 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        GetTree().Quit(HomePlatformFramed() ? 0 : 1);
+        bool framed = HomePlatformFramed();
+        GetTree().Quit(framed && _audit.AllOk ? 0 : 1);
+    }
+
+    /// <summary>打一行全流程自检结论（<c>[flow]</c>）；失败的条目另以错误打印，退出码由 <see cref="FinishAutoDemo"/> 汇总。</summary>
+    private void Flow(AuditLine line)
+    {
+        GD.Print($"[flow] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 {line}");
+        if (!line.Ok)
+        {
+            GD.PrintErr($"[flow] 自检失败：{line.Step}——{line.Detail}");
+        }
+    }
+
+    /// <summary>
+    /// 推进提示条队列并把当前条写到 HUD（settlement-show「战场结算横幅」）：帧间隔折成整数毫秒；截图模式下固定 16 ms / 帧，提示条出现后的截图帧可复现。
+    /// 到期消失不经过脏刷新，所以这里逐帧比对当前条。
+    /// </summary>
+    private void AdvanceStrips(double delta)
+    {
+        int ms = _screenshotFrame >= 0 || _shotPending ? 16 : System.Math.Max(1, (int)System.Math.Round(delta * 1000d));
+        _strips.Advance(ms);
+        if (_strips.Current != _shownStrip)
+        {
+            _shownStrip = _strips.Current;
+            _hud.SetEventStrip(_shownStrip);
+        }
     }
 
     /// <summary>
@@ -1550,7 +1679,7 @@ public sealed partial class GameRoot : Node3D
         $"AI 难度 {Labels.Difficulty(_session.Difficulty)}（{_session.Difficulty}，前瞻宽度 {_session.Search.LookaheadWidth}），AI 评价权重 {_session.Weights}";
 
     /// <summary>无人值守（自动演示 / 定帧截图 / 拾取自检）：不采贴边推屏，画面才可复现——指针恰好停在窗口边上不该改变截图。</summary>
-    private bool Unattended => _autoDemo || _pickCheck || _screenshotFrame >= 0 || _shotPending;
+    private bool Unattended => _autoDemo || _pickCheck || _pickCheckAfterLink || _screenshotFrame >= 0 || _shotPending;
 
     /// <summary>
     /// 相机输入（viewport-camera）：贴边感应带 + 方向键 / WASD 合成一个平移意图交给视图模型，夹取与速度都在那边算。

@@ -74,7 +74,28 @@ public sealed class MatchSession
     public string Notice { get; private set; } = string.Empty;
 
     /// <summary>事件提示条（settlement-show「战场结算横幅」：他场结算"不打断操作的提示条"），最近一条；没有则为空串。</summary>
-    public string EventStrip { get; private set; } = string.Empty;
+    /// <summary>自上次取走以来新产生的他场结算提示条文案（settlement-show「战场结算横幅」）；显示队列与日志由 GameRoot 接。</summary>
+    public ImmutableArray<string> TakeNotices()
+    {
+        ImmutableArray<string> notices = [.. _pendingNotices];
+        _pendingNotices.Clear();
+        return notices;
+    }
+
+    private readonly List<string> _pendingNotices = [];
+
+    /// <summary>最近一次结算接线产出的战场横幅（"战场胜出" / "战场落败（第 N 名）"）与提示条文案，供 `--auto-demo` 全流程自检核对（<see cref="Siege.Presentation.Diagnostics.LinkDemoAudit.Settled"/>）。</summary>
+    public (ImmutableArray<string> Banners, ImmutableArray<string> Notices) LastSettlementShow { get; private set; } = ([], []);
+
+    /// <summary>本机所在战场的格数（独立于按座位过滤的口径：由地图的战场导出 <see cref="Battlefields"/> 给出），供自检比对可见格数；未锁定出生区为 0。</summary>
+    public int MyBattlefieldCells => Match.Phase == MatchPhase.FlagPlanting ? 0
+        : Battlefields.Of(Match.Map).ById(Match.BattlefieldOf(Me))?.Cells.Length ?? 0;
+
+    /// <summary>本机所在战场的标识（= 分量内最小出生棋盘编号）；未锁定为 <c>null</c>。</summary>
+    public int? MyBattlefield => Match.Phase == MatchPhase.FlagPlanting ? null : Match.BattlefieldOf(Me);
+
+    /// <summary>本机此刻的合法落子范围（只读查询，Core 的唯一实现）；不在进行中为空。</summary>
+    public IReadOnlySet<Coord> MyLegalRange => Match.Phase == MatchPhase.InProgress ? Match.LegalRangeFor(Me) : ImmutableHashSet<Coord>.Empty;
 
     /// <summary>当前征募面板；不在征募阶段为 <c>null</c>。</summary>
     public RecruitPanelView? RecruitPanel { get; private set; }
@@ -94,17 +115,15 @@ public sealed class MatchSession
     }
 
     /// <summary>
-    /// 链接模式新增的演出（board-link-mode tasks 4.5）：在既有结算节拍之后接上本机战场结算的横幅与本机参与的"棋盘展开"节拍；他场结算只写事件提示条。
+    /// 链接模式新增的演出（board-link-mode tasks 4.5）：在既有结算节拍之后接上本机战场结算的横幅与本机参与的"棋盘展开"节拍；他场结算只入提示条队列。
     /// 节拍全部由 <see cref="LinkShowBeats"/> 纯函数生成（输入：结算前后本机的默认棋盘、全局公开的结算记录），这里只接线。须在 <see cref="Rebuild"/> 之后调用。
     /// </summary>
     private ImmutableArray<SettlementBeat> WithLinkBeats(ImmutableArray<SettlementBeat> beats, DefaultBoardView boardBefore, ImmutableArray<BattlefieldSettlementRecord> settlementsBefore)
     {
         (ImmutableArray<SettlementBeat> settled, ImmutableArray<string> notices) =
             LinkShowBeats.Settlements(settlementsBefore, Match.Settlements, Me, matchEnded: Match.Phase == MatchPhase.Ended);
-        if (!notices.IsEmpty)
-        {
-            EventStrip = string.Join("　", notices);
-        }
+        _pendingNotices.AddRange(notices);
+        LastSettlementShow = ([.. settled.OfType<BannerBeat>().SelectMany(b => b.Banners)], notices);
 
         ImmutableArray<PlayerId> matesBefore = _matesBefore;
         ImmutableArray<PlayerId> newOpponents = [.. World.SameBattlefieldPlayers.Where(p => !matesBefore.Contains(p))];

@@ -156,6 +156,7 @@ opsx:propose 开 change（proposal + design + specs + tasks）→ task.py create
 - Godot **4.7.2 .NET**（`Godot.NET.Sdk/4.7.2`）：`D:\software\godot\Godot_v4.7.2-stable_mono_win64\`，命令行用 `..._console.exe`。
   - 构建 C#：`--headless --path src/godot --build-solutions --quit`
   - 拾取自检（换相机、层高或地图后必须跑）：`--headless --path src/godot -- --auto-demo --pick-check [--map=<标识>]`
+  - 链接全流程自检（board-link-mode 4.6，`[flow]` 行七步可断言、任一步不符退出码 1）：`--headless --path src/godot -- --auto-demo --rounds=0 [--seed=5]`；链接后第二轮拾取要本机参与首轮链接：`--auto-demo --pick-check --seed=5`（缺省种子的本机不在首轮链接里，会以 1 退出并提示换种子）
 - codegraph 索引在 `.codegraph/`（已 gitignore）；`trellis-implement` / `trellis-check` 两个 agent 已配置 `mcp__codegraph__*`。
 - 工作树：`.claude/worktrees/` 已清空，`terrain-surfaces` 的 worktree 与分支都已删除（合入于 `254964e`）。
 

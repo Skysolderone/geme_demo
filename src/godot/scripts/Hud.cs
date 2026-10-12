@@ -320,8 +320,13 @@ public sealed partial class Hud : CanvasLayer
         RefreshCenter(session, world, handPanel, recruitCollapse, deferResult);
         RefreshShowOverlay(mask ?? ShowMask.Empty);
         _notice.Text = session.Notice;
-        _eventStrip.Text = session.EventStrip;
-        _eventStrip.Visible = session.EventStrip.Length > 0;
+    }
+
+    /// <summary>他场结算提示条（settlement-show「战场结算横幅」）：由 GameRoot 按 <see cref="Siege.Presentation.Show.NoticeQueue"/> 的当前条逐帧更新，<c>null</c> 即隐藏；与 <see cref="Refresh"/> 的脏刷新解耦（到期消失没有别的刷新路径）。</summary>
+    public void SetEventStrip(string? text)
+    {
+        _eventStrip.Text = text ?? string.Empty;
+        _eventStrip.Visible = !string.IsNullOrEmpty(text);
     }
 
     /// <summary>演出逐帧刷新（settlement-show-callouts D6）：势力排名栏的分段到账与数字弹跳、顶部提子合计、中央横幅。由 GameRoot 每帧调用。</summary>

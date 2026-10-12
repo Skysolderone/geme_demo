@@ -308,3 +308,78 @@ Godot（只接线、不算规则）：
 - `--pick-check` 只验开局那一帧（第 2 帧），链接后合并战场的拾取没有自检覆盖（testing.md 已有同类说明）；可在 D-d 加"链接后重跑拾取"。
 - 他场结算提示条只保留最近一条（`EventStrip` 覆盖式），不排队、不自动消失。
 - 展开演出里对方盘面"显现"用既有 `Appearing` 遮罩（渐显），对方已揭示信物随格一起显现，没有单独的信物节拍。
+
+---
+
+# 段 D-d 实施报告
+
+> 派单：tasks 4.6 —— `--auto-demo` 全流程可断言自检、链接后重跑拾取、他场结算提示条队列、截图整理与 README、`--map-select --auto-demo` 核对、全套跑。未 commit；单 dotnet / Godot 顺序执行；图形版只引用 Core / Presentation；Godot 层不含规则计算（只调 Core 只读查询、喂数据给 Presentation 判定）；Presentation 零 Godot；规则 / AI / 子流未动；既有测试断言一条未改。
+
+## 1. 完成情况与测试类（`tests/Siege.Core.Tests/`，新增 12 条，全量 2376 条：通过 2365、跳过 11）
+
+| 项 | 状态 | 测试 / 自证 |
+|---|---|---|
+| 1 `--auto-demo` 全流程自检：插旗锁定 → 构筑期 → 首轮配对 → 链接 → 战场结算 → 决赛链接 → 终局，每步 `[flow]` 行可断言、任一步不符退出码 1；`--rounds=0` 另要求七步齐全 | 完成 | `SimulationHarness/自动演示全流程自检Tests`（7 条）；Godot `[flow]` 行（缺省种子 `--rounds=0`：11 条自检全通过、七步齐全；种子 5：13 条） |
+| 2 链接后重跑拾取：开局一轮通过后不退出，本机参与的链接把战场合并、重搭后的下一帧再跑一轮，两轮都过才退出 0 | 完成 | `--auto-demo --pick-check --seed=5`：开局 25/25，链接后 312 格逐格居中 312/312 ×2、各位姿含"全局预览"档（距离 86.68）312/312；缺省种子以 1 退出并提示换种子 |
+| 3 提示条队列：多条依次、每条停留 3000 ms 自动消失；无人值守零时长 | 完成 | `SettlementShow/他场结算提示条队列Tests`（5 条）；`[strip]` 行照常打（与显示解耦） |
+| 4 截图整理：补"决赛链接后合并战场全局预览"与"终局面板"（彩色 + 灰度），`art/board-link-mode/README.md`（28 行：12 对图的命令 / 帧 / 看什么 + 7 项人工检查清单） | 完成 | §4 |
+| 5 `--map-select --auto-demo` 五步与规格四步核对 | 已通过，未动 | 第 3 步"回到进入时的种子"只为"开始"那步的节点计数比对服务，规格的四步（非法种子 / 合法种子 / 换一张 / 开始）全在；退出 0 |
+| 6 全套跑 | 完成 | §3 |
+
+变异验证（全部实跑，`cp` 备份 → 只建测试工程 → `--filter` → `cp` 还原 → `cmp` 一致 → `touch`；还原后两类 12/12 全绿、无 `.mutbak` 残留；红数已回写各测试类 `<remarks>`）：
+M-G1 `NoticeQueue.Advance` 到期后不换下一条 → 红 3；M-G2 零时长也入队 → 红 1；M-G3 `LinkDemoAudit.Pairing` 不看来源 → 红 1；M-G4 `Linked` 本机参与时不比可见格数 → 红 1；M-G5 `Completeness` 恒通过 → 红 1。
+
+## 2. 新增 / 修改文件
+
+Presentation（零 Godot，不调任何 `MatchFlow` / `FlagPlanting` 成员——`UI层不含规则计算Tests` 的禁用表）：
+- `src/Siege.Presentation/Diagnostics/LinkDemoAudit.cs`（新）：`AuditLine(Step, Detail, Ok)`；`LinkDemoAudit` 纯判定——`FlagsLocked`（占位 5 块、仅本机那块展开、可见格 = 本战场格数）、`BuildingRange`（第 1–3 大回合合法范围非空且 ⊆ 自己出生棋盘）、`Pairing`（来源 = `script`、各对出自候选且不重复、首轮奇数候选恰一名等待者、决赛无等待者且全部候选链成一个、首轮先于决赛）、`Linked`（本机参与：可见格 = 本战场格数且增长、已展开占位 ≥ 2；他人：可见格不变）、`Settled`（本机在名单且未终局 → 横幅"战场胜出" / "战场落败（第 N 名）"；不在 → 提示条"战场 X 已结算，胜者 Y"；终局 → 都没有）、`Ended`（原因 = `LastBattlefieldSettled`）、`Completeness`（七步齐全）；`Lines / AllOk / Seen`。
+- `src/Siege.Presentation/Show/NoticeQueue.cs`（新）：`DwellMs = 3000`，`Enqueue`（零时长丢弃）、`Advance(ms)`（到期换下一条、多余时间顺延）、`Current / PendingCount / IsEmpty / ElapsedMs`。
+
+Godot（只接线）：
+- `src/godot/scripts/MatchSession.cs`：删 `EventStrip`；新增 `TakeNotices()`（本回合新提示条文案）、`LastSettlementShow`（最近一次结算接线的战场横幅与提示条）、只读查询 `MyBattlefield / MyBattlefieldCells`（`Battlefields.Of(Map).ById(...)`，与按座位过滤独立的口径）/ `MyLegalRange`（`Match.LegalRangeFor(Me)`）。
+- `src/godot/scripts/Hud.cs`：`Refresh` 不再读 `EventStrip`；新增 `SetEventStrip(string?)`（逐帧由队列当前条驱动，到期消失不走脏刷新）。
+- `src/godot/scripts/GameRoot.cs`：`LinkDemoAudit _audit`、`Flow(line)` 打 `[flow]` 行（失败另打错误）；锁定（`ChooseZone` 后）、构筑期（本机每大回合一次，≤ 3）、配对 / 链接 / 结算（脏刷新分支增量）、终局与完整性（`FinishAutoDemo`，`_rounds == 0` 才要求完整）；退出码 `HomePlatformFramed() && _audit.AllOk`。`NoticeQueue _strips`（无人值守且无待截图 → 零时长）+ `AdvanceStrips(delta)`（截图模式固定 16 ms / 帧）。`--pick-check`：Link 模式开局一轮通过后置 `_pickCheckAfterLink` 继续演示，`[link]` 循环里本机参与（`MyBattlefield == link.X`）则下一帧跑第二轮；演示结束仍没等到 → 错误、退出 1。`Unattended` 含 `_pickCheckAfterLink`。
+
+文档 / 资产：
+- `art/board-link-mode/README.md`（新，28 行）；`art/board-link-mode/d-d-final-link-overview(.png/-gray.png)`、`d-d-match-end(.png/-gray.png)`（新）；`d-c-strip-elsewhere(.png/-gray.png)` 用队列实现重拍（同一命令同一帧）。
+- `HANDOFF.md`：自检命令清单加一行（链接全流程 `--auto-demo --rounds=0 [--seed=5]`；第二轮拾取 `--auto-demo --pick-check --seed=5`）。其余未动（整体改写属段 E）。
+- `openspec/changes/board-link-mode/tasks.md` 勾选 4.6。
+
+测试：新 `SimulationHarness/自动演示全流程自检Tests.cs`（7 条）、`SettlementShow/他场结算提示条队列Tests.cs`（5 条），均 CRLF。既有测试断言未改。
+
+## 3. 构建、全量、自检、终局跑
+
+- `dotnet build siege.sln -c Release`：0 警告 0 错误。`dotnet test tests/Siege.Core.Tests -c Release`：通过 2365 / 跳过 11 / 总计 2376。
+- `dotnet build src/godot/Siege.Godot.csproj`（Debug）后（全部 headless、顺序单跑、0 条 ERROR）：
+  - `--auto-demo`（缺省种子、4 大回合）退出 0：`[flow]` 5 条通过（插旗锁定 25/25、构筑期 25 格全在棋盘内、第 12 帧他场结算提示条、首轮配对 (3,5) 来源 script、他人链接可见格 25 → 25），完整性不要求；开局对准自检通过。
+  - `--auto-demo --pick-check --seed=5` 退出 0：开局一轮 25/25 → 第 39 帧链接 1+2 → 第 40 帧第二轮：逐格居中 312/312 ×2，位姿 中心 45、左下 28、右下 39、最近 23、最远 75、全局预览 312（距离 86.68，D28 后这一档在合并战场一屏看不全时自然出现），`可落子格 312，至少在一个位姿下验到 312；通过`。缺省种子：开局一轮通过后演示到第 4 大回合停止，`错误：--pick-check 直到演示结束都没有等到本机参与的链接……换一个 --seed=（如 --seed=5）`，退出 1。
+  - `--map-select --auto-demo` 退出 0：五步通过（本次随机种子 `link:852646294`，棋盘节点 428 / 428、游离 0 / 0），建局后自动演示 `[flow]` 6 条通过、开局对准 30/30 通过。
+  - `--auto-demo --rounds=0`（缺省种子）退出 0：93 大回合、240 帧、约 100–103 s（两次实跑）；`[flow]` 11 条全通过、七步齐全（锁定 → 构筑 → 第 12 帧他场结算［本机第 1 大回合被减员（势力归零）出局，此后全程观战］→ 第 19 帧首轮配对 (3,5) 与他人链接 → 第 139 帧决赛链接 (1,3)、本机参与链接 25 → 564 格 = 本战场、他场结算提示条 → 第 239 帧决赛结算（终局：不出横幅与提示条）→ 终局 `LastBattlefieldSettled`）。
+  - `--auto-demo --rounds=0 --seed=5` 退出 0：156 大回合、1191 帧、246–361 s（两次实跑）；`[flow]` 13 条全通过（第 39 帧首轮配对 (1,2)(4,5)、本机参与链接 25 → 312；第 104 帧他场提示条；第 1052 帧本机战场结算"战场落败（第 2 名）"横幅、决赛链接 (1,5)、本机参与链接 312 → 669；第 1190 帧决赛结算不出横幅；终局）。
+
+## 4. 截图（`art/board-link-mode/`，共 24 张 = 12 对；索引与人工清单见 `README.md`）
+
+| 文件 | 命令（`--path src/godot --`） | 内容 | 灰度均值 / 暗(<40) / 亮(≥200) |
+|---|---|---|---|
+| `d-d-final-link-overview.png` | `--auto-demo --rounds=0 --seed=5 --overview --screenshot=…:1060` | 决赛链接（第 1052 帧 1+5）后的合并战场全局预览：`[camera] 第 1058 帧（全局预览）注视点 (-0.5, 0.5)，距离 86.68`（三块出生棋盘 + 两块公共棋盘的中心），约 195 s | 157.3 / 4.1% / 36.5% |
+| `d-d-match-end.png` | `--auto-demo --rounds=0 --seed=5 --screenshot=…:1200` | 终局面板（第 1190 帧"最后一个战场已结算"，四人名次），`FinishAutoDemo` 有待截图时停在结算画面；约 270 s | 131.3 / 4.5% / 18.9% |
+| `d-c-strip-elsewhere.png`（重拍） | `--auto-demo --seed=5 --rounds=12 --screenshot=…:110` | 第 104 帧入队、第 110 帧截（截图模式每帧 16 ms，队列里仍在显示）；像素统计与 D-c 版相同 | 130.0 / 7.0% / 15.4% |
+
+## 5. 偏离与需裁决（编号续 D35）
+
+| # | 事项 | 处理 | 建议 |
+|---|---|---|---|
+| D35 | 全流程"七步齐全"只在 `--rounds=0` 要求；缺省 `--auto-demo`（4 大回合）不要求完整性、保持快速退出，但已见各步任一失败同样退出 1（退出码 = 开局对准自证 `&&` 全部 `[flow]` 通过，对缺省与全流程一样生效） | 已实现 | 接受 |
+| D36 | 链接后第二轮拾取要本机参与的链接；缺省种子（20260915）的本机在 2 人棋盘上、不进首轮配对，`--auto-demo --pick-check` 不带种子现以 1 退出并提示换种子；文档命令改为 `--auto-demo --pick-check --seed=5`（HANDOFF 只加一行，第 158 行旧命令未动） | 已实现 | 接受；或段 E 改写 HANDOFF 时把第 158 行并掉 |
+| D37 | 提示条零时长只在"无人值守且没有待截图"时生效；截图模式下队列每帧固定推进 16 ms（提示条截图帧可复现），正常时长按帧间隔 | 已实现 | 接受 |
+| D38 | 全流程判定放 Presentation（`LinkDemoAudit`，纯函数、可测），Godot 只喂数据；`MatchSession` 新增三个只读查询（`MyLegalRange` 调 `Match.LegalRangeFor`，`MyBattlefieldCells` 调 `Battlefields.Of(Map).ById`），不自算规则 | 已实现 | 接受 |
+| D39 | 战场结算核对口径："本机在名单" = 在该结算记录的 `Entries`（在局者）；本机已出局后原战场结算按他场提示条核对（D31 延续）；终局那条要求横幅与提示条都没有 | 已实现 | 接受 |
+| D40 | 缺省种子全流程实测：本机第 1 大回合即被减员（势力归零）出局，此后全程观战，本机战场横幅一次都没出现；七步仍齐全（"战场结算"以他场提示条计） | 未改缺省种子 | 接受；若要缺省种子演示到本机横幅，需另选缺省种子（种子 5 有"战场落败"横幅但 156 大回合 / 约 4 分钟） |
+| D41 | `--map-select --auto-demo` 五步比规格多出第 3 步"回到进入时的种子"（为"开始"那步的节点 / 游离节点计数比对服务） | 未动 | 接受 |
+| D42 | `--pick-check` 第二轮沿用 `RunPickCheck` 原函数（`ok &=` 守门行与 `focusedOnCenter` 一字未动），四角位姿在合并战场上两角"无可验"照旧不算失败 | 已实现 | 接受 |
+
+遗留与风险：
+- 全流程自检只覆盖无人值守路径的七步；有人值守路径（真随机配对、演出正常时长）仍靠人工试玩（README 清单）。
+- 第二轮拾取只在本机参与的**第一次**链接后跑一次；决赛链接后的更大战场（种子 5：669 格）没有拾取自检。
+- 提示条队列不去重：同一帧多条结算各入一条（依次 3 s）。
+- `d-d-*` 两张截图各需约 3–5 分钟非 headless 跑到第 1052 / 1190 帧，复现成本高于其它图。
