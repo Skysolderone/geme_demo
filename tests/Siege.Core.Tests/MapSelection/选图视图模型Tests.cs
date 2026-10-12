@@ -4,6 +4,7 @@ using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Visibility;
+using static Siege.Core.Tests.PresentationFixtures;
 
 namespace Siege.Core.Tests.MapSelection;
 
@@ -26,7 +27,7 @@ public class 选图视图模型Tests
     {
         MatchFlow match = MatchFlow.CreateUnvalidated(
             map, MatchFixtures.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], MatchFixtures.Relics(map),
-            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
+            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = LinkMapId.IsLinkMap(map.Id) ? MatchMode.Link : MatchMode.Legacy });
         return DefaultBoardView.From(match.PublicWorldOf());
     }
 
@@ -191,11 +192,19 @@ public class 选图视图模型Tests
     [Fact]
     public void 预览说明读默认棋盘视图模型()
     {
-        // 新局界面的一行说明由 MapPreviewInfo 给出：尺寸、出生区数、可落子格数、棋盘数——读默认棋盘视图模型，不读地图、不判规则。
+        // 新局界面的一行说明由 MapPreviewInfo 给出。段 D-b（D18）：预览会话按座位过滤后只有 5 个占位——文案只提画布与 5 块出生棋盘（边长范围），
+        // 不提信物格与可落子格；旧地图（无占位）的文案不变。读默认棋盘视图模型，不读地图、不判规则。
         MapData map = MapCatalog.Resolve("link:1");
-        string info = MapPreviewInfo.Of(ViewOf(map));
-        Assert.StartsWith($"{map.Width}×{map.Height}，5 个出生区，可落子 {map.PlayableCount} 格", info, StringComparison.Ordinal);
-        Assert.Contains("棋盘 5 块（出生 5、公共 0）", info, StringComparison.Ordinal);
+        MatchFlow match = MatchFlow.CreateUnvalidated(
+            map, MatchFixtures.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], MatchFixtures.Relics(map),
+            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
+        DefaultBoardView preview = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
+        string info = MapPreviewInfo.Of(preview);
+        Assert.StartsWith($"{map.Width}×{map.Height} 画布，5 块出生棋盘（边长 ", info, StringComparison.Ordinal);
+        Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
+        Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
+        Assert.Empty(preview.Cells);
+        Assert.Equal("13×13，4 个出生区，可落子 105 格", MapPreviewInfo.Of(ViewOf(FourPlayerBaseMap.Create())));   // 旧地图文案不变
     }
 
     [Fact]

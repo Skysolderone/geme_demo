@@ -66,6 +66,7 @@ public sealed partial class GameRoot : Node3D
     private bool _verifyResultAfterShow;
     private bool _autoDemo;
     private bool _pickCheck;
+    private int _seenLinks;
 
     /// <summary>链接图对局的配对来源（board-link-mode D3）：有人值守真随机、无人值守固定脚本；每次建局（含新局界面的预览会话）都挂同一个。</summary>
     private IPairingSource _pairing = null!;
@@ -588,6 +589,16 @@ public sealed partial class GameRoot : Node3D
                 _flash = _flash with { Edits = fresh };
                 _flashTimer = FlashSeconds;
                 GD.Print($"[terrain-edit] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合落成：{string.Join("、", fresh.Select(Labels.TerrainEdit))}");
+            }
+
+            // 链接事件（board-link-mode D-b）：Godot 在这一帧感知到新链接（段 D-c 的"棋盘展开"节拍挂在这里）；随后的 RefreshViews 经地形指纹变化重搭本战场。
+            IReadOnlyList<LinkRecord> links = _session.Match.Links;
+            for (; _seenLinks < links.Count; _seenLinks++)
+            {
+                LinkRecord link = links[_seenLinks];
+                DefaultBoardView board = _session.World.Board();
+                GD.Print($"[link] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 链接 #{link.Sequence}：战场 {BirthZoneLabel.Of(link.X)} + {BirthZoneLabel.Of(link.Y)}"
+                    + $"{(link.Degraded ? "（退化直通道）" : string.Empty)}；本机可见格 {board.Cells.Length}，已展开占位 {board.Placeholders.Count(p => p.Expanded)} / {board.Placeholders.Length}");
             }
 
             RefreshViews();
@@ -1558,10 +1569,19 @@ public sealed partial class GameRoot : Node3D
         _opened |= opening;
     }
 
+    /// <summary>
+    /// 回家 / 开局对准的目标格：本机玩家锁定的出生棋盘的全部格（读本机自己的锁定结果，不经 zone → 玩家表——链接模式下同一块棋盘可有多人，board-link-mode D-b）；
+    /// 尚未锁定时为全部占位的外接矩形格（viewport-camera「回到出生平台」：未选区时空格键移到全部占位的外接矩形中心），旧地图未选区时为空（地图中心）。
+    /// </summary>
     private Coord[] HomeCells()
     {
-        int? zone = _session.ZoneOwners.Where(z => z.Value == _session.Me).Select(z => (int?)z.Key).FirstOrDefault();
-        return zone is null ? [] : [.. _session.World.Board().Cells.Where(c => c.BirthZone == zone).Select(c => c.Coord)];
+        DefaultBoardView board = _session.World.Board();
+        if (_session.World.OwnZone is { } zone)
+        {
+            return [.. board.Cells.Where(c => c.BirthZone == zone).Select(c => c.Coord)];
+        }
+
+        return [.. board.Placeholders.SelectMany(p => p.Cells())];
     }
 
     /// <summary>

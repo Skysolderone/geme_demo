@@ -231,6 +231,8 @@ public sealed class MatchSession
         }
 
         ImmutableArray<(PlayerId Player, int Zone)> choices = Match.PlantPrototype((Me, zone));
+        // 本机玩家先登记（board-link-mode D-b）：链接模式下同一块棋盘可能有多人，zone → 玩家这张表只给旧模式的出生区染色用；本机的那块归本机。
+        _zoneOwners[zone] = Me;
         foreach ((PlayerId player, int chosen) in choices)
         {
             _zoneOwners.TryAdd(chosen, player);
@@ -242,7 +244,9 @@ public sealed class MatchSession
             _runner.SetController(player, HeuristicAi.Create(Match, player, Difficulty, Weights, Search));
         }
 
-        Notice = $"出生区锁定。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
+        Rebuild();   // 先重建世界再读同棋盘玩家（按座位视图在锁定后才有）
+        ImmutableArray<PlayerId> sameBoard = World.SameBattlefieldPlayers;
+        Notice = $"出生棋盘锁定{(Match.Mode == MatchMode.Link ? sameBoard.IsEmpty ? "，这块棋盘只有你" : $"，同棋盘：{string.Join("、", sameBoard.Select(Siege.Presentation.Text.Labels.Player))}" : string.Empty)}。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
         Rebuild();
     }
 
@@ -603,13 +607,15 @@ public sealed class MatchSession
     {
         MatchPublicView view = Match.Publish();
         PublicSupplement supplement = Match.PublishSupplement();
+        // board-link-mode 实现裁决 B4 / D-b：按座位视图决定本机能看到哪些格（链接模式只有本战场 + 5 个占位；旧模式全图），与公开快照同一时刻取。
+        SeatPublicView seat = Match.PublishFor(Me);
         HandPrivateView hand = Match.Hands.AccessFor(Me).PrivateView();
         BatchPreview? preview = Match.Stage == TurnStage.Deploy && Match.CurrentPlayer == Me ? Match.PreviewCurrentBatch() : null;
 
         // 单子禁手（forbidden-marks D6）：只在轮到本机玩家行动时取；AI 回合、插旗与终局不取、不显示。
         // 世界只在状态变化后重建（盘面、行动玩家、暂放任一变化都会走到这里），所以查询不逐帧跑。结果由规则内核给出，本类不判气、提子、同形与活形。
         ForbiddenMoveReport? forbidden = IsMyTurn ? Match.ForbiddenMovesOfCurrentPlayer() : null;
-        return ViewerWorld.Build(Me, view, supplement, hand, preview, forbidden);
+        return ViewerWorld.Build(Me, view, supplement, hand, preview, forbidden, seat);
     }
 
     private void Guard(Action action)

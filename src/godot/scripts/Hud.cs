@@ -350,11 +350,17 @@ public sealed partial class Hud : CanvasLayer
             : $"第 {view.MajorRound} 大回合 · {Labels.Player(banner)}";
         _turnSubtitle.Text = view.Phase switch
         {
-            MatchPhase.FlagPlanting => "点一块出生区地砖插旗",
+            MatchPhase.FlagPlanting => "点一块出生棋盘的占位插旗（选中即锁定）",
             MatchPhase.Ended => "对局结束",
-            _ => $"{Names.Stage(view.Stage)} · 信息层模式：{(layers.Mode == LayerInputMode.HoldToShow ? "按住显示" : "点击切换")}（T 切换）",
+            _ => $"{Names.Stage(view.Stage)} · 信息层模式：{(layers.Mode == LayerInputMode.HoldToShow ? "按住显示" : "点击切换")}（T 切换）{SameBoardText(world)}",
         };
     }
+
+    /// <summary>链接模式锁定后：与自己同一块棋盘 / 战场的玩家（match-setup「匿名同时插旗」只公开这一项；读按座位视图，不读他人旗帜）。旧模式为空。</summary>
+    private static string SameBoardText(ViewerWorld world) =>
+        world.Seat is not { Mode: MatchMode.Link } ? string.Empty
+        : world.SameBattlefieldPlayers.IsEmpty ? " · 本战场只有你"
+        : $" · 同战场：{string.Join("、", world.SameBattlefieldPlayers.Select(Labels.Player))}";
 
     private void RefreshOrderBar(ViewerWorld world)
     {
@@ -520,7 +526,7 @@ public sealed partial class Hud : CanvasLayer
         PreviewPresentation? preview = world.Preview();
         if (preview is null)
         {
-            _actionBody.AddChild(Ui.Text(session.IsOver ? "对局已结束" : session.AwaitingZone ? "先点一块出生区地砖插旗" : "等待其他玩家行动…", Ui.MutedText, wrap: true));
+            _actionBody.AddChild(Ui.Text(session.IsOver ? "对局已结束" : session.AwaitingZone ? "先点一块出生棋盘的占位插旗（选中即锁定）" : "等待其他玩家行动…", Ui.MutedText, wrap: true));
             return;
         }
 
@@ -693,9 +699,9 @@ public sealed partial class Hud : CanvasLayer
         {
             // 插旗提示放左列（信息层面板的位置，此时它是隐藏的）：居中放在顶部会盖住棋盘远边的列标注（terrain-model 6.3）。
             Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, CameraHintVisible ? 268f : 222f);
-            _centerBody.AddChild(Ui.Heading("开局插旗"));
-            _centerBody.AddChild(Ui.Text("点棋盘上任意一块染色的出生区地砖，即可把旗插在那一区。", Ui.InfoText, wrap: true));
-            _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的出生区落子（构筑保护期）。", Ui.MutedText, wrap: true));
+            _centerBody.AddChild(Ui.Heading("开局盲选出生棋盘"));
+            _centerBody.AddChild(Ui.Text("点 5 个占位里的任意一块，旗就插在那块出生棋盘上——选中即锁定，锁定后只展开自己那块；别人的旗看不到，可能与你同区。", Ui.InfoText, wrap: true));
+            _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的战场落子（构筑期），之后随机配对、棋盘链接开战。", Ui.MutedText, wrap: true));
             if (CameraHintVisible)
             {
                 _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));

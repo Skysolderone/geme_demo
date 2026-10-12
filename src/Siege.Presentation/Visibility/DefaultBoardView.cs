@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
+using Siege.Core.Match;
 using Siege.Core.Relics;
 
 namespace Siege.Presentation.Visibility;
@@ -90,6 +91,20 @@ public enum PlacementBlock
     Superko,
 }
 
+/// <summary>
+/// 一块出生棋盘的占位（board-link-mode D4 / D9；规格 match-setup「开局信息公开范围」、visual-style-baseline「未展开区域的可视表现」）：
+/// 编号（0 起，面向人的编号经 <see cref="BirthZoneLabel"/>）、外接矩形（左下角原点与边长），以及对本座位是否已展开、是否是本座位所在的那块。
+/// 未展开的占位只有外接矩形，MUST NOT 带内部布局（格、信物格）；渲染层只能画边框与编号。全部整数，原样取自按座位视图的 <see cref="BoardPlaceholder"/>。
+/// </summary>
+public sealed record BoardPlaceholderView(int Zone, Coord Origin, int Width, int Height, bool Expanded, bool Own)
+{
+    /// <summary>外接矩形内的全部格（渲染占位台面与拾取用；不是棋盘布局——出生棋盘本就是实心矩形）。</summary>
+    public IEnumerable<Coord> Cells() =>
+        from y in Enumerable.Range(Origin.Y, Height)
+        from x in Enumerable.Range(Origin.X, Width)
+        select new Coord(x, y);
+}
+
 /// <summary>默认棋盘（不打开任何信息层时）。</summary>
 /// <param name="Fences">
 /// <b>当前</b>全部栅栏边（无序格对，terrain-model 边属性）：Godot 沿两格公共边立起，不占任一格的落点。
@@ -113,9 +128,53 @@ public sealed record DefaultBoardView(
     ImmutableArray<TerrainEdit> Edits,
     ImmutableArray<BoardPlate> Boards)
 {
-    /// <summary>某格。</summary>
+    /// <summary>
+    /// 5 块出生棋盘的占位（board-link-mode，链接模式）：由 <see cref="ForSeat"/> 填入；旧模式与全知视图为空。
+    /// 未展开（<see cref="BoardPlaceholderView.Expanded"/> 为假）的占位在 <see cref="Cells"/> 里没有任何格。
+    /// </summary>
+    public ImmutableArray<BoardPlaceholderView> Placeholders { get; init; } = [];
+
+    /// <summary>某格。不在本视图里（链接模式下未展开的战场）抛出——拾取 / 悬停请先用 <see cref="CellOrNull"/>。</summary>
     public BoardCellView CellAt(Coord coord) =>
-        Cells.FirstOrDefault(c => c.Coord == coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标超出棋盘范围。");
+        CellOrNull(coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标不在本视图的格里（超出棋盘范围或未展开）。");
+
+    /// <summary>某格；不在本视图里为 <c>null</c>（链接模式下未展开的战场格、占位格）。</summary>
+    public BoardCellView? CellOrNull(Coord coord) => Cells.FirstOrDefault(c => c.Coord == coord);
+
+    /// <summary>
+    /// 按座位过滤（board-link-mode 实现裁决 B4 在表现层的镜像，information-visibility「其他战场不可见」「数据层过滤」）：
+    /// 只保留 <paramref name="seat"/> 可见的格（<see cref="SeatPublicView.Cells"/>，即本座位所在战场；插旗阶段为本座位已选的那块、未选时为空），
+    /// 棋盘清单只留整块可见的台面，栅栏两端可见、改造的目标格 / 边可见才保留；<see cref="Placeholders"/> 取 5 块出生棋盘的占位，
+    /// 已展开 = 其原点格可见（出生棋盘整块一起展开），本座位所在 = 编号等于 <paramref name="ownZone"/>。
+    /// 旧模式（<see cref="SeatPublicView.Mode"/> 不是 <see cref="MatchMode.Link"/>）原样返回：全图可见、没有占位，与引入本方法之前逐项相同。
+    /// 本方法不读地图、不判规则，只按座位视图给出的坐标做集合过滤。
+    /// </summary>
+    public DefaultBoardView ForSeat(SeatPublicView seat, int? ownZone)
+    {
+        ArgumentNullException.ThrowIfNull(seat);
+        if (seat.Mode != MatchMode.Link)
+        {
+            return this;
+        }
+
+        HashSet<Coord> visible = [.. seat.Cells.Select(c => Coord.Parse(c.Coord))];
+        ImmutableArray<BoardPlaceholderView> placeholders =
+        [
+            .. seat.Placeholders.Select(p =>
+            {
+                Coord origin = Coord.Parse(p.Origin);
+                return new BoardPlaceholderView(p.Zone, origin, p.Width, p.Height, visible.Contains(origin), ownZone == p.Zone);
+            }),
+        ];
+        return this with
+        {
+            Cells = [.. Cells.Where(c => visible.Contains(c.Coord))],
+            Fences = [.. Fences.Where(f => visible.Contains(f.A) && visible.Contains(f.B))],
+            Edits = [.. Edits.Where(e => e.Kind == TerrainEditKind.Fence ? visible.Contains(e.Edge.A) && visible.Contains(e.Edge.B) : visible.Contains(e.Cell))],
+            Boards = [.. Boards.Where(b => b.Cells().All(visible.Contains))],
+            Placeholders = placeholders,
+        };
+    }
 
     /// <summary>
     /// 叠上观察者本人的单子禁手（forbidden-marks D4 / D6）：禁手格的 <see cref="BoardCellView.Forbidden"/> 取查询结果，其余格不变。

@@ -87,7 +87,12 @@ public static class HoverReadout
             return string.Empty;
         }
 
-        Visibility.BoardCellView cell = board.CellAt(c);
+        // 链接模式下悬停在未展开的格（他人占位、场景格）上没有读数（board-link-mode D-b）：视图里没有这格。
+        if (board.CellOrNull(c) is not { } cell)
+        {
+            return string.Empty;
+        }
+
         return cell.Block is Visibility.PlacementBlock.None or Visibility.PlacementBlock.Terrain
             ? c.ToNotation()
             : $"{c.ToNotation()} · {Style.PlacementBlocks.ReasonOf(cell)}";

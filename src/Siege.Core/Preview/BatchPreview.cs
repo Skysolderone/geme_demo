@@ -165,7 +165,8 @@ public static class BatchPreviewBuilder
             ];
 
             // D3：将揭示 = 结算第 4 步在结算后盘面上会揭示的格。在账本副本上跑同一个 Reveal，正式账本不动；只取坐标，内容不出本方法。
-            RelicLedger copy = RelicLedger.Restore(relics.Generation, relics.ExportState());
+            // 副本经 RelicLedger.Copy：含链接追加的公共棋盘信物（board-link-mode D-b 实测：只按开局生成记录恢复，链接后一旦有公共信物被揭示即抛"非信物格"）。
+            RelicLedger copy = relics.Copy();
             willReveal = [.. copy.Reveal(projected, majorRound).Select(e => e.Coord).Order()];
         }
 

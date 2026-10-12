@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -55,14 +56,28 @@ public sealed class PublicWorld
 /// </remarks>
 public sealed class ViewerWorld
 {
-    private ViewerWorld(PlayerId viewer, PublicWorld world, HandPrivateView ownHand, BatchPreview? ownPreview, ForbiddenMoveReport? ownForbidden)
+    private ViewerWorld(PlayerId viewer, PublicWorld world, HandPrivateView ownHand, BatchPreview? ownPreview, ForbiddenMoveReport? ownForbidden, SeatPublicView? seat)
     {
         Viewer = viewer;
         Public = world;
         OwnHand = ownHand;
         OwnPreview = ownPreview;
         OwnForbidden = ownForbidden;
+        Seat = seat;
     }
+
+    /// <summary>
+    /// 本座位的按座位公开视图（board-link-mode 实现裁决 B4，<c>MatchFlow.PublishFor</c>）：链接模式下决定默认棋盘与信息层里哪些格可见（<see cref="Board"/> / <see cref="Layer"/>），
+    /// 并提供占位、同战场玩家等只对本座位成立的信息。未给出（旧模式、既有调用方）即全图可见。
+    /// </summary>
+    public SeatPublicView? Seat { get; }
+
+    /// <summary>本座位锁定的出生棋盘编号（0 起）；尚未锁定为 <c>null</c>。取自公开快照里本座位自己的状态。</summary>
+    public int? OwnZone => Public.View.Players.FirstOrDefault(s => s.Player == Viewer)?.BirthZone;
+
+    /// <summary>链接模式下与本座位同一战场的其他玩家（match-setup「匿名同时插旗」：锁定后只公开"与自己同一块棋盘的玩家有谁"）；旧模式或插旗阶段为空。</summary>
+    public ImmutableArray<PlayerId> SameBattlefieldPlayers =>
+        Seat is { Mode: MatchMode.Link } seat ? [.. seat.Players.Where(p => p.SameBattlefield && p.Player != Viewer).Select(p => p.Player)] : [];
 
     /// <summary>观察者。</summary>
     public PlayerId Viewer { get; }
@@ -92,6 +107,12 @@ public sealed class ViewerWorld
     public DefaultBoardView Board()
     {
         DefaultBoardView board = DefaultBoardView.From(Public);
+        if (Seat is { } seat)
+        {
+            // 链接模式：只留本座位所在战场的格（information-visibility「其他战场不可见」在表现层的镜像）；旧模式 ForSeat 原样返回。
+            board = board.ForSeat(seat, OwnZone);
+        }
+
         return OwnForbidden is null ? board : board.WithForbidden(OwnForbidden);
     }
 
@@ -104,19 +125,47 @@ public sealed class ViewerWorld
 
     /// <summary>某信息层的内容。只读公开世界。<paramref name="reading"/> 只对盘面层有意义。</summary>
     public LayerContent Layer(
-        TacticalLayer layer, BoardReading reading = BoardReading.Ownership, LibertyThresholds? thresholds = null) =>
-        TacticalLayers.Build(Public, layer, reading, thresholds);
+        TacticalLayer layer, BoardReading reading = BoardReading.Ownership, LibertyThresholds? thresholds = null)
+    {
+        LayerContent content = TacticalLayers.Build(Public, layer, reading, thresholds);
+        if (Seat is not { Mode: MatchMode.Link } seat)
+        {
+            return content;
+        }
+
+        // 链接模式（board-link-mode D-b）：信息层里逐格 / 逐棋串的内容只保留本座位可见的格——其他战场的格根本不进视图模型。
+        // 势力层 / 顺序层里按玩家列出的行（他战场玩家的势力数值）本段不过滤，见 D-b 报告 D20。
+        HashSet<Coord> visible = [.. seat.Cells.Select(c => Coord.Parse(c.Coord))];
+        return content switch
+        {
+            TerritoryLayerContent territory => territory with { Cells = [.. territory.Cells.Where(c => visible.Contains(c.Coord))] },
+            LibertyLayerContent liberties => liberties with { Groups = [.. liberties.Groups.Where(g => g.Stones.All(visible.Contains))] },
+            PowerLayerContent power => power with
+            {
+                Groups = [.. power.Groups.Where(g => g.Stones.All(visible.Contains))],
+                Territory = [.. power.Territory.Where(c => visible.Contains(c.Coord))],
+            },
+            RelicLayerContent relics => relics with { Relics = [.. relics.Relics.Where(r => visible.Contains(r.Coord))] },
+            _ => content,
+        };
+    }
 
     /// <summary>
     /// 组装。<paramref name="ownPreview"/> 只在本人处于部署阶段时传入；<paramref name="ownForbidden"/> 只在轮到本人行动时传入
     /// （属于他人、或当前行动玩家不是本人即抛出：别人的禁手依赖别人的暂放，结构上不得进入观察者视图）。
     /// </summary>
+    /// <param name="seat">本座位的按座位公开视图（<c>MatchFlow.PublishFor(viewer)</c>，与 <paramref name="view"/> 同一时刻）；属于他人即抛出。未给出即全图可见（旧模式 / 既有调用方）。</param>
     public static ViewerWorld Build(
         PlayerId viewer, MatchPublicView view, PublicSupplement supplement, HandPrivateView ownHand, BatchPreview? ownPreview,
-        ForbiddenMoveReport? ownForbidden = null)
+        ForbiddenMoveReport? ownForbidden = null, SeatPublicView? seat = null)
     {
         ArgumentNullException.ThrowIfNull(ownHand);
         PublicWorld world = PublicWorld.From(view, supplement);
+        if (seat is not null && seat.Seat != viewer)
+        {
+            throw new ArgumentException($"按座位视图属于 {seat.Seat}，观察者是 {viewer}：别人的座位视图不得进入观察者世界。", nameof(seat));
+        }
+
         if (ownHand.Player != viewer)
         {
             throw new ArgumentException($"手牌私有视图属于 {ownHand.Player}，观察者是 {viewer}：私有视图只能交给本人。", nameof(ownHand));
@@ -153,6 +202,6 @@ public sealed class ViewerWorld
             throw new ArgumentException($"观察者 {viewer} 不在本局名单中。", nameof(viewer));
         }
 
-        return new ViewerWorld(viewer, world, ownHand, ownPreview, ownForbidden);
+        return new ViewerWorld(viewer, world, ownHand, ownPreview, ownForbidden, seat);
     }
 }

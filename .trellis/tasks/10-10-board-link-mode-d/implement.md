@@ -110,3 +110,108 @@
 - `各入口按地图标识选图Tests.显式选缺省地图与不带选项逐字相同`：两次 `PlayCommand.Run` 都显式传 Legacy v5 后该断言趋于恒真；命令行缺省 `link:1` 由 `各入口按地图标识选图_链接模式Tests.缺省地图` 守住。
 - 变异验证记录（全部实跑，红数已写回各测试类注释）：M-D1（预测不用判定）红 4；M-D2（判定把未行动者当已 Pass）红 6（预测 1 + 战场结算Tests 5）；M-D3（Restore 去门）红 1；M-D4（非法种子置 0）红 12；M-D5（Reroll 忽略注入值）红 2；M-D6（TrySelectId 解析不了时 Move(0) 报成功）红 1；M-D7（Resolve 转交 Legacy）红 8；M-D8（PairingDraw 首轮不配对）红 2；M-D9（Copy 不追加链接信物）红 1。均 `cp` 备份（不带 -p）→ 只建测试工程 → `--filter` → `cp` 还原 → `cmp` 一致 → `touch`；还原后相关类重建全绿（62/62、38/38），无 `.mutbak` 残留；最终全量在还原后的构建上跑出。
 - `.trellis/workspace/rubioc/journal-1.md` 在本段开工前已是 M 状态（`git status` 首行），不是本段改动。
+
+
+---
+
+# 段 D-b 实施报告（插旗占位与按战场渲染：tasks 4.2 / 4.3）
+
+对应 `tasks.md` 4.2、4.3（已勾上）。D-c / D-d 未动。未 `git commit`。基线 `fbade6f`（D-a 已提交，裁决 D9–D19 全按建议）。
+
+## 0. 续做核对（主会话以为被中断；实为报告追加那一步的 heredoc 失败）
+
+`git status`：16 个已改文件 + `art/board-link-mode/` + 2 个新测试类 + tasks.md，与主会话列的清单一致，全部是本段改动。`dotnet build siege.sln -c Release` 0 警告 0 错误。派发五点逐项：
+
+| 派发项 | 状态 |
+|---|---|
+| 1 按座位的视图模型（Presentation） | 已完成（含守门测试，变异 M-E1 / M-E2 实跑） |
+| 2 插旗界面（4.2）：占位可点选、选中即锁定、只展开自己那块、HUD 同战场玩家、`_zoneOwners` 首位缺陷、空格键未选区到占位外接矩形中心 | 已完成 |
+| 3 按战场渲染（4.3）：只搭本战场 + 占位轮廓、场景格不画、链接后重建、信息层只在本战场、灰度可辨 | 已完成（灰度数值见 §4） |
+| 4 新局界面背景只画占位（D18）+ `MapPreviewInfo` 文案 | 已完成 |
+| 5 三条自检 + 终局跑 + 截图四张彩色 / 灰度 | 已完成（截图 6 张彩色 + 6 张灰度） |
+
+未开始：无。进行中：无。
+
+## 1. 完成情况与测试类
+
+| 项 | 状态 | 测试类（`tests/Siege.Core.Tests/`） |
+|---|---|---|
+| 按座位的视图模型（Presentation，零 Godot） | 完成：复用 `DefaultBoardView` / `ViewerWorld`，以"过滤后的格集合"实现，不复制视图模型逻辑 | `InformationVisibility/视图模型按座位过滤Tests`（插旗阶段只有五个占位_没有任何格、构筑期只见自己的棋盘_其余四块是占位、序列化不含其他出生棋盘的任何坐标、同区两人互见_他人不见、链接后合并战场的格一起可见、信息层只含本战场的格、旧模式全图可见无占位_与全知棋盘逐项相同、别人的座位视图不得进入观察者世界） |
+| 4.2 插旗界面 | 完成（点占位即锁定、只展开自己那块、他人旗帜不显示、HUD 显示同战场玩家、`_zoneOwners` 首位缺陷已修、空格键未选区时到全部占位外接矩形中心） | 上表 + Godot 自检；`MapSelection/选图视图模型Tests.预览说明读默认棋盘视图模型`（D18 文案） |
+| 4.3 按战场渲染 | 完成（只搭本战场格 + 5 个占位轮廓；其余场景格不绘制；链接后沿地形指纹重搭、沿用台面与地块部件；信息层 / 禁手 / 落点 / 落成反馈只在本战场格） | `VisualStyleBaseline/占位轮廓灰度Tests`（占位边框与每种已展开台面的亮度差不小于阈值、台面与占位颜色只在调色板定义_Godot经转换取用） |
+| D18 新局界面背景 | 完成：预览会话按座位过滤后只有 5 个占位，渲染层只画边框与编号；`MapPreviewInfo` 文案改为画布 + 5 块出生棋盘（边长范围），不提信物与可落子格 | `选图视图模型Tests.预览说明读默认棋盘视图模型`；`--map-select --auto-demo` 自检步骤改按占位核对 |
+| 实测缺陷修复（D10 第二处） | `BatchPreviewBuilder`（本人部署的富预演）同样在账本副本上跑"将揭示"，副本不含链接信物 → 自检种子 3 / 5 第 46 帧抛"揭示记录指向非信物格"（D11 守门把它变成退出码 1 才暴露） | `Battlefield/链接后的公开补充载荷Tests.链接后揭示公共棋盘信物_本人部署预演照常` |
+
+## 2. 新增 / 修改文件
+
+新增：`tests/.../InformationVisibility/视图模型按座位过滤Tests.cs`、`tests/.../VisualStyleBaseline/占位轮廓灰度Tests.cs`；`art/board-link-mode/`（截图 12 张，见 §4）。
+
+Presentation：
+- `Visibility/DefaultBoardView.cs`：新增 `BoardPlaceholderView(Zone, Origin, Width, Height, Expanded, Own)`（`Cells()` 枚举外接矩形）；`DefaultBoardView.Placeholders`（init，缺省空）；`ForSeat(SeatPublicView seat, int? ownZone)`——`Mode != Link` 原样返回，否则 `Cells` / `Fences` / `Edits` / `Boards` 按 `seat.Cells` 的坐标集过滤，`Placeholders` 由 `seat.Placeholders` 映射（Expanded = 原点格可见，Own = 编号 == ownZone）；`CellOrNull`（`CellAt` 改为经它，未展开格抛出）。
+- `Visibility/Worlds.cs`：`ViewerWorld.Build(..., SeatPublicView? seat = null)`（属于他人即抛）；`Seat` / `OwnZone`（取公开快照里本座位自己的 `BirthZone`）/ `SameBattlefieldPlayers`；`Board()` 经 `ForSeat`；`Layer()` 在 Link 下过滤 Territory 格、Liberty / Power 棋串（全部棋子可见才留）、Power 独占格、Relic 格。
+- `Camera/CameraInput.cs`：`HoverReadout.Of` 对未展开格给空读数（不再 `CellAt` 抛出）。
+- `MapSelect/MapPreviewInfo.cs`：有占位时文案"73×73 画布，5 块出生棋盘（边长 5–7）；各自盲选一块，三个大回合后随机配对链接"；无占位的旧文案不变。
+- `Style/VisualBaseline.cs`：新增 `BoardPlatePalette`（`PublicFrame` 232/228/214、`BirthHint` 232/198/96、`PlaceholderFrame` 40/44/52、`PlaceholderLabel` 200/204/212、`MinPlaceholderLumaGap = 40`、`ExpandedFrames`）。
+
+Core：`Preview/BatchPreview.cs` 的账本副本改经 `RelicLedger.Copy()`（Core 唯一改动，不改规则）。
+
+Godot：
+- `Visuals.cs`：`PublicBoardFrame` / `BirthHint` 改为 `ToColor(BoardPlatePalette.…)`，新增 `PlaceholderFrame` / `PlaceholderLabel`（源码扫描守住不再手写字面量）。
+- `BoardView.cs`：新增 `_visible`（本次搭建的格集）；`Build` 按画布四角（对称取负，不另写换算，`坐标映射在Godot侧唯一` 守门不受影响）算相机 bounds——视图过滤后插旗阶段无格、链接后格集变化，bounds 都不变，否则 Rig 重建、开局对准自检红；`AddPlaceholders`（未展开占位：四条边框 + 中央编号 `Label3D`，占位格登记 h=0 供拾取、不进 `_visible`）；九个逐格图元（`AddTint / AddDot / AddPillar / AddBadge / AddEyeBadge / AddCross / AddRing / AddCircle / AddCornerBadge`）与 `AddEditFence` 开头按 `_visible` 守门。链接后重建不另写：`Refresh` 的 `TerrainKeyOf(board)` 随格集变化 → 既有 `Build` 路径；合批策略未动（`[batch]` 读数见 §3）。
+- `MatchSession.cs`：`BuildWorld` 多取一次 `Match.PublishFor(Me)` 传给 `ViewerWorld.Build`；`ChooseZone` 先 `_zoneOwners[zone] = Me` 再登记其余（修同区首位）；锁定 Notice 带"同棋盘：…/ 这块棋盘只有你"。
+- `GameRoot.cs`：`HomeCells()` 改读 `World.OwnZone`（本机自己的锁定结果），未锁定时返回全部占位格（空格键 → 占位外接矩形中心）；新增 `[link]` 感知日志（`_seenLinks`，见 §5）。
+- `GameRoot.MapSelect.cs`：自检第 1 / 2 步改核对"5 个占位 + 0 格"（原核对 `Boards.Length == 5`，过滤后预览没有台面）。
+- `Hud.cs`：插旗文案改为占位 / 盲选口径；回合横幅副标题附"同战场：…"（读 `ViewerWorld.SameBattlefieldPlayers`，不读他人旗帜）。
+
+测试改动：`PresentationFixtures.World` 传 `match.PublishFor(viewer)`（与图形版会话同口径）；`选图视图模型Tests.预览说明读默认棋盘视图模型` 按 D18 文案改写、`ViewOf` 按地图取模式；`链接后的公开补充载荷Tests` 加一条。既有断言只改了这一处 D18 文案（D-a 新写的测试）；像素 / 节点计数自证改在 Godot 自检代码里（`GameRoot.MapSelect.cs`），不在测试断言。
+
+## 3. 构建、全量、自检、终局跑
+
+- `dotnet build siege.sln -c Release`：0 警告 0 错误（`src/godot` Debug 构建同样成功）。
+- `dotnet test tests/Siege.Core.Tests -c Release`（全量，最终源码）：总计 2344，通过 2333，跳过 11，失败 0，1 m 33 s。
+- Godot（最终 Debug 构建）：
+  - `-- --auto-demo`：退出码 0，无 ERROR；`[batch] 障碍装饰合批 0 格…场景面砖 0 格、MultiMesh 0 个`（场景格不再绘制），`地砖与台面归并：面砖材质 2 份、衬底 2 份、描边 / 边框 2 份、盒网格 10 份`；`[link] 第 19 帧、第 4 大回合 链接 #1：战场 出生区 3 + 出生区 5；本机可见格 25，已展开占位 1 / 5`；开局对准自检 25/25、位姿变化 0；23 帧。
+  - `-- --auto-demo --pick-check`：退出码 0。**Link 口径变化**：逐格居中层"可落子格 25"（只验本战场可见格；D-a 时全图 179）、25/25 两种缩放；多位姿层"中心 / 最近 / 最远"注视 (0,0) 均 0 格 → 按 D12 口径记"地图中心是场景格，无可验"；左下角位姿 25/25；全局预览 23/23；`可落子格 25，至少在一个位姿下验到 25；通过`。`拾取自检的例外没有写宽` 钉的两行字节未改。
+  - `-- --map-select --auto-demo --rounds=2`：退出码 0，五步通过（文案已是占位口径：`73×73 画布，5 块出生棋盘（边长 5–7）…`；开始那步棋盘节点 438 / 438——D-a 时 1147，预览不再搭全图）；随后 2 大回合 + 开局对准 42/42 通过。
+  - 种子 3 / 5 `--auto-demo`：首跑退出码 1（D11 守门抓到 `BatchPreviewBuilder` 的账本副本缺陷，第 46 帧），修复后退出码 0。
+  - `-- --auto-demo --rounds=0 --seed=5`：退出码 0，无 ERROR；`[link] 第 39 帧 链接 #1：出生区 1 + 出生区 2；本机可见格 312，已展开占位 2 / 5`、`[link] 第 1052 帧、第 88 大回合 链接 #2：出生区 1 + 出生区 5；本机可见格 669，已展开占位 3 / 5`；`终局：第 156 大回合，最后一个战场已结算`；1191 帧，331 s（两次链接后重建均正常）。
+  - `[perf]` 行里没有绘制调用数（只有 `--perf-sample` 窗口模式路径打印 `RenderTotalDrawCallsInFrame`），本段未跑 `--perf-sample`；合批策略零改动，场景面砖 / 障碍 MultiMesh 数从 D-a 的 5150 格 / 58 个降到 0（场景格不画）。
+
+## 4. 截图（`art/board-link-mode/`，1600×900，非 headless，彩色 + `-gray` 灰度各一，共 12 张）
+
+| 文件 | 命令要点 | 内容 |
+|---|---|---|
+| `flags-placeholders.png` | `--screenshot=…:2 --overview`（无 `--auto-demo`，停在插旗） | 插旗阶段：5 个占位轮廓 + 编号，无任何格 |
+| `locked-own-board.png` | `--auto-demo --seed=5 --screenshot=…:3 --overview` | 锁定后：自己那块（出生区 1）展开为完整棋盘，其余 4 块占位 |
+| `linked-battlefield.png` | `--auto-demo --seed=5 --screenshot=…:41 --overview` | 首轮链接后（第 39 帧链接 1+2）：合并战场（两块出生棋盘 + 公共棋盘 + 通道）+ 3 块占位 |
+| `linked-battlefield-closeup.png` | 同上无 `--overview` | 合并战场近景：出生棋盘与新公共棋盘同一套台面 / 地砖 / 格线 |
+| `placeholder-closeup.png` | `--auto-demo --seed=5 --screenshot=…:41 --shot-cell=AX26` | 占位（出生区 3）近景：只有边框与编号 |
+| `new-game.png` | `--map-select --screenshot=…:2` | 新局界面：背景 5 个占位，面板显示 `link:<种子>` |
+
+截图路径须给绝对路径（相对路径按 Godot 工程目录解析，首跑 5 张全部 `Can't save PNG`）。截图未读入会话，内容按控制台自证行与像素统计判定。
+
+灰度亮度差（Rec.601 整数亮度）：调色板 占位边框 43 vs 公共台面边框 227（差 184）、出生区提示色 196（153）、红 98（55）、蓝 98（55）、金 169（126）、紫 100（57）→ 全部 ≥ 阈值 40（`占位轮廓灰度Tests`）。截图实测（PIL，±3 色差掩膜、跳过左侧 HUD 区）：占位近景里边框像素渲染为 (44, 49, 59)、灰度 48（中心 400×300 窗 1662 px），编号 (213, 216, 220) 灰度 215，占位所坐的底座 (135, 122, 110) 灰度 124；合并战场近景里公共台面边框像素 539 px 灰度均值 226、红方边框 98。渲染值与调色板差 ≤ 5（环境调整），差距结论不变（占位 48 vs 公共 226 / 红 98 / 金 169）。
+
+## 5. D-c 接线点
+
+- **相机范围数据**：`ViewerWorld.Board()` 的 `Cells`（本战场格）与 `Placeholders`（5 块外接矩形，`Expanded` / `Own`）；可行矩形按"当前战场外接矩形"取 `Cells` 的坐标包围盒、插旗未锁定时取全部占位的包围盒（`BoardPlaceholderView.Cells()`），再经 `_board.PlaneCenterOf` 换到平面坐标。本段 `BoardView.Build` 仍按整张画布建 `BoardCamera(bounds)`（画布四角、对称取负）；D-c 改成战场范围时注意：bounds 变化会重建 `Rig`、复位位姿，`_poseChangesAfterOpening` 计数要在重建处豁免或改为保位姿的重定界。`BuildCoordinateLabels` 仍沿整张画布边缘放 146 个标注（离战场很远），D-c 一并改为沿当前战场。
+- **链接事件感知**：`GameRoot._Process` 的 `_dirty` 分支里新增的 `[link]` 循环（`_seenLinks` 与 `_session.Match.Links.Count` 比较）就是 Godot 第一次看到新链接的位置——AI 小回合 `RunAiTurn → Rebuild` 之后的同一帧（实测种子 5：第 39 帧、第 4 大回合）；紧随其后的 `RefreshViews → BoardView.Refresh` 经 `TerrainKeyOf` 变化重搭本战场。"棋盘展开"节拍挂在该循环内（拿 `LinkRecord.PublicBoard / Corridors / X / Y`），拉远到新战场范围用上面的包围盒；无人值守零时长沿用 `settlement-show` 时间线。
+- **战场结算 / 落败横幅**：`_session.Match.Settlements`（`BattlefieldSettlementRecord`）与 `SeatPublicView.Settlements`；`Names.End` 已有 `LastBattlefieldSettled`。
+- `GameRoot.HomeCells()` 现已按本机自己的 `OwnZone` 取格，开局对准 / 空格回家可直接复用。
+
+## 6. 偏离与需裁决（编号续 D20）
+
+| # | 事项 | 处理 | 建议 |
+|---|---|---|---|
+| D20 | 势力层 / 顺序层按玩家列出的行、HUD 排名栏与顺序预测仍显示他战场玩家的势力数值（information-visibility「他人势力不可见」的既有泄漏，来自全知 `MatchPublicView`）；本段只过滤了逐格 / 逐棋串内容 | 未改，不在 4.2 / 4.3 | 另起小段或并入 D-d：HUD 排名 / 顺序行读 `SeatPublicView.Players.SameBattlefield` 隐去数值 |
+| D21 | 规格「占位灰度可辨」引用的"既有棋盘台面条款阈值"在既有规格、裁决记录与测试里都没有数值 | 本 change 取 `BoardPlatePalette.MinPlaceholderLumaGap = 40`（与 scoring-sites 据点三档"两两差 ≥ 40"同量级），占位色 (40, 44, 52)，与六种已展开台面边框色差 55–184 | 接受，或给出规格数值后回改常量 |
+| D22 | 相机可行矩形本段仍取整张画布（规格「边界夹取」要求当前战场范围，属 tasks 4.4 / D-c）；全局预览也仍是整张画布 | 未改，接线点见 §5 | D-c 处理 |
+| D23 | 账本副本缺链接信物在第二处（`BatchPreviewBuilder`，Core）复现，与 D10 同根因；D11 的无人值守守门第一次抓到真问题 | 改经 `RelicLedger.Copy()`，补测试（不改规则） | 接受 |
+| D24 | `--pick-check` 口径随"只画本战场"变为只验本战场可见格（25 格），多位姿层注视中心的三档全部"无可验"，覆盖面靠逐格居中层与左下角 / 全局预览位姿 | 按 Link 口径接受；D-c 改为战场范围位姿后自然恢复 | 接受 |
+| D25 | 占位格登记为 h=0 可拾取（插旗点占位即锁定）；对局中点到占位会走 `ToggleStage(coord)`（Core 拒绝：不在合法范围），无副作用 | 未改 | 接受 |
+
+遗留与风险：
+- `MatchSession._zoneOwners` 仍是 zone → 单一玩家，只给旧模式出生区染色用；链接模式下同区他人的出生区染色取首位登记者（本机已先登记），D-c / D-d 若要按玩家染色需改按座位视图。
+- 新局界面与插旗阶段的坐标标注（146 个 `Label3D`）仍沿画布边缘，远离占位；视觉上空旷，D-c 相机 / 标注一并处理。
+- 全局跑到终局 331 s（种子 5，156 大回合、两次链接后重建），比 D-a 的 142 s 长，差异来自对局长度，不是渲染。
+- 变异验证记录（全部实跑，红数写在各测试类注释）：M-E1 `ForSeat` 不过滤 Cells → 红 5；M-E2 `Layer` 对链接模式恒不过滤 → 红 1（第一次尝试的变异不编译，已换成可编译写法重跑）；M-E3 占位色改 (110,112,120) → 红 1；M-E4 `BatchPreviewBuilder` 改回 `RelicLedger.Restore(Generation, ExportState())` → 红 1。均 cp 备份 → 只建测试工程 → filter → cp 还原 → cmp 一致 → touch；还原后相关类重建全绿（13/13、76/76），无 `.mutbak` 残留。

@@ -97,7 +97,13 @@ public static class Visuals
     /// 公共棋盘的边框（board-map D10）：不属于任何阵营的浅石色。与四个阵营主色、插旗阶段的出生区提示色（金）、
     /// 锁定后无主出生平台的褪色（冷灰）都拉得开，出生棋盘与公共棋盘一眼可分。
     /// </summary>
-    public static readonly Color PublicBoardFrame = Color.Color8(232, 228, 214);
+    public static readonly Color PublicBoardFrame = ToColor(BoardPlatePalette.PublicFrame);   // board-link-mode D-b：唯一来源在 Presentation 调色板
+
+    /// <summary>未展开的出生棋盘占位的台面边框（board-link-mode D4，低饱和深色；灰度可辨由 Presentation 的 占位轮廓灰度Tests 守住）。</summary>
+    public static readonly Color PlaceholderFrame = ToColor(BoardPlatePalette.PlaceholderFrame);
+
+    /// <summary>占位编号文字。</summary>
+    public static readonly Color PlaceholderLabel = ToColor(BoardPlatePalette.PlaceholderLabel);
 
     /// <summary>棋盘台面的格线（board-map D10）：压暗的墨色细线，只画在棋盘清单里的棋盘之内。</summary>
     public static readonly Color BoardGridLine = Color.Color8(52, 60, 48);
@@ -115,7 +121,7 @@ public static class Visuals
     public static readonly Color EmblemInk = Color.Color8(242, 240, 232);
 
     /// <summary>插旗阶段的出生区提示色（尚无归属时统一高亮）。</summary>
-    public static readonly Color BirthHint = Color.Color8(232, 198, 96);
+    public static readonly Color BirthHint = ToColor(BoardPlatePalette.BirthHint);   // board-link-mode D-b：唯一来源在 Presentation 调色板
 
     /// <summary>未知信物标记。</summary>
     public static readonly Color RelicUnknown = Color.Color8(196, 180, 120);

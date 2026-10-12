@@ -80,6 +80,12 @@ public sealed partial class BoardView : Node3D
     private MeshInstance3D _cursor = null!;
     private WorldEnvironment _environment = null!;
     private IReadOnlyDictionary<int, PlayerId> _zoneOwners = new Dictionary<int, PlayerId>();
+
+    /// <summary>
+    /// 本次搭建时视图模型里有的格（board-link-mode D-b：链接模式下只有本座位所在战场的格，旧模式全图）。逐格图元（信息层、禁手、落点、落成反馈）
+    /// 一律先查它——不在视图里的格什么都不画，"信息层只在本战场的格上出现"由这一处守住。
+    /// </summary>
+    private HashSet<Coord> _visible = [];
     private string _terrainKey = string.Empty;
     private int _width;
     private int _height;
@@ -124,6 +130,7 @@ public sealed partial class BoardView : Node3D
         _capturedPieces.Clear();
         _width = board.Width;
         _height = board.Height;
+        _visible = [.. board.Cells.Select(c => c.Coord)];
 
         // 底座：盖住棋盘外圈的标注平面（标注在 h=0 平面上、离边缘格最远 FarLabelMargin），再向外留 0.45 格的边。
         // 顶面压到地砖上表面之下 WaterDrop：深水面与底座齐平、地砖高出一截，水才读得出是"沟"；地砖缝里露出的深色底座就是网格线。
@@ -183,16 +190,15 @@ public sealed partial class BoardView : Node3D
         int variant = 0;
         StandardMaterial3D? slabMaterial = null;
         List<Vector3> slabTops = [];
-        float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
+        // 地图外接矩形由画布四角的格心推出（格心只有 BoardGeometry.Center 一份映射），供相机夹取用。
+        // board-link-mode D-b：按画布而不是按视图里的格算——链接模式下视图只有本战场的格（插旗阶段甚至为空），而相机的可行矩形本段仍取整张画布
+        // （战场范围的夹取属段 D-c / tasks 4.4）；旧模式视图含全图每一格，与按格累计逐值相同。
+        // 画布以原点居中（BoardGeometry.Center 的唯一映射）：左下角 A1 的格心取负号就是对角那格的格心，不另写一份换算。
+        Vector3 cornerA = BoardGeometry.Center(new Coord(0, 0), _width, _height);
+        float minX = Math.Min(cornerA.X, -cornerA.X), maxX = Math.Max(cornerA.X, -cornerA.X);
+        float minZ = Math.Min(cornerA.Z, -cornerA.Z), maxZ = Math.Max(cornerA.Z, -cornerA.Z);
         foreach (BoardCellView cell in board.Cells)
         {
-            // 地图外接矩形由格心推出（格心只有 BoardGeometry.Center 一份映射），供相机夹取用。
-            Vector3 flat = BoardGeometry.Center(cell.Coord, _width, _height);
-            minX = Math.Min(minX, flat.X);
-            maxX = Math.Max(maxX, flat.X);
-            minZ = Math.Min(minZ, flat.Z);
-            maxZ = Math.Max(maxZ, flat.Z);
-
             bool playable = cell.Terrain == Terrain.Playable;
             if (playable)
             {
@@ -335,6 +341,8 @@ public sealed partial class BoardView : Node3D
         {
             AddBoardPlates(plates, zoneOf, ZoneColorOf);
         }
+
+        AddPlaceholders(board.Placeholders);
 
         foreach (FenceEdge fence in board.Fences)
         {
@@ -946,6 +954,61 @@ public sealed partial class BoardView : Node3D
         };
     }
 
+    /// <summary>
+    /// 未展开的出生棋盘占位（board-link-mode D4 / 规格 visual-style-baseline「未展开区域的可视表现」、match-setup「开局信息公开范围」）：
+    /// 只有外接矩形的台面边框与编号——没有格线、地砖、棋子与信物标记；边框色取 Presentation 调色板的低饱和深色（灰度可辨由那边的测试守住）。
+    /// 占位格登记为 h=0 供拾取（插旗阶段点占位即锁定），但不进 <see cref="_visible"/>：任何逐格图元都不会画到占位上。
+    /// 已展开的占位就是正常的棋盘台面（<see cref="AddBoardPlates"/>），这里跳过。外接矩形与边长原样取自视图模型，不从格子推断。
+    /// </summary>
+    private void AddPlaceholders(ImmutableArray<BoardPlaceholderView> placeholders)
+    {
+        if (placeholders.IsDefaultOrEmpty)
+        {
+            return;
+        }
+
+        var root = new Node3D { Name = "Placeholders" };
+        AddChild(root);
+        const float half = BoardGeometry.CellSize * 0.5f;
+        const float frameWidth = 0.14f;
+        const float frameHeight = 0.07f;
+        StandardMaterial3D frame = FlatOf(Visuals.PlaceholderFrame);
+        foreach (BoardPlaceholderView placeholder in placeholders.Where(p => !p.Expanded))
+        {
+            foreach (Coord c in placeholder.Cells())
+            {
+                _levels.TryAdd(c, 0);
+            }
+
+            Vector3 a = BoardGeometry.Center(placeholder.Origin, _width, _height);
+            Vector3 b = BoardGeometry.Center(new Coord(placeholder.Origin.X + placeholder.Width - 1, placeholder.Origin.Y + placeholder.Height - 1), _width, _height);
+            float minX = Math.Min(a.X, b.X) - half, maxX = Math.Max(a.X, b.X) + half;
+            float minZ = Math.Min(a.Z, b.Z) - half, maxZ = Math.Max(a.Z, b.Z) + half;
+            float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
+            float y = a.Y + (frameHeight * 0.5f);
+            float spanX = maxX - minX + frameWidth;
+            float spanZ = maxZ - minZ + frameWidth;
+            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, minZ)));
+            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, maxZ)));
+            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ)));
+            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ)));
+
+            // 编号（面向人 1–5，BirthZoneLabel 的唯一映射）放在台面中央；大小随距离缩放的屏幕定尺文字，与坐标标注同一工厂。
+            Label3D number = Label(BirthZoneLabel.Number(placeholder.Zone).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                new Vector3(midX, a.Y + 0.02f, midZ), CoordinateLabelStyle.FontSize + 24, CoordinateLabelStyle.OutlineSize);
+            number.Modulate = Visuals.PlaceholderLabel;
+            root.AddChild(number);
+        }
+
+        MeshInstance3D Strip(Vector3 size, Vector3 position) => new()
+        {
+            Mesh = BoxOf(size),
+            MaterialOverride = frame,
+            Position = position,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+    }
+
     /// <summary>深水面低于同层地砖上表面的距离：够让相邻地砖露出一段侧面，读得出"沟"。</summary>
     private const float WaterDrop = 0.10f;
 
@@ -1173,6 +1236,10 @@ public sealed partial class BoardView : Node3D
     /// <summary>同形标记的圆环：平放在格面上，套在叉的外面（不超出地砖）。</summary>
     private void AddCircle(Coord coord, Color color, float crossSpan, float width)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         float outer = Mathf.Min(BoardGeometry.TileSize * 0.5f, (crossSpan * 0.5f) + width);
         _overlay.AddChild(new MeshInstance3D
         {
@@ -1186,6 +1253,10 @@ public sealed partial class BoardView : Node3D
     /// <summary>破坏活形标记的角标：格子右上角的一枚小方块（形状通道，去色后仍与活棋禁入的印记可分）。</summary>
     private void AddCornerBadge(Coord coord, Color color, float accent)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         float size = accent * 2.2f;
         float offset = (BoardGeometry.TileSize * 0.5f) - (size * 0.5f);
         _overlay.AddChild(new MeshInstance3D
@@ -1655,6 +1726,11 @@ public sealed partial class BoardView : Node3D
     /// </summary>
     private void AddEditFence(FenceEdge edge, Color color, float alpha)
     {
+        if (!_visible.Contains(edge.A) || !_visible.Contains(edge.B))
+        {
+            return;   // board-link-mode D-b：同上，边的两端都要在视图里
+        }
+
         int level = Math.Max(LevelOf(edge.A) ?? 0, LevelOf(edge.B) ?? 0);
         Vector3 a = BoardGeometry.Center(edge.A, _width, _height, level);
         Vector3 b = BoardGeometry.Center(edge.B, _width, _height, level);
@@ -1668,6 +1744,10 @@ public sealed partial class BoardView : Node3D
 
     private void AddTint(Coord coord, Color color, float alpha, Node3D? parent = null)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         (parent ?? _overlay).AddChild(new MeshInstance3D
         {
             Mesh = LowPoly.Marker(BoardGeometry.TileSize),
@@ -1678,6 +1758,10 @@ public sealed partial class BoardView : Node3D
 
     private void AddDot(Coord coord, Color color, float size)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         _overlay.AddChild(new MeshInstance3D
         {
             Mesh = new CylinderMesh { TopRadius = size * 0.5f, BottomRadius = size * 0.5f, Height = 0.02f, RadialSegments = 8 },
@@ -1688,6 +1772,10 @@ public sealed partial class BoardView : Node3D
 
     private void AddPillar(Coord coord, Color color, float height)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         _overlay.AddChild(new MeshInstance3D
         {
             Mesh = new BoxMesh { Size = new Vector3(0.10f, height, 0.10f) },
@@ -1698,6 +1786,10 @@ public sealed partial class BoardView : Node3D
 
     private void AddBadge(Coord coord, Color color)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         _preview.AddChild(new MeshInstance3D
         {
             Mesh = new SphereMesh { Radius = 0.10f, Height = 0.20f, RadialSegments = 6, Rings = 3 },
@@ -1709,6 +1801,10 @@ public sealed partial class BoardView : Node3D
     /// <summary>已活标记的"眼"徽记：棋子上方悬浮一枚平放的圆环（形状通道，去色后仍与危险棋串的单环可分）。</summary>
     private void AddEyeBadge(Node3D parent, Coord coord, Color color)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         parent.AddChild(new MeshInstance3D
         {
             Mesh = new TorusMesh { InnerRadius = 0.07f, OuterRadius = 0.13f, Rings = 12, RingSegments = 6 },
@@ -1719,6 +1815,10 @@ public sealed partial class BoardView : Node3D
 
     private void AddCross(Coord coord, Color color, Node3D? parent = null, float span = 0.62f, float stroke = 0.07f)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         Vector3 center = CenterOf(coord) + new Vector3(0f, 0.045f, 0f);
         StandardMaterial3D material = Visuals.Flat(color);
         for (int i = 0; i < 2; i++)
@@ -1736,6 +1836,10 @@ public sealed partial class BoardView : Node3D
     /// <summary>格子轮廓环。<paramref name="dashed"/> 为虚线（预计提子），否则实线（警示 / 落子演出）。</summary>
     private void AddRing(Node3D parent, Coord coord, Color color, bool dashed, float y, float thickness = 0.055f)
     {
+        if (!_visible.Contains(coord))
+        {
+            return;   // board-link-mode D-b：不在视图里的格（未展开战场、占位）不画任何逐格图元
+        }
         Vector3 center = CenterOf(coord) + new Vector3(0f, y, 0f);
         StandardMaterial3D material = Visuals.Flat(color);
         const float half = BoardGeometry.TileSize * 0.5f;

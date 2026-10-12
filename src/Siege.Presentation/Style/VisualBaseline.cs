@@ -16,6 +16,33 @@ public readonly record struct Rgba(byte R, byte G, byte B, byte A = 255)
     public string Hex => $"#{R:X2}{G:X2}{B:X2}{A:X2}";
 }
 
+/// <summary>
+/// 棋盘台面与占位的颜色（board-link-mode D4 / 规格 visual-style-baseline「未展开区域的可视表现」）：Godot 层经 <c>Visuals.ToColor</c> 取用，不另抄一份。
+/// 占位轮廓是低饱和的深灰蓝，在灰度下与已展开台面（公共棋盘的中性边框、出生棋盘的四方阵营色边框、锁定前的出生区提示色）亮度差不小于 <see cref="MinPlaceholderLumaGap"/>。
+/// </summary>
+public static class BoardPlatePalette
+{
+    /// <summary>公共棋盘的中性色边框（board-map「棋盘台面的可视表现」：出生棋盘用阵营色，公共棋盘用不属于任何阵营的中性色）。</summary>
+    public static readonly Rgba PublicFrame = new(232, 228, 214);
+
+    /// <summary>锁定前出生区 / 出生棋盘的统一提示色（与 Godot 的 <c>Visuals.BirthHint</c> 同值）。</summary>
+    public static readonly Rgba BirthHint = new(232, 198, 96);
+
+    /// <summary>未展开的出生棋盘占位：台面边框（低饱和、偏暗）。</summary>
+    public static readonly Rgba PlaceholderFrame = new(40, 44, 52);
+
+    /// <summary>占位编号文字（浅灰，与边框同样低饱和）。</summary>
+    public static readonly Rgba PlaceholderLabel = new(200, 204, 212);
+
+    /// <summary>
+    /// 占位边框与任一已展开台面边框在灰度下的最小亮度差（Rec.601 整数亮度）。规格引用的"既有棋盘台面条款阈值"在既有规格与裁决里没有数值（见 D-b 报告 D21），本 change 取 40。
+    /// </summary>
+    public const int MinPlaceholderLumaGap = 40;
+
+    /// <summary>占位边框需要区分的全部已展开台面边框色：公共棋盘中性色、四方阵营主色、锁定前的出生区提示色。</summary>
+    public static IEnumerable<Rgba> ExpandedFrames => [PublicFrame, BirthHint, .. FactionTable.All.Select(f => f.Primary)];
+}
+
 /// <summary>四方主色（设计文档 §20）。</summary>
 public enum FactionColor
 {

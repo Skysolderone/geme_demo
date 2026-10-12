@@ -16,8 +16,8 @@ namespace Siege.Godot;
 /// <remarks>
 /// <para>新局状态机在零引擎依赖的 <see cref="MapSelectModel"/> 里，它只产出地图标识；地图一律经三个入口共用的目录解析，这里不自带清单、不自行出图。</para>
 /// <para>预览不另写渲染：用候选地图建一个<b>尚未插旗</b>的会话，只为取它的默认棋盘视图模型交给 <see cref="BoardView.Build"/>（与开局插旗前的盘面同构）；
-/// 确认开局时按最终选择重新建局。一屏看不全的图切全局预览。背景应是 5 块出生棋盘的占位轮廓（规格「界面背景 SHALL 显示 5 块出生棋盘的占位轮廓，MUST NOT 显示棋盘内部布局」）——
-/// 段 D-a 先沿用现有渲染画 5 块出生棋盘，占位样式由段 D-b 定稿。</para>
+/// 确认开局时按最终选择重新建局。一屏看不全的图切全局预览。背景是 5 块出生棋盘的占位轮廓（规格「界面背景 SHALL 显示 5 块出生棋盘的占位轮廓，MUST NOT 显示棋盘内部布局」）：
+/// 预览会话尚未插旗，按座位过滤后的默认棋盘没有任何格、只有 5 个占位，渲染层据此只画边框与编号（段 D-b，D18）。</para>
 /// <para>该阶段不接受落子、插旗、推屏与缩放：<c>_Process</c> 不走 <c>Drive</c> / 悬停 / 平移，<c>_UnhandledInput</c> 整体不处理，
 /// <c>_Input</c> 不认领相机键——否则 W A S D、空格、方向键进不了种子输入框。</para>
 /// </remarks>
@@ -173,14 +173,16 @@ public sealed partial class GameRoot
         {
             what = "输入种子 12345";
             OnSelectionChanged(model.SubmitSeed("12345"));
+            // 预览会话未插旗：按座位过滤后没有任何格，只有 5 个占位（D18：背景只画占位轮廓，不显示棋盘布局）。
             ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && model.CurrentId == "link:12345" && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Boards.Length == 5;
+                && _session.World.Board().Placeholders.Length == 5 && _session.World.Board().Cells.IsEmpty;
         }
         else if (step == 2)
         {
             what = "换一张";
             OnSelectionChanged(model.Reroll(NewMapSeed()));
-            ok = model.CurrentId != before && model.MapSeed != 12345UL && _session.Match.Map.Id == model.CurrentId && _session.World.Board().Boards.Length == 5;
+            ok = model.CurrentId != before && model.MapSeed != 12345UL && _session.Match.Map.Id == model.CurrentId
+                && _session.World.Board().Placeholders.Length == 5 && _session.World.Board().Cells.IsEmpty;
         }
         else if (step == 3)
         {
