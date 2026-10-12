@@ -29,8 +29,9 @@ public class 链接模式存档Tests
         match.Board.ApplyTerrainEdits([TerrainEdit.Fence(fenceA, new Coord(fenceA.X + 1, fenceA.Y))]);
         match.PlayRounds(3, P0, P2);
         match.ApplyPairing([(0, 3), (1, 4)]);
-        BoardPlate plate = match.Map.Boards.First(b => b.Kind == BoardPlateKind.Public);
-        match.Place(P1, plate.Origin);
+        // 段 F：没有公共棋盘，P1 落在拼过来的 4 号棋盘（已平移）上。
+        Coord onPartner = match.Board.Battlefields.ById(1)!.Cells.First(c => match.Map.BirthZoneOf(c) == 4 && match.Board[c].Occupant is null);
+        match.Place(P1, onPartner);
         match.PlayRound(P0, P2);
 
         MatchFlow restored = RoundTrip(match);
@@ -204,6 +205,60 @@ public class 链接模式存档Tests
         JsonObject root = JsonNode.Parse(match.Serialize())!.AsObject();
         root["Link"]!["Links"]![1]!["MapDigest"] = "00";
         Assert.Throws<FormatException>(() => MatchFlow.Restore(Map, root.ToJsonString()));
+
+        // 段 F：平移向量与贴边也是记录的一部分——篡改任一项即拒绝（变异 M-F15：恢复不比对向量 → 下面第一条不抛）。
+        JsonObject shifted = JsonNode.Parse(match.Serialize())!.AsObject();
+        shifted["Link"]!["Links"]![1]!["Shifts"]![0]!["Dx"] = 99;
+        Assert.Throws<FormatException>(() => MatchFlow.Restore(Map, shifted.ToJsonString()));
+        JsonObject sided = JsonNode.Parse(match.Serialize())!.AsObject();
+        sided["Link"]!["Links"]![0]!["Side"] = "North";
+        Assert.Throws<FormatException>(() => MatchFlow.Restore(Map, sided.ToJsonString()));
+    }
+
+    [Fact]
+    public void 锚点非零向量的拼接可存档恢复()
+    {
+        // 裁决 J8-3：最长共享边的候选全部越界时整个布局整体平移、锚点向量非零并记入链接记录；存档恢复按记录重放、逐项核对，篡改锚点向量即拒绝。
+        // 手搭的 link: 图（不经生成器）：0 号 5×7、1 号 5×5、2 号 5×5、3 号 5×7、4 号 5×5 一字排开。四人四区、脚本缺省配对 (0,1)(2,3)：
+        // 首轮东贴后 {0,1} 顶行只剩 0 号、{2,3} 底行只剩 3 号（3 号偏南贴到 y = 0）；决赛北贴唯一的最长共享边位置让 2 号越出原点 3 列 → 整体东移 3。
+        MapData map = LinkMapFixtures.Build("link:900001",
+        [
+            new(new Coord(2, 2), 5, 7, BoardPlateKind.Birth),
+            new(new Coord(10, 2), 5, 5, BoardPlateKind.Birth),
+            new(new Coord(18, 2), 5, 5, BoardPlateKind.Birth),
+            new(new Coord(26, 2), 5, 7, BoardPlateKind.Birth),
+            new(new Coord(34, 2), 5, 5, BoardPlateKind.Birth),
+        ]);
+        MatchFlow match = MatchFlow.Create(map, MatchFixtures.Seed, All, LinkModeFixtures.Options);
+        match.PairingSource = new ScriptedPairingSource();
+        foreach (PlayerId p in All)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 50));
+        }
+
+        match.PlantSequentially(All.Select((p, i) => (p, i)));
+        Coord anchorStone = new(2, 8);   // 0 号顶行西端
+        match.Place(P0, anchorStone);
+        match.PassRounds(4);
+
+        Assert.Equal(3, match.Links.Count);
+        LinkRecord final = match.Links[2];
+        Assert.Equal((0, 2, LinkSide.North), (final.X, final.Y, final.Side));
+        Assert.Equal(new BattlefieldShift(0, 3, 0), final.ShiftOf(0));   // 锚点非零向量
+        Assert.Equal(0, match.Map.Boards[2].Origin.X);   // 整体平移恰好不越界：被贴方最西列落在 0
+        Assert.Equal(new Occupant(P0, PieceType.Basic), match.Board[match.Track(anchorStone, 0)].Occupant);
+        Assert.Equal(new Coord(5, 8), match.Track(anchorStone, 0));
+
+        string json = match.Serialize();
+        MatchFlow restored = MatchFlow.Restore(map, json);
+        Assert.Equal(json, restored.Serialize());
+        Assert.Equal(MapFile.ToJson(match.Map), MapFile.ToJson(restored.Map));
+        Assert.Equal(match.Board.Serialize(), restored.Board.Serialize());
+        Assert.Equal(match.Links.Select(Battlefield.链接执行Tests.Text), restored.Links.Select(Battlefield.链接执行Tests.Text));
+
+        JsonObject tampered = JsonNode.Parse(json)!.AsObject();
+        tampered["Link"]!["Links"]![2]!["Shifts"]![0]!["Dx"] = 0;
+        Assert.Throws<FormatException>(() => MatchFlow.Restore(map, tampered.ToJsonString()));
     }
 
     private static MatchFlow RoundTrip(MatchFlow match)
@@ -229,12 +284,10 @@ public class 链接模式存档Tests
         Assert.Equal(a.PassedThisRound, b.PassedThisRound);
         Assert.Equal(a.SettledBattlefields, b.SettledBattlefields);
         Assert.Equal(a.Pairings.Select(Text), b.Pairings.Select(Text));
-        Assert.Equal(a.Links.Select(l => (l.Sequence, l.PairingSequence, l.X, l.Y, l.MapVersion, l.MapDigest, l.Degraded, l.CorridorCells, string.Join(",", l.NewRelics))),
-            b.Links.Select(l => (l.Sequence, l.PairingSequence, l.X, l.Y, l.MapVersion, l.MapDigest, l.Degraded, l.CorridorCells, string.Join(",", l.NewRelics))));
+        Assert.Equal(a.Links.Select(Battlefield.链接执行Tests.Text), b.Links.Select(Battlefield.链接执行Tests.Text));
         Assert.Equal(a.Settlements.Select(Text), b.Settlements.Select(Text));
         Assert.Equal(a.PlayerStates.Select(Text), b.PlayerStates.Select(Text));
         Assert.Equal(a.Relics.PublicStates().Select(r => r.ToString()), b.Relics.PublicStates().Select(r => r.ToString()));
-        Assert.Equal(a.Relics.LinkedPlacements.Select(p => p.ToString()), b.Relics.LinkedPlacements.Select(p => p.ToString()));
         Assert.Equal(a.PendingPairing is null, b.PendingPairing is null);
     }
 

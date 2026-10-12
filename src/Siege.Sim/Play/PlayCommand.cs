@@ -233,7 +233,8 @@ internal static class PlayCommand
                     for (; links < match.Links.Count; links++)
                     {
                         LinkRecord l = match.Links[links];
-                        render.Line($"   棋盘展开：{BirthZoneLabel.Number(l.X)} 号与 {BirthZoneLabel.Number(l.Y)} 号战场之间长出{(l.Degraded ? "一条直通道" : "一块公共棋盘")}，两个战场连通。", ConsoleColor.Yellow);
+                        // 段 F 最小适配（F.3 再按平移向量改写）：拼接取代公共棋盘 / 通道。
+                        render.Line($"   棋盘拼接：{BirthZoneLabel.Number(l.Y)} 号战场平移贴到 {BirthZoneLabel.Number(l.X)} 号战场{(l.Side == Siege.Core.Board.Maps.LinkSide.East ? "东" : "北")}侧，两个战场连通。", ConsoleColor.Yellow);
                     }
 
                     for (; settlements < match.Settlements.Count; settlements++)

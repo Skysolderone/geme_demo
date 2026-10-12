@@ -137,7 +137,7 @@ public class 盲选插旗Tests
         // 人工选择取遍 5 块棋盘：必有某次与某名 AI 同区，"同区时多消费一次别的子流"这类耦合才会被触发。
         MatchFlow a = LinkModeFixtures.Create();
         a.PlantPrototype((LinkModeFixtures.P0, 0));
-        Assert.Equal(5, a.Relics.Coords.Count());
+        Assert.Equal(10, a.Relics.Coords.Count());   // 裁决 J2：5 块出生棋盘各 2 枚
         for (int zone = 1; zone < 5; zone++)
         {
             MatchFlow b = LinkModeFixtures.Create();

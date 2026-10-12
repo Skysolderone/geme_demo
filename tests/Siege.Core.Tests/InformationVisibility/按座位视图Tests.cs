@@ -74,6 +74,10 @@ public class 按座位视图Tests
         match.PassRounds(3);
         match.ApplyPairing([(0, 3), (1, 4)]);
 
+        // 段 F：战场 3 的格随拼接平移（含第二次链接把合并战场再向东重排），按链接记录追踪到当前坐标。
+        cStone = match.Track(cStone, 3);
+        fenceA = match.Track(fenceA, 3);
+        fenceB = match.Track(fenceB, 3);
         SeatPublicView a = match.PublishFor(P0);
         Assert.Equal(P2, a.CellAt(cStone)!.Owner);
         Assert.Contains($"{fenceA.ToNotation()}-{fenceB.ToNotation()}", a.Fences);
@@ -103,9 +107,9 @@ public class 按座位视图Tests
         // 占位（每块出生棋盘的位置与边长）是全局公开信息，其原点坐标不算"格数据"，从判据里除去。
         HashSet<Coord> origins = [.. match.Map.BirthZones.Select(z => new Coord(z.Min(c => c.X), z.Min(c => c.Y)))];
         HashSet<Coord> theirs = [.. match.Board.Battlefields.All.Where(f => f.Id != 0).SelectMany(f => f.Cells).Where(c => !origins.Contains(c))];
-        Assert.True(theirs.Count > 100);
+        Assert.True(theirs.Count > 60);   // 段 F：另外两个战场共三块出生棋盘（没有公共棋盘与通道）
         Assert.All(theirs, c => Assert.DoesNotContain($"\"{c.ToNotation()}\"", json, StringComparison.Ordinal));
-        Assert.Contains($"\"{BirthCell(match.Map, 3, 2, 2).ToNotation()}\"", json, StringComparison.Ordinal);   // 反面：链接进来的格在
+        Assert.Contains($"\"{BirthCell(match.Map, 3, 2, 2).ToNotation()}\"", json, StringComparison.Ordinal);   // 反面：链接进来的格在（match.Map 已是拼接后的地图）
         Assert.True(mine.Count(c => json.Contains($"\"{c.ToNotation()}\"", StringComparison.Ordinal)) == mine.Count);
         // 他人势力数值不出现：P1 的棋子在战场 1，P0 视图里 P1 的势力为 null。
         Assert.Contains("\"Power\":null", json, StringComparison.Ordinal);
@@ -162,8 +166,8 @@ public class 按座位视图Tests
         match.Flags.Plant(P0, 2);
         SeatPublicView locked = match.PublishFor(P0);
         Assert.Equal(match.Map.BirthZones[2].Order().Select(c => c.ToNotation()), locked.Cells.Select(c => c.Coord));
-        Assert.Single(locked.Relics);
-        Assert.Null(locked.Relics[0].Content);
+        Assert.Equal(2, locked.Relics.Length);   // 裁决 J2：每块出生棋盘 2 个信物格
+        Assert.All(locked.Relics, r => Assert.Null(r.Content));
     }
 
     [Fact]

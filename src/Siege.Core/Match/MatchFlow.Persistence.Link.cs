@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Numerics;
 using System.Text.Json.Serialization;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
@@ -11,8 +12,8 @@ namespace Siege.Core.Match;
 /// 链接模式的存档（board-link-mode 实现裁决 B5，段 A 接线契约 3）。旧模式不写任何新字段（存档逐字节同前），无模式字段的存档按旧模式读入。
 /// </summary>
 /// <remarks>
-/// 恢复顺序：开局图建空盘 → 按存档的链接记录逐个重放链接（地图增长 + 公共棋盘信物重生，核对版本号与地图摘要）→ 再写入盘面（棋子与改造，改造落在增长后的地图上）
-/// → 再恢复信物揭示 → 其余流程状态。<see cref="GameBoard.BaseMap"/> 始终是开局图。
+/// 恢复顺序：开局图建空盘 → 按存档的链接记录逐个重放拼接（地图重裁 + 信物账本坐标平移，核对版本号、地图摘要与各战场平移向量）→ 再写入盘面（棋子与改造，坐标已是拼接后的）
+/// → 再恢复信物揭示（坐标同样是拼接后的）→ 其余流程状态。<see cref="GameBoard.BaseMap"/> 始终是开局图。
 /// </remarks>
 public sealed partial class MatchFlow
 {
@@ -49,9 +50,11 @@ public sealed partial class MatchFlow
                 PairingSequence = l.PairingSequence,
                 X = l.X,
                 Y = l.Y,
+                Side = l.Side,
                 MapVersion = l.MapVersion,
+                SharedEdge = l.SharedEdge,
                 MapDigest = l.MapDigest,
-                NewRelicCells = [.. l.NewRelicCells.Select(c => c.ToNotation())],
+                Shifts = [.. l.Shifts.Select(s => new BattlefieldShiftSaveData { Battlefield = s.Battlefield, Dx = s.Dx, Dy = s.Dy })],
             })],
             Settlements = [.. _settlements.Select(s => new SettlementSaveData
             {
@@ -83,18 +86,19 @@ public sealed partial class MatchFlow
         LinkSaveData link = data.Link ?? throw new FormatException("链接模式的存档缺少链接流程状态（Link 段）。");
         foreach (LinkSaveData.Entry saved in link.Links.OrderBy(l => l.Sequence))
         {
-            LinkRecord replayed = ExecuteLink(saved.X, saved.Y, saved.PairingSequence, replay: true);
-            if (replayed.Sequence != saved.Sequence || replayed.MapVersion != saved.MapVersion
+            LinkRecord replayed = ExecuteLink(saved.X, saved.Y, saved.PairingSequence, saved.Side, replay: true);
+            if (replayed.Sequence != saved.Sequence || replayed.MapVersion != saved.MapVersion || replayed.SharedEdge != saved.SharedEdge
                 || !string.Equals(replayed.MapDigest, saved.MapDigest, StringComparison.Ordinal)
-                || !replayed.NewRelicCells.Select(c => c.ToNotation()).SequenceEqual(saved.NewRelicCells))
+                || !replayed.Shifts.Select(s => (s.Battlefield, s.Dx, s.Dy)).SequenceEqual(saved.Shifts.Select(s => (s.Battlefield, s.Dx, s.Dy))))
             {
                 throw new FormatException(
-                    $"链接 #{saved.Sequence}（战场 {BirthZoneLabel.Of(saved.X)} + {BirthZoneLabel.Of(saved.Y)}）重放结果与存档不一致：地图版本 {replayed.MapVersion} / {saved.MapVersion}，"
-                    + $"摘要 {replayed.MapDigest} / {saved.MapDigest}；未恢复。");
+                    $"链接 #{saved.Sequence}（战场 {BirthZoneLabel.Of(saved.X)} + {BirthZoneLabel.Of(saved.Y)}，贴{(saved.Side == LinkSide.East ? "东" : "北")}）重放结果与存档不一致："
+                    + $"地图版本 {replayed.MapVersion} / {saved.MapVersion}，摘要 {replayed.MapDigest} / {saved.MapDigest}，"
+                    + $"平移 [{string.Join(" ", replayed.Shifts)}] / [{string.Join(" ", saved.Shifts.Select(s => $"{BirthZoneLabel.Of(s.Battlefield)}({s.Dx:+#;-#;0},{s.Dy:+#;-#;0})"))}]；未恢复。");
             }
         }
 
-        // 段 A 接线契约 3：先重放链接、再重放改造——盘面段的棋子与改造写进增长后的地图。
+        // 段 A 接线契约 3：先重放链接、再写盘面——盘面段的棋子与改造（坐标已是拼接后的）写进重裁后的地图。
         try
         {
             Board.LoadState(data.Board ?? throw new FormatException("存档缺少盘面。"));
@@ -148,7 +152,7 @@ public sealed class LinkSaveData
 
     public List<PairingSaveData> Pairings { get; set; } = [];
 
-    /// <summary>链接事件：恢复时按序号重放并逐项核对版本号、地图摘要与新增信物格。</summary>
+    /// <summary>链接事件：恢复时按序号重放（贴边取自记录）并逐项核对版本号、共享边、地图摘要与各战场平移向量。</summary>
     public List<Entry> Links { get; set; } = [];
 
     public List<SettlementSaveData> Settlements { get; set; } = [];
@@ -168,12 +172,28 @@ public sealed class LinkSaveData
 
         public int Y { get; set; }
 
+        /// <summary>贴边（首轮东、决赛北）：重放时传给生成器。</summary>
+        public LinkSide Side { get; set; }
+
         public int MapVersion { get; set; }
+
+        public int SharedEdge { get; set; }
 
         public string MapDigest { get; set; } = string.Empty;
 
-        public List<string> NewRelicCells { get; set; } = [];
+        /// <summary>拼接前每个战场的平移向量（按标识升序，含锚点的零向量）。</summary>
+        public List<BattlefieldShiftSaveData> Shifts { get; set; } = [];
     }
+}
+
+/// <summary>一个战场在一次链接里的平移向量。</summary>
+public sealed class BattlefieldShiftSaveData
+{
+    public int Battlefield { get; set; }
+
+    public int Dx { get; set; }
+
+    public int Dy { get; set; }
 }
 
 public sealed class PairingRequestSaveData

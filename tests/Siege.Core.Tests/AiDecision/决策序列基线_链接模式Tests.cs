@@ -105,7 +105,7 @@ internal static class LinkDecisionSequence
             for (; links < match.Links.Count; links++)
             {
                 LinkRecord l = match.Links[links];
-                sb.Append($"L\t{l.Sequence}\tpairing={l.PairingSequence}\t{l.X}-{l.Y}\tversion={l.MapVersion}\tdegraded={l.Degraded}\tdigest={l.MapDigest}\trelics={string.Join(",", l.NewRelics.Select(r => $"{r.Coord.ToNotation()}:{r.Content.Type}"))}\n");
+                sb.Append($"L\t{l.Sequence}\tpairing={l.PairingSequence}\t{l.X}-{l.Y}\tside={l.Side}\tversion={l.MapVersion}\tshared={l.SharedEdge}\tshifts={string.Join(",", l.Shifts.Select(s => $"{s.Battlefield}:{s.Dx}:{s.Dy}"))}\tdigest={l.MapDigest}\n");
             }
 
             for (; settlements < match.Settlements.Count; settlements++)

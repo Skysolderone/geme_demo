@@ -112,17 +112,17 @@ public class 视图模型按座位过滤Tests
     [Fact]
     public void 链接后合并战场的格一起可见()
     {
-        // information-visibility Scenario「链接后立即可见」：四人四区、脚本配对 (1,2)(4,5) → P0 的视图含棋盘 1、棋盘 2 与新公共棋盘 / 通道，占位展开 2 块。
+        // information-visibility Scenario「链接后立即可见」：四人四区、脚本配对 (1,2)(4,5) → P0 的视图含棋盘 1 与（平移后的）棋盘 2，占位展开 2 块（段 F：拼接，没有公共棋盘与通道）。
         MatchFlow match = Started([0, 1, 3, 4], new ScriptedPairingSource()).PassRounds(3);
         Assert.Equal(2, match.Links.Count);
         DefaultBoardView board = match.World(P0).Board();
         SeatPublicView seat = match.PublishFor(P0);
 
         Assert.Equal(seat.Cells.Select(c => c.Coord).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.True(board.Cells.Length > Map.BirthZones[0].Count + Map.BirthZones[1].Count, "链接后应多出公共棋盘与通道的格");
+        Assert.Equal(Map.BirthZones[0].Count + Map.BirthZones[1].Count, board.Cells.Length);   // 拼接不新增格
         Assert.Equal([0, 1], board.Placeholders.Where(p => p.Expanded).Select(p => p.Zone));
         Assert.Equal([2, 3, 4], board.Placeholders.Where(p => !p.Expanded).Select(p => p.Zone));
-        Assert.Equal(3, board.Boards.Length);   // 两块出生棋盘 + 一块公共棋盘（退化直通道时公共棋盘缺，本种子不退化）
+        Assert.Equal(2, board.Boards.Length);   // 两块出生棋盘边对边紧贴
         Assert.Equal([P1], match.World(P0).SameBattlefieldPlayers);
         Assert.Contains(board.Cells, c => c.BirthZone == 1);
         Assert.DoesNotContain(board.Cells, c => c.BirthZone is 3 or 4);

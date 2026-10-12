@@ -634,7 +634,7 @@ public sealed partial class GameRoot : Node3D
                 LinkRecord link = links[_seenLinks];
                 DefaultBoardView board = _session.World.Board();
                 GD.Print($"[link] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 链接 #{link.Sequence}：战场 {BirthZoneLabel.Of(link.X)} + {BirthZoneLabel.Of(link.Y)}"
-                    + $"{(link.Degraded ? "（退化直通道）" : string.Empty)}；本机可见格 {board.Cells.Length}，已展开占位 {board.Placeholders.Count(p => p.Expanded)} / {board.Placeholders.Length}");
+                    + $"；本机可见格 {board.Cells.Length}，已展开占位 {board.Placeholders.Count(p => p.Expanded)} / {board.Placeholders.Length}");
                 // 合并后的战场标识 = 两个旧标识中的小者：本机战场现在就是它，即本机参与了这次链接。
                 bool mine = _session.MyBattlefield == link.X;
                 Flow(_audit.Linked(link, mine, _visibleCells, board, _session.MyBattlefieldCells));

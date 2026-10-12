@@ -46,7 +46,7 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Contains("其他战场（势力不可见）", output, StringComparison.Ordinal);
         Assert.Contains("════════ 轮到你了 ════════", output, StringComparison.Ordinal);
 
-        // 只画本战场：列标行恰是 2 号棋盘的列（宽 5），不是 73 列的画布。
+        // 只画本战场：列标行恰是 2 号棋盘的列，不是整张画布。
         MapData map = MapCatalog.Resolve("link:12345");
         BoundsOf(map, 1, out Coord origin, out int width, out _);
         string columns = "    " + string.Concat(Enumerable.Range(origin.X, width).Select(x => $" {new Coord(x, 0).Column,-2}"));
@@ -163,7 +163,8 @@ public class 各入口支持生成图_链接模式Tests
         // 规格：map 子命令能打印任一 link: 初始地图的文本图与校验报告。
         (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1");
         Assert.True(code == 0, err);
-        Assert.Contains("地图 link:1  73×73", output, StringComparison.Ordinal);
+        MapData initial = MapCatalog.Resolve("link:1");
+        Assert.Contains($"地图 link:1  {initial.Width}×{initial.Height}", output, StringComparison.Ordinal);
         Assert.Contains("地图校验通过", output, StringComparison.Ordinal);
         Assert.DoesNotContain("链接 #", output, StringComparison.Ordinal);
     }
@@ -179,7 +180,7 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Contains("链接 #2：战场 出生区 2 + 出生区 5", output, StringComparison.Ordinal);
         Assert.Contains("地图校验通过", output, StringComparison.Ordinal);
 
-        MapData expected = LinkMapGenerator.Link(LinkMapGenerator.Link(MapCatalog.Resolve("link:1"), 0, 3).Map, 1, 4).Map;
+        MapData expected = LinkMapGenerator.Link(LinkMapGenerator.Link(MapCatalog.Resolve("link:1"), 0, 3, LinkSide.East).Map, 1, 4, LinkSide.East).Map;
         Assert.Contains($"可落子格 {expected.PlayableCount} ", output, StringComparison.Ordinal);
         Assert.Contains("已模拟 2 次链接", output, StringComparison.Ordinal);
 

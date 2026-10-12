@@ -16,8 +16,9 @@ namespace Siege.Core.Match;
 /// → 交战（InProgress / Final）→ 终局（<see cref="MatchPhase.Ended"/>）。全部阶段转换都在大回合结束时（<see cref="AdvanceLinkPhase"/>）。</para>
 /// <para><b>配对</b>：Core 不抽配对随机数。进入待配对时若挂接了 <see cref="PairingSource"/> 就当场向它要结果；否则停在待配对，由外部调用 <see cref="ApplyPairing(PairingDecision)"/>。
 /// 两条路径共用同一份校验与执行。</para>
-/// <para><b>链接</b>（段 A 接线契约）：对 <see cref="GameBoard.LinkedMap"/> 调 <see cref="LinkMapGenerator.Link(MapData, int, int)"/>，再 <see cref="GameBoard.ApplyLink"/>；
-/// 同一配对事件内按规范次序逐对执行（R2）；公共棋盘的信物内容由 <c>relic-link:&lt;X&gt;:&lt;Y&gt;</c> 子流生成并追加进账本（B6）。</para>
+/// <para><b>链接 = 拼接</b>（段 A 接线契约 + 段 F 裁决 J1–J7）：对 <see cref="GameBoard.LinkedMap"/> 调 <see cref="LinkMapGenerator.Link(MapData, int, int, LinkSide)"/>
+/// （首轮配对贴东侧、决赛贴北侧），再 <see cref="GameBoard.ApplySplice"/> 把占用与改造按平移向量迁移、<see cref="RelicLedger.Translate"/> 把信物账本一并迁移；
+/// 同一配对事件内按规范次序逐对执行（R2）。没有公共棋盘，也没有链接新增的信物（J2：出生棋盘各 2 枚，全部在建局时生成）。</para>
 /// <para><b>战场结算</b>：大回合结束时逐战场检查整轮 Pass / 填满（<see cref="SettleAtRoundEnd"/>），出局 / 弃赛之后即时检查减员（<see cref="SettleByAttrition"/>）；
 /// 全局终局"最后战场结算"在大回合结束判定，"只剩一名参赛玩家"即时判定且优先。</para>
 /// </remarks>
@@ -201,9 +202,10 @@ public sealed partial class MatchFlow
         Emit(FlowEventKind.PairingApplied, null,
             $"{(request.Kind == PairingKind.FirstRound ? "首轮配对" : "决赛链接")} #{sequence}：候选 {string.Join(" ", request.Candidates.Select(BirthZoneLabel.Of))}；{decision}");
 
+        LinkSide side = request.Kind == PairingKind.FirstRound ? LinkSide.East : LinkSide.North;
         foreach ((int x, int y) in pairs)
         {
-            ExecuteLink(x, y, sequence);
+            ExecuteLink(x, y, sequence, side);
         }
 
         if (request.Kind == PairingKind.Final)
@@ -283,37 +285,27 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 执行一次链接（段 A 接线契约 1）：对开局 + 链接的地图（不含改造）生成增长，换到盘面上（已有改造重新落在新图上），
-    /// 新增信物格的内容由 <c>relic-link:&lt;X&gt;:&lt;Y&gt;</c> 子流生成并追加进账本（B6），两个旧战场的结算标记一并清除，派生量重算。
-    /// <c>internal</c> 供测试按非规范次序直接调用（"信物子流独立"）；对局流程只经 <see cref="ResolvePairing"/> 调用，存档恢复经 <paramref name="replay"/> 重放
+    /// 执行一次链接（段 A 接线契约 1 + 段 F 拼接）：对开局 + 链接的地图（不含改造）做拼接，被贴方与为腾位置而移动的战场整体平移；盘面占用、改造与信物账本按同一映射迁移，
+    /// 两个旧战场的结算标记一并清除，派生量重算。<paramref name="side"/> 由阶段决定（首轮东、决赛北，裁决 J1）。
+    /// <c>internal</c> 供测试直接调用（绕过配对事件）；对局流程只经 <see cref="ResolvePairing"/> 调用，存档恢复经 <paramref name="replay"/> 重放
     /// （重放不发事件、不重算派生量——恢复末尾统一重算一次）。
     /// </summary>
-    internal LinkRecord ExecuteLink(int x, int y, int pairingSequence, bool replay = false)
+    internal LinkRecord ExecuteLink(int x, int y, int pairingSequence, LinkSide side, bool replay = false)
     {
         RequireLinkMode();
-        MapData before = Board.LinkedMap;
-        LinkResult result = LinkMapGenerator.Link(before, x, y);
-        Board.ApplyLink(result.Map);
-        ImmutableArray<RelicPlacement> relics = RelicGenerator.GenerateLinked(
-            result.Map.RelicCells.Where(kv => !before.RelicCells.ContainsKey(kv.Key)), Seed, x, y, ContentSet);
-        Relics.Append(relics);
+        LinkResult result = LinkMapGenerator.Link(Board.LinkedMap, x, y, side);
+        Board.ApplySplice(result.Map, result.Translate);
+        Relics.Translate(result.Translate);
         _settledBattlefields.Remove(x);
         _settledBattlefields.Remove(y);
-        int lo = Math.Min(x, y);
-        int hi = Math.Max(x, y);
-        var record = new LinkRecord(_links.Count + 1, pairingSequence, lo, hi, result.Map.MapVersion, result.Degraded, result.Summary, [.. relics.Select(r => r.Coord)])
+        var record = new LinkRecord(_links.Count + 1, pairingSequence, result.Anchor, result.Mover, side, result.Map.MapVersion, result.SharedEdge, result.Shifts, result.Summary)
         {
-            PublicBoard = result.PublicBoard,
-            CorridorCells = result.Corridors.Sum(c => c.Cells().Count()),
-            Corridors = result.Corridors,
             MapDigest = MapFile.Digest(result.Map),
-            NewRelics = relics,
         };
         _links.Add(record);
         if (!replay)
         {
-            Emit(FlowEventKind.BattlefieldsLinked, null,
-                $"链接 #{_links.Count}：战场 {BirthZoneLabel.Of(lo)} + {BirthZoneLabel.Of(hi)}{(result.Degraded ? "（退化直通道）" : string.Empty)}；{result.Summary}");
+            Emit(FlowEventKind.BattlefieldsLinked, null, $"链接 #{_links.Count}：战场 {BirthZoneLabel.Of(result.Anchor)} + {BirthZoneLabel.Of(result.Mover)}；{result.Summary}");
             RecalculateDerived();
         }
 

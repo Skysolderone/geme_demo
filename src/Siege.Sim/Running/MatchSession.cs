@@ -292,6 +292,7 @@ public sealed class MatchSession
         MatchPublicView before = _previous;
         _trace.Reset();
         int turnStartedBefore = Match.Events.Count(e => e.Kind == FlowEventKind.TurnStarted);
+        int linksBefore = Match.Links.Count;
 
         _total.Start();
         var sw = Stopwatch.StartNew();
@@ -311,7 +312,7 @@ public sealed class MatchSession
         _turn++;
         MatchPublicView after = Match.Publish();
         AssertInvariants(after);
-        RecordTurn(player, majorRound, position, before, after, sw.ElapsedMilliseconds);
+        RecordTurn(player, majorRound, position, before, after, sw.ElapsedMilliseconds, linksBefore);
         _previous = after;
 
         if (Config.InjectFailureAtTurn == _turn)
@@ -349,23 +350,57 @@ public sealed class MatchSession
 
     // ---------- 记录 ----------
 
-    private void RecordTurn(PlayerId player, int majorRound, int position, MatchPublicView before, MatchPublicView after, long elapsedMs)
+    private void RecordTurn(PlayerId player, int majorRound, int position, MatchPublicView before, MatchPublicView after, long elapsedMs, int linksBefore)
     {
         var placements = new List<string>();
         var placedCells = new List<Coord>();
         var captures = new List<string>();
-        foreach (Coord c in after.Board.AllCoords())
+        // 段 F 最小适配：本小回合末尾发生了拼接（board-link-mode J3 / J7）时，拼接前盘面的格要先沿本回合的链接记录平移到新画布再比对
+        // （被贴方与为腾位置而移动的战场各有一条向量；落子与提子记的是拼接后的坐标）。没有链接时与原先逐格比对完全相同，旧模式日志逐字节不变。
+        // 日志里写出平移向量、以及"链接前坐标按链接前布局解释"的回放口径属 F.3。
+        Func<Coord, Coord> moved = c => c;
+        Func<Coord, Coord?> back = c => c;
+        IEnumerable<Coord> cells = after.Board.AllCoords();
+        if (Match.Links.Count > linksBefore)
         {
+            Battlefields fieldsBefore = Battlefields.Of(before.Board.Map);
+            LinkRecord[] links = [.. Match.Links.Skip(linksBefore)];
+            moved = c =>
+            {
+                int id = fieldsBefore.At(c)!.Id;
+                foreach (LinkRecord link in links)
+                {
+                    if (link.ShiftOf(id) is { } shift)
+                    {
+                        c = new Coord(c.X + shift.Dx, c.Y + shift.Dy);
+                    }
+
+                    if (link.Y == id)
+                    {
+                        id = link.X;
+                    }
+                }
+
+                return c;
+            };
+            cells = before.Board.AllCoords().Where(before.Board.Map.IsPlayable);
+            Dictionary<Coord, Coord> inverse = cells.ToDictionary(moved, c => c);
+            back = c => inverse.TryGetValue(c, out Coord was) ? was : null;
+        }
+
+        foreach (Coord c in cells)
+        {
+            Coord target = moved(c);
             Occupant? was = before.Board[c].Occupant;
-            Occupant? now = after.Board[c].Occupant;
+            Occupant? now = after.Board[target].Occupant;
             if (was is null && now is { } placed)
             {
-                placements.Add(new Placement(c, placed.Type).ToString());
-                placedCells.Add(c);
+                placements.Add(new Placement(target, placed.Type).ToString());
+                placedCells.Add(target);
             }
             else if (was is { } taken && now is null)
             {
-                captures.Add(new CapturedStone(c, taken.Owner, taken.Type).ToString());
+                captures.Add(new CapturedStone(target, taken.Owner, taken.Type).ToString());
             }
         }
 
@@ -503,7 +538,7 @@ public sealed class MatchSession
             Placements = placements,
             Captures = captures,
             Edits = edits,
-            Life = LifeEntry(player, before, after, placedCells, edits.Count > 0) with
+            Life = LifeEntry(player, before, after, placedCells, edits.Count > 0, moved, back) with
             {
                 ForbiddenStaged = refusals.Count(r => r.Failure.Kind == BatchFailureKind.LifeForbidden),
                 ForbiddenRehearsed = _trace.IllegalRehearsals.Count(r => r.Failure.Kind == BatchFailureKind.LifeForbidden),
@@ -550,7 +585,15 @@ public sealed class MatchSession
     /// 己方加子合并两条活串时，旧串的子仍在同主的活串里，不算失去；新串含旧活串的子，不算新确立。
     /// 两类拒绝计数由调用方填。internal 供测试用真实盘面走写入路径。
     /// </summary>
-    internal static LifeTurnEntry LifeEntry(PlayerId actor, MatchPublicView before, MatchPublicView after, IReadOnlyCollection<Coord> placed, bool edited)
+    internal static LifeTurnEntry LifeEntry(PlayerId actor, MatchPublicView before, MatchPublicView after, IReadOnlyCollection<Coord> placed, bool edited) =>
+        LifeEntry(actor, before, after, placed, edited, c => c, c => c);
+
+    /// <summary>
+    /// 同上，带本小回合拼接的坐标映射（段 F 最小适配）：<paramref name="moved"/> 把结算前盘面的格平移到结算后画布，<paramref name="back"/> 反向（结算后的格在结算前不存在为 <c>null</c>）。
+    /// 没有拼接时两者都是恒等。
+    /// </summary>
+    internal static LifeTurnEntry LifeEntry(
+        PlayerId actor, MatchPublicView before, MatchPublicView after, IReadOnlyCollection<Coord> placed, bool edited, Func<Coord, Coord> moved, Func<Coord, Coord?> back)
     {
         LifeShapeReport was = before.LifeShape;
         LifeShapeReport now = after.LifeShape;
@@ -558,7 +601,7 @@ public sealed class MatchSession
 
         foreach (GroupLife g in now.Groups.Where(g => g.Life == LifeState.Alive).OrderBy(g => g.Group.Stones.Min()))
         {
-            if (!g.Group.Stones.Any(s => StillAlive(was, s, g.Group.Owner)))
+            if (!g.Group.Stones.Any(s => back(s) is { } b && StillAlive(was, b, g.Group.Owner)))
             {
                 changes.Add(Change(LifeChangeEntry.Established, g, actor, cause: null));
             }
@@ -566,13 +609,13 @@ public sealed class MatchSession
 
         foreach (GroupLife g in was.Groups.Where(g => g.Life == LifeState.Alive).OrderBy(g => g.Group.Stones.Min()))
         {
-            if (g.Group.Stones.All(s => StillAlive(now, s, g.Group.Owner)))
+            if (g.Group.Stones.All(s => StillAlive(now, moved(s), g.Group.Owner)))
             {
                 continue;
             }
 
             string cause = g.Group.Owner != actor ? LifeChangeEntry.NonOwner
-                : placed.Any(c => g.EyeSpaces.Any(e => e.Cells.Contains(c))) ? LifeChangeEntry.OwnerFill
+                : placed.Any(c => g.EyeSpaces.Any(e => e.Cells.Any(cell => moved(cell) == c))) ? LifeChangeEntry.OwnerFill
                 : edited ? LifeChangeEntry.OwnerEdit
                 : LifeChangeEntry.OwnerOther;
             changes.Add(Change(LifeChangeEntry.Lost, g, actor, cause));
@@ -786,14 +829,15 @@ public sealed class MatchSession
                             X = linked.X,
                             Y = linked.Y,
                             MapVersion = linked.MapVersion,
-                            Degraded = linked.Degraded,
-                            PublicBoard = linked.PublicBoard is { } plate ? $"{plate.Origin.ToNotation()} {plate.Width}×{plate.Height}" : null,
-                            CorridorCells = linked.CorridorCells,
-                            CorridorLengths = [.. linked.Corridors.Select(c => c.Length)],
+                            // 段 F 最小适配：拼接没有公共棋盘 / 通道 / 退化 / 新增信物，退役字段填中性值；日志 schema 改为平移向量属 F.3。
+                            Degraded = false,
+                            PublicBoard = null,
+                            CorridorCells = 0,
+                            CorridorLengths = [],
                             // 合并后的战场 = 链接后地图（开局 + 链接，不含改造）里含战场 X 那块出生棋盘的连通分量。同一配对事件里的各对互不相交，
                             // 此刻（整个配对事件执行完）按出生棋盘取仍是这一对合并出的战场；决赛那一条即决赛战场。
                             BattlefieldCells = Battlefields.Of(Match.Board.LinkedMap).All.Single(f => f.BirthZones.Contains(linked.X)).Cells.Length,
-                            NewRelics = [.. linked.NewRelics.Select(RelicEntryOf)],
+                            NewRelics = [],
                             MapDigest = linked.MapDigest,
                             Summary = linked.Summary,
                         },

@@ -138,20 +138,20 @@ public static class MapValidator
                 RequireLandmarks: true,
                 BirthZonesMustReachEntrance: true),
 
-            // 链接档（board-link-mode D2 / 裁决 A3）：可落子格 125（初始 5 块出生棋盘）–1600（链接后；A3 原定 1000，三块公共棋盘加六条长通道会超过）；
-            // 信物 5–14；出生区恰 5 个、各 25–49 格；棋盘清单与通道宽照棋盘档，通道长度不限（见 LinkMapGenerator）；
-            // 连通性按连通分量（每个分量须含出生棋盘），不要求到中央入口可达、不做距离均衡、不要求标注咽喉；画布列、行各 20–80。
+            // 链接档（board-link-mode D2 拼接版 / 裁决 J1–J7）：可落子格 = 5 块出生棋盘之和 125–245、信物恰 10（每块出生棋盘 2 个）、出生区恰 5 个、各 25–49 格；
+            // 棋盘边长 5–7、不同战场的棋盘至少隔 1 格（同一战场内的棋盘边对边紧贴）、没有通道；连通性按分量（每个分量含出生棋盘、分量数 = 5 − 版本号）；
+            // 不要求到中央入口可达、不做距离均衡、不要求标注咽喉；画布列 20–75、行 8–21（裁决 J8-6：种子 1–20 穷举实测——J8-1 以西不动后含初始图宽 23–68、高 9–18——向外留余量）。
             [MapProfile.Link] = new(
                 "链接档只提供 4 人的预算表（本模式只有 4 人局）",
                 new Dictionary<int, Budget>
                 {
-                    [4] = new(125, 1600, 5, 14, (5, 5), (25, 49)),
+                    [4] = new(125, 245, 10, 10, (5, 5), (25, 49)),
                 }.ToImmutableDictionary(),
                 ZonesMustExceedPlayers: true,
                 DistanceHandling.Skip,
-                ColumnRange: (20, 80),
-                RowRange: (20, 80),
-                PlateList: new((5, 11), (5, 7), MinGap: 2, CorridorWidth: (3, 4), CorridorLength: (2, 80)),
+                ColumnRange: (20, 75),
+                RowRange: (8, 21),
+                PlateList: new((5, 7), (5, 7), MinGap: 1, CorridorWidth: (3, 4), CorridorLength: (2, 4), BirthRelics: 2),
                 Connectivity: PlateConnectivity.PerComponent,
                 RequireLandmarks: false,
                 BirthZonesMustReachEntrance: false),
@@ -206,7 +206,8 @@ public static class MapValidator
         (int Min, int Max) BirthSide,
         int MinGap,
         (int Min, int Max) CorridorWidth,
-        (int Min, int Max) CorridorLength);
+        (int Min, int Max) CorridorLength,
+        int? BirthRelics = null);
 
     /// <summary>一档人数的规模预算。</summary>
     private readonly record struct Budget(
@@ -344,17 +345,20 @@ public static class MapValidator
             return false;
         }
 
+        // 链接档（拼接，board-link-mode J1–J7）：同一战场内的棋盘边对边紧贴，间隔只在不同战场之间要求；没有通道，可落子格都必须属于某块棋盘；分量数 = 出生棋盘数 − 版本号。
+        bool spliced = rules.Connectivity == PlateConnectivity.PerComponent;
+        Battlefields? fields = spliced ? Battlefields.Of(map) : null;
         int[,] owner = ValidatePlateCells(map, plates, f);
-        ValidatePlateGaps(map, plates, f);
+        ValidatePlateGaps(map, plates, fields, f);
         ValidateBirthPlates(map, f);
         ValidateFlatScenery(map, owner, f);
-        ValidateCorridors(map, plates, owner, f);
-        if (rules.Connectivity == PlateConnectivity.PerComponent)
+        if (spliced)
         {
-            ValidateComponentsHaveBirthBoards(map, f);
+            ValidateSpliced(map, plates, owner, fields!, f);
         }
         else
         {
+            ValidateCorridors(map, plates, owner, f);
             ValidatePlateConnectivity(map, owner, f);
         }
 
@@ -456,8 +460,11 @@ public static class MapValidator
         return owner;
     }
 
-    /// <summary>第 3 条：棋盘外接矩形两两不重叠，且至少间隔若干格（两个方向上间隔的较大者；投影重叠的方向记为负）。</summary>
-    private static void ValidatePlateGaps(MapData map, PlateRules plates, ImmutableArray<MapValidationFailure>.Builder f)
+    /// <summary>
+    /// 第 3 条：棋盘外接矩形两两不重叠，且至少间隔若干格（两个方向上间隔的较大者；投影重叠的方向记为负）。
+    /// <paramref name="fields"/> 非空（链接档）时只对<b>不同战场</b>的棋盘要求间隔——同一战场内的棋盘是拼接出来的，边对边紧贴；重叠由 <see cref="ValidateSpliced"/> 另查。
+    /// </summary>
+    private static void ValidatePlateGaps(MapData map, PlateRules plates, Battlefields? fields, ImmutableArray<MapValidationFailure>.Builder f)
     {
         for (int i = 0; i < map.Boards.Length; i++)
         {
@@ -465,6 +472,11 @@ public static class MapValidator
             {
                 BoardPlate a = map.Boards[i];
                 BoardPlate b = map.Boards[j];
+                if (fields is not null && fields.At(a.Origin) is { } fa && fields.At(b.Origin) is { } fb && ReferenceEquals(fa, fb))
+                {
+                    continue;
+                }
+
                 int dx = Math.Max(a.Origin.X - (b.Origin.X + b.Width), b.Origin.X - (a.Origin.X + a.Width));
                 int dy = Math.Max(a.Origin.Y - (b.Origin.Y + b.Height), b.Origin.Y - (a.Origin.Y + a.Height));
                 int gap = Math.Max(dx, dy);
@@ -473,7 +485,7 @@ public static class MapValidator
                     string how = gap < 0 ? "重叠" : $"只隔 {gap} 格";
                     f.Add(new MapValidationFailure(
                         "BOARD_TOO_CLOSE",
-                        $"{Describe(a)} 与 {Describe(b)} {how}：棋盘两两至少间隔 {plates.MinGap} 格。",
+                        $"{Describe(a)} 与 {Describe(b)} {how}：棋盘两两至少间隔 {plates.MinGap} 格{(fields is null ? string.Empty : "（未链接的战场不得相邻）")}。",
                         [a.Origin, b.Origin]));
                 }
             }
@@ -716,20 +728,72 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 链接档的连通性（board-link-mode D1 / 规格 link-map-generation「物化状态校验」）：按几何四邻导出可落子格的连通分量（<see cref="Battlefields"/>），
-    /// 每个分量都必须含至少一块出生棋盘——没有出生棋盘的公共棋盘 / 通道片是生成器缺陷。分量之间**不要求**连通：开局 5 块出生棋盘本就彼此隔绝。
+    /// 链接档的拼接校验（board-link-mode D1 / D2 拼接版，规格 link-map-generation「物化状态校验」）：
+    /// 可落子格都属于某块棋盘（没有通道）；棋盘两两不重叠；每块出生棋盘恰 <see cref="PlateRules.BirthRelics"/> 个信物格；
+    /// 按几何四邻导出的连通分量（<see cref="Battlefields"/>）每个都含出生棋盘，且分量数 = 出生棋盘数 − 地图版本号——少了即有未链接的战场被拼到了一起（相邻），多了即有已链接的战场没有连通。
+    /// 分量之间**不要求**连通：开局 5 块出生棋盘本就彼此隔绝。
     /// </summary>
-    private static void ValidateComponentsHaveBirthBoards(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateSpliced(MapData map, PlateRules plates, int[,] owner, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        foreach (Battlefield field in Battlefields.Of(map).All)
+        ImmutableArray<Coord> loose = [.. map.AllCoords().Where(c => map.IsPlayable(c) && owner[c.X, c.Y] < 0)];
+        if (!loose.IsEmpty)
+        {
+            f.Add(new MapValidationFailure(
+                "SCENERY_CELL_PLAYABLE",
+                "拼接图上的可落子格都必须属于某块出生棋盘：没有通道，棋盘之外必须全部是障碍格。",
+                loose));
+        }
+
+        for (int i = 0; i < map.Boards.Length; i++)
+        {
+            BoardPlate plate = map.Boards[i];
+            bool inside = plate.Width > 0 && plate.Height > 0 && plate.Origin.X + plate.Width <= map.Width && plate.Origin.Y + plate.Height <= map.Height;
+            if (!inside)
+            {
+                continue;
+            }
+
+            ImmutableArray<Coord> overlapped = [.. plate.Cells().Where(c => owner[c.X, c.Y] != i)];
+            if (!overlapped.IsEmpty)
+            {
+                f.Add(new MapValidationFailure(
+                    "BOARD_OVERLAP", $"{Describe(plate)} 与清单里靠前的棋盘重叠：拼接只能边对边紧贴，不得重叠。", overlapped));
+            }
+
+            if (plate.Kind == BoardPlateKind.Birth && plates.BirthRelics is { } want)
+            {
+                int relics = map.RelicCells.Keys.Count(plate.Contains);
+                if (relics != want)
+                {
+                    f.Add(new MapValidationFailure(
+                        "BIRTH_BOARD_RELIC_COUNT", $"{Describe(plate)} 有 {relics} 个信物格，每块出生棋盘必须恰有 {want} 个。", [plate.Origin]));
+                }
+            }
+        }
+
+        foreach (Battlefield field in fields.All)
         {
             if (!field.HasBirthBoard)
             {
                 f.Add(new MapValidationFailure(
                     "BATTLEFIELD_WITHOUT_BIRTH_BOARD",
-                    $"有一片 {field.Cells.Length} 格的可落子格不含任何出生棋盘：每个战场都必须由出生棋盘长出来。",
+                    $"有一片 {field.Cells.Length} 格的可落子格不含任何出生棋盘：每个战场都必须由出生棋盘拼出来。",
                     field.Cells));
             }
+        }
+
+        int births = map.Boards.Count(b => b.Kind == BoardPlateKind.Birth);
+        int expected = births - map.MapVersion;
+        int actual = fields.All.Count(field => field.HasBirthBoard);
+        if (actual != expected)
+        {
+            // 少了：有两个未链接的战场相邻、被当成一个——指出全部含多块出生棋盘的分量；多了：版本号对应的链接没有连通——指出全部分量。
+            ImmutableArray<Coord> cells = [.. fields.All.Where(field => field.HasBirthBoard && (actual > expected || field.BirthZones.Length > 1)).SelectMany(field => field.Cells)];
+            f.Add(new MapValidationFailure(
+                "BATTLEFIELD_COUNT_MISMATCH",
+                $"地图版本号 {map.MapVersion} 对应 {expected} 个战场，实际导出 {actual} 个："
+                + (actual < expected ? "有未链接的战场相邻、被拼到了一起（未链接的战场之间 MUST 不相邻）。" : "有已链接的战场没有沿接缝连通。"),
+                cells));
         }
     }
 

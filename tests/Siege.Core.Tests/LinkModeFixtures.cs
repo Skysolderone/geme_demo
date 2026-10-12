@@ -139,6 +139,30 @@ internal static class LinkModeFixtures
         return match;
     }
 
+    /// <summary>
+    /// 把拼接前（开局）坐标 <paramref name="before"/>（位于出生棋盘 <paramref name="zone"/>）沿本局全部链接记录逐次平移到当前坐标（裁决 J3 / J7：
+    /// 每次链接里被贴方与为腾位置而移动的战场各有一条向量；该格所在战场的标识在它作为被贴方合并后变为锚点标识）。
+    /// </summary>
+    internal static Coord Track(this MatchFlow match, Coord before, int zone)
+    {
+        int id = zone;
+        Coord c = before;
+        foreach (LinkRecord link in match.Links)
+        {
+            if (link.ShiftOf(id) is { } shift)
+            {
+                c = new Coord(c.X + shift.Dx, c.Y + shift.Dy);
+            }
+
+            if (link.Y == id)
+            {
+                id = link.X;
+            }
+        }
+
+        return c;
+    }
+
     /// <summary>出生棋盘 <paramref name="zone"/> 左上角起的相对坐标。</summary>
     internal static Coord BirthCell(MapData map, int zone, int dx, int dy)
     {

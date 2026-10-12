@@ -42,16 +42,17 @@ public class 战场内合法落子范围Tests
         Assert.Equal([0, 3], merged.BirthZones);
         Assert.Equal(merged.Cells.ToHashSet(), match.LegalRangeFor(P0));
         Assert.Equal(merged.Cells.ToHashSet(), match.LegalRangeFor(P2));
-        Assert.True(match.LegalRangeFor(P0).Count > match.Map.BirthZones[0].Count + match.Map.BirthZones[3].Count);
+        Assert.Equal(match.Map.BirthZones[0].Count + match.Map.BirthZones[3].Count, match.LegalRangeFor(P0).Count);   // 拼接不新增格
     }
 
     [Fact]
-    public void 链接后可进入公共棋盘()
+    public void 链接后可进入对方棋盘()
     {
-        // Scenario：第 4 大回合，玩家所在战场已与另一战场链接，玩家在新生成的公共棋盘上暂放棋子 → 接受。
+        // Scenario：第 4 大回合，玩家所在战场已与另一战场链接，玩家在拼过来的对方出生棋盘（已平移）上暂放棋子 → 接受。
         MatchFlow match = Started([0, 1, 3, 4]).PassRounds(3);
         match.ApplyPairing([(0, 3), (1, 4)]);
-        BoardPlate plate = match.Map.Boards.First(b => b.Kind == BoardPlateKind.Public && match.Board.Battlefields.At(b.Origin)!.Id == 0);
+        BoardPlate plate = match.Map.Boards[3];
+        Assert.Equal(0, match.Board.Battlefields.At(plate.Origin)!.Id);
         match.AtRound(4, [P0, P1, P2, P3]);
         StagedBatch batch = match.ToDeploy();
         Assert.Null(batch.Stage(plate.Origin, PieceType.Basic));

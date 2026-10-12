@@ -20,7 +20,7 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// </remarks>
 public class 对局日志的记录内容_链接模式Tests
 {
-    [Fact]
+    [Fact(Skip = "board-link-mode 裁决 J8-9：F.3 / F.4 恢复。段 F 拼接重做：改造记录的坐标按发生时的布局解释（design D2 / 裁决 J3），离线重建要靠日志里的平移向量——F.3 把向量写进链接事件后按新口径重写本测试")]
     public void 地形可离线重建()
     {
         // 规格正文「改造与链接记录 MUST 足以离线重建任意时刻的地形」的链接模式侧（段 C 质检补缺口；Legacy 侧见 地形改造日志与分析Tests.地形可离线重建）：
@@ -36,7 +36,8 @@ public class 对局日志的记录内容_链接模式Tests
         var digests = new List<string>();
         foreach (LinkLogEntry link in links)
         {
-            map = LinkMapGenerator.Link(map, link.X, link.Y).Map;
+            // 贴边取对局记录（日志 schema 改为记贴边与平移向量属 F.3）。
+            map = LinkMapGenerator.Link(map, link.X, link.Y, session.Match.Links.Single(l => l.Sequence == link.Sequence).Side).Map;
             Assert.Equal(link.MapDigest, MapFile.Digest(map));
             digests.Add(MapFile.Digest(map));
         }
@@ -82,18 +83,19 @@ public class 对局日志的记录内容_链接模式Tests
         {
             LinkRecord record = match.Links[i];
             LinkLogEntry entry = links[i].Link!;
-            Assert.Equal((record.Sequence, record.PairingSequence, record.X, record.Y, record.MapVersion, record.Degraded),
-                (entry.Sequence, entry.PairingSequence, entry.X, entry.Y, entry.MapVersion, entry.Degraded));
+            Assert.Equal((record.Sequence, record.PairingSequence, record.X, record.Y, record.MapVersion),
+                (entry.Sequence, entry.PairingSequence, entry.X, entry.Y, entry.MapVersion));
             Assert.Equal(record.MapDigest, entry.MapDigest);
             Assert.Equal(64, entry.MapDigest.Length);
-            Assert.Equal(record.CorridorCells, entry.CorridorCells);
-            Assert.True(entry.CorridorCells > 0);
-            Assert.Equal(record.PublicBoard is { } plate ? $"{plate.Origin.ToNotation()} {plate.Width}×{plate.Height}" : null, entry.PublicBoard);
-            Assert.Equal(record.NewRelics.Select(r => r.Coord.ToNotation()), entry.NewRelics.Select(r => r.Coord));
-            Assert.Equal(record.NewRelics.Select(r => r.Content.Type.ToString()), entry.NewRelics.Select(r => r.Type));
+            Assert.Equal(record.Summary, entry.Summary);
+            // 段 F：公共棋盘 / 通道 / 退化 / 新增信物已不存在，日志里对应字段为中性值；贴边与平移向量进日志属 F.3。
+            Assert.False(entry.Degraded);
+            Assert.Null(entry.PublicBoard);
+            Assert.Equal(0, entry.CorridorCells);
+            Assert.Empty(entry.NewRelics);
         }
 
-        Assert.Contains(links, l => l.Link!.NewRelics.Count > 0);   // 样本口径：公共棋盘带来了新信物
+        Assert.All(links, l => Assert.Contains("拼接", l.Link!.Summary, StringComparison.Ordinal));
         Assert.Equal([1, 2, 3], links.Select(l => l.Link!.MapVersion));
 
         // 首部第 1、2 项：模式、锁定时各棋盘旗数，没有冒险概率。

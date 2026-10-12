@@ -346,10 +346,12 @@ public static class Program
                 throw new ArgumentException($"--links 第 {step + 1} 项 {item}：出生棋盘 {a} 与 {b} 已在同一战场 {BirthZoneLabel.Of(x)}，不能再链接。");
             }
 
-            LinkResult linked = LinkMapGenerator.Link(map, x, y);
+            // 段 F 最小适配（F.3 再定口径）：两个战场都只含一块出生棋盘按首轮贴东侧，否则按决赛贴北侧。
+            LinkSide side = fields.ById(x)!.BirthZones.Length == 1 && fields.ById(y)!.BirthZones.Length == 1 ? LinkSide.East : LinkSide.North;
+            LinkResult linked = LinkMapGenerator.Link(map, x, y, side);
             map = linked.Map;
             step++;
-            Console.WriteLine($"链接 #{step}：战场 {BirthZoneLabel.Of(Math.Min(x, y))} + {BirthZoneLabel.Of(Math.Max(x, y))}{(linked.Degraded ? "（退化直通道）" : string.Empty)}；地图版本 {map.MapVersion}；{linked.Summary}");
+            Console.WriteLine($"链接 #{step}：战场 {BirthZoneLabel.Of(Math.Min(x, y))} + {BirthZoneLabel.Of(Math.Max(x, y))}；地图版本 {map.MapVersion}；{linked.Summary}");
         }
 
         Console.WriteLine($"已模拟 {step} 次链接。棋盘清单：{string.Join("  ", map.Boards.Select(p => $"{p.Kind}@{p.Origin.ToNotation()} {p.Width}×{p.Height}"))}");

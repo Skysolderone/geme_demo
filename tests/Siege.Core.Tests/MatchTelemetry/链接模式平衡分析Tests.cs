@@ -44,11 +44,11 @@ public class 链接模式平衡分析Tests
         Assert.Equal(new SortedDictionary<string, int> { ["1-2 3-4"] = 1, ["2-3"] = 1 }, s.FirstRoundPairings);
         Assert.Equal(5, s.Links);
 
+        // 段 F：拼接没有退化与通道，日志里对应字段为中性值（分析段的退化率 / 通道长度行改为平移向量属 F.3）。
         List<LinkLogEntry> links = [.. new[] { a, b }.SelectMany(l => l.Events).Where(e => e.Link is not null).Select(e => e.Link!)];
-        Assert.Equal(links.Count(l => l.Degraded), s.DegradedLinks);
-        Assert.Equal(links.Sum(l => l.CorridorLengths.Count), s.CorridorLengths.Values.Sum());
-        Assert.All(links, l => Assert.Equal(l.Degraded ? 1 : 2, l.CorridorLengths.Count));   // 公共棋盘两条通道，退化一条直通道
-        Assert.All(links.SelectMany(l => l.CorridorLengths), length => Assert.True(length >= 2));
+        Assert.Equal(5, links.Count);
+        Assert.Equal(0, s.DegradedLinks);
+        Assert.Empty(s.CorridorLengths);
 
         // 决赛战场格数：每局一个样本，取决赛链接那一条的合并战场格数，且大于首轮任何一个战场。
         Assert.Equal(2, s.FinalBattlefieldCells.Values.Sum());
@@ -139,17 +139,8 @@ public class 链接模式平衡分析Tests
         Assert.True(report.LinkMode.TurnMaxMs > 0);
         Assert.Contains("## 链接模式（board-link-mode）", ReportWriter.Render(report), StringComparison.Ordinal);
 
-        // 链接新增的公共棋盘信物也进信物统计（3.6 冒烟时实测：首部之外的信物格一旦被控制，既有的信物选择段即 KeyNotFound）。
-        // 变异 MC-33：信物选择段改回只读首部信物 → 本测试红。
-        MatchLog controlled = SimFixtures.Clone(LinkSimFixtures.TwoLinkLog.Value);
-        RelicEntry linked = controlled.Events.First(e => e.Link is not null).Link!.NewRelics.First();
-        int index = controlled.Turns.Count - 1;
-        TurnSnapshot lastTurn = controlled.Turns[index];
-        Assert.Contains(lastTurn.Relics, r => r.Coord == linked.Coord);   // 样本口径：快照里列出了这枚链接新增的信物
-        controlled.Turns[index] = lastTurn with { Relics = [.. lastTurn.Relics.Select(r => r.Coord == linked.Coord ? r with { Control = "Controlled", Holder = 0 } : r)] };
-        BalanceReport withLinked = BalanceAnalyzer.Analyze([controlled]);
-        Assert.Equal(controlled.AllRelics.Count(r => r.Type == linked.Type), withLinked.Selection.Relics.Single(r => r.Type == linked.Type).Count);
-        Assert.True(controlled.AllRelics.Count() > controlled.Header.Relics.Count);
+        // 段 F：链接不再新增信物，链接模式日志的完整信物分布也逐项即首部信物（信物坐标随拼接平移进快照，由 F.3 的日志口径处理）。
+        Assert.Equal(log.Header.Relics, log.AllRelics);
 
         // 回归：旧模式日志没有链接事件，完整信物分布逐项即首部信物（信物选择段对旧日志的结果因此不变）。
         Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(l.Header.Relics, l.AllRelics));

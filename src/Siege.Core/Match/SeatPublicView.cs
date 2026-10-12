@@ -142,7 +142,8 @@ public sealed partial class MatchFlow
         return new SeatPublicView(
             seat, Board.BaseMap.Id, Seed.ToString(), Mode, Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order,
             CarryInOut, [.. CarryIns.Select(kv => new SeatCarryInView(kv.Key, kv.Value))], battlefield,
-            [.. Board.BaseMap.BirthZones.Select((cells, z) => new BoardPlaceholder(z, new Coord(cells.Min(c => c.X), cells.Min(c => c.Y)).ToNotation(),
+            // 占位取当前地图的出生区（拼接后被平移方与为腾位置而移动的棋盘坐标已变，裁决 J3 / J7），不读开局图。
+            [.. Board.Map.BirthZones.Select((cells, z) => new BoardPlaceholder(z, new Coord(cells.Min(c => c.X), cells.Min(c => c.Y)).ToNotation(),
                 cells.Max(c => c.X) - cells.Min(c => c.X) + 1, cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1))],
             cells, fences, relics, groups, players,
             [.. _settlements.Select(s => new SeatSettlementView(s.Battlefield, s.MajorRound, s.Winner))],

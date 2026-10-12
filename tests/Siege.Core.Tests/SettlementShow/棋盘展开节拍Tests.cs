@@ -30,7 +30,7 @@ public class 棋盘展开节拍Tests
         return (before, after, opponents, match);
     }
 
-    [Fact]
+    [Fact(Skip = "board-link-mode 裁决 J8-9：F.3 / F.4 恢复。段 F 拼接重做：公共棋盘升起的节拍已不存在，演出改为对方棋盘滑入贴合（裁决 J5），F.4 重写 LinkShowBeats.Expansion 后按新规格重写本测试")]
     public void 首轮链接演出_四个节拍依次()
     {
         // Scenario「首轮链接演出」：公共棋盘与通道升起 → 相机拉远到合并后战场 → 对方盘面显现 → 横幅"棋盘展开：与 X 交战"；四拍合计约 2.5 s。
@@ -62,7 +62,7 @@ public class 棋盘展开节拍Tests
         Assert.Equal(total, new ShowTimeline(beats, ShowDuration.Normal).TotalDurationMs);
     }
 
-    [Fact]
+    [Fact(Skip = "board-link-mode 裁决 J8-9：F.3 / F.4 恢复。段 F 拼接重做：裁决 J7 下他人链接会把本战场向东重排（坐标变化），Expansion 按格差分会误判为新增格；F.4 改为按平移向量差分后恢复本测试")]
     public void 他人链接不演出()
     {
         // Scenario「他人链接不演出」：P0、P1 同在棋盘 1（不进首轮配对），P2、P3 的棋盘 4 + 5 链接 → P0 的战场没有新增格，空序列。

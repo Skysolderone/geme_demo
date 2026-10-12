@@ -11,7 +11,7 @@ namespace Siege.Core.Board;
 /// 设计文档 §9.2 / §10.1 要求实时重算；一次提子可能同时改变覆盖、棋串分裂、连珠断线与倍率，
 /// 增量维护的组合爆炸不可控。</para>
 /// <para>唯一的例外是<b>盘面未变时的记忆化</b>（ai-turn-speed D2；board-link-mode 段 C2 加上 <see cref="Serialize"/>）：全盘棋串（<see cref="AllGroups"/>）、活形报告（<see cref="LifeShapeReport.Analyze"/>）
-/// 与盘面序列化按突变版本号记忆——每次写入原语（<see cref="Place"/> / <see cref="Clear"/> / <see cref="RemoveStones"/> / <see cref="ApplyTerrainEdits"/> / <see cref="ApplyLink"/>）都让版本号 +1
+/// 与盘面序列化按突变版本号记忆——每次写入原语（<see cref="Place"/> / <see cref="Clear"/> / <see cref="RemoveStones"/> / <see cref="ApplyTerrainEdits"/> / <see cref="ApplySplice"/>）都让版本号 +1
 /// （空集合的 <see cref="RemoveStones"/> 什么都没写，不算写入），版本号不同即整份重算，副本从零起。它不是增量维护：命中时返回的是同一盘面上同一份全量结果，任何一次写入之后的第一次查询都重算。</para>
 /// <para>地图派生量（每格可落子 / 出生区 / 信物格、气边邻居、覆盖目标、可落子格清单）按<b>当前 <see cref="MapData"/> 实例</b>逐格惰性记忆：
 /// 改造换上新地图即换表（<see cref="ApplyTerrainEdits"/>：段 C2 起新表由旧表派生，只作废改造目标周围 2 格，与从零建表逐项相同），链接换图从零建表，
@@ -23,7 +23,7 @@ namespace Siege.Core.Board;
 /// </remarks>
 public sealed partial class GameBoard
 {
-    private readonly Occupant?[] _occupants;
+    private Occupant?[] _occupants;
     private readonly List<TerrainEdit> _edits;
     private MapTables _tables;
 
@@ -598,23 +598,50 @@ public sealed partial class GameBoard
     public Battlefields Battlefields => Battlefields.Of(Map);
 
     /// <summary>
-    /// 最小写入原语：链接增长（board-link-mode D2 / 实现裁决 A1）——换上一份由 <c>LinkMapGenerator.Link(LinkedMap, …)</c> 产出、<b>只新增格</b>的新地图，
-    /// 把本局已有的改造重新落在它之上得到新的 <see cref="Map"/>，重建派生表；占用数组与改造列表不动。
-    /// 走与 <see cref="ApplyTerrainEdits"/> 相同的"换一份 MapData、重建 MapTables"路径。
-    /// <b>不做链接几何的判定</b>——那是生成器与校验器的事；这里只核对新地图确实是 <see cref="LinkedMap"/> 的"只增不改"扩展：
-    /// 画布、标识、地形、出生区、信物格与已有棋盘逐项不变，已可落子的格仍可落子，版本号恰 +1。任一不符即抛 <see cref="SiegeRuleException"/>，地图不变。
+    /// 最小写入原语：拼接（board-link-mode D2 拼接版 / 裁决 J3）——换上一份由 <c>LinkMapGenerator.Link(LinkedMap, …)</c> 产出的新地图（画布可能重裁），
+    /// 并按 <paramref name="move"/>（拼接前的可落子格 → 新坐标；锚点战场通常为恒等，整体越界平移时也有向量）把占用数组与改造列表逐格迁移到新画布，再把改造重新落在新图上得到新的 <see cref="Map"/>，派生表从零建。
+    /// <b>不做拼接几何的判定</b>——那是生成器与校验器的事；这里只核对映射确实把 <see cref="LinkedMap"/>"逐格搬过去"：标识相同、版本号恰 +1、每个可落子格都映射到新图上一个可落子格、
+    /// 映射两两不重、可落子格总数不变、地形 / 出生区 / 信物格逐格相同、栅栏（静态地形里的）逐边相同。任一不符即抛 <see cref="SiegeRuleException"/>，盘面不变。
+    /// 改造的迁移：搭桥 / 烧林按目标格平移；立栅按有可落子端的那一端所属战场的向量平移（边界栅栏随棋盘走），两端都是场景格的栅栏没有锚点——
+    /// 新图上两端仍在画布内且仍不可落子就原样保留，否则丢弃（它本来就切不到任何气边）。接缝两侧各自朝间隙立的两道栅栏平移后是同一条边，只保留先出现的一条
+    /// （<see cref="TerrainWriter.ApplyAll"/> 对重复边会抛"该边已有栅栏"）。
     /// </summary>
-    public void ApplyLink(MapData grown)
+    public void ApplySplice(MapData spliced, Func<Coord, Coord> move)
     {
-        ArgumentNullException.ThrowIfNull(grown);
-        string? mismatch = LinkMismatch(LinkedMap, grown);
-        if (mismatch is not null)
+        ArgumentNullException.ThrowIfNull(spliced);
+        ArgumentNullException.ThrowIfNull(move);
+        MapData current = LinkedMap;
+        int[] target = SpliceTargets(current, spliced, move);
+
+        var occupants = new Occupant?[spliced.Width * spliced.Height];
+        for (int i = 0; i < _occupants.Length; i++)
         {
-            throw new SiegeRuleException($"链接产出的地图不是当前地图的只增扩展：{mismatch}");
+            if (_occupants[i] is { } occupant)
+            {
+                if (target[i] < 0)
+                {
+                    throw new SiegeRuleException($"{CoordAt(i).ToNotation()} 上有棋子却不是当前地图的可落子格：盘面与地图不一致。");
+                }
+
+                occupants[target[i]] = occupant;
+            }
         }
 
-        LinkedMap = grown;
-        ReplaceMap(_edits.Count == 0 ? grown : TerrainWriter.ApplyAll(grown, [.. _edits]));
+        var edits = new List<TerrainEdit>(_edits.Count);
+        var seen = new HashSet<TerrainEdit>();
+        foreach (TerrainEdit edit in _edits)
+        {
+            if (MoveEdit(current, spliced, move, edit) is { } kept && seen.Add(kept))
+            {
+                edits.Add(kept);
+            }
+        }
+
+        _occupants = occupants;
+        _edits.Clear();
+        _edits.AddRange(edits);
+        LinkedMap = spliced;
+        ReplaceMap(edits.Count == 0 ? spliced : TerrainWriter.ApplyAll(spliced, edits));
     }
 
     /// <summary>
@@ -628,67 +655,113 @@ public sealed partial class GameBoard
         _version++;
     }
 
-    /// <summary>"只增不改"核对的唯一实现；合格为 <c>null</c>，否则说明第一处不符。</summary>
-    private static string? LinkMismatch(MapData current, MapData grown)
+    /// <summary>"逐格搬过去"核对的唯一实现：返回旧格下标 → 新格下标（不可落子格为 −1）；任一不符抛 <see cref="SiegeRuleException"/>。</summary>
+    private static int[] SpliceTargets(MapData current, MapData spliced, Func<Coord, Coord> move)
     {
-        if (grown.Width != current.Width || grown.Height != current.Height)
+        if (spliced.Id != current.Id)
         {
-            return $"画布由 {current.Width}×{current.Height} 变成 {grown.Width}×{grown.Height}（链接档画布整局不变）。";
+            throw new SiegeRuleException($"拼接产出的地图标识由 {current.Id} 变成 {spliced.Id}。");
         }
 
-        if (grown.Id != current.Id)
+        if (spliced.MapVersion != current.MapVersion + 1)
         {
-            return $"地图标识由 {current.Id} 变成 {grown.Id}。";
+            throw new SiegeRuleException($"拼接产出的地图版本号应由 {current.MapVersion} 变成 {current.MapVersion + 1}，实际为 {spliced.MapVersion}。");
         }
 
-        if (grown.MapVersion != current.MapVersion + 1)
-        {
-            return $"版本号应由 {current.MapVersion} 变成 {current.MapVersion + 1}，实际为 {grown.MapVersion}。";
-        }
-
-        if (!SameTerrain(grown.TerrainData, current.TerrainData))
-        {
-            return "地形数据（高度 / 地表 / 桥 / 栅栏）被改写。";
-        }
-
-        if (grown.BirthZones.Length != current.BirthZones.Length
-            || Enumerable.Range(0, current.BirthZones.Length).Any(i => !grown.BirthZones[i].SetEquals(current.BirthZones[i])))
-        {
-            return "出生区被改写。";
-        }
-
-        if (grown.Boards.Length < current.Boards.Length
-            || Enumerable.Range(0, current.Boards.Length).Any(i => grown.Boards[i] != current.Boards[i]))
-        {
-            return "已有棋盘清单被改写（链接只能往清单末尾追加）。";
-        }
-
-        foreach ((Coord c, RelicCellSpec spec) in current.RelicCells)
-        {
-            if (!grown.RelicCells.TryGetValue(c, out RelicCellSpec kept) || kept != spec)
-            {
-                return $"已有信物格 {c.ToNotation()} 被改写或删除。";
-            }
-        }
-
+        var target = new int[current.Width * current.Height];
+        Array.Fill(target, -1);
+        var taken = new bool[spliced.Width * spliced.Height];
+        int count = 0;
         foreach (Coord c in current.AllCoords())
         {
-            if (current.IsPlayable(c) && !grown.IsPlayable(c))
+            if (!current.IsPlayable(c))
             {
-                return $"已可落子的格 {c.ToNotation()} 变成了不可落子。";
+                continue;
             }
+
+            Coord n = move(c);
+            if (!spliced.Contains(n) || !spliced.IsPlayable(n))
+            {
+                throw new SiegeRuleException($"拼接映射把可落子格 {c.ToNotation()} 送到 {n.ToNotation()}，它不是新地图上的可落子格。");
+            }
+
+            int ni = (n.Y * spliced.Width) + n.X;
+            if (taken[ni])
+            {
+                throw new SiegeRuleException($"拼接映射把两个格送到了同一格 {n.ToNotation()}。");
+            }
+
+            if (current.HeightAt(c) != spliced.HeightAt(n) || current.SurfaceAt(c) != spliced.SurfaceAt(n) || current.HasBridge(c) != spliced.HasBridge(n))
+            {
+                throw new SiegeRuleException($"拼接改写了 {c.ToNotation()} → {n.ToNotation()} 的地形（高度 / 地表 / 桥）。");
+            }
+
+            if (current.BirthZoneOf(c) != spliced.BirthZoneOf(n))
+            {
+                throw new SiegeRuleException($"拼接改写了 {c.ToNotation()} → {n.ToNotation()} 的出生区归属。");
+            }
+
+            bool hadRelic = current.RelicCells.TryGetValue(c, out RelicCellSpec was);
+            bool hasRelic = spliced.RelicCells.TryGetValue(n, out RelicCellSpec now);
+            if (hadRelic != hasRelic || (hadRelic && was != now))
+            {
+                throw new SiegeRuleException($"拼接改写了 {c.ToNotation()} → {n.ToNotation()} 的信物格。");
+            }
+
+            taken[ni] = true;
+            target[(c.Y * current.Width) + c.X] = ni;
+            count++;
         }
 
-        return null;
+        if (count != spliced.PlayableCount)
+        {
+            throw new SiegeRuleException($"拼接后可落子格总数由 {count} 变成 {spliced.PlayableCount}：拼接 MUST NOT 新增或删除可落子格。");
+        }
+
+        if (current.RelicCells.Count != spliced.RelicCells.Count)
+        {
+            throw new SiegeRuleException($"拼接后信物格数由 {current.RelicCells.Count} 变成 {spliced.RelicCells.Count}。");
+        }
+
+        if (current.TerrainData.Fences.Count != spliced.TerrainData.Fences.Count
+            || current.TerrainData.Fences.Where(e => current.IsPlayable(e.A) && current.IsPlayable(e.B)).Any(e => !spliced.TerrainData.Fences.Contains(new FenceEdge(move(e.A), move(e.B)))))
+        {
+            throw new SiegeRuleException("拼接改写了地形数据里的栅栏。");
+        }
+
+        return target;
     }
 
-    /// <summary>两份地形逐项相同：高度表、地表表、桥集合、栅栏集合（同一实例直接为真）。</summary>
-    private static bool SameTerrain(TerrainData a, TerrainData b) =>
-        ReferenceEquals(a, b)
-        || (a.Heights.Count == b.Heights.Count && a.Heights.All(kv => b.Heights.TryGetValue(kv.Key, out int h) && h == kv.Value)
-            && a.Surfaces.Count == b.Surfaces.Count && a.Surfaces.All(kv => b.Surfaces.TryGetValue(kv.Key, out Surface v) && v == kv.Value)
-            && a.Bridges.SetEquals(b.Bridges)
-            && a.Fences.SetEquals(b.Fences));
+    /// <summary>一条改造随拼接迁移后的样子；没有合法落点（两端都是场景格的栅栏搬不走）为 <c>null</c>。</summary>
+    private static TerrainEdit? MoveEdit(MapData current, MapData spliced, Func<Coord, Coord> move, TerrainEdit edit)
+    {
+        if (edit.Kind != TerrainEditKind.Fence)
+        {
+            return edit.Kind == TerrainEditKind.Bridge ? TerrainEdit.Bridge(move(edit.Cell)) : TerrainEdit.Burn(move(edit.Cell));
+        }
+
+        Coord a = edit.Edge.A;
+        Coord b = edit.Edge.B;
+        bool aPlayable = current.IsPlayable(a);
+        bool bPlayable = current.IsPlayable(b);
+        if (aPlayable && bPlayable)
+        {
+            return TerrainEdit.Fence(move(a), move(b));
+        }
+
+        if (aPlayable || bPlayable)
+        {
+            // 一端是场景格：随可落子的那一端所属战场平移，另一端保持相邻；平移后越出画布原点（负坐标）即丢弃。
+            Coord anchor = aPlayable ? a : b;
+            Coord other = aPlayable ? b : a;
+            Coord moved = move(anchor);
+            int ox = other.X + (moved.X - anchor.X);
+            int oy = other.Y + (moved.Y - anchor.Y);
+            return ox < 0 || oy < 0 ? null : TerrainEdit.Fence(moved, new Coord(ox, oy));
+        }
+
+        return spliced.Contains(a) && spliced.Contains(b) && !spliced.IsPlayable(a) && !spliced.IsPlayable(b) ? edit : null;
+    }
 
     /// <summary>最小写入原语：清除指定格的占用。</summary>
     public void Clear(Coord c)

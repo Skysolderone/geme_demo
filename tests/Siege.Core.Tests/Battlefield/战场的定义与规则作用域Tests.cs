@@ -59,7 +59,7 @@ public class 战场的定义与规则作用域Tests
         // 改造换图：GameBoard.ApplyTerrainEdits 换上新 MapData，战场导出跟着换实例（立栅不改变战场数）。
         GameBoard board = GameBoard.Load(map);
         Battlefields before = board.Battlefields;
-        board.ApplyTerrainEdits([TerrainEdit.Fence(new Coord(1, 1), new Coord(2, 1))]);
+        board.ApplyTerrainEdits([TerrainEdit.Fence(new Coord(3, 3), new Coord(4, 3))]);
         Assert.NotSame(before, board.Battlefields);
         Assert.Equal(5, board.Battlefields.Count);
     }
@@ -71,8 +71,8 @@ public class 战场的定义与规则作用域Tests
         GameBoard board = GameBoard.Load(LinkMapFixtures.Initial());
         var a = new PlayerId(0);
         var b = new PlayerId(1);
-        Coord a1 = new(2, 2);          // 0 号棋盘中心
-        Coord b1 = new(22, 2);         // 1 号棋盘中心
+        Coord a1 = new(4, 4);          // 0 号棋盘中心
+        Coord b1 = new(12, 4);         // 1 号棋盘中心
         board.Place(a1, a, PieceType.Basic);
         board.Place(b1, b, PieceType.Basic);
         Group groupA = board.GroupAt(a1)!;
@@ -80,7 +80,7 @@ public class 战场的定义与规则作用域Tests
         ImmutableArray<Coord> coverageBefore = board.CoverageTargets(a1);
 
         // B 在自己的战场里把整块棋盘的边缘填满，A 的气与覆盖目标逐项不变；两条棋串没有任何共同的气边邻格。
-        foreach (Coord c in LinkMapFixtures.Births[1].Cells().Where(c => c != b1 && (c.X == 20 || c.X == 24 || c.Y == 0 || c.Y == 4)))
+        foreach (Coord c in LinkMapFixtures.Births[1].Cells().Where(c => c != b1 && (c.X == 10 || c.X == 14 || c.Y == 2 || c.Y == 6)))
         {
             board.Place(c, b, PieceType.Basic);
         }
@@ -99,9 +99,9 @@ public class 战场的定义与规则作用域Tests
         // 实现口径（见 TerrainEditRules 类注释）：搭桥 / 烧林在场景格（障碍）上被拒绝；立栅不按规格档分流，
         // 落在场景格边上的栅栏是合法但无效果的动作（切不到任何气边、不改变任何格的可落子性），因此战场数量与格集合不变。
         MapData map = LinkMapFixtures.Initial();
-        var corner = new Coord(4, 2);          // 0 号棋盘东缘的格
-        var scenery = new Coord(5, 2);         // 紧邻的场景格（障碍）
-        var scenery2 = new Coord(6, 2);
+        var corner = new Coord(6, 4);          // 0 号棋盘东缘的格
+        var scenery = new Coord(7, 4);         // 紧邻的场景格（障碍）
+        var scenery2 = new Coord(8, 4);
 
         Assert.Contains("深水", TerrainEditRules.Reject(map, corner, TerrainEdit.Bridge(scenery)), StringComparison.Ordinal);
         Assert.Contains("林地", TerrainEditRules.Reject(map, corner, TerrainEdit.Burn(scenery)), StringComparison.Ordinal);

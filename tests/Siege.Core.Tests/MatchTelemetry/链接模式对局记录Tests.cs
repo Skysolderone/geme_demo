@@ -1,4 +1,5 @@
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using static Siege.Core.Tests.LinkModeFixtures;
 
@@ -31,10 +32,12 @@ public class 链接模式对局记录Tests
         foreach (LinkRecord link in match.Links)
         {
             Assert.False(string.IsNullOrEmpty(link.MapDigest));
-            Assert.True(link.CorridorCells > 0);
-            Assert.Equal(link.Degraded, link.PublicBoard is null);
-            Assert.Equal(link.NewRelicCells, link.NewRelics.Select(r => r.Coord));
+            Assert.True(link.SharedEdge >= 1);
+            Assert.True(link.ShiftOf(link.X)!.Value.IsZero);          // 锚点零向量
+            Assert.False(link.ShiftOf(link.Y)!.Value.IsZero);         // 被贴方必然移动
         }
+
+        Assert.Equal([LinkSide.East, LinkSide.East, LinkSide.North], match.Links.Select(l => l.Side));
 
         Assert.Equal(match.Links.Select(l => l.MapDigest).Distinct().Count(), match.Links.Count);
     }

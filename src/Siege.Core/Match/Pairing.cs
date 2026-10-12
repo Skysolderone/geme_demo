@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 
 namespace Siege.Core.Match;
 
@@ -153,24 +154,27 @@ public sealed record PairingRecord(
     int Sequence, PairingKind Kind, int MajorRound, ImmutableArray<int> Candidates, ImmutableArray<(int X, int Y)> Pairs, int? Waiter, string Source = PairingDecision.ExternalSource);
 
 /// <summary>
-/// 一次执行完的链接（match-telemetry 第 9 项；存档只存 (X, Y, 所属配对) 并在恢复时重放核对）：链接序号（从 1 起）、所属配对事件序号、两个战场（X &lt; Y）、
-/// 链接后的地图版本号、是否退化为直通道、生成器给出的几何摘要、新增的信物格（坐标字典序）。
+/// 一次执行完的链接（match-telemetry 第 9 项；存档存 (X, Y, 贴边, 所属配对) 并在恢复时重放核对版本号、摘要与平移向量）：链接序号（从 1 起）、所属配对事件序号、
+/// 两个战场（X &lt; Y，X 即锚点）、贴边（首轮东、决赛北，裁决 J1）、链接后的地图版本号、共享边长度、拼接前每个战场的平移向量
+/// （按标识升序，锚点通常为零向量、整体越界平移时非零〔裁决 J8-3〕；未参与链接但为腾位置而东移的战场也在内，裁决 J7 / J8-1）、生成器给出的几何摘要。
 /// </summary>
 public sealed record LinkRecord(
-    int Sequence, int PairingSequence, int X, int Y, int MapVersion, bool Degraded, string Summary, ImmutableArray<Coord> NewRelicCells)
+    int Sequence, int PairingSequence, int X, int Y, LinkSide Side, int MapVersion, int SharedEdge, ImmutableArray<BattlefieldShift> Shifts, string Summary)
 {
-    /// <summary>新增的公共棋盘（外接矩形即其原点与边长）；退化链接为 <c>null</c>。</summary>
-    public BoardPlate? PublicBoard { get; init; }
-
-    /// <summary>新增通道的格数。</summary>
-    public int CorridorCells { get; init; }
-
-    /// <summary>新增的通道（外接矩形；长度 = 较长边），按生成器给出的次序。退化链接为一条直通道。只作记录（遥测：通道长度，负责人裁决 R3 复核项），不入存档。</summary>
-    public ImmutableArray<Board.Maps.LinkCorridor> Corridors { get; init; } = [];
-
     /// <summary>链接后（开局 + 链接、不含改造）地图的内容摘要（<see cref="MapFile.Digest"/>）。</summary>
     public string MapDigest { get; init; } = string.Empty;
 
-    /// <summary>新增信物格及其内容（坐标字典序）。</summary>
-    public ImmutableArray<Relics.RelicPlacement> NewRelics { get; init; } = [];
+    /// <summary>某战场在这次链接里的平移向量；拼接前不存在该标识为 <c>null</c>。</summary>
+    public BattlefieldShift? ShiftOf(int battlefield)
+    {
+        foreach (BattlefieldShift shift in Shifts)
+        {
+            if (shift.Battlefield == battlefield)
+            {
+                return shift;
+            }
+        }
+
+        return null;
+    }
 }

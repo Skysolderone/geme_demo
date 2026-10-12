@@ -1289,9 +1289,14 @@ public static class BalanceAnalyzer
                 relicCount[relic.Type] = relicCount.TryGetValue(relic.Type, out int n) ? n + 1 : 1;
             }
 
+            // 段 F 最小适配：链接模式下信物随拼接平移，快照 / 揭示里的坐标与首部（开局坐标）对不上的先跳过——按平移向量对齐属 F.3。
             foreach (RelicRevealEntry reveal in log.Result.RelicReveals.Where(r => r.RevealedInMajorRound is not null))
             {
-                string type = typeOf[reveal.Coord];
+                if (!typeOf.TryGetValue(reveal.Coord, out string? type))
+                {
+                    continue;
+                }
+
                 relicRevealed[type] = relicRevealed.TryGetValue(type, out int n) ? n + 1 : 1;
             }
 
@@ -1300,7 +1305,11 @@ public static class BalanceAnalyzer
             {
                 foreach (RelicStateEntry state in turn.Relics.Where(r => r.Control == nameof(RelicControlKind.Controlled) && r.Holder is not null))
                 {
-                    string type = typeOf[state.Coord];
+                    if (!typeOf.TryGetValue(state.Coord, out string? type))
+                    {
+                        continue;
+                    }
+
                     relicControlledTurns[type] = relicControlledTurns.TryGetValue(type, out int n) ? n + 1 : 1;
                     if (!controlledBy.TryGetValue(state.Holder!.Value, out HashSet<string>? set))
                     {

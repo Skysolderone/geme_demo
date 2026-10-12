@@ -4,96 +4,119 @@ using Siege.Core.Determinism;
 
 namespace Siege.Core.Board.Maps;
 
-/// <summary>一条链接通道：左下角格、宽、高（直条矩形；横向通道高 = 通道宽 3–4，纵向通道宽 = 通道宽）。</summary>
-public readonly record struct LinkCorridor(Coord Origin, int Width, int Height)
+/// <summary>拼接时被贴方贴到锚点的哪一侧（裁决 J1）：首轮链接贴东侧，决赛链接贴北侧。由对局流程按阶段决定并传给生成器。</summary>
+public enum LinkSide
 {
-    /// <summary>通道格，先行后列。</summary>
-    public IEnumerable<Coord> Cells()
-    {
-        for (int y = Origin.Y; y < Origin.Y + Height; y++)
-        {
-            for (int x = Origin.X; x < Origin.X + Width; x++)
-            {
-                yield return new Coord(x, y);
-            }
-        }
-    }
+    /// <summary>被贴方最西列 = 锚点外接矩形最东列 + 1；纵向取共享边最长、并列偏南。</summary>
+    East,
 
-    /// <summary>通道长度（沿通道方向的格数）。</summary>
-    public int Length => Math.Max(Width, Height);
+    /// <summary>被贴方最南行 = 锚点外接矩形最北行 + 1；横向取共享边最长、并列偏西。</summary>
+    North,
+}
 
-    public override string ToString() =>
-        $"{Origin.ToNotation()}–{new Coord(Origin.X + Width - 1, Origin.Y + Height - 1).ToNotation()}（{Width}×{Height}）";
+/// <summary>一次拼接里某个战场的整体平移向量（锚点通常为零向量，只在整体越界平移时非零，裁决 J8-3；未参与链接但为腾位置而移动的战场也各记一条）。</summary>
+public readonly record struct BattlefieldShift(int Battlefield, int Dx, int Dy)
+{
+    /// <summary>是否真的移动了。</summary>
+    public bool IsZero => Dx == 0 && Dy == 0;
+
+    public override string ToString() => $"{BirthZoneLabel.Of(Battlefield)}({Dx:+#;-#;0},{Dy:+#;-#;0})";
 }
 
 /// <summary>
-/// 一次链接的结果（board-link-mode D2 / 规格 battlefield「链接事件」）：新地图（版本号 +1）、新增的公共棋盘（退化链接为 <c>null</c>）、新增的通道、
-/// 是否退化、实际相连的两块棋盘在清单里的下标、以及一句供日志记录的几何摘要。信物<b>内容</b>不在这里生成——那是对局层按对局种子派生的子流（段 B）。
+/// 一次拼接的结果（board-link-mode D2 拼接版 / 规格 link-map-generation「链接时的棋盘拼接」）：新地图（版本号 +1、画布可能重裁）、贴边、锚点与被贴方的标识、共享边长度、
+/// 拼接前每个战场的平移向量（按战场标识升序，含锚点——通常为零向量），以及一句供日志记录的几何摘要。
+/// <see cref="Translate"/> 把拼接前地图上任一可落子格映射到新地图上的坐标——盘面占用、改造列表、信物账本与测试都只经它迁移，不另判"格属于哪个战场"。
 /// </summary>
-public sealed record LinkResult(
-    MapData Map,
-    BoardPlate? PublicBoard,
-    ImmutableArray<LinkCorridor> Corridors,
-    bool Degraded,
-    int FromBoard,
-    int ToBoard,
-    bool ClosestPair,
-    string Summary);
-
-/// <summary>一次链接档初始布局生成的结果：地图、实际采用的尝试序号（只供诊断）、作废尝试的原因、以及生成期对全部链接序列的核对统计。</summary>
-public sealed record GeneratedLinkMap(MapData Map, int Attempt, ImmutableArray<string> Discarded, LinkVerification Verification);
-
-/// <summary>生成期链接核对的统计：三类序列各执行了多少次链接、其中退化（无公共棋盘）与备选（不是最近两块棋盘）各多少。</summary>
-public sealed record LinkVerification(
-    int FourZoneLinks, int FourZoneDegraded, int FourZoneAlternate,
-    int TwoPlusLinks, int TwoPlusDegraded, int TwoPlusAlternate,
-    int ThreePlusLinks, int ThreePlusDegraded, int ThreePlusAlternate)
+public sealed class LinkResult
 {
-    public int Links => FourZoneLinks + TwoPlusLinks + ThreePlusLinks;
+    private readonly Battlefields _before;
+    private readonly ImmutableDictionary<int, (int Dx, int Dy)> _shiftOf;
 
-    public int Degraded => FourZoneDegraded + TwoPlusDegraded + ThreePlusDegraded;
+    internal LinkResult(MapData map, Battlefields before, LinkSide side, int anchor, int mover, int sharedEdge, ImmutableArray<BattlefieldShift> shifts, string summary)
+    {
+        Map = map;
+        _before = before;
+        Side = side;
+        Anchor = anchor;
+        Mover = mover;
+        SharedEdge = sharedEdge;
+        Shifts = shifts;
+        Summary = summary;
+        _shiftOf = shifts.ToImmutableDictionary(s => s.Battlefield, s => (s.Dx, s.Dy));
+    }
+
+    /// <summary>拼接后的地图（版本号 = 拼接前 + 1）。</summary>
+    public MapData Map { get; }
+
+    /// <summary>贴边。</summary>
+    public LinkSide Side { get; }
+
+    /// <summary>锚点战场标识（两个标识中的小者），坐标不变。</summary>
+    public int Anchor { get; }
+
+    /// <summary>被贴方战场标识（两个标识中的大者），整体平移。</summary>
+    public int Mover { get; }
+
+    /// <summary>共享边长度：接缝两侧都有可落子格的格数，≥ 1。</summary>
+    public int SharedEdge { get; }
+
+    /// <summary>拼接前每个战场的平移向量，按标识升序；锚点通常为零向量（整体越界平移时非零，裁决 J8-3）。</summary>
+    public ImmutableArray<BattlefieldShift> Shifts { get; }
+
+    /// <summary>几何摘要（日志用）。</summary>
+    public string Summary { get; }
+
+    /// <summary>拼接前地图上的可落子格 → 新地图上的坐标。不可落子的格抛 <see cref="ArgumentException"/>。</summary>
+    public Coord Translate(Coord before)
+    {
+        Battlefield field = _before.At(before)
+            ?? throw new ArgumentException($"{before.ToNotation()} 不是拼接前地图上的可落子格，没有平移向量。", nameof(before));
+        (int dx, int dy) = _shiftOf[field.Id];
+        return new Coord(before.X + dx, before.Y + dy);
+    }
 }
 
-/// <summary>链接序列的类别（规格 link-map-generation「全部链接序列都能生成」的三类）。</summary>
+/// <summary>链接序列的类别（规格 link-map-generation「全部链接序列都能拼接」的三类）。</summary>
 public enum LinkSequenceKind
 {
-    /// <summary>四人四区：首轮配对两次链接，再决赛链接（公共 ↔ 公共）。</summary>
+    /// <summary>四人四区：首轮配对两次东贴，再决赛北贴。</summary>
     FourZones,
 
-    /// <summary>2+1+1：两名独占者先配对链接，胜者再与同区棋盘决赛（出生棋盘 ↔ 合并战场）。</summary>
+    /// <summary>2+1+1：两名独占者先配对东贴，胜者再与同区棋盘决赛北贴（出生棋盘 ↔ 合并战场）。</summary>
     TwoPlusOnePlusOne,
 
-    /// <summary>3+1：独占者直接与三人同区棋盘的胜者决赛（出生棋盘 ↔ 出生棋盘）。</summary>
+    /// <summary>3+1：独占者直接与三人同区棋盘的胜者决赛北贴（出生棋盘 ↔ 出生棋盘）。</summary>
     ThreePlusOne,
 }
 
-/// <summary>一条链接序列：类别与依次执行的若干次 (X, Y) 链接。战场标识即当时分量内最小的出生棋盘编号。</summary>
-public sealed record LinkSequence(LinkSequenceKind Kind, ImmutableArray<(int X, int Y)> Steps)
+/// <summary>一次链接步骤：两个战场标识（当时分量内最小的出生棋盘编号）与贴边。</summary>
+public readonly record struct LinkStep(int X, int Y, LinkSide Side)
 {
-    public override string ToString() => $"{Kind}：{string.Join(" → ", Steps.Select(s => $"({s.X},{s.Y})"))}";
+    public override string ToString() => $"({X},{Y}){(Side == LinkSide.East ? "东" : "北")}";
+}
+
+/// <summary>一条链接序列：类别与依次执行的若干步。</summary>
+public sealed record LinkSequence(LinkSequenceKind Kind, ImmutableArray<LinkStep> Steps)
+{
+    public override string ToString() => $"{Kind}：{string.Join(" → ", Steps)}";
 }
 
 /// <summary>
-/// 链接档地图生成器（board-link-mode D2、实现裁决 A1–A3；规格 link-map-generation）。两个入口：
-/// <see cref="Generate(ulong, int)"/> 由地图种子生成<b>初始布局</b>（5 块隔绝的出生棋盘）；
-/// <see cref="Link(MapData, int, int, ulong)"/> 在当前物化状态上执行一次<b>链接</b>（公共棋盘 + 两条通道，放不下即退化为直通道），产出版本号 +1 的新地图。
-/// 全程整数运算，随机只来自 <see cref="MapRandom.ForLinkAttempt"/> / <see cref="MapRandom.ForLink"/>，不读时钟与环境，也拿不到对局种子。
+/// 链接档地图生成器（board-link-mode D2 拼接版，负责人 2026-10-12 裁决 A + J1–J7；规格 link-map-generation）。两个入口：
+/// <see cref="Generate(ulong)"/> 由地图种子生成<b>初始布局</b>（5 块隔绝的出生棋盘一字排开）；
+/// <see cref="Link(MapData, int, int, LinkSide)"/> 在当前物化状态上执行一次<b>拼接</b>（被贴方整体平移到锚点东侧 / 北侧紧贴），产出版本号 +1 的新地图与各战场的平移向量。
+/// 全程整数运算，随机只在初始布局（<see cref="MapRandom.ForLinkLayout"/>），拼接不消费任何随机；不读时钟与环境，也拿不到对局种子。
 /// </summary>
 /// <remarks>
-/// <para><b>画布与槽位</b>：画布固定为 <see cref="CanvasSide"/>×<see cref="CanvasSide"/>（整局不变，占用数组与盘面序列化的行宽因此不受链接影响，A2），
-/// 由 <see cref="Lanes"/>×<see cref="Lanes"/> 个槽位组成，槽位间距 <see cref="LanePitch"/> = 出生棋盘最大边长 + 预留间距
-/// （<see cref="ReserveGap"/> = 一块 11×11 公共棋盘 + 两条最短通道），于是任意两块出生棋盘之间都放得下公共棋盘与两条 3 格宽通道。
-/// 5 块出生棋盘占 5 个槽位，图案取自白名单 <see cref="SlotPatterns"/>（"每一对棋盘都能用一块公共棋盘 + 两条直通道接上"的 536 个图案里，
-/// 全部链接序列都走得通的 32 个）。</para>
-/// <para><b>为什么不是 50×50</b>：规格要求任意两块出生棋盘 Chebyshev 间隔 ≥ 15；50 列里一轴最多排 3 个带（5+15+5+15+5 = 45），5 块棋盘只能落在 3×3 槽位，
-/// 而 3×3 的全部 5 槽图案都存在至少一对棋盘无法用直通道接上（已穷举）。4×4 槽位需要 3×22 + 7 = 73 列。负责人 2026-10-09 裁决 R1 / R6 接受 73×73 与 32 种图案白名单，规格「初始布局」已同步为 73×73。</para>
-/// <para><b>校验闭环</b>：第 k 次尝试的随机源只由（地图种子, k）决定；每次尝试先过链接档静态校验，再把<see cref="Sequences"/>（15 种四人四区配对各接决赛、
-/// 全部 2+1+1 与 3+1 序列；四人四区的首轮两次链接只按规范次序——含最小出生棋盘编号的一对先，裁决 R2）逐条执行一遍——任一步链接失败（放不下也铺不出直通道、或校验不过）即本次尝试作废。
-/// 通过的图保证"全部链接序列都能生成"；退化次数记入 <see cref="GeneratedLinkMap.Verification"/>。</para>
-/// <para><b>链接几何</b>：在 X、Y 两战场最近的两块棋盘之间放公共棋盘（边长 9–11，与任何已有棋盘至少隔 <see cref="BoardGap"/> 格、与任何已物化格不相邻），
-/// 各铺一条 3–4 宽直通道（两端各整端贴一块棋盘、侧面不贴任何已物化格、不覆盖已物化格）。候选按（两条通道总长, 偏好边长差, 偏好宽度差, 行, 列）取最小，
-/// 偏好值由 (地图种子, X, Y) 的随机源给出；最近的一对放不下时按距离次序试其余棋盘对（备选位置），全部放不下时退化为一条直通道。
-/// 通道长度不设上限：非相邻槽位之间的链接通道可以很长，这是槽位模型下"任意配对都能接上"的代价（见任务报告）。</para>
+/// <para><b>初始布局</b>（J4 / J2）：5 块出生棋盘边长各 5–7、次序由地图种子决定，底边对齐在第 <see cref="Margin"/> 行、自第 <see cref="Margin"/> 列起以固定间距 <see cref="Gap"/> 一字排开；
+/// 每块恰 2 个信物格（最外一圈以内、互不相邻、尽量不同行不同列）；画布按布局四周各留 <see cref="Margin"/> 格裁出一次。没有槽位、白名单、公共棋盘与通道。</para>
+/// <para><b>拼接</b>（J1 / J3）：锚点 = 两个标识中的小者（即含最小出生棋盘编号的战场），坐标不变；被贴方整体平移——东贴时最西列 = 锚点最东列 + 1，北贴时最南行 = 锚点最北行 + 1；
+/// 另一分量在"接缝两侧都有可落子格的格数"最多的候选里取偏南 / 偏西者，共享边 MUST ≥ 1。</para>
+/// <para><b>画布</b>（J7 / J8-1）：原点优先固定、西 / 南边界不动，只在东 / 北侧按需扩展或收缩（边界外留 <see cref="Margin"/> 格）；未参与链接的战场里整体位于合并战场以西（至少隔一列空列）的原地不动，
+/// 其余按原相对次序（当前最西列升序）收拢排到合并战场东侧、间距 <see cref="Gap"/>，底边不动。因此一次链接可能平移多个战场，每个都记一条向量。</para>
+/// <para><b>越界</b>（J8-3）：共享边并列时先排除会让被贴方越出画布原点的候选，再取偏南 / 偏西；最长共享边的候选全部越界时，整个布局（含锚点）整体向东 / 北平移到恰好不越界，
+/// 锚点此时有非零向量（"锚点不变"降为优先原则）。不抛异常。</para>
 /// </remarks>
 public static class LinkMapGenerator
 {
@@ -104,92 +127,20 @@ public static class LinkMapGenerator
     public const int BirthMinSide = 5;
     public const int BirthMaxSide = 7;
 
-    /// <summary>公共棋盘边长区间。</summary>
-    public const int PublicMinSide = 9;
-    public const int PublicMaxSide = 11;
+    /// <summary>每块出生棋盘的信物格数（裁决 J2）。</summary>
+    public const int RelicsPerBirthBoard = 2;
 
-    /// <summary>通道宽度区间与最短长度。</summary>
-    public const int CorridorMinWidth = 3;
-    public const int CorridorMaxWidth = 4;
-    public const int MinCorridorLength = 2;
+    /// <summary>战场 / 出生棋盘之间的固定间距（裁决 J4 / J7）。</summary>
+    public const int Gap = 3;
 
-    /// <summary>公共棋盘与任何已有棋盘的最小间隔。</summary>
-    public const int BoardGap = 2;
+    /// <summary>画布留白：初始布局四周、拼接后东 / 北侧边界外的空格数。</summary>
+    public const int Margin = 2;
 
-    /// <summary>任意两块出生棋盘之间的预留间距：一块最大公共棋盘加两条最短通道。</summary>
-    public const int ReserveGap = PublicMaxSide + (2 * MinCorridorLength);
-
-    /// <summary>槽位间距：出生棋盘最大边长 + 预留间距。</summary>
-    public const int LanePitch = BirthMaxSide + ReserveGap;
-
-    /// <summary>每轴槽位数。</summary>
-    public const int Lanes = 4;
-
-    /// <summary>画布边长（列数 = 行数），整局不变。</summary>
-    public const int CanvasSide = ((Lanes - 1) * LanePitch) + BirthMaxSide;
-
-    /// <summary>公共棋盘上边长（宽高较小者）不超过此值的放 2 个信物格，更大的放 3 个（与棋盘档同口径）。</summary>
-    public const int SmallPublicSide = 10;
-
-    /// <summary>同一块公共棋盘上两个信物格至少相隔几格（两个方向上距离的较大者）。</summary>
-    private const int RelicSpacing = 3;
-
-    /// <summary>尝试上限的缺省值。</summary>
-    public const int DefaultMaxAttempts = 64;
-
-    private static readonly ConcurrentDictionary<ulong, GeneratedLinkMap> Cache = new();
+    private static readonly ConcurrentDictionary<ulong, MapData> Cache = new();
 
     /// <summary>
-    /// 全部"逐对可接"的槽位图案（按字典序）：4×4 槽位里 5 个槽位的组合中，每一对棋盘都能"用一块公共棋盘 + 两条直通道"接上的那些
-    /// （同行 / 同列相邻，或同行 / 同列隔一个空槽，或对角且至少一个拐角槽为空且拐角到两端的中间槽全空）。只在类型初始化时算一次；
-    /// 它是必要条件，不是充分条件——首轮两次链接会互相挡路。生成只从 <see cref="SlotPatterns"/> 里选。
-    /// </summary>
-    internal static ImmutableArray<ImmutableArray<(int Col, int Row)>> AllSlotFeasiblePatterns { get; } = ComputeSlotPatterns();
-
-    /// <summary>
-    /// 生成用的槽位图案白名单：<see cref="AllSlotFeasiblePatterns"/>（536 个）里用统一边长 7、零偏移、种子 1 跑完 <see cref="Sequences"/> 全部走得通的 32 个
-    /// （诊断测试 <c>槽位图案诊断Tests</c> 列出；结构上都是"主对角线 / 反对角线三块 + 第 0 行一块 + 第 0 / 3 列一块"这一族及其镜像）。
-    /// 边长与槽内偏移随种子变化后仍逐次核对，核对不过就换下一次尝试。
-    /// </summary>
-    internal static ImmutableArray<ImmutableArray<(int Col, int Row)>> SlotPatterns { get; } =
-    [
-        [(0, 0), (1, 0), (1, 1), (2, 2), (3, 3)],
-        [(0, 0), (2, 0), (1, 1), (2, 2), (3, 3)],
-        [(0, 0), (3, 0), (2, 1), (1, 2), (0, 3)],
-        [(0, 0), (3, 0), (2, 1), (1, 2), (1, 3)],
-        [(0, 0), (3, 0), (2, 1), (1, 2), (2, 3)],
-        [(0, 0), (3, 0), (2, 1), (1, 2), (3, 3)],
-        [(0, 0), (0, 1), (1, 1), (2, 2), (3, 3)],
-        [(0, 0), (1, 1), (0, 2), (2, 2), (3, 3)],
-        [(0, 0), (1, 1), (2, 2), (0, 3), (3, 3)],
-        [(0, 0), (2, 1), (3, 1), (1, 2), (0, 3)],
-        [(0, 0), (2, 1), (1, 2), (3, 2), (0, 3)],
-        [(0, 0), (2, 1), (1, 2), (0, 3), (3, 3)],
-        [(1, 0), (3, 0), (2, 1), (1, 2), (0, 3)],
-        [(1, 0), (0, 1), (1, 1), (2, 2), (3, 3)],
-        [(1, 0), (1, 1), (0, 2), (2, 2), (3, 3)],
-        [(1, 0), (1, 1), (2, 2), (0, 3), (3, 3)],
-        [(1, 0), (2, 1), (3, 1), (1, 2), (0, 3)],
-        [(1, 0), (2, 1), (1, 2), (3, 2), (0, 3)],
-        [(1, 0), (2, 1), (1, 2), (0, 3), (3, 3)],
-        [(2, 0), (3, 0), (2, 1), (1, 2), (0, 3)],
-        [(2, 0), (0, 1), (1, 1), (2, 2), (3, 3)],
-        [(2, 0), (1, 1), (0, 2), (2, 2), (3, 3)],
-        [(2, 0), (1, 1), (2, 2), (0, 3), (3, 3)],
-        [(2, 0), (2, 1), (3, 1), (1, 2), (0, 3)],
-        [(2, 0), (2, 1), (1, 2), (3, 2), (0, 3)],
-        [(2, 0), (2, 1), (1, 2), (0, 3), (3, 3)],
-        [(3, 0), (0, 1), (1, 1), (2, 2), (3, 3)],
-        [(3, 0), (1, 1), (0, 2), (2, 2), (3, 3)],
-        [(3, 0), (1, 1), (2, 2), (0, 3), (3, 3)],
-        [(3, 0), (2, 1), (3, 1), (1, 2), (0, 3)],
-        [(3, 0), (2, 1), (1, 2), (3, 2), (0, 3)],
-        [(3, 0), (2, 1), (1, 2), (0, 3), (3, 3)],
-    ];
-
-    /// <summary>
-    /// 生成期与穷举测试共用的全部链接序列（规格「全部链接序列都能生成」的三类）。四人四区的首轮两次链接按规范次序（含最小出生棋盘编号的一对先）执行——
-    /// 两种次序都要求走得通的话没有任何槽位图案能过（已穷举），因此配对事件（段 B）MUST 按此规范次序逐对链接。
+    /// 穷举测试用的全部链接序列（规格「全部链接序列都能拼接」的三类，每步带贴边）：四人四区 15 种首轮配对（规范次序：含最小出生棋盘编号的一对先，裁决 R2）各接决赛；
+    /// 2+1+1 的 30 条（独占对东贴后与同区棋盘北贴）；3+1 的 10 条（出生棋盘 ↔ 出生棋盘北贴）。生成期不再逐条核对——拼接由构造保证可行，可行性由测试穷举守住。
     /// </summary>
     public static ImmutableArray<LinkSequence> Sequences { get; } = ComputeSequences();
 
@@ -197,275 +148,90 @@ public static class LinkMapGenerator
     public static MapData Generate(string mapId) => Generate(LinkMapId.Parse(mapId));
 
     /// <summary>生成初始地图。<see cref="MapData.Id"/> 为规范化标识，<see cref="MapData.MapVersion"/> 为 0。结果按种子缓存（地图不可变）。</summary>
-    public static MapData Generate(ulong mapSeed, int maxAttempts = DefaultMaxAttempts) => GenerateDetailed(mapSeed, maxAttempts).Map;
+    public static MapData Generate(ulong mapSeed) => Cache.GetOrAdd(mapSeed, static seed => Layout(seed));
 
-    /// <summary>生成初始地图，并给出实际采用的尝试序号、作废原因与链接核对统计。缺省尝试上限的结果按种子缓存。</summary>
-    public static GeneratedLinkMap GenerateDetailed(ulong mapSeed, int maxAttempts = DefaultMaxAttempts)
+    /// <summary>一次布局：抽棋盘次序、各棋盘宽高与 2 个信物格；其余格一律障碍。布局由构造满足链接档校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。</summary>
+    private static MapData Layout(ulong mapSeed)
     {
-        if (maxAttempts < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxAttempts), maxAttempts, "尝试上限至少为 1。");
-        }
-
-        if (maxAttempts == DefaultMaxAttempts && Cache.TryGetValue(mapSeed, out GeneratedLinkMap? cached))
-        {
-            return cached;
-        }
-
         string id = LinkMapId.Format(mapSeed);
-        ImmutableArray<string>.Builder discarded = ImmutableArray.CreateBuilder<string>();
-        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        RandomStream rng = MapRandom.ForLinkLayout(mapSeed);
+
+        // 排列次序（Fisher–Yates）：order[k] = 从西到东第 k 块是哪个出生棋盘编号。
+        int[] order = [.. Enumerable.Range(0, BirthBoards)];
+        for (int i = order.Length - 1; i > 0; i--)
         {
-            MapData map = Layout(id, MapRandom.ForLinkAttempt(mapSeed, attempt));
-            MapValidationResult validation = MapValidator.Validate(map);
-            if (!validation.IsValid)
-            {
-                discarded.Add($"第 {attempt} 次尝试未通过链接档静态校验：{string.Join("；", validation.Failures)}");
-                continue;
-            }
-
-            if (!TryVerify(map, mapSeed, out LinkVerification verification, out string failure))
-            {
-                discarded.Add($"第 {attempt} 次尝试有链接序列走不通：{failure}");
-                continue;
-            }
-
-            var made = new GeneratedLinkMap(map, attempt, discarded.ToImmutable(), verification);
-            if (maxAttempts == DefaultMaxAttempts)
-            {
-                Cache.TryAdd(mapSeed, made);
-            }
-
-            return made;
+            int j = rng.NextInt(i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
         }
 
-        throw new MapGenerationException(
-            $"地图 {id} 在 {maxAttempts} 次尝试内没有得到全部链接序列都能生成的地图。最后一次的失败原因——{discarded[^1]}");
-    }
-
-    /// <summary>
-    /// 在当前物化状态上执行一次链接（地图种子取自 <see cref="MapData.Id"/>）。
-    /// </summary>
-    public static LinkResult Link(MapData current, int battlefieldX, int battlefieldY)
-    {
-        ArgumentNullException.ThrowIfNull(current);
-        return Link(current, battlefieldX, battlefieldY, LinkMapId.Parse(current.Id));
-    }
-
-    /// <summary>
-    /// 在当前物化状态上执行一次链接：把战场 <paramref name="battlefieldX"/> 与 <paramref name="battlefieldY"/>（标识 = 分量内最小出生棋盘编号）合并，
-    /// 产出版本号 +1 的新地图；几何由 (<paramref name="mapSeed"/>, X, Y) 与当前物化状态确定性派生，不改写任何已有格。
-    /// 新地图通过链接档静态校验后才返回，不通过抛 <see cref="MapValidationException"/>（生成器缺陷，MUST NOT 静默继续）。
-    /// 非链接档地图抛 <see cref="SiegeRuleException"/>（该规格档不允许增长）；标识不存在或相同抛 <see cref="ArgumentException"/>；
-    /// 公共棋盘与直通道都放不下抛 <see cref="MapGenerationException"/>。
-    /// </summary>
-    public static LinkResult Link(MapData current, int battlefieldX, int battlefieldY, ulong mapSeed)
-    {
-        ArgumentNullException.ThrowIfNull(current);
-        if (current.Profile != MapProfile.Link)
+        // 各棋盘宽高按编号顺序抽取，再按次序摆放。
+        var sizes = new (int W, int H)[BirthBoards];
+        for (int zone = 0; zone < BirthBoards; zone++)
         {
-            throw new SiegeRuleException($"地图 {current.Id} 的规格档为 {current.Profile}，不允许增长：只有链接档地图可以执行链接。");
+            sizes[zone] = (BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1), BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1));
         }
 
-        if (battlefieldX == battlefieldY)
+        var plates = new BoardPlate[BirthBoards];
+        int x = Margin;
+        foreach (int zone in order)
         {
-            throw new ArgumentException($"链接的两个战场必须不同，实际都是 {battlefieldX}。", nameof(battlefieldY));
+            (int w, int h) = sizes[zone];
+            plates[zone] = new BoardPlate(new Coord(x, Margin), w, h, BoardPlateKind.Birth);
+            x += w + Gap;
         }
 
-        Battlefields fields = Battlefields.Of(current);
-        Battlefield fx = fields.ById(battlefieldX)
-            ?? throw new ArgumentException($"地图 {current.Id}（版本 {current.MapVersion}）上没有标识为 {battlefieldX} 的战场。", nameof(battlefieldX));
-        Battlefield fy = fields.ById(battlefieldY)
-            ?? throw new ArgumentException($"地图 {current.Id}（版本 {current.MapVersion}）上没有标识为 {battlefieldY} 的战场。", nameof(battlefieldY));
-        if (fx.Boards.IsEmpty || fy.Boards.IsEmpty)
-        {
-            throw new ArgumentException($"两个战场都必须至少含一块棋盘：战场 {BirthZoneLabel.Of(battlefieldX)} 有 {fx.Boards.Length} 块、战场 {BirthZoneLabel.Of(battlefieldY)} 有 {fy.Boards.Length} 块。");
-        }
-
-        RandomStream rng = MapRandom.ForLink(mapSeed, battlefieldX, battlefieldY);
-        int preferWidth = PublicMinSide + rng.NextInt(PublicMaxSide - PublicMinSide + 1);
-        int preferHeight = PublicMinSide + rng.NextInt(PublicMaxSide - PublicMinSide + 1);
-        int preferCorridor = CorridorMinWidth + rng.NextInt(CorridorMaxWidth - CorridorMinWidth + 1);
-
-        var grid = new Occupancy(current);
-        Rect[] plates = [.. current.Boards.Select(Rect.Of)];
-
-        // 棋盘对按间隔升序（并列按下标），最近的一对优先；放不下再试下一对（备选位置）。
-        var pairs = new List<(int Gap, int A, int B)>();
-        foreach (int a in fx.Boards)
-        {
-            foreach (int b in fy.Boards)
-            {
-                pairs.Add((plates[a].GapTo(plates[b]), a, b));
-            }
-        }
-
-        pairs.Sort();
-
-        var newCells = new List<Coord>();
-        BoardPlate? publicBoard = null;
-        ImmutableArray<LinkCorridor> corridors = [];
-        bool degraded = false;
-        int from = -1;
-        int to = -1;
-        foreach ((int _, int a, int b) in pairs)
-        {
-            if (TryPlacePublic(grid, plates, plates[a], plates[b], preferWidth, preferHeight, preferCorridor, out Rect p, out Rect c1, out Rect c2))
-            {
-                publicBoard = new BoardPlate(new Coord(p.X, p.Y), p.W, p.H, BoardPlateKind.Public);
-                corridors = [c1.ToCorridor(), c2.ToCorridor()];
-                newCells.AddRange(p.Cells());
-                newCells.AddRange(c1.Cells());
-                newCells.AddRange(c2.Cells());
-                from = a;
-                to = b;
-                break;
-            }
-        }
-
-        if (publicBoard is null)
-        {
-            foreach ((int _, int a, int b) in pairs)
-            {
-                if (TryCorridor(grid, plates[a], plates[b], preferCorridor, out Rect c))
-                {
-                    corridors = [c.ToCorridor()];
-                    newCells.AddRange(c.Cells());
-                    degraded = true;
-                    from = a;
-                    to = b;
-                    break;
-                }
-            }
-        }
-
-        if (from < 0)
-        {
-            throw new MapGenerationException(
-                $"地图 {current.Id}（版本 {current.MapVersion}）上战场 {BirthZoneLabel.Of(battlefieldX)} 与 {BirthZoneLabel.Of(battlefieldY)} 之间放不下公共棋盘，也铺不出直通道。");
-        }
-
-        // 信物格：公共棋盘按边长 2–3 个，最外一圈以内、两两至少相隔 RelicSpacing；第一个高档、其余标准档；内容由对局层另派子流生成。
-        ImmutableDictionary<Coord, RelicCellSpec>.Builder relics = current.RelicCells.ToBuilder();
-        if (publicBoard is { } plate)
-        {
-            int want = Math.Min(plate.Width, plate.Height) <= SmallPublicSide ? 2 : 3;
-            var placed = new List<Coord>();
-            for (int i = 0; i < want; i++)
-            {
-                var candidates = new List<Coord>();
-                for (int y = plate.Origin.Y + 1; y < plate.Origin.Y + plate.Height - 1; y++)
-                {
-                    for (int x = plate.Origin.X + 1; x < plate.Origin.X + plate.Width - 1; x++)
-                    {
-                        var c = new Coord(x, y);
-                        if (placed.All(r => Math.Max(Math.Abs(r.X - x), Math.Abs(r.Y - y)) >= RelicSpacing))
-                        {
-                            candidates.Add(c);
-                        }
-                    }
-                }
-
-                if (candidates.Count == 0)
-                {
-                    break;
-                }
-
-                Coord pick = candidates[rng.NextInt(candidates.Count)];
-                placed.Add(pick);
-                relics[pick] = new RelicCellSpec(RelicZone.Contested, i == 0 ? BudgetTier.High : BudgetTier.Standard);
-            }
-        }
-
-        MapData grown = current with
-        {
-            Obstacles = current.Obstacles.Except(newCells),
-            Boards = publicBoard is { } added ? current.Boards.Add(added) : current.Boards,
-            RelicCells = relics.ToImmutable(),
-            ChokePoints = current.ChokePoints.Union(corridors.SelectMany(c => c.Cells())),
-            MapVersion = current.MapVersion + 1,
-        };
-
-        MapValidationResult validation = MapValidator.Validate(grown);
-        if (!validation.IsValid)
-        {
-            throw new MapValidationException(validation);
-        }
-
-        bool closest = from == pairs[0].A && to == pairs[0].B;
-        string summary = publicBoard is { } pb
-            ? $"链接 {BirthZoneLabel.Of(battlefieldX)}↔{BirthZoneLabel.Of(battlefieldY)}：{Describe(current.Boards[from])} 与 {Describe(current.Boards[to])} 之间新增公共棋盘 {Describe(pb)}，通道 {corridors[0]}、{corridors[1]}{(closest ? string.Empty : "（备选棋盘对）")}"
-            : $"退化链接 {BirthZoneLabel.Of(battlefieldX)}↔{BirthZoneLabel.Of(battlefieldY)}：{Describe(current.Boards[from])} 与 {Describe(current.Boards[to])} 之间只铺一条直通道 {corridors[0]}，没有公共棋盘";
-        return new LinkResult(grown, publicBoard, corridors, degraded, from, to, closest, summary);
-    }
-
-    // ---------- 初始布局 ----------
-
-    /// <summary>
-    /// 诊断入口：用指定图案、统一边长 <paramref name="side"/>、零偏移、信物在中心摆一张初始图并跑完整核对；返回是否通过、失败说明与统计。
-    /// 只供测试与图案筛选，不进生产路径。
-    /// </summary>
-    internal static (bool Ok, string Failure, LinkVerification? Verification) VerifyPattern(ImmutableArray<(int Col, int Row)> pattern, int side, ulong mapSeed)
-    {
-        var plates = ImmutableArray.CreateBuilder<BoardPlate>(BirthBoards);
-        var zones = ImmutableArray.CreateBuilder<ImmutableHashSet<Coord>>(BirthBoards);
+        // 信物格：按编号顺序每块 2 个，最外一圈以内；第二个与第一个不相邻，尽量不同行不同列（没有这样的格时退到"不相邻"）。
         var relics = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
-        var playable = new HashSet<Coord>();
-        foreach ((int col, int row) in pattern)
+        for (int zone = 0; zone < BirthBoards; zone++)
         {
-            var plate = new BoardPlate(new Coord(col * LanePitch, row * LanePitch), side, side, BoardPlateKind.Birth);
-            plates.Add(plate);
-            zones.Add([.. plate.Cells()]);
-            playable.UnionWith(plate.Cells());
-            relics[new Coord(plate.Origin.X + (side / 2), plate.Origin.Y + (side / 2))] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+            BoardPlate plate = plates[zone];
+            var inner = new List<Coord>();
+            for (int cy = plate.Origin.Y + 1; cy < plate.Origin.Y + plate.Height - 1; cy++)
+            {
+                for (int cx = plate.Origin.X + 1; cx < plate.Origin.X + plate.Width - 1; cx++)
+                {
+                    inner.Add(new Coord(cx, cy));
+                }
+            }
+
+            Coord first = inner[rng.NextInt(inner.Count)];
+            List<Coord> apart = [.. inner.Where(c => !Adjacency.AreAdjacent(c, first) && c != first)];
+            List<Coord> preferred = [.. apart.Where(c => c.X != first.X && c.Y != first.Y)];
+            List<Coord> candidates = preferred.Count > 0 ? preferred : apart;
+            Coord second = candidates[rng.NextInt(candidates.Count)];
+            relics[first] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+            relics[second] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
         }
 
-        MapData map = Assemble(LinkMapId.Format(mapSeed), plates.MoveToImmutable(), zones.MoveToImmutable(), relics.ToImmutable(), playable);
+        MapData map = Assemble(id, [.. plates], relics.ToImmutable(), TerrainData.Flat, ImmutableHashSet<Coord>.Empty, mapVersion: 0);
         MapValidationResult validation = MapValidator.Validate(map);
         if (!validation.IsValid)
         {
-            return (false, validation.ToString(), null);
+            throw new MapGenerationException($"地图 {id} 的初始布局未通过链接档静态校验（生成器缺陷）：{string.Join("；", validation.Failures)}");
         }
 
-        bool ok = TryVerify(map, mapSeed, out LinkVerification verification, out string failure);
-        return (ok, failure, ok ? verification : null);
+        return map;
     }
 
-    /// <summary>一次尝试的布局：选图案、抽各棋盘的宽高与槽内偏移、各放 1 个信物格；其余格一律障碍。</summary>
-    private static MapData Layout(string id, RandomStream rng)
-    {
-        ImmutableArray<(int Col, int Row)> pattern = SlotPatterns[rng.NextInt(SlotPatterns.Length)];
-        var plates = ImmutableArray.CreateBuilder<BoardPlate>(BirthBoards);
-        var zones = ImmutableArray.CreateBuilder<ImmutableHashSet<Coord>>(BirthBoards);
-        var relics = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
-        var playable = new HashSet<Coord>();
-        foreach ((int col, int row) in pattern)
-        {
-            int w = BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1);
-            int h = BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1);
-            int x = (col * LanePitch) + rng.NextInt(BirthMaxSide - w + 1);
-            int y = (row * LanePitch) + rng.NextInt(BirthMaxSide - h + 1);
-            var plate = new BoardPlate(new Coord(x, y), w, h, BoardPlateKind.Birth);
-            plates.Add(plate);
-            zones.Add([.. plate.Cells()]);
-            playable.UnionWith(plate.Cells());
-
-            // 信物格在最外一圈以内（边长 ≥ 5 → 内圈至少 3×3）。
-            var relic = new Coord(x + 1 + rng.NextInt(w - 2), y + 1 + rng.NextInt(h - 2));
-            relics[relic] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
-        }
-
-        return Assemble(id, plates.MoveToImmutable(), zones.MoveToImmutable(), relics.ToImmutable(), playable);
-    }
-
-    /// <summary>把 5 块出生棋盘灌成初始地图数据：其余格一律障碍，没有咽喉，中央入口取第一块棋盘的中心格。</summary>
+    /// <summary>
+    /// 把棋盘清单灌成链接档地图数据：画布 = 全部棋盘外接矩形的东 / 北边界各外扩 <see cref="Margin"/> 格（原点固定在 (0,0)），棋盘之外一律障碍，
+    /// 出生区 = 出生棋盘，中央入口取第一块棋盘的中心格，没有咽喉。
+    /// </summary>
     private static MapData Assemble(
-        string id, ImmutableArray<BoardPlate> plates, ImmutableArray<ImmutableHashSet<Coord>> zones, ImmutableDictionary<Coord, RelicCellSpec> relics, HashSet<Coord> playable)
+        string id, ImmutableArray<BoardPlate> plates, ImmutableDictionary<Coord, RelicCellSpec> relics, TerrainData terrain, ImmutableHashSet<Coord> chokePoints, int mapVersion)
     {
-        var obstacles = ImmutableHashSet.CreateBuilder<Coord>();
-        for (int y = 0; y < CanvasSide; y++)
+        int width = plates.Max(p => p.Origin.X + p.Width) + Margin;
+        int height = plates.Max(p => p.Origin.Y + p.Height) + Margin;
+        var playable = new HashSet<Coord>();
+        foreach (BoardPlate plate in plates)
         {
-            for (int x = 0; x < CanvasSide; x++)
+            playable.UnionWith(plate.Cells());
+        }
+
+        var obstacles = ImmutableHashSet.CreateBuilder<Coord>();
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
             {
                 var c = new Coord(x, y);
                 if (!playable.Contains(c))
@@ -479,322 +245,233 @@ public static class LinkMapGenerator
         return new MapData
         {
             Id = id,
-            Width = CanvasSide,
-            Height = CanvasSide,
+            Width = width,
+            Height = height,
             MaxPlayers = 4,
             Profile = MapProfile.Link,
             Obstacles = obstacles.ToImmutable(),
-            BirthZones = zones,
+            TerrainData = terrain,
+            BirthZones = [.. plates.Select(p => (ImmutableHashSet<Coord>)[.. p.Cells()])],
             Boards = plates,
             RelicCells = relics,
-            ChokePoints = ImmutableHashSet<Coord>.Empty,
+            ChokePoints = chokePoints,
             CentralEntrance = new Coord(first.Origin.X + (first.Width / 2), first.Origin.Y + (first.Height / 2)),
-            MapVersion = 0,
+            MapVersion = mapVersion,
         };
     }
 
-    /// <summary>把 <see cref="Sequences"/> 逐条跑一遍；任一步抛异常即失败并说明哪一条、哪一步。</summary>
-    private static bool TryVerify(MapData initial, ulong mapSeed, out LinkVerification verification, out string failure)
-    {
-        int[] links = new int[3];
-        int[] degraded = new int[3];
-        int[] alternate = new int[3];
-
-        // 同一前缀的序列共享中间地图：按步骤前缀记忆几何，避免把同一次链接算多遍；但每条序列的每一步都计入它所属类别的统计。
-        var memo = new Dictionary<string, LinkResult>(StringComparer.Ordinal);
-        foreach (LinkSequence sequence in Sequences)
-        {
-            MapData map = initial;
-            string key = string.Empty;
-            foreach ((int x, int y) in sequence.Steps)
-            {
-                key += $"({x},{y});";
-                if (!memo.TryGetValue(key, out LinkResult? result))
-                {
-                    try
-                    {
-                        result = Link(map, x, y, mapSeed);
-                    }
-                    catch (Exception ex) when (ex is MapGenerationException or MapValidationException)
-                    {
-                        verification = default!;
-                        failure = $"{sequence} 在链接 ({x},{y}) 时失败：{ex.Message.Replace(Environment.NewLine, " | ", StringComparison.Ordinal)}";
-                        return false;
-                    }
-
-                    memo[key] = result;
-                }
-
-                int kind = (int)sequence.Kind;
-                links[kind]++;
-                if (result.Degraded)
-                {
-                    degraded[kind]++;
-                }
-                else if (!result.ClosestPair)
-                {
-                    alternate[kind]++;
-                }
-
-                map = result.Map;
-            }
-        }
-
-        verification = new LinkVerification(
-            links[0], degraded[0], alternate[0],
-            links[1], degraded[1], alternate[1],
-            links[2], degraded[2], alternate[2]);
-        failure = string.Empty;
-        return true;
-    }
-
-    // ---------- 链接几何 ----------
+    // ---------- 拼接 ----------
 
     /// <summary>
-    /// 在棋盘 <paramref name="a"/> 与 <paramref name="b"/> 之间找公共棋盘的最佳放置：枚举全部边长与位置，要求与任何已物化格不相邻、与任何棋盘隔 ≥ 2，
-    /// 且 a→P、b→P 各有一条直通道；按（两条通道总长, 偏好边长差, 偏好宽度差, 行, 列）取最小。
+    /// 在当前物化状态上执行一次拼接：把战场 <paramref name="battlefieldX"/> 与 <paramref name="battlefieldY"/>（标识 = 分量内最小出生棋盘编号）边对边紧贴拼成一块，
+    /// 被贴方贴到锚点（标识较小者）的 <paramref name="side"/> 侧；产出版本号 +1 的新地图与各战场平移向量。几何只由 (X, Y, 当前布局) 确定，不消费随机。
+    /// 新地图通过链接档静态校验后才返回，不通过抛 <see cref="MapValidationException"/>（生成器缺陷，MUST NOT 静默继续）。
+    /// 非链接档地图抛 <see cref="SiegeRuleException"/>（该规格档不允许增长）；标识不存在或相同抛 <see cref="ArgumentException"/>；
+    /// 最长共享边的候选全部会让被贴方越出画布原点时整个布局整体平移（裁决 J8-3，见类注释），不抛异常。
     /// </summary>
-    private static bool TryPlacePublic(
-        Occupancy grid, Rect[] plates, Rect a, Rect b, int preferWidth, int preferHeight, int preferCorridor,
-        out Rect best, out Rect bestC1, out Rect bestC2)
+    public static LinkResult Link(MapData current, int battlefieldX, int battlefieldY, LinkSide side)
     {
-        best = default;
-        bestC1 = default;
-        bestC2 = default;
-        (int, int, int, int, int)? bestCost = null;
-        for (int h = PublicMinSide; h <= PublicMaxSide; h++)
+        ArgumentNullException.ThrowIfNull(current);
+        if (current.Profile != MapProfile.Link)
         {
-            for (int w = PublicMinSide; w <= PublicMaxSide; w++)
+            throw new SiegeRuleException($"地图 {current.Id} 的规格档为 {current.Profile}，不允许增长：只有链接档地图可以执行链接。");
+        }
+
+        if (battlefieldX == battlefieldY)
+        {
+            throw new ArgumentException($"链接的两个战场必须不同，实际都是 {battlefieldX}。", nameof(battlefieldY));
+        }
+
+        Battlefields fields = Battlefields.Of(current);
+        int anchorId = Math.Min(battlefieldX, battlefieldY);
+        int moverId = Math.Max(battlefieldX, battlefieldY);
+        Battlefield anchor = fields.ById(anchorId)
+            ?? throw new ArgumentException($"地图 {current.Id}（版本 {current.MapVersion}）上没有标识为 {anchorId} 的战场。", nameof(battlefieldX));
+        Battlefield mover = fields.ById(moverId)
+            ?? throw new ArgumentException($"地图 {current.Id}（版本 {current.MapVersion}）上没有标识为 {moverId} 的战场。", nameof(battlefieldY));
+
+        var anchorCells = new HashSet<Coord>(anchor.Cells);
+        var moverCells = new HashSet<Coord>(mover.Cells);
+        Extent a = Extent.Of(anchor.Cells);
+        Extent b = Extent.Of(mover.Cells);
+
+        // 被贴方的向量：贴边分量由外接矩形定死，另一分量在候选里取共享边最长者；并列时先排除会让被贴方越出画布原点（负坐标）的候选，
+        // 再取偏南 / 偏西（候选按升序枚举）；最长者全部越界时取其中偏南 / 偏西者，随后整个布局整体平移（裁决 J8-3）。
+        var counts = new List<(int Candidate, int Count)>();
+        int dx = 0;
+        int dy = 0;
+        if (side == LinkSide.East)
+        {
+            dx = a.MaxX + 1 - b.MinX;
+            for (int candidate = a.MinY - b.MaxY; candidate <= a.MaxY - b.MinY; candidate++)
             {
-                int sizeCost = Math.Abs(w - preferWidth) + Math.Abs(h - preferHeight);
-                for (int y = 0; y + h <= grid.Height; y++)
+                int count = 0;
+                for (int r = Math.Max(a.MinY, b.MinY + candidate); r <= Math.Min(a.MaxY, b.MaxY + candidate); r++)
                 {
-                    for (int x = 0; x + w <= grid.Width; x++)
+                    if (anchorCells.Contains(new Coord(a.MaxX, r)) && moverCells.Contains(new Coord(b.MinX, r - candidate)))
                     {
-                        var p = new Rect(x, y, w, h);
-                        if (!p.Faces(a) || !p.Faces(b))
-                        {
-                            continue;
-                        }
-
-                        if (grid.AnyPlayable(p.Grow(1)) || grid.AnyPlate(p.Grow(BoardGap)))
-                        {
-                            continue;
-                        }
-
-                        grid.Push(p);
-                        foreach ((Rect c1, int widthCost1) in CorridorOptions(grid, a, p, preferCorridor))
-                        {
-                            grid.Push(c1);
-                            foreach ((Rect c2, int widthCost2) in CorridorOptions(grid, b, p, preferCorridor))
-                            {
-                                var cost = (c1.Length + c2.Length, sizeCost, widthCost1 + widthCost2, y, x);
-                                if (bestCost is null || cost.CompareTo(bestCost.Value) < 0)
-                                {
-                                    bestCost = cost;
-                                    best = p;
-                                    bestC1 = c1;
-                                    bestC2 = c2;
-                                }
-
-                                break;   // 同一条 c1 下 c2 已按偏好次序给出，第一条就是该 c1 的最优
-                            }
-
-                            grid.Pop(c1);
-                        }
-
-                        grid.Pop(p);
+                        count++;
                     }
                 }
+
+                counts.Add((candidate, count));
             }
         }
-
-        return bestCost is not null;
-    }
-
-    /// <summary>退化：a 与 b 之间一条直通道（最窄的偏好宽度优先）。</summary>
-    private static bool TryCorridor(Occupancy grid, Rect a, Rect b, int preferCorridor, out Rect corridor)
-    {
-        foreach ((Rect c, int _) in CorridorOptions(grid, a, b, preferCorridor))
+        else
         {
-            corridor = c;
-            return true;
-        }
-
-        corridor = default;
-        return false;
-    }
-
-    /// <summary>
-    /// 棋盘 <paramref name="a"/> 与矩形 <paramref name="p"/> 之间全部可铺的直通道，按（偏好宽度差, 居中偏差, 位置）排序：
-    /// 两者在一轴上投影重叠 ≥ 通道宽、另一轴上相隔 ≥ 最短长度；通道格及其两侧各一格都不得是已物化格（两端贴的就是 a 与 p）。
-    /// </summary>
-    private static IEnumerable<(Rect Corridor, int WidthCost)> CorridorOptions(Occupancy grid, Rect a, Rect p, int preferCorridor)
-    {
-        var found = new List<((int WidthCost, int Center, int Pos) Key, Rect Corridor)>();
-        // 横向：a 在 p 的左或右。
-        if (a.X1 < p.X || p.X1 < a.X)
-        {
-            int lo = Math.Max(a.Y, p.Y);
-            int hi = Math.Min(a.Y1, p.Y1);
-            int x0 = a.X1 < p.X ? a.X1 + 1 : p.X1 + 1;
-            int length = a.X1 < p.X ? p.X - a.X1 - 1 : a.X - p.X1 - 1;
-            if (length >= MinCorridorLength)
+            dy = a.MaxY + 1 - b.MinY;
+            for (int candidate = a.MinX - b.MaxX; candidate <= a.MaxX - b.MinX; candidate++)
             {
-                for (int cw = CorridorMinWidth; cw <= CorridorMaxWidth; cw++)
+                int count = 0;
+                for (int c = Math.Max(a.MinX, b.MinX + candidate); c <= Math.Min(a.MaxX, b.MaxX + candidate); c++)
                 {
-                    for (int y0 = lo; y0 + cw - 1 <= hi; y0++)
+                    if (anchorCells.Contains(new Coord(c, a.MaxY)) && moverCells.Contains(new Coord(c - candidate, b.MinY)))
                     {
-                        var c = new Rect(x0, y0, length, cw);
-                        if (!grid.AnyPlayable(new Rect(x0, y0 - 1, length, cw + 2)))
-                        {
-                            int center = Math.Abs((2 * y0) + cw - 1 - (lo + hi));
-                            found.Add(((Math.Abs(cw - preferCorridor), center, y0), c));
-                        }
+                        count++;
                     }
                 }
+
+                counts.Add((candidate, count));
             }
         }
 
-        // 纵向：a 在 p 的下或上。
-        if (a.Y1 < p.Y || p.Y1 < a.Y)
+        int shared = counts.Max(c => c.Count);
+        if (shared < 1)
         {
-            int lo = Math.Max(a.X, p.X);
-            int hi = Math.Min(a.X1, p.X1);
-            int y0 = a.Y1 < p.Y ? a.Y1 + 1 : p.Y1 + 1;
-            int length = a.Y1 < p.Y ? p.Y - a.Y1 - 1 : a.Y - p.Y1 - 1;
-            if (length >= MinCorridorLength)
-            {
-                for (int cw = CorridorMinWidth; cw <= CorridorMaxWidth; cw++)
-                {
-                    for (int x0 = lo; x0 + cw - 1 <= hi; x0++)
-                    {
-                        var c = new Rect(x0, y0, cw, length);
-                        if (!grid.AnyPlayable(new Rect(x0 - 1, y0, cw + 2, length)))
-                        {
-                            int center = Math.Abs((2 * x0) + cw - 1 - (lo + hi));
-                            found.Add(((Math.Abs(cw - preferCorridor), center, x0), c));
-                        }
-                    }
-                }
-            }
+            throw new MapGenerationException(
+                $"地图 {current.Id}（版本 {current.MapVersion}）上战场 {BirthZoneLabel.Of(anchorId)} 与 {BirthZoneLabel.Of(moverId)} 沿{SideName(side)}侧拼接找不到共享边（生成器缺陷）。");
         }
 
-        found.Sort((l, r) => l.Key.CompareTo(r.Key));
-        return found.Select(f => (f.Corridor, f.Key.WidthCost));
+        // 被贴方另一分量的最小坐标：东贴看最南行、北贴看最西列。
+        int lowest = side == LinkSide.East ? b.MinY : b.MinX;
+        (int Candidate, int Count)[] longest = [.. counts.Where(c => c.Count == shared)];
+        int pick = longest.FirstOrDefault(c => lowest + c.Candidate >= 0, longest[0]).Candidate;
+        if (side == LinkSide.East)
+        {
+            dy = pick;
+        }
+        else
+        {
+            dx = pick;
+        }
+
+        // 平移表（整体平移之前）：锚点零向量、被贴方 (dx, dy)；未参与链接的战场里，外接矩形整体位于合并战场以西（与之至少隔一列空列，不相邻）的原地不动，
+        // 其余（以东、与合并战场横向交叠或紧贴）按当前最西列升序收拢排到合并战场东侧，间距 Gap，底边不动（裁决 J7 / J8-1）。
+        var shifts = new SortedDictionary<int, (int Dx, int Dy)> { [anchorId] = (0, 0), [moverId] = (dx, dy) };
+        int mergedMinX = Math.Min(a.MinX, b.MinX + dx);
+        int mergedMaxX = Math.Max(a.MaxX, b.MaxX + dx);
+        int cursor = mergedMaxX + 1 + Gap;
+        foreach (Battlefield other in fields.All.Where(f => f.Id != anchorId && f.Id != moverId).OrderBy(f => f.Cells.Min(c => c.X)).ThenBy(f => f.Id))
+        {
+            Extent e = Extent.Of(other.Cells);
+            if (e.MaxX + 1 < mergedMinX)
+            {
+                shifts[other.Id] = (0, 0);
+                continue;
+            }
+
+            shifts[other.Id] = (cursor - e.MinX, 0);
+            cursor += e.MaxX - e.MinX + 1 + Gap;
+        }
+
+        // 被贴方越出画布原点（最长共享边的候选全部越界）：整个布局（含锚点）整体向东 / 北平移到恰好不越界，锚点向量一并记录（裁决 J8-3）。
+        int globalX = Math.Max(0, -(b.MinX + dx));
+        int globalY = Math.Max(0, -(b.MinY + dy));
+        ImmutableArray<BattlefieldShift> shiftList = [.. shifts.Select(kv => new BattlefieldShift(kv.Key, kv.Value.Dx + globalX, kv.Value.Dy + globalY))];
+        foreach (BattlefieldShift s in shiftList)
+        {
+            shifts[s.Battlefield] = (s.Dx, s.Dy);
+        }
+
+        // 同一份映射搬全部格：格所属战场由拼接前的战场导出给出，不另判。
+        Coord Move(Coord c)
+        {
+            (int sx, int sy) = shifts[fields.At(c)!.Id];
+            return new Coord(c.X + sx, c.Y + sy);
+        }
+
+        // 新地图：棋盘清单、出生区、信物格、地形、咽喉按同一映射逐项迁移；画布按东 / 北边界重裁。
+        ImmutableArray<BoardPlate> plates = [.. current.Boards.Select(p => p with { Origin = Move(p.Origin) })];
+        ImmutableDictionary<Coord, RelicCellSpec> relics = current.RelicCells.ToImmutableDictionary(kv => Move(kv.Key), kv => kv.Value);
+        // 链接档的静态地形恒为空（棋盘内全是 h=0 草地、无桥无栅；匠人的改造是对局状态，不在这里）：拼接后仍是 Flat，不另构造地形（地形写入口守门）。
+        TerrainData terrain = current.TerrainData;
+        if (terrain.Heights.Count > 0 || terrain.Surfaces.Count > 0 || terrain.Bridges.Count > 0 || terrain.Fences.Count > 0)
+        {
+            throw new MapGenerationException($"地图 {current.Id}（版本 {current.MapVersion}）带静态地形数据（高度 / 地表 / 桥 / 栅栏）：链接档地图的静态地形必须为空，拼接不搬运地形。");
+        }
+
+        MapData spliced = Assemble(current.Id, plates, relics, TerrainData.Flat, [.. current.ChokePoints.Select(Move)], current.MapVersion + 1) with
+        {
+            MaxPlayers = current.MaxPlayers,
+            CentralEntrance = current.IsPlayable(current.CentralEntrance) ? Move(current.CentralEntrance) : current.CentralEntrance,
+            DistanceTolerance = current.DistanceTolerance,
+            ToleranceRelaxReason = current.ToleranceRelaxReason,
+            MinTwoEyeArea = current.MinTwoEyeArea,
+            PocketExemptions = [.. current.PocketExemptions.Where(current.IsPlayable).Select(Move)],
+            PocketExemptionReasons = current.PocketExemptionReasons.Where(kv => current.IsPlayable(kv.Key)).ToImmutableDictionary(kv => Move(kv.Key), kv => kv.Value),
+        };
+
+        MapValidationResult validation = MapValidator.Validate(spliced);
+        if (!validation.IsValid)
+        {
+            throw new MapValidationException(validation);
+        }
+
+        string others = string.Join("、", shiftList.Where(s => s.Battlefield != anchorId && s.Battlefield != moverId && !s.IsZero));
+        string summary =
+            $"拼接 {BirthZoneLabel.Of(anchorId)}↔{BirthZoneLabel.Of(moverId)}：战场 {BirthZoneLabel.Of(moverId)} 平移 ({dx:+#;-#;0},{dy:+#;-#;0}) 贴到战场 {BirthZoneLabel.Of(anchorId)} {SideName(side)}侧，"
+            + $"共享边 {shared} 格；合并后 {anchor.Cells.Length + mover.Cells.Length} 格"
+            + (others.Length > 0 ? $"；其余战场平移 {others}" : string.Empty)
+            + $"；画布 {spliced.Width}×{spliced.Height}";
+        return new LinkResult(spliced, fields, side, anchorId, moverId, shared, shiftList, summary);
     }
 
-    private static string Describe(BoardPlate plate)
+    private static string SideName(LinkSide side) => side == LinkSide.East ? "东" : "北";
+
+    /// <summary>一组格的外接矩形（闭区间）。</summary>
+    private readonly record struct Extent(int MinX, int MaxX, int MinY, int MaxY)
     {
-        string kind = plate.Kind == BoardPlateKind.Birth ? "出生棋盘" : "公共棋盘";
-        return $"{kind} {plate.Origin.ToNotation()}–{new Coord(plate.Origin.X + plate.Width - 1, plate.Origin.Y + plate.Height - 1).ToNotation()}（{plate.Width}×{plate.Height}）";
+        internal static Extent Of(ImmutableArray<Coord> cells) =>
+            new(cells.Min(c => c.X), cells.Max(c => c.X), cells.Min(c => c.Y), cells.Max(c => c.Y));
     }
 
-    // ---------- 槽位图案与链接序列 ----------
-
-    private static ImmutableArray<ImmutableArray<(int Col, int Row)>> ComputeSlotPatterns()
-    {
-        var slots = new List<(int Col, int Row)>();
-        for (int row = 0; row < Lanes; row++)
-        {
-            for (int col = 0; col < Lanes; col++)
-            {
-                slots.Add((col, row));
-            }
-        }
-
-        var patterns = ImmutableArray.CreateBuilder<ImmutableArray<(int Col, int Row)>>();
-        foreach (int[] pick in Combinations(slots.Count, BirthBoards))
-        {
-            (int Col, int Row)[] chosen = [.. pick.Select(i => slots[i])];
-            var empty = new HashSet<(int, int)>(slots);
-            empty.ExceptWith(chosen);
-            bool ok = true;
-            for (int i = 0; i < chosen.Length && ok; i++)
-            {
-                for (int j = i + 1; j < chosen.Length && ok; j++)
-                {
-                    ok = SlotPairLinkable(empty, chosen[i], chosen[j]);
-                }
-            }
-
-            if (ok)
-            {
-                patterns.Add([.. chosen]);
-            }
-        }
-
-        return patterns.ToImmutable();
-    }
-
-    /// <summary>槽位 a、b 之间能否放公共棋盘并用两条直通道接上：同行 / 同列时中间槽全空；对角时某个拐角槽为空且拐角到两端的中间槽全空。</summary>
-    private static bool SlotPairLinkable(HashSet<(int, int)> empty, (int Col, int Row) a, (int Col, int Row) b)
-    {
-        static IEnumerable<(int, int)> Between((int Col, int Row) p, (int Col, int Row) q)
-        {
-            if (p.Row == q.Row)
-            {
-                for (int c = Math.Min(p.Col, q.Col) + 1; c < Math.Max(p.Col, q.Col); c++)
-                {
-                    yield return (c, p.Row);
-                }
-            }
-            else
-            {
-                for (int r = Math.Min(p.Row, q.Row) + 1; r < Math.Max(p.Row, q.Row); r++)
-                {
-                    yield return (p.Col, r);
-                }
-            }
-        }
-
-        if (a.Row == b.Row || a.Col == b.Col)
-        {
-            return Between(a, b).All(empty.Contains);
-        }
-
-        foreach ((int, int) corner in new[] { (b.Col, a.Row), (a.Col, b.Row) })
-        {
-            if (empty.Contains(corner) && Between(a, corner).All(empty.Contains) && Between(corner, b).All(empty.Contains))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    // ---------- 链接序列清单 ----------
 
     private static ImmutableArray<LinkSequence> ComputeSequences()
     {
         var list = ImmutableArray.CreateBuilder<LinkSequence>();
 
-        // 四人四区：选 4 块棋盘（5 种），三种配对；首轮两次链接按**规范次序**执行（含最小出生棋盘编号的一对先，段 B 的配对事件 MUST 照此次序逐对链接），
-        // 再决赛（两个合并战场的标识 = 各自最小编号）。
+        // 四人四区：选 4 块棋盘（5 种），三种配对；首轮两次东贴按规范次序（含最小出生棋盘编号的一对先），再决赛北贴（两个合并战场的标识 = 各自最小编号）。
         foreach (int[] four in Combinations(BirthBoards, 4))
         {
             int a = four[0], b = four[1], c = four[2], d = four[3];
             foreach (((int, int) p, (int, int) q) in new[] { ((a, b), (c, d)), ((a, c), (b, d)), ((a, d), (b, c)) })
             {
-                list.Add(new LinkSequence(LinkSequenceKind.FourZones, [p, q, (Math.Min(p.Item1, p.Item2), Math.Min(q.Item1, q.Item2))]));
+                list.Add(new LinkSequence(LinkSequenceKind.FourZones,
+                [
+                    new LinkStep(p.Item1, p.Item2, LinkSide.East),
+                    new LinkStep(q.Item1, q.Item2, LinkSide.East),
+                    new LinkStep(Math.Min(p.Item1, p.Item2), Math.Min(q.Item1, q.Item2), LinkSide.North),
+                ]));
             }
         }
 
-        // 2+1+1：两名独占者（a, b）配对，再与同区棋盘 c 决赛。
+        // 2+1+1：两名独占者（a, b）配对东贴，再与同区棋盘 c 决赛北贴。
         foreach (int[] two in Combinations(BirthBoards, 2))
         {
             for (int c = 0; c < BirthBoards; c++)
             {
                 if (c != two[0] && c != two[1])
                 {
-                    list.Add(new LinkSequence(LinkSequenceKind.TwoPlusOnePlusOne, [(two[0], two[1]), (two[0], c)]));
+                    list.Add(new LinkSequence(LinkSequenceKind.TwoPlusOnePlusOne, [new LinkStep(two[0], two[1], LinkSide.East), new LinkStep(two[0], c, LinkSide.North)]));
                 }
             }
         }
 
-        // 3+1：独占者与三人同区棋盘的胜者直接决赛。
+        // 3+1：独占者与三人同区棋盘的胜者直接决赛北贴。
         foreach (int[] two in Combinations(BirthBoards, 2))
         {
-            list.Add(new LinkSequence(LinkSequenceKind.ThreePlusOne, [(two[0], two[1])]));
+            list.Add(new LinkSequence(LinkSequenceKind.ThreePlusOne, [new LinkStep(two[0], two[1], LinkSide.North)]));
         }
 
         return list.ToImmutable();
@@ -828,142 +505,6 @@ public static class LinkMapGenerator
             {
                 pick[i] = pick[i - 1] + 1;
             }
-        }
-    }
-
-    // ---------- 工作态 ----------
-
-    /// <summary>画布里的矩形：左下角与宽高（全部闭区间运算）。</summary>
-    internal readonly record struct Rect(int X, int Y, int W, int H)
-    {
-        internal int X1 => X + W - 1;
-
-        internal int Y1 => Y + H - 1;
-
-        internal int Length => Math.Max(W, H);
-
-        internal static Rect Of(BoardPlate plate) => new(plate.Origin.X, plate.Origin.Y, plate.Width, plate.Height);
-
-        internal Rect Grow(int by) => new(X - by, Y - by, W + (2 * by), H + (2 * by));
-
-        internal LinkCorridor ToCorridor() => new(new Coord(X, Y), W, H);
-
-        /// <summary>与另一矩形的间隔：两个方向上空格数的较大者（投影重叠的方向为负），与校验器 <c>ValidatePlateGaps</c> 同口径。</summary>
-        internal int GapTo(Rect other) =>
-            Math.Max(Math.Max(X - (other.X + other.W), other.X - (X + W)), Math.Max(Y - (other.Y + other.H), other.Y - (Y + H)));
-
-        /// <summary>是否与另一矩形在某一轴上投影重叠至少一条通道的最小宽度（直通道的必要条件）。</summary>
-        internal bool Faces(Rect other) =>
-            Math.Min(Y1, other.Y1) - Math.Max(Y, other.Y) + 1 >= CorridorMinWidth
-            || Math.Min(X1, other.X1) - Math.Max(X, other.X) + 1 >= CorridorMinWidth;
-
-        internal IEnumerable<Coord> Cells()
-        {
-            for (int y = Y; y <= Y1; y++)
-            {
-                for (int x = X; x <= X1; x++)
-                {
-                    yield return new Coord(x, y);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// 当前物化状态的占用表：可落子格与棋盘格各一张二维前缀和，矩形查询 O(1)；候选公共棋盘与通道用 <see cref="Push"/> / <see cref="Pop"/> 临时压入
-    /// （压入期间对应矩形直接计入"可落子"，查询先看临时层）。越界部分按不占用处理（画布边缘就是边缘）。
-    /// </summary>
-    private sealed class Occupancy
-    {
-        private readonly int[,] _playable;
-        private readonly int[,] _plate;
-        private readonly List<Rect> _pushed = [];
-
-        internal Occupancy(MapData map)
-        {
-            Width = map.Width;
-            Height = map.Height;
-            _playable = new int[Width + 1, Height + 1];
-            _plate = new int[Width + 1, Height + 1];
-            var plateCell = new bool[Width, Height];
-            foreach (BoardPlate plate in map.Boards)
-            {
-                foreach (Coord c in plate.Cells())
-                {
-                    if (map.Contains(c))
-                    {
-                        plateCell[c.X, c.Y] = true;
-                    }
-                }
-            }
-
-            for (int x = 0; x < Width; x++)
-            {
-                for (int y = 0; y < Height; y++)
-                {
-                    int playable = map.IsPlayable(new Coord(x, y)) ? 1 : 0;
-                    _playable[x + 1, y + 1] = playable + _playable[x, y + 1] + _playable[x + 1, y] - _playable[x, y];
-                    _plate[x + 1, y + 1] = (plateCell[x, y] ? 1 : 0) + _plate[x, y + 1] + _plate[x + 1, y] - _plate[x, y];
-                }
-            }
-        }
-
-        internal int Width { get; }
-
-        internal int Height { get; }
-
-        internal void Push(Rect r) => _pushed.Add(r);
-
-        internal void Pop(Rect r)
-        {
-            if (_pushed.Count == 0 || _pushed[^1] != r)
-            {
-                throw new InvalidOperationException("占用表的临时层必须按压入的逆序弹出。");
-            }
-
-            _pushed.RemoveAt(_pushed.Count - 1);
-        }
-
-        internal bool AnyPlayable(Rect r)
-        {
-            foreach (Rect p in _pushed)
-            {
-                if (Overlaps(p, r))
-                {
-                    return true;
-                }
-            }
-
-            return Sum(_playable, r) > 0;
-        }
-
-        internal bool AnyPlate(Rect r)
-        {
-            foreach (Rect p in _pushed)
-            {
-                if (Overlaps(p, r))
-                {
-                    return true;
-                }
-            }
-
-            return Sum(_plate, r) > 0;
-        }
-
-        private static bool Overlaps(Rect a, Rect b) => a.X <= b.X1 && b.X <= a.X1 && a.Y <= b.Y1 && b.Y <= a.Y1;
-
-        private int Sum(int[,] prefix, Rect r)
-        {
-            int x0 = Math.Max(r.X, 0);
-            int y0 = Math.Max(r.Y, 0);
-            int x1 = Math.Min(r.X1, Width - 1);
-            int y1 = Math.Min(r.Y1, Height - 1);
-            if (x0 > x1 || y0 > y1)
-            {
-                return 0;
-            }
-
-            return prefix[x1 + 1, y1 + 1] - prefix[x0, y1 + 1] - prefix[x1 + 1, y0] + prefix[x0, y0];
         }
     }
 }

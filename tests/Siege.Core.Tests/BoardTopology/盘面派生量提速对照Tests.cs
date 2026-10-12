@@ -258,11 +258,11 @@ public class 盘面派生量提速对照Tests
 
     private static IEnumerable<MapData> Maps()
     {
-        // link:1 首轮两次链接后再接决赛链接：公共棋盘与通道都在图上。
+        // link:1 首轮两次东贴后再接决赛北贴：拼接后的连体棋盘（段 F）。
         MapData link = LinkMapGenerator.Generate(1);
-        link = LinkMapGenerator.Link(link, 0, 1).Map;
-        link = LinkMapGenerator.Link(link, 2, 3).Map;
-        yield return LinkMapGenerator.Link(link, 0, 2).Map;
+        link = LinkMapGenerator.Link(link, 0, 1, LinkSide.East).Map;
+        link = LinkMapGenerator.Link(link, 2, 3, LinkSide.East).Map;
+        yield return LinkMapGenerator.Link(link, 0, 2, LinkSide.North).Map;
         yield return MapCatalog.Legacy.Resolve("siege-4p-base-v5");
         yield return MapCatalog.Legacy.Resolve("board:1");
         for (int seed = 1; seed <= 12; seed++)

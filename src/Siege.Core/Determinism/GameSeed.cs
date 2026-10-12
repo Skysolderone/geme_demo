@@ -54,12 +54,6 @@ public readonly record struct GameSeed(ulong Value)
     /// </summary>
     public const string FlagPick = "flag-pick";
 
-    /// <summary>
-    /// 链接时公共棋盘的信物内容子流名 <c>relic-link:&lt;X&gt;:&lt;Y&gt;</c>（board-link-mode D2 / 实现裁决 B6）：X &lt; Y 为被链接的两个战场标识。
-    /// 只由（对局种子, X, Y）决定，与链接序号和其他链接的先后无关；MUST NOT 消费任何既有子流。
-    /// </summary>
-    public static string RelicLink(int x, int y) => $"relic-link:{Math.Min(x, y)}:{Math.Max(x, y)}";
-
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
     private const ulong Golden = 0x9E3779B97F4A7C15UL;
