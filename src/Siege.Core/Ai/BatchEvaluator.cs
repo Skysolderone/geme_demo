@@ -107,6 +107,12 @@ public sealed class BatchEvaluator
     /// <summary>被评价的玩家。</summary>
     public PlayerId Player => _me;
 
+    /// <summary>
+    /// 按本评价器的势力口径（构造时的名册 + 批次开始前已揭示的信物内容）对任一盘面算势力：与"即时势力增量"维的结算后势力同一份计算。
+    /// 供停手复盘（<see cref="HeuristicTurnController.ReviewBestMove"/>）在候选预演结果上判"本可翻盘"，不另写势力口径。
+    /// </summary>
+    internal PowerSnapshot PowerOf(GameBoard board) => PowerCalculator.Compute(board, _roster, _knownRelics);
+
     /// <summary>是否只评价即时收益与眼位（简单难度，ai-eye R26）。</summary>
     public bool ImmediateOnly => _immediateOnly;
 

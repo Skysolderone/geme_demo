@@ -228,6 +228,14 @@ public sealed class MatchSession
     /// <summary>某玩家当前控制者内层的启发式 AI；人工控制中为 <c>null</c>。</summary>
     public HeuristicTurnController? AiOf(PlayerId player) => (Runner.ControllerOf(player) as LoggingController)?.Heuristic;
 
+    /// <summary>
+    /// 分析复盘接缝（ai-pass-review 1.2）：挂一个部署前回调（见 <see cref="TurnTrace.DeployProbe"/>），<c>null</c> 即摘除。只供离线分析的回放会话使用。
+    /// </summary>
+    internal void ObserveDeploy(Action<StagedBatch>? probe) => _trace.DeployProbe = probe;
+
+    /// <summary>已记录的小回合快照（只读；分析复盘逐小回合核对回放与原日志一致）。</summary>
+    internal IReadOnlyList<TurnSnapshot> RecordedTurns => _turns;
+
     // ---------- 驱动 ----------
 
     /// <summary>跑到终局或小回合数截断；任何异常（含小回合硬停）都被捕获为失败局记录。返回完整日志。</summary>

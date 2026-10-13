@@ -46,6 +46,12 @@ internal sealed class TurnTrace
     /// <summary>当前小回合效果快照的读取委托（会话挂 <c>MatchFlow.CurrentSnapshot</c>）；为 <c>null</c> 时不采集。不随 <see cref="Reset"/> 清空。</summary>
     internal Func<EffectSnapshot?>? SnapshotSource { get; set; }
 
+    /// <summary>
+    /// 分析复盘接缝（ai-pass-review 1.2）：部署阶段在内层控制者决策<b>之前</b>回调，参数是本小回合的正式暂放批次（此刻为空）。
+    /// 只给离线分析的回放会话挂；回调 MUST NOT 暂放到这个批次上（复盘用同上下文的影子批次），也不得改对局。为 <c>null</c>（缺省）时什么都不做。不随 <see cref="Reset"/> 清空。
+    /// </summary>
+    internal Action<StagedBatch>? DeployProbe { get; set; }
+
     internal void Reset()
     {
         ShowCount = 0;
@@ -95,6 +101,7 @@ internal sealed class LoggingController(ITurnController inner, TurnTrace trace) 
         ArgumentNullException.ThrowIfNull(rehearse);
         trace.DeployLimit = batch.Context.DeployLimit;
         trace.Batch = batch;
+        trace.DeployProbe?.Invoke(batch);
         Inner.Deploy(batch, () =>
         {
             RehearsalResult result = rehearse();

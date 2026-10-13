@@ -499,7 +499,8 @@ public static class Program
     private static int Analyze(CommandLine cli)
     {
         string dir = cli.GetOrNull("dir") ?? throw new ArgumentException("analyze 需要 --dir <目录>。");
-        var options = new AnalysisOptions { IncludeContaminated = cli.Flag("include-contaminated") };
+        // ai-pass-review 1.2：analyze 命令一律做战场落败复盘（按日志回放，只对链接模式日志出段）。
+        var options = new AnalysisOptions { IncludeContaminated = cli.Flag("include-contaminated"), ReviewDefeats = true };
         string outPath = cli.Get("out", Path.Combine(dir, "report.txt"));
         cli.EnsureRecognized();   // 读完所有选项、读日志与写报告之前结算（strict-cli 2.4）
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);

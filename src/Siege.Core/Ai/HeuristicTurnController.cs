@@ -372,6 +372,108 @@ public sealed class HeuristicTurnController : ITurnController
     }
 
     /// <summary>
+    /// 停手复盘（ai-pass-review 1.1，规格 match-telemetry「战场落败复盘与等待者评估」）：在本玩家即将部署的局面上，按<b>正式决策的同一实现</b>
+    /// （同一观察视图与预演口径、同一评价器、同一实际停手阈值、同一候选格预筛 / 单点枚举 / 活形硬约束 / 单点排序）取"最好一手"，
+    /// 并在该手的预演结果上重算势力，判断对手不回应时能否追平或反超本战场其他在局玩家的最高势力（"本可翻盘"）。只诊断，不做任何决定。
+    /// </summary>
+    /// <remarks>
+    /// <para>最好一手 = 单点排序第一名：它的"评价收益"（单点总分 − Pass 总分）正是贪心组批加第一枚时与停手阈值比较的那个量。
+    /// 排序第一名的收益不过阈值时，贪心在任何扰动次序下都从空批次起步、每一枚都不过阈值，正式决策必然 Pass；反之必然落子——
+    /// 所以复盘只需 k = 0 的无扰动排序，<b>不消费扰动子流</b>（也不需要它的副本），对局逐字节不变。</para>
+    /// <para>另给一条"强制落子批次"：同一排序前 N、同一贪心组批（<see cref="Greedy"/>），但把保留条件放宽到"预演合法且未被活形硬约束淘汰即保留"，
+    /// 直到部署上限——回答"若不许 Pass，AI 自己的首选落法能否翻盘"。</para>
+    /// <para>势力口径与评价器相同（批次开始前已揭示的信物内容，<see cref="BatchEvaluator.PowerOf"/>）：本批首次揭示的计分信物不计入，偏保守；
+    /// "对手不回应"偏乐观（design Risks）。</para>
+    /// <para><paramref name="batch"/> 应是与正式暂放批次分离的影子批次（同一盘面与上下文），<paramref name="rehearse"/> 对它做零副作用预演；
+    /// 本方法只在其上暂放 / 清空，不写 <see cref="Decisions"/>、<c>Last*</c> 留痕与任何随机流。</para>
+    /// </remarks>
+    public BestMoveReview ReviewBestMove(StagedBatch batch, Func<RehearsalResult> rehearse)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        ArgumentNullException.ThrowIfNull(rehearse);
+        if (RehearsalView is { } project)
+        {
+            Func<RehearsalResult> real = rehearse;
+            rehearse = () => project(real());
+        }
+
+        MatchPublicView view = _observe();
+        BatchEvaluator evaluator = CreateEvaluator(view);
+        int passThreshold = EffectivePassThreshold(view);
+        BatchContext context = batch.Context;
+        batch.Clear();
+
+        int stock = context.Stock.Values.Sum();
+        int legalCells = context.LegalRange.Count(c => batch.Board[c].IsPlayableEmpty);
+        BigInteger passTotal = evaluator.Evaluate([], rehearse(), context).Total;
+        var rejections = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator, rejections);
+        ImmutableArray<PointScore> ranked = [.. Rank(points)];
+
+        ImmutableArray<PlayerId> rivals = RivalsInBattlefield(view, Player);
+        BigInteger powerBefore = evaluator.Before.Of(Player).Total;
+        BigInteger? rivalBefore = rivals.IsEmpty ? null : rivals.Max(r => evaluator.Before.Of(r).Total);
+
+        MoveOutcome Outcome(ImmutableArray<Placement> placements, BigInteger total)
+        {
+            batch.Clear();
+            foreach (Placement placement in placements)
+            {
+                if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
+                {
+                    throw new SiegeRuleException($"复盘复摆已预演通过的落点被拒绝：{failure.Message}");
+                }
+            }
+
+            RehearsalResult result = rehearse();
+            GameBoard after = result.ProjectedBoard ?? throw new SiegeRuleException("复盘的候选预演没有结算后盘面。");
+            PowerSnapshot power = evaluator.PowerOf(after);
+            BigInteger? rivalAfter = rivals.IsEmpty ? null : rivals.Max(r => power.Of(r).Total);
+            return new MoveOutcome(placements, total - passTotal, result.Captures.Length, power.Of(Player).Total, rivalAfter);
+        }
+
+        MoveOutcome? best = null;
+        int captureCandidates = 0, comebackCandidates = 0;
+        foreach (PointScore point in ranked)
+        {
+            MoveOutcome outcome = Outcome([point.Placement], point.Total);
+            best ??= outcome;
+            captureCandidates += outcome.Captures > 0 ? 1 : 0;
+            comebackCandidates += outcome.ComesBack == true ? 1 : 0;
+        }
+
+        MoveOutcome? forced = null;
+        if (!ranked.IsEmpty && context.DeployLimit > 0)
+        {
+            CandidateBatch candidate = Greedy([.. ranked.Take(Config.CandidatePointCount)], batch, rehearse, evaluator, int.MinValue);
+            forced = candidate.IsPass ? null : Outcome(candidate.Placements, candidate.Total);
+        }
+
+        batch.Clear();
+        return new BestMoveReview(
+            Player, passThreshold, context.DeployLimit, stock, legalCells, cells.Length, ranked.Length,
+            powerBefore, rivalBefore, best, forced, captureCandidates, comebackCandidates)
+        {
+            Rejections = rejections.ToImmutableSortedDictionary(StringComparer.Ordinal),
+        };
+    }
+
+    /// <summary>与 <see cref="TrailsInBattlefield"/> 同一战场口径：出生棋盘落在 <paramref name="player"/> 所在战场里的其他在局玩家（升序）。未锁定出生棋盘为空。</summary>
+    private static ImmutableArray<PlayerId> RivalsInBattlefield(MatchPublicView view, PlayerId player)
+    {
+        if (view.Players.FirstOrDefault(p => p.Player == player)?.BirthZone is not int zone)
+        {
+            return [];
+        }
+
+        Battlefield field = PublicRules.BattlefieldOf(view.Board, zone);
+        return [.. view.Players
+            .Where(p => p.Player != player && p.IsActive && p.BirthZone is int z && field.BirthZones.Contains(z))
+            .Select(p => p.Player)
+            .Order()];
+    }
+
+    /// <summary>
     /// 单点评价：每个合法空格 × 每种持有类型 × 改造选项各预演一次，取总分前 N（同分按坐标、再按类型、再按改造记法）。
     /// 预演合法之后先过活形硬约束（<see cref="BatchEvaluator.TryEvaluate"/>），被淘汰的候选不打分、不进排行。
     /// 配置了候选格上限 K 且合法空格多于 K 时，先经 <see cref="PrefilterCells"/> 把"每个合法空格"收窄到 K 格。
@@ -382,6 +484,29 @@ public sealed class HeuristicTurnController : ITurnController
     /// </remarks>
     private ImmutableArray<PointScore> RankPoints(StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
     {
+        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator);
+        LastCandidateCells = cells;
+        return [.. Rank(points).Take(Config.CandidatePointCount)];
+    }
+
+    /// <summary>
+    /// 单点排序的确定性次序（总分降序 → 坐标 → 类型 → 改造记法）。<see cref="RankPoints"/> 与停手复盘（<see cref="ReviewBestMove"/>）共用这一份，
+    /// 复盘的"最好一手"因此就是正式决策单点排序的第一名。
+    /// </summary>
+    private static IOrderedEnumerable<PointScore> Rank(IEnumerable<PointScore> points) => points
+        .OrderByDescending(p => p.Total)
+        .ThenBy(p => p.Coord)
+        .ThenBy(p => p.Type)
+        .ThenBy(p => p.Edit?.ToString() ?? string.Empty, StringComparer.Ordinal);
+
+    /// <summary>
+    /// 单点评价的枚举本体（<see cref="RankPoints"/> 的前半段，ai-pass-review 1.1 抽出、行为不变）：返回进入完整枚举的格与全部通过预演和活形硬约束的单点（未排序、未截断）。
+    /// 不写 <see cref="LastCandidateCells"/>——那是正式决策的留痕，复盘 MUST NOT 改它。不消费任何随机流。
+    /// </summary>
+    /// <param name="rejections">复盘用的落选计数（暂放被拒 / 预演不合法按失败种类、活形硬约束淘汰）；正式决策传 <c>null</c>，只计数、不改变任何分支。</param>
+    private (ImmutableArray<Coord> Cells, List<PointScore> Points) ScorePoints(
+        StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, SortedDictionary<string, int>? rejections = null)
+    {
         BatchContext context = batch.Context;
         ImmutableArray<PieceType> types = [.. context.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order()];
         ImmutableArray<Coord> cells = [.. context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
@@ -390,7 +515,6 @@ public sealed class HeuristicTurnController : ITurnController
             cells = PrefilterCells(cells, types, batch, rehearse, evaluator, Config.CandidateCellLimit);
         }
 
-        LastCandidateCells = cells;
         var points = new List<PointScore>();
         foreach (Coord cell in cells)
         {
@@ -399,8 +523,9 @@ public sealed class HeuristicTurnController : ITurnController
                 foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type, context.WorkshopActive))
                 {
                     batch.Clear();
-                    if (batch.Stage(cell, type, edit) is not null)
+                    if (batch.Stage(cell, type, edit) is { } refused)
                     {
+                        Tally(rejections, $"暂放被拒:{refused.Kind}");
                         continue;
                     }
 
@@ -409,6 +534,7 @@ public sealed class HeuristicTurnController : ITurnController
                     // 预演合法之后、打分之前：活形硬约束淘汰的候选不打分、不进排行（ai-eye D3）。
                     if (!result.IsLegal || !evaluator.TryEvaluate(batch.Placements, result, context, out EvaluationBreakdown? evaluation))
                     {
+                        Tally(rejections, result.IsLegal ? "活形硬约束" : $"预演不合法:{result.Failure?.Kind}");
                         continue;
                     }
 
@@ -418,12 +544,15 @@ public sealed class HeuristicTurnController : ITurnController
         }
 
         batch.Clear();
-        return [.. points
-            .OrderByDescending(p => p.Total)
-            .ThenBy(p => p.Coord)
-            .ThenBy(p => p.Type)
-            .ThenBy(p => p.Edit?.ToString() ?? string.Empty, StringComparer.Ordinal)
-            .Take(Config.CandidatePointCount)];
+        return (cells, points);
+
+        static void Tally(SortedDictionary<string, int>? counts, string key)
+        {
+            if (counts is not null)
+            {
+                counts[key] = counts.GetValueOrDefault(key) + 1;
+            }
+        }
     }
 
     /// <summary>

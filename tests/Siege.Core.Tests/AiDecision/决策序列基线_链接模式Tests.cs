@@ -76,7 +76,12 @@ internal static class LinkDecisionSequence
     /// <summary>
     /// 同上，4 名 AI 取难度 <paramref name="difficulty"/>（retire-legacy-maps 4b.4 / L21：简单、困难各补钉一条基线）。标准难度不改玩家配置，输出与上一个重载逐字节相同。
     /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty)
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty) => Export(seed, maxMajorRounds, difficulty, attach: null);
+
+    /// <summary>
+    /// 同上，建局后先对会话执行 <paramref name="attach"/>（ai-pass-review 1.4「复盘不改对局」：挂部署前复盘回调）；为 <c>null</c> 时与上一个重载逐字节相同。
+    /// </summary>
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach)
     {
         var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0 };
         if (difficulty != AiDifficulty.Standard)
@@ -86,6 +91,7 @@ internal static class LinkDecisionSequence
 
         MapData map = MapCatalog.Resolve(config.MapId);
         MatchSession session = MatchSession.Create(config, seed, map, recorded: false, carry: null, pairing: new ScriptedPairingSource());
+        attach?.Invoke(session);
         MatchFlow match = session.Match;
         var sb = new StringBuilder();
         sb.Append("# AI 决策序列基线（board-link-mode 3.4，裁决 C5）\n");

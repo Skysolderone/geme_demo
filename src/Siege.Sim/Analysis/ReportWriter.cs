@@ -1,6 +1,10 @@
+using System.Globalization;
 using System.Numerics;
 using System.Text;
+using Siege.Core.Ai;
+using Siege.Core.Board;
 using Siege.Core.Scoring;
+using Siege.Sim.Running;
 
 namespace Siege.Sim.Analysis;
 
@@ -200,6 +204,17 @@ public static class ReportWriter
             AppendLinkMode(sb, link);
         }
 
+        // ai-pass-review 1.2 / 1.3：两段只在链接模式样本里出现（旧日志的报告逐字节不变）。
+        if (r.DefeatReview is { } review)
+        {
+            AppendDefeatReview(sb, review);
+        }
+
+        if (r.Waiters is { } waiters)
+        {
+            AppendWaiters(sb, waiters);
+        }
+
         return sb.ToString();
     }
 
@@ -217,6 +232,88 @@ public static class ReportWriter
         sb.AppendLine($"- 等待大回合数：全部玩家均值 {Num(l.WaitingMean)}，等待过的 {l.Waiters} 人次均值 {Num(l.WaitingMeanOfWaiters)}，最大 {l.WaitingMax}");
         sb.AppendLine($"- 出局：战场落败 {l.BattlefieldDefeats} 人次，势力归零 {l.PowerZeroEliminations} 人次；整轮 Pass 结算落败 {l.AllPassedDefeats} 人次，其中过早 Pass 落败（结算那一大回合本人 Pass 且手牌仍有子；未逐格核对禁入与部署上限，为上界）{l.PrematurePassDefeats} 人次");
         sb.AppendLine($"- 单个小回合耗时：中位 {Num(l.TurnMedianMs)} ms，最大 {l.TurnMaxMs} ms；整局耗时合计 {l.TotalMatchMs} ms");
+    }
+
+    /// <summary>战场落败复盘（ai-pass-review 1.2）：汇总在前、逐人明细在后。口径写进报告：最好一手 = AI 自己的单点排序第一名，"本可翻盘"假设对手不回应。</summary>
+    private static void AppendDefeatReview(StringBuilder sb, DefeatReviewSection d)
+    {
+        sb.AppendLine();
+        sb.AppendLine("## 战场落败复盘（ai-pass-review：整轮 Pass 结算的落败者，复盘其结算那一大回合最后一次 Pass；按日志回放到该时刻，用其自身 AI 配置的候选、预演与评价）");
+        sb.AppendLine($"- 涉及 {d.Logs} 局，整轮 Pass 结算落败 {d.Defeats} 人次，复盘到 {d.Reviewed} 人次；未能复盘的局：{Histogram(d.SkippedLogs)}；找不到本人 Pass 快照 {d.MissingPass} 人次");
+        sb.AppendLine($"- 复盘时实际停手阈值分布：{Histogram(d.Thresholds)}；复盘结论与实际 Pass 一致 {d.Consistent}/{d.Reviewed}");
+        sb.AppendLine($"- 本可翻盘（最好一手落下、对手不回应时己方势力 ≥ 本战场最高者）：{d.Comebacks}/{d.Reviewed}（{Pct(Share(d.Comebacks, d.Reviewed))}）；"
+            + $"合法候选中存在单点翻盘手 {d.AnyComebacks}/{d.Reviewed}；强制落子批次（同一排序前 N 的贪心、合法即保留，直到部署上限）可翻盘 {d.ForcedComebacks}/{d.Reviewed}");
+        sb.AppendLine($"- 能提子：最好一手提子 {d.BestCaptures}/{d.Reviewed}；合法候选中存在提子手 {d.AnyCaptures}/{d.Reviewed}");
+        sb.AppendLine($"- 无任何可落的一手：{d.NoMove.Values.Sum()}/{d.Reviewed}（{Histogram(d.NoMove)}）；其中落选原因（无合法候选者的完整枚举落选单点合计）：{Histogram(d.NoMoveRejections)}");
+        sb.AppendLine($"- 最好一手收益（与停手阈值同口径：单点总分 − Pass 总分；有合法候选 {d.BestGains.Count} 人次）分位数：{Quantiles(d.BestGains)}");
+        sb.AppendLine($"  - 分段：{Histogram(GainBands(d.BestGains))}");
+        sb.AppendLine($"- 复盘时势力差（本战场最高者 − 己方）分位数：{Quantiles(d.GapsBefore)}");
+        sb.AppendLine("- 逐人明细（种子 / 大回合 / 战场（出生棋盘编号）/ 玩家 / 小回合；阈值；势力 己方 vs 最高；合法候选（空格 / 枚举格）；最好一手 收益 / 提子 / 落下后势力 vs 最高 / 翻盘；强制批次；提子候选 / 翻盘候选）：");
+        foreach (DefeatReviewEntry e in d.Entries)
+        {
+            BestMoveReview v = e.Review;
+            DefeatTarget t = e.Target;
+            string best = v.Best is { } b ? $"{Moves(b)} 收益 {b.Gain} 提子 {b.Captures} 落下后 {b.PowerAfter} vs {Opt(b.RivalAfter)} 翻盘 {YesNo(b.ComesBack)}" : $"无（{v.NoMove}）";
+            string forced = v.Forced is { } f ? $"{Moves(f)} 收益 {f.Gain} 提子 {f.Captures} 落下后 {f.PowerAfter} vs {Opt(f.RivalAfter)} 翻盘 {YesNo(f.ComesBack)}" : "无";
+            sb.AppendLine($"  - {e.Seed} R{t.MajorRound} 战场{BirthZoneLabel.Number(t.Battlefield)} P{t.Player} T{t.Turn}：阈值 {v.PassThreshold}；势力 {v.PowerBefore} vs {Opt(v.RivalBefore)}；"
+                + $"候选 {v.Candidates}（空格 {v.LegalCells} / 枚举格 {v.CandidateCells}，库存 {v.Stock}，上限 {v.DeployLimit}）；最好 {best}；强制 {forced}；提子候选 {v.CaptureCandidates}，翻盘候选 {v.ComebackCandidates}；落选 {(v.Rejections.IsEmpty ? "无" : string.Join("，", v.Rejections.Select(kv => $"{kv.Key}×{kv.Value}")))}");
+        }
+    }
+
+    /// <summary>等待者评估（ai-pass-review 1.3）：等待者 vs 首轮刚结算的胜者，决赛胜率、决赛开始势力差、等待大回合数分布。</summary>
+    private static void AppendWaiters(StringBuilder sb, WaiterSection w)
+    {
+        sb.AppendLine();
+        sb.AppendLine("## 等待者评估（ai-pass-review：决赛参与者按进入决赛时的等待大回合数分组；等待者 = 等过 ≥ 1 个大回合，首轮刚结算的胜者 = 0）");
+        sb.AppendLine($"- 纳入到达决赛、未截断的 {w.Finals} 局，决赛参与者 {w.Participants.Count} 人次");
+        foreach ((FinalistGroup group, string name) in new[] { (FinalistGroup.Waiter, "等待者"), (FinalistGroup.FreshWinner, "首轮刚结算的胜者") })
+        {
+            List<FinalistEntry> g = [.. w.Participants.Where(p => p.Group == group)];
+            int wins = g.Count(p => p.Won);
+            sb.AppendLine($"- {name}：{g.Count} 人次，决赛胜 {wins}（{Pct(Share(wins, g.Count))}）；决赛开始势力差（己方 − 其余决赛者最高）均值 {Num(Statistics.Mean(g.Select(p => (double)p.PowerGap)))}，"
+                + $"中位 {Num(Statistics.Median(g.Select(p => (double)p.PowerGap)))}；等待大回合数分布：{Histogram(new SortedDictionary<int, int>(g.GroupBy(p => p.WaitingRounds).ToDictionary(x => x.Key, x => x.Count())))}");
+        }
+
+        sb.AppendLine($"- 等待者来由：{Histogram(new SortedDictionary<string, int>(w.Participants.Where(p => p.Group == FinalistGroup.Waiter).GroupBy(p => p.Origin.ToString()).ToDictionary(x => x.Key, x => x.Count()), StringComparer.Ordinal))}");
+        sb.AppendLine("- 逐人明细（种子 / 玩家 / 分组 / 来由 / 等待大回合 / 决赛开始势力 / 势力差 / 决赛胜）：");
+        foreach (FinalistEntry p in w.Participants)
+        {
+            sb.AppendLine($"  - {p.Seed} P{p.Player} {(p.Group == FinalistGroup.Waiter ? "等待者" : "首轮胜者")} {p.Origin} 等 {p.WaitingRounds} 势力 {p.Power} 差 {p.PowerGap} {(p.Won ? "胜" : "负")}");
+        }
+    }
+
+    private static double Share(int part, int whole) => whole == 0 ? double.NaN : (double)part / whole;
+
+    private static string Opt(BigInteger? value) => value is { } v ? v.ToString(CultureInfo.InvariantCulture) : "—";
+
+    private static string YesNo(bool? value) => value switch { true => "是", false => "否", null => "—" };
+
+    private static string Moves(MoveOutcome outcome) => $"[{string.Join(" ", outcome.Placements)}]";
+
+    /// <summary>最近秩分位数（不插值、不经浮点）：最小 / P10 / P25 / 中位 / P75 / P90 / 最大。</summary>
+    private static string Quantiles(IReadOnlyList<BigInteger> sorted)
+    {
+        if (sorted.Count == 0)
+        {
+            return "无样本";
+        }
+
+        int n = sorted.Count;
+        BigInteger At(int percent) => sorted[Math.Max(0, ((percent * n) + 99) / 100 - 1)];
+        return $"最小 {sorted[0]}，P10 {At(10)}，P25 {At(25)}，中位 {At(50)}，P75 {At(75)}，P90 {At(90)}，最大 {sorted[^1]}";
+    }
+
+    /// <summary>收益分段：相对停手阈值（缺省 20 / 落后者 0）看"差多少"。</summary>
+    private static SortedDictionary<string, int> GainBands(IReadOnlyList<BigInteger> gains)
+    {
+        var h = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (BigInteger g in gains)
+        {
+            string band = g <= -500 ? "a.≤-500" : g <= -100 ? "b.(-500,-100]" : g <= -20 ? "c.(-100,-20]" : g < 0 ? "d.(-20,0)" : g == 0 ? "e.=0" : g <= 20 ? "f.(0,20]" : "g.>20";
+            h[band] = h.GetValueOrDefault(band) + 1;
+        }
+
+        return h;
     }
 
     /// <summary>

@@ -17,6 +17,12 @@ public sealed record AnalysisOptions
 
     /// <summary>胜率类指标的最低样本数（裁决 5：200 局是快速回归下限，默认基线 2000 局）。</summary>
     public int RequiredMatches { get; init; } = 200;
+
+    /// <summary>
+    /// 是否做战场落败复盘（ai-pass-review 1.2）：要按日志回放每局，耗时约等于跑局本身，缺省关闭；<c>analyze</c> 命令开启。
+    /// 关闭时 <see cref="BalanceReport.DefeatReview"/> 为 <c>null</c>，报告里没有这一段。
+    /// </summary>
+    public bool ReviewDefeats { get; init; }
 }
 
 /// <summary>收敛情况（裁决 13 → round-cap D5）：非达上限终局 vs 以 <c>MajorRoundLimit</c>（达大回合上限）终局，单独成段。</summary>
@@ -305,6 +311,12 @@ public sealed record BalanceReport(
 {
     /// <summary>链接模式统计（board-link-mode 3.5）；没有链接模式的纳入局时为 <c>null</c>，报告里整段不出现。</summary>
     public LinkModeSection? LinkMode { get; init; }
+
+    /// <summary>战场落败复盘（ai-pass-review 1.2）；未开启（<see cref="AnalysisOptions.ReviewDefeats"/>）或没有整轮 Pass 结算落败时为 <c>null</c>。</summary>
+    public DefeatReviewSection? DefeatReview { get; init; }
+
+    /// <summary>等待者评估（ai-pass-review 1.3）；没有到达决赛的链接模式纳入局时为 <c>null</c>。</summary>
+    public WaiterSection? Waiters { get; init; }
 }
 
 /// <summary>
@@ -422,6 +434,8 @@ public static class BalanceAnalyzer
             NewContent(included))
         {
             LinkMode = LinkModeAnalyzer.Analyze(included),
+            DefeatReview = options.ReviewDefeats ? PassReviewAnalyzer.ReviewDefeats(included) : null,
+            Waiters = PassReviewAnalyzer.Waiters(included),
         };
     }
 
