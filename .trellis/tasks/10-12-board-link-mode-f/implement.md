@@ -187,3 +187,97 @@ Legacy 既有测试断言一条未改；v5 / board:1 决策序列基线、黄金
 | J9-2 | 整体越界平移时，以西不动的战场也随整体平移（"整个布局"字面） | 已实现，22 次 | 接受 |
 
 其余 J8 项已按裁决落实，上文 §6 的 J8-1 / J8-3 / J8-6 建议栏作废。
+
+---
+
+# F.3（Sim：日志、analyze、map --links、回放）
+
+在提交 9f76306 之上实施；`tasks.md` F.3 已勾。
+
+## 1. 改动清单
+
+- **新增 `src/Siege.Sim/Logging/LinkLayout.cs`**：作为“坐标随链接平移”的**唯一**实现。
+  - `LinkShiftStep(X, Y, Shifts)` 可由 `LinkRecord` 或 `LinkLogEntry` 构造。
+  - `LinkLayout(开局出生棋盘, 链接序列)` 按版本累计每块棋盘的位移，战场标识随合并改名。
+  - 提供 `Translate` / `ZoneAt` / `BoardAt` / `TranslateEdit`，其中 `TranslateEdit` 与 `GameBoard.ApplySplice` 同口径：
+    - 一端在场景格的栅栏随另一端平移；
+    - 两端都在场景格的栅栏不动，但被棋盘占到或越出画布时丢弃；
+    - 落到负坐标的丢弃。
+  - `LinkLayout.Of(log)` 只读日志首部的开局棋盘和链接事件。
+  - 版本口径工具：`VersionAfterTurn` / `VersionAtEvent`。
+- **日志 `MatchLog.cs`**：
+  - `LinkLogEntry` 删掉 `Degraded` / `PublicBoard` / `CorridorCells` / `CorridorLengths` / `NewRelics`，换成 `Side` / `SharedEdge` / `Shifts`（新类型 `BattlefieldShiftEntry`，含锚点）；`BattlefieldCells`、`MapDigest`、`Summary` 保留。
+  - 首部新增 `Boards`（新类型 `BoardEntry`，开局出生棋盘），只在链接模式写出（`WhenWritingNull`）。
+  - 删除 `AllRelics`：完整信物分布就是首部，按开局坐标。
+  - 类注释写明各行坐标的版本口径：
+    - 首部：开局布局；
+    - 小回合快照：该回合结束时（含本回合内的链接）的布局；
+    - 事件：发生时的布局；
+    - 末行揭示表：终局布局；
+    - 驿站来源与前瞻记录：回合开始时的布局。
+- **跑局 `MatchSession.cs`**：
+  - 首部写 `Boards`，链接事件写新字段。
+  - `RecordTurn` 的本回合平移改为调用 `LinkLayout`，删掉原先的那份实现。
+  - 本回合改造的 `Target` / `Artisan` 也平移到链接后的布局，与快照口径一致；若平移结果为空则保留原记法。
+- **分析**：
+  - `LinkModeAnalyzer`：删 `DegradedLinks` / `DegradedShare` / `CorridorLengths`，新增 `SharedEdges`（共享边长度分布）和 `GlobalShifts`（锚点向量非零的次数）。`FinalBattlefieldCells` 即决赛合并战场的格数。
+  - `ReportWriter`：链接段两行改写，不再出现“退化”“通道长度”。
+  - `BalanceAnalyzer.Selection`：信物统计按“首部开局坐标经 `LinkLayout` 换算到该快照或揭示表的版本”读；撤掉 F.2 的“查不到就跳过”，对不上即抛 `FormatException`。`Life.PlayableCells` 的口径未动。
+- **`map --links`（J8-8）**：
+  - 保留 `1-4,2-5` 写法，并支持显式 `1-4E` / `1-2N`。
+  - 不写贴边时按阶段推断：一旦某项连到已合并的战场即进入决赛（北贴），之后都按北贴；在此之前按东贴。
+  - 每步打印贴边（推断的会标出）和平移向量；最后照旧打印拼接后的文本图与校验报告。帮助文案已同步。
+- **回放**：`Replayer` 没有改代码——链接按记录的配对重放，贴边由配对阶段决定，向量与开局棋盘随确定性文本逐行比对。
+- **测试**：
+  - 新增 `MatchTelemetry/坐标随链接平移Tests`：
+    - 种子 1–20 的全部链接序列、每对起止版本、每个可落子格，`LinkLayout` 都与 Core `LinkResult.Translate` 逐次复合的结果逐格相同；
+    - 改造随棋盘平移，并与 `ApplySplice` 的结果逐条一致；
+    - 缺少向量的记录被拒。
+  - `对局日志的记录内容_链接模式Tests`：
+    - **恢复「地形可离线重建」**（去掉 Skip）：只读日志，用生成器重放链接并核对摘要与向量；改造按 `VersionAfterTurn` 经 `LinkLayout` 平移到终局，重放后与真实终局逐格相同；反面断言为把任一次链接的向量置零即对不上。
+    - 新增「链接那一小回合的改造按链接后布局记」：第 3 大回合每人立一道棋盘内栅栏，日志里的改造平移到终局后，与 Core 盘面迁移后的改造列表逐条相同。
+    - 「配对与链接可查」改为核对 `Side` / `SharedEdge` / `Shifts` 和首部 `Boards`。
+  - `链接模式平衡分析Tests`：
+    - 改为核对共享边分布和整体越界平移计数（用一份把锚点向量改成非零的日志验证计数）；报告不含“退化”“通道长度”；
+    - 信物统计用“已平移的信物被控制后计数加 1”验证；坐标损坏时抛 `FormatException`。
+  - `可复现回放_链接模式Tests`：新增「篡改平移向量或开局棋盘即在对应行分歧」：改向量，分歧报在该链接事件那一行；改首部棋盘，分歧报在第 1 行。
+  - `各入口支持生成图_链接模式Tests`：
+    - 新增「map子命令按阶段推断贴边_也接受显式贴边」：`1-4,2-5,1-2` 推断为 东/东/北；与显式 `1-4E,2-5E,1-2N` 的结果逐行相同；`1-2N` 可让两块单棋盘北贴；
+    - 参数校验加 `1-4X`。
+  - `LinkModeFixtures.Track` 改为调用 `LinkLayout`，测试侧也不再保留第二份实现。
+- Godot / Presentation 没有改动（`LinkRecord` 之外的共享类型没有变化）。
+
+## 2. 构建、测试、变异
+
+- `dotnet build siege.sln -c Release`：0 警告 0 错误。
+- `dotnet test tests/Siege.Core.Tests -c Release`：**2386 条，通过 2374，跳过 12，失败 0**（退出码 0）。跳过数从 13 降到 12，剩下的两条 J8-9 Skip 留给 F.4。Legacy 黄金哈希、v5 / board:1 基线照常通过。
+- 变异（每条还原后都复跑确认红 0）：
+
+| 编号 | 变异 | 红 |
+|---|---|---|
+| MF3-1 | `LinkLayout` 不随合并改写战场标识 | 16 |
+| MF3-2 | 一端在场景格的栅栏只平移可落子端 | 1（「改造随棋盘平移」） |
+| MF3-3 | 跑局层记录改造时不平移 | 1（「链接那一小回合的改造按链接后布局记」） |
+| MF3-4 | 信物统计不按版本换算 | 1（「真实跑局的链接日志可完整分析」） |
+| MF3-5 | 整体越界平移不计数 | 1（「配对与链接可查」） |
+| MF3-6 | `map --links` 不推断决赛 | 1（「map子命令按阶段推断贴边_也接受显式贴边」） |
+
+## 3. 链接图决策序列基线
+
+**没有变化**，`decisions-link1-seed3.txt` 未改动。基线只导出 AI 决策和 Core 的配对 / 链接 / 结算记录，不读 Sim 日志字段。
+
+## 4. F.4 接线点补充
+
+- 表现层若要把“链接前的坐标”换算到链接后（例如演出时对方棋盘滑入的起止位置、`LinkShowBeats.Expansion` 改为按向量差分），可以直接用 `LinkLayout`：
+  - 由 `Match.Board.BaseMap.Boards` 和 `Match.Links.Select(LinkShiftStep.From)` 构造；
+  - `BoardAt(zone, v)` 给出每块出生棋盘在各版本的外接矩形，即滑入动画的起点和终点。
+  - 注意：`LinkLayout` 在 Siege.Sim 里，Presentation 不得引用 Sim。如需共用，要把它下沉到 Core 或 Presentation，并保持只有一份实现——这需要主会话决定位置（见 J10-1）。
+- 同一配对事件内有两条链接时，用 `BoardAt(z, 起始版本)` → `BoardAt(z, 结束版本)` 即可得到合成后的位移。
+
+## 5. 需裁决
+
+| # | 事项 | 现状 | 建议 |
+|---|---|---|---|
+| J10-1 | `LinkLayout` 放在 Siege.Sim（日志 / 解析层，按派发要求）。F.4 演出若要同样的换算，Presentation 不能引用 Sim | 未动 | F.4 前把它下沉到 Core（例如 `Siege.Core.Board.Maps`），Sim / Presentation / 测试共用 |
+| J10-2 | 小回合快照里驿站来源与前瞻记录是回合开始时的决策量，按回合开始时的布局记；快照其余字段按回合结束时的布局记——同一行里有两种口径 | 已写进 `MatchLog` 类注释 | 接受（只在发生链接的那个小回合里两者不同）；或把这两项也平移到回合结束时 |
+| J10-3 | `map --links` 推断规则：前面的单棋盘配对在没写贴边时一律按东贴，所以“3+1 决赛”（两块单棋盘北贴）必须显式写 `N` | 已实现 | 接受 |

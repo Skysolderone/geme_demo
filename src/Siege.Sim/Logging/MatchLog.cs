@@ -25,6 +25,9 @@ namespace Siege.Sim.Logging;
 /// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因三类之一（LastPlayerStanding / BoardFull / AllPassed），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
 /// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
+/// <para>链接模式（board-link-mode 段 F）：链接时坐标会变（拼接平移）。首部 <see cref="LogHeader.Relics"/> 与 <see cref="LogHeader.Boards"/> 按开局坐标；
+/// 小回合快照的落子 / 提子 / 改造 / 信物状态 / 活形按该小回合结束时（含本回合内的链接）的布局；事件按发生时的布局；末行揭示表按终局布局。
+/// 换算只经 <see cref="LinkLayout"/>（<see cref="LinkLayout.VersionAfterTurn"/> / <see cref="LinkLayout.VersionAtEvent"/>）。驿站来源与前瞻记录是小回合开始时的决策量，按该回合开始时的布局。</para>
 /// <para>life-shape「活形记录与统计」：快照的 <see cref="TurnSnapshot.Life"/>（本小回合的活形确立 / 失去、两类拒绝计数、结算后逐玩家活形状态）；
 /// 暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试另记 <c>LifeRefused</c> 事件（非细粒度，任何保留策略下都在）。</para>
 /// <para>
@@ -87,13 +90,6 @@ public sealed class MatchLog
     private static T ParseName<T>(string text, string what)
         where T : struct, Enum =>
         Enum.GetNames<T>().Contains(text, StringComparer.Ordinal) ? Enum.Parse<T>(text) : throw new FormatException($"日志首部的带入里有未知{what} {text}。");
-
-    /// <summary>
-    /// 完整信物分布（match-telemetry 第 1 项）：首部的开局信物，加上按发生顺序的各次链接新增的公共棋盘信物（<see cref="LinkLogEntry.NewRelics"/>）。
-    /// 旧模式日志没有链接事件，即首部 <see cref="LogHeader.Relics"/>。
-    /// </summary>
-    public IEnumerable<RelicEntry> AllRelics =>
-        Header.Relics.Concat(Events.Where(e => e.Link is not null).OrderBy(e => e.Seq).SelectMany(e => e.Link!.NewRelics));
 
     /// <summary>是否为链接模式的局（首部 <see cref="LogHeader.Mode"/>）。</summary>
     public bool IsLinkMode => Header.Mode == nameof(Siege.Core.Match.MatchMode.Link);
@@ -393,6 +389,13 @@ public sealed record LogHeader
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<int>? LockedFlagCounts { get; init; }
+
+    /// <summary>
+    /// 开局的出生棋盘（board-link-mode F.3；下标 = 出生棋盘编号）：只在链接模式的局写出。与链接事件的平移向量一起，离线即可把任一时刻的坐标换算到另一时刻
+    /// （<see cref="LinkLayout.Of"/>），不必按地图标识重建地图。<see cref="Relics"/> 按开局坐标写。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<BoardEntry>? Boards { get; init; }
 }
 
 /// <summary>日志首部的一名玩家的带入：补给种类名（<see cref="Siege.Core.Carry.SupplyKind"/>）与换入类型名（备用子为 <c>null</c>）。</summary>
@@ -926,7 +929,11 @@ public sealed record PairingLogEntry
     public required string Source { get; init; }
 }
 
-/// <summary>一次链接事件（match-telemetry 第 9 项）：链接序号、所属配对、两个战场、新增公共棋盘的外接矩形、通道格数、是否退化、新增信物格及内容、链接后的地图版本与内容摘要。</summary>
+/// <summary>
+/// 一次链接事件（match-telemetry 第 9 项；board-link-mode 段 F 拼接版）：链接序号、所属配对、两个战场（X 为锚点、Y 为被贴方）、贴边（东 / 北）、链接后的地图版本、
+/// 共享边长度、拼接前每个战场的平移向量（含锚点，通常为零；整体越界平移时非零）、合并战场格数、链接后地图摘要与几何摘要。
+/// 链接之前的事件与快照里的坐标按链接前的布局解释，换算只经 <see cref="LinkLayout"/>。
+/// </summary>
 public sealed record LinkLogEntry
 {
     public int Sequence { get; init; }
@@ -937,28 +944,45 @@ public sealed record LinkLogEntry
 
     public int Y { get; init; }
 
+    /// <summary>贴边：<c>East</c>（首轮）/ <c>North</c>（决赛）。</summary>
+    public required string Side { get; init; }
+
     public int MapVersion { get; init; }
 
-    public bool Degraded { get; init; }
+    /// <summary>共享边长度：接缝两侧都有可落子格的格数。</summary>
+    public int SharedEdge { get; init; }
 
-    /// <summary>新增公共棋盘的外接矩形 <c>原点 宽×高</c>（围棋记法）；退化链接为 <c>null</c>。</summary>
-    public string? PublicBoard { get; init; }
+    /// <summary>拼接前每个战场的平移向量，按战场标识升序（含锚点）。</summary>
+    public List<BattlefieldShiftEntry> Shifts { get; init; } = [];
 
-    public int CorridorCells { get; init; }
-
-    /// <summary>各条新增通道的长度（外接矩形的较长边），按生成器次序（负责人裁决 R3"通道长度不限"的复核项）。</summary>
-    public List<int> CorridorLengths { get; init; } = [];
-
-    /// <summary>链接后合并战场的可落子格数（开局 + 链接的地图、不含改造；负责人裁决 R4 可落子上限的复核项，决赛战场取决赛链接这一条）。</summary>
+    /// <summary>链接后合并战场的可落子格数（开局 + 链接的地图、不含改造；决赛战场取决赛链接这一条）。</summary>
     public int BattlefieldCells { get; init; }
-
-    /// <summary>新增信物格及其内容（坐标字典序）。</summary>
-    public List<RelicEntry> NewRelics { get; init; } = [];
 
     /// <summary>链接后（开局 + 链接、不含改造）地图的内容摘要；回放逐行比对它即核对"每次链接后的地图与原局逐格相同"。</summary>
     public required string MapDigest { get; init; }
 
     public required string Summary { get; init; }
+}
+
+/// <summary>一个战场在一次链接里的平移向量。</summary>
+public sealed record BattlefieldShiftEntry
+{
+    public int Battlefield { get; init; }
+
+    public int Dx { get; init; }
+
+    public int Dy { get; init; }
+}
+
+/// <summary>开局的一块出生棋盘（链接模式日志首部 <see cref="LogHeader.Boards"/>，下标 = 出生棋盘编号）。</summary>
+public sealed record BoardEntry
+{
+    /// <summary>左下角格（围棋记法）。</summary>
+    public required string Origin { get; init; }
+
+    public int Width { get; init; }
+
+    public int Height { get; init; }
 }
 
 /// <summary>一次战场结算（match-telemetry 第 10 项）：大回合、战场标识、原因（<c>AllPassed</c> / <c>BoardFull</c> / <c>Attrition</c>）、名次与各玩家势力、胜者。</summary>

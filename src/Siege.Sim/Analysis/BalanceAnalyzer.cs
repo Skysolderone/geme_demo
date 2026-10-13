@@ -1224,6 +1224,31 @@ public static class BalanceAnalyzer
 
     // ---------- §17.3 棋子与信物 ----------
 
+    /// <summary>
+    /// 某版本布局下"信物坐标 → 类型"：旧模式只有版本 0（即首部）；链接模式把首部的开局坐标经 <see cref="LinkLayout"/> 换算到该版本（按版本记忆）。
+    /// </summary>
+    private static Func<int, Dictionary<string, string>> RelicTypesByVersion(MatchLog log)
+    {
+        LinkLayout? layout = log.IsLinkMode ? LinkLayout.Of(log) : null;
+        var memo = new Dictionary<int, Dictionary<string, string>>();
+        return version =>
+        {
+            if (!memo.TryGetValue(version, out Dictionary<string, string>? types))
+            {
+                types = log.Header.Relics.ToDictionary(
+                    r => layout is null ? r.Coord : layout.Translate(Coord.Parse(r.Coord), 0, version).ToNotation(),
+                    r => r.Type,
+                    StringComparer.Ordinal);
+                memo[version] = types;
+            }
+
+            return types;
+        };
+    }
+
+    private static string RelicTypeAt(Dictionary<string, string> types, string coord, string where) =>
+        types.TryGetValue(coord, out string? type) ? type : throw new FormatException($"{where}里的信物格 {coord} 不在首部的信物分布里（按链接换算后）：日志损坏。");
+
     /// <param name="rankable">有名次的局：选择率与控制时长用全部纳入局，"选过 / 控制过它的玩家胜率"只取这些局（截断局没有胜者）。</param>
     private static SelectionSection Selection(List<MatchLog> logs, HashSet<MatchLog> rankable)
     {
@@ -1282,34 +1307,28 @@ public static class BalanceAnalyzer
                 }
             }
 
-            // 完整信物分布含链接时新增的公共棋盘信物（match-telemetry 第 1 项）；旧模式日志没有链接事件，与首部相同。
-            var typeOf = log.AllRelics.ToDictionary(r => r.Coord, r => r.Type, StringComparer.Ordinal);
-            foreach (RelicEntry relic in log.AllRelics)
+            // 完整信物分布即首部（开局坐标）：链接不新增信物（段 F，裁决 J2）。链接模式下信物随拼接平移，快照与揭示表里的坐标按各自版本的布局记，
+            // 经 LinkLayout 把开局坐标换算到该版本再对（MatchLog 类注释的版本口径）；对不上即日志损坏，响亮失败。
+            Func<int, Dictionary<string, string>> typeAt = RelicTypesByVersion(log);
+            foreach (RelicEntry relic in log.Header.Relics)
             {
                 relicCount[relic.Type] = relicCount.TryGetValue(relic.Type, out int n) ? n + 1 : 1;
             }
 
-            // 段 F 最小适配：链接模式下信物随拼接平移，快照 / 揭示里的坐标与首部（开局坐标）对不上的先跳过——按平移向量对齐属 F.3。
+            Dictionary<string, string> finalTypes = typeAt(log.IsLinkMode ? LinkLayout.Of(log).Versions : 0);
             foreach (RelicRevealEntry reveal in log.Result.RelicReveals.Where(r => r.RevealedInMajorRound is not null))
             {
-                if (!typeOf.TryGetValue(reveal.Coord, out string? type))
-                {
-                    continue;
-                }
-
+                string type = RelicTypeAt(finalTypes, reveal.Coord, "揭示表");
                 relicRevealed[type] = relicRevealed.TryGetValue(type, out int n) ? n + 1 : 1;
             }
 
             var controlledBy = new Dictionary<int, HashSet<string>>();
             foreach (TurnSnapshot turn in log.Turns)
             {
+                Dictionary<string, string> types = typeAt(log.IsLinkMode ? LinkLayout.VersionAfterTurn(log, turn.Turn) : 0);
                 foreach (RelicStateEntry state in turn.Relics.Where(r => r.Control == nameof(RelicControlKind.Controlled) && r.Holder is not null))
                 {
-                    if (!typeOf.TryGetValue(state.Coord, out string? type))
-                    {
-                        continue;
-                    }
-
+                    string type = RelicTypeAt(types, state.Coord, $"第 {turn.Turn} 小回合快照");
                     relicControlledTurns[type] = relicControlledTurns.TryGetValue(type, out int n) ? n + 1 : 1;
                     if (!controlledBy.TryGetValue(state.Holder!.Value, out HashSet<string>? set))
                     {

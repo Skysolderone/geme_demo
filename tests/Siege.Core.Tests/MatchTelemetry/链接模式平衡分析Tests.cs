@@ -1,3 +1,4 @@
+using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Tests.SimulationHarness;
@@ -44,11 +45,23 @@ public class 链接模式平衡分析Tests
         Assert.Equal(new SortedDictionary<string, int> { ["1-2 3-4"] = 1, ["2-3"] = 1 }, s.FirstRoundPairings);
         Assert.Equal(5, s.Links);
 
-        // 段 F：拼接没有退化与通道，日志里对应字段为中性值（分析段的退化率 / 通道长度行改为平移向量属 F.3）。
+        // 段 F.3：共享边长度分布逐次计入；整体越界平移 = 锚点向量非零的链接次数（本样本为 0，下限由 链接时的棋盘拼接Tests 的穷举与夹具守）。
         List<LinkLogEntry> links = [.. new[] { a, b }.SelectMany(l => l.Events).Where(e => e.Link is not null).Select(e => e.Link!)];
         Assert.Equal(5, links.Count);
-        Assert.Equal(0, s.DegradedLinks);
-        Assert.Empty(s.CorridorLengths);
+        Assert.Equal(links.GroupBy(l => l.SharedEdge).ToDictionary(g => g.Key, g => g.Count()).OrderBy(kv => kv.Key), s.SharedEdges);
+        Assert.Equal(links.Count(l => l.Shifts.Single(x => x.Battlefield == l.X) is { } anchor && (anchor.Dx != 0 || anchor.Dy != 0)), s.GlobalShifts);
+        string section = ReportWriter.Render(BalanceAnalyzer.Analyze([a, b]));
+        Assert.Contains("共享边长度分布", section, StringComparison.Ordinal);
+        Assert.Contains("整体越界平移", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("退化", section, StringComparison.Ordinal);
+        Assert.DoesNotContain("通道长度", section, StringComparison.Ordinal);
+
+        // 整体越界平移的计数口径：把样本 A 第一次链接的锚点向量改成非零 → 计 1 次（变异 MF3-5：计数恒不加 → 红）。
+        MatchLog fake = SimFixtures.Clone(a);
+        int at = fake.Events.FindIndex(e => e.Link is not null);
+        LinkLogEntry first = fake.Events[at].Link!;
+        fake.Events[at] = fake.Events[at] with { Link = first with { Shifts = [.. first.Shifts.Select(x => x.Battlefield == first.X ? x with { Dx = 2 } : x)] } };
+        Assert.Equal(1, LinkModeAnalyzer.Analyze([fake])!.GlobalShifts);
 
         // 决赛战场格数：每局一个样本，取决赛链接那一条的合并战场格数，且大于首轮任何一个战场。
         Assert.Equal(2, s.FinalBattlefieldCells.Values.Sum());
@@ -139,11 +152,25 @@ public class 链接模式平衡分析Tests
         Assert.True(report.LinkMode.TurnMaxMs > 0);
         Assert.Contains("## 链接模式（board-link-mode）", ReportWriter.Render(report), StringComparison.Ordinal);
 
-        // 段 F：链接不再新增信物，链接模式日志的完整信物分布也逐项即首部信物（信物坐标随拼接平移进快照，由 F.3 的日志口径处理）。
-        Assert.Equal(log.Header.Relics, log.AllRelics);
+        // 段 F.3：信物统计按"首部开局坐标 + 随链接平移"读。取最后一个快照里一枚坐标已随拼接变化的信物，改成被 0 号控制 → 该类型的控制小回合数 +1；
+        // 若仍按首部坐标直接对（F.2 的临时处理是"查不到就跳过"），这枚信物不会被计入。变异 MF3-4：Selection 不换算（版本恒取 0）→ 本测试红。
+        LinkLayout layout = LinkLayout.Of(log);
+        int index = log.Turns.Count - 1;
+        TurnSnapshot lastTurn = log.Turns[index];
+        int version = LinkLayout.VersionAfterTurn(log, lastTurn.Turn);
+        RelicEntry moved = log.Header.Relics.First(r => layout.Translate(Coord.Parse(r.Coord), 0, version).ToNotation() != r.Coord);   // 样本口径：确有信物被平移
+        string now = layout.Translate(Coord.Parse(moved.Coord), 0, version).ToNotation();
+        Assert.Contains(lastTurn.Relics, r => r.Coord == now);
+        MatchLog controlled = SimFixtures.Clone(log);
+        controlled.Turns[index] = lastTurn with { Relics = [.. lastTurn.Relics.Select(r => r.Coord == now ? r with { Control = "Controlled", Holder = 0 } : r)] };
+        int before = report.Selection.Relics.Single(r => r.Type == moved.Type).ControlledTurns;
+        int after = BalanceAnalyzer.Analyze([controlled]).Selection.Relics.Single(r => r.Type == moved.Type).ControlledTurns;
+        Assert.Equal(before + (lastTurn.Relics.Single(r => r.Coord == now).Control == "Controlled" ? 0 : 1), after);
 
-        // 回归：旧模式日志没有链接事件，完整信物分布逐项即首部信物（信物选择段对旧日志的结果因此不变）。
-        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(l.Header.Relics, l.AllRelics));
+        // 坐标对不上首部（换算后）即日志损坏，响亮失败，不静默跳过。
+        MatchLog corrupt = SimFixtures.Clone(log);
+        corrupt.Turns[index] = lastTurn with { Relics = [.. lastTurn.Relics.Select((r, i) => i == 0 ? r with { Coord = "A1", Control = "Controlled", Holder = 0 } : r)] };
+        Assert.Throws<FormatException>(() => BalanceAnalyzer.Analyze([corrupt]));
     }
 
     [Fact]

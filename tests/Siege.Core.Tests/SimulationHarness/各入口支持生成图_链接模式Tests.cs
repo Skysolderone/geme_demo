@@ -190,7 +190,44 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Contains("链接 #2：战场 出生区 1 + 出生区 2", chainedOut, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void map子命令按阶段推断贴边_也接受显式贴边()
+    {
+        // 裁决 J8-8：不写贴边时，前面互不重叠的单棋盘配对按首轮东贴，连到已合并战场的按决赛北贴；也接受 1-4E,2-5E,1-2N 的显式写法，结果相同；
+        // 每次链接打印平移向量，最后打印拼接后的文本图与校验报告。显式 N 可让两个单棋盘战场北贴（3+1 的决赛）。
+        (int code, string inferred, string err) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-4,2-5,1-2");
+        Assert.True(code == 0, err);
+        Assert.Equal(2, CountOf(inferred, "贴东（推断）"));
+        Assert.Equal(1, CountOf(inferred, "贴北（推断）"));
+        Assert.Equal(3, CountOf(inferred, "  平移向量："));
+        Assert.Contains("地图校验通过", inferred, StringComparison.Ordinal);
+
+        MapData expected = MapCatalog.Resolve("link:1");
+        foreach ((int x, int y, LinkSide side) in new[] { (0, 3, LinkSide.East), (1, 4, LinkSide.East), (0, 1, LinkSide.North) })
+        {
+            expected = LinkMapGenerator.Link(expected, x, y, side).Map;
+        }
+
+        Assert.Contains($"地图 link:1  {expected.Width}×{expected.Height}", inferred, StringComparison.Ordinal);
+
+        (int code2, string spelled, string err2) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-4E,2-5E,1-2N");
+        Assert.True(code2 == 0, err2);
+        Assert.Equal(0, CountOf(spelled, "（推断）"));
+        Assert.Equal(Tail(inferred), Tail(spelled));   // 拼接后的文本图与校验报告逐行相同
+
+        (int code3, string north, string err3) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-2N");
+        Assert.True(code3 == 0, err3);
+        Assert.Contains("贴北；", north, StringComparison.Ordinal);
+        MapData final = LinkMapGenerator.Link(MapCatalog.Resolve("link:1"), 0, 1, LinkSide.North).Map;
+        Assert.Contains($"地图 link:1  {final.Width}×{final.Height}", north, StringComparison.Ordinal);
+
+        static int CountOf(string text, string what) => (text.Length - text.Replace(what, string.Empty, StringComparison.Ordinal).Length) / what.Length;
+
+        static string Tail(string text) => text[text.IndexOf("已模拟", StringComparison.Ordinal)..];
+    }
+
     [Theory]
+    [InlineData("link:1", "1-4X", "编号 1–5")]
     [InlineData("siege-4p-base-v5", "1-2", "只用于链接图")]
     [InlineData("link:1", "1-1", "已在同一战场")]
     [InlineData("link:1", "1-4,4-1", "已在同一战场")]

@@ -15,6 +15,36 @@ namespace Siege.Core.Tests.SimulationHarness;
 public class 可复现回放_链接模式Tests
 {
     [Fact]
+    public void 篡改平移向量或开局棋盘即在对应行分歧()
+    {
+        // 段 F.3：链接按记录的配对（贴边由配对阶段决定）重放，重放出的平移向量随确定性文本逐行比对——篡改日志里某次链接的向量，分歧报在该链接事件那一行；
+        // 篡改首部的开局棋盘，分歧报在首部（第 1 行）。
+        MatchLog original = SimFixtures.Clone(TwoLinkLog.Value);
+        LogEvent link = original.Events.First(e => e.Link is not null);
+        string linkLine = System.Text.Json.JsonSerializer.Serialize(link, LogJson.Options);
+        int expectedLine = Array.IndexOf(original.DeterministicText().Split('\n'), linkLine) + 1;
+        Assert.True(expectedLine > 1, "样本口径：确定性文本里找到链接事件那一行");
+
+        MatchLog shifted = SimFixtures.Clone(original);
+        int at = shifted.Events.FindIndex(e => e.Link is not null);
+        LinkLogEntry entry = shifted.Events[at].Link!;
+        shifted.Events[at] = shifted.Events[at] with { Link = entry with { Shifts = [.. entry.Shifts.Select(s => s.Battlefield == entry.Y ? s with { Dx = s.Dx + 1 } : s)] } };
+        ReplayResult tampered = Replayer.Replay(shifted);
+        Assert.False(tampered.Identical);
+        Assert.Equal(expectedLine, tampered.FirstDivergentLine);
+        Assert.Contains("\"Shifts\"", tampered.Expected!, StringComparison.Ordinal);
+
+        MatchLog boards = SimFixtures.Clone(original);
+        List<BoardEntry> opening = boards.Header.Boards!;
+        opening[0] = opening[0] with { Width = opening[0].Width + 1 };
+        ReplayResult header = Replayer.Replay(boards);
+        Assert.False(header.Identical);
+        Assert.Equal(1, header.FirstDivergentLine);
+
+        Assert.True(Replayer.Replay(original).Identical);   // 反面：未篡改的一致
+    }
+
+    [Fact]
     public void 纯AI局可凭种子加配对复现()
     {
         // 规格 Scenario「纯 AI 局可凭种子加配对复现」：用种子、配置与日志中的配对事件重跑，每一步的链接、征募候选、选择、批次与结算结果完全一致；

@@ -212,8 +212,8 @@ public static class ReportWriter
         sb.AppendLine($"- 同区率（锁定时有棋盘旗数 ≥ 2）：{l.SharedMatches}/{l.Matches}（{Pct(l.SharedShare)}）；开局布局：{Histogram(l.Layouts)}");
         sb.AppendLine($"- 首轮配对分布（棋盘编号 1–5，\"等\" = 等待者）：{Histogram(l.FirstRoundPairings)}");
         sb.AppendLine($"- 各阶段平均大回合数：构筑 {Num(l.BuildRounds)}，首轮交战 {Num(l.FirstFightRounds)}，决赛 {Num(l.FinalRounds)}（到达决赛 {l.FinalMatches} 局）");
-        sb.AppendLine($"- 链接 {l.Links} 次，退化直通道 {l.DegradedLinks} 次（退化率 {Pct(l.DegradedShare)}）");
-        sb.AppendLine($"- 通道长度分布（R3 复核）：{Histogram(l.CorridorLengths)}；决赛战场可落子格数（R4 复核，每局一个）：{Histogram(l.FinalBattlefieldCells)}；终局全图可落子格均值 {Num(l.EndPlayableCells)}");
+        sb.AppendLine($"- 链接（拼接）{l.Links} 次，共享边长度分布：{Histogram(l.SharedEdges)}；整体越界平移 {l.GlobalShifts} 次");
+        sb.AppendLine($"- 决赛合并战场可落子格数（每局一个）：{Histogram(l.FinalBattlefieldCells)}；终局全图可落子格均值 {Num(l.EndPlayableCells)}");
         sb.AppendLine($"- 等待大回合数：全部玩家均值 {Num(l.WaitingMean)}，等待过的 {l.Waiters} 人次均值 {Num(l.WaitingMeanOfWaiters)}，最大 {l.WaitingMax}");
         sb.AppendLine($"- 出局：战场落败 {l.BattlefieldDefeats} 人次，势力归零 {l.PowerZeroEliminations} 人次；整轮 Pass 结算落败 {l.AllPassedDefeats} 人次，其中过早 Pass 落败（结算那一大回合本人 Pass 且手牌仍有子；未逐格核对禁入与部署上限，为上界）{l.PrematurePassDefeats} 人次");
         sb.AppendLine($"- 单个小回合耗时：中位 {Num(l.TurnMedianMs)} ms，最大 {l.TurnMaxMs} ms；整局耗时合计 {l.TotalMatchMs} ms");

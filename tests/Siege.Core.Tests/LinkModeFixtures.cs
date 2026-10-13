@@ -140,27 +140,17 @@ internal static class LinkModeFixtures
     }
 
     /// <summary>
-    /// 把拼接前（开局）坐标 <paramref name="before"/>（位于出生棋盘 <paramref name="zone"/>）沿本局全部链接记录逐次平移到当前坐标（裁决 J3 / J7：
-    /// 每次链接里被贴方与为腾位置而移动的战场各有一条向量；该格所在战场的标识在它作为被贴方合并后变为锚点标识）。
+    /// 把开局坐标 <paramref name="before"/>（位于出生棋盘 <paramref name="zone"/>）沿本局全部链接记录平移到当前坐标——经唯一的换算工具 <see cref="Siege.Sim.Logging.LinkLayout"/>。
     /// </summary>
     internal static Coord Track(this MatchFlow match, Coord before, int zone)
     {
-        int id = zone;
-        Coord c = before;
-        foreach (LinkRecord link in match.Links)
+        var layout = new Siege.Sim.Logging.LinkLayout(match.Board.BaseMap.Boards, match.Links.Select(Siege.Sim.Logging.LinkShiftStep.From));
+        if (layout.ZoneAt(before, 0) != zone)
         {
-            if (link.ShiftOf(id) is { } shift)
-            {
-                c = new Coord(c.X + shift.Dx, c.Y + shift.Dy);
-            }
-
-            if (link.Y == id)
-            {
-                id = link.X;
-            }
+            throw new ArgumentException($"{before.ToNotation()} 不在开局出生棋盘 {zone} 上。", nameof(before));
         }
 
-        return c;
+        return layout.Translate(before, 0, layout.Versions);
     }
 
     /// <summary>出生棋盘 <paramref name="zone"/> 左上角起的相对坐标。</summary>

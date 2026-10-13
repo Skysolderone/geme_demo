@@ -92,7 +92,7 @@ public static class Program
         Console.WriteLine("用法：");
         Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，缺省取地图人数上限>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子，缺省 {DefaultMapId}>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
-        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--links <战场对，如 1-4,2-5，只用于 link:>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出；旧标识族仍可打印，夹具用途）");
+        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--links <出生棋盘对，如 1-4,2-5 或 1-4E,2-5E,1-2N（E 东贴 / N 北贴，不写按阶段推断），只用于 link:>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出；旧标识族仍可打印，夹具用途）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <link:地图种子，缺省 {DefaultMapId}>] [--players <人数，缺省取地图人数上限>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
@@ -314,9 +314,11 @@ public static class Program
     }
 
     /// <summary>
-    /// <c>map --links 1-4,2-5</c>（规格 simulation-harness「map 子命令模拟链接」）：在链接图的初始状态上依次执行给定的链接，打印每一步，返回最终地图。
+    /// <c>map --links 1-4,2-5</c>（规格 simulation-harness「map 子命令模拟链接」，段 F.3 / 裁决 J8-8）：在链接图的初始状态上依次执行给定的拼接，打印每一步（含平移向量），返回最终地图。
     /// 每一项是两块出生棋盘的编号（面向人 1–5）；执行时换算成各自所在战场的标识（= 战场内最小出生棋盘编号），所以已合并的战场可用其中任一块棋盘指代。
-    /// 只用于链接图；两块棋盘已在同一战场、编号越界、格式不对都报错。链接的几何与校验全部由 <see cref="LinkMapGenerator.Link(MapData, int, int)"/> 给出，这里不另算。
+    /// 贴边：可显式写在项尾（<c>1-4E</c> 东贴、<c>1-2N</c> 北贴）；不写时按配对阶段推断——同一串里前面互不重叠的单棋盘配对视为首轮（东贴），
+    /// 一旦某项连到已合并的战场即进入决赛（北贴），之后不写贴边的项都按北贴。
+    /// 只用于链接图；两块棋盘已在同一战场、编号越界、格式不对都报错。拼接的几何与校验全部由 <see cref="LinkMapGenerator.Link(MapData, int, int, LinkSide)"/> 给出，这里不另算。
     /// </summary>
     internal static MapData SimulateLinks(MapData map, string links)
     {
@@ -327,15 +329,19 @@ public static class Program
 
         string[] items = links.Split(',', StringSplitOptions.TrimEntries);
         int step = 0;
+        bool final = false;
         foreach (string item in items)
         {
-            string[] ends = item.Split('-', StringSplitOptions.TrimEntries);
+            LinkSide? explicitSide = item.EndsWith('E') ? LinkSide.East : item.EndsWith('N') ? LinkSide.North : null;
+            string pair = explicitSide is null ? item : item[..^1];
+            string[] ends = pair.Split('-', StringSplitOptions.TrimEntries);
             if (ends.Length != 2
                 || !int.TryParse(ends[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int a)
                 || !int.TryParse(ends[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int b)
                 || a < 1 || b < 1 || a > map.BirthZones.Length || b > map.BirthZones.Length)
             {
-                throw new ArgumentException($"--links 的每一项须为两块出生棋盘的编号 1–{map.BirthZones.Length}，写作 1-4，多项用逗号分隔（如 1-4,2-5）；无法解析 \"{item}\"。");
+                throw new ArgumentException(
+                    $"--links 的每一项须为两块出生棋盘的编号 1–{map.BirthZones.Length}，写作 1-4，可在项尾加 E（东贴）/ N（北贴），多项用逗号分隔（如 1-4,2-5 或 1-4E,2-5E,1-2N）；无法解析 \"{item}\"。");
             }
 
             Battlefields fields = Battlefields.Of(map);
@@ -346,12 +352,14 @@ public static class Program
                 throw new ArgumentException($"--links 第 {step + 1} 项 {item}：出生棋盘 {a} 与 {b} 已在同一战场 {BirthZoneLabel.Of(x)}，不能再链接。");
             }
 
-            // 段 F 最小适配（F.3 再定口径）：两个战场都只含一块出生棋盘按首轮贴东侧，否则按决赛贴北侧。
-            LinkSide side = fields.ById(x)!.BirthZones.Length == 1 && fields.ById(y)!.BirthZones.Length == 1 ? LinkSide.East : LinkSide.North;
+            // 阶段推断：连到已合并战场即进入决赛，此后都按北贴（显式贴边优先）。
+            final |= fields.ById(x)!.BirthZones.Length > 1 || fields.ById(y)!.BirthZones.Length > 1;
+            LinkSide side = explicitSide ?? (final ? LinkSide.North : LinkSide.East);
             LinkResult linked = LinkMapGenerator.Link(map, x, y, side);
             map = linked.Map;
             step++;
-            Console.WriteLine($"链接 #{step}：战场 {BirthZoneLabel.Of(Math.Min(x, y))} + {BirthZoneLabel.Of(Math.Max(x, y))}；地图版本 {map.MapVersion}；{linked.Summary}");
+            Console.WriteLine($"链接 #{step}：战场 {BirthZoneLabel.Of(linked.Anchor)} + {BirthZoneLabel.Of(linked.Mover)}，贴{(side == LinkSide.East ? "东" : "北")}{(explicitSide is null ? "（推断）" : string.Empty)}；地图版本 {map.MapVersion}；{linked.Summary}");
+            Console.WriteLine($"  平移向量：{string.Join("  ", linked.Shifts.Select(s => $"{BirthZoneLabel.Of(s.Battlefield)} ({s.Dx},{s.Dy})"))}");
         }
 
         Console.WriteLine($"已模拟 {step} 次链接。棋盘清单：{string.Join("  ", map.Boards.Select(p => $"{p.Kind}@{p.Origin.ToNotation()} {p.Width}×{p.Height}"))}");

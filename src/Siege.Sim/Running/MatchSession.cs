@@ -355,34 +355,19 @@ public sealed class MatchSession
         var placements = new List<string>();
         var placedCells = new List<Coord>();
         var captures = new List<string>();
-        // 段 F 最小适配：本小回合末尾发生了拼接（board-link-mode J3 / J7）时，拼接前盘面的格要先沿本回合的链接记录平移到新画布再比对
-        // （被贴方与为腾位置而移动的战场各有一条向量；落子与提子记的是拼接后的坐标）。没有链接时与原先逐格比对完全相同，旧模式日志逐字节不变。
-        // 日志里写出平移向量、以及"链接前坐标按链接前布局解释"的回放口径属 F.3。
+        // 本小回合末尾发生了拼接（board-link-mode J3 / J7）时，拼接前盘面的格先经唯一的换算工具 LinkLayout 平移到新画布再比对：
+        // 快照里的落子、提子、改造与活形一律按本小回合结束时（链接之后）的布局记（MatchLog 类注释的版本口径）。没有链接时与原先逐格比对完全相同，旧模式日志逐字节不变。
         Func<Coord, Coord> moved = c => c;
         Func<Coord, Coord?> back = c => c;
+        Func<TerrainEdit, TerrainEdit> movedEdit = e => e;
         IEnumerable<Coord> cells = after.Board.AllCoords();
         if (Match.Links.Count > linksBefore)
         {
-            Battlefields fieldsBefore = Battlefields.Of(before.Board.Map);
-            LinkRecord[] links = [.. Match.Links.Skip(linksBefore)];
-            moved = c =>
-            {
-                int id = fieldsBefore.At(c)!.Id;
-                foreach (LinkRecord link in links)
-                {
-                    if (link.ShiftOf(id) is { } shift)
-                    {
-                        c = new Coord(c.X + shift.Dx, c.Y + shift.Dy);
-                    }
-
-                    if (link.Y == id)
-                    {
-                        id = link.X;
-                    }
-                }
-
-                return c;
-            };
+            var layout = new LinkLayout(Match.Board.BaseMap.Boards, Match.Links.Select(LinkShiftStep.From));
+            int to = Match.Links.Count;
+            moved = c => layout.Translate(c, linksBefore, to);
+            // 两端都随棋盘越出画布原点的场景格栅栏在盘面上已被丢弃（GameBoard.ApplySplice）；日志保留发生时的记法。
+            movedEdit = e => layout.TranslateEdit(e, linksBefore, to) ?? e;
             cells = before.Board.AllCoords().Where(before.Board.Map.IsPlayable);
             Dictionary<Coord, Coord> inverse = cells.ToDictionary(moved, c => c);
             back = c => inverse.TryGetValue(c, out Coord was) ? was : null;
@@ -412,9 +397,9 @@ public sealed class MatchSession
             edits.Add(new TerrainEditEntry
             {
                 Action = e.Edit.Kind.ToString(),
-                Target = e.Edit.ToString(),
+                Target = movedEdit(e.Edit).ToString(),
                 Player = e.Player.Value,
-                Artisan = e.ArtisanCoord.ToNotation(),
+                Artisan = moved(e.ArtisanCoord).ToNotation(),
                 CausedCapture = e.CausedCapture,
                 ViaWorkshop = WritesNewContent(Match.ContentSet) ? e.ViaWorkshop : null,
             });
@@ -828,16 +813,13 @@ public sealed class MatchSession
                             PairingSequence = linked.PairingSequence,
                             X = linked.X,
                             Y = linked.Y,
+                            Side = linked.Side.ToString(),
                             MapVersion = linked.MapVersion,
-                            // 段 F 最小适配：拼接没有公共棋盘 / 通道 / 退化 / 新增信物，退役字段填中性值；日志 schema 改为平移向量属 F.3。
-                            Degraded = false,
-                            PublicBoard = null,
-                            CorridorCells = 0,
-                            CorridorLengths = [],
+                            SharedEdge = linked.SharedEdge,
+                            Shifts = [.. linked.Shifts.Select(s => new BattlefieldShiftEntry { Battlefield = s.Battlefield, Dx = s.Dx, Dy = s.Dy })],
                             // 合并后的战场 = 链接后地图（开局 + 链接，不含改造）里含战场 X 那块出生棋盘的连通分量。同一配对事件里的各对互不相交，
                             // 此刻（整个配对事件执行完）按出生棋盘取仍是这一对合并出的战场；决赛那一条即决赛战场。
                             BattlefieldCells = Battlefields.Of(Match.Board.LinkedMap).All.Single(f => f.BirthZones.Contains(linked.X)).Cells.Length,
-                            NewRelics = [],
                             MapDigest = linked.MapDigest,
                             Summary = linked.Summary,
                         },
@@ -932,6 +914,10 @@ public sealed class MatchSession
             Mode = Match.Mode == MatchMode.Link ? nameof(MatchMode.Link) : null,
             LockedFlagCounts = Match.Mode == MatchMode.Link
                 ? [.. Enumerable.Range(0, Match.Board.BaseMap.BirthZones.Length).Select(z => Match.LockedFlagCounts.GetValueOrDefault(z))]
+                : null,
+            // 段 F.3：开局出生棋盘（离线坐标换算的起点，LinkLayout.Of）；旧模式不写。
+            Boards = Match.Mode == MatchMode.Link
+                ? [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height })]
                 : null,
         };
     }

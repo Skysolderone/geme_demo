@@ -6,8 +6,8 @@ namespace Siege.Sim.Analysis;
 // 本文件属于离线分析输出层：允许浮点（裁决 14）。只读日志对象，不引用任何对局运行时对象。
 
 /// <summary>
-/// 链接模式统计（board-link-mode tasks 3.5 / 规格 match-telemetry「对局日志的记录内容」：同区率、首轮配对分布、各阶段大回合数、退化链接率、等待时长；
-/// 另按负责人要求列终局原因分布、出局原因计数、通道长度与决赛战场可落子格数（裁决 R3 / R4 的复核项）、过早 Pass 落败次数与 AI 小回合耗时）。
+/// 链接模式统计（board-link-mode tasks 3.5 / 规格 match-telemetry「对局日志的记录内容」：同区率、首轮配对分布、各阶段大回合数、等待时长；
+/// 另按负责人要求列终局原因分布、出局原因计数、拼接的共享边长度分布与整体越界平移次数（段 F.3）、决赛合并战场格数、过早 Pass 落败次数与 AI 小回合耗时）。
 /// 只统计首部 <see cref="LogHeader.Mode"/> 为链接模式的纳入局；没有这样的局时整段不出现（旧日志的报告逐字节不变）。
 /// </summary>
 /// <param name="Matches">纳入的链接模式局数（含截断局）。</param>
@@ -20,7 +20,8 @@ namespace Siege.Sim.Analysis;
 /// <param name="FinalRounds">决赛大回合数的均值，只计到达决赛的局（<see cref="FinalMatches"/>）。</param>
 /// <param name="FinalMatches">到达决赛（有决赛链接事件）的局数。</param>
 /// <param name="Links">链接总次数。</param>
-/// <param name="DegradedLinks">其中退化为直通道的次数。</param>
+/// <param name="SharedEdges">每次拼接的共享边长度分布（段 F.3）。</param>
+/// <param name="GlobalShifts">整体越界平移（锚点向量非零，裁决 J8-3）的次数。</param>
 /// <param name="WaitingMean">每名玩家等待大回合数的均值（全部玩家，取最后一个快照）。</param>
 /// <param name="WaitingMeanOfWaiters">等待过（&gt; 0）的玩家的均值。</param>
 /// <param name="WaitingMax">等待大回合数的最大值。</param>
@@ -28,8 +29,7 @@ namespace Siege.Sim.Analysis;
 /// <param name="EndReasons">终局原因分布（含 <c>turn_limit</c>）。</param>
 /// <param name="BattlefieldDefeats">战场落败出局人次。</param>
 /// <param name="PowerZeroEliminations">势力归零出局人次。</param>
-/// <param name="CorridorLengths">全部新增通道的长度分布。</param>
-/// <param name="FinalBattlefieldCells">决赛战场（决赛链接后合并战场）的可落子格数，每局一个样本。</param>
+/// <param name="FinalBattlefieldCells">决赛战场（决赛链接后的合并战场）的可落子格数，每局一个样本。</param>
 /// <param name="EndPlayableCells">每局最后一个快照的全图可落子格（<c>Life.PlayableCells</c>，链接后的分母口径）的均值。</param>
 /// <param name="AllPassedDefeats">在"整轮 Pass"结算中落败的人次。</param>
 /// <param name="PrematurePassDefeats">过早 Pass 落败：在整轮 Pass 结算中落败，且结算那一大回合本人的小回合是 Pass、Pass 后公开手牌类型仍非空（手里还有子）。手里有子不等于有合法可落的格（未逐格核对禁入格与部署上限），故为上界。</param>
@@ -47,7 +47,8 @@ public sealed record LinkModeSection(
     double FinalRounds,
     int FinalMatches,
     int Links,
-    int DegradedLinks,
+    SortedDictionary<int, int> SharedEdges,
+    int GlobalShifts,
     double WaitingMean,
     double WaitingMeanOfWaiters,
     int WaitingMax,
@@ -55,7 +56,6 @@ public sealed record LinkModeSection(
     SortedDictionary<string, int> EndReasons,
     int BattlefieldDefeats,
     int PowerZeroEliminations,
-    SortedDictionary<int, int> CorridorLengths,
     SortedDictionary<int, int> FinalBattlefieldCells,
     double EndPlayableCells,
     int AllPassedDefeats,
@@ -65,8 +65,6 @@ public sealed record LinkModeSection(
     long TotalMatchMs)
 {
     public double SharedShare => Matches == 0 ? double.NaN : (double)SharedMatches / Matches;
-
-    public double DegradedShare => Links == 0 ? double.NaN : (double)DegradedLinks / Links;
 }
 
 /// <summary>链接模式统计的唯一实现（见 <see cref="LinkModeSection"/>）。</summary>
@@ -88,7 +86,7 @@ public static class LinkModeAnalyzer
         var layouts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var pairings = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var endReasons = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        var corridors = new SortedDictionary<int, int>();
+        var sharedEdges = new SortedDictionary<int, int>();
         var finalCells = new SortedDictionary<int, int>();
         var build = new List<double>();
         var firstFight = new List<double>();
@@ -96,7 +94,7 @@ public static class LinkModeAnalyzer
         var waiting = new List<double>();
         var turnMs = new List<double>();
         var endPlayable = new List<double>();
-        int shared = 0, links = 0, degraded = 0, defeats = 0, powerZero = 0, allPassedDefeats = 0, premature = 0, truncated = 0;
+        int shared = 0, links = 0, globalShifts = 0, defeats = 0, powerZero = 0, allPassedDefeats = 0, premature = 0, truncated = 0;
         long turnMax = 0, totalMs = 0;
 
         foreach (MatchLog log in logs)
@@ -127,11 +125,8 @@ public static class LinkModeAnalyzer
             foreach (LinkLogEntry link in log.Events.Where(e => e.Link is not null).Select(e => e.Link!))
             {
                 links++;
-                degraded += link.Degraded ? 1 : 0;
-                foreach (int length in link.CorridorLengths)
-                {
-                    Add(corridors, length);
-                }
+                Add(sharedEdges, link.SharedEdge);
+                globalShifts += link.Shifts.Any(s => s.Battlefield == link.X && (s.Dx != 0 || s.Dy != 0)) ? 1 : 0;
 
                 if (finalPairing is not null && link.PairingSequence == finalPairing.Sequence)
                 {
@@ -170,9 +165,9 @@ public static class LinkModeAnalyzer
         return new LinkModeSection(
             logs.Count, truncated, shared, layouts, pairings,
             Statistics.Mean(build), Statistics.Mean(firstFight), Statistics.Mean(final), final.Count,
-            links, degraded,
+            links, sharedEdges, globalShifts,
             Statistics.Mean(waiting), Statistics.Mean(waiters), waiting.Count == 0 ? 0 : (int)waiting.Max(), waiters.Length,
-            endReasons, defeats, powerZero, corridors, finalCells, Statistics.Mean(endPlayable),
+            endReasons, defeats, powerZero, finalCells, Statistics.Mean(endPlayable),
             allPassedDefeats, premature, Statistics.Median(turnMs), turnMax, totalMs);
     }
 
