@@ -118,6 +118,45 @@ public sealed record MapData
         return null;
     }
 
+    /// <summary>
+    /// 棋盘清单里的出生棋盘，按清单次序；第 z 项即出生棋盘 z（与出生区 z 一一对应、次序一致）。
+    /// 需要"整块棋盘"的使用者（插旗占位、锁定后的可见范围、取景、拾取）读它，不读 <see cref="BirthZones"/>——
+    /// 链接档的出生区是出生棋盘的核心区，不等于整块棋盘（link-map-terrain D1）。
+    /// </summary>
+    public IEnumerable<BoardPlate> BirthBoards() => Boards.Where(b => b.Kind == BoardPlateKind.Birth);
+
+    /// <summary>出生棋盘 <paramref name="zone"/>（<see cref="BirthBoards"/> 的第 <paramref name="zone"/> 项）；清单里没有这一块即抛 <see cref="ArgumentOutOfRangeException"/>。</summary>
+    public BoardPlate BirthBoard(int zone)
+    {
+        int index = 0;
+        foreach (BoardPlate plate in BirthBoards())
+        {
+            if (index++ == zone)
+            {
+                return plate;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(zone), zone, $"地图 {Id} 的棋盘清单里没有出生棋盘 {BirthZoneLabel.Of(zone)}（共 {index} 块）。");
+    }
+
+    /// <summary>外接矩形含该格的出生棋盘编号；不在任何出生棋盘内为 <c>null</c>。</summary>
+    public int? BirthBoardAt(Coord c)
+    {
+        int index = 0;
+        foreach (BoardPlate plate in BirthBoards())
+        {
+            if (plate.Contains(c))
+            {
+                return index;
+            }
+
+            index++;
+        }
+
+        return null;
+    }
+
     /// <summary>按确定性顺序（先行后列，自下而上）枚举全部格子。</summary>
     public IEnumerable<Coord> AllCoords()
     {

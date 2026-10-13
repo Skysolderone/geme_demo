@@ -170,7 +170,8 @@ internal sealed class BoardRenderer
                 Cell cell = board[c];
                 if (placeholders)
                 {
-                    if (map.BirthZoneOf(c) is { } placeholder)
+                    // 占位画整块出生棋盘（棋盘清单），不画出生区——链接档的出生区是核心区（link-map-terrain D1）。
+                    if (map.BirthBoardAt(c) is { } placeholder)
                     {
                         Ink($" {BirthZoneLabel.Number(placeholder)} ", ZoneColor);
                     }
@@ -278,7 +279,7 @@ internal sealed class BoardRenderer
         IReadOnlySet<Coord>? shown;
         if (zones || zone is null)
         {
-            cells = [.. map.BirthZones.SelectMany(z => z)];
+            cells = [.. map.BirthBoards().SelectMany(b => b.Cells())];
             shown = null;
         }
         else

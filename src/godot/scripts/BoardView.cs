@@ -1149,6 +1149,25 @@ public sealed partial class BoardView : Node3D
         const float frameHeight = 0.07f;
         StandardMaterial3D ink = Visuals.Flat(Visuals.BoardGridLine);
 
+        // 出生棋盘 → 出生区编号：取棋盘内任一属于出生区的格，不取左下角格——链接档的出生区是棋盘的核心区，不含左下角（link-map-terrain D1）。
+        int? ZoneOfPlate(BoardPlate plate)
+        {
+            if (plate.Kind != BoardPlateKind.Birth)
+            {
+                return null;
+            }
+
+            foreach (Coord c in plate.Cells())
+            {
+                if (zoneOf.TryGetValue(c, out int z))
+                {
+                    return z;
+                }
+            }
+
+            return null;
+        }
+
         for (int index = 0; index < plates.Length; index++)
         {
             BoardPlate plate = plates[index];
@@ -1187,7 +1206,7 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
-            Color color = plate.Kind == BoardPlateKind.Birth && zoneOf.TryGetValue(plate.Origin, out int zone)
+            Color color = ZoneOfPlate(plate) is int zone
                 ? zoneColorOf(zone)
                 : Visuals.PublicBoardFrame;
             StandardMaterial3D frame = FlatOf(color);
@@ -1261,7 +1280,7 @@ public sealed partial class BoardView : Node3D
             }
 
             // 自证行（board-link-mode F.4，供自检与截图核对"接缝无边框"）：组内棋盘、外轮廓边框段数（中性色）、接缝格线段数；接缝上没有任何边框段。
-            GD.Print($"[plates] 连体棋盘（出生区 {string.Join("+", Enumerable.Range(0, plates.Length).Where(i => groups[i] == group && plates[i].Kind == BoardPlateKind.Birth && zoneOf.ContainsKey(plates[i].Origin)).Select(i => BirthZoneLabel.Number(zoneOf[plates[i].Origin])))}，{cells.Count} 格）：外轮廓边框 {outline} 段，接缝格线 {seams} 段，接缝边框 0 段");
+            GD.Print($"[plates] 连体棋盘（出生区 {string.Join("+", Enumerable.Range(0, plates.Length).Where(i => groups[i] == group && ZoneOfPlate(plates[i]) is not null).Select(i => BirthZoneLabel.Number(ZoneOfPlate(plates[i])!.Value)))}，{cells.Count} 格）：外轮廓边框 {outline} 段，接缝格线 {seams} 段，接缝边框 0 段");
 
             // 某格朝 (dx, dy) 一侧：外轮廓（邻格不在组内）→ 边框；接缝（邻格在组内另一块棋盘上）→ 格线；同一块棋盘内部 → 不画（内部格线已画）。
             int? Kind(Coord c, int dx, int dy)

@@ -176,7 +176,9 @@ public static class LinkMapGenerator
         foreach (int zone in order)
         {
             (int w, int h) = sizes[zone];
-            plates[zone] = new BoardPlate(new Coord(x, Margin), w, h, BoardPlateKind.Birth);
+            // link-map-terrain 第 1 组临时赋值：出生棋盘 z 取主题枚举的第 z 个（高台 / 河流 / 林地 / 栅栏阵 / 混合），不消费随机流，布局逐格不变；
+            // 第 2 组（tasks 2.1）改为在宽高之后用同一条布局流做 Fisher–Yates 排列。
+            plates[zone] = new BoardPlate(new Coord(x, Margin), w, h, BoardPlateKind.Birth, (BoardTheme)zone);
             x += w + Gap;
         }
 

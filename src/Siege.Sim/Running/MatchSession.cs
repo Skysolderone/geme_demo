@@ -887,7 +887,7 @@ public sealed class MatchSession
             ZoneCount = Match.Map.BirthZones.Length,
             // 摘要与平台边长同样取开局地图：首部在终局时才写出，活地形（本局架的桥、烧掉的林）不属于"这是哪张图"。
             MapDigest = MapFile.Digest(Match.Board.BaseMap),
-            ZoneSides = Config.MapPerMatch ? [.. Match.Board.BaseMap.BirthZones.Select(SideOf)] : null,
+            ZoneSides = Config.MapPerMatch ? [.. Match.Board.BaseMap.BirthBoards().Select(SideOf)] : null,
             ArtisanWeight = Match.ArtisanWeight,
             AiEvaluationVersion = EvaluationBreakdown.Version,
             Seed = Seed.ToString(),
@@ -912,7 +912,7 @@ public sealed class MatchSession
                 : null,
             // 段 F.3：开局出生棋盘（离线坐标换算的起点，LinkLayout.Of）；旧模式不写。
             Boards = Match.Mode == MatchMode.Link
-                ? [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height })]
+                ? [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })]
                 : null,
         };
     }
@@ -947,11 +947,8 @@ public sealed class MatchSession
             })];
 
     /// <summary>出生区的边长：格子外接矩形的较长边（生成图与手工边疆图的平台都是整块正方形，平台内无障碍）。</summary>
-    private static int SideOf(IEnumerable<Coord> zone)
-    {
-        Coord[] cells = [.. zone];
-        return Math.Max(cells.Max(c => c.X) - cells.Min(c => c.X), cells.Max(c => c.Y) - cells.Min(c => c.Y)) + 1;
-    }
+    /// <summary>出生棋盘的边长（宽高中的较大者）：取整块棋盘（棋盘清单），不取出生区——链接档的出生区是核心区（link-map-terrain D1）。</summary>
+    private static int SideOf(BoardPlate plate) => Math.Max(plate.Width, plate.Height);
 
     private List<TakeoverEntry> TakeoverEntries() =>
         [.. Runner.Annotations.Takeovers.Select(t => new TakeoverEntry

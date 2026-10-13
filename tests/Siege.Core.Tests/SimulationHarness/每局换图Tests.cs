@@ -89,16 +89,18 @@ public class 每局换图Tests
     [Fact]
     public void 首部的平台边长取自对局本身_与生成器给出的各平台方块一致()
     {
-        // 首部 ZoneSides = 各出生区格子外接矩形的较长边。
+        // 首部 ZoneSides = 各出生棋盘外接矩形的较长边（link-map-terrain 1.4：取整块棋盘，不取出生区——链接档的出生区将缩为核心区）。
         // retire-legacy-maps 1.8：原以 gen:1:p8 起的 4 局、与生成器报告的正方形平台边长比对；生成器删除后改为 link:1 起的 4 局，
         // 测试内独立来源改为"由该局初始地图的出生区格子现算外接矩形较长边"（测试内算式，不调用 SideOf），断言不变。
-        // 变异 MB-12：SideOf 少加 1（把"跨度"当边长）→ 本测试红。
+        // 变异 MB-12：SideOf 少加 1（把"跨度"当边长）→ 本测试红。link-map-terrain 1.4 改写 SideOf 后重跑：SideOf 改为 Max(宽, 高) − 1 → 本类红 1（本测试）。
+        // 注：第 1 组出生区仍等于整块棋盘，"改读棋盘清单"本身在这里区分不出来，到 2.1 出生区改为核心区后才由本测试守住。
         List<MatchLog> logs = BatchRunner.Execute(Rotating(4, "link:1"), parallelism: 1);
 
         for (int i = 0; i < logs.Count; i++)
         {
             Siege.Core.Board.MapData map = MapCatalog.Resolve(logs[i].Header.MapId);
-            int[] expected = [.. map.BirthZones.Select(z => Math.Max(z.Max(c => c.X) - z.Min(c => c.X) + 1, z.Max(c => c.Y) - z.Min(c => c.Y) + 1))];
+            int[] expected = [.. map.Boards.Where(b => b.Kind == Siege.Core.Board.BoardPlateKind.Birth).Select(b => b.Cells().ToArray())
+                .Select(z => Math.Max(z.Max(c => c.X) - z.Min(c => c.X) + 1, z.Max(c => c.Y) - z.Min(c => c.Y) + 1))];
             Assert.Equal(expected, logs[i].Header.ZoneSides);
             Assert.All(logs[i].Header.ZoneSides!, side => Assert.InRange(side, 5, 9));
             Assert.Equal(logs[i].Header.ZoneSides, MatchLog.Parse(logs[i].DeterministicText()).Header.ZoneSides);

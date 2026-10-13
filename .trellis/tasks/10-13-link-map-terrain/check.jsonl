@@ -2,3 +2,5 @@
 {"file": ".trellis/spec/core/boundaries.md", "reason": "边界与单一实现"}
 {"file": ".trellis/spec/core/determinism.md", "reason": "确定性"}
 {"file": ".trellis/spec/core/testing.md", "reason": "测试与变异规范"}
+{"file": "openspec/changes/link-map-terrain/tasks.md", "reason": "按组验收"}
+{"file": "openspec/changes/link-map-terrain/design.md", "reason": "按组验收"}

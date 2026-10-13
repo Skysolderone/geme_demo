@@ -38,7 +38,7 @@ public static class MapFile
             // 空清单不写出：既有地图的导出文件与引入棋盘清单之前逐字节相同（board-map D2）。
             Boards = map.Boards.IsDefaultOrEmpty
                 ? null
-                : [.. map.Boards.Select(b => new BoardDto { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Kind = b.Kind })],
+                : [.. map.Boards.Select(b => new BoardDto { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Kind = b.Kind, Theme = b.Theme?.ToString() })],
             // 版本号为 0（初始地图与全部非链接档）不写出：既有地图的导出文件逐字节不变（board-link-mode 1.1）。
             MapVersion = map.MapVersion == 0 ? null : map.MapVersion,
             Obstacles = Sorted(map.Obstacles),
@@ -89,6 +89,7 @@ public static class MapFile
         List<List<string>> zones = Required(dto.BirthZones, "BirthZones");
         Dictionary<string, RelicDto> relicCells = Required(dto.RelicCells, "RelicCells");
         Dictionary<string, string> exemptions = Required(dto.PocketExemptions, "PocketExemptions");
+        MapProfile profile = ParseProfile(dto.Profile);
 
         return new MapData
         {
@@ -96,8 +97,8 @@ public static class MapFile
             Width = dto.Width,
             Height = dto.Height,
             MaxPlayers = dto.MaxPlayers,
-            Profile = ParseProfile(dto.Profile),
-            Boards = ParseBoards(dto.Boards),
+            Profile = profile,
+            Boards = ParseBoards(dto.Boards, profile),
             MapVersion = ParseMapVersion(dto.MapVersion),
             Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
@@ -160,10 +161,11 @@ public static class MapFile
     }
 
     /// <summary>
-    /// 棋盘清单缺省为空（旧地图文件没有该字段）。这里只管"读得成一块矩形"：类别是已定义的取值、宽高为正；
-    /// 边长区间、棋盘内无障碍、出生棋盘与出生区对应等属于静态校验，不在文件格式里判。
+    /// 棋盘清单缺省为空（旧地图文件没有该字段）。这里只管"读得成一块矩形"：类别是已定义的取值、宽高为正，以及主题字段（link-map-terrain D2）——
+    /// 链接档的出生棋盘 MUST 带主题、其他类别 MUST NOT 带，主题只认枚举名（大小写不敏感，不认数字），缺失或无法识别都指名该棋盘拒绝加载，不取缺省主题。
+    /// 边长区间、棋盘内无障碍、出生棋盘与出生区对应、主题两两不同等属于静态校验，不在文件格式里判。
     /// </summary>
-    private static ImmutableArray<BoardPlate> ParseBoards(List<BoardDto>? boards)
+    private static ImmutableArray<BoardPlate> ParseBoards(List<BoardDto>? boards, MapProfile profile)
     {
         if (boards is null)
         {
@@ -171,6 +173,7 @@ public static class MapFile
         }
 
         ImmutableArray<BoardPlate>.Builder plates = ImmutableArray.CreateBuilder<BoardPlate>(boards.Count);
+        int birth = 0;
         for (int i = 0; i < boards.Count; i++)
         {
             BoardDto dto = Required(boards[i], $"Boards[{i}]");
@@ -184,11 +187,36 @@ public static class MapFile
                 throw new FormatException($"地图文件的 Boards[{i}] 为 {dto.Width}×{dto.Height}：棋盘的宽与高必须为正。");
             }
 
-            plates.Add(new BoardPlate(Coord.Parse(Required(dto.Origin, $"Boards[{i}].Origin")), dto.Width, dto.Height, dto.Kind));
+            plates.Add(new BoardPlate(Coord.Parse(Required(dto.Origin, $"Boards[{i}].Origin")), dto.Width, dto.Height, dto.Kind, ParseTheme(dto, i, ref birth, profile)));
         }
 
         return plates.MoveToImmutable();
     }
+
+    /// <summary>棋盘清单第 <paramref name="index"/> 项的主题；<paramref name="birth"/> 是到这一项为止的出生棋盘计数（出生棋盘编号 = 计数 − 1，用于报文）。</summary>
+    private static BoardTheme? ParseTheme(BoardDto dto, int index, ref int birth, MapProfile profile)
+    {
+        string where = dto.Kind == BoardPlateKind.Birth ? $"Boards[{index}]（出生棋盘 {BirthZoneLabel.Number(birth++)}）" : $"Boards[{index}]（公共棋盘）";
+        if (dto.Theme is null)
+        {
+            return dto.Kind == BoardPlateKind.Birth && profile == MapProfile.Link
+                ? throw new FormatException($"地图文件的 {where} 缺少主题字段 Theme：链接档的出生棋盘必须带主题（{LegalThemes}），不取缺省主题。")
+                : null;
+        }
+
+        if (dto.Kind != BoardPlateKind.Birth)
+        {
+            throw new FormatException($"地图文件的 {where} 带了主题 Theme = {dto.Theme}：只有出生棋盘带主题。");
+        }
+
+        string text = dto.Theme.Trim();
+        return Enum.GetValues<BoardTheme>().Select(t => (BoardTheme?)t).FirstOrDefault(t => string.Equals(t.ToString(), text, StringComparison.OrdinalIgnoreCase))
+            ?? throw new FormatException($"地图文件的 {where} 的主题 Theme 为 \"{dto.Theme}\"：无法识别，主题只能是 {LegalThemes}。");
+    }
+
+    /// <summary>错误信息里的合法主题清单（枚举名与中文名），由 <see cref="BoardTheme"/> 与 <see cref="BoardThemeNames.DisplayName"/> 推出，不另写一份。</summary>
+    private static string LegalThemes =>
+        string.Join(" / ", Enum.GetValues<BoardTheme>().Select(t => $"{t}（{t.DisplayName()}）"));
 
     /// <summary>
     /// 地形字段全部可省略（旧 v2 文件按全平地读入）；写出时按行字符串自上而下（最高行号在前，与看图方向一致）。
@@ -441,7 +469,7 @@ public static class MapFile
         public Dictionary<string, JsonElement> Unknown { get; set; } = [];
     }
 
-    /// <summary>棋盘清单的一项：左下角坐标（围棋记法）、宽、高、类别。</summary>
+    /// <summary>棋盘清单的一项：左下角坐标（围棋记法）、宽、高、类别与主题（link-map-terrain D2，只有出生棋盘带；省略即无主题，无主题时写出也省略）。</summary>
     private sealed class BoardDto
     {
         public string Origin { get; set; } = string.Empty;
@@ -451,6 +479,25 @@ public static class MapFile
         public int Height { get; set; }
 
         public BoardPlateKind Kind { get; set; }
+
+        /// <summary>主题的枚举名。按原文读成字符串（字符串或数字都收），由 <see cref="ParseTheme"/> 判定，使无法识别的取值指名该棋盘报出，而不是反序列化器的笼统异常。</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonConverter(typeof(ThemeTextConverter))]
+        public string? Theme { get; set; }
+    }
+
+    /// <summary>主题字段的原文读取：字符串原样、数字取其十进制文本（随后被拒）；写出为字符串。</summary>
+    private sealed class ThemeTextConverter : JsonConverter<string?>
+    {
+        public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => System.Text.Encoding.UTF8.GetString(reader.ValueSpan),
+            JsonTokenType.Null => null,
+            _ => throw new FormatException($"地图文件的棋盘主题 Theme 不是字符串（{reader.TokenType}）：主题只能是 {LegalThemes}。"),
+        };
+
+        public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options) => writer.WriteStringValue(value);
     }
 
     private sealed class RelicDto

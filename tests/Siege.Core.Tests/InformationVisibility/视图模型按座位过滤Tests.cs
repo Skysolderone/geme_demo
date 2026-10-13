@@ -110,6 +110,60 @@ public class 视图模型按座位过滤Tests
     }
 
     [Fact]
+    public void 占位透传主题()
+    {
+        // match-setup Scenario「插旗阶段的可见信息」（link-map-terrain 裁决 M3）在视图模型上的镜像：5 个占位带主题名，原样取自座位视图（即棋盘清单），表现层不另算。
+        // 样本口径：主题确实存在且两两不同（全是 null 时"相等"恒真）。
+        // 变异验证（link-map-terrain 第 1 组收尾实跑，只跑本类）：M-V1 ForSeat 构造占位时主题恒写 null → 本测试红 1。
+        MatchFlow match = Create();
+        DefaultBoardView board = match.World(P0).Board();
+        BoardTheme?[] expected = [.. Map.Boards.Select(b => b.Theme)];
+        Assert.All(expected, t => Assert.NotNull(t));
+        Assert.Equal(5, expected.Distinct().Count());
+
+        Assert.Equal(expected, board.Placeholders.Select(p => p.Theme));
+        Assert.Equal(match.PublishFor(P0).Placeholders.Select(p => p.Theme), board.Placeholders.Select(p => p.Theme));
+    }
+
+    [Fact]
+    public void 棋盘内有岩石时本座位棋盘仍可见()
+    {
+        // link-map-terrain 第 1 组裁决④：棋盘清单只留"整块可见"的台面，判据不得假设棋盘内每格可落子——战场只含可落子格，棋盘内的岩石永远不在可见格里。
+        // 手写链接档夹具：棋盘 1（下标 0）的左下角 C3 与内部 E6 是岩石，其余格连通。P0 锁定棋盘 1 进入第 1 大回合：
+        // 本座位的棋盘仍留在清单里，其占位已展开；他人棋盘仍只是占位、不在清单里。
+        // 变异验证（link-map-terrain 第 1 组收尾实跑，只跑本类）：M-V2 Boards 过滤改回"棋盘内每格都可见" → 本测试红 1；
+        // M-V3 占位展开改回"左下角格可见" → 本测试红 1。
+        MapData map = RockyMap();
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, All, MatchFixtures.Relics(map), Options);
+        foreach (PlayerId p in All)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 50));
+        }
+
+        match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 4 }[i])));
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
+
+        DefaultBoardView board = match.World(P0).Board();
+        Assert.Equal(23, board.Cells.Length);   // 样本口径：5×5 − 2 块岩石，岩石不在可见格里
+        Assert.DoesNotContain(board.Cells, c => c.Coord == new Coord(2, 2) || c.Coord == new Coord(4, 5));
+        Assert.Equal([map.Boards[0]], board.Boards);
+        BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);
+        Assert.Equal((0, true), (own.Zone, own.Expanded));
+        Assert.Equal(4, board.Placeholders.Count(p => !p.Expanded));
+    }
+
+    /// <summary>链接档手写夹具（link:90002，不发生链接）：五块 5×5 出生棋盘，棋盘 1 的左下角 C3 与内部 E6 是岩石；没有信物格。只经 CreateUnvalidated 建局。</summary>
+    private static MapData RockyMap()
+    {
+        MapData built = LinkMapFixtures.Build("link:90002", LinkMapFixtures.Births);
+        return built with
+        {
+            Obstacles = built.Obstacles.Add(new Coord(2, 2)).Add(new Coord(4, 5)),
+            RelicCells = System.Collections.Immutable.ImmutableDictionary<Coord, RelicCellSpec>.Empty,
+        };
+    }
+
+    [Fact]
     public void 链接后合并战场的格一起可见()
     {
         // information-visibility Scenario「链接后立即可见」：四人四区、脚本配对 (1,2)(4,5) → P0 的视图含棋盘 1 与（平移后的）棋盘 2，占位展开 2 块（段 F：拼接，没有公共棋盘与通道）。

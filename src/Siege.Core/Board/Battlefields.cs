@@ -127,7 +127,8 @@ public sealed class Battlefields
             fields.Add((number, start, cells));
         }
 
-        // 每个分量的出生区与棋盘：出生区按"任一格落在分量内"归属；棋盘按左下角格归属（棋盘内每格都可落子且连通，取一格即可）。
+        // 每个分量的出生区与棋盘：出生区按"任一格落在分量内"归属；棋盘按"棋盘内任一可落子格所在的分量"归属（link-map-terrain D7）——
+        // 棋盘内可落子格连通（链接档清单规则），取按 Cells() 次序的第一个可落子格即可；不再假设左下角格可落子（主题棋盘的角上可以是岩石）。
         var zonesOf = new List<int>[fields.Count];
         var boardsOf = new List<int>[fields.Count];
         for (int i = 0; i < fields.Count; i++)
@@ -156,13 +157,22 @@ public sealed class Battlefields
 
         for (int b = 0; b < map.Boards.Length; b++)
         {
-            Coord origin = map.Boards[b].Origin;
-            if (!map.Contains(origin))
+            Coord? anchor = null;
+            foreach (Coord c in map.Boards[b].Cells())
+            {
+                if (map.IsPlayable(c))
+                {
+                    anchor = c;
+                    break;
+                }
+            }
+
+            if (anchor is not { } cell)
             {
                 continue;
             }
 
-            int number = component[(origin.Y * width) + origin.X];
+            int number = component[(cell.Y * width) + cell.X];
             if (number >= 0)
             {
                 boardsOf[number].Add(b);

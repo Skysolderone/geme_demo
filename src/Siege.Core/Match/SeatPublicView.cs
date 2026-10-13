@@ -8,8 +8,11 @@ using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
 
-/// <summary>一块出生棋盘的占位（编号与外接矩形）：始终公开，不含内部布局（match-setup「开局信息公开范围」）。</summary>
-public sealed record BoardPlaceholder(int Zone, string Origin, int Width, int Height);
+/// <summary>
+/// 一块出生棋盘的占位（编号、整块棋盘的外接矩形与主题）：始终公开，不含内部布局（match-setup「开局信息公开范围」，link-map-terrain 裁决 M3）。
+/// <see cref="Theme"/> 取自棋盘清单；旧模式（没有棋盘清单）为 <c>null</c>。
+/// </summary>
+public sealed record BoardPlaceholder(int Zone, string Origin, int Width, int Height, BoardTheme? Theme);
 
 /// <summary>
 /// 座位可见的一格（information-visibility 第 1–4 项）：坐标（围棋记法）、地形 / 高度 / 地表 / 桥、占用（所属与类型）、格子归属、是否信物格。
@@ -103,7 +106,8 @@ public sealed partial class MatchFlow
         ImmutableHashSet<Coord> visible = !link
             ? [.. Board.AllCoords().Where(Board.Map.IsPlayable)]
             : zone is null ? []
-            : Phase == MatchPhase.FlagPlanting ? Board.Map.BirthZones[zone.Value]
+            // 插旗阶段锁定后只公开这一块出生棋盘的布局：取整块棋盘（棋盘清单），不是出生区——链接档的出生区是核心区（link-map-terrain D1）。
+            : Phase == MatchPhase.FlagPlanting ? [.. Board.Map.BirthBoard(zone.Value).Cells()]
             : [.. PublicRules.BattlefieldOf(Board, zone.Value).Cells];
         bool SameField(PlayerId p) => !link || (battlefield is { } id && _records[p].BirthZone is { } z && PublicRules.BattlefieldOf(Board, z).Id == id);
 
@@ -142,9 +146,13 @@ public sealed partial class MatchFlow
         return new SeatPublicView(
             seat, Board.BaseMap.Id, Seed.ToString(), Mode, Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order,
             CarryInOut, [.. CarryIns.Select(kv => new SeatCarryInView(kv.Key, kv.Value))], battlefield,
-            // 占位取当前地图的出生区（拼接后被平移方与为腾位置而移动的棋盘坐标已变，裁决 J3 / J7），不读开局图。
-            [.. Board.Map.BirthZones.Select((cells, z) => new BoardPlaceholder(z, new Coord(cells.Min(c => c.X), cells.Min(c => c.Y)).ToNotation(),
-                cells.Max(c => c.X) - cells.Min(c => c.X) + 1, cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1))],
+            // 占位取当前地图的出生棋盘（拼接后被平移方与为腾位置而移动的棋盘坐标已变，裁决 J3 / J7），不读开局图。
+            // 链接模式取棋盘清单的整块外接矩形与主题（match-setup「占位尺寸取整块棋盘」，link-map-terrain D1 / D7），不取出生区（核心区）；
+            // 旧模式没有棋盘清单，仍按出生区的外接矩形给出，与引入棋盘清单之前逐字节相同（旧模式的占位不被任何呈现读取）。
+            link
+                ? [.. Board.Map.BirthBoards().Select((plate, z) => new BoardPlaceholder(z, plate.Origin.ToNotation(), plate.Width, plate.Height, plate.Theme))]
+                : [.. Board.Map.BirthZones.Select((cells, z) => new BoardPlaceholder(z, new Coord(cells.Min(c => c.X), cells.Min(c => c.Y)).ToNotation(),
+                    cells.Max(c => c.X) - cells.Min(c => c.X) + 1, cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1, null))],
             cells, fences, relics, groups, players,
             [.. _settlements.Select(s => new SeatSettlementView(s.Battlefield, s.MajorRound, s.Winner))],
             [.. _links.Select(l => new SeatLinkView(l.Sequence, l.X, l.Y))],

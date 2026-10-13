@@ -276,8 +276,11 @@ public sealed class MatchSession
         return CarrySettled;
     }
 
-    /// <summary>某格属于哪个出生区；不是出生区格为 <c>null</c>。</summary>
-    public int? BirthZoneAt(Coord coord) => Match.Map.BirthZoneOf(coord);
+    /// <summary>
+    /// 某格落在哪块出生棋盘上（插旗时点占位选棋盘）；不在任何出生棋盘内为 <c>null</c>。取整块棋盘（棋盘清单），
+    /// 不取出生区——链接档的出生区是核心区，点在核心区之外的棋盘格上也要选中这块（link-map-terrain D1）。
+    /// </summary>
+    public int? BirthZoneAt(Coord coord) => Match.Map.BirthBoardAt(coord);
 
     /// <summary>
     /// 插旗：本机玩家选定出生棋盘，其余玩家的棋盘由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：链接模式下三名 AI 用 <c>flag-pick</c> 子流盲选，

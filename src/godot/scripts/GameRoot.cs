@@ -1193,7 +1193,8 @@ public sealed partial class GameRoot : Node3D
                 {
                     // 构筑期（第 1–3 大回合）：合法落子范围只在自己的出生棋盘内（范围由 Core 唯一实现给出，这里只比对）。
                     _auditedBuildRound = round;
-                    Flow(_audit.BuildingRange(round, _session.MyLegalRange, _session.Match.Map.BirthZones[zone]));
+                    // 比对的是整块出生棋盘（棋盘清单），不是出生区（链接档的出生区是核心区，link-map-terrain D1）。
+                    Flow(_audit.BuildingRange(round, _session.MyLegalRange, [.. _session.Match.Map.BirthBoard(zone).Cells()]));
                 }
 
                 AutoStep();

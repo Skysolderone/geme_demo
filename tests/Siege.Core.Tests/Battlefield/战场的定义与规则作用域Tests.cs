@@ -172,4 +172,25 @@ public class 战场的定义与规则作用域Tests
         Assert.Contains(split.All, f => f.Id == -1 && f.Cells.SequenceEqual([pick]));
         Assert.Null(split.At(Adjacency.Neighbors(v5.Width, v5.Height, pick)[0]));
     }
+
+    [Fact]
+    public void 棋盘左下角是岩石时按棋盘内可落子格归属()
+    {
+        // link-map-terrain design D7（battlefield 接口）/ tasks 1.3：战场到棋盘的归属取"棋盘内任一可落子格所在的分量"，不再假设左下角格可落子。
+        // 手写链接档图：第 3 块出生棋盘（下标 2）的左下角改成岩石，其余格仍连通。旧实现按左下角格取分量 → 该棋盘不属于任何战场。
+        // 变异验证（link-map-terrain 1.3 实跑，只跑本类）：M-T1 Battlefields.Compute 的棋盘归属改回取 plate.Origin 的分量 → 本测试红 1，本类其余不红。
+        MapData initial = LinkMapFixtures.Initial();
+        BoardPlate plate = initial.Boards[2];
+        MapData map = initial with { Obstacles = initial.Obstacles.Add(plate.Origin) };
+        Assert.False(map.IsPlayable(plate.Origin));
+
+        Battlefields fields = Battlefields.Of(map);
+        Assert.Equal(5, fields.Count);
+        Siege.Core.Board.Battlefield field = fields.ById(2)!;
+        Assert.Equal([2], field.Boards);
+        Assert.Equal(plate.Cells().Where(map.IsPlayable).Order(), field.Cells);
+
+        // 每块棋盘恰属于一个战场。
+        Assert.Equal(Enumerable.Range(0, 5), fields.All.SelectMany(f => f.Boards).Order());
+    }
 }

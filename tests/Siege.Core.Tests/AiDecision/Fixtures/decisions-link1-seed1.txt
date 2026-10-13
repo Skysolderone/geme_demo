@@ -1,5 +1,5 @@
 # AI 决策序列基线（board-link-mode 3.4，裁决 C5）
-# map=link:1 digest=7A6996E5DA18C310E26686B2857550EC518A15E195D0328F326173C216A84223 seed=1 players=4 difficulty=Standard zones=3,3,1,0
+# map=link:1 digest=0ABD4F08ABC973FE3E01D5E2D611134924393F729F06828D74F1DD828379B843 seed=1 players=4 difficulty=Standard zones=3,3,1,0
 # cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10 mode=Link pairing=script（缺省：升序两两配）
 # maxMajorRounds=12
 # 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算
@@ -16,7 +16,7 @@
 3	P0	R:0:Fortress,3:Line,1:Basic D:F3:Line,E4:Fortress,E8:Basic
 3	P1	R:0:Basic,1:Basic,2:Sentry D:D7:Sentry,G7:Basic,D9:Synergy
 P	1	FirstRound	round=4	candidates=0,1	pairs=0-1	waiter=-	source=script
-L	1	pairing=1	0-1	side=East	version=1	shared=5	shifts=0:0:0,1:-11:0,2:0:0,3:0:0,4:5:0	digest=7DB761F60BEFDAD79F92D4E0BC143344E90C4C4A023A7D1A23190C7302BADEEE
+L	1	pairing=1	0-1	side=East	version=1	shared=5	shifts=0:0:0,1:-11:0,2:0:0,3:0:0,4:5:0	digest=818AE3BA57838D293AFAD81EDE8CCD7457A564ED09352E023056F3D76909500C
 4	P3	R:2:Fortress,4:Fortress,0:Basic D:X3:Basic,V5:Fortress,Z5:Sentry,Z7:Fortress
 4	P1	R:0:Basic,1:Bannerman,2:Basic D:G4:Basic,C6:Basic,C8:Bannerman,E9:Basic
 4	P2	R:0:Fortress,1:Basic,2:Boundary,3:Basic D:AB7:Boundary,AC7:Synergy,AD7:Fortress
@@ -38,7 +38,7 @@ L	1	pairing=1	0-1	side=East	version=1	shared=5	shifts=0:0:0,1:-11:0,2:0:0,3:0:0,
 8	P2	R:1:Synergy,0:Line D:pass
 8	P0	R:0:Fortress,3:Fortress,4:Fortress D:pass
 P	2	Final	round=9	candidates=0,3	pairs=0-3	waiter=-	source=script
-L	2	pairing=2	0-3	side=North	version=2	shared=5	shifts=0:0:0,2:0:0,3:18:6,4:0:0	digest=01A2C638925C036E82B16DEEA84CF68D15F57308B8E9904F9270EAB7D9B085D8
+L	2	pairing=2	0-3	side=North	version=2	shared=5	shifts=0:0:0,2:0:0,3:18:6,4:0:0	digest=8A1E67C59B46B0C704AED23B6D88B28CE1E1B0A0B72863570FD9718D0DC81EB7
 S	1	round=8	field=0	AllPassed	winner=P3	1.P3=101 2.P2=54
 S	2	round=8	field=3	AllPassed	winner=P1	1.P1=108 2.P0=24
 9	P1	R:2:Synergy,4:Multiplier,0:Fortress D:pass

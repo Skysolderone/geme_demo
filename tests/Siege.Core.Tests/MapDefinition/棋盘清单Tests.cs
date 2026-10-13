@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Nodes;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Match;
@@ -132,6 +133,75 @@ public class 棋盘清单Tests
             () => MapFile.FromJson(json.Replace("\"Kind\": \"Birth\"", "\"Kind\": 9", StringComparison.Ordinal))).Message, StringComparison.Ordinal);
         Assert.Contains("Boards", Assert.Throws<FormatException>(
             () => MapFile.FromJson(json.Replace("\"Width\": 5,", "\"Width\": 0,", StringComparison.Ordinal))).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 主题读写往返()
+    {
+        // 规格 Scenario（link-map-terrain map-definition「棋盘清单」）：把 link:1 的初始地图导出为文件再读入 → 5 块出生棋盘的主题逐块相同。
+        // 样本口径：主题确实存在且两两不同（全是 null 时"逐块相同"恒真）。
+        // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F1 ToJson 不写 Theme → 本类红 8（本测试，及凡经 link:1 / 带主题夹具文件往返的 7 条：读回缺主题被拒）；
+        // M-F2 ParseBoards 读入时丢掉主题（恒取 null）→ 本类红 2（本测试、棋盘清单项的文件写法）。
+        MapData map = MapCatalog.Resolve("link:1");
+        BoardTheme?[] themes = [.. map.Boards.Select(b => b.Theme)];
+        Assert.Equal(5, themes.Length);
+        Assert.All(themes, t => Assert.NotNull(t));
+        Assert.Equal(5, themes.Distinct().Count());
+
+        string json = MapFile.ToJson(map);
+        Assert.Contains($"\"Theme\": \"{themes[2]}\"", json, StringComparison.Ordinal);   // 主题写成枚举名
+        MapData restored = MapFile.FromJson(json);
+        Assert.Equal(themes, restored.Boards.Select(b => b.Theme));
+        Assert.Equal(map.Boards, restored.Boards);
+        Assert.Equal(json, MapFile.ToJson(restored));
+    }
+
+    [Fact]
+    public void 缺少主题被拒()
+    {
+        // 规格 Scenario：读入一张链接档地图文件，其某块出生棋盘没有主题字段 → 拒绝加载并指出该棋盘；MUST NOT 静默取缺省主题。
+        // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F3 ParseBoards 删去"链接档出生棋盘缺主题"的拒绝 → 本测试红 1。
+        JsonObject root = JsonNode.Parse(MapFile.ToJson(MapCatalog.Resolve("link:1")))!.AsObject();
+        Assert.True(root["Boards"]![2]!.AsObject().Remove("Theme"));
+
+        string message = Assert.Throws<FormatException>(() => MapFile.FromJson(root.ToJsonString())).Message;
+        Assert.Contains("Boards[2]", message, StringComparison.Ordinal);
+        Assert.Contains("出生棋盘 3", message, StringComparison.Ordinal);
+        Assert.Contains("Theme", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 非出生棋盘带主题被拒()
+    {
+        // 规格（map-definition「棋盘清单」）：链接档的出生棋盘 MUST 带主题；其他类别 MUST NOT 带主题。
+        // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F4 ParseBoards 删去"非出生棋盘带主题"的拒绝 → 本测试红 1。
+        BoardPlate open = new(new Coord(2, 2), 5, 5, BoardPlateKind.Public, BoardTheme.River);
+        string json = MapFile.ToJson(LinkMapFixtures.Initial() with { Boards = [.. LinkMapFixtures.Births, open] });
+
+        string message = Assert.Throws<FormatException>(() => MapFile.FromJson(json)).Message;
+        Assert.Contains("Boards[5]", message, StringComparison.Ordinal);
+        Assert.Contains("Theme", message, StringComparison.Ordinal);
+
+        // 反面：同一块公共棋盘不带主题即可读回。
+        BoardPlate plain = open with { Theme = null };
+        Assert.Equal(plain, MapFile.FromJson(MapFile.ToJson(LinkMapFixtures.Initial() with { Boards = [.. LinkMapFixtures.Births, plain] })).Boards[^1]);
+    }
+
+    [Theory]
+    [InlineData("\"Lava\"")]
+    [InlineData("1")]
+    [InlineData("\"\"")]
+    public void 主题取值无法识别被拒(string raw)
+    {
+        // 规格：主题取值无法识别 MUST 拒绝加载，MUST NOT 静默取缺省主题；数字不按枚举序号读（只认名字）。
+        // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F5 主题改按 Enum.TryParse + IsDefined 解析（接受数字）→ 本类红 1（"1" 一条）。
+        string json = MapFile.ToJson(MapCatalog.Resolve("link:1"));
+        JsonObject root = JsonNode.Parse(json)!.AsObject();
+        root["Boards"]![3]!["Theme"] = JsonNode.Parse(raw);
+
+        string message = Assert.Throws<FormatException>(() => MapFile.FromJson(root.ToJsonString())).Message;
+        Assert.Contains("Boards[3]", message, StringComparison.Ordinal);
+        Assert.Contains("出生棋盘 4", message, StringComparison.Ordinal);
     }
 
     /// <summary>

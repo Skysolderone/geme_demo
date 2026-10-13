@@ -1,12 +1,12 @@
-> 前置：负责人对 design.md「Open Questions」Q1–Q5 批注。下列任务按缺省建议编写。
+> 负责人 2026-10-14：design.md「Open Questions」Q1–Q5 全部按建议，派发方式 A。
 > 每组单独提交：组内全部完成，且 `dotnet build siege.sln -c Release` 零警告零错误、`dotnet test -c Release` 全绿，才进入下一组。新守门要做变异验证（`.trellis/spec/core/testing.md`）。
 
 ## 1. 数据模型与出生区语义（design D1 / D2）
 
-- [ ] 1.1 新增主题枚举（高台 / 河流 / 林地 / 栅栏阵 / 混合）与 `BoardPlate.Theme`，地图文件随棋盘清单读写主题。先红后绿。验收：单元测试覆盖三种情况——`link:1` 导出再读入主题逐块相同；链接档出生棋盘缺主题被拒并指出该棋盘；非出生棋盘带主题被拒（算例：`map-definition`「主题读写往返」「缺少主题被拒」）
-- [ ] 1.2 用 codegraph 列全 `MapData.BirthZones` 的调用者（Core / Sim / Presentation / Godot），逐个标注"出生区"或"整块棋盘"，清单写入 `.trellis/tasks/10-13-link-map-terrain/implement.md`。验收：清单覆盖全部调用者（人工检查）
-- [ ] 1.3 `Battlefields` 的棋盘归属改为"棋盘内任一可落子格所在的分量"。先红：构造一块左下角是岩石的手写链接档棋盘，旧实现归属出错；后绿。验收：单元测试通过并做变异验证（还原成取左下角格后变红）
-- [ ] 1.4 按 1.2 清单把"整块棋盘"类使用者改读 `Boards`：公开视图的占位（`SeatPublicView`）、Sim `MatchSession` 的 `ZoneSides`、Sim 打印与终端版占位渲染。验收：单元测试覆盖算例——宽 8 高 6 的棋盘占位为 8×6、左下角与棋盘一致（`match-setup`「占位尺寸取整块棋盘」）；在纯平地图上，这一步前后 `link:1` 的对局日志逐字节不变（此时出生区仍等于整块棋盘）
+- [x] 1.1 新增主题枚举（高台 / 河流 / 林地 / 栅栏阵 / 混合）与 `BoardPlate.Theme`，地图文件随棋盘清单读写主题。先红后绿。验收：单元测试覆盖三种情况——`link:1` 导出再读入主题逐块相同；链接档出生棋盘缺主题被拒并指出该棋盘；非出生棋盘带主题被拒（算例：`map-definition`「主题读写往返」「缺少主题被拒」）
+- [x] 1.2 用 codegraph 列全 `MapData.BirthZones` 的调用者（Core / Sim / Presentation / Godot），逐个标注"出生区"或"整块棋盘"，清单写入 `.trellis/tasks/10-13-link-map-terrain/implement.md`。验收：清单覆盖全部调用者（人工检查）
+- [x] 1.3 `Battlefields` 的棋盘归属改为"棋盘内任一可落子格所在的分量"。先红：构造一块左下角是岩石的手写链接档棋盘，旧实现归属出错；后绿。验收：单元测试通过并做变异验证（还原成取左下角格后变红）
+- [x] 1.4 按 1.2 清单把"整块棋盘"类使用者改读 `Boards`：公开视图的占位（`SeatPublicView`）、Sim `MatchSession` 的 `ZoneSides`、Sim 打印与终端版占位渲染。验收：单元测试覆盖算例——宽 8 高 6 的棋盘占位为 8×6、左下角与棋盘一致（`match-setup`「占位尺寸取整块棋盘」）；在纯平地图上，这一步前后 `link:1` 的对局日志逐字节不变（此时出生区仍等于整块棋盘）
 
 ## 2. 生成器（design D3–D5）
 

@@ -285,6 +285,28 @@ public class 对局日志的记录内容_链接模式Tests
     }
 
     [Fact]
+    public void 开局棋盘主题经日志往返逐块相同()
+    {
+        // link-map-terrain 第 1 组裁决②：日志首部的开局棋盘带主题（枚举名），JSON Lines 往返后逐块相同；LinkLogLayout 从日志重建的棋盘带回主题。
+        // 样本口径：主题确实存在且两两不同（全是 null 时"逐块相同"恒真）。
+        // 变异验证（link-map-terrain 第 1 组收尾实跑，只跑本类）：M-L1 MatchSession 写首部时不写 Theme → 本测试红 1；
+        // M-L2 LinkLogLayout.Of 重建时丢掉主题 → 本测试红 1。
+        (MatchFlow match, MatchLog log) = Play([0, 1, 2, 3], stoneRounds: 1);
+        BoardTheme?[] expected = [.. match.Board.BaseMap.Boards.Select(b => b.Theme)];
+        Assert.Equal(5, expected.Length);
+        Assert.All(expected, t => Assert.NotNull(t));
+        Assert.Equal(5, expected.Distinct().Count());
+
+        string text = log.FullText();
+        Assert.Contains($"\"Theme\":\"{expected[1]}\"", text, StringComparison.Ordinal);   // 写成枚举名
+        MatchLog parsed = MatchLog.Parse(text);
+        Assert.Equal(expected, parsed.Header.Boards!.Select(b => b.Theme));
+
+        LinkLayout layout = LinkLogLayout.Of(parsed);
+        Assert.Equal(expected, Enumerable.Range(0, 5).Select(z => layout.BoardAt(z, 0).Theme));
+    }
+
+    [Fact]
     public void 旧模式日志不写链接模式字段()
     {
         // 实现裁决 C3：Legacy 对局的日志写出逐字节不变——新字段一律只在链接模式写出（逐字节由既有黄金哈希守住，这里守"键不出现"）。

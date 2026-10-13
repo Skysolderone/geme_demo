@@ -23,7 +23,7 @@ public static class LinkLogLayout
         ArgumentNullException.ThrowIfNull(log);
         List<BoardEntry> boards = log.Header.Boards ?? throw new FormatException($"日志 {log.Header.MapId} 的首部没有开局棋盘（Boards），不是链接模式的日志。");
         return new LinkLayout(
-            boards.Select((b, z) => new BoardPlate(Coord.Parse(b.Origin), b.Width, b.Height, BoardPlateKind.Birth)),
+            boards.Select((b, z) => new BoardPlate(Coord.Parse(b.Origin), b.Width, b.Height, BoardPlateKind.Birth, b.Theme)),
             log.Events.Where(e => e.Link is not null).OrderBy(e => e.Seq).Select(e => StepOf(e.Link!)));
     }
 

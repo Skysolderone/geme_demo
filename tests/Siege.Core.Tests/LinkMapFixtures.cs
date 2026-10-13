@@ -10,14 +10,17 @@ namespace Siege.Core.Tests;
 /// </summary>
 internal static class LinkMapFixtures
 {
-    /// <summary>五块 5×5 出生棋盘一字排开：x = 2 / 10 / 18 / 26 / 34，y = 2，间距 3。下标即出生区编号。</summary>
+    /// <summary>
+    /// 五块 5×5 出生棋盘一字排开：x = 2 / 10 / 18 / 26 / 34，y = 2，间距 3。下标即出生区编号。
+    /// 各带一个主题（link-map-terrain 1.1：链接档出生棋盘读入时缺主题被拒，夹具经文件往返的测试因此要带上）；主题只用于生成、校验与呈现，不影响这里的任何几何。
+    /// </summary>
     internal static readonly ImmutableArray<BoardPlate> Births =
     [
-        new(new Coord(2, 2), 5, 5, BoardPlateKind.Birth),
-        new(new Coord(10, 2), 5, 5, BoardPlateKind.Birth),
-        new(new Coord(18, 2), 5, 5, BoardPlateKind.Birth),
-        new(new Coord(26, 2), 5, 5, BoardPlateKind.Birth),
-        new(new Coord(34, 2), 5, 5, BoardPlateKind.Birth),
+        new(new Coord(2, 2), 5, 5, BoardPlateKind.Birth, BoardTheme.Plateau),
+        new(new Coord(10, 2), 5, 5, BoardPlateKind.Birth, BoardTheme.River),
+        new(new Coord(18, 2), 5, 5, BoardPlateKind.Birth, BoardTheme.Forest),
+        new(new Coord(26, 2), 5, 5, BoardPlateKind.Birth, BoardTheme.Palisade),
+        new(new Coord(34, 2), 5, 5, BoardPlateKind.Birth, BoardTheme.Mixed),
     ];
 
     /// <summary>41×9 的链接档初始图：只有 5 块出生棋盘，各 2 个信物格，其余全部障碍；可落子 125、信物 10。</summary>
@@ -30,10 +33,10 @@ internal static class LinkMapFixtures
         "test-link-5",
         [
             Births[0],
-            new(new Coord(7, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(15, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(23, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(31, 2), 5, 5, BoardPlateKind.Birth),
+            Births[1] with { Origin = new Coord(7, 2) },
+            Births[2] with { Origin = new Coord(15, 2) },
+            Births[3] with { Origin = new Coord(23, 2) },
+            Births[4] with { Origin = new Coord(31, 2) },
         ],
         mapVersion: 1);
 

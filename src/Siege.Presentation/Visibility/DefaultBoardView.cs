@@ -93,10 +93,10 @@ public enum PlacementBlock
 
 /// <summary>
 /// 一块出生棋盘的占位（board-link-mode D4 / D9；规格 match-setup「开局信息公开范围」、visual-style-baseline「未展开区域的可视表现」）：
-/// 编号（0 起，面向人的编号经 <see cref="BirthZoneLabel"/>）、外接矩形（左下角原点与边长），以及对本座位是否已展开、是否是本座位所在的那块。
-/// 未展开的占位只有外接矩形，MUST NOT 带内部布局（格、信物格）；渲染层只能画边框与编号。全部整数，原样取自按座位视图的 <see cref="BoardPlaceholder"/>。
+/// 编号（0 起，面向人的编号经 <see cref="BirthZoneLabel"/>）、外接矩形（左下角原点与边长）、对本座位是否已展开、是否是本座位所在的那块，以及主题（link-map-terrain 裁决 M3）。
+/// 未展开的占位只有外接矩形与主题，MUST NOT 带内部布局（格、信物格）；渲染层只能画边框、编号与主题名。全部原样取自按座位视图的 <see cref="BoardPlaceholder"/>，表现层不另算。
 /// </summary>
-public sealed record BoardPlaceholderView(int Zone, Coord Origin, int Width, int Height, bool Expanded, bool Own)
+public sealed record BoardPlaceholderView(int Zone, Coord Origin, int Width, int Height, bool Expanded, bool Own, BoardTheme? Theme)
 {
     /// <summary>外接矩形内的全部格（渲染占位台面与拾取用；不是棋盘布局——出生棋盘本就是实心矩形）。</summary>
     public IEnumerable<Coord> Cells() =>
@@ -181,8 +181,9 @@ public sealed record DefaultBoardView(
     /// <summary>
     /// 按座位过滤（board-link-mode 实现裁决 B4 在表现层的镜像，information-visibility「其他战场不可见」「数据层过滤」）：
     /// 只保留 <paramref name="seat"/> 可见的格（<see cref="SeatPublicView.Cells"/>，即本座位所在战场；插旗阶段为本座位已选的那块、未选时为空），
-    /// 棋盘清单只留整块可见的台面，栅栏两端可见、改造的目标格 / 边可见才保留；<see cref="Placeholders"/> 取 5 块出生棋盘的占位，
-    /// 已展开 = 其原点格可见（出生棋盘整块一起展开），本座位所在 = 编号等于 <paramref name="ownZone"/>。
+    /// 棋盘清单只留整块可见的台面（棋盘内的<b>可落子格</b>全部可见；棋盘内的岩石 / 未架桥深水不属于任何战场、本就不在可见格里，不作判据，link-map-terrain 第 1 组裁决④），
+    /// 栅栏两端可见、改造的目标格 / 边可见才保留；<see cref="Placeholders"/> 取 5 块出生棋盘的占位，
+    /// 已展开 = 外接矩形内有可见格（出生棋盘整块一起展开；不假设左下角格可落子），本座位所在 = 编号等于 <paramref name="ownZone"/>，主题原样透传。
     /// 旧模式（<see cref="SeatPublicView.Mode"/> 不是 <see cref="MatchMode.Link"/>）原样返回：全图可见、没有占位，与引入本方法之前逐项相同。
     /// 本方法不读地图、不判规则，只按座位视图给出的坐标做集合过滤。
     /// </summary>
@@ -195,12 +196,14 @@ public sealed record DefaultBoardView(
         }
 
         HashSet<Coord> visible = [.. seat.Cells.Select(c => Coord.Parse(c.Coord))];
+        HashSet<Coord> playable = [.. Cells.Where(c => c.Terrain == Terrain.Playable).Select(c => c.Coord)];
         ImmutableArray<BoardPlaceholderView> placeholders =
         [
             .. seat.Placeholders.Select(p =>
             {
                 Coord origin = Coord.Parse(p.Origin);
-                return new BoardPlaceholderView(p.Zone, origin, p.Width, p.Height, visible.Contains(origin), ownZone == p.Zone);
+                var rect = new BoardPlate(origin, p.Width, p.Height, BoardPlateKind.Birth);
+                return new BoardPlaceholderView(p.Zone, origin, p.Width, p.Height, rect.Cells().Any(visible.Contains), ownZone == p.Zone, p.Theme);
             }),
         ];
         return this with
@@ -208,7 +211,7 @@ public sealed record DefaultBoardView(
             Cells = [.. Cells.Where(c => visible.Contains(c.Coord))],
             Fences = [.. Fences.Where(f => visible.Contains(f.A) && visible.Contains(f.B))],
             Edits = [.. Edits.Where(e => e.Kind == TerrainEditKind.Fence ? visible.Contains(e.Edge.A) && visible.Contains(e.Edge.B) : visible.Contains(e.Cell))],
-            Boards = [.. Boards.Where(b => b.Cells().All(visible.Contains))],
+            Boards = [.. Boards.Where(b => b.Cells().Where(playable.Contains).All(visible.Contains))],
             Placeholders = placeholders,
         };
     }

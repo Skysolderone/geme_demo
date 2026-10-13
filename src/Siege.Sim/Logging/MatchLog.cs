@@ -983,6 +983,9 @@ public sealed record BoardEntry
     public int Width { get; init; }
 
     public int Height { get; init; }
+
+    /// <summary>主题（link-map-terrain 第 1 组裁决②，写成枚举名）；没有主题的棋盘（手写夹具）不写出。只供离线统计与重建，不参与回放比对之外的任何计算。</summary>
+    public Siege.Core.Board.BoardTheme? Theme { get; init; }
 }
 
 /// <summary>一次战场结算（match-telemetry 第 10 项）：大回合、战场标识、原因（<c>AllPassed</c> / <c>BoardFull</c> / <c>Attrition</c>）、名次与各玩家势力、胜者。</summary>

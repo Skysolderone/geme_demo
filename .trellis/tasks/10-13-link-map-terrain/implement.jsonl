@@ -5,3 +5,9 @@
 {"file": ".trellis/spec/core/determinism.md", "reason": "地图只用布局子流"}
 {"file": ".trellis/spec/core/coordinates.md", "reason": "核心区与外圈坐标"}
 {"file": ".trellis/spec/core/testing.md", "reason": "先红后绿、变异验证"}
+{"file": "openspec/changes/link-map-terrain/proposal.md", "reason": "link-map-terrain change 产物"}
+{"file": "openspec/changes/link-map-terrain/design.md", "reason": "link-map-terrain change 产物"}
+{"file": "openspec/changes/link-map-terrain/tasks.md", "reason": "link-map-terrain change 产物"}
+{"file": "openspec/changes/link-map-terrain/specs/link-map-generation/spec.md", "reason": "link-map-terrain change 产物"}
+{"file": "openspec/changes/link-map-terrain/specs/map-definition/spec.md", "reason": "link-map-terrain change 产物"}
+{"file": "openspec/changes/link-map-terrain/specs/match-setup/spec.md", "reason": "link-map-terrain change 产物"}
