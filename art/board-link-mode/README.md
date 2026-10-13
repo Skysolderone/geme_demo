@@ -7,8 +7,8 @@
 | `new-game` | `--map-select --screenshot=…` | 2 | 新局界面：背景 5 块占位一字排开，面板显示 `link:<种子>`，没有棋盘布局 |
 | `flags-placeholders` | `--screenshot=… --overview`（不带 `--auto-demo`，停在插旗） | 2 | 插旗阶段：5 个占位 + 编号一字排开（间距 3），没有任何格 |
 | `locked-own-board` | `--auto-demo --seed=5 --screenshot=… --overview` | 3 | 锁定后：自己那块（出生区 1）展开为棋盘，其余 4 块仍是占位 |
-| `f-splice-mid` | `--auto-demo --seed=5 --shot-show=expand --screenshot=…` | 39 | 拼接演出中间帧（本机为锚点）：对方棋盘（出生区 2）连同它的地砖、台面边框与格线、信物标记一起滑入半程（508‰），滑入期间两块各自带边框，其上棋子仍隐藏，相机不动 |
-| `f-splice-mid-mover` | `--auto-demo --seed=2 --zone=3 --shot-show=expand --screenshot=…` | 38 | 拼接演出中间帧（本机为被贴方，本机锁定 3 号棋盘）：本机棋盘连同棋子与标记滑过去（500‰），相机注视点随本机棋盘同步平移，画面里本机棋盘不动、2 号棋盘相对靠拢 |
+| `f-splice-mid` | `--auto-demo --seed=5 --shot-show=expand --screenshot=…` | 39 | 拼接演出中间帧（本机为锚点）：对方棋盘（出生区 2）连同它的地砖、台面边框与格线、信物标记一起从东侧滑入半程（508‰；起点封顶 4 格、裁决 J12-2，半程偏移约 2 格），滑入期间两块各自带边框，其上棋子仍隐藏，相机不动 |
+| `f-splice-mid-mover` | `--auto-demo --seed=2 --zone=3 --shot-show=expand --screenshot=…` | 38 | 拼接演出中间帧（本机为被贴方，本机锁定 3 号棋盘）：本机棋盘连同棋子与标记从东侧往西滑过去（500‰；起点封顶 4 格、裁决 J12-2，半程偏移 2 格），相机注视点随本机棋盘同步平移，画面里本机棋盘不动、2 号棋盘相对靠拢 |
 | `f-spliced-overview` | `--auto-demo --seed=5 --shot-cell=C5 --screenshot=…` | 41 | 首轮拼接（第 39 帧 1+2）后整张画布：连体棋盘 + 3 块占位；他人战场不显示 |
 | `f-spliced-closeup` | `--auto-demo --seed=5 --shot-board=1 --screenshot=…` | 42 | 拼接后近景（对准被贴方出生区 2）：两块出生棋盘的台面、地砖与格线连成一片，接缝无边框、无缝隙；边框只沿合并战场外轮廓 |
 | `f-final-overview` | `--auto-demo --rounds=0 --seed=5 --overview --screenshot=…` | 139 | 决赛拼接（第 137 帧 1+5，北贴）后的全局预览：三块出生棋盘拼成的连体棋盘 |

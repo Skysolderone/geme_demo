@@ -34,6 +34,25 @@ public class 棋盘展开节拍Tests
         return (before, after, opponents, match, new LinkLayout(match.Board.BaseMap.Boards, match.Links.Select(l => l.ShiftStep)));
     }
 
+    /// <summary>演出起点封顶（裁决 J12-2）：东贴沿 +x、北贴沿 +y，偏 min(拼接前两战场的相对偏移, 4) 格。</summary>
+    private static (int Dx, int Dy) Capped(int relDx, int relDy, bool east)
+    {
+        int reach = Math.Min(Math.Max(Math.Abs(relDx), Math.Abs(relDy)), LinkShowBeats.SlideCap);
+        return east ? (reach, 0) : (0, reach);
+    }
+
+    /// <summary>手搭的两块 5×5 出生棋盘与一条链接（0 + 1，1 号被贴方平移 <paramref name="moverShift"/>）的布局换算，以及 <paramref name="viewer"/> 号视角的拼接前后默认棋盘（只有格坐标有意义）。</summary>
+    private static (DefaultBoardView Before, DefaultBoardView After, LinkLayout Layout) Synthetic(Coord moverOrigin, (int Dx, int Dy) moverShift, int viewer)
+    {
+        BoardPlate[] plates = [new(new Coord(2, 2), 5, 5, BoardPlateKind.Birth), new(moverOrigin, 5, 5, BoardPlateKind.Birth)];
+        var layout = new LinkLayout(plates, [new LinkShiftStep(0, 1, [new BattlefieldShift(0, 0, 0), new BattlefieldShift(1, moverShift.Dx, moverShift.Dy)])]);
+        DefaultBoardView View(IEnumerable<Coord> coords) =>
+            new(64, 64, [.. coords.Order().Select(c => new BoardCellView(c, default, 0, default, false, null, null, default, null, null))], [], [], []);
+        DefaultBoardView before = View(plates[viewer].Cells());
+        DefaultBoardView after = View(plates[0].Cells().Concat(layout.BoardAt(1, 1).Cells()));
+        return (before, after, layout);
+    }
+
     private static (int Dx, int Dy) Delta(LinkLayout layout, int zone)
     {
         Coord was = layout.BoardAt(zone, 0).Origin;
@@ -57,12 +76,13 @@ public class 棋盘展开节拍Tests
         var reveal = Assert.IsType<OpponentRevealBeat>(beats[2]);
         var banner = Assert.IsType<BannerBeat>(beats[3]);
 
-        // 滑的是对方那块（出生棋盘 1，拼接后坐标），起点 = 拼接前相对本机的位置：偏移 = 本机位移 − 对方位移。
+        // 滑的是对方那块（出生棋盘 1，拼接后坐标）。
+        // board-link-mode F.6：原断言"起点 = 拼接前相对本机的位置（本机位移 − 对方位移）"改为裁决 J12-2 的封顶口径——首轮东贴，从东侧偏 min(相对偏移, 4) 格滑入。
         HashSet<Coord> theirs = [.. match.Map.BirthZones[1]];
         Assert.Equal(theirs.Order(), slide.Cells.Order());
         (int myDx, int myDy) = Delta(layout, 0);
         (int theirDx, int theirDy) = Delta(layout, 1);
-        Assert.Equal((myDx - theirDx, myDy - theirDy), (slide.FromDx, slide.FromDy));
+        Assert.Equal(Capped(myDx - theirDx, myDy - theirDy, east: true), (slide.FromDx, slide.FromDy));
         Assert.NotEqual((0, 0), (slide.FromDx, slide.FromDy));
 
         Assert.Equal(theirs.Order(), reveal.Cells.Order());                                       // 显现的是对方那块出生棋盘
@@ -88,8 +108,27 @@ public class 棋盘展开节拍Tests
         Assert.Equal(match.Map.BirthZones[0].Order(), reveal.Cells.Order());
         (int myDx, int myDy) = Delta(layout, 1);
         (int theirDx, int theirDy) = Delta(layout, 0);
-        Assert.Equal((theirDx - myDx, theirDy - myDy), (slide.FromDx, slide.FromDy));
+        // board-link-mode F.6：原断言"起点 = 对方位移 − 本机位移"改为裁决 J12-2 的封顶口径——本机棋盘从东侧偏 min(相对偏移, 4) 格滑过去。
+        Assert.Equal(Capped(theirDx - myDx, theirDy - myDy, east: true), (slide.FromDx, slide.FromDy));
         Assert.Equal([P0], opponents);
+    }
+
+    [Theory]
+    [InlineData(38, 2, -31, 0, true, 4)]    // 东贴、相对偏移 31 → 演出起点只差 4 格
+    [InlineData(10, 2, -3, 0, true, 3)]     // 东贴、相对偏移 3 → 按 3
+    [InlineData(2, 40, 0, -33, false, 4)]   // 北贴、相对偏移 33 → 从北侧 4 格往南滑入
+    [InlineData(2, 9, 0, -2, false, 2)]     // 北贴、相对偏移 2 → 按 2
+    public void 滑入起点封顶四格_真实平移照旧(int moverX, int moverY, int shiftX, int shiftY, bool east, int reach)
+    {
+        // 裁决 J12-2：滑动方从"终点沿贴边反方向偏 min(实际偏移, 4) 格"的位置滑到终点；真实平移向量照旧在布局换算（链接记录）里，封顶只影响演出。
+        foreach (int viewer in new[] { 0, 1 })
+        {
+            (DefaultBoardView before, DefaultBoardView after, LinkLayout layout) = Synthetic(new Coord(moverX, moverY), (shiftX, shiftY), viewer);
+            var slide = Assert.IsType<BoardSlideBeat>(LinkShowBeats.Expansion(before, after, [P1], layout, 0)[0]);
+            Assert.Equal(layout.BoardAt(1, 1).Cells().Order(), slide.Cells.Order());                // 锚点 0 视角滑对方、被贴方 1 视角滑本机：都是 1 号那块
+            Assert.Equal(east ? (reach, 0) : (0, reach), (slide.FromDx, slide.FromDy));
+            Assert.Equal(new Coord(moverX + shiftX, moverY + shiftY), layout.BoardAt(1, 1).Origin);   // 真实平移不封顶
+        }
     }
 
     [Fact]
@@ -109,6 +148,32 @@ public class 棋盘展开节拍Tests
         Assert.NotEqual(layout.BoardAt(0, 0).Origin, layout.BoardAt(0, 1).Origin);
         // 反面：P2 的战场确实长出了格（拼入 4 号）。
         Assert.True(match.World(P2).Board().Cells.Length > Map.BirthZones[3].Count);
+    }
+
+    [Fact]
+    public void 他人链接平移本机棋盘_布局指纹变_引擎层据此重搭()
+    {
+        // 裁决 J12-1 根因（board-link-mode F.6）：他人链接把本机战场收拢平移后，本机看得见的格的逐格属性序列（可落子 / 高度 / 地表 / 桥）不变，
+        // 引擎层原先的地形指纹只看这串序列 → 不重搭、画面停在旧坐标、开局对准自检只见 23 / 25。布局指纹须带坐标、画布与占位。
+        (DefaultBoardView before, DefaultBoardView after, _, _, LinkLayout layout) = LinkedFor(P0, [0, 0, 3, 4]);
+        Assert.NotEqual(layout.BoardAt(0, 0).Origin, layout.BoardAt(0, 1).Origin);
+
+        // 原失败局面：旧指纹（逐格属性 + 栅栏）前后相同。
+        static string PropertiesOnly(DefaultBoardView v) =>
+            string.Concat(v.Cells.Select(c => $"{(int)c.Terrain}{c.Height}{(int)c.Surface}{(c.HasBridge ? 1 : 0)};")) + "|" + string.Concat(v.Fences.Select(f => $"{f};"));
+        Assert.Equal(PropertiesOnly(before), PropertiesOnly(after));
+
+        Assert.NotEqual(before.LayoutKey(), after.LayoutKey());
+        // 单看格坐标也要分得出（画布、棋盘清单、占位都不动，只把格整体东移 1 格）。
+        DefaultBoardView shifted = before with { Cells = [.. before.Cells.Select(c => c with { Coord = new Coord(c.Coord.X + 1, c.Coord.Y) })] };
+        Assert.NotEqual(before.LayoutKey(), shifted.LayoutKey());
+
+        // 反面：没有链接的大回合（只 Pass）指纹不变——不会每回合重搭。
+        MatchFlow quiet = Started([0, 0, 3, 4], new ScriptedPairingSource());
+        string opening = quiet.World(P0).Board().LayoutKey();
+        quiet.PassRound();
+        Assert.Empty(quiet.Links);
+        Assert.Equal(opening, quiet.World(P0).Board().LayoutKey());
     }
 
     [Fact]

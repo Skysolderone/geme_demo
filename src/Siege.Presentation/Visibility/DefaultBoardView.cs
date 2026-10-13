@@ -134,6 +134,43 @@ public sealed record DefaultBoardView(
     /// </summary>
     public ImmutableArray<BoardPlaceholderView> Placeholders { get; init; } = [];
 
+    /// <summary>
+    /// 布局指纹（引擎层"要不要整体重搭"的唯一判据，board-link-mode F.6 / 裁决 J12-1）：画布尺寸、每格的<b>坐标</b>与可落子 / 高度 / 地表 / 桥、全部栅栏边、
+    /// 棋盘清单与 5 块占位（编号、原点、展开、本机）。拼接会平移格的坐标、重裁画布、平移占位——这些都必须让指纹变；
+    /// 只落子 / 提子不变。原先引擎层的指纹只看逐格属性的序列、不看坐标，他人链接把本机战场收拢平移后格的属性序列不变，于是不重搭、画面停在旧坐标。
+    /// 预置设施与本局改造在这里本来就分不出——指纹变了只说明"要重搭"，不说明是谁改的。
+    /// </summary>
+    public string LayoutKey()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append(Width).Append('x').Append(Height).Append('|');
+        foreach (BoardCellView cell in Cells)
+        {
+            sb.Append(cell.Coord.X).Append(',').Append(cell.Coord.Y).Append(':')
+                .Append((int)cell.Terrain).Append(cell.Height).Append((int)cell.Surface).Append(cell.HasBridge ? '1' : '0').Append(';');
+        }
+
+        sb.Append('|');
+        foreach (FenceEdge fence in Fences.IsDefault ? [] : Fences)
+        {
+            sb.Append(fence).Append(';');
+        }
+
+        sb.Append('|');
+        foreach (BoardPlate plate in Boards.IsDefault ? [] : Boards)
+        {
+            sb.Append(plate.Origin.X).Append(',').Append(plate.Origin.Y).Append(':').Append(plate.Width).Append('x').Append(plate.Height).Append((int)plate.Kind).Append(';');
+        }
+
+        sb.Append('|');
+        foreach (BoardPlaceholderView p in Placeholders)
+        {
+            sb.Append(p.Zone).Append('@').Append(p.Origin.X).Append(',').Append(p.Origin.Y).Append(p.Expanded ? 'E' : '-').Append(p.Own ? 'O' : '-').Append(';');
+        }
+
+        return sb.ToString();
+    }
+
     /// <summary>某格。不在本视图里（链接模式下未展开的战场）抛出——拾取 / 悬停请先用 <see cref="CellOrNull"/>。</summary>
     public BoardCellView CellAt(Coord coord) =>
         CellOrNull(coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标不在本视图的格里（超出棋盘范围或未展开）。");

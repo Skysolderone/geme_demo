@@ -146,12 +146,12 @@ public sealed partial class BoardView : Node3D
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(zoneOwners);
 
-        // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次；地形被改造后 Refresh 也会再搭一次（见 TerrainKeyOf）。
+        // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次；地形被改造、或拼接平移了本机看得见的格 / 占位后，Refresh 也会再搭一次（见 DefaultBoardView.LayoutKey）。
         Clear(this);
         int loadedBefore = TerrainParts.LoadedCount;
         int generatedBefore = TerrainParts.GeneratedCount;
         _zoneOwners = zoneOwners;
-        _terrainKey = TerrainKeyOf(board);
+        _terrainKey = board.LayoutKey();
         _tileMaterials.Clear();
         _surfaceMaterials.Clear();
         _linerMaterials.Clear();
@@ -1479,7 +1479,7 @@ public sealed partial class BoardView : Node3D
 
         // 地形不再是对局内不变量（artisan-terrain-edit）：架桥 / 立栅 / 烧林都改地砖、水面、栅栏与 _levels（新桥格要能被拾取），
         // 而这些只在 Build 里搭。地形指纹一变就整体重搭一次——2.6 第 12 条原写"GameRoot 每次刷新都重跑 Build"，实际不是，这里补上。
-        if (TerrainKeyOf(board) != _terrainKey)
+        if (board.LayoutKey() != _terrainKey)
         {
             Build(board, _zoneOwners);
         }
@@ -1520,27 +1520,6 @@ public sealed partial class BoardView : Node3D
         DrawPreview(preview, focus);
         DrawFlash(flash);
         ApplySlide(mask ?? ShowMask.Empty);   // 全部画完再收拢滑动战场的节点；没有滑动中的格就全部并回（board-link-mode F.4b）
-    }
-
-    /// <summary>
-    /// 地形指纹：可落子 / 高度 / 地表 / 桥 + 全部栅栏边。只读默认棋盘视图模型，不读地图、不判改造。
-    /// 预置设施与本局改造在这里<b>本来就分不出</b>——指纹变了只说明"要重搭"，不说明是谁改的。
-    /// </summary>
-    private static string TerrainKeyOf(DefaultBoardView board)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (BoardCellView cell in board.Cells)
-        {
-            sb.Append((int)cell.Terrain).Append(cell.Height).Append((int)cell.Surface).Append(cell.HasBridge ? '1' : '0').Append(';');
-        }
-
-        sb.Append('|');
-        foreach (FenceEdge fence in board.Fences)
-        {
-            sb.Append(fence).Append(';');
-        }
-
-        return sb.ToString();
     }
 
     private static void Clear(Node container)
@@ -1686,7 +1665,7 @@ public sealed partial class BoardView : Node3D
         ArgumentNullException.ThrowIfNull(treatment);
         ArgumentNullException.ThrowIfNull(mask);
         DefaultBoardView board = world.Board();
-        if (TerrainKeyOf(board) != _terrainKey)
+        if (board.LayoutKey() != _terrainKey)
         {
             // 链接后第一帧演出（board-link-mode F.4）：拼接后的布局要先搭出来，滑入节拍才有东西可移。重搭保位姿（Rebound 只随本机棋盘位移平移注视点）。
             Build(board, _zoneOwners);

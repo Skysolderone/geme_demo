@@ -86,6 +86,9 @@ public static class LinkShowBeats
     /// <summary>他场结算的提示条文案（不打断操作）。</summary>
     public static string SettledElsewhereText(int battlefield, PlayerId winner) => $"战场 {BirthZoneLabel.Of(battlefield)} 已结算，胜者 {Labels.Player(winner)}";
 
+    /// <summary>滑入演出起点相对终点的最大偏移（格，裁决 J12-2）。</summary>
+    public const int SlideCap = 4;
+
     /// <summary>四个拼接节拍的基准总时长（毫秒；裁决 J5：滑入约 900 + 重定界约 500 + 显现约 600 + 横幅）。</summary>
     public const int ExpansionTotalMs = BoardSlideBeat.Ms + CameraPullBeat.Ms + OpponentRevealBeat.Ms + BannerBeat.PerBannerMs;
 
@@ -93,7 +96,7 @@ public static class LinkShowBeats
     /// 棋盘拼接（board-link-mode F.4 / 裁决 J5）：由本机结算前后两份按座位过滤的默认棋盘与布局换算 <see cref="LinkLayout"/>（版本 <paramref name="fromVersion"/> → 最新）得出。
     /// 结算前本机的格先按平移向量映射到拼接后坐标，再与拼接后的格比：没有新增格（本机不参与的链接，即便它把本机战场收拢平移了）→ 空序列，不把平移误判为新增。
     /// 新增格即对方战场。锚点一方（含最小出生棋盘编号的战场）不动、被贴方滑入：本机是锚点 → 对方棋盘滑入；本机是被贴方 → 本机棋盘滑过去贴合。
-    /// 滑动的起点 = 拼接前两战场的相对位置（两侧平移向量之差），同一配对事件里的两条链接自然合成一次。
+    /// 滑动的起点在终点沿贴边反方向 min(拼接前两战场的相对偏移, <see cref="SlideCap"/>) 格处（东贴从东、北贴从北），同一配对事件里的两条链接自然合成一次。
     /// 之后：相机重定界到合并后战场包围盒 → 对方格上的棋子 / 设施 / 已揭示信物显现 → 横幅"棋盘拼接：与 X 交战"。
     /// <paramref name="newOpponents"/> 是链接后新成为同战场的玩家。
     /// </summary>
@@ -123,9 +126,14 @@ public static class LinkShowBeats
         (int myDx, int myDy) = Delta(myZone);
         (int theirDx, int theirDy) = Delta(theirZone);
         bool anchor = myZone < theirZone;
-        BoardSlideBeat slide = anchor
-            ? new BoardSlideBeat(added, myDx - theirDx, myDy - theirDy)
-            : new BoardSlideBeat(mine, theirDx - myDx, theirDy - myDy);
+        ImmutableArray<Coord> moving = anchor ? added : mine;
+        ImmutableArray<Coord> staying = anchor ? mine : added;
+        // 演出起点封顶（裁决 J12-2）：被贴方从终点沿贴边反方向偏 min(实际相对偏移, SlideCap) 格的位置滑到终点——东贴从东侧往西滑入、北贴从北侧往南滑入；
+        // 本机是被贴方时滑的是本机棋盘，同一几何。真实平移向量照旧在链接记录里，封顶只影响演出。
+        int actual = Math.Max(Math.Abs(theirDx - myDx), Math.Abs(theirDy - myDy));
+        int reach = Math.Min(actual, SlideCap);
+        bool east = moving.Min(c => c.X) > staying.Max(c => c.X);
+        BoardSlideBeat slide = east ? new BoardSlideBeat(moving, reach, 0) : new BoardSlideBeat(moving, 0, reach);
 
         return
         [
