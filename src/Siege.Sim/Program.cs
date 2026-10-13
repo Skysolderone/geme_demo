@@ -104,7 +104,8 @@ public static class Program
         Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
         Console.WriteLine("            map 子命令另可打印旧标识族（内置图 / 地图文件 / gen: / board:，测试夹具用途）。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");
-        Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--out <报告文件>]");
+        Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--review-defeats] [--out <报告文件>]");
+        Console.WriteLine("    --review-defeats：按日志回放每局，复盘整轮 Pass 结算的落败者与决胜一手（耗时约等于跑局本身；缺省不做）");
     }
 
     // ---------- play ----------
@@ -499,8 +500,8 @@ public static class Program
     private static int Analyze(CommandLine cli)
     {
         string dir = cli.GetOrNull("dir") ?? throw new ArgumentException("analyze 需要 --dir <目录>。");
-        // ai-pass-review 1.2：analyze 命令一律做战场落败复盘（按日志回放，只对链接模式日志出段）。
-        var options = new AnalysisOptions { IncludeContaminated = cli.Flag("include-contaminated"), ReviewDefeats = true };
+        // ai-pass-review 2.3（裁决 P10）：战场落败复盘要按日志回放每局，改为显式开关 --review-defeats，缺省不做；等待者评估照常输出。
+        var options = new AnalysisOptions { IncludeContaminated = cli.Flag("include-contaminated"), ReviewDefeats = cli.Flag("review-defeats") };
         string outPath = cli.Get("out", Path.Combine(dir, "report.txt"));
         cli.EnsureRecognized();   // 读完所有选项、读日志与写报告之前结算（strict-cli 2.4）
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);

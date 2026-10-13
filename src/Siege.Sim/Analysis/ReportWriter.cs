@@ -241,6 +241,16 @@ public static class ReportWriter
         sb.AppendLine("## 战场落败复盘（ai-pass-review：整轮 Pass 结算的落败者，复盘其结算那一大回合最后一次 Pass；按日志回放到该时刻，用其自身 AI 配置的候选、预演与评价）");
         sb.AppendLine($"- 涉及 {d.Logs} 局，整轮 Pass 结算落败 {d.Defeats} 人次，复盘到 {d.Reviewed} 人次；未能复盘的局：{Histogram(d.SkippedLogs)}；找不到本人 Pass 快照 {d.MissingPass} 人次");
         sb.AppendLine($"- 复盘时实际停手阈值分布：{Histogram(d.Thresholds)}；复盘结论与实际 Pass 一致 {d.Consistent}/{d.Reviewed}");
+        sb.AppendLine($"- 决胜一手（ai-pass-review 2.1：本将 Pass、该 Pass 会让本战场整轮 Pass 结算、自己落后时改落可追平 / 反超的批次）：触发 {d.Decisive.Count} 次"
+            + $"（单点 {d.Decisive.Count(x => !x.Entry.Move.FromForcedBatch)} / 强制批次 {d.Decisive.Count(x => x.Entry.Move.FromForcedBatch)}，涉及 {d.Decisive.Select(x => (x.Entry.Seed, x.Entry.Player)).Distinct().Count()} 人）；"
+            + $"其后该玩家赢下所在战场下一次结算 {d.Decisive.Count(x => x.WonBattlefield == true)} 次，输 {d.Decisive.Count(x => x.WonBattlefield == false)} 次，无后续结算 {d.Decisive.Count(x => x.WonBattlefield is null)} 次");
+        foreach (DecisiveOutcome x in d.Decisive)
+        {
+            DecisiveMove m = x.Entry.Move;
+            sb.AppendLine($"  - 决胜 {x.Entry.Seed} R{x.Entry.MajorRound} P{x.Entry.Player} T{x.Entry.Turn}：{(m.FromForcedBatch ? "强制批次" : "单点")} {Moves(m.Outcome)} 收益 {m.Outcome.Gain}；"
+                + $"势力 {m.PowerBefore} vs {m.RivalBefore} → {m.Outcome.PowerAfter} vs {Opt(m.Outcome.RivalAfter)}；下一次结算 {(x.WonBattlefield is { } won ? (won ? "胜" : "负") : "无")}");
+        }
+
         sb.AppendLine($"- 本可翻盘（最好一手落下、对手不回应时己方势力 ≥ 本战场最高者）：{d.Comebacks}/{d.Reviewed}（{Pct(Share(d.Comebacks, d.Reviewed))}）；"
             + $"合法候选中存在单点翻盘手 {d.AnyComebacks}/{d.Reviewed}；强制落子批次（同一排序前 N 的贪心、合法即保留，直到部署上限）可翻盘 {d.ForcedComebacks}/{d.Reviewed}");
         sb.AppendLine($"- 能提子：最好一手提子 {d.BestCaptures}/{d.Reviewed}；合法候选中存在提子手 {d.AnyCaptures}/{d.Reviewed}");

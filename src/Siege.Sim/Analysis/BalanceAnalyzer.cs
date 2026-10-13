@@ -19,7 +19,7 @@ public sealed record AnalysisOptions
     public int RequiredMatches { get; init; } = 200;
 
     /// <summary>
-    /// 是否做战场落败复盘（ai-pass-review 1.2）：要按日志回放每局，耗时约等于跑局本身，缺省关闭；<c>analyze</c> 命令开启。
+    /// 是否做战场落败复盘（ai-pass-review 1.2）：要按日志回放每局，耗时约等于跑局本身，缺省关闭；<c>analyze --review-defeats</c> 开启（裁决 P10）。
     /// 关闭时 <see cref="BalanceReport.DefeatReview"/> 为 <c>null</c>，报告里没有这一段。
     /// </summary>
     public bool ReviewDefeats { get; init; }

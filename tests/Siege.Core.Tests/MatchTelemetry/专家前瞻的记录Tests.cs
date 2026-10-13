@@ -156,7 +156,9 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         Assert.Equal(44, log.Turns.Count);
         Assert.Equal(8, log.LookaheadTurns.Count());
-        Assert.Equal("5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F", Sha256(text));
+        // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
+        Assert.Contains("\"AiEvaluationVersion\":4", text, StringComparison.Ordinal);
+        Assert.Equal("5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -271,7 +273,9 @@ public class 专家前瞻的记录Tests
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
         Assert.Equal(40, log.Turns.Count);
-        Assert.Equal("403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F", Sha256(text));
+        // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
+        Assert.Contains("\"AiEvaluationVersion\":4", text, StringComparison.Ordinal);
+        Assert.Equal("403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
     }
 
     [Fact]

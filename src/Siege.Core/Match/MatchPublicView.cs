@@ -50,4 +50,10 @@ public sealed record MatchPublicView(
     /// 不是位置参数：缺省 <see cref="MatchMode.Legacy"/>，旧的构造写法不变。
     /// </summary>
     public MatchMode Mode { get; init; }
+
+    /// <summary>
+    /// 链接模式下本大回合已 Pass 的玩家（升序；Pass 是公开行动）。旧模式恒为空。AI 的决胜一手据此判断"本次 Pass 是否会让本战场整轮 Pass"
+    /// （ai-decision「链接模式下的决胜一手」）。按座位投影时只留本战场的玩家。不是位置参数，旧的构造写法不变。
+    /// </summary>
+    public ImmutableArray<PlayerId> PassedThisRound { get; init; } = [];
 }

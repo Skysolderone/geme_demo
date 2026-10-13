@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-10-13（`retire-legacy-maps` 实施完成、待主会话归档；此前 `board-link-mode` 段 E 收尾，基线 HEAD `e40c84c`）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-10-13（`ai-pass-review` 第二段实施完成、待主会话提交归档；此前 `retire-legacy-maps` 已归档；此前 `board-link-mode` 段 E 收尾，基线 HEAD `e40c84c`）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续；最近进度以 `.trellis/workspace/rubioc/journal-1.md` 最后一节为准。
 
 ## 一句话
@@ -50,10 +50,10 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 - `play`：`--seed` `--players` `--seat`（缺省 1）`--difficulty` `--map`（缺省 `link:1`）`--cell-limit` `--profile <路径>` `--no-carry`（两者不能同给）。
 - `run`：`--out`（必填）`--config <json>` `--seed` `--count` `--parallel` `--serial` `--map` `--players` `--difficulty` `--turn-limit`（缺省 600，0 = 不截断）`--artisan-weight`（缺省 10）`--cell-limit` `--pass-threshold`（缺省 20）`--pairing-seed` `--carry-in 0|1`（缺省 0）`--map-per-match`（第 i 局用 `link:<起始+i>`）`--retention SnapshotsOnly|Full` `--sample-permille` `--gzip`。
 - `map`：`--map`（只接受 `link:`，缺省 `link:1`）`--links <如 1-4,2-5 或 1-4E,2-5E,1-2N>`（单棋盘之间不写贴边一律东贴，3+1 决赛须显式写 N）`--out`。
-- `replay`：`--file <match-*.jsonl>` 或 `--dir <目录> --seed <十六进制种子>`（只回放 `link:` 日志）。`analyze`：`--dir` `--include-contaminated` `--out`。
+- `replay`：`--file <match-*.jsonl>` 或 `--dir <目录> --seed <十六进制种子>`（只回放 `link:` 日志）。`analyze`：`--dir` `--include-contaminated` `--review-defeats`（按日志回放复盘整轮 Pass 结算的落败者与决胜一手，耗时约等于跑局；缺省不做）`--out`。
 - 已删除：`--flag-risk`（冒险概率随盲选废除）；`--config` 文件里写 `FlagRisk` 字段即报错退出（`retire-legacy-maps`）。Link 局固定 4 人，`--players` 给别的值建局报错。AI 全知开关只在 `--config` 的 `Players[].Search.SeatVision`，没有命令行选项。难度名不区分大小写、不接受数字（`AiDifficultyNames`）。
 
-## 现行规则速览（设计文档 v1.21）
+## 现行规则速览（设计文档 v1.22）
 
 - **地图**（§3.3）：`link:<种子>` 生成 5 块出生棋盘（边长 5–7、各 2 信物格、间距 3 排开，可落子共 125–245），其余是不可落子、不可改造的场景格。**战场** = 可落子格连通分量。
 - **盲选**（§4.1）：只见 5 个占位，选中即锁定，互相看不到；AI 用 `flag-pick` 子流均匀选；多人可同区。
@@ -65,9 +65,9 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 - **势力** = 领地分（独占空格，荒漠不计）+ 棋串军势，军势 = ⌊(基础 + 位置加值) × 1.5ⁿ⌋，不封顶，BigInteger（§10.1）。部署上限 3 / 4 / 5（第 1–3 / 4–6 / 7+ 大回合）+ 军令；征募展示 5、免费取 3。
 - **活形**（§6.4）：`EYE_SPACE_MAX = 12`，眼值 ≥ 2 为已活；已活棋串的眼空间对他人禁入；单子不成活。同形判重不含棋子类型（§6.2）。
 - **十种棋子 / 十类信物**，内容集 v2 缺省（§8、§9）。
-- **AI**（§15.2）：九维评价；停手阈值 20，己方无子或"链接模式下不是本战场势力第一"时取 0（C15）；可落子格 > 150 时候选格上限 K = 24（链接档按建局时 5 块之和判定）。难度 简单 / 标准 / 困难 / 专家（一层前瞻）。
+- **AI**（§15.2）：九维评价；停手阈值 20，己方无子或"链接模式下不是本战场势力第一"时取 0（C15）；**决胜一手**（`ai-pass-review` P7）：本将 Pass、该 Pass 会让本战场整轮 Pass 结算、自己落后时，若有合法单点或强制贪心批次能让势力追平 / 反超本战场最高者，落下差值最大者；可落子格 > 150 时候选格上限 K = 24（链接档按建局时 5 块之和判定）。难度 简单 / 标准 / 困难 / 专家（一层前瞻）。
 - **带入带出**（§21）：备用子 3 / 征召签 2 / 换型令 4 点，每局至多 1 件；名次点 24/16/12/10；完赛全额、弃赛 50% 并返还补给、出局（势力归零或战场落败）带出 0 且补给丢失。
-- **拼接版冒烟**（F.5，`link:1`、标准 × 4、10 局）：大回合 10 / 11 / 15，首轮交战平均 5.3、决赛 3.2，等待过的人平均等 2.33 个大回合，AI 单小回合中位 47 ms；落败者 28/28 手中有子即 Pass（已知问题）。
+- **拼接版冒烟**（F.5，`link:1`、标准 × 4、10 局）：大回合 10 / 11 / 15，首轮交战平均 5.3、决赛 3.2，等待过的人平均等 2.33 个大回合，AI 单小回合中位 47 ms。`ai-pass-review` 诊断（20 局）：整轮 Pass 结算落败者 48% 无可落之手、43% 无追平手、8.6% 有追平 / 反超手（已由决胜一手处理）；等待者在决赛吃亏（胜率 27.8% 对首轮胜者 68.2%）。
 
 ## 自检命令（Godot 用 `..._console.exe`，headless、顺序单跑、看真实退出码）
 
@@ -84,7 +84,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 ## 测试现状
 
 - `dotnet build siege.sln -c Release` 与 Godot 工程均 0 警告 0 错误（段 F.6 实测）。
-- `dotnet test -c Release`：**1977 条，通过 1971，跳过 6**（`retire-legacy-maps` 删旧地图测试后；跳过全是 Perf / Slow，用 `SIEGE_PERF=1` / `SIEGE_SLOW=1` 加 `Category` 过滤开启）。逐类迁移与对账见 `.trellis/tasks/10-13-retire-legacy-maps/migration.md`。
+- `dotnet test -c Release`：**1999 条，通过 1993，跳过 6**（`ai-pass-review` 第二段后；跳过全是 Perf / Slow，用 `SIEGE_PERF=1` / `SIEGE_SLOW=1` 加 `Category` 过滤开启）。逐类迁移与对账见 `.trellis/tasks/10-13-retire-legacy-maps/migration.md`。
 - 决策序列基线：链接图 `link:1` + 固定配对脚本 + 标准难度、对局种子 1 / 2 / 3（截到第 12 大回合）；旧 v5 / board:1 基线已删除。专家 G1 黄金值与前瞻计时局面集钉在 `link:1` 种子 1–3。
 
 ## 旧地图（已删除）
@@ -95,12 +95,14 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 
 ## 后续 change（只登记，未建目录；设计文档 §19 同）
 
-1. **AI 停手复核**：链接模式下落后方手里有子仍 Pass，战场结算全靠整轮 Pass（冒烟 28/28，C15 零效果）；对局偏短，可一并评估构筑期长度或结算门槛。
+1. ~~AI 停手复核~~：已实施（`ai-pass-review`，诊断 + 决胜一手）。
 2. **AI 视野收紧**：关闭全知开关后，专家前瞻会把其他战场玩家当作已出局（C12）。
-3. ~~retire-legacy-maps~~：已实施（待归档）。
-4. **等待者失衡评估**：独自等待的玩家没有对手，势力只增不减。
+3. ~~retire-legacy-maps~~：已实施并归档（2026-10-13）。
+4. **决赛开局势力差评估**（替代原"等待者失衡评估"）：等待者在决赛吃亏（27.8% 对 68.2%），决赛开局势力领先者胜 16 / 19。
 5. **Godot 无头运行偶发崩溃观察**：一次 `Illegal instruction`（退出码 132）未复现；再现时抓崩溃日志（J12-7）。
 6. **retire-legacy-rules**：删除 Core 中只服务手写 9×9 夹具的 Legacy 规则分支（需先把手写夹具迁到链接规则；`retire-legacy-maps` 裁决 L6 = C 登记的债务，含 Sim 日志 / 终端渲染里读模式的分支，待决 L17）。
+7. **AI 整批评价观察**（`ai-pass-review` P14）：逐枚贪心会漏掉"整批为正、逐枚为负"的组合（种子 D R5 整批 +323）。
+8. **决胜一手拉长战场观察**（P15）：20 局均值 +0.4 大回合，个例 14 → 20。
 
 另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。2026-09-28 之后已归档：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`，以及本次的 `board-link-mode`（归档由主会话完成）。
 

@@ -18,10 +18,17 @@ public sealed record DefeatReviewEntry(string Seed, DefeatTarget Target, BestMov
 /// 一局的复盘结果。<paramref name="Targets"/> 是按日志找到的全部目标（含找不到 Pass 小回合的落败者以外的全部）；
 /// <paramref name="MissingPass"/> 是落败者在结算那一大回合找不到本人 Pass 快照的人次；<paramref name="Skipped"/> 非空即整局未能复盘的原因（地图 / AI 版本不一致、回放分歧、控制者不是启发式 AI）。
 /// </summary>
-public sealed record DefeatReplayResult(string Seed, IReadOnlyList<DefeatTarget> Targets, int MissingPass, IReadOnlyList<DefeatReviewEntry> Entries, string? Skipped);
+public sealed record DefeatReplayResult(string Seed, IReadOnlyList<DefeatTarget> Targets, int MissingPass, IReadOnlyList<DefeatReviewEntry> Entries, string? Skipped)
+{
+    /// <summary>回放中出现的决胜一手（ai-pass-review 2.4：回放到日志最后一个小回合，逐次读 AI 的 <see cref="HeuristicTurnController.LastDecisive"/>）。未能复盘时为空。</summary>
+    public IReadOnlyList<DecisiveEntry> Decisive { get; init; } = [];
+}
+
+/// <summary>一次决胜一手：所在小回合、大回合、玩家与 AI 留痕（<see cref="DecisiveMove"/>）。</summary>
+public sealed record DecisiveEntry(string Seed, int Turn, int MajorRound, int Player, DecisiveMove Move);
 
 /// <summary>
-/// 战场落败复盘的回放驱动（ai-pass-review 1.2，design D2"分析时回放"）：按日志首部原样重建对局（与 <see cref="Replayer"/> 同一组输入：首部配置、种子、
+/// 战场落败复盘的回放驱动（ai-pass-review 1.2，design D2"分析时回放"；2.4 起回放到日志最后一个小回合并收集决胜一手）：按日志首部原样重建对局（与 <see cref="Replayer"/> 同一组输入：首部配置、种子、
 /// 首部记录的带入、日志里的配对事件），逐小回合推进；到目标小回合的部署阶段、AI 决策之前，在<b>影子批次</b>（同盘面、同批次上下文）上调用复盘。
 /// 日志不新增任何字段。复盘不碰正式暂放批次、不消费任何随机流，回放本身与原局逐小回合相同——每推进一个小回合即与原日志的同序号快照核对，
 /// 一旦分歧（如脚本控制者跑出的测试日志）整局记为未能复盘，不给出半截结论。
@@ -57,13 +64,15 @@ public static class DefeatReplay
         return ([.. targets.OrderBy(t => t.Turn)], missing);
     }
 
-    /// <summary>回放一局并复盘其全部目标。没有目标时不回放。</summary>
+    /// <summary>
+    /// 回放一局（到日志最后一个小回合），复盘其全部目标并收集决胜一手。日志没有小回合时不回放。
+    /// </summary>
     public static DefeatReplayResult Review(MatchLog log)
     {
         ArgumentNullException.ThrowIfNull(log);
         LogHeader header = log.Header;
         (IReadOnlyList<DefeatTarget> targets, int missing) = TargetsOf(log);
-        if (targets.Count == 0)
+        if (log.Turns.Count == 0)
         {
             return new DefeatReplayResult(header.Seed, targets, missing, [], null);
         }
@@ -88,10 +97,29 @@ public static class DefeatReplay
         Dictionary<int, DefeatTarget> byTurn = targets.ToDictionary(t => t.Turn);
         Dictionary<int, TurnSnapshot> original = log.Turns.GroupBy(t => t.Turn).ToDictionary(g => g.Key, g => g.Last());
         var entries = new List<DefeatReviewEntry>();
+        var decisive = new List<DecisiveEntry>();
         string? failure = null;
+
+        // 决胜一手的留痕在 AI 决策之后才有：每次部署前收上一次部署者的 LastDecisive，回放结束再收最后一次。
+        (HeuristicTurnController Ai, int Turn, int Round)? previous = null;
+        void Harvest()
+        {
+            if (previous is { } p && p.Ai.LastDecisive is { } move)
+            {
+                decisive.Add(new DecisiveEntry(header.Seed, p.Turn, p.Round, p.Ai.Player.Value, move));
+            }
+
+            previous = null;
+        }
 
         session.ObserveDeploy(batch =>
         {
+            Harvest();
+            if (session.AiOf(batch.Context.Player) is { } deciding)
+            {
+                previous = (deciding, session.TurnCount + 1, session.Match.MajorRound);
+            }
+
             if (failure is not null || !byTurn.TryGetValue(session.TurnCount + 1, out DefeatTarget? target))
             {
                 return;
@@ -118,7 +146,7 @@ public static class DefeatReplay
             entries.Add(new DefeatReviewEntry(header.Seed, target, review));
         });
 
-        int last = targets[^1].Turn;
+        int last = log.Turns[^1].Turn;
         try
         {
             while (failure is null && session.TurnCount < last)
@@ -145,12 +173,13 @@ public static class DefeatReplay
             failure = $"回放抛出 {ex.GetType().Name}";
         }
 
+        Harvest();
         if (failure is null && entries.Count != targets.Count)
         {
             failure = $"只到达 {entries.Count}/{targets.Count} 个复盘目标";
         }
 
-        return failure is null ? new DefeatReplayResult(header.Seed, targets, missing, entries, null) : Skip(failure);
+        return failure is null ? new DefeatReplayResult(header.Seed, targets, missing, entries, null) { Decisive = decisive } : Skip(failure);
     }
 
     /// <summary>回放与原日志的一个小回合是否相同：行动玩家、大回合、是否 Pass、落子与提子逐项相同（耗时等非确定字段不比）。</summary>

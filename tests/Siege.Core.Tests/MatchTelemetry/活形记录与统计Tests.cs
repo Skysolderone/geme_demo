@@ -153,7 +153,9 @@ public class 活形记录与统计Tests
         // ② 预演阶段"破坏活形"的计数 = 细粒度 Rehearsal 事件里同类别的条数（两条独立写入路径互证）；样本口径下界 > 0；
         // ③ 终局快照的逐玩家活形状态 = 测试侧在活对局上独立数出来的值；样本口径下界：终局至少一条活形棋串。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
-        RunConfig config = SimFixtures.Config(count: 1, seedStart: 1, turnLimit: 40, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 };
+        // ai-pass-review 2.1（决胜一手，裁决 P7）改变了种子 1 的走法（第 20 小回合起三次决胜一手），40 个小回合里不再出现预演阶段的破坏活形，样本口径下界②落空；
+        // 断言不改，样本换到按序第一个满足三条下界的种子 3（种子 2 同样为 0 次；种子 3 破坏活形 17 次、终局活形棋串 10、贴地形小空区 12）。待负责人确认（P12）。
+        RunConfig config = SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 40, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 };
         MatchSession session = MatchSession.Create(config, config.SeedAt(0));   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         MatchLog log = RoundTrip(session.Run());
 

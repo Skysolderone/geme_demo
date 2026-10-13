@@ -28,6 +28,10 @@ public class 战场落败复盘与等待者评估Tests
 
     private static readonly EvaluationWeights Weights = SimFixtures.PreCalibrationWeights with { PowerGain = 1 };
 
+    /// <summary>一局真实 AI 链接局（四人四区种子、简单难度、跑到终局）的日志，经文本往返。</summary>
+    private static readonly Lazy<MatchLog> RealLog = new(() =>
+        MatchLog.Parse(MatchSession.Create(LinkSimFixtures.Config(turnLimit: 600), LinkSimFixtures.FourZoneSeed.Value).Run().FullText()));
+
     /// <summary>P0 在 <paramref name="cell"/> 一格上复盘（部署上限 1、库存 5 枚普通子），影子批次走零副作用预演。</summary>
     private static BestMoveReview Review(MatchFlow match, Coord cell, int stock = 5)
     {
@@ -123,26 +127,36 @@ public class 战场落败复盘与等待者评估Tests
     public void 复盘不改对局()
     {
         // 规格 Scenario「复盘不改对局」：链接图决策序列基线（link:1、种子 3、截到第 12 大回合）在<b>每一次</b>部署前都挂上复盘（影子批次 + 同一 AI 对象），
-        // 导出仍与钉入的基线逐字节相同；并且复盘结论（ImpliesPass）与 AI 随后的实际决策（D:pass 与否）逐次一致——复盘走的确是正式决策的同一条路径。
+        // 导出仍与钉入的基线逐字节相同；并且复盘结论（ImpliesPass）与 AI 随后的实际决策逐次一致——复盘走的确是正式决策的同一条路径。
+        // 第二段（决胜一手，2.1）起"实际决策"= D:pass，或依停手阈值本将 Pass、被决胜一手改落（LastDecisive 非空）；本基线种子 3 里有 2 次决胜一手。
         // 变异 MP-1：ReviewBestMove 消费扰动子流本体 → 本测试红（基线分歧）。
-        var reviews = new Dictionary<PlayerId, List<BestMoveReview>>();
+        var reviews = new Dictionary<PlayerId, List<(BestMoveReview Review, int Index)>>();
+        var deciders = new List<HeuristicTurnController>();
+        var decisive = new List<bool>();
         string actual = LinkDecisionSequence.Export(3, 12, AiDifficulty.Standard, session => session.ObserveDeploy(batch =>
         {
+            if (deciders.Count > 0)
+            {
+                decisive.Add(deciders[^1].LastDecisive is not null);   // 上一次部署是否走了决胜一手
+            }
+
             PlayerId player = batch.Context.Player;
             HeuristicTurnController ai = session.AiOf(player)!;
             var shadow = new StagedBatch(batch.Board, batch.Context);
             MatchFlow match = session.Match;
             BestMoveReview review = ai.ReviewBestMove(shadow, () => BatchRehearsal.Rehearse(shadow.Board, shadow.Context, shadow.Placements, match.History));
             Assert.Empty(batch.Placements);
-            (reviews.TryGetValue(player, out List<BestMoveReview>? list) ? list : reviews[player] = []).Add(review);
+            (reviews.TryGetValue(player, out var list) ? list : reviews[player] = []).Add((review, deciders.Count));
+            deciders.Add(ai);
         }));
+        decisive.Add(deciders[^1].LastDecisive is not null);
 
         string expected = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", "decisions-link1-seed3.txt")).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Equal(expected, actual);
 
         // 逐玩家对照：第 i 次复盘 ↔ 该玩家第 i 条 D: 决策。
         int total = 0;
-        foreach ((PlayerId player, List<BestMoveReview> list) in reviews)
+        foreach ((PlayerId player, List<(BestMoveReview Review, int Index)> list) in reviews)
         {
             string[] deploys = [.. expected.Split('\n')
                 .Where(l => l.Split('\t') is [var round, var who, _] && int.TryParse(round, out _) && who == player.ToString())
@@ -150,13 +164,15 @@ public class 战场落败复盘与等待者评估Tests
             Assert.Equal(deploys.Length, list.Count);
             for (int i = 0; i < list.Count; i++)
             {
-                Assert.True(list[i].ImpliesPass == (deploys[i] == "D:pass"), $"{player} 第 {i + 1} 次部署：复盘 {list[i]}，实际 {deploys[i]}");
+                bool wouldPass = deploys[i] == "D:pass" || decisive[list[i].Index];
+                Assert.True(list[i].Review.ImpliesPass == wouldPass, $"{player} 第 {i + 1} 次部署：复盘 {list[i].Review}，实际 {deploys[i]}");
             }
 
             total += list.Count;
         }
 
         Assert.True(total >= 40, $"样本口径：只复盘了 {total} 次部署。");
+        Assert.Equal(2, decisive.Count(d => d));   // 样本口径：第 10 大回合 P0、第 12 大回合 P2 各一次决胜一手
 
         // 对局日志同样逐字节不变：同一种子（四人四区、截到第 13 个小回合，含两次链接）挂与不挂复盘各跑一次，确定性文本相同。
         MatchLog plain = MatchSession.Create(LinkSimFixtures.Config(turnLimit: 13), LinkSimFixtures.FourZoneSeed.Value).Run();
@@ -180,7 +196,7 @@ public class 战场落败复盘与等待者评估Tests
         // 复盘结论与其实际 Pass 一致；报告列出逐人明细与"本可翻盘"占比。
         // 反面：脚本控制者跑出的日志（首部写的是 AI 配置）回放第 1 小回合即分歧 → 整局记为未能复盘，不给半截结论。
         // 变异 MP-5：回放核对 SameMove 恒为真 → 脚本日志被"复盘"（Reviewed > 0）即红。
-        MatchLog log = MatchLog.Parse(MatchSession.Create(LinkSimFixtures.Config(turnLimit: 600), LinkSimFixtures.FourZoneSeed.Value).Run().FullText());
+        MatchLog log = RealLog.Value;
         Assert.NotNull(log.Result);
         (IReadOnlyList<DefeatTarget> targets, int missing) = DefeatReplay.TargetsOf(log);
         Assert.NotEmpty(targets);   // 样本口径
@@ -192,6 +208,7 @@ public class 战场落败复盘与等待者评估Tests
         Assert.Equal(targets.Count, section.Reviewed);
         Assert.Equal(section.Reviewed, section.Consistent);
         Assert.All(section.Entries, e => Assert.Equal(targets.Single(t => t.Turn == e.Target.Turn), e.Target));
+        Assert.All(section.Decisive, d => Assert.True(d.Entry.Move.Outcome.ComesBack));   // 决胜一手（2.4 收集）都满足追平 / 反超
 
         string report = ReportWriter.Render(BalanceAnalyzer.Analyze([log], new AnalysisOptions { ReviewDefeats = true }));
         Assert.Contains("## 战场落败复盘", report, StringComparison.Ordinal);
@@ -247,5 +264,28 @@ public class 战场落败复盘与等待者评估Tests
         Assert.Null(oldReport.Waiters);
         Assert.Null(oldReport.DefeatReview);
         Assert.DoesNotContain("等待者评估", ReportWriter.Render(oldReport), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 分析命令的复盘开关()
+    {
+        // 裁决 P10（tasks 2.3）：analyze 缺省不做战场落败复盘（不回放），等待者评估照常输出；--review-defeats 开启复盘。用法文本列出该开关。
+        // 变异 MP-7：开关读取改回恒为 true → 缺省也出复盘段，本测试红。
+        string dir = SimFixtures.TempDir("analyze-review-defeats");
+        RealLog.Value.WriteTo(dir);
+
+        (int code, string output, string err) = LinkSimFixtures.RunMain(null, null, "analyze", "--dir", dir);
+        Assert.True(code == 0, err);
+        Assert.DoesNotContain("## 战场落败复盘", output, StringComparison.Ordinal);
+        Assert.Contains("## 等待者评估", output, StringComparison.Ordinal);
+
+        (int reviewCode, string reviewed, string reviewErr) = LinkSimFixtures.RunMain(null, null, "analyze", "--dir", dir, "--review-defeats");
+        Assert.True(reviewCode == 0, reviewErr);
+        Assert.Contains("## 战场落败复盘", reviewed, StringComparison.Ordinal);
+        Assert.Contains("决胜一手", reviewed, StringComparison.Ordinal);
+        Assert.Contains("## 等待者评估", reviewed, StringComparison.Ordinal);
+
+        (_, string usage, _) = LinkSimFixtures.RunMain(null, null);
+        Assert.Contains("[--review-defeats]", usage, StringComparison.Ordinal);
     }
 }

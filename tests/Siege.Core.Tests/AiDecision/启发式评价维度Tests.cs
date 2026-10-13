@@ -495,7 +495,8 @@ public class 启发式评价维度Tests
         Siege.Sim.Logging.MatchLog log = Siege.Sim.Running.MatchSession
             .Create(SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard), 41).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         // 段 C（裁决 R10）：硬约束 + 阈值 + 预筛口径使走法变化，版本 2 → 3。
-        Assert.Equal(3, EvaluationBreakdown.Version);
+        // ai-pass-review 裁决 P13：链接模式下的决胜一手改变"哪些候选参与保留"，版本 3 → 4。
+        Assert.Equal(4, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
 
         // 往返：写出再读回仍在（写入路径漏写则读回 null）。

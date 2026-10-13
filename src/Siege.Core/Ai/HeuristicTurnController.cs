@@ -119,6 +119,12 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>最近一次部署的选择；尚未部署过为 <c>null</c>。</summary>
     public CandidateBatch? LastChoice { get; private set; }
 
+    /// <summary>
+    /// 最近一次部署是否走了决胜一手（ai-decision「链接模式下的决胜一手」）：走了即为所落批次的记录，否则（含尚未部署）为 <c>null</c>。
+    /// 只是留痕，决策日志的格式不变（仍是 <c>D:&lt;批次&gt;</c>）。
+    /// </summary>
+    public DecisiveMove? LastDecisive { get; private set; }
+
     /// <summary>最近一次部署的前瞻记录（expert-lookahead）：前瞻宽度为 0（简单 / 标准 / 高难）时恒为 <c>null</c>。</summary>
     public LookaheadRecord? LastLookahead { get; private set; }
 
@@ -309,8 +315,9 @@ public sealed class HeuristicTurnController : ITurnController
         BatchContext context = batch.Context;
         batch.Clear();
 
-        ImmutableArray<PointScore> ranking = RankPoints(batch, rehearse, evaluator);
+        ImmutableArray<PointScore> ranking = RankPoints(batch, rehearse, evaluator, out ImmutableArray<PointScore> ranked);
         LastPointRanking = ranking;
+        LastDecisive = null;
         if (ranking.IsEmpty || context.DeployLimit == 0)
         {
             LastCandidates = [];
@@ -354,6 +361,14 @@ public sealed class HeuristicTurnController : ITurnController
         {
             choice = CandidateSelection.Best(candidates);
             LastLookahead = null;
+        }
+
+        // 决胜一手（ai-pass-review 2.1，P7 = A 窄版）：只在"本将 Pass、这次 Pass 会让本战场整轮 Pass 结算、自己落后"时检查；
+        // 条件不满足时这里什么都不算，决策与引入之前逐字节相同。不消费任何随机流。
+        if (choice.IsPass && DecisiveTriggered(view, Player) && DecisiveMoveFor(view, ranked, ranking, batch, rehearse, evaluator) is { } decisive)
+        {
+            choice = decisive.Choice;
+            LastDecisive = decisive.Record;
         }
 
         LastChoice = choice;
@@ -414,29 +429,14 @@ public sealed class HeuristicTurnController : ITurnController
         BigInteger powerBefore = evaluator.Before.Of(Player).Total;
         BigInteger? rivalBefore = rivals.IsEmpty ? null : rivals.Max(r => evaluator.Before.Of(r).Total);
 
-        MoveOutcome Outcome(ImmutableArray<Placement> placements, BigInteger total)
-        {
-            batch.Clear();
-            foreach (Placement placement in placements)
-            {
-                if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
-                {
-                    throw new SiegeRuleException($"复盘复摆已预演通过的落点被拒绝：{failure.Message}");
-                }
-            }
-
-            RehearsalResult result = rehearse();
-            GameBoard after = result.ProjectedBoard ?? throw new SiegeRuleException("复盘的候选预演没有结算后盘面。");
-            PowerSnapshot power = evaluator.PowerOf(after);
-            BigInteger? rivalAfter = rivals.IsEmpty ? null : rivals.Max(r => power.Of(r).Total);
-            return new MoveOutcome(placements, total - passTotal, result.Captures.Length, power.Of(Player).Total, rivalAfter);
-        }
+        MoveOutcome Project(ImmutableArray<Placement> placements, BigInteger total) =>
+            Outcome(placements, total - passTotal, batch, rehearse, evaluator, rivals);
 
         MoveOutcome? best = null;
         int captureCandidates = 0, comebackCandidates = 0;
         foreach (PointScore point in ranked)
         {
-            MoveOutcome outcome = Outcome([point.Placement], point.Total);
+            MoveOutcome outcome = Project([point.Placement], point.Total);
             best ??= outcome;
             captureCandidates += outcome.Captures > 0 ? 1 : 0;
             comebackCandidates += outcome.ComesBack == true ? 1 : 0;
@@ -446,7 +446,7 @@ public sealed class HeuristicTurnController : ITurnController
         if (!ranked.IsEmpty && context.DeployLimit > 0)
         {
             CandidateBatch candidate = Greedy([.. ranked.Take(Config.CandidatePointCount)], batch, rehearse, evaluator, int.MinValue);
-            forced = candidate.IsPass ? null : Outcome(candidate.Placements, candidate.Total);
+            forced = candidate.IsPass ? null : Project(candidate.Placements, candidate.Total);
         }
 
         batch.Clear();
@@ -456,6 +456,88 @@ public sealed class HeuristicTurnController : ITurnController
         {
             Rejections = rejections.ToImmutableSortedDictionary(StringComparer.Ordinal),
         };
+    }
+
+    /// <summary>
+    /// 决胜一手的触发条件（ai-decision「链接模式下的决胜一手」）：链接模式；本战场其他在局玩家在本大回合都已 Pass（本次 Pass 会让本战场整轮 Pass 而结算）；
+    /// 自己不是本战场势力最高（并列最高视为最高，与 C15 同一判定 <see cref="TrailsInBattlefield"/>）。只读公开快照。
+    /// </summary>
+    internal static bool DecisiveTriggered(MatchPublicView view, PlayerId player)
+    {
+        if (view.Mode != MatchMode.Link || !TrailsInBattlefield(view, player))
+        {
+            return false;
+        }
+
+        ImmutableArray<PlayerId> rivals = RivalsInBattlefield(view, player);
+        return !rivals.IsEmpty && rivals.All(view.PassedThisRound.Contains);
+    }
+
+    /// <summary>
+    /// 决胜一手的选择：在单点排序的<b>全部</b>合法单点（按排序次序）与"同一排序前 N 的强制贪心批次（合法即保留，至部署上限）"之中，
+    /// 取预演后"己方势力 − 本战场其他在局者最高势力"最大且 ≥ 0 者；并列取先出现者（单点按排序在前，强制批次排最后）。没有即 <c>null</c>（照常 Pass）。
+    /// 候选、预演、活形硬约束与势力计算全部复用停手复盘的同一路径（<see cref="Outcome"/>、<see cref="Greedy"/>、<see cref="BatchEvaluator.PowerOf"/>），
+    /// 不看评价分（P9）。不消费任何随机流。
+    /// </summary>
+    private (CandidateBatch Choice, DecisiveMove Record)? DecisiveMoveFor(
+        MatchPublicView view, ImmutableArray<PointScore> ranked, ImmutableArray<PointScore> ranking, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+    {
+        ImmutableArray<PlayerId> rivals = RivalsInBattlefield(view, Player);
+        BatchContext context = batch.Context;
+        batch.Clear();
+        BigInteger passTotal = evaluator.Evaluate([], rehearse(), context).Total;
+        var options = new List<(CandidateBatch Batch, bool Forced)>(ranked.Length + 1);
+        options.AddRange(ranked.Select(p => (new CandidateBatch([p.Placement], p.Evaluation), false)));
+        CandidateBatch forced = Greedy(ranking, batch, rehearse, evaluator, int.MinValue);
+        if (!forced.IsPass)
+        {
+            options.Add((forced, true));
+        }
+
+        (CandidateBatch Batch, bool Forced, MoveOutcome Outcome)? best = null;
+        BigInteger bestMargin = BigInteger.MinusOne;
+        foreach ((CandidateBatch option, bool isForced) in options)
+        {
+            MoveOutcome outcome = Outcome(option.Placements, option.Total - passTotal, batch, rehearse, evaluator, rivals);
+            BigInteger margin = outcome.PowerAfter - outcome.RivalAfter!.Value;
+            if (margin >= 0 && (best is null || margin > bestMargin))
+            {
+                best = (option, isForced, outcome);
+                bestMargin = margin;
+            }
+        }
+
+        batch.Clear();
+        if (best is not { } chosen)
+        {
+            return null;
+        }
+
+        BigInteger rivalBefore = rivals.Max(r => evaluator.Before.Of(r).Total);
+        return (chosen.Batch, new DecisiveMove(chosen.Outcome, chosen.Forced, evaluator.Before.Of(Player).Total, rivalBefore));
+    }
+
+    /// <summary>
+    /// 把一手摆上暂放批次、零副作用预演，并按评价器势力口径算落下后己方与本战场对手最高的势力。停手复盘与决胜一手共用这一份。
+    /// 落点都来自已通过预演与活形硬约束的候选，复摆被拒即响亮失败。结束时批次里留着这一手，调用方负责清空。
+    /// </summary>
+    private MoveOutcome Outcome(
+        ImmutableArray<Placement> placements, BigInteger gain, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, ImmutableArray<PlayerId> rivals)
+    {
+        batch.Clear();
+        foreach (Placement placement in placements)
+        {
+            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
+            {
+                throw new SiegeRuleException($"复摆已预演通过的落点被拒绝：{failure.Message}");
+            }
+        }
+
+        RehearsalResult result = rehearse();
+        GameBoard after = result.ProjectedBoard ?? throw new SiegeRuleException("候选预演没有结算后盘面。");
+        PowerSnapshot power = evaluator.PowerOf(after);
+        BigInteger? rivalAfter = rivals.IsEmpty ? null : rivals.Max(r => power.Of(r).Total);
+        return new MoveOutcome(placements, gain, result.Captures.Length, power.Of(Player).Total, rivalAfter);
     }
 
     /// <summary>与 <see cref="TrailsInBattlefield"/> 同一战场口径：出生棋盘落在 <paramref name="player"/> 所在战场里的其他在局玩家（升序）。未锁定出生棋盘为空。</summary>
@@ -482,11 +564,12 @@ public sealed class HeuristicTurnController : ITurnController
     /// 改造不新增评估维度（design D-J）：匠人的每个合法改造目标只是多一个候选暂放，
     /// "提子""通路""覆盖变化"由既有的 <see cref="EvaluationWeights"/> 维度经预演结果自然反映。
     /// </remarks>
-    private ImmutableArray<PointScore> RankPoints(StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+    private ImmutableArray<PointScore> RankPoints(StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, out ImmutableArray<PointScore> ranked)
     {
         (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator);
         LastCandidateCells = cells;
-        return [.. Rank(points).Take(Config.CandidatePointCount)];
+        ranked = [.. Rank(points)];
+        return [.. ranked.Take(Config.CandidatePointCount)];
     }
 
     /// <summary>

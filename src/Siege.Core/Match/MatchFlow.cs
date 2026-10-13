@@ -515,6 +515,7 @@ public sealed partial class MatchFlow
             CarryInOut, CarryIns)
         {
             Mode = Options.Mode,
+            PassedThisRound = PassedThisRound,
         };
     }
 

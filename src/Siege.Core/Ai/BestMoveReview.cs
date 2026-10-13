@@ -89,3 +89,12 @@ public sealed record BestMoveReview(
     /// </summary>
     public bool ImpliesPass => NoMove != NoMoveReason.None || Best!.Gain <= PassThreshold;
 }
+
+/// <summary>
+/// 一次决胜一手（ai-decision「链接模式下的决胜一手」，ai-pass-review 2.1）：本将 Pass、该 Pass 会让本战场整轮 Pass 结算、自己落后时改落的批次。
+/// </summary>
+/// <param name="Outcome">所落批次与落下后（对手不回应）的势力对比；<see cref="MoveOutcome.Gain"/> 是其评价收益（可为负——决胜一手不看评价分，P9）。</param>
+/// <param name="FromForcedBatch">取自强制贪心批次（否则是单点）。</param>
+/// <param name="PowerBefore">决策前己方势力。</param>
+/// <param name="RivalBefore">决策前本战场其他在局玩家的最高势力。</param>
+public sealed record DecisiveMove(MoveOutcome Outcome, bool FromForcedBatch, BigInteger PowerBefore, BigInteger RivalBefore);

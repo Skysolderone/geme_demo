@@ -43,13 +43,11 @@ S	1	round=7	field=0	AllPassed	winner=P1	1.P1=101 2.P3=58
 9	P0	R:2:Line,4:Multiplier,0:Sentry D:W7:Multiplier,V8:Chain
 10	P1	R:0:Artisan,1:Basic,2:Basic D:pass
 10	P2	R:5:Synergy,2:Line,4:Multiplier D:pass
-10	P0	R:0:Synergy,1:Basic,2:Basic D:pass
-P	2	Final	round=11	candidates=0,2	pairs=0-2	waiter=-	source=script
-L	3	pairing=2	0-2	side=North	version=3	shared=5	shifts=0:0:0,2:8:7,4:0:0	digest=FF34CCA153E0D7DD97F93214285E319125E03CEB1AC80C057447568639703EC0
-S	2	round=10	field=2	AllPassed	winner=P2	1.P2=88 2.P0=78
-11	P1	R:0:Synergy,1:Multiplier,2:Basic D:AC8:Multiplier,AE8:Synergy,AD9:Sentry
-11	P2	R:3:Fortress,5:Fortress,0:Basic D:AB9:Fortress
-12	P1	R:2:Synergy,0:Bannerman,1:Basic D:pass
-12	P2	R:0:Multiplier,1:Fortress,3:Fortress D:pass
-S	3	round=12	field=0	AllPassed	winner=P1	1.P1=432 2.P2=89
-# end phase=Ended majorRound=12 reason=LastBattlefieldSettled turns=41
+10	P0	R:0:Synergy,1:Basic,2:Basic D:V6:Sentry,U7:Synergy
+11	P0	R:1:Synergy,4:Synergy,0:Multiplier D:W5:Line
+11	P1	R:0:Basic,1:Basic,2:Basic D:pass
+11	P2	R:2:Line,0:Fortress,5:Fortress D:pass
+12	P0	R:1:Multiplier,3:Fortress,4:Fortress D:pass
+12	P1	R:0:Line,3:Line,1:Basic D:pass
+12	P2	R:0:Multiplier,2:Fortress,5:Fortress D:R5:Multiplier
+# end phase=InProgress majorRound=13 reason=- turns=43

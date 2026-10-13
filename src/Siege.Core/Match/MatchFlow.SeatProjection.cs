@@ -47,6 +47,7 @@ public sealed partial class MatchFlow
             Relics = relics,
             Hands = hands,
             LifeShape = LifeShapeReport.Analyze(board),
+            PassedThisRound = [.. full.PassedThisRound.Where(sameField.Contains)],
         };
     }
 

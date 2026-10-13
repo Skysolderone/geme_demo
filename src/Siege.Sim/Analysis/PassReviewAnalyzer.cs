@@ -13,7 +13,7 @@ namespace Siege.Sim.Analysis;
 /// 战场落败复盘（ai-pass-review 1.2，规格 match-telemetry「战场落败复盘与等待者评估」第 1 条）的汇总。
 /// 复盘对象 = 以"战场落败"出局、且其战场因整轮 Pass 结算的玩家；时刻 = 结算那一大回合本人最后一次 Pass（分析时按日志回放到该时刻）。
 /// </summary>
-/// <param name="Logs">含整轮 Pass 结算落败的链接模式局数。</param>
+/// <param name="Logs">回放的链接模式局数（有结果、有小回合的纳入局；2.4 起全部回放以收集决胜一手）。</param>
 /// <param name="SkippedLogs">未能复盘的局：原因 → 局数（地图 / AI 版本不一致、回放分歧等）。</param>
 /// <param name="Defeats">整轮 Pass 结算落败总人次（全部纳入局，含未能复盘的局）。</param>
 /// <param name="MissingPass">结算那一大回合找不到本人 Pass 快照的人次（应为 0）。</param>
@@ -27,6 +27,9 @@ public sealed record DefeatReviewSection(
 {
     /// <summary>复盘到的人次。</summary>
     public int Reviewed => Entries.Count;
+
+    /// <summary>回放中出现的决胜一手（ai-pass-review 2.4）及其后该玩家是否赢下所在战场的下一次结算。</summary>
+    public IReadOnlyList<DecisiveOutcome> Decisive { get; init; } = [];
 
     /// <summary>最好一手"本可翻盘"的人次（对手不回应）。</summary>
     public int Comebacks => Entries.Count(e => e.Review.Best?.ComesBack == true);
@@ -132,12 +135,12 @@ public static class PassReviewAnalyzer
 {
     /// <summary>
     /// 战场落败复盘：对纳入局中的每局链接模式日志按日志回放复盘（<see cref="DefeatReplay.Review"/>）。没有整轮 Pass 结算落败的样本时返回 <c>null</c>（报告整段不出现）。
-    /// 回放要重跑对局，耗时约等于跑局本身，所以只由 <c>analyze</c> 命令开启（<see cref="AnalysisOptions.ReviewDefeats"/>）。
+    /// 回放要重跑对局，耗时约等于跑局本身，所以只由 <c>analyze --review-defeats</c> 开启（<see cref="AnalysisOptions.ReviewDefeats"/>）。
     /// </summary>
     public static DefeatReviewSection? ReviewDefeats(IReadOnlyList<MatchLog> included)
     {
         ArgumentNullException.ThrowIfNull(included);
-        List<MatchLog> logs = [.. included.Where(l => l.IsLinkMode && l.Result is not null && DefeatReplay.TargetsOf(l) is { } t && (t.Targets.Count > 0 || t.MissingPass > 0))];
+        List<MatchLog> logs = [.. included.Where(l => l.IsLinkMode && l.Result is not null && l.Turns.Count > 0)];
         if (logs.Count == 0)
         {
             return null;
@@ -145,6 +148,7 @@ public static class PassReviewAnalyzer
 
         var skipped = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var entries = new List<DefeatReviewEntry>();
+        var decisive = new List<DecisiveOutcome>();
         int defeats = 0, missing = 0;
         foreach (MatchLog log in logs.OrderBy(l => l.Seed))
         {
@@ -158,10 +162,21 @@ public static class PassReviewAnalyzer
             }
 
             entries.AddRange(result.Entries);
+            decisive.AddRange(result.Decisive.Select(d => new DecisiveOutcome(d, WonNextSettlement(log, d))));
         }
 
-        return new DefeatReviewSection(logs.Count, skipped, defeats, missing, entries);
+        return new DefeatReviewSection(logs.Count, skipped, defeats, missing, entries) { Decisive = decisive };
     }
+
+    /// <summary>
+    /// 决胜一手之后该玩家所在战场的下一次结算（大回合 ≥ 决胜一手所在大回合、名单里有该玩家）是否由他胜出；之后没有含他的结算（截断等）为 <c>null</c>。
+    /// </summary>
+    private static bool? WonNextSettlement(MatchLog log, DecisiveEntry d) =>
+        log.Events
+            .Where(e => e.Settlement is { } s && s.MajorRound >= d.MajorRound && s.Entries.Any(x => x.Player == d.Player))
+            .OrderBy(e => e.Seq)
+            .Select(e => (bool?)(e.Settlement!.Winner == d.Player))
+            .FirstOrDefault();
 
     /// <summary>等待者评估：只读日志，不回放。没有到达决赛的纳入局时返回 <c>null</c>（旧日志与无决赛样本的报告不出现这一段）。</summary>
     public static WaiterSection? Waiters(IReadOnlyList<MatchLog> included)
@@ -228,3 +243,6 @@ public static class PassReviewAnalyzer
         return firstRound is not null && firstRound.Candidates.Contains(zone) ? WaiterOrigin.FirstRoundSettledEarly : WaiterOrigin.Other;
     }
 }
+
+/// <summary>一次决胜一手与其后果：该玩家所在战场的下一次结算是否由他胜出（之后没有含他的结算为 <c>null</c>）。</summary>
+public sealed record DecisiveOutcome(DecisiveEntry Entry, bool? WonBattlefield);
