@@ -1,0 +1,8 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/board-link-mode/proposal.md", "reason": "段 E 收尾依据"}
+{"file": "openspec/changes/board-link-mode/design.md", "reason": "段 E 收尾依据"}
+{"file": "openspec/changes/board-link-mode/tasks.md", "reason": "段 E 收尾依据"}
+{"file": ".trellis/tasks/archive/2026-10/10-12-board-link-mode-f/implement.md", "reason": "段 E 收尾依据"}
+{"file": ".trellis/tasks/archive/2026-10/10-10-board-link-mode-d/implement.md", "reason": "段 E 收尾依据"}
+{"file": "art/board-link-mode/README.md", "reason": "段 E 收尾依据"}
+{"file": "HANDOFF.md", "reason": "段 E 收尾依据"}
