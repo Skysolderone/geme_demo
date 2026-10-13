@@ -97,18 +97,30 @@ public sealed record ShowMask(
         [], null, ImmutableDictionary<Coord, int>.Empty, null);
 
     /// <summary>
-    /// 棋盘展开节拍 ①（board-link-mode 4.5）：正在升起的新增格及其进度（0..1000‰；0 = 尚未开始、仍在地面之下）。
-    /// 升起节拍之前（含之前的节拍播放中）这些格进度为 0；播完后不再出现。
+    /// 棋盘拼接节拍 ①（board-link-mode F.4 / 裁决 J5）：正在滑动的格、进度 0 时相对终点的格偏移与进度（0..1000‰；0 = 尚未开始、停在起点）。
+    /// 滑入节拍之前（含之前的节拍播放中）进度为 0；播完后为 <c>null</c>（到位）。某格当前的格偏移见 <see cref="SlideOffsetOf"/>。
     /// </summary>
-    public ImmutableDictionary<Coord, int> Rising { get; init; } = ImmutableDictionary<Coord, int>.Empty;
+    public (ImmutableArray<Coord> Cells, int FromDx, int FromDy, int Permille)? Slide { get; init; }
 
-    /// <summary>棋盘展开节拍 ②：相机拉远的目标（合并后战场的格包围盒）与进度（0..1000‰）；只在该节拍进行中非空。</summary>
+    /// <summary>某格此刻相对终点的格偏移（千分之一格）；不在滑动中为 (0, 0)。</summary>
+    public (int DxPermille, int DyPermille) SlideOffsetOf(Coord coord)
+    {
+        if (Slide is not { } slide || !slide.Cells.Contains(coord))
+        {
+            return (0, 0);
+        }
+
+        int remain = PowerInterpolation.FullPermille - Math.Clamp(slide.Permille, 0, PowerInterpolation.FullPermille);
+        return (slide.FromDx * remain, slide.FromDy * remain);
+    }
+
+    /// <summary>棋盘拼接节拍 ②：相机拉远的目标（合并后战场的格包围盒）与进度（0..1000‰）；只在该节拍进行中非空。</summary>
     public (CoordRect Target, int Permille)? CameraPull { get; init; }
 
     /// <summary>遮罩是否为空（没有任何中间态）。</summary>
     public bool IsEmpty =>
         Hidden.IsEmpty && Appearing.IsEmpty && StillShown.IsEmpty && CaptureFadePermille == 0 && Power.IsEmpty
-        && Callouts.IsEmpty && CaptureSummary is null && RelicFlash.IsEmpty && Banner is null && Rising.IsEmpty && CameraPull is null;
+        && Callouts.IsEmpty && CaptureSummary is null && RelicFlash.IsEmpty && Banner is null && Slide is null && CameraPull is null;
 }
 
 /// <summary>
@@ -233,22 +245,18 @@ public sealed class ShowTimeline
         string? captureSummary = null;
         ImmutableDictionary<Coord, int>.Builder relicFlash = ImmutableDictionary.CreateBuilder<Coord, int>();
         BannerDisplay? banner = null;
-        ImmutableDictionary<Coord, int>.Builder rising = ImmutableDictionary.CreateBuilder<Coord, int>();
+        (ImmutableArray<Coord> Cells, int FromDx, int FromDy, int Permille)? slide = null;
         (CoordRect Target, int Permille)? cameraPull = null;
         int progress = ProgressPermille;
         int nowMs = _startOfCurrentMs + _elapsedMs;
 
-        // 棋盘展开（board-link-mode 4.5）：尚未播到的升起节拍里的格要先藏在地面之下、尚未显现的对方格要先藏起棋子——这些"未来节拍"也要在遮罩里体现。
+        // 棋盘拼接（board-link-mode F.4）：尚未播到的滑入节拍里的格停在起点、尚未显现的对方格要先藏起棋子——这些"未来节拍"也要在遮罩里体现。
         for (int i = _index + 1; i < Beats.Length; i++)
         {
             switch (Beats[i])
             {
-                case BoardRiseBeat rise:
-                    foreach (Coord c in rise.Cells)
-                    {
-                        rising[c] = 0;
-                    }
-
+                case BoardSlideBeat pending:
+                    slide = (pending.Cells, pending.FromDx, pending.FromDy, 0);
                     break;
                 case OpponentRevealBeat reveal:
                     foreach (Coord c in reveal.Cells)
@@ -338,14 +346,11 @@ public sealed class ShowTimeline
                     }
 
                     break;
-                case BoardRiseBeat rise:
-                    // 升起中：进度即升起程度；播过即到位（不再列入）。
+                case BoardSlideBeat moving:
+                    // 滑动中：进度即走过的比例；播过即到位（不再列入）。
                     if (current)
                     {
-                        foreach (Coord c in rise.Cells)
-                        {
-                            rising[c] = progress;
-                        }
+                        slide = (moving.Cells, moving.FromDx, moving.FromDy, progress);
                     }
 
                     break;
@@ -381,7 +386,7 @@ public sealed class ShowTimeline
 
         return new ShowMask(hidden.ToImmutable(), appearing.ToImmutable(), stillShown, fade, power.ToImmutable(), callouts.ToImmutable(), captureSummary, relicFlash.ToImmutable(), banner)
         {
-            Rising = rising.ToImmutable(),
+            Slide = slide,
             CameraPull = cameraPull,
         };
     }

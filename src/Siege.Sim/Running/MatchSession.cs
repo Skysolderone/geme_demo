@@ -363,7 +363,7 @@ public sealed class MatchSession
         IEnumerable<Coord> cells = after.Board.AllCoords();
         if (Match.Links.Count > linksBefore)
         {
-            var layout = new LinkLayout(Match.Board.BaseMap.Boards, Match.Links.Select(LinkShiftStep.From));
+            var layout = new LinkLayout(Match.Board.BaseMap.Boards, Match.Links.Select(l => l.ShiftStep));
             int to = Match.Links.Count;
             moved = c => layout.Translate(c, linksBefore, to);
             // 两端都随棋盘越出画布原点的场景格栅栏在盘面上已被丢弃（GameBoard.ApplySplice）；日志保留发生时的记法。

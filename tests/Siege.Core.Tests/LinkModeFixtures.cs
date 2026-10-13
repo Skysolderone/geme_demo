@@ -140,11 +140,11 @@ internal static class LinkModeFixtures
     }
 
     /// <summary>
-    /// 把开局坐标 <paramref name="before"/>（位于出生棋盘 <paramref name="zone"/>）沿本局全部链接记录平移到当前坐标——经唯一的换算工具 <see cref="Siege.Sim.Logging.LinkLayout"/>。
+    /// 把开局坐标 <paramref name="before"/>（位于出生棋盘 <paramref name="zone"/>）沿本局全部链接记录平移到当前坐标——经唯一的换算工具 <see cref="Siege.Core.Board.Maps.LinkLayout"/>。
     /// </summary>
     internal static Coord Track(this MatchFlow match, Coord before, int zone)
     {
-        var layout = new Siege.Sim.Logging.LinkLayout(match.Board.BaseMap.Boards, match.Links.Select(Siege.Sim.Logging.LinkShiftStep.From));
+        var layout = new Siege.Core.Board.Maps.LinkLayout(match.Board.BaseMap.Boards, match.Links.Select(l => l.ShiftStep));
         if (layout.ZoneAt(before, 0) != zone)
         {
             throw new ArgumentException($"{before.ToNotation()} 不在开局出生棋盘 {zone} 上。", nameof(before));

@@ -114,20 +114,24 @@ public sealed class BoardCamera
 
     /// <summary>
     /// 重定界（board-link-mode 4.4：链接后可行矩形随战场扩大）：<b>保位姿</b>换上新的外接矩形与战场矩形，只按新矩形重夹一次——不复位到中心、不改缩放、
-    /// 不退出全局预览（预览中的距离与注视点按新战场重算）。矩形相同时什么都不变。
+    /// 不退出全局预览（预览中的距离与注视点按新战场重算）。矩形相同且不平移时什么都不变。
+    /// <paramref name="shiftX"/> / <paramref name="shiftZ"/>（board-link-mode F.4）：拼接后布局整体变化、本机棋盘在平面上随之移动时，注视点按同一位移平移再夹取，
+    /// 使画面里本机棋盘不跳（锚点通常不动，但他人链接把本机战场收拢东移、或整体越界平移时本机也会动）。
     /// </summary>
-    public void Rebound(PlaneRect bounds, PlaneRect? focus = null)
+    public void Rebound(PlaneRect bounds, PlaneRect? focus = null, float shiftX = 0f, float shiftZ = 0f)
     {
         CheckRect(bounds, nameof(bounds));
         PlaneRect next = focus ?? bounds;
         CheckRect(next, nameof(focus));
-        if (bounds == _bounds && next == _focus)
+        if (bounds == _bounds && next == _focus && shiftX == 0f && shiftZ == 0f)
         {
             return;
         }
 
         _bounds = bounds;
         _focus = next;
+        _x += shiftX;
+        _z += shiftZ;
         Clamp();
     }
 

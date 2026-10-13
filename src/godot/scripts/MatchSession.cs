@@ -118,7 +118,8 @@ public sealed class MatchSession
     /// 链接模式新增的演出（board-link-mode tasks 4.5）：在既有结算节拍之后接上本机战场结算的横幅与本机参与的"棋盘展开"节拍；他场结算只入提示条队列。
     /// 节拍全部由 <see cref="LinkShowBeats"/> 纯函数生成（输入：结算前后本机的默认棋盘、全局公开的结算记录），这里只接线。须在 <see cref="Rebuild"/> 之后调用。
     /// </summary>
-    private ImmutableArray<SettlementBeat> WithLinkBeats(ImmutableArray<SettlementBeat> beats, DefaultBoardView boardBefore, ImmutableArray<BattlefieldSettlementRecord> settlementsBefore)
+    private ImmutableArray<SettlementBeat> WithLinkBeats(
+        ImmutableArray<SettlementBeat> beats, DefaultBoardView boardBefore, ImmutableArray<BattlefieldSettlementRecord> settlementsBefore, int linksBefore)
     {
         (ImmutableArray<SettlementBeat> settled, ImmutableArray<string> notices) =
             LinkShowBeats.Settlements(settlementsBefore, Match.Settlements, Me, matchEnded: Match.Phase == MatchPhase.Ended);
@@ -128,11 +129,30 @@ public sealed class MatchSession
         ImmutableArray<PlayerId> matesBefore = _matesBefore;
         ImmutableArray<PlayerId> newOpponents = [.. World.SameBattlefieldPlayers.Where(p => !matesBefore.Contains(p))];
         _matesBefore = World.SameBattlefieldPlayers;
-        ImmutableArray<SettlementBeat> expansion = LinkShowBeats.Expansion(boardBefore, World.Board(), newOpponents);
+        // 拼接（board-link-mode F.4）：本小回合里发生了链接才有节拍；结算前后的格经布局换算对齐，平移不算新增。
+        ImmutableArray<SettlementBeat> expansion = Match.Links.Count > linksBefore
+            ? LinkShowBeats.Expansion(boardBefore, World.Board(), newOpponents, Layout(), linksBefore)
+            : [];
         return LinkShowBeats.Splice(beats, settled, expansion);   // 战场落败横幅排在出局横幅之前，再是展开节拍
     }
 
-    /// <summary>上一次结算后与本机同战场的玩家（"棋盘展开"横幅里"与 X 交战"的 X = 新成为同战场者）。</summary>
+    /// <summary>本局的布局换算（开局出生棋盘 + 全部链接的平移向量，Core 的唯一实现 <see cref="LinkLayout"/>）。</summary>
+    private LinkLayout Layout() => new(Match.Board.BaseMap.Boards, Match.Links.Select(l => l.ShiftStep));
+
+    /// <summary>自 <paramref name="linksBefore"/> 次链接以来的坐标映射（结算前盘面的格 → 拼接后坐标）；期间没有链接为 <c>null</c>（恒等）。</summary>
+    private Func<Coord, Coord>? MovedSince(int linksBefore)
+    {
+        if (Match.Links.Count == linksBefore)
+        {
+            return null;
+        }
+
+        LinkLayout layout = Layout();
+        int to = layout.Versions;
+        return c => layout.Translate(c, linksBefore, to);
+    }
+
+    /// <summary>上一次结算后与本机同战场的玩家（"棋盘拼接"横幅里"与 X 交战"的 X = 新成为同战场者）。</summary>
     private ImmutableArray<PlayerId> _matesBefore = [];
 
     /// <summary>出生区 → 玩家（插旗锁定后才有）。</summary>
@@ -483,6 +503,7 @@ public sealed class MatchSession
         MatchPublicView before = World.Public.View;
         DefaultBoardView boardBefore = World.Board();
         ImmutableArray<BattlefieldSettlementRecord> settlementsBefore = [.. Match.Settlements];
+        int linksBefore = Match.Links.Count;
         SettlementOutcome outcome = Match.Confirm();
         if (!outcome.Confirmed)
         {
@@ -498,7 +519,8 @@ public sealed class MatchSession
         Rebuild();
 
         // 本机玩家自己的结算：有结算记录（按放置顺序），落子节拍压缩为一次整体确认闪动（design.md A2）。
-        _pendingBeats = WithLinkBeats(SettlementBeats.Generate(before, World.Public.View, outcome.CaptureRecord, compressPlacement: true), boardBefore, settlementsBefore);
+        _pendingBeats = WithLinkBeats(
+            SettlementBeats.Generate(before, World.Public.View, outcome.CaptureRecord, compressPlacement: true, MovedSince(linksBefore)), boardBefore, settlementsBefore, linksBefore);
     }
 
     /// <summary>第 5 阶段：Pass（0 落子）。</summary>
@@ -512,6 +534,7 @@ public sealed class MatchSession
         MatchPublicView before = World.Public.View;
         DefaultBoardView boardBefore = World.Board();
         ImmutableArray<BattlefieldSettlementRecord> settlementsBefore = [.. Match.Settlements];
+        int linksBefore = Match.Links.Count;
         Match.Pass();
         LastFailure = null;
         RecruitPanel = null;
@@ -519,7 +542,7 @@ public sealed class MatchSession
         Rebuild();
 
         // Pass 没有结算记录：势力不变得空序列、势力有变只得势力重算节拍。
-        _pendingBeats = WithLinkBeats(SettlementBeats.Generate(before, World.Public.View, record: null), boardBefore, settlementsBefore);
+        _pendingBeats = WithLinkBeats(SettlementBeats.Generate(before, World.Public.View, record: null, moved: MovedSince(linksBefore)), boardBefore, settlementsBefore, linksBefore);
     }
 
     /// <summary>跑完一个 AI 小回合，返回落子与被提子的演出数据。</summary>
@@ -533,6 +556,7 @@ public sealed class MatchSession
         MatchPublicView before = Match.Publish();
         DefaultBoardView boardBefore = World.Board();
         ImmutableArray<BattlefieldSettlementRecord> settlementsBefore = [.. Match.Settlements];
+        int linksBefore = Match.Links.Count;
         _runner.RunTurn();
         MatchPublicView after = Match.Publish();
         LastAiLookahead = (_runner.ControllerOf(actor) as HeuristicTurnController)?.LastLookahead is { } lookahead
@@ -541,9 +565,10 @@ public sealed class MatchSession
 
         // 运行器不返回结算记录（design.md D1）：落子与被提棋子只凭两份快照的盘面之差得出，落子按坐标字典序。
         // 现有"回合高亮"里的落子格 / 被提格两项由节拍取代，不再单独计算（D6）。
-        ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(before, after, record: null);
+        // 本小回合末尾若发生了拼接（board-link-mode F.4），结算前的格先平移到拼接后坐标再比，平移不被当成落子与提子。
+        ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(before, after, record: null, moved: MovedSince(linksBefore));
         Rebuild();
-        beats = WithLinkBeats(beats, boardBefore, settlementsBefore);
+        beats = WithLinkBeats(beats, boardBefore, settlementsBefore, linksBefore);
         _pendingBeats = beats;
         TurnFlash flash = TurnFlash.Of(beats);
 

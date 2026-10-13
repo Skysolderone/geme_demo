@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Presentation.Text;
 using Siege.Presentation.Visibility;
@@ -31,16 +32,20 @@ public readonly record struct CoordRect(int MinX, int MinY, int MaxX, int MaxY)
     public (Coord Low, Coord High) Corners => (new Coord(MinX, MinY), new Coord(MaxX, MaxY));
 }
 
-/// <summary>棋盘展开节拍 ①：新增的公共棋盘与通道从地面升起（settlement-show「棋盘展开节拍」，design D9 / 裁决 D5）。</summary>
-public sealed record BoardRiseBeat(ImmutableArray<Coord> Cells) : SettlementBeat
+/// <summary>
+/// 棋盘拼接节拍 ①（settlement-show「棋盘展开节拍」拼接版，裁决 J5）：被贴方的格从拼接前与本机的相对位置滑到贴合位置。
+/// <paramref name="Cells"/> 为滑动的格（拼接后坐标）；<paramref name="FromDx"/> / <paramref name="FromDy"/> 为进度 0 时相对终点的格偏移（进度 1000‰ 时为 0）。
+/// 本机是锚点时滑的是对方棋盘；本机是被贴方时滑的是本机自己的棋盘（相机随后的重定界节拍跟过去）。
+/// </summary>
+public sealed record BoardSlideBeat(ImmutableArray<Coord> Cells, int FromDx, int FromDy) : SettlementBeat
 {
     /// <summary>基准时长（毫秒）。</summary>
-    public const int Ms = 700;
+    public const int Ms = 900;
 
     public override int DurationMs => Ms;
 }
 
-/// <summary>棋盘展开节拍 ②：相机拉远到合并后战场一屏可见（目标为合并后战场格的包围盒；位姿换算与夹取在引擎侧经相机视图模型完成）。</summary>
+/// <summary>棋盘拼接节拍 ②：相机重定界到合并后战场一屏可见（目标为合并后战场格的包围盒；位姿换算与夹取在引擎侧经相机视图模型完成）。</summary>
 public sealed record CameraPullBeat(CoordRect Target) : SettlementBeat
 {
     /// <summary>基准时长（毫秒）。</summary>
@@ -49,7 +54,7 @@ public sealed record CameraPullBeat(CoordRect Target) : SettlementBeat
     public override int DurationMs => Ms;
 }
 
-/// <summary>棋盘展开节拍 ③：对方战场的棋子、设施与已揭示信物显现（这些格此前对本机不可见）。</summary>
+/// <summary>棋盘拼接节拍 ③：对方战场的棋子、设施与已揭示信物显现（这些格此前对本机不可见）。</summary>
 public sealed record OpponentRevealBeat(ImmutableArray<Coord> Cells) : SettlementBeat
 {
     /// <summary>基准时长（毫秒）。</summary>
@@ -64,12 +69,12 @@ public sealed record OpponentRevealBeat(ImmutableArray<Coord> Cells) : Settlemen
 /// </summary>
 public static class LinkShowBeats
 {
-    /// <summary>棋盘展开横幅文案。</summary>
+    /// <summary>棋盘拼接横幅文案（裁决 J5）。</summary>
     public static string ExpansionText(IEnumerable<PlayerId> opponents)
     {
         ArgumentNullException.ThrowIfNull(opponents);
         string names = string.Join("、", opponents.Select(Labels.Player));
-        return names.Length == 0 ? "棋盘展开" : $"棋盘展开：与 {names} 交战";
+        return names.Length == 0 ? "棋盘拼接" : $"棋盘拼接：与 {names} 交战";
     }
 
     /// <summary>战场胜出横幅。</summary>
@@ -81,45 +86,61 @@ public static class LinkShowBeats
     /// <summary>他场结算的提示条文案（不打断操作）。</summary>
     public static string SettledElsewhereText(int battlefield, PlayerId winner) => $"战场 {BirthZoneLabel.Of(battlefield)} 已结算，胜者 {Labels.Player(winner)}";
 
-    /// <summary>四个展开节拍的基准总时长（毫秒；裁决 D5：合计约 2.5 s）。</summary>
-    public const int ExpansionTotalMs = BoardRiseBeat.Ms + CameraPullBeat.Ms + OpponentRevealBeat.Ms + BannerBeat.PerBannerMs;
+    /// <summary>四个拼接节拍的基准总时长（毫秒；裁决 J5：滑入约 900 + 重定界约 500 + 显现约 600 + 横幅）。</summary>
+    public const int ExpansionTotalMs = BoardSlideBeat.Ms + CameraPullBeat.Ms + OpponentRevealBeat.Ms + BannerBeat.PerBannerMs;
 
     /// <summary>
-    /// 棋盘展开：由本机结算前后两份按座位过滤的默认棋盘得出。本机战场没有新增格（本机不参与的链接）→ 空序列。
-    /// 新增格里属于"此前未展开、此刻已展开"的出生棋盘占位的，是对方的出生棋盘（节拍 ③ 显现）；其余新增格是新长出的公共棋盘与通道（节拍 ① 升起）。
-    /// <paramref name="newOpponents"/> 是链接后新成为同战场的玩家（横幅文案"与 X 交战"）。
+    /// 棋盘拼接（board-link-mode F.4 / 裁决 J5）：由本机结算前后两份按座位过滤的默认棋盘与布局换算 <see cref="LinkLayout"/>（版本 <paramref name="fromVersion"/> → 最新）得出。
+    /// 结算前本机的格先按平移向量映射到拼接后坐标，再与拼接后的格比：没有新增格（本机不参与的链接，即便它把本机战场收拢平移了）→ 空序列，不把平移误判为新增。
+    /// 新增格即对方战场。锚点一方（含最小出生棋盘编号的战场）不动、被贴方滑入：本机是锚点 → 对方棋盘滑入；本机是被贴方 → 本机棋盘滑过去贴合。
+    /// 滑动的起点 = 拼接前两战场的相对位置（两侧平移向量之差），同一配对事件里的两条链接自然合成一次。
+    /// 之后：相机重定界到合并后战场包围盒 → 对方格上的棋子 / 设施 / 已揭示信物显现 → 横幅"棋盘拼接：与 X 交战"。
+    /// <paramref name="newOpponents"/> 是链接后新成为同战场的玩家。
     /// </summary>
-    public static ImmutableArray<SettlementBeat> Expansion(DefaultBoardView before, DefaultBoardView after, IEnumerable<PlayerId> newOpponents)
+    public static ImmutableArray<SettlementBeat> Expansion(
+        DefaultBoardView before, DefaultBoardView after, IEnumerable<PlayerId> newOpponents, LinkLayout layout, int fromVersion)
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
         ArgumentNullException.ThrowIfNull(newOpponents);
-        HashSet<Coord> had = [.. before.Cells.Select(c => c.Coord)];
+        ArgumentNullException.ThrowIfNull(layout);
+        int to = layout.Versions;
+        if (fromVersion >= to || before.Cells.IsEmpty)
+        {
+            return [];
+        }
+
+        ImmutableArray<Coord> mine = [.. before.Cells.Select(c => layout.Translate(c.Coord, fromVersion, to)).Order()];
+        HashSet<Coord> had = [.. mine];
         ImmutableArray<Coord> added = [.. after.Cells.Select(c => c.Coord).Where(c => !had.Contains(c)).Order()];
         if (added.IsEmpty)
         {
             return [];
         }
 
-        HashSet<int> expandedBefore = [.. before.Placeholders.Where(p => p.Expanded).Select(p => p.Zone)];
-        HashSet<Coord> opponentBoards = [.. after.Placeholders.Where(p => p.Expanded && !expandedBefore.Contains(p.Zone)).SelectMany(p => p.Cells())];
-        ImmutableArray<Coord> rising = [.. added.Where(c => !opponentBoards.Contains(c))];
-        ImmutableArray<Coord> revealed = [.. added.Where(opponentBoards.Contains)];
+        int myZone = before.Cells.Select(c => layout.ZoneAt(c.Coord, fromVersion)!.Value).Min();
+        int theirZone = added.Select(c => layout.ZoneAt(c, to)!.Value).Min();
+        (int myDx, int myDy) = Delta(myZone);
+        (int theirDx, int theirDy) = Delta(theirZone);
+        bool anchor = myZone < theirZone;
+        BoardSlideBeat slide = anchor
+            ? new BoardSlideBeat(added, myDx - theirDx, myDy - theirDy)
+            : new BoardSlideBeat(mine, theirDx - myDx, theirDy - myDy);
 
-        ImmutableArray<SettlementBeat>.Builder beats = ImmutableArray.CreateBuilder<SettlementBeat>(4);
-        if (!rising.IsEmpty)
+        return
+        [
+            slide,
+            new CameraPullBeat(CoordRect.Of(after.Cells.Select(c => c.Coord))!.Value),
+            new OpponentRevealBeat(added),
+            new BannerBeat([ExpansionText(newOpponents)]),
+        ];
+
+        (int Dx, int Dy) Delta(int zone)
         {
-            beats.Add(new BoardRiseBeat(rising));
+            Coord was = layout.BoardAt(zone, fromVersion).Origin;
+            Coord now = layout.BoardAt(zone, to).Origin;
+            return (now.X - was.X, now.Y - was.Y);
         }
-
-        beats.Add(new CameraPullBeat(CoordRect.Of(after.Cells.Select(c => c.Coord))!.Value));
-        if (!revealed.IsEmpty)
-        {
-            beats.Add(new OpponentRevealBeat(revealed));
-        }
-
-        beats.Add(new BannerBeat([ExpansionText(newOpponents)]));
-        return beats.ToImmutable();
     }
 
     /// <summary>

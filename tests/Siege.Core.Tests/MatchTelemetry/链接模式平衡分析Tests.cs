@@ -154,10 +154,10 @@ public class 链接模式平衡分析Tests
 
         // 段 F.3：信物统计按"首部开局坐标 + 随链接平移"读。取最后一个快照里一枚坐标已随拼接变化的信物，改成被 0 号控制 → 该类型的控制小回合数 +1；
         // 若仍按首部坐标直接对（F.2 的临时处理是"查不到就跳过"），这枚信物不会被计入。变异 MF3-4：Selection 不换算（版本恒取 0）→ 本测试红。
-        LinkLayout layout = LinkLayout.Of(log);
+        LinkLayout layout = LinkLogLayout.Of(log);
         int index = log.Turns.Count - 1;
         TurnSnapshot lastTurn = log.Turns[index];
-        int version = LinkLayout.VersionAfterTurn(log, lastTurn.Turn);
+        int version = LinkLogLayout.VersionAfterTurn(log, lastTurn.Turn);
         RelicEntry moved = log.Header.Relics.First(r => layout.Translate(Coord.Parse(r.Coord), 0, version).ToNotation() != r.Coord);   // 样本口径：确有信物被平移
         string now = layout.Translate(Coord.Parse(moved.Coord), 0, version).ToNotation();
         Assert.Contains(lastTurn.Relics, r => r.Coord == now);

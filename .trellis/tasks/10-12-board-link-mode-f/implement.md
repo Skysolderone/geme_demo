@@ -281,3 +281,138 @@ Legacy 既有测试断言一条未改；v5 / board:1 决策序列基线、黄金
 | J10-1 | `LinkLayout` 放在 Siege.Sim（日志 / 解析层，按派发要求）。F.4 演出若要同样的换算，Presentation 不能引用 Sim | 未动 | F.4 前把它下沉到 Core（例如 `Siege.Core.Board.Maps`），Sim / Presentation / 测试共用 |
 | J10-2 | 小回合快照里驿站来源与前瞻记录是回合开始时的决策量，按回合开始时的布局记；快照其余字段按回合结束时的布局记——同一行里有两种口径 | 已写进 `MatchLog` 类注释 | 接受（只在发生链接的那个小回合里两者不同）；或把这两项也平移到回合结束时 |
 | J10-3 | `map --links` 推断规则：前面的单棋盘配对在没写贴边时一律按东贴，所以“3+1 决赛”（两块单棋盘北贴）必须显式写 `N` | 已实现 | 接受 |
+
+---
+
+# F.3b / F.4（LinkLayout 下沉；Godot / Presentation：按布局重搭与接缝、拼接演出、自检与截图）
+
+在提交 d52934e 之上实施；`tasks.md` 已勾 F.3b、F.4。
+
+## 1. F.3b：LinkLayout 下沉（裁决 J10-1）
+
+- 新增 `src/Siege.Core/Board/Maps/LinkLayout.cs`：`LinkShiftStep` 记录与 `LinkLayout` 类（构造、`Versions` / `BoardAt` / `ZoneAt` / `Translate` / `TranslateEdit`），从 Sim 原样搬过来，零行为改动；不含浮点，不依赖 Godot。
+- `LinkRecord.ShiftStep`（Core，新）取代 `LinkShiftStep.From(LinkRecord)`，原因是 Core 的 `Board.Maps` 不反向引用 `Match`。
+- 新增 `src/Siege.Sim/Logging/LinkLogLayout.cs`，承接原先放在 `LinkLayout` 上、与日志相关的部分：`StepOf(LinkLogEntry)`、`Of(MatchLog)`、`VersionAfterTurn`、`VersionAtEvent`。删除 `src/Siege.Sim/Logging/LinkLayout.cs`。
+- 调用方改为新入口：`BalanceAnalyzer`、`MatchLog` 注释、`MatchSession`，以及测试中的 `LinkModeFixtures`、`对局日志的记录内容_链接模式Tests`、`链接模式平衡分析Tests`。没有守门测试按文件名或命名空间扫描它，所以白名单无需调整。
+- 全量测试：2386 条，通过 2374，跳过 12。
+
+## 2. F.4 第 1 步：按新布局重搭、接缝、拼接核对
+
+- **相机（Presentation `BoardCamera`）**：`Rebound(bounds, focus, shiftX, shiftZ)` 先把注视点按给定位移平移，再夹取；不传位移时行为与原来一致。
+- **相机接线（Godot `BoardView.Build`）**：
+  - 记录上一次本机出生棋盘（占位 Own）的原点和画布尺寸。
+  - 重搭时取本机棋盘格心的平面位移（新格心 − 旧格心）传给 `Rebound`，这样他人链接收拢本机战场、或整体越界平移时，画面里本机棋盘不跳。
+  - 底座、坐标标注、相机可行矩形照旧按新的画幅包围盒重算。
+- **接缝**：
+  - `BoardView.PlateGroups`：外接矩形边对边紧贴的棋盘归为一组，即拼接出来的连体棋盘。
+  - 组内每块棋盘照常画内部格线；接缝处补一条同样的格线（只从东 / 北一侧画一次）；接缝上不画边框。
+  - 整组只沿外轮廓画一圈边框，同类边按行 / 列合并成段，颜色为中性的台面边框色。
+  - 出生区阵营色描边在接缝一侧不描，只沿自己那块的外缘。
+  - 自证行例：`[plates] 连体棋盘（出生区 1+2，55 格）：外轮廓边框 6 段，接缝格线 1 段，接缝边框 0 段`；决赛后 `1+2+5，80 格：外轮廓 6 段、接缝格线 2 段、接缝边框 0 段`。
+  - 旧地图（棋盘两两至少隔 2 格）每块各成一组，画法不变。
+- **`LinkDemoAudit.Linked`**：
+  - 新增参数 `expandedBefore`（拼接前已展开的出生棋盘）。
+  - 本机参与时要求：可见格 = 本战场格数 = 拼接前可见格 + 新展开的对方出生棋盘格数，且确有新展开；他人链接要求本机可见格数不变。
+  - GameRoot 改为按同一帧的整批链接核对，再一次性更新基准；修掉了"同帧本机另有拼接时，他人那条按拼接后的格数比"的潜在误判。
+
+## 3. F.4 第 2 步：拼接演出
+
+- **`LinkShowBeats`**（Presentation）：
+  - 新节拍 `BoardSlideBeat(Cells, FromDx, FromDy)`，900 ms，取代已删除的 `BoardRiseBeat`。
+  - `Expansion(before, after, newOpponents, layout, fromVersion)`：先把结算前本机的格经 `LinkLayout` 映射到拼接后坐标，再与结算后的格比。没有新增格就返回空序列，平移不再被误判为新增。
+  - 锚点 / 被贴方按两侧最小出生棋盘编号判定：本机是锚点时滑对方棋盘；本机是被贴方时滑本机棋盘。起点偏移 = 两侧平移向量之差，同一配对事件里的两条链接自然合成一次。
+  - 节拍依次为：滑入（900）→ 相机重定界（500）→ 对方盘面显现（600）→ 横幅"棋盘拼接：与 X 交战"。
+  - 提速、零时长沿用时间线原规则。
+- **`ShowMask`**：`Rising` 换成 `Slide`（格、起点偏移、进度），并新增 `SlideOffsetOf(coord)`，单位是千分之一格。
+- **`SettlementBeats.Generate(..., moved)`**：拼接发生在某小回合末尾时，结算前的盘面与信物先经映射换到拼接后坐标再比。修掉了被平移的棋子被当成"落子 + 提子"、以及结算前画布较小时越界抛出的问题（见 J11-3）。不传映射时与原来逐行相同。
+- **Godot 接线**：
+  - `BoardView.ApplySlide`：滑动格的地砖节点按偏移逐帧平移，其上棋子按格心 + 偏移整份重写；完整刷新与演出帧都调用。原来的 `ApplyRising` / `RiseDepth` 已删除。
+  - `MatchSession`：本机确认、Pass、AI 小回合三处都记录拼接前的链接数，用 `LinkLayout` 生成映射，传给 `SettlementBeats` 与 `Expansion`。
+  - `GameRoot`：`[show]` 行改为"拼接 滑入 a 格、显现 b 格、重定界"；`[field]` 匹配"棋盘拼接"；`--shot-show=expand` 改为取滑入节拍半程；`--shot-show=field` 改为取第一条横幅（"战场落败 / 胜出"）的半程——原先取整拍半程，那时已切到第二条"出局"横幅。
+- **恢复 J8-9 剩余两条 Skip**（`棋盘展开节拍Tests` 整体重写）：
+  - 「首轮链接演出_四个节拍依次」恢复；
+  - 「他人链接不演出」恢复，并补断言：本机棋盘确实随他人链接平移；平移后可见格与内容逐格对应；本机占位原点 = 换算后的位置。
+  - 新增「本机是被贴方_本机棋盘滑过去贴合」「遮罩_滑入前停在起点_对方格先隐藏后渐显_相机目标带进度」「拼接那一回合的结算节拍不把平移当成落子与提子」。
+  - 「无人值守零时长」「提速照旧」按新签名照旧。
+- **其他测试**：
+  - `战场范围的相机Tests` 新增「拼接后注视点随本机棋盘平移」。
+  - `自动演示全流程自检Tests` 的两处 `Linked` 调用补上 `expandedBefore`，并加"拼接前后格数不守恒即失败"的反例（注释"board-link-mode F.4："）。
+
+## 4. 构建、测试、变异
+
+- `dotnet build siege.sln -c Release`：0 警告 0 错误；`dotnet build src/godot/Siege.Godot.csproj`：0 警告 0 错误。
+- `dotnet test tests/Siege.Core.Tests -c Release`：**2389 条，通过 2379，跳过 10，失败 0**（退出码 0）。
+- 跳过数从 12 降到 **10**，不是派发里写的 11：F.3 时剩 12 条，其中 2 条是 J8-9 Skip，本段都已恢复；剩下 10 条都是 Perf / Slow（见 J11-1）。
+- 变异（每条还原后复跑都是红 0 / 绿 153）：
+
+| 编号 | 变异 | 红 |
+|---|---|---|
+| MF4-1 | `Expansion` 不经布局换算、直接按坐标差分 | 3（含「他人链接不演出」） |
+| MF4-2 | 锚点 / 被贴方判反 | 2 |
+| MF4-3 | `SettlementBeats` 不用拼接映射 | 1 |
+| MF4-4 | `Rebound` 不随本机棋盘平移 | 1 |
+| MF4-5 | 拼接核对不看格数守恒 | 1 |
+
+- 接缝画法在 Godot 层，xunit 测不到；靠 `[plates]` 自证行（接缝边框 0 段）加截图像素统计。
+
+## 5. 自检与终局跑（headless，顺序单跑，0 条 ERROR）
+
+- `--auto-demo`：退出 0。`[flow]` 6 条通过（缺省种子第 39 帧他人链接 3+5，本机可见格 30 → 30）；开局对准 30/30。
+- `--auto-demo --pick-check --seed=5`：退出 0。开局一轮 30/30；第 39 帧本机参与拼接 1+2（30 + 拼入 25 → 55）；第二轮逐格居中 55/55 ×2，各位姿通过。
+- `--map-select --auto-demo`：退出 0，`[flow]` 6 条通过。
+- `--auto-demo --rounds=0`（缺省种子）：退出 0，12 大回合、105 帧、约 3.9 s，`[flow]` 13 条全通过，七步齐全：
+  - 第 91 帧本机战场落败横幅；
+  - 第 100 帧决赛拼接 1+3，本机所在战场参与（30 + 拼入 67 → 97）；
+  - 第 104 帧决赛结算，终局不出横幅。
+- `--auto-demo --rounds=0 --seed=5`（本机参与首轮拼接）：退出 0，14 大回合、142 帧、约 4.9 s，`[flow]` 13 条全通过：
+  - 第 39 帧首轮拼接 1+2（30 + 25 → 55），演出：滑入 25 格、显现 25 格、重定界；
+  - 第 137 帧决赛拼接 1+5（55 + 25 → 80）。
+- 对局长度比段 D（93 / 156 大回合）短很多，与 F.2 的基线观察一致；F.5 冒烟会看到。
+
+## 6. 截图（`art/board-link-mode/`，1600×900，非 headless，彩色 + 灰度；未读入会话，按自证行与 PIL 统计判定）
+
+- **删除**（旧公共棋盘 / 通道或旧 73×73 布局）：
+  - `linked-battlefield`、`linked-battlefield-closeup`
+  - `d-c-expand-mid`、`d-c-overview-field`、`d-c-field-lost`、`d-c-strip-elsewhere`
+  - `d-d-final-link-overview`、`d-d-match-end`
+  - `placeholder-closeup`：新画布 40×11 一屏看全，`--shot-cell` 近景与全图同一张；该图改名为 `f-spliced-overview`
+  - 以上各含 `-gray`，共 18 个文件。
+- **重拍**（同名覆盖）：`new-game`、`flags-placeholders`、`locked-own-board`。
+- **新拍**：`f-splice-mid`、`f-spliced-overview`、`f-spliced-closeup`、`f-final-overview`、`f-field-lost`、`f-strip-elsewhere`、`f-match-end`。
+- 像素统计（灰度均值 / 暗 <40 / 亮 ≥200 / 台面边框色像素）：
+
+| 文件 | 均值 | 暗 | 亮 | 台面边框色像素 |
+|---|---|---|---|---|
+| `flags-placeholders` | 155.7 | 3.0% | 35.7% | 2153 |
+| `new-game` | 167.2 | 2.2% | 43.1% | 457 |
+| `locked-own-board` | 149.4 | 9.6% | 36.9% | 2243 |
+| `f-splice-mid` | 158.0 | 4.3% | 35.8% | 6768 |
+| `f-spliced-overview` | 158.0 | 4.3% | 35.9% | 6891 |
+| `f-spliced-closeup` | 133.3 | 4.3% | 12.5% | 35058 |
+| `f-final-overview` | 143.2 | 4.4% | 23.9% | 12518 |
+| `f-field-lost` | 154.4 | 5.4% | 34.4% | 1678 |
+| `f-strip-elsewhere` | 145.7 | 10.5% | 34.8% | 4203 |
+| `f-match-end` | 136.4 | 5.4% | 25.6% | 7002 |
+
+- 截图时的自证行：
+  - `f-splice-mid`：当前节拍 BoardSlideBeat，进度 508‰；
+  - `f-field-lost`：横幅「战场落败（第 2 名）」第 1/2 条，515‰；
+  - `f-spliced-overview` 的边框色竖线只在合并战场西沿（x≈800，约 190 px）一处，估算的接缝列附近没有同等长度的竖线（最高约 37 px）。
+- `README.md` 已重写：新索引；人工检查清单第 2 项"展开动画"改为"拼接动画"，新增"接缝连成一片""他人链接画面不跳"两项，共 9 项。
+
+## 7. 偏离与需裁决（J11 起）
+
+| # | 事项 | 现状 | 建议 |
+|---|---|---|---|
+| J11-1 | 跳过数实测 10，派发写 11 | F.3 后 12，减去恢复的 2 条 J8-9 = 10；其余都是 Perf / Slow | 以 10 为准 |
+| J11-2 | 连体棋盘外轮廓边框用中性台面边框色；本机阵营色只保留在出生区外缘描边（接缝一侧不描） | 二选一里选了"阵营色提示仍只覆盖自己那块" | 接受；或改为外轮廓按本机阵营色描 |
+| J11-3 | 派发没列，但必须修：拼接发生在某小回合末尾时，该小回合的结算节拍原本按坐标直接差分，会把被平移的棋子当成落子 + 提子，结算前画布较小时还会越界抛出 | `SettlementBeats.Generate` 加可选映射参数，Godot 三处传入；补测试与变异 MF4-3 | 接受 |
+| J11-4 | 滑入只移动地砖（含阵营描边）与其上的棋子；台面边框 / 格线、信物标记、改造标记滑动期间停在终点 | 为控制改动面 | 接受；要求全部随之滑动需另加节点登记 |
+| J11-5 | 本机是被贴方时，本机棋盘在滑入节拍里自己滑过去，相机在随后的重定界节拍才跟上，滑入期间不跟随 | 已实现 | 接受；或滑入期间相机按同样偏移跟随 |
+| J11-6 | 新增自证行 `[plates]`；`--shot-show=field` 改为取第一条横幅半程 | 截图工具口径 | 接受 |
+| J11-7 | "他人链接平移本机战场时画面不跳"由 Presentation 测试与相机测试守；Godot 自检的两个种子里没出现"他人链接平移本机棋盘"的帧（缺省种子第 39 帧他人链接 3+5，本机棋盘在合并战场以西、不动） | 未专门找种子 | 接受；或另找种子做人工核对 |
+
+遗留：
+- 接缝无边框的像素判据是估算的接缝列位置，不是逐像素定位。
+- `--pick-check` 第二轮仍只在本机参与的第一次链接后跑。
+- 决赛后的连体棋盘没有拾取自检。

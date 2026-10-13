@@ -45,9 +45,9 @@ public class 对局日志的记录内容_链接模式Tests
 
         Assert.Equal(MapFile.Digest(session.Match.Board.LinkedMap), MapFile.Digest(map));
 
-        LinkLayout layout = LinkLayout.Of(log);
+        LinkLayout layout = LinkLogLayout.Of(log);
         Assert.Equal(2, layout.Versions);
-        (TerrainEdit Edit, int Version)[] recorded = [.. log.Turns.SelectMany(t => (t.Edits ?? []).Select(e => (TerrainEdit.Parse(e.Target), LinkLayout.VersionAfterTurn(log, t.Turn))))];
+        (TerrainEdit Edit, int Version)[] recorded = [.. log.Turns.SelectMany(t => (t.Edits ?? []).Select(e => (TerrainEdit.Parse(e.Target), LinkLogLayout.VersionAfterTurn(log, t.Turn))))];
         Assert.NotEmpty(recorded);   // 样本口径：本局确有改造
         MapData actual = session.Match.Board.Map;
         MapData rebuilt = Rebuild(layout);
@@ -71,7 +71,7 @@ public class 对局日志的记录内容_链接模式Tests
                 log.Header.Boards!.Select(b => new BoardPlate(Coord.Parse(b.Origin), b.Width, b.Height, BoardPlateKind.Birth)),
                 links.Select((l, k) => k == dropped
                     ? new LinkShiftStep(l.X, l.Y, [.. l.Shifts.Select(s => new BattlefieldShift(s.Battlefield, 0, 0))])
-                    : LinkShiftStep.From(l)));
+                    : LinkLogLayout.StepOf(l)));
             try
             {
                 anyMismatch |= !Rebuild(broken).TerrainData.Fences.SetEquals(actual.TerrainData.Fences);
@@ -108,14 +108,14 @@ public class 对局日志的记录内容_链接模式Tests
 
         MatchLog log = SimFixtures.Clone(session.Run());
         Assert.Equal(2, match.Links.Count);
-        LinkLayout layout = LinkLayout.Of(log);
-        (TerrainEdit Edit, int Version, int Turn)[] recorded = [.. log.Turns.SelectMany(t => (t.Edits ?? []).Select(e => (TerrainEdit.Parse(e.Target), LinkLayout.VersionAfterTurn(log, t.Turn), t.Turn)))];
+        LinkLayout layout = LinkLogLayout.Of(log);
+        (TerrainEdit Edit, int Version, int Turn)[] recorded = [.. log.Turns.SelectMany(t => (t.Edits ?? []).Select(e => (TerrainEdit.Parse(e.Target), LinkLogLayout.VersionAfterTurn(log, t.Turn), t.Turn)))];
         Assert.Equal(4, recorded.Length);   // 样本口径：第 3 大回合每人一道栅栏
 
         // 样本口径：最后一道栅栏所在小回合里发生了链接，且该棋盘被平移（版本前后坐标真的不同）。
         (TerrainEdit last, int lastVersion, int lastTurn) = recorded[^1];
         Assert.Equal(2, lastVersion);
-        Assert.Equal(0, LinkLayout.VersionAfterTurn(log, lastTurn - 1));
+        Assert.Equal(0, LinkLogLayout.VersionAfterTurn(log, lastTurn - 1));
         int lastZone = layout.ZoneAt(last.Edge.A, 2) ?? layout.ZoneAt(last.Edge.B, 2)!.Value;
         Assert.NotEqual(layout.BoardAt(lastZone, 0).Origin, layout.BoardAt(lastZone, 2).Origin);   // 该棋盘在本回合的链接里确实平移了
         Assert.Equal(match.Board.TerrainEdits.Select(e => e.ToString()).Order(StringComparer.Ordinal),

@@ -1,5 +1,6 @@
 using System.Numerics;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Relics;
 using Siege.Core.Scoring;
@@ -1229,7 +1230,7 @@ public static class BalanceAnalyzer
     /// </summary>
     private static Func<int, Dictionary<string, string>> RelicTypesByVersion(MatchLog log)
     {
-        LinkLayout? layout = log.IsLinkMode ? LinkLayout.Of(log) : null;
+        LinkLayout? layout = log.IsLinkMode ? LinkLogLayout.Of(log) : null;
         var memo = new Dictionary<int, Dictionary<string, string>>();
         return version =>
         {
@@ -1315,7 +1316,7 @@ public static class BalanceAnalyzer
                 relicCount[relic.Type] = relicCount.TryGetValue(relic.Type, out int n) ? n + 1 : 1;
             }
 
-            Dictionary<string, string> finalTypes = typeAt(log.IsLinkMode ? LinkLayout.Of(log).Versions : 0);
+            Dictionary<string, string> finalTypes = typeAt(log.IsLinkMode ? LinkLogLayout.Of(log).Versions : 0);
             foreach (RelicRevealEntry reveal in log.Result.RelicReveals.Where(r => r.RevealedInMajorRound is not null))
             {
                 string type = RelicTypeAt(finalTypes, reveal.Coord, "揭示表");
@@ -1325,7 +1326,7 @@ public static class BalanceAnalyzer
             var controlledBy = new Dictionary<int, HashSet<string>>();
             foreach (TurnSnapshot turn in log.Turns)
             {
-                Dictionary<string, string> types = typeAt(log.IsLinkMode ? LinkLayout.VersionAfterTurn(log, turn.Turn) : 0);
+                Dictionary<string, string> types = typeAt(log.IsLinkMode ? LinkLogLayout.VersionAfterTurn(log, turn.Turn) : 0);
                 foreach (RelicStateEntry state in turn.Relics.Where(r => r.Control == nameof(RelicControlKind.Controlled) && r.Holder is not null))
                 {
                     string type = RelicTypeAt(types, state.Coord, $"第 {turn.Turn} 小回合快照");

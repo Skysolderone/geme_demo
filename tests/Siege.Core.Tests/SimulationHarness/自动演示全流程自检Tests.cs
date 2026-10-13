@@ -36,8 +36,10 @@ public class 自动演示全流程自检Tests
         PairingRecord first = Assert.Single(match.Pairings);
         Assert.True(audit.Pairing(first).Ok);
         DefaultBoardView after = match.World(P0).Board();
-        Assert.True(audit.Linked(match.Links[0], mine: true, locked.Cells.Length, after, BattlefieldCellsOf(match, P0)).Ok);
-        Assert.True(audit.Linked(match.Links[1], mine: false, after.Cells.Length, after, BattlefieldCellsOf(match, P0)).Ok);
+        // board-link-mode F.4：拼接核对"可见格 = 本战场 = 拼接前可见格 + 拼入的对方出生棋盘格数"，需给出拼接前已展开的出生棋盘。
+        int[] expandedBefore = [.. locked.Placeholders.Where(p => p.Expanded).Select(p => p.Zone)];
+        Assert.True(audit.Linked(match.Links[0], mine: true, locked.Cells.Length, after, BattlefieldCellsOf(match, P0), expandedBefore).Ok);
+        Assert.True(audit.Linked(match.Links[1], mine: false, after.Cells.Length, after, BattlefieldCellsOf(match, P0), expandedBefore).Ok);
         Assert.True(after.Cells.Length > locked.Cells.Length);
 
         // 第 4 大回合全员 Pass：两个合并战场都结算；P0 在战场 1 的名单里，P2 的战场 4 对 P0 是他场。
@@ -105,10 +107,14 @@ public class 自动演示全流程自检Tests
         int cells = BattlefieldCellsOf(match, P0);
         Assert.Equal(cells, after.Cells.Length);   // 按座位过滤的格 = 战场导出的格（独立口径一致）
 
-        Assert.True(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells).Ok);
-        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells + 1).Ok, "可见格数与本战场格数不等");
-        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, before, before.Cells.Length).Ok, "参与了链接可见格却没增加");
-        Assert.False(audit.Linked(match.Links[1], mine: false, before.Cells.Length, after, cells).Ok, "他人链接本机可见格却变了");
+        // board-link-mode F.4：拼接口径——可见格 = 本战场 = 拼接前可见格 + 拼入的对方出生棋盘格数（两战场格数之和守恒）。
+        int[] expandedBefore = [.. before.Placeholders.Where(p => p.Expanded).Select(p => p.Zone)];
+        Assert.Equal(before.Cells.Length + Map.BirthZones[1].Count, cells);
+        Assert.True(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells, expandedBefore).Ok);
+        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells + 1, expandedBefore).Ok, "可见格数与本战场格数不等");
+        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, before, before.Cells.Length, expandedBefore).Ok, "参与了链接可见格却没增加");
+        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length - 1, after, cells, expandedBefore).Ok, "拼接前后格数不守恒");
+        Assert.False(audit.Linked(match.Links[1], mine: false, before.Cells.Length, after, cells, expandedBefore).Ok, "他人链接本机可见格却变了");
     }
 
     [Fact]

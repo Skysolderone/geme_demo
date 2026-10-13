@@ -87,11 +87,14 @@ public sealed partial class BoardView : Node3D
     /// </summary>
     private HashSet<Coord> _visible = [];
 
-    /// <summary>每个可落子格搭出来的地砖节点（面砖、衬底、侧面色带、水面、桥）：棋盘展开节拍把新增格的地砖从地面之下升起时按格位移（board-link-mode 4.5）。</summary>
+    /// <summary>每个可落子格搭出来的地砖节点（面砖、衬底、侧面色带、出生区描边、水面、桥）：棋盘拼接节拍按格平移（board-link-mode F.4）。</summary>
     private readonly Dictionary<Coord, List<Node3D>> _tileNodes = [];
 
-    /// <summary>此刻被升起节拍压下去的格 → 下压量（世界单位）；节拍播完 / 完整刷新时复位。</summary>
-    private readonly Dictionary<Coord, float> _tileDrop = [];
+    /// <summary>此刻被滑入节拍偏移的格 → 平面偏移（世界单位）；节拍播完 / 完整刷新时复位。</summary>
+    private readonly Dictionary<Coord, Vector3> _tileSlide = [];
+
+    /// <summary>上一次搭建时本机出生棋盘（占位 Own）的左下角与画布尺寸：拼接后布局变化时据此算本机棋盘的平面位移，相机注视点随之平移（board-link-mode F.4）。</summary>
+    private (Coord Origin, int Width, int Height)? _ownPlacement;
 
     /// <summary>本次搭建的画幅（格包围盒），供引擎侧的 pick-check 等读取。</summary>
     private (Coord Low, Coord High) _extent;
@@ -99,8 +102,6 @@ public sealed partial class BoardView : Node3D
     /// <summary>画幅（当前战场 ∪ 占位的格包围盒）。</summary>
     public (Coord Low, Coord High) Extent => _extent;
 
-    /// <summary>升起节拍开始时地砖所在的深度（世界单位）：藏在底座之下。</summary>
-    private const float RiseDepth = 1.6f;
     private string _terrainKey = string.Empty;
     private int _width;
     private int _height;
@@ -140,7 +141,7 @@ public sealed partial class BoardView : Node3D
         _boxMeshes.Clear();
         _levels.Clear();
         _tileNodes.Clear();
-        _tileDrop.Clear();
+        _tileSlide.Clear();
         _partBatches.Clear();
         _unbatchedObstacles = 0;
         _boardPieces.Clear();
@@ -191,6 +192,13 @@ public sealed partial class BoardView : Node3D
         ImmutableArray<BoardPlate> plates = board.Boards.IsDefault ? [] : board.Boards;
         bool plated = !plates.IsEmpty;
         bool OnPlate(Coord c) => plates.Any(p => p.Contains(c));
+        int[] plateGroup = PlateGroups(plates);
+        bool SameGroup(Coord a, Coord b)
+        {
+            int pa = plates.IndexOf(plates.FirstOrDefault(p => p.Contains(a)));
+            int pb = plates.IndexOf(plates.FirstOrDefault(p => p.Contains(b)));
+            return pa >= 0 && pb >= 0 && plates[pa].Contains(a) && plates[pb].Contains(b) && plateGroup[pa] == plateGroup[pb];
+        }
 
         // 出生区的归属色：插旗前统一提示色；锁定后有主的取阵营主色，无主的褪成中性色。出生区描边与出生棋盘边框共用。
         Color ZoneColorOf(int zone) =>
@@ -208,7 +216,8 @@ public sealed partial class BoardView : Node3D
             var next = new Coord(x, y);
             if (zoneOf.TryGetValue(next, out int other))
             {
-                return other != zone;
+                // 拼接接缝（board-link-mode F.4）：邻格是同一块连体棋盘里另一块出生棋盘 → 不描，阵营色提示只沿自己那块的外缘、接缝处连成一片。
+                return other != zone && !SameGroup(c, next);
             }
 
             (int minX0, int minY0, int maxX0, int maxY0) = zoneBox[zone];
@@ -463,14 +472,28 @@ public sealed partial class BoardView : Node3D
             focus = new PlaneRect(field.MinX - outer, field.MinZ - outer, field.MaxX + outer, field.MaxZ + outer);
         }
 
+        // 拼接（board-link-mode F.4 / 裁决 J3 / J7）：布局整体变化——被贴方、被收拢的战场坐标都变了，画布也重裁，格心的平面位置随之变。
+        // 本机出生棋盘（占位 Own）在平面上的位移 = 新格心 − 旧格心；相机注视点按同一位移平移，画面里本机棋盘不跳（锚点通常不动，他人链接收拢或整体越界平移时本机也会动）。
+        float shiftX = 0f, shiftZ = 0f;
+        BoardPlaceholderView? own = board.Placeholders.FirstOrDefault(p => p.Own);
+        if (own is not null && _ownPlacement is { } was && (was.Origin != own.Origin || was.Width != _width || was.Height != _height))
+        {
+            Vector3 before = BoardGeometry.Center(was.Origin, was.Width, was.Height);
+            Vector3 after = BoardGeometry.Center(own.Origin, _width, _height);
+            shiftX = after.X - before.X;
+            shiftZ = after.Z - before.Z;
+        }
+
+        _ownPlacement = own is null ? null : (own.Origin, _width, _height);
+
         if (Rig is null)
         {
             Rig = new BoardCamera(bounds, focus: focus);
         }
         else
         {
-            // 链接后画幅扩大（board-link-mode 4.4）：保位姿重定界——不复位、不改缩放，开局对准之后的位姿自证照常成立。
-            Rig.Rebound(bounds, focus);
+            // 链接后画幅变化（board-link-mode 4.4 / F.4）：保位姿重定界——不复位、不改缩放，注视点只随本机棋盘的位移平移，开局对准之后的位姿自证照常成立。
+            Rig.Rebound(bounds, focus, shiftX, shiftZ);
         }
 
         Camera = new Camera3D { Fov = CameraPose.FovDegrees };
@@ -514,47 +537,53 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>
-    /// 棋盘展开节拍 ①（board-link-mode 4.5）：遮罩里升起中的格按进度把地砖从 <see cref="RiseDepth"/> 之下抬到位；不在遮罩里的格复位。
-    /// 只改节点位移，不改视图模型；零时长演出遮罩恒空，这里什么都不做。
+    /// 棋盘拼接节拍 ①（board-link-mode F.4 / 裁决 J5）：遮罩里滑动中的格按进度把地砖（与其上的棋子）从起点偏移移到位；不在遮罩里的格复位。
+    /// 偏移由遮罩给出（千分之一格），经格心映射换成平面位移；只改节点位移，不改视图模型；零时长演出遮罩恒空，这里什么都不做。
     /// </summary>
-    private void ApplyRising(ShowMask mask)
+    private void ApplySlide(ShowMask mask)
     {
-        foreach (Coord coord in _tileDrop.Keys.Where(c => !mask.Rising.ContainsKey(c)).ToArray())
+        HashSet<Coord> sliding = mask.Slide is { } slide ? [.. slide.Cells] : [];
+        foreach (Coord coord in _tileSlide.Keys.Where(c => !sliding.Contains(c)).ToArray())
         {
-            Shift(coord, 0f);
+            Move(coord, Vector3.Zero);
         }
 
-        foreach ((Coord coord, int permille) in mask.Rising)
+        foreach (Coord coord in sliding)
         {
-            Shift(coord, RiseDepth * (1000 - Math.Clamp(permille, 0, 1000)) / 1000f);
+            (int dx, int dy) = mask.SlideOffsetOf(coord);
+            // Coord 的 x 向东 = 世界 +X，y 向北 = 世界 −Z（与 BoardGeometry.Center 同一口径）。
+            Move(coord, new Vector3(dx / 1000f * BoardGeometry.CellSize, 0f, -dy / 1000f * BoardGeometry.CellSize));
         }
 
-        void Shift(Coord coord, float drop)
+        void Move(Coord coord, Vector3 offset)
         {
-            if (!_tileNodes.TryGetValue(coord, out List<Node3D>? nodes))
+            // 棋子：每帧按格心 + 偏移整份写（棋子节点可能被完整刷新重建，增量会丢）；滑动中的格上没有出现 / 淡出中的棋子，格心即其位置。
+            if (_boardPieces.TryGetValue(coord, out PieceNode? piece) && piece.Progress < 0)
+            {
+                piece.Node.Position = CenterOf(coord) + offset;
+            }
+
+            Vector3 previous = _tileSlide.GetValueOrDefault(coord);
+            if ((previous - offset).LengthSquared() < 1e-8f)
             {
                 return;
             }
 
-            float previous = _tileDrop.GetValueOrDefault(coord);
-            if (Math.Abs(previous - drop) < 1e-4f)
+            if (_tileNodes.TryGetValue(coord, out List<Node3D>? nodes))
             {
-                return;
+                foreach (Node3D node in nodes)
+                {
+                    node.Position += offset - previous;
+                }
             }
 
-            foreach (Node3D node in nodes)
+            if (offset == Vector3.Zero)
             {
-                node.Position += new Vector3(0f, previous - drop, 0f);
-                node.Visible = drop < RiseDepth - 1e-3f;
-            }
-
-            if (drop <= 0f)
-            {
-                _tileDrop.Remove(coord);
+                _tileSlide.Remove(coord);
             }
             else
             {
-                _tileDrop[coord] = drop;
+                _tileSlide[coord] = offset;
             }
         }
     }
@@ -1010,6 +1039,8 @@ public sealed partial class BoardView : Node3D
     {
         var root = new Node3D { Name = "BoardPlates" };
         AddChild(root);
+        int[] groups = PlateGroups(plates);
+        Dictionary<int, int> groupSize = groups.GroupBy(g => g).ToDictionary(g => g.Key, g => g.Count());
 
         const float half = BoardGeometry.CellSize * 0.5f;
         const float lineWidth = 0.035f;
@@ -1018,8 +1049,9 @@ public sealed partial class BoardView : Node3D
         const float frameHeight = 0.07f;
         StandardMaterial3D ink = Visuals.Flat(Visuals.BoardGridLine);
 
-        foreach (BoardPlate plate in plates)
+        for (int index = 0; index < plates.Length; index++)
         {
+            BoardPlate plate = plates[index];
             int level = LevelOf(plate.Origin) ?? 0;
             Vector3 a = BoardGeometry.Center(plate.Origin, _width, _height, level);
             Vector3 b = BoardGeometry.Center(new Coord(plate.Origin.X + plate.Width - 1, plate.Origin.Y + plate.Height - 1), _width, _height, level);
@@ -1043,7 +1075,12 @@ public sealed partial class BoardView : Node3D
                 root.AddChild(Strip(new Vector3(maxX - minX, lineHeight, lineWidth), new Vector3(midX, top + (lineHeight * 0.5f), (near.Z + far.Z) * 0.5f), ink));
             }
 
-            // 边框：骑在外接矩形的外缘上，四角补齐。
+            // 边框：骑在外接矩形的外缘上，四角补齐。拼接成连体棋盘的（同组不止一块），边框改由下面按整组外轮廓统一画。
+            if (groupSize[groups[index]] > 1)
+            {
+                continue;
+            }
+
             Color color = plate.Kind == BoardPlateKind.Birth && zoneOf.TryGetValue(plate.Origin, out int zone)
                 ? zoneColorOf(zone)
                 : Visuals.PublicBoardFrame;
@@ -1057,6 +1094,111 @@ public sealed partial class BoardView : Node3D
             root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ), frame));
         }
 
+        // 连体棋盘（board-link-mode F.4 / 规格 visual-style-baseline「未展开区域的可视表现」拼接段）：边对边紧贴的棋盘合为一组，
+        // 接缝处补一条与棋盘内部同样的格线（两块棋盘的格线连成一片）、不画边框；边框只沿整组的外轮廓画一圈中性色（台面边框色）。
+        foreach (int group in groups.Distinct().Where(g => groupSize[g] > 1))
+        {
+            var cells = new Dictionary<Coord, int>();
+            for (int i = 0; i < plates.Length; i++)
+            {
+                if (groups[i] == group)
+                {
+                    foreach (Coord c in plates[i].Cells())
+                    {
+                        cells[c] = i;
+                    }
+                }
+            }
+
+            float top = BoardGeometry.TopYOf(0);
+            StandardMaterial3D frame = FlatOf(Visuals.PublicBoardFrame);
+            int outline = 0, seams = 0;
+            float frameY = top + (frameHeight * 0.5f);
+            float lineY = top + (lineHeight * 0.5f);
+
+            // 横边（Coord 的南 / 北边 → 世界 +Z / −Z）：同一行的连续格合成一条。dy = −1 南边、+1 北边。
+            foreach (int dy in new[] { -1, 1 })
+            {
+                foreach (IGrouping<int, Coord> row in cells.Keys.GroupBy(c => c.Y))
+                {
+                    foreach ((int x0, int x1, bool seam) in Runs(row.Select(c => c.X).Order(), x => Kind(new Coord(x, row.Key), 0, dy)))
+                    {
+                        Vector3 a = BoardGeometry.Center(new Coord(x0, row.Key), _width, _height);
+                        Vector3 b = BoardGeometry.Center(new Coord(x1, row.Key), _width, _height);
+                        float z = a.Z - (dy * half);
+                        float length = b.X - a.X + BoardGeometry.CellSize;
+                        _ = seam ? seams++ : outline++;
+                        root.AddChild(seam
+                            ? Strip(new Vector3(length, lineHeight, lineWidth), new Vector3((a.X + b.X) * 0.5f, lineY, z), ink)
+                            : Strip(new Vector3(length + frameWidth, frameHeight, frameWidth), new Vector3((a.X + b.X) * 0.5f, frameY, z), frame));
+                    }
+                }
+            }
+
+            // 竖边（西 / 东 → 世界 −X / +X）：同一列的连续格合成一条。dx = −1 西边、+1 东边。
+            foreach (int dx in new[] { -1, 1 })
+            {
+                foreach (IGrouping<int, Coord> column in cells.Keys.GroupBy(c => c.X))
+                {
+                    foreach ((int y0, int y1, bool seam) in Runs(column.Select(c => c.Y).Order(), y => Kind(new Coord(column.Key, y), dx, 0)))
+                    {
+                        Vector3 a = BoardGeometry.Center(new Coord(column.Key, y0), _width, _height);
+                        Vector3 b = BoardGeometry.Center(new Coord(column.Key, y1), _width, _height);
+                        float x = a.X + (dx * half);
+                        float length = a.Z - b.Z + BoardGeometry.CellSize;
+                        _ = seam ? seams++ : outline++;
+                        root.AddChild(seam
+                            ? Strip(new Vector3(lineWidth, lineHeight, length), new Vector3(x, lineY, (a.Z + b.Z) * 0.5f), ink)
+                            : Strip(new Vector3(frameWidth, frameHeight, length + frameWidth), new Vector3(x, frameY, (a.Z + b.Z) * 0.5f), frame));
+                    }
+                }
+            }
+
+            // 自证行（board-link-mode F.4，供自检与截图核对"接缝无边框"）：组内棋盘、外轮廓边框段数（中性色）、接缝格线段数；接缝上没有任何边框段。
+            GD.Print($"[plates] 连体棋盘（出生区 {string.Join("+", Enumerable.Range(0, plates.Length).Where(i => groups[i] == group && plates[i].Kind == BoardPlateKind.Birth && zoneOf.ContainsKey(plates[i].Origin)).Select(i => BirthZoneLabel.Number(zoneOf[plates[i].Origin])))}，{cells.Count} 格）：外轮廓边框 {outline} 段，接缝格线 {seams} 段，接缝边框 0 段");
+
+            // 某格朝 (dx, dy) 一侧：外轮廓（邻格不在组内）→ 边框；接缝（邻格在组内另一块棋盘上）→ 格线；同一块棋盘内部 → 不画（内部格线已画）。
+            int? Kind(Coord c, int dx, int dy)
+            {
+                var next = new Coord(Math.Max(0, c.X + dx), Math.Max(0, c.Y + dy));
+                bool outside = c.X + dx < 0 || c.Y + dy < 0 || !cells.TryGetValue(next, out int other);
+                if (outside)
+                {
+                    return 0;
+                }
+
+                return cells[next] != cells[c] && dx + dy > 0 ? 1 : null;   // 接缝只从东 / 北一侧画一次
+            }
+        }
+
+        // 连续的同类边合成一段：返回 (起, 止, 是否接缝)。
+        static IEnumerable<(int From, int To, bool Seam)> Runs(IEnumerable<int> ordered, Func<int, int?> kind)
+        {
+            int? start = null, last = null, current = null;
+            foreach (int v in ordered)
+            {
+                int? k = kind(v);
+                if (start is not null && (k != current || v != last + 1))
+                {
+                    yield return (start.Value, last!.Value, current == 1);
+                    start = null;
+                }
+
+                if (k is not null && start is null)
+                {
+                    start = v;
+                    current = k;
+                }
+
+                last = v;
+            }
+
+            if (start is not null)
+            {
+                yield return (start.Value, last!.Value, current == 1);
+            }
+        }
+
         MeshInstance3D Strip(Vector3 size, Vector3 position, StandardMaterial3D material) => new()
         {
             Mesh = BoxOf(size),
@@ -1064,6 +1206,38 @@ public sealed partial class BoardView : Node3D
             Position = position,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
+    }
+
+    /// <summary>
+    /// 棋盘分组（board-link-mode F.4）：外接矩形边对边紧贴（共享一段边、不只是角）的棋盘归为一组——拼接出来的连体棋盘。
+    /// 返回每块棋盘的组号（组内最小下标）。旧地图（棋盘两两至少隔 2 格）与链接前每块各成一组，台面画法与引入之前相同。
+    /// </summary>
+    private static int[] PlateGroups(ImmutableArray<BoardPlate> plates)
+    {
+        int[] group = [.. Enumerable.Range(0, plates.Length)];
+        int Find(int i) => group[i] == i ? i : group[i] = Find(group[i]);
+        for (int i = 0; i < plates.Length; i++)
+        {
+            for (int j = i + 1; j < plates.Length; j++)
+            {
+                if (Touch(plates[i], plates[j]))
+                {
+                    int a = Find(i), b = Find(j);
+                    group[Math.Max(a, b)] = Math.Min(a, b);
+                }
+            }
+        }
+
+        return [.. Enumerable.Range(0, plates.Length).Select(Find)];
+
+        static bool Touch(BoardPlate a, BoardPlate b)
+        {
+            bool rowsOverlap = a.Origin.Y < b.Origin.Y + b.Height && b.Origin.Y < a.Origin.Y + a.Height;
+            bool columnsOverlap = a.Origin.X < b.Origin.X + b.Width && b.Origin.X < a.Origin.X + a.Width;
+            bool sideBySide = a.Origin.X + a.Width == b.Origin.X || b.Origin.X + b.Width == a.Origin.X;
+            bool stacked = a.Origin.Y + a.Height == b.Origin.Y || b.Origin.Y + b.Height == a.Origin.Y;
+            return (sideBySide && rowsOverlap) || (stacked && columnsOverlap);
+        }
     }
 
     /// <summary>
@@ -1199,7 +1373,6 @@ public sealed partial class BoardView : Node3D
             Build(board, _zoneOwners);
         }
 
-        ApplyRising(mask ?? ShowMask.Empty);   // 完整刷新：没有升起中的格就全部复位
         LayerContent? content = layer is { } active ? world.Layer(active, reading, thresholds) : null;
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
@@ -1231,6 +1404,7 @@ public sealed partial class BoardView : Node3D
         DrawRelicMarkers(board);
         DrawPlacementMarks(board);
         DrawPieces(board, treatment, mask ?? ShowMask.Empty);
+        ApplySlide(mask ?? ShowMask.Empty);   // 完整刷新：没有滑动中的格就全部复位（board-link-mode F.4）
         DrawShow(mask ?? ShowMask.Empty);
         DrawLayer(content);
         DrawPreview(preview, focus);
@@ -1393,14 +1567,14 @@ public sealed partial class BoardView : Node3D
         DefaultBoardView board = world.Board();
         if (TerrainKeyOf(board) != _terrainKey)
         {
-            // 链接后第一帧演出（board-link-mode 4.5）：新增格的地砖要先搭出来，升起节拍才有东西可抬。重搭不改相机位姿（Rebound 保位姿）。
+            // 链接后第一帧演出（board-link-mode F.4）：拼接后的布局要先搭出来，滑入节拍才有东西可移。重搭保位姿（Rebound 只随本机棋盘位移平移注视点）。
             Build(board, _zoneOwners);
         }
 
-        ApplyRising(mask);
         Clear(_show);
         _lastShowRedraw = DrawPieces(board, treatment, mask);
         _totalShowRedraw += _lastShowRedraw;
+        ApplySlide(mask);
         _showFrames++;
         DrawShow(mask);
     }

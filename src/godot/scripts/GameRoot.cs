@@ -73,6 +73,9 @@ public sealed partial class GameRoot : Node3D
     private int _auditedBuildRound;
     private int _visibleCells;
 
+    /// <summary>上次核对时已展开的出生棋盘编号（拼接核对"可见格 = 两战场格数之和"，board-link-mode F.4）。</summary>
+    private HashSet<int> _expandedZones = [];
+
     /// <summary>`--auto-demo` 全流程自检（board-link-mode tasks 4.6）：判定在 Presentation（<see cref="LinkDemoAudit"/>），这里只在相应时机喂数据、打 <c>[flow]</c> 行、按结论定退出码。</summary>
     private readonly LinkDemoAudit _audit = new();
 
@@ -629,6 +632,11 @@ public sealed partial class GameRoot : Node3D
 
             // 链接事件（board-link-mode D-b）：Godot 在这一帧感知到新链接（段 D-c 的"棋盘展开"节拍挂在这里）；随后的 RefreshViews 经地形指纹变化重搭本战场。
             IReadOnlyList<LinkRecord> links = _session.Match.Links;
+            // 同一配对事件的几条链接在同一帧被看到（board-link-mode F.4）：本机参与的那条按"拼接前可见格 + 拼入格 = 本战场"核对，
+            // 他人那条核对本机可见格数不变——同帧里本机另有拼接时，"不变"以拼接后的格数为准。核对完再一次性更新基准。
+            bool mineInBatch = links.Skip(_seenLinks).Any(l => l.X == _session.MyBattlefield);
+            int visibleBefore = _visibleCells;
+            HashSet<int> expandedBefore = _expandedZones;
             for (; _seenLinks < links.Count; _seenLinks++)
             {
                 LinkRecord link = links[_seenLinks];
@@ -637,8 +645,9 @@ public sealed partial class GameRoot : Node3D
                     + $"；本机可见格 {board.Cells.Length}，已展开占位 {board.Placeholders.Count(p => p.Expanded)} / {board.Placeholders.Length}");
                 // 合并后的战场标识 = 两个旧标识中的小者：本机战场现在就是它，即本机参与了这次链接。
                 bool mine = _session.MyBattlefield == link.X;
-                Flow(_audit.Linked(link, mine, _visibleCells, board, _session.MyBattlefieldCells));
+                Flow(_audit.Linked(link, mine, mine || !mineInBatch ? visibleBefore : board.Cells.Length, board, _session.MyBattlefieldCells, expandedBefore));
                 _visibleCells = board.Cells.Length;
+                _expandedZones = [.. board.Placeholders.Where(p => p.Expanded).Select(p => p.Zone)];
                 if (mine && _pickCheckAfterLink)
                 {
                     _pickCheckPending = true;   // 本帧随后 RefreshViews 重搭合并战场，下一帧再跑第二轮拾取
@@ -1164,6 +1173,7 @@ public sealed partial class GameRoot : Node3D
                 _dirty = true;
                 DefaultBoardView locked = _session.World.Board();
                 _visibleCells = locked.Cells.Length;
+                _expandedZones = [.. locked.Placeholders.Where(p => p.Expanded).Select(p => p.Zone)];
                 Flow(_audit.FlagsLocked(locked, _session.World.OwnZone ?? -1, _session.MyBattlefieldCells));
             }
 
@@ -1261,9 +1271,9 @@ public sealed partial class GameRoot : Node3D
         GD.Print($"[show] 第 {_frame} 帧 {who}结算：节拍 {beats.Length}"
             + $"（落子 {beats.OfType<PlacementBeat>().Sum(b => b.Pieces.Length)} / 提子 {beats.OfType<CaptureBeat>().Sum(b => b.Pieces.Length)}"
             + $" / 信物 {beats.OfType<RelicRevealBeat>().Sum(b => b.Relics.Length)} / 势力 {beats.OfType<PowerBeat>().Sum(b => b.Changes.Length)} / 横幅 {beats.OfType<BannerBeat>().Sum(b => b.Banners.Length)}"
-            + $" / 展开 {beats.OfType<BoardRiseBeat>().Sum(b => b.Cells.Length)}+{beats.OfType<OpponentRevealBeat>().Sum(b => b.Cells.Length)} 格{(beats.OfType<CameraPullBeat>().Any() ? "、拉远" : string.Empty)}）"
+            + $" / 拼接 滑入 {beats.OfType<BoardSlideBeat>().Sum(b => b.Cells.Length)} 格、显现 {beats.OfType<OpponentRevealBeat>().Sum(b => b.Cells.Length)} 格{(beats.OfType<CameraPullBeat>().Any() ? "、重定界" : string.Empty)}）"
             + (duration == ShowDuration.Zero ? "，零时长" : $"，{_show.TotalDurationMs} ms"));
-        foreach (string banner in beats.OfType<BannerBeat>().SelectMany(b => b.Banners).Where(t => t.StartsWith("战场", System.StringComparison.Ordinal) || t.StartsWith("棋盘展开", System.StringComparison.Ordinal)))
+        foreach (string banner in beats.OfType<BannerBeat>().SelectMany(b => b.Banners).Where(t => t.StartsWith("战场", System.StringComparison.Ordinal) || t.StartsWith("棋盘拼接", System.StringComparison.Ordinal)))
         {
             // 链接模式演出（settlement-show「战场结算横幅」「棋盘展开节拍」）：横幅文案打一行，供自检与截图选帧。
             GD.Print($"[field] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合 横幅：{banner}");
@@ -1346,7 +1356,7 @@ public sealed partial class GameRoot : Node3D
             from.FocusX + ((rect.CenterX - from.FocusX) * t),
             from.FocusZ + ((rect.CenterZ - from.FocusZ) * t),
             from.Distance + ((distance - from.Distance) * t)));
-        ApplyCamera("棋盘展开");
+        ApplyCamera("棋盘拼接");
     }
 
     /// <summary>相机拉远节拍开始时的位姿（插值起点）；节拍之外为 <c>null</c>。</summary>
@@ -1356,9 +1366,13 @@ public sealed partial class GameRoot : Node3D
     /// <c>--shot-show</c> 的取图点：势力节拍要等到有玩家处在领地 / 军势段且段内过了三成（数字仍放大、段文案可见——只有一段时半拍处已经定格，看不到"领地 +a"）；
     /// 其余节拍取进行到一半。
     /// </summary>
-    private bool ShotShowReady() => _shotShow == "power"
-        ? _show.Mask().Power.Values.Any(d => d.Stage is PowerStage.Territory or PowerStage.Group && d.StagePermille >= 300)
-        : _show.ProgressPermille >= 500;
+    private bool ShotShowReady() => _shotShow switch
+    {
+        "power" => _show.Mask().Power.Values.Any(d => d.Stage is PowerStage.Territory or PowerStage.Group && d.StagePermille >= 300),
+        // board-link-mode F.4：战场横幅与出局横幅并成一条节拍时，取第一条（"战场落败 / 胜出"）显示过半，而不是整拍过半（那时已是第二条"出局"）。
+        "field" => _show.Mask().Banner is { Index: 0, ProgressPermille: >= 500 },
+        _ => _show.ProgressPermille >= 500,
+    };
 
     /// <summary>演出播完：挂上本次落子格 / 被提格的高亮（保留现有固定时长再清除，D6），完整刷新一次。</summary>
     private void FinishShow()
@@ -1400,7 +1414,7 @@ public sealed partial class GameRoot : Node3D
         "capture" => beat is CaptureBeat,
         "power" => beat is PowerBeat,
         "banner" => beat is BannerBeat,
-        "expand" => beat is BoardRiseBeat or OpponentRevealBeat,   // board-link-mode 4.5：棋盘展开中间帧（升起或对方盘面显现）
+        "expand" => beat is BoardSlideBeat,   // board-link-mode F.4：棋盘拼接中间帧（滑入半程）
         "field" => beat is BannerBeat field && field.Banners.Any(t => t.StartsWith("战场", System.StringComparison.Ordinal)),   // 战场胜出 / 落败横幅
         _ => false,
     };

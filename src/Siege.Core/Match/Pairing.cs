@@ -164,6 +164,9 @@ public sealed record LinkRecord(
     /// <summary>链接后（开局 + 链接、不含改造）地图的内容摘要（<see cref="MapFile.Digest"/>）。</summary>
     public string MapDigest { get; init; } = string.Empty;
 
+    /// <summary>本次链接的平移数据（<see cref="LinkLayout"/> 的输入）。</summary>
+    public LinkShiftStep ShiftStep => new(X, Y, Shifts);
+
     /// <summary>某战场在这次链接里的平移向量；拼接前不存在该标识为 <c>null</c>。</summary>
     public BattlefieldShift? ShiftOf(int battlefield)
     {

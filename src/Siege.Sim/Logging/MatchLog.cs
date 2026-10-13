@@ -27,7 +27,7 @@ namespace Siege.Sim.Logging;
 /// </list>
 /// <para>链接模式（board-link-mode 段 F）：链接时坐标会变（拼接平移）。首部 <see cref="LogHeader.Relics"/> 与 <see cref="LogHeader.Boards"/> 按开局坐标；
 /// 小回合快照的落子 / 提子 / 改造 / 信物状态 / 活形按该小回合结束时（含本回合内的链接）的布局；事件按发生时的布局；末行揭示表按终局布局。
-/// 换算只经 <see cref="LinkLayout"/>（<see cref="LinkLayout.VersionAfterTurn"/> / <see cref="LinkLayout.VersionAtEvent"/>）。驿站来源与前瞻记录是小回合开始时的决策量，按该回合开始时的布局。</para>
+/// 换算只经 <see cref="LinkLayout"/>（<see cref="LinkLogLayout.VersionAfterTurn"/> / <see cref="LinkLogLayout.VersionAtEvent"/>）。驿站来源与前瞻记录是小回合开始时的决策量，按该回合开始时的布局。</para>
 /// <para>life-shape「活形记录与统计」：快照的 <see cref="TurnSnapshot.Life"/>（本小回合的活形确立 / 失去、两类拒绝计数、结算后逐玩家活形状态）；
 /// 暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试另记 <c>LifeRefused</c> 事件（非细粒度，任何保留策略下都在）。</para>
 /// <para>
@@ -392,7 +392,7 @@ public sealed record LogHeader
 
     /// <summary>
     /// 开局的出生棋盘（board-link-mode F.3；下标 = 出生棋盘编号）：只在链接模式的局写出。与链接事件的平移向量一起，离线即可把任一时刻的坐标换算到另一时刻
-    /// （<see cref="LinkLayout.Of"/>），不必按地图标识重建地图。<see cref="Relics"/> 按开局坐标写。
+    /// （<see cref="LinkLogLayout.Of"/>），不必按地图标识重建地图。<see cref="Relics"/> 按开局坐标写。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<BoardEntry>? Boards { get; init; }

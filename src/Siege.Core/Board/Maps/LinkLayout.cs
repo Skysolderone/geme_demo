@@ -1,27 +1,12 @@
 using System.Collections.Immutable;
-using Siege.Core.Board;
-using Siege.Core.Board.Maps;
-using Siege.Core.Match;
 
-namespace Siege.Sim.Logging;
+namespace Siege.Core.Board.Maps;
 
-/// <summary>一次链接的平移数据（离线解析与跑局层共用的形状）：锚点 X、被贴方 Y 与拼接前每个战场的平移向量。</summary>
-public sealed record LinkShiftStep(int X, int Y, ImmutableArray<BattlefieldShift> Shifts)
-{
-    /// <summary>取自对局的链接记录。</summary>
-    public static LinkShiftStep From(LinkRecord record)
-    {
-        ArgumentNullException.ThrowIfNull(record);
-        return new LinkShiftStep(record.X, record.Y, record.Shifts);
-    }
-
-    /// <summary>取自日志的链接事件。</summary>
-    public static LinkShiftStep From(LinkLogEntry entry)
-    {
-        ArgumentNullException.ThrowIfNull(entry);
-        return new LinkShiftStep(entry.X, entry.Y, [.. entry.Shifts.Select(s => new BattlefieldShift(s.Battlefield, s.Dx, s.Dy))]);
-    }
-}
+/// <summary>
+/// 一次链接的平移数据（跑局层、离线解析与表现层共用的形状）：锚点 X、被贴方 Y 与拼接前每个战场的平移向量。
+/// 由对局的链接记录（<c>LinkRecord.ShiftStep</c>）或日志的链接事件（Sim 的 <c>LinkLogLayout.StepOf</c>）构造。
+/// </summary>
+public sealed record LinkShiftStep(int X, int Y, ImmutableArray<BattlefieldShift> Shifts);
 
 /// <summary>
 /// "坐标随链接平移"的<b>唯一</b>实现（board-link-mode F.3 / 裁决 J3：链接时坐标允许变化，日志里链接前的坐标按链接前布局解释）。
@@ -30,8 +15,9 @@ public sealed record LinkShiftStep(int X, int Y, ImmutableArray<BattlefieldShift
 /// （战场标识随合并变化：被贴方 Y 合并后标识变为锚点 X）。
 /// </summary>
 /// <remarks>
+/// board-link-mode 裁决 J10-1：从 Siege.Sim 下沉到 Core（零行为改动），Sim、表现层与测试共用这一份。
 /// 使用方：跑局层把本小回合的落子 / 提子 / 改造从链接前盘面搬到链接后盘面（<c>MatchSession.RecordTurn</c>）、离线分析把开局坐标的信物对到各快照的坐标（<c>BalanceAnalyzer</c>）、
-/// 离线重建地形（测试）。日志各行坐标的版本口径见 <see cref="VersionAfterTurn"/> / <see cref="VersionAtEvent"/>。
+/// 表现层的拼接演出（<c>LinkShowBeats</c>）、离线重建地形（测试）。日志各行坐标的版本口径见 Sim 的 <c>LinkLogLayout</c>。
 /// </remarks>
 public sealed class LinkLayout
 {
@@ -74,31 +60,6 @@ public sealed class LinkLayout
 
     /// <summary>链接次数（最大版本号）。</summary>
     public int Versions => _offset.Length - 1;
-
-    /// <summary>日志的布局：开局棋盘取首部 <see cref="LogHeader.Boards"/>，链接按事件序号。非链接模式或首部缺棋盘即 <see cref="FormatException"/>。</summary>
-    public static LinkLayout Of(MatchLog log)
-    {
-        ArgumentNullException.ThrowIfNull(log);
-        List<BoardEntry> boards = log.Header.Boards ?? throw new FormatException($"日志 {log.Header.MapId} 的首部没有开局棋盘（Boards），不是链接模式的日志。");
-        return new LinkLayout(
-            boards.Select((b, z) => new BoardPlate(Coord.Parse(b.Origin), b.Width, b.Height, BoardPlateKind.Birth)),
-            log.Events.Where(e => e.Link is not null).OrderBy(e => e.Seq).Select(e => LinkShiftStep.From(e.Link!)));
-    }
-
-    /// <summary>小回合 <paramref name="turn"/> 快照里落子 / 提子 / 改造 / 信物状态 / 活形的坐标所处的版本：本小回合及之前发生的链接数（快照在小回合结束、该回合内的链接之后）。</summary>
-    public static int VersionAfterTurn(MatchLog log, int turn)
-    {
-        ArgumentNullException.ThrowIfNull(log);
-        return log.Events.Count(e => e.Link is not null && e.Turn <= turn);
-    }
-
-    /// <summary>事件 <paramref name="logEvent"/> 里坐标所处的版本：序号在它之前的链接数（事件按发生时的布局记）。</summary>
-    public static int VersionAtEvent(MatchLog log, LogEvent logEvent)
-    {
-        ArgumentNullException.ThrowIfNull(log);
-        ArgumentNullException.ThrowIfNull(logEvent);
-        return log.Events.Count(e => e.Link is not null && e.Seq < logEvent.Seq);
-    }
 
     /// <summary>出生棋盘 <paramref name="zone"/> 在版本 <paramref name="version"/> 的位置。</summary>
     public BoardPlate BoardAt(int zone, int version)

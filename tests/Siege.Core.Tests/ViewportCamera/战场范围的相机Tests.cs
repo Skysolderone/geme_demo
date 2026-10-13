@@ -17,6 +17,26 @@ public class 战场范围的相机Tests
     private static readonly PlaneRect MergedField = new(Canvas.MinX, Canvas.MaxZ - 9f - (2f * Margin), Canvas.MinX + 60f, Canvas.MaxZ);
 
     [Fact]
+    public void 拼接后注视点随本机棋盘平移()
+    {
+        // board-link-mode F.4：拼接后布局整体变化、本机棋盘在平面上移动 (dx, dz)，重定界时注视点按同一位移平移再夹取——画面里本机棋盘不跳；距离不变。
+        var camera = new BoardCamera(Canvas, focus: SingleBoard);
+        camera.Set(new CameraPose(SingleBoard.CenterX, SingleBoard.CenterZ, camera.Nearest));
+        CameraPose before = camera.Pose;
+        PlaneRect moved = SingleBoard with { MinX = SingleBoard.MinX + 6f, MaxX = SingleBoard.MaxX + 6f, MinZ = SingleBoard.MinZ - 2f, MaxZ = SingleBoard.MaxZ - 2f };
+        camera.Rebound(Canvas, moved, shiftX: 6f, shiftZ: -2f);
+        Assert.Equal(before.FocusX + 6f, camera.Pose.FocusX, 3);
+        Assert.Equal(before.FocusZ - 2f, camera.Pose.FocusZ, 3);
+        Assert.Equal(before.Distance, camera.Pose.Distance, 3);
+
+        // 不给位移即原样（保位姿，旧行为）。
+        var still = new BoardCamera(Canvas, focus: SingleBoard);
+        still.Set(before);
+        still.Rebound(Canvas, moved);
+        Assert.Equal(before, still.Pose);
+    }
+
+    [Fact]
     public void 单块棋盘没有全局预览_占位再远也不算()
     {
         // Scenario「单块棋盘没有全局预览」：构筑期战场只有一块 7×7，按 M 不动相机；但可行矩形是整张画布，能推到占位、能拉到最远上限。

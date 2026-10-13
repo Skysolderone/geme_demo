@@ -77,17 +77,23 @@ public sealed class LinkDemoAudit
             $"#{record.Sequence} 第 {record.MajorRound} 大回合 候选 {string.Join(" ", record.Candidates.Select(BirthZoneLabel.Of))}；配对 {pairs}；等待者 {(record.Waiter is { } wt ? BirthZoneLabel.Of(wt) : "无")}；来源 {record.Source}", ok);
     }
 
-    /// <summary>链接：本机参与时合并后可见格数 = 本战场格数且已展开占位 ≥ 2；本机不参与时可见格数不变。</summary>
-    public AuditLine Linked(LinkRecord link, bool mine, int cellsBefore, DefaultBoardView after, int battlefieldCells)
+    /// <summary>
+    /// 链接（拼接，board-link-mode F.4）：本机参与时 可见格 = 本战场格数 = 拼接前本机可见格 + 新展开的对方出生棋盘格数（拼接不增不减格，两战场格数之和守恒）、
+    /// 且有新展开的占位；本机不参与时可见格数不变（坐标可能随收拢平移，格数不变）。<paramref name="expandedBefore"/> 为拼接前已展开的出生棋盘编号。
+    /// </summary>
+    public AuditLine Linked(LinkRecord link, bool mine, int cellsBefore, DefaultBoardView after, int battlefieldCells, IReadOnlyCollection<int> expandedBefore)
     {
         ArgumentNullException.ThrowIfNull(link);
         ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(expandedBefore);
+        BoardPlaceholderView[] joined = [.. after.Placeholders.Where(p => p.Expanded && !expandedBefore.Contains(p.Zone))];
+        int joinedCells = joined.Sum(p => p.Width * p.Height);
         int expanded = after.Placeholders.Count(p => p.Expanded);
         bool ok = mine
-            ? after.Cells.Length == battlefieldCells && after.Cells.Length > cellsBefore && expanded >= 2
+            ? after.Cells.Length == battlefieldCells && battlefieldCells == cellsBefore + joinedCells && joined.Length > 0
             : after.Cells.Length == cellsBefore;
         return Record("链接",
-            $"#{link.Sequence} 战场 {BirthZoneLabel.Of(link.X)} + {BirthZoneLabel.Of(link.Y)}{(mine ? "（本机参与）" : "（他人）")}：可见格 {cellsBefore} → {after.Cells.Length}，本战场 {battlefieldCells} 格，已展开占位 {expanded}", ok);
+            $"#{link.Sequence} 战场 {BirthZoneLabel.Of(link.X)} + {BirthZoneLabel.Of(link.Y)}{(mine ? "（本机参与）" : "（他人）")}：可见格 {cellsBefore} + 拼入 {joinedCells} → {after.Cells.Length}，本战场 {battlefieldCells} 格，已展开占位 {expanded}", ok);
     }
 
     /// <summary>
