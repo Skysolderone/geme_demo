@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/retire-legacy-maps/proposal.md", "reason": "retire-legacy-maps 规划与内核规范"}
+{"file": "openspec/changes/retire-legacy-maps/design.md", "reason": "retire-legacy-maps 规划与内核规范"}
+{"file": "openspec/changes/retire-legacy-maps/tasks.md", "reason": "retire-legacy-maps 规划与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "retire-legacy-maps 规划与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "retire-legacy-maps 规划与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "retire-legacy-maps 规划与内核规范"}
