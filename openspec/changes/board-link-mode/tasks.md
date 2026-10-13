@@ -66,7 +66,7 @@
 
 ## 5. 段 E：收尾
 
-- [ ] 5.1 设计文档 §3 / §4 / §12 / §13 / §19 改写为新模式，变更记录写入 13 项裁决与 Q1–Q10 缺省；版本号递增。
-- [ ] 5.2 HANDOFF 改写：启动方式、可用选项、地图标识只剩 `link:`；旧地图说明移到"测试夹具"一节。
-- [ ] 5.3 回归：两处构建零警告；`dotnet test -c Release` 全绿；Godot `--auto-demo` / `--pick-check` / `--map-select --auto-demo` 退出码 0；`openspec validate board-link-mode --strict`。
-- [ ] 5.4 journal 收尾；登记后续 change：`retire-legacy-maps`（删旧地图与夹具）、AI 视野收紧、等待者失衡评估。
+- [x] 5.1 设计文档 §3 / §4 / §12 / §13 / §19 改写为新模式，变更记录写入 13 项裁决与 Q1–Q10 缺省；版本号递增。
+- [x] 5.2 HANDOFF 改写：启动方式、可用选项、地图标识只剩 `link:`；旧地图说明移到"测试夹具"一节。
+- [x] 5.3 回归：两处构建零警告；`dotnet test -c Release` 全绿；Godot `--auto-demo` / `--pick-check` / `--map-select --auto-demo` 退出码 0；`openspec validate board-link-mode --strict`。
+- [x] 5.4 journal 收尾；登记后续 change：`retire-legacy-maps`（删旧地图与夹具）、AI 视野收紧、等待者失衡评估。
