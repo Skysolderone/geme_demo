@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-13-link-map-terrain/prd.md", "reason": "按 AC1–AC7 核对"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "边界与单一实现"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "确定性"}
+{"file": ".trellis/spec/core/testing.md", "reason": "测试与变异规范"}

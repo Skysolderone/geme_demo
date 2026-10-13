@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/10-13-link-map-terrain/prd.md", "reason": "裁决 M1–M11 与验收标准"}
+{"file": ".trellis/tasks/10-13-link-map-terrain/design.md", "reason": "主题生成、校验表、BirthZones 语义变化"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范入口"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "零 Godot 依赖、单一实现"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "地图只用布局子流"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "核心区与外圈坐标"}
+{"file": ".trellis/spec/core/testing.md", "reason": "先红后绿、变异验证"}
