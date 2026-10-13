@@ -166,6 +166,39 @@ public class 棋盘展开节拍Tests
     }
 
     [Fact]
+    public void 本机为被贴方时滑入期间相机跟随本机棋盘()
+    {
+        // board-link-mode F.4b / 裁决 J11-5：本机是被贴方，滑入期间注视点 = 滑入开始位姿 + 本机棋盘此刻的平面偏移（与滑入同一插值）；距离不变；
+        // 本机是锚点（滑的是对方）时不跟随；滑入播完不再跟随。格心映射取一个线性的测试映射（x 向东 = +X、y 向北 = −Z，与引擎同口径）。
+        // 变异 MF4b-1：FollowSlide 不加偏移（恒返回起点）→ 本测试红。
+        (DefaultBoardView before, DefaultBoardView after, ImmutableArray<PlayerId> opponents, MatchFlow match, LinkLayout layout) = LinkedFor(P1);
+        ImmutableArray<SettlementBeat> beats = LinkShowBeats.Expansion(before, after, opponents, layout, 0);
+        var slide = (BoardSlideBeat)beats[0];
+        HashSet<Coord> own = [.. match.Map.BirthZones[1]];
+        static (float X, float Z) Plane(Coord c) => (c.X * 1f, -c.Y * 1f);
+        var start = new Siege.Presentation.Camera.CameraPose(3f, -2f, 12f);
+        var timeline = new ShowTimeline(beats, ShowDuration.Normal);
+
+        Siege.Presentation.Camera.CameraPose atStart = Siege.Presentation.Camera.CameraPose.FollowSlide(start, timeline.Mask(), own, Plane)!.Value;
+        Assert.Equal(start.FocusX + slide.FromDx, atStart.FocusX, 3);
+        Assert.Equal(start.FocusZ - slide.FromDy, atStart.FocusZ, 3);
+        Assert.Equal(start.Distance, atStart.Distance, 3);
+
+        timeline.Advance(BoardSlideBeat.Ms / 2);
+        Siege.Presentation.Camera.CameraPose atHalf = Siege.Presentation.Camera.CameraPose.FollowSlide(start, timeline.Mask(), own, Plane)!.Value;
+        Assert.InRange(atHalf.FocusX - start.FocusX, Math.Min(slide.FromDx * 0.4f, slide.FromDx * 0.6f), Math.Max(slide.FromDx * 0.4f, slide.FromDx * 0.6f));
+        Assert.NotEqual(0, slide.FromDx);
+
+        timeline.Advance(BoardSlideBeat.Ms / 2 + 10);
+        Assert.Null(Siege.Presentation.Camera.CameraPose.FollowSlide(start, timeline.Mask(), own, Plane));
+
+        // 本机是锚点（P0 视角，滑的是对方）：不跟随。
+        (DefaultBoardView b0, DefaultBoardView a0, ImmutableArray<PlayerId> o0, MatchFlow m0, LinkLayout l0) = LinkedFor(P0);
+        ShowMask anchorMask = new ShowTimeline(LinkShowBeats.Expansion(b0, a0, o0, l0, 0), ShowDuration.Normal).Mask();
+        Assert.Null(Siege.Presentation.Camera.CameraPose.FollowSlide(start, anchorMask, new HashSet<Coord>(m0.Map.BirthZones[0]), Plane));
+    }
+
+    [Fact]
     public void 无人值守零时长()
     {
         // Scenario「无人值守零时长」：节拍照常生成，时间线零时长创建即播完、遮罩为空。

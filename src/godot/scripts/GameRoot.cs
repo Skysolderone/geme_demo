@@ -98,6 +98,9 @@ public sealed partial class GameRoot : Node3D
     private bool _shotOverview;
     private bool _shotPower;
     private int? _shotBoard;
+
+    /// <summary><c>--zone=N</c>（board-link-mode F.4b）：无人值守演示里本机锁定的出生棋盘编号（1 起，缺省 1）。用来演示"本机为被贴方"的拼接——本机在 1 号时永远是锚点。</summary>
+    private int _autoZone = 1;
     private bool _shotGroups;
     private bool _shotOwnership;
     private double _perfSampleSeconds;
@@ -141,6 +144,7 @@ public sealed partial class GameRoot : Node3D
             // --shot-board=<棋盘清单下标>：截图前把相机对准棋盘清单里的第几块棋盘（board-map 3.4：给负责人看一块棋盘的近景，仅截图用）。
             // 须与 --screenshot= 同用；下标越界报错退出。棋盘的外接矩形取自视图模型的棋盘清单。
             _shotBoard = args.Value<int>("shot-board", "棋盘清单下标（非负整数，截图时对准该棋盘）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
+            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生棋盘编号（1–5）", t => int.TryParse(t, out int v) && v is >= 1 and <= 5 ? v : null) ?? 1;
 
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
@@ -1167,7 +1171,7 @@ public sealed partial class GameRoot : Node3D
         {
             if (_autoDemo)
             {
-                _session.ChooseZone(0);
+                _session.ChooseZone(_autoZone - 1);
                 _board.Build(_session.World.Board(), _session.ZoneOwners);
                 FocusHome(opening: true);
                 _dirty = true;
@@ -1311,6 +1315,12 @@ public sealed partial class GameRoot : Node3D
             _sounds!.Play(SoundCues.Between(heard, _show.Mask(), crossed), fast);
         }
 
+        // 滑入期间相机跟随（F.4b）先于取图判定：取图那一帧的位姿已随本机棋盘平移到位。
+        if (!_show.IsFinished)
+        {
+            ApplySlideCamera(_show.Mask());
+        }
+
         if (shot && ShotShowTarget(_show.Current) && ShotShowReady())
         {
             // 该节拍进行到取图点：冻结在此帧取图（BeginCapture 会带当前遮罩完整刷新一次）。
@@ -1361,6 +1371,37 @@ public sealed partial class GameRoot : Node3D
 
     /// <summary>相机拉远节拍开始时的位姿（插值起点）；节拍之外为 <c>null</c>。</summary>
     private CameraPose? _pullStart;
+
+    /// <summary>
+    /// 棋盘拼接节拍 ① 的相机跟随（board-link-mode F.4b / 裁决 J11-5）：本机是被贴方时，滑入期间注视点随本机棋盘同步平移（同一插值，算式在 <see cref="CameraPose.FollowSlide"/>），
+    /// 重定界节拍再从那里过渡到合并战场一屏可见。本机是锚点（滑的是对方）时不动相机。无人值守零时长遮罩恒空，不进这里。
+    /// </summary>
+    private void ApplySlideCamera(ShowMask mask)
+    {
+        if (mask.Slide is null)
+        {
+            _slideStart = null;
+            return;
+        }
+
+        HashSet<Coord> own = [.. _session.World.Board().Placeholders.Where(p => p.Own).SelectMany(p => p.Cells())];
+        _slideStart ??= _board.Rig.Pose;
+        if (CameraPose.FollowSlide(_slideStart.Value, mask, own, _board.PlaneCenterOf) is { } follow)
+        {
+            _board.Rig.Set(follow);
+            ApplyCamera("棋盘拼接·跟随本机棋盘");
+            if (!_slideFollowReported && mask.Slide is { Permille: >= 500 })
+            {
+                _slideFollowReported = true;
+                GD.Print($"[slide] 本机为被贴方：滑入半程相机注视点 ({follow.FocusX:0.##}, {follow.FocusZ:0.##})，起点 ({_slideStart.Value.FocusX:0.##}, {_slideStart.Value.FocusZ:0.##})，随本机棋盘同步平移");
+            }
+        }
+    }
+
+    /// <summary>滑入节拍开始时的位姿（跟随的基准）；节拍之外为 <c>null</c>。</summary>
+    private CameraPose? _slideStart;
+
+    private bool _slideFollowReported;
 
     /// <summary>
     /// <c>--shot-show</c> 的取图点：势力节拍要等到有玩家处在领地 / 军势段且段内过了三成（数字仍放大、段文案可见——只有一段时半拍处已经定格，看不到"领地 +a"）；

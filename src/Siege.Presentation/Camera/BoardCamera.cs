@@ -1,4 +1,5 @@
 using System.Numerics;
+using Siege.Core.Board;
 
 namespace Siege.Presentation.Camera;
 
@@ -46,6 +47,48 @@ public readonly record struct CameraPose(float FocusX, float FocusZ, float Dista
 
     /// <summary>相机所在的世界坐标：自注视目标沿固定俯角向后上方退 <see cref="Distance"/>。棋盘"上"（−Z）始终朝屏幕上方。</summary>
     public Vector3 Eye => Target + new Vector3(0f, Distance * MathF.Sin(PitchRadians), Distance * MathF.Cos(PitchRadians));
+
+    /// <summary>
+    /// 滑入期间相机跟随本机棋盘（board-link-mode F.4b / 裁决 J11-5）：本机是被贴方、本机棋盘在滑——注视点 = 滑入开始时的位姿 + 本机棋盘此刻的平面偏移
+    /// （与滑入同一插值：遮罩给的千分之一格偏移，经引擎侧的格心映射 <paramref name="planeCenterOf"/> 换成平面位移），距离不变；画面里本机棋盘因此不动、对方相对靠拢。
+    /// 本机不在滑动格里（锚点一方）或没有滑入时为 <c>null</c>（相机不跟）。格心映射是线性的，取 (0,0)、(1,0)、(0,1) 三格得两个方向的单位位移，不另写换算。
+    /// </summary>
+    public static CameraPose? FollowSlide(CameraPose start, Siege.Presentation.Show.ShowMask mask, IReadOnlySet<Coord> own, Func<Coord, (float X, float Z)> planeCenterOf)
+    {
+        ArgumentNullException.ThrowIfNull(mask);
+        ArgumentNullException.ThrowIfNull(own);
+        ArgumentNullException.ThrowIfNull(planeCenterOf);
+        if (mask.Slide is not { } slide)
+        {
+            return null;
+        }
+
+        Coord? mine = null;
+        foreach (Coord cell in slide.Cells)
+        {
+            if (own.Contains(cell))
+            {
+                mine = cell;
+                break;
+            }
+        }
+
+        if (mine is not { } anchor)
+        {
+            return null;
+        }
+
+        (int dx, int dy) = mask.SlideOffsetOf(anchor);
+        (float ox, float oz) = planeCenterOf(new Coord(0, 0));
+        (float ex, float ez) = planeCenterOf(new Coord(1, 0));
+        (float nx, float nz) = planeCenterOf(new Coord(0, 1));
+        float fx = dx / 1000f;
+        float fy = dy / 1000f;
+        return new CameraPose(
+            start.FocusX + ((ex - ox) * fx) + ((nx - ox) * fy),
+            start.FocusZ + ((ez - oz) * fx) + ((nz - oz) * fy),
+            start.Distance);
+    }
 }
 
 /// <summary>

@@ -90,8 +90,26 @@ public sealed partial class BoardView : Node3D
     /// <summary>每个可落子格搭出来的地砖节点（面砖、衬底、侧面色带、出生区描边、水面、桥）：棋盘拼接节拍按格平移（board-link-mode F.4）。</summary>
     private readonly Dictionary<Coord, List<Node3D>> _tileNodes = [];
 
-    /// <summary>此刻被滑入节拍偏移的格 → 平面偏移（世界单位）；节拍播完 / 完整刷新时复位。</summary>
-    private readonly Dictionary<Coord, Vector3> _tileSlide = [];
+    /// <summary>
+    /// 滑入节拍的父节点（board-link-mode F.4b / 裁决 J11-4）：滑动战场上的<b>全部</b>节点（地砖与阵营描边、台面边框与格线、信物 / 改造 / 禁手标记、
+    /// 信息层叠加物、棋子、演出层）在滑动期间从各自的容器挪到这里对应的镜像容器下，整体按偏移平移；滑到位后原样并回。不逐类登记。
+    /// </summary>
+    private Node3D _slideRoot = null!;
+
+    /// <summary>源容器 → 它在 <see cref="_slideRoot"/> 下的镜像容器（同一局部坐标系：源容器与滑动父节点都在原点）。</summary>
+    private readonly Dictionary<Node3D, Node3D> _slideMirror = [];
+
+    /// <summary>此刻滑动中的格（拼接后坐标）；空即没有滑入。</summary>
+    private HashSet<Coord> _slideCells = [];
+
+    /// <summary>本次滑入是否已打过半程自证行。</summary>
+    private bool _slideHalfReported;
+
+    /// <summary>地砖容器、棋盘台面容器与台面的输入（滑入期间台面按"各自独立一块"重画，滑到位后切回合并外轮廓）。</summary>
+    private Node3D _tiles = null!;
+    private Node3D? _plateRoot;
+    private (ImmutableArray<BoardPlate> Plates, Dictionary<Coord, int> ZoneOf, Func<int, Color> ColorOf)? _plateSource;
+    private bool _platesMerged = true;
 
     /// <summary>上一次搭建时本机出生棋盘（占位 Own）的左下角与画布尺寸：拼接后布局变化时据此算本机棋盘的平面位移，相机注视点随之平移（board-link-mode F.4）。</summary>
     private (Coord Origin, int Width, int Height)? _ownPlacement;
@@ -141,7 +159,12 @@ public sealed partial class BoardView : Node3D
         _boxMeshes.Clear();
         _levels.Clear();
         _tileNodes.Clear();
-        _tileSlide.Clear();
+        _slideMirror.Clear();
+        _slideCells = [];
+        _slideHalfReported = false;
+        _platesMerged = true;
+        _plateRoot = null;
+        _plateSource = null;
         _partBatches.Clear();
         _unbatchedObstacles = 0;
         _boardPieces.Clear();
@@ -179,6 +202,7 @@ public sealed partial class BoardView : Node3D
 
         var tiles = new Node3D { Name = "Tiles" };
         AddChild(tiles);
+        _tiles = tiles;
 
         // 出生区的外圈格（四邻里有不属于同一区的格）：归属色只重染外圈，内部只淡淡带一点，让草地本色露出来。只是渲染，不进规则。
         Dictionary<Coord, int> zoneOf = board.Cells.Where(c => c.BirthZone is not null).ToDictionary(c => c.Coord, c => c.BirthZone!.Value);
@@ -374,7 +398,8 @@ public sealed partial class BoardView : Node3D
 
         if (plated)
         {
-            AddBoardPlates(plates, zoneOf, ZoneColorOf);
+            _plateSource = (plates, zoneOf, ZoneColorOf);
+            AddBoardPlates(plates, zoneOf, ZoneColorOf, merge: true);
         }
 
         AddPlaceholders(board.Placeholders);
@@ -403,6 +428,8 @@ public sealed partial class BoardView : Node3D
         AddChild(_preview);
         _show = new Node3D { Name = "Show" };
         AddChild(_show);
+        _slideRoot = new Node3D { Name = "Sliding" };
+        AddChild(_slideRoot);
 
         _cursor = new MeshInstance3D
         {
@@ -536,56 +563,133 @@ public sealed partial class BoardView : Node3D
         _tileNodes[coord] = nodes;
     }
 
+    /// <summary>节点上记录"属于哪一格"的元数据键（棋盘台面节点用它，其余节点按位置反推）。</summary>
+    private const string SlideCellMeta = "slide_cell";
+
     /// <summary>
-    /// 棋盘拼接节拍 ①（board-link-mode F.4 / 裁决 J5）：遮罩里滑动中的格按进度把地砖（与其上的棋子）从起点偏移移到位；不在遮罩里的格复位。
-    /// 偏移由遮罩给出（千分之一格），经格心映射换成平面位移；只改节点位移，不改视图模型；零时长演出遮罩恒空，这里什么都不做。
+    /// 棋盘拼接节拍 ①（board-link-mode F.4 / F.4b、裁决 J5 / J11-4）：滑动中的战场整体平移。每次画完（完整刷新、演出帧）调用一次：
+    /// 把地砖、台面、叠加层、棋子、预览、演出层容器里属于滑动格的节点挪到滑动父节点下的镜像容器，滑动父节点按遮罩的偏移平移；
+    /// 没有滑动时全部并回原容器、偏移归零。滑入期间台面按"各自独立一块"重画（滑动方带自己的边框），滑到位后切回合并外轮廓。
+    /// 只改节点归属与位移，不改视图模型；零时长演出遮罩恒空，这里只在必要时并回。
     /// </summary>
     private void ApplySlide(ShowMask mask)
     {
         HashSet<Coord> sliding = mask.Slide is { } slide ? [.. slide.Cells] : [];
-        foreach (Coord coord in _tileSlide.Keys.Where(c => !sliding.Contains(c)).ToArray())
+        bool active = sliding.Count > 0;
+        if (_plateSource is { } source && _platesMerged == active)
         {
-            Move(coord, Vector3.Zero);
-        }
-
-        foreach (Coord coord in sliding)
-        {
-            (int dx, int dy) = mask.SlideOffsetOf(coord);
-            // Coord 的 x 向东 = 世界 +X，y 向北 = 世界 −Z（与 BoardGeometry.Center 同一口径）。
-            Move(coord, new Vector3(dx / 1000f * BoardGeometry.CellSize, 0f, -dy / 1000f * BoardGeometry.CellSize));
-        }
-
-        void Move(Coord coord, Vector3 offset)
-        {
-            // 棋子：每帧按格心 + 偏移整份写（棋子节点可能被完整刷新重建，增量会丢）；滑动中的格上没有出现 / 淡出中的棋子，格心即其位置。
-            if (_boardPieces.TryGetValue(coord, out PieceNode? piece) && piece.Progress < 0)
+            // 台面：滑入开始时拆成各自一块，滑到位后合并（只在状态切换的那一帧重画一次）。
+            if (_plateRoot is not null)
             {
-                piece.Node.Position = CenterOf(coord) + offset;
-            }
-
-            Vector3 previous = _tileSlide.GetValueOrDefault(coord);
-            if ((previous - offset).LengthSquared() < 1e-8f)
-            {
-                return;
-            }
-
-            if (_tileNodes.TryGetValue(coord, out List<Node3D>? nodes))
-            {
-                foreach (Node3D node in nodes)
+                ReturnFromMirror(_plateRoot);
+                if (_slideMirror.Remove(_plateRoot, out Node3D? oldMirror))
                 {
-                    node.Position += offset - previous;
+                    oldMirror.QueueFree();
+                }
+
+                RemoveChild(_plateRoot);
+                _plateRoot.QueueFree();
+            }
+
+            AddBoardPlates(source.Plates, source.ZoneOf, source.ColorOf, merge: !active);
+            _platesMerged = !active;
+        }
+
+        Node3D[] containers = [_tiles, .. _plateRoot is null ? Array.Empty<Node3D>() : [_plateRoot], _overlay, _pieces, _preview, _show];
+        if (!active)
+        {
+            foreach (Node3D container in containers)
+            {
+                ReturnFromMirror(container);
+            }
+
+            _slideRoot.Position = Vector3.Zero;
+            _slideCells = [];
+            _slideHalfReported = false;
+            return;
+        }
+
+        _slideCells = sliding;
+        (int dx, int dy) = mask.SlideOffsetOf(sliding.First());
+        // Coord 的 x 向东 = 世界 +X，y 向北 = 世界 −Z（与 BoardGeometry.Center 同一口径）；偏移单位千分之一格。
+        _slideRoot.Position = new Vector3(dx / 1000f * BoardGeometry.CellSize, 0f, -dy / 1000f * BoardGeometry.CellSize);
+        foreach (Node3D container in containers)
+        {
+            Node3D mirror = MirrorOf(container);
+            foreach (Node3D child in container.GetChildren().OfType<Node3D>().ToArray())
+            {
+                if (CellOf(child) is { } cell && sliding.Contains(cell))
+                {
+                    container.RemoveChild(child);
+                    mirror.AddChild(child);
                 }
             }
-
-            if (offset == Vector3.Zero)
-            {
-                _tileSlide.Remove(coord);
-            }
-            else
-            {
-                _tileSlide[coord] = offset;
-            }
         }
+
+        if (!_slideHalfReported && mask.Slide is { Permille: >= 500 } half)
+        {
+            // 自证行（F.4b）：滑入半程时滑动战场的节点数、其中非地砖的、以及仍留在原容器里的滑动格节点（应为 0）。
+            _slideHalfReported = true;
+            int total = _slideMirror.Values.Sum(m => m.GetChildCount());
+            int tiles = _slideMirror.TryGetValue(_tiles, out Node3D? tileMirror) ? tileMirror.GetChildCount() : 0;
+            int stray = containers.Sum(c => c.GetChildren().OfType<Node3D>().Count(n => CellOf(n) is { } cell && sliding.Contains(cell)));
+            GD.Print($"[slide] 滑入半程（{half.Permille}‰，{sliding.Count} 格，偏移 {dx / 1000f:0.##},{dy / 1000f:0.##} 格）：滑动战场节点 {total} 个，其中非地砖 {total - tiles} 个"
+                + $"（台面 {CountIn(_plateRoot)}、叠加 {CountIn(_overlay)}、棋子 {CountIn(_pieces)}、预览 {CountIn(_preview)}、演出 {CountIn(_show)}），"
+                + (stray == 0 ? "全部挂在滑动父节点下" : $"仍有 {stray} 个留在原容器"));
+        }
+
+        int CountIn(Node3D? container) => container is not null && _slideMirror.TryGetValue(container, out Node3D? m) ? m.GetChildCount() : 0;
+    }
+
+    /// <summary>某容器在滑动父节点下的镜像容器（按需新建，名字同源）。</summary>
+    private Node3D MirrorOf(Node3D container)
+    {
+        if (!_slideMirror.TryGetValue(container, out Node3D? mirror) || !IsInstanceValid(mirror))
+        {
+            mirror = new Node3D { Name = $"Sliding{container.Name}" };
+            _slideRoot.AddChild(mirror);
+            _slideMirror[container] = mirror;
+        }
+
+        return mirror;
+    }
+
+    /// <summary>把镜像容器里的节点并回源容器（局部坐标不变：两边都在原点）。</summary>
+    private void ReturnFromMirror(Node3D container)
+    {
+        if (!_slideMirror.TryGetValue(container, out Node3D? mirror) || !IsInstanceValid(mirror))
+        {
+            return;
+        }
+
+        foreach (Node child in mirror.GetChildren())
+        {
+            mirror.RemoveChild(child);
+            container.AddChild(child);
+        }
+    }
+
+    /// <summary>
+    /// 节点属于哪一格：有 <see cref="SlideCellMeta"/> 元数据的取它；否则取节点（或原点处的纯容器节点里第一个子节点）的位置，按格心映射反推最近的格。
+    /// 反算只经唯一实现 <see cref="BoardGeometry.TryFromWorld"/>（坐标映射在 Godot 侧唯一）。
+    /// </summary>
+    private Coord? CellOf(Node3D node)
+    {
+        if (node.HasMeta(SlideCellMeta))
+        {
+            Vector2I cell = node.GetMeta(SlideCellMeta).AsVector2I();
+            return new Coord(cell.X, cell.Y);
+        }
+
+        Vector3 position = node.Position;
+        Node3D current = node;
+        while (position.LengthSquared() < 1e-8f && current.GetChildCount() > 0 && current.GetChild(0) is Node3D first)
+        {
+            current = first;
+            position += first.Position;
+        }
+
+        return BoardGeometry.TryFromWorld(position, _width, _height, out Coord found) ? found : null;
     }
 
     private void AddFloatingIsland(DefaultBoardView board, float apron, Vector3 frameCenter, float spanX, float spanZ)
@@ -1035,10 +1139,11 @@ public sealed partial class BoardView : Node3D
     /// 出生棋盘的边框沿用出生区的归属色，公共棋盘用中性色。外接矩形与类别取自视图模型的棋盘清单；
     /// 位置一律由 <see cref="BoardGeometry.Center(Coord, int, int, int)"/> 的格心推出（边线 = 相邻两格格心的中点，外缘 = 角格格心外推半格）。
     /// </summary>
-    private void AddBoardPlates(ImmutableArray<BoardPlate> plates, Dictionary<Coord, int> zoneOf, Func<int, Color> zoneColorOf)
+    private void AddBoardPlates(ImmutableArray<BoardPlate> plates, Dictionary<Coord, int> zoneOf, Func<int, Color> zoneColorOf, bool merge)
     {
         var root = new Node3D { Name = "BoardPlates" };
         AddChild(root);
+        _plateRoot = root;
         int[] groups = PlateGroups(plates);
         Dictionary<int, int> groupSize = groups.GroupBy(g => g).ToDictionary(g => g.Key, g => g.Count());
 
@@ -1060,23 +1165,29 @@ public sealed partial class BoardView : Node3D
             float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
             float top = a.Y;
 
+            // 每块棋盘的格线与边框挂在自己的节点下（F.4b：滑入时整块随滑动战场平移；归属取棋盘左下角格，不按节点位置猜）。
+            var plateNode = new Node3D { Name = $"Plate{index}" };
+            plateNode.SetMeta(SlideCellMeta, new Vector2I(plate.Origin.X, plate.Origin.Y));
+            root.AddChild(plateNode);
+
             // 内部格线：压在地砖之间的缝上，略高于面砖、低于一切叠加标记（标记最低在 +0.008）。
             for (int column = 1; column < plate.Width; column++)
             {
                 Vector3 left = BoardGeometry.Center(new Coord(plate.Origin.X + column - 1, plate.Origin.Y), _width, _height, level);
                 Vector3 right = BoardGeometry.Center(new Coord(plate.Origin.X + column, plate.Origin.Y), _width, _height, level);
-                root.AddChild(Strip(new Vector3(lineWidth, lineHeight, maxZ - minZ), new Vector3((left.X + right.X) * 0.5f, top + (lineHeight * 0.5f), midZ), ink));
+                plateNode.AddChild(Strip(new Vector3(lineWidth, lineHeight, maxZ - minZ), new Vector3((left.X + right.X) * 0.5f, top + (lineHeight * 0.5f), midZ), ink));
             }
 
             for (int row = 1; row < plate.Height; row++)
             {
                 Vector3 near = BoardGeometry.Center(new Coord(plate.Origin.X, plate.Origin.Y + row - 1), _width, _height, level);
                 Vector3 far = BoardGeometry.Center(new Coord(plate.Origin.X, plate.Origin.Y + row), _width, _height, level);
-                root.AddChild(Strip(new Vector3(maxX - minX, lineHeight, lineWidth), new Vector3(midX, top + (lineHeight * 0.5f), (near.Z + far.Z) * 0.5f), ink));
+                plateNode.AddChild(Strip(new Vector3(maxX - minX, lineHeight, lineWidth), new Vector3(midX, top + (lineHeight * 0.5f), (near.Z + far.Z) * 0.5f), ink));
             }
 
-            // 边框：骑在外接矩形的外缘上，四角补齐。拼接成连体棋盘的（同组不止一块），边框改由下面按整组外轮廓统一画。
-            if (groupSize[groups[index]] > 1)
+            // 边框：骑在外接矩形的外缘上，四角补齐。拼接成连体棋盘的（同组不止一块），边框改由下面按整组外轮廓统一画；
+            // 滑入期间（merge = false，F.4b）滑动方仍是独立一块、各自带边框，滑到位后再切成合并外轮廓。
+            if (merge && groupSize[groups[index]] > 1)
             {
                 continue;
             }
@@ -1088,15 +1199,15 @@ public sealed partial class BoardView : Node3D
             float y = top + (frameHeight * 0.5f);
             float spanX = maxX - minX + frameWidth;
             float spanZ = maxZ - minZ + frameWidth;
-            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, minZ), frame));
-            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, maxZ), frame));
-            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ), frame));
-            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ), frame));
+            plateNode.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, minZ), frame));
+            plateNode.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, maxZ), frame));
+            plateNode.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ), frame));
+            plateNode.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ), frame));
         }
 
         // 连体棋盘（board-link-mode F.4 / 规格 visual-style-baseline「未展开区域的可视表现」拼接段）：边对边紧贴的棋盘合为一组，
         // 接缝处补一条与棋盘内部同样的格线（两块棋盘的格线连成一片）、不画边框；边框只沿整组的外轮廓画一圈中性色（台面边框色）。
-        foreach (int group in groups.Distinct().Where(g => groupSize[g] > 1))
+        foreach (int group in groups.Distinct().Where(g => merge && groupSize[g] > 1))
         {
             var cells = new Dictionary<Coord, int>();
             for (int i = 0; i < plates.Length; i++)
@@ -1385,12 +1496,12 @@ public sealed partial class BoardView : Node3D
         ScalePartBatches(decorationScale);
 
         // 完整刷新仍然整层重建棋子（board-render-perf D3）：终态与非演出路径完全一致；新节点由 DrawPieces 登记进表，供随后的演出帧增量比对。
-        Clear(_overlay);
-        Clear(_pieces);
+        ClearLayer(_overlay);
+        ClearLayer(_pieces);
         _boardPieces.Clear();
         _capturedPieces.Clear();
-        Clear(_preview);
-        Clear(_show);
+        ClearLayer(_preview);
+        ClearLayer(_show);
 
         // 水面流动层与装饰对比同步压淡：信息层打开时它不该比判读信息更抢眼。
         Visuals.WaterFlow.SetShaderParameter("dim", 0.35f + (0.65f * treatment.DecorationContrastPercent / 100f));
@@ -1404,11 +1515,11 @@ public sealed partial class BoardView : Node3D
         DrawRelicMarkers(board);
         DrawPlacementMarks(board);
         DrawPieces(board, treatment, mask ?? ShowMask.Empty);
-        ApplySlide(mask ?? ShowMask.Empty);   // 完整刷新：没有滑动中的格就全部复位（board-link-mode F.4）
         DrawShow(mask ?? ShowMask.Empty);
         DrawLayer(content);
         DrawPreview(preview, focus);
         DrawFlash(flash);
+        ApplySlide(mask ?? ShowMask.Empty);   // 全部画完再收拢滑动战场的节点；没有滑动中的格就全部并回（board-link-mode F.4b）
     }
 
     /// <summary>
@@ -1438,6 +1549,16 @@ public sealed partial class BoardView : Node3D
         {
             container.RemoveChild(child);
             child.QueueFree();
+        }
+    }
+
+    /// <summary>清空一个逐帧重画的容器，连同它在滑动父节点下的镜像（F.4b：滑动中的节点挪到了镜像里，不能漏清）。</summary>
+    private void ClearLayer(Node3D container)
+    {
+        Clear(container);
+        if (_slideMirror.TryGetValue(container, out Node3D? mirror))
+        {
+            Clear(mirror);
         }
     }
 
@@ -1571,12 +1692,12 @@ public sealed partial class BoardView : Node3D
             Build(board, _zoneOwners);
         }
 
-        Clear(_show);
+        ClearLayer(_show);
         _lastShowRedraw = DrawPieces(board, treatment, mask);
         _totalShowRedraw += _lastShowRedraw;
-        ApplySlide(mask);
         _showFrames++;
         DrawShow(mask);
+        ApplySlide(mask);
     }
 
     /// <summary>
@@ -1653,7 +1774,7 @@ public sealed partial class BoardView : Node3D
         {
             // 棋子强调变了（信息层开关）：每枚的颜色都要换，整层重建。
             freed = _boardPieces.Count + _capturedPieces.Count;
-            Clear(_pieces);
+            ClearLayer(_pieces);
             _boardPieces.Clear();
             _capturedPieces.Clear();
             _pieceEmphasis = treatment.PieceEmphasisPercent;
@@ -1677,7 +1798,7 @@ public sealed partial class BoardView : Node3D
 
             if (shown is not null)
             {
-                _pieces.RemoveChild(shown.Node);
+                shown.Node.GetParent()?.RemoveChild(shown.Node);   // 滑动中可能挂在滑动父节点下（F.4b）
                 shown.Node.QueueFree();
                 freed++;
             }
@@ -1693,7 +1814,7 @@ public sealed partial class BoardView : Node3D
         {
             foreach (Coord coord in table.Keys.Where(c => !wanted.Contains(c)).ToList())
             {
-                _pieces.RemoveChild(table[coord].Node);
+                table[coord].Node.GetParent()?.RemoveChild(table[coord].Node);
                 table[coord].Node.QueueFree();
                 table.Remove(coord);
                 freed++;
