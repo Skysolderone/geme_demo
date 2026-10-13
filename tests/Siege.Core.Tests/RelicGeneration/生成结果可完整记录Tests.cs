@@ -8,7 +8,8 @@ namespace Siege.Core.Tests.RelicGeneration;
 /// <summary>规格：relic-generation —— Requirement: 生成结果可完整记录</summary>
 public class 生成结果可完整记录Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图，断言不变。
+    private static readonly MapData Map = MapCatalog.Resolve("link:1");
 
     [Fact]
     public void 分布可导出()
@@ -41,7 +42,7 @@ public class 生成结果可完整记录Tests
         }
 
         // 离线复现：从记录取种子，在同一地图上重新生成
-        RelicGenerationRecord replay = RelicGenerator.Generate(FourPlayerBaseMap.Create(), GameSeed.Parse(lines[0].Split(';')[0]["seed=".Length..]));
+        RelicGenerationRecord replay = RelicGenerator.Generate(MapCatalog.Resolve("link:1"), GameSeed.Parse(lines[0].Split(';')[0]["seed=".Length..]));
         Assert.Equal(record.Placements, replay.Placements);
         Assert.Equal(record.Converged, replay.Converged);
     }

@@ -136,7 +136,7 @@ public sealed partial class MatchFlow
     /// 从 <see cref="Serialize"/> 的输出恢复（玩家入口）。地图由调用方提供，其 <see cref="MapData.Id"/> 与内容摘要（<see cref="MapFile.Digest"/>）MUST 与存档一致；
     /// 不一致抛 <see cref="FormatException"/>（"地图不一致"），MUST NOT 在另一张图上静默恢复。
     /// 地图标识不是 <c>link:</c> 的旧存档一律拒绝并提示属于已移除的地图模式（board-link-mode Q6 / 实现裁决 D7，match-setup「旧存档被拒绝」）；
-    /// Core 测试里的 Legacy 夹具走 <see cref="RestoreLegacy"/>。
+    /// Core 测试里的手写夹具走 <see cref="RestoreUnvalidated"/>（retire-legacy-maps 3.4：内部口 RestoreLegacy 随旧地图删除）。
     /// </summary>
     public static MatchFlow Restore(MapData map, string json)
     {
@@ -148,16 +148,13 @@ public sealed partial class MatchFlow
                 $"该存档属于已移除的地图模式（地图 {data.MapId ?? "（缺）"}），不再支持恢复：现在只接受 {LinkMapId.Prefix}:<地图种子> 上的链接模式对局存档。");
         }
 
-        return RestoreChecked(map, data);
-    }
+        // retire-legacy-maps 3.5：建局侧删去"链接图只能以链接模式"一条后，恢复侧在玩家入口这里单独把关——链接图上缺模式字段（= 旧模式）的存档拒绝。
+        if (data.Mode != MatchMode.Link)
+        {
+            throw new FormatException($"存档的对局模式与地图不符：链接图 {data.MapId} 只能以链接模式恢复（存档缺模式字段即旧模式）。");
+        }
 
-    /// <summary>
-    /// 旧地图族夹具的恢复（Core 测试专用，围棋内核的回归护栏）：与 <see cref="Restore"/> 相同的校验与重建，只是不拒绝非 <c>link:</c> 的存档。
-    /// </summary>
-    internal static MatchFlow RestoreLegacy(MapData map, string json)
-    {
-        ArgumentNullException.ThrowIfNull(map);
-        return RestoreChecked(map, Parse(json));
+        return RestoreChecked(map, data);
     }
 
     private static MatchFlow RestoreChecked(MapData map, MatchSaveData data)

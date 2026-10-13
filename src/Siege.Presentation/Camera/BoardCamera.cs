@@ -193,7 +193,7 @@ public sealed class BoardCamera
     /// <summary>最近限值：完整显示一个 5×5 平台；地图本身比它还小时退到最远限值。</summary>
     public float Nearest => MathF.Min(DistanceToShow(NearestSpan), Farthest);
 
-    /// <summary>最远缩放下外接矩形一屏可见（如 <c>siege-4p-base-v5</c>）：这类地图上相机等价于旧的固定相机，开局对准不动相机。</summary>
+    /// <summary>最远缩放下外接矩形一屏可见（如已删除的旧标准图 v5、相机测试的 13×13 手写夹具）：这类地图上相机等价于旧的固定相机，开局对准不动相机。</summary>
     public bool FitsOneScreen => BoundsViewDistance <= FarthestCap;
 
     /// <summary>

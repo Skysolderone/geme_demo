@@ -169,7 +169,7 @@ public class 活形分析的决策内缓存Tests
     /// </summary>
     internal static MatchLog Play(RunConfig config, ulong seed, bool? cacheLife)
     {
-        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(config, seed);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         if (cacheLife is { } cache)
         {
             for (int i = 0; i < session.Match.Players.Length; i++)
@@ -200,7 +200,8 @@ public class 活形分析的决策内缓存Tests
     [Fact]
     public void 缓存开关不改变决策序列()
     {
-        // 缩小版（默认套件）：v5、种子 31、4 名 Standard AI、24 个小回合、完整事件流。完整版见下面两条慢测试（种子 1–20：标准图跑到终局，边疆图截断 80 个小回合）。
+        // 缩小版（默认套件）：link:1、种子 31、4 名 Standard AI、24 个小回合、完整事件流。完整版见下面的慢测试（link:1 种子 1–20 跑到终局）。
+        // retire-legacy-maps 1.5：缩小版与完整版由 v5（+ 边疆图）改到 link:1（共用配置），断言不变。
         // 变异 M-C11（指纹漏掉第 1 行）→ 红 11（含本测试、同一决策内重复盘面只分析一次与眼位 / 活形中性 / 硬约束的多条算例）：这类"缓存改变结果"的错误在这里以整局分歧出现。
         // 变异 M-C10（指纹只记有子 / 无子、不记所有者）→ 0 红，是等价变异：同一决策内的候选盘面都是"同一个批次前盘面 + 本人落子 − 被提的子"，
         // 占用格集合相同则所有者必相同；所有者只在跨决策时才区分得开——又一条缓存不得跨决策的理由。所有者仍留在指纹里。
@@ -212,17 +213,14 @@ public class 活形分析的决策内缓存Tests
         Assert.Equal(Play(config, 31, cacheLife: null).DeterministicText(), Play(config, 31, cacheLife: true).DeterministicText());
     }
 
+    // retire-legacy-maps 1.5：原有两条慢测试——「…_标准图种子1至20」（v5 到终局）与「…_边疆图种子1至20」（边疆图截断 80 个小回合）；
+    // 旧图删除后只剩一族地图，合并为下面一条 link:1 到终局（Slow 类别、默认跳过，跳过数 2 → 1）。
     [SlowFact]
     [Trait("Category", "Slow")]
-    public void 缓存开关不改变决策序列_标准图种子1至20() => RunSeeds(FourPlayerBaseMap.Id, turnLimit: 600);
-
-    [SlowFact]
-    [Trait("Category", "Slow")]
-    public void 缓存开关不改变决策序列_边疆图种子1至20() => RunSeeds(FrontierMapV2.Id, turnLimit: 80);
+    public void 缓存开关不改变决策序列_链接图种子1至20() => RunSeeds("link:1", turnLimit: 600);
 
     /// <summary>
-    /// 种子 1–20、4 名 Standard AI、完整事件流。标准图跑到终局（跑局缺省截断 600，实测每局 27–33 个小回合）；
-    /// 边疆图截断在 80 个小回合（20 个大回合）：段 C 实测每小回合约 2.5 s，跑满 600 小回合的 20 × 2 局要数小时。
+    /// 种子 1–20、4 名 Standard AI、完整事件流，跑到终局（跑局缺省截断 600）。
     /// </summary>
     private static void RunSeeds(string mapId, int turnLimit)
     {

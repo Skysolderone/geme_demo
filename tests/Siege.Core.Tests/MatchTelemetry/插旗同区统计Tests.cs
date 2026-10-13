@@ -62,12 +62,13 @@ public class 插旗同区统计Tests
     [Fact]
     public void 真实跑局的同区经首部进入统计()
     {
-        // 端到端（testing.md「真实跑局覆盖不到的写入路径，要补真实盘面端到端测试」）：冒险概率 100 的真实建局 → 首部锁定区全部相同 → 分析计为同区对局。
-        // 对照：冒险概率 0 的同种子局互不同区。
-        MatchLog always = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4) with { FlagRisk = 100 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        MatchLog never = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4) with { FlagRisk = 0 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        // 端到端（testing.md「真实跑局覆盖不到的写入路径，要补真实盘面端到端测试」）：真实建局 → 首部锁定区有人同区 → 分析计为同区对局；对照局互不同区。
+        // retire-legacy-maps 1.8：原以冒险概率 100 / 0 造出"全员同区 / 互不同区"两局（v5）；冒险概率随旧地图删除，共用配置改到 link:1（盲选插旗），
+        // 改取 link:1 上盲选恰好同区的种子 1（锁定区 3,3,1,0）与四人四区的种子 3（2,0,3,1）——锁定区由 flag-pick 子流决定，与配对来源无关。所守的统计规则不变。
+        MatchLog always = BatchRunner.Execute(SimFixtures.Config(seedStart: 1, turnLimit: 4), parallelism: 1)[0];
+        MatchLog never = BatchRunner.Execute(SimFixtures.Config(seedStart: 3, turnLimit: 4), parallelism: 1)[0];
 
-        Assert.Single(always.Header.Zones.Distinct());
+        Assert.True(always.Header.Zones.Distinct().Count() < 4, string.Join(",", always.Header.Zones));
         Assert.Equal(4, never.Header.Zones.Distinct().Count());
         SharedZoneSection s = BalanceAnalyzer.Analyze([always, never]).SharedZones;
         Assert.Equal(2, s.Matches);

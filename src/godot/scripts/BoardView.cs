@@ -212,10 +212,10 @@ public sealed partial class BoardView : Node3D
         HashSet<Coord> blocked = [.. board.Cells.Where(c => c.Terrain != Terrain.Playable).Select(c => c.Coord)];
 
         // 棋盘台面（board-map D10）：只在棋盘清单非空的地图上生效；清单为空（全部既有地图）时下面每一处都走原路径，画面不变。
-        // 哪些格属于哪块棋盘一律读清单，不从格子数据推断；"可落子且不属于任何棋盘"即通道（D2 的定义）。
+        // 哪些格属于哪块棋盘一律读清单，不从格子数据推断。retire-legacy-maps 3.7（L10）：通道（可落子且不属于任何棋盘）只出现在已删除的棋盘档地图上，
+        // 链接图没有通道格（link:1–20 初始图与链接后各一张实测 0 格），通道地砖色随之删除。
         ImmutableArray<BoardPlate> plates = board.Boards.IsDefault ? [] : board.Boards;
         bool plated = !plates.IsEmpty;
-        bool OnPlate(Coord c) => plates.Any(p => p.Contains(c));
         int[] plateGroup = PlateGroups(plates);
         bool SameGroup(Coord a, Coord b)
         {
@@ -289,11 +289,6 @@ public sealed partial class BoardView : Node3D
                 Surface.Shallows => Visuals.TileShallows,
                 _ => Visuals.TilePlayable,
             };
-            if (plated && playable && !OnPlate(cell.Coord))
-            {
-                color = Visuals.CorridorPath;
-            }
-
             if (!playable)
             {
                 // 障碍格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。

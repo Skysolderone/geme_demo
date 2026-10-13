@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.AiDecision;
 
 /// <summary>
 /// 规格：ai-decision（expert-lookahead）—— Requirement: 专家前瞻的确定性与耗时 / Scenario: 耗时上限（计时口径，design D12）。
-/// Release、同一进程、同一局面集（v5 种子 1–3、4 名标准 AI 对局的部署局面，每 3 个取 1，同 <see cref="LookaheadFixtures.ProbePositions"/>）；
+/// Release、同一进程、同一局面集（link:1 种子 1–3、内置固定配对脚本、截断第 12 大回合、4 名标准 AI 对局的部署局面；retire-legacy-maps 1.4：原 v5 种子 1–3，每 3 个取 1，同 <see cref="LookaheadFixtures.ProbePositions"/>）；
 /// 每个局面按 ABBA（高难、专家、专家、高难）交替测单次 <c>Deploy</c> 耗时，丢掉前 3 个局面作预热；比较两组中位数，专家 ≤ 4 × 高难；输出中位数、p90 与比值。
 /// 专家一方取 <see cref="LookaheadFixtures.ExpandedExpert"/>（显式 S = 8、λ = 1000‰）：专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后，
 /// 本测试量的是最耗时的可配置项；预设（一层配置）的耗时低于它。
@@ -22,10 +22,11 @@ public class 专家前瞻耗时计时Tests(ITestOutputHelper output)
 
     [PerfTheory]
     [Trait("Category", "Perf")]
-    [InlineData("siege-4p-base-v5")]
+    [InlineData("link:1")]
     public void 专家单次部署耗时中位数不超过高难的四倍(string mapId)
     {
-        Assert.Equal("siege-4p-base-v5", mapId);
+        // retire-legacy-maps 1.4：局面集改到 link:1（LookaheadFixtures.ProbePositions），断言不变。
+        Assert.Equal(LookaheadFixtures.MapId, mapId);
         var hard = new List<long>();
         var expert = new List<long>();
         int index = 0;

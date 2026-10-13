@@ -57,8 +57,10 @@ public class 各棋子势力占比Tests
         // M-C1a（去掉 Base 等式的匠人项）、M-C1b（otherTypes 去掉匠人）→ 各红 1（本测试）。
         // more-pieces-relics 段 A：样本口径下界（有匠人、匠人与协同同串）依赖走法 → 写死内容集 v1；类型计数的键集合按内容集（v1 六种），
         // v2 局十种键由 对局内容集Tests.新局缺省v2 钉住。
+        // retire-legacy-maps 1.8：样本由 v5 改到 link:1 后种子 11–12 不再出现"匠人与协同同串"（下界响亮失败），按探针换为种子 14–15
+        //（link:1 种子 14、12 个小回合：含匠人棋串 12 条、其中与协同同串 11 条）；断言不变，只换样本。
         List<MatchLog> withArtisan = BatchRunner.Execute(
-            SimFixtures.Config(count: 2, seedStart: 11, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            SimFixtures.Config(count: 2, seedStart: 14, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
         List<GroupEntry> groups =
             [.. SimFixtures.Sample.Value.Concat(withArtisan).SelectMany(l => l.Turns).SelectMany(t => t.PlayersState).SelectMany(p => p.Groups)];
         Assert.NotEmpty(groups);

@@ -9,11 +9,12 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// <summary>
 /// map-generator tasks 2.4（design D5）：日志首部记地图内容摘要；回放重建地图后先比摘要，不同即在首部报"地图不一致"并停止；
 /// 旧日志缺该字段跳过比对；内置图同样写摘要。规格：simulation-harness「各入口支持生成图」—— Scenario: 回放重建生成图 / 生成器变了。
+/// retire-legacy-maps 1.8：样本图由 <c>gen:12345</c> / v5 / 边疆图改为 <c>link:12345</c> / <c>link:1</c> / <c>link:7</c>（旧生成器与内置图删除），断言不变。
 /// </summary>
 public class 日志首部地图摘要Tests
 {
     private static readonly Lazy<MatchLog> Gen12345 = new(() =>
-        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "gen:12345" }, seed: 5, resolveMap: MapCatalog.Legacy.Resolve).Run());   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "link:12345" }, seed: 5).Run());
 
     [Fact]
     public void 真实跑局把开局地图的摘要写进首部并经文本往返_内置图同样写()
@@ -25,14 +26,14 @@ public class 日志首部地图摘要Tests
 
         MatchLog gen = Gen12345.Value;
         Assert.False(gen.IsFailed, gen.Failure?.Message);
-        Assert.Equal(Expect(FrontierMapGenerator.Generate(12345)), gen.Header.MapDigest);
+        Assert.Equal(Expect(MapCatalog.Resolve("link:12345")), gen.Header.MapDigest);
         Assert.Equal(gen.Header.MapDigest, MatchLog.Parse(gen.DeterministicText()).Header.MapDigest);
         Assert.Equal(gen.Header.MapDigest, MatchLog.Parse(gen.FullText()).Header.MapDigest);
         Assert.Contains($"\"MapDigest\":\"{gen.Header.MapDigest}\"", gen.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
-        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(FourPlayerBaseMap.Create()), l.Header.MapDigest));
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(Expect(FrontierMapV2.Create()), frontier.Header.MapDigest);
+        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(MapCatalog.Resolve("link:1")), l.Header.MapDigest));
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:7" }, seed: 7).Run();
+        Assert.Equal(Expect(MapCatalog.Resolve("link:7")), frontier.Header.MapDigest);
         Assert.NotEqual(gen.Header.MapDigest, frontier.Header.MapDigest);
     }
 
@@ -42,11 +43,11 @@ public class 日志首部地图摘要Tests
         // 规格 Scenario「回放重建生成图」：日志经文本往返后与内存里的地图对象彻底脱钩，回放只凭首部。
         MatchLog original = MatchLog.Parse(Gen12345.Value.FullText());
 
-        ReplayResult replay = Replayer.Replay(original, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(original);
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Null(replay.MapMismatch);
-        Assert.Equal("gen:12345", replay.Replayed.Header.MapId);
+        Assert.Equal("link:12345", replay.Replayed.Header.MapId);
         Assert.Equal(original.Turns.Count, replay.Replayed.Turns.Count);
         Assert.True(original.Turns.Count > 4);
     }
@@ -59,16 +60,16 @@ public class 日志首部地图摘要Tests
         // ② 调用方给的地图被人改了一格（标识没变）。
         // 变异 MB-6：Replayer 去掉摘要比对 → 本测试红（①只在首部分歧但重跑了整局；②带着另一张图跑出中途分歧）。
         MatchLog original = MatchLog.Parse(Gen12345.Value.DeterministicText());
-        string otherDigest = MapFile.Digest(FrontierMapGenerator.Generate(12346));
+        string otherDigest = MapFile.Digest(MapCatalog.Resolve("link:12346"));
         var stale = new MatchLog { Header = original.Header with { MapDigest = otherDigest }, Turns = original.Turns, Events = original.Events, Result = original.Result };
 
-        ReplayResult fromStale = Replayer.Replay(stale, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult fromStale = Replayer.Replay(stale);
 
         Assert.False(fromStale.Identical);
         Assert.Equal(1, fromStale.FirstDivergentLine);
         Assert.NotNull(fromStale.MapMismatch);
         Assert.Contains("地图不一致", fromStale.ToString(), StringComparison.Ordinal);
-        Assert.Contains("gen:12345", fromStale.MapMismatch, StringComparison.Ordinal);
+        Assert.Contains("link:12345", fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Contains(otherDigest, fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Contains(original.Header.MapDigest!, fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Empty(fromStale.Replayed.Turns);                       // 没有重跑
@@ -76,13 +77,13 @@ public class 日志首部地图摘要Tests
         Assert.Contains(otherDigest, fromStale.Expected, StringComparison.Ordinal);
         Assert.Contains(original.Header.MapDigest!, fromStale.Actual, StringComparison.Ordinal);
 
-        // ② 改一格：把一个不是出生区 / 信物的岩石格挖掉（导出文本里把它从 Obstacles 移走），标识仍是 gen:12345。
-        MapData map = FrontierMapGenerator.Generate(12345);
+        // ② 改一格：把一个不是出生区 / 信物的岩石格挖掉（导出文本里把它从 Obstacles 移走），标识仍是 link:12345。
+        MapData map = MapCatalog.Resolve("link:12345");
         MapData tampered = TamperOneCell(map);
         Assert.Equal(map.Id, tampered.Id);
         Assert.NotEqual(MapFile.Digest(map), MapFile.Digest(tampered));
 
-        ReplayResult fromTampered = Replayer.Replay(original, tampered, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult fromTampered = Replayer.Replay(original, tampered);
 
         Assert.False(fromTampered.Identical);
         Assert.Equal(1, fromTampered.FirstDivergentLine);
@@ -90,7 +91,7 @@ public class 日志首部地图摘要Tests
         Assert.Empty(fromTampered.Replayed.Turns);
 
         // 对照：给的是同一张图 → 一致。
-        Assert.True(Replayer.Replay(original, map, resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.True(Replayer.Replay(original, map).Identical);
     }
 
     [Fact]
@@ -98,14 +99,16 @@ public class 日志首部地图摘要Tests
     {
         // 与 ZoneCount、候选格上限同一口径：旧日志读入为 null、不抛、不回填；回放照常重跑，重建的首部多出摘要 → 第 1 行分歧，其余逐行相同。
         // 变异 MB-7：Replayer 把"首部没有摘要"当成不一致 → 本测试红（Replayed 没有小回合）。
+        // retire-legacy-maps 1.8：样本改到 link:1 后，链接事件行也带 MapDigest（链接后的图摘要，必填）；"旧日志缺摘要"只指首部，删除只作用于首行。
         MatchLog current = SimFixtures.Sample.Value[0];
         string text = current.DeterministicText();
-        string stripped = Regex.Replace(text, "\"MapDigest\":\"[0-9A-F]{64}\",", string.Empty);
+        int firstLineEnd = text.IndexOf('\n', StringComparison.Ordinal);
+        string stripped = Regex.Replace(text[..firstLineEnd], "\"MapDigest\":\"[0-9A-F]{64}\",", string.Empty) + text[firstLineEnd..];
         Assert.NotEqual(text, stripped);
         MatchLog old = MatchLog.Parse(stripped);
         Assert.Null(old.Header.MapDigest);
 
-        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(old);
 
         Assert.Null(replay.MapMismatch);
         Assert.False(replay.Identical);
@@ -114,13 +117,13 @@ public class 日志首部地图摘要Tests
         Assert.Equal(old.DeterministicText().Split('\n')[1..], replay.Replayed.DeterministicText().Split('\n')[1..]);
 
         // 对照：带摘要的新日志回放逐行一致。
-        Assert.True(Replayer.Replay(MatchLog.Parse(text), resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.True(Replayer.Replay(MatchLog.Parse(text)).Identical);
     }
 
     [Fact]
     public void 标准批次的首部不多出换图相关字段()
     {
-        // v4 / 内置图上首部只新增 MapDigest 一项：每局换图的开关为缺省值时不写出，平台边长只在换图批次里写。
+        // 不换图的批次（原 v4 / 内置图；retire-legacy-maps 1.8 起共用样本为 link:1）首部只新增 MapDigest 一项：每局换图的开关为缺省值时不写出，平台边长只在换图批次里写。
         string header = SimFixtures.Sample.Value[0].DeterministicText().Split('\n')[0];
         Assert.DoesNotContain("MapPerMatch", header, StringComparison.Ordinal);
         Assert.DoesNotContain("ZoneSides", header, StringComparison.Ordinal);

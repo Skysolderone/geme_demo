@@ -1,5 +1,6 @@
 using Siege.Presentation.Style;
 
+// retire-legacy-maps：仓库根目录改取 TestPaths.RepoRoot()（原 FrontierFixtures.RepoRoot，随旧地图夹具删除而原样迁出）。
 namespace Siege.Core.Tests.VisualStyleBaseline;
 
 /// <summary>
@@ -33,7 +34,7 @@ public class 占位轮廓灰度Tests
     public void 台面与占位颜色只在调色板定义_Godot经转换取用()
     {
         // Godot 的 Visuals 不得再手写一份台面 / 占位颜色字面量（否则调色板的灰度断言守不住画面）。
-        string visuals = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts", "Visuals.cs"));
+        string visuals = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "godot", "scripts", "Visuals.cs"));
         Assert.Contains("PublicBoardFrame = ToColor(BoardPlatePalette.PublicFrame)", visuals, StringComparison.Ordinal);
         Assert.Contains("PlaceholderFrame = ToColor(BoardPlatePalette.PlaceholderFrame)", visuals, StringComparison.Ordinal);
         Assert.Contains("PlaceholderLabel = ToColor(BoardPlatePalette.PlaceholderLabel)", visuals, StringComparison.Ordinal);
@@ -42,7 +43,7 @@ public class 占位轮廓灰度Tests
         Assert.DoesNotContain("Color8(232, 198, 96)", visuals, StringComparison.Ordinal);
 
         // 占位只画边框与编号：BoardView 的占位方法里不得出现地砖 / 格线 / 棋子 / 信物的搭建调用。
-        string boardView = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts", "BoardView.cs"));
+        string boardView = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "godot", "scripts", "BoardView.cs"));
         int start = boardView.IndexOf("private void AddPlaceholders(", StringComparison.Ordinal);
         int end = boardView.IndexOf("private const float WaterDrop", start, StringComparison.Ordinal);
         Assert.True(start > 0 && end > start, "BoardView 缺少 AddPlaceholders");

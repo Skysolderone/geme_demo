@@ -72,7 +72,8 @@ public class 信物控制判定Tests
         // 规格：控制判定 SHALL 复用 add-territory-power 的唯一覆盖查询。对 1000 个种子驱动的随机盘面（4 人基准图 14 个信物格），
         // 断言本层四态与 CoverageMap.OwnershipOf 逐格不矛盾：Occupied/Exclusive ↔ Controlled(同一人)，Contested ↔ Contested，Neutral ↔ Uncontrolled。
         // 变异验证 M-C7（占据也判争议）、M-C8（争议取编号最小者）都让本测试红。
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 1.6：载体由 4 人基准图 v5（14 个信物格）改为 link:1 初始图（10 个信物格），断言不变。
+        MapData map = MapCatalog.Resolve("link:1");
         RelicGenerationRecord record = RelicGenerator.Generate(map, new GameSeed(11));
         PlayerId[] players = [TestMaps.P0, TestMaps.P1, RelicFixtures.P2, RelicFixtures.P3];
         var seen = new HashSet<RelicControlKind>();

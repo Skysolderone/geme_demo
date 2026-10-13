@@ -1,5 +1,5 @@
 using Siege.Core.Board;
-using Siege.Core.Board.Maps;
+using System.Collections.Immutable;
 using Siege.Presentation.Camera;
 
 namespace Siege.Core.Tests.ViewportCamera;
@@ -10,9 +10,62 @@ internal static class CameraFixtures
     /// <summary>坐标标注外圈的边距（与引擎侧 <c>BoardGeometry.FarLabelMargin</c> 同值；旧固定相机的跨度公式用的就是它）。</summary>
     internal const float Margin = 1.7f;
 
-    internal static MapData V4 => MapCatalog.Legacy.Resolve("siege-4p-base-v5");
+    /// <summary>
+    /// 一屏看全的单块棋盘（retire-legacy-maps 1.7：原为 v5 内置图）：13×13，四个出生区与 v5 逐格相同。
+    /// 相机测试只读外接尺寸、出生区格子与标识，所以期望值一字不改。
+    /// </summary>
+    internal static MapData V4 { get; } = new()
+    {
+        Id = "test-camera-13x13",
+        Width = 13,
+        Height = 13,
+        MaxPlayers = 4,
+        Obstacles = [],
+        BirthZones =
+        [
+            Cells("B1", "C1", "D1", "A2", "B2", "C2", "D2", "A3", "B3", "C3", "D3", "A4", "B4"),
+            Cells("K1", "L1", "M1", "K2", "L2", "M2", "N2", "L3", "M3", "N3", "L4", "M4", "N4"),
+            Cells("M10", "N10", "K11", "L11", "M11", "N11", "K12", "L12", "M12", "N12", "K13", "L13", "M13"),
+            Cells("A10", "B10", "C10", "A11", "B11", "C11", "A12", "B12", "C12", "D12", "B13", "C13", "D13"),
+        ],
+        RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
+        ChokePoints = [],
+        CentralEntrance = Coord.Parse("G7"),
+    };
 
-    internal static MapData Frontier => MapCatalog.Legacy.Resolve("siege-frontier-v2");
+    /// <summary>
+    /// 竖长的高台图（retire-legacy-maps 1.7：原为 siege-frontier-v2）：25×30，六个正方形出生平台（9 / 8 / 7 / 6 / 5 / 5 格边长）与边疆图逐格相同、全部 h=2。
+    /// 遮挡分类与"每格至少一种缩放下严格选中自身"由 Core 相机测试在含高差的手写夹具上守护（裁决 L13），图形版 --pick-check 只验链接图。
+    /// </summary>
+    internal static MapData Frontier { get; } = FrontierLike();
+
+    private static MapData FrontierLike()
+    {
+        ImmutableArray<ImmutableHashSet<Coord>> zones =
+        [
+            [.. TestMaps.Rect(0, 20, 9, 9)],
+            [.. TestMaps.Rect(16, 1, 8, 8)],
+            [.. TestMaps.Rect(16, 21, 7, 7)],
+            [.. TestMaps.Rect(3, 2, 6, 6)],
+            [.. TestMaps.Rect(4, 12, 5, 5)],
+            [.. TestMaps.Rect(16, 12, 5, 5)],
+        ];
+        return new MapData
+        {
+            Id = "test-camera-25x30",
+            Width = 25,
+            Height = 30,
+            MaxPlayers = 4,
+            Obstacles = [],
+            BirthZones = zones,
+            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
+            ChokePoints = [],
+            CentralEntrance = Coord.Parse("M15"),
+            TerrainData = TestMaps.Terrain(heights: [.. zones.SelectMany(z => z).Select(c => (c.ToNotation(), 2))]),
+        };
+    }
+
+    private static ImmutableHashSet<Coord> Cells(params string[] notations) => [.. notations.Select(Coord.Parse)];
 
     /// <summary>格心间距 1、棋盘以原点为中心：外接矩形 = 全部格子 + 四周各 <see cref="Margin"/>。</summary>
     internal static PlaneRect BoundsOf(int width, int height) =>

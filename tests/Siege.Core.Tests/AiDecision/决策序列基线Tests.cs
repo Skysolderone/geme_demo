@@ -12,6 +12,7 @@ namespace Siege.Core.Tests.AiDecision;
 /// 规格：ai-decision（ai-turn-speed）—— Requirement: 决策序列基线与耗时 / Scenario: 决策序列与基线相同。
 /// 固定种子、4 名标准难度 AI 的真实对局（跑局层建局：候选格上限与停手阈值按地图落成缺省值），逐小回合导出 AI 的决策序列，
 /// 与改动前钉入的基线（<c>AiDecision/Fixtures/decisions-*.txt</c>）逐字节比对——任何性能优化 MUST NOT 改变任何一步。
+/// retire-legacy-maps 2.x：v5 / board:1 两行基线与旧导出器 DecisionSequence 随旧地图删除，只留链接图种子 1 / 2（种子 3 见 <see cref="决策序列基线_链接模式Tests"/>）。
 /// </summary>
 /// <remarks>
 /// 基线生成于 ai-turn-speed 的任何 Core 改动之前（`git diff --stat -- src` 为空时）。规则或 AI 行为有意变更后重建：
@@ -19,12 +20,17 @@ namespace Siege.Core.Tests.AiDecision;
 /// </remarks>
 public class 决策序列基线Tests
 {
+    /// <summary>
+    /// retire-legacy-maps 1.3（裁决 L2 / 设计 D6）：新回归护栏——<c>link:1</c>、对局种子 1 / 2、脚本固定配对、4 名标准难度、截断到第 12 大回合，
+    /// 导出口径与 <see cref="决策序列基线_链接模式Tests"/>（种子 3，沿用既有文件、不重钉）完全相同（同一个 <see cref="LinkDecisionSequence.Export"/>）。
+    /// 两份基线在删除任何旧地图代码之前、按当时实现钉入；此后每一组删除结束时三条链接图基线必须逐字节不变。
+    /// </summary>
     [Theory]
-    [InlineData("siege-4p-base-v5", 1UL, 0, "decisions-siege-4p-base-v5-seed1.txt")]
-    [InlineData("board:1", 1UL, 12, "decisions-board1-seed1.txt")]
-    public void 决策序列与基线相同(string mapId, ulong seed, int maxMajorRounds, string fixture)
+    [InlineData(1UL, "decisions-link1-seed1.txt")]
+    [InlineData(2UL, "decisions-link1-seed2.txt")]
+    public void 链接图决策序列与基线相同(ulong seed, string fixture)
     {
-        string actual = DecisionSequence.Export(mapId, seed, maxMajorRounds);
+        string actual = LinkDecisionSequence.Export(seed, 12);
         if (Environment.GetEnvironmentVariable("SIEGE_REBUILD_DECISION_BASELINE") == "1")
         {
             File.WriteAllText(Path.Combine(SourceFixtureDirectory(), fixture), actual, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -34,61 +40,46 @@ public class 决策序列基线Tests
         Assert.True(File.Exists(path), $"找不到决策序列基线：{path}");
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.True(expected.Length < 200_000, $"基线 {fixture} 超过 200 KB（{expected.Length} 字符）");
+
+        // 样本口径下界：基线里确有配对与战场结算事件、至少 30 个小回合，且要么跑满第 12 大回合、要么以规则终局收尾（种子 1 / 2 分别在第 10 / 11 大回合决赛结算）。
+        string[] lines = expected.Split('\n');
+        Assert.Contains(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("S\t", StringComparison.Ordinal));
+        Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
+        Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains("majorRound=13", StringComparison.Ordinal));
+        Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// retire-legacy-maps 4b.4（裁决 L21）：在 <c>link:1</c>、对局种子 1 上为简单与困难难度各补钉一条基线，口径与上面相同（脚本缺省配对、截断到第 12 大回合），
+    /// 只新钉、不改任何行为——三条标准难度基线只守标准难度的走法，这两条补上另外两档（专家由 G1 黄金值守）。
+    /// </summary>
+    [Theory]
+    [InlineData(AiDifficulty.Easy, "decisions-link1-easy-seed1.txt")]
+    [InlineData(AiDifficulty.Hard, "decisions-link1-hard-seed1.txt")]
+    public void 链接图其他难度决策序列与基线相同(AiDifficulty difficulty, string fixture)
+    {
+        string actual = LinkDecisionSequence.Export(1, 12, difficulty);
+        if (Environment.GetEnvironmentVariable("SIEGE_REBUILD_DECISION_BASELINE") == "1")
+        {
+            File.WriteAllText(Path.Combine(SourceFixtureDirectory(), fixture), actual, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        }
+
+        string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", fixture);
+        Assert.True(File.Exists(path), $"找不到决策序列基线：{path}");
+        string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.True(expected.Length < 200_000, $"基线 {fixture} 超过 200 KB（{expected.Length} 字符）");
+
+        // 样本口径下界：首部写明难度；有配对与链接；至少 30 个小回合；跑满第 12 大回合或以规则终局收尾。
+        string[] lines = expected.Split('\n');
+        Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
+        Assert.Contains(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("L\t", StringComparison.Ordinal));
+        Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
+        Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains("majorRound=13", StringComparison.Ordinal));
         Assert.Equal(expected, actual);
     }
 
     private static string SourceFixtureDirectory([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
         Path.Combine(Path.GetDirectoryName(thisFile)!, "Fixtures");
-}
-
-/// <summary>固定种子对局的 AI 决策序列导出（ai-turn-speed 1.1）：比对测试与基线重建共用这一份。</summary>
-internal static class DecisionSequence
-{
-    /// <summary>
-    /// 在 <paramref name="mapId"/> 上以种子 <paramref name="seed"/> 建一局（4 名标准难度 AI，跑局层缺省配置、不截断），逐小回合驱动并记录每名 AI 本小回合新增的决策条目
-    /// （<c>O:</c> 弃牌、<c>R:</c> 征募选择、<c>D:</c> 落点与类型列表或 <c>pass</c>、<c>X:</c> 被拒补救）。<paramref name="maxMajorRounds"/> 大于 0 时只跑到该大回合结束，
-    /// 为 0 时跑到终局（未终局即失败，不让截断冒充终局）。输出为 <c>\n</c> 行尾的文本，首部记下影响走法的全部生效配置。
-    /// </summary>
-    internal static string Export(string mapId, ulong seed, int maxMajorRounds)
-    {
-        var config = new RunConfig { MapId = mapId, SeedStart = seed, Count = 1, TurnLimit = 0 };
-        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        MatchFlow match = session.Match;
-        var sb = new StringBuilder();
-        sb.Append("# AI 决策序列基线（ai-turn-speed 1.1）\n");
-        sb.Append($"# map={match.Map.Id} digest={MapFile.Digest(match.Board.BaseMap)} seed={seed} players={match.Players.Length} difficulty=Standard\n");
-        sb.Append($"# cellLimit={session.CellLimit} passThreshold={session.PassThreshold} contentSet={match.ContentSet} flagRisk={config.ResolvedFor(match.Board.BaseMap).FlagRisk} artisanWeight={match.ArtisanWeight}\n");
-        sb.Append($"# maxMajorRounds={maxMajorRounds}（0 = 到终局）\n");
-        sb.Append("# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（空格分隔；O: 弃牌 R: 征募 D: 部署 X: 被拒）\n");
-
-        var cursors = new Dictionary<PlayerId, int>();
-        while (match.Phase == MatchPhase.InProgress)
-        {
-            int round = match.MajorRound;
-            if (maxMajorRounds > 0 && round > maxMajorRounds)
-            {
-                break;
-            }
-
-            PlayerId player = match.CurrentPlayer ?? throw new InvalidOperationException("对局进行中却没有当前玩家。");
-            if (!session.RunTurn())
-            {
-                break;
-            }
-
-            HeuristicTurnController ai = session.AiOf(player) ?? throw new InvalidOperationException($"玩家 {player} 不是启发式 AI。");
-            int from = cursors.TryGetValue(player, out int cursor) ? cursor : 0;
-            IReadOnlyList<string> decisions = ai.Decisions;
-            sb.Append(round).Append('\t').Append(player).Append('\t').AppendJoin(' ', decisions.Skip(from)).Append('\n');
-            cursors[player] = decisions.Count;
-        }
-
-        if (maxMajorRounds == 0 && match.Phase != MatchPhase.Ended)
-        {
-            throw new InvalidOperationException($"要求跑到终局，对局却停在 {match.Phase}（第 {match.MajorRound} 大回合）。");
-        }
-
-        sb.Append($"# end phase={match.Phase} majorRound={match.MajorRound} reason={match.Result?.Reason.ToString() ?? "-"} turns={session.TurnCount}\n");
-        return sb.ToString();
-    }
 }

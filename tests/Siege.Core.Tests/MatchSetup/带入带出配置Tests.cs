@@ -17,8 +17,9 @@ namespace Siege.Core.Tests.MatchSetup;
 
 /// <summary>规格：carry-in-out match-setup —— Requirement: 带入带出配置</summary>
 /// <remarks>
-/// "逐步相同"两条以 <see cref="候选格上限Tests.V4GoldenTurnHash"/> 为"引入带入带出之前记录过的对局"（种子 31、Standard、24 个小回合，
-/// 权重 / 阈值 / 冒险概率 / 内容集写死为 <see cref="SimFixtures.PinPreCalibration"/> 的口径）。带入带出开关在这里<b>显式写死</b>（关闭 / 开启且无人带入），
+/// "逐步相同"两条以 <see cref="候选格上限Tests.LinkGoldenTurnHash"/> 为"此前记录过的对局"（link:1、种子 31、Standard、24 个小回合，
+/// 权重 / 阈值 / 内容集写死为 <see cref="SimFixtures.PinPreCalibration"/> 的口径）。retire-legacy-maps 1.8：原为 v5 上在引入带入带出之前钉下的
+/// <c>V4GoldenTurnHash</c>；v5 删除前在 link:1 上以同口径重钉，断言不变。带入带出开关在这里<b>显式写死</b>（关闭 / 开启且无人带入），
 /// 不跟随缺省值；另跑一局全员带备用子的对照，证明带入确实抵达对局（否则两条"相同"是空证）。
 /// </remarks>
 public class 带入带出配置Tests
@@ -31,19 +32,21 @@ public class 带入带出配置Tests
     /// </summary>
     private static (MatchLog Log, string OpeningHands) Golden(bool carryInOut, ImmutableSortedDictionary<PlayerId, CarryIn> carryIns)
     {
-        RunConfig raw = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
-        MapData map = MapCatalog.Legacy.Resolve(raw.MapId);
+        // retire-legacy-maps 1.8：复刻的是链接图的建局（Link 模式、种子派生配对，与 MatchSession.Create 对 link: 的处理逐项相同）；原为 v5 的 Legacy 建局（含冒险概率）。
+        RunConfig raw = 候选格上限Tests.LinkGoldenConfig();
+        MapData map = MapCatalog.Resolve(raw.MapId);
         RunConfig config = raw.ResolvedFor(map);
         MatchFlow match = MatchFlow.Create(
             map, new GameSeed(31), config.PlayerIds(),
             MatchOptions.Immediate with
             {
                 ArtisanWeight = config.ArtisanWeight,
-                FlagRisk = config.FlagRisk!.Value,
                 ContentSet = config.ContentSet!.Value,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
+                Mode = MatchMode.Link,
             });
+        match.PairingSource = new SeededPairingSource(31, config.PairingSeed);
         string opening = string.Join(" | ", match.Players.Select(p => $"{p}:{CarryFixtures.HandText(match, p)}"))
             + $" | recruit={match.Hands.Export().RecruitConsumed}";
         match.PlantPrototype();
@@ -64,7 +67,7 @@ public class 带入带出配置Tests
         Assert.False(MatchOptions.Immediate.CarryInOut);
         Assert.Empty(MatchOptions.Immediate.CarryIns);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Legacy.Resolve(MapCatalog.Legacy.DefaultId), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four, MatchOptions.Default with { Mode = MatchMode.Link });   // retire-legacy-maps：建局由 v5（Legacy）改为 link:1 链接模式
         Assert.False(match.CarryInOut);
         Assert.Empty(match.CarryIns);
         Assert.False(match.CarryInOutBackfilled);
@@ -76,7 +79,7 @@ public class 带入带出配置Tests
         Assert.Empty(saved["CarryIns"]!.AsArray());
 
         // 日志首部同样写明（段 C）：不配置带入数量的跑局，首部开关写 false、带入写空表，不是缺字段。
-        JsonNode header = JsonNode.Parse(MatchSession.Create(SimFixtures.Config(turnLimit: 1), 5, resolveMap: MapCatalog.Legacy.Resolve).Run().DeterministicText().Split('\n')[0])!;   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        JsonNode header = JsonNode.Parse(MatchSession.Create(SimFixtures.Config(turnLimit: 1), 5).Run().DeterministicText().Split('\n')[0])!;   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.False(header["CarryInOut"]!.GetValue<bool>());
         Assert.Empty(header["CarryIns"]!.AsArray());
     }
@@ -87,13 +90,13 @@ public class 带入带出配置Tests
         // 规格 Scenario：关闭带入带出，以同一种子与配置重跑此前记录过的 AI 对局 → 每一步与引入之前逐项相同，黄金哈希不变。
         (MatchLog off, string opening) = Golden(carryInOut: false, ImmutableSortedDictionary<PlayerId, CarryIn>.Empty);
         Assert.Equal(PlainOpening, opening);
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(off));
+        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(off));
 
         // 反面：同一局全员带换型令（堡垒子），小回合快照不同——带入确实抵达对局，"相同"不是空证。
         // （全员带备用子在这 24 个小回合里快照哈希不变：快照只记手牌类型不记枚数，多 1 枚普通子没有改变 AI 在这段内的落点。）
         (MatchLog commission, string carried) = Golden(carryInOut: true, Four.ToImmutableSortedDictionary(p => p, _ => CarryFixtures.Commission(PieceType.Fortress)));
         Assert.NotEqual(PlainOpening, carried);
-        Assert.NotEqual(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(commission));
+        Assert.NotEqual(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(commission));
     }
 
     [Fact]
@@ -102,7 +105,7 @@ public class 带入带出配置Tests
         // 规格 Scenario：开启带入带出、全员无带入，以同一种子重跑同一局 → 逐步与关闭时相同（唯一差别是局终多出带出结算，结算是局外的纯函数，不进对局）。
         (MatchLog on, string opening) = Golden(carryInOut: true, ImmutableSortedDictionary<PlayerId, CarryIn>.Empty);
         Assert.Equal(PlainOpening, opening);
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(on));
+        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(on));
     }
 
     [Fact]

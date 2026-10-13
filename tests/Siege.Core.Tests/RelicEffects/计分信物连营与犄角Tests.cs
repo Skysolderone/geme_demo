@@ -145,7 +145,8 @@ public class 计分信物连营与犄角Tests
         // 性质测试（tasks 2.5）：v2、标准图、种子 0–149 的信物生成 + 种子驱动的随机盘面（十种棋子类型随机、所有者随机），不跑整局；
         // 每个盘面先做一次"结算"（第 4 步揭示 + 第 5 步重算控制），再比较两种输入下全部玩家的势力明细。
         // 样本口径下界：足够多的盘面上计分信物确实改变了势力（与"不传已知内容"不同），否则两边相等是恒真。
-        MapData map = FourPlayerBaseMap.Create();
+        // retire-legacy-maps 1.6：载体由标准图 v5 改为 link:1 初始图，断言不变。
+        MapData map = MapCatalog.Resolve("link:1");
         PlayerId[] players = [TestMaps.P0, TestMaps.P1, RelicFixtures.P2, RelicFixtures.P3];
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = RelicFixtures.AllActive(players);
         PieceType[] types = [.. ContentSets.PieceTypesOf(ContentSet.V2)];

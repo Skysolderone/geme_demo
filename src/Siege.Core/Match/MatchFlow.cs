@@ -75,13 +75,14 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 创建一局：地图经静态校验，信物按 <c>relic-gen</c> 子流一次性生成，手牌账本派生 <c>recruit</c> 子流，本类持有 <c>setup</c> 子流。
-    /// 创建后处于插旗阶段。
+    /// 创建后处于插旗阶段。retire-legacy-maps 3.5（裁决 L6 = C）：公开建局<b>恒以链接模式</b>（不看 <paramref name="options"/> 里的模式），
+    /// 地图须是链接图、恰 4 人；旧模式只剩测试专用的 <see cref="CreateUnvalidated"/>（手写 9×9 夹具）。
     /// </summary>
     public static MatchFlow Create(MapData map, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(map);
         GameBoard board = GameBoard.Load(map);
-        options ??= MatchOptions.Default;
+        options = (options ?? MatchOptions.Default) with { Mode = MatchMode.Link };
         // more-pieces-relics D8：信物按本局内容集的权重表与徽记绑定集合生成（v1 与改动前逐格相同）。
         return Build(map, board, seed, players, RelicGenerator.Generate(map, seed, options.ContentSet), options);
     }
@@ -113,7 +114,6 @@ public sealed partial class MatchFlow
 
         RequireModeMatchesMap(options.Mode, map, list.Length);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
-        PrototypeZoneAssignment.RequireValidFlagRisk(options.FlagRisk);
         ContentSets.RequireValid(options.ContentSet);
         // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
         // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
@@ -289,17 +289,15 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 原型替代路径的一站式入口（frontier-map D4）：<paramref name="manual"/> 是人工指定的那一名玩家及其区号，其余玩家的区由
-    /// <see cref="PrototypeZoneAssignment"/> 给出（此前已有旗时以对局配置的冒险概率 <see cref="MatchOptions.FlagRisk"/> 加入已有人的区——flag-contest D1；
-    /// 否则区数不多于地图人数上限时按编号顺排，多于时由种子的独立子流均匀选区），随后依次插旗并锁定。
+    /// <see cref="PrototypeZoneAssignment.AssignBlind"/> 盲选给出（flag-pick 子流，不看已插的旗），随后依次插旗并锁定。
     /// 批量跑局、终端版与图形版都走这里；返回每名玩家的选择（顺序同 <see cref="Players"/>）。
+    /// retire-legacy-maps 3.1：旧模式的冒险概率 / 顺排 / 种子选区分支删除，原型路径恒走盲选（手写夹具用 <see cref="PlantSequentially"/> 显式插旗）。
     /// </summary>
     public ImmutableArray<(PlayerId Player, int Zone)> PlantPrototype((PlayerId Player, int Zone)? manual = null)
     {
         RequirePhase(MatchPhase.FlagPlanting);
-        // 链接模式（实现裁决 B2）：flag-pick 子流均匀盲选，不看已插的旗、不用冒险概率；旧模式原样。
-        ImmutableArray<(PlayerId Player, int Zone)> choices = Mode == MatchMode.Link
-            ? PrototypeZoneAssignment.AssignBlind(Board.BaseMap, Seed, _players, manual)
-            : PrototypeZoneAssignment.Assign(Board.BaseMap, Seed, _players, Options.FlagRisk, manual);
+        // 实现裁决 B2：flag-pick 子流均匀盲选，不看已插的旗。
+        ImmutableArray<(PlayerId Player, int Zone)> choices = PrototypeZoneAssignment.AssignBlind(Board.BaseMap, Seed, _players, manual);
         PlantSequentially(choices);
         return choices;
     }
@@ -827,7 +825,9 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 模式与地图匹配（实现裁决 B1）：链接模式只能配链接图，链接图只能以链接模式建局；不匹配即建局报错。
+    /// 模式与地图匹配（实现裁决 B1）：链接模式只能配链接图、恰 4 人；不匹配即建局报错。
+    /// retire-legacy-maps 3.5：原第三条"链接图只能以链接模式建局"删除——公开建局恒为链接模式，手写夹具的旧模式不会配链接图；
+    /// 公开恢复路径对"链接图上的旧模式存档"另行拒绝（<see cref="Restore"/>）。
     /// 按地图标识判定（<see cref="LinkMapId.IsLinkMap"/>）：对局层不读规格档（boundaries「地图规格档的分流」），而链接本身也要从标识取地图种子。
     /// </summary>
     private static void RequireModeMatchesMap(MatchMode mode, MapData map, int players)
@@ -842,11 +842,6 @@ public sealed partial class MatchFlow
         if (mode == MatchMode.Link && !linkMap)
         {
             throw new ArgumentException($"链接模式只能配链接图（link:<地图种子>），地图 {map.Id} 不是。", nameof(map));
-        }
-
-        if (mode != MatchMode.Link && linkMap)
-        {
-            throw new ArgumentException($"链接图 {map.Id} 只能以链接模式建局（对局配置 Mode = Link），当前为 {mode}。", nameof(map));
         }
     }
 

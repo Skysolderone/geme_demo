@@ -1,4 +1,3 @@
-using Siege.Core.Board.Maps;
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Ai;
@@ -7,7 +6,6 @@ using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Relics;
 using Siege.Core.Scoring;
-using Siege.Sim.Running;
 using static Siege.Core.Tests.LookaheadFixtures;
 
 namespace Siege.Core.Tests.AiDecision;
@@ -91,26 +89,37 @@ public class 公开规则纯函数Tests
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]
-    public void v5真实对局每个小回合新旧两条路径逐项相等(ulong seed)
+    public void 真实对局每个小回合新旧两条路径逐项相等(ulong seed)
     {
-        // v5、种子 1–3、4 名标准 AI 整局，每个小回合（部署阶段）比对：
+        // retire-legacy-maps 1.5：原「v5真实对局每个小回合新旧两条路径逐项相等」（v5、种子 1–3、4 名标准 AI 整局）改到 9×9 手写夹具上的 4 名标准 AI 整局——
+        // 被比对的"旧路径"抄自改动前的 MatchFlow.LegalRangeFor（保护期限出生区、此后全图），只在 Legacy 规则下成立，链接图上无从比对；
+        // 9×9 夹具（MatchFixtures，Legacy 规则，L6）是它今后的载体。另放军令 / 工坊 / 先锋三枚信物，让 ② ③ 两项比对的不是恒为缺省的值。四项比对断言不变。
+        // 每个小回合（部署阶段）比对：
         // ① 合法落子范围：旧实现（抄自改动前的 MatchFlow.LegalRangeFor）＝ 对局下发的批次上下文 ＝ 纯函数读公开快照；
         // ② 部署上限与工坊：旧实现（抄自改动前 RelicLedger.BuildSnapshot 的军令 / 工坊部分，读真实内容）＝ 批次上下文 ＝ 纯函数读公开快照；
         // ③ 先锋修正：旧实现（抄自改动前的 SumVanguard）＝ 账本（委托后）＝ 纯函数读公开快照；
         // ④ 出局：此刻没有"应出局而仍参赛"的玩家，每个已出局者都满足判据（旧判据）。
         int checkedTurns = 0;
-        MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        foreach (PlayerId player in session.Match.Players)
+        MatchFlow match = MatchFixtures.Started(new Siege.Core.Determinism.GameSeed(seed),
+            relics: [("E5", RelicFixtures.Command(2)), ("C5", RelicFixtures.Workshop()), ("G5", RelicFixtures.Vanguard())]);
+        var runner = new MatchRunner(match);
+        foreach (PlayerId player in match.Players)
         {
-            HeuristicTurnController inner = session.AiOf(player)!;
-            session.SetController(player, new ProbeController(inner, batch =>
+            HeuristicTurnController inner = HeuristicAi.Create(match, player, AiDifficulty.Standard, Weights, AiSearchConfig.Standard with { PassThreshold = PassThreshold });
+            runner.SetController(player, new ProbeController(inner, batch =>
             {
-                CompareAll(session.Match, batch);
+                CompareAll(match, batch);
                 checkedTurns++;
             }));
         }
 
-        Assert.Null(session.Run().Failure);
+        int guard = 0;
+        while (match.Phase == MatchPhase.InProgress)
+        {
+            Assert.True(++guard < 2000, "跑局超过 2000 个小回合");
+            runner.RunTurn();
+        }
+
         Assert.True(checkedTurns >= 20, $"只比对了 {checkedTurns} 个小回合");
     }
 

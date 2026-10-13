@@ -8,7 +8,7 @@ using Xunit.Abstractions;
 namespace Siege.Core.Tests.LifeShape;
 
 /// <summary>
-/// tasks 1.5 性能基线（不对应 Scenario）：在 v5 与边疆图的中盘局面上，一次全盘活形分析的耗时中位数
+/// tasks 1.5 性能基线（不对应 Scenario）：在 link:1 与 link:2 的中盘局面上（retire-legacy-maps 1.8：原为 v5 与边疆图），一次全盘活形分析的耗时中位数
 /// 不超过一次含气的全盘棋串计算（<see cref="GameBoard.AllGroups"/> + 全部 <see cref="GameBoard.LibertiesOf"/>）的 3 倍（宽松上界，裁决 R6）。
 /// 中盘 = Easy 4 人真实对局（种子 7）跑满 40 个小回合（10 个大回合）。两者交错计时、取中位数之比。
 /// 另输出只以 AllGroups 为分母的比值，仅供参考（段 A 口径）。
@@ -30,12 +30,12 @@ public class 活形分析性能基线Tests
 
     [PerfTheory]
     [Trait("Category", "Perf")]
-    [InlineData("siege-4p-base-v5")]
-    [InlineData("siege-frontier-v2")]
+    [InlineData("link:1")]   // retire-legacy-maps 1.8：原 siege-4p-base-v5 / siege-frontier-v2
+    [InlineData("link:2")]
     public void 中盘全盘活形分析不超过含气棋串计算的三倍(string mapId)
     {
         RunConfig config = SimFixtures.Config(turnLimit: 0) with { MapId = mapId };
-        MatchSession session = MatchSession.Create(config, 7, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(config, 7);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         int turns = 0;
         while (turns < MidGameTurns && session.RunTurn())
         {

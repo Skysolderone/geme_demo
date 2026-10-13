@@ -44,14 +44,21 @@ public class 地形改造日志与分析Tests
         // 同一份写死权重与阈值重扫种子 1–200（临时探针；探针先在去掉单子上限的二进制上复现了 53–55 的 改造 1 / 5 / 3、致提子 1 / 1 / 1）：
         // 58 局有致提子；取最小的连续且每局都有改造的 1–3：改造 3 / 3 / 6 次、致提子 1 / 0 / 0 次。断言与期望均未改，只换样本。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
-        RunConfig config = SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { PassThreshold = 20, ContentSet = ContentSet.V1 };
+        // retire-legacy-maps 1.8 第七次重挑：共用配置由 v5 改到 link:1。链接图第 3 大回合结束即可能链接，链接后坐标随之平移（match-telemetry「坐标随链接平移」），
+        // "把改造重放到开局地图"只在链接之前成立；于是截断改为 12 个小回合（第 3 大回合），并取这 12 个小回合内没有链接、每局都有改造的种子。
+        // 同一份写死权重与阈值扫 link:1 种子 1–60（临时探针）：致提子的改造只有种子 12（有链接）与 36（无链接）；取无链接的 34 / 36 / 43：改造 5 / 2 / 4 次、致提子 0 / 1 / 0 次。
+        // 断言与期望均未改，只换样本（种子不再连续，改为显式列出）。
+        RunConfig config = SimFixtures.Config(count: 1, seedStart: 1, turnLimit: 12, difficulty: AiDifficulty.Standard) with { PassThreshold = 20, ContentSet = ContentSet.V1 };
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
+        ulong[] seeds = [34, 36, 43];
 
-        for (int i = 0; i < config.Count; i++)
+        for (int i = 0; i < seeds.Length; i++)
         {
-            MatchSession session = MatchSession.Create(config, config.SeedAt(i), resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            MatchSession session = MatchSession.Create(config, seeds[i]);
+            Assert.Empty(session.Match.Links);   // 样本口径：开局时自然没有链接（截断之内也不应有，跑完后再核一次）
             MatchLog log = session.Run();
+            Assert.Empty(session.Match.Links);
             records.AddRange(session.Match.TerrainEdits);
 
             TerrainEdit[] replayed = [.. log.Turns.SelectMany(t => t.Edits!).Select(e => TerrainEdit.Parse(e.Target))];
@@ -99,7 +106,7 @@ public class 地形改造日志与分析Tests
         // 「改造可查」+「地形可离线重建」：走真实跑局（Standard——Easy 结构性地几乎不落匠人）→ 日志往返 → 重放。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         // 每一条小回合快照都带改造字段（没有改造就是空表），首部带匠人权重。
         Assert.All(logs, l => Assert.All(l.Turns, t => Assert.NotNull(t.Edits)));
@@ -122,7 +129,7 @@ public class 地形改造日志与分析Tests
         // 离线重建：按日志顺序把改造重放到开局地图上，结果与该局终局地形逐格一致。
         foreach (MatchLog log in logs)
         {
-            MapData start = Siege.Core.Board.Maps.FourPlayerBaseMap.Create();
+            MapData start = Siege.Core.Board.Maps.MapCatalog.Resolve(log.Header.MapId);   // retire-legacy-maps 1.8：原写死 v5（样本地图），改按日志首部的地图标识取开局地图（共用配置已是 link:1）
             MapData replayed = TerrainWriter.ApplyAll(
                 start, log.Turns.SelectMany(t => t.Edits!).Select(e => TerrainEdit.Parse(e.Target)));
 
@@ -148,7 +155,7 @@ public class 地形改造日志与分析Tests
             ArtisanWeight = 18,
         };
 
-        MatchLog log = BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve).Single();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog log = BatchRunner.Execute(config, parallelism: 1).Single();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.Equal(18, log.Header.ArtisanWeight);
         Assert.Equal(18, log.Header.Config.ArtisanWeight);
@@ -159,7 +166,7 @@ public class 地形改造日志与分析Tests
 
         // 反向：默认配置下首部是 10，不是"永远写 18"。
         Assert.Equal(10, BatchRunner.Execute(
-            SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 12), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve).Single().Header.ArtisanWeight);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 12), parallelism: 1).Single().Header.ArtisanWeight);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
     }
 
     [Fact]
@@ -301,7 +308,7 @@ public class 地形改造日志与分析Tests
         // 真实跑局上跑一遍分析：分母自洽、动作次数与日志逐条对得上。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径依赖走法、原先跟随缺省内容集 → 写死 v1。
         List<MatchLog> logs = BatchRunner.Execute(
-            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            SimFixtures.Config(count: 3, seedStart: 1, turnLimit: 24, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         TerrainEditSection t = BalanceAnalyzer.Analyze(logs).TerrainEdits;
 
         Assert.Equal(logs.Count, t.Matches);

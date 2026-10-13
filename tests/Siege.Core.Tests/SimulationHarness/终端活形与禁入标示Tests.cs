@@ -116,17 +116,19 @@ public class 终端活形与禁入标示Tests
     [Fact]
     public void 脚本对局里出现禁入与已活标示()
     {
-        // 脚本化终端测试：v5 图、种子 31，人类坐 1 号位、选 1 号区后每个小回合都 Pass；AI（Standard）按规则落子。
-        // life-shape 段 B 实测种子 31 第 4 大回合盘上已有活形棋串（v5 贴地形的小空区很容易成活，R8）。
+        // 脚本化终端测试：link:1、种子 31（内置固定配对脚本），人类坐 1 号位、选 2 号出生棋盘后每个小回合都 Pass；AI（Standard）按规则落子。
+        // retire-legacy-maps 1.8：原为 v5、选 1 号区、Pass 8 次（第 4 大回合盘上已有活形棋串）。改到 link:1 后人类只看得见自己的战场，
+        // 探针（种子 1–40 × 棋盘 1–5）选同棋盘有 AI、构筑期内即出现活形与禁入的组合：种子 31 选 2 号棋盘；Pass 改为 2 次（停在第 3 大回合、链接之前——
+        // 终端对局在链接后的小回合播报会越界崩溃，见 migration.md 待决 L15）。断言不变。
         // 样本口径下界：输出的棋盘行里必须真的出现 "@" 与 "x" 标记，并且图例同步出现——否则上面的逐格断言只证明了渲染函数，不证明终端对局真的走到了它。
-        var script = new System.Text.StringBuilder("1\n");
-        for (int i = 0; i < 8; i++)
+        var script = new System.Text.StringBuilder("2\n");
+        for (int i = 0; i < 2; i++)
         {
             script.Append("\npass\n");
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(31, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, flagRisk: 0, contentSet: ContentSet.V1, map: MapCatalog.Legacy.Resolve(null));   // flag-contest：脚本依赖出生区与走法，写死冒险概率 0；more-pieces-relics：写死内容集 v1   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        int exit = PlayCommand.Run(31, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);

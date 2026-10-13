@@ -1,4 +1,3 @@
-using Siege.Core.Board.Maps;
 using System.Collections.Immutable;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
@@ -17,13 +16,13 @@ namespace Siege.Core.Tests.AiDecision;
 public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
 {
     /// <summary>
-    /// v5、种子 1、整局：P1 为专家（显式打开多样候选 S = 8 与两层加分 λ = 1000‰，写死阈值 80），其余三名标准；返回日志确定性文本与 P1 每次部署的前瞻记录文本。
+    /// link:1、种子 1、内置固定配对脚本、整局（retire-legacy-maps 1.4：原 v5，断言不变）：P1 为专家（显式打开多样候选 S = 8 与两层加分 λ = 1000‰，写死阈值 80），其余三名标准；返回日志确定性文本与 P1 每次部署的前瞻记录文本。
     /// 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后，本类改用 <see cref="LookaheadFixtures.ExpandedExpert"/>，断言不改——两项作为可配置项仍须确定、不消费新随机、耗时受限。
     /// </summary>
     internal static (string Text, List<string> Records, List<LookaheadRecord> Raw) RunExpertSeat1(bool cacheLife)
     {
-        MatchSession session = MatchSession.Create(
-            V5Config(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = CreateSession(
+            LinkConfig(Standard, new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = PassThreshold } }, Standard, Standard), 1);
         HeuristicTurnController inner = HeuristicAi.Create(session.Match, P1, AiDifficulty.Expert, Weights,
             ExpandedExpert with { PassThreshold = PassThreshold }, lifeQuery: null, cacheLife);
         var recorder = new LookaheadRecorder(inner);
@@ -71,7 +70,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     {
         // 同一局面分别由专家与高难做一次部署决策：两者对 ai-<玩家> 子流的消费次数相同（前瞻不消费随机，D5 (a)）；
         // 前瞻组件的类型闭包里没有随机流与种子——对局中不会出现新的子流名，其余子流的位置无从被改动。
-        // 局面取 v5 种子 1 上一局 4 名标准 AI 对局的部署局面，每 3 个取 1（与耗时代理同一探针）。
+        // 局面取 link:1 种子 1 上一局 4 名标准 AI 对局的部署局面（retire-legacy-maps 1.4：原 v5），每 3 个取 1（与耗时代理同一探针）。
         // 变异 M-A6c（模拟对手用专家的扰动流做完整的标准 M = 8）、M-A9（前瞻里消费一次 ai-<玩家>）→ 见段 A 实施记录。
         // expert-strength：专家显式打开多样补充上限 8、两层权重 1000‰（预设已退回一层）——排除重跑与两层扫描同样不消费随机；
         // 前瞻集的第一个逐局面等于高难的选择（「前瞻集第一个仍是高难的选择」的真实局面取样）。样本口径：确有局面做过排除重跑、做过两层扫描。
@@ -114,7 +113,7 @@ public class 专家前瞻的确定性与耗时Tests(ITestOutputHelper output)
     [Fact]
     public void 预演次数代理计入新增部分()
     {
-        // D12 / expert-strength D8 确定性代理（默认套件）：v5 种子 1–3、4 名标准 AI 对局的固定局面集（四个座位的全部部署决策每 3 个取 1，见 LookaheadFixtures.ProbePositions 的说明），
+        // D12 / expert-strength D8 确定性代理（默认套件）：link:1 种子 1–3（固定配对脚本、截断第 12 大回合；retire-legacy-maps 1.4：原 v5）、4 名标准 AI 对局的固定局面集（四个座位的全部部署决策每 3 个取 1，见 LookaheadFixtures.ProbePositions 的说明），
         // 统计专家（显式多样补充上限 8、两层权重 1000‰；预设已退回一层）与高难每次决策的预演次数，断言总次数之比 ≤ 4，并输出总比值与三部分占比。
         // 专家一方 = 经 rehearse 委托的预演（单点排序、贪心组批、多样补充的排除重跑、候选 B1）+ 模拟对手的预演 + 两层扫描的单点预演。
         // 计时口径见 专家前瞻耗时计时Tests。

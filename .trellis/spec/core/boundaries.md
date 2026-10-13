@@ -23,16 +23,16 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 围棋记法 ↔ 内部索引映射 | `Siege.Core` 坐标类型 |
 | 覆盖数据（谁覆盖了哪格、来源棋子、是否几何相邻） | `CoverageMap.Compute` 一次算出；`SourcesOf(c)` 只读查询（信物控制、盘面层差集原因都消费它，不自行遍历） |
 | 高地压制加值 | `PieceEffects.HighGroundBonus(board, group)`；覆盖目标只经 `GameBoard.CoverageTargets` 取得，不另写邻接或崖壁判断；"严格更低"用 `Map.HeightAt` 比较目标格与自身格；`PowerCalculator` 是唯一消费者，表现层只读 `GroupPower.HighGroundBonus` |
-| 地图规格档（标准 / 边疆）的分流 | `MapValidator` 里"规则 → 处理方式"的一张声明表（frontier-map D2）。校验器别处不得出现对规格档的分支，下游（对局、AI、Sim、表现层、`src/godot/`）不得读 `Profile`——要按图的大小分流就读可落子格数（如 `AiSearchConfig.DefaultCellLimitFor`）。守门在 `地图规格档Tests` / `边疆档静态校验Tests`，属性模式、强转比较等绕法已做过变异 |
-| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`；批量、终端、图形三个入口共用，未知标识响亮失败并列出可用标识，缺省恒为 `siege-4p-base-v5`。加内置图只在 `Builtins` 表加一行（含面向人的显示名，`BuiltinMaps`）。生成图 `gen:<种子>[:p<N>]` 也只经它解析——`FrontierMapGenerator` 的唯一生产调用方就是 `MapCatalog`；选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`） |
-| 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——生成器一旦改版，同一 `gen:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
-| 原型插旗路径的 AI 选区（含冒险概率） | `PrototypeZoneAssignment`（见 `determinism.md` 的 `zone-pick` 与 `flag-risk`）；三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门） |
+| 地图规格档的分流 | `MapValidator` 里"规则 → 处理方式"的一张声明表（frontier-map D2）。retire-legacy-maps 起 `MapProfile` 只剩 `Link`，声明表只剩链接一行（字段：支持人数说明、人数预算、出生区数须多于人数、列 / 行区间、棋盘清单规则）；地图文件缺规格档字段或写已移除的 `Standard / Frontier / Board`（含数值 0 / 1 / 2）即拒绝加载。校验器别处仍不得出现对规格档的分支，下游（对局、AI、Sim、表现层、`src/godot/`）不得读 `Profile`——要按图的大小分流就读可落子格数（如 `AiSearchConfig.DefaultCellLimitFor`）。守门在 `规格档分流守门Tests` / `地图规格档Tests`，属性模式、强转比较等绕法已做过变异 |
+| "标识 → 地图"解析 | `Siege.Core.Board.Maps.MapCatalog`（公开成员只剩 `DefaultId` 与 `Resolve`）；批量、终端、图形三个入口共用，只接受 `link:<地图种子>`，缺省（null / 空白）为 `link:1`，其余标识（含已删除的内置图、`gen:` / `board:`、文件路径）一律响亮失败并说明只接受 `link:<地图种子>`。`LinkMapGenerator.Generate` 的唯一生产调用方就是 `MapCatalog`（拼接 `LinkMapGenerator.Link` 由 `MatchFlow` 与 `map --links` 调用）；裸 `link` 的随机取种子只在入口最外层（经 `LinkMapId.FriendlySeed` 折叠）。选图视图模型（`Siege.Presentation.MapSelect`）与 `src/godot/` 只产出 / 传递标识，不自带地图清单或显示名对照表、不直接调生成器（守门 `选图界面守门Tests`、`各入口支持生成图_链接模式Tests.生成器只经目录调用_裸link只在入口最外层取种子`） |
+| 地图内容摘要 | `MapFile.Digest`（开局地图导出文本的 SHA-256）；日志首部与存档都写它，回放 / 恢复先比摘要，不同即报"地图不一致"并停止——链接图生成器一旦改版，同一 `link:` 标识会重建出另一张图，必须响亮失败。旧日志 / 旧存档缺该字段跳过比对并可查知 |
+| 原型插旗路径的 AI 选区 | `PrototypeZoneAssignment.AssignBlind`（盲选，见 `determinism.md` 的 `flag-pick`）；retire-legacy-maps 删除了冒险概率与旧顺排 / `zone-pick` 选区。三个入口不得各写一份循环（图形版不在 sln 里，靠源码扫描守门 `原型插旗替代路径Tests.三个入口的选区都走内核的唯一实现`） |
 | AI 候选格上限的缺省值 | `AiSearchConfig.ForMap` / `DefaultCellLimitFor`（可落子格 > 150 取 24，否则 0）；显式配置含 0 优先；实际生效值进 `config.json` 与日志首部，`Replayer` 按首部重建、缺项按不限制 |
 | 相机位姿 | 纯计算在 `Siege.Presentation.Camera`（状态只有注视点与距离，俯角恒 60°、朝向恒定——缩放若带俯角变化，拾取会在某个缩放档静默出错）；`src/godot/` 只采输入，写相机节点的唯一位置是 `BoardView.ApplyCameraPose` |
 | 图形版命令行 | `LaunchArgs`：只校验 `--` 之后的用户参数，合法选项集合唯一来自读取动作，未知 / 带错值一律退出码 1 并列出合法选项；全仓没有第二个读原始命令行的地方 |
-| 出生区编号的对人显示（1–8） | `BirthZoneLabel.Of` / `Number`；校验器、对称检查、平衡分析报告、`FlagsLocked` 事件文本、`map` 文本图、`play` 棋盘与插旗提示都经它换算，不得手写 `+ 1`；内部索引与日志数据字段保持 0 起（`play` 读入玩家输入的 `z - 1` 是输入解析，不在此列） |
+| 出生区编号的对人显示（1–8） | `BirthZoneLabel.Of` / `Number`；校验器、平衡分析报告、`FlagsLocked` 事件文本、`map` 文本图、`play` 棋盘与插旗提示都经它换算，不得手写 `+ 1`；内部索引与日志数据字段保持 0 起（`play` 读入玩家输入的 `z - 1` 是输入解析，不在此列） |
 | 结算顺序（设计文档 §6.3 **七步**） | `Siege.Core` 批次结算驱动器（`SettlementDriver`）。第 3 步"同时应用本批全部改造"先于第 4 步提子，顺序不得改（设计文档 §3.4 / §6.3） |
-| 地形写入口（加桥 / 加栅 / 烧林） | `TerrainWriter.Apply` / `ApplyAll`（`Siege.Core.Board`）——唯一构造"改造后 `TerrainData`"的地方，只做加法、没有逆向入口，不碰高度 / 障碍 / 信物。盘面侧的唯一写入路径是 `GameBoard.ApplyTerrainEdits`（内部只经 `TerrainWriter`），调用点只有 `BatchRehearsal`（预演第 4 步）、`SettlementDriver.Confirm`（正式第 3 步）与 `AttributeEdits` 探针、`GameBoard.Fill`（存档回放）。守门 `地形写入口Tests.地形写入口之外不得构造改造后的地形`（IL 扫 `new TerrainData(`，白名单 = 写入口 + `TerrainData.Flat` + `MapFile` + 基准图，另配"扫描器确实命中写入口"的反面断言），变异 M-B1 已证红 |
+| 地形写入口（加桥 / 加栅 / 烧林） | `TerrainWriter.Apply` / `ApplyAll`（`Siege.Core.Board`）——唯一构造"改造后 `TerrainData`"的地方，只做加法、没有逆向入口，不碰高度 / 障碍 / 信物。盘面侧的唯一写入路径是 `GameBoard.ApplyTerrainEdits`（内部只经 `TerrainWriter`），调用点只有 `BatchRehearsal`（预演第 4 步）、`SettlementDriver.Confirm`（正式第 3 步）与 `AttributeEdits` 探针、`GameBoard.Fill`（存档回放）。守门 `地形写入口Tests.地形写入口之外不得构造改造后的地形`（IL 扫 `new TerrainData(`，白名单 = 写入口 + `TerrainData.Flat` + `MapFile`（retire-legacy-maps 删去了旧基准图），另配"扫描器确实命中写入口"的反面断言），变异 M-B1 已证红 |
 | 改造合法性（动作集、目标枚举与拒绝理由） | `TerrainEditRules`（`Siege.Core.Board`）——`LegalTargets` 枚举、`IsLegal` / `Reject` 判定同类同源，守门 `改造合法性Tests.拒绝理由与合法目标集合一致` 穷举全盘 144 条几何边比对。全仓调用点**只有四处**（more-pieces-relics 段 D 刷新）：`BatchRehearsal.ValidateShape`（`Reject`，预演第 1 步）、`BatchPreviewBuilder.Build`（`LegalTargets`，富预演的可改造目标 `EditOutlook`）、`HeuristicTurnController` 的完整枚举 `EditOptions` 与候选格上限预筛的匠人回退（均为 `LegalTargets`）——四处一律传本小回合快照的工坊标记（`BatchContext.WorkshopActive`），旧的不带工坊参数的重载 = 否。格目标候选（几何四邻 ∪ 工坊下同行 / 同列距离 2）只在私有的 `CellTargets` 一处给出，`LegalTargets` 与 `Reject` 共用，守门 `拒绝理由与合法目标集合一致` 对工坊真 / 假各穷举一遍。表现层（`Siege.Presentation` / `src/godot`）的可改造目标一律经富预演投影，**MUST NOT** 自判，也不得调 `TerrainEditRules`（`UI层不含规则计算Tests.ForbiddenTypes` / `Godot层不含规则计算Tests` token 表）。"批内唯一 / 不链式"不在本类——那是批次层（`BatchRehearsal` 的 `DuplicateEditInBatch`）的事，复制一份就是第二实现。变异 M-T2（只放宽 `Reject` 一侧）已证"改其一即红" |
 | 四种新棋子的位置加值（旗手 / 铁链 / 哨兵 / 界碑，more-pieces-relics D1 / D2） | `PieceEffects.BannerBonus` / `ChainBonus` / `SentryBonus` / `BoundaryBonus`（`Siege.Core.Scoring`），唯一消费者 `PowerCalculator.Evaluate`（七项来源先求和再整体乘倍率），表现层与遥测只读 `GroupPower` 的七项字段。邻接一律经 `GameBoard.LibertyNeighbors`（旗手读地图静态信物格 `Cell.IsRelicCell`、不看揭示与控制；哨兵读气边邻格上的非己方占用者、不看玩家状态）；界碑逐格读**传入的** `CoverageMap.OwnershipOf` 独占结果、不另算覆盖、不滤荒漠（`总势力Tests.领地计分直接取空格归属结果` 的读者名单含 `PieceEffects.cs`）。AI 不另写加值公式（源码扫描 `新棋子与新信物的AI适配Tests.AI源码不另写新加值公式`，变异 MC-T2 已证红）。连营 / 犄角的额外加值并入 `LineBonus` / `SynergyBonus`（`GroupPower.EncampmentBonus` / `PincerBonus` 只是子拆分，不是第八 / 九项来源） |
 | 对局内容集有哪些棋子类型 | `ContentSets.PieceTypesOf(set)`（`Siege.Core.Board`）：v1 显式六种、v2 = v1 + 四种（v1 是 v2 的前缀，枚举次序即固定类型次序）。征募表（`RecruitWeights.OrderOf`）、徽记绑定集合（`RelicGenerator`）、日志棋子计数键（`MatchSession.PieceCountsOf`）、分析器类型列表与终端图例都经它，**MUST NOT** 用 `Enum.GetValues<PieceType>()` 代替——枚举一长，v1 的徽记绑定与日志快照键就会整体改变（变异 M-C6 / M-C7 / MB-G2 已证红）。信物类型清单同理只经 `RelicWeights.OrderOf(set)` |
@@ -45,7 +45,7 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 | 盘面同形比对键（superko-occupancy） | `GameBoard.SuperkoKey(serialized)`：由 `Serialize()` 的输出投影，每格只留占用者、去掉类型码，改造段原样保留；唯一调用方 `BoardHistory`（"比对键 → 最早提交序号"索引，新增与读档共用 `Append`），预演第 8 步只经 `FindDuplicate(projected.Serialize())` 到达。`Serialize()` 本身仍含类型（存档、日志、结算核对、弃赛快照），不得为同形另写一份逐格遍历。守门 `盘面同形禁则Tests.同形比对键投影只有一处实现`（扫整个 `src/` 含 `src/godot`：`SuperkoKey(` 只在 GameBoard / BoardHistory；类型码集合字面量形状零命中），变异 M-K3 / M-K4 已证红 |
 | 单子禁手查询（自杀手 / 同形 / 破坏活形的事先标示，forbidden-marks） | `Siege.Core.Batch.ForbiddenMoves`：唯一实现，按"当前暂放批次之上再落这一子"整批判定，内部复用预演（不另写气、同形或活形判断），结果与完整合法性预演逐格一致。生产调用方只有 `MatchFlow.ForbiddenMovesOfCurrentPlayer`；`Siege.Presentation` / `src/godot` 只读其结果做标示与原因文案，不自判 |
 | 预演第 3–8 步的内部入口 | `BatchRehearsal.Settle`（`internal`）：`BatchRehearsal.Rehearse` 与 `ForbiddenMoves` 共用这一份，不得为单子查询另抄一份结算步骤 |
-| 棋盘档生成与标识（board-map） | `BoardMapGenerator` / `BoardMapId`（`Siege.Core.Board.Maps`）：`board:<种子>[:n<棋盘数>]` 的解析、规范化与生成只此一处；`BoardMapGenerator` 的唯一生产调用方是 `MapCatalog`，入口与选图视图模型只经 `BoardMapId` 产出 / 解析标识（裸 `board` 的随机取种子在入口最外层），不直接调生成器。棋盘清单 `MapData.Boards` 只用于静态校验与呈现，**不参与结算**——气、提子、覆盖、保护期、计分、信物与 AI 都不读它 |
+| 链接档生成与标识（board-link-mode） | `LinkMapGenerator` / `LinkMapId`（`Siege.Core.Board.Maps`）：`link:<地图种子>` 的解析、规范化与短种子折叠只在 `LinkMapId`，初始布局与拼接只在 `LinkMapGenerator`（布局随机源 `MapRandom.ForLinkLayout`，拼接不消费随机）；入口与选图视图模型只经 `LinkMapId` 产出 / 解析标识，不直接调生成器。旧的 `gen:` / `board:` 生成器已随 retire-legacy-maps 删除。棋盘清单 `MapData.Boards` 只用于静态校验、拼接与呈现，**不参与结算**——气、提子、覆盖、保护期、计分、信物与 AI 都不读它 |
 | 规则计算 | `Siege.Core`——表现层只消费预演结果，绝不自己算 |
 
 写新代码前先搜一遍是否已有实现。重复实现的典型症状：领地层说独占、信物层判争议。
@@ -59,14 +59,13 @@ Godot 项目（`godot/`）单向引用 `Siege.Core`，反向引用不存在。
 
 第三条"规则变更后权重必须重新标注未校准"见 [测试组织](./testing.md)「计分口径一变，默认权重必须重扫」。
 
-### 内置图内容一变，标识必须递增（restore-go-core-rules D6）
+### 地图标识与地图内容（restore-go-core-rules D6 → retire-legacy-maps）
 
-内置图（`MapCatalog.Builtins` 里的 `siege-4p-base-vN` / `siege-frontier-vN`）的**任何**内容变化——地形、信物格、出生区，或像据点这样整类字段的增删——MUST 同时递增标识，MUST NOT 沿用旧标识。先例：v3 → v4（加计分格，裁决 S-9）、v4 → v5 与 frontier v1 → v2（摘除据点）。
+内置图（`siege-4p-base-vN` / `siege-frontier-vN` / 2 人 / 3 人图）与 `maps/*.json` 已随 retire-legacy-maps 全部删除，现存地图只有链接图 `link:<地图种子>`。历史上"内置图内容一变，标识必须递增"（v3 → v4 加计分格、v4 → v5 与 frontier v1 → v2 摘除据点）的约定不再有适用对象，留作背景：
 
-- 理由：日志首部、存档、扫档 `config.json` 只记标识与 `MapFile.Digest`；沿用旧标识会让"同一个标识"在不同时期指向两张图，旧数据与新数据被静默混比。
-- 旧标识 MUST 从 `Builtins` 删除，请求时报"未知地图"；`maps/<旧标识>.json` 也不得留在仓库里——否则 `MapCatalog.Resolve` 的"`maps/<标识>.json` 文件回落"会把旧标识悄悄复活（守门 `各入口按地图标识选图Tests.改名前的旧地图标识报未知地图`）。
-- 类名随标识走（`FrontierMapV1` → `FrontierMapV2`）：标识升号而类名不动是陷阱。
-- 生成图 `gen:` 标识不含生成器版本段，生成器改动后同一标识产出不同的图是**已接受**的不兼容（D6）；对应的生成确定性黄金值随之重建，并在实现记录里写明原因。
+- 理由仍成立：日志首部、存档、扫档 `config.json` 只记标识与 `MapFile.Digest`；同一个标识在不同时期指向两张图，旧数据与新数据就会被静默混比。
+- `link:` 标识不含生成器版本段，链接图生成器改动后同一标识产出不同的图是**已接受**的不兼容（同 D6）：靠 `MapFile.Digest` 在回放 / 恢复时响亮失败，`link:1`–`link:20` 快照与三条链接图决策基线（`AiDecision/Fixtures/decisions-link1-seed1/2/3.txt`）随之重钉，并在实现记录里写明原因。
+- 不要再引入"文件路径 / `maps/<标识>.json` 回落"之类的第二条读图路径：`MapCatalog.Resolve` 只认 `link:`（守门 `链接档地图标识与确定性Tests.目录解析link标识`、`各入口按地图标识选图_链接模式Tests.旧标识报错`）。
 
 ### 气与覆盖是两套边，不再恒等（terrain-model）
 

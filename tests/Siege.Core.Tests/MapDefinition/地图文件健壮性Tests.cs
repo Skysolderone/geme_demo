@@ -11,13 +11,15 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <remarks>规格：map-definition —— Requirement: 地图为设计师固定的静态数据</remarks>
 public class 地图文件健壮性Tests
 {
+    // retire-legacy-maps 4.1（L7）：规格档字段改为必填（缺失即报"已移除"），本类手写的残缺 / 畸形 JSON 一律补上 "Profile":"Link"，
+    // 使各条仍落在它原本要测的那一处错误上；断言不变。
     [Theory]
     [InlineData("null", "不是合法 JSON")]
-    [InlineData("{}", "无法解析为围棋记法坐标")]                              // 缺 CentralEntrance
-    [InlineData("{\"CentralEntrance\":\"I5\"}", "\"I5\"")]                    // I 不是合法列字母
-    [InlineData("{\"CentralEntrance\":\"A0\"}", "\"A0\"")]                    // 行号自 1 起
-    [InlineData("{\"CentralEntrance\":\"ZZZ99\"}", "\"ZZZ99\"")]              // 列标至多两个字母（board-map D6 起 ZZ99 是合法坐标）
-    [InlineData("{\"CentralEntrance\":\"F6\",\"Obstacles\":[null]}", "<null>")]
+    [InlineData("{\"Profile\":\"Link\"}", "无法解析为围棋记法坐标")]          // 缺 CentralEntrance
+    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"I5\"}", "\"I5\"")]                    // I 不是合法列字母
+    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"A0\"}", "\"A0\"")]                    // 行号自 1 起
+    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"ZZZ99\"}", "\"ZZZ99\"")]              // 列标至多两个字母（board-map D6 起 ZZ99 是合法坐标）
+    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"Obstacles\":[null]}", "<null>")]
     public void 畸形字段抛出可诊断的FormatException(string json, string expectedFragment)
     {
         FormatException ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
@@ -34,7 +36,7 @@ public class 地图文件健壮性Tests
     [InlineData("Id")]
     public void 显式写成null的字段被指名报出(string field)
     {
-        string json = $"{{\"CentralEntrance\":\"F6\",\"{field}\":null}}";
+        string json = $"{{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"{field}\":null}}";
 
         FormatException ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
 
@@ -42,8 +44,8 @@ public class 地图文件健壮性Tests
     }
 
     [Theory]
-    [InlineData("{\"CentralEntrance\":\"F6\",\"Width\":\"eleven\"}")]
-    [InlineData("{\"CentralEntrance\":\"F6\",\"RelicCells\":{\"D4\":{\"Zone\":\"Mystery\",\"Budget\":\"High\"}}}")]
+    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"Width\":\"eleven\"}")]
+    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"RelicCells\":{\"D4\":{\"Zone\":\"Mystery\",\"Budget\":\"High\"}}}")]
     [InlineData("not json at all")]
     public void 类型或枚举不认识时抛JsonException(string json)
     {
@@ -55,7 +57,7 @@ public class 地图文件健壮性Tests
     {
         // 反序列化本身宽容（缺字段取默认值），但这样的地图 MUST NOT 通过静态校验：
         // 根因（尺寸为 0）要能在失败列表里被直接看到，而不是只剩"可落子格为 0"这种症状。
-        MapData degenerate = MapFile.FromJson("{\"CentralEntrance\":\"F6\",\"MaxPlayers\":4}");
+        MapData degenerate = MapFile.FromJson("{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"MaxPlayers\":4}");
 
         MapValidationResult result = MapValidator.Validate(degenerate);
 
@@ -69,28 +71,20 @@ public class 地图文件健壮性Tests
     public void 同一坐标重复写会被合并而不是静默取一个()
     {
         // JSON 对象的重复键由序列化器"后者胜出"地吞掉，坐标记法的大小写差异同样会折叠成同一格。
-        // 这里钉住：折叠后信物格数量变了，人数适配预算会报出来——不会带着"丢了一个信物格"的地图开局。
-        MapData folded = MapFile.FromJson(
-            "{\"CentralEntrance\":\"F6\",\"Width\":11,\"Height\":11,\"MaxPlayers\":4,"
-            + "\"RelicCells\":{\"D4\":{\"Zone\":\"Contested\",\"Budget\":\"High\"},"
-            + "\"d4\":{\"Zone\":\"Contested\",\"Budget\":\"High\"}}}");
+        // 这里钉住：折叠后信物格数量变了，信物格预算会报出来——不会带着"丢了一个信物格"的地图开局。
+        // retire-legacy-maps 4.1：原载体是 11×11 的手写残缺图（无规格档字段）；4.1 起它先因外接尺寸被链接档拒绝、到不了信物预算，
+        // 载体改为 link:1 的导出文本，把第二个信物格的键改写成第一个的小写（10 → 9 个），断言不变。
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
+        Coord[] relics = [.. MapFile.FromJson(canonical).RelicCells.Keys.Order()];
+        Assert.Equal(10, relics.Length);   // 样本口径
+        string json = canonical.Replace($"\"{relics[1].ToNotation()}\": {{", $"\"{relics[0].ToNotation().ToLowerInvariant()}\": {{", StringComparison.Ordinal);
+        Assert.NotEqual(canonical, json);
 
-        Assert.Single(folded.RelicCells);
+        MapData folded = MapFile.FromJson(json);
+
+        Assert.Equal(9, folded.RelicCells.Count);
         Assert.Contains(
             MapValidator.Validate(folded).Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
-    }
-
-    [Fact]
-    public void 磁盘上的基准地图文件与代码一致()
-    {
-        // maps/siege-4p-base-v5.json（文件名随 Id）是设计师维护的那一份；它若与代码里的基准图漂移，
-        // 就会出现"代码跑的图和设计师看的图不是同一张"。
-        // 文件名跟着地图 Id 走（denser-map 裁决 3），旧的 v1 / v2 / v3 留在 maps/ 只作对照，不参与本断言。
-        string path = Path.Combine(RepoRoot(), "maps", $"{FourPlayerBaseMap.Create().Id}.json");
-        MapData onDisk = MapFile.FromJson(File.ReadAllText(path));
-
-        Assert.Equal(MapFile.ToJson(FourPlayerBaseMap.Create()), MapFile.ToJson(onDisk));
-        Assert.True(MapValidator.Validate(onDisk).IsValid, MapValidator.Validate(onDisk).ToString());
     }
 
     [Fact]
@@ -98,7 +92,8 @@ public class 地图文件健壮性Tests
     {
         // 设计师手写的键名不必与 DTO 的大小写一致。把基准图的全部 JSON 键名压成小写，
         // 往返后 MUST 与原图逐字节一致——包括嵌套的 zone / budget 与豁免理由。
-        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图（本类各条同），断言不变。
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
         string lowerKeys = System.Text.RegularExpressions.Regex.Replace(
             canonical, "\"([A-Za-z0-9_]+)\":", m => $"\"{m.Groups[1].Value.ToLowerInvariant()}\":");
         Assert.NotEqual(canonical, lowerKeys);
@@ -116,7 +111,7 @@ public class 地图文件健壮性Tests
         // PropertyNameCaseInsensitive 只管键名，枚举值走 JsonStringEnumConverter；
         // 它读取时同样不区分大小写。这里把 Zone / Budget 的全部枚举值压成小写钉住这一点，
         // 免得日后换转换器或加 JsonNamingPolicy 时静默变成"看起来能用的坏地图"。
-        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
         string lowerValues = canonical
             .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"birthzone\"", StringComparison.Ordinal)
             .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"contested\"", StringComparison.Ordinal)
@@ -136,8 +131,10 @@ public class 地图文件健壮性Tests
     public void 未知枚举值的地图拒绝加载()
     {
         // 大小写宽容不等于任意字符串宽容：拼错的分区名 MUST 报错，不能落成默认值 BirthZone。
-        string broken = MapFile.ToJson(FourPlayerBaseMap.Create())
-            .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"Contest\"", StringComparison.Ordinal);
+        // retire-legacy-maps 1.6：link:1 的信物格都在出生区，拼错的分区名改为把 BirthZone 写成 BirthZon（原为 Contested → Contest）。
+        string broken = MapFile.ToJson(MapCatalog.Resolve("link:1"))
+            .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"BirthZon\"", StringComparison.Ordinal);
+        Assert.Contains("BirthZon\"", broken, StringComparison.Ordinal);
 
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => MapFile.FromJson(broken));
     }
@@ -146,10 +143,12 @@ public class 地图文件健壮性Tests
     public void 含未知字段的地图能正确加载()
     {
         // 地图文件里允许写 _comment 之类的说明字段：顶层与嵌套对象都不报错、不影响数据。
-        string canonical = MapFile.ToJson(FourPlayerBaseMap.Create());
+        // retire-legacy-maps 1.6：载体由 v5 改为 link:1；嵌套对象里的说明字段改挂在出生区信物上（link:1 没有公共区信物）。
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
         string withComments = canonical
             .Replace("{\n  \"Id\":", "{\n  \"_comment\": \"设计师备注：中央区与咽喉承担高预算\",\n  \"Id\":", StringComparison.Ordinal)
-            .Replace("\"Zone\": \"Contested\",", "\"_comment\": \"公共区\",\n      \"Zone\": \"Contested\",", StringComparison.Ordinal);
+            .Replace("\"Zone\": \"BirthZone\",", "\"_comment\": \"出生区\",\n      \"Zone\": \"BirthZone\",", StringComparison.Ordinal);
+        Assert.Contains("\"_comment\": \"出生区\"", withComments, StringComparison.Ordinal);
         Assert.NotEqual(canonical, withComments);
         Assert.Contains("_comment", withComments, StringComparison.Ordinal);
 
@@ -187,9 +186,9 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 缺地形字段的旧文件按平地读入()
     {
-        // v2 文件（历史存档，已不能通过校验）没有地形字段 → 全 h=0、全草地、无桥无栅；可落子格仍是 85
-        string path = Path.Combine(RepoRoot(), "maps", "siege-4p-base-v2.json");
-        string text = File.ReadAllText(path);
+        // 没有地形字段的旧文件 → 全 h=0、全草地、无桥无栅。
+        // retire-legacy-maps 1.6：原样本是 maps/siege-4p-base-v2.json（可落子 85）；maps/ 目录随旧地图删除，改用手写的最小地图文本（3×3、A1 为障碍 → 可落子 8）。
+        const string text = "{\"Id\":\"old\",\"Width\":3,\"Height\":3,\"MaxPlayers\":4,\"Profile\":\"Link\",\"Obstacles\":[\"A1\"],\"BirthZones\":[],\"RelicCells\":{},\"ChokePoints\":[],\"CentralEntrance\":\"B2\"}";
         Assert.DoesNotContain("\"Heights\"", text, StringComparison.Ordinal);
 
         MapData onDisk = MapFile.FromJson(text);
@@ -198,7 +197,7 @@ public class 地图文件健壮性Tests
         Assert.Empty(onDisk.TerrainData.Surfaces);
         Assert.Empty(onDisk.TerrainData.Bridges);
         Assert.Empty(onDisk.TerrainData.Fences);
-        Assert.Equal(85, onDisk.PlayableCount);
+        Assert.Equal(8, onDisk.PlayableCount);
     }
 
     [Theory]
@@ -209,7 +208,7 @@ public class 地图文件健壮性Tests
     [InlineData("\"Fences\":[\"A1B1\"]", "A1B1")]
     public void 畸形地形字段被指名报出(string fragment, string expectedFragment)
     {
-        string json = "{\"Id\":\"t\",\"Width\":3,\"Height\":3,\"MaxPlayers\":2,\"CentralEntrance\":\"B2\"," + fragment + "}";
+        string json = "{\"Profile\":\"Link\",\"Id\":\"t\",\"Width\":3,\"Height\":3,\"MaxPlayers\":2,\"CentralEntrance\":\"B2\"," + fragment + "}";
 
         var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
 
@@ -242,7 +241,7 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 非法地表码列出全部八个码()
     {
-        string json = "{\"Id\":\"t\",\"Width\":3,\"Height\":3,\"MaxPlayers\":2,\"CentralEntrance\":\"B2\",\"Surfaces\":[\"GGG\",\"GGG\",\"GGX\"]}";
+        string json = "{\"Profile\":\"Link\",\"Id\":\"t\",\"Width\":3,\"Height\":3,\"MaxPlayers\":2,\"CentralEntrance\":\"B2\",\"Surfaces\":[\"GGG\",\"GGG\",\"GGX\"]}";
 
         var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
 
@@ -252,7 +251,4 @@ public class 地图文件健壮性Tests
             Assert.Contains(code, ex.Message, StringComparison.Ordinal);
         }
     }
-
-    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", ".."));
 }

@@ -57,7 +57,7 @@ public class 前瞻的近似两层加分Tests
         Assert.Equal(new BigInteger(100), b - a);
         Assert.Equal(1, ExpertLookahead.SelectIndex([a, b]));
 
-        // 真实局面：v5 种子 1 的固定局面集上，两层加分（1000‰、多样候选关闭）至少改变一次选择（相对一层配置），且改变时被选者的加分严格更高。
+        // 真实局面：link:1 种子 1 的固定局面集上（retire-legacy-maps 1.4：原 v5 种子 1，断言不变），两层加分（1000‰、多样候选关闭）至少改变一次选择（相对一层配置），且改变时被选者的加分严格更高。
         int compared = 0;
         int changed = 0;
         ProbePositions(every: 2, (match, batch) =>

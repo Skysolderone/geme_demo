@@ -81,10 +81,11 @@ public class 冲突占用率口径Tests
     public void 真实跑局把可落子格写进日志首部()
     {
         // 合成日志绕过写入路径：首部漏写可落子格时，上面那条用的是手填值，照样绿。
-        // 这条走真实跑局 → 日志往返 → 报告，并用"非回填值"证伪：v3 基准图是 105，若写入路径漏写就会是 null。
+        // 这条走真实跑局 → 日志往返 → 报告，并用"非回填值"证伪：link:1 初始图是 157，若写入路径漏写就会是 null。
+        // retire-legacy-maps 1.8：共用样本由 v5（105 格）改到 link:1（157 格），期望值随之改，断言不变。
         List<MatchLog> sample = SimFixtures.Sample.Value;
-        Assert.All(sample, l => Assert.Equal(105, l.Header.PlayableCells));
-        Assert.All(sample, l => Assert.Equal(105, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
+        Assert.All(sample, l => Assert.Equal(157, l.Header.PlayableCells));
+        Assert.All(sample, l => Assert.Equal(157, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
 
         // 报告段落在真实批次上也能算出来（可能全批次无提子，那就只断言段落存在与分母自洽）。
         BalanceReport report = BalanceAnalyzer.Analyze(sample);

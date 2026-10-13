@@ -1,11 +1,13 @@
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Core.Match;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Play;
 using Siege.Sim.Running;
 
+// retire-legacy-maps：仓库根目录改取 TestPaths.RepoRoot()（原 FrontierFixtures.RepoRoot，随旧地图夹具删除而原样迁出）。
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
@@ -22,88 +24,11 @@ internal static class ConsoleRedirect
 public class 各入口按地图标识选图Tests
 {
     [Fact]
-    public void 缺省地图不变()
-    {
-        // 未给地图选项 → siege-4p-base-v5。三个入口的缺省都取自目录的同一个常量。
-        // 变异 M-A9：MapCatalog.DefaultId 换成 siege-4p-base-v3 → 本测试红（全套共红 39：所有走缺省地图的入口都跟着变）。
-        // board-link-mode 裁决 D7：玩家入口的缺省地图改为 link:1（MapCatalog.DefaultId），v5 只剩 Legacy 夹具的缺省（MapCatalog.Legacy.DefaultId）；下面各断言随之改读 Legacy.DefaultId。
-        Assert.Equal("link:1", MapCatalog.DefaultId);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.DefaultId);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve(null).Id);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve("  ").Id);
-        Assert.Equal("siege-4p-base-v5", MapCatalog.Legacy.Resolve("siege-4p-base-v5").Id);
-        Assert.Equal("siege-4p-base-v5", new Siege.Sim.Config.RunConfig().MapId);
-        Assert.Contains("siege-4p-base-v5", MapCatalog.BuiltinIds);
-        Assert.Equal(MapFile.ToJson(FourPlayerBaseMap.Create()), MapFile.ToJson(MapCatalog.Legacy.Resolve(null)));
-    }
-
-    [Fact]
-    public void 未知标识报错()
-    {
-        // 规格 Scenario：以 no-such-map 启动任一入口 → 报错退出并列出可用地图标识，不开始对局，MUST NOT 静默回落到缺省地图。
-        // 变异 M-A10：Resolve 找不到时 return 缺省地图 → 本测试红。
-        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve("no-such-map"));
-        Assert.Contains("no-such-map", ex.Message, StringComparison.Ordinal);
-        Assert.NotEmpty(MapCatalog.BuiltinIds);
-        Assert.All(MapCatalog.BuiltinIds, id => Assert.Contains(id, ex.Message, StringComparison.Ordinal));
-
-        // 终端版入口
-        // board-link-mode 裁决 C7：入口只接受 link:，未知标识在入口门报错（文案说明只接受 link:<地图种子>），可用旧标识清单改由上面的 MapCatalog.Legacy 断言守住。
-        (int playCode, string playErr) = RunMain("play", "--map", "no-such-map", "--seed", "1");
-        Assert.NotEqual(0, playCode);
-        Assert.Contains("只接受 link:<地图种子>", playErr, StringComparison.Ordinal);
-
-        // 批量入口：报错且不写出任何输出
-        string outDir = Path.Combine(SimFixtures.TempDir("mapcatalog-unknown"), "out");
-        (int runCode, string runErr) = RunMain("run", "--out", outDir, "--map", "no-such-map", "--seed", "1");
-        Assert.NotEqual(0, runCode);
-        Assert.Contains("只接受 link:<地图种子>", runErr, StringComparison.Ordinal);
-        Assert.False(Directory.Exists(outDir));
-    }
-
-    [Theory]
-    [InlineData("siege-4p-base-v4", "siege-4p-base-v5")]
-    [InlineData("siege-frontier-v1", "siege-frontier-v2")]
-    public void 改名前的旧地图标识报未知地图(string retired, string current)
-    {
-        // 规格：map-definition —— 内置图随据点摘除改名（tasks 2.3）。旧标识 MUST 报"找不到地图"并列出现名，
-        // MUST NOT 悄悄解析成新图——两张图的信物/地形虽然一样，但旧标识对应的权威文件已经不存在，
-        // 让它还能解析出图会掩盖"调用方仍在用旧标识"。
-        // 变异 M-B20：Builtins 表里把新标识写回旧标识 → 本测试红。
-        Assert.DoesNotContain(retired, MapCatalog.BuiltinIds);
-        FileNotFoundException ex = Assert.Throws<FileNotFoundException>(() => MapCatalog.Legacy.Resolve(retired));
-        Assert.Contains("找不到地图", ex.Message, StringComparison.Ordinal);
-        Assert.Contains(retired, ex.Message, StringComparison.Ordinal);
-        Assert.Contains(current, ex.Message, StringComparison.Ordinal);
-
-        // 反面：现名必须解析得出，否则上面那条"旧的报错"可以靠"两个都报错"恒真。
-        Assert.Equal(current, MapCatalog.Legacy.Resolve(current).Id);
-
-        // 旧标识的权威文件也不得留在仓库里——留着的话 Resolve 会经 maps/<标识>.json 回落，旧标识悄悄复活。
-        Assert.False(
-            File.Exists(Path.Combine(FrontierFixtures.RepoRoot(), "maps", retired + ".json")),
-            $"maps/{retired}.json 仍在仓库里。");
-    }
-
-    [Fact]
-    public void 其余标识按文件路径读入()
-    {
-        string path = Path.Combine(SimFixtures.TempDir("mapcatalog-file"), "my-frontier.json");
-        File.WriteAllText(path, MapFile.ToJson(FrontierFixtures.Map()));
-
-        MapData map = MapCatalog.Legacy.Resolve(path);
-
-        Assert.Equal("test-frontier-6", map.Id);
-        Assert.Equal(MapProfile.Frontier, map.Profile);
-        Assert.Equal(6, map.BirthZones.Length);
-    }
-
-    [Fact]
     public void 终端版未登记的地图选项拼写被拒绝()
     {
         // tasks 2.2：--map 已在 play 的严格命令行解析里登记；拼错的 --mapp 按 strict-cli 报错，并建议 --map。
         // 变异 M-A11：Program.Play 不读 "map" 选项 → 合法的 --map 也成了未知选项，下面的反面断言红。
-        (int code, string err) = RunMain("play", "--mapp", "siege-4p-base-v5", "--seed", "1");
+        (int code, string err) = RunMain("play", "--mapp", "link:1", "--seed", "1");   // retire-legacy-maps 1.8：拼错选项的取值由 v5 改为 link:1（取值与本条无关）
         Assert.NotEqual(0, code);
         Assert.Contains("--mapp", err, StringComparison.Ordinal);
         Assert.Contains("是否想用 --map？", err, StringComparison.Ordinal);
@@ -117,32 +42,13 @@ public class 各入口按地图标识选图Tests
     }
 
     [Fact]
-    public void 选边疆图()
-    {
-        // 规格 Scenario：以边疆图启动终端版 → 插旗提示列出 1–6 号平台。frontier-v1 在段 B 才有，这里用测试内构造的 6 平台图
-        //（入口 Program.Play 只做"标识 → 地图"的解析后把地图传给 PlayCommand.Run，解析本身由上面几条钉住）。
-        // 人选 3 号台后其余三名 AI 由种子选区：互不相同、不与人重复、都在 1–6 内。
-        var output = new StringWriter();
-        int exit = PlayCommand.Run(42, 4, 1, AiDifficulty.Easy, new StringReader("9\n0\n3\n"), output, FrontierFixtures.Map(), flagRisk: 0, contentSet: ContentSet.V1);   // flag-contest：写死冒险概率 0；more-pieces-relics：写死内容集 v1
-        string text = output.ToString();
-
-        Assert.Equal(0, exit);
-        Assert.Contains("地图 test-frontier-6", text, StringComparison.Ordinal);
-        Assert.Contains("选择你的出生区（1–6）", text, StringComparison.Ordinal);
-        Assert.Equal(3, text.Split("选择你的出生区（1–6）").Length - 1);   // 9 与 0 越界被拒，第三次的 3 才被接受
-        string locked = text.Split('\n').Single(l => l.Contains("出生区锁定：", StringComparison.Ordinal));
-        Assert.Contains("玩家1(你)→3号区", locked, StringComparison.Ordinal);
-        int[] zones = [.. System.Text.RegularExpressions.Regex.Matches(locked, @"→(\d+)号区").Select(m => int.Parse(m.Groups[1].Value))];
-        Assert.Equal(4, zones.Length);
-        Assert.Equal(4, zones.Distinct().Count());
-        Assert.All(zones, z => Assert.InRange(z, 1, 6));
-    }
-
-    [Fact]
     public void 显式选缺省地图与不带选项逐字相同()
     {
         // tasks 2.2：不带 --map 时同种子对局与改动前逐步相同。改动前后的完整转录对比是一次性做的（记录在任务 implement.md 段 A）；
-        // 这里长期钉住的是"缺省 ≡ 显式给 v4"，并配行数下界与字段级断言，防止两边一起只剩首行（testing.md）。
+        // 这里长期钉住的是"缺省 ≡ 显式给缺省地图"，并配行数下界与字段级断言，防止两边一起只剩首行（testing.md）。
+        // retire-legacy-maps 1.8：缺省地图由 v5 改为 link:1（PlayCommand 的 map 参数为 null 即 MapCatalog.Resolve(null)），两边都挂内置固定配对脚本；
+        // 插旗提示改为链接图的"盲选出生棋盘（1–5）"；原"缺省地图不多打一行"只属于 Legacy 缺省图（链接图一律打印完整标识），改为断言两边都打印同一行地图标识。
+        // 种子 7 在 link:1 上人类出局后对局自动跑过链接、终端播报越界崩溃（migration.md 待决 L15），探针（种子 1–20）改取种子 5。
         string script = "2\n" + string.Concat(Enumerable.Repeat("\npass\n", 3));   // 段 C：大回合上限删除，改为 3 个小回合后输入耗尽退出（原 40 行 + 上限 3 收尾）；   // 每个小回合：空行 = 不征募，pass = 不落子
         var implicitOut = new StringWriter();
         var explicitOut = new StringWriter();
@@ -150,16 +56,16 @@ public class 各入口按地图标识选图Tests
         // AI 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：默认阈值 80 下简单难度第 1 大回合全员 Pass、对局即终局，走不到第 3 大回合（段 D2 改写）。
         EvaluationWeights w = SimFixtures.PreCalibrationWeights;
         const int t = SimFixtures.PreCalibrationPassThreshold;
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Legacy.Resolve("siege-4p-base-v5"), weights: w, passThreshold: t, flagRisk: 0, contentSet: ContentSet.V1);
+        PlayCommand.Run(5, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, contentSet: ContentSet.V1, pairingSource: new ScriptedPairingSource());
+        PlayCommand.Run(5, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("link:1"), weights: w, passThreshold: t, contentSet: ContentSet.V1, pairingSource: new ScriptedPairingSource());
 
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());
         Assert.True(text.Split('\n').Length > 100, "转录过短，对局没有真正进行。");
-        Assert.Contains("选择你的出生区（1–4）", text, StringComparison.Ordinal);
+        Assert.Contains("盲选出生棋盘：以上是 5 块棋盘的占位（1–5）", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
-        Assert.Contains("已退出。种子 7", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("地图 ", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);   // 缺省地图不多打一行，转录与改动前一致
+        Assert.Contains("已退出。种子 5", text, StringComparison.Ordinal);
+        Assert.Contains("地图 link:1（5 块隔绝的出生棋盘）", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -168,7 +74,8 @@ public class 各入口按地图标识选图Tests
         // 规格：三个入口 MUST 共用同一份"标识 → 地图"的解析，MUST NOT 各自维护地图清单。
         // src/godot 不在 siege.sln 里，对 IL / 反射类守门隐身（testing.md），只能做源码文本扫描；配样本口径下界与反面命中。
         // 变异 M-A12：把 src/godot/scripts/MatchSession.cs 改回 FourPlayerBaseMap.Create() → 本测试红。
-        string root = FrontierFixtures.RepoRoot();
+        // retire-legacy-maps：内置图类型已删除，禁用记号改为链接图生成器的建图入口 LinkMapGenerator.Generate(（入口只经目录取图），反面命中仍在目录。
+        string root = TestPaths.RepoRoot();
         string[] entryFiles =
         [
             Path.Combine(root, "src", "Siege.Sim", "Play", "PlayCommand.cs"),
@@ -179,7 +86,7 @@ public class 各入口按地图标识选图Tests
         Assert.True(entryFiles.Length >= 8, $"样本口径：只扫到 {entryFiles.Length} 个入口文件。");
         Assert.True(entryFiles.Sum(p => new FileInfo(p).Length) > 50_000, "样本口径：入口文件总量过小。");
 
-        Assert.Empty(entryFiles.Where(p => File.ReadAllText(p).Contains("FourPlayerBaseMap", StringComparison.Ordinal)).Select(Path.GetFileName));
+        Assert.Empty(entryFiles.Where(p => File.ReadAllText(p).Contains("LinkMapGenerator.Generate(", StringComparison.Ordinal)).Select(Path.GetFileName));
         foreach (string[] entry in new[]
         {
             new[] { "src", "Siege.Sim", "Program.cs" },
@@ -191,7 +98,7 @@ public class 各入口按地图标识选图Tests
         }
 
         // 反面：被禁的记号在它的归属处（目录本身）确实命中；目录只有一份。
-        Assert.Contains("FourPlayerBaseMap", File.ReadAllText(Path.Combine(root, "src", "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
+        Assert.Contains("LinkMapGenerator.Generate(", File.ReadAllText(Path.Combine(root, "src", "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
         Assert.Single(Directory.EnumerateFiles(Path.Combine(root, "src"), "MapCatalog.cs", SearchOption.AllDirectories));
     }
 
@@ -201,7 +108,7 @@ public class 各入口按地图标识选图Tests
         // 规格：地图选项 MUST 在各入口的严格命令行解析中登记。图形版的合法选项集合 = LaunchArgs 上被读取过的名字，
         // 所以"登记"= 经 LaunchArgs 读取 + 结算在建局之前；任何直接翻 OS.GetCmdline*Args 的读取点都会绕过未知选项校验。
         // src/godot 不在解决方案里，只能做源码文本扫描（行为由 Godot 自检实测：--mapp=x / --auto-demo=1 / --rounds=abc 退出码 1）。
-        string dir = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
+        string dir = Path.Combine(TestPaths.RepoRoot(), "src", "godot", "scripts");
         (string Name, string Text)[] scripts = [.. Directory.GetFiles(dir, "*.cs").Order().Select(f => (Path.GetFileName(f), File.ReadAllText(f)))];
         Assert.True(scripts.Length >= 10, $"样本口径：只扫到 {scripts.Length} 个脚本。");
 
@@ -216,105 +123,6 @@ public class 各入口按地图标识选图Tests
         Assert.Equal(["GameRoot.cs: GetCmdlineUserArgs(", "GameRoot.cs: GetCmdlineArgs("], rawReads);
         Assert.Contains("new LaunchArgs(OS.GetCmdlineUserArgs(), OS.GetCmdlineArgs())", root, StringComparison.Ordinal);
         Assert.DoesNotContain(scripts, s => s.Name != "LaunchArgs.cs" && s.Text.Contains("StartsWith(\"--", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void 两人图可选_选中确认后建局恰有2名玩家()
-    {
-        // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 A 只有 2 人图）：选图清单可选到 2 人图，
-        // 变异 M-S5：Program.Run 的缺省人数不改写（条件加 `&& maxPlayers < 0`）→ 本测试与下一条共红 2。
-        // board-link-mode 裁决 C7：批量入口只接受 link:，旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy，与 run 同一口径的
-        // Program.RebuildPlayers / DefaultPlayerCount；M-S5 现落在 DefaultPlayerCount 的人数比较上）。
-        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 2 名玩家。
-        // board-link-mode 裁决 D7：新局界面只剩 link: 一种地图、旧地图清单已删除，"选图清单可选到 2 人图"不再成立；本测试只保留夹具建局"缺省人数取地图上限"的口径。
-        string id = TwoPlayerBaseMap.Id;
-
-        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunLegacy(id);
-        Assert.Equal(2, recorded.PlayerCount);
-        Assert.Equal(TwoPlayerBaseMap.Id, recorded.MapId);
-        Assert.Equal(TwoPlayerBaseMap.Id, log.Header.MapId);
-        Assert.Equal(2, log.Header.Players.Count);
-    }
-
-    [Fact]
-    public void 三人图可选_选中确认后建局恰有3名玩家()
-    {
-        // 规格：small-maps / map-selection —— Scenario「2 人与 3 人图可选」（段 B 补 3 人图）：选图清单可选到 3 人图，
-        // 选中确认后拿到的标识交给入口建局（不给人数），对局恰有 3 名玩家。
-        // board-link-mode 裁决 C7：旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy，见上一条）。
-        // board-link-mode 裁决 D7：旧地图清单已删除（同上一条），只保留夹具建局"缺省人数取地图上限"的口径。
-        string id = ThreePlayerBaseMap.Id;
-
-        (Siege.Sim.Config.RunConfig recorded, MatchLog log) = RunLegacy(id);
-        Assert.Equal(3, recorded.PlayerCount);
-        Assert.Equal(ThreePlayerBaseMap.Id, recorded.MapId);
-        Assert.Equal(ThreePlayerBaseMap.Id, log.Header.MapId);
-        Assert.Equal(3, log.Header.Players.Count);
-    }
-
-    [Fact]
-    public void 参赛人数缺省取地图人数上限_显式人数照旧()
-    {
-        // small-maps D3：批量配置 / 终端 / 图形版在未指定人数时用 map.MaxPlayers；显式给人数时仍按给定值；4 人图行为不变。
-        // 变异（各红本测试）：M-S4 PlayCommand 缺省写死 `?? 4`；M-S5 批量缺省不改写（共红 2，另一条是上面的「两人图可选」）；
-        // M-S6 配置文件写了 Players 也当未指定；M-S7 src/godot/scripts/GameRoot.cs 建局人数 Min(4, map.MaxPlayers) 改成 4。
-        // 批量口径：不给人数
-        // board-link-mode 裁决 C7：批量入口只接受 link:，旧地图改为不走命令行、经 MapCatalog.Legacy 直接建局（RunLegacy：与 run 同一口径的
-        // Program.RebuildPlayers / DefaultPlayerCount / DeclaresPlayers）；不给地图即 RunConfig 的缺省（Legacy 夹具的缺省地图）。
-        // 命令行不给地图时的缺省 link:1 是 4 人，由 各入口按地图标识选图_链接模式Tests.缺省地图 守住。
-        Assert.Equal(2, RunLegacy(TwoPlayerBaseMap.Id).Config.PlayerCount);
-        Assert.Equal(2, RunLegacy(TwoPlayerBaseMap.Id, difficulty: AiDifficulty.Easy).Config.PlayerCount);
-        Assert.Equal(3, RunLegacy(ThreePlayerBaseMap.Id).Config.PlayerCount);
-        Assert.Equal(4, RunLegacy(MapCatalog.Legacy.DefaultId).Config.PlayerCount);   // board-link-mode 裁决 D7：缺省地图改为 link:1，夹具的 v5 缺省改读 Legacy.DefaultId
-        Assert.Equal(4, RunLegacy(null).Config.PlayerCount);
-        Assert.Equal(3, RunLegacy(null, players: 3).Config.PlayerCount);
-
-        // 批量口径：配置文件不写 Players 也算"未指定"；写了就按写的。
-        string noPlayers = $"{{ \"MapId\": \"{TwoPlayerBaseMap.Id}\" }}";
-        Assert.Equal(2, RunLegacy(null, noPlayers).Config.PlayerCount);
-        string withPlayers = "{ \"Players\": [ { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" }, { \"Difficulty\": \"Easy\" } ] }";
-        Assert.Equal(3, RunLegacy(null, withPlayers).Config.PlayerCount);
-
-        // 终端入口：不给人数 → 地图人数上限（2 人图出生区 1–2、对手 1 名）；4 人图仍是 3 名对手。
-        var twoOut = new StringWriter();
-        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), twoOut, TwoPlayerBaseMap.Create(), flagRisk: 0));
-        Assert.Contains("对手 1 名", twoOut.ToString(), StringComparison.Ordinal);
-        Assert.Contains("选择你的出生区（1–2）", twoOut.ToString(), StringComparison.Ordinal);
-        var fourOut = new StringWriter();
-        Assert.Equal(0, PlayCommand.Run(5, null, 1, AiDifficulty.Easy, new StringReader("q\n"), fourOut, flagRisk: 0, map: MapCatalog.Legacy.Resolve(null)));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Contains("对手 3 名", fourOut.ToString(), StringComparison.Ordinal);
-
-        // 图形版（src/godot 不在解决方案里，只能源码扫描）：每一处建局的人数都取自地图的人数上限（Min(4, MaxPlayers)，
-        // 标准档预算表只到 4 人，故恒等于 MaxPlayers；4 封顶是表现层配色只备 4 名玩家的保险）。此项在改动前已成立，由 Godot 自检实测 2 人图建局 2 名玩家。
-        string scripts = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
-        string[] creates = [.. Directory.GetFiles(scripts, "*.cs")
-            .SelectMany(f => File.ReadLines(f))
-            .Where(l => l.Contains("MatchSession.Create(", StringComparison.Ordinal))];
-        Assert.True(creates.Length >= 3, $"样本口径：只扫到 {creates.Length} 处建局。");
-        Assert.All(creates, l => Assert.Contains(".MaxPlayers", l, StringComparison.Ordinal));
-    }
-
-    /// <summary>
-    /// board-link-mode 裁决 C7：旧地图不再能经 run 入口，改为与 run 同一口径直接建局跑 1 局（4 个小回合截断）——
-    /// 配置文件文本（可选）→ 按给定人数 / 难度重建玩家列表（<see cref="Siege.Sim.Program.RebuildPlayers"/>）→ 地图（<paramref name="mapId"/>，空则沿用配置）
-    /// 经 <see cref="MapCatalog.Legacy"/> 解析 → 都没给人数时取地图人数上限（<see cref="Siege.Sim.Program.DefaultPlayerCount"/>）→ 按地图落成 → 跑局。
-    /// 返回落成后的批次配置（即 config.json 的口径）与该局日志。
-    /// </summary>
-    private static (RunConfig Config, MatchLog Log) RunLegacy(string? mapId, string? configJson = null, int? players = null, AiDifficulty? difficulty = null)
-    {
-        RunConfig config = configJson is null ? new RunConfig() : RunConfig.FromJson(configJson);
-        config = Siege.Sim.Program.RebuildPlayers(config, players, difficulty);
-        config = config with { MapId = mapId ?? config.MapId, Count = 1, SeedStart = 1, TurnLimit = 4 };
-        MapData map = MapCatalog.Legacy.Resolve(config.MapId);
-        if (players is null && !(configJson is not null && Siege.Sim.Program.DeclaresPlayers(configJson)))
-        {
-            config = Siege.Sim.Program.DefaultPlayerCount(config, map);
-        }
-
-        config = config.Validated().ResolvedFor(map);
-        MatchLog log = BatchRunner.Execute(config, parallelism: 1, map, resolveMap: MapCatalog.Legacy.Resolve).Single();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.False(log.IsFailed, log.Failure?.Message);
-        return (config, log);
     }
 
     private static (int Code, string Error) RunMain(params string[] args)

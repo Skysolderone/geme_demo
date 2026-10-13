@@ -91,4 +91,13 @@ internal static class TestMaps
 
     internal static string[] Notations(this IEnumerable<Coord> coords) =>
         coords.Select(c => c.ToNotation()).ToArray();
+
+    /// <summary>
+    /// 左下角 (<paramref name="x0"/>, <paramref name="y0"/>)、宽 <paramref name="w"/> 高 <paramref name="h"/> 的矩形格集
+    /// （retire-legacy-maps：原 <c>FrontierFixtures.Rect</c>，随旧地图夹具删除而原样迁到这里）。
+    /// </summary>
+    internal static IEnumerable<Coord> Rect(int x0, int y0, int w, int h) =>
+        from y in Enumerable.Range(y0, h)
+        from x in Enumerable.Range(x0, w)
+        select new Coord(x, y);
 }

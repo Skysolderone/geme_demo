@@ -129,8 +129,9 @@ public class 专家难度的一层前瞻Tests
         // 本 change 之前的专家日志首部只有前瞻宽度 4、没有多样补充上限与两层权重 → 按一层配置重建，回放逐步一致，重新产生的前瞻记录与日志逐条相同。
         // 替身（段 A）：sim-out 不入库，这里用"显式一层配置产出的日志"——两项为 0 不写出，首部与改动前的专家日志同形；一层配置与改动前的专家逐步相同由 G1 钉住。
         // 段 B（tasks 2.1）补真实的 expert-lookahead 冒烟日志夹具。
-        RunConfig config = V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = OneLayerConfig() }, Standard, Standard, Standard) with { TurnLimit = 16 };
-        MatchLog log = MatchSession.Create(config, 1, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        // retire-legacy-maps 1.4：样本局由 v5 改到 link:1（内置固定配对脚本），断言不变。
+        RunConfig config = LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = OneLayerConfig() }, Standard, Standard, Standard) with { TurnLimit = 16 };
+        MatchLog log = CreateSession(config, 1).Run();
         string header = log.DeterministicText().Split('\n')[0];
         Assert.Contains("\"LookaheadWidth\":4", header, StringComparison.Ordinal);
         Assert.DoesNotContain("DiverseSupplementLimit", header, StringComparison.Ordinal);
@@ -142,7 +143,7 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(0, search.TwoPlyWeightPermille);
         Assert.Equal(OneLayerConfig(), search);
         Assert.Contains(old.LookaheadTurns, t => t.Lookahead!.Status == nameof(LookaheadStatus.Applied));
-        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(old);
         Assert.True(replay.Identical, replay.ToString());
     }
 
@@ -178,7 +179,7 @@ public class 专家难度的一层前瞻Tests
     public void 前瞻宽度为1且关闭多样候选时与高难逐步相同()
     {
         // G2（expert-strength D6；沿用 expert-lookahead 的"前瞻宽度为 1 时与高难逐步相同"，改配置）：
-        // v5、种子 1、整局：玩家 1 为"前瞻宽度 1、多样补充上限 0、两层权重 1000‰（显式给出）、其余同专家预设"的配置，对照同座位的高难，其余三名标准。每一步决策与日志的小回合 / 事件逐项相同。
+        // link:1、种子 1、整局（retire-legacy-maps 1.4：原 v5）：玩家 1 为"前瞻宽度 1、多样补充上限 0、两层权重 1000‰（显式给出）、其余同专家预设"的配置，对照同座位的高难，其余三名标准。每一步决策与日志的小回合 / 事件逐项相同。
         // 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后两层权重不再取预设值，改为显式 1000‰——否则 E-G3（W = 1 时仍计两层加分）在 λ = 0 下测不到。
         // D1：前瞻集去掉空批次再取第一个，与高难在含空批次的集合上 CandidateSelection.Best 一致（非空候选总分严格大于空批次）。
         // 变异 M-A9（前瞻里消费一次 ai-<玩家>）→ 见 expert-lookahead 段 A 实施记录；变异 E-G3（W = 1 时仍计两层加分）→ 见 expert-strength 段 A 实施记录。
@@ -218,21 +219,22 @@ public class 专家难度的一层前瞻Tests
     }
 
     /// <summary>
-    /// G1 黄金值（expert-strength tasks 1.1）：改动任何代码之前（HEAD c630d59）用当时的专家预设（= 一层配置）取下。
-    /// v5、座位 1（P0）为专家、其余三名标准、写死权重与停手阈值 80（<see cref="V5Config"/>）；每颗种子记
+    /// G1 黄金值（expert-strength tasks 1.1 起；retire-legacy-maps 1.4 改钉，裁决 L2 / L8）：在删除 <c>siege-4p-base-v5</c> 之前、以当时的实现在 <c>link:1</c> 上取下。
+    /// <c>link:1</c>、对局种子 1–3、内置固定配对脚本、座位 1（P0）为专家、其余三名标准、写死权重与停手阈值 80（<see cref="LinkConfig"/>）、截断到第 12 大回合；每颗种子记
     /// （决策条数、决策序列的 SHA-256、ai-P0 子流消费次数、前瞻记录条数、前瞻记录 <see cref="LookaheadRecord.ToText"/> 逐条换行拼接的 SHA-256）。
+    /// 原 v5 黄金值（种子 1–3）随 v5 删除，不再保留。
     /// </summary>
     internal static readonly (ulong Seed, int Decisions, string DecisionsHash, long Consumed, int Records, string RecordsHash)[] G1Golden =
     [
-        (1, 14, "763028350CD893FFF9AECEC02D3B430EA06C3D21361C79F496ADF9A64AF844D4", 4557, 7, "50A657428BC1D0321BD170FCD8E9DD0A9BF635B373E86B2447439847C151E7C3"),
-        (2, 14, "7EDF5EBDFD1039EF58AB1B475E7E8183DA4D63B2279CAFE2D245F16C157B7720", 4867, 7, "A47D605F53878A0AA1EF5647E27D396347146C5E212E424F74885F7860A102B5"),
-        (3, 20, "2DA476BC7318C10FB6293DEB9969333F86068FF9AE8A6896ED2292CE3950B204", 5797, 10, "BF4A832E6A7011FEB8F2791C366CE223302EB5205F89A7FEAA3E2343D56D62DF"),
+        (1, 18, "9931058863ADB025241AD07A080304D866C734682C6569F13707232C6BAEBC28", 3069, 9, "6B948F9BE9D4C936E7B182DDDBF6D62CF9F430A1CB709B22CEFE98EA12CDEBAD"),
+        (2, 22, "C4572AE899F5F15E93EE14666B3E7643873F48BC38DC6B0E13A577A04F53BB07", 7502, 11, "C37EE64F2003D94B810EAB176EDC59C0ACD12982A149B68BB471B56CCCFB2468"),
+        (3, 24, "BAA330579B45A00F022B9266B61367A41B21F9ECEECA919DC41B7F6E64C1F15F", 6510, 12, "851B180F47D084F86B86BCCC6705B90E172B524DD956361EE8CD2622A57E0C88"),
     ];
 
     /// <summary>G1 口径的一局：座位 1（P0）按 <paramref name="search"/> 做专家，与 <see cref="G1Golden"/> 逐项比对。</summary>
-    private static void AssertG1(AiSearchConfig search, ulong seed)
+    private static void AssertG1(AiSearchConfig search, ulong seed, int cellLimit = 0)
     {
-        (IReadOnlyList<string> decisions, long consumed, List<string> records) = RunExpertSeat0(search, seed);
+        (IReadOnlyList<string> decisions, long consumed, List<string> records) = RunExpertSeat0(search, seed, cellLimit);
         string actual = $"{seed} {decisions.Count} {Sha256(decisions)} {consumed} {records.Count} {Sha256(records)}";
 
         // 样本口径：该局专家确有已前瞻的决策，决策不止几条，扰动子流确被消费。
@@ -244,17 +246,19 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal($"{golden.Seed} {golden.Decisions} {golden.DecisionsHash} {golden.Consumed} {golden.Records} {golden.RecordsHash}", actual);
     }
 
-    /// <summary>v5 整局：座位 1（P0）按 <paramref name="search"/> 做专家，其余三名标准；返回 P0 的决策序列、ai-P0 子流消费次数与每次部署的前瞻记录文本。</summary>
-    internal static (IReadOnlyList<string> Decisions, long Consumed, List<string> Records) RunExpertSeat0(AiSearchConfig search, ulong seed)
+    /// <summary>
+    /// <c>link:1</c> 一局（retire-legacy-maps 1.4：原 v5 整局）：座位 1（P0）按 <paramref name="search"/> 做专家，其余三名标准，内置固定配对脚本、截断到第 12 大回合；
+    /// 返回 P0 的决策序列、ai-P0 子流消费次数与每次部署的前瞻记录文本。<paramref name="cellLimit"/> 是跑局配置的候选格上限（只作用于未显式给 Search 的三名标准）。
+    /// </summary>
+    internal static (IReadOnlyList<string> Decisions, long Consumed, List<string> Records) RunExpertSeat0(AiSearchConfig search, ulong seed, int cellLimit = 0)
     {
-        MatchSession session = MatchSession.Create(
-            V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = CreateSession(
+            LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = cellLimit }, seed);
         Siege.Core.Determinism.RandomStream stream = session.Match.Seed.Stream(HeuristicAi.StreamName(P0));
         var inner = new HeuristicTurnController(P0, session.Match.Publish, stream, AiDifficulty.Expert, Weights, search);
         var recorder = new LookaheadRecorder(inner);
         session.SetController(P0, recorder);
-        MatchLog log = session.Run();
-        Assert.Null(log.Failure);
+        RunToRound(session);
         return (inner.Decisions, stream.Consumed, recorder.Records);
     }
 
@@ -265,10 +269,11 @@ public class 专家难度的一层前瞻Tests
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]
-    public void 一层配置与改动前的专家逐步相同(ulong seed)
+    public void 一层配置的专家黄金值(ulong seed)
     {
-        // G1（expert-strength D6）：前瞻宽度 4、多样补充上限 0、两层权重 0、其余同专家预设的配置，在 v5 种子 1–3 上（1 专家 + 3 标准）
-        // 与改动之前的专家实现逐项相同：决策序列、ai-P0 子流消费次数、前瞻记录的确定性文本。黄金值见 G1Golden（改动前取下）。
+        // retire-legacy-maps 1.4：测试名随规格 Scenario 改名（原「一层配置与改动前的专家逐步相同」），地图改 link:1（原 v5），断言不变。
+        // G1（expert-strength D6）：前瞻宽度 4、多样补充上限 0、两层权重 0、其余同专家预设的配置，在 link:1 种子 1–3 上（1 专家 + 3 标准、固定配对脚本、截断第 12 大回合）
+        // 与钉入的黄金值逐项相同：决策序列、ai-P0 子流消费次数、前瞻记录的确定性文本。黄金值见 G1Golden。
         AssertG1(OneLayerConfig(), seed);
     }
 
@@ -276,23 +281,25 @@ public class 专家难度的一层前瞻Tests
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]
-    public void 缺省预设的专家与改动前的专家逐步相同(ulong seed)
+    public void 缺省预设的专家与一层配置逐步相同(ulong seed)
     {
+        // retire-legacy-maps 1.4：测试名随规格 Scenario 改名（原「缺省预设的专家与改动前的专家逐步相同」），地图改 link:1（原 v5），断言不变。
         // 预设退回一层（负责人裁决 2026-09-28，段 B 后：扩样配对 好 7 / 同 33 / 差 20，p = 0.019，λ = 1000‰、S = 8 的专家弱于高难）：
-        // 缺省专家预设（只改停手阈值为夹具写死的 80）在 v5 种子 1–3 上与 G1 黄金值（改动前的专家）逐项相同。
-        // 另钉解析路径：未显式给 Search 的专家玩家，会话落成的搜索配置就是这份预设（v5 不触发候选格上限）。
+        // 缺省专家预设（只改停手阈值为夹具写死的 80）在 link:1 种子 1–3 上与 G1 黄金值逐项相同。
+        // 另钉解析路径：未显式给 Search 的专家玩家，会话落成的搜索配置就是这份预设。v5 本来不触发候选格上限；link:1 可落子格 > 150 会按地图落成 K = 24，
+        // 这里显式给跑局配置 K = 0（候选格上限是跑局层参数，不是预设的一部分），使落成的配置仍逐字段等于预设、走法与 G1 同口径。
         // 变异 E-P1 / E-P2（预设的多样补充上限改回 8 / 两层权重改回 1000）→ 本测试红（见预设退回记录）。
         AiSearchConfig preset = AiSearchConfig.Expert with { PassThreshold = PassThreshold };
-        MatchSession session = MatchSession.Create(V5Config(new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = CreateSession(LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, Standard, Standard, Standard) with { CandidateCellLimit = 0 }, seed);
         Assert.Equal(preset, session.AiOf(P0)!.Config);
         AssertG1(preset, seed);
     }
 
-    /// <summary>v5 种子 1 整局：玩家 1 按给定难度与显式搜索配置，其余三名标准；返回日志与玩家 1 的决策日志。</summary>
+    /// <summary>link:1 种子 1 整局（retire-legacy-maps 1.4：原 v5）：玩家 1 按给定难度与显式搜索配置，其余三名标准；返回日志与玩家 1 的决策日志。</summary>
     internal static (MatchLog Log, IReadOnlyList<string> Decisions) RunSeat1(AiDifficulty difficulty, AiSearchConfig search)
     {
-        MatchSession session = MatchSession.Create(
-            V5Config(Standard, new PlayerAiConfig { Difficulty = difficulty, Search = search }, Standard, Standard), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = CreateSession(
+            LinkConfig(Standard, new PlayerAiConfig { Difficulty = difficulty, Search = search }, Standard, Standard), 1);
         HeuristicTurnController ai = session.AiOf(P1)!;
         Assert.Equal(search, ai.Config);
         MatchLog log = session.Run();

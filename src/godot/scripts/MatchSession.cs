@@ -35,8 +35,8 @@ public sealed class MatchSession
         Difficulty = difficulty;
         // AI 候选格上限：未显式给出时按地图的可落子格数取（阈值逻辑在 Core，与批量 / 终端版共用）。
         Search = AiSearchConfig.ForMap(difficulty, match.Map.PlayableCount, cellLimit).Validated();
-        // AI 评价权重（v2-recalibration D6）：本局地图登记了地图专属覆盖就取覆盖，否则取缺省表——经 Core 的唯一实现，不自带对照表。
-        Weights = EvaluationWeights.ForMapId(match.Map.Id);
+        // AI 评价权重：缺省表（retire-legacy-maps 3.3：地图专属评价权重覆盖随 2 人图删除）。
+        Weights = EvaluationWeights.Default;
         World = BuildWorld();
     }
 
@@ -172,8 +172,8 @@ public sealed class MatchSession
 
     /// <summary>
     /// 开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（链接图 <c>link:&lt;地图种子&gt;</c>），本机玩家坐第 <paramref name="seat"/> 位（1 起）。
-    /// 链接图一律以链接模式建局（board-link-mode 实现裁决 B1 / D7）并挂 <paramref name="pairing"/>（D3：有人值守真随机、无人值守固定脚本，由 <c>GameRoot</c> 决定）；
-    /// 其余地图是 Legacy 夹具（图形版入口已不可达），仍以旧模式建局、不挂来源。
+    /// 一律以链接模式建局（board-link-mode 实现裁决 B1 / D7；retire-legacy-maps 3.6：建局分叉删除，公开 <c>MatchFlow.Create</c> 恒为链接模式）
+    /// 并挂 <paramref name="pairing"/>（D3：有人值守真随机、无人值守固定脚本，由 <c>GameRoot</c> 决定）。
     /// <paramref name="carryInOut"/> 为真即开启带入带出（carry-in-out D10）：本机玩家带 <paramref name="carry"/>（可为空），
     /// 各 AI 按"与本机玩家同等数量"从 <c>carry-ai</c> 子流抽取（<see cref="CarryAi.ForHumanMatch"/>，与终端版同一实现）。关闭时对局选项与引入之前相同。
     /// </summary>
@@ -182,19 +182,15 @@ public sealed class MatchSession
     {
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         PlayerId me = players[seat - 1];
-        bool link = LinkMapId.IsLinkMap(map.Id);
-        MatchOptions options = MatchOptions.Immediate with { Mode = link ? MatchMode.Link : MatchMode.Legacy };
+        MatchOptions options = MatchOptions.Immediate;
         if (carryInOut)
         {
             options = options with { CarryInOut = true, CarryIns = CarryAi.ForHumanMatch(new GameSeed(seed), players, me, carry, options.ContentSet) };
         }
 
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
-        if (link)
-        {
-            // 配对由对局外部给出（battlefield「配对事件由对局外部提供」）：没有来源的链接图对局会停在待配对阶段，图形版没有人工配对界面，所以必须挂一个。
-            match.PairingSource = pairing ?? throw new ArgumentException("链接图对局必须挂配对来源：有人值守用真随机，无人值守用内置固定脚本。", nameof(pairing));
-        }
+        // 配对由对局外部给出（battlefield「配对事件由对局外部提供」）：没有来源的链接图对局会停在待配对阶段，图形版没有人工配对界面，所以必须挂一个。
+        match.PairingSource = pairing ?? throw new ArgumentException("链接图对局必须挂配对来源：有人值守用真随机，无人值守用内置固定脚本。", nameof(pairing));
 
         return new MatchSession(match, me, seed, difficulty, cellLimit);
     }
@@ -311,7 +307,7 @@ public sealed class MatchSession
 
         Rebuild();   // 先重建世界再读同棋盘玩家（按座位视图在锁定后才有）
         ImmutableArray<PlayerId> sameBoard = World.SameBattlefieldPlayers;
-        Notice = $"出生棋盘锁定{(Match.Mode == MatchMode.Link ? sameBoard.IsEmpty ? "，这块棋盘只有你" : $"，同棋盘：{string.Join("、", sameBoard.Select(Siege.Presentation.Text.Labels.Player))}" : string.Empty)}。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
+        Notice = $"出生棋盘锁定{(sameBoard.IsEmpty ? "，这块棋盘只有你" : $"，同棋盘：{string.Join("、", sameBoard.Select(Siege.Presentation.Text.Labels.Player))}")}。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
         Rebuild();
     }
 

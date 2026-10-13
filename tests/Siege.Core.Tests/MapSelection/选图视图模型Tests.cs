@@ -204,7 +204,8 @@ public class 选图视图模型Tests
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
         Assert.Empty(preview.Cells);
-        Assert.Equal("13×13，4 个出生区，可落子 105 格", MapPreviewInfo.Of(ViewOf(FourPlayerBaseMap.Create())));   // 旧地图文案不变
+        // 旧地图（无占位）的文案不变。retire-legacy-maps 1.8：载体由 v5（13×13 / 105 格）改为 9×9 手写夹具（4 个出生区、81 格），文案格式不变。
+        Assert.Equal("9×9，4 个出生区，可落子 81 格", MapPreviewInfo.Of(ViewOf(MatchFixtures.Map())));
     }
 
     [Fact]
@@ -213,13 +214,25 @@ public class 选图视图模型Tests
         // 变异 MC-7：FriendlySeed 原样返回 → 本测试红（超过九位、相邻输入只差 1）。
         // 折叠函数在 Core 的标识唯一实现旁（三个入口共用：图形版裸 link、新局界面"换一张"、批量 / 终端版裸 link）。
         ulong[] raws = [0UL, 1UL, 2UL, 1789820032123456UL, 1789820032123457UL, ulong.MaxValue];
-        ulong[] seeds = [.. raws.Select(GeneratedMapId.FriendlySeed)];
+        // retire-legacy-maps 2.1：折叠函数自 GeneratedMapId 迁入 LinkMapId（原样搬运），断言不变。
+        ulong[] seeds = [.. raws.Select(LinkMapId.FriendlySeed)];
 
         Assert.All(seeds, s => Assert.InRange(s, 0UL, 999_999_999UL));
         Assert.Equal(seeds.Length, seeds.Distinct().Count());
-        Assert.Equal(seeds, raws.Select(GeneratedMapId.FriendlySeed));   // 纯函数
-        Assert.Equal(1_000_000_000UL, GeneratedMapId.FriendlySeedLimit);
+        Assert.Equal(seeds, raws.Select(LinkMapId.FriendlySeed));   // 纯函数
+        Assert.Equal(1_000_000_000UL, LinkMapId.FriendlySeedLimit);
         long gap = Math.Abs((long)seeds[3] - (long)seeds[4]);
         Assert.True(gap > 1000, $"相邻时间戳折出的种子只差 {gap}。");
     }
+
+    [Fact]
+    public void 短种子折叠迁入后输出逐位相同()
+    {
+        // retire-legacy-maps 2.1：LinkMapId.FriendlySeed 自已删除的 GeneratedMapId.FriendlySeed 原样迁入。迁移当时对同一批输入与旧实现逐位比对（见 migration.md 第 2 组），
+        // 旧实现删除后改为钉值：钉的是迁移当时旧实现的输出。
+        ulong[] raws = [0UL, 1UL, 2UL, 12345UL, 1789820032123456UL, 1789820032123457UL, ulong.MaxValue];
+        Assert.Equal(Golden, raws.Select(LinkMapId.FriendlySeed));
+    }
+
+    private static readonly ulong[] Golden = [0UL, 969246250UL, 774983618UL, 268246356UL, 102909540UL, 97086102UL, 142409162UL];
 }

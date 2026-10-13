@@ -18,47 +18,25 @@ namespace Siege.Core.Tests.AiDecision;
 public class 候选格上限Tests
 {
     /// <summary>
-    /// 黄金值：取自引入候选格上限<b>之前</b>的代码（工作树 = 段 A + 段 B）的实际运行结果——v4、种子 31、4 名 Standard AI、6 大回合，
-    /// 全部小回合快照（去耗时）逐行拼接后的 SHA-256。
-    /// <para>restore-go-core-rules 段 A 重建：计分口径（领地计分、加值进倍率、不封顶）与快照字段（删"生效倍率指数"）都变了，整局走法与快照文本随之变，
-    /// 旧值 83755037…403E18 作废。</para>
-    /// <para>段 B 再次重建：<b>走法一步没变</b>——把段 A 的快照文本与段 B 的逐条比对，去掉被删的 <c>TurnSnapshot.Sites</c> 与
-    /// <c>PlayerEntry.SiteScore</c> 两项之后 24 个小回合逐字节相同（比对脚本见 implement 记录）。变的只是快照 JSON 少了这两个字段，
-    /// 段 A 值 43D7E980…A757D 因此作废。新值取自段 B 完成后 K = 0 的实际运行，连跑两次一致；变异 M-K1 在新值下重跑仍红。</para>
-    /// <para>段 C 第三次重建：<b>走法一步没变</b>——段 B 提交（HEAD）用 <c>--max-rounds 6</c>、段 C 用 <c>--turn-limit 24</c> 各跑种子 31，
-    /// 两份日志的 24 个小回合快照去掉耗时、再去掉被改名的 <c>PlayerEntry.Protection</c> → <c>HasEstablishedPower</c> 之后逐条相同（比对脚本见 implement 记录）。
-    /// 变的只是快照 JSON 里这一个字段名（及其取值：保护状态 → 出局标记），段 B 值 96D6C02A…385917 因此作废。样本长度由规则级大回合上限 6
-    /// 改为跑局层小回合数截断 24（同为 24 个小回合）。</para>
-    /// <para>段 D 第四次重建：<b>走法确实变了</b>，变化只来自删除名次征募加成（裁决 #7）。段 C 提交（HEAD）与段 D 在同一测试夹具下各跑种子 31、24 个小回合，
-    /// 旧快照去掉被删的两个留痕字段后逐条比对：第 1 个小回合（全员并列名次 1、旧实现无加成）逐字节相同；第 2 个小回合起分叉，
-    /// 而分叉点恰是旧日志里第一次出现加成的小回合，且第 2、3 个小回合只差展示数 / 选取数（旧 5/4、6/4 → 新 5/3、5/3），
-    /// 第 4 个小回合起候选抽取不同、落点随之分叉。旧值 ABA5D7F9…229A65 在 HEAD 上重跑复现，因此作废；新值取自段 D 的实际运行。</para>
+    /// 黄金值（retire-legacy-maps 1.5 改钉）：9×9 手写夹具（<see cref="MatchFixtures"/>，Legacy 规则，裁决 L6）、种子 31、4 名标准 AI（权重与停手阈值写死为
+    /// <see cref="SimFixtures.PreCalibrationWeights"/> / <see cref="SimFixtures.PreCalibrationPassThreshold"/>）、跑满 6 个大回合，全体 AI 的决策日志（<see cref="AiFixtures.DecisionLog"/>）
+    /// 与终了盘面序列化的 SHA-256。在删除 v5 之前、以当时的实现钉下。
+    /// <para>原黄金值 <c>V4GoldenTurnHash</c>（v5、种子 31、24 个小回合的快照哈希，历次重建记录见 git 历史）随 v5 删除：v5 的 105 格不超过 150、缺省 K = 0，
+    /// 守的是"小图不限制时走法不变"；链接图一律超过 150 格（<c>link:1</c> 为 157），这条规则今后只能在手写小图上守（规格「小图不限制」：如 9×9 手写测试夹具）。</para>
     /// </summary>
-    // restore-go-core-rules 段 E：F3DA0A40…48D8F6E0 → 49BCFA49…11DEA30C。走法一步没变：快照新增 PlayerEntry.TerritoryScore 一个字段；
-    // 同一局 24 条快照逐条去掉该字段后的哈希恰为旧值 F3DA0A40…（临时探针实跑，roundtrip 逐字节一致），领地分非零 90 处。
-    // life-shape 段 B：49BCFA49…11DEA30C → F1B2CAB6…4ACEB088。<b>走法确实变了</b>，来源是活棋禁入 / 破坏活形生效：
-    // 改动前后的二进制各跑种子 31、24 个小回合，快照去掉耗时后前 15 个小回合逐条相同；第 16 个小回合（第 4 大回合、P0，保护期后第一手全图落子）起分叉——
-    // 旧落点 H2 / M8 / E9 中 M8、E9 在新规则下正是 P0 的禁入格（临时探针实测该时刻 P0 禁入 39 格），新落点 H2 / E5 / F12。新值连跑两次一致。
-    // 契约是否扣除禁入格不影响这一局（变异 M-B7「契约不扣除」下本测试仍绿：落进禁入格的候选在预演第 1 步被拒、不进排名）。
-    // life-shape 段 D：F1B2CAB6…4ACEB088 → CDEB4C13…70084563。走法一步没变：快照新增 TurnSnapshot.Life 一个字段（活形记录，4.1）；
-    // 同一局 24 条快照逐条去掉该字段（JsonNode 删键后重新序列化）的哈希恰为旧值 F1B2CAB6…（临时探针实跑），24 条快照的活形字段全部非空。
-    // ai-eye 段 A：CDEB4C13…70084563 → 14E1B0D2…104CBA72。<b>走法确实变了</b>，来源是 GroupSafety 改用活形查询（1.4：两眼潜力 = min(2, 眼值之和)、
-    // 已确定活形的安全分取公式上界常数 18）。新增的眼位 / 威胁两维默认权重为 0、不进总分（1.1 之后种子 1–20 的 4 AI 对局与改动前逐步相同，
-    // 比对含候选与预演事件）。改动前后的二进制各跑种子 31、24 个小回合：第 1 个小回合（P3）即分叉——旧落点 B10 / B11 / C12 全为要塞、
-    // 安全维原始值 12；新落点 B11 改为普通子、安全维 36（B10-B11 与 C12 两条棋串共享平台角上一块 8 格眼空间、眼值 2，均为已确定活形，各取常数 18），眼位原始值 8 = 2 + 2 × 3（权重 0）。新值连跑两次一致。
-    // ai-eye 段 B：14E1B0D2…104CBA72 → D1481DD5…772968BD，<b>走法确实变了</b>，分两步归因（每步都有独立的零变化证据）：
-    // ① 活形硬约束（2.2）：14E1B0D2… → 8EEC49A7…04679FC8。探针（硬约束判据短路为恒不淘汰、其余改动保留）跑种子 1–20 与改动前逐步相同（20 / 20，含候选与预演事件），
-    //    所以变化只来自淘汰本身。本局第 23 个小回合（第 6 大回合、P2）起分叉：旧落点 E12 协同子，新实现 Pass——E12 在 v5 上被地形围成 P2 的单格眼（四邻只有 F12 有气边）。
-    // ② 停手阈值缺省 20（2.3）：8EEC49A7… → D1481DD5…。阈值取 0 时整局重现 8EEC49A7…（停手阈值Tests.阈值为0时零变化 钉住）。
-    //    第 16 个小回合（第 4 大回合、P0）起分叉：旧选中批次 [G3 普通, G4 连珠, J9 要塞] = 1422 里 G3 是最后加入的一枚、边际提升 1422 − 1402 = 20，
-    //    恰等于阈值被撤回，该扰动次序改出 [G4 连珠, J9 要塞] = 1402；同分 1422 的另一候选 [G3 要塞, G4 普通, J9 连珠] 当选。新值连跑两次一致。
-    // life-single-stone（规则变更）：D1481DD5…772968BD → 35E25329…8B88D3D7，<b>走法确实变了</b>，来源只是单子上限（单子眼值之和 ≥ 2 也只判未定）：
-    // 探针 = 工作树只把三态判定里的 `when stoneCount > 1` 去掉（其余改动全保留），全量测试只红本 change 新增的 4 条，本测试与「阈值为0时零变化」
-    // 在旧常量下重新变绿，即两份哈希被逐字节复现。两份二进制各跑种子 31、24 个小回合逐条比对：第 1 个小回合（P3）落点 B10 / B11 / C12 不变，
-    // 快照只差活形记录——旧记录里单子 C12（与 B10-B11 共享平台角 8 格眼空间、眼值 2）的"确立"事件消失；第 2 个小回合（P0）起走法分叉：
-    // 旧落点 C2 连珠 + D3 匠人（立 D2–E2）两枚单子共享同一块 11 格眼空间、各自"确立"活形，新落点 C2 连珠 + B3 匠人（立 A2–B2）。
-    // 旧日志各小回合快照里的单子活形条数由 1 增到 26，新日志恒为 0。新值连跑两次一致。
-    internal const string V4GoldenTurnHash = "35E25329A68CDF9ADE5DD1EE424E923F8A01CB5C27D474CD047CBAC68B88D3D7";
+    internal const string SmallMapGoldenHash = "DEB4ED371A7E9EC71B08517058C06148B8919A8D4B26458FFC229C50EA3B87E4";
+
+    /// <summary>
+    /// 链接图上"此前记录过的对局"（retire-legacy-maps 1.5：原 v5 的 <c>V4GoldenTurnHash</c> 在 <c>对局内容集Tests</c>、<c>带入带出配置Tests</c>、<c>批量跑局Tests</c> 里充当这一角色）：
+    /// <c>link:1</c>、种子 31、4 名标准 AI、24 个小回合、跑局层（<see cref="BatchRunner"/>，种子派生配对）、<see cref="SimFixtures.PinPreCalibration"/> 写死口径，
+    /// 全部小回合快照（去耗时）逐行拼接后的 SHA-256（<see cref="TurnHash"/>）。在删除 v5 之前、以当时的实现钉下。
+    /// </summary>
+    internal const string LinkGoldenTurnHash = "B4A74124D2C6C25CD8576ACC8C444D3D4A71A7C076E9CC1310725C06C61BF498";
+
+    /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
+    internal static RunConfig LinkGoldenConfig() =>
+        SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1" });
+
 
     internal static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
@@ -95,20 +73,39 @@ public class 候选格上限Tests
 
     // ---------- K = 0：零变化 ----------
 
-    [Fact]
-    public void 缺省不限制时标准图整局与改动前逐步相同()
+    /// <summary>
+    /// 9×9 手写夹具上 4 名标准 AI 跑满 6 个大回合（retire-legacy-maps 1.5：原 v5 整局的替身，Legacy 规则，裁决 L6）：返回全体 AI 的决策日志与终了盘面序列化。
+    /// 权重与停手阈值写死为 <see cref="SimFixtures.PreCalibrationWeights"/> / <see cref="SimFixtures.PreCalibrationPassThreshold"/>（本测试钉的是"K 缺省不改变走法"，不是默认权重）。
+    /// </summary>
+    private static string SmallMapRun(AiSearchConfig config, ulong seed = 31)
     {
-        // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 本测试红。
-        // 段 A check 实跑：在重建后的黄金哈希上 M-K1 仍红 36（含本测试）——哈希虽是段 A 后重生成的，但不是自证的。
-        // ai-eye 段 D2（4.5）：黄金哈希产自定值之前的缺省（Eye / Threat 0、停手阈值 20），权重与阈值写死为该口径——本测试钉的是"K 缺省不改变走法"，不是默认权重。
-        MatchLog log = BatchRunner.Execute(
-            SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchFlow match = MatchFixtures.Started(new Siege.Core.Determinism.GameSeed(seed));
+        var runner = new MatchRunner(match);
+        ImmutableSortedDictionary<PlayerId, HeuristicTurnController> ais =
+            runner.AttachAi(AiDifficulty.Standard, SimFixtures.PreCalibrationWeights, config with { PassThreshold = SimFixtures.PreCalibrationPassThreshold });
+        runner.RunMajorRounds(6);
+        return AiFixtures.DecisionLog(ais) + "\n" + match.Board.Serialize();
+    }
 
-        Assert.False(log.IsFailed);
-        Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
-        Assert.Null(log.Header.Config.CandidateCellLimit);
-        string hash = TurnHash(log);
-        Assert.True(V4GoldenTurnHash == hash, $"种子 31 的小回合快照哈希变了：现为 {hash}。");
+    [Fact]
+    public void 小图不限制()
+    {
+        // retire-legacy-maps 1.5：原「缺省不限制时标准图整局与改动前逐步相同」（v5、种子 31、24 个小回合的快照黄金哈希），随 v5 改到 9×9 手写夹具，
+        // 测试名随规格 Scenario「小图不限制」（可落子格不超过 150 的地图，如 9×9 手写测试夹具）。所守规则不变：小图上缺省 K 为 0，决策与显式 K = 0 逐步相同，且与钉下的黄金值相同。
+        // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 黄金值红（retire-legacy-maps 改钉后重做，见 migration.md）。
+        int playable = MatchFixtures.Map().PlayableCount;
+        Assert.True(playable <= AiSearchConfig.LargeMapPlayableThreshold, $"夹具可落子格 {playable}");
+        AiSearchConfig auto = AiSearchConfig.ForMap(AiDifficulty.Standard, playable);
+        Assert.Equal(0, auto.CandidateCellLimit);
+
+        string byDefault = SmallMapRun(auto);
+        string explicitZero = SmallMapRun(StandardWith(0));
+        Assert.Equal(explicitZero, byDefault);
+
+        // 样本口径：6 个大回合里确有落子（不是全员 Pass 的空局）。
+        Assert.Contains(" D:", byDefault, StringComparison.Ordinal);
+        string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(byDefault)));
+        Assert.True(SmallMapGoldenHash == hash, $"9×9 夹具种子 31 的决策与盘面哈希变了：现为 {hash}。");
     }
 
     [Fact]
@@ -385,18 +382,19 @@ public class 候选格上限Tests
     [Fact]
     public void 启用后同种子两次运行逐步相同()
     {
-        // v4（105 格）上显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
-        // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局——实测 K = 8 在这个种子上与不限制逐步相同，证明不了 K 传到了 AI。
-        static MatchLog Run() => BatchRunner.Execute(
-            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { CandidateCellLimit = 2 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        // retire-legacy-maps 1.5：原在 v4（105 格）上跑，改到 link:1（157 格）；对照局由"v4 不限制的黄金局"改为同种子显式 K = 0 的一局，断言不变。
+        // 显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
+        // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局，证明 K 确实传到了 AI。
+        static MatchLog Run(int k) => BatchRunner.Execute(
+            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1", CandidateCellLimit = k }, parallelism: 1)[0];
 
         // 变异 M-K9：Sim 的 MatchSession 建 AI 时不传跑局配置的 K → 与不限制的那一局相同 → 本测试红。
-        MatchLog a = Run();
-        MatchLog b = Run();
+        MatchLog a = Run(2);
+        MatchLog b = Run(2);
 
         Assert.False(a.IsFailed);
         Assert.Equal(TurnHash(a), TurnHash(b));
-        Assert.NotEqual(V4GoldenTurnHash, TurnHash(a));   // K 确实传到了 AI：与不限制的那一局不同
+        Assert.NotEqual(TurnHash(Run(0)), TurnHash(a));   // K 确实传到了 AI：与不限制的那一局不同
         Assert.Equal(2, a.Header.Config.CandidateCellLimit);
     }
 
@@ -410,10 +408,11 @@ public class 候选格上限Tests
         Assert.Equal(AiSearchConfig.LargeMapCellLimit, AiSearchConfig.DefaultCellLimitFor(AiSearchConfig.LargeMapPlayableThreshold + 1));
         Assert.True(AiSearchConfig.LargeMapCellLimit > 0);
 
-        int v4 = MapCatalog.Legacy.Resolve(null).PlayableCount;
-        int frontier = MapCatalog.Legacy.Resolve(FrontierMapV2.Id).PlayableCount;
-        Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"v4 可落子格 {v4}");
-        Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"边疆图可落子格 {frontier}");
+        // retire-legacy-maps 1.5：小图由 v4（105 格）改为 9×9 手写夹具（81 格），大图由边疆图（411 格）改为 link:1（157 格）；断言不变。
+        int v4 = MatchFixtures.Map().PlayableCount;
+        int frontier = MapCatalog.Resolve("link:1").PlayableCount;
+        Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"小图可落子格 {v4}");
+        Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"大图可落子格 {frontier}");
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.ForDifficulty(d), AiSearchConfig.ForMap(d, v4)));
         Assert.Equal(StandardWith(AiSearchConfig.LargeMapCellLimit), AiSearchConfig.ForMap(AiDifficulty.Standard, frontier));
         Assert.Equal(AiSearchConfig.Standard, AiSearchConfig.ForMap(AiDifficulty.Standard, frontier, cellLimit: 0));
@@ -425,7 +424,7 @@ public class 候选格上限Tests
     {
         // src/godot 不在 siege.sln 里，只能做源码文本扫描（testing.md）；配样本口径下界与反面命中。
         // 变异 M-K6：把 src/godot/scripts/MatchSession.cs 的建 AI 一行改回 HeuristicAi.Create(Match, player, Difficulty) → 本测试红。M-K10：终端版同样改回 → 本测试红。
-        string root = FrontierFixtures.RepoRoot();
+        string root = TestPaths.RepoRoot();   // retire-legacy-maps：RepoRoot 由已删除的 FrontierFixtures 原样迁到 TestPaths
         string[][] entries =
         [
             ["src", "Siege.Sim", "Play", "PlayCommand.cs"],
@@ -459,25 +458,26 @@ public class 候选格上限Tests
     [Fact]
     public void 首部没有上限项的大图旧日志按不限制回放()
     {
-        // 该项出现之前的边疆图日志首部没有 CandidateCellLimit：当时就是不限制。回放 MUST NOT 按今天的大图缺省 K 重跑，重建的首部也不得多出一项。
+        // 该项出现之前的大图日志首部没有 CandidateCellLimit：当时就是不限制。回放 MUST NOT 按今天的大图缺省 K 重跑，重建的首部也不得多出一项。
         // 变异 M-K12：Replayer 改回不带 recorded 的 MatchSession.Create → 重建首部多出该项、第 1 行即分歧 → 本测试红。
-        RunConfig frontier = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
-        MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        // retire-legacy-maps 1.5：大图由边疆图改为 link:1（157 格 > 150），断言不变。
+        RunConfig frontier = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" };
+        MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"CandidateCellLimit\":0,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"CandidateCellLimit\":0,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.Config.CandidateCellLimit);
 
-        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(old);
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Null(replay.Replayed.Header.Config.CandidateCellLimit);
 
         // 会话层：新建的局按地图取缺省 K 并写进首部配置；按首部重建的局不取。
-        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1, resolveMap: MapCatalog.Legacy.Resolve).CellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1, resolveMap: MapCatalog.Legacy.Resolve).Config.CandidateCellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(0, MatchSession.Create(frontier, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).CellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(7, MatchSession.Create(frontier with { CandidateCellLimit = 7 }, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).CellLimit);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1).CellLimit);
+        Assert.Equal(AiSearchConfig.LargeMapCellLimit, MatchSession.Create(frontier, 1).Config.CandidateCellLimit);
+        Assert.Equal(0, MatchSession.Create(frontier, 1, map: null, recorded: true).CellLimit);
+        Assert.Equal(7, MatchSession.Create(frontier with { CandidateCellLimit = 7 }, 1, map: null, recorded: true).CellLimit);
     }
 
     // ---------- 配置记录 ----------
@@ -518,23 +518,23 @@ public class 候选格上限Tests
     [Fact]
     public void 批次配置记录写入实际生效的上限()
     {
-        // 边疆图、Easy、1 个大回合（保护期内只有自家平台可落，跑得快）。读 config.json 原文，不经反序列化，避免缺省值掩盖漏写。
+        // link:1（大图）、Easy、1 个大回合（构筑期只有自家出生棋盘可落，跑得快）。读 config.json 原文，不经反序列化，避免缺省值掩盖漏写。
         // 变异 M-K8：BatchRunner.ExecuteToDirectory 去掉 ResolvedFor → config.json 不含该项 → 本测试红。
-        RunConfig auto = SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id };
+        // retire-legacy-maps 1.5：大图由边疆图改为 link:1；小图一段见下。
+        RunConfig auto = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" };
         string autoDir = SimFixtures.TempDir("cell-limit-auto");
-        BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1);
         Assert.Contains($"\"CandidateCellLimit\": {AiSearchConfig.LargeMapCellLimit}", File.ReadAllText(Path.Combine(autoDir, "config.json")), StringComparison.Ordinal);
         MatchLog autoLog = MatchLog.Read(Directory.EnumerateFiles(autoDir, "match-*.jsonl").Single());
         Assert.Equal(AiSearchConfig.LargeMapCellLimit, autoLog.Header.Config.CandidateCellLimit);
 
         // 显式 0（不限制）优先于大图缺省，并如实写出。
         string zeroDir = SimFixtures.TempDir("cell-limit-zero");
-        BatchRunner.ExecuteToDirectory(auto with { CandidateCellLimit = 0 }, zeroDir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchRunner.ExecuteToDirectory(auto with { CandidateCellLimit = 0 }, zeroDir, parallelism: 1);
         Assert.Contains("\"CandidateCellLimit\": 0", File.ReadAllText(Path.Combine(zeroDir, "config.json")), StringComparison.Ordinal);
 
-        // 标准图：配置记录与引入本项之前一样，不多出这一项。
-        string v4Dir = SimFixtures.TempDir("cell-limit-v4");
-        BatchRunner.ExecuteToDirectory(SimFixtures.Config(turnLimit: 4), v4Dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.DoesNotContain("CandidateCellLimit", File.ReadAllText(Path.Combine(v4Dir, "config.json")), StringComparison.Ordinal);
+        // 小图：配置记录与引入本项之前一样，不多出这一项。retire-legacy-maps 1.5：批量入口只接受链接图（一律超过 150 格），小图（原 v4）到不了批量入口；
+        // 改在写出配置记录的同一处落成（RunConfig.ResolvedFor，ExecuteToDirectory 写 config.json 用的正是它）上对 9×9 手写夹具断言。
+        Assert.DoesNotContain("CandidateCellLimit", SimFixtures.Config(turnLimit: 4).ResolvedFor(MatchFixtures.Map()).ToJson(), StringComparison.Ordinal);
     }
 }

@@ -4,19 +4,18 @@
 
 ## 随机子流隔离
 
-从对局种子派生五条**互相独立**的确定性序列：
+从对局种子派生以下几条**互相独立**的确定性序列（另有带入用的 `carry-ai` / `carry-draft:<编号>`，见 `GameSeed`）：
 
 | 子流 | 消费者 |
 |---|---|
 | `relic-gen` | 信物内容生成（开局一次性） |
 | `recruit` | 每小回合的征募候选抽取 |
 | `setup` | 插旗后的首回合顺序、以及其他流程初始化 |
-| `zone-pick` | 原型插旗路径的 AI 选区（frontier-map）。**只在出生区数 > 地图支持的最大人数时派生**；相等时走按编号顺排、不消费任何随机——v4 上的既有对局因此逐步不变（`PrototypeZoneAssignment` 是三个入口共用的唯一实现） |
-| `flag-risk` | 原型插旗路径的冒险抽签（flag-contest D1）。未由人指定的玩家**此前已有旗时**抽一次 `[0,100)`，小于冒险概率 p 再用同一子流在已有人的出生区（升序去重）里等概率选一个；否则走 `zone-pick` / 顺排，且原规则的状态（顺排游标、`zone-pick` 子流、空闲表）只在走原规则时推进——p = 0 时本子流虽被抽取，锁定结果与引入之前逐项相同。同在 `PrototypeZoneAssignment` 里 |
+| `flag-pick` | 链接模式的盲选插旗（board-link-mode B2）：每名玩家按编号升序各抽一次 `[0, 出生棋盘数)`，未由人指定或时限到时未选的玩家取自己那一次的结果，不看已插的旗（`PrototypeZoneAssignment.AssignBlind` 与正式插旗共用）。retire-legacy-maps 删除了只服务旧路径的 `zone-pick`（边疆档种子选区）与 `flag-risk`（冒险抽签）两条子流 |
 
 改变其中一条子流的**消费次数**，MUST NOT 影响其他子流的取值。
 
-**地图随机源不在这张表里，也不是 `GameSeed` 的子流**（map-generator D2）。生成图 `gen:<地图种子>[:p<N>]` 用一条只由（地图种子, 尝试序号）决定的整数序列（`MapRandom.ForAttempt`，与对局随机源同一份 PRNG 实现），两边互不可见：生成器文件里不得出现 `GameSeed`，`Siege.Core/Match` 下不得出现地图种子类型——对局流程只拿到生成好的 `MapData` 与标识字符串。Core 永不读时钟：裸 `gen` 的地图种子只在三个入口最外层取（经 `GeneratedMapId.FriendlySeed` 折成九位以内），取完即拼成完整标识，裸 `gen` 不得写进任何记录。生成路径上同样禁浮点、禁散列容器遍历、禁时钟与环境（源码扫描守门）。
+**地图随机源不在这张表里，也不是 `GameSeed` 的子流**（map-generator D2，retire-legacy-maps 后只剩链接档）。链接图 `link:<地图种子>` 的初始布局用一条只由地图种子决定的整数序列（`MapRandom.ForLinkLayout`，与对局随机源同一份 PRNG 实现、独立的域常量），拼接本身不消费随机；两边互不可见：`MapRandom.cs` / `LinkMapGenerator.cs` / `LinkMapId.cs` 里不得出现 `GameSeed`，`Siege.Core/Match` 下不得出现 `MapRandom` 或地图种子——对局流程只拿到生成好的 `MapData` 与标识字符串。Core 永不读时钟：裸 `link` 的地图种子只在三个入口最外层取（经 `LinkMapId.FriendlySeed` 折成九位以内），取完即拼成完整标识，裸 `link` 不得写进任何记录。生成路径上同样禁浮点、禁时钟与环境（源码扫描守门 `链接档地图标识与确定性Tests.对局种子不影响地图` / `地图随机源与对局随机互不可见`）。旧 `gen:` / `board:` 生成器的尝试序号随机源（`ForAttempt` / `ForSurfaces` / `ForBoardAttempt`）已随生成器删除。
 
 **为什么。** 若共用一条序列，玩家改一个征募决策就会让后续所有随机取值偏移，"改一个决策重放整局"立刻失效，调试与回归都会变得极难。
 

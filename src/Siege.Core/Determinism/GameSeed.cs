@@ -23,17 +23,8 @@ public readonly record struct GameSeed(ulong Value)
     /// <summary>流程初始化子流名。</summary>
     public const string Setup = "setup";
 
-    /// <summary>
-    /// 原型插旗路径的 AI 选区子流名（frontier-map D4）：只在出生区数多于地图人数上限时消费；
-    /// 独立命名，MUST NOT 扰动信物生成、首回合顺序与 AI 决策的既有序列。
-    /// </summary>
-    public const string ZonePick = "zone-pick";
-
-    /// <summary>
-    /// 原型插旗路径的冒险抽签子流名（flag-contest D1）：未由人指定的玩家在已有旗时抽一次 <c>[0,100)</c>，命中再在已有人的出生区里均匀选一个。
-    /// 独立命名，MUST NOT 扰动信物生成、首回合顺序、原型选区（<see cref="ZonePick"/>）与 AI 决策的既有序列。
-    /// </summary>
-    public const string FlagRisk = "flag-risk";
+    // retire-legacy-maps 3.1：原型选区子流 zone-pick（边疆档区数多于人数时）与冒险抽签子流 flag-risk 只服务已删除的旧路径，子流名一并删除；
+    // 链接模式的盲选用 FlagPick（flag-pick），取值不变。
 
     /// <summary>
     /// AI 带入的抽取子流名（carry-in-out D7）：按玩家编号升序为每名 AI 抽补给种类（及换型令的类型）。

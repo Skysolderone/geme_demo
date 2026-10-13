@@ -62,7 +62,7 @@ internal static class LinkMapFixtures
             Profile = MapProfile.Link,
             Boards = boards,
             MapVersion = mapVersion,
-            Obstacles = [.. FrontierFixtures.Rect(0, 0, width, height).Where(c => !playable.Contains(c))],
+            Obstacles = [.. TestMaps.Rect(0, 0, width, height).Where(c => !playable.Contains(c))],   // retire-legacy-maps：Rect 由已删除的 FrontierFixtures 原样迁到 TestMaps
             BirthZones = [.. boards.Where(b => b.Kind == BoardPlateKind.Birth).Select(b => (ImmutableHashSet<Coord>)[.. b.Cells()])],
             RelicCells = relics.ToImmutable(),
             ChokePoints = [],

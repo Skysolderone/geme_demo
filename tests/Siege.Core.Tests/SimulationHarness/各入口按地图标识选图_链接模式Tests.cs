@@ -25,6 +25,9 @@ public class 各入口按地图标识选图_链接模式Tests
         (int playCode, string playOut, string playErr) = RunMain(null, new StringReader("q\n"), "play", "--seed", "5", "--no-carry");
         Assert.True(playCode == 0, playErr);
         Assert.Contains("地图 link:1（", playOut, StringComparison.Ordinal);
+        // retire-legacy-maps：自已删除的「各入口按地图标识选图Tests.缺省地图不变」迁入——目录常量与批次配置的缺省同为 link:1（原 v5）。
+        Assert.Equal("link:1", MapCatalog.DefaultId);
+        Assert.Equal("link:1", new RunConfig().MapId);
 
         string outDir = Path.Combine(SimFixtures.TempDir("link-default-run"), "out");
         (int runCode, _, string runErr) = RunMain(null, null, "run", "--out", outDir, "--count", "1", "--seed", "1", "--turn-limit", "4", "--difficulty", "Easy", "--serial");
@@ -99,10 +102,7 @@ public class 各入口按地图标识选图_链接模式Tests
         MatchSession link = MatchSession.Create(Config(turnLimit: 1), 1);
         Assert.Equal(MatchMode.Link, link.Match.Mode);
         Assert.IsType<SeededPairingSource>(link.Match.PairingSource);
-
-        MatchSession legacy = MatchSession.Create(SimFixtures.Config(turnLimit: 1), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析
-        Assert.Equal(MatchMode.Legacy, legacy.Match.Mode);
-        Assert.Null(legacy.Match.PairingSource);
+        // retire-legacy-maps：原后半"旧地图仍以 Legacy 建局"随旧地图删除（Sim 已无法按标识取得旧地图）。
     }
 
     [Fact]
@@ -117,14 +117,38 @@ public class 各入口按地图标识选图_链接模式Tests
         Assert.Contains("flag-risk", err, StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.Combine(dir, "cli")));
 
-        ArgumentException ex = Assert.Throws<ArgumentException>(() => (Config(turnLimit: 1) with { FlagRisk = 37 }).Validated());
-        Assert.Contains("冒险概率已废除", ex.Message, StringComparison.Ordinal);
+        // retire-legacy-maps 3.2：RunConfig.FlagRisk 字段删除——配置文件写了即报错退出、指出字段已移除，不建输出目录（原断言对象内设 FlagRisk = 37 报"冒险概率已废除"）。
+        string configFile = Path.Combine(dir, "with-flag-risk.json");
+        File.WriteAllText(configFile, "{ \"MapId\": \"link:1\", \"FlagRisk\": 37 }");
+        FormatException ex = Assert.Throws<FormatException>(() => RunConfig.FromJson(File.ReadAllText(configFile)));
+        Assert.Contains("FlagRisk 已删除", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("冒险概率已移除", ex.Message, StringComparison.Ordinal);
+        (int fileCode, _, string fileErr) = RunMain(null, null, "run", "--out", Path.Combine(dir, "file"), "--config", configFile, "--seed", "1", "--count", "1", "--serial");
+        Assert.Equal(1, fileCode);
+        Assert.Contains("FlagRisk 已删除", fileErr, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(dir, "file")));
 
         // 变异 MC-5：ResolvedFor 对链接图也落成缺省冒险概率 → 首部出现 FlagRisk，本断言红。
         MatchLog log = MatchSession.Create(Config(turnLimit: 1), 1).Run();
         string header = log.DeterministicText().Split('\n')[0];
         Assert.DoesNotContain("FlagRisk", header, StringComparison.Ordinal);
         Assert.Contains("\"PassThreshold\":", header, StringComparison.Ordinal);   // 反面：配置确实写进了首部
+    }
+
+    [Theory]
+    [InlineData("3")]
+    [InlineData("5")]
+    public void 参赛人数不是4即按S1报错(string players)
+    {
+        // retire-legacy-maps 4b.3（L20）："缺省取地图人数上限"删除后，终端与批量入口不给人数即 4；给别的值按裁决 3b / S1 报错退出、不建输出目录。
+        (int playCode, _, string playErr) = RunMain(null, new StringReader("q\n"), "play", "--seed", "5", "--no-carry", "--players", players);
+        Assert.Equal(1, playCode);
+        Assert.Contains("链接模式只有 4 人局", playErr, StringComparison.Ordinal);
+
+        string outDir = Path.Combine(SimFixtures.TempDir("link-players-" + players), "out");
+        (int runCode, _, string runErr) = RunMain(null, null, "run", "--out", outDir, "--count", "1", "--seed", "1", "--turn-limit", "2", "--serial", "--players", players);
+        Assert.NotEqual(0, runCode);
+        Assert.Contains("4 人", runErr, StringComparison.Ordinal);
     }
 
     [Fact]

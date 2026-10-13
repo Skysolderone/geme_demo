@@ -1,14 +1,8 @@
-using Siege.Core.Board.Maps;
 using System.Collections.Immutable;
-using System.Security.Cryptography;
-using System.Text;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Sim.Config;
-using Siege.Sim.Logging;
-using Siege.Sim.Running;
 
 namespace Siege.Core.Tests.AiDecision;
 
@@ -155,32 +149,9 @@ public class 难度分级Tests
         Assert.All([AiDifficulty.Easy, AiDifficulty.Standard, AiDifficulty.Hard], d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).LookaheadWidth));
     }
 
-    /// <summary>
-    /// 三档旧难度的黄金值：v5、种子 1、4 名同难度 AI 整局（不截断），写死权重（段 A 开工时的缺省）、阈值 80、冒险概率 0、内容集 v2。
-    /// 取自引入专家难度<b>之前</b>的代码（HEAD 03d45f6）的实际运行结果：小回合数、确定性文本行数、确定性文本（含日志首部）的 SHA-256、四名 AI 决策日志的 SHA-256。
-    /// </summary>
-    [Theory]
-    [InlineData(AiDifficulty.Easy, 72, 2364, "277336FE7188875FD00EF369ACB354C3666B99B50A93BDCF4E406D438AF72576", "987D1695B6134D25B72D56EE379FB234FE8DCCD99AE07DC092866F1AD4AE8F4C")]
-    [InlineData(AiDifficulty.Standard, 28, 416, "29353FC976C82867E9DD76AE7229223B876146D5DA53F523366824A7A407736A", "6E6FEFBE0739612BA168AC511BE466F117954A47654F091635B1A242E7807604")]
-    [InlineData(AiDifficulty.Hard, 26, 494, "135B8E7AB5DB8CACC2FFB59C7ED4ACF43B797970B087BDDAF9981AAFBDFF66BC", "3F9D8A31F38EFD6950846DABCA60AA89ED81899E2AEECE9637AEE0803E7576F6")]
-    public void 三档旧难度逐步不变(AiDifficulty difficulty, int turns, int lines, string logHash, string decisionHash)
-    {
-        // expert-lookahead MODIFIED「难度分级」：简单 / 标准 / 高难的每一步决策、日志的确定性文本（含首部）与改动前逐项相同。
-        // 守门型测试：黄金值在改动前的代码上钉下，改动前即绿（设计如此），改动后仍须绿。
-        // 除本条外，既有黄金哈希（候选格上限Tests.V4GoldenTurnHash 等）一字未改。
-        PlayerAiConfig[] players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })];
-        MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(players), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        MatchLog log = session.Run();
-        string text = log.DeterministicText();
-        string decisions = string.Join("\n", session.Match.Players.Select(p => $"{p}: {string.Join(" | ", session.AiOf(p)!.Decisions)}"));
-
-        Assert.Null(log.Failure);
-        Assert.Equal(turns, log.Turns.Count);
-        Assert.Equal(lines, text.Split('\n').Length);
-        Assert.Equal(logHash, Sha256(text));
-        Assert.Equal(decisionHash, Sha256(decisions));
-        Assert.All(session.Match.Players, p => Assert.Null(session.AiOf(p)!.LastLookahead));
-    }
+    // retire-legacy-maps 1.5（裁决 L8）：「三档旧难度逐步不变」（v5 种子 1 整局的三档黄金哈希）随 v5 删除。
+    // 它守的是"引入专家难度时三档旧难度不变"——那次改动早已完成；三档难度今天的走法由链接图三条决策序列基线（4 名标准）
+    // 与 AiDecision 其余用例（简单难度只看即时收益与眼位、高难度不越权等手写局面）守护。
 
     [Fact]
     public void 专家难度不越权()
@@ -197,6 +168,4 @@ public class 难度分级Tests
         Assert.DoesNotContain(typeof(Siege.Core.Determinism.RandomStream), lookahead);
         Assert.Contains(typeof(LookaheadRecord), AiFixtures.ReachableTypes(typeof(HeuristicTurnController)));
     }
-
-    private static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }

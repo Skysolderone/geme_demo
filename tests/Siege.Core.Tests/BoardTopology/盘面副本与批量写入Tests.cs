@@ -69,14 +69,17 @@ public class 盘面副本与批量写入Tests
     [Fact]
     public void 副本不重跑校验()
     {
-        // 诱饵：把咽喉标注清空，这张图 MUST 过不了静态校验。
+        // 诱饵：拿掉一枚出生棋盘信物，这张图 MUST 过不了静态校验。
         // 若 Clone() 偷偷走了 Load，就会在这里抛 MapValidationException。
-        MapData bait = FourPlayerBaseMap.Create() with { ChokePoints = ImmutableHashSet<Coord>.Empty };
-        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "CHOKE_NOT_ANNOTATED");
+        // retire-legacy-maps 1.8：原诱饵是 v5 清空咽喉标注（CHOKE_NOT_ANNOTATED，旧三档规则，第 4 组删除）；改为 link:1 拿掉一枚出生棋盘信物
+        //（BIRTH_BOARD_RELIC_COUNT，链接档清单规则，保留），断言不变。
+        MapData link = MapCatalog.Resolve("link:1");
+        MapData bait = link with { RelicCells = link.RelicCells.Remove(link.RelicCells.Keys.Order().First()) };
+        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
         Assert.Throws<MapValidationException>(() => GameBoard.Load(bait));
 
         GameBoard board = GameBoard.LoadUnvalidated(bait);
-        board.Place(TestMaps.At("G7"), TestMaps.P0, PieceType.Basic);   // v3：F6 是岩石，G7 是中央入口
+        board.Place(TestMaps.At("N5"), TestMaps.P0, PieceType.Basic);   // link:1：N5 在出生棋盘 3 上、非信物格
 
         GameBoard clone = board.Clone();
 

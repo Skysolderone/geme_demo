@@ -42,18 +42,17 @@ public sealed record ReplayResult(bool Identical, int LineCount, int? FirstDiver
 public static class Replayer
 {
     /// <summary>
-    /// 凭日志重跑并比对。<paramref name="resolveMap"/> 是未传 <paramref name="map"/> 时"标识 → 地图"的解析（board-link-mode 实现裁决 D7）：
-    /// 缺省 <see cref="MapCatalog.Resolve"/>，只认 <c>link:</c>；Core 测试回放旧日志（Legacy 夹具的回归护栏）显式传 <c>MapCatalog.Legacy.Resolve</c>。
-    /// <c>replay</c> 命令在调用之前已拒绝非 <c>link:</c> 的日志（实现裁决 C3）。
+    /// 凭日志重跑并比对。未传 <paramref name="map"/> 时经 <see cref="MapCatalog.Resolve"/> 按标识重建地图（只认 <c>link:</c>；retire-legacy-maps 3.4：
+    /// Legacy 夹具的 resolveMap 过渡口删除）。<c>replay</c> 命令在调用之前已拒绝非 <c>link:</c> 的日志（实现裁决 C3）。
     /// </summary>
-    public static ReplayResult Replay(MatchLog original, MapData? map = null, Func<string, MapData>? resolveMap = null)
+    public static ReplayResult Replay(MatchLog original, MapData? map = null)
     {
         ArgumentNullException.ThrowIfNull(original);
         LogHeader header = original.Header;
         // 重建地图：每局换图的批次里，首部配置的 MapId 只是批次的起始标识，本局的图是首部的地图标识；
         // 其余情形仍按配置的 MapId（它可能是地图文件路径，而首部的地图标识是文件里写的 Id，未必解析得回去）。
         string mapId = header.Config.MapPerMatch ? header.MapId : header.Config.MapId;
-        map ??= resolveMap is { } custom ? custom(mapId) : MapCatalog.Resolve(mapId);
+        map ??= MapCatalog.Resolve(mapId);
 
         // 先比地图内容摘要：不同就停在首部，MUST NOT 带着另一张图继续逐步比对。旧日志没有摘要 → 跳过（不回填）。
         string digest = MapFile.Digest(map);
@@ -114,5 +113,5 @@ public static class Replayer
     }
 
     /// <summary>读文件回放。</summary>
-    public static ReplayResult ReplayFile(string path, MapData? map = null, Func<string, MapData>? resolveMap = null) => Replay(MatchLog.Read(path), map, resolveMap);
+    public static ReplayResult ReplayFile(string path, MapData? map = null) => Replay(MatchLog.Read(path), map);
 }

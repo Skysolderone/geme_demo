@@ -110,7 +110,8 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Equal(42UL, RunConfig.FromJson(File.ReadAllText(Path.Combine(outDir, "config.json"))).PairingSeed);
         Assert.Equal(42UL, MatchLog.ReadDirectory(outDir).Single().Header.Config.PairingSeed);
 
-        Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { PairingSeed = 1 }).Validated());
+        // retire-legacy-maps 1.8：共用配置改到 link:1 后不再是"旧地图"，这里显式写一个非 link: 标识，断言不变。
+        Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { MapId = "siege-4p-base-v5", PairingSeed = 1 }).Validated());
     }
 
     [Fact]
@@ -228,7 +229,7 @@ public class 各入口支持生成图_链接模式Tests
 
     [Theory]
     [InlineData("link:1", "1-4X", "编号 1–5")]
-    [InlineData("siege-4p-base-v5", "1-2", "只用于链接图")]
+    [InlineData("siege-4p-base-v5", "1-2", "不受支持")]   // retire-legacy-maps：旧标识在目录先报错（原断言"只用于链接图"）
     [InlineData("link:1", "1-1", "已在同一战场")]
     [InlineData("link:1", "1-4,4-1", "已在同一战场")]
     [InlineData("link:1", "1-6", "编号 1–5")]
@@ -240,13 +241,83 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Contains(message, err, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void map子命令仍可打印旧标识()
+    [Theory]
+    [InlineData("siege-4p-base-v5")]
+    [InlineData("siege-frontier-v2")]
+    [InlineData("gen:12345")]
+    [InlineData("board:7")]
+    [InlineData("maps/siege-4p-base-v5.json")]
+    public void map子命令拒绝旧标识(string mapId)
     {
-        // 规格：map 子命令 SHALL 仍能打印旧标识族的地图（夹具用途），旧标识经 MapCatalog.Legacy 到达。
-        (int code, string output, string err) = RunMain(null, null, "map", "--map", "board:7");
+        // retire-legacy-maps 3.4（规格 simulation-harness「map 子命令」）：旧标识族与其他入口一样经目录报错，退出码 1，消息说明只接受 link:<地图种子>。
+        // 原「map 子命令仍可打印旧标识」随旧地图删除。
+        (int code, string output, string err) = RunMain(null, null, "map", "--map", mapId);
+        Assert.Equal(1, code);
+        Assert.Contains("不受支持", err, StringComparison.Ordinal);
+        Assert.Contains("只接受 link:<地图种子>", err, StringComparison.Ordinal);
+        Assert.DoesNotContain("地图校验", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void map子命令缺省地图()
+    {
+        // retire-legacy-maps 3.4：不带 --map 时打印 link:1（原缺省为 v5），且不导出任何文件（内置图的权威文件导出已删除）；未登记的拼写照旧被拒绝。
+        string before = Directory.GetCurrentDirectory();
+        bool mapsBefore = Directory.Exists(Path.Combine(before, "maps"));
+        (int code, string output, string err) = RunMain(null, null, "map");
         Assert.True(code == 0, err);
-        Assert.Contains("地图 board:7", output, StringComparison.Ordinal);
+        MapData initial = MapCatalog.Resolve("link:1");
+        Assert.Contains($"地图 link:1  {initial.Width}×{initial.Height}", output, StringComparison.Ordinal);
+        Assert.Contains("地图校验通过", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("已导出", output, StringComparison.Ordinal);
+        Assert.Equal(mapsBefore, Directory.Exists(Path.Combine(before, "maps")));
+
+        (int badCode, _, string badErr) = RunMain(null, null, "map", "--mapp", "link:1");
+        Assert.NotEqual(0, badCode);
+        Assert.Contains("--mapp", badErr, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 生成器只经目录调用_裸link只在入口最外层取种子()
+    {
+        // retire-legacy-maps：由已删除的「各入口支持生成图Tests.生成器只经目录调用_裸gen只在入口最外层取种子」改为链接档版本（守门不降级）。
+        // 守门（源码扫描；src/godot 不在解决方案里，反射看不见）：
+        //   ① 三个入口与表现层不直接调链接图生成器的建图入口——一律经目录 MapCatalog.Resolve；
+        //   ② 识别裸 link 的地方只有：标识的唯一实现、目录（拒绝它）、批量配置校验（每局换图时拒绝它）、批量 / 终端入口（Program）、图形版入口（GameRoot）。
+        //      取时钟落种子的只有最后两处（各一次），且都先经同一个折叠函数 LinkMapId.FriendlySeed。
+        // 变异记录见 migration.md（在 BatchRunner 直接调 LinkMapGenerator.Generate → 红；PlayCommand 加一处 IsBareRequest → 红）。
+        string src = Path.Combine(TestPaths.RepoRoot(), "src");
+        (string Path, string Text)[] files =
+        [
+            .. Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories)
+                .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    && !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    && !p.Contains($"{Path.DirectorySeparatorChar}.godot{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .Select(p => (Path.GetRelativePath(src, p).Replace('\\', '/'), File.ReadAllText(p))),
+        ];
+        Assert.True(files.Length >= 120, $"样本口径：只扫到 {files.Length} 个源文件。");
+        Assert.Contains(files, f => f.Path.StartsWith("godot/scripts/", StringComparison.Ordinal));
+
+        string[] generatorCallers = [.. files.Where(f => f.Text.Contains("LinkMapGenerator.Generate(", StringComparison.Ordinal)).Select(f => f.Path).Order(StringComparer.Ordinal)];
+        Assert.Equal(["Siege.Core/Board/Maps/MapCatalog.cs"], generatorCallers);   // 反面：目录确实在调
+
+        string[] bareReaders = [.. files.Where(f => f.Text.Contains("IsBareRequest(", StringComparison.Ordinal)).Select(f => f.Path).Order(StringComparer.Ordinal)];
+        Assert.Equal(
+            ["Siege.Core/Board/Maps/LinkMapId.cs", "Siege.Core/Board/Maps/MapCatalog.cs", "Siege.Sim/Config/RunConfig.cs", "Siege.Sim/Program.cs", "godot/scripts/GameRoot.cs"],
+            bareReaders);
+
+        string program = files.Single(f => f.Path == "Siege.Sim/Program.cs").Text;
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"Stopwatch\.GetTimestamp\(\)"));          // 缺省来源 ClockMapSeed
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"=> LinkMapId\.FriendlySeed\(\(ulong\)System\.Diagnostics\.Stopwatch\.GetTimestamp\(\)\);"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"LinkMapId\.Format\(mapSeedSource\(\)"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"mapSeedSource\(\)"));   // 只有裸 link 取一次，别无他处
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"=> Execute\(args, ClockMapSeed\)"));
+        string gameRoot = files.Single(f => f.Path == "godot/scripts/GameRoot.cs").Text;
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(gameRoot, @"LinkMapId\.Format\(LinkMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
+
+        // 规则内核永不读时钟（裸 link 的种子不可能在 Core 里取）。
+        Assert.DoesNotContain(files, f => f.Path.StartsWith("Siege.Core/", StringComparison.Ordinal)
+            && System.Text.RegularExpressions.Regex.IsMatch(f.Text, @"Stopwatch\.|DateTime\.(Utc)?Now|Environment\.TickCount|Random\.Shared|new Random\("));
     }
 
     private static void BoundsOf(MapData map, int zone, out Coord origin, out int width, out int height)

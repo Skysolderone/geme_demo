@@ -73,6 +73,67 @@ public class 物化状态校验Tests
     }
 
     [Fact]
+    public void 棋盘清单规则逐条报出()
+    {
+        // retire-legacy-maps（check 补回覆盖）：MapValidator 的棋盘清单规则（ValidatePlateList / ValidatePlateCells / ValidateBirthPlates / ValidateFlatScenery）
+        // 是链接档仍在执行的代码，但下面这些失败码此前只在 棋盘档预算与校验Tests（board: 档，整类随旧档删除）里有用例。
+        // 这里把同样的断言换到手写链接档图（LinkMapFixtures，41×9、五块 5×5）上，每例只改一处；所守规则见 map-definition「地图静态校验规则」
+        // 的棋盘清单段与 link-map-generation「物化状态校验」，规则本身不变。
+        MapData map = LinkMapFixtures.Initial();
+        Assert.True(MapValidator.Validate(map).IsValid);   // 载体本身合规
+
+        // ① 清单不得为空：报 BOARDS_REQUIRED 并到此为止（不再报棋盘与规模派生失败）。
+        MapValidationResult empty = MapValidator.Validate(map with { Boards = [] });
+        Assert.Equal("BOARDS_REQUIRED", Assert.Single(empty.Failures).Code);
+
+        // ② 出生棋盘边长 5–7：一块 8×5（其余四块挪开、保持间隔，规模仍在预算内）→ 只报这一条。
+        MapData wide = LinkMapFixtures.Build("test-link-wide",
+        [
+            new(new Coord(2, 2), 8, 5, BoardPlateKind.Birth),
+            new(new Coord(13, 2), 5, 5, BoardPlateKind.Birth),
+            new(new Coord(21, 2), 5, 5, BoardPlateKind.Birth),
+            new(new Coord(29, 2), 5, 5, BoardPlateKind.Birth),
+            new(new Coord(37, 2), 5, 5, BoardPlateKind.Birth),
+        ]);
+        MapValidationFailure size = Assert.Single(MapValidator.Validate(wide).Failures);
+        Assert.Equal("BOARD_SIZE_OUT_OF_RANGE", size.Code);
+        Assert.Contains("5–7", size.Message, StringComparison.Ordinal);
+        Assert.Equal([new Coord(2, 2)], size.Coords);
+
+        // ③ 棋盘内不得有障碍：出生棋盘 1 的 E5 改成障碍。
+        MapValidationFailure blocked = Assert.Single(
+            MapValidator.Validate(map with { Obstacles = map.Obstacles.Add(TestMaps.At("E5")) }).Failures, f => f.Code == "BOARD_CELL_NOT_PLAYABLE");
+        Assert.Equal([TestMaps.At("E5")], blocked.Coords);
+
+        // ④ 全图不得有深水（场景格上也不行）；⑤ 棋盘内与棋盘边界上不得有栅栏。
+        MapValidationFailure water = Assert.Single(
+            MapValidator.Validate(map with { TerrainData = TestMaps.Terrain(surfaces: [("A1", Surface.DeepWater)]) }).Failures, f => f.Code == "BOARD_MAP_DEEP_WATER");
+        Assert.Equal([TestMaps.At("A1")], water.Coords);
+        MapValidationFailure fence = Assert.Single(
+            MapValidator.Validate(map with { TerrainData = TestMaps.Terrain(fences: [("E5", "E6")]) }).Failures, f => f.Code == "BOARD_MAP_FENCE");
+        Assert.Equal([TestMaps.At("E5"), TestMaps.At("E6")], fence.Coords.Order().ToArray());
+
+        // ⑥ 出生棋盘与出生区一一对应：出生区 1 / 2 对调 → 两块棋盘各报一次。
+        MapData swapped = map with { BirthZones = [map.BirthZones[1], map.BirthZones[0], .. map.BirthZones.Skip(2)] };
+        Assert.Equal(2, MapValidator.Validate(swapped).Failures.Count(f => f.Code == "BIRTH_BOARD_MISMATCH"));
+
+        // ⑦ 信物格必须在棋盘内：把场景格 J5（出生棋盘 1、2 之间）开放并标成信物格 → 指出该格。
+        MapData stray = map with
+        {
+            Obstacles = map.Obstacles.Remove(TestMaps.At("J5")),
+            RelicCells = map.RelicCells.Add(TestMaps.At("J5"), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)),
+        };
+        MapValidationFailure outside = Assert.Single(MapValidator.Validate(stray).Failures, f => f.Code == "RELIC_OUTSIDE_BOARD");
+        Assert.Equal([TestMaps.At("J5")], outside.Coords);
+
+        // ⑧ 出生区数须多于人数（声明表 ZonesMustExceedPlayers）：只有 4 块出生棋盘的 4 人图 → 与区间越界同时报出。
+        MapData four = LinkMapFixtures.Build("test-link-4", [.. LinkMapFixtures.Births.Take(4)]);
+        MapValidationResult fourResult = MapValidator.Validate(four);
+        Assert.Contains(fourResult.Failures, f => f.Code == "BIRTH_ZONE_COUNT_NOT_ABOVE_PLAYERS");
+        Assert.Contains(fourResult.Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
+    }
+
+    [Fact]
     public void 每块出生棋盘恰两个信物格()
     {
         MapData initial = LinkMapFixtures.Initial();
@@ -99,7 +160,7 @@ public class 物化状态校验Tests
 
         MapData overlap = LinkMapFixtures.Build("test-link-overlap", [LinkMapFixtures.Births[0], new(new Coord(5, 2), 5, 5, BoardPlateKind.Birth), .. LinkMapFixtures.Births.Skip(2)], mapVersion: 1);
         MapValidationFailure overlapped = Assert.Single(MapValidator.Validate(overlap).Failures, f => f.Code == "BOARD_OVERLAP");
-        Assert.Equal(FrontierFixtures.Rect(5, 2, 2, 5).Order(), overlapped.Coords.Order());
+        Assert.Equal(TestMaps.Rect(5, 2, 2, 5).Order(), overlapped.Coords.Order());   // retire-legacy-maps：Rect 由已删除的 FrontierFixtures 原样迁到 TestMaps
 
         // 可落子格总数预算：5 块出生棋盘之和 125–245；一块 7×7 的拼接图里塞第 6 块棋盘即超出。
         MapData tooMany = LinkMapFixtures.Build("test-link-6", [.. LinkMapFixtures.Births, new(new Coord(42, 2), 7, 7, BoardPlateKind.Birth)]);
@@ -140,7 +201,8 @@ public class 物化状态校验Tests
     public void 非链接档不可增长()
     {
         // Scenario：对一张棋盘档地图尝试执行链接 → 系统拒绝并指出该规格档不允许增长；标准档、边疆档同理。
-        foreach (MapData map in new[] { BoardMapFixtures.FourPlayerMap(), MapCatalog.Legacy.Resolve(null), MapCatalog.Legacy.Resolve("gen:12345") })
+        // retire-legacy-maps：棋盘图 / v5 / gen: 载体随旧地图删除，改为手写 9×9 夹具；4.1 起枚举只剩 Link，非链接档改用已移除旧档的原数值 0 / 1 / 2（断言不变）。
+        foreach (MapData map in new[] { 0, 1, 2 }.Select(v => MatchFixtures.Map() with { Profile = (MapProfile)v }))
         {
             SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => LinkMapGenerator.Link(map, 0, 1, LinkSide.East));
             Assert.Contains("不允许增长", ex.Message, StringComparison.Ordinal);

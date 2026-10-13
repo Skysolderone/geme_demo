@@ -27,18 +27,24 @@ public class 对局模式Tests
     [Fact]
     public void 链接模式不能配旧地图()
     {
-        MapData v5 = MapCatalog.Legacy.Resolve("siege-4p-base-v5");
+        // retire-legacy-maps：载体由 v5 换成 9×9 手写夹具（非链接图、4 人），断言不变。
         ArgumentException ex = Assert.Throws<ArgumentException>(() =>
-            MatchFlow.Create(v5, MatchFixtures.Seed, MatchFixtures.All, MatchOptions.Immediate with { Mode = MatchMode.Link }));
+            MatchFixtures.Create(options: MatchOptions.Immediate with { Mode = MatchMode.Link }));
         Assert.Contains("链接模式只能配链接图", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void 链接图不能以旧模式建局()
+    public void 公开建局恒为链接模式()
     {
+        // retire-legacy-maps 3.5（裁决 L6 = C）：原「链接图不能以旧模式建局」——公开 Create 不再接受旧模式：选项里的模式缺省（Legacy）照样建成链接模式；
+        // 非链接图经公开 Create 一律报"链接模式只能配链接图"。旧模式只剩 CreateUnvalidated（手写夹具，见「缺省为旧模式」）。
+        MatchFlow match = MatchFlow.Create(LinkModeFixtures.Map, MatchFixtures.Seed, MatchFixtures.All, MatchOptions.Immediate);
+        Assert.Equal(MatchMode.Legacy, MatchOptions.Immediate.Mode);   // 样本口径：传入的确是缺省（旧）模式
+        Assert.Equal(MatchMode.Link, match.Mode);
+        Assert.True(match.Flags.IsBlind);
         ArgumentException ex = Assert.Throws<ArgumentException>(() =>
-            MatchFlow.Create(LinkModeFixtures.Map, MatchFixtures.Seed, MatchFixtures.All, MatchOptions.Immediate));
-        Assert.Contains("只能以链接模式建局", ex.Message, StringComparison.Ordinal);
+            MatchFlow.Create(LinkModeFixtures.Map with { Id = "test-not-link" }, MatchFixtures.Seed, MatchFixtures.All, MatchOptions.Immediate));   // 合规地图、标识不是 link:
+        Assert.Contains("链接模式只能配链接图", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

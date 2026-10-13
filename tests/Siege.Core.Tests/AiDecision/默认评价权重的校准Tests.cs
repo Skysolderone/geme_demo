@@ -11,7 +11,7 @@ using Xunit.Abstractions;
 namespace Siege.Core.Tests.AiDecision;
 
 /// <summary>规格：ai-decision —— Requirement: 默认评价权重的校准</summary>
-public class 默认评价权重的校准Tests(ITestOutputHelper output)
+public class 默认评价权重的校准Tests
 {
     [Theory]
     // ai-eye 段 D 校准（v5、种子 1–200、4 人标准难度、每档 200 局）：Eye / Safety / Threat 三维扫过档，其余六维沿用旧值、新规则下未单独扫档
@@ -64,7 +64,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "AiDifficulty.cs"));
         string status = AiSearchConfig.PassThresholdCalibrationStatus;
         const string tiers = "0 / 20 / 40 / 80";
-        foreach (string evidence in new[] { "v2-recalibration", FourPlayerBaseMap.Id, "V2", "种子 1–20", "20 局", "小样本", tiers, "sim-out/v2-recalibration/pass-" })
+        foreach (string evidence in new[] { "v2-recalibration", "siege-4p-base-v5" /* retire-legacy-maps：校准地图已删除，口径字符串作为历史保留（L8），改写字面量 */, "V2", "种子 1–20", "20 局", "小样本", tiers, "sim-out/v2-recalibration/pass-" })
         {
             Assert.Contains(evidence, status, StringComparison.Ordinal);
         }
@@ -105,7 +105,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
             if (swept.Contains(d))
             {
                 // v2-recalibration 1.8：三维的扫档在内容集 V1 上完成（缺省内容集已是 V2），口径 MUST 注明内容集。
-                foreach (string evidence in new[] { "ai-eye 段 D 校准", "内容集 V1", FourPlayerBaseMap.Id, "种子 1–200", "200 局", "sim-out/ai-eye-" })
+                foreach (string evidence in new[] { "ai-eye 段 D 校准", "内容集 V1", "siege-4p-base-v5" /* retire-legacy-maps：同上 */, "种子 1–200", "200 局", "sim-out/ai-eye-" })
                 {
                     Assert.Contains(evidence, status, StringComparison.Ordinal);
                 }
@@ -135,16 +135,9 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.NotEqual(20, EvaluationWeights.Default.Safety);
     }
 
-    // 变异（只改测试，段 D2）：M-D2-6t 截断计数取反（Truncated → !Truncated）→ 红 1（本测试）；M-D2-7t 样本下界放大到 10000 × 局数 → 红 1（本测试，下界是活的）。
-    // 完整版（种子 1–200）实测截断 2 局（101、171），上限 10 局——那是 ai-eye 在内容集 V1、停手阈值 80 下的结论。
-    // v2-recalibration 段 A：缩小版在新缺省（内容集 V2、停手阈值 20）下照常运行；CLI 对照 sim-out/v2-recalibration/pass-20（种子 1–20 截断 0）。
-    [Fact]
-    public void 校准后截断率达标() => AssertTruncation(count: 20, maxTruncated: 1);
-
-    // 停手阈值经 V2 20 局复核变更后（80 → 20），本慢测试的结论未经复核；v2-recalibration 未运行（负责人 2026-09-28 裁决 ⑥：严禁 200 局）。上限 10 局不改。
-    [SlowFact]
-    [Trait("Category", "Slow")]
-    public void 校准后截断率达标_种子1至200() => AssertTruncation(count: 200, maxTruncated: 10);
+    // retire-legacy-maps 1.5（裁决 L8）：「校准后截断率达标」（v5 种子 1–20 默认套件）与「校准后截断率达标_种子1至200」（Slow）随 v5 删除——
+    // 它们守的是 v5 上的校准结论；校准记录作为历史口径保留（CalibrationStatus 里的 siege-4p-base-v5 字样由「默认权重的校准依据随值一起更新」照旧守），
+    // 链接图上未复核（ai-decision「默认评价权重的校准」）。
 
     [Fact]
     public void 引用未校准维度产出的数据()
@@ -159,10 +152,10 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         RunConfig config = SimFixtures.Config(seedStart: 5, turnLimit: 4, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly);
         Assert.All(config.Players, p => Assert.Null(p.Weights));
         Assert.Null(config.PassThreshold);
-        Assert.Null(config.FlagRisk);   // flag-contest D2：未配置的冒险概率同样落成缺省值写进记录
+        Assert.DoesNotContain("FlagRisk", config.ToJson(), StringComparison.Ordinal);   // retire-legacy-maps 3.2：冒险概率字段已删除（原 Assert.Null(config.FlagRisk)；1.8 起样本为 link:1，链接图本就不落成）
         Assert.Null(config.ContentSet);   // more-pieces-relics D8：未配置的内容集同样落成缺省 v2 写进记录
         string dir = SimFixtures.TempDir("calibration-provenance");
-        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         RunConfig saved = RunConfig.FromJson(File.ReadAllText(Path.Combine(dir, "config.json")));
         Assert.Equal(AiSearchConfig.DefaultPassThreshold, saved.PassThreshold);
@@ -180,37 +173,10 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 反面：只改一个未扫档维度，记录随之不同——口径不同的两份数据从记录上就区分得开，不会被当成同口径直接比较。
         EvaluationWeights other = EvaluationWeights.Default with { Growth = EvaluationWeights.Default.Growth + 1 };
         RunConfig changed = config with { Players = [.. config.Players.Select(p => p with { Weights = other })] };
-        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
+        // retire-legacy-maps 1.8：样本由 v5（105 格，不落成候选格上限）改到 link:1（157 格 > 150，落成 K = 24），期望的落成项随之换为"候选格上限 24、无冒险概率"。
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
         // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。
-        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
-    }
-
-    /// <summary>
-    /// 与校准批次同口径：<c>siege-4p-base-v5</c>、种子 1 起、4 名 Standard AI、未显式配置权重与停手阈值（取默认）、小回合数截断 600。
-    /// 缩小版（默认套件）种子 1–20、截断至多 1 局（5%）；完整版种子 1–200、至多 10 局（规格原文）。
-    /// CLI 对照：<c>sim-out/ai-eye-pass-80</c> 截断 2 局（种子 101、171），种子 1–20 无截断（内容集 V1、停手阈值 80）。
-    /// 停手阈值经 V2 20 局复核变更后（v2-recalibration 段 A，80 → 20），完整版（种子 1–200）的结论未经复核；v2-recalibration 未运行完整版。
-    /// 缩小版的 V2 对照：<c>sim-out/v2-recalibration/pass-20</c>（种子 1–20 截断 0）。
-    /// </summary>
-    private void AssertTruncation(int count, int maxTruncated)
-    {
-        RunConfig config = SimFixtures.Config(count: count, seedStart: 1, turnLimit: RunConfig.DefaultTurnLimit, difficulty: AiDifficulty.Standard, retention: EventRetention.SnapshotsOnly);
-        Assert.Equal(FourPlayerBaseMap.Id, config.MapId);
-        Assert.All(config.Players, p => Assert.Null(p.Weights));
-        Assert.Null(config.PassThreshold);
-
-        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: Environment.ProcessorCount, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(count, logs.Count);
-        Assert.All(logs, l => Assert.False(l.IsFailed));
-        Assert.All(logs, l => Assert.Equal(AiSearchConfig.DefaultPassThreshold, l.Header.Config.PassThreshold));
-
-        // 样本口径下界：AI 真的在落子。一子不落的局全部 AllPassed、截断为 0，是空证（段 D2 简单难度在阈值 80 下即如此）。
-        int placingTurns = logs.Sum(l => l.Turns.Count(t => !t.Passed));
-        Assert.True(placingTurns >= 10 * count, $"{count} 局只有 {placingTurns} 个落子小回合");
-
-        ulong[] truncated = [.. logs.Where(l => l.Result!.Truncated).Select(l => l.Seed).Order()];
-        output.WriteLine($"种子 1–{count}：截断 {truncated.Length} 局（{string.Join("、", truncated)}），落子小回合 {placingTurns}");
-        Assert.True(truncated.Length <= maxTruncated, $"截断 {truncated.Length} 局 > {maxTruncated}：{string.Join("、", truncated)}");
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
     }
 
     [Fact]
@@ -221,7 +187,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         RunConfig blank = SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard);
         Assert.All(blank.Players, p => Assert.Null(p.Weights));
 
-        MatchSession session = MatchSession.Create(blank, 41, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(blank, 41);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         MatchLog blankLog = session.Run();
         foreach (PlayerId p in session.Match.Players)
         {
@@ -232,7 +198,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         // 比的是快照 + 事件，不比 DeterministicText：首行 header 里带着配置 JSON，Weights 填不填本身就使整段文本不同，
         // 那样"相等"恒假、"不等"恒真，两条断言都不在守门。
         RunConfig asDefault = blank with { Players = [.. blank.Players.Select(p => p with { Weights = EvaluationWeights.Default })] };
-        MatchLog defaultLog = MatchSession.Create(asDefault, 41, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog defaultLog = MatchSession.Create(asDefault, 41).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         // 比对配覆盖范围下界（testing.md M-C5）：投影砍到只剩一行时比对恒真。
         Assert.True(blankLog.Turns.Count >= 4, $"样本只有 {blankLog.Turns.Count} 个小回合");
@@ -245,7 +211,7 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         {
             Players = [.. blank.Players.Select(p => p with { Weights = EvaluationWeights.Default with { Safety = 200 } })],
         };
-        MatchLog otherLog = MatchSession.Create(other, 41, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog otherLog = MatchSession.Create(other, 41).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.NotEqual(Play(blankLog), Play(otherLog));
     }
 
@@ -293,54 +259,6 @@ public class 默认评价权重的校准Tests(ITestOutputHelper output)
         Assert.DoesNotContain("取 40 一半收敛", src, StringComparison.Ordinal);
         Assert.DoesNotContain("待 ai-eye", src, StringComparison.Ordinal);
         Assert.DoesNotContain("未校准（", src, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void 两人图覆盖表的校准记录随值一起更新()
-    {
-        // 规格：ai-decision「地图专属评价权重覆盖」Scenario「覆盖表被改动」（v2-recalibration 段 B 2.9，design D10）：
-        // 钉住覆盖表的键集合、与默认表的逐维差异，以及机读的校准口径（地图 / 内容集 / 种子 / 局数 / 停手阈值 / 档位 / 各档数据 / 选定值 / 数据目录），
-        // 且口径与源码一致、不再是占位。改任一维或增删登记的地图而不同时更新口径 → 本测试红。变异记录见任务 09-28-v2-recalibration 的 implement.md「段 B」。
-        const string id = "siege-2p-base-v1";
-        Assert.Equal([id], EvaluationWeights.MapOverrides.Keys);
-        EvaluationWeights table = EvaluationWeights.MapOverrides[id];
-
-        // 逐维：只有 Eye 与默认表不同（扫档选定 Eye 50、EnemyLoss 8），其余八维跟随默认表。
-        var diff = new Dictionary<EvaluationDimension, int> { [EvaluationDimension.Eye] = 50 };
-        foreach (EvaluationDimension d in Enum.GetValues<EvaluationDimension>())
-        {
-            Assert.Equal(diff.TryGetValue(d, out int v) ? v : EvaluationWeights.Default.Of(d), table.Of(d));
-        }
-
-        string status = EvaluationWeights.MapOverrideCalibrationOf(id)!;
-        Assert.NotNull(status);
-        foreach (string evidence in new[]
-                 {
-                     "v2-recalibration", id, "2 名标准难度", "内容集 V2", "种子 1–20", "20 局", "小样本", $"停手阈值 {AiSearchConfig.DefaultPassThreshold}",
-                     "sim-out/v2-recalibration/2p-eye",
-                 })
-        {
-            Assert.Contains(evidence, status, StringComparison.Ordinal);
-        }
-
-        // 五个档位各有一组"截断 / 整局无提子 / 已终局局平均结束大回合 / 第 3 大回合领先者胜"；选定档在档位清单里且等于覆盖表的取值。
-        const string tiers = "(200, 8) / (100, 8) / (50, 8) / (200, 16) / (200, 24)";
-        Assert.Contains(tiers, status, StringComparison.Ordinal);
-        foreach (string tier in tiers.Split(" / "))
-        {
-            Assert.Matches(System.Text.RegularExpressions.Regex.Escape(tier) + @" → \d+ / \d+ / \d+\.\d+ / \d+/\d+", status);
-        }
-
-        string chosen = $"({table.Eye}, {table.EnemyLoss})";
-        Assert.Contains(chosen, tiers, StringComparison.Ordinal);
-        Assert.Contains($"选定 {chosen}", status, StringComparison.Ordinal);
-
-        // 不再是占位；源码里的口径与常量一致（单个字面量，注释改了常量不改或反之都会红）。
-        string src = File.ReadAllText(Path.Combine(PresentationFixtures.RepoRoot(), "src", "Siege.Core", "Ai", "EvaluationWeights.cs"));
-        Assert.DoesNotContain("占位", status, StringComparison.Ordinal);
-        Assert.DoesNotContain("占位", src, StringComparison.Ordinal);
-        Assert.Contains(status, src, StringComparison.Ordinal);
-        Assert.Contains($"Default with {{ Eye = {table.Eye} }}", src, StringComparison.Ordinal);
     }
 
     /// <summary>一局的过程投影（快照 + 事件），不含首行 header——header 里带配置 JSON，会把"权重填没填"本身混进比对。</summary>

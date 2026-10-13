@@ -3,6 +3,7 @@ using Siege.Core.Ai;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Text;
 
+// retire-legacy-maps：仓库根目录改取 TestPaths.RepoRoot()（原 FrontierFixtures.RepoRoot，随旧地图夹具删除而原样迁出）。
 namespace Siege.Core.Tests.MapSelection;
 
 /// <summary>
@@ -13,7 +14,7 @@ namespace Siege.Core.Tests.MapSelection;
 /// </summary>
 public class 选图界面难度选择Tests
 {
-    private static readonly string Scripts = Path.Combine(FrontierFixtures.RepoRoot(), "src", "godot", "scripts");
+    private static readonly string Scripts = Path.Combine(TestPaths.RepoRoot(), "src", "godot", "scripts");
 
     [Fact]
     public void 难度选择缺省标准_四档按次序_可预选可切换()

@@ -150,15 +150,6 @@ public class 盲选插旗Tests
         }
     }
 
-    [Fact]
-    public void 链接模式不用冒险概率()
-    {
-        // 实现裁决 B2：冒险概率只保留给旧模式；链接模式下改 p 不改变任何锁定结果。
-        MatchFlow p0 = LinkModeFixtures.Create(options: LinkModeFixtures.Options with { FlagRisk = 0 });
-        MatchFlow p100 = LinkModeFixtures.Create(options: LinkModeFixtures.Options with { FlagRisk = 100 });
-        Assert.Equal(p0.PlantPrototype().Select(c => c.Zone), p100.PlantPrototype().Select(c => c.Zone));
-    }
-
     private static int[] PlantWithHuman(GameSeed seed, int humanZone)
     {
         MatchFlow match = LinkModeFixtures.Create(seed);

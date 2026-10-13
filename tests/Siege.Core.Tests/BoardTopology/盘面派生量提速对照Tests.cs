@@ -263,8 +263,9 @@ public class 盘面派生量提速对照Tests
         link = LinkMapGenerator.Link(link, 0, 1, LinkSide.East).Map;
         link = LinkMapGenerator.Link(link, 2, 3, LinkSide.East).Map;
         yield return LinkMapGenerator.Link(link, 0, 2, LinkSide.North).Map;
-        yield return MapCatalog.Legacy.Resolve("siege-4p-base-v5");
-        yield return MapCatalog.Legacy.Resolve("board:1");
+        // retire-legacy-maps 1.8：原另有 v5 与 board:1 两张旧图样本，随旧地图删除；补两张链接图样本（link:2 初始图、link:7 链接一次之后）保持样本数，断言不变。
+        yield return MapCatalog.Resolve("link:2");
+        yield return LinkMapGenerator.Link(LinkMapGenerator.Generate(7), 1, 3, LinkSide.East).Map;
         for (int seed = 1; seed <= 12; seed++)
         {
             yield return RandomMap(seed);

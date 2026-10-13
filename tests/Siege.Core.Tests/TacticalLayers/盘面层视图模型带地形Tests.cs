@@ -1,5 +1,4 @@
 using Siege.Core.Board;
-using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Presentation.Visibility;
 using static Siege.Core.Tests.PresentationFixtures;
@@ -8,16 +7,32 @@ namespace Siege.Core.Tests.TacticalLayers;
 
 /// <summary>
 /// terrain-model 5.1：盘面层视图模型带出每格高度、地表、桥与栅栏边，供 Godot 渲染——Godot 只消费这些字段，不读地图、不推地形。
-/// 钉在真 v3 基准图地形上，字段值直接对照 implement.md 段 B 的文本图。scoring-sites 起 <see cref="FourPlayerBaseMap"/> 是 v4
-/// （地形与 v3 逐格相同），本类只测地形，断言不变。
+/// 原钉在真 v3 基准图地形上（字段值对照 implement.md 段 B 的文本图）。retire-legacy-maps 1.8：v3 / v5 删除，改为一张 13×13 手写地形夹具——
+/// 在断言用到的每一格上照搬 v3 的地形（B2 所在出生区 0 为 h=2 高台、E2 缓坡 h=1、D4 未架桥深水、G4 架桥深水、A13 岩石、E5 林地、C8 土路、四段栅栏），
+/// 其余为 h=0 草地。断言一字不改。
 /// </summary>
 public class 盘面层视图模型带地形Tests
 {
     private static DefaultBoardView V3Board()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        TerrainData terrain = TestMaps.Terrain(
+            heights: [("A1", 2), ("B1", 2), ("A2", 2), ("B2", 2), ("E2", 1)],
+            surfaces: [("D4", Surface.DeepWater), ("G4", Surface.DeepWater), ("E5", Surface.Forest), ("C8", Surface.Road)],
+            bridges: ["G4"],
+            fences: [("G5", "H5"), ("E6", "E7"), ("J7", "J8"), ("F9", "G9")]);
+        MapData map = TestMaps.Synthetic(13, maxPlayers: 4, obstacles: [TestMaps.At("A13")], terrain: terrain) with
+        {
+            Id = "test-terrain-view-13",
+            BirthZones =
+            [
+                [TestMaps.At("A1"), TestMaps.At("B1"), TestMaps.At("A2"), TestMaps.At("B2")],
+                [TestMaps.At("N1")],
+                [TestMaps.At("A12")],
+                [TestMaps.At("N13")],
+            ],
+        };
         PlayerId[] players = [P0, P1, P2, P3];
-        MatchFlow match = MatchFlow.Create(map, new Siege.Core.Determinism.GameSeed(1), players, MatchOptions.Immediate);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, new Siege.Core.Determinism.GameSeed(1), players, MatchFixtures.Relics(map), MatchOptions.Immediate);
         return DefaultBoardView.From(match.PublicWorldOf());
     }
 

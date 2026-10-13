@@ -13,12 +13,14 @@ public class AI带入Tests
     private static readonly PlayerId[] Four = CarryFixtures.Four;
     private static readonly PlayerId Me = Four[0];
 
-    private static MapData Map => MapCatalog.Legacy.Resolve(MapCatalog.Legacy.DefaultId);
+    // retire-legacy-maps 1.8：建局地图由 v5（Legacy 夹具缺省图）改为 link:1，链接模式建局；断言不变。
+    private static MapData Map => MapCatalog.Resolve("link:1");
 
     /// <summary>人机对局的建局：本机玩家 P0 的选择 + AI 的抽取，开启带入带出。</summary>
     private static MatchFlow Create(GameSeed seed, CarryIn? mine, ContentSet set = ContentSet.V2) =>
         MatchFlow.Create(Map, seed, Four, MatchOptions.Immediate with
         {
+            Mode = MatchMode.Link,
             ContentSet = set,
             CarryInOut = true,
             CarryIns = CarryAi.ForHumanMatch(seed, Four, Me, mine, set),
@@ -158,7 +160,7 @@ public class AI带入Tests
         GameSeed seed = pick!.Value;
 
         MatchFlow carried = Create(seed, CarryFixtures.Spare);
-        MatchFlow plain = MatchFlow.Create(Map, seed, Four, MatchOptions.Immediate);
+        MatchFlow plain = MatchFlow.Create(Map, seed, Four, MatchOptions.Immediate with { Mode = MatchMode.Link });
         Assert.All(Four, p => Assert.Equal("Basic×6+0", CarryFixtures.HandText(carried, p)));
 
         carried.PlantPrototype();

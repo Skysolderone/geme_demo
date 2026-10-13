@@ -119,13 +119,46 @@ public class 地形派生数据不缓存Tests
     public void 距离表按传入地图现算()
     {
         // 排查项 ⑥（不缓存，但有口径）：MapValidator.DistanceTable 是纯函数（传入哪份地图就按哪份算），
-        // 唯二调用方是建局时的 Validate 与 `Siege.Sim map` 子命令，都只看开局地图。
-        // 结论：本局架的桥不会回头改变距离均衡校验的结论——这是有意的，校验是**地图设计**的守门，不是对局态。
+        // 调用方只看开局地图：retire-legacy-maps 4.2 起距离均衡校验随旧档删除，唯一调用方是 `Siege.Sim map` 子命令的距离打印（L10 保留）。
+        // 结论：本局架的桥不会回头改变这张表——这是有意的，它描述的是**地图设计**，不是对局态。
         MapData map = TestMaps.Blank(TestMaps.Terrain(surfaces: [("E5", Surface.DeepWater)]), size: 9).Map;
         MapData bridged = TerrainWriter.ApplyAll(map, [TerrainEdit.Bridge(TestMaps.At("E5"))]);
 
         Assert.True(map.TerrainData.IsUnbridgedDeepWater(TestMaps.At("E5")));
         Assert.False(bridged.TerrainData.IsUnbridgedDeepWater(TestMaps.At("E5")));
         Assert.Equal(map.PlayableCount + 1, bridged.PlayableCount);
+    }
+
+    [Fact]
+    public void 距离表沿气边计算()
+    {
+        // retire-legacy-maps（check 补回覆盖）：MapValidator.DistanceTable / MultiSourceDistances 按 L10 保留（`Siege.Sim map` 打印距离表），
+        // 它们唯一的测试 地图静态校验规则Tests.距离沿气边计算 随距离均衡校验（DISTANCE_IMBALANCE）在第 4 组删除。这里把同一个算例迁来，
+        // 断言从"失衡失败消息里的两个距离"改为直接读距离表——所守的"最短落子距离沿气边、崖壁挡住的路不算路"不变。
+        // 9×9 平地，入口 E5；出生区 1 = {A5}、出生区 2 = {J5}，几何距离都是 4。
+        // 把 G1–G8 抬到 h=2（G9 留作绕行口）：出生区 2 只能绕 J9 → G9 → E9 → E5，气边最短路 12；出生区 1 仍是 4。
+        static MapData Wall(int height) =>
+            TestMaps.Synthetic(
+                size: 9,
+                maxPlayers: 2,
+                terrain: TestMaps.Terrain(heights: [.. Enumerable.Range(1, 8).Select(row => ($"G{row}", height))]))
+            with
+            {
+                BirthZones = [[TestMaps.At("A5")], [TestMaps.At("J5")]],
+                ChokePoints = [TestMaps.At("E5")],
+                CentralEntrance = TestMaps.At("E5"),
+            };
+
+        BirthZoneDistance entrance = Assert.Single(MapValidator.DistanceTable(Wall(2)), m => m.Name == "中央入口");
+        Assert.Equal(new int?[] { 4, 12 }, entrance.Distances.ToArray());
+        Assert.Equal(new int?[] { 4, 12 }, Assert.Single(MapValidator.DistanceTable(Wall(2)), m => m.Name == "最近咽喉").Distances.ToArray());
+
+        // 同一堵墙降为 h=1 缓坡：两条路都能走，距离相等——证明上面的 12 是崖壁造成的而不是别的。
+        Assert.Equal(new int?[] { 4, 4 }, Assert.Single(MapValidator.DistanceTable(Wall(1)), m => m.Name == "中央入口").Distances.ToArray());
+
+        // 没有公共信物：该项目标集合为空，整列为 null（不是 0）。
+        BirthZoneDistance relic = Assert.Single(MapValidator.DistanceTable(Wall(2)), m => m.Name == "最近公共信物");
+        Assert.Empty(relic.Targets);
+        Assert.All(relic.Distances, d => Assert.Null(d));
     }
 }

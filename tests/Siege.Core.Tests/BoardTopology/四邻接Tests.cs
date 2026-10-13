@@ -125,14 +125,9 @@ public class 四邻接Tests
                    //    名单只放这一个类型：任何第二处"自己遍历四邻判改造目标"的实现都会在这里红。
                    || outer == typeof(TerrainEditRules)
 
-                   // ④ FrontierSurfaces：生成器的新地表投放（terrain-surfaces D6）。规格按**几何四邻**定义"块"（同种地表沿几何四邻连通、
-                   //    浅滩块挨着主河），与气边无关——栅栏、崖壁都不该把一块地表切成两块；它只读 MapData，走不了 GameBoard.Neighbors。
-                   //    内部类型按全名比（测试程序集看得见 internal，但写成字符串免得把可见性绑进守门）。
-                   || outer.FullName == "Siege.Core.Board.Maps.FrontierSurfaces"
+                   // ④（已删除）FrontierSurfaces：边疆档生成器的新地表投放随 retire-legacy-maps 删除，豁免同步收回（编号保留，免得后续注释错位）。
 
-                   // ⑤ MapValidator.ValidateCorridors（board-map 段 B）：规格把通道定义成"沿**几何四邻**连通的一组通道格"，与气边无关。
-                   //    只放这一个方法，不放整个校验器：距离 / 连通 / 口袋仍须走气边（上面的 M-B2 照旧会红）。
-                   || (outer == typeof(MapValidator) && caller.Name == "ValidateCorridors")
+                   // ⑤（已删除）MapValidator.ValidateCorridors：通道规则随棋盘档删除（retire-legacy-maps 4.2），豁免同步收回；校验器里不得再有任何直接几何四邻调用。
 
                    // ⑥ Battlefields（board-link-mode D1）：规格把战场定义成"沿**几何四邻**相连的可落子格的极大连通分量"，与气边无关——
                    //    匠人立栅、崖壁都不得把一个战场切成两个，隔开两个战场的只有不可落子的场景格；它只读 MapData，走不了 GameBoard.Neighbors。
@@ -154,14 +149,14 @@ public class 四邻接Tests
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.LibertyNeighbors));
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.CoverageTargets));
 
-        // 豁免 ⑤ 按方法名比，改名后同样会静默失效——钉住它确实命中。
-        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(MapValidator) && c.Name == "ValidateCorridors");
+        // retire-legacy-maps 4.2：豁免 ⑤ 收回后，校验器整个类型都不得直接枚举几何四邻（距离 / 连通 / 口袋走气边，拼接分量走 Battlefields）。
+        Assert.DoesNotContain(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(MapValidator));
 
         // 豁免 ⑥：战场导出确实在直接枚举几何邻居（改走气边的话这里先红）。
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Battlefields));
 
-        // 豁免 ④ 按全名字符串比，类型改名后豁免会静默失效成摆设——这里钉住它确实命中了一个真实调用者。
-        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!).FullName == "Siege.Core.Board.Maps.FrontierSurfaces");
+        // retire-legacy-maps：豁免 ④ 收回后，原归属命名空间 Siege.Core.Board.Maps 里不得再有任何直接枚举几何四邻的调用者（链接图生成器走 Battlefields / 气边）。
+        Assert.DoesNotContain(adjacencyCallers, c => Outermost(c.DeclaringType!).Namespace == "Siege.Core.Board.Maps");
     }
 
     private static MethodBase[] CallersOf((MethodBase Caller, MemberInfo Target, OpCode OpCode)[] refs, Type declaringType, string methodName) =>

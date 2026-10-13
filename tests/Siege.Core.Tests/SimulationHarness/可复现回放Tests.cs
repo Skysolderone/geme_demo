@@ -17,12 +17,12 @@ public class 可复现回放Tests
         // 标准难度带种子扰动子流（ai-P{n}），一并覆盖。
         // 变异验证：M-B16 / M-B23（种子被扰动）均使本测试红；本类专属变异见 失败局可复现 的 M-B21。
         RunConfig config = SimFixtures.Config(turnLimit: 8, difficulty: AiDifficulty.Standard);
-        MatchSession a = MatchSession.Create(config, 41, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession a = MatchSession.Create(config, 41);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         MatchLog logA = a.Run();
         string dir = SimFixtures.TempDir("replay");
         string path = logA.WriteTo(dir);
 
-        ReplayResult replay = Replayer.ReplayFile(path, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.ReplayFile(path);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Equal(logA.DeterministicText(), replay.Replayed.DeterministicText());
@@ -32,7 +32,7 @@ public class 可复现回放Tests
         Assert.False(replay.Replayed.IsFailed);
         Assert.Equal(AiDifficulty.Standard, replay.Replayed.Header.Config.Players[0].Difficulty);
 
-        MatchSession b = MatchSession.Create(config, 41, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession b = MatchSession.Create(config, 41);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         b.Run();
         foreach (PlayerId p in a.Match.Players)
         {
@@ -47,7 +47,7 @@ public class 可复现回放Tests
         Assert.Equal(a.Match.Hands.Records, b.Match.Hands.Records);
 
         // 不同种子不会被误判为一致
-        MatchLog other = MatchSession.Create(config, 42, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog other = MatchSession.Create(config, 42).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         ReplayResult mismatch = Replayer.Compare(logA, other);
         Assert.False(mismatch.Identical);
         Assert.Equal(1, mismatch.FirstDivergentLine);
@@ -69,7 +69,7 @@ public class 可复现回放Tests
         MatchLog log = original.Run();
         string path = log.WriteTo(SimFixtures.TempDir("replay-carry"));
 
-        ReplayResult replay = Replayer.ReplayFile(path, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.ReplayFile(path);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Equal(log.DeterministicText(), replay.Replayed.DeterministicText());
@@ -86,7 +86,7 @@ public class 可复现回放Tests
         // 规格正文（可复现回放）：缺带入字段的旧日志按无带入回放。旧日志样本：一局新写出的关闭带入的日志删掉首部三项（开关、带入、配置的带入数量），
         // 引入带入带出之前的首部就是如此。回放 MUST 逐行一致——重建出的首部也不得多出这三项（否则第 1 行即分歧）。
         // 变异 M-T7：按缺字段的旧日志回放时仍写首部带入两项 → 本测试红。
-        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 8), 17, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog log = MatchSession.Create(SimFixtures.Config(turnLimit: 8), 17).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         string[] lines = log.FullText().Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var header = System.Text.Json.Nodes.JsonNode.Parse(lines[0])!.AsObject();
         Assert.True(header.Remove("CarryInOut") && header.Remove("CarryIns") && header["Config"]!.AsObject().Remove("CarryIn"), "新首部应写出三项");
@@ -95,7 +95,7 @@ public class 可复现回放Tests
         string path = Path.Combine(dir, "match-legacy.jsonl");
         File.WriteAllText(path, string.Join('\n', lines) + "\n");
 
-        ReplayResult replay = Replayer.ReplayFile(path, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.ReplayFile(path);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Null(replay.Replayed.Header.CarryInOut);
@@ -114,7 +114,7 @@ public class 可复现回放Tests
             SimFixtures.Config(count: 3, seedStart: 51, turnLimit: 12, retention: EventRetention.SnapshotsOnly, injectFailureAtTurn: 5));
         string dir = SimFixtures.TempDir("failed");
 
-        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.Equal((3, 0, 3), (summary.Count, summary.Completed, summary.Failed));
         Assert.Equal(3, summary.FailedFiles.Count);
@@ -131,20 +131,21 @@ public class 可复现回放Tests
         Assert.Equal(5, failed.Turns.Count);
         // 首部配置 = 跑局配置（阈值已显式写死；"未配置的阈值落成缺省值写入首部"由 停手阈值Tests.阈值进入记录 钉住）。
         // carry-in-out 段 C：未配置的带入数量落成 0 写进首部（写明关闭），期望随之补上这一项。
-        Assert.Equal((config with { CarryIn = 0 }).ToJson(), failed.Header.Config.ToJson());
+        // retire-legacy-maps 1.8：共用配置改到 link:1（157 格 > 150），未配置的候选格上限按地图落成 24 写进首部，期望随之补上这一项。
+        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Siege.Core.Ai.AiSearchConfig.LargeMapCellLimit }).ToJson(), failed.Header.Config.ToJson());
         // 失败局强制保留完整事件流（含细粒度事件），不受 SnapshotsOnly 影响
         Assert.Equal(EventRetention.Full, failed.Header.Retention);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.Candidates);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.MajorRoundEnded && e.MajorRound == 1);
 
-        ReplayResult replay = Replayer.Replay(failed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(failed);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.True(replay.Identical, replay.ToString());
         Assert.True(replay.Replayed.IsFailed);
         Assert.Equal(failed.Failure.ExceptionType, replay.Replayed.Failure!.ExceptionType);
         Assert.Equal(5, replay.Replayed.Failure.Turn);
 
         // 去掉注入点重跑同一种子 → 正常完成，前 5 个小回合与失败局逐条一致
-        MatchLog healthy = MatchSession.Create(config with { InjectFailureAtTurn = null, EventRetention = EventRetention.Full }, 51, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog healthy = MatchSession.Create(config with { InjectFailureAtTurn = null, EventRetention = EventRetention.Full }, 51).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.False(healthy.IsFailed);
         Assert.Equal(SimFixtures.TurnTexts(failed.Turns), SimFixtures.TurnTexts(healthy.Turns.Take(5)));
     }

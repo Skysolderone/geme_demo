@@ -37,7 +37,7 @@ public sealed partial class GameRoot
     private bool Selecting => _select is not null;
 
     /// <summary>取一个新的地图种子：入口最外层读一次计数器，折成便于读写的短种子（视图模型与规则内核都不读时钟）。三个入口共用同一个折叠函数。</summary>
-    private static ulong NewMapSeed() => GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp());
+    private static ulong NewMapSeed() => LinkMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp());
 
     /// <summary>
     /// 进入新局界面并搭好第一张预览。<paramref name="preselect"/> 只来自 <c>--map-select --map=link:&lt;种子&gt;</c>（截图 / 自检），只作为预填种子；

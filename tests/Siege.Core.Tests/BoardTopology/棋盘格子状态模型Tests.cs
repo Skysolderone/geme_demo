@@ -19,7 +19,8 @@ public class 棋盘格子状态模型Tests
     [Fact]
     public void 信物格可正常落子()
     {
-        GameBoard board = GameBoard.LoadUnvalidated(FourPlayerBaseMapData());
+        // retire-legacy-maps 1.8：原取 v5（B2 为出生区信物格）；改用 13×13 手写夹具、B2 设为信物格，断言不变。
+        GameBoard board = TestMaps.WithRelicCells(["B2"], size: 13);
         Coord relic = TestMaps.At("B2");
         Assert.True(board[relic].IsRelicCell);
 
@@ -46,15 +47,14 @@ public class 棋盘格子状态模型Tests
     {
         // "棋盘外沿与障碍具有相同的封堵语义"这句话在数据层的落点：
         // 越界格的地形 MUST 就是障碍，而不是靠每个调用方各自记得先判边界。
-        MapData map = FourPlayerBaseMapData();
+        // retire-legacy-maps 1.8：原取 v5（13×13）；改用 13×13 手写夹具（全平地），断言不变。
+        MapData map = TestMaps.Synthetic(13, maxPlayers: 4);
 
-        // v3 基准图 13×13：(13, 0) / (0, 13) 刚好越界一格；G7 是盘内可落子格（中央入口）。
+        // 13×13：(13, 0) / (0, 13) 刚好越界一格；G7 是盘内可落子格（中央）。
         Assert.False(map.Contains(new Coord(13, 0)));
         Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(13, 0)));
         Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(0, 13)));
         Assert.Equal(Terrain.Obstacle, map.TerrainAt(new Coord(24, 99)));
         Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("G7")));
     }
-
-    private static MapData FourPlayerBaseMapData() => Siege.Core.Board.Maps.FourPlayerBaseMap.Create();
 }

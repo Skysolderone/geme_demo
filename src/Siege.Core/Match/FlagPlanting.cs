@@ -22,10 +22,11 @@ public sealed record MatchOptions
     public TimeSpan FlagTimeLimit { get; init; } = DefaultFlagTimeLimit;
 
     /// <summary>
-    /// 对局模式（board-link-mode 实现裁决 B1）：缺省 <see cref="MatchMode.Legacy"/>，行为与引入本项之前逐字节相同；
-    /// <see cref="MatchMode.Link"/> 只能配链接图，不匹配即建局报错。属于对局配置：开局固定。
+    /// 对局模式（board-link-mode 实现裁决 B1）：<see cref="MatchMode.Link"/> 只能配链接图、恰 4 人，不匹配即建局报错。属于对局配置：开局固定。
+    /// retire-legacy-maps 3.5（裁决 L6 = C）：<c>init</c> 降为 Core 内部（及其友元测试 / Sim 程序集）——公开的 <see cref="MatchFlow.Create"/> 恒以链接模式建局，
+    /// 玩家入口无从选旧模式；缺省值 <see cref="MatchMode.Legacy"/> 只对手写夹具的 <c>CreateUnvalidated</c> / <c>RestoreUnvalidated</c> 起作用。
     /// </summary>
-    public MatchMode Mode { get; init; } = MatchMode.Legacy;
+    public MatchMode Mode { get; internal init; } = MatchMode.Legacy;
 
     // restore-go-core-rules 裁决 #4 / #7 / #15：大回合上限、碾压起始大回合、落后者征募补偿开关三项配置整体删除。
     // 终局只剩「只剩一名参赛玩家 / 棋盘填满 / 整轮 Pass」三类，对局 MUST NOT 设置固定总轮数，也 MUST NOT 因势力领先幅度提前结束。
@@ -40,14 +41,8 @@ public sealed record MatchOptions
     /// </summary>
     public int ArtisanWeight { get; init; } = DefaultArtisanWeight;
 
-    /// <summary>原型插旗路径的冒险概率缺省值（flag-contest：负责人 2026-09-25 裁决 15%，初值、未校准）。</summary>
-    public const int DefaultFlagRisk = 15;
-
-    /// <summary>
-    /// 原型插旗路径的冒险概率 p（flag-contest D1 / D2；0–100 的整数百分比）：未由人指定的玩家在它之前已有旗时，以 p% 加入一个已有人的出生区。
-    /// p = 0 时锁定结果与引入冒险概率之前逐项相同。只作用于 <see cref="MatchFlow.PlantPrototype"/>，与正式的同时插旗无关。
-    /// </summary>
-    public int FlagRisk { get; init; } = DefaultFlagRisk;
+    // retire-legacy-maps 3.1（裁决 L1）：原型插旗的冒险概率（FlagRisk / DefaultFlagRisk，flag-contest）整体删除——
+    // 原型路径恒为盲选（PrototypeZoneAssignment.AssignBlind），不看已插的旗。
 
     /// <summary>
     /// 对局内容集（more-pieces-relics D8，match-setup「对局内容集」）：v1 = 原六种棋子 + 原六类信物，v2 = 十 + 十。新局缺省 v2（<see cref="ContentSets.Default"/>）。

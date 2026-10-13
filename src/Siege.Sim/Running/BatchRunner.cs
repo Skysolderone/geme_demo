@@ -51,15 +51,14 @@ public sealed record BatchSummary
 public static class BatchRunner
 {
     /// <summary>
-    /// 执行全部对局，按种子顺序返回日志。<paramref name="parallelism"/> ≤ 1 即串行。
-    /// <paramref name="resolveMap"/> 是"标识 → 地图"的解析（board-link-mode 实现裁决 D7）：缺省 <see cref="MapCatalog.Resolve"/>，只认 <c>link:</c>；
-    /// Core 测试里的 Legacy 夹具显式传 <c>MapCatalog.Legacy.Resolve</c>（每局换图的旧 <c>gen:</c> 配置也靠它逐局解析）。玩家入口不传。
+    /// 执行全部对局，按种子顺序返回日志。<paramref name="parallelism"/> ≤ 1 即串行。"标识 → 地图"一律经 <see cref="MapCatalog.Resolve"/>
+    /// （retire-legacy-maps 3.4：Legacy 夹具的 resolveMap 过渡口随旧地图删除）。
     /// </summary>
-    public static List<MatchLog> Execute(RunConfig config, int parallelism, MapData? map = null, Action<MatchLog>? onCompleted = null, Func<string, MapData>? resolveMap = null)
+    public static List<MatchLog> Execute(RunConfig config, int parallelism, MapData? map = null, Action<MatchLog>? onCompleted = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
-        MapData resolve(string id) => resolveMap is { } custom ? custom(id) : MapCatalog.Resolve(id);
+        static MapData resolve(string id) => MapCatalog.Resolve(id);
         // 每局换图（map-generator D6）：第 i 局的地图 = MapIdAt(i)，逐局解析（生成一张十几毫秒）；调用方给的 map 只在不换图时使用。
         if (!config.MapPerMatch)
         {
@@ -92,14 +91,14 @@ public static class BatchRunner
         return [.. results.OrderBy(l => l.Seed)];
     }
 
-    /// <summary>执行并把配置、每局日志与汇总写进 <paramref name="outputDir"/>。<paramref name="resolveMap"/> 同 <see cref="Execute"/>。</summary>
-    public static BatchSummary ExecuteToDirectory(RunConfig config, string outputDir, int parallelism, TextWriter? progress = null, Func<string, MapData>? resolveMap = null)
+    /// <summary>执行并把配置、每局日志与汇总写进 <paramref name="outputDir"/>。</summary>
+    public static BatchSummary ExecuteToDirectory(RunConfig config, string outputDir, int parallelism, TextWriter? progress = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         // 先解析地图再建输出目录：未知地图标识要在写出任何东西之前报错（strict-cli D4：半份输出比没有输出更糟）。
         // 每局换图时解析的是第 0 局的图（同样起到"先验证再写盘"的作用）；生成图的可落子格都在边疆档区间内，按它落成的 K 对每一局都成立。
         config.Validated();
-        MapData map = resolveMap is { } custom ? custom(config.MapIdAt(0)) : MapCatalog.Resolve(config.MapIdAt(0));
+        MapData map = MapCatalog.Resolve(config.MapIdAt(0));
         // 候选格上限先按地图落成具体值，config.json 记录的就是实际生效的 K（小图上原样不变）。
         config = config.ResolvedFor(map);
         Directory.CreateDirectory(outputDir);
@@ -107,7 +106,7 @@ public static class BatchRunner
         var wall = Stopwatch.StartNew();
         int done = 0;
         object gate = new();
-        List<MatchLog> logs = Execute(config, parallelism, map, resolveMap: resolveMap, onCompleted: log =>
+        List<MatchLog> logs = Execute(config, parallelism, map, onCompleted: log =>
         {
             log.WriteTo(outputDir, config.Compress);
             int n = Interlocked.Increment(ref done);

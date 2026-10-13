@@ -8,7 +8,7 @@ namespace Siege.Core.Board.Maps;
 /// </summary>
 /// <remarks>
 /// 裸 <c>link</c>（"随机取一个种子"）不是完整标识，<see cref="Parse"/> 不接受——取种子只发生在入口的最外层（Core 不读时钟），
-/// 入口用 <see cref="IsBareRequest"/> 识别它，取到种子后用 <see cref="Format"/> 拼出完整标识再解析。写法参照 <see cref="BoardMapId"/>。
+/// 入口用 <see cref="IsBareRequest"/> 识别它，取到种子后用 <see cref="Format"/> 拼出完整标识再解析；入口取种子时先用 <see cref="FriendlySeed"/> 把时间戳折成短种子。
 /// </remarks>
 public static class LinkMapId
 {
@@ -50,6 +50,24 @@ public static class LinkMapId
 
     /// <summary>把任一合法写法规范化（去空白、去前导零：<c> link:007 </c> → <c>link:7</c>）。</summary>
     public static string Normalize(string? mapId) => Format(Parse(mapId));
+
+    /// <summary><see cref="FriendlySeed"/> 的取值上界（不含）：九位十进制数以内，便于读写与口头交流。</summary>
+    public const ulong FriendlySeedLimit = 1_000_000_000UL;
+
+    /// <summary>
+    /// 把一个原始计数（入口取的时间戳）折成便于人读写的地图种子：乘大奇数、异或移位两轮后取九位以内的十进制数。
+    /// 纯函数——时间戳由入口最外层取（Core 不读时钟）；三个入口"随机取一个地图种子"都经这里折一次，
+    /// 相邻两次取到的种子不挨着，也不和对局种子长得几乎一样。
+    /// retire-legacy-maps 2.1：自已删除的 <c>GeneratedMapId.FriendlySeed</c>（边疆档生成图标识）原样迁入，输出逐位相同。
+    /// </summary>
+    public static ulong FriendlySeed(ulong raw)
+    {
+        ulong z = unchecked(raw * 0x9E3779B97F4A7C15UL);
+        z ^= z >> 32;
+        z = unchecked(z * 0xD6E8FEB86659FD93UL);
+        z ^= z >> 32;
+        return z % FriendlySeedLimit;
+    }
 
     private static bool IsDigits(string text) => text.Length > 0 && text.All(char.IsAsciiDigit);
 }

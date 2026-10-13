@@ -6,7 +6,8 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <summary>规格：map-definition —— Requirement: 出生区归属与共享</summary>
 public class 出生区归属Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图（期望值随之改：出生区 2 是 5×5 的 2 号出生棋盘）。
+    private static readonly MapData Map = MapCatalog.Resolve("link:1");
 
     [Fact]
     public void 共享出生区()
@@ -22,9 +23,9 @@ public class 出生区归属Tests
         Coord[] before = LegalFor(TestMaps.P0);
         Assert.Equal(before, LegalFor(TestMaps.P1));
 
-        // terrain-model v3：出生区是 13 格 h=2 高台，区内无障碍，可落子的空格就是全部 13 格。
-        Assert.Equal(13, before.Length);
-        Assert.Equal(13, Map.BirthZones[lockedZone].Count);
+        // link:1：出生区 2 是 5×5 的出生棋盘，棋盘内无障碍，可落子的空格就是全部 25 格。
+        Assert.Equal(25, before.Length);
+        Assert.Equal(25, Map.BirthZones[lockedZone].Count);
 
         board.Place(before[0], TestMaps.P0, PieceType.Basic);
         board.Place(before[1], TestMaps.P1, PieceType.Basic);
@@ -39,10 +40,12 @@ public class 出生区归属Tests
     {
         // 本层没有大回合概念：某格是否属于某出生区，不影响它能否落子。
         // 限制的生效时机（前三大回合）由对局流程层决定。
-        GameBoard board = GameBoard.Load(Map);
-        Coord inZone = Map.BirthZones[0].Where(c => board[c].IsPlayableEmpty).Order().First();
+        // retire-legacy-maps 1.6：链接档初始图的可落子格全在出生棋盘上，找不到"出生区之外的可落子格"；改用 9×9 手写夹具（四角出生区、中间公共），断言不变。
+        MapData map = MatchFixtures.Map();
+        GameBoard board = GameBoard.LoadUnvalidated(map);
+        Coord inZone = map.BirthZones[0].Where(c => board[c].IsPlayableEmpty).Order().First();
         Coord outsideZone = board.AllCoords()
-            .First(c => board[c].IsPlayableEmpty && Map.BirthZoneOf(c) is null);
+            .First(c => board[c].IsPlayableEmpty && map.BirthZoneOf(c) is null);
 
         board.Place(inZone, TestMaps.P0, PieceType.Basic);
         board.Place(outsideZone, TestMaps.P0, PieceType.Basic);
@@ -66,6 +69,7 @@ public class 出生区归属Tests
     [Fact]
     public void 非出生区格归属为空()
     {
-        Assert.Null(Map.BirthZoneOf(Map.CentralEntrance));
+        // retire-legacy-maps 1.6：原取 v5 的中央入口；link:1 的中央入口落在 1 号出生棋盘上，改取棋盘之外的场景格 A1。
+        Assert.Null(Map.BirthZoneOf(Coord.Parse("A1")));
     }
 }

@@ -154,7 +154,7 @@ public class 活形记录与统计Tests
         // ③ 终局快照的逐玩家活形状态 = 测试侧在活对局上独立数出来的值；样本口径下界：终局至少一条活形棋串。
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
         RunConfig config = SimFixtures.Config(count: 1, seedStart: 1, turnLimit: 40, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 };
-        MatchSession session = MatchSession.Create(config, config.SeedAt(0), resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(config, config.SeedAt(0));   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         MatchLog log = RoundTrip(session.Run());
 
         Assert.All(log.Turns, t => Assert.NotNull(t.Life));

@@ -72,19 +72,19 @@ public sealed record RunConfig
     /// <summary>默认小回合硬停（防死锁保险，以异常记为失败局，不是终局原因）。截断为 0（不截断，仅供调试）时它是唯一兜底。</summary>
     public const int DefaultMaxTurns = 1_000;
 
-    /// <summary>地图标识或地图 JSON 文件路径。</summary>
-    public string MapId { get; init; } = MapCatalog.Legacy.DefaultId;
+    /// <summary>地图标识：链接图 <c>link:&lt;地图种子&gt;</c>。缺省 <see cref="MapCatalog.DefaultId"/>（<c>link:1</c>；retire-legacy-maps：原为 v5，随旧地图删除）。</summary>
+    public string MapId { get; init; } = MapCatalog.DefaultId;
 
     /// <summary>
-    /// 每局换图（map-generator D6）：<see cref="MapId"/> 须是生成图标识 <c>gen:&lt;起始地图种子&gt;[:p&lt;平台数&gt;]</c>，第 <i>i</i> 局用地图种子 <c>起始 + i</c>、
-    /// 平台数不变（<see cref="MapIdAt"/>）。起始地图种子与平台数就写在 <see cref="MapId"/> 里（平台数为缺省 6 时按规范化写法省略），不另设字段——
+    /// 每局换图（map-generator D6）：<see cref="MapId"/> 须是带起始地图种子的链接图标识 <c>link:&lt;起始地图种子&gt;</c>，第 <i>i</i> 局用地图种子 <c>起始 + i</c>
+    /// （<see cref="MapIdAt"/>；retire-legacy-maps：<c>gen:</c> 生成图随旧生成器删除）。起始地图种子就写在 <see cref="MapId"/> 里，不另设字段——
     /// 同一件事只有一处记录。各局的完整地图标识写入该局日志首部的 <see cref="Logging.LogHeader.MapId"/>；首部里的 <see cref="MapId"/> 仍是批次的起始标识。
     /// 为 <c>false</c> 时不写出（标准批次的配置记录与日志首部与引入本项之前逐字节相同）。命令行 <c>--map-per-match</c>。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool MapPerMatch { get; init; }
 
-    /// <summary>各玩家配置；玩家编号即下标（P0、P1……）。标准图上冒险概率为 0 时插旗 P<i>i</i> 锁定出生区 <i>i</i>，否则见 <see cref="FlagRisk"/>。</summary>
+    /// <summary>各玩家配置；玩家编号即下标（P0、P1……）。出生棋盘由盲选插旗决定（<see cref="MatchFlow.PlantPrototype"/>）。</summary>
     public List<PlayerAiConfig> Players { get; init; } = [new(), new(), new(), new()];
 
     /// <summary>首个种子；第 <i>i</i> 局的种子 = SeedStart + i。</summary>
@@ -116,12 +116,7 @@ public sealed record RunConfig
     /// </summary>
     public int? PassThreshold { get; init; }
 
-    /// <summary>
-    /// 原型插旗的冒险概率（<see cref="MatchOptions.FlagRisk"/>，flag-contest D2；0–100）：<c>null</c> = 新建的局取 <see cref="MatchOptions.DefaultFlagRisk"/>，
-    /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 0 重建
-    /// （p = 0 与引入之前逐项相同）。board-link-mode 实现裁决 C2 / C8：命令行 <c>--flag-risk</c> 已删除，本字段只留给 Legacy 夹具；链接图配置写了即报错。
-    /// </summary>
-    public int? FlagRisk { get; init; }
+    // retire-legacy-maps 3.2：冒险概率字段 FlagRisk 删除；配置文件写了即报错（见 RetiredKeys）。
 
     /// <summary>
     /// 配对种子（board-link-mode Q10 / 规格 simulation-harness「各入口支持生成图」，命令行 <c>--pairing-seed</c>）：只用于链接图 <c>link:</c> 的对局，
@@ -172,23 +167,10 @@ public sealed record RunConfig
     /// <summary>第 <paramref name="index"/> 局的种子。</summary>
     public ulong SeedAt(int index) => checked(SeedStart + (ulong)index);
 
-    /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>gen:&lt;起始 + index&gt;[:p&lt;N&gt;]</c>（规范化），否则恒为 <see cref="MapId"/>。</summary>
-    public string MapIdAt(int index)
-    {
-        if (!MapPerMatch)
-        {
-            return MapId;
-        }
-
-        if (LinkMapId.IsLinkMap(MapId))
-        {
-            // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>。
-            return LinkMapId.Format(checked(LinkMapId.Parse(MapId) + (ulong)index));
-        }
-
-        (ulong start, MapGenParameters parameters) = GeneratedMapId.Parse(MapId);
-        return GeneratedMapId.Format(checked(start + (ulong)index), parameters);
-    }
+    /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>link:&lt;起始 + index&gt;</c>（规范化），否则恒为 <see cref="MapId"/>。</summary>
+    public string MapIdAt(int index) =>
+        // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>。
+        MapPerMatch ? LinkMapId.Format(checked(LinkMapId.Parse(MapId) + (ulong)index)) : MapId;
 
     /// <summary>玩家编号列表。</summary>
     public PlayerId[] PlayerIds() => [.. Enumerable.Range(0, Players.Count).Select(i => new PlayerId(i))];
@@ -216,15 +198,14 @@ public sealed record RunConfig
 
         if (MapPerMatch)
         {
-            bool link = LinkMapId.IsLinkMap(MapId) && !LinkMapId.IsBareRequest(MapId);
-            if (!link && (!GeneratedMapId.IsGenerated(MapId) || GeneratedMapId.IsBareRequest(MapId)))
+            if (!LinkMapId.IsLinkMap(MapId) || LinkMapId.IsBareRequest(MapId))
             {
-                throw new ArgumentException($"每局换图要求地图标识带起始地图种子：链接图 link:<起始地图种子>，或生成图 gen:<起始地图种子>[:p<平台数>]；实际为 {MapId}。");
+                throw new ArgumentException($"每局换图要求地图标识带起始地图种子：链接图 link:<起始地图种子>；实际为 {MapId}。");
             }
 
             try
             {
-                _ = MapIdAt(Count - 1);   // 格式、平台数范围与种子上溢在开跑之前报出
+                _ = MapIdAt(Count - 1);   // 格式与种子上溢在开跑之前报出
             }
             catch (OverflowException)
             {
@@ -245,17 +226,6 @@ public sealed record RunConfig
         if (PassThreshold < 0)
         {
             throw new ArgumentException("停手阈值须为非负整数（0 = 严格提高即保留）。");
-        }
-
-        if (FlagRisk is < 0 or > 100)
-        {
-            throw new ArgumentException("冒险概率须为 0–100 的整数百分比（0 = 不冒险，与引入之前逐项相同）。");
-        }
-
-        // board-link-mode 实现裁决 C2：链接图（唯一的玩家模式）废除冒险概率——盲选插旗看不见已插的旗，配置里写了即报错，不静默忽略。
-        if (FlagRisk is not null && LinkMapId.IsLinkMap(MapId))
-        {
-            throw new ArgumentException("冒险概率已废除（board-link-mode：盲选插旗），链接图 link: 的配置不得含 FlagRisk。");
         }
 
         if (PairingSeed is not null && !LinkMapId.IsLinkMap(MapId))
@@ -309,38 +279,23 @@ public sealed record RunConfig
         this with { Players = [.. Players.Select(p => p with { Weights = p.Weights ?? EvaluationWeights.Default })] };
 
     /// <summary>
-    /// 把"按地图自动"的候选格上限与缺省停手阈值、缺省冒险概率落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K、阈值与 p。
-    /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>，
-    /// 冒险概率未配置时一律落成 <see cref="MatchOptions.DefaultFlagRisk"/>（两者缺省都非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分），
+    /// 把"按地图自动"的候选格上限与缺省停手阈值落成具体数值，使批次 <c>config.json</c> 与日志首部如实记录实际生效的 K 与阈值。
+    /// K 已显式配置、或自动值为 0（小图）时不写（标准图上这一项与引入之前相同）；阈值未配置时一律落成 <see cref="AiSearchConfig.DefaultPassThreshold"/>
+    /// （缺省非 0，不落成就无法与"首部缺该项 = 旧日志 = 0"区分；retire-legacy-maps 3.2：冒险概率的落成随字段删除），
     /// 内容集未配置时一律落成 <see cref="ContentSets.Default"/>（同理：首部缺该项 = 旧日志 = v1），带入数量未配置时落成 0（关闭）。
-    /// 本局地图登记了地图专属评价权重覆盖（<see cref="EvaluationWeights.MapOverrides"/>）时，未显式配置权重的玩家落成覆盖表（首部权重为空 = 旧日志 = 缺省表）；
-    /// 未登记的地图不动权重。幂等。
+    /// 权重不动（retire-legacy-maps 3.3：地图专属评价权重覆盖随 2 人图删除）。幂等。
     /// </summary>
-    public RunConfig ResolvedFor(MapData map) => ResolvedFor(map, EvaluationWeights.MapOverrides);
-
-    /// <summary>同 <see cref="ResolvedFor(MapData)"/>，地图专属权重的登记表由参数给出（测试接缝，纯函数）。</summary>
-    internal RunConfig ResolvedFor(MapData map, IReadOnlyDictionary<string, EvaluationWeights> mapOverrides)
+    public RunConfig ResolvedFor(MapData map)
     {
         ArgumentNullException.ThrowIfNull(map);
-        ArgumentNullException.ThrowIfNull(mapOverrides);
         RunConfig resolved = CandidateCellLimit is null && AiSearchConfig.DefaultCellLimitFor(map.PlayableCount) is > 0 and int auto
             ? this with { CandidateCellLimit = auto }
             : this;
         resolved = resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
-        // 冒险概率只属于旧地图（Legacy 夹具）；链接图不落成、不写出（board-link-mode C2，match-telemetry 第 1 项"首部 MUST NOT 含冒险概率字段"）。
-        resolved = resolved.FlagRisk is null && !LinkMapId.IsLinkMap(map.Id) ? resolved with { FlagRisk = MatchOptions.DefaultFlagRisk } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
         resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
-        // 地图专属评价权重（v2-recalibration D6）：只对登记了覆盖的地图、未显式配置权重的玩家，把覆盖表落成显式权重写进 config.json 与首部
-        // （与停手阈值落成同一先例），回放按首部重建；取值经 Core 的唯一实现（显式 > 覆盖 > 缺省表，整表）。
-        // 未登记的地图原样返回，配置记录与首部与引入之前逐字节相同。必须放在下面前瞻宽度那段之前（它直接 return）。
-        if (mapOverrides.ContainsKey(map.Id) && resolved.Players.Any(p => p.Weights is null))
-        {
-            resolved = resolved with { Players = [.. resolved.Players.Select(p => p with { Weights = EvaluationWeights.ForMapId(map.Id, p.Weights, mapOverrides) })] };
-        }
-
         // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，
         // 使"专家、前瞻宽度 4"如实可查、回放按首部重建。落成值与会话建 AI 时按难度取的完全相同（候选格上限与停手阈值取上面已落成的值），走法不变。
         // 必须放在候选格上限与停手阈值落成之后。前瞻宽度为 0 的三档旧难度不落成（Search 保持缺省），配置记录与首部与引入之前逐字节相同。
@@ -366,6 +321,7 @@ public sealed record RunConfig
         ["MaxMajorRounds"] = "大回合上限终局已删除（restore-go-core-rules 裁决 #4），对局只剩三类终局；跑局要限长请用 TurnLimit（小回合数截断）",
         ["DominanceStartRound"] = "势力碾压已删除（restore-go-core-rules 裁决 #4）",
         ["CatchUpRecruit"] = "落后者征募补偿已删除（restore-go-core-rules 裁决 #7）",
+        ["FlagRisk"] = "冒险概率已移除（retire-legacy-maps 3.2；board-link-mode 起原型插旗为盲选）",
     };
 
     public static RunConfig FromJson(string json)

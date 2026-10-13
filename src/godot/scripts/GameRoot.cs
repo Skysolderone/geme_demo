@@ -303,7 +303,7 @@ public sealed partial class GameRoot : Node3D
             // 旧的裸 gen / 裸 board 不再识别（board-link-mode 实现裁决 D7）：与其他旧标识一样由 MapCatalog.Resolve 报错退出。
             if (LinkMapId.IsBareRequest(mapId))
             {
-                mapId = LinkMapId.Format(GeneratedMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()));
+                mapId = LinkMapId.Format(LinkMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()));
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
@@ -682,13 +682,13 @@ public sealed partial class GameRoot : Node3D
             }
             finally
             {
-                if (!passed || !_autoDemo || _session.Match.Mode != MatchMode.Link)
+                if (!passed || !_autoDemo)   // retire-legacy-maps 3.6：图形版只有链接模式，模式判定删除
                 {
                     GetTree().Quit(passed ? 0 : 1);
                 }
             }
 
-            if (passed && _autoDemo && _session.Match.Mode == MatchMode.Link)
+            if (passed && _autoDemo)
             {
                 // board-link-mode D-d：开局那轮通过后不退出，自动演示继续，等本机参与的链接把战场合并后再跑一轮（合并战场的全部可见格都要验到）。
                 _pickCheckAfterLink = true;

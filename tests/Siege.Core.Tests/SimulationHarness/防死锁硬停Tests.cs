@@ -17,7 +17,7 @@ public class 防死锁硬停Tests
 {
     private static MatchSession AlwaysPlacing(RunConfig config, ulong seed)
     {
-        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(config, seed);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         foreach (PlayerId p in session.Match.Players)
         {
             session.SetController(p, new AlwaysPlaceController());
@@ -34,7 +34,7 @@ public class 防死锁硬停Tests
         // 变异验证 M-RC3（check）：硬停改为 `return false` 且会话收尾把未终局对局记成 MajorRoundLimit 终局 → 红 1（本测试：IsFailed 为 false）。
         Assert.Equal(1_000, RunConfig.DefaultMaxTurns);
 
-        RunConfig config = SimFixtures.Config(retention: EventRetention.SnapshotsOnly) with { MaxTurns = 30, TurnLimit = 0, FlagRisk = 0 };   // flag-contest：写死冒险概率 0   // 截断关闭（0），只剩硬停兜底
+        RunConfig config = SimFixtures.Config(retention: EventRetention.SnapshotsOnly) with { MaxTurns = 30, TurnLimit = 0 };   // retire-legacy-maps 1.8：共用配置改到 link:1（盲选插旗，链接图不得含冒险概率），去掉原写死的 FlagRisk = 0   // 截断关闭（0），只剩硬停兜底
         MatchSession session = AlwaysPlacing(config, 302);
 
         MatchLog log = session.Run();

@@ -155,8 +155,10 @@ public class 平衡分析方向Tests
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stripped)));
         }
 
-        Assert.Equal("83302588F50D3B8B52A75D7DFFF1261561B0073AF56D3C319212DF3D7F651FF1", Hash(SimFixtures.Sample.Value));
-        Assert.Equal("19E3B957D93FC0877760093116CB09E1DF2AC441C510AF7FF315D86217AB9B04", Hash(SimFixtures.RankedSample.Value));
+        // retire-legacy-maps 1.8：两份共用样本由 v5 改到 link:1，黄金值在删除 v5 之前按当时实现重钉（原值 83302588…、19E3B957… 取自 ad78d50 的 v5 样本）。
+        // 守的规则不变：v1 样本的报告不因内容枚举追加而多出行（第 12 项只单列"不适用"）；此后报告任何一行改动都会红。
+        Assert.Equal("A4D48D1F732226F87D3F5689748922AF7CAF4FA425462EF7EE938FFC54FB04DC", Hash(SimFixtures.Sample.Value));
+        Assert.Equal("665851BBD2CE8ACFD5A02E3419A727C360529103006929C04D1470241C2C1127", Hash(SimFixtures.RankedSample.Value));
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Match;
 using Siege.Core.Carry;
 using Siege.Sim;
 using Siege.Sim.Cli;
@@ -31,7 +32,7 @@ public class 终端的带入选择弃赛与结算显示Tests
     {
         var output = new StringWriter();
         int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Easy, new StringReader(script), output,
-            weights: ScriptWeights, passThreshold: ScriptPassThreshold, flagRisk: 0, contentSet: ContentSet.V1, profile: profile, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            weights: ScriptWeights, passThreshold: ScriptPassThreshold, contentSet: ContentSet.V1, profile: profile, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // retire-legacy-maps 1.8：地图由 v5 改为 link:1（内置固定配对脚本），冒险概率随旧地图删除
         return (exit, output.ToString());
     }
 
@@ -51,7 +52,8 @@ public class 终端的带入选择弃赛与结算显示Tests
         Assert.Contains("补给点 14", text, StringComparison.Ordinal);
         Assert.Contains("你：换型令 → 连珠子", text, StringComparison.Ordinal);
         Assert.Matches(new Regex("你：换型令 → 连珠子；玩家2：(备用子|征召签 → \\S+子|换型令 → \\S+子)；玩家3：(备用子|征召签 → \\S+子|换型令 → \\S+子)；玩家4：(备用子|征召签 → \\S+子|换型令 → \\S+子)"), text);
-        Assert.True(text.IndexOf("你：换型令 → 连珠子", StringComparison.Ordinal) < text.IndexOf("选择你的出生区", StringComparison.Ordinal), "带入应在插旗前公开");
+        // retire-legacy-maps 1.8：链接图上插旗提示为"盲选出生棋盘"（原 v5 为"选择你的出生区"），断言不变。
+        Assert.True(text.IndexOf("你：换型令 → 连珠子", StringComparison.Ordinal) < text.IndexOf("盲选出生棋盘", StringComparison.Ordinal), "带入应在插旗前公开");
 
         CarryProfile after = CarryProfile.Parse(temp.Read());
         Assert.Equal((14, 1, 1), (after.Points, after.StockOf(SupplyKind.SpareStone), after.StockOf(SupplyKind.Commission)));
@@ -80,7 +82,9 @@ public class 终端的带入选择弃赛与结算显示Tests
         // 名次与点数由测试独立核对：p = 点数表（规格：4 人 24 / 16 / 12 / 10）第 r 名的一半向下取整；第 6 大回合已过保护期。
         using var temp = new TempProfile();
         temp.Write(TempProfile.Json(points: 0, spare: 0, draft: 0, commission: 1));
-        var script = new StringBuilder("3\n1\n1\n");   // 带入换型令、指定 v1 候选第 1 项堡垒子；1 号出生区
+        // retire-legacy-maps 1.8：地图改到 link:1 后种子 42 / 1 号区的人类要么早早出局、要么链接后终端播报越界崩溃（migration.md 待决 L15）；
+        // 探针（种子 40–70 × 棋盘 1–5）取能在第 6 大回合弃赛、此后 AI 跑到终局的种子 43、3 号出生棋盘。断言不变。
+        var script = new StringBuilder("3\n1\n3\n");   // 带入换型令、指定 v1 候选第 1 项堡垒子；3 号出生棋盘
         for (int round = 1; round <= 5; round++)
         {
             script.Append("\npass\n");                 // 回车不征募，pass
@@ -88,7 +92,7 @@ public class 终端的带入选择弃赛与结算显示Tests
 
         script.Append("resign\ny\n");
 
-        (int exit, string text) = Play(script.ToString(), temp.Store());
+        (int exit, string text) = Play(script.ToString(), temp.Store(), seed: 43);
 
         Assert.Equal(0, exit);
         Assert.Contains("你：换型令 → 堡垒子", text, StringComparison.Ordinal);
@@ -144,7 +148,7 @@ public class 终端的带入选择弃赛与结算显示Tests
         Assert.Contains("更新的版本", text, StringComparison.Ordinal);
         Assert.DoesNotContain("补给点", text, StringComparison.Ordinal);
         Assert.DoesNotContain("带入：", text, StringComparison.Ordinal);
-        Assert.Contains("选择你的出生区", text, StringComparison.Ordinal);
+        Assert.Contains("盲选出生棋盘", text, StringComparison.Ordinal);   // retire-legacy-maps 1.8：链接图的插旗提示（原 v5 为"选择你的出生区"）
         Assert.Equal(newer, temp.Read());
         Assert.Equal(["profile.json"], temp.Files());
     }
@@ -232,7 +236,7 @@ public class 终端的带入选择弃赛与结算显示Tests
 
         string before = RealProfileDir.State();
         var output = new StringWriter();
-        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n\npass\n"), output, map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n\npass\n"), output, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // retire-legacy-maps 1.8：地图由 v5 改为 link:1
         Assert.Equal(before, RealProfileDir.State());
     }
 }

@@ -50,7 +50,7 @@ public class 分析排除测试污染Tests
         {
             Players = [new PlayerAiConfig { DebugAi = true, Difficulty = AiDifficulty.Easy }, new PlayerAiConfig { Difficulty = AiDifficulty.Easy }, new PlayerAiConfig { Difficulty = AiDifficulty.Easy }, new PlayerAiConfig { Difficulty = AiDifficulty.Easy }],
         };
-        MatchLog debugLog = MatchSession.Create(config, 77, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog debugLog = MatchSession.Create(config, 77).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.True(debugLog.Result!.UsedDebugAi);
         Assert.Equal([0], debugLog.Result.DebugAiPlayers);
         Assert.Equal([0], debugLog.Header.DebugAiPlayers);

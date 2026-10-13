@@ -125,24 +125,20 @@ public sealed class MatchSession
     // ---------- 建局 ----------
 
     /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
-    public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null, Func<string, MapData>? resolveMap = null) =>
-        Create(config, seed, map, recorded: false, resolveMap: resolveMap);
+    public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null) =>
+        Create(config, seed, map, recorded: false);
 
     /// <summary>
     /// <paramref name="recorded"/> 为 <c>true</c> 即按日志首部的配置原样重建（回放）：不把候选格上限按地图落成缺省值，
     /// 首部没有该项就是不限制——否则该项出现之前的大图旧日志会被按新缺省 K 重跑而中途分歧，重建出的首部也会多出一项。
-    /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。冒险概率同理：首部没有该项按 0（不冒险）重建。
+    /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。
     /// </summary>
     /// <param name="pairing">
     /// 链接图对局的配对来源（board-link-mode D3 / Q10）：<c>null</c> 即新建的局——由配对种子（<see cref="RunConfig.PairingSeed"/>，缺省由对局种子派生）派生的工具层随机源
     /// <see cref="SeededPairingSource"/>；回放传按日志配对事件重放的 <see cref="RecordedPairingSource"/>。旧地图（Legacy 夹具）的对局不读它。
     /// </param>
-    /// <param name="resolveMap">
-    /// 未传 <paramref name="map"/> 时"标识 → 地图"的解析（board-link-mode 实现裁决 D7）：缺省 <see cref="MapCatalog.Resolve"/>，只认 <c>link:</c>；
-    /// Core 测试里的 Legacy 夹具显式传 <c>MapCatalog.Legacy.Resolve</c>。玩家入口（<c>Program</c>）不传。
-    /// </param>
     internal static MatchSession Create(
-        RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null, IPairingSource? pairing = null, Func<string, MapData>? resolveMap = null)
+        RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null, IPairingSource? pairing = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
@@ -152,15 +148,13 @@ public sealed class MatchSession
             throw new ArgumentException("每局换图的配置不能由会话自行解析地图：请由调用方按本局的地图标识解析后传入。");
         }
 
-        map ??= resolveMap is { } custom ? custom(config.MapId) : MapCatalog.Resolve(config.MapId);
+        map ??= MapCatalog.Resolve(config.MapId);   // retire-legacy-maps 3.4：resolveMap 过渡口删除，一律经目录
         if (!recorded)
         {
             config = config.ResolvedFor(map);
         }
 
         PlayerId[] players = config.PlayerIds();
-        // 冒险概率（flag-contest D2）：新建的局已由 ResolvedFor 落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时没有冒险，按 0 重建。
-        int flagRisk = config.FlagRisk ?? (recorded ? 0 : MatchOptions.DefaultFlagRisk);
         // 内容集（more-pieces-relics D8）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时只有原六 + 六，按 v1 重建。
         ContentSet contentSet = config.ContentSet ?? (recorded ? ContentSets.Legacy : ContentSets.Default);
         // 带入带出（carry-in-out D11）：新建的局按带入数量从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
@@ -179,26 +173,19 @@ public sealed class MatchSession
             carryIns = CarryAi.Draw(new GameSeed(seed), players, count, contentSet);
         }
 
-        // board-link-mode 实现裁决 C1：链接图 link: 的对局一律以链接模式建局并挂配对来源（冒险概率在链接模式下不读，C2）；其余地图是 Legacy 夹具，原样。
-        bool link = LinkMapId.IsLinkMap(map.Id);
+        // board-link-mode 实现裁决 C1：一律以链接模式建局并挂配对来源。retire-legacy-maps 3.6：建局分叉删除——公开 MatchFlow.Create 恒为链接模式（3.5）。
         MatchFlow match = MatchFlow.Create(
             map, new GameSeed(seed), players,
             MatchOptions.Immediate with
             {
                 ArtisanWeight = config.ArtisanWeight,
-                FlagRisk = link ? MatchOptions.DefaultFlagRisk : flagRisk,
                 ContentSet = contentSet,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
-                Mode = link ? MatchMode.Link : MatchMode.Legacy,
             });
-        if (link)
-        {
-            match.PairingSource = pairing ?? new SeededPairingSource(seed, config.PairingSeed);
-        }
+        match.PairingSource = pairing ?? new SeededPairingSource(seed, config.PairingSeed);
 
-        // 选区的唯一实现在 Core（frontier-map D4 / flag-contest D1）：此前已有旗时以冒险概率加入已有人的区；否则区数不多于人数上限时顺排
-        // （p = 0 时 P<i> → 区 <i>，与此前逐项相同），多于时由种子的独立子流均匀选区。
+        // 选区的唯一实现在 Core（frontier-map D4 / board-link-mode B2）：盲选（retire-legacy-maps 3.1：冒险概率 / 顺排 / 种子选区已删除）。
         match.PlantPrototype();
         return new MatchSession(match, config, recorded, carryHeader: !recorded || carry is not null);
     }

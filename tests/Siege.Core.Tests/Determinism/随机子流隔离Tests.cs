@@ -71,7 +71,7 @@ public class 随机子流隔离Tests
     {
         // 规范强制回归：改变某玩家的一次征募决策（= recruit 子流消费次数变化）后，该局信物生成结果逐格不变。
         // 变异验证 M-D3（Stream 返回共享实例）→ 本测试红。
-        MapData map = FourPlayerBaseMap.Create();
+        MapData map = MapCatalog.Resolve("link:1");   // retire-legacy-maps 1.8：原取 v5，改为 link:1（10 个信物格），断言不变
 
         RelicGenerationRecord baseline = RelicGenerator.Generate(map, Seed);
 

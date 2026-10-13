@@ -34,7 +34,7 @@ public class 对局日志的记录内容Tests
         MatchLog log = MatchLog.Read(path);
 
         // 1. 地图、种子、完整信物分布及揭示时间
-        Assert.Equal("siege-4p-base-v5", log.Header.MapId); // scoring-sites：RunConfig 默认地图切到 v4
+        Assert.Equal("link:1", log.Header.MapId); // retire-legacy-maps 1.8：共用样本由 v5 改到 link:1（原注：scoring-sites：RunConfig 默认地图切到 v4）
         Assert.Equal(live.Header.Seed, log.Header.Seed);
         Assert.NotEmpty(log.Header.Relics);
         Assert.All(log.Header.Relics, r => Assert.True(Coord.TryParse(r.Coord, out _) && Enum.TryParse<Relics.RelicType>(r.Type, out _)));
@@ -202,7 +202,11 @@ public class 对局日志的记录内容Tests
         // 变异验证 M-C4（check）：MatchSession.Finish 把 RelicReveals 置空 → 红 2（本测试、日志覆盖七类记录）。
         // ai-eye 段 B：样本由第 2 局（种子 12）换为第 1 局（种子 11）。停手阈值（缺省 20）之后种子 12 在 16 个小回合内揭示了全部 13 枚信物，
         // "整局未揭示的标为 null"这一支没有样本（下界响亮失败）；种子 11 在改动前、硬约束后、阈值后都恰有 1 枚未揭示。断言与期望均未改，只换样本。
-        MatchLog log = MatchLog.Parse(SimFixtures.Sample.Value[0].FullText());
+        // retire-legacy-maps 1.8：共用样本改到 link:1 后，第 3 大回合结束即发生链接，坐标随链接平移（match-telemetry「坐标随链接平移」），首部信物格（开局坐标）
+        // 与结果行（终局坐标）不再可逐格对照。这里改用同一批配置截断到第 11 个小回合（第 3 大回合结束前、尚无链接——链接在第 12 个小回合收尾时发生）的种子 11 一局，断言不变；
+        // 链接图上至少有一块出生棋盘无人插旗，其上的信物整局不揭示，"未揭示标为 null"一支有样本。
+        MatchLog log = MatchLog.Parse(BatchRunner.Execute(SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 11, turnLimit: 11)), parallelism: 1)[0].FullText());
+        Assert.Empty(log.Events.Where(e => e.Type == LogEventType.BattlefieldsLinked));   // 样本口径：截断之内没有链接
         Assert.Equal(log.Header.Relics.Select(r => r.Coord).Order(), log.Result!.RelicReveals.Select(r => r.Coord).Order());
         List<LogEvent> reveals = [.. log.Events.Where(e => e.Type == LogEventType.Reveal)];
         Assert.NotEmpty(reveals);
@@ -471,21 +475,23 @@ public class 对局日志的记录内容Tests
     }
 
     /// <summary>
-    /// 一局开启带入带出、各玩家带入由测试指定的真实会话（缺省图、内容集 v2、Easy）：与 <c>Siege.Sim.Running.MatchSession.Create</c> 同样先落成配置再建局插旗，
+    /// 一局开启带入带出、各玩家带入由测试指定的真实会话（<c>link:1</c>、内容集 v2、Easy）：与 <c>Siege.Sim.Running.MatchSession.Create</c> 同样先落成配置再建局插旗，
     /// 只是带入不从种子抽，而是像人机对局那样由外部给出——这样的带入不可由种子推出，回放必须读首部。
+    /// retire-legacy-maps 1.8：原为缺省图 v5 的 Legacy 建局（含冒险概率）；改为 link:1 的链接模式建局（种子派生配对，与 MatchSession.Create 对 link: 的处理相同）。
     /// </summary>
     internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, CarryIn> carries, int turnLimit)
     {
-        MapData map = MapCatalog.Legacy.Resolve(null);
+        MapData map = MapCatalog.Resolve("link:1");
         RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate with
         {
             ArtisanWeight = config.ArtisanWeight,
-            FlagRisk = config.FlagRisk!.Value,
             ContentSet = config.ContentSet!.Value,
             CarryInOut = true,
             CarryIns = carries.ToImmutableSortedDictionary(kv => new PlayerId(kv.Key), kv => kv.Value),
+            Mode = MatchMode.Link,
         });
+        match.PairingSource = new SeededPairingSource(seed, config.PairingSeed);
         match.PlantPrototype();
         return MatchSession.ForMatch(match, config);
     }

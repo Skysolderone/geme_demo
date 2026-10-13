@@ -290,7 +290,12 @@ public class 对局日志的记录内容_链接模式Tests
         // 实现裁决 C3：Legacy 对局的日志写出逐字节不变——新字段一律只在链接模式写出（逐字节由既有黄金哈希守住，这里守"键不出现"）。
         // 反面：同样的键在链接模式的日志里确实出现。
         // 变异 MC-18：首部 Mode 对旧模式也写 "Legacy" → 本测试红（也会让既有首部黄金哈希红）。
-        string legacy = MatchSession.Create(SimFixtures.Config(turnLimit: 8), 1, resolveMap: MapCatalog.Legacy.Resolve).Run().DeterministicText();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析
+        // retire-legacy-maps：旧模式载体由 v5 换成 9×9 手写夹具（Legacy 只剩手写夹具，L6 = C），经 MatchSession.ForMatch 跑出日志；断言不变。
+        MatchFlow fixture = MatchFlow.CreateUnvalidated(
+            MatchFixtures.Map(), MatchFixtures.Seed, [MatchFixtures.P0, MatchFixtures.P1], MatchFixtures.Relics(MatchFixtures.Map()), MatchOptions.Immediate);
+        fixture.PlantSequentially([(MatchFixtures.P0, 0), (MatchFixtures.P1, 1)]);
+        string legacy = MatchSession.ForMatch(fixture, SimFixtures.Config(turnLimit: 8, players: 2)).Run().DeterministicText();
+        Assert.Contains("\"MapId\":\"test-", legacy.Split('\n')[0], StringComparison.Ordinal);   // 样本口径：确是手写夹具上的旧模式局
         string link = Play([0, 1, 2, 3], stoneRounds: 1).Log.DeterministicText();
         foreach (string key in new[] { "\"Mode\":", "\"LockedFlagCounts\":", "\"WaitingRounds\":", "\"EliminationReason\":", "\"Pairing\":", "\"Link\":", "\"Settlement\":", "\"PairingSeed\":" })
         {

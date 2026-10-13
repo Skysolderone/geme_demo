@@ -31,7 +31,7 @@ public class 批量跑局Tests
         RunConfig config = SimFixtures.Config(count: 6, seedStart: 21, turnLimit: 12, retention: EventRetention.SnapshotsOnly) with { FullEventSamplePermille = 500, ContentSet = ContentSet.V1 };
         string dir = SimFixtures.TempDir("batch");
 
-        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 3);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.Equal((6, 6, 0), (summary.Count, summary.Completed, summary.Failed));
         Assert.Equal(6, summary.Reasons.Values.Sum());
@@ -41,11 +41,12 @@ public class 批量跑局Tests
         // config.json 写实际生效配置——未显式配置的权重填默认表（旧期望 config.ToJson() 原样 → 新期望 Effective()）。
         // ai-eye 段 B：未配置的停手阈值同样落成实际生效的缺省值写入（ai-decision「停手阈值」：实际生效的阈值 MUST 写入批次配置记录）。
         Assert.Null(config.PassThreshold);
-        // flag-contest D2：未配置的冒险概率同样落成缺省值 15 写入（不落成就无法与"首部缺该项 = 旧日志 = 0"区分）。
-        Assert.Null(config.FlagRisk);
+        // retire-legacy-maps 1.8：共用配置改到 link:1——链接图不落成冒险概率（board-link-mode C2，原 flag-contest D2 在 v5 上落成 15），
+        // 而 157 格 > 150 会落成候选格上限 24；期望里的落成项随之由"冒险概率 15"换为"候选格上限 24"，断言不变。
+        Assert.DoesNotContain("FlagRisk", config.ToJson(), StringComparison.Ordinal);   // retire-legacy-maps 3.2：字段已删除（原 Assert.Null(config.FlagRisk)）
         // carry-in-out 段 C：未配置的带入数量落成 0 写入（写明关闭）。
         Assert.Null(config.CarryIn);
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
         Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
@@ -54,7 +55,7 @@ public class 批量跑局Tests
         Assert.All(logs, l =>
         {
             Assert.NotNull(l.Result);
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, FlagRisk = Core.Match.MatchOptions.DefaultFlagRisk, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B / flag-contest D2：首部同样落成实际生效的阈值与冒险概率；carry-in-out 段 C：带入数量落成 0
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
             Assert.InRange(l.Result!.MajorRound, 1, 3);
         });
 
@@ -63,12 +64,12 @@ public class 批量跑局Tests
         Assert.Contains(logs, l => l.Header.Retention == EventRetention.SnapshotsOnly);
         Assert.All(logs.Where(l => l.Header.Retention == EventRetention.SnapshotsOnly), l => Assert.DoesNotContain(l.Events, e => LogEventType.IsFineGrained(e.Type)));
         Assert.Contains(logs.Where(l => l.Header.Retention == EventRetention.Full), l => l.Events.Any(e => e.Type == LogEventType.Candidates));
-        Assert.Equal(logs.Select(l => l.Header.Retention), BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve).Select(l => l.Header.Retention));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(logs.Select(l => l.Header.Retention), BatchRunner.Execute(config, parallelism: 1).Select(l => l.Header.Retention));   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         // 压缩输出同样可读
         RunConfig gz = config with { Count = 1, Compress = true };
         string gzDir = SimFixtures.TempDir("batch-gz");
-        BatchRunner.ExecuteToDirectory(gz, gzDir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchRunner.ExecuteToDirectory(gz, gzDir, parallelism: 1);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         string gzFile = Assert.Single(Directory.GetFiles(gzDir, "match-*.jsonl.gz"));
         // 首行 header 含 Count / Compress（本批不同），从第二行起逐字节一致
         Assert.Equal(logs[0].DeterministicText().Split('\n').Skip(1), MatchLog.Read(gzFile).DeterministicText().Split('\n').Skip(1));
@@ -84,8 +85,8 @@ public class 批量跑局Tests
         // 补上行数下界与快照 / 事件逐条比对后 → 红 2（本测试、纯AI局可凭种子复现）。
         RunConfig config = SimFixtures.Config(count: 6, seedStart: 31, turnLimit: 12);
 
-        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        List<MatchLog> parallel = BatchRunner.Execute(config, parallelism: 4, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        List<MatchLog> parallel = BatchRunner.Execute(config, parallelism: 4);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.Equal(6, serial.Count);
         Assert.Equal(serial.Select(l => l.Seed), parallel.Select(l => l.Seed));
@@ -124,7 +125,7 @@ public class 批量跑局Tests
         };
         string dir = SimFixtures.TempDir("sweep-config");
 
-        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         using JsonDocument json = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json")));
         Assert.Equal(18, json.RootElement.GetProperty("ArtisanWeight").GetInt32());
@@ -145,7 +146,7 @@ public class 批量跑局Tests
         Assert.Equal(4, log.Header.Config.TurnLimit);
 
         // 反面：地图数据不含据点——写出的地图文本里没有该字段（段 B 守门）。
-        Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(MapCatalog.Legacy.Resolve(log.Header.MapId)), StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Sites\"", MapFile.ToJson(MapCatalog.Resolve(log.Header.MapId)), StringComparison.Ordinal);   // retire-legacy-maps 1.8：样本图为 link:1，改经 MapCatalog.Resolve
     }
 
     [Fact]
@@ -227,7 +228,7 @@ public class 批量跑局Tests
     public void 未知玩家一律抛SiegeRuleException()
     {
         // boundaries.md「未知玩家必须响亮失败」延伸到会话层：替换控制者 / 接管 / 交还一个不在名单的玩家都抛 SiegeRuleException。
-        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 4), 5, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 4), 5);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         var stranger = new PlayerId(9);
         Assert.Throws<SiegeRuleException>(() => session.SetController(stranger, new BlindController()));
         Assert.Throws<SiegeRuleException>(() => session.TakeOver(stranger, new BlindController()));
@@ -237,7 +238,7 @@ public class 批量跑局Tests
         Assert.Equal(AiDifficulty.Easy, session.AiOf(new PlayerId(3))!.Difficulty);
 
         // 人数与地图不符也响亮失败
-        Assert.ThrowsAny<ArgumentException>(() => MatchSession.Create(SimFixtures.Config(players: 5), 5, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.ThrowsAny<ArgumentException>(() => MatchSession.Create(SimFixtures.Config(players: 5), 5));   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.Throws<ArgumentException>(() => SimFixtures.Config(players: 1).Validated());
     }
 
@@ -249,13 +250,13 @@ public class 批量跑局Tests
     public void 缺省关闭带入()
     {
         // 规格 Scenario：不传 --carry-in 执行一批对局 → 配置记录写明带入数量 0，每局日志与引入带入带出之前逐局相同。
-        // "逐局相同"用既有黄金哈希钉住（种子 31、Standard、24 个小回合，写死定值之前的权重，同 候选格上限Tests.缺省不限制时标准图整局与改动前逐步相同）；
+        // "逐局相同"用既有黄金哈希钉住（种子 31、Standard、24 个小回合，写死定值之前的权重，同 候选格上限Tests.LinkGoldenTurnHash；retire-legacy-maps 1.8：原为 v5 上的同口径黄金哈希）；
         // 首部只多出写明关闭的三项（配置的带入数量 0、开关 false、带入空表），结果行没有带出结算。
         RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
         Assert.Null(config.CarryIn);
         string dir = SimFixtures.TempDir("carry-default");
 
-        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         using (JsonDocument written = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config.json"))))
         {
@@ -263,7 +264,7 @@ public class 批量跑局Tests
         }
 
         MatchLog log = MatchLog.Read(Directory.GetFiles(dir, "match-*.jsonl").Single());
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(log));
+        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(log));   // retire-legacy-maps 1.8：原 V4GoldenTurnHash（v5），改为 link:1 上同口径重钉的黄金值
         Assert.Equal(0, log.Header.Config.CarryIn);
         Assert.Equal(false, log.Header.CarryInOut);
         Assert.Equal([], log.Header.CarryIns!);
@@ -279,7 +280,7 @@ public class 批量跑局Tests
         string before = RealProfileDir.State();
         RunConfig config = SimFixtures.Config(count: 20, seedStart: 1, turnLimit: 4) with { CarryIn = 1 };
 
-        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: 4, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        List<MatchLog> logs = BatchRunner.Execute(config, parallelism: 4);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.Equal(20, logs.Count);
         Assert.All(logs, log =>
@@ -302,7 +303,7 @@ public class 批量跑局Tests
         Assert.Equal(["Commission", "DraftLot", "SpareStone"], logs.SelectMany(l => l.Header.CarryIns!).Select(e => e.Supply).Distinct().Order(StringComparer.Ordinal));
 
         // 同一种子重跑：带入逐项相同。
-        MatchLog again = BatchRunner.Execute(config with { Count = 1, SeedStart = 7 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog again = BatchRunner.Execute(config with { Count = 1, SeedStart = 7 }, parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         MatchLog first = logs.Single(l => l.Seed == 7);
         Assert.Equal(CarryFixtures.CarryText(first.CarryIns), CarryFixtures.CarryText(again.CarryIns));
         Assert.Equal(SimFixtures.TurnTexts(first.Turns), SimFixtures.TurnTexts(again.Turns));   // 首部配置的种子 / 局数不同，只比走法
@@ -539,7 +540,7 @@ public class 批量跑局Tests
         Assert.Equal(600, RunConfig.DefaultTurnLimit);
         Assert.Equal(600, new RunConfig().TurnLimit);
 
-        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 10), 41, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(SimFixtures.Config(turnLimit: 10), 41);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         MatchLog log = MatchLog.Parse(session.Run().FullText());
 
         Assert.False(log.IsFailed);
@@ -606,8 +607,8 @@ public class 批量跑局Tests
         // 逐字节比对要钉住覆盖范围（testing.md）：快照条数 = 截断值、末条快照盘面有子；另逐条比对事件。
         // 反面：换一个更小的截断值，前面的小回合逐条相同——截断只是停止驱动，不改变走法。
         RunConfig config = SimFixtures.Config(turnLimit: 14);
-        MatchLog a = MatchSession.Create(config, 43, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        MatchLog b = MatchSession.Create(config, 43, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog a = MatchSession.Create(config, 43).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        MatchLog b = MatchSession.Create(config, 43).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.True(a.Result!.Truncated && b.Result!.Truncated);
         Assert.Equal((14, 14, 14), (a.Result.TurnCount, b.Result.TurnCount, a.Turns.Count));
@@ -618,7 +619,7 @@ public class 批量跑局Tests
             b.Events.Select(e => $"{e.Seq}:{e.Turn}:{e.Type}:{e.Player}:{e.Detail}"));
         Assert.Equal(a.DeterministicText(), b.DeterministicText());
 
-        MatchLog shorter = MatchSession.Create(SimFixtures.Config(turnLimit: 12), 43, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog shorter = MatchSession.Create(SimFixtures.Config(turnLimit: 12), 43).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.Equal(12, shorter.Result!.TurnCount);
         Assert.Equal(SimFixtures.TurnTexts(a.Turns.Take(12)), SimFixtures.TurnTexts(shorter.Turns));
     }

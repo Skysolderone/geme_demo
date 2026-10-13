@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Siege.Core.Board.Maps;
 
+// retire-legacy-maps：仓库根目录改取 TestPaths.RepoRoot()（原 FrontierFixtures.RepoRoot，随旧地图夹具删除而原样迁出）。
 namespace Siege.Core.Tests.MapSelection;
 
 /// <summary>
@@ -9,7 +10,7 @@ namespace Siege.Core.Tests.MapSelection;
 /// </summary>
 public class 选图界面守门Tests
 {
-    private static readonly string Src = Path.Combine(FrontierFixtures.RepoRoot(), "src");
+    private static readonly string Src = Path.Combine(TestPaths.RepoRoot(), "src");
 
     /// <summary>选图界面的全部源码：表现层的选图视图模型 + 图形版脚本。</summary>
     private static (string Path, string Text)[] SelectionSources()
@@ -50,24 +51,18 @@ public class 选图界面守门Tests
         Assert.DoesNotMatch(new Regex(@"""(board|gen|link):", RegexOptions.CultureInvariant), model);   // 不手拼标识
         Assert.DoesNotMatch(new Regex(@"BoardMapId|GeneratedMapId\.(Format|Parse)", RegexOptions.CultureInvariant), model);   // 旧标识族的拼装 / 解析不再出现
 
-        // 内置图面向人的显示名同样只登记在目录里（裁决 3）：界面层出现任何一个显示名的字面量，就是自带了"标识 → 名字"对照表。
-        // 变异 MC-20：Hud 选图面板里自带显示名对照表 → 本测试红。禁用词取自目录本身，新增内置图自动纳入。
-        Assert.Equal(MapCatalog.BuiltinIds.Count, MapCatalog.BuiltinMaps.Count);
-        foreach (BuiltinMapInfo map in MapCatalog.BuiltinMaps)
-        {
-            Assert.False(string.IsNullOrWhiteSpace(map.Title));
-            Assert.NotEqual(map.Id, map.Title);
-            string word = map.Title.Split(' ', '（')[0];   // "标准图 13×13" → "标准图"
-            Assert.True(word.Length >= 3, $"显示名 {map.Title} 的首词太短，扫描会误伤。");
-            Assert.Empty(files.Where(f => f.Text.Contains(map.Title, StringComparison.Ordinal)).Select(f => $"{f.Path}: {map.Title}"));
-            Assert.Empty(files.Where(f => CodeLines(f.Text).Any(l => l.Contains(word, StringComparison.Ordinal))).Select(f => $"{f.Path}: {word}"));
-            Assert.Contains($"\"{map.Title}\"", File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
-        }
+        // retire-legacy-maps：内置图、显示名表（BuiltinMaps / BuiltinIds）与内置图类型随旧地图删除——目录不再有任何"内置"成员，
+        // 原"显示名只登记在目录里"的逐项扫描失去对象，改为断言目录的公开面只剩缺省标识与解析（反射，比扫源码更直接）。
+        Assert.Equal(
+            ["DefaultId", "Resolve"],
+            typeof(MapCatalog).GetMembers(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly)
+                .Select(m => m.Name).Distinct().Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(CodeLines(File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs"))), l => l.Contains("Builtin", StringComparison.Ordinal));
 
-        // 反面：被禁的记号在它的归属处（目录）确实命中。
-        string catalog = File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs"));
-        Assert.Matches(banned, catalog);
-        Assert.Matches(banned, File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "FrontierMapV2.cs")));
+        // 反面：禁用正则确实能命中旧标识与旧类型名（旧的归属处 MapCatalog 内置表 / FrontierMapV2.cs 已删除，改用字面样本）。
+        Assert.Matches(banned, "siege-4p-base-v5");
+        Assert.Matches(banned, "siege-frontier-v2");
+        Assert.Matches(banned, "FourPlayerBaseMap.Create()");
     }
 
     [Fact]
@@ -91,7 +86,6 @@ public class 选图界面守门Tests
 
         // 反面：被禁的记号在目录里确实命中。
         Assert.Matches(banned, File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")));
-        Assert.Contains("BoardMapGenerator.Generate(", File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
         Assert.Contains("LinkMapGenerator.Generate(", File.ReadAllText(Path.Combine(Src, "Siege.Core", "Board", "Maps", "MapCatalog.cs")), StringComparison.Ordinal);
     }
 
@@ -106,7 +100,8 @@ public class 选图界面守门Tests
 
         // 图形版里取新地图种子的只有选图阶段这一处：时间戳先折成便于读写的短种子再交给视图模型。
         string stage = files.Single(f => f.Path == "godot/scripts/GameRoot.MapSelect.cs").Text;
-        Assert.Single(Regex.Matches(stage, @"GeneratedMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
+        // retire-legacy-maps：短种子折叠函数随 GeneratedMapId 删除迁入 LinkMapId（逐位相同，见 选图视图模型Tests）。
+        Assert.Single(Regex.Matches(stage, @"LinkMapId\.FriendlySeed\(\(ulong\)Stopwatch\.GetTimestamp\(\)\)"));
         Assert.Single(Regex.Matches(stage, @"Stopwatch\."));
         Assert.DoesNotContain(files, f => f.Path.EndsWith("Hud.MapSelect.cs", StringComparison.Ordinal) && clock.IsMatch(f.Text));
     }

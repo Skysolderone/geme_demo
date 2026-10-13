@@ -17,7 +17,7 @@ namespace Siege.Core.Tests.MatchSetup;
 /// v1 = 原六种棋子 + 原六类信物（与引入新内容之前逐步相同），v2 = 十 + 十；新局缺省 v2，旧存档 / 旧日志缺字段按 v1 并留痕（design.md D8）。
 /// 段 A 只有征募棋池随内容集变化（信物表的 v1 / v2 分流在段 B），因此"信物分布与保存时一致"在段 A 由同一生成器保证，段 B 起才有分流可测。
 /// </remarks>
-// board-link-mode 裁决 D7：非 link: 的旧存档由玩家入口 MatchFlow.Restore 拒绝；本类是 Legacy 夹具，改走等价内部口 MatchFlow.RestoreLegacy（校验与重建相同，只是不拒绝旧地图）。
+// retire-legacy-maps 1.8：样本对局由 v5（Legacy 夹具，经内部口 MatchFlow.RestoreLegacy 恢复）改到 link:1（链接模式，经玩家入口 MatchFlow.Restore 恢复）；断言不变。
 public class 对局内容集Tests
 {
     private static readonly PlayerId[] Four = [new(0), new(1), new(2), new(3)];
@@ -25,7 +25,7 @@ public class 对局内容集Tests
     /// <summary>按指定内容集跑 <paramref name="turns"/> 个小回合的真实 AI 对局（权重、阈值、冒险概率写死为既有口径）。</summary>
     private static MatchSession Played(ContentSet? set, ulong seed, int turns)
     {
-        MatchSession session = MatchSession.Create(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 0)) with { ContentSet = set }, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 0)) with { ContentSet = set }, seed);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         for (int i = 0; i < turns && session.RunTurn(); i++)
         {
         }
@@ -48,7 +48,7 @@ public class 对局内容集Tests
         Assert.True(node.Remove("ContentSet"), "新存档应写出内容集字段");
         string legacy = node.ToJsonString();
 
-        MatchFlow restored = MatchFlow.RestoreLegacy(match.Board.BaseMap, legacy);
+        MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(legacy)), legacy);
 
         Assert.Equal(ContentSet.V1, restored.ContentSet);
         Assert.True(restored.ContentSetBackfilled);
@@ -72,16 +72,17 @@ public class 对局内容集Tests
     public void v1逐步相同()
     {
         // 规格 Scenario：以内容集 v1 用同一种子与同一配置重跑一局此前记录过的 AI 对局 → 每一步与引入内容集之前逐项相同。
-        // "此前记录过"= 候选格上限Tests.V4GoldenTurnHash：种子 31、Standard、24 个小回合，在引入内容集之前钉下（快照含每步落子、提子、手牌类型、征募面板规模与势力明细）。
+        // "此前记录过"= 候选格上限Tests.LinkGoldenTurnHash：link:1、种子 31、Standard、24 个小回合（快照含每步落子、提子、手牌类型、征募面板规模与势力明细）。
+        // retire-legacy-maps 1.8：原为 v5 上的 V4GoldenTurnHash（在引入内容集之前钉下）；v5 删除前在 link:1 上以同口径重钉（PinPreCalibration 写死 v1），断言不变。
         // 反面：同一配置按 v2 跑出的局不同——否则内容集没有抵达对局，守门是空证。
-        RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard));
+        RunConfig config = 候选格上限Tests.LinkGoldenConfig();
 
-        MatchLog v1 = BatchRunner.Execute(config with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        MatchLog v2 = BatchRunner.Execute(config with { ContentSet = ContentSet.V2 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog v1 = BatchRunner.Execute(config with { ContentSet = ContentSet.V1 }, parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        MatchLog v2 = BatchRunner.Execute(config with { ContentSet = ContentSet.V2 }, parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.Equal(ContentSet.V1, v1.Header.Config.ContentSet);
         Assert.True(v1.Turns.Count >= 24, $"小回合 {v1.Turns.Count}");
-        Assert.Equal(候选格上限Tests.V4GoldenTurnHash, 候选格上限Tests.TurnHash(v1));
+        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(v1));
         Assert.NotEqual(候选格上限Tests.TurnHash(v1), 候选格上限Tests.TurnHash(v2));
     }
 
@@ -92,7 +93,7 @@ public class 对局内容集Tests
         Assert.Equal(ContentSet.V2, MatchOptions.Default.ContentSet);
         Assert.Equal(ContentSet.V2, MatchOptions.Immediate.ContentSet);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Legacy.Resolve(MapCatalog.Legacy.DefaultId), new GameSeed(5), Four);
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve("link:1"), new GameSeed(5), Four, MatchOptions.Default with { Mode = MatchMode.Link });
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
         Assert.Equal(ContentSet.V2, match.ContentSet);
         Assert.False(match.ContentSetBackfilled);
@@ -100,7 +101,7 @@ public class 对局内容集Tests
         Assert.Equal("V2", JsonNode.Parse(match.Serialize())!["ContentSet"]!.GetValue<string>());
 
         // 跑局：配置里不写内容集 → 新建的局取 v2，并落成具体值写进日志首部；样本里确实抽到了新棋子。
-        MatchLog log = BatchRunner.Execute(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 8)) with { ContentSet = null }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog log = BatchRunner.Execute(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 8)) with { ContentSet = null }, parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.Equal(ContentSet.V2, log.Header.Config.ContentSet);
         Assert.Contains("\"ContentSet\":\"V2\"", log.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
         MatchSession session = Played(null, seed: 1, turns: 8);
@@ -126,7 +127,9 @@ public class 对局内容集Tests
         MatchSession session = Played(ContentSet.V2, seed: 11, turns: 8);
         string json = session.Match.Serialize();
 
-        MatchFlow restored = MatchFlow.RestoreLegacy(session.Match.Board.BaseMap, json);
+        MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(json)), json);
+        // retire-legacy-maps 1.8：链接图对局的配对来源由对局外部给出、不进存档（battlefield「配对事件由对局外部提供」）；续跑跨过第 3 大回合的配对，恢复局挂上与原局同口径的种子派生来源。
+        restored.PairingSource = new SeededPairingSource(11, session.Config.PairingSeed);
 
         Assert.Equal(ContentSet.V2, restored.ContentSet);
         Assert.False(restored.ContentSetBackfilled);
@@ -153,8 +156,8 @@ public class 对局内容集Tests
         // match-setup「对局内容集」正文：回放不含该字段的旧日志按 v1 处理，MUST NOT 按 v2 静默重建。
         // 样本：v1 跑出的局去掉首部配置里的这一项；同一种子按 v2 跑出的局与之不同（样本口径：否则按 v2 回放也会"相同"，守门是空证）。
         RunConfig config = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 11, turnLimit: 8));
-        MatchLog v1 = BatchRunner.Execute(config with { ContentSet = ContentSet.V1 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        MatchLog v2 = BatchRunner.Execute(config with { ContentSet = ContentSet.V2 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog v1 = BatchRunner.Execute(config with { ContentSet = ContentSet.V1 }, parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        MatchLog v2 = BatchRunner.Execute(config with { ContentSet = ContentSet.V2 }, parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.NotEqual(候选格上限Tests.TurnHash(v1), 候选格上限Tests.TurnHash(v2));
 
         string text = v1.DeterministicText();
@@ -162,7 +165,7 @@ public class 对局内容集Tests
         MatchLog old = MatchLog.Parse(text.Replace("\"ContentSet\":\"V1\",", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.Config.ContentSet);
 
-        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(old);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.True(replay.LineCount >= 9, $"比对行数 {replay.LineCount}");
@@ -170,10 +173,10 @@ public class 对局内容集Tests
 
         // 会话层：新建的局缺字段取 v2 并落成具体值；按首部重建的局缺字段取 v1，有字段取记录值。
         RunConfig unset = config with { ContentSet = null };
-        Assert.Equal(ContentSet.V2, MatchSession.Create(unset, 11, resolveMap: MapCatalog.Legacy.Resolve).Match.ContentSet);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(ContentSet.V2, MatchSession.Create(unset, 11, resolveMap: MapCatalog.Legacy.Resolve).Config.ContentSet);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(ContentSet.V1, MatchSession.Create(unset, 11, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).Match.ContentSet);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(ContentSet.V2, MatchSession.Create(config with { ContentSet = ContentSet.V2 }, 11, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).Match.ContentSet);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(ContentSet.V2, MatchSession.Create(unset, 11).Match.ContentSet);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        Assert.Equal(ContentSet.V2, MatchSession.Create(unset, 11).Config.ContentSet);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        Assert.Equal(ContentSet.V1, MatchSession.Create(unset, 11, map: null, recorded: true).Match.ContentSet);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        Assert.Equal(ContentSet.V2, MatchSession.Create(config with { ContentSet = ContentSet.V2 }, 11, map: null, recorded: true).Match.ContentSet);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
     }
 
     [Fact]
@@ -181,12 +184,12 @@ public class 对局内容集Tests
     {
         // 0 不是合法内容集（显式编号 1 / 2）：对局配置、跑局配置与存档里的非法值都要响亮失败，不静默当成某个内容集。
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            MatchFlow.Create(MapCatalog.Legacy.Resolve(MapCatalog.Legacy.DefaultId), new GameSeed(1), Four, MatchOptions.Immediate with { ContentSet = 0 }));
+            MatchFlow.Create(MapCatalog.Resolve("link:1"), new GameSeed(1), Four, MatchOptions.Immediate with { ContentSet = 0, Mode = MatchMode.Link }));
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { ContentSet = (ContentSet)3 }).Validated());
 
         MatchSession session = Played(ContentSet.V1, seed: 11, turns: 4);
         JsonObject node = JsonNode.Parse(session.Match.Serialize())!.AsObject();
         node["ContentSet"] = "V9";
-        Assert.ThrowsAny<Exception>(() => MatchFlow.RestoreLegacy(session.Match.Board.BaseMap, node.ToJsonString()));
+        Assert.ThrowsAny<Exception>(() => MatchFlow.Restore(MapCatalog.Resolve(session.Match.Map.Id), node.ToJsonString()));
     }
 }

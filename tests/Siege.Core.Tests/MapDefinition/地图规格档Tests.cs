@@ -8,52 +8,28 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <summary>规格：frontier-map / map-definition —— Requirement: 地图规格档</summary>
 public class 地图规格档Tests
 {
-    [Theory]
-    [InlineData("siege-4p-base-v1")]
-    [InlineData("siege-4p-base-v2")]
-    [InlineData("siege-4p-base-v3")]
-    [InlineData("siege-4p-base-v5")]
-    public void 缺省为标准档(string id)
-    {
-        // Scenario：读入一张没有规格档字段的旧地图文件 → 规格档为标准。四份既有 maps/*.json 都没有该字段。
-        string text = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", id + ".json"));
-        Assert.DoesNotContain("\"Profile\"", text, StringComparison.Ordinal);
-
-        Assert.Equal(MapProfile.Standard, MapFile.FromJson(text).Profile);
-    }
-
-    [Fact]
-    public void 标准档写出时不带规格档字段且基准图文件逐字节不变()
-    {
-        // 标准档省略该字段：磁盘上的 v5 文件与代码序列化结果仍逐字符相等（行尾归一后），不必重导四份 json。
-        MapData v5 = FourPlayerBaseMap.Create();
-        Assert.Equal(MapProfile.Standard, v5.Profile);
-        string json = MapFile.ToJson(v5);
-        Assert.DoesNotContain("\"Profile\"", json, StringComparison.Ordinal);
-
-        string disk = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "maps", "siege-4p-base-v5.json"));
-        Assert.Equal(Normalize(disk), Normalize(json));
-    }
-
     [Fact]
     public void 规格档读写往返()
     {
-        // Scenario：边疆档地图导出再读入 → 规格档仍为边疆，其余字段逐项相等。
-        // 「写出时漏字段」只有往返测试抓得到（testing.md）；边疆 ≠ 缺省值，漏写 / 漏读都会读回标准档。
+        // Scenario：把一张链接档地图的初始状态导出为文件再读入 → 规格档仍为链接，棋盘清单与其余字段逐项相等。
+        // 「写出时漏字段」只有往返测试抓得到（testing.md）。
+        // retire-legacy-maps 1.6：载体由边疆档夹具（FrontierFixtures，随边疆档删除）改为手写链接档初始图，并按规格补比棋盘清单；断言不变。
         // 变异 M-A1：MapFile.ToJson 不写 Profile（恒 null）→ 本测试红。变异 M-A2：FromJson 不读 Profile → 本测试红。
-        MapData original = FrontierFixtures.Map();
+        MapData original = LinkMapFixtures.Initial();
 
         string json = MapFile.ToJson(original);
         MapData restored = MapFile.FromJson(json);
 
-        Assert.Contains("\"Profile\": \"Frontier\"", json, StringComparison.Ordinal);
-        Assert.Equal(MapProfile.Frontier, restored.Profile);
+        Assert.Contains("\"Profile\": \"Link\"", json, StringComparison.Ordinal);
+        Assert.Equal(MapProfile.Link, restored.Profile);
+        Assert.Equal(original.Boards.AsEnumerable(), restored.Boards.AsEnumerable());
+        Assert.Equal(5, restored.Boards.Length);
         Assert.Equal(original.Id, restored.Id);
         Assert.Equal(original.Width, restored.Width);
         Assert.Equal(original.Height, restored.Height);
         Assert.Equal(original.MaxPlayers, restored.MaxPlayers);
         Assert.Equal(original.Obstacles.Order(), restored.Obstacles.Order());
-        Assert.Equal(6, restored.BirthZones.Length);
+        Assert.Equal(5, restored.BirthZones.Length);
         for (int i = 0; i < original.BirthZones.Length; i++)
         {
             Assert.Equal(original.BirthZones[i].Order(), restored.BirthZones[i].Order());
@@ -69,56 +45,13 @@ public class 地图规格档Tests
     }
 
     [Fact]
-    public void 棋盘档读写往返()
+    public void 未定义的规格档值被拒绝而不是抛异常()
     {
-        // Scenario（board-map）：棋盘档地图导出再读入 → 规格档仍为棋盘，棋盘清单与其余字段逐项相等。
-        // 夹具宽 29 列：1 号出生棋盘在双字母列上，漏改列标解析时这里读不回来。
-        MapData original = BoardMapFixtures.Map();
-
-        string json = MapFile.ToJson(original);
-        MapData restored = MapFile.FromJson(json);
-
-        Assert.Contains("\"Profile\": \"Board\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"Boards\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"AB9\"", json, StringComparison.Ordinal);
-        Assert.Equal(MapProfile.Board, restored.Profile);
-        Assert.Equal(3, restored.Boards.Length);
-        Assert.Equal(original.Boards.AsEnumerable(), restored.Boards.AsEnumerable());
-        Assert.Equal(new BoardPlate(Coord.Parse("X5"), 5, 5, BoardPlateKind.Birth), restored.Boards[1]);
-        Assert.Equal(new BoardPlate(Coord.Parse("L3"), 9, 9, BoardPlateKind.Public), restored.Boards[2]);
-        Assert.Equal(original.Id, restored.Id);
-        Assert.Equal(original.Width, restored.Width);
-        Assert.Equal(original.Height, restored.Height);
-        Assert.Equal(original.MaxPlayers, restored.MaxPlayers);
-        Assert.Equal(original.Obstacles.Order(), restored.Obstacles.Order());
-        Assert.Equal(original.BirthZones.Length, restored.BirthZones.Length);
-        for (int i = 0; i < original.BirthZones.Length; i++)
-        {
-            Assert.Equal(original.BirthZones[i].Order(), restored.BirthZones[i].Order());
-        }
-
-        Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
-        Assert.Equal(original.ChokePoints.Order(), restored.ChokePoints.Order());
-        Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
-        Assert.Equal(original.DistanceTolerance, restored.DistanceTolerance);
-        Assert.Equal(original.MinTwoEyeArea, restored.MinTwoEyeArea);
-        Assert.Equal(json, MapFile.ToJson(restored));
-    }
-
-    [Fact]
-    public void 棋盘档按自己的声明行校验_未定义的规格档值仍被拒绝而不是抛异常()
-    {
-        // board-map 段 B：棋盘档有了声明行。合规的 4 人棋盘档图被接受（逐条 Scenario 见 棋盘档预算与校验Tests）；
-        // 段 A 的 29×13 2 人夹具不合棋盘档的规模（行数不足 20 行），按棋盘档自己的规则被拒绝，而不是"没有声明表"。
-        Assert.True(MapValidator.Validate(BoardMapFixtures.FourPlayerMap()).IsValid);
-        GameBoard.Load(BoardMapFixtures.FourPlayerMap());
-
-        MapValidationResult small = MapValidator.Validate(BoardMapFixtures.Map());
-        Assert.Equal("MAP_TOO_SHORT", Assert.Single(small.Failures).Code);
-        Assert.Throws<MapValidationException>(() => GameBoard.Load(BoardMapFixtures.Map()));
-
         // 没有声明行的只剩未定义的取值（只可能来自手工构造）：报成拒绝项并说明原因，不崩。
-        MapData unknown = BoardMapFixtures.FourPlayerMap() with { Profile = (MapProfile)9 };
+        // retire-legacy-maps 1.6：原名「棋盘档按自己的声明行校验_未定义的规格档值仍被拒绝而不是抛异常」；棋盘档那一半随棋盘档删除，
+        // 未定义取值这一半的载体由棋盘档夹具改为手写链接档初始图，断言不变。
+        Assert.True(MapValidator.Validate(LinkMapFixtures.Initial()).IsValid);
+        MapData unknown = LinkMapFixtures.Initial() with { Profile = (MapProfile)9 };
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(unknown).Failures);
         Assert.Equal("MAP_PROFILE_UNKNOWN", failure.Code);
         Assert.Throws<MapValidationException>(() => GameBoard.Load(unknown));
@@ -127,10 +60,47 @@ public class 地图规格档Tests
     [Fact]
     public void 未定义的规格档数字被指名报出()
     {
-        string json = MapFile.ToJson(FrontierFixtures.Map()).Replace("\"Profile\": \"Frontier\"", "\"Profile\": 7", StringComparison.Ordinal);
+        // retire-legacy-maps 1.6：载体由边疆档夹具改为手写链接档初始图，断言不变。
+        string json = MapFile.ToJson(LinkMapFixtures.Initial()).Replace("\"Profile\": \"Link\"", "\"Profile\": 7", StringComparison.Ordinal);
 
         var ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
         Assert.Contains("Profile", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null, "缺少规格档字段")]
+    [InlineData("\"Standard\"", "Standard 已移除")]
+    [InlineData("\"Frontier\"", "Frontier 已移除")]
+    [InlineData("\"Board\"", "Board 已移除")]
+    [InlineData("\"board\"", "Board 已移除")]
+    [InlineData("0", "Standard 已移除")]
+    [InlineData("1", "Frontier 已移除")]
+    [InlineData("2", "Board 已移除")]
+    public void 已移除的规格档被拒绝(string? profile, string expected)
+    {
+        // retire-legacy-maps 4.1（裁决 L7，规格 map-definition「地图规格档」）：规格档只剩链接档；地图文件的规格档字段缺失、
+        // 或写的是已移除的 Standard / Frontier / Board（字符串不分大小写，或其原数值 0 / 1 / 2）时拒绝读入，并说明该档已移除、只接受 Link。
+        string canonical = MapFile.ToJson(LinkMapFixtures.Initial());
+        Assert.Contains("\"Profile\": \"Link\",", canonical, StringComparison.Ordinal);   // 样本口径：恒写出规格档
+        string json = profile is null
+            ? canonical.Replace("\"Profile\": \"Link\",", string.Empty, StringComparison.Ordinal)
+            : canonical.Replace("\"Profile\": \"Link\"", $"\"Profile\": {profile}", StringComparison.Ordinal);
+        Assert.NotEqual(canonical, json);
+
+        FormatException ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
+        Assert.Contains(expected, ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Link", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(MapProfile.Link, MapFile.FromJson(canonical.Replace("\"Profile\": \"Link\"", "\"Profile\": 3", StringComparison.Ordinal)).Profile);   // 反面：数值 3 仍是链接档
+    }
+
+    [Fact]
+    public void 缺省规格档为链接档且恒写出()
+    {
+        // retire-legacy-maps 4.1：MapData.Profile 缺省改为 Link；文件恒写规格档字段（原"标准档不写出"随标准档删除）。
+        MapData synthetic = TestMaps.Synthetic(size: 9, maxPlayers: 4);
+        Assert.Equal(MapProfile.Link, synthetic.Profile);
+        Assert.Equal([MapProfile.Link], Enum.GetValues<MapProfile>());
+        Assert.Contains("\"Profile\": \"Link\"", MapFile.ToJson(synthetic), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -158,7 +128,7 @@ public class 地图规格档Tests
         // D1 接口契约：下游（对局、AI、表现层、入口）不感知规格档。规格档枚举的类型名只允许出现在
         // 定义处、地图数据、文件格式、校验器，以及内置地图的生成器目录（段 B 的边疆图要在那里标规格档）。
         // 变异 M-A8：在 Siege.Core/Match/MatchFlow.cs 注入一句读 MapProfile.Frontier 的分支 → 本测试红。
-        string src = Path.Combine(FrontierFixtures.RepoRoot(), "src");
+        string src = Path.Combine(TestPaths.RepoRoot(), "src");   // retire-legacy-maps：RepoRoot 由已删除的 FrontierFixtures 原样迁到 TestPaths
         string[] allowed =
         [
             Path.Combine("Siege.Core", "Board", "MapProfile.cs"),
@@ -192,6 +162,4 @@ public class 地图规格档Tests
         Assert.Contains("public MapProfile Profile { get; init; }", mapData, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(mapData, @"(?<![\w])Profile(?![\w])"));
     }
-
-    private static string Normalize(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n');
 }

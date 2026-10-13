@@ -237,6 +237,7 @@ public class 地形写入口Tests
     public void 地形写入口之外不得构造改造后的地形()
     {
         // 守门（tasks 2.1）：全仓只有三处允许 new TerrainData(...) ——写入口自身、地图文件读入、地图定义（v4 与 frontier-map 3.1 的边疆图各一个生成器，加 map-generator 的边疆档生成器）。
+        // retire-legacy-maps：三个旧地图定义（v5 / 边疆图 / 边疆档生成器）随旧地图删除，白名单同步收紧为写入口自身与地图文件读入。
         // 第四处即"第二份地形写入实现"，改造后的重算与不可逆约束就会各写一份。
         // 变异验证 M-B1：把 TerrainWriter.Apply 的桥分支挪进 GameBoard.ApplyTerrainEdits（直接 new TerrainData）→ 本测试红。
         string[] allowed =
@@ -244,9 +245,6 @@ public class 地形写入口Tests
             typeof(TerrainWriter).FullName!,
             typeof(TerrainData).FullName!,            // TerrainData.Flat
             "Siege.Core.Board.MapFile",
-            "Siege.Core.Board.Maps.FourPlayerBaseMap",
-            "Siege.Core.Board.Maps.FrontierMapV2",
-            "Siege.Core.Board.Maps.FrontierMapGenerator",   // map-generator 1.3：生成图与两张内置图同属"地图定义"，只在灌成 MapData 的那一处构造
         ];
 
         (MethodBase Caller, MemberInfo Target, OpCode OpCode)[] constructions =

@@ -22,7 +22,6 @@ public class 新地表判断唯一Tests
         "Siege.Core/Board/TerrainData.cs",   // 映射：地表显示名（错误信息与图例共用）
         "Siege.Core/Board/MapFile.cs",       // 映射：地表 ↔ 地图文件字符码
         "Siege.Core/Board/MapValidator.cs",  // 校验：map-definition 第 9 条（出生区内无新地表）
-        "Siege.Core/Board/Maps/FrontierSurfaces.cs",  // 生成：map-generation 新地表投放
         "Siege.Core/Scoring/PowerCalculator.cs",      // 规则：段 1 荒漠——独占计分谓词 ScoresTerritory
         "Siege.Core/Board/Adjacency.cs",              // 规则：段 2 沼泽源、段 3 岩台远格（覆盖关系唯一实现）
         "Siege.Core/Board/GameBoard.MapTables.cs",    // 规则：段 4 浅滩——"空格能否作为气"谓词 GivesLiberty（board-link-mode 裁决 P7：派生表抽成 partial 文件，谓词随之搬入）

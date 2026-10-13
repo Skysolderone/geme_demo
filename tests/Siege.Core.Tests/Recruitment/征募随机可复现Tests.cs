@@ -122,7 +122,7 @@ public class 征募随机可复现Tests
         // 规范强制回归（determinism.md）：改变某玩家的一次征募选择 → 信物生成结果逐格不变；且 recruit 子流消费次数确实不同。
         // 变异验证 M-R23：HandLedger 构造用 seed.Stream(GameSeed.RelicGeneration) → 红 3（征募只消费 recruit 子流 等），本测试不红——
         // 账本拿错子流名并不改变 RelicGenerator 自己派生的流；真正的共用序列是 M-D3（GameSeed.Stream 返回共享实例）→ 红 13，含本测试与 Determinism/随机子流隔离Tests。
-        MapData map = FourPlayerBaseMap.Create();
+        MapData map = MapCatalog.Resolve("link:1");   // retire-legacy-maps 1.8：原为 v5，改为 link:1，断言不变
         RelicGenerationRecord baseline = RelicGenerator.Generate(map, HandFixtures.Seed);
 
         HandLedger fewer = Play(HandFixtures.Seed, p1FirstTurnPicks: 0);

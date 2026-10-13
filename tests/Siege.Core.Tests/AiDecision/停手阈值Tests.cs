@@ -1,4 +1,3 @@
-using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
@@ -18,13 +17,13 @@ namespace Siege.Core.Tests.AiDecision;
 public class 停手阈值Tests
 {
     /// <summary>
-    /// 严格提高实现（ai-eye 段 B 2.2 完成、2.3 之前：活形硬约束已生效，保留条件仍是 <c>next.Total &gt; current.Total</c>）的实际运行结果——
-    /// v4、种子 31、4 名 Standard AI、24 个小回合，全部小回合快照（去耗时）逐行拼接后的 SHA-256（口径同 <see cref="候选格上限Tests.TurnHash"/>）。
-    /// 阈值取 0 时本 change 的实现 MUST 逐步重现它。
-    /// <para>life-single-stone（规则变更）重建：8EEC49A7…04679FC8 → DCB7CC7C…CD39033E。去掉单子上限的探针下旧值逐字节复现；
-    /// 分叉与 <see cref="候选格上限Tests.V4GoldenTurnHash"/> 同源（第 1 个小回合只差活形记录，第 2 个小回合 P0 的匠人 D3 → B3），归因见那里的注释。</para>
+    /// 阈值 0（= 严格提高）的一局：<c>link:1</c>、种子 31、4 名 Standard AI、24 个小回合（跑局层、种子派生配对，<see cref="SimFixtures.PinPreCalibration"/> 写死口径），
+    /// 全部小回合快照（去耗时）逐行拼接后的 SHA-256（口径同 <see cref="候选格上限Tests.TurnHash"/>）。
+    /// <para>retire-legacy-maps 1.5 改钉：原值 DCB7CC7C…CD39033E 是 v4、种子 31 上"严格提高实现"（ai-eye 段 B 2.2 完成、2.3 之前）的实际运行结果，
+    /// 本实现在阈值 0 下逐步重现了它（该测试在 v4 上一直为绿）。v4 随旧地图删除，这里在删除之前、以当时的实现在 link:1 上重钉同口径的一局；
+    /// 历次重建记录见 git 历史。</para>
     /// </summary>
-    private const string StrictImprovementTurnHash = "DCB7CC7CAC326562BD7FFFDE813172AD8494335298F4B2EBDC44BD17CD39033E";
+    private const string StrictImprovementTurnHash = "C852D900B0A2A4FA40CFFC09BA07732D4795A382ACB3902626E12527B47798D8";
 
     private static readonly PlayerId Me = AiFixtures.P0;
 
@@ -142,8 +141,9 @@ public class 停手阈值Tests
         // M-B6（> 改 >=）在本样本上不红：种子 31 前 24 个小回合里没有边际提升恰为 0 的候选，阈值 0 下 > 与 >= 走法相同；该变异由「零收益不落子」「恰等于阈值不落子」挡住。
         // ai-eye 段 D2（4.5）：九维权重写死为对照实现当时的缺省（Eye / Threat = 0）。本测试钉的是"阈值 0 = 严格提高"，不是默认权重；
         // 默认权重改为校准值（Eye 200、Threat 25）后若仍跟随缺省，对照哈希就不再是"严格提高实现"的产物（testing.md「校准与保真度分离」）。
-        RunConfig zero = SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard)) with { PassThreshold = 0 };
-        MatchLog log = BatchRunner.Execute(zero, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        // retire-legacy-maps 1.5：样本由 v4 改到 link:1（对照哈希在删除 v4 之前重钉，见 StrictImprovementTurnHash），断言不变。
+        RunConfig zero = 候选格上限Tests.LinkGoldenConfig() with { PassThreshold = 0 };
+        MatchLog log = BatchRunner.Execute(zero, parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
         Assert.True(log.Turns.Count >= 24, $"小回合 {log.Turns.Count}");
@@ -152,7 +152,7 @@ public class 停手阈值Tests
         Assert.True(StrictImprovementTurnHash == hash, $"阈值 0 的小回合快照哈希：{hash}");
 
         // 反面：缺省阈值下同一局走法不同——否则"阈值确实传到了 AI"无从证明。
-        Assert.NotEqual(StrictImprovementTurnHash, 候选格上限Tests.V4GoldenTurnHash);
+        Assert.NotEqual(StrictImprovementTurnHash, 候选格上限Tests.LinkGoldenTurnHash);
     }
 
     [Fact]
@@ -162,10 +162,11 @@ public class 停手阈值Tests
         // 变异 M-B8（RunConfig.ResolvedFor 不落成缺省阈值）→ 段 B 实测红 6；ai-eye 段 D2 重跑（缺省阈值改为 80、多个夹具写死阈值之后）红 13（本测试、首部缺停手阈值的旧日志按0回放，
         // 以及回放 / 配置记录类 11 条：首部缺该项 → 回放按 0 重建而分歧 / 配置记录不符，逐条见任务 09-23-ai-eye 段 D2 记录）。
         // 变异 M-B14（会话建 AI 时不传跑局配置的阈值）→ 红 2（本测试的逐玩家断言、阈值为0时零变化）。
-        RunConfig blank = SimFixtures.Config(turnLimit: 4);
+        // retire-legacy-maps 1.5：样本地图由 v5 改为 link:1，断言不变。
+        RunConfig blank = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" };
         Assert.Null(blank.PassThreshold);
         string dir = SimFixtures.TempDir("pass-threshold-default");
-        BatchRunner.ExecuteToDirectory(blank, dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchRunner.ExecuteToDirectory(blank, dir, parallelism: 1);
         Assert.Contains($"\"PassThreshold\": {AiSearchConfig.DefaultPassThreshold}", File.ReadAllText(Path.Combine(dir, "config.json")), StringComparison.Ordinal);
         string file = Directory.EnumerateFiles(dir, "match-*.jsonl").Single();
         Assert.Contains($"\"PassThreshold\":{AiSearchConfig.DefaultPassThreshold},", File.ReadLines(file).First(), StringComparison.Ordinal);
@@ -176,7 +177,7 @@ public class 停手阈值Tests
             PassThreshold = 7,
             Players = [.. blank.Players.Select((p, i) => i == 1 ? p with { Search = AiSearchConfig.Easy with { PassThreshold = 3 } } : p)],
         };
-        MatchSession session = MatchSession.Create(mixed, 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(mixed, 1);
         MatchLog log = session.Run();
         Assert.Equal([7, 3, 7, 7], session.Match.Players.Select(p => session.AiOf(p)!.Config.PassThreshold));
 
@@ -294,24 +295,25 @@ public class 停手阈值Tests
         // 该项出现之前的日志首部没有 PassThreshold：当时的保留条件就是"严格提高"（= 阈值 0）。回放 MUST 按 0 重建，重建的首部也不得多出一项。
         // 样本：阈值 0 跑出的局去掉这一项。它与缺省阈值下的同一局走法不同（「阈值为0时零变化」的反面），所以按缺省重建必然分歧。
         // 变异 M-B10（按首部重建时缺字段取缺省阈值而不是 0）→ 红 1（本测试）。
-        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard);
-        MatchLog zero = BatchRunner.Execute(config with { PassThreshold = 0 }, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        // retire-legacy-maps 1.5：样本地图由 v4 改为 link:1，断言不变。
+        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1" };
+        MatchLog zero = BatchRunner.Execute(config with { PassThreshold = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"PassThreshold\":0,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"PassThreshold\":0,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.Config.PassThreshold);
 
-        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(old);
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.True(replay.LineCount >= 25, $"比对行数 {replay.LineCount}");
         Assert.Null(replay.Replayed.Header.Config.PassThreshold);
 
         // 会话层：新建的局取缺省阈值并写进首部配置；按首部重建的局缺字段取 0，有字段取记录值。
-        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1, resolveMap: MapCatalog.Legacy.Resolve).PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1, resolveMap: MapCatalog.Legacy.Resolve).Config.PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(0, MatchSession.Create(config, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.Equal(7, MatchSession.Create(config with { PassThreshold = 7 }, 1, map: null, recorded: true, resolveMap: MapCatalog.Legacy.Resolve).PassThreshold);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1).PassThreshold);
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, MatchSession.Create(config, 1).Config.PassThreshold);
+        Assert.Equal(0, MatchSession.Create(config, 1, map: null, recorded: true).PassThreshold);
+        Assert.Equal(7, MatchSession.Create(config with { PassThreshold = 7 }, 1, map: null, recorded: true).PassThreshold);
     }
 
     [Fact]
@@ -347,21 +349,37 @@ public class 停手阈值Tests
     }
 
     [Fact]
-    public void 地图覆盖不改阈值()
+    public void 阈值不随地图变化()
     {
-        // 规格 Scenario「地图覆盖不改阈值」（v2-recalibration 段 B，design D8）：2 人图登记了评价权重覆盖，未显式配置阈值的批量跑局开局，
-        // 批次配置记录与日志首部里的停手阈值等于默认停手阈值，与 v5 上相同；覆盖只动权重。
-        Assert.True(EvaluationWeights.MapOverrides.ContainsKey(Board.Maps.TwoPlayerBaseMap.Id), "2 人图没有登记覆盖，本条是空证。");
-        (_, string twoConfig, MatchLog twoLog) = SimulationHarness.各入口的地图专属AI权重Tests.RunOneRaw(
-            "threshold-2p", SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig(Board.Maps.TwoPlayerBaseMap.Id, 2));
-        (_, string fourConfig, MatchLog fourLog) = SimulationHarness.各入口的地图专属AI权重Tests.RunOneRaw(
-            "threshold-v5", SimulationHarness.各入口的地图专属AI权重Tests.BlankConfig(Board.Maps.FourPlayerBaseMap.Id, 4));
+        // retire-legacy-maps 1.5（规格 Scenario「阈值不随地图变化」）：原「地图覆盖不改阈值」（2 人图登记了评价权重覆盖，与 v5 比停手阈值）随 2 人图与地图覆盖删除，
+        // 改为两张不同的链接图 link:1 / link:2：未显式配置阈值的批量跑局开局，批次配置记录与日志首部里的停手阈值都等于默认停手阈值。所守规则（阈值不按地图取）不变。
+        (string oneConfig, MatchLog oneLog) = RunOne("threshold-link1", "link:1");
+        (string twoConfig, MatchLog twoLog) = RunOne("threshold-link2", "link:2");
 
+        Assert.NotEqual(oneLog.Header.MapDigest, twoLog.Header.MapDigest);   // 样本口径：确是两张不同的图
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, RunConfig.FromJson(oneConfig).PassThreshold);
         Assert.Equal(AiSearchConfig.DefaultPassThreshold, RunConfig.FromJson(twoConfig).PassThreshold);
+        Assert.Equal(AiSearchConfig.DefaultPassThreshold, oneLog.Header.Config.PassThreshold);
         Assert.Equal(AiSearchConfig.DefaultPassThreshold, twoLog.Header.Config.PassThreshold);
-        Assert.Equal(fourLog.Header.Config.PassThreshold, twoLog.Header.Config.PassThreshold);
-        Assert.Equal(RunConfig.FromJson(fourConfig).PassThreshold, RunConfig.FromJson(twoConfig).PassThreshold);
-        Assert.All(twoLog.Header.Config.Players, p => Assert.Null(p.Search));   // 搜索参数也不随覆盖落成（标准难度不落成 Search）
-        Assert.All(twoLog.Header.Config.Players, p => Assert.NotNull(p.Weights));   // 反面：覆盖确实落成了
+        Assert.All(twoLog.Header.Config.Players, p => Assert.Null(p.Search));   // 搜索参数也不随地图落成（标准难度不落成 Search）
+    }
+
+    /// <summary>经批量入口落盘一局（4 名标准、未显式配置权重与阈值、8 个小回合），返回 config.json 原文与解析后的日志。</summary>
+    private static (string Config, MatchLog Log) RunOne(string name, string mapId)
+    {
+        RunConfig config = new()
+        {
+            MapId = mapId,
+            Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = AiDifficulty.Standard })],
+            SeedStart = 1,
+            Count = 1,
+            TurnLimit = 8,
+            Parallelism = 1,
+            EventRetention = EventRetention.SnapshotsOnly,
+            FullEventSamplePermille = 0,
+        };
+        string dir = SimFixtures.TempDir(name);
+        BatchRunner.ExecuteToDirectory(config, dir, parallelism: 1);
+        return (File.ReadAllText(Path.Combine(dir, "config.json")), MatchLog.Read(Directory.GetFiles(dir, "match-*.jsonl").Single()));
     }
 }

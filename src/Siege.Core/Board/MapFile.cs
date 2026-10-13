@@ -33,8 +33,8 @@ public static class MapFile
             Width = map.Width,
             Height = map.Height,
             MaxPlayers = map.MaxPlayers,
-            // 标准档不写出：四份既有 maps/*.json 逐字节不变；缺字段按标准档读入（frontier-map 1.1）。
-            Profile = map.Profile == MapProfile.Standard ? null : map.Profile,
+            // retire-legacy-maps 4.1（L7）：规格档恒写出（原"标准档不写出"随标准档删除）；链接图的导出文件本就写着 Link，逐字节不变。
+            Profile = map.Profile.ToString(),
             // 空清单不写出：既有地图的导出文件与引入棋盘清单之前逐字节相同（board-map D2）。
             Boards = map.Boards.IsDefaultOrEmpty
                 ? null
@@ -118,14 +118,37 @@ public static class MapFile
         };
     }
 
-    /// <summary>规格档缺省为标准档；写成数字且不是已定义的档位时响亮失败（字符串形式的未知值由 JSON 反序列化直接拒绝）。</summary>
-    private static MapProfile ParseProfile(MapProfile? profile)
+    /// <summary>
+    /// 规格档（retire-legacy-maps 4.1，裁决 L7）：字段必填，只接受 Link（或其数值 3）。字段缺失、或写的是已移除的
+    /// Standard / Frontier / Board（或其数值 0 / 1 / 2）时拒绝并说明已移除；其余未定义的取值（字符串或数字）同样响亮失败。
+    /// </summary>
+    private static MapProfile ParseProfile(string? raw)
     {
-        MapProfile value = profile ?? MapProfile.Standard;
-        return Enum.IsDefined(value)
+        if (raw is null)
+        {
+            throw new FormatException(
+                "地图文件缺少规格档字段 Profile：现在只接受 Link（链接档）；标准档、边疆档与棋盘档已移除（retire-legacy-maps），缺该字段的旧地图文件不再能加载。");
+        }
+
+        string text = raw.Trim();
+        if (RemovedProfiles.FirstOrDefault(r => string.Equals(r.Name, text, StringComparison.OrdinalIgnoreCase) || r.Number == text) is { Name: not null } removed)
+        {
+            throw new FormatException(
+                $"地图文件的规格档 Profile 为 {text}：{removed.Name} 已移除（retire-legacy-maps），现在只接受 Link（链接档）。");
+        }
+
+        return Enum.TryParse(text, ignoreCase: true, out MapProfile value) && Enum.IsDefined(value)
             ? value
-            : throw new FormatException($"地图文件的 Profile 为 {(int)value}：规格档只能是 Standard（标准）/ Frontier（边疆）/ Board（棋盘）/ Link（链接）。");
+            : throw new FormatException($"地图文件的 Profile 为 {text}：规格档只能是 Link（链接）。");
     }
+
+    /// <summary>已移除的规格档（retire-legacy-maps）：名字与原数值。</summary>
+    private static readonly (string Name, string Number)[] RemovedProfiles =
+    [
+        ("Standard", "0"),
+        ("Frontier", "1"),
+        ("Board", "2"),
+    ];
 
     /// <summary>地图版本号缺省为 0（旧地图文件没有该字段）；负数只可能是手改出来的，响亮失败。</summary>
     private static int ParseMapVersion(int? version)
@@ -339,6 +362,20 @@ public static class MapFile
     private static ImmutableHashSet<Coord> Parse(IEnumerable<string> notations) =>
         notations.Select(Coord.Parse).ToImmutableHashSet();
 
+    /// <summary>规格档字段的原文读取：字符串原样、数字取其十进制文本；写出为字符串。</summary>
+    private sealed class ProfileTextConverter : JsonConverter<string?>
+    {
+        public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => System.Text.Encoding.UTF8.GetString(reader.ValueSpan),
+            JsonTokenType.Null => null,
+            _ => throw new FormatException($"地图文件的 Profile 不是字符串或数字（{reader.TokenType}）：规格档只能是 Link（链接）。"),
+        };
+
+        public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options) => writer.WriteStringValue(value);
+    }
+
     private sealed class MapDto
     {
         public string Id { get; set; } = string.Empty;
@@ -349,9 +386,13 @@ public static class MapFile
 
         public int MaxPlayers { get; set; }
 
-        /// <summary>规格档（Standard 标准 / Frontier 边疆 / Board 棋盘 / Link 链接）。省略即标准档；标准档写出时也省略。</summary>
+        /// <summary>
+        /// 规格档（retire-legacy-maps 4.1：只剩 Link，恒写出）。按原文读成字符串（字符串或数字都收），由 <see cref="ParseProfile"/> 判定，
+        /// 使"缺失 / 已移除 / 未定义"都以 <see cref="FormatException"/> 报出、说明原因，而不是反序列化器的笼统异常。
+        /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public MapProfile? Profile { get; set; }
+        [JsonConverter(typeof(ProfileTextConverter))]
+        public string? Profile { get; set; }
 
         /// <summary>棋盘清单（board-map）。省略即空清单；空清单写出时也省略。</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

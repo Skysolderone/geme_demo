@@ -12,7 +12,7 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests;
 
 /// <summary>
-/// expert-lookahead 的公共夹具：写死的权重与搜索配置、单次决策、v5 真实对局上的局面探针。
+/// expert-lookahead 的公共夹具：写死的权重与搜索配置、单次决策、<c>link:1</c> 真实对局上的局面探针（retire-legacy-maps：原为 v5）。
 /// 依赖 AI 实际走法的断言一律写死权重（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），不读 <see cref="EvaluationWeights.Default"/>。
 /// </summary>
 internal static class LookaheadFixtures
@@ -108,17 +108,26 @@ internal static class LookaheadFixtures
         return match.RehearseBatch(batch, [.. cells.Select(c => (c, PieceType.Basic))]);
     }
 
-    // ---------- v5 真实对局 ----------
+    // ---------- link:1 真实对局（retire-legacy-maps 1.4：原 v5 真实对局改到 link:1，裁决 L2 / L8） ----------
 
-    /// <summary>v5 上的一局：玩家配置逐名给出，写死权重 / 阈值 / 冒险概率 / 内容集，不截断。</summary>
-    internal static RunConfig V5Config(params PlayerAiConfig[] players) => new()
+    /// <summary>真实对局的地图（retire-legacy-maps：原 <c>siege-4p-base-v5</c>）。</summary>
+    internal const string MapId = "link:1";
+
+    /// <summary>真实对局的截断：跑到第 12 大回合结束（与链接图决策序列基线同口径，board-link-mode 裁决 C5）。</summary>
+    internal const int MaxMajorRounds = 12;
+
+    /// <summary>
+    /// <c>link:1</c> 上的一局：玩家配置逐名给出，写死权重 / 阈值 / 内容集（retire-legacy-maps：原 <c>V5Config</c>；链接图配置不得含冒险概率，去掉 <c>FlagRisk = 0</c>）。
+    /// <see cref="RunConfig.TurnLimit"/> 只是防失控的上限；按大回合截断由 <see cref="CreateSession"/> 的调用方以 <see cref="RunToRound"/> 完成。
+    /// </summary>
+    internal static RunConfig LinkConfig(params PlayerAiConfig[] players) => new()
     {
+        MapId = MapId,
         Players = [.. players.Select(p => p with { Weights = Weights })],
         SeedStart = 1,
         Count = 1,
         TurnLimit = 600,
         PassThreshold = PassThreshold,
-        FlagRisk = 0,
         ContentSet = ContentSet.V2,
         EventRetention = EventRetention.Full,
         FullEventSamplePermille = 0,
@@ -126,13 +135,25 @@ internal static class LookaheadFixtures
 
     internal static PlayerAiConfig Standard => new() { Difficulty = AiDifficulty.Standard };
 
+    /// <summary>按 <paramref name="config"/> 在 <c>link:1</c> 上建一局，挂内置固定配对脚本（<see cref="ScriptedPairingSource"/>，与链接图决策序列基线同一口径）。</summary>
+    internal static MatchSession CreateSession(RunConfig config, ulong seed) =>
+        MatchSession.Create(config, seed, MapCatalog.Resolve(config.MapId), recorded: false, carry: null, pairing: new ScriptedPairingSource());
+
+    /// <summary>逐小回合驱动到第 <paramref name="maxMajorRounds"/> 大回合结束或终局（不经 <see cref="MatchSession.Run"/>，不产出日志）。</summary>
+    internal static void RunToRound(MatchSession session, int maxMajorRounds = MaxMajorRounds)
+    {
+        while (session.Match.Phase == MatchPhase.InProgress && session.Match.MajorRound <= maxMajorRounds && session.RunTurn())
+        {
+        }
+    }
+
     /// <summary>
-    /// 固定局面集（expert-lookahead D12）：<c>siege-4p-base-v5</c>、种子 1–3（或 <paramref name="seeds"/>）、4 名标准 AI 的真实对局中的部署决策，按全局决策序号每 <paramref name="every"/> 个取一个。
+    /// 固定局面集（expert-lookahead D12；retire-legacy-maps 1.4 改到 <c>link:1</c>）：<c>link:1</c>、对局种子 1–3（或 <paramref name="seeds"/>）、内置固定配对脚本、
+    /// 4 名标准 AI、截断到第 12 大回合的真实对局中的部署决策，按全局决策序号每 <paramref name="every"/> 个取一个。
     /// 在每个入选局面上调用 <paramref name="probe"/>（对局此刻停在部署阶段），随后由原 AI 照常决策——对局走法与不探针时相同。
     /// </summary>
     /// <remarks>
-    /// 规格写的是"玩家 1 的每次部署决策（不少于 30 个）"，但 v5 种子 1–3 上 4 名标准 AI 的对局只有 7 + 7 + 9 = 23 次玩家 1 的部署（段 A 实测），
-    /// 达不到 30；这里改取四个座位的全部部署决策（共 92 次）按固定间隔抽样（记入段 A 实施记录的待决项）。
+    /// 取四个座位的全部部署决策按固定间隔抽样（expert-lookahead 段 A 起的口径）；局面覆盖构筑期与链接之后的交战（规格「耗时上限」）。
     /// </remarks>
     internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
     {
@@ -140,7 +161,7 @@ internal static class LookaheadFixtures
         int probed = 0;
         foreach (ulong seed in seeds.Length == 0 ? [1, 2, 3] : seeds)
         {
-            MatchSession session = MatchSession.Create(V5Config(Standard, Standard, Standard, Standard), seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            MatchSession session = CreateSession(LinkConfig(Standard, Standard, Standard, Standard), seed);
             foreach (PlayerId player in session.Match.Players)
             {
                 HeuristicTurnController inner = session.AiOf(player)!;
@@ -154,7 +175,7 @@ internal static class LookaheadFixtures
                 }));
             }
 
-            session.Run();
+            RunToRound(session);
         }
 
         return probed;

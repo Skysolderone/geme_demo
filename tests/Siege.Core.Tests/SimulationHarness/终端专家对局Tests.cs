@@ -1,5 +1,6 @@
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Match;
 using Siege.Core.Board.Maps;
 using Siege.Sim.Play;
 
@@ -21,14 +22,14 @@ public class 终端专家对局Tests
         var ais = new Dictionary<PlayerId, HeuristicTurnController>();
         var output = new StringWriter();
         int exit = PlayCommand.Run(
-            42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nB1 B\nv\nok\n\npass\n"), output,
-            weights: LookaheadFixtures.Weights, passThreshold: LookaheadFixtures.PassThreshold, flagRisk: 0, contentSet: ContentSet.V1,
-            onAi: (p, ai) => ais.Add(p, ai), map: MapCatalog.Legacy.Resolve(null));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nV3 B\nv\nok\n\npass\n"), output,
+            weights: LookaheadFixtures.Weights, passThreshold: LookaheadFixtures.PassThreshold, contentSet: ContentSet.V1,
+            onAi: (p, ai) => ais.Add(p, ai), map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // retire-legacy-maps 1.8：地图由 v5 改为 link:1（落点 B1 → V3），冒险概率随旧地图删除
         string text = output.ToString();
 
         Assert.Equal(0, exit);
         Assert.Contains("对手 3 名 Expert AI（前瞻宽度 4）", text, StringComparison.Ordinal);
-        Assert.Contains("玩家1(你) 落子 B1B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 V3B", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 42", text, StringComparison.Ordinal);
 

@@ -11,7 +11,7 @@ namespace Siege.Core.Tests.MatchTelemetry;
 
 /// <summary>
 /// 规格：expert-lookahead / match-telemetry —— Requirement: 专家前瞻的记录。
-/// 样本一律写死权重与停手阈值（<see cref="LookaheadFixtures.V5Config"/>），种子按段 B 探针挑选：v5 种子 3 整局中专家有已前瞻、Pass 与一次"前瞻改变选择"。
+/// 样本一律写死权重与停手阈值（<see cref="LookaheadFixtures.LinkConfig"/>；retire-legacy-maps 1.4：样本由 v5 改到 link:1、内置固定配对脚本，种子重新挑选），种子按探针挑选：整局中专家有已前瞻、Pass 与一次"前瞻改变选择"。
 /// 日志端的每条记录都与跑局时从活控制者取下的 <see cref="LookaheadRecord"/> 逐项比对（写入端漏写 / 写错在这里红，而不是只证明"读得出来"）。
 /// </summary>
 public class 专家前瞻的记录Tests
@@ -19,12 +19,12 @@ public class 专家前瞻的记录Tests
     private static readonly PlayerId P0 = LookaheadFixtures.P0;
 
     /// <summary>
-    /// 1 名专家（P0）+ 3 名标准，v5 种子 3 整局：日志与 P0 每个小回合的活记录（小回合序号 → 记录）。
-    /// expert-strength 1.3：本样本钉的是一层前瞻的记录（"种子 3 恰有一次改变选择"等），改为显式的一层配置（专家预设 + 多样补充上限 0 + 两层权重 0，
+    /// 1 名专家（P0）+ 3 名标准，link:1 种子 6 整局（retire-legacy-maps 1.4：原 v5 种子 3；link:1 种子 1–8 探针中"恰一次改变选择、有 Pass"的为 6、7，取 6）：日志与 P0 每个小回合的活记录（小回合序号 → 记录）。
+    /// expert-strength 1.3：本样本钉的是一层前瞻的记录（"样本恰有一次改变选择"等），改为显式的一层配置（专家预设 + 多样补充上限 0 + 两层权重 0，
     /// 阈值 80、候选格上限 0）——与改动前"未显式给搜索配置"时首部落成的搜索配置逐字段相同，断言一字不改。未显式给配置的专家见「回放核对前瞻记录」。
     /// </summary>
     private static readonly Lazy<(MatchLog Log, Dictionary<int, LookaheadRecord?> Live)> ExpertSample = new(() =>
-        RunCapturing(LookaheadFixtures.V5Config(OneLayerExpert, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), 3, P0));
+        RunCapturing(LookaheadFixtures.LinkConfig(OneLayerExpert, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), 6, P0));
 
     private static PlayerAiConfig OneLayerExpert => new() { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.OneLayerConfig() };
 
@@ -44,12 +44,12 @@ public class 专家前瞻的记录Tests
     };
 
     /// <summary>
-    /// 1 名打开多样候选与两层加分的专家（P0）+ 3 名标准，v5 种子 2 整局。2.1 探针（种子 1–6）：六颗都有多样补充成员与非零两层加分，"选中多样补充成员"只有种子 2、4 各 1 次，取较小的 2。
+    /// 1 名打开多样候选与两层加分的专家（P0）+ 3 名标准，link:1 种子 1 整局（retire-legacy-maps 1.4：原 v5 种子 2；link:1 种子 1–8 探针中"选中多样补充成员"的为 1、4、5，取 1）。
     /// </summary>
     private static readonly Lazy<(MatchLog Log, Dictionary<int, LookaheadRecord?> Live)> StrengthSample = new(() =>
-        RunCapturing(LookaheadFixtures.V5Config(StrengthExpert(), LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), StrengthSeed, P0));
+        RunCapturing(LookaheadFixtures.LinkConfig(StrengthExpert(), LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), StrengthSeed, P0));
 
-    private const ulong StrengthSeed = 2;
+    private const ulong StrengthSeed = 1;
 
     /// <summary>本 change 之前的真实专家日志：expert-lookahead 冒烟 `sim-out/expert-lookahead/smoke20/match-0000000000000008.jsonl`（gzip，原文 226 365 字节）。</summary>
     private static string LegacyExpertLogPath => Path.Combine(AppContext.BaseDirectory, "MatchTelemetry", "Fixtures", "expert-lookahead-smoke20-match-0000000000000008.jsonl.gz");
@@ -106,7 +106,7 @@ public class 专家前瞻的记录Tests
     {
         (MatchLog log, _) = ExpertSample.Value;
         LookaheadLogEntry[] records = [.. MatchLog.Parse(log.FullText()).LookaheadTurns.Select(t => t.Lookahead!)];
-        LookaheadLogEntry changed = Assert.Single(records, r => r.Changed);   // 样本口径：种子 3 恰有一次（段 B 探针）
+        LookaheadLogEntry changed = Assert.Single(records, r => r.Changed);   // 样本口径：样本种子恰有一次（retire-legacy-maps 1.4 探针，见 ExpertSample）
         Assert.True(changed.Chosen >= 1);
         LookaheadCandidateEntry first = changed.Candidates[0];
         LookaheadCandidateEntry chosen = changed.ChosenCandidate!;
@@ -129,7 +129,7 @@ public class 专家前瞻的记录Tests
         Assert.Contains(live.Values, r => r!.Status == LookaheadStatus.Pass);
 
         // 不前瞻：前瞻宽度 1 的专家（经配置文件的 Search 显式给出）每次非 Pass 的决策都记"不前瞻"，前瞻集只有 1 个候选、前后分数相同、无对手。
-        RunConfig w1 = LookaheadFixtures.V5Config(
+        RunConfig w1 = LookaheadFixtures.LinkConfig(
             new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.ExpertConfig(LookaheadFixtures.PassThreshold, width: 1) with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit } },
             LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 8 };
         (MatchLog small, _) = RunCapturing(w1, 1, P0);
@@ -149,14 +149,19 @@ public class 专家前瞻的记录Tests
     [Fact]
     public void 一层配置的记录与改动前相同()
     {
-        // 一层配置（多样补充上限 0、两层权重 0）下的专家日志：确定性文本整份与改动前逐字节相同。黄金值在 expert-strength 2.1 改日志端之前、
+        // retire-legacy-maps 1.4：样本由 v5 种子 3 改到 link:1 种子 6（见 ExpertSample），小回合数、前瞻记录数与 SHA-256 在删除 v5 之前按当时实现重钉。
+        // 一层配置（多样补充上限 0、两层权重 0）下的专家日志：确定性文本整份与改动前逐字节相同。原黄金值在 expert-strength 2.1 改日志端之前、
         // 同一样本上取下（G1 已证一层配置走法不变，所以当时的文本就是"改动前"的文本）；G1 黄金值只钉 ToText()，这里钉 JSON。
         (MatchLog log, _) = ExpertSample.Value;
         string text = log.DeterministicText();
-        Assert.Equal(39, log.Turns.Count);
-        Assert.Equal(10, log.LookaheadTurns.Count());
-        Assert.Equal("078C5B1778226D464689A8CA559BCCBD27357C26D1E21AA57EA99E2AF007D972", Sha256(text));
-        Assert.DoesNotContain("\"Source\"", text, StringComparison.Ordinal);
+        Assert.Equal(44, log.Turns.Count);
+        Assert.Equal(8, log.LookaheadTurns.Count());
+        Assert.Equal("5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F", Sha256(text));
+        // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
+        // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
+        string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
+        Assert.NotEmpty(lookaheadLines);
+        Assert.DoesNotContain("\"Source\"", lookaheadLines, StringComparison.Ordinal);
         Assert.DoesNotContain("\"TwoPly", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"SupplementRehearsals\"", text, StringComparison.Ordinal);
     }
@@ -243,26 +248,30 @@ public class 专家前瞻的记录Tests
         Assert.NotEmpty(rawAfter);
         Assert.Equal(rawAfter, lookahead.SelectMany(t => t.Lookahead!.Candidates).Select(c => c.After.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
-        Assert.Equal(raw, legacy.FullText());
+        // retire-legacy-maps 3.2：配置字段 FlagRisk 已删除，旧日志首部里的 "FlagRisk":15 读入时被忽略、写回时不再出现；
+        // 除去这一项，写回与原文逐字节相同（首部其余字段与全部事件行）。
+        Assert.Contains("\"FlagRisk\":15,", raw.Split('\n')[0], StringComparison.Ordinal);   // 样本口径：确是带该字段的旧首部
+        Assert.Equal(raw.Replace("\"FlagRisk\":15,", string.Empty, StringComparison.Ordinal), legacy.FullText());
 
-        ReplayResult replay = Replayer.Replay(legacy, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
-        Assert.True(replay.Identical, replay.ToString());
-        Assert.Equal(lookahead.Select(t => LogText(t.Lookahead!)), replay.Replayed.LookaheadTurns.Select(t => LogText(t.Lookahead!)));
+        // retire-legacy-maps 1.4：该日志的地图 siege-4p-base-v5 随旧地图删除，回放一段去掉（地图已不可解析）；离线解析与逐字节写回照旧。
+        // "旧专家日志按一层配置回放"的回放口径改由 专家难度的一层前瞻Tests.旧专家日志按一层配置回放（link:1 样本，回放逐步一致）守护。
     }
 
     [Fact]
     public void 非专家没有前瞻记录()
     {
-        // 4 名标准：日志中没有任何前瞻记录，确定性文本（含首部）与改动前逐字节相同——黄金值与 难度分级Tests.三档旧难度逐步不变 的标准档同一个（HEAD 03d45f6 钉下）。
+        // 4 名标准：日志中没有任何前瞻记录，确定性文本（含首部）与钉下的黄金值逐字节相同。
+        // retire-legacy-maps 1.4：样本由 v5 种子 1 改到 link:1 种子 1（内置固定配对脚本、整局），黄金值（小回合数与 SHA-256）在删除 v5 之前按当时实现重钉；
+        // 原黄金值与 难度分级Tests.三档旧难度逐步不变 的标准档同一个，那条随 v5 删除。
         // 变异 M-B3a（非专家也写前瞻记录：控制者没有记录时写一条 Pass）→ 本测试红。
-        MatchSession session = MatchSession.Create(LookaheadFixtures.V5Config(
-            LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = LookaheadFixtures.CreateSession(LookaheadFixtures.LinkConfig(
+            LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), 1);   // retire-legacy-maps 1.4：样本改到 link:1
         MatchLog log = session.Run();
         string text = log.DeterministicText();
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
-        Assert.Equal(28, log.Turns.Count);
-        Assert.Equal("29353FC976C82867E9DD76AE7229223B876146D5DA53F523366824A7A407736A", Sha256(text));
+        Assert.Equal(40, log.Turns.Count);
+        Assert.Equal("403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F", Sha256(text));
     }
 
     [Fact]
@@ -270,15 +279,15 @@ public class 专家前瞻的记录Tests
     {
         // 引入专家难度之前产生的日志：4 名标准的日志与改动前逐字节相同（上一条的黄金值），直接当作旧日志离线解析、回放。
         // 另造一份首部里带显式 Search（无前瞻宽度字段）的旧式日志：前瞻宽度读为 0。
-        MatchLog fresh = MatchSession.Create(LookaheadFixtures.V5Config(
-            LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 12 }, 1, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog fresh = LookaheadFixtures.CreateSession(LookaheadFixtures.LinkConfig(
+            LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 12 }, 1).Run();   // retire-legacy-maps 1.4：样本改到 link:1
         MatchLog old = MatchLog.Parse(fresh.FullText());
         Assert.Empty(old.LookaheadTurns);
         Assert.All(old.Turns, t => Assert.Null(t.Lookahead));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(old.LookaheadWidthOf));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(old.DiverseSupplementLimitOf));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(old.TwoPlyWeightPermilleOf));
-        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(old);
         Assert.True(replay.Identical, replay.ToString());
 
         const string legacySearch = """{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":24,"PassThreshold":80}""";
@@ -300,8 +309,8 @@ public class 专家前瞻的记录Tests
         // 显式配置的那名让"回放不读首部的前瞻宽度 / 两层权重"两种写法（归 0 / 回落到难度预设）都会分歧。
         // 变异 M-B3c（回放不读首部的前瞻宽度）、E-B3（回放不读首部的两层权重）→ 本测试红。
         PlayerAiConfig w2 = StrengthExpert(width: 2) with { Search = StrengthExpert(width: 2).Search! with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit } };
-        RunConfig config = LookaheadFixtures.V5Config(Expert, w2, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 16 };
-        MatchLog log = MatchSession.Create(config, 2, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        RunConfig config = LookaheadFixtures.LinkConfig(Expert, w2, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 16 };
+        MatchLog log = LookaheadFixtures.CreateSession(config, 2).Run();   // retire-legacy-maps 1.4：样本改到 link:1
         string path = log.WriteTo(SimFixtures.TempDir("lookahead-replay"));
 
         string header = File.ReadLines(path).First();
@@ -319,7 +328,7 @@ public class 专家前瞻的记录Tests
         Assert.Contains(original.LookaheadTurns, t => t.Player == 1 && t.Lookahead!.Status == nameof(LookaheadStatus.Applied));
         Assert.All(original.LookaheadTurns.Where(t => t.Player == 1), t => Assert.True(t.Lookahead!.Candidates.Count <= 2));
 
-        ReplayResult replay = Replayer.Replay(original, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(original);
         Assert.True(replay.Identical, replay.ToString());
         Assert.Equal(original.LookaheadTurns.Select(t => LogText(t.Lookahead!)), replay.Replayed.LookaheadTurns.Select(t => LogText(t.Lookahead!)));
 
@@ -335,7 +344,7 @@ public class 专家前瞻的记录Tests
             Events = original.Events,
             Result = original.Result,
         };
-        ReplayResult diverged = Replayer.Replay(forged, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult diverged = Replayer.Replay(forged);
         Assert.False(diverged.Identical);
         Assert.Contains($"\"Turn\":{target.Turn},", diverged.Expected, StringComparison.Ordinal);
     }
@@ -343,7 +352,7 @@ public class 专家前瞻的记录Tests
     /// <summary>逐小回合跑一局，记下 <paramref name="expert"/> 每个小回合结束时的活记录（小回合序号 → 记录），最后收尾出日志。</summary>
     private static (MatchLog Log, Dictionary<int, LookaheadRecord?> Live) RunCapturing(RunConfig config, ulong seed, PlayerId expert)
     {
-        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = LookaheadFixtures.CreateSession(config, seed);   // retire-legacy-maps 1.4：样本改到 link:1（内置固定配对脚本）
         var live = new Dictionary<int, LookaheadRecord?>();
         while (true)
         {

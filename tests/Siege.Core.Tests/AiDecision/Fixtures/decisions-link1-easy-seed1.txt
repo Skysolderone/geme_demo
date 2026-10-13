@@ -1,0 +1,55 @@
+# AI 决策序列基线（board-link-mode 3.4，裁决 C5）
+# map=link:1 digest=7A6996E5DA18C310E26686B2857550EC518A15E195D0328F326173C216A84223 seed=1 players=4 difficulty=Easy zones=3,3,1,0
+# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10 mode=Link pairing=script（缺省：升序两两配）
+# maxMajorRounds=12
+# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算
+1	P0	R:1:Fortress,0:Line,2:Artisan D:D3:Artisan+F:C3-C4,D4:Fortress
+1	P3	R:0:Multiplier,1:Basic,2:Sentry D:W4:Basic,X4:Basic
+1	P2	R:0:Basic,1:Boundary,2:Basic D:AN4:Boundary
+1	P1	R:3:Fortress,0:Basic,1:Synergy D:F5:Fortress
+2	P0	R:0:Artisan,1:Artisan,2:Bannerman D:C6:Artisan+F:C4-C5,C8:Artisan+F:C9-D9
+2	P2	R:2:Fortress,3:Fortress,0:Sentry D:AP5:Fortress,AO6:Fortress
+2	P3	R:0:Synergy,1:Basic,2:Sentry D:Y4:Synergy,Y6:Basic
+2	P1	R:0:Line,1:Boundary,2:Basic D:E7:Boundary
+3	P2	R:3:Fortress,0:Bannerman,1:Basic,2:Line D:AP3:Fortress,AO4:Bannerman
+3	P3	R:1:Fortress,0:Basic,2:Synergy D:V4:Multiplier
+3	P1	R:0:Fortress,1:Fortress,3:Fortress D:E3:Fortress,G8:Fortress,F9:Fortress
+3	P0	R:1:Fortress,0:Boundary,2:Basic D:D5:Boundary,D7:Fortress
+P	1	FirstRound	round=4	candidates=0,1	pairs=0-1	waiter=-	source=script
+L	1	pairing=1	0-1	side=East	version=1	shared=5	shifts=0:0:0,1:-11:0,2:0:0,3:0:0,4:5:0	digest=7DB761F60BEFDAD79F92D4E0BC143344E90C4C4A023A7D1A23190C7302BADEEE
+4	P2	R:0:Basic,1:Boundary,2:Line,3:Bannerman D:Y5:Sentry,W7:Boundary,Y7:Bannerman
+4	P1	R:0:Basic,1:Bannerman,2:Basic D:G5:Synergy,D8:Bannerman
+4	P3	R:0:Fortress,1:Basic,2:Boundary D:AA5:Fortress,AB6:Fortress,AD6:Sentry
+4	P0	R:0:Artisan,1:Artisan,2:Line D:D6:Artisan+F:D4-D5,E8:Artisan+F:D8-D9
+5	P2	R:0:Basic,1:Sentry,2:Artisan,3:Chain D:AE7:Artisan+F:AE5-AE6
+5	P3	R:0:Fortress,3:Sentry,4:Sentry D:Z3:Fortress
+5	P1	R:1:Fortress,0:Basic,2:Artisan D:E4:Artisan+F:F3-F4,E9:Fortress
+5	P0	R:0:Multiplier,1:Multiplier,2:Basic D:E5:Multiplier,E6:Multiplier,F6:Bannerman
+6	P2	R:1:Fortress,0:Line,2:Bannerman,3:Basic D:AB5:Sentry
+6	P3	R:0:Synergy,1:Basic,2:Basic D:AA3:Synergy
+6	P0	R:0:Basic,1:Basic,2:Multiplier D:G6:Basic,F7:Multiplier
+6	P1	R:0:Fortress,1:Fortress,2:Basic D:G7:Fortress,F8:Fortress
+7	P0	R:1:Fortress,3:Fortress,0:Chain D:pass
+7	P2	R:0:Fortress,4:Fortress,1:Basic,2:Line D:AB3:Fortress,AE5:Fortress
+7	P3	R:0:Artisan,2:Basic,4:Basic D:AD7:Artisan+F:AE6-AE7
+7	P1	R:4:Fortress,0:Basic,1:Bannerman D:pass
+S	1	round=7	field=3	AllPassed	winner=P0	1.P0=68 2.P1=37
+8	P0	R:3:Fortress,0:Basic,1:Basic D:pass
+8	P2	R:3:Fortress,0:Line,1:Basic,2:Line D:AA4:Chain,V5:Fortress,AA6:Fortress,Z7:Bannerman
+8	P3	R:2:Fortress,1:Synergy,3:Boundary D:W5:Fortress,X5:Synergy
+9	P2	R:2:Fortress,0:Basic,1:Basic,3:Multiplier D:Z5:Multiplier,AB7:Fortress
+9	P3	R:4:Fortress,1:Basic,2:Basic D:V6:Fortress,X6:Synergy
+9	P0	R:2:Fortress,0:Basic,1:Line D:pass
+10	P3	R:0:Boundary,1:Boundary,2:Basic D:W6:Sentry,Z6:Sentry,X7:Sentry
+10	P2	R:0:Sentry,1:Basic,2:Bannerman,3:Bannerman D:AC7:Sentry,Y8:Bannerman
+10	P0	R:3:Fortress,0:Line,1:Line D:pass
+11	P3	R:2:Fortress,3:Fortress,4:Fortress D:V7:Boundary,W8:Fortress,X8:Boundary
+11	P2	R:0:Fortress,4:Fortress,1:Basic,2:Boundary D:Z4:Fortress,AE4:Fortress
+11	P0	R:0:Basic,1:Artisan,2:Synergy D:pass
+12	P3	R:0:Artisan,1:Line,2:Line D:pass
+12	P2	R:4:Fortress,0:Line,1:Basic,2:Basic D:pass
+12	P0	R:0:Basic,1:Basic,2:Synergy D:pass
+P	2	Final	round=13	candidates=0,3	pairs=0-3	waiter=-	source=script
+L	2	pairing=2	0-3	side=North	version=2	shared=5	shifts=0:0:0,2:0:0,3:18:6,4:0:0	digest=01A2C638925C036E82B16DEEA84CF68D15F57308B8E9904F9270EAB7D9B085D8
+S	2	round=12	field=0	AllPassed	winner=P3	1.P3=140 2.P2=100
+# end phase=InProgress majorRound=13 reason=- turns=43

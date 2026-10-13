@@ -9,7 +9,9 @@ namespace Siege.Core.Tests.RelicGeneration;
 /// <summary>规格：relic-generation —— Requirement: 区域强度预算</summary>
 public class 区域强度预算Tests
 {
-    private static readonly MapData Map = FourPlayerBaseMap.Create();
+    // retire-legacy-maps 1.6：载体由 v5（4 个出生区 × 2 枚）改为 link:1 初始图（5 块出生棋盘 × 2 枚，规格 Scenario「出生区稀有度均衡」），断言不变。
+    // L12 实测（只调用生成器）：link:1 × 对局种子 0–499 未收敛 v1 109 / 500、v2 96 / 500；地图种子 link:1–100 × 对局种子 = 地图种子 未收敛 v1 24 / 100、v2 15 / 100。
+    private static readonly MapData Map = MapCatalog.Resolve("link:1");
 
     /// <summary>
     /// more-pieces-relics 段 B：本类各用例的字面量（稀有度 222 / 2000、预算 600 / 690 / 780、不收敛图的稀有度集合）都出自 v1 的百分制表，
@@ -55,10 +57,12 @@ public class 区域强度预算Tests
             converged++;
             long[] sums = ZoneRarities(record);
             long total = sums.Sum();
+            int zones = sums.Length;
+            Assert.Equal(5, zones);
             foreach (long sum in sums)
             {
-                // |sum − total/4| ≤ total/4 × 8%  ⇔  |sum×4 − total| × 100 ≤ total × 8
-                Assert.True(Math.Abs((sum * 4) - total) * 100 <= total * 8, $"种子 {seed} 出生区稀有度 {string.Join("/", sums)} 偏差超过 8%");
+                // |sum − total/n| ≤ total/n × 8%  ⇔  |sum×n − total| × 100 ≤ total × 8（n = 出生区数；retire-legacy-maps：原 v5 的 n 写死为 4）
+                Assert.True(Math.Abs((sum * zones) - total) * 100 <= total * 8, $"种子 {seed} 出生区稀有度 {string.Join("/", sums)} 偏差超过 8%");
             }
         }
 
@@ -115,27 +119,53 @@ public class 区域强度预算Tests
         CentralEntrance = TestMaps.At("E5"),
     };
 
+    /// <summary>
+    /// 「高风险区预算更高」交叉检查的手写图（retire-legacy-maps 1.6）：9×9，四角 3×3 出生区（MatchFixtures 同形）各 2 枚出生区信物，
+    /// 中央 E5 / E4 两枚 High 档公共信物（样本 2000 种子 × 2 格 = 4000，与原 v5 的 High 档样本量相同）。只供生成器使用，不做地图校验。
+    /// </summary>
+    private static MapData HighTierMap()
+    {
+        var spec = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+        var high = new RelicCellSpec(RelicZone.Contested, BudgetTier.High);
+        return MatchFixtures.Map() with
+        {
+            Id = "test-high-tier",
+            RelicCells = new Dictionary<Coord, RelicCellSpec>
+            {
+                [TestMaps.At("A1")] = spec, [TestMaps.At("C3")] = spec,
+                [TestMaps.At("G1")] = spec, [TestMaps.At("J3")] = spec,
+                [TestMaps.At("A7")] = spec, [TestMaps.At("C9")] = spec,
+                [TestMaps.At("G7")] = spec, [TestMaps.At("J9")] = spec,
+                [TestMaps.At("E5")] = high, [TestMaps.At("E4")] = high,
+            }.ToImmutableDictionary(),
+        };
+    }
+
     [Fact]
     public void 同区同类型被降低概率但不禁止()
     {
         // 裁决记录 3：同区同类型计入偏离惩罚。对 2000 个种子的已收敛结果统计「某出生区两枚同类型」的出生区占比：
         // 有惩罚（默认 500‰）应显著低于无惩罚（0‰）——至少低 1/3——且不为零。
         // 变异验证 M-G12：IsBalanced 里 allowedShare 恒为 1000（惩罚失效）→ 红 1（本测试，两者相等）。
+        // retire-legacy-maps 1.6：载体由 v5（4 个出生区 × 2 枚 + 公共区信物）改为同构的 9×9 手写图（HighTierMap：四角出生区 × 2 枚 + 中央两枚公共信物），
+        // 断言与"至少低 1/3"的阈值不变。link:1（5 块出生棋盘、无公共区信物）上实测有惩罚 272‰ / 无惩罚 339‰——惩罚照样生效但幅度小于 1/3，
+        // 那是另一种图形状下的效应量，不是本条要守的口径；阈值按原口径保留，所以换用同构的手写图而不是放宽阈值。
+        MapData sample = HighTierMap();
         (int Same, int Zones) Count(RelicGenerationOptions options)
         {
             int same = 0;
             int zones = 0;
             for (ulong seed = 0; seed < 2000; seed++)
             {
-                RelicGenerationRecord record = RelicGenerator.Generate(Map, new GameSeed(seed), options);
+                RelicGenerationRecord record = RelicGenerator.Generate(sample, new GameSeed(seed), options);
                 if (!record.Converged)
                 {
                     continue;
                 }
 
-                for (int z = 0; z < Map.BirthZones.Length; z++)
+                for (int z = 0; z < sample.BirthZones.Length; z++)
                 {
-                    RelicType[] types = [.. record.Placements.Where(p => p.Spec.Zone == RelicZone.BirthZone && Map.BirthZoneOf(p.Coord) == z).Select(p => p.Content.Type)];
+                    RelicType[] types = [.. record.Placements.Where(p => p.Spec.Zone == RelicZone.BirthZone && sample.BirthZoneOf(p.Coord) == z).Select(p => p.Content.Type)];
                     Assert.Equal(2, types.Length);
                     zones++;
                     if (types[0] == types[1])
@@ -208,7 +238,8 @@ public class 区域强度预算Tests
     public void 高风险区预算更高()
     {
         // 预算 = 单格期望稀有度：出生区不升级为 600，Standard 档按 15% 升级为 690，High 档（中央 / 咽喉旁）按 30% 升级为 780，逐级严格更高。
-        // 交叉检查：基准图 High 档信物格都在公共区；2000 个种子下 High 档格的平均稀有度严格高于出生区格。
+        // 交叉检查：High 档信物格都在公共区；2000 个种子下 High 档格的平均稀有度严格高于出生区格。
+        // retire-legacy-maps 1.6：链接档初始图只有出生区信物（没有 High 档格），交叉检查的载体由 v5 改为 9×9 手写图（四角出生区各 2 枚 + 中央两枚 High 档公共信物），断言不变。
         // 变异验证 M-G14：BudgetOf 对 High 返回 baseline（不乘升级率）→ 红 1（本测试）。
         RelicGenerationOptions options = V1;
         Assert.True(options.BudgetOf(BudgetTier.High) > options.BudgetOf(BudgetTier.Birth));
@@ -224,9 +255,10 @@ public class 区域强度预算Tests
         Assert.Equal(1090, v2.BudgetOf(BudgetTier.Standard));
         Assert.Equal(1180, v2.BudgetOf(BudgetTier.High));
 
-        Coord[] highCells = [.. Map.RelicCells.Where(kv => kv.Value.Budget == BudgetTier.High).Select(kv => kv.Key)];
+        MapData mixed = HighTierMap();
+        Coord[] highCells = [.. mixed.RelicCells.Where(kv => kv.Value.Budget == BudgetTier.High).Select(kv => kv.Key)];
         Assert.NotEmpty(highCells);
-        Assert.All(highCells, c => Assert.Equal(RelicZone.Contested, Map.RelicCells[c].Zone));
+        Assert.All(highCells, c => Assert.Equal(RelicZone.Contested, mixed.RelicCells[c].Zone));
 
         long highRarity = 0;
         long highCount = 0;
@@ -234,7 +266,7 @@ public class 区域强度预算Tests
         long birthCount = 0;
         for (ulong seed = 0; seed < 2000; seed++)
         {
-            foreach (RelicPlacement p in RelicGenerator.Generate(Map, new GameSeed(seed), options).Placements)
+            foreach (RelicPlacement p in RelicGenerator.Generate(mixed, new GameSeed(seed), options).Placements)
             {
                 if (p.Spec.Budget == BudgetTier.High)
                 {

@@ -12,7 +12,7 @@ namespace Siege.Core.Tests.AiDecision;
 /// 规格：ai-decision —— 决策序列基线（board-link-mode 实现裁决 C5，tasks 3.4）：<c>link:1</c> + 脚本固定配对（<see cref="ScriptedPairingSource"/> 缺省：候选升序两两相配、
 /// 奇数时最大者等待、决赛唯一结果）+ 4 名标准难度 AI（跑局层缺省配置：候选格上限与停手阈值按地图落成，裁决 C11 下 K = 24、链接后不变），截断到第 12 大回合；
 /// 逐小回合导出 AI 的决策（弃牌 / 征募 / 落点与类型 / Pass / 被拒补救）与配对、链接、战场结算事件，与钉入的基线
-/// （<c>AiDecision/Fixtures/decisions-link1-seed3.txt</c>）逐字节比对。旧图的两条基线（v5 / board:1）在 <see cref="决策序列基线Tests"/>，不受影响。
+/// （<c>AiDecision/Fixtures/decisions-link1-seed3.txt</c>）逐字节比对。同口径的种子 1 / 2 两条（retire-legacy-maps 新钉）在 <see cref="决策序列基线Tests"/>；旧图的两条基线（v5 / board:1）已随旧地图删除。
 /// </summary>
 /// <remarks>
 /// 对局种子 3 是 <c>link:1</c> 上第一个"四名 AI 盲选到四块不同出生棋盘"的种子：首轮恰两对、配对脚本的次序会改变链接与之后的一切（变异 MC-27 据此可红）。
@@ -71,15 +71,25 @@ internal static class LinkDecisionSequence
     /// 在 <c>link:1</c> 上以种子 <paramref name="seed"/> 建一局（4 名标准难度 AI，跑局层缺省配置、不截断小回合），挂脚本固定配对，逐小回合驱动到第 <paramref name="maxMajorRounds"/> 大回合结束或终局。
     /// 每行：<c>大回合 TAB 玩家 TAB 决策条目</c>；本小回合内发生的配对 / 链接 / 结算紧随其后各占一行。<c>\n</c> 行尾。
     /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds)
+    internal static string Export(ulong seed, int maxMajorRounds) => Export(seed, maxMajorRounds, AiDifficulty.Standard);
+
+    /// <summary>
+    /// 同上，4 名 AI 取难度 <paramref name="difficulty"/>（retire-legacy-maps 4b.4 / L21：简单、困难各补钉一条基线）。标准难度不改玩家配置，输出与上一个重载逐字节相同。
+    /// </summary>
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty)
     {
         var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0 };
+        if (difficulty != AiDifficulty.Standard)
+        {
+            config = config with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
+        }
+
         MapData map = MapCatalog.Resolve(config.MapId);
         MatchSession session = MatchSession.Create(config, seed, map, recorded: false, carry: null, pairing: new ScriptedPairingSource());
         MatchFlow match = session.Match;
         var sb = new StringBuilder();
         sb.Append("# AI 决策序列基线（board-link-mode 3.4，裁决 C5）\n");
-        sb.Append($"# map={match.Map.Id} digest={MapFile.Digest(match.Board.BaseMap)} seed={seed} players={match.Players.Length} difficulty=Standard zones={string.Join(",", match.PlayerStates.Select(s => s.BirthZone))}\n");
+        sb.Append($"# map={match.Map.Id} digest={MapFile.Digest(match.Board.BaseMap)} seed={seed} players={match.Players.Length} difficulty={difficulty} zones={string.Join(",", match.PlayerStates.Select(s => s.BirthZone))}\n");
         sb.Append($"# cellLimit={session.CellLimit} passThreshold={session.PassThreshold} contentSet={match.ContentSet} artisanWeight={match.ArtisanWeight} mode={match.Mode} pairing=script（缺省：升序两两配）\n");
         sb.Append($"# maxMajorRounds={maxMajorRounds}\n");
         sb.Append("# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算\n");

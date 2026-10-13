@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
@@ -5,6 +6,7 @@ using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
 using Siege.Sim.Play;
 
+// retire-legacy-maps：仓库根目录改取 TestPaths.RepoRoot()（原 FrontierFixtures.RepoRoot，随旧地图夹具删除而原样迁出）。
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
@@ -19,7 +21,10 @@ public class 出生区编号显示Tests
         // 期望行由夹具的平台摆放手工写出（不经渲染器）：
         //   第 1 行（y=0）：1 号台 A–E、空地 F–P、2 号台 Q–U；
         //   第 14 行（y=13）：3 号台 A–E、空地 F–H、6 号台 J–N（夹具的平台内已无营帐，map-generator 裁决 18）、空地 O、4 号台 P–T、空地 U。
-        MatchFlow match = MatchFlow.Create(FrontierFixtures.Map(), new GameSeed(3), MatchFixtures.All, MatchOptions.Immediate);
+        // retire-legacy-maps 1.8：夹具原为 FrontierFixtures.Map()（边疆档、经公开 MatchFlow.Create 校验建局）；该夹具随边疆档删除，
+        // 同一张 20×20 六平台图原样搬进本类（SixZoneMap，去掉边疆档规格档），按手写夹具的入口 CreateUnvalidated 建局（信物按同一种子生成）。断言不变。
+        MapData map = SixZoneMap();
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, new GameSeed(3), MatchFixtures.All, Siege.Core.Relics.RelicGenerator.Generate(map, new GameSeed(3)), MatchOptions.Immediate);
         var output = new StringWriter();
 
         new BoardRenderer(output).Board(match.Publish(), MatchFixtures.P0, zones: true);
@@ -50,7 +55,7 @@ public class 出生区编号显示Tests
             Assert.NotEqual(BoardRenderer.ZoneColor, BoardRenderer.ColorOf(new PlayerId(p)));
         }
 
-        string source = File.ReadAllText(Path.Combine(FrontierFixtures.RepoRoot(), "src", "Siege.Sim", "Play", "BoardRenderer.cs"));
+        string source = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Sim", "Play", "BoardRenderer.cs"));
         Assert.True(source.Length > 8_000, "样本口径：BoardRenderer.cs 过短。");
         Assert.DoesNotContain("new PlayerId(z)", source, StringComparison.Ordinal);
         Assert.Contains("BirthZoneLabel.Number(z)} \", ZoneColor)", source, StringComparison.Ordinal);   // 反面：区号那一格确实用中性色上色
@@ -88,6 +93,50 @@ public class 出生区编号显示Tests
         Assert.StartsWith("  - 出生区 1：", zoneLines[6], StringComparison.Ordinal);   // 第 7 行已是下一段（收敛局）的 1 号区
         Assert.Contains("基线 25.0%", text, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 20×20 六平台手写图（retire-legacy-maps：自已删除的 FrontierFixtures.Map 原样搬来，只去掉边疆档规格档）：最上两行岩石，6 个 5×5 平台故意不对称，
+    /// 每平台 1 个出生区信物 + 10 个公共信物。
+    /// </summary>
+    private static MapData SixZoneMap() =>
+        new()
+        {
+            Id = "test-six-zones",
+            Width = 20,
+            Height = 20,
+            MaxPlayers = 4,
+            Obstacles = [.. TestMaps.Rect(0, 18, 20, 2)],
+            BirthZones =
+            [
+                [.. TestMaps.Rect(0, 0, 5, 5)],
+                [.. TestMaps.Rect(15, 0, 5, 5)],
+                [.. TestMaps.Rect(0, 13, 5, 5)],
+                [.. TestMaps.Rect(14, 12, 5, 5)],
+                [.. TestMaps.Rect(7, 1, 5, 5)],
+                [.. TestMaps.Rect(8, 11, 5, 5)],
+            ],
+            RelicCells = new (int X, int Y, RelicZone Zone, BudgetTier Budget)[]
+            {
+                (1, 1, RelicZone.BirthZone, BudgetTier.Birth),
+                (18, 1, RelicZone.BirthZone, BudgetTier.Birth),
+                (1, 16, RelicZone.BirthZone, BudgetTier.Birth),
+                (17, 15, RelicZone.BirthZone, BudgetTier.Birth),
+                (8, 2, RelicZone.BirthZone, BudgetTier.Birth),
+                (11, 14, RelicZone.BirthZone, BudgetTier.Birth),
+                (10, 9, RelicZone.Contested, BudgetTier.High),
+                (6, 6, RelicZone.Contested, BudgetTier.Standard),
+                (13, 10, RelicZone.Contested, BudgetTier.Standard),
+                (5, 12, RelicZone.Contested, BudgetTier.Standard),
+                (16, 7, RelicZone.Contested, BudgetTier.Standard),
+                (12, 7, RelicZone.Contested, BudgetTier.Standard),
+                (7, 10, RelicZone.Contested, BudgetTier.Standard),
+                (3, 8, RelicZone.Contested, BudgetTier.Standard),
+                (18, 10, RelicZone.Contested, BudgetTier.Standard),
+                (6, 14, RelicZone.Contested, BudgetTier.Standard),
+            }.ToImmutableDictionary(r => new Coord(r.X, r.Y), r => new RelicCellSpec(r.Zone, r.Budget)),
+            ChokePoints = [new Coord(7, 9), new Coord(13, 9)],
+            CentralEntrance = new Coord(10, 9),
+        };
 
     [Theory]
     [InlineData(0, 1, "出生区 1")]

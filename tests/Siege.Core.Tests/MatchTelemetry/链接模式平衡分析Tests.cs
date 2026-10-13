@@ -136,9 +136,10 @@ public class 链接模式平衡分析Tests
         Assert.Contains("首轮配对分布（棋盘编号 1–5，\"等\" = 等待者）：1-2 3-4×1，2-3×1", report, StringComparison.Ordinal);
         Assert.Contains("为上界）", report, StringComparison.Ordinal);   // 过早 Pass 落败的口径是上界，报告文字写明（3.6 / check）
 
-        // 旧日志的报告没有这一段（逐字节不变由 平衡分析方向Tests 的黄金哈希守住）。
-        Assert.DoesNotContain("链接模式", ReportWriter.Render(BalanceAnalyzer.Analyze(SimFixtures.Sample.Value)), StringComparison.Ordinal);
-        Assert.Null(BalanceAnalyzer.Analyze(SimFixtures.Sample.Value).LinkMode);
+        // 旧日志的报告没有这一段。retire-legacy-maps 1.8：原取共用样本（v5 的 Legacy 日志）；共用样本改到 link:1 后，"旧日志"改用合成的非链接日志（首部无模式字段），断言不变。
+        MatchLog[] old = [SimFixtures.Synthetic(1, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(6, [0]))];
+        Assert.DoesNotContain("链接模式", ReportWriter.Render(BalanceAnalyzer.Analyze(old)), StringComparison.Ordinal);
+        Assert.Null(BalanceAnalyzer.Analyze(old).LinkMode);
     }
 
     [Fact]
@@ -179,8 +180,10 @@ public class 链接模式平衡分析Tests
         // 规格 Scenario「旧日志被拒绝」：analyze 命令遇到地图标识不是 link: 的日志 → 拒绝并提示属于已移除的地图模式，不写报告（与 replay 同口径，实现裁决 C3）；
         // 内部分析接口仍能读旧日志（Legacy 夹具的分析回归测试）。反面：链接模式日志照常出报告。
         // 变异 MC-32：Program.Analyze 去掉地图标识检查 → 旧日志照常出报告、退出码 0，本测试红。
+        // retire-legacy-maps 1.8：旧日志原由 v5 真实跑一局得到；旧地图删除后 Sim 不再能产出非链接日志，改用合成日志并把首部地图标识写成 siege-4p-base-v5，断言不变。
         string legacyDir = SimFixtures.TempDir("analyze-legacy");
-        MatchSession.Create(SimFixtures.Config(turnLimit: 4), 1, resolveMap: MapCatalog.Legacy.Resolve).Run().WriteTo(legacyDir);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析
+        MatchLog synthetic = SimFixtures.Synthetic(1, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(6, [0]));
+        new MatchLog { Header = synthetic.Header with { MapId = "siege-4p-base-v5" }, Turns = synthetic.Turns, Events = synthetic.Events, Result = synthetic.Result }.WriteTo(legacyDir);
         (int code, _, string err) = LinkSimFixtures.RunMain(null, null, "analyze", "--dir", legacyDir);
         Assert.Equal(1, code);
         Assert.Contains("已移除的地图模式", err, StringComparison.Ordinal);

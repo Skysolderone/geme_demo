@@ -8,13 +8,14 @@ using Xunit.Abstractions;
 namespace Siege.Core.Tests.MatchFlowRegression;
 
 /// <summary>implement 8.4：占位随机策略（种子驱动）端到端连跑 100 局 4 人对局，无死锁、无非法状态。</summary>
-// board-link-mode 裁决 D7：非 link: 的旧存档由玩家入口 MatchFlow.Restore 拒绝；本类是 Legacy 夹具，改走等价内部口 MatchFlow.RestoreLegacy（校验与重建相同，只是不拒绝旧地图）。
+// retire-legacy-maps 1.8：原在 v5 上以 Legacy 模式连跑（存档经内部口 MatchFlow.RestoreLegacy 往返）；改到 link:1、链接模式（内置固定配对脚本），
+// 存档经玩家入口 MatchFlow.Restore 往返。断言不变。
 public class 百局端到端Tests(ITestOutputHelper output)
 {
     [Fact]
     public void 连续一百局四人对局无死锁无非法状态()
     {
-        MapData map = FourPlayerBaseMap.Create();
+        MapData map = MapCatalog.Resolve("link:1");
         PlayerId[] players = [new(0), new(1), new(2), new(3)];
         var reasons = new SortedDictionary<EndReason, int>();
         var winners = new SortedDictionary<PlayerId, int>();
@@ -26,7 +27,8 @@ public class 百局端到端Tests(ITestOutputHelper output)
         for (ulong s = 1; s <= 100; s++)
         {
             var seed = new GameSeed(s);
-            MatchFlow match = MatchFlow.Create(map, seed, players, MatchOptions.Immediate);
+            MatchFlow match = MatchFlow.Create(map, seed, players, MatchOptions.Immediate with { Mode = MatchMode.Link });
+            match.PairingSource = new ScriptedPairingSource();
             match.PlantSequentially(players.Select((p, i) => (p, i)));
             var runner = new MatchRunner(match);
             foreach (PlayerId p in players)
@@ -99,6 +101,6 @@ public class 百局端到端Tests(ITestOutputHelper output)
         }
 
         // 存档往返
-        Assert.Equal(match.Serialize(), MatchFlow.RestoreLegacy(match.Board.BaseMap, match.Serialize()).Serialize());
+        Assert.Equal(match.Serialize(), MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(match.Serialize())), match.Serialize()).Serialize());
     }
 }

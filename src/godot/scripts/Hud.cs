@@ -374,9 +374,10 @@ public sealed partial class Hud : CanvasLayer
         };
     }
 
-    /// <summary>链接模式锁定后：与自己同一块棋盘 / 战场的玩家（match-setup「匿名同时插旗」只公开这一项；读按座位视图，不读他人旗帜）。旧模式为空。</summary>
+    /// <summary>锁定后：与自己同一块棋盘 / 战场的玩家（match-setup「匿名同时插旗」只公开这一项；读按座位视图，不读他人旗帜）。锁定前（无座位视图）为空。
+    /// retire-legacy-maps 3.6：图形版只有链接模式，旧模式判定删除。</summary>
     private static string SameBoardText(ViewerWorld world) =>
-        world.Seat is not { Mode: MatchMode.Link } ? string.Empty
+        world.Seat is null ? string.Empty
         : world.SameBattlefieldPlayers.IsEmpty ? " · 本战场只有你"
         : $" · 同战场：{string.Join("、", world.SameBattlefieldPlayers.Select(Labels.Player))}";
 

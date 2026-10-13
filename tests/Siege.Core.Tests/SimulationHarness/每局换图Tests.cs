@@ -10,96 +10,102 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// map-generator tasks 2.5（design D6）：批量"每局换图"——第 i 局用地图种子 起始 + i；批次配置记录写明；
 /// 分析报告在该模式下按平台边长（5–9）分组。规格：simulation-harness「各入口支持生成图」—— Scenario: 每局换图的批次。
 /// 真实 20 局只走 CLI（统计表见实施记录），这里用小局数验证机制。
+/// retire-legacy-maps 1.8：起始标识由 <c>gen:</c>（边疆档生成器，已删除）改为 <c>link:</c>；只属于 <c>gen:</c> 的"平台数参数"断言随生成器删除，其余断言不变。
 /// </summary>
 public class 每局换图Tests
 {
-    private static RunConfig Rotating(int count, string mapId = "gen:100") =>
+    private static RunConfig Rotating(int count, string mapId = "link:100") =>
         SimFixtures.Config(count: count, seedStart: 1, turnLimit: 4) with { MapId = mapId, MapPerMatch = true };
 
     [Fact]
-    public void 第i局的地图标识是起始种子加i_平台数不变()
+    public void 第i局的地图标识是起始种子加i()
     {
+        // retire-legacy-maps 1.8：原名「…_平台数不变」；平台数（:p7）是 gen: 的参数，随边疆档生成器删除，链接图标识没有参数。
         RunConfig six = Rotating(20);
-        Assert.Equal(Enumerable.Range(100, 20).Select(n => $"gen:{n}"), Enumerable.Range(0, 20).Select(six.MapIdAt));
+        Assert.Equal(Enumerable.Range(100, 20).Select(n => $"link:{n}"), Enumerable.Range(0, 20).Select(six.MapIdAt));
 
-        RunConfig seven = Rotating(3, "gen:18446744073709551613:p7");
-        Assert.Equal(["gen:18446744073709551613:p7", "gen:18446744073709551614:p7", "gen:18446744073709551615:p7"], Enumerable.Range(0, 3).Select(seven.MapIdAt));
+        RunConfig seven = Rotating(3, "link:18446744073709551613");
+        Assert.Equal(["link:18446744073709551613", "link:18446744073709551614", "link:18446744073709551615"], Enumerable.Range(0, 3).Select(seven.MapIdAt));
 
         // 不换图：恒为配置的地图标识。
-        Assert.Equal("siege-frontier-v2", (SimFixtures.Config(count: 3) with { MapId = "siege-frontier-v2" }).MapIdAt(2));
+        Assert.Equal("link:7", (SimFixtures.Config(count: 3) with { MapId = "link:7" }).MapIdAt(2));
     }
 
     [Fact]
     public void 每局换图要求带起始种子的生成图标识_开跑之前报错()
     {
+        // retire-legacy-maps 1.8：裸标识与种子上溢改用 link:；gen: 的平台数越界（gen:1:p9）随生成器删除。旧标识照旧报错。
         Assert.Throws<ArgumentException>(() => Rotating(2, "siege-frontier-v2").Validated());
-        Assert.Throws<ArgumentException>(() => Rotating(2, "gen").Validated());
-        Assert.Throws<FormatException>(() => Rotating(2, "gen:1:p9").Validated());
-        Assert.Throws<ArgumentException>(() => Rotating(2, "gen:18446744073709551615").Validated());
+        Assert.Throws<ArgumentException>(() => Rotating(2, "link").Validated());
+        Assert.Throws<ArgumentException>(() => Rotating(2, "link:18446744073709551615").Validated());
 
         // 会话自己解析不了"本局是第几局"：不给地图就拒绝，而不是悄悄用起始那张图。
-        Assert.Throws<ArgumentException>(() => MatchSession.Create(Rotating(2), seed: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Throws<ArgumentException>(() => MatchSession.Create(Rotating(2), seed: 1));
 
         // 半份输出比没有输出更糟：非法配置不建输出目录。
         string dir = Path.Combine(SimFixtures.TempDir("rotate-invalid"), "out");
-        Assert.Throws<ArgumentException>(() => BatchRunner.ExecuteToDirectory(Rotating(2, "siege-4p-base-v5"), dir, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.Throws<ArgumentException>(() => BatchRunner.ExecuteToDirectory(Rotating(2, "siege-4p-base-v5"), dir, parallelism: 1));
         Assert.False(Directory.Exists(dir));
     }
 
     [Fact]
     public void 小批次每局换图_首部标识依次递增_配置记录写明_全部可回放()
     {
-        // 变异 MB-10：BatchRunner 每局都用第 0 局的图 → 本测试红（首部标识全是 gen:100）。
+        // 变异 MB-10：BatchRunner 每局都用第 0 局的图 → 本测试红（首部标识全是 link:100）。
+        // retire-legacy-maps 1.8：起始标识由 gen:100:p7（7 个平台）改为 link:100（5 块出生棋盘），断言不变（区数期望 7 → 5）。
         string dir = SimFixtures.TempDir("rotate-batch");
-        RunConfig config = Rotating(3, "gen:100:p7");
+        RunConfig config = Rotating(3, "link:100");
 
-        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 2, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 2);
 
         Assert.Equal((3, 0), (summary.Completed, summary.Failed));
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
-        Assert.Equal(["gen:100:p7", "gen:101:p7", "gen:102:p7"], logs.Select(l => l.Header.MapId));
+        Assert.Equal(["link:100", "link:101", "link:102"], logs.Select(l => l.Header.MapId));
         Assert.Equal(3, logs.Select(l => l.Header.MapDigest).Distinct().Count());
-        Assert.All(logs, l => Assert.Equal(7, l.Header.ZoneCount));
+        Assert.All(logs, l => Assert.Equal(5, l.Header.ZoneCount));
 
-        // 批次配置记录：起始地图种子与平台数（都在起始标识里）+ "每局换图"这一事实；每局首部的配置同样带着。
+        // 批次配置记录：起始地图种子（在起始标识里）+ "每局换图"这一事实；每局首部的配置同样带着。
         string saved = File.ReadAllText(Path.Combine(dir, "config.json"));
-        Assert.Contains("\"MapId\": \"gen:100:p7\"", saved, StringComparison.Ordinal);
+        Assert.Contains("\"MapId\": \"link:100\"", saved, StringComparison.Ordinal);
         Assert.Contains("\"MapPerMatch\": true", saved, StringComparison.Ordinal);
         RunConfig reread = RunConfig.FromJson(saved);
         Assert.True(reread.MapPerMatch);
-        Assert.Equal("gen:102:p7", reread.MapIdAt(2));
+        Assert.Equal("link:102", reread.MapIdAt(2));
         Assert.All(logs, l => Assert.True(l.Header.Config.MapPerMatch));
-        Assert.All(logs, l => Assert.Equal("gen:100:p7", l.Header.Config.MapId));
+        Assert.All(logs, l => Assert.Equal("link:100", l.Header.Config.MapId));
 
         // 回放：只凭日志文件。本局的图取首部的地图标识（不是配置里的起始标识）。变异 MB-11：Replayer 一律按配置的 MapId 解析 → 第 2、3 局报地图不一致。
         foreach (MatchLog log in logs)
         {
-            ReplayResult replay = Replayer.Replay(log, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+            ReplayResult replay = Replayer.Replay(log);
             Assert.True(replay.Identical, $"{log.Header.MapId}: {replay}");
         }
 
         // 串行与并行逐字节相同（换图不引入调度相关性）。
-        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        List<MatchLog> serial = BatchRunner.Execute(config, parallelism: 1);
         Assert.Equal(logs.Select(l => l.DeterministicText()), serial.Select(l => l.DeterministicText()));
     }
 
     [Fact]
     public void 首部的平台边长取自对局本身_与生成器给出的各平台方块一致()
     {
-        // 首部 ZoneSides = 各出生区格子外接矩形的较长边；生成图的平台是正方形，应等于生成器报告的边长（测试内独立来源）。
+        // 首部 ZoneSides = 各出生区格子外接矩形的较长边。
+        // retire-legacy-maps 1.8：原以 gen:1:p8 起的 4 局、与生成器报告的正方形平台边长比对；生成器删除后改为 link:1 起的 4 局，
+        // 测试内独立来源改为"由该局初始地图的出生区格子现算外接矩形较长边"（测试内算式，不调用 SideOf），断言不变。
         // 变异 MB-12：SideOf 少加 1（把"跨度"当边长）→ 本测试红。
-        List<MatchLog> logs = BatchRunner.Execute(Rotating(4, "gen:1:p8"), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        List<MatchLog> logs = BatchRunner.Execute(Rotating(4, "link:1"), parallelism: 1);
 
         for (int i = 0; i < logs.Count; i++)
         {
-            GeneratedMap generated = MapGenFixtures.Generated((ulong)(1 + i), 8);
-            Assert.Equal(generated.Platforms.Select(p => p.Side), logs[i].Header.ZoneSides);
+            Siege.Core.Board.MapData map = MapCatalog.Resolve(logs[i].Header.MapId);
+            int[] expected = [.. map.BirthZones.Select(z => Math.Max(z.Max(c => c.X) - z.Min(c => c.X) + 1, z.Max(c => c.Y) - z.Min(c => c.Y) + 1))];
+            Assert.Equal(expected, logs[i].Header.ZoneSides);
             Assert.All(logs[i].Header.ZoneSides!, side => Assert.InRange(side, 5, 9));
             Assert.Equal(logs[i].Header.ZoneSides, MatchLog.Parse(logs[i].DeterministicText()).Header.ZoneSides);
         }
 
         // 不换图的批次（哪怕是生成图）不写这一项。
-        MatchLog single = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "gen:1:p8" }, seed: 1, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog single = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" }, seed: 1).Run();
         Assert.Null(single.Header.ZoneSides);
     }
 
@@ -160,7 +166,10 @@ public class 每局换图Tests
         Assert.Null(report.BirthZones.BySide);
         string text = ReportWriter.Render(report);
         Assert.Contains("  - 出生区 1：", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("边长", text, StringComparison.Ordinal);
+        // retire-legacy-maps 1.8：共用样本改到 link:1 后报告多出链接段"共享边长度分布"，原断言 DoesNotContain("边长") 会误中它；
+        // 改为断言平台边长一节的两种行（段首与分行）都不存在，所守规则不变。
+        Assert.DoesNotContain("平台边长", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("  - 边长 ", text, StringComparison.Ordinal);
     }
 
     private static MatchLog WithSides(MatchLog log, int[] sides) => new()

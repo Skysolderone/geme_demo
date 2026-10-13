@@ -12,7 +12,8 @@ public class 地图静态数据Tests
         // 本层不消费任何随机源——它连"对局种子"这个参数都没有。
         // 因此独立构建多次必须逐字节一致；对局内唯一的随机来源是信物的"具体内容"，
         // 由信物系统按种子生成，不属于本层。
-        string[] snapshots = [.. Enumerable.Range(0, 3).Select(_ => MapFile.ToJson(FourPlayerBaseMap.Create()))];
+        // retire-legacy-maps 1.6：载体由 v5（内置图）改为 link:1（链接档生成图，地图种子相同即同一张图），断言不变。
+        string[] snapshots = [.. Enumerable.Range(0, 3).Select(_ => MapFile.ToJson(MapCatalog.Resolve("link:1")))];
 
         Assert.Equal(snapshots[0], snapshots[1]);
         Assert.Equal(snapshots[0], snapshots[2]);
@@ -37,24 +38,9 @@ public class 地图静态数据Tests
     }
 
     [Fact]
-    public void 拒绝裁切适配()
-    {
-        // 规格 Scenario「拒绝裁切适配」：3 人地图必须独立手工制作。
-        // 本层连"按人数裁切"这条路径都不存在；把 4 人图改标成 3 人并砍掉两列，
-        // 只会得到一张校验不通过的图。
-        MapData cropped = FourPlayerBaseMap.Create() with { MaxPlayers = 3, Width = 9 };
-
-        MapValidationResult result = MapValidator.Validate(cropped);
-
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Failures, f => f.Code == "BIRTH_ZONE_COUNT_MISMATCH");
-        Assert.Contains(result.Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
-        Assert.Throws<MapValidationException>(() => GameBoard.Load(cropped));
-    }
-
-    [Fact]
     public void 地图基准校验通过()
     {
-        Assert.True(MapValidator.Validate(FourPlayerBaseMap.Create()).IsValid);
+        // retire-legacy-maps 1.6：原为 v5 基准图通过校验；改为链接档生成图 link:1 通过校验（规格 Scenario「生成图经过校验」）。
+        Assert.True(MapValidator.Validate(MapCatalog.Resolve("link:1")).IsValid);
     }
 }

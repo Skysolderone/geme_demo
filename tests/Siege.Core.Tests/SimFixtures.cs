@@ -1,4 +1,3 @@
-using Siege.Core.Board.Maps;
 using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Batch;
@@ -17,12 +16,16 @@ namespace Siege.Core.Tests;
 /// </summary>
 internal static class SimFixtures
 {
-    /// <summary>基准图 4 人 Easy 配置。</summary>
+    /// <summary>
+    /// <c>link:1</c> 上 4 人 Easy 配置（retire-legacy-maps 1.8：原为基准图 v5——当时靠 <c>RunConfig.MapId</c> 的内部缺省；
+    /// 改为显式写 <c>link:1</c>，与第 3 组把内部缺省改为 <c>link:1</c> 无关）。
+    /// </summary>
     internal static RunConfig Config(
         int count = 1, ulong seedStart = 1, int? turnLimit = null, AiDifficulty difficulty = AiDifficulty.Easy,
         EventRetention retention = EventRetention.Full, int players = 4, int? injectFailureAtTurn = null, bool compress = false) =>
         new()
         {
+            MapId = "link:1",
             Players = [.. Enumerable.Range(0, players).Select(_ => new PlayerAiConfig { Difficulty = difficulty })],
             SeedStart = seedStart,
             Count = count,
@@ -41,7 +44,7 @@ internal static class SimFixtures
     /// </summary>
     /// <remarks>权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省（<see cref="PinPreCalibration"/>）：大量遥测 / 日志 / 分析测试的样本口径（4 局全是截断局等）
     /// 依赖这四局的实际走法，不应随校准值与 R26（简单难度算眼位）漂移（段 D2 改写）。</remarks>
-    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(PinPreCalibration(Config(count: 4, seedStart: 11)), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve));   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+    internal static readonly Lazy<List<MatchLog>> Sample = new(() => BatchRunner.Execute(PinPreCalibration(Config(count: 4, seedStart: 11)), parallelism: 1));   // retire-legacy-maps 1.8：样本由 v5 改到 link:1
 
     /// <summary>
     /// 有名次的真实样本（restore-go-core-rules 段 E）：规则层删掉大回合上限与碾压之后，<see cref="Sample"/> 的 4 局全是 <c>turn_limit</c> 截断局、胜者全空，
@@ -63,13 +66,12 @@ internal static class SimFixtures
     internal const int PreCalibrationPassThreshold = 20;
 
     /// <summary>
-    /// 把配置的权重与停手阈值写死为 4.5 定值之前的缺省（见 <see cref="PreCalibrationWeights"/>），冒险概率写死为 0（flag-contest 1.3：
-    /// 这些样本的黄金值钉在引入冒险概率之前，p = 0 时锁定结果逐项不变；不写死则缺省 p = 15 会让部分种子开局同区、走法随之变）。
+    /// 把配置的权重与停手阈值写死为 4.5 定值之前的缺省（见 <see cref="PreCalibrationWeights"/>）。
+    /// retire-legacy-maps 1.8：原另把冒险概率写死为 0（flag-contest 1.3）；样本改到 link:1 后插旗一律盲选，链接图配置不得含冒险概率，该项去掉。
     /// </summary>
     internal static RunConfig PinPreCalibration(RunConfig config) => config with
     {
         PassThreshold = PreCalibrationPassThreshold,
-        FlagRisk = 0,
         // more-pieces-relics D8：新局缺省内容集 v2 会改变征募序列；这些样本与黄金值都在引入内容集之前钉下，写死 v1（v1 与引入之前逐步相同）。
         ContentSet = ContentSet.V1,
         Players = [.. config.Players.Select(p => p with { Weights = PreCalibrationWeights })],
@@ -82,7 +84,7 @@ internal static class SimFixtures
         // 停手阈值同样写死（ai-eye 段 B 待决 #8，段 D2 落实）：缺省阈值随 4.5 由 20 改为 80，不写死则 Easy 的走法随之变、样本口径断言跟着翻。
         // 写死的是本夹具建立时（段 B–D1）实际生效的缺省值，四局逐步不变；眼位权重为 0，R26（简单难度算眼位）也不改变走法。
         RunConfig config = PinPreCalibration(Config(turnLimit: 0));
-        MatchSession session = MatchSession.Create(config, seed, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchSession session = MatchSession.Create(config, seed);   // retire-legacy-maps 1.8：样本由 v5 改到 link:1
         while (session.Match.MajorRound <= 3 && session.RunTurn())
         {
         }

@@ -14,20 +14,21 @@ public class 日志首部区数Tests
     [Fact]
     public void 真实跑局把区数写进首部并经文本往返()
     {
-        // 走真实写入路径（合成日志是手填值，漏写照样绿）：边疆图 6 区 4 人，首部 ZoneCount = 6 ≠ 参赛人数 4 ≠ 被选到的最大区号 + 1（不恒等），
-        // 确定性文本与完整文本两条往返都保留；标准图样本为 4。
+        // 走真实写入路径（合成日志是手填值，漏写照样绿）：链接图 5 块出生棋盘、4 人，首部 ZoneCount = 5 ≠ 参赛人数 4，
+        // 确定性文本与完整文本两条往返都保留；共用样本同为 5。
+        // retire-legacy-maps 1.8：原用边疆图（6 区 4 人）与标准图样本（4 区）；旧图删除，改用 link:1（5 区 4 人），"区数 ≠ 人数"这一非恒等口径不变。
         // 变异 M-B5：MatchSession.BuildHeader 不写 ZoneCount → 本测试红。
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = FrontierMapV2.Id }, seed: 7, resolveMap: MapCatalog.Legacy.Resolve).Run();   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:7" }, seed: 7).Run();
 
         Assert.False(frontier.IsFailed, frontier.Failure?.Message);
-        Assert.Equal(FrontierMapV2.Id, frontier.Header.MapId);
-        Assert.Equal(6, frontier.Header.ZoneCount);
+        Assert.Equal("link:7", frontier.Header.MapId);
+        Assert.Equal(5, frontier.Header.ZoneCount);
         Assert.Equal(4, frontier.Header.Zones.Count);
-        Assert.Equal(6, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);
-        Assert.Equal(6, MatchLog.Parse(frontier.FullText()).Header.ZoneCount);
-        Assert.Contains("\"ZoneCount\":6", frontier.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
+        Assert.Equal(5, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);
+        Assert.Equal(5, MatchLog.Parse(frontier.FullText()).Header.ZoneCount);
+        Assert.Contains("\"ZoneCount\":5", frontier.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
-        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(4, l.Header.ZoneCount));
+        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(5, l.Header.ZoneCount));
     }
 
     [Fact]
@@ -35,7 +36,10 @@ public class 日志首部区数Tests
     {
         // 旧日志（frontier-map 之前）首部没有 ZoneCount：读入为 null，不抛；分析端回填为"被选到过的最大区号 + 1"——
         // 旧日志全部来自区数 = 人数的标准档图，回填值即真值，各区胜率段与加字段之前逐项相同。
-        MatchLog current = SimFixtures.Sample.Value[0];
+        // retire-legacy-maps 1.8：原取共用样本（v5，区数 4）；样本改到 link:1 后区数为 5 而 4 人至多占 4 区，"回填值即真值"的前提只在旧图上成立，
+        // 这里改用区数 = 人数、四区各被选一次的合成日志（经同一写出 / 解析路径），所守的分析端回填规则不变。
+        MatchLog current = MatchLog.Parse(SimFixtures.Synthetic(
+            11, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(6, [2]), zones: [3, 1, 0, 2], zoneCount: 4).FullText());
         string text = current.FullText();
         Assert.Contains("\"ZoneCount\":4,", text, StringComparison.Ordinal);
         MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":4,", string.Empty, StringComparison.Ordinal));
@@ -54,23 +58,24 @@ public class 日志首部区数Tests
     {
         // ZoneCount 进了确定性文本（它不是耗时字段）：回放 frontier-map 之前的旧日志时，重建的首部多出这一项，
         // 逐行比对在第 1 行（首部）报分歧——与历次加首部字段的效果相同，不静默放过、也不伪造一致；而对局本身逐步相同。
-        MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4), parallelism: 1, resolveMap: MapCatalog.Legacy.Resolve)[0];   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        // retire-legacy-maps 1.8：样本由 v5（区数 4）改到 link:1（区数 5），期望值随之由 4 改为 5，断言不变。
+        MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4), parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         string text = current.DeterministicText();
-        Assert.Contains("\"ZoneCount\":4,", text, StringComparison.Ordinal);
-        MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":4,", string.Empty, StringComparison.Ordinal));
+        Assert.Contains("\"ZoneCount\":5,", text, StringComparison.Ordinal);
+        MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":5,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.ZoneCount);
 
-        ReplayResult replay = Replayer.Replay(old, resolveMap: MapCatalog.Legacy.Resolve);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        ReplayResult replay = Replayer.Replay(old);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.False(replay.Identical);
         Assert.Equal(1, replay.FirstDivergentLine);
-        Assert.Contains("\"ZoneCount\":4", replay.Actual, StringComparison.Ordinal);
-        Assert.Equal(4, replay.Replayed.Header.ZoneCount);
+        Assert.Contains("\"ZoneCount\":5", replay.Actual, StringComparison.Ordinal);
+        Assert.Equal(5, replay.Replayed.Header.ZoneCount);
         Assert.Equal(SimFixtures.TurnTexts(old.Turns), SimFixtures.TurnTexts(replay.Replayed.Turns));
         Assert.Equal(old.DeterministicText().Split('\n')[1..], replay.Replayed.DeterministicText().Split('\n')[1..]);
 
         // 对照：带该字段的新日志回放逐行一致。
-        Assert.True(Replayer.Replay(MatchLog.Parse(text), resolveMap: MapCatalog.Legacy.Resolve).Identical);   // board-link-mode 裁决 D7：Legacy 夹具显式经 MapCatalog.Legacy 解析地图（MapCatalog.Resolve 只认 link:）
+        Assert.True(Replayer.Replay(MatchLog.Parse(text)).Identical);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
     }
 
     [Fact]
