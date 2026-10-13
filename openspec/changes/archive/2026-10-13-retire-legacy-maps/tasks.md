@@ -52,4 +52,4 @@
 - [x] 5.1 更新 `HANDOFF.md`：去掉旧地图、`gen:` / `board:`、冒险概率、地图覆盖、`map` 子命令旧标识的说明；登记后续 change `retire-legacy-rules`（L6 缺省）与"Core 保留只服务手写夹具的 Legacy 规则分支"这一债务。验收：人工检查
 - [x] 5.2 同步设计文档当前章节（§3 地图来源只剩链接档、§4 冒险概率已删、§16–§17 基线改 `link:1` 三种子、AI 校准口径注明"校准地图已退役、链接图上未复核"、§19 后续扩展登记 `retire-legacy-rules`）；历史变更记录不改（L5）。验收：人工检查
 - [x] 5.3 最终回归（顺序单跑，看真实退出码）：`dotnet test` 全量；Godot console 版 headless 三条自检 `-- --auto-demo`、`-- --auto-demo --pick-check --seed=5`、`-- --map-select --auto-demo`；`-- --auto-demo --rounds=0 --seed=5`（七步齐全）。验收：全部退出 0，`[flow]` 与拾取自证行与 `board-link-mode` 段 E 记录一致
-- [ ] 5.4 `openspec validate retire-legacy-maps --strict` 通过后归档；`map-generation` 保留说明性 Requirement（L14 缺省）。验收：归档后 `openspec validate --specs --strict` 34 份主规格全过
+- [x] 5.4 `openspec validate retire-legacy-maps --strict` 通过后归档；`map-generation` 保留说明性 Requirement（L14 缺省）。验收：归档后 `openspec validate --specs --strict` 34 份主规格全过

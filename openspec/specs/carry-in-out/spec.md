@@ -138,7 +138,7 @@ TBD - created by archiving change carry-in-out. Update Purpose after archive.
 
 批量跑局没有本机玩家，每名 AI 的带入数量取跑局配置（见 `simulation-harness`「批量跑局」）。
 
-AI 的带入只由对局种子、带入数量、内容集与 AI 玩家集合决定，MUST NOT 依赖本机玩家选了哪一种补给。两条新子流 MUST NOT 扰动信物生成、征募、流程初始化、原型选区、冒险抽签与 AI 决策的既有序列。AI 的带入 SHALL 公开显示，AI MUST NOT 写档案。
+AI 的带入只由对局种子、带入数量、内容集与 AI 玩家集合决定，MUST NOT 依赖本机玩家选了哪一种补给。两条新子流 MUST NOT 扰动信物生成、征募、流程初始化、原型盲选与 AI 决策的既有序列。AI 的带入 SHALL 公开显示，AI MUST NOT 写档案。
 
 #### Scenario: 同等数量
 - **WHEN** 4 人局本机玩家带入 1 件

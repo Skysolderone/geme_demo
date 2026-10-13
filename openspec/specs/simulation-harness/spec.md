@@ -123,7 +123,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 批量跑局、终端版与图形版 SHALL 都能通过一个地图选项按地图标识选图，且只接受 `link:<地图种子>`；未给出该选项时批量与终端 MUST 加载 `link:1`，图形版进入新局界面。三个入口 MUST 共用同一份"标识 → 地图"的解析，MUST NOT 各自维护一份地图清单。
 
-地图标识无法解析或属于已降级的旧标识族（内置图名、`gen:`、`board:`、地图文件路径）时，入口 MUST 报错并说明只接受 `link:<地图种子>`，MUST NOT 静默回落到缺省地图。地图选项 MUST 在各入口的严格命令行解析中登记。
+地图标识无法解析或属于已删除的旧标识族（内置图名、`gen:`、`board:`、地图文件路径，负责人 2026-10-13 裁决 L1）时，入口 MUST 报错并说明只接受 `link:<地图种子>`，MUST NOT 静默回落到缺省地图。地图选项 MUST 在各入口的严格命令行解析中登记。
 
 实际加载的地图标识 MUST 写入对局日志首部与批次配置记录。面向人的出生棋盘编号显示 SHALL 为 1–5。
 
@@ -153,7 +153,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 回放 SHALL 按日志首部记录的地图标识重建初始地图，并按日志中的链接事件重建后续地图；重新生成的地图与日志记录的地图内容摘要不一致时，回放 MUST 在首部即报分歧并停止。
 
-`map` 子命令 SHALL 能打印任一 `link:` 初始地图的文本图与校验报告，并能模拟给定的链接序列后打印最终地图；也 SHALL 仍能打印旧标识族的地图（夹具用途）。
+`map` 子命令 SHALL 能打印任一 `link:` 初始地图的文本图与校验报告，并能模拟给定的链接序列后打印最终地图；未给地图选项时 SHALL 加载 `link:1`。旧标识族（内置图名、`gen:`、`board:`、地图文件路径）已随旧地图删除（负责人 2026-10-13 裁决 L1），`map` 子命令遇到时 MUST 与其他入口一样报错并说明只接受 `link:<地图种子>`。
 
 #### Scenario: 终端版开新局
 - **WHEN** 以 `play --map link:12345` 启动终端版
@@ -178,6 +178,14 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 #### Scenario: map 子命令模拟链接
 - **WHEN** 用 `map --map link:1 --links 1-4,2-5` 打印地图
 - **THEN** 输出两次链接后的文本图与校验报告
+
+#### Scenario: map 子命令拒绝旧标识
+- **WHEN** 用 `map --map siege-4p-base-v5` 或 `map --map gen:12345` 打印地图
+- **THEN** 报错退出并说明只接受 `link:<地图种子>`，不打印任何地图
+
+#### Scenario: map 子命令缺省地图
+- **WHEN** 不带地图选项执行 `map`
+- **THEN** 打印 `link:1` 的初始地图与校验报告
 
 ### Requirement: 各入口的难度选项
 
@@ -216,45 +224,4 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 #### Scenario: 图形版选专家
 - **WHEN** 在图形版选图界面把难度选为专家后开局，或以 `--difficulty=Expert` 启动
 - **THEN** 本局全部 AI 玩家按专家难度决策；以 `--auto-demo` 启动时 AI 仍为标准难度
-
-### Requirement: 各入口的地图专属 AI 权重
-
-批量跑局、终端与图形版三个入口 SHALL 经 AI 层唯一的"按地图标识取权重"实现（`ai-decision`「地图专属评价权重覆盖」）为未显式配置权重的 AI 取权重，MUST NOT 各自维护地图与权重的对照。
-
-- **批量跑局**：新开的对局，在把配置落成为实际生效值时，SHALL 对未显式配置权重、且本局地图登记了覆盖的玩家，把覆盖表落成为该玩家的显式权重，写入批次配置记录与对局日志首部。本局地图未登记覆盖时，配置记录与日志首部 MUST 与引入本机制之前逐字节相同。
-- **回放**：SHALL 按日志首部记录的权重重建。首部权重为空的旧日志 MUST 按默认表重建，MUST NOT 套用地图覆盖。
-- **终端与图形版**：未给出权重时 SHALL 取本局地图的覆盖；未登记时取默认表。
-- **命令行重建玩家列表**：批量跑局给了难度或人数参数而重建玩家列表时，配置文件里的权重不再生效，玩家按地图覆盖、再按默认表取权重。这是既有行为，本 change 不改，只按现状写明；后续若修复"静默丢权重"，可以改动本条。用法说明 MUST 写明这一点。
-
-#### Scenario: 批量跑局在 2 人图上落成覆盖
-- **WHEN** 以未显式配置权重的配置文件，在 `siege-2p-base-v1` 上执行一批 2 名标准难度 AI 的对局
-- **THEN** 批次配置记录与每局日志首部里，两名玩家的权重都等于 2 人图覆盖表
-
-#### Scenario: 未登记的地图首部逐字节不变
-- **WHEN** 以同一份未显式配置权重的配置，分别用引入本机制前后的实现在 `siege-4p-base-v5` 上跑种子 1 的一局
-- **THEN** 两份日志首部与批次配置记录逐字节相同，各玩家首部权重均为空
-
-#### Scenario: 显式权重不被覆盖替换
-- **WHEN** 配置文件在 `siege-2p-base-v1` 上给两名玩家显式写了 Eye = 100 的整表权重
-- **THEN** 批次配置记录与日志首部记录的是这张显式表，不是覆盖表
-
-#### Scenario: 新日志按首部回放
-- **WHEN** 回放一局在 `siege-2p-base-v1` 上、按覆盖落成权重的新日志
-- **THEN** 重放的每一步决策与原局相同，重建出的首部与原首部逐字节相同
-
-#### Scenario: 旧日志不套覆盖
-- **WHEN** 回放一局引入本机制之前在 `siege-2p-base-v1` 上产出、首部权重为空的日志
-- **THEN** AI 按默认表重建，重放的每一步决策与原局相同
-
-#### Scenario: 终端入口取覆盖
-- **WHEN** 以 `play --map siege-2p-base-v1` 开局，入口不给权重
-- **THEN** 每名 AI 玩家的评价权重等于 2 人图覆盖表
-
-#### Scenario: 图形版入口取覆盖
-- **WHEN** 图形版在选图界面选 `siege-2p-base-v1` 开局
-- **THEN** 每名 AI 玩家的评价权重等于 2 人图覆盖表；选 `siege-4p-base-v5` 开局时等于默认表
-
-#### Scenario: 重建玩家列表后按覆盖取值
-- **WHEN** 在 `siege-2p-base-v1` 上以带显式权重的配置文件执行批量跑局，同时给了难度参数
-- **THEN** 配置文件里的权重被丢弃，批次配置记录中两名玩家的权重等于 2 人图覆盖表
 
