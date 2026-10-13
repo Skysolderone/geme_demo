@@ -1,0 +1,8 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/ai-pass-review/proposal.md", "reason": "ai-pass-review 规划与内核规范"}
+{"file": "openspec/changes/ai-pass-review/design.md", "reason": "ai-pass-review 规划与内核规范"}
+{"file": "openspec/changes/ai-pass-review/tasks.md", "reason": "ai-pass-review 规划与内核规范"}
+{"file": "openspec/changes/ai-pass-review/specs/match-telemetry/spec.md", "reason": "ai-pass-review 规划与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "ai-pass-review 规划与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "ai-pass-review 规划与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "ai-pass-review 规划与内核规范"}
