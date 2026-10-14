@@ -153,7 +153,20 @@ public class 平衡分析方向Tests
             }
 
             Assert.Contains(lines[start..end], l => l.Contains("本项不适用", StringComparison.Ordinal));
-            string stripped = string.Join('\n', lines[..start].Concat(lines[end..]));
+            string[] kept = [.. lines[..start].Concat(lines[end..])];
+
+            // link-map-terrain 5.2：按主题统计是纯追加的一段（前面一个空行 + 标题 + 口径行 + 各主题行）。去掉它之后报告与追加之前逐字节相同，所以黄金值不重钉；
+            // 这一段本身的内容由 按主题统计Tests 守。样本是带主题的 link:1 日志，这一段必须在（否则"去掉"是空操作）。
+            int themes = Array.FindIndex(kept, l => l.StartsWith("## 按主题统计（link-map-terrain）", StringComparison.Ordinal));
+            Assert.True(themes > 0 && kept[themes - 1].TrimEnd('\r').Length == 0, "报告里没有按主题统计一段");
+            int themesEnd = themes;
+            while (themesEnd < kept.Length && kept[themesEnd].TrimEnd('\r').Length > 0)
+            {
+                themesEnd++;
+            }
+
+            Assert.Equal(7, themesEnd - themes);   // 标题 + 口径行 + 五个主题各一行
+            string stripped = string.Join('\n', kept[..(themes - 1)].Concat(kept[themesEnd..]));
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stripped)));
         }
 

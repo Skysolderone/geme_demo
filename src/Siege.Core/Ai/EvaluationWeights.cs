@@ -56,14 +56,24 @@ public sealed record EvaluationWeights(
     /// <para>守门测试 <c>默认评价权重的校准Tests</c> 断言本常量、<see cref="CalibrationOf"/> 与 <see cref="Default"/> 的每一维同步。
     /// 以未单独扫档维度的当前默认值产出的基线数据，引用时 MUST 注明权重口径，MUST NOT 与别的权重口径下的数据直接比较。</para>
     /// </summary>
-    public const string CalibrationStatus = "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）；more-pieces-relics 扩展计分后未重扫";
+    public const string CalibrationStatus = "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）；more-pieces-relics 扩展计分后未重扫；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）";
 
     /// <summary>
     /// more-pieces-relics（D10，负责人裁决不重新校准）扩展了计分——四种新棋子的位置加值、连营 / 犄角——之后的补注：上面的扫档全部是在旧内容上做的，
-    /// 新内容下<b>没有</b>重扫。<see cref="CalibrationStatus"/> 与 <see cref="CalibrationOf"/> 的九维一律以它结尾；权重数值不变。以当前默认权重在内容集 v2 下产出的数据，
+    /// 新内容下<b>没有</b>重扫。<see cref="CalibrationStatus"/> 与 <see cref="CalibrationOf"/> 的九维一律带它（link-map-terrain 4.3 之后，地形相关三维与 <see cref="CalibrationStatus"/> 在它之后再接 <see cref="TerrainUncalibratedStatus"/>）；权重数值不变。以当前默认权重在内容集 v2 下产出的数据，
     /// 引用时 MUST 注明这一口径。停手阈值已由 v2-recalibration 段 A 在内容集 V2 上复核，<c>AiSearchConfig.PassThresholdCalibrationStatus</c> 不再带本补注。
     /// </summary>
     public const string ScoringExtendedStatus = "more-pieces-relics 扩展计分后未重扫";
+
+    /// <summary>
+    /// link-map-terrain（M10，任务 4.3）的补注：链接档出生棋盘带上主题化地形（高台 / 河流 / 林地 / 栅栏阵 / 混合）之后，读气边、眼空间与威胁的三维
+    /// （<see cref="TerrainDimensions"/>）在新地形上<b>没有</b>重扫——栅栏、深水、高度差与林地直接改变它们的输入。这三维的 <see cref="CalibrationOf"/> 以它结尾，
+    /// <see cref="CalibrationStatus"/> 点名三维并以它结尾；权重数值不变。以当前默认权重在主题化链接图上产出的数据，引用时 MUST 注明这一口径。重新校准归后续 AI change。
+    /// </summary>
+    public const string TerrainUncalibratedStatus = "未校准（link-map-terrain 后）";
+
+    /// <summary>与地形相关的评价维度（link-map-terrain 4.3）：Safety（气）、Eye（眼空间）、Threat（敌串气数）。</summary>
+    public static readonly ImmutableArray<EvaluationDimension> TerrainDimensions = [EvaluationDimension.Safety, EvaluationDimension.Eye, EvaluationDimension.Threat];
 
     /// <summary>未单独扫档维度的标注（<see cref="CalibrationOf"/> 对这六维返回它）。</summary>
     public const string NotSweptStatus = "沿用旧值、新规则下未单独扫档";
@@ -102,13 +112,13 @@ public sealed record EvaluationWeights(
 
     /// <summary>
     /// 某维度默认值的校准口径：扫过档的三维返回"内容集 / 地图 / 局数 / 种子 / 档位 / 数据目录"（ai-eye 段 D 在内容集 V1 上扫档），其余六维返回 <see cref="NotSweptStatus"/>；
-    /// 九维一律以 <see cref="ScoringExtendedStatus"/> 结尾（more-pieces-relics 扩展计分后未重扫）。
+    /// 九维一律含 <see cref="ScoringExtendedStatus"/>（more-pieces-relics 扩展计分后未重扫）；与地形相关的三维（<see cref="TerrainDimensions"/>）其后再接 <see cref="TerrainUncalibratedStatus"/>（link-map-terrain 4.3），其余六维以 <see cref="ScoringExtendedStatus"/> 结尾。
     /// </summary>
     public static string CalibrationOf(EvaluationDimension dimension) => dimension switch
     {
-        EvaluationDimension.Eye => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 50 / 100 / 200 / 400 五档 + 停手阈值 80 下 100 / 200 / 400 复核；sim-out/ai-eye-eye-*、sim-out/ai-eye-eyecheck-*；" + ScoringExtendedStatus,
-        EvaluationDimension.Safety => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；10 / 20 / 35 / 50 / 70 五档；sim-out/ai-eye-safety-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
-        EvaluationDimension.Threat => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 25 / 50 / 100 五档；sim-out/ai-eye-threat-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus,
+        EvaluationDimension.Eye => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 50 / 100 / 200 / 400 五档 + 停手阈值 80 下 100 / 200 / 400 复核；sim-out/ai-eye-eye-*、sim-out/ai-eye-eyecheck-*；" + ScoringExtendedStatus + "；" + TerrainUncalibratedStatus,
+        EvaluationDimension.Safety => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；10 / 20 / 35 / 50 / 70 五档；sim-out/ai-eye-safety-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus + "；" + TerrainUncalibratedStatus,
+        EvaluationDimension.Threat => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 25 / 50 / 100 五档；sim-out/ai-eye-threat-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus + "；" + TerrainUncalibratedStatus,
         _ => NotSweptStatus + "；" + ScoringExtendedStatus,
     };
 

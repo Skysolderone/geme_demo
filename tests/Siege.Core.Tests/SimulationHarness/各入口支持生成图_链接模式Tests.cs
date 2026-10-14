@@ -19,7 +19,7 @@ public class 各入口支持生成图_链接模式Tests
     public void 终端版开新局()
     {
         // 规格 Scenario「终端版开新局」：play --map link:12345 的插旗提示列出 5 个占位（位置与边长），盲选，不画任何棋盘的内部布局；打印的地图标识为 link:12345。
-        // 变异 MC-6：PlayCommand 在链接模式仍画全图（render.Board(zones: true)）→ "号棋盘：左下角" 不出现，本测试红。
+        // 变异 MC-6：PlayCommand 在链接模式仍画全图（render.Board(zones: true)）→ "号棋盘 · …（左下角 …）" 不出现，本测试红。
         (int code, string output, string err) = RunMain(null, new StringReader("q\n"), "play", "--map", "link:12345", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
         Assert.Contains("地图 link:12345（5 块隔绝的出生棋盘）", output, StringComparison.Ordinal);
@@ -27,7 +27,8 @@ public class 各入口支持生成图_链接模式Tests
         for (int zone = 0; zone < 5; zone++)
         {
             BoundsOf(map, zone, out Coord origin, out int width, out int height);
-            Assert.Contains($"  {zone + 1} 号棋盘：左下角 {origin.ToNotation()}，{width}×{height}", output, StringComparison.Ordinal);
+            // link-map-terrain 5.1：占位行改为"编号 · 主题 · 宽×高（左下角 …）"（match-setup「插旗阶段的可见信息」）。
+            Assert.Contains($"  {zone + 1} 号棋盘 · {map.BirthBoard(zone).Theme!.Value.DisplayName()} · {width}×{height}（左下角 {origin.ToNotation()}）", output, StringComparison.Ordinal);
         }
 
         Assert.Contains("盲选出生棋盘", output, StringComparison.Ordinal);
@@ -225,6 +226,33 @@ public class 各入口支持生成图_链接模式Tests
         static int CountOf(string text, string what) => (text.Length - text.Replace(what, string.Empty, StringComparison.Ordinal).Length) / what.Length;
 
         static string Tail(string text) => text[text.IndexOf("已模拟", StringComparison.Ordinal)..];
+    }
+
+    [Fact]
+    public void map子命令打印每块棋盘的编号主题宽高与公共信物数()
+    {
+        // link-map-terrain 5.1：map --map link:1 每块出生棋盘一行"编号 · 主题 · 宽×高"，并给左下角与该棋盘内的公共信物数；主题中文名唯一来源 BoardThemeNames.DisplayName。
+        // 输出里本来就有"林地 n"与图例"F 林地"，只断言"含林地"恒真——所以逐块拼出整行断言，并另查五个主题名两两不同。
+        // 变异（实跑，过滤本类）：MLT-6（map 的棋盘行固定打印"高台"）→ 红 1（本测试）；MLT-7（公共信物数不按棋盘过滤、打全图公共信物数）→ 红 1（本测试）。
+        (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1");
+        Assert.True(code == 0, err);
+        MapData map = MapCatalog.Resolve("link:1");
+        int contested = 0;
+        var names = new List<string>();
+        for (int zone = 0; zone < 5; zone++)
+        {
+            BoardPlate plate = map.BirthBoard(zone);
+            int publicRelics = map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested && plate.Contains(r.Key));
+            contested += publicRelics;
+            string name = plate.Theme!.Value.DisplayName();
+            names.Add(name);
+            Assert.Contains($"  {zone + 1} 号棋盘 · {name} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}", output, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合", "高台" }, names.Order(StringComparer.Ordinal));
+        // 样本口径：各棋盘公共信物数之和等于全图公共区信物数，且 ≥ 2（否则按棋盘过滤与否测不出来）。
+        Assert.Equal(map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested), contested);
+        Assert.True(contested >= 2, $"link:1 公共信物 {contested} 个；每块至多 1 个，≥ 2 时全图数才不等于任何一块的数");
     }
 
     [Theory]

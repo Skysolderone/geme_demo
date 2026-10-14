@@ -204,6 +204,12 @@ public static class ReportWriter
             AppendLinkMode(sb, link);
         }
 
+        // link-map-terrain 5.2：只在样本里有带主题的链接模式局时出现（旧日志的报告逐字节不变）。
+        if (r.Themes is { } themes)
+        {
+            AppendThemes(sb, themes);
+        }
+
         // ai-pass-review 1.2 / 1.3：两段只在链接模式样本里出现（旧日志的报告逐字节不变）。
         if (r.DefeatReview is { } review)
         {
@@ -232,6 +238,23 @@ public static class ReportWriter
         sb.AppendLine($"- 等待大回合数：全部玩家均值 {Num(l.WaitingMean)}，等待过的 {l.Waiters} 人次均值 {Num(l.WaitingMeanOfWaiters)}，最大 {l.WaitingMax}");
         sb.AppendLine($"- 出局：战场落败 {l.BattlefieldDefeats} 人次，势力归零 {l.PowerZeroEliminations} 人次；整轮 Pass 结算落败 {l.AllPassedDefeats} 人次，其中过早 Pass 落败（结算那一大回合本人 Pass 且手牌仍有子；未逐格核对禁入与部署上限，为上界）{l.PrematurePassDefeats} 人次");
         sb.AppendLine($"- 单个小回合耗时：中位 {Num(l.TurnMedianMs)} ms，最大 {l.TurnMaxMs} ms；整局耗时合计 {l.TotalMatchMs} ms");
+    }
+
+    /// <summary>按主题统计（link-map-terrain 5.2）：每个主题一行，归属口径写进段首。</summary>
+    private static void AppendThemes(StringBuilder sb, ThemeSection t)
+    {
+        sb.AppendLine();
+        sb.AppendLine("## 按主题统计（link-map-terrain）");
+        sb.AppendLine($"- 纳入带主题的链接模式 {t.Matches} 局，其中有名次 {t.RankedMatches} 局。口径：名次与胜场按玩家锁定的出生棋盘归主题，只计有名次的局（截断局只计锁定人次）；"
+            + "匠人改造按目标所在棋盘归主题（立栅取第一个落在棋盘内的一端）；公共信物按所在棋盘归主题，\"被控制\"只数变为有人控制的次数");
+        foreach (ThemeStat s in t.Themes)
+        {
+            string edits = s.EditTotal == 0
+                ? "0 次"
+                : $"{s.EditTotal} 次（{string.Join(" / ", s.Edits.Select(kv => $"{EditActionName(kv.Key)} {kv.Value}"))}）";
+            sb.AppendLine($"- {s.Theme.DisplayName()}：棋盘 {s.Boards} 块，锁定 {s.Seats} 人次（有名次 {s.RankedSeats} 人次），平均名次 {Num(s.MeanRank)}，胜 {s.Wins}；"
+                + $"匠人改造 {edits}；公共信物 {s.PublicRelics} 个，被控制 {s.PublicControls} 次");
+        }
     }
 
     /// <summary>战场落败复盘（ai-pass-review 1.2）：汇总在前、逐人明细在后。口径写进报告：最好一手 = AI 自己的单点排序第一名，"本可翻盘"假设对手不回应。</summary>

@@ -219,6 +219,17 @@ public static class Program
             + " 个可落子格，高度 "
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
+
+        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角（--links 之后为平移后的位置）与该棋盘内的公共信物数。
+        // 主题中文名只经 BoardThemeNames.DisplayName；没有主题的棋盘（手写夹具）写"无主题"。
+        Console.WriteLine("出生棋盘（编号 · 主题 · 宽×高）：");
+        int boardIndex = 0;
+        foreach (BoardPlate plate in map.BirthBoards())
+        {
+            int publicRelics = map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested && plate.Contains(r.Key));
+            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}");
+        }
+
         Console.WriteLine($"各出生区沿气边最短距离（出生区 {string.Join("/", Enumerable.Range(0, map.BirthZones.Length).Select(BirthZoneLabel.Number))}）：");
         foreach (BirthZoneDistance metric in MapValidator.DistanceTable(map))
         {

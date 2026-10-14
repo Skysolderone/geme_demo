@@ -317,6 +317,9 @@ public sealed record BalanceReport(
 
     /// <summary>等待者评估（ai-pass-review 1.3）；没有到达决赛的链接模式纳入局时为 <c>null</c>。</summary>
     public WaiterSection? Waiters { get; init; }
+
+    /// <summary>按主题统计（link-map-terrain 5.2）；没有带主题的链接模式纳入局时为 <c>null</c>，报告里整段不出现。</summary>
+    public ThemeSection? Themes { get; init; }
 }
 
 /// <summary>
@@ -436,6 +439,7 @@ public static class BalanceAnalyzer
             LinkMode = LinkModeAnalyzer.Analyze(included),
             DefeatReview = options.ReviewDefeats ? PassReviewAnalyzer.ReviewDefeats(included) : null,
             Waiters = PassReviewAnalyzer.Waiters(included),
+            Themes = ThemeAnalyzer.Analyze(included),
         };
     }
 

@@ -98,7 +98,9 @@ public class 默认评价权重的校准Tests
         // 规格：尚未校准的维度 MUST 带显式标注；去掉标注而无新校准记录则守门失败。于是逐维二选一：
         //   扫过档 → 校准记录必须指向跑局证据（地图、种子范围、局数、数据目录）；没扫过 → 必须恰为"沿用旧值、新规则下未单独扫档"。
         // 变异 M-D2-3（CalibrationOf 的缺省分支改成 "已校准"）→ 红 2（本测试、引用未校准维度产出的数据）。
+        // link-map-terrain 4.3：地形补注的变异（实跑，过滤本类）：MLT-1（Safety 的 CalibrationOf 去掉地形补注）→ 红 1（本测试）；MLT-2（CalibrationStatus 去掉地形补注）→ 红 2（本测试、默认权重的校准依据随值一起更新）。
         EvaluationDimension[] swept = [EvaluationDimension.Safety, EvaluationDimension.Eye, EvaluationDimension.Threat];
+        EvaluationDimension[] terrainDimensions = [EvaluationDimension.Safety, EvaluationDimension.Eye, EvaluationDimension.Threat];
         foreach (EvaluationDimension d in Enum.GetValues<EvaluationDimension>())
         {
             string status = EvaluationWeights.CalibrationOf(d);
@@ -118,11 +120,28 @@ public class 默认评价权重的校准Tests
 
             // more-pieces-relics D10（3.4）：计分扩展（四种新棋子、连营 / 犄角）之后，九维一律补注"扩展计分后未重扫"——扫过档的三维也不例外，
             // 它们的扫档是在旧内容上做的。数值不变（见 默认权重被改动）。变异 MC-C1（去掉补注）应红。
-            Assert.EndsWith("more-pieces-relics 扩展计分后未重扫", status, StringComparison.Ordinal);
+            Assert.Contains("more-pieces-relics 扩展计分后未重扫", status, StringComparison.Ordinal);
+
+            // link-map-terrain 4.3（M10）：链接档出生棋盘带上主题化地形后，读气边 / 眼空间 / 威胁的三维（Safety / Eye / Threat，
+            // 栅栏、深水、高度差与林地直接改变它们的输入）标"未校准（link-map-terrain 后）"，接在计分扩展补注之后；其余六维本就未单独扫档，不加。权重值不变。
+            if (terrainDimensions.Contains(d))
+            {
+                Assert.EndsWith("more-pieces-relics 扩展计分后未重扫；未校准（link-map-terrain 后）", status, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.EndsWith("more-pieces-relics 扩展计分后未重扫", status, StringComparison.Ordinal);
+                Assert.DoesNotContain("link-map-terrain", status, StringComparison.Ordinal);
+            }
         }
 
         Assert.Equal("more-pieces-relics 扩展计分后未重扫", EvaluationWeights.ScoringExtendedStatus);
-        Assert.EndsWith(EvaluationWeights.ScoringExtendedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
+        Assert.Contains(EvaluationWeights.ScoringExtendedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
+        Assert.Equal("未校准（link-map-terrain 后）", EvaluationWeights.TerrainUncalibratedStatus);
+        Assert.Equal(terrainDimensions, EvaluationWeights.TerrainDimensions);
+        Assert.EndsWith("Safety / Eye / Threat 三维" + EvaluationWeights.TerrainUncalibratedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
+        // 停手阈值不是评价权重，不带地形补注（4.3 只标权重）。
+        Assert.DoesNotContain("link-map-terrain", AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
         // v2-recalibration 段 A（1.7）：停手阈值已在内容集 V2 上复核，其口径不再带"扩展计分后未重扫"；九维权重（上面的循环）仍带。
         Assert.False(AiSearchConfig.PassThresholdCalibrationStatus.EndsWith(EvaluationWeights.ScoringExtendedStatus, StringComparison.Ordinal));
         Assert.DoesNotContain(EvaluationWeights.ScoringExtendedStatus, AiSearchConfig.PassThresholdCalibrationStatus, StringComparison.Ordinal);
@@ -230,7 +249,8 @@ public class 默认评价权重的校准Tests
         Assert.Equal(
             "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档"
             + "；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）"   // v2-recalibration 1.8：九维取值不变
-            + "；more-pieces-relics 扩展计分后未重扫",   // more-pieces-relics 3.4：计分扩展后补注，取值不变
+            + "；more-pieces-relics 扩展计分后未重扫"   // more-pieces-relics 3.4：计分扩展后补注，取值不变
+            + "；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）",   // link-map-terrain 4.3（M10）：地形相关三维补注，取值不变
             EvaluationWeights.CalibrationStatus);
         Assert.Contains(EvaluationWeights.CalibrationStatus, src, StringComparison.Ordinal);
 
@@ -258,7 +278,9 @@ public class 默认评价权重的校准Tests
         Assert.DoesNotContain("阶段 B 的首个校准项", src, StringComparison.Ordinal);
         Assert.DoesNotContain("取 40 一半收敛", src, StringComparison.Ordinal);
         Assert.DoesNotContain("待 ai-eye", src, StringComparison.Ordinal);
-        Assert.DoesNotContain("未校准（", src, StringComparison.Ordinal);
+        // link-map-terrain 4.3：源码里合法地出现了"未校准（link-map-terrain 后）"，原先整词禁止"未校准（"收窄为禁止作废的那一句旧标注。
+        Assert.DoesNotContain("未校准（restore-go-core-rules", src, StringComparison.Ordinal);
+        Assert.Contains("未校准（link-map-terrain 后）", src, StringComparison.Ordinal);
     }
 
     /// <summary>一局的过程投影（快照 + 事件），不含首行 header——header 里带配置 JSON，会把"权重填没填"本身混进比对。</summary>

@@ -93,6 +93,34 @@ public class 开局信息公开范围Tests
         Assert.Equal(25, rows.Sum(r => CountIn(r, " 1 ")));
     }
 
+    [Fact]
+    public void 插旗阶段的可见信息_终端占位行显示编号主题宽高()
+    {
+        // match-setup Scenario「插旗阶段的可见信息」（link-map-terrain 5.1 / 裁决 M3）在终端版的落点：play 插旗阶段每块出生棋盘一行"编号 · 主题 · 宽×高"，
+        // 主题中文名唯一来源 BoardThemeNames.DisplayName；仍不画任何棋盘内部布局。期望取自 link:1 的棋盘清单（整块棋盘，不是核心区）。
+        // 不经 Program（不碰控制台、不读写带入档案）：直接调 PlayCommand.Run，不给档案即不带入带出。
+        // 变异 MLT-5（PlayCommand.ChooseZone 占位行去掉主题）→ 红 2（本测试、各入口支持生成图_链接模式Tests.终端版开新局）。
+        MapData map = Siege.Core.Board.Maps.MapCatalog.Resolve("link:1");
+        var output = new StringWriter();
+
+        int code = PlayCommand.Run(5, null, 1, Siege.Core.Ai.AiDifficulty.Standard, new StringReader("q\n"), output, map);
+
+        Assert.Equal(0, code);
+        string text = output.ToString();
+        string[] themeNames = new string[5];
+        for (int zone = 0; zone < 5; zone++)
+        {
+            BoardPlate plate = map.BirthBoard(zone);
+            themeNames[zone] = plate.Theme!.Value.DisplayName();
+            Assert.Contains($"  {zone + 1} 号棋盘 · {themeNames[zone]} · {plate.Width}×{plate.Height}（左下角 {plate.Origin.ToNotation()}）", text, StringComparison.Ordinal);
+        }
+
+        // 五块主题两两不同，恰是五个主题的中文名（测试内字面量，不经 DisplayName 反推）。
+        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合", "高台" }, themeNames.Order(StringComparer.Ordinal));
+        Assert.Contains("盲选出生棋盘", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(" ? ", text, StringComparison.Ordinal);   // 不暴露棋盘内部布局（信物格）
+    }
+
     /// <summary>手写各块棋盘的主题（按编号）。</summary>
     private static readonly BoardTheme[] Themes = [BoardTheme.Plateau, BoardTheme.River, BoardTheme.Forest, BoardTheme.Palisade, BoardTheme.Mixed];
 

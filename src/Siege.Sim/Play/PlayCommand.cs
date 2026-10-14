@@ -268,10 +268,11 @@ internal static class PlayCommand
     /// <summary>retire-legacy-maps 3.6：终端只剩链接模式，旧模式的整图选区分支（画全图 + "选择你的出生区"）删除。</summary>
     private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, string? quitWarning)
     {
-        // 盲选（match-setup「开局信息公开范围」）：只列 5 块出生棋盘的占位（位置与边长，取自按座位视图），不画棋盘内部布局。
+        // 盲选（match-setup「开局信息公开范围」）：只列 5 块出生棋盘的占位（位置、宽高与主题名，取自按座位视图），不画棋盘内部布局。
+        // link-map-terrain 5.1：每行"编号 · 主题 · 宽×高"，主题中文名只经 BoardThemeNames.DisplayName；没有主题的占位（手写夹具）写"无主题"。
         foreach (BoardPlaceholder p in match.PublishFor(me).Placeholders)
         {
-            output.WriteLine($"  {BirthZoneLabel.Number(p.Zone)} 号棋盘：左下角 {p.Origin}，{p.Width}×{p.Height}");
+            output.WriteLine($"  {BirthZoneLabel.Number(p.Zone)} 号棋盘 · {p.Theme?.DisplayName() ?? "无主题"} · {p.Width}×{p.Height}（左下角 {p.Origin}）");
         }
 
         output.WriteLine();
