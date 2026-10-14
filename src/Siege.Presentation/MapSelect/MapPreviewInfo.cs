@@ -12,6 +12,16 @@ namespace Siege.Presentation.MapSelect;
 /// <remarks>规格：openspec/changes/board-link-mode/specs/map-selection —— 开局选图界面（背景 5 个占位轮廓，MUST NOT 显示棋盘内部布局）。</remarks>
 public static class MapPreviewInfo
 {
+    /// <summary>
+    /// 新局界面背景用的棋盘视图（link-map-terrain 裁决 Q5：新局界面的占位本期不显示主题，主题只在插旗阶段显示）：占位的主题清空，其余原样。
+    /// <see cref="DefaultBoardView.LayoutKey"/> 不含主题，所以与插旗阶段的视图同一指纹——刷新路径不会因此重搭成带主题的画面。
+    /// </summary>
+    public static DefaultBoardView Backdrop(DefaultBoardView board)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return board.Placeholders.IsDefaultOrEmpty ? board : board with { Placeholders = [.. board.Placeholders.Select(p => p with { Theme = null })] };
+    }
+
     /// <summary>一行说明。</summary>
     public static string Of(DefaultBoardView board)
     {

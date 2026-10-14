@@ -250,6 +250,8 @@ public sealed partial class BoardView : Node3D
         }
 
         int variant = 0;
+        int boardRocks = 0;
+        var zoneStrips = new SortedDictionary<int, int>();
         StandardMaterial3D? slabMaterial = null;
         List<Vector3> slabTops = [];
         foreach (BoardCellView cell in board.Cells)
@@ -289,9 +291,24 @@ public sealed partial class BoardView : Node3D
                 Surface.Shallows => Visuals.TileShallows,
                 _ => Visuals.TilePlayable,
             };
+            if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
+            {
+                // 棋盘内的岩石（link-map-terrain 6.1，D4 中间带 0–2 格）：本战场的一格地形，不是场景装饰——按棋盘格画（障碍色地砖 + 岩石部件，不在松树 / 断柱里挑，
+                // 免得读成林地），逐格节点登记进地砖与装饰层，拼接滑入时随棋盘一起平移（场景面砖与合批装饰是整块 MultiMesh，滑不动）。归属只读视图模型的棋盘清单。
+                color = Visuals.TileObstacle;
+                Node3D rock = TerrainParts.Create(TerrainParts.Rock, variant++);
+                rock.Position = center;
+                _decoration.AddChild(rock);
+                int firstRock = tiles.GetChildCount();
+                AddTileStack(tiles, center, cell.Height, SurfaceOf(color), color);
+                RegisterTiles(cell.Coord, tiles, firstRock);
+                boardRocks++;
+                continue;
+            }
+
             if (!playable)
             {
-                // 障碍格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
+                // 场景格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
                 color = Visuals.TileObstacle;
                 int pick = unchecked((int)(((uint)(cell.Coord.X * 73856093) ^ (uint)(cell.Coord.Y * 19349663)) % 100u));
                 // 同一变体的各格合成 MultiMesh 画（board-render-perf D2）：挑选规则、变体序号与逐格变换都不变。
@@ -315,6 +332,7 @@ public sealed partial class BoardView : Node3D
                     }
 
                     // Coord 的 y 向上（北）对应世界 −Z。描边条贴在格内侧边缘、略高于面砖，不占落点。
+                    zoneStrips[zone] = zoneStrips.GetValueOrDefault(zone) + 1;
                     const float strip = 0.07f;
                     float offset = (BoardGeometry.CellSize * 0.5f) - (strip * 0.5f);
                     tiles.AddChild(new MeshInstance3D
@@ -383,6 +401,12 @@ public sealed partial class BoardView : Node3D
             int firstTile = tiles.GetChildCount();
             AddTileStack(tiles, center, cell.Height, material, color);
             RegisterTiles(cell.Coord, tiles, firstTile);
+        }
+
+        // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内岩石逐格画了几格。
+        if (zoneStrips.Count > 0 || boardRocks > 0)
+        {
+            GD.Print($"[zone] 出生区描边：{(zoneStrips.Count == 0 ? "无" : string.Join("、", zoneStrips.Select(kv => $"出生区 {BirthZoneLabel.Number(kv.Key)} {kv.Value} 段")))}；棋盘内岩石 {boardRocks} 格（按棋盘格画）");
         }
 
         BuildPartBatches();
@@ -590,7 +614,9 @@ public sealed partial class BoardView : Node3D
             _platesMerged = !active;
         }
 
-        Node3D[] containers = [_tiles, .. _plateRoot is null ? Array.Empty<Node3D>() : [_plateRoot], _overlay, _pieces, _preview, _show];
+        // 装饰层（林地的树、棋盘内岩石等逐格节点，link-map-terrain 6.1）也按格收拢：链接档棋盘上有地形装饰，滑入时要随地砖一起走。
+        // 合批层（_batch）只装场景格的装饰，场景格从不属于滑动战场，不在此列。
+        Node3D[] containers = [_tiles, _decoration, .. _plateRoot is null ? Array.Empty<Node3D>() : [_plateRoot], _overlay, _pieces, _preview, _show];
         if (!active)
         {
             foreach (Node3D container in containers)
@@ -629,7 +655,7 @@ public sealed partial class BoardView : Node3D
             int tiles = _slideMirror.TryGetValue(_tiles, out Node3D? tileMirror) ? tileMirror.GetChildCount() : 0;
             int stray = containers.Sum(c => c.GetChildren().OfType<Node3D>().Count(n => CellOf(n) is { } cell && sliding.Contains(cell)));
             GD.Print($"[slide] 滑入半程（{half.Permille}‰，{sliding.Count} 格，偏移 {dx / 1000f:0.##},{dy / 1000f:0.##} 格）：滑动战场节点 {total} 个，其中非地砖 {total - tiles} 个"
-                + $"（台面 {CountIn(_plateRoot)}、叠加 {CountIn(_overlay)}、棋子 {CountIn(_pieces)}、预览 {CountIn(_preview)}、演出 {CountIn(_show)}），"
+                + $"（装饰 {CountIn(_decoration)}、台面 {CountIn(_plateRoot)}、叠加 {CountIn(_overlay)}、棋子 {CountIn(_pieces)}、预览 {CountIn(_preview)}、演出 {CountIn(_show)}），"
                 + (stray == 0 ? "全部挂在滑动父节点下" : $"仍有 {stray} 个留在原容器"));
         }
 
@@ -1367,7 +1393,7 @@ public sealed partial class BoardView : Node3D
 
     /// <summary>
     /// 未展开的出生棋盘占位（board-link-mode D4 / 规格 visual-style-baseline「未展开区域的可视表现」、match-setup「开局信息公开范围」）：
-    /// 只有外接矩形的台面边框与编号——没有格线、地砖、棋子与信物标记；边框色取 Presentation 调色板的低饱和深色（灰度可辨由那边的测试守住）。
+    /// 只有外接矩形的台面边框、编号与主题名（link-map-terrain 6.1）——没有格线、地砖、棋子与信物标记；边框色取 Presentation 调色板的低饱和深色（灰度可辨由那边的测试守住）。
     /// 占位格登记为 h=0 供拾取（插旗阶段点占位即锁定），但不进 <see cref="_visible"/>：任何逐格图元都不会画到占位上。
     /// 已展开的占位就是正常的棋盘台面（<see cref="AddBoardPlates"/>），这里跳过。外接矩形与边长原样取自视图模型，不从格子推断。
     /// </summary>
@@ -1384,6 +1410,8 @@ public sealed partial class BoardView : Node3D
         const float frameWidth = 0.14f;
         const float frameHeight = 0.07f;
         StandardMaterial3D frame = FlatOf(Visuals.PlaceholderFrame);
+        int themed = 0;
+        int missingGlyphs = 0;
         foreach (BoardPlaceholderView placeholder in placeholders.Where(p => !p.Expanded))
         {
             foreach (Coord c in placeholder.Cells())
@@ -1409,7 +1437,22 @@ public sealed partial class BoardView : Node3D
                 new Vector3(midX, a.Y + 0.02f, midZ), CoordinateLabelStyle.FontSize + 24, CoordinateLabelStyle.OutlineSize);
             number.Modulate = Visuals.PlaceholderLabel;
             root.AddChild(number);
+
+            // 主题名（link-map-terrain 6.1 / 裁决 M3）：编号正下方（世界 +Z = 画面下方）一行，字样只取视图模型的 ThemeName（→ BoardThemeNames.DisplayName），
+            // 没有主题的占位不画。中文需系统字体（Godot 自带字体没有中文字形），与界面主题共用 Ui.ChineseFont。
+            if (placeholder.ThemeName is { } themeName)
+            {
+                Label3D theme = Label(themeName, new Vector3(midX, a.Y + 0.02f, midZ + (BoardGeometry.CellSize * 0.85f)), CoordinateLabelStyle.FontSize + 8, CoordinateLabelStyle.OutlineSize);
+                theme.Font = Ui.ChineseFont;
+                theme.Modulate = Visuals.PlaceholderLabel;
+                root.AddChild(theme);
+                themed++;
+                missingGlyphs += themeName.Count(ch => !Ui.ChineseFont.HasChar(ch));
+            }
         }
+
+        // 自证行（link-map-terrain 6.1）：画出的占位与各自的主题名，供自检日志核对"插旗阶段占位带主题名"。
+        GD.Print($"[placeholders] 未展开占位 {placeholders.Count(p => !p.Expanded)} 块，带主题名 {themed} 块（字体缺字 {missingGlyphs} 个）：{string.Join("、", placeholders.Where(p => !p.Expanded).Select(p => $"{BirthZoneLabel.Number(p.Zone)}·{p.ThemeName ?? "（无）"}"))}");
 
         MeshInstance3D Strip(Vector3 size, Vector3 position) => new()
         {
@@ -1502,7 +1545,10 @@ public sealed partial class BoardView : Node3D
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
         float decorationScale = 0.72f + (0.28f * treatment.DecorationContrastPercent / 100f);
-        foreach (Node3D ornament in _decoration.GetChildren().OfType<Node3D>())
+        // 滑入中的装饰暂挂在滑动父节点下的镜像容器里（ApplySlide），一并缩放。
+        Node3D? slidingDecoration = _slideMirror.TryGetValue(_decoration, out Node3D? decorationMirror) && IsInstanceValid(decorationMirror) ? decorationMirror : null;
+        IEnumerable<Node> ornaments = slidingDecoration is null ? _decoration.GetChildren() : _decoration.GetChildren().Concat(slidingDecoration.GetChildren());
+        foreach (Node3D ornament in ornaments.OfType<Node3D>())
         {
             ornament.Scale = Vector3.One * decorationScale;
         }

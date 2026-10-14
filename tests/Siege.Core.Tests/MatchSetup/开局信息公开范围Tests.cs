@@ -94,6 +94,31 @@ public class 开局信息公开范围Tests
     }
 
     [Fact]
+    public void 插旗阶段的可见信息_图形版占位带主题名()
+    {
+        // match-setup Scenario「插旗阶段的可见信息」（link-map-terrain 6.1 / 裁决 M3）在图形版的落点：默认棋盘视图模型的每个占位给出主题中文名，
+        // 唯一来源 BoardThemeNames.DisplayName；Godot 只把它画在占位编号下方（源码守门见 占位轮廓灰度Tests.占位主题名只经视图模型取用_Godot不另写一份）。
+        // 插旗阶段看不到任何格，主题名是占位上唯一的布局线索。
+        // 变异 MLT-G1（BoardPlaceholderView.ThemeName 恒返回 null，实跑）→ 红 2（本测试、选图视图模型Tests.新局界面背景占位不带主题名_其余与插旗阶段相同 的样本口径）。
+        MatchFlow match = LinkModeFixtures.Create();
+        Siege.Presentation.Visibility.DefaultBoardView board = match.World(MatchFixtures.P0).Board();
+
+        Assert.Empty(board.Cells);
+        Assert.Equal(5, board.Placeholders.Length);
+        foreach (Siege.Presentation.Visibility.BoardPlaceholderView p in board.Placeholders)
+        {
+            Assert.Equal(LinkModeFixtures.Map.BirthBoard(p.Zone).Theme!.Value.DisplayName(), p.ThemeName);
+        }
+
+        // 五块主题两两不同，恰是五个主题的中文名（测试内字面量，不经 DisplayName 反推）。
+        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合", "高台" }, board.Placeholders.Select(p => p.ThemeName).Order(StringComparer.Ordinal));
+
+        // 没有主题的占位（手写夹具）不给主题名：渲染层不画这一行。
+        var bare = new Siege.Presentation.Visibility.BoardPlaceholderView(0, new Coord(0, 0), 5, 5, Expanded: false, Own: false, Theme: null);
+        Assert.Null(bare.ThemeName);
+    }
+
+    [Fact]
     public void 插旗阶段的可见信息_终端占位行显示编号主题宽高()
     {
         // match-setup Scenario「插旗阶段的可见信息」（link-map-terrain 5.1 / 裁决 M3）在终端版的落点：play 插旗阶段每块出生棋盘一行"编号 · 主题 · 宽×高"，

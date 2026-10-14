@@ -107,6 +107,19 @@ public class 选图界面守门Tests
     }
 
     [Fact]
+    public void 新局界面的背景占位经Backdrop搭建_不带主题名()
+    {
+        // link-map-terrain 裁决 Q5：新局界面的占位不显示主题。新局界面阶段的两处搭建（_Ready 首次搭建在新局界面时、切换候选图重搭）都经 MapPreviewInfo.Backdrop；
+        // 点"开始"后按正式对局重搭的那一处不经它（插旗阶段要显示主题名）。
+        // 变异 MLT-G6（GameRoot.MapSelect 切换候选图重搭改回直接传 World.Board()，实跑）→ 本测试红 1。
+        string stage = File.ReadAllText(Path.Combine(Src, "godot", "scripts", "GameRoot.MapSelect.cs"));
+        string root = File.ReadAllText(Path.Combine(Src, "godot", "scripts", "GameRoot.cs"));
+        Assert.Contains("_board.Build(MapPreviewInfo.Backdrop(_session.World.Board()), _session.ZoneOwners);", stage, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(stage, @"_board\.Build\(_session\.World\.Board\(\), _session\.ZoneOwners\);"));   // 只剩"开始"后那一处
+        Assert.Contains("_board.Build(Selecting ? MapPreviewInfo.Backdrop(_session.World.Board()) : _session.World.Board(), _session.ZoneOwners);", root, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void 选图启动选项登记在严格命令行解析里()
     {
         string root = File.ReadAllText(Path.Combine(Src, "godot", "scripts", "GameRoot.cs"));

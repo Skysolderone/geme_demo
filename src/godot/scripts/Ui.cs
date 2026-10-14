@@ -24,15 +24,14 @@ public static class Ui
     /// <summary>次要文字色。</summary>
     public static Color MutedText => Visuals.ToColor(UiTheme.InfoText) with { A = 0.62f };
 
-    /// <summary>界面主题：系统中文字体 + 正文字号。Godot 自带字体没有中文字形，必须指定系统字体。</summary>
-    public static Theme BuildTheme()
+    /// <summary>系统中文字体（界面主题与盘面上的中文 3D 标注共用一份）。Godot 自带字体没有中文字形，必须指定系统字体。</summary>
+    public static readonly SystemFont ChineseFont = new()
     {
-        var font = new SystemFont
-        {
-            FontNames = ["Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "Sans-Serif"],
-        };
-        return new Theme { DefaultFont = font, DefaultFontSize = UiTheme.BodyFontPx };
-    }
+        FontNames = ["Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "Sans-Serif"],
+    };
+
+    /// <summary>界面主题：系统中文字体 + 正文字号。</summary>
+    public static Theme BuildTheme() => new() { DefaultFont = ChineseFont, DefaultFontSize = UiTheme.BodyFontPx };
 
     /// <summary>深色半透明面板样式。</summary>
     public static StyleBoxFlat PanelStyle(int margin = 8)

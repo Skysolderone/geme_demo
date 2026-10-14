@@ -1,0 +1,78 @@
+using Siege.Core.Board;
+using Siege.Core.Board.Maps;
+using Siege.Core.Match;
+using Siege.Presentation.Visibility;
+using static Siege.Core.Tests.LinkModeFixtures;
+
+namespace Siege.Core.Tests.VisualStyleBaseline;
+
+/// <summary>
+/// 规格：visual-style-baseline —— Requirement: 棋盘台面的可视表现（"哪些格属于哪块棋盘 MUST 取自视图模型中的棋盘清单"；"场景格 SHALL 只作装饰"）。
+/// link-map-terrain 6.1：链接档棋盘的中间带可以有岩石（D4，每块 0–2 格）。棋盘内的岩石是本战场的一格地形，按棋盘格画（地砖 + 岩石部件），
+/// 场景格（棋盘之外）仍按场景装饰画。"这一格是棋盘内岩石还是场景装饰"由视图模型 <see cref="DefaultBoardView.ObstacleArtAt"/> 按棋盘清单给出，Godot 不自己推断。
+/// </summary>
+/// <remarks>
+/// 变异验证（link-map-terrain 6.1 实跑）：见各测试方法的注释。
+/// </remarks>
+public class 棋盘台面的可视表现Tests
+{
+    /// <summary>扫描区间：地图种子 1–N（写死，不挑单个种子）。</summary>
+    private const int SeedSpan = 20;
+
+    [Fact]
+    public void 棋盘内岩石取岩石造型_场景格取场景装饰()
+    {
+        // 每张图让 P0 锁定 1 号棋盘、构筑期按座位过滤后的默认棋盘：棋盘内的不可落子非深水格（岩石）→ BoardRock；
+        // 棋盘外接矩形之外的格（场景格，不在视图里）→ Scenery。样本下界：1–20 号图里 1 号棋盘至少出现一格岩石。
+        // 变异 MLT-G8（ObstacleArtAt 恒返回 Scenery，实跑）→ 红 1（本测试）。
+        int rocks = 0;
+        for (int seed = 1; seed <= SeedSpan; seed++)
+        {
+            MapData map = MapCatalog.Resolve($"link:{seed}");
+            MatchFlow match = MatchFlow.Create(map, MatchFixtures.Seed, All, Options);
+            match.PlantSequentially(All.Select((p, i) => (p, i)));
+            DefaultBoardView board = match.World(P0).Board();
+            BoardPlate own = map.BirthBoard(0);
+
+            foreach (BoardCellView cell in board.Cells.Where(c => c.Terrain == Terrain.Obstacle && c.Surface != Surface.DeepWater))
+            {
+                Assert.True(own.Contains(cell.Coord), $"link:{seed} {cell.Coord.ToNotation()} 不在本座位的棋盘内");
+                Assert.Equal(ObstacleArt.BoardRock, board.ObstacleArtAt(cell.Coord));
+                rocks++;
+            }
+
+            // 棋盘外接矩形外一圈的场景格：不属于任何可见棋盘 → 场景装饰。
+            Coord outside = new(own.Origin.X - 1, own.Origin.Y - 1);
+            Assert.Equal(ObstacleArt.Scenery, board.ObstacleArtAt(outside));
+        }
+
+        Assert.True(rocks >= 1, $"link:1–{SeedSpan} 的 1 号棋盘里一格岩石都没有，本测试无样本");
+    }
+
+    [Fact]
+    public void 棋盘清单为空时一律是场景装饰()
+    {
+        // 手写 9×9 夹具没有棋盘清单：任何格都按场景装饰画，与引入本方法之前相同。
+        MatchFlow match = MatchFixtures.Create();
+        DefaultBoardView board = match.World(MatchFixtures.P0).Board();
+
+        Assert.Empty(board.Boards);
+        Assert.All(board.Cells, c => Assert.Equal(ObstacleArt.Scenery, board.ObstacleArtAt(c.Coord)));
+    }
+
+    [Fact]
+    public void Godot障碍造型只经视图模型取用()
+    {
+        // BoardView 搭建地砖时按 ObstacleArtAt 分流：棋盘内岩石走棋盘格画法（逐格节点、随拼接滑动），场景格走场景面砖与散列装饰。
+        // 变异 MLT-G2（BoardView 去掉 ObstacleArtAt 分流、退回"plated && !playable 一律场景面砖"，实跑）→ 本测试红 1。
+        string boardView = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "godot", "scripts", "BoardView.cs"));
+        Assert.Contains("board.ObstacleArtAt(cell.Coord)", boardView, StringComparison.Ordinal);
+        Assert.Contains("ObstacleArt.BoardRock", boardView, StringComparison.Ordinal);
+
+        // 棋盘上的逐格装饰（林地的树、棋盘内岩石）挂在装饰层：拼接滑入时装饰层与地砖一起按格收拢到滑动父节点下，否则树和岩石会停在原地。
+        // 变异 MLT-G7（ApplySlide 的容器表去掉 _decoration，实跑）→ 本测试红 1；实跑 --shot-show=expand 的 [slide] 行里"装饰 N"随之归零。
+        int slide = boardView.IndexOf("private void ApplySlide(", StringComparison.Ordinal);
+        Assert.True(slide > 0, "BoardView 缺少 ApplySlide");
+        Assert.Contains("Node3D[] containers = [_tiles, _decoration,", boardView[slide..], StringComparison.Ordinal);
+    }
+}

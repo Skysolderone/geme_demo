@@ -209,6 +209,30 @@ public class 选图视图模型Tests
     }
 
     [Fact]
+    public void 新局界面背景占位不带主题名_其余与插旗阶段相同()
+    {
+        // link-map-terrain 裁决 Q5（按建议）：新局界面的占位轮廓本期不显示主题，主题只在插旗阶段显示。背景占位由 MapPreviewInfo.Backdrop 给出：
+        // 主题清空（ThemeName 为 null，渲染层不画主题名），编号、外接矩形、展开 / 本机、格与棋盘清单原样；LayoutKey 不含主题，因此与插旗阶段的视图同一指纹，
+        // 刷新路径不会因此重搭成带主题的画面。图形版的接线（新局界面两处 Build 都经 Backdrop）由 选图界面守门Tests 的源码扫描守住。
+        // 变异 MLT-G5（Backdrop 原样返回，实跑）→ 红 1（本测试）。
+        MapData map = MapCatalog.Resolve("link:1");
+        MatchFlow match = MatchFlow.CreateUnvalidated(
+            map, MatchFixtures.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], MatchFixtures.Relics(map),
+            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
+        DefaultBoardView flags = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
+        DefaultBoardView backdrop = MapPreviewInfo.Backdrop(flags);
+
+        Assert.All(flags.Placeholders, p => Assert.NotNull(p.ThemeName));   // 样本口径：插旗阶段的占位确实带主题
+        Assert.Equal(5, backdrop.Placeholders.Length);
+        Assert.All(backdrop.Placeholders, p => Assert.Null(p.ThemeName));
+        Assert.Equal(
+            flags.Placeholders.Select(p => (p.Zone, p.Origin, p.Width, p.Height, p.Expanded, p.Own)),
+            backdrop.Placeholders.Select(p => (p.Zone, p.Origin, p.Width, p.Height, p.Expanded, p.Own)));
+        Assert.Equal(flags.LayoutKey(), backdrop.LayoutKey());
+        Assert.Equal(MapPreviewInfo.Of(flags), MapPreviewInfo.Of(backdrop));
+    }
+
+    [Fact]
     public void 时间戳折成便于人读写的种子_九位以内_相邻输入散开()
     {
         // 变异 MC-7：FriendlySeed 原样返回 → 本测试红（超过九位、相邻输入只差 1）。

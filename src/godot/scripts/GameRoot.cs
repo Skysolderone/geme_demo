@@ -12,6 +12,7 @@ using Siege.Presentation.Camera;
 using Siege.Presentation.Diagnostics;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
+using Siege.Presentation.MapSelect;
 using Siege.Presentation.Pairing;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Show;
@@ -331,7 +332,8 @@ public sealed partial class GameRoot : Node3D
 
         _board = new BoardView { Name = "Board" };
         AddChild(_board);
-        _board.Build(_session.World.Board(), _session.ZoneOwners);
+        // 停在新局界面时背景占位不带主题名（link-map-terrain Q5），插旗阶段才显示。
+        _board.Build(Selecting ? MapPreviewInfo.Backdrop(_session.World.Board()) : _session.World.Board(), _session.ZoneOwners);
 
         _hud = new Hud { Name = "Hud" };
         AddChild(_hud);

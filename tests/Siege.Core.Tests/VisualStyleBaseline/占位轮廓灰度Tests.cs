@@ -56,4 +56,37 @@ public class 占位轮廓灰度Tests
         Assert.Contains("Where(p => !p.Expanded)", body, StringComparison.Ordinal);
         Assert.Contains("BirthZoneLabel.Number(", body, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void 占位主题名只经视图模型取用_Godot不另写一份()
+    {
+        // link-map-terrain 6.1：插旗阶段的占位在编号下方显示主题名，字样只经 BoardPlaceholderView.ThemeName（→ Core BoardThemeNames.DisplayName）。
+        // Godot 与 Presentation 不得再写一份"主题 → 中文名"的映射：不出现按 BoardTheme 分支的 switch 臂；Godot 侧也不出现五个主题名的整串字面量。
+        // 变异 MLT-G3（AddPlaceholders 改用本地 switch：BoardTheme.Plateau => "高台" …，实跑）→ 本测试红 1；MLT-G4（AddPlaceholders 不画主题名，实跑）→ 本测试红 1。
+        string root = TestPaths.RepoRoot();
+        string godotDir = Path.Combine(root, "src", "godot", "scripts");
+        string presentationDir = Path.Combine(root, "src", "Siege.Presentation");
+        (string Name, string Text)[] godot = [.. Directory.GetFiles(godotDir, "*.cs").Order().Select(f => (Path.GetFileName(f), File.ReadAllText(f)))];
+        (string Name, string Text)[] presentation = [.. Directory.GetFiles(presentationDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Order().Select(f => (Path.GetFileName(f), File.ReadAllText(f)))];
+        Assert.True(godot.Length >= 10 && presentation.Length >= 10, $"只扫到 Godot {godot.Length} / Presentation {presentation.Length} 个文件");
+
+        var switchArm = new System.Text.RegularExpressions.Regex(@"BoardTheme\.(Plateau|River|Forest|Palisade|Mixed)\s*=>");
+        string[] literals = ["\"高台\"", "\"河流\"", "\"林地\"", "\"栅栏阵\"", "\"混合\""];
+        string[] violations =
+        [
+            .. godot.Concat(presentation).Where(s => switchArm.IsMatch(s.Text)).Select(s => $"{s.Name}: BoardTheme 分支"),
+            .. godot.SelectMany(s => literals.Where(l => s.Text.Contains(l, StringComparison.Ordinal)).Select(l => $"{s.Name}: {l}")),
+        ];
+        Assert.Empty(violations);
+
+        // 正向：占位方法确实画主题名，且取自视图模型。
+        string boardView = File.ReadAllText(Path.Combine(godotDir, "BoardView.cs"));
+        int start = boardView.IndexOf("private void AddPlaceholders(", StringComparison.Ordinal);
+        int end = boardView.IndexOf("private const float WaterDrop", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "BoardView 缺少 AddPlaceholders");
+        Assert.Contains("placeholder.ThemeName", boardView[start..end], StringComparison.Ordinal);
+    }
 }

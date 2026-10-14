@@ -94,7 +94,7 @@ public sealed partial class GameRoot
             {
                 _session = PreviewSession();
                 _select.Accept();
-                _board.Build(_session.World.Board(), _session.ZoneOwners);
+                _board.Build(MapPreviewInfo.Backdrop(_session.World.Board()), _session.ZoneOwners);   // 新局界面的占位不带主题名（link-map-terrain Q5）
                 GD.Print($"[siege] 新局预览：{_select.CurrentId}");
             }
             catch (System.Exception ex) when (ex is MapGenerationException or MapValidationException or System.FormatException or System.IO.FileNotFoundException)
@@ -196,8 +196,12 @@ public sealed partial class GameRoot
             what = $"开始（棋盘节点 {boardNodes} / 进入时 {_selectEntryBoardNodes}，游离节点 {orphans} / 进入时 {_selectEntryOrphans}）";
             StartMatch();
             RefreshViews();
+            // 插旗阶段的占位比新局界面的背景多一行主题名（link-map-terrain 6.1 / Q5：背景不带主题名）：建局后的节点数 = 进入时 + 主题名标注数，多出别的即是重搭泄漏。
+            int themeLabels = _session.World.Board().Placeholders.Count(p => !p.Expanded && p.ThemeName is not null);
+            int afterStart = CountNodes(_board);
+            what += $"，建局后棋盘节点 {afterStart} = 进入时 + 主题名 {themeLabels}";
             ok = !Selecting && _session.AwaitingZone && _session.Match.Map.Id == _selectEntryId && !_board.Rig.IsOverview && !_hud.MapSelectOpen
-                && boardNodes == _selectEntryBoardNodes && orphans == _selectEntryOrphans && CountNodes(_board) == _selectEntryBoardNodes;
+                && boardNodes == _selectEntryBoardNodes && orphans == _selectEntryOrphans && afterStart == _selectEntryBoardNodes + themeLabels;
         }
 
         string shown = Selecting ? $"{model.CurrentId}（{PreviewInfo()}；全局预览 {(_board.Rig.IsOverview ? "开" : "关")}）" : $"已建局 {_session.Match.Map.Id}";

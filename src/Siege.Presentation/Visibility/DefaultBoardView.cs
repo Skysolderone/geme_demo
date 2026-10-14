@@ -103,6 +103,24 @@ public sealed record BoardPlaceholderView(int Zone, Coord Origin, int Width, int
         from y in Enumerable.Range(Origin.Y, Height)
         from x in Enumerable.Range(Origin.X, Width)
         select new Coord(x, y);
+
+    /// <summary>
+    /// 主题的中文名（link-map-terrain 6.1 / 裁决 M3）：图形版画在占位编号下方。唯一来源 <see cref="BoardThemeNames.DisplayName"/>，表现层与 Godot 不另写映射；
+    /// 没有主题（手写夹具）为 <c>null</c>，渲染层不画这一行。
+    /// </summary>
+    public string? ThemeName => Theme?.DisplayName();
+}
+
+/// <summary>
+/// 不可落子格的造型类别（visual-style-baseline「棋盘台面的可视表现」，link-map-terrain 6.1）：由棋盘清单决定，渲染层不自行推断。
+/// </summary>
+public enum ObstacleArt
+{
+    /// <summary>场景格（棋盘之外）：只作装饰，铺满整格、不留格缝，装饰件按坐标散列挑选。</summary>
+    Scenery,
+
+    /// <summary>棋盘内的岩石（链接档中间带，D4）：本战场的一格地形，按棋盘格画（地砖 + 岩石部件），随拼接与棋盘一起滑动。</summary>
+    BoardRock,
 }
 
 /// <summary>默认棋盘（不打开任何信息层时）。</summary>
@@ -170,6 +188,13 @@ public sealed record DefaultBoardView(
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// 某个不可落子格（未架桥深水除外，深水另有画法）该画成什么（link-map-terrain 6.1）：落在本视图棋盘清单的某块外接矩形内 → <see cref="ObstacleArt.BoardRock"/>，
+    /// 否则 → <see cref="ObstacleArt.Scenery"/>。清单为空（手写夹具）时一律是场景装饰。只读清单的外接矩形，不判规则。
+    /// </summary>
+    public ObstacleArt ObstacleArtAt(Coord coord) =>
+        !Boards.IsDefault && Boards.Any(b => b.Contains(coord)) ? ObstacleArt.BoardRock : ObstacleArt.Scenery;
 
     /// <summary>某格。不在本视图里（链接模式下未展开的战场）抛出——拾取 / 悬停请先用 <see cref="CellOrNull"/>。</summary>
     public BoardCellView CellAt(Coord coord) =>
