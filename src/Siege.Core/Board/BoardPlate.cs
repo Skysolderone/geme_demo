@@ -60,9 +60,45 @@ public static class BoardThemeNames
 /// <param name="Theme">主题（link-map-terrain D2）：链接档的出生棋盘 MUST 带主题，其他类别 MUST NOT 带；手写测试夹具可以缺省（<c>null</c>）。拼接平移经 <c>with</c> 原样保留。</param>
 public readonly record struct BoardPlate(Coord Origin, int Width, int Height, BoardPlateKind Kind, BoardTheme? Theme = null)
 {
+    /// <summary>核心区边长（link-map-terrain D1 / 裁决 M1）：棋盘中央 3×3。</summary>
+    public const int CoreSide = 3;
+
     /// <summary>该格是否在外接矩形内。</summary>
     public bool Contains(Coord c) =>
         c.X >= Origin.X && c.X < Origin.X + Width && c.Y >= Origin.Y && c.Y < Origin.Y + Height;
+
+    /// <summary>
+    /// 核心区左下角（link-map-terrain D1）：棋盘原点 + (⌊(W−3)/2⌋, ⌊(H−3)/2⌋)，宽或高为偶数时偏西 / 偏南。
+    /// "核心区"的唯一定义：生成器、校验器与呈现都只经 <see cref="CoreOrigin"/> / <see cref="InCore"/> / <see cref="CoreCells"/> 取得，不另算偏移。
+    /// </summary>
+    public Coord CoreOrigin => new(Origin.X + ((Width - CoreSide) / 2), Origin.Y + ((Height - CoreSide) / 2));
+
+    /// <summary>该格是否在核心区内。</summary>
+    public bool InCore(Coord c)
+    {
+        Coord o = CoreOrigin;
+        return c.X >= o.X && c.X < o.X + CoreSide && c.Y >= o.Y && c.Y < o.Y + CoreSide;
+    }
+
+    /// <summary>按确定性顺序（先行后列，自下而上）枚举核心区的 9 格。</summary>
+    public IEnumerable<Coord> CoreCells()
+    {
+        Coord o = CoreOrigin;
+        for (int y = o.Y; y < o.Y + CoreSide; y++)
+        {
+            for (int x = o.X; x < o.X + CoreSide; x++)
+            {
+                yield return new Coord(x, y);
+            }
+        }
+    }
+
+    /// <summary>该格是否在外圈（棋盘最外一圈，link-map-terrain 裁决 M6）。</summary>
+    public bool OnRim(Coord c) =>
+        Contains(c) && (c.X == Origin.X || c.X == Origin.X + Width - 1 || c.Y == Origin.Y || c.Y == Origin.Y + Height - 1);
+
+    /// <summary>该格是否在中间带：棋盘内、不在外圈、不在核心区。</summary>
+    public bool InMiddleBand(Coord c) => Contains(c) && !OnRim(c) && !InCore(c);
 
     /// <summary>按确定性顺序（先行后列，自下而上）枚举外接矩形内的全部格子。</summary>
     public IEnumerable<Coord> Cells()

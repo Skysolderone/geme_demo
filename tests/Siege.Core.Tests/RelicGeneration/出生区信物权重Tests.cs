@@ -96,14 +96,16 @@ public class 出生区信物权重Tests
     /// </summary>
     private static readonly (string MapId, string Sha256, int Unconverged)[] PreChangeGolden =
     [
-        ("link:1", "9C39B357E3B984DAF502D6680CF98A3B64F8D58CF13C44AB596C1C966B26B835", 109),
+        // link-map-terrain 第 2 组重钉（M10）：link:1 的信物格变了（出生区档 10 个移进核心区、另加 3 个公共区档），同一种子的生成结果随之变；
+        // 旧值 9C39B357E3B984DAF502D6680CF98A3B64F8D58CF13C44AB596C1C966B26B835 / 未收敛 109。此后本值是"当前实现在新 link:1 上"的自证值，不再是引入新信物之前的独立参照。
+        ("link:1", "7DCEB00E865B03671ABC4C31C253E357CE98A400E056C637088CD72B9CC09119", 113),
     ];
 
     [Fact]
     public void 内容集v1保持旧表()
     {
         // 规格「内容集 v1 保持旧表」：同一种子在 v1 下的生成结果与引入新信物之前逐格一致（含收敛标记与重抽次数），不出现任何新四类。
-        // 期望值是改动前抓取的黄金哈希（见 PreChangeGolden），不是由当前实现推出来的。
+        // 期望值原是改动前抓取的黄金哈希（见 PreChangeGolden）；link-map-terrain 起是当前实现在新 link:1 上的自证钉值（2026-10-14 重钉），测试名沿用规格 Scenario 名。
         foreach ((string mapId, string sha256, int unconverged) in PreChangeGolden)
         {
             MapData map = MapCatalog.Resolve(mapId);

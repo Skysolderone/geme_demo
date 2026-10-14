@@ -56,7 +56,11 @@ public class 批量跑局Tests
         {
             Assert.NotNull(l.Result);
             Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
-            Assert.InRange(l.Result!.MajorRound, 1, 3);
+            // 截断 12 个小回合：4 人都在局时恰为 3 个大回合；原断言"终局大回合在 1–3"隐含"截断前无人出局"。
+            // link-map-terrain：地图变了、AI 走法随之变，种子 24 的同区两人在第 2 大回合整轮 Pass 结算、少一人后 12 个小回合跨到第 4 大回合。
+            // 改为按截断语义断言：小回合数不超过 12；终局大回合超过 3 时，截断前确有战场结算（有人出局）。
+            Assert.InRange(l.Turns.Count, 1, 12);
+            Assert.True(l.Result!.MajorRound <= 3 || l.Events.Any(e => e.Settlement is not null), $"种子 {l.Seed} 终局大回合 {l.Result.MajorRound} 但截断前没有战场结算");
         });
 
         // 按种子抽样的完整事件流（子流 sim-sample，与对局子流无关）：千分之 500 下 6 局里既有完整也有仅快照

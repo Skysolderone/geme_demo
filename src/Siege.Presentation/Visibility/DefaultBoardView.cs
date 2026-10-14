@@ -181,7 +181,7 @@ public sealed record DefaultBoardView(
     /// <summary>
     /// 按座位过滤（board-link-mode 实现裁决 B4 在表现层的镜像，information-visibility「其他战场不可见」「数据层过滤」）：
     /// 只保留 <paramref name="seat"/> 可见的格（<see cref="SeatPublicView.Cells"/>，即本座位所在战场；插旗阶段为本座位已选的那块、未选时为空），
-    /// 棋盘清单只留整块可见的台面（棋盘内的<b>可落子格</b>全部可见；棋盘内的岩石 / 未架桥深水不属于任何战场、本就不在可见格里，不作判据，link-map-terrain 第 1 组裁决④），
+    /// 棋盘清单只留整块可见的台面（棋盘内的<b>可落子格</b>全部可见，link-map-terrain 第 1 组裁决④；G1 起战斗阶段的可见格已含本战场棋盘内的岩石 / 未架桥深水，判据不变），
     /// 栅栏两端可见、改造的目标格 / 边可见才保留；<see cref="Placeholders"/> 取 5 块出生棋盘的占位，
     /// 已展开 = 外接矩形内有可见格（出生棋盘整块一起展开；不假设左下角格可落子），本座位所在 = 编号等于 <paramref name="ownZone"/>，主题原样透传。
     /// 旧模式（<see cref="SeatPublicView.Mode"/> 不是 <see cref="MatchMode.Link"/>）原样返回：全图可见、没有占位，与引入本方法之前逐项相同。

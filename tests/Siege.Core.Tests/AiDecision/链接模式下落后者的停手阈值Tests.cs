@@ -25,8 +25,8 @@ public class 链接模式下落后者的停手阈值Tests
 
     private static readonly EvaluationWeights Weights = SimFixtures.PreCalibrationWeights with { PowerGain = 1 };
 
-    /// <summary>出生棋盘 0 的边长（link:1 上 5–7）。</summary>
-    private static int Side => Map.BirthZones[0].Max(c => c.X) - Map.BirthZones[0].Min(c => c.X) + 1;
+    /// <summary>出生棋盘 0 的宽（读棋盘清单；link-map-terrain 起出生区是 3×3 核心区，不能再拿它量边长）。</summary>
+    private static int Side => Map.BirthBoard(0).Width;
 
     /// <summary>孤子点：棋盘 0 左上起 (2, 3)，离两个上角的棋子都 ≥ 2 格。</summary>
     private static Coord Candidate => BirthCell(Map, 0, 2, 3);

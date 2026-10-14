@@ -70,7 +70,7 @@ public class 战场结算Tests
         MatchFlow match = Started([0, 0, 3, 4]).AtRound(1, [P0, P1, P2, P3]);
         match.PlaceOne();
         bool toP1 = false;
-        foreach (Coord c in match.Map.BirthZones[0].Order().Where(c => match.Board[c].Occupant is null))
+        foreach (Coord c in match.Board.Battlefields.ById(0)!.Cells.Where(c => match.Board[c].Occupant is null))   // link-map-terrain：填满整个战场（出生区已缩成核心区）
         {
             match.Board.Place(c, toP1 ? P1 : P0, PieceType.Basic);
             toP1 = !toP1;
@@ -90,13 +90,21 @@ public class 战场结算Tests
     {
         // Scenario：战场 1 内 A、B、C 同一大回合全部 Pass → A（势力最高）胜，B、C 同时以"战场落败"出局（同一出局序号），
         // 二者名次按比较链排序、只有链全同才共享（信物数这一级的比较由「链接模式终局名次Tests」用构造输入钉住）。
-        MatchFlow match = Started([0, 0, 0, 3]).PlayRound(P0, P1, P2).PlayRound(P0).PassRound();
+        // link-map-terrain：棋盘带主题地形后，"P0 多落一枚就势力最高"不再由几何保证（崖壁 / 林地会改覆盖与领地，三人可能并列）；
+        // 断言的是三人战场结算的机制：胜者是结算时势力最高者（并列由比较链决出）、另两人同一出局序号、名次按比较链——不是谁赢。
+        MatchFlow match = Started([0, 0, 0, 3]).PlayRound(P0, P1, P2).PlayRound(P0);
+        PlayerId[] three = [P0, P1, P2];
+        Dictionary<PlayerId, System.Numerics.BigInteger> power = three.ToDictionary(p => p, p => match.Scoreboard.Latest!.Of(p).Total);
+        match.PassRound();
 
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
-        Assert.Equal(P0, settled.Winner);
+        PlayerId a = settled.Winner;
+        Assert.Contains(a, three);
+        Assert.All(three, p => Assert.True(power[p] <= power[a], $"{p} 势力 {power[p]} 高于胜者 {a} 的 {power[a]}"));
         Assert.Equal(3, settled.Entries.Length);
-        int order = match.StateOf(P1).EliminationOrder!.Value;
-        Assert.Equal(order, match.StateOf(P2).EliminationOrder);
+        PlayerId[] losers = [.. three.Where(p => p != a)];
+        int order = match.StateOf(losers[0]).EliminationOrder!.Value;
+        Assert.Equal(order, match.StateOf(losers[1]).EliminationOrder);
         Assert.Equal(order, settled.EliminationOrder);
         SettlementEntry second = settled.Entries[1];
         SettlementEntry third = settled.Entries[2];

@@ -78,7 +78,8 @@ public class 棋盘展开节拍Tests
 
         // 滑的是对方那块（出生棋盘 1，拼接后坐标）。
         // board-link-mode F.6：原断言"起点 = 拼接前相对本机的位置（本机位移 − 对方位移）"改为裁决 J12-2 的封顶口径——首轮东贴，从东侧偏 min(相对偏移, 4) 格滑入。
-        HashSet<Coord> theirs = [.. match.Map.BirthZones[1]];
+        // link-map-terrain：取整块出生棋盘（棋盘清单；G1 起可见格含棋盘内的岩石与深水），不是出生区（核心区）。
+        HashSet<Coord> theirs = [.. match.Map.BirthBoard(1).Cells()];
         Assert.Equal(theirs.Order(), slide.Cells.Order());
         (int myDx, int myDy) = Delta(layout, 0);
         (int theirDx, int theirDy) = Delta(layout, 1);
@@ -104,8 +105,8 @@ public class 棋盘展开节拍Tests
         ImmutableArray<SettlementBeat> beats = LinkShowBeats.Expansion(before, after, opponents, layout, 0);
         var slide = Assert.IsType<BoardSlideBeat>(beats[0]);
         var reveal = Assert.IsType<OpponentRevealBeat>(beats[2]);
-        Assert.Equal(match.Map.BirthZones[1].Order(), slide.Cells.Order());
-        Assert.Equal(match.Map.BirthZones[0].Order(), reveal.Cells.Order());
+        Assert.Equal(match.Map.BirthBoard(1).Cells().Order(), slide.Cells.Order());
+        Assert.Equal(match.Map.BirthBoard(0).Cells().Order(), reveal.Cells.Order());
         (int myDx, int myDy) = Delta(layout, 1);
         (int theirDx, int theirDy) = Delta(layout, 0);
         // board-link-mode F.6：原断言"起点 = 对方位移 − 本机位移"改为裁决 J12-2 的封顶口径——本机棋盘从东侧偏 min(相对偏移, 4) 格滑过去。
@@ -147,7 +148,7 @@ public class 棋盘展开节拍Tests
         // 样本口径：本机棋盘确实随这次他人链接平移了——否则按坐标直接差分也会是空序列，这条测试就守不住"平移不算新增"。
         Assert.NotEqual(layout.BoardAt(0, 0).Origin, layout.BoardAt(0, 1).Origin);
         // 反面：P2 的战场确实长出了格（拼入 4 号）。
-        Assert.True(match.World(P2).Board().Cells.Length > Map.BirthZones[3].Count);
+        Assert.True(match.World(P2).Board().Cells.Length > Map.BirthBoard(3).Width * Map.BirthBoard(3).Height);
     }
 
     [Fact]
@@ -239,7 +240,7 @@ public class 棋盘展开节拍Tests
         (DefaultBoardView before, DefaultBoardView after, ImmutableArray<PlayerId> opponents, MatchFlow match, LinkLayout layout) = LinkedFor(P1);
         ImmutableArray<SettlementBeat> beats = LinkShowBeats.Expansion(before, after, opponents, layout, 0);
         var slide = (BoardSlideBeat)beats[0];
-        HashSet<Coord> own = [.. match.Map.BirthZones[1]];
+        HashSet<Coord> own = [.. match.Map.BirthBoard(1).Cells()];
         static (float X, float Z) Plane(Coord c) => (c.X * 1f, -c.Y * 1f);
         var start = new Siege.Presentation.Camera.CameraPose(3f, -2f, 12f);
         var timeline = new ShowTimeline(beats, ShowDuration.Normal);
@@ -260,7 +261,7 @@ public class 棋盘展开节拍Tests
         // 本机是锚点（P0 视角，滑的是对方）：不跟随。
         (DefaultBoardView b0, DefaultBoardView a0, ImmutableArray<PlayerId> o0, MatchFlow m0, LinkLayout l0) = LinkedFor(P0);
         ShowMask anchorMask = new ShowTimeline(LinkShowBeats.Expansion(b0, a0, o0, l0, 0), ShowDuration.Normal).Mask();
-        Assert.Null(Siege.Presentation.Camera.CameraPose.FollowSlide(start, anchorMask, new HashSet<Coord>(m0.Map.BirthZones[0]), Plane));
+        Assert.Null(Siege.Presentation.Camera.CameraPose.FollowSlide(start, anchorMask, new HashSet<Coord>(m0.Map.BirthBoard(0).Cells()), Plane));
     }
 
     [Fact]

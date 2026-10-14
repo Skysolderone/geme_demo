@@ -38,7 +38,10 @@ public sealed class LinkDemoAudit
     /// <summary>已见到的步（<see cref="FullFlow"/> 的子集）。</summary>
     public ImmutableArray<string> Seen => [.. FullFlow.Where(_seen.Contains)];
 
-    /// <summary>插旗锁定：本机那块占位展开为棋盘（可见格 = 本机战场格数），其余 4 块保持占位。</summary>
+    /// <summary>
+    /// 插旗锁定：本机那块占位展开为棋盘（可见格 = 本机战场应可见的格数），其余 4 块保持占位。
+    /// <paramref name="battlefieldCells"/> 由调用方从战场导出与棋盘清单独立算出：link-map-terrain G1 起为本战场各棋盘外接矩形的格数之和（含岩石与未架桥深水）。
+    /// </summary>
     public AuditLine FlagsLocked(DefaultBoardView board, int ownZone, int battlefieldCells)
     {
         ArgumentNullException.ThrowIfNull(board);
@@ -78,7 +81,7 @@ public sealed class LinkDemoAudit
     }
 
     /// <summary>
-    /// 链接（拼接，board-link-mode F.4）：本机参与时 可见格 = 本战场格数 = 拼接前本机可见格 + 新展开的对方出生棋盘格数（拼接不增不减格，两战场格数之和守恒）、
+    /// 链接（拼接，board-link-mode F.4）：本机参与时 可见格 = 本战场应可见的格数（G1：各棋盘外接矩形之和）= 拼接前本机可见格 + 新展开的对方出生棋盘格数（拼接不增不减格，两战场格数之和守恒）、
     /// 且有新展开的占位；本机不参与时可见格数不变（坐标可能随收拢平移，格数不变）。<paramref name="expandedBefore"/> 为拼接前已展开的出生棋盘编号。
     /// </summary>
     public AuditLine Linked(LinkRecord link, bool mine, int cellsBefore, DefaultBoardView after, int battlefieldCells, IReadOnlyCollection<int> expandedBefore)

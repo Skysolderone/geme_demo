@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Siege.Core.Board;
+using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Scoring;
+using Siege.Presentation.Visibility;
 using static Siege.Core.Tests.LinkModeFixtures;
 
 namespace Siege.Core.Tests.InformationVisibility;
@@ -29,15 +31,52 @@ public class 按座位视图Tests
     {
         // Scenario：玩家 A 在战场 1，查询战场 4 内任一格 → 返回"未展开"，不含地形与占用。
         MatchFlow match = Started([0, 1, 3, 4]);
-        match.Place(P2, BirthCell(match.Map, 3, 1, 1));
+        match.Place(P2, CoreCell(match.Map, 3, 1, 1));
         SeatPublicView a = match.PublishFor(P0);
 
-        Coord other = BirthCell(match.Map, 3, 1, 1);
+        Coord other = CoreCell(match.Map, 3, 1, 1);
         Assert.False(a.IsExpanded(other));
         Assert.Null(a.CellAt(other));
         Assert.True(a.IsExpanded(BirthCell(match.Map, 0, 0, 0)));
-        Assert.Equal(match.Map.BirthZones[0].Count, a.Cells.Length);
+        // G1（link-map-terrain 2.6）：本战场展开的是整块棋盘的外接矩形（含岩石与未架桥深水），不是出生区（核心区）。
+        Assert.Equal(match.Map.BirthBoard(0).Width * match.Map.BirthBoard(0).Height, a.Cells.Length);
         Assert.Equal(0, a.Battlefield);
+    }
+
+    [Fact]
+    public void 本战场棋盘内的岩石与未架桥深水可见()
+    {
+        // G1（负责人 2026-10-14 裁决 A，tasks 2.6）：战斗阶段按座位可见的格 = 本战场所含各棋盘外接矩形内的全部格，包括岩石与未架桥深水
+        // （否则河流与岩石在视图里成了空缺）；其他战场仍不可见（information-visibility「其他战场不可见」）。Core 视图与表现层的按座位过滤一致。
+        // 载体：从 link:1 起找第一张"河流主题棋盘里同时有岩石与未架桥深水"的图（link:1 的河流棋盘是 6×8，按面积缩放不放岩石）。
+        (MapData map, int zone) = Enumerable.Range(1, 200).Select(s => LinkMapGenerator.Generate((ulong)s))
+            .SelectMany(m => Enumerable.Range(0, 5).Select(z => (Map: m, Zone: z)))
+            .First(t => t.Map.Boards[t.Zone].Theme == BoardTheme.River && t.Map.Boards[t.Zone].Cells().Any(c => t.Map.Obstacles.Contains(c)));
+        BoardPlate plate = map.BirthBoard(zone);
+        Coord[] water = [.. plate.Cells().Where(map.TerrainData.IsUnbridgedDeepWater)];
+        Coord[] rocks = [.. plate.Cells().Where(map.Obstacles.Contains)];
+        Assert.NotEmpty(water);   // 样本口径
+        Assert.NotEmpty(rocks);
+        int[] others = [.. Enumerable.Range(0, 5).Where(z => z != zone).Take(3)];
+        MatchFlow match = MatchFlow.Create(map, MatchFixtures.Seed, All, Options);
+        match.PlantSequentially([(P0, zone), (P1, others[0]), (P2, others[1]), (P3, others[2])]);
+        Assert.NotEqual(MatchPhase.FlagPlanting, match.Phase);
+
+        SeatPublicView a = match.PublishFor(P0);
+        Assert.Equal(plate.Cells().Order().Select(c => c.ToNotation()), a.Cells.Select(c => c.Coord));
+        SeatCellView w = a.CellAt(water[0])!;
+        Assert.Equal((Terrain.Obstacle, Surface.DeepWater, false), (w.Terrain, w.Surface, w.Bridge));
+        Assert.True(w.Ownership is { Kind: OwnershipKind.Obstacle }, $"{w.Ownership}");
+        SeatCellView r = a.CellAt(rocks[0])!;
+        Assert.Equal((Terrain.Obstacle, Surface.Grass), (r.Terrain, r.Surface));
+
+        // 其他战场：整块外接矩形（含它们的岩石与深水）一格都不出现。
+        Assert.All(others.Append(Enumerable.Range(0, 5).Except([zone, .. others]).Single()), z => Assert.All(map.BirthBoard(z).Cells(), c => Assert.Null(a.CellAt(c))));
+
+        // 表现层按座位过滤与 Core 视图同一组格；本座位的棋盘整块可见，所以棋盘清单里只留这一块。
+        DefaultBoardView view = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(a, zone);
+        Assert.Equal(a.Cells.Select(c => Coord.Parse(c.Coord)).Order(), view.Cells.Select(c => c.Coord).Order());
+        Assert.Equal([plate], view.Boards.AsEnumerable());
     }
 
     [Fact]
@@ -45,7 +84,7 @@ public class 按座位视图Tests
     {
         // Scenario：A 在战场 1，查询战场 4 内玩家 C 的势力 → 只返回 C 的在局状态，不含势力数值。
         MatchFlow match = Started([0, 1, 3, 4]);
-        match.Place(P2, BirthCell(match.Map, 3, 1, 1));
+        match.Place(P2, CoreCell(match.Map, 3, 1, 1));
         SeatPlayerView c = match.PublishFor(P0).Players.Single(p => p.Player == P2);
 
         Assert.Equal(PlayerStatus.Active, c.Status);
@@ -65,7 +104,7 @@ public class 按座位视图Tests
     {
         // Scenario：战场 1 与战场 4 链接 → A 立即可读到原战场 4 的全部棋子、设施与 C 的势力明细（含链接前的改造）。
         MatchFlow match = Started([0, 1, 3, 4]);
-        Coord cStone = BirthCell(match.Map, 3, 1, 1);
+        Coord cStone = CoreCell(match.Map, 3, 1, 1);
         Coord fenceA = BirthCell(match.Map, 3, 0, 0);
         Coord fenceB = new(fenceA.X + 1, fenceA.Y);
         match.Place(P2, cStone);
@@ -104,8 +143,8 @@ public class 按座位视图Tests
         string json = JsonSerializer.Serialize(match.PublishFor(P0), Json);
 
         HashSet<Coord> mine = [.. match.Board.Battlefields.ById(0)!.Cells];
-        // 占位（每块出生棋盘的位置与边长）是全局公开信息，其原点坐标不算"格数据"，从判据里除去。
-        HashSet<Coord> origins = [.. match.Map.BirthZones.Select(z => new Coord(z.Min(c => c.X), z.Min(c => c.Y)))];
+        // 占位（每块出生棋盘的位置与边长）是全局公开信息，其原点坐标不算"格数据"，从判据里除去（link-map-terrain：占位原点 = 整块棋盘的左下角）。
+        HashSet<Coord> origins = [.. match.Map.BirthBoards().Select(b => b.Origin)];
         HashSet<Coord> theirs = [.. match.Board.Battlefields.All.Where(f => f.Id != 0).SelectMany(f => f.Cells).Where(c => !origins.Contains(c))];
         Assert.True(theirs.Count > 60);   // 段 F：另外两个战场共三块出生棋盘（没有公共棋盘与通道）
         Assert.All(theirs, c => Assert.DoesNotContain($"\"{c.ToNotation()}\"", json, StringComparison.Ordinal));
@@ -160,13 +199,15 @@ public class 按座位视图Tests
         Assert.Equal(MapId, a.MapId);
         Assert.Equal(MatchFixtures.Seed.ToString(), a.Seed);
         Assert.All(a.Players, p => Assert.False(p.SameBattlefield));
-        Assert.Equal(match.Map.BirthZones[2].Count, a.Placeholders[2].Width * a.Placeholders[2].Height);
+        Assert.Equal((match.Map.BirthBoard(2).Width, match.Map.BirthBoard(2).Height), (a.Placeholders[2].Width, a.Placeholders[2].Height));   // 占位取整块棋盘
 
         // Scenario：锁定后只见自己的棋盘 → 可见棋盘 3 的全部格与信物格位置，其余 4 块仍只是占位。
         match.Flags.Plant(P0, 2);
         SeatPublicView locked = match.PublishFor(P0);
-        Assert.Equal(match.Map.BirthZones[2].Order().Select(c => c.ToNotation()), locked.Cells.Select(c => c.Coord));
-        Assert.Equal(2, locked.Relics.Length);   // 裁决 J2：每块出生棋盘 2 个信物格
+        Assert.Equal(match.Map.BirthBoard(2).Cells().Order().Select(c => c.ToNotation()), locked.Cells.Select(c => c.Coord));
+        // 裁决 J2 / link-map-terrain D5：每块出生棋盘 2 个出生区档 + 至多 1 个公共区档信物格，锁定后全部可见（内容隐藏）。
+        Assert.Equal(match.Map.RelicCells.Keys.Count(match.Map.BirthBoard(2).Contains), locked.Relics.Length);
+        Assert.InRange(locked.Relics.Length, 2, 3);
         Assert.All(locked.Relics, r => Assert.Null(r.Content));
     }
 

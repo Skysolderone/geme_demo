@@ -47,6 +47,40 @@ internal static class LinkModeFixtures
         return match;
     }
 
+    /// <summary>
+    /// 平坦的手写链接档图（link-map-terrain 第 2 组）：<c>link:1</c> 的出生棋盘带主题地形（出生棋盘 0 是高台，外圈内侧有高度 2 的格），
+    /// 角上的气与领地随主题变化；依赖"平坦的角"做势力算例的测试改用这张图。载体是 <see cref="LinkMapFixtures.Births"/>（五块 6×6，中间带只有东列两端两格林地），
+    /// 棋盘 0 的出生区档信物移到核心区左下角起 (3,1) / (1,3)，不压在算例的棋子下。标识取 <c>link:90003</c>（链接模式只接受 link: 标识；不经生成器）。
+    /// </summary>
+    internal static readonly MapData FlatMap = BuildFlatMap();
+
+    private static MapData BuildFlatMap()
+    {
+        MapData built = LinkMapFixtures.Build("link:90003", LinkMapFixtures.Births);
+        BoardPlate zero = built.Boards[0];
+        var birth = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+        return built with
+        {
+            RelicCells = built.RelicCells.Where(kv => !zero.Contains(kv.Key))
+                .Append(KeyValuePair.Create(new Coord(zero.Origin.X + 3, zero.Origin.Y + 1), birth))
+                .Append(KeyValuePair.Create(new Coord(zero.Origin.X + 1, zero.Origin.Y + 3), birth))
+                .ToImmutableDictionary(),
+        };
+    }
+
+    /// <summary>在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
+    internal static MatchFlow StartedFlat(int[] zones)
+    {
+        MatchFlow match = MatchFlow.Create(FlatMap, MatchFixtures.Seed, All, Options);
+        foreach (PlayerId p in All)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 50));
+        }
+
+        match.PlantSequentially(All.Select((p, i) => (p, zones[i])));
+        return match;
+    }
+
     /// <summary>当前大回合内剩下的玩家全部 Pass，直到大回合结束（或对局离开进行中阶段）。链接模式下整轮 Pass 不结束对局。</summary>
     internal static MatchFlow PassRound(this MatchFlow match)
     {
@@ -93,12 +127,17 @@ internal static class LinkModeFixtures
         return match;
     }
 
-    /// <summary>当前玩家落 1 子：合法范围内按坐标序取第一个能暂放、且整批能确认的空格；都不行就 Pass。</summary>
+    /// <summary>
+    /// 当前玩家落 1 子：合法范围内取第一个能暂放、且整批能确认的空格；都不行就 Pass。
+    /// 次序：本座位出生区（核心区）内的格在前，其余在后，各按坐标序。link-map-terrain 第 2 组：棋盘的外圈与中间带按主题带地形（崖壁、栅栏、深水），
+    /// 核心区恒为高度 0 的草地——先落核心区，夹具的行为就不随主题地形变化（原按纯坐标序时，高台主题的崖壁会让第一枚子只剩一口气、第二大回合被提）。
+    /// </summary>
     internal static void PlaceOne(this MatchFlow match)
     {
         PlayerId player = match.CurrentPlayer!.Value;
         StagedBatch batch = match.ToDeploy();
-        foreach (Coord cell in match.LegalRangeFor(player).Order())
+        int? zone = match.StateOf(player).BirthZone;
+        foreach (Coord cell in match.LegalRangeFor(player).OrderBy(c => zone is { } z && match.Map.BirthZones[z].Contains(c) ? 0 : 1).ThenBy(c => c))
         {
             if (match.Board[cell].Occupant is not null || batch.Stage(cell, PieceType.Basic) is not null)
             {
@@ -153,11 +192,21 @@ internal static class LinkModeFixtures
         return layout.Translate(before, 0, layout.Versions);
     }
 
-    /// <summary>出生棋盘 <paramref name="zone"/> 左上角起的相对坐标。</summary>
+    /// <summary>
+    /// 出生棋盘 <paramref name="zone"/> 左下角起的相对坐标。link-map-terrain 第 2 组：出生区缩成核心区后改读棋盘清单（整块棋盘的左下角），
+    /// 不再取出生区的最小坐标；棋盘内可能有岩石 / 深水，调用方取的偏移须落在可落子格上（用 <see cref="CoreCell"/> 取核心区内恒可落子的格）。
+    /// </summary>
     internal static Coord BirthCell(MapData map, int zone, int dx, int dy)
     {
-        ImmutableHashSet<Coord> cells = map.BirthZones[zone];
-        return new Coord(cells.Min(c => c.X) + dx, cells.Min(c => c.Y) + dy);
+        BoardPlate plate = map.BirthBoard(zone);
+        return new Coord(plate.Origin.X + dx, plate.Origin.Y + dy);
+    }
+
+    /// <summary>出生棋盘 <paramref name="zone"/> 核心区左下角起的相对坐标（0–2）：核心区是高度 0 的草地，恒可落子。</summary>
+    internal static Coord CoreCell(MapData map, int zone, int dx, int dy)
+    {
+        Coord core = map.BirthBoard(zone).CoreOrigin;
+        return new Coord(core.X + dx, core.Y + dy);
     }
 
     /// <summary>当前玩家的小回合推进到部署阶段，返回暂放批次。</summary>

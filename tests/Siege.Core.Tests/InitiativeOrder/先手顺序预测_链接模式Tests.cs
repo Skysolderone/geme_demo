@@ -45,7 +45,7 @@ public class 先手顺序预测_链接模式Tests
     /// <summary>把出生棋盘 <paramref name="zone"/> 填满：除 <paramref name="minority"/> 的一格外全部是 <paramref name="majority"/> 的棋子（绕过规则直接摆子）。</summary>
     private static void FillBoard(MatchFlow match, int zone, PlayerId majority, PlayerId minority)
     {
-        Coord[] cells = [.. Map.BirthZones[zone].Order()];
+        Coord[] cells = [.. Map.BirthBoard(zone).Cells().Where(Map.IsPlayable).Order()];   // link-map-terrain：整块棋盘的可落子格（出生区已缩成核心区）
         match.Place(minority, cells[0]);
         match.Place(majority, cells[1..]);
         // 直接摆子不经结算：被占据的信物格要先揭示，否则公开补充载荷会因"控制而未揭示"响亮失败（那是守门，不是本测试要验的）。

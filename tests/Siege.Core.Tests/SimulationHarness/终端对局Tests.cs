@@ -13,13 +13,13 @@ public class 终端对局Tests
     public void 脚本输入能落子并走到输入耗尽()
     {
         // 选 1 号区；第一回合选 1 号候选，在出生区落 B1（v3 的 A1 是角石），预演后确认；之后 Pass 一个小回合，输入耗尽退出。
-        // retire-legacy-maps 1.8：地图由 v5 改为 link:1（内置固定配对脚本），落点 B1 → V3（1 号出生棋盘左下角）；冒险概率随旧地图删除、不再写死。种子 42 在 link:1 上第 2 大回合即被同棋盘 AI 提光出局、
+        // retire-legacy-maps 1.8：地图由 v5 改为 link:1（内置固定配对脚本），落点 B1 → V3（1 号出生棋盘左下角；link-map-terrain 起 link:1 的 1 号出生棋盘左下角为 X3）；冒险概率随旧地图删除、不再写死。种子 42 在 link:1 上第 2 大回合即被同棋盘 AI 提光出局、
         // 对局自动跑过链接后终端播报越界崩溃（migration.md 待决 L15），探针（种子 41–52）改取种子 45。断言不变（落点文字与种子随之改）。
         // 段 C：大回合上限删除，脚本不再能"Pass 到上限终局"（AI 不会停手），原"走到终局"改为走到第 3 大回合后输入耗尽干净退出。
         // life-shape 段 B：原脚本 Pass 两次、在第 4 大回合的提示处耗尽；活棋禁入 / 破坏活形生效后 AI 第 4 大回合走法变了（与改动前逐行比对：前 3 个大回合相同），
         // 玩家2 在轮到你之前提走了你唯一的 B1，你出局、对局自动跑到终局，永远走不到"输入耗尽"。改为只 Pass 一次、在第 3 大回合的提示处耗尽——
         // 保护期内别家不能进你的出生区，这一步不再依赖 AI 的走法；断言未改。
-        var script = new System.Text.StringBuilder("1\n1\nV3 B\nv\nok\n");
+        var script = new System.Text.StringBuilder("1\n1\nX3 B\nv\nok\n");
         for (int i = 0; i < 1; i++)
         {
             script.Append("\npass\n");
@@ -30,7 +30,7 @@ public class 终端对局Tests
         string text = output.ToString();
 
         Assert.Equal(0, exit);
-        Assert.Contains("玩家1(你) 落子 V3B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 X3B", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 45", text, StringComparison.Ordinal);
 

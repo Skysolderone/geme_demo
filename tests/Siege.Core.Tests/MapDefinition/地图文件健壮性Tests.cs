@@ -73,18 +73,22 @@ public class 地图文件健壮性Tests
         // JSON 对象的重复键由序列化器"后者胜出"地吞掉，坐标记法的大小写差异同样会折叠成同一格。
         // 这里钉住：折叠后信物格数量变了，信物格预算会报出来——不会带着"丢了一个信物格"的地图开局。
         // retire-legacy-maps 4.1：原载体是 11×11 的手写残缺图（无规格档字段）；4.1 起它先因外接尺寸被链接档拒绝、到不了信物预算，
-        // 载体改为 link:1 的导出文本，把第二个信物格的键改写成第一个的小写（10 → 9 个），断言不变。
+        // 载体改为 link:1 的导出文本，把第二个信物格的键改写成第一个的小写，断言不变。
+        // link-map-terrain：信物格区间改为 10–15、link:1 有 13 个（含 3 个公共区档），少一个仍在区间内；改为折叠两个出生区档信物格，
+        // 由"每块出生棋盘恰 2 个出生区档信物格"报出——同样不会带着丢了一个信物格的地图开局。
         string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
-        Coord[] relics = [.. MapFile.FromJson(canonical).RelicCells.Keys.Order()];
+        MapData parsed = MapFile.FromJson(canonical);
+        Coord[] relics = [.. parsed.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).Select(kv => kv.Key).Order()];
         Assert.Equal(10, relics.Length);   // 样本口径
+        Assert.Equal(13, parsed.RelicCells.Count);
         string json = canonical.Replace($"\"{relics[1].ToNotation()}\": {{", $"\"{relics[0].ToNotation().ToLowerInvariant()}\": {{", StringComparison.Ordinal);
         Assert.NotEqual(canonical, json);
 
         MapData folded = MapFile.FromJson(json);
 
-        Assert.Equal(9, folded.RelicCells.Count);
+        Assert.Equal(12, folded.RelicCells.Count);
         Assert.Contains(
-            MapValidator.Validate(folded).Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
+            MapValidator.Validate(folded).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
     }
 
     [Fact]

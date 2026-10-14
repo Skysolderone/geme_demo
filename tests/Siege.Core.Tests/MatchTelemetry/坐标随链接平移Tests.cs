@@ -75,19 +75,19 @@ public class 坐标随链接平移Tests
         BattlefieldShift mover = result.Shifts.Single(s => s.Battlefield == 3);
         Assert.False(mover.IsZero);
 
-        // 夹具 3 号棋盘 x 26–30，东贴到 2 号（x 18–22）之后平移 (-3, 0)。
-        Coord inner = new(26, 3);                // 3 号棋盘西缘
-        Coord west = new(25, 3);                 // 紧邻的场景格
-        Coord scenery = new(24, 3);              // 两块棋盘之间的场景格
+        // 夹具 3 号棋盘 x 29–34，东贴到 2 号（x 20–25）之后平移 (-3, 0)（link-map-terrain：夹具改为 6×6，几何同步改写，口径不变）。
+        Coord inner = new(29, 3);                // 3 号棋盘西缘
+        Coord west = new(28, 3);                 // 紧邻的场景格
+        Coord scenery = new(27, 3);              // 两块棋盘之间的场景格
         Assert.Equal(-3, mover.Dx);
-        Assert.Equal(TerrainEdit.Fence(new Coord(23, 3), new Coord(22, 3)), layout.TranslateEdit(TerrainEdit.Fence(inner, west), 0, 1));   // 随可落子端平移，成了接缝栅栏
-        Assert.Equal(TerrainEdit.Fence(new Coord(23, 3), new Coord(24, 3)), layout.TranslateEdit(TerrainEdit.Fence(inner, new Coord(27, 3)), 0, 1));
-        Assert.Equal(TerrainEdit.Fence(new Coord(24, 0), new Coord(24, 1)), layout.TranslateEdit(TerrainEdit.Fence(new Coord(24, 0), new Coord(24, 1)), 0, 1));   // 两端场景格、仍是场景格：不动
-        Assert.Null(layout.TranslateEdit(TerrainEdit.Fence(scenery, new Coord(24, 4)), 0, 1));                                                                     // 两端场景格、被拼过来的棋盘占到：丢弃
+        Assert.Equal(TerrainEdit.Fence(new Coord(26, 3), new Coord(25, 3)), layout.TranslateEdit(TerrainEdit.Fence(inner, west), 0, 1));   // 随可落子端平移，成了接缝栅栏
+        Assert.Equal(TerrainEdit.Fence(new Coord(26, 3), new Coord(27, 3)), layout.TranslateEdit(TerrainEdit.Fence(inner, new Coord(30, 3)), 0, 1));
+        Assert.Equal(TerrainEdit.Fence(new Coord(27, 0), new Coord(27, 1)), layout.TranslateEdit(TerrainEdit.Fence(new Coord(27, 0), new Coord(27, 1)), 0, 1));   // 两端场景格、仍是场景格：不动
+        Assert.Null(layout.TranslateEdit(TerrainEdit.Fence(scenery, new Coord(27, 4)), 0, 1));                                                                     // 两端场景格、被拼过来的棋盘占到：丢弃
         Assert.Throws<ArgumentException>(() => layout.Translate(scenery, 0, 1));
 
         // 与盘面实际迁移逐条一致（GameBoard.ApplySplice 是 Core 侧的唯一实现）。
-        TerrainEdit[] edits = [TerrainEdit.Fence(inner, west), TerrainEdit.Fence(new Coord(24, 0), new Coord(24, 1)), TerrainEdit.Fence(scenery, new Coord(24, 4)), TerrainEdit.Fence(inner, new Coord(27, 3))];
+        TerrainEdit[] edits = [TerrainEdit.Fence(inner, west), TerrainEdit.Fence(new Coord(27, 0), new Coord(27, 1)), TerrainEdit.Fence(scenery, new Coord(27, 4)), TerrainEdit.Fence(inner, new Coord(30, 3))];
         GameBoard board = GameBoard.Load(opening);
         board.ApplyTerrainEdits(edits);
         board.ApplySplice(result.Map, result.Translate);

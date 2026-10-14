@@ -104,10 +104,21 @@ public class 专家前瞻的记录Tests
     [Fact]
     public void 选择变化可查()
     {
-        (MatchLog log, _) = ExpertSample.Value;
-        LookaheadLogEntry[] records = [.. MatchLog.Parse(log.FullText()).LookaheadTurns.Select(t => t.Lookahead!)];
-        LookaheadLogEntry changed = Assert.Single(records, r => r.Changed);   // 样本口径：样本种子恰有一次（retire-legacy-maps 1.4 探针，见 ExpertSample）
-        Assert.True(changed.Chosen >= 1);
+        // link-map-terrain 裁决 T1 = A：原样本口径"样本种子 6 恰有一次改变选择"（探针挑出）在改图后为 0 次；前瞻是否改变选择取决于 AI 走法，脚本造不出来。
+        // 改为固定种子区间：与 ExpertSample 同一配置（1 名一层专家 + 3 名标准、整局），种子 1–8（即 retire-legacy-maps 1.4 原探针的区间，写死，不针对单个种子挑），
+        // 按顺序跑到第一局出现"改变选择"的记录为止；对那条记录做原有的逐项断言（一字未改）。改图后实测种子 4 命中（前 4 局约 10 s）。
+        PlayerAiConfig oneLayer = OneLayerExpert;
+        LookaheadLogEntry? changed = null;
+        LookaheadLogEntry[] records = [];
+        for (ulong seed = 1; seed <= 8 && changed is null; seed++)
+        {
+            MatchLog run = LookaheadFixtures.CreateSession(LookaheadFixtures.LinkConfig(oneLayer, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard), seed).Run();
+            records = [.. MatchLog.Parse(run.FullText()).LookaheadTurns.Select(t => t.Lookahead!)];
+            changed = records.FirstOrDefault(r => r.Changed);
+        }
+
+        Assert.True(changed is not null, "种子 1–8 里没有一次前瞻改变选择");
+        Assert.True(changed!.Chosen >= 1);
         LookaheadCandidateEntry first = changed.Candidates[0];
         LookaheadCandidateEntry chosen = changed.ChosenCandidate!;
         Assert.NotEqual(first.Batch, chosen.Batch);
@@ -149,17 +160,20 @@ public class 专家前瞻的记录Tests
     [Fact]
     public void 一层配置的记录与改动前相同()
     {
+        // 方法名与 match-telemetry 同名 Scenario 对应，保留不改。改图后黄金值已是当前实现的自证值，不再是"改动前"的产物（link-map-terrain 裁决 #8）。
+        // 钉值来源：当前实现在 link:1 对局种子 6 上的产出（1 名一层专家 + 3 名标准、整局），2026-10-14 link-map-terrain 第 2 组重钉。
         // retire-legacy-maps 1.4：样本由 v5 种子 3 改到 link:1 种子 6（见 ExpertSample），小回合数、前瞻记录数与 SHA-256 在删除 v5 之前按当时实现重钉。
         // 一层配置（多样补充上限 0、两层权重 0）下的专家日志：确定性文本整份与改动前逐字节相同。原黄金值在 expert-strength 2.1 改日志端之前、
         // 同一样本上取下（G1 已证一层配置走法不变，所以当时的文本就是"改动前"的文本）；G1 黄金值只钉 ToText()，这里钉 JSON。
         (MatchLog log, _) = ExpertSample.Value;
         string text = log.DeterministicText();
-        Assert.Equal(44, log.Turns.Count);
-        Assert.Equal(8, log.LookaheadTurns.Count());
+        Assert.Equal(46, log.Turns.Count);   // link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：小回合 44 → 46、前瞻记录 8 → 13
+        Assert.Equal(13, log.LookaheadTurns.Count());
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         Assert.Contains("\"AiEvaluationVersion\":4", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
-        Assert.Equal("4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
+        // 第 2 组重钉：旧值 4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B（地图内容变，整局走法变，不再能逐行比对出"只差首部"）。
+        Assert.Equal("6059A235B06536C946901BF77F444CEE5DA515C3F5B2B534AAE359F86AC838B8", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -273,11 +287,12 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
-        Assert.Equal(40, log.Turns.Count);
+        Assert.Equal(65, log.Turns.Count);   // link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         Assert.Contains("\"AiEvaluationVersion\":4", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
-        Assert.Equal("999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
+        // 第 2 组重钉：旧值 999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5。
+        Assert.Equal("3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
     }
 
     [Fact]

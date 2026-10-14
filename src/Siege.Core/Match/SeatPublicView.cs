@@ -93,7 +93,7 @@ public sealed record SeatPublicView(
 public sealed partial class MatchFlow
 {
     /// <summary>
-    /// 按座位发布公开视图（实现裁决 B4）。链接模式：插旗阶段只展开本座位已选的那块出生棋盘；此后只展开本座位所在战场（随链接扩大）。
+    /// 按座位发布公开视图（实现裁决 B4）。链接模式：插旗阶段只展开本座位已选的那块出生棋盘；此后只展开本座位所在战场的各块棋盘（整块外接矩形，含岩石与未架桥深水，G1；随链接扩大）。
     /// 旧模式：全图展开、全员视为同战场。
     /// </summary>
     public SeatPublicView PublishFor(PlayerId seat)
@@ -108,7 +108,9 @@ public sealed partial class MatchFlow
             : zone is null ? []
             // 插旗阶段锁定后只公开这一块出生棋盘的布局：取整块棋盘（棋盘清单），不是出生区——链接档的出生区是核心区（link-map-terrain D1）。
             : Phase == MatchPhase.FlagPlanting ? [.. Board.Map.BirthBoard(zone.Value).Cells()]
-            : [.. PublicRules.BattlefieldOf(Board, zone.Value).Cells];
+            // 战斗阶段（G1，负责人 2026-10-14 裁决 A）：本战场所含各棋盘外接矩形内的全部格，含岩石与未架桥深水——否则河流与岩石在视图里成了空缺；
+            // 战场只由可落子格组成，棋盘归属读 Battlefield.Boards（棋盘内任一可落子格所在的分量，D7）。其他战场的棋盘不在这里。
+            : [.. PublicRules.BattlefieldOf(Board, zone.Value).Boards.SelectMany(b => Board.Map.Boards[b].Cells())];
         bool SameField(PlayerId p) => !link || (battlefield is { } id && _records[p].BirthZone is { } z && PublicRules.BattlefieldOf(Board, z).Id == id);
 
         bool started = Phase != MatchPhase.FlagPlanting;

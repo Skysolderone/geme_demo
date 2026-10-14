@@ -87,9 +87,12 @@ public sealed class MatchSession
     /// <summary>最近一次结算接线产出的战场横幅（"战场胜出" / "战场落败（第 N 名）"）与提示条文案，供 `--auto-demo` 全流程自检核对（<see cref="Siege.Presentation.Diagnostics.LinkDemoAudit.Settled"/>）。</summary>
     public (ImmutableArray<string> Banners, ImmutableArray<string> Notices) LastSettlementShow { get; private set; } = ([], []);
 
-    /// <summary>本机所在战场的格数（独立于按座位过滤的口径：由地图的战场导出 <see cref="Battlefields"/> 给出），供自检比对可见格数；未锁定出生区为 0。</summary>
+    /// <summary>
+    /// 本机所在战场应可见的格数（独立于按座位过滤的口径：由地图的战场导出 <see cref="Battlefields"/> 与棋盘清单给出），供自检比对可见格数；未锁定出生区为 0。
+    /// link-map-terrain G1（裁决 A）：战斗阶段可见格 = 本战场所含各棋盘外接矩形内的全部格（含岩石与未架桥深水），所以取各棋盘宽 × 高之和，不取战场的可落子格数。
+    /// </summary>
     public int MyBattlefieldCells => Match.Phase == MatchPhase.FlagPlanting ? 0
-        : Battlefields.Of(Match.Map).ById(Match.BattlefieldOf(Me))?.Cells.Length ?? 0;
+        : Battlefields.Of(Match.Map).ById(Match.BattlefieldOf(Me))?.Boards.Sum(b => Match.Map.Boards[b].Width * Match.Map.Boards[b].Height) ?? 0;
 
     /// <summary>本机所在战场的标识（= 分量内最小出生棋盘编号）；未锁定为 <c>null</c>。</summary>
     public int? MyBattlefield => Match.Phase == MatchPhase.FlagPlanting ? null : Match.BattlefieldOf(Me);

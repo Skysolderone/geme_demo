@@ -117,6 +117,46 @@ internal static class LinkSimFixtures
         public bool OnRejected(StagedBatch batch, BatchFailure failure) => false;
     }
 
+    /// <summary>
+    /// 脚本化的一个座位（link-map-terrain 裁决 T1 = A：样本下界改为不依赖 AI 走法）：在 <paramref name="byRound"/> 列出的大回合按脚本暂放（坐标、类型、可选改造），
+    /// 其余大回合交给 <paramref name="fallback"/>（缺省为 Pass）。脚本暂放失败（被拒）时整批 Pass，测试会因样本缺失而响亮失败。
+    /// </summary>
+    internal sealed class ScriptedSeat(
+        MatchFlow match,
+        IReadOnlyDictionary<int, (Coord Cell, PieceType Type, TerrainEdit? Edit)[]> byRound,
+        ITurnController? fallback = null) : ITurnController
+    {
+        public void OrganizeHand(PlayerHandAccess hand, int overflow) => fallback?.OrganizeHand(hand, overflow);
+
+        public void Recruit(PlayerHandAccess hand, RecruitPanelView panel)
+        {
+            if (!byRound.ContainsKey(match.MajorRound))
+            {
+                fallback?.Recruit(hand, panel);
+            }
+        }
+
+        public void Deploy(StagedBatch batch, Func<RehearsalResult> rehearse)
+        {
+            if (byRound.TryGetValue(match.MajorRound, out (Coord Cell, PieceType Type, TerrainEdit? Edit)[]? script))
+            {
+                foreach ((Coord cell, PieceType type, TerrainEdit? edit) in script)
+                {
+                    if (batch.Stage(cell, type, edit) is { } failure)
+                    {
+                        throw new InvalidOperationException($"脚本暂放 {cell.ToNotation()}:{type} 被拒：{failure.Message}");
+                    }
+                }
+
+                return;
+            }
+
+            fallback?.Deploy(batch, rehearse);
+        }
+
+        public bool OnRejected(StagedBatch batch, BatchFailure failure) => fallback?.OnRejected(batch, failure) ?? false;
+    }
+
     /// <summary>只会 Pass 的控制者：部署阶段什么都不暂放，确认即 Pass。</summary>
     internal sealed class PassController : ITurnController
     {

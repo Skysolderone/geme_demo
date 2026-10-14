@@ -133,8 +133,10 @@ public class 平衡分析方向Tests
     }
 
     [Fact]
-    public void 内容集v1的报告除第12项外与引入新内容之前逐字节相同()
+    public void 内容集v1的报告除第12项外钉值()
     {
+        // link-map-terrain 裁决 #8：原名「内容集v1的报告除第12项外与引入新内容之前逐字节相同」。改图后黄金值已是当前实现的自证值，故改名；
+        // 钉值来源：当前实现在 link:1 共用样本（SimFixtures.Sample / RankedSample）上的报告，2026-10-14 link-map-terrain 第 2 组重钉。
         // 段 B 待决 6：分析器的棋子 / 信物列表按内容集展开，v1 样本的报告不因枚举追加四值而多出 0 行；
         // 新增的第 12 项对 v1 对局只单列"不适用"。黄金值取自引入新内容之前的提交（ad78d50，同一共用样本、去掉耗时字段后渲染）的 SHA-256：
         // 共用样本（4 局 Easy、写死 v1）146 行、名次样本 152 行。去掉第 12 项那一段后逐字节相同。
@@ -157,8 +159,9 @@ public class 平衡分析方向Tests
 
         // retire-legacy-maps 1.8：两份共用样本由 v5 改到 link:1，黄金值在删除 v5 之前按当时实现重钉（原值 83302588…、19E3B957… 取自 ad78d50 的 v5 样本）。
         // 守的规则不变：v1 样本的报告不因内容枚举追加而多出行（第 12 项只单列"不适用"）；此后报告任何一行改动都会红。
-        Assert.Equal("A4D48D1F732226F87D3F5689748922AF7CAF4FA425462EF7EE938FFC54FB04DC", Hash(SimFixtures.Sample.Value));
-        Assert.Equal("665851BBD2CE8ACFD5A02E3419A727C360529103006929C04D1470241C2C1127", Hash(SimFixtures.RankedSample.Value));
+        // link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变；旧值 A4D48D1F732226F8… / 665851BBD2CE8ACF…。守的规则不变（第 12 项只单列"不适用"由上面的 Hash 内断言守）。
+        Assert.Equal("8AF0C0CD430175146C459064F0BD0DFEFE6031C8B55B2D41076061466B8BF8D5", Hash(SimFixtures.Sample.Value));
+        Assert.Equal("B9C2D624CFB570D60F38A0A0EEA964BC8F2D98A876FB13861203F8A8FF237872", Hash(SimFixtures.RankedSample.Value));
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

@@ -322,9 +322,10 @@ public class 各入口支持生成图_链接模式Tests
 
     private static void BoundsOf(MapData map, int zone, out Coord origin, out int width, out int height)
     {
-        var cells = map.BirthZones[zone];
-        origin = new Coord(cells.Min(c => c.X), cells.Min(c => c.Y));
-        width = cells.Max(c => c.X) - origin.X + 1;
-        height = cells.Max(c => c.Y) - origin.Y + 1;
+        // link-map-terrain：占位与取景取整块出生棋盘（棋盘清单），不是出生区（核心区）。
+        BoardPlate plate = map.BirthBoard(zone);
+        origin = plate.Origin;
+        width = plate.Width;
+        height = plate.Height;
     }
 }

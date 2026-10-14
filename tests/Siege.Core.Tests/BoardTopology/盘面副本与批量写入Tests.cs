@@ -74,7 +74,8 @@ public class 盘面副本与批量写入Tests
         // retire-legacy-maps 1.8：原诱饵是 v5 清空咽喉标注（CHOKE_NOT_ANNOTATED，旧三档规则，第 4 组删除）；改为 link:1 拿掉一枚出生棋盘信物
         //（BIRTH_BOARD_RELIC_COUNT，链接档清单规则，保留），断言不变。
         MapData link = MapCatalog.Resolve("link:1");
-        MapData bait = link with { RelicCells = link.RelicCells.Remove(link.RelicCells.Keys.Order().First()) };
+        // link-map-terrain：link:1 带公共区档信物（至多 1 个 / 棋盘，拿掉不违规），诱饵改拿第一个出生区档信物。
+        MapData bait = link with { RelicCells = link.RelicCells.Remove(link.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).Select(kv => kv.Key).Order().First()) };
         Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
         Assert.Throws<MapValidationException>(() => GameBoard.Load(bait));
 

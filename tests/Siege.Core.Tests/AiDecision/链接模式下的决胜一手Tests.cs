@@ -11,7 +11,8 @@ namespace Siege.Core.Tests.AiDecision;
 /// 规格：openspec/changes/ai-pass-review/specs/ai-decision —— Requirement: 链接模式下的决胜一手（负责人裁决 P7 = A 窄版，tasks 2.1）。
 /// </summary>
 /// <remarks>
-/// <para>局面沿用 <see cref="链接模式下落后者的停手阈值Tests"/>：<c>link:1</c>，P0、P1 同在出生棋盘 0（双人战场），P2、P3 各占一块。简单难度、停手阈值写死 20。
+/// <para>局面沿用 <see cref="链接模式下落后者的停手阈值Tests"/>：P0、P1 同在出生棋盘 0（双人战场），P2、P3 各占一块。简单难度、停手阈值写死 20。
+/// link-map-terrain 第 2 组起载体由 <c>link:1</c> 改为平坦的手写链接档图（见 <see cref="FlatMap"/>）：所守的是决胜一手的触发条件与势力判据，不是某张图的地形。
 /// 为了构造"最好单点评价收益为负、但落下后势力反超"（Scenario 原文），权重写死为定值前缺省并把 PowerGain 取 −1、EnemyLoss 取 0：简单难度只看这两维与眼位（眼位权重 0），任何增加己方势力的落子评价都为负，
 /// AI 依停手阈值必然 Pass——决胜一手是否介入只取决于触发条件与势力（testing.md：依赖 AI 实际走法的断言把权重写死）。</para>
 /// <para>"对手本大回合已 Pass"由真实流程给出：把行动顺序设为 P1 先、P0 次，P1 走完一个 Pass 的小回合（<see cref="MatchFlow.PassedThisRound"/> 经公开快照到达 AI）。</para>
@@ -24,12 +25,15 @@ public class 链接模式下的决胜一手Tests
 
     private static readonly EvaluationWeights Weights = SimFixtures.PreCalibrationWeights with { PowerGain = -1, EnemyLoss = 0 };
 
-    /// <summary>孤子点：棋盘 0 左上起 (2, 3)，四邻皆空、离两个上角的棋子都 ≥ 2 格（同 C15 测试）。孤子落下 = 军势 1 + 独占领地 4，势力 +5。</summary>
-    private static Coord Candidate => BirthCell(Map, 0, 2, 3);
+    /// <summary>P0、P1 同在出生棋盘 0、P2 在 3、P3 在 4，在平坦的手写链接档图（<see cref="LinkModeFixtures.FlatMap"/>）上开始第 1 大回合。</summary>
+    private static MatchFlow Flat() => StartedFlat([0, 0, 3, 4]);
 
-    private static Coord FarCorner => BirthCell(Map, 0, Map.BirthZones[0].Max(c => c.X) - Map.BirthZones[0].Min(c => c.X), 0);
+    /// <summary>孤子点：棋盘 0 左下起 (2, 3)（核心区上沿正中），四邻皆空、离两个下角的棋子都 ≥ 2 格（同 C15 测试）。孤子落下 = 军势 1 + 独占领地 4，势力 +5。</summary>
+    private static Coord Candidate => BirthCell(FlatMap, 0, 2, 3);
 
-    private static Coord Corner(int dx, int dy) => BirthCell(Map, 0, dx, dy);
+    private static Coord FarCorner => BirthCell(FlatMap, 0, FlatMap.BirthBoard(0).Width - 1, 0);
+
+    private static Coord Corner(int dx, int dy) => BirthCell(FlatMap, 0, dx, dy);
 
     private static HeuristicTurnController Ai(MatchFlow match) =>
         new(P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Easy, Weights, AiSearchConfig.Easy with { PassThreshold = Threshold });
@@ -58,7 +62,7 @@ public class 链接模式下的决胜一手Tests
     }
 
     /// <summary>P0 右上角一枚孤子（势力 3），P1 左上角两子成串（势力 5）：P0 落后，落下孤子点后 8 ≥ 5 即反超。</summary>
-    private static MatchFlow Trailing() => Started([0, 0, 3, 4]).Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0));
+    private static MatchFlow Trailing() => Flat().Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0));
 
     [Fact]
     public void 最后一个Pass会输且有反超手()
@@ -95,7 +99,7 @@ public class 链接模式下的决胜一手Tests
     {
         // "≥ 对手最高"含追平（并列最高视为最高）：P0 一枚孤子 3、P1 左上角 2×2 四子 8；P0 落孤子点后 3 + 5 = 8，恰好追平 → 落下。
         // 判别力：变异 MD-3"决胜判据改为严格反超（margin > 0）"→ 本测试红。
-        MatchFlow match = AfterP1Passed(Started([0, 0, 3, 4]).Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1), Corner(1, 1)));
+        MatchFlow match = AfterP1Passed(Flat().Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1), Corner(1, 1)));
         HeuristicTurnController ai = DecideAtCandidate(match);
 
         DecisiveMove decisive = Assert.IsType<DecisiveMove>(ai.LastDecisive);
@@ -108,7 +112,7 @@ public class 链接模式下的决胜一手Tests
     public void 无反超手照常Pass()
     {
         // Scenario「无反超手照常 Pass」：同一情形下 P1 势力远高于 P0 + 5，任何合法批次都追不平 → Pass，本战场按整轮 Pass 结算（P0 战场落败）。
-        MatchFlow match = AfterP1Passed(Started([0, 0, 3, 4]).Place(P0, FarCorner)
+        MatchFlow match = AfterP1Passed(Flat().Place(P0, FarCorner)
             .Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1), Corner(1, 1), Corner(2, 0), Corner(0, 2)));
         Assert.True(match.Publish().Power!.Of(P1).Total > match.Publish().Power!.Of(P0).Total + 5);   // 样本口径：孤子点的 +5 也追不平
         HeuristicTurnController ai = DecideAtCandidate(match);
@@ -147,13 +151,13 @@ public class 链接模式下的决胜一手Tests
     {
         // Scenario「领先者不触发」：对手已 Pass、AI 势力为本战场最高 → 不触发，照常 Pass。另：并列最高视为最高，同样不触发。
         // 判别力：变异 MD-2 去掉条件 (2) → 本测试红。
-        MatchFlow leading = AfterP1Passed(Started([0, 0, 3, 4]).Place(P1, FarCorner).Place(P0, Corner(0, 0), Corner(1, 0)));
+        MatchFlow leading = AfterP1Passed(Flat().Place(P1, FarCorner).Place(P0, Corner(0, 0), Corner(1, 0)));
         Assert.True(leading.Publish().Power!.Of(P0).Total > leading.Publish().Power!.Of(P1).Total);   // 样本口径
         HeuristicTurnController ai = DecideAtCandidate(leading);
         Assert.Null(ai.LastDecisive);
         Assert.True(ai.LastChoice!.IsPass);
 
-        MatchFlow tied = AfterP1Passed(Started([0, 0, 3, 4]).Place(P0, FarCorner).Place(P1, Corner(0, 0)));
+        MatchFlow tied = AfterP1Passed(Flat().Place(P0, FarCorner).Place(P1, Corner(0, 0)));
         Assert.Equal(tied.Publish().Power!.Of(P0).Total, tied.Publish().Power!.Of(P1).Total);   // 样本口径
         Assert.False(HeuristicTurnController.DecisiveTriggered(tied.Publish(), P0));
         Assert.True(DecideAtCandidate(tied).LastChoice!.IsPass);

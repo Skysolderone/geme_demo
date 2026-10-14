@@ -39,25 +39,31 @@ public class 棋盘清单Tests
     }
 
     [Fact]
-    public void 出生棋盘即出生区()
+    public void 出生区是出生棋盘的核心区()
     {
-        // Scenario：检查一张链接档初始地图的第 2 块出生棋盘 → 其外接矩形内的全部格子恰是出生区 2 的全部格子（编号自 1 起，即下标 1）。
-        // retire-legacy-maps 1.6：载体由棋盘档夹具改为 link:1（经文件往返）；原有的"公共棋盘不属于任何出生区"一段随棋盘档删除（链接图没有公共棋盘）。
+        // Scenario（link-map-terrain map-definition「棋盘清单」，原「出生棋盘即出生区」）：出生区 i 恰是第 i 块出生棋盘中央的 3×3 核心区（宽或高为偶数时偏西 / 偏南）；
+        // 棋盘内核心区之外的格不属于任何出生区。期望值用测试内独立算式（西起第 ⌊(W−3)/2⌋+1 列、南起第 ⌊(H−3)/2⌋+1 行起 3×3）。
         MapData map = MapFile.FromJson(MapFile.ToJson(MapCatalog.Resolve("link:1")));
-
         BoardPlate[] births = [.. map.Boards.Where(b => b.Kind == BoardPlateKind.Birth)];
         Assert.Equal(map.BirthZones.Length, births.Length);
         for (int i = 0; i < births.Length; i++)
         {
-            Assert.Equal(map.BirthZones[i].Order(), births[i].Cells().Order());
-            Assert.All(births[i].Cells(), c => Assert.Equal(i, map.BirthZoneOf(c)));
+            BoardPlate b = births[i];
+            Coord[] core = [.. from dy in Enumerable.Range(0, 3) from dx in Enumerable.Range(0, 3)
+                               select new Coord(b.Origin.X + ((b.Width - 3) / 2) + dx, b.Origin.Y + ((b.Height - 3) / 2) + dy)];
+            Assert.Equal(core.Order(), map.BirthZones[i].Order());
+            Assert.All(b.Cells(), c => Assert.Equal(core.Contains(c) ? (int?)i : null, map.BirthZoneOf(c)));
         }
 
-        // 第 2 块：左下角 AM3、右上角 AQ7，25 格；外接矩形的判定与格子枚举是同一份。
-        BoardPlate second = births[1];
-        Assert.Equal(["AM3", "AQ7"], new[] { second.Cells().Min(), second.Cells().Max() }.Select(c => c.ToNotation()));
-        Assert.Equal(25, second.Cells().Count());
-        Assert.All(map.AllCoords(), c => Assert.Equal(map.BirthZones[1].Contains(c), second.Contains(c)));
+        // link:1 的第 2 块：左下角 AQ3、6×6 → 出生区 AR4–AT6（西起第 2–4 列、南起第 2–4 行）。
+        Assert.Equal("AQ3", births[1].Origin.ToNotation());
+        Assert.Equal(["AR4", "AT6"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
+
+        // 规格算例：宽 7、高 8 的第 2 块出生棋盘 → 出生区恰是西起第 3–5 列、南起第 3–5 行这 9 格。在 link:1 起的种子里找一张第 2 块是 7×8 的图。
+        MapData sample = Enumerable.Range(1, 400).Select(s => LinkMapGenerator.Generate((ulong)s)).First(m => m.Boards[1] is { Width: 7, Height: 8 });
+        BoardPlate seven = sample.Boards[1];
+        HashSet<(int Column, int Row)> relative = [.. sample.BirthZones[1].Select(c => (c.X - seven.Origin.X + 1, c.Y - seven.Origin.Y + 1))];
+        Assert.True(relative.SetEquals(from r in new[] { 3, 4, 5 } from c in new[] { 3, 4, 5 } select (c, r)), $"{sample.Id}：{string.Join(" ", relative)}");
     }
 
     [Fact]
@@ -95,13 +101,13 @@ public class 棋盘清单Tests
     public void 默认棋盘视图模型透传棋盘清单()
     {
         // D2 / D10：渲染用的棋盘清单全部取自视图模型，Godot 不自行推断；没有清单的图（手写夹具）清单为空，画面不变。
-        // retire-legacy-maps 1.6：载体由棋盘档夹具改为手写链接档初始图（41×9），断言不变。
+        // retire-legacy-maps 1.6：载体由棋盘档夹具改为手写链接档初始图（link-map-terrain 起 46×10），断言不变。
         MapData map = LinkMapFixtures.Initial();
 
         DefaultBoardView view = DefaultBoardView.From(Started(map).PublicWorldOf());
 
         Assert.Equal(map.Boards.AsEnumerable(), view.Boards.AsEnumerable());
-        Assert.Equal((41, 9), (view.Width, view.Height));
+        Assert.Equal((46, 10), (view.Width, view.Height));
 
         DefaultBoardView legacy = DefaultBoardView.From(MatchFixtures.Started().PublicWorldOf());
         Assert.False(legacy.Boards.IsDefault);
@@ -115,9 +121,9 @@ public class 棋盘清单Tests
         // retire-legacy-maps 1.6：载体由棋盘档夹具改为手写链接档初始图（只有出生棋盘，原"公共棋盘写成 Public"一处随棋盘档删除），断言不变。
         string json = MapFile.ToJson(LinkMapFixtures.Initial());
 
-        MapData edited = MapFile.FromJson(json.Replace("\"Origin\": \"L3\"", "\"Origin\": \"l3\"", StringComparison.Ordinal));
+        MapData edited = MapFile.FromJson(json.Replace("\"Origin\": \"M3\"", "\"Origin\": \"m3\"", StringComparison.Ordinal));
 
-        Assert.Contains("\"Origin\": \"L3\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Origin\": \"M3\"", json, StringComparison.Ordinal);
         Assert.Contains("\"Kind\": \"Birth\"", json, StringComparison.Ordinal);
         Assert.Equal(LinkMapFixtures.Births[1], edited.Boards[1]);
 
@@ -132,7 +138,7 @@ public class 棋盘清单Tests
         Assert.Contains("Boards", Assert.Throws<FormatException>(
             () => MapFile.FromJson(json.Replace("\"Kind\": \"Birth\"", "\"Kind\": 9", StringComparison.Ordinal))).Message, StringComparison.Ordinal);
         Assert.Contains("Boards", Assert.Throws<FormatException>(
-            () => MapFile.FromJson(json.Replace("\"Width\": 5,", "\"Width\": 0,", StringComparison.Ordinal))).Message, StringComparison.Ordinal);
+            () => MapFile.FromJson(json.Replace("\"Width\": 6,", "\"Width\": 0,", StringComparison.Ordinal))).Message, StringComparison.Ordinal);
     }
 
     [Fact]

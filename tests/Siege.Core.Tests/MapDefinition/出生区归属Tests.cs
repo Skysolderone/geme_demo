@@ -6,7 +6,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <summary>规格：map-definition —— Requirement: 出生区归属与共享</summary>
 public class 出生区归属Tests
 {
-    // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图（期望值随之改：出生区 2 是 5×5 的 2 号出生棋盘）。
+    // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图（期望值随之改：出生区 2 是 5×5 的 2 号出生棋盘；link-map-terrain 起出生区是 3×3 核心区）。
     private static readonly MapData Map = MapCatalog.Resolve("link:1");
 
     [Fact]
@@ -23,9 +23,10 @@ public class 出生区归属Tests
         Coord[] before = LegalFor(TestMaps.P0);
         Assert.Equal(before, LegalFor(TestMaps.P1));
 
-        // link:1：出生区 2 是 5×5 的出生棋盘，棋盘内无障碍，可落子的空格就是全部 25 格。
-        Assert.Equal(25, before.Length);
-        Assert.Equal(25, Map.BirthZones[lockedZone].Count);
+        // link:1：出生区 2 是出生棋盘 2 的 3×3 核心区（link-map-terrain D1），核心区内没有地形，可落子的空格就是全部 9 格。
+        // 构筑期的合法落子范围是整块棋盘（战场），由 战场内合法落子范围Tests 守；本层只看"范围与落子者无关"。
+        Assert.Equal(9, before.Length);
+        Assert.Equal(9, Map.BirthZones[lockedZone].Count);
 
         board.Place(before[0], TestMaps.P0, PieceType.Basic);
         board.Place(before[1], TestMaps.P1, PieceType.Basic);

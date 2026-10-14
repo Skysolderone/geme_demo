@@ -602,7 +602,7 @@ public sealed partial class GameBoard
     /// 并按 <paramref name="move"/>（拼接前的可落子格 → 新坐标；锚点战场通常为恒等，整体越界平移时也有向量）把占用数组与改造列表逐格迁移到新画布，再把改造重新落在新图上得到新的 <see cref="Map"/>，派生表从零建。
     /// <b>不做拼接几何的判定</b>——那是生成器与校验器的事；这里只核对映射确实把 <see cref="LinkedMap"/>"逐格搬过去"：标识相同、版本号恰 +1、每个可落子格都映射到新图上一个可落子格、
     /// 映射两两不重、可落子格总数不变、地形 / 出生区 / 信物格逐格相同、栅栏（静态地形里的）逐边相同。任一不符即抛 <see cref="SiegeRuleException"/>，盘面不变。
-    /// 改造的迁移：搭桥 / 烧林按目标格平移；立栅按有可落子端的那一端所属战场的向量平移（边界栅栏随棋盘走），两端都是场景格的栅栏没有锚点——
+    /// 改造的迁移：搭桥 / 烧林按目标格平移（搭桥的目标是棋盘内的未架桥深水，按所在棋盘平移，link-map-terrain）；立栅按有可落子端（或棋盘内端）的那一端的向量平移（边界栅栏随棋盘走），两端都是场景格的栅栏没有锚点——
     /// 新图上两端仍在画布内且仍不可落子就原样保留，否则丢弃（它本来就切不到任何气边）。接缝两侧各自朝间隙立的两道栅栏平移后是同一条边，只保留先出现的一条
     /// （<see cref="TerrainWriter.ApplyAll"/> 对重复边会抛"该边已有栅栏"）。
     /// </summary>
@@ -618,12 +618,27 @@ public sealed partial class GameBoard
         {
             if (_occupants[i] is { } occupant)
             {
-                if (target[i] < 0)
+                int to = target[i];
+                if (to < 0)
                 {
-                    throw new SiegeRuleException($"{CoordAt(i).ToNotation()} 上有棋子却不是当前地图的可落子格：盘面与地图不一致。");
+                    // link-map-terrain：对局中架的桥让棋盘内的深水格变成可落子格，桥上可以有棋子；这类格在 LinkedMap（不含改造）上不可落子、不在逐格对照表里，
+                    // 按 move 给出的棋盘向量迁移（与桥这条改造本身的迁移同一个向量，见 MoveEdit），落点必须在新画布内且没被别的棋子占用。
+                    Coord c = CoordAt(i);
+                    if (!Map.IsPlayable(c))
+                    {
+                        throw new SiegeRuleException($"{c.ToNotation()} 上有棋子却不是当前地图的可落子格：盘面与地图不一致。");
+                    }
+
+                    Coord n = move(c);
+                    if (!spliced.Contains(n) || occupants[(n.Y * spliced.Width) + n.X] is not null)
+                    {
+                        throw new SiegeRuleException($"拼接映射把棋子 {c.ToNotation()} 送到 {n.ToNotation()}，它不在新画布内或已被占用。");
+                    }
+
+                    to = (n.Y * spliced.Width) + n.X;
                 }
 
-                occupants[target[i]] = occupant;
+                occupants[to] = occupant;
             }
         }
 
@@ -637,11 +652,20 @@ public sealed partial class GameBoard
             }
         }
 
+        MapData next = edits.Count == 0 ? spliced : TerrainWriter.ApplyAll(spliced, edits);
+        for (int i = 0; i < occupants.Length; i++)
+        {
+            if (occupants[i] is not null && !next.IsPlayable(CoordAt(spliced.Width, i)))
+            {
+                throw new SiegeRuleException($"拼接后 {CoordAt(spliced.Width, i).ToNotation()} 上有棋子却不是新地图（含改造）的可落子格。");
+            }
+        }
+
         _occupants = occupants;
         _edits.Clear();
         _edits.AddRange(edits);
         LinkedMap = spliced;
-        ReplaceMap(edits.Count == 0 ? spliced : TerrainWriter.ApplyAll(spliced, edits));
+        ReplaceMap(next);
     }
 
     /// <summary>
@@ -740,10 +764,11 @@ public sealed partial class GameBoard
             return edit.Kind == TerrainEditKind.Bridge ? TerrainEdit.Bridge(move(edit.Cell)) : TerrainEdit.Burn(move(edit.Cell));
         }
 
+        // 端点"随棋盘走"：可落子格，或棋盘内的不可落子格（岩石、未架桥深水，link-map-terrain）——都按所在棋盘平移（move 对两者都给出向量）。
         Coord a = edit.Edge.A;
         Coord b = edit.Edge.B;
-        bool aPlayable = current.IsPlayable(a);
-        bool bPlayable = current.IsPlayable(b);
+        bool aPlayable = current.IsPlayable(a) || current.Boards.Any(p => p.Contains(a));
+        bool bPlayable = current.IsPlayable(b) || current.Boards.Any(p => p.Contains(b));
         if (aPlayable && bPlayable)
         {
             return TerrainEdit.Fence(move(a), move(b));

@@ -245,6 +245,8 @@ public class 地形写入口Tests
             typeof(TerrainWriter).FullName!,
             typeof(TerrainData).FullName!,            // TerrainData.Flat
             "Siege.Core.Board.MapFile",
+            // link-map-terrain 第 2 组：链接档生成器重新成为地图定义方（主题地形、拼接时按棋盘搬运地形），与 retire-legacy-maps 删掉的边疆档生成器同类。
+            "Siege.Core.Board.Maps.LinkMapGenerator",
         ];
 
         (MethodBase Caller, MemberInfo Target, OpCode OpCode)[] constructions =

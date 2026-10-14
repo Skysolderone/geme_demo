@@ -22,8 +22,9 @@ public class 停手阈值Tests
     /// <para>retire-legacy-maps 1.5 改钉：原值 DCB7CC7C…CD39033E 是 v4、种子 31 上"严格提高实现"（ai-eye 段 B 2.2 完成、2.3 之前）的实际运行结果，
     /// 本实现在阈值 0 下逐步重现了它（该测试在 v4 上一直为绿）。v4 随旧地图删除，这里在删除之前、以当时的实现在 link:1 上重钉同口径的一局；
     /// 历次重建记录见 git 历史。</para>
+    /// <para>link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变；旧值 C852D900B0A2A4FA40CFFC09BA07732D4795A382ACB3902626E12527B47798D8（同样是以当时实现在阈值 0 下的自证值，独立参照在 retire-legacy-maps 时已不复存在）。</para>
     /// </summary>
-    private const string StrictImprovementTurnHash = "C852D900B0A2A4FA40CFFC09BA07732D4795A382ACB3902626E12527B47798D8";
+    private const string StrictImprovementTurnHash = "F52ACDC37DC0BDB151DE0CD3D5103291048E858F61EB94975A0B48872260C21B";
 
     private static readonly PlayerId Me = AiFixtures.P0;
 
@@ -136,7 +137,7 @@ public class 停手阈值Tests
     public void 阈值为0时零变化()
     {
         // 规格：阈值 0 时保留条件退化为"加权总分严格提高"，决策与不含本配置的实现逐步相同。
-        // 对照值取自严格提高实现的实际运行（见 StrictImprovementTurnHash）；种子 1–20 的离线决策序列比对另见 implement 记录。
+        // 对照值原取自严格提高实现的实际运行（见 StrictImprovementTurnHash）；link-map-terrain 起是当前实现在阈值 0 下的自证钉值（2026-10-14 重钉），测试名沿用规格 Scenario 名。
         // 变异 M-B14（会话建 AI 时不传跑局配置的阈值，即实际按缺省 20 跑）→ 红 2（本测试、阈值进入记录）。
         // M-B6（> 改 >=）在本样本上不红：种子 31 前 24 个小回合里没有边际提升恰为 0 的候选，阈值 0 下 > 与 >= 走法相同；该变异由「零收益不落子」「恰等于阈值不落子」挡住。
         // ai-eye 段 D2（4.5）：九维权重写死为对照实现当时的缺省（Eye / Threat = 0）。本测试钉的是"阈值 0 = 严格提高"，不是默认权重；

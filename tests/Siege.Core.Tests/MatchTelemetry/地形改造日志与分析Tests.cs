@@ -2,6 +2,7 @@ using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Tests.SimulationHarness;
 using Siege.Sim.Analysis;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -52,10 +53,14 @@ public class 地形改造日志与分析Tests
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = pinned })] };
         var records = new List<TerrainEditRecord>();
         ulong[] seeds = [34, 36, 43];
+        // link-map-terrain 裁决 T1 = A：第二条样本下界（"这几局里确有致提子的改造"）不再依赖 AI 走法——link:1 地图改了之后种子 34 / 36 / 43 的致提子改造为 0。
+        // 改法：在三局真实跑局之外加一局脚本化的对局（ScriptedCaptureSession），必然发生一次致提子的立栅；它走与三局完全相同的逐条转录与重建断言，
+        // 主体断言（日志重放到开局地图后与终局地形逐项相同、反面对照）一字未改。
+        MatchSession scripted = ScriptedCaptureSession();
+        MatchSession[] sessions = [.. seeds.Select(s => MatchSession.Create(config, s)), scripted];
 
-        for (int i = 0; i < seeds.Length; i++)
+        foreach (MatchSession session in sessions)
         {
-            MatchSession session = MatchSession.Create(config, seeds[i]);
             Assert.Empty(session.Match.Links);   // 样本口径：开局时自然没有链接（截断之内也不应有，跑完后再核一次）
             MatchLog log = session.Run();
             Assert.Empty(session.Match.Links);
@@ -94,9 +99,39 @@ public class 地形改造日志与分析Tests
         // 样本口径下界之二：这三局里确实有"致提子的改造"，上面那条逐条转录才真的校到了 CausedCapture
         // （T-11 之后立栅致提子是第 11 项的主力指标；单局样本里它可能恰好全是 false）。
         Assert.Contains(records, r => r.CausedCapture);
+        Assert.Contains(scripted.Match.TerrainEdits, r => r.CausedCapture && r.Edit.Kind == TerrainEditKind.Fence);   // 脚本局的那一手确实致提子（不靠样本）
 
         static (int Bridges, int Fences, int Forests) Shape(MapData m) =>
             (m.TerrainData.Bridges.Count, m.TerrainData.Fences.Count, m.AllCoords().Count(c => m.SurfaceAt(c) == Surface.Forest));
+    }
+
+    /// <summary>
+    /// 脚本化的致提子立栅（裁决 T1 = A）：link:1、四人都锁定出生棋盘 3（下标 2，一个战场、不会链接），只在核心区（恒为高度 0 草地、内部无栅栏）里落子。
+    /// 第 1 大回合 P1 落核心区中心，P0 落它的西 / 东 / 南三格；第 2 大回合 P0 在核心区左上角落匠人，立中心与北邻之间的栅栏，切断 P1 最后一口气 → 提子。
+    /// 其余小回合与其余玩家一律 Pass；截到第 8 个小回合（2 个大回合）。
+    /// </summary>
+    private static MatchSession ScriptedCaptureSession()
+    {
+        MatchFlow match = LinkModeFixtures.Started([2, 2, 2, 2]);
+        foreach (PlayerId p in match.Players)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 20), (PieceType.Artisan, 2));
+        }
+
+        Coord C(int dx, int dy) => LinkModeFixtures.CoreCell(match.Map, 2, dx, dy);
+        MatchSession session = MatchSession.ForMatch(match, LinkSimFixtures.Config(turnLimit: 8) with { ContentSet = match.ContentSet });
+        session.SetController(LinkModeFixtures.P0, new LinkSimFixtures.ScriptedSeat(match, new Dictionary<int, (Coord, PieceType, TerrainEdit?)[]>
+        {
+            [1] = [(C(0, 1), PieceType.Basic, null), (C(2, 1), PieceType.Basic, null), (C(1, 0), PieceType.Basic, null)],
+            [2] = [(C(0, 2), PieceType.Artisan, TerrainEdit.Fence(C(1, 2), C(1, 1)))],
+        }));
+        session.SetController(LinkModeFixtures.P1, new LinkSimFixtures.ScriptedSeat(match, new Dictionary<int, (Coord, PieceType, TerrainEdit?)[]>
+        {
+            [1] = [(C(1, 1), PieceType.Basic, null)],
+        }));
+        session.SetController(LinkModeFixtures.P2, new LinkSimFixtures.PassController());
+        session.SetController(LinkModeFixtures.P3, new LinkSimFixtures.PassController());
+        return session;
     }
 
     [Fact]

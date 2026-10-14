@@ -27,10 +27,23 @@ public class 对局日志的记录内容_链接模式Tests
         // 只读日志（文本往返后）——按首部标识重建开局地图、核对首部摘要与开局棋盘；按发生顺序把每个链接事件（两个战场 + 贴边）交给链接生成器，
         // 逐次核对链接后的地图摘要与日志里的平移向量；再把每个小回合记录的改造（按该小回合结束时的布局）经 LinkLayout 沿链接记录平移到终局布局，
         // 重放到终局地图上，与这一局真实对局的终局地形逐格相同。反面：漏平移任一次链接即对不上。
+        // link-map-terrain 裁决 T1 = A：样本下界"链接前确有改造、且它的棋盘随之平移"不再依赖 AI 走法（link:1 改图后这局唯一的改造落在链接之后）。
+        // 改法：先读不改动的同一局（TwoLinkLog）里第一次链接的被贴方 Y，把出生在 Y 上的那个座位换成"第 1 大回合按脚本落一枚匠人并立一道栅栏、其余回合照旧交给它的 AI"；
+        // 配对与链接由种子派生、与走法无关，Y 必然在第一次链接里平移，这道栅栏就必然是"链接前的改造、坐标随之变"。主体断言（逐次链接摘要、终局地形逐格重建、漏平移即对不上）一字未改。
+        LinkLogEntry firstLink = LinkSimFixtures.TwoLinkLog.Value.Events.Where(e => e.Link is not null).OrderBy(e => e.Seq).First().Link!;
         MatchSession session = MatchSession.Create(LinkSimFixtures.Config(turnLimit: 13), LinkSimFixtures.FourZoneSeed.Value);
+        var seat = new PlayerId(LinkSimFixtures.TwoLinkLog.Value.Header.Zones.IndexOf(firstLink.Y));
+        Coord C(int dx, int dy) => LinkModeFixtures.CoreCell(session.Match.Map, firstLink.Y, dx, dy);
+        TerrainEdit scriptedFence = TerrainEdit.Fence(C(1, 2), C(0, 2));
+        session.Match.Debug.SeedHand(seat, (PieceType.Basic, 20), (PieceType.Artisan, 2));
+        session.SetController(seat, new LinkSimFixtures.ScriptedSeat(session.Match, new Dictionary<int, (Coord, PieceType, TerrainEdit?)[]>
+        {
+            [1] = [(C(1, 1), PieceType.Artisan, scriptedFence)],
+        }, session.AiOf(seat)));
         MatchLog log = SimFixtures.Clone(session.Run());
         List<LinkLogEntry> links = [.. log.Events.Where(e => e.Link is not null).OrderBy(e => e.Seq).Select(e => e.Link!)];
         Assert.Equal(2, links.Count);   // 样本口径：两次链接
+        Assert.Equal((firstLink.X, firstLink.Y), (links[0].X, links[0].Y));   // 脚本座位不改变配对与链接
 
         MapData map = MapCatalog.Resolve(log.Header.MapId);
         Assert.Equal(log.Header.MapDigest, MapFile.Digest(map));
@@ -61,6 +74,8 @@ public class 对局日志的记录内容_链接模式Tests
 
         // 样本口径：确有改造发生在某次链接之前、且它的棋盘随之平移（坐标真的变了），平移那条腿才被比对。
         Assert.Contains(recorded, r => r.Version < layout.Versions && layout.TranslateEdit(r.Edit, r.Version, layout.Versions) != r.Edit);
+        // 裁决 T1 = A：上面这条由脚本座位确定地成立——它在第 1 大回合（版本 0）立的那道栅栏就在记录里，且随第一次链接平移（不靠 AI 是否也立了栅）。
+        Assert.Contains(recorded, r => r.Edit == scriptedFence && r.Version == 0 && layout.TranslateEdit(r.Edit, 0, layout.Versions) != r.Edit);
 
         // 反面：漏平移任一次链接（把那次链接的全部向量置零）→ 重建的栅栏与真实终局不同。
         bool anyMismatch = false;

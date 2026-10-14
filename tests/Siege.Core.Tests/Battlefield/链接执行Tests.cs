@@ -36,7 +36,7 @@ public class 链接执行Tests
         match.Debug.Recalculate();
         Assert.True(match.Relics.IsRevealed(relic));
         RelicContent content = match.Relics.PublicStateOf(relic).Content!.Value;
-        Dictionary<Coord, string> anchorBefore = Snapshot(match, map.BirthZones[0]);
+        Dictionary<Coord, string> anchorBefore = Snapshot(match, map.BirthBoard(0).Cells());   // link-map-terrain：整块锚点棋盘（棋盘清单），不只是出生区（核心区）
         match.PassRounds(3);
 
         match.ApplyPairing([(0, 3), (1, 4)]);
@@ -61,7 +61,7 @@ public class 链接执行Tests
         Assert.True(match.Relics.IsRevealed(Moved(relic)));
         Assert.Equal(content, match.Relics.PublicStateOf(Moved(relic)).Content);
         Assert.Equal(match.Map.RelicCells.Keys.Order(), match.Relics.Coords);
-        Assert.Equal(anchorBefore.ToDictionary(kv => MovedAnchor(kv.Key), kv => kv.Value), Snapshot(match, map.BirthZones[0].Select(MovedAnchor)));
+        Assert.Equal(anchorBefore.ToDictionary(kv => MovedAnchor(kv.Key), kv => kv.Value), Snapshot(match, map.BirthBoard(0).Cells().Select(MovedAnchor)));
         Assert.Equal(new Occupant(P0, PieceType.Basic), match.Board[MovedAnchor(anchorStone)].Occupant);
         Assert.Equal(map.PlayableCount, match.Map.PlayableCount);
         Assert.Equal(2, match.Board.LinkedMap.MapVersion);
@@ -84,13 +84,14 @@ public class 链接执行Tests
         Assert.Equal(2, match.Links.Count);
         Assert.Equal([5, 4], match.Links.Select(l => l.Shifts.Length));   // 第二次链接时只剩 4 个战场
 
-        // 按座位视图的占位取当前地图的出生区（被平移方与为腾位置而移动的棋盘坐标已变），不是开局图（变异 M-F16：改读 BaseMap → 红）。
+        // 按座位视图的占位取当前地图的出生棋盘（被平移方与为腾位置而移动的棋盘坐标已变），不是开局图（变异 M-F16：改读 BaseMap → 红）。
+        // link-map-terrain：占位取整块棋盘的左下角（棋盘清单），不是出生区（核心区）的最小坐标。
         SeatPublicView view = match.PublishFor(P0);
         Assert.Equal(
-            match.Map.BirthZones.Select(z => new Coord(z.Min(c => c.X), z.Min(c => c.Y)).ToNotation()),
+            match.Map.BirthBoards().Select(b => b.Origin.ToNotation()),
             view.Placeholders.Select(p => p.Origin));
         Assert.NotEqual(
-            match.Board.BaseMap.BirthZones.Select(z => new Coord(z.Min(c => c.X), z.Min(c => c.Y)).ToNotation()),
+            match.Board.BaseMap.BirthBoards().Select(b => b.Origin.ToNotation()),
             view.Placeholders.Select(p => p.Origin));
         Assert.All(match.Links, l => Assert.True(l.SharedEdge >= 1));
         Assert.All(match.Links, l => Assert.Equal(64, l.MapDigest.Length));

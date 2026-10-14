@@ -121,21 +121,31 @@ public class 终端活形与禁入标示Tests
         // 探针（种子 1–40 × 棋盘 1–5）选同棋盘有 AI、构筑期内即出现活形与禁入的组合：种子 31 选 2 号棋盘；Pass 改为 2 次（停在第 3 大回合、链接之前——
         // 终端对局在链接后的小回合播报会越界崩溃，见 migration.md 待决 L15）。断言不变。
         // 样本口径下界：输出的棋盘行里必须真的出现 "@" 与 "x" 标记，并且图例同步出现——否则上面的逐格断言只证明了渲染函数，不证明终端对局真的走到了它。
-        var script = new System.Text.StringBuilder("2\n");
-        for (int i = 0; i < 2; i++)
+        // link-map-terrain 裁决 T1 = A：原为单一种子 31（探针挑出），改图后该局前 3 大回合没有已活棋串。
+        // "x"是别家（AI）活形的眼，脚本落子控制不了 AI，而 "@" 与 "x" 要在同一份终端输出里出现，所以改为固定种子区间：
+        // 种子 1–10（写死，不针对单个种子挑）、人类选 2 号出生棋盘、每小回合 Pass，区间内至少一局的棋盘行同时出现 "@" 与 "x" 标记，且图例同步出现。
+        // 每局各自的断言（退出码 0、棋盘行 ≥ 20）照旧逐局检查。每局约 0.2 s。
+        bool found = false;
+        for (ulong seed = 1; seed <= 10 && !found; seed++)
         {
-            script.Append("\npass\n");
+            var script = new System.Text.StringBuilder("2\n");
+            for (int i = 0; i < 2; i++)
+            {
+                script.Append("\npass\n");
+            }
+
+            var output = new StringWriter();
+            int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // more-pieces-relics：写死内容集 v1
+            string text = output.ToString();
+
+            Assert.Equal(0, exit);
+            string[] boardRows = [.. text.Split('\n').Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s{0,2}\d{1,2} ( [#~.?+] |\d[BFLMSA][ @]|x\d | \d |\*[BFLMSA] | [pcdove] )+ \d+\s*$"))];
+            Assert.True(boardRows.Length >= 20, $"种子 {seed} 只找到 {boardRows.Length} 行棋盘");
+            found = boardRows.Any(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"\d[BFLMSA]@"))
+                && boardRows.Any(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"x\d "))
+                && text.Contains("@=已活棋串", StringComparison.Ordinal);
         }
 
-        var output = new StringWriter();
-        int exit = PlayCommand.Run(31, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // more-pieces-relics：写死内容集 v1
-        string text = output.ToString();
-
-        Assert.Equal(0, exit);
-        string[] boardRows = [.. text.Split('\n').Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s{0,2}\d{1,2} ( [#~.?+] |\d[BFLMSA][ @]|x\d | \d |\*[BFLMSA] | [pcdove] )+ \d+\s*$"))];
-        Assert.True(boardRows.Length >= 20, $"只找到 {boardRows.Length} 行棋盘");
-        Assert.Contains(boardRows, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"\d[BFLMSA]@"));
-        Assert.Contains(boardRows, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"x\d "));
-        Assert.Contains("@=已活棋串", text, StringComparison.Ordinal);
+        Assert.True(found, "种子 1–10 里没有一局的终端棋盘同时出现已活标示与禁入标示");
     }
 }

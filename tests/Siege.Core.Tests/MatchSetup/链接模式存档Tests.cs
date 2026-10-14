@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
@@ -219,15 +220,16 @@ public class 链接模式存档Tests
     public void 锚点非零向量的拼接可存档恢复()
     {
         // 裁决 J8-3：最长共享边的候选全部越界时整个布局整体平移、锚点向量非零并记入链接记录；存档恢复按记录重放、逐项核对，篡改锚点向量即拒绝。
-        // 手搭的 link: 图（不经生成器）：0 号 5×7、1 号 5×5、2 号 5×5、3 号 5×7、4 号 5×5 一字排开。四人四区、脚本缺省配对 (0,1)(2,3)：
-        // 首轮东贴后 {0,1} 顶行只剩 0 号、{2,3} 底行只剩 3 号（3 号偏南贴到 y = 0）；决赛北贴唯一的最长共享边位置让 2 号越出原点 3 列 → 整体东移 3。
+        // 手搭的 link: 图（不经生成器）：0 号 6×8、1 号 6×6、2 号 6×6、3 号 6×8、4 号 6×6 一字排开（link-map-terrain：边长 6–8，原为 5×7 / 5×5）。四人四区、脚本缺省配对 (0,1)(2,3)：
+        // 首轮东贴后 {0,1} 顶行只剩 0 号、{2,3} 底行只剩 3 号（3 号偏南贴到 y = 0）；决赛北贴唯一的最长共享边位置让 2 号越出原点 4 列 → 整体东移 4。
+        ImmutableArray<BoardPlate> b = LinkMapFixtures.Births;
         MapData map = LinkMapFixtures.Build("link:900001",
         [
-            new(new Coord(2, 2), 5, 7, BoardPlateKind.Birth),
-            new(new Coord(10, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(18, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(26, 2), 5, 7, BoardPlateKind.Birth),
-            new(new Coord(34, 2), 5, 5, BoardPlateKind.Birth),
+            b[0] with { Origin = new Coord(2, 2), Height = 8 },
+            b[1] with { Origin = new Coord(11, 2) },
+            b[2] with { Origin = new Coord(20, 2) },
+            b[3] with { Origin = new Coord(29, 2), Height = 8 },
+            b[4] with { Origin = new Coord(38, 2) },
         ]);
         MatchFlow match = MatchFlow.Create(map, MatchFixtures.Seed, All, LinkModeFixtures.Options);
         match.PairingSource = new ScriptedPairingSource();
@@ -237,17 +239,17 @@ public class 链接模式存档Tests
         }
 
         match.PlantSequentially(All.Select((p, i) => (p, i)));
-        Coord anchorStone = new(2, 8);   // 0 号顶行西端
+        Coord anchorStone = new(2, 9);   // 0 号顶行西端
         match.Place(P0, anchorStone);
         match.PassRounds(4);
 
         Assert.Equal(3, match.Links.Count);
         LinkRecord final = match.Links[2];
         Assert.Equal((0, 2, LinkSide.North), (final.X, final.Y, final.Side));
-        Assert.Equal(new BattlefieldShift(0, 3, 0), final.ShiftOf(0));   // 锚点非零向量
+        Assert.Equal(new BattlefieldShift(0, 4, 0), final.ShiftOf(0));   // 锚点非零向量
         Assert.Equal(0, match.Map.Boards[2].Origin.X);   // 整体平移恰好不越界：被贴方最西列落在 0
         Assert.Equal(new Occupant(P0, PieceType.Basic), match.Board[match.Track(anchorStone, 0)].Occupant);
-        Assert.Equal(new Coord(5, 8), match.Track(anchorStone, 0));
+        Assert.Equal(new Coord(6, 9), match.Track(anchorStone, 0));
 
         string json = match.Serialize();
         MatchFlow restored = MatchFlow.Restore(map, json);

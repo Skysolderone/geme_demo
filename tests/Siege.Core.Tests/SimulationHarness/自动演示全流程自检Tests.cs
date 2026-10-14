@@ -15,7 +15,9 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// <remarks>变异验证（段 D-d 实跑）：M-G3 <c>Pairing</c> 不看 <c>Source</c> → 「配对记录来源必须是脚本」红 1；M-G4 <c>Linked</c> 本机参与时不比可见格数 → 「链接后可见格数等于本战场格数」红 1；M-G5 <c>Completeness</c> 恒通过 → 「完整性缺一步即失败」红 1。</remarks>
 public class 自动演示全流程自检Tests
 {
-    private static int BattlefieldCellsOf(MatchFlow match, PlayerId me) => Battlefields.Of(match.Map).ById(match.BattlefieldOf(me))!.Cells.Length;
+    /// <summary>本机战场应可见的格数，与图形版 <c>MatchSession.MyBattlefieldCells</c> 同口径：G1（link-map-terrain）起为本战场各棋盘外接矩形的格数之和（含岩石与未架桥深水）。</summary>
+    private static int BattlefieldCellsOf(MatchFlow match, PlayerId me) =>
+        Battlefields.Of(match.Map).ById(match.BattlefieldOf(me))!.Boards.Sum(b => match.Map.Boards[b].Width * match.Map.Boards[b].Height);
 
     [Fact]
     public void 真对局走一遍_七步全通过()
@@ -28,7 +30,7 @@ public class 自动演示全流程自检Tests
         Assert.True(audit.FlagsLocked(locked, 0, BattlefieldCellsOf(match, P0)).Ok);
 
         // 构筑期：第 1 大回合合法范围 ⊆ 自己的出生棋盘。
-        Assert.True(audit.BuildingRange(match.MajorRound, match.LegalRangeFor(P0), match.Map.BirthZones[0]).Ok);
+        Assert.True(audit.BuildingRange(match.MajorRound, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(0).Cells()]).Ok);
 
         // 第 3 大回合结束：首轮配对 (1,2)(4,5)，两次链接；P0 参与链接 #1。
         match.PassRounds(3);
@@ -109,7 +111,7 @@ public class 自动演示全流程自检Tests
 
         // board-link-mode F.4：拼接口径——可见格 = 本战场 = 拼接前可见格 + 拼入的对方出生棋盘格数（两战场格数之和守恒）。
         int[] expandedBefore = [.. before.Placeholders.Where(p => p.Expanded).Select(p => p.Zone)];
-        Assert.Equal(before.Cells.Length + Map.BirthZones[1].Count, cells);
+        Assert.Equal(before.Cells.Length + (Map.BirthBoard(1).Width * Map.BirthBoard(1).Height), cells);
         Assert.True(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells, expandedBefore).Ok);
         Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells + 1, expandedBefore).Ok, "可见格数与本战场格数不等");
         Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, before, before.Cells.Length, expandedBefore).Ok, "参与了链接可见格却没增加");
@@ -129,10 +131,10 @@ public class 自动演示全流程自检Tests
         Assert.False(audit.FlagsLocked(board, 0, cells + 1).Ok);
         Assert.False(audit.FlagsLocked(match.World(P0).Board() with { Placeholders = board.Placeholders[1..] }, 0, cells).Ok, "占位不足 5 块");
 
-        Assert.True(audit.BuildingRange(1, match.LegalRangeFor(P0), match.Map.BirthZones[0]).Ok);
-        Assert.False(audit.BuildingRange(1, match.LegalRangeFor(P0), match.Map.BirthZones[1]).Ok, "范围落在别人的棋盘上");
-        Assert.False(audit.BuildingRange(4, match.LegalRangeFor(P0), match.Map.BirthZones[0]).Ok, "第 4 大回合不是构筑期");
-        Assert.False(audit.BuildingRange(1, ImmutableHashSet<Coord>.Empty, match.Map.BirthZones[0]).Ok, "范围为空");
+        Assert.True(audit.BuildingRange(1, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(0).Cells()]).Ok);
+        Assert.False(audit.BuildingRange(1, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(1).Cells()]).Ok, "范围落在别人的棋盘上");
+        Assert.False(audit.BuildingRange(4, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(0).Cells()]).Ok, "第 4 大回合不是构筑期");
+        Assert.False(audit.BuildingRange(1, ImmutableHashSet<Coord>.Empty, [.. match.Map.BirthBoard(0).Cells()]).Ok, "范围为空");
     }
 
     [Fact]

@@ -26,7 +26,7 @@ public class 战场的定义与规则作用域Tests
                 Siege.Core.Board.Battlefield field = fields.All[i];
                 Assert.Equal(i, field.Id);
                 Assert.True(field.HasBirthBoard);
-                Assert.Equal(map.Boards[i].Cells().Order(), field.Cells);
+                Assert.Equal(map.Boards[i].Cells().Where(map.IsPlayable).Order(), field.Cells);   // link-map-terrain：棋盘内的岩石 / 未架桥深水不属于战场
                 Assert.Equal([i], field.BirthZones);
                 Assert.Equal([i], field.Boards);
                 Assert.Same(field, fields.ById(i));
@@ -99,13 +99,14 @@ public class 战场的定义与规则作用域Tests
         // 实现口径（见 TerrainEditRules 类注释）：搭桥 / 烧林在场景格（障碍）上被拒绝；立栅不按规格档分流，
         // 落在场景格边上的栅栏是合法但无效果的动作（切不到任何气边、不改变任何格的可落子性），因此战场数量与格集合不变。
         MapData map = LinkMapFixtures.Initial();
-        var corner = new Coord(6, 4);          // 0 号棋盘东缘的格
-        var scenery = new Coord(7, 4);         // 紧邻的场景格（障碍）
-        var scenery2 = new Coord(8, 4);
+        var corner = new Coord(7, 4);          // 0 号棋盘东缘的格（link-map-terrain：夹具改为 6×6，x 2–7）
+        var scenery = new Coord(8, 4);         // 紧邻的场景格（障碍）
+        var scenery2 = new Coord(9, 4);
 
         Assert.Contains("深水", TerrainEditRules.Reject(map, corner, TerrainEdit.Bridge(scenery)), StringComparison.Ordinal);
         Assert.Contains("林地", TerrainEditRules.Reject(map, corner, TerrainEdit.Burn(scenery)), StringComparison.Ordinal);
-        Assert.DoesNotContain(TerrainEditRules.LegalTargets(map, corner, workshop: true), e => e.Kind != TerrainEditKind.Fence);
+        // 工坊范围内的格目标只落在棋盘内（夹具中间带的林地 G4 / G7 是合法的烧林目标），场景格上没有搭桥 / 烧林目标。
+        Assert.DoesNotContain(TerrainEditRules.LegalTargets(map, corner, workshop: true), e => e.Kind != TerrainEditKind.Fence && !map.Boards.Any(b => b.Contains(e.Cell)));
 
         // 场景格上的栅栏：合法但无效果——应用后场景格仍不可落子、气边集合逐格不变、战场不变。
         GameBoard fenced = GameBoard.Load(map);

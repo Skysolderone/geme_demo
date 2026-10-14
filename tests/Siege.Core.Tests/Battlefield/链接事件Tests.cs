@@ -29,7 +29,19 @@ public class 链接事件Tests
         HashSet<Coord> expected = [.. before.ById(0)!.Cells, .. before.ById(2)!.Cells.Select(c => new Coord(c.X + shift.Dx, c.Y + shift.Dy))];
         Assert.Equal(expected.Order(), merged.Cells);
         Assert.Equal(initial.MapVersion + 1, result.Map.MapVersion);
-        Assert.Empty(result.Map.TerrainData.Fences);
+        // link-map-terrain：棋盘带预置地形，拼接按棋盘整体搬运——栅栏 / 高度 / 地表 / 桥都随所在棋盘的向量平移（测试内按"格所在棋盘 → 所属战场 → 向量"独立换算）。
+        Coord Moved(Coord c)
+        {
+            int board = initial.Boards.IndexOf(initial.Boards.First(p => p.Contains(c)));
+            BattlefieldShift s = result.Shifts.Single(x => x.Battlefield == before.All.First(f => f.Boards.Contains(board)).Id);
+            return new Coord(c.X + s.Dx, c.Y + s.Dy);
+        }
+
+        Assert.NotEmpty(initial.TerrainData.Fences);   // 样本口径：link:3 有栅栏阵
+        Assert.True(result.Map.TerrainData.Fences.SetEquals(initial.TerrainData.Fences.Select(e => new FenceEdge(Moved(e.A), Moved(e.B)))));
+        Assert.Equal(initial.TerrainData.Surfaces.Select(kv => (Moved(kv.Key), kv.Value)).Order(), result.Map.TerrainData.Surfaces.Select(kv => (kv.Key, kv.Value)).Order());
+        Assert.Equal(initial.TerrainData.Heights.Select(kv => (Moved(kv.Key), kv.Value)).Order(), result.Map.TerrainData.Heights.Select(kv => (kv.Key, kv.Value)).Order());
+        Assert.Equal(initial.TerrainData.Bridges.Select(Moved).Order(), result.Map.TerrainData.Bridges.Order());
 
         // 接缝：锚点最东列上至少一格的东邻是被贴方的格。
         int seam = before.ById(0)!.Cells.Max(c => c.X);
@@ -150,6 +162,39 @@ public class 链接事件Tests
     }
 
     [Fact]
+    public void 河上架的桥随棋盘平移()
+    {
+        // link-map-terrain 第 2 组：河流主题的未架桥深水是搭桥目标；对局中架的桥（改造列表）在拼接时按所在棋盘平移。
+        // 深水格不可落子、不属于任何战场，拼接映射（LinkResult.Translate）对棋盘内的不可落子格按所在棋盘给出向量，与 LinkLayout 同口径；
+        // 改用"只接受可落子格"的旧映射时，这里在 ApplySplice 迁移改造时抛 ArgumentException。
+        MapData initial = LinkMapGenerator.Generate(1);
+        int river = initial.Boards.IndexOf(initial.Boards.Single(b => b.Theme == BoardTheme.River));
+        Coord water = initial.Boards[river].Cells().First(initial.TerrainData.IsUnbridgedDeepWater);
+        Coord shore = initial.Boards[river].Cells().First(c => initial.IsPlayable(c) && Adjacency.AreAdjacent(c, water));
+        int anchor = river == 0 ? 1 : 0;
+        GameBoard board = GameBoard.Load(initial);
+        board.ApplyTerrainEdits([TerrainEdit.Bridge(water), TerrainEdit.Fence(water, shore)]);
+        Assert.True(board.Map.IsPlayable(water));
+        // 桥上有棋子：桥格只在改造后的地图上可落子（拼接搬的是不含改造的 LinkedMap），盘面迁移不能只认 LinkedMap 的可落子格。
+        // 第 2 组实测：真实跑局（link:1、对局种子 3）第 27 大回合拼接时在这里抛"有棋子却不是当前地图的可落子格"。
+        board.Place(water, new PlayerId(3), PieceType.Basic);
+
+        LinkResult result = LinkMapGenerator.Link(board.LinkedMap, anchor, river, LinkSide.East);
+        board.ApplySplice(result.Map, result.Translate);
+
+        BattlefieldShift shift = result.Shifts.Single(s => s.Battlefield == river);
+        var moved = new Coord(water.X + shift.Dx, water.Y + shift.Dy);
+        var movedShore = new Coord(shore.X + shift.Dx, shore.Y + shift.Dy);
+        Assert.True(shift.Dx != 0 || shift.Dy != 0, "样本口径：河流棋盘确实被平移");
+        Assert.True(board.Map.HasBridge(moved));
+        Assert.True(board.Map.IsPlayable(moved));
+        Assert.True(board.Map.HasFence(moved, movedShore));
+        Assert.Equal(new Occupant(new PlayerId(3), PieceType.Basic), board[moved].Occupant);
+        Assert.False(board.LinkedMap.HasBridge(moved));   // 静态地形里仍是未架桥深水，桥只在改造列表里
+        Assert.Equal(result.Map.PlayableCount + 1, board.Map.PlayableCount);
+    }
+
+    [Fact]
     public void ApplySplice拒绝不是逐格搬运的地图()
     {
         // GameBoard.ApplySplice 只接受"逐格搬过去"的新图：标识、版本号、每个可落子格的落点、可落子格总数、地形、出生区、信物任一不符即拒绝，盘面不变。
@@ -168,11 +213,11 @@ public class 链接事件Tests
         Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked with { MapVersion = 2 }, result.Translate));
         Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked with { Id = "other" }, result.Translate));
         Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked, c => c));                                              // 恒等映射：被平移方落到障碍格
-        Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked, c => result.Translate(initial.BirthZones[0].Contains(c) && c.X == 2 ? new Coord(3, c.Y) : c)));   // 两格映射到同一格
+        Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked, c => result.Translate(initial.Boards[0].Contains(c) && c.X == 2 ? new Coord(3, c.Y) : c)));   // 两格映射到同一格
         Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked with { Obstacles = linked.Obstacles.Add(new Coord(3, 3)) }, result.Translate));             // 已可落子的格变障碍
         Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked with { RelicCells = linked.RelicCells.Remove(new Coord(3, 3)) }, result.Translate));
         Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked with { TerrainData = TestMaps.Terrain(fences: [("D4", "E4")]) }, result.Translate));
-        Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked with { Obstacles = linked.Obstacles.Remove(new Coord(20, 4)) }, result.Translate));           // 新图多出一个可落子格
+        Assert.Throws<SiegeRuleException>(() => fresh().ApplySplice(linked with { Obstacles = linked.Obstacles.Remove(new Coord(15, 4)) }, result.Translate));           // 新图多出一个可落子格（棋盘 2 与 3 之间的场景格）
 
         // 拒绝后地图不变。
         GameBoard rejected = fresh();

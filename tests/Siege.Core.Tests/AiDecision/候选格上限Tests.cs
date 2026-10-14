@@ -30,8 +30,9 @@ public class 候选格上限Tests
     /// 链接图上"此前记录过的对局"（retire-legacy-maps 1.5：原 v5 的 <c>V4GoldenTurnHash</c> 在 <c>对局内容集Tests</c>、<c>带入带出配置Tests</c>、<c>批量跑局Tests</c> 里充当这一角色）：
     /// <c>link:1</c>、种子 31、4 名标准 AI、24 个小回合、跑局层（<see cref="BatchRunner"/>，种子派生配对）、<see cref="SimFixtures.PinPreCalibration"/> 写死口径，
     /// 全部小回合快照（去耗时）逐行拼接后的 SHA-256（<see cref="TurnHash"/>）。在删除 v5 之前、以当时的实现钉下。
+    /// <para>link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变；旧值 B4A74124D2C6C25CD8576ACC8C444D3D4A71A7C076E9CC1310725C06C61BF498。"此前记录过的对局"的角色从这次重钉起算。</para>
     /// </summary>
-    internal const string LinkGoldenTurnHash = "B4A74124D2C6C25CD8576ACC8C444D3D4A71A7C076E9CC1310725C06C61BF498";
+    internal const string LinkGoldenTurnHash = "1CFBFF61319693C0E9593642D890D221A461A4739EA2CCE8E0C1BF85E2ECB538";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>

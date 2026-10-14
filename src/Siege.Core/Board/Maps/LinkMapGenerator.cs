@@ -32,11 +32,25 @@ public sealed class LinkResult
 {
     private readonly Battlefields _before;
     private readonly ImmutableDictionary<int, (int Dx, int Dy)> _shiftOf;
+    private readonly ImmutableArray<BoardPlate> _platesBefore;
+    private readonly ImmutableArray<(int Dx, int Dy)> _plateShifts;
 
-    internal LinkResult(MapData map, Battlefields before, LinkSide side, int anchor, int mover, int sharedEdge, ImmutableArray<BattlefieldShift> shifts, string summary)
+    internal LinkResult(
+        MapData map,
+        Battlefields before,
+        ImmutableArray<BoardPlate> platesBefore,
+        ImmutableArray<(int Dx, int Dy)> plateShifts,
+        LinkSide side,
+        int anchor,
+        int mover,
+        int sharedEdge,
+        ImmutableArray<BattlefieldShift> shifts,
+        string summary)
     {
         Map = map;
         _before = before;
+        _platesBefore = platesBefore;
+        _plateShifts = plateShifts;
         Side = side;
         Anchor = anchor;
         Mover = mover;
@@ -67,13 +81,20 @@ public sealed class LinkResult
     /// <summary>几何摘要（日志用）。</summary>
     public string Summary { get; }
 
-    /// <summary>拼接前地图上的可落子格 → 新地图上的坐标。不可落子的格抛 <see cref="ArgumentException"/>。</summary>
+    /// <summary>
+    /// 拼接前地图上的可落子格 → 新地图上的坐标；棋盘内的不可落子格（岩石、未架桥深水——搭桥改造的目标就在这里，link-map-terrain）按所在棋盘平移，与 <see cref="LinkLayout"/> 同口径。
+    /// 棋盘之外的场景格抛 <see cref="ArgumentException"/>。
+    /// </summary>
     public Coord Translate(Coord before)
     {
-        Battlefield field = _before.At(before)
-            ?? throw new ArgumentException($"{before.ToNotation()} 不是拼接前地图上的可落子格，没有平移向量。", nameof(before));
-        (int dx, int dy) = _shiftOf[field.Id];
-        return new Coord(before.X + dx, before.Y + dy);
+        if (_before.At(before) is { } field)
+        {
+            (int dx, int dy) = _shiftOf[field.Id];
+            return new Coord(before.X + dx, before.Y + dy);
+        }
+
+        return LinkMapGenerator.MoveByPlate(_platesBefore, _plateShifts, before)
+            ?? throw new ArgumentException($"{before.ToNotation()} 不是拼接前地图上棋盘内的格，没有平移向量。", nameof(before));
     }
 }
 
@@ -109,8 +130,9 @@ public sealed record LinkSequence(LinkSequenceKind Kind, ImmutableArray<LinkStep
 /// 全程整数运算，随机只在初始布局（<see cref="MapRandom.ForLinkLayout"/>），拼接不消费任何随机；不读时钟与环境，也拿不到对局种子。
 /// </summary>
 /// <remarks>
-/// <para><b>初始布局</b>（J4 / J2）：5 块出生棋盘边长各 5–7、次序由地图种子决定，底边对齐在第 <see cref="Margin"/> 行、自第 <see cref="Margin"/> 列起以固定间距 <see cref="Gap"/> 一字排开；
-/// 每块恰 2 个信物格（最外一圈以内、互不相邻、尽量不同行不同列）；画布按布局四周各留 <see cref="Margin"/> 格裁出一次。没有槽位、白名单、公共棋盘与通道。</para>
+/// <para><b>初始布局</b>（J4 / J2，link-map-terrain D3）：5 块出生棋盘边长各 6–8、次序由地图种子决定，底边对齐在第 <see cref="Margin"/> 行、自第 <see cref="Margin"/> 列起以固定间距 <see cref="Gap"/> 一字排开；
+/// 5 个主题两两不同、由地图种子排列；每块按主题生成地形（<c>LinkMapGenerator.Themes.cs</c>），出生区 = 中央 3×3 核心区，核心区内恰 2 个出生区档信物格（互不相邻、尽量不同行不同列），
+/// 另在主题的难到达格上至多 1 个公共区档信物格；画布按布局四周各留 <see cref="Margin"/> 格裁出一次。没有槽位、白名单、公共棋盘与通道。</para>
 /// <para><b>拼接</b>（J1 / J3）：锚点 = 两个标识中的小者（即含最小出生棋盘编号的战场），坐标不变；被贴方整体平移——东贴时最西列 = 锚点最东列 + 1，北贴时最南行 = 锚点最北行 + 1；
 /// 另一分量在"接缝两侧都有可落子格的格数"最多的候选里取偏南 / 偏西者，共享边 MUST ≥ 1。</para>
 /// <para><b>画布</b>（J7 / J8-1）：原点优先固定、西 / 南边界不动，只在东 / 北侧按需扩展或收缩（边界外留 <see cref="Margin"/> 格）；未参与链接的战场里整体位于合并战场以西（至少隔一列空列）的原地不动，
@@ -118,16 +140,16 @@ public sealed record LinkSequence(LinkSequenceKind Kind, ImmutableArray<LinkStep
 /// <para><b>越界</b>（J8-3）：共享边并列时先排除会让被贴方越出画布原点的候选，再取偏南 / 偏西；最长共享边的候选全部越界时，整个布局（含锚点）整体向东 / 北平移到恰好不越界，
 /// 锚点此时有非零向量（"锚点不变"降为优先原则）。不抛异常。</para>
 /// </remarks>
-public static class LinkMapGenerator
+public static partial class LinkMapGenerator
 {
     /// <summary>出生棋盘数，固定。</summary>
     public const int BirthBoards = 5;
 
-    /// <summary>出生棋盘边长区间。</summary>
-    public const int BirthMinSide = 5;
-    public const int BirthMaxSide = 7;
+    /// <summary>出生棋盘边长区间（link-map-terrain 裁决 M9）。</summary>
+    public const int BirthMinSide = 6;
+    public const int BirthMaxSide = 8;
 
-    /// <summary>每块出生棋盘的信物格数（裁决 J2）。</summary>
+    /// <summary>每块出生棋盘的出生区档信物格数（裁决 J2），都在核心区内（link-map-terrain D1）。</summary>
     public const int RelicsPerBirthBoard = 2;
 
     /// <summary>战场 / 出生棋盘之间的固定间距（裁决 J4 / J7）。</summary>
@@ -148,10 +170,17 @@ public static class LinkMapGenerator
     public static MapData Generate(string mapId) => Generate(LinkMapId.Parse(mapId));
 
     /// <summary>生成初始地图。<see cref="MapData.Id"/> 为规范化标识，<see cref="MapData.MapVersion"/> 为 0。结果按种子缓存（地图不可变）。</summary>
-    public static MapData Generate(ulong mapSeed) => Cache.GetOrAdd(mapSeed, static seed => Layout(seed));
+    public static MapData Generate(ulong mapSeed) => Cache.GetOrAdd(mapSeed, static seed => Layout(seed).Map);
 
-    /// <summary>一次布局：抽棋盘次序、各棋盘宽高与 2 个信物格；其余格一律障碍。布局由构造满足链接档校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。</summary>
-    private static MapData Layout(ulong mapSeed)
+    /// <summary>生成初始地图并给出每块出生棋盘（按编号）的重抽次数（tasks 2.3 的分布统计用；不缓存）。</summary>
+    internal static (MapData Map, ImmutableArray<int> Redraws) GenerateWithRedraws(ulong mapSeed) => Layout(mapSeed);
+
+    /// <summary>
+    /// 一次布局（link-map-terrain D3），全部随机数来自 <see cref="MapRandom.ForLinkLayout"/> 这一条流，顺序固定：
+    /// 次序 → 宽高（6–8）→ 主题排列（Fisher–Yates）→ 按编号逐块生成地形（自检失败在同一条流上重抽该块）→ 出生区信物 → 公共信物。
+    /// 布局最后过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。
+    /// </summary>
+    private static (MapData Map, ImmutableArray<int> Redraws) Layout(ulong mapSeed)
     {
         string id = LinkMapId.Format(mapSeed);
         RandomStream rng = MapRandom.ForLinkLayout(mapSeed);
@@ -171,33 +200,37 @@ public static class LinkMapGenerator
             sizes[zone] = (BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1), BirthMinSide + rng.NextInt(BirthMaxSide - BirthMinSide + 1));
         }
 
+        // 主题排列（Fisher–Yates，在宽高之后）：themes[z] = 出生棋盘 z 的主题，5 块两两不同（裁决 M2）。
+        BoardTheme[] themes = [BoardTheme.Plateau, BoardTheme.River, BoardTheme.Forest, BoardTheme.Palisade, BoardTheme.Mixed];
+        for (int i = themes.Length - 1; i > 0; i--)
+        {
+            int j = rng.NextInt(i + 1);
+            (themes[i], themes[j]) = (themes[j], themes[i]);
+        }
+
         var plates = new BoardPlate[BirthBoards];
         int x = Margin;
         foreach (int zone in order)
         {
             (int w, int h) = sizes[zone];
-            // link-map-terrain 第 1 组临时赋值：出生棋盘 z 取主题枚举的第 z 个（高台 / 河流 / 林地 / 栅栏阵 / 混合），不消费随机流，布局逐格不变；
-            // 第 2 组（tasks 2.1）改为在宽高之后用同一条布局流做 Fisher–Yates 排列。
-            plates[zone] = new BoardPlate(new Coord(x, Margin), w, h, BoardPlateKind.Birth, (BoardTheme)zone);
+            plates[zone] = new BoardPlate(new Coord(x, Margin), w, h, BoardPlateKind.Birth, themes[zone]);
             x += w + Gap;
         }
 
-        // 信物格：按编号顺序每块 2 个，最外一圈以内；第二个与第一个不相邻，尽量不同行不同列（没有这样的格时退到"不相邻"）。
+        // 按编号逐块生成地形（自检失败在同一条流上重抽该块，D3）。
+        var boards = new BoardTerrain[BirthBoards];
+        for (int zone = 0; zone < BirthBoards; zone++)
+        {
+            boards[zone] = DraftBoard(plates[zone], rng);
+        }
+
+        // 出生区信物：按编号顺序每块 2 个，在核心区内；第二个与第一个不相邻，尽量不同行不同列（没有这样的格时退到"不相邻"）。
         var relics = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
         for (int zone = 0; zone < BirthBoards; zone++)
         {
-            BoardPlate plate = plates[zone];
-            var inner = new List<Coord>();
-            for (int cy = plate.Origin.Y + 1; cy < plate.Origin.Y + plate.Height - 1; cy++)
-            {
-                for (int cx = plate.Origin.X + 1; cx < plate.Origin.X + plate.Width - 1; cx++)
-                {
-                    inner.Add(new Coord(cx, cy));
-                }
-            }
-
-            Coord first = inner[rng.NextInt(inner.Count)];
-            List<Coord> apart = [.. inner.Where(c => !Adjacency.AreAdjacent(c, first) && c != first)];
+            List<Coord> core = [.. plates[zone].CoreCells()];
+            Coord first = core[rng.NextInt(core.Count)];
+            List<Coord> apart = [.. core.Where(c => !Adjacency.AreAdjacent(c, first) && c != first)];
             List<Coord> preferred = [.. apart.Where(c => c.X != first.X && c.Y != first.Y)];
             List<Coord> candidates = preferred.Count > 0 ? preferred : apart;
             Coord second = candidates[rng.NextInt(candidates.Count)];
@@ -205,22 +238,44 @@ public static class LinkMapGenerator
             relics[second] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
         }
 
-        MapData map = Assemble(id, [.. plates], relics.ToImmutable(), TerrainData.Flat, ImmutableHashSet<Coord>.Empty, mapVersion: 0);
+        // 公共信物（D5 / 裁决 M8 / Q3）：按编号顺序，每块从主题的难到达格里取 1 个，档位 (Contested, Standard)；没有难到达格的这块放 0 个。
+        for (int zone = 0; zone < BirthBoards; zone++)
+        {
+            ImmutableArray<Coord> hard = boards[zone].HardCells;
+            if (hard.Length > 0)
+            {
+                relics[hard[rng.NextInt(hard.Length)]] = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
+            }
+        }
+
+        TerrainData terrain = new(
+            boards.SelectMany(b => b.Heights).ToImmutableDictionary(),
+            boards.SelectMany(b => b.Surfaces).ToImmutableDictionary(),
+            [.. boards.SelectMany(b => b.Bridges)],
+            [.. boards.SelectMany(b => b.Fences)]);
+        ImmutableHashSet<Coord> rocks = [.. boards.SelectMany(b => b.Rocks)];
+        MapData map = Assemble(id, [.. plates], relics.ToImmutable(), terrain, rocks, ImmutableHashSet<Coord>.Empty, mapVersion: 0);
         MapValidationResult validation = MapValidator.Validate(map);
         if (!validation.IsValid)
         {
             throw new MapGenerationException($"地图 {id} 的初始布局未通过链接档静态校验（生成器缺陷）：{string.Join("；", validation.Failures)}");
         }
 
-        return map;
+        return (map, [.. boards.Select(b => b.Redraws)]);
     }
 
     /// <summary>
-    /// 把棋盘清单灌成链接档地图数据：画布 = 全部棋盘外接矩形的东 / 北边界各外扩 <see cref="Margin"/> 格（原点固定在 (0,0)），棋盘之外一律障碍，
-    /// 出生区 = 出生棋盘，中央入口取第一块棋盘的中心格，没有咽喉。
+    /// 把棋盘清单灌成链接档地图数据：画布 = 全部棋盘外接矩形的东 / 北边界各外扩 <see cref="Margin"/> 格（原点固定在 (0,0)），棋盘之外与棋盘内的岩石一律障碍，
+    /// 出生区 = 出生棋盘的核心区（link-map-terrain D1），中央入口取第一块棋盘的中心格（落在核心区内），没有咽喉。
     /// </summary>
     private static MapData Assemble(
-        string id, ImmutableArray<BoardPlate> plates, ImmutableDictionary<Coord, RelicCellSpec> relics, TerrainData terrain, ImmutableHashSet<Coord> chokePoints, int mapVersion)
+        string id,
+        ImmutableArray<BoardPlate> plates,
+        ImmutableDictionary<Coord, RelicCellSpec> relics,
+        TerrainData terrain,
+        ImmutableHashSet<Coord> rocks,
+        ImmutableHashSet<Coord> chokePoints,
+        int mapVersion)
     {
         int width = plates.Max(p => p.Origin.X + p.Width) + Margin;
         int height = plates.Max(p => p.Origin.Y + p.Height) + Margin;
@@ -230,6 +285,7 @@ public static class LinkMapGenerator
             playable.UnionWith(plate.Cells());
         }
 
+        playable.ExceptWith(rocks);
         var obstacles = ImmutableHashSet.CreateBuilder<Coord>();
         for (int y = 0; y < height; y++)
         {
@@ -253,7 +309,7 @@ public static class LinkMapGenerator
             Profile = MapProfile.Link,
             Obstacles = obstacles.ToImmutable(),
             TerrainData = terrain,
-            BirthZones = [.. plates.Select(p => (ImmutableHashSet<Coord>)[.. p.Cells()])],
+            BirthZones = [.. plates.Where(p => p.Kind == BoardPlateKind.Birth).Select(p => (ImmutableHashSet<Coord>)[.. p.CoreCells()])],
             Boards = plates,
             RelicCells = relics,
             ChokePoints = chokePoints,
@@ -385,24 +441,24 @@ public static class LinkMapGenerator
             shifts[s.Battlefield] = (s.Dx, s.Dy);
         }
 
-        // 同一份映射搬全部格：格所属战场由拼接前的战场导出给出，不另判。
-        Coord Move(Coord c)
-        {
-            (int sx, int sy) = shifts[fields.At(c)!.Id];
-            return new Coord(c.X + sx, c.Y + sy);
-        }
+        // 同一份映射搬全部格（link-map-terrain：含棋盘内的岩石与未架桥深水）：按格所在的棋盘平移，棋盘的向量取它所属战场（棋盘内任一可落子格所在的分量，D7）的向量。
+        ImmutableArray<(int Dx, int Dy)> plateShifts = PlateShifts(current, fields, shifts);
+        Coord Move(Coord c) => MoveByPlate(current.Boards, plateShifts, c)
+            ?? throw new MapGenerationException($"地图 {current.Id}（版本 {current.MapVersion}）上的 {c.ToNotation()} 不在任何棋盘内：链接档地图的地形、信物与咽喉都必须在棋盘内，拼接无法迁移它。");
 
-        // 新地图：棋盘清单、出生区、信物格、地形、咽喉按同一映射逐项迁移；画布按东 / 北边界重裁。
-        ImmutableArray<BoardPlate> plates = [.. current.Boards.Select(p => p with { Origin = Move(p.Origin) })];
+        // 新地图：棋盘清单、出生区、信物格、地形（高度 / 地表 / 桥 / 栅栏）、岩石、咽喉按同一映射逐项迁移；画布按东 / 北边界重裁。
+        // 栅栏两端在同一块棋盘内（外圈相关的边不得有栅栏，见校验器），两端的向量相同，边仍几何相邻。
+        ImmutableArray<BoardPlate> plates = [.. current.Boards.Select((p, i) => p with { Origin = new Coord(p.Origin.X + plateShifts[i].Dx, p.Origin.Y + plateShifts[i].Dy) })];
         ImmutableDictionary<Coord, RelicCellSpec> relics = current.RelicCells.ToImmutableDictionary(kv => Move(kv.Key), kv => kv.Value);
-        // 链接档的静态地形恒为空（棋盘内全是 h=0 草地、无桥无栅；匠人的改造是对局状态，不在这里）：拼接后仍是 Flat，不另构造地形（地形写入口守门）。
-        TerrainData terrain = current.TerrainData;
-        if (terrain.Heights.Count > 0 || terrain.Surfaces.Count > 0 || terrain.Bridges.Count > 0 || terrain.Fences.Count > 0)
-        {
-            throw new MapGenerationException($"地图 {current.Id}（版本 {current.MapVersion}）带静态地形数据（高度 / 地表 / 桥 / 栅栏）：链接档地图的静态地形必须为空，拼接不搬运地形。");
-        }
+        TerrainData before = current.TerrainData;
+        TerrainData terrain = new(
+            before.Heights.ToImmutableDictionary(kv => Move(kv.Key), kv => kv.Value),
+            before.Surfaces.ToImmutableDictionary(kv => Move(kv.Key), kv => kv.Value),
+            [.. before.Bridges.Select(Move)],
+            [.. before.Fences.Select(e => new FenceEdge(Move(e.A), Move(e.B)))]);
+        ImmutableHashSet<Coord> rocks = [.. current.Obstacles.Where(c => current.Boards.Any(p => p.Contains(c))).Select(Move)];
 
-        MapData spliced = Assemble(current.Id, plates, relics, TerrainData.Flat, [.. current.ChokePoints.Select(Move)], current.MapVersion + 1) with
+        MapData spliced = Assemble(current.Id, plates, relics, terrain, rocks, [.. current.ChokePoints.Select(Move)], current.MapVersion + 1) with
         {
             MaxPlayers = current.MaxPlayers,
             CentralEntrance = current.IsPlayable(current.CentralEntrance) ? Move(current.CentralEntrance) : current.CentralEntrance,
@@ -425,7 +481,27 @@ public static class LinkMapGenerator
             + $"共享边 {shared} 格；合并后 {anchor.Cells.Length + mover.Cells.Length} 格"
             + (others.Length > 0 ? $"；其余战场平移 {others}" : string.Empty)
             + $"；画布 {spliced.Width}×{spliced.Height}";
-        return new LinkResult(spliced, fields, side, anchorId, moverId, shared, shiftList, summary);
+        return new LinkResult(spliced, fields, current.Boards, plateShifts, side, anchorId, moverId, shared, shiftList, summary);
+    }
+
+    /// <summary>每块棋盘（按清单下标）的平移向量：取它所属战场（<see cref="Battlefield.Boards"/>）的向量；不属于任何战场的棋盘（棋盘内没有可落子格，只可能来自手写夹具）抛出。</summary>
+    private static ImmutableArray<(int Dx, int Dy)> PlateShifts(MapData current, Battlefields fields, IReadOnlyDictionary<int, (int Dx, int Dy)> shifts) =>
+        [.. current.Boards.Select((p, i) => fields.All.FirstOrDefault(f => f.Boards.Contains(i)) is { } field
+            ? shifts[field.Id]
+            : throw new MapGenerationException($"地图 {current.Id}（版本 {current.MapVersion}）的棋盘 {p.Origin.ToNotation()} 不属于任何战场，拼接无法确定它的平移向量。"))];
+
+    /// <summary>按格所在的棋盘平移；不在任何棋盘内为 <c>null</c>。</summary>
+    internal static Coord? MoveByPlate(ImmutableArray<BoardPlate> plates, ImmutableArray<(int Dx, int Dy)> plateShifts, Coord c)
+    {
+        for (int i = 0; i < plates.Length; i++)
+        {
+            if (plates[i].Contains(c))
+            {
+                return new Coord(c.X + plateShifts[i].Dx, c.Y + plateShifts[i].Dy);
+            }
+        }
+
+        return null;
     }
 
     private static string SideName(LinkSide side) => side == LinkSide.East ? "东" : "北";

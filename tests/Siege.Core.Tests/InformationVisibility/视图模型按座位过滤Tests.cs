@@ -22,8 +22,8 @@ public class 视图模型按座位过滤Tests
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
-    /// <summary>某块出生棋盘的全部坐标（围棋记法）。</summary>
-    private static string[] ZoneNotations(int zone) => [.. Map.BirthZones[zone].Select(c => c.ToNotation()).Order()];
+    /// <summary>某块出生棋盘的全部坐标（围棋记法）：整块外接矩形（link-map-terrain：读棋盘清单，不读出生区；G1 起战斗阶段可见格即整块棋盘，含岩石与深水）。</summary>
+    private static string[] ZoneNotations(int zone) => [.. Map.BirthBoard(zone).Cells().Select(c => c.ToNotation()).Order()];
 
     [Fact]
     public void 插旗阶段只有五个占位_没有任何格()
@@ -37,8 +37,9 @@ public class 视图模型按座位过滤Tests
         Assert.Equal(5, board.Placeholders.Length);
         Assert.Equal([0, 1, 2, 3, 4], board.Placeholders.Select(p => p.Zone));
         Assert.All(board.Placeholders, p => Assert.False(p.Expanded || p.Own));
-        Assert.All(board.Placeholders, p => Assert.Equal(Map.BirthZones[p.Zone].OrderBy(c => c.Y).ThenBy(c => c.X).First(), p.Origin));
-        Assert.All(board.Placeholders, p => Assert.Equal(Map.BirthZones[p.Zone].Count, p.Width * p.Height));
+        // 占位取整块棋盘的外接矩形（match-setup「占位尺寸取整块棋盘」），不是出生区（核心区）。
+        Assert.All(board.Placeholders, p => Assert.Equal(Map.BirthBoard(p.Zone).Origin, p.Origin));
+        Assert.All(board.Placeholders, p => Assert.Equal((Map.BirthBoard(p.Zone).Width, Map.BirthBoard(p.Zone).Height), (p.Width, p.Height)));
         Assert.Equal((Map.Width, Map.Height), (board.Width, board.Height));
         Assert.Null(match.World(P0).OwnZone);
         Assert.Empty(match.World(P0).SameBattlefieldPlayers);
@@ -61,7 +62,7 @@ public class 视图模型按座位过滤Tests
 
         Assert.Equal(seat.Cells.Select(c => c.Coord).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
         Assert.Equal(ZoneNotations(0), board.Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.All(board.Cells, c => Assert.Equal(0, c.BirthZone));
+        Assert.All(board.Cells, c => Assert.Equal(Map.BirthZones[0].Contains(c.Coord) ? (int?)0 : null, c.BirthZone));   // 出生区 = 核心区，棋盘内其余格不属于出生区
         Assert.Single(board.Boards);
         Assert.Equal(0, world.OwnZone);
         BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);
@@ -70,7 +71,7 @@ public class 视图模型按座位过滤Tests
         Assert.Empty(world.SameBattlefieldPlayers);
 
         // 他人棋盘上的格一个都不在视图里；拾取 / 悬停用的 CellOrNull 对它们返回 null，不抛。
-        foreach (Coord other in Map.BirthZones[1].Concat(Map.BirthZones[3]))
+        foreach (Coord other in Map.BirthBoard(1).Cells().Concat(Map.BirthBoard(3).Cells()))
         {
             Assert.Null(board.CellOrNull(other));
             Assert.Throws<ArgumentOutOfRangeException>(() => board.CellAt(other));
@@ -128,11 +129,12 @@ public class 视图模型按座位过滤Tests
     [Fact]
     public void 棋盘内有岩石时本座位棋盘仍可见()
     {
-        // link-map-terrain 第 1 组裁决④：棋盘清单只留"整块可见"的台面，判据不得假设棋盘内每格可落子——战场只含可落子格，棋盘内的岩石永远不在可见格里。
+        // link-map-terrain 第 1 组裁决④：棋盘清单只留"整块可见"的台面，判据不得假设棋盘内每格可落子。
         // 手写链接档夹具：棋盘 1（下标 0）的左下角 C3 与内部 E6 是岩石，其余格连通。P0 锁定棋盘 1 进入第 1 大回合：
         // 本座位的棋盘仍留在清单里，其占位已展开；他人棋盘仍只是占位、不在清单里。
-        // 变异验证（link-map-terrain 第 1 组收尾实跑，只跑本类）：M-V2 Boards 过滤改回"棋盘内每格都可见" → 本测试红 1；
-        // M-V3 占位展开改回"左下角格可见" → 本测试红 1。
+        // 第 2 组 G1（裁决 A）起战斗阶段可见格 = 本战场棋盘的整块外接矩形，岩石也在可见格里（36 格，岩石格的地形为障碍）。
+        // 变异验证（第 1 组收尾实跑）：M-V2 Boards 过滤改回"棋盘内每格都可见"、M-V3 占位展开改回"左下角格可见" 各红 1——G1 之后棋盘内每格都可见，
+        // 这两条变异在本测试上不再可分（两种判据结果相同），本测试改为同时钉住 G1 在表现层的镜像（岩石格出现、地形为障碍）。
         MapData map = RockyMap();
         MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, All, MatchFixtures.Relics(map), Options);
         foreach (PlayerId p in All)
@@ -144,15 +146,15 @@ public class 视图模型按座位过滤Tests
         Assert.Equal(MatchPhase.InProgress, match.Phase);
 
         DefaultBoardView board = match.World(P0).Board();
-        Assert.Equal(23, board.Cells.Length);   // 样本口径：5×5 − 2 块岩石，岩石不在可见格里
-        Assert.DoesNotContain(board.Cells, c => c.Coord == new Coord(2, 2) || c.Coord == new Coord(4, 5));
+        Assert.Equal(36, board.Cells.Length);   // 6×6 整块，含 2 块岩石
+        Assert.All(new[] { new Coord(2, 2), new Coord(4, 5) }, rock => Assert.Equal(Terrain.Obstacle, board.CellAt(rock).Terrain));
         Assert.Equal([map.Boards[0]], board.Boards);
         BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);
         Assert.Equal((0, true), (own.Zone, own.Expanded));
         Assert.Equal(4, board.Placeholders.Count(p => !p.Expanded));
     }
 
-    /// <summary>链接档手写夹具（link:90002，不发生链接）：五块 5×5 出生棋盘，棋盘 1 的左下角 C3 与内部 E6 是岩石；没有信物格。只经 CreateUnvalidated 建局。</summary>
+    /// <summary>链接档手写夹具（link:90002，不发生链接）：五块 6×6 出生棋盘，棋盘 1 的左下角 C3 与内部 E6 是岩石；没有信物格。只经 CreateUnvalidated 建局。</summary>
     private static MapData RockyMap()
     {
         MapData built = LinkMapFixtures.Build("link:90002", LinkMapFixtures.Births);
@@ -173,7 +175,7 @@ public class 视图模型按座位过滤Tests
         SeatPublicView seat = match.PublishFor(P0);
 
         Assert.Equal(seat.Cells.Select(c => c.Coord).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.Equal(Map.BirthZones[0].Count + Map.BirthZones[1].Count, board.Cells.Length);   // 拼接不新增格
+        Assert.Equal(ZoneNotations(0).Length + ZoneNotations(1).Length, board.Cells.Length);   // 拼接不新增格；G1：两块棋盘的整块外接矩形
         Assert.Equal([0, 1], board.Placeholders.Where(p => p.Expanded).Select(p => p.Zone));
         Assert.Equal([2, 3, 4], board.Placeholders.Where(p => !p.Expanded).Select(p => p.Zone));
         Assert.Equal(2, board.Boards.Length);   // 两块出生棋盘边对边紧贴

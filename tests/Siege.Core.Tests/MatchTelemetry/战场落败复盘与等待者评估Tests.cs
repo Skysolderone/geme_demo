@@ -16,7 +16,8 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// 规格：openspec/changes/ai-pass-review/specs/match-telemetry —— Requirement: 战场落败复盘与等待者评估（tasks 1.1–1.4）。
 /// </summary>
 /// <remarks>
-/// <para>复盘入口（1.1）的三例手写局面沿用 <see cref="链接模式下落后者的停手阈值Tests"/> 的口径：<c>link:1</c>，P0、P1 同在出生棋盘 0（双人战场），
+/// <para>复盘入口（1.1）的三例手写局面沿用 <see cref="链接模式下落后者的停手阈值Tests"/> 的口径：P0、P1 同在出生棋盘 0（双人战场；link-map-terrain 第 2 组起载体由 <c>link:1</c>
+/// 改为平坦的手写链接档图 <see cref="LinkModeFixtures.FlatMap"/>——link:1 的出生棋盘 0 带高台地形，角上的气与领地随之变），
 /// 简单难度、权重写死为定值前缺省并把 PowerGain 取 1，停手阈值写死 20；合法落子范围只给一格，结论只取决于这一格。</para>
 /// <para>变异（1.4 实跑，记录见任务 implement.md）：MP-1 复盘改为消费 AI 扰动子流本体（<c>ReviewBestMove</c> 里多调一次 <c>Perturb(ranked)</c>）→
 /// 「复盘不改对局」红；其余见各测试注释。</para>
@@ -53,9 +54,9 @@ public class 战场落败复盘与等待者评估Tests
         // 期望：最好一手 = 这一格；落下后（对手不回应）P0 势力 ≥ P1 → 本可翻盘；P0 落后 → 实际阈值取 0（C15），收益 > 0 → 正式决策不会 Pass。
         // 另：P2 在别的战场（棋盘 3）势力远高于 P0——"本战场最高者"只看同战场，P2 不算对手。
         // 判别力：变异 MP-3"对手不限本战场（取全部其他在局玩家）"→ RivalBefore 变成 P2 的势力、翻盘判否，本测试红。
-        Coord cell = BirthCell(Map, 0, 2, 3);
-        MatchFlow match = Started([0, 0, 3, 4]).Place(P0, BirthCell(Map, 0, 4, 0)).Place(P1, BirthCell(Map, 0, 0, 0), BirthCell(Map, 0, 1, 0))
-            .Place(P2, BirthCell(Map, 3, 0, 0), BirthCell(Map, 3, 1, 0), BirthCell(Map, 3, 2, 0), BirthCell(Map, 3, 0, 1), BirthCell(Map, 3, 1, 1), BirthCell(Map, 3, 2, 1));
+        Coord cell = BirthCell(FlatMap, 0, 2, 3);
+        MatchFlow match = StartedFlat([0, 0, 3, 4]).Place(P0, BirthCell(FlatMap, 0, 4, 0)).Place(P1, BirthCell(FlatMap, 0, 0, 0), BirthCell(FlatMap, 0, 1, 0))
+            .Place(P2, BirthCell(FlatMap, 3, 0, 0), BirthCell(FlatMap, 3, 1, 0), BirthCell(FlatMap, 3, 2, 0), BirthCell(FlatMap, 3, 0, 1), BirthCell(FlatMap, 3, 1, 1), BirthCell(FlatMap, 3, 2, 1));
         MatchPublicView view = match.Publish();
         Assert.True(view.Power!.Of(P0).Total < view.Power.Of(P1).Total);   // 样本口径：P0 落后
 
@@ -83,10 +84,10 @@ public class 战场落败复盘与等待者评估Tests
     {
         // 局面：P0 唯一可落的格四邻都是 P1 的子（各自另有气）→ 落下即自杀手，预演不合法；没有任何合法候选，正式决策必然 Pass。
         // 另：手里没有棋子 → 无手牌。判别力：变异 MP-4"无落子原因漏判无合法候选（Candidates == 0 一支删去）"→ 本测试红。
-        Coord cell = BirthCell(Map, 0, 2, 2);
-        MatchFlow match = Started([0, 0, 3, 4])
-            .Place(P0, BirthCell(Map, 0, 4, 4))
-            .Place(P1, BirthCell(Map, 0, 1, 2), BirthCell(Map, 0, 3, 2), BirthCell(Map, 0, 2, 1), BirthCell(Map, 0, 2, 3));
+        Coord cell = BirthCell(FlatMap, 0, 2, 2);
+        MatchFlow match = StartedFlat([0, 0, 3, 4])
+            .Place(P0, BirthCell(FlatMap, 0, 4, 4))
+            .Place(P1, BirthCell(FlatMap, 0, 1, 2), BirthCell(FlatMap, 0, 3, 2), BirthCell(FlatMap, 0, 2, 1), BirthCell(FlatMap, 0, 2, 3));
 
         BestMoveReview review = Review(match, cell);
 
@@ -99,7 +100,7 @@ public class 战场落败复盘与等待者评估Tests
         Assert.Equal(0, review.ComebackCandidates);
         Assert.Equal(1, review.Rejections[$"预演不合法:{BatchFailureKind.Suicide}"]);
 
-        BestMoveReview empty = Review(match, BirthCell(Map, 0, 0, 4), stock: 0);
+        BestMoveReview empty = Review(match, BirthCell(FlatMap, 0, 0, 4), stock: 0);
         Assert.Equal(NoMoveReason.NoStock, empty.NoMove);
         Assert.True(empty.ImpliesPass);
     }
@@ -108,11 +109,11 @@ public class 战场落败复盘与等待者评估Tests
     public void 能提子的一手()
     {
         // 局面：P1 一枚子三面被 P0 围住，P0 只能落它的最后一口气 → 提 1 子。最好一手的提子数与"提子候选"都计入。
-        Coord stone = BirthCell(Map, 0, 2, 2);
-        Coord cell = BirthCell(Map, 0, 2, 3);
-        MatchFlow match = Started([0, 0, 3, 4])
-            .Place(P0, BirthCell(Map, 0, 1, 2), BirthCell(Map, 0, 3, 2), BirthCell(Map, 0, 2, 1))
-            .Place(P1, stone, BirthCell(Map, 0, 0, 4));
+        Coord stone = BirthCell(FlatMap, 0, 2, 2);
+        Coord cell = BirthCell(FlatMap, 0, 2, 3);
+        MatchFlow match = StartedFlat([0, 0, 3, 4])
+            .Place(P0, BirthCell(FlatMap, 0, 1, 2), BirthCell(FlatMap, 0, 3, 2), BirthCell(FlatMap, 0, 2, 1))
+            .Place(P1, stone, BirthCell(FlatMap, 0, 0, 4));
         Assert.Single(match.Board.LibertiesOf(match.Board.GroupAt(stone)!));   // 样本口径：P1 这枚只剩一口气
 
         BestMoveReview review = Review(match, cell);
@@ -172,7 +173,25 @@ public class 战场落败复盘与等待者评估Tests
         }
 
         Assert.True(total >= 40, $"样本口径：只复盘了 {total} 次部署。");
-        Assert.Equal(2, decisive.Count(d => d));   // 样本口径：第 10 大回合 P0、第 12 大回合 P2 各一次决胜一手
+
+        // link-map-terrain 裁决 T1 = A：原样本下界"基线种子 3 里有 2 次决胜一手"（上面 wouldPass 的第二条腿）在改图后为 0 次。
+        // 改法：这条腿改用手写局面确定地走到——平坦手写图上 P0 落后、P1 已 Pass、权重写死使唯一单点评价为负（同 链接模式下的决胜一手Tests 的 Trailing 局面）：
+        // 同一个 AI 对象先复盘、再正式部署，复盘结论"本将 Pass"、正式决策被决胜一手改落——与基线里的对照口径（wouldPass = D:pass 或走了决胜一手）一致。
+        // 基线逐字节相同、逐次复盘与实际决策一致这两条主体断言一字未改。
+        MatchFlow trailing = StartedFlat([0, 0, 3, 4]).Place(P0, BirthCell(FlatMap, 0, FlatMap.BirthBoard(0).Width - 1, 0)).Place(P1, BirthCell(FlatMap, 0, 0, 0), BirthCell(FlatMap, 0, 1, 0));
+        trailing.Debug.SetOrder(P1, P0, P2, P3);
+        trailing.ToDeploy();
+        trailing.Pass();
+        Assert.Equal(P0, trailing.CurrentPlayer);
+        var decider = new HeuristicTurnController(P0, trailing.Publish, trailing.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Easy,
+            SimFixtures.PreCalibrationWeights with { PowerGain = -1, EnemyLoss = 0 }, AiSearchConfig.Easy with { PassThreshold = Threshold });
+        StagedBatch real = trailing.ToDeploy();
+        var probe = new StagedBatch(real.Board, real.Context);
+        BestMoveReview leg = decider.ReviewBestMove(probe, () => BatchRehearsal.Rehearse(probe.Board, probe.Context, probe.Placements, trailing.History));
+        decider.Deploy(real, trailing.Rehearse);
+        Assert.True(leg.ImpliesPass, $"复盘 {leg}");
+        Assert.NotNull(decider.LastDecisive);
+        Assert.False(decider.LastChoice!.IsPass);
 
         // 对局日志同样逐字节不变：同一种子（四人四区、截到第 13 个小回合，含两次链接）挂与不挂复盘各跑一次，确定性文本相同。
         MatchLog plain = MatchSession.Create(LinkSimFixtures.Config(turnLimit: 13), LinkSimFixtures.FourZoneSeed.Value).Run();

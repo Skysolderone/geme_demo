@@ -33,7 +33,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         var p0 = new PlayerId(0);
         var p3 = new PlayerId(3);
         Coord stoneA = a.Origin;
-        Coord stoneB = new(b.Origin.X + 1, b.Origin.Y + 2);
+        Coord stoneB = b.CoreOrigin;   // link-map-terrain：棋盘内可能有岩石 / 深水，取核心区的格（恒可落子）
         board.Place(stoneA, p0, PieceType.Basic);
         board.Place(stoneB, p3, PieceType.Fortress);
 
@@ -54,7 +54,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Siege.Core.Board.Battlefield merged = after.ById(0)!;
         Assert.Null(after.ById(3));
         Assert.Equal([0, 3], merged.BirthZones);
-        Assert.Equal(a.Width * a.Height + b.Width * b.Height, merged.Cells.Length);
+        Assert.Equal(before.ById(0)!.Cells.Length + before.ById(3)!.Cells.Length, merged.Cells.Length);
         HashSet<Coord> expected = [.. before.ById(0)!.Cells, .. before.ById(3)!.Cells.Select(c => new Coord(c.X + shift.Dx, c.Y + shift.Dy))];
         Assert.Equal(expected.Order(), merged.Cells);
         Assert.Equal(initial.PlayableCount, grown.PlayableCount);               // 没有新增格
@@ -74,30 +74,31 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
     [Fact]
     public void 共享边最长()
     {
-        // Scenario：锚点东侧边界由高低不齐的两块棋盘组成（0 号 5×5 在下、1 号 7×6 北贴在上且更宽，东沿只有 1 号的 6 行），被贴方为 5×5 →
-        // 纵向位置取共享边最长者（5）：候选 y = 7 与 8 并列，取偏南的 7。
+        // Scenario：锚点东侧边界由高低不齐的两块棋盘组成（0 号 6×6 在下、1 号 8×7 北贴在上且更宽，东沿只有 1 号的 7 行），被贴方为 6×6 →
+        // 纵向位置取共享边最长者（6）：候选底行 y = 8 与 9 并列，取偏南的 8。（link-map-terrain：边长 6–8，原算例为 5×5 / 7×6 / 5×5。）
+        ImmutableArray<BoardPlate> b = LinkMapFixtures.Births;
         ImmutableArray<BoardPlate> boards =
         [
-            new(new Coord(2, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(2, 7), 7, 6, BoardPlateKind.Birth),
-            new(new Coord(12, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(20, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(28, 2), 5, 5, BoardPlateKind.Birth),
+            b[0] with { Origin = new Coord(2, 2) },
+            b[1] with { Origin = new Coord(2, 8), Width = 8, Height = 7 },
+            b[2] with { Origin = new Coord(13, 2) },
+            b[3] with { Origin = new Coord(22, 2) },
+            b[4] with { Origin = new Coord(31, 2) },
         ];
         MapData map = LinkMapFixtures.Build("test-link-uneven", boards, mapVersion: 1);
         Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
         Assert.Equal(4, Battlefields.Of(map).Count);
 
         LinkResult result = LinkMapGenerator.Link(map, 0, 2, LinkSide.East);
-        Assert.Equal(5, result.SharedEdge);
-        Assert.Equal(new BattlefieldShift(2, -3, 5), result.Shifts.Single(s => s.Battlefield == 2));   // 最西列 12 → 9，底行 2 → 7（偏南）
-        Assert.Equal(new Coord(9, 7), result.Map.Boards[2].Origin);
-        // 其余两块按原次序排到合并战场东侧，间距 3：合并外接矩形最东列 13 → 17 与 25；画布东 / 北边界外留 2 格。
+        Assert.Equal(6, result.SharedEdge);
+        Assert.Equal(new BattlefieldShift(2, -3, 6), result.Shifts.Single(s => s.Battlefield == 2));   // 最西列 13 → 10，底行 2 → 8（偏南）
+        Assert.Equal(new Coord(10, 8), result.Map.Boards[2].Origin);
+        // 其余两块按原次序排到合并战场东侧，间距 3：合并外接矩形最东列 15 → 19 与 28；画布东 / 北边界外留 2 格。
         Assert.Equal(new BattlefieldShift(3, -3, 0), result.Shifts.Single(s => s.Battlefield == 3));
         Assert.Equal(new BattlefieldShift(4, -3, 0), result.Shifts.Single(s => s.Battlefield == 4));
-        Assert.Equal(new Coord(17, 2), result.Map.Boards[3].Origin);
-        Assert.Equal(new Coord(25, 2), result.Map.Boards[4].Origin);
-        Assert.Equal((32, 15), (result.Map.Width, result.Map.Height));
+        Assert.Equal(new Coord(19, 2), result.Map.Boards[3].Origin);
+        Assert.Equal(new Coord(28, 2), result.Map.Boards[4].Origin);
+        Assert.Equal((36, 17), (result.Map.Width, result.Map.Height));
         Assert.Equal(3, Battlefields.Of(result.Map).Count);
         Assert.Equal([0, 1, 2], Battlefields.Of(result.Map).ById(0)!.BirthZones);
     }
@@ -134,7 +135,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
     public void 合并战场以西的战场不动()
     {
         // Scenario（裁决 J8-1）：一次链接后，未参与战场整体位于合并战场以西 → 坐标不变；只有以东（或与之交叠 / 紧贴）的被收拢东移。
-        // 夹具五块 5×5 在 x = 2 / 10 / 18 / 26 / 34：链接 2 与 3（东贴）→ 合并战场 x 18–27；0、1 号在其以西不动，4 号收拢到 31（间距 3）。
+        // 夹具五块 6×6 在 x = 2 / 11 / 20 / 29 / 38：链接 2 与 3（东贴）→ 合并战场 x 20–31；0、1 号在其以西不动，4 号收拢到 35（间距 3）。
         MapData initial = LinkMapFixtures.Initial();
         LinkResult result = LinkMapGenerator.Link(initial, 2, 3, LinkSide.East);
 
@@ -145,8 +146,8 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Assert.Equal(new BattlefieldShift(4, -3, 0), result.Shifts.Single(s => s.Battlefield == 4));
         Assert.Equal(initial.Boards[0], result.Map.Boards[0]);
         Assert.Equal(initial.Boards[1], result.Map.Boards[1]);
-        Assert.Equal(new Coord(31, 2), result.Map.Boards[4].Origin);
-        Assert.Equal(38, result.Map.Width);
+        Assert.Equal(new Coord(35, 2), result.Map.Boards[4].Origin);
+        Assert.Equal(43, result.Map.Width);
         Assert.True(MapValidator.Validate(result.Map).IsValid, MapValidator.Validate(result.Map).ToString());
     }
 
@@ -154,52 +155,53 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
     public void 越界候选被排除()
     {
         // Scenario（裁决 J8-3）：决赛北贴、锚点在最西、锚点顶行只剩西块、被贴方底行只剩东块。
-        // 情形一：锚点顶行宽（0 号 5×7 + 1 号 7×7，顶行 x 2–13），被贴方东块 5 宽可落在 8 个位置共享边都是 5；偏西的 3 个会让被贴方西块越出原点，
-        // 排除后取最西的不越界者（被贴方最西列恰为 0），锚点不动。
+        // 情形一：锚点顶行宽（0 号 6×8 + 1 号 8×8，顶行 x 2–15），被贴方东块 6 宽可落在 9 个位置共享边都是 6；偏西的 4 个会让被贴方西块越出原点，
+        // 排除后取最西的不越界者（被贴方最西列恰为 0），锚点不动。（link-map-terrain：边长 6–8，原算例为 5×7 / 7×7 / 5×5 / 5×7 / 5×5。）
+        ImmutableArray<BoardPlate> b = LinkMapFixtures.Births;
         ImmutableArray<BoardPlate> wide =
         [
-            new(new Coord(2, 2), 5, 7, BoardPlateKind.Birth),
-            new(new Coord(7, 2), 7, 7, BoardPlateKind.Birth),
-            new(new Coord(20, 4), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(25, 2), 5, 7, BoardPlateKind.Birth),
-            new(new Coord(35, 2), 5, 5, BoardPlateKind.Birth),
+            b[0] with { Origin = new Coord(2, 2), Height = 8 },
+            b[1] with { Origin = new Coord(8, 2), Width = 8, Height = 8 },
+            b[2] with { Origin = new Coord(19, 4) },
+            b[3] with { Origin = new Coord(25, 2), Height = 8 },
+            b[4] with { Origin = new Coord(34, 2) },
         ];
         MapData map = LinkMapFixtures.Build("test-link-west-wide", wide, mapVersion: 2);
         Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
         LinkResult kept = LinkMapGenerator.Link(map, 0, 2, LinkSide.North);
-        Assert.Equal(5, kept.SharedEdge);
+        Assert.Equal(6, kept.SharedEdge);
         Assert.Equal(new BattlefieldShift(0, 0, 0), kept.Shifts.Single(s => s.Battlefield == 0));
-        Assert.Equal(new BattlefieldShift(2, -20, 7), kept.Shifts.Single(s => s.Battlefield == 2));
-        Assert.Equal(new BattlefieldShift(4, -18, 0), kept.Shifts.Single(s => s.Battlefield == 4));
+        Assert.Equal(new BattlefieldShift(2, -19, 8), kept.Shifts.Single(s => s.Battlefield == 2));
+        Assert.Equal(new BattlefieldShift(4, -15, 0), kept.Shifts.Single(s => s.Battlefield == 4));
         Assert.Equal(0, kept.Map.Boards[2].Origin.X);
         Assert.True(MapValidator.Validate(kept.Map).IsValid, MapValidator.Validate(kept.Map).ToString());
 
-        // 情形二：锚点顶行只剩 0 号 5 宽（1 号 5×5 更矮），被贴方东块只有一个共享边 5 的位置、且会让西块越出原点 3 列 →
-        // 整个布局（含锚点）整体东移 3，锚点向量 (3, 0) 记入链接记录；不抛异常。
+        // 情形二：锚点顶行只剩 0 号 6 宽（1 号 6×6 更矮），被贴方东块只有一个共享边 6 的位置、且会让西块越出原点 4 列 →
+        // 整个布局（含锚点）整体东移 4，锚点向量 (4, 0) 记入链接记录；不抛异常。
         ImmutableArray<BoardPlate> narrow =
         [
-            new(new Coord(2, 2), 5, 7, BoardPlateKind.Birth),
-            new(new Coord(7, 2), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(20, 4), 5, 5, BoardPlateKind.Birth),
-            new(new Coord(25, 2), 5, 7, BoardPlateKind.Birth),
-            new(new Coord(35, 2), 5, 5, BoardPlateKind.Birth),
+            b[0] with { Origin = new Coord(2, 2), Height = 8 },
+            b[1] with { Origin = new Coord(8, 2) },
+            b[2] with { Origin = new Coord(17, 4) },
+            b[3] with { Origin = new Coord(23, 2), Height = 8 },
+            b[4] with { Origin = new Coord(32, 2) },
         ];
         MapData tight = LinkMapFixtures.Build("test-link-west-narrow", narrow, mapVersion: 2);
         Assert.True(MapValidator.Validate(tight).IsValid, MapValidator.Validate(tight).ToString());
         LinkResult shifted = LinkMapGenerator.Link(tight, 0, 2, LinkSide.North);
-        Assert.Equal(5, shifted.SharedEdge);
-        Assert.Equal(new BattlefieldShift(0, 3, 0), shifted.Shifts.Single(s => s.Battlefield == 0));
-        Assert.Equal(new BattlefieldShift(2, -20, 7), shifted.Shifts.Single(s => s.Battlefield == 2));
-        Assert.Equal(new BattlefieldShift(4, -17, 0), shifted.Shifts.Single(s => s.Battlefield == 4));
-        Assert.Equal([new Coord(5, 2), new Coord(10, 2), new Coord(0, 11), new Coord(5, 9), new Coord(18, 2)], shifted.Map.Boards.Select(b => b.Origin));
-        Assert.Equal((25, 18), (shifted.Map.Width, shifted.Map.Height));
+        Assert.Equal(6, shifted.SharedEdge);
+        Assert.Equal(new BattlefieldShift(0, 4, 0), shifted.Shifts.Single(s => s.Battlefield == 0));
+        Assert.Equal(new BattlefieldShift(2, -17, 8), shifted.Shifts.Single(s => s.Battlefield == 2));
+        Assert.Equal(new BattlefieldShift(4, -11, 0), shifted.Shifts.Single(s => s.Battlefield == 4));
+        Assert.Equal([new Coord(6, 2), new Coord(12, 2), new Coord(0, 12), new Coord(6, 10), new Coord(21, 2)], shifted.Map.Boards.Select(p => p.Origin));
+        Assert.Equal((29, 20), (shifted.Map.Width, shifted.Map.Height));
         Assert.True(MapValidator.Validate(shifted.Map).IsValid, MapValidator.Validate(shifted.Map).ToString());
 
         // 锚点的格与棋子按锚点向量整体平移，盘面逐格搬运（GameBoard 层）。
         GameBoard board = GameBoard.Load(tight);
         board.Place(new Coord(2, 8), new PlayerId(0), PieceType.Basic);
         board.ApplySplice(shifted.Map, shifted.Translate);
-        Assert.Equal(new Occupant(new PlayerId(0), PieceType.Basic), board[new Coord(5, 8)].Occupant);
+        Assert.Equal(new Occupant(new PlayerId(0), PieceType.Basic), board[new Coord(6, 8)].Occupant);
     }
 
     [Fact]
@@ -214,6 +216,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         var widths = new List<int>();
         var heights = new List<int>();
         var playable = new List<int>();
+        var totals = new List<int>();
         int movedOthers = 0;
         int stayedWest = 0;
         int touchingPacked = 0;
@@ -221,6 +224,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         for (ulong seed = 1; seed <= 20; seed++)
         {
             MapData initial = LinkMapGenerator.Generate(seed);
+            totals.Add(initial.PlayableCount);
             widths.Add(initial.Width);
             heights.Add(initial.Height);
             var memo = new Dictionary<string, LinkResult>(StringComparer.Ordinal);
@@ -293,7 +297,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         }
 
         output.WriteLine($"去重后 {distinct} 次拼接；共享边分布 {string.Join(" ", shared.Select(kv => $"{kv.Key}:{kv.Value}"))}");
-        output.WriteLine($"画布宽 {widths.Min()}–{widths.Max()}，高 {heights.Min()}–{heights.Max()}（含初始图）；合并战场可落子格 {playable.Min()}–{playable.Max()}");
+        output.WriteLine($"画布宽 {widths.Min()}–{widths.Max()}，高 {heights.Min()}–{heights.Max()}（含初始图）；合并战场可落子格 {playable.Min()}–{playable.Max()}；全图可落子格 {totals.Min()}–{totals.Max()}");
         output.WriteLine($"未参与战场：以西不动 {stayedWest} 次，收拢东移 {movedOthers} 次（其中以西但紧贴而被收拢 {touchingPacked} 次）；整体越界平移 {globalShifts} 次");
 
         Assert.Equal(20 * 45, links[0]);
@@ -303,15 +307,21 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Assert.True(stayedWest > 0, "样本口径：确有以西不动的未参与战场");
         Assert.All(widths, w => Assert.InRange(w, LinkCanvas.MinColumns, LinkCanvas.MaxColumns));
         Assert.All(heights, h => Assert.InRange(h, LinkCanvas.MinRows, LinkCanvas.MaxRows));
+        Assert.All(totals, n => Assert.InRange(n, LinkCanvas.MinPlayable, LinkCanvas.MaxPlayable));
     }
 
-    /// <summary>校验器链接行的画布区间（裁决 J8-6：按本类穷举实测向外留余量；与 <c>MapValidator</c> 声明行同值，改一处要同步另一处）。</summary>
+    /// <summary>
+    /// 校验器链接行的画布与可落子格区间（裁决 J8-6 / link-map-terrain M9：按本类穷举实测向外留余量；与 <c>MapValidator</c> 声明行同值，改一处要同步另一处）。
+    /// link-map-terrain 3.3 实测（种子 1–20、1600 次去重拼接）：画布宽 26–76、高 10–20，全图可落子 212–280；旧值（5–7 边长纯平棋盘）列 20–75、行 8–21、可落子 125–245。
+    /// </summary>
     internal static class LinkCanvas
     {
         internal const int MinColumns = 20;
-        internal const int MaxColumns = 75;
+        internal const int MaxColumns = 85;
         internal const int MinRows = 8;
-        internal const int MaxRows = 21;
+        internal const int MaxRows = 24;
+        internal const int MinPlayable = 170;
+        internal const int MaxPlayable = 320;
     }
 
     [Fact]
