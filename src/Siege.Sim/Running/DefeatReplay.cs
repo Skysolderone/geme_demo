@@ -78,27 +78,9 @@ public static class DefeatReplay
         }
 
         DefeatReplayResult Skip(string reason) => new(header.Seed, targets, missing, [], reason);
-
-        // 与 Replayer 同一组前置核对：地图内容摘要、AI 评价版本——任一不同，今天的实现重现不了那一局的决策，不复盘。
-        string mapId = header.Config.MapPerMatch ? header.MapId : header.Config.MapId;
-        MapData map = MapCatalog.Resolve(mapId);
-        if (header.MapDigest is { } recorded && !string.Equals(recorded, MapFile.Digest(map), StringComparison.Ordinal))
-        {
-            return Skip("地图摘要不一致");
-        }
-
-        if (header.AiEvaluationVersion != EvaluationBreakdown.Version)
-        {
-            return Skip("AI 评价版本不一致");
-        }
-
-        RecordedCarry? carry = header.CarryInOut is { } carryInOut ? new RecordedCarry(carryInOut, log.CarryIns) : null;
-        MatchSession session = MatchSession.Create(header.Config, log.Seed, map, recorded: true, carry, new RecordedPairingSource(log.RecordedPairings()));
         Dictionary<int, DefeatTarget> byTurn = targets.ToDictionary(t => t.Turn);
-        Dictionary<int, TurnSnapshot> original = log.Turns.GroupBy(t => t.Turn).ToDictionary(g => g.Key, g => g.Last());
         var entries = new List<DefeatReviewEntry>();
         var decisive = new List<DecisiveEntry>();
-        string? failure = null;
 
         // 决胜一手的留痕在 AI 决策之后才有：每次部署前收上一次部署者的 LastDecisive，回放结束再收最后一次。
         (HeuristicTurnController Ai, int Turn, int Round)? previous = null;
@@ -112,7 +94,8 @@ public static class DefeatReplay
             previous = null;
         }
 
-        session.ObserveDeploy(batch =>
+        // 回放驱动（前置核对、逐小回合核对、异常即未能复盘）与改造诊断共用 LogReplay（ai-terrain-review 1.2 原样抽出）。
+        string? failure = LogReplay.Run(log, (session, batch) =>
         {
             Harvest();
             if (session.AiOf(batch.Context.Player) is { } deciding)
@@ -120,22 +103,20 @@ public static class DefeatReplay
                 previous = (deciding, session.TurnCount + 1, session.Match.MajorRound);
             }
 
-            if (failure is not null || !byTurn.TryGetValue(session.TurnCount + 1, out DefeatTarget? target))
+            if (!byTurn.TryGetValue(session.TurnCount + 1, out DefeatTarget? target))
             {
-                return;
+                return null;
             }
 
             var player = new PlayerId(target.Player);
             if (batch.Context.Player != player)
             {
-                failure = $"第 {target.Turn} 小回合的行动玩家是 {batch.Context.Player}，日志记的是 {player}";
-                return;
+                return $"第 {target.Turn} 小回合的行动玩家是 {batch.Context.Player}，日志记的是 {player}";
             }
 
             if (session.AiOf(player) is not { } ai)
             {
-                failure = $"玩家 {player} 的控制者不是启发式 AI";
-                return;
+                return $"玩家 {player} 的控制者不是启发式 AI";
             }
 
             // 影子批次：同一盘面与批次上下文，预演走同一个零副作用入口（与 MatchFlow.Rehearse 同一实现、同一份已提交盘面集合），
@@ -144,34 +125,8 @@ public static class DefeatReplay
             var shadow = new StagedBatch(batch.Board, batch.Context);
             BestMoveReview review = ai.ReviewBestMove(shadow, () => BatchRehearsal.Rehearse(shadow.Board, shadow.Context, shadow.Placements, match.History));
             entries.Add(new DefeatReviewEntry(header.Seed, target, review));
+            return null;
         });
-
-        int last = log.Turns[^1].Turn;
-        try
-        {
-            while (failure is null && session.TurnCount < last)
-            {
-                int before = session.TurnCount;
-                bool more = session.RunTurn();
-                if (session.TurnCount > before)
-                {
-                    TurnSnapshot replayed = session.RecordedTurns[^1];
-                    if (!original.TryGetValue(replayed.Turn, out TurnSnapshot? expected) || !SameMove(expected, replayed))
-                    {
-                        failure = $"回放在第 {replayed.Turn} 小回合分歧";
-                    }
-                }
-
-                if (!more)
-                {
-                    break;
-                }
-            }
-        }
-        catch (Exception ex) when (ex is SiegeRuleException or SimAssertionException or InvalidOperationException)
-        {
-            failure = $"回放抛出 {ex.GetType().Name}";
-        }
 
         Harvest();
         if (failure is null && entries.Count != targets.Count)
@@ -181,9 +136,4 @@ public static class DefeatReplay
 
         return failure is null ? new DefeatReplayResult(header.Seed, targets, missing, entries, null) { Decisive = decisive } : Skip(failure);
     }
-
-    /// <summary>回放与原日志的一个小回合是否相同：行动玩家、大回合、是否 Pass、落子与提子逐项相同（耗时等非确定字段不比）。</summary>
-    private static bool SameMove(TurnSnapshot a, TurnSnapshot b) =>
-        a.Turn == b.Turn && a.MajorRound == b.MajorRound && a.Player == b.Player && a.Passed == b.Passed
-        && a.Placements.SequenceEqual(b.Placements, StringComparer.Ordinal) && a.Captures.SequenceEqual(b.Captures, StringComparer.Ordinal);
 }

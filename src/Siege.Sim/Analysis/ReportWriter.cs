@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -221,6 +222,17 @@ public static class ReportWriter
             AppendWaiters(sb, waiters);
         }
 
+        // ai-terrain-review 1.3 / 1.2：两段追加在最末（缺省报告只多「主题表现」，旧报告前缀逐字节不变）；改造诊断只在 --review-artisan 时出现。
+        if (r.Themes is { } performance)
+        {
+            AppendThemePerformance(sb, performance);
+        }
+
+        if (r.ArtisanReview is { } artisan)
+        {
+            AppendArtisanReview(sb, artisan);
+        }
+
         return sb.ToString();
     }
 
@@ -314,6 +326,136 @@ public static class ReportWriter
             sb.AppendLine($"  - {p.Seed} P{p.Player} {(p.Group == FinalistGroup.Waiter ? "等待者" : "首轮胜者")} {p.Origin} 等 {p.WaitingRounds} 势力 {p.Power} 差 {p.PowerGap} {(p.Won ? "胜" : "负")}");
         }
     }
+
+    /// <summary>主题表现（ai-terrain-review 1.3）：按玩家锁定的出生棋盘主题分组，首轮战场胜率、名次均值、第 3 大回合结束时势力、该主题棋盘上的改造次数与类别。</summary>
+    private static void AppendThemePerformance(StringBuilder sb, ThemeSection t)
+    {
+        sb.AppendLine();
+        sb.AppendLine("## 主题表现（ai-terrain-review：按玩家锁定的出生棋盘主题分组，同区多人各计）");
+        sb.AppendLine($"- 纳入带主题的链接模式 {t.Matches} 局（有名次 {t.RankedMatches} 局）。口径：首轮战场 = 该玩家出现在名单里的第一次战场结算、且早于决赛配对事件；未经结算即在决赛配对前出局（势力归零等）记首轮落败；"
+            + "决赛前既未经历结算也未出局者（3+1 单人棋盘、首轮未配对的等待者、截断前未结算）单列「无首轮」、不进分母；名次只计有名次的局；"
+            + $"第 {ThemeAnalyzer.Round3} 大回合结束时 = 该大回合最后一条快照，势力名次 = 本局四人里的名次（1 最高，并列取高）；改造按目标所在棋盘归主题（同「按主题统计」）");
+        foreach (ThemeStat s in t.Themes)
+        {
+            string edits = string.Join(" / ", ArtisanEditReview.Kinds.Select(k => $"{EditActionName(k.ToString())} {s.Edits.GetValueOrDefault(k.ToString())}"));
+            sb.AppendLine($"- {s.Theme.DisplayName()}：锁定 {s.Seats} 人次；首轮战场胜 {s.FirstFieldWins}/{s.FirstFieldSeats}（{Pct(Share(s.FirstFieldWins, s.FirstFieldSeats))}；其中未经结算即出局 {s.FirstFieldEliminated}），无首轮 {s.NoFirstField}；"
+                + $"平均名次 {Num(s.MeanRank)}（有名次 {s.RankedSeats} 人次），胜 {s.Wins}；"
+                + $"第 {ThemeAnalyzer.Round3} 大回合结束时势力 均值 {Num(Statistics.Mean(s.Round3Powers.Select(v => (double)v)))}，中位 {Num(Statistics.Median(s.Round3Powers.Select(v => (double)v)))}，"
+                + $"范围 {(s.Round3Powers.Count == 0 ? "无样本" : $"{s.Round3Powers[0]}–{s.Round3Powers[^1]}")}，势力名次均值 {Num(Statistics.Mean(s.Round3PowerRanks.Select(v => (double)v)))}（样本 {s.Round3Powers.Count}）；"
+                + $"该主题棋盘上的匠人改造 {s.EditTotal} 次（{edits}）");
+        }
+    }
+
+    /// <summary>
+    /// AI 改造诊断（ai-terrain-review 1.2）：汇总在前、按主题与逐次明细在后。口径写进段首：三层计数、处境判定次序、收益口径、实际选择取自日志。
+    /// </summary>
+    private static void AppendArtisanReview(StringBuilder sb, ArtisanReviewSection a)
+    {
+        List<ArtisanReviewItem> items = [.. a.Items];
+        sb.AppendLine();
+        sb.AppendLine("## AI 改造诊断（ai-terrain-review：每次 AI 匠人可改造的时刻 = 手里有匠人、部署上限 > 0 的 AI 部署；按日志回放到该时刻，用其自身 AI 配置的候选格预筛、单点枚举、预演、活形硬约束与评价）");
+        sb.AppendLine("- 口径：① 规则合法目标 = 合法落子范围内全部可落子空格上的（匠人落点, 目标）对，经唯一实现 TerrainEditRules.LegalTargets，不预演；② 其中落点进入完整枚举（候选格上限预筛之后）的对数；"
+            + "③ 合法候选 = ② 里经暂放、预演与活形硬约束留下的匠人单点。收益 = 单点加权总分 − Pass 加权总分（与停手阈值同口径）；名次 = 在全部合法单点排序（未截断）里的名次，贪心组批只看前 N。"
+            + "处境按次序取第一条：无合法目标（① = 0）→ 候选生成阶段排除（① > 0、② = 0：目标所在格全被预筛挡掉）→ 候选全部落选（③ = 0）→ 排在前 N 之外 → 落后于第一名 → 第一名。"
+            + "预筛外 = ① − ② 那些格上的搭桥 / 烧林经同一打分路径的结果（立栅不做）。实际选择取自原日志该小回合已确认的批次");
+        sb.AppendLine($"- 涉及 {a.Logs} 局，未能复盘的局：{Histogram(a.SkippedLogs)}；匠人可改造时刻 {items.Count} 次");
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        sb.AppendLine($"- 实际选择分布：{Histogram(Count(items.Select(i => ChoiceText(i.Entry.Choice))))}；实际改造：{string.Join(" / ", ArtisanEditReview.Kinds.Select(k => $"{EditActionName(k.ToString())} {items.Sum(i => i.Entry.Choice.Count(c => c.ToString() == k.ToString()))}"))}");
+        sb.AppendLine($"- 单点排序第一名的类别：{Histogram(Count(items.Select(i => TopText(i.Entry.Review))))}；第一名收益分位数：{Quantiles([.. items.Where(i => i.Entry.Review.Top is not null).Select(i => i.Entry.Review.Top!.Gain).Order()])}");
+        List<ArtisanReviewItem> withNone = [.. items.Where(i => i.Entry.Review.NoEdit is not null)];
+        sb.AppendLine($"- 匠人不改造：有合法候选 {withNone.Count}/{items.Count} 次，最好一手收益分位数：{Quantiles([.. withNone.Select(i => i.Entry.Review.NoEdit!.Gain).Order()])}");
+        foreach (TerrainEditKind kind in ArtisanEditReview.Kinds)
+        {
+            string name = EditActionName(kind.ToString());
+            List<ArtisanKindReview> ks = [.. items.Select(i => i.Entry.Review.Of(kind))];
+            SortedDictionary<string, int> statuses = Count(items.Select(i => StatusText(i.Entry.Review.StatusOf(kind))));
+            int behind = items.Count(i => i.Entry.Review.StatusOf(kind) is ArtisanKindStatus.OutsideTopN or ArtisanKindStatus.Behind);
+            int behindNotChosen = items.Count(i => i.Entry.Review.StatusOf(kind) is ArtisanKindStatus.OutsideTopN or ArtisanKindStatus.Behind && !i.Entry.Choice.Any(c => c.ToString() == kind.ToString()));
+            sb.AppendLine($"- {name}：处境 {Histogram(statuses)}；无合法目标 {items.Count(i => i.Entry.Review.StatusOf(kind) == ArtisanKindStatus.NoTarget)} 次，"
+                + $"候选生成阶段排除 {items.Count(i => i.Entry.Review.StatusOf(kind) == ArtisanKindStatus.ExcludedByPrefilter)} 次，有目标但评价落后（前 N 之外 + 落后于第一名）{behind} 次（其中实际未选{name} {behindNotChosen} 次）");
+            sb.AppendLine($"  - ① 规则合法目标对数分位数：{Quantiles([.. ks.Select(k => (BigInteger)k.RangeTargets).Order()])}；② 进入枚举：{Quantiles([.. ks.Select(k => (BigInteger)k.EnumeratedTargets).Order()])}；"
+                + $"③ 合法候选数：{Quantiles([.. ks.Select(k => (BigInteger)k.Candidates).Order()])}");
+            List<ArtisanReviewItem> withBest = [.. items.Where(i => i.Entry.Review.Of(kind).Best is not null)];
+            sb.AppendLine($"  - 最好一手收益分位数（有合法候选 {withBest.Count} 次）：{Quantiles([.. withBest.Select(i => i.Entry.Review.Of(kind).Best!.Gain).Order()])}；"
+                + $"名次分位数：{Quantiles([.. withBest.Select(i => (BigInteger)i.Entry.Review.Of(kind).Best!.Rank!.Value).Order()])}");
+            List<ArtisanReviewItem> paired = [.. withBest.Where(i => i.Entry.Review.NoEdit is not null)];
+            sb.AppendLine($"  - 最好一手 − 匠人不改造最好一手（两者都有 {paired.Count} 次）：{Quantiles([.. paired.Select(i => i.Entry.Review.Of(kind).Best!.Gain - i.Entry.Review.NoEdit!.Gain).Order()])}");
+            List<ImmutableArray<BigInteger>> effects = [.. ks.Where(k => !k.EditEffect.IsEmpty).Select(k => k.EditEffect)];
+            sb.AppendLine($"  - 改造本身的加权效果（最好一手 − 同一落点匠人不改造，逐维加权贡献之差的均值；{effects.Count} 次）："
+                + (effects.Count == 0 ? "无样本" : string.Join("，", Enum.GetValues<EvaluationDimension>().Select(d => $"{d} {Num(effects.Average(e => (double)e[(int)d]))}")))
+                + (effects.Count == 0 ? string.Empty : $"；合计 {Num(effects.Average(e => (double)e.Aggregate(BigInteger.Zero, (x, y) => x + y)))}"));
+            if (kind != TerrainEditKind.Fence)
+            {
+                List<ArtisanReviewItem> outside = [.. items.Where(i => i.Entry.Review.Of(kind).RangeTargets > i.Entry.Review.Of(kind).EnumeratedTargets)];
+                List<ArtisanReviewItem> outsideBest = [.. outside.Where(i => i.Entry.Review.Of(kind).OutsideBest is not null)];
+                int beatsTop = outsideBest.Count(i => i.Entry.Review.Top is { } top && i.Entry.Review.Of(kind).OutsideBest!.Gain > top.Gain);
+                sb.AppendLine($"  - 预筛外：有预筛外目标 {outside.Count} 次，其中有合法候选 {outsideBest.Count} 次（候选合计 {outside.Sum(i => i.Entry.Review.Of(kind).OutsideCandidates ?? 0)}）；"
+                    + $"预筛外最好一手收益分位数：{Quantiles([.. outsideBest.Select(i => i.Entry.Review.Of(kind).OutsideBest!.Gain).Order()])}；高于当时第一名收益 {beatsTop} 次");
+            }
+        }
+
+        sb.AppendLine("- 按出生棋盘主题（被诊断玩家锁定的棋盘）：");
+        foreach (IGrouping<BoardTheme?, ArtisanReviewItem> g in items.GroupBy(i => i.Theme).OrderBy(g => g.Key is { } k ? (int)k : int.MaxValue))
+        {
+            string theme = g.Key is { } th ? th.DisplayName() : "无主题";
+            string kinds = string.Join("；", ArtisanEditReview.Kinds.Select(k => $"{EditActionName(k.ToString())} {Histogram(Count(g.Select(i => StatusText(i.Entry.Review.StatusOf(k)))))}"));
+            sb.AppendLine($"  - {theme}：{g.Count()} 次；实际选择 {Histogram(Count(g.Select(i => ChoiceText(i.Entry.Choice))))}；{kinds}");
+        }
+
+        sb.AppendLine("- 逐次明细（种子 / 大回合 / 玩家 / 小回合（主题）；阈值；匠人库存 / 部署上限；空格 / 枚举格；实际选择；第一名；匠人不改造；三类 ①/②/③ 最好一手 收益（名次）处境，搭桥 / 烧林另列预筛外）：");
+        foreach (ArtisanReviewItem i in items)
+        {
+            ArtisanEditReview v = i.Entry.Review;
+            string kinds = string.Join("；", v.KindReviews.Select(k =>
+                $"{EditActionName(k.Kind.ToString())} {k.RangeTargets}/{k.EnumeratedTargets}/{k.Candidates} {OptionText(k.Best)} {StatusText(v.StatusOf(k.Kind))}"
+                + (k.OutsideCandidates is { } n ? $" 预筛外 {n} {OptionText(k.OutsideBest)}" : string.Empty)));
+            sb.AppendLine($"  - {i.Entry.Seed} R{i.Entry.MajorRound} P{v.Player.Value} T{i.Entry.Turn}（{(i.Theme is { } th ? th.DisplayName() : "无主题")}）：阈值 {v.PassThreshold}；匠人 {v.ArtisanStock} / 上限 {v.DeployLimit}；"
+                + $"空格 {v.LegalCells} / 枚举格 {v.CandidateCells}；选择 {ChoiceText(i.Entry.Choice)}；第一名 {OptionText(v.Top)}；不改造 {OptionText(v.NoEdit)}；{kinds}");
+        }
+    }
+
+    private static SortedDictionary<string, int> Count(IEnumerable<string> keys)
+    {
+        var h = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (string key in keys)
+        {
+            h[key] = h.GetValueOrDefault(key) + 1;
+        }
+
+        return h;
+    }
+
+    private static string OptionText(ArtisanOption? o) =>
+        o is null ? "无" : $"[{o.Placement}] {o.Gain}{(o.Rank is { } r ? $"（#{r}）" : string.Empty)}";
+
+    private static string ChoiceText(IEnumerable<ArtisanChoice> choices) => string.Join("+", choices.Select(c => c switch
+    {
+        ArtisanChoice.Pass => "Pass",
+        ArtisanChoice.NoArtisan => "未落匠人",
+        ArtisanChoice.ArtisanNoEdit => "匠人不改造",
+        _ => EditActionName(c.ToString()),
+    }));
+
+    private static string TopText(ArtisanEditReview v) =>
+        v.Top is not { } top ? "无合法单点"
+        : top.Placement.Type != TerrainEditRules.EditorType ? "其他类型"
+        : top.Placement.Edit is { } edit ? EditActionName(edit.Kind.ToString())
+        : "匠人不改造";
+
+    private static string StatusText(ArtisanKindStatus status) => status switch
+    {
+        ArtisanKindStatus.NoTarget => "a.无合法目标",
+        ArtisanKindStatus.ExcludedByPrefilter => "b.预筛排除",
+        ArtisanKindStatus.AllRejected => "c.全部落选",
+        ArtisanKindStatus.OutsideTopN => "d.前N之外",
+        ArtisanKindStatus.Behind => "e.落后于第一名",
+        ArtisanKindStatus.Leading => "f.第一名",
+        _ => status.ToString(),
+    };
 
     private static double Share(int part, int whole) => whole == 0 ? double.NaN : (double)part / whole;
 

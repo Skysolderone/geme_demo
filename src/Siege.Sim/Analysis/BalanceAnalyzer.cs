@@ -23,6 +23,12 @@ public sealed record AnalysisOptions
     /// 关闭时 <see cref="BalanceReport.DefeatReview"/> 为 <c>null</c>，报告里没有这一段。
     /// </summary>
     public bool ReviewDefeats { get; init; }
+
+    /// <summary>
+    /// 是否做 AI 改造诊断（ai-terrain-review 1.2）：要按日志回放每局并在每个匠人时刻多做一遍完整枚举，缺省关闭；<c>analyze --review-artisan</c> 开启。
+    /// 关闭时 <see cref="BalanceReport.ArtisanReview"/> 为 <c>null</c>，报告里没有这一段。
+    /// </summary>
+    public bool ReviewArtisan { get; init; }
 }
 
 /// <summary>收敛情况（裁决 13 → round-cap D5）：非达上限终局 vs 以 <c>MajorRoundLimit</c>（达大回合上限）终局，单独成段。</summary>
@@ -320,6 +326,9 @@ public sealed record BalanceReport(
 
     /// <summary>按主题统计（link-map-terrain 5.2）；没有带主题的链接模式纳入局时为 <c>null</c>，报告里整段不出现。</summary>
     public ThemeSection? Themes { get; init; }
+
+    /// <summary>AI 改造诊断（ai-terrain-review 1.2）；未开启（<see cref="AnalysisOptions.ReviewArtisan"/>）或没有可回放的链接模式局时为 <c>null</c>。</summary>
+    public ArtisanReviewSection? ArtisanReview { get; init; }
 }
 
 /// <summary>
@@ -440,6 +449,7 @@ public static class BalanceAnalyzer
             DefeatReview = options.ReviewDefeats ? PassReviewAnalyzer.ReviewDefeats(included) : null,
             Waiters = PassReviewAnalyzer.Waiters(included),
             Themes = ThemeAnalyzer.Analyze(included),
+            ArtisanReview = options.ReviewArtisan ? ArtisanReviewAnalyzer.Review(included) : null,
         };
     }
 

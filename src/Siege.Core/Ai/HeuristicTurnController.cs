@@ -459,6 +459,111 @@ public sealed class HeuristicTurnController : ITurnController
     }
 
     /// <summary>
+    /// 匠人改造诊断（ai-terrain-review 1.1，规格 match-telemetry「AI 改造与主题诊断」第 1 条）：在本玩家即将部署的局面上，按<b>正式决策的同一实现</b>
+    /// （同一观察视图与预演口径、同一评价器、同一候选格预筛 / 单点枚举 / 活形硬约束 / 单点排序）统计立栅 / 搭桥 / 烧林三类改造各自的
+    /// 规则合法目标数、进入完整枚举的目标数、合法候选数与最好一手，并给出排序第一名。只诊断，不做任何决定。
+    /// </summary>
+    /// <remarks>
+    /// <para>三层计数（每类各一份，口径见 <see cref="ArtisanKindReview"/>）：① 合法落子范围内<b>全部</b>可落子空格上的规则合法目标（唯一实现
+    /// <see cref="TerrainEditRules.LegalTargets(MapData, Coord, bool)"/>，不预演）；② 其中落在"进入完整枚举的格"（<see cref="PrefilterCells"/> 之后）上的目标；
+    /// ③ ② 里经暂放、预演与活形硬约束后留下的匠人单点（<see cref="ScorePoints"/> 的产物）。① &gt; 0 而 ② = 0 即"候选生成阶段排除"。</para>
+    /// <para>预筛外的格（① − ②）上的搭桥 / 烧林另经同一个 <see cref="ScoreOne"/> 打分（<see cref="ArtisanKindReview.Outside"/>），回答"若不被预筛掉，评价分是多少"；
+    /// 立栅每格 16 条边，开销大，不做这一项。</para>
+    /// <para>与 <see cref="ReviewBestMove"/> 同：只走 k = 0 的无扰动排序，<b>不消费扰动子流</b>；<paramref name="batch"/> 应是影子批次，
+    /// 本方法只在其上暂放 / 清空，不写 <see cref="Decisions"/>、<c>Last*</c> 留痕与任何随机流。实际选择由调用方在正式决策之后读 <see cref="LastChoice"/>。</para>
+    /// </remarks>
+    public ArtisanEditReview ReviewArtisanEdits(StagedBatch batch, Func<RehearsalResult> rehearse)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        ArgumentNullException.ThrowIfNull(rehearse);
+        if (RehearsalView is { } project)
+        {
+            Func<RehearsalResult> real = rehearse;
+            rehearse = () => project(real());
+        }
+
+        MatchPublicView view = _observe();
+        BatchEvaluator evaluator = CreateEvaluator(view);
+        int passThreshold = EffectivePassThreshold(view);
+        BatchContext context = batch.Context;
+        batch.Clear();
+
+        MapData map = batch.Board.Map;
+        ImmutableArray<Coord> legal = [.. context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
+        BigInteger passTotal = evaluator.Evaluate([], rehearse(), context).Total;
+        (ImmutableArray<Coord> cells, List<PointScore> points) = ScorePoints(batch, rehearse, evaluator);
+        ImmutableArray<PointScore> ranked = [.. Rank(points)];
+        var enumerated = new HashSet<Coord>(cells);
+        bool holdsEditor = context.Stock.GetValueOrDefault(TerrainEditRules.EditorType) > 0;
+
+        (PointScore Point, int Rank)? FirstOf(Func<PointScore, bool> match)
+        {
+            for (int i = 0; i < ranked.Length; i++)
+            {
+                if (match(ranked[i]))
+                {
+                    return (ranked[i], i + 1);
+                }
+            }
+
+            return null;
+        }
+
+        var kinds = ImmutableArray.CreateBuilder<ArtisanKindReview>(3);
+        foreach (TerrainEditKind kind in ArtisanEditReview.Kinds)
+        {
+            int rangeTargets = 0, enumeratedTargets = 0;
+            var outside = new List<PointScore>();
+            foreach (Coord cell in legal)
+            {
+                ImmutableArray<TerrainEdit> targets = [.. TerrainEditRules.LegalTargets(map, cell, context.WorkshopActive).Where(e => e.Kind == kind)];
+                rangeTargets += targets.Length;
+                if (enumerated.Contains(cell))
+                {
+                    enumeratedTargets += targets.Length;
+                    continue;
+                }
+
+                if (holdsEditor && kind != TerrainEditKind.Fence)
+                {
+                    foreach (TerrainEdit edit in targets)
+                    {
+                        if (ScoreOne(batch, rehearse, evaluator, cell, TerrainEditRules.EditorType, edit, rejections: null) is { } point)
+                        {
+                            outside.Add(point);
+                        }
+                    }
+                }
+            }
+
+            int candidates = points.Count(p => p.Type == TerrainEditRules.EditorType && p.Edit?.Kind == kind);
+            (PointScore Point, int Rank)? best = FirstOf(p => p.Type == TerrainEditRules.EditorType && p.Edit?.Kind == kind);
+            PointScore? outsideBest = Rank(outside).FirstOrDefault();
+            PointScore? plain = best is { } bb ? points.FirstOrDefault(p => p.Coord == bb.Point.Coord && p.Type == TerrainEditRules.EditorType && p.Edit is null) : null;
+            kinds.Add(new ArtisanKindReview(
+                kind, rangeTargets, enumeratedTargets, candidates,
+                best is { } b ? new ArtisanOption(b.Point.Placement, b.Point.Total - passTotal, b.Rank) : null,
+                kind == TerrainEditKind.Fence ? null : outside.Count,
+                outsideBest is null ? null : new ArtisanOption(outsideBest.Placement, outsideBest.Total - passTotal, Rank: null))
+            {
+                EditEffect = best is { } e && plain is not null
+                    ? [.. Enum.GetValues<EvaluationDimension>().Select(d => e.Point.Evaluation.ContributionOf(d) - plain.Evaluation.ContributionOf(d))]
+                    : [],
+            });
+        }
+
+        batch.Clear();
+        (PointScore Point, int Rank)? none = FirstOf(p => p.Type == TerrainEditRules.EditorType && p.Edit is null);
+        PointScore? top = ranked.IsEmpty ? null : ranked[0];
+        return new ArtisanEditReview(
+            Player, passThreshold, context.DeployLimit, context.Stock.GetValueOrDefault(TerrainEditRules.EditorType), legal.Length, cells.Length,
+            Config.CandidatePointCount, ranked.Length,
+            top is null ? null : new ArtisanOption(top.Placement, top.Total - passTotal, 1),
+            none is { } n ? new ArtisanOption(n.Point.Placement, n.Point.Total - passTotal, n.Rank) : null,
+            kinds.MoveToImmutable());
+    }
+
+    /// <summary>
     /// 决胜一手的触发条件（ai-decision「链接模式下的决胜一手」）：链接模式；本战场其他在局玩家在本大回合都已 Pass（本次 Pass 会让本战场整轮 Pass 而结算）；
     /// 自己不是本战场势力最高（并列最高视为最高，与 C15 同一判定 <see cref="TrailsInBattlefield"/>）。只读公开快照。
     /// </summary>
@@ -605,29 +710,44 @@ public sealed class HeuristicTurnController : ITurnController
             {
                 foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type, context.WorkshopActive))
                 {
-                    batch.Clear();
-                    if (batch.Stage(cell, type, edit) is { } refused)
+                    if (ScoreOne(batch, rehearse, evaluator, cell, type, edit, rejections) is { } point)
                     {
-                        Tally(rejections, $"暂放被拒:{refused.Kind}");
-                        continue;
+                        points.Add(point);
                     }
-
-                    RehearsalResult result = rehearse();
-
-                    // 预演合法之后、打分之前：活形硬约束淘汰的候选不打分、不进排行（ai-eye D3）。
-                    if (!result.IsLegal || !evaluator.TryEvaluate(batch.Placements, result, context, out EvaluationBreakdown? evaluation))
-                    {
-                        Tally(rejections, result.IsLegal ? "活形硬约束" : $"预演不合法:{result.Failure?.Kind}");
-                        continue;
-                    }
-
-                    points.Add(new PointScore(cell, type, edit, evaluation));
                 }
             }
         }
 
         batch.Clear();
         return (cells, points);
+    }
+
+    /// <summary>
+    /// 一个单点（格 × 类型 × 改造选项）的打分：暂放 → 零副作用预演 → 活形硬约束 → 九维评价。<see cref="ScorePoints"/> 的循环体（ai-terrain-review 1.1 原样抽出、行为不变），
+    /// 改造诊断（<see cref="ReviewArtisanEdits"/>）对预筛外的格复用同一份。落选返回 <c>null</c> 并按原因计入 <paramref name="rejections"/>（可为 <c>null</c>）。
+    /// 结束时批次里可能留着这一枚，调用方负责清空（与抽出之前相同：下一次调用先 <c>Clear</c>）。
+    /// </summary>
+    private static PointScore? ScoreOne(
+        StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, Coord cell, PieceType type, TerrainEdit? edit, SortedDictionary<string, int>? rejections)
+    {
+        BatchContext context = batch.Context;
+        batch.Clear();
+        if (batch.Stage(cell, type, edit) is { } refused)
+        {
+            Tally(rejections, $"暂放被拒:{refused.Kind}");
+            return null;
+        }
+
+        RehearsalResult result = rehearse();
+
+        // 预演合法之后、打分之前：活形硬约束淘汰的候选不打分、不进排行（ai-eye D3）。
+        if (!result.IsLegal || !evaluator.TryEvaluate(batch.Placements, result, context, out EvaluationBreakdown? evaluation))
+        {
+            Tally(rejections, result.IsLegal ? "活形硬约束" : $"预演不合法:{result.Failure?.Kind}");
+            return null;
+        }
+
+        return new PointScore(cell, type, edit, evaluation);
 
         static void Tally(SortedDictionary<string, int>? counts, string key)
         {

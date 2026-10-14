@@ -166,7 +166,20 @@ public class 平衡分析方向Tests
             }
 
             Assert.Equal(7, themesEnd - themes);   // 标题 + 口径行 + 五个主题各一行
-            string stripped = string.Join('\n', kept[..(themes - 1)].Concat(kept[themesEnd..]));
+
+            // ai-terrain-review 1.3：「主题表现」同样是纯追加在报告最末的一段（前面一个空行 + 标题 + 口径行 + 五个主题各一行）。去掉它之后报告与追加之前逐字节相同，
+            // 黄金值不重钉；这一段本身的内容由 AI改造与主题诊断Tests.主题表现可查 守。样本带主题，这一段必须在（否则"去掉"是空操作）。
+            string[] rest = [.. kept[..(themes - 1)].Concat(kept[themesEnd..])];
+            int performance = Array.FindIndex(rest, l => l.StartsWith("## 主题表现（ai-terrain-review", StringComparison.Ordinal));
+            Assert.True(performance > 0 && rest[performance - 1].TrimEnd('\r').Length == 0, "报告里没有主题表现一段");
+            int performanceEnd = performance;
+            while (performanceEnd < rest.Length && rest[performanceEnd].TrimEnd('\r').Length > 0)
+            {
+                performanceEnd++;
+            }
+
+            Assert.Equal(7, performanceEnd - performance);
+            string stripped = string.Join('\n', rest[..(performance - 1)].Concat(rest[performanceEnd..]));
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stripped)));
         }
 

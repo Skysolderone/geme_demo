@@ -53,7 +53,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 - `replay`：`--file <match-*.jsonl>` 或 `--dir <目录> --seed <十六进制种子>`（只回放 `link:` 日志）。`analyze`：`--dir` `--include-contaminated` `--review-defeats`（按日志回放复盘整轮 Pass 结算的落败者与决胜一手，耗时约等于跑局；缺省不做）`--out`。
 - 已删除：`--flag-risk`（冒险概率随盲选废除）；`--config` 文件里写 `FlagRisk` 字段即报错退出（`retire-legacy-maps`）。Link 局固定 4 人，`--players` 给别的值建局报错。AI 全知开关只在 `--config` 的 `Players[].Search.SeatVision`，没有命令行选项。难度名不区分大小写、不接受数字（`AiDifficultyNames`）。
 
-## 现行规则速览（设计文档 v1.23）
+## 现行规则速览（设计文档 v1.24）
 
 - **地图**（§3.3，`link-map-terrain`）：`link:<种子>` 生成 5 块出生棋盘（宽高 6–8、间距 3 排开），五主题高台 / 河流 / 林地 / 栅栏阵 / 混合各一块；外圈平坦，中央 3×3 核心区是出生区（2 个出生区信物），中间带按主题放高差 / 深水与桥 / 林地 / 栅栏 / 岩石，另有 0–1 个公共区档信物在难到达格；全图可落子 212–280、信物 10–15。插旗占位公开主题名。棋盘外是不可落子、不可改造的场景格。**战场** = 可落子格连通分量，战斗阶段可见本战场各棋盘外接矩形内全部格。
 - **盲选**（§4.1）：只见 5 个占位，选中即锁定，互相看不到；AI 用 `flag-pick` 子流均匀选；多人可同区。
@@ -104,15 +104,16 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 7. **AI 整批评价观察**（`ai-pass-review` P14）：逐枚贪心会漏掉"整批为正、逐枚为负"的组合（种子 D R5 整批 +323）。
 8. **决胜一手拉长战场观察**（P15）：20 局均值 +0.4 大回合，个例 14 → 20。
 9. **链接档新地表**（`link-map-terrain` M4，暂名 `link-map-surfaces`）：荒漠 / 沼泽 / 岩台 / 浅滩进入出生棋盘中间带。
-10. **AI 地形与主题观察**（L2 / M10）：AI 改造全是立栅、零搭桥零烧林；Safety / Eye / Threat 在主题化地形上未校准；AI 盲选不读主题。
+10. ~~AI 地形与主题观察~~：已诊断（`ai-terrain-review`，裁决 T16 = E 维持现状）——AI 只立栅是评价的理性选择：一道栅栏能切小空区或隔开敌串而造眼（同落点加权分立栅 +876、搭桥 +286、烧林 +5.6），预筛漏掉的搭桥 / 烧林从未更好；五主题首轮胜率无显著失衡；三维权重只影响节奏。
 11. **对局长度观察**（L1）：主题化地形后对局中位 15–16 大回合（原 11）、首轮交战约 10（原 5.3）；按试玩手感决定是否缩边长或缩构筑期。
 12. **格线高度观察**（第 6 组）：格线画在 h=0 面上，高台上只能靠地砖缝看格界，深水上方悬一条格线；负责人看图后暂不立项。
+13. **栅栏造眼是否太便宜**（`ai-terrain-review` T13，规则层观察）：人类玩家同样可用；试玩体会后再决定是否改规则（例如栅栏不参与眼空间判定）。
 
 另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。2026-09-28 之后已归档：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`，`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`，以及本次的 `link-map-terrain`。
 
 ## 权威来源（按优先级）
 
-1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.23**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
+1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.24**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
 2. `openspec/changes/archive/<日期>-<change>/` 的 proposal 裁决表与 design.md：设计文档没写到的以它判定（链接模式的全部裁决在 `board-link-mode` 的 proposal）。
 3. `.trellis/spec/core/`：`index` / `boundaries` / `determinism` / `coordinates` / `testing`，**必读**。
 4. `.trellis/workspace/rubioc/journal-1.md` 与 `.trellis/tasks/archive/<月>/<任务>/implement.md`（逐段记录、冒烟数字、自检输出）。
