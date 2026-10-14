@@ -202,3 +202,11 @@ TBD - created by archiving change turn-settlement-show. Update Purpose after arc
 - **WHEN** 决赛战场结算
 - **THEN** 只播放终局横幅
 
+### Requirement: 决赛倒计时提示
+
+本机玩家所在战场进入决赛倒计时时，图形版 SHALL 显示一条不打断操作的提示条"对面战场已结算，本战场还剩 N 个大回合"，每个大回合开始时更新 N；到期结算沿用「战场结算横幅」。本机玩家是等待者时 SHALL 显示"等待决赛：对面战场最迟第 R + K 大回合结束"。无人值守时提示条零时长。
+
+#### Scenario: 倒计时提示
+- **WHEN** 本机玩家在战场 1，战场 4 已结算，K = 2
+- **THEN** 下一大回合开始时出现提示条"对面战场已结算，本战场还剩 2 个大回合"
+

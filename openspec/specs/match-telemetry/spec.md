@@ -304,3 +304,11 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 - **WHEN** 分析一批链接模式日志
 - **THEN** 报告按五个主题列出首轮胜率、名次均值、第 3 大回合结束时势力与改造次数
 
+### Requirement: 决赛倒计时的记录
+
+对局日志首部 SHALL 记录本局"决赛倒计时大回合数" K（K = 0 时照写）；战场结算记录的结算原因 SHALL 可取"到期"；每个进入倒计时的战场 SHALL 记录其期限大回合。离线分析 SHALL 能统计到期结算次数、等待者决赛胜率、等待大回合数与决赛开局势力差。
+
+#### Scenario: 到期结算可查
+- **WHEN** 读取一局发生过到期结算的日志
+- **THEN** 首部有 K，战场结算记录的原因为"到期"并带期限大回合
+
