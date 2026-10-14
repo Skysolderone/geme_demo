@@ -201,4 +201,37 @@ public class 战场结算Tests
         Assert.Equal(expected, settled.Winner);
         Assert.Equal([1, 2], settled.Entries.Select(e => e.Rank));
     }
+
+    /// <remarks>变异 M-FC1（到期不结算）使本条红（final-countdown 1.3 实跑，check 阶段复现；见 Battlefield.决赛倒计时Tests）。</remarks>
+    [Fact]
+    public void 倒计时到期强制结算()
+    {
+        // final-countdown Scenario：战场 4 在第 6 大回合结束时结算、其胜者开始等待决赛，K = 2，战场 1 内 A、B 一直有人落子
+        // → 第 8 大回合结束时战场 1 按当前势力强制结算，结算原因记为"到期"，随后进入待决赛链接。
+        // 四人四区 [0,1,3,4]、不挂配对来源：首轮配对由外部提交 (0,1)(3,4)，战场 1 / 战场 4 即这里的 0 / 3。比较链复用：胜者 = 结算时势力（及其后各级）最高者。
+        MatchFlow match = Started([0, 1, 3, 4], options: CountdownOptions(2));
+        match.PlayRounds(3, All);
+        Assert.Equal(MatchPhase.AwaitingPairing, match.Phase);
+        match.ApplyPairing([(0, 1), (3, 4)]);
+        match.PlayRounds(2, All);
+        match.PlayRound(P0, P1);
+        Assert.Equal((6, 3), (Assert.Single(match.Settlements).MajorRound, match.Settlements[0].Battlefield));
+        Assert.Equal(8, match.DeadlineOf(0));
+
+        match.PlayRound(P0, P1);
+        Assert.Single(match.Settlements);
+        match.PlayRound(P0, P1);
+
+        BattlefieldSettlementRecord expired = match.Settlements[1];
+        Assert.Equal((8, 0, SettlementReason.Expired, (int?)8), (expired.MajorRound, expired.Battlefield, expired.Reason, expired.Deadline));
+        // 比较链第一级：结算时势力高者胜（样本口径：两人势力不并列，否则要看后续各级）。
+        Assert.Equal(2, expired.Entries.Length);
+        Assert.NotEqual(expired.Entries[0].Power, expired.Entries[1].Power);
+        Assert.Equal(expired.Entries.MaxBy(e => e.Power)!.Player, expired.Winner);
+        PlayerId loser = expired.Winner == P0 ? P1 : P0;
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(loser).Status);
+        Assert.Equal(expired.Entries[1].Power, match.StateOf(loser).PowerAtDefeat);
+        Assert.Equal(MatchPhase.AwaitingFinalLink, match.Phase);
+        Assert.Equal(PairingKind.Final, match.PendingPairing!.Kind);
+    }
 }

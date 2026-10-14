@@ -26,17 +26,24 @@ internal static class LinkModeFixtures
     /// <summary><c>link:1</c> 的初始图（5 块隔绝的出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
 
-    /// <summary>链接模式、插旗立即。</summary>
-    internal static MatchOptions Options => MatchOptions.Immediate with { Mode = MatchMode.Link };
+    /// <summary>
+    /// 链接模式、插旗立即。final-countdown：夹具显式取 K = 0（不启用决赛倒计时）——既有链接模式测试的期望都写于倒计时引入之前，
+    /// 用 K = 0 守住原期望（battlefield「决赛倒计时」K 为 0 不启用：与引入之前逐步相同），不改期望；倒计时的测试用 <see cref="CountdownOptions"/>。
+    /// </summary>
+    internal static MatchOptions Options => MatchOptions.Immediate with { Mode = MatchMode.Link, FinalCountdownRounds = 0 };
+
+    /// <summary>链接模式、插旗立即、决赛倒计时 K = <paramref name="rounds"/>（final-countdown）。</summary>
+    internal static MatchOptions CountdownOptions(int rounds = MatchOptions.DefaultFinalCountdownRounds) =>
+        MatchOptions.Immediate with { Mode = MatchMode.Link, FinalCountdownRounds = rounds };
 
     /// <summary>插旗阶段的链接模式对局。</summary>
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
         MatchFlow.Create(Map, seed ?? MatchFixtures.Seed, All, options ?? Options);
 
     /// <summary>按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。可挂接配对来源。</summary>
-    internal static MatchFlow Started(int[] zones, IPairingSource? source = null, GameSeed? seed = null)
+    internal static MatchFlow Started(int[] zones, IPairingSource? source = null, GameSeed? seed = null, MatchOptions? options = null)
     {
-        MatchFlow match = Create(seed);
+        MatchFlow match = Create(seed, options);
         match.PairingSource = source;
         foreach (PlayerId p in All)
         {

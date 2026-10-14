@@ -111,6 +111,8 @@ public sealed partial class MatchFlow
     public void ApplyPairing(PairingDecision decision)
     {
         ResolvePairing(decision);
+        // final-countdown：外部提交的配对在大回合结束之后执行（此时 MajorRound 已是下一轮），首轮配对后的等待者与新拼接的战场按刚结束的那个大回合计。
+        UpdateFinalCountdown(MajorRound - 1);
         EnsureCurrentActive();
     }
 
@@ -298,6 +300,9 @@ public sealed partial class MatchFlow
         Relics.Translate(result.Translate);
         _settledBattlefields.Remove(x);
         _settledBattlefields.Remove(y);
+        // final-countdown：合并后的新战场视为新出现，两个旧标识的期限一并清掉（新战场标识 = 两者中的小者，不清会继承旧期限）。
+        _deadlines.Remove(x);
+        _deadlines.Remove(y);
         var record = new LinkRecord(_links.Count + 1, pairingSequence, result.Anchor, result.Mover, side, result.Map.MapVersion, result.SharedEdge, result.Shifts, result.Summary)
         {
             MapDigest = MapFile.Digest(result.Map),
@@ -327,7 +332,8 @@ public sealed partial class MatchFlow
     /// </remarks>
     private void SettleAtRoundEnd(int completed)
     {
-        if (completed > BuildProtectionRounds)
+        // 等待大回合数只计第 3 大回合之后（与决赛倒计时起点 R 共用 WaitingStarted 一处判定，裁决 W7）；本大回合 completed 已过起算点才计一个等待大回合。
+        if (WaitingStarted(completed - 1))
         {
             foreach (PlayerId player in ActivePlayers)
             {
@@ -353,7 +359,8 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 大回合结束时的结算判定（裁决 S10，<b>无副作用</b>）：按 <see cref="OccupiedBattlefields"/> 升序，对每个未结算、在局玩家 ≥ 2 的战场判
-    /// （a）<paramref name="passed"/> 含其全部在局玩家 → 整轮 Pass；（b）无可落子空格 → 填满；满足即给出判决（胜者与落败者按比较链排好）。
+    /// （a）<paramref name="passed"/> 含其全部在局玩家 → 整轮 Pass；（b）无可落子空格 → 填满；（c）处于决赛倒计时且本大回合（<see cref="MajorRound"/>）已到期限 → 到期
+    /// （final-countdown）；满足即给出判决（胜者与落败者按比较链排好）。
     /// <paramref name="power"/> 是此刻盘面的势力快照：大回合结束时由势力榜重算给出，顺序预测时由 <see cref="PowerCalculator"/> 在不推进势力榜的情况下算出，二者同一口径。
     /// </summary>
     private ImmutableArray<BattlefieldVerdict> JudgeAtRoundEnd(PowerSnapshot power, IReadOnlySet<PlayerId> passed)
@@ -368,8 +375,10 @@ public sealed partial class MatchFlow
                 continue;
             }
 
+            // final-countdown（c）：到期排在整轮 Pass 与填满之后——到期时已因前两条满足的照记前两条原因。
             SettlementReason? reason = members.All(passed.Contains) ? SettlementReason.AllPassed
                 : !HasPlayableEmptyCell(id) ? SettlementReason.BoardFull
+                : CountdownExpired(id) ? SettlementReason.Expired
                 : null;
             if (reason is { } r)
             {
@@ -469,7 +478,10 @@ public sealed partial class MatchFlow
     {
         int? eliminationOrder = verdict.Losers.Length == 0 ? null : order ?? ++_eliminationSequence;
         _settledBattlefields.Add(verdict.Battlefield);
-        var record = new BattlefieldSettlementRecord(_settlements.Count + 1, MajorRound, verdict.Battlefield, verdict.Reason, verdict.Winner, verdict.Entries, eliminationOrder);
+        var record = new BattlefieldSettlementRecord(_settlements.Count + 1, MajorRound, verdict.Battlefield, verdict.Reason, verdict.Winner, verdict.Entries, eliminationOrder)
+        {
+            Deadline = DeadlineOf(verdict.Battlefield),
+        };
         _settlements.Add(record);
         Emit(FlowEventKind.BattlefieldSettled, verdict.Winner,
             $"战场 {BirthZoneLabel.Of(verdict.Battlefield)} 结算（{verdict.Reason}）；胜者 {verdict.Winner}；{string.Join(" ", record.Entries.Select(e => $"{e.Rank}.{e.Player}={e.Power}"))}");

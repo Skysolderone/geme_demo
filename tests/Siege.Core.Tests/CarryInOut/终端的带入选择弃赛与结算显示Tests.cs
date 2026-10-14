@@ -32,7 +32,8 @@ public class 终端的带入选择弃赛与结算显示Tests
     {
         var output = new StringWriter();
         int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Easy, new StringReader(script), output,
-            weights: ScriptWeights, passThreshold: ScriptPassThreshold, contentSet: ContentSet.V1, profile: profile, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // retire-legacy-maps 1.8：地图由 v5 改为 link:1（内置固定配对脚本），冒险概率随旧地图删除
+            weights: ScriptWeights, passThreshold: ScriptPassThreshold, contentSet: ContentSet.V1, profile: profile, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource(),
+            finalCountdown: 0);   // retire-legacy-maps 1.8：地图由 v5 改为 link:1（内置固定配对脚本），冒险概率随旧地图删除；final-countdown：脚本写于引入决赛倒计时之前，写死 K = 0（不启用，与引入之前逐步相同）
         return (exit, output.ToString());
     }
 

@@ -329,6 +329,9 @@ public sealed record BalanceReport(
 
     /// <summary>AI 改造诊断（ai-terrain-review 1.2）；未开启（<see cref="AnalysisOptions.ReviewArtisan"/>）或没有可回放的链接模式局时为 <c>null</c>。</summary>
     public ArtisanReviewSection? ArtisanReview { get; init; }
+
+    /// <summary>决赛倒计时（final-countdown 2.1）；纳入局里没有 K &gt; 0 的链接模式局（含只有 K = 0 / 首部缺 K 的旧日志）时为 <c>null</c>，报告里整段不出现。</summary>
+    public FinalCountdownSection? FinalCountdown { get; init; }
 }
 
 /// <summary>
@@ -450,6 +453,7 @@ public static class BalanceAnalyzer
             Waiters = PassReviewAnalyzer.Waiters(included),
             Themes = ThemeAnalyzer.Analyze(included),
             ArtisanReview = options.ReviewArtisan ? ArtisanReviewAnalyzer.Review(included) : null,
+            FinalCountdown = FinalCountdownAnalyzer.Analyze(included),
         };
     }
 

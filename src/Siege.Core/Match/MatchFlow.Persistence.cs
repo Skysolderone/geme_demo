@@ -252,6 +252,8 @@ public sealed partial class MatchFlow
             CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
             // 实现裁决 B5：无模式字段的存档按旧模式读入。
             Mode = data.Mode ?? MatchMode.Legacy,
+            // final-countdown（match-setup「决赛倒计时配置」）：K 记在链接段；缺字段的旧存档（及旧模式存档）按 0 = 不启用，保持旧存档的行为（FinalCountdownBackfilled 留痕）。
+            FinalCountdownRounds = data.Link?.FinalCountdownRounds ?? 0,
         };
         // 与建局同一处校验（裁决 B1 / S1）：链接图只能以链接模式恢复，链接模式只能是链接图、4 人。
         try
@@ -265,6 +267,15 @@ public sealed partial class MatchFlow
         }
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
+        try
+        {
+            RequireValidFinalCountdown(options.FinalCountdownRounds);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            throw new FormatException($"存档的决赛倒计时大回合数不合法：{ex.Message}", ex);
+        }
+
         // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
         _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
         RelicLedgerState relicState = data.Relics ?? throw new FormatException("存档缺少信物账本。");
@@ -280,6 +291,7 @@ public sealed partial class MatchFlow
         match.CarryInOutBackfilled = carryInOutBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
+        match.FinalCountdownBackfilled = options.Mode == MatchMode.Link && data.Link?.FinalCountdownRounds is null;
         if (options.Mode == MatchMode.Link)
         {
             match.RestoreLink(data);

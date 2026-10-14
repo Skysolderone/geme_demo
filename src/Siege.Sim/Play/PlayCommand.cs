@@ -29,11 +29,13 @@ internal static class PlayCommand
     /// <param name="onAi">测试接缝：每名 AI 玩家的控制者建好后回调一次（终端不写对局日志，脚本测试经它核对 AI 的难度、搜索配置与前瞻记录）。终端入口不传。</param>
     /// <param name="pairingSource">测试接缝：链接图对局的配对来源；<c>null</c> = 真随机 <see cref="Running.RandomPairingSource"/>（规格 simulation-harness：有人值守对局 MUST 用真随机源）。
     /// 终端入口不传；脚本测试注入固定配对使转录可复现。旧地图（Legacy 夹具）的对局不读它。</param>
+    /// <param name="finalCountdown">决赛倒计时大回合数 K（final-countdown）；<c>null</c> = 对局配置缺省值（<see cref="MatchOptions.DefaultFinalCountdownRounds"/>）。
+    /// 终端入口由 <c>--final-countdown</c> 传入；依赖走法的脚本测试写死 0，使脚本不随倒计时改变的对局走向而失步。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, ContentSet? contentSet = null,
         CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null,
-        IPairingSource? pairingSource = null)
+        IPairingSource? pairingSource = null, int? finalCountdown = null)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? LinkPlayers;
@@ -58,6 +60,7 @@ internal static class PlayCommand
         // retire-legacy-maps 3.6：建局分叉删除——公开 MatchFlow.Create 恒以链接模式建局（3.5），冒险概率测试接缝已删（3.1）。
         MatchOptions options = MatchOptions.Immediate;
         options = contentSet is { } set ? options with { ContentSet = set } : options;
+        options = finalCountdown is { } countdown ? options with { FinalCountdownRounds = countdown } : options;
         var render = new BoardRenderer(output);
 
         // 带入带出（carry-in-out）：开启时在建局之前读档、处理残留在途记录、兑换与选择带入；AI 按本机玩家的带入数从 carry-ai 子流抽取。
@@ -108,6 +111,10 @@ internal static class PlayCommand
         output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
         output.WriteLine("战场：前 3 个大回合各自在出生棋盘上构筑；第 3 大回合结束时独占一块棋盘的玩家被随机配对、棋盘之间长出公共棋盘连通；"
             + "一个战场里全员在一个大回合内都 Pass、或战场填满即结算，势力最高者胜、其余出局；两对都分出胜负后胜者链接打决赛。曾有势力而势力降到 0 同样出局。");
+        if (match.FinalCountdownRounds > 0)
+        {
+            output.WriteLine($"决赛倒计时：一旦有人等待决赛，其余未结算的战场最多再打 {match.FinalCountdownRounds} 个大回合，到期按当前势力强制结算。");
+        }
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         if (store is not null)

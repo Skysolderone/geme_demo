@@ -59,6 +59,12 @@ public sealed class MatchLog
     /// </summary>
     public Siege.Core.Board.ContentSet ContentSet => Header.Config.ContentSet ?? Siege.Core.Board.ContentSets.Legacy;
 
+    /// <summary>
+    /// 本局的决赛倒计时大回合数 K（final-countdown，match-telemetry「决赛倒计时的记录」；记在首部配置 <see cref="RunConfig.FinalCountdownRounds"/>，K = 0 时照写）。
+    /// 首部缺该项的旧日志按 0（不启用）读。
+    /// </summary>
+    public int FinalCountdownRounds => Header.Config.FinalCountdownRounds ?? 0;
+
     /// <summary>本局是否开启带入带出（首部 <see cref="LogHeader.CarryInOut"/>）。引入带入带出之前的旧日志缺该项，按关闭读。</summary>
     public bool CarryInOut => Header.CarryInOut ?? false;
 
@@ -906,6 +912,24 @@ public sealed record LogEvent
     /// <summary>战场结算（<c>BattlefieldSettled</c>，match-telemetry 第 10 项）。其余事件为 <c>null</c>。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SettlementLogEntry? Settlement { get; init; }
+
+    /// <summary>决赛倒计时（<c>FinalCountdown</c>，final-countdown：起点 R、战场与期限）。其余事件为 <c>null</c>。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public FinalCountdownLogEntry? Countdown { get; init; }
+}
+
+/// <summary>一个战场进入决赛倒计时（final-countdown）：记录序号、战场标识（出生棋盘编号 0 起）、倒计时起点 R、期限大回合、得到期限的大回合。</summary>
+public sealed record FinalCountdownLogEntry
+{
+    public int Sequence { get; init; }
+
+    public int Battlefield { get; init; }
+
+    public int Start { get; init; }
+
+    public int Deadline { get; init; }
+
+    public int AssignedInMajorRound { get; init; }
 }
 
 /// <summary>一次配对事件（match-telemetry 第 8 项）：序号、种类、大回合、候选、规范次序的配对、等待者与来源（真随机 / 配对种子 / 脚本）。战场标识为出生棋盘编号 0 起。</summary>
@@ -988,7 +1012,7 @@ public sealed record BoardEntry
     public Siege.Core.Board.BoardTheme? Theme { get; init; }
 }
 
-/// <summary>一次战场结算（match-telemetry 第 10 项）：大回合、战场标识、原因（<c>AllPassed</c> / <c>BoardFull</c> / <c>Attrition</c>）、名次与各玩家势力、胜者。</summary>
+/// <summary>一次战场结算（match-telemetry 第 10 项）：大回合、战场标识、原因（<c>AllPassed</c> / <c>BoardFull</c> / <c>Attrition</c> / <c>Expired</c>）、名次与各玩家势力、胜者、期限。</summary>
 public sealed record SettlementLogEntry
 {
     public int Sequence { get; init; }
@@ -1004,6 +1028,9 @@ public sealed record SettlementLogEntry
     public int? EliminationOrder { get; init; }
 
     public List<SettlementRankEntry> Entries { get; init; } = [];
+
+    /// <summary>结算时该战场的决赛倒计时期限大回合（final-countdown）；不在倒计时中（及旧日志）为 <c>null</c>、不写出。原因为 <c>Expired</c> 时恒非空。</summary>
+    public int? Deadline { get; init; }
 }
 
 /// <summary>战场结算的一名玩家：名次与结算时的比较量（势力 → 控制信物 → 独占空格 → 棋子数）。</summary>
@@ -1048,6 +1075,9 @@ public static class LogEventType
 
     /// <summary>战场结算（链接模式，<see cref="LogEvent.Settlement"/>）。</summary>
     public const string BattlefieldSettled = "BattlefieldSettled";
+
+    /// <summary>决赛倒计时：一个战场得到期限（final-countdown，<see cref="LogEvent.Countdown"/>）。K = 0 的局不出现。</summary>
+    public const string FinalCountdown = "FinalCountdown";
 
     /// <summary>暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试（life-shape 4.1）；预演环节的同类失败见细粒度 <see cref="Rehearsal"/> 与快照计数。</summary>
     public const string LifeRefused = "LifeRefused";

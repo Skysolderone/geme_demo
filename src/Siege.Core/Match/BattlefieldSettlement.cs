@@ -25,6 +25,9 @@ public enum SettlementReason
 
     /// <summary>减员：多人战场因弃赛或势力归零只剩 1 名在局玩家（即时标记）。</summary>
     Attrition,
+
+    /// <summary>到期（final-countdown）：战场处于决赛倒计时且到了期限大回合仍未因整轮 Pass、填满或减员结算，按同一比较链强制结算。追加在末位，旧名称不变。</summary>
+    Expired,
 }
 
 /// <summary>
@@ -38,4 +41,11 @@ public sealed record SettlementEntry(PlayerId Player, int Rank, BigInteger Power
 /// 同一大回合结束时结算的多个战场的落败者共享一个出局序号（<paramref name="EliminationOrder"/>；减员结算没有落败者时为 <c>null</c>）。
 /// </summary>
 public sealed record BattlefieldSettlementRecord(
-    int Sequence, int MajorRound, int Battlefield, SettlementReason Reason, PlayerId Winner, ImmutableArray<SettlementEntry> Entries, int? EliminationOrder);
+    int Sequence, int MajorRound, int Battlefield, SettlementReason Reason, PlayerId Winner, ImmutableArray<SettlementEntry> Entries, int? EliminationOrder)
+{
+    /// <summary>
+    /// 结算时该战场的决赛倒计时期限大回合（final-countdown，match-telemetry「决赛倒计时的记录」）；该战场当时不在倒计时中为 <c>null</c>。
+    /// 原因为 <see cref="SettlementReason.Expired"/> 时恒非空且等于 <see cref="MajorRound"/>。
+    /// </summary>
+    public int? Deadline { get; init; }
+}

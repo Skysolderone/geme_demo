@@ -228,12 +228,36 @@ public static class ReportWriter
             AppendThemePerformance(sb, performance);
         }
 
+        // final-countdown 2.1：排在「主题表现」之后、可选的「AI 改造诊断」之前（缺省报告仍是 --review-artisan 报告的前缀）；
+        // 只在样本里有 K > 0 的局时出现，K = 0 与旧日志的报告逐字节不变。
+        if (r.FinalCountdown is { } countdown)
+        {
+            AppendFinalCountdown(sb, countdown);
+        }
+
         if (r.ArtisanReview is { } artisan)
         {
             AppendArtisanReview(sb, artisan);
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>决赛倒计时（final-countdown 2.1）：K 分布、起点、到期结算次数与到期时势力差；等待者胜率等见「等待者评估」。</summary>
+    private static void AppendFinalCountdown(StringBuilder sb, FinalCountdownSection c)
+    {
+        sb.AppendLine();
+        sb.AppendLine("## 决赛倒计时（final-countdown：出现等待决赛的玩家后，其余未结算多人战场最多再打 K 个大回合，到期按势力强制结算）");
+        sb.AppendLine($"- 纳入链接模式 {c.Matches} 局；K 分布：{Histogram(c.Ks)}（其中首部缺 K 的旧日志 {c.MissingK} 局按 0 计）");
+        sb.AppendLine($"- 启动倒计时的局 {c.Started}/{c.Matches}；起点 R（第一次出现等待者的大回合）分布：{Histogram(c.Starts)}；进入倒计时的战场 {c.CountdownFields} 个");
+        sb.AppendLine($"- 战场结算按原因：{Histogram(c.SettlementReasons)}");
+        sb.AppendLine($"- 到期结算 {c.ExpiredCount} 次；所在大回合分布：{Histogram(c.ExpiredRounds)}");
+        sb.AppendLine($"- 到期时势力差（胜者 − 第二名）分位数：{Quantiles(c.ExpiredGaps)}");
+        sb.AppendLine($"  - 分布：{(c.ExpiredGaps.Count == 0 ? "无样本" : string.Join("，", c.ExpiredGaps))}");
+        foreach (ExpiredSettlementEntry e in c.Expired)
+        {
+            sb.AppendLine($"  - {e.Seed} R{e.MajorRound} 战场{BirthZoneLabel.Number(e.Battlefield)} 胜者 P{e.Winner} 期限 {(e.Deadline is { } d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-")} 差 {e.Gap}");
+        }
     }
 
     /// <summary>链接模式一段（board-link-mode 3.5）：只在样本里有链接模式局时出现，旧日志的报告逐字节不变。</summary>

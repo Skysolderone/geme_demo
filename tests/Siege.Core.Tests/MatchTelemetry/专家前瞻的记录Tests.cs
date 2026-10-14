@@ -173,7 +173,9 @@ public class 专家前瞻的记录Tests
         Assert.Contains("\"AiEvaluationVersion\":4", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B（地图内容变，整局走法变，不再能逐行比对出"只差首部"）。
-        Assert.Equal("6059A235B06536C946901BF77F444CEE5DA515C3F5B2B534AAE359F86AC838B8", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
+        // final-countdown：样本配置写死 K = 0（LookaheadFixtures.LinkConfig），首部配置因此多出 "FinalCountdownRounds":0 一项；黄金值按"遮掉这一项"后的文本比对，证明除该项外逐字节不变。
+        Assert.Contains("\"FinalCountdownRounds\":0,", text, StringComparison.Ordinal);
+        Assert.Equal("6059A235B06536C946901BF77F444CEE5DA515C3F5B2B534AAE359F86AC838B8", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal)));
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -292,7 +294,9 @@ public class 专家前瞻的记录Tests
         Assert.Contains("\"AiEvaluationVersion\":4", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5。
-        Assert.Equal("3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)));
+        // final-countdown：样本配置写死 K = 0（LookaheadFixtures.LinkConfig），首部配置因此多出 "FinalCountdownRounds":0 一项；黄金值按"遮掉这一项"后的文本比对，证明除该项外逐字节不变。
+        Assert.Contains("\"FinalCountdownRounds\":0,", text, StringComparison.Ordinal);
+        Assert.Equal("3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217", Sha256(text.Replace("\"AiEvaluationVersion\":4", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal)));
     }
 
     [Fact]

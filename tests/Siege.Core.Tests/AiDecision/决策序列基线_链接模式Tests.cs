@@ -25,6 +25,8 @@ namespace Siege.Core.Tests.AiDecision;
 /// 原为 D:pass → 整轮 Pass 结算 P2 胜；现走决胜一手落强制贪心批次 V6:Sentry,U7:Synergy（评价收益 −1355，预演后 105 对 88），战场 2 不结算、不进决赛；
 /// 第 12 大回合 P2（86 对 104，P0 已 Pass）同样走决胜一手落单点 R5:Multiplier（预演后 148 对 104）。截到第 12 大回合时对局仍在进行（原第 12 大回合以最后战场结算终局）。
 /// 其余四条链接图基线（种子 1 / 2、简单 / 困难种子 1）逐字节不变。
+/// final-countdown 1.4（缺省 K = 2）：本条（四人四区）截到第 12 大回合两个首轮战场都未结算、不出现等待者，倒计时不启动，逐字节不变；
+/// 改前基线另存为 <c>decisions-link1-seed3-k0.txt</c>（与本文件相同），由 <c>Battlefield.决赛倒计时Tests</c> 以 K = 0 比对。其余四条的重钉说明见 <see cref="决策序列基线Tests"/>。
 /// </remarks>
 public class 决策序列基线_链接模式Tests
 {
@@ -85,9 +87,17 @@ internal static class LinkDecisionSequence
     /// <summary>
     /// 同上，建局后先对会话执行 <paramref name="attach"/>（ai-pass-review 1.4「复盘不改对局」：挂部署前复盘回调）；为 <c>null</c> 时与上一个重载逐字节相同。
     /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach)
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach) =>
+        Export(seed, maxMajorRounds, difficulty, attach, finalCountdown: null);
+
+    /// <summary>
+    /// 同上，决赛倒计时大回合数 K 取 <paramref name="finalCountdown"/>（final-countdown）；<c>null</c> = 跑局层缺省（落成 2），与上一个重载逐字节相同。
+    /// 导出格式不随 K 变：首部不写 K；只有发生了倒计时的局才多出 <c>C</c> 行（战场进入倒计时）与 <c>S</c> 行末的 <c>deadline=</c>，
+    /// 所以 K = 0 的导出与引入倒计时之前的基线逐字节可比（<c>*-k0.txt</c>）。
+    /// </summary>
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, int? finalCountdown)
     {
-        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0 };
+        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0, FinalCountdownRounds = finalCountdown };
         if (difficulty != AiDifficulty.Standard)
         {
             config = config with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
@@ -105,7 +115,7 @@ internal static class LinkDecisionSequence
         sb.Append("# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算\n");
 
         var cursors = new Dictionary<PlayerId, int>();
-        int pairings = 0, links = 0, settlements = 0;
+        int pairings = 0, links = 0, settlements = 0, countdowns = 0;
         while (match.Phase == MatchPhase.InProgress && match.MajorRound <= maxMajorRounds)
         {
             int round = match.MajorRound;
@@ -131,7 +141,15 @@ internal static class LinkDecisionSequence
             for (; settlements < match.Settlements.Count; settlements++)
             {
                 BattlefieldSettlementRecord s = match.Settlements[settlements];
-                sb.Append($"S\t{s.Sequence}\tround={s.MajorRound}\tfield={s.Battlefield}\t{s.Reason}\twinner={s.Winner}\t{string.Join(" ", s.Entries.Select(e => $"{e.Rank}.{e.Player}={e.Power}"))}\n");
+                sb.Append($"S\t{s.Sequence}\tround={s.MajorRound}\tfield={s.Battlefield}\t{s.Reason}\twinner={s.Winner}\t{string.Join(" ", s.Entries.Select(e => $"{e.Rank}.{e.Player}={e.Power}"))}")
+                    .Append(s.Deadline is { } deadline ? $"\tdeadline={deadline}" : string.Empty).Append('\n');
+            }
+
+            // final-countdown：战场进入决赛倒计时（K = 0 的局没有这一行）。
+            for (; countdowns < match.FinalCountdowns.Count; countdowns++)
+            {
+                FinalCountdownRecord c = match.FinalCountdowns[countdowns];
+                sb.Append($"C\t{c.Sequence}\tround={c.AssignedInMajorRound}\tfield={c.Battlefield}\tstart={c.Start}\tdeadline={c.Deadline}\n");
             }
 
             if (!more)

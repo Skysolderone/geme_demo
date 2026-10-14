@@ -142,6 +142,13 @@ public sealed record RunConfig
     /// </summary>
     public int? CarryIn { get; init; }
 
+    /// <summary>
+    /// 决赛倒计时大回合数 K（<see cref="MatchOptions.FinalCountdownRounds"/>，final-countdown 裁决 W2；整数 ≥ 0，0 = 不启用）：<c>null</c> = 新建的局取
+    /// <see cref="MatchOptions.DefaultFinalCountdownRounds"/>（2），并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部；
+    /// 按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 0 重建（与引入之前逐步相同）。命令行 <c>--final-countdown</c>。
+    /// </summary>
+    public int? FinalCountdownRounds { get; init; }
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -248,6 +255,11 @@ public sealed record RunConfig
             throw new ArgumentException($"{Players.Count} 人局没有名次补给点表（只有 2–4 人），不能开启带入。");
         }
 
+        if (FinalCountdownRounds < 0)
+        {
+            throw new ArgumentException("决赛倒计时大回合数须为非负整数（0 = 不启用）。");
+        }
+
         if (FullEventSamplePermille is < 0 or > 1000)
         {
             throw new ArgumentException("抽样千分比须在 0..1000。");
@@ -296,6 +308,8 @@ public sealed record RunConfig
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
         resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
+        // 决赛倒计时（final-countdown）：缺省 2 与"首部缺该项 = 旧日志 = 0"必须可区分，未配置一律落成 2。
+        resolved = resolved.FinalCountdownRounds is null ? resolved with { FinalCountdownRounds = MatchOptions.DefaultFinalCountdownRounds } : resolved;
         // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，
         // 使"专家、前瞻宽度 4"如实可查、回放按首部重建。落成值与会话建 AI 时按难度取的完全相同（候选格上限与停手阈值取上面已落成的值），走法不变。
         // 必须放在候选格上限与停手阈值落成之后。前瞻宽度为 0 的三档旧难度不落成（Search 保持缺省），配置记录与首部与引入之前逐字节相同。

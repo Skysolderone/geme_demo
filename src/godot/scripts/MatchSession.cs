@@ -128,6 +128,11 @@ public sealed class MatchSession
             LinkShowBeats.Settlements(settlementsBefore, Match.Settlements, Me, matchEnded: Match.Phase == MatchPhase.Ended);
         _pendingNotices.AddRange(notices);
         LastSettlementShow = ([.. settled.OfType<BannerBeat>().SelectMany(b => b.Banners)], notices);
+        if (CountdownNotice() is { } countdown)
+        {
+            // 决赛倒计时提示条（settlement-show「决赛倒计时提示」，final-countdown 3.1）：每个大回合开始一条，排在他场结算提示之后，同一个显示队列。
+            _pendingNotices.Add(countdown);
+        }
 
         ImmutableArray<PlayerId> matesBefore = _matesBefore;
         ImmutableArray<PlayerId> newOpponents = [.. World.SameBattlefieldPlayers.Where(p => !matesBefore.Contains(p))];
@@ -137,6 +142,26 @@ public sealed class MatchSession
             ? LinkShowBeats.Expansion(boardBefore, World.Board(), newOpponents, Layout(), linksBefore)
             : [];
         return LinkShowBeats.Splice(beats, settled, expansion);   // 战场落败横幅排在出局横幅之前，再是展开节拍
+    }
+
+    private readonly FinalCountdownNotices _countdownNotices = new();
+
+    /// <summary>
+    /// 本机此刻的决赛倒计时提示（每个大回合至多一次）：输入全部只读自对局的全局公开状态——本机是否在局、是否等待决赛（Core 判定）、
+    /// 本机所在战场与其余未结算战场的期限；文案与去重在 <see cref="FinalCountdownNotices"/>。
+    /// </summary>
+    private string? CountdownNotice()
+    {
+        if (Match.Phase != MatchPhase.InProgress)
+        {
+            return null;
+        }
+
+        int myField = Match.BattlefieldOf(Me);
+        ImmutableSortedDictionary<int, int> deadlines = Match.BattlefieldDeadlines;
+        int? mine = !Match.IsBattlefieldSettled(myField) && deadlines.TryGetValue(myField, out int d) ? d : null;
+        return _countdownNotices.Take(Match.MajorRound, true, Match.StateOf(Me).Status == Siege.Core.Scoring.PlayerStatus.Active, Match.IsWaitingForFinal(Me), mine,
+            deadlines.Where(kv => kv.Key != myField && !Match.IsBattlefieldSettled(kv.Key)).Select(kv => kv.Value));
     }
 
     /// <summary>本局的布局换算（开局出生棋盘 + 全部链接的平移向量，Core 的唯一实现 <see cref="LinkLayout"/>）。</summary>

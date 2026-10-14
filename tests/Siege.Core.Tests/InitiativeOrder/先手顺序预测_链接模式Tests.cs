@@ -15,6 +15,7 @@ namespace Siege.Core.Tests.InitiativeOrder;
 /// <remarks>
 /// 变异验证（段 D-a 实跑）：M-D1 预测里不调判定（去掉 <c>Mode == Link</c> 分支）→ 「质检局面_P0P1已Pass_预测为P2P0P3」「预测与大回合结束后的实际顺序一致」「填满判定同样进预测」「此刻结束即终局时没有预测」红 4；
 /// M-D2 判定把"未行动者"当作已 Pass（<c>members.All(passed.Contains)</c> 改为 <c>members.Length &gt;= 2</c>）→ 「未行动者按未Pass算」红 1，<c>战场结算Tests</c> 同批红 5（一方落子即不结算、整轮Pass结算、三人战场结算、填满结算、等待者Pass不结算），合计红 6。
+/// final-countdown（design D2）：新增「期限大回合的预测剔除将到期落败者」——到期（c）走同一判定，预测自动随之；变异 M-FC1（到期不结算）/ M-FC2（R 错一回合）各使它红（实跑，见 Battlefield.决赛倒计时Tests）。
 /// </remarks>
 public class 先手顺序预测_链接模式Tests
 {
@@ -163,6 +164,78 @@ public class 先手顺序预测_链接模式Tests
         match.PassRound();
         Assert.Equal(MatchPhase.Ended, match.Phase);
         Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
+    }
+
+    [Fact]
+    public void 期限大回合的预测剔除将到期落败者()
+    {
+        // final-countdown（design D2）：到期是 JudgeAtRoundEnd 的第三个触发条件，先手预测复用同一判定。四人四区 [0,1,3,4]、K = 2、脚本配对：
+        // 战场 3 第 6 大回合整轮 Pass 结算 → 战场 0 期限第 8 大回合。第 8 大回合开始、尚无人行动时"假设此刻结束"：没有人 Pass（a 不成立）、战场未满（b 不成立），
+        // 只因到期（c）结算 → 预测已剔除战场 0 的落败者；第 7 大回合开始时同一问法不剔除任何人。随后真把第 8 大回合打完（全员 Pass，势力不变），出局者与预测一致。
+        MatchFlow match = Started([0, 1, 3, 4], new ScriptedPairingSource(), options: CountdownOptions(2));
+        match.PlayRounds(5, All);
+        match.PlayRound(P0, P1);
+        Assert.Equal(8, match.DeadlineOf(0));
+        PlayerId waiter = Assert.Single(match.Settlements).Winner;
+
+        Assert.Equal(3, Forecast(match)!.ActiveCount);   // 第 7 大回合：未到期限
+        match.PlayRound(P0, P1);
+        Assert.Equal(8, match.MajorRound);
+        Assert.Empty(match.PassedThisRound);
+
+        InitiativeReport forecast = Assert.IsType<InitiativeReport>(Forecast(match));
+
+        Assert.Equal(2, forecast.ActiveCount);
+        Assert.Contains(waiter, forecast.NextOrder);
+        PlayerId[] fighters = [.. new[] { P0, P1 }.Where(forecast.NextOrder.Contains)];
+        PlayerId survivor = Assert.Single(fighters);
+        Assert.Single(match.Settlements);   // 仍只是预测
+
+        match.PassRound();
+        BattlefieldSettlementRecord settled = match.Settlements[1];
+        // 口径：预测时（无人行动）只有（c）成立；实际全员 Pass 后（a）先成立、原因记整轮 Pass——比较链相同、势力不变，落败者与顺序都与预测一致。
+        // 实际以"到期"结算的对照见「期限大回合最后一人Pass前的预测与实际顺序一致」。
+        Assert.Equal((8, 0, SettlementReason.AllPassed), (settled.MajorRound, settled.Battlefield, settled.Reason));
+        Assert.Equal(survivor, settled.Winner);
+        Assert.Equal(forecast.NextOrder, match.ActionOrder);
+    }
+
+    [Fact]
+    public void 期限大回合最后一人Pass前的预测与实际顺序一致()
+    {
+        // final-countdown check 补测（design D2）：第 8 大回合（期限）里战场 0 的两人在前面各落 1 子、等待者 Pass，只剩顺序末位一人未行动时取预测；
+        // 末位 Pass 不改势力、战场 0 本大回合并非全员 Pass → 只因到期（c）结算。预测的下一轮顺序 MUST 与实际逐项相同（不只是集合），落败者已剔除。
+        MatchFlow match = Started([0, 1, 3, 4], new ScriptedPairingSource(), options: CountdownOptions(2));
+        match.PlayRounds(5, All);
+        match.PlayRound(P0, P1);
+        match.PlayRound(P0, P1);
+        Assert.Equal((8, 8), (match.MajorRound, match.DeadlineOf(0)));
+        PlayerId waiter = Assert.Single(match.Settlements).Winner;
+        Assert.Equal(3, match.ActionOrder.Length);
+
+        while (match.ActionOrder.IndexOf(match.CurrentPlayer!.Value) < match.ActionOrder.Length - 1)
+        {
+            if (match.CurrentPlayer == waiter)
+            {
+                match.PassTurn();
+            }
+            else
+            {
+                match.PlaceOne();
+            }
+        }
+
+        InitiativeReport forecast = Assert.IsType<InitiativeReport>(Forecast(match));
+        Assert.Equal(8, match.MajorRound);
+        Assert.Equal(2, forecast.ActiveCount);
+
+        match.PassTurn();
+
+        BattlefieldSettlementRecord settled = match.Settlements[^1];
+        Assert.Equal((8, 0, SettlementReason.Expired), (settled.MajorRound, settled.Battlefield, settled.Reason));
+        Assert.Contains(settled.Winner, forecast.NextOrder);
+        Assert.DoesNotContain(settled.Entries[1].Player, forecast.NextOrder);
+        Assert.Equal(forecast.NextOrder, match.ActionOrder);
     }
 
     [Fact]

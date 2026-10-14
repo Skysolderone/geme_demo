@@ -65,6 +65,18 @@ public sealed partial class MatchFlow
                 Winner = s.Winner.Value,
                 EliminationOrder = s.EliminationOrder,
                 Entries = [.. s.Entries.Select(SettlementEntrySaveData.From)],
+                Deadline = s.Deadline,
+            })],
+            FinalCountdownRounds = FinalCountdownRounds,
+            CountdownStart = _countdownStart,
+            Deadlines = [.. _deadlines.Select(kv => new BattlefieldDeadlineSaveData { Battlefield = kv.Key, Deadline = kv.Value })],
+            Countdowns = [.. _countdowns.Select(c => new FinalCountdownSaveData
+            {
+                Sequence = c.Sequence,
+                Battlefield = c.Battlefield,
+                Start = c.Start,
+                Deadline = c.Deadline,
+                AssignedInMajorRound = c.AssignedInMajorRound,
             })],
             SettledBattlefields = [.. _settledBattlefields],
             Players = [.. _players.Select(p => new LinkPlayerSaveData
@@ -120,7 +132,18 @@ public sealed partial class MatchFlow
         _pairings.AddRange(link.Pairings.Select(p => new PairingRecord(
             p.Sequence, p.Kind, p.MajorRound, [.. p.Candidates], [.. p.Pairs.Select(x => (x[0], x[1]))], p.Waiter, p.Source ?? PairingDecision.ExternalSource)));
         _settlements.AddRange(link.Settlements.Select(s => new BattlefieldSettlementRecord(
-            s.Sequence, s.MajorRound, s.Battlefield, s.Reason, new PlayerId(s.Winner), [.. s.Entries.Select(e => e.ToEntry())], s.EliminationOrder)));
+            s.Sequence, s.MajorRound, s.Battlefield, s.Reason, new PlayerId(s.Winner), [.. s.Entries.Select(e => e.ToEntry())], s.EliminationOrder)
+        {
+            Deadline = s.Deadline,
+        }));
+        // final-countdown：起点、当前期限与倒计时记录原样取自存档，不重算（旧存档缺这几项 → K = 0、全空，见 RestoreCore）。
+        _countdownStart = link.CountdownStart;
+        foreach (BattlefieldDeadlineSaveData d in link.Deadlines ?? [])
+        {
+            _deadlines[d.Battlefield] = d.Deadline;
+        }
+
+        _countdowns.AddRange((link.Countdowns ?? []).Select(c => new FinalCountdownRecord(c.Sequence, c.Battlefield, c.Start, c.Deadline, c.AssignedInMajorRound)));
         _settledBattlefields.Clear();
         _settledBattlefields.UnionWith(link.SettledBattlefields);
         foreach (LinkPlayerSaveData saved in link.Players)
@@ -160,6 +183,22 @@ public sealed class LinkSaveData
     public List<int> SettledBattlefields { get; set; } = [];
 
     public List<LinkPlayerSaveData> Players { get; set; } = [];
+
+    /// <summary>
+    /// 决赛倒计时大回合数 K（final-countdown，match-setup「决赛倒计时配置」）。新存档恒写出（K = 0 也写）；
+    /// 旧存档无此字段（<c>null</c>）→ 恢复时按 0（不启用），<see cref="MatchFlow.FinalCountdownBackfilled"/> 为 <c>true</c>。
+    /// </summary>
+    public int? FinalCountdownRounds { get; set; }
+
+    /// <summary>倒计时起点 R；尚未出现等待决赛的玩家为 <c>null</c>（不写出）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CountdownStart { get; set; }
+
+    /// <summary>当前处于倒计时中的战场与期限（升序）。旧存档无此字段 → 空。</summary>
+    public List<BattlefieldDeadlineSaveData>? Deadlines { get; set; }
+
+    /// <summary>全部倒计时记录（按赋期限的先后）。旧存档无此字段 → 空。</summary>
+    public List<FinalCountdownSaveData>? Countdowns { get; set; }
 
     /// <summary>一次链接的存档记录。</summary>
     public sealed class Entry
@@ -245,6 +284,32 @@ public sealed class SettlementSaveData
     public int? EliminationOrder { get; set; }
 
     public List<SettlementEntrySaveData> Entries { get; set; } = [];
+
+    /// <summary>结算时该战场的决赛倒计时期限（final-countdown）；不在倒计时中为 <c>null</c>（不写出）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Deadline { get; set; }
+}
+
+/// <summary>一个处于决赛倒计时中的战场与其期限大回合（final-countdown）。</summary>
+public sealed class BattlefieldDeadlineSaveData
+{
+    public int Battlefield { get; set; }
+
+    public int Deadline { get; set; }
+}
+
+/// <summary>一条决赛倒计时记录（final-countdown，<see cref="FinalCountdownRecord"/>）。</summary>
+public sealed class FinalCountdownSaveData
+{
+    public int Sequence { get; set; }
+
+    public int Battlefield { get; set; }
+
+    public int Start { get; set; }
+
+    public int Deadline { get; set; }
+
+    public int AssignedInMajorRound { get; set; }
 }
 
 public sealed class SettlementEntrySaveData

@@ -94,8 +94,14 @@ public enum FlowEventKind
     /// <summary>链接模式：一次链接执行完毕（两个战场合并）。旧模式永不发出。</summary>
     BattlefieldsLinked,
 
-    /// <summary>链接模式：一个战场结算（整轮 Pass / 填满 / 减员）。旧模式永不发出。</summary>
+    /// <summary>链接模式：一个战场结算（整轮 Pass / 填满 / 减员 / 到期）。旧模式永不发出。</summary>
     BattlefieldSettled,
+
+    /// <summary>
+    /// 链接模式（final-countdown）：一个未结算的多人战场进入决赛倒计时、得到期限大回合（第一次出现时同时记下倒计时起点 R）。
+    /// 旧模式与 K = 0 时永不发出。追加在末位，旧值不变。
+    /// </summary>
+    FinalCountdown,
 }
 
 /// <summary>一条流程事件：种类、发生时的大回合、相关玩家（若有）与文字说明。</summary>

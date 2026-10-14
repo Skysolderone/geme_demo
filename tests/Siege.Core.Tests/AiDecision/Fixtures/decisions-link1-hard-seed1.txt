@@ -34,21 +34,20 @@ L	1	pairing=1	0-1	side=East	version=1	shared=6	shifts=0:0:0,1:-12:0,2:0:0,3:0:0,
 7	P1	R:4:Synergy,3:Multiplier,2:Line D:pass
 7	P0	R:0:Fortress,3:Fortress,1:Boundary D:pass
 S	1	round=7	field=3	AllPassed	winner=P1	1.P1=58 2.P0=41
+C	1	round=7	field=0	start=7	deadline=9
 8	P3	R:0:Synergy,5:Multiplier,1:Artisan D:pass
 8	P2	R:0:Line,2:Line,4:Line D:AH4:Line,AH5:Line
 8	P1	R:2:Line,0:Artisan,1:Basic D:F8:Artisan+F:F6-F7
 9	P2	R:1:Line,3:Multiplier,0:Artisan D:X8:Artisan+F:X9-Y9
 9	P3	R:6:Synergy,2:Fortress,0:Artisan D:Y9:Artisan+F:X8-X9
 9	P1	R:0:Multiplier,1:Line,3:Line D:pass
-10	P2	R:1:Line,3:Line,0:Artisan D:Y3:Artisan+F:Z3-AA3
-10	P3	R:4:Synergy,3:Multiplier,0:Basic D:Z3:Fortress
-10	P1	R:3:Multiplier,0:Basic,1:Basic D:pass
-11	P2	R:3:Multiplier,4:Fortress,1:Basic D:pass
-11	P3	R:4:Fortress,5:Fortress,1:Basic D:pass
-11	P1	R:4:Multiplier,2:Line,5:Line D:pass
-P	2	Final	round=12	candidates=0,3	pairs=0-3	waiter=-	source=script
+P	2	Final	round=10	candidates=0,3	pairs=0-3	waiter=-	source=script
 L	2	pairing=2	0-3	side=North	version=2	shared=6	shifts=0:0:0,2:0:0,3:20:7,4:0:0	digest=5F25BCA61F6C94CC2083ECB2D6E2292BCD245A793B2A69350C2032CFA8E2BD93
-S	2	round=11	field=0	AllPassed	winner=P2	1.P2=84 2.P3=80
-12	P2	R:0:Fortress,1:Basic,2:Basic D:Y3:Fortress,X10:Line,X12:Line,X13:Line
-12	P1	R:0:Fortress,1:Fortress,2:Basic D:Y10:Fortress,Y12:Fortress,Y13:Fortress
-# end phase=InProgress majorRound=13 reason=- turns=42
+S	2	round=9	field=0	Expired	winner=P2	1.P2=84 2.P3=80	deadline=9
+10	P2	R:1:Line,3:Line,0:Artisan D:X10:Artisan+F:X11-X12
+10	P1	R:0:Line,1:Basic,2:Sentry D:Y10:Sentry
+11	P2	R:0:Artisan,1:Basic,3:Basic D:X13:Artisan+F:X12-Y12
+11	P1	R:3:Synergy,5:Line,1:Basic D:AA9:Fortress,AC9:Line,AB10:Synergy,Y13:Fortress
+12	P2	R:4:Multiplier,0:Fortress,1:Basic D:pass
+12	P1	R:0:Line,1:Line,5:Line D:Z10:Line,X12:Line
+# end phase=InProgress majorRound=13 reason=- turns=40

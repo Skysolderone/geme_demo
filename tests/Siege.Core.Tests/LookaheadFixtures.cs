@@ -129,6 +129,8 @@ internal static class LookaheadFixtures
         TurnLimit = 600,
         PassThreshold = PassThreshold,
         ContentSet = ContentSet.V2,
+        // final-countdown：这些真实对局的黄金值都在引入决赛倒计时之前钉下，写死 K = 0（不启用，与引入之前逐步相同）。
+        FinalCountdownRounds = 0,
         EventRetention = EventRetention.Full,
         FullEventSamplePermille = 0,
     };

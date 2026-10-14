@@ -52,6 +52,7 @@ public sealed class MatchSession
     private int _pairingCursor;
     private int _linkCursor;
     private int _settlementCursor;
+    private int _countdownCursor;
     private bool _finished;
     private bool _truncated;
     private readonly bool _carryHeader;
@@ -84,6 +85,11 @@ public sealed class MatchSession
         if (config.ContentSet is { } contentSet && contentSet != match.ContentSet)
         {
             throw new SiegeRuleException($"跑局配置的内容集为 {contentSet}，对局配置却为 {match.ContentSet}。");
+        }
+
+        if (config.FinalCountdownRounds is { } countdown && match.Mode == MatchMode.Link && countdown != match.FinalCountdownRounds)
+        {
+            throw new SiegeRuleException($"跑局配置的决赛倒计时大回合数为 {countdown}，对局配置却为 {match.FinalCountdownRounds}。");
         }
 
         if (config.CarryIn == 1 && !match.CarryInOut)
@@ -182,6 +188,8 @@ public sealed class MatchSession
                 ContentSet = contentSet,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
+                // final-countdown：新建的局已由 ResolvedFor 落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，按 0（不启用）重建。
+                FinalCountdownRounds = config.FinalCountdownRounds ?? (recorded ? 0 : MatchOptions.DefaultFinalCountdownRounds),
             });
         match.PairingSource = pairing ?? new SeededPairingSource(seed, config.PairingSeed);
 
@@ -843,6 +851,23 @@ public sealed class MatchSession
                                 ExclusiveCells = x.ExclusiveCells,
                                 Stones = x.Stones,
                             })],
+                            Deadline = settled.Deadline,
+                        },
+                    });
+                    break;
+                case FlowEventKind.FinalCountdown:
+                    // final-countdown（match-telemetry「决赛倒计时的记录」）：每个进入倒计时的战场一条，带起点 R 与期限。
+                    FinalCountdownRecord countdown = Match.FinalCountdowns[_countdownCursor++];
+                    AddLink(e, new LogEvent
+                    {
+                        Type = LogEventType.FinalCountdown,
+                        Countdown = new FinalCountdownLogEntry
+                        {
+                            Sequence = countdown.Sequence,
+                            Battlefield = countdown.Battlefield,
+                            Start = countdown.Start,
+                            Deadline = countdown.Deadline,
+                            AssignedInMajorRound = countdown.AssignedInMajorRound,
                         },
                     });
                     break;

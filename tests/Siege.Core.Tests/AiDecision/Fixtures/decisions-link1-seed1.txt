@@ -34,19 +34,20 @@ L	1	pairing=1	0-1	side=East	version=1	shared=6	shifts=0:0:0,1:-12:0,2:0:0,3:0:0,
 7	P3	R:3:Line,2:Fortress,0:Basic D:X6:Fortress,Z6:Multiplier
 7	P1	R:5:Synergy,2:Fortress,0:Basic D:pass
 S	1	round=7	field=3	AllPassed	winner=P0	1.P0=192 2.P1=38
+C	1	round=7	field=0	start=7	deadline=9
 8	P0	R:2:Fortress,0:Basic,1:Basic D:pass
 8	P2	R:3:Multiplier,1:Fortress,2:Fortress D:AE3:Multiplier,AH5:Fortress,AG6:Fortress,AJ8:Basic
 8	P3	R:0:Synergy,2:Multiplier,3:Fortress D:AB3:Multiplier,Y7:Synergy,Z8:Multiplier
 9	P0	R:3:Line,0:Fortress,1:Artisan D:pass
 9	P3	R:0:Line,1:Basic,2:Sentry D:AC3:Fortress,Z9:Sentry
 9	P2	R:1:Line,2:Line,0:Fortress D:AF5:Line,AE6:Basic,AJ6:Fortress,AB8:Line
-10	P0	R:3:Multiplier,0:Line,4:Line D:pass
+P	2	Final	round=10	candidates=0,3	pairs=0-3	waiter=-	source=script
+L	2	pairing=2	0-3	side=North	version=2	shared=6	shifts=0:0:0,2:0:0,3:20:7,4:0:0	digest=5F25BCA61F6C94CC2083ECB2D6E2292BCD245A793B2A69350C2032CFA8E2BD93
+S	2	round=9	field=0	Expired	winner=P3	1.P3=164 2.P2=108	deadline=9
+10	P0	R:3:Multiplier,0:Line,4:Line D:X9:Line,AC9:Line,AC10:Multiplier
 10	P3	R:0:Synergy,5:Fortress,1:Basic D:AE4:Line,X8:Fortress,Y9:Synergy
-10	P2	R:0:Synergy,4:Multiplier,1:Artisan D:AG4:Artisan+F:AF4-AF5
+11	P0	R:0:Multiplier,1:Line,3:Line D:pass
 11	P3	R:3:Multiplier,0:Line,1:Sentry D:X3:Line,Z3:Multiplier
-11	P0	R:2:Multiplier,0:Basic,1:Basic D:pass
-11	P2	R:3:Multiplier,4:Fortress,1:Basic D:pass
-12	P3	R:1:Fortress,5:Fortress,0:Basic D:pass
-12	P0	R:3:Line,0:Basic,1:Chain D:pass
-12	P2	R:1:Line,2:Fortress,3:Basic D:AD7:Multiplier,AF7:Fortress,AG7:Synergy
-# end phase=InProgress majorRound=13 reason=- turns=43
+12	P0	R:2:Multiplier,0:Basic,1:Basic D:pass
+12	P3	R:0:Line,4:Line,1:Basic D:AB4:Line,Y5:Line,AD7:Sentry
+# end phase=InProgress majorRound=13 reason=- turns=40

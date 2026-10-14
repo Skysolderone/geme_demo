@@ -74,6 +74,8 @@ internal static class SimFixtures
         PassThreshold = PreCalibrationPassThreshold,
         // more-pieces-relics D8：新局缺省内容集 v2 会改变征募序列；这些样本与黄金值都在引入内容集之前钉下，写死 v1（v1 与引入之前逐步相同）。
         ContentSet = ContentSet.V1,
+        // final-countdown：缺省 K = 2 的决赛倒计时会改变链接模式的对局走向；这些样本与黄金值都在引入倒计时之前钉下，写死 K = 0（不启用，与引入之前逐步相同）。
+        FinalCountdownRounds = 0,
         Players = [.. config.Players.Select(p => p with { Weights = PreCalibrationWeights })],
     };
 

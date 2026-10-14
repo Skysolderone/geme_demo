@@ -115,6 +115,7 @@ public sealed partial class MatchFlow
         RequireModeMatchesMap(options.Mode, map, list.Length);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
+        RequireValidFinalCountdown(options.FinalCountdownRounds);
         // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
         // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
         if (options.CarryIns.Count > 0)
@@ -791,6 +792,8 @@ public sealed partial class MatchFlow
         {
             // 链接模式的阶段转换全部在大回合结束时执行（battlefield「阶段推进」）：首轮配对、决赛触发。
             AdvanceLinkPhase(completed);
+            // final-countdown：结算与阶段转换（含挂接来源时当场执行的首轮配对）之后推进决赛倒计时；停在待配对时由 ApplyPairing 补做。
+            UpdateFinalCountdown(completed);
         }
     }
 

@@ -93,12 +93,14 @@ public static class Program
         Console.WriteLine("用法：");
         Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，链接模式恒为 4>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子，缺省 {DefaultMapId}>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
+        Console.WriteLine($"                [--final-countdown <决赛倒计时大回合数 K，非负整数，缺省 {Core.Match.MatchOptions.DefaultFinalCountdownRounds}；0 = 不启用>]");
         Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--links <出生棋盘对，如 1-4,2-5 或 1-4E,2-5E,1-2N（E 东贴 / N 北贴，不写按阶段推断），只用于 link:>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出；旧标识族仍可打印，夹具用途）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <link:地图种子，缺省 {DefaultMapId}>] [--players <人数，链接模式恒为 4>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
         Console.WriteLine("                [--pairing-seed <配对种子，非负整数；缺省由对局种子派生，同一批次可重复对比>]");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
+        Console.WriteLine($"                [--final-countdown <决赛倒计时大回合数 K，非负整数，缺省 {Core.Match.MatchOptions.DefaultFinalCountdownRounds}；0 = 不启用（出现等待决赛的玩家后其余多人战场最多再打 K 个大回合，到期按势力强制结算）>]");
         Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
@@ -122,13 +124,14 @@ public static class Program
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
+        int? finalCountdown = cli.Has("final-countdown") ? cli.GetInt("final-countdown", 0) : null;
         Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
         // board-link-mode C1：不给地图选项即 link:1；只接受 link:，旧标识族报错（在任何取种子与解析之前）。
         mapId = RequireLinkMap(string.IsNullOrWhiteSpace(mapId) ? DefaultMapId : mapId.Trim(), "play");
         mapId = MaterializeMapRequest(mapId, output, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
-        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile);
+        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile, finalCountdown: finalCountdown);
     }
 
     /// <summary>
@@ -413,6 +416,7 @@ public static class Program
             PassThreshold = cli.Has("pass-threshold") ? cli.GetInt("pass-threshold", 0) : config.PassThreshold,
             PairingSeed = cli.Has("pairing-seed") ? cli.GetUInt64("pairing-seed", 0) : config.PairingSeed,
             CarryIn = cli.Has("carry-in") ? cli.GetInt("carry-in", 0) : config.CarryIn,
+            FinalCountdownRounds = cli.Has("final-countdown") ? cli.GetInt("final-countdown", 0) : config.FinalCountdownRounds,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,
