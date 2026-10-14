@@ -37,16 +37,16 @@
 - [x] 5.1 `map` 子命令打印每块棋盘的主题与地形图例；终端版插旗阶段的占位行显示"编号 · 主题 · 宽×高"。验收：单元测试覆盖 `map --map link:1` 的输出含 5 个主题名；终端插旗提示含主题（`match-setup`「插旗阶段的可见信息」）
 - [x] 5.2 `analyze` 增加按主题的统计：各主题棋盘的平均名次与胜场、匠人改造次数、公共信物被控制的次数。验收：单元测试用一份小日志集断言统计值
 - [x] 5.3 冒烟：`run --map link:1 --seed 1 --count 10 --difficulty Standard`，再加 `--map-per-match` 跑 10 局，共 20 局。对比 F.5 基线：对局大回合中位 / 最大、首轮与决赛交战、AI 单小回合中位耗时。验收：数据写入 journal；单小回合中位超过 150 ms 或对局中位超过 20 大回合时停下，回负责人裁决（design 风险项）
-- [ ] 5.4 按冒烟的主题统计决定是否回调 design D4 的初值；回调后重跑 2.x 与 3.3 的测试。验收：回调幅度与理由写入 journal（没有回调也要注明）
+- [x] 5.4 按冒烟的主题统计决定是否回调 design D4 的初值；回调后重跑 2.x 与 3.3 的测试。验收：回调幅度与理由写入 journal（没有回调也要注明）
 
 ## 6. 图形版（AC5 / AC7）
 
 - [x] 6.1 插旗阶段的占位显示主题名（字样复用 `Labels`）；出生区嵌入亮条改为按核心区画。验收：Godot 构建零警告；截图人工检查
 - [x] 6.2 headless 自检四条：`--auto-demo`、`--auto-demo --pick-check --seed=5`、`--map-select --auto-demo`、`--auto-demo --rounds=0 --seed=5`，全部退出 0；拾取计数按新尺寸实测回写。验收：真实退出码为 0，`[flow]` 七步齐全
 - [x] 6.3 非 headless 截图：五个主题各一张，加拼接后一张，放进 `art/link-map-terrain/` 并写人工检查清单。验收：负责人过目
-- [ ] 6.4 给负责人试玩入口（终端版与图形版命令）。验收：负责人试玩反馈记录在案
+- [x] 6.4 给负责人试玩入口（终端版与图形版命令）。验收：负责人试玩反馈记录在案
 
 ## 7. 文档与归档
 
-- [ ] 7.1 设计文档 §3.1（补一句说明）、§3.3（改写）、§4.1（盲选可见主题）升到 v1.21，并写变更记录；`HANDOFF.md` 的"现行规则速览·地图"与后续 change 同步（登记 `link-map-surfaces`）。验收：人工检查
-- [ ] 7.2 `openspec validate link-map-terrain --strict` 通过后归档；归档后 `openspec validate --specs --strict` 全部主规格通过。验收：两条命令退出 0
+- [x] 7.1 设计文档 §3.1（补一句说明）、§3.3（改写）、§4.1（盲选可见主题）升到 v1.21，并写变更记录；`HANDOFF.md` 的"现行规则速览·地图"与后续 change 同步（登记 `link-map-surfaces`）。验收：人工检查
+- [x] 7.2 `openspec validate link-map-terrain --strict` 通过后归档；归档后 `openspec validate --specs --strict` 全部主规格通过。验收：两条命令退出 0

@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-10-13（`ai-pass-review` 第二段实施完成、待主会话提交归档；此前 `retire-legacy-maps` 已归档；此前 `board-link-mode` 段 E 收尾，基线 HEAD `e40c84c`）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-10-14（`link-map-terrain` 归档：链接档出生棋盘主题化地形；此前 `ai-pass-review`、`retire-legacy-maps`、`board-link-mode` 均已归档）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续；最近进度以 `.trellis/workspace/rubioc/journal-1.md` 最后一节为准。
 
 ## 一句话
@@ -53,9 +53,9 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 - `replay`：`--file <match-*.jsonl>` 或 `--dir <目录> --seed <十六进制种子>`（只回放 `link:` 日志）。`analyze`：`--dir` `--include-contaminated` `--review-defeats`（按日志回放复盘整轮 Pass 结算的落败者与决胜一手，耗时约等于跑局；缺省不做）`--out`。
 - 已删除：`--flag-risk`（冒险概率随盲选废除）；`--config` 文件里写 `FlagRisk` 字段即报错退出（`retire-legacy-maps`）。Link 局固定 4 人，`--players` 给别的值建局报错。AI 全知开关只在 `--config` 的 `Players[].Search.SeatVision`，没有命令行选项。难度名不区分大小写、不接受数字（`AiDifficultyNames`）。
 
-## 现行规则速览（设计文档 v1.22）
+## 现行规则速览（设计文档 v1.23）
 
-- **地图**（§3.3）：`link:<种子>` 生成 5 块出生棋盘（边长 5–7、各 2 信物格、间距 3 排开，可落子共 125–245），其余是不可落子、不可改造的场景格。**战场** = 可落子格连通分量。
+- **地图**（§3.3，`link-map-terrain`）：`link:<种子>` 生成 5 块出生棋盘（宽高 6–8、间距 3 排开），五主题高台 / 河流 / 林地 / 栅栏阵 / 混合各一块；外圈平坦，中央 3×3 核心区是出生区（2 个出生区信物），中间带按主题放高差 / 深水与桥 / 林地 / 栅栏 / 岩石，另有 0–1 个公共区档信物在难到达格；全图可落子 212–280、信物 10–15。插旗占位公开主题名。棋盘外是不可落子、不可改造的场景格。**战场** = 可落子格连通分量，战斗阶段可见本战场各棋盘外接矩形内全部格。
 - **盲选**（§4.1）：只见 5 个占位，选中即锁定，互相看不到；AI 用 `flag-pick` 子流均匀选；多人可同区。
 - **构筑期**（§4.2）：第 1–3 大回合只能在自己的战场落子；没有第 4 大回合全图解禁，任何时候都只能在所在战场落子。
 - **配对与拼接**（§4.3、§3.3）：第 3 大回合结束时独占者两两随机配对，拼接成连体棋盘（锚点 = 最小编号者不动，首轮贴东侧、决赛贴北侧，共享边最长、并列偏南 / 偏西）；多人同区就地对局；奇数时配对事件指定一人等待。配对不可复现，作为事件写日志与存档。
@@ -74,17 +74,17 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 `$G = "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64_console.exe"`，以下都是 `& $G --headless --path src/godot ...`：
 - 构建 C#：`--build-solutions --quit`（Godot 在编辑器外读 **Debug** 程序集，只做 Release 构建会跑到旧代码）。
 - `-- --auto-demo`：插旗 → 构筑 → 配对 → 拼接，`[flow]` 已见各步通过 + 开局对准自证，退出 0。
-- `-- --auto-demo --pick-check --seed=5`：开局一轮拾取 30/30，本机参与首轮拼接后第二轮 55/55（缺省种子的本机不在首轮链接里，会以 1 退出并提示换种子）。
-- `-- --map-select --auto-demo`：新局界面五步（非法种子 / 合法种子 / 换一张 / 回到进入时的种子 / 开始）再接演示。
+- `-- --auto-demo --pick-check --seed=5`：开局一轮拾取 42/42，本机参与首轮拼接后第二轮 78/78（`link-map-terrain` 后，棋盘变大）（缺省种子的本机不在首轮链接里，会以 1 退出并提示换种子）。
+- `-- --map-select --auto-demo`：新局界面五步（非法种子 / 合法种子 / 换一张 / 回到进入时的种子 / 开始）再接演示；第 4 步节点守门为"建局后 = 进入时 + 主题名标注数"（新局界面背景不带主题名）。
 - `-- --auto-demo --rounds=0 [--seed=5]`：跑到终局，`[flow]` 要求七步齐全（锁定 → 构筑 → 首轮配对 → 拼接 → 战场结算 → 决赛 → 终局），任一步不符退出 1。
 - 换出生棋盘看取景：`-- --auto-demo --zone=<1–5> --seed=<S>`（F.6 已验 5 × 4 = 20 次全过）。
-- 截图（非 headless）命令与人工试玩清单：`art/board-link-mode/README.md`。
+- 截图（非 headless）命令与人工试玩清单：`art/board-link-mode/README.md`、`art/link-map-terrain/README.md`（五主题、棋盘内岩石 `link:9`、拼接）。
 - 规格：`openspec validate board-link-mode --strict`。
 
 ## 测试现状
 
 - `dotnet build siege.sln -c Release` 与 Godot 工程均 0 警告 0 错误（段 F.6 实测）。
-- `dotnet test -c Release`：**1999 条，通过 1993，跳过 6**（`ai-pass-review` 第二段后；跳过全是 Perf / Slow，用 `SIEGE_PERF=1` / `SIEGE_SLOW=1` 加 `Category` 过滤开启）。逐类迁移与对账见 `.trellis/tasks/10-13-retire-legacy-maps/migration.md`。
+- `dotnet test -c Release`：**2110 条，通过 2104，跳过 6**（`link-map-terrain` 后；跳过全是 Perf / Slow，用 `SIEGE_PERF=1` / `SIEGE_SLOW=1` 加 `Category` 过滤开启）。逐类迁移与对账见 `.trellis/tasks/10-13-retire-legacy-maps/migration.md`。
 - 决策序列基线：链接图 `link:1` + 固定配对脚本 + 标准难度、对局种子 1 / 2 / 3（截到第 12 大回合）；旧 v5 / board:1 基线已删除。专家 G1 黄金值与前瞻计时局面集钉在 `link:1` 种子 1–3。
 
 ## 旧地图（已删除）
@@ -103,12 +103,16 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 6. **retire-legacy-rules**：删除 Core 中只服务手写 9×9 夹具的 Legacy 规则分支（需先把手写夹具迁到链接规则；`retire-legacy-maps` 裁决 L6 = C 登记的债务，含 Sim 日志 / 终端渲染里读模式的分支，待决 L17）。
 7. **AI 整批评价观察**（`ai-pass-review` P14）：逐枚贪心会漏掉"整批为正、逐枚为负"的组合（种子 D R5 整批 +323）。
 8. **决胜一手拉长战场观察**（P15）：20 局均值 +0.4 大回合，个例 14 → 20。
+9. **链接档新地表**（`link-map-terrain` M4，暂名 `link-map-surfaces`）：荒漠 / 沼泽 / 岩台 / 浅滩进入出生棋盘中间带。
+10. **AI 地形与主题观察**（L2 / M10）：AI 改造全是立栅、零搭桥零烧林；Safety / Eye / Threat 在主题化地形上未校准；AI 盲选不读主题。
+11. **对局长度观察**（L1）：主题化地形后对局中位 15–16 大回合（原 11）、首轮交战约 10（原 5.3）；按试玩手感决定是否缩边长或缩构筑期。
+12. **格线高度观察**（第 6 组）：格线画在 h=0 面上，高台上只能靠地砖缝看格界，深水上方悬一条格线；负责人看图后暂不立项。
 
-另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。2026-09-28 之后已归档：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`，以及本次的 `board-link-mode`（归档由主会话完成）。
+另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。2026-09-28 之后已归档：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`，`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`，以及本次的 `link-map-terrain`。
 
 ## 权威来源（按优先级）
 
-1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.21**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
+1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.23**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
 2. `openspec/changes/archive/<日期>-<change>/` 的 proposal 裁决表与 design.md：设计文档没写到的以它判定（链接模式的全部裁决在 `board-link-mode` 的 proposal）。
 3. `.trellis/spec/core/`：`index` / `boundaries` / `determinism` / `coordinates` / `testing`，**必读**。
 4. `.trellis/workspace/rubioc/journal-1.md` 与 `.trellis/tasks/archive/<月>/<任务>/implement.md`（逐段记录、冒烟数字、自检输出）。
