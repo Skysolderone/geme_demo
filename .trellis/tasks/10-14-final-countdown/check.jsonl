@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/final-countdown/proposal.md", "reason": "final-countdown 规划与内核规范"}
+{"file": "openspec/changes/final-countdown/design.md", "reason": "final-countdown 规划与内核规范"}
+{"file": "openspec/changes/final-countdown/tasks.md", "reason": "final-countdown 规划与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "final-countdown 规划与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "final-countdown 规划与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "final-countdown 规划与内核规范"}
