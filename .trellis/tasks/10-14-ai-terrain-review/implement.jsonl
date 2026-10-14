@@ -1,0 +1,10 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/ai-terrain-review/proposal.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": "openspec/changes/ai-terrain-review/design.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": "openspec/changes/ai-terrain-review/tasks.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": "openspec/changes/ai-terrain-review/specs/match-telemetry/spec.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": ".trellis/tasks/archive/2026-10/10-13-ai-pass-review/implement.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": ".trellis/tasks/archive/2026-10/10-13-link-map-terrain/implement.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "ai-terrain-review 规划、先例与内核规范"}
