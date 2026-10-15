@@ -48,24 +48,24 @@ public class 同类信物叠加且无统一硬上限Tests
     public void 来源可拆分()
     {
         // growth-pass-1 relic-effects 规格：第 7 大回合控制 2 枚普通军令，部署上限 7 → 来源拆分为基础 5（第 7 大回合阶段值）与军令 +1、+1。
-        // P1 经正式结算占据 H4、J4（占据即揭示并控制），P0 视角读公开结构参数与手牌面板文案。
+        // P1 经正式结算占据 J6、K6（占据即揭示并控制；retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 H4、J4 列 +1、行 +2），P0 视角读公开结构参数与手牌面板文案。
         // 变异验证 M-GP4（MatchFlow.StructuresOf 的部署基础改传 BaseDeployLimitFor(1)，并去掉 Parameter 的一致性抛出——
         //   即把 +2 阶段增量算进"军令加成"）→ 全套红 2（本测试 Base 3 / Bonus 4、「显示参数与来源」）。
-        MatchFlow match = MatchFixtures.Started(relics: [("H4", RelicFixtures.Command()), ("J4", RelicFixtures.Command())])
-            .AtRound(7, MatchFixtures.All);
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("J6", RelicFixtures.Command()), ("K6", RelicFixtures.Command())])
+            .AtRound(7, TestMaps.All);
         match.PassTurn();
-        match.PlayTurn("H4", "J4");
+        match.PlayTurn("J6", "K6");
 
-        StructureParameter deploy = match.PublishSupplement().Structures.Single(s => s.Player == MatchFixtures.P1).Parameters!.DeployLimit;
+        StructureParameter deploy = match.PublishSupplement().Structures.Single(s => s.Player == TestMaps.P1).Parameters!.DeployLimit;
         Assert.Equal((7, 5, 2), (deploy.Value, deploy.Base, deploy.Bonus));
         Assert.Equal([(RelicType.Command, 1), (RelicType.Command, 1)], deploy.Sources.Select(s => (s.Type, s.Magnitude)));
-        Assert.Equal(["H4", "J4"], deploy.Sources.Select(s => s.Coord).Notations());
+        Assert.Equal(["J6", "K6"], deploy.Sources.Select(s => s.Coord).Notations());
 
-        ParameterView view = match.World(MatchFixtures.P0).HandPanel().Opponents.Single(o => o.Player == MatchFixtures.P1).Structure!.DeployLimit;
+        ParameterView view = match.World(TestMaps.P0).HandPanel().Opponents.Single(o => o.Player == TestMaps.P1).Structure!.DeployLimit;
         Assert.Equal("部署上限 7（基础 5，+2 来自 军令×2）", view.Text);
 
         // 无军令的玩家：来源为空，基础即当前值 5
-        StructureParameter plain = match.PublishSupplement().Structures.Single(s => s.Player == MatchFixtures.P2).Parameters!.DeployLimit;
+        StructureParameter plain = match.PublishSupplement().Structures.Single(s => s.Player == TestMaps.P2).Parameters!.DeployLimit;
         Assert.Equal((5, 5), (plain.Value, plain.Base));
         Assert.Empty(plain.Sources);
     }

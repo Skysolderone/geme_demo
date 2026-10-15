@@ -4,6 +4,7 @@ using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
+using Siege.Core.Relics;
 
 namespace Siege.Core.Tests;
 
@@ -17,11 +18,11 @@ internal static class LinkModeFixtures
 
     private static readonly Lazy<MapData> LazyMap = new(() => MapCatalog.Resolve(MapId));
 
-    internal static readonly PlayerId P0 = MatchFixtures.P0;
-    internal static readonly PlayerId P1 = MatchFixtures.P1;
-    internal static readonly PlayerId P2 = MatchFixtures.P2;
-    internal static readonly PlayerId P3 = MatchFixtures.P3;
-    internal static readonly PlayerId[] All = MatchFixtures.All;
+    internal static readonly PlayerId P0 = TestMaps.P0;
+    internal static readonly PlayerId P1 = TestMaps.P1;
+    internal static readonly PlayerId P2 = TestMaps.P2;
+    internal static readonly PlayerId P3 = TestMaps.P3;
+    internal static readonly PlayerId[] All = TestMaps.All;
 
     /// <summary><c>link:1</c> 的初始图（5 块隔绝的出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
@@ -38,7 +39,7 @@ internal static class LinkModeFixtures
 
     /// <summary>插旗阶段的链接模式对局。</summary>
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
-        MatchFlow.Create(Map, seed ?? MatchFixtures.Seed, All, options ?? Options);
+        MatchFlow.Create(Map, seed ?? TestMaps.Seed, All, options ?? Options);
 
     /// <summary>按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。可挂接配对来源。</summary>
     internal static MatchFlow Started(int[] zones, IPairingSource? source = null, GameSeed? seed = null, MatchOptions? options = null)
@@ -78,7 +79,7 @@ internal static class LinkModeFixtures
     /// <summary>在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
     internal static MatchFlow StartedFlat(int[] zones)
     {
-        MatchFlow match = MatchFlow.Create(FlatMap, MatchFixtures.Seed, All, Options);
+        MatchFlow match = MatchFlow.Create(FlatMap, TestMaps.Seed, All, Options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
@@ -87,6 +88,173 @@ internal static class LinkModeFixtures
         match.PlantSequentially(All.Select((p, i) => (p, zones[i])));
         return match;
     }
+
+    // ---------- 平坦 8×8 棋盘 0 的手写链接档图（retire-legacy-rules D2：原 9×9 Legacy 流程夹具的迁移载体） ----------
+
+    /// <summary>平坦变体棋盘 0 的边长（链接档出生棋盘边长上限）。</summary>
+    internal const int PlainSize = 8;
+
+    /// <summary>平坦变体的地图标识。</summary>
+    internal const string PlainMapId = "link:90008";
+
+    /// <summary>
+    /// 平坦变体的棋盘清单：棋盘 0 为 8×8、左下角 (2, 2)（画布口径同生成器：底边第 2 行、最西列第 2 列）；其余四块同 <see cref="LinkMapFixtures.Births"/> 的 6×6，
+    /// 按间距 3 依次排在东侧（x = 13 / 22 / 31 / 40）。主题沿用 <see cref="LinkMapFixtures.Births"/> 的次序，只用于呈现。
+    /// </summary>
+    internal static readonly ImmutableArray<BoardPlate> PlainBoards =
+    [
+        new(new Coord(2, 2), PlainSize, PlainSize, BoardPlateKind.Birth, BoardTheme.Plateau),
+        new(new Coord(13, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
+        new(new Coord(22, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest),
+        new(new Coord(31, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Palisade),
+        new(new Coord(40, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
+    ];
+
+    /// <summary>平坦变体地图（无地形、信物格由用例给）。</summary>
+    internal static MapData PlainMap(params string[] relicCells) => PlainMap(null, relicCells);
+
+    /// <summary>
+    /// 平坦变体地图（标识 <see cref="PlainMapId"/>）：棋盘 0 全是高度 0 的可落子草地——<b>没有</b>林地、深水、岩石，信物格只取 <paramref name="relicCells"/>（一律公共区标准档），
+    /// 其余四块棋盘同样平坦、无信物格。原 9×9 夹具的局面整体平移 (+2, +2) 后落在棋盘 0 上（9×9 的 <c>A1</c> → 这里的 <c>C3</c>），
+    /// 棋盘外一律障碍，与 9×9 的盘边封堵语义相同。偏离校验之处：中间带没有改造目标（裁决 M7）、信物格不按出生区档布置——所以只能经
+    /// <see cref="MatchFlow.CreateUnvalidated"/> 建局。<paramref name="terrain"/> 写在本图坐标上（需要地形的用例：深水 / 林地 / 栅栏放棋盘 0 中间带）。
+    /// </summary>
+    internal static MapData PlainMap(TerrainData? terrain, params string[] relicCells)
+    {
+        const int Margin = 2;
+        int width = PlainBoards.Max(b => b.Origin.X + b.Width) + Margin;
+        int height = PlainBoards.Max(b => b.Origin.Y + b.Height) + Margin;
+        ImmutableHashSet<Coord> playable = [.. PlainBoards.SelectMany(b => b.Cells())];
+        var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
+        return new MapData
+        {
+            Id = PlainMapId,
+            Width = width,
+            Height = height,
+            MaxPlayers = 4,
+            Profile = MapProfile.Link,
+            Boards = PlainBoards,
+            MapVersion = 0,
+            Obstacles = [.. TestMaps.Rect(0, 0, width, height).Where(c => !playable.Contains(c))],
+            TerrainData = terrain ?? TerrainData.Flat,
+            BirthZones = [.. PlainBoards.Select(b => (ImmutableHashSet<Coord>)[.. b.CoreCells()])],
+            RelicCells = relicCells.ToImmutableDictionary(Coord.Parse, _ => spec),
+            ChokePoints = [],
+            CentralEntrance = PlainBoards[0].CoreOrigin,
+        };
+    }
+
+    /// <summary>
+    /// 平坦变体建局用的选项：调用方给的选项（缺省 <see cref="Options"/>）强制改为链接模式、决赛倒计时 K = 0。
+    /// 原 9×9 夹具的用例都写于链接模式与决赛倒计时之前；建局后另断言模式确为链接（<see cref="RequireLink"/>）——链接图配旧模式在
+    /// <see cref="MatchFlow.CreateUnvalidated"/> 里是放行的，漏传选项会让测试在链接图上跑旧规则而照样全绿。
+    /// </summary>
+    internal static MatchOptions PlainOptions(MatchOptions? options) =>
+        (options ?? Options) with { Mode = MatchMode.Link, FinalCountdownRounds = 0 };
+
+    /// <summary>断言对局确以链接模式建局（见 <see cref="PlainOptions"/>）。</summary>
+    internal static MatchFlow RequireLink(MatchFlow match) =>
+        match.Mode == MatchMode.Link ? match : throw new InvalidOperationException($"夹具建局不是链接模式（{match.Mode}）。");
+
+    /// <summary>平坦变体上建局、停在插旗阶段；信物为手工分布（格与内容由用例给，坐标写在本图上）。</summary>
+    internal static MatchFlow PlainCreate(GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
+        PlainCreate(null, seed, options, relics);
+
+    /// <summary>同上，另可指定地形。</summary>
+    internal static MatchFlow PlainCreate(TerrainData? terrain, GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
+    {
+        MapData map = PlainMap(terrain, [.. relics.Select(r => r.Cell)]);
+        return RequireLink(MatchFlow.CreateUnvalidated(map, seed ?? TestMaps.Seed, All, TestMaps.Relics(map, relics), PlainOptions(options)));
+    }
+
+    /// <summary>
+    /// 平坦变体上建局并依次插旗（缺省四人同锁棋盘 0：单一战场、锁定旗数 4 不进首轮配对、没有链接，第 1 大回合起合法范围即整块棋盘 0），
+    /// 给每人 50 枚普通子，进入第 1 大回合。
+    /// </summary>
+    internal static MatchFlow PlainStarted(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
+        PlainStarted(null, seed, zones, options, relics);
+
+    /// <summary>同上，另可指定地形。</summary>
+    internal static MatchFlow PlainStarted(TerrainData? terrain, GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
+    {
+        MatchFlow match = PlainCreate(terrain, seed, options, relics);
+        zones ??= [0, 0, 0, 0];
+        foreach (PlayerId p in All)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 50));
+        }
+
+        match.PlantSequentially(All.Select((p, i) => (p, zones[i])));
+        return match;
+    }
+
+    /// <summary>
+    /// 原 9×9 夹具坐标 → 平坦变体棋盘 0 上的坐标：整体平移 (+2, +2)（<c>A1</c> → <c>C3</c>）。只用于多个文件共用、同时被规则层（9×9）与链接载体引用的坐标数组；
+    /// 单个用例里的坐标一律直接写平移后的值。
+    /// </summary>
+    internal static string[] Shift(params string[] cells) =>
+        [.. cells.Select(Coord.Parse).Select(c => new Coord(c.X + 2, c.Y + 2).ToNotation())];
+
+    // ---------- 流程推进扩展（retire-legacy-rules 1.2：原 MatchFixtures 的扩展方法，原样迁来） ----------
+
+    /// <summary>
+    /// 把对局摆到第 <paramref name="majorRound"/> 大回合开始、指定顺序。出局判定不再有保护期豁免（restore-go-core-rules 裁决 #3），
+    /// 这里也就没有"保护状态"可摆。
+    /// </summary>
+    internal static MatchFlow AtRound(this MatchFlow match, int majorRound, PlayerId[]? order = null)
+    {
+        match.Debug.SetMajorRound(majorRound);
+        match.Debug.SetOrder(order ?? All);
+        return match;
+    }
+
+    /// <summary>
+    /// 直接在权威盘面摆子（绕过规则，只为构造局面），然后重算派生量。重算会照常置位「曾建立正势力」标记（与真实结算同一置位点），
+    /// 所以这样摆上去的棋子若随后被全部提走，该玩家会按规则出局。
+    /// </summary>
+    internal static MatchFlow Stones(this MatchFlow match, PlayerId owner, params string[] cells)
+    {
+        foreach (string cell in cells)
+        {
+            match.Board.Place(Coord.Parse(cell), owner, PieceType.Basic);
+        }
+
+        match.Debug.Recalculate();
+        return match;
+    }
+
+    /// <summary>跑完当前玩家的小回合：开始 → 征募（不选） → 部署指定落点 → 确认。落点为空即 Pass。</summary>
+    internal static SettlementOutcome PlayTurn(this MatchFlow match, params string[] cells)
+    {
+        match.BeginTurn();
+        match.EnterRecruit();
+        StagedBatch batch = match.EnterDeploy();
+        foreach (string cell in cells)
+        {
+            BatchFailure? failure = batch.Stage(Coord.Parse(cell), PieceType.Basic);
+            if (failure is not null)
+            {
+                throw new InvalidOperationException($"夹具暂放失败：{failure.Message}");
+            }
+        }
+
+        SettlementOutcome outcome = match.Confirm();
+        if (!outcome.Confirmed)
+        {
+            throw new InvalidOperationException($"夹具确认失败：{outcome.Failure!.Message}");
+        }
+
+        return outcome;
+    }
+
+    /// <summary>当前玩家 Pass。</summary>
+    internal static SettlementOutcome PassTurn(this MatchFlow match) => match.PlayTurn();
+
+    /// <summary>某玩家在盘面上的棋子数。</summary>
+    internal static int StoneCount(this MatchFlow match, PlayerId player) => match.Board.GroupsOf(player).Sum(g => g.Size);
+
+    /// <summary>某种类事件的数量。</summary>
+    internal static int CountEvents(this MatchFlow match, FlowEventKind kind) => match.Events.Count(e => e.Kind == kind);
 
     /// <summary>当前大回合内剩下的玩家全部 Pass，直到大回合结束（或对局离开进行中阶段）。链接模式下整轮 Pass 不结束对局。</summary>
     internal static MatchFlow PassRound(this MatchFlow match)

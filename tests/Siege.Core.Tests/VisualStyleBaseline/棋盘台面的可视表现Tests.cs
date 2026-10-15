@@ -1,6 +1,8 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Match;
+using Siege.Core.Preview;
 using Siege.Presentation.Visibility;
 using static Siege.Core.Tests.LinkModeFixtures;
 
@@ -29,7 +31,7 @@ public class 棋盘台面的可视表现Tests
         for (int seed = 1; seed <= SeedSpan; seed++)
         {
             MapData map = MapCatalog.Resolve($"link:{seed}");
-            MatchFlow match = MatchFlow.Create(map, MatchFixtures.Seed, All, Options);
+            MatchFlow match = MatchFlow.Create(map, TestMaps.Seed, All, Options);
             match.PlantSequentially(All.Select((p, i) => (p, i)));
             DefaultBoardView board = match.World(P0).Board();
             BoardPlate own = map.BirthBoard(0);
@@ -53,8 +55,15 @@ public class 棋盘台面的可视表现Tests
     public void 棋盘清单为空时一律是场景装饰()
     {
         // 手写 9×9 夹具没有棋盘清单：任何格都按场景装饰画，与引入本方法之前相同。
-        MatchFlow match = MatchFixtures.Create();
-        DefaultBoardView board = match.World(MatchFixtures.P0).Board();
+        // retire-legacy-rules 1.3（清单 P4，(a) 规则层）：对局只能建在链接档图上（必有清单），这里不经对局——在 9×9 地图数据的 GameBoard 上
+        // 直接组装同一时刻的公开快照与补充载荷，再经 DefaultBoardView.From 取默认棋盘（与对局发布走同一构建函数），断言不变。
+        GameBoard nine = GameBoard.LoadUnvalidated(TestMaps.NineByNine());
+        var view = new MatchPublicView(
+            nine.Map.Id, TestMaps.Seed.ToString(), MatchPhase.FlagPlanting, 0, MatchOptions.DefaultArtisanWeight, ContentSets.Default, TurnStage.Idle,
+            null, [], [], nine, nine.Serialize(), null, [], [], 0, null, LifeShapeReport.Analyze(nine), false,
+            ImmutableSortedDictionary<PlayerId, Siege.Core.Carry.CarryIn>.Empty);
+        DefaultBoardView board = DefaultBoardView.From(PublicWorld.From(view, new PublicSupplement(nine.Serialize(), 0, [], [], null, null)));
+        Assert.Equal(81, board.Cells.Length);   // 样本口径：确是整张 9×9
 
         Assert.Empty(board.Boards);
         Assert.All(board.Cells, c => Assert.Equal(ObstacleArt.Scenery, board.ObstacleArtAt(c.Coord)));

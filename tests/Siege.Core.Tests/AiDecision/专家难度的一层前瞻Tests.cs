@@ -16,23 +16,24 @@ namespace Siege.Core.Tests.AiDecision;
 public class 专家难度的一层前瞻Tests
 {
     /// <summary>
-    /// 叫吃局面（9×9、第 5 大回合、顺序 P0 → P3、专家 P0 的部署上限 1，候选都是单子批次）：
+    /// 叫吃局面（第 5 大回合、顺序 P0 → P3、专家 P0 的部署上限 1，候选都是单子批次）：
     /// <code>
-    ///  9 . . . . . X O O O     A = G8：P2（O，右上）的 3 子串 G9–J9 被 P0 的 F9 / H8 / J8 围成一口气 G8，A 提走它（自身总分 1157）。
-    ///  8 . . . . . . ! X X
-    ///  6 . O O O O . . . .     P0（X）的 4 子串 C5–F5 只剩一口气 G5；P1（O）围在上下左三面。
-    ///  5 O X X X X ! . . .     B = G5：长出三口气，四子串得救（自身总分 1111）。
-    ///  4 . O O O O . . . .     下一名对手 P1 的模拟回应：A 之后在 G5 提走四子串；B 之后提不到 P0 的子。
-    ///    B C D E F G H J
+    /// 10 . . . . . X O O O     A = H9：P2（O，右上）的 3 子串 H10–K10 被 P0 的 G10 / J9 / K9 围成一口气 H9，A 提走它。
+    ///  9 . . . . . . ! X X
+    ///  7 . O O O O . . . .     P0（X）的 4 子串 D6–G6 只剩一口气 H6；P1（O）围在上下左三面。
+    ///  6 O X X X X ! . . .     B = H6：长出三口气，四子串得救。
+    ///  5 . O O O O . . . .     下一名对手 P1 的模拟回应：A 之后在 H6 提走四子串；B 之后提不到 P0 的子。
+    ///    C D E F G H J K
     /// </code>
-    /// 段 A 实测：A 的前瞻后分数 860（四子串被提走，按 ≤ 1 口气的危险计入安全维），B 为 991 → 专家选 B；高难按自身总分选 A。
+    /// retire-legacy-rules 1.4：载体为平坦 8×8 链接档图（四人同锁棋盘 0），原 9×9 局面 B4–J9 平移 (+1, +1) 落在棋盘 0 的 C5–K10（右上角仍贴盘角）。
+    /// 原 9×9 段 A 实测：A 的自身总分 1157、前瞻后分数 860（四子串被提走，按 ≤ 1 口气的危险计入安全维），B 为 1111 / 991 → 专家选 B；高难按自身总分选 A。
     /// </summary>
     internal static MatchFlow AtariPosition()
     {
         MatchFlow match = AiFixtures.Round5()
-            .Stones(P0, "C5", "D5", "E5", "F5", "F9", "H8", "J8")
-            .Stones(P1, "B5", "C4", "D4", "E4", "F4", "C6", "D6", "E6", "F6")
-            .Stones(P2, "G9", "H9", "J9");
+            .Stones(P0, "D6", "E6", "F6", "G6", "G10", "J9", "K9")
+            .Stones(P1, "C6", "D5", "E5", "F5", "G5", "D7", "E7", "F7", "G7")
+            .Stones(P2, "H10", "J10", "K10");
         match.SetDeployLimit(1);
         return match;
     }
@@ -49,21 +50,21 @@ public class 专家难度的一层前瞻Tests
         LookaheadRecord record = Record(expert);
 
         // 前提（因果声明用断言钉住）：高难选的是提子的 A；A 与 B 都在专家的前瞻集里，A 排在 B 前面。
-        Assert.Equal("G8:Basic", hard.LastChoice!.Key);
+        Assert.Equal("H9:Basic", hard.LastChoice!.Key);
         Assert.Equal(LookaheadStatus.Applied, record.Status);
-        int a = record.Entries.ToList().FindIndex(e => e.CandidateKey == "G8:Basic");
-        int b = record.Entries.ToList().FindIndex(e => e.CandidateKey == "G5:Basic");
+        int a = record.Entries.ToList().FindIndex(e => e.CandidateKey == "H9:Basic");
+        int b = record.Entries.ToList().FindIndex(e => e.CandidateKey == "H6:Basic");
         Assert.Equal(0, a);
         Assert.True(b > a, record.ToText());
         Assert.True(record.Entries[a].ScoreBefore > record.Entries[b].ScoreBefore);
 
-        // A 之后的模拟回应在 G5 提走四子串；B 之后回应不落在 G5。
+        // A 之后的模拟回应在 H6 提走四子串；B 之后回应不落在 H6。
         Assert.Equal(P1, record.Entries[a].Responder);
-        Assert.Contains(TestMaps.At("G5"), CoordsOf(record.Entries[a].ResponseKey!));
-        Assert.DoesNotContain(TestMaps.At("G5"), CoordsOf(record.Entries[b].ResponseKey!));
+        Assert.Contains(TestMaps.At("H6"), CoordsOf(record.Entries[a].ResponseKey!));
+        Assert.DoesNotContain(TestMaps.At("H6"), CoordsOf(record.Entries[b].ResponseKey!));
         Assert.True(record.Entries[b].ScoreAfter > record.Entries[a].ScoreAfter, record.ToText());
 
-        Assert.Equal("G5:Basic", expert.LastChoice!.Key);
+        Assert.Equal("H6:Basic", expert.LastChoice!.Key);
         Assert.Equal(b, record.ChosenIndex);
         Assert.True(record.ChangedChoice);
     }
@@ -148,11 +149,21 @@ public class 专家难度的一层前瞻Tests
     }
 
     /// <summary>
-    /// 第 2 大回合、顺序 P0 → P3：下一名对手 P1 的出生区（G1–J3）已被自己的 9 枚子填满，合法落子范围为空 → 对每个候选的模拟回应都是 Pass。
+    /// 第 2 大回合、顺序 P0 → P3：下一名对手 P1 的合法落子范围里没有空格 → 对每个候选的模拟回应都是 Pass。
+    /// retire-legacy-rules 1.4：原 9×9 局面是"P1 的 3×3 出生区被自己的 9 枚子填满"——旧模式保护期内合法范围只是出生区；链接模式下合法范围是整个战场，
+    /// 四人同锁棋盘 0 时只要有空格 P1 就能落。改为：P0 占满棋盘 0、只留三块直三眼空间（<see cref="NoResponseEyes"/>，眼值 1 + 1 + 1，P0 为已确定活形）——
+    /// 全部空格都是 P0 活形的眼空间、对 P1 是禁入格，P1 的合法范围里没有空格；P0 自己可以点直三的中间（眼位 +1，非单格眼、不失活形），候选不止一个。
     /// </summary>
-    private static MatchFlow NoResponsePosition() =>
-        MatchFixtures.Started().AtRound(2, [P0, P1, P2, P3])
-            .Stones(P1, "G1", "H1", "J1", "G2", "H2", "J2", "G3", "H3", "J3");
+    private static MatchFlow NoResponsePosition()
+    {
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(2, [P0, P1, P2, P3]);
+        match.Stones(P0, [.. match.Map.Boards[0].Cells().Select(c => c.ToNotation()).Except(NoResponseEyes)]);
+        match.SetDeployLimit(1);   // 单子候选：三处直三中间各是一个候选（部署上限 3 时贪心组批会把三处并成同一个批次，前瞻集只剩 1 个）
+        return match;
+    }
+
+    /// <summary>棋盘 0 上 P0 留下的三块直三眼空间：底边 C3–E3、顶边 C10–E10、东边 K5–K7。</summary>
+    private static readonly string[] NoResponseEyes = ["C3", "D3", "E3", "C10", "D10", "E10", "K5", "K6", "K7"];
 
     [Fact]
     public void 模拟回应全为Pass()
@@ -316,15 +327,16 @@ public class 专家难度的一层前瞻Tests
     }
 
     /// <summary>
-    /// 两块各差一眼的棋（9×9、第 5 大回合、专家 P0 的部署上限 1）：左下 B1 / A2 / B2 / C2 / D2 已有眼 A1，D1 围出第二眼 C1；
-    /// 右下 H1 / J2 / H2 / G2 / F2 已有眼 J1，F1 围出第二眼 G1；P2 的 E3 挡住"一手同时补两块"的 E3。
-    /// 停手阈值取 700：只有 D1、F1（做活，自身 1020）越得过，其余落点（E2 为 635，其他更低）都越不过 → 候选只有 {D1}、{F1} 两个。
+    /// 两块各差一眼的棋（第 5 大回合、专家 P0 的部署上限 1）：左下 D3 / C4 / D4 / E4 / F4 已有眼 C3，F3 围出第二眼 E3；
+    /// 右上（左下那块绕棋盘 0 中心转 180°）J10 / K9 / J9 / H9 / G9 已有眼 K10，G10 围出第二眼 H10。
+    /// 停手阈值取 700：只有 F3、G10（做活）越得过 → 候选只有 {F3}、{G10} 两个。
+    /// retire-legacy-rules 1.4：原 9×9 两块并排在底边（B1–D2 与 F2–J2，中间隔 E 列、P2 的 E3 挡住"一手同时补两块"），棋盘 0 只有 8 列放不下"4 + 1 + 4"，
+    /// 改为左下一块（平移 (+2, +2)）+ 右上一块（同形转 180°），两块相距甚远，不再需要 P2 的挡子。
     /// </summary>
     private static MatchFlow TwoCandidatePosition()
     {
         MatchFlow match = AiFixtures.Round5()
-            .Stones(P0, "B1", "A2", "B2", "C2", "D2", "H1", "J2", "H2", "G2", "F2")
-            .Stones(P2, "E3");
+            .Stones(P0, "D3", "C4", "D4", "E4", "F4", "J10", "K9", "J9", "H9", "G9");
         match.SetDeployLimit(1);
         return match;
     }
@@ -340,7 +352,7 @@ public class 专家难度的一层前瞻Tests
 
         Assert.Equal(2, expert.LastCandidates.Count(c => !c.IsPass));
         Assert.Equal(LookaheadStatus.Applied, record.Status);
-        Assert.Equal(["D1:Basic", "F1:Basic"], record.Entries.Select(e => e.CandidateKey));
+        Assert.Equal(["F3:Basic", "G10:Basic"], record.Entries.Select(e => e.CandidateKey));
         Assert.All(record.Entries, e =>
         {
             Assert.Equal(P1, e.Responder);
@@ -353,10 +365,10 @@ public class 专家难度的一层前瞻Tests
     public void 不前瞻时直接取前瞻集第一个()
     {
         // 第 3 步：前瞻宽度不大于 1、或前瞻集只有 1 个候选时，直接选前瞻集的第一个，不做模拟；记录状态为"不前瞻"（段 B 遥测「不前瞻也有记录」依赖它）。
-        // ① 两个候选、前瞻宽度 1；② 前瞻宽度 4、但只剩左下一块差一眼的棋 → 候选只有 {D1}。两种情形都与同一局面上的高难选同一个。
+        // ① 两个候选、前瞻宽度 1；② 前瞻宽度 4、但只剩左下一块差一眼的棋 → 候选只有 {F3}。两种情形都与同一局面上的高难选同一个。
         static MatchFlow OneCandidate()
         {
-            MatchFlow match = AiFixtures.Round5().Stones(P0, "B1", "A2", "B2", "C2", "D2");
+            MatchFlow match = AiFixtures.Round5().Stones(P0, "D3", "C4", "D4", "E4", "F4");
             match.SetDeployLimit(1);
             return match;
         }

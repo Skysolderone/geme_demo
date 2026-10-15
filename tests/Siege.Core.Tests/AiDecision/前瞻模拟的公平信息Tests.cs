@@ -18,9 +18,9 @@ public class 前瞻模拟的公平信息Tests
     internal static MatchFlow ContactPosition(params (PieceType Type, int Count)[] p1Hand)
     {
         MatchFlow match = AiFixtures.Round5()
-            .Stones(P0, "D5", "E5", "E4")
-            .Stones(P1, "F5", "F6", "E6")
-            .Stones(P2, "B8").Stones(P3, "H2");
+            .Stones(P0, "E6", "F6", "F5")
+            .Stones(P1, "G6", "G7", "F7")
+            .Stones(P2, "D9").Stones(P3, "J4");
         match.Debug.SeedHand(P1, p1Hand);
         return match;
     }
@@ -84,10 +84,10 @@ public class 前瞻模拟的公平信息Tests
     /// </summary>
     private static MatchFlow CommandPosition()
     {
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command(2)), ("G5", RelicFixtures.Command())])
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("F6", RelicFixtures.Command(2)), ("H6", RelicFixtures.Command())])
             .AtRound(5, [P2, P0, P1, P3])
-            .Stones(P0, "C3").Stones(P1, "E5", "G4").Stones(P3, "H8");
-        match.PlayTurn("B8");
+            .Stones(P0, "E4").Stones(P1, "F6", "H5").Stones(P3, "J9");
+        match.PlayTurn("D9");
         Assert.Equal(P0, match.CurrentPlayer);
         return match;
     }
@@ -103,10 +103,10 @@ public class 前瞻模拟的公平信息Tests
         Assert.All(view.Relics, r => Assert.True(r.IsRevealed));
         Assert.Equal(7, PublicRelicEffects.Deploy(P1, 5, view.Relics).DeployLimit);
 
-        RehearsalResult b1 = Rehearse(match, "G6");
+        RehearsalResult b1 = Rehearse(match, "H7");
         MatchPublicView projected = ExpertLookahead.Project(view, b1.ProjectedBoard!);
-        Assert.Equal(RelicControlKind.Contested, projected.Relics.Single(r => r.Coord == TestMaps.At("G5")).Control.Kind);
-        Assert.True(projected.Relics.Single(r => r.Coord == TestMaps.At("E5")).Control.GrantsEffectTo(P1));
+        Assert.Equal(RelicControlKind.Contested, projected.Relics.Single(r => r.Coord == TestMaps.At("H6")).Control.Kind);
+        Assert.True(projected.Relics.Single(r => r.Coord == TestMaps.At("F6")).Control.GrantsEffectTo(P1));
         Assert.Equal((P1, 5), ExpertLookahead.NextOpponent(view, P0, projected));
 
         BatchContext context = ExpertLookahead.SimulatedContext(projected, P1, 5);
@@ -117,25 +117,31 @@ public class 前瞻模拟的公平信息Tests
     }
 
     /// <summary>
-    /// 第 2 大回合、顺序 P3 → P0（专家）→ P1 → P2。H2 是普通军令，P1 以 H3 唯一覆盖它；P3 先落一子完成一次结算，军令随之揭示。
+    /// 第 2 大回合、顺序 P3 → P0（专家）→ P1 → P2。K3 是普通军令（棋盘 0 的东南角），P1 以 J3 / K4 唯一覆盖它；P3 先落一子完成一次结算，军令随之揭示。
+    /// retire-legacy-rules 1.4：原 9×9 的 H2 由 P1 的 H3 覆盖、专家在保护期内够不着；链接载体上构筑期四人同锁棋盘 0，专家的批次能落到军令旁把它覆盖成争议，
+    /// 故把军令移到盘角、由 P1 两子封住（专家落不进角上、也提不掉这两子），模拟对手的部署上限在每个候选之后都是 3 + 1。
     /// </summary>
     private static MatchFlow ProtectionPosition()
     {
-        MatchFlow match = MatchFixtures.Started(relics: [("H2", RelicFixtures.Command())])
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("K3", RelicFixtures.Command())])
             .AtRound(2, [P3, P0, P1, P2])
-            .Stones(P0, "B2").Stones(P1, "H3").Stones(P2, "B8");
-        match.PlayTurn("H8");
+            .Stones(P0, "D4").Stones(P1, "J3", "K4").Stones(P2, "D9");
+        match.PlayTurn("J9");
         Assert.Equal(P0, match.CurrentPlayer);
         return match;
     }
 
     [Fact]
-    public void 保护期内只在出生区回应()
+    public void 构筑期内只在本战场回应()
     {
-        // 第 2 大回合模拟下一名对手 P1：模拟回应的全部落点都在 P1 的出生区（G1–J3）内，部署上限为 3 加其控制的军令强度（+1）= 4。
-        HeuristicTurnController expert = DecideExpert(ProtectionPosition());
+        // 规格 Scenario「构筑期内只在本战场回应」（retire-legacy-rules 1.4：原「保护期内只在出生区回应」，旧模式保护期的合法范围是出生区）：
+        // 第 2 大回合模拟下一名对手 P1：模拟回应的全部落点都在 P1 所在战场内（构筑期即其锁定的出生棋盘——载体为平坦 8×8 链接档图，四人同锁棋盘 0，
+        // 其余四块棋盘不在战场里），部署上限为 3 加其控制的军令强度（+1）= 4（设计文档 §15.2）。
+        MatchFlow position = ProtectionPosition();
+        IReadOnlySet<Coord> field = position.Board.Battlefields.ById(position.StateOf(P1).BirthZone!.Value)!.Cells.ToHashSet();
+        Assert.Equal(position.Map.Boards[0].Cells().ToHashSet(), field);   // 样本口径：战场确是棋盘 0，不是整张图
+        HeuristicTurnController expert = DecideExpert(position);
         LookaheadRecord record = Record(expert);
-        IReadOnlySet<Coord> zone1 = MatchFixtures.Map().BirthZones[1];
 
         Assert.Equal(LookaheadStatus.Applied, record.Status);
         Assert.All(record.Entries, e =>
@@ -143,7 +149,7 @@ public class 前瞻模拟的公平信息Tests
             Assert.Equal(P1, e.Responder);
             Assert.Equal(2, e.ResponderRound);
             Assert.Equal(4, e.SimulatedDeployLimit);
-            Assert.All(CoordsOf(e.ResponseKey!), c => Assert.Contains(c, zone1));
+            Assert.All(CoordsOf(e.ResponseKey!), c => Assert.Contains(c, field));
         });
         Assert.Contains(record.Entries, e => e.ResponseKey!.Length > 0);
     }
@@ -155,10 +161,10 @@ public class 前瞻模拟的公平信息Tests
     /// </summary>
     private static MatchFlow HiddenRelicPosition(RelicContent content)
     {
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", content)]).AtRound(5, [P0, P1, P2, P3])
-            .Stones(P0, "C5", "C4", "D3")
-            .Stones(P1, "G5", "G6", "F7")
-            .Stones(P2, "B8").Stones(P3, "H2");
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("F6", content)]).AtRound(5, [P0, P1, P2, P3])
+            .Stones(P0, "D6", "D5", "E4")
+            .Stones(P1, "H6", "H7", "G8")
+            .Stones(P2, "C9").Stones(P3, "J3");
         match.SetDeployLimit(1);
         return match;
     }
@@ -175,7 +181,7 @@ public class 前瞻模拟的公平信息Tests
         LookaheadRecord b = Record(depot);
 
         Assert.Equal(LookaheadStatus.Applied, a.Status);
-        Assert.Contains(a.Entries, e => CoordsOf(e.CandidateKey).Any(c => IsAdjacentOrOn(c, TestMaps.At("E5"))));
+        Assert.Contains(a.Entries, e => CoordsOf(e.CandidateKey).Any(c => IsAdjacentOrOn(c, TestMaps.At("F6"))));
         Assert.Equal(a.ToText(), b.ToText());
         Assert.Equal(command.LastChoice!.Key, depot.LastChoice!.Key);
 
@@ -248,12 +254,16 @@ public class 前瞻模拟的公平信息Tests
 
     // ---------- 投影公开视图（tasks 1.4，design D8） ----------
 
-    /// <summary>投影定义的字段（D8）：盘面、势力、信物（揭示 + 控制）、流程状态、活形。其余字段（阶段、当前玩家、手牌类型）不投影。</summary>
+    /// <summary>
+    /// 投影定义的字段（D8）：盘面、势力、信物（揭示 + 控制）、流程状态、活形。其余字段（阶段、当前玩家、手牌类型）不投影。
+    /// retire-legacy-rules 1.4：流程状态里 board-link-mode 新增的出局原因 / 落败时势力 / 等待大回合三项不在 D8 的投影定义内（投影不填，AI 也不读）——
+    /// 旧载体上它们恒为空、比较的从来只是 D8 字段；迁到链接载体后真实快照会记出局原因，这里显式剔除这三项，口径与迁移前相同。
+    /// </summary>
     internal static string ProjectedFields(MatchPublicView v) => string.Join("\n",
         v.BoardSerialized,
         AiFixtures.PowerText(v.Power!),
         string.Join(";", v.Relics.Select(r => r.ToString())),
-        string.Join(";", v.Players.Select(p => p.ToString())),
+        string.Join(";", v.Players.Select(p => (p with { EliminationReason = null, PowerAtDefeat = null, WaitingRounds = 0 }).ToString())),
         string.Join(";", v.LifeShape.Groups.Select(g => $"{g.Group.Owner}:{g.Life}:{string.Join(",", g.Group.Stones.Order().Select(c => c.ToNotation()))}")),
         string.Join(";", v.Players.Select(p => $"{p.Player}:{string.Join(",", v.LifeShape.ForbiddenCellsFor(p.Player).Order().Select(c => c.ToNotation()))}")),
         v.Board.Serialize());
@@ -271,10 +281,10 @@ public class 前瞻模拟的公平信息Tests
     [Fact]
     public void 投影视图与真实结算后的快照一致_提子()
     {
-        // P0 在 J8 提走 P1 的 J9（P1 在 B2 另有子，不出局）。
-        MatchFlow match = AiFixtures.Round5().Stones(P0, "H9").Stones(P1, "J9", "B2").Stones(P2, "B8").Stones(P3, "H2");
-        (MatchPublicView projected, MatchPublicView published) = ProjectThenConfirm(match, "J8");
-        Assert.Null(published.Board[TestMaps.At("J9")].Occupant);
+        // P0 在 K9 提走 P1 的 K10（P1 在 D4 另有子，不出局；retire-legacy-rules：平坦 8×8 链接载体，四角贴棋盘 0 的角）。
+        MatchFlow match = AiFixtures.Round5().Stones(P0, "J10").Stones(P1, "K10", "D4").Stones(P2, "D9").Stones(P3, "J4");
+        (MatchPublicView projected, MatchPublicView published) = ProjectThenConfirm(match, "K9");
+        Assert.Null(published.Board[TestMaps.At("K10")].Occupant);
         Assert.Equal(PlayerStatus.Active, published.Players.Single(p => p.Player == P1).Status);
         Assert.Equal(ProjectedFields(published), ProjectedFields(projected));
     }
@@ -282,9 +292,9 @@ public class 前瞻模拟的公平信息Tests
     [Fact]
     public void 投影视图与真实结算后的快照一致_出局()
     {
-        // P0 在 J8 提走 P1 在盘上唯一的子 J9（曾建立正势力）→ P1 出局，出局序号 1、出局大回合 5。
-        MatchFlow match = AiFixtures.Round5().Stones(P0, "H9").Stones(P1, "J9").Stones(P2, "B8").Stones(P3, "H2");
-        (MatchPublicView projected, MatchPublicView published) = ProjectThenConfirm(match, "J8");
+        // P0 在 K9 提走 P1 在盘上唯一的子 K10（曾建立正势力）→ P1 出局，出局序号 1、出局大回合 5。
+        MatchFlow match = AiFixtures.Round5().Stones(P0, "J10").Stones(P1, "K10").Stones(P2, "D9").Stones(P3, "J4");
+        (MatchPublicView projected, MatchPublicView published) = ProjectThenConfirm(match, "K9");
         Assert.Equal(PlayerStatus.Eliminated, published.Players.Single(p => p.Player == P1).Status);
         Assert.Equal(ProjectedFields(published), ProjectedFields(projected));
     }
@@ -292,14 +302,14 @@ public class 前瞻模拟的公平信息Tests
     [Fact]
     public void 投影视图与真实结算后的快照一致_控制易手()
     {
-        // G8 是已揭示的军令，被 P1 占据；P0 在 G7 提走 G8 后四面围住它 → 控制由 P1 易手为 P0。
-        MatchFlow match = MatchFixtures.Started(relics: [("G8", RelicFixtures.Command())])
+        // H9 是已揭示的军令，被 P1 占据；P0 在 H8 提走 H9 后四面围住它 → 控制由 P1 易手为 P0（retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 G8 / G7）。
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("H9", RelicFixtures.Command())])
             .AtRound(5, [P2, P0, P1, P3])
-            .Stones(P0, "F8", "G9", "H8").Stones(P1, "G8", "B2").Stones(P3, "H2");
-        match.PlayTurn("B8");
+            .Stones(P0, "G9", "H10", "J9").Stones(P1, "H9", "D4").Stones(P3, "J4");
+        match.PlayTurn("D9");
         Assert.True(match.Publish().Relics.Single().Control.GrantsEffectTo(P1));
 
-        (MatchPublicView projected, MatchPublicView published) = ProjectThenConfirm(match, "G7");
+        (MatchPublicView projected, MatchPublicView published) = ProjectThenConfirm(match, "H8");
         Assert.True(published.Relics.Single().Control.GrantsEffectTo(P0));
         Assert.Equal(ProjectedFields(published), ProjectedFields(projected));
     }
@@ -309,7 +319,7 @@ public class 前瞻模拟的公平信息Tests
     {
         // D8：投影时揭示状态不变——决策起点未揭示、在 B1 上首次被覆盖的信物仍未揭示、内容为空（只按期望估值），控制照常按 B1 重算。
         MatchFlow match = HiddenRelicPosition(RelicFixtures.Command(2));
-        RehearsalResult b1 = Rehearse(match, "D5");
+        RehearsalResult b1 = Rehearse(match, "E6");
         MatchPublicView projected = ExpertLookahead.Project(match.Publish(), b1.ProjectedBoard!);
         RelicPublicState e5 = projected.Relics.Single();
 

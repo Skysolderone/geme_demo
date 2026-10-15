@@ -116,8 +116,8 @@ public class 带入带出配置Tests
         // 规格 Scenario：恢复一个引入带入带出之前保存的存档 → 恢复成功，开关关闭、全员无带入，并留有回填痕迹。
         // 旧存档样本：一局有人弃赛的对局存档后删掉 CarryInOut / CarryIns 与弃赛记录的 RankAtResign（引入之前的存档结构就是如此）。
         // 旧存档的弃赛记录没有弃赛时名次：恢复后为空，MUST NOT 重算。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All).Stones(MatchFixtures.P3, "H8");
-        match.Resign(MatchFixtures.P3);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All).Stones(TestMaps.P3, "K10");
+        match.Resign(TestMaps.P3);
         string json = match.Serialize();
 
         JsonObject node = JsonNode.Parse(json)!.AsObject();
@@ -148,11 +148,11 @@ public class 带入带出配置Tests
         // 样本：种子 1–64 中第一颗让 P3 的征召签抽出连珠子的种子（v2 下 18 / 80）。
         MatchOptions options = CarryFixtures.On((1, CarryFixtures.Commission(PieceType.Fortress)), (3, CarryFixtures.Draft));
         GameSeed? seed = Enumerable.Range(1, 64).Select(i => (GameSeed?)new GameSeed((ulong)i))
-            .FirstOrDefault(s => MatchFixtures.Create(s, options).CarryIns[MatchFixtures.P3].Type == PieceType.Line);
+            .FirstOrDefault(s => LinkModeFixtures.PlainCreate(s, options).CarryIns[TestMaps.P3].Type == PieceType.Line);
         Assert.True(seed is not null, "样本口径：种子 1–64 中应有 P3 抽出连珠子的一颗");
 
-        MatchFlow match = MatchFixtures.Create(seed, options);
-        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
+        MatchFlow match = LinkModeFixtures.PlainCreate(seed, options);
+        match.PlantSequentially(TestMaps.All.Select((p, i) => (p, i)));
         match.PlayTurn();
         string json = match.Serialize();
 
@@ -172,7 +172,7 @@ public class 带入带出配置Tests
         // 规格 Scenario：对局进入插旗阶段之后尝试修改任一玩家的带入 → 系统拒绝。
         // 对局没有任何修改带入的入口（结构守门）：对局配置只在建局时给出，MatchFlow.Options 没有公开的写入口；
         // 带入是不可变字典；拿到配置副本再 with 出一份新配置，对局里的带入不变。
-        MatchFlow match = MatchFixtures.Create(options: CarryFixtures.On((0, CarryFixtures.Spare)));
+        MatchFlow match = LinkModeFixtures.PlainCreate(options: CarryFixtures.On((0, CarryFixtures.Spare)));
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
 
         PropertyInfo options = typeof(MatchFlow).GetProperty(nameof(MatchFlow.Options))!;
@@ -184,22 +184,22 @@ public class 带入带出配置Tests
         Assert.Contains(typeof(MatchOptions).GetProperty(nameof(MatchOptions.CarryIns))!.SetMethod!.ReturnParameter.GetRequiredCustomModifiers(),
             t => t.FullName == "System.Runtime.CompilerServices.IsExternalInit");
 
-        MatchOptions copy = match.Options with { CarryIns = match.Options.CarryIns.SetItem(MatchFixtures.P0, CarryFixtures.Commission(PieceType.Fortress)) };
-        Assert.Equal(SupplyKind.Commission, copy.CarryIns[MatchFixtures.P0].Kind);
+        MatchOptions copy = match.Options with { CarryIns = match.Options.CarryIns.SetItem(TestMaps.P0, CarryFixtures.Commission(PieceType.Fortress)) };
+        Assert.Equal(SupplyKind.Commission, copy.CarryIns[TestMaps.P0].Kind);
         Assert.Equal("P0:SpareStone>-", CarryFixtures.CarryText(match.CarryIns));
-        Assert.Equal("Basic×6+0", CarryFixtures.HandText(match, MatchFixtures.P0));
+        Assert.Equal("Basic×6+0", CarryFixtures.HandText(match, TestMaps.P0));
     }
 
     [Fact]
     public void 关闭时有带入即拒绝()
     {
         // 规格正文：开关关闭时各玩家带入 MUST 为空——关闭却给了带入，拒绝建局，不静默丢弃。
-        ArgumentException ex = Assert.ThrowsAny<ArgumentException>(() => MatchFixtures.Create(
-            options: MatchOptions.Immediate with { CarryIns = ImmutableSortedDictionary<PlayerId, CarryIn>.Empty.Add(MatchFixtures.P0, CarryFixtures.Spare) }));
+        ArgumentException ex = Assert.ThrowsAny<ArgumentException>(() => LinkModeFixtures.PlainCreate(
+            options: MatchOptions.Immediate with { CarryIns = ImmutableSortedDictionary<PlayerId, CarryIn>.Empty.Add(TestMaps.P0, CarryFixtures.Spare) }));
         Assert.Contains("关闭", ex.Message, StringComparison.Ordinal);
 
         // 带入者不在名册：响亮失败（boundaries.md「显式输入的名册：未知玩家必须响亮失败」）。
-        Assert.ThrowsAny<ArgumentException>(() => MatchFixtures.Create(options: CarryFixtures.On((7, CarryFixtures.Spare))));
+        Assert.ThrowsAny<ArgumentException>(() => LinkModeFixtures.PlainCreate(options: CarryFixtures.On((7, CarryFixtures.Spare))));
     }
 
     [Fact]
@@ -211,9 +211,9 @@ public class 带入带出配置Tests
         for (ulong s = 1; s <= 8; s++)
         {
             var seed = new GameSeed(s);
-            PieceType? alone = MatchFixtures.Create(seed, CarryFixtures.On((2, CarryFixtures.Draft))).CarryIns[MatchFixtures.P2].Type;
-            PieceType? withSpare = MatchFixtures.Create(seed, CarryFixtures.On((0, CarryFixtures.Spare), (2, CarryFixtures.Draft))).CarryIns[MatchFixtures.P2].Type;
-            PieceType? withDraft = MatchFixtures.Create(seed, CarryFixtures.On((0, CarryFixtures.Draft), (2, CarryFixtures.Draft))).CarryIns[MatchFixtures.P2].Type;
+            PieceType? alone = LinkModeFixtures.PlainCreate(seed, CarryFixtures.On((2, CarryFixtures.Draft))).CarryIns[TestMaps.P2].Type;
+            PieceType? withSpare = LinkModeFixtures.PlainCreate(seed, CarryFixtures.On((0, CarryFixtures.Spare), (2, CarryFixtures.Draft))).CarryIns[TestMaps.P2].Type;
+            PieceType? withDraft = LinkModeFixtures.PlainCreate(seed, CarryFixtures.On((0, CarryFixtures.Draft), (2, CarryFixtures.Draft))).CarryIns[TestMaps.P2].Type;
             Assert.NotNull(alone);
             Assert.Equal(alone, withSpare);
             Assert.Equal(alone, withDraft);

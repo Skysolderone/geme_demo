@@ -1,0 +1,571 @@
+## AiDecision/AI决策的可复现性Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 同局面同决策  (MF.build,helper:MatchFixtures.Started)
+  L 并列确定性打破  (MF.build,helper:MatchFixtures.Started)
+## AiDecision/AI对地表的感知Tests.cs  total=5 theory=0 rows=0  L=5 D=0 M=0 K=0
+  L 不去抢荒漠  (helper:At)
+  L 剪枝使用唯一查询  (helper:At)
+  L 岩台远格计入收益  (helper:At)
+  L 沼泽落子无领地收益  (helper:At)
+  L 空浅滩不算安全  (helper:At)
+## AiDecision/AI枚举改造目标Tests.cs  total=5 theory=0 rows=0  L=4 D=0 M=0 K=0  [file:K]
+  L AI在能一手立栅提子时选择该手  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 单点枚举同时产出带改造与不改造两类候选  (helper:Boxed)
+  L 选中的批次连改造一起摆回暂放  (helper:Match)
+  L 非匠人没有改造候选  (helper:Match)
+## AiDecision/专家难度的一层前瞻Tests.cs  total=16 theory=2 rows=6  L=9 D=0 M=0 K=0
+  L 不前瞻时直接取前瞻集第一个  (helper:AiFixtures.Round5)
+  L 前瞻不修改正式状态  (helper:AtariPosition)
+  L 前瞻后分数是两项之和  (helper:AtariPosition)
+  L 前瞻改变选择  (helper:AtariPosition)
+  L 前瞻集不足W个  (helper:TwoCandidatePosition)
+  L 旧记录按不前瞻读入  (helper:AtariPosition)
+  L 模拟回应全为Pass  (helper:NoResponsePosition)
+  L 被提走的己方棋子按危险计入  (helper:前瞻中的停手口径Tests.DoomedPosition)
+  L 被提走的损失压低前瞻后分数  (helper:前瞻中的停手口径Tests.DoomedPosition)
+## AiDecision/候选格上限Tests.cs  total=15 theory=2 rows=5  L=8 D=2 M=0 K=0
+  L K不小于合法空格数时等价于不限制  (helper:OpenPosition)
+  L 只有带改造的匠人才落得下的格不被预筛漏掉  (helper:ArtisanOnlyCellPosition)
+  L 启用后只对前K格做完整枚举  (helper:OpenPosition)
+  D 大图缺省取上限小图为零显式配置优先  (MF.map)
+  L 小K下仍找到妙手  (helper:启发式评价维度Tests.CaptureRelicPosition,helper:AiFixtures.Round5)
+  L 小图不限制  (helper:SmallMapRun,MF.map)
+  D 批次配置记录写入实际生效的上限  (MF.map)
+  L 难度默认参数不启用上限  (helper:OpenPosition)
+  L 预筛按代表类型的格分取前K同分按坐标序  (helper:OpenPosition)
+  L 预筛阶段不触发活形查询  (helper:OpenPosition)
+## AiDecision/停手阈值Tests.cs  total=15 theory=0 rows=0  L=8 D=0 M=0 K=0
+  L 低于阈值不落子  (helper:Marginal)
+  L 同批次内不中途切换  (helper:AiFixtures.Round5)
+  L 恰等于阈值不落子  (helper:Marginal)
+  L 无子时不受阈值限制  (helper:AiFixtures.Round5)
+  L 无落点被保留则Pass  (helper:AiFixtures.Round5)
+  L 有子后恢复阈值  (helper:AiFixtures.Round5)
+  L 零收益不落子  (helper:AiFixtures.Round5)
+  L 高于阈值落子  (helper:Marginal)
+## AiDecision/公开规则纯函数Tests.cs  total=5 theory=1 rows=3  L=4 D=0 M=0 K=0
+  L 公开先锋修正不计已弃赛者  (MF.build,helper:MatchFixtures.Started)
+  L 出局判据  (helper:AiFixtures.Round5)
+  L 夹具局面新旧两条路径逐项相等  (MF.build,helper:MatchFixtures.Started)
+  L 真实对局每个小回合新旧两条路径逐项相等  (MF.build,helper:MatchFixtures.Started)
+## AiDecision/前瞻中的下一名对手Tests.cs  total=8 theory=0 rows=0  L=6 D=0 M=0 K=1  [file:K]
+  L 专家在预测顺序中居首  (helper:AiFixtures.Round5)
+  L 专家是本大回合末位  (helper:LastSeatPosition)
+  K 他战场玩家不进名册  (MF.const)
+  L 候选使下一名对手出局  (helper:CapturablePosition)
+  L 只剩自己时退化  (helper:LastOpponentPosition)
+  L 跳过已出局者  (helper:AiFixtures.Round5)
+  L 跳过已弃赛者  (helper:AiFixtures.Round5)
+## AiDecision/前瞻中的停手口径Tests.cs  total=6 theory=0 rows=0  L=5 D=0 M=0 K=0
+  L 两层单点不受停手阈值  (helper:AiFixtures.Round5)
+  L 两层单点受活形硬约束  (helper:活形硬约束Tests.TwoEyes)
+  L 前瞻不引入Pass  (helper:SqueezedPosition)
+  L 回应后不重判活形硬约束  (helper:DoomedPosition)
+  L 高难会Pass时专家也Pass  (helper:AiFixtures.Round5)
+## AiDecision/前瞻模拟的公平信息Tests.cs  total=10 theory=0 rows=0  L=9 D=0 M=0 K=0
+  L 保护期内只在出生区回应  (helper:ProtectionPosition,MF.map)
+  L 其余对手的隐藏信息不影响两层加分  (helper:ContactPosition)
+  L 对手真实手牌不同结果不变  (helper:ContactPosition)
+  L 投影不揭示新覆盖的信物  (helper:HiddenRelicPosition)
+  L 投影视图与真实结算后的快照一致_出局  (helper:AiFixtures.Round5)
+  L 投影视图与真实结算后的快照一致_控制易手  (MF.build,helper:MatchFixtures.Started)
+  L 投影视图与真实结算后的快照一致_提子  (helper:AiFixtures.Round5)
+  L 未揭示信物不被读取  (helper:HiddenRelicPosition)
+  L 模拟部署上限按公开信息推得  (helper:CommandPosition)
+## AiDecision/前瞻的近似两层加分Tests.cs  total=9 theory=0 rows=0  L=7 D=0 M=0 K=0
+  L 专家出局时加分为0  (helper:AiFixtures.Round5)
+  L 两层权重为0时不做扫描  (helper:Contact)
+  L 全部无对手时不计加分  (helper:前瞻中的下一名对手Tests.LastOpponentPosition)
+  L 加分按千分数取整  (helper:Contact)
+  L 只用本人持有的类型  (helper:Contact)
+  L 按下一大回合的口径枚举  (MF.build,helper:MatchFixtures.Started)
+  L 无对手的候选在B1上计加分  (helper:前瞻中的下一名对手Tests.LastOpponentPosition)
+## AiDecision/前瞻集的多样候选Tests.cs  total=7 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 补充候选同样受停手阈值  (helper:AiFixtures.Round5)
+## AiDecision/启发式评价维度Tests.cs  total=14 theory=0 rows=0  L=9 D=0 M=0 K=0
+  L 做出第二个眼获得眼位正贡献  (helper:AiFixtures.Round5)
+  L 先手位评价生效  (helper:CaptureRelicPosition)
+  L 共享眼空间只计一次  (helper:AiFixtures.Round5)
+  L 叫吃获得威胁正贡献  (helper:AiFixtures.Round5)
+  L 已活时点直三中间眼位增量只有眼值1  (helper:AiFixtures.Round5)
+  L 权重可配置  (helper:CaptureRelicPosition)
+  L 点直三中间眼位增量为眼值1加活形3  (helper:AiFixtures.Round5)
+  L 自填眼位不得分  (helper:AiFixtures.Round5)
+  L 评价覆盖九个维度  (helper:CaptureRelicPosition)
+## AiDecision/对隐藏信息的概率估计Tests.cs  total=2 theory=1 rows=16  L=1 D=0 M=0 K=0
+  L 估计不得使用真实值  (MF.build,helper:RunUntilReveal,helper:MatchFixtures.Started)
+## AiDecision/已确定活形的评价中性Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0
+  L 不攻打活棋  (helper:AiFixtures.Round5)
+  L 做活在安全维度上是净收益  (helper:AiFixtures.Round5)
+  L 活棋补气不加分  (helper:AiFixtures.Round5)
+## AiDecision/新棋子与新信物的AI适配Tests.cs  total=8 theory=0 rows=0  L=6 D=0 M=0 K=0  [file:K]
+  L 内容集v1的期望价值不变  (helper:RelicRawCoveringE5)
+  L 哨兵加值进入即时势力增量  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 工坊扩展的目标进入候选  (MF.build,helper:MatchFixtures.Started)
+  L 未揭示信物的期望价值  (helper:RelicRawCoveringE5)
+  L 未揭示的连营不影响AI评价  (helper:LineMatch)
+  L 组合成长不计新来源与计分信物  (MF.build,helper:MatchFixtures.Started,MF.const)
+## AiDecision/正式对战AI的信息边界Tests.cs  total=4 theory=0 rows=0  L=3 D=0 M=0 K=0
+  L 敌方手牌数量不可读  (MF.build,helper:MatchFixtures.Started)
+  L 敌方未确认批次不可读  (MF.build,helper:MatchFixtures.Started)
+  L 未知信物不可读  (MF.build,helper:MatchFixtures.Started)
+## AiDecision/正式对战AI的信息边界_链接模式Tests.cs  total=9 theory=2 rows=7  L=1 D=0 M=0 K=0  [file:K]
+  L 全知例外集中可关  (MF.build,helper:MatchFixtures.Started,MF.const)
+## AiDecision/活形分析的决策内缓存Tests.cs  total=5 theory=0 rows=0  L=3 D=0 M=0 K=0
+  L 同一决策内重复盘面只分析一次  (helper:RichPosition)
+  L 地形改造不同的盘面不共用分析  (MF.build,helper:MatchFixtures.Started)
+  L 缓存不跨决策  (helper:OpenPosition)
+## AiDecision/活形硬约束Tests.cs  total=6 theory=0 rows=0  L=6 D=0 M=0 K=0
+  L 不填自己的单格眼  (helper:AiFixtures.Round5)
+  L 不拆自己的活形  (helper:TwoEyes)
+  L 为提子而填眼放行  (helper:AiFixtures.Round5)
+  L 全部候选被淘汰则Pass  (helper:TwoEyes)
+  L 点三格眼空间的中间不被淘汰  (helper:AiFixtures.Round5)
+  L 用改造拆自己的活形也被淘汰  (MF.build,helper:MatchFixtures.Started)
+## AiDecision/链接模式下的决胜一手Tests.cs  total=6 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:M]
+  L 旧模式不变  (Mode.Legacy,helper:AiFixtures.Round5,MatchMode)
+## AiDecision/链接模式下落后者的停手阈值Tests.cs  total=5 theory=2 rows=4  L=1 D=0 M=0 K=0  [file:M]
+  L 旧模式不变  (Mode.Legacy,helper:AiFixtures.Round5,MatchMode)
+## AiDecision/难度分级Tests.cs  total=6 theory=0 rows=0  L=5 D=0 M=0 K=0
+  L 专家难度不越权  (MF.build,helper:MatchFixtures.Started)
+  L 简单难度也不拆自己的活形  (helper:活形硬约束Tests.TwoEyes)
+  L 简单难度也会做活  (helper:AiFixtures.Round5)
+  L 简单难度只看即时收益与眼位  (helper:启发式评价维度Tests.CaptureRelicPosition)
+  L 高难度不越权  (MF.build,helper:对隐藏信息的概率估计Tests.RunUntilReveal,helper:MatchFixtures.Started)
+## AiDecision/高部署上限下的候选剪枝Tests.cs  total=4 theory=1 rows=3  L=4 D=0 M=0 K=0
+  L 不穷举排列  (helper:AiFixtures.Round5)
+  L 剪枝保留高价值落点  (helper:启发式评价维度Tests.CaptureRelicPosition)
+  L 必须找到的妙手  (helper:启发式评价维度Tests.CaptureRelicPosition,helper:AiFixtures.Round5)
+  L 种子扰动由种子驱动  (helper:AiFixtures.Round5)
+## AiFixtures.cs  total=0 theory=0 rows=0  L=0 D=0 M=0 K=0  [file:K]
+## BatchDeployment/批次数量与库存约束Tests.cs  total=9 theory=2 rows=9  L=2 D=0 M=0 K=0  [file:K]
+  L 基础值随阶段提高  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 基础值随阶段提高_插旗阶段  (MF.build,helper:MatchFixtures.Create,MF.const)
+## BatchDeployment/非法批次必须给出可定位的原因Tests.cs  total=12 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 活棋禁入返回落点与棋串  (MF.build,helper:MatchFixtures.Started,MF.const)
+## BatchPreview/批次预演必须显示的信息Tests.cs  total=6 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L Pass确认前警示撤销本轮新征募  (helper:AiFixtures.Round5)
+  L 显示部署额度  (helper:AiFixtures.Round5)
+## BatchPreview/未知信物在预演中只显示将揭示Tests.cs  total=1 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 将揭示提示  (helper:Stage)
+## BatchPreview/计分信物与新棋子的预演Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 将揭示的连营不计入预演  (helper:Match)
+  L 已揭示连营计入预演  (helper:Match)
+  L 新棋子的位置加值计入预演  (helper:Match,MF.const)
+## BatchPreview/非法批次必须说明原因并高亮Tests.cs  total=7 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 活棋禁入说明  (MF.build,helper:MatchFixtures.Started)
+## BatchPreview/预演一致性回归Tests.cs  total=1 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 千例随机局面预演与结算一致  (MF.build,helper:MatchFixtures.Started)
+## BatchPreview/预演不改变游戏状态Tests.cs  total=1 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 预演无副作用  (helper:AiFixtures.Round5)
+## Battlefield/战场的定义与规则作用域Tests.cs  total=6 theory=0 rows=0  L=0 D=1 M=0 K=0
+  D 旧地图的孤立可落子区不属于任何战场编号  (MF.map)
+## Battlefield/链接后的公开补充载荷Tests.cs  total=3 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 旧模式副本与按生成记录恢复逐项相同  (MF.build,helper:MatchFixtures.Started)
+## Battlefield/阶段推进Tests.cs  total=11 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 旧模式没有阶段转换  (MF.build,helper:MatchFixtures.Started)
+## CarryInOut/AI带入Tests.cs  total=7 theory=0 rows=0  L=0 D=0 M=1 K=0  [file:M]
+  M 不扰动征募序列  (MatchMode)
+## CarryInOut/出局结算Tests.cs  total=3 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 出局丢失  (helper:CarryFixtures.Result)
+## CarryInOut/名次补给点表Tests.cs  total=5 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 四人局查表  (helper:CarryFixtures.Result)
+  L 并列共享  (helper:CarryFixtures.Result)
+## CarryInOut/完赛结算Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 只剩一名参赛玩家  (helper:CarryFixtures.Result)
+  L 完赛第1名  (helper:CarryFixtures.Result)
+## CarryInOut/弃赛结算Tests.cs  total=6 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 保护期内弃赛不带出补给点  (helper:CarryFixtures.Result)
+  L 弃赛时第1名  (helper:CarryFixtures.Result)
+## CarryInOut/战场落败出局结算Tests.cs  total=1 theory=0 rows=0  L=0 D=0 M=0 K=1  [file:K]
+  K 战场落败同样丢失  (MF.const)
+## CarryInOut/换型候选类型Tests.cs  total=5 theory=1 rows=3  L=2 D=0 M=0 K=0  [file:K]
+  L 拒绝不合形的带入  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 拒绝非候选类型  (MF.build,helper:MatchFixtures.Create)
+## CarryInOut/补给种类与开局效果Tests.cs  total=5 theory=0 rows=0  L=5 D=0 M=0 K=0  [file:K]
+  L 不带入者不变  (MF.build,helper:MatchFixtures.Create)
+  L 备用子  (helper:Locked)
+  L 征召签  (MF.build,helper:MatchFixtures.Create)
+  L 换型令  (MF.build,helper:MatchFixtures.Create)
+  L 效果只在开局  (helper:Locked,MF.const)
+## EliminationEndgame/三类终局条件Tests.cs  total=8 theory=0 rows=0  L=8 D=0 M=0 K=0  [file:K]
+  L Pass计数跨回合重置  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 势力悬殊不提前结束  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 只剩一名参赛玩家优先于棋盘填满  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 唯一参赛者获胜  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 整轮Pass  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 棋盘填满  (helper:FullBoard,MF.const)
+  L 棋盘填满优先于整轮Pass  (helper:FullBoard)
+  L 轮数再多也不结束  (MF.build,helper:MatchFixtures.Started,MF.const)
+## EliminationEndgame/两类终局条件Tests.cs  total=6 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 旧模式终局原因不含最后战场结算  (MF.build,helper:MatchFixtures.Started)
+## EliminationEndgame/主动弃赛Tests.cs  total=9 theory=0 rows=0  L=9 D=0 M=0 K=0  [file:K]
+  L 保护期内允许弃赛  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 弃赛名次不影响最终名次  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 弃赛名次随存档往返  (helper:WithEliminatedC,MF.const)
+  L 弃赛后停止行动  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 弃赛快照可记录  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 弃赛时势力名次  (helper:WithEliminatedC,MF.const)
+  L 此前已弃赛者计入弃赛名次  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 遗留棋子可被围杀  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 遗留棋子继续生效  (MF.build,helper:MatchFixtures.Started,MF.const)
+## EliminationEndgame/出局判定Tests.cs  total=6 theory=0 rows=0  L=6 D=0 M=0 K=0  [file:K]
+  L 从未落子者不因Pass出局  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 保护期内不豁免  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 势力归零立即出局  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 同时归零同时出局  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 开局零势力不出局  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 手牌有子也出局  (MF.build,helper:MatchFixtures.Started,MF.const)
+## EliminationEndgame/终局名次与并列判定Tests.cs  total=11 theory=0 rows=0  L=11 D=0 M=0 K=0  [file:K]
+  L 信物相同比独占空格数  (Standings.Legacy,MF.const)
+  L 出局者倒序  (Standings.Legacy,MF.const)
+  L 势力相同比信物数  (Standings.Legacy,MF.const)
+  L 同一次结算出局者共享名次  (Standings.Legacy,MF.const)
+  L 多名弃赛者互比  (Standings.Legacy,MF.const)
+  L 完全相同则并列  (Standings.Legacy,MF.const)
+  L 弃赛者排在完赛者之后  (Standings.Legacy,MF.const)
+  L 整轮Pass时按同一规则排名  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 旧模式流程中弃赛者排在势力归零出局者之前  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 终局输入取独占空格数  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 逐级比较到棋子数  (Standings.Legacy,MF.const)
+## EliminationEndgame/链接模式终局名次Tests.cs  total=8 theory=0 rows=0  L=0 D=0 M=7 K=0  [file:M]
+  M 信物相同比独占空格数  (ComputeLink)
+  M 决赛胜者第一  (ComputeLink)
+  M 同一战场多名落败者按势力排  (ComputeLink)
+  M 同次势力归零者共享名次  (ComputeLink)
+  M 弃赛者最后  (ComputeLink)
+  M 更早出局者按出局先后倒序  (ComputeLink)
+  M 逐级比较到棋子数  (ComputeLink)
+## HandInfoPanel/全玩家手牌对比面板Tests.cs  total=1 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 开关面板  (helper:AiFixtures.Round5)
+## HandInfoPanel/公开结构参数与信物来源Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 参数对全体公开  (helper:AiFixtures.Round5,MF.const)
+  L 显示参数与来源  (helper:AiFixtures.Round5)
+  L 来源只有基础值与信物  (MF.build,helper:AiFixtures.Round5,helper:MatchFixtures.Started)
+## HandInfoPanel/弃赛玩家的面板表现Tests.cs  total=1 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 弃赛者标记  (helper:AiFixtures.Round5)
+## HandInfoPanel/征募面板可收起Tests.cs  total=12 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 征募阶段标识只认本机玩家的征募阶段  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 新征募阶段默认展开  (MF.build,helper:MatchFixtures.Started,MF.const)
+## HandInfoPanel/敌方区域的显示内容Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 不显示敌方征募与暂放  (helper:AiFixtures.Round5)
+  L 敌方只显示类型  (helper:AiFixtures.Round5)
+## HandInfoPanel/新棋子类型与驿站来源的显示Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 新类型在自己区域显示  (helper:AiFixtures.Round5)
+  L 零加成的驿站不列出  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 驿站来源逐枚列出  (helper:B控制驿站探勘军令)
+## HandInfoPanel/自己区域的显示内容Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0
+  L 显示本轮新征募未提交数量  (helper:FindMatchWithTwoBasicCandidates)
+  L 显示槽位占用  (helper:AiFixtures.Round5)
+  L 自己看得到准确数量  (helper:AiFixtures.Round5)
+## InformationVisibility/他战场玩家数值不进HUD视图模型Tests.cs  total=5 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 旧模式与同战场不遮蔽  (MF.build,helper:MatchFixtures.Started,MF.const)
+## InformationVisibility/始终公开的信息Tests.cs  total=6 theory=0 rows=0  L=6 D=0 M=0 K=0  [file:K]
+  L 势力明细公开  (helper:AiFixtures.Round5)
+  L 带入公开  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 棋子类型公开  (helper:AiFixtures.Round5,MF.const)
+  L 气可推导  (helper:AiFixtures.Round5,MF.const)
+  L 活形状态公开  (helper:AiFixtures.Round5,MF.const)
+  L 领地分公开  (MF.build,helper:MatchFixtures.Started,MF.const)
+## InformationVisibility/必须隐藏的信息Tests.cs  total=4 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 手牌数量隐藏  (helper:OpponentAreaOfP0)
+  L 未发现信物内容隐藏  (helper:AiFixtures.Round5,helper:Views)
+  L 未确认批次隐藏  (helper:AiFixtures.Round5)
+## InformationVisibility/按座位视图Tests.cs  total=11 theory=0 rows=0  L=1 D=0 M=0 K=3  [file:K]
+  K 插旗阶段的可见信息  (MF.const)
+  L 旧模式全图展开  (MF.build,helper:MatchFixtures.Started,MF.const)
+  K 本战场棋盘内的岩石与未架桥深水可见  (MF.const)
+  K 行动顺序与带入全局公开  (MF.const)
+## InformationVisibility/视图模型按座位过滤Tests.cs  total=10 theory=0 rows=0  L=1 D=1 M=0 K=0  [file:K]  [file:M]
+  L 旧模式全图可见无占位_与全知棋盘逐项相同  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode)
+  D 棋盘内有岩石时本座位棋盘仍可见  (MF.map,MF.const)
+## InitiativeOrder/先手值公式Tests.cs  total=3 theory=0 rows=0  L=2 D=0 M=0 K=1  [file:K]
+  K 先锋推动低名次玩家前移  (MF.const)
+  L 参赛人数变化影响公式  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 四人局基础先手值  (MF.build,helper:MatchFixtures.Started,MF.const)
+## InitiativeOrder/先手顺序预测_链接模式Tests.cs  total=8 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]  [file:M]
+  L 旧模式预测不变  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode,MF.const)
+## InitiativeOrder/同值判定链Tests.cs  total=4 theory=0 rows=0  L=1 D=0 M=0 K=3  [file:K]
+  K 上轮顺序打破平局  (MF.const)
+  K 先手修正打破平局  (MF.const)
+  K 势力值打破平局  (MF.const)
+  L 首回合种子兜底  (MF.build,helper:MatchFixtures.Started,MF.const)
+## InitiativeOrder/基础排序Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 按势力排名次  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 排除非参赛玩家  (MF.build,helper:MatchFixtures.Started,MF.const)
+## InitiativeOrder/排名的作用范围Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 排名不累计  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 落后不获补偿  (MF.build,helper:MatchFixtures.Started,MF.const)
+## LifeShape/活形三态Tests.cs  total=16 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 活形不入存档  (MF.build,helper:MatchFixtures.Started,MF.const)
+## LifeShape/禁入格Tests.cs  total=4 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 弃赛者的活形仍禁入  (MF.build,helper:MatchFixtures.Started,MF.const)
+## LinkMapGeneration/物化状态校验Tests.cs  total=10 theory=0 rows=0  L=0 D=1 M=0 K=0
+  D 非链接档不可增长  (MF.map)
+## LinkMapGeneration/链接时的棋盘拼接Tests.cs  total=7 theory=0 rows=0  L=0 D=0 M=0 K=1  [file:K]
+  K 平移保内容  (MF.const)
+## LinkModeFixtures.cs  total=0 theory=0 rows=0  L=0 D=0 M=0 K=0  [file:K]  [file:M]
+## LookaheadFixtures.cs  total=0 theory=0 rows=0  L=0 D=0 M=0 K=0  [file:K]
+## MapDefinition/两位数行号贯通Tests.cs  total=3 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 对局存档与终端渲染在两位数行号下正确  (CreateUnvalidated.Legacy,MF.map,MF.const)
+  L 对局日志在两位数行号下记录并可读回  (CreateUnvalidated.Legacy,MF.map,MF.const)
+## MapDefinition/出生区归属Tests.cs  total=4 theory=0 rows=0  L=0 D=1 M=0 K=0
+  D 出生区标记不自带限制  (MF.map)
+## MapDefinition/棋盘清单Tests.cs  total=9 theory=1 rows=3  L=2 D=1 M=0 K=0  [file:K]
+  L 清单不参与结算  (helper:AiRun,helper:ScriptedSteps,MF.map,helper:AiRun,helper:ScriptedSteps)
+  D 空清单不写出  (MF.map)
+  L 默认棋盘视图模型透传棋盘清单  (MF.build,helper:Started,helper:MatchFixtures.Started,helper:Started)
+## MapSelection/选图视图模型Tests.cs  total=11 theory=1 rows=12  L=2 D=1 M=0 K=0  [file:K]  [file:M]
+  D 新局界面背景占位不带主题名_其余与插旗阶段相同  (MF.map,MatchMode,MF.const)
+  L 确认开局_给出已接受的标识_与按它解析出的地图标识一致  (helper:ViewOf,helper:ViewOf)
+  L 预览说明读默认棋盘视图模型  (helper:ViewOf,MF.map,helper:ViewOf,MatchMode,MF.const)
+## MatchFlowRegression/对局持久化Tests.cs  total=9 theory=1 rows=5  L=9 D=0 M=0 K=0  [file:K]
+  L 匠人权重随存档往返且旧存档回填  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 含大回合上限碾压或补偿字段的旧存档被拒  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 存档地图不符即拒绝  (MF.build,helper:MatchFixtures.Started,MF.map)
+  L 小回合边界存档恢复后状态完全一致  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 小回合进行中不能存档  (MF.build,helper:MatchFixtures.Started)
+  L 已结束对局与终局结果可恢复  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 弃赛快照的驿站来源与工坊标记随存档往返且旧存档缺省为空与否  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 曾建立正势力标记随存档往返  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 终局独占空格数随存档往返而含据点分值的旧存档被拒  (MF.build,helper:MatchFixtures.Started,MF.const)
+## MatchFlowRegression/流程回归Tests.cs  total=5 theory=0 rows=0  L=4 D=0 M=0 K=0  [file:K]
+  L 任意阶段可替换决策来源  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 出局改变参赛人数后Pass计数与新人数重比  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 弃赛改变参赛人数后立即重比Pass计数  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 最后一手抢到的先锋本大回合结束即生效  (MF.build,helper:MatchFixtures.Started,MF.const)
+## MatchFlowRegression/百局端到端Tests.cs  total=1 theory=0 rows=0  L=0 D=0 M=1 K=0  [file:M]
+  M 连续一百局四人对局无死锁无非法状态  (MatchMode)
+## MatchFlowRegression/输出契约Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 公开快照的结构里不存在私有视图类型  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 插旗未锁定时不提供合法落子范围  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 未知玩家一律抛SiegeRuleException  (MF.build,helper:MatchFixtures.Started,MF.const)
+## MatchSetup/决赛倒计时配置Tests.cs  total=4 theory=0 rows=0  L=0 D=0 M=0 K=2  [file:K]
+  K 缺省值  (MF.const)
+  K 负数建局报错  (MF.const)
+## MatchSetup/匿名同时插旗Tests.cs  total=4 theory=0 rows=0  L=4 D=0 M=0 K=0  [file:K]
+  L 多人同区  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 时限可配置  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 身份匿名  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 锁定前可更换  (MF.build,helper:MatchFixtures.Create,MF.const)
+## MatchSetup/原型插旗替代路径Tests.cs  total=3 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 出生区锁定结果可持久化  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 调试依次插旗  (MF.build,helper:MatchFixtures.Create,MF.const)
+## MatchSetup/对局内容集Tests.cs  total=6 theory=0 rows=0  L=0 D=0 M=2 K=0  [file:M]
+  M 内容集须为已定义的值  (MatchMode)
+  M 新局缺省v2  (MatchMode)
+## MatchSetup/对局模式Tests.cs  total=5 theory=0 rows=0  L=4 D=0 M=0 K=1  [file:K]  [file:M]
+  L 公开建局恒为链接模式  (Mode.Legacy,MatchMode,MF.const)
+  L 缺省为旧模式  (MF.build,Mode.Legacy,helper:MatchFixtures.Create,MatchMode)
+  L 链接图以链接模式建局  (MF.build,helper:MatchFixtures.Create,MatchMode)
+  L 链接模式不能配旧地图  (MF.build,helper:MatchFixtures.Create,MatchMode)
+  K 链接模式只有四人局  (MF.const)
+## MatchSetup/对局配置公开完整地图标识Tests.cs  total=6 theory=2 rows=4  L=0 D=0 M=0 K=0  [file:M]
+## MatchSetup/带入带出配置Tests.cs  total=8 theory=0 rows=0  L=5 D=0 M=1 K=0  [file:K]  [file:M]
+  L 关闭时有带入即拒绝  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 对局中不可改  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 征召签与其他玩家的带入无关  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 新存档往返  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 旧存档按无带入读取  (MF.build,helper:MatchFixtures.Started,MF.const)
+  M 缺省关闭  (MatchMode)
+## MatchSetup/开局信息公开范围Tests.cs  total=6 theory=0 rows=0  L=1 D=3 M=0 K=1  [file:K]
+  D 占位尺寸取整块棋盘  (MF.map,MF.const)
+  L 插旗阶段的可见信息  (MF.build,helper:MatchFixtures.Create)
+  K 插旗阶段的可见信息_图形版占位带主题名  (MF.const)
+  D 终端插旗占位画整块棋盘  (MF.map,MF.const)
+  D 锁定后只见自己的棋盘  (MF.map,MF.const)
+## MatchSetup/盲选插旗Tests.cs  total=7 theory=0 rows=0  L=2 D=0 M=0 K=2  [file:K]
+  K AI均匀盲选可复现  (MF.const)
+  L 旗帜互不可见  (MF.build,helper:MatchFixtures.Create,MF.const)
+  K 时限到时未选者由flag_pick均匀指定  (MF.const)
+  L 选中即锁定  (MF.build,helper:MatchFixtures.Create,MF.const)
+## MatchSetup/链接模式存档Tests.cs  total=12 theory=0 rows=0  L=3 D=0 M=1 K=1  [file:K]  [file:M]
+  L 旧存档被拒绝  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode)
+  L 旧模式存档不写新字段且按旧模式读入  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode)
+  L 旧模式终局存档不写出局原因  (MF.build,helper:MatchFixtures.Started,MF.const)
+  M 锁定结果可持久化  (MatchMode)
+  K 锚点非零向量的拼接可存档恢复  (MF.const)
+## MatchSetup/首回合顺序随机Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 顺序可复现  (MF.build,helper:MatchFixtures.Started)
+  L 首回合随机顺序  (MF.build,helper:MatchFixtures.Started,MF.const)
+## MatchTelemetry/AI改造与主题诊断Tests.cs  total=8 theory=0 rows=0  L=4 D=0 M=0 K=0  [file:K]
+  L 只有立栅目标  (MF.build,helper:MatchFixtures.Started)
+  L 有林地可烧  (MF.build,helper:MatchFixtures.Started)
+  L 有深水可搭桥  (MF.build,helper:MatchFixtures.Started)
+  L 预筛挡掉搭桥目标即候选生成阶段排除  (MF.build,helper:MatchFixtures.Started,MF.const)
+## MatchTelemetry/对局日志的记录内容Tests.cs  total=11 theory=0 rows=0  L=7 D=0 M=0 K=1  [file:K]  [file:M]
+  L 大数不失真  (CreateUnvalidated.Legacy,MF.map,MF.const)
+  L 带出结算可查  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 新来源可查  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 日志覆盖八类记录  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 非法批次也记录  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 领地分可查  (MF.build,helper:MatchFixtures.Started,MF.const)
+  K 首部记录带入  (MF.const)
+  L 驿站来源与工坊标记可查  (helper:WorkshopSession)
+## MatchTelemetry/对局日志的记录内容_链接模式Tests.cs  total=8 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 旧模式日志不写链接模式字段  (CreateUnvalidated.Legacy,MF.map,MF.const)
+## MatchTelemetry/活形记录与统计Tests.cs  total=8 theory=0 rows=0  L=5 D=0 M=0 K=0  [file:K]
+  L 所有者的改造导致失去记为所有者的改造  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 拒绝尝试可查  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 活形棋串加子不重复记确立  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 活形确立可查  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 自拆可查  (MF.build,helper:MatchFixtures.Started,MF.const)
+## PresentationFixtures.cs  total=0 theory=0 rows=0  L=0 D=0 M=0 K=0  [file:K]
+## Recruitment/初始配置与基础棋池Tests.cs  total=8 theory=0 rows=0  L=1 D=0 M=1 K=0  [file:M]
+  L 匠人权重可配置  (MF.build,helper:MatchFixtures.Started)
+  M 带入改变开局手牌  (MatchMode)
+## Recruitment/私人征募面板Tests.cs  total=7 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 最后一名没有补偿  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 驿站生效  (MF.build,helper:MatchFixtures.Started,MF.const)
+## RelicEffects/同类信物叠加且无统一硬上限Tests.cs  total=4 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 来源可拆分  (MF.build,helper:MatchFixtures.Started,MF.const)
+## RelicEffects/工坊扩大匠人的格改造范围Tests.cs  total=3 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 控制工坊即标记生效  (MF.build,helper:MatchFixtures.Started,MF.const)
+## RelicEffects/效果快照在小回合开始时生成Tests.cs  total=10 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 分阶段基础值只在生成快照时读取一次  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 名次不影响快照  (MF.build,helper:MatchFixtures.Started,MF.const)
+## RelicEffects/计分信物连营与犄角Tests.cs  total=8 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 失去控制立即失效  (MF.build,helper:MatchFixtures.Started,MF.const)
+## RelicEffects/驿站的展示数加成Tests.cs  total=6 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 与探勘相加  (MF.build,helper:MatchFixtures.Started,MF.const)
+## RelicGeneration/区域强度预算Tests.cs  total=6 theory=1 rows=2  L=0 D=2 M=0 K=0
+  D 同区同类型被降低概率但不禁止  (helper:HighTierMap)
+  D 高风险区预算更高  (helper:HighTierMap)
+## SettlementShow/演出期间对局不推进Tests.cs  total=1 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 演出不影响对局结果  (helper:Start)
+## SettlementShow/结算节拍序列的生成Tests.cs  total=7 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 相同输入得到相同序列  (MF.build,helper:MatchFixtures.Started,MF.const)
+## SimulationHarness/人工接管Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0
+  L 交还后继续  (MF.build,helper:MatchFixtures.Started)
+  L 任意阶段接管  (MF.build,helper:MatchFixtures.Started)
+  L 接管记录可追溯  (MF.build,helper:MatchFixtures.Started)
+## SimulationHarness/出生区编号显示Tests.cs  total=4 theory=1 rows=3  L=1 D=0 M=0 K=0  [file:K]
+  L 六区图的插旗棋盘快照  (CreateUnvalidated.Legacy,MF.const)
+## SimulationHarness/原型调试AITests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0
+  L 对局记录标注  (MF.build,helper:MatchFixtures.Started)
+  L 调试AI可读全量状态  (MF.build,helper:MatchFixtures.Started)
+  L 面向玩家的对局拒绝调试AI  (MF.build,helper:MatchFixtures.Started)
+## SimulationHarness/可复现回放Tests.cs  total=4 theory=0 rows=0  L=0 D=0 M=0 K=1  [file:K]
+  K 带入对局可回放  (MF.const)
+## SimulationHarness/各入口按地图标识选图_链接模式Tests.cs  total=8 theory=2 rows=8  L=0 D=0 M=2 K=0  [file:M]
+  M 链接图建局为链接模式并挂配对来源  (MatchMode)
+  M 链接图批量跑局  (MatchMode)
+## SimulationHarness/旧生成器摘要被拒Tests.cs  total=2 theory=0 rows=0  L=0 D=0 M=1 K=0  [file:M]
+  M 旧生成器的link1存档_恢复报地图不一致  (MatchMode)
+## SimulationHarness/终端对局Tests.cs  total=4 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 状态栏大数势力缩写不撑破一行  (CreateUnvalidated.Legacy,MF.map,MF.const)
+## SimulationHarness/终端新棋子与新信物Tests.cs  total=5 theory=0 rows=0  L=4 D=0 M=0 K=0  [file:K]
+  L 内容集v1的图例不变  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 工坊目标含隔一格的文字列出  (helper:DeployScript)
+  L 新棋子与已揭示新信物的渲染快照  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 驿站来源逐枚列出且隐藏零加成  (helper:RecruitOutput)
+## SimulationHarness/终端活形与禁入标示Tests.cs  total=6 theory=0 rows=0  L=5 D=0 M=0 K=0  [file:K]
+  L 信物格同为禁入时信物标记优先  (MF.build,helper:RingMatch,helper:MatchFixtures.Started,MF.const)
+  L 图例含禁入与已活符号  (helper:RingMatch)
+  L 所有者看自己的眼不标禁入  (helper:RingMatch)
+  L 文本盘面标出禁入格与已活棋串  (helper:RingMatch)
+  L 未定棋串不标已活  (MF.build,helper:MatchFixtures.Started)
+## TacticalLayers/五种战术信息层Tests.cs  total=6 theory=0 rows=0  L=6 D=0 M=0 K=0
+  L 信物层不泄漏未知内容  (helper:AiFixtures.Round5)
+  L 信物层说明失效原因  (helper:AiFixtures.Round5)
+  L 弃赛者封锁的信物可辨  (helper:AiFixtures.Round5)
+  L 归属读法三态可辨  (helper:AiFixtures.Round5)
+  L 棋串读法标示危险棋串  (helper:AiFixtures.Round5)
+  L 顺序层可解释下一轮排序  (helper:AiFixtures.Round5)
+## TacticalLayers/信息层的可用时机与无副作用Tests.cs  total=4 theory=0 rows=0  L=4 D=0 M=0 K=0
+  L 他人行动时可查看  (MF.build,helper:MatchFixtures.Started)
+  L 信息层不越权  (MF.build,helper:MatchFixtures.Started)
+  L 插旗阶段也能发布补充载荷  (MF.build,helper:MatchFixtures.Create)
+  L 查看无副作用  (helper:AiFixtures.Round5)
+## TacticalLayers/势力层领地与高地Tests.cs  total=7 theory=1 rows=11  L=6 D=0 M=0 K=0  [file:K]
+  L 倍率热区等级只是显示档位  (MF.build,helper:MatchFixtures.Started)
+  L 势力层四项新来源各自可读  (MF.build,helper:MatchFixtures.Started)
+  L 势力层显示新来源  (MF.build,helper:MatchFixtures.Started)
+  L 势力层显示领地分  (MF.build,helper:MatchFixtures.Started)
+  L 势力层显示高地加值  (CreateUnvalidated.Legacy,MF.map,MF.const)
+  L 荒漠独占不进领地分  (MF.build,helper:MatchFixtures.Started)
+## TacticalLayers/单子禁手的标示Tests.呈现.cs  total=11 theory=0 rows=0  L=10 D=0 M=0 K=0  [file:K]
+  L 别人的回合不显示  (helper:Surrounded)
+  L 劫点事先打叉  (helper:AiFixtures.Round5)
+  L 四类标记可区分  (MF.build,helper:MatchFixtures.Started)
+  L 库存不影响禁手  (helper:Surrounded)
+  L 暂放改变禁手  (helper:Surrounded)
+  L 没有当前行动玩家时不显示  (MF.build,helper:MatchFixtures.Create)
+  L 破坏活形格带所有者  (CreateUnvalidated.Legacy,MF.map,MF.const)
+  L 禁手叠加与盘面不同刻即抛出  (helper:Surrounded)
+  L 能提子的点不是自杀点  (helper:Surrounded)
+  L 自杀点事先打叉  (helper:Surrounded)
+## TacticalLayers/单子禁手的标示Tests.对照.cs  total=7 theory=2 rows=4  L=0 D=0 M=0 K=0  [file:K]  [file:M]
+## TacticalLayers/单子禁手的标示Tests.查询.cs  total=9 theory=0 rows=0  L=7 D=0 M=0 K=0
+  L 查询_不改对局状态  (helper:Surrounded)
+  L 查询_库存与额度不影响禁手  (helper:Surrounded)
+  L 查询_暂放改变禁手  (helper:Surrounded)
+  L 查询_暂放自身非法时按整批判定  (helper:Surrounded)
+  L 查询_没有当前行动玩家时为空  (MF.build,helper:MatchFixtures.Create)
+  L 查询_能提子的点不是自杀点  (helper:Surrounded)
+  L 查询_自杀点  (helper:Surrounded)
+## TacticalLayers/改造在默认棋盘与棋串读法里的呈现Tests.cs  total=4 theory=0 rows=0  L=4 D=0 M=0 K=0  [file:K]
+  L 工坊下标出隔一格目标  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 暂放匠人时标出可改造目标  (helper:Match)
+  L 棋串读法区分栅栏侧  (helper:Match)
+  L 立栅后栅栏侧与差集都随改造更新  (helper:Match)
+## TacticalLayers/新地表的规则标示Tests.cs  total=8 theory=0 rows=0  L=8 D=0 M=0 K=0  [file:K]
+  L 图例给出规则描述  (helper:TerrainMatch,helper:TerrainMatch)
+  L 岩台远格的归属  (helper:TerrainMatch,helper:TerrainMatch)
+  L 差集可由岩台远格解释  (helper:TerrainMatch,helper:TerrainMatch)
+  L 差集可由新地表解释  (helper:TerrainMatch,helper:TerrainMatch)
+  L 差集可由沼泽源解释  (helper:TerrainMatch,helper:TerrainMatch)
+  L 差集可由空浅滩解释  (helper:TerrainMatch,helper:TerrainMatch)
+  L 沼泽上的棋子不点亮归属  (helper:TerrainMatch,helper:TerrainMatch)
+  L 空浅滩在棋串读法中标为不算气  (helper:TerrainMatch,helper:TerrainMatch)
+## TacticalLayers/活形与禁入格的标示Tests.cs  total=6 theory=0 rows=0  L=5 D=0 M=0 K=0  [file:K]
+  L 已活棋串即使气少也标已活  (MF.build,helper:MatchFixtures.Started)
+  L 已活棋串可辨  (MF.build,helper:MatchFixtures.Started)
+  L 所有者看到的是可落子  (helper:RingMatch)
+  L 禁入格区别于地形不可落子与范围外  (CreateUnvalidated.Legacy,MF.map,MF.const)
+  L 禁入格在默认棋盘上可见  (helper:RingMatch)
+## TacticalLayers/盘面层的读法切换Tests.cs  total=9 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 差集可由地形解释  (helper:TerrainMatch,helper:TerrainMatch)
+  L 平地上两种读法点亮同一批空格  (helper:AiFixtures.Round5)
+  L 归属读法另有棋串读法没有的格  (helper:AiFixtures.Round5)
+## TacticalLayers/盘面层视图模型带地形Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 栅栏边随视图模型带出  (helper:V3Board,helper:V3Board)
+  L 每格带高度地表与桥  (helper:V3Board,helper:V3Board)
+## TacticalLayers/默认棋盘上的未发现信物Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 分区信息在信物层可查  (helper:PresentationFixtures.StartedWithZonedRelics,helper:PresentationFixtures.StartedWithZonedRelics)
+  L 默认棋盘不显示分区  (helper:PresentationFixtures.StartedWithZonedRelics,helper:PresentationFixtures.StartedWithZonedRelics)
+## TerrainEditing/同形与存档纳入设施Tests.cs  total=5 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 对局存档往返保留改造与匠人权重  (MF.build,helper:MatchFixtures.Started)
+## TerrainEditing/地形派生数据不缓存Tests.cs  total=7 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L MatchFlow的Map随改造更新  (MF.build,helper:MatchFixtures.Started)
+  L 合法落子范围在保护期后含本局新架的桥  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 表现层的地形视图随改造更新  (MF.build,helper:MatchFixtures.Started,MF.const)
+## TerrainEditing/改造不可逆与公开Tests.cs  total=4 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 弃赛不撤销改造  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 改造结果人人可见且不显示改造者  (MF.build,helper:MatchFixtures.Started)
+  L 默认棋盘上的新旧设施同形且不带改造者  (MF.build,helper:MatchFixtures.Started,MF.const)
+## TurnSequence/合法落子范围的对外契约Tests.cs  total=4 theory=0 rows=0  L=4 D=0 M=0 K=0  [file:K]
+  L 共享出生区内的禁入  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 禁入扣除只在LegalRangeFor且与预演共用同一查询  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 禁入格不在范围内  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 范围随大回合切换  (MF.build,helper:MatchFixtures.Started,MF.const)
+## TurnSequence/大回合的定义与推进Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 出局者不再获得小回合  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 大回合完成  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 无固定轮数  (MF.build,helper:MatchFixtures.Started,MF.const)
+## TurnSequence/小回合的五个阶段Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 快照在回合内不变  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 超限阻断征募  (MF.build,helper:MatchFixtures.Started)
+  L 阶段顺序  (MF.build,helper:MatchFixtures.Started)
+## TurnSequence/战场内合法落子范围Tests.cs  total=9 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]  [file:M]
+  L 旧模式第4大回合仍全图解禁  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode,MF.const)
+## TurnSequence/构筑保护期的落子限制Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 保护期内规则照常  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 保护期内越区落子被拒  (MF.build,helper:MatchFixtures.Started,MF.const)
+## TurnSequence/第4大回合的全图解禁Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 空盘面玩家重新进入  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 解禁后全图可落子  (MF.build,helper:MatchFixtures.Started,MF.const)
+## VisualStyleBaseline/棋盘台面的可视表现Tests.cs  total=3 theory=0 rows=0  L=1 D=0 M=0 K=1  [file:K]
+  K 棋盘内岩石取岩石造型_场景格取场景装饰  (MF.const)
+  L 棋盘清单为空时一律是场景装饰  (MF.build,helper:MatchFixtures.Create,MF.const)
+
+# files=138  L-methods=381  D-methods=13  M-methods=17  K-methods=20

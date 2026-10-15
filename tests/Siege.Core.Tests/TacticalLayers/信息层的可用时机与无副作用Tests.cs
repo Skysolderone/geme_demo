@@ -10,6 +10,7 @@ using static Siege.Core.Tests.PresentationFixtures;
 namespace Siege.Core.Tests.TacticalLayers;
 
 /// <summary>规格：tactical-layers —— Requirement: 信息层的可用时机与无副作用</summary>
+/// <remarks>retire-legacy-rules 1.6：局面载体为平坦 8×8 链接档图上四人同锁棋盘 0（LinkModeFixtures.PlainStarted / AiFixtures.Round5），原 9×9 坐标平移 (+2, +2)。</remarks>
 public class 信息层的可用时机与无副作用Tests
 {
     [Fact]
@@ -18,10 +19,10 @@ public class 信息层的可用时机与无副作用Tests
         // 设计文档 §14.2 / implement 3.10：P1 正在部署（已暂放）时，P0 打开势力层 → 正常显示，内容与公开势力明细一致，
         // 不影响 P1：P1 的暂放与预演在 P0 查看前后逐字相同。
         // 变异验证 M-A1：ViewerWorld.Build 要求 `view.CurrentPlayer == viewer`（只在自己回合可建世界）→ 本测试红 1。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [P1, P0, P2, P3]).Pieces(P2, PieceType.Basic, "C3", "C4");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P1, P0, P2, P3]).Pieces(P2, PieceType.Basic, "E5", "E6");
         StagedBatch batch = match.OpenDeploy();
         Assert.Equal(P1, match.CurrentPlayer);
-        Assert.Null(batch.Stage(TestMaps.At("D3"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("F5"), PieceType.Basic));
         string p1Preview = Dump(match.PreviewCurrentBatch());
 
         var state = new TacticalLayerState();
@@ -38,7 +39,7 @@ public class 信息层的可用时机与无副作用Tests
 
         Assert.Equal(2, layer.Groups.Single(g => g.Owner == P2).Power.BaseTotal);
         Assert.Equal(p1Preview, Dump(match.PreviewCurrentBatch()));
-        Assert.Equal(["D3:Basic"], batch.Placements.Select(p => p.ToString()));
+        Assert.Equal(["F5:Basic"], batch.Placements.Select(p => p.ToString()));
     }
 
     [Fact]
@@ -48,10 +49,10 @@ public class 信息层的可用时机与无副作用Tests
         // 两条腿：部署阶段指纹不变；结束小回合后与孪生局 Serialize 逐字节一致。状态机结构上不引用任何 Core 对象。
         // 变异验证 M-A2：MatchFlow.ForecastInitiative 的势力改用 `Scoreboard.Recalculate(Board, roster, completed)` → 本测试红 1（势力榜版本号）。
         // 变异验证 M-A3：MatchFlow.StructuresOf 改用正式账本 `Relics.SnapshotFor(...)`（部署上限峰值遥测被推进）→ 本测试红 1——P1 控制军令，副本外求快照会把部署上限峰值从 3 推到 4。
-        MatchFlow viewed = AiFixtures.Round5(relics: ("C3", RelicFixtures.Command())).Pieces(P1, PieceType.Basic, "C4");
-        MatchFlow twin = AiFixtures.Round5(relics: ("C3", RelicFixtures.Command())).Pieces(P1, PieceType.Basic, "C4");
+        MatchFlow viewed = AiFixtures.Round5(relics: ("E5", RelicFixtures.Command())).Pieces(P1, PieceType.Basic, "E6");
+        MatchFlow twin = AiFixtures.Round5(relics: ("E5", RelicFixtures.Command())).Pieces(P1, PieceType.Basic, "E6");
         StagedBatch batch = viewed.OpenDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("F6"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("H8"), PieceType.Basic));
         string fingerprint = Fingerprint(viewed);
 
         var state = new TacticalLayerState();
@@ -73,11 +74,11 @@ public class 信息层的可用时机与无副作用Tests
         }
 
         Assert.Equal(fingerprint, Fingerprint(viewed));
-        Assert.Equal(["F6:Basic"], batch.Placements.Select(p => p.ToString()));
+        Assert.Equal(["H8:Basic"], batch.Placements.Select(p => p.ToString()));
 
         Assert.True(viewed.Confirm().Confirmed);
         StagedBatch twinBatch = twin.OpenDeploy();
-        Assert.Null(twinBatch.Stage(TestMaps.At("F6"), PieceType.Basic));
+        Assert.Null(twinBatch.Stage(TestMaps.At("H8"), PieceType.Basic));
         Assert.True(twin.Confirm().Confirmed);
         Assert.Equal(twin.Serialize(), viewed.Serialize());
         Assert.Equal(twin.Scoreboard.Version, viewed.Scoreboard.Version);
@@ -93,7 +94,7 @@ public class 信息层的可用时机与无副作用Tests
         // 非 Scenario 的接口回归（阶段 B 需要）：插旗阶段还没有势力快照，公开补充载荷仍可发布——
         // 结构参数为各自基础值、气快照为空、顺序预测为空；领地层与势力层退化为空内容而不是抛出。
         // 变异验证 M-A5：MatchFlow.ForecastInitiative 去掉 `Phase != MatchPhase.InProgress` 判断 → 插旗阶段也产出顺序预测，本测试红 1（实测）。
-        MatchFlow match = MatchFixtures.Create();
+        MatchFlow match = LinkModeFixtures.PlainCreate();
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
 
         Core.Preview.PublicSupplement supplement = match.PublishSupplement();
@@ -107,14 +108,14 @@ public class 信息层的可用时机与无副作用Tests
         Assert.Empty(((TerritoryLayerContent)world.Layer(TacticalLayer.Board, BoardReading.Ownership)).Cells);
         Assert.Empty(((PowerLayerContent)world.Layer(TacticalLayer.Power)).Groups);
         Assert.Empty(((OrderLayerContent)world.Layer(TacticalLayer.Order)).Rows);
-        Assert.Equal(81, world.Board().Cells.Length);
+        Assert.Empty(world.Board().Cells);   // retire-legacy-rules 1.6（R8）：原 9×9 旧模式全图 81 格；链接模式插旗阶段座位视野里还没有任何格（只有棋盘占位），默认棋盘照样可建
     }
 
     [Fact]
     public void 信息层不越权()
     {
         // 设计文档 §14.2：任意信息层都不显示对手手牌数量、对手未确认批次或未发现的信物内容。
-        // 结构：五层内容类型闭包里没有私有类型；行为：P1 手牌数量、P1 暂放、E5 真实内容三者任意变化，P0 看到的五层投影逐字相同。
+        // 结构：五层内容类型闭包里没有私有类型；行为：P1 手牌数量、P1 暂放、G7 真实内容三者任意变化，P0 看到的五层投影逐字相同。
         // 变异验证 M-A4（非根类型）：给 GroupScoreView 加 `public Siege.Core.Recruit.HandEntry? Leak { get; init; }` → 本测试红 1。
         foreach (Type content in new[] { typeof(LayerContent), typeof(TerritoryLayerContent), typeof(LibertyLayerContent), typeof(PowerLayerContent), typeof(RelicLayerContent), typeof(OrderLayerContent) })
         {
@@ -126,12 +127,12 @@ public class 信息层的可用时机与无副作用Tests
 
         string Layers(Core.Relics.RelicContent hidden, int p1Basic, bool p1Stages)
         {
-            MatchFlow match = MatchFixtures.Started(relics: ("E5", hidden)).AtRound(5, [P1, P0, P2, P3]).Pieces(P2, PieceType.Basic, "C3");
+            MatchFlow match = LinkModeFixtures.PlainStarted(relics: ("G7", hidden)).AtRound(5, [P1, P0, P2, P3]).Pieces(P2, PieceType.Basic, "E5");
             match.Debug.SeedHand(P1, (PieceType.Basic, p1Basic), (PieceType.Fortress, 1));
             StagedBatch batch = match.OpenDeploy();
             if (p1Stages)
             {
-                Assert.Null(batch.Stage(TestMaps.At("E4"), PieceType.Fortress));
+                Assert.Null(batch.Stage(TestMaps.At("G6"), PieceType.Fortress));
             }
 
             ViewerWorld world = match.World(P0);

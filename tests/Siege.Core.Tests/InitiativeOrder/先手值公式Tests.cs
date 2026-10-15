@@ -21,13 +21,13 @@ public class 先手值公式Tests
         Assert.Equal(3, Flow.ValueOf(4, 1, 0));
 
         // 流程层：第 4 名的明细 Value 为 0
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "B2", "E2").Stones(MatchFixtures.P1, "H2").Stones(MatchFixtures.P2, "E5");
-        match.PlayTurn("B5");
-        match.PlayTurn("E8");
-        match.PlayTurn("H8");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+            .Stones(TestMaps.P0, "D4", "G4").Stones(TestMaps.P1, "J4").Stones(TestMaps.P2, "G7");
+        match.PlayTurn("D7");
+        match.PlayTurn("G9");
         match.PlayTurn("J9");
-        InitiativeEntry last = match.InitiativeReports.Single().Of(MatchFixtures.P3);
+        match.PlayTurn("K10");
+        InitiativeEntry last = match.InitiativeReports.Single().Of(TestMaps.P3);
         Assert.Equal(4, last.Rank);
         Assert.Equal(0, last.Bonus);
         Assert.Equal(0, last.Value);
@@ -40,16 +40,16 @@ public class 先手值公式Tests
         // 同值链第 1 条"先手修正更高者优先"让第 4 名排到第 2 名之前。
         ImmutableArray<InitiativeEntry> entries =
         [
-            Entry(MatchFixtures.P0, 4, 1, 0, power: 80),
-            Entry(MatchFixtures.P1, 4, 2, 0, power: 55),
-            Entry(MatchFixtures.P2, 4, 3, 0, power: 40),
-            Entry(MatchFixtures.P3, 4, 4, 2, power: 12),
+            Entry(TestMaps.P0, 4, 1, 0, power: 80),
+            Entry(TestMaps.P1, 4, 2, 0, power: 55),
+            Entry(TestMaps.P2, 4, 3, 0, power: 40),
+            Entry(TestMaps.P3, 4, 4, 2, power: 12),
         ];
         Assert.Equal(2, entries[3].Value);
         Assert.Equal(2, entries[1].Value);
 
         InitiativeReport report = Flow.Generate(1, entries);
-        Assert.Equal(new[] { MatchFixtures.P0, MatchFixtures.P3, MatchFixtures.P1, MatchFixtures.P2 }, report.NextOrder);
+        Assert.Equal(new[] { TestMaps.P0, TestMaps.P3, TestMaps.P1, TestMaps.P2 }, report.NextOrder);
     }
 
     [Fact]
@@ -59,19 +59,19 @@ public class 先手值公式Tests
         // 变异验证 M-I4：EndMajorRound 用 _players.Length 代替参赛人数 → 红 1（本测试流程断言）。
         Assert.Equal(1, Flow.ValueOf(2, 1, 0));
 
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "B2", "B1", "H9")
-            .Stones(MatchFixtures.P2, "A1")
-            .Stones(MatchFixtures.P3, "J9");
-        match.PlayTurn("A2", "J8");    // P0 一个批次提光 P2（A1）与 P3（J9）→ 同时出局（段 C 改摆法：原为二人盘面与手牌皆空、P0 落 E5）
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+            .Stones(TestMaps.P0, "D4", "D3", "J10")
+            .Stones(TestMaps.P2, "C3")
+            .Stones(TestMaps.P3, "K10");
+        match.PlayTurn("C4", "K9");    // P0 一个批次提光 P2（C3）与 P3（K10）→ 同时出局（段 C 改摆法：原为二人盘面与手牌皆空、P0 落 E5；retire-legacy-rules：四角各贴棋盘 0 的角）
         Assert.Equal(2, match.ActiveCount);
-        match.PlayTurn("H2");    // P1
+        match.PlayTurn("J4");    // P1
 
         InitiativeReport report = match.InitiativeReports.Single();
         Assert.Equal(2, report.ActiveCount);
-        InitiativeEntry top = report.Of(MatchFixtures.P0);
+        InitiativeEntry top = report.Of(TestMaps.P0);
         Assert.Equal(1, top.Rank);
         Assert.Equal(1, top.Value);
-        Assert.Equal(0, report.Of(MatchFixtures.P1).Value);
+        Assert.Equal(0, report.Of(TestMaps.P1).Value);
     }
 }

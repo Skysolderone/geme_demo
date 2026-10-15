@@ -83,24 +83,24 @@ public class 计分信物连营与犄角Tests
     public void 失去控制立即失效()
     {
         // 规格 Scenario：玩家 B 的批次结算使玩家 A 失去其唯一的连营 → 该次结算后的势力重算中 A 的连珠加值立即回落，MUST NOT 等到 A 的下一个小回合。
-        // 走真实对局流程：A = P0 以 E4 唯一覆盖连营 E5，连珠线 D8–F8（长度 3）；A 先行动一个小回合（生成过 A 的快照），
-        // 随后 B = P1 落 E6 使 E5 争议。B 确认后势力榜里 A 的连珠加值由 9 回落为 6，此时仍未轮到 A。
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Encampment())]).AtRound(7, MatchFixtures.All);
-        match.Board.Place(TestMaps.At("E4"), TestMaps.P0, PieceType.Basic);
-        foreach (string cell in new[] { "D8", "E8", "F8" })
+        // 走真实对局流程：A = P0 以 G6 唯一覆盖连营 G7，连珠线 F10–H10（长度 3）；A 先行动一个小回合（生成过 A 的快照），
+        // 随后 B = P1 落 G8 使 G7 争议。B 确认后势力榜里 A 的连珠加值由 9 回落为 6，此时仍未轮到 A。（retire-legacy-rules：平坦 8×8 链接载体，原 9×9 坐标平移 (+2, +2)）
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Encampment())]).AtRound(7, TestMaps.All);
+        match.Board.Place(TestMaps.At("G6"), TestMaps.P0, PieceType.Basic);
+        foreach (string cell in new[] { "F10", "G10", "H10" })
         {
             match.Board.Place(TestMaps.At(cell), TestMaps.P0, PieceType.Line);
         }
 
         match.Debug.Recalculate();
-        Assert.Equal(9, match.Scoreboard.Latest!.GroupContaining(TestMaps.P0, "D8").LineBonus);
+        Assert.Equal(9, match.Scoreboard.Latest!.GroupContaining(TestMaps.P0, "F10").LineBonus);
 
         match.PassTurn();                       // A（P0）的小回合：快照在此生成
-        Assert.Equal(9, match.Scoreboard.Latest!.GroupContaining(TestMaps.P0, "D8").LineBonus);
-        match.PlayTurn("E6");                   // B（P1）的批次：E5 变为争议
+        Assert.Equal(9, match.Scoreboard.Latest!.GroupContaining(TestMaps.P0, "F10").LineBonus);
+        match.PlayTurn("G8");                   // B（P1）的批次：G7 变为争议
 
-        Assert.Equal(RelicControl.Contested, match.Relics.ControlOf(TestMaps.At("E5")));
-        Assert.Equal(6, match.Scoreboard.Latest!.GroupContaining(TestMaps.P0, "D8").LineBonus);
+        Assert.Equal(RelicControl.Contested, match.Relics.ControlOf(TestMaps.At("G7")));
+        Assert.Equal(6, match.Scoreboard.Latest!.GroupContaining(TestMaps.P0, "F10").LineBonus);
     }
 
     [Fact]

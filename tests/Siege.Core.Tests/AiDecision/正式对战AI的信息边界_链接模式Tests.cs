@@ -120,10 +120,7 @@ public class 正式对战AI的信息边界_链接模式Tests
         Assert.NotNull(rehearsal.ProjectedBoard[theirs].Occupant);   // 投影在副本上做，不改原预演结果
         // ai-seat-vision 1.3：原断言"四档预设都是全知"随缺省翻转反向——四档预设都按座位视野。
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.True(AiSearchConfig.ForDifficulty(d).SeatVision));
-
-        // 旧模式：投影即全知视图（没有战场之分）。
-        MatchFlow legacy = MatchFixtures.Started();
-        Assert.Equal(legacy.Publish().BoardSerialized, legacy.PublishSeatProjection(MatchFixtures.P0).BoardSerialized);
+        // retire-legacy-rules 1.7（清单"删反面段"）：原有的旧模式反面段（投影即全知视图）随旧模式退役删除。
     }
 
     [Fact]

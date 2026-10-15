@@ -28,8 +28,10 @@ public class 对局模式Tests
     public void 链接模式不能配旧地图()
     {
         // retire-legacy-maps：载体由 v5 换成 9×9 手写夹具（非链接图、4 人），断言不变。
+        // retire-legacy-rules 1.5：9×9 地图数据移到 TestMaps，经测试口以链接选项建局（与原写法同为"链接模式 + 非链接图"），断言不变。
+        MapData nine = TestMaps.NineByNine();
         ArgumentException ex = Assert.Throws<ArgumentException>(() =>
-            MatchFixtures.Create(options: MatchOptions.Immediate with { Mode = MatchMode.Link }));
+            MatchFlow.CreateUnvalidated(nine, TestMaps.Seed, TestMaps.All, TestMaps.Relics(nine), LinkModeFixtures.Options));
         Assert.Contains("链接模式只能配链接图", ex.Message, StringComparison.Ordinal);
     }
 
@@ -52,10 +54,10 @@ public class 对局模式Tests
     {
         // 裁决 3b / S1：链接模式的对局 MUST 恰为 4 名玩家，人数不符即建局报错。
         ArgumentException ex = Assert.Throws<ArgumentException>(() =>
-            MatchFlow.Create(LinkModeFixtures.Map, MatchFixtures.Seed, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2], LinkModeFixtures.Options));
+            MatchFlow.Create(LinkModeFixtures.Map, TestMaps.Seed, [TestMaps.P0, TestMaps.P1, TestMaps.P2], LinkModeFixtures.Options));
         Assert.Contains("4 人局", ex.Message, StringComparison.Ordinal);
         Assert.Throws<ArgumentException>(() =>
-            MatchFlow.Create(LinkModeFixtures.Map, MatchFixtures.Seed, [MatchFixtures.P0, MatchFixtures.P1], LinkModeFixtures.Options));
+            MatchFlow.Create(LinkModeFixtures.Map, TestMaps.Seed, [TestMaps.P0, TestMaps.P1], LinkModeFixtures.Options));
     }
 
     [Fact]

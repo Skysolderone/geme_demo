@@ -1,0 +1,51 @@
+tests/Siege.Core.Tests/AiDecision/链接模式下的决胜一手Tests.cs:171:        MatchFlow match = MatchFixtures.Started().AtRound(5, [P0, P1, P2, P3]).Stones(P0, "A1").Stones(P1, "J9", "H9");
+tests/Siege.Core.Tests/AiDecision/链接模式下的决胜一手Tests.cs:172:        Assert.Equal(MatchMode.Legacy, match.Mode);
+tests/Siege.Core.Tests/AiDecision/链接模式下落后者的停手阈值Tests.cs:135:        MatchFlow match = MatchFixtures.Started().AtRound(5, [P0, P1, P2, P3]).Stones(P0, "A1").Stones(P1, "J9", "H9", "J8");
+tests/Siege.Core.Tests/AiDecision/链接模式下落后者的停手阈值Tests.cs:136:        Assert.Equal(MatchMode.Legacy, match.Mode);
+tests/Siege.Core.Tests/Battlefield/链接后的公开补充载荷Tests.cs:77:        MatchFlow legacy = MatchFixtures.Started();
+tests/Siege.Core.Tests/Battlefield/阶段推进Tests.cs:212:        MatchFlow match = MatchFixtures.Started();
+tests/Siege.Core.Tests/EliminationEndgame/三类终局条件Tests.cs:19:        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All)
+tests/Siege.Core.Tests/EliminationEndgame/三类终局条件Tests.cs:42:        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
+tests/Siege.Core.Tests/EliminationEndgame/三类终局条件Tests.cs:80:        MatchFlow match = MatchFixtures.Started().AtRound(40, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+tests/Siege.Core.Tests/EliminationEndgame/三类终局条件Tests.cs:109:        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+tests/Siege.Core.Tests/EliminationEndgame/三类终局条件Tests.cs:125:        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+tests/Siege.Core.Tests/EliminationEndgame/两类终局条件Tests.cs:140:        MatchFlow legacy = MatchFixtures.Started();
+tests/Siege.Core.Tests/EliminationEndgame/终局名次与并列判定Tests.cs:95:        MatchFlow match = MatchFixtures.Started(relics: [("A2", RelicFixtures.Depot()), ("G2", RelicFixtures.Depot()), ("J2", RelicFixtures.Depot()), ("H1", RelicFixtures.Depot())])
+tests/Siege.Core.Tests/EliminationEndgame/终局名次与并列判定Tests.cs:126:        MatchFlow match = MatchFixtures.Started().AtRound(5, TestMaps.All)
+tests/Siege.Core.Tests/InformationVisibility/按座位视图Tests.cs:256:        MatchFlow legacy = MatchFixtures.Started();
+tests/Siege.Core.Tests/InformationVisibility/视图模型按座位过滤Tests.cs:221:        MatchFlow legacy = MatchFixtures.Started();
+tests/Siege.Core.Tests/InformationVisibility/视图模型按座位过滤Tests.cs:230:        Assert.Equal(MatchMode.Legacy, legacy.World(P0).Seat!.Mode);
+tests/Siege.Core.Tests/InitiativeOrder/先手顺序预测_链接模式Tests.cs:245:        MatchFlow match = MatchFixtures.Started();
+tests/Siege.Core.Tests/InitiativeOrder/先手顺序预测_链接模式Tests.cs:260:        Assert.Equal(MatchMode.Legacy, match.Mode);
+tests/Siege.Core.Tests/MatchFlowRegression/流程回归Tests.cs:20:        MatchFlow match = MatchFixtures.Started().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+tests/Siege.Core.Tests/MatchFlowRegression/流程回归Tests.cs:42:        MatchFlow match = MatchFixtures.Started().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+tests/Siege.Core.Tests/MatchSetup/匿名同时插旗Tests.cs:14:        MatchFlow match = MatchFixtures.Create();
+tests/Siege.Core.Tests/MatchSetup/匿名同时插旗Tests.cs:35:        MatchFlow match = MatchFixtures.Create();
+tests/Siege.Core.Tests/MatchSetup/匿名同时插旗Tests.cs:51:        MatchFlow match = MatchFixtures.Create(options: MatchOptions.Immediate);
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:19:        Assert.Equal(MatchMode.Legacy, new MatchOptions().Mode);
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:20:        Assert.Equal(MatchMode.Legacy, MatchOptions.Immediate.Mode);
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:21:        MatchFlow match = MatchFixtures.Create();
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:22:        Assert.Equal(MatchMode.Legacy, match.Mode);
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:24:        Assert.Equal(MatchMode.Legacy, match.Publish().Mode);
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:44:        Assert.Equal(MatchMode.Legacy, MatchOptions.Immediate.Mode);   // 样本口径：传入的确是缺省（旧）模式
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:72:        Assert.False(MatchFixtures.Create().Flags.IsBlind);
+tests/Siege.Core.Tests/MatchSetup/链接模式存档Tests.cs:117:        MatchFlow legacy = MatchFixtures.Started();
+tests/Siege.Core.Tests/MatchSetup/链接模式存档Tests.cs:122:        Assert.Equal(MatchMode.Legacy, MatchFlow.RestoreUnvalidated(legacy.Map, legacy.Relics.Generation, json).Mode);
+tests/Siege.Core.Tests/MatchSetup/链接模式存档Tests.cs:155:        MatchFlow legacy = MatchFixtures.Started().AtRound(5, MatchFixtures.All)
+tests/Siege.Core.Tests/TurnSequence/合法落子范围的对外契约Tests.cs:25:        MatchFlow match = MatchFixtures.Started(zones: [1, 1, 2, 3]).AtRound(3).Stones(MatchFixtures.P2, CornerG1J1);
+tests/Siege.Core.Tests/TurnSequence/合法落子范围的对外契约Tests.cs:45:        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(MatchFixtures.P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5);
+tests/Siege.Core.Tests/TurnSequence/战场内合法落子范围Tests.cs:180:        MatchFlow legacy = MatchFixtures.Started().AtRound(4);
+tests/Siege.Core.Tests/TurnSequence/战场内合法落子范围Tests.cs:182:        Assert.Equal(MatchMode.Legacy, legacy.Mode);
+tests/Siege.Core.Tests/TurnSequence/构筑保护期的落子限制Tests.cs:16:        MatchFlow match = MatchFixtures.Started().AtRound(2, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+tests/Siege.Core.Tests/TurnSequence/第4大回合的全图解禁Tests.cs:16:        MatchFlow match = MatchFixtures.Started().AtRound(4, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+tests/Siege.Core.Tests/TurnSequence/第4大回合的全图解禁Tests.cs:31:        MatchFlow match = MatchFixtures.Started().AtRound(4, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+tests/Siege.Core.Tests/InformationVisibility/视图模型按座位过滤Tests.cs:157:    /// <summary>链接档手写夹具（link:90002，不发生链接）：五块 6×6 出生棋盘，棋盘 1 的左下角 C3 与内部 E6 是岩石；没有信物格。只经 CreateUnvalidated 建局。</summary>
+tests/Siege.Core.Tests/MapSelection/选图视图模型Tests.cs:28:        MatchFlow match = MatchFlow.CreateUnvalidated(
+tests/Siege.Core.Tests/MapSelection/选图视图模型Tests.cs:198:        MatchFlow match = MatchFlow.CreateUnvalidated(
+tests/Siege.Core.Tests/MapSelection/选图视图模型Tests.cs:217:        MatchFlow match = MatchFlow.CreateUnvalidated(
+tests/Siege.Core.Tests/MatchFixtures.cs:28:        MatchFlow match = MatchFlow.CreateUnvalidated(map, Seed, [P0, P1], Relics(map), options ?? MatchOptions.Immediate);
+tests/Siege.Core.Tests/MatchFixtures.cs:53:        return MatchFlow.CreateUnvalidated(map, seed ?? Seed, All, Relics(map, relics), options);
+tests/Siege.Core.Tests/MatchSetup/对局模式Tests.cs:42:        // 非链接图经公开 Create 一律报"链接模式只能配链接图"。旧模式只剩 CreateUnvalidated（手写夹具，见「缺省为旧模式」）。
+tests/Siege.Core.Tests/MatchSetup/开局信息公开范围Tests.cs:154:    /// （原点 + (⌊(W−3)/2⌋, ⌊(H−3)/2⌋)，偶数边偏西 / 偏南，link-map-terrain D1），没有信物格。第 1 组的校验器仍要求出生区等于整块棋盘，所以只经 CreateUnvalidated 建局。
+tests/Siege.Core.Tests/MatchTelemetry/对局日志的记录内容_链接模式Tests.cs:331:        MatchFlow fixture = MatchFlow.CreateUnvalidated(
+tests/Siege.Core.Tests/SimulationHarness/出生区编号显示Tests.cs:27:        // 同一张 20×20 六平台图原样搬进本类（SixZoneMap，去掉边疆档规格档），按手写夹具的入口 CreateUnvalidated 建局（信物按同一种子生成）。断言不变。

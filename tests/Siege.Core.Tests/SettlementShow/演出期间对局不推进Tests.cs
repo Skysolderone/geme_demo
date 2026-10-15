@@ -12,20 +12,20 @@ namespace Siege.Core.Tests.SettlementShow;
 /// </summary>
 public class 演出期间对局不推进Tests
 {
-    /// <summary>同一组操作：第 5 大回合起四名玩家各走一手，其中 P0 的第二手提掉 P1 的 B2。</summary>
+    /// <summary>同一组操作：第 5 大回合起四名玩家各走一手，其中 P0 的第二手提掉 P1 的 D4（retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 B2；坐标按列 A–C +2 / 其余 +1、行 1–4 +2 / 其余 +1 映射）。</summary>
     private static readonly string[][] Script =
     [
-        ["F6", "E6"],   // P0
-        ["B8"],         // P1
-        ["H2"],         // P2
+        ["G7", "F7"],   // P0
+        ["D9"],         // P1
+        ["J4"],         // P2
         [],             // P3 Pass
-        ["C2", "B1"],   // P0：B2 被围（A2、B3 已有子）→ 提子
+        ["E4", "D3"],   // P0：D4 被围（C4、D5 已有子）→ 提子
         [],             // P1 Pass
     ];
 
-    private static MatchFlow Start() => MatchFixtures.Started().AtRound(5, MatchFixtures.All)
-        .Stones(MatchFixtures.P1, "B2")
-        .Stones(MatchFixtures.P0, "A2", "B3");
+    private static MatchFlow Start() => LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All)
+        .Stones(TestMaps.P1, "D4")
+        .Stones(TestMaps.P0, "C4", "D5");
 
     [Fact]
     public void 演出不影响对局结果()
@@ -43,7 +43,7 @@ public class 演出期间对局不推进Tests
             Assert.Equal(PresentationFixtures.Fingerprint(shown), PresentationFixtures.Fingerprint(zero));
         }
 
-        // 脚本确实覆盖了三种节拍：至少一步含提子节拍（B2 被提）。
+        // 脚本确实覆盖了三种节拍：至少一步含提子节拍（D4 被提）。
         Assert.Contains(3, beatCounts);
     }
 

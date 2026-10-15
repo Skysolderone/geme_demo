@@ -3,7 +3,7 @@
   "name": "retire-legacy-rules",
   "title": "retire-legacy-rules：删除 Legacy 对局模式规则分支并迁移手写夹具测试",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

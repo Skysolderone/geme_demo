@@ -17,7 +17,7 @@ public class 前瞻中的下一名对手Tests
         // 本大回合顺序 P0（专家）→ P1 → P2 → P3，P1 已弃赛 → 每个候选的下一名对手都是 P2，行动大回合为当前大回合。
         // 变异 M-A5a（名册不去掉已弃赛者）→ 见段 A 实施记录。
         MatchFlow match = AiFixtures.Round5()
-            .Stones(P0, "E5").Stones(P1, "B8").Stones(P2, "H2").Stones(P3, "H8");
+            .Stones(P0, "F6").Stones(P1, "D9").Stones(P2, "J4").Stones(P3, "J9");
         match.Resign(P1);
         Assert.Equal(PlayerStatus.Resigned, match.StateOf(P1).Status);
         Assert.Equal(P0, match.CurrentPlayer);
@@ -39,8 +39,8 @@ public class 前瞻中的下一名对手Tests
         // 顺序 P3 → P0（专家）→ P1 → P2；P3 先在 J8 提走 P1 在盘上唯一的子 J9（P1 曾建立正势力）→ P1 出局 → 每个候选的下一名对手都是 P2。
         MatchFlow match = AiFixtures.Round5()
             .AtRound(5, [P3, P0, P1, P2])
-            .Stones(P0, "E5").Stones(P1, "J9").Stones(P2, "B2").Stones(P3, "H9");
-        match.PlayTurn("J8");
+            .Stones(P0, "F6").Stones(P1, "K10").Stones(P2, "D4").Stones(P3, "J10");
+        match.PlayTurn("K9");
         Assert.Equal(PlayerStatus.Eliminated, match.StateOf(P1).Status);
         Assert.Equal(P0, match.CurrentPlayer);
 
@@ -53,7 +53,7 @@ public class 前瞻中的下一名对手Tests
 
     /// <summary>顺序 P0（专家）→ P1 → P2 → P3；P1 在盘上只有 J9 一子（曾建立正势力），被 P0 的 H9 逼到只剩一口气 J8。</summary>
     private static MatchFlow CapturablePosition() =>
-        AiFixtures.Round5().Stones(P0, "H9").Stones(P1, "J9").Stones(P2, "B2").Stones(P3, "B8");
+        AiFixtures.Round5().Stones(P0, "J10").Stones(P1, "K10").Stones(P2, "D4").Stones(P3, "D9");
 
     [Fact]
     public void 候选使下一名对手出局()
@@ -69,8 +69,8 @@ public class 前瞻中的下一名对手Tests
             return ExpertLookahead.NextOpponent(view, P0, ExpertLookahead.Project(view, b1.ProjectedBoard!));
         }
 
-        Assert.Equal((P2, 5), ForCandidate("J8"));
-        Assert.Equal((P1, 5), ForCandidate("E5"));
+        Assert.Equal((P2, 5), ForCandidate("K9"));
+        Assert.Equal((P1, 5), ForCandidate("F6"));
     }
 
     /// <summary>
@@ -79,11 +79,11 @@ public class 前瞻中的下一名对手Tests
     /// </summary>
     private static MatchFlow LastSeatPosition()
     {
-        MatchFlow match = MatchFixtures.Started().AtRound(3, [P3, P1, P2, P0])
-            .Stones(P0, "A3", "B3", "C3", "C2")
-            .Stones(P1, "F1", "H1", "F2", "G2", "H2", "J2")
-            .Stones(P2, "A6", "B6", "C6", "D6", "E6", "F6", "G6", "H6", "J6", "A8", "C8", "E8", "G8", "J8")
-            .Stones(P3, "E9");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(3, [P3, P1, P2, P0])
+            .Stones(P0, "C5", "D5", "E5", "E4")
+            .Stones(P1, "G3", "J3", "G4", "H4", "J4", "K4")
+            .Stones(P2, "C7", "D7", "E7", "F7", "G7", "H7", "J7", "K7", "C9", "E9", "F9", "H9", "K9")
+            .Stones(P3, "F10");
         match.Resign(P3);
         match.PassTurn();
         match.PassTurn();
@@ -96,11 +96,12 @@ public class 前瞻中的下一名对手Tests
     public void 专家是本大回合末位()
     {
         // 第 3 大回合专家末位行动：本大回合专家之后没有名册玩家 → 用 InitiativeOrder 的唯一实现、按 B1 上的公开输入预测第 4 大回合顺序。
-        // P2 势力最高而居首 → 下一名对手 P2，按第 4 大回合模拟：分阶段基础部署上限 4，合法落子范围为全图可落子格扣除 P2 的禁入格。
+        // P2 势力最高而居首 → 下一名对手 P2，按第 4 大回合模拟：分阶段基础部署上限 4，合法落子范围为对手所在战场（四人同锁的棋盘 0）的可落子格扣除 P2 的禁入格
+        // （retire-legacy-rules 1.4：规格 ai-decision「前瞻中的下一名对手」Scenario「专家是本大回合末位」由"全图可落子格"改为对手所在战场）。
         // 若按本大回合顺序回绕（P3 已弃赛 → P1），会模拟错人。
         // 变异 M-A5c（末位按本大回合顺序回绕）、M-A6d（应答者仍按第 3 大回合的部署上限 / 范围）→ 见段 A 实施记录。
         MatchFlow match = LastSeatPosition();
-        RehearsalResult b1 = Rehearse(match, "B2");
+        RehearsalResult b1 = Rehearse(match, "D4");
         Assert.True(b1.IsLegal, b1.Failure?.Message);
         MatchPublicView view = match.Publish();
         MatchPublicView projected = ExpertLookahead.Project(view, b1.ProjectedBoard!);
@@ -114,9 +115,9 @@ public class 前瞻中的下一名对手Tests
         BatchContext context = ExpertLookahead.SimulatedContext(projected, P2, 4);
         GameBoard board = b1.ProjectedBoard!;
         System.Collections.Immutable.ImmutableArray<Coord> forbidden = LifeShapeReport.Analyze(board).ForbiddenCellsFor(P2);
-        Assert.Contains(TestMaps.At("G1"), forbidden);
-        Assert.Contains(TestMaps.At("J1"), forbidden);
-        Coord[] expected = [.. board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable && !forbidden.Contains(c)).Order()];
+        Assert.Contains(TestMaps.At("H3"), forbidden);
+        Assert.Contains(TestMaps.At("K3"), forbidden);
+        Coord[] expected = [.. match.Map.Boards[0].Cells().Where(c => board[c].Terrain == Terrain.Playable && !forbidden.Contains(c)).Order()];   // 本战场（棋盘 0）的可落子格
         Assert.Equal(expected, context.LegalRange.Order());
         Assert.Equal(4, context.DeployLimit);
         Assert.Equal(P2, context.Player);
@@ -131,16 +132,16 @@ public class 前瞻中的下一名对手Tests
         // 变异 M-A5d（居首时返回专家本人）→ 见段 A 实施记录。
         MatchFlow match = AiFixtures.Round5()
             .AtRound(5, [P2, P1, P3, P0])
-            .Stones(P0, "A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1", "J1", "A3", "C3", "E3")
-            .Stones(P1, "E9")
-            .Stones(P2, "J9")
-            .Stones(P3, "A9", "B9", "C9");
+            .Stones(P0, "C3", "D3", "E3", "F3", "G3", "H3", "J3", "K3", "C5", "E5", "G5")
+            .Stones(P1, "G10")
+            .Stones(P2, "K10")
+            .Stones(P3, "C10", "D10", "E10");
         match.Resign(P2);
         match.PassTurn();
         match.PassTurn();
         Assert.Equal(P0, match.CurrentPlayer);
 
-        RehearsalResult b1 = Rehearse(match, "G3");
+        RehearsalResult b1 = Rehearse(match, "J5");
         MatchPublicView view = match.Publish();
         MatchPublicView projected = ExpertLookahead.Project(view, b1.ProjectedBoard!);
         PowerSnapshot power = PowerCalculator.Compute(b1.ProjectedBoard!, match.Roster);
@@ -155,8 +156,8 @@ public class 前瞻中的下一名对手Tests
     /// </summary>
     internal static MatchFlow LastOpponentPosition()
     {
-        MatchFlow match = MatchFixtures.Started().AtRound(2, [P0, P1, P2, P3])
-            .Stones(P0, "A2", "C2", "B1").Stones(P1, "B2").Stones(P2, "B8").Stones(P3, "H8");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(2, [P0, P1, P2, P3])
+            .Stones(P0, "C4", "E4", "D3").Stones(P1, "D4").Stones(P2, "D10").Stones(P3, "K10");
         match.Resign(P2);
         match.Resign(P3);
         match.SetDeployLimit(9);
@@ -174,7 +175,7 @@ public class 前瞻中的下一名对手Tests
         Assert.True(record.Entries.Length >= 2, record.ToText());
         Assert.All(record.Entries, e =>
         {
-            Assert.Contains(TestMaps.At("B3"), CoordsOf(e.CandidateKey));
+            Assert.Contains(TestMaps.At("D5"), CoordsOf(e.CandidateKey));
             Assert.Null(e.Responder);
             Assert.Null(e.ResponseKey);
             Assert.Equal(e.ScoreBefore, e.ScoreAfter);
@@ -195,11 +196,11 @@ public class 前瞻中的下一名对手Tests
         // 变异 MN-1：去掉 NextOpponent 的同战场过滤 → 全知下 P2 进名册且排在 P1 之前，本测试红。
         // 变异 MN-2：Project 三参数重载不限定出局判定范围（judged 恒 null）→ 投影视图下 P2、P3 被判出局，"不被当作出局"断言红。
         MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 4]);
-        match.PlayRounds(1, MatchFixtures.All);
+        match.PlayRounds(1, TestMaps.All);
         int round = match.MajorRound;
         Assert.Equal(2, round);
         Assert.True(match.Publish().Power!.Of(P2).Total > 0, "样本口径：他战场玩家确有势力");
-        Assert.All(MatchFixtures.All, p => Assert.True(match.StateOf(p).HasEstablishedPower, $"样本口径：{p} 曾建立正势力"));
+        Assert.All(TestMaps.All, p => Assert.True(match.StateOf(p).HasEstablishedPower, $"样本口径：{p} 曾建立正势力"));
         Assert.Equal(match.BattlefieldOf(P0), match.BattlefieldOf(P1));
         Assert.NotEqual(match.BattlefieldOf(P0), match.BattlefieldOf(P2));
         Assert.NotEqual(match.BattlefieldOf(P0), match.BattlefieldOf(P3));

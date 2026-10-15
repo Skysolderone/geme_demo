@@ -14,10 +14,10 @@ namespace Siege.Core.Tests;
 /// <summary>AI 测试的公共夹具：可达类型闭包（信息边界守门）、局面搭建、决策日志投影、脚本化的人工控制者。</summary>
 internal static class AiFixtures
 {
-    internal static readonly PlayerId P0 = MatchFixtures.P0;
-    internal static readonly PlayerId P1 = MatchFixtures.P1;
-    internal static readonly PlayerId P2 = MatchFixtures.P2;
-    internal static readonly PlayerId P3 = MatchFixtures.P3;
+    internal static readonly PlayerId P0 = TestMaps.P0;
+    internal static readonly PlayerId P1 = TestMaps.P1;
+    internal static readonly PlayerId P2 = TestMaps.P2;
+    internal static readonly PlayerId P3 = TestMaps.P3;
 
     /// <summary>
     /// 正式 AI 的可达类型闭包中 MUST NOT 出现的类型：账本本体、对局本体、调试接缝、生成记录（含真实内容）、种子（可重算 relic-gen）。
@@ -130,9 +130,24 @@ internal static class AiFixtures
 
     // ---------- 局面 ----------
 
-    /// <summary>开局并摆到第 5 大回合（全图可落子、全员已解除保护）、顺序 P0 → P3。</summary>
+    /// <summary>
+    /// 开局并摆到第 5 大回合、顺序 P0 → P3。retire-legacy-rules 第 1 组：载体为平坦 8×8 链接档图上四人同锁棋盘 0（<see cref="LinkModeFixtures.PlainStarted(GameSeed?, int[], MatchOptions?, (string Cell, RelicContent Content)[])"/>）——
+    /// 单一战场、合法范围即整块棋盘 0（原 9×9 第 4 大回合起的全图阶段最近的等价物）；坐标写在棋盘 0 上（原 9×9 坐标平移 (+2, +2)）。
+    /// 链接规则的两道门（落后者停手阈值取 0、决胜一手）只看本战场势力：被测 AI 须居本战场势力首位（并列即首位），局面构造时注意。
+    /// </summary>
     internal static MatchFlow Round5(GameSeed? seed = null, params (string Cell, RelicContent Content)[] relics) =>
-        MatchFixtures.Started(seed, relics: relics).AtRound(5, [P0, P1, P2, P3]);
+        LinkModeFixtures.PlainStarted(seed, relics: relics).AtRound(5, [P0, P1, P2, P3]);
+
+    /// <summary>
+    /// 迁移清单 P2（retire-legacy-rules 1.4）：链接规则下被测 AI 若在本战场势力落后，停手阈值按落后者取 0（ai-decision「链接模式下落后者的停手阈值」），
+    /// 局面的含义就变了。在远离被测区域的格上给 <paramref name="ai"/> 补子，使其居本战场势力首位（并列即首位），并断言这一前提。
+    /// </summary>
+    internal static MatchFlow AsLeader(this MatchFlow match, PlayerId ai, params string[] cells)
+    {
+        match.Stones(ai, cells);
+        Assert.False(HeuristicTurnController.TrailsInBattlefield(match.Publish(), ai), $"前提（清单 P2）：{ai} 居本战场势力首位");
+        return match;
+    }
 
     /// <summary>开始当前玩家的小回合并直接走到部署阶段（征募不选）。</summary>
     internal static StagedBatch OpenDeploy(this MatchFlow match)

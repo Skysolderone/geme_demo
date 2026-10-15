@@ -15,27 +15,28 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// 规格：life-shape 增量 match-telemetry —— Requirement: 活形记录与统计（tasks 4.1 / 4.2）。
 /// 日志：快照的 <see cref="TurnSnapshot.Life"/>（活形确立 / 失去、两类拒绝计数、终局活形状态）+ <c>LifeRefused</c> 事件（暂放 / 确认被拒的坐标）。
 /// 分析：<see cref="LifeShapeSection"/> 与报告「活形」一段；缺活形字段的旧日志整局排除并计数，他人致失活单列为规则缺陷。
+/// retire-legacy-rules 1.6：真实流程的手写局面载体为平坦 8×8 链接档图上四人同锁棋盘 0，原 9×9 坐标平移 (+2, +2)；合成日志的数据不动。
 /// </summary>
 public class 活形记录与统计Tests
 {
-    private static readonly PlayerId P0 = MatchFixtures.P0;
-    private static readonly PlayerId P1 = MatchFixtures.P1;
+    private static readonly PlayerId P0 = TestMaps.P0;
+    private static readonly PlayerId P1 = TestMaps.P1;
 
-    /// <summary>P0 在出生区 0 角上的两眼活形（眼 A1、C1）：见 <c>合法落子范围的对外契约Tests.CornerA1C1</c>。</summary>
-    private static readonly string[] CornerA1C1 = ["B1", "D1", "A2", "B2", "C2", "D2"];
+    /// <summary>P0 在棋盘 0 角上的两眼活形（眼 C3、E3）：见 <c>合法落子范围的对外契约Tests.CornerC3E3</c>（retire-legacy-rules 1.6：原 9×9 的 CornerC3E3 平移 (+2, +2)）。</summary>
+    private static readonly string[] CornerC3E3 = ["D3", "F3", "C4", "D4", "E4", "F4"];
 
     private static MatchLog RoundTrip(MatchLog log) => MatchLog.Parse(log.FullText());
 
     [Fact]
     public void 活形确立可查()
     {
-        // 第 3 大回合，P0 角上已有 D1、A2–D2（A1–C1 三格空区，眼值 1 → 未定）；P0 本批落 B1 → A1、C1 两个单格眼 → 已确定活形。
-        // 日志须可查：大回合 3、小回合 1、所有者 P0、棋串坐标（代表坐标 = 坐标序首格 B1）、眼空间与各眼值。
-        MatchFlow match = MatchFixtures.Started().AtRound(3, [P0, P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(P0, "D1", "A2", "B2", "C2", "D2");
-        Assert.Equal(LifeState.Undetermined, match.Publish().LifeShape.GroupLifeAt(TestMaps.At("A2"))!.Life);   // 前提：结算前未活
+        // 第 3 大回合，P0 角上已有 F3、C4–F4（C3–E3 三格空区，眼值 1 → 未定）；P0 本批落 D3 → C3、E3 两个单格眼 → 已确定活形。
+        // 日志须可查：大回合 3、小回合 1、所有者 P0、棋串坐标（代表坐标 = 坐标序首格 D3）、眼空间与各眼值。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(3, [P0, P1, TestMaps.P2, TestMaps.P3])
+            .Stones(P0, "F3", "C4", "D4", "E4", "F4");
+        Assert.Equal(LifeState.Undetermined, match.Publish().LifeShape.GroupLifeAt(TestMaps.At("C4"))!.Life);   // 前提：结算前未活
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
-        session.SetController(P0, new BlindController("B1"));
+        session.SetController(P0, new BlindController("D3"));
 
         MatchLog log = RoundTrip(session.Run());
 
@@ -45,50 +46,50 @@ public class 活形记录与统计Tests
         Assert.Equal(LifeChangeEntry.Established, change.Kind);
         Assert.Equal(0, change.Owner);
         Assert.Equal(0, change.Actor);
-        Assert.Equal("B1", change.At);
-        Assert.Equal(["B1", "D1", "A2", "B2", "C2", "D2"], change.Stones);
-        Assert.Equal(["A1=1", "C1=1"], change.EyeSpaces);
+        Assert.Equal("D3", change.At);
+        Assert.Equal(["D3", "F3", "C4", "D4", "E4", "F4"], change.Stones);
+        Assert.Equal(["C3=1", "E3=1"], change.EyeSpaces);
         Assert.Null(change.Cause);
 
         // 终局活形状态：P0 一条活形棋串、2 个受保护眼格；P1 无。
         LifePlayerEntry p0 = turn.Life.Players.Single(p => p.Player == 0);
         Assert.Equal((1, 0, 2, 2), (p0.AliveGroups, p0.SingleStoneAlive, p0.EyeSpaces, p0.EyeCells));
         Assert.Equal(0, turn.Life.Players.Single(p => p.Player == 1).AliveGroups);
-        Assert.Equal(0, p0.TerrainSmallEyeSpaces);   // 平地角上的单格眼：棋盘外沿不算地形墙（R8 口径）
+        Assert.Equal(2, p0.TerrainSmallEyeSpaces);   // retire-legacy-rules 1.6（R8 重导，见回报）：原 9×9 为 0（平地角上的单格眼：棋盘外沿不算地形墙）；链接图棋盘 0 之外是画布内的障碍格，两个角眼都计为贴地形小空区
         Assert.Equal(2, turn.Life.ProtectedCells);
-        Assert.Equal(81, turn.Life.PlayableCells);
+        Assert.Equal(208, turn.Life.PlayableCells);   // retire-legacy-rules 1.6（R8）：原 9×9 的 81 格 → 平坦载体五块棋盘 64 + 4 × 36
     }
 
     [Fact]
     public void 自拆可查()
     {
-        // P0 的角上活形（眼 A1、C1），P0 本批落 A1 填掉自己的一个眼 → 只剩 C1 → 未定：记一次失去，原因"所有者自拆"，棋串坐标取结算前。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [P0, P1, MatchFixtures.P2, MatchFixtures.P3]).Stones(P0, CornerA1C1);
+        // P0 的角上活形（眼 C3、E3），P0 本批落 C3 填掉自己的一个眼 → 只剩 E3 → 未定：记一次失去，原因"所有者自拆"，棋串坐标取结算前。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P0, P1, TestMaps.P2, TestMaps.P3]).Stones(P0, CornerC3E3);
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
-        session.SetController(P0, new BlindController("A1"));
+        session.SetController(P0, new BlindController("C3"));
 
         MatchLog log = RoundTrip(session.Run());
 
         LifeChangeEntry change = Assert.Single(log.Turns[0].Life!.Changes);
         Assert.Equal(LifeChangeEntry.Lost, change.Kind);
         Assert.Equal(LifeChangeEntry.OwnerFill, change.Cause);
-        Assert.Equal((0, 0, "B1"), (change.Owner, change.Actor, change.At));
-        Assert.Equal(["B1", "D1", "A2", "B2", "C2", "D2"], change.Stones);
-        Assert.Equal(["A1=1", "C1=1"], change.EyeSpaces);   // 失去前的眼空间
+        Assert.Equal((0, 0, "D3"), (change.Owner, change.Actor, change.At));
+        Assert.Equal(["D3", "F3", "C4", "D4", "E4", "F4"], change.Stones);
+        Assert.Equal(["C3=1", "E3=1"], change.EyeSpaces);   // 失去前的眼空间
         Assert.Equal(0, log.Turns[0].Life!.Players.Single(p => p.Player == 0).AliveGroups);
     }
 
     [Fact]
     public void 活形棋串加子不重复记确立()
     {
-        // 按棋子归属判定：P0 的活形（眼 A1、C1）本批在 D3 加一子连上串，结算后仍是同一主的活形——不是"新确立"，也不是"失去"。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [P0, P1, MatchFixtures.P2, MatchFixtures.P3]).Stones(P0, CornerA1C1);
+        // 按棋子归属判定：P0 的活形（眼 C3、E3）本批在 F5 加一子连上串，结算后仍是同一主的活形——不是"新确立"，也不是"失去"。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P0, P1, TestMaps.P2, TestMaps.P3]).Stones(P0, CornerC3E3);
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
-        session.SetController(P0, new BlindController("D3"));
+        session.SetController(P0, new BlindController("F5"));
 
         MatchLog log = RoundTrip(session.Run());
 
-        Assert.Equal(["D3:Basic"], log.Turns[0].Placements);   // 前提：确实加了子
+        Assert.Equal(["F5:Basic"], log.Turns[0].Placements);   // 前提：确实加了子
         Assert.Empty(log.Turns[0].Life!.Changes);
         Assert.Equal(1, log.Turns[0].Life!.Players.Single(p => p.Player == 0).AliveGroups);
     }
@@ -96,37 +97,37 @@ public class 活形记录与统计Tests
     [Fact]
     public void 所有者的改造导致失去记为所有者的改造()
     {
-        // 失去原因的第二个取值。B2 是未架桥深水（墙）：
-        //   第 1 行  A1 ● · B1 眼 · C1 ● · D1 眼 · E1 ●
-        //   第 2 行  A2 ●   B2 ~    C2 ●   D2 ●   E2 ●
-        // C1–C2–D2–E2–E1 一串贴 B1、D1 两个单格眼 → 已确定活形（A1–A2 另成一串，只贴 B1，未定）。
-        // P0 本批在 B3 落匠人并对 B2 搭桥 → B1、B2 连成 2 格空区（眼值 0），该串只剩 D1 → 未定：失去，原因"所有者的改造"（落点 B3 不在原眼空间里）。
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("B2", Surface.DeepWater)]))
-            .AtRound(5, [P0, P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(P0, "A1", "C1", "E1", "A2", "C2", "D2", "E2");
+        // 失去原因的第二个取值。D4 是未架桥深水（墙）：
+        //   第 3 行  C3 ● · D3 眼 · E3 ● · F3 眼 · G3 ●
+        //   第 4 行  C4 ●   D4 ~    E4 ●   F4 ●   G4 ●
+        // E3–E4–F4–G4–G3 一串贴 D3、F3 两个单格眼 → 已确定活形（C3–C4 另成一串，只贴 D3，未定）。
+        // P0 本批在 D5 落匠人并对 D4 搭桥 → D3、D4 连成 2 格空区（眼值 0），该串只剩 F3 → 未定：失去，原因"所有者的改造"（落点 D5 不在原眼空间里）。
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater)]))
+            .AtRound(5, [P0, P1, TestMaps.P2, TestMaps.P3])
+            .Stones(P0, "C3", "E3", "G3", "C4", "E4", "F4", "G4");
         match.Debug.SeedHand(P0, (PieceType.Artisan, 1));
-        Assert.Equal(LifeState.Alive, match.Publish().LifeShape.GroupLifeAt(TestMaps.At("C1"))!.Life);   // 前提
+        Assert.Equal(LifeState.Alive, match.Publish().LifeShape.GroupLifeAt(TestMaps.At("E3"))!.Life);   // 前提
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
-        session.SetController(P0, new EditController("B3", TerrainEdit.Bridge(TestMaps.At("B2"))));
+        session.SetController(P0, new EditController("D5", TerrainEdit.Bridge(TestMaps.At("D4"))));
 
         MatchLog log = RoundTrip(session.Run());
 
         Assert.Single(log.Turns[0].Edits!);   // 前提：改造确实生效
         LifeChangeEntry lost = Assert.Single(log.Turns[0].Life!.Changes, c => c.Kind == LifeChangeEntry.Lost);
         Assert.Equal(LifeChangeEntry.OwnerEdit, lost.Cause);
-        Assert.Equal(["C1", "E1", "C2", "D2", "E2"], lost.Stones);
-        Assert.Equal(["B1=1", "D1=1"], lost.EyeSpaces);
+        Assert.Equal(["E3", "G3", "E4", "F4", "G4"], lost.Stones);
+        Assert.Equal(["D3=1", "F3=1"], lost.EyeSpaces);
     }
 
     [Fact]
     public void 拒绝尝试可查()
     {
-        // P1 试图把一枚子暂放进 P0 的眼 A1（活棋禁入，暂放即被拒）→ 放弃、Pass。
-        // 日志：LifeRefused 事件（行动玩家 P1、类别 LifeForbidden、坐标 A1、所有者 P0、环节 stage），快照计数 ForbiddenStaged = 1。
+        // P1 试图把一枚子暂放进 P0 的眼 C3（活棋禁入，暂放即被拒）→ 放弃、Pass。
+        // 日志：LifeRefused 事件（行动玩家 P1、类别 LifeForbidden、坐标 C3、所有者 P0、环节 stage），快照计数 ForbiddenStaged = 1。
         // 期望值非 0：抓得到"写入端漏写"（testing.md「期望值是 0 / null 的遥测断言抓不到写入端漏写」）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [P1, P0, MatchFixtures.P2, MatchFixtures.P3]).Stones(P0, CornerA1C1);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P1, P0, TestMaps.P2, TestMaps.P3]).Stones(P0, CornerC3E3);
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1, retention: EventRetention.SnapshotsOnly));
-        session.SetController(P1, new TryStageController("A1"));
+        session.SetController(P1, new TryStageController("C3"));
 
         MatchLog log = RoundTrip(session.Run());
 
@@ -139,7 +140,7 @@ public class 活形记录与统计Tests
         LogEvent refused = Assert.Single(log.Events, e => e.Type == LogEventType.LifeRefused);
         Assert.Equal(1, refused.Player);
         Assert.Equal(nameof(BatchFailureKind.LifeForbidden), refused.FailureKind);
-        Assert.Equal(["A1"], refused.Coords);
+        Assert.Equal(["C3"], refused.Coords);
         Assert.Equal(0, (int)refused.Values!["Owner"]);
         Assert.StartsWith("stage", refused.Detail, StringComparison.Ordinal);
         Assert.Equal(1, refused.Turn);

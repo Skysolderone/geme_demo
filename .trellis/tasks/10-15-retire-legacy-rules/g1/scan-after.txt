@@ -1,0 +1,54 @@
+## AiDecision/链接模式下的决胜一手Tests.cs  total=6 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:M]
+  L 旧模式不变  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode)
+## AiDecision/链接模式下落后者的停手阈值Tests.cs  total=5 theory=2 rows=4  L=1 D=0 M=0 K=0  [file:M]
+  L 旧模式不变  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode)
+## Battlefield/链接后的公开补充载荷Tests.cs  total=3 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 旧模式副本与按生成记录恢复逐项相同  (MF.build,helper:MatchFixtures.Started)
+## Battlefield/阶段推进Tests.cs  total=11 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 旧模式没有阶段转换  (MF.build,helper:MatchFixtures.Started)
+## EliminationEndgame/三类终局条件Tests.cs  total=6 theory=0 rows=0  L=6 D=0 M=0 K=0  [file:K]
+  L 只剩一名参赛玩家优先于棋盘填满  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 唯一参赛者获胜  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 整轮Pass  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 棋盘填满  (helper:FullBoard,MF.const)
+  L 棋盘填满优先于整轮Pass  (helper:FullBoard)
+  L 轮数再多也不结束  (MF.build,helper:MatchFixtures.Started,MF.const)
+## EliminationEndgame/两类终局条件Tests.cs  total=8 theory=0 rows=0  L=1 D=0 M=0 K=0
+  L 旧模式终局原因不含最后战场结算  (MF.build,helper:MatchFixtures.Started)
+## EliminationEndgame/终局名次与并列判定Tests.cs  total=11 theory=0 rows=0  L=2 D=0 M=8 K=0  [file:M]
+  L 整轮Pass时按同一规则排名  (MF.build,helper:MatchFixtures.Started)
+  L 旧模式流程中弃赛者排在势力归零出局者之前  (MF.build,helper:MatchFixtures.Started)
+## InformationVisibility/按座位视图Tests.cs  total=11 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 旧模式全图展开  (MF.build,helper:MatchFixtures.Started,MF.const)
+## InformationVisibility/视图模型按座位过滤Tests.cs  total=10 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:M]
+  L 旧模式全图可见无占位_与全知棋盘逐项相同  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode)
+## InitiativeOrder/先手顺序预测_链接模式Tests.cs  total=8 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]  [file:M]
+  L 旧模式预测不变  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode,MF.const)
+## MatchFlowRegression/流程回归Tests.cs  total=5 theory=0 rows=0  L=2 D=0 M=0 K=0
+  L 出局改变参赛人数后Pass计数与新人数重比  (MF.build,helper:MatchFixtures.Started)
+  L 弃赛改变参赛人数后立即重比Pass计数  (MF.build,helper:MatchFixtures.Started)
+## MatchSetup/匿名同时插旗Tests.cs  total=3 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]
+  L 多人同区  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 身份匿名  (MF.build,helper:MatchFixtures.Create,MF.const)
+  L 锁定前可更换  (MF.build,helper:MatchFixtures.Create,MF.const)
+## MatchSetup/对局模式Tests.cs  total=5 theory=0 rows=0  L=3 D=0 M=0 K=0  [file:K]  [file:M]
+  L 公开建局恒为链接模式  (Mode.Legacy,MatchMode,MF.const)
+  L 缺省为旧模式  (MF.build,Mode.Legacy,helper:MatchFixtures.Create,MatchMode)
+  L 链接图以链接模式建局  (MF.build,helper:MatchFixtures.Create,MatchMode)
+## MatchSetup/链接模式存档Tests.cs  total=12 theory=0 rows=0  L=2 D=0 M=1 K=0  [file:K]  [file:M]
+  L 旧模式存档不写新字段且按旧模式读入  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode)
+  L 旧模式终局存档不写出局原因  (MF.build,helper:MatchFixtures.Started,MF.const)
+## MatchTelemetry/对局日志的记录内容_链接模式Tests.cs  total=8 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 旧模式日志不写链接模式字段  (CreateUnvalidated.Legacy,MF.map,MF.const)
+## TurnSequence/合法落子范围的对外契约Tests.cs  total=4 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 禁入格不在范围内  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 范围随大回合切换  (MF.build,helper:MatchFixtures.Started,MF.const)
+## TurnSequence/战场内合法落子范围Tests.cs  total=10 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]  [file:M]
+  L 旧模式第4大回合仍全图解禁  (MF.build,Mode.Legacy,helper:MatchFixtures.Started,MatchMode,MF.const)
+## TurnSequence/构筑保护期的落子限制Tests.cs  total=1 theory=0 rows=0  L=1 D=0 M=0 K=0  [file:K]
+  L 保护期内越区落子被拒  (MF.build,helper:MatchFixtures.Started,MF.const)
+## TurnSequence/第4大回合的全图解禁Tests.cs  total=2 theory=0 rows=0  L=2 D=0 M=0 K=0  [file:K]
+  L 空盘面玩家重新进入  (MF.build,helper:MatchFixtures.Started,MF.const)
+  L 解禁后全图可落子  (MF.build,helper:MatchFixtures.Started,MF.const)
+
+# files=19  L-methods=33  D-methods=0  M-methods=9  K-methods=0

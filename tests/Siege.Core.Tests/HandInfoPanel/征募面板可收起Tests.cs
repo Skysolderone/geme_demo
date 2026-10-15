@@ -92,38 +92,38 @@ public class 征募面板可收起Tests
     {
         // 真实 MatchFlow 跨两个大回合：第 5 大回合 P0 征募时收起、完成征募并落子；其余三人各落一子（不 Pass——全员 Pass 会触发终局），
         // 第 6 大回合轮到 P0 再次进入征募阶段 → 面板以展开状态出现。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3]);
         var cells = new Dictionary<PlayerId, Queue<string>>
         {
-            [MatchFixtures.P1] = new(["J1", "H1", "G1"]),
-            [MatchFixtures.P2] = new(["A9", "A8", "A7"]),
-            [MatchFixtures.P3] = new(["J9", "H9", "G9"]),
+            [TestMaps.P1] = new(["K3", "J3", "H3"]),
+            [TestMaps.P2] = new(["C10", "C9", "C8"]),
+            [TestMaps.P3] = new(["K10", "J10", "H10"]),
         };
         var model = new RecruitPanelCollapse();
 
         match.BeginTurn();
-        Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+        Assert.Equal(TestMaps.P0, match.CurrentPlayer);
         RecruitPanelView first = match.EnterRecruit();
-        RecruitPhaseKey? k1 = RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P0);
+        RecruitPhaseKey? k1 = RecruitPhaseKey.Of(match.Publish(), TestMaps.P0);
         Assert.Equal(new RecruitPhaseKey(5, 1), k1);
         model.Sync(k1);
         Assert.True(model.Toggle(handPanelOpen: false));
         Assert.True(model.Present(first).IsCollapsed);
 
         StagedBatch batch = match.EnterDeploy();
-        Assert.Null(batch.Stage(Coord.Parse("A1"), PieceType.Basic));
+        Assert.Null(batch.Stage(Coord.Parse("C3"), PieceType.Basic));
         Assert.True(match.Confirm().Confirmed);
-        model.Sync(RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P0));
+        model.Sync(RecruitPhaseKey.Of(match.Publish(), TestMaps.P0));
 
-        while (match.CurrentPlayer != MatchFixtures.P0)
+        while (match.CurrentPlayer != TestMaps.P0)
         {
             match.PlayTurn(cells[match.CurrentPlayer!.Value].Dequeue());
-            model.Sync(RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P0));
+            model.Sync(RecruitPhaseKey.Of(match.Publish(), TestMaps.P0));
         }
 
         match.BeginTurn();
         RecruitPanelView second = match.EnterRecruit();
-        RecruitPhaseKey? k2 = RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P0);
+        RecruitPhaseKey? k2 = RecruitPhaseKey.Of(match.Publish(), TestMaps.P0);
         Assert.Equal(6, k2!.Value.MajorRound);
         model.Sync(k2);
         Assert.False(model.IsCollapsed);
@@ -150,19 +150,19 @@ public class 征募面板可收起Tests
     [Fact]
     public void 征募阶段标识只认本机玩家的征募阶段()
     {
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P2, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P3]);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P2, TestMaps.P0, TestMaps.P1, TestMaps.P3]);
         match.BeginTurn();
-        Assert.Null(RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P2));   // 整理手牌阶段不算
+        Assert.Null(RecruitPhaseKey.Of(match.Publish(), TestMaps.P2));   // 整理手牌阶段不算
         match.EnterRecruit();
-        Assert.Null(RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P0));   // 别人的征募阶段不算
-        Assert.Equal(new RecruitPhaseKey(5, 1), RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P2));
+        Assert.Null(RecruitPhaseKey.Of(match.Publish(), TestMaps.P0));   // 别人的征募阶段不算
+        Assert.Equal(new RecruitPhaseKey(5, 1), RecruitPhaseKey.Of(match.Publish(), TestMaps.P2));
         match.EnterDeploy();
-        Assert.Null(RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P2));   // 部署阶段不算
+        Assert.Null(RecruitPhaseKey.Of(match.Publish(), TestMaps.P2));   // 部署阶段不算
         Assert.True(match.Confirm().Confirmed);
 
         match.BeginTurn();
         match.EnterRecruit();
-        Assert.Equal(new RecruitPhaseKey(5, 2), RecruitPhaseKey.Of(match.Publish(), MatchFixtures.P0));
+        Assert.Equal(new RecruitPhaseKey(5, 2), RecruitPhaseKey.Of(match.Publish(), TestMaps.P0));
     }
 
     [Fact]

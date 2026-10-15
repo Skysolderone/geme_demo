@@ -22,12 +22,12 @@ public class 选图视图模型Tests
 {
     private const ulong InitialSeed = 424242UL;
 
-    /// <summary>某张图的默认棋盘视图模型（尚未插旗的对局，与新局界面的预览同构）。</summary>
+    /// <summary>某张链接图的默认棋盘视图模型（尚未插旗的对局，与新局界面的预览同构）。retire-legacy-rules 1.7：去掉非链接图走旧模式的分支（唯一的调用点已删）。</summary>
     private static DefaultBoardView ViewOf(MapData map)
     {
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], MatchFixtures.Relics(map),
-            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = LinkMapId.IsLinkMap(map.Id) ? MatchMode.Link : MatchMode.Legacy });
+            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
+            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
         return DefaultBoardView.From(match.PublicWorldOf());
     }
 
@@ -193,10 +193,10 @@ public class 选图视图模型Tests
     public void 预览说明读默认棋盘视图模型()
     {
         // 新局界面的一行说明由 MapPreviewInfo 给出。段 D-b（D18）：预览会话按座位过滤后只有 5 个占位——文案只提画布与 5 块出生棋盘（边长范围），
-        // 不提信物格与可落子格；旧地图（无占位）的文案不变。读默认棋盘视图模型，不读地图、不判规则。
+        // 不提信物格与可落子格。读默认棋盘视图模型，不读地图、不判规则。retire-legacy-rules 1.7（清单"删反面段"、P5）：旧地图（无占位、9×9 手写夹具）文案那一行删除——旧模式退役后不再有无占位的对局。
         MapData map = MapCatalog.Resolve("link:1");
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], MatchFixtures.Relics(map),
+            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
             MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
         DefaultBoardView preview = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         string info = MapPreviewInfo.Of(preview);
@@ -204,8 +204,6 @@ public class 选图视图模型Tests
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
         Assert.Empty(preview.Cells);
-        // 旧地图（无占位）的文案不变。retire-legacy-maps 1.8：载体由 v5（13×13 / 105 格）改为 9×9 手写夹具（4 个出生区、81 格），文案格式不变。
-        Assert.Equal("9×9，4 个出生区，可落子 81 格", MapPreviewInfo.Of(ViewOf(MatchFixtures.Map())));
     }
 
     [Fact]
@@ -217,7 +215,7 @@ public class 选图视图模型Tests
         // 变异 MLT-G5（Backdrop 原样返回，实跑）→ 红 1（本测试）。
         MapData map = MapCatalog.Resolve("link:1");
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], MatchFixtures.Relics(map),
+            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
             MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
         DefaultBoardView flags = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         DefaultBoardView backdrop = MapPreviewInfo.Backdrop(flags);

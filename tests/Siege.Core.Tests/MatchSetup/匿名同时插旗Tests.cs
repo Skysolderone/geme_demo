@@ -28,36 +28,6 @@ public class 匿名同时插旗Tests
     }
 
     [Fact]
-    public void 时限可配置()
-    {
-        // 裁决记录 1：默认 15 秒；单机 / AI 路径配置为立即，对局状态与正式插旗结果等价。
-        // 变异验证 M-S3：MatchOptions.Immediate 也用 15 秒 → 红 1（本测试）。
-        MatchFlow online = MatchFixtures.Create(options: MatchOptions.Default);
-        MatchFlow local = MatchFixtures.Create(options: MatchOptions.Immediate);
-        Assert.Equal(TimeSpan.FromSeconds(15), online.Flags.TimeLimit);
-        Assert.False(online.Flags.IsImmediate);
-        Assert.True(local.Flags.IsImmediate);
-
-        foreach (MatchFlow m in new[] { online, local })
-        {
-            m.Flags.Plant(MatchFixtures.P0, 2);
-            m.Flags.Plant(MatchFixtures.P1, 0);
-            m.Flags.Plant(MatchFixtures.P2, 3);
-            m.Flags.Plant(MatchFixtures.P3, 1);
-            m.LockFlags();
-        }
-
-        Assert.Equal(online.PlayerStates, local.PlayerStates);
-        Assert.Equal(online.ActionOrder, local.ActionOrder);
-        Assert.Equal(MatchPhase.InProgress, local.Phase);
-
-        // S-14：锁定事件文本对人显示出生区 1–4（内部索引 2 / 0 / 3 / 1 → 3 / 1 / 4 / 2）。
-        // 变异验证 M-D3：MatchFlow 锁定事件改回直接写内部索引 → 红 1（本断言）。
-        FlowEvent locked = Assert.Single(local.Events, e => e.Kind == FlowEventKind.FlagsLocked);
-        Assert.StartsWith("出生区 P0:3 P1:1 P2:4 P3:2；", locked.Detail, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void 锁定前可更换()
     {
         // 设计文档 §4.1 算例：A 先选区 1 再改区 3 → 锁定为区 3。

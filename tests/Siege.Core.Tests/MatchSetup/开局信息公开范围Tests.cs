@@ -14,13 +14,13 @@ public class 开局信息公开范围Tests
     {
         // 设计文档 §4.1：地形、出生区、信物格位置公开；信物具体内容隐藏。
         // 变异验证 M-S1：RelicState.ToPublic 无条件带出 Content → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Create(relics: [("E5", RelicFixtures.Command()), ("B2", RelicFixtures.Vanguard())]);
+        MatchFlow match = LinkModeFixtures.PlainCreate(relics: [("G7", RelicFixtures.Command()), ("D4", RelicFixtures.Vanguard())]);
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
 
         MapData map = match.Flags.Map;
-        Assert.Equal(4, map.BirthZones.Length);
-        Assert.Equal(new[] { "B2", "E5" }, map.RelicCells.Keys.Order().Notations());
-        Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("E5")));
+        Assert.Equal(5, map.BirthZones.Length);   // retire-legacy-rules 1.5：载体为平坦 8×8 链接档图（五块出生棋盘；原 9×9 夹具 4 个出生区），信物格 E5 / B2 平移为 G7 / D4
+        Assert.Equal(new[] { "D4", "G7" }, map.RelicCells.Keys.Order().Notations());
+        Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("G7")));
 
         foreach (RelicPublicState state in match.Relics.PublicStates())
         {
@@ -40,10 +40,10 @@ public class 开局信息公开范围Tests
         // 夹具的出生区手写成核心区（与"取出生区"的旧实现区分开）。
         // 变异验证（link-map-terrain 1.4 实跑，只跑本类）：M-P1 SeatPublicView 链接模式的占位改回取出生区外接矩形 → 本测试红 1。
         MapData map = CoreZoneMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), LinkModeFixtures.Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.Options);
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
 
-        SeatPublicView view = match.PublishFor(MatchFixtures.P0);
+        SeatPublicView view = match.PublishFor(TestMaps.P0);
         Assert.Equal(5, view.Placeholders.Length);
         BoardPlaceholder wide = view.Placeholders[1];
         Assert.Equal((1, "L3", 8, 6, (BoardTheme?)BoardTheme.River), (wide.Zone, wide.Origin, wide.Width, wide.Height, wide.Theme));
@@ -62,13 +62,13 @@ public class 开局信息公开范围Tests
         // match-setup Scenario「锁定后只见自己的棋盘」：锁定棋盘 2 → 该玩家可见这块棋盘的全部格（整块 8×6），不只是出生区（核心区）。
         // 变异验证（link-map-terrain 1.4 实跑，只跑本类）：M-P2 SeatPublicView 插旗阶段的可见格改回取出生区 → 本测试红 1。
         MapData map = CoreZoneMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), LinkModeFixtures.Options);
-        match.Flags.Plant(MatchFixtures.P0, 1);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.Options);
+        match.Flags.Plant(TestMaps.P0, 1);
 
-        SeatPublicView locked = match.PublishFor(MatchFixtures.P0);
+        SeatPublicView locked = match.PublishFor(TestMaps.P0);
         Assert.Equal(48, locked.Cells.Length);
         Assert.Equal(map.Boards[1].Cells().Order().Select(c => c.ToNotation()), locked.Cells.Select(c => c.Coord));
-        Assert.Empty(match.PublishFor(MatchFixtures.P1).Cells);   // 反面：未锁定者看不到任何格
+        Assert.Empty(match.PublishFor(TestMaps.P1).Cells);   // 反面：未锁定者看不到任何格
     }
 
     [Fact]
@@ -79,10 +79,10 @@ public class 开局信息公开范围Tests
         // 变异验证（link-map-terrain 1.4 实跑，只跑本类）：M-P3 BoardRenderer 占位格改回 map.BirthZoneOf → 本测试红 1；
         // M-P4 BoardRenderer.Viewport 插旗取景改回出生区之并 → 本测试红 1。
         MapData map = CoreZoneMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), LinkModeFixtures.Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.Options);
         var output = new StringWriter();
 
-        new BoardRenderer(output).Board(match.Publish(), MatchFixtures.P0, zones: true);
+        new BoardRenderer(output).Board(match.Publish(), TestMaps.P0, zones: true);
 
         string[] lines = [.. output.ToString().Split('\n').Select(l => l.TrimEnd('\r'))];
         string[] rows = [.. lines.Where(l => l.Length > 4 && char.IsDigit(l[2]) && l[3] == ' ')];
@@ -101,7 +101,7 @@ public class 开局信息公开范围Tests
         // 插旗阶段看不到任何格，主题名是占位上唯一的布局线索。
         // 变异 MLT-G1（BoardPlaceholderView.ThemeName 恒返回 null，实跑）→ 红 2（本测试、选图视图模型Tests.新局界面背景占位不带主题名_其余与插旗阶段相同 的样本口径）。
         MatchFlow match = LinkModeFixtures.Create();
-        Siege.Presentation.Visibility.DefaultBoardView board = match.World(MatchFixtures.P0).Board();
+        Siege.Presentation.Visibility.DefaultBoardView board = match.World(TestMaps.P0).Board();
 
         Assert.Empty(board.Cells);
         Assert.Equal(5, board.Placeholders.Length);

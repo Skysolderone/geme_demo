@@ -16,27 +16,28 @@ namespace Siege.Core.Tests.TerrainEditing;
 public class 地形派生数据不缓存Tests
 {
     [Fact]
-    public void 合法落子范围在保护期后含本局新架的桥()
+    public void 合法落子范围含本局新架的桥()
     {
         // 排查项 ①（曾经是缓存，已改）：MatchFlow 原先在建局时把可落子格算进 _playableCells 字段，
         // 地形可变之后它是过期数据——本局架出来的桥永远进不了合法落子范围。现改为每次按 Board 现算。
-        // 注意必须用第 4 大回合之后：保护期内合法范围是出生区格集合（含深水格），测不出这条。
+        // retire-legacy-rules 1.5：原名「合法落子范围在保护期后含本局新架的桥」，原注"必须用第 4 大回合之后（保护期内合法范围是出生区格集合，含深水格）"
+        // 只对旧模式成立；链接载体（平坦 8×8 链接档图，四人同锁棋盘 0）上合法范围任何大回合都是所在战场的可落子格，构筑期同样成立，故改名。
         // 也必须真的走 MatchFlow.LegalRangeFor：用别的盘面自己算一遍 IsPlayable 是恒真断言，把字段加回去照样绿。
         // 变异 M-B15：LegalRangeFor 改回读构造时算好的字段 → 本条红 1。
-        Coord water = TestMaps.At("E5");   // 9×9 合成图的中心，不属于任何角落出生区
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("E5", Surface.DeepWater)])).AtRound(5);
+        Coord water = TestMaps.At("G7");   // 棋盘 0 中部（原 9×9 合成图的中心 E5）
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("G7", Surface.DeepWater)])).AtRound(5);
 
-        Assert.DoesNotContain(water, match.LegalRangeFor(MatchFixtures.P0));
+        Assert.DoesNotContain(water, match.LegalRangeFor(TestMaps.P0));
 
         match.Board.ApplyTerrainEdits([TerrainEdit.Bridge(water)]);
 
-        Assert.Contains(water, match.LegalRangeFor(MatchFixtures.P0));
+        Assert.Contains(water, match.LegalRangeFor(TestMaps.P0));
 
         // 反面：范围里只多了这一格，没有把别的格子一起放进来。
-        MatchFlow twin = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("E5", Surface.DeepWater)])).AtRound(5);
+        MatchFlow twin = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("G7", Surface.DeepWater)])).AtRound(5);
         Assert.Equal(
-            twin.LegalRangeFor(MatchFixtures.P0).Count + 1,
-            match.LegalRangeFor(MatchFixtures.P0).Count);
+            twin.LegalRangeFor(TestMaps.P0).Count + 1,
+            match.LegalRangeFor(TestMaps.P0).Count);
     }
 
     [Fact]
@@ -45,16 +46,16 @@ public class 地形派生数据不缓存Tests
         // 排查项 ②（曾经是缓存，已改）：MatchFlow.Map 原先是建局时拷进字段的那一份 MapData，
         // 改造之后读到的是旧地形。现改为 `Map => Board.Map`。
         // 下游一大片（LegalRangeFor / 日志首部 / FlagPlanting 之外的全部读图处）都经它。
-        MatchFlow match = MatchFixtures.Started().AtRound(5);
-        Assert.False(match.Map.HasFence(TestMaps.At("E5"), TestMaps.At("E6")));
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5);
+        Assert.False(match.Map.HasFence(TestMaps.At("G7"), TestMaps.At("G8")));
 
-        match.Board.ApplyTerrainEdits([TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6"))]);
+        match.Board.ApplyTerrainEdits([TerrainEdit.Fence(TestMaps.At("G7"), TestMaps.At("G8"))]);
 
-        Assert.True(match.Map.HasFence(TestMaps.At("E5"), TestMaps.At("E6")));
+        Assert.True(match.Map.HasFence(TestMaps.At("G7"), TestMaps.At("G8")));
         Assert.Same(match.Board.Map, match.Map);
 
         // 开局那份仍可读（日志首部的可落子格分母用它）。
-        Assert.False(match.Board.BaseMap.HasFence(TestMaps.At("E5"), TestMaps.At("E6")));
+        Assert.False(match.Board.BaseMap.HasFence(TestMaps.At("G7"), TestMaps.At("G8")));
     }
 
     [Fact]
@@ -105,14 +106,14 @@ public class 地形派生数据不缓存Tests
     {
         // 排查项 ⑤（不缓存）：DefaultBoardView.From 每次从公开快照的 Board.Map 现取地表与栅栏集合，
         // Godot 的 BoardView.Build 在每次刷新时重建。段 C 只需管"画得对不对"，不需要再加失效机制。
-        MatchFlow match = MatchFixtures.Started().AtRound(5);
-        DefaultBoardView before = DefaultBoardView.From(match.World(MatchFixtures.P0).Public);
-        Assert.DoesNotContain(new FenceEdge(TestMaps.At("E5"), TestMaps.At("E6")), before.Fences);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5);
+        DefaultBoardView before = DefaultBoardView.From(match.World(TestMaps.P0).Public);
+        Assert.DoesNotContain(new FenceEdge(TestMaps.At("G7"), TestMaps.At("G8")), before.Fences);
 
-        match.Board.ApplyTerrainEdits([TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6"))]);
+        match.Board.ApplyTerrainEdits([TerrainEdit.Fence(TestMaps.At("G7"), TestMaps.At("G8"))]);
 
-        DefaultBoardView after = DefaultBoardView.From(match.World(MatchFixtures.P0).Public);
-        Assert.Contains(new FenceEdge(TestMaps.At("E5"), TestMaps.At("E6")), after.Fences);
+        DefaultBoardView after = DefaultBoardView.From(match.World(TestMaps.P0).Public);
+        Assert.Contains(new FenceEdge(TestMaps.At("G7"), TestMaps.At("G8")), after.Fences);
     }
 
     [Fact]

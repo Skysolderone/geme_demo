@@ -51,15 +51,14 @@ public class 公开规则纯函数Tests
     {
         // 大回合结束读先锋（设计文档 §11.2）：只输出参赛中的玩家；已弃赛者即使盘上留子占着先锋也不在输出里（封锁，不给任何人）。
         // 账本委托后的结果与读公开快照的纯函数逐项相等。变异 M-P2（先锋修正计入已弃赛者）→ 见段 A 实施记录。
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Vanguard(2)), ("C3", RelicFixtures.Vanguard())])
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G6", RelicFixtures.Vanguard(2)), ("E4", RelicFixtures.Vanguard())])
             .AtRound(5, [P2, P0, P1, P3])
-            .Stones(P0, "C3").Stones(P1, "E5");
-        match.PlayTurn("B8");
+            .Stones(P0, "E4").Stones(P1, "G6");
+        match.PlayTurn("D9");
         match.Resign(P1);
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = match.Roster;
 
-        ImmutableSortedDictionary<PlayerId, int> ledger =
-            RelicLedger.Restore(match.Relics.Generation, match.Relics.ExportState()).ReadInitiativeBonuses(match.Board, roster);
+        ImmutableSortedDictionary<PlayerId, int> ledger = match.Relics.Copy().ReadInitiativeBonuses(match.Board, roster);   // retire-legacy-rules：副本改用 Copy()（Restore 只服务旧模式恢复，R12 删除）
         MatchPublicView view = match.Publish();
         ImmutableSortedDictionary<PlayerId, int> pure =
             PublicRelicEffects.InitiativeBonuses(view.Players.Where(p => p.IsActive).Select(p => p.Player), view.Relics);
@@ -78,9 +77,9 @@ public class 公开规则纯函数Tests
         Assert.False(PublicRules.IsEliminated(hasEstablishedPower: false, BigInteger.Zero));
         Assert.False(PublicRules.IsEliminated(hasEstablishedPower: true, BigInteger.One));
 
-        MatchFlow match = AiFixtures.Round5().Stones(P1, "J9").Stones(P2, "B8");
+        MatchFlow match = AiFixtures.Round5().Stones(P1, "K10").Stones(P2, "D9");
         match.Resign(P2);
-        match.Board.RemoveStones([TestMaps.At("J9"), TestMaps.At("B8")]);
+        match.Board.RemoveStones([TestMaps.At("K10"), TestMaps.At("D9")]);
         PowerSnapshot power = PowerCalculator.Compute(match.Board, match.Roster);
         Assert.Equal([P1], PublicRules.Eliminated(match.PlayerStates, power));
     }
@@ -91,17 +90,19 @@ public class 公开规则纯函数Tests
     [InlineData(3UL)]
     public void 真实对局每个小回合新旧两条路径逐项相等(ulong seed)
     {
-        // retire-legacy-maps 1.5：原「v5真实对局每个小回合新旧两条路径逐项相等」（v5、种子 1–3、4 名标准 AI 整局）改到 9×9 手写夹具上的 4 名标准 AI 整局——
-        // 被比对的"旧路径"抄自改动前的 MatchFlow.LegalRangeFor（保护期限出生区、此后全图），只在 Legacy 规则下成立，链接图上无从比对；
-        // 9×9 夹具（MatchFixtures，Legacy 规则，L6）是它今后的载体。另放军令 / 工坊 / 先锋三枚信物，让 ② ③ 两项比对的不是恒为缺省的值。四项比对断言不变。
+        // retire-legacy-maps 1.5：原「v5真实对局每个小回合新旧两条路径逐项相等」（v5、种子 1–3、4 名标准 AI 整局）改到 9×9 手写夹具上的 4 名标准 AI 整局。
+        // retire-legacy-rules 1.4：载体改为 link:1 探针（链接模式、内置固定配对脚本、生成的信物——含军令 / 工坊 / 先锋，② ③ 比对的不是恒为缺省的值）上的 4 名标准 AI 整局；
+        // ① 里抄自改动前的"保护期限出生区、此后全图"旧路径只在旧模式成立，删去（清单"删反面段"），改为三方相等。② ③ ④ 不变。
         // 每个小回合（部署阶段）比对：
-        // ① 合法落子范围：旧实现（抄自改动前的 MatchFlow.LegalRangeFor）＝ 对局下发的批次上下文 ＝ 纯函数读公开快照；
+        // ① 合法落子范围：对局下发的批次上下文 ＝ MatchFlow.LegalRangeFor ＝ 纯函数读公开快照；
         // ② 部署上限与工坊：旧实现（抄自改动前 RelicLedger.BuildSnapshot 的军令 / 工坊部分，读真实内容）＝ 批次上下文 ＝ 纯函数读公开快照；
         // ③ 先锋修正：旧实现（抄自改动前的 SumVanguard）＝ 账本（委托后）＝ 纯函数读公开快照；
         // ④ 出局：此刻没有"应出局而仍参赛"的玩家，每个已出局者都满足判据（旧判据）。
         int checkedTurns = 0;
-        MatchFlow match = MatchFixtures.Started(new Siege.Core.Determinism.GameSeed(seed),
-            relics: [("E5", RelicFixtures.Command(2)), ("C5", RelicFixtures.Workshop()), ("G5", RelicFixtures.Vanguard())]);
+        MatchFlow match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(seed));
+        match.PairingSource = new ScriptedPairingSource();
+        match.PlantPrototype();
+        Assert.Contains(match.Relics.Generation.Placements, p => p.Content.Type is RelicType.Command or RelicType.Workshop or RelicType.Vanguard);   // 样本口径
         var runner = new MatchRunner(match);
         foreach (PlayerId player in match.Players)
         {
@@ -126,15 +127,15 @@ public class 公开规则纯函数Tests
     [Fact]
     public void 夹具局面新旧两条路径逐项相等()
     {
-        // 9×9 夹具：保护期（第 2 大回合）与全图（第 5 大回合），含活棋禁入（P1 在 P0 出生区角上的两眼活棋，眼 A1 / C1）、
+        // 平坦 8×8 链接载体（retire-legacy-rules 1.4，原 9×9 夹具）：构筑期（第 2 大回合）与第 5 大回合，含活棋禁入（P1 在棋盘 0 角上的两眼活棋，眼 C3 / E3）、
         // 已揭示军令 / 工坊 / 先锋与弃赛者。
         foreach (int round in new[] { 2, 5 })
         {
-            MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command(2)), ("G5", RelicFixtures.Workshop()), ("C5", RelicFixtures.Vanguard())])
+            MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command(2)), ("H7", RelicFixtures.Workshop()), ("E7", RelicFixtures.Vanguard())])
                 .AtRound(round, [P2, P0, P1, P3])
-                .Stones(P0, "C5")
-                .Stones(P1, "B1", "D1", "A2", "B2", "C2", "D2", "E5", "G4").Stones(P3, "J9");
-            match.PlayTurn("B8");
+                .Stones(P0, "E7")
+                .Stones(P1, "D3", "F3", "C4", "D4", "E4", "F4", "G7", "H6").Stones(P3, "K10");
+            match.PlayTurn("D9");
             match.Resign(P3);
             StagedBatch batch = match.OpenDeploy();
             CompareAll(match, batch);
@@ -148,11 +149,11 @@ public class 公开规则纯函数Tests
         MatchPublicView view = match.Publish();
         PlayerFlowState state = view.Players.Single(p => p.Player == player);
 
-        // ① 合法落子范围
-        Coord[] old = [.. OldLegalRange(match, player).Order()];
-        Assert.Equal(old, batch.Context.LegalRange.Order());
-        Assert.Equal(old, match.LegalRangeFor(player).Order());
-        Assert.Equal(old, PublicRules.LegalRange(view.Board, view.MajorRound, state.BirthZone!.Value, player, view.LifeShape).Order());
+        // ① 合法落子范围（retire-legacy-rules：旧路径 OldLegalRange 只在旧模式成立，已删；三方相等）
+        Coord[] range = [.. batch.Context.LegalRange.Order()];
+        Assert.NotEmpty(range);
+        Assert.Equal(range, match.LegalRangeFor(player).Order());
+        Assert.Equal(range, PublicRules.LegalRange(view.Board, view.MajorRound, state.BirthZone!.Value, player, view.LifeShape, view.Mode).Order());
 
         // ② 部署上限与工坊
         (int oldLimit, bool oldWorkshop) = OldDeployAndWorkshop(match, player);
@@ -164,7 +165,7 @@ public class 公开规则纯函数Tests
 
         // ③ 先锋修正（在账本副本上读，不动正式账本）
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = match.Roster;
-        RelicLedger copy = RelicLedger.Restore(match.Relics.Generation, match.Relics.ExportState());
+        RelicLedger copy = match.Relics.Copy();
         ImmutableSortedDictionary<PlayerId, int> ledger = copy.ReadInitiativeBonuses(match.Board, roster);
         Assert.Equal(OldVanguard(copy, roster), ledger);
         Assert.Equal(ledger, PublicRelicEffects.InitiativeBonuses(roster.Where(kv => kv.Value == PlayerStatus.Active).Select(kv => kv.Key), copy.PublicStates()));
@@ -183,15 +184,7 @@ public class 公开规则纯函数Tests
         Assert.Empty(PublicRules.Eliminated(view.Players, power));
     }
 
-    /// <summary>改动前的 <c>MatchFlow.LegalRangeFor</c>（HEAD 03d45f6，原样抄录）。</summary>
-    private static IReadOnlySet<Coord> OldLegalRange(MatchFlow match, PlayerId player)
-    {
-        int zone = match.StateOf(player).BirthZone!.Value;
-        IEnumerable<Coord> range = match.MajorRound <= 3
-            ? match.Map.BirthZones[zone]
-            : match.Board.AllCoords().Where(c => match.Board[c].Terrain == Terrain.Playable);
-        return range.Except(LifeShapeReport.Analyze(match.Board).ForbiddenCellsFor(player)).ToImmutableHashSet();
-    }
+
 
     /// <summary>改动前 <c>RelicLedger.BuildSnapshot</c> 的军令 / 工坊部分（读真实内容与账本此刻的控制）。</summary>
     private static (int DeployLimit, bool Workshop) OldDeployAndWorkshop(MatchFlow match, PlayerId player)
@@ -206,7 +199,7 @@ public class 公开规则纯函数Tests
                 continue;
             }
 
-            RelicContent content = match.Relics.Generation.At(coord).Content;
+            RelicContent content = match.Relics.ContentAt(coord);   // retire-legacy-rules：链接拼接后信物随格平移，按账本当前坐标取内容（开局生成记录的坐标不再适用）
             Assert.Equal(contents[coord], content.Type);
             if (content.Type == RelicType.Command)
             {
@@ -230,7 +223,7 @@ public class 公开规则纯函数Tests
             int bonus = 0;
             foreach (Coord coord in ledger.Coords)
             {
-                RelicContent content = ledger.Generation.At(coord).Content;
+                RelicContent content = ledger.ContentAt(coord);
                 if (content.Type == RelicType.Vanguard && ledger.ControlOf(coord).GrantsEffectTo(player))
                 {
                     bonus += content.Magnitude;

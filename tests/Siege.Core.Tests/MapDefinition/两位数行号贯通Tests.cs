@@ -37,6 +37,23 @@ public class 两位数行号贯通Tests
                 fences: [("Z31", "Z32")]),
         };
 
+    /// <summary>
+    /// 同一张竖长图改为链接模式可用的形态（retire-legacy-rules 1.6）：标识换成 <c>link:</c> 族（链接模式只配链接图）、人数上限 4（链接模式只有 4 人局），棋盘清单取 <paramref name="plates"/>，
+    /// 棋盘之外一律障碍（战场 = 可落子格的连通分量）；其余（地形、出生区、信物格）不变。只走 Unvalidated 入口。
+    /// </summary>
+    private static MapData LinkTall(params BoardPlate[] plates)
+    {
+        MapData tall = Tall();
+        HashSet<Coord> onBoards = [.. plates.SelectMany(b => b.Cells())];
+        return tall with
+        {
+            Id = "link:90032",
+            MaxPlayers = 4,
+            Boards = [.. plates],
+            Obstacles = tall.Obstacles.Union(TestMaps.Rect(0, 0, tall.Width, tall.Height).Where(c => !onBoards.Contains(c))),
+        };
+    }
+
     [Fact]
     public void 地图文件在两位数行号下往返()
     {
@@ -68,11 +85,14 @@ public class 两位数行号贯通Tests
     [Fact]
     public void 对局存档与终端渲染在两位数行号下正确()
     {
-        MapData map = Tall();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate);
+        // retire-legacy-rules 1.6：改以链接模式建局（4 人、整张 25×32 图登记为一块出生棋盘、四人同锁）——链接终端只画本战场的外接矩形，
+        // 整图一块棋盘才能把 32 行都画出来；原为旧模式 2 人局、各锁一区。断言不变。
+        MapData map = LinkTall(new BoardPlate(new Coord(0, 0), 25, 32, BoardPlateKind.Birth));
+        MatchFlow match = LinkModeFixtures.RequireLink(
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         match.Debug.SeedHand(P0, (PieceType.Basic, 9));
-        match.PlantSequentially([(P0, 0), (P1, 1)]);
-        match.Debug.SetOrder(P0, P1);
+        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
+        match.Debug.SetOrder(P0, P1, TestMaps.P2, TestMaps.P3);
 
         match.PlayTurn("A27", "E29");
 
@@ -102,15 +122,17 @@ public class 两位数行号贯通Tests
     [Fact]
     public void 对局日志在两位数行号下记录并可读回()
     {
-        // 真实跑局：两名 Easy AI 在竖长图上跑 1 个大回合。0 号区在第 25–29 行，保护期内 P0 只能落在那里，
+        // 真实跑局：Easy AI 在竖长图上跑 1 个大回合。0 号区在第 25–29 行，P0 只能落在那里，
         // 所以 P0 的落点必然全是两位数行号——样本口径下界：P0 确实落了子。
-        MapData map = Tall();
+        // retire-legacy-rules 1.6：改以链接模式建局——两个出生区各登记为一块 5×5 出生棋盘（两块不相邻，各成一个战场），4 人两两同锁（P0 / P2 锁 0 号、P1 / P3 锁 1 号），
+        // P0 的合法范围恒为 0 号棋盘（原为旧模式 2 人局、靠保护期限在出生区）；跑局截断由 2 个小回合改为 4 个（4 人的 1 个大回合）。断言不变。
+        MapData map = LinkTall(new BoardPlate(new Coord(0, 24), 5, 5, BoardPlateKind.Birth), new BoardPlate(new Coord(20, 0), 5, 5, BoardPlateKind.Birth));
         // more-pieces-relics 段 A：跑局配置经 PinPreCalibration 写死内容集 v1（样本下界依赖走法），对局配置须与之一致（MatchSession 核对二者）。
-        MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
-        match.PlantSequentially([(P0, 0), (P1, 1)]);
+        MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
+            map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate with { ContentSet = ContentSet.V1 })));
+        match.PlantSequentially([(P0, 0), (P1, 1), (TestMaps.P2, 0), (TestMaps.P3, 1)]);
         // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：样本下界"P0 落了子"依赖走法（默认阈值 80 下简单难度第 1 大回合可能一子不落；段 D2 改写）。
-        MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 2, players: 2)));
+        MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 4)));
 
         MatchLog log = MatchLog.Parse(session.Run().FullText());
 

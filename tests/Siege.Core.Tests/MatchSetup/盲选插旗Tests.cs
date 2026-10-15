@@ -30,11 +30,7 @@ public class 盲选插旗Tests
         // 公开视图不暴露任何旗数。
         Assert.Empty(match.Flags.PublicView().FlagCountByZone);
         Assert.Equal(0, match.Flags.ViewFor(LinkModeFixtures.P0).OwnZone);
-
-        // 反面：旧模式公开视图照旧给出每区旗数。
-        MatchFlow legacy = MatchFixtures.Create();
-        legacy.Flags.Plant(MatchFixtures.P0, 0);
-        Assert.Equal(1, legacy.Flags.PublicView().FlagsAt(0));
+        // retire-legacy-rules 1.7（清单"删反面段"）：原有的旧模式反面段（公开视图照旧给出每区旗数）随旧模式退役删除。
     }
 
     [Fact]
@@ -46,12 +42,7 @@ public class 盲选插旗Tests
         SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => match.Flags.Plant(LinkModeFixtures.P0, 2));
         Assert.Contains("选中即锁定", ex.Message, StringComparison.Ordinal);
         Assert.Equal(0, match.Flags.FlagOf(LinkModeFixtures.P0));
-
-        // 反面：旧模式锁定前仍可更换。
-        MatchFlow legacy = MatchFixtures.Create();
-        legacy.Flags.Plant(MatchFixtures.P0, 0);
-        legacy.Flags.Plant(MatchFixtures.P0, 2);
-        Assert.Equal(2, legacy.Flags.FlagOf(MatchFixtures.P0));
+        // retire-legacy-rules 1.7（清单"删反面段"）：原有的旧模式反面段（锁定前仍可更换）随旧模式退役删除。
     }
 
     [Fact]
@@ -76,12 +67,43 @@ public class 盲选插旗Tests
         match.Flags.Plant(LinkModeFixtures.P0, 3);
         match.LockFlags();
 
-        int[] expected = ExpectedPicks(MatchFixtures.Seed, 4, 5);
+        int[] expected = ExpectedPicks(TestMaps.Seed, 4, 5);
         Assert.Equal(3, match.StateOf(LinkModeFixtures.P0).BirthZone);
         for (int i = 1; i < 4; i++)
         {
             Assert.Equal(expected[i], match.StateOf(LinkModeFixtures.All[i]).BirthZone);
         }
+    }
+
+    [Fact]
+    public void 时限可配置()
+    {
+        // 裁决记录 1：默认 15 秒；单机 / AI 路径配置为立即，对局状态与正式插旗结果等价。
+        // retire-legacy-rules 1.5：由「匿名同时插旗Tests」迁来（原文件整删）。载体由 9×9 旧模式夹具换为 link:1（公开建局恒为链接模式、盲选），断言不变。
+        // 变异验证 M-S3：MatchOptions.Immediate 也用 15 秒 → 红 1（本测试）。
+        MatchFlow online = LinkModeFixtures.Create(options: MatchOptions.Default);
+        MatchFlow local = LinkModeFixtures.Create(options: MatchOptions.Immediate);
+        Assert.Equal(TimeSpan.FromSeconds(15), online.Flags.TimeLimit);
+        Assert.False(online.Flags.IsImmediate);
+        Assert.True(local.Flags.IsImmediate);
+
+        foreach (MatchFlow m in new[] { online, local })
+        {
+            m.Flags.Plant(TestMaps.P0, 2);
+            m.Flags.Plant(TestMaps.P1, 0);
+            m.Flags.Plant(TestMaps.P2, 3);
+            m.Flags.Plant(TestMaps.P3, 1);
+            m.LockFlags();
+        }
+
+        Assert.Equal(online.PlayerStates, local.PlayerStates);
+        Assert.Equal(online.ActionOrder, local.ActionOrder);
+        Assert.Equal(MatchPhase.InProgress, local.Phase);
+
+        // S-14：锁定事件文本对人显示出生区 1–4（内部索引 2 / 0 / 3 / 1 → 3 / 1 / 4 / 2）。
+        // 变异验证 M-D3：MatchFlow 锁定事件改回直接写内部索引 → 红 1（本断言）。
+        FlowEvent locked = Assert.Single(local.Events, e => e.Kind == FlowEventKind.FlagsLocked);
+        Assert.StartsWith("出生区 P0:3 P1:1 P2:4 P3:2；", locked.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -108,11 +130,11 @@ public class 盲选插旗Tests
     {
         // Scenario：本机玩家选棋盘 2，其余三名 AI 自动插旗，同一对局种子重复开局两次 → 三名 AI 两次锁定的棋盘完全相同。
         // 钉住子流：AI 的结果等于 flag-pick 子流（字面量子流名）按编号升序每人一次的抽取。
-        int[] once = PlantWithHuman(MatchFixtures.Seed, 1);
-        int[] twice = PlantWithHuman(MatchFixtures.Seed, 1);
+        int[] once = PlantWithHuman(TestMaps.Seed, 1);
+        int[] twice = PlantWithHuman(TestMaps.Seed, 1);
         Assert.Equal(once, twice);
         Assert.Equal(1, once[0]);
-        int[] expected = ExpectedPicks(MatchFixtures.Seed, 4, 5);
+        int[] expected = ExpectedPicks(TestMaps.Seed, 4, 5);
         Assert.Equal(expected[1..], once[1..]);
 
         // 均匀盲选：多个种子下 AI 会与人同区、彼此同区，五块棋盘都会被选到（不看已插的旗、不避让）。

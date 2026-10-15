@@ -48,21 +48,31 @@ public class 终端对局Tests
     {
         // tasks 5.3「大数显示不换行溢出」：120 枚倍增子的一条棋串军势 ⌊120 × 3^120 / 2^120⌋ 有 23 位；势力栏用 ≥ 10^6 的缩写（与图形版同一份 PowerNotation），
         // 整行不超过 100 列、不出现完整的 23 位数字。精确值由终局名次 / 预演给出，不在概览栏。
-        MapData map = MatchFixtures.Map() with { Id = "test-match-12x12", Width = 12, Height = 12 };
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
-        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
+        // retire-legacy-rules 1.6：12×12 全平地夹具改以链接模式建局——标识 link:90012、整张图登记为一块 12×12 出生棋盘、四人同锁这一块（原为 9×9 夹具放大、旧模式、各锁一角）。
+        MapData map = TestMaps.NineByNine() with
+        {
+            Id = "link:90012",
+            Width = 12,
+            Height = 12,
+            Profile = MapProfile.Link,
+            Boards = [new BoardPlate(new Coord(0, 0), 12, 12, BoardPlateKind.Birth)],
+            BirthZones = [[.. TestMaps.Rect(0, 0, 12, 12)]],
+        };
+        MatchFlow match = LinkModeFixtures.RequireLink(
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
         for (int y = 0; y < 10; y++)
         {
             for (int x = 0; x < 12; x++)
             {
-                match.Board.Place(new Coord(x, y), MatchFixtures.P0, PieceType.Multiplier);
+                match.Board.Place(new Coord(x, y), TestMaps.P0, PieceType.Multiplier);
             }
         }
 
         match.Debug.Recalculate();
-        Scoring.PlayerPower p0 = match.Scoreboard.Latest!.Of(MatchFixtures.P0);
+        Scoring.PlayerPower p0 = match.Scoreboard.Latest!.Of(TestMaps.P0);
         var output = new StringWriter();
-        new BoardRenderer(output).Status(match.Publish(), MatchFixtures.P0);
+        new BoardRenderer(output).Status(match.Publish(), TestMaps.P0);
 
         string line = output.ToString().Split('\n').Single(l => l.Contains("玩家1(你)", StringComparison.Ordinal) && l.Contains("势力 ", StringComparison.Ordinal));
         Assert.Contains($"势力 {Scoring.PowerNotation.Compact(p0.Total)}（领地 12 + 棋串 {Scoring.PowerNotation.Compact(p0.GroupScore)}）", line, StringComparison.Ordinal);

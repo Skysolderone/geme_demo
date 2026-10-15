@@ -69,18 +69,18 @@ public class 前瞻集的多样候选Tests
         // 真实局面（9×9、第 5 大回合、专家 P0 的部署上限 1）：左下 B1 / A2 / B2 / C2 / D2 已有眼 A1，D1 围出第二眼（自身 1020）；停手阈值 700，其余落点都越不过。
         // 候选生成只得到 {D1}；多样补充排除 D1 重跑时剩余每个单点的边际提升都不大于阈值 → 空批次，不追加，前瞻集不出现空批次 → 仍是"不前瞻"的单个候选。
         // 变异 E-D3（排除重跑绕过停手阈值：阈值传 0）→ 见段 A 实施记录。
-        MatchFlow match = AiFixtures.Round5().Stones(P0, "B1", "A2", "B2", "C2", "D2");
+        MatchFlow match = AiFixtures.Round5().Stones(P0, "D3", "C4", "D4", "E4", "F4");
         match.SetDeployLimit(1);
         HeuristicTurnController expert = Decide(match, AiDifficulty.Expert, StrengthConfig(passThreshold: 700, permille: 0));
         LookaheadRecord record = Record(expert);
 
-        Assert.Equal(["D1:Basic"], expert.LastCandidates.Where(c => !c.IsPass).Select(c => c.Key));
+        Assert.Equal(["F3:Basic"], expert.LastCandidates.Where(c => !c.IsPass).Select(c => c.Key));
         Assert.True(record.SupplementRehearsals > 0, record.ToText());   // 确实做过排除重跑
         Assert.Equal(LookaheadStatus.NotApplied, record.Status);
         LookaheadEntry only = Assert.Single(record.Entries);
-        Assert.Equal("D1:Basic", only.CandidateKey);
+        Assert.Equal("F3:Basic", only.CandidateKey);
         Assert.Equal(CandidateSource.Original, only.Source);
-        Assert.Equal("D1:Basic", expert.LastChoice!.Key);
+        Assert.Equal("F3:Basic", expert.LastChoice!.Key);
     }
 
     [Fact]

@@ -8,6 +8,10 @@ using Siege.Core.Scoring;
 namespace Siege.Core.Tests.MatchFlowRegression;
 
 /// <summary>implement 1.1 / 8.2：对局顶层状态在小回合边界的持久化与恢复。</summary>
+/// <remarks>
+/// retire-legacy-rules 1.5：载体由 9×9 旧模式夹具换为平坦 8×8 链接档图（<c>LinkModeFixtures.PlainStarted</c>，四人同锁棋盘 0、手工信物），
+/// 恢复走测试口 <see cref="MatchFlow.RestoreUnvalidated"/> 的链接路径（空盘 → 重放链接 → 写盘面 → 信物揭示）；坐标平移到棋盘 0，逐条见迁移清单第 6 节。
+/// </remarks>
 public class 对局持久化Tests
 {
     [Fact]
@@ -16,26 +20,27 @@ public class 对局持久化Tests
         // 阶段、顺序、大回合、保护状态、Pass 计数、出局 / 弃赛状态、已提交盘面历史、信物揭示、手牌、弃赛快照、先手明细全部往返；
         // 恢复后继续同样的决策（含征募抽取）产出逐字节相同的存档——三条随机子流的消费位置也被正确恢复。
         // 变异验证 M-P1：Serialize 不写 PassStreak → 红 1；M-P2：HandLedger.Restore 不推进 recruit 子流 → 红 1（续跑后面板不同）。
-        // 段 C 改摆法：出局判据改为"曾建立正势力且势力归零"。P2 首轮在自家出生区落 A9（标记置位），第 5 大回合 P0 另有 B9，
-        // 批次 E5 / C3 / A8 的 A8 提光 A9 → P2 出局（原为 P2 首轮 Pass、盘面与手牌皆空）。
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command()), ("C3", RelicFixtures.Vanguard())]);
-        string?[] cell = ["B2", "H2", "A9", "H8"];
+        // 段 C 改摆法：出局判据改为"曾建立正势力且势力归零"。P2 首轮落 C10（标记置位），第 5 大回合 P0 另有 D10，
+        // 批次 G7 / E5 / C9 的 C9 提光 C10 → P2 出局（原为 P2 首轮 Pass、盘面与手牌皆空）。
+        // retire-legacy-rules 1.5：载体为平坦 8×8 链接档图、四人同锁棋盘 0；原 9×9 坐标列 +2、第 1–7 行 +2 / 第 8–9 行 +1（左上角 A9 贴棋盘 0 的角 C10），断言不变。
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command()), ("E5", RelicFixtures.Vanguard())]);
+        string?[] cell = ["D4", "K4", "C10", "K9"];
         for (int i = 0; i < 4; i++)
         {
             string? c = cell[match.CurrentPlayer!.Value.Value];
             _ = c is null ? match.PassTurn() : match.PlayTurn(c);
         }
 
-        match.AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]).Stones(MatchFixtures.P0, "B9");
-        match.Resign(MatchFixtures.P3);
-        match.PlayTurn("E5", "C3", "A8");   // P0：控制军令与先锋，并提光 P2 的 A9 → P2 出局
-        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P2).Status);
+        match.AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3]).Stones(TestMaps.P0, "D10");
+        match.Resign(TestMaps.P3);
+        match.PlayTurn("G7", "E5", "C9");   // P0：控制军令与先锋，并提光 P2 的 C10 → P2 出局
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(TestMaps.P2).Status);
         match.PassTurn();             // P1 → 出局 / 弃赛者被跳过，大回合结束，第 6 大回合顺序 [P0, P1]
         Assert.Equal(6, match.MajorRound);
         Assert.Equal(1, match.PassStreak);
         // 段 F 6.4c：局面里带一处地形改造（经唯一写入口，与 同形与存档纳入设施Tests 同法）。存档记的是**开局**地图摘要，
         // 恢复时 MUST 传 Board.BaseMap；传改造后的活地形 match.Map 会报"地图不一致"（改前实跑红：FormatException）。
-        TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("G2"), TestMaps.At("G3"));
+        TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("J4"), TestMaps.At("J5"));
         match.Board.ApplyTerrainEdits([fence]);
         Assert.NotEqual(MapFile.ToJson(match.Board.BaseMap), MapFile.ToJson(match.Map));
 
@@ -56,7 +61,7 @@ public class 对局持久化Tests
         Assert.Equal(match.Relics.PublicStates(), restored.Relics.PublicStates());
         Assert.Equal(match.Hands.PublicViews(), restored.Hands.PublicViews());
         Assert.Equal(match.Hands.RecruitStreamConsumed, restored.Hands.RecruitStreamConsumed);
-        foreach (PlayerId p in MatchFixtures.All)
+        foreach (PlayerId p in TestMaps.All)
         {
             Assert.Equal(match.Hands.Debug.PrivateViewOf(p), restored.Hands.Debug.PrivateViewOf(p));
         }
@@ -76,11 +81,11 @@ public class 对局持久化Tests
             Assert.Equal(5, m.CurrentSnapshot!.DeployLimit);   // 第 6 大回合基础 4 + 军令 +1（growth-pass-1：原基础 3 → 4）
             RecruitPanelView panel = m.EnterRecruit();
             m.CurrentHand().Pick(panel.Candidates.First(c => c.IsSelectable).Index);
-            Assert.Null(m.EnterDeploy().Stage(TestMaps.At("F6"), PieceType.Basic));
+            Assert.Null(m.EnterDeploy().Stage(TestMaps.At("H8"), PieceType.Basic));
             Assert.True(m.Confirm().Confirmed);
         }
 
-        Assert.Equal(match.Hands.Debug.PrivateViewOf(MatchFixtures.P0), restored.Hands.Debug.PrivateViewOf(MatchFixtures.P0));
+        Assert.Equal(match.Hands.Debug.PrivateViewOf(TestMaps.P0), restored.Hands.Debug.PrivateViewOf(TestMaps.P0));
         Assert.Equal(match.Serialize(), restored.Serialize());
     }
 
@@ -89,12 +94,12 @@ public class 对局持久化Tests
     {
         // more-pieces-relics tasks 2.4 / Migration 3：弃赛快照里的 EffectSnapshot 多了驿站来源与工坊标记——
         // ① 新存档写出并往返（值相等含这两项）；② 旧存档（无这两个字段）恢复为"无驿站来源、工坊未生效"，其余字段照旧。
-        MatchFlow match = MatchFixtures.Started(relics: [("G4", RelicFixtures.Relay()), ("H4", RelicFixtures.Workshop()), ("J4", RelicFixtures.Command())])
-            .AtRound(7, MatchFixtures.All)
-            .Stones(MatchFixtures.P3, "G4", "H4", "J4");
-        match.Resign(MatchFixtures.P3);
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay()), ("J6", RelicFixtures.Workshop()), ("K6", RelicFixtures.Command())])
+            .AtRound(7, TestMaps.All)
+            .Stones(TestMaps.P3, "H6", "J6", "K6");
+        match.Resign(TestMaps.P3);
         EffectSnapshot saved = match.Resignations.Single().Effects;
-        Assert.Equal([(TestMaps.At("G4"), 2)], saved.RelaySources.Select(kv => (kv.Key, kv.Value)));
+        Assert.Equal([(TestMaps.At("H6"), 2)], saved.RelaySources.Select(kv => (kv.Key, kv.Value)));
         Assert.True(saved.WorkshopActive);
         Assert.Equal(7, saved.RevealCount);
 
@@ -127,12 +132,12 @@ public class 对局持久化Tests
     {
         // 段 C 改摆法：P1 / P2 / P3 各有一子（标记置位），被 P0 一个批次同时提光 → 三人同时出局、共享出局序号 → 只剩 P0
         // （原为三人盘面与手牌皆空、P0 落 B2）。同时出局者的共享名次也随存档往返。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "E5", "B1", "H9", "H1")
-            .Stones(MatchFixtures.P1, "A1")
-            .Stones(MatchFixtures.P2, "J9")
-            .Stones(MatchFixtures.P3, "J1");
-        match.PlayTurn("A2", "J8", "J2");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+            .Stones(TestMaps.P0, "G7", "D3", "J10", "J3")
+            .Stones(TestMaps.P1, "C3")
+            .Stones(TestMaps.P2, "K10")
+            .Stones(TestMaps.P3, "K3");
+        match.PlayTurn("C4", "K9", "K4");
         Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
         Assert.Equal([1, 2, 2, 2], match.Result.Standings.Select(s => s.Rank));
 
@@ -146,7 +151,7 @@ public class 对局持久化Tests
     [Fact]
     public void 小回合进行中不能存档()
     {
-        MatchFlow match = MatchFixtures.Started();
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         match.BeginTurn();
         SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => match.Serialize());
         Assert.Contains("小回合边界", ex.Message);
@@ -155,8 +160,8 @@ public class 对局持久化Tests
     [Fact]
     public void 存档地图不符即拒绝()
     {
-        MatchFlow match = MatchFixtures.Started();
-        MapData other = MatchFixtures.Map() with { Id = "another-map" };
+        MatchFlow match = LinkModeFixtures.PlainStarted();
+        MapData other = LinkModeFixtures.PlainMap() with { Id = "another-map" };
         Assert.Throws<FormatException>(() => MatchFlow.RestoreUnvalidated(other, match.Relics.Generation, match.Serialize()));
     }
 
@@ -168,7 +173,7 @@ public class 对局持久化Tests
         // ② 剥掉 ArtisanWeight 字段的旧存档 → 回填 10、ArtisanWeightBackfilled 为 true。
         // 变异验证见测试报告 M-A6（Serialize 不写 ArtisanWeight）。
         // more-pieces-relics 段 A：下面用六档字面量表独立抽面板，依赖征募序列 → 写死内容集 v1（v1 棋池与引入新棋子之前相同）。
-        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { ArtisanWeight = 18, ContentSet = ContentSet.V1 });
+        MatchFlow match = LinkModeFixtures.PlainStarted(options: MatchOptions.Immediate with { ArtisanWeight = 18, ContentSet = ContentSet.V1 });
         Assert.Equal(18, match.ArtisanWeight);
         Assert.False(match.ArtisanWeightBackfilled);
 
@@ -181,14 +186,14 @@ public class 对局持久化Tests
 
         // 独立读路径（testing.md：结果对象与活对象两边都要钉）——restored.Options 与 restored.ArtisanWeight 是同一个字段的两个读法，
         // 证明不了"恢复出来的手牌账本真拿到了 18"。这里从恢复后的账本实抽一次面板，与 18 权重下的字面量表独立对齐。
-        RandomStream expected = MatchFixtures.Seed.Stream(GameSeed.Recruit);
+        RandomStream expected = TestMaps.Seed.Stream(GameSeed.Recruit);
         expected.Advance(restored.Hands.RecruitStreamConsumed);
         int[] table18 = [160, 80, 72, 48, 40, 72];   // 基础 × 4（无徽记），匠人 18 × 4 = 72
         PieceType[] direct = [.. Enumerable.Range(0, 10).Select(_ => RecruitWeights.Order[expected.WeightedPick(table18)])];
-        RecruitPanelView panel = HandFixtures.Begin(restored.Hands, MatchFixtures.P0, reveal: 10).EnterRecruit();
+        RecruitPanelView panel = HandFixtures.Begin(restored.Hands, TestMaps.P0, reveal: 10).EnterRecruit();
         Assert.Equal(direct, panel.CandidateTypes);
 
-        RandomStream atDefault = MatchFixtures.Seed.Stream(GameSeed.Recruit);
+        RandomStream atDefault = TestMaps.Seed.Stream(GameSeed.Recruit);
         atDefault.Advance(restored.Hands.RecruitStreamConsumed);
         int[] table10 = [160, 80, 72, 48, 40, 40];
         Assert.NotEqual([.. Enumerable.Range(0, 10).Select(_ => RecruitWeights.Order[atDefault.WeightedPick(table10)])], panel.CandidateTypes);
@@ -210,12 +215,12 @@ public class 对局持久化Tests
         // ① 非回填值往返：终局名次的"独占空格数"是非 0 值 → 恢复后逐字段相等 + 再存档逐字节相等；
         // ② 旧存档：往存档里塞回已废弃的 SiteValues 段 → 明确报错并指出该字段已废弃（design.md Migration Plan 3：旧存档不迁移）。
         // 变异验证 M-B18（段 B，实跑红 1）：MatchFlow.Parse 去掉 RejectRetiredFields 调用（退回静默忽略）→ ② 红。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All)
-            .Stones(MatchFixtures.P0, "B5", "C5");
-        match.Resign(MatchFixtures.P1);
-        match.Resign(MatchFixtures.P2);
-        match.Resign(MatchFixtures.P3);
-        int cells = match.Result!.Of(MatchFixtures.P0).Input.ExclusiveCells;
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All)
+            .Stones(TestMaps.P0, "D7", "E7");
+        match.Resign(TestMaps.P1);
+        match.Resign(TestMaps.P2);
+        match.Resign(TestMaps.P3);
+        int cells = match.Result!.Of(TestMaps.P0).Input.ExclusiveCells;
         Assert.True(cells > 0, "前提：终局独占空格数非 0");
 
         string json = match.Serialize();
@@ -251,37 +256,37 @@ public class 对局持久化Tests
         // 从未落子者的 false 若被恢复时的重算"算出来"就无从分辨，所以钉住：P3 从未落子（手牌清空）→ 存档 false → 恢复后仍 false →
         // 随后的 Pass 不让他出局；P0 已有子 → true。另把 JSON 里 P3 的标记改成 true 再恢复：此时 P3 势力 0 且标记置位，
         // 下一次检查即出局——证明恢复读的是存档里的值，而不是按盘面重算。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P1, MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P2])
-            .Stones(MatchFixtures.P0, "E5");
-        match.Debug.SeedHand(MatchFixtures.P3);
-        Assert.True(match.StateOf(MatchFixtures.P0).HasEstablishedPower);
-        Assert.False(match.StateOf(MatchFixtures.P3).HasEstablishedPower);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P1, TestMaps.P3, TestMaps.P0, TestMaps.P2])
+            .Stones(TestMaps.P0, "G7");
+        match.Debug.SeedHand(TestMaps.P3);
+        Assert.True(match.StateOf(TestMaps.P0).HasEstablishedPower);
+        Assert.False(match.StateOf(TestMaps.P3).HasEstablishedPower);
 
         string json = match.Serialize();
         Assert.Contains("\"HasEstablishedPower\": false", json, StringComparison.Ordinal);
         MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
         Assert.Equal(match.PlayerStates, restored.PlayerStates);
-        Assert.False(restored.StateOf(MatchFixtures.P3).HasEstablishedPower);
-        Assert.True(restored.StateOf(MatchFixtures.P0).HasEstablishedPower);
+        Assert.False(restored.StateOf(TestMaps.P3).HasEstablishedPower);
+        Assert.True(restored.StateOf(TestMaps.P0).HasEstablishedPower);
         Assert.Equal(json, restored.Serialize());
 
         restored.PassTurn();   // P1
         restored.PassTurn();   // P3 自己 Pass：势力 0 但从未置位 → 不出局
-        Assert.Equal(PlayerStatus.Active, restored.StateOf(MatchFixtures.P3).Status);
+        Assert.Equal(PlayerStatus.Active, restored.StateOf(TestMaps.P3).Status);
 
         System.Text.Json.Nodes.JsonNode forged = System.Text.Json.Nodes.JsonNode.Parse(json)!;
         foreach (System.Text.Json.Nodes.JsonNode? player in forged["Players"]!.AsArray())
         {
-            if ((int)player!["Player"]! == MatchFixtures.P3.Value)
+            if ((int)player!["Player"]! == TestMaps.P3.Value)
             {
                 player["HasEstablishedPower"] = true;
             }
         }
 
         MatchFlow marked = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, forged.ToJsonString());
-        Assert.True(marked.StateOf(MatchFixtures.P3).HasEstablishedPower);
+        Assert.True(marked.StateOf(TestMaps.P3).HasEstablishedPower);
         marked.PassTurn();     // P1 Pass → 检查全部参赛玩家：P3 标记置位且势力 0 → 出局
-        Assert.Equal(PlayerStatus.Eliminated, marked.StateOf(MatchFixtures.P3).Status);
+        Assert.Equal(PlayerStatus.Eliminated, marked.StateOf(TestMaps.P3).Status);
     }
 
     [Theory]
@@ -295,7 +300,7 @@ public class 对局持久化Tests
         // match-setup 三条 REMOVED 的 Migration：大回合上限 / 碾压起始大回合 / 落后补偿开关三项不再入存档，旧存档不兼容，
         // 加载时明确报错（不回填）；碾压候选与待回应名单（elimination-endgame「势力碾压」REMOVED）同理。
         // 旧存档里这五个字段即使取值为 null / 空数组也会写出，所以按"字段出现"判定。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All);
         string json = match.Serialize();
         Assert.DoesNotContain($"\"{field}\"", json, StringComparison.Ordinal);   // 新存档不再写出
 

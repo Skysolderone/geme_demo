@@ -12,6 +12,7 @@ using static Siege.Core.Tests.PresentationFixtures;
 namespace Siege.Core.Tests.TacticalLayers;
 
 /// <summary>规格：tactical-layers —— Requirement: 五种战术信息层（势力层的领地分与高地拆分）</summary>
+/// <remarks>retire-legacy-rules 1.6：局面载体为平坦 8×8 链接档图上四人同锁棋盘 0（LinkModeFixtures.PlainStarted），原 9×9 坐标平移 (+2, +2)（「势力层显示领地分」为 (+1, +1)，保住 J 列）。</remarks>
 public class 势力层领地与高地Tests
 {
     [Fact]
@@ -21,11 +22,11 @@ public class 势力层领地与高地Tests
         // restore-go-core-rules 段 B：取代旧的「势力层显示据点控制」与「势力层视图模型不含领地贡献字段」两条——
         // 据点项已随据点摘除，领地分恢复计分后势力层必须给得出它。
         // 变异验证 M-B11（段 B，实跑红 3）：LayerContents.Power 把 PlayerPowerRowView 的领地分改成 0 → 本测试红。
-        // 段 E（tasks 5.4）：势力层内容改为"独占格着色 + 领地分 + 棋串分"。规格算例：P0 占 C5–G5 一排 5 子 → 覆盖第 4 / 6 行各 5 格 + 两端 B5、H5 = 12 个独占空格，
-        // 这 12 格以 P0 的阵营呈现、领地分读得出 12。另摆 P1 J9 与 P2 G9：两家共同覆盖 H9 → 争议格，MUST NOT 以任何玩家的得分呈现。
+        // 段 E（tasks 5.4）：势力层内容改为"独占格着色 + 领地分 + 棋串分"。规格算例：P0 占 D6–H6 一排 5 子 → 覆盖第 5 / 7 行各 5 格 + 两端 C6、J6 = 12 个独占空格，
+        // 这 12 格以 P0 的阵营呈现、领地分读得出 12。另摆 P1 K10 与 P2 H10：两家共同覆盖 J10 → 争议格，MUST NOT 以任何玩家的得分呈现。
         // 独占格直接投影势力明细的 ExclusiveCells（空格归属三态的唯一结果），不在表现层另扫覆盖表。
         // 变异验证 M-E8：LayerContents.Power 的独占格集合掺入争议格（争议格也以独占格呈现）→ 实跑红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(P0, "C5", "D5", "E5", "F5", "G5").Stones(P1, "J9").Stones(P2, "G9");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5).Stones(P0, "D6", "E6", "F6", "G6", "H6").Stones(P1, "K10").Stones(P2, "H10");
 
         var layer = (PowerLayerContent)match.World(P3).Layer(TacticalLayer.Power);
         PowerSnapshot truth = match.Scoreboard.Latest!;
@@ -34,11 +35,11 @@ public class 势力层领地与高地Tests
         Assert.Equal(12, mine.Length);
         Assert.Equal(12, layer.Players.Single(r => r.Player == P0).TerritoryScore);
         Assert.Equal(
-            ["B5", "C4", "C6", "D4", "D6", "E4", "E6", "F4", "F6", "G4", "G6", "H5"],
+            ["C6", "D5", "D7", "E5", "E7", "F5", "F7", "G5", "G7", "H5", "H7", "J6"],
             mine.Select(c => c.Coord.ToNotation()).Order(StringComparer.Ordinal));
         Assert.All(layer.Territory, c => Assert.Equal(TerritoryState.Exclusive, c.State));
-        Assert.Equal(OwnershipKind.Contested, truth.Coverage.OwnershipOf(Coord.Parse("H9")).Kind);
-        Assert.DoesNotContain(layer.Territory, c => c.Coord == Coord.Parse("H9"));
+        Assert.Equal(OwnershipKind.Contested, truth.Coverage.OwnershipOf(Coord.Parse("J10")).Kind);
+        Assert.DoesNotContain(layer.Territory, c => c.Coord == Coord.Parse("J10"));
         foreach (PlayerPower p in truth.Players)
         {
             Assert.Equal(p.ExclusiveCells.Order(), layer.Territory.Where(c => c.Owner == p.Player).Select(c => c.Coord).Order());
@@ -70,16 +71,16 @@ public class 势力层领地与高地Tests
     {
         // 规格 terrain-surfaces · tactical-layers「荒漠独占不进领地分」：A 独占 5 个空草地格与 3 个空荒漠格 → 领地分显示 5，
         // 3 个荒漠格以"独占、不计分"的样式出现（Scored = false），且仍归 A。
-        // 布置：P0 占 C5–E5 一排 3 子 → 独占 B5、F5、C4、D4、E4、C6、D6、E6 共 8 格，其中 B5、C4、C6 为荒漠。
+        // 布置：P0 占 E7–G7 一排 3 子 → 独占 D7、H7、E6、F6、G6、E8、F8、G8 共 8 格，其中 D7、E6、E8 为荒漠。
         // 变异验证 M-S1c（实跑）：LayerContents.Power 的 Scored 恒为 true → 本测试红。
-        TerrainData terrain = TestMaps.Terrain(surfaces: [("B5", Surface.Desert), ("C4", Surface.Desert), ("C6", Surface.Desert)]);
-        MatchFlow match = MatchFixtures.Started(terrain).AtRound(5).Stones(P0, "C5", "D5", "E5");
+        TerrainData terrain = TestMaps.Terrain(surfaces: [("D7", Surface.Desert), ("E6", Surface.Desert), ("E8", Surface.Desert)]);
+        MatchFlow match = LinkModeFixtures.PlainStarted(terrain).AtRound(5).Stones(P0, "E7", "F7", "G7");
 
         var layer = (PowerLayerContent)match.World(P1).Layer(TacticalLayer.Power);
 
         TerritoryCellView[] mine = [.. layer.Territory.Where(c => c.Owner == P0)];
         Assert.Equal(8, mine.Length);
-        Assert.Equal(["B5", "C4", "C6"], mine.Where(c => !c.Scored).Select(c => c.Coord.ToNotation()).Order(StringComparer.Ordinal));
+        Assert.Equal(["D7", "E6", "E8"], mine.Where(c => !c.Scored).Select(c => c.Coord.ToNotation()).Order(StringComparer.Ordinal));
         Assert.Equal(5, mine.Count(c => c.Scored));
         Assert.Equal(5, layer.Players.Single(r => r.Player == P0).TerritoryScore);
         Assert.Equal(5 + 3, layer.Players.Single(r => r.Player == P0).Total);
@@ -89,17 +90,10 @@ public class 势力层领地与高地Tests
     public void 势力层显示高地加值()
     {
         // 规格 Scenario：某棋串的位置加值中有 2 点来自高地压制 → 该棋串的分数拆分中可读出高地 2 点。
-        // D5 / E5 为 h=2，P0 占两格、各自覆盖正下方 h=0 的 P1 敌子（D4 / E4）→ 每枚 +1，高地 2；无连珠 / 协同。
+        // F7 / G7 为 h=2，P0 占两格、各自覆盖正下方 h=0 的 P1 敌子（F6 / G6）→ 每枚 +1，高地 2；无连珠 / 协同。
         // 变异验证 M-B6（段 B）：GroupPowerView.From 的公式文案去掉高地一项 → 本测试红。
-        MapData map = MatchFixtures.Map() with { TerrainData = TestMaps.Terrain(heights: [("D5", 2), ("E5", 2)]) };
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
-        foreach (PlayerId p in MatchFixtures.All)
-        {
-            match.Debug.SeedHand(p, (PieceType.Basic, 50));
-        }
-
-        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
-        match.AtRound(5).Stones(P0, "D5", "E5").Stones(P1, "D4", "E4");
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(heights: [("F7", 2), ("G7", 2)]))
+            .AtRound(5).Stones(P0, "F7", "G7").Stones(P1, "F6", "G6");
 
         var layer = (PowerLayerContent)match.World(P3).Layer(TacticalLayer.Power);
         GroupScoreView group = Assert.Single(layer.Groups, g => g.Owner == P0);
@@ -124,21 +118,21 @@ public class 势力层领地与高地Tests
     {
         // more-pieces-relics tactical-layers Scenario「势力层显示新来源」：打开势力层，查看一条含铁链子与哨兵子的棋串 →
         // 该棋串的位置加值拆分中可读到铁链与哨兵两项，且各项之和等于位置加值。
-        // 盘面（独立手算，规格 piece-effects）：P0 C5、D5 铁链子 + E5 哨兵子连成 3 子串；P1 普通子 F5 贴着哨兵。
-        //   铁链：每枚提供"棋串棋子数 − 1" = 2，两枚 → 4；哨兵：气边邻格 F5 上 1 枚非己方棋子 → +2；其余来源 0；无倍增子。
+        // 盘面（独立手算，规格 piece-effects）：P0 E7、F7 铁链子 + G7 哨兵子连成 3 子串；P1 普通子 H7 贴着哨兵。
+        //   铁链：每枚提供"棋串棋子数 − 1" = 2，两枚 → 4；哨兵：气边邻格 H7 上 1 枚非己方棋子 → +2；其余来源 0；无倍增子。
         //   基础 3（新四种各 1）、位置加值 6、军势 ⌊(3 + 6) × 1⌋ = 9。
         // 文案口径（段 D 定）：连珠 / 协同 / 高地三项照旧恒列；四项新来源只在非 0 时列出——v1 局它们恒为 0，恒列只会给每条棋串多挂四个 0。
         // 先红：骨架态视图的四个新字段恒 0、文案只列三项。
-        MatchFlow match = MatchFixtures.Started().AtRound(5)
-            .Pieces(P0, PieceType.Chain, "C5", "D5")
-            .Pieces(P0, PieceType.Sentry, "E5")
-            .Stones(P1, "F5");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5)
+            .Pieces(P0, PieceType.Chain, "E7", "F7")
+            .Pieces(P0, PieceType.Sentry, "G7")
+            .Stones(P1, "H7");
 
         var layer = (PowerLayerContent)match.World(P2).Layer(TacticalLayer.Power);
         GroupScoreView group = Assert.Single(layer.Groups, g => g.Owner == P0);
         GroupPower truth = match.Scoreboard.Latest!.Of(P0).Groups.Single();
 
-        Assert.Equal(["C5", "D5", "E5"], group.Stones.Notations());
+        Assert.Equal(["E7", "F7", "G7"], group.Stones.Notations());
         Assert.Equal((4, 2), (group.Power.ChainBonus, group.Power.SentryBonus));
         Assert.Equal((0, 0, 0, 0, 0), (group.Power.LineBonus, group.Power.SynergyBonus, group.Power.HighGroundBonus, group.Power.BannerBonus, group.Power.BoundaryBonus));
         Assert.Equal((truth.ChainBonus, truth.SentryBonus, truth.PositionBonus), (group.Power.ChainBonus, group.Power.SentryBonus, group.Power.PositionBonus));
@@ -157,11 +151,11 @@ public class 势力层领地与高地Tests
     public void 势力层四项新来源各自可读()
     {
         // 同一 Requirement「位置加值的连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑拆分」：旗手与界碑两项也要各自落到视图字段与文案（上一条只覆盖铁链 / 哨兵）。
-        // 盘面（独立手算）：信物格 D5；P0 D4 旗手子 + E4 界碑子成串。旗手：气边邻格 D5 是信物格 → +3（按位置计，不看揭示与控制）。
-        //   界碑 E4 的气边邻格 E3、F4、E5 都只被 P0 覆盖（D4 另一侧 C4 / D3 与界碑无关）→ 独占空格 3 个 → +3。基础 2、位置加值 6、军势 8。
-        MatchFlow match = MatchFixtures.Started(relics: [("D5", RelicFixtures.Prospecting())]).AtRound(5)
-            .Pieces(P0, PieceType.Bannerman, "D4")
-            .Pieces(P0, PieceType.Boundary, "E4");
+        // 盘面（独立手算）：信物格 F7；P0 F6 旗手子 + G6 界碑子成串。旗手：气边邻格 F7 是信物格 → +3（按位置计，不看揭示与控制）。
+        //   界碑 G6 的气边邻格 G5、H6、G7 都只被 P0 覆盖（F6 另一侧 E6 / F5 与界碑无关）→ 独占空格 3 个 → +3。基础 2、位置加值 6、军势 8。
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("F7", RelicFixtures.Prospecting())]).AtRound(5)
+            .Pieces(P0, PieceType.Bannerman, "F6")
+            .Pieces(P0, PieceType.Boundary, "G6");
 
         var layer = (PowerLayerContent)match.World(P2).Layer(TacticalLayer.Power);
         GroupScoreView group = Assert.Single(layer.Groups, g => g.Owner == P0);
@@ -179,7 +173,7 @@ public class 势力层领地与高地Tests
         // restore-go-core-rules 段 A：倍率不封顶后，势力层的热区等级（柱高 / 着色档位）取 min(倍增子数量, 3)，不随数量无限加高；
         // 它只是显示档位，不是倍率封顶——同一条棋串的倍率文字与军势仍是精确值：5 枚倍增子 → 倍率 7.59375、军势 ⌊5 × 243 / 32⌋ = ⌊37.96…⌋ = 37。
         // 变异验证 M-AC15（段 A check 实跑）：LayerContents 的热区等级去掉 Math.Min（直接取倍增子数量）→ 全套只红本测试 1 条（5 ≠ 3）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Pieces(P0, PieceType.Multiplier, "C5", "D5", "E5", "F5", "G5").Pieces(P1, PieceType.Multiplier, "C2", "D2");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5).Pieces(P0, PieceType.Multiplier, "E7", "F7", "G7", "H7", "J7").Pieces(P1, PieceType.Multiplier, "E4", "F4");
 
         var layer = (PowerLayerContent)match.World(P3).Layer(TacticalLayer.Power);
         GroupScoreView five = Assert.Single(layer.Groups, g => g.Owner == P0);

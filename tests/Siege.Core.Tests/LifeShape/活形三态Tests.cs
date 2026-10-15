@@ -191,12 +191,12 @@ public class 活形三态Tests
     [Fact]
     public void 活形不入存档()
     {
-        // 在 11×11 对局盘上给 P0 搭一条两眼活形（眼 E5、G5），存档 → 恢复 → 重算，与存档前逐项一致；存档 JSON 不含活形字段。
-        MatchFlow match = MatchFixtures.Started().AtRound(5)
-            .Stones(MatchFixtures.P0, "D4", "E4", "F4", "G4", "H4", "D5", "F5", "H5", "D6", "E6", "F6", "G6", "H6")
-            .Stones(MatchFixtures.P1, "B9");
+        // 在对局盘上给 P0 搭一条两眼活形（眼 F6、H6；retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的眼 E5、G5），存档 → 恢复 → 重算，与存档前逐项一致；存档 JSON 不含活形字段。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5)
+            .Stones(TestMaps.P0, "E5", "F5", "G5", "H5", "J5", "E6", "G6", "J6", "E7", "F7", "G7", "H7", "J7")
+            .Stones(TestMaps.P1, "D10");
         LifeShapeReport before = LifeShapeReport.Analyze(match.Board);
-        Assert.Equal(LifeState.Alive, before.LifeOf("D4"));
+        Assert.Equal(LifeState.Alive, before.LifeOf("E5"));
 
         string json = match.Serialize();
         foreach (string word in new[] { "life", "eye", "forbid", "alive", "活形", "禁入" })
@@ -208,7 +208,7 @@ public class 活形三态Tests
         LifeShapeReport after = LifeShapeReport.Analyze(restored.Board);
 
         Assert.Equal(Describe(before), Describe(after));
-        Assert.Equal(LifeState.Alive, after.LifeOf("D4"));
+        Assert.Equal(LifeState.Alive, after.LifeOf("E5"));
     }
 
     // ---------- life-single-stone：单子不成活（规格 openspec/changes/life-single-stone/specs/life-shape） ----------

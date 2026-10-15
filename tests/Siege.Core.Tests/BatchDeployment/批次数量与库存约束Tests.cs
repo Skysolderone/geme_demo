@@ -134,16 +134,16 @@ public class 批次数量与库存约束Tests
         // 变异验证 M-GP2（BaseDeployLimitFor 阶段表写死 3：`<= 6 => 3`、`_ => 3`）→ 全套红 19，含本 Theory 的 5/8 两行；
         // M-GP3（RelicLedger.BuildSnapshot 基础改为 BaseDeployLimitFor(1)）→ 全套红 47，含本 Theory 的 5/8 两行。
         // M-GP1（边界整体后移一回合）本 Theory 不红（3/5/8 都不在边界上），由「基础值随阶段提高_阶段边界」的 4、7 两行抓。
-        MatchFlow match = MatchFixtures.Started().AtRound(majorRound, MatchFixtures.All);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(majorRound, TestMaps.All);
 
         match.BeginTurn();
-        Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+        Assert.Equal(TestMaps.P0, match.CurrentPlayer);
         Assert.Equal((majorRound, expected), (match.CurrentSnapshot!.MajorRound, match.CurrentSnapshot.DeployLimit));
         match.EnterRecruit();
         StagedBatch batch = match.EnterDeploy();
         Assert.Equal(expected, batch.Context.DeployLimit);
 
-        string[] cells = ["A1", "C1", "B2", "A3", "C3", "B1"];
+        string[] cells = ["C3", "E3", "D4", "C5", "E5", "D3"];
         for (int i = 0; i < expected; i++)
         {
             Assert.Null(batch.Stage(TestMaps.At(cells[i]), PieceType.Basic));
@@ -232,10 +232,10 @@ public class 批次数量与库存约束Tests
         // growth-pass-1 D2 边界补钉（check 阶段）：插旗阶段 MajorRound = 0，PublishSupplement「任何阶段可用」会经账本副本为每名玩家生成效果快照，
         // 此时基础部署上限必须落在第一阶段 3（BaseDeployLimitFor 的 `<= 3` 分支覆盖 0），不得因 0 不在 1–3 区间而取到其它阶段值或抛出。
         // 变异验证 M-C4：BaseDeployLimitFor 首分支前插入 `< 1 => 5` → 全套红 2（本测试、既有「插旗阶段也能发布补充载荷」——后者只钉 Value，本测试另钉来源拆分的 Base）。
-        MatchFlow match = MatchFixtures.Create();
+        MatchFlow match = LinkModeFixtures.PlainCreate();
         Assert.Equal((MatchPhase.FlagPlanting, 0), (match.Phase, match.MajorRound));
 
-        StructureParameter deploy = match.PublishSupplement().Structures.Single(s => s.Player == MatchFixtures.P0).Parameters!.DeployLimit;
+        StructureParameter deploy = match.PublishSupplement().Structures.Single(s => s.Player == TestMaps.P0).Parameters!.DeployLimit;
 
         Assert.Equal((3, 3), (deploy.Value, deploy.Base));
         Assert.Empty(deploy.Sources);

@@ -135,13 +135,13 @@ public class 盘面层的读法切换Tests
     {
         // 规格 Scenario「平地上两种读法点亮同一批空格」（terrain-model D-G 改写 merge-board-layer 的"两种读法点亮同一批空格"）：
         // 没有崖壁、林地、栅栏与深水的区域内，"被某方覆盖的空格"与"某条棋串的气"仍是同一批格子——
-        // 覆盖关系与气边在平地上退化成同一条几何邻接。9×9 夹具是全平地，所以全盘成立，且视图模型报出的差集为空。
+        // 覆盖关系与气边在平地上退化成同一条几何邻接。平坦 8×8 链接载体是全平地（retire-legacy-rules 1.6 前为 9×9 夹具），所以全盘成立，且视图模型报出的差集为空。
         // 集合在测试内独立取出后做双向差集，不调用实现自己的任何比较。
         MatchFlow match = AiFixtures.Round5()
-            .Pieces(P0, PieceType.Basic, "D4", "D5", "E5")
-            .Pieces(P1, PieceType.Basic, "F4", "G4")
-            .Pieces(P2, PieceType.Basic, "C8", "D8")
-            .Pieces(P3, PieceType.Basic, "H7");
+            .Pieces(P0, PieceType.Basic, "F6", "F7", "G7")
+            .Pieces(P1, PieceType.Basic, "H6", "J6")
+            .Pieces(P2, PieceType.Basic, "E10", "F10")
+            .Pieces(P3, PieceType.Basic, "K9");
 
         var ownership = (TerritoryLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership);
         var groups = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups);
@@ -163,22 +163,22 @@ public class 盘面层的读法切换Tests
     {
         // 规格 Scenario「差集可由地形解释」（terrain-model D-G）：同一盘面上被覆盖但不是任何棋串的气的空格，
         // 与提供覆盖的棋子之间存在崖壁、栅栏或一格深水中的至少一种；反向（是气但无人覆盖）只能是林地。
-        // 四种地形各摆一处（都放在 9×9 夹具中段，避开四角出生区）：
-        //   崖壁：P0 在 h=2 的 D5，D6 为 h=1 缓坡（给它一口气），C5 / E5 / D4 为 h=0 → 三格被居高临下覆盖却不是气；
-        //   栅栏：P1 在 F6，F6–G6 有栅栏 → G6 被覆盖（栅栏不挡覆盖）却不是气；
-        //   隔岸：P2 在 E2，E3 为未架桥深水 → 覆盖落到对岸 E4，E4 与 E2 不相邻自然不是气；
-        //   林地：P3 在 B4，B5 为林地 → B5 是气（林地不挡气）却无人覆盖（B4 与 D5 互不相邻，两处互不干扰）。
-        // 变异验证 M-C1：TacticalLayers.ReasonFor 去掉"来源不相邻 → 隔岸"分支 → 本测试红（E4 抛出"既无栅栏也非崖壁"）。
+        // 四种地形各摆一处（都放在平坦 8×8 链接载体棋盘 0 的中段；retire-legacy-rules 1.6 前为 9×9 夹具，坐标平移 (+2, +2)）：
+        //   崖壁：P0 在 h=2 的 F7，F8 为 h=1 缓坡（给它一口气），E7 / G7 / F6 为 h=0 → 三格被居高临下覆盖却不是气；
+        //   栅栏：P1 在 H8，H8–J8 有栅栏 → J8 被覆盖（栅栏不挡覆盖）却不是气；
+        //   隔岸：P2 在 G4，G5 为未架桥深水 → 覆盖落到对岸 G6，G6 与 G4 不相邻自然不是气；
+        //   林地：P3 在 D6，D7 为林地 → D7 是气（林地不挡气）却无人覆盖（D6 与 F7 互不相邻，两处互不干扰）。
+        // 变异验证 M-C1：TacticalLayers.ReasonFor 去掉"来源不相邻 → 隔岸"分支 → 本测试红（G6 抛出"既无栅栏也非崖壁"）。
         // 变异验证 M-C2：CoverageMap.Compute 记录来源时把 Adjacent 写死为 true → 本测试红（同上）。
-        // 变异验证 M-C4（check 阶段实做）：ReadingDiff 去掉"是气但无人覆盖 → 林地"分支（条件改 false）→ 本测试红（B5 抛"不是林地"）。
+        // 变异验证 M-C4（check 阶段实做）：ReadingDiff 去掉"是气但无人覆盖 → 林地"分支（条件改 false）→ 本测试红（D7 抛"不是林地"）。
         MatchFlow match = TerrainMatch(TestMaps.Terrain(
-            heights: [("D5", 2), ("D6", 1)],
-            surfaces: [("E3", Surface.DeepWater), ("B5", Surface.Forest)],
-            fences: [("F6", "G6")]))
-            .Pieces(P0, PieceType.Basic, "D5")
-            .Pieces(P1, PieceType.Basic, "F6")
-            .Pieces(P2, PieceType.Basic, "E2")
-            .Pieces(P3, PieceType.Basic, "B4");
+            heights: [("F7", 2), ("F8", 1)],
+            surfaces: [("G5", Surface.DeepWater), ("D7", Surface.Forest)],
+            fences: [("H8", "J8")]))
+            .Pieces(P0, PieceType.Basic, "F7")
+            .Pieces(P1, PieceType.Basic, "H8")
+            .Pieces(P2, PieceType.Basic, "G4")
+            .Pieces(P3, PieceType.Basic, "D6");
 
         var ownership = (TerritoryLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership);
         var groups = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups);
@@ -188,52 +188,45 @@ public class 盘面层的读法切换Tests
             .Where(c => c.State is TerritoryState.Exclusive or TerritoryState.Contested)
             .Select(c => c.Coord)];
         HashSet<Coord> liberties = [.. groups.Groups.SelectMany(g => g.Liberties)];
-        // Coord 的字典序先行后列：第 4 行的 D4 / E4 排在第 5 行的 C5 / E5 之前。
-        Assert.Equal(["D4", "E4", "C5", "E5", "G6"], covered.Except(liberties).Order().Notations());
-        Assert.Equal(["B5"], liberties.Except(covered).Order().Notations());
+        // Coord 的字典序先行后列：第 6 行的 F6 / G6 排在第 7 行的 E7 / G7 之前。
+        Assert.Equal(["F6", "G6", "E7", "G7", "J8"], covered.Except(liberties).Order().Notations());
+        Assert.Equal(["D7"], liberties.Except(covered).Order().Notations());
 
         BoardReadingDiff diff = ownership.Diff;
         Assert.Equal(Dump(diff), Dump(groups.Diff));
         Assert.Equal(covered.Except(liberties).Order().Notations(), diff.CoveredNotLiberty.Select(d => d.Coord).Notations());
-        Assert.Equal(["B5"], diff.LibertyNotCovered.Select(d => d.Coord).Notations());
+        Assert.Equal(["D7"], diff.LibertyNotCovered.Select(d => d.Coord).Notations());
 
         // 每一格都给得出原因，且原因与摆出的地形一一对应。
         Dictionary<string, TerrainReason[]> reasons = diff.CoveredNotLiberty.Concat(diff.LibertyNotCovered)
             .ToDictionary(d => d.Coord.ToNotation(), d => d.Reasons.ToArray());
         Assert.All(reasons.Values, r => Assert.NotEmpty(r));
-        Assert.Equal([TerrainReason.Cliff], reasons["C5"]);
-        Assert.Equal([TerrainReason.Cliff], reasons["D4"]);
-        Assert.Equal([TerrainReason.Cliff], reasons["E5"]);
-        Assert.Equal([TerrainReason.Fence], reasons["G6"]);
-        Assert.Equal([TerrainReason.AcrossWater], reasons["E4"]);
-        Assert.Equal([TerrainReason.Forest], reasons["B5"]);
+        Assert.Equal([TerrainReason.Cliff], reasons["E7"]);
+        Assert.Equal([TerrainReason.Cliff], reasons["F6"]);
+        Assert.Equal([TerrainReason.Cliff], reasons["G7"]);
+        Assert.Equal([TerrainReason.Fence], reasons["J8"]);
+        Assert.Equal([TerrainReason.AcrossWater], reasons["G6"]);
+        Assert.Equal([TerrainReason.Forest], reasons["D7"]);
 
-        // 缓坡 D6：Δh = 1，既是气也被覆盖，不在差集里。
-        Assert.Contains(TestMaps.At("D6"), covered);
-        Assert.Contains(TestMaps.At("D6"), liberties);
+        // 缓坡 F8：Δh = 1，既是气也被覆盖，不在差集里。
+        Assert.Contains(TestMaps.At("F8"), covered);
+        Assert.Contains(TestMaps.At("F8"), liberties);
 
         // Core 只读查询 CoverageMap.SourcesOf 的直接断言（段 C 唯一 Core 增量）：来源坐标与"是否几何相邻"一位由 Core 给出，
-        // 隔岸 E4 的来源 E2 不相邻，崖壁 C5 / 栅栏 G6 的来源相邻；无人覆盖的林地 B5 没有来源。
+        // 隔岸 G6 的来源 G4 不相邻，崖壁 E7 / 栅栏 J8 的来源相邻；无人覆盖的林地 D7 没有来源。
         CoverageMap coverage = match.PublicWorldOf().View.Power!.Coverage;
-        Assert.Equal(new[] { new CoverageSource(TestMaps.At("E2"), Adjacent: false) }, coverage.SourcesOf(TestMaps.At("E4")).ToArray());
-        Assert.Equal(new[] { new CoverageSource(TestMaps.At("D5"), Adjacent: true) }, coverage.SourcesOf(TestMaps.At("C5")).ToArray());
-        Assert.Equal(new[] { new CoverageSource(TestMaps.At("F6"), Adjacent: true) }, coverage.SourcesOf(TestMaps.At("G6")).ToArray());
-        Assert.Empty(coverage.SourcesOf(TestMaps.At("B5")));
+        Assert.Equal(new[] { new CoverageSource(TestMaps.At("G4"), Adjacent: false) }, coverage.SourcesOf(TestMaps.At("G6")).ToArray());
+        Assert.Equal(new[] { new CoverageSource(TestMaps.At("F7"), Adjacent: true) }, coverage.SourcesOf(TestMaps.At("E7")).ToArray());
+        Assert.Equal(new[] { new CoverageSource(TestMaps.At("H8"), Adjacent: true) }, coverage.SourcesOf(TestMaps.At("J8")).ToArray());
+        Assert.Empty(coverage.SourcesOf(TestMaps.At("D7")));
     }
 
-    /// <summary>9×9 流程夹具地图换上指定地形后开到第 5 大回合（全图可落子）。地形要素须避开四角 3×3 出生区。</summary>
-    private static MatchFlow TerrainMatch(TerrainData terrain)
-    {
-        MapData map = MatchFixtures.Map() with { TerrainData = terrain };
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
-        foreach (PlayerId p in MatchFixtures.All)
-        {
-            match.Debug.SeedHand(p, (PieceType.Basic, 50));
-        }
-
-        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
-        return match.AtRound(5, [P0, P1, P2, P3]);
-    }
+    /// <summary>
+    /// 平坦 8×8 链接载体换上指定地形（写在棋盘 0 上）后开到第 5 大回合：四人同锁棋盘 0，合法范围即整块棋盘 0。
+    /// retire-legacy-rules 1.6：原为 9×9 流程夹具（旧模式），坐标整体平移 (+2, +2)。
+    /// </summary>
+    private static MatchFlow TerrainMatch(TerrainData terrain) =>
+        LinkModeFixtures.PlainStarted(terrain).AtRound(5, [P0, P1, P2, P3]);
 
     [Fact]
     public void 归属读法另有棋串读法没有的格()
@@ -241,8 +234,8 @@ public class 盘面层的读法切换Tests
         // 规格 Scenario「归属读法另有棋串读法没有的格」：占据格与中立格在棋串读法里不被标出。
         // 这条挡的是"合并时顺手把归属读法削成气的子集"——那样合并就变成了删功能。
         MatchFlow match = AiFixtures.Round5()
-            .Pieces(P0, PieceType.Basic, "D4", "D5", "E5")
-            .Pieces(P1, PieceType.Basic, "F4", "G4");
+            .Pieces(P0, PieceType.Basic, "F6", "F7", "G7")
+            .Pieces(P1, PieceType.Basic, "H6", "J6");
 
         var ownership = (TerritoryLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Ownership);
         var groups = (LibertyLayerContent)match.World(P0).Layer(TacticalLayer.Board, BoardReading.Groups);

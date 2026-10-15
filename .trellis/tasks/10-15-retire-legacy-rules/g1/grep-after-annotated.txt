@@ -1,0 +1,53 @@
+# g1/grep-after.txt 逐行归类（retire-legacy-rules 1.7 验收）：§3 行号 = 清单 (c)/(j) 逐名表；夹具定义 = MatchFixtures.cs 本身（第 2 组随文件删除）；注释 = 只在注释里出现；误报 = 链接模式选项写在续行上
+AiDecision/链接模式下的决胜一手Tests.cs:171	§3 #1（c）旧模式不变
+AiDecision/链接模式下的决胜一手Tests.cs:172	§3 #1（c）旧模式不变
+AiDecision/链接模式下落后者的停手阈值Tests.cs:135	§3 #2（c）旧模式不变
+AiDecision/链接模式下落后者的停手阈值Tests.cs:136	§3 #2（c）旧模式不变
+Battlefield/链接后的公开补充载荷Tests.cs:77	§3 #3（c）旧模式副本与按生成记录恢复逐项相同
+Battlefield/阶段推进Tests.cs:212	§3 #4（c）旧模式没有阶段转换
+EliminationEndgame/三类终局条件Tests.cs:19	§3 #9（j）唯一参赛者获胜
+EliminationEndgame/三类终局条件Tests.cs:42	§3 #5（c）整轮Pass
+EliminationEndgame/三类终局条件Tests.cs:80	§3 #10（j）轮数再多也不结束
+EliminationEndgame/三类终局条件Tests.cs:109	§3 #8（c）只剩一名参赛玩家优先于棋盘填满
+EliminationEndgame/三类终局条件Tests.cs:125	(c) 专用助手 FullBoard：只被 §3 #6 棋盘填满、#7 棋盘填满优先于整轮Pass 调用（第 2 组随文件删除）
+EliminationEndgame/两类终局条件Tests.cs:140	§3 #11（c）旧模式终局原因不含最后战场结算
+EliminationEndgame/终局名次与并列判定Tests.cs:95	§3 #12（c）整轮Pass时按同一规则排名
+EliminationEndgame/终局名次与并列判定Tests.cs:126	§3 #13（c）旧模式流程中弃赛者排在势力归零出局者之前
+InformationVisibility/按座位视图Tests.cs:256	§3 #14（c）旧模式全图展开
+InformationVisibility/视图模型按座位过滤Tests.cs:221	§3 #15（c）旧模式全图可见无占位_与全知棋盘逐项相同
+InformationVisibility/视图模型按座位过滤Tests.cs:230	§3 #15（c）旧模式全图可见无占位_与全知棋盘逐项相同
+InitiativeOrder/先手顺序预测_链接模式Tests.cs:245	§3 #16（c）旧模式预测不变
+InitiativeOrder/先手顺序预测_链接模式Tests.cs:260	§3 #16（c）旧模式预测不变
+MatchFlowRegression/流程回归Tests.cs:20	§3 #17（c）出局改变参赛人数后Pass计数与新人数重比
+MatchFlowRegression/流程回归Tests.cs:42	§3 #18（c）弃赛改变参赛人数后立即重比Pass计数
+MatchSetup/匿名同时插旗Tests.cs:14	§3 #19（c）身份匿名
+MatchSetup/匿名同时插旗Tests.cs:35	§3 #20（c）锁定前可更换
+MatchSetup/匿名同时插旗Tests.cs:51	§3 #21（c）多人同区
+MatchSetup/对局模式Tests.cs:19	§3 #22（c）缺省为旧模式
+MatchSetup/对局模式Tests.cs:20	§3 #22（c）缺省为旧模式
+MatchSetup/对局模式Tests.cs:21	§3 #22（c）缺省为旧模式
+MatchSetup/对局模式Tests.cs:22	§3 #22（c）缺省为旧模式
+MatchSetup/对局模式Tests.cs:24	§3 #22（c）缺省为旧模式
+MatchSetup/对局模式Tests.cs:44	§3 #23（c）公开建局恒为链接模式
+MatchSetup/对局模式Tests.cs:72	§3 #24（c）链接图以链接模式建局
+MatchSetup/链接模式存档Tests.cs:117	§3 #25（c）旧模式存档不写新字段且按旧模式读入
+MatchSetup/链接模式存档Tests.cs:122	§3 #25（c）旧模式存档不写新字段且按旧模式读入
+MatchSetup/链接模式存档Tests.cs:155	§3 #26（c）旧模式终局存档不写出局原因
+TurnSequence/合法落子范围的对外契约Tests.cs:25	§3 #28（c）范围随大回合切换
+TurnSequence/合法落子范围的对外契约Tests.cs:45	§3 #29（j）禁入格不在范围内
+TurnSequence/战场内合法落子范围Tests.cs:180	§3 #30（c）旧模式第4大回合仍全图解禁
+TurnSequence/战场内合法落子范围Tests.cs:182	§3 #30（c）旧模式第4大回合仍全图解禁
+TurnSequence/构筑保护期的落子限制Tests.cs:16	§3 #31（j）保护期内越区落子被拒
+TurnSequence/第4大回合的全图解禁Tests.cs:16	§3 #32（c）解禁后全图可落子
+TurnSequence/第4大回合的全图解禁Tests.cs:31	§3 #33（j）空盘面玩家重新进入
+InformationVisibility/视图模型按座位过滤Tests.cs:157	注释
+MapSelection/选图视图模型Tests.cs:28	误报：ViewOf 的链接模式选项在续行
+MapSelection/选图视图模型Tests.cs:198	误报：预览说明读默认棋盘视图模型 的链接模式选项在续行
+MapSelection/选图视图模型Tests.cs:217	误报：新局界面背景占位不带主题名_其余与插旗阶段相同 的链接模式选项在续行
+MatchFixtures.cs:28	夹具定义（第 2 组随 MatchFixtures.cs 删除）
+MatchFixtures.cs:53	夹具定义（第 2 组随 MatchFixtures.cs 删除）
+MatchSetup/对局模式Tests.cs:42	注释
+MatchSetup/开局信息公开范围Tests.cs:154	注释
+MatchTelemetry/对局日志的记录内容_链接模式Tests.cs:331	§3 #27（c）旧模式日志不写链接模式字段
+SimulationHarness/出生区编号显示Tests.cs:27	注释
+# 汇总：§3 (c)/(j) 41 行 + 其专用助手 1 行、夹具定义 2 行、注释 4 行、误报 3 行，共 51 行；无未归类

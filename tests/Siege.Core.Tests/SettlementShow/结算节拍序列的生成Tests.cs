@@ -98,9 +98,9 @@ public class 结算节拍序列的生成Tests
         Assert.Equal(Text(CaptureExampleBeats()), Text(CaptureExampleBeats()));
 
         // 真实对局：结算前后两份公开快照 + 结算记录，两次生成逐项相同；生成不改变对局（指纹不变）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All);   // 保护期（第 1–3 大回合）之后全图可落
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All);   // retire-legacy-rules：平坦 8×8 链接载体、四人同锁棋盘 0（原 9×9 第 5 大回合全图可落），落点平移 (+2, +2)
         MatchPublicView before = match.Publish();
-        SettlementOutcome outcome = match.PlayTurn("F6", "E6");
+        SettlementOutcome outcome = match.PlayTurn("H8", "G8");
         MatchPublicView after = match.Publish();
         string fingerprint = PresentationFixtures.Fingerprint(match);
 
@@ -111,7 +111,7 @@ public class 结算节拍序列的生成Tests
 
         // 快照投影确实读到了内容：落子节拍按放置顺序列出两枚、归属为行动玩家。
         PlacementBeat placement = Assert.IsType<PlacementBeat>(first[0]);
-        Assert.Equal(["F6", "E6"], placement.Pieces.Select(p => p.Coord.ToNotation()));
+        Assert.Equal(["H8", "G8"], placement.Pieces.Select(p => p.Coord.ToNotation()));
         Assert.All(placement.Pieces, p => Assert.Equal(before.CurrentPlayer, p.Owner));
     }
 

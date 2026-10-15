@@ -19,11 +19,11 @@ namespace Siege.Core.Tests.AiDecision;
 /// </remarks>
 public class AI枚举改造目标Tests
 {
-    private static readonly PlayerId Me = MatchFixtures.P0;
+    private static readonly PlayerId Me = TestMaps.P0;
 
-    /// <summary>D4 / D5 深水、F4 林地的 9×9 对局，第 5 大回合（保护期已过，全图可落子）。</summary>
-    private static MatchFlow Match() => MatchFixtures
-        .Started(TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater), ("D5", Surface.DeepWater), ("F4", Surface.Forest)]))
+    /// <summary>F6 / F7 深水、H6 林地的对局（retire-legacy-rules：平坦 8×8 链接载体、四人同锁棋盘 0，原 9×9 坐标平移 (+2, +2)），第 5 大回合。</summary>
+    private static MatchFlow Match() => LinkModeFixtures
+        .PlainStarted(TestMaps.Terrain(surfaces: [("F6", Surface.DeepWater), ("F7", Surface.DeepWater), ("H6", Surface.Forest)]))
         .AtRound(5);
 
     private static HeuristicTurnController Ai(MatchFlow match) =>
@@ -50,19 +50,19 @@ public class AI枚举改造目标Tests
     }
 
     /// <summary>
-    /// 与 <see cref="Match"/> 同地形，但把 E4 的 16 条候选边（T-11）预先封掉 14 条，只留 E3–E4 与 E2–E3。
+    /// 与 <see cref="Match"/> 同地形，但把 G6 的 16 条候选边（T-11）预先封掉 14 条，只留 G5–G6 与 G4–G5。
     /// 不这么做，单点排行榜的 12 个名额会被同分的栅栏候选占满，烧林（记法 <c>X:</c> 排在最后）被挤出榜外——
     /// 这条要钉的是"三种动作都进了枚举"，不是"三种动作都挤得进前 12"（挤占本身记在 implement.md 供段 D 参考）。
     /// </summary>
-    private static MatchFlow Boxed() => MatchFixtures
-        .Started(TestMaps.Terrain(
-            surfaces: [("D4", Surface.DeepWater), ("D5", Surface.DeepWater), ("F4", Surface.Forest)],
+    private static MatchFlow Boxed() => LinkModeFixtures
+        .PlainStarted(TestMaps.Terrain(
+            surfaces: [("F6", Surface.DeepWater), ("F7", Surface.DeepWater), ("H6", Surface.Forest)],
             fences:
             [
-                ("E3", "D3"), ("E3", "F3"),
-                ("D4", "D3"), ("D4", "C4"), ("D4", "E4"), ("D4", "D5"),
-                ("F4", "F3"), ("F4", "E4"), ("F4", "G4"), ("F4", "F5"),
-                ("E5", "E4"), ("E5", "D5"), ("E5", "F5"), ("E5", "E6"),
+                ("G5", "F5"), ("G5", "H5"),
+                ("F6", "F5"), ("F6", "E6"), ("F6", "G6"), ("F6", "F7"),
+                ("H6", "H5"), ("H6", "G6"), ("H6", "J6"), ("H6", "H7"),
+                ("G7", "G6"), ("G7", "F7"), ("G7", "H7"), ("G7", "G8"),
             ]))
         .AtRound(5);
 
@@ -72,20 +72,20 @@ public class AI枚举改造目标Tests
         // D-J：对每枚暂放匠人枚举"全部合法目标 + 不改造"。同一落点因此会出现多个候选，只差在改造上。
         // 变异 M-B5：RankPoints 只 yield null（不枚举改造）→ 本条红。
         MatchFlow match = Boxed();
-        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 1, "E4");
+        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 1, "G6");
 
         ImmutableArray<PointScore> ranking = Rank(Ai(match), batch, driver);
 
         Assert.Contains(ranking, p => p.Edit is null);
         Assert.Contains(ranking, p => p.Edit is not null);
 
-        // 三种动作都被枚举到：E4 旁是深水 D4 与林地 F4，还剩两条没封的边可立栅。
+        // 三种动作都被枚举到：G6 旁是深水 F6 与林地 H6，还剩两条没封的边可立栅。
         Assert.Contains(ranking, p => p.Edit?.Kind == TerrainEditKind.Bridge);
         Assert.Contains(ranking, p => p.Edit?.Kind == TerrainEditKind.Burn);
         Assert.Contains(ranking, p => p.Edit?.Kind == TerrainEditKind.Fence);
 
-        // T-11：留下的两条边里有一条是**外圈边**（E2–E3 不以落点 E4 为端），放宽后的口径确实进了 AI 枚举。
-        Assert.Contains(ranking, p => p.Edit == TerrainEdit.Fence(TestMaps.At("E2"), TestMaps.At("E3")));
+        // T-11：留下的两条边里有一条是**外圈边**（G4–G5 不以落点 G6 为端），放宽后的口径确实进了 AI 枚举。
+        Assert.Contains(ranking, p => p.Edit == TerrainEdit.Fence(TestMaps.At("G4"), TestMaps.At("G5")));
 
         // 同一落点既有"不改造"也有"带改造"（两者是独立候选，不会被静默合并）。
         Assert.Contains(
@@ -101,34 +101,34 @@ public class AI枚举改造目标Tests
     [Fact]
     public void AI在能一手立栅提子时选择该手()
     {
-        // tasks 3.1 点名的验证：P1 孤子 E5 被堵到只剩 E5–E6 一口气，AI 手里只有匠人且只能落 E7。
-        // E7 不与 E5 相邻——只有 T-11 放宽后的外圈边 E5–E6 才是它的合法目标，带上它当场提子；
+        // tasks 3.1 点名的验证：P1 孤子 G7 被堵到只剩 G7–G8 一口气，AI 手里只有匠人且只能落 G9。
+        // G9 不与 G7 相邻——只有 T-11 放宽后的外圈边 G7–G8 才是它的合法目标，带上它当场提子；
         // 同一落点不带改造提不到子。AI 必须选带栅栏那一手。
-        MatchFlow match = MatchFixtures.Started().AtRound(5);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5);
         GameBoard board = match.Board;
-        board.Place(TestMaps.At("E5"), MatchFixtures.P1, PieceType.Basic);
-        foreach (string cell in new[] { "E4", "D5", "F5" })
+        board.Place(TestMaps.At("G7"), TestMaps.P1, PieceType.Basic);
+        foreach (string cell in new[] { "G6", "F7", "H7" })
         {
             board.Place(TestMaps.At(cell), Me, PieceType.Basic);
         }
 
-        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 1, "E7");
+        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 1, "G9");
         HeuristicTurnController ai = Ai(match);
         ai.Deploy(batch, () => driver.Rehearse(batch.Context, batch.Placements));
 
         Placement chosen = Assert.Single(ai.LastChoice!.Placements);
-        Assert.Equal(TestMaps.At("E7"), chosen.Coord);
-        Assert.Equal(TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6")), chosen.Edit);
+        Assert.Equal(TestMaps.At("G9"), chosen.Coord);
+        Assert.Equal(TerrainEdit.Fence(TestMaps.At("G7"), TestMaps.At("G8")), chosen.Edit);
 
-        // 该手确实提子（不是"碰巧评分最高"）：复摆后预演的提子集合是 E5。
-        Assert.Equal(["E5"], driver.Rehearse(batch.Context, batch.Placements).Captures.Select(c => c.Coord).Notations());
+        // 该手确实提子（不是"碰巧评分最高"）：复摆后预演的提子集合是 G7。
+        Assert.Equal(["G7"], driver.Rehearse(batch.Context, batch.Placements).Captures.Select(c => c.Coord).Notations());
     }
 
     [Fact]
     public void 非匠人没有改造候选()
     {
         MatchFlow match = Match();
-        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Fortress, 1, "C4", "E4");
+        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Fortress, 1, "E6", "G6");
 
         ImmutableArray<PointScore> ranking = Rank(Ai(match), batch, driver);
 
@@ -142,7 +142,7 @@ public class AI枚举改造目标Tests
         // 复摆漏 Edit 会静默丢改造：匠人照落、地形不动，而候选分是按带改造算的。
         // 变异 M-B6：Deploy 末尾的复摆去掉 placement.Edit → 本条红。
         MatchFlow match = Match();
-        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 3, "C4", "E4");
+        (StagedBatch batch, SettlementDriver driver) = Staging(match, PieceType.Artisan, 3, "E6", "G6");
         HeuristicTurnController ai = Ai(match);
 
         ai.Deploy(batch, () => driver.Rehearse(batch.Context, batch.Placements));

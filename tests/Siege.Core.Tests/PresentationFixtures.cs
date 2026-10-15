@@ -20,10 +20,10 @@ namespace Siege.Core.Tests;
 /// <summary>tactical-ui 测试的公共夹具：观察者世界组装、值投影、状态指纹、类型闭包与 IL 调用扫描。</summary>
 internal static class PresentationFixtures
 {
-    internal static readonly PlayerId P0 = MatchFixtures.P0;
-    internal static readonly PlayerId P1 = MatchFixtures.P1;
-    internal static readonly PlayerId P2 = MatchFixtures.P2;
-    internal static readonly PlayerId P3 = MatchFixtures.P3;
+    internal static readonly PlayerId P0 = TestMaps.P0;
+    internal static readonly PlayerId P1 = TestMaps.P1;
+    internal static readonly PlayerId P2 = TestMaps.P2;
+    internal static readonly PlayerId P3 = TestMaps.P3;
 
     internal static Assembly PresentationAssembly => typeof(PublicWorld).Assembly;
 
@@ -46,7 +46,7 @@ internal static class PresentationFixtures
 
     /// <summary>不含任何信物的账本（静态预演用例的盘面没有信物格）。</summary>
     internal static RelicLedger EmptyRelics(GameBoard board) =>
-        new(new RelicGenerationRecord(MatchFixtures.Seed, board.Map.Id, [], Converged: true, Rerolls: 0));
+        new(new RelicGenerationRecord(TestMaps.Seed, board.Map.Id, [], Converged: true, Rerolls: 0));
 
     /// <summary>空手牌的私有视图（静态预演用例不经手牌账本）。</summary>
     internal static HandPrivateView EmptyHand(PlayerId player) =>
@@ -69,25 +69,25 @@ internal static class PresentationFixtures
             majorRound: 5);
 
     /// <summary>
-    /// 9×9 流程夹具地图，但每个信物格自带分区与档位（默认夹具把全部信物标为公共区标准档，测不了"默认棋盘不区分分区"）。
-    /// 进入第 1 大回合后摆到第 5 大回合（全图可落子）。
+    /// 平坦 8×8 链接载体（<see cref="LinkModeFixtures.PlainMap(string[])"/>），但每个信物格自带分区与档位（平坦载体把信物格一律标为公共区标准档，测不了"默认棋盘不区分分区"）。
+    /// 四人同锁棋盘 0，进入第 1 大回合后摆到第 5 大回合。坐标写在棋盘 0 上。retire-legacy-rules 1.2：原为 9×9 流程夹具（旧模式），各人锁自己的出生区。
     /// </summary>
     internal static MatchFlow StartedWithZonedRelics(params (string Cell, RelicContent Content, RelicZone Zone, BudgetTier Tier)[] relics)
     {
-        MapData map = MatchFixtures.Map() with
+        MapData map = LinkModeFixtures.PlainMap() with
         {
             RelicCells = relics.ToImmutableDictionary(r => Coord.Parse(r.Cell), r => new RelicCellSpec(r.Zone, r.Tier)),
         };
         ImmutableArray<RelicPlacement> placements =
             [.. relics.Select(r => new RelicPlacement(Coord.Parse(r.Cell), r.Content, new RelicCellSpec(r.Zone, r.Tier))).OrderBy(p => p.Coord)];
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All,
-            new RelicGenerationRecord(MatchFixtures.Seed, map.Id, placements, Converged: true, Rerolls: 0), MatchOptions.Immediate);
-        foreach (PlayerId p in MatchFixtures.All)
+        MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All,
+            new RelicGenerationRecord(TestMaps.Seed, map.Id, placements, Converged: true, Rerolls: 0), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+        foreach (PlayerId p in TestMaps.All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
         }
 
-        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
+        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
         return match.AtRound(5);
     }
 

@@ -20,7 +20,7 @@ public class 决赛倒计时配置Tests
     public void 缺省值()
     {
         // 规格 Scenario：不显式配置开一局 → K = 2，存档与日志首部都写明。
-        MatchFlow match = MatchFlow.Create(Map, MatchFixtures.Seed, All);
+        MatchFlow match = MatchFlow.Create(Map, TestMaps.Seed, All);
         Assert.Equal(2, match.FinalCountdownRounds);
         Assert.Equal(MatchOptions.DefaultFinalCountdownRounds, MatchOptions.Default.FinalCountdownRounds);
         match.PlantSequentially(All.Select((p, i) => (p, i)));
@@ -38,7 +38,7 @@ public class 决赛倒计时配置Tests
     [Fact]
     public void 负数建局报错()
     {
-        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(() => MatchFlow.Create(Map, MatchFixtures.Seed, All, CountdownOptions(-1)));
+        ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(() => MatchFlow.Create(Map, TestMaps.Seed, All, CountdownOptions(-1)));
         Assert.Contains("决赛倒计时", ex.Message, StringComparison.Ordinal);
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { FinalCountdownRounds = -1 }).Validated());   // 批次配置同口径
     }

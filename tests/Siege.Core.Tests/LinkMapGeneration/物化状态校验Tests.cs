@@ -237,7 +237,7 @@ public class 物化状态校验Tests
     {
         // Scenario：对一张棋盘档地图尝试执行链接 → 系统拒绝并指出该规格档不允许增长；标准档、边疆档同理。
         // retire-legacy-maps：棋盘图 / v5 / gen: 载体随旧地图删除，改为手写 9×9 夹具；4.1 起枚举只剩 Link，非链接档改用已移除旧档的原数值 0 / 1 / 2（断言不变）。
-        foreach (MapData map in new[] { 0, 1, 2 }.Select(v => MatchFixtures.Map() with { Profile = (MapProfile)v }))
+        foreach (MapData map in new[] { 0, 1, 2 }.Select(v => TestMaps.NineByNine() with { Profile = (MapProfile)v }))
         {
             SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => LinkMapGenerator.Link(map, 0, 1, LinkSide.East));
             Assert.Contains("不允许增长", ex.Message, StringComparison.Ordinal);

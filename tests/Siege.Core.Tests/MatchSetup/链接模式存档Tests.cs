@@ -129,23 +129,22 @@ public class 链接模式存档Tests
         // 变异 M-D3（段 D-a 实跑）：Restore 去掉地图标识门 → 本测试红 1。
         // retire-legacy-maps 1.8：旧存档原由 v5 建局得到、并经内部口 RestoreLegacy 再读回；v5 与 RestoreLegacy 删除后，旧存档改取 9×9 手写夹具
         // （Legacy 规则、地图标识 test-match-9x9，不是 link:）的存档，"内部口仍能读回"一段改为手写夹具专用的 RestoreUnvalidated（裁决 L6）。所守规则不变。
-        MatchFlow legacy = MatchFixtures.Started();
-        MapData old = legacy.Map;
-        string json = legacy.Serialize();
+        // retire-legacy-rules 1.5：对局只能建在链接档图上，旧存档样本改为"把一份链接存档的地图标识改成非 link: 的 test-match-9x9"，交玩家入口 → 照样拒绝；
+        // "内部口仍能以旧模式读回"一段只测 Legacy 存档恢复（R2 删除范围），随之去掉。
+        MatchFlow link = Started([0, 1, 3, 4]);
+        string linkJson = link.Serialize();
+        JsonObject node = JsonNode.Parse(linkJson)!.AsObject();
+        node["MapId"] = "test-match-9x9";
+        string json = node.ToJsonString();
         Assert.Equal("test-match-9x9", MatchFlow.SavedMapId(json));
 
-        FormatException ex = Assert.Throws<FormatException>(() => MatchFlow.Restore(old, json));
+        FormatException ex = Assert.Throws<FormatException>(() => MatchFlow.Restore(Map, json));
         Assert.Contains("已移除的地图模式", ex.Message, StringComparison.Ordinal);
         Assert.Contains("test-match-9x9", ex.Message, StringComparison.Ordinal);
         Assert.Contains("link:<地图种子>", ex.Message, StringComparison.Ordinal);
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(old, legacy.Relics.Generation, json);
-        Assert.Equal(json, restored.Serialize());
-        Assert.Equal(MatchMode.Legacy, restored.Mode);
-
         // 反面：链接模式存档照常经玩家入口恢复。
-        MatchFlow link = Started([0, 1, 3, 4]);
-        Assert.Equal(link.Serialize(), MatchFlow.Restore(Map, link.Serialize()).Serialize());
+        Assert.Equal(linkJson, MatchFlow.Restore(Map, linkJson).Serialize());
     }
 
     [Fact]
@@ -231,7 +230,7 @@ public class 链接模式存档Tests
             b[3] with { Origin = new Coord(29, 2), Height = 8 },
             b[4] with { Origin = new Coord(38, 2) },
         ]);
-        MatchFlow match = MatchFlow.Create(map, MatchFixtures.Seed, All, LinkModeFixtures.Options);
+        MatchFlow match = MatchFlow.Create(map, TestMaps.Seed, All, LinkModeFixtures.Options);
         match.PairingSource = new ScriptedPairingSource();
         foreach (PlayerId p in All)
         {

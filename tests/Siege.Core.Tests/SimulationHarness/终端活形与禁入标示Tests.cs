@@ -9,18 +9,24 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// <summary>
 /// life-shape tasks 3.3：终端版文本盘面用独立符号标出禁入格与已活棋串，图例同步。
 /// 禁入格记作 <c>xN</c>（N = 活形所有者的玩家号），已活棋串的子在类型字母后加 <c>@</c>（如 <c>1B@</c>）；二者都不与既有符号冲突。
+/// retire-legacy-rules 1.6：局面载体为平坦 8×8 链接档图上四人同锁棋盘 0；环形活形用 RingF7H7（原 RingE5G5 平移 (+1, +2)），其余平移 (+2, +2)；链接终端只画本战场外接矩形，列号按视口左缘计。
 /// </summary>
 public class 终端活形与禁入标示Tests
 {
-    private static readonly PlayerId P0 = MatchFixtures.P0;
-    private static readonly PlayerId P1 = MatchFixtures.P1;
+    private static readonly PlayerId P0 = TestMaps.P0;
+    private static readonly PlayerId P1 = TestMaps.P1;
 
-    /// <summary>P0 的环形活形（单格眼 E5、G5），第 5 大回合。</summary>
+    /// <summary>P0 的环形活形（单格眼 F7、H7），第 5 大回合。</summary>
     private static MatchFlow RingMatch() =>
-        MatchFixtures.Started().AtRound(5, [P1, P0, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5);
+        LinkModeFixtures.PlainStarted().AtRound(5, [P1, P0, TestMaps.P2, TestMaps.P3])
+            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7);
 
-    /// <summary>取某一行（围棋记法行号）里第 <paramref name="column"/> 列（A = 0）的 3 字符格。行首是 <c>{行号,3} </c>，每格 3 字符。</summary>
+    /// <summary>链接终端只画本座位所在战场（四人同锁的棋盘 0）的外接矩形：可画出的格与视口左缘的列号。</summary>
+    private static readonly Coord[] Viewport = [.. LinkModeFixtures.PlainBoards[0].Cells()];
+
+    private static readonly int ViewportLeft = LinkModeFixtures.PlainBoards[0].Origin.X;
+
+    /// <summary>取某一行（围棋记法行号）里视口第 <paramref name="column"/> 列（视口左缘 = 0；retire-legacy-rules 前为全图 A = 0）的 3 字符格。行首是 <c>{行号,3} </c>，每格 3 字符。</summary>
     private static string CellText(string output, int row, int column)
     {
         string line = output.Split('\n').First(l => l.StartsWith($"{row,3} ", StringComparison.Ordinal));
@@ -37,20 +43,20 @@ public class 终端活形与禁入标示Tests
     [Fact]
     public void 文本盘面标出禁入格与已活棋串()
     {
-        // P1 看盘：P0 的眼 E5、G5 是 P1 的禁入格 → "x1"（玩家1 = P0 的活形）；环上每枚子都是已活棋串的子 → "1B@"。
+        // P1 看盘：P0 的眼 F7、H7 是 P1 的禁入格 → "x1"（玩家1 = P0 的活形）；环上每枚子都是已活棋串的子 → "1B@"。
         string text = Render(RingMatch(), P1);
 
-        Assert.Equal("x1 ", CellText(text, 5, 4));
-        Assert.Equal("x1 ", CellText(text, 5, 6));
-        Assert.Equal("1B@", CellText(text, 4, 3));
-        Assert.Equal("1B@", CellText(text, 6, 7));
-        Assert.Equal(" . ", CellText(text, 5, 0));
+        Assert.Equal("x1 ", CellText(text, 7, 3));
+        Assert.Equal("x1 ", CellText(text, 7, 5));
+        Assert.Equal("1B@", CellText(text, 6, 2));
+        Assert.Equal("1B@", CellText(text, 8, 6));
+        Assert.Equal(" . ", CellText(text, 7, 0));
 
         // 标出的禁入格恰好就是活形查询给 P1 的禁入格集合（测试侧独立取数；终端不另判规则）。
         MatchPublicView view = RingMatch().Publish();
         Coord[] marked =
         [
-            .. view.Board.AllCoords().Where(c => CellText(text, c.Y + 1, c.X).StartsWith('x')).Order(),
+            .. Viewport.Where(c => CellText(text, c.Y + 1, c.X - ViewportLeft).StartsWith('x')).Order(),
         ];
         Assert.Equal(view.LifeShape.ForbiddenCellsFor(P1).Order(), marked);
     }
@@ -61,22 +67,22 @@ public class 终端活形与禁入标示Tests
         // P0 看盘：自己的眼不是禁入格（所有者可自拆），照常显示为空格；自己的活棋仍标 "@"。
         string text = Render(RingMatch(), P0);
 
-        Assert.Equal(" . ", CellText(text, 5, 4));
-        Assert.Equal(" . ", CellText(text, 5, 6));
-        Assert.Equal("1B@", CellText(text, 4, 3));
+        Assert.Equal(" . ", CellText(text, 7, 3));
+        Assert.Equal(" . ", CellText(text, 7, 5));
+        Assert.Equal("1B@", CellText(text, 6, 2));
         Assert.DoesNotContain("x", string.Join('\n', text.Split('\n').Where(l => l.Length > 3 && char.IsDigit(l[2]))), StringComparison.Ordinal);
     }
 
     [Fact]
     public void 未定棋串不标已活()
     {
-        // 只有一个眼的棋串是"未定"，不加 "@"，它的眼也不是禁入格。P0 的 A1–C1–C2... 这里用单子 E5 周围四子围出的单眼：D5、F5、E4、E6 各为独立单子，
-        // 每枚都只贴一个封闭空区 E5（眼值 1）→ 未定。
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(P0, "D5", "F5", "E4", "E6");
+        // 只有一个眼的棋串是"未定"，不加 "@"，它的眼也不是禁入格。P0 的 C3–E3–E4... 这里用单子 G7 周围四子围出的单眼：F7、H7、G6、G8 各为独立单子，
+        // 每枚都只贴一个封闭空区 G7（眼值 1）→ 未定。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5).Stones(P0, "F7", "H7", "G6", "G8");
         string text = Render(match, P1);
 
-        Assert.Equal("1B ", CellText(text, 5, 3));
-        Assert.Equal(" . ", CellText(text, 5, 4));
+        Assert.Equal("1B ", CellText(text, 7, 3));
+        Assert.Equal(" . ", CellText(text, 7, 4));
     }
 
     [Fact]
@@ -93,21 +99,21 @@ public class 终端活形与禁入标示Tests
     {
         // life-shape 裁决 R13：禁入格与未揭示信物重叠时，格上显示信物标记（信物更少见、信息量更大），
         // 被盖住的禁入格改由图例下方一行列出（格 + 所有者），不丢信息。
-        // P0 的眼 E5 上放一枚未揭示信物，G5 没有：P1 看盘时 E5 为 " ? "，G5 仍为 "x1 "。
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command())])
-            .AtRound(5, [P1, P0, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5);
+        // P0 的眼 F7 上放一枚未揭示信物，H7 没有：P1 看盘时 F7 为 " ? "，H7 仍为 "x1 "。
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("F7", RelicFixtures.Command())])
+            .AtRound(5, [P1, P0, TestMaps.P2, TestMaps.P3])
+            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7);
         string text = Render(match, P1);
 
-        Assert.Equal(" ? ", CellText(text, 5, 4));
-        Assert.Equal("x1 ", CellText(text, 5, 6));
+        Assert.Equal(" ? ", CellText(text, 7, 3));
+        Assert.Equal("x1 ", CellText(text, 7, 5));
 
-        // 盘面上的 x 集合 = 禁入格 − 信物格（测试侧独立取数）；被盖住的 E5 出现在图例下方的说明行里，并带所有者。
+        // 盘面上的 x 集合 = 禁入格 − 信物格（测试侧独立取数）；被盖住的 F7 出现在图例下方的说明行里，并带所有者。
         MatchPublicView view = match.Publish();
         Coord[] relicCells = [.. view.Relics.Select(r => r.Coord)];
-        Coord[] marked = [.. view.Board.AllCoords().Where(c => CellText(text, c.Y + 1, c.X).StartsWith('x')).Order()];
+        Coord[] marked = [.. Viewport.Where(c => CellText(text, c.Y + 1, c.X - ViewportLeft).StartsWith('x')).Order()];
         Assert.Equal(view.LifeShape.ForbiddenCellsFor(P1).Except(relicCells).Order(), marked);
-        Assert.Contains("信物格同为禁入：E5(x1)", text, StringComparison.Ordinal);
+        Assert.Contains("信物格同为禁入：F7(x1)", text, StringComparison.Ordinal);
 
         // 反面：没有重叠时不出这一行（说明行不是恒写）。
         Assert.DoesNotContain("信物格同为禁入", Render(RingMatch(), P1), StringComparison.Ordinal);

@@ -50,20 +50,20 @@ public class 改造不可逆与公开Tests
     public void 弃赛不撤销改造()
     {
         // terrain-edit「弃赛不撤销改造」：搭桥的玩家弃赛后桥仍在原处，任何玩家都可以使用。
-        Coord water = TestMaps.At("E5");
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("E5", Surface.DeepWater)])).AtRound(5);
+        Coord water = TestMaps.At("G7");
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("G7", Surface.DeepWater)])).AtRound(5);
         match.Board.ApplyTerrainEdits([TerrainEdit.Bridge(water)]);
 
         Assert.True(match.Map.HasBridge(water));
 
-        match.Resign(MatchFixtures.P0);
+        match.Resign(TestMaps.P0);
 
-        Assert.Equal(PlayerStatus.Resigned, match.StateOf(MatchFixtures.P0).Status);
+        Assert.Equal(PlayerStatus.Resigned, match.StateOf(TestMaps.P0).Status);
         Assert.True(match.Map.HasBridge(water));
         Assert.Equal([TerrainEdit.Bridge(water)], match.Board.TerrainEdits);
 
         // "任何玩家都可以使用"：弃赛之后该格对其余玩家仍是合法落点。
-        Assert.Contains(water, match.LegalRangeFor(MatchFixtures.P1));
+        Assert.Contains(water, match.LegalRangeFor(TestMaps.P1));
     }
 
     [Fact]
@@ -71,17 +71,17 @@ public class 改造不可逆与公开Tests
     {
         // terrain-edit「改造公开」：桥、栅栏与被烧过的地表是盘面的一部分，对全部玩家可见；
         // 同时 MUST NOT 记录或展示改造者（R-3）——改造方只活在 MatchFlow.TerrainEdits（遥测）里。
-        TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6"));
-        MatchFlow match = MatchFixtures.Started(
-            TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater), ("F4", Surface.Forest)])).AtRound(5);
-        match.Board.ApplyTerrainEdits([TerrainEdit.Bridge(TestMaps.At("D4")), fence, TerrainEdit.Burn(TestMaps.At("F4"))]);
+        TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("G7"), TestMaps.At("G8"));
+        MatchFlow match = LinkModeFixtures.PlainStarted(
+            TestMaps.Terrain(surfaces: [("F6", Surface.DeepWater), ("H6", Surface.Forest)])).AtRound(5);
+        match.Board.ApplyTerrainEdits([TerrainEdit.Bridge(TestMaps.At("F6")), fence, TerrainEdit.Burn(TestMaps.At("H6"))]);
 
         MatchPublicView view = match.Publish();
 
         // 三种改造都在公开快照里，四家看到的是同一份（Publish 不带视角参数）。
-        Assert.True(view.Board.Map.HasBridge(TestMaps.At("D4")));
-        Assert.True(view.Board.Map.HasFence(TestMaps.At("E5"), TestMaps.At("E6")));
-        Assert.Equal(Surface.Grass, view.Board.Map.SurfaceAt(TestMaps.At("F4")));
+        Assert.True(view.Board.Map.HasBridge(TestMaps.At("F6")));
+        Assert.True(view.Board.Map.HasFence(TestMaps.At("G7"), TestMaps.At("G8")));
+        Assert.Equal(Surface.Grass, view.Board.Map.SurfaceAt(TestMaps.At("H6")));
         Assert.Contains(fence.ToString(), view.BoardSerialized, StringComparison.Ordinal);
         Assert.Equal(match.Board.Serialize(), view.BoardSerialized);
 
@@ -102,30 +102,30 @@ public class 改造不可逆与公开Tests
         // 默认棋盘的桥 / 栅栏 / 地表字段里分不出预置与本局新增，且整个闭包里没有改造者。
         // 变异验证 M-SC3（实做）：DefaultBoardView.From 把 Edits 恒传 [] → 本测试红（Edits.Length 3 → 0，落成反馈失去数据来源）。
         TerrainData terrain = TestMaps.Terrain(
-            surfaces: [("D4", Surface.DeepWater), ("F4", Surface.DeepWater), ("G4", Surface.Forest), ("H4", Surface.Forest)],
-            bridges: ["D4"],
-            fences: [("B1", "B2")]);
-        MatchFlow match = MatchFixtures.Started(terrain).AtRound(5);
+            surfaces: [("F6", Surface.DeepWater), ("G6", Surface.DeepWater), ("H6", Surface.Forest), ("J6", Surface.Forest)],
+            bridges: ["F6"],
+            fences: [("D3", "D4")]);
+        MatchFlow match = LinkModeFixtures.PlainStarted(terrain).AtRound(5);
         match.Board.ApplyTerrainEdits(
-            [TerrainEdit.Bridge(TestMaps.At("F4")), TerrainEdit.Fence(TestMaps.At("C1"), TestMaps.At("C2")), TerrainEdit.Burn(TestMaps.At("H4"))]);
+            [TerrainEdit.Bridge(TestMaps.At("G6")), TerrainEdit.Fence(TestMaps.At("E3"), TestMaps.At("E4")), TerrainEdit.Burn(TestMaps.At("J6"))]);
         match.Debug.Recalculate();
 
-        Siege.Presentation.Visibility.DefaultBoardView board = match.World(MatchFixtures.P0).Board();
+        Siege.Presentation.Visibility.DefaultBoardView board = match.World(TestMaps.P0).Board();
 
-        // 预置桥 D4 与本局架的桥 F4：三个可见字段逐项相同。
-        Siege.Presentation.Visibility.BoardCellView preset = board.CellAt(TestMaps.At("D4"));
-        Siege.Presentation.Visibility.BoardCellView built = board.CellAt(TestMaps.At("F4"));
+        // 预置桥 F6 与本局架的桥 G6：三个可见字段逐项相同。
+        Siege.Presentation.Visibility.BoardCellView preset = board.CellAt(TestMaps.At("F6"));
+        Siege.Presentation.Visibility.BoardCellView built = board.CellAt(TestMaps.At("G6"));
         Assert.Equal((preset.Terrain, preset.Surface, preset.HasBridge), (built.Terrain, built.Surface, built.HasBridge));
         Assert.True(built.HasBridge);
 
         // 预置栅栏与本局立的栅栏混在同一个集合里，没有第二个字段区分。
         Assert.Equal(
-            [new FenceEdge(TestMaps.At("B1"), TestMaps.At("B2")), new FenceEdge(TestMaps.At("C1"), TestMaps.At("C2"))],
+            [new FenceEdge(TestMaps.At("D3"), TestMaps.At("D4")), new FenceEdge(TestMaps.At("E3"), TestMaps.At("E4"))],
             board.Fences);
 
-        // 被烧的林地读起来就是草地（未烧的 G4 仍是林地）。
-        Assert.Equal(Surface.Grass, board.CellAt(TestMaps.At("H4")).Surface);
-        Assert.Equal(Surface.Forest, board.CellAt(TestMaps.At("G4")).Surface);
+        // 被烧的林地读起来就是草地（未烧的 H6 仍是林地）。
+        Assert.Equal(Surface.Grass, board.CellAt(TestMaps.At("J6")).Surface);
+        Assert.Equal(Surface.Forest, board.CellAt(TestMaps.At("H6")).Surface);
 
         // Edits 只是"本局改了哪几处"的清单，没有归属；整个闭包里不存在带改造方的记录类型（R-3）。
         Assert.Equal(3, board.Edits.Length);

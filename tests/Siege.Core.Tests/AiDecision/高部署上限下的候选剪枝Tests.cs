@@ -15,7 +15,7 @@ public class 高部署上限下的候选剪枝Tests
         // 设计文档 §15.2 / 裁决 2：部署上限 8、60+ 合法空格 → 候选批次 ≤ M（标准 8），单点排序 ≤ N（12），
         // 预演次数 ≤ 空格数 × 类型数（单点）+ M × (N + 1)（组合），远小于 C(60, 8)。
         // 变异验证 M-A13：RankPoints 去掉 Take(N) → 红 1（本测试）。
-        MatchFlow match = AiFixtures.Round5().Stones(AiFixtures.P1, "E5", "F6", "D7").Stones(AiFixtures.P2, "G3");
+        MatchFlow match = AiFixtures.Round5().Stones(AiFixtures.P1, "G7", "H8", "F9").Stones(AiFixtures.P2, "J5");
         match.SetDeployLimit(8);
         // ai-eye 段 D2（4.5）：末尾"落满 8 枚"依赖走法，权重与停手阈值写死为定值之前的缺省（默认阈值 80 下只落 7 枚）。
         HeuristicTurnController ai = HeuristicAi.Create(
@@ -46,14 +46,15 @@ public class 高部署上限下的候选剪枝Tests
     [Fact]
     public void 剪枝保留高价值落点()
     {
-        // 单点评价第 1 名的落点（提子 + 抢信物的 F5）进入前 N，并出现在最终批次里；候选批次的每个落点都来自前 N。
+        // 单点评价第 1 名的落点（提子 + 抢信物的 G6）进入前 N，并出现在最终批次里；候选批次的每个落点都来自前 N。
         // 变异验证 M-A15：RankPoints 改为 OrderBy 升序 → 红 4（本测试、不穷举排列、必须找到的妙手、并列确定性打破）。
-        MatchFlow match = 启发式评价维度Tests.CaptureRelicPosition();
+        // retire-legacy-rules 1.4（清单 P2）：给 P0 在远离妙手的盘角补一块 2×2，使其居本战场首位（链接规则下落后者的停手阈值取 0）。
+        MatchFlow match = 启发式评价维度Tests.CaptureRelicPosition().AsLeader(AiFixtures.P0, "J3", "K3", "J4", "K4");
         HeuristicTurnController ai = HeuristicAi.Create(match, AiFixtures.P0);
         StagedBatch batch = match.OpenDeploy();
         ai.Deploy(batch, match.Rehearse);
 
-        Coord f5 = TestMaps.At("F5");
+        Coord f5 = TestMaps.At("G6");
         Assert.Equal(f5, ai.LastPointRanking[0].Coord);
         Assert.Contains(batch.Placements, p => p.Coord == f5);
         var topN = ai.LastPointRanking.Select(p => p.Coord).ToHashSet();
@@ -68,7 +69,8 @@ public class 高部署上限下的候选剪枝Tests
         // 变异验证 M-A16：Perturb 用 new Random() 取 j → 红 4（本测试、同局面同决策、估计不得使用真实值、高难度不越权）。
         static HeuristicTurnController Run(out MatchFlow match)
         {
-            match = AiFixtures.Round5().Stones(AiFixtures.P1, "E5", "F6").Stones(AiFixtures.P0, "C4");
+            // retire-legacy-rules 1.4（清单 P2）：P0 另在两个盘角各补一子，使其居本战场首位（链接规则下落后者的停手阈值取 0）。
+            match = AiFixtures.Round5().Stones(AiFixtures.P1, "G7", "H8").Stones(AiFixtures.P0, "E6").AsLeader(AiFixtures.P0, "C3", "K3");
             match.SetDeployLimit(4);
             HeuristicTurnController ai = HeuristicAi.Create(match, AiFixtures.P0, AiDifficulty.Hard);
             ai.Deploy(match.OpenDeploy(), match.Rehearse);
@@ -86,41 +88,44 @@ public class 高部署上限下的候选剪枝Tests
 
     /// <summary>
     /// implement 3.4「必须找到的妙手」回归集（标准难度剪枝参数、第 5 大回合部署上限 4——growth-pass-1 分阶段基础值，原 3、只有普通子）。
-    /// 局面 a（提子 + 抢信物）见 <see cref="启发式评价维度Tests.CaptureRelicPosition"/>。
-    /// 局面 b（补气 + 提子）：P0 的 D4-D5 只剩一气 E5，P1 的 E4-F4 也只剩一气 E5；E5 提两子后 P0 串与 F5 连成四气。
+    /// 局面 a（提子 + 抢信物）见 <see cref="启发式评价维度Tests.CaptureRelicPosition"/>。retire-legacy-rules 1.4：三个局面都在平坦 8×8 链接载体棋盘 0 上（原 9×9 平移 (+1, +1)）。
+    /// 局面 b（补气 + 提子）：P0 的 E5-E6 只剩一气 F6，P1 的 F5-G5 也只剩一气 F6；F6 提两子后 P0 串与 G6 连成四气。
     /// <code>
-    ///  6 . . . X X . . .      X = P1
-    ///  5 . . X O ! O . .      O = P0
-    ///  4 . . X O X X O .      ! = E5
-    ///  3 . . . X O O . .
-    ///    A B C D E F G H
+    ///  7 . . . X X . . .      X = P1
+    ///  6 . . X O ! O . .      O = P0
+    ///  5 . . X O X X O .      ! = F6
+    ///  4 . . . X O O . .
+    ///    B C D E F G H J
     /// </code>
-    /// 局面 c（一手提三子并夺回信物）：P1 的 E5-E6-F6 只剩一气 F5，E6 是已揭示的信物格（P1 占据中）。
+    /// 局面 c（一手提三子并夺回信物）：P1 的 F6-F7-G7 只剩一气 G6，F7 是已揭示的信物格（P1 占据中）。
     /// <code>
-    ///  7 . . . . O O . .
-    ///  6 . . . O X X O .
-    ///  5 . . . O X ! . .      ! = F5
-    ///  4 . . . . O . . .
-    ///    A B C D E F G H
+    ///  8 . . . . O O . .
+    ///  7 . . . O X X O .
+    ///  6 . . . O X ! . .      ! = G6
+    ///  5 . . . . O . . .
+    ///    B C D E F G H J
     /// </code>
     /// </summary>
     [Theory]
-    [InlineData("a", "F5")]
-    [InlineData("b", "E5")]
-    [InlineData("c", "F5")]
+    [InlineData("a", "G6")]
+    [InlineData("b", "F6")]
+    [InlineData("c", "G6")]
     public void 必须找到的妙手(string position, string key)
     {
         // 变异验证 M-A17：Greedy 接受条件改为 next.Total < current.Total → 红 9（本 Theory、不穷举排列、剪枝保留高价值落点、种子扰动由种子驱动、
         // 同局面同决策、估计不得使用真实值、高难度不越权、接管记录可追溯、对局记录标注）。
         MatchFlow match = position switch
         {
-            "a" => 启发式评价维度Tests.CaptureRelicPosition(),
+            // retire-legacy-rules 1.4（清单 P2）：局面 a / b 里 P0 原本势力落后（a 的先手位用例就靠这一点），链接规则下落后者的停手阈值取 0；
+            // 这里在远离妙手的盘角给 P0 补一块 2×2，使其居本战场首位（AsLeader 断言前提）。局面 c 里 P0 本就领先。
+            "a" => 启发式评价维度Tests.CaptureRelicPosition().AsLeader(AiFixtures.P0, "J3", "K3", "J4", "K4"),
             "b" => AiFixtures.Round5()
-                .Stones(AiFixtures.P0, "D4", "D5", "F5", "G4", "E3", "F3")
-                .Stones(AiFixtures.P1, "D6", "E6", "C5", "C4", "E4", "F4", "D3"),
-            "c" => AiFixtures.Round5(relics: [("E6", RelicFixtures.Conscription())])
-                .Stones(AiFixtures.P0, "D5", "D6", "E4", "E7", "F7", "G6")
-                .Stones(AiFixtures.P1, "E5", "E6", "F6"),
+                .Stones(AiFixtures.P0, "E5", "E6", "G6", "H5", "F4", "G4")
+                .Stones(AiFixtures.P1, "E7", "F7", "D6", "D5", "F5", "G5", "E4")
+                .AsLeader(AiFixtures.P0, "J9", "K9", "J10", "K10"),
+            "c" => AiFixtures.Round5(relics: [("F7", RelicFixtures.Conscription())])
+                .Stones(AiFixtures.P0, "E6", "E7", "F5", "F8", "G8", "H7")
+                .Stones(AiFixtures.P1, "F6", "F7", "G7"),
             _ => throw new ArgumentOutOfRangeException(nameof(position)),
         };
 
@@ -135,14 +140,14 @@ public class 高部署上限下的候选剪枝Tests
         Assert.True(outcome.CaptureRecord is { } captured && captured.Captured.Length >= 1, "妙手必须真的提子");
         if (position == "b")
         {
-            Group saved = match.Board.GroupAt(TestMaps.At("D4"))!;
+            Group saved = match.Board.GroupAt(TestMaps.At("E5"))!;
             Assert.True(match.Board.LibertiesOf(saved).Length >= 4, $"补气后 {saved} 气数 {match.Board.LibertiesOf(saved).Length}");
         }
 
         if (position == "c")
         {
             Assert.Equal(3, outcome.CaptureRecord!.Captured.Length);
-            Assert.True(match.Relics.ControlOf(TestMaps.At("E6")).GrantsEffectTo(AiFixtures.P0));
+            Assert.True(match.Relics.ControlOf(TestMaps.At("F7")).GrantsEffectTo(AiFixtures.P0));
         }
     }
 }

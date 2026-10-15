@@ -61,18 +61,18 @@ public class 禁入格Tests
     public void 弃赛者的活形仍禁入()
     {
         // 活形分析不接名册：棋子还在盘上，所有者从棋子读出，弃赛与否不影响禁入。
-        MatchFlow match = MatchFixtures.Started().AtRound(6, MatchFixtures.All)
-            .Stones(MatchFixtures.P3, "D4", "E4", "F4", "G4", "H4", "D5", "F5", "H5", "D6", "E6", "F6", "G6", "H6")
-            .Stones(MatchFixtures.P1, "B9");
-        match.Resign(MatchFixtures.P3);
-        Assert.Equal(PlayerStatus.Resigned, match.StateOf(MatchFixtures.P3).Status);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(6, TestMaps.All)
+            .Stones(TestMaps.P3, "E5", "F5", "G5", "H5", "J5", "E6", "G6", "J6", "E7", "F7", "G7", "H7", "J7")
+            .Stones(TestMaps.P1, "D10");
+        match.Resign(TestMaps.P3);
+        Assert.Equal(PlayerStatus.Resigned, match.StateOf(TestMaps.P3).Status);
 
         LifeShapeReport report = LifeShapeReport.Analyze(match.Board);
 
-        Assert.Equal(LifeState.Alive, report.LifeOf("D4"));
-        foreach (PlayerId active in new[] { MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2 })
+        Assert.Equal(LifeState.Alive, report.LifeOf("E5"));
+        foreach (PlayerId active in new[] { TestMaps.P0, TestMaps.P1, TestMaps.P2 })
         {
-            Assert.Equal(["E5", "G5"], report.Forbidden(active));
+            Assert.Equal(["F6", "H6"], report.Forbidden(active));
         }
     }
 

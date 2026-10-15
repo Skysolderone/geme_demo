@@ -67,7 +67,7 @@ public class 自己区域的显示内容Tests
     {
         for (ulong v = 1; v < 200; v++)
         {
-            MatchFlow match = MatchFixtures.Started(new GameSeed(v)).AtRound(5);
+            MatchFlow match = LinkModeFixtures.PlainStarted(new GameSeed(v)).AtRound(5);
             match.Debug.SeedHand(P0, (PieceType.Basic, 4));
             match.BeginTurn();
             panel = match.EnterRecruit();

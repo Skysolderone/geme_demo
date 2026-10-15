@@ -17,7 +17,7 @@ public class AI决策的可复现性Tests
         // 变异验证 M-A16（Perturb 用 new Random()）→ 红 4（本测试、种子扰动由种子驱动、估计不得使用真实值、高难度不越权）。
         static (string Log, string Save) Play()
         {
-            MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command()), ("B7", RelicFixtures.Depot())]);
+            MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command()), ("D9", RelicFixtures.Depot())]);
             var runner = new MatchRunner(match);
             ImmutableSortedDictionary<PlayerId, HeuristicTurnController> ais = runner.AttachAi(AiDifficulty.Standard);
             runner.RunMajorRounds(3);
@@ -51,7 +51,7 @@ public class AI决策的可复现性Tests
         Assert.True(CandidateSelection.Compare(Batch(same, "C2"), Batch(same, "B3")) < 0);
 
         // 整局面：空盘首手，出生区内大量落点同分；选中的批次必须是同分候选里坐标序列最小的那个
-        MatchFlow match = MatchFixtures.Started();
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         HeuristicTurnController ai = HeuristicAi.Create(match, match.CurrentPlayer!.Value, AiDifficulty.Hard);
         ai.Deploy(match.OpenDeploy(), match.Rehearse);
         CandidateBatch choice = ai.LastChoice!;

@@ -73,47 +73,6 @@ public class 三类终局条件Tests
     }
 
     [Fact]
-    public void Pass计数跨回合重置()
-    {
-        // Scenario：某大回合中前两名玩家 Pass、第三名玩家落子 1 枚 → 整轮 Pass 的计数被重置，对局继续。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3]);
-        match.PassTurn();
-        match.PassTurn();
-        Assert.Equal(2, match.PassStreak);
-        match.PlayTurn("E5");
-        Assert.Equal(0, match.PassStreak);
-        match.PassTurn();
-        Assert.Equal(1, match.PassStreak);
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-        Assert.Equal(6, match.MajorRound);
-    }
-
-    [Fact]
-    public void 势力悬殊不提前结束()
-    {
-        // Scenario：第 9 大回合参赛玩家势力为 A=210、B=80、C=70、D=55（A ≥ 其余之和 205），且三类终局条件均未满足 → 对局继续。
-        // 规格数值只是示意"领先者势力不小于其余之和"（旧势力碾压的成立式）。这里摆出同一关系：P0 占满 A、B 两列，其余各一子，
-        // 断言 P0 ≥ 其余之和后跑完整个第 9 大回合，对局进入第 10 大回合。旧实现（碾压起始 7）在此会以 PowerDominance 终局。
-        MatchFlow match = MatchFixtures.Started().AtRound(9, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9")
-            .Stones(MatchFixtures.P1, "J1")
-            .Stones(MatchFixtures.P2, "J9")
-            .Stones(MatchFixtures.P3, "E5");
-        PowerSnapshot power = match.Scoreboard.Latest!;
-        BigInteger others = power.Of(MatchFixtures.P1).Total + power.Of(MatchFixtures.P2).Total + power.Of(MatchFixtures.P3).Total;
-        Assert.True(power.Of(MatchFixtures.P0).Total >= others, $"P0 {power.Of(MatchFixtures.P0).Total} 应 ≥ 其余之和 {others}");
-
-        match.PlayTurn("D5");   // P0
-        match.PlayTurn("H1");   // P1
-        match.PlayTurn("H9");   // P2
-        match.PlayTurn("F5");   // P3 → 第 9 大回合结束
-
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-        Assert.Null(match.Result);
-        Assert.Equal(10, match.MajorRound);
-    }
-
-    [Fact]
     public void 轮数再多也不结束()
     {
         // Scenario：对局进行到第 40 大回合且三类终局条件均未满足 → 对局继续。

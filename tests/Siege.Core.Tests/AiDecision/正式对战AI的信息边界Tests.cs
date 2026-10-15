@@ -20,7 +20,7 @@ public class 正式对战AI的信息边界Tests
         // 变异验证 M-A1：给 HeuristicTurnController 加 `public RelicLedger? Leak { get; init; }` → 红 3（本测试、敌方手牌数量不可读、高难度不越权）。
         //（未用字段的写法会先撞 CS0169 警告即错误，编译期就被拦下。）
         // 变异验证 M-C1（check）：给非根类型 BatchEvaluator 加 `public RelicGenerationRecord? Leak` 属性（经 CreateEvaluator 返回类型可达）→ 红 3（同上三条），证明闭包确实展开了非根类型的公开成员。
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Command())]);
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command())]);
         HeuristicTurnController ai = HeuristicAi.Create(match, AiFixtures.P0);
 
         Assert.Empty(AiFixtures.Violations(typeof(HeuristicTurnController)));
@@ -29,7 +29,7 @@ public class 正式对战AI的信息边界Tests
         Assert.Contains(typeof(RelicPublicState), reachable);
 
         // 行为：AI 能看到的信物状态里没有类型与强度；评价器只能对它做先验估计
-        RelicPublicState state = match.Publish().Relics.Single(r => r.Coord == TestMaps.At("E5"));
+        RelicPublicState state = match.Publish().Relics.Single(r => r.Coord == TestMaps.At("G7"));
         Assert.Equal(AiFixtures.P0, ai.CreateEvaluator().Player);
         Assert.Equal(RelicEstimate.ExpectedValueScaled(RelicZone.Contested, match.ContentSet) / RelicEstimate.ScaleOf(match.ContentSet), RelicEstimate.Estimate(state, match.ContentSet));
         Assert.False(state.IsRevealed);
@@ -44,7 +44,7 @@ public class 正式对战AI的信息边界Tests
         // 设计文档 §13.1 / §13.2：对手手牌只返回类型集合。公开视图是独立类型，结构上没有数量字段；
         // AI 闭包里唯一的 HandPrivateView 来自本人的 PlayerHandAccess（Deploy/Recruit 递入），不经 HandLedger。
         // 变异验证：M-A1（见上）→ 本测试红；M-A3（见下）钉住公开快照闭包。
-        MatchFlow match = MatchFixtures.Started();
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         match.Debug.SeedHand(AiFixtures.P1, (PieceType.Basic, 7), (PieceType.Fortress, 2));
         match.Debug.Recalculate();
 
@@ -73,14 +73,14 @@ public class 正式对战AI的信息边界Tests
         // 设计文档 §13.2：对手正在暂放时，正式 AI 的任何读取路径都拿不到暂放信息——公开快照的盘面是正式盘面的副本，
         // 闭包里没有 StagedBatch / Placement；AI 唯一能拿到的 StagedBatch 是 Deploy 递入的本人批次。
         // 变异验证 M-A3：MatchPublicView 加 `StagedBatch? CurrentBatch` 字段 → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started();
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         match.Debug.SetOrder(AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3);
         StagedBatch batch = match.OpenDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("B2"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("D4"), PieceType.Basic));
         Assert.Equal(1, batch.Count);
 
         MatchPublicView seenByEnemy = match.Publish();
-        Assert.Null(seenByEnemy.Board[TestMaps.At("B2")].Occupant);
+        Assert.Null(seenByEnemy.Board[TestMaps.At("D4")].Occupant);
         Assert.Equal(TurnStage.Deploy, seenByEnemy.Stage);
 
         ImmutableHashSet<Type> fromPublicView = AiFixtures.ReachableTypes(typeof(MatchPublicView));

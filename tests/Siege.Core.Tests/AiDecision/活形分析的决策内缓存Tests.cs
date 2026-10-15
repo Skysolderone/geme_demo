@@ -28,7 +28,7 @@ public class 活形分析的决策内缓存Tests
     /// <summary>第 5 大回合、部署上限 8、60+ 合法空格的开放局面（同「候选格上限」）。</summary>
     private static MatchFlow OpenPosition()
     {
-        MatchFlow match = AiFixtures.Round5().Stones(AiFixtures.P1, "E5", "F6", "D7").Stones(AiFixtures.P2, "G3");
+        MatchFlow match = AiFixtures.Round5().Stones(AiFixtures.P1, "G7", "H8", "F9").Stones(AiFixtures.P2, "J5");
         match.SetDeployLimit(8);
         return match;
     }
@@ -39,7 +39,7 @@ public class 活形分析的决策内缓存Tests
     /// </summary>
     private static MatchFlow RichPosition()
     {
-        MatchFlow match = OpenPosition().Stones(Me, "B1", "A2", "B2", "C2", "D1", "D2");
+        MatchFlow match = OpenPosition().Stones(Me, "D3", "C4", "D4", "E4", "F3", "F4");
         match.Debug.SeedHand(Me, [(PieceType.Basic, 20), (PieceType.Fortress, 5), (PieceType.Line, 5)]);
         return match;
     }
@@ -133,17 +133,18 @@ public class 活形分析的决策内缓存Tests
     {
         // 同一格落匠人，带不带改造：占用者网格完全相同，气边不同（同「活形硬约束 · 用改造拆自己的活形也被淘汰」的盘面：
         // 预置栅栏 A1–A2、J1–J2，P0 一排 B1…H1 两端各一个单格眼；匠人落 D2 不改造 → 活形不变；落 D2 并立栅 D1–E1 → 切成两条未定棋串）。
+        // retire-legacy-rules 1.4：随「活形硬约束」同一盘面迁到平坦 8×8 链接载体并缩一子——预置栅栏 C3–C4、K3–K4，P0 一排 D3…J3，匠人 F4、立栅 F3–G3。
         // 先评价不改造的、再评价立栅的：指纹若不含地形，后者命中前者的分析，判不出失活。
         // 变异 M-C6（指纹去掉改造段）→ 红 5：本测试、活形硬约束 · 用改造拆自己的活形也被淘汰、缓存开关不改变决策序列、
         // 候选格上限黄金哈希、阈值为0时零变化（v5 实战里匠人改造常见，漏掉改造段即整局走法改变）。
-        MatchFlow match = MatchFixtures
-            .Started(TestMaps.Terrain(fences: [("A1", "A2"), ("J1", "J2")]))
+        MatchFlow match = LinkModeFixtures
+            .PlainStarted(TestMaps.Terrain(fences: [("C3", "C4"), ("K3", "K4")]))
             .AtRound(5, [Me, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3])
-            .Stones(Me, "B1", "C1", "D1", "E1", "F1", "G1", "H1");
-        TerrainEdit cut = TerrainEdit.Fence(TestMaps.At("D1"), TestMaps.At("E1"));
-        (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Artisan, 1, "D2");
-        RehearsalResult plain = 活形硬约束Tests.Rehearse(batch, driver, BatchFixtures.Artisan("D2", cut) with { Edit = null });
-        RehearsalResult split = 活形硬约束Tests.Rehearse(batch, driver, BatchFixtures.Artisan("D2", cut));
+            .Stones(Me, "D3", "E3", "F3", "G3", "H3", "J3");
+        TerrainEdit cut = TerrainEdit.Fence(TestMaps.At("F3"), TestMaps.At("G3"));
+        (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Artisan, 1, "F4");
+        RehearsalResult plain = 活形硬约束Tests.Rehearse(batch, driver, BatchFixtures.Artisan("F4", cut) with { Edit = null });
+        RehearsalResult split = 活形硬约束Tests.Rehearse(batch, driver, BatchFixtures.Artisan("F4", cut));
         Assert.True(plain.IsLegal && split.IsLegal);
         Assert.Equal(Key(plain.ProjectedBoard!).Split('|')[0], Key(split.ProjectedBoard!).Split('|')[0]);   // 前提：占用者网格相同
         Assert.NotEqual(Key(plain.ProjectedBoard!), Key(split.ProjectedBoard!));
@@ -151,8 +152,8 @@ public class 活形分析的决策内缓存Tests
         HeuristicTurnController ai = HeuristicAi.Create(match, Me, AiDifficulty.Standard, weights: null, AiSearchConfig.Standard, lifeQuery: null, cacheLife: true);
         HeuristicTurnController reference = HeuristicAi.Create(match, Me, AiDifficulty.Standard, weights: null, AiSearchConfig.Standard, lifeQuery: null, cacheLife: false);
         BatchEvaluator cached = ai.CreateEvaluator();
-        ImmutableArray<Placement> plainBatch = [BatchFixtures.Artisan("D2", cut) with { Edit = null }];
-        ImmutableArray<Placement> splitBatch = [BatchFixtures.Artisan("D2", cut)];
+        ImmutableArray<Placement> plainBatch = [BatchFixtures.Artisan("F4", cut) with { Edit = null }];
+        ImmutableArray<Placement> splitBatch = [BatchFixtures.Artisan("F4", cut)];
 
         Assert.True(cached.TryEvaluate(plainBatch, plain, batch.Context, out EvaluationBreakdown? plainScore));
         Assert.False(cached.TryEvaluate(splitBatch, split, batch.Context, out _));

@@ -1,0 +1,196 @@
+# 逐文件比对（清单 第 1 节 vs 脚本）
+
+| 文件 | 来源 | 清单 总/Legacy | 脚本 总/L/D/M/K | 清单分类 | 结论 |
+|---|---|---|---|---|---|
+| AiDecision/AI决策的可复现性Tests.cs | MF | 2/2 | 2/2/0/0/0 | b×2 | 一致 |
+| AiDecision/AI对地表的感知Tests.cs | MF | 5/5 | 5/5/0/0/0 | b×5 | 一致 |
+| AiDecision/AI枚举改造目标Tests.cs | MF | 5/4 | 5/4/0/0/0 | b×4 | 一致 |
+| AiDecision/专家难度的一层前瞻Tests.cs | MF | 16/9 | 16/9/0/0/0 | b×9 | 一致 |
+| AiDecision/候选格上限Tests.cs | MF | 15/10 | 15/8/2/0/0 | a×1 b×8 d×1 | 一致 |
+| AiDecision/停手阈值Tests.cs | IND | 15/8 | 15/8/0/0/0 | b×8 | 一致 |
+| AiDecision/公开规则纯函数Tests.cs | MF | 5/4 | 5/4/0/0/0 | b×4 | 一致 |
+| AiDecision/前瞻中的下一名对手Tests.cs | MF | 8/6 | 8/6/0/0/1 | b×6 | 一致 |
+| AiDecision/前瞻中的停手口径Tests.cs | IND | 6/5 | 6/5/0/0/0 | b×5 | 一致 |
+| AiDecision/前瞻模拟的公平信息Tests.cs | MF | 10/9 | 10/9/0/0/0 | b×9 | 一致 |
+| AiDecision/前瞻的近似两层加分Tests.cs | MF | 9/7 | 9/7/0/0/0 | b×7 | 一致 |
+| AiDecision/前瞻集的多样候选Tests.cs | IND | 7/1 | 7/1/0/0/0 | b×1 | 一致 |
+| AiDecision/启发式评价维度Tests.cs | IND | 14/9 | 14/9/0/0/0 | b×9 | 一致 |
+| AiDecision/对隐藏信息的概率估计Tests.cs | MF | 2/1 | 2/1/0/0/0 | b×1 | 一致 |
+| AiDecision/已确定活形的评价中性Tests.cs | IND | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| AiDecision/新棋子与新信物的AI适配Tests.cs | MF | 8/6 | 8/6/0/0/0 | b×6 | 一致 |
+| AiDecision/正式对战AI的信息边界Tests.cs | MF | 4/3 | 4/3/0/0/0 | b×3 | 一致 |
+| AiDecision/正式对战AI的信息边界_链接模式Tests.cs | MF | 9/1 | 9/1/0/0/0 | m×1 | 一致 |
+| AiDecision/活形分析的决策内缓存Tests.cs | IND | 5/3 | 5/3/0/0/0 | b×3 | 一致 |
+| AiDecision/活形硬约束Tests.cs | IND | 6/6 | 6/6/0/0/0 | b×6 | 一致 |
+| AiDecision/链接模式下的决胜一手Tests.cs | MM | 6/1 | 6/1/0/0/0 | c×1 m×5 | 一致 |
+| AiDecision/链接模式下落后者的停手阈值Tests.cs | MM | 5/1 | 5/1/0/0/0 | c×1 m×4 | 一致 |
+| AiDecision/难度分级Tests.cs | MF | 6/5 | 6/5/0/0/0 | b×5 | 一致 |
+| AiDecision/高部署上限下的候选剪枝Tests.cs | IND | 4/4 | 4/4/0/0/0 | b×4 | 一致 |
+| AiFixtures.cs | FIX | （夹具，清单「夹具」小节） | 0/0/0/0/0 | — | 夹具 |
+| BatchDeployment/批次数量与库存约束Tests.cs | MF | 9/2 | 9/2/0/0/0 | b×2 | 一致 |
+| BatchDeployment/非法批次必须给出可定位的原因Tests.cs | MF | 12/1 | 12/1/0/0/0 | b×1 | 一致 |
+| BatchPreview/批次预演必须显示的信息Tests.cs | IND | 6/2 | 6/2/0/0/0 | b×2 | 一致 |
+| BatchPreview/未知信物在预演中只显示将揭示Tests.cs | IND | 1/1 | 1/1/0/0/0 | b×1 | 一致 |
+| BatchPreview/计分信物与新棋子的预演Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| BatchPreview/非法批次必须说明原因并高亮Tests.cs | MF | 7/1 | 7/1/0/0/0 | b×1 | 一致 |
+| BatchPreview/预演一致性回归Tests.cs | MF | 1/1 | 1/1/0/0/0 | b×1 | 一致 |
+| BatchPreview/预演不改变游戏状态Tests.cs | IND | 1/1 | 1/1/0/0/0 | b×1 | 一致 |
+| Battlefield/战场的定义与规则作用域Tests.cs | MF | 6/1 | 6/0/1/0/0 | d×1 | 一致 |
+| Battlefield/链接后的公开补充载荷Tests.cs | MF | 3/1 | 3/1/0/0/0 | c×1 | 一致 |
+| Battlefield/阶段推进Tests.cs | MF | 11/1 | 11/1/0/0/0 | c×1 | 一致 |
+| CarryInOut/AI带入Tests.cs | MM | 7/— | 7/0/0/1/0 | m×7 | 一致 |
+| CarryInOut/出局结算Tests.cs | CF | 3/1 | 3/1/0/0/0 | a×1 | 一致 |
+| CarryInOut/名次补给点表Tests.cs | CF | 5/2 | 5/2/0/0/0 | a×2 | 一致 |
+| CarryInOut/完赛结算Tests.cs | CF | 2/2 | 2/2/0/0/0 | a×2 | 一致 |
+| CarryInOut/弃赛结算Tests.cs | CF | 6/2 | 6/2/0/0/0 | a×2 | 一致 |
+| CarryInOut/战场落败出局结算Tests.cs | MF | 1/— | 1/0/0/0/1 | e×1 | 一致 |
+| CarryInOut/换型候选类型Tests.cs | MF | 5/2 | 5/2/0/0/0 | b×2 | 一致 |
+| CarryInOut/补给种类与开局效果Tests.cs | MF | 5/5 | 5/5/0/0/0 | b×5 | 一致 |
+| EliminationEndgame/三类终局条件Tests.cs | MF | 8/8 | 8/8/0/0/0 | c×4 j×2 b×2 | 一致 |
+| EliminationEndgame/两类终局条件Tests.cs | MF | 6/1 | 6/1/0/0/0 | c×1 m×5 | 一致 |
+| EliminationEndgame/主动弃赛Tests.cs | MF | 9/9 | 9/9/0/0/0 | b×9 | 一致 |
+| EliminationEndgame/出局判定Tests.cs | MF | 6/6 | 6/6/0/0/0 | b×6 | 一致 |
+| EliminationEndgame/终局名次与并列判定Tests.cs | MF | 11/11 | 11/11/0/0/0 | a×8 c×2 b×1 | 一致 |
+| EliminationEndgame/链接模式终局名次Tests.cs | RN | 8/— | 8/0/0/7/0 | m×8 | 一致 |
+| HandInfoPanel/全玩家手牌对比面板Tests.cs | IND | 1/1 | 1/1/0/0/0 | b×1 | 一致 |
+| HandInfoPanel/公开结构参数与信物来源Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| HandInfoPanel/弃赛玩家的面板表现Tests.cs | IND | 1/1 | 1/1/0/0/0 | b×1 | 一致 |
+| HandInfoPanel/征募面板可收起Tests.cs | MF | 12/2 | 12/2/0/0/0 | b×2 | 一致 |
+| HandInfoPanel/敌方区域的显示内容Tests.cs | IND | 2/2 | 2/2/0/0/0 | b×2 | 一致 |
+| HandInfoPanel/新棋子类型与驿站来源的显示Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| HandInfoPanel/自己区域的显示内容Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| InformationVisibility/他战场玩家数值不进HUD视图模型Tests.cs | MF | 5/1 | 5/1/0/0/0 | m×1 | 一致 |
+| InformationVisibility/始终公开的信息Tests.cs | MF | 6/6 | 6/6/0/0/0 | b×6 | 一致 |
+| InformationVisibility/必须隐藏的信息Tests.cs | MF | 4/3 | 4/3/0/0/0 | b×3 | 一致 |
+| InformationVisibility/按座位视图Tests.cs | MF | 11/1 | 11/1/0/0/3 | c×1 | 一致 |
+| InformationVisibility/视图模型按座位过滤Tests.cs | MF | 10/2 | 10/1/1/0/0 | c×1 m×1 | 一致 |
+| InitiativeOrder/先手值公式Tests.cs | MF | 3/2 | 3/2/0/0/1 | b×2 e×1 | 一致 |
+| InitiativeOrder/先手顺序预测_链接模式Tests.cs | MF | 8/1 | 8/1/0/0/0 | c×1 | 一致 |
+| InitiativeOrder/同值判定链Tests.cs | MF | 4/1 | 4/1/0/0/3 | b×1 | 一致 |
+| InitiativeOrder/基础排序Tests.cs | MF | 2/2 | 2/2/0/0/0 | b×2 | 一致 |
+| InitiativeOrder/排名的作用范围Tests.cs | MF | 2/2 | 2/2/0/0/0 | b×2 | 一致 |
+| LifeShape/活形三态Tests.cs | MF | 16/1 | 16/1/0/0/0 | b×1 | 一致 |
+| LifeShape/禁入格Tests.cs | MF | 4/1 | 4/1/0/0/0 | b×1 | 一致 |
+| LinkMapGeneration/物化状态校验Tests.cs | MF | 10/1 | 10/0/1/0/0 | d×1 | 一致 |
+| LinkMapGeneration/链接时的棋盘拼接Tests.cs | MF | 7/— | 7/0/0/0/1 | e×7 | 一致 |
+| LinkModeFixtures.cs | FIX | （夹具，清单「夹具」小节） | 0/0/0/0/0 | — | 夹具 |
+| LookaheadFixtures.cs | FIX | （夹具，清单「夹具」小节） | 0/0/0/0/0 | — | 夹具 |
+| MapDefinition/两位数行号贯通Tests.cs | MF | 3/2 | 3/2/0/0/0 | b×2 | 一致 |
+| MapDefinition/出生区归属Tests.cs | MF | 4/1 | 4/0/1/0/0 | d×1 | 一致 |
+| MapDefinition/棋盘清单Tests.cs | MF | 9/3 | 9/2/1/0/0 | d×1 a×1 m×1 | 一致 |
+| MapSelection/选图视图模型Tests.cs | MF | 11/3 | 11/2/1/0/0 | m×3 | 一致 |
+| MatchFlowRegression/对局持久化Tests.cs | MF | 9/9 | 9/9/0/0/0 | b×9 | 一致 |
+| MatchFlowRegression/流程回归Tests.cs | MF | 5/4 | 5/4/0/0/0 | c×2 b×2 | 一致 |
+| MatchFlowRegression/百局端到端Tests.cs | MM | 1/— | 1/0/0/1/0 | m×1 | 一致 |
+| MatchFlowRegression/输出契约Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| MatchSetup/决赛倒计时配置Tests.cs | MF | 4/— | 4/0/0/0/2 | m×4 | 一致 |
+| MatchSetup/匿名同时插旗Tests.cs | MF | 4/4 | 4/4/0/0/0 | c×3 b×1 | 一致 |
+| MatchSetup/原型插旗替代路径Tests.cs | MF | 3/2 | 3/2/0/0/0 | b×2 | 一致 |
+| MatchSetup/对局内容集Tests.cs | MM | 6/— | 6/0/0/2/0 | m×6 | 一致 |
+| MatchSetup/对局模式Tests.cs | MF | 5/4 | 5/4/0/0/1 | c×3 b×1 e×1 | 一致 |
+| MatchSetup/对局配置公开完整地图标识Tests.cs | MM | 6/— | 6/0/0/0/0 | m×6 | 一致 |
+| MatchSetup/带入带出配置Tests.cs | MF | 8/5 | 8/5/0/1/0 | b×5 | 一致 |
+| MatchSetup/开局信息公开范围Tests.cs | MF | 6/4 | 6/1/3/0/1 | b×1 m×4 | 一致 |
+| MatchSetup/盲选插旗Tests.cs | MF | 7/2 | 7/2/0/0/2 | m×2 | 一致 |
+| MatchSetup/链接模式存档Tests.cs | MF | 12/3 | 12/3/0/1/1 | c×2 b×1 | 一致 |
+| MatchSetup/首回合顺序随机Tests.cs | MF | 2/2 | 2/2/0/0/0 | b×2 | 一致 |
+| MatchTelemetry/AI改造与主题诊断Tests.cs | MF | 8/4 | 8/4/0/0/0 | b×4 | 一致 |
+| MatchTelemetry/专家前瞻的记录Tests.cs | EXT | 10/— | 未命中 | — | 一致（不迁，只读旧日志夹具） |
+| MatchTelemetry/对局日志的记录内容Tests.cs | MF | 11/7 | 11/7/0/0/1 | b×7 | 一致 |
+| MatchTelemetry/对局日志的记录内容_链接模式Tests.cs | MF | 8/1 | 8/1/0/0/0 | c×1 | 一致 |
+| MatchTelemetry/活形记录与统计Tests.cs | MF | 8/5 | 8/5/0/0/0 | b×5 | 一致 |
+| PresentationFixtures.cs | FIX | （夹具，清单「夹具」小节） | 0/0/0/0/0 | — | 夹具 |
+| Recruitment/初始配置与基础棋池Tests.cs | MF | 8/1 | 8/1/0/1/0 | b×1 | 一致 |
+| Recruitment/私人征募面板Tests.cs | MF | 7/2 | 7/2/0/0/0 | b×2 | 一致 |
+| RelicEffects/同类信物叠加且无统一硬上限Tests.cs | MF | 4/1 | 4/1/0/0/0 | b×1 | 一致 |
+| RelicEffects/工坊扩大匠人的格改造范围Tests.cs | MF | 3/1 | 3/1/0/0/0 | b×1 | 一致 |
+| RelicEffects/效果快照在小回合开始时生成Tests.cs | MF | 10/2 | 10/2/0/0/0 | b×2 | 一致 |
+| RelicEffects/计分信物连营与犄角Tests.cs | MF | 8/1 | 8/1/0/0/0 | b×1 | 一致 |
+| RelicEffects/驿站的展示数加成Tests.cs | MF | 6/1 | 6/1/0/0/0 | b×1 | 一致 |
+| RelicGeneration/区域强度预算Tests.cs | MF | 6/2 | 6/0/2/0/0 | d×2 | 一致 |
+| SettlementShow/演出期间对局不推进Tests.cs | MF | 1/1 | 1/1/0/0/0 | b×1 | 一致 |
+| SettlementShow/结算节拍序列的生成Tests.cs | MF | 7/1 | 7/1/0/0/0 | b×1 | 一致 |
+| SimulationHarness/人工接管Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| SimulationHarness/出生区编号显示Tests.cs | MF | 4/1 | 4/1/0/0/0 | b×1 | 一致 |
+| SimulationHarness/原型调试AITests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| SimulationHarness/可复现回放Tests.cs | MF | 4/— | 4/0/0/0/1 | e×4 | 一致 |
+| SimulationHarness/各入口按地图标识选图_链接模式Tests.cs | MM | 8/— | 8/0/0/2/0 | m×2 | 一致 |
+| SimulationHarness/旧生成器摘要被拒Tests.cs | MM | 2/— | 2/0/0/1/0 | m×1 | 一致 |
+| SimulationHarness/终端对局Tests.cs | MF | 4/1 | 4/1/0/0/0 | b×1 | 一致 |
+| SimulationHarness/终端新棋子与新信物Tests.cs | MF | 5/4 | 5/4/0/0/0 | b×4 | 一致 |
+| SimulationHarness/终端活形与禁入标示Tests.cs | MF | 6/5 | 6/5/0/0/0 | b×5 | 一致 |
+| TacticalLayers/五种战术信息层Tests.cs | IND | 6/6 | 6/6/0/0/0 | b×6 | 一致 |
+| TacticalLayers/信息层的可用时机与无副作用Tests.cs | MF | 4/4 | 4/4/0/0/0 | b×4 | 一致 |
+| TacticalLayers/势力层领地与高地Tests.cs | MF | 7/6 | 7/6/0/0/0 | b×6 | 一致 |
+| TacticalLayers/单子禁手的标示Tests.呈现.cs | MF | 11/10 | 11/10/0/0/0 | b×10 | 一致 |
+| TacticalLayers/单子禁手的标示Tests.对照.cs | MF | 7/— | 7/0/0/0/0 | m×5 | 一致 |
+| TacticalLayers/单子禁手的标示Tests.查询.cs | MF | 9/7 | 9/7/0/0/0 | b×7 | 一致 |
+| TacticalLayers/改造在默认棋盘与棋串读法里的呈现Tests.cs | MF | 4/4 | 4/4/0/0/0 | b×4 | 一致 |
+| TacticalLayers/新地表的规则标示Tests.cs | MF | 8/8 | 8/8/0/0/0 | b×8 | 一致 |
+| TacticalLayers/活形与禁入格的标示Tests.cs | MF | 6/5 | 6/5/0/0/0 | b×5 | 一致 |
+| TacticalLayers/盘面层的读法切换Tests.cs | MF | 9/3 | 9/3/0/0/0 | b×3 | 一致 |
+| TacticalLayers/盘面层视图模型带地形Tests.cs | MF | 2/2 | 2/2/0/0/0 | b×2 | 一致 |
+| TacticalLayers/默认棋盘上的未发现信物Tests.cs | IND | 2/2 | 2/2/0/0/0 | b×2 | 一致 |
+| TerrainEditing/同形与存档纳入设施Tests.cs | MF | 5/1 | 5/1/0/0/0 | b×1 | 一致 |
+| TerrainEditing/地形派生数据不缓存Tests.cs | MF | 7/3 | 7/3/0/0/0 | b×3 | 一致 |
+| TerrainEditing/改造不可逆与公开Tests.cs | MF | 4/3 | 4/3/0/0/0 | b×3 | 一致 |
+| TurnSequence/合法落子范围的对外契约Tests.cs | MF | 4/4 | 4/4/0/0/0 | c×1 j×1 b×2 | 一致 |
+| TurnSequence/大回合的定义与推进Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| TurnSequence/小回合的五个阶段Tests.cs | MF | 3/3 | 3/3/0/0/0 | b×3 | 一致 |
+| TurnSequence/战场内合法落子范围Tests.cs | MF | 9/1 | 9/1/0/0/0 | c×1 | 一致 |
+| TurnSequence/构筑保护期的落子限制Tests.cs | MF | 2/2 | 2/2/0/0/0 | j×1 b×1 | 一致 |
+| TurnSequence/第4大回合的全图解禁Tests.cs | MF | 2/2 | 2/2/0/0/0 | c×1 j×1 | 一致 |
+| VisualStyleBaseline/棋盘台面的可视表现Tests.cs | MF | 3/1 | 3/1/0/0/1 | a×1 | 一致 |
+
+有出入文件数：0
+
+# 第 3 节（(c) / (j) / L18）逐名核对
+
+- #1 AiDecision/链接模式下的决胜一手Tests.cs.旧模式不变 [c] → 脚本 L
+- #2 AiDecision/链接模式下落后者的停手阈值Tests.cs.旧模式不变 [c] → 脚本 L
+- #3 Battlefield/链接后的公开补充载荷Tests.cs.旧模式副本与按生成记录恢复逐项相同 [c] → 脚本 L
+- #4 Battlefield/阶段推进Tests.cs.旧模式没有阶段转换 [c] → 脚本 L
+- #5 EliminationEndgame/三类终局条件Tests.cs.整轮Pass [c] → 脚本 L
+- #6 EliminationEndgame/三类终局条件Tests.cs.棋盘填满 [c] → 脚本 L
+- #7 EliminationEndgame/三类终局条件Tests.cs.棋盘填满优先于整轮Pass [c] → 脚本 L
+- #8 EliminationEndgame/三类终局条件Tests.cs.只剩一名参赛玩家优先于棋盘填满 [c] → 脚本 L
+- #9 EliminationEndgame/三类终局条件Tests.cs.唯一参赛者获胜 [j] → 脚本 L
+- #10 EliminationEndgame/三类终局条件Tests.cs.轮数再多也不结束 [j] → 脚本 L
+- #11 EliminationEndgame/两类终局条件Tests.cs.旧模式终局原因不含最后战场结算 [c] → 脚本 L
+- #12 EliminationEndgame/终局名次与并列判定Tests.cs.整轮Pass时按同一规则排名 [c] → 脚本 L
+- #13 EliminationEndgame/终局名次与并列判定Tests.cs.旧模式流程中弃赛者排在势力归零出局者之前 [c] → 脚本 L
+- #14 InformationVisibility/按座位视图Tests.cs.旧模式全图展开 [c] → 脚本 L
+- #15 InformationVisibility/视图模型按座位过滤Tests.cs.旧模式全图可见无占位_与全知棋盘逐项相同 [c] → 脚本 L
+- #16 InitiativeOrder/先手顺序预测_链接模式Tests.cs.旧模式预测不变 [c] → 脚本 L
+- #17 MatchFlowRegression/流程回归Tests.cs.出局改变参赛人数后Pass计数与新人数重比 [c] → 脚本 L
+- #18 MatchFlowRegression/流程回归Tests.cs.弃赛改变参赛人数后立即重比Pass计数 [c] → 脚本 L
+- #19 MatchSetup/匿名同时插旗Tests.cs.身份匿名 [c] → 脚本 L
+- #20 MatchSetup/匿名同时插旗Tests.cs.锁定前可更换 [c] → 脚本 L
+- #21 MatchSetup/匿名同时插旗Tests.cs.多人同区 [c] → 脚本 L
+- #22 MatchSetup/对局模式Tests.cs.缺省为旧模式 [c] → 脚本 L
+- #23 MatchSetup/对局模式Tests.cs.公开建局恒为链接模式 [c] → 脚本 L
+- #24 MatchSetup/对局模式Tests.cs.链接图以链接模式建局 [c] → 脚本 L
+- #25 MatchSetup/链接模式存档Tests.cs.旧模式存档不写新字段且按旧模式读入 [c] → 脚本 L
+- #26 MatchSetup/链接模式存档Tests.cs.旧模式终局存档不写出局原因 [c] → 脚本 L
+- #27 MatchTelemetry/对局日志的记录内容_链接模式Tests.cs.旧模式日志不写链接模式字段 [c] → 脚本 L
+- #28 TurnSequence/合法落子范围的对外契约Tests.cs.范围随大回合切换 [c] → 脚本 L
+- #29 TurnSequence/合法落子范围的对外契约Tests.cs.禁入格不在范围内 [j] → 脚本 L
+- #30 TurnSequence/战场内合法落子范围Tests.cs.旧模式第4大回合仍全图解禁 [c] → 脚本 L
+- #31 TurnSequence/构筑保护期的落子限制Tests.cs.保护期内越区落子被拒 [j] → 脚本 L
+- #32 TurnSequence/第4大回合的全图解禁Tests.cs.解禁后全图可落子 [c] → 脚本 L
+- #33 TurnSequence/第4大回合的全图解禁Tests.cs.空盘面玩家重新进入 [j] → 脚本 L
+- #34 MapDefinition/地图静态校验规则Tests.cs.中央入口与咽喉必须位于可落子格 [c（L18）] → L18（与 Legacy 无关，第 4 组）
+- #35 MapDefinition/地图静态校验规则Tests.cs.放宽容差必须写明理由 [c（L18）] → L18（与 Legacy 无关，第 4 组）
+
+第 3 节条目 35，未命中 0
+
+# 第 4 节（改名 / 迁出）源方法存在性
+
+- 三类终局条件Tests.势力悬殊不提前结束 → 脚本命中 L
+- 三类终局条件Tests.Pass计数跨回合重置 → 脚本命中 L
+- 匿名同时插旗Tests.时限可配置 → 脚本命中 L
+- 构筑保护期的落子限制Tests.保护期内规则照常 → 脚本命中 L
+- 前瞻模拟的公平信息Tests.保护期内只在出生区回应 → 脚本命中 L
+- 他战场玩家数值不进HUD视图模型Tests.旧模式与同战场不遮蔽 → 脚本命中 L
+- 地形派生数据不缓存Tests.合法落子范围在保护期后含本局新架的桥 → 脚本命中 L
+- MatchSetup/对局模式Tests → （文件级改名）

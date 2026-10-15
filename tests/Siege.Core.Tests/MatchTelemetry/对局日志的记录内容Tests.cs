@@ -18,6 +18,7 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests.MatchTelemetry;
 
 /// <summary>规格：match-telemetry —— Requirement: 对局日志的记录内容</summary>
+/// <remarks>retire-legacy-rules 1.6：手写局面的载体为平坦 8×8 链接档图上四人同锁棋盘 0（LinkModeFixtures.PlainStarted），原 9×9 坐标平移 (+2, +2)（领地分一条 (+1, +1)、带出结算一条按四角映射）。</remarks>
 public class 对局日志的记录内容Tests
 {
     [Fact]
@@ -118,12 +119,12 @@ public class 对局日志的记录内容Tests
         Assert.Equal(live.DeterministicText(), MatchLog.Parse(live.FullText().Replace("\n", "\r\n")).DeterministicText());
 
         // 6（续）规则级终局的最终结果：P1、P2 先弃赛，P0 由 AI 走一个小回合后 P3 弃赛 → 只剩一名参赛玩家，名次取自规则层。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All);
-        match.Resign(MatchFixtures.P1);
-        match.Resign(MatchFixtures.P2);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All);
+        match.Resign(TestMaps.P1);
+        match.Resign(TestMaps.P2);
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config());
         Assert.True(session.RunTurn());
-        match.Resign(MatchFixtures.P3);
+        match.Resign(TestMaps.P3);
         MatchLog ended = MatchLog.Parse(session.Run().FullText());
         Assert.Equal(nameof(EndReason.LastPlayerStanding), ended.Result!.Reason);
         Assert.True(ended.Result.Converged);
@@ -137,11 +138,11 @@ public class 对局日志的记录内容Tests
     {
         // 规格 Scenario：某次结算后玩家 A 的独占空格由 14 变为 9 → 日志中可查到该次结算后 A 的领地分为 9。
         // 走真实盘面 → 日志写入函数（MatchSession.PlayerEntries，RecordTurn 用的同一个）→ 文本往返（testing.md「真实跑局覆盖不到的写入路径」）。
-        // 9×9 平地：P0 占 C5–H5 一排 6 子 → 覆盖第 4 / 6 行各 6 格 + 两端 B5、J5 = 14 个独占空格。
-        // 随后 P1 落 D6、H4：D6 与 H4 本身被占（−2），D6 使 C6 / E6 变争议（−2），H4 使 G4 变争议（−1）→ 14 − 5 = 9。
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(MatchFixtures.P0, "C5", "D5", "E5", "F5", "G5", "H5");
+        // 平地（retire-legacy-rules 1.6 起为平坦 8×8 链接载体的棋盘 0，原 9×9 坐标平移 (+1, +1)）：P0 占 D6–J6 一排 6 子 → 覆盖第 5 / 7 行各 6 格 + 两端 C6、K6 = 14 个独占空格。
+        // 随后 P1 落 E7、J5：E7 与 J5 本身被占（−2），E7 使 D7 / F7 变争议（−2），J5 使 H5 变争议（−1）→ 14 − 5 = 9。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5).Stones(TestMaps.P0, "D6", "E6", "F6", "G6", "H6", "J6");
         List<PlayerEntry> before = MatchSession.PlayerEntries(match.Publish());
-        match.Stones(MatchFixtures.P1, "D6", "H4");
+        match.Stones(TestMaps.P1, "E7", "J5");
         List<PlayerEntry> after = MatchSession.PlayerEntries(match.Publish());
 
         MatchLog written = SimFixtures.Synthetic(
@@ -153,7 +154,7 @@ public class 对局日志的记录内容Tests
 
         Assert.Equal(14, log.Turns[0].PlayersState.Single(p => p.Player == 0).TerritoryScore);
         Assert.Equal(9, log.Turns[1].PlayersState.Single(p => p.Player == 0).TerritoryScore);
-        // 与权威势力明细逐人一致（P1 的领地分也非零：D7 / J4 / H3 三格）
+        // 与权威势力明细逐人一致（P1 的领地分也非零：E8 / K5 / J4 三格）
         Assert.All(log.Turns[1].PlayersState, p => Assert.Equal(match.Scoreboard.Latest!.Of(new PlayerId(p.Player)).TerritoryScore, p.TerritoryScore));
         Assert.Equal(3, log.Turns[1].PlayersState.Single(p => p.Player == 1).TerritoryScore);
     }
@@ -165,21 +166,31 @@ public class 对局日志的记录内容Tests
         // 真实盘面：12×12 平地上 P0 用 120 枚倍增子铺满第 1–10 行（一条棋串）→ 军势 ⌊120 × 3^120 / 2^120⌋（测试内独立整数式），
         // 远超 2^63；第 11 行 12 格为 P0 独占（领地分 12，非零）。经日志写入函数 → 文本 → 解析，逐位与对局内的势力明细比。
         // 写出端形状见 军势精确整数遥测Tests（JSON 数字、不加引号、无指数）。
-        MapData map = MatchFixtures.Map() with { Id = "test-match-12x12", Width = 12, Height = 12 };
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, MatchFixtures.All, MatchFixtures.Relics(map), MatchOptions.Immediate);
-        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
+        // retire-legacy-rules 1.6：同 终端对局Tests.状态栏大数势力缩写不撑破一行——12×12 全平地改以链接模式建局（link:90012，整图一块出生棋盘、四人同锁）。
+        MapData map = TestMaps.NineByNine() with
+        {
+            Id = "link:90012",
+            Width = 12,
+            Height = 12,
+            Profile = MapProfile.Link,
+            Boards = [new BoardPlate(new Coord(0, 0), 12, 12, BoardPlateKind.Birth)],
+            BirthZones = [[.. TestMaps.Rect(0, 0, 12, 12)]],
+        };
+        MatchFlow match = LinkModeFixtures.RequireLink(
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
         for (int y = 0; y < 10; y++)
         {
             for (int x = 0; x < 12; x++)
             {
-                match.Board.Place(new Coord(x, y), MatchFixtures.P0, PieceType.Multiplier);
+                match.Board.Place(new Coord(x, y), TestMaps.P0, PieceType.Multiplier);
             }
         }
 
         match.Debug.Recalculate();
         BigInteger expected = 120 * BigInteger.Pow(3, 120) / BigInteger.Pow(2, 120);
         Assert.True(expected > BigInteger.Pow(2, 63));
-        Scoring.PlayerPower truth = match.Scoreboard.Latest!.Of(MatchFixtures.P0);
+        Scoring.PlayerPower truth = match.Scoreboard.Latest!.Of(TestMaps.P0);
         Assert.Equal(expected, Assert.Single(truth.Groups).Power);
         Assert.Equal(12, truth.TerritoryScore);
 
@@ -231,13 +242,13 @@ public class 对局日志的记录内容Tests
     [Fact]
     public void 非法批次也记录()
     {
-        // 玩家提交自杀手批次：P1 先占 A2、B1，P0 提交 A1（无气、不提子）→ 确认被拒 → 日志记录该次尝试、失败类别 Suicide 与相关坐标 A1。
+        // 玩家提交自杀手批次：P1 先占 C4、D3，P0 提交 C3（无气、不提子）→ 确认被拒 → 日志记录该次尝试、失败类别 Suicide 与相关坐标 C3。
         // 变异验证 M-B4：LoggingController.OnRejected 不记录 → 红 1（本测试）。
         // round-cap 3.3：原靠跑局层 maxRounds: 1 硬停；现由对局配置上限 1 以规则原因 MajorRoundLimit 终局。
-        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate).Stones(MatchFixtures.P1, "A2", "B1");
-        match.Debug.SetOrder(MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3);
+        MatchFlow match = LinkModeFixtures.PlainStarted(options: MatchOptions.Immediate).Stones(TestMaps.P1, "C4", "D3");
+        match.Debug.SetOrder(TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3);
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 4));
-        session.SetController(MatchFixtures.P0, new BlindController("A1"));
+        session.SetController(TestMaps.P0, new BlindController("C3"));
 
         Assert.True(session.RunTurn());
         MatchLog log = session.Run();
@@ -251,21 +262,21 @@ public class 对局日志的记录内容Tests
         Assert.Equal(1, rejected.Turn);
         Assert.Equal(0, rejected.Player);
         Assert.Equal(nameof(Batch.BatchFailureKind.Suicide), rejected.FailureKind);
-        Assert.Equal(["A1"], rejected.Coords);
-        Assert.Contains("A1", rejected.Detail);
-        Assert.Null(match.Board[Coord.Parse("A1")].Occupant);
+        Assert.Equal(["C3"], rejected.Coords);
+        Assert.Contains("C3", rejected.Detail);
+        Assert.Null(match.Board[Coord.Parse("C3")].Occupant);
     }
 
     [Fact]
     public void 新来源可查()
     {
         // more-pieces-relics 规格 Scenario：某次结算后 A 的一条棋串含哨兵子、哨兵加值为 4 → 日志中该棋串的来源拆分记录哨兵 4，七项来源之和等于位置加值。
-        // P0 哨兵 F5 气边邻接 P1 的 E5、G5；v2 局写出四种新来源（含 0），v1 局不写（null，日志与引入新棋子之前逐字节相同）。
+        // P0 哨兵 H7 气边邻接 P1 的 G7、J7；v2 局写出四种新来源（含 0），v1 局不写（null，日志与引入新棋子之前逐字节相同）。
         // 写入 → 文本 → 读回：七项之和 = 军势 − 基础（无倍增子），并与活对象的位置加值一致。变异 MC-L1（写入端漏写哨兵来源）应红。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All).Stones(MatchFixtures.P1, "E5", "G5");
-        match.Board.Place(Coord.Parse("F5"), MatchFixtures.P0, PieceType.Sentry);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All).Stones(TestMaps.P1, "G7", "J7");
+        match.Board.Place(Coord.Parse("H7"), TestMaps.P0, PieceType.Sentry);
         match.Debug.Recalculate();
-        Scoring.GroupPower live = match.Scoreboard.Latest!.GroupContaining(MatchFixtures.P0, "F5");
+        Scoring.GroupPower live = match.Scoreboard.Latest!.GroupContaining(TestMaps.P0, "H7");
         Assert.Equal(4, live.SentryBonus);
 
         GroupEntry written = Assert.Single(MatchSession.PlayerEntries(match.Publish()).Single(p => p.Player == 0).Groups);
@@ -277,9 +288,9 @@ public class 对局日志的记录内容Tests
         Assert.Equal(live.PositionBonus, seven);
         Assert.Equal(g.Power - g.Base, seven);
 
-        // v1 局（同一几何、F5 换成普通子）：四种新来源与计分信物子拆分都不出现在日志文本里。
-        MatchFlow v1 = MatchFixtures.Started(options: MatchOptions.Immediate with { ContentSet = ContentSet.V1 }).AtRound(5, MatchFixtures.All).Stones(MatchFixtures.P1, "E5", "G5");
-        v1.Board.Place(Coord.Parse("F5"), MatchFixtures.P0, PieceType.Basic);
+        // v1 局（同一几何、H7 换成普通子）：四种新来源与计分信物子拆分都不出现在日志文本里。
+        MatchFlow v1 = LinkModeFixtures.PlainStarted(options: MatchOptions.Immediate with { ContentSet = ContentSet.V1 }).AtRound(5, TestMaps.All).Stones(TestMaps.P1, "G7", "J7");
+        v1.Board.Place(Coord.Parse("H7"), TestMaps.P0, PieceType.Basic);
         v1.Debug.Recalculate();
         string v1Text = JsonSerializer.Serialize(MatchSession.PlayerEntries(v1.Publish()), LogJson.Options);
         foreach (string field in new[] { "BannerBonus", "ChainBonus", "SentryBonus", "BoundaryBonus", "EncampmentBonus", "PincerBonus" })
@@ -316,17 +327,17 @@ public class 对局日志的记录内容Tests
     public void 驿站来源与工坊标记可查()
     {
         // 规格第 4、5 条：快照记录展示数的驿站来源与工坊是否生效；改造记录"目标是否经工坊扩展（隔一格）"。真实会话端到端（写入函数 → 日志文本 → 读回）：
-        // v2 局，P0 占据已揭示的驿站 H5、工坊 H3、先锋 B8 → 驿站计入 2 枚其他信物（+2），展示数 7，工坊生效；
-        // P0 的批次：匠人 E5 隔一格搭桥 E7 + 匠人 C5 搭桥四邻的 D5 → 前者经工坊扩展、后者不是。
+        // v2 局，P0 占据已揭示的驿站 K7、工坊 K5、先锋 D10 → 驿站计入 2 枚其他信物（+2），展示数 7，工坊生效；
+        // P0 的批次：匠人 G7 隔一格搭桥 G9 + 匠人 E7 搭桥四邻的 F7 → 前者经工坊扩展、后者不是。
         // 变异 MC-L2（快照漏写驿站来源）、MC-L3（改造记录的工坊扩展恒否）应红。v1 局同一脚本：三个字段都不出现在日志文本与快照哈希文本里。
         (MatchLog log, MatchFlow match) = WorkshopSession(ContentSet.V2);
         TurnSnapshot first = MatchLog.Parse(log.DeterministicText()).Turns[0];
         Assert.Equal(0, first.Player);
         Assert.Equal(7, first.ShowCount);
-        Assert.Equal(["H5=2"], first.RelaySources!.Select(kv => $"{kv.Key}={kv.Value}"));
+        Assert.Equal(["K7=2"], first.RelaySources!.Select(kv => $"{kv.Key}={kv.Value}"));
         Assert.True(first.WorkshopActive);
         Assert.Equal(
-            ["B:D5/False", "B:E7/True"],
+            ["B:F7/False", "B:G9/True"],
             first.Edits!.Select(e => $"{e.Target}/{e.ViaWorkshop}").Order(StringComparer.Ordinal));
         Assert.Equal(
             match.TerrainEdits.Select(r => $"{r.Edit}/{r.ViaWorkshop}").Order(StringComparer.Ordinal),
@@ -340,26 +351,26 @@ public class 对局日志的记录内容Tests
         }
     }
 
-    /// <summary>E7 / D5 深水的局（第 5 大回合、P0 先行）：P0 占据并揭示驿站 H5、工坊 H3、先锋 B8，手里只有匠人；P0 的批次是 E5 隔一格搭桥 E7 + C5 搭桥 D5，跑 1 个小回合。</summary>
+    /// <summary>G9 / F7 深水的局（第 5 大回合、P0 先行）：P0 占据并揭示驿站 K7、工坊 K5、先锋 D10，手里只有匠人；P0 的批次是 G7 隔一格搭桥 G9 + E7 搭桥 F7，跑 1 个小回合。</summary>
     private static (MatchLog Log, MatchFlow Match) WorkshopSession(ContentSet set)
     {
-        MatchFlow match = MatchFixtures.Started(
-                TestMaps.Terrain(surfaces: [("E7", Surface.DeepWater), ("D5", Surface.DeepWater)]),
+        MatchFlow match = LinkModeFixtures.PlainStarted(
+                TestMaps.Terrain(surfaces: [("G9", Surface.DeepWater), ("F7", Surface.DeepWater)]),
                 options: MatchOptions.Immediate with { ContentSet = set },
-                relics: [("H5", RelicFixtures.Relay()), ("H3", RelicFixtures.Workshop()), ("B8", RelicFixtures.Vanguard())])
-            .AtRound(5, MatchFixtures.All);
-        foreach (string cell in new[] { "H5", "H3", "B8" })
+                relics: [("K7", RelicFixtures.Relay()), ("K5", RelicFixtures.Workshop()), ("D10", RelicFixtures.Vanguard())])
+            .AtRound(5, TestMaps.All);
+        foreach (string cell in new[] { "K7", "K5", "D10" })
         {
-            match.Board.Place(Coord.Parse(cell), MatchFixtures.P0, PieceType.Basic);
+            match.Board.Place(Coord.Parse(cell), TestMaps.P0, PieceType.Basic);
         }
 
         match.Relics.Reveal(match.Board, 5);
         match.Debug.Recalculate();
-        match.Debug.SeedHand(MatchFixtures.P0, (PieceType.Artisan, 3));
+        match.Debug.SeedHand(TestMaps.P0, (PieceType.Artisan, 3));
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
-        session.SetController(MatchFixtures.P0, new ArtisanScript(
-            BatchFixtures.Artisan("E5", TerrainEdit.Bridge(Coord.Parse("E7"))),
-            BatchFixtures.Artisan("C5", TerrainEdit.Bridge(Coord.Parse("D5")))));
+        session.SetController(TestMaps.P0, new ArtisanScript(
+            BatchFixtures.Artisan("G7", TerrainEdit.Bridge(Coord.Parse("G9"))),
+            BatchFixtures.Artisan("E7", TerrainEdit.Bridge(Coord.Parse("F7")))));
         return (session.Run(), match);
     }
 
@@ -371,7 +382,7 @@ public class 对局日志的记录内容Tests
         // 规格 Scenario：玩家 1 带入换型令（堡垒子）、玩家 2 带入征召签（抽得哨兵子）、玩家 3 与 4 带入备用子 → 日志首部逐名记录这四项带入与开关状态。
         // 征召签的抽得类型只由种子与玩家编号决定（carry-draft:1 子流）：取第一颗让玩家 2 抽得哨兵子的种子。
         // 两条腿：写出文本 → 解析 → 逐项比对活对象（对局配置里的带入）；首部字面值由测试写死。
-        ulong seed = FirstSeed(s => CarryCandidates.Draw(new GameSeed(s), MatchFixtures.P1, ContentSet.V2) == PieceType.Sentry);
+        ulong seed = FirstSeed(s => CarryCandidates.Draw(new GameSeed(s), TestMaps.P1, ContentSet.V2) == PieceType.Sentry);
         var carries = new Dictionary<int, CarryIn>
         {
             [0] = new(SupplyKind.Commission, PieceType.Fortress),
@@ -401,18 +412,18 @@ public class 对局日志的记录内容Tests
         // 规格 Scenario：开启带入带出的一局中玩家 4 在第 6 大回合以弃赛时势力名次第 2 弃赛 → 日志中可查到玩家 4 的结算：弃赛、名次 2、带出 8、补给返还。
         // 局面同 主动弃赛Tests.弃赛时势力名次：C（P2）已出局；A（P0）严格高于 D（P3），B（P1）与 D 相等 → D 第 2。
         // 随后 B 也弃赛，A 成为唯一参赛者，规则终局（只剩一名参赛玩家）。样本的每名玩家都取非缺省值：完赛 24、出局 0 丢失、两名弃赛者、返还为真。
-        MatchFlow match = MatchFixtures.Started(options: CarryFixtures.On(ContentSet.V1,
+        MatchFlow match = LinkModeFixtures.PlainStarted(options: CarryFixtures.On(ContentSet.V1,
                 (0, CarryFixtures.Spare), (2, CarryFixtures.Commission(PieceType.Line)), (3, CarryFixtures.Commission(PieceType.Fortress))))
-            .AtRound(6, MatchFixtures.All)
-            .Stones(MatchFixtures.P2, "A9")
-            .Stones(MatchFixtures.P1, "J1")
-            .Stones(MatchFixtures.P3, "J9");
-        match.PlayTurn("A8", "B9");
-        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P2).Status);   // 前提：C 已出局
-        match.Resign(MatchFixtures.P3);
+            .AtRound(6, TestMaps.All)
+            .Stones(TestMaps.P2, "C10")
+            .Stones(TestMaps.P1, "K3")
+            .Stones(TestMaps.P3, "K10");
+        match.PlayTurn("C9", "D10");
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(TestMaps.P2).Status);   // 前提：C 已出局
+        match.Resign(TestMaps.P3);
         Assert.Equal(2, match.Resignations.Single().RankAtResign);                        // 前提：D 的弃赛名次第 2
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config());
-        match.Resign(MatchFixtures.P1);
+        match.Resign(TestMaps.P1);
         Assert.Equal(2, match.Resignations[1].RankAtResign);                              // 前提：B 的弃赛名次也是第 2
 
         MatchLog log = MatchLog.Parse(session.Run().FullText());
@@ -483,7 +494,7 @@ public class 对局日志的记录内容Tests
     {
         MapData map = MapCatalog.Resolve("link:1");
         RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
-        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate with
+        MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), TestMaps.All, MatchOptions.Immediate with
         {
             ArtisanWeight = config.ArtisanWeight,
             ContentSet = config.ContentSet!.Value,

@@ -17,12 +17,12 @@ public class 流程回归Tests
         // 变异验证 M-R1：CheckEndConditions 用 _players.Length 代替 ActiveCount → 红 1（本测试：第 3 次 Pass 后仍在进行）。
         // 段 C 改摆法：出局只能由提子造成（Pass 不改变任何人的势力），原"P0 Pass 后 P3 因盘面与手牌皆空出局"已不成立。
         // 改为 P0 一个批次提光 P3 的 A1（计数清零），随后 P1、P2 与第 6 大回合首位各 Pass 一次：3 ≥ 3 → 整轮 Pass（终局大回合 5 → 6）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P3, "A1")
-            .Stones(MatchFixtures.P0, "B1");
+        MatchFlow match = MatchFixtures.Started().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+            .Stones(TestMaps.P3, "A1")
+            .Stones(TestMaps.P0, "B1");
 
         match.PlayTurn("A2");   // P0：提光 P3 → P3 出局，参赛人数 3
-        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(MatchFixtures.P3).Status);
+        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(TestMaps.P3).Status);
         Assert.Equal(0, match.PassStreak);
         match.PassTurn();   // P1
         match.PassTurn();   // P2 → 第 5 大回合结束（P3 被跳过）
@@ -39,43 +39,46 @@ public class 流程回归Tests
     {
         // 前三人 Pass（计数 3 < 4），第四人在小回合边界弃赛 → 参赛人数变 3，计数 3 ≥ 3 立即触发整轮 Pass。
         // 变异验证 M-R2：Resign 后不调用 CheckEndConditions → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "E5");
+        MatchFlow match = MatchFixtures.Started().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+            .Stones(TestMaps.P0, "E5");
         match.PassTurn();
         match.PassTurn();
         match.PassTurn();
         Assert.Equal(3, match.PassStreak);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
 
-        match.Resign(MatchFixtures.P3);
+        match.Resign(TestMaps.P3);
         Assert.Equal(MatchPhase.Ended, match.Phase);
         Assert.Equal(EndReason.AllPassed, match.Result!.Reason);
-        Assert.Equal(MatchFixtures.P0, match.Result.Winners.Single());
+        Assert.Equal(TestMaps.P0, match.Result.Winners.Single());
     }
 
     [Fact]
     public void 最后一手抢到的先锋本大回合结束即生效()
     {
         // design.md D4 / 设计文档 §8.1：先手修正在大回合结束时单次拉取、不缓存——本大回合最后一手抢到的先锋立刻影响下一轮顺序。
-        // 盘面：P0 三孤子 15、P1 两孤子 10、P2 一孤子 5、P3 空；P0–P2 Pass，P3 最后落 E5（先锋）→ P3 势力 5 与 P2 并列第 3，
+        // 盘面：P0 三孤子 15、P1 两孤子 10、P2 一孤子 5、P3 空；P0–P2 Pass，P3 最后落 G7（先锋）→ P3 势力 5 与 P2 并列第 3，
         // 先手值 (4−3)+1 = 2 与 P1 的 (4−2)+0 = 2 同值，同值链第 1 条（修正）让 P3 排在 P1 之前。
         // 变异验证 M-R3：把 ReadInitiativeBonuses 移到大回合开始时读取并缓存 → 红 1（本测试：P3 修正为 0，顺序 P0>P1>P2>P3）。
-        MatchFlow match = MatchFixtures.Started(relics: [("E5", RelicFixtures.Vanguard())])
-            .AtRound(5, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, "B2", "E2", "H2")
-            .Stones(MatchFixtures.P1, "E8", "H8")
-            .Stones(MatchFixtures.P2, "B8");
+        // retire-legacy-rules 1.5：载体为平坦 8×8 链接档图（四人同锁棋盘 0；P3 落子 → 本战场不是整轮 Pass，不结算）。原 9×9 的七个孤子分布在第 2 / 5 / 8 行，
+        // 8×8 棋盘放不下"三行都不贴边"，重排为棋盘 0 内圈两两曼哈顿距离 ≥ 3 的七格（每子仍是四邻独占的孤子，势力 15 / 10 / 5 / 5 不变）。
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Vanguard())])
+            .AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
+            .Stones(TestMaps.P0, "D4", "G4", "J5")
+            .Stones(TestMaps.P1, "D8", "J8")
+            .Stones(TestMaps.P2, "E6");
+        Assert.Equal([15, 10, 5, 0], TestMaps.All.Select(p => (int)match.Scoreboard.Latest!.Of(p).Total));   // 前提：与原局面相同的势力
         match.PassTurn();
         match.PassTurn();
         match.PassTurn();
-        match.PlayTurn("E5");
+        match.PlayTurn("G7");
 
         InitiativeReport report = match.InitiativeReports.Single();
-        Assert.Equal(1, report.Of(MatchFixtures.P3).Bonus);
-        Assert.Equal(3, report.Of(MatchFixtures.P3).Rank);
-        Assert.Equal(2, report.Of(MatchFixtures.P3).Value);
-        Assert.Equal(2, report.Of(MatchFixtures.P1).Value);
-        Assert.Equal(new[] { MatchFixtures.P0, MatchFixtures.P3, MatchFixtures.P1, MatchFixtures.P2 }, report.NextOrder);
+        Assert.Equal(1, report.Of(TestMaps.P3).Bonus);
+        Assert.Equal(3, report.Of(TestMaps.P3).Rank);
+        Assert.Equal(2, report.Of(TestMaps.P3).Value);
+        Assert.Equal(2, report.Of(TestMaps.P1).Value);
+        Assert.Equal(new[] { TestMaps.P0, TestMaps.P3, TestMaps.P1, TestMaps.P2 }, report.NextOrder);
     }
 
     [Fact]
@@ -83,11 +86,11 @@ public class 流程回归Tests
     {
         // 设计文档 §15.3 / implement 2.5：运行器在每个阶段开始时重新解析控制者；在整理手牌阶段替换后，征募与部署阶段由新控制者接管。
         // 变异验证 M-R4：RunTurn 在小回合开始时只解析一次控制者 → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started();
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         var runner = new MatchRunner(match);
-        foreach (PlayerId p in MatchFixtures.All)
+        foreach (PlayerId p in TestMaps.All)
         {
-            runner.SetController(p, new RandomTurnController(MatchFixtures.Seed.Stream($"ai-{p}")));
+            runner.SetController(p, new RandomTurnController(TestMaps.Seed.Stream($"ai-{p}")));
         }
 
         PlayerId first = match.CurrentPlayer!.Value;

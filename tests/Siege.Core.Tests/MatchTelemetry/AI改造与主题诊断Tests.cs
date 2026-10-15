@@ -16,14 +16,14 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// 规格：openspec/changes/ai-terrain-review/specs/match-telemetry —— Requirement: AI 改造与主题诊断（tasks 1.1–1.4）。
 /// </summary>
 /// <remarks>
-/// <para>改造诊断入口（1.1）的手写局面沿用 <see cref="AI枚举改造目标Tests"/> 的 9×9 载体（第 5 大回合、全图可落子），标准难度、权重写死为定值前缺省
+/// <para>改造诊断入口（1.1）的手写局面沿用 <see cref="AI枚举改造目标Tests"/> 的载体（retire-legacy-rules 1.6 起为平坦 8×8 链接载体上四人同锁棋盘 0，原 9×9 坐标平移 (+2, +2)，预筛一条为 (+1, +1)；第 5 大回合），标准难度、权重写死为定值前缺省
 /// （<see cref="SimFixtures.PreCalibrationWeights"/>，不跟随缺省表，testing.md）；合法落子范围收窄到一两格，结论只取决于这几格。</para>
 /// <para>变异（1.4 实跑，记录见任务 implement.md）：MA-1 诊断消费 AI 扰动子流本体 →「诊断不改对局」红；其余见各测试注释。</para>
 /// </remarks>
 [Collection(ConsoleRedirect.Collection)]
 public class AI改造与主题诊断Tests
 {
-    private static readonly PlayerId Me = MatchFixtures.P0;
+    private static readonly PlayerId Me = TestMaps.P0;
 
     private static readonly EvaluationWeights Weights = SimFixtures.PreCalibrationWeights;
 
@@ -77,10 +77,10 @@ public class AI改造与主题诊断Tests
     [Fact]
     public void 只有立栅目标()
     {
-        // 平地 9×9，匠人只能落 E5（盘中央）：四邻都是草地 → 没有深水可搭桥、没有林地可烧；立栅候选是以 E5 四邻为一端的 16 条边（T-11）。
+        // 平地（平坦 8×8 链接载体的棋盘 0），匠人只能落 G7（盘中部）：四邻都是草地 → 没有深水可搭桥、没有林地可烧；立栅候选是以 G7 四邻为一端的 16 条边（T-11）。
         // 判别力：变异 MA-2"① 不按格累计（只数进入枚举的格）"不影响本条；本条钉"无合法目标"与三层计数的基本口径。
-        MatchFlow match = MatchFixtures.Started().AtRound(5);
-        (ArtisanEditReview review, HeuristicTurnController ai, StagedBatch real, Func<RehearsalResult> rehearse) = Diagnose(match, ArtisansOnly, null, "E5");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5);
+        (ArtisanEditReview review, HeuristicTurnController ai, StagedBatch real, Func<RehearsalResult> rehearse) = Diagnose(match, ArtisansOnly, null, "G7");
 
         Assert.Equal(1, review.LegalCells);
         Assert.Equal(1, review.CandidateCells);
@@ -98,10 +98,10 @@ public class AI改造与主题诊断Tests
         Assert.Equal(16, fence.RangeTargets);
         Assert.Equal(16, fence.EnumeratedTargets);
         Assert.InRange(fence.Candidates, 1, 16);
-        Assert.Equal(TestMaps.At("E5"), fence.Best!.Placement.Coord);
+        Assert.Equal(TestMaps.At("G7"), fence.Best!.Placement.Coord);
         Assert.Equal(TerrainEditKind.Fence, fence.Best.Placement.Edit!.Value.Kind);
         Assert.Null(fence.OutsideCandidates);   // 立栅不做预筛外打分
-        Assert.Equal(new Placement(TestMaps.At("E5"), PieceType.Artisan), review.NoEdit!.Placement);
+        Assert.Equal(new Placement(TestMaps.At("G7"), PieceType.Artisan), review.NoEdit!.Placement);
         Assert.Equal(EvaluationBreakdown.DimensionCount, fence.EditEffect.Length);   // 同格不改造在场：改造本身的逐维效果可算
         Assert.Equal(1 + fence.Candidates, review.Candidates);                       // 只有匠人：不改造 1 + 立栅候选
 
@@ -111,13 +111,13 @@ public class AI改造与主题诊断Tests
     [Fact]
     public void 有深水可搭桥()
     {
-        // D4 / D5 深水，匠人只能落 E4：E4 的四邻里 D4 是深水（D5 是斜向，不是格目标）→ 搭桥合法目标恰 1 个且进入枚举、预演合法；没有林地。
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater), ("D5", Surface.DeepWater)])).AtRound(5);
-        (ArtisanEditReview review, HeuristicTurnController ai, StagedBatch real, Func<RehearsalResult> rehearse) = Diagnose(match, ArtisansOnly, null, "E4");
+        // F6 / F7 深水，匠人只能落 G6：G6 的四邻里 F6 是深水（F7 是斜向，不是格目标）→ 搭桥合法目标恰 1 个且进入枚举、预演合法；没有林地。
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("F6", Surface.DeepWater), ("F7", Surface.DeepWater)])).AtRound(5);
+        (ArtisanEditReview review, HeuristicTurnController ai, StagedBatch real, Func<RehearsalResult> rehearse) = Diagnose(match, ArtisansOnly, null, "G6");
 
         ArtisanKindReview bridge = review.Of(TerrainEditKind.Bridge);
         Assert.Equal((1, 1, 1), (bridge.RangeTargets, bridge.EnumeratedTargets, bridge.Candidates));
-        Assert.Equal(new Placement(TestMaps.At("E4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("D4"))), bridge.Best!.Placement);
+        Assert.Equal(new Placement(TestMaps.At("G6"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("F6"))), bridge.Best!.Placement);
         Assert.Equal(EvaluationBreakdown.DimensionCount, bridge.EditEffect.Length);
         Assert.NotEqual(ArtisanKindStatus.NoTarget, review.StatusOf(TerrainEditKind.Bridge));
         Assert.Equal(ArtisanKindStatus.NoTarget, review.StatusOf(TerrainEditKind.Burn));
@@ -129,13 +129,13 @@ public class AI改造与主题诊断Tests
     [Fact]
     public void 有林地可烧()
     {
-        // F4 林地，匠人只能落 E4：烧林合法目标恰 1 个且进入枚举、预演合法；没有深水。
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("F4", Surface.Forest)])).AtRound(5);
-        (ArtisanEditReview review, HeuristicTurnController ai, StagedBatch real, Func<RehearsalResult> rehearse) = Diagnose(match, ArtisansOnly, null, "E4");
+        // H6 林地，匠人只能落 G6：烧林合法目标恰 1 个且进入枚举、预演合法；没有深水。
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("H6", Surface.Forest)])).AtRound(5);
+        (ArtisanEditReview review, HeuristicTurnController ai, StagedBatch real, Func<RehearsalResult> rehearse) = Diagnose(match, ArtisansOnly, null, "G6");
 
         ArtisanKindReview burn = review.Of(TerrainEditKind.Burn);
         Assert.Equal((1, 1, 1), (burn.RangeTargets, burn.EnumeratedTargets, burn.Candidates));
-        Assert.Equal(new Placement(TestMaps.At("E4"), PieceType.Artisan, TerrainEdit.Burn(TestMaps.At("F4"))), burn.Best!.Placement);
+        Assert.Equal(new Placement(TestMaps.At("G6"), PieceType.Artisan, TerrainEdit.Burn(TestMaps.At("H6"))), burn.Best!.Placement);
         Assert.Equal(ArtisanKindStatus.NoTarget, review.StatusOf(TerrainEditKind.Bridge));
         Assert.NotEqual(ArtisanKindStatus.NoTarget, review.StatusOf(TerrainEditKind.Burn));
 
@@ -145,19 +145,19 @@ public class AI改造与主题诊断Tests
     [Fact]
     public void 预筛挡掉搭桥目标即候选生成阶段排除()
     {
-        // 候选格上限 K = 1：合法范围 {E4, H7}，手里有普通子与匠人。预筛按代表类型（普通子）、不带改造给每格打分——H7 是 P1 孤子 H8 的最后一口气（提子），
-        // E4 只是平地一子，预筛只留 H7；E4 旁的深水 D4 因此是"有规则合法目标、却进不了完整枚举"（候选生成阶段排除）。预筛外打分给出 E4 搭桥这一手。
+        // 候选格上限 K = 1：合法范围 {F5, J8}，手里有普通子与匠人。预筛按代表类型（普通子）、不带改造给每格打分——J8 是 P1 孤子 J9 的最后一口气（提子），
+        // F5 只是平地一子，预筛只留 J8；F5 旁的深水 E5 因此是"有规则合法目标、却进不了完整枚举"（候选生成阶段排除）。预筛外打分给出 F5 搭桥这一手。
         // 判别力：变异 MA-2"② 改为按全部合法空格累计（去掉进入枚举的判定）"→ ② = ①、处境不再是预筛排除，本条红。
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("D4", Surface.DeepWater)])).AtRound(5);
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("E5", Surface.DeepWater)])).AtRound(5);
         GameBoard board = match.Board;
-        board.Place(TestMaps.At("H8"), MatchFixtures.P1, PieceType.Basic);
-        foreach (string cell in new[] { "G8", "J8", "H9" })
+        board.Place(TestMaps.At("J9"), TestMaps.P1, PieceType.Basic);
+        foreach (string cell in new[] { "H9", "K9", "J10" })
         {
             board.Place(TestMaps.At(cell), Me, PieceType.Basic);
         }
 
         (ArtisanEditReview review, HeuristicTurnController ai, StagedBatch real, Func<RehearsalResult> rehearse) = Diagnose(
-            match, BatchFixtures.Stock((PieceType.Basic, 5), (PieceType.Artisan, 5)), AiSearchConfig.Standard with { CandidateCellLimit = 1 }, "E4", "H7");
+            match, BatchFixtures.Stock((PieceType.Basic, 5), (PieceType.Artisan, 5)), AiSearchConfig.Standard with { CandidateCellLimit = 1 }, "F5", "J8");
 
         Assert.Equal(2, review.LegalCells);
         Assert.Equal(1, review.CandidateCells);
@@ -166,14 +166,14 @@ public class AI改造与主题诊断Tests
         Assert.Equal(ArtisanKindStatus.ExcludedByPrefilter, review.StatusOf(TerrainEditKind.Bridge));
         Assert.Equal(1, bridge.OutsideCandidates);
         ArtisanOption outside = Assert.IsType<ArtisanOption>(bridge.OutsideBest);
-        Assert.Equal(new Placement(TestMaps.At("E4"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("D4"))), outside.Placement);
+        Assert.Equal(new Placement(TestMaps.At("F5"), PieceType.Artisan, TerrainEdit.Bridge(TestMaps.At("E5"))), outside.Placement);
         Assert.Null(outside.Rank);   // 预筛外的单点不在正式排序里
         ArtisanKindReview fence = review.Of(TerrainEditKind.Fence);
         Assert.True(fence.EnumeratedTargets > 0 && fence.EnumeratedTargets < fence.RangeTargets, $"立栅 ① {fence.RangeTargets} ② {fence.EnumeratedTargets}");
 
-        // 正式决策的预筛确实只留 H7（与诊断同一实现）。
+        // 正式决策的预筛确实只留 J8（与诊断同一实现）。
         ai.Deploy(real, rehearse);
-        Assert.Equal(new[] { TestMaps.At("H7") }, ai.LastCandidateCells);
+        Assert.Equal(new[] { TestMaps.At("J8") }, ai.LastCandidateCells);
     }
 
     [Fact]

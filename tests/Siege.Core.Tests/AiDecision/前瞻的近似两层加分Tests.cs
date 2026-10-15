@@ -82,13 +82,14 @@ public class 前瞻的近似两层加分Tests
     [Fact]
     public void 按下一大回合的口径枚举()
     {
-        // 专家（P0）在第 3 大回合（保护期末）做部署决策 → 两层加分的单点按第 4 大回合枚举：落点为全图可落子格扣除 P0 在局面上的禁入格（不再限于出生区），
+        // 专家（P0）在第 3 大回合（保护期末）做部署决策 → 两层加分的单点按第 4 大回合枚举：落点为专家所在战场的可落子格扣除 P0 在局面上的禁入格（不再限于出生区），
+        // （retire-legacy-rules 1.4：规格 Scenario「按下一大回合的口径枚举」由"全图可落子格"改为专家所在战场；载体为平坦 8×8 链接档图，四人同锁棋盘 0，战场即棋盘 0）
         // 部署上限为 4 加 P0 控制的已揭示军令强度（C3 的 +2 军令，P2 先完成一次结算使其揭示）= 6。
         // 变异 E-T4（下一手按当前大回合：出生区、上限 3 + 2）→ 见段 A 实施记录。
-        MatchFlow match = MatchFixtures.Started(relics: [("C3", RelicFixtures.Command(2))])
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("E5", RelicFixtures.Command(2))])
             .AtRound(3, [P2, P0, P1, P3])
-            .Stones(P0, "C3", "B2").Stones(P1, "H2").Stones(P3, "H8");
-        match.PlayTurn("B8");
+            .Stones(P0, "E5", "D4").Stones(P1, "J4").Stones(P3, "J9");
+        match.PlayTurn("D9");
         Assert.Equal(P0, match.CurrentPlayer);
         (ExpertLookahead engine, MatchPublicView view, BatchContext mine, _) = Engine(match, StrengthConfig());
         RelicPublicState c3 = Assert.Single(view.Relics);
@@ -100,9 +101,9 @@ public class 前瞻的近似两层加分Tests
 
         Assert.Equal(P0, next.Player);
         Assert.Equal(4 + 2, next.DeployLimit);
-        Coord[] expected = [.. view.Board.AllCoords().Where(c => view.Board[c].Terrain == Terrain.Playable).Except(view.LifeShape.ForbiddenCellsFor(P0)).Order()];
+        Coord[] expected = [.. view.Board.Map.Boards[0].Cells().Where(c => view.Board[c].Terrain == Terrain.Playable).Except(view.LifeShape.ForbiddenCellsFor(P0)).Order()];
         Assert.Equal(expected, next.LegalRange.Order());
-        Assert.Contains(TestMaps.At("E5"), next.LegalRange);   // 出生区之外
+        Assert.Contains(TestMaps.At("K10"), next.LegalRange);   // 出生区（棋盘 0 的核心区）之外
     }
 
     [Fact]
@@ -169,7 +170,7 @@ public class 前瞻的近似两层加分Tests
 
         LookaheadRecord record = Record(Decide(Position(), AiDifficulty.Expert, StrengthConfig(permille: 1000, supplement: 0)));
         Assert.Equal(LookaheadStatus.Applied, record.Status);
-        LookaheadEntry a = Assert.Single(record.Entries, e => e.CandidateKey == "B3:Basic");
+        LookaheadEntry a = Assert.Single(record.Entries, e => e.CandidateKey == "D5:Basic");
         Assert.Null(a.Responder);
         Assert.True(a.TwoPlyBonus > 0, record.ToText());
         Assert.Equal(a.ScoreBefore + a.TwoPlyBonus, a.ScoreAfter);
@@ -178,7 +179,7 @@ public class 前瞻的近似两层加分Tests
         // A 的加分就是 B1（投影视图）上的两层加分：独立复算 B1 与同形历史（决策起点盘面 + B1）。
         MatchFlow match = Position();
         (ExpertLookahead engine, MatchPublicView view, BatchContext mine, BoardHistory history) = Engine(match, StrengthConfig(permille: 1000, supplement: 0));
-        RehearsalResult b1 = BatchRehearsal.Rehearse(match.Board, mine, [new Placement(TestMaps.At("B3"), PieceType.Basic)], match.History);
+        RehearsalResult b1 = BatchRehearsal.Rehearse(match.Board, mine, [new Placement(TestMaps.At("D5"), PieceType.Basic)], match.History);
         MatchPublicView projected = ExpertLookahead.Project(view, b1.ProjectedBoard!);
         history.Record(projected.BoardSerialized);
         Assert.Equal(a.TwoPlyBonus, engine.TwoPlyBonusOn(projected, history, mine));
@@ -209,10 +210,10 @@ public class 前瞻的近似两层加分Tests
     {
         // 某候选之后，模拟回应提走专家在盘上的全部棋子（专家曾建立正势力）→ 专家在 B2 上已出局，两层加分为 0、不做两层单点预演。
         // 以 B2 = 决策起点盘面去掉专家唯一的棋子构造；对照：同一引擎在决策起点（专家未出局）上的加分为正。
-        MatchFlow match = AiFixtures.Round5().Stones(P0, "E5").Stones(P1, "B2").Stones(P2, "B8").Stones(P3, "H2");
+        MatchFlow match = AiFixtures.Round5().Stones(P0, "G7").Stones(P1, "D4").Stones(P2, "D9").Stones(P3, "J4");
         (ExpertLookahead engine, MatchPublicView view, BatchContext mine, BoardHistory history) = Engine(match, StrengthConfig());
         GameBoard b2 = view.Board.Clone();
-        b2.Clear(TestMaps.At("E5"));
+        b2.Clear(TestMaps.At("G7"));
         MatchPublicView after = ExpertLookahead.Project(view, b2);
         Assert.Equal(PlayerStatus.Eliminated, after.Players.Single(p => p.Player == P0).Status);
 

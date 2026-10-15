@@ -16,7 +16,7 @@ public class 前瞻中的停手口径Tests
     {
         // 停手阈值只在候选生成里生效、口径与高难相同：全部候选落点的边际提升都不超过阈值 → 高难 Pass，专家同样 Pass，不做任何模拟。
         // 阈值取一个任何单枚都越不过的值（P0 盘上有子，无子豁免不适用）。
-        static MatchFlow Position() => AiFixtures.Round5().Stones(P0, "E5").Stones(P1, "B8");
+        static MatchFlow Position() => AiFixtures.Round5().Stones(P0, "F6").Stones(P1, "D9");
         const int unreachable = 1_000_000;
         HeuristicTurnController hard = DecideHard(Position(), unreachable);
         HeuristicTurnController expert = DecideExpert(Position(), unreachable);
@@ -41,29 +41,32 @@ public class 前瞻中的停手口径Tests
     }
 
     /// <summary>
-    /// 必失局面（9×9、第 5 大回合、顺序 P0 → P3、专家 P0 的部署上限 1）：
-    /// P0 的 7 子串 B5–H5 只剩一口气 J5；J5 的另两个邻格 J4 / J6 是 P1 的子，P0 落 J5 是自杀手，救不回来。
-    /// P1 占满第 4、第 6 行与 A5——无论专家落在哪里，下一名对手 P1 的模拟回应都在 J5 提走七子串。
+    /// 必失局面（第 5 大回合、顺序 P0 → P3、专家 P0 的部署上限 1）：
+    /// P0 的 7 子串 D7–K7 只剩一口气 C7；C7 的另两个邻格 C6 / C8 是 P1 的子，P0 落 C7 是自杀手，救不回来。
+    /// P1 占满第 6、第 8 行——无论专家落在哪里，下一名对手 P1 的模拟回应都在 C7 提走七子串。
+    /// retire-legacy-rules 1.4：载体为平坦 8×8 链接档图（四人同锁棋盘 0）。原 9×9 的七子串 B5–H5 + 两侧 9 子行 + A5 放不进 8 列，
+    /// 改为七子串贴棋盘 0 东边（K7 的东侧即盘边，等价于原 A5 的封堵）、唯一的气在西端 C7，两侧各一整行 P1（8 子）。
     /// </summary>
     internal static MatchFlow DoomedPosition()
     {
         MatchFlow match = AiFixtures.Round5()
-            .Stones(P0, "B5", "C5", "D5", "E5", "F5", "G5", "H5")
-            .Stones(P1, "A4", "B4", "C4", "D4", "E4", "F4", "G4", "H4", "J4", "A5", "A6", "B6", "C6", "D6", "E6", "F6", "G6", "H6", "J6");
+            .Stones(P0, "D7", "E7", "F7", "G7", "H7", "J7", "K7")
+            .Stones(P1, "C6", "D6", "E6", "F6", "G6", "H6", "J6", "K6", "C8", "D8", "E8", "F8", "G8", "H8", "J8", "K8");
         match.SetDeployLimit(1);
         return match;
     }
 
     /// <summary>
-    /// 必受损局面（9×9、第 5 大回合、顺序 P0 → P3、专家 P0 的部署上限 1）：P0 的 10 子块 A1–E2 恰有 4 口气 B3 / D3 / F1 / F2（不在危险中），
-    /// 四口气全是死路（P1 的 A3 / C3 / E3 / B4 / D4 / G1 / G2 / F3 围住）——P0 在哪口气上落子都只会少一口气，救不回来。
+    /// 必受损局面（第 5 大回合、顺序 P0 → P3、专家 P0 的部署上限 1）：P0 的 10 子块 C3–G4 恰有 4 口气 D5 / F5 / H3 / H4（不在危险中），
+    /// 四口气全是死路（P1 的 C5 / E5 / G5 / D6 / F6 / J3 / J4 / H5 围住）——P0 在哪口气上落子都只会少一口气，救不回来。
+    /// （retire-legacy-rules 1.4：平坦 8×8 链接载体棋盘 0 的左下角，原 9×9 的 A1–E2 局面平移 (+2, +2)。）
     /// 无论专家落在哪里，下一名对手 P1 的模拟回应都会紧一口气，把 10 子块打进危险（3 口气），前瞻后分数因此全部为负。
     /// </summary>
     internal static MatchFlow SqueezedPosition()
     {
         MatchFlow match = AiFixtures.Round5()
-            .Stones(P0, "A1", "B1", "C1", "D1", "E1", "A2", "B2", "C2", "D2", "E2")
-            .Stones(P1, "A3", "C3", "E3", "B4", "D4", "G1", "G2", "F3");
+            .Stones(P0, "C3", "D3", "E3", "F3", "G3", "C4", "D4", "E4", "F4", "G4")
+            .Stones(P1, "C5", "E5", "G5", "D6", "F6", "J3", "J4", "H5");
         match.SetDeployLimit(1);
         return match;
     }
@@ -79,7 +82,7 @@ public class 前瞻中的停手口径Tests
         Assert.Equal(LookaheadStatus.Applied, record.Status);
         Assert.Equal(3, record.Entries.Length);
         Assert.All(record.Entries, e => Assert.True(e.ScoreAfter < 0, record.ToText()));
-        Assert.All(record.Entries, e => Assert.True(CoordsOf(e.ResponseKey!).Intersect([TestMaps.At("B3"), TestMaps.At("D3"), TestMaps.At("F1"), TestMaps.At("F2")]).Any(), e.ToString()));
+        Assert.All(record.Entries, e => Assert.True(CoordsOf(e.ResponseKey!).Intersect([TestMaps.At("D5"), TestMaps.At("F5"), TestMaps.At("H3"), TestMaps.At("H4")]).Any(), e.ToString()));
         Assert.False(expert.LastChoice!.IsPass);
         Assert.Equal(record.Entries.Max(e => e.ScoreAfter), record.Entries[record.ChosenIndex].ScoreAfter);
         Assert.Equal(record.Entries[record.ChosenIndex].CandidateKey, expert.LastChoice.Key);
@@ -149,7 +152,7 @@ public class 前瞻中的停手口径Tests
         // 取样：同一局面、同一两层权重（1000‰），停手阈值 0 与 1 000 000 两个引擎给出同一个两层加分，且为正、远低于后者的阈值——
         // 若两层扫描施加阈值，后者必为 0。
         // 变异 E-T8（两层单点只计边际增量大于停手阈值者）→ 见段 A 实施记录。
-        static MatchFlow Position() => AiFixtures.Round5().Stones(P0, "D5", "E5").Stones(P1, "F5", "F6").Stones(P2, "B8").Stones(P3, "H2");
+        static MatchFlow Position() => AiFixtures.Round5().Stones(P0, "E6", "F6").Stones(P1, "G6", "G7").Stones(P2, "D9").Stones(P3, "J4");
         (ExpertLookahead low, MatchPublicView lowView, BatchContext lowMine, BoardHistory lowHistory) = Engine(Position(), StrengthConfig(passThreshold: 0));
         (ExpertLookahead high, MatchPublicView highView, BatchContext highMine, BoardHistory highHistory) = Engine(Position(), StrengthConfig(passThreshold: 1_000_000));
 
@@ -170,19 +173,19 @@ public class 前瞻中的停手口径Tests
         // J5（P1 的 J4 / J6 之间，一口气）合法且通过活形硬约束 → 最大单点增量 = J5 的总分。
         // 变异 E-T1（两层扫描改用 Evaluate，不过活形硬约束）→ 见段 A 实施记录。
         var powerOnly = new EvaluationWeights(PowerGain: 10, EnemyLoss: 0, Relic: 0, Safety: 0, Growth: 0, Initiative: 0, Supply: 0, Eye: 0, Threat: 0);
-        MatchFlow match = 活形硬约束Tests.TwoEyes().Stones(P1, "J4", "J6").Stones(P2, "B8").Stones(P3, "H8");
+        MatchFlow match = 活形硬约束Tests.TwoEyes().Stones(P1, "K6", "K8").Stones(P2, "D10").Stones(P3, "J10");
         (ExpertLookahead engine, MatchPublicView view, BatchContext mine, BoardHistory history) = Engine(match, StrengthConfig(), powerOnly);
         BatchContext held = mine with { Stock = new Dictionary<PieceType, int> { [PieceType.Multiplier] = 1 } };
-        BatchContext next = engine.NextMoveContext(view, held)! with { LegalRange = ImmutableHashSet.Create(TestMaps.At("A1"), TestMaps.At("J5")) };
+        BatchContext next = engine.NextMoveContext(view, held)! with { LegalRange = ImmutableHashSet.Create(TestMaps.At("C3"), TestMaps.At("K7")) };
 
         var evaluator = new BatchEvaluator(P0, view, powerOnly, immediateOnly: false);
-        ImmutableArray<Placement> fill = [new Placement(TestMaps.At("A1"), PieceType.Multiplier)];
+        ImmutableArray<Placement> fill = [new Placement(TestMaps.At("C3"), PieceType.Multiplier)];
         RehearsalResult filled = BatchRehearsal.Rehearse(view.Board, next, fill, history);
         Assert.True(filled.IsLegal, filled.Failure?.Message);
         Assert.Empty(filled.Captures);
-        Assert.NotEqual(LifeState.Alive, LifeShapeReport.Analyze(filled.ProjectedBoard!).GroupLifeAt(TestMaps.At("B2"))!.Life);
+        Assert.NotEqual(LifeState.Alive, LifeShapeReport.Analyze(filled.ProjectedBoard!).GroupLifeAt(TestMaps.At("D4"))!.Life);
         Assert.False(evaluator.TryEvaluate(fill, filled, next, out _));
-        ImmutableArray<Placement> j5 = [new Placement(TestMaps.At("J5"), PieceType.Multiplier)];
+        ImmutableArray<Placement> j5 = [new Placement(TestMaps.At("K7"), PieceType.Multiplier)];
         RehearsalResult other = BatchRehearsal.Rehearse(view.Board, next, j5, history);
         Assert.True(other.IsLegal, other.Failure?.Message);
         Assert.True(evaluator.TryEvaluate(j5, other, next, out EvaluationBreakdown? second));
@@ -207,7 +210,7 @@ public class 前瞻中的停手口径Tests
         foreach ((LookaheadEntry entry, CandidateBatch candidate, EvaluationBreakdown plain, int lost) in items)
         {
             Assert.Equal(P1, entry.Responder);
-            Assert.Contains(TestMaps.At("J5"), CoordsOf(entry.ResponseKey!));
+            Assert.Contains(TestMaps.At("C7"), CoordsOf(entry.ResponseKey!));
             Assert.Equal(7, lost);
             Assert.Equal(plain.Total - (Weights.Safety * AtariDangerPerStone * lost), entry.ScoreAfter);
             Assert.True(plain.RawOf(EvaluationDimension.PowerGain) < candidate.Evaluation.RawOf(EvaluationDimension.PowerGain), $"{candidate} / {plain}");

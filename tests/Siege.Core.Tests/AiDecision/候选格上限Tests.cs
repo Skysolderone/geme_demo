@@ -18,13 +18,16 @@ namespace Siege.Core.Tests.AiDecision;
 public class 候选格上限Tests
 {
     /// <summary>
-    /// 黄金值（retire-legacy-maps 1.5 改钉）：9×9 手写夹具（<see cref="MatchFixtures"/>，Legacy 规则，裁决 L6）、种子 31、4 名标准 AI（权重与停手阈值写死为
+    /// 黄金值（retire-legacy-rules 1.4 改钉，清单 P1 / R8）：手写小链接档图（<see cref="SmallLinkMap"/>，链接模式、四人同锁棋盘 0）、种子 31、4 名标准 AI（权重与停手阈值写死为
+    /// <see cref="SimFixtures.PreCalibrationWeights"/> / <see cref="SimFixtures.PreCalibrationPassThreshold"/>）、跑满 6 个大回合，全体 AI 的决策日志与终了盘面序列化的 SHA-256，
+    /// 以改钉时的实现在新载体上自证钉下；旧值 DEB4ED371A7E9EC71B08517058C06148B8919A8D4B26458FFC229C50EA3B87E4（9×9 手写夹具、Legacy 规则）。
+    /// <para>retire-legacy-maps 1.5 时的口径：9×9 手写夹具（Legacy 规则，裁决 L6）、种子 31、4 名标准 AI（权重与停手阈值写死为
     /// <see cref="SimFixtures.PreCalibrationWeights"/> / <see cref="SimFixtures.PreCalibrationPassThreshold"/>）、跑满 6 个大回合，全体 AI 的决策日志（<see cref="AiFixtures.DecisionLog"/>）
-    /// 与终了盘面序列化的 SHA-256。在删除 v5 之前、以当时的实现钉下。
+    /// 与终了盘面序列化的 SHA-256。在删除 v5 之前、以当时的实现钉下。</para>
     /// <para>原黄金值 <c>V4GoldenTurnHash</c>（v5、种子 31、24 个小回合的快照哈希，历次重建记录见 git 历史）随 v5 删除：v5 的 105 格不超过 150、缺省 K = 0，
     /// 守的是"小图不限制时走法不变"；链接图一律超过 150 格（<c>link:1</c> 为 157），这条规则今后只能在手写小图上守（规格「小图不限制」：如 9×9 手写测试夹具）。</para>
     /// </summary>
-    internal const string SmallMapGoldenHash = "DEB4ED371A7E9EC71B08517058C06148B8919A8D4B26458FFC229C50EA3B87E4";
+    internal const string SmallMapGoldenHash = "26AF3B28F94F88CA44847D5F9BF7B41733CFEC357CFF6A9CA7F337523CB4BD41";
 
     /// <summary>
     /// 链接图上"此前记录过的对局"（retire-legacy-maps 1.5：原 v5 的 <c>V4GoldenTurnHash</c> 在 <c>对局内容集Tests</c>、<c>带入带出配置Tests</c>、<c>批量跑局Tests</c> 里充当这一角色）：
@@ -47,7 +50,7 @@ public class 候选格上限Tests
     /// <summary>第 5 大回合、部署上限 8、60+ 合法空格的开放局面（与「不穷举排列」同一局面）。</summary>
     private static MatchFlow OpenPosition()
     {
-        MatchFlow match = AiFixtures.Round5().Stones(AiFixtures.P1, "E5", "F6", "D7").Stones(AiFixtures.P2, "G3");
+        MatchFlow match = AiFixtures.Round5().Stones(AiFixtures.P1, "G7", "H8", "F9").Stones(AiFixtures.P2, "J5");
         match.SetDeployLimit(8);
         return match;
     }
@@ -75,12 +78,28 @@ public class 候选格上限Tests
     // ---------- K = 0：零变化 ----------
 
     /// <summary>
-    /// 9×9 手写夹具上 4 名标准 AI 跑满 6 个大回合（retire-legacy-maps 1.5：原 v5 整局的替身，Legacy 规则，裁决 L6）：返回全体 AI 的决策日志与终了盘面序列化。
+    /// 手写小链接档图（retire-legacy-rules 1.4，清单 P1）：五块 5×5 出生棋盘一字排开（x = 2 / 10 / 18 / 26 / 34，间距 3），全平地、无林地、无信物格，
+    /// 可落子 125 格（不超过 <see cref="AiSearchConfig.LargeMapPlayableThreshold"/>）。链接档图的可落子格恒超过 150，"小图"只能是未校验的手写图（边长 5 低于出生棋盘下限 6）。
+    /// </summary>
+    private static readonly MapData SmallLinkMap = LinkMapFixtures.Build(
+        "link:90005", [.. Enumerable.Range(0, 5).Select(i => new BoardPlate(new Coord(2 + (i * 8), 2), 5, 5, BoardPlateKind.Birth, (BoardTheme)i))])
+        with { RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty };
+
+    /// <summary>
+    /// 小链接档图上 4 名标准 AI 跑满 6 个大回合：返回全体 AI 的决策日志与终了盘面序列化。retire-legacy-maps 1.5 起是 v5 整局的替身（9×9 手写夹具，Legacy 规则）；
+    /// retire-legacy-rules 1.4 起载体换为 <see cref="SmallLinkMap"/>（链接模式、K = 0，四人同锁棋盘 0，各持 50 枚普通子）。
     /// 权重与停手阈值写死为 <see cref="SimFixtures.PreCalibrationWeights"/> / <see cref="SimFixtures.PreCalibrationPassThreshold"/>（本测试钉的是"K 缺省不改变走法"，不是默认权重）。
     /// </summary>
     private static string SmallMapRun(AiSearchConfig config, ulong seed = 31)
     {
-        MatchFlow match = MatchFixtures.Started(new Siege.Core.Determinism.GameSeed(seed));
+        MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
+            SmallLinkMap, new Siege.Core.Determinism.GameSeed(seed), TestMaps.All, TestMaps.Relics(SmallLinkMap), LinkModeFixtures.PlainOptions(null)));
+        foreach (PlayerId p in TestMaps.All)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 50));
+        }
+
+        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
         var runner = new MatchRunner(match);
         ImmutableSortedDictionary<PlayerId, HeuristicTurnController> ais =
             runner.AttachAi(AiDifficulty.Standard, SimFixtures.PreCalibrationWeights, config with { PassThreshold = SimFixtures.PreCalibrationPassThreshold });
@@ -94,7 +113,9 @@ public class 候选格上限Tests
         // retire-legacy-maps 1.5：原「缺省不限制时标准图整局与改动前逐步相同」（v5、种子 31、24 个小回合的快照黄金哈希），随 v5 改到 9×9 手写夹具，
         // 测试名随规格 Scenario「小图不限制」（可落子格不超过 150 的地图，如 9×9 手写测试夹具）。所守规则不变：小图上缺省 K 为 0，决策与显式 K = 0 逐步相同，且与钉下的黄金值相同。
         // 变异 M-K1：RankPoints 的启用条件改成恒真（K = 0 也预筛，Take(0) 取空）→ 黄金值红（retire-legacy-maps 改钉后重做，见 migration.md）。
-        int playable = MatchFixtures.Map().PlayableCount;
+        // retire-legacy-rules 1.4（清单 P1）：载体由 9×9 手写夹具（81 格）改为手写小链接档图（125 格，见 SmallLinkMap），黄金值按新载体以当前实现重钉（见迁移清单第 6 节）。
+        int playable = SmallLinkMap.PlayableCount;
+        Assert.Equal(125, playable);
         Assert.True(playable <= AiSearchConfig.LargeMapPlayableThreshold, $"夹具可落子格 {playable}");
         AiSearchConfig auto = AiSearchConfig.ForMap(AiDifficulty.Standard, playable);
         Assert.Equal(0, auto.CandidateCellLimit);
@@ -106,7 +127,7 @@ public class 候选格上限Tests
         // 样本口径：6 个大回合里确有落子（不是全员 Pass 的空局）。
         Assert.Contains(" D:", byDefault, StringComparison.Ordinal);
         string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(byDefault)));
-        Assert.True(SmallMapGoldenHash == hash, $"9×9 夹具种子 31 的决策与盘面哈希变了：现为 {hash}。");
+        Assert.True(SmallMapGoldenHash == hash, $"小链接档图种子 31 的决策与盘面哈希变了：现为 {hash}。");
     }
 
     [Fact]
@@ -173,16 +194,16 @@ public class 候选格上限Tests
     }
 
     /// <summary>
-    /// A2 是深水、B1 是敌子（气：A1、C1；B2 是己子）：A1 的气边邻格只有 B1，不带改造落 A1 是自杀手。
-    /// 匠人落 A1 同时立栅 B1–C1，则 B1 只剩 A1 一口气、随落子被提，A1 合法且提一子（terrain-edit T-3：改造先于提子与自杀手判定）；
-    /// 在 A2 搭桥也能让 A1 合法（补一口气），但不提子。这是一手"只有带改造的匠人才下得出"的妙手。
+    /// C4 是深水、D3 是敌子（气：C3、E3；D4 是己子）：C3 的气边邻格只有 D3，不带改造落 C3 是自杀手。
+    /// 匠人落 C3 同时立栅 D3–E3，则 D3 只剩 C3 一口气、随落子被提，C3 合法且提一子（terrain-edit T-3：改造先于提子与自杀手判定）；
+    /// 在 C4 搭桥也能让 C3 合法（补一口气），但不提子。这是一手"只有带改造的匠人才下得出"的妙手。
     /// </summary>
     private static MatchFlow ArtisanOnlyCellPosition(bool holdsArtisan)
     {
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("A2", Surface.DeepWater)]))
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("C4", Surface.DeepWater)]))
             .AtRound(5, [AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3])
-            .Stones(AiFixtures.P0, "B2")
-            .Stones(AiFixtures.P1, "B1");
+            .Stones(AiFixtures.P0, "D4")
+            .Stones(AiFixtures.P1, "D3");
         match.Debug.SeedHand(AiFixtures.P0, holdsArtisan ? [(PieceType.Basic, 50), (PieceType.Artisan, 5)] : [(PieceType.Basic, 50)]);
         return match;
     }
@@ -194,7 +215,7 @@ public class 候选格上限Tests
         // 预筛对这类格退而用匠人逐个合法改造目标预演，格分取最高的合法总分；其余格仍只预演一次。
         // 变异 M-K13：去掉回退 → A1 不进候选，本测试红。变异 M-K14：回退条件去掉"代表类型落不下"（每格都逐个改造预演）→ 预演次数上界红。
         // 变异 M-K15：格分改取第一个合法改造（搭桥补气，分低）而不是最高分（立栅提子）→ A1 名次掉出前 K，本测试红。
-        Coord a1 = TestMaps.At("A1");
+        Coord a1 = TestMaps.At("C3");
         MatchFlow oracleMatch = ArtisanOnlyCellPosition(holdsArtisan: true);
         HeuristicTurnController oracleAi = HeuristicAi.Create(oracleMatch, AiFixtures.P0);
         StagedBatch batch = oracleMatch.OpenDeploy();
@@ -202,7 +223,7 @@ public class 候选格上限Tests
         Coord[] empties = [.. batch.Context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty).Order()];
         ImmutableArray<TerrainEdit> a1Edits = TerrainEditRules.LegalTargets(batch.Board.Map, a1);
 
-        // 前提：A1 不带改造是自杀手，带改造（立栅 B1–C1 / 在 A2 搭桥）才合法；其余空格普通子都落得下。
+        // 前提：C3 不带改造是自杀手，带改造（立栅 D3–E3 / 在 C4 搭桥）才合法；其余空格普通子都落得下。
         // 格分按预筛口径（ai-eye 段 C 3.1：七维、不查活形，EvaluatePrefilter）复算。
         var scored = new List<(Coord Cell, BigInteger Total)>();
         foreach (Coord cell in empties)
@@ -230,12 +251,12 @@ public class 候选格上限Tests
         }
 
         batch.Clear();
-        Assert.Contains(TerrainEdit.Bridge(TestMaps.At("A2")), a1Edits);
-        Assert.Contains(TerrainEdit.Fence(TestMaps.At("B1"), TestMaps.At("C1")), a1Edits);
+        Assert.Contains(TerrainEdit.Bridge(TestMaps.At("C4")), a1Edits);
+        Assert.Contains(TerrainEdit.Fence(TestMaps.At("D3"), TestMaps.At("E3")), a1Edits);
         Assert.NotEmpty(a1Totals);
         scored.Add((a1, a1Totals.Max()));
 
-        // K 取"恰好把 A1 收进来"的名次：A1 在前 K 格里，K 仍小于合法空格数（预筛生效）。
+        // K 取"恰好把 C3 收进来"的名次：C3 在前 K 格里，K 仍小于合法空格数（预筛生效）。
         (Coord Cell, BigInteger Total)[] ranked = [.. scored.OrderByDescending(s => s.Total).ThenBy(s => s.Cell)];
         int k = Array.FindIndex(ranked, s => s.Cell == a1) + 1;
         Assert.InRange(k, 1, empties.Length - 1);   // A1 垫底时无法既收进它又让预筛生效——那样局面要重摆
@@ -247,14 +268,14 @@ public class 候选格上限Tests
         Assert.Equal(expected, limited.Ai.LastCandidateCells);
         Assert.True(a1Totals.Max() > a1Totals.Min(), "格分取的是各合法改造里最高的总分（立栅提子高于搭桥补气），不是第一个合法的。");
 
-        // 开销：预筛每格 1 次 + 只在 A1 上逐个改造再试 + K 格的完整枚举（普通子 1 次、匠人 1 + 改造目标数）+ 组合 M × (N + 1)。
+        // 开销：预筛每格 1 次 + 只在 C3 上逐个改造再试 + K 格的完整枚举（普通子 1 次、匠人 1 + 改造目标数）+ 组合 M × (N + 1)。
         int fullEnumeration = limited.Ai.LastCandidateCells.Sum(c => 2 + TerrainEditRules.LegalTargets(batch.Board.Map, c).Length);
         int combine = AiSearchConfig.Standard.CandidateBatchCount * (AiSearchConfig.Standard.CandidatePointCount + 1);
         Assert.True(
             limited.Rehearsals <= empties.Length + a1Edits.Length + fullEnumeration + combine,
             $"预演 {limited.Rehearsals} 次，上界 {empties.Length} + {a1Edits.Length} + {fullEnumeration} + {combine}");
 
-        // 手里没有匠人：A1 谁也落不下，不进候选，也不为它多做预演。
+        // 手里没有匠人：C3 谁也落不下，不进候选，也不为它多做预演。
         DeployTrace noArtisan = DeployOnce(ArtisanOnlyCellPosition(holdsArtisan: false), StandardWith(k));
         Assert.DoesNotContain(a1, noArtisan.Ai.LastCandidateCells);
         Assert.True(noArtisan.Rehearsals <= empties.Length + k + combine, $"预演 {noArtisan.Rehearsals} 次");
@@ -349,22 +370,25 @@ public class 候选格上限Tests
     }
 
     [Theory]
-    [InlineData("a", "F5")]
-    [InlineData("b", "E5")]
-    [InlineData("c", "F5")]
+    [InlineData("a", "G6")]
+    [InlineData("b", "F6")]
+    [InlineData("c", "G6")]
     public void 小K下仍找到妙手(string position, string key)
     {
         // 提子点 / 救命点没有单独的豁免名单：提子走"敌方损失"维、补气走"安全"维，都与落下的类型无关，代表类型的格分自然把它们排进前 K。
         // 局面同「高部署上限下的候选剪枝 · 必须找到的妙手」，K 取 4。
         MatchFlow match = position switch
         {
-            "a" => 启发式评价维度Tests.CaptureRelicPosition(),
+            // retire-legacy-rules 1.4（清单 P2）：局面 a / b 里 P0 原本势力落后（a 的先手位用例就靠这一点），链接规则下落后者的停手阈值取 0；
+            // 这里在远离妙手的盘角给 P0 补一块 2×2，使其居本战场首位（AsLeader 断言前提）。局面 c 里 P0 本就领先。
+            "a" => 启发式评价维度Tests.CaptureRelicPosition().AsLeader(AiFixtures.P0, "J3", "K3", "J4", "K4"),
             "b" => AiFixtures.Round5()
-                .Stones(AiFixtures.P0, "D4", "D5", "F5", "G4", "E3", "F3")
-                .Stones(AiFixtures.P1, "D6", "E6", "C5", "C4", "E4", "F4", "D3"),
-            "c" => AiFixtures.Round5(relics: [("E6", RelicFixtures.Conscription())])
-                .Stones(AiFixtures.P0, "D5", "D6", "E4", "E7", "F7", "G6")
-                .Stones(AiFixtures.P1, "E5", "E6", "F6"),
+                .Stones(AiFixtures.P0, "E5", "E6", "G6", "H5", "F4", "G4")
+                .Stones(AiFixtures.P1, "E7", "F7", "D6", "D5", "F5", "G5", "E4")
+                .AsLeader(AiFixtures.P0, "J9", "K9", "J10", "K10"),
+            "c" => AiFixtures.Round5(relics: [("F7", RelicFixtures.Conscription())])
+                .Stones(AiFixtures.P0, "E6", "E7", "F5", "F8", "G8", "H7")
+                .Stones(AiFixtures.P1, "F6", "F7", "G7"),
             _ => throw new ArgumentOutOfRangeException(nameof(position)),
         };
 
@@ -410,7 +434,7 @@ public class 候选格上限Tests
         Assert.True(AiSearchConfig.LargeMapCellLimit > 0);
 
         // retire-legacy-maps 1.5：小图由 v4（105 格）改为 9×9 手写夹具（81 格），大图由边疆图（411 格）改为 link:1（157 格）；断言不变。
-        int v4 = MatchFixtures.Map().PlayableCount;
+        int v4 = TestMaps.NineByNine().PlayableCount;
         int frontier = MapCatalog.Resolve("link:1").PlayableCount;
         Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"小图可落子格 {v4}");
         Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"大图可落子格 {frontier}");
@@ -536,6 +560,6 @@ public class 候选格上限Tests
 
         // 小图：配置记录与引入本项之前一样，不多出这一项。retire-legacy-maps 1.5：批量入口只接受链接图（一律超过 150 格），小图（原 v4）到不了批量入口；
         // 改在写出配置记录的同一处落成（RunConfig.ResolvedFor，ExecuteToDirectory 写 config.json 用的正是它）上对 9×9 手写夹具断言。
-        Assert.DoesNotContain("CandidateCellLimit", SimFixtures.Config(turnLimit: 4).ResolvedFor(MatchFixtures.Map()).ToJson(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CandidateCellLimit", SimFixtures.Config(turnLimit: 4).ResolvedFor(TestMaps.NineByNine()).ToJson(), StringComparison.Ordinal);
     }
 }

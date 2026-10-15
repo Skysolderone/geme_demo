@@ -62,7 +62,7 @@ public class 可复现回放Tests
         const ulong seed = 23;
         var game = new Siege.Core.Determinism.GameSeed(seed);
         System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Siege.Core.Carry.CarryIn> carries = Siege.Core.Carry.CarryAi.ForHumanMatch(
-            game, MatchFixtures.All, MatchFixtures.P0, new Siege.Core.Carry.CarryIn(Siege.Core.Carry.SupplyKind.Commission, PieceType.Line), ContentSet.V2);
+            game, TestMaps.All, TestMaps.P0, new Siege.Core.Carry.CarryIn(Siege.Core.Carry.SupplyKind.Commission, PieceType.Line), ContentSet.V2);
         Assert.Equal(4, carries.Count);                                   // 前提：三名 AI 各带 1 件
         MatchSession original = MatchTelemetry.对局日志的记录内容Tests.CarriedSession(seed, carries.ToDictionary(kv => kv.Key.Value, kv => kv.Value), turnLimit: 12);
         string opening = string.Join(" | ", original.Match.Players.Select(p => CarryInOut.CarryFixtures.HandText(original.Match, p)));

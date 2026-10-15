@@ -23,29 +23,29 @@ public class 工坊扩大匠人的格改造范围Tests
         Assert.True(ledger.SnapshotFor(TestMaps.P0, board, 0, 1).WorkshopActive);
         Assert.False(ledger.SnapshotFor(TestMaps.P1, board, 0, 1).WorkshopActive);
 
-        // 对局流程：小回合开始的快照标记工坊生效 → 进入部署时批次上下文带上这个标记 → 匠人可隔一格改造（F6 → 烧林 H6）。
+        // 对局流程：小回合开始的快照标记工坊生效 → 进入部署时批次上下文带上这个标记 → 匠人可隔一格改造（H8 → 烧林 K8；retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 F6 → H6 平移 (+2, +2)）。
         // 同一局面另一名不控制工坊的玩家，同样的暂放被拒。
-        MatchFlow match = MatchFixtures.Started(
-                TestMaps.Terrain(surfaces: [("H6", Surface.Forest), ("F4", Surface.Forest)]), relics: [("G4", RelicFixtures.Workshop())])
-            .AtRound(7, MatchFixtures.All)
-            .Stones(MatchFixtures.P0, "G4");
-        match.Debug.SeedHand(MatchFixtures.P0, (PieceType.Artisan, 2));
-        match.Debug.SeedHand(MatchFixtures.P1, (PieceType.Artisan, 2));
+        MatchFlow match = LinkModeFixtures.PlainStarted(
+                TestMaps.Terrain(surfaces: [("K8", Surface.Forest), ("H6", Surface.Forest)]), relics: [("J6", RelicFixtures.Workshop())])
+            .AtRound(7, TestMaps.All)
+            .Stones(TestMaps.P0, "J6");
+        match.Debug.SeedHand(TestMaps.P0, (PieceType.Artisan, 2));
+        match.Debug.SeedHand(TestMaps.P1, (PieceType.Artisan, 2));
 
         match.BeginTurn();
         Assert.True(match.CurrentSnapshot!.WorkshopActive);
         match.EnterRecruit();
         StagedBatch batch = match.EnterDeploy();
         Assert.True(batch.Context.WorkshopActive);
-        Assert.Null(batch.Stage(TestMaps.At("F6"), PieceType.Artisan, TerrainEdit.Burn(TestMaps.At("H6"))));
-        batch.Unstage(TestMaps.At("F6"));
+        Assert.Null(batch.Stage(TestMaps.At("H8"), PieceType.Artisan, TerrainEdit.Burn(TestMaps.At("K8"))));
+        batch.Unstage(TestMaps.At("H8"));
         Assert.True(match.Confirm().Confirmed);
 
         match.BeginTurn();
-        Assert.Equal(MatchFixtures.P1, match.CurrentPlayer);
+        Assert.Equal(TestMaps.P1, match.CurrentPlayer);
         Assert.False(match.CurrentSnapshot!.WorkshopActive);
         match.EnterRecruit();
-        BatchFailure? failure = match.EnterDeploy().Stage(TestMaps.At("F6"), PieceType.Artisan, TerrainEdit.Burn(TestMaps.At("H6")));
+        BatchFailure? failure = match.EnterDeploy().Stage(TestMaps.At("H8"), PieceType.Artisan, TerrainEdit.Burn(TestMaps.At("K8")));
         Assert.Equal(BatchFailureKind.TerrainEditIllegal, failure!.Kind);
     }
 

@@ -58,27 +58,28 @@ public class 私人征募面板Tests
     {
         // 规格 Scenario「最后一名没有补偿」（restore-go-core-rules 裁决 #7）：4 人局中势力名次第 4 的玩家不控制任何信物，进入征募阶段
         // → 面板展示 5 枚候选，最多可免费选取 3 枚，与第 1 名相同。走真实 MatchFlow（名次来自势力榜），不走 HandFixtures 的直给快照。
-        // 势力独立复算（四邻接）：P0 A1-D1 → 4 + 5 = 9；P1 G1 H1 J1 → 3 + 4 = 7；P2 A9 B9 → 2 + 3 = 5；P3 J9 → 1 + 2 = 3。
+        // 势力独立复算（四邻接）：P0 C3-F3 → 4 + 4 = 8（G3 为 P0 / P1 争议格）；P1 H3 J3 K3 → 3 + 3 = 6；P2 C10 D10 → 2 + 3 = 5；P3 K10 → 1 + 2 = 3
+        // （retire-legacy-rules 1.5：平坦 8×8 链接载体、四人同锁棋盘 0，原 9×9 的四角各贴棋盘 0 的角；原复算 9 / 7 / 5 / 3，名次不变）。
         // 先红：旧实现下 P3 面板为 展示 6 / 选取 4 → 本测试红。
-        MatchFlow match = MatchFixtures.Started()
-            .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
-            .Stones(MatchFixtures.P0, "A1", "B1", "C1", "D1")
-            .Stones(MatchFixtures.P1, "G1", "H1", "J1")
-            .Stones(MatchFixtures.P2, "A9", "B9")
-            .Stones(MatchFixtures.P3, "J9");
-        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(MatchFixtures.P3));
-        Assert.Empty(match.Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(MatchFixtures.P3)));
+        MatchFlow match = LinkModeFixtures.PlainStarted()
+            .AtRound(5, [TestMaps.P3, TestMaps.P0, TestMaps.P1, TestMaps.P2])
+            .Stones(TestMaps.P0, "C3", "D3", "E3", "F3")
+            .Stones(TestMaps.P1, "H3", "J3", "K3")
+            .Stones(TestMaps.P2, "C10", "D10")
+            .Stones(TestMaps.P3, "K10");
+        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(TestMaps.P3));
+        Assert.Empty(match.Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(TestMaps.P3)));
 
         match.BeginTurn();
-        Assert.Equal(MatchFixtures.P3, match.CurrentPlayer);
+        Assert.Equal(TestMaps.P3, match.CurrentPlayer);
         RecruitPanelView lastPanel = match.EnterRecruit();
         Assert.Equal((5, 3, 3), (lastPanel.ShowCount, lastPanel.FreePickCount, lastPanel.PicksRemaining));
         match.EnterDeploy();
         Assert.True(match.Confirm().Confirmed);
 
-        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(MatchFixtures.P0));
+        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(TestMaps.P0));
         match.BeginTurn();
-        Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+        Assert.Equal(TestMaps.P0, match.CurrentPlayer);
         RecruitPanelView firstPanel = match.EnterRecruit();
         Assert.Equal((firstPanel.ShowCount, firstPanel.FreePickCount), (lastPanel.ShowCount, lastPanel.FreePickCount));
     }
@@ -163,9 +164,9 @@ public class 私人征募面板Tests
     {
         // more-pieces-relics MODIFIED：小回合开始时控制 1 枚驿站、1 枚探勘、1 枚军令 → 面板展示 5 + 1 + 2 = 8 枚候选
         // （探勘 +1；驿站计除自身外的 2 枚受控信物 +2）。走真实对局流程：P0 直接占据三枚信物，小回合开始时生成快照、进入征募。
-        MatchFlow match = MatchFixtures.Started(relics: [("G4", RelicFixtures.Relay()), ("H4", RelicFixtures.Prospecting()), ("J4", RelicFixtures.Command())])
-            .AtRound(7, MatchFixtures.All)
-            .Stones(MatchFixtures.P0, "G4", "H4", "J4");
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay()), ("J6", RelicFixtures.Prospecting()), ("K6", RelicFixtures.Command())])
+            .AtRound(7, TestMaps.All)
+            .Stones(TestMaps.P0, "H6", "J6", "K6");
 
         match.BeginTurn();
         RecruitPanelView panel = match.EnterRecruit();

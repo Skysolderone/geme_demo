@@ -1,11 +1,11 @@
 using System.Collections.Immutable;
 using System.Text.Json.Nodes;
+using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Match;
+using Siege.Core.Scoring;
 using Siege.Presentation.Visibility;
-using Siege.Sim.Logging;
-using Siege.Sim.Running;
 
 namespace Siege.Core.Tests.MapDefinition;
 
@@ -25,7 +25,7 @@ public class 棋盘清单Tests
     {
         // 规格 Scenario：导出一张没有棋盘清单的手写测试夹具地图再读回 → 导出文件不含棋盘清单字段，读回后清单为空。
         // retire-legacy-maps 1.6 新增：接替「旧地图没有棋盘清单」（读入七张旧地图文件再导出；maps/ 随旧地图删除）。
-        MapData map = MatchFixtures.Map("E5");
+        MapData map = TestMaps.NineByNine("E5");
         string json = MapFile.ToJson(map);
         MapData restored = MapFile.FromJson(json);
 
@@ -70,9 +70,12 @@ public class 棋盘清单Tests
     public void 清单不参与结算()
     {
         // Scenario：给一张手写测试夹具地图补上与出生区一致的棋盘清单，前后两次在相同种子下执行同一组批次 → 每一步的盘面、提子与势力值逐项相同。
-        // 第一段是摆好的提子局面，逐步比对局指纹；第二段是两名 AI 的真实跑局，逐小回合比日志快照与事件。
+        // 第一段是摆好的提子局面，逐步比对盘面 / 同形历史 / 提子 / 势力明细；第二段是种子驱动的随机批次序列，逐步比对同一组量。
         // retire-legacy-maps 1.6：载体由棋盘档夹具（清空清单对照）改为 9×9 手写夹具（补上四角出生棋盘对照），断言不变。
-        MapData cleared = MatchFixtures.Map();
+        // retire-legacy-rules 1.3（清单 P7，(a) 规则层）：对局只能建在链接档图上，而链接局必须有棋盘清单——"无清单"一侧无法再经对局流程，
+        // 改为在 9×9 地图数据的 GameBoard 上直接经结算层（SettlementDriver：放置 → 提子 → 重算的唯一实现）与 PowerCalculator 执行；
+        // 第一段局面与落点不变、期望不变。原第二段"两名 AI 的真实跑局"要对局流程，换成同一结算层上的种子驱动随机批次（样本口径：至少一次提子）。
+        MapData cleared = TestMaps.NineByNine();
         MapData full = cleared with
         {
             Boards = [.. new[] { (0, 0), (6, 0), (0, 6), (6, 6) }.Select(o => new BoardPlate(new Coord(o.Item1, o.Item2), 3, 3, BoardPlateKind.Birth))],
@@ -86,32 +89,27 @@ public class 棋盘清单Tests
         Assert.Equal(3, withBoards.Length);
         Assert.Equal(withBoards, withoutBoards);
 
-        MatchLog logWith = AiRun(full);
-        MatchLog logWithout = AiRun(cleared);
+        string[] randomWith = RandomSteps(full);
+        string[] randomWithout = RandomSteps(cleared);
 
-        Assert.False(logWith.IsFailed);
-        Assert.NotEmpty(logWith.Turns.SelectMany(t => t.Placements));   // 样本口径：确实落了子
-        Assert.Equal(SimFixtures.TurnTexts(logWith.Turns), SimFixtures.TurnTexts(logWithout.Turns));
-        Assert.Equal(
-            logWith.Events.Select(e => System.Text.Json.JsonSerializer.Serialize(e)),
-            logWithout.Events.Select(e => System.Text.Json.JsonSerializer.Serialize(e)));
+        Assert.Equal(RandomStepCount, randomWith.Length);
+        Assert.Contains(randomWith, s => s.Contains("captured=[", StringComparison.Ordinal) && !s.Contains("captured=[]", StringComparison.Ordinal));   // 样本口径：确实提过子
+        Assert.Equal(randomWith, randomWithout);
     }
 
     [Fact]
     public void 默认棋盘视图模型透传棋盘清单()
     {
-        // D2 / D10：渲染用的棋盘清单全部取自视图模型，Godot 不自行推断；没有清单的图（手写夹具）清单为空，画面不变。
+        // D2 / D10：渲染用的棋盘清单全部取自视图模型，Godot 不自行推断。
         // retire-legacy-maps 1.6：载体由棋盘档夹具改为手写链接档初始图（link-map-terrain 起 46×10），断言不变。
-        MapData map = LinkMapFixtures.Initial();
+        // retire-legacy-rules 1.7：链接模式只配 link: 标识，建局前把手写夹具的标识换成 link:90046（清单、尺寸不变）。
+        MapData map = LinkMapFixtures.Initial() with { Id = "link:90046" };
 
         DefaultBoardView view = DefaultBoardView.From(Started(map).PublicWorldOf());
 
         Assert.Equal(map.Boards.AsEnumerable(), view.Boards.AsEnumerable());
         Assert.Equal((46, 10), (view.Width, view.Height));
-
-        DefaultBoardView legacy = DefaultBoardView.From(MatchFixtures.Started().PublicWorldOf());
-        Assert.False(legacy.Boards.IsDefault);
-        Assert.Empty(legacy.Boards);
+        // retire-legacy-rules 1.7（清单"删反面段"）：原有的旧夹具反面段（无清单的 9×9 图清单为空）删除——对局不再能建在无清单的图上。
     }
 
     [Fact]
@@ -211,46 +209,81 @@ public class 棋盘清单Tests
     }
 
     /// <summary>
-    /// 摆好的提子局面（retire-legacy-maps 1.6：改在 9×9 手写夹具上）：P0 三面围住中央 E5 的 P1 子（P1 另有 J9），第 5 大回合 P0 落第四面 E6 提子，
-    /// P1 在 A9 应一手，P0 再落 E5。每步记对局指纹。
+    /// 摆好的提子局面（retire-legacy-maps 1.6：改在 9×9 手写夹具上）：P0 三面围住中央 E5 的 P1 子（P1 另有 J9），P0 落第四面 E6 提子，
+    /// P1 在 A9 应一手，P0 再落 E5。每步记结算层指纹（retire-legacy-rules 1.3：由对局指纹改为结算层指纹，见 <see cref="Settle"/>）。
     /// </summary>
     private static string[] ScriptedSteps(MapData map)
     {
-        MatchFlow match = Started(map).AtRound(5, [P0, P1]);
-        match.Stones(P1, "E5", "J9");   // J9：P1 另有一子，提走 E5 后不出局、对局继续
-        match.Stones(P0, "D5", "F5", "E4");
+        GameBoard board = GameBoard.LoadUnvalidated(map);
+        board.Place("E5", P1).Place("J9", P1);   // J9：P1 另有一子，提走 E5 后不出局
+        board.Place("D5", P0).Place("F5", P0).Place("E4", P0);
+        SettlementDriver driver = BatchFixtures.Driver(board);
         var steps = new List<string>();
 
-        match.PlayTurn("E6");
-        Assert.Null(match.Board[Coord.Parse("E5")].Occupant);   // 样本口径：这一步确实提了子
-        steps.Add(PresentationFixtures.Fingerprint(match));
+        steps.Add(Settle(driver, P0, "E6"));
+        Assert.Null(driver.Board[Coord.Parse("E5")].Occupant);   // 样本口径：这一步确实提了子
 
-        match.PlayTurn("A9");
-        Assert.Equal(P1, match.Board[Coord.Parse("A9")].Occupant?.Owner);
-        steps.Add(PresentationFixtures.Fingerprint(match));
+        steps.Add(Settle(driver, P1, "A9"));
+        Assert.Equal(P1, driver.Board[Coord.Parse("A9")].Occupant?.Owner);
 
-        match.PlayTurn("E5");
-        steps.Add(PresentationFixtures.Fingerprint(match));
+        steps.Add(Settle(driver, P0, "E5"));
         return [.. steps];
     }
 
-    private static MatchFlow Started(MapData map)
+    private const int RandomStepCount = 60;
+
+    /// <summary>
+    /// 种子驱动的随机批次序列：P0 / P1 轮流，每步在空的可落子格里随机取 1–3 格落普通子，经结算层确认（被拒也记下失败种类），共 <see cref="RandomStepCount"/> 步。
+    /// 用 <see cref="Random"/> 固定种子，不用 <c>Random.Shared</c>——两张图必须走同一组批次。
+    /// </summary>
+    private static string[] RandomSteps(MapData map)
     {
-        MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
-        match.Debug.SeedHand(P0, (PieceType.Basic, 50));
-        match.Debug.SeedHand(P1, (PieceType.Basic, 50));
-        match.PlantSequentially([(P0, 0), (P1, 1)]);
-        return match;
+        SettlementDriver driver = BatchFixtures.Driver(GameBoard.LoadUnvalidated(map));
+        var rng = new Random(20261015);
+        var steps = new List<string>();
+        for (int i = 0; i < RandomStepCount; i++)
+        {
+            PlayerId player = i % 2 == 0 ? P0 : P1;
+            Coord[] open = [.. driver.Board.AllCoords().Where(c => driver.Board[c].IsPlayableEmpty).Order()];
+            string[] cells = [.. BatchFixtures.Shuffle(open, rng).Take(1 + rng.Next(3)).Select(c => c.ToNotation())];
+            steps.Add(Settle(driver, player, cells, mustConfirm: false));
+        }
+
+        return [.. steps];
     }
 
-    /// <summary>两名 Easy AI 在夹具图上跑 3 个大回合；权重写死（testing.md：依赖走法的断言不读默认权重）。</summary>
-    private static MatchLog AiRun(MapData map)
+    private static string Settle(SettlementDriver driver, PlayerId player, params string[] cells) => Settle(driver, player, cells, mustConfirm: true);
+
+    /// <summary>经结算层确认一批普通子，返回该步的指纹：确认与否 / 失败种类、提子、结算后盘面与同形历史、势力明细。</summary>
+    private static string Settle(SettlementDriver driver, PlayerId player, string[] cells, bool mustConfirm)
     {
-        MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, MatchFixtures.Seed, [P0, P1], MatchFixtures.Relics(map), MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
-        match.PlantSequentially([(P0, 0), (P1, 1)]);
-        MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 6, players: 2)));
-        return MatchLog.Parse(session.Run().FullText());
+        SettlementOutcome outcome = driver.Confirm(BatchFixtures.Context(driver.Board, player), [.. cells.Select(c => BatchFixtures.P(c))]);
+        if (mustConfirm)
+        {
+            Assert.True(outcome.Confirmed, outcome.Failure?.Message);
+        }
+
+        string captured = outcome.CaptureRecord is { } record ? string.Join(",", record.Captured.Select(c => c.ToString())) : string.Empty;
+        return string.Join(
+            "\n",
+            $"{player}:{string.Join(",", cells)} confirmed={outcome.Confirmed} failure={outcome.Failure?.Kind}",
+            $"captured=[{captured}]",
+            driver.Board.Serialize(),
+            driver.History.Serialize(),
+            AiFixtures.PowerText(PowerCalculator.Compute(driver.Board)));
+    }
+
+    /// <summary>链接模式 4 人建局并依次插旗（retire-legacy-rules 1.7：原为旧模式 2 人局，P0 / P1 各锁一块；链接模式只有 4 人局）。</summary>
+    private static MatchFlow Started(MapData map)
+    {
+        MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
+            map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate with { ContentSet = ContentSet.V1 })));
+        foreach (PlayerId p in TestMaps.All)
+        {
+            match.Debug.SeedHand(p, (PieceType.Basic, 50));
+        }
+
+        match.PlantSequentially(TestMaps.All.Select((p, i) => (p, i)));
+        return match;
     }
 }

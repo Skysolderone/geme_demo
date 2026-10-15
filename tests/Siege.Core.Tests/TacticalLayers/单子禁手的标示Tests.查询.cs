@@ -7,14 +7,14 @@ namespace Siege.Core.Tests.TacticalLayers;
 
 /// <summary>
 /// 规格：tactical-layers —— Requirement: 单子禁手的标示（change `forbidden-marks`）。本文件是查询部分（tasks 1.1 / 1.2）：
-/// 9×9 流程夹具、第 5 大回合（全图可落子），盘面直接摆出。对照与预筛见 <c>.对照.cs</c>，呈现见 <c>.呈现.cs</c>。
+/// 流程夹具（retire-legacy-rules 1.6 起为平坦 8×8 链接载体上四人同锁棋盘 0，原 9×9 坐标 A 列 → C、其余列 +1、行 +1）、第 5 大回合（合法范围即整块棋盘 0），盘面直接摆出。对照与预筛见 <c>.对照.cs</c>，呈现见 <c>.呈现.cs</c>。
 /// </summary>
 public partial class 单子禁手的标示Tests
 {
-    /// <summary>P1 的四枚单子围住空格 E5，各自另有不止一口气。</summary>
-    private static readonly string[] AroundE5 = ["E4", "E6", "D5", "F5"];
+    /// <summary>P1 的四枚单子围住空格 F6，各自另有不止一口气。</summary>
+    private static readonly string[] AroundF6 = ["F5", "F7", "E6", "G6"];
 
-    private static MatchFlow Surrounded() => AiFixtures.Round5().Stones(P1, AroundE5);
+    private static MatchFlow Surrounded() => AiFixtures.Round5().Stones(P1, AroundF6);
 
     /// <summary>禁手集合的值投影：<c>坐标:类别[:同形序号][:活形所有者]</c>，坐标序。</summary>
     internal static string[] Project(ForbiddenMoveReport report) =>
@@ -28,35 +28,35 @@ public partial class 单子禁手的标示Tests
     [Fact]
     public void 查询_自杀点()
     {
-        // 规格 Scenario「自杀点事先打叉」的查询一半：轮到 P0，空格 E5 四邻全是 P1 的棋子且各有不止一口气 → E5 是禁手、原因自杀手；别的格都不是。
+        // 规格 Scenario「自杀点事先打叉」的查询一半：轮到 P0，空格 F6 四邻全是 P1 的棋子且各有不止一口气 → F6 是禁手、原因自杀手；别的格都不是。
         // 变异 M-Q1（查询把预演给出的自杀手失败当作非禁手）→ 红 11；M-P3（预筛去掉"自身有气"）→ 红 10；本测试均在其中。
         // 变异 M-C1（对局流程的入口不把暂放交给查询）→ 红 4；M-C2（候选不排除已暂放的格）→ 红 10。红数是本 Requirement 三个测试类合计。
         MatchFlow match = Surrounded();
-        Assert.All(AroundE5, s => Assert.True(match.Board.LibertiesOf(match.Board.GroupAt(TestMaps.At(s))!).Length > 1));
+        Assert.All(AroundF6, s => Assert.True(match.Board.LibertiesOf(match.Board.GroupAt(TestMaps.At(s))!).Length > 1));
 
         ForbiddenMoveReport report = match.ForbiddenMovesOfCurrentPlayer()!;
 
         Assert.Equal(P0, report.Player);
-        Assert.Equal(["E5:Suicide"], Project(report));
-        Assert.Equal(ForbiddenMoveKind.Suicide, report.At(TestMaps.At("E5"))!.Kind);
-        Assert.Null(report.At(TestMaps.At("A5")));
+        Assert.Equal(["F6:Suicide"], Project(report));
+        Assert.Equal(ForbiddenMoveKind.Suicide, report.At(TestMaps.At("F6"))!.Kind);
+        Assert.Null(report.At(TestMaps.At("C6")));
 
-        // 候选 = 合法落子范围内的空格：81 格 − 4 枚棋子。进入部署阶段（暂放为空）结果相同。
-        Assert.Equal(77, report.CandidateCount);
+        // 候选 = 合法落子范围内的空格：棋盘 0 的 64 格 − 4 枚棋子（原 9×9 为 81 − 4 = 77）。进入部署阶段（暂放为空）结果相同。
+        Assert.Equal(60, report.CandidateCount);
         match.OpenDeploy();
-        Assert.Equal(["E5:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
+        Assert.Equal(["F6:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
     }
 
     [Fact]
     public void 查询_能提子的点不是自杀点()
     {
-        // 规格 Scenario「能提子的点不是自杀点」：E5 四邻全是 P1 的棋子，其中 E4 只剩 E5 这一口气（D4 / F4 / E3 是 P0）→ 落 E5 提走 E4，不是自杀手。
-        MatchFlow match = Surrounded().Stones(P0, "D4", "F4", "E3");
-        Assert.Equal(["E5"], match.Board.LibertiesOf(match.Board.GroupAt(TestMaps.At("E4"))!).Notations());
+        // 规格 Scenario「能提子的点不是自杀点」：F6 四邻全是 P1 的棋子，其中 F5 只剩 F6 这一口气（E5 / G5 / F4 是 P0）→ 落 F6 提走 F5，不是自杀手。
+        MatchFlow match = Surrounded().Stones(P0, "E5", "G5", "F4");
+        Assert.Equal(["F6"], match.Board.LibertiesOf(match.Board.GroupAt(TestMaps.At("F5"))!).Notations());
 
         ForbiddenMoveReport report = match.ForbiddenMovesOfCurrentPlayer()!;
 
-        Assert.Null(report.At(TestMaps.At("E5")));
+        Assert.Null(report.At(TestMaps.At("F6")));
         Assert.Empty(report.Moves);
     }
 
@@ -117,63 +117,63 @@ public partial class 单子禁手的标示Tests
     [Fact]
     public void 查询_暂放改变禁手()
     {
-        // 规格 Scenario「暂放改变禁手」：E5 对 P0 是自杀点（E4 还有 E3 一口气）。P0 先暂放 E3 → 再落 E5 时整批提走 E4 → E5 不再是禁手；撤回后又是。
-        MatchFlow match = Surrounded().Stones(P0, "D4", "F4");
-        Assert.Equal(["E3", "E5"], match.Board.LibertiesOf(match.Board.GroupAt(TestMaps.At("E4"))!).Notations());
+        // 规格 Scenario「暂放改变禁手」：F6 对 P0 是自杀点（F5 还有 F4 一口气）。P0 先暂放 F4 → 再落 F6 时整批提走 F5 → F6 不再是禁手；撤回后又是。
+        MatchFlow match = Surrounded().Stones(P0, "E5", "G5");
+        Assert.Equal(["F4", "F6"], match.Board.LibertiesOf(match.Board.GroupAt(TestMaps.At("F5"))!).Notations());
         StagedBatch batch = match.OpenDeploy();
-        Assert.Equal(["E5:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
+        Assert.Equal(["F6:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
 
-        Assert.Null(batch.Stage(TestMaps.At("E3"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("F4"), PieceType.Basic));
         ForbiddenMoveReport staged = match.ForbiddenMovesOfCurrentPlayer()!;
 
         Assert.Empty(staged.Moves);
         // 已暂放的格不是候选。
-        Assert.Equal(74, staged.CandidateCount);
+        Assert.Equal(57, staged.CandidateCount);
 
-        Assert.True(batch.Unstage(TestMaps.At("E3")));
-        Assert.Equal(["E5:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
+        Assert.True(batch.Unstage(TestMaps.At("F4")));
+        Assert.Equal(["F6:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
     }
 
     [Fact]
     public void 查询_暂放自身非法时按整批判定()
     {
-        // 整批判定的另一面：P0 先把子暂放进自杀点 E5（暂放只过预演第 1–2 步）。此后再落一子，整批仍因 E5 无气被拒 → 其余候选格都是自杀手；
-        // 只有 E3 例外——落 E3 后整批提走 E4，E5 得气。
-        MatchFlow match = Surrounded().Stones(P0, "D4", "F4");
+        // 整批判定的另一面：P0 先把子暂放进自杀点 F6（暂放只过预演第 1–2 步）。此后再落一子，整批仍因 F6 无气被拒 → 其余候选格都是自杀手；
+        // 只有 F4 例外——落 F4 后整批提走 F5，F6 得气。
+        MatchFlow match = Surrounded().Stones(P0, "E5", "G5");
         StagedBatch batch = match.OpenDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("E5"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("F6"), PieceType.Basic));
         Assert.Equal(BatchFailureKind.Suicide, match.Rehearse().Failure!.Kind);
 
         ForbiddenMoveReport report = match.ForbiddenMovesOfCurrentPlayer()!;
 
-        Assert.Equal(74, report.CandidateCount);
-        Assert.Equal(73, report.Moves.Length);
-        Assert.Null(report.At(TestMaps.At("E3")));
+        Assert.Equal(57, report.CandidateCount);
+        Assert.Equal(56, report.Moves.Length);
+        Assert.Null(report.At(TestMaps.At("F4")));
         Assert.All(report.Moves, m => Assert.Equal(ForbiddenMoveKind.Suicide, m.Kind));
     }
 
     [Fact]
     public void 查询_库存与额度不影响禁手()
     {
-        // 规格 Scenario「库存不影响禁手」：P0 手牌为空、部署额度为 0，E5 对 P0 仍是禁手。
+        // 规格 Scenario「库存不影响禁手」：P0 手牌为空、部署额度为 0，F6 对 P0 仍是禁手。
         MatchFlow match = Surrounded();
         match.Debug.SeedHand(P0);
         match.SetDeployLimit(0);
         StagedBatch batch = match.OpenDeploy();
         Assert.Equal(0, batch.Context.DeployLimit);
         Assert.Equal(0, batch.Context.StockOf(PieceType.Basic));
-        Assert.NotNull(batch.Stage(TestMaps.At("A5"), PieceType.Basic));
+        Assert.NotNull(batch.Stage(TestMaps.At("C6"), PieceType.Basic));
 
-        Assert.Equal(["E5:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
+        Assert.Equal(["F6:Suicide"], Project(match.ForbiddenMovesOfCurrentPlayer()!));
     }
 
     [Fact]
     public void 查询_不改对局状态()
     {
         // 规格：查询 MUST NOT 改变对局状态。部署阶段、已有一枚暂放时查询前后，对局权威状态的指纹（盘面、历史、账本、流程、暂放……）逐字相同。
-        MatchFlow match = Surrounded().Stones(P0, "D4", "F4");
+        MatchFlow match = Surrounded().Stones(P0, "E5", "G5");
         StagedBatch batch = match.OpenDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("A5"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("C6"), PieceType.Basic));
         string before = Fingerprint(match);
 
         ForbiddenMoveReport report = match.ForbiddenMovesOfCurrentPlayer()!;
@@ -186,7 +186,7 @@ public partial class 单子禁手的标示Tests
     public void 查询_没有当前行动玩家时为空()
     {
         // 插旗阶段没有当前行动玩家 → 查询为 null（D6：此时不显示）。
-        Assert.Null(MatchFixtures.Create().ForbiddenMovesOfCurrentPlayer());
+        Assert.Null(LinkModeFixtures.PlainCreate().ForbiddenMovesOfCurrentPlayer());
     }
 
     /// <summary>合法落子范围契约（第 5 大回合：全图可落子格扣除禁入格）。</summary>

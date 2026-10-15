@@ -137,9 +137,9 @@ public class 批次预演必须显示的信息Tests
         MatchFlow match = AiFixtures.Round5();
         match.SetDeployLimit(5);
         StagedBatch batch = match.OpenDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("B2"), PieceType.Basic));
-        Assert.Null(batch.Stage(TestMaps.At("E5"), PieceType.Basic));
-        Assert.Null(batch.Stage(TestMaps.At("H8"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("D4"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("G7"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("K10"), PieceType.Basic));
 
         PreviewPresentation shown = match.World(P0).Preview()!;
 
@@ -147,7 +147,7 @@ public class 批次预演必须显示的信息Tests
         Assert.Equal((3, 5), (shown.DeployUsed, shown.DeployLimit));
         HandCostView cost = Assert.Single(shown.HandCosts);
         Assert.Equal("普通子 ×3（库存 50）", cost.Text);
-        Assert.Equal(["B2", "E5", "H8"], shown.StagedPieces.Select(p => p.Coord).Notations());
+        Assert.Equal(["D4", "G7", "K10"], shown.StagedPieces.Select(p => p.Coord).Notations());
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class 批次预演必须显示的信息Tests
         Assert.Equal("确认 0 落子将撤销本轮新征募的 3 枚棋子", shown.PassWarning);
         Assert.True(shown.CanConfirm);
 
-        Assert.Null(match.CurrentBatch!.Stage(TestMaps.At("E5"), PieceType.Basic));
+        Assert.Null(match.CurrentBatch!.Stage(TestMaps.At("G7"), PieceType.Basic));
         Assert.Null(match.World(P0).Preview()!.PassWarning);
     }
 

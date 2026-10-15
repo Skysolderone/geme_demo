@@ -10,6 +10,7 @@ namespace Siege.Core.Tests.TacticalLayers;
 /// 原钉在真 v3 基准图地形上（字段值对照 implement.md 段 B 的文本图）。retire-legacy-maps 1.8：v3 / v5 删除，改为一张 13×13 手写地形夹具——
 /// 在断言用到的每一格上照搬 v3 的地形（B2 所在出生区 0 为 h=2 高台、E2 缓坡 h=1、D4 未架桥深水、G4 架桥深水、A13 岩石、E5 林地、C8 土路、四段栅栏），
 /// 其余为 h=0 草地。断言一字不改。
+/// retire-legacy-rules 1.6：改以链接模式建局（链接模式只配 <c>link:</c> 标识，夹具标识由 test-terrain-view-13 改为 link:90013；只取插旗阶段的公开世界，不开局），地形与断言不变。
 /// </summary>
 public class 盘面层视图模型带地形Tests
 {
@@ -22,7 +23,7 @@ public class 盘面层视图模型带地形Tests
             fences: [("G5", "H5"), ("E6", "E7"), ("J7", "J8"), ("F9", "G9")]);
         MapData map = TestMaps.Synthetic(13, maxPlayers: 4, obstacles: [TestMaps.At("A13")], terrain: terrain) with
         {
-            Id = "test-terrain-view-13",
+            Id = "link:90013",
             BirthZones =
             [
                 [TestMaps.At("A1"), TestMaps.At("B1"), TestMaps.At("A2"), TestMaps.At("B2")],
@@ -32,7 +33,8 @@ public class 盘面层视图模型带地形Tests
             ],
         };
         PlayerId[] players = [P0, P1, P2, P3];
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, new Siege.Core.Determinism.GameSeed(1), players, MatchFixtures.Relics(map), MatchOptions.Immediate);
+        MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
+            map, new Siege.Core.Determinism.GameSeed(1), players, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         return DefaultBoardView.From(match.PublicWorldOf());
     }
 

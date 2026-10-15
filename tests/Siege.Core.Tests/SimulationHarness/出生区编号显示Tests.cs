@@ -19,27 +19,30 @@ public class 出生区编号显示Tests
     public void 六区图的插旗棋盘快照()
     {
         // 期望行由夹具的平台摆放手工写出（不经渲染器）：
-        //   第 1 行（y=0）：1 号台 A–E、空地 F–P、2 号台 Q–U；
-        //   第 14 行（y=13）：3 号台 A–E、空地 F–H、6 号台 J–N（夹具的平台内已无营帐，map-generator 裁决 18）、空地 O、4 号台 P–T、空地 U。
+        //   第 1 行（y=0）：1 号台 A–E、台外 F–P、2 号台 Q–U；
+        //   第 14 行（y=13）：3 号台 A–E、台外 F–H、6 号台 J–N（夹具的平台内已无营帐，map-generator 裁决 18）、台外 O、4 号台 P–T、台外 U。
+        // retire-legacy-rules 1.6（R8）：改以链接模式建局（标识 link:90006，六个平台即六块 5×5 出生棋盘）。链接模式插旗阶段终端只画出生棋盘的外接矩形（y 0–17，
+        // 最上两行岩石在外）、每块棋盘整块画区号占位（台内信物格不另画），台外留空——所以台外由"."改为空白、行数 20 → 18、每区格数 24 → 25。
         // retire-legacy-maps 1.8：夹具原为 FrontierFixtures.Map()（边疆档、经公开 MatchFlow.Create 校验建局）；该夹具随边疆档删除，
         // 同一张 20×20 六平台图原样搬进本类（SixZoneMap，去掉边疆档规格档），按手写夹具的入口 CreateUnvalidated 建局（信物按同一种子生成）。断言不变。
         MapData map = SixZoneMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, new GameSeed(3), MatchFixtures.All, Siege.Core.Relics.RelicGenerator.Generate(map, new GameSeed(3)), MatchOptions.Immediate);
+        MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
+            map, new GameSeed(3), TestMaps.All, Siege.Core.Relics.RelicGenerator.Generate(map, new GameSeed(3)), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         var output = new StringWriter();
 
-        new BoardRenderer(output).Board(match.Publish(), MatchFixtures.P0, zones: true);
+        new BoardRenderer(output).Board(match.Publish(), TestMaps.P0, zones: true);
 
         string[] lines = [.. output.ToString().Split('\n').Select(l => l.TrimEnd('\r'))];
-        Assert.Equal("  1  1  1  1  1  1  .  .  .  .  .  .  .  .  .  .  2  2  2  2  2  1", lines.Single(l => l.StartsWith("  1 ", StringComparison.Ordinal)));
-        Assert.Equal(" 14  3  3  3  3  3  .  .  .  6  6  6  6  6  .  4  4  4  4  4  .  14", lines.Single(l => l.StartsWith(" 14 ", StringComparison.Ordinal)));
+        Assert.Equal("  1  1  1  1  1  1                                2  2  2  2  2  1", lines.Single(l => l.StartsWith("  1 ", StringComparison.Ordinal)));
+        Assert.Equal(" 14  3  3  3  3  3           6  6  6  6  6     4  4  4  4  4     14", lines.Single(l => l.StartsWith(" 14 ", StringComparison.Ordinal)));
 
-        // 六个区号都出现，且格数 = 平台 25 格 − 台内信物 1 = 24；没有 7 以上的区号。
+        // 六个区号都出现，且格数 = 平台 25 格（占位整块画区号）；没有 7 以上的区号。
         string[] boardRows = [.. lines.Where(l => l.Length > 4 && char.IsDigit(l[2]) && l[3] == ' ')];
-        Assert.Equal(20, boardRows.Length);
+        Assert.Equal(18, boardRows.Length);
         string cells = string.Concat(boardRows.Select(l => l[4..(4 + (20 * 3))]));
         for (int zone = 1; zone <= 6; zone++)
         {
-            Assert.Equal(24, Enumerable.Range(0, cells.Length / 3).Count(i => cells.Substring(i * 3, 3) == $" {zone} "));
+            Assert.Equal(25, Enumerable.Range(0, cells.Length / 3).Count(i => cells.Substring(i * 3, 3) == $" {zone} "));
         }
 
         Assert.DoesNotContain(" 7 ", cells, StringComparison.Ordinal);
@@ -94,18 +97,24 @@ public class 出生区编号显示Tests
         Assert.Contains("基线 25.0%", text, StringComparison.Ordinal);
     }
 
+    /// <summary>六个 5×5 平台的左下角（出生区 0–5 依次）。</summary>
+    private static readonly Coord[] SixZoneOrigins = [new(0, 0), new(15, 0), new(0, 13), new(14, 12), new(7, 1), new(8, 11)];
+
     /// <summary>
     /// 20×20 六平台手写图（retire-legacy-maps：自已删除的 FrontierFixtures.Map 原样搬来，只去掉边疆档规格档）：最上两行岩石，6 个 5×5 平台故意不对称，
     /// 每平台 1 个出生区信物 + 10 个公共信物。
+    /// retire-legacy-rules 1.6：标识改为 link:90006、规格档链接、六个平台登记为六块出生棋盘（链接模式只配 link: 标识，插旗阶段终端按出生棋盘画占位），其余不变。
     /// </summary>
     private static MapData SixZoneMap() =>
         new()
         {
-            Id = "test-six-zones",
+            Id = "link:90006",
             Width = 20,
             Height = 20,
             MaxPlayers = 4,
             Obstacles = [.. TestMaps.Rect(0, 18, 20, 2)],
+            Profile = MapProfile.Link,
+            Boards = [.. SixZoneOrigins.Select(o => new BoardPlate(o, 5, 5, BoardPlateKind.Birth))],
             BirthZones =
             [
                 [.. TestMaps.Rect(0, 0, 5, 5)],

@@ -330,7 +330,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         // Scenario：被平移战场在链接前有 3 枚棋子、1 道栅栏、1 枚已揭示信物 → 链接后这些内容出现在平移后的对应格，类型、归属、揭示状态逐项相同。
         MapData initial = LinkMapGenerator.Generate(2);
         GameBoard board = GameBoard.Load(initial);
-        var ledger = new RelicLedger(RelicGenerator.Generate(initial, MatchFixtures.Seed));
+        var ledger = new RelicLedger(RelicGenerator.Generate(initial, TestMaps.Seed));
         var p1 = new PlayerId(1);
         Coord relic = initial.RelicCells.Keys.Where(initial.BirthZones[4].Contains).Order().First();
         Coord[] cells = [.. initial.BirthZones[4].Order()];

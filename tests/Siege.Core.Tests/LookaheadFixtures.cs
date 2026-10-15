@@ -17,10 +17,10 @@ namespace Siege.Core.Tests;
 /// </summary>
 internal static class LookaheadFixtures
 {
-    internal static readonly PlayerId P0 = MatchFixtures.P0;
-    internal static readonly PlayerId P1 = MatchFixtures.P1;
-    internal static readonly PlayerId P2 = MatchFixtures.P2;
-    internal static readonly PlayerId P3 = MatchFixtures.P3;
+    internal static readonly PlayerId P0 = TestMaps.P0;
+    internal static readonly PlayerId P1 = TestMaps.P1;
+    internal static readonly PlayerId P2 = TestMaps.P2;
+    internal static readonly PlayerId P3 = TestMaps.P3;
 
     /// <summary>写死的评价权重：取段 A 开工时（HEAD 03d45f6）的缺省值。</summary>
     internal static readonly EvaluationWeights Weights =

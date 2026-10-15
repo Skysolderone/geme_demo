@@ -58,7 +58,7 @@ public class 按座位视图Tests
         Assert.NotEmpty(water);   // 样本口径
         Assert.NotEmpty(rocks);
         int[] others = [.. Enumerable.Range(0, 5).Where(z => z != zone).Take(3)];
-        MatchFlow match = MatchFlow.Create(map, MatchFixtures.Seed, All, Options);
+        MatchFlow match = MatchFlow.Create(map, TestMaps.Seed, All, Options);
         match.PlantSequentially([(P0, zone), (P1, others[0]), (P2, others[1]), (P3, others[2])]);
         Assert.NotEqual(MatchPhase.FlagPlanting, match.Phase);
 
@@ -197,7 +197,7 @@ public class 按座位视图Tests
         Assert.Empty(a.Cells);
         Assert.Empty(a.Relics);
         Assert.Equal(MapId, a.MapId);
-        Assert.Equal(MatchFixtures.Seed.ToString(), a.Seed);
+        Assert.Equal(TestMaps.Seed.ToString(), a.Seed);
         Assert.All(a.Players, p => Assert.False(p.SameBattlefield));
         Assert.Equal((match.Map.BirthBoard(2).Width, match.Map.BirthBoard(2).Height), (a.Placeholders[2].Width, a.Placeholders[2].Height));   // 占位取整块棋盘
 
@@ -236,7 +236,7 @@ public class 按座位视图Tests
     public void 行动顺序与带入全局公开()
     {
         // Scenario：任意玩家查询当前行动顺序 → 可读到全部在局玩家的顺序；带入不论对方在哪块棋盘都可读。
-        MatchFlow match = MatchFlow.Create(Map, MatchFixtures.Seed, All, Options with
+        MatchFlow match = MatchFlow.Create(Map, TestMaps.Seed, All, Options with
         {
             CarryInOut = true,
             CarryIns = System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Carry.CarryIn>.Empty.Add(P2, new Carry.CarryIn(Carry.SupplyKind.SpareStone)),

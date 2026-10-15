@@ -1,0 +1,27 @@
+开始前 2152 结束后 2152
+-  Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "a", key: "F5")
+-  Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "b", key: "E5")
+-  Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "c", key: "F5")
+-  Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.保护期内只在出生区回应
+-  Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "a", key: "F5")
+-  Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "b", key: "E5")
+-  Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "c", key: "F5")
+-  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.Pass计数跨回合重置
+-  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.势力悬殊不提前结束
+-  Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.旧模式与同战场不遮蔽
+-  Siege.Core.Tests.MatchSetup.匿名同时插旗Tests.时限可配置
+-  Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.合法落子范围在保护期后含本局新架的桥
+-  Siege.Core.Tests.TurnSequence.构筑保护期的落子限制Tests.保护期内规则照常
++  Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "a", key: "G6")
++  Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "b", key: "F6")
++  Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "c", key: "G6")
++  Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.构筑期内只在本战场回应
++  Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "a", key: "G6")
++  Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "b", key: "F6")
++  Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "c", key: "G6")
++  Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.Pass计数跨回合重置
++  Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.势力悬殊不提前结束
++  Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.同战场不遮蔽
++  Siege.Core.Tests.MatchSetup.盲选插旗Tests.时限可配置
++  Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.合法落子范围含本局新架的桥
++  Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.构筑期内规则照常

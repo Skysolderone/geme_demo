@@ -171,27 +171,33 @@ public class 非法批次必须给出可定位的原因Tests
         Assert.DoesNotContain("不可落子", failure.Message);
     }
 
-    /// <summary>9×9 对局盘面上 P0 的两眼活形：D4–H4、D6–H6、D5、F5、H5 围出单格眼 E5、G5。</summary>
+    /// <summary>9×9 对局盘面上 P0 的两眼活形：D4–H4、D6–H6、D5、F5、H5 围出单格眼 E5、G5。retire-legacy-rules：只剩清单 (c) / (j) 方法引用，第 2 组随之删除。</summary>
     internal static readonly string[] RingE5G5 = ["D4", "E4", "F4", "G4", "H4", "D5", "F5", "H5", "D6", "E6", "F6", "G6", "H6"];
+
+    /// <summary>
+    /// 平坦 8×8 链接载体棋盘 0 上 P0 的两眼活形（retire-legacy-rules：<see cref="RingE5G5"/> 列 +1、行 +2——环的东侧与北侧仍留一列 / 两行空地，不贴棋盘 0 的边）：
+    /// E6–J6、E8–J8、E7、G7、J7 围出单格眼 F7、H7，外侧大片空地。
+    /// </summary>
+    internal static readonly string[] RingF7H7 = ["E6", "F6", "G6", "H6", "J6", "E7", "G7", "J7", "E8", "F8", "G8", "H8", "J8"];
 
     [Fact]
     public void 活棋禁入返回落点与棋串()
     {
-        // 走真实对局流程（第 5 大回合，P1 行动）：P1 的合法落子范围已扣除 E5，暂放 E5 时预演第 1 步必须报"活棋禁入"而不是"违反合法落子范围"——
+        // 走真实对局流程（第 5 大回合，P1 行动；retire-legacy-rules：平坦 8×8 链接载体，环与眼列 +1、行 +2）：P1 的合法落子范围已扣除 F7，暂放 F7 时预演第 1 步必须报"活棋禁入"而不是"违反合法落子范围"——
         // 禁入判定排在范围判定之前，经 BatchFixtures.Context（全图范围）的用例抓不住这个顺序。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [MatchFixtures.P1, MatchFixtures.P0, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P0, RingE5G5);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P1, TestMaps.P0, TestMaps.P2, TestMaps.P3])
+            .Stones(TestMaps.P0, RingF7H7);
         StagedBatch batch = match.OpenDeploy();
 
-        BatchFailure? failure = batch.Stage(TestMaps.At("E5"), PieceType.Basic);
+        BatchFailure? failure = batch.Stage(TestMaps.At("F7"), PieceType.Basic);
 
         Assert.NotNull(failure);
         Assert.Equal(BatchFailureKind.LifeForbidden, failure.Kind);
-        Assert.Equal(["E5"], failure.Coords.Notations());
-        Assert.Equal(RingE5G5.Select(TestMaps.At).Order().Notations(), failure.LifeGroup.Notations());
-        Assert.Equal(MatchFixtures.P0, failure.LifeOwner);
+        Assert.Equal(["F7"], failure.Coords.Notations());
+        Assert.Equal(RingF7H7.Select(TestMaps.At).Order().Notations(), failure.LifeGroup.Notations());
+        Assert.Equal(TestMaps.P0, failure.LifeOwner);
         Assert.Contains("活棋禁入", failure.Message);
-        Assert.Contains("E5", failure.Message);
+        Assert.Contains("F7", failure.Message);
         Assert.Equal(0, batch.Count);
     }
 

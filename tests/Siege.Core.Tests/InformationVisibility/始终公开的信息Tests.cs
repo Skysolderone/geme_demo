@@ -19,12 +19,12 @@ public class 始终公开的信息Tests
         MatchFlow match = AiFixtures.Round5();
         match.Debug.SeedHand(P0, (PieceType.Multiplier, 1), (PieceType.Basic, 5));
         StagedBatch batch = match.OpenDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("E5"), PieceType.Multiplier));
+        Assert.Null(batch.Stage(TestMaps.At("G7"), PieceType.Multiplier));
         Assert.True(match.Confirm().Confirmed);
 
-        foreach (PlayerId viewer in MatchFixtures.All)
+        foreach (PlayerId viewer in TestMaps.All)
         {
-            BoardCellView cell = match.World(viewer).Board().CellAt(TestMaps.At("E5"));
+            BoardCellView cell = match.World(viewer).Board().CellAt(TestMaps.At("G7"));
             Assert.Equal(new Occupant(P0, PieceType.Multiplier), cell.Occupant);
         }
     }
@@ -36,9 +36,9 @@ public class 始终公开的信息Tests
         // B（P1）打开势力层可见 A 的领地分与该棋串的基础军势、位置加值、倍率与最终军势，且与 Core 势力明细逐项一致
         // （information-visibility「领地分公开」）。
         MatchFlow match = AiFixtures.Round5()
-            .Pieces(P0, PieceType.Basic, "B2", "C2", "D2")
-            .Pieces(P0, PieceType.Fortress, "E2")
-            .Pieces(P0, PieceType.Multiplier, "F2", "G2");
+            .Pieces(P0, PieceType.Basic, "D4", "E4", "F4")
+            .Pieces(P0, PieceType.Fortress, "G4")
+            .Pieces(P0, PieceType.Multiplier, "H4", "J4");
 
         var layer = (PowerLayerContent)match.World(P1).Layer(TacticalLayer.Power);
 
@@ -53,16 +53,16 @@ public class 始终公开的信息Tests
     public void 领地分公开()
     {
         // 规格 Scenario（information-visibility「始终公开的信息」第 5 条）：任意玩家查询对手的势力明细 → 可读到对手的领地分总计与独占空格坐标集合。
-        // P0 占 C5–G5 一排 5 子 → 独占 12 格（第 4 / 6 行 C–G 各 5 格 + B5、H5）。三名对手各自从自己的公开世界读取，逐格与权威明细一致；
+        // P0 占 D7–H7 一排 5 子 → 独占 12 格（第 6 / 8 行 D–H 各 5 格 + C7、J7；retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 C5–G5 列 +1、行 +2）。三名对手各自从自己的公开世界读取，逐格与权威明细一致；
         // 势力层的独占格着色与领地分也对每名对手给出同一份（不是只对本人可见）。
         // 变异验证 M-E15：势力层的独占格集合漏掉 P0（只投影其余玩家）→ 实跑红 2（本测试、势力层显示领地分）。
         // 公开视图（MatchPublicView.Power）对所有观察者是同一个对象，不存在按观察者裁剪的路径，所以变异落在表现层投影上。
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(P0, "C5", "D5", "E5", "F5", "G5");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5).Stones(P0, "D7", "E7", "F7", "G7", "H7");
         Scoring.PlayerPower truth = match.Scoreboard.Latest!.Of(P0);
-        string[] expected = ["B5", "C4", "C6", "D4", "D6", "E4", "E6", "F4", "F6", "G4", "G6", "H5"];
+        string[] expected = ["C7", "D6", "D8", "E6", "E8", "F6", "F8", "G6", "G8", "H6", "H8", "J7"];
         Assert.Equal(expected, truth.ExclusiveCells.Select(c => c.ToNotation()).Order(StringComparer.Ordinal));
 
-        foreach (PlayerId viewer in new[] { P1, MatchFixtures.P2, MatchFixtures.P3 })
+        foreach (PlayerId viewer in new[] { P1, TestMaps.P2, TestMaps.P3 })
         {
             ViewerWorld world = match.World(viewer);
             Scoring.PlayerPower seen = world.Public.View.Power!.Of(P0);
@@ -78,17 +78,17 @@ public class 始终公开的信息Tests
     [Fact]
     public void 气可推导()
     {
-        // 设计文档 §13.1：任意棋串的气数与气位可从公开信息推导。拐角串 D4-D5-E5（testing.md：共享气 E4 被 D4 与 E5 同时邻接），
-        // 手工推导气位 D3、C4、E4、C5、F5、D6、E6 共 7 口；任何观察者的气层都给出同一结果。
+        // 设计文档 §13.1：任意棋串的气数与气位可从公开信息推导。拐角串 F6-F7-G7（testing.md：共享气 G6 被 F6 与 G7 同时邻接；retire-legacy-rules：原 9×9 的 D4-D5-E5 平移 (+2, +2)），
+        // 手工推导气位 F5、E6、G6、E7、H7、F8、G8 共 7 口；任何观察者的气层都给出同一结果。
         // 变异验证 M-V3：TacticalLayers.Liberties 的 LibertyCount 改为 `g.Stones.Length` → 本测试红 1。
-        MatchFlow match = AiFixtures.Round5().Pieces(P2, PieceType.Basic, "D4", "D5", "E5");
+        MatchFlow match = AiFixtures.Round5().Pieces(P2, PieceType.Basic, "F6", "F7", "G7");
 
-        foreach (PlayerId viewer in MatchFixtures.All)
+        foreach (PlayerId viewer in TestMaps.All)
         {
             var layer = (LibertyLayerContent)match.World(viewer).Layer(TacticalLayer.Board, BoardReading.Groups);
             LibertyGroupView group = Assert.Single(layer.Groups, g => g.Owner == P2);
-            Assert.Equal(["D4", "D5", "E5"], group.Stones.Notations());
-            Assert.Equal(["D3", "C4", "E4", "C5", "F5", "D6", "E6"], group.Liberties.Notations());
+            Assert.Equal(["F6", "F7", "G7"], group.Stones.Notations());
+            Assert.Equal(["F5", "E6", "G6", "E7", "H7", "F8", "G8"], group.Liberties.Notations());
             Assert.Equal(7, group.LibertyCount);
         }
     }
@@ -96,27 +96,27 @@ public class 始终公开的信息Tests
     [Fact]
     public void 活形状态公开()
     {
-        // life-shape D6 / 始终公开的信息第 6 条：P0 两眼活形（眼 E5、G5）、P2 一眼未定（角上 A9，A8 / B9）、P3 孤子 J1（无眼，死）。
+        // life-shape D6 / 始终公开的信息第 6 条：P0 两眼活形（眼 F7、H7）、P2 一眼未定（角上 C10，C9 / D10）、P3 孤子 K3（无眼，死）——retire-legacy-rules：平坦 8×8 链接载体，环列 +1、行 +2，三角各贴棋盘 0 的角。
         // 四名观察者从各自的公开世界读到同一份：每条棋串的三态、已确定活形的眼空间、每名玩家的禁入格；且与公开盘面上独立重算的结果逐项相同。
         MatchFlow match = AiFixtures.Round5()
-            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5)
-            .Stones(MatchFixtures.P2, "A8", "B9")
-            .Stones(MatchFixtures.P3, "J1");
+            .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7)
+            .Stones(TestMaps.P2, "C9", "D10")
+            .Stones(TestMaps.P3, "K3");
 
-        foreach (PlayerId viewer in MatchFixtures.All)
+        foreach (PlayerId viewer in TestMaps.All)
         {
             MatchPublicView view = match.World(viewer).Public.View;
             Siege.Core.Board.LifeShapeReport life = view.LifeShape;
 
-            Assert.Equal(Siege.Core.Board.LifeState.Alive, life.LifeOf("E4"));
-            Assert.Equal(["E5", "G5"], life.EyeSpacesOf("E4"));
-            Assert.Equal(Siege.Core.Board.LifeState.Undetermined, life.LifeOf("A8"));
-            Assert.Equal(Siege.Core.Board.LifeState.Undetermined, life.LifeOf("B9"));
-            Assert.Equal(Siege.Core.Board.LifeState.Dead, life.LifeOf("J1"));
+            Assert.Equal(Siege.Core.Board.LifeState.Alive, life.LifeOf("F6"));
+            Assert.Equal(["F7", "H7"], life.EyeSpacesOf("F6"));
+            Assert.Equal(Siege.Core.Board.LifeState.Undetermined, life.LifeOf("C9"));
+            Assert.Equal(Siege.Core.Board.LifeState.Undetermined, life.LifeOf("D10"));
+            Assert.Equal(Siege.Core.Board.LifeState.Dead, life.LifeOf("K3"));
             Assert.Empty(life.Forbidden(P0));
-            Assert.Equal(["E5", "G5"], life.Forbidden(P1));
-            Assert.Equal(["E5", "G5"], life.Forbidden(MatchFixtures.P2));
-            Assert.Equal(["E5", "G5"], life.Forbidden(MatchFixtures.P3));
+            Assert.Equal(["F7", "H7"], life.Forbidden(P1));
+            Assert.Equal(["F7", "H7"], life.Forbidden(TestMaps.P2));
+            Assert.Equal(["F7", "H7"], life.Forbidden(TestMaps.P3));
             Assert.Equal(
                 LifeShapeFixtures.Describe(Siege.Core.Board.LifeShapeReport.Analyze(view.Board)),
                 LifeShapeFixtures.Describe(life));
@@ -128,16 +128,16 @@ public class 始终公开的信息Tests
     {
         // carry-in-out 规格 Scenario（information-visibility 第 7 条）：插旗阶段任意玩家查询对手信息 → 可读到每名玩家的带入，
         // 如"玩家2：征召签 → 堡垒子；玩家3：无"。公开视图给的是建局时解析后的值（征召签带抽得类型），与对局配置逐项相同。
-        MatchFlow match = MatchFixtures.Create(options: Siege.Core.Tests.CarryInOut.CarryFixtures.On(
+        MatchFlow match = LinkModeFixtures.PlainCreate(options: Siege.Core.Tests.CarryInOut.CarryFixtures.On(
             (1, new CarryIn(SupplyKind.DraftLot)), (2, new CarryIn(SupplyKind.Commission, PieceType.Fortress))));
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
 
         MatchPublicView view = match.Publish();
         Assert.True(view.CarryInOut);
-        Assert.Equal(new CarryIn(SupplyKind.Commission, PieceType.Fortress), view.CarryIns[MatchFixtures.P2]);
+        Assert.Equal(new CarryIn(SupplyKind.Commission, PieceType.Fortress), view.CarryIns[TestMaps.P2]);
         Assert.Equal(SupplyKind.DraftLot, view.CarryIns[P1].Kind);
         Assert.NotNull(view.CarryIns[P1].Type);
-        Assert.False(view.CarryIns.ContainsKey(MatchFixtures.P3));
+        Assert.False(view.CarryIns.ContainsKey(TestMaps.P3));
         Assert.Equal(
             Siege.Core.Tests.CarryInOut.CarryFixtures.CarryText(match.CarryIns),
             Siege.Core.Tests.CarryInOut.CarryFixtures.CarryText(view.CarryIns));

@@ -1,0 +1,28 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Siege.Core -> E:\wws\geme_demo\src\Siege.Core\bin\Debug\net8.0\Siege.Core.dll
+  Siege.Presentation -> E:\wws\geme_demo\src\Siege.Presentation\bin\Debug\net8.0\Siege.Presentation.dll
+  Siege.Sim -> E:\wws\geme_demo\src\Siege.Sim\bin\Debug\net8.0\Siege.Sim.dll
+  Siege.Core.Tests -> E:\wws\geme_demo\tests\Siege.Core.Tests\bin\Debug\net8.0\Siege.Core.Tests.dll
+Test run for E:\wws\geme_demo\tests\Siege.Core.Tests\bin\Debug\net8.0\Siege.Core.Tests.dll (.NETCoreApp,Version=v8.0)
+VSTest version 17.11.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:11.69]     Siege.Core.Tests.CaptureResolution.活形保护性质Tests.已确定活形在非所有者的合法批次后仍为已确定活形_种子1至200 [SKIP]
+  Skipped Siege.Core.Tests.CaptureResolution.活形保护性质Tests.已确定活形在非所有者的合法批次后仍为已确定活形_种子1至200 [1 ms]
+[xUnit.net 00:00:47.26]     Siege.Core.Tests.LifeShape.活形分析性能基线Tests.中盘全盘活形分析不超过含气棋串计算的三倍 [SKIP]
+  Skipped Siege.Core.Tests.LifeShape.活形分析性能基线Tests.中盘全盘活形分析不超过含气棋串计算的三倍 [1 ms]
+[xUnit.net 00:01:30.60]     Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致_棋盘图中盘 [SKIP]
+  Skipped Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致_棋盘图中盘 [1 ms]
+[xUnit.net 00:01:31.54]     Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.单次查询耗时 [SKIP]
+  Skipped Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.单次查询耗时 [1 ms]
+[xUnit.net 00:01:37.92]     Siege.Core.Tests.AiDecision.活形分析的决策内缓存Tests.缓存开关不改变决策序列_链接图种子1至20 [SKIP]
+  Skipped Siege.Core.Tests.AiDecision.活形分析的决策内缓存Tests.缓存开关不改变决策序列_链接图种子1至20 [1 ms]
+[xUnit.net 00:04:40.23]     Siege.Core.Tests.AiDecision.专家前瞻耗时计时Tests.专家单次部署耗时中位数不超过高难的四倍 [SKIP]
+[xUnit.net 00:04:40.23]     Siege.Core.Tests.AiDecision.专家前瞻耗时计时Tests.按座位视野下专家单次部署耗时中位数不超过高难的四倍 [SKIP]
+  Skipped Siege.Core.Tests.AiDecision.专家前瞻耗时计时Tests.专家单次部署耗时中位数不超过高难的四倍 [1 ms]
+  Skipped Siege.Core.Tests.AiDecision.专家前瞻耗时计时Tests.按座位视野下专家单次部署耗时中位数不超过高难的四倍 [1 ms]
+
+Passed!  - Failed:     0, Passed:  2150, Skipped:     7, Total:  2157, Duration: 4 m 39 s - Siege.Core.Tests.dll (net8.0)
+RC=0

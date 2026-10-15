@@ -89,21 +89,21 @@ public class 非法批次必须说明原因并高亮Tests
     [Fact]
     public void 活棋禁入说明()
     {
-        // life-shape D3 / R9：P1 把棋子暂放到 P0 环形活形的眼 E5 → 说明"活棋禁入"，高亮该格（失败焦点）与围住它的活形棋串（活形棋串高亮，与焦点手法不同）。
+        // life-shape D3 / R9：P1 把棋子暂放到 P0 环形活形的眼 F7（retire-legacy-rules：平坦 8×8 链接载体，环列 +1、行 +2） → 说明"活棋禁入"，高亮该格（失败焦点）与围住它的活形棋串（活形棋串高亮，与焦点手法不同）。
         // 走真实对局流程（第 5 大回合 P1 行动）：暂放被拒与确认被拒共用同一个 FailurePresentation.From。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [P1, P0, P2, P3]).Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P1, P0, P2, P3]).Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7);
         StagedBatch batch = match.OpenDeploy();
 
-        FailurePresentation shown = FailurePresentation.From(batch.Stage(TestMaps.At("E5"), PieceType.Basic)!);
+        FailurePresentation shown = FailurePresentation.From(batch.Stage(TestMaps.At("F7"), PieceType.Basic)!);
 
         Assert.Equal(BatchFailureKind.LifeForbidden, shown.Kind);
         Assert.Equal("活棋禁入", shown.Title);
-        Assert.Contains("E5", shown.Detail);
+        Assert.Contains("F7", shown.Detail);
         Assert.Contains(Labels.Player(P0), shown.Detail);
         Assert.Equal(P0, shown.LifeOwner);
-        Assert.Equal(["E5"], shown.Highlights.Where(h => h.Kind == HighlightKind.FailureFocus).Select(h => h.Coord).Notations());
+        Assert.Equal(["F7"], shown.Highlights.Where(h => h.Kind == HighlightKind.FailureFocus).Select(h => h.Coord).Notations());
         Assert.Equal(
-            BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5.Select(TestMaps.At).Order().Notations(),
+            BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7.Select(TestMaps.At).Order().Notations(),
             shown.Highlights.Where(h => h.Kind == HighlightKind.LifeGroup).Select(h => h.Coord).Notations());
         Assert.Equal(14, shown.Highlights.Length);
         Assert.Empty(shown.EdgeHighlights);

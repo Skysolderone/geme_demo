@@ -136,7 +136,7 @@ public class 视图模型按座位过滤Tests
         // 变异验证（第 1 组收尾实跑）：M-V2 Boards 过滤改回"棋盘内每格都可见"、M-V3 占位展开改回"左下角格可见" 各红 1——G1 之后棋盘内每格都可见，
         // 这两条变异在本测试上不再可分（两种判据结果相同），本测试改为同时钉住 G1 在表现层的镜像（岩石格出现、地形为障碍）。
         MapData map = RockyMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, MatchFixtures.Seed, All, MatchFixtures.Relics(map), Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, All, TestMaps.Relics(map), Options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));

@@ -12,7 +12,7 @@ namespace Siege.Core.Tests.InformationVisibility;
 /// <summary>
 /// board-link-mode 负责人裁决 Q1 / D20（information-visibility「他人势力不可见」）：链接模式下不与本机同战场的玩家，在势力排名栏、势力层、顺序层、顺序预测与手牌对比面板里
 /// 只显示名字 + 在局 / 出局 / 弃赛 + 所在战场是否已结算，不显示势力数值、势力明细、手牌类型与结构参数；同战场玩家照旧；行动顺序本身全局公开。
-/// 判据只读 <see cref="SeatPublicView.Players"/> 的 <c>SameBattlefield</c>（<see cref="ViewerWorld.IsConcealed"/>），引擎层不自己判。Legacy 不变。
+/// 判据只读 <see cref="SeatPublicView.Players"/> 的 <c>SameBattlefield</c>（<see cref="ViewerWorld.IsConcealed"/>），引擎层不自己判。
 /// </summary>
 /// <remarks>变异验证（段 D-c 实跑）：M-F1 <c>ViewerWorld.IsConcealed</c> 恒假 → 「他战场玩家的势力行只剩名字与状态」「他战场玩家的顺序行只剩预测位置」「他战场玩家的手牌类型与结构参数不可见」「他战场已结算时状态文案带胜出_出局者按出局显示」红 4。</remarks>
 public class 他战场玩家数值不进HUD视图模型Tests
@@ -121,11 +121,13 @@ public class 他战场玩家数值不进HUD视图模型Tests
     }
 
     [Fact]
-    public void 旧模式与同战场不遮蔽()
+    public void 同战场不遮蔽()
     {
-        MatchFlow legacy = MatchFixtures.Started();
-        ViewerWorld world = legacy.World(P0);
-        Assert.All(MatchFixtures.All, p => Assert.False(world.IsConcealed(p)));
+        // retire-legacy-rules 1.7（清单"删反面段"，原名「旧模式与同战场不遮蔽」）：旧模式半段随旧模式退役删除；保留同战场半段——
+        // 四人同锁棋盘 1、各落一子，P0 看到的势力层、手牌对比与顺序层里没有任何遮蔽（原载体是旧模式局，四人本就"同一个战场"）。
+        MatchFlow match = Started([0, 0, 0, 0]).PlayRound(P0, P1, P2, P3);
+        ViewerWorld world = match.World(P0);
+        Assert.All(All, p => Assert.False(world.IsConcealed(p)));
         var power = Assert.IsType<PowerLayerContent>(world.Layer(TacticalLayer.Power));
         Assert.All(power.Players, p => Assert.False(p.Concealed));
         Assert.All(world.HandPanel().Opponents, o => Assert.False(o.Concealed));

@@ -84,7 +84,7 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
     private static MatchFlow Played(string mapId, ulong seed, int turns, out MatchRunner runner, bool skipProtection = false)
     {
         // retire-legacy-maps 1.8：地图由 v5 / board:1（Legacy 建局）改为链接图（链接模式、内置固定配对脚本——第 3 大回合结束要配对链接）。
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(mapId), new GameSeed(seed), MatchFixtures.All, MatchOptions.Immediate with { Mode = MatchMode.Link });
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(mapId), new GameSeed(seed), TestMaps.All, MatchOptions.Immediate with { Mode = MatchMode.Link });
         match.PairingSource = new ScriptedPairingSource();
         match.PlantPrototype();
         if (skipProtection)

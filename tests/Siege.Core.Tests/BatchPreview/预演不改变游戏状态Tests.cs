@@ -17,22 +17,22 @@ public class 预演不改变游戏状态Tests
         // 两条腿（testing.md）：部署阶段逐项指纹不变；小回合结束后与"从未预演过"的孪生局 Serialize 逐字节一致，并做字段级投影比对。
         // 变异验证 M-S1：BatchPreviewBuilder 的将揭示改为在正式账本上 `relics.Reveal(projected, majorRound)` → 本测试红 1（指纹里揭示事件变化）。
         // 变异验证 M-S2：MatchFlow.ForecastInitiative 的势力改用 `Scoreboard.Recalculate(Board, roster, completed)` → 本测试红 1（势力榜版本号变化）。
-        MatchFlow previewed = AiFixtures.Round5(relics: ("E5", RelicFixtures.Command()));
-        MatchFlow twin = AiFixtures.Round5(relics: ("E5", RelicFixtures.Command()));
+        MatchFlow previewed = AiFixtures.Round5(relics: ("G7", RelicFixtures.Command()));
+        MatchFlow twin = AiFixtures.Round5(relics: ("G7", RelicFixtures.Command()));
         previewed.Debug.SeedHand(P0, (PieceType.Basic, 5), (PieceType.Fortress, 2), (PieceType.Multiplier, 2));
         twin.Debug.SeedHand(P0, (PieceType.Basic, 5), (PieceType.Fortress, 2), (PieceType.Multiplier, 2));
-        previewed.Pieces(P1, PieceType.Basic, "D5", "F5");
-        twin.Pieces(P1, PieceType.Basic, "D5", "F5");
+        previewed.Pieces(P1, PieceType.Basic, "F7", "H7");
+        twin.Pieces(P1, PieceType.Basic, "F7", "H7");
 
         StagedBatch batch = previewed.OpenDeploy();
         string fingerprint = Fingerprint(previewed);
         for (int i = 0; i < 20; i++)
         {
-            Assert.Null(batch.Stage(TestMaps.At("E4"), PieceType.Basic));
-            Assert.Null(batch.Stage(TestMaps.At("E6"), PieceType.Fortress));
+            Assert.Null(batch.Stage(TestMaps.At("G6"), PieceType.Basic));
+            Assert.Null(batch.Stage(TestMaps.At("G8"), PieceType.Fortress));
             _ = previewed.PreviewCurrentBatch();
-            Assert.Null(batch.Move(TestMaps.At("E6"), TestMaps.At("C5")));
-            Assert.Null(batch.Replace(TestMaps.At("C5"), PieceType.Multiplier));
+            Assert.Null(batch.Move(TestMaps.At("G8"), TestMaps.At("E7")));
+            Assert.Null(batch.Replace(TestMaps.At("E7"), PieceType.Multiplier));
             ViewerWorld world = previewed.World(P0);
             _ = world.Preview(LibertyThresholds.Default);
             foreach (TacticalLayer layer in Enum.GetValues<TacticalLayer>())
@@ -40,20 +40,20 @@ public class 预演不改变游戏状态Tests
                 _ = world.Layer(layer);
             }
 
-            Assert.True(batch.Unstage(TestMaps.At("E4")));
-            Assert.True(batch.Unstage(TestMaps.At("C5")));
+            Assert.True(batch.Unstage(TestMaps.At("G6")));
+            Assert.True(batch.Unstage(TestMaps.At("E7")));
             Assert.Equal(fingerprint, Fingerprint(previewed));
         }
 
-        Assert.Null(batch.Stage(TestMaps.At("E4"), PieceType.Fortress));
+        Assert.Null(batch.Stage(TestMaps.At("G6"), PieceType.Fortress));
         Core.Preview.BatchPreview last = previewed.PreviewCurrentBatch();
         Assert.Equal(batch.Placements, last.Placements);          // 结果对象与活对象两处都钉住
         Assert.Equal(batch.Count, last.DeployUsed);
-        Assert.Equal(Fingerprint(previewed).Replace("E4:Fortress", string.Empty, StringComparison.Ordinal), fingerprint);
+        Assert.Equal(Fingerprint(previewed).Replace("G6:Fortress", string.Empty, StringComparison.Ordinal), fingerprint);
 
         Assert.True(previewed.Confirm().Confirmed);
         StagedBatch twinBatch = twin.OpenDeploy();
-        Assert.Null(twinBatch.Stage(TestMaps.At("E4"), PieceType.Fortress));
+        Assert.Null(twinBatch.Stage(TestMaps.At("G6"), PieceType.Fortress));
         Assert.True(twin.Confirm().Confirmed);
 
         Assert.Equal(twin.Serialize(), previewed.Serialize());

@@ -53,7 +53,7 @@ public class 敌方区域的显示内容Tests
         }
 
         StagedBatch batch = match.EnterDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("E5"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("G7"), PieceType.Basic));
         string staging = Area(match);
 
         Assert.Equal(idle, recruiting);

@@ -46,19 +46,19 @@ public class 对隐藏信息的概率估计Tests
     public void 估计不得使用真实值()
     {
         // 设计文档 §15.1。1.5 的"大样本相关系数"用确定性等价物代替，分三段：
-        // (1) 敏感度见证：读真实内容的调试评价器对同一批次（A2 普通子，覆盖 B2）在四种不同真实内容下给出不同的信物维分——证明局面对隐藏内容敏感；
+        // (1) 敏感度见证：读真实内容的调试评价器对同一批次（C4 普通子，覆盖 D4）在四种不同真实内容下给出不同的信物维分——证明局面对隐藏内容敏感；
         // (2) 正式评价器对同一批次在四种内容下的七维分解逐维相同——估计与真实内容零相关；
-        // (3) 同种子两局只在 B2 内容上不同，B2 揭示前所有玩家的决策序列完全一致。
+        // (3) 同种子两局只在 D4 内容上不同，D4 揭示前所有玩家的决策序列完全一致。
         // 变异验证 M-A5：把 (2) 的正式评价器换成调试评价器 → 红 1（本测试，四种内容的分解不再唯一）。
         RelicContent[] contents = [RelicFixtures.Command(), RelicFixtures.Emblem(PieceType.Basic), RelicFixtures.Vanguard(), RelicFixtures.Depot()];
         var officialBreakdowns = new List<string>();
         var debugRelicRaw = new List<BigInteger>();
         foreach (RelicContent content in contents)
         {
-            MatchFlow match = MatchFixtures.Started(relics: [("B2", content)]);
+            MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("D4", content)]);
             match.Debug.SetOrder(AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3);
             StagedBatch batch = match.OpenDeploy();
-            RehearsalResult result = match.RehearseBatch(batch, ("A2", PieceType.Basic));
+            RehearsalResult result = match.RehearseBatch(batch, ("C4", PieceType.Basic));
             BatchEvaluator official = HeuristicAi.Create(match, AiFixtures.P0).CreateEvaluator();
             officialBreakdowns.Add(official.Evaluate(batch.Placements, result, batch.Context).ToString());
             BatchEvaluator debug = DebugTurnController.Create(new MatchRunner(match), AiFixtures.P0, debugMode: true).Inner.CreateEvaluator();
@@ -71,16 +71,20 @@ public class 对隐藏信息的概率估计Tests
 
         (string a, string b, int compared) = RunUntilReveal(AiDifficulty.Standard);
         Assert.Equal(a, b);
-        Assert.True(compared >= 1, "P0 至少要在 B2 揭示前做出一次部署决策，否则本测试没有覆盖到估计路径");
+        Assert.True(compared >= 1, "P0 至少要在 D4 揭示前做出一次部署决策，否则本测试没有覆盖到估计路径");
         Assert.Contains("D:", a);
     }
 
-    /// <summary>两局只在 B2 的隐藏内容上不同；逐小回合比较决策日志，直到 B2 在任一局被揭示为止。返回两份日志与 P0 被比较的部署决策数。</summary>
+    /// <summary>两局只在 D4 的隐藏内容上不同；逐小回合比较决策日志，直到 D4 在任一局被揭示为止。返回两份日志与 P0 被比较的部署决策数。</summary>
     internal static (string LogA, string LogB, int ComparedP0Deploys) RunUntilReveal(AiDifficulty difficulty)
     {
-        Coord b2 = TestMaps.At("B2");
-        MatchFlow matchA = MatchFixtures.Started(relics: [("B2", RelicFixtures.Command()), ("E5", RelicFixtures.Vanguard())]);
-        MatchFlow matchB = MatchFixtures.Started(relics: [("B2", RelicFixtures.Emblem(PieceType.Basic)), ("E5", RelicFixtures.Vanguard())]);
+        Coord b2 = TestMaps.At("D4");
+        MatchFlow matchA = LinkModeFixtures.PlainStarted(relics: [("D4", RelicFixtures.Command()), ("G7", RelicFixtures.Vanguard())]);
+        MatchFlow matchB = LinkModeFixtures.PlainStarted(relics: [("D4", RelicFixtures.Emblem(PieceType.Basic)), ("G7", RelicFixtures.Vanguard())]);
+        // retire-legacy-rules 1.4：载体为平坦 8×8 链接档图、四人同锁棋盘 0——旧模式里各人保护期只在自己的出生区，D4（原 B2）只有 P0 够得着；
+        // 链接构筑期四人同战场，先行动的对手可能先把它揭示掉。这里把首轮顺序摆成 P0 先行（两局同摆），保证 P0 在揭示前至少决策一次。
+        matchA.Debug.SetOrder(AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3);
+        matchB.Debug.SetOrder(AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3);
         Assert.Equal(RelicType.Command, matchA.Relics.Generation.At(b2).Content.Type);
         Assert.Equal(RelicType.SchoolEmblem, matchB.Relics.Generation.At(b2).Content.Type);
 

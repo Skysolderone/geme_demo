@@ -15,9 +15,9 @@ public class 首回合顺序随机Tests
         var orders = new HashSet<string>();
         for (ulong v = 1; v <= 20; v++)
         {
-            MatchFlow match = MatchFixtures.Started(new GameSeed(v));
+            MatchFlow match = LinkModeFixtures.Started([0, 1, 2, 3], seed: new GameSeed(v));   // retire-legacy-rules 1.5：载体由 9×9 旧模式夹具换为 link:1
             Assert.Equal(1, match.MajorRound);
-            Assert.Equal(MatchFixtures.All.Order(), match.ActionOrder.Order());
+            Assert.Equal(TestMaps.All.Order(), match.ActionOrder.Order());
             orders.Add(string.Join(">", match.ActionOrder));
         }
 
@@ -29,9 +29,9 @@ public class 首回合顺序随机Tests
     {
         // 同一对局种子与同一插旗结果重放 → 第一大回合顺序完全一致；且不受 recruit 子流消费影响（子流隔离）。
         // 变异验证 M-S7：Shuffle 改用 Random.Shared → 红 1（本测试，概率性但 4! = 24 种顺序下连续 3 局一致的概率极低）。
-        MatchFlow a = MatchFixtures.Started(new GameSeed(77), zones: [0, 1, 2, 3]);
-        MatchFlow b = MatchFixtures.Started(new GameSeed(77), zones: [0, 1, 2, 3]);
-        MatchFlow c = MatchFixtures.Started(new GameSeed(77), zones: [3, 2, 1, 0]);
+        MatchFlow a = LinkModeFixtures.Started([0, 1, 2, 3], seed: new GameSeed(77));   // retire-legacy-rules 1.5：载体换为 link:1，插旗结果不变
+        MatchFlow b = LinkModeFixtures.Started([0, 1, 2, 3], seed: new GameSeed(77));
+        MatchFlow c = LinkModeFixtures.Started([3, 2, 1, 0], seed: new GameSeed(77));
         a.PlayTurn();
         Assert.Equal(a.ActionOrder, b.ActionOrder);
         Assert.Equal(a.ActionOrder, c.ActionOrder);

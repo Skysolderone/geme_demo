@@ -73,7 +73,7 @@ public class 换型候选类型Tests
     {
         // 规格 Scenario：以换型令指定倍增子或匠人开局 → 系统拒绝该带入并给出原因，对局不创建。普通子同样不是候选。
         ArgumentException ex = Assert.ThrowsAny<ArgumentException>(
-            () => MatchFixtures.Create(options: CarryFixtures.On((0, CarryFixtures.Commission(type)))));
+            () => LinkModeFixtures.Create(options: CarryFixtures.On((0, CarryFixtures.Commission(type)))));
         Assert.Contains("候选", ex.Message, StringComparison.Ordinal);
     }
 
@@ -82,14 +82,14 @@ public class 换型候选类型Tests
     {
         // 同一校验的其余形状：v1 下指定旗手子（v2 才有的候选）、换型令不指定类型、备用子带类型——都拒绝，不静默当成别的带入。
         Assert.ThrowsAny<ArgumentException>(
-            () => MatchFixtures.Create(options: CarryFixtures.On(ContentSet.V1, (0, CarryFixtures.Commission(PieceType.Bannerman)))));
+            () => LinkModeFixtures.Create(options: CarryFixtures.On(ContentSet.V1, (0, CarryFixtures.Commission(PieceType.Bannerman)))));
         Assert.ThrowsAny<ArgumentException>(
-            () => MatchFixtures.Create(options: CarryFixtures.On((0, new CarryIn(SupplyKind.Commission)))));
+            () => LinkModeFixtures.Create(options: CarryFixtures.On((0, new CarryIn(SupplyKind.Commission)))));
         Assert.ThrowsAny<ArgumentException>(
-            () => MatchFixtures.Create(options: CarryFixtures.On((0, new CarryIn(SupplyKind.SpareStone, PieceType.Fortress)))));
+            () => LinkModeFixtures.Create(options: CarryFixtures.On((0, new CarryIn(SupplyKind.SpareStone, PieceType.Fortress)))));
 
         // 反面：v1 下指定 v1 候选照常创建。
-        MatchFlow match = MatchFixtures.Create(options: CarryFixtures.On(ContentSet.V1, (0, CarryFixtures.Commission(PieceType.Synergy))));
-        Assert.Equal("Basic×4+0 Synergy×1+0", CarryFixtures.HandText(match, MatchFixtures.P0));
+        MatchFlow match = LinkModeFixtures.Create(options: CarryFixtures.On(ContentSet.V1, (0, CarryFixtures.Commission(PieceType.Synergy))));
+        Assert.Equal("Basic×4+0 Synergy×1+0", CarryFixtures.HandText(match, TestMaps.P0));
     }
 }

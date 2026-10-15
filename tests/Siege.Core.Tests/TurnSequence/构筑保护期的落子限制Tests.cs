@@ -1,11 +1,11 @@
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.TurnSequence;
 
-/// <summary>规格：turn-sequence —— Requirement: 构筑保护期的落子限制</summary>
+/// <summary>规格：turn-sequence —— Requirement: 构筑保护期的落子限制（旧模式 3×3 出生区限制）。</summary>
+/// <remarks>retire-legacy-rules：「保护期内规则照常」已迁到 <see cref="战场内合法落子范围Tests"/>（改名「构筑期内规则照常」）；余下一条为清单 (j)，第 2 组随整文件删除。</remarks>
 public class 构筑保护期的落子限制Tests
 {
     [Fact]
@@ -23,25 +23,5 @@ public class 构筑保护期的落子限制Tests
         Assert.Equal(BatchFailureKind.OutOfLegalRange, failure.Kind);
         Assert.Contains("合法落子范围", failure.Message);
         Assert.Null(batch.Stage(TestMaps.At("B2"), PieceType.Basic));
-    }
-
-    [Fact]
-    public void 保护期内规则照常()
-    {
-        // 设计文档 §4.2：第 3 大回合两名共享出生区的玩家互相围杀 → 提子、覆盖重算、信物揭示与势力更新全部正常执行。
-        // 变异验证 M-T9：OnRevealRelics 在保护期内跳过揭示 → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started(zones: [0, 0, 2, 3], relics: [("B2", RelicFixtures.Depot())])
-            .AtRound(3, [MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2, MatchFixtures.P3])
-            .Stones(MatchFixtures.P1, "A1");
-        Assert.False(match.Relics.IsRevealed(TestMaps.At("B2")));
-
-        match.PlayTurn("B1", "A2");
-
-        Assert.Null(match.Board[TestMaps.At("A1")].Occupant);                       // 提子
-        Assert.True(match.Relics.IsRevealed(TestMaps.At("B2")));                     // 信物揭示
-        Assert.Equal(RelicControlKind.Controlled, match.Relics.ControlOf(TestMaps.At("B2")).Kind);
-        Assert.Contains(TestMaps.At("A1"), match.Scoreboard.Latest!.Of(MatchFixtures.P0).ExclusiveCells);   // 覆盖重算
-        Assert.Equal(0, match.Scoreboard.Latest.Of(MatchFixtures.P1).Total);                                // 势力更新
-        Assert.True(match.Scoreboard.Latest.Of(MatchFixtures.P0).Total > 0);
     }
 }

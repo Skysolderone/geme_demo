@@ -30,8 +30,8 @@ public class 必须隐藏的信息Tests
         Assert.DoesNotContain("军令", command);
         Assert.DoesNotContain("Command", command);
 
-        MatchFlow match = AiFixtures.Round5(relics: ("E5", RelicFixtures.Command()));
-        BoardCellView cell = match.World(P1).Board().CellAt(TestMaps.At("E5"));
+        MatchFlow match = AiFixtures.Round5(relics: ("G6", RelicFixtures.Command()));
+        BoardCellView cell = match.World(P1).Board().CellAt(TestMaps.At("G6"));
         Assert.Equal((RelicMarker.Unknown, (RelicType?)null), (cell.Relic, cell.RevealedType));
     }
 
@@ -58,15 +58,15 @@ public class 必须隐藏的信息Tests
         StagedBatch batch = match.OpenDeploy();
         string before = OthersView(match, P1);
 
-        Assert.Null(batch.Stage(TestMaps.At("E5"), PieceType.Basic));
-        Assert.Null(batch.Stage(TestMaps.At("F6"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("G6"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("H7"), PieceType.Basic));
         Core.Preview.BatchPreview previewOfA = match.PreviewCurrentBatch();
 
         Assert.Equal(before, OthersView(match, P1));
         ViewerWorld seenByB = match.World(P1);
         Assert.Null(seenByB.OwnPreview);
         Assert.Null(seenByB.Preview());
-        Assert.Null(seenByB.Board().CellAt(TestMaps.At("E5")).Occupant);
+        Assert.Null(seenByB.Board().CellAt(TestMaps.At("G6")).Occupant);
         Assert.Throws<ArgumentException>(() =>
             ViewerWorld.Build(P1, match.Publish(), match.PublishSupplement(), match.Hands.AccessFor(P1).PrivateView(), previewOfA));
     }
@@ -103,8 +103,8 @@ public class 必须隐藏的信息Tests
 
     private static string Views(RelicContent content)
     {
-        MatchFlow match = AiFixtures.Round5(relics: ("E5", content)).Pieces(P1, PieceType.Basic, "B8");
-        return string.Join("\n", MatchFixtures.All.Select(viewer =>
+        MatchFlow match = AiFixtures.Round5(relics: ("G6", content)).Pieces(P1, PieceType.Basic, "D9");
+        return string.Join("\n", TestMaps.All.Select(viewer =>
         {
             ViewerWorld world = match.World(viewer);
             return Dump(world.Board()) + Dump(world.Layer(TacticalLayer.Relics));

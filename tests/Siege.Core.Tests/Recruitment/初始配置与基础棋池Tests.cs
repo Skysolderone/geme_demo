@@ -136,7 +136,7 @@ public class 初始配置与基础棋池Tests
         Assert.Equal(5, RecruitWeights.BaseWeightOf(PieceType.Artisan, artisanWeight: 5));
 
         var seed = new GameSeed(77);
-        MatchFlow match = MatchFixtures.Started(seed, options: MatchOptions.Immediate with { ArtisanWeight = 18 });
+        MatchFlow match = LinkModeFixtures.PlainStarted(seed, options: MatchOptions.Immediate with { ArtisanWeight = 18 });
         Assert.Equal(18, match.ArtisanWeight);
         Assert.Equal(0, match.Hands.RecruitStreamConsumed);
         RecruitPanelView panel = HandFixtures.Begin(match.Hands, HandFixtures.P0, reveal: 10).EnterRecruit();

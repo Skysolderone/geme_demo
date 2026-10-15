@@ -124,14 +124,14 @@ public class 同形与存档纳入设施Tests
     {
         // 段 A 检查第 5 项：ArtisanWeight 进 MatchPublicView（R-2 照对局配置的口径：开局固定、始终公开、插旗阶段即可读）。
         // 这里一并钉住"地形改造随对局存档往返"——地图由调用方提供，改造只能靠盘面序列化带过去。
-        MatchFlow match = MatchFixtures.Started(options: MatchOptions.Immediate with { ArtisanWeight = 18 }).AtRound(5);
-        TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("E6"));
+        MatchFlow match = LinkModeFixtures.PlainStarted(options: MatchOptions.Immediate with { ArtisanWeight = 18 }).AtRound(5);
+        TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("G7"), TestMaps.At("G8"));
         match.Board.ApplyTerrainEdits([fence]);
         string json = match.Serialize();
 
         MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
 
-        Assert.True(restored.Board.Map.HasFence(TestMaps.At("E5"), TestMaps.At("E6")));
+        Assert.True(restored.Board.Map.HasFence(TestMaps.At("G7"), TestMaps.At("G8")));
         Assert.Equal([fence], restored.Board.TerrainEdits);
         Assert.Equal(match.Board.Serialize(), restored.Board.Serialize());
         Assert.Equal(json, restored.Serialize());
@@ -140,7 +140,7 @@ public class 同形与存档纳入设施Tests
         // 活对象与公开视图两处都钉（testing.md：结果对象与活对象各读一次）。
         Assert.Equal(18, restored.ArtisanWeight);
         Assert.Equal(18, restored.Publish().ArtisanWeight);
-        Assert.True(restored.Publish().Board.Map.HasFence(TestMaps.At("E5"), TestMaps.At("E6")));
+        Assert.True(restored.Publish().Board.Map.HasFence(TestMaps.At("G7"), TestMaps.At("G8")));
 
         // 旧存档（无 ArtisanWeight 字段）回填 10，公开视图同样读到 10。
         string legacy = System.Text.RegularExpressions.Regex.Replace(json, "\\s*\"ArtisanWeight\": 18,", string.Empty);

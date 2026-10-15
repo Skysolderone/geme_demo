@@ -17,11 +17,11 @@ public class 效果快照在小回合开始时生成Tests
         // 本小回合的批次上下文取的也是这份快照的值。
         // 变异验证 M-GP7（快照重读大回合：BuildSnapshot 写静态 EffectSnapshot.LastRound，DeployLimit 改为 `BaseDeployLimitFor(LastRound) + 军令加成` 现算）
         // → 全套红 14，含本测试（round3 读成 4）；该变异引入进程级静态状态，并行测试互相污染，红数不稳定（Sim 批量跑局等也会红），以"本测试红"为准。
-        MatchFlow match = MatchFixtures.Started().AtRound(3, MatchFixtures.All);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(3, TestMaps.All);
         match.PassTurn();
         match.PassTurn();
         match.PassTurn();
-        Assert.Equal((3, MatchFixtures.P3), (match.MajorRound, match.CurrentPlayer!.Value));
+        Assert.Equal((3, TestMaps.P3), (match.MajorRound, match.CurrentPlayer!.Value));
 
         match.BeginTurn();
         EffectSnapshot round3 = match.CurrentSnapshot!;
@@ -29,7 +29,7 @@ public class 效果快照在小回合开始时生成Tests
         match.EnterRecruit();
         StagedBatch batch = match.EnterDeploy();
         Assert.Equal(3, batch.Context.DeployLimit);
-        Assert.Null(batch.Stage(TestMaps.At("H8"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("K10"), PieceType.Basic));
         Assert.True(match.Confirm().Confirmed);
 
         Assert.Equal(4, match.MajorRound);
@@ -53,28 +53,29 @@ public class 效果快照在小回合开始时生成Tests
     {
         // 规格 Scenario「名次不影响快照」（restore-go-core-rules 裁决 #7 / D7）：两名玩家控制的信物完全相同（都不控制任何信物）、
         // 处于同一大回合，势力名次分别为第 1 与第 4 → 二者的快照参数完全相同。
-        // 势力独立复算（四邻接，总势力 = 独占空格 + 棋串军势）：P0 A1-D1 → 4 + 5 = 9；P1 G1 H1 J1 → 3 + 4 = 7；P2 A9 B9 → 2 + 3 = 5；P3 J9 → 1 + 2 = 3。
+        // 势力独立复算（四邻接，总势力 = 独占空格 + 棋串军势）：P0 C3-F3 → 4 + 4 = 8（G3 为 P0 / P1 争议格）；P1 H3 J3 K3 → 3 + 3 = 6；P2 C10 D10 → 2 + 3 = 5；P3 K10 → 1 + 2 = 3
+        // （retire-legacy-rules 1.5：平坦 8×8 链接载体、四人同锁棋盘 0，原 9×9 的四角各贴棋盘 0 的角；原复算 9 / 7 / 5 / 3，名次不变）。
         // 第 5 大回合的分阶段基础部署上限为 4。
         // 先红：旧实现（按名次给征募加成）下 P3 的快照为 展示 6 / 选取 4，P0 为 5 / 3 → 本测试红。
         // 变异验证 M-D1：MatchFlow.BeginTurn 生成快照后，名次 ≥ 3 者展示 / 选取各 +1 → 红 4（本测试、最后一名没有补偿、落后不获补偿、候选格上限黄金哈希）。
-        MatchFlow match = MatchFixtures.Started()
-            .AtRound(5, [MatchFixtures.P3, MatchFixtures.P0, MatchFixtures.P1, MatchFixtures.P2])
-            .Stones(MatchFixtures.P0, "A1", "B1", "C1", "D1")
-            .Stones(MatchFixtures.P1, "G1", "H1", "J1")
-            .Stones(MatchFixtures.P2, "A9", "B9")
-            .Stones(MatchFixtures.P3, "J9");
-        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(MatchFixtures.P3));
-        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(MatchFixtures.P0));
+        MatchFlow match = LinkModeFixtures.PlainStarted()
+            .AtRound(5, [TestMaps.P3, TestMaps.P0, TestMaps.P1, TestMaps.P2])
+            .Stones(TestMaps.P0, "C3", "D3", "E3", "F3")
+            .Stones(TestMaps.P1, "H3", "J3", "K3")
+            .Stones(TestMaps.P2, "C10", "D10")
+            .Stones(TestMaps.P3, "K10");
+        Assert.Equal(4, match.Scoreboard.Latest!.RankOf(TestMaps.P3));
+        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(TestMaps.P0));
 
         match.BeginTurn();
-        Assert.Equal(MatchFixtures.P3, match.CurrentPlayer);
+        Assert.Equal(TestMaps.P3, match.CurrentPlayer);
         EffectSnapshot last = match.CurrentSnapshot!;
         match.EnterRecruit();
         match.EnterDeploy();
         Assert.True(match.Confirm().Confirmed);   // P3 Pass，盘面不变
 
-        Assert.Equal((5, MatchFixtures.P0), (match.MajorRound, match.CurrentPlayer!.Value));
-        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(MatchFixtures.P0));
+        Assert.Equal((5, TestMaps.P0), (match.MajorRound, match.CurrentPlayer!.Value));
+        Assert.Equal(1, match.Scoreboard.Latest!.RankOf(TestMaps.P0));
         match.BeginTurn();
         EffectSnapshot first = match.CurrentSnapshot!;
 

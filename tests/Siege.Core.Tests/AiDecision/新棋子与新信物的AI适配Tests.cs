@@ -16,7 +16,7 @@ namespace Siege.Core.Tests.AiDecision;
 /// </summary>
 public class 新棋子与新信物的AI适配Tests
 {
-    private static readonly PlayerId Me = MatchFixtures.P0;
+    private static readonly PlayerId Me = TestMaps.P0;
 
     private static MatchOptions With(ContentSet set) => MatchOptions.Immediate with { ContentSet = set };
 
@@ -53,7 +53,7 @@ public class 新棋子与新信物的AI适配Tests
         Assert.Equal(5, RelicEstimate.Estimate(Unrevealed(RelicZone.BirthZone), ContentSet.V2));
         Assert.Equal(5, RelicEstimate.Estimate(Unrevealed(RelicZone.Contested), ContentSet.V2));
 
-        // 评价器取对局公开的内容集：P0 在 E4 落子唯一覆盖未揭示的公共区信物 E5 → 信物维 = V（控制）+ ⌊V/2⌋（发现）。
+        // 评价器取对局公开的内容集：P0 在 G6 落子唯一覆盖未揭示的公共区信物 G7 → 信物维 = V（控制）+ ⌊V/2⌋（发现）。
         // v2：5 + 2 = 7；v1：6 + 3 = 9。
         Assert.Equal(7, RelicRawCoveringE5(ContentSet.V2));
     }
@@ -73,19 +73,19 @@ public class 新棋子与新信物的AI适配Tests
     [Fact]
     public void 哨兵加值进入即时势力增量()
     {
-        // 规格 Scenario：AI 手中只有哨兵子，两个候选落点其余条件相同——F5 经气边邻接 P1 的 E5、G5 两枚敌子，A1（角）不邻接敌子；
-        // 两处都恰好新增 2 格独占空格（F5：F4 / F6；A1：A2 / B1），棋串都只有这一枚哨兵子、没有倍率 → 即时势力增量之差 = 2 × 2 = 4。
-        // 差值来自唯一的势力计算：落 F5 后该棋串的哨兵加值就是 4。
+        // 规格 Scenario：AI 手中只有哨兵子，两个候选落点其余条件相同——H7 经气边邻接 P1 的 G7、J7 两枚敌子，C3（角）不邻接敌子；
+        // 两处都恰好新增 2 格独占空格（H7：H6 / H8；C3：C4 / D3），棋串都只有这一枚哨兵子、没有倍率 → 即时势力增量之差 = 2 × 2 = 4。
+        // 差值来自唯一的势力计算：落 H7 后该棋串的哨兵加值就是 4。
         // 组合成长维口径不变（哨兵不是倍增 / 连珠 / 协同）：两处的成长原始值都是 0——变异 MC-G1（成长维计入新来源）应红。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, MatchFixtures.All).Stones(MatchFixtures.P1, "E5", "G5");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All).Stones(TestMaps.P1, "G7", "J7");
         match.Debug.SeedHand(Me, (PieceType.Sentry, 3));
         StagedBatch batch = match.OpenDeploy();
         BatchEvaluator evaluator = HeuristicAi.Create(match, Me).CreateEvaluator();
 
-        RehearsalResult near = match.RehearseBatch(batch, ("F5", PieceType.Sentry));
+        RehearsalResult near = match.RehearseBatch(batch, ("H7", PieceType.Sentry));
         EvaluationBreakdown nearScore = evaluator.Evaluate(batch.Placements, near, batch.Context);
         GroupPower sentry = Assert.Single(PowerCalculator.Compute(near.ProjectedBoard!, match.Roster).Of(Me).Groups);
-        RehearsalResult far = match.RehearseBatch(batch, ("A1", PieceType.Sentry));
+        RehearsalResult far = match.RehearseBatch(batch, ("C3", PieceType.Sentry));
         EvaluationBreakdown farScore = evaluator.Evaluate(batch.Placements, far, batch.Context);
 
         Assert.Equal(4, sentry.SentryBonus);
@@ -100,30 +100,30 @@ public class 新棋子与新信物的AI适配Tests
     public void 组合成长不计新来源与计分信物()
     {
         // Requirement 正文："组合成长"维 MUST NOT 计入四种新来源与计分信物（与势力增量双计）。
-        // P0 已控制一枚已揭示的犄角（占据 H8），棋串 C3 协同 + C4 普通；候选在 C5 落铁链子。
+        // P0 已控制一枚已揭示的犄角（占据 J9），棋串 D4 协同 + D5 普通；候选在 D6 落铁链子。
         // 成长维（旧口径）：协同加值由 1 种 × 2 = 2 变为 2 种 × 2 = 4（不按犄角的 3 计），铁链的 +2（棋串 3 子 − 1）不计 → 原始值 2。
         // 即时势力增量经唯一势力计算感知犄角与铁链：协同 1 × 1 × 3 = 3 → 1 × 2 × 3 = 6，铁链 +2——等于独立算出的结算后势力之差。
         // 变异 MC-G1（成长维加上铁链 / 哨兵 / 旗手 / 界碑加值 → 4）、MC-G2（成长维的协同改按犄角计 → 3）应红。
-        MatchFlow match = MatchFixtures.Started(relics: [("H8", RelicFixtures.Pincer())]).AtRound(5, MatchFixtures.All);
-        match.Board.Place(TestMaps.At("C3"), Me, PieceType.Synergy);
-        match.Board.Place(TestMaps.At("C4"), Me, PieceType.Basic);
-        match.Board.Place(TestMaps.At("H8"), Me, PieceType.Basic);
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("J9", RelicFixtures.Pincer())]).AtRound(5, TestMaps.All);
+        match.Board.Place(TestMaps.At("D4"), Me, PieceType.Synergy);
+        match.Board.Place(TestMaps.At("D5"), Me, PieceType.Basic);
+        match.Board.Place(TestMaps.At("J9"), Me, PieceType.Basic);
         match.Relics.Reveal(match.Board, 5);
         match.Debug.Recalculate();
         match.Debug.SeedHand(Me, (PieceType.Chain, 3));
-        Assert.True(match.Relics.IsRevealed(TestMaps.At("H8")));   // 前提：犄角已揭示且由 P0 控制
-        Assert.Equal(3, match.Scoreboard.Latest!.GroupContaining(Me, "C3").SynergyBonus);
+        Assert.True(match.Relics.IsRevealed(TestMaps.At("J9")));   // 前提：犄角已揭示且由 P0 控制
+        Assert.Equal(3, match.Scoreboard.Latest!.GroupContaining(Me, "D4").SynergyBonus);
 
         StagedBatch batch = match.OpenDeploy();
         BatchEvaluator evaluator = HeuristicAi.Create(match, Me).CreateEvaluator();
-        RehearsalResult result = match.RehearseBatch(batch, ("C5", PieceType.Chain));
+        RehearsalResult result = match.RehearseBatch(batch, ("D6", PieceType.Chain));
         EvaluationBreakdown score = evaluator.Evaluate(batch.Placements, result, batch.Context);
 
         Assert.Equal(2, score.RawOf(EvaluationDimension.Growth));
 
         // 势力增量里有犄角（3 → 6）与铁链（+2）：与一份独立算出的结算后势力（已揭示的犄角 = 真实内容，结算盘面上二者一致）相减一致。
         PowerSnapshot after = PowerCalculator.Compute(result.ProjectedBoard!, match.Roster, match.Relics.TrueContents());
-        GroupPower grown = after.GroupContaining(Me, "C3");
+        GroupPower grown = after.GroupContaining(Me, "D4");
         Assert.Equal((6, 2), (grown.SynergyBonus, grown.ChainBonus));
         Assert.Equal(after.Of(Me).Total - match.Scoreboard.Latest!.Of(Me).Total, score.RawOf(EvaluationDimension.PowerGain));
     }
@@ -131,17 +131,17 @@ public class 新棋子与新信物的AI适配Tests
     [Fact]
     public void 工坊扩展的目标进入候选()
     {
-        // 规格 Scenario：本小回合快照标记工坊生效、AI 持有匠人，落点 E5 隔一格（E7）是未架桥深水 → E5 的候选含"隔一格搭桥 E7"；
+        // 规格 Scenario：本小回合快照标记工坊生效、AI 持有匠人，落点 G7 隔一格（G9）是未架桥深水 → G7 的候选含"隔一格搭桥 G9"；
         // 快照未标记工坊生效时该候选不出现。目标集合只来自改造合法性唯一实现（候选里每个改造都 IsLegal(…, workshop)）。
         // 排行名额放大到 1000，免得被同分的立栅候选挤出榜外（这条钉的是"进了枚举"）。
         // 变异 MC-W1（完整枚举不传工坊标记）应红。
-        MatchFlow match = MatchFixtures.Started(TestMaps.Terrain(surfaces: [("E7", Surface.DeepWater)])).AtRound(5);
-        TerrainEdit bridge = TerrainEdit.Bridge(TestMaps.At("E7"));
+        MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("G9", Surface.DeepWater)])).AtRound(5);
+        TerrainEdit bridge = TerrainEdit.Bridge(TestMaps.At("G9"));
 
         ImmutableArray<PointScore> with = Ranking(match, workshop: true);
         ImmutableArray<PointScore> without = Ranking(match, workshop: false);
 
-        Assert.Contains(with, p => p.Coord == TestMaps.At("E5") && p.Edit == bridge);
+        Assert.Contains(with, p => p.Coord == TestMaps.At("G7") && p.Edit == bridge);
         Assert.DoesNotContain(without, p => p.Edit == bridge);
         Assert.All(with.Where(p => p.Edit is not null), p => Assert.True(TerrainEditRules.IsLegal(match.Board.Map, p.Coord, p.Edit!.Value, workshop: true)));
         Assert.All(without.Where(p => p.Edit is not null), p => Assert.True(TerrainEditRules.IsLegal(match.Board.Map, p.Coord, p.Edit!.Value)));
@@ -151,15 +151,15 @@ public class 新棋子与新信物的AI适配Tests
     public void 未揭示的连营不影响AI评价()
     {
         // 规格 Scenario：候选批次会首次覆盖一枚尚未揭示的连营 → 该候选的即时势力增量不含连营加成；该信物只按未揭示期望价值进入信物维。
-        // 做法：同一局面、同一候选（D5 连珠子与 C5 连成长 2 的线 + H4 普通子唯一覆盖未揭示的 H5），H5 分别是连营与军令——两份分解逐维相同。
-        // 对照（已揭示）：H5 上已有 P0 的子、连营已揭示并由 P0 控制时，同一连珠候选的即时势力增量比军令版多 L = 2（经唯一势力计算感知）。
+        // 做法：同一局面、同一候选（E7 连珠子与 D7 连成长 2 的线 + J6 普通子唯一覆盖未揭示的 J7），J7 分别是连营与军令——两份分解逐维相同。
+        // 对照（已揭示）：J7 上已有 P0 的子、连营已揭示并由 P0 控制时，同一连珠候选的即时势力增量比军令版多 L = 2（经唯一势力计算感知）。
         // 变异 MC-A1（AI 读真实内容：公开状态不看揭示即给出内容）、MC-A2（评价器不传已揭示内容）应红。
         string Unrevealed(RelicContent content)
         {
             MatchFlow match = LineMatch(content, revealed: false);
             StagedBatch batch = match.OpenDeploy();
             BatchEvaluator evaluator = HeuristicAi.Create(match, Me).CreateEvaluator();
-            RehearsalResult result = match.RehearseBatch(batch, ("D5", PieceType.Line), ("H4", PieceType.Basic));
+            RehearsalResult result = match.RehearseBatch(batch, ("E7", PieceType.Line), ("J6", PieceType.Basic));
             return evaluator.Evaluate(batch.Placements, result, batch.Context).ToString();
         }
 
@@ -170,7 +170,7 @@ public class 新棋子与新信物的AI适配Tests
         MatchFlow probe = LineMatch(RelicFixtures.Encampment(), revealed: false);
         StagedBatch probeBatch = probe.OpenDeploy();
         EvaluationBreakdown probeScore = HeuristicAi.Create(probe, Me).CreateEvaluator()
-            .Evaluate(probeBatch.Placements, probe.RehearseBatch(probeBatch, ("D5", PieceType.Line), ("H4", PieceType.Basic)), probeBatch.Context);
+            .Evaluate(probeBatch.Placements, probe.RehearseBatch(probeBatch, ("E7", PieceType.Line), ("J6", PieceType.Basic)), probeBatch.Context);
         Assert.Equal(7, probeScore.RawOf(EvaluationDimension.Relic));
 
         BigInteger Revealed(RelicContent content)
@@ -178,7 +178,7 @@ public class 新棋子与新信物的AI适配Tests
             MatchFlow match = LineMatch(content, revealed: true);
             StagedBatch batch = match.OpenDeploy();
             BatchEvaluator evaluator = HeuristicAi.Create(match, Me).CreateEvaluator();
-            RehearsalResult result = match.RehearseBatch(batch, ("D5", PieceType.Line));
+            RehearsalResult result = match.RehearseBatch(batch, ("E7", PieceType.Line));
             return evaluator.Evaluate(batch.Placements, result, batch.Context).RawOf(EvaluationDimension.PowerGain);
         }
 
@@ -219,41 +219,41 @@ public class 新棋子与新信物的AI适配Tests
         new(TestMaps.At("B2"), new RelicCellSpec(zone, zone == RelicZone.BirthZone ? BudgetTier.Birth : BudgetTier.Standard),
             IsRevealed: false, Content: null, RevealedInMajorRound: null, RelicControl.Uncontrolled);
 
-    /// <summary>P0 在 E4 落普通子唯一覆盖未揭示的公共区军令 E5，返回该候选的信物维原始值。</summary>
+    /// <summary>P0 在 G6 落普通子唯一覆盖未揭示的公共区军令 G7，返回该候选的信物维原始值。</summary>
     private static BigInteger RelicRawCoveringE5(ContentSet set)
     {
-        MatchFlow match = MatchFixtures.Started(options: With(set), relics: [("E5", RelicFixtures.Command())]).AtRound(5, MatchFixtures.All);
+        MatchFlow match = LinkModeFixtures.PlainStarted(options: With(set), relics: [("G7", RelicFixtures.Command())]).AtRound(5, TestMaps.All);
         Assert.Equal(set, match.Publish().ContentSet);
         StagedBatch batch = match.OpenDeploy();
-        RehearsalResult result = match.RehearseBatch(batch, ("E4", PieceType.Basic));
+        RehearsalResult result = match.RehearseBatch(batch, ("G6", PieceType.Basic));
         return HeuristicAi.Create(match, Me).CreateEvaluator().Evaluate(batch.Placements, result, batch.Context).RawOf(EvaluationDimension.Relic);
     }
 
     /// <summary>
-    /// v2、第 5 大回合、P0 先行：P0 有连珠子 C5，手里有连珠子与普通子；H5 是信物格。
-    /// <paramref name="revealed"/> 为真时 P0 已占据 H5 且该信物已揭示（由 P0 控制）。
+    /// v2、第 5 大回合、P0 先行：P0 有连珠子 D7，手里有连珠子与普通子；J7 是信物格。
+    /// <paramref name="revealed"/> 为真时 P0 已占据 J7 且该信物已揭示（由 P0 控制）。
     /// </summary>
     private static MatchFlow LineMatch(RelicContent content, bool revealed)
     {
-        MatchFlow match = MatchFixtures.Started(relics: [("H5", content)]).AtRound(5, MatchFixtures.All);
-        match.Board.Place(TestMaps.At("C5"), Me, PieceType.Line);
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("J7", content)]).AtRound(5, TestMaps.All);
+        match.Board.Place(TestMaps.At("D7"), Me, PieceType.Line);
         if (revealed)
         {
-            match.Board.Place(TestMaps.At("H5"), Me, PieceType.Basic);
+            match.Board.Place(TestMaps.At("J7"), Me, PieceType.Basic);
             match.Relics.Reveal(match.Board, 5);
         }
 
         match.Debug.Recalculate();
         match.Debug.SeedHand(Me, (PieceType.Line, 3), (PieceType.Basic, 3));
-        Assert.Equal(revealed, match.Relics.IsRevealed(TestMaps.At("H5")));
+        Assert.Equal(revealed, match.Relics.IsRevealed(TestMaps.At("J7")));
         return match;
     }
 
-    /// <summary>只在 E5 落匠人（部署上限 1）的单点排行；<paramref name="workshop"/> 即本小回合快照的工坊标记（经批次上下文传入）。</summary>
+    /// <summary>只在 G7 落匠人（部署上限 1）的单点排行；<paramref name="workshop"/> 即本小回合快照的工坊标记（经批次上下文传入）。</summary>
     private static ImmutableArray<PointScore> Ranking(MatchFlow match, bool workshop)
     {
         GameBoard board = match.Board;
-        var batch = new StagedBatch(board, BatchFixtures.Context(board, Me, 1, BatchFixtures.Stock((PieceType.Artisan, 3)), new HashSet<Coord> { TestMaps.At("E5") })
+        var batch = new StagedBatch(board, BatchFixtures.Context(board, Me, 1, BatchFixtures.Stock((PieceType.Artisan, 3)), new HashSet<Coord> { TestMaps.At("G7") })
             with { WorkshopActive = workshop });
         var driver = new SettlementDriver(board, match.History, new RecordingHooks { Board = board });
         var ai = new HeuristicTurnController(Me, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(Me)), AiDifficulty.Standard,

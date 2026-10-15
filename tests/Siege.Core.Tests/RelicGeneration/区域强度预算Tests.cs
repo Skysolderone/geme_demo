@@ -127,7 +127,7 @@ public class 区域强度预算Tests
     {
         var spec = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
         var high = new RelicCellSpec(RelicZone.Contested, BudgetTier.High);
-        return MatchFixtures.Map() with
+        return TestMaps.NineByNine() with
         {
             Id = "test-high-tier",
             RelicCells = new Dictionary<Coord, RelicCellSpec>

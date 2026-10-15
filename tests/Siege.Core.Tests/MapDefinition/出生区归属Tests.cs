@@ -42,7 +42,7 @@ public class 出生区归属Tests
         // 本层没有大回合概念：某格是否属于某出生区，不影响它能否落子。
         // 限制的生效时机（前三大回合）由对局流程层决定。
         // retire-legacy-maps 1.6：链接档初始图的可落子格全在出生棋盘上，找不到"出生区之外的可落子格"；改用 9×9 手写夹具（四角出生区、中间公共），断言不变。
-        MapData map = MatchFixtures.Map();
+        MapData map = TestMaps.NineByNine();
         GameBoard board = GameBoard.LoadUnvalidated(map);
         Coord inZone = map.BirthZones[0].Where(c => board[c].IsPlayableEmpty).Order().First();
         Coord outsideZone = board.AllCoords()

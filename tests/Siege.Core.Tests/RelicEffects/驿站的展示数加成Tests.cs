@@ -92,7 +92,7 @@ public class 驿站的展示数加成Tests
     public void 与探勘相加()
     {
         // 规格 Scenario：控制 1 枚驿站与 1 枚探勘 → 展示数 5 + 1 + 1 = 7，来源拆分列出基础 5、探勘 +1、驿站 +1。
-        // 快照一侧：驿站加成 1；公开结构参数一侧（MatchFlow.PublishSupplement）：P1 经正式结算占据 H4（驿站）与 J4（探勘），
+        // 快照一侧：驿站加成 1；公开结构参数一侧（MatchFlow.PublishSupplement）：P1 经正式结算占据 J6（驿站）与 K6（探勘）（retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 H4 / J4），
         // 来源逐枚列出，且"基础 + 各来源 = 快照值"的一致性校验通过（驿站若不进来源，这里会抛）。
         (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("C3", RelicFixtures.Relay()), ("E5", RelicFixtures.Prospecting()));
         board.Place("C3", TestMaps.P0).Place("E5", TestMaps.P0);
@@ -101,15 +101,15 @@ public class 驿站的展示数加成Tests
         Assert.Equal(7, snapshot.RevealCount);
         Assert.Equal(1, snapshot.RelayBonus);
 
-        MatchFlow match = MatchFixtures.Started(relics: [("H4", RelicFixtures.Relay()), ("J4", RelicFixtures.Prospecting())])
-            .AtRound(7, MatchFixtures.All);
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("J6", RelicFixtures.Relay()), ("K6", RelicFixtures.Prospecting())])
+            .AtRound(7, TestMaps.All);
         match.PassTurn();
-        match.PlayTurn("H4", "J4");
+        match.PlayTurn("J6", "K6");
 
-        StructureParameter reveal = match.PublishSupplement().Structures.Single(s => s.Player == MatchFixtures.P1).Parameters!.RevealCount;
+        StructureParameter reveal = match.PublishSupplement().Structures.Single(s => s.Player == TestMaps.P1).Parameters!.RevealCount;
         Assert.Equal((7, 5), (reveal.Value, reveal.Base));
         Assert.Equal(
-            [(RelicType.Prospecting, 1, "J4"), (RelicType.Relay, 1, "H4")],
+            [(RelicType.Prospecting, 1, "K6"), (RelicType.Relay, 1, "J6")],
             reveal.Sources.Select(s => (s.Type, s.Magnitude, s.Coord.ToNotation())));
     }
 }

@@ -11,8 +11,10 @@ public class 合法落子范围的对外契约Tests
     /// <summary>P2 在出生区 1（G1–J3）角上的两眼活形：F2–J2、H1、F1 围出单格眼 G1、J1。</summary>
     private static readonly string[] CornerG1J1 = ["F1", "H1", "F2", "G2", "H2", "J2"];
 
-    /// <summary>P0 在出生区 0（A1–C3）角上的两眼活形：A2–D2、B1、D1 围出单格眼 A1、C1。</summary>
-    private static readonly string[] CornerA1C1 = ["B1", "D1", "A2", "B2", "C2", "D2"];
+    /// <summary>
+    /// P0 在平坦 8×8 链接载体棋盘 0 角上的两眼活形：C4–F4、D3、F3 围出单格眼 C3、E3（retire-legacy-rules：原 9×9 出生区 0 角上的 A2–D2、B1、D1 / 眼 A1、C1 平移 (+2, +2)）。
+    /// </summary>
+    private static readonly string[] CornerC3E3 = ["D3", "F3", "C4", "D4", "E4", "F4"];
 
     [Fact]
     public void 范围随大回合切换()
@@ -59,11 +61,12 @@ public class 合法落子范围的对外契约Tests
     public void 共享出生区内的禁入()
     {
         // 第 2 大回合，P0 与 P1 共享出生区 0（A1–C3）；P0 已在区内做出活形（眼 A1、C1）→ P1 的范围 = 出生区扣除 A1、C1。
-        MatchFlow match = MatchFixtures.Started(zones: [0, 0, 2, 3]).AtRound(2).Stones(MatchFixtures.P0, CornerA1C1);
-        IReadOnlySet<Coord> zone0 = match.Map.BirthZones[0];
+        // retire-legacy-rules：链接载体上 P0 / P1 同锁棋盘 0，构筑期的战场就是这块出生棋盘——P1 的范围 = 棋盘 0 的可落子格扣除 P0 的眼 C3、E3，P0 的范围是整块棋盘 0。
+        MatchFlow match = LinkModeFixtures.PlainStarted(zones: [0, 0, 2, 3]).AtRound(2).Stones(TestMaps.P0, CornerC3E3);
+        HashSet<Coord> board0 = [.. match.Map.Boards[0].Cells()];
 
-        Assert.Equal(zone0.Except([TestMaps.At("A1"), TestMaps.At("C1")]).ToHashSet(), match.LegalRangeFor(MatchFixtures.P1));
-        Assert.Equal(zone0, match.LegalRangeFor(MatchFixtures.P0));
+        Assert.Equal(board0.Except([TestMaps.At("C3"), TestMaps.At("E3")]).ToHashSet(), match.LegalRangeFor(TestMaps.P1));
+        Assert.Equal(board0, match.LegalRangeFor(TestMaps.P0));
     }
 
     [Fact]
@@ -77,6 +80,8 @@ public class 合法落子范围的对外契约Tests
         //    "扣除"认三种形状：Except / ExceptWith 的实参里取禁入格；Where 里对 IsForbiddenFor 取反；RemoveWhere / RemoveAll 里判禁入。
         //    挡不住所有绕法（testing.md「违禁 token 清单挡不住照抄一份算式」），靠 ② 的行为比对兜底。
         // ② 行为：同一盘面上，P1 在全图范围下逐格单子预演得到"活棋禁入"的格，恰好是契约从全图可落子格里扣掉的格。
+        //    retire-legacy-rules：载体为平坦 8×8 链接档图（四人同锁棋盘 0），"全图"收窄为本战场（棋盘 0）——其余棋盘本就不在合法范围里，不是禁入扣除；
+        //    P2 的角上活形由原 9×9 左上角（A8–D8、B9、D9，眼 A9、C9）翻到棋盘 0 左下角（C4–F4、D3、F3，眼 C3、E3），P0 的环列 +1、行 +2。
         string root = RepoRoot();
         string[] files =
         [
@@ -96,12 +101,13 @@ public class 合法落子范围的对外契约Tests
         Assert.Contains("DefaultBoardView.cs", CallersOf(files, "ForbiddenCellsFor"));
         Assert.Contains("BatchRehearsal.cs", CallersOf(files, "IsForbiddenFor"));
 
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(MatchFixtures.P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5)
-            .Stones(MatchFixtures.P2, "A8", "B8", "C8", "D8", "B9", "D9");
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5).Stones(TestMaps.P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7)
+            .Stones(TestMaps.P2, CornerC3E3);
         GameBoard board = match.Board;
-        BatchContext wide = BatchFixtures.Context(board, MatchFixtures.P1);
+        BatchContext wide = BatchFixtures.Context(board, TestMaps.P1);
+        Coord[] field = [.. match.Map.Boards[0].Cells()];
         var rejected = new List<Coord>();
-        foreach (Coord c in board.AllCoords().Where(c => board[c].IsPlayableEmpty).Order())
+        foreach (Coord c in field.Where(c => board[c].IsPlayableEmpty).Order())
         {
             RehearsalResult r = BatchRehearsal.Rehearse(board, wide, [new Placement(c, PieceType.Basic)], new BoardHistory());
             if (r.Failure?.Kind == BatchFailureKind.LifeForbidden)
@@ -110,8 +116,8 @@ public class 合法落子范围的对外契约Tests
             }
         }
 
-        Coord[] removed = [.. board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable).Except(match.LegalRangeFor(MatchFixtures.P1)).Order()];
-        Assert.Equal(["E5", "G5", "A9", "C9"], removed.Notations());
+        Coord[] removed = [.. field.Where(c => board[c].Terrain == Terrain.Playable).Except(match.LegalRangeFor(TestMaps.P1)).Order()];
+        Assert.Equal(["C3", "E3", "F7", "H7"], removed.Notations());
         Assert.Equal(removed, rejected);
     }
 

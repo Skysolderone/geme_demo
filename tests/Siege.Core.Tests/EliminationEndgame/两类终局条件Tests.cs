@@ -1,3 +1,4 @@
+using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Scoring;
@@ -85,6 +86,51 @@ public class 两类终局条件Tests
         MatchFlow match = Started([0, 0, 3, 4], new ScriptedPairingSource()).PlayRound(P0).AtRound(40, [P0, P1, P2, P3]).PlayRound(P1);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
         Assert.Equal(41, match.MajorRound);
+    }
+
+    [Fact]
+    public void 势力悬殊不提前结束()
+    {
+        // Scenario：第 9 大回合参赛玩家势力为 A=210、B=80、C=70、D=55（A ≥ 其余之和 205），且终局条件均未满足 → 对局继续。
+        // 规格数值只是示意"领先者势力不小于其余之和"（旧势力碾压的成立式）。这里摆出同一关系后跑完整个第 9 大回合，对局进入第 10 大回合。
+        // retire-legacy-rules 1.5：由「三类终局条件Tests」迁来（原文件整删）。载体为平坦 8×8 链接档图（四人同锁棋盘 0，本大回合有人落子 → 不结算）；
+        // 原 9×9 上 P0 占满 A、B 两列（18 子）、P1 / P2 各占东侧一角、P3 居中，改为 P0 占满棋盘 0 西侧 C、D 两列（16 子）、P1 / P2 占东侧两角 K3 / K10、P3 居中 G7，
+        // 关系由前提断言钉住。旧实现（碾压起始 7）在此会以 PowerDominance 终局。
+        MatchFlow match = PlainStarted().AtRound(9, [P0, P1, P2, P3])
+            .Stones(P0, "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10")
+            .Stones(P1, "K3")
+            .Stones(P2, "K10")
+            .Stones(P3, "G7");
+        PowerSnapshot power = match.Scoreboard.Latest!;
+        BigInteger others = power.Of(P1).Total + power.Of(P2).Total + power.Of(P3).Total;
+        Assert.True(power.Of(P0).Total >= others, $"P0 {power.Of(P0).Total} 应 ≥ 其余之和 {others}");
+
+        match.PlayTurn("F7");   // P0
+        match.PlayTurn("J3");   // P1
+        match.PlayTurn("J10");  // P2
+        match.PlayTurn("H7");   // P3 → 第 9 大回合结束
+
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
+        Assert.Null(match.Result);
+        Assert.Equal(10, match.MajorRound);
+    }
+
+    [Fact]
+    public void Pass计数跨回合重置()
+    {
+        // Scenario：某大回合中前两名玩家 Pass、第三名玩家落子 1 枚 → 连续 Pass 的计数被重置，对局继续。
+        // retire-legacy-rules 1.5：由「三类终局条件Tests」迁来（原文件整删）。全局连续 Pass 计数不再决定终局，但仍写进公开快照、存档、日志与终端（design D4 保留），
+        // 这里只断言计数的增减与清零、对局继续。载体为平坦 8×8 链接档图（四人同锁棋盘 0），原 9×9 的 E5 平移为 G7。
+        MatchFlow match = PlainStarted().AtRound(5, [P0, P1, P2, P3]);
+        match.PassTurn();
+        match.PassTurn();
+        Assert.Equal(2, match.PassStreak);
+        match.PlayTurn("G7");
+        Assert.Equal(0, match.PassStreak);
+        match.PassTurn();
+        Assert.Equal(1, match.PassStreak);
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
+        Assert.Equal(6, match.MajorRound);
     }
 
     [Fact]

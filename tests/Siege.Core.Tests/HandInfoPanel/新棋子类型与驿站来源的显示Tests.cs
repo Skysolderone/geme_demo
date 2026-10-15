@@ -40,7 +40,7 @@ public class 新棋子类型与驿站来源的显示Tests
     {
         // Scenario「驿站来源逐枚列出」：玩家 B 的展示数为 8，来源为基础 5、探勘 +1、驿站 +2（计入 2 枚其他信物）
         // → 面板显示展示数 8，并分别列出探勘 +1 与"驿站 +2（控制 2 枚其他信物）"，各来源之和为 8。
-        // 局面（同 私人征募面板Tests.驿站生效）：B = P1 占据驿站 G4、探勘 H4、军令 J4——驿站计除自身外 2 枚受控信物 → +2；探勘 +1；军令只进部署上限。
+        // 局面（同 私人征募面板Tests.驿站生效）：B = P1 占据驿站 H6、探勘 J6、军令 K6（retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 G4 / H4 / J4 列 +1、行 +2）——驿站计除自身外 2 枚受控信物 → +2；探勘 +1；军令只进部署上限。
         // 数值来自 Core 公开补充载荷（MatchFlow 结构参数来源），面板只拼文案。Godot 手牌面板显示的是 ParameterView.Text，所以驿站明细必须在 Text 里。
         // 先红：骨架态文案按类型合并为"驿站×1"，来源文案不注"控制 N 枚其他信物"。
         MatchFlow match = B控制驿站探勘军令();
@@ -52,9 +52,9 @@ public class 新棋子类型与驿站来源的显示Tests
         })
         {
             Assert.Equal((8, 5), (reveal.Value, reveal.Base));
-            Assert.Equal(["H4 探勘 +1", "G4 驿站 +2（控制 2 枚其他信物）"], reveal.Sources.Select(s => s.Text).OrderBy(t => t.Contains("驿站", StringComparison.Ordinal)));
+            Assert.Equal(["J6 探勘 +1", "H6 驿站 +2（控制 2 枚其他信物）"], reveal.Sources.Select(s => s.Text).OrderBy(t => t.Contains("驿站", StringComparison.Ordinal)));
             Assert.Equal(8, reveal.Base + reveal.Sources.Sum(s => s.Magnitude));
-            Assert.Equal("展示数 8（基础 5，+3 来自 探勘×1、驿站 G4 +2（控制 2 枚其他信物））", reveal.Text);
+            Assert.Equal("展示数 8（基础 5，+3 来自 探勘×1、驿站 H6 +2（控制 2 枚其他信物））", reveal.Text);
         }
     }
 
@@ -64,9 +64,9 @@ public class 新棋子类型与驿站来源的显示Tests
         // 段 C 待决 5 / 段 B 待决 4 的图形面板口径（段 D 定）：只控制驿站本身时它的加成为 +0，面板与终端一样不列这一条——
         // 两处共用 Core 的 StructureParameter.ListedSources（略去 0 加成来源），不各写过滤；略去的项为 0，各来源之和仍等于当前值。
         // 规则层的来源拆分照旧逐枚保留 +0（遥测照记）。先红：骨架态 ListedSources 不过滤。
-        MatchFlow match = MatchFixtures.Started(relics: [("G4", RelicFixtures.Relay())])
-            .AtRound(7, MatchFixtures.All)
-            .Pieces(P1, PieceType.Basic, "G4");
+        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay())])
+            .AtRound(7, TestMaps.All)
+            .Pieces(P1, PieceType.Basic, "H6");
 
         Siege.Core.Preview.StructureParameter core = match.PublishSupplement().Structures.Single(s => s.Player == P1).Parameters!.RevealCount;
         Siege.Core.Preview.ParameterSource relay = Assert.Single(core.Sources);
@@ -81,7 +81,7 @@ public class 新棋子类型与驿站来源的显示Tests
     }
 
     private static MatchFlow B控制驿站探勘军令() =>
-        MatchFixtures.Started(relics: [("G4", RelicFixtures.Relay()), ("H4", RelicFixtures.Prospecting()), ("J4", RelicFixtures.Command())])
-            .AtRound(7, MatchFixtures.All)
-            .Pieces(P1, PieceType.Basic, "G4", "H4", "J4");
+        LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay()), ("J6", RelicFixtures.Prospecting()), ("K6", RelicFixtures.Command())])
+            .AtRound(7, TestMaps.All)
+            .Pieces(P1, PieceType.Basic, "H6", "J6", "K6");
 }

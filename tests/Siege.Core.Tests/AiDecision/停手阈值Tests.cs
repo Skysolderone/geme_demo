@@ -37,18 +37,18 @@ public class 停手阈值Tests
     }
 
     /// <summary>
-    /// E5 被 P0 三面（D5、E4、E6）与 P1（F5）夹住，是争议格：
+    /// G7 被 P0 三面（F7、G6、G8）与 P1（H7）夹住，是争议格（retire-legacy-rules：原 9×9 的 E5 局面平移 (+2, +2) 到链接载体棋盘 0）：
+    ///  8 . O . .
+    ///  7 O ! X .     ! = G7（唯一合法格，部署上限 1）
     ///  6 . O . .
-    ///  5 O ! X .     ! = E5（唯一合法格，部署上限 1）
-    ///  4 . O . .
-    ///    D E F G
-    /// 落 E5：三枚孤子连成一串，棋串军势 3 → 4（+1）；E5 本是争议格、四邻已全被占，领地不增不减；P1 不受损。
+    ///    F G H J
+    /// 落 G7：三枚孤子连成一串，棋串军势 3 → 4（+1）；G7 本是争议格、四邻已全被占，领地不增不减；P1 不受损。
     /// 简单难度只评价这两维，总分 = PowerGain 权重 × 1。
     /// </summary>
     private static HeuristicTurnController Marginal(int powerGainWeight, int threshold)
     {
-        MatchFlow match = AiFixtures.Round5().Stones(Me, "D5", "E4", "E6").Stones(AiFixtures.P1, "F5");
-        (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, 1, "E5");
+        MatchFlow match = AiFixtures.Round5().Stones(Me, "F7", "G6", "G8").Stones(AiFixtures.P1, "H7");
+        (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, 1, "G7");
         EvaluationWeights weights = EvaluationWeights.Default with { PowerGain = powerGainWeight };
 
         HeuristicTurnController ai = DeployWith(match, AiDifficulty.Easy, AiSearchConfig.Easy with { PassThreshold = threshold }, weights, batch, driver);
@@ -69,18 +69,18 @@ public class 停手阈值Tests
     [Fact]
     public void 零收益不落子()
     {
-        // P0 围出一块 2 格独占空区 A1–B1（眼值 0，不是单格眼，不受活形硬约束）：
-        //  2 O O .
-        //  1 . ! O     ! = B1（唯一合法格）
-        //    A B C
-        // 落 B1：领地 −1、棋串军势 +1，势力增量 0；简单难度总分 0。阈值 0 下"提升 0 不大于 0"→ 撤回。
-        // ai-eye R26 起简单难度也算眼位：B1 把 2 格空区变成单格眼 A1（眼位原始值 +1），在默认权重下不再是零收益手。
+        // P0 在棋盘 0 的角上围出一块 2 格独占空区 C3–D3（眼值 0，不是单格眼，不受活形硬约束；原 9×9 的 A1–B1 平移 (+2, +2)）：
+        //  4 O O .
+        //  3 . ! O     ! = D3（唯一合法格）
+        //    C D E
+        // 落 D3：领地 −1、棋串军势 +1，势力增量 0；简单难度总分 0。阈值 0 下"提升 0 不大于 0"→ 撤回。
+        // ai-eye R26 起简单难度也算眼位：D3 把 2 格空区变成单格眼 C3（眼位原始值 +1），在默认权重下不再是零收益手。
         // 本 Scenario 钉的是"零收益 → 撤回"，故权重写死为眼位 0 的定值前缺省（段 D2 改写）。
-        MatchFlow match = AiFixtures.Round5().Stones(Me, "A2", "B2", "C1");
-        EyeSpace space = LifeShapeReport.Analyze(match.Board).EyeSpaceAt(TestMaps.At("B1"))!;
+        MatchFlow match = AiFixtures.Round5().Stones(Me, "C4", "D4", "E3");
+        EyeSpace space = LifeShapeReport.Analyze(match.Board).EyeSpaceAt(TestMaps.At("D3"))!;
         Assert.Equal(2, space.Cells.Length);
         Assert.Equal(Me, space.Owner);
-        (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, 1, "B1");
+        (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, 1, "D3");
 
         HeuristicTurnController ai = DeployWith(match, AiDifficulty.Easy, AiSearchConfig.Easy with { PassThreshold = 0 }, SimFixtures.PreCalibrationWeights, batch, driver);
 
@@ -103,7 +103,7 @@ public class 停手阈值Tests
         // 变异 M-B15（保留条件 > 阈值 改 > 阈值 + 1）→ 红 2（本测试、无落点被保留则Pass——int.MaxValue + 1 溢出为负，全部保留）。
         HeuristicTurnController ai = Marginal(powerGainWeight: 21, threshold: 20);
         Placement placed = Assert.Single(ai.LastChoice!.Placements);
-        Assert.Equal(TestMaps.At("E5"), placed.Coord);
+        Assert.Equal(TestMaps.At("G7"), placed.Coord);
         Assert.Equal(21, ai.LastChoice.Total);
     }
 
@@ -112,10 +112,13 @@ public class 停手阈值Tests
     {
         // 开放局面（同「候选格上限Tests」）：阈值 0 时 AI 会落子（反面，否则 Pass 是恒真）；阈值取 int.MaxValue 时任何一枚的边际提升都不超过它 → 0 落子 Pass。
         // 变异 M-B7（Greedy 仍按"严格提高"保留、不看阈值）→ 红 4（本测试、低于阈值不落子、恰等于阈值不落子、候选格上限黄金哈希）。
-        // pass-threshold-first-stone：P0 在 A1 放一枚远离候选区的子——无子豁免下"盘上没有己方棋子"时阈值取 0，int.MaxValue 就测不到了。
-        static MatchFlow Open() => AiFixtures.Round5().Stones(Me, "A1").Stones(AiFixtures.P1, "E5", "F6", "D7").Stones(AiFixtures.P2, "G3");
+        // pass-threshold-first-stone：P0 在 C3（原 9×9 的 A1）放一枚远离候选区的子——无子豁免下"盘上没有己方棋子"时阈值取 0，int.MaxValue 就测不到了。
+        // retire-legacy-rules（清单 P2）：链接载体上四人同战场，P0 若势力低于 P1 即按落后者取阈值 0，int.MaxValue 同样测不到；
+        // P0 另在 D6 / E4 / K3 各放一枚互不相邻、覆盖不与他人重叠的孤子，使其居本战场势力首位（下方前提断言钉住）。
+        static MatchFlow Open() => AiFixtures.Round5().Stones(Me, "C3", "D6", "E4", "K3").Stones(AiFixtures.P1, "G7", "H8", "F9").Stones(AiFixtures.P2, "J5");
 
         MatchFlow eager = Open();
+        Assert.False(HeuristicTurnController.TrailsInBattlefield(eager.Publish(), Me), "前提：P0 居本战场势力首位");
         HeuristicTurnController zero = HeuristicAi.Create(eager, Me, AiDifficulty.Standard, config: AiSearchConfig.Standard with { PassThreshold = 0 });
         StagedBatch eagerBatch = eager.OpenDeploy();
         zero.Deploy(eagerBatch, eager.Rehearse);
@@ -225,10 +228,10 @@ public class 停手阈值Tests
         MatchFlow match = AiFixtures.Round5();
         Assert.True(match.Board.GroupsOf(Me).IsEmpty);
 
-        HeuristicTurnController ai = LoneStones(match, 1, "E5");
+        HeuristicTurnController ai = LoneStones(match, 1, "G7");
 
         Placement placed = Assert.Single(ai.LastChoice!.Placements);
-        Assert.Equal(TestMaps.At("E5"), placed.Coord);
+        Assert.Equal(TestMaps.At("G7"), placed.Coord);
         Assert.Equal(30, ai.LastChoice.Total);
         Assert.Equal("D:" + ai.LastChoice.Key, ai.Decisions[^1]);
     }
@@ -236,13 +239,13 @@ public class 停手阈值Tests
     [Fact]
     public void 有子后恢复阈值()
     {
-        // 与「无子时不受阈值限制」同一局面，只多一枚远离 E5 的己方子 A1（不影响 E5 的任何一维）：提升 30 不大于配置阈值 80 → 撤回、Pass。
+        // 与「无子时不受阈值限制」同一局面，只多一枚远离 G7 的己方子 C3（不影响 G7 的任何一维）：提升 30 不大于配置阈值 80 → 撤回、Pass。
         // 本条在改动前即绿（描述的是原行为）；变异 M-F3（豁免条件反转：有子取 0、无子取配置值）→ 全量红 8（本测试、无子时不受阈值限制、同批次内不中途切换、
         // 低于阈值不落子、恰等于阈值不落子、无落点被保留则Pass、候选格上限黄金哈希、地形可离线重建）。
-        MatchFlow match = AiFixtures.Round5().Stones(Me, "A1");
+        MatchFlow match = AiFixtures.Round5().Stones(Me, "C3");
         Assert.False(match.Board.GroupsOf(Me).IsEmpty);
 
-        HeuristicTurnController ai = LoneStones(match, 1, "E5");
+        HeuristicTurnController ai = LoneStones(match, 1, "G7");
 
         AssertPassed(ai);
     }
@@ -250,16 +253,16 @@ public class 停手阈值Tests
     [Fact]
     public void 同批次内不中途切换()
     {
-        // 阈值 80，P0 批次开始前无子，部署上限 2、两个互不相邻也不共覆盖的候选格 B2 / E5（各自提升 30）。
+        // 阈值 80，P0 批次开始前无子，部署上限 2、两个互不相邻也不共覆盖的候选格 D4 / G7（各自提升 30）。
         // 第一枚保留后批次里已有己方暂放子，但豁免只按正式盘面判定：第二枚仍按阈值 0 判定而保留，整批 60。
         // 变异 M-F2（按暂放后盘面判定：Greedy 里批次已有先前保留的暂放子就改用配置阈值）→ 全量红 1（本测试）；「无子时不受阈值限制」仍绿。
         MatchFlow match = AiFixtures.Round5();
         Assert.True(match.Board.GroupsOf(Me).IsEmpty);
 
-        HeuristicTurnController ai = LoneStones(match, 2, "B2", "E5");
+        HeuristicTurnController ai = LoneStones(match, 2, "D4", "G7");
 
         Assert.Equal(1, ai.Config.CandidateBatchCount);
-        Assert.Equal([TestMaps.At("B2"), TestMaps.At("E5")], ai.LastChoice!.Placements.Select(p => p.Coord).Order());
+        Assert.Equal([TestMaps.At("D4"), TestMaps.At("G7")], ai.LastChoice!.Placements.Select(p => p.Coord).Order());
         Assert.Equal(60, ai.LastChoice.Total);
     }
 

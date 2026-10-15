@@ -168,7 +168,7 @@ public class 链接模式下的决胜一手Tests
     {
         // Scenario「旧模式不变」：Legacy 手写夹具里公开快照没有本大回合 Pass 记录，决胜一手恒不触发；P0 落后、唯一候选能反超也照常 Pass。
         // 逐字节口径由既有 Legacy 测试（候选格上限 / 停手阈值黄金哈希等）在全量回归里守住。
-        MatchFlow match = AiFixtures.Round5().Stones(P0, "A1").Stones(P1, "J9", "H9");
+        MatchFlow match = MatchFixtures.Started().AtRound(5, [P0, P1, P2, P3]).Stones(P0, "A1").Stones(P1, "J9", "H9");
         Assert.Equal(MatchMode.Legacy, match.Mode);
         match.Debug.SetOrder(P1, P0, P2, P3);
         match.ToDeploy();

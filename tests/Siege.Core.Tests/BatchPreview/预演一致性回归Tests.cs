@@ -16,7 +16,8 @@ public class 预演一致性回归Tests
     [Fact]
     public void 千例随机局面预演与结算一致()
     {
-        // 每例：9×9 夹具地图 + 5 个信物格，第 5 大回合（全图可落子）；种子驱动的 RandomStream 随机铺子（禁止 System.Random），
+        // 每例：9×9 夹具地图 + 5 个信物格，第 5 大回合（全图可落子）；retire-legacy-rules 1.5：改为平坦 8×8 链接载体（四人同锁棋盘 0，合法范围即整块棋盘 0），
+        // 信物格平移 (+2, +2)，随机铺子与暂放只在棋盘 0 内取格；种子驱动的 RandomStream 随机铺子（禁止 System.Random），
         // 清掉无气棋串、按盘面揭示信物，使局面满足"每条棋串 ≥1 气、被覆盖的信物已揭示"的正式对局不变量；
         // P0 暂放 1–5 枚（部署上限随机，六成落点取自敌方 ≤2 气棋串的气位以提高提子率），预演后确认。
         // 断言：预演前后指纹不变；合法 ⇔ 确认被接受；预计提子 = 实际提子；将揭示 = 实际新揭示；预计势力与名次 = 结算后势力榜；
@@ -30,9 +31,9 @@ public class 预演一致性回归Tests
         {
             var seed = new GameSeed(0x7AC7_0000UL + (ulong)i);
             RandomStream rng = seed.Stream("preview-regression");
-            MatchFlow match = MatchFixtures.Started(seed, relics:
-                [("C3", RelicFixtures.Command()), ("G3", RelicFixtures.Conscription()), ("E5", RelicFixtures.Prospecting()),
-                 ("C7", RelicFixtures.Vanguard()), ("G7", RelicFixtures.Depot(2))]).AtRound(5);
+            MatchFlow match = LinkModeFixtures.PlainStarted(seed, relics:
+                [("E5", RelicFixtures.Command()), ("J5", RelicFixtures.Conscription()), ("G7", RelicFixtures.Prospecting()),
+                 ("E9", RelicFixtures.Vanguard()), ("J9", RelicFixtures.Depot(2))]).AtRound(5);
             Scatter(match, rng);
             match.Debug.SeedHand(P0, (PieceType.Basic, 3), (PieceType.Fortress, 2), (PieceType.Line, 2), (PieceType.Multiplier, 2), (PieceType.Synergy, 2));
             match.SetDeployLimit(1 + rng.NextInt(5));
@@ -78,7 +79,8 @@ public class 预演一致性回归Tests
         }
 
         string samples = $"提子 {captures} / 将揭示 {reveals} / 自杀手 {suicides} / 合法无提子 {quiet}";
-        // 本种子区间实测：提子 281 / 将揭示 35 / 自杀手 85 / 合法无提子 634。下界取约七成，种子或局面生成改动后样本塌缩即红。
+        // 本种子区间实测：提子 281 / 将揭示 35 / 自杀手 85 / 合法无提子 634（9×9 旧载体）；retire-legacy-rules 迁到平坦 8×8 链接载体后实测 324 / 46 / 74 / 602，下界不变。
+        // 下界取约七成，种子或局面生成改动后样本塌缩即红。
         Assert.True(captures >= 200 && reveals >= 25 && suicides >= 50 && quiet >= 400, samples);
     }
 
@@ -86,11 +88,11 @@ public class 预演一致性回归Tests
     private static void Scatter(MatchFlow match, RandomStream rng)
     {
         PieceType[] types = Enum.GetValues<PieceType>();
-        foreach (Coord c in match.Board.AllCoords())
+        foreach (Coord c in match.Map.Boards[0].Cells())   // retire-legacy-rules：只铺棋盘 0（四人同锁的唯一战场；其余棋盘不在合法范围里）
         {
             if (rng.NextInt(100) < 45)
             {
-                match.Board.Place(c, MatchFixtures.All[rng.NextInt(4)], types[rng.NextInt(types.Length)]);
+                match.Board.Place(c, TestMaps.All[rng.NextInt(4)], types[rng.NextInt(types.Length)]);
             }
         }
 
@@ -111,7 +113,7 @@ public class 预演一致性回归Tests
 
     private static void StageRandom(MatchFlow match, StagedBatch batch, RandomStream rng)
     {
-        Coord[] empty = [.. match.Board.AllCoords().Where(c => match.Board[c].IsPlayableEmpty)];
+        Coord[] empty = [.. match.Map.Boards[0].Cells().Where(c => match.Board[c].IsPlayableEmpty)];
         Coord[] pressure = [.. LibertySnapshot.Compute(match.Board).Where(g => g.Owner != P0 && g.Count <= 2).SelectMany(g => g.Liberties).Distinct().Order()];
         PieceType[] types = Enum.GetValues<PieceType>();
         int want = 1 + rng.NextInt(batch.Context.DeployLimit);

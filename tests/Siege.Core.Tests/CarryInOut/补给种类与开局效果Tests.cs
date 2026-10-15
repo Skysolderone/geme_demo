@@ -12,16 +12,16 @@ namespace Siege.Core.Tests.CarryInOut;
 /// </remarks>
 public class 补给种类与开局效果Tests
 {
-    private static readonly PlayerId P0 = MatchFixtures.P0;
-    private static readonly PlayerId P1 = MatchFixtures.P1;
-    private static readonly PlayerId P2 = MatchFixtures.P2;
+    private static readonly PlayerId P0 = TestMaps.P0;
+    private static readonly PlayerId P1 = TestMaps.P1;
+    private static readonly PlayerId P2 = TestMaps.P2;
 
-    /// <summary>插旗并锁定（各占各的出生区），把第 1 大回合的行动顺序摆成 P0 先行。</summary>
+    /// <summary>插旗并锁定（各占各的出生棋盘），把第 1 大回合的行动顺序摆成 P0 先行。retire-legacy-rules 1.5：载体由 9×9 旧模式夹具换为 link:1（开局手牌与模式无关）。</summary>
     private static MatchFlow Locked(MatchOptions options)
     {
-        MatchFlow match = MatchFixtures.Create(options: options);
-        match.PlantSequentially(MatchFixtures.All.Select((p, i) => (p, i)));
-        match.Debug.SetOrder(MatchFixtures.All);
+        MatchFlow match = LinkModeFixtures.Create(options: options);
+        match.PlantSequentially(TestMaps.All.Select((p, i) => (p, i)));
+        match.Debug.SetOrder(TestMaps.All);
         return match;
     }
 
@@ -45,7 +45,7 @@ public class 补给种类与开局效果Tests
     public void 换型令()
     {
         // 规格 Scenario：A 带入换型令并指定连珠子 → 普通子 × 4、连珠子 × 1，占 2 个类型槽。
-        MatchFlow match = MatchFixtures.Create(options: CarryFixtures.On((0, CarryFixtures.Commission(PieceType.Line))));
+        MatchFlow match = LinkModeFixtures.Create(options: CarryFixtures.On((0, CarryFixtures.Commission(PieceType.Line))));
 
         Assert.Equal("Basic×4+0 Line×1+0", CarryFixtures.HandText(match, P0));
         Assert.Equal(2, match.Hands.Debug.PrivateViewOf(P0).OccupiedSlots);
@@ -60,10 +60,10 @@ public class 补给种类与开局效果Tests
         MatchOptions options = CarryFixtures.On((1, CarryFixtures.Draft));
         GameSeed? seed = Enumerable.Range(1, 64).Select(i => new GameSeed((ulong)i))
             .Select(s => (GameSeed?)s)
-            .FirstOrDefault(s => MatchFixtures.Create(s, options).CarryIns[P1].Type == PieceType.Sentry);
+            .FirstOrDefault(s => LinkModeFixtures.Create(s, options).CarryIns[P1].Type == PieceType.Sentry);
         Assert.True(seed is not null, "样本口径：种子 1–64 中应有 P1 抽出哨兵子的一颗");
 
-        MatchFlow match = MatchFixtures.Create(seed, options);
+        MatchFlow match = LinkModeFixtures.Create(seed, options);
 
         Assert.Equal(ContentSet.V2, match.ContentSet);
         Assert.Equal("Basic×4+0 Sentry×1+0", CarryFixtures.HandText(match, P1));
@@ -75,8 +75,8 @@ public class 补给种类与开局效果Tests
     public void 不带入者不变()
     {
         // 规格 Scenario：C 未带入 → 普通子 × 5，与引入带入带出之前相同（对照同一种子、关闭带入带出的一局）。
-        MatchFlow carried = MatchFixtures.Create(options: CarryFixtures.On((0, CarryFixtures.Spare), (1, CarryFixtures.Commission(PieceType.Fortress))));
-        MatchFlow plain = MatchFixtures.Create(options: MatchOptions.Immediate);
+        MatchFlow carried = LinkModeFixtures.Create(options: CarryFixtures.On((0, CarryFixtures.Spare), (1, CarryFixtures.Commission(PieceType.Fortress))));
+        MatchFlow plain = LinkModeFixtures.Create(options: MatchOptions.Immediate);
 
         Assert.Equal("Basic×5+0", CarryFixtures.HandText(carried, P2));
         Assert.Equal(CarryFixtures.HandText(plain, P2), CarryFixtures.HandText(carried, P2));
@@ -108,7 +108,7 @@ public class 补给种类与开局效果Tests
         static RecruitPanelView Panel(MatchFlow match)
         {
             match.BeginTurn();
-            Assert.Equal(MatchFixtures.P0, match.CurrentPlayer);
+            Assert.Equal(TestMaps.P0, match.CurrentPlayer);
             return match.EnterRecruit();
         }
     }

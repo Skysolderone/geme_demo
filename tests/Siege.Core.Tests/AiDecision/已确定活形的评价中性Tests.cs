@@ -23,18 +23,18 @@ public class 已确定活形的评价中性Tests
         // 旧公式（气数 + 两眼潜力 + 分散气 − 危险）下这手是大幅加分：3 气处于危险（大小 × 4），5 气解除危险。活形中性要求恒为 0。
         // 变异 M-A3：GroupSafety.Score 的 `if (IsAlive)` 改成运行时恒假（活棋仍走公式）→ 红 2（本测试 + 候选格上限的黄金哈希；AiDecision 过滤）。
         MatchFlow match = AiFixtures.Round5()
-            .Stones(AiFixtures.P0, "B1", "A2", "B2", "C2", "D1", "D2")
-            .Stones(AiFixtures.P1, "A3", "B3", "C3", "E1", "E2");
-        GroupLife before = LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("B2"))!;
+            .Stones(AiFixtures.P0, "D3", "C4", "D4", "E4", "F3", "F4")
+            .Stones(AiFixtures.P1, "C5", "D5", "E5", "G3", "G4");
+        GroupLife before = LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("D4"))!;
         Assert.Equal(LifeState.Alive, before.Life);
-        Assert.Equal(["A1", "C1", "D3"], match.Board.LibertiesOf(before.Group).Notations());
+        Assert.Equal(["C3", "E3", "F5"], match.Board.LibertiesOf(before.Group).Notations());
 
-        (EvaluationBreakdown e, RehearsalResult result) = EvaluationFixtures.EvaluateP0(match, "D3", "E3");
+        (EvaluationBreakdown e, RehearsalResult result) = EvaluationFixtures.EvaluateP0(match, "F5", "G5");
 
         GameBoard after = result.ProjectedBoard!;
-        GroupLife now = LifeShapeReport.Analyze(after).GroupLifeAt(TestMaps.At("B2"))!;
+        GroupLife now = LifeShapeReport.Analyze(after).GroupLifeAt(TestMaps.At("D4"))!;
         Assert.Equal(LifeState.Alive, now.Life);
-        Assert.Equal(["A1", "C1", "F3", "D4", "E4"], after.LibertiesOf(now.Group).Notations());
+        Assert.Equal(["C3", "E3", "H5", "F6", "G6"], after.LibertiesOf(now.Group).Notations());
         Assert.Empty(result.Captures);
         Assert.Single(after.GroupsOf(AiFixtures.P0));
 
@@ -51,15 +51,15 @@ public class 已确定活形的评价中性Tests
         //    A B C D
         // 落 D1 后该棋串成为已确定活形。活形常数取公式上界，所以做活在安全维度上必然是净收益（原始值为正）。
         MatchFlow match = AiFixtures.Round5()
-            .Stones(AiFixtures.P0, "B1", "A2", "B2", "C2")
-            .Stones(AiFixtures.P1, "A3", "B3", "C3", "D2");
-        GroupLife before = LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("B2"))!;
+            .Stones(AiFixtures.P0, "D3", "C4", "D4", "E4")
+            .Stones(AiFixtures.P1, "C5", "D5", "E5", "F4");
+        GroupLife before = LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("D4"))!;
         Assert.Equal(LifeState.Undetermined, before.Life);
         Assert.Equal(2, match.Board.LibertiesOf(before.Group).Length);
 
-        (EvaluationBreakdown e, RehearsalResult result) = EvaluationFixtures.EvaluateP0(match, "D1");
+        (EvaluationBreakdown e, RehearsalResult result) = EvaluationFixtures.EvaluateP0(match, "F3");
 
-        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(result.ProjectedBoard!).GroupLifeAt(TestMaps.At("B2"))!.Life);
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(result.ProjectedBoard!).GroupLifeAt(TestMaps.At("D4"))!.Life);
         Assert.True(e.RawOf(EvaluationDimension.Safety) > 0, e.ToString());
     }
 
@@ -76,16 +76,16 @@ public class 已确定活形的评价中性Tests
         // 变异 M-A2：ThreatOf 删掉"排除活形敌串"条件 → 红 1（本测试，威胁 +6）。
         // 变异 M-A5：敌损加一项不排除活形的"潜在提子价值"（全部非己方棋串中气数 ≤ 3 者的棋子数）→ 红 2（本测试 + 评价覆盖九个维度）。
         MatchFlow match = AiFixtures.Round5()
-            .Stones(AiFixtures.P1, "H9", "J8", "H8", "G8", "F9", "F8")
-            .Stones(AiFixtures.P0, "G7", "H7", "J7");
-        GroupLife before = LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("H8"))!;
+            .Stones(AiFixtures.P1, "J10", "K9", "J9", "H9", "G10", "G9")
+            .Stones(AiFixtures.P0, "H8", "J8", "K8");
+        GroupLife before = LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("J9"))!;
         Assert.Equal(LifeState.Alive, before.Life);
-        Assert.Equal(["F7", "E8", "E9", "G9", "J9"], match.Board.LibertiesOf(before.Group).Notations());
+        Assert.Equal(["G8", "F9", "F10", "H10", "K10"], match.Board.LibertiesOf(before.Group).Notations());
 
-        (EvaluationBreakdown e, RehearsalResult result) = EvaluationFixtures.EvaluateP0(match, "E8", "E9");
+        (EvaluationBreakdown e, RehearsalResult result) = EvaluationFixtures.EvaluateP0(match, "F9", "F10");
 
         GameBoard after = result.ProjectedBoard!;
-        GroupLife now = LifeShapeReport.Analyze(after).GroupLifeAt(TestMaps.At("H8"))!;
+        GroupLife now = LifeShapeReport.Analyze(after).GroupLifeAt(TestMaps.At("J9"))!;
         Assert.Equal(LifeState.Alive, now.Life);
         Assert.Equal(3, after.LibertiesOf(now.Group).Length);
         Assert.True(after.LibertiesOf(now.Group).Length <= GroupSafety.DangerLiberties);

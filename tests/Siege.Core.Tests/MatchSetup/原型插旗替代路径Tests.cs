@@ -18,15 +18,16 @@ public class 原型插旗替代路径Tests
     {
         // 设计文档 §4.1：原型可由 AI 或调试界面依次完成插旗，产出与正式插旗完全相同的对局状态（implement 1.4：逐字段一致）。
         // 变异验证 M-S8：PlantSequentially 不经 LockAll 而是另起一套顺序生成 → 红 1（本测试的存档逐字节比较）。
-        MatchFlow simultaneous = MatchFixtures.Create(options: MatchOptions.Immediate);
-        simultaneous.Flags.Plant(MatchFixtures.P2, 1);
-        simultaneous.Flags.Plant(MatchFixtures.P0, 3);
-        simultaneous.Flags.Plant(MatchFixtures.P3, 1);
-        simultaneous.Flags.Plant(MatchFixtures.P1, 0);
+        // retire-legacy-rules 1.5：载体由 9×9 旧模式夹具换为 link:1（链接模式盲选，K = 0），选区与断言不变。
+        MatchFlow simultaneous = LinkModeFixtures.Create();
+        simultaneous.Flags.Plant(TestMaps.P2, 1);
+        simultaneous.Flags.Plant(TestMaps.P0, 3);
+        simultaneous.Flags.Plant(TestMaps.P3, 1);
+        simultaneous.Flags.Plant(TestMaps.P1, 0);
         simultaneous.LockFlags();
 
-        MatchFlow sequential = MatchFixtures.Create(options: MatchOptions.Immediate);
-        sequential.PlantSequentially([(MatchFixtures.P0, 3), (MatchFixtures.P1, 0), (MatchFixtures.P2, 1), (MatchFixtures.P3, 1)]);
+        MatchFlow sequential = LinkModeFixtures.Create();
+        sequential.PlantSequentially([(TestMaps.P0, 3), (TestMaps.P1, 0), (TestMaps.P2, 1), (TestMaps.P3, 1)]);
 
         Assert.Equal(MatchPhase.InProgress, sequential.Phase);
         Assert.Equal(1, sequential.MajorRound);
@@ -42,15 +43,16 @@ public class 原型插旗替代路径Tests
     {
         // 插旗完成后保存对局 → 每名玩家锁定的出生区编号被完整保存并可恢复。
         // 变异验证 M-S9：Serialize 不写 BirthZone → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Create(options: MatchOptions.Immediate);
-        match.PlantSequentially([(MatchFixtures.P0, 2), (MatchFixtures.P1, 2), (MatchFixtures.P2, 0), (MatchFixtures.P3, 3)]);
+        // retire-legacy-rules 1.5：载体由 9×9 旧模式夹具换为 link:1，恢复走公开入口 MatchFlow.Restore（链接图过校验），断言不变。
+        MatchFlow match = LinkModeFixtures.Create();
+        match.PlantSequentially([(TestMaps.P0, 2), (TestMaps.P1, 2), (TestMaps.P2, 0), (TestMaps.P3, 3)]);
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, match.Serialize());
+        MatchFlow restored = MatchFlow.Restore(LinkModeFixtures.Map, match.Serialize());
         Assert.Equal(new int?[] { 2, 2, 0, 3 }, restored.PlayerStates.Select(s => s.BirthZone));
-        Assert.Equal(new int?[] { 2, 2, 0, 3 }, MatchFixtures.All.Select(restored.Flags.FlagOf));
+        Assert.Equal(new int?[] { 2, 2, 0, 3 }, TestMaps.All.Select(restored.Flags.FlagOf));
         Assert.True(restored.Flags.IsLocked);
         Assert.Equal(match.ActionOrder, restored.ActionOrder);
-        Assert.Equal(match.LegalRangeFor(MatchFixtures.P1), restored.LegalRangeFor(MatchFixtures.P1));
+        Assert.Equal(match.LegalRangeFor(TestMaps.P1), restored.LegalRangeFor(TestMaps.P1));
     }
 
     [Fact]
