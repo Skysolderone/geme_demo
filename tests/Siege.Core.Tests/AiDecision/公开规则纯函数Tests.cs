@@ -153,7 +153,7 @@ public class 公开规则纯函数Tests
         Coord[] range = [.. batch.Context.LegalRange.Order()];
         Assert.NotEmpty(range);
         Assert.Equal(range, match.LegalRangeFor(player).Order());
-        Assert.Equal(range, PublicRules.LegalRange(view.Board, view.MajorRound, state.BirthZone!.Value, player, view.LifeShape, view.Mode).Order());
+        Assert.Equal(range, PublicRules.LegalRange(view.Board, state.BirthZone!.Value, player, view.LifeShape).Order());
 
         // ② 部署上限与工坊
         (int oldLimit, bool oldWorkshop) = OldDeployAndWorkshop(match, player);

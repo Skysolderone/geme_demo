@@ -48,11 +48,11 @@ internal static class CarryFixtures
         new(new PlayerId(player), status, power, 0, 0, 0, eliminationOrder);
 
     /// <summary>
-    /// 按终局名次比较链（唯一实现）算出的整局结果。retire-legacy-rules 1.3：改调链接版名次（<see cref="FinalStandings.ComputeLink"/>，第 3 组更名为 <c>Compute</c>），
+    /// 按终局名次比较链（唯一实现）算出的整局结果。retire-legacy-rules 1.3：改调链接版名次（原 <c>ComputeLink</c>，第 3 组更名为 <see cref="FinalStandings.Compute"/>），
     /// 终局原因取链接口径的「最后战场结算」；各用例的输入只有完赛 + 出局或完赛 + 弃赛（两种组序相同），或只读第 1 名与弃赛快照，期望不变。
     /// </summary>
     internal static MatchResult Result(params StandingInput[] inputs) =>
-        new(EndReason.LastBattlefieldSettled, 9, FinalStandings.ComputeLink(inputs));
+        new(EndReason.LastBattlefieldSettled, 9, FinalStandings.Compute(inputs));
 
     internal static readonly PlayerId[] Four = [new(0), new(1), new(2), new(3)];
 }

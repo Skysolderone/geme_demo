@@ -99,8 +99,9 @@ public class 各入口按地图标识选图_链接模式Tests
     {
         // 实现裁决 C1：link: 对局一律以链接模式建局并挂配对来源（批量跑局缺省为由对局种子派生的配对种子来源）；旧地图仍是 Legacy 夹具。
         // 变异 MC-3：MatchSession.Create 不设 Mode = Link → MatchFlow.Create 报"链接图只能以链接模式建局"，本测试红。
+        // retire-legacy-rules 第 3 组：对局模式删除（对局只有链接规则一套），原"模式为链接"一句改为断言对局建在链接图上。
         MatchSession link = MatchSession.Create(Config(turnLimit: 1), 1);
-        Assert.Equal(MatchMode.Link, link.Match.Mode);
+        Assert.True(LinkMapId.IsLinkMap(link.Match.Map.Id));
         Assert.IsType<SeededPairingSource>(link.Match.PairingSource);
         // retire-legacy-maps：原后半"旧地图仍以 Legacy 建局"随旧地图删除（Sim 已无法按标识取得旧地图）。
     }
@@ -161,7 +162,7 @@ public class 各入口按地图标识选图_链接模式Tests
         Assert.True(code == 0, err);
         MatchLog log = MatchLog.ReadDirectory(outDir).Single();
         Assert.False(log.IsFailed, log.Failure?.Message);
-        Assert.Equal(nameof(MatchMode.Link), log.Header.Mode);
+        Assert.Equal("Link", log.Header.Mode);
         LogEvent pairing = Assert.Single(log.EventsOf(LogEventType.PairingApplied));   // 样本口径：种子 1 的锁定结果有两块单人棋盘 → 首轮一对
         Assert.Equal(PairingSourceNames.Seeded, pairing.Pairing!.Source);
         Assert.NotEmpty(log.EventsOf(LogEventType.BattlefieldsLinked));

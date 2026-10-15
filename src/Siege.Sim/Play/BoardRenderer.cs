@@ -263,17 +263,12 @@ internal sealed class BoardRenderer
     }
 
     /// <summary>
-    /// 画哪一块：旧模式全图；链接模式插旗阶段为 5 块出生棋盘的外接矩形（只画占位），此后为本座位所在战场的外接矩形，<c>shown</c> 为该战场的格。
+    /// 画哪一块：插旗阶段为 5 块出生棋盘的外接矩形（只画占位），此后为本座位所在战场的外接矩形，<c>shown</c> 为该战场的格。
     /// 战场取自公开视图里的地形与本座位锁定的出生棋盘（<see cref="PublicRules.BattlefieldOf"/>），不做规则计算。
     /// </summary>
     private static (int X0, int Y0, int X1, int Y1, IReadOnlySet<Coord>? Shown, bool Placeholders) Viewport(MatchPublicView view, PlayerId me, bool zones)
     {
         MapData map = view.Board.Map;
-        if (view.Mode != MatchMode.Link)
-        {
-            return (0, 0, map.Width - 1, map.Height - 1, null, false);
-        }
-
         int? zone = view.Players.FirstOrDefault(p => p.Player == me)?.BirthZone;
         Coord[] cells;
         IReadOnlySet<Coord>? shown;
@@ -292,10 +287,10 @@ internal sealed class BoardRenderer
         return (cells.Min(c => c.X), cells.Min(c => c.Y), cells.Max(c => c.X), cells.Max(c => c.Y), shown, zones || zone is null);
     }
 
-    /// <summary>链接模式下某玩家是否与本座位同一战场（他人战场玩家的势力与手牌类型不显示）。旧模式恒为真。</summary>
+    /// <summary>某玩家是否与本座位同一战场（他人战场玩家的势力与手牌类型不显示）。</summary>
     private static bool SameBattlefield(MatchPublicView view, PlayerId me, PlayerId other)
     {
-        if (view.Mode != MatchMode.Link || other == me)
+        if (other == me)
         {
             return true;
         }

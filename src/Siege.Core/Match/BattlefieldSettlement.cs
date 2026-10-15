@@ -4,7 +4,7 @@ using Siege.Core.Board;
 
 namespace Siege.Core.Match;
 
-/// <summary>出局原因（elimination-endgame「出局判定」）。序列化名称稳定。只在链接模式下记录；旧模式的出局不带原因（行为与之前逐字节相同）。</summary>
+/// <summary>出局原因（elimination-endgame「出局判定」）。序列化名称稳定。</summary>
 public enum EliminationReason
 {
     /// <summary>势力归零：曾建立正势力且当前总势力为 0。</summary>

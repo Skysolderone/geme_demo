@@ -244,13 +244,12 @@ public class 初始配置与基础棋池Tests
         var seed = new GameSeed(23);
         MatchFlow carried = MatchFlow.Create(map, seed, four, MatchOptions.Immediate with
         {
-            Mode = MatchMode.Link,
             CarryInOut = true,
             CarryIns = ImmutableSortedDictionary<PlayerId, CarryIn>.Empty
                 .Add(four[0], new CarryIn(SupplyKind.Commission, PieceType.Fortress))
                 .Add(four[3], new CarryIn(SupplyKind.DraftLot)),
         });
-        MatchFlow plain = MatchFlow.Create(map, seed, four, MatchOptions.Immediate with { Mode = MatchMode.Link });
+        MatchFlow plain = MatchFlow.Create(map, seed, four, MatchOptions.Immediate);
 
         Assert.Equal("Basic×4+0 Fortress×1+0", Siege.Core.Tests.CarryInOut.CarryFixtures.HandText(carried, four[0]));
         Assert.Equal("Basic×5+0", Siege.Core.Tests.CarryInOut.CarryFixtures.HandText(carried, four[1]));

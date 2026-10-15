@@ -1,0 +1,12 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Siege.Core -> E:\wws\geme_demo\src\Siege.Core\bin\Debug\net8.0\Siege.Core.dll
+  Siege.Presentation -> E:\wws\geme_demo\src\Siege.Presentation\bin\Debug\net8.0\Siege.Presentation.dll
+  Siege.Sim -> E:\wws\geme_demo\src\Siege.Sim\bin\Debug\net8.0\Siege.Sim.dll
+  Siege.Core.Tests -> E:\wws\geme_demo\tests\Siege.Core.Tests\bin\Debug\net8.0\Siege.Core.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:09.54

@@ -27,7 +27,7 @@ public class 选图视图模型Tests
     {
         MatchFlow match = MatchFlow.CreateUnvalidated(
             map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
-            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
+            MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         return DefaultBoardView.From(match.PublicWorldOf());
     }
 
@@ -197,7 +197,7 @@ public class 选图视图模型Tests
         MapData map = MapCatalog.Resolve("link:1");
         MatchFlow match = MatchFlow.CreateUnvalidated(
             map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
-            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
+            MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         DefaultBoardView preview = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         string info = MapPreviewInfo.Of(preview);
         Assert.StartsWith($"{map.Width}×{map.Height} 画布，5 块出生棋盘（边长 ", info, StringComparison.Ordinal);
@@ -216,7 +216,7 @@ public class 选图视图模型Tests
         MapData map = MapCatalog.Resolve("link:1");
         MatchFlow match = MatchFlow.CreateUnvalidated(
             map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
-            MatchOptions.Immediate with { ContentSet = ContentSet.V1, Mode = MatchMode.Link });
+            MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         DefaultBoardView flags = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         DefaultBoardView backdrop = MapPreviewInfo.Backdrop(flags);
 

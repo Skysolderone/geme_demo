@@ -375,8 +375,6 @@ internal static class PlayCommand
         string reason = result.Reason switch
         {
             EndReason.LastPlayerStanding => "只剩一名玩家",
-            EndReason.AllPassed => "一整轮所有人都 Pass",
-            EndReason.BoardFull => "棋盘已无空位",
             EndReason.LastBattlefieldSettled => "最后一个战场结算",
             _ => result.Reason.ToString(),
         };

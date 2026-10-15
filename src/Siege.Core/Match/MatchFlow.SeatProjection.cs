@@ -14,7 +14,7 @@ namespace Siege.Core.Match;
 /// 口径与 <see cref="PublishFor"/>（<see cref="SeatPublicView"/>）一致：本座位所在战场之外——未与之链接的战场——的棋子不出现，其上的信物呈未揭示、无人控制，
 /// 他人战场玩家的手牌类型为空；势力快照与活形分析对投影盘面现算（唯一实现 <see cref="PowerCalculator"/> / <see cref="LifeShapeReport.Analyze"/>），
 /// 他人战场玩家的势力因此只剩本战场里的部分（即 0）。地形、行动顺序、在局状态、带入与结果是全局项，不过滤。
-/// 旧模式与插旗阶段（还没有战场）原样返回 <see cref="Publish"/>。
+/// 插旗阶段（还没有战场）原样返回 <see cref="Publish"/>。
 /// </remarks>
 public sealed partial class MatchFlow
 {
@@ -53,7 +53,7 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 把一次零副作用预演的结果投影到同一口径（按座位视野的 AI 用——缺省即是，见 <see cref="Ai.HeuristicAi.VisionFor"/>）：预演后盘面去掉本座位战场之外的棋子（副本上做），
-    /// 合法性、失败与提子不变（提子只发生在本战场里）。旧模式、插旗阶段原样返回。
+    /// 合法性、失败与提子不变（提子只发生在本战场里）。插旗阶段原样返回。
     /// </summary>
     public RehearsalResult ProjectRehearsal(PlayerId seat, RehearsalResult result)
     {
@@ -68,11 +68,11 @@ public sealed partial class MatchFlow
         return result with { ProjectedBoard = board };
     }
 
-    /// <summary>本座位所在的战场；旧模式、插旗阶段或尚未锁定出生棋盘时为 <c>null</c>（不投影）。</summary>
+    /// <summary>本座位所在的战场；插旗阶段或尚未锁定出生棋盘时为 <c>null</c>（不投影）。</summary>
     private Battlefield? SeatField(PlayerId seat)
     {
         PlayerRecord record = Require(seat);
-        return Mode != MatchMode.Link || Phase == MatchPhase.FlagPlanting || record.BirthZone is not int zone
+        return Phase == MatchPhase.FlagPlanting || record.BirthZone is not int zone
             ? null
             : PublicRules.BattlefieldOf(Board, zone);
     }

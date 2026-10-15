@@ -69,24 +69,24 @@ public sealed class ViewerWorld
     }
 
     /// <summary>
-    /// 本座位的按座位公开视图（board-link-mode 实现裁决 B4，<c>MatchFlow.PublishFor</c>）：链接模式下决定默认棋盘与信息层里哪些格可见（<see cref="Board"/> / <see cref="Layer"/>），
-    /// 并提供占位、同战场玩家等只对本座位成立的信息。未给出（旧模式、既有调用方）即全图可见。
+    /// 本座位的按座位公开视图（board-link-mode 实现裁决 B4，<c>MatchFlow.PublishFor</c>）：决定默认棋盘与信息层里哪些格可见（<see cref="Board"/> / <see cref="Layer"/>），
+    /// 并提供占位、同战场玩家等只对本座位成立的信息。未给出（既有调用方）即全图可见。
     /// </summary>
     public SeatPublicView? Seat { get; }
 
     /// <summary>本座位锁定的出生棋盘编号（0 起）；尚未锁定为 <c>null</c>。取自公开快照里本座位自己的状态。</summary>
     public int? OwnZone => Public.View.Players.FirstOrDefault(s => s.Player == Viewer)?.BirthZone;
 
-    /// <summary>链接模式下与本座位同一战场的其他玩家（match-setup「匿名同时插旗」：锁定后只公开"与自己同一块棋盘的玩家有谁"）；旧模式或插旗阶段为空。</summary>
+    /// <summary>与本座位同一战场的其他玩家（match-setup「匿名同时插旗」：锁定后只公开"与自己同一块棋盘的玩家有谁"）；没有按座位视图或插旗阶段为空。</summary>
     public ImmutableArray<PlayerId> SameBattlefieldPlayers =>
-        Seat is { Mode: MatchMode.Link } seat ? [.. seat.Players.Where(p => p.SameBattlefield && p.Player != Viewer).Select(p => p.Player)] : [];
+        Seat is { } seat ? [.. seat.Players.Where(p => p.SameBattlefield && p.Player != Viewer).Select(p => p.Player)] : [];
 
     /// <summary>
-    /// 某玩家的数值是否对本座位遮蔽（board-link-mode Q1 / 裁决 D20，information-visibility「他人势力不可见」）：链接模式下不与本座位同战场的其他玩家。
-    /// 判据只读按座位视图的 <see cref="SeatPlayerView.SameBattlefield"/>——引擎层不得自己判"同不同战场"。旧模式、本人、同战场玩家恒为假。
+    /// 某玩家的数值是否对本座位遮蔽（board-link-mode Q1 / 裁决 D20，information-visibility「他人势力不可见」）：不与本座位同战场的其他玩家。
+    /// 判据只读按座位视图的 <see cref="SeatPlayerView.SameBattlefield"/>——引擎层不得自己判"同不同战场"。没有按座位视图、本人、同战场玩家恒为假。
     /// </summary>
     public bool IsConcealed(PlayerId player) =>
-        Seat is { Mode: MatchMode.Link } seat && player != Viewer && seat.Players.FirstOrDefault(p => p.Player == player) is { SameBattlefield: false };
+        Seat is { } seat && player != Viewer && seat.Players.FirstOrDefault(p => p.Player == player) is { SameBattlefield: false };
 
     /// <summary>
     /// 遮蔽行的状态文案（裁决 D20 允许显示的全部）：在局 / 出局 / 弃赛，外加"所在战场已结算（胜出）"——该玩家是某个已结算战场的胜者时。
@@ -129,7 +129,7 @@ public sealed class ViewerWorld
         DefaultBoardView board = DefaultBoardView.From(Public);
         if (Seat is { } seat)
         {
-            // 链接模式：只留本座位所在战场的格（information-visibility「其他战场不可见」在表现层的镜像）；旧模式 ForSeat 原样返回。
+            // 只留本座位所在战场的格（information-visibility「其他战场不可见」在表现层的镜像）。
             board = board.ForSeat(seat, OwnZone);
         }
 
@@ -140,11 +140,11 @@ public sealed class ViewerWorld
     public PreviewPresentation? Preview(LibertyThresholds? thresholds = null) =>
         OwnPreview is null ? null : PreviewPresentation.Build(OwnPreview, OwnHand, thresholds ?? LibertyThresholds.Default);
 
-    /// <summary>全玩家手牌对比面板。链接模式下他战场玩家的区域被遮蔽（裁决 D20）：没有手牌类型与结构参数。</summary>
+    /// <summary>全玩家手牌对比面板。他战场玩家的区域被遮蔽（裁决 D20）：没有手牌类型与结构参数。</summary>
     public HandInfoPanelView HandPanel()
     {
         HandInfoPanelView panel = HandInfoPanelView.Build(this);
-        return Seat is { Mode: MatchMode.Link }
+        return Seat is { }
             ? panel with { Opponents = [.. panel.Opponents.Select(o => IsConcealed(o.Player) ? o.Conceal(ConcealedStatusText(o.Player)) : o)] }
             : panel;
     }
@@ -154,12 +154,12 @@ public sealed class ViewerWorld
         TacticalLayer layer, BoardReading reading = BoardReading.Ownership, LibertyThresholds? thresholds = null)
     {
         LayerContent content = TacticalLayers.Build(Public, layer, reading, thresholds);
-        if (Seat is not { Mode: MatchMode.Link } seat)
+        if (Seat is not { } seat)
         {
             return content;
         }
 
-        // 链接模式（board-link-mode D-b）：信息层里逐格 / 逐棋串的内容只保留本座位可见的格——其他战场的格根本不进视图模型。
+        // board-link-mode D-b：信息层里逐格 / 逐棋串的内容只保留本座位可见的格——其他战场的格根本不进视图模型。
         // 势力层 / 顺序层里按玩家列出的行（他战场玩家的势力数值）本段不过滤，见 D-b 报告 D20。
         HashSet<Coord> visible = [.. seat.Cells.Select(c => Coord.Parse(c.Coord))];
         // 裁决 D20：按玩家列出的行（势力层玩家汇总、顺序层先手值明细）对他战场玩家只留名字 + 状态（势力层）/ 预测位置（顺序层），数值归零。
@@ -183,7 +183,7 @@ public sealed class ViewerWorld
     /// 组装。<paramref name="ownPreview"/> 只在本人处于部署阶段时传入；<paramref name="ownForbidden"/> 只在轮到本人行动时传入
     /// （属于他人、或当前行动玩家不是本人即抛出：别人的禁手依赖别人的暂放，结构上不得进入观察者视图）。
     /// </summary>
-    /// <param name="seat">本座位的按座位公开视图（<c>MatchFlow.PublishFor(viewer)</c>，与 <paramref name="view"/> 同一时刻）；属于他人即抛出。未给出即全图可见（旧模式 / 既有调用方）。</param>
+    /// <param name="seat">本座位的按座位公开视图（<c>MatchFlow.PublishFor(viewer)</c>，与 <paramref name="view"/> 同一时刻）；属于他人即抛出。未给出即全图可见（既有调用方）。</param>
     public static ViewerWorld Build(
         PlayerId viewer, MatchPublicView view, PublicSupplement supplement, HandPrivateView ownHand, BatchPreview? ownPreview,
         ForbiddenMoveReport? ownForbidden = null, SeatPublicView? seat = null)

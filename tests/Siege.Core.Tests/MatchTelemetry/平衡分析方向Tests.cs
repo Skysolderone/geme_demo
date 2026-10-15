@@ -335,14 +335,14 @@ public class 平衡分析方向Tests
         [
             .. Enumerable.Range(0, 30).Select(i => Of(i + 1, SimFixtures.ResultOf(5, [0], reason: nameof(Match.EndReason.LastPlayerStanding)))),
             .. Enumerable.Range(0, 150).Select(i => Of(i + 100, SimFixtures.ResultOf(8, [i % 4]))),
-            .. Enumerable.Range(0, 8).Select(i => Of(i + 300, SimFixtures.ResultOf(12, [1], reason: nameof(Match.EndReason.BoardFull)))),
+            .. Enumerable.Range(0, 8).Select(i => Of(i + 300, SimFixtures.ResultOf(12, [1], reason: LogResult.LegacyBoardFull))),
             .. Enumerable.Range(0, 12).Select(i => Of(i + 400, SimFixtures.TruncatedResult(150))),
         ];
 
         EndingSection e = BalanceAnalyzer.Analyze(logs).Ending;
 
         Assert.Equal(
-            [(nameof(Match.EndReason.LastPlayerStanding), 30, 0.15, 5.0), (nameof(Match.EndReason.BoardFull), 8, 0.04, 12.0), (nameof(Match.EndReason.AllPassed), 150, 0.75, 8.0)],
+            [(nameof(Match.EndReason.LastPlayerStanding), 30, 0.15, 5.0), (LogResult.LegacyBoardFull, 8, 0.04, 12.0), (LogResult.LegacyAllPassed, 150, 0.75, 8.0)],
             e.Reasons.Select(r => (r.Reason, r.Count, Math.Round(r.Share, 10), r.MeanEndRound)));
         Assert.Equal((200, 12, 0, 150.0), (e.Matches, e.Truncated, e.Other, e.MeanTruncatedRound));
 

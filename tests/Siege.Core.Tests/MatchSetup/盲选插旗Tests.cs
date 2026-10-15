@@ -7,7 +7,6 @@ namespace Siege.Core.Tests.MatchSetup;
 
 /// <summary>
 /// 规格：openspec/changes/board-link-mode/specs/match-setup —— Requirement: 匿名同时插旗、原型插旗替代路径（链接模式的盲选，实现裁决 B2）。
-/// 旧模式的插旗行为由既有 <c>匿名同时插旗Tests</c> / <c>原型插旗替代路径Tests</c> 原样守住。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 B 前半实跑）：
@@ -27,8 +26,9 @@ public class 盲选插旗Tests
         Assert.Null(b.OwnZone);
         Assert.Empty(b.SameBoard);
         Assert.Equal(5, b.ZoneCount);
-        // 公开视图不暴露任何旗数。
-        Assert.Empty(match.Flags.PublicView().FlagCountByZone);
+        // 公开视图不暴露任何旗数（retire-legacy-rules 第 3 组：旧模式的每区旗数字段删除，改为断言公开视图只有"是否已锁定"一项）。
+        Assert.Equal([nameof(FlagPublicView.IsLocked)], typeof(FlagPublicView).GetProperties().Select(p => p.Name));
+        Assert.Equal(new FlagPublicView(false), match.Flags.PublicView());
         Assert.Equal(0, match.Flags.ViewFor(LinkModeFixtures.P0).OwnZone);
         // retire-legacy-rules 1.7（清单"删反面段"）：原有的旧模式反面段（公开视图照旧给出每区旗数）随旧模式退役删除。
     }
@@ -55,7 +55,7 @@ public class 盲选插旗Tests
         Assert.Equal([LinkModeFixtures.P0, LinkModeFixtures.P1], match.Flags.ViewFor(LinkModeFixtures.P0).SameBoard);
         Assert.Equal([LinkModeFixtures.P0, LinkModeFixtures.P1], match.Flags.ViewFor(LinkModeFixtures.P1).SameBoard);
         Assert.Equal([LinkModeFixtures.P2], match.Flags.ViewFor(LinkModeFixtures.P2).SameBoard);
-        Assert.Empty(match.Flags.PublicView().FlagCountByZone);
+        Assert.Equal(new FlagPublicView(true), match.Flags.PublicView());   // 只有"已锁定"，没有旗数（retire-legacy-rules 第 3 组：原断言旗数字段为空）
         Assert.Equal(2, match.LockedFlagCounts[1]);
     }
 

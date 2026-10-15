@@ -9,7 +9,7 @@ namespace Siege.Core.Match;
 
 /// <summary>
 /// 表现层的只读入口（tactical-ui 裁决 9）：富预演与公开补充载荷。本文件只<b>读</b>对局状态、只调用既有唯一实现，
-/// 任何需要"试算"的步骤都在副本上进行（盘面副本由预演内部 Clone，信物账本副本经 <see cref="RelicLedger.Restore"/> 构造），
+/// 任何需要"试算"的步骤都在副本上进行（盘面副本由预演内部 Clone，信物账本副本经 <see cref="RelicLedger.Copy"/> 构造），
 /// 正式盘面、历史、账本、势力榜、事件与随机子流一律不动。
 /// </summary>
 public sealed partial class MatchFlow
@@ -125,7 +125,6 @@ public sealed partial class MatchFlow
     /// 链接模式（board-link-mode 裁决 S10 / D6）：大回合结束会先做战场结算，所以预测先用与 <c>SettleAtRoundEnd</c> <b>同一份</b>判定（<c>JudgeAtRoundEnd</c>，无副作用）
     /// 算出此刻结束时会落败的玩家——口径"假设此刻结束、未行动者按未 Pass 算"（本大回合尚未行动的玩家不在 Pass 记录里）；落败者不进下一轮顺序，
     /// 其余玩家的势力名次按剔除后的名册重算（与结算后 <see cref="EndMajorRound"/> 的重算同口径）。此刻结束会以"最后战场结算"终局时没有下一轮，返回 <c>null</c>。
-    /// 旧模式不进入这条分支，与引入之前逐字节相同。
     /// </remarks>
     private InitiativeReport? ForecastInitiative(IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
@@ -136,21 +135,18 @@ public sealed partial class MatchFlow
 
         int completed = MajorRound;
         PowerSnapshot power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
-        if (Mode == MatchMode.Link)
+        ImmutableArray<BattlefieldVerdict> verdicts = JudgeAtRoundEnd(power, _passedThisRound);
+        if (verdicts.Length > 0)
         {
-            ImmutableArray<BattlefieldVerdict> verdicts = JudgeAtRoundEnd(power, _passedThisRound);
-            if (verdicts.Length > 0)
+            ImmutableHashSet<PlayerId> losers = [.. verdicts.SelectMany(v => v.Losers).Select(e => e.Player)];
+            roster = roster.ToImmutableSortedDictionary(kv => kv.Key, kv => losers.Contains(kv.Key) ? PlayerStatus.Eliminated : kv.Value);
+            ImmutableArray<int> occupied = [.. _players.Where(p => roster[p] == PlayerStatus.Active).Select(BattlefieldOf).Distinct()];
+            if (occupied is [int only] && (_settledBattlefields.Contains(only) || verdicts.Any(v => v.Battlefield == only)))
             {
-                ImmutableHashSet<PlayerId> losers = [.. verdicts.SelectMany(v => v.Losers).Select(e => e.Player)];
-                roster = roster.ToImmutableSortedDictionary(kv => kv.Key, kv => losers.Contains(kv.Key) ? PlayerStatus.Eliminated : kv.Value);
-                ImmutableArray<int> occupied = [.. _players.Where(p => roster[p] == PlayerStatus.Active).Select(BattlefieldOf).Distinct()];
-                if (occupied is [int only] && (_settledBattlefields.Contains(only) || verdicts.Any(v => v.Battlefield == only)))
-                {
-                    return null;
-                }
-
-                power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
+                return null;
             }
+
+            power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
         }
 
         int active = roster.Count(kv => kv.Value == PlayerStatus.Active);

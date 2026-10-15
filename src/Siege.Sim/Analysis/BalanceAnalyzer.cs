@@ -739,7 +739,8 @@ public static class BalanceAnalyzer
     // ---------- 终局原因分布与截断（restore-go-core-rules 段 E） ----------
 
     /// <summary>终局原因的报告顺序 = 终局优先级（只剩一名 &gt; 棋盘填满 &gt; 整轮 Pass）。</summary>
-    private static readonly string[] RuleReasons = [nameof(EndReason.LastPlayerStanding), nameof(EndReason.BoardFull), nameof(EndReason.AllPassed)];
+    /// <remarks>retire-legacy-rules（R9）：后两类是旧模式的原因，已从 <c>EndReason</c> 删除，按 <see cref="LogResult"/> 的字符串常量读旧日志；报告口径不变。</remarks>
+    private static readonly string[] RuleReasons = [nameof(EndReason.LastPlayerStanding), LogResult.LegacyBoardFull, LogResult.LegacyAllPassed];
 
     private static EndingSection Ending(List<MatchLog> logs, int ranked)
     {

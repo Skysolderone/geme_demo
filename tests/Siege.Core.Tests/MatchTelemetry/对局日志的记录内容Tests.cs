@@ -500,7 +500,6 @@ public class 对局日志的记录内容Tests
             ContentSet = config.ContentSet!.Value,
             CarryInOut = true,
             CarryIns = carries.ToImmutableSortedDictionary(kv => new PlayerId(kv.Key), kv => kv.Value),
-            Mode = MatchMode.Link,
         });
         match.PairingSource = new SeededPairingSource(seed, config.PairingSeed);
         match.PlantPrototype();

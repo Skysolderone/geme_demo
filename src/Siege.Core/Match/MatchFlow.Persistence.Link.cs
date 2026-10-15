@@ -9,7 +9,7 @@ using Siege.Core.Scoring;
 namespace Siege.Core.Match;
 
 /// <summary>
-/// 链接模式的存档（board-link-mode 实现裁决 B5，段 A 接线契约 3）。旧模式不写任何新字段（存档逐字节同前），无模式字段的存档按旧模式读入。
+/// 链接模式的存档（board-link-mode 实现裁决 B5，段 A 接线契约 3）。retire-legacy-rules：存档恒写模式与链接段；缺模式字段的存档拒绝恢复（不再有"按旧模式读入"）。
 /// </summary>
 /// <remarks>
 /// 恢复顺序：开局图建空盘 → 按存档的链接记录逐个重放拼接（地图重裁 + 信物账本坐标平移，核对版本号、地图摘要与各战场平移向量）→ 再写入盘面（棋子与改造，坐标已是拼接后的）
@@ -17,14 +17,9 @@ namespace Siege.Core.Match;
 /// </remarks>
 public sealed partial class MatchFlow
 {
-    /// <summary>导出链接模式的流程状态；旧模式返回 <c>null</c>（不写入存档）。</summary>
-    private LinkSaveData? ExportLink()
+    /// <summary>导出链接模式的流程状态（存档恒写出）。</summary>
+    private LinkSaveData ExportLink()
     {
-        if (Mode != MatchMode.Link)
-        {
-            return null;
-        }
-
         return new LinkSaveData
         {
             FirstPairingStepDone = _firstPairingStepDone,
@@ -156,7 +151,7 @@ public sealed partial class MatchFlow
     }
 }
 
-/// <summary>链接模式的流程状态存档段（<see cref="MatchSaveData.Link"/>）。旧模式不写。</summary>
+/// <summary>链接模式的流程状态存档段（<see cref="MatchSaveData.Link"/>）。</summary>
 public sealed class LinkSaveData
 {
     public bool FirstPairingStepDone { get; set; }

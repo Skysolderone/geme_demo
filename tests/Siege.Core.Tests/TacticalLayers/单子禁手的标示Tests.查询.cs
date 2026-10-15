@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
@@ -189,7 +190,11 @@ public partial class 单子禁手的标示Tests
         Assert.Null(LinkModeFixtures.PlainCreate().ForbiddenMovesOfCurrentPlayer());
     }
 
-    /// <summary>合法落子范围契约（第 5 大回合：全图可落子格扣除禁入格）。</summary>
+    /// <summary>
+    /// 查询的候选范围：全图可落子格扣除 <paramref name="player"/> 的禁入格（原旧模式第 5 大回合的合法范围口径）。
+    /// retire-legacy-rules 第 3 组：<see cref="PublicRules.LegalRange"/> 只剩"所在战场"一条口径，而这些规则层夹具（<c>TestMaps.Blank</c> / <c>LifeShapeFixtures.Grid</c> /
+    /// <c>BatchFixtures.KoBoard</c>）没有出生区、不构成战场，故在这里按原口径直接算出同一集合（逐格相同），各用例的输入与期望不变。
+    /// </summary>
     internal static IReadOnlySet<Coord> RangeOf(GameBoard board, PlayerId player) =>
-        PublicRules.LegalRange(board, majorRound: 5, birthZone: 0, player, LifeShapeReport.Analyze(board));
+        board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable).Except(LifeShapeReport.Analyze(board).ForbiddenCellsFor(player)).ToImmutableHashSet();
 }

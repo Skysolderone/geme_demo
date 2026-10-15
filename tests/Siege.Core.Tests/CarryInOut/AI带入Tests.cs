@@ -20,7 +20,6 @@ public class AI带入Tests
     private static MatchFlow Create(GameSeed seed, CarryIn? mine, ContentSet set = ContentSet.V2) =>
         MatchFlow.Create(Map, seed, Four, MatchOptions.Immediate with
         {
-            Mode = MatchMode.Link,
             ContentSet = set,
             CarryInOut = true,
             CarryIns = CarryAi.ForHumanMatch(seed, Four, Me, mine, set),
@@ -160,7 +159,7 @@ public class AI带入Tests
         GameSeed seed = pick!.Value;
 
         MatchFlow carried = Create(seed, CarryFixtures.Spare);
-        MatchFlow plain = MatchFlow.Create(Map, seed, Four, MatchOptions.Immediate with { Mode = MatchMode.Link });
+        MatchFlow plain = MatchFlow.Create(Map, seed, Four, MatchOptions.Immediate);
         Assert.All(Four, p => Assert.Equal("Basic×6+0", CarryFixtures.HandText(carried, p)));
 
         carried.PlantPrototype();

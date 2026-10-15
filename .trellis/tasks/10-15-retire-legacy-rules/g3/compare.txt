@@ -1,0 +1,23 @@
+# 第 3 组存档快照对照（saves-before = 改前 HEAD ba69f68，saves-after = 第 3 组改后）
+same  save-fixture-awaiting.json
+same  save-fixture-awaiting.restored.json
+same  save-fixture-ended.json
+same  save-fixture-ended.restored.json
+same  save-fixture-linked.json
+same  save-fixture-linked.restored.json
+same  save-link1-seed1-r12.json
+same  save-link1-seed1-r12.restored.json
+same  save-link1-seed1-r4.json
+same  save-link1-seed1-r4.restored.json
+same  save-link1-seed1-r8.json
+same  save-link1-seed1-r8.restored.json
+same  save-link1-seed3-r12.json
+same  save-link1-seed3-r12.restored.json
+same  save-link1-seed3-r4.json
+same  save-link1-seed3-r4.restored.json
+same  save-link1-seed3-r8.json
+same  save-link1-seed3-r8.restored.json
+
+# 日志首部（link:1 种子 1，--turn-limit 24）
+same  log-header-before.jsonl / log-header-after.jsonl
+完整日志去掉 ElapsedMs / MajorRoundMs / TotalMs 计时字段后逐字节相同；config.json 逐字节相同（完整日志未入库）

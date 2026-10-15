@@ -12,36 +12,25 @@ namespace Siege.Core.Match;
 /// </summary>
 public static class PublicRules
 {
-    /// <summary>构筑保护期的大回合数（设计文档 §4.2）：第 1–3 大回合只能在锁定出生区内落子。</summary>
+    /// <summary>构筑保护期的大回合数（设计文档 §4.2）：第 1–3 大回合为构筑期（带出"保护期内弃赛"与决赛倒计时起点的依据；合法范围不随它变）。</summary>
     public const int BuildProtectionRounds = 3;
 
     /// <summary>
-    /// 合法落子范围（turn-sequence「合法落子范围的对外契约」）：保护期内为 <paramref name="birthZone"/> 的格集合，此后为全图可落子格
-    /// （按当前地形现算，改造出来的桥立即可落）；两种情况都扣除 <paramref name="player"/> 的禁入格——扣除只在这里一处（裁决 R12）。
+    /// 合法落子范围（turn-sequence「合法落子范围的对外契约」）：任何大回合都是该玩家所在战场的可落子格（战场 = 含其出生棋盘的连通分量，随链接扩大；
+    /// 按当前地形现算，改造出来的桥立即可落），扣除 <paramref name="player"/> 的禁入格——扣除只在这里一处（裁决 R12）。
+    /// retire-legacy-rules：旧模式的"保护期内为出生区、此后为全图"两条分支与模式、大回合两个参数一并删除。
     /// </summary>
     /// <param name="board">盘面（地形取其当前 <see cref="GameBoard.Map"/>）。</param>
-    /// <param name="majorRound">该玩家行动的大回合。</param>
     /// <param name="birthZone">该玩家锁定的出生区编号。</param>
     /// <param name="player">玩家。</param>
     /// <param name="life">对 <paramref name="board"/> 的活形分析（禁入格的唯一查询）。</param>
-    /// <param name="mode">
-    /// 对局模式（board-link-mode 实现裁决 B1）。<see cref="MatchMode.Link"/> 下任何大回合都是"该玩家所在战场的可落子格"
-    /// （turn-sequence「合法落子范围的对外契约」；战场 = 含其出生棋盘的连通分量，随链接扩大），不存在"第 4 大回合全图解禁"；
-    /// 缺省 <see cref="MatchMode.Legacy"/> 与引入模式之前逐字节相同。
-    /// </param>
-    public static IReadOnlySet<Coord> LegalRange(
-        GameBoard board, int majorRound, int birthZone, PlayerId player, LifeShapeReport life, MatchMode mode = MatchMode.Legacy)
+    public static IReadOnlySet<Coord> LegalRange(GameBoard board, int birthZone, PlayerId player, LifeShapeReport life)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(life);
 
         // 可落子格按当前地形现算：本局架出来的桥必须立刻成为合法落点（artisan-terrain-edit 2.6 缓存排查第 1 条）。
-        IEnumerable<Coord> range = mode == MatchMode.Link
-            ? BattlefieldOf(board, birthZone).Cells
-            : majorRound <= BuildProtectionRounds
-                ? board.Map.BirthZones[birthZone]
-                : board.AllCoords().Where(c => board[c].Terrain == Terrain.Playable);
-        return range.Except(life.ForbiddenCellsFor(player)).ToImmutableHashSet();
+        return BattlefieldOf(board, birthZone).Cells.Except(life.ForbiddenCellsFor(player)).ToImmutableHashSet();
     }
 
     /// <summary>

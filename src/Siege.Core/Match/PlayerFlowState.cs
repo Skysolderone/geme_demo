@@ -30,12 +30,12 @@ public sealed record PlayerFlowState(
     /// <summary>是否参赛中。</summary>
     public bool IsActive => Status == PlayerStatus.Active;
 
-    /// <summary>出局原因（elimination-endgame「出局判定」）。只在链接模式下记录；旧模式与未出局为 <c>null</c>。</summary>
+    /// <summary>出局原因（elimination-endgame「出局判定」）。未出局为 <c>null</c>。</summary>
     public EliminationReason? EliminationReason { get; init; }
 
     /// <summary>战场落败时记录的势力（可以大于 0）；其他情形为 <c>null</c>。</summary>
     public BigInteger? PowerAtDefeat { get; init; }
 
-    /// <summary>链接模式：作为等待者（构筑期之后独处一个战场的在局玩家）度过的大回合数（match-telemetry 第 11 项）。旧模式恒为 0。</summary>
+    /// <summary>链接模式：作为等待者（构筑期之后独处一个战场的在局玩家）度过的大回合数（match-telemetry 第 11 项）。</summary>
     public int WaitingRounds { get; init; }
 }

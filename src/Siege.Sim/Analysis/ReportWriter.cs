@@ -587,8 +587,8 @@ public static class ReportWriter
     private static string EndReasonName(string reason) => reason switch
     {
         nameof(Core.Match.EndReason.LastPlayerStanding) => "只剩一名参赛玩家",
-        nameof(Core.Match.EndReason.BoardFull) => "棋盘填满",
-        nameof(Core.Match.EndReason.AllPassed) => "整轮 Pass",
+        Logging.LogResult.LegacyBoardFull => "棋盘填满",
+        Logging.LogResult.LegacyAllPassed => "整轮 Pass",
         _ => reason,
     };
 

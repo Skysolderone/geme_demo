@@ -171,11 +171,8 @@ public class 非法批次必须给出可定位的原因Tests
         Assert.DoesNotContain("不可落子", failure.Message);
     }
 
-    /// <summary>9×9 对局盘面上 P0 的两眼活形：D4–H4、D6–H6、D5、F5、H5 围出单格眼 E5、G5。retire-legacy-rules：只剩清单 (c) / (j) 方法引用，第 2 组随之删除。</summary>
-    internal static readonly string[] RingE5G5 = ["D4", "E4", "F4", "G4", "H4", "D5", "F5", "H5", "D6", "E6", "F6", "G6", "H6"];
-
     /// <summary>
-    /// 平坦 8×8 链接载体棋盘 0 上 P0 的两眼活形（retire-legacy-rules：<see cref="RingE5G5"/> 列 +1、行 +2——环的东侧与北侧仍留一列 / 两行空地，不贴棋盘 0 的边）：
+    /// 平坦 8×8 链接载体棋盘 0 上 P0 的两眼活形（retire-legacy-rules：原 9×9 盘面上围出单格眼 E5、G5 的环列 +1、行 +2——环的东侧与北侧仍留一列 / 两行空地，不贴棋盘 0 的边）：
     /// E6–J6、E8–J8、E7、G7、J7 围出单格眼 F7、H7，外侧大片空地。
     /// </summary>
     internal static readonly string[] RingF7H7 = ["E6", "F6", "G6", "H6", "J6", "E7", "G7", "J7", "E8", "F8", "G8", "H8", "J8"];

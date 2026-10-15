@@ -62,7 +62,7 @@ public sealed partial class MatchFlow
         Scoreboard = new PowerScoreboard();
         _setup = seed.Stream(GameSeed.Setup);
         _driver = new SettlementDriver(board, history, new Hooks(this));
-        Flags = new FlagPlanting(map, players, options.FlagTimeLimit, options.Mode, seed);
+        Flags = new FlagPlanting(map, players, options.FlagTimeLimit, seed);
         foreach (PlayerId player in players)
         {
             _records.Add(player, new PlayerRecord());
@@ -75,19 +75,18 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 创建一局：地图经静态校验，信物按 <c>relic-gen</c> 子流一次性生成，手牌账本派生 <c>recruit</c> 子流，本类持有 <c>setup</c> 子流。
-    /// 创建后处于插旗阶段。retire-legacy-maps 3.5（裁决 L6 = C）：公开建局<b>恒以链接模式</b>（不看 <paramref name="options"/> 里的模式），
-    /// 地图须是链接图、恰 4 人；旧模式只剩测试专用的 <see cref="CreateUnvalidated"/>（手写 9×9 夹具）。
+    /// 创建后处于插旗阶段。地图须是链接图、恰 4 人（retire-legacy-rules：对局只有链接规则一套，旧模式与对局模式枚举一并删除）。
     /// </summary>
     public static MatchFlow Create(MapData map, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(map);
         GameBoard board = GameBoard.Load(map);
-        options = (options ?? MatchOptions.Default) with { Mode = MatchMode.Link };
+        options ??= MatchOptions.Default;
         // more-pieces-relics D8：信物按本局内容集的权重表与徽记绑定集合生成（v1 与改动前逐格相同）。
         return Build(map, board, seed, players, RelicGenerator.Generate(map, seed, options.ContentSet), options);
     }
 
-    /// <summary>测试专用：跳过地图校验并使用手工指定的信物分布。</summary>
+    /// <summary>测试专用：跳过地图校验并使用手工指定的信物分布。建局约束（链接图标识、恰 4 人）照常执行。</summary>
     internal static MatchFlow CreateUnvalidated(
         MapData map, GameSeed seed, IEnumerable<PlayerId> players, RelicGenerationRecord relics, MatchOptions? options = null) =>
         Build(map, GameBoard.LoadUnvalidated(map), seed, players, relics, options ?? MatchOptions.Immediate);
@@ -112,7 +111,7 @@ public sealed partial class MatchFlow
             throw new ArgumentException($"地图 {map.Id} 最多支持 {map.MaxPlayers} 人，实际 {list.Length} 人。", nameof(players));
         }
 
-        RequireModeMatchesMap(options.Mode, map, list.Length);
+        RequireLinkMatch(map, list.Length);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
         RequireValidFinalCountdown(options.FinalCountdownRounds);
@@ -415,9 +414,8 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 对 <c>add-batch-deployment</c> 的契约（design.md D5）：第 1–3 大回合为该玩家锁定的出生区格集合（同区玩家自然共享），
-    /// 从第 4 大回合起为全图可落子格集合。出生区数据本身不带限制，限制只由本方法按当前大回合序号决定。
-    /// 两种情况都扣除该玩家的禁入格（life-shape，turn-sequence「合法落子范围的对外契约」），
+    /// 对 <c>add-batch-deployment</c> 的契约（turn-sequence「合法落子范围的对外契约」）：任何大回合都是该玩家所在战场的可落子格（同战场玩家自然共享，随链接扩大），
+    /// 扣除该玩家的禁入格（life-shape），
     /// 查询走 <see cref="LifeShapeReport.ForbiddenCellsFor"/>（唯一实现，与预演第 1 步同源），界面与 AI 不自行判断。
     /// 计算委托给只读公开量的纯函数 <see cref="PublicRules.LegalRange"/>（expert-lookahead D7：对局流程与专家前瞻共用唯一实现，禁入只在那里扣除）。
     /// 可落子格按当前地形现算（这里曾是建局时算好的缓存字段，地形可变之后它是过期数据，2.6 缓存排查第 1 条）。
@@ -426,7 +424,7 @@ public sealed partial class MatchFlow
     {
         RequirePhase(MatchPhase.InProgress);
         int zone = Require(player).BirthZone ?? throw new SiegeRuleException($"玩家 {player} 尚未锁定出生区。");
-        return PublicRules.LegalRange(Board, MajorRound, zone, player, LifeShapeReport.Analyze(Board), Mode);
+        return PublicRules.LegalRange(Board, zone, player, LifeShapeReport.Analyze(Board));
     }
 
     // ---------- 弃赛 ----------
@@ -469,17 +467,14 @@ public sealed partial class MatchFlow
         }
 
         Hands.Resign(player);
-        Dictionary<int, int>? occupancy = Mode == MatchMode.Link ? OccupancyCounts() : null;
+        Dictionary<int, int> occupancy = OccupancyCounts();
         record.Status = PlayerStatus.Resigned;
         record.ResignedInMajorRound = MajorRound;
         record.PowerAtResign = power;
         Emit(FlowEventKind.PlayerResigned, player, $"弃赛时势力 {power}");
         RecalculateDerived();
-        if (occupancy is not null)
-        {
-            // 链接模式：多人战场因弃赛只剩 1 人 → 减员结算（即时标记；势力按弃赛后的重算结果记录）。
-            SettleByAttrition(occupancy);
-        }
+        // 多人战场因弃赛只剩 1 人 → 减员结算（即时标记；势力按弃赛后的重算结果记录）。
+        SettleByAttrition(occupancy);
 
         if (inOwnTurn)
         {
@@ -515,7 +510,6 @@ public sealed partial class MatchFlow
             Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board),
             CarryInOut, CarryIns)
         {
-            Mode = Options.Mode,
             PassedThisRound = PassedThisRound,
         };
     }
@@ -540,9 +534,9 @@ public sealed partial class MatchFlow
     {
         // D2：连续 Pass 计数——落子 ≥1 枚即清零。
         _passStreak = context.IsPass ? _passStreak + 1 : 0;
-        if (Mode == MatchMode.Link && context.IsPass)
+        if (context.IsPass)
         {
-            // 链接模式的整轮 Pass 按战场判定（battlefield「战场结算」），逐人记本大回合是否 Pass，不读全局计数。
+            // 整轮 Pass 按战场判定（battlefield「战场结算」），逐人记本大回合是否 Pass，不读全局计数。
             _passedThisRound.Add(context.Player);
         }
 
@@ -588,7 +582,7 @@ public sealed partial class MatchFlow
             return;
         }
 
-        Dictionary<int, int>? occupancy = Mode == MatchMode.Link ? OccupancyCounts() : null;
+        Dictionary<int, int> occupancy = OccupancyCounts();
         int order = ++_eliminationSequence;
         foreach (PlayerId player in zeroed)
         {
@@ -596,26 +590,19 @@ public sealed partial class MatchFlow
             record.Status = PlayerStatus.Eliminated;
             record.EliminationOrder = order;
             record.EliminatedInMajorRound = MajorRound;
-            if (occupancy is not null)
-            {
-                record.EliminationReason = EliminationReason.PowerZero;
-            }
-
+            record.EliminationReason = EliminationReason.PowerZero;
             Emit(FlowEventKind.PlayerEliminated, player, $"第 {order} 个出局（势力归零）");
         }
 
-        if (occupancy is not null)
-        {
-            // 链接模式：多人战场因势力归零只剩 1 人 → 减员结算（即时标记）。
-            SettleByAttrition(occupancy);
-        }
+        // 多人战场因势力归零只剩 1 人 → 减员结算（即时标记）。
+        SettleByAttrition(occupancy);
     }
 
     /// <summary>
-    /// 三类终局条件（elimination-endgame「三类终局条件」）。只记录待处理的终局原因；收尾在当前小回合结束时进行。
+    /// 小回合内的终局检查（elimination-endgame「两类终局条件」）：只判"只剩一名参赛玩家"。只记录待处理的终局原因；收尾在当前小回合结束时进行。
     /// </summary>
     /// <remarks>
-    /// 分支顺序即优先级：只剩一名参赛玩家 &gt; 棋盘填满 &gt; 整轮 Pass。
+    /// 整轮 Pass 与填满不直接结束对局，而是触发所在战场的结算（battlefield「战场结算」）；"最后战场结算"在大回合结束时判定（<see cref="EndMajorRound"/>）。
     /// 本方法 MUST NOT 再增加分支：既不按轮数结束，也不因势力领先幅度提前结束。
     /// </remarks>
     private void CheckEndConditions()
@@ -625,24 +612,9 @@ public sealed partial class MatchFlow
             return;
         }
 
-        int active = ActiveCount;
-        if (active <= 1)
+        if (ActiveCount <= 1)
         {
             _pendingEnd = EndReason.LastPlayerStanding;
-        }
-        else if (Mode == MatchMode.Link)
-        {
-            // 链接模式（battlefield「战场结算」，elimination-endgame）：整轮 Pass 与填满不再直接结束对局，而是触发所在战场的结算（2.6）；
-            // 全局终局只剩"只剩一名参赛玩家"（与"只剩一个战场且已结算"，2.7）。
-            return;
-        }
-        else if (!Board.HasPlayableEmptyCell())
-        {
-            _pendingEnd = EndReason.BoardFull;
-        }
-        else if (_passStreak >= active)
-        {
-            _pendingEnd = EndReason.AllPassed;
         }
     }
 
@@ -656,7 +628,7 @@ public sealed partial class MatchFlow
         {
             PlayerRecord record = _records[player];
             PlayerPower detail = power.Of(player);
-            if (Mode == MatchMode.Link && record.Defeat is { } defeat)
+            if (record.Defeat is { } defeat)
             {
                 // 战场落败者按结算时的比较量排名（elimination-endgame「终局名次与并列判定」第 2 条），不按终局时盘面。
                 inputs.Add(new StandingInput(player, record.Status, defeat.Power, defeat.ControlledRelics, defeat.ExclusiveCells, defeat.Stones, record.EliminationOrder)
@@ -679,7 +651,7 @@ public sealed partial class MatchFlow
             });
         }
 
-        Result = new MatchResult(reason, MajorRound, Mode == MatchMode.Link ? FinalStandings.ComputeLink(inputs) : FinalStandings.Compute(inputs));
+        Result = new MatchResult(reason, MajorRound, FinalStandings.Compute(inputs));
         Phase = MatchPhase.Ended;
         _pendingEnd = null;
         Emit(FlowEventKind.MatchEnded, null, $"{reason}；名次 {string.Join(" ", Result.Standings.Select(s => $"{s.Rank}.{s.Player}"))}");
@@ -734,15 +706,12 @@ public sealed partial class MatchFlow
     private void EndMajorRound()
     {
         int completed = MajorRound;
-        if (Mode == MatchMode.Link)
+        // 先逐战场结算（落败者不进下一轮顺序），再判"最后战场结算"终局（battlefield「战场结算」「阶段推进」）。
+        SettleAtRoundEnd(completed);
+        if (LastBattlefieldSettled())
         {
-            // 链接模式：先逐战场结算（落败者不进下一轮顺序），再判"最后战场结算"终局（battlefield「战场结算」「阶段推进」）。
-            SettleAtRoundEnd(completed);
-            if (LastBattlefieldSettled())
-            {
-                Finish(EndReason.LastBattlefieldSettled);
-                return;
-            }
+            Finish(EndReason.LastBattlefieldSettled);
+            return;
         }
 
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
@@ -788,13 +757,10 @@ public sealed partial class MatchFlow
         MajorRound = completed + 1;
         Emit(FlowEventKind.MajorRoundEnded, null,
             $"第 {completed} 大回合结束；先手值 {string.Join(" ", report.Entries.Select(e => $"{e.Player}={e.Value}(名次{e.Rank},修正{e.Bonus})"))}；下一轮 {string.Join(">", report.NextOrder)}");
-        if (Mode == MatchMode.Link)
-        {
-            // 链接模式的阶段转换全部在大回合结束时执行（battlefield「阶段推进」）：首轮配对、决赛触发。
-            AdvanceLinkPhase(completed);
-            // final-countdown：结算与阶段转换（含挂接来源时当场执行的首轮配对）之后推进决赛倒计时；停在待配对时由 ApplyPairing 补做。
-            UpdateFinalCountdown(completed);
-        }
+        // 阶段转换全部在大回合结束时执行（battlefield「阶段推进」）：首轮配对、决赛触发。
+        AdvanceLinkPhase(completed);
+        // final-countdown：结算与阶段转换（含挂接来源时当场执行的首轮配对）之后推进决赛倒计时；停在待配对时由 ApplyPairing 补做。
+        UpdateFinalCountdown(completed);
     }
 
     // ---------- 内部 ----------
@@ -829,21 +795,19 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 模式与地图匹配（实现裁决 B1）：链接模式只能配链接图、恰 4 人；不匹配即建局报错。
-    /// retire-legacy-maps 3.5：原第三条"链接图只能以链接模式建局"删除——公开建局恒为链接模式，手写夹具的旧模式不会配链接图；
-    /// 公开恢复路径对"链接图上的旧模式存档"另行拒绝（<see cref="Restore"/>）。
+    /// 建局约束（实现裁决 B1 / S1）：只能配链接图、恰 4 人；不满足即建局报错（恢复路径同一处校验）。
+    /// retire-legacy-rules：原 <c>RequireModeMatchesMap</c> 去掉模式参数——对局只有链接规则一套。
     /// 按地图标识判定（<see cref="LinkMapId.IsLinkMap"/>）：对局层不读规格档（boundaries「地图规格档的分流」），而链接本身也要从标识取地图种子。
     /// </summary>
-    private static void RequireModeMatchesMap(MatchMode mode, MapData map, int players)
+    private static void RequireLinkMatch(MapData map, int players)
     {
-        if (mode == MatchMode.Link && players != 4)
+        if (players != 4)
         {
             // 裁决 3b / S1：链接模式只有 4 人局。
             throw new ArgumentException($"链接模式只有 4 人局，实际 {players} 人。", nameof(players));
         }
 
-        bool linkMap = LinkMapId.IsLinkMap(map.Id);
-        if (mode == MatchMode.Link && !linkMap)
+        if (!LinkMapId.IsLinkMap(map.Id))
         {
             throw new ArgumentException($"链接模式只能配链接图（link:<地图种子>），地图 {map.Id} 不是。", nameof(map));
         }
@@ -924,7 +888,7 @@ public sealed partial class MatchFlow
 
         internal BigInteger? PowerAtResign { get; set; }
 
-        /// <summary>链接模式的出局原因；旧模式恒为 <c>null</c>。</summary>
+        /// <summary>出局原因；未出局为 <c>null</c>。</summary>
         internal EliminationReason? EliminationReason { get; set; }
 
         /// <summary>战场落败时的比较量（势力 / 信物 / 独占空格 / 棋子，名次比较链）；其他情形为 <c>null</c>。</summary>

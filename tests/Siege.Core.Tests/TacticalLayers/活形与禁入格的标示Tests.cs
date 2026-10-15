@@ -15,7 +15,7 @@ public class 活形与禁入格的标示Tests
     /// <summary>
     /// P0 的环形活形：棋子见 <see cref="BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7"/>，单格眼 F7、H7，外侧大片空地。
     /// 平坦 8×8 链接载体上四人同锁棋盘 0、第 5 大回合（合法范围即整块棋盘 0），<paramref name="first"/> 先行动，已进入部署阶段。
-    /// retire-legacy-rules 1.6：原为 9×9 夹具上的 RingE5G5；本文件坐标由原 9×9 逐用例映射（环形相关为 (+1, +2)）。
+    /// retire-legacy-rules 1.6：原为 9×9 夹具上眼 E5、G5 的环；本文件坐标由原 9×9 逐用例映射（环形相关为 (+1, +2)）。
     /// </summary>
     private static MatchFlow RingMatch(PlayerId first)
     {
@@ -104,7 +104,7 @@ public class 活形与禁入格的标示Tests
         // 三类"落不下"在视图数据里互斥、在外观上各有独立手法：地形（岩石 / 深水，看地形本身）、范围外（无标记）、活棋禁入（禁入印记）。
         // 第 1 大回合，P1 只能在自己所在的战场落子：P0 的眼 F7 不在 P1 的范围里——它仍 MUST 标活棋禁入（与预演第 1 步"禁入先于范围"同序）；
         // 战场之外的格（棋盘 1 的左下角）只是范围外。岩石 C8 是地形不可落子。
-        // retire-legacy-rules 1.6：载体为平坦 8×8 链接档图、四人同锁棋盘 0；环形活形同 RingF7H7（原 RingE5G5 平移 (+1, +2)），岩石 B6 → C8。
+        // retire-legacy-rules 1.6：载体为平坦 8×8 链接档图、四人同锁棋盘 0；环形活形同 RingF7H7（原 9×9 眼 E5、G5 的环平移 (+1, +2)），岩石 B6 → C8。
         // 原"P2 出生区里的 A9"（保护期里 P1 的范围外）改为本战场之外的格：链接模式的合法范围恒为整个战场，座位视野里看不到战场之外的格，
         // 所以范围外这一格从不带视野过滤的公开棋盘（DefaultBoardView.From(PublicWorld)）上取。
         MapData plain = LinkModeFixtures.PlainMap();

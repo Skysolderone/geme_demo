@@ -199,7 +199,7 @@ public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, Bi
 
     /// <summary>
     /// 链接模式下不与本机同战场的玩家（board-link-mode Q1 / 裁决 D20，information-visibility「他人势力不可见」）：数值全部归零、名次为空，只剩名字与状态。
-    /// 由 <see cref="Visibility.ViewerWorld.Layer"/> 按座位视图置位；旧模式与同战场玩家恒为假。
+    /// 由 <see cref="Visibility.ViewerWorld.Layer"/> 按座位视图置位；没有按座位视图与同战场玩家恒为假。
     /// </summary>
     public bool Concealed { get; init; }
 

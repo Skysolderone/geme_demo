@@ -28,7 +28,7 @@ public class 收敛口径Tests
         Assert.Equal((1, 3), (c.Converged, c.Capped));
         Assert.Equal(0.75, c.CappedRate.Value);
         Assert.Equal(3, c.Reasons[LogResult.LegacyMajorRoundLimit]);
-        Assert.Equal(1, c.Reasons[nameof(EndReason.AllPassed)]);
+        Assert.Equal(1, c.Reasons[LogResult.LegacyAllPassed]);
         Assert.Equal(6, c.MeanMajorRoundsConverged);
 
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze(logs));

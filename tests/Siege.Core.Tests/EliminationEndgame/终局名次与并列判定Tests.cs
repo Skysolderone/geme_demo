@@ -7,7 +7,7 @@ using Siege.Core.Scoring;
 namespace Siege.Core.Tests.EliminationEndgame;
 
 /// <summary>规格：elimination-endgame —— Requirement: 终局名次与并列判定（design.md D7 纯函数；restore-go-core-rules D4 并列链：势力 → 信物数 → 独占空格数 → 棋子数）</summary>
-/// <remarks>retire-legacy-rules 1.3：纯函数用例改调唯一名次实现的链接版（<see cref="FinalStandings.ComputeLink"/>，第 3 组更名为 <c>Compute</c>），期望值不变（「出局者倒序」按清单 P3 去掉输入里的弃赛者）。</remarks>
+/// <remarks>retire-legacy-rules 1.3：纯函数用例改调唯一名次实现的链接版（原 <c>ComputeLink</c>，第 3 组更名为 <see cref="FinalStandings.Compute"/>），期望值不变（「出局者倒序」按清单 P3 去掉输入里的弃赛者）。</remarks>
 public class 终局名次与并列判定Tests
 {
     private static StandingInput Active(PlayerId p, long power, int relics = 0, int cells = 0, int stones = 0) =>
@@ -25,7 +25,7 @@ public class 终局名次与并列判定Tests
     {
         // 设计文档 §12.3：势力均为 42，信物数 3 与 1 → 3 者名次更高。
         // 变异验证 M-E17：FinisherComparer 删除信物级 → 红 1（本测试）。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Active(TestMaps.P0, 42, relics: 1), Active(TestMaps.P1, 42, relics: 3)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(TestMaps.P0, 42, relics: 1), Active(TestMaps.P1, 42, relics: 3)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, TestMaps.P0, TestMaps.P1));
     }
 
@@ -34,7 +34,7 @@ public class 终局名次与并列判定Tests
     {
         // 设计文档 §12.3：势力、信物、独占空格数均相同，棋子数 11 与 8 → 11 者名次更高。
         // 变异验证 M-E18：FinisherComparer 删除棋子数级（少一级）→ 红 1（本测试：二者并列）。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Active(TestMaps.P0, 42, 2, 7, stones: 8), Active(TestMaps.P1, 42, 2, 7, stones: 11)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(TestMaps.P0, 42, 2, 7, stones: 8), Active(TestMaps.P1, 42, 2, 7, stones: 11)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, TestMaps.P0, TestMaps.P1));
     }
 
@@ -43,7 +43,7 @@ public class 终局名次与并列判定Tests
     {
         // 设计文档 §12.3：四项全同 → 共享同一名次；其后的名次跳号（竞争名次）。
         // 变异验证 M-E19：Append 不判并列、名次恒为位置 → 红 1（本测试）。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Active(TestMaps.P0, 42, 2, 7, 9), Active(TestMaps.P1, 42, 2, 7, 9), Active(TestMaps.P2, 10)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(TestMaps.P0, 42, 2, 7, 9), Active(TestMaps.P1, 42, 2, 7, 9), Active(TestMaps.P2, 10)]);
         Assert.Equal(new[] { 1, 1, 3 }, Ranks(s, TestMaps.P0, TestMaps.P1, TestMaps.P2));
     }
 
@@ -52,7 +52,7 @@ public class 终局名次与并列判定Tests
     {
         // 设计文档 §12.3：弃赛玩家 D 势力 60，完赛玩家 A 势力 20 → A 高于 D。
         // 变异验证 M-E20：Compute 把弃赛者并入完赛者按势力排 → 红 1（本测试）。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Resigned(TestMaps.P3, 60), Active(TestMaps.P0, 20)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Resigned(TestMaps.P3, 60), Active(TestMaps.P0, 20)]);
         Assert.Equal(new[] { 1, 2 }, Ranks(s, TestMaps.P0, TestMaps.P3));
         Assert.Equal(StandingGroup.Resigned, s.Single(x => x.Player == TestMaps.P3).Group);
     }
@@ -61,7 +61,7 @@ public class 终局名次与并列判定Tests
     public void 多名弃赛者互比()
     {
         // 设计文档 §12.3：D 弃赛时势力 60，E 弃赛时 35 → 弃赛者组内 D 高于 E。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Active(TestMaps.P0, 20), Resigned(TestMaps.P2, 35), Resigned(TestMaps.P3, 60)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(TestMaps.P0, 20), Resigned(TestMaps.P2, 35), Resigned(TestMaps.P3, 60)]);
         Assert.Equal(new[] { 1, 3, 2 }, Ranks(s, TestMaps.P0, TestMaps.P2, TestMaps.P3));
     }
 
@@ -72,7 +72,7 @@ public class 终局名次与并列判定Tests
         // retire-legacy-rules（清单 P3）：原输入另含一名弃赛者并断言"出局者排在弃赛者之后"——那是旧模式组序，链接口径相反（完赛 > 出局 > 弃赛，
         // 由「链接模式终局名次Tests.弃赛者最后」守）；这里去掉弃赛者，只断言出局者倒序。
         // 变异验证 M-E21：出局者按 EliminationOrder 升序 → 红 1（本测试）。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Eliminated(TestMaps.P1, 1), Eliminated(TestMaps.P2, 2), Active(TestMaps.P0, 30)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Eliminated(TestMaps.P1, 1), Eliminated(TestMaps.P2, 2), Active(TestMaps.P0, 30)]);
         Assert.Equal(new[] { 1, 3, 2 }, Ranks(s, TestMaps.P0, TestMaps.P1, TestMaps.P2));
     }
 
@@ -81,7 +81,7 @@ public class 终局名次与并列判定Tests
     {
         // restore-go-core-rules 裁决 #3：同一次结算中同时出局者共享同一出局序号 → 共享同一名次（竞争名次，其后跳号）。
         // 真实对局路径见 出局判定Tests.同时归零同时出局。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Active(TestMaps.P0, 30), Eliminated(TestMaps.P1, 1), Eliminated(TestMaps.P2, 1), Eliminated(TestMaps.P3, 2)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(TestMaps.P0, 30), Eliminated(TestMaps.P1, 1), Eliminated(TestMaps.P2, 1), Eliminated(TestMaps.P3, 2)]);
         Assert.Equal(new[] { 1, 3, 3, 2 }, Ranks(s, TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3));
     }
 
@@ -90,7 +90,7 @@ public class 终局名次与并列判定Tests
     {
         // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、控制信物均为 2，独占空格数 14 与 9 → 14 者名次更高（段 C 改用规格算例数值，原为 3 与 1）。
         // 变异验证 M-B13（段 B，实跑红 1）/ M-C（段 C 重跑）：FinisherComparer 删除独占空格级 → 本测试红（二者比到棋子数，P0 棋子多反而第 1）。
-        ImmutableArray<Standing> s = FinalStandings.ComputeLink([Active(TestMaps.P0, 60, relics: 2, cells: 9, stones: 20), Active(TestMaps.P1, 60, relics: 2, cells: 14, stones: 5)]);
+        ImmutableArray<Standing> s = FinalStandings.Compute([Active(TestMaps.P0, 60, relics: 2, cells: 9, stones: 20), Active(TestMaps.P1, 60, relics: 2, cells: 14, stones: 5)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, TestMaps.P0, TestMaps.P1));
     }
 

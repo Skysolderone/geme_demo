@@ -31,11 +31,11 @@ internal static class LinkModeFixtures
     /// 链接模式、插旗立即。final-countdown：夹具显式取 K = 0（不启用决赛倒计时）——既有链接模式测试的期望都写于倒计时引入之前，
     /// 用 K = 0 守住原期望（battlefield「决赛倒计时」K 为 0 不启用：与引入之前逐步相同），不改期望；倒计时的测试用 <see cref="CountdownOptions"/>。
     /// </summary>
-    internal static MatchOptions Options => MatchOptions.Immediate with { Mode = MatchMode.Link, FinalCountdownRounds = 0 };
+    internal static MatchOptions Options => MatchOptions.Immediate with { FinalCountdownRounds = 0 };
 
     /// <summary>链接模式、插旗立即、决赛倒计时 K = <paramref name="rounds"/>（final-countdown）。</summary>
     internal static MatchOptions CountdownOptions(int rounds = MatchOptions.DefaultFinalCountdownRounds) =>
-        MatchOptions.Immediate with { Mode = MatchMode.Link, FinalCountdownRounds = rounds };
+        MatchOptions.Immediate with { FinalCountdownRounds = rounds };
 
     /// <summary>插旗阶段的链接模式对局。</summary>
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
@@ -145,16 +145,16 @@ internal static class LinkModeFixtures
     }
 
     /// <summary>
-    /// 平坦变体建局用的选项：调用方给的选项（缺省 <see cref="Options"/>）强制改为链接模式、决赛倒计时 K = 0。
-    /// 原 9×9 夹具的用例都写于链接模式与决赛倒计时之前；建局后另断言模式确为链接（<see cref="RequireLink"/>）——链接图配旧模式在
-    /// <see cref="MatchFlow.CreateUnvalidated"/> 里是放行的，漏传选项会让测试在链接图上跑旧规则而照样全绿。
+    /// 平坦变体建局用的选项：调用方给的选项（缺省 <see cref="Options"/>）强制决赛倒计时 K = 0。
+    /// 原 9×9 夹具的用例都写于决赛倒计时之前；建局后另断言地图确为链接图（<see cref="RequireLink"/>）。
+    /// retire-legacy-rules 第 3 组：对局模式删除，<see cref="MatchFlow.CreateUnvalidated"/> 恒按链接规则建局，原"强制链接模式"一项随之去掉。
     /// </summary>
     internal static MatchOptions PlainOptions(MatchOptions? options) =>
-        (options ?? Options) with { Mode = MatchMode.Link, FinalCountdownRounds = 0 };
+        (options ?? Options) with { FinalCountdownRounds = 0 };
 
-    /// <summary>断言对局确以链接模式建局（见 <see cref="PlainOptions"/>）。</summary>
+    /// <summary>断言对局建在链接图上（见 <see cref="PlainOptions"/>；retire-legacy-rules 第 3 组起对局只有链接规则，原"模式为链接"的断言改为断言地图标识）。</summary>
     internal static MatchFlow RequireLink(MatchFlow match) =>
-        match.Mode == MatchMode.Link ? match : throw new InvalidOperationException($"夹具建局不是链接模式（{match.Mode}）。");
+        LinkMapId.IsLinkMap(match.Map.Id) ? match : throw new InvalidOperationException($"夹具建局不在链接图上（{match.Map.Id}）。");
 
     /// <summary>平坦变体上建局、停在插旗阶段；信物为手工分布（格与内容由用例给，坐标写在本图上）。</summary>
     internal static MatchFlow PlainCreate(GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>

@@ -1,0 +1,77 @@
+// retire-legacy-rules 第 3 组改前 / 改后快照探针（临时测试，跑完即删，不入 tests/）。
+// 用法：g3/snapshot.py 把本文件拷成 tests/Siege.Core.Tests/G3SnapshotProbe.cs，设 G3_SNAPSHOT_OUT=<目录>，
+// dotnet test --filter FullyQualifiedName~G3SnapshotProbe，跑完删除拷贝。只用改前改后都存在的 API（不写 MatchMode）。
+using System.Text;
+using Siege.Core.Board;
+using Siege.Core.Board.Maps;
+using Siege.Core.Match;
+using Siege.Sim.Config;
+using Siege.Sim.Running;
+using static Siege.Core.Tests.LinkModeFixtures;
+
+namespace Siege.Core.Tests;
+
+public class G3SnapshotProbe
+{
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+
+    [Fact]
+    public void Snapshot()
+    {
+        string dir = Environment.GetEnvironmentVariable("G3_SNAPSHOT_OUT") ?? throw new InvalidOperationException("缺 G3_SNAPSHOT_OUT");
+        Directory.CreateDirectory(dir);
+
+        // ① 夹具：两次链接 + 栅栏 + 拼过来的棋盘上落子（同「链接模式存档Tests.存档恢复地图」）。
+        MatchFlow a = Started([0, 1, 3, 4]);
+        Coord fenceA = BirthCell(a.Map, 3, 0, 0);
+        a.Board.ApplyTerrainEdits([TerrainEdit.Fence(fenceA, new Coord(fenceA.X + 1, fenceA.Y))]);
+        a.PlayRounds(3, P0, P2);
+        a.ApplyPairing([(0, 3), (1, 4)]);
+        Coord onPartner = a.Board.Battlefields.ById(1)!.Cells.First(c => a.Map.BirthZoneOf(c) == 4 && a.Board[c].Occupant is null);
+        a.Place(P1, onPartner);
+        a.PlayRound(P0, P2);
+        Write(dir, "save-fixture-linked", a.Serialize(), MatchFlow.Restore(Map, a.Serialize()).Serialize());
+
+        // ② 夹具：终局后（最后战场结算）。
+        MatchFlow b = Started([0, 0, 0, 2], new ScriptedPairingSource()).PlayRound(P0, P1).PassRounds(3);
+        Write(dir, "save-fixture-ended", b.Serialize(), MatchFlow.Restore(Map, b.Serialize()).Serialize());
+
+        // ③ 夹具：待首轮配对时。
+        MatchFlow c = Started([0, 1, 3, 4]).PassRounds(3);
+        Write(dir, "save-fixture-awaiting", c.Serialize(), MatchFlow.Restore(Map, c.Serialize()).Serialize());
+
+        // ④ link:1 种子 3 / 种子 1，4 名标准 AI（跑局层缺省、脚本配对），第 4 / 8 / 12 大回合开始时各存一份。
+        foreach (ulong seed in new ulong[] { 3, 1 })
+        {
+            var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0 };
+            MapData map = MapCatalog.Resolve(config.MapId);
+            MatchSession session = MatchSession.Create(config, seed, map, recorded: false, carry: null, pairing: new ScriptedPairingSource());
+            MatchFlow m = session.Match;
+            int[] marks = [4, 8, 12];
+            int next = 0;
+            while (m.Phase == MatchPhase.InProgress && next < marks.Length)
+            {
+                if (m.MajorRound >= marks[next] && m.Stage == TurnStage.Idle)
+                {
+                    string json = m.Serialize();
+                    Write(dir, $"save-link1-seed{seed}-r{marks[next]}", json, MatchFlow.Restore(map, json).Serialize());
+                    next++;
+                    continue;
+                }
+
+                session.RunTurn();
+            }
+
+            if (m.Phase == MatchPhase.Ended)
+            {
+                Write(dir, $"save-link1-seed{seed}-end", m.Serialize(), MatchFlow.Restore(map, m.Serialize()).Serialize());
+            }
+        }
+    }
+
+    private static void Write(string dir, string name, string json, string restored)
+    {
+        File.WriteAllText(Path.Combine(dir, name + ".json"), json, Utf8);
+        File.WriteAllText(Path.Combine(dir, name + ".restored.json"), restored, Utf8);
+    }
+}

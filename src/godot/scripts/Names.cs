@@ -29,8 +29,6 @@ public static class Names
     public static string End(EndReason reason) => reason switch
     {
         EndReason.LastPlayerStanding => "只剩一名参赛玩家",
-        EndReason.AllPassed => "一整轮所有人都 Pass",
-        EndReason.BoardFull => "棋盘已无可落子空位",
         EndReason.LastBattlefieldSettled => "最后一个战场已结算",
         _ => reason.ToString(),
     };

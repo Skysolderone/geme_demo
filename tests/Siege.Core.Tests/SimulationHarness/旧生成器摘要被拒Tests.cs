@@ -76,7 +76,7 @@ public class 旧生成器摘要被拒Tests
         MapData now = MapCatalog.Resolve("link:1");
         Assert.NotEqual(OldLink1Digest, MapFile.Digest(now));
 
-        MatchOptions options = MatchOptions.Immediate with { Mode = MatchMode.Link };
+        MatchOptions options = MatchOptions.Immediate;
         MatchFlow match = MatchFlow.Create(now, new GameSeed(11), [new(0), new(1), new(2), new(3)], options);
         match.PairingSource = new ScriptedPairingSource();
         match.PlantPrototype();

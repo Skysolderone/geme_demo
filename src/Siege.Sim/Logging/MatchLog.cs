@@ -98,7 +98,7 @@ public sealed class MatchLog
         Enum.GetNames<T>().Contains(text, StringComparer.Ordinal) ? Enum.Parse<T>(text) : throw new FormatException($"日志首部的带入里有未知{what} {text}。");
 
     /// <summary>是否为链接模式的局（首部 <see cref="LogHeader.Mode"/>）。</summary>
-    public bool IsLinkMode => Header.Mode == nameof(Siege.Core.Match.MatchMode.Link);
+    public bool IsLinkMode => Header.Mode == "Link";
 
     /// <summary>
     /// 日志里的配对事件（回放输入，simulation-harness「可复现回放」），按发生顺序。种类或来源名解析不了即 <see cref="FormatException"/>。
@@ -1101,6 +1101,15 @@ public sealed record LogResult
     /// 这里只为读旧日志保留字面量；段 E（tasks 5.2）换成 <c>turn_limit</c> 截断口径。
     /// </summary>
     public const string LegacyMajorRoundLimit = "MajorRoundLimit";
+
+    /// <summary>
+    /// 旧日志里「整轮 Pass」的终局原因名。该原因只属于旧模式，已随 retire-legacy-rules（R9）从 <c>EndReason</c> 删除；
+    /// 这里只为读旧日志保留字面量（平衡报告的终局原因分布仍按旧口径统计，报告字节不变）。
+    /// </summary>
+    public const string LegacyAllPassed = "AllPassed";
+
+    /// <summary>旧日志里「棋盘填满」的终局原因名。同 <see cref="LegacyAllPassed"/>：随 retire-legacy-rules（R9）从 <c>EndReason</c> 删除，只为读旧日志保留字面量。</summary>
+    public const string LegacyBoardFull = "BoardFull";
 
     /// <summary>
     /// 跑局层小回合数截断的结束原因（restore-go-core-rules D5）：不是 <c>EndReason</c> 的成员（规则层没有这种终局），

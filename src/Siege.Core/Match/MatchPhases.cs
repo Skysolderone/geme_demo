@@ -16,12 +16,12 @@ public enum MatchPhase
 
     /// <summary>
     /// 链接模式（battlefield「阶段推进」）：第 3 大回合结束、首轮配对候选 ≥ 2，停在大回合边界等待外部提交配对事件
-    /// （<see cref="MatchFlow.ApplyPairing"/>，或挂接的 <see cref="MatchFlow.PairingSource"/> 当场给出）。旧模式永不进入。
+    /// （<see cref="MatchFlow.ApplyPairing"/>，或挂接的 <see cref="MatchFlow.PairingSource"/> 当场给出）。
     /// 构筑期与交战期都是 <see cref="InProgress"/>（二者只差合法落子范围是否已随链接扩大，见 <see cref="MatchFlow.LinkStage"/>）。
     /// </summary>
     AwaitingPairing,
 
-    /// <summary>链接模式：全部多人战场已结算且在局玩家 ≥ 2，停在大回合边界等待决赛链接事件。旧模式永不进入。</summary>
+    /// <summary>链接模式：全部多人战场已结算且在局玩家 ≥ 2，停在大回合边界等待决赛链接事件。</summary>
     AwaitingFinalLink,
 }
 
@@ -52,25 +52,18 @@ public enum TurnStage
 
 /// <summary>
 /// 终局原因。序列化名称稳定：存档与对局日志按名字写入。
-/// 旧模式（<see cref="MatchMode.Legacy"/>）只用前三个成员——elimination-endgame「三类终局条件」（restore-go-core-rules 裁决 #4）；
-/// 链接模式只用 <see cref="LastPlayerStanding"/> 与 <see cref="LastBattlefieldSettled"/>——「两类终局条件」，优先级 只剩一名 &gt; 最后战场结算
-/// （board-link-mode 裁决 S4，2026-10-10 追加末位成员）。
+/// 只有 <see cref="LastPlayerStanding"/> 与 <see cref="LastBattlefieldSettled"/> 两个成员——elimination-endgame「两类终局条件」，优先级 只剩一名 &gt; 最后战场结算
+/// （board-link-mode 裁决 S4）。retire-legacy-rules（R9）：旧模式专用的 <c>AllPassed</c> / <c>BoardFull</c> 删除；Sim 读旧日志时按字符串常量识别这两个原因名。
 /// 除此之外本枚举 MUST NOT 再增加成员：对局 MUST NOT 设置固定总轮数或大回合上限，也 MUST NOT 因势力领先幅度提前结束
 /// （旧的 <c>MajorRoundLimit</c> / <c>PowerDominance</c> 已随 round-cap / dominance-victory 一并删除）。
 /// </summary>
 public enum EndReason
 {
-    /// <summary>条件 1：只剩一名参赛玩家，该玩家直接获胜。优先级最高。</summary>
+    /// <summary>只剩一名参赛玩家，该玩家直接获胜。优先级最高。</summary>
     LastPlayerStanding,
 
-    /// <summary>条件 3：连续 Pass 计数达到当前参赛人数（整轮 Pass）。优先级最低。</summary>
-    AllPassed,
-
-    /// <summary>条件 2：盘面不存在任何可落子的空格。</summary>
-    BoardFull,
-
     /// <summary>
-    /// 链接模式：只剩一个含在局玩家的战场且它已结算（battlefield「战场结算」，在大回合结束时判定）。
+    /// 只剩一个含在局玩家的战场且它已结算（battlefield「战场结算」，在大回合结束时判定）。
     /// 结算落败者出局后只剩胜者一人时也记本原因（结算是终局的直接原因）；因弃赛或势力归零只剩一人时记 <see cref="LastPlayerStanding"/>。
     /// </summary>
     LastBattlefieldSettled,
@@ -88,18 +81,18 @@ public enum FlowEventKind
     PlayerResigned,
     MatchEnded,
 
-    /// <summary>链接模式：配对事件（首轮或决赛）被接受。旧模式永不发出。</summary>
+    /// <summary>链接模式：配对事件（首轮或决赛）被接受。</summary>
     PairingApplied,
 
-    /// <summary>链接模式：一次链接执行完毕（两个战场合并）。旧模式永不发出。</summary>
+    /// <summary>链接模式：一次链接执行完毕（两个战场合并）。</summary>
     BattlefieldsLinked,
 
-    /// <summary>链接模式：一个战场结算（整轮 Pass / 填满 / 减员 / 到期）。旧模式永不发出。</summary>
+    /// <summary>链接模式：一个战场结算（整轮 Pass / 填满 / 减员 / 到期）。</summary>
     BattlefieldSettled,
 
     /// <summary>
     /// 链接模式（final-countdown）：一个未结算的多人战场进入决赛倒计时、得到期限大回合（第一次出现时同时记下倒计时起点 R）。
-    /// 旧模式与 K = 0 时永不发出。追加在末位，旧值不变。
+    /// K = 0 时永不发出。追加在末位，旧值不变。
     /// </summary>
     FinalCountdown,
 }

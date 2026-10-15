@@ -44,7 +44,6 @@ public class 带入带出配置Tests
                 ContentSet = config.ContentSet!.Value,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
-                Mode = MatchMode.Link,
                 // final-countdown：复刻 MatchSession.Create 的建局，决赛倒计时取跑局配置的值（黄金配置写死 K = 0）。
                 FinalCountdownRounds = config.FinalCountdownRounds!.Value,
             });
@@ -69,7 +68,7 @@ public class 带入带出配置Tests
         Assert.False(MatchOptions.Immediate.CarryInOut);
         Assert.Empty(MatchOptions.Immediate.CarryIns);
 
-        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four, MatchOptions.Default with { Mode = MatchMode.Link });   // retire-legacy-maps：建局由 v5（Legacy）改为 link:1 链接模式
+        MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(MapCatalog.DefaultId), new GameSeed(5), Four, MatchOptions.Default);   // retire-legacy-maps：建局由 v5（Legacy）改为 link:1 链接模式
         Assert.False(match.CarryInOut);
         Assert.Empty(match.CarryIns);
         Assert.False(match.CarryInOutBackfilled);

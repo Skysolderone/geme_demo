@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// <summary>
 /// life-shape tasks 3.3：终端版文本盘面用独立符号标出禁入格与已活棋串，图例同步。
 /// 禁入格记作 <c>xN</c>（N = 活形所有者的玩家号），已活棋串的子在类型字母后加 <c>@</c>（如 <c>1B@</c>）；二者都不与既有符号冲突。
-/// retire-legacy-rules 1.6：局面载体为平坦 8×8 链接档图上四人同锁棋盘 0；环形活形用 RingF7H7（原 RingE5G5 平移 (+1, +2)），其余平移 (+2, +2)；链接终端只画本战场外接矩形，列号按视口左缘计。
+/// retire-legacy-rules 1.6：局面载体为平坦 8×8 链接档图上四人同锁棋盘 0；环形活形用 RingF7H7（原 9×9 眼 E5、G5 的环平移 (+1, +2)），其余平移 (+2, +2)；链接终端只画本战场外接矩形，列号按视口左缘计。
 /// </summary>
 public class 终端活形与禁入标示Tests
 {

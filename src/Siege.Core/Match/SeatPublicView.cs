@@ -10,7 +10,7 @@ namespace Siege.Core.Match;
 
 /// <summary>
 /// 一块出生棋盘的占位（编号、整块棋盘的外接矩形与主题）：始终公开，不含内部布局（match-setup「开局信息公开范围」，link-map-terrain 裁决 M3）。
-/// <see cref="Theme"/> 取自棋盘清单；旧模式（没有棋盘清单）为 <c>null</c>。
+/// <see cref="Theme"/> 取自棋盘清单；棋盘没有主题时为 <c>null</c>。
 /// </summary>
 public sealed record BoardPlaceholder(int Zone, string Origin, int Width, int Height, BoardTheme? Theme);
 
@@ -56,13 +56,12 @@ public sealed record SeatLinkView(int Sequence, int X, int Y);
 /// 数据层过滤：结构里只有本座位所在战场的格、棋子、设施、归属、信物、棋串与活形，以及同战场玩家的势力明细与手牌类型；
 /// 其他战场的格根本不在 <see cref="Cells"/> 里（呈现为"未展开"，<see cref="IsExpanded"/> 为 <c>false</c>）。
 /// 全局公开项（配置、地图标识与种子、带入、行动顺序、各玩家状态、战场结算与胜者、链接事件、占位）不过滤。
-/// 旧模式下全图可见、全员同战场（全知视图 <see cref="MatchFlow.Publish"/> 原样保留，批量分析、遥测、回放与显式全知配置的 AI 仍用它）。
+/// 全知视图 <see cref="MatchFlow.Publish"/> 原样保留（批量分析、遥测、回放与显式全知配置的 AI 仍用它）。
 /// </summary>
 public sealed record SeatPublicView(
     PlayerId Seat,
     string MapId,
     string Seed,
-    MatchMode Mode,
     MatchPhase Phase,
     int MajorRound,
     int ArtisanWeight,
@@ -93,25 +92,21 @@ public sealed record SeatPublicView(
 public sealed partial class MatchFlow
 {
     /// <summary>
-    /// 按座位发布公开视图（实现裁决 B4）。链接模式：插旗阶段只展开本座位已选的那块出生棋盘；此后只展开本座位所在战场的各块棋盘（整块外接矩形，含岩石与未架桥深水，G1；随链接扩大）。
-    /// 旧模式：全图展开、全员视为同战场。
+    /// 按座位发布公开视图（实现裁决 B4）：插旗阶段只展开本座位已选的那块出生棋盘；此后只展开本座位所在战场的各块棋盘（整块外接矩形，含岩石与未架桥深水，G1；随链接扩大）。
     /// </summary>
     public SeatPublicView PublishFor(PlayerId seat)
     {
         Require(seat);
-        bool link = Mode == MatchMode.Link;
         int? zone = Phase == MatchPhase.FlagPlanting ? Flags.FlagOf(seat) : _records[seat].BirthZone;
-        int? battlefield = !link || zone is null || Phase == MatchPhase.FlagPlanting ? null : PublicRules.BattlefieldOf(Board, zone.Value).Id;
+        int? battlefield = zone is null || Phase == MatchPhase.FlagPlanting ? null : PublicRules.BattlefieldOf(Board, zone.Value).Id;
 
-        ImmutableHashSet<Coord> visible = !link
-            ? [.. Board.AllCoords().Where(Board.Map.IsPlayable)]
-            : zone is null ? []
+        ImmutableHashSet<Coord> visible = zone is null ? []
             // 插旗阶段锁定后只公开这一块出生棋盘的布局：取整块棋盘（棋盘清单），不是出生区——链接档的出生区是核心区（link-map-terrain D1）。
             : Phase == MatchPhase.FlagPlanting ? [.. Board.Map.BirthBoard(zone.Value).Cells()]
             // 战斗阶段（G1，负责人 2026-10-14 裁决 A）：本战场所含各棋盘外接矩形内的全部格，含岩石与未架桥深水——否则河流与岩石在视图里成了空缺；
             // 战场只由可落子格组成，棋盘归属读 Battlefield.Boards（棋盘内任一可落子格所在的分量，D7）。其他战场的棋盘不在这里。
             : [.. PublicRules.BattlefieldOf(Board, zone.Value).Boards.SelectMany(b => Board.Map.Boards[b].Cells())];
-        bool SameField(PlayerId p) => !link || (battlefield is { } id && _records[p].BirthZone is { } z && PublicRules.BattlefieldOf(Board, z).Id == id);
+        bool SameField(PlayerId p) => battlefield is { } id && _records[p].BirthZone is { } z && PublicRules.BattlefieldOf(Board, z).Id == id;
 
         bool started = Phase != MatchPhase.FlagPlanting;
         LifeShapeReport life = LifeShapeReport.Analyze(Board);
@@ -146,15 +141,11 @@ public sealed partial class MatchFlow
         })];
 
         return new SeatPublicView(
-            seat, Board.BaseMap.Id, Seed.ToString(), Mode, Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order,
+            seat, Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order,
             CarryInOut, [.. CarryIns.Select(kv => new SeatCarryInView(kv.Key, kv.Value))], battlefield,
             // 占位取当前地图的出生棋盘（拼接后被平移方与为腾位置而移动的棋盘坐标已变，裁决 J3 / J7），不读开局图。
-            // 链接模式取棋盘清单的整块外接矩形与主题（match-setup「占位尺寸取整块棋盘」，link-map-terrain D1 / D7），不取出生区（核心区）；
-            // 旧模式没有棋盘清单，仍按出生区的外接矩形给出，与引入棋盘清单之前逐字节相同（旧模式的占位不被任何呈现读取）。
-            link
-                ? [.. Board.Map.BirthBoards().Select((plate, z) => new BoardPlaceholder(z, plate.Origin.ToNotation(), plate.Width, plate.Height, plate.Theme))]
-                : [.. Board.Map.BirthZones.Select((cells, z) => new BoardPlaceholder(z, new Coord(cells.Min(c => c.X), cells.Min(c => c.Y)).ToNotation(),
-                    cells.Max(c => c.X) - cells.Min(c => c.X) + 1, cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1, null))],
+            // 取棋盘清单的整块外接矩形与主题（match-setup「占位尺寸取整块棋盘」，link-map-terrain D1 / D7），不取出生区（核心区）。
+            [.. Board.Map.BirthBoards().Select((plate, z) => new BoardPlaceholder(z, plate.Origin.ToNotation(), plate.Width, plate.Height, plate.Theme))],
             cells, fences, relics, groups, players,
             [.. _settlements.Select(s => new SeatSettlementView(s.Battlefield, s.MajorRound, s.Winner))],
             [.. _links.Select(l => new SeatLinkView(l.Sequence, l.X, l.Y))],

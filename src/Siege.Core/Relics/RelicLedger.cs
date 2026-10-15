@@ -137,19 +137,10 @@ public sealed class RelicLedger
     public RelicLedgerState ExportState() =>
         new([.. _reveals.Select(e => new RevealedRelic(e.Coord.ToNotation(), e.MajorRound))], DeployLimitPeak);
 
-    /// <summary>从生成记录 + <see cref="ExportState"/> 的结果恢复账本。揭示按存档顺序重放；存档里出现非信物格即视为损坏。</summary>
-    public static RelicLedger Restore(RelicGenerationRecord generation, RelicLedgerState state)
-    {
-        ArgumentNullException.ThrowIfNull(state);
-        var ledger = new RelicLedger(generation);
-        ledger.RestoreState(state);
-        return ledger;
-    }
-
     /// <summary>
     /// 本账本的独立副本（表现层只读入口的试算用：<c>MatchFlow.PublishSupplement</c> 在副本上读结构参数与先手修正，不碰正式账本）：
-    /// 逐枚复制活状态（当前坐标、内容、揭示、控制）与揭示事件、峰值遥测。旧模式下与 <c>Restore(Generation, ExportState())</c> 逐项相同；
-    /// 链接模式下账本坐标已随拼接平移，MUST NOT 再从开局生成记录重建（那是开局图坐标，已揭示的被平移信物会被当作"非信物格"而抛出——段 D-a 在图形版自检里实测过同类缺陷）。
+    /// 逐枚复制活状态（当前坐标、内容、揭示、控制）与揭示事件、峰值遥测。
+    /// 账本坐标已随拼接平移，MUST NOT 再从开局生成记录重建（那是开局图坐标，已揭示的被平移信物会被当作"非信物格"而抛出——段 D-a 在图形版自检里实测过同类缺陷）。
     /// </summary>
     public RelicLedger Copy() => new(Generation, _relics.Values.Select(r => r.Clone()), _reveals) { DeployLimitPeak = DeployLimitPeak };
 
@@ -165,7 +156,7 @@ public sealed class RelicLedger
     }
 
     /// <summary>
-    /// 把 <see cref="ExportState"/> 的结果写回尚未有任何揭示的账本（<see cref="Restore"/> 与链接模式恢复共用：后者先重放链接——账本坐标随拼接平移（<see cref="Translate"/>）——再调本方法，存档里的揭示坐标即平移后的坐标）。
+    /// 把 <see cref="ExportState"/> 的结果写回尚未有任何揭示的账本（存档恢复用：先重放链接——账本坐标随拼接平移（<see cref="Translate"/>）——再调本方法，存档里的揭示坐标即平移后的坐标）。
     /// 揭示按存档顺序重放；存档里出现非信物格即视为损坏。
     /// </summary>
     internal void RestoreState(RelicLedgerState state)

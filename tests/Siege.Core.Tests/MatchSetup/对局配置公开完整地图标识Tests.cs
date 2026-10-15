@@ -20,7 +20,7 @@ public class 对局配置公开完整地图标识Tests
     /// <summary>链接图上建局（插旗阶段），挂内置固定配对脚本。</summary>
     private static MatchFlow CreateLink(string mapId, GameSeed seed, ContentSet? contentSet = null)
     {
-        MatchOptions options = MatchOptions.Immediate with { Mode = MatchMode.Link };
+        MatchOptions options = MatchOptions.Immediate;
         MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(mapId), seed, Four, contentSet is { } set ? options with { ContentSet = set } : options);
         match.PairingSource = new ScriptedPairingSource();
         return match;

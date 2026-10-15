@@ -147,7 +147,7 @@ public sealed record DefaultBoardView(
     ImmutableArray<BoardPlate> Boards)
 {
     /// <summary>
-    /// 5 块出生棋盘的占位（board-link-mode，链接模式）：由 <see cref="ForSeat"/> 填入；旧模式与全知视图为空。
+    /// 5 块出生棋盘的占位（board-link-mode，链接模式）：由 <see cref="ForSeat"/> 填入；全知视图为空。
     /// 未展开（<see cref="BoardPlaceholderView.Expanded"/> 为假）的占位在 <see cref="Cells"/> 里没有任何格。
     /// </summary>
     public ImmutableArray<BoardPlaceholderView> Placeholders { get; init; } = [];
@@ -209,17 +209,11 @@ public sealed record DefaultBoardView(
     /// 棋盘清单只留整块可见的台面（棋盘内的<b>可落子格</b>全部可见，link-map-terrain 第 1 组裁决④；G1 起战斗阶段的可见格已含本战场棋盘内的岩石 / 未架桥深水，判据不变），
     /// 栅栏两端可见、改造的目标格 / 边可见才保留；<see cref="Placeholders"/> 取 5 块出生棋盘的占位，
     /// 已展开 = 外接矩形内有可见格（出生棋盘整块一起展开；不假设左下角格可落子），本座位所在 = 编号等于 <paramref name="ownZone"/>，主题原样透传。
-    /// 旧模式（<see cref="SeatPublicView.Mode"/> 不是 <see cref="MatchMode.Link"/>）原样返回：全图可见、没有占位，与引入本方法之前逐项相同。
     /// 本方法不读地图、不判规则，只按座位视图给出的坐标做集合过滤。
     /// </summary>
     public DefaultBoardView ForSeat(SeatPublicView seat, int? ownZone)
     {
         ArgumentNullException.ThrowIfNull(seat);
-        if (seat.Mode != MatchMode.Link)
-        {
-            return this;
-        }
-
         HashSet<Coord> visible = [.. seat.Cells.Select(c => Coord.Parse(c.Coord))];
         HashSet<Coord> playable = [.. Cells.Where(c => c.Terrain == Terrain.Playable).Select(c => c.Coord)];
         ImmutableArray<BoardPlaceholderView> placeholders =

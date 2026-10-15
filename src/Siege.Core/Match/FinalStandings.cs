@@ -5,7 +5,7 @@ using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
 
-/// <summary>终局名次的三个分组：完赛者 &gt; 弃赛者 &gt; 出局者。</summary>
+/// <summary>终局名次的三个分组：完赛者 &gt; 出局者 &gt; 弃赛者（枚举值顺序不表示名次先后，序列化名称稳定）。</summary>
 public enum StandingGroup
 {
     Finisher,
@@ -31,7 +31,7 @@ public sealed record StandingInput(
     int? EliminationOrder)
 {
     /// <summary>
-    /// 出局原因（链接模式；旧模式与未出局为 <c>null</c>）。战场落败者的 <see cref="Power"/> 与其后三项是<b>结算时</b>的比较量。
+    /// 出局原因（未出局为 <c>null</c>）。战场落败者的 <see cref="Power"/> 与其后三项是<b>结算时</b>的比较量。
     /// </summary>
     public EliminationReason? Reason { get; init; }
 }
@@ -44,38 +44,18 @@ public sealed record Standing(int Rank, PlayerId Player, StandingGroup Group, St
 /// </summary>
 /// <remarks>
 /// 完赛者按 势力值 → 控制信物数 → 独占空格数 → 盘面棋子数 逐级比较，四项全同则并列；
-/// 弃赛者排在全部完赛者之后，组内按弃赛时势力值；出局者排在最后，按出局先后倒序（越晚出局名次越高），同一次结算中同时出局者共享名次。
-/// 终局条件 1（只剩一名参赛玩家）下唯一的完赛者自然位列第 1，无需特殊分支。
+/// 出局者排在全部完赛者之后，按出局先后倒序（越晚出局名次越高）；弃赛者排在最后，组内按弃赛时势力值。
+/// 终局条件"只剩一名参赛玩家"下唯一的完赛者自然位列第 1，无需特殊分支。
+/// retire-legacy-rules：旧模式的组序（完赛 &gt; 弃赛 &gt; 出局）删除，原链接版 <c>ComputeLink</c> 更名为本方法，是唯一的名次实现。
 /// </remarks>
 public static class FinalStandings
 {
-    /// <summary>计算最终名次。</summary>
-    public static ImmutableArray<Standing> Compute(IEnumerable<StandingInput> inputs)
-    {
-        ArgumentNullException.ThrowIfNull(inputs);
-        StandingInput[] all = [.. inputs];
-
-        List<StandingInput> finishers = [.. all.Where(i => i.Status == PlayerStatus.Active).OrderBy(i => i, FinisherComparer.Instance)];
-        List<StandingInput> resigned = [.. all.Where(i => i.Status == PlayerStatus.Resigned).OrderByDescending(i => i.Power).ThenBy(i => i.Player)];
-        List<StandingInput> eliminated = [.. all.Where(i => i.Status == PlayerStatus.Eliminated)
-            .OrderByDescending(i => i.EliminationOrder ?? throw new SiegeRuleException($"出局玩家 {i.Player} 没有出局序号。"))];
-
-        ImmutableArray<Standing>.Builder result = ImmutableArray.CreateBuilder<Standing>(all.Length);
-        int position = 0;
-
-        Append(result, finishers, StandingGroup.Finisher, ref position, (a, b) => FinisherComparer.Instance.Compare(a, b) == 0);
-        Append(result, resigned, StandingGroup.Resigned, ref position, (a, b) => a.Power == b.Power);
-        // 同一次结算中同时出局者共享同一出局序号（MatchFlow.CheckEliminations），据此共享同一名次（restore-go-core-rules 裁决 #3）。
-        Append(result, eliminated, StandingGroup.Eliminated, ref position, (a, b) => a.EliminationOrder == b.EliminationOrder);
-        return result.MoveToImmutable();
-    }
-
     /// <summary>
-    /// 链接模式的最终名次（board-link-mode，elimination-endgame「终局名次与并列判定」）：
+    /// 最终名次（board-link-mode，elimination-endgame「终局名次与并列判定」）：
     /// ① 在局者（最后战场的胜者；只剩一名参赛玩家时即那一人）按比较链；② 出局者按出局先后倒序——同一出局序号内，战场落败者按结算时的比较链排序、
-    /// 只有链全同才共享名次，势力归零者共享名次；③ 弃赛者最后，按弃赛时势力。旧模式的 <see cref="Compute"/> 不受影响。
+    /// 只有链全同才共享名次，势力归零者共享名次；③ 弃赛者最后，按弃赛时势力。
     /// </summary>
-    public static ImmutableArray<Standing> ComputeLink(IEnumerable<StandingInput> inputs)
+    public static ImmutableArray<Standing> Compute(IEnumerable<StandingInput> inputs)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         StandingInput[] all = [.. inputs];

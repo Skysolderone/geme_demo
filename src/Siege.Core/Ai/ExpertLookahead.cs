@@ -321,7 +321,7 @@ internal sealed class ExpertLookahead
         {
             Player = _me,
             DeployLimit = effects.DeployLimit,
-            LegalRange = PublicRules.LegalRange(after.Board, round, zone, _me, after.LifeShape, after.Mode),
+            LegalRange = PublicRules.LegalRange(after.Board, zone, _me, after.LifeShape),
             Stock = types.ToDictionary(t => t, _ => effects.DeployLimit),
             WorkshopActive = effects.WorkshopActive,
         };
@@ -440,13 +440,13 @@ internal sealed class ExpertLookahead
 
     /// <summary>
     /// 同 <see cref="Project(MatchPublicView, GameBoard)"/>，出局判定只对专家 <paramref name="me"/> 所在战场的玩家做（ai-seat-vision 裁决 V2，修 C12）：
-    /// 链接模式下候选与回应只改变本战场的盘面，他战场玩家的势力不会因此变化；按座位视野下他们的势力在投影里为 0（不可见，不是归零），
-    /// MUST NOT 因此被判出局。全知视图下他战场玩家的势力与决策起点相同、不会新出局，两种口径结果一致。旧模式（没有战场之分）与两参数重载相同。
+    /// 候选与回应只改变本战场的盘面，他战场玩家的势力不会因此变化；按座位视野下他们的势力在投影里为 0（不可见，不是归零），
+    /// MUST NOT 因此被判出局。全知视图下他战场玩家的势力与决策起点相同、不会新出局，两种口径结果一致。
     /// </summary>
     internal static MatchPublicView Project(MatchPublicView view, GameBoard board, PlayerId me)
     {
         ArgumentNullException.ThrowIfNull(view);
-        return Project(view, board, view.Mode == MatchMode.Link ? [me, .. HeuristicTurnController.RivalsInBattlefield(view, me)] : null);
+        return Project(view, board, [me, .. HeuristicTurnController.RivalsInBattlefield(view, me)]);
     }
 
     /// <summary>投影本体：<paramref name="judged"/> 为 <c>null</c> 时对全体玩家做出局判定，否则只对其中的玩家做。</summary>
@@ -483,7 +483,7 @@ internal sealed class ExpertLookahead
     }
 
     /// <summary>
-    /// 下一名对手（ai-decision「前瞻中的下一名对手」）：名册 = 投影视图（B1）上仍参赛的玩家去掉专家本人；链接模式下先只取与专家同一战场的在局玩家
+    /// 下一名对手（ai-decision「前瞻中的下一名对手」）：名册 = 投影视图（B1）上仍参赛的玩家去掉专家本人，只取与专家同一战场的在局玩家
     /// （ai-seat-vision 裁决 V2，修 C12：他战场玩家不进名册，也不因势力在按座位投影里不可见而被当作出局；同战场口径与
     /// <see cref="HeuristicTurnController.RivalsInBattlefield"/> 同一实现）。
     /// 本大回合顺序中排在专家之后的第一名名册玩家即是（行动大回合 = 当前大回合）；没有时用 <see cref="InitiativeOrder.Generate"/> 按 B1 上的公开输入预测下一大回合顺序，
@@ -494,10 +494,7 @@ internal sealed class ExpertLookahead
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(projected);
         HashSet<PlayerId> roster = [.. projected.Players.Where(p => p.IsActive && p.Player != me).Select(p => p.Player)];
-        if (view.Mode == MatchMode.Link)
-        {
-            roster.IntersectWith(HeuristicTurnController.RivalsInBattlefield(view, me));
-        }
+        roster.IntersectWith(HeuristicTurnController.RivalsInBattlefield(view, me));
 
         if (roster.Count == 0)
         {
@@ -512,7 +509,7 @@ internal sealed class ExpertLookahead
             }
         }
 
-        foreach (PlayerId player in PredictNextOrder(view, projected, view.Mode == MatchMode.Link ? [me, .. roster] : null))
+        foreach (PlayerId player in PredictNextOrder(view, projected, [me, .. roster]))
         {
             if (roster.Contains(player))
             {
@@ -526,14 +523,14 @@ internal sealed class ExpertLookahead
     /// <summary>
     /// 按 B1 预测下一大回合顺序：与大回合结束时同一组输入与同一个实现——势力名次（出局检查之后的名册）、公开先锋修正（B1 上重算控制）、
     /// 本大回合的行动位置（第 1 大回合结束时不计），公式与同值链走 <see cref="InitiativeOrder"/>；种子兜底以玩家编号代替。
-    /// <paramref name="among"/> 非空（链接模式：专家与名册玩家）时只在这些玩家之间比较先后（ai-seat-vision 裁决 V2）：其余玩家按不参与排名处理
+    /// 只在 <paramref name="among"/>（专家与名册玩家）之间比较先后（ai-seat-vision 裁决 V2）：其余玩家按不参与排名处理
     /// （名次与先手值的参赛人数都只数这些玩家），不需要他战场玩家的势力。
     /// </summary>
-    private static ImmutableArray<PlayerId> PredictNextOrder(MatchPublicView view, MatchPublicView projected, ImmutableHashSet<PlayerId>? among)
+    private static ImmutableArray<PlayerId> PredictNextOrder(MatchPublicView view, MatchPublicView projected, ImmutableHashSet<PlayerId> among)
     {
         ImmutableSortedDictionary<PlayerId, PlayerStatus> roster = projected.Players.ToImmutableSortedDictionary(
-            p => p.Player, p => among is null || among.Contains(p.Player) || !p.IsActive ? p.Status : PlayerStatus.Eliminated);
-        ImmutableArray<PlayerId> active = [.. projected.Players.Where(p => p.IsActive && (among is null || among.Contains(p.Player))).Select(p => p.Player)];
+            p => p.Player, p => among.Contains(p.Player) || !p.IsActive ? p.Status : PlayerStatus.Eliminated);
+        ImmutableArray<PlayerId> active = [.. projected.Players.Where(p => p.IsActive && among.Contains(p.Player)).Select(p => p.Player)];
         PowerSnapshot power = PowerCalculator.Compute(projected.Board, roster, RevealedRelics.Of(view.Relics));
         ImmutableArray<RelicPublicState> relics = [.. projected.Relics.Select(r => r with { Control = RelicControl.Of(power.Coverage, r.Coord, roster) })];
         ImmutableSortedDictionary<PlayerId, int> bonuses = PublicRelicEffects.InitiativeBonuses(active, relics);
@@ -565,7 +562,7 @@ internal sealed class ExpertLookahead
         {
             Player = responder,
             DeployLimit = effects.DeployLimit,
-            LegalRange = PublicRules.LegalRange(projected.Board, majorRound, zone, responder, projected.LifeShape, projected.Mode),
+            LegalRange = PublicRules.LegalRange(projected.Board, zone, responder, projected.LifeShape),
             Stock = new Dictionary<PieceType, int> { [PieceType.Basic] = effects.DeployLimit },
             WorkshopActive = effects.WorkshopActive,
         };

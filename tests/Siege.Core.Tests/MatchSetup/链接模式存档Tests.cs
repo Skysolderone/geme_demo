@@ -10,7 +10,7 @@ namespace Siege.Core.Tests.MatchSetup;
 /// <summary>
 /// 规格：openspec/changes/board-link-mode/specs/match-setup —— Requirement: 对局配置公开完整地图标识（存档恢复地图）、原型插旗替代路径（锁定结果可持久化）；
 /// battlefield —— 链接事件 / 配对事件"写入存档、恢复时按记录重建"。实现裁决 B5：存档带模式、链接与配对、战场结算；Link 恢复先重放链接再重放改造；
-/// 无模式字段的旧存档按旧模式读入（match-setup「旧存档被拒绝」在段 C 删旧入口之前不生效，见实施报告）。
+/// retire-legacy-rules 第 3 组：无模式字段的存档不再按旧模式读入，一律拒绝（「链接图上缺模式字段的存档被拒」）。
 /// </summary>
 /// <remarks>
 /// 持久化守门两条腿（testing.md）：逐字段比对活对象与恢复对象 + 再存档逐字节相等 + 恢复后续跑同样决策再比。
@@ -108,7 +108,8 @@ public class 链接模式存档Tests
         MatchFlow restored = RoundTrip(match);
         Assert.Equal(match.PlayerStates.Select(s => s.BirthZone), restored.PlayerStates.Select(s => s.BirthZone));
         Assert.Equal(match.LockedFlagCounts, restored.LockedFlagCounts);
-        Assert.Equal(MatchMode.Link, restored.Mode);
+        // retire-legacy-rules 第 3 组：对局模式成员删除，原"恢复后为链接模式"改为断言恢复后再存档的模式字段仍为链接模式。
+        Assert.Equal("Link", JsonNode.Parse(restored.Serialize())!["Mode"]!.GetValue<string>());
     }
 
     [Fact]
@@ -241,7 +242,6 @@ public class 链接模式存档Tests
     /// <summary>活对象与恢复对象逐字段比对（含链接流程状态）。</summary>
     private static void AssertSameState(MatchFlow a, MatchFlow b)
     {
-        Assert.Equal(a.Mode, b.Mode);
         Assert.Equal(a.Phase, b.Phase);
         Assert.Equal(a.MajorRound, b.MajorRound);
         Assert.Equal(a.LinkStage, b.LinkStage);

@@ -35,7 +35,7 @@ public sealed partial class MatchFlow
     /// <summary>恢复自不含决赛倒计时字段的旧链接模式存档时为 <c>true</c>：按 K = 0（不启用）回填，保持旧存档的行为。</summary>
     public bool FinalCountdownBackfilled { get; private set; }
 
-    /// <summary>倒计时起点 R：第一次出现等待决赛的玩家的那个大回合；尚未出现（或 K = 0、旧模式）为 <c>null</c>。</summary>
+    /// <summary>倒计时起点 R：第一次出现等待决赛的玩家的那个大回合；尚未出现（或 K = 0）为 <c>null</c>。</summary>
     public int? FinalCountdownStart => _countdownStart;
 
     /// <summary>当前处于倒计时中的战场 → 期限大回合（升序；已结算的战场仍保留其期限，链接合并时两个旧标识一并移除）。</summary>
@@ -49,12 +49,12 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 某玩家此刻是否是"等待决赛的玩家"（battlefield「决赛倒计时」）：在局、尚未进入决赛、所在战场只剩他一人，且所在战场已结算或首轮配对步骤已完成
-    /// （待首轮配对时单人战场的玩家还要被配对，不算）。旧模式恒为 <c>false</c>。与 K 无关（K = 0 时也照实回答）。
+    /// （待首轮配对时单人战场的玩家还要被配对，不算）。与 K 无关（K = 0 时也照实回答）。
     /// </summary>
     public bool IsWaitingForFinal(PlayerId player)
     {
         PlayerRecord record = Require(player);
-        if (Mode != MatchMode.Link || _finalLinked || record.Status != PlayerStatus.Active || record.BirthZone is null || Phase == MatchPhase.FlagPlanting)
+        if (_finalLinked || record.Status != PlayerStatus.Active || record.BirthZone is null || Phase == MatchPhase.FlagPlanting)
         {
             return false;
         }
@@ -94,7 +94,7 @@ public sealed partial class MatchFlow
     /// </summary>
     private void UpdateFinalCountdown(int completed)
     {
-        if (Mode != MatchMode.Link || FinalCountdownRounds == 0 || _finalLinked || Phase != MatchPhase.InProgress)
+        if (FinalCountdownRounds == 0 || _finalLinked || Phase != MatchPhase.InProgress)
         {
             return;
         }

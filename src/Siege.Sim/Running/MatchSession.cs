@@ -89,7 +89,7 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的内容集为 {contentSet}，对局配置却为 {match.ContentSet}。");
         }
 
-        if (config.FinalCountdownRounds is { } countdown && match.Mode == MatchMode.Link && countdown != match.FinalCountdownRounds)
+        if (config.FinalCountdownRounds is { } countdown && countdown != match.FinalCountdownRounds)
         {
             throw new SiegeRuleException($"跑局配置的决赛倒计时大回合数为 {countdown}，对局配置却为 {match.FinalCountdownRounds}。");
         }
@@ -702,10 +702,10 @@ public sealed class MatchSession
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
                 })],
-                // match-telemetry 第 11 项（链接模式才写；旧模式为 null 不写出，与引入之前逐字节相同）。
-                EliminationReason = view.Mode == MatchMode.Link ? state.EliminationReason?.ToString() : null,
-                PowerAtDefeat = view.Mode == MatchMode.Link ? state.PowerAtDefeat : null,
-                WaitingRounds = view.Mode == MatchMode.Link ? state.WaitingRounds : null,
+                // match-telemetry 第 11 项。
+                EliminationReason = state.EliminationReason?.ToString(),
+                PowerAtDefeat = state.PowerAtDefeat,
+                WaitingRounds = state.WaitingRounds,
             });
         }
 
@@ -779,7 +779,7 @@ public sealed class MatchSession
                     Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail,
                         values: rank is { } resignRank ? new Dictionary<string, BigInteger> { ["RankAtResign"] = resignRank } : null);
                     break;
-                case FlowEventKind.PlayerEliminated when Match.Mode == MatchMode.Link && e.Player is { } eliminated:
+                case FlowEventKind.PlayerEliminated when e.Player is { } eliminated:
                     // match-telemetry 第 11 项：链接模式区分出局原因并记出局时势力（战场落败取结算时的势力，势力归零为 0）。
                     PlayerFlowState state = Match.StateOf(eliminated);
                     AddLink(e, new LogEvent
@@ -937,15 +937,11 @@ public sealed class MatchSession
             CarryIns = _carryHeader
                 ? [.. Match.CarryIns.Select(kv => new CarryInEntry { Player = kv.Key.Value, Supply = kv.Value.Kind.ToString(), Type = kv.Value.Type?.ToString() })]
                 : null,
-            // 链接模式（match-telemetry 第 1、2 项，board-link-mode C3）：模式与锁定时各出生棋盘的旗数；旧模式不写，首部逐字节不变。
-            Mode = Match.Mode == MatchMode.Link ? nameof(MatchMode.Link) : null,
-            LockedFlagCounts = Match.Mode == MatchMode.Link
-                ? [.. Enumerable.Range(0, Match.Board.BaseMap.BirthZones.Length).Select(z => Match.LockedFlagCounts.GetValueOrDefault(z))]
-                : null,
-            // 段 F.3：开局出生棋盘（离线坐标换算的起点，LinkLayout.Of）；旧模式不写。
-            Boards = Match.Mode == MatchMode.Link
-                ? [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })]
-                : null,
+            // match-telemetry 第 1、2 项（board-link-mode C3）：模式与锁定时各出生棋盘的旗数（retire-legacy-rules R10 = A：模式照写常量 "Link"）。
+            Mode = "Link",
+            LockedFlagCounts = [.. Enumerable.Range(0, Match.Board.BaseMap.BirthZones.Length).Select(z => Match.LockedFlagCounts.GetValueOrDefault(z))],
+            // 段 F.3：开局出生棋盘（离线坐标换算的起点，LinkLayout.Of）。
+            Boards = [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })],
         };
     }
 
@@ -1023,7 +1019,7 @@ public sealed class MatchSession
                 ExclusiveCells = s.Input.ExclusiveCells,
                 Stones = s.Input.Stones,
                 EliminationOrder = s.Input.EliminationOrder,
-                EliminationReason = Match.Mode == MatchMode.Link ? Match.StateOf(s.Player).EliminationReason?.ToString() : null,
+                EliminationReason = Match.StateOf(s.Player).EliminationReason?.ToString(),
             })],
             Winners = [.. standings.Where(s => s.Rank == 1).Select(s => s.Player.Value)],
             UsedDebugAi = Runner.Annotations.UsedDebugAi,

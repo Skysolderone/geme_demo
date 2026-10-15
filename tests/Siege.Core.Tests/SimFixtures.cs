@@ -201,7 +201,8 @@ internal static class SimFixtures
         {
             // 未收敛样本用旧日志的「达大回合上限」原因名（规则层已删除该原因，只剩旧日志会出现；它有规则名次，仍纳入胜率类指标）。
             // 跑局层截断见 TruncatedResult：那种局没有名次与胜者。
-            Reason = reason ?? (converged ? nameof(EndReason.AllPassed) : LogResult.LegacyMajorRoundLimit),
+            // retire-legacy-rules（R9）：收敛样本的原因名「整轮 Pass」已从 EndReason 删除，按旧日志的字符串常量写（与改前字面相同）。
+            Reason = reason ?? (converged ? LogResult.LegacyAllPassed : LogResult.LegacyMajorRoundLimit),
             MajorRound = majorRound,
             TurnCount = majorRound * players,
             Standings = [.. Enumerable.Range(0, players).Select(p => new StandingEntry

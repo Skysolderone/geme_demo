@@ -8,7 +8,7 @@ namespace Siege.Core.Match;
 
 /// <summary>
 /// 链接模式的对局流程（board-link-mode 段 B：battlefield「阶段推进」「配对事件由对局外部提供」「链接事件」）。
-/// 本文件里的一切只在 <see cref="MatchMode.Link"/> 下被调用；旧模式不进入任何一条分支、不派生任何新子流，行为与之前逐字节相同。
+/// retire-legacy-rules：旧模式删除后对局只有链接规则一套，本文件的流程无条件生效。
 /// </summary>
 /// <remarks>
 /// <para><b>阶段</b>：插旗（<see cref="MatchPhase.FlagPlanting"/>）→ 构筑（<see cref="MatchPhase.InProgress"/>，<see cref="LinkStage"/> = Building）
@@ -34,18 +34,14 @@ public sealed partial class MatchFlow
     private bool _finalLinked;
     private PairingRequest? _pendingPairing;
 
-    /// <summary>对局模式（实现裁决 B1）。</summary>
-    public MatchMode Mode => Options.Mode;
-
     /// <summary>
     /// 挂接的配对来源（实现裁决 B3）：进入待配对 / 待决赛链接时当场调用并校验。为 <c>null</c> 时对局停在待配对阶段，等外部调用 <see cref="ApplyPairing(PairingDecision)"/>。
     /// 不是对局配置、不入存档——配对结果本身才是记录（2.9）。
     /// </summary>
     public IPairingSource? PairingSource { get; set; }
 
-    /// <summary>链接模式在"进行中"之内的阶段标签；旧模式为 <c>null</c>。</summary>
-    public LinkStage? LinkStage => Mode != MatchMode.Link ? null
-        : _finalLinked ? Match.LinkStage.Final
+    /// <summary>"进行中"之内的阶段标签（构筑 / 交战 / 决赛）。</summary>
+    public LinkStage LinkStage => _finalLinked ? Match.LinkStage.Final
         : _firstPairingStepDone ? Match.LinkStage.Fighting
         : Match.LinkStage.Building;
 
@@ -90,7 +86,6 @@ public sealed partial class MatchFlow
     /// </summary>
     public ImmutableArray<int> FirstRoundCandidates()
     {
-        RequireLinkMode();
         return [.. _players
             .Where(p => _records[p].BirthZone is { } zone && _lockedFlagCounts.GetValueOrDefault(zone) == 1 && _records[p].Status == PlayerStatus.Active)
             .Select(BattlefieldOf)
@@ -125,7 +120,7 @@ public sealed partial class MatchFlow
 
     // ---------- 内部 ----------
 
-    /// <summary>插旗锁定时记下每块出生棋盘上的旗数（首轮候选的依据）。两种模式都记，旧模式不读。</summary>
+    /// <summary>插旗锁定时记下每块出生棋盘上的旗数（首轮候选的依据）。</summary>
     private void RecordLockedFlagCounts(ImmutableSortedDictionary<PlayerId, int> zones) =>
         _lockedFlagCounts = zones.Values.GroupBy(z => z).ToImmutableSortedDictionary(g => g.Key, g => g.Count());
 
@@ -192,7 +187,6 @@ public sealed partial class MatchFlow
     private void ResolvePairing(PairingDecision decision)
     {
         ArgumentNullException.ThrowIfNull(decision);
-        RequireLinkMode();
         PairingRequest request = _pendingPairing
             ?? throw new SiegeRuleException($"对局阶段为 {Phase}，当前没有待处理的配对事件。");
         ImmutableArray<(int X, int Y)> pairs = Validate(request, decision);
@@ -294,7 +288,6 @@ public sealed partial class MatchFlow
     /// </summary>
     internal LinkRecord ExecuteLink(int x, int y, int pairingSequence, LinkSide side, bool replay = false)
     {
-        RequireLinkMode();
         LinkResult result = LinkMapGenerator.Link(Board.LinkedMap, x, y, side);
         Board.ApplySplice(result.Map, result.Translate);
         Relics.Translate(result.Translate);
@@ -323,11 +316,11 @@ public sealed partial class MatchFlow
     /// 大回合结束时的战场结算（battlefield「战场结算」，构筑期同样生效）：先给每名在局的单人战场玩家记一个等待大回合（构筑期之后），
     /// 再对每个未结算、在局玩家 ≥ 2 的战场按标识升序检查（a）本大回合内全员 Pass、（b）无可落子空格，满足即结算。
     /// 只有 1 名在局玩家的战场不检查：既不因 Pass、也不因填满结算（裁决 S9）。
-    /// 同一大回合结束时结算的全部落败者共享一个出局序号，名次按结算时的比较链跨战场统一排序（裁决 S7，见 <see cref="FinalStandings.ComputeLink"/>）。最后清空本大回合的 Pass 记录。
+    /// 同一大回合结束时结算的全部落败者共享一个出局序号，名次按结算时的比较链跨战场统一排序（裁决 S7，见 <see cref="FinalStandings.Compute"/>）。最后清空本大回合的 Pass 记录。
     /// </summary>
     /// <remarks>
     /// 裁决 S10：判定（<see cref="JudgeAtRoundEnd"/>，无副作用）与执行（<see cref="ExecuteSettlement"/>）分开——先手顺序预测（<c>ForecastInitiative</c>）
-    /// 在 Link 模式下复用同一份判定，口径"假设此刻结束、未行动者按未 Pass 算"。先全部判定再逐个执行与原先"逐战场判定即执行"等价：各战场的在局成员互不相交，
+    /// 复用同一份判定，口径"假设此刻结束、未行动者按未 Pass 算"。先全部判定再逐个执行与原先"逐战场判定即执行"等价：各战场的在局成员互不相交，
     /// 判定只读本大回合开始前就定下的盘面、势力快照与 Pass 记录，执行只改落败者的状态。
     /// </remarks>
     private void SettleAtRoundEnd(int completed)
@@ -439,7 +432,6 @@ public sealed partial class MatchFlow
     /// </summary>
     private BattlefieldVerdict Judge(int battlefieldId, SettlementReason reason, PowerSnapshot power, ImmutableArray<RelicPublicState> relics, PlayerId? winner)
     {
-        RequireLinkMode();
         if (_settledBattlefields.Contains(battlefieldId))
         {
             throw new SiegeRuleException($"战场 {BirthZoneLabel.Of(battlefieldId)} 已结算，不得再次结算。");
@@ -510,14 +502,6 @@ public sealed partial class MatchFlow
     }
 
     internal int DebugSeedRankOf(PlayerId player) => Require(player).SeedRank;
-
-    private void RequireLinkMode()
-    {
-        if (Mode != MatchMode.Link)
-        {
-            throw new SiegeRuleException($"对局模式为 {Mode}：该操作只属于链接模式。");
-        }
-    }
 
     /// <summary>
     /// 测试接缝：在小回合边界以给定胜者结算一个战场（原因记为整轮 Pass），随后立即做终局检查（最后战场结算 → 只剩一名）。

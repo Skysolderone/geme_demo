@@ -122,7 +122,7 @@ internal static class LinkDecisionSequence
         var sb = new StringBuilder();
         sb.Append("# AI 决策序列基线（board-link-mode 3.4，裁决 C5）\n");
         sb.Append($"# map={match.Map.Id} digest={MapFile.Digest(match.Board.BaseMap)} seed={seed} players={match.Players.Length} difficulty={difficulty} zones={string.Join(",", match.PlayerStates.Select(s => s.BirthZone))}\n");
-        sb.Append($"# cellLimit={session.CellLimit} passThreshold={session.PassThreshold} contentSet={match.ContentSet} artisanWeight={match.ArtisanWeight} mode={match.Mode} pairing=script（缺省：升序两两配）\n");
+        sb.Append($"# cellLimit={session.CellLimit} passThreshold={session.PassThreshold} contentSet={match.ContentSet} artisanWeight={match.ArtisanWeight} mode=Link pairing=script（缺省：升序两两配）\n");
         sb.Append($"# maxMajorRounds={maxMajorRounds}\n");
         sb.Append("# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算\n");
 

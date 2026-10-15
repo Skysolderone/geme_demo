@@ -167,12 +167,12 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>
     /// 裁决 C15：链接模式下 <paramref name="player"/> 所在战场还有其他在局玩家，且其当前总势力严格低于其中某一人（并列最高视为最高）。
-    /// 旧模式、尚无势力快照、未锁定出生棋盘、独自在单人战场等待时一律为 <c>false</c>（沿用缺省阈值）。同战场口径与按座位投影相同：
+    /// 尚无势力快照、未锁定出生棋盘、独自在单人战场等待时一律为 <c>false</c>（沿用缺省阈值）。同战场口径与按座位投影相同：
     /// 出生棋盘落在本战场里的在局玩家（<see cref="PublicRules.BattlefieldOf"/>）。只读公开快照，按座位视野（缺省）下同战场的势力仍完整可见。
     /// </summary>
     internal static bool TrailsInBattlefield(MatchPublicView view, PlayerId player)
     {
-        if (view.Mode != MatchMode.Link || view.Power is not { } power)
+        if (view.Power is not { } power)
         {
             return false;
         }
@@ -562,12 +562,12 @@ public sealed class HeuristicTurnController : ITurnController
     }
 
     /// <summary>
-    /// 决胜一手的触发条件（ai-decision「链接模式下的决胜一手」）：链接模式；本战场其他在局玩家在本大回合都已 Pass（本次 Pass 会让本战场整轮 Pass 而结算）；
+    /// 决胜一手的触发条件（ai-decision「链接模式下的决胜一手」）：本战场其他在局玩家在本大回合都已 Pass（本次 Pass 会让本战场整轮 Pass 而结算）；
     /// 自己不是本战场势力最高（并列最高视为最高，与 C15 同一判定 <see cref="TrailsInBattlefield"/>）。只读公开快照。
     /// </summary>
     internal static bool DecisiveTriggered(MatchPublicView view, PlayerId player)
     {
-        if (view.Mode != MatchMode.Link || !TrailsInBattlefield(view, player))
+        if (!TrailsInBattlefield(view, player))
         {
             return false;
         }

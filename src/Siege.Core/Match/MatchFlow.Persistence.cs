@@ -50,8 +50,8 @@ public sealed partial class MatchFlow
             ContentSet = ContentSet,
             CarryInOut = CarryInOut,
             CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
-            // 实现裁决 B5：模式与链接流程状态只在链接模式下写出；旧模式两项为 null、不写（存档逐字节同前）。
-            Mode = Mode == MatchMode.Link ? MatchMode.Link : null,
+            // 实现裁决 B5：模式与链接流程状态恒写出（retire-legacy-rules R10 = A：模式照写常量 "Link"，链接局存档逐字节不变）。
+            Mode = MatchSaveData.LinkMode,
             Link = ExportLink(),
             Phase = Phase,
             MajorRound = MajorRound,
@@ -148,12 +148,7 @@ public sealed partial class MatchFlow
                 $"该存档属于已移除的地图模式（地图 {data.MapId ?? "（缺）"}），不再支持恢复：现在只接受 {LinkMapId.Prefix}:<地图种子> 上的链接模式对局存档。");
         }
 
-        // retire-legacy-maps 3.5：建局侧删去"链接图只能以链接模式"一条后，恢复侧在玩家入口这里单独把关——链接图上缺模式字段（= 旧模式）的存档拒绝。
-        if (data.Mode != MatchMode.Link)
-        {
-            throw new FormatException($"存档的对局模式与地图不符：链接图 {data.MapId} 只能以链接模式恢复（存档缺模式字段即旧模式）。");
-        }
-
+        RequireLinkModeField(data);
         return RestoreChecked(map, data);
     }
 
@@ -164,18 +159,30 @@ public sealed partial class MatchFlow
         // more-pieces-relics D8：存档只存种子，信物分布按存档的内容集重新生成——缺字段的旧存档按 v1（与 RestoreCore 的回填同一口径），
         // 否则旧存档会按新局缺省 v2 的权重表重建出另一份分布。
         ContentSet contentSet = ContentSets.RequireValid(data.ContentSet ?? ContentSets.Legacy);
-        // 链接模式（B5 / 段 A 接线契约 3）：盘面先建空，等链接重放完再写入棋子与改造（见 RestoreLink）。
-        GameBoard board = data.Mode == MatchMode.Link ? GameBoard.Load(map) : GameBoard.Restore(map, data.Board!);
+        // B5 / 段 A 接线契约 3：盘面先建空，等链接重放完再写入棋子与改造（见 RestoreLink）。
+        GameBoard board = GameBoard.Load(map);
         return RestoreCore(map, board, seed, RelicGenerator.Generate(map, seed, contentSet), data);
     }
 
-    /// <summary>测试专用：在未校验的合成地图与手工信物分布上恢复。</summary>
+    /// <summary>测试专用：在未校验的合成地图与手工信物分布上恢复。同样只接受带链接模式字段的存档（retire-legacy-rules：不再有"缺字段即旧模式"的读法）。</summary>
     internal static MatchFlow RestoreUnvalidated(MapData map, RelicGenerationRecord relics, string json)
     {
         MatchSaveData data = Parse(json);
+        RequireLinkModeField(data);
         RequireMap(map, data);
-        GameBoard board = data.Mode == MatchMode.Link ? GameBoard.LoadUnvalidated(map) : GameBoard.RestoreUnvalidated(map, data.Board!);
+        GameBoard board = GameBoard.LoadUnvalidated(map);
         return RestoreCore(map, board, GameSeed.Parse(data.Seed!), relics, data);
+    }
+
+    /// <summary>
+    /// 存档的模式字段必须是链接模式（retire-legacy-maps 3.5 起在玩家入口把关，retire-legacy-rules 起测试口同样把关）：缺字段（= 旧模式存档）或别的取值一律拒绝。
+    /// </summary>
+    private static void RequireLinkModeField(MatchSaveData data)
+    {
+        if (!string.Equals(data.Mode, MatchSaveData.LinkMode, StringComparison.Ordinal))
+        {
+            throw new FormatException($"存档的对局模式与地图不符：链接图 {data.MapId} 只能以链接模式恢复（存档缺模式字段即旧模式）。");
+        }
     }
 
     private static MatchSaveData Parse(string json)
@@ -250,15 +257,13 @@ public sealed partial class MatchFlow
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
             CarryInOut = data.CarryInOut ?? false,
             CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
-            // 实现裁决 B5：无模式字段的存档按旧模式读入。
-            Mode = data.Mode ?? MatchMode.Legacy,
-            // final-countdown（match-setup「决赛倒计时配置」）：K 记在链接段；缺字段的旧存档（及旧模式存档）按 0 = 不启用，保持旧存档的行为（FinalCountdownBackfilled 留痕）。
+            // final-countdown（match-setup「决赛倒计时配置」）：K 记在链接段；缺字段的旧链接存档按 0 = 不启用，保持旧存档的行为（FinalCountdownBackfilled 留痕；R7 窄解保留）。
             FinalCountdownRounds = data.Link?.FinalCountdownRounds ?? 0,
         };
-        // 与建局同一处校验（裁决 B1 / S1）：链接图只能以链接模式恢复，链接模式只能是链接图、4 人。
+        // 与建局同一处校验（裁决 B1 / S1）：只能是链接图、4 人。
         try
         {
-            RequireModeMatchesMap(options.Mode, map, players.Length);
+            RequireLinkMatch(map, players.Length);
         }
         catch (ArgumentException ex)
         {
@@ -278,11 +283,11 @@ public sealed partial class MatchFlow
 
         // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
         _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
-        RelicLedgerState relicState = data.Relics ?? throw new FormatException("存档缺少信物账本。");
+        _ = data.Relics ?? throw new FormatException("存档缺少信物账本。");
         var match = new MatchFlow(
             map, board, seed, players,
-            // 链接模式的揭示记录含公共棋盘信物，要等链接重放把它们追加进账本之后再恢复（RestoreLink）。
-            options.Mode == MatchMode.Link ? new RelicLedger(relicRecord) : RelicLedger.Restore(relicRecord, relicState),
+            // 揭示记录的坐标是拼接后的，要等链接重放把账本坐标平移之后再恢复（RestoreLink）。
+            new RelicLedger(relicRecord),
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight, options.ContentSet),
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
@@ -291,11 +296,9 @@ public sealed partial class MatchFlow
         match.CarryInOutBackfilled = carryInOutBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
-        match.FinalCountdownBackfilled = options.Mode == MatchMode.Link && data.Link?.FinalCountdownRounds is null;
-        if (options.Mode == MatchMode.Link)
-        {
-            match.RestoreLink(data);
-        }
+        // W13（R7 窄解）：只删了"旧模式存档不置位"的模式条件；链接存档缺 K 仍按 0 回填并留痕。
+        match.FinalCountdownBackfilled = data.Link?.FinalCountdownRounds is null;
+        match.RestoreLink(data);
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -399,11 +402,16 @@ public sealed class MatchSaveData
     /// <summary>各玩家的带入（征召签记录抽得的类型）；旧存档无此字段（<c>null</c>）→ 全员无带入。</summary>
     public List<CarryInSaveData>? CarryIns { get; set; }
 
-    /// <summary>对局模式（board-link-mode 实现裁决 B5）。只在链接模式下写出；缺字段（旧模式与旧存档）按 <see cref="MatchMode.Legacy"/> 读入。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public MatchMode? Mode { get; set; }
+    /// <summary>模式字段的唯一取值（retire-legacy-rules R10 = A：照写常量，链接局存档逐字节不变）。</summary>
+    public const string LinkMode = "Link";
 
-    /// <summary>链接模式的流程状态（配对、链接、战场结算、锁定旗数、阶段字段、出局原因与等待大回合数）。旧模式不写。</summary>
+    /// <summary>
+    /// 对局模式（board-link-mode 实现裁决 B5）。新存档恒写 <see cref="LinkMode"/>；恢复时缺字段或别的取值即拒绝（旧模式存档不再支持）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mode { get; set; }
+
+    /// <summary>链接模式的流程状态（配对、链接、战场结算、锁定旗数、阶段字段、出局原因与等待大回合数）。新存档恒写出。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LinkSaveData? Link { get; set; }
 
@@ -561,7 +569,7 @@ public sealed class StandingSaveData
 
     public int? EliminationOrder { get; set; }
 
-    /// <summary>出局原因（链接模式）；旧模式不写。</summary>
+    /// <summary>出局原因；没有出局原因时不写。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public EliminationReason? Reason { get; set; }
 }

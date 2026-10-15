@@ -27,7 +27,7 @@ public class 百局端到端Tests(ITestOutputHelper output)
         for (ulong s = 1; s <= 100; s++)
         {
             var seed = new GameSeed(s);
-            MatchFlow match = MatchFlow.Create(map, seed, players, MatchOptions.Immediate with { Mode = MatchMode.Link });
+            MatchFlow match = MatchFlow.Create(map, seed, players, MatchOptions.Immediate);
             match.PairingSource = new ScriptedPairingSource();
             match.PlantSequentially(players.Select((p, i) => (p, i)));
             var runner = new MatchRunner(match);

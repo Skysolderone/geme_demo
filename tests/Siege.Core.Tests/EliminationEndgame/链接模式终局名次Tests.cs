@@ -6,8 +6,8 @@ using Siege.Core.Scoring;
 namespace Siege.Core.Tests.EliminationEndgame;
 
 /// <summary>
-/// 规格：openspec/changes/board-link-mode/specs/elimination-endgame —— Requirement: 终局名次与并列判定（链接模式，<see cref="FinalStandings.ComputeLink"/>）。
-/// 算例取自该 Requirement 的 Scenario。旧模式 <see cref="FinalStandings.Compute"/> 由既有「终局名次与并列判定Tests」原样守住。
+/// 规格：openspec/changes/board-link-mode/specs/elimination-endgame —— Requirement: 终局名次与并列判定（链接模式，<see cref="FinalStandings.Compute"/>）。
+/// 算例取自该 Requirement 的 Scenario。retire-legacy-rules 第 3 组：旧模式名次实现删除，原链接版 <c>ComputeLink</c> 更名为唯一的 <c>Compute</c>。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 B 后半实跑）：M-B14 <c>DefeatComparer</c> 恒返回 0 → 「同一战场多名落败者按势力排」「信物相同比独占空格数」「逐级比较到棋子数」「决赛胜者第一」红 4
@@ -25,7 +25,7 @@ public class 链接模式终局名次Tests
     public void 决赛胜者第一()
     {
         // Scenario：决赛战场结算，A 势力 120、C 势力 90；更早 B 以势力 42 落败、D 以势力 55 落败（同一大回合结束时两个战场同批结算）→ 名次 A、C、D、B。
-        var result = FinalStandings.ComputeLink([
+        var result = FinalStandings.Compute([
             Finisher(A, 120),
             Defeated(C, 90, order: 2),
             Defeated(B, 42, order: 1),
@@ -41,7 +41,7 @@ public class 链接模式终局名次Tests
     public void 更早出局者按出局先后倒序()
     {
         // B 先落败（序号 1，势力 99），D 后落败（序号 2，势力 10）→ 越晚出局名次越高：D 在 B 前，与势力无关。
-        var result = FinalStandings.ComputeLink([Finisher(A, 50), Defeated(B, 99, order: 1), Defeated(D, 10, order: 2)]);
+        var result = FinalStandings.Compute([Finisher(A, 50), Defeated(B, 99, order: 1), Defeated(D, 10, order: 2)]);
         Assert.Equal([A, D, B], result.Select(s => s.Player));
     }
 
@@ -49,7 +49,7 @@ public class 链接模式终局名次Tests
     public void 同一战场多名落败者按势力排()
     {
         // Scenario：三人战场结算，落败者 B 势力 55、C 势力 55，B 控制信物 2 枚、C 控制 1 枚 → B 的名次高于 C（不共享）。
-        var result = FinalStandings.ComputeLink([
+        var result = FinalStandings.Compute([
             Finisher(A, 80),
             Defeated(C, 55, order: 1, relics: 1),
             Defeated(B, 55, order: 1, relics: 2),
@@ -62,7 +62,7 @@ public class 链接模式终局名次Tests
     public void 信物相同比独占空格数()
     {
         // Scenario：两名玩家势力值均为 60、控制信物数量均为 2，独占空格数分别为 14 与 9 → 独占空格数 14 的玩家名次更高。
-        var result = FinalStandings.ComputeLink([
+        var result = FinalStandings.Compute([
             Finisher(A, 100),
             Defeated(B, 60, order: 1, relics: 2, exclusive: 9),
             Defeated(C, 60, order: 1, relics: 2, exclusive: 14),
@@ -75,7 +75,7 @@ public class 链接模式终局名次Tests
     public void 逐级比较到棋子数()
     {
         // Scenario：势力、信物数量与独占空格数均相同，盘面棋子数分别为 11 与 8 → 11 的名次更高；四级全同才共享名次。
-        var result = FinalStandings.ComputeLink([
+        var result = FinalStandings.Compute([
             Finisher(A, 100),
             Defeated(C, 60, order: 1, relics: 2, exclusive: 9, stones: 8),
             Defeated(B, 60, order: 1, relics: 2, exclusive: 9, stones: 11),
@@ -89,7 +89,7 @@ public class 链接模式终局名次Tests
     public void 同次势力归零者共享名次()
     {
         // 同一次结算中因势力归零同时出局者共享同一名次（与势力无关）。
-        var result = FinalStandings.ComputeLink([
+        var result = FinalStandings.Compute([
             Finisher(A, 100),
             new StandingInput(B, PlayerStatus.Eliminated, BigInteger.Zero, 0, 0, 0, 1) { Reason = EliminationReason.PowerZero },
             new StandingInput(C, PlayerStatus.Eliminated, BigInteger.Zero, 0, 3, 0, 1) { Reason = EliminationReason.PowerZero },
@@ -101,7 +101,7 @@ public class 链接模式终局名次Tests
     public void 弃赛者最后()
     {
         // 弃赛者排在所有正常完赛与出局玩家之后；多名弃赛者按弃赛时势力。
-        var result = FinalStandings.ComputeLink([
+        var result = FinalStandings.Compute([
             Finisher(A, 10),
             new StandingInput(B, PlayerStatus.Resigned, 500, 0, 0, 0, null),
             Defeated(C, 1, order: 1),
