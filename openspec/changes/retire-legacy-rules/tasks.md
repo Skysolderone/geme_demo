@@ -1,4 +1,4 @@
-> 前置：负责人过目 `.trellis/tasks/10-15-retire-legacy-rules/migration.md` 并对 design.md「Open Questions」R6–R12 批注（R4）。下列任务按缺省建议编写。
+> 前置：负责人已过目迁移清单，2026-10-15 裁决 R6–R12 全按缺省（R7 = 窄解，R4）。下列任务按此编写。
 > 每组对应 design D1 的一步：组内全部完成、组末验收全部满足才进入下一组；每组单独提交。全程不跑批量（R5）。"15 份基线"= `AiDecision/Fixtures/` 下 5 条链接图决策序列基线 + 5 份 `*-omniscient.txt` + 5 份 `*-k0.txt`。
 
 ## 1. 按迁移清单逐类迁移（D1 第 1 步：Legacy 分支仍在，证明原断言在新载体上成立）

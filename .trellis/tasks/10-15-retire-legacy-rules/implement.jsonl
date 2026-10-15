@@ -1,1 +1,12 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/retire-legacy-rules/proposal.md", "reason": "retire-legacy-rules 规划与规格增量"}
+{"file": "openspec/changes/retire-legacy-rules/design.md", "reason": "retire-legacy-rules 规划与规格增量"}
+{"file": "openspec/changes/retire-legacy-rules/tasks.md", "reason": "retire-legacy-rules 规划与规格增量"}
+{"file": "openspec/changes/retire-legacy-rules/specs/ai-decision/spec.md", "reason": "retire-legacy-rules 规划与规格增量"}
+{"file": "openspec/changes/retire-legacy-rules/specs/capture-resolution/spec.md", "reason": "retire-legacy-rules 规划与规格增量"}
+{"file": "openspec/changes/retire-legacy-rules/specs/information-visibility/spec.md", "reason": "retire-legacy-rules 规划与规格增量"}
+{"file": "openspec/changes/retire-legacy-rules/specs/map-definition/spec.md", "reason": "retire-legacy-rules 规划与规格增量"}
+{"file": ".trellis/tasks/10-15-retire-legacy-rules/migration.md", "reason": "逐方法迁移清单（分类、待定项 P1–P7、补测 Q1–Q2、重导记录表）"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
