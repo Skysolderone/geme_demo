@@ -151,7 +151,7 @@ public class 战场的定义与规则作用域Tests
     public void 旧地图的孤立可落子区不属于任何战场编号()
     {
         // 非链接档：全部可落子格连成一片 → 恰 1 个战场、标识 0、含全部出生区；手工挖出的孤立格成为"无出生棋盘"的分量，排在最后。
-        // retire-legacy-maps 1.8：原取标准图 v5；旧图删除后改用 9×9 手写夹具（MatchFixtures.Map：单连通、四角 4 个出生区、无棋盘清单），断言不变。
+        // retire-legacy-maps 1.8：原取标准图 v5；旧图删除后改用 9×9 手写夹具（原 9×9 流程夹具地图、现 TestMaps.NineByNine：单连通、四角 4 个出生区、无棋盘清单），断言不变。
         MapData v5 = TestMaps.NineByNine();
         Battlefields whole = Battlefields.Of(v5);
         Assert.Single(whole.All);

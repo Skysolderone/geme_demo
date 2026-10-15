@@ -1,0 +1,44 @@
+删除前 2157 行，删除后 2124 行，减少 33
+差集（删除前有、删除后无）33 行 / 33 个方法；新增 0 行
+清单第 3 节 (c)/(j)（不含 L18）33 条：(c) 28、(j) 5
+
+# 1 c OK  行数 1  Siege.Core.Tests.AiDecision.链接模式下的决胜一手Tests.旧模式不变
+# 2 c OK  行数 1  Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.旧模式不变
+# 3 c OK  行数 1  Siege.Core.Tests.Battlefield.链接后的公开补充载荷Tests.旧模式副本与按生成记录恢复逐项相同
+# 4 c OK  行数 1  Siege.Core.Tests.Battlefield.阶段推进Tests.旧模式没有阶段转换
+# 5 c OK  行数 1  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.整轮Pass
+# 6 c OK  行数 1  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.棋盘填满
+# 7 c OK  行数 1  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.棋盘填满优先于整轮Pass
+# 8 c OK  行数 1  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.只剩一名参赛玩家优先于棋盘填满
+# 9 j OK  行数 1  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.唯一参赛者获胜
+#10 j OK  行数 1  Siege.Core.Tests.EliminationEndgame.三类终局条件Tests.轮数再多也不结束
+#11 c OK  行数 1  Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.旧模式终局原因不含最后战场结算
+#12 c OK  行数 1  Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.整轮Pass时按同一规则排名
+#13 c OK  行数 1  Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.旧模式流程中弃赛者排在势力归零出局者之前
+#14 c OK  行数 1  Siege.Core.Tests.InformationVisibility.按座位视图Tests.旧模式全图展开
+#15 c OK  行数 1  Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.旧模式全图可见无占位_与全知棋盘逐项相同
+#16 c OK  行数 1  Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.旧模式预测不变
+#17 c OK  行数 1  Siege.Core.Tests.MatchFlowRegression.流程回归Tests.出局改变参赛人数后Pass计数与新人数重比
+#18 c OK  行数 1  Siege.Core.Tests.MatchFlowRegression.流程回归Tests.弃赛改变参赛人数后立即重比Pass计数
+#19 c OK  行数 1  Siege.Core.Tests.MatchSetup.匿名同时插旗Tests.身份匿名
+#20 c OK  行数 1  Siege.Core.Tests.MatchSetup.匿名同时插旗Tests.锁定前可更换
+#21 c OK  行数 1  Siege.Core.Tests.MatchSetup.匿名同时插旗Tests.多人同区
+#22 c OK  行数 1  Siege.Core.Tests.MatchSetup.对局模式Tests.缺省为旧模式
+#23 c OK  行数 1  Siege.Core.Tests.MatchSetup.对局模式Tests.公开建局恒为链接模式
+#24 c OK  行数 1  Siege.Core.Tests.MatchSetup.对局模式Tests.链接图以链接模式建局
+#25 c OK  行数 1  Siege.Core.Tests.MatchSetup.链接模式存档Tests.旧模式存档不写新字段且按旧模式读入
+#26 c OK  行数 1  Siege.Core.Tests.MatchSetup.链接模式存档Tests.旧模式终局存档不写出局原因
+#27 c OK  行数 1  Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.旧模式日志不写链接模式字段
+#28 c OK  行数 1  Siege.Core.Tests.TurnSequence.合法落子范围的对外契约Tests.范围随大回合切换
+#29 j OK  行数 1  Siege.Core.Tests.TurnSequence.合法落子范围的对外契约Tests.禁入格不在范围内
+#30 c OK  行数 1  Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.旧模式第4大回合仍全图解禁
+#31 j OK  行数 1  Siege.Core.Tests.TurnSequence.构筑保护期的落子限制Tests.保护期内越区落子被拒
+#32 c OK  行数 1  Siege.Core.Tests.TurnSequence.第4大回合的全图解禁Tests.解禁后全图可落子
+#33 j OK  行数 1  Siege.Core.Tests.TurnSequence.第4大回合的全图解禁Tests.空盘面玩家重新进入
+
+差集中不在清单的: []
+清单中未出现在差集的: []
+删除后新增的名字（改名映射后）: []
+按第 4 节改名映射的: [('Siege.Core.Tests.MatchSetup.对局模式Tests.链接模式不能配旧地图', 'Siege.Core.Tests.MatchSetup.建局约束Tests.链接模式不能配旧地图'), ('Siege.Core.Tests.MatchSetup.对局模式Tests.链接模式只有四人局', 'Siege.Core.Tests.MatchSetup.建局约束Tests.链接模式只有四人局')]
+Theory 行（差集中带参数的）: {}
+结论: 逐名一致

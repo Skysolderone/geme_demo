@@ -120,7 +120,7 @@ public class 区域强度预算Tests
     };
 
     /// <summary>
-    /// 「高风险区预算更高」交叉检查的手写图（retire-legacy-maps 1.6）：9×9，四角 3×3 出生区（MatchFixtures 同形）各 2 枚出生区信物，
+    /// 「高风险区预算更高」交叉检查的手写图（retire-legacy-maps 1.6）：9×9，四角 3×3 出生区（与 TestMaps.NineByNine 同形）各 2 枚出生区信物，
     /// 中央 E5 / E4 两枚 High 档公共信物（样本 2000 种子 × 2 格 = 4000，与原 v5 的 High 档样本量相同）。只供生成器使用，不做地图校验。
     /// </summary>
     private static MapData HighTierMap()

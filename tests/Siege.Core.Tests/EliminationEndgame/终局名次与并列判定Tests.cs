@@ -86,61 +86,6 @@ public class 终局名次与并列判定Tests
     }
 
     [Fact]
-    public void 整轮Pass时按同一规则排名()
-    {
-        // 接线：以「整轮 Pass」终局时走 Finish → FinalStandings.Compute 的同一路径——势力相同比信物数，控制 3 枚者高于控制 1 枚者。
-        // （原「达上限时按同一规则排名」：大回合上限终局已删除，改由整轮 Pass 触发同一收尾路径，局面与断言不变。）
-        // 局面：P0 {B2,B3} 与 P1 {H2,H3} 左右镜像（势力相同），信物格 A2 只被 P0 独占覆盖，G2 / J2 / H1 只被 P1 独占覆盖（信物内容不影响势力）。
-        // 变异验证 M-R14（沿用）：Finish 把 ControlledRelics 传 0 → 本测试红（P0 与 P1 并列）。
-        MatchFlow match = MatchFixtures.Started(relics: [("A2", RelicFixtures.Depot()), ("G2", RelicFixtures.Depot()), ("J2", RelicFixtures.Depot()), ("H1", RelicFixtures.Depot())])
-            .AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
-            .Stones(TestMaps.P0, "B2")
-            .Stones(TestMaps.P1, "H2");
-
-        match.PlayTurn("B3");   // P0
-        match.PlayTurn("H3");   // P1
-        match.PassTurn();       // P2
-        match.PassTurn();       // P3：第 5 大回合结束，连续 Pass 计数 2（跨大回合累计）
-        match.PassTurn();       // 第 6 大回合第 1 位：计数 3
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-        match.PassTurn();       // 第 6 大回合第 2 位：计数 4 ≥ 4 → 整轮 Pass
-        Assert.Equal(MatchPhase.Ended, match.Phase);
-        Assert.Equal(EndReason.AllPassed, match.Result!.Reason);
-
-        Standing p0 = match.Result.Of(TestMaps.P0);
-        Standing p1 = match.Result.Of(TestMaps.P1);
-        Assert.Equal(p0.Input.Power, p1.Input.Power);   // 镜像局面：势力相同
-        Assert.True(p0.Input.Power > 0);
-        Assert.Equal((1, 3), (p0.Input.ControlledRelics, p1.Input.ControlledRelics));
-        Assert.Equal((2, 1), (p0.Rank, p1.Rank));
-        Assert.Equal(StandingGroup.Finisher, p1.Group);
-    }
-
-    [Fact]
-    public void 旧模式流程中弃赛者排在势力归零出局者之前()
-    {
-        // 接线（board-link-mode 实现裁决 B1：旧模式名次逐字节不变）：同一局里既有势力归零出局者、又有弃赛者，Finish 在旧模式下走 Compute——
-        // 完赛者 > 弃赛者（按弃赛时势力）> 出局者。链接模式的 ComputeLink 把弃赛者排在出局者之后，两条规则在这一局上给出不同名次。
-        // 变异验证 M-C3（段 B check 实跑）：Finish 里 ComputeLink / Compute 的模式门反转 → 红 3：本测试、旧模式「三类终局条件Tests.唯一参赛者获胜」与链接模式「两类终局条件Tests.唯一参赛者获胜」
-        //（实施报告 M-B15 记"旧模式侧 0 红"，是只跑了链接相关类的缘故）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, TestMaps.All)
-            .Stones(TestMaps.P1, "A1")
-            .Stones(TestMaps.P2, "J9")
-            .Stones(TestMaps.P0, "B1");
-
-        match.PlayTurn("A2");   // P0 提掉 A1 → P1 势力归零出局
-        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(TestMaps.P1).Status);
-        match.Resign(TestMaps.P2);   // 弃赛时势力 > 0
-        match.Resign(TestMaps.P3);   // 弃赛时势力 0 → 只剩 P0
-
-        Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
-        Assert.True(match.Result.Of(TestMaps.P2).Input.Power > match.Result.Of(TestMaps.P3).Input.Power);
-        Assert.Equal(
-            new[] { (TestMaps.P0, 1, StandingGroup.Finisher), (TestMaps.P2, 2, StandingGroup.Resigned), (TestMaps.P3, 3, StandingGroup.Resigned), (TestMaps.P1, 4, StandingGroup.Eliminated) },
-            match.Result.Standings.Select(s => (s.Player, s.Rank, s.Group)));
-    }
-
-    [Fact]
     public void 信物相同比独占空格数()
     {
         // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、控制信物均为 2，独占空格数 14 与 9 → 14 者名次更高（段 C 改用规格算例数值，原为 3 与 1）。

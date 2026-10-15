@@ -112,17 +112,6 @@ public class 链接模式存档Tests
     }
 
     [Fact]
-    public void 旧模式存档不写新字段且按旧模式读入()
-    {
-        MatchFlow legacy = MatchFixtures.Started();
-        string json = legacy.Serialize();
-        JsonObject root = JsonNode.Parse(json)!.AsObject();
-        Assert.False(root.ContainsKey("Mode"));
-        Assert.False(root.ContainsKey("Link"));
-        Assert.Equal(MatchMode.Legacy, MatchFlow.RestoreUnvalidated(legacy.Map, legacy.Relics.Generation, json).Mode);
-    }
-
-    [Fact]
     public void 旧存档被拒绝()
     {
         // match-setup Scenario「旧存档被拒绝」（Q6 / 实现裁决 D7）：恢复一个地图标识不是 link: 的旧存档 → 玩家入口 MatchFlow.Restore 拒绝读取并提示属于已移除的地图模式；
@@ -145,27 +134,6 @@ public class 链接模式存档Tests
 
         // 反面：链接模式存档照常经玩家入口恢复。
         Assert.Equal(linkJson, MatchFlow.Restore(Map, linkJson).Serialize());
-    }
-
-    [Fact]
-    public void 旧模式终局存档不写出局原因()
-    {
-        // 实现裁决 B1 / B5：旧模式下终局名次的每一项也不写出局原因（Reason 只在链接模式写出），存档字段集与改动前相同。
-        // 局面：P1 势力归零出局、P2 / P3 弃赛 → 终局结果里既有出局者又有弃赛者。
-        MatchFlow legacy = MatchFixtures.Started().AtRound(5, MatchFixtures.All)
-            .Stones(MatchFixtures.P1, "A1")
-            .Stones(MatchFixtures.P0, "B1");
-        legacy.PlayTurn("A2");
-        legacy.Resign(MatchFixtures.P2);
-        legacy.Resign(MatchFixtures.P3);
-        Assert.Equal(MatchPhase.Ended, legacy.Phase);
-
-        JsonObject root = JsonNode.Parse(legacy.Serialize())!.AsObject();
-        Assert.False(root.ContainsKey("Mode"));
-        Assert.False(root.ContainsKey("Link"));
-        JsonArray standings = root["Result"]!["Standings"]!.AsArray();
-        Assert.Equal(4, standings.Count);
-        Assert.All(standings, s => Assert.False(s!.AsObject().ContainsKey("Reason")));
     }
 
     [Fact]

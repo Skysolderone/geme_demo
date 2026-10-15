@@ -215,22 +215,6 @@ public class 视图模型按座位过滤Tests
     }
 
     [Fact]
-    public void 旧模式全图可见无占位_与全知棋盘逐项相同()
-    {
-        // Legacy 回归：ForSeat 对旧模式原样返回；默认棋盘与引入本 change 之前（全知）逐项相同，没有占位。
-        MatchFlow legacy = MatchFixtures.Started();
-        DefaultBoardView seatBoard = legacy.World(P0).Board();
-        DefaultBoardView omniscient = DefaultBoardView.From(legacy.PublicWorldOf());
-
-        Assert.Empty(seatBoard.Placeholders);
-        Assert.Equal(omniscient.Cells.Length, seatBoard.Cells.Length);
-        Assert.Equal(JsonSerializer.Serialize(omniscient.Cells, Json), JsonSerializer.Serialize(seatBoard.Cells, Json));
-        Assert.Equal(omniscient.Boards, seatBoard.Boards);
-        Assert.Equal(omniscient.Fences, seatBoard.Fences);
-        Assert.Equal(MatchMode.Legacy, legacy.World(P0).Seat!.Mode);
-    }
-
-    [Fact]
     public void 别人的座位视图不得进入观察者世界()
     {
         MatchFlow match = Started([0, 1, 3, 4]);

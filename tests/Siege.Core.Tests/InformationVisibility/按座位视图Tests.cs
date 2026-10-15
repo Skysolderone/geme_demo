@@ -248,15 +248,4 @@ public class 按座位视图Tests
         Assert.Equal(P2, a.CarryIns.Single().Player);
         Assert.Equal(Carry.SupplyKind.SpareStone, a.CarryIns.Single().CarryIn.Kind);
     }
-
-    [Fact]
-    public void 旧模式全图展开()
-    {
-        // 实现裁决 B4：旧模式下按座位视图不过滤（全图可见、全员同战场）；全知视图 Publish 原样保留。
-        MatchFlow legacy = MatchFixtures.Started();
-        SeatPublicView a = legacy.PublishFor(MatchFixtures.P0);
-        Assert.Equal(legacy.Map.PlayableCount, a.Cells.Length);
-        Assert.All(a.Players, p => Assert.True(p.SameBattlefield));
-        Assert.Null(a.Battlefield);
-    }
 }

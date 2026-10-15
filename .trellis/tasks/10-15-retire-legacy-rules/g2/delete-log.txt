@@ -1,0 +1,22 @@
+AiDecision/链接模式下的决胜一手Tests.cs: 旧模式不变  删 165-187 行（23 行）
+AiDecision/链接模式下落后者的停手阈值Tests.cs: 旧模式不变  删 129-150 行（22 行）
+Battlefield/链接后的公开补充载荷Tests.cs: 旧模式副本与按生成记录恢复逐项相同  删 72-82 行（11 行）
+Battlefield/阶段推进Tests.cs: 旧模式没有阶段转换  删 207-221 行（15 行）
+EliminationEndgame/两类终局条件Tests.cs: 旧模式终局原因不含最后战场结算  删 135-147 行（13 行）
+EliminationEndgame/终局名次与并列判定Tests.cs: 整轮Pass时按同一规则排名  删 87-117 行（31 行）
+EliminationEndgame/终局名次与并列判定Tests.cs: 旧模式流程中弃赛者排在势力归零出局者之前  删 87-110 行（24 行）
+InformationVisibility/按座位视图Tests.cs: 旧模式全图展开  删 251-261 行（11 行）
+InformationVisibility/视图模型按座位过滤Tests.cs: 旧模式全图可见无占位_与全知棋盘逐项相同  删 216-231 行（16 行）
+InitiativeOrder/先手顺序预测_链接模式Tests.cs: 旧模式预测不变  删 240-263 行（24 行）
+MatchFlowRegression/流程回归Tests.cs: 出局改变参赛人数后Pass计数与新人数重比  删 13-35 行（23 行）
+MatchFlowRegression/流程回归Tests.cs: 弃赛改变参赛人数后立即重比Pass计数  删 13-31 行（19 行）
+MatchSetup/对局模式Tests.cs: 缺省为旧模式  删 16-25 行（10 行）
+MatchSetup/对局模式Tests.cs: 公开建局恒为链接模式  删 27-40 行（14 行）
+MatchSetup/对局模式Tests.cs: 链接图以链接模式建局  删 38-49 行（12 行）
+MatchSetup/链接模式存档Tests.cs: 旧模式存档不写新字段且按旧模式读入  删 113-123 行（11 行）
+MatchSetup/链接模式存档Tests.cs: 旧模式终局存档不写出局原因  删 138-158 行（21 行）
+MatchTelemetry/对局日志的记录内容_链接模式Tests.cs: 旧模式日志不写链接模式字段  删 323-345 行（23 行）
+TurnSequence/合法落子范围的对外契约Tests.cs: 范围随大回合切换  删 18-39 行（22 行）
+TurnSequence/合法落子范围的对外契约Tests.cs: 禁入格不在范围内  删 18-36 行（19 行）
+TurnSequence/战场内合法落子范围Tests.cs: 旧模式第4大回合仍全图解禁  删 175-183 行（9 行）
+删除方法数 21

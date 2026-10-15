@@ -126,26 +126,4 @@ public class 链接模式下落后者的停手阈值Tests
 
         AssertPassed(Decide(match));
     }
-
-    [Fact]
-    public void 旧模式不变()
-    {
-        // Scenario「旧模式不变」：Legacy 局里 P0 势力低于 P1，也不触发落后者豁免——收益 5 不过阈值 20，Pass。
-        // 逐字节口径由既有基线守住：决策序列基线Tests（v5 / board:1）与候选格上限 / 停手阈值的 Legacy 黄金哈希，引入本条前后不变。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [P0, P1, P2, P3]).Stones(P0, "A1").Stones(P1, "J9", "H9", "J8");
-        Assert.Equal(MatchMode.Legacy, match.Mode);
-        GameBoard board = match.Board;
-        IReadOnlySet<Coord> range = ImmutableHashSet.Create(TestMaps.At("E5"));
-        var batch = new StagedBatch(board, BatchFixtures.Context(board, P0, 1, BatchFixtures.Stock((PieceType.Basic, 5)), range));
-        var driver = new SettlementDriver(board, match.History, new RecordingHooks { Board = board });
-        MatchPublicView view = match.Publish();
-        Assert.True(view.Power!.Of(P0).Total < view.Power.Of(P1).Total);   // 样本口径
-
-        var ai = new HeuristicTurnController(P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Easy, Weights,
-            AiSearchConfig.Easy with { PassThreshold = Threshold });
-        ai.Deploy(batch, () => driver.Rehearse(batch.Context, batch.Placements));
-
-        Assert.Equal(5, Assert.Single(ai.LastPointRanking).Total);
-        AssertPassed(ai);
-    }
 }

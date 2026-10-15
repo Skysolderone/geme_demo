@@ -237,28 +237,4 @@ public class 先手顺序预测_链接模式Tests
         Assert.DoesNotContain(settled.Entries[1].Player, forecast.NextOrder);
         Assert.Equal(forecast.NextOrder, match.ActionOrder);
     }
-
-    [Fact]
-    public void 旧模式预测不变()
-    {
-        // Legacy 不进入判定分支：三人落子后取预测，最后一人 Pass 结束大回合，预测与第 2 大回合实际顺序逐项相同（与引入 S10 之前相同口径）。
-        MatchFlow match = MatchFixtures.Started();
-        foreach (PlayerId p in MatchFixtures.All)
-        {
-            match.Debug.SeedHand(p, (PieceType.Basic, 20));
-        }
-
-        for (int i = 0; i < 3; i++)
-        {
-            match.PlaceOne();
-        }
-
-        InitiativeReport forecast = Assert.IsType<InitiativeReport>(Forecast(match));
-        match.PassTurn();
-
-        Assert.Equal(2, match.MajorRound);
-        Assert.Equal(MatchMode.Legacy, match.Mode);
-        Assert.Equal(forecast.NextOrder, match.ActionOrder);
-        Assert.Equal(4, forecast.ActiveCount);
-    }
 }

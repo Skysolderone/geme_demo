@@ -14,11 +14,11 @@ internal static class TestMaps
     internal static readonly PlayerId P3 = new(3);
     internal static readonly PlayerId[] All = [P0, P1, P2, P3];
 
-    /// <summary>测试公共种子（retire-legacy-rules 1.2：原 <c>MatchFixtures.Seed</c>，随 9×9 流程夹具删除迁到这里，值不变）。</summary>
+    /// <summary>测试公共种子（retire-legacy-rules 1.2：原 9×9 流程夹具的 <c>Seed</c>，随该夹具删除迁到这里，值不变）。</summary>
     internal static readonly GameSeed Seed = new(0x5EED_0912_2026UL);
 
     /// <summary>
-    /// 9×9 合成地图（retire-legacy-rules 1.2：原 <c>MatchFixtures.Map</c>，数据原样迁来）：四个 3×3 角落出生区（0 左下、1 右下、2 左上、3 右上），
+    /// 9×9 合成地图（retire-legacy-rules 1.2：原 9×9 流程夹具的 <c>Map</c>，数据原样迁来）：四个 3×3 角落出生区（0 左下、1 右下、2 左上、3 右上），
     /// 无棋盘清单，信物格由用例指定。只供规则层（<see cref="GameBoard.LoadUnvalidated"/>）与地图数据层测试使用——对局只在链接档图上建局。
     /// </summary>
     internal static MapData NineByNine(params string[] relicCells) => NineByNine(null, relicCells);
@@ -44,7 +44,7 @@ internal static class TestMaps
 
     private static ImmutableHashSet<Coord> Corner(int x0, int y0) => [.. Rect(x0, y0, 3, 3)];
 
-    /// <summary>手工信物分布（原 <c>MatchFixtures.Relics</c>）：给定格与内容，一律记为公共区标准档；生成记录的种子取 <see cref="Seed"/>。</summary>
+    /// <summary>手工信物分布（原 9×9 流程夹具的 <c>Relics</c>）：给定格与内容，一律记为公共区标准档；生成记录的种子取 <see cref="Seed"/>。</summary>
     internal static RelicGenerationRecord Relics(MapData map, params (string Cell, RelicContent Content)[] relics)
     {
         var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);

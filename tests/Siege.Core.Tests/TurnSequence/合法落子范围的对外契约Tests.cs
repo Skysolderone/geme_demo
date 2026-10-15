@@ -8,54 +8,10 @@ namespace Siege.Core.Tests.TurnSequence;
 /// <summary>规格：turn-sequence —— Requirement: 合法落子范围的对外契约</summary>
 public class 合法落子范围的对外契约Tests
 {
-    /// <summary>P2 在出生区 1（G1–J3）角上的两眼活形：F2–J2、H1、F1 围出单格眼 G1、J1。</summary>
-    private static readonly string[] CornerG1J1 = ["F1", "H1", "F2", "G2", "H2", "J2"];
-
     /// <summary>
     /// P0 在平坦 8×8 链接载体棋盘 0 角上的两眼活形：C4–F4、D3、F3 围出单格眼 C3、E3（retire-legacy-rules：原 9×9 出生区 0 角上的 A2–D2、B1、D1 / 眼 A1、C1 平移 (+2, +2)）。
     /// </summary>
     private static readonly string[] CornerC3E3 = ["D3", "F3", "C4", "D4", "E4", "F4"];
-
-    [Fact]
-    public void 范围随大回合切换()
-    {
-        // design.md D5：第 3 大回合为该玩家的出生区格集合，第 4 大回合为全图可落子格集合；出生区数据本身不带限制。
-        // life-shape：两种情况下都扣除该玩家的禁入格——P2 在出生区 1 角上有活形（眼 G1、J1），P0 / P1 的范围不含这两格，P2 自己的含。
-        // 变异验证 M-T12：`MajorRound <= 3` 改为 `< 3` → 红 1（本测试第 3 大回合断言）。
-        MatchFlow match = MatchFixtures.Started(zones: [1, 1, 2, 3]).AtRound(3).Stones(MatchFixtures.P2, CornerG1J1);
-        Coord[] eyes = [TestMaps.At("G1"), TestMaps.At("J1")];
-        IReadOnlySet<Coord> zone1 = match.Map.BirthZones[1];
-        var zone1Open = zone1.Except(eyes).ToHashSet();
-        Assert.Equal(zone1Open, match.LegalRangeFor(MatchFixtures.P0));
-        Assert.Equal(zone1Open, match.LegalRangeFor(MatchFixtures.P1));
-        Assert.Equal(7, zone1Open.Count);
-
-        match.AtRound(4);
-        IReadOnlySet<Coord> full = match.LegalRangeFor(MatchFixtures.P0);
-        Assert.Equal(79, full.Count);
-        Assert.Equal(match.Map.AllCoords().Where(c => match.Map.TerrainAt(c) == Terrain.Playable).Except(eyes).ToHashSet(), full);
-        Assert.Equal(full, match.LegalRangeFor(MatchFixtures.P1));
-        Assert.Superset(eyes.ToHashSet(), match.LegalRangeFor(MatchFixtures.P2).ToHashSet());
-    }
-
-    [Fact]
-    public void 禁入格不在范围内()
-    {
-        // 第 5 大回合，P0（A）的活形眼空间为 E5、G5：P1（B）的范围不含这两格，P0 自己的含。
-        MatchFlow match = MatchFixtures.Started().AtRound(5).Stones(MatchFixtures.P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingE5G5);
-        Coord e5 = TestMaps.At("E5");
-        Coord g5 = TestMaps.At("G5");
-
-        IReadOnlySet<Coord> b = match.LegalRangeFor(MatchFixtures.P1);
-        IReadOnlySet<Coord> a = match.LegalRangeFor(MatchFixtures.P0);
-
-        Assert.DoesNotContain(e5, b);
-        Assert.DoesNotContain(g5, b);
-        Assert.Equal(79, b.Count);
-        Assert.Contains(e5, a);
-        Assert.Contains(g5, a);
-        Assert.Equal(81, a.Count);
-    }
 
     [Fact]
     public void 共享出生区内的禁入()

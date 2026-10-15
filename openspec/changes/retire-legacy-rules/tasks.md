@@ -13,8 +13,8 @@
 
 ## 2. 删 (c) 与 (j) 测试（D1 第 2 步）
 
-- [ ] 2.1 删清单第 3 节 (c) 28 条与 (j) 5 条；整文件删除 `三类终局条件Tests`、`匿名同时插旗Tests`、`构筑保护期的落子限制Tests`、`第4大回合的全图解禁Tests`；`对局模式Tests` 改名 `建局约束Tests`（保留两条）。验收：全量测试全绿；通过数减少 = 33、Theory 行数减少与清单一致，**逐名对上**（脚本比对删除前后的测试名清单，差集存入任务目录）
-- [ ] 2.2 删 `MatchFixtures.cs`（`TwoPlayer` 无调用者）。验收：`dotnet build` 零警告；Grep `MatchFixtures` 在 `tests/` 为零
+- [x] 2.1 删清单第 3 节 (c) 28 条与 (j) 5 条；整文件删除 `三类终局条件Tests`、`匿名同时插旗Tests`、`构筑保护期的落子限制Tests`、`第4大回合的全图解禁Tests`；`对局模式Tests` 改名 `建局约束Tests`（保留两条）。验收：全量测试全绿；通过数减少 = 33、Theory 行数减少与清单一致，**逐名对上**（脚本比对删除前后的测试名清单，差集存入任务目录）
+- [x] 2.2 删 `MatchFixtures.cs`（`TwoPlayer` 无调用者）。验收：`dotnet build` 零警告；Grep `MatchFixtures` 在 `tests/` 为零
 
 ## 3. 删 Legacy 分支与 `MatchMode`（D1 第 3 步，design D4–D9）
 

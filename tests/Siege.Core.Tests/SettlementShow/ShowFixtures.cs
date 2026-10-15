@@ -11,7 +11,7 @@ namespace Siege.Core.Tests.SettlementShow;
 /// <summary>settlement-show 测试的公共夹具：按规格算例摆盘面与势力读数、把节拍 / 遮罩投影成文本（含 ImmutableArray 的 record 不能直接 Assert.Equal）。</summary>
 internal static class ShowFixtures
 {
-    // 规格文本里的 P1–P4（与 MatchFixtures 的 P0–P3 无关，只是算例里的名字）。
+    // 规格文本里的 P1–P4（与 TestMaps 的 P0–P3 无关，只是算例里的名字）。
     internal static readonly PlayerId P1 = new(1);
     internal static readonly PlayerId P2 = new(2);
     internal static readonly PlayerId P3 = new(3);

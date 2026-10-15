@@ -204,19 +204,4 @@ public class 阶段推进Tests
         Assert.Equal(LinkStage.Final, match.LinkStage);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
     }
-
-    [Fact]
-    public void 旧模式没有阶段转换()
-    {
-        // 实现裁决 B1：旧模式第 3 大回合结束不进入待配对。
-        MatchFlow match = MatchFixtures.Started();
-        for (int i = 0; i < 12 && match.Phase == MatchPhase.InProgress; i++)
-        {
-            match.PassTurn();
-        }
-
-        Assert.Null(match.LinkStage);
-        Assert.NotEqual(MatchPhase.AwaitingPairing, match.Phase);
-        Assert.Throws<SiegeRuleException>(() => match.FirstRoundCandidates());
-    }
 }

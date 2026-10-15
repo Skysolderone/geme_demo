@@ -132,17 +132,4 @@ public class 两类终局条件Tests
         Assert.Equal(MatchPhase.InProgress, match.Phase);
         Assert.Equal(6, match.MajorRound);
     }
-
-    [Fact]
-    public void 旧模式终局原因不含最后战场结算()
-    {
-        // S4：新成员只在链接模式使用；旧模式整轮 Pass 仍按原规则终局。
-        MatchFlow legacy = MatchFixtures.Started();
-        for (int i = 0; i < 4; i++)
-        {
-            legacy.PassTurn();
-        }
-
-        Assert.Equal(EndReason.AllPassed, legacy.Result!.Reason);
-    }
 }

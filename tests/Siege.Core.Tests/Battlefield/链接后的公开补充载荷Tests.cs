@@ -69,15 +69,4 @@ public class 链接后的公开补充载荷Tests
         Assert.True(preview.IsLegal);
         Assert.Equal(1, match.Relics.PublicStates().Count(s => s.IsRevealed && s.Coord == moved));   // 正式账本未被预演改动
     }
-
-    [Fact]
-    public void 旧模式副本与按生成记录恢复逐项相同()
-    {
-        // Legacy 没有链接：Copy 与原先的 Restore(Generation, ExportState()) 逐项相同。
-        MatchFlow legacy = MatchFixtures.Started();
-        RelicLedger expected = RelicLedger.Restore(legacy.Relics.Generation, legacy.Relics.ExportState());
-        RelicLedger copy = legacy.Relics.Copy();
-        Assert.Equal(expected.PublicStates().Select(s => (s.Coord, s.IsRevealed, s.Control)), copy.PublicStates().Select(s => (s.Coord, s.IsRevealed, s.Control)));
-        Assert.Equal(expected.Coords, copy.Coords);
-    }
 }

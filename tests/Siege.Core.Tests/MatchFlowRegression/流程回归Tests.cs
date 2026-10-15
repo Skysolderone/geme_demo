@@ -7,52 +7,9 @@ using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.MatchFlowRegression;
 
-/// <summary>implement 8.3 的流程回归用例集中未被 Scenario 覆盖的部分：出局改变人数、最后一手抢先锋、人工接管、事件唯一发出点。</summary>
+/// <summary>implement 8.3 的流程回归用例集中未被 Scenario 覆盖的部分：最后一手抢先锋、人工接管、事件唯一发出点。</summary>
 public class 流程回归Tests
 {
-    [Fact]
-    public void 出局改变参赛人数后Pass计数与新人数重比()
-    {
-        // 裁决记录 3：连续 Pass 计数达到「当前」参赛人数即触发；出局让人数从 4 变 3 后，3 次 Pass 就够。
-        // 变异验证 M-R1：CheckEndConditions 用 _players.Length 代替 ActiveCount → 红 1（本测试：第 3 次 Pass 后仍在进行）。
-        // 段 C 改摆法：出局只能由提子造成（Pass 不改变任何人的势力），原"P0 Pass 后 P3 因盘面与手牌皆空出局"已不成立。
-        // 改为 P0 一个批次提光 P3 的 A1（计数清零），随后 P1、P2 与第 6 大回合首位各 Pass 一次：3 ≥ 3 → 整轮 Pass（终局大回合 5 → 6）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
-            .Stones(TestMaps.P3, "A1")
-            .Stones(TestMaps.P0, "B1");
-
-        match.PlayTurn("A2");   // P0：提光 P3 → P3 出局，参赛人数 3
-        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(TestMaps.P3).Status);
-        Assert.Equal(0, match.PassStreak);
-        match.PassTurn();   // P1
-        match.PassTurn();   // P2 → 第 5 大回合结束（P3 被跳过）
-        Assert.Equal(6, match.MajorRound);
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-        match.PassTurn();   // 第 6 大回合首位 → 3 ≥ 3
-        Assert.Equal(MatchPhase.Ended, match.Phase);
-        Assert.Equal(EndReason.AllPassed, match.Result!.Reason);
-        Assert.Equal(6, match.Result.MajorRound);
-    }
-
-    [Fact]
-    public void 弃赛改变参赛人数后立即重比Pass计数()
-    {
-        // 前三人 Pass（计数 3 < 4），第四人在小回合边界弃赛 → 参赛人数变 3，计数 3 ≥ 3 立即触发整轮 Pass。
-        // 变异验证 M-R2：Resign 后不调用 CheckEndConditions → 红 1（本测试）。
-        MatchFlow match = MatchFixtures.Started().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
-            .Stones(TestMaps.P0, "E5");
-        match.PassTurn();
-        match.PassTurn();
-        match.PassTurn();
-        Assert.Equal(3, match.PassStreak);
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-
-        match.Resign(TestMaps.P3);
-        Assert.Equal(MatchPhase.Ended, match.Phase);
-        Assert.Equal(EndReason.AllPassed, match.Result!.Reason);
-        Assert.Equal(TestMaps.P0, match.Result.Winners.Single());
-    }
-
     [Fact]
     public void 最后一手抢到的先锋本大回合结束即生效()
     {

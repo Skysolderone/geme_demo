@@ -195,7 +195,7 @@ internal static class LinkModeFixtures
     internal static string[] Shift(params string[] cells) =>
         [.. cells.Select(Coord.Parse).Select(c => new Coord(c.X + 2, c.Y + 2).ToNotation())];
 
-    // ---------- 流程推进扩展（retire-legacy-rules 1.2：原 MatchFixtures 的扩展方法，原样迁来） ----------
+    // ---------- 流程推进扩展（retire-legacy-rules 1.2：原 9×9 流程夹具的扩展方法，原样迁来） ----------
 
     /// <summary>
     /// 把对局摆到第 <paramref name="majorRound"/> 大回合开始、指定顺序。出局判定不再有保护期豁免（restore-go-core-rules 裁决 #3），

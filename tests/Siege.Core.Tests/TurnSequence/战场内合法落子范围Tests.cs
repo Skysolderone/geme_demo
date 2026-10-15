@@ -172,13 +172,4 @@ public class 战场内合法落子范围Tests
         Assert.Equal(0, match.Scoreboard.Latest.Of(P1).Total);                                // 势力更新
         Assert.True(match.Scoreboard.Latest.Of(P0).Total > 0);
     }
-
-    [Fact]
-    public void 旧模式第4大回合仍全图解禁()
-    {
-        // 实现裁决 B1：删除"第 4 大回合全图解禁"只作用于链接模式；旧模式原样（与既有「第4大回合的全图解禁Tests」同口径）。
-        MatchFlow legacy = MatchFixtures.Started().AtRound(4);
-        Assert.Contains(TestMaps.At("H8"), legacy.LegalRangeFor(MatchFixtures.P0));
-        Assert.Equal(MatchMode.Legacy, legacy.Mode);
-    }
 }
