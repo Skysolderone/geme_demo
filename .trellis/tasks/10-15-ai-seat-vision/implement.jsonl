@@ -1,0 +1,8 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/ai-seat-vision/proposal.md", "reason": "ai-seat-vision 规划与内核规范"}
+{"file": "openspec/changes/ai-seat-vision/design.md", "reason": "ai-seat-vision 规划与内核规范"}
+{"file": "openspec/changes/ai-seat-vision/tasks.md", "reason": "ai-seat-vision 规划与内核规范"}
+{"file": "openspec/changes/ai-seat-vision/specs/ai-decision/spec.md", "reason": "ai-seat-vision 规划与内核规范"}
+{"file": ".trellis/spec/core/index.md", "reason": "ai-seat-vision 规划与内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "ai-seat-vision 规划与内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "ai-seat-vision 规划与内核规范"}
