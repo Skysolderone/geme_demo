@@ -103,6 +103,7 @@ public static class Program
         Console.WriteLine($"                [--final-countdown <决赛倒计时大回合数 K，非负整数，缺省 {Core.Match.MatchOptions.DefaultFinalCountdownRounds}；0 = 不启用（出现等待决赛的玩家后其余多人战场最多再打 K 个大回合，到期按势力强制结算）>]");
         Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
+        Console.WriteLine("                （AI 视野没有命令行选项：缺省按座位视野；全知只作测试与离线分析，经 --config 顶层 \"SeatVision\": false 打开，对全部 AI 生效）");
         Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
         Console.WriteLine("            map 子命令另可打印旧标识族（内置图 / 地图文件 / gen: / board:，测试夹具用途）。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");

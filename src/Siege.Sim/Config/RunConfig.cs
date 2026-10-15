@@ -149,6 +149,14 @@ public sealed record RunConfig
     /// </summary>
     public int? FinalCountdownRounds { get; init; }
 
+    /// <summary>
+    /// AI 视野（<see cref="AiSearchConfig.SeatVision"/>，ai-seat-vision 裁决 V1 / D1）：<c>true</c> = 按座位视野（缺省），<c>false</c> = 全知（只作测试与离线分析的显式配置项）。
+    /// 对<b>全部</b> AI 玩家生效（含显式给了 <see cref="PlayerAiConfig.Search"/> 的玩家：视野只记在这一处，搜索配置里不写也读不进它）。
+    /// <c>null</c> = 新建的局取 <c>true</c>，并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部（缺省值也写，便于回放）；
+    /// 按日志首部重建（回放）时缺该项即该项出现之前的旧日志，当时 AI 缺省全知，按 <c>false</c> 重建。没有命令行选项：全知只能经 <c>--config</c> 打开。
+    /// </summary>
+    public bool? SeatVision { get; init; }
+
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
 
@@ -310,6 +318,8 @@ public sealed record RunConfig
         resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
         // 决赛倒计时（final-countdown）：缺省 2 与"首部缺该项 = 旧日志 = 0"必须可区分，未配置一律落成 2。
         resolved = resolved.FinalCountdownRounds is null ? resolved with { FinalCountdownRounds = MatchOptions.DefaultFinalCountdownRounds } : resolved;
+        // AI 视野（ai-seat-vision D1）：缺省按座位视野与"首部缺该项 = 旧日志 = 全知"必须可区分，未配置一律落成 true。
+        resolved = resolved.SeatVision is null ? resolved with { SeatVision = true } : resolved;
         // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，
         // 使"专家、前瞻宽度 4"如实可查、回放按首部重建。落成值与会话建 AI 时按难度取的完全相同（候选格上限与停手阈值取上面已落成的值），走法不变。
         // 必须放在候选格上限与停手阈值落成之后。前瞻宽度为 0 的三档旧难度不落成（Search 保持缺省），配置记录与首部与引入之前逐字节相同。
@@ -338,6 +348,32 @@ public sealed record RunConfig
         ["FlagRisk"] = "冒险概率已移除（retire-legacy-maps 3.2；board-link-mode 起原型插旗为盲选）",
     };
 
+    /// <summary>
+    /// 玩家搜索配置里的视野项（ai-seat-vision D1）：<see cref="AiSearchConfig.SeatVision"/> 不进 JSON，写在 <c>Players[].Search</c> 里会被静默忽略——
+    /// 一份想开全知的配置照常跑通、实际却按座位视野跑，是口径错误（testing.md「静默忽略的输入」）。所以报错点名，指向顶层 <see cref="SeatVision"/>。
+    /// </summary>
+    private static void RejectSearchVision(JsonElement root)
+    {
+        if (!root.TryGetProperty(nameof(Players), out JsonElement players) || players.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        int index = 0;
+        foreach (JsonElement player in players.EnumerateArray())
+        {
+            if (player.ValueKind == JsonValueKind.Object && player.TryGetProperty(nameof(PlayerAiConfig.Search), out JsonElement search)
+                && search.ValueKind == JsonValueKind.Object
+                && search.EnumerateObject().Any(p => string.Equals(p.Name, nameof(AiSearchConfig.SeatVision), StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new FormatException(
+                    $"配置项 Players[{index}].Search.SeatVision 不再生效：AI 视野只在配置顶层 SeatVision 一处配置、对全部 AI 玩家生效（ai-seat-vision；缺省 true = 按座位视野，false = 全知）。请改写到顶层。");
+            }
+
+            index++;
+        }
+    }
+
     public static RunConfig FromJson(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
@@ -352,6 +388,8 @@ public sealed record RunConfig
                         throw new FormatException($"配置项 {property.Name} 已删除：{why}。请从配置文件里去掉它。");
                     }
                 }
+
+                RejectSearchVision(doc.RootElement);
             }
         }
 

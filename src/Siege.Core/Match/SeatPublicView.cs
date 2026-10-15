@@ -56,7 +56,7 @@ public sealed record SeatLinkView(int Sequence, int X, int Y);
 /// 数据层过滤：结构里只有本座位所在战场的格、棋子、设施、归属、信物、棋串与活形，以及同战场玩家的势力明细与手牌类型；
 /// 其他战场的格根本不在 <see cref="Cells"/> 里（呈现为"未展开"，<see cref="IsExpanded"/> 为 <c>false</c>）。
 /// 全局公开项（配置、地图标识与种子、带入、行动顺序、各玩家状态、战场结算与胜者、链接事件、占位）不过滤。
-/// 旧模式下全图可见、全员同战场（全知视图 <see cref="MatchFlow.Publish"/> 原样保留，批量分析、遥测与 AI 全知例外仍用它）。
+/// 旧模式下全图可见、全员同战场（全知视图 <see cref="MatchFlow.Publish"/> 原样保留，批量分析、遥测、回放与显式全知配置的 AI 仍用它）。
 /// </summary>
 public sealed record SeatPublicView(
     PlayerId Seat,

@@ -90,9 +90,9 @@ public sealed class HeuristicTurnController : ITurnController
     public PlayerId Player { get; }
 
     /// <summary>
-    /// 预演结果的读取口径（board-link-mode 实现裁决 C4）：关闭全知时由 <see cref="HeuristicAi.VisionFor"/> 给出，把对局的零副作用预演结果投影到与
+    /// 预演结果的读取口径（board-link-mode 实现裁决 C4；ai-seat-vision 起为缺省）：按座位视野时由 <see cref="HeuristicAi.VisionFor"/> 给出，把对局的零副作用预演结果投影到与
     /// 观察视图相同的口径（去掉未与本座位链接的战场上的棋子），使"预演前"（观察视图）与"预演后"（预演结果）同一口径——评价代码不改。
-    /// 全知（缺省）为 <c>null</c>，预演结果原样使用。
+    /// 显式全知（配置的视野项为 <c>false</c>，见 <see cref="HeuristicAi.VisionFor"/>）时为 <c>null</c>，预演结果原样使用；不经 <see cref="HeuristicAi.VisionFor"/> 直接构造的控制器同为 <c>null</c>。
     /// </summary>
     internal Func<RehearsalResult, RehearsalResult>? RehearsalView { get; init; }
 
@@ -168,20 +168,18 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>
     /// 裁决 C15：链接模式下 <paramref name="player"/> 所在战场还有其他在局玩家，且其当前总势力严格低于其中某一人（并列最高视为最高）。
     /// 旧模式、尚无势力快照、未锁定出生棋盘、独自在单人战场等待时一律为 <c>false</c>（沿用缺省阈值）。同战场口径与按座位投影相同：
-    /// 出生棋盘落在本战场里的在局玩家（<see cref="PublicRules.BattlefieldOf"/>）。只读公开快照，关闭全知时同战场的势力仍完整可见。
+    /// 出生棋盘落在本战场里的在局玩家（<see cref="PublicRules.BattlefieldOf"/>）。只读公开快照，按座位视野（缺省）下同战场的势力仍完整可见。
     /// </summary>
     internal static bool TrailsInBattlefield(MatchPublicView view, PlayerId player)
     {
-        if (view.Mode != MatchMode.Link || view.Power is not { } power
-            || view.Players.FirstOrDefault(p => p.Player == player)?.BirthZone is not int zone)
+        if (view.Mode != MatchMode.Link || view.Power is not { } power)
         {
             return false;
         }
 
-        Battlefield field = PublicRules.BattlefieldOf(view.Board, zone);
+        // 同战场口径只经 RivalsInBattlefield 一处（ai-seat-vision check：原为同一过滤条件的内联副本，行为不变）；未锁定出生棋盘时它为空 → false。
         BigInteger mine = power.Of(player).Total;
-        return view.Players.Any(p => p.Player != player && p.IsActive && p.BirthZone is int z && field.BirthZones.Contains(z)
-            && power.Of(p.Player).Total > mine);
+        return RivalsInBattlefield(view, player).Any(p => power.Of(p).Total > mine);
     }
 
     // ---------- 第 2 阶段 ----------
@@ -645,8 +643,11 @@ public sealed class HeuristicTurnController : ITurnController
         return new MoveOutcome(placements, gain, result.Captures.Length, power.Of(Player).Total, rivalAfter);
     }
 
-    /// <summary>与 <see cref="TrailsInBattlefield"/> 同一战场口径：出生棋盘落在 <paramref name="player"/> 所在战场里的其他在局玩家（升序）。未锁定出生棋盘为空。</summary>
-    private static ImmutableArray<PlayerId> RivalsInBattlefield(MatchPublicView view, PlayerId player)
+    /// <summary>
+    /// 与 <see cref="TrailsInBattlefield"/> 同一战场口径：出生棋盘落在 <paramref name="player"/> 所在战场里的其他在局玩家（升序）。未锁定出生棋盘为空。
+    /// 只读公开项（在局状态、出生棋盘、地形划出的战场），全知与按座位视野下结果相同。同战场口径的唯一实现：C15（<see cref="TrailsInBattlefield"/>）、决胜一手与专家前瞻的名册（ai-seat-vision 裁决 V2）都经它。
+    /// </summary>
+    internal static ImmutableArray<PlayerId> RivalsInBattlefield(MatchPublicView view, PlayerId player)
     {
         if (view.Players.FirstOrDefault(p => p.Player == player)?.BirthZone is not int zone)
         {

@@ -67,6 +67,8 @@ public sealed class MatchSession
         CellLimit = Config.CandidateCellLimit ?? (recorded ? 0 : AiSearchConfig.DefaultCellLimitFor(match.Map.PlayableCount));
         // 停手阈值同理：首部没有该项 = 该项出现之前的旧日志，当时的保留条件是严格提高（= 0），MUST NOT 按今天的缺省阈值重建。
         PassThreshold = Config.PassThreshold ?? (recorded ? 0 : AiSearchConfig.DefaultPassThreshold);
+        // AI 视野（ai-seat-vision D1）：首部没有该项 = 该项出现之前的旧日志，当时 AI 缺省全知，MUST NOT 按今天的缺省（按座位视野）重建。
+        SeatVision = Config.SeatVision ?? !recorded;
         if (match.Phase != MatchPhase.InProgress)
         {
             throw new SiegeRuleException("会话要求对局已完成插旗并处于进行中。");
@@ -122,6 +124,9 @@ public sealed class MatchSession
 
     /// <summary>本局未显式配置剪枝参数的 AI 实际生效的停手阈值（ai-eye D4）。</summary>
     public int PassThreshold { get; }
+
+    /// <summary>本会话全部 AI 的视野：<c>true</c> = 按座位视野（新建局的缺省），<c>false</c> = 全知（显式配置或缺该项的旧日志回放）。见 <see cref="RunConfig.SeatVision"/>。</summary>
+    public bool SeatVision { get; }
 
     public GameSeed Seed { get; }
 
@@ -205,7 +210,9 @@ public sealed class MatchSession
     {
         // 显式的剪枝参数原样生效；未配置时按难度取，候选格上限取跑局配置的值，仍未给出则按地图大小取（阈值逻辑在 Core，三个入口共用）。
         // 停手阈值同样只作用于未显式配置剪枝参数的玩家（显式的 Search 自带阈值）。
-        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold });
+        // AI 视野（ai-seat-vision D1）对全部玩家一律取会话值：视野只在批次配置顶层一处，显式的 Search 也开不了全知。
+        AiSearchConfig search = (ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold }))
+            with { SeatVision = SeatVision };
         if (ai.DebugAi)
         {
             DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, search);

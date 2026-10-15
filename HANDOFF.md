@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-10-15（`final-countdown` 实施（含 W7）：首轮同步收尾 / 决赛倒计时，设计文档 v1.25；此前 `ai-terrain-review`、`link-map-terrain`、`ai-pass-review`、`retire-legacy-maps`、`board-link-mode` 均已归档）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-10-15（`ai-seat-vision` 实施：AI 缺省按座位视野、专家前瞻名册限同战场，设计文档 v1.26；此前 `final-countdown`、`ai-terrain-review`、`link-map-terrain`、`ai-pass-review`、`retire-legacy-maps`、`board-link-mode` 均已归档）。仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续；最近进度以 `.trellis/workspace/rubioc/journal-1.md` 最后一节为准。
 
 ## 一句话
@@ -51,9 +51,9 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 - `run`：`--out`（必填）`--config <json>` `--seed` `--count` `--parallel` `--serial` `--map` `--players` `--difficulty` `--turn-limit`（缺省 600，0 = 不截断）`--artisan-weight`（缺省 10）`--cell-limit` `--pass-threshold`（缺省 20）`--pairing-seed` `--carry-in 0|1`（缺省 0）`--map-per-match`（第 i 局用 `link:<起始+i>`）`--final-countdown <K>`（决赛倒计时，缺省 2，0 = 不启用；落成值写进 config.json 与日志首部）`--retention SnapshotsOnly|Full` `--sample-permille` `--gzip`。
 - `map`：`--map`（只接受 `link:`，缺省 `link:1`）`--links <如 1-4,2-5 或 1-4E,2-5E,1-2N>`（单棋盘之间不写贴边一律东贴，3+1 决赛须显式写 N）`--out`。
 - `replay`：`--file <match-*.jsonl>` 或 `--dir <目录> --seed <十六进制种子>`（只回放 `link:` 日志）。`analyze`：`--dir` `--include-contaminated` `--review-defeats`（按日志回放复盘整轮 Pass 结算的落败者与决胜一手，耗时约等于跑局；缺省不做）`--out`。
-- 已删除：`--flag-risk`（冒险概率随盲选废除）；`--config` 文件里写 `FlagRisk` 字段即报错退出（`retire-legacy-maps`）。Link 局固定 4 人，`--players` 给别的值建局报错。AI 全知开关只在 `--config` 的 `Players[].Search.SeatVision`，没有命令行选项。难度名不区分大小写、不接受数字（`AiDifficultyNames`）。
+- 已删除：`--flag-risk`（冒险概率随盲选废除）；`--config` 文件里写 `FlagRisk` 字段即报错退出（`retire-legacy-maps`）。Link 局固定 4 人，`--players` 给别的值建局报错。AI 视野只在 `--config` 顶层 `SeatVision`（缺省 true = 按座位视野；`false` = 全知，只作测试与离线分析，对全部 AI 生效），没有命令行选项；写进 `Players[].Search.SeatVision` 即报错（`ai-seat-vision`）。批次配置与日志首部照写该项，旧日志缺该项按全知回放。难度名不区分大小写、不接受数字（`AiDifficultyNames`）。
 
-## 现行规则速览（设计文档 v1.25）
+## 现行规则速览（设计文档 v1.26）
 
 - **地图**（§3.3，`link-map-terrain`）：`link:<种子>` 生成 5 块出生棋盘（宽高 6–8、间距 3 排开），五主题高台 / 河流 / 林地 / 栅栏阵 / 混合各一块；外圈平坦，中央 3×3 核心区是出生区（2 个出生区信物），中间带按主题放高差 / 深水与桥 / 林地 / 栅栏 / 岩石，另有 0–1 个公共区档信物在难到达格；全图可落子 212–280、信物 10–15。插旗占位公开主题名。棋盘外是不可落子、不可改造的场景格。**战场** = 可落子格连通分量，战斗阶段可见本战场各棋盘外接矩形内全部格。
 - **盲选**（§4.1）：只见 5 个占位，选中即锁定，互相看不到；AI 用 `flag-pick` 子流均匀选；多人可同区。
@@ -62,7 +62,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 - **战场结算**（§12.3）：每个大回合结束检查——本战场在局 ≥ 2 人且全员 Pass / 填满 / 只剩一人 / 决赛倒计时到期；势力第一胜出，其余"战场落败"出局。单人战场不因 Pass 或填满结算。
 - **决赛倒计时**（§4.3，`final-countdown`）：第一次出现"等待决赛的玩家"（已结算战场的胜者，或第 3 大回合结束时未被配对的独占者）的那个大回合记为 R（不早于第 3 大回合，W7），其余未结算多人战场最迟第 R + K 大回合结束时按势力强制结算（原因 `Expired`）；之后才出现的战场期限 max(R + K, 出现大回合 + 1)；决赛战场不倒计时。K 是对局配置，缺省 2，0 = 不启用；旧存档按 0。图形版每个大回合开始出提示条"对面战场已结算，本战场还剩 N 个大回合" / "等待决赛：对面战场最迟第 X 大回合结束"。
 - **决赛与终局**（§12.4）：全部多人战场结算且在局 ≥ 2 → 决赛拼接；终局只有"只剩一名参赛玩家"与"最后战场结算"两类。名次：决赛胜者 → 决赛其他玩家（同样以战场落败出局，出局最晚）→ 更早落败者倒序（同次按势力排）→ 弃赛者（§12.5）。因此带出补给点的只有决赛胜者（§21.3）。
-- **信息**（§13）：同战场公开与全局公开两层；其他战场的盘面与势力数值不可见（`MatchPublicView.ForSeat` 数据层过滤）。AI 第一版仍读全局（`SeatVision` 缺省 false = 全知）。
+- **信息**（§13）：同战场公开与全局公开两层；其他战场的盘面与势力数值不可见（`MatchPublicView.ForSeat` 数据层过滤）。AI 同样按座位视野（`ai-seat-vision`，四档一律；先手维名次只在同战场内比较），全知只作批量跑局的显式配置；专家前瞻名册限同战场。
 - **势力** = 领地分（独占空格，荒漠不计）+ 棋串军势，军势 = ⌊(基础 + 位置加值) × 1.5ⁿ⌋，不封顶，BigInteger（§10.1）。部署上限 3 / 4 / 5（第 1–3 / 4–6 / 7+ 大回合）+ 军令；征募展示 5、免费取 3。
 - **活形**（§6.4）：`EYE_SPACE_MAX = 12`，眼值 ≥ 2 为已活；已活棋串的眼空间对他人禁入；单子不成活。同形判重不含棋子类型（§6.2）。
 - **十种棋子 / 十类信物**，内容集 v2 缺省（§8、§9）。
@@ -97,7 +97,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 ## 后续 change（只登记，未建目录；设计文档 §19 同）
 
 1. ~~AI 停手复核~~：已实施（`ai-pass-review`，诊断 + 决胜一手）。
-2. **AI 视野收紧**：关闭全知开关后，专家前瞻会把其他战场玩家当作已出局（C12）。
+2. ~~AI 视野收紧~~：已实施（`ai-seat-vision`，AI 评价版本 4 → 5）——验证 20 + 20 局：标准 × 4 对局中位 16 → 15.5 大回合、逐小回合落点差异率 40.2%、战场落败 / 到期结算次数不变、单小回合耗时中位 68 → 128 ms（投影开销）；1 专家 + 3 标准专家胜 7 / 20（35%）、平均名次 2.40，前瞻改变选择 12.9%，名册为空退化 30 次。
 3. ~~retire-legacy-maps~~：已实施并归档（2026-10-13）。
 4. ~~决赛开局势力差评估~~：已实施（`final-countdown`，K = 2）——验证 20 局：等待 ≤ 2 个大回合（原中位 6、最长 14），决赛开局势力差中位 418 → 19，等待者决赛胜率 20% → 25%，到期结算 16 次，对局中位 17.5 → 16 大回合；截图 `art/final-countdown/countdown-strip(-gray).png`（`--auto-demo --seed=5 --rounds=7 --screenshot=…:290`）。是否再调 K 待试玩。
 5. **Godot 无头运行偶发崩溃观察**：一次 `Illegal instruction`（退出码 132）未复现；再现时抓崩溃日志（J12-7）。
@@ -114,7 +114,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 
 ## 权威来源（按优先级）
 
-1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.24**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
+1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.26**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
 2. `openspec/changes/archive/<日期>-<change>/` 的 proposal 裁决表与 design.md：设计文档没写到的以它判定（链接模式的全部裁决在 `board-link-mode` 的 proposal）。
 3. `.trellis/spec/core/`：`index` / `boundaries` / `determinism` / `coordinates` / `testing`，**必读**。
 4. `.trellis/workspace/rubioc/journal-1.md` 与 `.trellis/tasks/archive/<月>/<任务>/implement.md`（逐段记录、冒烟数字、自检输出）。

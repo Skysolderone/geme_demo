@@ -60,10 +60,12 @@ public enum AiDifficulty
 /// 0 = 不计两层加分、不做两层扫描。四档预设都为 0（专家预设已退回一层，见 <see cref="Expert"/>）；可配置项，<c>Search</c> 显式给出时生效。为 0 时不写出，缺字段按 0 读。
 /// </param>
 /// <param name="SeatVision">
-/// AI 全知开关（board-link-mode 实现裁决 C4 / 规格 ai-decision「正式对战 AI 的信息边界」第一版例外）：缺省 <c>false</c> = 全知（第一版例外：经全知视图读取其他战场的盘面与势力；
-/// 候选落点仍只来自合法落子范围）；<c>true</c> = 关闭全知——AI 读按座位投影的视图（<see cref="Match.MatchFlow.PublishSeatProjection"/>：未与本座位链接的战场上的棋子被去掉、
-/// 其上的信物呈未揭示、他人战场玩家的势力与手牌类型不可见），预演结果投影到同一口径。分流只在 <see cref="HeuristicAi.VisionFor"/> 一处；评价代码不读本项。
-/// 取布尔（配置对象只有整数与布尔，守门「难度分级 / 高难度不越权」）且以"全知"为 <c>false</c>：缺省值不写出，旧日志、旧配置的首部逐字节不变，缺字段按全知读。
+/// AI 视野开关（ai-seat-vision 裁决 V1 / D1，取代 board-link-mode C4 的"第一版全知例外"）：缺省 <c>true</c> = 按座位视野——AI 读按座位投影的视图
+/// （<see cref="Match.MatchFlow.PublishSeatProjection"/>：未与本座位链接的战场上的棋子被去掉、其上的信物呈未揭示、他人战场玩家的势力与手牌类型不可见），
+/// 预演结果投影到同一口径；<c>false</c> = 全知（只作测试与离线分析的显式配置项：批量跑局经 <c>--config</c> 顶层 <c>"SeatVision": false</c> 打开，
+/// 终端版与图形版没有入口）。四档预设与 <see cref="ForMap"/> 都随构造缺省取 <c>true</c>。分流只在 <see cref="HeuristicAi.VisionFor"/> 一处；评价代码不读本项。
+/// 本项<b>不进任何 JSON</b>（<c>[JsonIgnore]</c>）：跑局层的视野只记在批次配置顶层一处（<c>RunConfig.SeatVision</c>，首部同写），对全部 AI 玩家生效——
+/// 显式的 <c>Search</c> 块既写不出也读不进它，漏写不会静默落成全知；旧日志缺顶层该项按全知回放。取布尔（配置对象只有整数与布尔，守门「难度分级 / 高难度不越权」）。
 /// </param>
 public sealed record AiSearchConfig(
     int CandidatePointCount,
@@ -74,7 +76,7 @@ public sealed record AiSearchConfig(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DiverseSupplementLimit = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool SeatVision = false)
+    [property: JsonIgnore] bool SeatVision = true)
 {
     /// <summary>专家预设的前瞻宽度（负责人裁决 2026-09-26：前 K = 4 个候选；规格里 K 专指候选格上限，故称 W）。</summary>
     public const int DefaultLookaheadWidth = 4;

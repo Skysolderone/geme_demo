@@ -229,9 +229,12 @@ public class 专家难度的一层前瞻Tests
         // link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变。旧值：
         // (1, 18, 9931058863ADB025…, 3069, 9, 6B948F9BE9D4C936…) (2, 22, C4572AE899F5F15E…, 7502, 11, C37EE64F2003D94B…) (3, 24, BAA330579B45A00F…, 6510, 12, 851B180F47D084F8…)。
         // 决策数 18 / 22 → 24：P0 的部署决策条数随走法变化（新图上三颗种子截断前都是 24 条）。
-        (1, 24, "F0D3738FF8300586C8AAEF4E8ED724B2AF2C06CC5C76DB4AE51C6007EFE5736B", 6386, 12, "D2074DF53A1562876D099DACDAA3FE2AA2BF36001774D69C54CC8D18A61AE25B"),
-        (2, 24, "7435EBED47DC95AD23CA6A6039C55009A17886E3334BDDB52912844ACC448CDB", 7533, 12, "E84CF42356DDF481D25A6DA7E97D27ADC447637298A5CF4AA29A16317FA7D8B8"),
-        (3, 24, "20FF2CD2850E4BA43E36C258156FBF79BB85D3C987529BA7EA3CBD7777222F90", 8184, 12, "54E0E8F99651D05CF8B6CC94480499E6EE8E49FC0B9033B1811183AD6D10C040"),
+        // ai-seat-vision 1.2 重钉（裁决 V2，见实施记录 V7）：前瞻名册改为只含同战场玩家。夹具写死全知（LookaheadFixtures.LinkConfig）；三颗种子的决策序列、决策条数与
+        // ai-P0 子流消费次数逐项不变，只有前瞻记录的确定性文本变了（下一名对手由他战场玩家换成同战场玩家、前瞻后分数随之变，截断前未改变任何一次选择）。旧 RecordsHash：
+        // 1 → D2074DF53A1562876D099DACDAA3FE2AA2BF36001774D69C54CC8D18A61AE25B；2 → E84CF42356DDF481D25A6DA7E97D27ADC447637298A5CF4AA29A16317FA7D8B8；3 → 54E0E8F99651D05CF8B6CC94480499E6EE8E49FC0B9033B1811183AD6D10C040。
+        (1, 24, "F0D3738FF8300586C8AAEF4E8ED724B2AF2C06CC5C76DB4AE51C6007EFE5736B", 6386, 12, "937E83BAD1649A517773EA527D1FADC9C8018D8C84CA304808661D4175C8D6E4"),
+        (2, 24, "7435EBED47DC95AD23CA6A6039C55009A17886E3334BDDB52912844ACC448CDB", 7533, 12, "6F8FBBDACC0FC3B91AE28AC2358D78743E2D5E1F85D7F57774C007723A66E57C"),
+        (3, 24, "20FF2CD2850E4BA43E36C258156FBF79BB85D3C987529BA7EA3CBD7777222F90", 8184, 12, "0F5F1AF62E8153F652ADBDA90112ABD6FFB71235A4EAB5121154488FCCA98526"),
     ];
 
     /// <summary>G1 口径的一局：座位 1（P0）按 <paramref name="search"/> 做专家，与 <see cref="G1Golden"/> 逐项比对。</summary>
@@ -294,7 +297,8 @@ public class 专家难度的一层前瞻Tests
         // 变异 E-P1 / E-P2（预设的多样补充上限改回 8 / 两层权重改回 1000）→ 本测试红（见预设退回记录）。
         AiSearchConfig preset = AiSearchConfig.Expert with { PassThreshold = PassThreshold };
         MatchSession session = CreateSession(LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, Standard, Standard, Standard) with { CandidateCellLimit = 0 }, seed);
-        Assert.Equal(preset, session.AiOf(P0)!.Config);
+        // ai-seat-vision 1.3：AI 视野是会话层对全部玩家的叠加项（批次配置顶层 SeatVision），夹具写死全知 → 落成的配置 = 预设 + 全知，其余逐字段等于预设。
+        Assert.Equal(preset with { SeatVision = false }, session.AiOf(P0)!.Config);
         AssertG1(preset, seed);
     }
 
@@ -304,7 +308,8 @@ public class 专家难度的一层前瞻Tests
         MatchSession session = CreateSession(
             LinkConfig(Standard, new PlayerAiConfig { Difficulty = difficulty, Search = search }, Standard, Standard), 1);
         HeuristicTurnController ai = session.AiOf(P1)!;
-        Assert.Equal(search, ai.Config);
+        // ai-seat-vision 1.3：显式的搜索配置原样生效，只有视野取会话值（夹具写死全知，见 LookaheadFixtures.LinkConfig）。
+        Assert.Equal(search with { SeatVision = false }, ai.Config);
         MatchLog log = session.Run();
         Assert.Null(log.Failure);
         return (log, ai.Decisions);

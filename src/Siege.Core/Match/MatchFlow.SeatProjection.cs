@@ -7,8 +7,8 @@ using Siege.Core.Scoring;
 namespace Siege.Core.Match;
 
 /// <summary>
-/// 按座位投影的公开快照（board-link-mode 实现裁决 C4 / 规格 ai-decision「全知例外集中可关」）：与 <see cref="Publish"/> 同一类型，
-/// 供关闭全知的 AI（<see cref="Ai.HeuristicAi.VisionFor"/>）与终端的人类玩家读取，评价代码与终端渲染不需要知道差别。
+/// 按座位投影的公开快照（board-link-mode 实现裁决 C4；ai-seat-vision 裁决 V1 起为正式 AI 的缺省视野，规格 ai-decision「正式对战 AI 的信息边界」）：与 <see cref="Publish"/> 同一类型，
+/// 供正式 AI（缺省按座位视野，经 <see cref="Ai.HeuristicAi.VisionFor"/>）与终端的人类玩家读取，评价代码与终端渲染不需要知道差别。
 /// </summary>
 /// <remarks>
 /// 口径与 <see cref="PublishFor"/>（<see cref="SeatPublicView"/>）一致：本座位所在战场之外——未与之链接的战场——的棋子不出现，其上的信物呈未揭示、无人控制，
@@ -52,7 +52,7 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 把一次零副作用预演的结果投影到同一口径（关闭全知的 AI 用，见 <see cref="Ai.HeuristicAi.VisionFor"/>）：预演后盘面去掉本座位战场之外的棋子（副本上做），
+    /// 把一次零副作用预演的结果投影到同一口径（按座位视野的 AI 用——缺省即是，见 <see cref="Ai.HeuristicAi.VisionFor"/>）：预演后盘面去掉本座位战场之外的棋子（副本上做），
     /// 合法性、失败与提子不变（提子只发生在本战场里）。旧模式、插旗阶段原样返回。
     /// </summary>
     public RehearsalResult ProjectRehearsal(PlayerId seat, RehearsalResult result)

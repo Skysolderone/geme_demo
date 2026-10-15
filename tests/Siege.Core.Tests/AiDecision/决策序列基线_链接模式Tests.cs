@@ -27,6 +27,11 @@ namespace Siege.Core.Tests.AiDecision;
 /// 其余四条链接图基线（种子 1 / 2、简单 / 困难种子 1）逐字节不变。
 /// final-countdown 1.4（缺省 K = 2）：本条（四人四区）截到第 12 大回合两个首轮战场都未结算、不出现等待者，倒计时不启动，逐字节不变；
 /// 改前基线另存为 <c>decisions-link1-seed3-k0.txt</c>（与本文件相同），由 <c>Battlefield.决赛倒计时Tests</c> 以 K = 0 比对。其余四条的重钉说明见 <see cref="决策序列基线Tests"/>。
+/// ai-seat-vision 1.4（AI 缺省按座位视野）重钉：改前文件另存为 <c>decisions-link1-seed3-omniscient.txt</c>（显式全知逐字节相同，见 <c>正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同</c>）。
+/// 第 1 大回合 P1 起即分歧（四人四区，P1 独自在出生棋盘 1）：原落 <c>AA4:Boundary,AA6:Line,Z7:Basic</c>，现落 <c>AA6:Line,Z7:Boundary</c>。实测两批九维原始值只差先手维：
+/// 全知下 P1 势力 0、全局名次 4（他战场 P0 17 / P2 11 / P3 8 可见），落子后升到 2，先手维 +2；按座位视野下他战场玩家势力为 0、名次只在同战场内比较，1 → 1，先手维为 0，
+/// 第三枚子的边际不再越过停手阈值。此后整局走法都不同：首轮配对与两次链接不变；截到第 12 大回合不再出现决胜一手（原第 10 / 12 大回合各一次），
+/// 第 12 大回合四人全部 Pass，两个首轮战场同时整轮 Pass 结算（P1 299 胜 P3 86；P2 148 胜 P0 108），随后决赛配对 0-2 与第三次链接；小回合数仍为 48。
 /// </remarks>
 public class 决策序列基线_链接模式Tests
 {
@@ -95,9 +100,16 @@ internal static class LinkDecisionSequence
     /// 导出格式不随 K 变：首部不写 K；只有发生了倒计时的局才多出 <c>C</c> 行（战场进入倒计时）与 <c>S</c> 行末的 <c>deadline=</c>，
     /// 所以 K = 0 的导出与引入倒计时之前的基线逐字节可比（<c>*-k0.txt</c>）。
     /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, int? finalCountdown)
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, int? finalCountdown) =>
+        Export(seed, maxMajorRounds, difficulty, attach, finalCountdown, seatVision: null);
+
+    /// <summary>
+    /// 同上，AI 视野取 <paramref name="seatVision"/>（ai-seat-vision D1 / D4）：<c>null</c> = 跑局层缺省（落成 true，按座位视野），与上一个重载逐字节相同；
+    /// <c>false</c> = 显式全知（改前的缺省），供"全知配置下与改前相同"的对照。导出格式不随视野变（首部不写视野）。
+    /// </summary>
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, int? finalCountdown, bool? seatVision)
     {
-        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0, FinalCountdownRounds = finalCountdown };
+        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0, FinalCountdownRounds = finalCountdown, SeatVision = seatVision };
         if (difficulty != AiDifficulty.Standard)
         {
             config = config with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };

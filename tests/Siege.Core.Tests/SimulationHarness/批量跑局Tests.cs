@@ -47,7 +47,8 @@ public class 批量跑局Tests
         // carry-in-out 段 C：未配置的带入数量落成 0 写入（写明关闭）。
         Assert.Null(config.CarryIn);
         // final-countdown：未配置的决赛倒计时大回合数同样落成缺省 2 写进 config.json（match-setup「决赛倒计时配置」），期望的落成项多这一项。
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, FinalCountdownRounds = Core.Match.MatchOptions.DefaultFinalCountdownRounds }).Effective().ToJson(), saved.ToJson());
+        // ai-seat-vision D1：未配置的 AI 视野落成 true（按座位视野）写进 config.json（缺省值也写），期望的落成项多这一项。
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, FinalCountdownRounds = Core.Match.MatchOptions.DefaultFinalCountdownRounds, SeatVision = true }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
         Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
@@ -57,7 +58,8 @@ public class 批量跑局Tests
         {
             Assert.NotNull(l.Result);
             // final-countdown：首部同样落成决赛倒计时大回合数（缺省 2），期望的落成项多这一项。
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, FinalCountdownRounds = Core.Match.MatchOptions.DefaultFinalCountdownRounds }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
+            // ai-seat-vision D1：首部同样落成 AI 视野（缺省 true），期望的落成项多这一项。
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, FinalCountdownRounds = Core.Match.MatchOptions.DefaultFinalCountdownRounds, SeatVision = true }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
             // 截断 12 个小回合：4 人都在局时恰为 3 个大回合；原断言"终局大回合在 1–3"隐含"截断前无人出局"。
             // link-map-terrain：地图变了、AI 走法随之变，种子 24 的同区两人在第 2 大回合整轮 Pass 结算、少一人后 12 个小回合跨到第 4 大回合。
             // 改为按截断语义断言：小回合数不超过 12；终局大回合超过 3 时，截断前确有战场结算（有人出局）。

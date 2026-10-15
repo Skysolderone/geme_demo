@@ -131,6 +131,8 @@ internal static class LookaheadFixtures
         ContentSet = ContentSet.V2,
         // final-countdown：这些真实对局的黄金值都在引入决赛倒计时之前钉下，写死 K = 0（不启用，与引入之前逐步相同）。
         FinalCountdownRounds = 0,
+        // ai-seat-vision 1.3：同理，这些黄金值都在 AI 缺省改为按座位视野之前钉下，写死全知（改前缺省，显式配置项）。
+        SeatVision = false,
         EventRetention = EventRetention.Full,
         FullEventSamplePermille = 0,
     };
@@ -157,13 +159,20 @@ internal static class LookaheadFixtures
     /// <remarks>
     /// 取四个座位的全部部署决策按固定间隔抽样（expert-lookahead 段 A 起的口径）；局面覆盖构筑期与链接之后的交战（规格「耗时上限」）。
     /// </remarks>
-    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
+    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds) =>
+        ProbePositions(seatVision: false, every, probe, seeds);
+
+    /// <summary>
+    /// 同上，局面来自 AI 视野为 <paramref name="seatVision"/> 的对局（ai-seat-vision V9：<c>true</c> = 新缺省按座位视野下的局面集；<c>false</c> 即上一个重载，
+    /// 写死全知，与引入之前逐步相同）。
+    /// </summary>
+    internal static int ProbePositions(bool seatVision, int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
     {
         int decision = 0;
         int probed = 0;
         foreach (ulong seed in seeds.Length == 0 ? [1, 2, 3] : seeds)
         {
-            MatchSession session = CreateSession(LinkConfig(Standard, Standard, Standard, Standard), seed);
+            MatchSession session = CreateSession(LinkConfig(Standard, Standard, Standard, Standard) with { SeatVision = seatVision }, seed);
             foreach (PlayerId player in session.Match.Players)
             {
                 HeuristicTurnController inner = session.AiOf(player)!;
@@ -200,6 +209,23 @@ internal static class LookaheadFixtures
             return BatchRehearsal.Rehearse(match.Board, context, batch.Placements, match.History);
         });
         return (ai, rehearsals, stream);
+    }
+
+    /// <summary>
+    /// 同 <see cref="Shadow"/>（另起批次、从种子重新派生 <c>ai-&lt;玩家&gt;</c> 子流），但观察视图与预演口径经正式 AI 的唯一分流点
+    /// <see cref="HeuristicAi.VisionFor"/> 按 <paramref name="config"/> 的视野取（ai-seat-vision V9）：<see cref="Shadow"/> 直接读全知 <see cref="MatchFlow.Publish"/>、
+    /// 预演原样使用，不随配置的视野变；本方法在按座位视野（预设缺省）下让观察与每次预演都走投影，耗时口径与正式对局相同。
+    /// </summary>
+    internal static HeuristicTurnController ShadowWithVision(MatchFlow match, BatchContext context, AiDifficulty difficulty, AiSearchConfig config)
+    {
+        var batch = new StagedBatch(match.Board, context);
+        AiVisionPorts vision = HeuristicAi.VisionFor(match, context.Player, config);
+        var ai = new HeuristicTurnController(context.Player, vision.Observe, match.Seed.Stream(HeuristicAi.StreamName(context.Player)), difficulty, Weights, config)
+        {
+            RehearsalView = vision.Rehearsal,
+        };
+        ai.Deploy(batch, () => BatchRehearsal.Rehearse(match.Board, context, batch.Placements, match.History));
+        return ai;
     }
 }
 

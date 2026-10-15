@@ -15,11 +15,12 @@ public sealed record EvaluationBreakdown(ImmutableArray<BigInteger> Raw, Evaluat
     /// <summary>
     /// AI 评价版本，写入跑局日志首部（ai-eye 1.1）。1 = 七维（ai-eye 之前，旧日志首部缺该字段）；2 = ai-eye 九维（眼位、威胁）；
     /// 3 = 活形硬约束 + 停手阈值（ai-eye 段 B，裁决 R10）+ 预筛只算七维（段 C）；
-    /// 4 = 链接模式下的决胜一手（ai-pass-review 裁决 P7 / P13；此前 board-link-mode 的 C15 落后者阈值取 0 未递增，一并归入本版）。
+    /// 4 = 链接模式下的决胜一手（ai-pass-review 裁决 P7 / P13；此前 board-link-mode 的 C15 落后者阈值取 0 未递增，一并归入本版）；
+    /// 5 = AI 缺省按座位视野 + 专家前瞻名册限同战场（ai-seat-vision 裁决 V1 / V2 / D4：链接模式下专家的前瞻重排在全知与按座位视野下都变了）。
     /// 维度数、任一维原始值的算法、或"哪些候选参与打分 / 保留"的规则变化 MUST 递增它：旧版本日志的 AI 决策不能用新评价逐步重现，
     /// 回放按首部版本处理（版本不同即在首部报分歧、不重跑）。
     /// </summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>全零分解（空批次 / Pass）。</summary>
     public static EvaluationBreakdown Zero(EvaluationWeights weights) => new([.. new BigInteger[DimensionCount]], weights);

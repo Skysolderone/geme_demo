@@ -143,7 +143,8 @@ public class 决赛倒计时Tests
         Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "改前基线小回合不足 30 个");   // 覆盖范围下界
         Assert.DoesNotContain(lines, l => l.StartsWith("C\t", StringComparison.Ordinal));
 
-        string actual = LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, finalCountdown: 0);
+        // ai-seat-vision 1.4：*-k0.txt 是改前（AI 缺省全知）的产物，本测试守的是倒计时、不是视野——显式全知（改前缺省），期望不改。
+        string actual = LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, finalCountdown: 0, seatVision: false);
 
         Assert.Equal(expected, actual);
     }

@@ -132,7 +132,8 @@ public class 可复现回放Tests
         // 首部配置 = 跑局配置（阈值已显式写死；"未配置的阈值落成缺省值写入首部"由 停手阈值Tests.阈值进入记录 钉住）。
         // carry-in-out 段 C：未配置的带入数量落成 0 写进首部（写明关闭），期望随之补上这一项。
         // retire-legacy-maps 1.8：共用配置改到 link:1（157 格 > 150），未配置的候选格上限按地图落成 24 写进首部，期望随之补上这一项。
-        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Siege.Core.Ai.AiSearchConfig.LargeMapCellLimit }).ToJson(), failed.Header.Config.ToJson());
+        // ai-seat-vision D1：未配置的 AI 视野落成 true（按座位视野）写进首部（缺省值也写），期望随之补上这一项。
+        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Siege.Core.Ai.AiSearchConfig.LargeMapCellLimit, SeatVision = true }).ToJson(), failed.Header.Config.ToJson());
         // 失败局强制保留完整事件流（含细粒度事件），不受 SnapshotsOnly 影响
         Assert.Equal(EventRetention.Full, failed.Header.Retention);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.Candidates);

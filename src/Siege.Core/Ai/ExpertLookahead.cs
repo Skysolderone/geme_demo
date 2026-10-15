@@ -108,7 +108,7 @@ internal sealed class ExpertLookahead
         {
             for (int i = 0; i < entries.Length; i++)
             {
-                BigInteger bonus = TwoPlyBonusOn(simulations[i].TwoPlyView(_view), simulations[i].History, batch.Context);
+                BigInteger bonus = TwoPlyBonusOn(simulations[i].TwoPlyView(_view, _me), simulations[i].History, batch.Context);
                 entries[i] = entries[i] with { TwoPlyBonus = bonus, ScoreAfter = entries[i].ScoreAfter + bonus };
             }
         }
@@ -213,15 +213,15 @@ internal sealed class ExpertLookahead
     /// </summary>
     internal sealed record Simulation(LookaheadEntry Entry, MatchPublicView B1, GameBoard? B2, BoardHistory History)
     {
-        /// <summary>两层加分所在的局面（D4）：有回应落子时为 B2 的投影视图（并把 B2 记入同形历史），否则即 B1。</summary>
-        internal MatchPublicView TwoPlyView(MatchPublicView view)
+        /// <summary>两层加分所在的局面（D4）：有回应落子时为 B2 的投影视图（并把 B2 记入同形历史），否则即 B1。出局判定口径同 <see cref="Project(MatchPublicView, GameBoard, PlayerId)"/>。</summary>
+        internal MatchPublicView TwoPlyView(MatchPublicView view, PlayerId me)
         {
             if (B2 is null)
             {
                 return B1;
             }
 
-            MatchPublicView after = Project(view, B2);
+            MatchPublicView after = Project(view, B2, me);
             History.Record(after.BoardSerialized);
             return after;
         }
@@ -247,7 +247,7 @@ internal sealed class ExpertLookahead
             throw new SiegeRuleException($"前瞻预演已通过的候选不合法：{b1.Failure?.Message}");
         }
 
-        MatchPublicView projected = Project(_view, b1.ProjectedBoard);
+        MatchPublicView projected = Project(_view, b1.ProjectedBoard, _me);
         var history = new BoardHistory();
         history.Record(_view.BoardSerialized);
         history.Record(projected.BoardSerialized);
@@ -436,7 +436,21 @@ internal sealed class ExpertLookahead
     /// 流程状态按出局判据的唯一实现（<see cref="PublicRules.Eliminated"/>）更新；活形分析重算；其余字段（阶段、顺序、手牌类型集合等）不变。
     /// 名册口径与真实结算第 5 步相同（出局检查之前的状态），因此在不涉及新揭示的局面上与真实结算后发布的快照逐字段相等。
     /// </summary>
-    internal static MatchPublicView Project(MatchPublicView view, GameBoard board)
+    internal static MatchPublicView Project(MatchPublicView view, GameBoard board) => Project(view, board, judged: null);
+
+    /// <summary>
+    /// 同 <see cref="Project(MatchPublicView, GameBoard)"/>，出局判定只对专家 <paramref name="me"/> 所在战场的玩家做（ai-seat-vision 裁决 V2，修 C12）：
+    /// 链接模式下候选与回应只改变本战场的盘面，他战场玩家的势力不会因此变化；按座位视野下他们的势力在投影里为 0（不可见，不是归零），
+    /// MUST NOT 因此被判出局。全知视图下他战场玩家的势力与决策起点相同、不会新出局，两种口径结果一致。旧模式（没有战场之分）与两参数重载相同。
+    /// </summary>
+    internal static MatchPublicView Project(MatchPublicView view, GameBoard board, PlayerId me)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        return Project(view, board, view.Mode == MatchMode.Link ? [me, .. HeuristicTurnController.RivalsInBattlefield(view, me)] : null);
+    }
+
+    /// <summary>投影本体：<paramref name="judged"/> 为 <c>null</c> 时对全体玩家做出局判定，否则只对其中的玩家做。</summary>
+    private static MatchPublicView Project(MatchPublicView view, GameBoard board, ImmutableHashSet<PlayerId>? judged)
     {
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(board);
@@ -448,7 +462,7 @@ internal sealed class ExpertLookahead
         // 「曾建立正势力」置位在出局检查之前（与 MatchFlow 的结算顺序一致；置位只会让总势力 > 0 的玩家变真，不改变谁出局）。
         ImmutableArray<PlayerFlowState> marked =
             [.. view.Players.Select(p => p with { HasEstablishedPower = p.HasEstablishedPower || power.Of(p.Player).Total > BigInteger.Zero })];
-        ImmutableArray<PlayerId> eliminated = PublicRules.Eliminated(marked, power);
+        ImmutableArray<PlayerId> eliminated = [.. PublicRules.Eliminated(marked, power).Where(p => judged is null || judged.Contains(p))];
         int order = (view.Players.Max(p => p.EliminationOrder) ?? 0) + 1;
         ImmutableArray<PlayerFlowState> players =
         [
@@ -469,7 +483,9 @@ internal sealed class ExpertLookahead
     }
 
     /// <summary>
-    /// 下一名对手（ai-decision「前瞻中的下一名对手」）：名册 = 投影视图（B1）上仍参赛的玩家去掉专家本人；
+    /// 下一名对手（ai-decision「前瞻中的下一名对手」）：名册 = 投影视图（B1）上仍参赛的玩家去掉专家本人；链接模式下先只取与专家同一战场的在局玩家
+    /// （ai-seat-vision 裁决 V2，修 C12：他战场玩家不进名册，也不因势力在按座位投影里不可见而被当作出局；同战场口径与
+    /// <see cref="HeuristicTurnController.RivalsInBattlefield"/> 同一实现）。
     /// 本大回合顺序中排在专家之后的第一名名册玩家即是（行动大回合 = 当前大回合）；没有时用 <see cref="InitiativeOrder.Generate"/> 按 B1 上的公开输入预测下一大回合顺序，
     /// 取其中第一名名册玩家（行动大回合 + 1；专家居首时自然跳过自己）。种子兜底顺序不公开，以玩家编号代替（D3 的已知近似）。名册为空返回 <c>null</c>。
     /// </summary>
@@ -478,6 +494,11 @@ internal sealed class ExpertLookahead
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(projected);
         HashSet<PlayerId> roster = [.. projected.Players.Where(p => p.IsActive && p.Player != me).Select(p => p.Player)];
+        if (view.Mode == MatchMode.Link)
+        {
+            roster.IntersectWith(HeuristicTurnController.RivalsInBattlefield(view, me));
+        }
+
         if (roster.Count == 0)
         {
             return null;
@@ -491,7 +512,7 @@ internal sealed class ExpertLookahead
             }
         }
 
-        foreach (PlayerId player in PredictNextOrder(view, projected))
+        foreach (PlayerId player in PredictNextOrder(view, projected, view.Mode == MatchMode.Link ? [me, .. roster] : null))
         {
             if (roster.Contains(player))
             {
@@ -505,11 +526,14 @@ internal sealed class ExpertLookahead
     /// <summary>
     /// 按 B1 预测下一大回合顺序：与大回合结束时同一组输入与同一个实现——势力名次（出局检查之后的名册）、公开先锋修正（B1 上重算控制）、
     /// 本大回合的行动位置（第 1 大回合结束时不计），公式与同值链走 <see cref="InitiativeOrder"/>；种子兜底以玩家编号代替。
+    /// <paramref name="among"/> 非空（链接模式：专家与名册玩家）时只在这些玩家之间比较先后（ai-seat-vision 裁决 V2）：其余玩家按不参与排名处理
+    /// （名次与先手值的参赛人数都只数这些玩家），不需要他战场玩家的势力。
     /// </summary>
-    private static ImmutableArray<PlayerId> PredictNextOrder(MatchPublicView view, MatchPublicView projected)
+    private static ImmutableArray<PlayerId> PredictNextOrder(MatchPublicView view, MatchPublicView projected, ImmutableHashSet<PlayerId>? among)
     {
-        ImmutableSortedDictionary<PlayerId, PlayerStatus> roster = projected.Players.ToImmutableSortedDictionary(p => p.Player, p => p.Status);
-        ImmutableArray<PlayerId> active = [.. projected.Players.Where(p => p.IsActive).Select(p => p.Player)];
+        ImmutableSortedDictionary<PlayerId, PlayerStatus> roster = projected.Players.ToImmutableSortedDictionary(
+            p => p.Player, p => among is null || among.Contains(p.Player) || !p.IsActive ? p.Status : PlayerStatus.Eliminated);
+        ImmutableArray<PlayerId> active = [.. projected.Players.Where(p => p.IsActive && (among is null || among.Contains(p.Player))).Select(p => p.Player)];
         PowerSnapshot power = PowerCalculator.Compute(projected.Board, roster, RevealedRelics.Of(view.Relics));
         ImmutableArray<RelicPublicState> relics = [.. projected.Relics.Select(r => r with { Control = RelicControl.Of(power.Coverage, r.Coord, roster) })];
         ImmutableSortedDictionary<PlayerId, int> bonuses = PublicRelicEffects.InitiativeBonuses(active, relics);
