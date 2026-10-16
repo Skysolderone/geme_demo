@@ -38,7 +38,7 @@ internal static class PresentationFixtures
         bool mine = match.Phase == MatchPhase.InProgress && match.CurrentPlayer == viewer;
         PreviewResult? preview = mine && match.Stage == TurnStage.Deploy ? match.PreviewCurrentBatch() : null;
         ForbiddenMoveReport? forbidden = mine ? match.ForbiddenMovesOfCurrentPlayer() : null;
-        // board-link-mode D-b：与图形版会话同样传本座位的按座位视图（旧模式下 ForSeat 原样返回，全图可见）。
+        // board-link-mode D-b：与图形版会话同样传本座位的按座位视图。
         return ViewerWorld.Build(viewer, match.Publish(), match.PublishSupplement(), match.Hands.AccessFor(viewer).PrivateView(), preview, forbidden, match.PublishFor(viewer));
     }
 

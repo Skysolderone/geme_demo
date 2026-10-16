@@ -11,7 +11,7 @@ namespace Siege.Core.Tests.InformationVisibility;
 /// <summary>
 /// information-visibility「其他战场不可见」「数据层过滤」在表现层的镜像（board-link-mode 段 D-b，tasks 4.2 / 4.3）：
 /// 观察者世界（<see cref="ViewerWorld"/>）在链接模式下带本座位的 <see cref="SeatPublicView"/>，默认棋盘 <see cref="ViewerWorld.Board"/> 与信息层 <see cref="ViewerWorld.Layer"/>
-/// 只含本座位所在战场的格；其余出生棋盘只剩占位（编号 + 外接矩形）。旧模式全图可见、无占位，与引入之前逐项相同。
+/// 只含本座位所在战场的格；其余出生棋盘只剩占位（编号 + 外接矩形）。retire-legacy-rules：旧模式全图可见、无占位的对照随旧模式删除。
 /// 规格：match-setup「开局信息公开范围」「匿名同时插旗」；visual-style-baseline「未展开区域的可视表现」（视图模型部分）。
 /// </summary>
 /// <remarks>

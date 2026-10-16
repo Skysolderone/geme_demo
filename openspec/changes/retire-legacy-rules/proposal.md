@@ -16,6 +16,7 @@
 | R6–R12 | 规划中发现的事项 | **2026-10-15 全按缺省**（见 design.md「Open Questions」）：R6 = A 合法链接档图载体（FlatMap 四人同区为主）；R7 = 窄解——只删 Legacy 存档不写 K 的模式分支，链接存档缺 K 按 0 回填留痕保留，`match-setup`「决赛倒计时配置」不变（据此 R2 中"旧存档缺 K 的回填"收窄为此义）；R8 (b) 类允许按新载体重导字面期望并逐条记表，(a) 类不许改；R9 Core 删 `EndReason.AllPassed` / `BoardFull`，Sim 用字符串常量读旧日志，平衡报告字节不变；R10 = A 存档 / 日志 `Mode` 照写常量 `"Link"`；R11 允许 5 条合并；R12 只被 Legacy 用到的公开成员一并删除 |
 | G1–G6 | 第 1 组上报事项 | **2026-10-15 全按缺省**：G1 `活形记录与统计Tests.活形确立可查` 在链接载体上钉新值 2（Sim"贴地形小空区"口径把棋盘外的画布障碍格算作地形墙，链接局本已如此），登记观察、本 change 不改 Sim；G2 前瞻投影不填 `EliminationReason` / `PowerAtDefeat` / `WaitingRounds`，`ProjectedFields` 比对前剔除，登记已知缺口；G3 全员 AI 跑局的 8 条无法人人居首，原样保留（断言为可复现性与日志结构）；G4 主载体为手写未校验的 8×8 平坦链接图 `link:90008`（FlatMap 6×6 容不下 9×9 局面），另有临时 `link:9000x` 标识，属 R6 = A 的辅载体范围，清单第 1 节去向栏随第 2 组更正；G5 `批量跑局Tests.已删除的选项报已删除(no-catch-up)` 偶发失败一次，登记观察；G6 `g1/` 验证产物入库，两份 `tests-list-*.txt` 可重生成、不入库 |
 | H1–H3 | 第 3 组上报事项 | **2026-10-15 全按缺省**：H1 `单子禁手的标示Tests` 的 `RangeOf` 助手在无出生区的规则层夹具上按原口径直接计算"可落子格 − 禁入格"（7 条用例逐格相同），不再经 `PublicRules.LegalRange`——该助手只是前提，`LegalRange` 另有专门测试；H2 存档 `Mode` 由枚举改为字符串、只认 `"Link"`，数字写法不再接受（存档从来只写 `"Link"`，现有存档不受影响）；H3 `g3/` 两份存档快照目录不入库（比对结论见 `compare.txt`，可由 `snapshot.py` 自 ba69f68 重生成） |
+| N1 | 终局原因优先级句（质检发现） | **2026-10-16 按建议 A**：`elimination-endgame`「两类终局条件」原"同一时刻满足多条时只剩一名参赛玩家 > 最后战场结算"与同条 Scenario「决赛结算即终局」「四人同区一次终局」冲突（每次最后战场结算都伴随只剩一名玩家）；改为按触发路径记录（小回合内减员 → 只剩一名；大回合末战场结算 → 最后战场结算），新增 Scenario 对应补测 Q1；只改规格措辞，实现不变 |
 
 ## What Changes
 
@@ -40,6 +41,7 @@
 - `capture-resolution`：「以整批最终状态判定合法性」第 1 步括号"保护期内为玩家锁定的出生区"改为"玩家所在战场的可落子格"。
 - `information-visibility`：「本大回合的 Pass 名单」删"Legacy 模式下该名单恒为空（裁决 P16）"。
 - `map-definition`：「地图静态校验规则」写明中央入口 / 咽喉可落子与距离容差两条规则已删除、对应字段只作数据保留（L18），并加一条 Scenario。
+- `elimination-endgame`：「两类终局条件」的终局原因优先级句改为按触发路径记录（裁决 N1），新增 Scenario「小回合内减员同时触发结算按只剩一名记录」。
 
 复核过、不需要增量的能力：`turn-sequence`、`elimination-endgame`、`battlefield`（`board-link-mode` 起已只写链接规则，旧测试按清单删除或合并）；`match-setup`（无 Legacy 条款；「决赛倒计时配置」按 R7 缺省不变）；`match-telemetry`（R9 缺省下平衡报告口径与字节不变）；`visual-style-baseline`（"棋盘清单为空的地图只可能是手写测试夹具"仍成立）；`carry-in-out`（"构筑保护期"在链接模式仍指第 1–3 大回合）；其余能力未引用旧模式。
 

@@ -9,11 +9,12 @@ namespace Siege.Core.Tests.TurnSequence;
 
 /// <summary>
 /// 规格：openspec/changes/board-link-mode/specs/turn-sequence —— Requirement: 构筑保护期的落子限制、合法落子范围的对外契约、第 4 大回合起的战场内落子；
-/// battlefield —— Requirement: 等待者的行动（链接模式）。旧模式的同名测试（含「第4大回合的全图解禁」）原样保留、守住旧模式。
+/// battlefield —— Requirement: 等待者的行动（链接模式）。retire-legacy-rules：旧模式的同名测试（含「第4大回合的全图解禁」）随旧模式删除，
+/// 其中仍成立的「构筑期内越区落子被拒」「空盘面玩家重新进入」「禁入格不在范围内」由本类同名条目接替（清单 (j)），「构筑期内规则照常」迁入本类。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 B 前半实跑）：M-B2 <c>PublicRules.LegalRange</c> 忽略 <c>mode</c>（Link 也走旧的保护期 / 全图分支）→ 本类「其他战场不可落子」
-/// 「等待者可落子」「等待者无法越界」「范围随链接扩大」红 4，旧模式 <c>第4大回合的全图解禁Tests</c> 2 条仍绿。
+/// 「等待者可落子」「等待者无法越界」「范围随链接扩大」红 4，旧模式 <c>第4大回合的全图解禁Tests</c> 2 条仍绿（历史记录；该参数与旧测试已随 retire-legacy-rules 删除）。
 /// </remarks>
 public class 战场内合法落子范围Tests
 {
@@ -25,6 +26,7 @@ public class 战场内合法落子范围Tests
         StagedBatch batch = match.ToDeploy();
         BatchFailure? failure = batch.Stage(BirthCell(match.Map, 1, 0, 0), PieceType.Basic);
         Assert.Equal(BatchFailureKind.OutOfLegalRange, failure?.Kind);
+        Assert.Contains("合法落子范围", failure!.Message);   // retire-legacy-rules 质检：随清单 (j) 合并补回原「保护期内越区落子被拒」的"说明违反合法落子范围"一句
         Assert.Null(batch.Stage(BirthCell(match.Map, 0, 0, 0), PieceType.Basic));
     }
 
@@ -109,6 +111,8 @@ public class 战场内合法落子范围Tests
         match.ApplyPairing([(0, 3), (1, 4)]);
         match.AtRound(4, [P0, P1, P2, P3]);
         match.Debug.SeedHand(P0);
+        // retire-legacy-rules 质检：随清单 (j) 合并补回原「第4大回合的全图解禁Tests.空盘面玩家重新进入」的前提——盘面与手牌皆空、征募后持有手牌。
+        Assert.True(match.Hands.IsHandEmpty(P0));
         Assert.Equal(0, match.StoneCount(P0));
 
         match.BeginTurn();
@@ -119,6 +123,7 @@ public class 战场内合法落子范围Tests
             hand.Pick(hand.Panel().Candidates.First(c => c.IsSelectable).Index);
         }
 
+        Assert.False(hand.PrivateView().IsEmpty);
         StagedBatch batch = match.EnterDeploy();
         PieceType type = hand.PrivateView().Types.First();
         Coord deep = CoreCell(match.Map, 3, 1, 1);             // 链接对方的出生棋盘深处（核心区中心）

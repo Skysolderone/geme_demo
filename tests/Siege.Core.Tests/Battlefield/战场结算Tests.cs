@@ -151,6 +151,33 @@ public class 战场结算Tests
     }
 
     [Fact]
+    public void 弃赛后按剩余在局者判整轮Pass()
+    {
+        // 整轮 Pass 按战场内的在局玩家判定：三人战场 1 内 A、B 都 Pass，C 未行动即在小回合边界弃赛 → 本大回合结束时战场 1 按剩余的 A、B 判整轮 Pass 结算；
+        // 弃赛者既不需要 Pass，也不进结算名次。retire-legacy-rules 质检补测 Q2：接替已删的旧「出局 / 弃赛改变参赛人数后 Pass 计数重比」两条（链接口径按战场逐人记，不读全局计数）。
+        // 变异验证 M-Q2（质检实跑）：JudgeAtRoundEnd 的整轮 Pass 改按战场内全部未出局玩家（含弃赛者）判 → 本条与「主动弃赛Tests.弃赛名次不影响最终名次」红 2。
+        MatchFlow match = Started([0, 0, 0, 3]).AtRound(1, [P0, P1, P2, P3]);
+        match.PassTurn();   // P0
+        match.PassTurn();   // P1
+        match.Resign(P2);   // 未 Pass 即弃赛；三人战场剩 2 人，不触发减员结算
+        Assert.Equal([P0, P1], match.PassedThisRound.Order());
+        Assert.Empty(match.Settlements);
+        Assert.Equal(P3, match.CurrentPlayer);
+
+        match.PassTurn();   // P3（单人战场，不结算）→ 第 1 大回合结束
+
+        BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
+        Assert.Equal((0, SettlementReason.AllPassed, 1), (settled.Battlefield, settled.Reason, settled.MajorRound));
+        Assert.Equal([P0, P1], settled.Entries.Select(e => e.Player).Order());
+        PlayerId loser = settled.Entries[1].Player;
+        Assert.Equal(EliminationReason.BattlefieldDefeat, match.StateOf(loser).EliminationReason);
+        Assert.Equal(PlayerStatus.Resigned, match.StateOf(P2).Status);
+        Assert.Null(match.StateOf(P2).EliminationReason);
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
+        Assert.Equal(2, match.ActiveCount);
+    }
+
+    [Fact]
     public void 等待者Pass不结算()
     {
         // Scenario：单人战场 3 内的玩家 D 连续三个大回合 Pass → 战场 3 不结算，D 仍在局；等待大回合数逐轮累计（构筑期不计）。

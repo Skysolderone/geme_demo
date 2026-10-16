@@ -121,7 +121,7 @@ public sealed record RunConfig
     /// <summary>
     /// 配对种子（board-link-mode Q10 / 规格 simulation-harness「各入口支持生成图」，命令行 <c>--pairing-seed</c>）：只用于链接图 <c>link:</c> 的对局，
     /// 首轮配对与等待者由该种子与对局种子一起派生的工具层随机源决定（<see cref="Running.SeededPairingSource"/>，不是对局子流）；
-    /// <c>null</c> = 缺省，由对局种子派生，同一批次可重复对比。为 <c>null</c> 时不写出（旧模式的配置记录与日志首部逐字节不变）。
+    /// <c>null</c> = 缺省，由对局种子派生，同一批次可重复对比。为 <c>null</c> 时不写出（缺省时批次配置记录与日志首部与引入该选项之前逐字节相同）。
     /// 回放不读它——配对按日志里的配对事件重建。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

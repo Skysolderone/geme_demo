@@ -366,7 +366,7 @@ public sealed class MatchSession
         var placedCells = new List<Coord>();
         var captures = new List<string>();
         // 本小回合末尾发生了拼接（board-link-mode J3 / J7）时，拼接前盘面的格先经唯一的换算工具 LinkLayout 平移到新画布再比对：
-        // 快照里的落子、提子、改造与活形一律按本小回合结束时（链接之后）的布局记（MatchLog 类注释的版本口径）。没有链接时与原先逐格比对完全相同，旧模式日志逐字节不变。
+        // 快照里的落子、提子、改造与活形一律按本小回合结束时（链接之后）的布局记（MatchLog 类注释的版本口径）。没有链接时与原先逐格比对完全相同。
         Func<Coord, Coord> moved = c => c;
         Func<Coord, Coord?> back = c => c;
         Func<TerrainEdit, TerrainEdit> movedEdit = e => e;
@@ -495,7 +495,7 @@ public sealed class MatchSession
 
         foreach (RelicPublicState now in after.Relics)
         {
-            // 链接模式：本小回合的链接新增的公共棋盘信物在 before 里没有（未揭示、无人控制；信物本身记在链接事件里）。旧模式恒能取到，行为不变。
+            // 链接模式：本小回合的链接新增的公共棋盘信物在 before 里没有（未揭示、无人控制；信物本身记在链接事件里）。没有链接的小回合恒能取到。
             RelicPublicState? was = before.Relics.FirstOrDefault(r => r.Coord == now.Coord);
             if (was is null)
             {

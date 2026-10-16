@@ -84,8 +84,8 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 
 ## 测试现状
 
-- `dotnet build siege.sln -c Release` 与 Godot 工程均 0 警告 0 错误（段 F.6 实测）。
-- `dotnet test -c Release`：**2144 条，通过 2138，跳过 6**（`final-countdown` 后；跳过全是 Perf / Slow，用 `SIEGE_PERF=1` / `SIEGE_SLOW=1` 加 `Category` 过滤开启）。逐类迁移与对账见 `.trellis/tasks/10-13-retire-legacy-maps/migration.md`。
+- `dotnet build siege.sln --no-incremental` 与 Godot 工程（`src/godot/Siege.Godot.csproj`）均 0 警告 0 错误（`retire-legacy-rules` 5.5 实测，2026-10-16）。
+- `dotnet test`：**2126 条，通过 2119，跳过 7**（`retire-legacy-rules` 质检补测后；跳过全是 Perf / Slow，用 `SIEGE_PERF=1` / `SIEGE_SLOW=1` 加 `Category` 过滤开启）。逐类迁移与对账见 `.trellis/tasks/10-15-retire-legacy-rules/migration.md`（质检 `check.md`；旧地图一轮见 `.trellis/tasks/archive/2026-10/10-13-retire-legacy-maps/migration.md`）。
 - 决策序列基线：链接图 `link:1` + 固定配对脚本 + 标准难度、对局种子 1 / 2 / 3（截到第 12 大回合）；旧 v5 / board:1 基线已删除。`final-countdown` 起按缺省 K = 2 重钉（种子 1 / 2 / 困难种子 1 变、种子 3 / 简单种子 1 不变），改前五条原样另存 `*-k0.txt`，由 `Battlefield/决赛倒计时Tests` 以 K = 0 逐字节对照；依赖走法的既有测试夹具（`LinkModeFixtures.Options`、`SimFixtures.PinPreCalibration`、`LookaheadFixtures.LinkConfig`）写死 K = 0。专家 G1 黄金值与前瞻计时局面集钉在 `link:1` 种子 1–3。
 
 ## 旧地图（已删除）
@@ -100,7 +100,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1 --links 1-4E,2
 3. ~~retire-legacy-maps~~：已实施并归档（2026-10-13）。
 4. ~~决赛开局势力差评估~~：已实施（`final-countdown`，K = 2）——验证 20 局：等待 ≤ 2 个大回合（原中位 6、最长 14），决赛开局势力差中位 418 → 19，等待者决赛胜率 20% → 25%，到期结算 16 次，对局中位 17.5 → 16 大回合；截图 `art/final-countdown/countdown-strip(-gray).png`（`--auto-demo --seed=5 --rounds=7 --screenshot=…:290`）。是否再调 K 待试玩。
 5. **Godot 无头运行偶发崩溃观察**：一次 `Illegal instruction`（退出码 132）未复现；再现时抓崩溃日志（J12-7）。
-6. ~~retire-legacy-rules~~：已实施（2026-10-16，v1.27，裁决 R1–R12 全缺省、R7 窄解；待归档）——删 `MatchMode` 与全部 Legacy 规则分支：出生区保护期 3×3 限制与第 4 大回合全图解禁、整轮 Pass / 填满即终局（`EndReason.AllPassed` / `BoardFull`）、旧名次算法（`ComputeLink` 更名唯一的 `Compute`）、非盲选插旗、Legacy 存档恢复路径、视图与 AI 的模式门、Sim 读模式分支（L17，`Replayer` 拒绝非链接日志）；校验器删中央入口 / 咽喉与容差两条旧规则（L18，字段保留）；链接存档缺 K 回填 0 保留（W13 窄解）。手写 9×9 夹具测试迁到链接载体（主载体手写 8×8 平坦链接图 `link:90008`）：(a) 规则层 18 条、(b) 链接夹具 324 条；删 (c) 28 条 + (j) 合并 5 条，`MatchFixtures.cs` 删除；通过数 2150 → 2117。15 份基线、存档快照与 `link:1`–`link:20` 地图导出逐字节不变。
+6. ~~retire-legacy-rules~~：已实施（2026-10-16，v1.27，裁决 R1–R12 全缺省、R7 窄解；待归档）——删 `MatchMode` 与全部 Legacy 规则分支：出生区保护期 3×3 限制与第 4 大回合全图解禁、整轮 Pass / 填满即终局（`EndReason.AllPassed` / `BoardFull`）、旧名次算法（`ComputeLink` 更名唯一的 `Compute`）、非盲选插旗、Legacy 存档恢复路径、视图与 AI 的模式门、Sim 读模式分支（L17，`Replayer` 拒绝非链接日志）；校验器删中央入口 / 咽喉与容差两条旧规则（L18，字段保留）；链接存档缺 K 回填 0 保留（W13 窄解）。手写 9×9 夹具测试迁到链接载体（主载体手写 8×8 平坦链接图 `link:90008`）：(a) 规则层 18 条、(b) 链接夹具 324 条；删 (c) 28 条 + (j) 合并 5 条，`MatchFixtures.cs` 删除；通过数 2150 → 2117（质检补测 Q1 / Q2 两条后 2119）。15 份基线、存档快照与 `link:1`–`link:20` 地图导出逐字节不变。
 7. **AI 整批评价观察**（`ai-pass-review` P14）：逐枚贪心会漏掉"整批为正、逐枚为负"的组合（种子 D R5 整批 +323）。
 8. **决胜一手拉长战场观察**（P15）：20 局均值 +0.4 大回合，个例 14 → 20。
 9. **链接档新地表**（`link-map-terrain` M4，暂名 `link-map-surfaces`）：荒漠 / 沼泽 / 岩台 / 浅滩进入出生棋盘中间带。

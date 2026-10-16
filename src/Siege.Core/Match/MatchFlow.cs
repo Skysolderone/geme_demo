@@ -726,7 +726,7 @@ public sealed partial class MatchFlow
             return;
         }
 
-        // restore-go-core-rules 裁决 #4：大回合结束 MUST NOT 成为终局条件（大回合上限终局已删除），对局只因三类条件结束。
+        // restore-go-core-rules 裁决 #4：大回合结束 MUST NOT 成为终局条件（大回合上限终局已删除），对局只因两类条件结束（elimination-endgame「两类终局条件」）。
 
         ImmutableArray<InitiativeEntry>.Builder entries = ImmutableArray.CreateBuilder<InitiativeEntry>(active);
         foreach (PlayerId player in _players)

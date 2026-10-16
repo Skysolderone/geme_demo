@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.EliminationEndgame;
 
 /// <summary>
 /// 规格：openspec/changes/board-link-mode/specs/elimination-endgame —— Requirement: 两类终局条件（链接模式；裁决 S4 新增原因"最后战场结算"）。
-/// 旧模式的「三类终局条件」由既有测试原样守住。
+/// retire-legacy-rules：旧模式的「三类终局条件」随旧模式删除（原 <c>三类终局条件Tests</c> 整文件删，其中仍成立的条目已迁入本类）。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 B 后半实跑）：M-B13 大回合结束的"最后战场结算"分支改记 <c>EndReason.LastPlayerStanding</c> → 「决赛结算即终局」「四人同区一次终局」
@@ -32,6 +32,38 @@ public class 两类终局条件Tests
         Assert.Equal(winners[1], match.Result.Winners.Single());
         Assert.Equal(StandingGroup.Resigned, match.Result.Of(winners[0]).Group);
         Assert.Equal(4, match.Result.Of(winners[0]).Rank);   // 弃赛者排最后
+        // retire-legacy-rules 质检：原「三类终局条件Tests.唯一参赛者获胜」（清单 (j) 合并入本条）的"对局立即结束"后置断言随合并补回。
+        Assert.Throws<SiegeRuleException>(() => match.BeginTurn());
+    }
+
+    [Fact]
+    public void 只剩一名优先于最后战场结算()
+    {
+        // 规格「两类终局条件」：同一时刻满足多条时，终局原因按"只剩一名参赛玩家 > 最后战场结算"记录（设计文档 §12.4）。
+        // retire-legacy-rules 质检补测 Q1（接替已删的旧「只剩一名参赛玩家优先于棋盘填满」）：四人同锁棋盘 0，P0 一个批次提光 P1、P2（势力归零出局），
+        // P3 随后在小回合边界弃赛 → 棋盘 0 因减员只剩 P0、当场结算——"只剩一个含在局玩家的战场且已结算"与"只剩一名参赛玩家"在同一次调用里同时成立，原因记只剩一名。
+        // 大回合末由战场结算本身终局的路径（「四人同区一次终局」「决赛结算即终局」）原因记最后战场结算，不在本条。
+        // 变异验证 M-Q1（质检实跑）：Resign 减员结算后先判最后战场结算（`_pendingEnd = LastBattlefieldSettled`）→ 本条、「唯一参赛者获胜」与「出局判定Tests.同时归零同时出局」红 3。
+        MatchFlow match = PlainStarted().AtRound(5, All)
+            .Stones(P1, "C3")
+            .Stones(P2, "K10")
+            .Stones(P0, "D3", "J10");
+        match.PlayTurn("C4", "K9");   // P0 一个批次同时提掉 C3 与 K10 → P1、P2 势力归零出局
+        Assert.Equal(2, match.ActiveCount);
+        Assert.False(match.IsBattlefieldSettled(0));
+        Assert.Empty(match.Settlements);
+
+        match.Resign(P3);
+
+        Assert.True(match.IsBattlefieldSettled(0));
+        Assert.Single(match.OccupiedBattlefields());
+        BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
+        Assert.Equal((0, SettlementReason.Attrition, P0), (settled.Battlefield, settled.Reason, settled.Winner));
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
+        Assert.Equal([P0], match.Result.Winners);
+        Assert.Equal(5, match.Result.MajorRound);
+        Assert.Equal(5, match.MajorRound);
     }
 
     [Fact]

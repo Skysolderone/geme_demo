@@ -22,7 +22,7 @@ namespace Siege.Sim.Logging;
 /// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍增子数量、倍率与最终军势；每名玩家的领地分</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>BannerBonus</c> / <c>ChainBonus</c> / <c>SentryBonus</c> / <c>BoundaryBonus</c>（七项来源；另有连营 / 犄角子拆分）/ <c>MultiplierCount</c>（即倍率指数，倍率 = 1.5^n 由它得出）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；
 /// <see cref="PlayerEntry.TerritoryScore"/>（独占空格数）与 <see cref="PlayerEntry.Total"/>（= 领地分 + Σ军势）。势力与军势一律精确十进制整数（JSON 数字，不加引号、无指数）</description></item>
 /// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果与结束原因</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="PlayerEntry.HasEstablishedPower"/>（出局判据的"曾建立正势力"标记）；
-/// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因三类之一（LastPlayerStanding / BoardFull / AllPassed），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
+/// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因（链接局为 LastPlayerStanding / LastBattlefieldSettled；旧日志另有 BoardFull / AllPassed，见 <see cref="LogResult.LegacyBoardFull"/> / <see cref="LogResult.LegacyAllPassed"/>），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
 /// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
 /// <para>链接模式（board-link-mode 段 F）：链接时坐标会变（拼接平移）。首部 <see cref="LogHeader.Relics"/> 与 <see cref="LogHeader.Boards"/> 按开局坐标；
