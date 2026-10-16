@@ -1,0 +1,45 @@
+// retire-legacy-rules 第 4 组改前 / 改后地图导出快照探针（临时测试，跑完即删，不入 tests/）。
+// 用法：g4/snapshot.py 把本文件拷成 tests/Siege.Core.Tests/G4SnapshotProbe.cs，设 G4_SNAPSHOT_OUT=<目录>，
+// dotnet test --filter FullyQualifiedName~G4SnapshotProbe，跑完删除拷贝。只用改前改后都存在的 API，不跑对局。
+// 产出：link:1–link:20 初始地图（经 MapCatalog.Resolve，与 Sim 入口同口径）的 MapFile.ToJson，以及按链接序列清单第一条
+// （四人四区：首轮 (0,1) 东贴、(2,3) 东贴，决赛 (0,2) 北贴）逐步 LinkMapGenerator.Link 之后各版本的导出；
+// digests.txt 逐行记 地图标识 / 版本 / MapFile.Digest（日志首部与链接事件里的地图摘要即此值）/ 拼接摘要。
+using System.Text;
+using Siege.Core.Board;
+using Siege.Core.Board.Maps;
+
+namespace Siege.Core.Tests;
+
+public class G4SnapshotProbe
+{
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+
+    [Fact]
+    public void Snapshot()
+    {
+        string dir = Environment.GetEnvironmentVariable("G4_SNAPSHOT_OUT") ?? throw new InvalidOperationException("缺 G4_SNAPSHOT_OUT");
+        Directory.CreateDirectory(dir);
+        LinkSequence sequence = LinkMapGenerator.Sequences[0];
+        var digests = new StringBuilder();
+        digests.Append("sequence ").Append(sequence).Append('\n');
+        for (int seed = 1; seed <= 20; seed++)
+        {
+            MapData map = MapCatalog.Resolve($"link:{seed}");
+            Write(dir, seed, map, digests, summary: "初始");
+            foreach (LinkStep step in sequence.Steps)
+            {
+                LinkResult r = LinkMapGenerator.Link(map, step.X, step.Y, step.Side);
+                map = r.Map;
+                Write(dir, seed, map, digests, r.Summary);
+            }
+        }
+
+        File.WriteAllText(Path.Combine(dir, "digests.txt"), digests.ToString(), Utf8);
+    }
+
+    private static void Write(string dir, int seed, MapData map, StringBuilder digests, string summary)
+    {
+        File.WriteAllText(Path.Combine(dir, $"link{seed:D2}-v{map.MapVersion}.json"), MapFile.ToJson(map), Utf8);
+        digests.Append(map.Id).Append(" v").Append(map.MapVersion).Append(' ').Append(MapFile.Digest(map)).Append(' ').Append(summary).Append('\n');
+    }
+}

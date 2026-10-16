@@ -8,8 +8,8 @@ using static Siege.Core.Tests.SimulationHarness.LinkSimFixtures;
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
-/// 规格：openspec/changes/board-link-mode/specs/simulation-harness —— Requirement: 可复现回放（配对事件从日志读取）；实现裁决 C3（replay 命令只回放 link: 日志，
-/// 测试内部的回放接口仍可回放旧日志）。tasks 3.1。
+/// 规格：openspec/changes/board-link-mode/specs/simulation-harness —— Requirement: 可复现回放（配对事件从日志读取）；实现裁决 C3（replay 命令只回放 link: 日志）。tasks 3.1。
+/// retire-legacy-rules L17：回放接口（<see cref="Replayer"/>）另拒绝首部模式不为 Link 的日志（原"测试内部的回放接口仍可回放旧日志"不再成立）。
 /// </summary>
 [Collection(ConsoleRedirect.Collection)]
 public class 可复现回放_链接模式Tests
@@ -108,6 +108,26 @@ public class 可复现回放_链接模式Tests
         Assert.Equal(1, code);
         Assert.Contains("已移除的地图模式", err, StringComparison.Ordinal);
         Assert.DoesNotContain("回放一致", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 回放接口拒绝非链接日志()
+    {
+        // retire-legacy-rules L17（design D5 / R10）：Replayer 只回放链接模式的日志——首部 Mode 缺失或不为 "Link" 即 FormatException 并点名原因，不重跑。
+        // 载体是一份真实的链接局日志（link: 地图标识、摘要与 AI 版本都对得上），只改首部 Mode：若不拒绝，它会照常重跑。
+        // 变异：去掉 Replayer 入口的模式检查 → 两次都不抛，本测试红。
+        MatchLog link = SimFixtures.Clone(TwoLinkLog.Value);
+        Assert.True(link.IsLinkMode);
+
+        MatchLog missing = new() { Header = link.Header with { Mode = null }, Turns = link.Turns, Events = link.Events, Result = link.Result };
+        FormatException none = Assert.Throws<FormatException>(() => Replayer.Replay(missing));
+        Assert.Contains("首部缺模式字段（Mode）", none.Message, StringComparison.Ordinal);
+        Assert.Contains("不是链接模式的日志", none.Message, StringComparison.Ordinal);
+
+        MatchLog legacy = new() { Header = link.Header with { Mode = "Legacy" }, Turns = link.Turns, Events = link.Events, Result = link.Result };
+        FormatException other = Assert.Throws<FormatException>(() => Replayer.Replay(legacy));
+        Assert.Contains("首部模式字段（Mode）为 Legacy", other.Message, StringComparison.Ordinal);
+        Assert.Contains("不是链接模式的日志", other.Message, StringComparison.Ordinal);
     }
 
     [Fact]

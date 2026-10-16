@@ -494,7 +494,7 @@ public static class Program
         MatchLog original = MatchLog.Read(path);
         if (!LinkMapId.IsLinkMap(original.Header.MapId))
         {
-            // board-link-mode 实现裁决 C3：replay 命令只回放链接图的日志；测试内部的回放接口（Replayer）仍能回放旧日志（Legacy 夹具的回归护栏）。
+            // board-link-mode 实现裁决 C3：replay 命令只回放链接图的日志；回放接口（Replayer）另拒绝首部模式不为 Link 的日志（retire-legacy-rules L17）。
             throw new ArgumentException(
                 $"日志 {path} 的地图标识为 {original.Header.MapId}，属于已移除的地图模式（只接受 {LinkMapId.Prefix}:<地图种子> 对局的日志），replay 不再回放它。");
         }

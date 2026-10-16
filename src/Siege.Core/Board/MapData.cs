@@ -64,10 +64,10 @@ public sealed record MapData
     /// <summary>中央入口。</summary>
     public required Coord CentralEntrance { get; init; }
 
-    /// <summary>出生区距离均衡容差，默认 1。逐图放宽 MUST 同时给出 <see cref="ToleranceRelaxReason"/>。</summary>
+    /// <summary>出生区距离均衡容差，默认 1。仅作地图数据记录与往返，校验器不再检查（retire-legacy-rules L18）。</summary>
     public int DistanceTolerance { get; init; } = 1;
 
-    /// <summary>放宽距离容差的理由。容差大于默认值时必填。</summary>
+    /// <summary>放宽距离容差的理由。仅作记录，校验器不再要求必填（retire-legacy-rules L18）。</summary>
     public string? ToleranceRelaxReason { get; init; }
 
     /// <summary>形成两眼所需的最小格数，默认 8（保守取值）。</summary>

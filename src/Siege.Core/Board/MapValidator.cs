@@ -82,8 +82,8 @@ public static class MapValidator
     /// retire-legacy-maps 4.2（裁决 L1 / L7）：标准档、边疆档、棋盘档随旧地图删除，表里只剩链接档一行；随之删除的分流规则：
     /// 距离均衡（拒绝 / 只报告两种处理）、出生区须到达中央入口、咽喉必须标注、全部棋盘须经通道连成一片、通道宽 / 长、旧档的列宽区间与"清单必须为空"。
     /// </para>
-    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格与信物格预算、出生区（保护期容量、出生区内无新地表）、信物格合法、中央入口与咽喉位于可落子格、
-    /// 容差与豁免理由、必死口袋，以及链接档的拼接后校验（<see cref="ValidateSpliced"/>）。
+    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格与信物格预算、出生区（保护期容量、出生区内无新地表）、信物格合法、
+    /// 豁免理由、必死口袋，以及链接档的拼接后校验（<see cref="ValidateSpliced"/>）。中央入口 / 咽喉须可落子与容差两条随 retire-legacy-rules（L18）删除。
     /// 旋转对称不在校验器里（原 MapSymmetry 只由标准档基准图的测试调用，已随旧地图删除——retire-legacy-maps）。
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
@@ -177,8 +177,7 @@ public static class MapValidator
         ValidateBudgets(map, rules, budget, f);
         ValidateBirthZones(map, budget, f);
         ValidateRelicCells(map, f);
-        ValidateLandmarks(map, f);
-        ValidateTolerance(map, f);
+        ValidatePocketExemptions(map, f);
         ValidatePockets(map, f);
 
         return new MapValidationResult(f.ToImmutable());
@@ -862,42 +861,13 @@ public static class MapValidator
         }
     }
 
-    private static void ValidateLandmarks(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    // retire-legacy-rules L18（裁决 R3）：原 ValidateLandmarks（中央入口 / 咽喉须可落子：CENTRAL_ENTRANCE_NOT_PLAYABLE、CHOKE_NOT_PLAYABLE）与
+    // ValidateTolerance 的容差两条（TOLERANCE_NEGATIVE、TOLERANCE_RELAX_WITHOUT_REASON）只为已删除的距离均衡服务，随之删除；
+    // MapData 的中央入口、咽喉、距离容差与放宽理由字段保留（地图文件照常读写、随链接平移）。原 ValidateTolerance 里的豁免理由一条移到下面，位置与次序不变。
+
+    /// <summary>每条必死口袋豁免都必须写明理由。</summary>
+    private static void ValidatePocketExemptions(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        if (map.TerrainAt(map.CentralEntrance) != Terrain.Playable)
-        {
-            f.Add(new MapValidationFailure(
-                "CENTRAL_ENTRANCE_NOT_PLAYABLE", "中央入口必须位于可落子格上。", [map.CentralEntrance]));
-        }
-
-        ImmutableArray<Coord> badChokes = map.ChokePoints
-            .Where(c => map.TerrainAt(c) != Terrain.Playable).Order().ToImmutableArray();
-        if (!badChokes.IsEmpty)
-        {
-            f.Add(new MapValidationFailure(
-                "CHOKE_NOT_PLAYABLE", "标注的咽喉格必须位于可落子格上。", badChokes));
-        }
-
-        // retire-legacy-maps 4.2："咽喉必须显式标注"（CHOKE_NOT_ANNOTATED）随距离均衡删除；标了的咽喉仍须位于可落子格。
-    }
-
-    private static void ValidateTolerance(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        const int defaultTolerance = 1;
-        if (map.DistanceTolerance < 0)
-        {
-            f.Add(new MapValidationFailure(
-                "TOLERANCE_NEGATIVE", "距离容差不得为负。", ImmutableArray<Coord>.Empty));
-        }
-
-        if (map.DistanceTolerance > defaultTolerance && string.IsNullOrWhiteSpace(map.ToleranceRelaxReason))
-        {
-            f.Add(new MapValidationFailure(
-                "TOLERANCE_RELAX_WITHOUT_REASON",
-                $"距离容差放宽到 {map.DistanceTolerance}（默认 {defaultTolerance}）必须同时写明理由。",
-                ImmutableArray<Coord>.Empty));
-        }
-
         foreach (Coord c in map.PocketExemptions.Order())
         {
             if (!map.PocketExemptionReasons.ContainsKey(c))

@@ -384,7 +384,7 @@ public sealed record LogHeader
     public List<CarryInEntry>? CarryIns { get; init; }
 
     /// <summary>
-    /// 对局模式（board-link-mode 实现裁决 B1 / C3）：只在链接模式的局写出 <c>"Link"</c>；旧模式（Legacy 夹具）的局与旧日志为 <c>null</c>，首部与引入之前逐字节相同。
+    /// 对局模式（board-link-mode 实现裁决 B1 / C3）：恒写常量 <c>"Link"</c>（retire-legacy-rules R10）；只有引入之前的旧日志为 <c>null</c>——分析器经 <see cref="MatchLog.IsLinkMode"/> 跳过它们，回放拒绝它们。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Mode { get; init; }

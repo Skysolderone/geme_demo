@@ -1,0 +1,5 @@
+地图导出：改前 81 份，改后 81 份，文件名集合相同
+逐字节不同： 无（81 份全部相同，含 digests.txt）
+link:1 种子 1 日志首部：改前 == 改后 True ；改前 == g3/log-header-after.jsonl True
+首部地图摘要 03AEAD07533419286AEC81A2CF83118473AB1B12059EFCFA9959DF32F921DE68 == digests.txt link:1 v0 True
+完整日志（去计时字段）：改前 118 行，改后 118 行，逐字节相同 True ；未去计时字段 False

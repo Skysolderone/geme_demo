@@ -44,11 +44,20 @@ public static class Replayer
     /// <summary>
     /// 凭日志重跑并比对。未传 <paramref name="map"/> 时经 <see cref="MapCatalog.Resolve"/> 按标识重建地图（只认 <c>link:</c>；retire-legacy-maps 3.4：
     /// Legacy 夹具的 resolveMap 过渡口删除）。<c>replay</c> 命令在调用之前已拒绝非 <c>link:</c> 的日志（实现裁决 C3）。
+    /// 只回放链接模式的日志（retire-legacy-rules L17 / R10）：首部 <see cref="LogHeader.Mode"/> 缺失或不为 <c>"Link"</c> 即 <see cref="FormatException"/>，
+    /// 在重建地图之前报出并点名原因。
     /// </summary>
     public static ReplayResult Replay(MatchLog original, MapData? map = null)
     {
         ArgumentNullException.ThrowIfNull(original);
         LogHeader header = original.Header;
+        if (!original.IsLinkMode)
+        {
+            string actual = header.Mode is null ? "首部缺模式字段（Mode）" : $"首部模式字段（Mode）为 {header.Mode}";
+            throw new FormatException(
+                $"日志 {header.MapId}（种子 {header.Seed}）{actual}，不是链接模式的日志：旧模式规则已随 retire-legacy-rules 删除，回放只接受 Mode 为 Link 的日志。");
+        }
+
         // 重建地图：每局换图的批次里，首部配置的 MapId 只是批次的起始标识，本局的图是首部的地图标识；
         // 其余情形仍按配置的 MapId（它可能是地图文件路径，而首部的地图标识是文件里写的 Id，未必解析得回去）。
         string mapId = header.Config.MapPerMatch ? header.MapId : header.Config.MapId;
@@ -85,8 +94,8 @@ public static class Replayer
         // 带入按首部记录的各玩家带入重建（simulation-harness「可复现回放」），MUST NOT 按配置的带入数量重抽；首部缺该项的旧日志按无带入回放。
         RecordedCarry? carry = header.CarryInOut is { } carryInOut ? new RecordedCarry(carryInOut, original.CarryIns) : null;
         // 链接模式（board-link-mode D3）：配对事件 MUST 从日志读取、MUST NOT 由种子推导——按记录逐次重放（来源名原样带回），链接随之按记录重建，
-        // 每次链接后的地图摘要随确定性文本逐行比对。旧模式日志没有配对事件，不挂来源。
-        IPairingSource? pairing = original.IsLinkMode ? new RecordedPairingSource(original.RecordedPairings()) : null;
+        // 每次链接后的地图摘要随确定性文本逐行比对。非链接日志已在入口拒绝（见上）。
+        IPairingSource pairing = new RecordedPairingSource(original.RecordedPairings());
         MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true, carry, pairing).Run();
         return Compare(original, replayed);
     }

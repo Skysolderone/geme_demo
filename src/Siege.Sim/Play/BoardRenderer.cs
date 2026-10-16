@@ -158,7 +158,7 @@ internal sealed class BoardRenderer
             .ToImmutableDictionary(c => c, c => life.EyeSpaceAt(c)!.Owner);
 
         // 链接模式（board-link-mode，information-visibility「其他战场不可见」）：只画本座位战场的外接矩形，矩形内不属于本战场的格留空（未展开）；
-        // 插旗阶段只画 5 块出生棋盘的占位（编号），不画棋盘内部布局（盲选）。旧模式画全图，与引入之前逐字相同。
+        // 插旗阶段只画 5 块出生棋盘的占位（编号），不画棋盘内部布局（盲选）。
         (int x0, int y0, int x1, int y1, IReadOnlySet<Coord>? shown, bool placeholders) = Viewport(view, me, zones);
         WriteColumns(x0, x1);
         for (int y = y1; y >= y0; y--)

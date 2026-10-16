@@ -26,8 +26,8 @@
 
 ## 4. L17 与 L18（D1 第 4 步，design D5 / D10）
 
-- [ ] 4.1 L17 Sim 读模式分支：`MatchSession` 第 92、706–708、782、941–946、1026 行的模式条件变无条件，首部 `Mode` 写常量 `"Link"`；`BoardRenderer` 删旧模式全图视口与"旧模式恒同战场"；`Replayer` 对非链接日志报错；`MatchLog.IsLinkMode` 保留为读端谓词（R10）。验收：单元测试通过；`link:1` 种子 1 的日志首部与第 3 组结束时逐字节相同；`终端对局Tests` 的链接局转录逐字节不变
-- [ ] 4.2 L18：删 `MapValidator.ValidateLandmarks` 与 `ValidateTolerance`（四个失败码）；`MapData` / `MapFile` / `LinkMapGenerator` / `DistanceTable` 不动；删 `地图静态校验规则Tests` 的 `中央入口与咽喉必须位于可落子格`、`放宽容差必须写明理由` 两条与 `尺寸非正与越界障碍被报出` 的 `TOLERANCE_NEGATIVE` 段；按 `map-definition` 新 Scenario 补 1 条"中央入口在场景格、容差 3 无理由仍通过且字段往返不变"。验收：单元测试通过，通过数 = −2 + 1，逐名对上；`link:1`–`link:20` 初始地图与各一条链接序列后的导出文件、日志首部地图摘要与第 3 组结束时逐字节相同（对照脚本输出存入任务目录）
+- [x] 4.1 L17 Sim 读模式分支：`MatchSession` 第 92、706–708、782、941–946、1026 行的模式条件变无条件，首部 `Mode` 写常量 `"Link"`；`BoardRenderer` 删旧模式全图视口与"旧模式恒同战场"；`Replayer` 对非链接日志报错；`MatchLog.IsLinkMode` 保留为读端谓词（R10）。验收：单元测试通过；`link:1` 种子 1 的日志首部与第 3 组结束时逐字节相同；`终端对局Tests` 的链接局转录逐字节不变
+- [x] 4.2 L18：删 `MapValidator.ValidateLandmarks` 与 `ValidateTolerance`（四个失败码）；`MapData` / `MapFile` / `LinkMapGenerator` / `DistanceTable` 不动；删 `地图静态校验规则Tests` 的 `中央入口与咽喉必须位于可落子格`、`放宽容差必须写明理由` 两条与 `尺寸非正与越界障碍被报出` 的 `TOLERANCE_NEGATIVE` 段；按 `map-definition` 新 Scenario 补 1 条"中央入口在场景格、容差 3 无理由仍通过且字段往返不变"。验收：单元测试通过，通过数 = −2 + 1，逐名对上；`link:1`–`link:20` 初始地图与各一条链接序列后的导出文件、日志首部地图摘要与第 3 组结束时逐字节相同（对照脚本输出存入任务目录）
 
 ## 5. 文档同步与回归
 

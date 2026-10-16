@@ -6,7 +6,7 @@ namespace Siege.Core.Tests.MapDefinition;
 
 /// <summary>规格：map-definition —— Requirement: 地图静态校验规则（link-map-terrain 增量：链接档清单规则改写）</summary>
 /// <remarks>
-/// retire-legacy-maps 1.6：各档共用的规则（结构、地形边界、规模预算、出生区、信物格、容差、必死口袋）的用例由 v5 / v2 改到手写的链接档地图。
+/// retire-legacy-maps 1.6：各档共用的规则（结构、地形边界、规模预算、出生区、信物格、必死口袋）的用例由 v5 / v2 改到手写的链接档地图。
 /// link-map-terrain 第 2 组：载体 <see cref="LinkMapFixtures.Initial"/> 改为 46×10、五块 6×6 出生棋盘 C3–H8 / M3–R8 / V3–AA8 / AE3–AK8 / AO3–AT8，
 /// 出生区 = 核心区（棋盘左下角起 (1,1)–(3,3)，出生棋盘 1 即 D4–F6），信物格在核心区对角（D4、F6 等），中间带两格林地（出生棋盘 1 的 G4、G7）；
 /// 期望值随之换成新预算（可落子 170–320、单区恰 9、信物 10–15）。新增规格 Scenario「外圈有高差或栅栏」「核心区有地形」「棋盘被切断」「可改造目标不足」「主题重复」，
@@ -380,22 +380,6 @@ public class 地图静态校验规则Tests
     }
 
     [Fact]
-    public void 中央入口与咽喉必须位于可落子格()
-    {
-        // retire-legacy-maps 1.6：链接档地图不要求标注咽喉，这里显式标一个咽喉（出生棋盘 2 的 M5）再把它与中央入口都改成障碍，断言不变。
-        MapData map = Link() with { ChokePoints = [Coord.Parse("M5")] };
-        MapData broken = map with
-        {
-            Obstacles = map.Obstacles.Add(map.CentralEntrance).Add(Coord.Parse("M5")),
-        };
-
-        var codes = MapValidator.Validate(broken).Failures.Select(f => f.Code).ToArray();
-
-        Assert.Contains("CENTRAL_ENTRANCE_NOT_PLAYABLE", codes);
-        Assert.Contains("CHOKE_NOT_PLAYABLE", codes);
-    }
-
-    [Fact]
     public void 尺寸非正与越界障碍被报出()
     {
         MapData map = Link();
@@ -409,9 +393,7 @@ public class 地图静态校验规则Tests
         Assert.Contains(
             MapValidator.Validate(map with { Id = "  " }).Failures,
             f => f.Code == "MAP_ID_MISSING");
-        Assert.Contains(
-            MapValidator.Validate(map with { DistanceTolerance = -1 }).Failures,
-            f => f.Code == "TOLERANCE_NEGATIVE");
+        // retire-legacy-rules L18：原末段"容差为负 → TOLERANCE_NEGATIVE"随容差规则删除（见 中央入口与容差不再校验）。
     }
 
     [Fact]
@@ -491,6 +473,29 @@ public class 地图静态校验规则Tests
     }
 
     [Fact]
+    public void 中央入口与容差不再校验()
+    {
+        // 规格 Scenario「中央入口与容差不再校验」（retire-legacy-rules L18，裁决 R3）：中央入口与一个标注的咽喉落在棋盘之外的场景格上，
+        // 距离容差为 3 且没有放宽理由 → 校验器不因这几项报出任何失败（基图本身合规，所以整体通过）；导出再读回，四个字段逐项相同。
+        // 变异：恢复原 ValidateLandmarks 或 ValidateTolerance 中任一条 → IsValid 为假，本测试红。
+        Coord entrance = Coord.Parse("J5");
+        Coord choke = Coord.Parse("K4");
+        MapData map = Link() with { CentralEntrance = entrance, ChokePoints = [choke], DistanceTolerance = 3, ToleranceRelaxReason = null };
+        Assert.False(map.IsPlayable(entrance));
+        Assert.False(map.IsPlayable(choke));
+
+        MapValidationResult result = MapValidator.Validate(map);
+        Assert.True(result.IsValid, result.ToString());
+
+        MapData back = MapFile.FromJson(MapFile.ToJson(map));
+        Assert.Equal(entrance, back.CentralEntrance);
+        Assert.Equal([choke], back.ChokePoints.Order());
+        Assert.Equal(3, back.DistanceTolerance);
+        Assert.Null(back.ToleranceRelaxReason);
+        Assert.Equal(MapFile.ToJson(map), MapFile.ToJson(back));
+    }
+
+    [Fact]
     public void 信物格不在可落子格上()
     {
         // 规格 Scenario：某个信物格落在棋盘之外的场景格上 → 拒绝并指出该信物格坐标。
@@ -502,23 +507,6 @@ public class 地图静态校验规则Tests
         Assert.Contains(
             MapValidator.Validate(broken).Failures,
             f => f.Code == "RELIC_ON_NON_PLAYABLE" && f.Coords.Contains(scenery));
-    }
-
-    [Fact]
-    public void 放宽容差必须写明理由()
-    {
-        MapData map = Link();
-
-        Assert.Contains(
-            MapValidator.Validate(map with { DistanceTolerance = 3 }).Failures,
-            f => f.Code == "TOLERANCE_RELAX_WITHOUT_REASON");
-        Assert.DoesNotContain(
-            MapValidator.Validate(map with
-            {
-                DistanceTolerance = 3,
-                ToleranceRelaxReason = "3 人图不套方形对称，按 §3.2 逐图放宽",
-            }).Failures,
-            f => f.Code == "TOLERANCE_RELAX_WITHOUT_REASON");
     }
 
     [Fact]

@@ -1,0 +1,7 @@
+改前 2124 条，改后 2124 条
+删除：
+  - Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.中央入口与咽喉必须位于可落子格
+  - Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.放宽容差必须写明理由
+新增：
+  + Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.中央入口与容差不再校验
+  + Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.回放接口拒绝非链接日志
