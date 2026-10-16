@@ -18,6 +18,8 @@ tests/Siege.Core.Tests/<Capability>/棋串构成Tests.cs
 
 多组数据的 Scenario 用 `[Theory]` + `[InlineData]`。
 
+测试载体只有链接规则（retire-legacy-rules 起没有旧模式建局路径）：经对局流程的测试用 `LinkModeFixtures`（缺省 `PlainStarted` = 手写 8×8 平坦链接图 `link:90008`、四人同锁棋盘 0，地形用 `PlainMap(terrain)`），只测棋盘规则的直接在 `GameBoard` / 规则层上测，地图数据与常量取 `TestMaps`（`Blank`、`NineByNine`、`P0..P3`）。
+
 ## 算例必须来自设计文档
 
 涉及数值的测试，其输入与期望值 MUST 取自 `2026-09-10-siege-core-gameplay-design-v1.md` 或 openspec spec 里写明的算例，并在测试上注明出处：
