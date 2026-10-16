@@ -36,4 +36,4 @@
 - [x] 5.3 同步 `.trellis/spec/core/boundaries.md`：Legacy / `MatchMode` / 模式分流相关条目改为只剩链接规则（"对局配置项的缺省值与缺项回填值"一行按 R7 保留 K 回填的说法）；`testing.md` 若有提及 `MatchFixtures` 的指引改为新载体。验收：Grep `MatchMode|MatchFixtures|旧模式` 在 `.trellis/spec/` 只剩历史引用（逐条列出）
 - [x] 5.4 质检（R4）：逐名比对清单第 3 节（(c) / (j)）与第 4 节（改名 / 迁出）；落实补测建议 Q1（链接口径"只剩一名 > 最后战场结算"优先级）与 Q2（出局 / 弃赛后按战场剩余在局者判整轮 Pass，先查 `战场结算Tests`）；复核第 6 节期望重钉表每条的关系断言未变。验收：质检报告存入任务目录
 - [x] 5.5 最终回归（顺序单跑，看真实退出码）：`dotnet test` 全量；Godot console 版 headless 四条自检 `-- --auto-demo`、`-- --auto-demo --pick-check --seed=5`、`-- --map-select --auto-demo`、`-- --auto-demo --rounds=0 --seed=5`。验收：全部退出 0，`[flow]` 与拾取自证行与 `retire-legacy-maps` 5.3 的记录一致；15 份基线逐字节通过
-- [ ] 5.6 `openspec validate retire-legacy-rules --strict` 通过后归档。验收：归档后 `openspec validate --specs --strict` 全部主规格通过
+- [x] 5.6 `openspec validate retire-legacy-rules --strict` 通过后归档。验收：归档后 `openspec validate --specs --strict` 全部主规格通过
