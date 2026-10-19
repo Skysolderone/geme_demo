@@ -30,14 +30,14 @@ public class 提速Tests
     [Fact]
     public void 按住提速()
     {
-        // 同一序列提速与不提速经过的节拍相同（顺序、内容、数量），提速所需总时间为四分之一（2000 ms → 500 ms）。
+        // 同一序列提速与不提速经过的节拍相同（顺序、内容、数量），提速所需总时间为四分之一（含飘字尾段 2100 ms → 525 ms）。
         ImmutableArray<SettlementBeat> beats = CaptureExampleBeats();
-        (List<string> normal, int normalMs) = Run(new ShowTimeline(beats, ShowDuration.Normal), 50, fast: false);
-        (List<string> fast, int fastMs) = Run(new ShowTimeline(beats, ShowDuration.Normal), 50, fast: true);
+        (List<string> normal, int normalMs) = Run(new ShowTimeline(beats, ShowDuration.Normal), 25, fast: false);
+        (List<string> fast, int fastMs) = Run(new ShowTimeline(beats, ShowDuration.Normal), 25, fast: true);
         Assert.Equal(normal, fast);
         Assert.Equal(3, fast.Count);
-        Assert.Equal(2000, normalMs);
-        Assert.Equal(500, fastMs);
+        Assert.Equal(2100, normalMs);
+        Assert.Equal(525, fastMs);
         Assert.Equal(ShowTimeline.SpeedUpFactor, normalMs / fastMs);
     }
 

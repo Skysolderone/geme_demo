@@ -11,14 +11,14 @@ namespace Siege.Core.Tests.SettlementShow;
 /// </summary>
 public class 演出按节拍依次播放Tests
 {
-    /// <summary>1.2 算例的时间线：落子 2 枚（500 ms）→ 提子（600 ms）→ 势力（900 ms），共 2000 ms。</summary>
+    /// <summary>1.2 算例的时间线：落子 2 枚（500 ms）→ 提子（600 ms）→ 势力（900 ms），节拍共 2000 ms；提子飘字 500 ms 出现、2100 ms 淡完，尾段 100 ms。</summary>
     private static ShowTimeline Example() => new(CaptureExampleBeats(), ShowDuration.Normal);
 
     [Fact]
     public void 节拍切换时刻()
     {
         ShowTimeline timeline = Example();
-        Assert.Equal(2000, timeline.TotalDurationMs);
+        Assert.Equal(2100, timeline.TotalDurationMs);
         var switches = new List<string>();
         for (int t = 100; t <= 2100; t += 100)
         {
@@ -62,6 +62,12 @@ public class 演出按节拍依次播放Tests
         Assert.Equal("隐藏[] 出现[A5:500] 仍显示[] 淡出0 势力[]", Text(timeline.Mask()));
 
         Assert.Single(timeline.Advance(100));
+
+        // 1000 ms 节拍播完，A5（800 ms 出现）的飘字未淡完：尾段到 2400 ms，期间棋子全部正常绘制。
+        Assert.False(timeline.IsFinished);
+        Assert.Equal("隐藏[] 出现[] 仍显示[] 淡出0 势力[]", Text(timeline.Mask()));
+        Assert.Equal(1400, timeline.TailMs);
+        Assert.Empty(timeline.Advance(1400));
         Assert.True(timeline.IsFinished);
     }
 
@@ -89,9 +95,9 @@ public class 演出按节拍依次播放Tests
     [Fact]
     public void 演出结束后画面与快照一致()
     {
-        // 最后一个节拍播完：遮罩为空——棋盘与记分显示即结算后公开快照（图形侧不再叠加任何中间态）。
+        // 最后一个节拍播完、飘字尾段（到 2100 ms）也播完：遮罩为空——棋盘与记分显示即结算后公开快照（图形侧不再叠加任何中间态）。
         ShowTimeline timeline = Example();
-        timeline.Advance(2000);
+        timeline.Advance(2100);
         Assert.True(timeline.IsFinished);
         Assert.Null(timeline.Current);
         Assert.Equal(1000, timeline.ProgressPermille);
@@ -113,6 +119,18 @@ public class 演出按节拍依次播放Tests
         Assert.Equal(2, partial.Advance(1200).Length);
         Assert.IsType<PowerBeat>(partial.Current);
         Assert.Equal(111, partial.ProgressPermille);
+    }
+
+    [Fact]
+    public void 没有飘字就没有尾段()
+    {
+        // 只含势力节拍（Pass 但势力有变）：没有飘字要等，势力拍播完即结束。
+        var timeline = new ShowTimeline([new PowerBeat([new PowerChange(P1, 3, 5, 1, 1)])], ShowDuration.Normal);
+        Assert.Equal(PowerBeat.Ms, timeline.TotalDurationMs);
+        timeline.Advance(PowerBeat.Ms - 1);
+        Assert.False(timeline.IsFinished);
+        Assert.Single(timeline.Advance(1));
+        Assert.True(timeline.IsFinished);
     }
 
     [Fact]

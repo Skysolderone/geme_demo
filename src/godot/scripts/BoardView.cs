@@ -1790,9 +1790,9 @@ public sealed partial class BoardView : Node3D
 
     /// <summary>
     /// 飘字在某一年龄的姿态（相对格心的位移、缩放、透明度），只由年龄、来源与所在格推出，同一遮罩必得同一画面。
-    /// 前 30% 寿命弹出（前半程从 0.2 缓出冲到峰值，后半程缓入回落到 1；峰值提子最大、信物次之、落子最小，免得长算式胀到压住邻格）；
+    /// 前 20% 寿命弹出（前半程从 0.2 缓出冲到峰值，后半程缓入回落到 1；峰值提子最大、信物次之、落子最小，免得长算式胀到压住邻格）；
     /// 全程沿弧线上浮（上升先快后慢，同时向一侧匀速漂移，相邻格按坐标奇偶左右分开）；后半段边淡出边缩到 0.6。
-    /// 寿命只有 <see cref="Callout.LifetimeMs"/>、字又小，幅度取小了肉眼看不出（首版 20% / 1.07 倍 / 0.14 格即如此）。
+    /// 幅度取小了肉眼看不出（首版 600 ms 寿命下 20% / 1.07 倍 / 0.14 格即如此）；寿命见 <see cref="Callout.LifetimeMs"/>。
     /// </summary>
     private static (Vector3 Offset, float Scale, float Alpha) CalloutPose(Callout callout)
     {
@@ -1803,7 +1803,7 @@ public sealed partial class BoardView : Node3D
             CalloutKind.Relic => 1.6f,
             _ => 1.4f,
         };
-        float u = Math.Min(t / 0.3f, 1f);
+        float u = Math.Min(t / 0.2f, 1f);
         float scale;
         if (u < 0.5f)
         {

@@ -46,7 +46,8 @@ public class 演出音效提示Tests
         Assert.Equal(string.Empty, Step(timeline, 100));  // 200 ms：没有新棋子
         Assert.Equal("Placement", Step(timeline, 150));   // 350 ms：A2 出现
         Assert.Equal("Placement", Step(timeline, 250));   // 600 ms：A3 出现
-        Assert.Equal(string.Empty, Step(timeline, 150));  // 750 ms：播完，没有新棋子
+        Assert.Equal(string.Empty, Step(timeline, 150));  // 750 ms：节拍播完，没有新棋子
+        Assert.Equal(string.Empty, Step(timeline, timeline.TailMs));   // 飘字尾段不发声
         Assert.True(timeline.IsFinished);
     }
 
@@ -60,7 +61,7 @@ public class 演出音效提示Tests
         Assert.Equal(string.Empty, Step(compressed, 100));
 
         var crossed = new ShowTimeline([new PlacementBeat(Pieces(3))], ShowDuration.Normal);
-        Assert.Equal("Placement", Step(crossed, 2000));
+        Assert.Equal("Placement", Step(crossed, 3000));   // 连同飘字尾段一帧跨过
         Assert.True(crossed.IsFinished);
     }
 
@@ -74,7 +75,8 @@ public class 演出音效提示Tests
         Assert.Equal("Placement,Capture", Step(timeline, 250));    // 500 ms：C4 出现并跨入提子节拍
         Assert.Equal(string.Empty, Step(timeline, 100));           // 提子进行中不重复
         Assert.Equal("Group", Step(timeline, 500));                // 1100 ms：跨入势力节拍，领地增量为 0 → 直接军势段，只响军势
-        Assert.Equal(string.Empty, Step(timeline, 900));           // 播完
+        Assert.Equal(string.Empty, Step(timeline, 900));           // 2000 ms：节拍播完
+        Assert.Equal(string.Empty, Step(timeline, 100));           // 2100 ms：提子飘字尾段播完，不发声
         Assert.True(timeline.IsFinished);
     }
 
@@ -86,6 +88,7 @@ public class 演出音效提示Tests
         Assert.Equal("Relic", Start(timeline));                    // 首拍在进度 0 即当前
         Assert.Equal(string.Empty, Step(timeline, 300));
         Assert.Equal(string.Empty, Step(timeline, 300));
+        Assert.Equal(string.Empty, Step(timeline, 1000));          // 信物飘字尾段（600 → 1600 ms）不发声
         Assert.True(timeline.IsFinished);
 
         // 放在落子之后：跨入时发声；单帧连跨落子与信物两拍也各响一声。

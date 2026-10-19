@@ -61,8 +61,8 @@ public enum CalloutKind
 /// <summary>一条活跃飘字（design.md D4）：所在格、文案、来源、年龄（0..1000‰，满即淡出完毕、不再列出）。</summary>
 public sealed record Callout(Coord Coord, string Text, CalloutKind Kind, int AgePermille)
 {
-    /// <summary>飘字寿命（毫秒）：出现后上浮并在此时间内淡出，可跨到下一节拍。</summary>
-    public const int LifetimeMs = 600;
+    /// <summary>飘字寿命（毫秒）：出现后上浮并在此时间内淡出，可跨到下一节拍；最后一拍播完仍未淡完的，演出补尾段等它淡完（试玩裁决：0.6 秒看不清）。</summary>
+    public const int LifetimeMs = 1600;
 }
 
 /// <summary>当前显示的横幅（settlement-show-callouts D3）：文案、在本节拍里的序号与总数、本条内进度（0..1000‰）。</summary>
@@ -130,7 +130,7 @@ public sealed record ShowMask(
 /// <remarks>
 /// <para>没有"直接到结尾"的入口（D4）：每个节拍至少作为 <see cref="Current"/> 出现一次，或在跨过时由 <see cref="Advance"/> 报告。</para>
 /// <para>空序列（如势力不变的 Pass）在正常模式下保留 <see cref="EmptyHoldMs"/> 的短停顿（D5），零时长模式下同样不占推进。</para>
-/// <para>飘字按演出内的绝对时刻计年龄（<see cref="_startOfCurrentMs"/> + 节拍内已过毫秒），可跨节拍存活；演出播完即遮罩为空，最后一拍里未淡完的飘字随之消失。</para>
+/// <para>飘字按演出内的绝对时刻计年龄（<see cref="_startOfCurrentMs"/> + 节拍内已过毫秒），可跨节拍存活；最后一拍播完后若仍有飘字未淡完，补一段尾段（<see cref="TailMs"/>）等它淡完——尾段没有当前节拍、遮罩里只有飘字。演出播完即遮罩为空。</para>
 /// </remarks>
 public sealed class ShowTimeline
 {
@@ -150,6 +150,7 @@ public sealed class ShowTimeline
         Beats = beats.IsDefault ? [] : beats;
         Duration = duration;
         IsFinished = duration == ShowDuration.Zero;
+        TailMs = CalloutTailMs(Beats);
     }
 
     /// <summary>一条已播完的空时间线（对局开始、演出结束或被弃赛终止后的静止状态）。</summary>
@@ -182,10 +183,16 @@ public sealed class ShowTimeline
         }
     }
 
-    /// <summary>正常速度下从头到尾所需的总时长（毫秒）。零时长模式为 0。</summary>
-    public int TotalDurationMs => Duration == ShowDuration.Zero ? 0 : Beats.IsEmpty ? EmptyHoldMs : Beats.Sum(b => b.DurationMs);
+    /// <summary>正常速度下从头到尾所需的总时长（毫秒，含飘字尾段）。零时长模式为 0。</summary>
+    public int TotalDurationMs => Duration == ShowDuration.Zero ? 0 : Beats.IsEmpty ? EmptyHoldMs : Beats.Sum(b => b.DurationMs) + TailMs;
 
-    private int CurrentDurationMs => Beats.IsEmpty ? EmptyHoldMs : Beats[_index].DurationMs;
+    /// <summary>最后一拍播完后等飘字淡完的尾段（毫秒）；没有飘字跨出最后一拍为 0。</summary>
+    public int TailMs { get; }
+
+    /// <summary>推进的段数：节拍各一段，有尾段再加一段；空序列只有一段短停顿。</summary>
+    private int SegmentCount => Beats.IsEmpty ? 1 : Beats.Length + (TailMs > 0 ? 1 : 0);
+
+    private int CurrentDurationMs => Beats.IsEmpty ? EmptyHoldMs : _index < Beats.Length ? Beats[_index].DurationMs : TailMs;
 
     /// <summary>
     /// 推进 <paramref name="deltaMs"/> 毫秒；<paramref name="fast"/> 为真即按住提速，增量按 <see cref="SpeedUpFactor"/> 倍计。
@@ -211,7 +218,7 @@ public sealed class ShowTimeline
             }
 
             remaining -= left;
-            if (!Beats.IsEmpty)
+            if (_index < Beats.Length)
             {
                 passed.Add(Beats[_index]);
             }
@@ -219,7 +226,7 @@ public sealed class ShowTimeline
             _startOfCurrentMs += CurrentDurationMs;
             _index++;
             _elapsedMs = 0;
-            if (_index >= Math.Max(Beats.Length, 1))
+            if (_index >= SegmentCount)
             {
                 IsFinished = true;
             }
@@ -389,6 +396,36 @@ public sealed class ShowTimeline
             Slide = slide,
             CameraPull = cameraPull,
         };
+    }
+
+    /// <summary>最后一条飘字淡完的时刻超出节拍总长的部分（毫秒）；与 <see cref="Mask"/> 里飘字的出现时刻同一口径。</summary>
+    private static int CalloutTailMs(ImmutableArray<SettlementBeat> beats)
+    {
+        int startMs = 0;
+        int endMs = 0;
+        foreach (SettlementBeat beat in beats)
+        {
+            switch (beat)
+            {
+                case PlacementBeat placement:
+                    for (int k = 0; k < placement.Pieces.Length; k++)
+                    {
+                        endMs = Math.Max(endMs, startMs + placement.AppearAtMs(k) + Callout.LifetimeMs);
+                    }
+
+                    break;
+                case CaptureBeat { Pieces.IsEmpty: false }:
+                case RelicRevealBeat { Relics.IsEmpty: false }:
+                    endMs = Math.Max(endMs, startMs + Callout.LifetimeMs);
+                    break;
+                default:
+                    break;
+            }
+
+            startMs += beat.DurationMs;
+        }
+
+        return Math.Max(0, endMs - startMs);
     }
 
     /// <summary>年龄在 0..寿命 之内的飘字才活跃（尚未出现或已淡完的不列）。</summary>

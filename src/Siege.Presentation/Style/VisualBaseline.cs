@@ -542,11 +542,11 @@ public static class CoordinateLabelStyle
 /// </summary>
 public sealed record CalloutLabelStyle(int FontSize, int OutlineSize)
 {
-    /// <summary>近景：比单字母坐标标注小一半。</summary>
-    public static readonly CalloutLabelStyle Near = new(FontSize: 48, OutlineSize: 6);
+    /// <summary>近景：与全局预览档原先同大（试玩裁决：首版 48 / 6 看不清，整体放大 1.5 倍）。</summary>
+    public static readonly CalloutLabelStyle Near = new(FontSize: 72, OutlineSize: 9);
 
-    /// <summary>全局预览：放大到坐标标注的四分之三。</summary>
-    public static readonly CalloutLabelStyle Overview = new(FontSize: 72, OutlineSize: 8);
+    /// <summary>全局预览：首版 72 / 8 放大 1.5 倍。</summary>
+    public static readonly CalloutLabelStyle Overview = new(FontSize: 108, OutlineSize: 12);
 
     /// <summary>按相机是否处于全局预览取尺寸。</summary>
     public static CalloutLabelStyle For(bool overview) => overview ? Overview : Near;

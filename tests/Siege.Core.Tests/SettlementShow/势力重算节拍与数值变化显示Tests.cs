@@ -41,7 +41,7 @@ public class 势力重算节拍与数值变化显示Tests
         Assert.True(display.Rolling);
         timeline.Advance(175);
         Assert.Equal("Hold:0:29:", StageText(timeline.Mask().Power[P1]));
-        timeline.Advance(200);
+        timeline.Advance(200 + 100);   // 势力拍在 1500 ms 播完，再等提子飘字（0 ms 出现、1600 ms 淡完）的 100 ms 尾段
         Assert.True(timeline.IsFinished);
     }
 
