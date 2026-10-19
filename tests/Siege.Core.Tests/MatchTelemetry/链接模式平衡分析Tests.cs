@@ -30,7 +30,7 @@ public class 链接模式平衡分析Tests
         return report.LinkMode ?? throw new InvalidOperationException("链接模式样本没有出链接模式统计。");
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 配对与链接可查()
     {
         // 规格 Scenario「配对与链接可查」的分析侧：同区率、开局布局、首轮配对分布、链接次数与退化率、通道长度、决赛战场格数都能离线统计。
@@ -77,7 +77,7 @@ public class 链接模式平衡分析Tests
         }
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 战场结算可查()
     {
         // 规格 Scenario「战场结算可查」的分析侧：各阶段大回合数、终局原因分布、出局原因计数、过早 Pass 落败。
@@ -118,7 +118,7 @@ public class 链接模式平衡分析Tests
         Assert.Equal(0, t.FirstFightRounds);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待时长可统计()
     {
         // 规格 Scenario「等待时长可统计」：分析一批日志，报告给出等待大回合数的均值与最大值。
@@ -142,7 +142,7 @@ public class 链接模式平衡分析Tests
         Assert.Null(BalanceAnalyzer.Analyze(old).LinkMode);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 真实跑局的链接日志可完整分析()
     {
         // 真实 AI 局（四人四区、截断在两次链接之后）的日志经文本往返后，全部分析段（含既有各段）都能跑完、报告含链接模式一段。

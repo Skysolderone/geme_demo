@@ -321,7 +321,8 @@ internal sealed class ExpertLookahead
         {
             Player = _me,
             DeployLimit = effects.DeployLimit,
-            LegalRange = PublicRules.LegalRange(after.Board, zone, _me, after.LifeShape),
+            LegalRange = PublicRules.LegalRange(after.Board, zone, _me, after.LifeShape, round),
+            EditScope = PublicRules.EditScope(after.Board, zone, round),
             Stock = types.ToDictionary(t => t, _ => effects.DeployLimit),
             WorkshopActive = effects.WorkshopActive,
         };
@@ -562,7 +563,8 @@ internal sealed class ExpertLookahead
         {
             Player = responder,
             DeployLimit = effects.DeployLimit,
-            LegalRange = PublicRules.LegalRange(projected.Board, zone, responder, projected.LifeShape),
+            LegalRange = PublicRules.LegalRange(projected.Board, zone, responder, projected.LifeShape, majorRound),
+            EditScope = PublicRules.EditScope(projected.Board, zone, majorRound),
             Stock = new Dictionary<PieceType, int> { [PieceType.Basic] = effects.DeployLimit },
             WorkshopActive = effects.WorkshopActive,
         };

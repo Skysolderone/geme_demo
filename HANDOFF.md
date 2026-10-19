@@ -5,7 +5,7 @@
 
 ## 一句话
 
-《围杀 Siege》：4 人回合制策略构筑游戏，玩法是围棋式提子加征募构筑。现在只有一个模式——**链接模式**：四人盲选 5 块隔绝的出生棋盘之一，构筑 3 个大回合后独占者两两配对、棋盘边对边拼接开战，战场逐个结算淘汰，胜者再拼接打决赛。
+《围杀 Siege》：4 人回合制策略构筑游戏，玩法是围棋式提子加征募构筑。现在只有一个模式——**链接模式（open-map 段 A 起：开放地图）**：5 块出生棋盘建局时就边对边紧贴成一张连通地图（3+2 两行），四人盲选其中一块插旗；第 1–3 大回合只能在自己锁定的出生棋盘内落子与改造（同区者共享），第 4 大回合起全图可落；锁定后全图全可见。整张地图是唯一战场：整轮 Pass / 填满 / 只剩一人即结算、即终局，名次按势力与判定链。配对 / 拼接 / 等待者 / 决赛倒计时的代码段 A 保留但不再触发（候选 ≤ 1 直接进入交战），段 B 删除。
 规则内核 `src/Siege.Core`（.NET 8，零 Godot 依赖，AI 在 `Ai/`）；批量、分析与终端版在 `src/Siege.Sim`；视图模型在 `src/Siege.Presentation`；3D 表现层在 `src/godot`（Godot 4.7.2 .NET，不在 `siege.sln` 里）。
 
 ## 怎么玩
@@ -19,14 +19,14 @@
 & "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --difficulty=Hard --profile=%TEMP%\siege-try.json
 & "D:/software/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe" --% --path E:/wws/geme_demo/src/godot -- --map=link:12345 --no-carry
 ```
-- 流程：点 5 个占位之一插旗（选中即锁定）→ 征募 → 左下手牌选类型、点格子暂放 → 右侧看预演 → Enter 确认 / P 键 Pass；有"弃赛"按钮。配对用真随机。
+- 流程（open-map）：点 5 个占位之一插旗（选中即锁定，5 块棋盘随即全部展开、整张地图可见）→ 征募 → 左下手牌选类型、点格子暂放（第 1–3 大回合只能落在自己的出生棋盘内，匠人的改造目标也限自己棋盘；第 4 大回合起全图）→ 右侧看预演 → Enter 确认 / P 键 Pass；有"弃赛"按钮。四人整轮 Pass、地图填满或只剩一人即终局。
 - 按键（`InputBindings.cs`）：1/2/3/4 盘面 / 势力 / 信物 / 顺序层；Tab 切读法；H 手牌面板；V 收起征募面板；T 按住 / 点击切换；E 轮换改造目标；M 全局预览（当前战场一屏看不全时才有）；方向键或 WASD 平移；空格回自己的出生棋盘；Esc 返回。
 
 **终端版**
 ```powershell
 dotnet run --project src/Siege.Sim -c Release -- play --map link:12345 --difficulty Hard --profile $env:TEMP\siege-try.json
 ```
-对局中输入 `resign` / `弃赛` 弃赛，`q` 退出。配对用真随机。
+对局中输入 `resign` / `弃赛` 弃赛，`q` 退出。流程同图形版：插旗锁定后整张地图可见，第 1–3 大回合只能在自己的出生棋盘落子，第 4 大回合起全图。
 
 **批量跑局与分析**（每个配置不超过 20 局）
 ```powershell

@@ -64,7 +64,8 @@ public class 批量跑局Tests
             // link-map-terrain：地图变了、AI 走法随之变，种子 24 的同区两人在第 2 大回合整轮 Pass 结算、少一人后 12 个小回合跨到第 4 大回合。
             // 改为按截断语义断言：小回合数不超过 12；终局大回合超过 3 时，截断前确有战场结算（有人出局）。
             Assert.InRange(l.Turns.Count, 1, 12);
-            Assert.True(l.Result!.MajorRound <= 3 || l.Events.Any(e => e.Settlement is not null), $"种子 {l.Seed} 终局大回合 {l.Result.MajorRound} 但截断前没有战场结算");
+            // open-map：唯一战场结算即终局；截断前跨到第 4 大回合只可能因有人出局（势力归零）或终局，所以改为"有出局 / 结算事件"。
+            Assert.True(l.Result!.MajorRound <= 3 || l.Events.Any(e => e.Settlement is not null) || l.Events.Any(e => e.Type == LogEventType.PlayerEliminated), $"种子 {l.Seed} 终局大回合 {l.Result.MajorRound} 但截断前没有出局或战场结算");
         });
 
         // 按种子抽样的完整事件流（子流 sim-sample，与对局子流无关）：千分之 500 下 6 局里既有完整也有仅快照
@@ -272,7 +273,7 @@ public class 批量跑局Tests
         }
 
         MatchLog log = MatchLog.Read(Directory.GetFiles(dir, "match-*.jsonl").Single());
-        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(log));   // retire-legacy-maps 1.8：原 V4GoldenTurnHash（v5），改为 link:1 上同口径重钉的黄金值
+        候选格上限Tests.AssertLinkGolden(log);   // retire-legacy-maps 1.8：原 V4GoldenTurnHash（v5），改为 link:1 上同口径重钉的黄金值
         Assert.Equal(0, log.Header.Config.CarryIn);
         Assert.Equal(false, log.Header.CarryInOut);
         Assert.Equal([], log.Header.CarryIns!);

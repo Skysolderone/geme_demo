@@ -18,7 +18,7 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 /// </remarks>
 public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 首轮拼接()
     {
         // Scenario：在 link:1 初始地图上链接战场 0 与 3（规格记作 1 与 4），锚点为 0 → 3 平移到 0 东侧紧贴，共享边 = 两块棋盘较矮者的高度；
@@ -71,7 +71,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Assert.Contains("拼接", result.Summary, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 共享边最长()
     {
         // Scenario：锚点东侧边界由高低不齐的两块棋盘组成（0 号 6×6 在下、1 号 8×7 北贴在上且更宽，东沿只有 1 号的 7 行），被贴方为 6×6 →
@@ -103,7 +103,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Assert.Equal([0, 1, 2], Battlefields.Of(result.Map).ById(0)!.BirthZones);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛拼接()
     {
         // Scenario：两个已合并的战场执行决赛链接 → 含最小出生棋盘编号的战场为锚点，另一战场贴在其北侧，共享边 ≥ 1，合并为一个战场。
@@ -131,7 +131,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Assert.True(MapValidator.Validate(final.Map).IsValid, MapValidator.Validate(final.Map).ToString());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 合并战场以西的战场不动()
     {
         // Scenario（裁决 J8-1）：一次链接后，未参与战场整体位于合并战场以西 → 坐标不变；只有以东（或与之交叠 / 紧贴）的被收拢东移。
@@ -151,7 +151,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Assert.True(MapValidator.Validate(result.Map).IsValid, MapValidator.Validate(result.Map).ToString());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 越界候选被排除()
     {
         // Scenario（裁决 J8-3）：决赛北贴、锚点在最西、锚点顶行只剩西块、被贴方底行只剩东块。
@@ -204,7 +204,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         Assert.Equal(new Occupant(new PlayerId(0), PieceType.Basic), board[new Coord(6, 8)].Occupant);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 全部链接序列都能拼接()
     {
         // Scenario：对 link:1–link:20 穷举三类链接序列（15 种四人四区配对按规范次序各接决赛、全部 2+1+1、全部 3+1），
@@ -324,7 +324,7 @@ public class 链接时的棋盘拼接Tests(ITestOutputHelper output)
         internal const int MaxPlayable = 320;
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 平移保内容()
     {
         // Scenario：被平移战场在链接前有 3 枚棋子、1 道栅栏、1 枚已揭示信物 → 链接后这些内容出现在平移后的对应格，类型、归属、揭示状态逐项相同。

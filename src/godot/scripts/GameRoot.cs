@@ -72,6 +72,7 @@ public sealed partial class GameRoot : Node3D
     private int _seenPairings;
     private int _seenSettlements;
     private int _auditedBuildRound;
+    private bool _auditedUnlock;
     private int _visibleCells;
 
     /// <summary>上次核对时已展开的出生棋盘编号（拼接核对"可见格 = 两战场格数之和"，board-link-mode F.4）。</summary>
@@ -692,9 +693,9 @@ public sealed partial class GameRoot : Node3D
 
             if (passed && _autoDemo)
             {
-                // board-link-mode D-d：开局那轮通过后不退出，自动演示继续，等本机参与的链接把战场合并后再跑一轮（合并战场的全部可见格都要验到）。
-                _pickCheckAfterLink = true;
-                GD.Print("[pick-check] 开局一轮通过；继续自动演示，等本机参与的链接后在合并战场上重跑一轮");
+                // open-map 实施裁决 A7：锁定后全图已可见，拾取只在锁定后对全图跑这一轮；"链接后重跑"随拼接一并取消（段 B 删代码），通过即退出。
+                GD.Print("[pick-check] 锁定后全图一轮通过；open-map 起不再有链接，退出");
+                GetTree().Quit(0);
             }
 
             return;
@@ -1198,6 +1199,16 @@ public sealed partial class GameRoot : Node3D
                     // 比对的是整块出生棋盘（棋盘清单），不是出生区（链接档的出生区是核心区，link-map-terrain D1）。
                     Flow(_audit.BuildingRange(round, _session.MyLegalRange, [.. _session.Match.Map.BirthBoard(zone).Cells()]));
                 }
+                else if (round > PublicRules.BuildProtectionRounds && !_auditedUnlock && _session.World.OwnZone is { } own)
+                {
+                    // 全图解禁（open-map D7）：第 4 大回合首次轮到本机时核对一次——范围 = 全图可落子格 − 本人禁入格（都读按座位视图模型），且大于自己棋盘的可落子格数。
+                    _auditedUnlock = true;
+                    DefaultBoardView board = _session.World.Board();
+                    HashSet<Coord> playable = [.. board.Cells.Where(c => c.Terrain == Terrain.Playable).Select(c => c.Coord)];
+                    HashSet<Coord> forbidden = [.. board.Cells.Where(c => c.LifeForbiddenBy is not null).Select(c => c.Coord)];
+                    int ownPlayable = board.Placeholders.Where(p => p.Zone == own).SelectMany(p => p.Cells()).Count(playable.Contains);
+                    Flow(_audit.Unlocked(round, _session.MyLegalRange, playable, forbidden, ownPlayable));
+                }
 
                 AutoStep();
                 _dirty = true;
@@ -1624,7 +1635,7 @@ public sealed partial class GameRoot : Node3D
 
         if (_rounds == 0)
         {
-            // 跑到终局的全流程（tasks 4.6）：七步都必须见过；缺省 --rounds=4 只要求已见各步通过。
+            // 跑到终局的全流程（tasks 4.6 → open-map D7）：四步都必须见过；缺省 --rounds=4 只要求已见各步通过。
             Flow(_audit.Completeness());
         }
 
@@ -1643,14 +1654,6 @@ public sealed partial class GameRoot : Node3D
         if (_shotShow is not null && _screenshotFrame >= 0)
         {
             GD.PrintErr($"[siege] 错误：--shot-show={_shotShow} 直到演示结束都没有等到含该节拍的结算。换一个 --seed= 或加大 --rounds=。");
-            GetTree().Quit(1);
-            return;
-        }
-
-        if (_pickCheckAfterLink || _pickCheckPending)
-        {
-            // 第二轮拾取要等本机参与的链接：缺省种子的本机不在首轮链接里，须换种子（如 --seed=5：第 4 大回合链接 出生区 1 + 出生区 2）。
-            GD.PrintErr("[siege] 错误：--pick-check 直到演示结束都没有等到本机参与的链接，链接后的第二轮拾取没跑。换一个 --seed=（如 --seed=5）或加大 --rounds=。");
             GetTree().Quit(1);
             return;
         }

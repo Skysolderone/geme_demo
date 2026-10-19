@@ -24,7 +24,14 @@ public class 停手阈值Tests
     /// 历次重建记录见 git 历史。</para>
     /// <para>link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变；旧值 C852D900B0A2A4FA40CFFC09BA07732D4795A382ACB3902626E12527B47798D8（同样是以当时实现在阈值 0 下的自证值，独立参照在 retire-legacy-maps 时已不复存在）。</para>
     /// </summary>
-    private const string StrictImprovementTurnHash = "F52ACDC37DC0BDB151DE0CD3D5103291048E858F61EB94975A0B48872260C21B";
+    /// <summary>
+    /// open-map 1.5 重钉：link:1 改为 3+2 紧贴布局后，种子 31 的前 24 个小回合在阈值 0 与缺省 20 下走法相同（没有边际提升落在 (0, 20] 的候选），不再能证明"阈值确实传到了 AI"；
+    /// 探针（种子 31–46）取第一个两种阈值走法不同的种子 34（<see cref="StrictImprovementSeed"/>）。旧值（种子 31）F52ACDC37DC0BDB151DE0CD3D5103291048E858F61EB94975A0B48872260C21B。
+    /// </summary>
+    private const string StrictImprovementTurnHash = "D0EB62C1AFA4432791B0283985210D4C09A1DC0529BCAF6598FFF562016630A2";
+
+    /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
+    private const ulong StrictImprovementSeed = 34;
 
     private static readonly PlayerId Me = AiFixtures.P0;
 
@@ -146,7 +153,7 @@ public class 停手阈值Tests
         // ai-eye 段 D2（4.5）：九维权重写死为对照实现当时的缺省（Eye / Threat = 0）。本测试钉的是"阈值 0 = 严格提高"，不是默认权重；
         // 默认权重改为校准值（Eye 200、Threat 25）后若仍跟随缺省，对照哈希就不再是"严格提高实现"的产物（testing.md「校准与保真度分离」）。
         // retire-legacy-maps 1.5：样本由 v4 改到 link:1（对照哈希在删除 v4 之前重钉，见 StrictImprovementTurnHash），断言不变。
-        RunConfig zero = 候选格上限Tests.LinkGoldenConfig() with { PassThreshold = 0 };
+        RunConfig zero = 候选格上限Tests.LinkGoldenConfig() with { SeedStart = StrictImprovementSeed, PassThreshold = 0 };
         MatchLog log = BatchRunner.Execute(zero, parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
@@ -155,8 +162,9 @@ public class 停手阈值Tests
         string hash = 候选格上限Tests.TurnHash(log);
         Assert.True(StrictImprovementTurnHash == hash, $"阈值 0 的小回合快照哈希：{hash}");
 
-        // 反面：缺省阈值下同一局走法不同——否则"阈值确实传到了 AI"无从证明。
-        Assert.NotEqual(StrictImprovementTurnHash, 候选格上限Tests.LinkGoldenTurnHash);
+        // 反面：缺省阈值下同一局走法不同——否则"阈值确实传到了 AI"无从证明（open-map 起改为实跑同一种子的缺省阈值局比对，不比两个常量）。
+        MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = StrictImprovementSeed }, parallelism: 1)[0];
+        Assert.NotEqual(hash, 候选格上限Tests.TurnHash(byDefault));
     }
 
     [Fact]

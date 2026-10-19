@@ -98,7 +98,8 @@ public class 出生区信物权重Tests
     [
         // link-map-terrain 第 2 组重钉（M10）：link:1 的信物格变了（出生区档 10 个移进核心区、另加 3 个公共区档），同一种子的生成结果随之变；
         // 旧值 9C39B357E3B984DAF502D6680CF98A3B64F8D58CF13C44AB596C1C966B26B835 / 未收敛 109。此后本值是"当前实现在新 link:1 上"的自证值，不再是引入新信物之前的独立参照。
-        ("link:1", "7DCEB00E865B03671ABC4C31C253E357CE98A400E056C637088CD72B9CC09119", 113),
+        // open-map 1.1 重钉：link:1 改为 3+2 紧贴布局（信物格坐标随棋盘位置变），未收敛 113 → 114；旧值 7DCEB00E865B03671ABC4C31C253E357CE98A400E056C637088CD72B9CC09119。
+        ("link:1", "AEA0BA6CE5ADEB7B31EC3C7068B76B61DCAAB9FEFB5A713DDCAC5D3DA0FCE281", 114),
     ];
 
     [Fact]
@@ -123,8 +124,8 @@ public class 出生区信物权重Tests
                 notConverged += record.Converged ? 0 : 1;
             }
 
-            Assert.Equal(unconverged, notConverged);
-            Assert.Equal(sha256, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()))));
+            string actual = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+            Assert.True(unconverged == notConverged && sha256 == actual, $"{mapId}：未收敛 {notConverged}、哈希 {actual}");
         }
 
         // v1 第一阶段分布仍是百分制旧表 45 / 20 / 15 / 8 / 7 / 5（改写前 `权重分布收敛` 的断言原样移到这里）。

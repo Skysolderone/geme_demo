@@ -105,16 +105,17 @@ public class 链接模式下落后者的停手阈值Tests
     [Fact]
     public void 并列最高视为最高()
     {
-        // 规格："并列最高视为最高"——两人各一枚对称角上的孤子、势力相等 → 不算落后，阈值为缺省值，AI Pass。
+        // 规格："并列最高视为最高"——两人各一枚角上的孤子、势力相等 → 不算落后，阈值为缺省值，AI Pass。
+        // open-map：link:1 棋盘 0（R3 起 6×7）的西南角紧贴棋盘 2（多一口气），改用东南角（FarCorner）与东北角两枚孤子，各 2 气、势力 3。
         // 判别力：比较由严格大于改为大于等于即红。
-        MatchFlow match = Started([0, 0, 3, 4]).Place(P0, FarCorner).Place(P1, Corner(0, 0));
+        MatchFlow match = Started([0, 0, 3, 4]).Place(P0, FarCorner).Place(P1, BirthCell(Map, 0, Side - 1, Map.BirthBoard(0).Height - 1));
         MatchPublicView view = match.Publish();
         Assert.Equal(view.Power!.Of(P1).Total, view.Power.Of(P0).Total);   // 样本口径
 
         AssertPassed(Decide(match));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待者照常停手()
     {
         // Scenario「等待者照常停手」：AI 独自在单人战场（P0 独占棋盘 0），即便全局势力低于别的战场里的玩家，阈值仍为缺省值 → Pass。

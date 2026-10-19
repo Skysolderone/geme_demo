@@ -22,14 +22,14 @@ public class 终端专家对局Tests
         var ais = new Dictionary<PlayerId, HeuristicTurnController>();
         var output = new StringWriter();
         int exit = PlayCommand.Run(
-            42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nX3 B\nv\nok\n\npass\n"), output,
+            42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nR3 B\nv\nok\n\npass\n"), output,
             weights: LookaheadFixtures.Weights, passThreshold: LookaheadFixtures.PassThreshold, contentSet: ContentSet.V1,
             onAi: (p, ai) => ais.Add(p, ai), map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // retire-legacy-maps 1.8：地图由 v5 改为 link:1（落点 B1 → V3；link-map-terrain 起为 X3），冒险概率随旧地图删除
         string text = output.ToString();
 
         Assert.Equal(0, exit);
         Assert.Contains("对手 3 名 Expert AI（前瞻宽度 4）", text, StringComparison.Ordinal);
-        Assert.Contains("玩家1(你) 落子 X3B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 R3B", text, StringComparison.Ordinal);   // open-map：link:1 的 1 号出生棋盘左下角 X3 → R3
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 42", text, StringComparison.Ordinal);
 

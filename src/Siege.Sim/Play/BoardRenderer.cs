@@ -307,7 +307,7 @@ internal sealed class BoardRenderer
         _out.WriteLine($"第 {view.MajorRound} 大回合    行动顺序：{order}    连续 Pass：{view.PassStreak}");
         if (view.MajorRound <= MatchFlow.BuildProtectionRounds)
         {
-            _out.WriteLine($"  构筑保护期（第 1–{MatchFlow.BuildProtectionRounds} 大回合）：只能在自己的出生区落子");
+            _out.WriteLine($"  构筑保护期（第 1–{MatchFlow.BuildProtectionRounds} 大回合）：只能在自己的出生棋盘落子");
         }
 
         foreach (PlayerFlowState state in view.Players)

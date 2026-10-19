@@ -6,10 +6,11 @@ using Siege.Core.Relics;
 namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
-/// 规格：openspec/changes/link-map-terrain/specs/link-map-generation —— Requirement: 初始布局（link-map-terrain 第 2 组：边长 6–8、主题、外圈 / 核心区 / 中间带）。
+/// 规格：openspec/changes/open-map/specs/link-map-generation —— Requirement: 初始布局（link-map-terrain 第 2 组：边长 6–8、主题、外圈 / 核心区 / 中间带；open-map：3+2 紧贴连通）。
 /// </summary>
 /// <remarks>
-/// 变异验证（段 F 实跑，只跑本类）：M-F2 <c>Layout</c> 的横向间距 <c>Gap</c> 改为 2 → 「出生棋盘互不相邻」全红；M-F3 <c>Assemble</c> 的东侧留白改为 1 → 「画布按布局裁出」全红。
+/// 变异验证（段 F 实跑，只跑本类）：M-F3 <c>Assemble</c> 的东侧留白改为 1 → 「画布按布局裁出」全红。
+/// open-map 1.1 变异（只跑本类）：M-O1 <c>InitialLayout.Arrange</c> 第一行间距改为 1 → 「三加二布局」「每条接缝至少一条气边」「地图只有出生棋盘且连成一片」全红。
 /// link-map-terrain 第 2 组的变异记录见任务汇报（主题排列、核心区偏移、出生区信物相邻、公共信物档位）。
 /// </remarks>
 public class 初始布局Tests
@@ -43,43 +44,131 @@ public class 初始布局Tests
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public void 出生棋盘互不相邻(ulong seed)
+    public void 地图只有出生棋盘且连成一片(ulong seed)
     {
-        // Scenario：任意两块出生棋盘的外接矩形之间至少隔 3 格，沿几何邻接不连通（5 个战场）。
+        // Scenario（open-map）：link:1–link:20 每张恰有 5 块出生棋盘，棋盘之外没有可落子格；全部可落子格沿几何四邻接恰成 1 个连通分量；5 块两两不重叠。
+        // 连通分量用测试内独立 BFS（只走 Adjacency.Neighbors 与 IsPlayable），不读 Battlefields。
         MapData map = LinkMapGenerator.Generate(seed);
+        HashSet<Coord> playable = [.. map.AllCoords().Where(map.IsPlayable)];
+        var reached = new HashSet<Coord> { playable.Order().First() };
+        var queue = new Queue<Coord>(reached);
+        while (queue.Count > 0)
+        {
+            foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, queue.Dequeue()).Where(playable.Contains))
+            {
+                if (reached.Add(n))
+                {
+                    queue.Enqueue(n);
+                }
+            }
+        }
+
+        Assert.Equal(playable.Count, reached.Count);
+        Assert.Equal(1, Battlefields.Of(map).Count);
+        Assert.Equal(Enumerable.Range(0, 5), Battlefields.Of(map).All[0].BirthZones);
         for (int i = 0; i < map.Boards.Length; i++)
         {
             for (int j = i + 1; j < map.Boards.Length; j++)
             {
-                Assert.True(LinkMapFixtures.Gap(map.Boards[i], map.Boards[j]) >= LinkMapGenerator.Gap, $"{seed}: 棋盘 {i} 与 {j} 只隔 {LinkMapFixtures.Gap(map.Boards[i], map.Boards[j])}");
+                Assert.False(InitialLayout.Overlaps(map.Boards[i], map.Boards[j]), $"link:{seed}: 棋盘 {i} 与 {j} 重叠");
             }
         }
 
-        Assert.Equal(5, Battlefields.Of(map).Count);
-        Assert.Equal(3, LinkMapGenerator.Gap);
+        Assert.InRange(map.PlayableCount, 212, 280);   // 校验器链接行回写：种子 1–20 实测 212–280
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void 每条接缝至少一条气边(ulong seed)
+    {
+        // Scenario（open-map）：任意两块外接矩形相邻的出生棋盘，在接缝上至少有 1 对互为几何邻居的可落子格之间存在气边。
+        // 接缝格对由测试内独立算出（沿共享边逐格配对），气边读唯一实现 Adjacency.LibertyNeighbors。
+        MapData map = LinkMapGenerator.Generate(seed);
+        int seams = 0;
+        for (int i = 0; i < map.Boards.Length; i++)
+        {
+            for (int j = i + 1; j < map.Boards.Length; j++)
+            {
+                BoardPlate a = map.Boards[i];
+                BoardPlate b = map.Boards[j];
+                if (InitialLayout.SharedEdge(a, b) == 0)
+                {
+                    continue;
+                }
+
+                seams++;
+                var pairs = new List<(Coord P, Coord Q)>();
+                foreach (Coord p in a.Cells())
+                {
+                    foreach (Coord q in Adjacency.Neighbors(map.Width, map.Height, p).Where(b.Contains))
+                    {
+                        pairs.Add((p, q));
+                    }
+                }
+
+                Assert.NotEmpty(pairs);
+                Assert.True(pairs.Any(x => Adjacency.LibertyNeighbors(map, x.P).Contains(x.Q)), $"link:{seed}: 棋盘 {i} 与 {j} 的接缝没有气边");
+            }
+        }
+
+        Assert.True(seams >= 4, $"link:{seed}: 只有 {seams} 条接缝");   // 3+2 布局至少 4 条接缝（第一行两条 + 第二行两块各贴一条）
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void 三加二布局(ulong seed)
+    {
+        // Scenario（open-map D1）：次序 o0、o1、o2 底边对齐、自西向东依次紧贴（间距 0）；o3 的最南行紧贴 o0 的最北行且西边与 o0 对齐；
+        // o4 的最南行紧贴 o1 的最北行、与 o1 共享边 ≥ 4、与 o3 不重叠。次序本身不公开，这里按几何反推：第一行 = 底边在留白行的三块（自西向东即 o0 / o1 / o2）。
+        // 实施记录 R-1：锚的北侧被挡死（o3 比 o0 宽且 o1 比 o0 高 / o4 比 o1 宽且 o2 比 o1 高）时换锚第一行共享边最长的一块；种子 1–20 里只有 link:7 的 o4 改锚 o2。
+        MapData map = LinkMapGenerator.Generate(seed);
+        BoardPlate[] row1 = [.. map.Boards.Where(b => b.Origin.Y == LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
+        BoardPlate[] row2 = [.. map.Boards.Where(b => b.Origin.Y != LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
+        Assert.Equal(3, row1.Length);
+        Assert.Equal(2, row2.Length);
+        Assert.Equal(LinkMapGenerator.Margin, row1[0].Origin.X);
+        Assert.Equal(row1[0].Origin.X + row1[0].Width, row1[1].Origin.X);
+        Assert.Equal(row1[1].Origin.X + row1[1].Width, row1[2].Origin.X);
+
+        // 每块第二行棋盘都北贴第一行的一块，与锚的共享边 ≥ 4（规格「初始布局」）。
+        foreach (BoardPlate top in row2)
+        {
+            int best = row1.Max(a => top.Origin.Y == a.Origin.Y + a.Height ? InitialLayout.SharedEdge(a, top) : 0);
+            Assert.True(best >= InitialLayout.MinSharedEdge, $"link:{seed}: 第二行棋盘 {top.Origin} 与锚的共享边只有 {best}");
+        }
+
+        // 设计规则本身（o3 锚 o0 西对齐；o4 锚 o1）：除 R-1 的换锚种子外逐条成立。
+        BoardPlate o3 = row2[0];
+        Assert.Equal(new Coord(LinkMapGenerator.Margin, row1[0].Origin.Y + row1[0].Height), o3.Origin);
+        Assert.Equal(Math.Min(row1[0].Width, o3.Width), InitialLayout.SharedEdge(row1[0], o3));
+        if (seed != 7)
+        {
+            BoardPlate o4 = row2[1];
+            Assert.Equal(row1[1].Origin.Y + row1[1].Height, o4.Origin.Y);
+            Assert.True(InitialLayout.SharedEdge(row1[1], o4) >= InitialLayout.MinSharedEdge);
+            Assert.True(o4.Origin.X >= o3.Origin.X + o3.Width);
+        }
+        else
+        {
+            Assert.Equal(row1[2].Origin.Y + row1[2].Height, row2[1].Origin.Y);   // link:7：o4（8×8）比 o1（6×6）宽、o2（7×7）比 o1 高 → 换锚 o2
+        }
     }
 
     [Theory]
     [MemberData(nameof(Seeds))]
     public void 画布按布局裁出(ulong seed)
     {
-        // 裁决 J4 / J7：5 块棋盘底边对齐在第 2 行、自第 2 列起一字排开、相邻两块恰隔 3 格；画布四周各留 2 格裁出一次（之后原点不再变）。
+        // 裁决 J4 / J7 + open-map D1：画布原点固定，按 5 块的包围盒四周各留 2 格裁出一次（之后原点与画布都不再变，MapVersion 恒 0）。
         MapData map = LinkMapGenerator.Generate(seed);
-        BoardPlate[] byX = [.. map.Boards.OrderBy(b => b.Origin.X)];
-        Assert.Equal(LinkMapGenerator.Margin, byX[0].Origin.X);
-        Assert.All(byX, b => Assert.Equal(LinkMapGenerator.Margin, b.Origin.Y));
-        for (int k = 1; k < byX.Length; k++)
-        {
-            Assert.Equal(byX[k - 1].Origin.X + byX[k - 1].Width + LinkMapGenerator.Gap, byX[k].Origin.X);
-        }
-
-        Assert.Equal(byX[^1].Origin.X + byX[^1].Width + LinkMapGenerator.Margin, map.Width);
+        Assert.Equal(LinkMapGenerator.Margin, map.Boards.Min(b => b.Origin.X));
+        Assert.Equal(LinkMapGenerator.Margin, map.Boards.Min(b => b.Origin.Y));
+        Assert.Equal(map.Boards.Max(b => b.Origin.X + b.Width) + LinkMapGenerator.Margin, map.Width);
         Assert.Equal(map.Boards.Max(b => b.Origin.Y + b.Height) + LinkMapGenerator.Margin, map.Height);
-        Assert.InRange(map.Width, 46, 56);   // 5×6 + 4×3 + 4 … 5×8 + 4×3 + 4
-        Assert.InRange(map.Height, 10, 12);
+        Assert.InRange(map.Width, 23, 27);    // 种子 1–20 实测（校验器链接行取理论边界 22–30）
+        Assert.InRange(map.Height, 17, 20);   // 种子 1–20 实测（理论边界 16–20）
 
         // 次序随种子变化（样本口径：20 个种子里不止一种排列）。
-        Assert.True(Seeds().Select(s => string.Join(",", LinkMapGenerator.Generate((ulong)s[0]).Boards.OrderBy(b => b.Origin.X).Select(b => Array.IndexOf([.. LinkMapGenerator.Generate((ulong)s[0]).Boards], b)))).Distinct().Count() > 1);
+        Assert.True(Seeds().Select(s => string.Join(",", LinkMapGenerator.Generate((ulong)s[0]).Boards.OrderBy(b => b.Origin.Y).ThenBy(b => b.Origin.X).Select(b => Array.IndexOf([.. LinkMapGenerator.Generate((ulong)s[0]).Boards], b)))).Distinct().Count() > 1);
     }
 
     [Fact]

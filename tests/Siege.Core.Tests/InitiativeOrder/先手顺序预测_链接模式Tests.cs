@@ -60,6 +60,7 @@ public class 先手顺序预测_链接模式Tests
         // 裁决 S10 的实测局面：开局 [0,0,3,4]（P0、P1 同在棋盘 1），第 1 大回合里 P0、P1 已 Pass、其余按原样 → 此刻结束战场 1 会整轮 Pass 结算，
         // 全零局面按种子兜底顺序 P0 胜、P1 落败出局；预测的下一轮顺序为 P2 > P0 > P3（三人先手值相同，首回合同值链走种子顺序），P1 不在其中。
         // 种子取 InspectionSeed（夹具缺省种子下 P0、P1 排在顺序末尾，Pass 完大回合即结束，取不到预测）。
+        // open-map：唯一战场上 P3、P2 尚未行动（按未 Pass 算）→ 此刻结束不结算，预测含四人；P0、P1 全零并列按种子顺序 P0 在前。
         MatchFlow match = Started([0, 0, 3, 4], seed: InspectionSeed);
         Assert.Equal([P0, P1, P3, P2], match.ActionOrder);
         PassOnly(match, P0, P1);
@@ -69,9 +70,9 @@ public class 先手顺序预测_链接模式Tests
 
         InitiativeReport forecast = Assert.IsType<InitiativeReport>(Forecast(match));
 
-        Assert.Equal([P2, P0, P3], forecast.NextOrder);
-        Assert.Equal(3, forecast.ActiveCount);
-        Assert.DoesNotContain(P1, forecast.Entries.Select(e => e.Player));
+        Assert.Equal(4, forecast.ActiveCount);
+        Assert.Equal([P0, P1, P2, P3], forecast.Entries.Select(e => e.Player).Order());
+        Assert.True(forecast.NextOrder.IndexOf(P0) < forecast.NextOrder.IndexOf(P1));
         Assert.Equal(1, forecast.CompletedMajorRound);
 
         // 判定无副作用：预测之后对局状态一点没变——没有结算记录、四人都在局、Pass 记录与盘面原样。
@@ -88,8 +89,8 @@ public class 先手顺序预测_链接模式Tests
     [Fact]
     public void 预测与大回合结束后的实际顺序一致()
     {
-        // 「假设此刻结束」：等到只剩最后一名（单人战场的）玩家未行动时取预测，再让他 Pass 结束大回合——单人战场不因 Pass 结算、势力不变，
-        // 所以预测的下一轮顺序 MUST 与第 2 大回合的实际行动顺序逐项相同，落败者已出局。
+        // 「假设此刻结束」：等到只剩最后一名玩家未行动时取预测，再让他 Pass 结束大回合——open-map 下唯一战场里已有人落子（P3），不是整轮 Pass，不结算、势力不变，
+        // 所以预测的下一轮顺序 MUST 与第 2 大回合的实际行动顺序逐项相同。
         MatchFlow match = Started([0, 0, 3, 4], seed: InspectionSeed);
         PassOnly(match, P0, P1);
         while (match.ActionOrder.IndexOf(match.CurrentPlayer!.Value) < 3)
@@ -104,9 +105,8 @@ public class 先手顺序预测_链接模式Tests
         match.PassTurn();
 
         Assert.Equal(2, match.MajorRound);
-        BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
-        Assert.Equal((0, P0), (settled.Battlefield, settled.Winner));
-        Assert.Equal(PlayerStatus.Eliminated, match.StateOf(P1).Status);
+        Assert.Empty(match.Settlements);
+        Assert.Equal(4, forecast.ActiveCount);
         Assert.Equal(forecast.NextOrder, match.ActionOrder);
         Assert.Equal(forecast.Entries.Select(e => (e.Player, e.Rank, e.Value)), match.PublishSupplement().CurrentOrderReport!.Entries.Select(e => (e.Player, e.Rank, e.Value)));
     }
@@ -129,7 +129,7 @@ public class 先手顺序预测_链接模式Tests
         Assert.Contains(other, forecast.NextOrder);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 填满判定同样进预测()
     {
         // 判定的（b）条：战场无可落子空格也会在大回合结束时结算。把棋盘 1 填满（P0 占绝大多数、P1 一格），谁都没 Pass → 预测已剔除落败的 P1。
@@ -154,9 +154,12 @@ public class 先手顺序预测_链接模式Tests
     [Fact]
     public void 此刻结束即终局时没有预测()
     {
-        // 四人同区且棋盘填满：此刻结束 → 唯一战场结算 → 终局（「最后战场结算」），没有下一轮可预测。
+        // 四人同区且地图填满（open-map：唯一战场 = 全图，5 块棋盘都填满）：此刻结束 → 唯一战场结算 → 终局（「最后战场结算」），没有下一轮可预测。
         MatchFlow match = Started([0, 0, 0, 0]);
-        FillBoard(match, zone: 0, majority: P0, minority: P1);
+        for (int zone = 0; zone < 5; zone++)
+        {
+            FillBoard(match, zone, majority: P0, minority: P1);
+        }
 
         Assert.Null(Forecast(match));
         Assert.Equal(MatchPhase.InProgress, match.Phase);   // 预测不结束对局
@@ -166,7 +169,7 @@ public class 先手顺序预测_链接模式Tests
         Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 期限大回合的预测剔除将到期落败者()
     {
         // final-countdown（design D2）：到期是 JudgeAtRoundEnd 的第三个触发条件，先手预测复用同一判定。四人四区 [0,1,3,4]、K = 2、脚本配对：
@@ -200,7 +203,7 @@ public class 先手顺序预测_链接模式Tests
         Assert.Equal(forecast.NextOrder, match.ActionOrder);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 期限大回合最后一人Pass前的预测与实际顺序一致()
     {
         // final-countdown check 补测（design D2）：第 8 大回合（期限）里战场 0 的两人在前面各落 1 子、等待者 Pass，只剩顺序末位一人未行动时取预测；

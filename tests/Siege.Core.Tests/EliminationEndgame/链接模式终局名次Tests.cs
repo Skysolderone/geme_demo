@@ -111,7 +111,7 @@ public class 链接模式终局名次Tests
         Assert.Equal(StandingGroup.Resigned, result[^1].Group);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 对局里战场落败者按结算时的比较量排名()
     {
         // 端到端：三人同区（P0 两子、P1 与 P2 各一子）在第 3 大回合结束结算，独占者 P3 等待；决赛后终局。

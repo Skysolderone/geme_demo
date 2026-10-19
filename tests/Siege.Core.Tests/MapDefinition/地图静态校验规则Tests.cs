@@ -34,7 +34,7 @@ public class 地图静态校验规则Tests
     public void 可落子格越界()
     {
         // 链接档 4 人可落子格区间 170–320（link-map-terrain 3.3 回写；原 125–245）。
-        // 下界：出生棋盘 1–4 的中间带各放 3 块岩石（G5 / G6 / E7 一类，不切断棋盘）→ 180 − 12 = 168；上界：画布 46×10 的场景格全部开放 → 460。
+        // 下界：出生棋盘 1–4 的中间带各放 3 块岩石（G5 / G6 / E7 一类，不切断棋盘）→ 180 − 12 = 168；上界：画布 22×16 的场景格全部开放 → 352（open-map 载体改 3+2 紧贴图）。
         MapData map = Link();
         Coord[] rocks = [.. map.Boards.Take(4).SelectMany(b => new[] { new Coord(b.Origin.X + 4, b.Origin.Y + 2), new Coord(b.Origin.X + 4, b.Origin.Y + 3), new Coord(b.Origin.X + 2, b.Origin.Y + 4) })];
         MapData tooFew = map with { Obstacles = map.Obstacles.Union(rocks) };
@@ -47,10 +47,10 @@ public class 地图静态校验规则Tests
 
         // 上界 320 同样要挡住：区间只有下界有算例时，把上界写成 2000 只会让消息文本变化，行为上一条测试都不红。
         MapData tooOpen = map with { Obstacles = [] };
-        Assert.Equal(460, tooOpen.PlayableCount);
+        Assert.Equal(352, tooOpen.PlayableCount);
         MapValidationFailure high = Assert.Single(
             MapValidator.Validate(tooOpen).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("可落子格为 460", high.Message, StringComparison.Ordinal);
+        Assert.Contains("可落子格为 352", high.Message, StringComparison.Ordinal);
         Assert.Contains("170–320", high.Message, StringComparison.Ordinal);
     }
 
@@ -59,15 +59,15 @@ public class 地图静态校验规则Tests
     {
         // retire-legacy-maps（check 补回覆盖）：自已删除的 边疆档静态校验Tests.超宽地图被拒绝而不是抛异常 迁来（原载体为边疆档的 25 列上限）。
         // 所守规则不变：外接尺寸不合该档声明的列 / 行区间 → 报拒绝项并到此为止，不往下跑规模与棋盘规则、不在枚举格子时崩溃。
-        // 链接档区间取自 MapValidator 声明表：列 20–85、行 8–24（link-map-terrain 3.3 回写；原列 20–75、行 8–21）；载体是合规的 46×10 手写链接档图，只改外接尺寸一处。
+        // 链接档区间取自 MapValidator 声明表：列 22–30、行 16–20（open-map 1.1 回写：3+2 紧贴布局的理论边界；拼接版为列 20–85、行 8–24）；载体是合规的 22×16 手写链接档图，只改外接尺寸一处。
         MapData map = Link();
         (MapData Map, string Code, string Value, string Bound)[] cases =
         [
-            (map with { Width = 86 }, "MAP_TOO_WIDE", "86", "85"),
-            (map with { Width = 1000 }, "MAP_TOO_WIDE", "1000", "85"),
-            (map with { Width = 19 }, "MAP_TOO_NARROW", "19", "20"),
-            (map with { Height = 25 }, "MAP_TOO_TALL", "25", "24"),
-            (map with { Height = 7 }, "MAP_TOO_SHORT", "7", "8"),
+            (map with { Width = 31 }, "MAP_TOO_WIDE", "31", "30"),
+            (map with { Width = 1000 }, "MAP_TOO_WIDE", "1000", "30"),
+            (map with { Width = 21 }, "MAP_TOO_NARROW", "21", "22"),
+            (map with { Height = 21 }, "MAP_TOO_TALL", "21", "20"),
+            (map with { Height = 15 }, "MAP_TOO_SHORT", "15", "16"),
         ];
         foreach ((MapData bad, string code, string value, string bound) in cases)
         {
@@ -81,17 +81,17 @@ public class 地图静态校验规则Tests
         }
 
         // 区间端点本身合法（只看本条规则：改了尺寸的图别的规则照样会报，这里不管）。
-        Assert.DoesNotContain(MapValidator.Validate(map with { Width = 85 }).Failures, f => f.Code == "MAP_TOO_WIDE");
-        Assert.DoesNotContain(MapValidator.Validate(map with { Width = 20 }).Failures, f => f.Code == "MAP_TOO_NARROW");
-        Assert.DoesNotContain(MapValidator.Validate(map with { Height = 24 }).Failures, f => f.Code == "MAP_TOO_TALL");
-        Assert.DoesNotContain(MapValidator.Validate(map with { Height = 8 }).Failures, f => f.Code == "MAP_TOO_SHORT");
+        Assert.DoesNotContain(MapValidator.Validate(map with { Width = 30 }).Failures, f => f.Code == "MAP_TOO_WIDE");
+        Assert.DoesNotContain(MapValidator.Validate(map with { Width = 22 }).Failures, f => f.Code == "MAP_TOO_NARROW");
+        Assert.DoesNotContain(MapValidator.Validate(map with { Height = 20 }).Failures, f => f.Code == "MAP_TOO_TALL");
+        Assert.DoesNotContain(MapValidator.Validate(map with { Height = 16 }).Failures, f => f.Code == "MAP_TOO_SHORT");
     }
 
     [Fact]
     public void 出生区数越界()
     {
         // 规格 Scenario：手写的链接档地图含 6 块各自合规的出生棋盘 → 拒绝并报告出生区数超出"恰 5 个"。
-        MapData six = LinkMapFixtures.Build("test-link-6", [.. LinkMapFixtures.Births, LinkMapFixtures.Births[0] with { Origin = new Coord(47, 2) }]);
+        MapData six = LinkMapFixtures.Build("test-link-6", [.. LinkMapFixtures.Births, LinkMapFixtures.Births[0] with { Origin = new Coord(14, 8) }]);   // 第 6 块贴在棋盘 2 北侧、棋盘 4 东侧
         Assert.Equal(6, six.BirthZones.Length);
 
         MapValidationFailure failure = Assert.Single(
@@ -244,8 +244,8 @@ public class 地图静态校验规则Tests
         MapData twice = LinkMapFixtures.Build("test-link-theme", [b[0], b[1], b[2] with { Theme = BoardTheme.River }, b[3], b[4]]);
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(twice).Failures, f => f.Code == "BOARD_THEME_INVALID");
         Assert.Equal([b[1].Origin, b[2].Origin], failure.Coords);
-        Assert.Contains("出生棋盘 M3–R8", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("出生棋盘 V3–AA8", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生棋盘 J3–O8", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("出生棋盘 P3–U8", failure.Message, StringComparison.Ordinal);
         Assert.Contains("河流", failure.Message, StringComparison.Ordinal);
 
         // 出生棋盘缺主题、主题取值无法识别也被拒，各指出该棋盘。
@@ -260,17 +260,17 @@ public class 地图静态校验规则Tests
     {
         // 3.2：高度 / 地表 / 桥 / 栅栏端点必须在盘内，越界项不参与任何查询。
         // "桥须在深水、栅栏须相邻"由 TerrainData 构造期抛出（裁决 A-1），校验器不重复。
-        // link-map-terrain：载体画布 46×10，越界格改为第 11 / 12 行。
+        // open-map：载体画布 22×16，越界格改为第 17 / 18 行。
         TerrainData terrain = Overlay(
             Link(),
-            heights: [("C11", 1)],
-            surfaces: [("D11", Surface.DeepWater)],
-            bridges: ["D11"],
-            fences: [("D11", "D12")]);
+            heights: [("C17", 1)],
+            surfaces: [("D17", Surface.DeepWater)],
+            bridges: ["D17"],
+            fences: [("D17", "D18")]);
         MapData map = Link() with { TerrainData = terrain };
 
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(map).Failures, f => f.Code == "TERRAIN_OUT_OF_BOUNDS");
-        Assert.Equal(["C11", "D11", "D12"], failure.Coords.Notations());
+        Assert.Equal(["C17", "D17", "D18"], failure.Coords.Notations());
 
         Assert.DoesNotContain(MapValidator.Validate(Link()).Failures, f => f.Code == "TERRAIN_OUT_OF_BOUNDS");
     }
@@ -415,8 +415,9 @@ public class 地图静态校验规则Tests
     {
         // 规格："连通空区面积小于 8 即判失败"——8 本身是合法的，阈值是闭的下界。
         // link-map-terrain：用障碍 F3 / E4 / E5 / F6 / G6 / H6 把出生棋盘 1 的 F4 / F5（核心区）与 G3–H5 圈出恰好 8 格（含林地 G4，林地可落子、不挡气）。
+        // open-map：棋盘 2 紧贴在东侧（J 列），再用 J3 / J4 / J5 把接缝封住，空区才是封闭的。
         MapData map = Link();
-        Coord[] walls = [.. new[] { "F3", "E4", "E5", "F6", "G6", "H6" }.Select(Coord.Parse)];
+        Coord[] walls = [.. new[] { "F3", "E4", "E5", "F6", "G6", "H6", "J3", "J4", "J5" }.Select(Coord.Parse)];
         MapData eightCellPocket = map with { Obstacles = map.Obstacles.Union(walls) };
 
         Assert.DoesNotContain(
@@ -436,9 +437,9 @@ public class 地图静态校验规则Tests
     public void 出生区之外的小空区不算必死口袋()
     {
         // 规格只禁止"出生区内"的必死口袋——出生区之外的封闭小空区是装饰自由，误报会把合法地图挡在门外。
-        // 在手写链接档地图的场景里开放 K4 / K5 两格（四周仍是障碍；J 列紧贴出生棋盘 1 的东边外圈，不用）。
+        // 在手写链接档地图的场景里开放 A1 / A2 两格（画布西南角的留白，四周仍是障碍；open-map 后棋盘之间没有场景格，只有四周留白）。
         MapData map = Link();
-        Coord[] hole = [Coord.Parse("K4"), Coord.Parse("K5")];
+        Coord[] hole = [Coord.Parse("A1"), Coord.Parse("A2")];
         MapData enclosed = map with { Obstacles = map.Obstacles.Except(hole) };
 
         Assert.DoesNotContain(MapValidator.Validate(enclosed).Failures, f => f.Code == "DEAD_POCKET");
@@ -478,8 +479,8 @@ public class 地图静态校验规则Tests
         // 规格 Scenario「中央入口与容差不再校验」（retire-legacy-rules L18，裁决 R3）：中央入口与一个标注的咽喉落在棋盘之外的场景格上，
         // 距离容差为 3 且没有放宽理由 → 校验器不因这几项报出任何失败（基图本身合规，所以整体通过）；导出再读回，四个字段逐项相同。
         // 变异：恢复原 ValidateLandmarks 或 ValidateTolerance 中任一条 → IsValid 为假，本测试红。
-        Coord entrance = Coord.Parse("J5");
-        Coord choke = Coord.Parse("K4");
+        Coord entrance = Coord.Parse("V5");   // open-map：棋盘之外只剩四周留白，V / W 列是棋盘 2 东侧的场景格
+        Coord choke = Coord.Parse("W4");
         MapData map = Link() with { CentralEntrance = entrance, ChokePoints = [choke], DistanceTolerance = 3, ToleranceRelaxReason = null };
         Assert.False(map.IsPlayable(entrance));
         Assert.False(map.IsPlayable(choke));
@@ -500,7 +501,7 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario：某个信物格落在棋盘之外的场景格上 → 拒绝并指出该信物格坐标。
         MapData map = Link();
-        Coord scenery = Coord.Parse("J5");
+        Coord scenery = Coord.Parse("V5");   // open-map：棋盘 2 东侧的留白
         Assert.False(map.IsPlayable(scenery));
         MapData broken = map with { RelicCells = map.RelicCells.Add(scenery, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)) };
 
@@ -574,7 +575,7 @@ public class 地图静态校验规则Tests
         // 链接档初始图的棋盘之外全是场景格；四种新地表标在场景格上（棋盘内的新地表由清单规则禁止，见「出生棋盘内有新地表」）。
         MapData map = Link();
         Assert.True(MapValidator.Validate(map).IsValid);
-        Coord[] outside = [.. new[] { "J3", "J4", "J5", "J6" }.Select(Coord.Parse)];
+        Coord[] outside = [.. new[] { "V3", "V4", "V5", "V6" }.Select(Coord.Parse)];   // open-map：棋盘 2 东侧的留白
         Assert.All(outside, c => Assert.Null(map.BirthZoneOf(c)));
         Surface[] kinds = [Surface.Desert, Surface.Marsh, Surface.Crag, Surface.Shallows];
         ImmutableDictionary<Coord, Surface> surfaces = map.TerrainData.Surfaces;

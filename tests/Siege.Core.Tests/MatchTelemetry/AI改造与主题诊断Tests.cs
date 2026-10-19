@@ -284,7 +284,7 @@ public class AI改造与主题诊断Tests
         Assert.StartsWith("回放在第 1 小回合分歧", Assert.Single(skipped.SkippedLogs).Key, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 主题表现可查()
     {
         // 规格 Scenario「主题表现可查」：三份样本——A 四人四区（首轮两对都在第 4 大回合结算：4 人有首轮、2 胜）；C 3+1（棋盘 1 的三人里一人第 1 大回合被提光、势力归零出局

@@ -55,9 +55,9 @@ public class 棋盘清单Tests
             Assert.All(b.Cells(), c => Assert.Equal(core.Contains(c) ? (int?)i : null, map.BirthZoneOf(c)));
         }
 
-        // link:1 的第 2 块：左下角 AQ3、6×6 → 出生区 AR4–AT6（西起第 2–4 列、南起第 2–4 行）。
-        Assert.Equal("AQ3", births[1].Origin.ToNotation());
-        Assert.Equal(["AR4", "AT6"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
+        // link:1 的第 2 块（open-map 3+2 布局）：左下角 J10、6×6 → 出生区 K11–M13（西起第 2–4 列、南起第 2–4 行）。
+        Assert.Equal("J10", births[1].Origin.ToNotation());
+        Assert.Equal(["K11", "M13"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
 
         // 规格算例：宽 7、高 8 的第 2 块出生棋盘 → 出生区恰是西起第 3–5 列、南起第 3–5 行这 9 格。在 link:1 起的种子里找一张第 2 块是 7×8 的图。
         MapData sample = Enumerable.Range(1, 400).Select(s => LinkMapGenerator.Generate((ulong)s)).First(m => m.Boards[1] is { Width: 7, Height: 8 });
@@ -108,7 +108,7 @@ public class 棋盘清单Tests
         DefaultBoardView view = DefaultBoardView.From(Started(map).PublicWorldOf());
 
         Assert.Equal(map.Boards.AsEnumerable(), view.Boards.AsEnumerable());
-        Assert.Equal((46, 10), (view.Width, view.Height));
+        Assert.Equal((22, 16), (view.Width, view.Height));   // open-map：夹具改 3+2 紧贴图
         // retire-legacy-rules 1.7（清单"删反面段"）：原有的旧夹具反面段（无清单的 9×9 图清单为空）删除——对局不再能建在无清单的图上。
     }
 
@@ -119,9 +119,9 @@ public class 棋盘清单Tests
         // retire-legacy-maps 1.6：载体由棋盘档夹具改为手写链接档初始图（只有出生棋盘，原"公共棋盘写成 Public"一处随棋盘档删除），断言不变。
         string json = MapFile.ToJson(LinkMapFixtures.Initial());
 
-        MapData edited = MapFile.FromJson(json.Replace("\"Origin\": \"M3\"", "\"Origin\": \"m3\"", StringComparison.Ordinal));
+        MapData edited = MapFile.FromJson(json.Replace("\"Origin\": \"J3\"", "\"Origin\": \"j3\"", StringComparison.Ordinal));
 
-        Assert.Contains("\"Origin\": \"M3\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Origin\": \"J3\"", json, StringComparison.Ordinal);
         Assert.Contains("\"Kind\": \"Birth\"", json, StringComparison.Ordinal);
         Assert.Equal(LinkMapFixtures.Births[1], edited.Boards[1]);
 

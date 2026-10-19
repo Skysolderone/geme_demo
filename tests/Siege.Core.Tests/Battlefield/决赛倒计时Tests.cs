@@ -42,7 +42,7 @@ public class 决赛倒计时Tests
         return settled;
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 首轮一侧先结算即开始倒计时()
     {
         // 规格 Scenario：四人四区，战场 1（A、B）与战场 4（C、D）首轮交战；战场 4 在第 6 大回合结束时结算、C 胜，K = 2
@@ -77,7 +77,7 @@ public class 决赛倒计时Tests
         Assert.Equal(new[] { first.Winner, expired.Winner }.Order(), match.Players.Where(p => match.StateOf(p).Status == PlayerStatus.Active).Order());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 首轮配对的等待者也触发倒计时()
     {
         // 规格 Scenario：3 人同区、1 人独占，第 3 大回合结束时独占者成为首轮等待者，K = 2 → 三人战场的期限为第 5 大回合结束。
@@ -106,7 +106,7 @@ public class 决赛倒计时Tests
         Assert.Equal(PairingKind.Final, Assert.Single(match.Pairings).Kind);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void K为0不启用()
     {
         // 规格 Scenario：对局配置 K = 0 → 任何战场都不会因到期结算，对局与引入本条之前逐步相同。同一局面下战场 3 第 6 大回合结算、胜者开始等待，
@@ -128,7 +128,7 @@ public class 决赛倒计时Tests
     /// 规格 Scenario「K 为 0 不启用」的回归面（design D3 / D4）：链接图五条决策序列基线以 K = 0 导出，与引入倒计时之前钉下的基线（<c>*-k0.txt</c>，改前原样另存）逐字节相同。
     /// 缺省 K = 2 的重钉见 <see cref="决策序列基线Tests"/>。
     /// </summary>
-    [Theory]
+    [Theory(Skip = "open-map 段 B 删除")]
     [InlineData(1UL, AiDifficulty.Standard, "decisions-link1-seed1-k0.txt")]
     [InlineData(2UL, AiDifficulty.Standard, "decisions-link1-seed2-k0.txt")]
     [InlineData(3UL, AiDifficulty.Standard, "decisions-link1-seed3-k0.txt")]
@@ -149,7 +149,7 @@ public class 决赛倒计时Tests
         Assert.Equal(expected, actual);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 无人等待者不倒计时()
     {
         // 规格 Scenario：四人四区首轮两个战场都在交战、尚无任何战场结算 → 两个战场都没有期限。
@@ -163,7 +163,7 @@ public class 决赛倒计时Tests
         Assert.Null(match.DeadlineOf(3));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 构筑期结算按第3大回合起算()
     {
         // 规格 Scenario「构筑期结算按第 3 大回合起算」（裁决 W7）：2+1+1 布局，同区战场在第 2 大回合整轮 Pass 结算，K = 2
@@ -194,7 +194,7 @@ public class 决赛倒计时Tests
         Assert.Equal((5, 3, SettlementReason.Expired, (int?)5), (expired.MajorRound, expired.Battlefield, expired.Reason, expired.Deadline));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 外部提交首轮配对后同样赋期限()
     {
         // 不挂配对来源：第 3 大回合结束时停在待配对，独占者此刻还要被配对、不算等待者，也不给期限；外部提交配对执行拼接后，
@@ -215,7 +215,7 @@ public class 决赛倒计时Tests
         Assert.Equal(3, Assert.Single(match.FinalCountdowns).AssignedInMajorRound);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛战场不倒计时()
     {
         // 规格正文：决赛战场本身 MUST NOT 进入倒计时。接「首轮一侧先结算」：第 8 大回合到期结算后决赛链接，决赛两人此后一直落子，

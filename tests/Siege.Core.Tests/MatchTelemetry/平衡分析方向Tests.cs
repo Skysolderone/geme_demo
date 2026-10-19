@@ -186,8 +186,11 @@ public class 平衡分析方向Tests
         // retire-legacy-maps 1.8：两份共用样本由 v5 改到 link:1，黄金值在删除 v5 之前按当时实现重钉（原值 83302588…、19E3B957… 取自 ad78d50 的 v5 样本）。
         // 守的规则不变：v1 样本的报告不因内容枚举追加而多出行（第 12 项只单列"不适用"）；此后报告任何一行改动都会红。
         // link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变；旧值 A4D48D1F732226F8… / 665851BBD2CE8ACF…。守的规则不变（第 12 项只单列"不适用"由上面的 Hash 内断言守）。
-        Assert.Equal("8AF0C0CD430175146C459064F0BD0DFEFE6031C8B55B2D41076061466B8BF8D5", Hash(SimFixtures.Sample.Value));
-        Assert.Equal("B9C2D624CFB570D60F38A0A0EEA964BC8F2D98A876FB13861203F8A8FF237872", Hash(SimFixtures.RankedSample.Value));
+        string sample = Hash(SimFixtures.Sample.Value);
+        string ranked = Hash(SimFixtures.RankedSample.Value);
+        // open-map 1.5 重钉：link:1 改为 3+2 紧贴布局，样本走法随之变；旧值 8AF0C0CD430175146C459064F0BD0DFEFE6031C8B55B2D41076061466B8BF8D5 / B9C2D624CFB570D60F38A0A0EEA964BC8F2D98A876FB13861203F8A8FF237872。
+        Assert.True("65989D85FBCD0A4242831076A7BB0E7285D17A55A8621A35CF08D2693621DCC7" == sample, $"Sample 报告哈希：{sample}");
+        Assert.True("A2EA5792DD56CBBA25D83ED5457CC970E7F4E9083FF5B4C31DED0310A5BC0EBA" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

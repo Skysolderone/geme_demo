@@ -103,7 +103,7 @@ internal static class PlayCommand
         // 地图那一行：一律打印完整标识（retire-legacy-maps：旧地图族的缺省图 v5 随旧地图删除，"缺省图不多打一行"的例外随之删除）。
         // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
         string shownMapId = match.Publish().MapId;
-        output.WriteLine($"地图 {shownMapId}（{map.BirthZones.Length} 块隔绝的出生棋盘）——用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关");
+        output.WriteLine($"地图 {shownMapId}（{map.BirthZones.Length} 块紧贴成一张连通地图的出生棋盘）——用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关");
 
         // 专家（前瞻宽度 > 0）另写明实际生效的前瞻宽度；其余三档这一行与引入专家之前逐字相同。
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;

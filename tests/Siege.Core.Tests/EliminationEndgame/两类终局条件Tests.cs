@@ -19,19 +19,23 @@ public class 两类终局条件Tests
     [Fact]
     public void 唯一参赛者获胜()
     {
-        // Scenario：4 人局中 2 人以战场落败出局、1 人弃赛 → 剩余的唯一参赛玩家直接获胜，对局立即结束（原因"只剩一名参赛玩家"，优先于最后战场结算）。
-        MatchFlow match = Started([0, 0, 3, 3]).PassRound();
-        Assert.Equal(2, match.Settlements.Count);
-        PlayerId[] winners = [.. match.Settlements.Select(s => s.Winner)];
+        // Scenario：4 人局中 2 人以势力归零出局、1 人弃赛 → 剩余的唯一参赛玩家直接获胜，对局立即结束（原因"只剩一名参赛玩家"，优先于最后战场结算）。
+        // open-map：唯一战场上"战场落败"即终局，两名出局者改由势力归零（提光）产生——局面同「只剩一名优先于最后战场结算」。
+        MatchFlow match = PlainStarted().AtRound(5, All)
+            .Stones(P1, "C3")
+            .Stones(P2, "K10")
+            .Stones(P0, "D3", "J10");
+        match.PlayTurn("C4", "K9");   // P0 一个批次同时提掉 C3 与 K10 → P1、P2 势力归零出局
+        Assert.Equal(2, match.ActiveCount);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
 
-        match.Resign(winners[0]);
+        match.Resign(P3);
 
         Assert.Equal(MatchPhase.Ended, match.Phase);
         Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
-        Assert.Equal(winners[1], match.Result.Winners.Single());
-        Assert.Equal(StandingGroup.Resigned, match.Result.Of(winners[0]).Group);
-        Assert.Equal(4, match.Result.Of(winners[0]).Rank);   // 弃赛者排最后
+        Assert.Equal(P0, match.Result.Winners.Single());
+        Assert.Equal(StandingGroup.Resigned, match.Result.Of(P3).Group);
+        Assert.Equal(4, match.Result.Of(P3).Rank);   // 弃赛者排最后
         // retire-legacy-rules 质检：原「三类终局条件Tests.唯一参赛者获胜」（清单 (j) 合并入本条）的"对局立即结束"后置断言随合并补回。
         Assert.Throws<SiegeRuleException>(() => match.BeginTurn());
     }
@@ -66,7 +70,7 @@ public class 两类终局条件Tests
         Assert.Equal(5, match.MajorRound);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛结算即终局()
     {
         // Scenario：决赛战场内两名玩家在同一大回合都 Pass，地图上另有无人的出生棋盘 → 该大回合结束时终止，原因"最后战场结算"。
@@ -87,13 +91,16 @@ public class 两类终局条件Tests
     }
 
     [Fact]
-    public void 非最后战场的整轮Pass不终局()
+    public void 构筑期内整轮Pass即终局()
     {
-        // Scenario：尚有两个以上含在局玩家的战场，其中一个战场内全员 Pass → 该战场结算，对局继续。
+        // Scenario（open-map battlefield「阶段推进」）：第 1 大回合 4 名玩家全部 Pass → 第 1 大回合结束时唯一战场结算，对局终局（最后战场结算），名次按势力与判定链。
+        // 原「非最后战场的整轮Pass不终局」（多战场）随 open-map 反向。
         MatchFlow match = Started([0, 0, 3, 4]).PassRound();
         Assert.Single(match.Settlements);
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-        Assert.Null(match.Result);
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
+        Assert.Equal(1, match.Result.MajorRound);
+        Assert.Equal(4, match.Result.Standings.Length);
     }
 
     [Fact]

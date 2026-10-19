@@ -88,8 +88,9 @@ public class 百局端到端Tests(ITestOutputHelper output)
             {
                 int elim = match.Events.ToList().FindIndex(e => e.Kind == FlowEventKind.PlayerEliminated && e.Player == state.Player);
                 Assert.DoesNotContain(match.Events.Skip(elim + 1), e => e.Kind == FlowEventKind.TurnStarted && e.Player == state.Player);
-                // restore-go-core-rules D3：出局者必定曾建立正势力（保护期不再豁免，故不再断言出局大回合晚于保护期）。
-                Assert.True(state.HasEstablishedPower);
+                // restore-go-core-rules D3：势力归零出局者必定曾建立正势力（保护期不再豁免，故不再断言出局大回合晚于保护期）。
+                // open-map：唯一战场整轮 Pass 结算时，未落过子的玩家同样以"战场落败"出局（battlefield「战场结算」），不要求曾建立正势力。
+                Assert.True(state.EliminationReason == EliminationReason.BattlefieldDefeat || state.HasEstablishedPower);
             }
         }
 

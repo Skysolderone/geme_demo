@@ -35,7 +35,8 @@ public class 候选格上限Tests
     /// 全部小回合快照（去耗时）逐行拼接后的 SHA-256（<see cref="TurnHash"/>）。在删除 v5 之前、以当时的实现钉下。
     /// <para>link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变；旧值 B4A74124D2C6C25CD8576ACC8C444D3D4A71A7C076E9CC1310725C06C61BF498。"此前记录过的对局"的角色从这次重钉起算。</para>
     /// </summary>
-    internal const string LinkGoldenTurnHash = "1CFBFF61319693C0E9593642D890D221A461A4739EA2CCE8E0C1BF85E2ECB538";
+    /// <para>open-map 1.5 重钉：link:1 改为 3+2 紧贴布局，同一配置的走法随之变；旧值 1CFBFF61319693C0E9593642D890D221A461A4739EA2CCE8E0C1BF85E2ECB538。</para>
+    internal const string LinkGoldenTurnHash = "8A03DA5EA2B81E5D233B55145161AC101498D71FFD976E9B02CF0E225C1CD1BE";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>
@@ -44,6 +45,13 @@ public class 候选格上限Tests
 
     internal static string TurnHash(MatchLog log) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', SimFixtures.TurnTexts(log.Turns)))));
+
+    /// <summary>与 <see cref="LinkGoldenTurnHash"/> 比对并在失败时打印完整实际值（Assert.Equal 会截断 64 位哈希）。</summary>
+    internal static void AssertLinkGolden(MatchLog log)
+    {
+        string actual = TurnHash(log);
+        Assert.True(LinkGoldenTurnHash == actual, $"链接图黄金小回合哈希：{actual}");
+    }
 
     private static AiSearchConfig StandardWith(int cellLimit) => AiSearchConfig.Standard with { CandidateCellLimit = cellLimit };
 

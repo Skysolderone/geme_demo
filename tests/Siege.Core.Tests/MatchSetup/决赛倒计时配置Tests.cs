@@ -16,7 +16,7 @@ namespace Siege.Core.Tests.MatchSetup;
 /// </remarks>
 public class 决赛倒计时配置Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 缺省值()
     {
         // 规格 Scenario：不显式配置开一局 → K = 2，存档与日志首部都写明。
@@ -35,7 +35,7 @@ public class 决赛倒计时配置Tests
         Assert.Equal(0, zero.FinalCountdownRounds);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 负数建局报错()
     {
         ArgumentOutOfRangeException ex = Assert.Throws<ArgumentOutOfRangeException>(() => MatchFlow.Create(Map, TestMaps.Seed, All, CountdownOptions(-1)));
@@ -43,7 +43,7 @@ public class 决赛倒计时配置Tests
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { FinalCountdownRounds = -1 }).Validated());   // 批次配置同口径
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 旧存档按不启用读取()
     {
         // 规格 Scenario：恢复一个不含该字段的链接模式存档 → K = 0，恢复后行为与保存前一致。
@@ -88,7 +88,7 @@ public class 决赛倒计时配置Tests
         Assert.Single(old.Settlements);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛倒计时随存档往返()
     {
         // tasks 1.3「存档往返」：K、起点 R、当前期限、倒计时记录、结算记录的期限都随存档往返（活对象与恢复对象逐字段比，取值非缺省），

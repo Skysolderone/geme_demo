@@ -24,8 +24,8 @@ public class 棋盘台面的可视表现Tests
     [Fact]
     public void 棋盘内岩石取岩石造型_场景格取场景装饰()
     {
-        // 每张图让 P0 锁定 1 号棋盘、构筑期按座位过滤后的默认棋盘：棋盘内的不可落子非深水格（岩石）→ BoardRock；
-        // 棋盘外接矩形之外的格（场景格，不在视图里）→ Scenery。样本下界：1–20 号图里 1 号棋盘至少出现一格岩石。
+        // 每张图让 P0 锁定 1 号棋盘、构筑期按座位过滤后的默认棋盘（open-map：锁定后 5 块都可见）：棋盘内的不可落子非深水格（岩石）→ BoardRock；
+        // 棋盘外接矩形之外的格（场景格，不在视图里）→ Scenery。样本下界：1–20 号图里至少出现一格岩石。
         // 变异 MLT-G8（ObstacleArtAt 恒返回 Scenery，实跑）→ 红 1（本测试）。
         int rocks = 0;
         for (int seed = 1; seed <= SeedSpan; seed++)
@@ -38,17 +38,17 @@ public class 棋盘台面的可视表现Tests
 
             foreach (BoardCellView cell in board.Cells.Where(c => c.Terrain == Terrain.Obstacle && c.Surface != Surface.DeepWater))
             {
-                Assert.True(own.Contains(cell.Coord), $"link:{seed} {cell.Coord.ToNotation()} 不在本座位的棋盘内");
+                Assert.True(map.Boards.Any(b => b.Contains(cell.Coord)), $"link:{seed} {cell.Coord.ToNotation()} 不在任何棋盘内");
                 Assert.Equal(ObstacleArt.BoardRock, board.ObstacleArtAt(cell.Coord));
                 rocks++;
             }
 
-            // 棋盘外接矩形外一圈的场景格：不属于任何可见棋盘 → 场景装饰。
-            Coord outside = new(own.Origin.X - 1, own.Origin.Y - 1);
-            Assert.Equal(ObstacleArt.Scenery, board.ObstacleArtAt(outside));
+            // 画布留白的场景格（西南角 A1）：不属于任何可见棋盘 → 场景装饰。
+            Assert.False(map.Boards.Any(b => b.Contains(own.Origin)) && own.Origin == new Coord(0, 0));
+            Assert.Equal(ObstacleArt.Scenery, board.ObstacleArtAt(new Coord(0, 0)));
         }
 
-        Assert.True(rocks >= 1, $"link:1–{SeedSpan} 的 1 号棋盘里一格岩石都没有，本测试无样本");
+        Assert.True(rocks >= 1, $"link:1–{SeedSpan} 的棋盘里一格岩石都没有，本测试无样本");
     }
 
     [Fact]

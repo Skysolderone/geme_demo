@@ -4,40 +4,37 @@ using Siege.Core.Board.Maps;
 
 namespace Siege.Core.Tests.Battlefield;
 
-/// <summary>规格：openspec/changes/board-link-mode/specs/battlefield —— Requirement: 战场的定义与规则作用域</summary>
+/// <summary>规格：openspec/changes/open-map/specs/battlefield —— Requirement: 战场的定义与规则作用域（open-map：开局即唯一战场）</summary>
 /// <remarks>
 /// 变异验证（段 A 实跑，只跑本类）：
-/// M-A1 Battlefields.Compute 的 Id 取 zonesOf[number].Max() → 「隔绝棋盘各成战场」不红（单棋盘分量最小 = 最大）、「链接合并战场」红（合并后 Id 应为较小者）；
+/// M-A1 Battlefields.Compute 的 Id 取 zonesOf[number].Max() → 「开局即唯一战场」红（open-map 1.1 重跑：标识应为分量内最小编号 0）；
 /// M-A2 Battlefields.Compute 改走 Adjacency.LibertyNeighbors → 「场景格不可改造」红（立栅后战场数变多）、四邻接Tests 的 ⑥ 反面断言红；
 /// M-A3 TerrainEditRules.Reject 删去障碍格端点判定 → 「场景格不可改造」红、改造合法性Tests.拒绝理由与合法目标集合一致 红。
 /// </remarks>
 public class 战场的定义与规则作用域Tests
 {
     [Fact]
-    public void 隔绝棋盘各成战场()
+    public void 开局即唯一战场()
     {
-        // Scenario：加载 link: 地图，开局 5 块出生棋盘尚未链接 → 恰好 5 个战场，每个战场的格集合 = 一块出生棋盘的格集合，标识 = 该棋盘编号。
+        // Scenario（open-map）：加载一张 link: 地图 → 导出恰好 1 个战场，其格集合等于 5 块出生棋盘可落子格的并集，标识为 0。
         foreach (MapData map in new[] { LinkMapGenerator.Generate(1), LinkMapGenerator.Generate(7), LinkMapFixtures.Initial() })
         {
             Battlefields fields = Battlefields.Of(map);
-            Assert.Equal(5, fields.Count);
-            for (int i = 0; i < 5; i++)
-            {
-                Siege.Core.Board.Battlefield field = fields.All[i];
-                Assert.Equal(i, field.Id);
-                Assert.True(field.HasBirthBoard);
-                Assert.Equal(map.Boards[i].Cells().Where(map.IsPlayable).Order(), field.Cells);   // link-map-terrain：棋盘内的岩石 / 未架桥深水不属于战场
-                Assert.Equal([i], field.BirthZones);
-                Assert.Equal([i], field.Boards);
-                Assert.Same(field, fields.ById(i));
-                Assert.All(field.Cells, c => Assert.Same(field, fields.At(c)));
-            }
+            Assert.Equal(1, fields.Count);
+            Siege.Core.Board.Battlefield field = fields.All[0];
+            Assert.Equal(0, field.Id);
+            Assert.True(field.HasBirthBoard);
+            Assert.Equal(map.Boards.SelectMany(b => b.Cells()).Where(map.IsPlayable).Order(), field.Cells);   // link-map-terrain：棋盘内的岩石 / 未架桥深水不属于战场
+            Assert.Equal([0, 1, 2, 3, 4], field.BirthZones);
+            Assert.Equal([0, 1, 2, 3, 4], field.Boards);
+            Assert.Same(field, fields.ById(0));
+            Assert.All(field.Cells, c => Assert.Same(field, fields.At(c)));
 
             // 场景格不属于任何战场；越界也不属于。
             Assert.All(map.AllCoords().Where(c => !map.IsPlayable(c)), c => Assert.Null(fields.At(c)));
             Assert.Null(fields.At(new Coord(map.Width, 0)));
             Assert.Null(fields.At(new Coord(0, map.Height)));
-            Assert.Null(fields.ById(5));
+            Assert.Null(fields.ById(1));
 
             // GameBoard 暴露同一份导出。
             GameBoard board = GameBoard.Load(map);
@@ -61,35 +58,26 @@ public class 战场的定义与规则作用域Tests
         Battlefields before = board.Battlefields;
         board.ApplyTerrainEdits([TerrainEdit.Fence(new Coord(3, 3), new Coord(4, 3))]);
         Assert.NotSame(before, board.Battlefields);
-        Assert.Equal(5, board.Battlefields.Count);
+        Assert.Equal(1, board.Battlefields.Count);
     }
 
     [Fact]
-    public void 规则不跨战场()
+    public void 接缝两侧规则照常()
     {
-        // Scenario：玩家 A 与 B 分别在两个未链接的战场上各有一条棋串 → 气、覆盖与领地互不影响，任一方落子不改变另一方的任何结算结果。
+        // Scenario（open-map）：玩家 A 在自己棋盘靠接缝的格落子，接缝另一侧是玩家 B 的棋盘的空格 → 该空格计入 A 棋串的气，并按覆盖规则参与空格归属；
+        // B 不能在构筑期落到那里由 turn-sequence 守（战场内合法落子范围Tests），这里只看气与覆盖不为"战场 / 出生棋盘"设任何过滤。
         GameBoard board = GameBoard.Load(LinkMapFixtures.Initial());
         var a = new PlayerId(0);
-        var b = new PlayerId(1);
-        Coord a1 = new(4, 4);          // 0 号棋盘中心
-        Coord b1 = new(12, 4);         // 1 号棋盘中心
+        Coord a1 = new(7, 4);          // 0 号棋盘东缘（H5）
+        Coord across = new(8, 4);      // 接缝另一侧：1 号棋盘西缘（J5）
         board.Place(a1, a, PieceType.Basic);
-        board.Place(b1, b, PieceType.Basic);
-        Group groupA = board.GroupAt(a1)!;
-        ImmutableArray<Coord> libertiesBefore = board.LibertiesOf(groupA);
-        ImmutableArray<Coord> coverageBefore = board.CoverageTargets(a1);
+        Assert.Contains(across, board.LibertiesOf(board.GroupAt(a1)!));
+        Assert.Contains(across, board.CoverageTargets(a1));
+        Assert.Contains(across, board.LibertyNeighbors(a1));
 
-        // B 在自己的战场里把整块棋盘的边缘填满，A 的气与覆盖目标逐项不变；两条棋串没有任何共同的气边邻格。
-        foreach (Coord c in LinkMapFixtures.Births[1].Cells().Where(c => c != b1 && (c.X == 10 || c.X == 14 || c.Y == 2 || c.Y == 6)))
-        {
-            board.Place(c, b, PieceType.Basic);
-        }
-
-        Assert.Equal(libertiesBefore, board.LibertiesOf(board.GroupAt(a1)!));
-        Assert.Equal(coverageBefore, board.CoverageTargets(a1));
-        Assert.Empty(board.Battlefields.ById(0)!.Cells.Intersect(board.Battlefields.ById(1)!.Cells));
-        Assert.All(board.Battlefields.ById(0)!.Cells, c => Assert.All(board.LibertyNeighbors(c), n => Assert.Equal(0, board.Battlefields.At(n)!.Id)));
-        Assert.All(board.Battlefields.ById(0)!.Cells, c => Assert.All(board.CoverageTargets(c), n => Assert.Equal(0, board.Battlefields.At(n)!.Id)));
+        // 对方在接缝另一侧落子即占掉这口气（提子与围杀照常）。
+        board.Place(across, new PlayerId(1), PieceType.Basic);
+        Assert.DoesNotContain(across, board.LibertiesOf(board.GroupAt(a1)!));
     }
 
     [Fact]
@@ -99,9 +87,9 @@ public class 战场的定义与规则作用域Tests
         // 实现口径（见 TerrainEditRules 类注释）：搭桥 / 烧林在场景格（障碍）上被拒绝；立栅不按规格档分流，
         // 落在场景格边上的栅栏是合法但无效果的动作（切不到任何气边、不改变任何格的可落子性），因此战场数量与格集合不变。
         MapData map = LinkMapFixtures.Initial();
-        var corner = new Coord(7, 4);          // 0 号棋盘东缘的格（link-map-terrain：夹具改为 6×6，x 2–7）
-        var scenery = new Coord(8, 4);         // 紧邻的场景格（障碍）
-        var scenery2 = new Coord(9, 4);
+        var corner = new Coord(19, 4);         // 2 号棋盘东缘的格（open-map：3+2 紧贴图里只有画布留白是场景格，x 14–19）
+        var scenery = new Coord(20, 4);        // 紧邻的场景格（障碍）
+        var scenery2 = new Coord(21, 4);
 
         Assert.Contains("深水", TerrainEditRules.Reject(map, corner, TerrainEdit.Bridge(scenery)), StringComparison.Ordinal);
         Assert.Contains("林地", TerrainEditRules.Reject(map, corner, TerrainEdit.Burn(scenery)), StringComparison.Ordinal);
@@ -119,9 +107,9 @@ public class 战场的定义与规则作用域Tests
 
         Assert.False(fenced.Map.IsPlayable(scenery));
         Assert.All(libertiesBefore, kv => Assert.Equal(kv.Value, fenced.LibertyNeighbors(kv.Key)));
-        Assert.Equal(5, fenced.Battlefields.Count);
+        Assert.Equal(1, fenced.Battlefields.Count);
 
-        // 把 0 号棋盘每个格上匠人的全部合法改造都做一遍，战场数量仍是 5、每个战场的格集合不变。
+        // 把 0 号棋盘每个格上匠人的全部合法改造都做一遍，战场数量仍是 1、战场的格集合不变。
         GameBoard board = GameBoard.Load(map);
         ImmutableArray<Siege.Core.Board.Battlefield> before = board.Battlefields.All;
         var applied = new HashSet<TerrainEdit>();
@@ -137,11 +125,8 @@ public class 战场的定义与规则作用域Tests
         }
 
         Assert.NotEmpty(applied);   // 样本口径：确实做了改造（棋盘内的栅栏）
-        Assert.Equal(5, board.Battlefields.Count);
-        for (int i = 0; i < 5; i++)
-        {
-            Assert.Equal(before[i].Cells, board.Battlefields.All[i].Cells);
-        }
+        Assert.Equal(1, board.Battlefields.Count);
+        Assert.Equal(before[0].Cells, board.Battlefields.All[0].Cells);
 
         // 场景格仍全部不可落子。
         Assert.All(map.AllCoords().Where(c => !map.IsPlayable(c)), c => Assert.False(board.Map.IsPlayable(c)));
@@ -186,12 +171,12 @@ public class 战场的定义与规则作用域Tests
         Assert.False(map.IsPlayable(plate.Origin));
 
         Battlefields fields = Battlefields.Of(map);
-        Assert.Equal(5, fields.Count);
-        Siege.Core.Board.Battlefield field = fields.ById(2)!;
-        Assert.Equal([2], field.Boards);
-        Assert.Equal(plate.Cells().Where(map.IsPlayable).Order(), field.Cells);
+        Assert.Equal(1, fields.Count);
+        Siege.Core.Board.Battlefield field = fields.ById(0)!;
+        Assert.Contains(2, field.Boards);
+        Assert.Equal(plate.Cells().Where(map.IsPlayable).Order(), field.Cells.Where(plate.Contains).Order());
 
-        // 每块棋盘恰属于一个战场。
+        // 每块棋盘恰属于一个战场（open-map：唯一战场含全部 5 块）。
         Assert.Equal(Enumerable.Range(0, 5), fields.All.SelectMany(f => f.Boards).Order());
     }
 }

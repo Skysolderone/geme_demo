@@ -20,7 +20,7 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// </remarks>
 public class 对局日志的记录内容_链接模式Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 地形可离线重建()
     {
         // 规格正文「改造与链接记录 MUST 足以离线重建任意时刻的地形」的链接模式侧（board-link-mode 裁决 J8-9：F.3 恢复）：
@@ -103,7 +103,7 @@ public class 对局日志的记录内容_链接模式Tests
             recorded.Select(r => l.TranslateEdit(r.Edit, r.Version, l.Versions)).OfType<TerrainEdit>().Distinct());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接那一小回合的改造按链接后布局记()
     {
         // 段 F.3 版本口径：小回合快照里的改造按该小回合结束时（含本回合内的链接）的布局记。第 3 大回合每人落一枚匠人并立一道栅栏，
@@ -172,7 +172,7 @@ public class 对局日志的记录内容_链接模式Tests
         public bool OnRejected(StagedBatch batch, BatchFailure failure) => false;
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 配对与链接可查()
     {
         // 规格 Scenario「配对与链接可查」：四人四区的日志里可查到第 3 大回合结束时的配对事件（两对）、两次链接事件及其地图摘要、决赛前的第三次链接。
@@ -232,7 +232,7 @@ public class 对局日志的记录内容_链接模式Tests
         (MatchFlow match, MatchLog log) = Play([0, 1, 2, 3], stoneRounds: 1);
 
         List<LogEvent> settled = log.Events.Where(e => e.Type == LogEventType.BattlefieldSettled).ToList();
-        Assert.Equal(3, settled.Count);
+        Assert.Single(settled);   // open-map：唯一战场一次结算即终局，四人都在名单里、三人以战场落败出局
         for (int i = 0; i < settled.Count; i++)
         {
             BattlefieldSettlementRecord record = match.Settlements[i];
@@ -263,7 +263,7 @@ public class 对局日志的记录内容_链接模式Tests
         Assert.Equal(3, log.Result.Standings.Count(s => s.EliminationReason == nameof(EliminationReason.BattlefieldDefeat)));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待时长可查()
     {
         // match-telemetry 第 11 项：每名玩家作为等待者度过的大回合数。2+1+1：同区的两人在第 2 大回合结算、胜者独处一战场；
@@ -277,7 +277,7 @@ public class 对局日志的记录内容_链接模式Tests
         Assert.Equal(2, log.Events.Count(e => e.Type == LogEventType.PairingApplied));   // 首轮一对 + 决赛
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 日志往返且配对可从日志重建()
     {
         // 新增的结构化字段经 JSON Lines 往返不丢（testing.md「写出时漏字段要用往返测试抓」）；回放输入（配对事件）可从日志逐项重建出原局的配对结果。

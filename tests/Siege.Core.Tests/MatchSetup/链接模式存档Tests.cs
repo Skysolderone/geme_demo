@@ -18,10 +18,13 @@ namespace Siege.Core.Tests.MatchSetup;
 /// M-B19 <c>ExportLink</c> 不写 <c>PassedThisRound</c> → 「小回合边界存档续跑一致」红 1；M-B21 旧模式存档也写 <c>Mode</c> → 「旧模式存档不写新字段且按旧模式读入」红 1。
 /// 段 B check 实跑：M-C4 <c>RestoreLink</c> 不比对地图摘要 → 「链接重放与存档不符即拒绝」红 1；M-C5 恢复路径去掉模式 ↔ 地图 / 人数校验 → 「链接图上缺模式字段的存档被拒」红 1；
 /// M-C7 <c>StandingSaveData.Reason</c> 去掉 <c>WhenWritingNull</c> → 「旧模式终局存档不写出局原因」红 1（补这条之前 0 红）。
+/// <para>open-map 段 A 质检：design D9 把"链接存档"列为整文件 Skip，但本类里「小回合边界存档续跑一致」「终局后存档」「锁定结果可持久化」「旧存档被拒绝」
+/// 「链接图上缺模式字段的存档被拒」「链接恢复须四人」不引用配对 / 链接 / 倒计时、断言原样成立，恢复执行（存档 / 恢复是新流程照常要用的路径）；
+/// 其余 4 条（执行链接 / 待配对 / 篡改链接记录 / 锚点非零向量）仍 Skip、段 B 删除。</para>
 /// </remarks>
 public class 链接模式存档Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 存档恢复地图()
     {
         // Scenario：在已执行两次链接的对局上保存后恢复 → 恢复出的地图与保存前逐格相同，地图标识不变（含链接前后的棋子、栅栏与已揭示信物）。
@@ -70,7 +73,7 @@ public class 链接模式存档Tests
         Assert.Equal(match.Result.Standings.Select(s => (s.Rank, s.Player, s.Group)), restored.Result.Standings.Select(s => (s.Rank, s.Player, s.Group)));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 待配对时存档()
     {
         // 停在待首轮配对时存档 → 恢复后待处理请求相同，提交同一配对得到逐格相同的地图。
@@ -166,7 +169,7 @@ public class 链接模式存档Tests
         Assert.Contains("链接模式只有 4 人局，实际 3 人", ex.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接重放与存档不符即拒绝()
     {
         MatchFlow match = Started([0, 1, 3, 4]).PassRounds(3);
@@ -184,7 +187,7 @@ public class 链接模式存档Tests
         Assert.Throws<FormatException>(() => MatchFlow.Restore(Map, sided.ToJsonString()));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 锚点非零向量的拼接可存档恢复()
     {
         // 裁决 J8-3：最长共享边的候选全部越界时整个布局整体平移、锚点向量非零并记入链接记录；存档恢复按记录重放、逐项核对，篡改锚点向量即拒绝。

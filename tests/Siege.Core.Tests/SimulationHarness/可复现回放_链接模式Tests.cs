@@ -10,11 +10,13 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// <summary>
 /// 规格：openspec/changes/board-link-mode/specs/simulation-harness —— Requirement: 可复现回放（配对事件从日志读取）；实现裁决 C3（replay 命令只回放 link: 日志）。tasks 3.1。
 /// retire-legacy-rules L17：回放接口（<see cref="Replayer"/>）另拒绝首部模式不为 Link 的日志（原"测试内部的回放接口仍可回放旧日志"不再成立）。
+/// open-map 段 A：只测配对 / 链接的用例整文件 Skip（段 B 删除）；「replay命令拒绝旧日志」「回放接口拒绝非链接日志」与配对无关（载体只是一局 13 小回合的真跑局），质检时恢复执行。
+/// 「纯 AI 局可凭种子复现」「失败局可复现」「带入对局可回放」三条 Scenario 由 <see cref="可复现回放Tests"/>（同样建在 link 图上）守。
 /// </summary>
 [Collection(ConsoleRedirect.Collection)]
 public class 可复现回放_链接模式Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 篡改平移向量或开局棋盘即在对应行分歧()
     {
         // 段 F.3：链接按记录的配对（贴边由配对阶段决定）重放，重放出的平移向量随确定性文本逐行比对——篡改日志里某次链接的向量，分歧报在该链接事件那一行；
@@ -44,7 +46,7 @@ public class 可复现回放_链接模式Tests
         Assert.True(Replayer.Replay(original).Identical);   // 反面：未篡改的一致
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 纯AI局可凭种子加配对复现()
     {
         // 规格 Scenario「纯 AI 局可凭种子加配对复现」：用种子、配置与日志中的配对事件重跑，每一步的链接、征募候选、选择、批次与结算结果完全一致；
@@ -60,7 +62,7 @@ public class 可复现回放_链接模式Tests
         Assert.Contains("回放一致", output, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 失败局可复现()
     {
         // 规格 Scenario「失败局可复现」：链接之后的小回合注入断言失败；失败日志保留种子、配置、已发生的配对事件与终止前的完整日志，可单独重跑复现。
@@ -75,7 +77,7 @@ public class 可复现回放_链接模式Tests
         Assert.True(replay.Replayed.IsFailed);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 带入对局可回放()
     {
         // 规格 Scenario「带入对局可回放」的链接模式侧（段 C 质检补缺口）：开启带入（每名 AI 从 carry-ai 子流带入 1 件）的链接图对局，
@@ -130,7 +132,7 @@ public class 可复现回放_链接模式Tests
         Assert.Contains("不是链接模式的日志", other.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 配对事件记录来源()
     {
         // match-telemetry 第 8 项：配对事件注明来源。批量跑局为配对种子来源，回放原样带回；脚本来源记 script，真随机来源记 random。
@@ -146,7 +148,7 @@ public class 可复现回放_链接模式Tests
         Assert.Equal(ScriptedPairingSource.ScriptSource, new ScriptedPairingSource().Decide(request).Source);
     }
 
-    [Theory]
+    [Theory(Skip = "open-map 段 B 删除")]
     [InlineData(4)]
     [InlineData(3)]
     [InlineData(2)]
@@ -169,7 +171,7 @@ public class 可复现回放_链接模式Tests
         Assert.Equal(ScriptedPairingSource.Default(final).Canonical, new SeededPairingSource(9, 1).Decide(final).Canonical);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 回放按记录配对而不是按种子推导()
     {
         // 规格："配对事件 MUST 从日志读取，MUST NOT 由种子推导"：同一局用另一个配对种子跑出的日志（配对不同）照样能逐行回放——回放不读配对种子。

@@ -12,7 +12,7 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// </summary>
 public class 链接模式对局记录Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 配对与链接可查()
     {
         // Scenario：一局四人四区 → 可查到第 3 大回合结束时的配对事件（两对）、两次链接事件及其地图摘要、决赛前的第三次链接。
@@ -54,7 +54,7 @@ public class 链接模式对局记录Tests
         Assert.Equal(EliminationReason.BattlefieldDefeat, match.StateOf(P1).EliminationReason);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 锁定旗数与等待时长可查()
     {
         // 第 2 项：锁定的出生棋盘及锁定时各棋盘的旗数；第 11 项：每名玩家作为等待者度过的大回合数、结束原因。

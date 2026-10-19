@@ -9,9 +9,9 @@ using static Siege.Core.Tests.LinkModeFixtures;
 namespace Siege.Core.Tests.InformationVisibility;
 
 /// <summary>
-/// information-visibility「其他战场不可见」「数据层过滤」在表现层的镜像（board-link-mode 段 D-b，tasks 4.2 / 4.3）：
-/// 观察者世界（<see cref="ViewerWorld"/>）在链接模式下带本座位的 <see cref="SeatPublicView"/>，默认棋盘 <see cref="ViewerWorld.Board"/> 与信息层 <see cref="ViewerWorld.Layer"/>
-/// 只含本座位所在战场的格；其余出生棋盘只剩占位（编号 + 外接矩形）。retire-legacy-rules：旧模式全图可见、无占位的对照随旧模式删除。
+/// information-visibility「始终公开的信息」（open-map：锁定后全图可见）在表现层的镜像（board-link-mode 段 D-b，tasks 4.2 / 4.3 → open-map 1.4）：
+/// 观察者世界（<see cref="ViewerWorld"/>）带本座位的 <see cref="SeatPublicView"/>，默认棋盘 <see cref="ViewerWorld.Board"/> 与信息层 <see cref="ViewerWorld.Layer"/>
+/// 含本座位所在战场（= 全图）的格；插旗阶段 5 块只是占位（编号 + 外接矩形），锁定后全部展开。
 /// 规格：match-setup「开局信息公开范围」「匿名同时插旗」；visual-style-baseline「未展开区域的可视表现」（视图模型部分）。
 /// </summary>
 /// <remarks>
@@ -52,62 +52,64 @@ public class 视图模型按座位过滤Tests
     }
 
     [Fact]
-    public void 构筑期只见自己的棋盘_其余四块是占位()
+    public void 锁定后全图可见_五块占位全部展开()
     {
-        // match-setup Scenario「锁定后只见自己的棋盘」/ visual-style-baseline「他人棋盘为占位」：P0 在棋盘 1（索引 0），其余 4 块只剩占位。
+        // open-map 裁决 O4（visual-style-baseline「锁定后全图展开」）：P0 在棋盘 1（索引 0），锁定后 5 块棋盘全部展开、视图含全图的格（原「构筑期只见自己的棋盘」反向）。
         MatchFlow match = Started([0, 1, 3, 4]);
         ViewerWorld world = match.World(P0);
         DefaultBoardView board = world.Board();
         SeatPublicView seat = match.PublishFor(P0);
 
         Assert.Equal(seat.Cells.Select(c => c.Coord).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.Equal(ZoneNotations(0), board.Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.All(board.Cells, c => Assert.Equal(Map.BirthZones[0].Contains(c.Coord) ? (int?)0 : null, c.BirthZone));   // 出生区 = 核心区，棋盘内其余格不属于出生区
-        Assert.Single(board.Boards);
+        Assert.Equal(Enumerable.Range(0, 5).SelectMany(ZoneNotations).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
+        Assert.All(board.Cells, c => Assert.Equal(Map.BirthZoneOf(c.Coord), c.BirthZone));   // 出生区 = 核心区，棋盘内其余格不属于出生区
+        Assert.Equal(5, board.Boards.Length);
         Assert.Equal(0, world.OwnZone);
         BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);
         Assert.Equal((0, true), (own.Zone, own.Expanded));
-        Assert.Equal(4, board.Placeholders.Count(p => !p.Expanded && !p.Own));
-        Assert.Empty(world.SameBattlefieldPlayers);
+        Assert.Equal(5, board.Placeholders.Count(p => p.Expanded));
+        Assert.Equal([P1, P2, P3], world.SameBattlefieldPlayers);
 
-        // 他人棋盘上的格一个都不在视图里；拾取 / 悬停用的 CellOrNull 对它们返回 null，不抛。
+        // 他人棋盘上的格都在视图里；拾取 / 悬停用的 CellOrNull 对它们返回格。
         foreach (Coord other in Map.BirthBoard(1).Cells().Concat(Map.BirthBoard(3).Cells()))
         {
-            Assert.Null(board.CellOrNull(other));
-            Assert.Throws<ArgumentOutOfRangeException>(() => board.CellAt(other));
+            Assert.NotNull(board.CellOrNull(other));
+            Assert.Equal(other, board.CellAt(other).Coord);
         }
     }
 
     [Fact]
-    public void 序列化不含其他出生棋盘的任何坐标()
+    public void 序列化含全部出生棋盘的坐标()
     {
-        // information-visibility Scenario「数据层过滤」的表现层镜像：按座位的默认棋盘序列化后不含任何未展开棋盘的坐标；全知棋盘（反面）含。
+        // information-visibility（open-map）的表现层镜像：按座位的默认棋盘序列化后含全部 5 块棋盘的坐标，与全知棋盘相同（原「不含其他出生棋盘的任何坐标」反向）。
         // Coord 序列化为 {X,Y} 对象，这里按围棋记法投影后再序列化，便于按坐标文本断言。
         MatchFlow match = Started([0, 1, 3, 4]);
         string seat = JsonSerializer.Serialize(match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()), Json);
         string omniscient = JsonSerializer.Serialize(DefaultBoardView.From(match.PublicWorldOf()).Cells.Select(c => c.Coord.ToNotation()), Json);
 
-        foreach (int zone in new[] { 1, 2, 3, 4 })
+        foreach (int zone in new[] { 0, 1, 2, 3, 4 })
         {
             foreach (string notation in ZoneNotations(zone))
             {
-                Assert.DoesNotContain($"\"{notation}\"", seat, StringComparison.Ordinal);
+                Assert.Contains($"\"{notation}\"", seat, StringComparison.Ordinal);
             }
         }
 
-        Assert.All(ZoneNotations(0), n => Assert.Contains($"\"{n}\"", seat, StringComparison.Ordinal));
-        Assert.All(ZoneNotations(3), n => Assert.Contains($"\"{n}\"", omniscient, StringComparison.Ordinal));   // 反面
+        // 全知棋盘另含画布留白的场景格（A1 …），按座位的只有 5 块棋盘的格：棋盘内的格集合相同。
+        HashSet<string> boards = [.. Enumerable.Range(0, 5).SelectMany(ZoneNotations)];
+        Assert.Equal(boards.Order(), match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
+        Assert.All(boards, n => Assert.Contains($"\"{n}\"", omniscient, StringComparison.Ordinal));
     }
 
     [Fact]
-    public void 同区两人互见_他人不见()
+    public void 同区与异区都互见()
     {
-        // match-setup Scenario「多人同区」：A、B 都在棋盘 3 → 彼此可见、其他玩家看不到棋盘 3 上有谁。
+        // match-setup Scenario「多人同区」→ open-map：A、B 都在棋盘 3 → 彼此可见，其他玩家同样看得到棋盘 3 上有谁（原「他人不见」反向）。
         MatchFlow match = Started([2, 2, 0, 4]);
-        Assert.Equal([P1], match.World(P0).SameBattlefieldPlayers);
-        Assert.Equal([P0], match.World(P1).SameBattlefieldPlayers);
-        Assert.Empty(match.World(P2).SameBattlefieldPlayers);
-        Assert.Equal(ZoneNotations(2), match.World(P1).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
+        Assert.Equal([P1, P2, P3], match.World(P0).SameBattlefieldPlayers);
+        Assert.Equal([P0, P2, P3], match.World(P1).SameBattlefieldPlayers);
+        Assert.Equal([P0, P1, P3], match.World(P2).SameBattlefieldPlayers);
+        Assert.Equal(Enumerable.Range(0, 5).SelectMany(ZoneNotations).Order(), match.World(P1).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
     }
 
     [Fact]
@@ -131,8 +133,8 @@ public class 视图模型按座位过滤Tests
     {
         // link-map-terrain 第 1 组裁决④：棋盘清单只留"整块可见"的台面，判据不得假设棋盘内每格可落子。
         // 手写链接档夹具：棋盘 1（下标 0）的左下角 C3 与内部 E6 是岩石，其余格连通。P0 锁定棋盘 1 进入第 1 大回合：
-        // 本座位的棋盘仍留在清单里，其占位已展开；他人棋盘仍只是占位、不在清单里。
-        // 第 2 组 G1（裁决 A）起战斗阶段可见格 = 本战场棋盘的整块外接矩形，岩石也在可见格里（36 格，岩石格的地形为障碍）。
+        // 5 块棋盘都留在清单里、占位全部展开（open-map）。
+        // 第 2 组 G1（裁决 A）起战斗阶段可见格 = 本战场棋盘的整块外接矩形，岩石也在可见格里（5 × 36 = 180 格，岩石格的地形为障碍）。
         // 变异验证（第 1 组收尾实跑）：M-V2 Boards 过滤改回"棋盘内每格都可见"、M-V3 占位展开改回"左下角格可见" 各红 1——G1 之后棋盘内每格都可见，
         // 这两条变异在本测试上不再可分（两种判据结果相同），本测试改为同时钉住 G1 在表现层的镜像（岩石格出现、地形为障碍）。
         MapData map = RockyMap();
@@ -146,12 +148,12 @@ public class 视图模型按座位过滤Tests
         Assert.Equal(MatchPhase.InProgress, match.Phase);
 
         DefaultBoardView board = match.World(P0).Board();
-        Assert.Equal(36, board.Cells.Length);   // 6×6 整块，含 2 块岩石
+        Assert.Equal(180, board.Cells.Length);   // 5 块 6×6 整块，含 2 块岩石
         Assert.All(new[] { new Coord(2, 2), new Coord(4, 5) }, rock => Assert.Equal(Terrain.Obstacle, board.CellAt(rock).Terrain));
-        Assert.Equal([map.Boards[0]], board.Boards);
+        Assert.Equal(map.Boards, board.Boards);
         BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);
         Assert.Equal((0, true), (own.Zone, own.Expanded));
-        Assert.Equal(4, board.Placeholders.Count(p => !p.Expanded));
+        Assert.Equal(0, board.Placeholders.Count(p => !p.Expanded));
     }
 
     /// <summary>链接档手写夹具（link:90002，不发生链接）：五块 6×6 出生棋盘，棋盘 1 的左下角 C3 与内部 E6 是岩石；没有信物格。只经 CreateUnvalidated 建局。</summary>
@@ -165,7 +167,7 @@ public class 视图模型按座位过滤Tests
         };
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接后合并战场的格一起可见()
     {
         // information-visibility Scenario「链接后立即可见」：四人四区、脚本配对 (1,2)(4,5) → P0 的视图含棋盘 1 与（平移后的）棋盘 2，占位展开 2 块（段 F：拼接，没有公共棋盘与通道）。
@@ -185,13 +187,13 @@ public class 视图模型按座位过滤Tests
     }
 
     [Fact]
-    public void 信息层只含本战场的格()
+    public void 信息层含全图的格()
     {
-        // visual-style-baseline：信息层只在本战场的格上出现。两块棋盘各有棋子；P0 的盘面层 / 势力层 / 信物层不含棋盘 4 的任何格或棋串。
+        // visual-style-baseline（open-map）：信息层在全图的格上出现。四块棋盘各有棋子；P0 的盘面层 / 势力层 / 信物层含棋盘 4 的格与棋串（原「只含本战场的格」反向）。
         MatchFlow match = Started([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);
         ViewerWorld world = match.World(P0);
         HashSet<Coord> mine = [.. world.Board().Cells.Select(c => c.Coord)];
-        Assert.Contains(match.Board.AllGroups(), g => g.Owner == P2);   // 样本口径：他人战场上确有棋串
+        Assert.Contains(match.Board.AllGroups(), g => g.Owner == P2);   // 样本口径：别的棋盘上确有棋串
 
         var territory = Assert.IsType<TerritoryLayerContent>(world.Layer(TacticalLayer.Board, BoardReading.Ownership));
         Assert.NotEmpty(territory.Cells);
@@ -200,18 +202,20 @@ public class 视图模型按座位过滤Tests
         var liberties = Assert.IsType<LibertyLayerContent>(world.Layer(TacticalLayer.Board, BoardReading.Groups));
         Assert.NotEmpty(liberties.Groups);
         Assert.All(liberties.Groups, g => Assert.All(g.Stones, s => Assert.Contains(s, mine)));
-        Assert.DoesNotContain(liberties.Groups, g => g.Owner == P2 || g.Owner == P3);
+        Assert.Contains(liberties.Groups, g => g.Owner == P2);
+        Assert.Contains(liberties.Groups, g => g.Owner == P3);
 
         var power = Assert.IsType<PowerLayerContent>(world.Layer(TacticalLayer.Power));
-        Assert.All(power.Groups, g => Assert.All(g.Stones, s => Assert.Contains(s, mine)));
+        Assert.Contains(power.Groups, g => g.Owner == P2);
         Assert.All(power.Territory, c => Assert.Contains(c.Coord, mine));
 
         var relics = Assert.IsType<RelicLayerContent>(world.Layer(TacticalLayer.Relics));
         Assert.NotEmpty(relics.Relics);
-        Assert.All(relics.Relics, r => Assert.Contains(r.Coord, mine));
+        Assert.Contains(relics.Relics, r => Map.BirthBoard(3).Contains(r.Coord));
 
-        // 反面：全知世界的同一层含他人战场的棋串。
-        Assert.Contains(Assert.IsType<LibertyLayerContent>(Siege.Presentation.Layers.TacticalLayers.Build(match.PublicWorldOf(), TacticalLayer.Board, BoardReading.Groups)).Groups, g => g.Owner == P2);
+        // 与全知世界的同一层逐项相同。
+        var omniscient = Assert.IsType<LibertyLayerContent>(Siege.Presentation.Layers.TacticalLayers.Build(match.PublicWorldOf(), TacticalLayer.Board, BoardReading.Groups));
+        Assert.Equal(omniscient.Groups.Select(g => (g.Owner, g.Stones.Length)).Order(), liberties.Groups.Select(g => (g.Owner, g.Stones.Length)).Order());
     }
 
     [Fact]

@@ -7,9 +7,9 @@ using static Siege.Core.Tests.LinkModeFixtures;
 namespace Siege.Core.Tests.Battlefield;
 
 /// <summary>
-/// 规格：openspec/changes/board-link-mode/specs/battlefield —— Requirement: 战场结算（段 B 后半 2.6）；
-/// elimination-endgame「出局判定」的"战场落败"；initiative-order「行动顺序跨战场统一」的"出局者出序"。
-/// 战场编号 0 起：规格的"战场 1"即这里的 0。
+/// 规格：openspec/changes/open-map/specs/battlefield —— Requirement: 战场结算（唯一战场：整轮 Pass / 填满 / 减员即结算、即终局）；
+/// elimination-endgame「出局判定」的"战场落败"。open-map 起整张地图是唯一战场（标识 0），任何结算都是最后战场结算，对局随之终局；
+/// 多战场 / 等待者 / 倒计时的用例整体 Skip（段 B 删除），其余按唯一战场重导期望（结算名单 = 全部在局玩家）。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 B 后半实跑）：
@@ -23,6 +23,7 @@ public class 战场结算Tests
     public void 整轮Pass结算()
     {
         // Scenario：战场 1 内 A、B 同一大回合各自 Pass，A 势力高于 B → 该大回合结束时战场 1 结算，A 胜，B 以"战场落败"出局且势力记为结算时的值（> 0）。
+        // open-map：唯一战场，结算名单是全部 4 名在局玩家（P2、P3 未落子势力为 0），结算即终局。
         MatchFlow match = Started([0, 0, 3, 4]).PlayRound(P0, P1).PlayRound(P0);
         Assert.Empty(match.Settlements);
         System.Numerics.BigInteger bPower = match.Scoreboard.Latest!.Of(P1).Total;
@@ -39,9 +40,12 @@ public class 战场结算Tests
         Assert.Equal(bPower, b.PowerAtDefeat);
         Assert.Equal(PlayerStatus.Active, match.StateOf(P0).Status);
         Assert.Null(match.StateOf(P0).EliminationReason);
-        Assert.Equal([P0, P1], settled.Entries.Select(e => e.Player));
-        Assert.Equal([1, 2], settled.Entries.Select(e => e.Rank));
+        Assert.Equal([P0, P1], settled.Entries.Take(2).Select(e => e.Player));
+        Assert.Equal(4, settled.Entries.Length);
+        Assert.Equal([1, 2], settled.Entries.Take(2).Select(e => e.Rank));
         Assert.Equal(1, match.CountEvents(FlowEventKind.BattlefieldSettled));
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
     }
 
     [Fact]
@@ -54,7 +58,7 @@ public class 战场结算Tests
         Assert.Empty(match.PassedThisRound);   // 大回合结束时清空
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他战场有人落子不妨碍本战场整轮Pass结算()
     {
         // 整轮 Pass 按战场判定：战场 1 的 A、B 都 Pass，另一战场的 C 落子 → 战场 1 照样结算（不读全局连续 Pass 计数）。
@@ -70,7 +74,7 @@ public class 战场结算Tests
         MatchFlow match = Started([0, 0, 3, 4]).AtRound(1, [P0, P1, P2, P3]);
         match.PlaceOne();
         bool toP1 = false;
-        foreach (Coord c in match.Board.Battlefields.ById(0)!.Cells.Where(c => match.Board[c].Occupant is null))   // link-map-terrain：填满整个战场（出生区已缩成核心区）
+        foreach (Coord c in match.Board.Battlefields.ById(0)!.Cells.Where(c => match.Board[c].Occupant is null))   // open-map：填满整张地图（唯一战场）
         {
             match.Board.Place(c, toP1 ? P1 : P0, PieceType.Basic);
             toP1 = !toP1;
@@ -82,7 +86,8 @@ public class 战场结算Tests
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
         Assert.Equal(SettlementReason.BoardFull, settled.Reason);
         Assert.Equal(0, settled.Battlefield);
-        Assert.Equal(3, match.ActiveCount);
+        Assert.Equal(1, match.ActiveCount);   // open-map：唯一战场结算即终局，落败三人出局
+        Assert.Equal(MatchPhase.Ended, match.Phase);
     }
 
     [Fact]
@@ -92,6 +97,7 @@ public class 战场结算Tests
         // 二者名次按比较链排序、只有链全同才共享（信物数这一级的比较由「链接模式终局名次Tests」用构造输入钉住）。
         // link-map-terrain：棋盘带主题地形后，"P0 多落一枚就势力最高"不再由几何保证（崖壁 / 林地会改覆盖与领地，三人可能并列）；
         // 断言的是三人战场结算的机制：胜者是结算时势力最高者（并列由比较链决出）、另两人同一出局序号、名次按比较链——不是谁赢。
+        // open-map：唯一战场，四人都在名单里（P3 未落子势力 0，排最后）；机制断言不变。
         MatchFlow match = Started([0, 0, 0, 3]).PlayRound(P0, P1, P2).PlayRound(P0);
         PlayerId[] three = [P0, P1, P2];
         Dictionary<PlayerId, System.Numerics.BigInteger> power = three.ToDictionary(p => p, p => match.Scoreboard.Latest!.Of(p).Total);
@@ -101,10 +107,12 @@ public class 战场结算Tests
         PlayerId a = settled.Winner;
         Assert.Contains(a, three);
         Assert.All(three, p => Assert.True(power[p] <= power[a], $"{p} 势力 {power[p]} 高于胜者 {a} 的 {power[a]}"));
-        Assert.Equal(3, settled.Entries.Length);
+        Assert.Equal(4, settled.Entries.Length);
+        Assert.Equal(P3, settled.Entries[^1].Player);
         PlayerId[] losers = [.. three.Where(p => p != a)];
         int order = match.StateOf(losers[0]).EliminationOrder!.Value;
         Assert.Equal(order, match.StateOf(losers[1]).EliminationOrder);
+        Assert.Equal(order, match.StateOf(P3).EliminationOrder);
         Assert.Equal(order, settled.EliminationOrder);
         SettlementEntry second = settled.Entries[1];
         SettlementEntry third = settled.Entries[2];
@@ -116,38 +124,47 @@ public class 战场结算Tests
     [Fact]
     public void 减员结算()
     {
-        // Scenario：双人战场 4 内玩家 D 弃赛 → 战场 4 立即标记为已结算，C 为胜者；转换仍等到大回合结束。
+        // Scenario（open-map）：在局玩家只剩 C、D 时 D 弃赛 → 立即标记为已结算，C 为胜者，对局终局（原因"只剩一名参赛玩家"优先）。
         MatchFlow match = Started([0, 1, 3, 3]).AtRound(2, [P0, P1, P2, P3]);
+        match.Resign(P0);
+        match.Resign(P1);
+        Assert.Empty(match.Settlements);
+        Assert.Equal(2, match.ActiveCount);
+
         match.Resign(P3);
 
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
-        Assert.Equal((3, SettlementReason.Attrition, P2), (settled.Battlefield, settled.Reason, settled.Winner));
+        Assert.Equal((0, SettlementReason.Attrition, P2), (settled.Battlefield, settled.Reason, settled.Winner));
         Assert.Null(settled.EliminationOrder);
         Assert.Equal(match.Scoreboard.Latest!.Of(P2).Total, settled.Entries.Single().Power);
-        Assert.True(match.IsBattlefieldSettled(3));
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
+        Assert.True(match.IsBattlefieldSettled(0));
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
         Assert.Equal(PlayerStatus.Resigned, match.StateOf(P3).Status);
     }
 
     [Fact]
     public void 势力归零的减员结算()
     {
-        // 多人战场因势力归零只剩 1 人 → 同样即时结算；被提光者记"势力归零"。
-        MatchFlow match = Started([0, 0, 3, 4]).AtRound(2, [P0, P1, P2, P3]);
-        Coord corner = BirthCell(match.Map, 0, 0, 0);
+        // 势力归零出局：被提光者记"势力归零"；open-map 下唯一战场仍有 3 人在局，不触发减员结算。
+        // 载体：link:1 里左下角在画布留白角上的出生棋盘 3（3+2 布局的 o0，(2,2)），其左下角格只有两口气；棋盘 0 的左下角自 open-map 起紧贴棋盘 2，有三口气。
+        MatchFlow match = Started([3, 3, 0, 4]).AtRound(2, [P0, P1, P2, P3]);
+        Coord corner = BirthCell(match.Map, 3, 0, 0);
+        Assert.Equal(new Coord(2, 2), corner);
         match.Place(P1, corner);
         Assert.True(match.StateOf(P1).HasEstablishedPower);
         // P0 在角的两个气上落子提走 P1（角上一子只有两口气）。
         StagedBatch batch = match.ToDeploy();
-        Assert.Null(batch.Stage(BirthCell(match.Map, 0, 1, 0), PieceType.Basic));
-        Assert.Null(batch.Stage(BirthCell(match.Map, 0, 0, 1), PieceType.Basic));
+        Assert.Null(batch.Stage(BirthCell(match.Map, 3, 1, 0), PieceType.Basic));
+        Assert.Null(batch.Stage(BirthCell(match.Map, 3, 0, 1), PieceType.Basic));
         Assert.True(match.Confirm().Confirmed);
 
         Assert.Equal(PlayerStatus.Eliminated, match.StateOf(P1).Status);
         Assert.Equal(EliminationReason.PowerZero, match.StateOf(P1).EliminationReason);
         Assert.Null(match.StateOf(P1).PowerAtDefeat);
-        BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
-        Assert.Equal((0, SettlementReason.Attrition, P0), (settled.Battlefield, settled.Reason, settled.Winner));
+        Assert.Empty(match.Settlements);
+        Assert.Equal(3, match.ActiveCount);
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
     }
 
     [Fact]
@@ -164,20 +181,19 @@ public class 战场结算Tests
         Assert.Empty(match.Settlements);
         Assert.Equal(P3, match.CurrentPlayer);
 
-        match.PassTurn();   // P3（单人战场，不结算）→ 第 1 大回合结束
+        match.PassTurn();   // P3 → 剩余三人都已 Pass，第 1 大回合结束即结算（open-map：唯一战场，结算即终局）
 
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
         Assert.Equal((0, SettlementReason.AllPassed, 1), (settled.Battlefield, settled.Reason, settled.MajorRound));
-        Assert.Equal([P0, P1], settled.Entries.Select(e => e.Player).Order());
-        PlayerId loser = settled.Entries[1].Player;
-        Assert.Equal(EliminationReason.BattlefieldDefeat, match.StateOf(loser).EliminationReason);
+        Assert.Equal([P0, P1, P3], settled.Entries.Select(e => e.Player).Order());
+        Assert.All(settled.Entries.Skip(1), e => Assert.Equal(EliminationReason.BattlefieldDefeat, match.StateOf(e.Player).EliminationReason));
         Assert.Equal(PlayerStatus.Resigned, match.StateOf(P2).Status);
         Assert.Null(match.StateOf(P2).EliminationReason);
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-        Assert.Equal(2, match.ActiveCount);
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(1, match.ActiveCount);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待者Pass不结算()
     {
         // Scenario：单人战场 3 内的玩家 D 连续三个大回合 Pass → 战场 3 不结算，D 仍在局；等待大回合数逐轮累计（构筑期不计）。
@@ -192,15 +208,17 @@ public class 战场结算Tests
     [Fact]
     public void 构筑期也结算()
     {
-        // Scenario：A、B 锁定同一棋盘，第 1 大回合两人都 Pass → 第 1 大回合结束时该战场结算。
+        // Scenario（open-map「构筑期也结算」）：第 1 大回合 4 名玩家都 Pass → 第 1 大回合结束时唯一战场结算、终局。
         MatchFlow match = Started([0, 0, 3, 4]).PassRound();
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
         Assert.Equal(1, settled.MajorRound);
         Assert.Equal(LinkStage.Building, match.LinkStage);
-        Assert.Equal(3, match.ActiveCount);
+        Assert.Equal(1, match.ActiveCount);
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 出局者出序()
     {
         // initiative-order Scenario：B 在某大回合结束时以战场落败出局 → 下一大回合的行动顺序不含 B。
@@ -224,13 +242,14 @@ public class 战场结算Tests
         // 比较链四级全同（都没落子）时，胜者取种子兜底顺序靠前者（裁决 S6 待定）；落败者名次 2。
         MatchFlow match = Started([0, 0, 3, 4]).PassRound();
         BattlefieldSettlementRecord settled = match.Settlements.Single();
-        PlayerId expected = new[] { P0, P1 }.OrderBy(p => match.Debug.SeedRankOf(p)).First();
+        PlayerId expected = All.OrderBy(p => match.Debug.SeedRankOf(p)).First();   // open-map：唯一战场，四人全零
         Assert.Equal(expected, settled.Winner);
-        Assert.Equal([1, 2], settled.Entries.Select(e => e.Rank));
+        Assert.Equal([1, 2, 2, 2], settled.Entries.Select(e => e.Rank));   // 落败者比较链四级全同 → 共享名次 2
+        Assert.Equal(All.OrderBy(p => match.Debug.SeedRankOf(p)), settled.Entries.Select(e => e.Player));
     }
 
     /// <remarks>变异 M-FC1（到期不结算）使本条红（final-countdown 1.3 实跑，check 阶段复现；见 Battlefield.决赛倒计时Tests）。</remarks>
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 倒计时到期强制结算()
     {
         // final-countdown Scenario：战场 4 在第 6 大回合结束时结算、其胜者开始等待决赛，K = 2，战场 1 内 A、B 一直有人落子

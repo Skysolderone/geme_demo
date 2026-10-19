@@ -53,10 +53,10 @@ public class 决策序列基线_链接模式Tests
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.True(expected.Length < 200_000, $"基线 {Fixture} 超过 200 KB（{expected.Length} 字符）");
 
-        // 样本口径：四人四区、首轮两对两次链接；基线里确有配对与链接事件，且跑过了第 3 大回合。
+        // 样本口径（open-map 重钉）：四人四区；基线里没有任何配对与链接事件，且跑过了第 3 大回合（第 4 大回合起全图可落）。
         string zones = expected.Split('\n')[1].Split(' ').Single(f => f.StartsWith("zones=", StringComparison.Ordinal))["zones=".Length..];
         Assert.Equal(4, zones.Split(',').Distinct().Count());
-        Assert.Equal(2, expected.Split('\n').Count(l => l.StartsWith("L\t", StringComparison.Ordinal) && l.Contains("\tpairing=1\t", StringComparison.Ordinal)));
+        Assert.Equal(0, expected.Split('\n').Count(l => l.StartsWith("L\t", StringComparison.Ordinal) || l.StartsWith("P\t", StringComparison.Ordinal)));
         Assert.Contains(expected.Split('\n'), l => l.StartsWith("4\t", StringComparison.Ordinal));
         Assert.Equal(expected, actual);
     }
@@ -64,10 +64,11 @@ public class 决策序列基线_链接模式Tests
     [Fact]
     public void 同种子重跑逐字节相同()
     {
-        // 基线的前提：同一种子、同一配对脚本重跑两次，导出逐字节相同（不依赖墙钟、并行或真随机）。截断到第 5 大回合（含首轮配对与链接）以省时。
+        // 基线的前提：同一种子重跑两次，导出逐字节相同（不依赖墙钟、并行或真随机）。截断到第 5 大回合（跨过第 4 大回合的全图解禁）以省时。
         string a = LinkDecisionSequence.Export(Seed, 5);
         string b = LinkDecisionSequence.Export(Seed, 5);
-        Assert.Contains(a.Split('\n'), l => l.StartsWith("P\t", StringComparison.Ordinal));
+        Assert.Contains(a.Split('\n'), l => l.StartsWith("4\t", StringComparison.Ordinal));
+        Assert.DoesNotContain(a.Split('\n'), l => l.StartsWith("P\t", StringComparison.Ordinal));
         Assert.Equal(a, b);
     }
 

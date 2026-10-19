@@ -170,8 +170,9 @@ public class 专家前瞻的记录Tests
         // link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：小回合 44 → 46、前瞻记录 8 → 13。
         // ai-seat-vision 1.2 重钉（裁决 V2，见实施记录 V7）：样本已写死全知（LookaheadFixtures.LinkConfig），标准 AI 的评价与选择逻辑在全知下不变（五条全知基线逐字节相同为证）；专家前瞻的名册改为只含同战场玩家后，
         // 原先被选作"下一名对手"的他战场玩家（其模拟回应落在别的战场、对各候选几乎同量平移）换成同战场对手，前瞻重排随之变，专家的选择变了、其余三人的走法随盘面一起变：小回合 46 → 45、前瞻记录 13 → 10。
-        Assert.Equal(45, log.Turns.Count);
-        Assert.Equal(10, log.LookaheadTurns.Count());
+        // open-map 1.5 重钉：link:1 改为 3+2 紧贴布局、锁定后全图可见、第 4 大回合起全图可落，走法随之变：小回合 45 → 84。
+        Assert.Equal(84, log.Turns.Count);
+        Assert.Equal(21, log.LookaheadTurns.Count());   // open-map：前瞻记录 10 → 21
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         Assert.Contains("\"AiEvaluationVersion\":5", text, StringComparison.Ordinal);
@@ -182,7 +183,8 @@ public class 专家前瞻的记录Tests
         // ai-seat-vision 1.3：样本配置写死全知（LookaheadFixtures.LinkConfig），首部配置多出 "SeatVision":false 一项；同样遮掉后比对。
         Assert.Contains("\"SeatVision\":false,", text, StringComparison.Ordinal);
         // ai-seat-vision 1.2 重钉（同上，走法变，不能再逐字节对照）：旧值 6059A235B06536C946901BF77F444CEE5DA515C3F5B2B534AAE359F86AC838B8。
-        Assert.Equal("0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC", Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal).Replace("\"SeatVision\":false,", string.Empty, StringComparison.Ordinal)));
+        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal).Replace("\"SeatVision\":false,", string.Empty, StringComparison.Ordinal));
+        Assert.True("D8CE9E7E4ABCB570C4F0E22846E59DD925F1603764F4DDA6B3C8C4541CB0DC3D" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -296,7 +298,7 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
-        Assert.Equal(65, log.Turns.Count);   // link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
+        Assert.Equal(80, log.Turns.Count);   // open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         Assert.Contains("\"AiEvaluationVersion\":5", text, StringComparison.Ordinal);
@@ -306,7 +308,8 @@ public class 专家前瞻的记录Tests
         Assert.Contains("\"FinalCountdownRounds\":0,", text, StringComparison.Ordinal);
         // ai-seat-vision 1.3：样本配置写死全知（LookaheadFixtures.LinkConfig），首部配置多出 "SeatVision":false 一项；同样遮掉后比对。
         Assert.Contains("\"SeatVision\":false,", text, StringComparison.Ordinal);
-        Assert.Equal("3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217", Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal).Replace("\"SeatVision\":false,", string.Empty, StringComparison.Ordinal)));
+        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal).Replace("\"SeatVision\":false,", string.Empty, StringComparison.Ordinal));
+        Assert.True("BACC1FF04678B2AD8D8B295EA3446EDCFCEE82EB5173EDCBC650EFE9A53D90F3" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]

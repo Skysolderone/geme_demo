@@ -17,7 +17,7 @@ namespace Siege.Core.Tests.Battlefield;
 /// </remarks>
 public class 配对事件由对局外部提供Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 合法配对被接受()
     {
         // Scenario：候选为战场 1、2、4、5，外部提交 {(1,4),(2,5)} → 系统依次执行两次链接，进入交战阶段。
@@ -38,7 +38,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Null(match.PendingPairing);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 奇数候选需要等待者()
     {
         // Scenario：候选为战场 2、4、5，外部提交 {(2,5)} 且指定 4 为等待者 → 执行一次链接，战场 4 的玩家原地等待。
@@ -58,7 +58,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal(1, match.BattlefieldOf(P3));
     }
 
-    [Theory]
+    [Theory(Skip = "open-map 段 B 删除")]
     [InlineData("非候选", new[] { 0, 2, 1, 4 }, -1)]          // 规格 Scenario：候选 1、2、4、5，提交 {(1,3),(2,5)}
     [InlineData("同一候选两次", new[] { 0, 3, 0, 4 }, -1)]
     [InlineData("一对两方相同", new[] { 0, 0, 1, 4 }, -1)]
@@ -84,7 +84,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal(MatchPhase.InProgress, match.Phase);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待者须是候选且不在配对里()
     {
         MatchFlow match = Started([0, 1, 3, 4]);
@@ -95,7 +95,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal(MatchPhase.AwaitingPairing, match.Phase);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛只接受唯一合法结果()
     {
         MatchFlow match = Started([0, 0, 2, 2]).PassRounds(3);
@@ -110,7 +110,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal(LinkStage.Final, match.LinkStage);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛候选超过两个时以最小编号为轴()
     {
         // 裁决 S2：决赛候选超过 2 个战场时，以编号最小的战场为轴、按编号升序依次链接——唯一合法结果。
@@ -120,7 +120,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Null(only.Waiter);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 待配对与待决赛链接阶段不可弃赛()
     {
         // 裁决 S3：两个"待…"阶段内 MUST NOT 接受弃赛。
@@ -135,7 +135,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal(2, final.ActiveCount);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 列出顺序不影响结果()
     {
         // 裁决 R2：同一配对事件内按"含最小出生棋盘编号的一对先"逐对链接，与事件中列出的顺序和对内先后无关 → 同一配对集合得到同一地图。
@@ -149,7 +149,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal(canonical.Board.Serialize(), listed.Board.Serialize());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 不在待配对时拒绝配对事件()
     {
         MatchFlow match = Started([0, 1, 3, 4]);
@@ -158,7 +158,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Empty(match.Links);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 脚本固定配对的确定性缺省()
     {
         // 实现裁决 B3：按编号升序两两相配，奇数时编号最大者等待；决赛给唯一合法结果。Core 不抽随机数。
@@ -177,7 +177,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal([(0, 3), (1, 4)], match.Pairings.Single().Pairs);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 来源给出非法结果时停在待配对()
     {
         var source = new ScriptedPairingSource(Pairs(null, (0, 2), (1, 4)));
@@ -189,7 +189,7 @@ public class 配对事件由对局外部提供Tests
         Assert.Equal(MatchPhase.InProgress, match.Phase);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 无来源时跑到底报待配对()
     {
         MatchFlow match = Started([0, 1, 3, 4]);

@@ -1,0 +1,17 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/open-map/proposal.md", "reason": "open-map 规划与裁决"}
+{"file": "openspec/changes/open-map/design.md", "reason": "open-map 规划与裁决"}
+{"file": "openspec/changes/open-map/tasks.md", "reason": "open-map 规划与裁决"}
+{"file": "openspec/changes/open-map/specs/battlefield/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/link-map-generation/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/turn-sequence/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/information-visibility/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/terrain-edit/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/ai-decision/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/simulation-harness/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/settlement-show/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/visual-style-baseline/spec.md", "reason": "open-map 规格差分"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}

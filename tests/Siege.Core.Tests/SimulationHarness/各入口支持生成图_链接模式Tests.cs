@@ -22,7 +22,7 @@ public class 各入口支持生成图_链接模式Tests
         // 变异 MC-6：PlayCommand 在链接模式仍画全图（render.Board(zones: true)）→ "号棋盘 · …（左下角 …）" 不出现，本测试红。
         (int code, string output, string err) = RunMain(null, new StringReader("q\n"), "play", "--map", "link:12345", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
-        Assert.Contains("地图 link:12345（5 块隔绝的出生棋盘）", output, StringComparison.Ordinal);
+        Assert.Contains("地图 link:12345（5 块紧贴成一张连通地图的出生棋盘）", output, StringComparison.Ordinal);
         MapData map = MapCatalog.Resolve("link:12345");
         for (int zone = 0; zone < 5; zone++)
         {
@@ -38,19 +38,21 @@ public class 各入口支持生成图_链接模式Tests
     [Fact]
     public void 终端版链接图能开局并按座位渲染()
     {
-        // tasks 3.0「play 在 link: 上能建局并跑起来」：选棋盘后锁定、开始第 1 大回合并轮到本机玩家；只公开同一块棋盘上的玩家，
-        // 他人战场玩家的势力显示为不可见，棋盘只画本座位战场的外接矩形。
+        // tasks 3.0「play 在 link: 上能建局并跑起来」→ open-map：选棋盘后锁定、开始第 1 大回合并轮到本机玩家；全图全可见（没有"势力不可见"的玩家），
+        // 棋盘画整张地图（唯一战场 = 5 块棋盘的包围盒），构筑期提示"只能在自己的出生棋盘落子"。
         (int code, string output, string err) = RunMain(null, new StringReader("2\nq\n"), "play", "--map", "link:12345", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
         Assert.Contains("你锁定了 2 号棋盘", output, StringComparison.Ordinal);
         Assert.DoesNotContain("出生区锁定：", output, StringComparison.Ordinal);   // 不列出别人的旗
-        Assert.Contains("其他战场（势力不可见）", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("其他战场（势力不可见）", output, StringComparison.Ordinal);
+        Assert.Contains("只能在自己的出生棋盘落子", output, StringComparison.Ordinal);
         Assert.Contains("════════ 轮到你了 ════════", output, StringComparison.Ordinal);
 
-        // 只画本战场：列标行恰是 2 号棋盘的列，不是整张画布。
+        // 画整张地图：列标行是 5 块棋盘包围盒的列（第 2 列起到东边留白前），不含画布留白列 A / B。
         MapData map = MapCatalog.Resolve("link:12345");
-        BoundsOf(map, 1, out Coord origin, out int width, out _);
-        string columns = "    " + string.Concat(Enumerable.Range(origin.X, width).Select(x => $" {new Coord(x, 0).Column,-2}"));
+        int minX = map.Boards.Min(b => b.Origin.X);
+        int maxX = map.Boards.Max(b => b.Origin.X + b.Width - 1);
+        string columns = "    " + string.Concat(Enumerable.Range(minX, maxX - minX + 1).Select(x => $" {new Coord(x, 0).Column,-2}"));
         Assert.Contains(columns + Environment.NewLine, output, StringComparison.Ordinal);
         Assert.DoesNotContain(" A  B  C ", output, StringComparison.Ordinal);
     }
@@ -79,7 +81,7 @@ public class 各入口支持生成图_链接模式Tests
         Assert.All(logs, l => Assert.Equal(MapFile.Digest(MapCatalog.Resolve(l.Header.MapId)), l.Header.MapDigest));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 批量配对可重复()
     {
         // 规格 Scenario「批量配对可重复」：同一对局种子与同一 --pairing-seed 跑两次，配对事件与全部结算结果逐项相同；换一个配对种子则配对可以不同
@@ -115,7 +117,7 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { MapId = "siege-4p-base-v5", PairingSeed = 1 }).Validated());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 回放重建链接()
     {
         // 规格 Scenario「回放重建链接」：回放一份含两次链接事件的日志，按记录依次执行链接，每次链接后的地图与原局逐格相同
@@ -171,7 +173,7 @@ public class 各入口支持生成图_链接模式Tests
         Assert.DoesNotContain("链接 #", output, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void map子命令模拟链接()
     {
         // 规格 Scenario「map 子命令模拟链接」：map --map link:1 --links 1-4,2-5 输出两次链接后的文本图与校验报告；结果与直接调生成器逐项相同。
@@ -192,7 +194,7 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Contains("链接 #2：战场 出生区 1 + 出生区 2", chainedOut, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void map子命令按阶段推断贴边_也接受显式贴边()
     {
         // 裁决 J8-8：不写贴边时，前面互不重叠的单棋盘配对按首轮东贴，连到已合并战场的按决赛北贴；也接受 1-4E,2-5E,1-2N 的显式写法，结果相同；

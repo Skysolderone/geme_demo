@@ -61,10 +61,11 @@ public class 决策序列基线Tests
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.True(expected.Length < 200_000, $"基线 {fixture} 超过 200 KB（{expected.Length} 字符）");
 
-        // 样本口径下界：基线里确有配对与战场结算事件、至少 30 个小回合，且要么跑满第 12 大回合、要么以规则终局收尾（种子 1 / 2 分别在第 10 / 11 大回合决赛结算）。
+        // 样本口径下界（open-map 重钉）：基线里没有任何配对 / 链接事件、至少 30 个小回合，且要么跑满第 12 大回合、要么以规则终局收尾。
         string[] lines = expected.Split('\n');
-        Assert.Contains(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
-        Assert.Contains(lines, l => l.StartsWith("S\t", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.StartsWith("L\t", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("4\t", StringComparison.Ordinal));   // 跑过了第 3 大回合，没有配对 / 链接
         Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
         Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains("majorRound=13", StringComparison.Ordinal));
         Assert.Equal(expected, actual);
@@ -90,14 +91,57 @@ public class 决策序列基线Tests
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.True(expected.Length < 200_000, $"基线 {fixture} 超过 200 KB（{expected.Length} 字符）");
 
-        // 样本口径下界：首部写明难度；有配对与链接；至少 30 个小回合；跑满第 12 大回合或以规则终局收尾。
+        // 样本口径下界（open-map 重钉）：首部写明难度；没有配对与链接；至少 30 个小回合；跑满第 12 大回合或以规则终局收尾。
         string[] lines = expected.Split('\n');
         Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
-        Assert.Contains(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
-        Assert.Contains(lines, l => l.StartsWith("L\t", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.StartsWith("L\t", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("4\t", StringComparison.Ordinal));
         Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
         Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains("majorRound=13", StringComparison.Ordinal));
         Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// open-map 段 A 自洽检查（design D9 / 实施裁决 A8）：锁定后座位视野 = 全图，且唯一战场上永不出现等待者、倒计时起点永不设定，
+    /// 所以显式全知（<c>*-omniscient.txt</c>）与 K = 0（<c>*-k0.txt</c>）两组基线 MUST 与缺省逐字节相同——段 A 把三组一次重钉为同一内容，段 B 删掉两组副本。
+    /// 变异（open-map 1.5 实跑）：把任一副本改动一个字节 → 本测试红。
+    /// </summary>
+    [Theory]
+    [InlineData("decisions-link1-seed1")]
+    [InlineData("decisions-link1-seed2")]
+    [InlineData("decisions-link1-seed3")]
+    [InlineData("decisions-link1-easy-seed1")]
+    [InlineData("decisions-link1-hard-seed1")]
+    public void 全知与K0副本与缺省逐字节相同(string stem)
+    {
+        string dir = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures");
+        byte[] standard = File.ReadAllBytes(Path.Combine(dir, stem + ".txt"));
+        Assert.True(standard.Length > 1000, stem);
+        Assert.Equal(standard, File.ReadAllBytes(Path.Combine(dir, stem + "-omniscient.txt")));
+        Assert.Equal(standard, File.ReadAllBytes(Path.Combine(dir, stem + "-k0.txt")));
+    }
+
+    /// <summary>
+    /// open-map 段 A 自洽检查的"执行"半边（质检补；design D6：唯一战场上倒计时起点 R 永不设定，K 不起作用）：显式 K = 0、缺省视野跑一局，
+    /// 与 <c>*-k0.txt</c>（= 缺省基线副本）逐字节相同。显式全知的那半边由 <c>正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同</c> 实跑；
+    /// 原 K = 0 实跑比对 <c>决赛倒计时Tests.K为0时链接图决策序列与改前基线逐字节相同</c> 随整文件 Skip 停跑，这里接替。段 B 随 K 一起删除。
+    /// 变异：把任一 <c>*-k0.txt</c> 改动一个字节 → 本测试与「全知与K0副本与缺省逐字节相同」同时红。
+    /// </summary>
+    [Theory]
+    [InlineData(1UL, AiDifficulty.Standard, "decisions-link1-seed1-k0.txt")]
+    [InlineData(2UL, AiDifficulty.Standard, "decisions-link1-seed2-k0.txt")]
+    [InlineData(3UL, AiDifficulty.Standard, "decisions-link1-seed3-k0.txt")]
+    [InlineData(1UL, AiDifficulty.Easy, "decisions-link1-easy-seed1-k0.txt")]
+    [InlineData(1UL, AiDifficulty.Hard, "decisions-link1-hard-seed1-k0.txt")]
+    public void K为0实跑与缺省基线逐字节相同(ulong seed, AiDifficulty difficulty, string fixture)
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", fixture);
+        string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.True(expected.Split('\n').Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
+        Assert.DoesNotContain(expected.Split('\n'), l => l.StartsWith("C\t", StringComparison.Ordinal));   // 没有任何战场进入倒计时
+
+        Assert.Equal(expected, LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, finalCountdown: 0));
     }
 
     private static string SourceFixtureDirectory([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>

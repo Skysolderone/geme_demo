@@ -363,6 +363,7 @@ public sealed partial class MatchFlow
             Player = player,
             DeployLimit = _snapshot!.DeployLimit,
             LegalRange = LegalRangeFor(player),
+            EditScope = EditScopeFor(player),
             Stock = hand.Entries.ToDictionary(kv => kv.Key, kv => kv.Value.Total),
             WorkshopActive = _snapshot.WorkshopActive,
         };
@@ -424,7 +425,15 @@ public sealed partial class MatchFlow
     {
         RequirePhase(MatchPhase.InProgress);
         int zone = Require(player).BirthZone ?? throw new SiegeRuleException($"玩家 {player} 尚未锁定出生区。");
-        return PublicRules.LegalRange(Board, zone, player, LifeShapeReport.Analyze(Board));
+        return PublicRules.LegalRange(Board, zone, player, LifeShapeReport.Analyze(Board), MajorRound);
+    }
+
+    /// <summary>某玩家此刻的改造范围（<see cref="PublicRules.EditScope"/> 的唯一实现，按当前大回合与其锁定的出生棋盘）：只读查询。</summary>
+    public IReadOnlySet<Coord> EditScopeFor(PlayerId player)
+    {
+        RequirePhase(MatchPhase.InProgress);
+        int zone = Require(player).BirthZone ?? throw new SiegeRuleException($"玩家 {player} 尚未锁定出生区。");
+        return PublicRules.EditScope(Board, zone, MajorRound);
     }
 
     // ---------- 弃赛 ----------

@@ -99,7 +99,14 @@ public class 公开规则纯函数Tests
         // ③ 先锋修正：旧实现（抄自改动前的 SumVanguard）＝ 账本（委托后）＝ 纯函数读公开快照；
         // ④ 出局：此刻没有"应出局而仍参赛"的玩家，每个已出局者都满足判据（旧判据）。
         int checkedTurns = 0;
+        // open-map 1.1：link:1 的信物格随 3+2 布局改变，种子 1 / 3 生成的信物里不再有军令 / 工坊 / 先锋；从给定种子起取第一个满足样本口径的对局种子。
         MatchFlow match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(seed));
+        for (ulong probe = seed; !match.Relics.Generation.Placements.Any(p => p.Content.Type is RelicType.Command or RelicType.Workshop or RelicType.Vanguard); probe++)
+        {
+            Assert.True(probe < seed + 50, "50 个对局种子里没有军令 / 工坊 / 先锋");
+            match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(probe + 1));
+        }
+
         match.PairingSource = new ScriptedPairingSource();
         match.PlantPrototype();
         Assert.Contains(match.Relics.Generation.Placements, p => p.Content.Type is RelicType.Command or RelicType.Workshop or RelicType.Vanguard);   // 样本口径
@@ -153,7 +160,7 @@ public class 公开规则纯函数Tests
         Coord[] range = [.. batch.Context.LegalRange.Order()];
         Assert.NotEmpty(range);
         Assert.Equal(range, match.LegalRangeFor(player).Order());
-        Assert.Equal(range, PublicRules.LegalRange(view.Board, state.BirthZone!.Value, player, view.LifeShape).Order());
+        Assert.Equal(range, PublicRules.LegalRange(view.Board, state.BirthZone!.Value, player, view.LifeShape, view.MajorRound).Order());
 
         // ② 部署上限与工坊
         (int oldLimit, bool oldWorkshop) = OldDeployAndWorkshop(match, player);

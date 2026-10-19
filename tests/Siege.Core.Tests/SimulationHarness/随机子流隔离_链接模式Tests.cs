@@ -10,7 +10,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// </summary>
 public class 随机子流隔离_链接模式Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 配对不扰动子流()
     {
         // 规格 Scenario「配对不扰动子流」：同一种子下两局采用不同的配对 → 出生棋盘的信物分布逐格相同，第 1 大回合行动顺序相同，锁定结果相同；

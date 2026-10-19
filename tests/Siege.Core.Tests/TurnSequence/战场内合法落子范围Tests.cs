@@ -8,8 +8,8 @@ using static Siege.Core.Tests.LinkModeFixtures;
 namespace Siege.Core.Tests.TurnSequence;
 
 /// <summary>
-/// 规格：openspec/changes/board-link-mode/specs/turn-sequence —— Requirement: 构筑保护期的落子限制、合法落子范围的对外契约、第 4 大回合起的战场内落子；
-/// battlefield —— Requirement: 等待者的行动（链接模式）。retire-legacy-rules：旧模式的同名测试（含「第4大回合的全图解禁」）随旧模式删除，
+/// 规格：openspec/changes/open-map/specs/turn-sequence —— Requirement: 构筑保护期的落子限制（自己的出生棋盘）、合法落子范围的对外契约（按大回合两段）、第 4 大回合起的全图落子；
+/// 等待者两条随 open-map Skip（段 B 删除）。retire-legacy-rules：旧模式的同名测试（含「第4大回合的全图解禁」）随旧模式删除，
 /// 其中仍成立的「构筑期内越区落子被拒」「空盘面玩家重新进入」「禁入格不在范围内」由本类同名条目接替（清单 (j)），「构筑期内规则照常」迁入本类。
 /// </summary>
 /// <remarks>
@@ -31,32 +31,36 @@ public class 战场内合法落子范围Tests
     }
 
     [Fact]
-    public void 范围随链接扩大()
+    public void 范围随大回合扩大()
     {
-        // Scenario：第 3 大回合与首轮链接后第 4 大回合的合法落子范围 → 前者为其出生棋盘的格集合，后者为合并后战场的格集合。
-        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(2);
+        // Scenario（open-map「合法落子范围的对外契约」范围随大回合扩大）：第 3 大回合的范围为其出生棋盘的可落子格集合，第 4 大回合起为全图可落子格集合；
+        // 同区者共享同一范围。P0 每个大回合落一子、其余 Pass（不触发整轮 Pass 结算）。
+        MatchFlow match = Started([0, 0, 3, 4]).PlayRounds(2, P0);
         Assert.Equal(3, match.MajorRound);
-        Assert.Equal(match.Board.Battlefields.ById(0)!.Cells.ToHashSet(), match.LegalRangeFor(P0));   // link-map-terrain：范围是整个战场（整块棋盘的可落子格），出生区只是核心区
-        int before = match.Board.Battlefields.ById(0)!.Cells.Length + match.Board.Battlefields.ById(3)!.Cells.Length;
-        match.PassRound();
-        match.ApplyPairing([(0, 3), (1, 4)]);
+        HashSet<Coord> board0 = [.. match.Map.BirthBoard(0).Cells().Where(match.Board.Map.IsPlayable)];
+        Assert.Equal(board0, match.LegalRangeFor(P0));   // 范围是整块出生棋盘的可落子格（含靠接缝的外圈），出生区只是核心区
+        Assert.Equal(match.LegalRangeFor(P0), match.LegalRangeFor(P1));   // 同区共享
+        Assert.True(board0.Count < match.Board.Battlefields.ById(0)!.Cells.Length);
+
+        match.PlayRound(P0);
 
         Assert.Equal(4, match.MajorRound);
-        Siege.Core.Board.Battlefield merged = match.Board.Battlefields.ById(0)!;
-        Assert.Equal([0, 3], merged.BirthZones);
-        Assert.Equal(merged.Cells.ToHashSet(), match.LegalRangeFor(P0));
-        Assert.Equal(merged.Cells.ToHashSet(), match.LegalRangeFor(P2));
-        Assert.Equal(before, match.LegalRangeFor(P0).Count);   // 拼接不新增格
+        Siege.Core.Board.Battlefield whole = match.Board.Battlefields.ById(0)!;
+        Assert.Equal([0, 1, 2, 3, 4], whole.BirthZones);
+        Assert.Equal(whole.Cells.ToHashSet(), match.LegalRangeFor(P0));
+        Assert.Equal(whole.Cells.ToHashSet(), match.LegalRangeFor(P2));
+        Assert.Equal(match.Map.Boards.Sum(b => b.Cells().Count(match.Board.Map.IsPlayable)), match.LegalRangeFor(P0).Count);   // 全图 = 5 块可落子格之和
     }
 
     [Fact]
-    public void 链接后可进入对方棋盘()
+    public void 第4大回合进入对方棋盘()
     {
-        // Scenario：第 4 大回合，玩家所在战场已与另一战场链接，玩家在拼过来的对方出生棋盘（已平移）上暂放棋子 → 接受。
-        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(3);
-        match.ApplyPairing([(0, 3), (1, 4)]);
-        BoardPlate plate = match.Map.Boards[3];
-        Assert.Equal(0, match.Board.Battlefields.At(plate.Origin)!.Id);
+        // Scenario（open-map「第 4 大回合起的全图落子」）：第 4 大回合，玩家在另一名玩家的出生棋盘上暂放棋子 → 接受；第 2 大回合同一落点被拒。
+        MatchFlow match = Started([0, 1, 3, 4]).AtRound(2, [P0, P1, P2, P3]);
+        BoardPlate plate = match.Map.Boards[3];   // P2 锁定的棋盘
+        Assert.Equal(BatchFailureKind.OutOfLegalRange, match.ToDeploy().Stage(plate.Origin, PieceType.Basic)?.Kind);
+        match.Pass();
+
         match.AtRound(4, [P0, P1, P2, P3]);
         StagedBatch batch = match.ToDeploy();
         Assert.Null(batch.Stage(plate.Origin, PieceType.Basic));
@@ -65,22 +69,21 @@ public class 战场内合法落子范围Tests
     }
 
     [Fact]
-    public void 其他战场不可落子()
+    public void 无人棋盘可落子()
     {
-        // Scenario：第 6 大回合，玩家尝试在未与自己链接的战场上暂放棋子 → 系统拒绝并说明不在合法落子范围内。
-        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(3);
-        match.ApplyPairing([(0, 3), (1, 4)]);
-        match.AtRound(6, [P0, P1, P2, P3]);
+        // Scenario（open-map）：第 6 大回合，玩家在无人锁定的出生棋盘（棋盘 2）上暂放棋子 → 接受；范围含其他玩家的出生棋盘。
+        MatchFlow match = Started([0, 1, 3, 4]).AtRound(6, [P0, P1, P2, P3]);
         IReadOnlySet<Coord> range = match.LegalRangeFor(P0);
-        Assert.DoesNotContain(BirthCell(match.Map, 1, 0, 0), range);
-        Assert.DoesNotContain(BirthCell(match.Map, 2, 0, 0), range);   // 无人的出生棋盘
-        Assert.Empty(range.Intersect(match.Board.Battlefields.ById(1)!.Cells));
+        Assert.Contains(BirthCell(match.Map, 1, 0, 0), range);
+        Assert.Contains(BirthCell(match.Map, 2, 0, 0), range);   // 无人的出生棋盘
+        Assert.Equal(match.Board.Battlefields.ById(0)!.Cells.ToHashSet(), range);
 
         StagedBatch batch = match.ToDeploy();
-        Assert.Equal(BatchFailureKind.OutOfLegalRange, batch.Stage(BirthCell(match.Map, 4, 1, 1), PieceType.Basic)?.Kind);
+        Assert.Null(batch.Stage(CoreCell(match.Map, 2, 1, 1), PieceType.Basic));
+        Assert.True(match.Confirm().Confirmed);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待者可落子()
     {
         // Scenario：玩家 D 在单人战场 3 等待，轮到其小回合 → D 可征募并在战场 3 内落子，其合法落子范围不含任何其他战场的格。
@@ -93,7 +96,7 @@ public class 战场内合法落子范围Tests
         Assert.True(match.Confirm().Confirmed);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待者无法越界()
     {
         // Scenario：等待者尝试在另一战场的空格暂放棋子 → 系统拒绝并说明不在合法落子范围内。
@@ -106,9 +109,9 @@ public class 战场内合法落子范围Tests
     [Fact]
     public void 空盘面玩家重新进入()
     {
-        // Scenario：第 4 大回合，某玩家盘面无棋子但完成征募后持有手牌 → 可在自己所在战场的任意合法空格重新落子（不只是出生棋盘）。
-        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(3);
-        match.ApplyPairing([(0, 3), (1, 4)]);
+        // Scenario：第 4 大回合，某玩家盘面无棋子但完成征募后持有手牌 → 可在全图任意合法空格重新落子（不只是出生棋盘）。
+        // open-map：构筑期由 P1 落子、其余 Pass 走到第 4 大回合（没有配对 / 链接）。
+        MatchFlow match = Started([0, 1, 3, 4]).PlayRounds(3, P1);
         match.AtRound(4, [P0, P1, P2, P3]);
         match.Debug.SeedHand(P0);
         // retire-legacy-rules 质检：随清单 (j) 合并补回原「第4大回合的全图解禁Tests.空盘面玩家重新进入」的前提——盘面与手牌皆空、征募后持有手牌。
@@ -126,7 +129,7 @@ public class 战场内合法落子范围Tests
         Assert.False(hand.PrivateView().IsEmpty);
         StagedBatch batch = match.EnterDeploy();
         PieceType type = hand.PrivateView().Types.First();
-        Coord deep = CoreCell(match.Map, 3, 1, 1);             // 链接对方的出生棋盘深处（核心区中心）
+        Coord deep = CoreCell(match.Map, 3, 1, 1);             // 对方（P2）出生棋盘深处（核心区中心）
         Assert.Null(batch.Stage(deep, type));
         Assert.True(match.Confirm().Confirmed);
         Assert.Equal(1, match.StoneCount(P0));
@@ -138,21 +141,21 @@ public class 战场内合法落子范围Tests
         // Scenario：玩家 A 有一条已确定活形棋串，B 与 A 同战场 → B 的合法落子范围不含 A 的眼空间，A 的含。
         // 在出生棋盘 0 的上边角做出与旧模式同形的"角上两眼"（眼 (0,0)、(2,0)），P0 与 P1 同区。
         // link-map-terrain：两眼形摆在棋盘左下角的外圈两行（第 0 行外圈 + 第 1 行）；6×6 棋盘的第 1 行第 1–3 列是核心区，整片高度 0、无栅栏。
-        // link:1 的 6×6 棋盘取林地主题的出生棋盘 5（下标 4），先断言这 8 格平坦（样本口径），免得主题地形改了眼形。
-        MatchFlow match = Started([4, 4, 3, 0]).AtRound(2);
+        // open-map：眼形要摆在画布留白角上的棋盘（下边与左边都是场景格）——link:1 的 3+2 布局里是出生棋盘 4（下标 3，o0，左下角 (2,2)）；先断言这 8 格平坦（样本口径）。
+        MatchFlow match = Started([3, 3, 4, 0]).AtRound(2);
         MapData map = match.Map;
-        Coord[] shape = [.. from dy in new[] { 0, 1 } from dx in new[] { 0, 1, 2, 3 } select BirthCell(map, 4, dx, dy)];
-        Assert.Equal((6, 6), (map.BirthBoard(4).Width, map.BirthBoard(4).Height));
+        Coord[] shape = [.. from dy in new[] { 0, 1 } from dx in new[] { 0, 1, 2, 3 } select BirthCell(map, 3, dx, dy)];
+        Assert.Equal(new Coord(2, 2), map.BirthBoard(3).Origin);
         Assert.All(shape, c => Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 0 && !shape.Any(n => map.HasFence(c, n)), c.ToNotation()));
-        Coord eyeA = BirthCell(map, 4, 0, 0);
-        Coord eyeB = BirthCell(map, 4, 2, 0);
-        match.Place(P0, BirthCell(map, 4, 1, 0), BirthCell(map, 4, 3, 0), BirthCell(map, 4, 0, 1), BirthCell(map, 4, 1, 1), BirthCell(map, 4, 2, 1), BirthCell(map, 4, 3, 1));
+        Coord eyeA = BirthCell(map, 3, 0, 0);
+        Coord eyeB = BirthCell(map, 3, 2, 0);
+        match.Place(P0, BirthCell(map, 3, 1, 0), BirthCell(map, 3, 3, 0), BirthCell(map, 3, 0, 1), BirthCell(map, 3, 1, 1), BirthCell(map, 3, 2, 1), BirthCell(map, 3, 3, 1));
         Assert.Equal(new HashSet<Coord> { eyeA, eyeB }, LifeShapeReport.Analyze(match.Board).ForbiddenCellsFor(P1).ToHashSet());
 
         IReadOnlySet<Coord> p1 = match.LegalRangeFor(P1);
         Assert.DoesNotContain(eyeA, p1);
         Assert.DoesNotContain(eyeB, p1);
-        Assert.Equal(match.Board.Battlefields.ById(4)!.Cells.Except([eyeA, eyeB]).ToHashSet(), p1);
+        Assert.Equal(map.BirthBoard(3).Cells().Where(map.IsPlayable).Except([eyeA, eyeB]).ToHashSet(), p1);   // 构筑期：自己的出生棋盘 − 禁入格
         Assert.Contains(eyeA, match.LegalRangeFor(P0));
     }
 

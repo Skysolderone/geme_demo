@@ -17,7 +17,7 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// </remarks>
 public class 坐标随链接平移Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 与拼接时的格映射逐格相同()
     {
         int checkedCells = 0;
@@ -65,7 +65,7 @@ public class 坐标随链接平移Tests
         Assert.True(globalShifts > 0, "样本口径：穷举里确有整体越界平移（锚点向量非零）");
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 改造随棋盘平移()
     {
         // 与 GameBoard.ApplySplice 同口径：栅栏两端各随所在棋盘平移；一端是场景格时随另一端平移；两端都是场景格的不动。
@@ -94,7 +94,7 @@ public class 坐标随链接平移Tests
         Assert.Equal(edits.Select(e => layout.TranslateEdit(e, 0, 1)).OfType<TerrainEdit>(), board.TerrainEdits);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 缺少向量的记录被拒绝()
     {
         MapData opening = LinkMapFixtures.Initial();

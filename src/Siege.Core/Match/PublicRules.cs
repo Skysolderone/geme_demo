@@ -12,30 +12,50 @@ namespace Siege.Core.Match;
 /// </summary>
 public static class PublicRules
 {
-    /// <summary>构筑保护期的大回合数（设计文档 §4.2）：第 1–3 大回合为构筑期（带出"保护期内弃赛"与决赛倒计时起点的依据；合法范围不随它变）。</summary>
+    /// <summary>构筑保护期的大回合数（设计文档 §4.2，open-map 裁决 O1）：第 1–3 大回合为构筑期，合法落子范围与改造范围都限自己锁定的出生棋盘；第 4 大回合起全图。</summary>
     public const int BuildProtectionRounds = 3;
 
     /// <summary>
-    /// 合法落子范围（turn-sequence「合法落子范围的对外契约」）：任何大回合都是该玩家所在战场的可落子格（战场 = 含其出生棋盘的连通分量，随链接扩大；
-    /// 按当前地形现算，改造出来的桥立即可落），扣除 <paramref name="player"/> 的禁入格——扣除只在这里一处（裁决 R12）。
-    /// retire-legacy-rules：旧模式的"保护期内为出生区、此后为全图"两条分支与模式、大回合两个参数一并删除。
+    /// 合法落子范围（turn-sequence「合法落子范围的对外契约」，open-map D3）：第 1–3 大回合 = 该玩家锁定的出生棋盘 <paramref name="birthZone"/> 的格 ∩ 所在战场的可落子格
+    /// （同区者共享；按当前地形现算，改造出来的桥立即可落，岩石与未架桥深水不可落）；第 4 大回合起 = 所在战场（= 全图）的可落子格。
+    /// 两段都扣除 <paramref name="player"/> 的禁入格——扣除只在这里一处（裁决 R12）。出生区标记（3×3 核心区）不施加任何限制。
     /// </summary>
     /// <param name="board">盘面（地形取其当前 <see cref="GameBoard.Map"/>）。</param>
     /// <param name="birthZone">该玩家锁定的出生区编号。</param>
     /// <param name="player">玩家。</param>
     /// <param name="life">对 <paramref name="board"/> 的活形分析（禁入格的唯一查询）。</param>
-    public static IReadOnlySet<Coord> LegalRange(GameBoard board, int birthZone, PlayerId player, LifeShapeReport life)
+    /// <param name="majorRound">该玩家行动的大回合（对局流程传当前大回合；专家前瞻按模拟对手 / 本人的行动大回合传）。</param>
+    public static IReadOnlySet<Coord> LegalRange(GameBoard board, int birthZone, PlayerId player, LifeShapeReport life, int majorRound)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(life);
 
         // 可落子格按当前地形现算：本局架出来的桥必须立刻成为合法落点（artisan-terrain-edit 2.6 缓存排查第 1 条）。
-        return BattlefieldOf(board, birthZone).Cells.Except(life.ForbiddenCellsFor(player)).ToImmutableHashSet();
+        IEnumerable<Coord> cells = BattlefieldOf(board, birthZone).Cells;
+        if (majorRound <= BuildProtectionRounds)
+        {
+            BoardPlate plate = board.Map.BirthBoard(birthZone);
+            cells = cells.Where(plate.Contains);
+        }
+
+        return cells.Except(life.ForbiddenCellsFor(player)).ToImmutableHashSet();
     }
 
     /// <summary>
-    /// 含出生棋盘 <paramref name="birthZone"/> 的战场（按当前地图导出，<see cref="GameBoard.Battlefields"/>）。链接后它的标识可能是另一块编号更小的出生棋盘，
-    /// 所以按"含该出生区"而不是按标识查找。
+    /// 改造范围（terrain-edit「构筑期内的改造范围」，open-map D4 / 裁决 O6）：允许作为改造目标的格集合——第 1–3 大回合为出生棋盘 <paramref name="birthZone"/> 的全部格，
+    /// 第 4 大回合起为全图。不扣禁入格（改造目标不是落点）。改造候选枚举与批次校验都经 <see cref="TerrainEditRules"/> 用它过滤（搭桥 / 烧林的格 ∈ 范围，立栅的边两端 ∈ 范围）。
+    /// </summary>
+    public static IReadOnlySet<Coord> EditScope(GameBoard board, int birthZone, int majorRound)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return majorRound <= BuildProtectionRounds
+            ? board.Map.BirthBoard(birthZone).Cells().ToImmutableHashSet()
+            : board.AllCoords().ToImmutableHashSet();
+    }
+
+    /// <summary>
+    /// 含出生棋盘 <paramref name="birthZone"/> 的战场（按当前地图导出，<see cref="GameBoard.Battlefields"/>）。open-map 起整张地图是唯一战场（标识 0），
+    /// 仍按"含该出生区"而不是按标识查找。
     /// </summary>
     public static Battlefield BattlefieldOf(GameBoard board, int birthZone)
     {

@@ -105,12 +105,13 @@ public class 地图文件往返Tests
     {
         string json = MapFile.ToJson(Link1());
 
-        // link:1：AA6 是中央入口，P5 是出生区信物格，AQ3 是 2 号出生棋盘的左下角（双字母列）；三处各走不同字段。
+        // link:1：U6 是中央入口，M5 是出生区信物格，J10 是 2 号出生棋盘的左下角（记法跳过 I）；三处各走不同字段。
         // retire-legacy-maps 1.6：原样本为 v3 的 G7（入口兼信物）/ B2（出生区信物）/ G4（桥）；第三处取棋盘清单的双字母列坐标。
         // link-map-terrain 第 2 组：link:1 随生成器改变（出生棋盘 6–8、带地形），三处坐标重取；再加一处桥（F8，河流主题的预置桥）。
-        Assert.Contains("\"CentralEntrance\": \"AA6\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"P5\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"Origin\": \"AQ3\"", json, StringComparison.Ordinal);
+        // open-map 1.1：link:1 改为 3+2 紧贴布局（24×18，没有双字母列），三处坐标重取（原 AA6 / P5 / AQ3），桥 F8 不变（河流棋盘仍在 C3）。
+        Assert.Contains("\"CentralEntrance\": \"U6\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"M5\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Origin\": \"J10\"", json, StringComparison.Ordinal);
         Assert.Contains("\"F8\"", json, StringComparison.Ordinal);
     }
 }

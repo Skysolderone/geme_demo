@@ -60,7 +60,7 @@ public class 棋盘展开节拍Tests
         return (now.X - was.X, now.Y - was.Y);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 首轮链接演出_四个节拍依次()
     {
         // Scenario「首轮链接演出」：本机 P0（出生棋盘 0，锚点）与 P1（出生棋盘 1）拼接 → 对方棋盘滑入贴合 → 相机重定界 → 对方盘面显现 → 横幅"棋盘拼接：与 X 交战"。
@@ -97,7 +97,7 @@ public class 棋盘展开节拍Tests
         Assert.Equal(total, new ShowTimeline(beats, ShowDuration.Normal).TotalDurationMs);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 本机是被贴方_本机棋盘滑过去贴合()
     {
         // 裁决 J5：本机自己是被贴方时，演出为"本机棋盘滑过去贴合"（相机随后的重定界跟过去）；对方（锚点）盘面照样显现。
@@ -114,7 +114,7 @@ public class 棋盘展开节拍Tests
         Assert.Equal([P0], opponents);
     }
 
-    [Theory]
+    [Theory(Skip = "open-map 段 B 删除")]
     [InlineData(38, 2, -31, 0, true, 4)]    // 东贴、相对偏移 31 → 演出起点只差 4 格
     [InlineData(10, 2, -3, 0, true, 3)]     // 东贴、相对偏移 3 → 按 3
     [InlineData(2, 40, 0, -33, false, 4)]   // 北贴、相对偏移 33 → 从北侧 4 格往南滑入
@@ -132,7 +132,7 @@ public class 棋盘展开节拍Tests
         }
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他人链接不演出()
     {
         // Scenario「他人链接不演出」：P0、P1 同在出生棋盘 0（不进首轮配对），P2、P3 的出生棋盘 3 + 4 拼接 → P0 的战场没有新增格，空序列；
@@ -151,7 +151,7 @@ public class 棋盘展开节拍Tests
         Assert.True(match.World(P2).Board().Cells.Length > Map.BirthBoard(3).Width * Map.BirthBoard(3).Height);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他人链接平移本机棋盘_布局指纹变_引擎层据此重搭()
     {
         // 裁决 J12-1 根因（board-link-mode F.6）：他人链接把本机战场收拢平移后，本机看得见的格的逐格属性序列（可落子 / 高度 / 地表 / 桥）不变，
@@ -177,7 +177,7 @@ public class 棋盘展开节拍Tests
         Assert.Equal(opening, quiet.World(P0).Board().LayoutKey());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 遮罩_滑入前停在起点_对方格先隐藏后渐显_相机目标带进度()
     {
         (DefaultBoardView before, DefaultBoardView after, ImmutableArray<PlayerId> opponents, _, LinkLayout layout) = LinkedFor(P0);
@@ -231,7 +231,7 @@ public class 棋盘展开节拍Tests
         Assert.True(timeline.Mask().IsEmpty);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 本机为被贴方时滑入期间相机跟随本机棋盘()
     {
         // board-link-mode F.4b / 裁决 J11-5：本机是被贴方，滑入期间注视点 = 滑入开始位姿 + 本机棋盘此刻的平面偏移（与滑入同一插值）；距离不变；
@@ -264,7 +264,7 @@ public class 棋盘展开节拍Tests
         Assert.Null(Siege.Presentation.Camera.CameraPose.FollowSlide(start, anchorMask, new HashSet<Coord>(m0.Map.BirthBoard(0).Cells()), Plane));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 无人值守零时长()
     {
         // Scenario「无人值守零时长」：节拍照常生成，时间线零时长创建即播完、遮罩为空。
@@ -277,7 +277,7 @@ public class 棋盘展开节拍Tests
         Assert.True(timeline.Mask().IsEmpty);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 提速照旧()
     {
         (DefaultBoardView before, DefaultBoardView after, ImmutableArray<PlayerId> opponents, _, LinkLayout layout) = LinkedFor(P0);
@@ -286,7 +286,7 @@ public class 棋盘展开节拍Tests
         Assert.True(timeline.IsFinished);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 拼接那一回合的结算节拍不把平移当成落子与提子()
     {
         // 段 F.4：拼接发生在某小回合末尾（第 3 大回合最后一手之后），该小回合的结算节拍由前后两份全知快照之差得出；

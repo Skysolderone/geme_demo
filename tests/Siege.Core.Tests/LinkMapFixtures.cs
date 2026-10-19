@@ -5,17 +5,32 @@ using Siege.Core.Board.Maps;
 namespace Siege.Core.Tests;
 
 /// <summary>
-/// 测试用链接档地图（board-link-mode 段 A，段 F 改为拼接版）：手写的最小合规数据，不经生成器，便于单独验证校验器、战场导出、改造规则与拼接几何。
+/// 测试用链接档地图（board-link-mode 段 A，段 F 改为拼接版，open-map 段 A 改为建局紧贴）：手写的最小合规数据，不经生成器，便于单独验证校验器、战场导出与改造规则。
 /// 画布口径与生成器相同（裁决 J4 / J7）：原点固定，棋盘底边在第 2 行、最西列从第 2 列起，东 / 北边界外留 2 格。
 /// </summary>
 internal static class LinkMapFixtures
 {
     /// <summary>
-    /// 五块 6×6 出生棋盘一字排开：x = 2 / 11 / 20 / 29 / 38，y = 2，间距 3。下标即出生区编号。
+    /// 五块 6×6 出生棋盘按 open-map D1 的 3+2 布局紧贴：第一行 x = 2 / 8 / 14、y = 2；第二行 x = 2 / 8、y = 8（棋盘 3 北贴棋盘 0、棋盘 4 北贴棋盘 1）。下标即出生区编号。
+    /// 围棋记法（列字母跳过 I）：棋盘 0 C3–H8、1 J3–O8、2 P3–U8、3 C9–H14、4 J9–O14；画布 22×16（列 A–W、行 1–16），场景格只剩四周留白。
+    /// 棋盘 0 的坐标与改动前（一字排开、间距 3）完全相同，只涉及棋盘 0 的用例不受影响。
     /// 各带一个主题（link-map-terrain 1.1：链接档出生棋盘读入时缺主题被拒，夹具经文件往返的测试因此要带上）；主题只用于生成、校验与呈现，不影响这里的任何几何。
     /// link-map-terrain 第 2 组：边长由 5 改 6（裁决 M9 的下限），出生区改为核心区（左下角起 (1,1)–(3,3)），中间带各放 2 格林地凑足"至少 2 个可改造目标"（裁决 M7）。
     /// </summary>
     internal static readonly ImmutableArray<BoardPlate> Births =
+    [
+        new(new Coord(2, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Plateau),
+        new(new Coord(8, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
+        new(new Coord(14, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest),
+        new(new Coord(2, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Palisade),
+        new(new Coord(8, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
+    ];
+
+    /// <summary>
+    /// 改动前（board-link-mode / link-map-terrain）的五块隔绝布局：x = 2 / 11 / 20 / 29 / 38，y = 2，间距 3；画布 46×10。
+    /// open-map 起校验器拒绝它（连通分量 5 ≠ 1），只给不经校验、专测"隔绝"语义的用例（段 B 随配对 / 拼接一并删除）。
+    /// </summary>
+    internal static readonly ImmutableArray<BoardPlate> IsolatedBirths =
     [
         new(new Coord(2, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Plateau),
         new(new Coord(11, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
@@ -24,20 +39,23 @@ internal static class LinkMapFixtures
         new(new Coord(38, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
     ];
 
-    /// <summary>46×10 的链接档初始图：只有 5 块出生棋盘，各 2 个出生区档信物格（核心区对角）与 2 格林地，其余全部障碍；可落子 180、信物 10。</summary>
+    /// <summary>22×16 的链接档初始图：只有 5 块紧贴的出生棋盘，各 2 个出生区档信物格（核心区对角）与 2 格林地，其余全部障碍；可落子 180、信物 10；恰 1 个连通分量。</summary>
     internal static MapData Initial() => Build("test-link-5", Births);
 
+    /// <summary>改动前的隔绝初始图（46×10，5 个连通分量；校验器拒绝）。</summary>
+    internal static MapData Isolated() => Build("test-link-5", IsolatedBirths);
+
     /// <summary>
-    /// 手写的"链接 0 与 1 之后"（东贴，版本 1）的物化状态：1 号棋盘平移到 0 号东侧紧贴（x = 8），其余三块按原次序排到合并战场东侧（x = 17 / 26 / 35，间距 3）；画布 43×10。
+    /// 手写的"链接 0 与 1 之后"（东贴，版本 1）的物化状态（open-map 后只服务已 Skip 的拼接用例）：1 号棋盘平移到 0 号东侧紧贴（x = 8），其余三块按原次序排到合并战场东侧（x = 17 / 26 / 35，间距 3）；画布 43×10。
     /// </summary>
     internal static MapData Linked01() => Build(
         "test-link-5",
         [
-            Births[0],
-            Births[1] with { Origin = new Coord(8, 2) },
-            Births[2] with { Origin = new Coord(17, 2) },
-            Births[3] with { Origin = new Coord(26, 2) },
-            Births[4] with { Origin = new Coord(35, 2) },
+            IsolatedBirths[0],
+            IsolatedBirths[1] with { Origin = new Coord(8, 2) },
+            IsolatedBirths[2] with { Origin = new Coord(17, 2) },
+            IsolatedBirths[3] with { Origin = new Coord(26, 2) },
+            IsolatedBirths[4] with { Origin = new Coord(35, 2) },
         ],
         mapVersion: 1);
 

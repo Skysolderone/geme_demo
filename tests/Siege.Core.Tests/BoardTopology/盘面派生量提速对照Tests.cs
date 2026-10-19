@@ -258,14 +258,10 @@ public class 盘面派生量提速对照Tests
 
     private static IEnumerable<MapData> Maps()
     {
-        // link:1 首轮两次东贴后再接决赛北贴：拼接后的连体棋盘（段 F）。
-        MapData link = LinkMapGenerator.Generate(1);
-        link = LinkMapGenerator.Link(link, 0, 1, LinkSide.East).Map;
-        link = LinkMapGenerator.Link(link, 2, 3, LinkSide.East).Map;
-        yield return LinkMapGenerator.Link(link, 0, 2, LinkSide.North).Map;
-        // retire-legacy-maps 1.8：原另有 v5 与 board:1 两张旧图样本，随旧地图删除；补两张链接图样本（link:2 初始图、link:7 链接一次之后）保持样本数，断言不变。
+        // open-map：link:1 建局即 5 块紧贴的连体棋盘（没有拼接）；样本改为 link:1 / link:2 / link:7 三张初始图，断言不变。
+        yield return LinkMapGenerator.Generate(1);
         yield return MapCatalog.Resolve("link:2");
-        yield return LinkMapGenerator.Link(LinkMapGenerator.Generate(7), 1, 3, LinkSide.East).Map;
+        yield return LinkMapGenerator.Generate(7);
         for (int seed = 1; seed <= 12; seed++)
         {
             yield return RandomMap(seed);

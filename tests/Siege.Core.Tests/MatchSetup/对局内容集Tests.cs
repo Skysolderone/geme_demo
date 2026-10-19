@@ -82,7 +82,7 @@ public class 对局内容集Tests
 
         Assert.Equal(ContentSet.V1, v1.Header.Config.ContentSet);
         Assert.True(v1.Turns.Count >= 24, $"小回合 {v1.Turns.Count}");
-        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(v1));
+        候选格上限Tests.AssertLinkGolden(v1);
         Assert.NotEqual(候选格上限Tests.TurnHash(v1), 候选格上限Tests.TurnHash(v2));
     }
 

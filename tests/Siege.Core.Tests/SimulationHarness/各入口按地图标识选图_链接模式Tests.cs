@@ -155,16 +155,16 @@ public class 各入口按地图标识选图_链接模式Tests
     [Fact]
     public void 链接图批量跑局()
     {
-        // 规格 Scenario「链接图批量跑局」的冒烟（不跑批量：1 局、截断到第 4 大回合）：run --map link:1 能建局并跑起来，日志首部记链接模式、
-        // 第 3 大回合结束时的配对事件由配对种子来源给出（tasks 3.0「run 在 link: 上能建局并跑起来」）。
+        // 规格 Scenario「链接图批量跑局」的冒烟（不跑批量：1 局、截断到第 4 大回合）：run --map link:1 能建局并跑起来，日志首部记链接模式；
+        // open-map：对局里不再有配对 / 链接事件（候选 ≤ 1 直接进入交战）。
         string outDir = Path.Combine(SimFixtures.TempDir("link-run"), "out");
         (int code, _, string err) = RunMain(null, null, "run", "--out", outDir, "--map", "link:1", "--count", "1", "--seed", "1", "--turn-limit", "14", "--difficulty", "Easy", "--serial");
         Assert.True(code == 0, err);
         MatchLog log = MatchLog.ReadDirectory(outDir).Single();
         Assert.False(log.IsFailed, log.Failure?.Message);
         Assert.Equal("Link", log.Header.Mode);
-        LogEvent pairing = Assert.Single(log.EventsOf(LogEventType.PairingApplied));   // 样本口径：种子 1 的锁定结果有两块单人棋盘 → 首轮一对
-        Assert.Equal(PairingSourceNames.Seeded, pairing.Pairing!.Source);
-        Assert.NotEmpty(log.EventsOf(LogEventType.BattlefieldsLinked));
+        Assert.Empty(log.EventsOf(LogEventType.PairingApplied));
+        Assert.Empty(log.EventsOf(LogEventType.BattlefieldsLinked));
+        Assert.True(log.Turns.Count >= 13, $"小回合 {log.Turns.Count}");   // 样本口径：跑过了第 3 大回合，没有任何配对 / 链接事件
     }
 }

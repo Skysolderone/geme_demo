@@ -5,12 +5,13 @@ using Siege.Core.Board.Maps;
 namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
-/// 规格：openspec/changes/board-link-mode/specs/link-map-generation —— Requirement: 物化状态校验（段 F 拼接版）；
+/// 规格：openspec/changes/open-map/specs/link-map-generation —— Requirement: 物化状态校验（open-map：恰 1 个连通分量且含全部出生棋盘）；
 /// map-definition —— Requirement: 地图规格档（Scenario 规格档读写往返 / 非链接档不可增长 / 规格档不改规则）。
+/// 载体 <see cref="LinkMapFixtures.Initial"/> 自 open-map 起为 22×16 的 3+2 紧贴图（棋盘 0 的坐标不变）。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 F 实跑，只跑本类）：
-/// M-F7 <c>MapValidator.ValidateSpliced</c> 不报 BATTLEFIELD_COUNT_MISMATCH（条件改恒假）→ 「校验失败中止」红；
+/// M-F7 <c>MapValidator.ValidateSpliced</c> 不报 BATTLEFIELD_COUNT_MISMATCH（条件改恒假）→ 「分量数不为一被拒」红（open-map 1.1 重跑）；
 /// M-F8 <c>ValidateSpliced</c> 不查每块出生棋盘的信物格数 → 「每块出生棋盘恰两个信物格」红；
 /// M-F9 <c>ValidatePlateGaps</c> 对不同战场也跳过间隔 → 「未链接战场不相邻」红；
 /// M-A10 <c>LinkMapGenerator.Link</c> 删去规格档检查 → 「非链接档不可增长」红。
@@ -25,7 +26,7 @@ public class 物化状态校验Tests
         return new TerrainData(t.Heights.SetItems(extra.Heights), t.Surfaces.SetItems(extra.Surfaces), t.Bridges, t.Fences.Union(extra.Fences));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接后校验()
     {
         // Scenario：任一链接执行完毕 → 当前布局通过校验，版本号加 1；手写的"链接 0 与 1 之后"状态同样通过。
@@ -49,32 +50,51 @@ public class 物化状态校验Tests
     }
 
     [Fact]
-    public void 校验失败中止()
+    public void 分量数不为一被拒()
     {
-        // Scenario：拼接结果让两个未链接的战场相邻 → 校验异常指出这两个战场，对局中止。
-        // 0 号与 1 号边对边紧贴，但版本号仍为 0（没有任何链接）：导出 4 个战场 ≠ 5 − 0。
-        MapData bad = LinkMapFixtures.Build("test-link-adjacent", [LinkMapFixtures.Births[0], LinkMapFixtures.Births[1] with { Origin = new Coord(8, 2) }, .. LinkMapFixtures.Births.Skip(2)]);
+        // Scenario（open-map）：手写的链接档地图，某块出生棋盘与其余 4 块不相邻 → 校验失败并指出连通分量数为 2；加载即异常中止。
+        // 棋盘 4 挪到棋盘 2 北侧隔 2 行（(16, 10)，画布 22×18 仍在区间内）：导出 2 个含出生棋盘的分量。
+        MapData bad = LinkMapFixtures.Build("test-link-split", [.. LinkMapFixtures.Births.Take(4), LinkMapFixtures.Births[4] with { Origin = new Coord(16, 10) }]);
         MapValidationResult result = MapValidator.Validate(bad);
         Assert.False(result.IsValid);
         MapValidationFailure failure = Assert.Single(result.Failures, f => f.Code == "BATTLEFIELD_COUNT_MISMATCH");
-        Assert.Contains("相邻", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(bad.Boards[0].Cells().Concat(bad.Boards[1].Cells()).Order(), failure.Coords.Order());   // 指出这两个战场
+        Assert.Contains("连通分量为 2 个", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(bad.AllCoords().Where(bad.IsPlayable).Order(), failure.Coords.Order());   // 指出全部分量
 
         MapValidationException ex = Assert.Throws<MapValidationException>(() => GameBoard.Load(bad));
         Assert.Contains("BATTLEFIELD_COUNT_MISMATCH", ex.Message, StringComparison.Ordinal);
 
-        // 反向：版本号说有一次链接，棋盘却仍各自隔绝 → 同样拒绝。
-        MapData notLinked = LinkMapFixtures.Initial() with { MapVersion = 1 };
-        Assert.Contains(MapValidator.Validate(notLinked).Failures, f => f.Code == "BATTLEFIELD_COUNT_MISMATCH" && f.Message.Contains("没有沿接缝连通", StringComparison.Ordinal));
+        // 改动前的隔绝布局（46×10、5 个分量）同样被拒（先在外接尺寸这一关被挡住）；合规的紧贴图恰 1 个分量、含全部 5 块。
+        Assert.False(MapValidator.Validate(LinkMapFixtures.Isolated()).IsValid);
+        MapData initial = LinkMapFixtures.Initial();
+        Assert.True(MapValidator.Validate(initial).IsValid, MapValidator.Validate(initial).ToString());
+        Assert.Empty(MapValidator.Validate(initial).Reports);   // 链接档没有距离报告项
+        Assert.Equal(0, initial.MapVersion);
+        Assert.Equal(1, Battlefields.Of(initial).Count);
+        Assert.Equal([0, 1, 2, 3, 4], Battlefields.Of(initial).All[0].BirthZones);
+    }
+
+    [Theory]
+    [InlineData(1ul)]
+    [InlineData(7ul)]
+    [InlineData(20ul)]
+    public void 生成后校验(ulong seed)
+    {
+        // Scenario（open-map）：由任一种子生成地图 → 布局通过校验，版本号为 0；可落子格总数与画布尺寸都落在校验器声明的区间内（种子 1–20 全部通过见 初始布局Tests）。
+        MapData map = LinkMapGenerator.Generate(seed);
+        MapValidationResult result = MapValidator.Validate(map);
+        Assert.True(result.IsValid, result.ToString());
+        Assert.Equal(0, map.MapVersion);
+        Assert.Equal(1, Battlefields.Of(map).Count);
     }
 
     [Fact]
     public void 接缝没有气边被拒()
     {
         // Scenario（link-map-terrain 3.2 / 裁决 M6）：手写的链接档地图，接缝两侧相邻的格之间全部隔着栅栏或高度差 ≥ 2 → 校验失败并指出该接缝。
-        // 载体：手写的"链接 0 与 1 之后"（出生棋盘 1 东边外圈 H 列紧贴出生棋盘 2 西边外圈 J 列，H3–H8 / J3–J8 六对）。
+        // 载体（open-map：建局即紧贴）：初始图里出生棋盘 1 东边外圈 H 列紧贴出生棋盘 2 西边外圈 J 列（记法跳过 I），H3–H8 / J3–J8 六对。
         // 这样的图同时违反外圈规则（外圈不得有栅栏与高差）——合规生成图上接缝恒有气边，这条是给手写地图与以后改外圈规则时用的底线。
-        MapData linked = LinkMapFixtures.Linked01();
+        MapData linked = LinkMapFixtures.Initial();
         Assert.True(MapValidator.Validate(linked).IsValid);
         string[] rows = ["3", "4", "5", "6", "7"];
         MapData blocked = linked with { TerrainData = With(linked, fences: [.. rows.Select(r => ("H" + r, "J" + r))], heights: [("J8", 2)]) };
@@ -90,7 +110,7 @@ public class 物化状态校验Tests
         Assert.DoesNotContain(MapValidator.Validate(oneOpen).Failures, f => f.Code == "LINK_SEAM_NO_LIBERTY");
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 未链接战场不相邻()
     {
         // 角对角相触（间隔 0 但几何不相邻）仍是"相邻"：不同战场的棋盘至少隔 1 格；同一战场内（拼接后）的棋盘紧贴不报。
@@ -107,7 +127,7 @@ public class 物化状态校验Tests
     {
         // retire-legacy-maps（check 补回覆盖）：MapValidator 的棋盘清单规则（ValidatePlateList / ValidatePlateCells / ValidateBirthPlates / ValidateFlatScenery）
         // 是链接档仍在执行的代码，但下面这些失败码此前只在 棋盘档预算与校验Tests（board: 档，整类随旧档删除）里有用例。
-        // 这里把同样的断言换到手写链接档图（LinkMapFixtures，link-map-terrain 起 46×10、五块 6×6）上，每例只改一处；所守规则见 map-definition「地图静态校验规则」
+        // 这里把同样的断言换到手写链接档图（LinkMapFixtures，open-map 起 22×16 的 3+2 紧贴图、五块 6×6）上，每例只改一处；所守规则见 map-definition「地图静态校验规则」
         // 的棋盘清单段与 link-map-generation「物化状态校验」，规则本身不变。
         MapData map = LinkMapFixtures.Initial();
         Assert.True(MapValidator.Validate(map).IsValid);   // 载体本身合规
@@ -116,14 +136,14 @@ public class 物化状态校验Tests
         MapValidationResult empty = MapValidator.Validate(map with { Boards = [] });
         Assert.Equal("BOARDS_REQUIRED", Assert.Single(empty.Failures).Code);
 
-        // ② 出生棋盘边长 6–8（link-map-terrain 裁决 M9）：一块 9×6（其余四块挪开、保持间隔，规模仍在预算内）→ 只报这一条。
+        // ② 出生棋盘边长 6–8（link-map-terrain 裁决 M9）：一块 9×6（其余四块挪开、保持紧贴连通，规模仍在预算内）→ 只报这一条。
         MapData wide = LinkMapFixtures.Build("test-link-wide",
         [
             new(new Coord(2, 2), 9, 6, BoardPlateKind.Birth, BoardTheme.Plateau),
-            new(new Coord(14, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
-            new(new Coord(23, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest),
-            new(new Coord(32, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Palisade),
-            new(new Coord(41, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
+            new(new Coord(11, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
+            new(new Coord(17, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest),
+            new(new Coord(2, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Palisade),
+            new(new Coord(11, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
         ]);
         MapValidationFailure size = Assert.Single(MapValidator.Validate(wide).Failures);
         Assert.Equal("BOARD_SIZE_OUT_OF_RANGE", size.Code);
@@ -152,14 +172,14 @@ public class 物化状态校验Tests
         MapData swapped = map with { BirthZones = [map.BirthZones[1], map.BirthZones[0], .. map.BirthZones.Skip(2)] };
         Assert.Equal(2, MapValidator.Validate(swapped).Failures.Count(f => f.Code == "BIRTH_BOARD_MISMATCH"));
 
-        // ⑦ 信物格必须在棋盘内：把场景格 J5（出生棋盘 1、2 之间）开放并标成信物格 → 指出该格。
+        // ⑦ 信物格必须在棋盘内：把场景格 V5（出生棋盘 2 东侧的留白，记法跳过 I）开放并标成信物格 → 指出该格。
         MapData stray = map with
         {
-            Obstacles = map.Obstacles.Remove(TestMaps.At("J5")),
-            RelicCells = map.RelicCells.Add(TestMaps.At("J5"), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)),
+            Obstacles = map.Obstacles.Remove(TestMaps.At("V5")),
+            RelicCells = map.RelicCells.Add(TestMaps.At("V5"), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)),
         };
         MapValidationFailure outside = Assert.Single(MapValidator.Validate(stray).Failures, f => f.Code == "RELIC_OUTSIDE_BOARD");
-        Assert.Equal([TestMaps.At("J5")], outside.Coords);
+        Assert.Equal([TestMaps.At("V5")], outside.Coords);
 
         // ⑧ 出生区数须多于人数（声明表 ZonesMustExceedPlayers）：只有 4 块出生棋盘的 4 人图 → 与区间越界同时报出。
         MapData four = LinkMapFixtures.Build("test-link-4", [.. LinkMapFixtures.Births.Take(4)]);
@@ -198,7 +218,7 @@ public class 物化状态校验Tests
         Assert.Equal(TestMaps.Rect(6, 2, 2, 6).Order(), overlapped.Coords.Order());   // retire-legacy-maps：Rect 由已删除的 FrontierFixtures 原样迁到 TestMaps
 
         // 出生区数与信物预算：塞第 6 块出生棋盘即超出。
-        MapData tooMany = LinkMapFixtures.Build("test-link-6", [.. LinkMapFixtures.Births, new(new Coord(47, 2), 7, 7, BoardPlateKind.Birth)]);
+        MapData tooMany = LinkMapFixtures.Build("test-link-6", [.. LinkMapFixtures.Births, new(new Coord(14, 8), 7, 7, BoardPlateKind.Birth)]);
         Assert.Contains(MapValidator.Validate(tooMany).Failures, f => f.Code is "BIRTH_ZONE_COUNT_OUT_OF_RANGE" or "RELIC_COUNT_OUT_OF_RANGE");
     }
 

@@ -59,8 +59,10 @@ public class 各棋子势力占比Tests
         // v2 局十种键由 对局内容集Tests.新局缺省v2 钉住。
         // retire-legacy-maps 1.8：样本由 v5 改到 link:1 后种子 11–12 不再出现"匠人与协同同串"（下界响亮失败），按探针换为种子 14–15
         //（link:1 种子 14、12 个小回合：含匠人棋串 12 条、其中与协同同串 11 条）；断言不变，只换样本。
+        // open-map 1.5：link:1 改为 3+2 紧贴布局后种子 14–15 不再出现"匠人与协同同串"（探针种子 10–40 步长 2：只有 10 / 30 / 38 有），按探针换为种子 10–11
+        //（含匠人棋串 42 条、其中与协同同串 5 条）；断言不变，只换样本。
         List<MatchLog> withArtisan = BatchRunner.Execute(
-            SimFixtures.Config(count: 2, seedStart: 14, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
+            SimFixtures.Config(count: 2, seedStart: 10, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
         List<GroupEntry> groups =
             [.. SimFixtures.Sample.Value.Concat(withArtisan).SelectMany(l => l.Turns).SelectMany(t => t.PlayersState).SelectMany(p => p.Groups)];
         Assert.NotEmpty(groups);

@@ -14,7 +14,7 @@ namespace Siege.Core.Tests.Battlefield;
 /// <remarks>变异验证（段 F 实跑）：M-F14 <c>RelicLedger.Copy</c> 改回 <c>Restore(Generation, ExportState())</c> → 「拼接后揭示被平移的信物_公开补充载荷照常」「拼接后揭示被平移的信物_本人部署预演照常」红 2。</remarks>
 public class 链接后的公开补充载荷Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 拼接后揭示被平移的信物_公开补充载荷照常()
     {
         // 四人四区、脚本固定配对（缺省升序两两配：(0,1) 与 (3,4)）：第 3 大回合结束拼接；在被平移方（1 号棋盘）的信物格上落子并揭示，再发布公开补充载荷。
@@ -42,7 +42,7 @@ public class 链接后的公开补充载荷Tests
         Assert.Equal(match.Relics.Coords, copy.Coords);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 拼接后揭示被平移的信物_本人部署预演照常()
     {
         // 富预演 BatchPreviewBuilder 同样在账本副本上跑"将揭示"。他人战场里被平移的信物被揭示即可触发（P0 自己是否链接无关）。

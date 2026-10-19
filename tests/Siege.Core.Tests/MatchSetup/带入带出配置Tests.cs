@@ -91,7 +91,7 @@ public class 带入带出配置Tests
         // 规格 Scenario：关闭带入带出，以同一种子与配置重跑此前记录过的 AI 对局 → 每一步与引入之前逐项相同，黄金哈希不变。
         (MatchLog off, string opening) = Golden(carryInOut: false, ImmutableSortedDictionary<PlayerId, CarryIn>.Empty);
         Assert.Equal(PlainOpening, opening);
-        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(off));
+        候选格上限Tests.AssertLinkGolden(off);
 
         // 反面：同一局全员带换型令（堡垒子），小回合快照不同——带入确实抵达对局，"相同"不是空证。
         // （全员带备用子在这 24 个小回合里快照哈希不变：快照只记手牌类型不记枚数，多 1 枚普通子没有改变 AI 在这段内的落点。）
@@ -106,7 +106,7 @@ public class 带入带出配置Tests
         // 规格 Scenario：开启带入带出、全员无带入，以同一种子重跑同一局 → 逐步与关闭时相同（唯一差别是局终多出带出结算，结算是局外的纯函数，不进对局）。
         (MatchLog on, string opening) = Golden(carryInOut: true, ImmutableSortedDictionary<PlayerId, CarryIn>.Empty);
         Assert.Equal(PlainOpening, opening);
-        Assert.Equal(候选格上限Tests.LinkGoldenTurnHash, 候选格上限Tests.TurnHash(on));
+        候选格上限Tests.AssertLinkGolden(on);
     }
 
     [Fact]

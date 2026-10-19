@@ -36,7 +36,7 @@ public class 决赛倒计时的记录Tests
         return (session.Run(), session.Match);
     });
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 到期结算可查()
     {
         // 规格 Scenario：读取一局发生过到期结算的日志 → 首部有 K，战场结算记录的原因为"到期"并带期限大回合。落盘文本往返后逐项与活对象比。
@@ -58,7 +58,7 @@ public class 决赛倒计时的记录Tests
         Assert.Contains(log.Events, e => e.Type == LogEventType.FinalCountdown && e.MajorRound == 8);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 首部K按记录回放()
     {
         // 回放按日志首部重建（simulation-harness「可复现回放」）：首部 K = 2 的局按 2 重建，到期结算在回放里逐行复现（首部缺 K 的旧日志按 0，由 expert-lookahead 的旧日志夹具守）。
@@ -73,7 +73,7 @@ public class 决赛倒计时的记录Tests
         Assert.Contains(replay.Replayed.Events, e => e.Settlement is { Reason: nameof(SettlementReason.Expired), Deadline: 9 });
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 篡改首部K或结算期限即报分歧()
     {
         // final-countdown check 补测（派发项 5）：回放按首部 K 重建、期限随确定性文本逐行比对。
@@ -103,7 +103,7 @@ public class 决赛倒计时的记录Tests
         Assert.Contains("\"Deadline\":10", tampered.Expected!, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 分析统计到期结算()
     {
         // 离线分析：到期结算次数、所在大回合、到期时势力差（胜者 − 第二名，测试内独立算式：164 − 108）、K 分布与起点。

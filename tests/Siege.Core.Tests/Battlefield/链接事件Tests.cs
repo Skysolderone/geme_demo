@@ -12,7 +12,7 @@ namespace Siege.Core.Tests.Battlefield;
 /// </remarks>
 public class 链接事件Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接合并战场()
     {
         // Scenario：对战场 0 与 2 执行链接 → 战场数减 1，原战场 0 与 2 的全部格属于同一个战场、沿接缝互为邻居，标识为 0。
@@ -56,7 +56,7 @@ public class 链接事件Tests
         }
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接不改内容()
     {
         // Scenario：链接前记录两个战场全部格的地形、占用、设施与信物，然后执行链接 → 锚点战场逐格不变；被平移战场每一格的记录出现在平移后的坐标上、逐项不变；可落子格总数不变。
@@ -114,7 +114,7 @@ public class 链接事件Tests
         Assert.Equal(board.Serialize(), clone.Serialize());
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 接缝两侧朝间隙的边界栅栏合并为一条()
     {
         // R5 下匠人可以在棋盘边缘朝场景格立栅（合法无效果）。锚点东缘朝东、被贴方西缘朝西的两道栅栏在东贴后落成同一条接缝边：
@@ -142,7 +142,7 @@ public class 链接事件Tests
         Assert.Contains(seamEast, board.Neighbors(eastEdge));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接可重放()
     {
         // Scenario：按记录的链接事件顺序在同一地图种子上重新执行 → 每次链接后的地图与原局逐格相同（两次独立执行逐字节相同）。
@@ -161,7 +161,7 @@ public class 链接事件Tests
         Assert.NotEqual(MapFile.ToJson(LinkMapGenerator.Link(LinkMapGenerator.Generate(5), 0, 3, LinkSide.North).Map), MapFile.ToJson(LinkMapGenerator.Link(LinkMapGenerator.Generate(5), 0, 3, LinkSide.East).Map));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 河上架的桥随棋盘平移()
     {
         // link-map-terrain 第 2 组：河流主题的未架桥深水是搭桥目标；对局中架的桥（改造列表）在拼接时按所在棋盘平移。
@@ -194,7 +194,7 @@ public class 链接事件Tests
         Assert.Equal(result.Map.PlayableCount + 1, board.Map.PlayableCount);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void ApplySplice拒绝不是逐格搬运的地图()
     {
         // GameBoard.ApplySplice 只接受"逐格搬过去"的新图：标识、版本号、每个可落子格的落点、可落子格总数、地形、出生区、信物任一不符即拒绝，盘面不变。

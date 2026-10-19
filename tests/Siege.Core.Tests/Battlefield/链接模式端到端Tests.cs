@@ -14,7 +14,54 @@ namespace Siege.Core.Tests.Battlefield;
 /// </summary>
 public class 链接模式端到端Tests
 {
+    /// <summary>
+    /// open-map（段 A 质检补）：同一确定性控制器从插旗跑到终局——没有配对 / 链接，唯一战场结算一次即终局；第 4 大回合开始时（或已终局时）存档、恢复后挂同样的控制器续跑，
+    /// 终局原因、大回合、名次与再存档逐项相同（原链接模式存档的"小回合边界存档续跑一致"在新流程上的全流程版）。
+    /// </summary>
     [Theory]
+    [InlineData("四人四区", new[] { 0, 1, 3, 4 }, 5)]
+    [InlineData("两人同区加两人独占", new[] { 1, 1, 3, 4 }, 5)]
+    [InlineData("四人同区", new[] { 0, 0, 0, 0 }, 5)]
+    [InlineData("构筑期内整轮Pass", new[] { 0, 1, 3, 4 }, 1)]
+    public void 从插旗跑到终局_开放地图(string 开局, int[] zones, int placeRounds)
+    {
+        (MatchFlow match, MatchRunner runner) = Build(zones, placeRounds);
+
+        while (match.Phase == MatchPhase.InProgress && match.MajorRound < 4)
+        {
+            runner.RunTurn();
+        }
+
+        MatchFlow restored = MatchFlow.Restore(Map, match.Serialize());
+        MatchRunner restoredRunner = Attach(restored, placeRounds);
+        Assert.Equal(match.Serialize(), restored.Serialize());
+
+        MatchResult result = match.Phase == MatchPhase.Ended ? match.Result! : runner.RunToEnd(500);
+        MatchResult again = restored.Phase == MatchPhase.Ended ? restored.Result! : restoredRunner.RunToEnd(500);
+
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.LastBattlefieldSettled, result.Reason);
+        Assert.Equal(placeRounds + 1, result.MajorRound);   // 最后一个落子大回合之后的第一个整轮 Pass 大回合结算
+        Assert.Empty(match.Pairings);
+        Assert.Empty(match.Links);
+        Assert.Equal(0, match.Map.MapVersion);
+        BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
+        Assert.Equal((0, SettlementReason.AllPassed), (settled.Battlefield, settled.Reason));
+        Assert.Equal(All.Order(), result.Standings.Select(s => s.Player).Order());
+        Assert.Equal(1, result.Standings.Count(s => s.Rank == 1));
+        Assert.Equal(StandingGroup.Finisher, result.Standings[0].Group);
+        Assert.All(result.Standings.Skip(1), s => Assert.Equal(StandingGroup.Eliminated, s.Group));
+        Assert.Contains(result.Standings, s => s.Input.Reason == EliminationReason.BattlefieldDefeat);
+        Assert.True(result.Standings.Select(s => s.Rank).SequenceEqual(result.Standings.Select(s => s.Rank).Order()), 开局);
+        Assert.Single(match.ActivePlayers);
+
+        Assert.Equal(result.Reason, again.Reason);
+        Assert.Equal(result.MajorRound, again.MajorRound);
+        Assert.Equal(result.Standings.Select(s => (s.Rank, s.Player, s.Input.Power)), again.Standings.Select(s => (s.Rank, s.Player, s.Input.Power)));
+        Assert.Equal(match.Serialize(), restored.Serialize());
+    }
+
+    [Theory(Skip = "open-map 段 B 删除")]
     [InlineData("四人四区", new[] { 0, 1, 3, 4 }, 2, 3, 3)]
     [InlineData("两人同区加两人独占", new[] { 1, 1, 3, 4 }, 2, 2, 3)]
     [InlineData("提前打完的同区棋盘不进配对", new[] { 1, 1, 3, 4 }, 0, 2, 3)]

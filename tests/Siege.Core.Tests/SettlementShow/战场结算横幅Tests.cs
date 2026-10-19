@@ -25,7 +25,7 @@ public class 战场结算横幅Tests
         return (before, [.. match.Settlements], match);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 落败横幅()
     {
         // Scenario「落败横幅」：本机 P1 所在的棋盘 1 结算、势力次高 → "战场落败（第 2 名）"（随后由出局视图接手）。
@@ -43,7 +43,7 @@ public class 战场结算横幅Tests
         Assert.Empty(notices);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他场结算提示()
     {
         // Scenario「他场结算提示」：P2 在棋盘 4 → 提示条"战场 出生区 1 已结算，胜者 红方(P0)"，没有节拍（不打断操作）。
@@ -56,7 +56,7 @@ public class 战场结算横幅Tests
         Assert.Equal(LinkShowBeats.SettledElsewhereText(0, P0), notices[0]);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛不重复()
     {
         // Scenario「决赛不重复」：决赛战场结算即终局 → 不出战场横幅、不出提示条，只有既有的终局横幅（由 SettlementBeats.Banners 的"对局结束"给出）。
@@ -83,7 +83,7 @@ public class 战场结算横幅Tests
         Assert.Equal([LinkShowBeats.SettledElsewhereText(0, P2)], LinkShowBeats.Settlements([], [final], P0, matchEnded: false).Notices);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 落败横幅排在出局横幅之前_展开节拍在最后()
     {
         // 规格「落败横幅」：先"战场落败（第 N 名）"再出局视图——既有结算节拍末尾的出局 / 终局横幅与战场横幅并成一条，战场横幅在前；展开节拍接在最后。
@@ -104,7 +104,7 @@ public class 战场结算横幅Tests
         Assert.Equal(existing.Length + expansion.Length, LinkShowBeats.Splice(existing, [], expansion).Length);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 没有新结算就没有节拍与提示()
     {
         (var before, var after, _) = FirstSettlement();

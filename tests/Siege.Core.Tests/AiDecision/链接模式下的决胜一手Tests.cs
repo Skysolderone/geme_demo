@@ -38,14 +38,21 @@ public class 链接模式下的决胜一手Tests
     private static HeuristicTurnController Ai(MatchFlow match) =>
         new(P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Easy, Weights, AiSearchConfig.Easy with { PassThreshold = Threshold });
 
-    /// <summary>P1 先走一个 Pass 的小回合，轮到 P0（行动顺序 P1 → P0 → P2 → P3）。</summary>
+    /// <summary>
+    /// P1、P2、P3 先各走一个 Pass 的小回合，轮到 P0（行动顺序 P1 → P2 → P3 → P0）。
+    /// open-map：整张地图是唯一战场，"对手"是全部其他在局玩家，所以三人都要先 Pass 才构成"最后一个 Pass 会输"的局面；P2、P3 盘上无子、势力 0，不影响"对手最高"。
+    /// </summary>
     private static MatchFlow AfterP1Passed(MatchFlow match)
     {
-        match.Debug.SetOrder(P1, P0, P2, P3);
-        match.ToDeploy();
-        match.Pass();
+        match.Debug.SetOrder(P1, P2, P3, P0);
+        foreach (PlayerId _ in new[] { P1, P2, P3 })
+        {
+            match.ToDeploy();
+            match.Pass();
+        }
+
         Assert.Equal(P0, match.CurrentPlayer);
-        Assert.Equal([P1], match.Publish().PassedThisRound);   // 样本口径：P1 的 Pass 经公开快照可见
+        Assert.Equal([P1, P2, P3], match.Publish().PassedThisRound.Order());   // 样本口径：三人的 Pass 经公开快照可见
         return match;
     }
 
@@ -88,7 +95,7 @@ public class 链接模式下的决胜一手Tests
         Assert.True(match.Confirm().Confirmed);
         Assert.True(match.Publish().Power!.Of(P0).Total >= match.Publish().Power!.Of(P1).Total);   // 预演口径与正式结算一致：确已反超
         int field = match.BattlefieldOf(P0);
-        match.PassRound();
+        Assert.Equal(2, match.MajorRound);   // P0 落子后本大回合结束，唯一战场不结算（不是整轮 Pass）
         Assert.False(match.IsBattlefieldSettled(field));
         Assert.Empty(match.Settlements);
         Assert.True(match.PlayerStates.Single(s => s.Player == P0).IsActive);
@@ -97,9 +104,9 @@ public class 链接模式下的决胜一手Tests
     [Fact]
     public void 最后一个Pass会输且有反超手_追平即落()
     {
-        // "≥ 对手最高"含追平（并列最高视为最高）：P0 一枚孤子 3、P1 左上角 2×2 四子 8；P0 落孤子点后 3 + 5 = 8，恰好追平 → 落下。
+        // "≥ 对手最高"含追平（并列最高视为最高）：P0 一枚孤子 4（open-map：棋盘 0 东南角紧贴棋盘 1，多一口气）、P1 左下角 2×2 四子加 (2,0) 一子 9；P0 落孤子点后 4 + 5 = 9，恰好追平 → 落下。
         // 判别力：变异 MD-3"决胜判据改为严格反超（margin > 0）"→ 本测试红。
-        MatchFlow match = AfterP1Passed(Flat().Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1), Corner(1, 1)));
+        MatchFlow match = AfterP1Passed(Flat().Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1), Corner(1, 1), Corner(2, 0)));
         HeuristicTurnController ai = DecideAtCandidate(match);
 
         DecisiveMove decisive = Assert.IsType<DecisiveMove>(ai.LastDecisive);
@@ -122,17 +129,18 @@ public class 链接模式下的决胜一手Tests
         Assert.Equal("D:pass", ai.Decisions[^1]);
 
         match.ToDeploy();
-        match.Pass();
-        match.PassRound();
+        match.Pass();   // 四人全部 Pass → 唯一战场整轮 Pass 结算（P0 战场落败），对局终局
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
         Assert.Equal(P1, settled.Winner);
         Assert.Equal(EliminationReason.BattlefieldDefeat, match.PlayerStates.Single(s => s.Player == P0).EliminationReason);
+        Assert.Equal(MatchPhase.Ended, match.Phase);
     }
 
     [Fact]
     public void 对手尚未Pass时不触发()
     {
         // Scenario「对手尚未 Pass 时不触发」：同「最后一个 Pass 会输且有反超手」的局面，但 P0 先行动、P1 本大回合尚未 Pass → 决胜一手不触发，
+        // open-map：对手 = 全部其他在局玩家，任一人未 Pass 即不触发。
         // AI 依停手阈值 Pass，与引入本条之前相同。判别力：变异 MD-1 去掉条件 (1) → 本测试红（会落下反超的孤子）。
         MatchFlow match = Trailing();
         match.Debug.SetOrder(P0, P1, P2, P3);
@@ -157,7 +165,7 @@ public class 链接模式下的决胜一手Tests
         Assert.Null(ai.LastDecisive);
         Assert.True(ai.LastChoice!.IsPass);
 
-        MatchFlow tied = AfterP1Passed(Flat().Place(P0, FarCorner).Place(P1, Corner(0, 0)));
+        MatchFlow tied = AfterP1Passed(Flat().Place(P0, FarCorner).Place(P1, Corner(0, 1)));   // open-map：东南角孤子 4 气口径为 1 + 3，西边第二格 (0, 1) 同为 1 + 3
         Assert.Equal(tied.Publish().Power!.Of(P0).Total, tied.Publish().Power!.Of(P1).Total);   // 样本口径
         Assert.False(HeuristicTurnController.DecisiveTriggered(tied.Publish(), P0));
         Assert.True(DecideAtCandidate(tied).LastChoice!.IsPass);

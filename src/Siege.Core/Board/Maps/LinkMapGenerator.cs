@@ -152,7 +152,7 @@ public static partial class LinkMapGenerator
     /// <summary>每块出生棋盘的出生区档信物格数（裁决 J2），都在核心区内（link-map-terrain D1）。</summary>
     public const int RelicsPerBirthBoard = 2;
 
-    /// <summary>战场 / 出生棋盘之间的固定间距（裁决 J4 / J7）。</summary>
+    /// <summary>拼接后未参与链接的战场收拢到东侧时的间距（裁决 J4 / J7）。open-map 起初始布局不再用它（5 块紧贴，<see cref="InitialLayout"/>），只剩 <see cref="Link"/> 读，段 B 随拼接删除。</summary>
     public const int Gap = 3;
 
     /// <summary>画布留白：初始布局四周、拼接后东 / 北侧边界外的空格数。</summary>
@@ -208,13 +208,13 @@ public static partial class LinkMapGenerator
             (themes[i], themes[j]) = (themes[j], themes[i]);
         }
 
+        // open-map D1：按次序把 5 块一次性边对边紧贴成一张连通地图（3+2 两行，InitialLayout 的纯几何，不消费随机）。
         var plates = new BoardPlate[BirthBoards];
-        int x = Margin;
-        foreach (int zone in order)
+        ImmutableArray<BoardPlate> arranged = InitialLayout.Arrange(
+            [.. order.Select(zone => new BoardPlate(new Coord(0, 0), sizes[zone].W, sizes[zone].H, BoardPlateKind.Birth, themes[zone]))], Margin);
+        for (int k = 0; k < order.Length; k++)
         {
-            (int w, int h) = sizes[zone];
-            plates[zone] = new BoardPlate(new Coord(x, Margin), w, h, BoardPlateKind.Birth, themes[zone]);
-            x += w + Gap;
+            plates[order[k]] = arranged[k];
         }
 
         // 按编号逐块生成地形（自检失败在同一条流上重抽该块，D3）。

@@ -49,8 +49,8 @@ public static class BoardThemeNames
 
 /// <summary>
 /// 棋盘清单的一项（board-map D2）：一块轴对齐矩形棋盘的外接矩形（左下角坐标、宽、高）、类别与主题。
-/// 清单只用于静态校验与呈现，MUST NOT 参与气、提子、覆盖、保护期、计分与信物的任何结算——
-/// 对局规则、AI 与结算流程都不读它。通道不入清单。
+/// 清单用于静态校验与呈现，MUST NOT 参与气、提子、覆盖、计分与信物的任何结算；open-map D2 起唯一例外是构筑期的合法落子范围与改造范围
+/// （<c>PublicRules.LegalRange</c> / <c>EditScope</c> 经 <c>MapData.BirthBoard</c> 取整块出生棋盘的格集合作几何基），其余规则、AI 评价与结算流程都不读它。通道不入清单。
 /// </summary>
 /// <remarks>规格：openspec/changes/board-map/specs/map-definition —— Requirement: 棋盘清单</remarks>
 /// <param name="Origin">左下角格。</param>

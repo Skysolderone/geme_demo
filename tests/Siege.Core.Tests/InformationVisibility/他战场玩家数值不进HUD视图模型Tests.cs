@@ -20,7 +20,7 @@ public class 他战场玩家数值不进HUD视图模型Tests
     /// <summary>P0、P1 同在棋盘 1，P2 在棋盘 4，P3 在棋盘 5；四人各落一子，势力都大于 0。</summary>
     private static MatchFlow Fought() => Started([0, 0, 3, 4]).PlayRound(P0, P1, P2, P3);
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他战场玩家的势力行只剩名字与状态()
     {
         ViewerWorld world = Fought().World(P0);
@@ -51,7 +51,7 @@ public class 他战场玩家数值不进HUD视图模型Tests
         Assert.True(Assert.IsType<PowerLayerContent>(Siege.Presentation.Layers.TacticalLayers.Build(Fought().PublicWorldOf(), TacticalLayer.Power)).Players.Single(p => p.Player == P2).Total > BigInteger.Zero);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他战场玩家的顺序行只剩预测位置()
     {
         ViewerWorld world = Fought().World(P0);
@@ -78,7 +78,7 @@ public class 他战场玩家数值不进HUD视图模型Tests
         }
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他战场玩家的手牌类型与结构参数不可见()
     {
         MatchFlow match = Fought();
@@ -104,7 +104,7 @@ public class 他战场玩家数值不进HUD视图模型Tests
         Assert.NotEmpty(HandInfoPanelView.Build(match.World(P2)).Opponents.Single(o => o.Player == P0).Types);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 他战场已结算时状态文案带胜出_出局者按出局显示()
     {
         // P2、P3 同在棋盘 4（索引 3），本大回合都 Pass → 结算：胜者"所在战场已结算（胜出）"，落败者"出局"；P0 在棋盘 1 看到的只有这些。

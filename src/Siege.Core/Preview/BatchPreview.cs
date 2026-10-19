@@ -136,7 +136,7 @@ public static class BatchPreviewBuilder
         ImmutableArray<EditOutlook> editOptions =
         [
             .. ordered.Where(p => p.Type == TerrainEditRules.EditorType)
-                .Select(p => new EditOutlook(p.Coord, p.Edit, TerrainEditRules.LegalTargets(board.Map, p.Coord, context.WorkshopActive))),
+                .Select(p => new EditOutlook(p.Coord, p.Edit, TerrainEditRules.LegalTargets(board.Map, p.Coord, context.WorkshopActive, context.EditScope))),
         ];
 
         if (rehearsal.IsPass || rehearsal.ProjectedBoard is not { } projected)

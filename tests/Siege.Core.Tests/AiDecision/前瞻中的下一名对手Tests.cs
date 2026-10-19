@@ -188,42 +188,46 @@ public class 前瞻中的下一名对手Tests
     // ---------- ai-seat-vision（裁决 V2 / D2，tasks 1.2）：链接模式下名册限同战场，修 C12 ----------
 
     [Fact]
-    public void 他战场玩家不进名册()
+    public void 不同棋盘的玩家进名册()
     {
-        // 规格 Scenario「他战场玩家不进名册」（编号映射：专家 P0、同战场 P1 在出生棋盘 0；P2、P3 在未链接的出生棋盘 3、4）：
-        // 本大回合顺序 P0、P2、P1、P3 → 每个候选的下一名对手都是 P1；P2、P3 不进名册，也不被当作出局。全知视图与按座位投影视图都如此。
-        // 专家末位时（顺序 P1、P2、P3、P0）跨大回合预测只在名册玩家之间比较 → 下一名对手是 P1，行动大回合 + 1。
-        // 变异 MN-1：去掉 NextOpponent 的同战场过滤 → 全知下 P2 进名册且排在 P1 之前，本测试红。
-        // 变异 MN-2：Project 三参数重载不限定出局判定范围（judged 恒 null）→ 投影视图下 P2、P3 被判出局，"不被当作出局"断言红。
+        // 规格 Scenario「不同棋盘的玩家进名册」（open-map；编号映射：专家 P0、同棋盘 P1 在出生棋盘 0；P2、P3 在出生棋盘 3、4，整局只有一个战场）：
+        // 第 2 大回合本大回合顺序 P0、P2、P1、P3 → 每个候选的下一名对手都是 P2，模拟 P2 的回应落点全在棋盘 4（下标 3）内；全知视图与按座位投影视图（= 全图）都如此。
+        // 专家末位时（顺序 P1、P2、P3、P0）跨大回合预测在全部名册玩家之间比较 → 下一名对手是预测顺序里的第一名他人，行动大回合 + 1。
+        // 原「他战场玩家不进名册」随 open-map 反向（名册 = 全部其他在局玩家）。
         MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 4]);
         match.PlayRounds(1, TestMaps.All);
         int round = match.MajorRound;
         Assert.Equal(2, round);
-        Assert.True(match.Publish().Power!.Of(P2).Total > 0, "样本口径：他战场玩家确有势力");
+        Assert.True(match.Publish().Power!.Of(P2).Total > 0, "样本口径：别的棋盘上的玩家确有势力");
         Assert.All(TestMaps.All, p => Assert.True(match.StateOf(p).HasEstablishedPower, $"样本口径：{p} 曾建立正势力"));
-        Assert.Equal(match.BattlefieldOf(P0), match.BattlefieldOf(P1));
-        Assert.NotEqual(match.BattlefieldOf(P0), match.BattlefieldOf(P2));
-        Assert.NotEqual(match.BattlefieldOf(P0), match.BattlefieldOf(P3));
+        Assert.All(TestMaps.All, p => Assert.Equal(match.BattlefieldOf(P0), match.BattlefieldOf(p)));
 
         MatchPublicView seatView = match.PublishSeatProjection(P0);
-        // 样本口径（C12 的触发条件）：按座位投影里 P2、P3 的势力为 0，按全体判定出局的旧口径（两参数 Project）会把他们判为出局。
-        MatchPublicView legacyProjected = ExpertLookahead.Project(seatView, seatView.Board);
-        Assert.Equal(PlayerStatus.Eliminated, legacyProjected.Players.Single(p => p.Player == P2).Status);
+        Assert.Equal(match.Publish().Power!.Of(P2).Total, seatView.Power!.Of(P2).Total);   // 按座位投影含全图：P2 的势力可读
+        HashSet<Coord> board3 = [.. match.Map.BirthBoard(3).Cells()];
 
         foreach (MatchPublicView start in new[] { match.Publish(), seatView })
         {
-            // B1 取决策起点盘面本身（名册与候选无关的情形：任何候选都只改本战场，他战场玩家的势力不随候选变）。
             MatchPublicView view = start with { ActionOrder = [P0, P2, P1, P3] };
             MatchPublicView projected = ExpertLookahead.Project(view, view.Board, P0);
-            Assert.All(new[] { P2, P3 }, p => Assert.Equal(PlayerStatus.Active, projected.Players.Single(s => s.Player == p).Status));
-            Assert.Equal((P1, round), ExpertLookahead.NextOpponent(view, P0, projected));
+            Assert.All(new[] { P1, P2, P3 }, p => Assert.Equal(PlayerStatus.Active, projected.Players.Single(s => s.Player == p).Status));
+            Assert.Equal((P2, round), ExpertLookahead.NextOpponent(view, P0, projected));
+            // 构筑期内模拟对手的合法落子范围 = 其出生棋盘（棋盘 4）的可落子格 − 禁入格。
+            Batch.BatchContext simulated = ExpertLookahead.SimulatedContext(projected, P2, round);
+            Assert.NotEmpty(simulated.LegalRange);
+            Assert.All(simulated.LegalRange, c => Assert.Contains(c, board3));
+            Assert.NotNull(simulated.EditScope);
+            Assert.All(simulated.EditScope!, c => Assert.Contains(c, board3));
 
             MatchPublicView last = start with { ActionOrder = [P1, P2, P3, P0] };
-            Assert.Equal((P1, round + 1), ExpertLookahead.NextOpponent(last, P0, ExpertLookahead.Project(last, projected.Board, P0)));
+            (PlayerId Responder, int MajorRound)? next = ExpertLookahead.NextOpponent(last, P0, ExpertLookahead.Project(last, projected.Board, P0));
+            Assert.NotNull(next);
+            Assert.NotEqual(P0, next!.Value.Responder);
+            Assert.Equal(round + 1, next.Value.MajorRound);
         }
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 同战场无对手时退化()
     {
         // 规格 Scenario「同战场无对手时退化」：链接模式，专家独自在单人战场（四人各占一块出生棋盘，第 1 大回合）→ 名册为空，不做模拟，

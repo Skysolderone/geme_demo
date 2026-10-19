@@ -65,7 +65,7 @@ public class 各入口按地图标识选图Tests
         Assert.Contains("盲选出生棋盘：以上是 5 块棋盘的占位（1–5）", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 5", text, StringComparison.Ordinal);
-        Assert.Contains("地图 link:1（5 块隔绝的出生棋盘）", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);
+        Assert.Contains("地图 link:1（5 块紧贴成一张连通地图的出生棋盘）", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);
     }
 
     [Fact]

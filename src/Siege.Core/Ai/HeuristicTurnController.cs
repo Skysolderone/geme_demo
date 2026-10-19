@@ -514,7 +514,7 @@ public sealed class HeuristicTurnController : ITurnController
             var outside = new List<PointScore>();
             foreach (Coord cell in legal)
             {
-                ImmutableArray<TerrainEdit> targets = [.. TerrainEditRules.LegalTargets(map, cell, context.WorkshopActive).Where(e => e.Kind == kind)];
+                ImmutableArray<TerrainEdit> targets = [.. TerrainEditRules.LegalTargets(map, cell, context.WorkshopActive, context.EditScope).Where(e => e.Kind == kind)];
                 rangeTargets += targets.Length;
                 if (enumerated.Contains(cell))
                 {
@@ -709,7 +709,7 @@ public sealed class HeuristicTurnController : ITurnController
         {
             foreach (PieceType type in types)
             {
-                foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type, context.WorkshopActive))
+                foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type, context.WorkshopActive, context.EditScope))
                 {
                     if (ScoreOne(batch, rehearse, evaluator, cell, type, edit, rejections) is { } point)
                     {
@@ -802,7 +802,7 @@ public sealed class HeuristicTurnController : ITurnController
             BigInteger? total = Score(cell, representative, null);
             if (total is null && holdsEditor)
             {
-                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell, context.WorkshopActive))
+                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell, context.WorkshopActive, context.EditScope))
                 {
                     if (Score(cell, TerrainEditRules.EditorType, edit) is { } edited && (total is null || edited > total))
                     {
@@ -832,7 +832,7 @@ public sealed class HeuristicTurnController : ITurnController
     /// 也 MUST NOT 自行扩展或收窄范围：<paramref name="workshop"/> 是本小回合快照的工坊标记（经批次上下文传入，more-pieces-relics D5），
     /// 为真时隔一格的格目标由唯一实现一并给出。
     /// </summary>
-    private static IEnumerable<TerrainEdit?> EditOptions(MapData map, Coord cell, PieceType type, bool workshop)
+    private static IEnumerable<TerrainEdit?> EditOptions(MapData map, Coord cell, PieceType type, bool workshop, IReadOnlySet<Coord>? scope)
     {
         yield return null;
         if (type != TerrainEditRules.EditorType)
@@ -840,7 +840,7 @@ public sealed class HeuristicTurnController : ITurnController
             yield break;
         }
 
-        foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, cell, workshop))
+        foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, cell, workshop, scope))
         {
             yield return edit;
         }

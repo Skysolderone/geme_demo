@@ -243,9 +243,11 @@ public class 专家难度的一层前瞻Tests
         // ai-seat-vision 1.2 重钉（裁决 V2，见实施记录 V7）：前瞻名册改为只含同战场玩家。夹具写死全知（LookaheadFixtures.LinkConfig）；三颗种子的决策序列、决策条数与
         // ai-P0 子流消费次数逐项不变，只有前瞻记录的确定性文本变了（下一名对手由他战场玩家换成同战场玩家、前瞻后分数随之变，截断前未改变任何一次选择）。旧 RecordsHash：
         // 1 → D2074DF53A1562876D099DACDAA3FE2AA2BF36001774D69C54CC8D18A61AE25B；2 → E84CF42356DDF481D25A6DA7E97D27ADC447637298A5CF4AA29A16317FA7D8B8；3 → 54E0E8F99651D05CF8B6CC94480499E6EE8E49FC0B9033B1811183AD6D10C040。
-        (1, 24, "F0D3738FF8300586C8AAEF4E8ED724B2AF2C06CC5C76DB4AE51C6007EFE5736B", 6386, 12, "937E83BAD1649A517773EA527D1FADC9C8018D8C84CA304808661D4175C8D6E4"),
-        (2, 24, "7435EBED47DC95AD23CA6A6039C55009A17886E3334BDDB52912844ACC448CDB", 7533, 12, "6F8FBBDACC0FC3B91AE28AC2358D78743E2D5E1F85D7F57774C007723A66E57C"),
-        (3, 24, "20FF2CD2850E4BA43E36C258156FBF79BB85D3C987529BA7EA3CBD7777222F90", 8184, 12, "0F5F1AF62E8153F652ADBDA90112ABD6FFB71235A4EAB5121154488FCCA98526"),
+        // open-map 1.5 重钉：link:1 改为 3+2 紧贴布局、锁定后全图可见、第 4 大回合起全图可落、前瞻名册 = 全部在局玩家，三颗种子的走法整体改变（决策条数仍为 24、前瞻记录仍为 12）。旧值：
+        // (1, 24, F0D3738FF8300586…, 6386, 12, 937E83BAD1649A51…) (2, 24, 7435EBED47DC95AD…, 7533, 12, 6F8FBBDACC0FC3B9…) (3, 24, 20FF2CD2850E4BA4…, 8184, 12, 0F5F1AF62E8153F6…)。
+        (1, 24, "0BEAB462B0D4E148AA99350B118E9CA182CEC0248BDE89DA7A4FA39A969F385C", 8556, 12, "D5D6C56BA748682A3E3C57900745CE1C3EBEB00EFAAB8D610B6605C0636DE43E"),
+        (2, 24, "D8A9DF8114E9B9B8C19BB0B56805AB1F1557834B65C2A791C9EEBB7B3E9D92F2", 8556, 12, "E560CE02355801C43E8982CEC2D2563235380FCFC131CA2A25295B361109B4CC"),
+        (3, 24, "17DC195B11B4DF4AF76DAB1969D39E104069D756F5E66E470E333F2C3A636A88", 8556, 12, "B06D5D809605EA4CC57B17D4C9CB464F68F76EBE399C03EAC894A72C5A5028F3"),
     ];
 
     /// <summary>G1 口径的一局：座位 1（P0）按 <paramref name="search"/> 做专家，与 <see cref="G1Golden"/> 逐项比对。</summary>
@@ -260,7 +262,8 @@ public class 专家难度的一层前瞻Tests
         Assert.Contains(records, r => r.StartsWith(nameof(LookaheadStatus.Applied), StringComparison.Ordinal));
         (ulong Seed, int Decisions, string DecisionsHash, long Consumed, int Records, string RecordsHash) golden = G1Golden.SingleOrDefault(g => g.Seed == seed);
         Assert.True(golden.Seed == seed, "缺黄金值：" + actual);
-        Assert.Equal($"{golden.Seed} {golden.Decisions} {golden.DecisionsHash} {golden.Consumed} {golden.Records} {golden.RecordsHash}", actual);
+        string expected = $"{golden.Seed} {golden.Decisions} {golden.DecisionsHash} {golden.Consumed} {golden.Records} {golden.RecordsHash}";
+        Assert.True(expected == actual, $"G1 黄金值不同：期望 {expected}；实际 {actual}");
     }
 
     /// <summary>

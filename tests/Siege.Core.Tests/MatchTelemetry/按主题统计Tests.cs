@@ -72,7 +72,7 @@ public class 按主题统计Tests
         Assert.True(double.IsNaN(Stat(s, BoardTheme.Mixed).MeanRank));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 匠人改造按目标所在棋盘与动作统计_坐标随链接换算()
     {
         // 注入 A：第 1 小回合（版本 0）在棋盘 3 搭桥 1 次、在棋盘 2 立栅 1 次；最后一个小回合（全部链接之后）在棋盘 1 烧林 1 次，
@@ -115,7 +115,7 @@ public class 按主题统计Tests
         Assert.Equal(3, s.Themes.Sum(t => t.EditTotal));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 公共信物个数与被控制次数按所在棋盘统计_失去控制与出生区信物不计()
     {
         // link:1 的公共信物在棋盘 0、2、3 各 1 个（样本口径断言）→ 三局合计：高台 3、林地 3、栅栏阵 3，河流与混合 0。

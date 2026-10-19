@@ -24,6 +24,9 @@ namespace Siege.Core.Board;
 /// <para><b>工坊</b>（more-pieces-relics D5）：本小回合快照标记工坊生效时，格目标另含与落点同行 / 同列、直线距离恰为 2 的格（"隔一格"，至多 4 格），
 /// 中间那格不设任何条件；斜向与直线距离 3 及以上的格仍不是格目标。边目标的范围不变。格目标候选只在 <see cref="CellTargets"/> 一处给出，
 /// 枚举与拒绝理由共用它。</para>
+/// <para><b>改造范围</b>（open-map D4 / 裁决 O6，terrain-edit「构筑期内的改造范围」）：带 <c>scope</c> 的重载按流程层给的改造范围（<c>PublicRules.EditScope</c>：
+/// 构筑期为自己的出生棋盘，第 4 大回合起为全图）过滤——搭桥 / 烧林的目标格 ∈ 范围，立栅的边两端都 ∈ 范围；枚举与拒绝理由共用同一判定，
+/// 理由文案固定为 <see cref="OutOfScopeReason"/>。<c>scope</c> 为 <c>null</c> 即不限（改动前的行为）。</para>
 /// <para><b>批内唯一与"不链式"不在本类</b>：本类只按传入的这一份地形判定单次改造，
 /// 而"按批次开始前的地形判定"与"同一目标批内唯一"是批次层的事（<c>BatchRehearsal</c>）。</para>
 /// </remarks>
@@ -31,6 +34,9 @@ public static class TerrainEditRules
 {
     /// <summary>只有匠人能携带改造（terrain-edit「匠人落子即改造」）。</summary>
     public const PieceType EditorType = PieceType.Artisan;
+
+    /// <summary>改造目标越出改造范围的拒绝理由（terrain-edit「构筑期内的改造范围」规定的文案）。</summary>
+    public const string OutOfScopeReason = "构筑期内改造目标须在自己的出生棋盘内";
 
     /// <summary>
     /// 枚举一枚落在 <paramref name="artisanCell"/> 的匠人此刻的<b>全部</b>合法改造目标（确定性顺序：先按动作类型，再按目标记法）。
@@ -43,7 +49,12 @@ public static class TerrainEditRules
     /// 同 <see cref="LegalTargets(MapData, Coord)"/>，<paramref name="workshop"/> 为本小回合快照的工坊标记（more-pieces-relics D5）：
     /// 为真时格目标另含与落点同行 / 同列、直线距离恰为 2 的格；边目标不变。
     /// </summary>
-    public static ImmutableArray<TerrainEdit> LegalTargets(MapData map, Coord artisanCell, bool workshop)
+    public static ImmutableArray<TerrainEdit> LegalTargets(MapData map, Coord artisanCell, bool workshop) => LegalTargets(map, artisanCell, workshop, scope: null);
+
+    /// <summary>
+    /// 同 <see cref="LegalTargets(MapData, Coord, bool)"/>，再按改造范围 <paramref name="scope"/>（open-map D4）过滤：格目标 ∈ 范围、边目标两端都 ∈ 范围；<c>null</c> 不限。
+    /// </summary>
+    public static ImmutableArray<TerrainEdit> LegalTargets(MapData map, Coord artisanCell, bool workshop, IReadOnlySet<Coord>? scope)
     {
         ArgumentNullException.ThrowIfNull(map);
         if (!map.Contains(artisanCell))
@@ -54,6 +65,11 @@ public static class TerrainEditRules
         var found = new List<TerrainEdit>();
         foreach (Coord n in CellTargets(map, artisanCell, workshop))
         {
+            if (!InScope(scope, n))
+            {
+                continue;
+            }
+
             if (map.TerrainData.IsUnbridgedDeepWater(n))
             {
                 found.Add(TerrainEdit.Bridge(n));
@@ -71,6 +87,11 @@ public static class TerrainEditRules
             // 其余给出 12 条外圈边。不同的 n 之间不会撞车：两个四邻格互不相邻，外圈端点离落点是 2 格。
             foreach (Coord m in Adjacency.Neighbors(map.Width, map.Height, n))
             {
+                if (!InScope(scope, n) || !InScope(scope, m))
+                {
+                    continue;
+                }
+
                 if (!map.HasFence(n, m))
                 {
                     found.Add(TerrainEdit.Fence(n, m));
@@ -87,6 +108,9 @@ public static class TerrainEditRules
     /// <summary>同 <see cref="IsLegal(MapData, Coord, TerrainEdit)"/>，带本小回合的工坊标记。</summary>
     public static bool IsLegal(MapData map, Coord artisanCell, TerrainEdit edit, bool workshop) => Reject(map, artisanCell, edit, workshop) is null;
 
+    /// <summary>同上，再带改造范围（open-map D4）。</summary>
+    public static bool IsLegal(MapData map, Coord artisanCell, TerrainEdit edit, bool workshop, IReadOnlySet<Coord>? scope) => Reject(map, artisanCell, edit, workshop, scope) is null;
+
     /// <summary>
     /// 拒绝理由；合法时为 <c>null</c>。判定与 <see cref="LegalTargets"/> 同源——本方法只负责把"为什么不在合法集合里"说清楚，
     /// MUST NOT 与 <see cref="LegalTargets"/> 出现口径分歧（守门：<c>改造合法性Tests.拒绝理由与合法目标集合一致</c>）。
@@ -94,7 +118,10 @@ public static class TerrainEditRules
     public static string? Reject(MapData map, Coord artisanCell, TerrainEdit edit) => Reject(map, artisanCell, edit, workshop: false);
 
     /// <summary>同 <see cref="Reject(MapData, Coord, TerrainEdit)"/>，<paramref name="workshop"/> 为本小回合快照的工坊标记。</summary>
-    public static string? Reject(MapData map, Coord artisanCell, TerrainEdit edit, bool workshop)
+    public static string? Reject(MapData map, Coord artisanCell, TerrainEdit edit, bool workshop) => Reject(map, artisanCell, edit, workshop, scope: null);
+
+    /// <summary>同上，再带改造范围 <paramref name="scope"/>（open-map D4）：目标格 / 边两端越出范围即以 <see cref="OutOfScopeReason"/> 拒绝；<c>null</c> 不限。</summary>
+    public static string? Reject(MapData map, Coord artisanCell, TerrainEdit edit, bool workshop, IReadOnlySet<Coord>? scope)
     {
         ArgumentNullException.ThrowIfNull(map);
         if (!map.Contains(artisanCell))
@@ -107,6 +134,11 @@ public static class TerrainEditRules
         switch (edit.Kind)
         {
             case TerrainEditKind.Bridge:
+                if (!InScope(scope, edit.Cell))
+                {
+                    return $"{OutOfScopeReason}：{edit.Cell.ToNotation()}。";
+                }
+
                 if (!cellTargets.Contains(edit.Cell))
                 {
                     return OutOfCellRange(artisanCell, edit.Cell, workshop);
@@ -122,6 +154,11 @@ public static class TerrainEditRules
                     : null;
 
             case TerrainEditKind.Burn:
+                if (!InScope(scope, edit.Cell))
+                {
+                    return $"{OutOfScopeReason}：{edit.Cell.ToNotation()}。";
+                }
+
                 if (!cellTargets.Contains(edit.Cell))
                 {
                     return OutOfCellRange(artisanCell, edit.Cell, workshop);
@@ -140,6 +177,11 @@ public static class TerrainEditRules
                 if (!Adjacency.AreAdjacent(edit.Edge.A, edit.Edge.B))
                 {
                     return $"立栅的边两端不是几何四邻：{edit.Edge}。";
+                }
+
+                if (!InScope(scope, edit.Edge.A) || !InScope(scope, edit.Edge.B))
+                {
+                    return $"{OutOfScopeReason}：{edit.Edge}。";
                 }
 
                 if (!neighbors.Contains(edit.Edge.A) && !neighbors.Contains(edit.Edge.B))
@@ -163,6 +205,12 @@ public static class TerrainEditRules
     /// </summary>
     public static bool IsWorkshopReach(Coord artisanCell, TerrainEdit edit) =>
         edit.Kind != TerrainEditKind.Fence && !Adjacency.AreAdjacent(artisanCell, edit.Cell);
+
+    /// <summary>
+    /// 改造范围的唯一判定（open-map D4）：<paramref name="scope"/> 为 <c>null</c> 即不限；否则格须在范围内。格目标直接用它，边目标对两端各用一次。
+    /// <see cref="LegalTargets(MapData, Coord, bool, IReadOnlySet{Coord})"/> 与 <see cref="Reject(MapData, Coord, TerrainEdit, bool, IReadOnlySet{Coord})"/> 共用，不各写一份条件。
+    /// </summary>
+    private static bool InScope(IReadOnlySet<Coord>? scope, Coord cell) => scope is null || scope.Contains(cell);
 
     /// <summary>工坊的"隔一格"偏移：同行 / 同列、直线距离恰为 2（不含斜向，不含更远）。</summary>
     private static readonly (int Dx, int Dy)[] WorkshopOffsets = [(0, -2), (-2, 0), (2, 0), (0, 2)];

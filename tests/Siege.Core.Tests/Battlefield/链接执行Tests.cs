@@ -18,7 +18,7 @@ namespace Siege.Core.Tests.Battlefield;
 /// </remarks>
 public class 链接执行Tests
 {
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接不改内容()
     {
         // Scenario：被平移战场在链接前有 3 枚棋子、1 道栅栏、1 枚已揭示信物 → 链接后这些内容出现在平移后的对应格，类型、归属、揭示状态逐项相同；锚点战场逐格不变。
@@ -70,7 +70,7 @@ public class 链接执行Tests
         Assert.Equal(match.BattlefieldOf(P0), match.BattlefieldOf(P2));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接合并战场()
     {
         // Scenario（对局层）：配对 (0,3)(1,4) 后 P0 与 P2 同战场、P1 与 P3 同战场，战场数 3，记录里每个战场各一条向量。
@@ -98,7 +98,7 @@ public class 链接执行Tests
         Assert.Equal(MapFile.Digest(match.Board.LinkedMap), match.Links[^1].MapDigest);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 决赛贴北侧()
     {
         // 裁决 J1：首轮配对的链接贴东侧，决赛链接贴北侧，由阶段决定并传给生成器。
@@ -110,7 +110,7 @@ public class 链接执行Tests
         Assert.Equal([0, 1, 3, 4], match.Board.Battlefields.ById(0)!.BirthZones);
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 链接可重放()
     {
         // Scenario（对局层）：两局同样的操作序列 → 每次链接后地图逐格相同、盘面序列化相同、链接记录相同。

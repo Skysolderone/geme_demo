@@ -37,7 +37,7 @@ public class 决赛倒计时提示Tests
         return match;
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 倒计时提示()
     {
         // 规格 Scenario：本机玩家在战场 1，战场 4 已结算，K = 2 → 下一大回合开始时出现提示条"对面战场已结算，本战场还剩 2 个大回合"。
@@ -50,7 +50,7 @@ public class 决赛倒计时提示Tests
         Assert.Equal("对面战场已结算，本战场还剩 1 个大回合", Inputs(notices, match, P0));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 等待者看到期限()
     {
         // 规格正文：本机玩家是等待者时显示"等待决赛：对面战场最迟第 R + K 大回合结束"（R = 6、K = 2）。
@@ -64,7 +64,7 @@ public class 决赛倒计时提示Tests
         Assert.Null(Inputs(new FinalCountdownNotices(), match, loser));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 每个大回合只出一次()
     {
         // 会话层每个小回合结算接线后都会问一次：同一个大回合只出第一次，下一大回合开始再出；没有倒计时的大回合什么都不出（且同样记为已问过）。
@@ -77,7 +77,7 @@ public class 决赛倒计时提示Tests
         Assert.Null(notices.Take(9, false, true, false, myDeadline: 8, []));   // 不在进行中（待决赛链接 / 终局）不出
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 没有倒计时不出提示()
     {
         // 纯函数的边界：无期限、已出局、等待者但对面都没有期限、期限已过（不应出现的数据）一律不出。
@@ -93,7 +93,7 @@ public class 决赛倒计时提示Tests
         Assert.All(All, p => Assert.Null(Inputs(new FinalCountdownNotices(), match, p)));
     }
 
-    [Fact]
+    [Fact(Skip = "open-map 段 B 删除")]
     public void 无人值守时提示条零时长()
     {
         // 规格正文：无人值守时提示条零时长——与他场结算提示条同一个队列：零时长入队即丢，正常时长立即显示、约 3 s 后消失。
