@@ -1750,7 +1750,7 @@ public sealed partial class BoardView : Node3D
     /// <summary>
     /// 演出层（settlement-show-callouts D6）：格上飘字与信物闪光，全部由遮罩推出、不回写视图模型。
     /// 飘字用 <see cref="Label"/> 的坐标标注画法（平铺、不用 billboard——见其注释），字号按相机远近两档（<see cref="CalloutLabelStyle"/>），
-    /// 随年龄上浮并在后半段淡出；信物闪光是既有信物标记外的一圈亮环，随进度衰减。
+    /// 随年龄弹出、沿弧线上浮并在后半段边缩边淡出（<see cref="CalloutPose"/>）；信物闪光是既有信物标记外的一圈亮环，随进度衰减。
     /// </summary>
     private void DrawShow(ShowMask mask)
     {
@@ -1771,21 +1771,51 @@ public sealed partial class BoardView : Node3D
         CalloutLabelStyle style = CalloutLabelStyle.For(Rig.IsOverview);
         foreach (Callout callout in mask.Callouts)
         {
-            float t = callout.AgePermille / 1000f;
-            float alpha = t < 0.5f ? 1f : 1f - ((t - 0.5f) * 2f);
+            (Vector3 offset, float scale, float alpha) = CalloutPose(callout);
             Color color = callout.Kind switch
             {
                 CalloutKind.Capture => Visuals.Urgent,
                 CalloutKind.Relic => Visuals.RelicRevealed,
                 _ => Visuals.CoordinateLabel,
             };
-            Label3D label = Label(callout.Text, CenterOf(callout.Coord) + new Vector3(0f, 0.16f + (0.5f * t), -0.28f), style.FontSize, style.OutlineSize);
+            Label3D label = Label(callout.Text, CenterOf(callout.Coord) + offset, style.FontSize, style.OutlineSize);
+            label.Scale = new Vector3(scale, scale, scale);
             label.Modulate = new Color(color, alpha);
             label.OutlineModulate = new Color(Visuals.CoordinateLabelOutline, alpha);
             label.NoDepthTest = true;
             label.RenderPriority = 2;
             _show.AddChild(label);
         }
+    }
+
+    /// <summary>
+    /// 飘字在某一年龄的姿态（相对格心的位移、缩放、透明度），只由年龄、来源与所在格推出，同一遮罩必得同一画面。
+    /// 前 20% 寿命弹出（缓出回弹：小 → 过冲 → 1，提子过冲最大、信物次之、落子最小，免得长算式胀到压住邻格）；
+    /// 全程沿弧线上浮（上升先快后慢，同时向一侧匀速漂移，相邻格按坐标奇偶左右分开）；后半段边淡出边缩到 0.7。
+    /// </summary>
+    private static (Vector3 Offset, float Scale, float Alpha) CalloutPose(Callout callout)
+    {
+        float t = callout.AgePermille / 1000f;
+        (float start, float overshoot) = callout.Kind switch
+        {
+            CalloutKind.Capture => (0.2f, 3.0f),
+            CalloutKind.Relic => (0.35f, 2.4f),
+            _ => (0.35f, 1.7f),
+        };
+        float v = Math.Min(t / 0.2f, 1f) - 1f;
+        float pop = 1f + ((overshoot + 1f) * v * v * v) + (overshoot * v * v);
+        float scale = start + ((1f - start) * pop);
+        float alpha = 1f;
+        if (t > 0.5f)
+        {
+            float exit = (t - 0.5f) * 2f;
+            scale *= 1f - (0.3f * exit);
+            alpha = 1f - exit;
+        }
+
+        float side = ((callout.Coord.X + callout.Coord.Y) & 1) == 0 ? 1f : -1f;
+        float rise = 1f - ((1f - t) * (1f - t));
+        return (new Vector3(side * 0.14f * t, 0.16f + (0.5f * rise), -0.28f), scale, alpha);
     }
 
     /// <summary>棋子层里一枚已画出的棋子（board-render-perf D3）：节点、占用者，以及画它时的进度（盘上棋子 = 出现进度 ‰，不在出现动画里为 -1；被提棋子 = 淡出进度 ‰）。</summary>
