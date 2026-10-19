@@ -1790,32 +1790,43 @@ public sealed partial class BoardView : Node3D
 
     /// <summary>
     /// 飘字在某一年龄的姿态（相对格心的位移、缩放、透明度），只由年龄、来源与所在格推出，同一遮罩必得同一画面。
-    /// 前 20% 寿命弹出（缓出回弹：小 → 过冲 → 1，提子过冲最大、信物次之、落子最小，免得长算式胀到压住邻格）；
-    /// 全程沿弧线上浮（上升先快后慢，同时向一侧匀速漂移，相邻格按坐标奇偶左右分开）；后半段边淡出边缩到 0.7。
+    /// 前 30% 寿命弹出（前半程从 0.2 缓出冲到峰值，后半程缓入回落到 1；峰值提子最大、信物次之、落子最小，免得长算式胀到压住邻格）；
+    /// 全程沿弧线上浮（上升先快后慢，同时向一侧匀速漂移，相邻格按坐标奇偶左右分开）；后半段边淡出边缩到 0.6。
+    /// 寿命只有 <see cref="Callout.LifetimeMs"/>、字又小，幅度取小了肉眼看不出（首版 20% / 1.07 倍 / 0.14 格即如此）。
     /// </summary>
     private static (Vector3 Offset, float Scale, float Alpha) CalloutPose(Callout callout)
     {
         float t = callout.AgePermille / 1000f;
-        (float start, float overshoot) = callout.Kind switch
+        float peak = callout.Kind switch
         {
-            CalloutKind.Capture => (0.2f, 3.0f),
-            CalloutKind.Relic => (0.35f, 2.4f),
-            _ => (0.35f, 1.7f),
+            CalloutKind.Capture => 1.8f,
+            CalloutKind.Relic => 1.6f,
+            _ => 1.4f,
         };
-        float v = Math.Min(t / 0.2f, 1f) - 1f;
-        float pop = 1f + ((overshoot + 1f) * v * v * v) + (overshoot * v * v);
-        float scale = start + ((1f - start) * pop);
+        float u = Math.Min(t / 0.3f, 1f);
+        float scale;
+        if (u < 0.5f)
+        {
+            float a = 1f - (u * 2f);
+            scale = 0.2f + ((peak - 0.2f) * (1f - (a * a)));
+        }
+        else
+        {
+            float b = (u - 0.5f) * 2f;
+            scale = peak + ((1f - peak) * b * b * (3f - (2f * b)));
+        }
+
         float alpha = 1f;
         if (t > 0.5f)
         {
             float exit = (t - 0.5f) * 2f;
-            scale *= 1f - (0.3f * exit);
+            scale *= 1f - (0.4f * exit);
             alpha = 1f - exit;
         }
 
         float side = ((callout.Coord.X + callout.Coord.Y) & 1) == 0 ? 1f : -1f;
         float rise = 1f - ((1f - t) * (1f - t));
-        return (new Vector3(side * 0.14f * t, 0.16f + (0.5f * rise), -0.28f), scale, alpha);
+        return (new Vector3(side * 0.35f * t, 0.16f + (0.7f * rise), -0.28f), scale, alpha);
     }
 
     /// <summary>棋子层里一枚已画出的棋子（board-render-perf D3）：节点、占用者，以及画它时的进度（盘上棋子 = 出现进度 ‰，不在出现动画里为 -1；被提棋子 = 淡出进度 ‰）。</summary>
