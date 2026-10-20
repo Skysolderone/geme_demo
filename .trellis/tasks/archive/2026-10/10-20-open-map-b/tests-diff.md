@@ -1,0 +1,281 @@
+# 测试名清单对账（删前 2174 → 删后 2020）
+
+- 删除 204 条（按用例名，Theory 按行计）；新增 50 条。
+- skip清单（按用例名）：139 条
+- 活用例随被删功能删除：42 条
+- 搬迁（旧名）：21 条
+- 未归类：2 条
+
+## skip清单（按用例名）（139）
+
+- Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.同战场无对手时退化
+- Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.等待者照常停手
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.K为0不启用
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.K为0时链接图决策序列与改前基线逐字节相同
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.决赛战场不倒计时
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.外部提交首轮配对后同样赋期限
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.无人等待者不倒计时
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.构筑期结算按第3大回合起算
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.首轮一侧先结算即开始倒计时
+- Siege.Core.Tests.Battlefield.决赛倒计时Tests.首轮配对的等待者也触发倒计时
+- Siege.Core.Tests.Battlefield.战场结算Tests.他战场有人落子不妨碍本战场整轮Pass结算
+- Siege.Core.Tests.Battlefield.战场结算Tests.倒计时到期强制结算
+- Siege.Core.Tests.Battlefield.战场结算Tests.出局者出序
+- Siege.Core.Tests.Battlefield.战场结算Tests.等待者Pass不结算
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.不在待配对时拒绝配对事件
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.决赛候选超过两个时以最小编号为轴
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.决赛只接受唯一合法结果
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.列出顺序不影响结果
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.合法配对被接受
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.奇数候选需要等待者
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.待配对与待决赛链接阶段不可弃赛
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.无来源时跑到底报待配对
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.来源给出非法结果时停在待配对
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.等待者须是候选且不在配对里
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.脚本固定配对的确定性缺省
+- Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.非法配对被拒
+- Siege.Core.Tests.Battlefield.链接事件Tests.ApplySplice拒绝不是逐格搬运的地图
+- Siege.Core.Tests.Battlefield.链接事件Tests.接缝两侧朝间隙的边界栅栏合并为一条
+- Siege.Core.Tests.Battlefield.链接事件Tests.河上架的桥随棋盘平移
+- Siege.Core.Tests.Battlefield.链接事件Tests.链接不改内容
+- Siege.Core.Tests.Battlefield.链接事件Tests.链接可重放
+- Siege.Core.Tests.Battlefield.链接事件Tests.链接合并战场
+- Siege.Core.Tests.Battlefield.链接后的公开补充载荷Tests.拼接后揭示被平移的信物_公开补充载荷照常
+- Siege.Core.Tests.Battlefield.链接后的公开补充载荷Tests.拼接后揭示被平移的信物_本人部署预演照常
+- Siege.Core.Tests.Battlefield.链接执行Tests.决赛贴北侧
+- Siege.Core.Tests.Battlefield.链接执行Tests.链接不改内容
+- Siege.Core.Tests.Battlefield.链接执行Tests.链接可重放
+- Siege.Core.Tests.Battlefield.链接执行Tests.链接合并战场
+- Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局
+- Siege.Core.Tests.Battlefield.阶段推进Tests.三人同区加一人独占
+- Siege.Core.Tests.Battlefield.阶段推进Tests.两人同区加两人独占
+- Siege.Core.Tests.Battlefield.阶段推进Tests.决赛链接
+- Siege.Core.Tests.Battlefield.阶段推进Tests.减员触发的决赛等到大回合结束
+- Siege.Core.Tests.Battlefield.阶段推进Tests.四人同区
+- Siege.Core.Tests.Battlefield.阶段推进Tests.四人四区
+- Siege.Core.Tests.Battlefield.阶段推进Tests.挂接配对来源时当场配对
+- Siege.Core.Tests.Battlefield.阶段推进Tests.提前打完的同区棋盘不进配对
+- Siege.Core.Tests.Battlefield.阶段推进Tests.构筑期三个大回合不转换
+- Siege.Core.Tests.Battlefield.阶段推进Tests.构筑期结算的两个同区战场在第3大回合结束进入决赛
+- Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.决赛结算即终局
+- Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.对局里战场落败者按结算时的比较量排名
+- Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场已结算时状态文案带胜出_出局者按出局显示
+- Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场玩家的势力行只剩名字与状态
+- Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场玩家的手牌类型与结构参数不可见
+- Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场玩家的顺序行只剩预测位置
+- Siege.Core.Tests.InformationVisibility.按座位视图Tests.链接后立即可见
+- Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.链接后合并战场的格一起可见
+- Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.填满判定同样进预测
+- Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.期限大回合最后一人Pass前的预测与实际顺序一致
+- Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.期限大回合的预测剔除将到期落败者
+- Siege.Core.Tests.InitiativeOrder.行动顺序跨战场统一Tests.等待者在序
+- Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.未链接战场不相邻
+- Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.链接后校验
+- Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.全部链接序列都能拼接
+- Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.共享边最长
+- Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.决赛拼接
+- Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.合并战场以西的战场不动
+- Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.平移保内容
+- Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.越界候选被排除
+- Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.首轮拼接
+- Siege.Core.Tests.LinkMapGeneration.链接档地图标识与确定性Tests.同链接序列同最终图
+- Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.决赛倒计时随存档往返
+- Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.旧存档按不启用读取
+- Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.缺省值
+- Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.负数建局报错
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.存档恢复地图
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.待配对时存档
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.链接重放与存档不符即拒绝
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.锚点非零向量的拼接可存档恢复
+- Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.分析统计到期结算
+- Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.到期结算可查
+- Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.篡改首部K或结算期限即报分歧
+- Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.首部K按记录回放
+- Siege.Core.Tests.MatchTelemetry.坐标随链接平移Tests.与拼接时的格映射逐格相同
+- Siege.Core.Tests.MatchTelemetry.坐标随链接平移Tests.改造随棋盘平移
+- Siege.Core.Tests.MatchTelemetry.坐标随链接平移Tests.缺少向量的记录被拒绝
+- Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.地形可离线重建
+- Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.日志往返且配对可从日志重建
+- Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.等待时长可查
+- Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.配对与链接可查
+- Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.链接那一小回合的改造按链接后布局记
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.等待者决赛表现可查
+- Siege.Core.Tests.MatchTelemetry.按主题统计Tests.公共信物个数与被控制次数按所在棋盘统计_失去控制与出生区信物不计
+- Siege.Core.Tests.MatchTelemetry.按主题统计Tests.匠人改造按目标所在棋盘与动作统计_坐标随链接换算
+- Siege.Core.Tests.MatchTelemetry.链接模式对局记录Tests.配对与链接可查
+- Siege.Core.Tests.MatchTelemetry.链接模式对局记录Tests.锁定旗数与等待时长可查
+- Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.战场结算可查
+- Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.真实跑局的链接日志可完整分析
+- Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.等待时长可统计
+- Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.配对与链接可查
+- Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.倒计时提示
+- Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.无人值守时提示条零时长
+- Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.每个大回合只出一次
+- Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.没有倒计时不出提示
+- Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.等待者看到期限
+- Siege.Core.Tests.SettlementShow.战场结算横幅Tests.他场结算提示
+- Siege.Core.Tests.SettlementShow.战场结算横幅Tests.决赛不重复
+- Siege.Core.Tests.SettlementShow.战场结算横幅Tests.没有新结算就没有节拍与提示
+- Siege.Core.Tests.SettlementShow.战场结算横幅Tests.落败横幅
+- Siege.Core.Tests.SettlementShow.战场结算横幅Tests.落败横幅排在出局横幅之前_展开节拍在最后
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.他人链接不演出
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.他人链接平移本机棋盘_布局指纹变_引擎层据此重搭
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.拼接那一回合的结算节拍不把平移当成落子与提子
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.提速照旧
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.无人值守零时长
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.本机为被贴方时滑入期间相机跟随本机棋盘
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.本机是被贴方_本机棋盘滑过去贴合
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.滑入起点封顶四格_真实平移照旧
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.遮罩_滑入前停在起点_对方格先隐藏后渐显_相机目标带进度
+- Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.首轮链接演出_四个节拍依次
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.Sim的配对来源给出合法结果
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.回放按记录配对而不是按种子推导
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.失败局可复现
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.带入对局可回放
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.篡改平移向量或开局棋盘即在对应行分歧
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.纯AI局可凭种子加配对复现
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.配对事件记录来源
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令按阶段推断贴边_也接受显式贴边
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令模拟链接
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.回放重建链接
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.批量配对可重复
+- Siege.Core.Tests.SimulationHarness.终端对局Tests.终端链接局跨过拼接后小回合播报不崩溃且不误报
+- Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.决赛链接须在首轮之后_且把全部候选链成一个
+- Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.战场结算三种口径
+- Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.配对记录来源必须是脚本
+- Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.链接后可见格数等于本战场格数
+- Siege.Core.Tests.SimulationHarness.随机子流隔离_链接模式Tests.配对不扰动子流
+- Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.等待者可落子
+- Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.等待者无法越界
+
+## 活用例随被删功能删除（42）
+
+- Siege.Core.Tests.AiDecision.专家前瞻耗时计时Tests.专家单次部署耗时中位数不超过高难的四倍
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 1, difficulty: Easy, fixture: "decisions-link1-easy-seed1-k0.txt")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 1, difficulty: Hard, fixture: "decisions-link1-hard-seed1-k0.txt")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 1, difficulty: Standard, fixture: "decisions-link1-seed1-k0.txt")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 2, difficulty: Standard, fixture: "decisions-link1-seed2-k0.txt")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 3, difficulty: Standard, fixture: "decisions-link1-seed3-k0.txt")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-easy-seed1")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-hard-seed1")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-seed1")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-seed2")
+- Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-seed3")
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知仅作显式配置
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知例外只在一处分流
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知例外集中可关
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 1, difficulty: Easy, fixture: "decisions-link1-easy-seed1-omniscient.txt")
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 1, difficulty: Hard, fixture: "decisions-link1-hard-seed1-omniscient.txt")
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 1, difficulty: Standard, fixture: "decisions-link1-seed1-omniscient.txt")
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 2, difficulty: Standard, fixture: "decisions-link1-seed2-omniscient.txt")
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 3, difficulty: Standard, fixture: "decisions-link1-seed3-omniscient.txt")
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.关闭全知时评价代码照常运行
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.旧日志缺视野项按全知回放
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.视野开关缺省不写出
+- Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.同战场不遮蔽
+- Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.非链接档不可增长
+- Siege.Core.Tests.Pairing.图形版配对来源Tests.决赛只有一种合法结果_与脚本缺省相同
+- Siege.Core.Tests.Pairing.图形版配对来源Tests.无人值守用固定脚本_来源名为script
+- Siege.Core.Tests.Pairing.图形版配对来源Tests.真随机_多次抽取结果不全相同
+- Siege.Core.Tests.Pairing.图形版配对来源Tests.首轮配对合法_每个候选恰出现一次
+- Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.一次推进跨过多条_多余时间顺延
+- Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.多条依次显示_每条停留约三秒
+- Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.显示中再入队排到后面_不覆盖
+- Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.空文案忽略_负推进拒绝
+- Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.零时长入队即空
+- Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.链接图建局为链接模式并挂配对来源
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-1", message: "已在同一战场")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-4,4-1", message: "已在同一战场")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-4X", message: "编号 1–5")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-6", message: "编号 1–5")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1:4", message: "编号 1–5")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "siege-4p-base-v5", links: "1-2", message: "不受支持")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.命令行配对种子写入配置记录
+- Siege.Core.Tests.SimulationHarness.随机子流隔离_链接模式Tests.配对来源不是对局子流
+
+## 搬迁（旧名）（21）
+
+- Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "两人同区加两人独占", zones: [1, 1, 3, 4], placeRounds: 5)
+- Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "四人同区", zones: [0, 0, 0, 0], placeRounds: 5)
+- Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "四人四区", zones: [0, 1, 3, 4], placeRounds: 5)
+- Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "构筑期内整轮Pass", zones: [0, 1, 3, 4], placeRounds: 1)
+- Siege.Core.Tests.Battlefield.阶段推进Tests.四人同区_开放地图
+- Siege.Core.Tests.Battlefield.阶段推进Tests.构筑期内整轮Pass即终局
+- Siege.Core.Tests.Battlefield.阶段推进Tests.第4大回合不发生任何事件
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.小回合边界存档续跑一致
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.旧存档被拒绝
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.终局后存档
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.链接图上缺模式字段的存档被拒
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.链接恢复须四人
+- Siege.Core.Tests.MatchSetup.链接模式存档Tests.锁定结果可持久化
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.分析命令的复盘开关
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.复盘不改对局
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.有翻盘手时判本可翻盘
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.确无有用手时无合法候选
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.能提子的一手
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.落败者复盘可查
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.replay命令拒绝旧日志
+- Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.回放接口拒绝非链接日志
+
+## 未归类（2）——同一用例由 Theory(bool seatVision) 改写为 Fact（全知开关删除，两行并成一条，新名见下方「新增」）
+
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.构筑期候选不越棋盘_第4大回合候选可全图(seatVision: False)
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.构筑期候选不越棋盘_第4大回合候选可全图(seatVision: True)
+
+## 新增（50）
+
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全图可读
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知开关已删除
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.按座位视野的评价代码照常运行
+- Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.构筑期候选不越棋盘_第4大回合候选可全图
+- Siege.Core.Tests.Battlefield.开放地图阶段推进Tests.从插旗跑到终局_开放地图(开局: "两人同区加两人独占", zones: [1, 1, 3, 4], placeRounds: 5)
+- Siege.Core.Tests.Battlefield.开放地图阶段推进Tests.从插旗跑到终局_开放地图(开局: "四人同区", zones: [0, 0, 0, 0], placeRounds: 5)
+- Siege.Core.Tests.Battlefield.开放地图阶段推进Tests.从插旗跑到终局_开放地图(开局: "四人四区", zones: [0, 1, 3, 4], placeRounds: 5)
+- Siege.Core.Tests.Battlefield.开放地图阶段推进Tests.从插旗跑到终局_开放地图(开局: "构筑期内整轮Pass", zones: [0, 1, 3, 4], placeRounds: 1)
+- Siege.Core.Tests.Battlefield.开放地图阶段推进Tests.四人同区_开放地图
+- Siege.Core.Tests.Battlefield.开放地图阶段推进Tests.构筑期内整轮Pass即终局
+- Siege.Core.Tests.Battlefield.开放地图阶段推进Tests.第4大回合不发生任何事件
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "CountdownStart", value: "7")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "Countdowns", value: "[]")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "Deadlines", value: "[]")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "FinalCountdownRounds", value: "2")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "FinalLinked", value: "false")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "FirstPairingStepDone", value: "true")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "Links", value: "[]")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "Pairings", value: "[]")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.含拼接字段的旧存档被拒(field: "PendingPairing", value: "null")
+- Siege.Core.Tests.MatchSetup.对局存档Tests.小回合边界存档续跑一致
+- Siege.Core.Tests.MatchSetup.对局存档Tests.旧存档被拒绝
+- Siege.Core.Tests.MatchSetup.对局存档Tests.终局后存档
+- Siege.Core.Tests.MatchSetup.对局存档Tests.链接图上缺模式字段的存档被拒
+- Siege.Core.Tests.MatchSetup.对局存档Tests.链接恢复须四人
+- Siege.Core.Tests.MatchSetup.对局存档Tests.锁定结果可持久化
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘Tests.分析命令的复盘开关
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘Tests.复盘不改对局
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘Tests.有翻盘手时判本可翻盘
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘Tests.确无有用手时无合法候选
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘Tests.能提子的一手
+- Siege.Core.Tests.MatchTelemetry.战场落败复盘Tests.落败者复盘可查
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.回放接口拒绝非链接日志(mode: "Legacy", expected: "首部模式字段（Mode）为 Legacy")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.回放接口拒绝非链接日志(mode: null, expected: "首部缺模式字段（Mode）")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧拼接日志被拒(where: "event", fragment: "{\"Kind\":\"event\",\"Seq\":999,\"Turn\":12,\"Majo"···, field: "BattlefieldsLinked")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧拼接日志被拒(where: "event", fragment: "{\"Kind\":\"event\",\"Seq\":999,\"Turn\":12,\"Majo"···, field: "FinalCountdown")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧拼接日志被拒(where: "event", fragment: "{\"Kind\":\"event\",\"Seq\":999,\"Turn\":12,\"Majo"···, field: "PairingApplied")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧拼接日志被拒(where: "header", fragment: "\"FinalCountdownRounds\":2,", field: "FinalCountdownRounds")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧拼接日志被拒(where: "header", fragment: "\"PairingSeed\":7,", field: "PairingSeed")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧拼接日志被拒(where: "header", fragment: "\"SeatVision\":false,", field: "SeatVision")
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧拼接日志被拒(where: "turn", fragment: "\"WaitingRounds\":1,", field: "WaitingRounds")
+- Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.链接图建局为链接模式
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.配对与链接相关选项已删除(command: "map", option: "--links", value: "1-4,2-5")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.配对与链接相关选项已删除(command: "play", option: "--final-countdown", value: "0")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.配对与链接相关选项已删除(command: "run", option: "--final-countdown", value: "2")
+- Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.配对与链接相关选项已删除(command: "run", option: "--pairing-seed", value: "42")
+- Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "FinalCountdownRounds", value: "2")
+- Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "PairingSeed", value: "7")
+- Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "SeatVision", value: "false")
+- Siege.Core.Tests.SimulationHarness.随机子流隔离_链接模式Tests.配对来源已随拼接规则删除
+
+## 质检追加（trellis-check，2026-10-20）：新增 2 条
+
+- Siege.Core.Tests.SimulationHarness.可复现回放Tests.replay命令拒绝旧日志（R-B4：原 可复现回放_链接模式Tests 同名用例原样搬回，命令级拒绝非 link: 日志）
+- Siege.Core.Tests.SimulationHarness.批量跑局Tests.玩家搜索配置里的视野开关被拒绝（B2 盲点：`Players[].Search.SeatVision` 原被 `RejectSearchVision` 拒绝，开关删除后会被静默忽略）

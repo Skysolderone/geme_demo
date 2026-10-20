@@ -1,0 +1,21 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/open-map/proposal.md", "reason": "open-map 规划与裁决（含段 B 裁决 B1–B10）"}
+{"file": "openspec/changes/open-map/design.md", "reason": "open-map 规划与裁决（含段 B 裁决 B1–B10）"}
+{"file": "openspec/changes/open-map/tasks.md", "reason": "open-map 规划与裁决（含段 B 裁决 B1–B10）"}
+{"file": "openspec/changes/open-map/specs/battlefield/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/link-map-generation/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/match-setup/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/match-telemetry/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/simulation-harness/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/settlement-show/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/information-visibility/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/ai-decision/spec.md", "reason": "open-map 规格差分"}
+{"file": "openspec/changes/open-map/specs/map-definition/spec.md", "reason": "open-map 规格差分"}
+{"file": ".trellis/tasks/10-19-open-map-a/notes.md", "reason": "段 A 实施 / 质检记录（Skip 清单、活用例、R-1–R-4）"}
+{"file": ".trellis/tasks/10-19-open-map-a/check.md", "reason": "段 A 实施 / 质检记录（Skip 清单、活用例、R-1–R-4）"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
+{"file": "HANDOFF.md", "reason": "待整体改写的续接说明"}
+{"file": "2026-09-10-siege-core-gameplay-design-v1.md", "reason": "设计文档（v1.27 → v1.28，只改相关章节）"}

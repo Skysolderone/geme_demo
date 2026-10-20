@@ -1,0 +1,2179 @@
+Siege.Core.Tests.AiDecision.AI决策的可复现性Tests.同局面同决策
+Siege.Core.Tests.AiDecision.AI决策的可复现性Tests.并列确定性打破
+Siege.Core.Tests.AiDecision.AI对地表的感知Tests.不去抢荒漠
+Siege.Core.Tests.AiDecision.AI对地表的感知Tests.剪枝使用唯一查询
+Siege.Core.Tests.AiDecision.AI对地表的感知Tests.岩台远格计入收益
+Siege.Core.Tests.AiDecision.AI对地表的感知Tests.沼泽落子无领地收益
+Siege.Core.Tests.AiDecision.AI对地表的感知Tests.空浅滩不算安全
+Siege.Core.Tests.AiDecision.AI枚举改造目标Tests.AI在能一手立栅提子时选择该手
+Siege.Core.Tests.AiDecision.AI枚举改造目标Tests.候选去重的键区分带改造与不带改造
+Siege.Core.Tests.AiDecision.AI枚举改造目标Tests.单点枚举同时产出带改造与不改造两类候选
+Siege.Core.Tests.AiDecision.AI枚举改造目标Tests.选中的批次连改造一起摆回暂放
+Siege.Core.Tests.AiDecision.AI枚举改造目标Tests.非匠人没有改造候选
+Siege.Core.Tests.AiDecision.专家前瞻的确定性与耗时Tests.不消费新随机
+Siege.Core.Tests.AiDecision.专家前瞻的确定性与耗时Tests.同局面同决策
+Siege.Core.Tests.AiDecision.专家前瞻的确定性与耗时Tests.缓存开关不改变专家决策
+Siege.Core.Tests.AiDecision.专家前瞻的确定性与耗时Tests.预演次数代理计入新增部分
+Siege.Core.Tests.AiDecision.专家前瞻耗时计时Tests.专家单次部署耗时中位数不超过高难的四倍
+Siege.Core.Tests.AiDecision.专家前瞻耗时计时Tests.按座位视野下专家单次部署耗时中位数不超过高难的四倍
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.一层配置的专家黄金值(seed: 1)
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.一层配置的专家黄金值(seed: 2)
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.一层配置的专家黄金值(seed: 3)
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.不前瞻时直接取前瞻集第一个
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.前瞻不修改正式状态
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.前瞻后分数是两项之和
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.前瞻宽度为1且关闭多样候选时与高难逐步相同
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.前瞻宽度拒绝负数
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.前瞻宽度进入记录
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.前瞻改变选择
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.前瞻集不足W个
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.同分取原次序
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.旧专家日志按一层配置回放
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.旧记录按不前瞻读入
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.模拟回应全为Pass
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.缺省预设的专家与一层配置逐步相同(seed: 1)
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.缺省预设的专家与一层配置逐步相同(seed: 2)
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.缺省预设的专家与一层配置逐步相同(seed: 3)
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.被提走的己方棋子按危险计入
+Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.被提走的损失压低前瞻后分数
+Siege.Core.Tests.AiDecision.候选格上限Tests.K不小于合法空格数时等价于不限制(extra: 0)
+Siege.Core.Tests.AiDecision.候选格上限Tests.K不小于合法空格数时等价于不限制(extra: 5)
+Siege.Core.Tests.AiDecision.候选格上限Tests.三个入口共用同一处阈值逻辑
+Siege.Core.Tests.AiDecision.候选格上限Tests.剪枝参数的文本往返与旧文本兼容
+Siege.Core.Tests.AiDecision.候选格上限Tests.只有带改造的匠人才落得下的格不被预筛漏掉
+Siege.Core.Tests.AiDecision.候选格上限Tests.启用后只对前K格做完整枚举
+Siege.Core.Tests.AiDecision.候选格上限Tests.启用后同种子两次运行逐步相同
+Siege.Core.Tests.AiDecision.候选格上限Tests.大图缺省取上限小图为零显式配置优先
+Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "a", key: "G6")
+Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "b", key: "F6")
+Siege.Core.Tests.AiDecision.候选格上限Tests.小K下仍找到妙手(position: "c", key: "G6")
+Siege.Core.Tests.AiDecision.候选格上限Tests.小图不限制
+Siege.Core.Tests.AiDecision.候选格上限Tests.批次配置记录写入实际生效的上限
+Siege.Core.Tests.AiDecision.候选格上限Tests.跑局配置的文本往返
+Siege.Core.Tests.AiDecision.候选格上限Tests.难度默认参数不启用上限
+Siege.Core.Tests.AiDecision.候选格上限Tests.预筛按代表类型的格分取前K同分按坐标序
+Siege.Core.Tests.AiDecision.候选格上限Tests.预筛阶段不触发活形查询
+Siege.Core.Tests.AiDecision.候选格上限Tests.首部没有上限项的大图旧日志按不限制回放
+Siege.Core.Tests.AiDecision.停手阈值Tests.低于阈值不落子
+Siege.Core.Tests.AiDecision.停手阈值Tests.同批次内不中途切换
+Siege.Core.Tests.AiDecision.停手阈值Tests.命令行停手阈值写入配置记录
+Siege.Core.Tests.AiDecision.停手阈值Tests.恰等于阈值不落子
+Siege.Core.Tests.AiDecision.停手阈值Tests.无子时不受阈值限制
+Siege.Core.Tests.AiDecision.停手阈值Tests.无落点被保留则Pass
+Siege.Core.Tests.AiDecision.停手阈值Tests.有子后恢复阈值
+Siege.Core.Tests.AiDecision.停手阈值Tests.跑局配置的停手阈值文本往返
+Siege.Core.Tests.AiDecision.停手阈值Tests.阈值不随地图变化
+Siege.Core.Tests.AiDecision.停手阈值Tests.阈值为0时零变化
+Siege.Core.Tests.AiDecision.停手阈值Tests.阈值进入记录
+Siege.Core.Tests.AiDecision.停手阈值Tests.阈值须为非负整数
+Siege.Core.Tests.AiDecision.停手阈值Tests.零收益不落子
+Siege.Core.Tests.AiDecision.停手阈值Tests.首部缺停手阈值的旧日志按0回放
+Siege.Core.Tests.AiDecision.停手阈值Tests.高于阈值落子
+Siege.Core.Tests.AiDecision.公开规则纯函数Tests.公开先锋修正不计已弃赛者
+Siege.Core.Tests.AiDecision.公开规则纯函数Tests.公开部署上限算例
+Siege.Core.Tests.AiDecision.公开规则纯函数Tests.出局判据
+Siege.Core.Tests.AiDecision.公开规则纯函数Tests.夹具局面新旧两条路径逐项相等
+Siege.Core.Tests.AiDecision.公开规则纯函数Tests.真实对局每个小回合新旧两条路径逐项相等(seed: 1)
+Siege.Core.Tests.AiDecision.公开规则纯函数Tests.真实对局每个小回合新旧两条路径逐项相等(seed: 2)
+Siege.Core.Tests.AiDecision.公开规则纯函数Tests.真实对局每个小回合新旧两条路径逐项相等(seed: 3)
+Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 1, difficulty: Easy, fixture: "decisions-link1-easy-seed1-k0.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 1, difficulty: Hard, fixture: "decisions-link1-hard-seed1-k0.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 1, difficulty: Standard, fixture: "decisions-link1-seed1-k0.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 2, difficulty: Standard, fixture: "decisions-link1-seed2-k0.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.K为0实跑与缺省基线逐字节相同(seed: 3, difficulty: Standard, fixture: "decisions-link1-seed3-k0.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-easy-seed1")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-hard-seed1")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-seed1")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-seed2")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.全知与K0副本与缺省逐字节相同(stem: "decisions-link1-seed3")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.链接图其他难度决策序列与基线相同(difficulty: Easy, fixture: "decisions-link1-easy-seed1.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.链接图其他难度决策序列与基线相同(difficulty: Hard, fixture: "decisions-link1-hard-seed1.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.链接图决策序列与基线相同(seed: 1, fixture: "decisions-link1-seed1.txt")
+Siege.Core.Tests.AiDecision.决策序列基线Tests.链接图决策序列与基线相同(seed: 2, fixture: "decisions-link1-seed2.txt")
+Siege.Core.Tests.AiDecision.决策序列基线_链接模式Tests.决策序列与基线相同
+Siege.Core.Tests.AiDecision.决策序列基线_链接模式Tests.同种子重跑逐字节相同
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.不同棋盘的玩家进名册
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.专家在预测顺序中居首
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.专家是本大回合末位
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.候选使下一名对手出局
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.只剩自己时退化
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.同战场无对手时退化
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.跳过已出局者
+Siege.Core.Tests.AiDecision.前瞻中的下一名对手Tests.跳过已弃赛者
+Siege.Core.Tests.AiDecision.前瞻中的停手口径Tests.两层单点不受停手阈值
+Siege.Core.Tests.AiDecision.前瞻中的停手口径Tests.两层单点受活形硬约束
+Siege.Core.Tests.AiDecision.前瞻中的停手口径Tests.前瞻不引入Pass
+Siege.Core.Tests.AiDecision.前瞻中的停手口径Tests.回应后不重判活形硬约束
+Siege.Core.Tests.AiDecision.前瞻中的停手口径Tests.空批次不进前瞻集
+Siege.Core.Tests.AiDecision.前瞻中的停手口径Tests.高难会Pass时专家也Pass
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.其余对手的隐藏信息不影响两层加分
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.守门覆盖前瞻代码
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.对手真实手牌不同结果不变
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.投影不揭示新覆盖的信物
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.投影视图与真实结算后的快照一致_出局
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.投影视图与真实结算后的快照一致_控制易手
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.投影视图与真实结算后的快照一致_提子
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.未揭示信物不被读取
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.构筑期内只在本战场回应
+Siege.Core.Tests.AiDecision.前瞻模拟的公平信息Tests.模拟部署上限按公开信息推得
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.下限为0
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.专家出局时加分为0
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.两层加分改变选择
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.两层权重为0时不做扫描
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.全部无对手时不计加分
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.加分按千分数取整
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.只用本人持有的类型
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.按下一大回合的口径枚举
+Siege.Core.Tests.AiDecision.前瞻的近似两层加分Tests.无对手的候选在B1上计加分
+Siege.Core.Tests.AiDecision.前瞻集的多样候选Tests.前瞻集第一个仍是高难的选择
+Siege.Core.Tests.AiDecision.前瞻集的多样候选Tests.多样候选关闭
+Siege.Core.Tests.AiDecision.前瞻集的多样候选Tests.已满W个不补足
+Siege.Core.Tests.AiDecision.前瞻集的多样候选Tests.排除重跑补足落点不同的候选
+Siege.Core.Tests.AiDecision.前瞻集的多样候选Tests.格集合相同只留排序靠前者
+Siege.Core.Tests.AiDecision.前瞻集的多样候选Tests.补充候选同样受停手阈值
+Siege.Core.Tests.AiDecision.前瞻集的多样候选Tests.达到补充上限即停止
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.AI不自带眼判定只经活形查询
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.两眼潜力取自活形查询
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.九维权重经配置往返且旧配置缺两维按0读入
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.做出第二个眼获得眼位正贡献
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.先手位评价生效
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.共享眼空间只计一次
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.叫吃获得威胁正贡献
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.已活时点直三中间眼位增量只有眼值1
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.日志首部写入AI评价版本且分解值为九项
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.旧评价版本的日志回放按首部版本处理
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.权重可配置
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.点直三中间眼位增量为眼值1加活形3
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.自填眼位不得分
+Siege.Core.Tests.AiDecision.启发式评价维度Tests.评价覆盖九个维度
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.估计不得使用真实值
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V1, type: Command, weight: 7)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V1, type: Conscription, weight: 8)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V1, type: Depot, weight: 15)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V1, type: Prospecting, weight: 20)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V1, type: SchoolEmblem, weight: 45)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V1, type: Vanguard, weight: 5)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Command, weight: 56)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Conscription, weight: 64)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Depot, weight: 120)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Encampment, weight: 50)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Pincer, weight: 50)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Prospecting, weight: 160)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Relay, weight: 50)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: SchoolEmblem, weight: 360)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Vanguard, weight: 40)
+Siege.Core.Tests.AiDecision.对隐藏信息的概率估计Tests.按分区权重估计未知信物(set: V2, type: Workshop, weight: 50)
+Siege.Core.Tests.AiDecision.已确定活形的评价中性Tests.不攻打活棋
+Siege.Core.Tests.AiDecision.已确定活形的评价中性Tests.做活在安全维度上是净收益
+Siege.Core.Tests.AiDecision.已确定活形的评价中性Tests.活棋补气不加分
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.AI源码不另写新加值公式
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.内容集v1的期望价值不变
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.哨兵加值进入即时势力增量
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.工坊扩展的目标进入候选
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.新信物的类型价值
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.未揭示信物的期望价值
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.未揭示的连营不影响AI评价
+Siege.Core.Tests.AiDecision.新棋子与新信物的AI适配Tests.组合成长不计新来源与计分信物
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界Tests.AI源码不读取真实信物内容
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界Tests.敌方手牌数量不可读
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界Tests.敌方未确认批次不可读
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界Tests.未知信物不可读
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知仅作显式配置
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知例外只在一处分流
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知例外集中可关
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 1, difficulty: Easy, fixture: "decisions-link1-easy-seed1-omniscient.txt")
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 1, difficulty: Hard, fixture: "decisions-link1-hard-seed1-omniscient.txt")
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 1, difficulty: Standard, fixture: "decisions-link1-seed1-omniscient.txt")
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 2, difficulty: Standard, fixture: "decisions-link1-seed2-omniscient.txt")
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.全知配置下与改前相同(seed: 3, difficulty: Standard, fixture: "decisions-link1-seed3-omniscient.txt")
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.关闭全知时评价代码照常运行
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.旧日志缺视野项按全知回放
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.构筑期候选不越棋盘_第4大回合候选可全图(seatVision: False)
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.构筑期候选不越棋盘_第4大回合候选可全图(seatVision: True)
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.缺省按座位视野
+Siege.Core.Tests.AiDecision.正式对战AI的信息边界_链接模式Tests.视野开关缺省不写出
+Siege.Core.Tests.AiDecision.活形分析的决策内缓存Tests.同一决策内重复盘面只分析一次
+Siege.Core.Tests.AiDecision.活形分析的决策内缓存Tests.地形改造不同的盘面不共用分析
+Siege.Core.Tests.AiDecision.活形分析的决策内缓存Tests.缓存不跨决策
+Siege.Core.Tests.AiDecision.活形分析的决策内缓存Tests.缓存开关不改变决策序列
+Siege.Core.Tests.AiDecision.活形分析的决策内缓存Tests.缓存开关不改变决策序列_链接图种子1至20
+Siege.Core.Tests.AiDecision.活形硬约束Tests.不填自己的单格眼
+Siege.Core.Tests.AiDecision.活形硬约束Tests.不拆自己的活形
+Siege.Core.Tests.AiDecision.活形硬约束Tests.为提子而填眼放行
+Siege.Core.Tests.AiDecision.活形硬约束Tests.全部候选被淘汰则Pass
+Siege.Core.Tests.AiDecision.活形硬约束Tests.点三格眼空间的中间不被淘汰
+Siege.Core.Tests.AiDecision.活形硬约束Tests.用改造拆自己的活形也被淘汰
+Siege.Core.Tests.AiDecision.链接模式下的决胜一手Tests.对手尚未Pass时不触发
+Siege.Core.Tests.AiDecision.链接模式下的决胜一手Tests.无反超手照常Pass
+Siege.Core.Tests.AiDecision.链接模式下的决胜一手Tests.最后一个Pass会输且有反超手
+Siege.Core.Tests.AiDecision.链接模式下的决胜一手Tests.最后一个Pass会输且有反超手_追平即落
+Siege.Core.Tests.AiDecision.链接模式下的决胜一手Tests.领先者不触发
+Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.并列最高视为最高
+Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.等待者照常停手
+Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.落后者不轻易停手(simulated: False)
+Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.落后者不轻易停手(simulated: True)
+Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.领先者照常停手(simulated: False)
+Siege.Core.Tests.AiDecision.链接模式下落后者的停手阈值Tests.领先者照常停手(simulated: True)
+Siege.Core.Tests.AiDecision.难度分级Tests.专家难度不越权
+Siege.Core.Tests.AiDecision.难度分级Tests.简单难度也不拆自己的活形
+Siege.Core.Tests.AiDecision.难度分级Tests.简单难度也会做活
+Siege.Core.Tests.AiDecision.难度分级Tests.简单难度只看即时收益与眼位
+Siege.Core.Tests.AiDecision.难度分级Tests.难度名称与次序
+Siege.Core.Tests.AiDecision.难度分级Tests.高难度不越权
+Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.不穷举排列
+Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.剪枝保留高价值落点
+Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "a", key: "G6")
+Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "b", key: "F6")
+Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.必须找到的妙手(position: "c", key: "G6")
+Siege.Core.Tests.AiDecision.高部署上限下的候选剪枝Tests.种子扰动由种子驱动
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.引用未校准维度产出的数据
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.未显式配置权重的跑局用默认权重表
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.规则变更使校准失效
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认停手阈值被改动
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重的校准依据随值一起更新
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: EnemyLoss, calibrated: 8)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: Eye, calibrated: 200)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: Growth, calibrated: 4)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: Initiative, calibrated: 20)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: PowerGain, calibrated: 10)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: Relic, calibrated: 6)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: Safety, calibrated: 35)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: Supply, calibrated: 2)
+Siege.Core.Tests.AiDecision.默认评价权重的校准Tests.默认权重被改动(dimension: Threat, calibrated: 25)
+Siege.Core.Tests.BatchDeployment.PassTests.确认0落子
+Siege.Core.Tests.BatchDeployment.PassTests.落子1枚即保留征募
+Siege.Core.Tests.BatchDeployment.围杀不产生通用奖励Tests.提子无额外收益
+Siege.Core.Tests.BatchDeployment.批次内落点的多样性Tests.混合类型分散落子
+Siege.Core.Tests.BatchDeployment.批次内落点的多样性Tests.禁止预占将被提空的格
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.分阶段基础部署上限唯一实现
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高(majorRound: 3, expected: 3)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高(majorRound: 5, expected: 4)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高(majorRound: 8, expected: 5)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高_插旗阶段
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高_阶段边界(majorRound: 1, expected: 3)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高_阶段边界(majorRound: 15, expected: 5)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高_阶段边界(majorRound: 3, expected: 3)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高_阶段边界(majorRound: 4, expected: 4)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高_阶段边界(majorRound: 6, expected: 4)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.基础值随阶段提高_阶段边界(majorRound: 7, expected: 5)
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.绕过暂放直接提交超量批次仍被拒绝
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.超出手牌库存
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.超出部署上限
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.额度不跨回合
+Siege.Core.Tests.BatchDeployment.批次数量与库存约束Tests.高部署上限无硬顶
+Siege.Core.Tests.BatchDeployment.批次暂放不改变正式盘面Tests.暂放不影响盘面
+Siege.Core.Tests.BatchDeployment.批次暂放不改变正式盘面Tests.自由撤销与换位
+Siege.Core.Tests.BatchDeployment.确认批次Tests.确认时重跑完整预演不信任缓存
+Siege.Core.Tests.BatchDeployment.确认批次Tests.确认的原子性
+Siege.Core.Tests.BatchDeployment.确认批次Tests.非法批次保留暂放
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.九类失败各有独立类别
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.同形返回历史序号
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.失败类别_手牌库存不足
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.失败类别_批次内重复落点
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.失败类别_落点不可落子
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.失败类别_落点已被占据
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.失败类别_超出部署上限
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.失败类别_违反合法落子范围
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.活棋禁入返回落点与棋串
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.破坏活形返回受影响棋串
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.自杀手返回可高亮信息
+Siege.Core.Tests.BatchDeployment.非法批次必须给出可定位的原因Tests.预占腾空格的拒绝文案为该格当前已被占据
+Siege.Core.Tests.BatchPreview.Godot层不含规则计算Tests.Godot层不读他人私有信息
+Siege.Core.Tests.BatchPreview.Godot层不含规则计算Tests.Godot层不调用规则计算入口
+Siege.Core.Tests.BatchPreview.Godot层不含规则计算Tests.坐标映射在Godot侧唯一
+Siege.Core.Tests.BatchPreview.UI层不含规则计算Tests.内核与表现层不出现浮点
+Siege.Core.Tests.BatchPreview.UI层不含规则计算Tests.表现层不引用Godot
+Siege.Core.Tests.BatchPreview.UI层不含规则计算Tests.表现层不持有可变对局对象
+Siege.Core.Tests.BatchPreview.UI层不含规则计算Tests.表现层不调用规则计算入口
+Siege.Core.Tests.BatchPreview.批次预演必须显示的信息Tests.Pass确认前警示撤销本轮新征募
+Siege.Core.Tests.BatchPreview.批次预演必须显示的信息Tests.显示军势预览
+Siege.Core.Tests.BatchPreview.批次预演必须显示的信息Tests.显示势力与排名变化
+Siege.Core.Tests.BatchPreview.批次预演必须显示的信息Tests.显示自杀风险
+Siege.Core.Tests.BatchPreview.批次预演必须显示的信息Tests.显示部署额度
+Siege.Core.Tests.BatchPreview.批次预演必须显示的信息Tests.显示预计提子
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.可改造目标按批次开始前的地形枚举
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.可改造目标逐条来自改造合法性唯一实现
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.工坊下列出隔一格目标
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.改造后的气与自杀风险
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.改造目标非法时仍列出全部合法目标
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.显示可改造目标
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.显示改造目标
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.立栅切开且两半都被提时分列两串
+Siege.Core.Tests.BatchPreview.改造在预演中的呈现Tests.立栅切开的敌串只列被提的那一半
+Siege.Core.Tests.BatchPreview.未知信物在预演中只显示将揭示Tests.将揭示提示
+Siege.Core.Tests.BatchPreview.计分信物与新棋子的预演Tests.将揭示的连营不计入预演
+Siege.Core.Tests.BatchPreview.计分信物与新棋子的预演Tests.已揭示连营计入预演
+Siege.Core.Tests.BatchPreview.计分信物与新棋子的预演Tests.新棋子的位置加值计入预演
+Siege.Core.Tests.BatchPreview.非法批次必须说明原因并高亮Tests.十二类失败标题互不相同
+Siege.Core.Tests.BatchPreview.非法批次必须说明原因并高亮Tests.同形说明
+Siege.Core.Tests.BatchPreview.非法批次必须说明原因并高亮Tests.活棋禁入说明
+Siege.Core.Tests.BatchPreview.非法批次必须说明原因并高亮Tests.破坏活形的格目标改造高亮在格上
+Siege.Core.Tests.BatchPreview.非法批次必须说明原因并高亮Tests.破坏活形说明
+Siege.Core.Tests.BatchPreview.非法批次必须说明原因并高亮Tests.自杀手高亮
+Siege.Core.Tests.BatchPreview.非法批次必须说明原因并高亮Tests.预占腾空格的文案
+Siege.Core.Tests.BatchPreview.预演一致性回归Tests.千例随机局面预演与结算一致
+Siege.Core.Tests.BatchPreview.预演不改变游戏状态Tests.预演无副作用
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.K为0不启用
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.K为0时链接图决策序列与改前基线逐字节相同
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.决赛战场不倒计时
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.外部提交首轮配对后同样赋期限
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.无人等待者不倒计时
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.构筑期结算按第3大回合起算
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.首轮一侧先结算即开始倒计时
+Siege.Core.Tests.Battlefield.决赛倒计时Tests.首轮配对的等待者也触发倒计时
+Siege.Core.Tests.Battlefield.战场的定义与规则作用域Tests.场景格不可改造
+Siege.Core.Tests.Battlefield.战场的定义与规则作用域Tests.开局即唯一战场
+Siege.Core.Tests.Battlefield.战场的定义与规则作用域Tests.战场导出按地图实例记忆化
+Siege.Core.Tests.Battlefield.战场的定义与规则作用域Tests.接缝两侧规则照常
+Siege.Core.Tests.Battlefield.战场的定义与规则作用域Tests.旧地图的孤立可落子区不属于任何战场编号
+Siege.Core.Tests.Battlefield.战场的定义与规则作用域Tests.棋盘左下角是岩石时按棋盘内可落子格归属
+Siege.Core.Tests.Battlefield.战场结算Tests.一方落子即不结算
+Siege.Core.Tests.Battlefield.战场结算Tests.三人战场结算
+Siege.Core.Tests.Battlefield.战场结算Tests.他战场有人落子不妨碍本战场整轮Pass结算
+Siege.Core.Tests.Battlefield.战场结算Tests.倒计时到期强制结算
+Siege.Core.Tests.Battlefield.战场结算Tests.全零局面按种子兜底顺序定胜者
+Siege.Core.Tests.Battlefield.战场结算Tests.减员结算
+Siege.Core.Tests.Battlefield.战场结算Tests.出局者出序
+Siege.Core.Tests.Battlefield.战场结算Tests.势力归零的减员结算
+Siege.Core.Tests.Battlefield.战场结算Tests.填满结算
+Siege.Core.Tests.Battlefield.战场结算Tests.已结算的战场不再结算
+Siege.Core.Tests.Battlefield.战场结算Tests.弃赛后按剩余在局者判整轮Pass
+Siege.Core.Tests.Battlefield.战场结算Tests.整轮Pass结算
+Siege.Core.Tests.Battlefield.战场结算Tests.构筑期也结算
+Siege.Core.Tests.Battlefield.战场结算Tests.等待者Pass不结算
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.不在待配对时拒绝配对事件
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.决赛候选超过两个时以最小编号为轴
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.决赛只接受唯一合法结果
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.列出顺序不影响结果
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.合法配对被接受
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.奇数候选需要等待者
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.待配对与待决赛链接阶段不可弃赛
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.无来源时跑到底报待配对
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.来源给出非法结果时停在待配对
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.等待者须是候选且不在配对里
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.脚本固定配对的确定性缺省
+Siege.Core.Tests.Battlefield.配对事件由对局外部提供Tests.非法配对被拒
+Siege.Core.Tests.Battlefield.链接事件Tests.ApplySplice拒绝不是逐格搬运的地图
+Siege.Core.Tests.Battlefield.链接事件Tests.接缝两侧朝间隙的边界栅栏合并为一条
+Siege.Core.Tests.Battlefield.链接事件Tests.河上架的桥随棋盘平移
+Siege.Core.Tests.Battlefield.链接事件Tests.链接不改内容
+Siege.Core.Tests.Battlefield.链接事件Tests.链接可重放
+Siege.Core.Tests.Battlefield.链接事件Tests.链接合并战场
+Siege.Core.Tests.Battlefield.链接后的公开补充载荷Tests.拼接后揭示被平移的信物_公开补充载荷照常
+Siege.Core.Tests.Battlefield.链接后的公开补充载荷Tests.拼接后揭示被平移的信物_本人部署预演照常
+Siege.Core.Tests.Battlefield.链接执行Tests.决赛贴北侧
+Siege.Core.Tests.Battlefield.链接执行Tests.链接不改内容
+Siege.Core.Tests.Battlefield.链接执行Tests.链接可重放
+Siege.Core.Tests.Battlefield.链接执行Tests.链接合并战场
+Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局
+Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "两人同区加两人独占", zones: [1, 1, 3, 4], placeRounds: 5)
+Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "四人同区", zones: [0, 0, 0, 0], placeRounds: 5)
+Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "四人四区", zones: [0, 1, 3, 4], placeRounds: 5)
+Siege.Core.Tests.Battlefield.链接模式端到端Tests.从插旗跑到终局_开放地图(开局: "构筑期内整轮Pass", zones: [0, 1, 3, 4], placeRounds: 1)
+Siege.Core.Tests.Battlefield.阶段推进Tests.三人同区加一人独占
+Siege.Core.Tests.Battlefield.阶段推进Tests.两人同区加两人独占
+Siege.Core.Tests.Battlefield.阶段推进Tests.决赛链接
+Siege.Core.Tests.Battlefield.阶段推进Tests.减员触发的决赛等到大回合结束
+Siege.Core.Tests.Battlefield.阶段推进Tests.四人同区
+Siege.Core.Tests.Battlefield.阶段推进Tests.四人同区_开放地图
+Siege.Core.Tests.Battlefield.阶段推进Tests.四人四区
+Siege.Core.Tests.Battlefield.阶段推进Tests.挂接配对来源时当场配对
+Siege.Core.Tests.Battlefield.阶段推进Tests.提前打完的同区棋盘不进配对
+Siege.Core.Tests.Battlefield.阶段推进Tests.构筑期三个大回合不转换
+Siege.Core.Tests.Battlefield.阶段推进Tests.构筑期内整轮Pass即终局
+Siege.Core.Tests.Battlefield.阶段推进Tests.构筑期结算的两个同区战场在第3大回合结束进入决赛
+Siege.Core.Tests.Battlefield.阶段推进Tests.第4大回合不发生任何事件
+Siege.Core.Tests.BoardTopology.四邻接Tests.内核不引用Godot
+Siege.Core.Tests.BoardTopology.四邻接Tests.几何相邻但无气边
+Siege.Core.Tests.BoardTopology.四邻接Tests.几何邻居枚举只在允许名单内直接调用
+Siege.Core.Tests.BoardTopology.四邻接Tests.斜向不相邻
+Siege.Core.Tests.BoardTopology.四邻接Tests.边角格邻居数量
+Siege.Core.Tests.BoardTopology.四邻接Tests.邻居不含斜向
+Siege.Core.Tests.BoardTopology.四邻接Tests.邻居集合与手工期望一致(center: "A1", expected: ["B1", "A2"])
+Siege.Core.Tests.BoardTopology.四邻接Tests.邻居集合与手工期望一致(center: "A6", expected: ["A5", "B6", "A7"])
+Siege.Core.Tests.BoardTopology.四邻接Tests.邻居集合与手工期望一致(center: "F6", expected: ["F5", "E6", "G6", "F7"])
+Siege.Core.Tests.BoardTopology.四邻接Tests.邻居集合与手工期望一致(center: "L11", expected: ["L10", "K11"])
+Siege.Core.Tests.BoardTopology.四邻接Tests.邻接只走四方向
+Siege.Core.Tests.BoardTopology.坐标记法Tests.两位数行号往返
+Siege.Core.Tests.BoardTopology.坐标记法Tests.列字母共25个且超出列标上限构造被拒
+Siege.Core.Tests.BoardTopology.坐标记法Tests.列字母跳过I(width: 11, expected: "ABCDEFGHJKL")
+Siege.Core.Tests.BoardTopology.坐标记法Tests.列字母跳过I(width: 13, expected: "ABCDEFGHJKLMN")
+Siege.Core.Tests.BoardTopology.坐标记法Tests.双向映射唯一
+Siege.Core.Tests.BoardTopology.坐标记法Tests.双字母同样跳过I
+Siege.Core.Tests.BoardTopology.坐标记法Tests.双字母坐标往返
+Siege.Core.Tests.BoardTopology.坐标记法Tests.左下角为原点
+Siege.Core.Tests.BoardTopology.坐标记法Tests.映射实现只有一处
+Siege.Core.Tests.BoardTopology.坐标记法Tests.第26列起用双字母
+Siege.Core.Tests.BoardTopology.坐标记法Tests.记法与索引对应(notation: "A1", x: 0, y: 0)
+Siege.Core.Tests.BoardTopology.坐标记法Tests.记法与索引对应(notation: "F6", x: 5, y: 5)
+Siege.Core.Tests.BoardTopology.坐标记法Tests.记法与索引对应(notation: "H4", x: 7, y: 3)
+Siege.Core.Tests.BoardTopology.坐标记法Tests.记法与索引对应(notation: "J10", x: 8, y: 9)
+Siege.Core.Tests.BoardTopology.坐标记法Tests.记法与索引对应(notation: "L11", x: 10, y: 10)
+Siege.Core.Tests.BoardTopology.坐标记法Tests.非法记法被拒绝(notation: "")
+Siege.Core.Tests.BoardTopology.坐标记法Tests.非法记法被拒绝(notation: "5A")
+Siege.Core.Tests.BoardTopology.坐标记法Tests.非法记法被拒绝(notation: "A0")
+Siege.Core.Tests.BoardTopology.坐标记法Tests.非法记法被拒绝(notation: "I5")
+Siege.Core.Tests.BoardTopology.坐标记法Tests.非法记法被拒绝(notation: null)
+Siege.Core.Tests.BoardTopology.棋串构成Tests.崖壁两侧不成串
+Siege.Core.Tests.BoardTopology.棋串构成Tests.敌我相邻不合并
+Siege.Core.Tests.BoardTopology.棋串构成Tests.棋串坐标按字典序稳定
+Siege.Core.Tests.BoardTopology.棋串构成Tests.空格与障碍不属于任何棋串
+Siege.Core.Tests.BoardTopology.棋串构成Tests.跨类型合并棋串
+Siege.Core.Tests.BoardTopology.棋盘格子状态模型Tests.信物格可正常落子
+Siege.Core.Tests.BoardTopology.棋盘格子状态模型Tests.棋盘外沿等同封堵
+Siege.Core.Tests.BoardTopology.棋盘格子状态模型Tests.越界坐标的地形就是障碍
+Siege.Core.Tests.BoardTopology.棋盘格子状态模型Tests.障碍格拒绝占用
+Siege.Core.Tests.BoardTopology.气的计算Tests.共享气去重
+Siege.Core.Tests.BoardTopology.气的计算Tests.孤立棋子的气
+Siege.Core.Tests.BoardTopology.气的计算Tests.提子腾出的浅滩格不成为气
+Siege.Core.Tests.BoardTopology.气的计算Tests.无气判定
+Siege.Core.Tests.BoardTopology.气的计算Tests.气随盘面实时重算
+Siege.Core.Tests.BoardTopology.气的计算Tests.浅滩上的棋子照常有气
+Siege.Core.Tests.BoardTopology.气的计算Tests.浅滩上的棋子照常连串
+Siege.Core.Tests.BoardTopology.气的计算Tests.空浅滩不是气
+Siege.Core.Tests.BoardTopology.气的计算Tests.被空浅滩包围即无气
+Siege.Core.Tests.BoardTopology.气的计算Tests.贴着的空浅滩单独列出
+Siege.Core.Tests.BoardTopology.气的计算Tests.障碍减少气
+Siege.Core.Tests.BoardTopology.气的计算Tests.靠崖壁的棋串
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.全盘棋串枚举不依赖名册
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.副本不重跑校验
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.副本与原盘面互不影响
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.副本立即等价
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.批量移除后气立即重算
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.批量移除无部分完成的中间态
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.批量移除空格是无害空操作
+Siege.Core.Tests.BoardTopology.盘面副本与批量写入Tests.批量移除输入枚举中途抛出时不写入
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.不同玩家不等价
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.十种类型的盘面码两两不同且往返保留类型
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.只含原六种类型码的旧盘面串照常恢复
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.同位置不同类型不等价
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.同形比对键忽略棋子类型
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.新四种类型码固定为NCTK
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.玩家编号超出0到15时序列化拒绝
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.落子顺序不影响序列化
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.重复序列化逐字节一致
+Siege.Core.Tests.BoardTopology.盘面序列化Tests.非盘面信息不影响序列化
+Siege.Core.Tests.BoardTopology.盘面查询接口Tests.枚举玩家棋串
+Siege.Core.Tests.BoardTopology.盘面查询接口Tests.查询不产生副作用
+Siege.Core.Tests.BoardTopology.盘面查询接口Tests.棋盘填满查询
+Siege.Core.Tests.BoardTopology.盘面查询接口Tests.障碍不计入可落子空格
+Siege.Core.Tests.BoardTopology.盘面派生量优化对照Tests.副本的记忆与原盘面互不可见
+Siege.Core.Tests.BoardTopology.盘面派生量优化对照Tests.每种写入原语之后棋串与活形随之重算
+Siege.Core.Tests.BoardTopology.盘面派生量优化对照Tests.随机局面下棋串气与格视图与参考实现逐项相同
+Siege.Core.Tests.BoardTopology.盘面派生量优化对照Tests.随机局面下覆盖表与参考实现逐项相同
+Siege.Core.Tests.BoardTopology.盘面派生量提速对照Tests.序列化按版本号记忆且与逐格写法相同
+Siege.Core.Tests.BoardTopology.盘面派生量提速对照Tests.改造派生表与从零建表逐项相同
+Siege.Core.Tests.BoardTopology.盘面派生量提速对照Tests.活形缓存指纹与逐格写法相同
+Siege.Core.Tests.BoardTopology.盘面派生量提速对照Tests.空集合移除不令记忆失效
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.不影响活形的改造合法
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.只挨空浅滩的落子是自杀手
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.同时填两眼被禁入拦下
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.围死活形被拒
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.所有者可以拆自己的眼
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.提子后恢复活形的批次合法
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.提子后获得气的合法批次(first: "C4", second: "E4")
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.提子后获得气的合法批次(first: "E4", second: "C4")
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.提子顺序无关性回归
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.搭桥漏眼被拒
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.敌串同时移除
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.未定棋串的眼可以进
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.真正的自杀手
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.立栅切出单子被拒
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.立栅切开活形被拒
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.立栅隔开眼与棋子被拒
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.自杀手检查全量重算
+Siege.Core.Tests.CaptureResolution.以整批最终状态判定合法性Tests.预演不污染正式盘面
+Siege.Core.Tests.CaptureResolution.已提交盘面历史的持久化Tests.存档恢复后同形仍生效
+Siege.Core.Tests.CaptureResolution.已提交盘面历史的持久化Tests.序号与内容按提交顺序往返
+Siege.Core.Tests.CaptureResolution.正式结算顺序Tests.势力重算后才检查终局
+Siege.Core.Tests.CaptureResolution.正式结算顺序Tests.提子先于信物揭示
+Siege.Core.Tests.CaptureResolution.正式结算顺序Tests.提子记录可重建被提棋串并保留落子顺序
+Siege.Core.Tests.CaptureResolution.正式结算顺序Tests.结算的原子性
+Siege.Core.Tests.CaptureResolution.正式结算顺序Tests.结算驱动器步骤顺序
+Siege.Core.Tests.CaptureResolution.活形保护性质Tests.已确定活形在非所有者的合法批次后仍为已确定活形
+Siege.Core.Tests.CaptureResolution.活形保护性质Tests.已确定活形在非所有者的合法批次后仍为已确定活形_种子1至200
+Siege.Core.Tests.CaptureResolution.盘面同形禁则Tests.中间态不入集合
+Siege.Core.Tests.CaptureResolution.盘面同形禁则Tests.同形比对键投影只有一处实现
+Siege.Core.Tests.CaptureResolution.盘面同形禁则Tests.同键返回最早提交序号
+Siege.Core.Tests.CaptureResolution.盘面同形禁则Tests.多人互提循环换类型也被禁止
+Siege.Core.Tests.CaptureResolution.盘面同形禁则Tests.循环提子被禁止
+Siege.Core.Tests.CaptureResolution.盘面同形禁则Tests.换类型仍构成同形
+Siege.Core.Tests.CaptureResolution.盘面同形禁则Tests.非盘面差异不豁免同形
+Siege.Core.Tests.CarryInOut.AI带入Tests.AI带入可复现
+Siege.Core.Tests.CarryInOut.AI带入Tests.AI带入用独立子流carry_ai按编号升序等概率抽取
+Siege.Core.Tests.CarryInOut.AI带入Tests.不扰动征募序列
+Siege.Core.Tests.CarryInOut.AI带入Tests.与本机玩家的选择无关
+Siege.Core.Tests.CarryInOut.AI带入Tests.同等数量
+Siege.Core.Tests.CarryInOut.AI带入Tests.带入数量只能为0或1
+Siege.Core.Tests.CarryInOut.AI带入Tests.本机不带则AI不带
+Siege.Core.Tests.CarryInOut.中途退出与截断Tests.截断局不结算
+Siege.Core.Tests.CarryInOut.中途退出与截断Tests.退出后下次开局
+Siege.Core.Tests.CarryInOut.中途退出与截断Tests.重复结算被忽略
+Siege.Core.Tests.CarryInOut.出局结算Tests.出局丢失
+Siege.Core.Tests.CarryInOut.出局结算Tests.截断局不结算
+Siege.Core.Tests.CarryInOut.出局结算Tests.未带入者出局
+Siege.Core.Tests.CarryInOut.名次补给点表Tests.任一名次半数向上取整大于任一价格
+Siege.Core.Tests.CarryInOut.名次补给点表Tests.四人局查表
+Siege.Core.Tests.CarryInOut.名次补给点表Tests.完赛优于同名次弃赛
+Siege.Core.Tests.CarryInOut.名次补给点表Tests.并列共享
+Siege.Core.Tests.CarryInOut.名次补给点表Tests.补给价格
+Siege.Core.Tests.CarryInOut.完赛结算Tests.只剩一名参赛玩家
+Siege.Core.Tests.CarryInOut.完赛结算Tests.完赛第1名
+Siege.Core.Tests.CarryInOut.带出结算写入档案Tests.出局写入档案且丢失
+Siege.Core.Tests.CarryInOut.带出结算写入档案Tests.完赛第1名写入档案且不返还
+Siege.Core.Tests.CarryInOut.带出结算写入档案Tests.弃赛写入档案并返还
+Siege.Core.Tests.CarryInOut.带出结算写入档案Tests.结算的补给与在途记录不一致即拒绝
+Siege.Core.Tests.CarryInOut.开局带入与在途记录Tests.不带入也有在途记录
+Siege.Core.Tests.CarryInOut.开局带入与在途记录Tests.带入扣库存
+Siege.Core.Tests.CarryInOut.开局带入与在途记录Tests.库存为0不能带
+Siege.Core.Tests.CarryInOut.开局带入与在途记录Tests.残留在途记录未处理时不得开局
+Siege.Core.Tests.CarryInOut.弃赛结算Tests.保护期内弃赛不带出补给点
+Siege.Core.Tests.CarryInOut.弃赛结算Tests.向下取整
+Siege.Core.Tests.CarryInOut.弃赛结算Tests.已出局者不计入弃赛名次
+Siege.Core.Tests.CarryInOut.弃赛结算Tests.弃赛时第1名
+Siege.Core.Tests.CarryInOut.弃赛结算Tests.弃赛百分之五十
+Siege.Core.Tests.CarryInOut.弃赛结算Tests.此前已弃赛者计入弃赛名次
+Siege.Core.Tests.CarryInOut.战场落败出局结算Tests.战场落败同样丢失
+Siege.Core.Tests.CarryInOut.换型候选类型Tests.v1候选
+Siege.Core.Tests.CarryInOut.换型候选类型Tests.v2候选
+Siege.Core.Tests.CarryInOut.换型候选类型Tests.征召签的抽取概率
+Siege.Core.Tests.CarryInOut.换型候选类型Tests.拒绝不合形的带入
+Siege.Core.Tests.CarryInOut.换型候选类型Tests.拒绝非候选类型(type: Artisan)
+Siege.Core.Tests.CarryInOut.换型候选类型Tests.拒绝非候选类型(type: Basic)
+Siege.Core.Tests.CarryInOut.换型候选类型Tests.拒绝非候选类型(type: Multiplier)
+Siege.Core.Tests.CarryInOut.本地玩家档案Tests.原子写入
+Siege.Core.Tests.CarryInOut.本地玩家档案Tests.在途记录的写出与读回
+Siege.Core.Tests.CarryInOut.本地玩家档案Tests.档案内容
+Siege.Core.Tests.CarryInOut.本地玩家档案Tests.路径可配置
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.同一秒内再次损坏不覆盖先前的备份
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.损坏时备份并重置
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.新版本档案不覆盖
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.缺失时新建
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.缺失时连同目录一起新建
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.负数视为损坏
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "[1,2,3]")
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"points\":3,\"inventory\":{},\"inFlight\":null}")
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":0,\"points\":3,\"inventory\":{},\"inF"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"inventory\":{},\"inFlight\":null}")
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inFlight\":null}")
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inventory\":{\"Multi"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inventory\":{\"Spare"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inventory\":{},\"inF"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inventory\":{},\"inF"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inventory\":{},\"inF"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inventory\":{},\"inF"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"inventory\":{},\"inF"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3,\"points\":4,\"invento"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "{\"version\":1,\"points\":3.5,\"inventory\":{},\"i"···)
+Siege.Core.Tests.CarryInOut.档案缺失损坏与版本不符的恢复Tests.非法内容视为损坏(content: "不是 JSON")
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.关闭与指定路径不能同时给出
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.关闭带入
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.库存为0的补给不在带入选项里
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.开局选择
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.弃赛命令
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.弃赛需二次确认
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.新版本档案时本局关闭带入
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.未带入时q直接退出
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.档案选项严格解析(option: "--no-carry", value: "5")
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.档案选项严格解析(option: "--profile", value: null)
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.脚本化终端对局不传档案时不碰真实档案目录
+Siege.Core.Tests.CarryInOut.终端的带入选择弃赛与结算显示Tests.退出提示与下次开局结算中途退出
+Siege.Core.Tests.CarryInOut.补给兑换Tests.兑换成功
+Siege.Core.Tests.CarryInOut.补给兑换Tests.每次兑换一件并按价扣点(kind: Commission, price: 4)
+Siege.Core.Tests.CarryInOut.补给兑换Tests.每次兑换一件并按价扣点(kind: DraftLot, price: 2)
+Siege.Core.Tests.CarryInOut.补给兑换Tests.每次兑换一件并按价扣点(kind: SpareStone, price: 3)
+Siege.Core.Tests.CarryInOut.补给兑换Tests.补给点不足
+Siege.Core.Tests.CarryInOut.补给兑换Tests.补给点恰等于价格可以兑换
+Siege.Core.Tests.CarryInOut.补给种类与开局效果Tests.不带入者不变
+Siege.Core.Tests.CarryInOut.补给种类与开局效果Tests.备用子
+Siege.Core.Tests.CarryInOut.补给种类与开局效果Tests.征召签
+Siege.Core.Tests.CarryInOut.补给种类与开局效果Tests.换型令
+Siege.Core.Tests.CarryInOut.补给种类与开局效果Tests.效果只在开局
+Siege.Core.Tests.CoverageTerritory.占据优先于覆盖Tests.围杀后归属重算
+Siege.Core.Tests.CoverageTerritory.占据优先于覆盖Tests.敌方覆盖不夺格
+Siege.Core.Tests.CoverageTerritory.唯一覆盖查询Tests.唯一覆盖查询与空格归属交叉一致
+Siege.Core.Tests.CoverageTerritory.唯一覆盖查询Tests.唯一覆盖者
+Siege.Core.Tests.CoverageTerritory.唯一覆盖查询Tests.多人覆盖
+Siege.Core.Tests.CoverageTerritory.唯一覆盖查询Tests.林地信物只能占据
+Siege.Core.Tests.CoverageTerritory.弃赛玩家的遗留棋子仍产生覆盖Tests.弃赛者遗留棋子制造争议
+Siege.Core.Tests.CoverageTerritory.弃赛玩家的遗留棋子仍产生覆盖Tests.弃赛者遗留棋子可被围杀
+Siege.Core.Tests.CoverageTerritory.弃赛玩家的遗留棋子仍产生覆盖Tests.弃赛者遗留棋子封锁信物
+Siege.Core.Tests.CoverageTerritory.棋子向四邻接相邻格提供覆盖Tests.岩台上的棋子覆盖更远
+Siege.Core.Tests.CoverageTerritory.棋子向四邻接相邻格提供覆盖Tests.棋盘外沿不传播覆盖
+Siege.Core.Tests.CoverageTerritory.棋子向四邻接相邻格提供覆盖Tests.沼泽上的棋子不提供覆盖
+Siege.Core.Tests.CoverageTerritory.棋子向四邻接相邻格提供覆盖Tests.覆盖判定与气边判定分离
+Siege.Core.Tests.CoverageTerritory.棋子向四邻接相邻格提供覆盖Tests.覆盖范围
+Siege.Core.Tests.CoverageTerritory.棋子向四邻接相邻格提供覆盖Tests.覆盖随盘面实时重算
+Siege.Core.Tests.CoverageTerritory.棋子向四邻接相邻格提供覆盖Tests.障碍不传播覆盖
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.中立
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.争议
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.棋子格不在独占集合中
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.独占
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.空林地格恒为中立
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.荒漠上的信物照常被控制
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.荒漠独占不计分
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.覆盖数量不影响独占
+Siege.Core.Tests.CoverageTerritory.空格归属三态Tests.障碍不属于任何玩家
+Siege.Core.Tests.Determinism.随机原语参考向量Tests.SplitMix64_种子0的前五个输出
+Siege.Core.Tests.Determinism.随机原语参考向量Tests.Xoshiro256StarStar_状态1234的前十个输出
+Siege.Core.Tests.Determinism.随机原语参考向量Tests.等概率整数用拒绝采样消除取模偏差
+Siege.Core.Tests.Determinism.随机子流隔离Tests.不同子流名序列不同
+Siege.Core.Tests.Determinism.随机子流隔离Tests.加权抽样只走整数累积权重
+Siege.Core.Tests.Determinism.随机子流隔离Tests.同种子同子流逐项一致
+Siege.Core.Tests.Determinism.随机子流隔离Tests.改变一条子流的消费次数不影响另一条
+Siege.Core.Tests.Determinism.随机子流隔离Tests.改变征募决策后信物生成逐格不变
+Siege.Core.Tests.Determinism.随机子流隔离Tests.种子文本往返
+Siege.Core.Tests.Determinism.随机子流隔离Tests.等概率整数无偏且在界内
+Siege.Core.Tests.Determinism.随机子流隔离Tests.随机与生成路径不含浮点
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.Pass计数跨回合重置
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.决赛结算即终局
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.势力悬殊不提前结束
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.只剩一名优先于最后战场结算
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.唯一参赛者获胜
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.四人同区一次终局
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.构筑期内整轮Pass即终局
+Siege.Core.Tests.EliminationEndgame.两类终局条件Tests.轮数再多也不结束
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.保护期内允许弃赛
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.弃赛名次不影响最终名次
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.弃赛名次随存档往返
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.弃赛后停止行动
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.弃赛快照可记录
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.弃赛时势力名次
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.此前已弃赛者计入弃赛名次
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.遗留棋子可被围杀
+Siege.Core.Tests.EliminationEndgame.主动弃赛Tests.遗留棋子继续生效
+Siege.Core.Tests.EliminationEndgame.出局判定Tests.从未落子者不因Pass出局
+Siege.Core.Tests.EliminationEndgame.出局判定Tests.保护期内不豁免
+Siege.Core.Tests.EliminationEndgame.出局判定Tests.势力归零立即出局
+Siege.Core.Tests.EliminationEndgame.出局判定Tests.同时归零同时出局
+Siege.Core.Tests.EliminationEndgame.出局判定Tests.开局零势力不出局
+Siege.Core.Tests.EliminationEndgame.出局判定Tests.手牌有子也出局
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.信物相同比独占空格数
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.出局者倒序
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.势力相同比信物数
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.同一次结算出局者共享名次
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.多名弃赛者互比
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.完全相同则并列
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.弃赛者排在完赛者之后
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.终局输入取独占空格数
+Siege.Core.Tests.EliminationEndgame.终局名次与并列判定Tests.逐级比较到棋子数
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.信物相同比独占空格数
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.决赛胜者第一
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.同一战场多名落败者按势力排
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.同次势力归零者共享名次
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.对局里战场落败者按结算时的比较量排名
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.弃赛者最后
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.更早出局者按出局先后倒序
+Siege.Core.Tests.EliminationEndgame.链接模式终局名次Tests.逐级比较到棋子数
+Siege.Core.Tests.HandInfoPanel.全玩家手牌对比面板Tests.开关面板
+Siege.Core.Tests.HandInfoPanel.公开结构参数与信物来源Tests.参数对全体公开
+Siege.Core.Tests.HandInfoPanel.公开结构参数与信物来源Tests.显示参数与来源
+Siege.Core.Tests.HandInfoPanel.公开结构参数与信物来源Tests.来源只有基础值与信物
+Siege.Core.Tests.HandInfoPanel.弃赛玩家的面板表现Tests.弃赛者标记
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.V键与手柄键不与既有按键冲突
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.不在本机征募阶段时收起键无效
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.图形版经状态模型决定收起
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.展开后状态不变
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.征募阶段标识只认本机玩家的征募阶段
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.换一个征募阶段即重置_不经过非征募阶段也重置
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.提示条不遮挡左侧信息层面板与顶部条
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.收起不进对局状态_Core与Sim与存档代码不含收起状态
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.收起不进对局状态_恢复后面板为展开
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.收起后看全场
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.收起状态下开关手牌面板后回到收起
+Siege.Core.Tests.HandInfoPanel.征募面板可收起Tests.新征募阶段默认展开
+Siege.Core.Tests.HandInfoPanel.敌方区域的显示内容Tests.不显示敌方征募与暂放
+Siege.Core.Tests.HandInfoPanel.敌方区域的显示内容Tests.敌方只显示类型
+Siege.Core.Tests.HandInfoPanel.新棋子类型与驿站来源的显示Tests.新类型在自己区域显示
+Siege.Core.Tests.HandInfoPanel.新棋子类型与驿站来源的显示Tests.零加成的驿站不列出
+Siege.Core.Tests.HandInfoPanel.新棋子类型与驿站来源的显示Tests.驿站来源逐枚列出
+Siege.Core.Tests.HandInfoPanel.自己区域的显示内容Tests.显示本轮新征募未提交数量
+Siege.Core.Tests.HandInfoPanel.自己区域的显示内容Tests.显示槽位占用
+Siege.Core.Tests.HandInfoPanel.自己区域的显示内容Tests.自己看得到准确数量
+Siege.Core.Tests.HandManagement.Pass撤销本轮新增征募Tests.Pass不撤销本轮的整类弃牌
+Siege.Core.Tests.HandManagement.Pass撤销本轮新增征募Tests.同类型只扣回新增数量
+Siege.Core.Tests.HandManagement.Pass撤销本轮新增征募Tests.已有手牌不受Pass影响
+Siege.Core.Tests.HandManagement.Pass撤销本轮新增征募Tests.撤销全部本轮新增
+Siege.Core.Tests.HandManagement.Pass撤销本轮新增征募Tests.撤销释放槽位
+Siege.Core.Tests.HandManagement.Pass撤销本轮新增征募Tests.落子1枚即全保留
+Siege.Core.Tests.HandManagement.Pass撤销本轮新增征募Tests.连续三个小回合的账目折叠
+Siege.Core.Tests.HandManagement.主动整类弃牌Tests.只允许在整理手牌阶段弃牌
+Siege.Core.Tests.HandManagement.主动整类弃牌Tests.拒绝部分弃牌
+Siege.Core.Tests.HandManagement.主动整类弃牌Tests.整类弃牌腾槽
+Siege.Core.Tests.HandManagement.手牌为空的可查询状态Tests.手牌清空
+Siege.Core.Tests.HandManagement.手牌库存与扣减Tests.库存不足的扣减响亮失败
+Siege.Core.Tests.HandManagement.手牌库存与扣减Tests.暂放不扣减
+Siege.Core.Tests.HandManagement.手牌库存与扣减Tests.清零释放槽位
+Siege.Core.Tests.HandManagement.手牌库存与扣减Tests.部署扣减库存
+Siege.Core.Tests.HandManagement.手牌的信息边界Tests.小回合中途弃赛作废未提交征募
+Siege.Core.Tests.HandManagement.手牌的信息边界Tests.弃赛者手牌类型保留展示
+Siege.Core.Tests.HandManagement.手牌的信息边界Tests.数量隐藏
+Siege.Core.Tests.HandManagement.手牌的信息边界Tests.类型公开
+Siege.Core.Tests.HandManagement.手牌类型槽Tests.六种类型挤不进默认槽位
+Siege.Core.Tests.HandManagement.手牌类型槽Tests.兵站扩展槽位
+Siege.Core.Tests.HandManagement.手牌类型槽Tests.同类无限叠加
+Siege.Core.Tests.HandManagement.手牌类型槽Tests.槽位由类型数派生不存在泄漏
+Siege.Core.Tests.HandManagement.手牌类型槽Tests.槽位统计种类而非总数
+Siege.Core.Tests.HandManagement.槽位缩水时的强制整类弃牌Tests.兵站丢失触发强制弃牌
+Siege.Core.Tests.HandManagement.槽位缩水时的强制整类弃牌Tests.快照持有类型数与账本不一致视为接线错误
+Siege.Core.Tests.HandManagement.槽位缩水时的强制整类弃牌Tests.超限解除后继续
+Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场已结算时状态文案带胜出_出局者按出局显示
+Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场玩家的势力行只剩名字与状态
+Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场玩家的手牌类型与结构参数不可见
+Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.他战场玩家的顺序行只剩预测位置
+Siege.Core.Tests.InformationVisibility.他战场玩家数值不进HUD视图模型Tests.同战场不遮蔽
+Siege.Core.Tests.InformationVisibility.始终公开的信息Tests.势力明细公开
+Siege.Core.Tests.InformationVisibility.始终公开的信息Tests.带入公开
+Siege.Core.Tests.InformationVisibility.始终公开的信息Tests.棋子类型公开
+Siege.Core.Tests.InformationVisibility.始终公开的信息Tests.气可推导
+Siege.Core.Tests.InformationVisibility.始终公开的信息Tests.活形状态公开
+Siege.Core.Tests.InformationVisibility.始终公开的信息Tests.领地分公开
+Siege.Core.Tests.InformationVisibility.必须隐藏的信息Tests.手牌数量隐藏
+Siege.Core.Tests.InformationVisibility.必须隐藏的信息Tests.数据层边界
+Siege.Core.Tests.InformationVisibility.必须隐藏的信息Tests.未发现信物内容隐藏
+Siege.Core.Tests.InformationVisibility.必须隐藏的信息Tests.未确认批次隐藏
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.他人势力可见
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.他人棋盘锁定后即展开
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.同战场空格归属三态可读
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.多人同区锁定后全员互见
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.战场结算结果全局公开
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.插旗阶段的可见信息
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.数据层含全图
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.本战场棋盘内的岩石与未架桥深水可见
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.行动顺序与带入全局公开
+Siege.Core.Tests.InformationVisibility.按座位视图Tests.链接后立即可见
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.信息层含全图的格
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.别人的座位视图不得进入观察者世界
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.占位透传主题
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.同区与异区都互见
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.序列化含全部出生棋盘的坐标
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.插旗阶段只有五个占位_没有任何格
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.棋盘内有岩石时本座位棋盘仍可见
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.链接后合并战场的格一起可见
+Siege.Core.Tests.InformationVisibility.视图模型按座位过滤Tests.锁定后全图可见_五块占位全部展开
+Siege.Core.Tests.InformationVisibility.锁定后全图可见Tests.HUD视图模型不遮蔽任何玩家
+Siege.Core.Tests.InformationVisibility.锁定后全图可见Tests.他人棋盘从第1大回合起可见
+Siege.Core.Tests.InformationVisibility.锁定后全图可见Tests.全员Pass可见
+Siege.Core.Tests.InformationVisibility.锁定后全图可见Tests.按座位序列化含全部五块棋盘
+Siege.Core.Tests.InitiativeOrder.先手值公式Tests.先锋推动低名次玩家前移
+Siege.Core.Tests.InitiativeOrder.先手值公式Tests.参赛人数变化影响公式
+Siege.Core.Tests.InitiativeOrder.先手值公式Tests.四人局基础先手值
+Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.填满判定同样进预测
+Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.期限大回合最后一人Pass前的预测与实际顺序一致
+Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.期限大回合的预测剔除将到期落败者
+Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.未行动者按未Pass算
+Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.此刻结束即终局时没有预测
+Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.质检局面_P0P1已Pass_预测为P2P0P3
+Siege.Core.Tests.InitiativeOrder.先手顺序预测_链接模式Tests.预测与大回合结束后的实际顺序一致
+Siege.Core.Tests.InitiativeOrder.同值判定链Tests.上轮顺序打破平局
+Siege.Core.Tests.InitiativeOrder.同值判定链Tests.先手修正打破平局
+Siege.Core.Tests.InitiativeOrder.同值判定链Tests.势力值打破平局
+Siege.Core.Tests.InitiativeOrder.同值判定链Tests.首回合种子兜底
+Siege.Core.Tests.InitiativeOrder.基础排序Tests.按势力排名次
+Siege.Core.Tests.InitiativeOrder.基础排序Tests.排除非参赛玩家
+Siege.Core.Tests.InitiativeOrder.排名的作用范围Tests.排名不累计
+Siege.Core.Tests.InitiativeOrder.排名的作用范围Tests.落后不获补偿
+Siege.Core.Tests.InitiativeOrder.行动顺序跨战场统一Tests.两个战场共用一轮
+Siege.Core.Tests.InitiativeOrder.行动顺序跨战场统一Tests.等待者在序
+Siege.Core.Tests.LifeShape.活形三态Tests.一个单格眼为未定
+Siege.Core.Tests.LifeShape.活形三态Tests.三格为未定
+Siege.Core.Tests.LifeShape.活形三态Tests.两个单格眼为活
+Siege.Core.Tests.LifeShape.活形三态Tests.两子棋串有两个单格眼为活
+Siege.Core.Tests.LifeShape.活形三态Tests.五格为未定
+Siege.Core.Tests.LifeShape.活形三态Tests.六格为活
+Siege.Core.Tests.LifeShape.活形三态Tests.切出单子即不再是活形_所有者自切
+Siege.Core.Tests.LifeShape.活形三态Tests.单子与活形棋串共享眼空间仍禁入
+Siege.Core.Tests.LifeShape.活形三态Tests.单子有两个单格眼为未定
+Siege.Core.Tests.LifeShape.活形三态Tests.单格眼加三格眼空间为活
+Siege.Core.Tests.LifeShape.活形三态Tests.方四为死形
+Siege.Core.Tests.LifeShape.活形三态Tests.活形不入存档
+Siege.Core.Tests.LifeShape.活形三态Tests.状态随盘面重算
+Siege.Core.Tests.LifeShape.活形三态Tests.直二不计
+Siege.Core.Tests.LifeShape.活形三态Tests.直四为活
+Siege.Core.Tests.LifeShape.活形三态Tests.被栅栏隔开的2x2不是方四
+Siege.Core.Tests.LifeShape.活形分析性能基线Tests.中盘全盘活形分析不超过含气棋串计算的三倍
+Siege.Core.Tests.LifeShape.活形查询Tests.查询确定
+Siege.Core.Tests.LifeShape.活形查询Tests.活形分析不直接遍历无序集合
+Siege.Core.Tests.LifeShape.活形查询Tests.预演副本可查询
+Siege.Core.Tests.LifeShape.禁入格Tests.他人活形的眼空间禁入
+Siege.Core.Tests.LifeShape.禁入格Tests.弃赛者的活形仍禁入
+Siege.Core.Tests.LifeShape.禁入格Tests.未定棋串不产生禁入
+Siege.Core.Tests.LifeShape.禁入格Tests.活形解除后禁入同步解除
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.单格眼
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.多条棋串共享眼空间
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.崖壁与栅栏算墙
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.未架桥深水算墙
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.林地可以是眼空间
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.棋盘边缘与障碍算墙
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.没有任何邻子的空区不封闭
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.活形分析只经气边邻格查询取邻接
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.浅滩被己方占据后可封闭
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.空浅滩不是眼
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.荒漠沼泽岩台可以是眼空间(surface: 'd')
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.荒漠沼泽岩台可以是眼空间(surface: 'm')
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.荒漠沼泽岩台可以是眼空间(surface: 'p')
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.贴到敌子不封闭
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.贴着空浅滩不封闭
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.超过上限不算眼空间
+Siege.Core.Tests.LifeShape.空区与封闭眼空间Tests.超过上限的空区从多个起点出发也不算眼空间
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.各主题在六乘六与八乘八上的实际地形量
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.林地有两到三团(side: 6)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.林地有两到三团(side: 8)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.栅栏阵有两到三段且不碰外圈(side: 6)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.栅栏阵有两到三段且不碰外圈(side: 8)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.河流贯穿中间带且恰有一座桥(side: 6)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.河流贯穿中间带且恰有一座桥(side: 8)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.混合四样各有(side: 6)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.混合四样各有(side: 8)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.种子1到20的重抽次数分布
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.自检失败在同一条流上重抽_到上限即抛
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.高台有高度2的格且可以走上去(side: 6)
+Siege.Core.Tests.LinkMapGeneration.主题地形Tests.高台有高度2的格且可以走上去(side: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.三加二布局(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.主题两两不同
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共信物走公共区权重表
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.公共区信物位置(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.初始图只有出生棋盘(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.地图只有出生棋盘且连成一片(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.外圈与核心区平坦(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.棋盘连通且有改造目标(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.每条接缝至少一条气边(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 10)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 11)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 12)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 13)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 14)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 15)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 16)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 17)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 18)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 19)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 2)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 3)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 4)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 5)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 6)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 8)
+Siege.Core.Tests.LinkMapGeneration.初始布局Tests.画布按布局裁出(seed: 9)
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.分量数不为一被拒
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.可落子格都属于棋盘_场景格不可落子
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.接缝没有气边被拒
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.未链接战场不相邻
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.棋盘清单规则逐条报出
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.每块出生棋盘恰两个信物格
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.生成后校验(seed: 1)
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.生成后校验(seed: 20)
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.生成后校验(seed: 7)
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.规格档不改规则
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.规格档读写往返
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.链接后校验
+Siege.Core.Tests.LinkMapGeneration.物化状态校验Tests.非链接档不可增长
+Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.全部链接序列都能拼接
+Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.共享边最长
+Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.决赛拼接
+Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.合并战场以西的战场不动
+Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.平移保内容
+Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.越界候选被排除
+Siege.Core.Tests.LinkMapGeneration.链接时的棋盘拼接Tests.首轮拼接
+Siege.Core.Tests.LinkMapGeneration.链接档地图标识与确定性Tests.同种子同初始图
+Siege.Core.Tests.LinkMapGeneration.链接档地图标识与确定性Tests.同链接序列同最终图
+Siege.Core.Tests.LinkMapGeneration.链接档地图标识与确定性Tests.地图随机源与对局随机互不可见
+Siege.Core.Tests.LinkMapGeneration.链接档地图标识与确定性Tests.对局种子不影响地图
+Siege.Core.Tests.LinkMapGeneration.链接档地图标识与确定性Tests.标识解析与规范化
+Siege.Core.Tests.LinkMapGeneration.链接档地图标识与确定性Tests.目录解析link标识
+Siege.Core.Tests.MapDefinition.两位数行号贯通Tests.地图文件在两位数行号下往返
+Siege.Core.Tests.MapDefinition.两位数行号贯通Tests.对局存档与终端渲染在两位数行号下正确
+Siege.Core.Tests.MapDefinition.两位数行号贯通Tests.对局日志在两位数行号下记录并可读回
+Siege.Core.Tests.MapDefinition.出生区归属Tests.共享出生区
+Siege.Core.Tests.MapDefinition.出生区归属Tests.出生区互不重叠
+Siege.Core.Tests.MapDefinition.出生区归属Tests.出生区标记不自带限制
+Siege.Core.Tests.MapDefinition.出生区归属Tests.非出生区格归属为空
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.全小写枚举值的地图能正确加载
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.全小写键名的地图能正确加载
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.同一坐标重复写会被合并而不是静默取一个
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.含未知字段的地图能正确加载
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.地形字段往返逐字段相等
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.新地表码往返
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.显式写成null的字段被指名报出(field: "BirthZones")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.显式写成null的字段被指名报出(field: "ChokePoints")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.显式写成null的字段被指名报出(field: "Id")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.显式写成null的字段被指名报出(field: "Obstacles")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.显式写成null的字段被指名报出(field: "PocketExemptions")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.显式写成null的字段被指名报出(field: "RelicCells")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.未知枚举值的地图拒绝加载
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形地形字段被指名报出(fragment: "\"Fences\":[\"A1B1\"]", expectedFragment: "A1B1")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形地形字段被指名报出(fragment: "\"Heights\":[\"000\",\"000\",\"003\"]", expectedFragment: "3")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形地形字段被指名报出(fragment: "\"Heights\":[\"000\"]", expectedFragment: "Heights")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形地形字段被指名报出(fragment: "\"Surfaces\":[\"GGG\",\"GGG\",\"GGX\"]", expectedFragment: "X")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形地形字段被指名报出(fragment: "\"Surfaces\":[\"GGG\",\"GGG\",\"GG\"]", expectedFragment: "Surfaces")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形字段抛出可诊断的FormatException(json: "null", expectedFragment: "不是合法 JSON")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形字段抛出可诊断的FormatException(json: "{\"Profile\":\"Link\",\"CentralEntrance\":\"A0\"}", expectedFragment: "\"A0\"")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形字段抛出可诊断的FormatException(json: "{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"···, expectedFragment: "<null>")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形字段抛出可诊断的FormatException(json: "{\"Profile\":\"Link\",\"CentralEntrance\":\"I5\"}", expectedFragment: "\"I5\"")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形字段抛出可诊断的FormatException(json: "{\"Profile\":\"Link\",\"CentralEntrance\":\"ZZZ99\"···, expectedFragment: "\"ZZZ99\"")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.畸形字段抛出可诊断的FormatException(json: "{\"Profile\":\"Link\"}", expectedFragment: "无法解析为围棋记法坐标")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.类型或枚举不认识时抛JsonException(json: "not json at all")
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.类型或枚举不认识时抛JsonException(json: "{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"···)
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.类型或枚举不认识时抛JsonException(json: "{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"···)
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.结构残缺的文件过不了校验
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.缺地形字段的旧文件按平地读入
+Siege.Core.Tests.MapDefinition.地图文件健壮性Tests.非法地表码列出全部八个码
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.其余未知字段仍然宽容
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.含据点字段的旧地图被拒绝(field: "SITES")
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.含据点字段的旧地图被拒绝(field: "Sites")
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.含据点字段的旧地图被拒绝(field: "sites")
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.序列化是确定性的
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.往返后仍然通过校验
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.往返读写无信息丢失
+Siege.Core.Tests.MapDefinition.地图文件往返Tests.文件里用围棋记法
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: "0", expected: "Standard 已移除")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: "1", expected: "Frontier 已移除")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: "2", expected: "Board 已移除")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: "\"Board\"", expected: "Board 已移除")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: "\"Frontier\"", expected: "Frontier 已移除")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: "\"Standard\"", expected: "Standard 已移除")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: "\"board\"", expected: "Board 已移除")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.已移除的规格档被拒绝(profile: null, expected: "缺少规格档字段")
+Siege.Core.Tests.MapDefinition.地图规格档Tests.未定义的规格档值被拒绝而不是抛异常
+Siege.Core.Tests.MapDefinition.地图规格档Tests.未定义的规格档数字被指名报出
+Siege.Core.Tests.MapDefinition.地图规格档Tests.缺省规格档为链接档且恒写出
+Siege.Core.Tests.MapDefinition.地图规格档Tests.规格档不改规则
+Siege.Core.Tests.MapDefinition.地图规格档Tests.规格档只被地图数据文件格式与校验器引用
+Siege.Core.Tests.MapDefinition.地图规格档Tests.规格档读写往返
+Siege.Core.Tests.MapDefinition.地图静态数据Tests.信物格只记录位置与分区不含内容
+Siege.Core.Tests.MapDefinition.地图静态数据Tests.加载不引入随机
+Siege.Core.Tests.MapDefinition.地图静态数据Tests.地图基准校验通过
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.不支持的人数被拒绝
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.中央入口与容差不再校验
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.主题重复
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.信物格不在可落子格上
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.信物格必须标注所属分区
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.信物格数越界
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.公共区域的新地表不受限
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区不得出现高阶预算信物
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区不得重叠
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区之外的小空区不算必死口袋
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区内四种新地表都被拒(surface: Crag)
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区内四种新地表都被拒(surface: Desert)
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区内四种新地表都被拒(surface: Marsh)
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区内四种新地表都被拒(surface: Shallows)
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区可落子格超出区间
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区容不下九枚部署
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区恰好九格时通过
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生区数越界
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生棋盘信物数不对
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.出生棋盘内有新地表
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.可改造目标不足
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.可落子格越界
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.合规的手写链接档地图通过
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.地形数据越界被报出
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.外圈有高差或栅栏
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.外接尺寸越界被拒绝而不是抛异常
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.尺寸非正与越界障碍被报出
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.必死口袋
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.必死口袋可显式豁免
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.校验不通过则拒绝加载
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.核心区有地形
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.棋盘被切断
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.豁免必须写明理由
+Siege.Core.Tests.MapDefinition.地图静态校验规则Tests.面积恰好等于两眼最小格数的空区不算口袋
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.主题取值无法识别被拒(raw: "1")
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.主题取值无法识别被拒(raw: "\"Lava\"")
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.主题取值无法识别被拒(raw: "\"\"")
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.主题读写往返
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.出生区是出生棋盘的核心区
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.棋盘清单项的文件写法
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.清单不参与结算
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.空清单不写出
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.缺少主题被拒
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.非出生棋盘带主题被拒
+Siege.Core.Tests.MapDefinition.棋盘清单Tests.默认棋盘视图模型透传棋盘清单
+Siege.Core.Tests.MapDefinition.规格档分流守门Tests.校验器对规格档的分支只在声明表里
+Siege.Core.Tests.MapSelection.选图界面守门Tests.新局界面的背景占位经Backdrop搭建_不带主题名
+Siege.Core.Tests.MapSelection.选图界面守门Tests.视图模型不读时钟_新种子只由图形版入口注入
+Siege.Core.Tests.MapSelection.选图界面守门Tests.选图启动选项登记在严格命令行解析里
+Siege.Core.Tests.MapSelection.选图界面守门Tests.选图界面不自带地图清单
+Siege.Core.Tests.MapSelection.选图界面守门Tests.选图界面不自行生成地图_地图只经目录解析
+Siege.Core.Tests.MapSelection.选图界面难度选择Tests.图形版难度参数经共用解析且在结算之前读取
+Siege.Core.Tests.MapSelection.选图界面难度选择Tests.建局用所选难度_只有预览固定标准
+Siege.Core.Tests.MapSelection.选图界面难度选择Tests.无人值守固定标准难度
+Siege.Core.Tests.MapSelection.选图界面难度选择Tests.难度选择缺省标准_四档按次序_可预选可切换
+Siege.Core.Tests.MapSelection.选图视图模型Tests.按标识预填_只认完整的链接图标识
+Siege.Core.Tests.MapSelection.选图视图模型Tests.换一张_种子取调用方注入的值_标识随之变化
+Siege.Core.Tests.MapSelection.选图视图模型Tests.新局界面背景占位不带主题名_其余与插旗阶段相同
+Siege.Core.Tests.MapSelection.选图视图模型Tests.时间戳折成便于人读写的种子_九位以内_相邻输入散开
+Siege.Core.Tests.MapSelection.选图视图模型Tests.生成失败_回到上一张成功的图并给出提示
+Siege.Core.Tests.MapSelection.选图视图模型Tests.短种子折叠迁入后输出逐位相同
+Siege.Core.Tests.MapSelection.选图视图模型Tests.确认开局_给出已接受的标识_与按它解析出的地图标识一致
+Siege.Core.Tests.MapSelection.选图视图模型Tests.缺省进入新局界面_已取好种子并显示完整标识
+Siege.Core.Tests.MapSelection.选图视图模型Tests.输入种子_同种子得到同一标识与同一张地图_前导零按数值
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "   ")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "+7")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "-1")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "0x10")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "1.5")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "12 34")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "18446744073709551616")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "5:p7")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "abc")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "link:5")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.非法种子_提示须为非负整数_当前种子不变(text: "１２３")
+Siege.Core.Tests.MapSelection.选图视图模型Tests.预览说明读默认棋盘视图模型
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.匠人权重随存档往返且旧存档回填
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.含大回合上限碾压或补偿字段的旧存档被拒(field: "CatchUpRecruit", value: "true")
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.含大回合上限碾压或补偿字段的旧存档被拒(field: "DominanceCandidate", value: "null")
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.含大回合上限碾压或补偿字段的旧存档被拒(field: "DominancePending", value: "[]")
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.含大回合上限碾压或补偿字段的旧存档被拒(field: "DominanceStartRound", value: "7")
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.含大回合上限碾压或补偿字段的旧存档被拒(field: "MaxMajorRounds", value: "15")
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.存档地图不符即拒绝
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.小回合边界存档恢复后状态完全一致
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.小回合进行中不能存档
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.已结束对局与终局结果可恢复
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.弃赛快照的驿站来源与工坊标记随存档往返且旧存档缺省为空与否
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.曾建立正势力标记随存档往返
+Siege.Core.Tests.MatchFlowRegression.对局持久化Tests.终局独占空格数随存档往返而含据点分值的旧存档被拒
+Siege.Core.Tests.MatchFlowRegression.流程回归Tests.任意阶段可替换决策来源
+Siege.Core.Tests.MatchFlowRegression.流程回归Tests.最后一手抢到的先锋本大回合结束即生效
+Siege.Core.Tests.MatchFlowRegression.流程回归Tests.流程事件只有一个发出点
+Siege.Core.Tests.MatchFlowRegression.百局端到端Tests.连续一百局四人对局无死锁无非法状态
+Siege.Core.Tests.MatchFlowRegression.输出契约Tests.公开快照的结构里不存在私有视图类型
+Siege.Core.Tests.MatchFlowRegression.输出契约Tests.插旗未锁定时不提供合法落子范围
+Siege.Core.Tests.MatchFlowRegression.输出契约Tests.未知玩家一律抛SiegeRuleException
+Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.决赛倒计时随存档往返
+Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.旧存档按不启用读取
+Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.缺省值
+Siege.Core.Tests.MatchSetup.决赛倒计时配置Tests.负数建局报错
+Siege.Core.Tests.MatchSetup.原型插旗替代路径Tests.三个入口的选区都走内核的唯一实现
+Siege.Core.Tests.MatchSetup.原型插旗替代路径Tests.出生区锁定结果可持久化
+Siege.Core.Tests.MatchSetup.原型插旗替代路径Tests.调试依次插旗
+Siege.Core.Tests.MatchSetup.对局内容集Tests.v1逐步相同
+Siege.Core.Tests.MatchSetup.对局内容集Tests.内容集须为已定义的值
+Siege.Core.Tests.MatchSetup.对局内容集Tests.新存档往返
+Siege.Core.Tests.MatchSetup.对局内容集Tests.新局缺省v2
+Siege.Core.Tests.MatchSetup.对局内容集Tests.旧存档照常读取
+Siege.Core.Tests.MatchSetup.对局内容集Tests.首部缺内容集的旧日志按v1回放
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.地图种子不扰动对局随机
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.存档只存地图标识_在生成图上保存后按标识重建地图恢复_逐项相同
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.存档记地图内容摘要_标识相同而内容不同的地图_恢复时报地图不一致(mapId: "link:12345")
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.存档记地图内容摘要_标识相同而内容不同的地图_恢复时报地图不一致(mapId: "link:7")
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.对局种子不影响地图(gameSeedA: 1, gameSeedB: 2)
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.对局种子不影响地图(gameSeedA: 20260920, gameSeedB: 99)
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.插旗阶段可见地图标识与对局种子_二者分开
+Siege.Core.Tests.MatchSetup.对局配置公开完整地图标识Tests.旧存档缺地图摘要_跳过比对并留痕_再存档补写
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.关闭时有带入即拒绝
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.关闭时逐步相同
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.对局中不可改
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.开启但无人带入时逐步相同
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.征召签与其他玩家的带入无关
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.新存档往返
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.旧存档按无带入读取
+Siege.Core.Tests.MatchSetup.带入带出配置Tests.缺省关闭
+Siege.Core.Tests.MatchSetup.建局约束Tests.链接模式不能配旧地图
+Siege.Core.Tests.MatchSetup.建局约束Tests.链接模式只有四人局
+Siege.Core.Tests.MatchSetup.开局信息公开范围Tests.占位尺寸取整块棋盘
+Siege.Core.Tests.MatchSetup.开局信息公开范围Tests.插旗阶段的可见信息
+Siege.Core.Tests.MatchSetup.开局信息公开范围Tests.插旗阶段的可见信息_图形版占位带主题名
+Siege.Core.Tests.MatchSetup.开局信息公开范围Tests.插旗阶段的可见信息_终端占位行显示编号主题宽高
+Siege.Core.Tests.MatchSetup.开局信息公开范围Tests.终端插旗占位画整块棋盘
+Siege.Core.Tests.MatchSetup.开局信息公开范围Tests.锁定后只见自己的棋盘
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.AI均匀盲选可复现
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.多人同区
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.旗帜互不可见
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.时限到时未选者由flag_pick均匀指定
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.时限可配置
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.调试依次插旗
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.选中即锁定
+Siege.Core.Tests.MatchSetup.盲选插旗Tests.选区不扰动其他随机
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.存档恢复地图
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.小回合边界存档续跑一致
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.待配对时存档
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.旧存档被拒绝
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.终局后存档
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.链接图上缺模式字段的存档被拒
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.链接恢复须四人
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.链接重放与存档不符即拒绝
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.锁定结果可持久化
+Siege.Core.Tests.MatchSetup.链接模式存档Tests.锚点非零向量的拼接可存档恢复
+Siege.Core.Tests.MatchSetup.首回合顺序随机Tests.顺序可复现
+Siege.Core.Tests.MatchSetup.首回合顺序随机Tests.首回合随机顺序
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.主题表现可查
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.分析命令的改造诊断开关
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.只有立栅目标
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.改造诊断可查
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.有林地可烧
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.有深水可搭桥
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.诊断不改对局
+Siege.Core.Tests.MatchTelemetry.AI改造与主题诊断Tests.预筛挡掉搭桥目标即候选生成阶段排除
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.一层配置的记录与改动前相同
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.不前瞻与Pass也有记录
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.两层加分可查
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.候选来源可查
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.前瞻前后分数可查
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.回放核对前瞻记录
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.旧日志照常解析
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.本change之前的专家日志照常解析
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.选择变化可查
+Siege.Core.Tests.MatchTelemetry.专家前瞻的记录Tests.非专家没有前瞻记录
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值写出为不带引号的精确十进制整数
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入拒绝非整数(json: "1.5")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入拒绝非整数(json: "1e30")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入拒绝非整数(json: "\"12x\"")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入拒绝非整数(json: "true")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入接受整数与整数字符串(json: "-5", expected: "-5")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入接受整数与整数字符串(json: "0", expected: "0")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入接受整数与整数字符串(json: "27", expected: "27")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入接受整数与整数字符串(json: "515377520732011331036461129765621272702107522001", expected: "515377520732011331036461129765621272702107522001")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入接受整数与整数字符串(json: "\"27\"", expected: "27")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.势力值读入接受整数与整数字符串(json: "\"515377520732011331036461129765621272702107522001"···, expected: "515377520732011331036461129765621272702107522001")
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.快照与峰值记录的军势逐位往返
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.旧日志的生效指数字段被忽略
+Siege.Core.Tests.MatchTelemetry.军势精确整数遥测Tests.高倍率棋串报告按倍增子数量且最高军势精确
+Siege.Core.Tests.MatchTelemetry.冲突占用率口径Tests.冲突时的盘面占用率
+Siege.Core.Tests.MatchTelemetry.冲突占用率口径Tests.真实跑局把可落子格写进日志首部
+Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.分析统计到期结算
+Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.到期结算可查
+Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.篡改首部K或结算期限即报分歧
+Siege.Core.Tests.MatchTelemetry.决赛倒计时的记录Tests.首部K按记录回放
+Siege.Core.Tests.MatchTelemetry.分析排除测试污染Tests.默认排除调试局
+Siege.Core.Tests.MatchTelemetry.各棋子势力占比Tests.各棋子势力占比按口径手算
+Siege.Core.Tests.MatchTelemetry.各棋子势力占比Tests.含连珠线协同倍增的真实棋串写快照读回并按口径归因
+Siege.Core.Tests.MatchTelemetry.各棋子势力占比Tests.快照棋串明细往返保留各棋子类型计数
+Siege.Core.Tests.MatchTelemetry.各棋子势力占比Tests.新来源归各自棋子不计入倍增子
+Siege.Core.Tests.MatchTelemetry.各棋子势力占比Tests.真实跑局快照的类型计数与明细自洽
+Siege.Core.Tests.MatchTelemetry.地形改造日志与分析Tests.一局里只要有一条快照缺改造字段就整局排除
+Siege.Core.Tests.MatchTelemetry.地形改造日志与分析Tests.匠人权重写进批次配置与日志首部
+Siege.Core.Tests.MatchTelemetry.地形改造日志与分析Tests.地形可离线重建
+Siege.Core.Tests.MatchTelemetry.地形改造日志与分析Tests.改造分析分动作输出
+Siege.Core.Tests.MatchTelemetry.地形改造日志与分析Tests.改造可查
+Siege.Core.Tests.MatchTelemetry.地形改造日志与分析Tests.烧林无人使用也如实给出
+Siege.Core.Tests.MatchTelemetry.地形改造日志与分析Tests.真实批次的第11项分析自洽
+Siege.Core.Tests.MatchTelemetry.坐标随链接平移Tests.与拼接时的格映射逐格相同
+Siege.Core.Tests.MatchTelemetry.坐标随链接平移Tests.改造随棋盘平移
+Siege.Core.Tests.MatchTelemetry.坐标随链接平移Tests.缺少向量的记录被拒绝
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.大数不失真
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.带出结算可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.揭示时间可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.新来源可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.日志覆盖八类记录
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.旧日志按无带入解析
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.旧日志照常解析
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.非法批次也记录
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.领地分可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.首部记录带入
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容Tests.驿站来源与工坊标记可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.地形可离线重建
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.开局棋盘主题经日志往返逐块相同
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.战场结算可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.日志往返且配对可从日志重建
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.等待时长可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.配对与链接可查
+Siege.Core.Tests.MatchTelemetry.对局日志的记录内容_链接模式Tests.链接那一小回合的改造按链接后布局记
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.内容集v1的报告除第12项外钉值
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.出生区公平性
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.成长轴部署阈值按分阶段基础值
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.成长轴顺序分析
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.新来源占比
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.最小落子拖延检测
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.棋子选择率与胜率
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.终局原因分布
+Siege.Core.Tests.MatchTelemetry.平衡分析方向Tests.领地分占比口径
+Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.分析命令的复盘开关
+Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.复盘不改对局
+Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.有翻盘手时判本可翻盘
+Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.确无有用手时无合法候选
+Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.等待者决赛表现可查
+Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.能提子的一手
+Siege.Core.Tests.MatchTelemetry.战场落败复盘与等待者评估Tests.落败者复盘可查
+Siege.Core.Tests.MatchTelemetry.按主题统计Tests.公共信物个数与被控制次数按所在棋盘统计_失去控制与出生区信物不计
+Siege.Core.Tests.MatchTelemetry.按主题统计Tests.匠人改造按目标所在棋盘与动作统计_坐标随链接换算
+Siege.Core.Tests.MatchTelemetry.按主题统计Tests.各主题的平均名次与胜场按锁定棋盘统计_截断局只计人次
+Siege.Core.Tests.MatchTelemetry.按主题统计Tests.报告列出按主题统计_无主题的日志不出这一段
+Siege.Core.Tests.MatchTelemetry.插旗同区统计Tests.同区对局与同区玩家的名次和胜率
+Siege.Core.Tests.MatchTelemetry.插旗同区统计Tests.无同区时如实给出0与无样本
+Siege.Core.Tests.MatchTelemetry.插旗同区统计Tests.真实跑局的同区经首部进入统计
+Siege.Core.Tests.MatchTelemetry.收敛口径Tests.不收敛率分母只含纳入局
+Siege.Core.Tests.MatchTelemetry.收敛口径Tests.截断局计入不收敛
+Siege.Core.Tests.MatchTelemetry.收敛口径Tests.按规则原因统计不收敛率
+Siege.Core.Tests.MatchTelemetry.数值目标回归Tests.AI决策质量旁证警告
+Siege.Core.Tests.MatchTelemetry.数值目标回归Tests.偏离必须显式报告
+Siege.Core.Tests.MatchTelemetry.数值目标回归Tests.截断率如实报告
+Siege.Core.Tests.MatchTelemetry.数值目标回归Tests.时长与地图规模并列
+Siege.Core.Tests.MatchTelemetry.数值目标回归Tests.部署曲线分阶段统计
+Siege.Core.Tests.MatchTelemetry.数值目标回归Tests.领先者胜率回归
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.他人致失活视为缺陷
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.所有者的改造导致失去记为所有者的改造
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.拒绝尝试可查
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.活形分析输出
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.活形棋串加子不重复记确立
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.活形确立可查
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.真实跑局的活形字段自洽
+Siege.Core.Tests.MatchTelemetry.活形记录与统计Tests.自拆可查
+Siege.Core.Tests.MatchTelemetry.链接模式对局记录Tests.战场结算可查
+Siege.Core.Tests.MatchTelemetry.链接模式对局记录Tests.配对与链接可查
+Siege.Core.Tests.MatchTelemetry.链接模式对局记录Tests.锁定旗数与等待时长可查
+Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.战场结算可查
+Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.旧日志被拒绝
+Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.真实跑局的链接日志可完整分析
+Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.等待时长可统计
+Siege.Core.Tests.MatchTelemetry.链接模式平衡分析Tests.配对与链接可查
+Siege.Core.Tests.Pairing.图形版配对来源Tests.决赛只有一种合法结果_与脚本缺省相同
+Siege.Core.Tests.Pairing.图形版配对来源Tests.无人值守用固定脚本_来源名为script
+Siege.Core.Tests.Pairing.图形版配对来源Tests.真随机_多次抽取结果不全相同
+Siege.Core.Tests.Pairing.图形版配对来源Tests.首轮配对合法_每个候选恰出现一次
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.两枚倍增子
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率不作用于领地分
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率作用于位置加值
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率作用于哨兵与界碑加值
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率指数不封顶
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率放大新棋子加值
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率的精确十进制表示(count: 0, expected: "1")
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率的精确十进制表示(count: 1, expected: "1.5")
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率的精确十进制表示(count: 3, expected: "3.375")
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率的精确十进制表示(count: 4, expected: "5.0625")
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.倍率的精确十进制表示(count: 5, expected: "7.59375")
+Siege.Core.Tests.PieceEffects.倍增子的棋串倍率Tests.大数值精确不抛出
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.军势表穷举六种类型
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.匠人不免死
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.匠人按1计
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.匠人落子后无持续效果
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Artisan, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Bannerman, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Basic, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Boundary, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Chain, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Fortress, expected: 4)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Line, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Multiplier, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Sentry, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.各类型基础军势(type: Synergy, expected: 1)
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.四种新棋子按1计
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.基础军势求和
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.堡垒子不免死
+Siege.Core.Tests.PieceEffects.六种原型棋子的基础军势Tests.新棋子不免死
+Siege.Core.Tests.PieceEffects.协同子的位置加值Tests.单枚协同子
+Siege.Core.Tests.PieceEffects.协同子的位置加值Tests.只看同一棋串
+Siege.Core.Tests.PieceEffects.协同子的位置加值Tests.多枚协同子
+Siege.Core.Tests.PieceEffects.协同子的位置加值Tests.新类型计入类型数
+Siege.Core.Tests.PieceEffects.协同子的位置加值Tests.纯协同子棋串
+Siege.Core.Tests.PieceEffects.哨兵子的位置加值Tests.两枚相邻敌子
+Siege.Core.Tests.PieceEffects.哨兵子的位置加值Tests.己方棋子不计
+Siege.Core.Tests.PieceEffects.哨兵子的位置加值Tests.弃赛者遗留棋子计入
+Siege.Core.Tests.PieceEffects.哨兵子的位置加值Tests.栅栏隔开的敌子不计
+Siege.Core.Tests.PieceEffects.哨兵子的位置加值Tests.高差2的敌子不计
+Siege.Core.Tests.PieceEffects.效果随盘面实时重算Tests.倍增子被提走
+Siege.Core.Tests.PieceEffects.效果随盘面实时重算Tests.棋串分裂重算
+Siege.Core.Tests.PieceEffects.效果随盘面实时重算Tests.连珠断开立即掉分
+Siege.Core.Tests.PieceEffects.旗手子的位置加值Tests.不看揭示与控制
+Siege.Core.Tests.PieceEffects.旗手子的位置加值Tests.同一信物格分别为两枚旗手子计分
+Siege.Core.Tests.PieceEffects.旗手子的位置加值Tests.崖壁隔开的信物格不计
+Siege.Core.Tests.PieceEffects.旗手子的位置加值Tests.栅栏隔开的信物格不计
+Siege.Core.Tests.PieceEffects.旗手子的位置加值Tests.站在信物格上并邻接另一信物格
+Siege.Core.Tests.PieceEffects.界碑子的位置加值Tests.争议格不计
+Siege.Core.Tests.PieceEffects.界碑子的位置加值Tests.平地孤立界碑
+Siege.Core.Tests.PieceEffects.界碑子的位置加值Tests.独占荒漠格计入
+Siege.Core.Tests.PieceEffects.界碑子的位置加值Tests.空林地不计
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.不拆分子区间
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.十字交叉双向计入
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.崖壁截断连珠线
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.栅栏截断连珠线
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.连珠线不穿越其他类型己方棋子
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.连珠线不跨玩家
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.长度为1不计分
+Siege.Core.Tests.PieceEffects.连珠子的位置加值Tests.长度为3的横线
+Siege.Core.Tests.PieceEffects.铁链子的位置加值Tests.五子棋串含一枚铁链子
+Siege.Core.Tests.PieceEffects.铁链子的位置加值Tests.单子铁链不加分
+Siege.Core.Tests.PieceEffects.铁链子的位置加值Tests.多枚铁链子各自计算
+Siege.Core.Tests.PieceEffects.铁链子的位置加值Tests.棋串分裂后重算
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.同高不加
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.多个低处敌子只加1
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.岩台远格压制
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.己方棋子不算
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.按棋串求和且每枚棋子独立判定
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.林地里的敌子压制不到
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.沼泽上的棋子没有压制
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.缓坡压制
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.跨崖居高临下
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.隔河压制
+Siege.Core.Tests.PieceEffects.高地压制加值Tests.高地加值随倍率放大
+Siege.Core.Tests.PowerScore.势力名次Tests.名册外的盘面玩家视为接线错误
+Siege.Core.Tests.PowerScore.势力名次Tests.名单上无棋子的参赛者仍参与名次
+Siege.Core.Tests.PowerScore.势力名次Tests.并列如实输出
+Siege.Core.Tests.PowerScore.势力名次Tests.排除非参赛玩家
+Siege.Core.Tests.PowerScore.势力明细Tests.不含新棋子的棋串新来源为0
+Siege.Core.Tests.PowerScore.势力明细Tests.位置加值七来源可溯源
+Siege.Core.Tests.PowerScore.势力明细Tests.位置加值三来源可溯源
+Siege.Core.Tests.PowerScore.势力明细Tests.位置加值可溯源
+Siege.Core.Tests.PowerScore.势力明细Tests.明细可复算总势力
+Siege.Core.Tests.PowerScore.势力明细Tests.明细可复算棋串军势
+Siege.Core.Tests.PowerScore.势力明细Tests.明细字段完整
+Siege.Core.Tests.PowerScore.势力明细Tests.遥测峰值保留倍增子数量
+Siege.Core.Tests.PowerScore.势力明细Tests.领地分可溯源
+Siege.Core.Tests.PowerScore.实时重算与公开排名Tests.Pass也触发更新
+Siege.Core.Tests.PowerScore.实时重算与公开排名Tests.弃赛者势力可见但不参与
+Siege.Core.Tests.PowerScore.实时重算与公开排名Tests.每次结算后更新
+Siege.Core.Tests.PowerScore.实时重算与公开排名Tests.遥测记录倍率峰值与出现轮次
+Siege.Core.Tests.PowerScore.总势力Tests.争议格不计分
+Siege.Core.Tests.PowerScore.总势力Tests.势力不可消耗
+Siege.Core.Tests.PowerScore.总势力Tests.势力不累计
+Siege.Core.Tests.PowerScore.总势力Tests.孤立棋子的势力
+Siege.Core.Tests.PowerScore.总势力Tests.荒漠上的棋子照常计军势
+Siege.Core.Tests.PowerScore.总势力Tests.荒漠与草地混合
+Siege.Core.Tests.PowerScore.总势力Tests.荒漠中的孤立棋子
+Siege.Core.Tests.PowerScore.总势力Tests.领地与棋串相加
+Siege.Core.Tests.PowerScore.总势力Tests.领地分不参与倍率
+Siege.Core.Tests.PowerScore.总势力Tests.领地计分直接取空格归属结果
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.位置加值被倍率放大
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍增子仍是棋串成员
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率不封顶
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 0, value: 1, expected: 1)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 1, value: 2, expected: 3)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 2, value: 4, expected: 9)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 3, value: 8, expected: 27)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 4, value: 16, expected: 81)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 5, value: 32, expected: 243)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 6, value: 64, expected: 729)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 7, value: 128, expected: 2187)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_恰为整数的值必须取到该整数(count: 8, value: 256, expected: 6561)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 1, value: 3, expected: 4)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 2, value: 5, expected: 11)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 3, value: 9, expected: 30)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 4, value: 17, expected: 86)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 5, value: 33, expected: 250)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 6, value: 65, expected: 740)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 7, value: 129, expected: 2204)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率取整边界_非整数向下取整(count: 8, value: 257, expected: 6586)
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.倍率显示为精确值
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.大指数精确不溢出
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.新来源一并被倍率放大
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.计分路径不含浮点
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.设计文档标准算例
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.连珠加值被倍率放大
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.逐棋串取整
+Siege.Core.Tests.PowerScore.棋串军势公式Tests.高地加值被倍率放大
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.内容集v1的棋池
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.匠人在池中
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.匠人权重可配置
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.带入改变开局手牌
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.开局手牌
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.新棋子在池中
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.无徽记大样本分布贴合权重表
+Siege.Core.Tests.Recruitment.初始配置与基础棋池Tests.棋池全局一致
+Siege.Core.Tests.Recruitment.征募的信息边界Tests.对手不可见
+Siege.Core.Tests.Recruitment.征募的信息边界Tests.调试旁路显式标记为测试专用
+Siege.Core.Tests.Recruitment.征募的信息边界Tests.选择过程不可见
+Siege.Core.Tests.Recruitment.征募随机可复现Tests.同种子同决策可复现
+Siege.Core.Tests.Recruitment.征募随机可复现Tests.征募只消费recruit子流
+Siege.Core.Tests.Recruitment.征募随机可复现Tests.征募记录完整
+Siege.Core.Tests.Recruitment.征募随机可复现Tests.征募路径不含浮点与非受控随机
+Siege.Core.Tests.Recruitment.征募随机可复现Tests.改变征募决策后信物生成逐格不变
+Siege.Core.Tests.Recruitment.流派徽记调整征募权重Tests.候选位独立且可重复
+Siege.Core.Tests.Recruitment.流派徽记调整征募权重Tests.匠人徽记按同一公式调权
+Siege.Core.Tests.Recruitment.流派徽记调整征募权重Tests.单枚徽记调权
+Siege.Core.Tests.Recruitment.流派徽记调整征募权重Tests.多枚同类徽记叠加
+Siege.Core.Tests.Recruitment.流派徽记调整征募权重Tests.新棋子徽记调权
+Siege.Core.Tests.Recruitment.流派徽记调整征募权重Tests.调权后重新归一化
+Siege.Core.Tests.Recruitment.流派徽记调整征募权重Tests.高阶徽记按数量2
+Siege.Core.Tests.Recruitment.私人征募面板Tests.探勘与征召生效
+Siege.Core.Tests.Recruitment.私人征募面板Tests.无刷新
+Siege.Core.Tests.Recruitment.私人征募面板Tests.最后一名没有补偿
+Siege.Core.Tests.Recruitment.私人征募面板Tests.未选候选消失
+Siege.Core.Tests.Recruitment.私人征募面板Tests.选取数是上限不强制取满
+Siege.Core.Tests.Recruitment.私人征募面板Tests.驿站生效
+Siege.Core.Tests.Recruitment.私人征募面板Tests.默认面板
+Siege.Core.Tests.Recruitment.选取受类型槽约束Tests.满槽可叠加已有类型
+Siege.Core.Tests.Recruitment.选取受类型槽约束Tests.满槽拒绝新类型
+Siege.Core.Tests.Recruitment.选取受类型槽约束Tests.选取新类型后其余新类型随即不可选
+Siege.Core.Tests.RelicControlSpec.信物内容在首次被覆盖时永久公开Tests.争议不阻止揭示
+Siege.Core.Tests.RelicControlSpec.信物内容在首次被覆盖时永久公开Tests.占据即揭示
+Siege.Core.Tests.RelicControlSpec.信物内容在首次被覆盖时永久公开Tests.提子先于揭示
+Siege.Core.Tests.RelicControlSpec.信物内容在首次被覆盖时永久公开Tests.揭示不可撤销
+Siege.Core.Tests.RelicControlSpec.信物内容在首次被覆盖时永久公开Tests.直接占据也揭示
+Siege.Core.Tests.RelicControlSpec.信物内容在首次被覆盖时永久公开Tests.首次覆盖即揭示
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.信物格为障碍时响亮失败
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.占据即控制
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.名册外玩家响亮失败
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.唯一覆盖即控制
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.多人覆盖即争议
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.控制判定与领地层覆盖判定交叉一致
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.无人覆盖即无人控制
+Siege.Core.Tests.RelicControlSpec.信物控制判定Tests.本层不做邻接遍历
+Siege.Core.Tests.RelicControlSpec.弃赛玩家的遗留棋子仍影响信物Tests.弃赛者不消费信物效果
+Siege.Core.Tests.RelicControlSpec.弃赛玩家的遗留棋子仍影响信物Tests.弃赛者棋子制造信物争议
+Siege.Core.Tests.RelicControlSpec.控制权在每次结算后重算Tests.围杀导致信物易主
+Siege.Core.Tests.RelicControlSpec.控制权在每次结算后重算Tests.控制权不保留历史
+Siege.Core.Tests.RelicControlSpec.揭示不授予收益Tests.失去控制即失效
+Siege.Core.Tests.RelicControlSpec.揭示不授予收益Tests.揭示者未获收益
+Siege.Core.Tests.RelicEffectsSpec.争议与失控信物不提供效果Tests.争议信物不生效
+Siege.Core.Tests.RelicEffectsSpec.争议与失控信物不提供效果Tests.效果不残留
+Siege.Core.Tests.RelicEffectsSpec.先锋的独立读取时机Tests.先锋不进小回合快照
+Siege.Core.Tests.RelicEffectsSpec.先锋的独立读取时机Tests.先锋在回合结束时读取
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.军令加成叠在分阶段基础值上
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.军令提高部署上限
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.效果映射(type: Command, reveal: 5, freePick: 3, slots: 5, deploy: 4)
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.效果映射(type: Conscription, reveal: 5, freePick: 4, slots: 5, deploy: 3)
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.效果映射(type: Depot, reveal: 5, freePick: 3, slots: 6, deploy: 3)
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.效果映射(type: Prospecting, reveal: 6, freePick: 3, slots: 5, deploy: 3)
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.效果映射(type: Vanguard, reveal: 5, freePick: 3, slots: 5, deploy: 3)
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.新四类信物没有高阶版
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.流派徽记绑定棋子类型并随内容揭示
+Siege.Core.Tests.RelicEffectsSpec.六类原型信物的效果Tests.高阶结构信物
+Siege.Core.Tests.RelicEffectsSpec.兵站丢失导致的槽位缩水Tests.本层不执行弃牌
+Siege.Core.Tests.RelicEffectsSpec.兵站丢失导致的槽位缩水Tests.槽位缩水触发强制弃牌
+Siege.Core.Tests.RelicEffectsSpec.同类信物叠加且无统一硬上限Tests.军令叠加
+Siege.Core.Tests.RelicEffectsSpec.同类信物叠加且无统一硬上限Tests.工坊不按数值相加
+Siege.Core.Tests.RelicEffectsSpec.同类信物叠加且无统一硬上限Tests.无硬上限
+Siege.Core.Tests.RelicEffectsSpec.同类信物叠加且无统一硬上限Tests.来源可拆分
+Siege.Core.Tests.RelicEffectsSpec.工坊扩大匠人的格改造范围Tests.多枚工坊不叠加
+Siege.Core.Tests.RelicEffectsSpec.工坊扩大匠人的格改造范围Tests.控制工坊即标记生效
+Siege.Core.Tests.RelicEffectsSpec.工坊扩大匠人的格改造范围Tests.新占工坊下一小回合生效
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.先手玩家夺走后手信物
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.分阶段基础值只在生成快照时读取一次
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.名次不影响快照
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.名次半数阈值算式不在源码中出现
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.快照值相等含驿站来源与工坊标记
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.快照是不可变值对象
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.快照期间丢失不影响本回合
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.快照生成代码不引用势力名次
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.新占信物本回合不生效
+Siege.Core.Tests.RelicEffectsSpec.效果快照在小回合开始时生成Tests.驿站按快照时的控制计数
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.两枚连营
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.争议不生效
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.失去控制立即失效
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.已结算盘面上真实内容与已揭示内容结果相同
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.弃赛者不因计分信物得分
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.犄角加成
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.连营加值被倍率放大
+Siege.Core.Tests.RelicEffectsSpec.计分信物连营与犄角Tests.连营加成
+Siege.Core.Tests.RelicEffectsSpec.驿站的展示数加成Tests.与探勘相加
+Siege.Core.Tests.RelicEffectsSpec.驿站的展示数加成Tests.两枚驿站互相计入
+Siege.Core.Tests.RelicEffectsSpec.驿站的展示数加成Tests.争议信物不计
+Siege.Core.Tests.RelicEffectsSpec.驿站的展示数加成Tests.只有驿站本身
+Siege.Core.Tests.RelicEffectsSpec.驿站的展示数加成Tests.驿站计入其他受控信物
+Siege.Core.Tests.RelicEffectsSpec.驿站的展示数加成Tests.高阶信物按1枚计
+Siege.Core.Tests.RelicEffectsSpec.默认基础值Tests.无信物时的快照
+Siege.Core.Tests.RelicGeneration.信物在开局一次性生成Tests.不同种子改变内容不改变位置
+Siege.Core.Tests.RelicGeneration.信物在开局一次性生成Tests.对局中不再变化
+Siege.Core.Tests.RelicGeneration.信物在开局一次性生成Tests.种子可复现
+Siege.Core.Tests.RelicGeneration.公共争夺区信物权重与高阶升级Tests.v2随机消费顺序与规格一致
+Siege.Core.Tests.RelicGeneration.公共争夺区信物权重与高阶升级Tests.新四类不升级
+Siege.Core.Tests.RelicGeneration.公共争夺区信物权重与高阶升级Tests.新四类在公共区各约7
+Siege.Core.Tests.RelicGeneration.公共争夺区信物权重与高阶升级Tests.高档升级率严格高于标准档
+Siege.Core.Tests.RelicGeneration.公共争夺区信物权重与高阶升级Tests.高阶徽记等效
+Siege.Core.Tests.RelicGeneration.公共争夺区信物权重与高阶升级Tests.高阶比例(set: V1)
+Siege.Core.Tests.RelicGeneration.公共争夺区信物权重与高阶升级Tests.高阶比例(set: V2)
+Siege.Core.Tests.RelicGeneration.出生区信物权重Tests.内容集v1保持旧表
+Siege.Core.Tests.RelicGeneration.出生区信物权重Tests.出生区无高阶信物
+Siege.Core.Tests.RelicGeneration.出生区信物权重Tests.徽记可绑定匠人(set: V1, kinds: 6)
+Siege.Core.Tests.RelicGeneration.出生区信物权重Tests.徽记可绑定匠人(set: V2, kinds: 10)
+Siege.Core.Tests.RelicGeneration.出生区信物权重Tests.新四类在出生区各约5
+Siege.Core.Tests.RelicGeneration.出生区信物权重Tests.权重分布收敛
+Siege.Core.Tests.RelicGeneration.区域强度预算Tests.出生区稀有度均衡(set: V1)
+Siege.Core.Tests.RelicGeneration.区域强度预算Tests.出生区稀有度均衡(set: V2)
+Siege.Core.Tests.RelicGeneration.区域强度预算Tests.同区同类型被降低概率但不禁止
+Siege.Core.Tests.RelicGeneration.区域强度预算Tests.稀有度按权重倒数计分且高阶两倍计
+Siege.Core.Tests.RelicGeneration.区域强度预算Tests.组合仍随机
+Siege.Core.Tests.RelicGeneration.区域强度预算Tests.重抽未收敛时的确定性兜底
+Siege.Core.Tests.RelicGeneration.区域强度预算Tests.高风险区预算更高
+Siege.Core.Tests.RelicGeneration.生成结果可完整记录Tests.分布可导出
+Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.一次推进跨过多条_多余时间顺延
+Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.多条依次显示_每条停留约三秒
+Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.显示中再入队排到后面_不覆盖
+Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.空文案忽略_负推进拒绝
+Siege.Core.Tests.SettlementShow.他场结算提示条队列Tests.零时长入队即空
+Siege.Core.Tests.SettlementShow.信物揭示节拍Tests.新揭示的信物
+Siege.Core.Tests.SettlementShow.信物揭示节拍Tests.无新揭示
+Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.倒计时提示
+Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.无人值守时提示条零时长
+Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.每个大回合只出一次
+Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.没有倒计时不出提示
+Siege.Core.Tests.SettlementShow.决赛倒计时提示Tests.等待者看到期限
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.两段到账
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.分项为零则跳过
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.分项之和等于总增量
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.势力上升
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.势力下降
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.名次变动
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.名次变动提示
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.已弃赛玩家名次为空仍列入
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.无变化的玩家不出现
+Siege.Core.Tests.SettlementShow.势力重算节拍与数值变化显示Tests.超大势力值
+Siege.Core.Tests.SettlementShow.战场结算横幅Tests.他场结算提示
+Siege.Core.Tests.SettlementShow.战场结算横幅Tests.决赛不重复
+Siege.Core.Tests.SettlementShow.战场结算横幅Tests.没有新结算就没有节拍与提示
+Siege.Core.Tests.SettlementShow.战场结算横幅Tests.落败横幅
+Siege.Core.Tests.SettlementShow.战场结算横幅Tests.落败横幅排在出局横幅之前_展开节拍在最后
+Siege.Core.Tests.SettlementShow.提速Tests.按住提速
+Siege.Core.Tests.SettlementShow.提速Tests.提速不省略节拍
+Siege.Core.Tests.SettlementShow.提速Tests.松开恢复
+Siege.Core.Tests.SettlementShow.无人值守运行下演出时长为零Tests.零时长模式创建即播完
+Siege.Core.Tests.SettlementShow.无人值守运行下演出时长为零Tests.零时长模式节拍序列照常生成
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.他人链接不演出
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.他人链接平移本机棋盘_布局指纹变_引擎层据此重搭
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.拼接那一回合的结算节拍不把平移当成落子与提子
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.提速照旧
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.无人值守零时长
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.本机为被贴方时滑入期间相机跟随本机棋盘
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.本机是被贴方_本机棋盘滑过去贴合
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.滑入起点封顶四格_真实平移照旧
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.遮罩_滑入前停在起点_对方格先隐藏后渐显_相机目标带进度
+Siege.Core.Tests.SettlementShow.棋盘展开节拍Tests.首轮链接演出_四个节拍依次
+Siege.Core.Tests.SettlementShow.横幅节拍Tests.出局横幅
+Siege.Core.Tests.SettlementShow.横幅节拍Tests.弃赛不产生横幅
+Siege.Core.Tests.SettlementShow.横幅节拍Tests.无人值守仍零时长
+Siege.Core.Tests.SettlementShow.横幅节拍Tests.终局横幅
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.单次推进跨过多个节拍时逐个报告
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.提子节拍开始前被提棋子仍在
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.本机玩家确认压缩为一次闪动
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.没有飘字就没有尾段
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.演出结束后画面与快照一致
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.空序列的短停顿
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.节拍切换时刻
+Siege.Core.Tests.SettlementShow.演出按节拍依次播放Tests.落子逐枚出现
+Siege.Core.Tests.SettlementShow.演出期间对局不推进Tests.演出不影响对局结果
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.两段到账两声
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.信物
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.压缩落子整批一次
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.同帧合并
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.序列确定性
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.提子
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.横幅逐条
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.落子逐枚发声
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.零时长无提示
+Siege.Core.Tests.SettlementShow.演出音效提示Tests.领地段为零只响军势
+Siege.Core.Tests.SettlementShow.结算节拍序列的生成Tests.Pass且势力不变
+Siege.Core.Tests.SettlementShow.结算节拍序列的生成Tests.Pass但势力有变
+Siege.Core.Tests.SettlementShow.结算节拍序列的生成Tests.三种节拍的数据模型
+Siege.Core.Tests.SettlementShow.结算节拍序列的生成Tests.无提子的批次
+Siege.Core.Tests.SettlementShow.结算节拍序列的生成Tests.相同输入得到相同序列
+Siege.Core.Tests.SettlementShow.结算节拍序列的生成Tests.结算前没有势力快照时旧值按零
+Siege.Core.Tests.SettlementShow.结算节拍序列的生成Tests.落子并提子的批次
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.多名玩家的棋子同时被提
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.提子飘字与合计
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.无记录时按坐标序
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.没有结算记录时按坐标字典序
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.节拍内容只取自公开信息
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.落子顺序与放置顺序一致
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.落子飘字带算式
+Siege.Core.Tests.SettlementShow.落子与提子节拍的内容Tests.飘字寿命跨节拍
+Siege.Core.Tests.SimulationHarness.人工接管Tests.交还后继续
+Siege.Core.Tests.SimulationHarness.人工接管Tests.任意阶段接管
+Siege.Core.Tests.SimulationHarness.人工接管Tests.接管记录可追溯
+Siege.Core.Tests.SimulationHarness.出生区编号显示Tests.六区图的插旗棋盘快照
+Siege.Core.Tests.SimulationHarness.出生区编号显示Tests.区号底色是中性色不借用玩家色
+Siege.Core.Tests.SimulationHarness.出生区编号显示Tests.各区胜率段在六区下输出六行
+Siege.Core.Tests.SimulationHarness.出生区编号显示Tests.对人编号支持到八(index: 0, number: 1, label: "出生区 1")
+Siege.Core.Tests.SimulationHarness.出生区编号显示Tests.对人编号支持到八(index: 5, number: 6, label: "出生区 6")
+Siege.Core.Tests.SimulationHarness.出生区编号显示Tests.对人编号支持到八(index: 7, number: 8, label: "出生区 8")
+Siege.Core.Tests.SimulationHarness.原型调试AITests.对局记录标注
+Siege.Core.Tests.SimulationHarness.原型调试AITests.调试AI可读全量状态
+Siege.Core.Tests.SimulationHarness.原型调试AITests.面向玩家的对局拒绝调试AI
+Siege.Core.Tests.SimulationHarness.可复现回放Tests.失败局可复现
+Siege.Core.Tests.SimulationHarness.可复现回放Tests.带入对局可回放
+Siege.Core.Tests.SimulationHarness.可复现回放Tests.旧日志按无带入回放
+Siege.Core.Tests.SimulationHarness.可复现回放Tests.纯AI局可凭种子复现
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.Sim的配对来源给出合法结果
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.replay命令拒绝旧日志
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.回放按记录配对而不是按种子推导
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.回放接口拒绝非链接日志
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.失败局可复现
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.带入对局可回放
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.篡改平移向量或开局棋盘即在对应行分歧
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.纯AI局可凭种子加配对复现
+Siege.Core.Tests.SimulationHarness.可复现回放_链接模式Tests.配对事件记录来源
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图Tests.三个入口都经同一份目录解析地图
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图Tests.图形版的地图选项登记在严格命令行解析里_没有绕过它的第二个读取点
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图Tests.显式选缺省地图与不带选项逐字相同
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图Tests.终端版未登记的地图选项拼写被拒绝
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.冒险概率选项已删除
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.参赛人数不是4即按S1报错(players: "3")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.参赛人数不是4即按S1报错(players: "5")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.旧标识写在配置文件里同样报错
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.旧标识报错(mapId: "board")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.旧标识报错(mapId: "board:7")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.旧标识报错(mapId: "gen")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.旧标识报错(mapId: "gen:12345")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.旧标识报错(mapId: "siege-4p-base-v5")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.旧标识报错(mapId: "siege-frontier-v2")
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.未知标识报错
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.缺省地图
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.链接图建局为链接模式并挂配对来源
+Siege.Core.Tests.SimulationHarness.各入口按地图标识选图_链接模式Tests.链接图批量跑局
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令打印每块棋盘的编号主题宽高与公共信物数
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令打印链接初始图
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令拒绝旧标识(mapId: "board:7")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令拒绝旧标识(mapId: "gen:12345")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令拒绝旧标识(mapId: "maps/siege-4p-base-v5.json")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令拒绝旧标识(mapId: "siege-4p-base-v5")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令拒绝旧标识(mapId: "siege-frontier-v2")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令按阶段推断贴边_也接受显式贴边
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令模拟链接
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-1", message: "已在同一战场")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-4,4-1", message: "已在同一战场")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-4X", message: "编号 1–5")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1-6", message: "编号 1–5")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "link:1", links: "1:4", message: "编号 1–5")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令的链接参数校验(mapId: "siege-4p-base-v5", links: "1-2", message: "不受支持")
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.map子命令缺省地图
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.命令行配对种子写入配置记录
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.回放重建链接
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.批量配对可重复
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.每局换图的批次
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.生成器变了
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.生成器只经目录调用_裸link只在入口最外层取种子
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.终端版开新局
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.终端版链接图能开局并按座位渲染
+Siege.Core.Tests.SimulationHarness.各入口支持生成图_链接模式Tests.裸link取种子并打印完整标识
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.名称不区分大小写
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.批量跑局选专家
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.数字难度被拒绝(command: "play", value: "1")
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.数字难度被拒绝(command: "play", value: "3")
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.数字难度被拒绝(command: "run", value: "0")
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.数字难度被拒绝(command: "run", value: "3")
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.未知难度被拒绝
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.用法说明列出四档名称
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.真实档案目录不被触碰
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.缺省仍为标准
+Siege.Core.Tests.SimulationHarness.各入口的难度选项Tests.逐玩家难度
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.Sim源码不含不受控随机与时间且浮点只在分析层
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.Sim程序集不引用Godot
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.analyze也在写出报告之前结算
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.replay两种定位方式不得混用
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.不收敛对局被截断
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.全部选项被读取时正常执行
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.已删除的选项报已删除(option: "dominance-start", value: "7")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.已删除的选项报已删除(option: "max-rounds", value: "6")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.已删除的选项报已删除(option: "no-catch-up", value: null)
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.已删除的选项报已删除(option: "site-values", value: "3,8,24")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.并行不改变结果
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.开关选项计入消费
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.开启带入
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.截断只存在于跑局驱动循环
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.截断可复现
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.截断局不污染胜率
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.扫档配置可追溯
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.批量执行并汇总
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.拼错的选项不被当作缺省值
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.未知玩家一律抛SiegeRuleException
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.未知选项按字典序报出
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.未知选项被拒绝
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.缺省关闭带入
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "CatchUpRecruit", value: "true")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "DominanceStartRound", value: "7")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "MaxMajorRounds", value: "15")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "SiteValues", value: "{\"Low\":3,\"Mid\":8,\"High\":24}")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.配置文件里的已删除配置项被拒绝(key: "maxMajorRounds", value: "15")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.非法带入数量(value: "-1")
+Siege.Core.Tests.SimulationHarness.批量跑局Tests.非法带入数量(value: "2")
+Siege.Core.Tests.SimulationHarness.日志首部区数Tests.区数取首部与被选区号的较大者不丢样本
+Siege.Core.Tests.SimulationHarness.日志首部区数Tests.回放缺区数字段的旧日志只在首部分歧对局逐步相同
+Siege.Core.Tests.SimulationHarness.日志首部区数Tests.报告给出AI单步耗时的均值与最大值
+Siege.Core.Tests.SimulationHarness.日志首部区数Tests.整批没人选的平台仍占一行且被选零次
+Siege.Core.Tests.SimulationHarness.日志首部区数Tests.旧日志缺区数字段按被选到的最大区号回填
+Siege.Core.Tests.SimulationHarness.日志首部区数Tests.真实跑局把区数写进首部并经文本往返
+Siege.Core.Tests.SimulationHarness.日志首部地图摘要Tests.回放生成图的日志_按标识重新生成地图_逐步一致
+Siege.Core.Tests.SimulationHarness.日志首部地图摘要Tests.旧日志缺摘要字段_跳过比对_只在首部分歧对局逐步相同
+Siege.Core.Tests.SimulationHarness.日志首部地图摘要Tests.标准批次的首部不多出换图相关字段
+Siege.Core.Tests.SimulationHarness.日志首部地图摘要Tests.真实跑局把开局地图的摘要写进首部并经文本往返_内置图同样写
+Siege.Core.Tests.SimulationHarness.日志首部地图摘要Tests.重建出的地图与首部摘要不同_在首部报地图不一致并停止_不重跑对局
+Siege.Core.Tests.SimulationHarness.旧生成器摘要被拒Tests.旧生成器的link1存档_恢复报地图不一致
+Siege.Core.Tests.SimulationHarness.旧生成器摘要被拒Tests.旧生成器的link1日志首部_回放在首部报地图不一致且不重跑
+Siege.Core.Tests.SimulationHarness.每局换图Tests.不换图的批次_报告仍按平台编号_没有边长一节
+Siege.Core.Tests.SimulationHarness.每局换图Tests.小批次每局换图_首部标识依次递增_配置记录写明_全部可回放
+Siege.Core.Tests.SimulationHarness.每局换图Tests.每局换图的批次_报告按平台边长分组给出被选次数与胜率
+Siege.Core.Tests.SimulationHarness.每局换图Tests.每局换图要求带起始种子的生成图标识_开跑之前报错
+Siege.Core.Tests.SimulationHarness.每局换图Tests.第i局的地图标识是起始种子加i
+Siege.Core.Tests.SimulationHarness.每局换图Tests.首部的平台边长取自对局本身_与生成器给出的各平台方块一致
+Siege.Core.Tests.SimulationHarness.终端专家对局Tests.专家难度开局_AI按专家决策
+Siege.Core.Tests.SimulationHarness.终端对局Tests.状态栏大数势力缩写不撑破一行
+Siege.Core.Tests.SimulationHarness.终端对局Tests.终端链接局跨过拼接后小回合播报不崩溃且不误报
+Siege.Core.Tests.SimulationHarness.终端对局Tests.脚本输入能落子并走到输入耗尽
+Siege.Core.Tests.SimulationHarness.终端对局Tests.输入结束时干净退出
+Siege.Core.Tests.SimulationHarness.终端新棋子与新信物Tests.内容集v1的图例不变
+Siege.Core.Tests.SimulationHarness.终端新棋子与新信物Tests.工坊目标含隔一格的文字列出
+Siege.Core.Tests.SimulationHarness.终端新棋子与新信物Tests.新棋子与已揭示新信物的渲染快照
+Siege.Core.Tests.SimulationHarness.终端新棋子与新信物Tests.棋子与信物字母两两不同
+Siege.Core.Tests.SimulationHarness.终端新棋子与新信物Tests.驿站来源逐枚列出且隐藏零加成
+Siege.Core.Tests.SimulationHarness.终端活形与禁入标示Tests.信物格同为禁入时信物标记优先
+Siege.Core.Tests.SimulationHarness.终端活形与禁入标示Tests.图例含禁入与已活符号
+Siege.Core.Tests.SimulationHarness.终端活形与禁入标示Tests.所有者看自己的眼不标禁入
+Siege.Core.Tests.SimulationHarness.终端活形与禁入标示Tests.文本盘面标出禁入格与已活棋串
+Siege.Core.Tests.SimulationHarness.终端活形与禁入标示Tests.未定棋串不标已活
+Siege.Core.Tests.SimulationHarness.终端活形与禁入标示Tests.脚本对局里出现禁入与已活标示
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.全图解禁
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.决赛链接须在首轮之后_且把全部候选链成一个
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.完整性缺一步即失败
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.战场结算三种口径
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.插旗锁定与构筑期
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.真对局走一遍_四步全通过
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.配对记录来源必须是脚本
+Siege.Core.Tests.SimulationHarness.自动演示全流程自检Tests.链接后可见格数等于本战场格数
+Siege.Core.Tests.SimulationHarness.防死锁硬停Tests.规则层无上限时硬停以失败局记录
+Siege.Core.Tests.SimulationHarness.随机子流隔离Tests.子流互不干扰
+Siege.Core.Tests.SimulationHarness.随机子流隔离Tests.带入子流不扰动其他子流
+Siege.Core.Tests.SimulationHarness.随机子流隔离_链接模式Tests.配对不扰动子流
+Siege.Core.Tests.SimulationHarness.随机子流隔离_链接模式Tests.配对来源不是对局子流
+Siege.Core.Tests.TacticalLayers.五种战术信息层Tests.信物层不泄漏未知内容
+Siege.Core.Tests.TacticalLayers.五种战术信息层Tests.信物层说明失效原因
+Siege.Core.Tests.TacticalLayers.五种战术信息层Tests.弃赛者封锁的信物可辨
+Siege.Core.Tests.TacticalLayers.五种战术信息层Tests.归属读法三态可辨
+Siege.Core.Tests.TacticalLayers.五种战术信息层Tests.棋串读法标示危险棋串
+Siege.Core.Tests.TacticalLayers.五种战术信息层Tests.顺序层可解释下一轮排序
+Siege.Core.Tests.TacticalLayers.信息层一次只显示一层Tests.切换即互斥
+Siege.Core.Tests.TacticalLayers.信息层的可用时机与无副作用Tests.他人行动时可查看
+Siege.Core.Tests.TacticalLayers.信息层的可用时机与无副作用Tests.信息层不越权
+Siege.Core.Tests.TacticalLayers.信息层的可用时机与无副作用Tests.插旗阶段也能发布补充载荷
+Siege.Core.Tests.TacticalLayers.信息层的可用时机与无副作用Tests.查看无副作用
+Siege.Core.Tests.TacticalLayers.信息层的进入与退出Tests.按住进入松开退出
+Siege.Core.Tests.TacticalLayers.信息层的进入与退出Tests.辅助设置切换为点击
+Siege.Core.Tests.TacticalLayers.信息层的进入与退出Tests.键鼠与手柄分别配置
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.倍率热区等级只是显示档位
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.势力层四项新来源各自可读
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.势力层显示新来源
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.势力层显示领地分
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.势力层显示高地加值
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "-1234567", compact: "-1.23M")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "0", compact: "0")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "1000000", compact: "1.00M")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "1000000000000000", compact: "1.00e15")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "1234567", compact: "1.23M")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "12345678", compact: "12.3M")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "123456789", compact: "123M")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "1999999999", compact: "1.99B")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "515377520732011331036461129765621272702107522001", compact: "5.15e47")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "999999", compact: "999999")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.大数势力显示缩写且明细给精确值(exact: "999999999999999", compact: "999T")
+Siege.Core.Tests.TacticalLayers.势力层领地与高地Tests.荒漠独占不进领地分
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致(mapId: "link:1", seed: 1, firstTurns: 14, step: 3, checkpoints: 4, skipProtection: False, requireContact: True)
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致(mapId: "link:1", seed: 4, firstTurns: 20, step: 3, checkpoints: 3, skipProtection: False, requireContact: True)
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致(mapId: "link:2", seed: 3, firstTurns: 5, step: 2, checkpoints: 2, skipProtection: True, requireContact: False)
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致_不提子也可能同形
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致_暂放含改造
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致_暂放立栅造出他人的新眼
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致_有气却提子后同形
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.与完整预演一致_棋盘图中盘
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.别人的回合不显示
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.劫点事先打叉
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.单次查询耗时
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.四类标记可区分
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.库存不影响禁手
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.暂放改变禁手
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_不改对局状态
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_劫点带重复的提交序号
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_库存与额度不影响禁手
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_暂放改变禁手
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_暂放自身非法时按整批判定
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_没有当前行动玩家时为空
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_破坏活形带所有者
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_能提子的点不是自杀点
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.查询_自杀点
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.没有当前行动玩家时不显示
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.界面不自行判断禁手
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.破坏活形格带所有者
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.禁手叠加与盘面不同刻即抛出
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.能提子的点不是自杀点
+Siege.Core.Tests.TacticalLayers.单子禁手的标示Tests.自杀点事先打叉
+Siege.Core.Tests.TacticalLayers.改造在默认棋盘与棋串读法里的呈现Tests.工坊下标出隔一格目标
+Siege.Core.Tests.TacticalLayers.改造在默认棋盘与棋串读法里的呈现Tests.暂放匠人时标出可改造目标
+Siege.Core.Tests.TacticalLayers.改造在默认棋盘与棋串读法里的呈现Tests.棋串读法区分栅栏侧
+Siege.Core.Tests.TacticalLayers.改造在默认棋盘与棋串读法里的呈现Tests.立栅后栅栏侧与差集都随改造更新
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.图例给出规则描述
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.岩台远格的归属
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.差集可由岩台远格解释
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.差集可由新地表解释
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.差集可由沼泽源解释
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.差集可由空浅滩解释
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.沼泽上的棋子不点亮归属
+Siege.Core.Tests.TacticalLayers.新地表的规则标示Tests.空浅滩在棋串读法中标为不算气
+Siege.Core.Tests.TacticalLayers.活形与禁入格的标示Tests.已活棋串即使气少也标已活
+Siege.Core.Tests.TacticalLayers.活形与禁入格的标示Tests.已活棋串可辨
+Siege.Core.Tests.TacticalLayers.活形与禁入格的标示Tests.所有者看到的是可落子
+Siege.Core.Tests.TacticalLayers.活形与禁入格的标示Tests.禁入格区别于地形不可落子与范围外
+Siege.Core.Tests.TacticalLayers.活形与禁入格的标示Tests.禁入格在默认棋盘上可见
+Siege.Core.Tests.TacticalLayers.活形与禁入格的标示Tests.表现层不调用活形分析只读公开视图
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.两种读法的场景处理不同
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.切换读法不影响其它层
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.差集可由地形解释
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.平地上两种读法点亮同一批空格
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.归属读法另有棋串读法没有的格
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.按住模式下读法不被层键改变
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.点击模式下三态循环
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.第四次按下打开的是关闭时的读法
+Siege.Core.Tests.TacticalLayers.盘面层的读法切换Tests.读法跨越关闭被记住
+Siege.Core.Tests.TacticalLayers.盘面层视图模型带地形Tests.栅栏边随视图模型带出
+Siege.Core.Tests.TacticalLayers.盘面层视图模型带地形Tests.每格带高度地表与桥
+Siege.Core.Tests.TacticalLayers.默认棋盘上的未发现信物Tests.分区信息在信物层可查
+Siege.Core.Tests.TacticalLayers.默认棋盘上的未发现信物Tests.默认棋盘不显示分区
+Siege.Core.Tests.TerrainEditing.同形与存档纳入设施Tests.对局存档往返保留改造与匠人权重
+Siege.Core.Tests.TerrainEditing.同形与存档纳入设施Tests.改造段的排序是规范形
+Siege.Core.Tests.TerrainEditing.同形与存档纳入设施Tests.无改造时序列化与改造上线之前逐字节相同
+Siege.Core.Tests.TerrainEditing.同形与存档纳入设施Tests.棋子分布相同但多一道栅栏即不同形
+Siege.Core.Tests.TerrainEditing.同形与存档纳入设施Tests.盘面序列化往返保留改造
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.一组改造同时生效且与顺序无关
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.副本上的改造不影响原盘面
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.同一目标不能被写两次
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.地形写入口之外不得构造改造后的地形
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.对局中架的桥与预置桥完全等价
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.改造只加不减且不动高度与障碍
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.架桥切断隔水覆盖
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.架桥后两格同串
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.烧林后可被覆盖
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.立栅不影响覆盖
+Siege.Core.Tests.TerrainEditing.地形写入口Tests.立栅后分串
+Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.MatchFlow的Map随改造更新
+Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.合法落子范围含本局新架的桥
+Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.气边覆盖与棋串每次调用重算
+Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.表现层的地形视图随改造更新
+Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.覆盖表与空格归属按新地形重算
+Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.距离表按传入地图现算
+Siege.Core.Tests.TerrainEditing.地形派生数据不缓存Tests.距离表沿气边计算
+Siege.Core.Tests.TerrainEditing.改造不可逆与公开Tests.匠人被提走后设施仍在
+Siege.Core.Tests.TerrainEditing.改造不可逆与公开Tests.弃赛不撤销改造
+Siege.Core.Tests.TerrainEditing.改造不可逆与公开Tests.改造结果人人可见且不显示改造者
+Siege.Core.Tests.TerrainEditing.改造不可逆与公开Tests.默认棋盘上的新旧设施同形且不带改造者
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.两道栅栏合围时两条都记致提子
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.外圈立栅把自己堵死也算自杀手
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.多个改造同时生效且与顺序无关
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.搭桥先于提子可使自杀手变合法
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.搭桥先于提子可救活敌串
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.改造导致的自杀手
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.烧林后的揭示与控制
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.立栅切断敌串连接后各自算气
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.立栅导致提子
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.结算的原子性含改造
+Siege.Core.Tests.TerrainEditing.改造先于提子Tests.预演不污染正式盘面的地形
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.匠人不带目标与无目标可改时仍可落子
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.同一批次内同一目标只能被改造一次
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.工坊下隔一格搭桥
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.工坊下隔着深水烧林
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.工坊不含斜向与更远的格(target: "E8")
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.工坊不含斜向与更远的格(target: "F9")
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.工坊不含斜向与更远的格(target: "G7")
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.工坊不含斜向与更远的格(target: "J6")
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.工坊不扩大边目标
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.已被改造过的目标不在合法集合里
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.当批不能站上新桥也不能拿它当跳板
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.拒绝理由与合法目标集合一致(workshop: False)
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.拒绝理由与合法目标集合一致(workshop: True)
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.改造不额外占额度
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.改造目标随暂放留在批次里
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.改造记法往返
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.新棋子不得改造
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.无工坊不得隔一格
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.格目标只含几何四邻且不含自身格
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.目标必须相邻
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.边目标不得离得更远时整批非法
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.边目标可落在外圈但不得更远
+Siege.Core.Tests.TerrainEditing.改造合法性Tests.非匠人不得改造
+Siege.Core.Tests.TerrainEditing.构筑期内的改造范围Tests.候选枚举与拒绝理由同源
+Siege.Core.Tests.TerrainEditing.构筑期内的改造范围Tests.构筑期内候选不含棋盘外目标
+Siege.Core.Tests.TerrainEditing.构筑期内的改造范围Tests.构筑期内跨接缝立栅被拒
+Siege.Core.Tests.TerrainEditing.构筑期内的改造范围Tests.第4大回合起可跨接缝改造
+Siege.Core.Tests.TerrainSpec.崖壁阈值唯一Tests.崖壁阈值取自裁决D2
+Siege.Core.Tests.TerrainSpec.崖壁阈值唯一Tests.高度差与裸数字比较只允许经CliffDrop
+Siege.Core.Tests.TerrainSpec.新地表判断唯一Tests.地表枚举恰为八种
+Siege.Core.Tests.TerrainSpec.新地表判断唯一Tests.新地表只在允许清单里被直接比较
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表不改变气边(surface: Crag)
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表不改变气边(surface: Desert)
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表不改变气边(surface: Marsh)
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表不改变气边(surface: Shallows)
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表与高度独立
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表可落子(surface: Crag)
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表可落子(surface: Desert)
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表可落子(surface: Marsh)
+Siege.Core.Tests.TerrainSpec.格属性Tests.新地表可落子(surface: Shallows)
+Siege.Core.Tests.TerrainSpec.格属性Tests.林地是普通可落子格
+Siege.Core.Tests.TerrainSpec.格属性Tests.桥只能架在深水上
+Siege.Core.Tests.TerrainSpec.格属性Tests.桥格可落子
+Siege.Core.Tests.TerrainSpec.格属性Tests.深水不计入可落子格数
+Siege.Core.Tests.TerrainSpec.格属性Tests.深水拒绝落子
+Siege.Core.Tests.TerrainSpec.格属性Tests.缺省为平地草地无桥无栅
+Siege.Core.Tests.TerrainSpec.格属性Tests.高度只有三档
+Siege.Core.Tests.TerrainSpec.气边Tests.不可落子格没有气边
+Siege.Core.Tests.TerrainSpec.气边Tests.崖壁切断气
+Siege.Core.Tests.TerrainSpec.气边Tests.栅栏切断气与连接
+Siege.Core.Tests.TerrainSpec.气边Tests.桥恢复气
+Siege.Core.Tests.TerrainSpec.气边Tests.气边对称
+Siege.Core.Tests.TerrainSpec.气边Tests.深水切断气
+Siege.Core.Tests.TerrainSpec.气边Tests.缓坡不切断气
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.仰视不覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.宽河不可隔岸
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.居高临下
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.岩台与隔水覆盖重合
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.岩台覆盖远一格
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.岩台远格不仰视
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.岩台远格不接收林地
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.岩台远格被障碍阻挡
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.岩台远格被高崖阻挡
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.岩台远格越过棋子与栅栏
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.林地上的棋子仍向外覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.林地不接收覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.栅栏不挡覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.沼泽上的棋子不覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.沼泽格本身接收覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.缓坡可覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.覆盖不等于气
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.隔岸不能跨崖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.隔岸对岸为林地不覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.隔岸对岸越界不覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.隔岸的桥格可被覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.隔岸覆盖
+Siege.Core.Tests.TerrainSpec.覆盖关系Tests.障碍不可隔岸也不被覆盖
+Siege.Core.Tests.TerrainSpec.边属性Tests.栅栏两侧均可落子
+Siege.Core.Tests.TerrainSpec.边属性Tests.栅栏只能标在相邻格之间
+Siege.Core.Tests.TerrainSpec.边属性Tests.栅栏边不分方向
+Siege.Core.Tests.TurnSequence.合法落子范围的对外契约Tests.共享出生区内的禁入
+Siege.Core.Tests.TurnSequence.合法落子范围的对外契约Tests.禁入扣除只在LegalRangeFor且与预演共用同一查询
+Siege.Core.Tests.TurnSequence.大回合的定义与推进Tests.出局者不再获得小回合
+Siege.Core.Tests.TurnSequence.大回合的定义与推进Tests.大回合完成
+Siege.Core.Tests.TurnSequence.大回合的定义与推进Tests.无固定轮数
+Siege.Core.Tests.TurnSequence.小回合的五个阶段Tests.快照在回合内不变
+Siege.Core.Tests.TurnSequence.小回合的五个阶段Tests.超限阻断征募
+Siege.Core.Tests.TurnSequence.小回合的五个阶段Tests.阶段顺序
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.无人棋盘可落子
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.构筑期内规则照常
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.构筑期内越区落子被拒
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.禁入格不在范围内
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.空盘面玩家重新进入
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.第4大回合进入对方棋盘
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.等待者可落子
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.等待者无法越界
+Siege.Core.Tests.TurnSequence.战场内合法落子范围Tests.范围随大回合扩大
+Siege.Core.Tests.ViewportCamera.全局预览Tests.一屏看全的地图上_没有全局预览可切
+Siege.Core.Tests.ViewportCamera.全局预览Tests.全局预览不改俯角_位姿仍只由注视点与距离决定
+Siege.Core.Tests.ViewportCamera.全局预览Tests.全局预览中_推屏与拉远无效
+Siege.Core.Tests.ViewportCamera.全局预览Tests.全局预览中回家_退出预览_距离回到切入前_注视点到家
+Siege.Core.Tests.ViewportCamera.全局预览Tests.全局预览中拉近_退出预览并从最远缩放继续
+Siege.Core.Tests.ViewportCamera.全局预览Tests.再切一次_回到切入前的位姿
+Siege.Core.Tests.ViewportCamera.全局预览Tests.切入全局预览_整盘一屏可见且注视点在地图中心
+Siege.Core.Tests.ViewportCamera.全局预览Tests.开局对准与自检置位都会退出全局预览
+Siege.Core.Tests.ViewportCamera.全局预览Tests.窗口变形时_全局预览仍整盘可见
+Siege.Core.Tests.ViewportCamera.动态相机下的拾取正确Tests.一屏看全的地图上最远位姿就是旧固定相机
+Siege.Core.Tests.ViewportCamera.动态相机下的拾取正确Tests.全部自检位姿俯角相同
+Siege.Core.Tests.ViewportCamera.动态相机下的拾取正确Tests.取自检位姿不改变相机当前状态
+Siege.Core.Tests.ViewportCamera.动态相机下的拾取正确Tests.自检位姿共7个_中心_四角夹取位_最近_最远
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.不规则出生区取外接矩形中心而不是格子重心
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.出生平台中心是出生区格子的外接矩形中心
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.回家结果同样经过夹取
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.小图开局不动相机_一屏看全的地图上锁定前后位姿相同
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.平台外接矩形取格心的最小最大_与行列方向无关
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_3号平台整个可见且四周留约2格
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_未选区时等同回到地图中心_距离不变
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_竖长窗口下横向成为瓶颈
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_距离双向设定_已拉到最近的相机会被拉远到平台整个可见
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_边疆图六个平台开局时都整个可见(aspect: 0.75)
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_边疆图六个平台开局时都整个可见(aspect: 1.33333337)
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_边疆图六个平台开局时都整个可见(aspect: 1.77777779)
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.开局对准自家_边疆图六个平台开局时都整个可见(aspect: 2.33333325)
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.未选区时回家目标是地图中心
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.空格回家_只改注视点不改距离
+Siege.Core.Tests.ViewportCamera.回到出生平台Tests.贴边的大平台整个可见_1号平台9行9列全部在画面内_注视点允许偏离平台中心
+Siege.Core.Tests.ViewportCamera.悬停格坐标读数Tests.Godot侧的悬停读数走视图模型_相机位姿只在一处写入
+Siege.Core.Tests.ViewportCamera.悬停格坐标读数Tests.不在格上读数为空
+Siege.Core.Tests.ViewportCamera.悬停格坐标读数Tests.两位数行号_第1列第27行读数为A27
+Siege.Core.Tests.ViewportCamera.悬停格坐标读数Tests.读数与日志同一份记法_全盘逐格等于Coord的记法
+Siege.Core.Tests.ViewportCamera.悬停格坐标读数Tests.跳过I_第9列是J
+Siege.Core.Tests.ViewportCamera.战场范围的相机Tests.单块棋盘没有全局预览_占位再远也不算
+Siege.Core.Tests.ViewportCamera.战场范围的相机Tests.拼接后注视点随本机棋盘平移
+Siege.Core.Tests.ViewportCamera.战场范围的相机Tests.旧地图两个矩形相同_行为逐位不变
+Siege.Core.Tests.ViewportCamera.战场范围的相机Tests.链接后全局预览以当前战场为准
+Siege.Core.Tests.ViewportCamera.战场范围的相机Tests.链接后重定界保位姿
+Siege.Core.Tests.ViewportCamera.战场范围的相机Tests.预览中重定界_预览随新战场重算
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.对角推屏_两个方向同时平移
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.小地图上等价于固定相机_最远缩放下任意平移意图位姿不变
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.屏幕上对应负Z_屏幕右对应正X
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.平移只改注视点不改距离与俯角
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.平移速度与距离成正比
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.意图超出正负一按一计_按键与贴边同时推不会加倍
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.朝向恒定_相机始终在注视目标的正后上方
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_刚离开感应带即停
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: -5, y: 450, right: 0, up: 0)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 1, y: 450, right: -1, up: 0)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 1598, y: 897, right: 1, up: -1)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 1599, y: 450, right: 1, up: 0)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 2, y: 3, right: -1, up: 1)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 800, y: 1, right: 0, up: 1)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 800, y: 450, right: 0, up: 0)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 800, y: 899, right: 0, up: -1)
+Siege.Core.Tests.ViewportCamera.推屏与平移Tests.贴边感应带_四边四角与窗外(x: 800, y: 905, right: 0, up: 0)
+Siege.Core.Tests.ViewportCamera.生成图上的拾取自检口径Tests.拾取自检的例外没有写宽
+Siege.Core.Tests.ViewportCamera.生成图上的拾取自检口径Tests.最远缩放下贴近远边的格居中不了_台面遮挡超过半格_最近缩放下能居中且不遮挡
+Siege.Core.Tests.ViewportCamera.缩放Tests.v4的初始位姿与旧固定相机逐位相等
+Siege.Core.Tests.ViewportCamera.缩放Tests.v4的最远距离不随横向窗口宽高比变化(aspect: 1.33333337)
+Siege.Core.Tests.ViewportCamera.缩放Tests.v4的最远距离不随横向窗口宽高比变化(aspect: 1.77777779)
+Siege.Core.Tests.ViewportCamera.缩放Tests.v4的最远距离不随横向窗口宽高比变化(aspect: 2.33333325)
+Siege.Core.Tests.ViewportCamera.缩放Tests.停在最远缩放时窗口变形后仍停在最远缩放
+Siege.Core.Tests.ViewportCamera.缩放Tests.最近限值下画面完整显示一个5x5平台
+Siege.Core.Tests.ViewportCamera.缩放Tests.最远限值取一屏看全所需距离与上限中的较小者
+Siege.Core.Tests.ViewportCamera.缩放Tests.缩放不改俯角_任意距离下反推的俯角都是60度
+Siege.Core.Tests.ViewportCamera.缩放Tests.缩放不改注视点
+Siege.Core.Tests.ViewportCamera.缩放Tests.缩放夹取_持续拉近停在最近限值_持续拉远停在最远限值
+Siege.Core.Tests.ViewportCamera.边界夹取Tests.v4在最远缩放下两个方向都锁中线
+Siege.Core.Tests.ViewportCamera.边界夹取Tests.可行矩形等于外接矩形向内收缩所见范围之半
+Siege.Core.Tests.ViewportCamera.边界夹取Tests.拉远后重新夹取_在一角拉到最远注视点被拉回
+Siege.Core.Tests.ViewportCamera.边界夹取Tests.推到尽头_持续向左推注视点停在可行矩形左缘
+Siege.Core.Tests.ViewportCamera.边界夹取Tests.某方向所见不小于地图跨度时该方向锁中线_另一方向仍可推
+Siege.Core.Tests.ViewportCamera.边界夹取Tests.直接给出界位姿也会被夹取
+Siege.Core.Tests.VisualStyleBaseline.UI风格约束Tests.信息密度
+Siege.Core.Tests.VisualStyleBaseline.六种棋子的轮廓语言Tests.Godot几何对每种轮廓各有一个独立分支
+Siege.Core.Tests.VisualStyleBaseline.六种棋子的轮廓语言Tests.易混对可辨(newcomer: Bannerman, lookalike: Artisan)
+Siege.Core.Tests.VisualStyleBaseline.六种棋子的轮廓语言Tests.易混对可辨(newcomer: Boundary, lookalike: Fortress)
+Siege.Core.Tests.VisualStyleBaseline.六种棋子的轮廓语言Tests.易混对可辨(newcomer: Chain, lookalike: Line)
+Siege.Core.Tests.VisualStyleBaseline.六种棋子的轮廓语言Tests.映射覆盖全部类型
+Siege.Core.Tests.VisualStyleBaseline.六种棋子的轮廓语言Tests.轮廓可辨
+Siege.Core.Tests.VisualStyleBaseline.占位轮廓灰度Tests.占位主题名只经视图模型取用_Godot不另写一份
+Siege.Core.Tests.VisualStyleBaseline.占位轮廓灰度Tests.占位边框与每种已展开台面的亮度差不小于阈值
+Siege.Core.Tests.VisualStyleBaseline.占位轮廓灰度Tests.台面与占位颜色只在调色板定义_Godot经转换取用
+Siege.Core.Tests.VisualStyleBaseline.双字母列标不重叠Tests.单字母列标不变
+Siege.Core.Tests.VisualStyleBaseline.双字母列标不重叠Tests.双字母列标可辨
+Siege.Core.Tests.VisualStyleBaseline.批次预览与信息层的视觉表现Tests.信息层降饱和
+Siege.Core.Tests.VisualStyleBaseline.批次预览与信息层的视觉表现Tests.暂放与提子的视觉区分
+Siege.Core.Tests.VisualStyleBaseline.方格边界与合法落点始终清晰Tests.装饰不遮挡判读
+Siege.Core.Tests.VisualStyleBaseline.棋盘台面的可视表现Tests.Godot障碍造型只经视图模型取用
+Siege.Core.Tests.VisualStyleBaseline.棋盘台面的可视表现Tests.棋盘内岩石取岩石造型_场景格取场景装饰
+Siege.Core.Tests.VisualStyleBaseline.棋盘台面的可视表现Tests.棋盘清单为空时一律是场景装饰
+Siege.Core.Tests.VisualStyleBaseline.棋盘坐标标注Tests.标注不用billboard
+Siege.Core.Tests.VisualStyleBaseline.棋盘坐标标注Tests.标注文本取自坐标记法而非自行推算
+Siege.Core.Tests.VisualStyleBaseline.棋盘坐标标注Tests.标注锚点由格心推出且四边各在一侧
+Siege.Core.Tests.VisualStyleBaseline.棋盘坐标标注Tests.表现层不得自带跳过I的列字母表
+Siege.Core.Tests.VisualStyleBaseline.禁手标记的远近可辨Tests.全局预览下可辨
+Siege.Core.Tests.VisualStyleBaseline.禁手标记的远近可辨Tests.近景不变
+Siege.Core.Tests.VisualStyleBaseline.视觉方向基准Tests.基准图中的回合数不具规则含义
+Siege.Core.Tests.VisualStyleBaseline.视觉方向基准Tests.基准图的适用范围
+Siege.Core.Tests.VisualStyleBaseline.阵营区分不得只依赖颜色Tests.色觉辅助
