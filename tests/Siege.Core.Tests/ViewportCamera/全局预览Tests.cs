@@ -121,6 +121,24 @@ public class 全局预览Tests
     }
 
     [Fact]
+    public void 预览中重定界到一屏看全的图_置位到中心最远即与新建相机相同()
+    {
+        // 新局界面"换一张"到一屏看不全的图会自动开预览，再换回一屏看全的图时 GameRoot.DropStaleOverview 按这个做法复位。
+        var camera = new BoardCamera(BoundsOf(Frontier));
+        camera.ToggleOverview();
+        camera.Rebound(BoundsOf(V4));
+        Assert.True(camera.IsOverview, "前提：重定界保留预览状态；此处失败说明重定界已自行退出预览，GameRoot.DropStaleOverview 可删");
+        Assert.False(camera.ToggleOverview(), "前提：一屏看全的图上 ToggleOverview 不起作用");
+
+        PlaneRect bounds = camera.Bounds;
+        camera.Set(new CameraPose(bounds.CenterX, bounds.CenterZ, camera.Farthest));
+
+        Assert.False(camera.IsOverview);
+        Assert.False(camera.OverviewAvailable);
+        Assert.Equal(new BoardCamera(BoundsOf(V4)).Pose, camera.Pose);
+    }
+
+    [Fact]
     public void 开局对准与自检置位都会退出全局预览()
     {
         var camera = new BoardCamera(BoundsOf(Frontier));

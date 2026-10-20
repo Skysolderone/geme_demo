@@ -3,6 +3,7 @@ using Godot;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
+using Siege.Presentation.Camera;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Text;
 using Siege.Presentation.Visibility;
@@ -118,6 +119,9 @@ public sealed partial class GameRoot
             _board.Rig.ToggleOverview();
         }
 
+        // 反过来：从一屏看不全的图换回看得全的图时，重定界保留了预览状态、ToggleOverview 又对这类图不起作用，在这里按新图复位。
+        DropStaleOverview();
+
         ApplyCamera("全局预览");
         if (_autoDemo)
         {
@@ -214,6 +218,19 @@ public sealed partial class GameRoot
         }
     }
 
+    /// <summary>
+    /// 残留的全局预览：相机视图模型重定界（<see cref="BoardCamera.Rebound"/>）保留预览状态，换到当前战场一屏看得全的图后
+    /// <see cref="BoardCamera.ToggleOverview"/> 不起作用、预览关不掉。这时复位到新建相机的初始位姿（地图中心、最远缩放），与按新图重搭相机等价。
+    /// </summary>
+    private void DropStaleOverview()
+    {
+        BoardCamera rig = _board.Rig;
+        if (rig.IsOverview && !rig.OverviewAvailable)
+        {
+            rig.Set(new CameraPose(rig.Bounds.CenterX, rig.Bounds.CenterZ, rig.Farthest));
+        }
+    }
+
     private static int CountNodes(Node node)
     {
         int count = 1;
@@ -254,6 +271,7 @@ public sealed partial class GameRoot
             _board.Rig.ToggleOverview();
         }
 
+        DropStaleOverview();
         ApplyCamera("新局确认");
         _hud.HideMapSelect();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
