@@ -59,6 +59,12 @@ public enum AiDifficulty
 /// 两层权重 λ（expert-strength D4 / D7，千分数，非负整数）：前瞻后分数 = 一层分数 + ⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋。
 /// 0 = 不计两层加分、不做两层扫描。四档预设都为 0（专家预设已退回一层，见 <see cref="Expert"/>）；可配置项，<c>Search</c> 显式给出时生效。为 0 时不写出，缺字段按 0 读。
 /// </param>
+/// <param name="StagnationRounds">
+/// 停滞大回合数 K（cycle-stop D3，ai-decision「循环提子停手」，非负整数；0 = 不启用）：部署决策开始时，若本 AI 盘上有子、最近 K 个大回合（本人每个大回合首次决策时采样的公开势力）
+/// 逐一不高于再前一个大回合、且排序后的前 N 个候选单点每个要么会提子、要么落在最近 K 个大回合内被提过的格上，则视同"没有任何落点被保留"→ 按停手阈值 Pass（决胜一手仍优先）。
+/// 四档预设都取 <see cref="DefaultStagnationRounds"/>（四档共用）。构造参数的缺省值是 0 而不是 <see cref="DefaultStagnationRounds"/>：该项出现之前记录的剪枝参数缺这个字段，
+/// 按 0 读入才能原样重建（同 <see cref="PassThreshold"/> 的先例）；为 0 时不写出。
+/// </param>
 public sealed record AiSearchConfig(
     int CandidatePointCount,
     int CandidateBatchCount,
@@ -67,8 +73,15 @@ public sealed record AiSearchConfig(
     int PassThreshold = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DiverseSupplementLimit = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int StagnationRounds = 0)
 {
+    /// <summary>
+    /// 默认停滞大回合数 K = 6（负责人 2026-10-20 裁决 D2，依据 cycle-stop 第一段诊断：正常 20 局（标准 × 4）里任一玩家在任一大回合的连续无净增 ≥ 8 的点 0 个、≥ 6 的 6 个点（2 局）；
+    /// 循环局 0x2C 终局时停滞 15 / 1 / 11 / 0、提子拖延局 6–10；取 6 兜住循环与拖延、少误伤正常收官；2.4 验证后可调）。四档共用。
+    /// </summary>
+    public const int DefaultStagnationRounds = 6;
+
     /// <summary>专家预设的前瞻宽度（负责人裁决 2026-09-26：前 K = 4 个候选；规格里 K 专指候选格上限，故称 W）。</summary>
     public const int DefaultLookaheadWidth = 4;
 
@@ -91,6 +104,8 @@ public sealed record AiSearchConfig(
     /// （0 → 3.5% / 29.0% / 12.24；10 → 4.0% / 32.0% / 11.49；20 → 4.0% / 32.5% / 10.59；40 → 2.5% / 36.0% / 11.15；80 → 1.0% / 32.0% / 9.81；160 → 0% / 73.5% / 7.73，
     /// <c>sim-out/ai-eye-pass-*</c>、<c>sim-out/ai-eye-eye-200</c>）。当时简单难度在阈值 80 下 v5 种子 1–200 截断 36 / 200（按裁决 R26 下放眼位维之后，
     /// <c>sim-out/ai-eye-final-easy-eye</c>）；这些数据都在内容集 V1 上取得，不与上面的 V2 数据直接比较。</para>
+    /// 上述全部校准与复核数据都在停滞大回合数 K = 0 下取得（cycle-stop 之前没有该项）；四档预设现带 K = <see cref="DefaultStagnationRounds"/>，阈值 20 未在 K = 6 下重新扫档
+    /// （cycle-stop 2.4 只做 ≤ 10 局的验证，见任务 10-20-cycle-stop-2 的 verify.md；负责人裁决项 4：只补口径，不改取值）。
     /// 改值须连同本段与 <see cref="PassThresholdCalibrationStatus"/> 一起更新（守门：<c>默认评价权重的校准Tests.默认停手阈值被改动</c>）。
     /// </summary>
     public const int DefaultPassThreshold = 20;
@@ -103,13 +118,13 @@ public sealed record AiSearchConfig(
     public const int LargeMapCellLimit = 24;
 
     /// <summary>简单：贪心一条、只看即时收益与眼位。</summary>
-    public static readonly AiSearchConfig Easy = new(CandidatePointCount: 6, CandidateBatchCount: 1, ImmediateOnly: true, PassThreshold: DefaultPassThreshold);
+    public static readonly AiSearchConfig Easy = new(CandidatePointCount: 6, CandidateBatchCount: 1, ImmediateOnly: true, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds);
 
     /// <summary>标准。</summary>
-    public static readonly AiSearchConfig Standard = new(CandidatePointCount: 12, CandidateBatchCount: 8, ImmediateOnly: false, PassThreshold: DefaultPassThreshold);
+    public static readonly AiSearchConfig Standard = new(CandidatePointCount: 12, CandidateBatchCount: 8, ImmediateOnly: false, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds);
 
     /// <summary>高难。</summary>
-    public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold);
+    public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds);
 
     /// <summary>
     /// 专家：候选生成同高难（N 24 / M 32、同一扰动子流、同一停手阈值），另加前瞻宽度 <see cref="DefaultLookaheadWidth"/> 的一层前瞻（expert-lookahead）。
@@ -148,9 +163,14 @@ public sealed record AiSearchConfig(
     public static AiSearchConfig ForMap(AiDifficulty difficulty, int playableCells, int? cellLimit = null) =>
         ForDifficulty(difficulty) with { CandidateCellLimit = cellLimit ?? DefaultCellLimitFor(playableCells) };
 
-    /// <summary>参数校验：N、M 至少为 1；K、停手阈值、前瞻宽度、多样补充上限与两层权重非负。</summary>
+    /// <summary>参数校验：N、M 至少为 1；K、停手阈值、前瞻宽度、多样补充上限、两层权重与停滞大回合数非负。</summary>
     public AiSearchConfig Validated()
     {
+        if (StagnationRounds < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(StagnationRounds), "停滞大回合数须为非负整数（0 = 不启用）。");
+        }
+
         if (CandidatePointCount < 1 || CandidateBatchCount < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(CandidateBatchCount), "候选落点数 N 与候选批次数 M 至少为 1。");

@@ -25,6 +25,9 @@ public enum SettlementReason
 
     /// <summary>减员：多人战场因弃赛或势力归零只剩 1 名在局玩家（即时标记）。</summary>
     Attrition,
+
+    /// <summary>上限（cycle-stop D2，安全网）：本大回合序号 ≥ 对局配置的大回合上限（<see cref="MatchOptions.RoundCap"/> &gt; 0）且在局 ≥ 2，按势力强制结算。排在整轮 Pass / 填满之后。</summary>
+    RoundCap,
 }
 
 /// <summary>

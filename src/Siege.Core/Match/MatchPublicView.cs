@@ -10,7 +10,8 @@ namespace Siege.Core.Match;
 /// 对局的公开快照（裁决：单线程游戏循环，表现层与 AI 只消费结算完成后发布的快照，不直接读权威盘面）。
 /// 全部字段是该时刻的副本或不可变值：<see cref="Board"/> 是 <see cref="GameBoard.Clone"/> 出的独立副本，
 /// 之后权威盘面的变化不会反映到这里。结构上不含任何私有信息（手牌数量、征募面板、未揭示信物内容）。
-/// 大回合上限、碾压起始大回合与落后补偿开关三项配置及碾压候选状态已随 restore-go-core-rules（裁决 #4 / #7 / #15）删除，视图里不再有对应字段。
+/// 旧的固定总轮数终局、碾压起始大回合与落后补偿开关三项配置及碾压候选状态已随 restore-go-core-rules（裁决 #4 / #7 / #15）删除，视图里不再有对应字段；
+/// <see cref="RoundCap"/> 是 cycle-stop 新增的大回合上限安全网（对局配置，始终公开，0 = 不启用），不是终局条件。
 /// <see cref="ArtisanWeight"/> 是匠人征募权重（artisan-terrain-edit R-2）：开局固定、始终公开、插旗阶段即可读。
 /// <see cref="ContentSet"/> 是对局内容集（more-pieces-relics D8）：同样开局固定、始终公开、插旗阶段即可读。
 /// <see cref="CarryInOut"/> / <see cref="CarryIns"/> 是带入带出开关与各玩家的带入（carry-in-out，information-visibility 第 7 条）：
@@ -50,4 +51,10 @@ public sealed record MatchPublicView(
     /// （ai-decision「链接模式下的决胜一手」）。按座位投影时只留本战场的玩家。不是位置参数，旧的构造写法不变。
     /// </summary>
     public ImmutableArray<PlayerId> PassedThisRound { get; init; } = [];
+
+    /// <summary>
+    /// 大回合上限安全网（cycle-stop D2，match-setup「大回合上限配置」；0 = 不启用）：第 R 大回合结束时 R ≥ 上限即按势力强制结算。
+    /// 对局配置，开局固定、始终公开、插旗阶段即可读；表现层据此在临近上限时提示。不是位置参数，旧的构造写法不变（手写视图缺省 0 = 不启用）。
+    /// </summary>
+    public int RoundCap { get; init; }
 }

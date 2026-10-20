@@ -228,8 +228,56 @@ public static class ReportWriter
             AppendArtisanReview(sb, artisan);
         }
 
+        // cycle-stop 1.1：循环提子诊断只在 --review-cycles 时出现，追加在整份报告最末（缺省报告逐字节不变）。
+        if (r.CycleReview is { } cycles)
+        {
+            AppendCycleReview(sb, cycles);
+        }
+
         return sb.ToString();
     }
+
+    /// <summary>
+    /// 循环提子诊断（cycle-stop D1 / S1 / S2）：汇总在前、停滞分布居中、逐局明细在后。口径写进段首：窗口、局部键、判定；
+    /// "候选全是提子 / 落在最近被提过的格"没有候选列表可读，只给代理口径（有落子的小回合里提子回合占比、落在本窗口内此前被提过格上的落子占比）。
+    /// </summary>
+    private static void AppendCycleReview(StringBuilder sb, CycleReviewSection c)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"## 循环提子诊断（cycle-stop：末段窗口 {c.WindowRounds} 个大回合，截断局按截断时刻；局部键 = 窗口内被提格 ∪ 四邻的占用者 + 设施，逐小回合比对；判定 = 窗口末 ≥ 2 名在局玩家净势力 ≤ 0 且局部键存在重复周期）");
+        sb.AppendLine($"- 诊断 {c.Logs} 局，其中截断 {c.Truncated} 局；判为循环提子 {c.Cyclic} 局（截断局中 {c.CyclicTruncated} 局，规则终局中 {c.Cyclic - c.CyclicTruncated} 局）");
+        sb.AppendLine($"- 提子拖延（代理口径，不判定）：窗口首在局玩家 ≥ 2 名净势力 ≤ 0 且窗口内有落子的小回合里提子回合占比 ≥ 75% 的局 {c.ExchangeBound} 局（含上面判为循环的局）");
+        List<CycleReviewEntry> cyclic = [.. c.Entries.Where(e => e.Cyclic)];
+        List<CycleReviewEntry> normal = [.. c.Entries.Where(e => !e.Cyclic)];
+        sb.AppendLine($"- 窗口首在局玩家终局时的连续无净增大回合数（D3 口径：每个大回合首的势力 ≤ 前一大回合首；整局算）：循环局 {Histogram(Counts(cyclic.SelectMany(e => e.Players).Select(p => p.StagnationAtEnd)))}；"
+            + $"非循环局 {Histogram(Counts(normal.SelectMany(e => e.Players).Select(p => p.StagnationAtEnd)))}；非循环局整局最大连续长度 {Histogram(Counts(normal.SelectMany(e => e.Players).Select(p => p.MaxStagnation)))}");
+        sb.AppendLine($"- 窗口内有落子的小回合里提子回合占比（代理口径）：循环局 {Pct(Share(cyclic.Sum(e => e.CaptureTurns), cyclic.Sum(e => e.MoveTurns)))}（{cyclic.Sum(e => e.CaptureTurns)}/{cyclic.Sum(e => e.MoveTurns)}），"
+            + $"非循环局 {Pct(Share(normal.Sum(e => e.CaptureTurns), normal.Sum(e => e.MoveTurns)))}（{normal.Sum(e => e.CaptureTurns)}/{normal.Sum(e => e.MoveTurns)}）；"
+            + $"落在本窗口内此前被提过格上的落子占比：循环局 {Pct(Share(cyclic.Sum(e => e.RecapturePlacements), cyclic.Sum(e => e.TotalPlacements)))}（{cyclic.Sum(e => e.RecapturePlacements)}/{cyclic.Sum(e => e.TotalPlacements)}），"
+            + $"非循环局 {Pct(Share(normal.Sum(e => e.RecapturePlacements), normal.Sum(e => e.TotalPlacements)))}（{normal.Sum(e => e.RecapturePlacements)}/{normal.Sum(e => e.TotalPlacements)}）");
+        sb.AppendLine("- 逐局（种子 / 结束 / 窗口；判定；局部周期（小回合）× 回到先前状态次数；被提格 |C| / 局部格数；C 之外新增落子 / 局部之外盘面变化的小回合数 / 窗口内局部新增设施数；有落子回合 其中提子回合；落在此前被提过格的落子 / 落子总数；各在局玩家 落子 提 被提 净势力（窗口首→末）停滞（终局时 / 整局最大）；被提格）：");
+        foreach (CycleReviewEntry e in c.Entries)
+        {
+            string players = string.Join("，", e.Players.Select(p =>
+                $"P{p.Player}{(p.EndStatus == nameof(Core.Scoring.PlayerStatus.Active) ? "" : $"（{p.EndStatus}）")} 落 {p.Placements} 提 {p.Captures} 被提 {p.Captured} 净 {Signed(p.NetPower)}（{p.PowerStart}→{p.PowerEnd}）停滞 {p.StagnationAtEnd}/{p.MaxStagnation}"));
+            sb.AppendLine($"  - {e.Seed} {(e.Truncated ? "截断" : EndReasonName(e.EndReason))} R{e.EndMajorRound} 窗口 R{e.WindowFirstRound}–R{e.EndMajorRound}（{e.WindowTurns} 小回合）；{(e.Cyclic ? "循环提子" : "非循环")}；"
+                + $"周期 {(e.Period is { } p ? $"{p} 小回合 × {e.Repeats}" : "无")}；被提格 {e.CapturedCells.Count} / 局部格 {e.LocalCells}；C 之外新增落子 {e.OutsidePlacements} / 局部外变化 {e.OutsideChanges} 回合 / 局部新增设施 {e.LocalEdits}；"
+                + $"有落子回合 {e.MoveTurns} 其中提子 {e.CaptureTurns}；被提格上落子 {e.RecapturePlacements}/{e.TotalPlacements}；{players}；被提格 [{string.Join(" ", e.CapturedCells)}]");
+        }
+    }
+
+    private static SortedDictionary<int, int> Counts(IEnumerable<int> values)
+    {
+        var h = new SortedDictionary<int, int>();
+        foreach (int v in values)
+        {
+            h[v] = h.GetValueOrDefault(v) + 1;
+        }
+
+        return h;
+    }
+
+    private static string Signed(BigInteger value) => value.Sign > 0 ? $"+{value}" : value.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>链接模式一段（board-link-mode 3.5 → open-map B5）：同区率、各出生棋盘被选次数、对局大回合数、终局原因、出局原因、过早 Pass 落败与耗时。</summary>
     private static void AppendLinkMode(StringBuilder sb, LinkModeSection l)
@@ -239,6 +287,7 @@ public static class ReportWriter
         sb.AppendLine($"- 纳入 {l.Matches} 局，其中截断 {l.Truncated} 局；终局原因：{Histogram(l.EndReasons)}");
         sb.AppendLine($"- 同区率（锁定时有棋盘旗数 ≥ 2）：{l.SharedMatches}/{l.Matches}（{Pct(l.SharedShare)}）；开局布局：{Histogram(l.Layouts)}；各出生棋盘被选次数（棋盘编号 1–5）：{Histogram(l.BoardPicks)}");
         sb.AppendLine($"- 对局大回合数：均值 {Num(l.MeanMajorRounds)}，中位 {Num(l.MedianMajorRounds)}，最小 {l.MinMajorRounds}，最大 {l.MaxMajorRounds}；终局全图可落子格均值 {Num(l.EndPlayableCells)}");
+        sb.AppendLine($"- 战场结算原因（cycle-stop：上限 = 大回合上限安全网强制结算）：{Histogram(l.SettlementReasons)}；上限结算 {l.SettlementReasons.GetValueOrDefault(nameof(Core.Match.SettlementReason.RoundCap))} 次");
         sb.AppendLine($"- 出局：战场落败 {l.BattlefieldDefeats} 人次，势力归零 {l.PowerZeroEliminations} 人次；整轮 Pass 结算落败 {l.AllPassedDefeats} 人次，其中过早 Pass 落败（结算那一大回合本人 Pass 且手牌仍有子；未逐格核对禁入与部署上限，为上界）{l.PrematurePassDefeats} 人次");
         sb.AppendLine($"- 单个小回合耗时：中位 {Num(l.TurnMedianMs)} ms，最大 {l.TurnMaxMs} ms；整局耗时合计 {l.TotalMatchMs} ms");
     }

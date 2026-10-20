@@ -313,7 +313,8 @@ public sealed partial class Hud : CanvasLayer
         RefreshLayerPanel(world, layers);
         RefreshCenter(session, world, handPanel, recruitCollapse, deferResult);
         RefreshShowOverlay(mask ?? ShowMask.Empty);
-        _notice.Text = session.Notice;
+        // 大回合上限提示条（cycle-stop S3）：窗口内接在状态提示前面，沿用同一条提示标签，不打断操作。
+        _notice.Text = session.RoundCapNotice is { } cap ? $"{cap}　{session.Notice}" : session.Notice;
     }
 
     /// <summary>演出逐帧刷新（settlement-show-callouts D6）：势力排名栏的分段到账与数字弹跳、顶部提子合计、中央横幅。由 GameRoot 每帧调用。</summary>

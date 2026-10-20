@@ -50,6 +50,7 @@ public sealed partial class MatchFlow
             ContentSet = ContentSet,
             CarryInOut = CarryInOut,
             CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
+            RoundCap = RoundCap,
             // 实现裁决 B5：模式与结算流程状态恒写出（retire-legacy-rules R10 = A：模式照写常量 "Link"；open-map 段 B 删配对 / 链接 / K 字段，段名不变）。
             Mode = MatchSaveData.LinkMode,
             Link = ExportLink(),
@@ -252,6 +253,9 @@ public sealed partial class MatchFlow
         bool contentSetBackfilled = data.ContentSet is null;
         // carry-in-out D8：旧存档没有带入带出字段 → 那局只可能是关闭、全员无带入，按此回填并在 CarryInOutBackfilled 留痕。
         bool carryInOutBackfilled = data.CarryInOut is null;
+        // cycle-stop 裁决 C4 / D4：旧存档没有大回合上限字段 → 按缺省 100 回填并在 RoundCapBackfilled 留痕——安全网默认开启（与当年决赛倒计时 K 按 0 相反），
+        // 恢复出的对局不会再无限打下去；其余行为与保存前一致（现存旧局最长 94 个大回合，到不了上限）。
+        bool roundCapBackfilled = data.RoundCap is null;
         var options = new MatchOptions
         {
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
@@ -259,6 +263,7 @@ public sealed partial class MatchFlow
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
             CarryInOut = data.CarryInOut ?? false,
             CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
+            RoundCap = data.RoundCap ?? MatchOptions.DefaultRoundCap,
         };
         // 与建局同一处校验（裁决 B1 / S1）：只能是链接图、4 人。
         try
@@ -272,6 +277,14 @@ public sealed partial class MatchFlow
         }
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
+        try
+        {
+            RequireValidRoundCap(options.RoundCap);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new FormatException($"存档的大回合上限不合法：{ex.Message}", ex);
+        }
 
         // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
         _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
@@ -286,6 +299,7 @@ public sealed partial class MatchFlow
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
         match.ContentSetBackfilled = contentSetBackfilled;
         match.CarryInOutBackfilled = carryInOutBackfilled;
+        match.RoundCapBackfilled = roundCapBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
         match.RestoreLink(data);
@@ -391,6 +405,12 @@ public sealed class MatchSaveData
 
     /// <summary>各玩家的带入（征召签记录抽得的类型）；旧存档无此字段（<c>null</c>）→ 全员无带入。</summary>
     public List<CarryInSaveData>? CarryIns { get; set; }
+
+    /// <summary>
+    /// 大回合上限安全网（cycle-stop D2；0 = 不启用）。旧存档无此字段（<c>null</c>）→ 恢复时按 <see cref="MatchOptions.DefaultRoundCap"/> 回填，
+    /// <see cref="MatchFlow.RoundCapBackfilled"/> 为 <c>true</c>（裁决 C4 / D4）。新存档恒写出（不启用也写 0）。
+    /// </summary>
+    public int? RoundCap { get; set; }
 
     /// <summary>模式字段的唯一取值（retire-legacy-rules R10 = A：照写常量，链接局存档逐字节不变）。</summary>
     public const string LinkMode = "Link";

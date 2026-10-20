@@ -499,7 +499,8 @@ public class 启发式评价维度Tests
         // 段 C（裁决 R10）：硬约束 + 阈值 + 预筛口径使走法变化，版本 2 → 3。
         // ai-pass-review 裁决 P13：链接模式下的决胜一手改变"哪些候选参与保留"，版本 3 → 4。
         // ai-seat-vision D4：专家前瞻名册限同战场（裁决 V2）改变链接模式下专家的候选重排，版本 4 → 5。
-        Assert.Equal(5, EvaluationBreakdown.Version);
+        // cycle-stop D3：循环提子停手（K 缺省 6）改变"哪些候选参与保留"，版本 5 → 6（K = 0 与版本 5 逐步相同，由 循环提子停手Tests.K为0零变化 守）。
+        Assert.Equal(6, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
 
         // 往返：写出再读回仍在（写入路径漏写则读回 null）。

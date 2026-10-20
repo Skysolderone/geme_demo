@@ -20,6 +20,7 @@ namespace Siege.Sim.Analysis;
 /// <param name="MinMajorRounds">对局大回合数的最小值。</param>
 /// <param name="MaxMajorRounds">对局大回合数的最大值。</param>
 /// <param name="EndReasons">终局原因分布（含 <c>turn_limit</c>）。</param>
+/// <param name="SettlementReasons">战场结算原因分布（<see cref="SettlementReason"/> 名：整轮 Pass / 填满 / 减员 / 上限；cycle-stop：上限结算次数由此可查）。</param>
 /// <param name="BattlefieldDefeats">战场落败出局人次。</param>
 /// <param name="PowerZeroEliminations">势力归零出局人次。</param>
 /// <param name="EndPlayableCells">每局最后一个快照的全图可落子格（<c>Life.PlayableCells</c>）的均值。</param>
@@ -39,6 +40,7 @@ public sealed record LinkModeSection(
     int MinMajorRounds,
     int MaxMajorRounds,
     SortedDictionary<string, int> EndReasons,
+    SortedDictionary<string, int> SettlementReasons,
     int BattlefieldDefeats,
     int PowerZeroEliminations,
     double EndPlayableCells,
@@ -70,6 +72,7 @@ public static class LinkModeAnalyzer
         var layouts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var picks = new SortedDictionary<int, int>();
         var endReasons = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var settlementReasons = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var rounds = new List<double>();
         var turnMs = new List<double>();
         var endPlayable = new List<double>();
@@ -103,6 +106,11 @@ public static class LinkModeAnalyzer
                 powerZero += e.Reason == nameof(EliminationReason.PowerZero) ? 1 : 0;
             }
 
+            foreach (LogEvent e in log.Events.Where(e => e.Settlement is not null))
+            {
+                Add(settlementReasons, e.Settlement!.Reason);
+            }
+
             (int allPassed, int early) = PassDefeats(log);
             allPassedDefeats += allPassed;
             premature += early;
@@ -117,7 +125,7 @@ public static class LinkModeAnalyzer
         return new LinkModeSection(
             logs.Count, truncated, shared, layouts, picks,
             Statistics.Mean(rounds), Statistics.Median(rounds), (int)rounds.Min(), (int)rounds.Max(),
-            endReasons, defeats, powerZero, Statistics.Mean(endPlayable),
+            endReasons, settlementReasons, defeats, powerZero, Statistics.Mean(endPlayable),
             allPassedDefeats, premature, Statistics.Median(turnMs), turnMax, totalMs);
     }
 

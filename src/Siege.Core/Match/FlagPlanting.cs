@@ -23,9 +23,22 @@ public sealed record MatchOptions
 
     // retire-legacy-rules：对局模式（原 Mode，board-link-mode 实现裁决 B1）删除——对局只有链接规则一套，建局恒要求链接图、恰 4 人。
 
-    // restore-go-core-rules 裁决 #4 / #7 / #15：大回合上限、碾压起始大回合、落后者征募补偿开关三项配置整体删除。
-    // 终局只剩「只剩一名参赛玩家 / 最后战场结算」两类（见 EndReason），对局 MUST NOT 设置固定总轮数，也 MUST NOT 因势力领先幅度提前结束。
+    // restore-go-core-rules 裁决 #4 / #7 / #15：旧的"固定总轮数终局"、碾压起始大回合、落后者征募补偿开关三项配置整体删除。
+    // 终局只剩「只剩一名参赛玩家 / 最后战场结算」两类（见 EndReason），对局 MUST NOT 以固定轮数作为正常终局，也 MUST NOT 因势力领先幅度提前结束。
     // 批量跑局的防死循环截断属 Siege.Sim 的技术设施，不是对局配置，MUST NOT 回到这里。
+    // cycle-stop 裁决 C2 / C3 / D4：另有一道"大回合上限"安全网（RoundCap）——不是终局条件，而是战场结算判定链的第 (c) 条：到达上限时按势力强制结算，
+    // 终局原因仍是"最后战场结算"。只在无人收尾（整轮 Pass / 填满都到不了）时生效，正常对局 SHOULD 在到达前收尾。
+
+    /// <summary>大回合上限安全网的缺省值（cycle-stop 裁决 D4：简单难度自然终局最长 94 个大回合，安全网只兜不收尾的局）。</summary>
+    public const int DefaultRoundCap = 100;
+
+    /// <summary>
+    /// 大回合上限安全网（cycle-stop D2，match-setup「大回合上限配置」；整数 ≥ 0，0 = 不启用）：第 R 大回合结束时若 R ≥ 上限、战场未结算且在局 ≥ 2，
+    /// 按 battlefield「战场结算」同一判定链强制结算，原因记"上限"（<see cref="SettlementReason.RoundCap"/>）。
+    /// 属于对局配置：开局固定、始终公开，入存档、日志首部与批次配置；负数建局报错；恢复缺该字段的旧存档按 <see cref="DefaultRoundCap"/>
+    /// 回填（<see cref="MatchFlow.RoundCapBackfilled"/> 留痕——安全网默认开启，与 open-map 之前决赛倒计时 K 按 0 的做法相反）。不随地图或难度自动变化。
+    /// </summary>
+    public int RoundCap { get; init; } = DefaultRoundCap;
 
     /// <summary>标准局的匠人征募权重初值（artisan-terrain-edit 裁决 T-1 / R-2：10，待扫档校准）。</summary>
     public const int DefaultArtisanWeight = RecruitWeights.DefaultArtisanWeight;

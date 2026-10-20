@@ -116,6 +116,20 @@ public sealed record RunConfig
     /// </summary>
     public int? PassThreshold { get; init; }
 
+    /// <summary>
+    /// 大回合上限安全网（<see cref="MatchOptions.RoundCap"/>，cycle-stop D2；0 = 不启用）：<c>null</c> = 新建的局取 <see cref="MatchOptions.DefaultRoundCap"/>，
+    /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，
+    /// 按 100 重建（裁决 C4 / D4：安全网默认开启，与候选格上限 / 停手阈值"缺项按引入前行为"相反；现存旧日志最长 94 个大回合，到不了上限）。命令行 <c>--round-cap</c>。
+    /// </summary>
+    public int? RoundCap { get; init; }
+
+    /// <summary>
+    /// AI 停滞大回合数 K（<see cref="AiSearchConfig.StagnationRounds"/>，cycle-stop D3；0 = 不启用）：<c>null</c> = 新建的局取 <see cref="AiSearchConfig.DefaultStagnationRounds"/>，
+    /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 0 重建。
+    /// 与停手阈值同口径：只作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家。命令行 <c>--stagnation-rounds</c>。
+    /// </summary>
+    public int? StagnationRounds { get; init; }
+
     // retire-legacy-maps 3.2：冒险概率字段 FlagRisk 删除；配置文件写了即报错（见 RetiredKeys）。
 
     /// <summary>
@@ -219,6 +233,16 @@ public sealed record RunConfig
             throw new ArgumentException("停手阈值须为非负整数（0 = 严格提高即保留）。");
         }
 
+        if (RoundCap < 0)
+        {
+            throw new ArgumentException("大回合上限须为非负整数（0 = 不启用）。");
+        }
+
+        if (StagnationRounds < 0)
+        {
+            throw new ArgumentException("停滞大回合数须为非负整数（0 = 不启用）。");
+        }
+
         if (ContentSet is { } contentSet && !Enum.IsDefined(contentSet))
         {
             throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
@@ -278,6 +302,9 @@ public sealed record RunConfig
             ? this with { CandidateCellLimit = auto }
             : this;
         resolved = resolved.PassThreshold is null ? resolved with { PassThreshold = AiSearchConfig.DefaultPassThreshold } : resolved;
+        // 大回合上限与停滞大回合数（cycle-stop D2 / D3）：未配置一律落成缺省值，config.json 与首部写明实际生效值。
+        resolved = resolved.RoundCap is null ? resolved with { RoundCap = MatchOptions.DefaultRoundCap } : resolved;
+        resolved = resolved.StagnationRounds is null ? resolved with { StagnationRounds = AiSearchConfig.DefaultStagnationRounds } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
@@ -289,7 +316,7 @@ public sealed record RunConfig
             ? resolved with
             {
                 Players = [.. resolved.Players.Select(p => p.Search is null && AiSearchConfig.ForDifficulty(p.Difficulty).LookaheadWidth > 0
-                    ? p with { Search = AiSearchConfig.ForMap(p.Difficulty, map.PlayableCount, resolved.CandidateCellLimit ?? 0) with { PassThreshold = resolved.PassThreshold!.Value } }
+                    ? p with { Search = AiSearchConfig.ForMap(p.Difficulty, map.PlayableCount, resolved.CandidateCellLimit ?? 0) with { PassThreshold = resolved.PassThreshold!.Value, StagnationRounds = resolved.StagnationRounds!.Value } }
                     : p)],
             }
             : resolved;
@@ -304,7 +331,7 @@ public sealed record RunConfig
     internal static readonly IReadOnlyDictionary<string, string> RetiredKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["SiteValues"] = "据点已整体移除（restore-go-core-rules 裁决 #14），没有据点分值可配",
-        ["MaxMajorRounds"] = "大回合上限终局已删除（restore-go-core-rules 裁决 #4），对局只剩三类终局；跑局要限长请用 TurnLimit（小回合数截断）",
+        ["MaxMajorRounds"] = "固定轮数终局已删除（restore-go-core-rules 裁决 #4）；大回合上限安全网请用 RoundCap（cycle-stop，到达按势力结算而非直接终局），跑局要限长请用 TurnLimit（小回合数截断）",
         ["DominanceStartRound"] = "势力碾压已删除（restore-go-core-rules 裁决 #4）",
         ["CatchUpRecruit"] = "落后者征募补偿已删除（restore-go-core-rules 裁决 #7）",
         ["FlagRisk"] = "冒险概率已移除（retire-legacy-maps 3.2；board-link-mode 起原型插旗为盲选）",

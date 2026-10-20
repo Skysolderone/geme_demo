@@ -8,6 +8,7 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>规格：simulation-harness —— Requirement: 可复现回放</summary>
+[Collection(ConsoleRedirect.Collection)]   // cycle-stop 1.1：「旧拼接日志被拒」经 LinkSimFixtures.RunMain 重定向控制台，与其他重定向类并行时互换 stderr（全量两次抓到），同样串行
 public class 可复现回放Tests
 {
     [Fact]
@@ -133,7 +134,8 @@ public class 可复现回放Tests
         // carry-in-out 段 C：未配置的带入数量落成 0 写进首部（写明关闭），期望随之补上这一项。
         // retire-legacy-maps 1.8：共用配置改到 link:1（157 格 > 150），未配置的候选格上限按地图落成 24 写进首部，期望随之补上这一项。
         // ai-seat-vision D1：未配置的 AI 视野落成 true（按座位视野）写进首部（缺省值也写），期望随之补上这一项。
-        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Siege.Core.Ai.AiSearchConfig.LargeMapCellLimit }).ToJson(), failed.Header.Config.ToJson());
+        // cycle-stop 2.1 / 2.2：未配置的大回合上限与停滞大回合数落成 100 / 6 写进首部，期望随之补上这两项。
+        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Siege.Core.Ai.AiSearchConfig.LargeMapCellLimit, RoundCap = Siege.Core.Match.MatchOptions.DefaultRoundCap, StagnationRounds = Siege.Core.Ai.AiSearchConfig.DefaultStagnationRounds }).ToJson(), failed.Header.Config.ToJson());
         // 失败局强制保留完整事件流（含细粒度事件），不受 SnapshotsOnly 影响
         Assert.Equal(EventRetention.Full, failed.Header.Retention);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.Candidates);

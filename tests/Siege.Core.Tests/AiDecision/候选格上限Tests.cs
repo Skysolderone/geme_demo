@@ -521,7 +521,8 @@ public class 候选格上限Tests
     {
         // ai-eye 段 B：旧文本没有停手阈值，按 0 读入（当时的保留条件就是严格提高），所以等于"标准预设去掉阈值"，不再等于预设本身（预设阈值为缺省 20）。
         AiSearchConfig old = JsonSerializer.Deserialize<AiSearchConfig>("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false}""")!;
-        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0 }, old);
+        // cycle-stop 2.2：旧文本同样没有停滞大回合数，按 0 读入（预设为 6）。
+        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0, StagnationRounds = 0 }, old);
         AiSearchConfig tuned = AiSearchConfig.Standard with { PassThreshold = 7 };
         Assert.Equal(tuned, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(tuned)));
 

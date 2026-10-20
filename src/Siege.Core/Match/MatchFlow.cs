@@ -114,6 +114,7 @@ public sealed partial class MatchFlow
         RequireLinkMatch(map, list.Length);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
+        RequireValidRoundCap(options.RoundCap);
         // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
         // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
         if (options.CarryIns.Count > 0)
@@ -154,6 +155,12 @@ public sealed partial class MatchFlow
 
     /// <summary>恢复自不含匠人权重字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultArtisanWeight"/> 回填。</summary>
     public bool ArtisanWeightBackfilled { get; private set; }
+
+    /// <summary>大回合上限安全网（cycle-stop D2，match-setup「大回合上限配置」；0 = 不启用）。对局配置，始终公开，入存档。</summary>
+    public int RoundCap => Options.RoundCap;
+
+    /// <summary>恢复自不含大回合上限字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultRoundCap"/> 回填（裁决 C4 / D4：安全网默认开启）。</summary>
+    public bool RoundCapBackfilled { get; private set; }
 
     /// <summary>对局内容集（more-pieces-relics D8）。对局配置，始终公开，入存档。</summary>
     public ContentSet ContentSet => Options.ContentSet;
@@ -518,6 +525,7 @@ public sealed partial class MatchFlow
             CarryInOut, CarryIns)
         {
             PassedThisRound = PassedThisRound,
+            RoundCap = RoundCap,
         };
     }
 
@@ -733,7 +741,8 @@ public sealed partial class MatchFlow
             return;
         }
 
-        // restore-go-core-rules 裁决 #4：大回合结束 MUST NOT 成为终局条件（大回合上限终局已删除），对局只因两类条件结束（elimination-endgame「两类终局条件」）。
+        // restore-go-core-rules 裁决 #4：大回合结束本身 MUST NOT 成为终局条件，对局只因两类条件结束（elimination-endgame「两类终局条件」）。
+        // cycle-stop D2：大回合上限安全网不是第三类终局——它走上面 SettleAtRoundEnd 的判定链第 (c) 条，到达时按势力强制结算，终局原因仍是"最后战场结算"。
 
         ImmutableArray<InitiativeEntry>.Builder entries = ImmutableArray.CreateBuilder<InitiativeEntry>(active);
         foreach (PlayerId player in _players)
@@ -819,6 +828,15 @@ public sealed partial class MatchFlow
 
     private PlayerRecord Require(PlayerId player) =>
         _records.TryGetValue(player, out PlayerRecord? record) ? record : throw new SiegeRuleException($"玩家 {player} 不在本局名单中。");
+
+    /// <summary>大回合上限须为非负整数（match-setup「大回合上限配置」Scenario「负数报错」）：建局与恢复共用这一处校验。</summary>
+    private static void RequireValidRoundCap(int roundCap)
+    {
+        if (roundCap < 0)
+        {
+            throw new ArgumentException($"大回合上限须为非负整数（0 = 不启用），实际为 {roundCap}。", nameof(roundCap));
+        }
+    }
 
     private void RequirePhase(MatchPhase expected)
     {

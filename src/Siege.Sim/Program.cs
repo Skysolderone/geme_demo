@@ -98,14 +98,16 @@ public static class Program
         Console.WriteLine($"                [--map <link:地图种子，缺省 {DefaultMapId}>] [--players <人数，链接模式恒为 4>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
+        Console.WriteLine($"                [--round-cap <大回合上限安全网，非负整数，缺省 {Core.Match.MatchOptions.DefaultRoundCap}，0=不启用；到达时按势力强制结算（cycle-stop）>] [--stagnation-rounds <AI 停滞大回合数 K，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultStagnationRounds}，0=不启用；连续 K 个大回合无净增且候选全是提子 / 反提即 Pass>]");
         Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("                （AI 一律按座位视野；open-map 起锁定后整张地图是唯一战场，座位视野即全图，没有全知开关）");
         Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");
-        Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--review-defeats] [--review-artisan] [--out <报告文件>]");
+        Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--review-defeats] [--review-artisan] [--review-cycles] [--out <报告文件>]");
         Console.WriteLine("    --review-defeats：按日志回放每局，复盘整轮 Pass 结算的落败者与决胜一手（耗时约等于跑局本身；缺省不做）");
         Console.WriteLine("    --review-artisan：按日志回放每局，诊断每次 AI 匠人可改造时三类改造（立栅 / 搭桥 / 烧林）的合法候选与评价（耗时约为跑局的一到两倍；缺省不做）");
+        Console.WriteLine("    --review-cycles：循环提子诊断（cycle-stop）：只读日志快照、不回放；对每局取末段窗口 12 个大回合，报告提子 / 被提 / 净势力、被提格与局部周期，判“循环提子”（缺省不做）");
     }
 
     // ---------- play ----------
@@ -354,6 +356,8 @@ public static class Program
             CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
             PassThreshold = cli.Has("pass-threshold") ? cli.GetInt("pass-threshold", 0) : config.PassThreshold,
             CarryIn = cli.Has("carry-in") ? cli.GetInt("carry-in", 0) : config.CarryIn,
+            RoundCap = cli.Has("round-cap") ? cli.GetInt("round-cap", 0) : config.RoundCap,
+            StagnationRounds = cli.Has("stagnation-rounds") ? cli.GetInt("stagnation-rounds", 0) : config.StagnationRounds,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,
@@ -460,6 +464,8 @@ public static class Program
             IncludeContaminated = cli.Flag("include-contaminated"),
             ReviewDefeats = cli.Flag("review-defeats"),
             ReviewArtisan = cli.Flag("review-artisan"),
+            // cycle-stop 1.1：循环提子诊断只读日志快照（不回放），仍走显式开关 --review-cycles，缺省不做（缺省报告逐字节不变）。
+            ReviewCycles = cli.Flag("review-cycles"),
         };
         string outPath = cli.Get("out", Path.Combine(dir, "report.txt"));
         cli.EnsureRecognized();   // 读完所有选项、读日志与写报告之前结算（strict-cli 2.4）

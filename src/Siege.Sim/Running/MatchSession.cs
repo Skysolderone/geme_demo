@@ -64,6 +64,8 @@ public sealed class MatchSession
         CellLimit = Config.CandidateCellLimit ?? (recorded ? 0 : AiSearchConfig.DefaultCellLimitFor(match.Map.PlayableCount));
         // 停手阈值同理：首部没有该项 = 该项出现之前的旧日志，当时的保留条件是严格提高（= 0），MUST NOT 按今天的缺省阈值重建。
         PassThreshold = Config.PassThreshold ?? (recorded ? 0 : AiSearchConfig.DefaultPassThreshold);
+        // 停滞大回合数同理（cycle-stop D3）：首部没有该项 = 该项出现之前的旧日志，按 0（不启用）重建。
+        StagnationRounds = Config.StagnationRounds ?? (recorded ? 0 : AiSearchConfig.DefaultStagnationRounds);
         if (match.Phase != MatchPhase.InProgress)
         {
             throw new SiegeRuleException("会话要求对局已完成插旗并处于进行中。");
@@ -114,6 +116,9 @@ public sealed class MatchSession
 
     /// <summary>本局未显式配置剪枝参数的 AI 实际生效的停手阈值（ai-eye D4）。</summary>
     public int PassThreshold { get; }
+
+    /// <summary>本局未显式配置剪枝参数的 AI 实际生效的停滞大回合数 K（cycle-stop D3；0 = 不启用）。</summary>
+    public int StagnationRounds { get; }
 
     public GameSeed Seed { get; }
 
@@ -175,6 +180,8 @@ public sealed class MatchSession
                 ContentSet = contentSet,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
+                // 大回合上限（cycle-stop D2 / C4）：新建的局已落成具体值；按首部重建时缺该项 = 旧日志，按 100 读（安全网默认开启；旧日志最长 94 大回合，到不了上限）。
+                RoundCap = config.RoundCap ?? MatchOptions.DefaultRoundCap,
             });
 
         // 选区的唯一实现在 Core（frontier-map D4 / board-link-mode B2）：盲选（retire-legacy-maps 3.1：冒险概率 / 顺排 / 种子选区已删除）。
@@ -189,7 +196,7 @@ public sealed class MatchSession
     {
         // 显式的剪枝参数原样生效；未配置时按难度取，候选格上限取跑局配置的值，仍未给出则按地图大小取（阈值逻辑在 Core，三个入口共用）。
         // 停手阈值同样只作用于未显式配置剪枝参数的玩家（显式的 Search 自带阈值）。
-        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold });
+        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold, StagnationRounds = StagnationRounds });
         if (ai.DebugAi)
         {
             DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, search);

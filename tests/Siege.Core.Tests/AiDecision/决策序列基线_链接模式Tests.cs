@@ -97,13 +97,22 @@ internal static class LinkDecisionSequence
     /// <summary>
     /// 同上，建局后先对会话执行 <paramref name="attach"/>（ai-pass-review 1.4「复盘不改对局」：挂部署前复盘回调）；为 <c>null</c> 时与上一个重载逐字节相同。
     /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach)
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach) =>
+        Export(seed, maxMajorRounds, difficulty, attach, configure: null);
+
+    /// <summary>
+    /// 同上，建会话之前先对跑局配置执行 <paramref name="configure"/>（cycle-stop 2.2「K 为 0 零变化」：显式 <c>StagnationRounds = 0</c>）；为 <c>null</c> 时与上一个重载逐字节相同。
+    /// 首部四行文案不随配置变化（5 份缺省基线 MUST 逐字节不变）。
+    /// </summary>
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, Func<RunConfig, RunConfig>? configure)
     {
         var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0 };
         if (difficulty != AiDifficulty.Standard)
         {
             config = config with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
         }
+
+        config = configure?.Invoke(config) ?? config;
 
         MapData map = MapCatalog.Resolve(config.MapId);
         MatchSession session = MatchSession.Create(config, seed, map, recorded: false, carry: null);

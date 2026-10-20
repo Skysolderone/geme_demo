@@ -98,6 +98,29 @@ public class 两类终局条件Tests
     }
 
     [Fact]
+    public void 上限结算即终局()
+    {
+        // Scenario（cycle-stop）：大回合上限 60，第 60 大回合结束时仍有 3 名在局玩家且本大回合有人落子 → 战场按势力强制结算，对局终止，
+        // 终局原因"最后战场结算"（不新增终局原因），结算原因"上限"。对照：上限 0 时同一局面第 60 大回合照常继续（「轮数再多也不结束」的口径不变）。
+        // 变异 M-RC1（JudgeAtRoundEnd 去掉第 (c) 条）→ 本条红。
+        MatchFlow capped = Started([0, 0, 3, 4], options: Options with { RoundCap = 60 }).PlayRound(P0, P1).PlayRound(P0);
+        capped.Resign(P3);
+        capped.AtRound(60, [P0, P1, P2]).PlayRound(P2);
+
+        Assert.Equal(MatchPhase.Ended, capped.Phase);
+        Assert.Equal(EndReason.LastBattlefieldSettled, capped.Result!.Reason);
+        Assert.Equal(SettlementReason.RoundCap, Assert.Single(capped.Settlements).Reason);
+        Assert.Equal(1, capped.ActiveCount);
+        Assert.Throws<SiegeRuleException>(() => capped.BeginTurn());
+
+        MatchFlow uncapped = Started([0, 0, 3, 4], options: Options with { RoundCap = 0 }).PlayRound(P0, P1).PlayRound(P0);
+        uncapped.Resign(P3);
+        uncapped.AtRound(60, [P0, P1, P2]).PlayRound(P2);
+        Assert.Equal(MatchPhase.InProgress, uncapped.Phase);
+        Assert.Equal(61, uncapped.MajorRound);
+    }
+
+    [Fact]
     public void 轮数再多也不结束()
     {
         // Scenario：对局进行到第 40 大回合且两类终局条件均未满足 → 对局继续。

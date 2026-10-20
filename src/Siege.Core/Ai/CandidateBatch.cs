@@ -9,7 +9,8 @@ namespace Siege.Core.Ai;
 /// 单点评价结果：某落点放某类型棋子（匠人可再带一个改造目标）的分解。
 /// <see cref="Edit"/> 非空时这一项代表"落这枚匠人<b>并且</b>做这次改造"，与同落点的"不改造"是两个独立候选。
 /// </summary>
-public sealed record PointScore(Coord Coord, PieceType Type, TerrainEdit? Edit, EvaluationBreakdown Evaluation)
+/// <param name="Captures">该单点落下会提走的棋子数（预演结果的提子数；cycle-stop D3 的"会提子"口径）。唯一构造点在 <c>HeuristicTurnController.ScoreOne</c>。</param>
+public sealed record PointScore(Coord Coord, PieceType Type, TerrainEdit? Edit, EvaluationBreakdown Evaluation, int Captures = 0)
 {
     /// <summary>加权总分。</summary>
     public BigInteger Total => Evaluation.Total;
@@ -19,6 +20,12 @@ public sealed record PointScore(Coord Coord, PieceType Type, TerrainEdit? Edit, 
 
     public override string ToString() => $"{Placement}={Total}";
 }
+
+/// <summary>
+/// 一次"循环提子停手"（cycle-stop D3，ai-decision「循环提子停手」）的留痕：K、本人最近 K + 1 个大回合首次决策时采样的公开势力（旧 → 新）、
+/// 最近 K 个大回合内观察到被提过的格、本次排序前 N 的候选落点。只是留痕，决策日志仍是 <c>D:pass</c>。
+/// </summary>
+public sealed record StagnationStop(int Rounds, ImmutableArray<BigInteger> PowerByRound, ImmutableArray<Coord> RecentlyCaptured, ImmutableArray<Coord> Candidates);
 
 /// <summary>一个候选批次：落点序列（批次内顺序）与整批评价分解。</summary>
 public sealed record CandidateBatch(ImmutableArray<Placement> Placements, EvaluationBreakdown Evaluation)

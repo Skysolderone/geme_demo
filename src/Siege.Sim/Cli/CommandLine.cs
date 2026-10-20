@@ -18,7 +18,7 @@ public sealed class CommandLine
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, string> RetiredOptions = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["max-rounds"] = "大回合上限终局已随 restore-go-core-rules（裁决 #4）删除，对局只剩三类终局；批量跑局要限长请用 --turn-limit（小回合数截断）",
+        ["max-rounds"] = "固定轮数终局已随 restore-go-core-rules（裁决 #4）删除；批量跑局 run 的大回合上限安全网请用 --round-cap（cycle-stop，到达按势力结算而非直接终局），批量跑局要限长请用 --turn-limit（小回合数截断）",
         ["dominance-start"] = "势力碾压已随 restore-go-core-rules（裁决 #4）删除",
         ["no-catch-up"] = "落后者征募补偿已随 restore-go-core-rules（裁决 #7）删除",
         ["site-values"] = "据点已随 restore-go-core-rules（裁决 #14）整体移除",

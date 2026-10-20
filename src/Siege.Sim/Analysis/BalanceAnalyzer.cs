@@ -29,6 +29,12 @@ public sealed record AnalysisOptions
     /// 关闭时 <see cref="BalanceReport.ArtisanReview"/> 为 <c>null</c>，报告里没有这一段。
     /// </summary>
     public bool ReviewArtisan { get; init; }
+
+    /// <summary>
+    /// 是否做循环提子诊断（cycle-stop D1）：只读日志快照、不回放，缺省关闭；<c>analyze --review-cycles</c> 开启。
+    /// 关闭时 <see cref="BalanceReport.CycleReview"/> 为 <c>null</c>，报告里没有这一段（既有报告逐字节不变）。
+    /// </summary>
+    public bool ReviewCycles { get; init; }
 }
 
 /// <summary>收敛情况（裁决 13 → round-cap D5）：非达上限终局 vs 以 <c>MajorRoundLimit</c>（达大回合上限）终局，单独成段。</summary>
@@ -326,6 +332,9 @@ public sealed record BalanceReport(
 
     /// <summary>AI 改造诊断（ai-terrain-review 1.2）；未开启（<see cref="AnalysisOptions.ReviewArtisan"/>）或没有可回放的链接模式局时为 <c>null</c>。</summary>
     public ArtisanReviewSection? ArtisanReview { get; init; }
+
+    /// <summary>循环提子诊断（cycle-stop D1）；未开启（<see cref="AnalysisOptions.ReviewCycles"/>）或没有带小回合的纳入局时为 <c>null</c>。</summary>
+    public CycleReviewSection? CycleReview { get; init; }
 }
 
 /// <summary>
@@ -446,6 +455,7 @@ public static class BalanceAnalyzer
             DefeatReview = options.ReviewDefeats ? PassReviewAnalyzer.ReviewDefeats(included) : null,
             Themes = ThemeAnalyzer.Analyze(included),
             ArtisanReview = options.ReviewArtisan ? ArtisanReviewAnalyzer.Review(included) : null,
+            CycleReview = options.ReviewCycles ? CycleAnalyzer.Review(included) : null,
         };
     }
 

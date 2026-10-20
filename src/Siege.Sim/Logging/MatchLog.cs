@@ -62,6 +62,12 @@ public sealed class MatchLog
     public bool CarryInOut => Header.CarryInOut ?? false;
 
     /// <summary>
+    /// 本局的大回合上限安全网（match-telemetry 第 1 条；记在首部配置 <see cref="RunConfig.RoundCap"/>，0 = 不启用）。
+    /// 首部缺该项的旧日志按 100 读、不拒绝（cycle-stop D2 / D4）。
+    /// </summary>
+    public int RoundCap => Header.Config.RoundCap ?? Siege.Core.Match.MatchOptions.DefaultRoundCap;
+
+    /// <summary>
     /// 各玩家的带入（首部 <see cref="LogHeader.CarryIns"/>，解析成对局配置的形状）。旧日志缺该项，按全员无带入读；
     /// 补给名或类型名解析不了即 <see cref="FormatException"/>（不静默当成无带入）。
     /// </summary>

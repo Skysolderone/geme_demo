@@ -10,6 +10,7 @@ namespace Siege.Core.Tests.Battlefield;
 /// 规格：openspec/changes/open-map/specs/battlefield —— Requirement: 战场结算（唯一战场：整轮 Pass / 填满 / 减员即结算、即终局）；
 /// elimination-endgame「出局判定」的"战场落败"。open-map 起整张地图是唯一战场（标识 0），任何结算都是最后战场结算，对局随之终局；
 /// 多战场 / 等待者 / 倒计时的用例整体 Skip（段 B 删除），其余按唯一战场重导期望（结算名单 = 全部在局玩家）。
+/// cycle-stop（openspec/changes/cycle-stop/specs/battlefield）：判定链第 (c) 条"到达大回合上限"——「上限结算」「上限与整轮 Pass 同时满足记整轮 Pass」「上限为 0 不启用」。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 B 后半实跑）：
@@ -216,4 +217,74 @@ public class 战场结算Tests
         Assert.Equal(All.OrderBy(p => match.Debug.SeedRankOf(p)), settled.Entries.Select(e => e.Player));
     }
 
+    /// <summary>上限 <paramref name="roundCap"/>、P3 弃赛（三人在局）、P0 / P1 / P2 各落过子（势力都 &gt; 0）且 P0 多落 6 子领先，摆到第 <paramref name="round"/> 大回合开始。</summary>
+    private static MatchFlow ThreeUnderCap(int roundCap, int round)
+    {
+        // 四人四块棋盘：P0 多落的子都在自己的出生棋盘核心区（PlaceOne 先落核心区），不会提走别人的子、不会让谁势力归零。
+        MatchFlow match = Started([0, 1, 3, 4], options: Options with { RoundCap = roundCap }).PlayRound(P0, P1, P2).PlayRounds(6, P0);
+        match.Resign(P3);
+        Assert.Equal(3, match.ActiveCount);
+        Assert.Empty(match.Settlements);
+        return match.AtRound(round, [P0, P1, P2]);
+    }
+
+    [Fact]
+    public void 上限结算()
+    {
+        // Scenario（cycle-stop）：大回合上限 60，第 60 大回合结束时 A、B、C 在局且 B 本大回合落子，势力 A > B > C → 战场按势力结算，A 胜、B / C 以"战场落败"出局，原因"上限"；
+        // 终局原因仍是"最后战场结算"（elimination-endgame「上限结算即终局」）。反面：第 59 大回合有人落子不结算（未到上限）。
+        // 变异 M-RC1：JudgeAtRoundEnd 去掉第 (c) 条 → 本条、「上限结算即终局」「上限结算可查」红；M-RC2：`>=` 改 `>` → 本条红（第 60 大回合不结算）。
+        MatchFlow match = ThreeUnderCap(60, 59);
+        // 对照（质检补）：第 59 大回合"假设此刻结束"未到上限 → 先手预测照常给出下一轮，三名在局者都在。
+        Assert.Equal([P0, P1, P2], match.PublishSupplement().NextOrderForecast!.NextOrder.Order());
+        match.PlayRound(P1);
+        Assert.Empty(match.Settlements);
+        Assert.Equal(60, match.MajorRound);
+        System.Numerics.BigInteger[] power = [.. new[] { P0, P1, P2 }.Select(p => match.Scoreboard.Latest!.Of(p).Total)];
+        Assert.True(power[0] > power[1] + 5 && power[0] > power[2] + 5 && power[2] > 0, $"样本口径：A 领先 B、C 超过一枚孤子的势力，实际 {string.Join(" / ", power)}");
+
+        // 先手预测复用同一判定（D2；规格「战场结算」"先手预测复用同一判定，上限大回合同样剔除将落败者"的守门）：第 60 大回合"假设此刻结束"会以上限结算
+        // 剔除 B、C，唯一战场随之结算终局 → 没有下一轮顺序（唯一战场上"剔除将落败者"唯一可观察的形式）。
+        Assert.Null(match.PublishSupplement().NextOrderForecast);
+
+        match.PlayRound(P1);   // B 落子：不是整轮 Pass、也没填满，只因上限结算
+
+        BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
+        Assert.Equal((0, SettlementReason.RoundCap, P0, 60), (settled.Battlefield, settled.Reason, settled.Winner, settled.MajorRound));
+        Assert.Equal([P1, P2], settled.Entries.Skip(1).Select(e => e.Player).Order());   // 落败者按比较链排（势力相同才共享名次）
+        Assert.Equal(1, settled.Entries[0].Rank);
+        Assert.Equal(settled.Entries[1].Power == settled.Entries[2].Power ? [2, 2] : [2, 3], settled.Entries.Skip(1).Select(e => e.Rank));
+        Assert.True(settled.Entries[1].Power >= settled.Entries[2].Power);
+        Assert.All(new[] { P1, P2 }, p => Assert.Equal(EliminationReason.BattlefieldDefeat, match.StateOf(p).EliminationReason));
+        Assert.Equal(settled.Entries.Single(e => e.Player == P1).Power, match.StateOf(P1).PowerAtDefeat);
+        Assert.True(match.StateOf(P1).PowerAtDefeat > 0);
+        Assert.Equal(PlayerStatus.Active, match.StateOf(P0).Status);
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+        Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
+        Assert.Equal(60, match.Result.MajorRound);
+        Assert.Equal(60, match.MajorRound);   // 终局后不再推进（快照与活对象都钉住）
+    }
+
+    [Fact]
+    public void 上限与整轮Pass同时满足记整轮Pass()
+    {
+        // Scenario（cycle-stop）：上限 60，第 60 大回合全部在局玩家都 Pass → 结算原因记"整轮 Pass"（判定顺序 (a)、(b)、(c)，同时满足记靠前者）。
+        // 变异 M-RC3：第 (c) 条挪到整轮 Pass 之前 → 本条红。
+        MatchFlow match = ThreeUnderCap(60, 60).PassRound();
+        BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
+        Assert.Equal((SettlementReason.AllPassed, 60), (settled.Reason, settled.MajorRound));
+        Assert.Equal(MatchPhase.Ended, match.Phase);
+    }
+
+    [Fact]
+    public void 上限为0不启用()
+    {
+        // Scenario（cycle-stop）：对局配置大回合上限为 0，第 200 大回合仍有人落子 → 不因上限结算，对局继续。
+        // 变异 M-RC4：第 (c) 条去掉 `RoundCap > 0` → 本条红（0 ≤ 200 即结算）。
+        MatchFlow match = ThreeUnderCap(0, 200).PlayRound(P1);
+        Assert.Empty(match.Settlements);
+        Assert.Equal(MatchPhase.InProgress, match.Phase);
+        Assert.Equal(201, match.MajorRound);
+        Assert.NotNull(match.PublishSupplement().NextOrderForecast);
+    }
 }

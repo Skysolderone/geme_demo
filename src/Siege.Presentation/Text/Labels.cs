@@ -118,6 +118,40 @@ public static class Labels
     /// <summary>玩家显示名：阵营名 + 编号，如「红方(P0)」。阵营映射只在 <see cref="FactionTable"/> 一处。</summary>
     public static string Player(PlayerId player) => $"{FactionTable.For(player).Name}({player})";
 
+    /// <summary>战场结算原因文案（battlefield「战场结算」：整轮 Pass / 填满 / 减员 / 上限）。终端与图形版共用这一份。</summary>
+    public static string Settlement(Siege.Core.Match.SettlementReason reason) => reason switch
+    {
+        Siege.Core.Match.SettlementReason.AllPassed => "整轮 Pass",
+        Siege.Core.Match.SettlementReason.BoardFull => "填满",
+        Siege.Core.Match.SettlementReason.Attrition => "减员",
+        Siege.Core.Match.SettlementReason.RoundCap => "上限",
+        _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "未知结算原因。"),
+    };
+
+    /// <summary>
+    /// 大回合上限提示条（cycle-stop S3）：上限启用且 <c>上限 − 当前大回合 ≤ 5</c> 时给出"第 X 大回合结束时按势力结算"的一句话，否则 <c>null</c>。
+    /// 每个大回合开始时由宿主调用一次；条件与文案只在这里，图形版与终端版共用。
+    /// </summary>
+    public static string? RoundCapNotice(int roundCap, int majorRound)
+    {
+        if (roundCap <= 0 || roundCap - majorRound > RoundCapNoticeWindow)
+        {
+            return null;
+        }
+
+        int left = roundCap - majorRound;
+        return left <= 0
+            ? $"第 {roundCap} 大回合结束时按势力结算（本大回合即上限）"
+            : $"第 {roundCap} 大回合结束时按势力结算（还剩 {left} 个大回合）";
+    }
+
+    /// <summary>提示条出现的窗口：还剩 ≤ 5 个大回合（cycle-stop 裁决 S3）。</summary>
+    public const int RoundCapNoticeWindow = 5;
+
+    /// <summary>终端大回合开始行的上限段：<c>上限 100（还剩 97）</c>；不启用时 <c>上限 不启用</c>。</summary>
+    public static string RoundCapStatus(int roundCap, int majorRound) =>
+        roundCap <= 0 ? "上限 不启用" : $"上限 {roundCap}（还剩 {Math.Max(roundCap - majorRound, 0)}）";
+
     /// <summary>参赛状态文案；参赛中为 <c>null</c>。</summary>
     public static string? Status(PlayerStatus status) => status switch
     {

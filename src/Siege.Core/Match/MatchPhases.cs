@@ -71,7 +71,7 @@ public enum FlowEventKind
     PlayerResigned,
     MatchEnded,
 
-    /// <summary>战场结算（整轮 Pass / 填满 / 减员）。open-map：配对 / 链接 / 决赛倒计时三种事件已随拼接规则删除。</summary>
+    /// <summary>战场结算（整轮 Pass / 填满 / 减员 / 上限）。open-map：配对 / 链接 / 决赛倒计时三种事件已随拼接规则删除；cycle-stop：上限安全网走同一事件。</summary>
     BattlefieldSettled,
 }
 

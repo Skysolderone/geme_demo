@@ -5,8 +5,10 @@ using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Core.Tests.SimulationHarness;
+using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
+using static Siege.Core.Tests.LinkModeFixtures;
 
 namespace Siege.Core.Tests.MatchTelemetry;
 
@@ -52,6 +54,50 @@ public class 对局日志的记录内容_链接模式Tests
         }
 
         public bool OnRejected(StagedBatch batch, BatchFailure failure) => false;
+    }
+
+    [Fact]
+    public void 上限结算可查()
+    {
+        // 规格 Scenario「上限结算可查」（cycle-stop）：第 6 大回合因到达大回合上限结算 → 日志中有该结算记录、原因为"上限"，首部记录大回合上限 6；
+        // 离线分析能统计上限结算次数（链接模式一段）。样本：四名控制者每小回合都落 1 子（永不 Pass、填不满），上限 6 → 只可能因上限结算。
+        // 旧日志：首部缺该项按 100 读、不拒绝（D2）。变异 M-RC5：MatchSession 建局不把 RoundCap 写进对局配置 → 样本跑到 turn_limit 截断，本条红。
+        MatchFlow match = Started([0, 1, 2, 3], options: Options with { RoundCap = 6 });
+        MatchSession session = MatchSession.ForMatch(match, LinkSimFixtures.Config(turnLimit: 200) with { ContentSet = match.ContentSet, RoundCap = match.RoundCap });
+        foreach (PlayerId p in match.Players)
+        {
+            session.SetController(p, new LinkSimFixtures.StoneThenPass(() => true));
+        }
+
+        MatchLog log = session.Run();
+        Assert.False(log.IsFailed, log.Failure?.Message);
+        Assert.Equal(nameof(EndReason.LastBattlefieldSettled), log.Result!.Reason);
+        Assert.Equal(6, log.Result.MajorRound);
+        Assert.Equal(6, log.Header.Config.RoundCap);
+        Assert.Equal(6, log.RoundCap);
+        Assert.Contains("\"RoundCap\":6", log.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
+
+        LogEvent settled = Assert.Single(log.Events.Where(e => e.Type == LogEventType.BattlefieldSettled));
+        Assert.Equal(nameof(SettlementReason.RoundCap), settled.Settlement!.Reason);
+        Assert.Equal(6, settled.Settlement.MajorRound);
+        Assert.Equal(4, settled.Settlement.Entries.Count);
+        Assert.True(settled.Settlement.Entries.All(e => e.Power > 0));   // 样本口径：四人都落过子、势力非 0
+
+        // 离线统计：链接模式一段按结算原因计数，上限结算 1 次。
+        MatchLog parsed = MatchLog.Parse(log.FullText());
+        LinkModeSection link = BalanceAnalyzer.Analyze([parsed]).LinkMode ?? throw new InvalidOperationException("没有链接模式统计。");
+        Assert.Equal(1, link.SettlementReasons.GetValueOrDefault(nameof(SettlementReason.RoundCap)));
+        Assert.Contains("上限结算 1 次", ReportWriter.Render(BalanceAnalyzer.Analyze([parsed])), StringComparison.Ordinal);
+
+        // 旧日志：从首部配置里删掉 RoundCap → 按 100 读、不拒绝。
+        string[] lines = log.FullText().Split('\n');
+        System.Text.Json.Nodes.JsonObject header = System.Text.Json.Nodes.JsonNode.Parse(lines[0])!.AsObject();
+        Assert.True(header["Config"]!.AsObject().Remove("RoundCap"));
+        lines[0] = header.ToJsonString();
+        MatchLog legacy = MatchLog.Parse(string.Join('\n', lines));
+        Assert.Null(legacy.Header.Config.RoundCap);
+        Assert.Equal(100, legacy.RoundCap);
+        Assert.NotNull(BalanceAnalyzer.Analyze([legacy]).LinkMode);
     }
 
     [Fact]

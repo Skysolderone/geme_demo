@@ -188,7 +188,7 @@ internal static class PlayCommand
                 for (; settlements < match.Settlements.Count; settlements++)
                 {
                     BattlefieldSettlementRecord s = match.Settlements[settlements];
-                    render.Line($"── {BirthZoneLabel.Number(s.Battlefield)} 号战场结算：{BoardRenderer.Label(s.Winner, me)} 胜出"
+                    render.Line($"── {BirthZoneLabel.Number(s.Battlefield)} 号战场结算（{Siege.Presentation.Text.Labels.Settlement(s.Reason)}）：{BoardRenderer.Label(s.Winner, me)} 胜出"
                         + (s.Entries.Length > 1 ? $"，{string.Join("、", s.Entries.Skip(1).Select(e => BoardRenderer.Label(e.Player, me)))} 战场落败出局" : string.Empty) + " ──",
                         s.Entries.Any(e => e.Player == me) ? ConsoleColor.Red : ConsoleColor.Yellow);
                 }

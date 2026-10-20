@@ -60,7 +60,8 @@ public sealed partial class MatchFlow
     // ---------- 战场结算（2.6；裁决 S10 / D6：判定与执行两步） ----------
 
     /// <summary>
-    /// 大回合结束时的战场结算（battlefield「战场结算」，构筑期同样生效）：对每个未结算、在局玩家 ≥ 2 的战场按标识升序检查（a）本大回合内全员 Pass、（b）无可落子空格，满足即结算。
+    /// 大回合结束时的战场结算（battlefield「战场结算」，构筑期同样生效）：对每个未结算、在局玩家 ≥ 2 的战场按标识升序检查（a）本大回合内全员 Pass、（b）无可落子空格、
+    /// （c）本大回合序号 ≥ 大回合上限安全网（cycle-stop D2，<see cref="MatchOptions.RoundCap"/> &gt; 0 才启用），满足即结算。
     /// 只有 1 名在局玩家的战场不检查：既不因 Pass、也不因填满结算（裁决 S9）。
     /// 同一大回合结束时结算的全部落败者共享一个出局序号，名次按结算时的比较链统一排序（裁决 S7，见 <see cref="FinalStandings.Compute"/>）。最后清空本大回合的 Pass 记录。
     /// </summary>
@@ -85,7 +86,9 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 大回合结束时的结算判定（裁决 S10，<b>无副作用</b>）：按 <see cref="OccupiedBattlefields"/> 升序，对每个未结算、在局玩家 ≥ 2 的战场判
-    /// （a）<paramref name="passed"/> 含其全部在局玩家 → 整轮 Pass；（b）无可落子空格 → 填满；满足即给出判决（胜者与落败者按比较链排好）。
+    /// （a）<paramref name="passed"/> 含其全部在局玩家 → 整轮 Pass；（b）无可落子空格 → 填满；（c）<see cref="MajorRound"/> ≥ <see cref="MatchOptions.RoundCap"/>（&gt; 0 才启用）→ 上限；
+    /// 判定顺序 (a)、(b)、(c)，同时满足记靠前者；满足即给出判决（胜者与落败者按比较链排好）。
+    /// 先手预测（<c>ForecastInitiative</c>，"假设此刻结束"）复用同一份判定，所以上限大回合里的预测同样剔除将落败者（cycle-stop D2）。
     /// <paramref name="power"/> 是此刻盘面的势力快照：大回合结束时由势力榜重算给出，顺序预测时由 <see cref="PowerCalculator"/> 在不推进势力榜的情况下算出，二者同一口径。
     /// </summary>
     private ImmutableArray<BattlefieldVerdict> JudgeAtRoundEnd(PowerSnapshot power, IReadOnlySet<PlayerId> passed)
@@ -102,6 +105,7 @@ public sealed partial class MatchFlow
 
             SettlementReason? reason = members.All(passed.Contains) ? SettlementReason.AllPassed
                 : !HasPlayableEmptyCell(id) ? SettlementReason.BoardFull
+                : Options.RoundCap > 0 && MajorRound >= Options.RoundCap ? SettlementReason.RoundCap
                 : null;
             if (reason is { } r)
             {

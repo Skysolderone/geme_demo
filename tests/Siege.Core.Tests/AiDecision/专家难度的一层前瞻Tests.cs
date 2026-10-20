@@ -432,17 +432,24 @@ public class 专家难度的一层前瞻Tests
         // 变异 M-A2b（去掉 WhenWritingDefault，宽度 0 照样写出）→ 见段 A 实施记录。
         // v2-recalibration 段 A（1.6）：本测试钉的是记录格式（宽度 0 不写出、字段次序），不是缺省阈值；预设的阈值写死为字面量取值时的 80，
         // 字面量一字不改。缺省阈值本身由 难度分级Tests.难度名称与次序 与 默认评价权重的校准Tests.默认停手阈值被改动 守门。
-        Assert.Equal("""{"CandidatePointCount":6,"CandidateBatchCount":1,"ImmediateOnly":true,"CandidateCellLimit":0,"PassThreshold":80}""",
+        // cycle-stop 2.2：四档预设带停滞大回合数 6（接在末尾；为 0 不写出——按 0 的记录与改动前逐字节相同，见下面 K = 0 的三行）。
+        Assert.Equal("""{"CandidatePointCount":6,"CandidateBatchCount":1,"ImmediateOnly":true,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6}""",
             JsonSerializer.Serialize(AiSearchConfig.Easy with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        Assert.Equal("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
+        Assert.Equal("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6}""",
             JsonSerializer.Serialize(AiSearchConfig.Standard with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6}""",
             JsonSerializer.Serialize(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold }));
+        Assert.Equal("""{"CandidatePointCount":6,"CandidateBatchCount":1,"ImmediateOnly":true,"CandidateCellLimit":0,"PassThreshold":80}""",
+            JsonSerializer.Serialize(AiSearchConfig.Easy with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0 }));
+        Assert.Equal("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
+            JsonSerializer.Serialize(AiSearchConfig.Standard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0 }));
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
+            JsonSerializer.Serialize(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0 }));
         // expert-strength：专家预设退回一层（负责人裁决 2026-09-28，段 B 后：多样补充上限 0、两层权重 0，为 0 不写出）——专家一行回到 expert-lookahead 时的字面量；
         // 三档旧难度的三行一字不改。两项非 0 即写出、字段次序接在前瞻宽度之后，由显式 S 8 / λ 1000 的配置钉住。
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""",
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"StagnationRounds":6}""",
             JsonSerializer.Serialize(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000}""",
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000,"StagnationRounds":6}""",
             JsonSerializer.Serialize(ExpandedExpert with { PassThreshold = LookaheadFixtures.PassThreshold }));
         // 一层配置（两项为 0）的序列化与 expert-lookahead 时代的专家预设逐字节相同。
         Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""",
@@ -483,7 +490,9 @@ public class 专家难度的一层前瞻Tests
         AiSearchConfig old = JsonSerializer.Deserialize<AiSearchConfig>(legacy)!;
         Assert.Equal(0, old.LookaheadWidth);
         // v2-recalibration 段 A（1.6）：旧记录里的阈值是写入时的 80，与现行缺省无关——比对对象写死同一阈值，旧记录字面量不改。
-        Assert.Equal(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold }, old);
+        // cycle-stop 2.2：缺停滞大回合数同样按 0 读。
+        Assert.Equal(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0 }, old);
+        Assert.Equal(0, old.StagnationRounds);
         Assert.Equal(4, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(AiSearchConfig.Expert))!.LookaheadWidth);
 
         // expert-strength：多样补充上限与两层权重同一口径——缺字段按 0 读；旧专家记录（只有前瞻宽度 4）读为一层配置，即退回后的专家预设；显式两项往返不丢。
@@ -491,7 +500,7 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(0, old.TwoPlyWeightPermille);
         const string legacyExpert = """{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""";
         Assert.Equal(OneLayerConfig(), JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));
-        Assert.Equal(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));
+        Assert.Equal(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0 }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));   // cycle-stop：旧专家记录缺 K 按 0 读
         Assert.Equal(AiSearchConfig.Expert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(AiSearchConfig.Expert)));
         Assert.Equal(ExpandedExpert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(ExpandedExpert)));
 

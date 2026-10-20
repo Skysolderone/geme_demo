@@ -97,6 +97,9 @@ public sealed partial class GameRoot : Node3D
     /// </summary>
     private AiDifficulty _difficulty = AiDifficulty.Standard;
     private bool _dirty = true;
+
+    /// <summary>最近一次打印过的大回合上限提示（cycle-stop S3）：文字变化时打一行 <c>[round-cap]</c>，供无人值守自检留痕。</summary>
+    private string? _loggedRoundCapNotice;
     private bool _mouseInside;
     private bool _opened;
     private int _poseChangesAfterOpening;
@@ -826,6 +829,11 @@ public sealed partial class GameRoot : Node3D
 
         _hud.OverviewActive = _board.Rig.IsOverview;
         _hud.OverviewAvailable = _board.Rig.OverviewAvailable;   // 一屏看不全才出现"全局"按钮（viewport-camera「全局预览」）
+        if (_session.RoundCapNotice is { } capNotice && capNotice != _loggedRoundCapNotice)
+        {
+            _loggedRoundCapNotice = capNotice;
+            GD.Print($"[round-cap] 第 {_frame} 帧、第 {_session.Match.MajorRound} 大回合：{capNotice}");
+        }
         SyncRecruitCollapse();
         // 演出未播完时终局面板不显示（settlement-show-callouts「横幅节拍」：终局面板在横幅播完后才出现）；无人值守零时长下时间线创建即播完，行为不变。
         _hud.Refresh(_session, _layers, _handPanel, _recruitCollapse, mask, deferResult: ShowPlaying);

@@ -34,6 +34,20 @@ public sealed class HeuristicTurnController : ITurnController
     private readonly bool _cacheLife;
     private readonly List<string> _decisions = [];
 
+    // ---------- 循环提子停手的记忆（cycle-stop D3）：只记本人、只读公开量 ----------
+
+    /// <summary>本人每个大回合<b>首次部署决策</b>时采样的公开势力（大回合 → 总势力）。K = 0 时不采样。</summary>
+    private readonly SortedDictionary<int, BigInteger> _powerByRound = [];
+
+    /// <summary>
+    /// 按观察所在大回合归档的"被提过的格"：相邻两次观察之间某格由有子变为空或换了主人，即视为在这期间被提过（棋子只会因提子离开盘面，判据精确；
+    /// 同一主人在两次观察之间被提又补回同格的情形看不出来——它仍满足"被提过"，这里保守地不计）。纯由公开占用推导，不读任何提子记录之外的量。
+    /// </summary>
+    private readonly SortedDictionary<int, HashSet<Coord>> _capturedByRound = [];
+
+    /// <summary>上一次观察（部署决策入口）时的占用：格 → 主人。</summary>
+    private Dictionary<Coord, PlayerId>? _lastOccupancy;
+
     public HeuristicTurnController(
         PlayerId player,
         Func<MatchPublicView> observe,
@@ -127,6 +141,42 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>最近一次部署的前瞻记录（expert-lookahead）：前瞻宽度为 0（简单 / 标准 / 高难）时恒为 <c>null</c>。</summary>
     public LookaheadRecord? LastLookahead { get; private set; }
+
+    /// <summary>
+    /// 最近一次部署是否因"循环提子停手"（cycle-stop D3）视同无改善手：是即为留痕，否则（含尚未部署、K = 0）为 <c>null</c>。
+    /// 决胜一手仍优先——停手成立但决胜一手落下时，这里有留痕、<see cref="LastDecisive"/> 也有。
+    /// </summary>
+    public StagnationStop? LastStagnation { get; private set; }
+
+    /// <summary>测试接缝：最近一次采样所在的大回合（尚未采样 / K = 0 为 <c>null</c>）。</summary>
+    internal int? LastSampledRound => _powerByRound.Count == 0 ? null : _powerByRound.Keys.Max();
+
+    /// <summary>测试接缝：最近一次采样的本人公开势力。</summary>
+    internal BigInteger? LastSampledPower => LastSampledRound is { } round ? _powerByRound[round] : null;
+
+    /// <summary>测试接缝：第 <paramref name="round"/> 大回合决策时视为"最近 K 个大回合内被提过"的格（与停滞判定同一窗口）。</summary>
+    internal ImmutableArray<Coord> RecentlyCapturedCells(int round) => [.. RecentlyCaptured(round)];
+
+    /// <summary>
+    /// 测试接缝：预置停滞记忆（本人某些大回合的采样势力、某些大回合观察到的被提格）。预置过的大回合不再被入口采样覆盖；占用差分照常从下一次观察起算。
+    /// </summary>
+    internal void SeedStagnationMemory(IEnumerable<(int Round, BigInteger Power)> powers, IEnumerable<(int Round, Coord Cell)> captured)
+    {
+        foreach ((int round, BigInteger power) in powers)
+        {
+            _powerByRound[round] = power;
+        }
+
+        foreach ((int round, Coord cell) in captured)
+        {
+            if (!_capturedByRound.TryGetValue(round, out HashSet<Coord>? cells))
+            {
+                _capturedByRound[round] = cells = [];
+            }
+
+            cells.Add(cell);
+        }
+    }
 
     /// <summary>
     /// 为当前公开快照建立评价器（供外部检视单个批次的分解）。<see cref="Deploy"/> 每次决策新建一个：活形分析的决策内缓存挂在评价器上，随之丢弃（ai-eye D5）。
@@ -308,6 +358,7 @@ public sealed class HeuristicTurnController : ITurnController
         }
 
         MatchPublicView view = _observe();
+        ObserveForStagnation(view);
         BatchEvaluator evaluator = CreateEvaluator(view);
         int passThreshold = EffectivePassThreshold(view);
         BatchContext context = batch.Context;
@@ -316,6 +367,7 @@ public sealed class HeuristicTurnController : ITurnController
         ImmutableArray<PointScore> ranking = RankPoints(batch, rehearse, evaluator, out ImmutableArray<PointScore> ranked);
         LastPointRanking = ranking;
         LastDecisive = null;
+        LastStagnation = null;
         if (ranking.IsEmpty || context.DeployLimit == 0)
         {
             LastCandidates = [];
@@ -325,6 +377,51 @@ public sealed class HeuristicTurnController : ITurnController
             return;
         }
 
+        CandidateBatch choice;
+        // 循环提子停手（cycle-stop D3，ai-decision「循环提子停手」）：停滞成立即视同"没有任何落点被保留"——不组批、不扰动（K = 0 时整段不进入，
+        // 一次额外预演、一次额外随机消费都没有，与引入之前逐步相同）；Pass 候选照常进下面的决胜一手检查，决胜一手优先。
+        if (Config.StagnationRounds > 0 && StagnationHolds(view, ranking) is { } stagnation)
+        {
+            LastStagnation = stagnation;
+            LastCandidates = [];
+            LastLookahead = Config.LookaheadWidth > 0 ? LookaheadRecord.Passed : null;
+            choice = new CandidateBatch([], evaluator.Evaluate([], rehearse(), context));
+        }
+        else
+        {
+            choice = ChooseByCandidates(ranking, batch, rehearse, evaluator, passThreshold, view);
+        }
+
+        // 决胜一手（ai-pass-review 2.1，P7 = A 窄版）：只在"本将 Pass、这次 Pass 会让本战场整轮 Pass 结算、自己落后"时检查；
+        // 条件不满足时这里什么都不算，决策与引入之前逐字节相同。不消费任何随机流。
+        if (choice.IsPass && DecisiveTriggered(view, Player) && DecisiveMoveFor(view, ranked, ranking, batch, rehearse, evaluator) is { } decisive)
+        {
+            choice = decisive.Choice;
+            LastDecisive = decisive.Record;
+        }
+
+        LastChoice = choice;
+
+        batch.Clear();
+        foreach (Placement placement in choice.Placements)
+        {
+            // 复摆 MUST 带上改造目标：漏了会静默丢掉改造（匠人照落，地形不动），而候选评分是按带改造算的。
+            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
+            {
+                throw new SiegeRuleException($"AI 复摆已预演通过的批次被拒绝：{failure.Message}");
+            }
+        }
+
+        _decisions.Add(choice.IsPass ? "D:pass" : $"D:{choice.Key}");
+    }
+
+    /// <summary>
+    /// 候选生成与选优（<see cref="Deploy"/> 原有的中段，cycle-stop 2.2 原样抽出、行为不变）：贪心 + 种子扰动组合出不超过 M 个候选批次，
+    /// 前瞻宽度大于 0 时交给一层前瞻重排，否则确定性选优。
+    /// </summary>
+    private CandidateBatch ChooseByCandidates(
+        ImmutableArray<PointScore> ranking, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold, MatchPublicView view)
+    {
         var candidates = new List<CandidateBatch>();
         var keys = new HashSet<string>(StringComparer.Ordinal);
         for (int k = 0; k < Config.CandidateBatchCount; k++)
@@ -361,27 +458,150 @@ public sealed class HeuristicTurnController : ITurnController
             LastLookahead = null;
         }
 
-        // 决胜一手（ai-pass-review 2.1，P7 = A 窄版）：只在"本将 Pass、这次 Pass 会让本战场整轮 Pass 结算、自己落后"时检查；
-        // 条件不满足时这里什么都不算，决策与引入之前逐字节相同。不消费任何随机流。
-        if (choice.IsPass && DecisiveTriggered(view, Player) && DecisiveMoveFor(view, ranked, ranking, batch, rehearse, evaluator) is { } decisive)
+        return choice;
+    }
+
+    // ---------- 循环提子停手（cycle-stop D3；ai-decision「循环提子停手」） ----------
+
+    /// <summary>
+    /// 部署决策入口的观察（K &gt; 0 才做）：本人在本大回合的首次决策采样一次公开势力；与上一次观察比对占用，由有子变为空或换了主人的格归档为"本大回合观察到被提过"。
+    /// 只读公开快照（盘面占用、势力榜），不读任何隐藏量；不消费随机流。<see cref="ReviewBestMove"/>（复盘）不经这里，不改记忆。
+    /// </summary>
+    private void ObserveForStagnation(MatchPublicView view)
+    {
+        if (Config.StagnationRounds <= 0)
         {
-            choice = decisive.Choice;
-            LastDecisive = decisive.Record;
+            return;
         }
 
-        LastChoice = choice;
-
-        batch.Clear();
-        foreach (Placement placement in choice.Placements)
+        int round = view.MajorRound;
+        if (!_powerByRound.ContainsKey(round))
         {
-            // 复摆 MUST 带上改造目标：漏了会静默丢掉改造（匠人照落，地形不动），而候选评分是按带改造算的。
-            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
+            _powerByRound[round] = view.Power?.Of(Player).Total ?? BigInteger.Zero;
+        }
+
+        var now = new Dictionary<Coord, PlayerId>();
+        foreach (Coord cell in view.Board.AllCoords())
+        {
+            if (view.Board[cell].Occupant is { } occupant)
             {
-                throw new SiegeRuleException($"AI 复摆已预演通过的批次被拒绝：{failure.Message}");
+                now[cell] = occupant.Owner;
             }
         }
 
-        _decisions.Add(choice.IsPass ? "D:pass" : $"D:{choice.Key}");
+        if (_lastOccupancy is not null)
+        {
+            foreach ((Coord cell, PlayerId owner) in _lastOccupancy)
+            {
+                if (!now.TryGetValue(cell, out PlayerId current) || current != owner)
+                {
+                    if (!_capturedByRound.TryGetValue(round, out HashSet<Coord>? cells))
+                    {
+                        _capturedByRound[round] = cells = [];
+                    }
+
+                    cells.Add(cell);
+                }
+            }
+        }
+
+        _lastOccupancy = now;
+    }
+
+    /// <summary>
+    /// 复盘用的停滞判定（<see cref="ReviewBestMove"/>）：在本人停滞记忆的副本上做一次与 <see cref="Deploy"/> 入口相同的观察再判定，结束后记忆原样还原——
+    /// 复盘 MUST NOT 改变对局决策（ai-pass-review「复盘不改对局」）。K = 0 为 <c>null</c>。
+    /// </summary>
+    private StagnationStop? PreviewStagnation(MatchPublicView view, ImmutableArray<PointScore> ranking)
+    {
+        if (Config.StagnationRounds <= 0)
+        {
+            return null;
+        }
+
+        var powers = new SortedDictionary<int, BigInteger>(_powerByRound);
+        var captured = _capturedByRound.ToDictionary(kv => kv.Key, kv => new HashSet<Coord>(kv.Value));
+        Dictionary<Coord, PlayerId>? last = _lastOccupancy;
+        try
+        {
+            ObserveForStagnation(view);
+            return StagnationHolds(view, ranking);
+        }
+        finally
+        {
+            _powerByRound.Clear();
+            foreach ((int round, BigInteger power) in powers)
+            {
+                _powerByRound[round] = power;
+            }
+
+            _capturedByRound.Clear();
+            foreach ((int round, HashSet<Coord> cells) in captured)
+            {
+                _capturedByRound[round] = cells;
+            }
+
+            _lastOccupancy = last;
+        }
+    }
+
+    /// <summary>
+    /// 停滞判定（cycle-stop D3）：盘上有己方棋子（无子豁免沿用）；最近 K + 1 个大回合（本大回合及之前 K 个）都采样过且最近 K 个大回合的采样逐一不高于前一个
+    /// （连续 K 个大回合无净增，与 <c>CycleAnalyzer.StagnationOf</c> 同口径——那边取上一大回合结束时的势力，这里取本人在该大回合首次决策时的势力，相差一个采样点）；
+    /// 且 <paramref name="ranking"/>（排序后的前 N 个候选单点）每一个要么会提子、要么落在最近 K 个大回合（本大回合及之前 K − 1 个）内观察到被提过的格上。
+    /// 成立返回留痕，否则 <c>null</c>。只读本次候选与本人记忆。
+    /// </summary>
+    private StagnationStop? StagnationHolds(MatchPublicView view, ImmutableArray<PointScore> ranking)
+    {
+        int k = Config.StagnationRounds;
+        int round = view.MajorRound;
+        if (view.Board.GroupsOf(Player).IsEmpty)
+        {
+            return null;
+        }
+
+        var powers = new BigInteger[k + 1];
+        for (int i = 0; i <= k; i++)
+        {
+            if (!_powerByRound.TryGetValue(round - k + i, out powers[i]))
+            {
+                return null;
+            }
+        }
+
+        for (int i = 1; i <= k; i++)
+        {
+            if (powers[i] > powers[i - 1])
+            {
+                return null;
+            }
+        }
+
+        SortedSet<Coord> recent = RecentlyCaptured(round);
+        foreach (PointScore point in ranking)
+        {
+            if (point.Captures == 0 && !recent.Contains(point.Coord))
+            {
+                return null;
+            }
+        }
+
+        return new StagnationStop(k, [.. powers], [.. recent], [.. ranking.Select(p => p.Coord).Distinct()]);
+    }
+
+    /// <summary>最近 K 个大回合（第 <paramref name="round"/> 大回合及之前 K − 1 个）内观察到被提过的格（坐标序）。</summary>
+    private SortedSet<Coord> RecentlyCaptured(int round)
+    {
+        var recent = new SortedSet<Coord>();
+        foreach ((int observed, HashSet<Coord> cells) in _capturedByRound)
+        {
+            if (observed > round - Config.StagnationRounds && observed <= round)
+            {
+                recent.UnionWith(cells);
+            }
+        }
+
+        return recent;
     }
 
     /// <summary>
@@ -447,12 +667,16 @@ public sealed class HeuristicTurnController : ITurnController
             forced = candidate.IsPass ? null : Project(candidate.Placements, candidate.Total);
         }
 
+        // cycle-stop D3：正式决策在停滞成立时视同无改善手 Pass——复盘按同一判定给出（只读预演，不改本人停滞记忆）。
+        StagnationStop? stagnation = ranked.IsEmpty || context.DeployLimit == 0 ? null : PreviewStagnation(view, [.. ranked.Take(Config.CandidatePointCount)]);
+
         batch.Clear();
         return new BestMoveReview(
             Player, passThreshold, context.DeployLimit, stock, legalCells, cells.Length, ranked.Length,
             powerBefore, rivalBefore, best, forced, captureCandidates, comebackCandidates)
         {
             Rejections = rejections.ToImmutableSortedDictionary(StringComparer.Ordinal),
+            Stagnation = stagnation,
         };
     }
 
@@ -748,7 +972,7 @@ public sealed class HeuristicTurnController : ITurnController
             return null;
         }
 
-        return new PointScore(cell, type, edit, evaluation);
+        return new PointScore(cell, type, edit, evaluation, result.Captures.Length);
 
         static void Tally(SortedDictionary<string, int>? counts, string key)
         {

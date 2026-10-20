@@ -46,7 +46,8 @@ public class 批量跑局Tests
         Assert.DoesNotContain("FlagRisk", config.ToJson(), StringComparison.Ordinal);   // retire-legacy-maps 3.2：字段已删除（原 Assert.Null(config.FlagRisk)）
         // carry-in-out 段 C：未配置的带入数量落成 0 写入（写明关闭）。
         Assert.Null(config.CarryIn);
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
+        // cycle-stop 2.1 / 2.2：未配置的大回合上限与停滞大回合数落成 100 / 6 写入 config.json。
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, RoundCap = Core.Match.MatchOptions.DefaultRoundCap, StagnationRounds = Core.Ai.AiSearchConfig.DefaultStagnationRounds }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
         Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
@@ -55,7 +56,7 @@ public class 批量跑局Tests
         Assert.All(logs, l =>
         {
             Assert.NotNull(l.Result);
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, RoundCap = Core.Match.MatchOptions.DefaultRoundCap, StagnationRounds = Core.Ai.AiSearchConfig.DefaultStagnationRounds }).ToJson(), l.Header.Config.ToJson());   // cycle-stop：首部同样落成大回合上限 100 与停滞大回合数 6   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
             // 截断 12 个小回合：4 人都在局时恰为 3 个大回合；原断言"终局大回合在 1–3"隐含"截断前无人出局"。
             // link-map-terrain：地图变了、AI 走法随之变，种子 24 的同区两人在第 2 大回合整轮 Pass 结算、少一人后 12 个小回合跨到第 4 大回合。
             // 改为按截断语义断言：小回合数不超过 12；终局大回合超过 3 时，截断前确有战场结算（有人出局）。

@@ -175,14 +175,16 @@ public class 专家前瞻的记录Tests
         Assert.Equal(21, log.LookaheadTurns.Count());   // open-map：前瞻记录 10 → 21
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
-        Assert.Contains("\"AiEvaluationVersion\":5", text, StringComparison.Ordinal);
+        // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
+        Assert.Contains("\"AiEvaluationVersion\":6", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B（地图内容变，整局走法变，不再能逐行比对出"只差首部"）。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
         Assert.DoesNotContain("\"FinalCountdownRounds\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"SeatVision\"", text, StringComparison.Ordinal);
         // ai-seat-vision 1.2 重钉（同上，走法变，不能再逐字节对照）：旧值 6059A235B06536C946901BF77F444CEE5DA515C3F5B2B534AAE359F86AC838B8。
-        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal));
+        // cycle-stop 2.1 / 2.2：黄金值不改——首部配置新增的 RoundCap / StagnationRounds 两项遮掉、版本 6 还原为 3 后比对，相等即证明走法与其余文本逐字节不变。
+        string digest = Sha256(PreCycleStop(text));
         // open-map 段 B 重钉（格式变化、走法不变：小回合 84 / 前瞻记录 21 两条断言未动）：首部去掉 K 与视野、快照去掉 WaitingRounds；旧值 D8CE9E7E4ABCB570C4F0E22846E59DD925F1603764F4DDA6B3C8C4541CB0DC3D。
         Assert.True("97B7E1EBA0936485C01B8CB9729F114949C7761ABD1A9845E6A30AD98D961B44" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
@@ -192,6 +194,20 @@ public class 专家前瞻的记录Tests
         Assert.DoesNotContain("\"Source\"", lookaheadLines, StringComparison.Ordinal);
         Assert.DoesNotContain("\"TwoPly", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"SupplementRehearsals\"", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// cycle-stop 之前的确定性文本口径：首部配置去掉 <c>RoundCap</c> / <c>StagnationRounds</c> 两项（含玩家搜索配置里的停滞大回合数）、AI 评价版本 6 还原为 3
+    /// （黄金值历来按"版本字段还原为 3"比对）。只改首部行；其余行原样，任何决策差异都会让哈希不等。
+    /// </summary>
+    private static string PreCycleStop(string text)
+    {
+        string[] lines = text.Split('\n');
+        lines[0] = lines[0]
+            .Replace("\"AiEvaluationVersion\":6", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
+            .Replace(",\"RoundCap\":100", string.Empty, StringComparison.Ordinal)
+            .Replace(",\"StagnationRounds\":6", string.Empty, StringComparison.Ordinal);
+        return string.Join('\n', lines);
     }
 
     [Fact]
@@ -301,13 +317,14 @@ public class 专家前瞻的记录Tests
         Assert.Equal(80, log.Turns.Count);   // open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
-        Assert.Contains("\"AiEvaluationVersion\":5", text, StringComparison.Ordinal);
+        // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
+        Assert.Contains("\"AiEvaluationVersion\":6", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
         Assert.DoesNotContain("\"FinalCountdownRounds\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("\"SeatVision\"", text, StringComparison.Ordinal);
-        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal));
+        string digest = Sha256(PreCycleStop(text));   // cycle-stop：同上，遮掉首部两项、版本还原后黄金值不变
         // open-map 段 B 重钉（格式变化、走法不变）：旧值 BACC1FF04678B2AD8D8B295EA3446EDCFCEE82EB5173EDCBC650EFE9A53D90F3。
         Assert.True("388B9A9EC1C57E9B37DB66F9F08422A78E7A87EAAC510CB9974ECB732770D932" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }

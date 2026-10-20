@@ -37,9 +37,10 @@ internal static class LookaheadFixtures
     /// 一层配置（expert-strength D6 / G1）：专家预设关掉多样候选与两层加分（多样补充上限 0、两层权重 0），其余与专家预设相同。
     /// 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后它与预设逐字段相同（阈值除外）；仍显式清零两项，使 G1 不随预设改动。
     /// 凡钉一层前瞻行为的既有测试改用它，断言与期望值一字不改；它的走法由 G1 黄金值（<c>专家难度的一层前瞻Tests.一层配置与改动前的专家逐步相同</c>）钉住。
+    /// cycle-stop 2.2：停滞大回合数同样写死为引入前的 0（boundaries.md「依赖走法的既有夹具显式写死旧口径」），G1 与记录字面量不随预设的 K = 6 改动。
     /// </summary>
     internal static AiSearchConfig OneLayerConfig(int passThreshold = PassThreshold) =>
-        AiSearchConfig.Expert with { PassThreshold = passThreshold, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0 };
+        AiSearchConfig.Expert with { PassThreshold = passThreshold, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0, StagnationRounds = 0 };
 
     /// <summary>段 B 扩样用的两层权重（千分数）：λ = 1000‰。专家预设已退回一层（负责人裁决 2026-09-28，段 B 后），打开两层加分的测试一律在 <c>Search</c> 里显式给出。</summary>
     internal const int StrengthPermille = 1000;

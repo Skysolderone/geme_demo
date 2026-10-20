@@ -47,20 +47,20 @@ TBD - created by archiving change board-link-mode. Update Purpose after archive.
 
 ### Requirement: 战场结算
 
-系统 SHALL 在每个大回合结束时对唯一战场检查：（a）在局玩家 ≥ 2 且他们在本大回合内全部 Pass；或（b）地图上不存在可落子空格。满足任一条即**结算**：按当前势力排序（并列按 `elimination-endgame`「终局名次与并列判定」的判定链），第一名为胜者，其余玩家以"战场落败"出局。
+系统 SHALL 在每个大回合结束时对唯一战场检查：（a）在局玩家 ≥ 2 且他们在本大回合内全部 Pass；或（b）地图上不存在可落子空格；或（c）本大回合序号 ≥ 对局配置的大回合上限（`match-setup`「大回合上限配置」，0 = 不启用）且在局玩家 ≥ 2。满足任一条即**结算**：按当前势力排序（并列按 `elimination-endgame`「终局名次与并列判定」的判定链），第一名为胜者，其余玩家以"战场落败"出局。结算原因 SHALL 记为 整轮 Pass / 填满 / 上限 之一，判定顺序 (a)、(b)、(c)，同时满足时记靠前者；判定链与执行三者完全复用。
 
 因弃赛或势力归零出局而只剩 1 名在局玩家时，SHALL 同样标记为已结算、该玩家为胜者。
 
 判定链四级（势力、控制信物数、独占空格数、盘面棋子数）全部相同时，SHALL 取锁定时由 `setup` 子流排出的种子兜底顺序靠前者为胜者，MUST NOT 因并列而不结算（裁决 S6）。
 
-只有 1 名在局玩家时 MUST NOT 因 Pass 或填满结算（该情形已由"只剩一名参赛玩家"终局）。已结算的战场 MUST NOT 再次结算。
+只有 1 名在局玩家时 MUST NOT 因 Pass、填满或上限结算（该情形已由"只剩一名参赛玩家"终局）。已结算的战场 MUST NOT 再次结算。先手预测（"假设此刻结束"）SHALL 复用同一判定，上限大回合同样剔除将落败者。
 
 #### Scenario: 整轮 Pass 结算
 - **WHEN** 第 5 大回合 4 名在局玩家全部 Pass，势力 A 60、B 42、C 30、D 12
 - **THEN** 第 5 大回合结束时结算，A 为胜者，B、C、D 以"战场落败"出局，名次 B、C、D
 
 #### Scenario: 一方落子即不结算
-- **WHEN** 本大回合 A、B、C Pass、D 落子 1 枚
+- **WHEN** 本大回合 A、B、C Pass、D 落子 1 枚，且未到大回合上限
 - **THEN** 本大回合结束时不结算
 
 #### Scenario: 填满结算
@@ -78,4 +78,16 @@ TBD - created by archiving change board-link-mode. Update Purpose after archive.
 #### Scenario: 构筑期也结算
 - **WHEN** 第 2 大回合 4 名玩家都 Pass
 - **THEN** 第 2 大回合结束时结算、终局
+
+#### Scenario: 上限结算
+- **WHEN** 大回合上限 60，第 60 大回合结束时 A、B、C 在局且 B 本大回合落子，势力 A 300、B 280、C 90
+- **THEN** 战场按势力结算，A 为胜者，B、C 以"战场落败"出局，结算原因为"上限"
+
+#### Scenario: 上限与整轮 Pass 同时满足记整轮 Pass
+- **WHEN** 大回合上限 60，第 60 大回合全部在局玩家都 Pass
+- **THEN** 结算原因记为"整轮 Pass"
+
+#### Scenario: 上限为 0 不启用
+- **WHEN** 对局配置大回合上限为 0，第 200 大回合仍有人落子
+- **THEN** 不因上限结算，对局继续
 

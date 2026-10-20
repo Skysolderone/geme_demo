@@ -84,10 +84,15 @@ public sealed record BestMoveReview(
         : NoMoveReason.None;
 
     /// <summary>
-    /// 按复盘结果，正式决策是否必然 Pass：没有可落的一手，或最好一手的收益不大于实际停手阈值。
+    /// 循环提子停手（cycle-stop D3）：复盘时刻停滞判定成立即为留痕（正式决策视同无改善手 Pass），否则 <c>null</c>（含 K = 0）。
+    /// </summary>
+    public StagnationStop? Stagnation { get; init; }
+
+    /// <summary>
+    /// 按复盘结果，正式决策是否必然 Pass：没有可落的一手，或最好一手的收益不大于实际停手阈值，或循环提子停手成立（cycle-stop D3）。
     /// 与对局里实际的 Pass 对照，可自检复盘确实走了正式决策的同一条路径。
     /// </summary>
-    public bool ImpliesPass => NoMove != NoMoveReason.None || Best!.Gain <= PassThreshold;
+    public bool ImpliesPass => NoMove != NoMoveReason.None || Best!.Gain <= PassThreshold || Stagnation is not null;
 }
 
 /// <summary>

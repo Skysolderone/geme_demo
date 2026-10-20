@@ -74,6 +74,13 @@ public sealed class MatchSession
     public string Notice { get; private set; } = string.Empty;
 
     /// <summary>
+    /// 大回合上限提示条（cycle-stop 裁决 S3）：上限启用且还剩 ≤ 5 个大回合时为"第 X 大回合结束时按势力结算（还剩 M 个大回合）"，否则 <c>null</c>。
+    /// 条件与文案在 <see cref="Siege.Presentation.Text.Labels.RoundCapNotice"/>（终端版共用）；每次状态重建时按当前大回合取一次——每个大回合开始时文字更新一次，
+    /// 窗口内常驻在提示条前面，不打断任何操作；无人值守零时长（没有演出，只是文字）。新局界面不加上限配置项（S4，缺省 100）。
+    /// </summary>
+    public string? RoundCapNotice { get; private set; }
+
+    /// <summary>
     /// 本机所在战场应可见的格数（独立于按座位过滤的口径：由地图的战场导出 <see cref="Battlefields"/> 与棋盘清单给出），供自检比对可见格数；未锁定出生区为 0。
     /// link-map-terrain G1（裁决 A）：战斗阶段可见格 = 本战场所含各棋盘外接矩形内的全部格（含岩石与未架桥深水），所以取各棋盘宽 × 高之和，不取战场的可落子格数。
     /// </summary>
@@ -607,7 +614,14 @@ public sealed class MatchSession
     }
 
     /// <summary>重建观察者世界：公开快照、补充载荷、私有手牌、预演<b>一次性</b>取齐，杜绝跨帧混用。</summary>
-    public void Rebuild() => World = BuildWorld();
+    public void Rebuild()
+    {
+        World = BuildWorld();
+        // 大回合上限提示（cycle-stop S3）：只读公开视图里的上限与当前大回合，终局后不再提示。
+        RoundCapNotice = Match.Phase == MatchPhase.InProgress
+            ? Siege.Presentation.Text.Labels.RoundCapNotice(World.Public.View.RoundCap, World.Public.View.MajorRound)
+            : null;
+    }
 
     private ViewerWorld BuildWorld()
     {

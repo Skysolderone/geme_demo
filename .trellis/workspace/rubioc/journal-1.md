@@ -270,3 +270,11 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 段 A（提交 `a2bb3a4`）：`InitialLayout.cs`（含换锚规则 R-1）、`PublicRules.LegalRange(..., majorRound)` + `EditScope`、`LinkDemoAudit` 四步；配对 / 拼接 / 倒计时成死路径。冒烟 20 局 0 截断，大回合中位 24（旧 15–16）。
 - 段 B（未提交，待负责人）：删配对 / 链接 / 倒计时 / K / `LinkMapGenerator.Link` / 全知开关 / 拼接演出 / `--pairing-seed` / `map --links`（源 11 + 基线 10 + 测试 20 个文件）；旧存档 / 日志遇旧字段按固定位置拒绝"拼接规则已移除"；按用例删 Skip、活用例搬到 `开放地图阶段推进Tests` / `对局存档Tests` / `战场落败复盘Tests`；设计文档 v1.28、HANDOFF 整体改写、boundaries.md / determinism.md 同步。全量 2027 / 2021 / 跳过 6 / 0；5 份缺省基线逐字节不变；Godot 四条自检退出 0。两个 Trellis 任务已归档。
 - 登记观察（设计文档 §19 / HANDOFF）：R-3 唯一战场上 Easy AI 可能循环提子不收尾（终端 `play` 无小回合上限；另开 change 裁决硬停 / AI 停手）；对局长度中位 24 是否缩棋盘待试玩；3+2 布局中间块邻居最多；基线首部仍写 `pairing=script` 字样待下次重钉。
+
+
+## Session: 2026-10-20 — cycle-stop（R-3：唯一战场上 AI 循环提子不收尾）
+
+- 负责人裁决 C1–C6（先诊断，再做"规则层大回合上限安全网 + AI 循环提子停手"双保险）与第二段 D1–D6 全按推荐。OpenSpec change `cycle-stop` 归档 `2026-10-20-cycle-stop`，主规格 +3 / ~3，34 份全过。
+- 第一段诊断（只读日志，`analyze --review-cycles`，`CycleAnalyzer`）：简单 ×3 种子 40–47 八局 0 截断但大回合中位 65.5（标准 24）、循环 1 / 拖延 4；标准 20 局 0 误判。机理：同形键含改造段，循环局里每轮新改造让占用相同的盘面算新局面（种子 44 全局占用逐格重复 9 个大回合，改造一停两轮即自然终局）；没有同形禁则漏拦，是口径问题（D1 不改同形，§19 登记）。
+- 第二段：A `MatchOptions.RoundCap` 缺省 100（简单局最长 94）、`JudgeAtRoundEnd` 第 (c) 条、结算原因"上限"、旧存档回填 100 留痕；B `AiSearchConfig.StagnationRounds` K = 6（连续 6 大回合本人公开势力无净增 + 前 N 候选全是提子 / 落被提格 → Pass，决胜一手优先，只读公开量，被提格由公开占用差分推导）；AI 评价版本 5 → 6；Godot 上限提示条、终端上限显示。验证简单 8 局：循环 1 → 0、拖延 4 → 1、大回合中位 65.5 → 58、最长 94 → 74、上限结算 0；标准种子 1–2 不变。全量 2051 / 2045 / 跳过 6 / 0；5 份基线逐字节不变；Godot 四条自检退出 0。设计文档 v1.29。
+- 登记：停滞记忆不入存档（目前无中局恢复入口，回放逐步一致；加恢复入口时再定）；停滞停手无逐次留痕；停手阈值 20 在 K = 0 下校准；显式 `Players[].Search` 不写 K 即不启用。
