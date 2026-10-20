@@ -321,17 +321,11 @@ public sealed record BalanceReport(
     /// <summary>战场落败复盘（ai-pass-review 1.2）；未开启（<see cref="AnalysisOptions.ReviewDefeats"/>）或没有整轮 Pass 结算落败时为 <c>null</c>。</summary>
     public DefeatReviewSection? DefeatReview { get; init; }
 
-    /// <summary>等待者评估（ai-pass-review 1.3）；没有到达决赛的链接模式纳入局时为 <c>null</c>。</summary>
-    public WaiterSection? Waiters { get; init; }
-
     /// <summary>按主题统计（link-map-terrain 5.2）；没有带主题的链接模式纳入局时为 <c>null</c>，报告里整段不出现。</summary>
     public ThemeSection? Themes { get; init; }
 
     /// <summary>AI 改造诊断（ai-terrain-review 1.2）；未开启（<see cref="AnalysisOptions.ReviewArtisan"/>）或没有可回放的链接模式局时为 <c>null</c>。</summary>
     public ArtisanReviewSection? ArtisanReview { get; init; }
-
-    /// <summary>决赛倒计时（final-countdown 2.1）；纳入局里没有 K &gt; 0 的链接模式局（含只有 K = 0 / 首部缺 K 的旧日志）时为 <c>null</c>，报告里整段不出现。</summary>
-    public FinalCountdownSection? FinalCountdown { get; init; }
 }
 
 /// <summary>
@@ -450,10 +444,8 @@ public static class BalanceAnalyzer
         {
             LinkMode = LinkModeAnalyzer.Analyze(included),
             DefeatReview = options.ReviewDefeats ? PassReviewAnalyzer.ReviewDefeats(included) : null,
-            Waiters = PassReviewAnalyzer.Waiters(included),
             Themes = ThemeAnalyzer.Analyze(included),
             ArtisanReview = options.ReviewArtisan ? ArtisanReviewAnalyzer.Review(included) : null,
-            FinalCountdown = FinalCountdownAnalyzer.Analyze(included),
         };
     }
 
@@ -1258,30 +1250,12 @@ public static class BalanceAnalyzer
 
     // ---------- §17.3 棋子与信物 ----------
 
-    /// <summary>
-    /// 某版本布局下"信物坐标 → 类型"：旧模式只有版本 0（即首部）；链接模式把首部的开局坐标经 <see cref="LinkLayout"/> 换算到该版本（按版本记忆）。
-    /// </summary>
-    private static Func<int, Dictionary<string, string>> RelicTypesByVersion(MatchLog log)
-    {
-        LinkLayout? layout = log.IsLinkMode ? LinkLogLayout.Of(log) : null;
-        var memo = new Dictionary<int, Dictionary<string, string>>();
-        return version =>
-        {
-            if (!memo.TryGetValue(version, out Dictionary<string, string>? types))
-            {
-                types = log.Header.Relics.ToDictionary(
-                    r => layout is null ? r.Coord : layout.Translate(Coord.Parse(r.Coord), 0, version).ToNotation(),
-                    r => r.Type,
-                    StringComparer.Ordinal);
-                memo[version] = types;
-            }
-
-            return types;
-        };
-    }
+    /// <summary>"信物坐标 → 类型"：首部的开局坐标（open-map 起地图整局不变，没有版本换算）。</summary>
+    private static Dictionary<string, string> RelicTypes(MatchLog log) =>
+        log.Header.Relics.ToDictionary(r => r.Coord, r => r.Type, StringComparer.Ordinal);
 
     private static string RelicTypeAt(Dictionary<string, string> types, string coord, string where) =>
-        types.TryGetValue(coord, out string? type) ? type : throw new FormatException($"{where}里的信物格 {coord} 不在首部的信物分布里（按链接换算后）：日志损坏。");
+        types.TryGetValue(coord, out string? type) ? type : throw new FormatException($"{where}里的信物格 {coord} 不在首部的信物分布里：日志损坏。");
 
     /// <param name="rankable">有名次的局：选择率与控制时长用全部纳入局，"选过 / 控制过它的玩家胜率"只取这些局（截断局没有胜者）。</param>
     private static SelectionSection Selection(List<MatchLog> logs, HashSet<MatchLog> rankable)
@@ -1341,15 +1315,14 @@ public static class BalanceAnalyzer
                 }
             }
 
-            // 完整信物分布即首部（开局坐标）：链接不新增信物（段 F，裁决 J2）。链接模式下信物随拼接平移，快照与揭示表里的坐标按各自版本的布局记，
-            // 经 LinkLayout 把开局坐标换算到该版本再对（MatchLog 类注释的版本口径）；对不上即日志损坏，响亮失败。
-            Func<int, Dictionary<string, string>> typeAt = RelicTypesByVersion(log);
+            // 完整信物分布即首部（开局坐标；open-map 起地图整局不变，快照与揭示表里的坐标与首部同一布局）；对不上即日志损坏，响亮失败。
+            Dictionary<string, string> relicTypes = RelicTypes(log);
             foreach (RelicEntry relic in log.Header.Relics)
             {
                 relicCount[relic.Type] = relicCount.TryGetValue(relic.Type, out int n) ? n + 1 : 1;
             }
 
-            Dictionary<string, string> finalTypes = typeAt(log.IsLinkMode ? LinkLogLayout.Of(log).Versions : 0);
+            Dictionary<string, string> finalTypes = relicTypes;
             foreach (RelicRevealEntry reveal in log.Result.RelicReveals.Where(r => r.RevealedInMajorRound is not null))
             {
                 string type = RelicTypeAt(finalTypes, reveal.Coord, "揭示表");
@@ -1359,10 +1332,9 @@ public static class BalanceAnalyzer
             var controlledBy = new Dictionary<int, HashSet<string>>();
             foreach (TurnSnapshot turn in log.Turns)
             {
-                Dictionary<string, string> types = typeAt(log.IsLinkMode ? LinkLogLayout.VersionAfterTurn(log, turn.Turn) : 0);
                 foreach (RelicStateEntry state in turn.Relics.Where(r => r.Control == nameof(RelicControlKind.Controlled) && r.Holder is not null))
                 {
-                    string type = RelicTypeAt(types, state.Coord, $"第 {turn.Turn} 小回合快照");
+                    string type = RelicTypeAt(relicTypes, state.Coord, $"第 {turn.Turn} 小回合快照");
                     relicControlledTurns[type] = relicControlledTurns.TryGetValue(type, out int n) ? n + 1 : 1;
                     if (!controlledBy.TryGetValue(state.Holder!.Value, out HashSet<string>? set))
                     {

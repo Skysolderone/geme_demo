@@ -9,15 +9,15 @@ using Siege.Sim.Running;
 namespace Siege.Core.Tests.AiDecision;
 
 /// <summary>
-/// 规格：ai-decision —— 决策序列基线（board-link-mode 实现裁决 C5，tasks 3.4）：<c>link:1</c> + 脚本固定配对（<see cref="ScriptedPairingSource"/> 缺省：候选升序两两相配、
-/// 奇数时最大者等待、决赛唯一结果）+ 4 名标准难度 AI（跑局层缺省配置：候选格上限与停手阈值按地图落成，裁决 C11 下 K = 24、链接后不变），截断到第 12 大回合；
+/// 规格：ai-decision —— 决策序列基线（board-link-mode 实现裁决 C5，tasks 3.4）：<c>link:1</c>（open-map 段 B：原"脚本固定配对 <c>ScriptedPairingSource</c>"已随配对 / 拼接删除，
+/// 对局只凭对局种子复现）+ 4 名标准难度 AI（跑局层缺省配置：候选格上限与停手阈值按地图落成，裁决 C11 下 K = 24、链接后不变），截断到第 12 大回合；
 /// 逐小回合导出 AI 的决策（弃牌 / 征募 / 落点与类型 / Pass / 被拒补救）与配对、链接、战场结算事件，与钉入的基线
 /// （<c>AiDecision/Fixtures/decisions-link1-seed3.txt</c>）逐字节比对。同口径的种子 1 / 2 两条（retire-legacy-maps 新钉）在 <see cref="决策序列基线Tests"/>；旧图的两条基线（v5 / board:1）已随旧地图删除。
 /// </summary>
 /// <remarks>
 /// 对局种子 3 是 <c>link:1</c> 上第一个"四名 AI 盲选到四块不同出生棋盘"的种子：首轮恰两对、配对脚本的次序会改变链接与之后的一切（变异 MC-27 据此可红）。
 /// 规则或 AI 行为有意变更后重建：设 <c>SIEGE_REBUILD_DECISION_BASELINE=1</c> 再跑本测试（写回源码目录的夹具，仍做比对），并在提交记录里写明原因。
-/// 变异验证（段 C 后半实跑）：MC-27 <c>ScriptedPairingSource.Default</c> 首轮改为首尾交错相配（(0,2)(1,3)）→ 「决策序列与基线相同」红 1。
+/// 变异验证（段 C 后半实跑，历史）：MC-27 原配对脚本首轮改为首尾交错相配 → 「决策序列与基线相同」红 1（配对已随 open-map 删除，该变异不再可做）。
 /// 裁决 C15（链接模式落后者停手阈值取 0，tasks 3.7）引入后按本口径重钉：逐字节不变。前 12 大回合 48 个小回合里 18 个处于"本战场势力落后"，
 /// 但这些小回合的最好单点收益均 ≥ 260、没有边际提升落在 (0, 20] 而只因阈值被撤回的落点，Pass 次数 0 → 0；因此本基线不守 C15，C15 由
 /// <see cref="链接模式下落后者的停手阈值Tests"/> 守。
@@ -76,12 +76,16 @@ public class 决策序列基线_链接模式Tests
         Path.Combine(Path.GetDirectoryName(thisFile)!, "Fixtures");
 }
 
-/// <summary>链接模式固定种子对局的 AI 决策序列导出（tasks 3.4）：格式沿用 <see cref="DecisionSequence"/>，另加配对（<c>P</c>）、链接（<c>L</c>）与战场结算（<c>S</c>）行。</summary>
+/// <summary>
+/// 链接模式固定种子对局的 AI 决策序列导出（tasks 3.4）：格式沿用 <see cref="DecisionSequence"/>，另加战场结算（<c>S</c>）行。
+/// open-map 段 B：配对（<c>P</c>）/ 链接（<c>L</c>）/ 倒计时（<c>C</c>）行与 K / 视野参数随拼接规则删除；首部两行文案原样保留——5 份缺省基线 MUST 逐字节不变（PRD 硬指标），
+/// 其中 <c>mode=Link pairing=script（缺省：升序两两配）</c> 与 <c>P 配对、L 链接</c> 只是历史字样（待负责人裁决是否连同基线一起重钉）。
+/// </summary>
 internal static class LinkDecisionSequence
 {
     /// <summary>
-    /// 在 <c>link:1</c> 上以种子 <paramref name="seed"/> 建一局（4 名标准难度 AI，跑局层缺省配置、不截断小回合），挂脚本固定配对，逐小回合驱动到第 <paramref name="maxMajorRounds"/> 大回合结束或终局。
-    /// 每行：<c>大回合 TAB 玩家 TAB 决策条目</c>；本小回合内发生的配对 / 链接 / 结算紧随其后各占一行。<c>\n</c> 行尾。
+    /// 在 <c>link:1</c> 上以种子 <paramref name="seed"/> 建一局（4 名标准难度 AI，跑局层缺省配置、不截断小回合），逐小回合驱动到第 <paramref name="maxMajorRounds"/> 大回合结束或终局。
+    /// 每行：<c>大回合 TAB 玩家 TAB 决策条目</c>；本小回合内发生的战场结算紧随其后各占一行。<c>\n</c> 行尾。
     /// </summary>
     internal static string Export(ulong seed, int maxMajorRounds) => Export(seed, maxMajorRounds, AiDifficulty.Standard);
 
@@ -93,31 +97,16 @@ internal static class LinkDecisionSequence
     /// <summary>
     /// 同上，建局后先对会话执行 <paramref name="attach"/>（ai-pass-review 1.4「复盘不改对局」：挂部署前复盘回调）；为 <c>null</c> 时与上一个重载逐字节相同。
     /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach) =>
-        Export(seed, maxMajorRounds, difficulty, attach, finalCountdown: null);
-
-    /// <summary>
-    /// 同上，决赛倒计时大回合数 K 取 <paramref name="finalCountdown"/>（final-countdown）；<c>null</c> = 跑局层缺省（落成 2），与上一个重载逐字节相同。
-    /// 导出格式不随 K 变：首部不写 K；只有发生了倒计时的局才多出 <c>C</c> 行（战场进入倒计时）与 <c>S</c> 行末的 <c>deadline=</c>，
-    /// 所以 K = 0 的导出与引入倒计时之前的基线逐字节可比（<c>*-k0.txt</c>）。
-    /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, int? finalCountdown) =>
-        Export(seed, maxMajorRounds, difficulty, attach, finalCountdown, seatVision: null);
-
-    /// <summary>
-    /// 同上，AI 视野取 <paramref name="seatVision"/>（ai-seat-vision D1 / D4）：<c>null</c> = 跑局层缺省（落成 true，按座位视野），与上一个重载逐字节相同；
-    /// <c>false</c> = 显式全知（改前的缺省），供"全知配置下与改前相同"的对照。导出格式不随视野变（首部不写视野）。
-    /// </summary>
-    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, int? finalCountdown, bool? seatVision)
+    internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach)
     {
-        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0, FinalCountdownRounds = finalCountdown, SeatVision = seatVision };
+        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0 };
         if (difficulty != AiDifficulty.Standard)
         {
             config = config with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };
         }
 
         MapData map = MapCatalog.Resolve(config.MapId);
-        MatchSession session = MatchSession.Create(config, seed, map, recorded: false, carry: null, pairing: new ScriptedPairingSource());
+        MatchSession session = MatchSession.Create(config, seed, map, recorded: false, carry: null);
         attach?.Invoke(session);
         MatchFlow match = session.Match;
         var sb = new StringBuilder();
@@ -128,7 +117,7 @@ internal static class LinkDecisionSequence
         sb.Append("# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算\n");
 
         var cursors = new Dictionary<PlayerId, int>();
-        int pairings = 0, links = 0, settlements = 0, countdowns = 0;
+        int settlements = 0;
         while (match.Phase == MatchPhase.InProgress && match.MajorRound <= maxMajorRounds)
         {
             int round = match.MajorRound;
@@ -139,30 +128,10 @@ internal static class LinkDecisionSequence
             sb.Append(round).Append('\t').Append(player).Append('\t').AppendJoin(' ', ai.Decisions.Skip(from)).Append('\n');
             cursors[player] = ai.Decisions.Count;
 
-            for (; pairings < match.Pairings.Count; pairings++)
-            {
-                PairingRecord p = match.Pairings[pairings];
-                sb.Append($"P\t{p.Sequence}\t{p.Kind}\tround={p.MajorRound}\tcandidates={string.Join(",", p.Candidates)}\tpairs={string.Join(" ", p.Pairs.Select(x => $"{x.X}-{x.Y}"))}\twaiter={p.Waiter?.ToString() ?? "-"}\tsource={p.Source}\n");
-            }
-
-            for (; links < match.Links.Count; links++)
-            {
-                LinkRecord l = match.Links[links];
-                sb.Append($"L\t{l.Sequence}\tpairing={l.PairingSequence}\t{l.X}-{l.Y}\tside={l.Side}\tversion={l.MapVersion}\tshared={l.SharedEdge}\tshifts={string.Join(",", l.Shifts.Select(s => $"{s.Battlefield}:{s.Dx}:{s.Dy}"))}\tdigest={l.MapDigest}\n");
-            }
-
             for (; settlements < match.Settlements.Count; settlements++)
             {
                 BattlefieldSettlementRecord s = match.Settlements[settlements];
-                sb.Append($"S\t{s.Sequence}\tround={s.MajorRound}\tfield={s.Battlefield}\t{s.Reason}\twinner={s.Winner}\t{string.Join(" ", s.Entries.Select(e => $"{e.Rank}.{e.Player}={e.Power}"))}")
-                    .Append(s.Deadline is { } deadline ? $"\tdeadline={deadline}" : string.Empty).Append('\n');
-            }
-
-            // final-countdown：战场进入决赛倒计时（K = 0 的局没有这一行）。
-            for (; countdowns < match.FinalCountdowns.Count; countdowns++)
-            {
-                FinalCountdownRecord c = match.FinalCountdowns[countdowns];
-                sb.Append($"C\t{c.Sequence}\tround={c.AssignedInMajorRound}\tfield={c.Battlefield}\tstart={c.Start}\tdeadline={c.Deadline}\n");
+                sb.Append($"S\t{s.Sequence}\tround={s.MajorRound}\tfield={s.Battlefield}\t{s.Reason}\twinner={s.Winner}\t{string.Join(" ", s.Entries.Select(e => $"{e.Rank}.{e.Player}={e.Power}"))}").Append('\n');
             }
 
             if (!more)

@@ -263,7 +263,7 @@ public class 前瞻模拟的公平信息Tests
         v.BoardSerialized,
         AiFixtures.PowerText(v.Power!),
         string.Join(";", v.Relics.Select(r => r.ToString())),
-        string.Join(";", v.Players.Select(p => (p with { EliminationReason = null, PowerAtDefeat = null, WaitingRounds = 0 }).ToString())),
+        string.Join(";", v.Players.Select(p => (p with { EliminationReason = null, PowerAtDefeat = null }).ToString())),
         string.Join(";", v.LifeShape.Groups.Select(g => $"{g.Group.Owner}:{g.Life}:{string.Join(",", g.Group.Stones.Order().Select(c => c.ToNotation()))}")),
         string.Join(";", v.Players.Select(p => $"{p.Player}:{string.Join(",", v.LifeShape.ForbiddenCellsFor(p.Player).Order().Select(c => c.ToNotation()))}")),
         v.Board.Serialize());

@@ -78,10 +78,8 @@ public class 棋盘台面的可视表现Tests
         Assert.Contains("board.ObstacleArtAt(cell.Coord)", boardView, StringComparison.Ordinal);
         Assert.Contains("ObstacleArt.BoardRock", boardView, StringComparison.Ordinal);
 
-        // 棋盘上的逐格装饰（林地的树、棋盘内岩石）挂在装饰层：拼接滑入时装饰层与地砖一起按格收拢到滑动父节点下，否则树和岩石会停在原地。
-        // 变异 MLT-G7（ApplySlide 的容器表去掉 _decoration，实跑）→ 本测试红 1；实跑 --shot-show=expand 的 [slide] 行里"装饰 N"随之归零。
-        int slide = boardView.IndexOf("private void ApplySlide(", StringComparison.Ordinal);
-        Assert.True(slide > 0, "BoardView 缺少 ApplySlide");
-        Assert.Contains("Node3D[] containers = [_tiles, _decoration,", boardView[slide..], StringComparison.Ordinal);
+        // 棋盘上的逐格装饰（林地的树、棋盘内岩石）挂在装饰层 _decoration（open-map 段 B：拼接滑入与滑动父节点已删除，BoardView 不再有 ApplySlide）。
+        Assert.Contains("_decoration.AddChild(rock)", boardView, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplySlide", boardView, StringComparison.Ordinal);
     }
 }

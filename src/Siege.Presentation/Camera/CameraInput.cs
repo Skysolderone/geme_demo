@@ -87,7 +87,7 @@ public static class HoverReadout
             return string.Empty;
         }
 
-        // 链接模式下悬停在未展开的格（他人占位、场景格）上没有读数（board-link-mode D-b）：视图里没有这格。
+        // 悬停在不在视图里的格（插旗阶段的占位、场景格）上没有读数（board-link-mode D-b）。
         if (board.CellOrNull(c) is not { } cell)
         {
             return string.Empty;

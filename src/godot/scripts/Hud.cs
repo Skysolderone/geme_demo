@@ -45,7 +45,6 @@ public sealed partial class Hud : CanvasLayer
     private PanelContainer _recruitBar = null!;
     private Button _recruitBarButton = null!;
     private Label _notice = null!;
-    private Label _eventStrip = null!;
     private Label _showCaption = null!;
     private Label _showBanner = null!;
     private Label _hoverReadout = null!;
@@ -111,11 +110,6 @@ public sealed partial class Hud : CanvasLayer
         _root.AddChild(_notice);
 
         // 事件提示条（settlement-show「战场结算横幅」：他场结算"不打断操作的提示条"）：通知条之下一行，文案来自会话层，不是节拍、不阻塞输入。
-        _eventStrip = Ui.Text(string.Empty, Ui.PanelBorder, UiTheme.BodyFontPx - 1);
-        _eventStrip.HorizontalAlignment = HorizontalAlignment.Center;
-        Ui.Anchor(_eventStrip, 0.5f, 0f, -420f, 90f, 420f, 112f);
-        _eventStrip.Visible = false;
-        _root.AddChild(_eventStrip);
 
         // 结算演出的顶部合计（"提 N 子"）与中央横幅（"金方出局" / "对局结束"，settlement-show-callouts D6）：
         // 都只在演出遮罩给出文案时可见，由 RefreshShow 逐帧刷新；横幅放中央面板的位置（此时终局面板尚未显示）。
@@ -322,13 +316,6 @@ public sealed partial class Hud : CanvasLayer
         _notice.Text = session.Notice;
     }
 
-    /// <summary>他场结算提示条（settlement-show「战场结算横幅」）：由 GameRoot 按 <see cref="Siege.Presentation.Show.NoticeQueue"/> 的当前条逐帧更新，<c>null</c> 即隐藏；与 <see cref="Refresh"/> 的脏刷新解耦（到期消失没有别的刷新路径）。</summary>
-    public void SetEventStrip(string? text)
-    {
-        _eventStrip.Text = text ?? string.Empty;
-        _eventStrip.Visible = !string.IsNullOrEmpty(text);
-    }
-
     /// <summary>演出逐帧刷新（settlement-show-callouts D6）：势力排名栏的分段到账与数字弹跳、顶部提子合计、中央横幅。由 GameRoot 每帧调用。</summary>
     public void RefreshShow(ViewerWorld world, ShowMask mask)
     {
@@ -374,7 +361,7 @@ public sealed partial class Hud : CanvasLayer
         };
     }
 
-    /// <summary>锁定后：与自己同一块棋盘 / 战场的玩家（match-setup「匿名同时插旗」只公开这一项；读按座位视图，不读他人旗帜）。锁定前（无座位视图）为空。
+    /// <summary>锁定后：与自己同一战场的玩家（open-map 起 = 全部其他在局玩家；读按座位视图）。锁定前（无座位视图）为空。
     /// retire-legacy-maps 3.6：图形版只有链接模式，旧模式判定删除。</summary>
     private static string SameBoardText(ViewerWorld world) =>
         world.Seat is null ? string.Empty
@@ -421,13 +408,6 @@ public sealed partial class Hud : CanvasLayer
             line.AddChild(icon);
             string rank = ShownRank(row) is int r ? $"第 {r} 名" : "—";
             string suffix = row.StatusText is null ? string.Empty : $"（{row.StatusText}）";
-            if (row.Concealed)
-            {
-                // 他战场玩家（board-link-mode Q1 / 裁决 D20）：只有名字与状态，没有名次与任何数值；遮蔽与否由视图模型按座位视图给出，这里不判。
-                line.AddChild(Ui.Text($"{faction.Name}　{row.CompactText}{suffix}", Ui.MutedText));
-                _rankBody.AddChild(line);
-                continue;
-            }
 
             if (mask.Power.TryGetValue(row.Player, out PowerDisplay? display))
             {
@@ -689,7 +669,7 @@ public sealed partial class Hud : CanvasLayer
             case PowerLayerContent power:
                 _layerBody.AddChild(Ui.Text("势力 = 领地分 + 棋串军势。领地分 = 独占空格数（盘上按阵营着色），争议格与中立格不计分。明细为精确值。", Ui.MutedText, wrap: true));
                 AddScroll(_layerBody, power.Players
-                    .Select(p => ($"{Labels.Player(p.Player)} {p.ExactText}{(p.Rank is int r ? $" 第 {r} 名" : string.Empty)}{(p.Concealed && p.StatusText is { } st ? $"（{st}）" : string.Empty)}", p.Concealed ? Ui.MutedText : Ui.InfoText))
+                    .Select(p => ($"{Labels.Player(p.Player)} {p.ExactText}{(p.Rank is int r ? $" 第 {r} 名" : string.Empty)}", Ui.InfoText))
                     .Concat(power.Groups.Select(g => ($"{Labels.Player(g.Owner)} {Labels.Coords(g.Stones)} {g.Power.FormulaText}", Ui.MutedText))));
                 break;
 
@@ -727,8 +707,8 @@ public sealed partial class Hud : CanvasLayer
             // 插旗提示放左列（信息层面板的位置，此时它是隐藏的）：居中放在顶部会盖住棋盘远边的列标注（terrain-model 6.3）。
             Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, CameraHintVisible ? 268f : 222f);
             _centerBody.AddChild(Ui.Heading("开局盲选出生棋盘"));
-            _centerBody.AddChild(Ui.Text("点 5 个占位里的任意一块，旗就插在那块出生棋盘上——选中即锁定，锁定后只展开自己那块；别人的旗看不到，可能与你同区。", Ui.InfoText, wrap: true));
-            _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的战场落子（构筑期），之后随机配对、棋盘链接开战。", Ui.MutedText, wrap: true));
+            _centerBody.AddChild(Ui.Text("点 5 个占位里的任意一块，旗就插在那块出生棋盘上——选中即锁定，锁定后 5 块棋盘一起展开、整张地图可见；别人的旗看不到，可能与你同区。", Ui.InfoText, wrap: true));
+            _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的出生棋盘落子与改造（构筑期），第 4 大回合起全图可落；四人整轮 Pass、地图填满或只剩一人即终局。", Ui.MutedText, wrap: true));
             if (CameraHintVisible)
             {
                 _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));
@@ -807,7 +787,7 @@ public sealed partial class Hud : CanvasLayer
 
         foreach (OpponentHandAreaView opponent in panel.Opponents)
         {
-            string types = opponent.Concealed ? "他战场 · 不可见" : opponent.TypeNames.IsDefaultOrEmpty ? "（无）" : string.Join("、", opponent.TypeNames);
+            string types = opponent.TypeNames.IsDefaultOrEmpty ? "（无）" : string.Join("、", opponent.TypeNames);
             string status = opponent.StatusText is null ? (opponent.IsActing ? "　行动中" : string.Empty) : $"　{opponent.StatusText}";
             _centerBody.AddChild(Ui.Text($"□ {Labels.Player(opponent.Player)}　持有类型：{types}{status}",
                 opponent.StatusText is null ? Ui.InfoText : Ui.MutedText));

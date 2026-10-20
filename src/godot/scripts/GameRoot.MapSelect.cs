@@ -61,7 +61,7 @@ public sealed partial class GameRoot
     private MatchSession PreviewSession()
     {
         MapData map = MapCatalog.Resolve(_select!.CurrentId);
-        MatchSession preview = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit, pairing: _pairing);
+        MatchSession preview = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit);
         _previewMap = map;
         return preview;
     }
@@ -229,7 +229,7 @@ public sealed partial class GameRoot
     private string PreviewInfo() => MapPreviewInfo.Of(_session.World.Board());
 
     /// <summary>
-    /// 点"开始"：按视图模型确认的标识建真正的对局（链接模式，配对来源见 <c>_pairing</c>），进入插旗；相机退出全局预览回到平时的初始位姿。
+    /// 点"开始"：按视图模型确认的标识建真正的对局，进入插旗；相机退出全局预览回到平时的初始位姿。
     /// </summary>
     private void StartMatch()
     {
@@ -245,7 +245,7 @@ public sealed partial class GameRoot
         }
 
         _difficulty = _select.Difficulty;
-        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, _difficulty, _cellLimit, pairing: _pairing);
+        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, _difficulty, _cellLimit);
         _select = null;
         BeginSupply(_previewMap);   // 带入带出开启时：新局之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
         _board.Build(_session.World.Board(), _session.ZoneOwners);

@@ -217,7 +217,6 @@ public class 对局日志的记录内容Tests
         // 与结果行（终局坐标）不再可逐格对照。这里改用同一批配置截断到第 11 个小回合（第 3 大回合结束前、尚无链接——链接在第 12 个小回合收尾时发生）的种子 11 一局，断言不变；
         // 链接图上至少有一块出生棋盘无人插旗，其上的信物整局不揭示，"未揭示标为 null"一支有样本。
         MatchLog log = MatchLog.Parse(BatchRunner.Execute(SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 11, turnLimit: 11)), parallelism: 1)[0].FullText());
-        Assert.Empty(log.Events.Where(e => e.Type == LogEventType.BattlefieldsLinked));   // 样本口径：截断之内没有链接
         Assert.Equal(log.Header.Relics.Select(r => r.Coord).Order(), log.Result!.RelicReveals.Select(r => r.Coord).Order());
         List<LogEvent> reveals = [.. log.Events.Where(e => e.Type == LogEventType.Reveal)];
         Assert.NotEmpty(reveals);
@@ -501,7 +500,6 @@ public class 对局日志的记录内容Tests
             CarryInOut = true,
             CarryIns = carries.ToImmutableSortedDictionary(kv => new PlayerId(kv.Key), kv => kv.Value),
         });
-        match.PairingSource = new SeededPairingSource(seed, config.PairingSeed);
         match.PlantPrototype();
         return MatchSession.ForMatch(match, config);
     }

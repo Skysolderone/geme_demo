@@ -263,15 +263,11 @@ public static class SettlementBeats
 {
     /// <summary>由结算前后两份公开快照（与可得时的结算记录）生成节拍序列。</summary>
     /// <param name="compressPlacement">本机玩家自己的结算：落子节拍压缩为一次整体确认闪动（design.md A2）。</param>
-    /// <param name="moved">
-    /// 本次结算之后发生了拼接（board-link-mode F.4）时，结算前盘面上的格 → 拼接后坐标（<see cref="Siege.Core.Board.Maps.LinkLayout.Translate"/>）；
-    /// 落子 / 提子 / 信物揭示一律按拼接后坐标比对与给出，平移不被误判为落子与提子。缺省即恒等（没有拼接）。
-    /// </param>
-    public static ImmutableArray<SettlementBeat> Generate(MatchPublicView before, MatchPublicView after, CaptureRecord? record, bool compressPlacement = false, Func<Coord, Coord>? moved = null)
+    public static ImmutableArray<SettlementBeat> Generate(MatchPublicView before, MatchPublicView after, CaptureRecord? record, bool compressPlacement = false)
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
-        return Generate(SettlementSide.From(before), SettlementSide.From(after), record?.Placements, compressPlacement, moved);
+        return Generate(SettlementSide.From(before), SettlementSide.From(after), record?.Placements, compressPlacement);
     }
 
     /// <summary>同上，输入已拆成盘面与势力读数（便于按设计文档算例直接构造；没有棋串、信物、玩家状态与终局信息）。</summary>
@@ -293,16 +289,10 @@ public static class SettlementBeats
 
     /// <summary>由结算前后两侧的公开数据生成节拍序列：落子 → 提子 → 信物揭示 → 势力重算 → 横幅，内容为空的节拍省略。</summary>
     public static ImmutableArray<SettlementBeat> Generate(
-        SettlementSide before, SettlementSide after, ImmutableArray<Placement>? placementOrder, bool compressPlacement = false, Func<Coord, Coord>? moved = null)
+        SettlementSide before, SettlementSide after, ImmutableArray<Placement>? placementOrder, bool compressPlacement = false)
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
-        if (moved is not null)
-        {
-            // 拼接后的坐标（F.4）：结算前的盘面与信物先映射到拼接后坐标，再与结算后比。
-            return GenerateMoved(before, after, placementOrder, compressPlacement, moved);
-        }
-
         ImmutableArray<SettlementBeat>.Builder beats = ImmutableArray.CreateBuilder<SettlementBeat>(5);
 
         ImmutableArray<PlacedPiece> placed = PlacedPieces(before.Board, after.Board, after.Groups, placementOrder);
@@ -318,80 +308,6 @@ public static class SettlementBeats
         }
 
         ImmutableArray<RevealedRelic> revealed = RevealedRelics(before.Relics, after.Relics);
-        if (!revealed.IsEmpty)
-        {
-            beats.Add(new RelicRevealBeat(revealed));
-        }
-
-        ImmutableArray<PowerChange> changes = PowerChanges(before.Power, after.Power);
-        if (!changes.IsEmpty)
-        {
-            beats.Add(new PowerBeat(changes));
-        }
-
-        ImmutableArray<string> banners = Banners(before.Statuses, after.Statuses, before.HasResult, after.HasResult);
-        if (!banners.IsEmpty)
-        {
-            beats.Add(new BannerBeat(banners));
-        }
-
-        return beats.ToImmutable();
-    }
-
-    /// <summary><see cref="Generate(SettlementSide, SettlementSide, ImmutableArray{Placement}?, bool, Func{Coord, Coord}?)"/> 的拼接分支：与原分支同一节拍次序，只是坐标先经 <paramref name="moved"/>。</summary>
-    private static ImmutableArray<SettlementBeat> GenerateMoved(
-        SettlementSide before, SettlementSide after, ImmutableArray<Placement>? placementOrder, bool compressPlacement, Func<Coord, Coord> moved)
-    {
-        var was = new Dictionary<Coord, Occupant>();
-        foreach (Coord coord in before.Board.AllCoords())
-        {
-            if (before.Board[coord].Occupant is { } occupant)
-            {
-                was[moved(coord)] = occupant;
-            }
-        }
-
-        var placedAt = new SortedDictionary<Coord, PlacedPiece>();
-        foreach (Coord coord in after.Board.AllCoords())
-        {
-            if (after.Board[coord].Occupant is { } now && !was.ContainsKey(coord))
-            {
-                placedAt[coord] = new PlacedPiece(coord, now.Type, now.Owner, FormulaAt(after.Groups, coord));
-            }
-        }
-
-        ImmutableArray<PlacedPiece>.Builder ordered = ImmutableArray.CreateBuilder<PlacedPiece>(placedAt.Count);
-        foreach (Placement placement in placementOrder ?? [])
-        {
-            if (placedAt.Remove(moved(placement.Coord), out PlacedPiece piece))
-            {
-                ordered.Add(piece);
-            }
-        }
-
-        ordered.AddRange(placedAt.Values);
-        var captured = new SortedDictionary<Coord, CapturedPiece>();
-        foreach ((Coord coord, Occupant occupant) in was)
-        {
-            if (!after.Board.Contains(coord) || after.Board[coord].Occupant is null)
-            {
-                captured[coord] = new CapturedPiece(coord, occupant.Owner, occupant.Type);
-            }
-        }
-
-        ImmutableArray<RelicPublicState> relicsBefore = before.Relics.IsDefault ? [] : [.. before.Relics.Select(r => r with { Coord = moved(r.Coord) })];
-        ImmutableArray<SettlementBeat>.Builder beats = ImmutableArray.CreateBuilder<SettlementBeat>(5);
-        if (ordered.Count > 0)
-        {
-            beats.Add(new PlacementBeat(ordered.ToImmutable(), compressPlacement));
-        }
-
-        if (captured.Count > 0)
-        {
-            beats.Add(new CaptureBeat([.. captured.Values]));
-        }
-
-        ImmutableArray<RevealedRelic> revealed = RevealedRelics(relicsBefore, after.Relics);
         if (!revealed.IsEmpty)
         {
             beats.Add(new RelicRevealBeat(revealed));

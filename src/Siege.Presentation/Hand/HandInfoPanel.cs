@@ -107,14 +107,7 @@ public sealed record OpponentHandAreaView(
     StructureView? Structure,
     PlayerStatus Status,
     bool IsActing,
-    string? StatusText)
-{
-    /// <summary>链接模式下不与本机同战场的玩家（board-link-mode Q1 / 裁决 D20）：手牌类型与结构参数不可见，只剩名字、状态与是否正在行动。</summary>
-    public bool Concealed { get; init; }
-
-    /// <summary>遮蔽后的敌方区域。</summary>
-    public OpponentHandAreaView Conceal(string? statusText) => this with { Types = [], TypeNames = [], Structure = null, StatusText = statusText, Concealed = true };
-}
+    string? StatusText);
 
 /// <summary>全玩家手牌对比面板。</summary>
 public sealed record HandInfoPanelView(OwnHandAreaView Own, ImmutableArray<OpponentHandAreaView> Opponents)

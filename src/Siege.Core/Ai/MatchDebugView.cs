@@ -22,7 +22,7 @@ internal sealed class MatchDebugView
     /// <summary>公开快照（与正式 AI 看到的完全相同）。</summary>
     internal MatchPublicView Public() => _match.Publish();
 
-    /// <summary>任意信物格的真实内容，不论是否已揭示（按账本当前坐标：链接模式下拼接后信物随格平移，开局生成记录里的坐标不再适用）。</summary>
+    /// <summary>任意信物格的真实内容，不论是否已揭示（按账本当前坐标）。</summary>
     internal RelicContent ContentOf(Coord coord) => _match.Relics.ContentAt(coord);
 
     /// <summary>任意玩家的私有手牌视图（含数量）。</summary>

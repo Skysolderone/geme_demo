@@ -20,7 +20,6 @@ public class 战场落败出局结算Tests
             .Add(P0, new CarryIn(SupplyKind.SpareStone))
             .Add(P1, new CarryIn(SupplyKind.SpareStone));
         MatchFlow match = MatchFlow.Create(Map, TestMaps.Seed, All, Options with { CarryInOut = true, CarryIns = carries });
-        match.PairingSource = new ScriptedPairingSource();
         match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 0, 3, 3 }[i])));
         match.PlayRound(P0, P2).PassRound();          // 两个双人战场同批结算：P0、P2 胜
         Assert.Equal(EliminationReason.BattlefieldDefeat, match.StateOf(P1).EliminationReason);

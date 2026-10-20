@@ -36,9 +36,6 @@ internal sealed class MatchDebugAccess
     /// <summary>链接模式测试桩（2.6 前）：在小回合边界以给定胜者结算一个战场，其余在局玩家出局。</summary>
     internal void SettleBattlefield(int battlefieldId, PlayerId winner) => _match.DebugSettleBattlefield(battlefieldId, winner);
 
-    /// <summary>链接模式：直接执行一次链接（绕过配对事件与规范次序），缺省贴东侧；供测试按任意次序 / 贴边拼接。</summary>
-    internal void Link(int x, int y, Board.Maps.LinkSide side = Board.Maps.LinkSide.East) => _match.ExecuteLink(x, y, pairingSequence: 0, side);
-
     /// <summary>某玩家的种子兜底顺序（插旗锁定时由 setup 子流排出；战场结算比较链全同时定胜者）。</summary>
     internal int SeedRankOf(PlayerId player) => _match.DebugSeedRankOf(player);
 }

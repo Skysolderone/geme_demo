@@ -119,15 +119,6 @@ public sealed record RunConfig
     // retire-legacy-maps 3.2：冒险概率字段 FlagRisk 删除；配置文件写了即报错（见 RetiredKeys）。
 
     /// <summary>
-    /// 配对种子（board-link-mode Q10 / 规格 simulation-harness「各入口支持生成图」，命令行 <c>--pairing-seed</c>）：只用于链接图 <c>link:</c> 的对局，
-    /// 首轮配对与等待者由该种子与对局种子一起派生的工具层随机源决定（<see cref="Running.SeededPairingSource"/>，不是对局子流）；
-    /// <c>null</c> = 缺省，由对局种子派生，同一批次可重复对比。为 <c>null</c> 时不写出（缺省时批次配置记录与日志首部与引入该选项之前逐字节相同）。
-    /// 回放不读它——配对按日志里的配对事件重建。
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ulong? PairingSeed { get; init; }
-
-    /// <summary>
     /// 对局内容集（<see cref="MatchOptions.ContentSet"/>，more-pieces-relics D8；v1 = 原六 + 六，v2 = 十 + 十）：<c>null</c> = 新建的局取 <see cref="ContentSets.Default"/>（v2），
     /// 并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 v1 重建
     /// （v1 与引入之前逐步相同）。按枚举名写出（"V1" / "V2"）。
@@ -141,21 +132,6 @@ public sealed record RunConfig
     /// 回放不读它——带入按首部记录的各玩家带入重建（<see cref="Logging.LogHeader.CarryIns"/>）。命令行 <c>--carry-in</c>。
     /// </summary>
     public int? CarryIn { get; init; }
-
-    /// <summary>
-    /// 决赛倒计时大回合数 K（<see cref="MatchOptions.FinalCountdownRounds"/>，final-countdown 裁决 W2；整数 ≥ 0，0 = 不启用）：<c>null</c> = 新建的局取
-    /// <see cref="MatchOptions.DefaultFinalCountdownRounds"/>（2），并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部；
-    /// 按日志首部重建（回放）时缺该项即该项出现之前的旧日志，按 0 重建（与引入之前逐步相同）。命令行 <c>--final-countdown</c>。
-    /// </summary>
-    public int? FinalCountdownRounds { get; init; }
-
-    /// <summary>
-    /// AI 视野（<see cref="AiSearchConfig.SeatVision"/>，ai-seat-vision 裁决 V1 / D1）：<c>true</c> = 按座位视野（缺省），<c>false</c> = 全知（只作测试与离线分析的显式配置项）。
-    /// 对<b>全部</b> AI 玩家生效（含显式给了 <see cref="PlayerAiConfig.Search"/> 的玩家：视野只记在这一处，搜索配置里不写也读不进它）。
-    /// <c>null</c> = 新建的局取 <c>true</c>，并由 <see cref="ResolvedFor"/> 落成具体值写进批次 <c>config.json</c> 与日志首部（缺省值也写，便于回放）；
-    /// 按日志首部重建（回放）时缺该项即该项出现之前的旧日志，当时 AI 缺省全知，按 <c>false</c> 重建。没有命令行选项：全知只能经 <c>--config</c> 打开。
-    /// </summary>
-    public bool? SeatVision { get; init; }
 
     /// <summary>单局小回合数硬停（防死锁），超出即抛异常记为失败局；上限为 0 时是唯一的兜底。</summary>
     public int MaxTurns { get; init; } = DefaultMaxTurns;
@@ -243,11 +219,6 @@ public sealed record RunConfig
             throw new ArgumentException("停手阈值须为非负整数（0 = 严格提高即保留）。");
         }
 
-        if (PairingSeed is not null && !LinkMapId.IsLinkMap(MapId))
-        {
-            throw new ArgumentException($"配对种子只用于链接图 link:<地图种子>，当前地图为 {MapId}。");
-        }
-
         if (ContentSet is { } contentSet && !Enum.IsDefined(contentSet))
         {
             throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
@@ -261,11 +232,6 @@ public sealed record RunConfig
         if (CarryIn == 1 && !Siege.Core.Carry.CarryPoints.Supports(Players.Count))
         {
             throw new ArgumentException($"{Players.Count} 人局没有名次补给点表（只有 2–4 人），不能开启带入。");
-        }
-
-        if (FinalCountdownRounds < 0)
-        {
-            throw new ArgumentException("决赛倒计时大回合数须为非负整数（0 = 不启用）。");
         }
 
         if (FullEventSamplePermille is < 0 or > 1000)
@@ -316,10 +282,6 @@ public sealed record RunConfig
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
         resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
-        // 决赛倒计时（final-countdown）：缺省 2 与"首部缺该项 = 旧日志 = 0"必须可区分，未配置一律落成 2。
-        resolved = resolved.FinalCountdownRounds is null ? resolved with { FinalCountdownRounds = MatchOptions.DefaultFinalCountdownRounds } : resolved;
-        // AI 视野（ai-seat-vision D1）：缺省按座位视野与"首部缺该项 = 旧日志 = 全知"必须可区分，未配置一律落成 true。
-        resolved = resolved.SeatVision is null ? resolved with { SeatVision = true } : resolved;
         // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，
         // 使"专家、前瞻宽度 4"如实可查、回放按首部重建。落成值与会话建 AI 时按难度取的完全相同（候选格上限与停手阈值取上面已落成的值），走法不变。
         // 必须放在候选格上限与停手阈值落成之后。前瞻宽度为 0 的三档旧难度不落成（Search 保持缺省），配置记录与首部与引入之前逐字节相同。
@@ -346,33 +308,10 @@ public sealed record RunConfig
         ["DominanceStartRound"] = "势力碾压已删除（restore-go-core-rules 裁决 #4）",
         ["CatchUpRecruit"] = "落后者征募补偿已删除（restore-go-core-rules 裁决 #7）",
         ["FlagRisk"] = "冒险概率已移除（retire-legacy-maps 3.2；board-link-mode 起原型插旗为盲选）",
+        ["PairingSeed"] = "拼接规则已移除（open-map 裁决 B1：配对、链接、等待者与决赛倒计时随之删除，没有配对种子可配）",
+        ["FinalCountdownRounds"] = "拼接规则已移除（open-map 裁决 B1：决赛倒计时 K 随决赛删除）",
+        ["SeatVision"] = "拼接规则已移除（open-map 裁决 B1：锁定后整张地图是唯一战场，座位视野即全图，全知开关随之删除）",
     };
-
-    /// <summary>
-    /// 玩家搜索配置里的视野项（ai-seat-vision D1）：<see cref="AiSearchConfig.SeatVision"/> 不进 JSON，写在 <c>Players[].Search</c> 里会被静默忽略——
-    /// 一份想开全知的配置照常跑通、实际却按座位视野跑，是口径错误（testing.md「静默忽略的输入」）。所以报错点名，指向顶层 <see cref="SeatVision"/>。
-    /// </summary>
-    private static void RejectSearchVision(JsonElement root)
-    {
-        if (!root.TryGetProperty(nameof(Players), out JsonElement players) || players.ValueKind != JsonValueKind.Array)
-        {
-            return;
-        }
-
-        int index = 0;
-        foreach (JsonElement player in players.EnumerateArray())
-        {
-            if (player.ValueKind == JsonValueKind.Object && player.TryGetProperty(nameof(PlayerAiConfig.Search), out JsonElement search)
-                && search.ValueKind == JsonValueKind.Object
-                && search.EnumerateObject().Any(p => string.Equals(p.Name, nameof(AiSearchConfig.SeatVision), StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new FormatException(
-                    $"配置项 Players[{index}].Search.SeatVision 不再生效：AI 视野只在配置顶层 SeatVision 一处配置、对全部 AI 玩家生效（ai-seat-vision；缺省 true = 按座位视野，false = 全知）。请改写到顶层。");
-            }
-
-            index++;
-        }
-    }
 
     public static RunConfig FromJson(string json)
     {
@@ -389,7 +328,30 @@ public sealed record RunConfig
                     }
                 }
 
-                RejectSearchVision(doc.RootElement);
+                // open-map 段 B 质检：玩家搜索配置里的视野开关（原 Players[].Search.SeatVision，ai-seat-vision 时期即报错）随 AiSearchConfig.SeatVision 删除后
+                // 不再是已知成员，System.Text.Json 会静默忽略——与顶层 RetiredKeys 同口径点名拒绝（大小写不敏感）。
+                foreach (JsonProperty top in doc.RootElement.EnumerateObject())
+                {
+                    if (!string.Equals(top.Name, nameof(Players), StringComparison.OrdinalIgnoreCase) || top.Value.ValueKind != JsonValueKind.Array)
+                    {
+                        continue;
+                    }
+
+                    int index = 0;
+                    foreach (JsonElement player in top.Value.EnumerateArray())
+                    {
+                        bool retired = player.ValueKind == JsonValueKind.Object && player.EnumerateObject().Any(p =>
+                            string.Equals(p.Name, nameof(PlayerAiConfig.Search), StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.Object
+                            && p.Value.EnumerateObject().Any(s => string.Equals(s.Name, "SeatVision", StringComparison.OrdinalIgnoreCase)));
+                        if (retired)
+                        {
+                            throw new FormatException($"配置项 Players[{index}].Search.SeatVision 已删除：{RetiredKeys["SeatVision"]}。请从配置文件里去掉它。");
+                        }
+
+                        index++;
+                    }
+                }
+
             }
         }
 

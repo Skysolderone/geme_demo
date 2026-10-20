@@ -178,13 +178,13 @@ public class 专家前瞻的记录Tests
         Assert.Contains("\"AiEvaluationVersion\":5", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B（地图内容变，整局走法变，不再能逐行比对出"只差首部"）。
-        // final-countdown：样本配置写死 K = 0（LookaheadFixtures.LinkConfig），首部配置因此多出 "FinalCountdownRounds":0 一项；黄金值按"遮掉这一项"后的文本比对，证明除该项外逐字节不变。
-        Assert.Contains("\"FinalCountdownRounds\":0,", text, StringComparison.Ordinal);
-        // ai-seat-vision 1.3：样本配置写死全知（LookaheadFixtures.LinkConfig），首部配置多出 "SeatVision":false 一项；同样遮掉后比对。
-        Assert.Contains("\"SeatVision\":false,", text, StringComparison.Ordinal);
+        // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
+        Assert.DoesNotContain("\"FinalCountdownRounds\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"SeatVision\"", text, StringComparison.Ordinal);
         // ai-seat-vision 1.2 重钉（同上，走法变，不能再逐字节对照）：旧值 6059A235B06536C946901BF77F444CEE5DA515C3F5B2B534AAE359F86AC838B8。
-        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal).Replace("\"SeatVision\":false,", string.Empty, StringComparison.Ordinal));
-        Assert.True("D8CE9E7E4ABCB570C4F0E22846E59DD925F1603764F4DDA6B3C8C4541CB0DC3D" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal));
+        // open-map 段 B 重钉（格式变化、走法不变：小回合 84 / 前瞻记录 21 两条断言未动）：首部去掉 K 与视野、快照去掉 WaitingRounds；旧值 D8CE9E7E4ABCB570C4F0E22846E59DD925F1603764F4DDA6B3C8C4541CB0DC3D。
+        Assert.True("97B7E1EBA0936485C01B8CB9729F114949C7761ABD1A9845E6A30AD98D961B44" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -304,12 +304,12 @@ public class 专家前瞻的记录Tests
         Assert.Contains("\"AiEvaluationVersion\":5", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5。
-        // final-countdown：样本配置写死 K = 0（LookaheadFixtures.LinkConfig），首部配置因此多出 "FinalCountdownRounds":0 一项；黄金值按"遮掉这一项"后的文本比对，证明除该项外逐字节不变。
-        Assert.Contains("\"FinalCountdownRounds\":0,", text, StringComparison.Ordinal);
-        // ai-seat-vision 1.3：样本配置写死全知（LookaheadFixtures.LinkConfig），首部配置多出 "SeatVision":false 一项；同样遮掉后比对。
-        Assert.Contains("\"SeatVision\":false,", text, StringComparison.Ordinal);
-        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal).Replace("\"FinalCountdownRounds\":0,", string.Empty, StringComparison.Ordinal).Replace("\"SeatVision\":false,", string.Empty, StringComparison.Ordinal));
-        Assert.True("BACC1FF04678B2AD8D8B295EA3446EDCFCEE82EB5173EDCBC650EFE9A53D90F3" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
+        // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
+        Assert.DoesNotContain("\"FinalCountdownRounds\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"SeatVision\"", text, StringComparison.Ordinal);
+        string digest = Sha256(text.Replace("\"AiEvaluationVersion\":5", "\"AiEvaluationVersion\":3", StringComparison.Ordinal));
+        // open-map 段 B 重钉（格式变化、走法不变）：旧值 BACC1FF04678B2AD8D8B295EA3446EDCFCEE82EB5173EDCBC650EFE9A53D90F3。
+        Assert.True("388B9A9EC1C57E9B37DB66F9F08422A78E7A87EAAC510CB9974ECB732770D932" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]

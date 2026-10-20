@@ -10,7 +10,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
 /// 规格：openspec/changes/board-link-mode/specs/simulation-harness —— Requirement: 各入口支持生成图（tasks 3.0 / 3.1 / 3.2）：
-/// 终端版开新局、裸 link、每局换图、批量配对可重复（<c>--pairing-seed</c>）、回放重建链接、生成器变了、map 子命令打印与模拟链接。
+/// 终端版开新局、裸 link、每局换图、生成器变了、map 子命令打印（含连通分量 1）；原"批量配对可重复（<c>--pairing-seed</c>）、回放重建链接、模拟链接（<c>--links</c>）"已随 open-map 段 B 删除，改为断言这些选项一律报错。
 /// </summary>
 [Collection(ConsoleRedirect.Collection)]
 public class 各入口支持生成图_链接模式Tests
@@ -81,76 +81,11 @@ public class 各入口支持生成图_链接模式Tests
         Assert.All(logs, l => Assert.Equal(MapFile.Digest(MapCatalog.Resolve(l.Header.MapId)), l.Header.MapDigest));
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 批量配对可重复()
-    {
-        // 规格 Scenario「批量配对可重复」：同一对局种子与同一 --pairing-seed 跑两次，配对事件与全部结算结果逐项相同；换一个配对种子则配对可以不同
-        // （样本口径：在 1..20 里找到一个与 7 给出不同首轮配对的配对种子），且配对种子只影响配对。
-        // 变异 MC-8：SeededPairingSource 忽略配对种子（只用对局种子）→ 找不到不同的配对，本测试红。
-        ulong seed = FourZoneSeed.Value;
-        RunConfig config = Config(turnLimit: 13) with { PairingSeed = 7 };
-        MatchLog a = MatchSession.Create(config, seed).Run();
-        MatchLog b = MatchSession.Create(config, seed).Run();
-        Assert.Equal(a.DeterministicText(), b.DeterministicText());
-        Assert.Equal(2, a.EventsOf(LogEventType.BattlefieldsLinked).Count);   // 样本口径：四人四区 → 两次链接
-
-        string PairsOf(MatchLog log) => string.Join(";", log.EventsOf(LogEventType.PairingApplied).Select(e => string.Join(",", e.Pairing!.Pairs.Select(p => $"{p[0]}-{p[1]}"))));
-        string first = PairsOf(a);
-        ulong? other = Enumerable.Range(1, 20).Select(i => (ulong)i).Where(p => p != 7)
-            .Cast<ulong?>()
-            .FirstOrDefault(p => PairsOf(MatchSession.Create(Config(turnLimit: 12) with { PairingSeed = p }, seed).Run()) != first);
-        Assert.NotNull(other);
-        Assert.Contains("\"PairingSeed\":7", a.DeterministicText().Split('\n')[0], StringComparison.Ordinal);   // 配对种子写进首部配置
-    }
-
-    [Fact]
-    public void 命令行配对种子写入配置记录()
-    {
-        // --pairing-seed 被严格命令行认领并写进 config.json 与日志首部；旧地图上给配对种子报错（只用于 link:）。
-        string outDir = Path.Combine(SimFixtures.TempDir("link-pairing-seed-cli"), "out");
-        (int code, _, string err) = RunMain(null, null, "run", "--out", outDir, "--seed", "1", "--count", "1", "--turn-limit", "2", "--difficulty", "Easy", "--serial", "--pairing-seed", "42");
-        Assert.True(code == 0, err);
-        Assert.Equal(42UL, RunConfig.FromJson(File.ReadAllText(Path.Combine(outDir, "config.json"))).PairingSeed);
-        Assert.Equal(42UL, MatchLog.ReadDirectory(outDir).Single().Header.Config.PairingSeed);
-
-        // retire-legacy-maps 1.8：共用配置改到 link:1 后不再是"旧地图"，这里显式写一个非 link: 标识，断言不变。
-        Assert.Throws<ArgumentException>(() => (SimFixtures.Config() with { MapId = "siege-4p-base-v5", PairingSeed = 1 }).Validated());
-    }
-
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 回放重建链接()
-    {
-        // 规格 Scenario「回放重建链接」：回放一份含两次链接事件的日志，按记录依次执行链接，每次链接后的地图与原局逐格相同
-        // （链接事件的地图内容摘要随确定性文本逐行比对）。配对 MUST 从日志读取：把日志里的首轮配对改成另一种合法结果，回放就按改后的配对链接、与原局分歧。
-        // 变异 MC-9：Replayer 对链接模式不挂记录来源（回放走 SeededPairingSource）→ 改过配对的日志仍"一致"，本测试红。
-        MatchLog original = TwoLinkLog.Value;
-        Assert.Equal(2, original.EventsOf(LogEventType.BattlefieldsLinked).Count);   // 样本口径
-        ReplayResult replay = Replayer.Replay(original);
-        Assert.True(replay.Identical, replay.ToString());
-        Assert.Equal(
-            original.EventsOf(LogEventType.BattlefieldsLinked).Select(e => e.Link!.MapDigest),
-            replay.Replayed.EventsOf(LogEventType.BattlefieldsLinked).Select(e => e.Link!.MapDigest));
-
-        // 改写配对：候选 [a,b,c,d] 原为两对，换成另一种两两配法（仍合法）。
-        LogEvent pairing = original.EventsOf(LogEventType.PairingApplied).First();
-        int[] c = [.. pairing.Pairing!.Candidates];
-        List<List<int>> pairs = pairing.Pairing.Pairs;
-        List<List<int>> alternative = pairs.Any(p => p.SequenceEqual(new[] { c[0], c[1] })) ? [[c[0], c[2]], [c[1], c[3]]] : [[c[0], c[1]], [c[2], c[3]]];
-        MatchLog tampered = SimFixtures.Clone(original);
-        int index = tampered.Events.FindIndex(e => e.Seq == pairing.Seq);
-        tampered.Events[index] = pairing with { Pairing = pairing.Pairing with { Pairs = alternative } };
-        ReplayResult diverged = Replayer.Replay(tampered);
-        Assert.False(diverged.Identical);
-        Assert.NotEqual(
-            original.EventsOf(LogEventType.BattlefieldsLinked).Select(e => e.Link!.MapDigest),
-            diverged.Replayed.EventsOf(LogEventType.BattlefieldsLinked).Select(e => e.Link!.MapDigest));
-    }
-
     [Fact]
     public void 生成器变了()
     {
         // 规格 Scenario「生成器变了」：回放时按标识重新生成的初始地图，其内容摘要与日志首部记录的不同 → 在首部报"地图不一致"并停止（不重跑）。
-        MatchLog original = TwoLinkLog.Value;
+        MatchLog original = Round4Log.Value;
         MatchLog copy = SimFixtures.Clone(original);
         var changed = new MatchLog { Header = copy.Header with { MapDigest = new string('0', 64) }, Turns = copy.Turns, Events = copy.Events, Result = copy.Result };
         ReplayResult replay = Replayer.Replay(changed);
@@ -170,64 +105,25 @@ public class 各入口支持生成图_链接模式Tests
         MapData initial = MapCatalog.Resolve("link:1");
         Assert.Contains($"地图 link:1  {initial.Width}×{initial.Height}", output, StringComparison.Ordinal);
         Assert.Contains("地图校验通过", output, StringComparison.Ordinal);
+        Assert.Contains("连通分量 1", output, StringComparison.Ordinal);   // open-map 裁决 B5：按几何四邻实算（唯一战场）
         Assert.DoesNotContain("链接 #", output, StringComparison.Ordinal);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void map子命令模拟链接()
+    [Theory]
+    [InlineData("map", "--links", "1-4,2-5")]
+    [InlineData("run", "--pairing-seed", "42")]
+    [InlineData("run", "--final-countdown", "2")]
+    [InlineData("play", "--final-countdown", "0")]
+    public void 配对与链接相关选项已删除(string command, string option, string value)
     {
-        // 规格 Scenario「map 子命令模拟链接」：map --map link:1 --links 1-4,2-5 输出两次链接后的文本图与校验报告；结果与直接调生成器逐项相同。
-        // 变异 MC-10：SimulateLinks 只执行第一项 → 输出没有"链接 #2"、可落子格数不符，本测试红。
-        (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-4,2-5");
-        Assert.True(code == 0, err);
-        Assert.Contains("链接 #1：战场 出生区 1 + 出生区 4", output, StringComparison.Ordinal);
-        Assert.Contains("链接 #2：战场 出生区 2 + 出生区 5", output, StringComparison.Ordinal);
-        Assert.Contains("地图校验通过", output, StringComparison.Ordinal);
-
-        MapData expected = LinkMapGenerator.Link(LinkMapGenerator.Link(MapCatalog.Resolve("link:1"), 0, 3, LinkSide.East).Map, 1, 4, LinkSide.East).Map;
-        Assert.Contains($"可落子格 {expected.PlayableCount} ", output, StringComparison.Ordinal);
-        Assert.Contains("已模拟 2 次链接", output, StringComparison.Ordinal);
-
-        // 已合并的战场可用其中任一块棋盘指代：1-4 之后 4-2 即战场 1 与战场 2。
-        (int chained, string chainedOut, string chainedErr) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-4,4-2");
-        Assert.True(chained == 0, chainedErr);
-        Assert.Contains("链接 #2：战场 出生区 1 + 出生区 2", chainedOut, StringComparison.Ordinal);
-    }
-
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void map子命令按阶段推断贴边_也接受显式贴边()
-    {
-        // 裁决 J8-8：不写贴边时，前面互不重叠的单棋盘配对按首轮东贴，连到已合并战场的按决赛北贴；也接受 1-4E,2-5E,1-2N 的显式写法，结果相同；
-        // 每次链接打印平移向量，最后打印拼接后的文本图与校验报告。显式 N 可让两个单棋盘战场北贴（3+1 的决赛）。
-        (int code, string inferred, string err) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-4,2-5,1-2");
-        Assert.True(code == 0, err);
-        Assert.Equal(2, CountOf(inferred, "贴东（推断）"));
-        Assert.Equal(1, CountOf(inferred, "贴北（推断）"));
-        Assert.Equal(3, CountOf(inferred, "  平移向量："));
-        Assert.Contains("地图校验通过", inferred, StringComparison.Ordinal);
-
-        MapData expected = MapCatalog.Resolve("link:1");
-        foreach ((int x, int y, LinkSide side) in new[] { (0, 3, LinkSide.East), (1, 4, LinkSide.East), (0, 1, LinkSide.North) })
-        {
-            expected = LinkMapGenerator.Link(expected, x, y, side).Map;
-        }
-
-        Assert.Contains($"地图 link:1  {expected.Width}×{expected.Height}", inferred, StringComparison.Ordinal);
-
-        (int code2, string spelled, string err2) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-4E,2-5E,1-2N");
-        Assert.True(code2 == 0, err2);
-        Assert.Equal(0, CountOf(spelled, "（推断）"));
-        Assert.Equal(Tail(inferred), Tail(spelled));   // 拼接后的文本图与校验报告逐行相同
-
-        (int code3, string north, string err3) = RunMain(null, null, "map", "--map", "link:1", "--links", "1-2N");
-        Assert.True(code3 == 0, err3);
-        Assert.Contains("贴北；", north, StringComparison.Ordinal);
-        MapData final = LinkMapGenerator.Link(MapCatalog.Resolve("link:1"), 0, 1, LinkSide.North).Map;
-        Assert.Contains($"地图 link:1  {final.Width}×{final.Height}", north, StringComparison.Ordinal);
-
-        static int CountOf(string text, string what) => (text.Length - text.Replace(what, string.Empty, StringComparison.Ordinal).Length) / what.Length;
-
-        static string Tail(string text) => text[text.IndexOf("已模拟", StringComparison.Ordinal)..];
+        // 规格 simulation-harness「各入口支持生成图」（open-map）：任何入口 MUST NOT 提供配对或链接相关选项——严格命令行下 --links / --pairing-seed / --final-countdown 一律报错退出，
+        // 不建局、不写任何输出目录。
+        string outDir = Path.Combine(SimFixtures.TempDir($"retired-{option[2..]}"), "out");
+        string[] args = command == "run" ? [command, "--out", outDir, "--seed", "1", option, value] : [command, "--map", "link:1", option, value];
+        (int code, string output, string err) = RunMain(null, new StringReader(string.Empty), args);
+        Assert.NotEqual(0, code);
+        Assert.Contains(option[2..], err + output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outDir));
     }
 
     [Fact]
@@ -255,20 +151,6 @@ public class 各入口支持生成图_链接模式Tests
         // 样本口径：各棋盘公共信物数之和等于全图公共区信物数，且 ≥ 2（否则按棋盘过滤与否测不出来）。
         Assert.Equal(map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested), contested);
         Assert.True(contested >= 2, $"link:1 公共信物 {contested} 个；每块至多 1 个，≥ 2 时全图数才不等于任何一块的数");
-    }
-
-    [Theory]
-    [InlineData("link:1", "1-4X", "编号 1–5")]
-    [InlineData("siege-4p-base-v5", "1-2", "不受支持")]   // retire-legacy-maps：旧标识在目录先报错（原断言"只用于链接图"）
-    [InlineData("link:1", "1-1", "已在同一战场")]
-    [InlineData("link:1", "1-4,4-1", "已在同一战场")]
-    [InlineData("link:1", "1-6", "编号 1–5")]
-    [InlineData("link:1", "1:4", "编号 1–5")]
-    public void map子命令的链接参数校验(string mapId, string links, string message)
-    {
-        (int code, _, string err) = RunMain(null, null, "map", "--map", mapId, "--links", links);
-        Assert.Equal(1, code);
-        Assert.Contains(message, err, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -194,24 +194,11 @@ public sealed record GroupScoreView(PlayerId Owner, ImmutableArray<Coord> Stones
 /// </summary>
 public sealed record PlayerPowerRowView(PlayerId Player, PlayerStatus Status, BigInteger Total, int TerritoryScore, BigInteger GroupScore, int? Rank, string? StatusText)
 {
-    /// <summary>他战场玩家的行被遮蔽时的文案（board-link-mode Q1 / 裁决 D20）。</summary>
-    public const string ConcealedText = "他战场 · 势力不可见";
+    /// <summary>概览文案，如「势力 1.23M（领地 12 + 棋串 1.23M）」。open-map 裁决 O4：全部玩家的势力明细对全员公开，"他战场遮蔽"随唯一战场删除。</summary>
+    public string CompactText => Labels.PowerBreakdown(Total, TerritoryScore, GroupScore, compact: true);
 
-    /// <summary>
-    /// 链接模式下不与本机同战场的玩家（board-link-mode Q1 / 裁决 D20，information-visibility「他人势力不可见」）：数值全部归零、名次为空，只剩名字与状态。
-    /// 由 <see cref="Visibility.ViewerWorld.Layer"/> 按座位视图置位；没有按座位视图与同战场玩家恒为假。
-    /// </summary>
-    public bool Concealed { get; init; }
-
-    /// <summary>概览文案，如「势力 1.23M（领地 12 + 棋串 1.23M）」；遮蔽行为 <see cref="ConcealedText"/>。</summary>
-    public string CompactText => Concealed ? ConcealedText : Labels.PowerBreakdown(Total, TerritoryScore, GroupScore, compact: true);
-
-    /// <summary>明细文案（精确值）；遮蔽行为 <see cref="ConcealedText"/>。</summary>
-    public string ExactText => Concealed ? ConcealedText : Labels.PowerBreakdown(Total, TerritoryScore, GroupScore, compact: false);
-
-    /// <summary>遮蔽后的行：数值归零、名次为空、状态文案另给（裁决 D20：只显示名字 + 在局 / 出局 / 弃赛 + 所在战场是否已结算）。</summary>
-    public PlayerPowerRowView Conceal(string? statusText) =>
-        this with { Total = BigInteger.Zero, TerritoryScore = 0, GroupScore = BigInteger.Zero, Rank = null, StatusText = statusText, Concealed = true };
+    /// <summary>明细文案（精确值）。</summary>
+    public string ExactText => Labels.PowerBreakdown(Total, TerritoryScore, GroupScore, compact: false);
 }
 
 /// <summary>
@@ -249,17 +236,7 @@ public sealed record RelicLayerContent(ImmutableArray<RelicCellView> Relics) : L
 // ---------- 顺序层 ----------
 
 /// <summary>顺序层的一行：势力名次、势力、先手修正、先手值、预测位置（1 起）与公式解释。</summary>
-public sealed record OrderRowView(PlayerId Player, int Rank, BigInteger Power, int Bonus, int Value, int PredictedPosition, string Explanation)
-{
-    /// <summary>他战场玩家的行被遮蔽时的解释（board-link-mode 裁决 D20）：预测位置仍给（行动顺序全局公开），势力名次 / 势力 / 先手值不给。</summary>
-    public const string ConcealedExplanation = "他战场：势力名次与先手值不可见";
-
-    /// <summary>链接模式下不与本机同战场的玩家：数值归零，只剩名字与预测位置。</summary>
-    public bool Concealed { get; init; }
-
-    /// <summary>遮蔽后的行。</summary>
-    public OrderRowView Conceal() => this with { Rank = 0, Power = BigInteger.Zero, Bonus = 0, Value = 0, Explanation = ConcealedExplanation, Concealed = true };
-}
+public sealed record OrderRowView(PlayerId Player, int Rank, BigInteger Power, int Bonus, int Value, int PredictedPosition, string Explanation);
 
 /// <summary>顺序层（tactical-ui D7）：本轮顺序 + 若此刻结束本大回合的先手值明细与下一轮顺序预测。</summary>
 public sealed record OrderLayerContent(

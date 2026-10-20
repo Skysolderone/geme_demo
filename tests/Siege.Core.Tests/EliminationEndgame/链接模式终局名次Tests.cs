@@ -111,29 +111,6 @@ public class 链接模式终局名次Tests
         Assert.Equal(StandingGroup.Resigned, result[^1].Group);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 对局里战场落败者按结算时的比较量排名()
-    {
-        // 端到端：三人同区（P0 两子、P1 与 P2 各一子）在第 3 大回合结束结算，独占者 P3 等待；决赛后终局。
-        // 落败者在终局名次里用的是结算时记下的势力（PowerAtDefeat），不是终局时盘面上的值。
-        MatchFlow match = LinkModeFixtures.Started([0, 0, 0, 3], new ScriptedPairingSource())
-            .PlayRound(LinkModeFixtures.P0, LinkModeFixtures.P1, LinkModeFixtures.P2).PlayRound(LinkModeFixtures.P0).PassRound();
-        Assert.Equal(LinkStage.Final, match.LinkStage);
-        match.PassRound();
-
-        Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
-        Assert.Equal(4, match.Result.Standings.Length);
-        foreach (Standing s in match.Result.Standings.Where(s => s.Input.Reason == EliminationReason.BattlefieldDefeat))
-        {
-            Assert.Equal(match.StateOf(s.Player).PowerAtDefeat, s.Input.Power);
-        }
-
-        // 最早结算（三人战场）的两名落败者名次在决赛落败者之后。
-        PlayerId finalLoser = match.Settlements[^1].Entries[1].Player;
-        Assert.Equal(2, match.Result.Of(finalLoser).Rank);
-        Assert.All(match.Settlements[0].Entries.Skip(1), e => Assert.True(match.Result.Of(e.Player).Rank >= 3));
-    }
-
     private static StandingInput Finisher(PlayerId p, int power) => new(p, PlayerStatus.Active, power, 0, 0, 0, null);
 
     private static StandingInput Defeated(PlayerId p, int power, int order, int relics = 0, int exclusive = 0, int stones = 0) =>

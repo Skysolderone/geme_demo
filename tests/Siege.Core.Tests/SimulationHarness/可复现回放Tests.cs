@@ -133,7 +133,7 @@ public class 可复现回放Tests
         // carry-in-out 段 C：未配置的带入数量落成 0 写进首部（写明关闭），期望随之补上这一项。
         // retire-legacy-maps 1.8：共用配置改到 link:1（157 格 > 150），未配置的候选格上限按地图落成 24 写进首部，期望随之补上这一项。
         // ai-seat-vision D1：未配置的 AI 视野落成 true（按座位视野）写进首部（缺省值也写），期望随之补上这一项。
-        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Siege.Core.Ai.AiSearchConfig.LargeMapCellLimit, SeatVision = true }).ToJson(), failed.Header.Config.ToJson());
+        Assert.Equal((config with { CarryIn = 0, CandidateCellLimit = Siege.Core.Ai.AiSearchConfig.LargeMapCellLimit }).ToJson(), failed.Header.Config.ToJson());
         // 失败局强制保留完整事件流（含细粒度事件），不受 SnapshotsOnly 影响
         Assert.Equal(EventRetention.Full, failed.Header.Retention);
         Assert.Contains(failed.Events, e => e.Type == LogEventType.Candidates);
@@ -149,5 +149,85 @@ public class 可复现回放Tests
         MatchLog healthy = MatchSession.Create(config with { InjectFailureAtTurn = null, EventRetention = EventRetention.Full }, 51).Run();   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         Assert.False(healthy.IsFailed);
         Assert.Equal(SimFixtures.TurnTexts(failed.Turns), SimFixtures.TurnTexts(healthy.Turns.Take(5)));
+    }
+
+    [Theory]
+    [InlineData("header", "\"FinalCountdownRounds\":2,", "FinalCountdownRounds")]
+    [InlineData("header", "\"PairingSeed\":7,", "PairingSeed")]
+    [InlineData("header", "\"SeatVision\":false,", "SeatVision")]
+    [InlineData("event", "{\"Kind\":\"event\",\"Seq\":999,\"Turn\":12,\"MajorRound\":4,\"Type\":\"PairingApplied\",\"Pairing\":{\"Sequence\":1,\"Kind\":\"FirstRound\",\"MajorRound\":4,\"Candidates\":[0,1,2,3],\"Pairs\":[[0,1],[2,3]],\"Source\":\"script\"}}", "PairingApplied")]
+    [InlineData("event", "{\"Kind\":\"event\",\"Seq\":999,\"Turn\":12,\"MajorRound\":4,\"Type\":\"BattlefieldsLinked\",\"Link\":{\"Sequence\":1,\"X\":0,\"Y\":1,\"Side\":\"East\",\"MapDigest\":\"00\",\"Summary\":\"x\"}}", "BattlefieldsLinked")]
+    [InlineData("event", "{\"Kind\":\"event\",\"Seq\":999,\"Turn\":12,\"MajorRound\":4,\"Type\":\"FinalCountdown\",\"Countdown\":{\"Sequence\":1,\"Battlefield\":0,\"Start\":7,\"Deadline\":9,\"AssignedInMajorRound\":7}}", "FinalCountdown")]
+    [InlineData("turn", "\"WaitingRounds\":1,", "WaitingRounds")]
+    public void 旧拼接日志被拒(string where, string fragment, string field)
+    {
+        // 规格 simulation-harness「旧拼接日志被拒」/ match-telemetry「旧拼接日志被拒绝」（open-map 裁决 B2）：含配对 / 链接事件或决赛倒计时字段的改动前日志
+        // 在解析时（回放、analyze、replay 命令共用 MatchLog.Parse）MUST 明确拒绝并提示属于已移除的拼接规则——先于地图摘要比对。
+        // 样本：真跑一局（截断 8 个小回合）的日志文本，按行注入旧字段 / 旧事件：首部配置里加 K / 配对种子 / 视野，事件流里加配对 / 链接 / 倒计时事件，快照玩家项里加等待大回合数。
+        // 反面：未注入的同一份照常解析并回放一致。
+        MatchLog original = MatchSession.Create(SimFixtures.Config(turnLimit: 8), 41).Run();
+        string text = original.FullText();
+        string[] lines = text.Split('\n');
+        string tampered = where switch
+        {
+            "header" => text.Replace("\"MapId\":", fragment + "\"MapId\":", StringComparison.Ordinal),
+            "event" => string.Join('\n', lines.Take(2).Append(fragment).Concat(lines.Skip(2))),
+            _ => text.Replace("\"PowerAtDefeat\":", fragment + "\"PowerAtDefeat\":", StringComparison.Ordinal) is var t && t != text ? t
+                : text.Replace("\"HasEstablishedPower\":", fragment + "\"HasEstablishedPower\":", StringComparison.Ordinal),
+        };
+        Assert.NotEqual(text, tampered);   // 样本口径：确实注入了
+        Assert.Contains(field, tampered, StringComparison.Ordinal);
+
+        FormatException ex = Assert.Throws<FormatException>(() => MatchLog.Parse(tampered));
+        Assert.StartsWith(MatchLog.RetiredLinkMessage, ex.Message, StringComparison.Ordinal);
+        Assert.Contains("拼接规则已移除", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(field, ex.Message, StringComparison.Ordinal);
+
+        // replay 命令与 analyze 命令都经同一解析入口拒绝（退出码非 0、提示同一文案）。
+        string dir = SimFixtures.TempDir($"retired-log-{field}");
+        string path = Path.Combine(dir, "match-0000000000000029.jsonl");
+        File.WriteAllText(path, tampered);
+        (int replayCode, string replayOut, string replayErr) = LinkSimFixtures.RunMain(null, null, "replay", "--file", path);
+        Assert.NotEqual(0, replayCode);
+        Assert.Contains("拼接规则已移除", replayErr + replayOut, StringComparison.Ordinal);
+        (int analyzeCode, string analyzeOut, string analyzeErr) = LinkSimFixtures.RunMain(null, null, "analyze", "--dir", dir);
+        Assert.NotEqual(0, analyzeCode);
+        Assert.Contains("拼接规则已移除", analyzeErr + analyzeOut, StringComparison.Ordinal);
+
+        // 反面：未注入的日志照常解析、回放一致。
+        Assert.True(Replayer.Replay(MatchLog.Parse(text)).Identical);
+    }
+
+    [Theory]
+    [InlineData(null, "首部缺模式字段（Mode）")]
+    [InlineData("Legacy", "首部模式字段（Mode）为 Legacy")]
+    public void 回放接口拒绝非链接日志(string? mode, string expected)
+    {
+        // retire-legacy-rules L17（design D5 / R10）：Replayer 只回放链接模式的日志——首部 Mode 缺失或不为 "Link" 即 FormatException 并点名原因，不重跑。
+        // open-map 段 B：原 可复现回放_链接模式Tests 的同名用例随文件删除，直调 Replayer.Replay 的这条守门搬到这里（载体换成本类的真跑局日志）。
+        // 变异：去掉 Replayer 入口的模式检查 → 两行都不抛，本测试红。
+        MatchLog link = SimFixtures.Clone(MatchSession.Create(SimFixtures.Config(turnLimit: 8), 41).Run());
+        Assert.True(link.IsLinkMode);
+        MatchLog tampered = new() { Header = link.Header with { Mode = mode }, Turns = link.Turns, Events = link.Events, Result = link.Result };
+        FormatException ex = Assert.Throws<FormatException>(() => Replayer.Replay(tampered));
+        Assert.Contains(expected, ex.Message, StringComparison.Ordinal);
+        Assert.Contains("不是链接模式的日志", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void replay命令拒绝旧日志()
+    {
+        // 实现裁决 C3 / match-telemetry「旧日志被拒绝」：replay 命令拒绝地图标识不是 link: 的日志并提示属于已移除的地图模式（命令级，与 analyze 同口径）。
+        // open-map 段 B 质检（R-B4）：原 可复现回放_链接模式Tests 的同名用例随文件删除、没有同名替代，原样搬到这里（载体为合成日志，与配对无关）。
+        // 变异 MC-11：Program.Replay 去掉地图标识检查 → 旧日志照常回放、退出码 0，本测试红。
+        MatchLog synthetic = SimFixtures.Synthetic(1, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(6, [0]));
+        MatchLog legacy = new() { Header = synthetic.Header with { MapId = "siege-4p-base-v5" }, Turns = synthetic.Turns, Events = synthetic.Events, Result = synthetic.Result };
+        Assert.Equal("siege-4p-base-v5", legacy.Header.MapId);
+        string path = legacy.WriteTo(SimFixtures.TempDir("link-replay-legacy"));
+
+        (int code, string output, string err) = LinkSimFixtures.RunMain(null, null, "replay", "--file", path);
+        Assert.Equal(1, code);
+        Assert.Contains("已移除的地图模式", err, StringComparison.Ordinal);
+        Assert.DoesNotContain("回放一致", output, StringComparison.Ordinal);
     }
 }

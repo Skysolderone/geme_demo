@@ -21,15 +21,4 @@ public class 行动顺序跨战场统一Tests
         Assert.Equal(4, match.ActionOrder.Length);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 等待者在序()
-    {
-        // Scenario：D 是单人战场 3 的等待者 → 每个大回合的行动顺序都含 D。A、B、C 同区，A 每大回合落子使战场 1 不结算。
-        MatchFlow match = Started([0, 0, 0, 2]).PlayRounds(5, P0);
-        Assert.Equal(6, match.MajorRound);
-        Assert.True(match.StateOf(P3).WaitingRounds > 0);
-        Assert.Equal(5, match.InitiativeReports.Count);
-        Assert.All(match.InitiativeReports, r => Assert.Contains(P3, r.NextOrder));
-        Assert.Contains(P3, match.ActionOrder);
-    }
 }

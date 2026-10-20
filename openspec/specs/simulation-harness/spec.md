@@ -91,17 +91,17 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 ### Requirement: 可复现回放
 
-任何一局 SHALL 能凭对局种子、配置与日志中记录的**配对事件序列**完整复现；若对局中包含人工接管，SHALL 另加记录的人工决策序列。配对事件 MUST 从日志读取，MUST NOT 由种子推导。带入带出开启的对局，回放 SHALL 按日志首部记录的各玩家带入重建开局手牌。
+任何一局 SHALL 能凭对局种子与配置完整复现（open-map：不再有配对事件）；若对局中包含人工接管，SHALL 另加记录的人工决策序列。带入带出开启的对局，回放 SHALL 按日志首部记录的各玩家带入重建开局手牌。
 
-出现异常终止或断言失败的局 SHALL 保留足以复现的最小信息，含已发生的配对事件。
+出现异常终止或断言失败的局 SHALL 保留足以复现的最小信息。
 
-#### Scenario: 纯 AI 局可凭种子加配对复现
-- **WHEN** 用某局的种子、配置与日志中的配对事件重跑
-- **THEN** 每一步的链接、征募候选、选择、批次与结算结果完全一致
+#### Scenario: 纯 AI 局可凭种子复现
+- **WHEN** 用某局的种子与配置重跑
+- **THEN** 每一步的征募候选、选择、批次与结算结果完全一致
 
 #### Scenario: 失败局可复现
 - **WHEN** 批量跑局中某局因断言失败而终止
-- **THEN** 系统保留该局的种子、配置、已发生的配对事件与终止前的完整日志，可单独重跑复现
+- **THEN** 系统保留该局的种子、配置与终止前的完整日志，可单独重跑复现
 
 #### Scenario: 带入对局可回放
 - **WHEN** 回放一局本机玩家带入换型令（连珠子）、三名 AI 各带入 1 件的对局日志
@@ -109,15 +109,11 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 ### Requirement: 随机子流隔离
 
-批量跑局 SHALL 保证各随机子流（信物生成、征募抽取、流程初始化、原型盲选 `flag-pick`、AI 带入 `carry-ai`、各玩家的征召签 `carry-draft:<玩家编号>`）相互隔离；改变其中一个子流的消费次数 MUST NOT 影响其他子流的取值。配对 MUST NOT 是对局内的随机子流。
+批量跑局 SHALL 保证各随机子流（信物生成、征募抽取、流程初始化、原型盲选 `flag-pick`、AI 带入 `carry-ai`、各玩家的征召签 `carry-draft:<玩家编号>`）相互隔离；改变其中一个子流的消费次数 MUST NOT 影响其他子流的取值。地图布局 MUST NOT 消费任何对局内子流。
 
 #### Scenario: 子流互不干扰
 - **WHEN** 改变某玩家的一次征募决策，使征募子流的消费次数变化
 - **THEN** 该局出生棋盘的信物生成结果逐格保持不变
-
-#### Scenario: 配对不扰动子流
-- **WHEN** 同一种子下两局采用不同的配对
-- **THEN** 两局出生棋盘的信物分布逐格相同，第 1 大回合行动顺序相同
 
 ### Requirement: 各入口按地图标识选图
 
@@ -141,7 +137,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 #### Scenario: 链接图批量跑局
 - **WHEN** 在 `link:1` 上用 4 个 AI 批量跑 20 局
-- **THEN** 全部对局正常终局，批次报告给出平均大回合数、各出生棋盘被选次数、同区局数、首轮配对分布、共享边长度分布、等待大回合数与胜率
+- **THEN** 全部对局正常终局，批次报告给出平均大回合数、各出生棋盘被选次数、同区局数与胜率
 
 ### Requirement: 各入口支持生成图
 
@@ -149,11 +145,13 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 批量跑局 SHALL 支持"每局一张生成图"：给定起始地图种子与局数，第 i 局使用地图种子 `起始 + i`；各局的完整地图标识 MUST 写入该局日志首部。
 
-批量跑局 SHALL 提供配对源选项 `--pairing-seed <整数>`：给出时配对由该种子派生的工具层随机源决定；未给出时缺省由对局种子派生，使同一批次可重复对比。终端版与图形版的有人值守对局 MUST 使用真随机源，MUST NOT 提供配对种子选项；图形版的无人值守路径（`--auto-demo`、`--pick-check`、`--screenshot=`）SHALL 使用内置的固定配对脚本，使帧序列与截图可复现。
+任何入口 MUST NOT 提供配对或链接相关选项（open-map 删除 `--pairing-seed` 与 `map --links`）。图形版的无人值守路径（`--auto-demo`、`--pick-check`、`--screenshot=`）SHALL 使帧序列与截图可复现。
 
-回放 SHALL 按日志首部记录的地图标识重建初始地图，并按日志中的链接事件重建后续地图；重新生成的地图与日志记录的地图内容摘要不一致时，回放 MUST 在首部即报分歧并停止。
+回放 SHALL 按日志首部记录的地图标识重新生成地图；重新生成的地图与日志记录的地图内容摘要不一致时，回放 MUST 在首部即报分歧并停止。含配对 / 链接事件或决赛倒计时字段的旧日志 MUST 拒绝回放并提示属于已移除的拼接规则。
 
-`map` 子命令 SHALL 能打印任一 `link:` 初始地图的文本图与校验报告，并能模拟给定的链接序列后打印最终地图；未给地图选项时 SHALL 加载 `link:1`。旧标识族（内置图名、`gen:`、`board:`、地图文件路径）已随旧地图删除（负责人 2026-10-13 裁决 L1），`map` 子命令遇到时 MUST 与其他入口一样报错并说明只接受 `link:<地图种子>`。
+`map` 子命令 SHALL 能打印任一 `link:` 地图的文本图与校验报告；未给地图选项时 SHALL 加载 `link:1`。旧标识族（内置图名、`gen:`、`board:`、地图文件路径）已随旧地图删除（负责人 2026-10-13 裁决 L1），`map` 子命令遇到时 MUST 与其他入口一样报错并说明只接受 `link:<地图种子>`。
+
+图形版无人值守自检 `--auto-demo` SHALL 从对局公开记录与按座位视图模型可断言地核对四步：插旗锁定（5 块占位全部展开，可见格数 = 全图可落子格数）→ 构筑期（第 1–3 大回合本机合法落子范围非空且全部在自己的出生棋盘内）→ 全图解禁（第 4 大回合本机合法落子范围 = 全图可落子格扣除本人禁入格，格数严格大于自己棋盘的可落子格数）→ 终局（原因为"最后战场结算"或"只剩一名参赛玩家"）。`--rounds=0` 时四步 MUST 齐全，任一步不符以非零退出码结束。`--pick-check` SHALL 在锁定后对全图跑一次拾取自证。
 
 #### Scenario: 终端版开新局
 - **WHEN** 以 `play --map link:12345` 启动终端版
@@ -163,21 +161,13 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 - **WHEN** 以起始地图种子 100、20 局、每局换图的配置批量跑局
 - **THEN** 20 局的日志首部地图标识依次为 `link:100` 到 `link:119`，全部正常终局
 
-#### Scenario: 批量配对可重复
-- **WHEN** 用同一对局种子与同一 `--pairing-seed` 跑两次同一局
-- **THEN** 两局的配对事件与全部结算结果逐项相同
-
-#### Scenario: 回放重建链接
-- **WHEN** 回放一份含两次链接事件的日志
-- **THEN** 回放按记录依次执行链接，每次链接后的地图与原局逐格相同
-
 #### Scenario: 生成器变了
-- **WHEN** 回放时按标识重新生成的初始地图，其内容摘要与日志首部记录的不同
+- **WHEN** 回放时按标识重新生成的地图，其内容摘要与日志首部记录的不同
 - **THEN** 回放在首部报"地图不一致"并停止
 
-#### Scenario: map 子命令模拟链接
-- **WHEN** 用 `map --map link:1 --links 1-4,2-5` 打印地图
-- **THEN** 输出两次链接后的文本图与校验报告
+#### Scenario: 旧拼接日志被拒
+- **WHEN** 回放一份含链接事件的改动前日志
+- **THEN** 回放在首部即拒绝并说明拼接规则已移除
 
 #### Scenario: map 子命令拒绝旧标识
 - **WHEN** 用 `map --map siege-4p-base-v5` 或 `map --map gen:12345` 打印地图
@@ -185,7 +175,11 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 #### Scenario: map 子命令缺省地图
 - **WHEN** 不带地图选项执行 `map`
-- **THEN** 打印 `link:1` 的初始地图与校验报告
+- **THEN** 打印 `link:1` 的地图与校验报告，连通分量数为 1
+
+#### Scenario: 自检四步
+- **WHEN** 以 `--auto-demo --rounds=0` 运行图形版
+- **THEN** 日志依次出现 插旗锁定、构筑期、全图解禁、终局 四条通过行，退出码 0
 
 ### Requirement: 各入口的难度选项
 

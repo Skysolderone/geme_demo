@@ -82,34 +82,13 @@ public sealed partial class BoardView : Node3D
     private IReadOnlyDictionary<int, PlayerId> _zoneOwners = new Dictionary<int, PlayerId>();
 
     /// <summary>
-    /// 本次搭建时视图模型里有的格（board-link-mode D-b：链接模式下只有本座位所在战场的格，旧模式全图）。逐格图元（信息层、禁手、落点、落成反馈）
-    /// 一律先查它——不在视图里的格什么都不画，"信息层只在本战场的格上出现"由这一处守住。
+    /// 本次搭建时视图模型里有的格（board-link-mode D-b：插旗阶段没有格，锁定后全图）。逐格图元（信息层、禁手、落点、落成反馈）
+    /// 一律先查它——不在视图里的格什么都不画。
     /// </summary>
     private HashSet<Coord> _visible = [];
 
-    /// <summary>每个可落子格搭出来的地砖节点（面砖、衬底、侧面色带、出生区描边、水面、桥）：棋盘拼接节拍按格平移（board-link-mode F.4）。</summary>
-    private readonly Dictionary<Coord, List<Node3D>> _tileNodes = [];
-
-    /// <summary>
-    /// 滑入节拍的父节点（board-link-mode F.4b / 裁决 J11-4）：滑动战场上的<b>全部</b>节点（地砖与阵营描边、台面边框与格线、信物 / 改造 / 禁手标记、
-    /// 信息层叠加物、棋子、演出层）在滑动期间从各自的容器挪到这里对应的镜像容器下，整体按偏移平移；滑到位后原样并回。不逐类登记。
-    /// </summary>
-    private Node3D _slideRoot = null!;
-
-    /// <summary>源容器 → 它在 <see cref="_slideRoot"/> 下的镜像容器（同一局部坐标系：源容器与滑动父节点都在原点）。</summary>
-    private readonly Dictionary<Node3D, Node3D> _slideMirror = [];
-
-    /// <summary>此刻滑动中的格（拼接后坐标）；空即没有滑入。</summary>
-    private HashSet<Coord> _slideCells = [];
-
-    /// <summary>本次滑入是否已打过半程自证行。</summary>
-    private bool _slideHalfReported;
-
-    /// <summary>地砖容器、棋盘台面容器与台面的输入（滑入期间台面按"各自独立一块"重画，滑到位后切回合并外轮廓）。</summary>
+    /// <summary>地砖容器。</summary>
     private Node3D _tiles = null!;
-    private Node3D? _plateRoot;
-    private (ImmutableArray<BoardPlate> Plates, Dictionary<Coord, int> ZoneOf, Func<int, Color> ColorOf)? _plateSource;
-    private bool _platesMerged = true;
 
     /// <summary>上一次搭建时本机出生棋盘（占位 Own）的左下角与画布尺寸：拼接后布局变化时据此算本机棋盘的平面位移，相机注视点随之平移（board-link-mode F.4）。</summary>
     private (Coord Origin, int Width, int Height)? _ownPlacement;
@@ -146,7 +125,7 @@ public sealed partial class BoardView : Node3D
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(zoneOwners);
 
-        // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次；地形被改造、或拼接平移了本机看得见的格 / 占位后，Refresh 也会再搭一次（见 DefaultBoardView.LayoutKey）。
+        // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次；地形被改造、或布局指纹变了（插旗锁定展开全图）后，Refresh 也会再搭一次（见 DefaultBoardView.LayoutKey）。
         Clear(this);
         int loadedBefore = TerrainParts.LoadedCount;
         int generatedBefore = TerrainParts.GeneratedCount;
@@ -158,13 +137,6 @@ public sealed partial class BoardView : Node3D
         _flatMaterials.Clear();
         _boxMeshes.Clear();
         _levels.Clear();
-        _tileNodes.Clear();
-        _slideMirror.Clear();
-        _slideCells = [];
-        _slideHalfReported = false;
-        _platesMerged = true;
-        _plateRoot = null;
-        _plateSource = null;
         _partBatches.Clear();
         _unbatchedObstacles = 0;
         _boardPieces.Clear();
@@ -173,7 +145,7 @@ public sealed partial class BoardView : Node3D
         _height = board.Height;
         _visible = [.. board.Cells.Select(c => c.Coord)];
 
-        // 画幅（board-link-mode 裁决 D26 / tasks 4.4）：底座、坐标标注与相机可行矩形都以"当前战场 ∪ 5 个占位"的格包围盒为准，随链接扩大；
+        // 画幅（board-link-mode 裁决 D26 / tasks 4.4）：底座、坐标标注与相机可行矩形都以"全部可见格 ∪ 5 个占位"的格包围盒为准（锁定后 = 整张地图）；
         // 旧地图没有占位、视图含全图每一格，包围盒就是整张图，与引入之前逐值相同。格包围盒 → 平面矩形只经 BoardGeometry.Center 的那一份映射。
         (Coord low, Coord high) = ExtentOf(board);
         Vector3 lowCenter = BoardGeometry.Center(low, _width, _height);
@@ -267,7 +239,6 @@ public sealed partial class BoardView : Node3D
                 // 深水：水面低于同层地砖，不可落子；架桥后桥面与地砖齐平、可落子。
                 Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
                 Color water = Visuals.DeepWater;
-                int firstWater = tiles.GetChildCount();
                 _tileMaterials.Add((AddWater(tiles, waterCenter, water), water));
                 if (cell.HasBridge)
                 {
@@ -276,7 +247,6 @@ public sealed partial class BoardView : Node3D
                     tiles.AddChild(bridge);
                 }
 
-                RegisterTiles(cell.Coord, tiles, firstWater);
                 continue;
             }
 
@@ -294,14 +264,12 @@ public sealed partial class BoardView : Node3D
             if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
             {
                 // 棋盘内的岩石（link-map-terrain 6.1，D4 中间带 0–2 格）：本战场的一格地形，不是场景装饰——按棋盘格画（障碍色地砖 + 岩石部件，不在松树 / 断柱里挑，
-                // 免得读成林地），逐格节点登记进地砖与装饰层，拼接滑入时随棋盘一起平移（场景面砖与合批装饰是整块 MultiMesh，滑不动）。归属只读视图模型的棋盘清单。
+                // 免得读成林地），逐格节点挂在地砖与装饰层（场景面砖与合批装饰是整块 MultiMesh）。归属只读视图模型的棋盘清单。
                 color = Visuals.TileObstacle;
                 Node3D rock = TerrainParts.Create(TerrainParts.Rock, variant++);
                 rock.Position = center;
                 _decoration.AddChild(rock);
-                int firstRock = tiles.GetChildCount();
                 AddTileStack(tiles, center, cell.Height, SurfaceOf(color), color);
-                RegisterTiles(cell.Coord, tiles, firstRock);
                 boardRocks++;
                 continue;
             }
@@ -398,9 +366,7 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
-            int firstTile = tiles.GetChildCount();
             AddTileStack(tiles, center, cell.Height, material, color);
-            RegisterTiles(cell.Coord, tiles, firstTile);
         }
 
         // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内岩石逐格画了几格。
@@ -417,8 +383,7 @@ public sealed partial class BoardView : Node3D
 
         if (plated)
         {
-            _plateSource = (plates, zoneOf, ZoneColorOf);
-            AddBoardPlates(plates, zoneOf, ZoneColorOf, merge: true);
+            AddBoardPlates(plates, zoneOf, ZoneColorOf);
         }
 
         AddPlaceholders(board.Placeholders);
@@ -447,9 +412,6 @@ public sealed partial class BoardView : Node3D
         AddChild(_preview);
         _show = new Node3D { Name = "Show" };
         AddChild(_show);
-        _slideRoot = new Node3D { Name = "Sliding" };
-        AddChild(_slideRoot);
-
         _cursor = new MeshInstance3D
         {
             Mesh = LowPoly.Marker(BoardGeometry.TileSize),
@@ -518,8 +480,7 @@ public sealed partial class BoardView : Node3D
             focus = new PlaneRect(field.MinX - outer, field.MinZ - outer, field.MaxX + outer, field.MaxZ + outer);
         }
 
-        // 拼接（board-link-mode F.4 / 裁决 J3 / J7）：布局整体变化——被贴方、被收拢的战场坐标都变了，画布也重裁，格心的平面位置随之变。
-        // 本机出生棋盘（占位 Own）在平面上的位移 = 新格心 − 旧格心；相机注视点按同一位移平移，画面里本机棋盘不跳（锚点通常不动，他人链接收拢或整体越界平移时本机也会动）。
+        // 画幅变化时（插旗锁定：占位 → 全图）本机出生棋盘（占位 Own）在平面上的位移 = 新格心 − 旧格心；相机注视点按同一位移平移，画面里本机棋盘不跳。
         float shiftX = 0f, shiftZ = 0f;
         BoardPlaceholderView? own = board.Placeholders.FirstOrDefault(p => p.Own);
         if (own is not null && _ownPlacement is { } was && (was.Origin != own.Origin || was.Width != _width || was.Height != _height))
@@ -538,7 +499,7 @@ public sealed partial class BoardView : Node3D
         }
         else
         {
-            // 链接后画幅变化（board-link-mode 4.4 / F.4）：保位姿重定界——不复位、不改缩放，注视点只随本机棋盘的位移平移，开局对准之后的位姿自证照常成立。
+            // 画幅变化（board-link-mode 4.4）：保位姿重定界——不复位、不改缩放，注视点只随本机棋盘的位移平移，开局对准之后的位姿自证照常成立。
             Rig.Rebound(bounds, focus, shiftX, shiftZ);
         }
 
@@ -565,152 +526,6 @@ public sealed partial class BoardView : Node3D
         }
 
         return minX == int.MaxValue ? (new Coord(0, 0), new Coord(board.Width - 1, board.Height - 1)) : (new Coord(minX, minY), new Coord(maxX, maxY));
-    }
-
-    /// <summary>把 <paramref name="parent"/> 从第 <paramref name="first"/> 个子节点起新加的节点登记为某格的地砖（升起节拍按格位移用）。</summary>
-    private void RegisterTiles(Coord coord, Node3D parent, int first)
-    {
-        List<Node3D> nodes = [];
-        for (int i = first; i < parent.GetChildCount(); i++)
-        {
-            if (parent.GetChild(i) is Node3D node)
-            {
-                nodes.Add(node);
-            }
-        }
-
-        _tileNodes[coord] = nodes;
-    }
-
-    /// <summary>节点上记录"属于哪一格"的元数据键（棋盘台面节点用它，其余节点按位置反推）。</summary>
-    private const string SlideCellMeta = "slide_cell";
-
-    /// <summary>
-    /// 棋盘拼接节拍 ①（board-link-mode F.4 / F.4b、裁决 J5 / J11-4）：滑动中的战场整体平移。每次画完（完整刷新、演出帧）调用一次：
-    /// 把地砖、台面、叠加层、棋子、预览、演出层容器里属于滑动格的节点挪到滑动父节点下的镜像容器，滑动父节点按遮罩的偏移平移；
-    /// 没有滑动时全部并回原容器、偏移归零。滑入期间台面按"各自独立一块"重画（滑动方带自己的边框），滑到位后切回合并外轮廓。
-    /// 只改节点归属与位移，不改视图模型；零时长演出遮罩恒空，这里只在必要时并回。
-    /// </summary>
-    private void ApplySlide(ShowMask mask)
-    {
-        HashSet<Coord> sliding = mask.Slide is { } slide ? [.. slide.Cells] : [];
-        bool active = sliding.Count > 0;
-        if (_plateSource is { } source && _platesMerged == active)
-        {
-            // 台面：滑入开始时拆成各自一块，滑到位后合并（只在状态切换的那一帧重画一次）。
-            if (_plateRoot is not null)
-            {
-                ReturnFromMirror(_plateRoot);
-                if (_slideMirror.Remove(_plateRoot, out Node3D? oldMirror))
-                {
-                    oldMirror.QueueFree();
-                }
-
-                RemoveChild(_plateRoot);
-                _plateRoot.QueueFree();
-            }
-
-            AddBoardPlates(source.Plates, source.ZoneOf, source.ColorOf, merge: !active);
-            _platesMerged = !active;
-        }
-
-        // 装饰层（林地的树、棋盘内岩石等逐格节点，link-map-terrain 6.1）也按格收拢：链接档棋盘上有地形装饰，滑入时要随地砖一起走。
-        // 合批层（_batch）只装场景格的装饰，场景格从不属于滑动战场，不在此列。
-        Node3D[] containers = [_tiles, _decoration, .. _plateRoot is null ? Array.Empty<Node3D>() : [_plateRoot], _overlay, _pieces, _preview, _show];
-        if (!active)
-        {
-            foreach (Node3D container in containers)
-            {
-                ReturnFromMirror(container);
-            }
-
-            _slideRoot.Position = Vector3.Zero;
-            _slideCells = [];
-            _slideHalfReported = false;
-            return;
-        }
-
-        _slideCells = sliding;
-        (int dx, int dy) = mask.SlideOffsetOf(sliding.First());
-        // Coord 的 x 向东 = 世界 +X，y 向北 = 世界 −Z（与 BoardGeometry.Center 同一口径）；偏移单位千分之一格。
-        _slideRoot.Position = new Vector3(dx / 1000f * BoardGeometry.CellSize, 0f, -dy / 1000f * BoardGeometry.CellSize);
-        foreach (Node3D container in containers)
-        {
-            Node3D mirror = MirrorOf(container);
-            foreach (Node3D child in container.GetChildren().OfType<Node3D>().ToArray())
-            {
-                if (CellOf(child) is { } cell && sliding.Contains(cell))
-                {
-                    container.RemoveChild(child);
-                    mirror.AddChild(child);
-                }
-            }
-        }
-
-        if (!_slideHalfReported && mask.Slide is { Permille: >= 500 } half)
-        {
-            // 自证行（F.4b）：滑入半程时滑动战场的节点数、其中非地砖的、以及仍留在原容器里的滑动格节点（应为 0）。
-            _slideHalfReported = true;
-            int total = _slideMirror.Values.Sum(m => m.GetChildCount());
-            int tiles = _slideMirror.TryGetValue(_tiles, out Node3D? tileMirror) ? tileMirror.GetChildCount() : 0;
-            int stray = containers.Sum(c => c.GetChildren().OfType<Node3D>().Count(n => CellOf(n) is { } cell && sliding.Contains(cell)));
-            GD.Print($"[slide] 滑入半程（{half.Permille}‰，{sliding.Count} 格，偏移 {dx / 1000f:0.##},{dy / 1000f:0.##} 格）：滑动战场节点 {total} 个，其中非地砖 {total - tiles} 个"
-                + $"（装饰 {CountIn(_decoration)}、台面 {CountIn(_plateRoot)}、叠加 {CountIn(_overlay)}、棋子 {CountIn(_pieces)}、预览 {CountIn(_preview)}、演出 {CountIn(_show)}），"
-                + (stray == 0 ? "全部挂在滑动父节点下" : $"仍有 {stray} 个留在原容器"));
-        }
-
-        int CountIn(Node3D? container) => container is not null && _slideMirror.TryGetValue(container, out Node3D? m) ? m.GetChildCount() : 0;
-    }
-
-    /// <summary>某容器在滑动父节点下的镜像容器（按需新建，名字同源）。</summary>
-    private Node3D MirrorOf(Node3D container)
-    {
-        if (!_slideMirror.TryGetValue(container, out Node3D? mirror) || !IsInstanceValid(mirror))
-        {
-            mirror = new Node3D { Name = $"Sliding{container.Name}" };
-            _slideRoot.AddChild(mirror);
-            _slideMirror[container] = mirror;
-        }
-
-        return mirror;
-    }
-
-    /// <summary>把镜像容器里的节点并回源容器（局部坐标不变：两边都在原点）。</summary>
-    private void ReturnFromMirror(Node3D container)
-    {
-        if (!_slideMirror.TryGetValue(container, out Node3D? mirror) || !IsInstanceValid(mirror))
-        {
-            return;
-        }
-
-        foreach (Node child in mirror.GetChildren())
-        {
-            mirror.RemoveChild(child);
-            container.AddChild(child);
-        }
-    }
-
-    /// <summary>
-    /// 节点属于哪一格：有 <see cref="SlideCellMeta"/> 元数据的取它；否则取节点（或原点处的纯容器节点里第一个子节点）的位置，按格心映射反推最近的格。
-    /// 反算只经唯一实现 <see cref="BoardGeometry.TryFromWorld"/>（坐标映射在 Godot 侧唯一）。
-    /// </summary>
-    private Coord? CellOf(Node3D node)
-    {
-        if (node.HasMeta(SlideCellMeta))
-        {
-            Vector2I cell = node.GetMeta(SlideCellMeta).AsVector2I();
-            return new Coord(cell.X, cell.Y);
-        }
-
-        Vector3 position = node.Position;
-        Node3D current = node;
-        while (position.LengthSquared() < 1e-8f && current.GetChildCount() > 0 && current.GetChild(0) is Node3D first)
-        {
-            current = first;
-            position += first.Position;
-        }
-
-        return BoardGeometry.TryFromWorld(position, _width, _height, out Coord found) ? found : null;
     }
 
     private void AddFloatingIsland(DefaultBoardView board, float apron, Vector3 frameCenter, float spanX, float spanZ)
@@ -1160,11 +975,10 @@ public sealed partial class BoardView : Node3D
     /// 出生棋盘的边框沿用出生区的归属色，公共棋盘用中性色。外接矩形与类别取自视图模型的棋盘清单；
     /// 位置一律由 <see cref="BoardGeometry.Center(Coord, int, int, int)"/> 的格心推出（边线 = 相邻两格格心的中点，外缘 = 角格格心外推半格）。
     /// </summary>
-    private void AddBoardPlates(ImmutableArray<BoardPlate> plates, Dictionary<Coord, int> zoneOf, Func<int, Color> zoneColorOf, bool merge)
+    private void AddBoardPlates(ImmutableArray<BoardPlate> plates, Dictionary<Coord, int> zoneOf, Func<int, Color> zoneColorOf)
     {
         var root = new Node3D { Name = "BoardPlates" };
         AddChild(root);
-        _plateRoot = root;
         int[] groups = PlateGroups(plates);
         Dictionary<int, int> groupSize = groups.GroupBy(g => g).ToDictionary(g => g.Key, g => g.Count());
 
@@ -1205,9 +1019,8 @@ public sealed partial class BoardView : Node3D
             float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
             float top = a.Y;
 
-            // 每块棋盘的格线与边框挂在自己的节点下（F.4b：滑入时整块随滑动战场平移；归属取棋盘左下角格，不按节点位置猜）。
+            // 每块棋盘的格线与边框挂在自己的节点下。
             var plateNode = new Node3D { Name = $"Plate{index}" };
-            plateNode.SetMeta(SlideCellMeta, new Vector2I(plate.Origin.X, plate.Origin.Y));
             root.AddChild(plateNode);
 
             // 内部格线：压在地砖之间的缝上，略高于面砖、低于一切叠加标记（标记最低在 +0.008）。
@@ -1225,9 +1038,8 @@ public sealed partial class BoardView : Node3D
                 plateNode.AddChild(Strip(new Vector3(maxX - minX, lineHeight, lineWidth), new Vector3(midX, top + (lineHeight * 0.5f), (near.Z + far.Z) * 0.5f), ink));
             }
 
-            // 边框：骑在外接矩形的外缘上，四角补齐。拼接成连体棋盘的（同组不止一块），边框改由下面按整组外轮廓统一画；
-            // 滑入期间（merge = false，F.4b）滑动方仍是独立一块、各自带边框，滑到位后再切成合并外轮廓。
-            if (merge && groupSize[groups[index]] > 1)
+            // 边框：骑在外接矩形的外缘上，四角补齐。紧贴成连体棋盘的（同组不止一块），边框改由下面按整组外轮廓统一画。
+            if (groupSize[groups[index]] > 1)
             {
                 continue;
             }
@@ -1247,7 +1059,7 @@ public sealed partial class BoardView : Node3D
 
         // 连体棋盘（board-link-mode F.4 / 规格 visual-style-baseline「未展开区域的可视表现」拼接段）：边对边紧贴的棋盘合为一组，
         // 接缝处补一条与棋盘内部同样的格线（两块棋盘的格线连成一片）、不画边框；边框只沿整组的外轮廓画一圈中性色（台面边框色）。
-        foreach (int group in groups.Distinct().Where(g => merge && groupSize[g] > 1))
+        foreach (int group in groups.Distinct().Where(g => groupSize[g] > 1))
         {
             var cells = new Dictionary<Coord, int>();
             for (int i = 0; i < plates.Length; i++)
@@ -1360,8 +1172,8 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>
-    /// 棋盘分组（board-link-mode F.4）：外接矩形边对边紧贴（共享一段边、不只是角）的棋盘归为一组——拼接出来的连体棋盘。
-    /// 返回每块棋盘的组号（组内最小下标）。旧地图（棋盘两两至少隔 2 格）与链接前每块各成一组，台面画法与引入之前相同。
+    /// 棋盘分组（board-link-mode F.4 → open-map）：外接矩形边对边紧贴（共享一段边、不只是角）的棋盘归为一组——建局即紧贴的 5 块归为一组，台面按整组外轮廓画。
+    /// 返回每块棋盘的组号（组内最小下标）。
     /// </summary>
     private static int[] PlateGroups(ImmutableArray<BoardPlate> plates)
     {
@@ -1545,10 +1357,7 @@ public sealed partial class BoardView : Node3D
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
         float decorationScale = 0.72f + (0.28f * treatment.DecorationContrastPercent / 100f);
-        // 滑入中的装饰暂挂在滑动父节点下的镜像容器里（ApplySlide），一并缩放。
-        Node3D? slidingDecoration = _slideMirror.TryGetValue(_decoration, out Node3D? decorationMirror) && IsInstanceValid(decorationMirror) ? decorationMirror : null;
-        IEnumerable<Node> ornaments = slidingDecoration is null ? _decoration.GetChildren() : _decoration.GetChildren().Concat(slidingDecoration.GetChildren());
-        foreach (Node3D ornament in ornaments.OfType<Node3D>())
+        foreach (Node3D ornament in _decoration.GetChildren().OfType<Node3D>())
         {
             ornament.Scale = Vector3.One * decorationScale;
         }
@@ -1579,7 +1388,6 @@ public sealed partial class BoardView : Node3D
         DrawLayer(content);
         DrawPreview(preview, focus);
         DrawFlash(flash);
-        ApplySlide(mask ?? ShowMask.Empty);   // 全部画完再收拢滑动战场的节点；没有滑动中的格就全部并回（board-link-mode F.4b）
     }
 
     private static void Clear(Node container)
@@ -1592,14 +1400,7 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>清空一个逐帧重画的容器，连同它在滑动父节点下的镜像（F.4b：滑动中的节点挪到了镜像里，不能漏清）。</summary>
-    private void ClearLayer(Node3D container)
-    {
-        Clear(container);
-        if (_slideMirror.TryGetValue(container, out Node3D? mirror))
-        {
-            Clear(mirror);
-        }
-    }
+    private static void ClearLayer(Node3D container) => Clear(container);
 
     private void DrawRelicMarkers(DefaultBoardView board)
     {
@@ -1727,7 +1528,7 @@ public sealed partial class BoardView : Node3D
         DefaultBoardView board = world.Board();
         if (board.LayoutKey() != _terrainKey)
         {
-            // 链接后第一帧演出（board-link-mode F.4）：拼接后的布局要先搭出来，滑入节拍才有东西可移。重搭保位姿（Rebound 只随本机棋盘位移平移注视点）。
+            // 布局指纹变了（插旗锁定后第一帧演出）：先重搭再画演出帧。重搭保位姿（Rebound 只随本机棋盘位移平移注视点）。
             Build(board, _zoneOwners);
         }
 
@@ -1736,7 +1537,6 @@ public sealed partial class BoardView : Node3D
         _totalShowRedraw += _lastShowRedraw;
         _showFrames++;
         DrawShow(mask);
-        ApplySlide(mask);
     }
 
     /// <summary>

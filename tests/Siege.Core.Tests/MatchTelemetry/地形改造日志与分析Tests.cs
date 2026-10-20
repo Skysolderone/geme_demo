@@ -61,9 +61,7 @@ public class 地形改造日志与分析Tests
 
         foreach (MatchSession session in sessions)
         {
-            Assert.Empty(session.Match.Links);   // 样本口径：开局时自然没有链接（截断之内也不应有，跑完后再核一次）
             MatchLog log = session.Run();
-            Assert.Empty(session.Match.Links);
             records.AddRange(session.Match.TerrainEdits);
 
             TerrainEdit[] replayed = [.. log.Turns.SelectMany(t => t.Edits!).Select(e => TerrainEdit.Parse(e.Target))];

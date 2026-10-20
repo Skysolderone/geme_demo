@@ -49,10 +49,7 @@ public sealed class MatchSession
     private int _flowCursor;
     private int _recruitCursor;
     private int _editCursor;
-    private int _pairingCursor;
-    private int _linkCursor;
     private int _settlementCursor;
-    private int _countdownCursor;
     private bool _finished;
     private bool _truncated;
     private readonly bool _carryHeader;
@@ -67,8 +64,6 @@ public sealed class MatchSession
         CellLimit = Config.CandidateCellLimit ?? (recorded ? 0 : AiSearchConfig.DefaultCellLimitFor(match.Map.PlayableCount));
         // 停手阈值同理：首部没有该项 = 该项出现之前的旧日志，当时的保留条件是严格提高（= 0），MUST NOT 按今天的缺省阈值重建。
         PassThreshold = Config.PassThreshold ?? (recorded ? 0 : AiSearchConfig.DefaultPassThreshold);
-        // AI 视野（ai-seat-vision D1）：首部没有该项 = 该项出现之前的旧日志，当时 AI 缺省全知，MUST NOT 按今天的缺省（按座位视野）重建。
-        SeatVision = Config.SeatVision ?? !recorded;
         if (match.Phase != MatchPhase.InProgress)
         {
             throw new SiegeRuleException("会话要求对局已完成插旗并处于进行中。");
@@ -87,11 +82,6 @@ public sealed class MatchSession
         if (config.ContentSet is { } contentSet && contentSet != match.ContentSet)
         {
             throw new SiegeRuleException($"跑局配置的内容集为 {contentSet}，对局配置却为 {match.ContentSet}。");
-        }
-
-        if (config.FinalCountdownRounds is { } countdown && countdown != match.FinalCountdownRounds)
-        {
-            throw new SiegeRuleException($"跑局配置的决赛倒计时大回合数为 {countdown}，对局配置却为 {match.FinalCountdownRounds}。");
         }
 
         if (config.CarryIn == 1 && !match.CarryInOut)
@@ -125,9 +115,6 @@ public sealed class MatchSession
     /// <summary>本局未显式配置剪枝参数的 AI 实际生效的停手阈值（ai-eye D4）。</summary>
     public int PassThreshold { get; }
 
-    /// <summary>本会话全部 AI 的视野：<c>true</c> = 按座位视野（新建局的缺省），<c>false</c> = 全知（显式配置或缺该项的旧日志回放）。见 <see cref="RunConfig.SeatVision"/>。</summary>
-    public bool SeatVision { get; }
-
     public GameSeed Seed { get; }
 
     /// <summary>已完成的小回合数。</summary>
@@ -144,12 +131,7 @@ public sealed class MatchSession
     /// 首部没有该项就是不限制——否则该项出现之前的大图旧日志会被按新缺省 K 重跑而中途分歧，重建出的首部也会多出一项。
     /// 停手阈值同理：不落成缺省值，首部没有该项按 0（严格提高）重建。
     /// </summary>
-    /// <param name="pairing">
-    /// 链接图对局的配对来源（board-link-mode D3 / Q10）：<c>null</c> 即新建的局——由配对种子（<see cref="RunConfig.PairingSeed"/>，缺省由对局种子派生）派生的工具层随机源
-    /// <see cref="SeededPairingSource"/>；回放传按日志配对事件重放的 <see cref="RecordedPairingSource"/>。旧地图（Legacy 夹具）的对局不读它。
-    /// </param>
-    internal static MatchSession Create(
-        RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null, IPairingSource? pairing = null)
+    internal static MatchSession Create(RunConfig config, ulong seed, MapData? map, bool recorded, RecordedCarry? carry = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Validated();
@@ -184,7 +166,7 @@ public sealed class MatchSession
             carryIns = CarryAi.Draw(new GameSeed(seed), players, count, contentSet);
         }
 
-        // board-link-mode 实现裁决 C1：一律以链接模式建局并挂配对来源。retire-legacy-maps 3.6：建局分叉删除——公开 MatchFlow.Create 恒为链接模式（3.5）。
+        // board-link-mode 实现裁决 C1：一律以链接模式建局。retire-legacy-maps 3.6：建局分叉删除——公开 MatchFlow.Create 恒为链接模式（3.5）。
         MatchFlow match = MatchFlow.Create(
             map, new GameSeed(seed), players,
             MatchOptions.Immediate with
@@ -193,10 +175,7 @@ public sealed class MatchSession
                 ContentSet = contentSet,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
-                // final-countdown：新建的局已由 ResolvedFor 落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，按 0（不启用）重建。
-                FinalCountdownRounds = config.FinalCountdownRounds ?? (recorded ? 0 : MatchOptions.DefaultFinalCountdownRounds),
             });
-        match.PairingSource = pairing ?? new SeededPairingSource(seed, config.PairingSeed);
 
         // 选区的唯一实现在 Core（frontier-map D4 / board-link-mode B2）：盲选（retire-legacy-maps 3.1：冒险概率 / 顺排 / 种子选区已删除）。
         match.PlantPrototype();
@@ -210,9 +189,7 @@ public sealed class MatchSession
     {
         // 显式的剪枝参数原样生效；未配置时按难度取，候选格上限取跑局配置的值，仍未给出则按地图大小取（阈值逻辑在 Core，三个入口共用）。
         // 停手阈值同样只作用于未显式配置剪枝参数的玩家（显式的 Search 自带阈值）。
-        // AI 视野（ai-seat-vision D1）对全部玩家一律取会话值：视野只在批次配置顶层一处，显式的 Search 也开不了全知。
-        AiSearchConfig search = (ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold }))
-            with { SeatVision = SeatVision };
+        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold });
         if (ai.DebugAi)
         {
             DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, search);
@@ -302,7 +279,6 @@ public sealed class MatchSession
         MatchPublicView before = _previous;
         _trace.Reset();
         int turnStartedBefore = Match.Events.Count(e => e.Kind == FlowEventKind.TurnStarted);
-        int linksBefore = Match.Links.Count;
 
         _total.Start();
         var sw = Stopwatch.StartNew();
@@ -322,7 +298,7 @@ public sealed class MatchSession
         _turn++;
         MatchPublicView after = Match.Publish();
         AssertInvariants(after);
-        RecordTurn(player, majorRound, position, before, after, sw.ElapsedMilliseconds, linksBefore);
+        RecordTurn(player, majorRound, position, before, after, sw.ElapsedMilliseconds);
         _previous = after;
 
         if (Config.InjectFailureAtTurn == _turn)
@@ -360,32 +336,15 @@ public sealed class MatchSession
 
     // ---------- 记录 ----------
 
-    private void RecordTurn(PlayerId player, int majorRound, int position, MatchPublicView before, MatchPublicView after, long elapsedMs, int linksBefore)
+    private void RecordTurn(PlayerId player, int majorRound, int position, MatchPublicView before, MatchPublicView after, long elapsedMs)
     {
         var placements = new List<string>();
         var placedCells = new List<Coord>();
         var captures = new List<string>();
-        // 本小回合末尾发生了拼接（board-link-mode J3 / J7）时，拼接前盘面的格先经唯一的换算工具 LinkLayout 平移到新画布再比对：
-        // 快照里的落子、提子、改造与活形一律按本小回合结束时（链接之后）的布局记（MatchLog 类注释的版本口径）。没有链接时与原先逐格比对完全相同。
-        Func<Coord, Coord> moved = c => c;
-        Func<Coord, Coord?> back = c => c;
-        Func<TerrainEdit, TerrainEdit> movedEdit = e => e;
-        IEnumerable<Coord> cells = after.Board.AllCoords();
-        if (Match.Links.Count > linksBefore)
+        // open-map：地图整局不变，前后快照逐格比对（原拼接时的坐标平移随链接删除）。
+        foreach (Coord c in after.Board.AllCoords())
         {
-            var layout = new LinkLayout(Match.Board.BaseMap.Boards, Match.Links.Select(l => l.ShiftStep));
-            int to = Match.Links.Count;
-            moved = c => layout.Translate(c, linksBefore, to);
-            // 两端都随棋盘越出画布原点的场景格栅栏在盘面上已被丢弃（GameBoard.ApplySplice）；日志保留发生时的记法。
-            movedEdit = e => layout.TranslateEdit(e, linksBefore, to) ?? e;
-            cells = before.Board.AllCoords().Where(before.Board.Map.IsPlayable);
-            Dictionary<Coord, Coord> inverse = cells.ToDictionary(moved, c => c);
-            back = c => inverse.TryGetValue(c, out Coord was) ? was : null;
-        }
-
-        foreach (Coord c in cells)
-        {
-            Coord target = moved(c);
+            Coord target = c;
             Occupant? was = before.Board[c].Occupant;
             Occupant? now = after.Board[target].Occupant;
             if (was is null && now is { } placed)
@@ -407,9 +366,9 @@ public sealed class MatchSession
             edits.Add(new TerrainEditEntry
             {
                 Action = e.Edit.Kind.ToString(),
-                Target = movedEdit(e.Edit).ToString(),
+                Target = e.Edit.ToString(),
                 Player = e.Player.Value,
-                Artisan = moved(e.ArtisanCoord).ToNotation(),
+                Artisan = e.ArtisanCoord.ToNotation(),
                 CausedCapture = e.CausedCapture,
                 ViaWorkshop = WritesNewContent(Match.ContentSet) ? e.ViaWorkshop : null,
             });
@@ -533,7 +492,7 @@ public sealed class MatchSession
             Placements = placements,
             Captures = captures,
             Edits = edits,
-            Life = LifeEntry(player, before, after, placedCells, edits.Count > 0, moved, back) with
+            Life = LifeEntry(player, before, after, placedCells, edits.Count > 0) with
             {
                 ForbiddenStaged = refusals.Count(r => r.Failure.Kind == BatchFailureKind.LifeForbidden),
                 ForbiddenRehearsed = _trace.IllegalRehearsals.Count(r => r.Failure.Kind == BatchFailureKind.LifeForbidden),
@@ -580,15 +539,7 @@ public sealed class MatchSession
     /// 己方加子合并两条活串时，旧串的子仍在同主的活串里，不算失去；新串含旧活串的子，不算新确立。
     /// 两类拒绝计数由调用方填。internal 供测试用真实盘面走写入路径。
     /// </summary>
-    internal static LifeTurnEntry LifeEntry(PlayerId actor, MatchPublicView before, MatchPublicView after, IReadOnlyCollection<Coord> placed, bool edited) =>
-        LifeEntry(actor, before, after, placed, edited, c => c, c => c);
-
-    /// <summary>
-    /// 同上，带本小回合拼接的坐标映射（段 F 最小适配）：<paramref name="moved"/> 把结算前盘面的格平移到结算后画布，<paramref name="back"/> 反向（结算后的格在结算前不存在为 <c>null</c>）。
-    /// 没有拼接时两者都是恒等。
-    /// </summary>
-    internal static LifeTurnEntry LifeEntry(
-        PlayerId actor, MatchPublicView before, MatchPublicView after, IReadOnlyCollection<Coord> placed, bool edited, Func<Coord, Coord> moved, Func<Coord, Coord?> back)
+    internal static LifeTurnEntry LifeEntry(PlayerId actor, MatchPublicView before, MatchPublicView after, IReadOnlyCollection<Coord> placed, bool edited)
     {
         LifeShapeReport was = before.LifeShape;
         LifeShapeReport now = after.LifeShape;
@@ -596,7 +547,7 @@ public sealed class MatchSession
 
         foreach (GroupLife g in now.Groups.Where(g => g.Life == LifeState.Alive).OrderBy(g => g.Group.Stones.Min()))
         {
-            if (!g.Group.Stones.Any(s => back(s) is { } b && StillAlive(was, b, g.Group.Owner)))
+            if (!g.Group.Stones.Any(s => StillAlive(was, s, g.Group.Owner)))
             {
                 changes.Add(Change(LifeChangeEntry.Established, g, actor, cause: null));
             }
@@ -604,13 +555,13 @@ public sealed class MatchSession
 
         foreach (GroupLife g in was.Groups.Where(g => g.Life == LifeState.Alive).OrderBy(g => g.Group.Stones.Min()))
         {
-            if (g.Group.Stones.All(s => StillAlive(now, moved(s), g.Group.Owner)))
+            if (g.Group.Stones.All(s => StillAlive(now, s, g.Group.Owner)))
             {
                 continue;
             }
 
             string cause = g.Group.Owner != actor ? LifeChangeEntry.NonOwner
-                : placed.Any(c => g.EyeSpaces.Any(e => e.Cells.Any(cell => moved(cell) == c))) ? LifeChangeEntry.OwnerFill
+                : placed.Any(c => g.EyeSpaces.Any(e => e.Cells.Contains(c))) ? LifeChangeEntry.OwnerFill
                 : edited ? LifeChangeEntry.OwnerEdit
                 : LifeChangeEntry.OwnerOther;
             changes.Add(Change(LifeChangeEntry.Lost, g, actor, cause));
@@ -705,7 +656,6 @@ public sealed class MatchSession
                 // match-telemetry 第 11 项。
                 EliminationReason = state.EliminationReason?.ToString(),
                 PowerAtDefeat = state.PowerAtDefeat,
-                WaitingRounds = state.WaitingRounds,
             });
         }
 
@@ -795,46 +745,6 @@ public sealed class MatchSession
                 case FlowEventKind.FlagsLocked:
                     Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail);
                     break;
-                case FlowEventKind.PairingApplied:
-                    PairingRecord pairing = Match.Pairings[_pairingCursor++];
-                    AddLink(e, new LogEvent
-                    {
-                        Type = LogEventType.PairingApplied,
-                        Pairing = new PairingLogEntry
-                        {
-                            Sequence = pairing.Sequence,
-                            Kind = pairing.Kind.ToString(),
-                            MajorRound = pairing.MajorRound,
-                            Candidates = [.. pairing.Candidates],
-                            Pairs = [.. pairing.Pairs.Select(p => new List<int> { p.X, p.Y })],
-                            Waiter = pairing.Waiter,
-                            Source = pairing.Source,
-                        },
-                    });
-                    break;
-                case FlowEventKind.BattlefieldsLinked:
-                    LinkRecord linked = Match.Links[_linkCursor++];
-                    AddLink(e, new LogEvent
-                    {
-                        Type = LogEventType.BattlefieldsLinked,
-                        Link = new LinkLogEntry
-                        {
-                            Sequence = linked.Sequence,
-                            PairingSequence = linked.PairingSequence,
-                            X = linked.X,
-                            Y = linked.Y,
-                            Side = linked.Side.ToString(),
-                            MapVersion = linked.MapVersion,
-                            SharedEdge = linked.SharedEdge,
-                            Shifts = [.. linked.Shifts.Select(s => new BattlefieldShiftEntry { Battlefield = s.Battlefield, Dx = s.Dx, Dy = s.Dy })],
-                            // 合并后的战场 = 链接后地图（开局 + 链接，不含改造）里含战场 X 那块出生棋盘的连通分量。同一配对事件里的各对互不相交，
-                            // 此刻（整个配对事件执行完）按出生棋盘取仍是这一对合并出的战场；决赛那一条即决赛战场。
-                            BattlefieldCells = Battlefields.Of(Match.Board.LinkedMap).All.Single(f => f.BirthZones.Contains(linked.X)).Cells.Length,
-                            MapDigest = linked.MapDigest,
-                            Summary = linked.Summary,
-                        },
-                    });
-                    break;
                 case FlowEventKind.BattlefieldSettled:
                     BattlefieldSettlementRecord settled = Match.Settlements[_settlementCursor++];
                     AddLink(e, new LogEvent
@@ -858,23 +768,6 @@ public sealed class MatchSession
                                 ExclusiveCells = x.ExclusiveCells,
                                 Stones = x.Stones,
                             })],
-                            Deadline = settled.Deadline,
-                        },
-                    });
-                    break;
-                case FlowEventKind.FinalCountdown:
-                    // final-countdown（match-telemetry「决赛倒计时的记录」）：每个进入倒计时的战场一条，带起点 R 与期限。
-                    FinalCountdownRecord countdown = Match.FinalCountdowns[_countdownCursor++];
-                    AddLink(e, new LogEvent
-                    {
-                        Type = LogEventType.FinalCountdown,
-                        Countdown = new FinalCountdownLogEntry
-                        {
-                            Sequence = countdown.Sequence,
-                            Battlefield = countdown.Battlefield,
-                            Start = countdown.Start,
-                            Deadline = countdown.Deadline,
-                            AssignedInMajorRound = countdown.AssignedInMajorRound,
                         },
                     });
                     break;
@@ -884,7 +777,7 @@ public sealed class MatchSession
         }
     }
 
-    /// <summary>链接模式的结构化事件（配对 / 链接 / 战场结算 / 带原因的出局）：序号、小回合、大回合与说明取自流程事件，其余由调用方给出。</summary>
+    /// <summary>结构化事件（战场结算 / 带原因的出局）：序号、小回合、大回合与说明取自流程事件，其余由调用方给出。</summary>
     private void AddLink(FlowEvent e, LogEvent entry) =>
         _events.Add(entry with { Seq = ++_eventSeq, Turn = _turn, MajorRound = e.MajorRound, Detail = e.Detail });
 
@@ -940,12 +833,12 @@ public sealed class MatchSession
             // match-telemetry 第 1、2 项（board-link-mode C3）：模式与锁定时各出生棋盘的旗数（retire-legacy-rules R10 = A：模式照写常量 "Link"）。
             Mode = "Link",
             LockedFlagCounts = [.. Enumerable.Range(0, Match.Board.BaseMap.BirthZones.Length).Select(z => Match.LockedFlagCounts.GetValueOrDefault(z))],
-            // 段 F.3：开局出生棋盘（离线坐标换算的起点，LinkLayout.Of）。
+            // 段 F.3：开局出生棋盘（离线按棋盘归主题的依据；open-map 起地图整局不变）。
             Boards = [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })],
         };
     }
 
-    /// <summary>信物分布的一项（首部的开局信物与链接事件的新增信物共用同一写法）。</summary>
+    /// <summary>信物分布的一项（首部的开局信物）。</summary>
     private static RelicEntry RelicEntryOf(RelicPlacement r) => new()
     {
         Coord = r.Coord.ToNotation(),

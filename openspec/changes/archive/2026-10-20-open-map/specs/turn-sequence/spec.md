@@ -1,3 +1,7 @@
+## RENAMED Requirements
+- FROM: `### Requirement: 第 4 大回合起的战场内落子`
+- TO: `### Requirement: 第 4 大回合起的全图落子`
+
 ## MODIFIED Requirements
 
 ### Requirement: 构筑保护期的落子限制

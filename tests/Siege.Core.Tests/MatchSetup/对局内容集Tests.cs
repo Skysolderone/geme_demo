@@ -128,8 +128,6 @@ public class 对局内容集Tests
         string json = session.Match.Serialize();
 
         MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(json)), json);
-        // retire-legacy-maps 1.8：链接图对局的配对来源由对局外部给出、不进存档（battlefield「配对事件由对局外部提供」）；续跑跨过第 3 大回合的配对，恢复局挂上与原局同口径的种子派生来源。
-        restored.PairingSource = new SeededPairingSource(11, session.Config.PairingSeed);
 
         Assert.Equal(ContentSet.V2, restored.ContentSet);
         Assert.False(restored.ContentSetBackfilled);

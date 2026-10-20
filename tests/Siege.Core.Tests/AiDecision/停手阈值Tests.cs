@@ -28,7 +28,8 @@ public class 停手阈值Tests
     /// open-map 1.5 重钉：link:1 改为 3+2 紧贴布局后，种子 31 的前 24 个小回合在阈值 0 与缺省 20 下走法相同（没有边际提升落在 (0, 20] 的候选），不再能证明"阈值确实传到了 AI"；
     /// 探针（种子 31–46）取第一个两种阈值走法不同的种子 34（<see cref="StrictImprovementSeed"/>）。旧值（种子 31）F52ACDC37DC0BDB151DE0CD3D5103291048E858F61EB94975A0B48872260C21B。
     /// </summary>
-    private const string StrictImprovementTurnHash = "D0EB62C1AFA4432791B0283985210D4C09A1DC0529BCAF6598FFF562016630A2";
+    // open-map 段 B 重钉（格式变化、走法不变）：快照 JSON 去掉 WaitingRounds / Deadline；旧值 D0EB62C1AFA4432791B0283985210D4C09A1DC0529BCAF6598FFF562016630A2。
+    private const string StrictImprovementTurnHash = "8841BD6F62ECC7F00D7D20DFB4B48035D5B743B823ECCAF41D86AB9F2A805776";
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
     private const ulong StrictImprovementSeed = 34;

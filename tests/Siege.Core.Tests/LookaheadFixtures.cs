@@ -129,19 +129,15 @@ internal static class LookaheadFixtures
         TurnLimit = 600,
         PassThreshold = PassThreshold,
         ContentSet = ContentSet.V2,
-        // final-countdown：这些真实对局的黄金值都在引入决赛倒计时之前钉下，写死 K = 0（不启用，与引入之前逐步相同）。
-        FinalCountdownRounds = 0,
-        // ai-seat-vision 1.3：同理，这些黄金值都在 AI 缺省改为按座位视野之前钉下，写死全知（改前缺省，显式配置项）。
-        SeatVision = false,
         EventRetention = EventRetention.Full,
         FullEventSamplePermille = 0,
     };
 
     internal static PlayerAiConfig Standard => new() { Difficulty = AiDifficulty.Standard };
 
-    /// <summary>按 <paramref name="config"/> 在 <c>link:1</c> 上建一局，挂内置固定配对脚本（<see cref="ScriptedPairingSource"/>，与链接图决策序列基线同一口径）。</summary>
+    /// <summary>按 <paramref name="config"/> 在 <c>link:1</c> 上建一局（与链接图决策序列基线同一口径）。</summary>
     internal static MatchSession CreateSession(RunConfig config, ulong seed) =>
-        MatchSession.Create(config, seed, MapCatalog.Resolve(config.MapId), recorded: false, carry: null, pairing: new ScriptedPairingSource());
+        MatchSession.Create(config, seed, MapCatalog.Resolve(config.MapId), recorded: false, carry: null);
 
     /// <summary>逐小回合驱动到第 <paramref name="maxMajorRounds"/> 大回合结束或终局（不经 <see cref="MatchSession.Run"/>，不产出日志）。</summary>
     internal static void RunToRound(MatchSession session, int maxMajorRounds = MaxMajorRounds)
@@ -159,20 +155,13 @@ internal static class LookaheadFixtures
     /// <remarks>
     /// 取四个座位的全部部署决策按固定间隔抽样（expert-lookahead 段 A 起的口径）；局面覆盖构筑期与链接之后的交战（规格「耗时上限」）。
     /// </remarks>
-    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds) =>
-        ProbePositions(seatVision: false, every, probe, seeds);
-
-    /// <summary>
-    /// 同上，局面来自 AI 视野为 <paramref name="seatVision"/> 的对局（ai-seat-vision V9：<c>true</c> = 新缺省按座位视野下的局面集；<c>false</c> 即上一个重载，
-    /// 写死全知，与引入之前逐步相同）。
-    /// </summary>
-    internal static int ProbePositions(bool seatVision, int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
+    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
     {
         int decision = 0;
         int probed = 0;
         foreach (ulong seed in seeds.Length == 0 ? [1, 2, 3] : seeds)
         {
-            MatchSession session = CreateSession(LinkConfig(Standard, Standard, Standard, Standard) with { SeatVision = seatVision }, seed);
+            MatchSession session = CreateSession(LinkConfig(Standard, Standard, Standard, Standard), seed);
             foreach (PlayerId player in session.Match.Players)
             {
                 HeuristicTurnController inner = session.AiOf(player)!;

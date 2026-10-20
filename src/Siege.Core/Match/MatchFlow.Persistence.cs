@@ -50,7 +50,7 @@ public sealed partial class MatchFlow
             ContentSet = ContentSet,
             CarryInOut = CarryInOut,
             CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
-            // 实现裁决 B5：模式与链接流程状态恒写出（retire-legacy-rules R10 = A：模式照写常量 "Link"，链接局存档逐字节不变）。
+            // 实现裁决 B5：模式与结算流程状态恒写出（retire-legacy-rules R10 = A：模式照写常量 "Link"；open-map 段 B 删配对 / 链接 / K 字段，段名不变）。
             Mode = MatchSaveData.LinkMode,
             Link = ExportLink(),
             Phase = Phase,
@@ -159,7 +159,7 @@ public sealed partial class MatchFlow
         // more-pieces-relics D8：存档只存种子，信物分布按存档的内容集重新生成——缺字段的旧存档按 v1（与 RestoreCore 的回填同一口径），
         // 否则旧存档会按新局缺省 v2 的权重表重建出另一份分布。
         ContentSet contentSet = ContentSets.RequireValid(data.ContentSet ?? ContentSets.Legacy);
-        // B5 / 段 A 接线契约 3：盘面先建空，等链接重放完再写入棋子与改造（见 RestoreLink）。
+        // B5：盘面先建空，再写入棋子与改造（见 RestoreLink）。
         GameBoard board = GameBoard.Load(map);
         return RestoreCore(map, board, seed, RelicGenerator.Generate(map, seed, contentSet), data);
     }
@@ -188,6 +188,8 @@ public sealed partial class MatchFlow
     private static MatchSaveData Parse(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
+        // open-map 裁决 B2：含配对 / 链接 / K / 等待者字段的旧存档先于一切比对（含地图摘要）拒绝并提示拼接规则已移除。
+        RejectRetiredLinkFields(json);
         MatchSaveData data = JsonSerializer.Deserialize<MatchSaveData>(json, JsonOptions)
                              ?? throw new FormatException("对局存档为空或不是合法 JSON。");
         RejectRetiredFields(data);
@@ -257,8 +259,6 @@ public sealed partial class MatchFlow
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
             CarryInOut = data.CarryInOut ?? false,
             CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
-            // final-countdown（match-setup「决赛倒计时配置」）：K 记在链接段；缺字段的旧链接存档按 0 = 不启用，保持旧存档的行为（FinalCountdownBackfilled 留痕；R7 窄解保留）。
-            FinalCountdownRounds = data.Link?.FinalCountdownRounds ?? 0,
         };
         // 与建局同一处校验（裁决 B1 / S1）：只能是链接图、4 人。
         try
@@ -272,21 +272,13 @@ public sealed partial class MatchFlow
         }
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
-        try
-        {
-            RequireValidFinalCountdown(options.FinalCountdownRounds);
-        }
-        catch (ArgumentOutOfRangeException ex)
-        {
-            throw new FormatException($"存档的决赛倒计时大回合数不合法：{ex.Message}", ex);
-        }
 
         // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
         _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
         _ = data.Relics ?? throw new FormatException("存档缺少信物账本。");
         var match = new MatchFlow(
             map, board, seed, players,
-            // 揭示记录的坐标是拼接后的，要等链接重放把账本坐标平移之后再恢复（RestoreLink）。
+            // 揭示记录在 RestoreLink 里恢复。
             new RelicLedger(relicRecord),
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight, options.ContentSet),
             BoardHistory.Deserialize(data.History ?? string.Empty),
@@ -296,8 +288,6 @@ public sealed partial class MatchFlow
         match.CarryInOutBackfilled = carryInOutBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
-        // W13（R7 窄解）：只删了"旧模式存档不置位"的模式条件；链接存档缺 K 仍按 0 回填并留痕。
-        match.FinalCountdownBackfilled = data.Link?.FinalCountdownRounds is null;
         match.RestoreLink(data);
 
         foreach (PlayerSaveData saved in data.Players)
@@ -411,7 +401,7 @@ public sealed class MatchSaveData
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Mode { get; set; }
 
-    /// <summary>链接模式的流程状态（配对、链接、战场结算、锁定旗数、阶段字段、出局原因与等待大回合数）。新存档恒写出。</summary>
+    /// <summary>流程状态段（本大回合 Pass 名单、锁定旗数、战场结算、出局原因与落败比较量）。新存档恒写出；段名沿用 <c>Link</c>（open-map 裁决 B2：不加存档格式版本号）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LinkSaveData? Link { get; set; }
 

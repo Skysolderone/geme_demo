@@ -1,6 +1,5 @@
 using System.Numerics;
 using Siege.Core.Board;
-using Siege.Core.Board.Maps;
 using Siege.Core.Match;
 using Siege.Sim.Logging;
 
@@ -17,7 +16,7 @@ namespace Siege.Sim.Analysis;
 /// <param name="Seats">锁定在该主题棋盘上的玩家人次（全部纳入局，含截断局）。</param>
 /// <param name="RankedSeats">其中在有名次的局（未截断、结果行有名次）里的人次——平均名次与胜场的分母。</param>
 /// <param name="MeanRank">平均名次（只计 <see cref="RankedSeats"/>；没有样本为 NaN）。</param>
-/// <param name="Wins">胜场：<see cref="RankedSeats"/> 里是本局胜者的人次。</param>
+/// <param name="Wins">胜场：<see cref="RankedSeats"/> 里是本局胜者的人次（open-map B6："主题表现"的整局胜率 = Wins / RankedSeats，原"首轮战场胜率"随决赛删除）。</param>
 /// <param name="Edits">匠人改造次数，按动作名（<c>TerrainEditKind</c>：Bridge / Fence / Burn）。</param>
 /// <param name="PublicRelics">纳入局里该主题棋盘上的公共信物个数之和（首部信物表的 <c>Contested</c> 档，开局坐标）。</param>
 /// <param name="PublicControls">这些公共信物"变为有人控制"的次数（<c>ControlChanged</c> 事件、控制者非空；失去控制不计）。</param>
@@ -34,21 +33,6 @@ public sealed record ThemeStat(
 {
     /// <summary>匠人改造合计。</summary>
     public int EditTotal => Edits.Values.Sum();
-
-    /// <summary>
-    /// 主题表现（ai-terrain-review 1.3）：锁定在该主题棋盘上、有首轮战场结果的人次——"首轮战场" = 该玩家出现在名单里的第一次战场结算，且早于决赛配对事件
-    /// （没有决赛配对的局不设上限）；没有这样的结算、但在决赛配对之前已出局（势力归零等）的，记为首轮战场落败（<see cref="FirstFieldEliminated"/>）。全部纳入局（含截断局）。
-    /// </summary>
-    public int FirstFieldSeats { get; init; }
-
-    /// <summary>其中赢下首轮战场的人次（结算胜者是本人）。</summary>
-    public int FirstFieldWins { get; init; }
-
-    /// <summary><see cref="FirstFieldSeats"/> 里未经战场结算、在决赛配对之前就已出局的人次（计为落败）。</summary>
-    public int FirstFieldEliminated { get; init; }
-
-    /// <summary>锁定在该主题棋盘上、但决赛之前既没有经历战场结算也没有出局的人次（3+1 的单人棋盘、首轮未配对的等待者、截断前未结算等），不进首轮胜率的分母。</summary>
-    public int NoFirstField { get; init; }
 
     /// <summary>第 3 大回合结束时（该大回合最后一条快照）锁定在该主题棋盘上的玩家势力，升序；没有第 3 大回合快照的局不计。</summary>
     public IReadOnlyList<BigInteger> Round3Powers { get; init; } = [];
@@ -84,10 +68,6 @@ public static class ThemeAnalyzer
         var edits = all.ToDictionary(t => t, _ => new SortedDictionary<string, int>(StringComparer.Ordinal));
         var relics = all.ToDictionary(t => t, _ => 0);
         var controls = all.ToDictionary(t => t, _ => 0);
-        var fieldSeats = all.ToDictionary(t => t, _ => 0);
-        var fieldWins = all.ToDictionary(t => t, _ => 0);
-        var noField = all.ToDictionary(t => t, _ => 0);
-        var fieldEliminated = all.ToDictionary(t => t, _ => 0);
         var r3Powers = all.ToDictionary(t => t, _ => new List<BigInteger>());
         var r3Ranks = all.ToDictionary(t => t, _ => new List<int>());
         int ranked = 0;
@@ -120,22 +100,7 @@ public static class ThemeAnalyzer
                     wins[theme] += result.Winners.Contains(player) ? 1 : 0;
                 }
 
-                // 主题表现（ai-terrain-review 1.3）：首轮战场与第 3 大回合结束时势力。
-                if (FirstField(log, player) is { } first)
-                {
-                    fieldSeats[theme]++;
-                    fieldWins[theme] += first.Winner == player ? 1 : 0;
-                }
-                else if (EliminatedBeforeFinal(log, player))
-                {
-                    fieldSeats[theme]++;
-                    fieldEliminated[theme]++;
-                }
-                else
-                {
-                    noField[theme]++;
-                }
-
+                // 主题表现（ai-terrain-review 1.3 → open-map B6）：整局胜率取上面的 wins / ranks，另记第 3 大回合结束时势力。
                 if (round3?.PlayersState.FirstOrDefault(p => p.Player == player) is { } state)
                 {
                     r3Powers[theme].Add(state.Total);
@@ -143,15 +108,27 @@ public static class ThemeAnalyzer
                 }
             }
 
-            LinkLayout layout = LinkLogLayout.Of(log);
+            // open-map：地图整局不变，坐标归棋盘只看首部的开局棋盘清单（唯一的棋盘几何来源，不重建地图）。
+            int? ZoneAt(Coord c)
+            {
+                for (int z = 0; z < entries.Count; z++)
+                {
+                    Coord origin = Coord.Parse(entries[z].Origin);
+                    if (c.X >= origin.X && c.X < origin.X + entries[z].Width && c.Y >= origin.Y && c.Y < origin.Y + entries[z].Height)
+                    {
+                        return z;
+                    }
+                }
 
-            // 匠人改造：快照里的改造按该小回合结束时（含本回合内的链接）的布局记，按目标所在棋盘归主题。
+                return null;
+            }
+
+            // 匠人改造：按目标所在棋盘归主题。
             foreach (TurnSnapshot turn in log.Turns.Where(t => t.Edits is { Count: > 0 }))
             {
-                int version = LinkLogLayout.VersionAfterTurn(log, turn.Turn);
                 foreach (TerrainEditEntry entry in turn.Edits!)
                 {
-                    int? zone = TerrainEdit.Parse(entry.Target).Cells.Select(c => layout.ZoneAt(c, version)).FirstOrDefault(z => z is not null);
+                    int? zone = TerrainEdit.Parse(entry.Target).Cells.Select(ZoneAt).FirstOrDefault(z => z is not null);
                     if (ThemeOf(zone) is { } theme)
                     {
                         edits[theme][entry.Action] = edits[theme].GetValueOrDefault(entry.Action) + 1;
@@ -163,25 +140,17 @@ public static class ThemeAnalyzer
             HashSet<Coord> contested = [.. log.Header.Relics.Where(r => r.Zone == nameof(RelicZone.Contested)).Select(r => Coord.Parse(r.Coord))];
             foreach (Coord c in contested)
             {
-                if (ThemeOf(layout.ZoneAt(c, 0)) is { } theme)
+                if (ThemeOf(ZoneAt(c)) is { } theme)
                 {
                     relics[theme]++;
                 }
             }
 
-            // 被控制：ControlChanged 事件按发生时的布局记坐标；换回开局坐标后查是否公共信物。控制者为空（失去控制）不计。
+            // 被控制：ControlChanged 事件的坐标即开局坐标；查是否公共信物。控制者为空（失去控制）不计。
             foreach (LogEvent e in log.Events.Where(e => e.Type == LogEventType.ControlChanged && e.Player is not null && e.Coords is { Count: > 0 }))
             {
-                int version = LinkLogLayout.VersionAtEvent(log, e);
                 Coord at = Coord.Parse(e.Coords![0]);
-                if (layout.ZoneAt(at, version) is not { } zone)
-                {
-                    continue;
-                }
-
-                Coord now = layout.BoardAt(zone, version).Origin;
-                Coord then = layout.BoardAt(zone, 0).Origin;
-                if (contested.Contains(new Coord(at.X - now.X + then.X, at.Y - now.Y + then.Y)) && ThemeOf(zone) is { } theme)
+                if (contested.Contains(at) && ThemeOf(ZoneAt(at)) is { } theme)
                 {
                     controls[theme]++;
                 }
@@ -193,10 +162,6 @@ public static class ThemeAnalyzer
             ranked,
             [.. all.Select(t => new ThemeStat(t, boards[t], seats[t], ranks[t].Count, Statistics.Mean(ranks[t]), wins[t], edits[t], relics[t], controls[t])
             {
-                FirstFieldSeats = fieldSeats[t],
-                FirstFieldWins = fieldWins[t],
-                FirstFieldEliminated = fieldEliminated[t],
-                NoFirstField = noField[t],
                 Round3Powers = [.. r3Powers[t].Order()],
                 Round3PowerRanks = [.. r3Ranks[t].Order()],
             })]);
@@ -204,28 +169,4 @@ public static class ThemeAnalyzer
 
     /// <summary>"第 3 大回合结束时势力"取的大回合（= 构筑期最后一个大回合，<see cref="LinkModeAnalyzer.BuildRounds"/>）。</summary>
     public const int Round3 = LinkModeAnalyzer.BuildRounds;
-
-    /// <summary>
-    /// 玩家的首轮战场结算：名单里有该玩家的第一次战场结算（按事件序），且早于决赛配对事件；没有为 <c>null</c>（见 <see cref="ThemeStat.FirstFieldSeats"/>）。
-    /// </summary>
-    internal static SettlementLogEntry? FirstField(MatchLog log, int player)
-    {
-        long final = FinalSeq(log);
-        return log.Events
-            .Where(e => e.Seq < final && e.Settlement is { } s && s.Entries.Any(x => x.Player == player))
-            .OrderBy(e => e.Seq)
-            .Select(e => e.Settlement)
-            .FirstOrDefault();
-    }
-
-    /// <summary>玩家在决赛配对事件之前出局（任何出局原因）。</summary>
-    internal static bool EliminatedBeforeFinal(MatchLog log, int player)
-    {
-        long final = FinalSeq(log);
-        return log.Events.Any(e => e.Seq < final && e.Type == LogEventType.PlayerEliminated && e.Player == player);
-    }
-
-    /// <summary>决赛配对事件的事件序；没有决赛配对为 <see cref="long.MaxValue"/>。</summary>
-    private static long FinalSeq(MatchLog log) =>
-        log.Events.Where(e => e.Pairing is { Kind: nameof(PairingKind.Final) }).Select(e => (long)e.Seq).DefaultIfEmpty(long.MaxValue).Min();
 }

@@ -49,9 +49,8 @@ public sealed record MapData
     public ImmutableArray<BoardPlate> Boards { get; init; } = [];
 
     /// <summary>
-    /// 地图版本号（board-link-mode D2）：初始地图为 0，链接档每经一次「链接事件」换上的新地图 +1；其余规格档恒为 0。
-    /// <see cref="Boards"/> 即当前已物化的棋盘集合——链接只往清单末尾追加公共棋盘、把场景格改成可落子格，不改写任何已有格。
-    /// 不参与任何规则计算，只供存档、日志与"链接后重新校验"核对。
+    /// 地图版本号：恒为 0（open-map 裁决 O3：地图在对局中不再变化；对局中增长的路径已随拼接规则删除）。
+    /// <see cref="Boards"/> 即全部出生棋盘。不参与任何规则计算，只供存档、日志与校验核对。
     /// </summary>
     public int MapVersion { get; init; }
 

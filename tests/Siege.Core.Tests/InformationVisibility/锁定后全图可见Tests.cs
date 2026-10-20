@@ -80,16 +80,13 @@ public class 锁定后全图可见Tests
         // tasks 1.4 验收：势力排名栏、顺序层、手牌对比面板对四人四区的任何玩家都不遮蔽（原「他战场玩家数值不进 HUD 视图模型」的反向）。
         MatchFlow match = Started([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);
         ViewerWorld world = match.World(P0);
-        Assert.All(All, p => Assert.False(world.IsConcealed(p)));
 
         var power = Assert.IsType<PowerLayerContent>(world.Layer(TacticalLayer.Power));
         Assert.Equal(4, power.Players.Length);
-        Assert.All(power.Players, p => Assert.False(p.Concealed));
         Assert.All(power.Players, p => Assert.True(p.Total > BigInteger.Zero));
         Assert.All(power.Players, p => Assert.NotNull(p.Rank));
-        Assert.All(world.HandPanel().Opponents, o => Assert.False(o.Concealed));
         Assert.All(world.HandPanel().Opponents, o => Assert.NotEmpty(o.Types));
-        Assert.All(Assert.IsType<OrderLayerContent>(world.Layer(TacticalLayer.Order)).Rows, r => Assert.False(r.Concealed));
+        Assert.All(Assert.IsType<OrderLayerContent>(world.Layer(TacticalLayer.Order)).Rows, r => Assert.True(r.Value > 0 || r.Rank > 0));   // 顺序层数值全员可读（open-map 段 B：遮蔽字段已删除）
 
         // 信息层含全图：他人棋盘上的棋串出现在气层里。
         var liberties = Assert.IsType<LibertyLayerContent>(world.Layer(TacticalLayer.Board, BoardReading.Groups));

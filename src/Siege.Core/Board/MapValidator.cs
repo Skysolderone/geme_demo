@@ -66,7 +66,7 @@ public sealed class MapValidationException : Exception
 }
 
 /// <summary>
-/// 地图静态校验。把必死口袋、出生区容量不足、拼接错位这类问题挡在加载期——
+/// 地图静态校验。把必死口袋、出生区容量不足、棋盘错位这类问题挡在加载期——
 /// 漏到对局中会表现为"某玩家莫名其妙被迫 Pass"，极难归因。
 /// 连通区一律沿气边（<see cref="Adjacency.LibertyNeighbors"/>）：崖壁、栅栏、未架桥深水挡住的路不算路。
 /// "障碍占外接区域 25%–35%"在 terrain-model 取消：深水与崖壁同样在压缩空间，只数障碍已无意义，密度由可落子格区间把控。
@@ -83,7 +83,7 @@ public static class MapValidator
     /// 距离均衡（拒绝 / 只报告两种处理）、出生区须到达中央入口、咽喉必须标注、全部棋盘须经通道连成一片、通道宽 / 长、旧档的列宽区间与"清单必须为空"。
     /// </para>
     /// 各地图共用、不在表里的规则：结构、地形边界、可落子格与信物格预算、出生区（保护期容量、出生区内无新地表）、信物格合法、
-    /// 豁免理由、必死口袋，以及链接档的拼接后校验（<see cref="ValidateSpliced"/>）。中央入口 / 咽喉须可落子与容差两条随 retire-legacy-rules（L18）删除。
+    /// 豁免理由、必死口袋，以及链接档的布局校验（<see cref="ValidateSpliced"/>）。中央入口 / 咽喉须可落子与容差两条随 retire-legacy-rules（L18）删除。
     /// 旋转对称不在校验器里（原 MapSymmetry 只由标准档基准图的测试调用，已随旧地图删除——retire-legacy-maps）。
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
@@ -106,7 +106,7 @@ public static class MapValidator
                 ZonesMustExceedPlayers: true,
                 ColumnRange: (22, 30),
                 RowRange: (16, 20),
-                PlateList: new((6, 8), (6, 8), MinGap: 1, BirthRelics: 2, PublicRelicsMax: 1, MinEditTargets: 2)),
+                PlateList: new((6, 8), (6, 8), BirthRelics: 2, PublicRelicsMax: 1, MinEditTargets: 2)),
         }.ToImmutableDictionary();
 
     /// <summary>
@@ -122,14 +122,13 @@ public static class MapValidator
         PlateRules PlateList);
 
     /// <summary>
-    /// 棋盘清单规则：棋盘边长区间、出生棋盘边长区间、不同战场的棋盘两两的最小间隔、每块出生棋盘的出生区档信物格数与公共区档信物格数上限、
+    /// 棋盘清单规则：棋盘边长区间、出生棋盘边长区间、每块出生棋盘的出生区档信物格数与公共区档信物格数上限、
     /// 每块出生棋盘的可改造目标（林地格 + 未架桥深水格）下限。
     /// retire-legacy-maps 4.2：通道的宽度与长度区间随棋盘档删除（链接档没有通道）。link-map-terrain D6：加公共区档上限与改造目标下限。
     /// </summary>
     private sealed record PlateRules(
         (int Min, int Max) Side,
         (int Min, int Max) BirthSide,
-        int MinGap,
         int BirthRelics,
         int PublicRelicsMax,
         int MinEditTargets);
@@ -246,11 +245,9 @@ public static class MapValidator
         }
 
         // 链接档（open-map D2）：5 块出生棋盘边对边紧贴成一张连通地图；没有通道，可落子格都必须属于某块棋盘；连通分量恰 1 个且含全部出生棋盘。
-        // ValidatePlateGaps 只对不同战场的棋盘要求间隔，唯一战场上不再触发（BOARD_TOO_CLOSE 段 B 删）。
         Battlefields fields = Battlefields.Of(map);
         int[,] owner = ValidatePlateCells(map, plates, fields, f);
         ValidateThemes(map, f);
-        ValidatePlateGaps(map, plates, fields, f);
         ValidateBirthPlates(map, f);
         ValidateFlatScenery(map, owner, f);
         ValidateSpliced(map, plates, owner, fields, f);
@@ -439,40 +436,6 @@ public static class MapValidator
         }
     }
 
-    /// <summary>
-    /// 第 3 条：棋盘外接矩形两两不重叠，且至少间隔若干格（两个方向上间隔的较大者；投影重叠的方向记为负）。
-    /// 只对<b>不同战场</b>（<paramref name="fields"/>）的棋盘要求间隔——同一战场内的棋盘是拼接出来的，边对边紧贴；重叠由 <see cref="ValidateSpliced"/> 另查。
-    /// 棋盘所属战场读 <see cref="Battlefield.Boards"/>（棋盘内任一可落子格所在的分量，link-map-terrain D7），不取左下角格——主题棋盘的角上可以不可落子。
-    /// </summary>
-    private static void ValidatePlateGaps(MapData map, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        Battlefield? FieldOf(int board) => fields.All.FirstOrDefault(field => field.Boards.Contains(board));
-        for (int i = 0; i < map.Boards.Length; i++)
-        {
-            for (int j = i + 1; j < map.Boards.Length; j++)
-            {
-                BoardPlate a = map.Boards[i];
-                BoardPlate b = map.Boards[j];
-                if (FieldOf(i) is { } fa && FieldOf(j) is { } fb && ReferenceEquals(fa, fb))
-                {
-                    continue;
-                }
-
-                int dx = Math.Max(a.Origin.X - (b.Origin.X + b.Width), b.Origin.X - (a.Origin.X + a.Width));
-                int dy = Math.Max(a.Origin.Y - (b.Origin.Y + b.Height), b.Origin.Y - (a.Origin.Y + a.Height));
-                int gap = Math.Max(dx, dy);
-                if (gap < plates.MinGap)
-                {
-                    string how = gap < 0 ? "重叠" : $"只隔 {gap} 格";
-                    f.Add(new MapValidationFailure(
-                        "BOARD_TOO_CLOSE",
-                        $"{Describe(a)} 与 {Describe(b)} {how}：棋盘两两至少间隔 {plates.MinGap} 格（未链接的战场不得相邻）。",
-                        [a.Origin, b.Origin]));
-                }
-            }
-        }
-    }
-
     /// <summary>「棋盘清单」：出生棋盘与出生区一一对应，第 i 块出生棋盘的核心区（<see cref="BoardPlate.CoreCells"/>）恰等于出生区 i（link-map-terrain D1 / 裁决 M1）。</summary>
     private static void ValidateBirthPlates(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -523,7 +486,7 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 链接档的拼接校验（board-link-mode D1 / D2 拼接版，规格 link-map-generation「物化状态校验」）：
+    /// 链接档的布局校验（规格 link-map-generation「物化状态校验」）：
     /// 可落子格都属于某块棋盘（没有通道）；棋盘两两不重叠；每块出生棋盘恰 <see cref="PlateRules.BirthRelics"/> 个出生区档信物格、至多 <see cref="PlateRules.PublicRelicsMax"/> 个公共区档信物格；
     /// 按几何四邻导出的连通分量（<see cref="Battlefields"/>）恰 1 个且含全部出生棋盘（open-map D2：建局时即紧贴成一张连通地图，对局中不变）。
     /// </summary>
@@ -534,7 +497,7 @@ public static class MapValidator
         {
             f.Add(new MapValidationFailure(
                 "SCENERY_CELL_PLAYABLE",
-                "拼接图上的可落子格都必须属于某块出生棋盘：没有通道，棋盘之外必须全部是障碍格。",
+                "可落子格都必须属于某块出生棋盘：没有通道，棋盘之外必须全部是障碍格。",
                 loose));
         }
 
@@ -552,7 +515,7 @@ public static class MapValidator
             if (!overlapped.IsEmpty)
             {
                 f.Add(new MapValidationFailure(
-                    "BOARD_OVERLAP", $"{Describe(plate)} 与清单里靠前的棋盘重叠：拼接只能边对边紧贴，不得重叠。", overlapped));
+                    "BOARD_OVERLAP", $"{Describe(plate)} 与清单里靠前的棋盘重叠：棋盘只能边对边紧贴，不得重叠。", overlapped));
             }
 
             if (plate.Kind == BoardPlateKind.Birth)
@@ -863,7 +826,7 @@ public static class MapValidator
 
     // retire-legacy-rules L18（裁决 R3）：原 ValidateLandmarks（中央入口 / 咽喉须可落子：CENTRAL_ENTRANCE_NOT_PLAYABLE、CHOKE_NOT_PLAYABLE）与
     // ValidateTolerance 的容差两条（TOLERANCE_NEGATIVE、TOLERANCE_RELAX_WITHOUT_REASON）只为已删除的距离均衡服务，随之删除；
-    // MapData 的中央入口、咽喉、距离容差与放宽理由字段保留（地图文件照常读写、随链接平移）。原 ValidateTolerance 里的豁免理由一条移到下面，位置与次序不变。
+    // MapData 的中央入口、咽喉、距离容差与放宽理由字段保留（地图文件照常读写）。原 ValidateTolerance 里的豁免理由一条移到下面，位置与次序不变。
 
     /// <summary>每条必死口袋豁免都必须写明理由。</summary>
     private static void ValidatePocketExemptions(MapData map, ImmutableArray<MapValidationFailure>.Builder f)

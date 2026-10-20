@@ -73,29 +73,12 @@ public sealed class MatchSession
     /// <summary>一行状态提示。</summary>
     public string Notice { get; private set; } = string.Empty;
 
-    /// <summary>事件提示条（settlement-show「战场结算横幅」：他场结算"不打断操作的提示条"），最近一条；没有则为空串。</summary>
-    /// <summary>自上次取走以来新产生的他场结算提示条文案（settlement-show「战场结算横幅」）；显示队列与日志由 GameRoot 接。</summary>
-    public ImmutableArray<string> TakeNotices()
-    {
-        ImmutableArray<string> notices = [.. _pendingNotices];
-        _pendingNotices.Clear();
-        return notices;
-    }
-
-    private readonly List<string> _pendingNotices = [];
-
-    /// <summary>最近一次结算接线产出的战场横幅（"战场胜出" / "战场落败（第 N 名）"）与提示条文案，供 `--auto-demo` 全流程自检核对（<see cref="Siege.Presentation.Diagnostics.LinkDemoAudit.Settled"/>）。</summary>
-    public (ImmutableArray<string> Banners, ImmutableArray<string> Notices) LastSettlementShow { get; private set; } = ([], []);
-
     /// <summary>
     /// 本机所在战场应可见的格数（独立于按座位过滤的口径：由地图的战场导出 <see cref="Battlefields"/> 与棋盘清单给出），供自检比对可见格数；未锁定出生区为 0。
     /// link-map-terrain G1（裁决 A）：战斗阶段可见格 = 本战场所含各棋盘外接矩形内的全部格（含岩石与未架桥深水），所以取各棋盘宽 × 高之和，不取战场的可落子格数。
     /// </summary>
     public int MyBattlefieldCells => Match.Phase == MatchPhase.FlagPlanting ? 0
         : Battlefields.Of(Match.Map).ById(Match.BattlefieldOf(Me))?.Boards.Sum(b => Match.Map.Boards[b].Width * Match.Map.Boards[b].Height) ?? 0;
-
-    /// <summary>本机所在战场的标识（= 分量内最小出生棋盘编号）；未锁定为 <c>null</c>。</summary>
-    public int? MyBattlefield => Match.Phase == MatchPhase.FlagPlanting ? null : Match.BattlefieldOf(Me);
 
     /// <summary>本机此刻的合法落子范围（只读查询，Core 的唯一实现）；不在进行中为空。</summary>
     public IReadOnlySet<Coord> MyLegalRange => Match.Phase == MatchPhase.InProgress ? Match.LegalRangeFor(Me) : ImmutableHashSet<Coord>.Empty;
@@ -117,72 +100,6 @@ public sealed class MatchSession
         return beats;
     }
 
-    /// <summary>
-    /// 链接模式新增的演出（board-link-mode tasks 4.5）：在既有结算节拍之后接上本机战场结算的横幅与本机参与的"棋盘展开"节拍；他场结算只入提示条队列。
-    /// 节拍全部由 <see cref="LinkShowBeats"/> 纯函数生成（输入：结算前后本机的默认棋盘、全局公开的结算记录），这里只接线。须在 <see cref="Rebuild"/> 之后调用。
-    /// </summary>
-    private ImmutableArray<SettlementBeat> WithLinkBeats(
-        ImmutableArray<SettlementBeat> beats, DefaultBoardView boardBefore, ImmutableArray<BattlefieldSettlementRecord> settlementsBefore, int linksBefore)
-    {
-        (ImmutableArray<SettlementBeat> settled, ImmutableArray<string> notices) =
-            LinkShowBeats.Settlements(settlementsBefore, Match.Settlements, Me, matchEnded: Match.Phase == MatchPhase.Ended);
-        _pendingNotices.AddRange(notices);
-        LastSettlementShow = ([.. settled.OfType<BannerBeat>().SelectMany(b => b.Banners)], notices);
-        if (CountdownNotice() is { } countdown)
-        {
-            // 决赛倒计时提示条（settlement-show「决赛倒计时提示」，final-countdown 3.1）：每个大回合开始一条，排在他场结算提示之后，同一个显示队列。
-            _pendingNotices.Add(countdown);
-        }
-
-        ImmutableArray<PlayerId> matesBefore = _matesBefore;
-        ImmutableArray<PlayerId> newOpponents = [.. World.SameBattlefieldPlayers.Where(p => !matesBefore.Contains(p))];
-        _matesBefore = World.SameBattlefieldPlayers;
-        // 拼接（board-link-mode F.4）：本小回合里发生了链接才有节拍；结算前后的格经布局换算对齐，平移不算新增。
-        ImmutableArray<SettlementBeat> expansion = Match.Links.Count > linksBefore
-            ? LinkShowBeats.Expansion(boardBefore, World.Board(), newOpponents, Layout(), linksBefore)
-            : [];
-        return LinkShowBeats.Splice(beats, settled, expansion);   // 战场落败横幅排在出局横幅之前，再是展开节拍
-    }
-
-    private readonly FinalCountdownNotices _countdownNotices = new();
-
-    /// <summary>
-    /// 本机此刻的决赛倒计时提示（每个大回合至多一次）：输入全部只读自对局的全局公开状态——本机是否在局、是否等待决赛（Core 判定）、
-    /// 本机所在战场与其余未结算战场的期限；文案与去重在 <see cref="FinalCountdownNotices"/>。
-    /// </summary>
-    private string? CountdownNotice()
-    {
-        if (Match.Phase != MatchPhase.InProgress)
-        {
-            return null;
-        }
-
-        int myField = Match.BattlefieldOf(Me);
-        ImmutableSortedDictionary<int, int> deadlines = Match.BattlefieldDeadlines;
-        int? mine = !Match.IsBattlefieldSettled(myField) && deadlines.TryGetValue(myField, out int d) ? d : null;
-        return _countdownNotices.Take(Match.MajorRound, true, Match.StateOf(Me).Status == Siege.Core.Scoring.PlayerStatus.Active, Match.IsWaitingForFinal(Me), mine,
-            deadlines.Where(kv => kv.Key != myField && !Match.IsBattlefieldSettled(kv.Key)).Select(kv => kv.Value));
-    }
-
-    /// <summary>本局的布局换算（开局出生棋盘 + 全部链接的平移向量，Core 的唯一实现 <see cref="LinkLayout"/>）。</summary>
-    private LinkLayout Layout() => new(Match.Board.BaseMap.Boards, Match.Links.Select(l => l.ShiftStep));
-
-    /// <summary>自 <paramref name="linksBefore"/> 次链接以来的坐标映射（结算前盘面的格 → 拼接后坐标）；期间没有链接为 <c>null</c>（恒等）。</summary>
-    private Func<Coord, Coord>? MovedSince(int linksBefore)
-    {
-        if (Match.Links.Count == linksBefore)
-        {
-            return null;
-        }
-
-        LinkLayout layout = Layout();
-        int to = layout.Versions;
-        return c => layout.Translate(c, linksBefore, to);
-    }
-
-    /// <summary>上一次结算后与本机同战场的玩家（"棋盘拼接"横幅里"与 X 交战"的 X = 新成为同战场者）。</summary>
-    private ImmutableArray<PlayerId> _matesBefore = [];
-
     /// <summary>出生区 → 玩家（插旗锁定后才有）。</summary>
     public IReadOnlyDictionary<int, PlayerId> ZoneOwners => _zoneOwners;
 
@@ -200,13 +117,12 @@ public sealed class MatchSession
 
     /// <summary>
     /// 开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（链接图 <c>link:&lt;地图种子&gt;</c>），本机玩家坐第 <paramref name="seat"/> 位（1 起）。
-    /// 一律以链接模式建局（board-link-mode 实现裁决 B1 / D7；retire-legacy-maps 3.6：建局分叉删除，公开 <c>MatchFlow.Create</c> 恒为链接模式）
-    /// 并挂 <paramref name="pairing"/>（D3：有人值守真随机、无人值守固定脚本，由 <c>GameRoot</c> 决定）。
+    /// 一律以链接模式建局（board-link-mode 实现裁决 B1 / D7；retire-legacy-maps 3.6：建局分叉删除，公开 <c>MatchFlow.Create</c> 恒为链接模式）。
     /// <paramref name="carryInOut"/> 为真即开启带入带出（carry-in-out D10）：本机玩家带 <paramref name="carry"/>（可为空），
     /// 各 AI 按"与本机玩家同等数量"从 <c>carry-ai</c> 子流抽取（<see cref="CarryAi.ForHumanMatch"/>，与终端版同一实现）。关闭时对局选项与引入之前相同。
     /// </summary>
     public static MatchSession Create(
-        MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int? cellLimit = null, bool carryInOut = false, CarryIn? carry = null, IPairingSource? pairing = null)
+        MapData map, ulong seed, int playerCount, int seat, AiDifficulty difficulty, int? cellLimit = null, bool carryInOut = false, CarryIn? carry = null)
     {
         PlayerId[] players = [.. Enumerable.Range(0, playerCount).Select(i => new PlayerId(i))];
         PlayerId me = players[seat - 1];
@@ -217,9 +133,6 @@ public sealed class MatchSession
         }
 
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
-        // 配对由对局外部给出（battlefield「配对事件由对局外部提供」）：没有来源的链接图对局会停在待配对阶段，图形版没有人工配对界面，所以必须挂一个。
-        match.PairingSource = pairing ?? throw new ArgumentException("链接图对局必须挂配对来源：有人值守用真随机，无人值守用内置固定脚本。", nameof(pairing));
-
         return new MatchSession(match, me, seed, difficulty, cellLimit);
     }
 
@@ -528,9 +441,6 @@ public sealed class MatchSession
 
         // 结算前快照取确认之前已持有的观察者世界里的公开快照（design.md D1），不额外发布。
         MatchPublicView before = World.Public.View;
-        DefaultBoardView boardBefore = World.Board();
-        ImmutableArray<BattlefieldSettlementRecord> settlementsBefore = [.. Match.Settlements];
-        int linksBefore = Match.Links.Count;
         SettlementOutcome outcome = Match.Confirm();
         if (!outcome.Confirmed)
         {
@@ -546,8 +456,7 @@ public sealed class MatchSession
         Rebuild();
 
         // 本机玩家自己的结算：有结算记录（按放置顺序），落子节拍压缩为一次整体确认闪动（design.md A2）。
-        _pendingBeats = WithLinkBeats(
-            SettlementBeats.Generate(before, World.Public.View, outcome.CaptureRecord, compressPlacement: true, MovedSince(linksBefore)), boardBefore, settlementsBefore, linksBefore);
+        _pendingBeats = SettlementBeats.Generate(before, World.Public.View, outcome.CaptureRecord, compressPlacement: true);
     }
 
     /// <summary>第 5 阶段：Pass（0 落子）。</summary>
@@ -559,9 +468,6 @@ public sealed class MatchSession
         }
 
         MatchPublicView before = World.Public.View;
-        DefaultBoardView boardBefore = World.Board();
-        ImmutableArray<BattlefieldSettlementRecord> settlementsBefore = [.. Match.Settlements];
-        int linksBefore = Match.Links.Count;
         Match.Pass();
         LastFailure = null;
         RecruitPanel = null;
@@ -569,7 +475,7 @@ public sealed class MatchSession
         Rebuild();
 
         // Pass 没有结算记录：势力不变得空序列、势力有变只得势力重算节拍。
-        _pendingBeats = WithLinkBeats(SettlementBeats.Generate(before, World.Public.View, record: null, moved: MovedSince(linksBefore)), boardBefore, settlementsBefore, linksBefore);
+        _pendingBeats = SettlementBeats.Generate(before, World.Public.View, record: null);
     }
 
     /// <summary>跑完一个 AI 小回合，返回落子与被提子的演出数据。</summary>
@@ -581,9 +487,6 @@ public sealed class MatchSession
         }
 
         MatchPublicView before = Match.Publish();
-        DefaultBoardView boardBefore = World.Board();
-        ImmutableArray<BattlefieldSettlementRecord> settlementsBefore = [.. Match.Settlements];
-        int linksBefore = Match.Links.Count;
         _runner.RunTurn();
         MatchPublicView after = Match.Publish();
         LastAiLookahead = (_runner.ControllerOf(actor) as HeuristicTurnController)?.LastLookahead is { } lookahead
@@ -592,10 +495,8 @@ public sealed class MatchSession
 
         // 运行器不返回结算记录（design.md D1）：落子与被提棋子只凭两份快照的盘面之差得出，落子按坐标字典序。
         // 现有"回合高亮"里的落子格 / 被提格两项由节拍取代，不再单独计算（D6）。
-        // 本小回合末尾若发生了拼接（board-link-mode F.4），结算前的格先平移到拼接后坐标再比，平移不被当成落子与提子。
-        ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(before, after, record: null, moved: MovedSince(linksBefore));
+        ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(before, after, record: null);
         Rebuild();
-        beats = WithLinkBeats(beats, boardBefore, settlementsBefore, linksBefore);
         _pendingBeats = beats;
         TurnFlash flash = TurnFlash.Of(beats);
 

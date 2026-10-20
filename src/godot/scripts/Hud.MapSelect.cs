@@ -110,7 +110,7 @@ public sealed partial class Hud
         _selectPanel = panel;
 
         body.AddChild(Ui.Text("开始新局", Ui.PanelBorder, UiTheme.BodyFontPx + 4));
-        body.AddChild(Ui.Text("四名玩家各盲选一块出生棋盘；三个大回合后随机配对、棋盘链接开战。地图由地图种子决定。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        body.AddChild(Ui.Text("5 块出生棋盘紧贴成一张连通地图，四名玩家各盲选一块；前 3 个大回合在自己棋盘构筑，第 4 大回合起全图开战。地图由地图种子决定。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
 
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("地图种子"));

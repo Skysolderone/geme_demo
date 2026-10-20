@@ -9,7 +9,7 @@ namespace Siege.Sim.Running;
 
 /// <summary>
 /// 分析复盘的回放驱动（ai-pass-review 1.2 的 <see cref="DefeatReplay"/> 原样抽出，ai-terrain-review 1.2 的 <see cref="ArtisanReplay"/> 共用）：
-/// 按日志首部原样重建对局（与 <see cref="Replayer"/> 同一组输入：首部配置、种子、首部记录的带入、日志里的配对事件），逐小回合推进到日志最后一个小回合，
+/// 按日志首部原样重建对局（与 <see cref="Replayer"/> 同一组输入：首部配置、种子、首部记录的带入），逐小回合推进到日志最后一个小回合，
 /// 每次部署前、AI 决策之前调用一次探针；每推进一个小回合即与原日志的同序号快照核对，一旦分歧整局记为未能复盘，不给出半截结论。日志不新增任何字段。
 /// </summary>
 /// <remarks>本文件不出现浮点（跑局层惯例）。</remarks>
@@ -40,7 +40,7 @@ public static class LogReplay
         }
 
         RecordedCarry? carry = header.CarryInOut is { } carryInOut ? new RecordedCarry(carryInOut, log.CarryIns) : null;
-        MatchSession session = MatchSession.Create(header.Config, log.Seed, map, recorded: true, carry, new RecordedPairingSource(log.RecordedPairings()));
+        MatchSession session = MatchSession.Create(header.Config, log.Seed, map, recorded: true, carry);
         Dictionary<int, TurnSnapshot> original = log.Turns.GroupBy(t => t.Turn).ToDictionary(g => g.Key, g => g.Last());
         string? failure = null;
         session.ObserveDeploy(batch =>

@@ -8,21 +8,11 @@ public enum MatchPhase
     /// <summary>插旗阶段：地形 / 出生区 / 信物格位置公开，信物内容隐藏。</summary>
     FlagPlanting,
 
-    /// <summary>对局进行中：大回合与小回合交替推进。</summary>
+    /// <summary>对局进行中：大回合与小回合交替推进。构筑期（第 1–3 大回合）与交战期（第 4 起）都是本阶段，只差合法落子范围与改造范围（open-map；待配对 / 待决赛链接阶段已随拼接规则删除）。</summary>
     InProgress,
 
     /// <summary>已结束：<see cref="MatchFlow.Result"/> 可读。</summary>
     Ended,
-
-    /// <summary>
-    /// 链接模式（battlefield「阶段推进」）：第 3 大回合结束、首轮配对候选 ≥ 2，停在大回合边界等待外部提交配对事件
-    /// （<see cref="MatchFlow.ApplyPairing"/>，或挂接的 <see cref="MatchFlow.PairingSource"/> 当场给出）。
-    /// 构筑期与交战期都是 <see cref="InProgress"/>（二者只差合法落子范围是否已随链接扩大，见 <see cref="MatchFlow.LinkStage"/>）。
-    /// </summary>
-    AwaitingPairing,
-
-    /// <summary>链接模式：全部多人战场已结算且在局玩家 ≥ 2，停在大回合边界等待决赛链接事件。</summary>
-    AwaitingFinalLink,
 }
 
 /// <summary>
@@ -81,20 +71,8 @@ public enum FlowEventKind
     PlayerResigned,
     MatchEnded,
 
-    /// <summary>链接模式：配对事件（首轮或决赛）被接受。</summary>
-    PairingApplied,
-
-    /// <summary>链接模式：一次链接执行完毕（两个战场合并）。</summary>
-    BattlefieldsLinked,
-
-    /// <summary>链接模式：一个战场结算（整轮 Pass / 填满 / 减员 / 到期）。</summary>
+    /// <summary>战场结算（整轮 Pass / 填满 / 减员）。open-map：配对 / 链接 / 决赛倒计时三种事件已随拼接规则删除。</summary>
     BattlefieldSettled,
-
-    /// <summary>
-    /// 链接模式（final-countdown）：一个未结算的多人战场进入决赛倒计时、得到期限大回合（第一次出现时同时记下倒计时起点 R）。
-    /// K = 0 时永不发出。追加在末位，旧值不变。
-    /// </summary>
-    FinalCountdown,
 }
 
 /// <summary>一条流程事件：种类、发生时的大回合、相关玩家（若有）与文字说明。</summary>

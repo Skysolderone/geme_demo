@@ -93,10 +93,8 @@ public static class Replayer
         // 原样使用首行配置：失败局自动提升为完整事件流、抽样由 sim-sample 子流决定，二者都只由种子 + 配置决定。
         // 带入按首部记录的各玩家带入重建（simulation-harness「可复现回放」），MUST NOT 按配置的带入数量重抽；首部缺该项的旧日志按无带入回放。
         RecordedCarry? carry = header.CarryInOut is { } carryInOut ? new RecordedCarry(carryInOut, original.CarryIns) : null;
-        // 链接模式（board-link-mode D3）：配对事件 MUST 从日志读取、MUST NOT 由种子推导——按记录逐次重放（来源名原样带回），链接随之按记录重建，
-        // 每次链接后的地图摘要随确定性文本逐行比对。非链接日志已在入口拒绝（见上）。
-        IPairingSource pairing = new RecordedPairingSource(original.RecordedPairings());
-        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true, carry, pairing).Run();
+        // 非链接日志已在入口拒绝（见上）；含配对 / 链接事件的改动前日志在 MatchLog.Parse 即被拒绝（open-map B2）。
+        MatchLog replayed = MatchSession.Create(original.Header.Config, original.Seed, map, recorded: true, carry).Run();
         return Compare(original, replayed);
     }
 

@@ -46,9 +46,7 @@ public class 批量跑局Tests
         Assert.DoesNotContain("FlagRisk", config.ToJson(), StringComparison.Ordinal);   // retire-legacy-maps 3.2：字段已删除（原 Assert.Null(config.FlagRisk)）
         // carry-in-out 段 C：未配置的带入数量落成 0 写入（写明关闭）。
         Assert.Null(config.CarryIn);
-        // final-countdown：未配置的决赛倒计时大回合数同样落成缺省 2 写进 config.json（match-setup「决赛倒计时配置」），期望的落成项多这一项。
-        // ai-seat-vision D1：未配置的 AI 视野落成 true（按座位视野）写进 config.json（缺省值也写），期望的落成项多这一项。
-        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, FinalCountdownRounds = Core.Match.MatchOptions.DefaultFinalCountdownRounds, SeatVision = true }).Effective().ToJson(), saved.ToJson());
+        Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0 }).Effective().ToJson(), saved.ToJson());
         Assert.All(saved.Players, p => Assert.Equal(Core.Ai.EvaluationWeights.Default, p.Weights));
         Assert.Equal((21UL, 6, 12, 500), (saved.SeedStart, saved.Count, saved.TurnLimit, saved.FullEventSamplePermille));   // 段 C：大回合上限 3 → 小回合数截断 12（= 3 × 4 人）
 
@@ -57,9 +55,7 @@ public class 批量跑局Tests
         Assert.All(logs, l =>
         {
             Assert.NotNull(l.Result);
-            // final-countdown：首部同样落成决赛倒计时大回合数（缺省 2），期望的落成项多这一项。
-            // ai-seat-vision D1：首部同样落成 AI 视野（缺省 true），期望的落成项多这一项。
-            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0, FinalCountdownRounds = Core.Match.MatchOptions.DefaultFinalCountdownRounds, SeatVision = true }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
+            Assert.Equal((config with { PassThreshold = Core.Ai.AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = Core.Ai.AiSearchConfig.LargeMapCellLimit, CarryIn = 0 }).ToJson(), l.Header.Config.ToJson());   // ai-eye 段 B：首部同样落成实际生效的阈值；carry-in-out 段 C：带入数量落成 0；retire-legacy-maps 1.8：link:1 落成候选格上限 24、不落成冒险概率
             // 截断 12 个小回合：4 人都在局时恰为 3 个大回合；原断言"终局大回合在 1–3"隐含"截断前无人出局"。
             // link-map-terrain：地图变了、AI 走法随之变，种子 24 的同区两人在第 2 大回合整轮 Pass 结算、少一人后 12 个小回合跨到第 4 大回合。
             // 改为按截断语义断言：小回合数不超过 12；终局大回合超过 3 时，截断前确有战场结算（有人出局）。
@@ -190,11 +186,8 @@ public class 批量跑局Tests
                 Assert.False(text.Contains("TimeProvider", StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} 含 TimeProvider（Sim 的墙钟只登记了 Program.PlayProfile 一处）");
             }
 
-            // 真随机 RandomNumberGenerator：除下面显式登记的唯一一处（Running/PairingSources.cs）之外一律不得出现。
-            if (Path.GetFileName(file) != "PairingSources.cs")
-            {
-                Assert.False(text.Contains("RandomNumberGenerator", StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} 含 RandomNumberGenerator（Sim 的真随机只登记了 RandomPairingSource 一处）");
-            }
+            // 真随机 RandomNumberGenerator：一律不得出现（open-map 段 B：原唯一登记处 RandomPairingSource 已随配对删除）。
+            Assert.False(text.Contains("RandomNumberGenerator", StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} 含 RandomNumberGenerator（Sim 不再有任何真随机来源）");
 
             if (!file.Contains($"{Path.DirectorySeparatorChar}Analysis{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             {
@@ -215,14 +208,8 @@ public class 批量跑局Tests
         Assert.True(playProfile > 0 && nextMember > playProfile && clock.Index > playProfile && clock.Index < nextMember, "唯一的 TimeProvider 必须在 PlayProfile 之内");
         Assert.Contains("TimeProvider.System.GetLocalNow)", program, StringComparison.Ordinal);
 
-        // 显式登记的唯一例外（board-link-mode 裁决 C9）：终端版有人值守对局的配对 MUST 用真随机源（规格 simulation-harness「各入口支持生成图」），
-        // 只给配对与等待者取数，配对结果作为对局事件记录、不进任何对局子流。恰好一处，且位于 RandomPairingSource 之内。
-        // 变异 MC-25：Running/MatchSession.cs 加一处 RandomNumberGenerator 用法 → 红。
-        string pairing = File.ReadAllText(Path.Combine(root, "Running", "PairingSources.cs"));
-        System.Text.RegularExpressions.Match entropy = System.Text.RegularExpressions.Regex.Matches(pairing, "RandomNumberGenerator").Single();
-        int randomSource = pairing.IndexOf("class RandomPairingSource", StringComparison.Ordinal);
-        int nextType = pairing.IndexOf("class RecordedPairingSource", StringComparison.Ordinal);
-        Assert.True(randomSource > 0 && nextType > randomSource && entropy.Index > randomSource && entropy.Index < nextType, "唯一的 RandomNumberGenerator 必须在 RandomPairingSource 之内");
+        // open-map 段 B：原显式登记的唯一真随机例外（RandomPairingSource，board-link-mode 裁决 C9）随配对删除，Running/ 下不再有 PairingSources.cs。
+        Assert.False(File.Exists(Path.Combine(root, "Running", "PairingSources.cs")));
 
         // 图形版同样由入口注入墙钟（src/godot 不在解决方案里，按源码扫描）：全部脚本里恰好一处，在带入带出的入口文件 GameRoot.Carry.cs。
         string scripts = Path.Combine(Determinism.随机子流隔离Tests.SourceRoot(), "src", "godot", "scripts");
@@ -696,12 +683,30 @@ public class 批量跑局Tests
         Assert.Contains("未知选项 --max-round", Assert.ThrowsAny<ArgumentException>(() => typo.EnsureRecognized()).Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void 玩家搜索配置里的视野开关被拒绝()
+    {
+        // open-map 段 B 质检（裁决 B1 / B2，boundaries.md「AI 视野」）：原 Players[].Search.SeatVision 在 ai-seat-vision 时期写进配置文件即报错；AiSearchConfig.SeatVision 删除后它成了
+        // 未知成员、System.Text.Json 会静默忽略——MUST 与顶层 SeatVision 同口径点名拒绝（大小写不敏感）。反面：Search 里的合法键照常可读。
+        // 变异（实跑）：RunConfig.FromJson 去掉 Players[].Search 的扫描 → 本测试红（配置被静默接受）。
+        FormatException ex = Assert.Throws<FormatException>(() => RunConfig.FromJson("{\"Count\": 2, \"Players\": [{\"Difficulty\": \"Standard\", \"Search\": {\"CandidateCellLimit\": 24, \"SeatVision\": false}}]}"));
+        Assert.Contains("Players[0].Search.SeatVision", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("已删除", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("拼接规则已移除", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Search.SeatVision", Assert.Throws<FormatException>(() => RunConfig.FromJson("{\"players\": [{}, {\"search\": {\"seatvision\": true}}]}")).Message, StringComparison.Ordinal);
+        RunConfig fine = new() { Players = [new() { Search = Siege.Core.Ai.AiSearchConfig.Standard with { CandidateCellLimit = 24 } }, new(), new(), new()] };
+        Assert.Equal(24, RunConfig.FromJson(fine.ToJson()).Players[0].Search!.CandidateCellLimit);
+    }
+
     [Theory]
     [InlineData("SiteValues", "{\"Low\":3,\"Mid\":8,\"High\":24}")]
     [InlineData("MaxMajorRounds", "15")]
     [InlineData("DominanceStartRound", "7")]
     [InlineData("CatchUpRecruit", "true")]
     [InlineData("maxMajorRounds", "15")]
+    [InlineData("PairingSeed", "7")]
+    [InlineData("FinalCountdownRounds", "2")]
+    [InlineData("SeatVision", "false")]
     public void 配置文件里的已删除配置项被拒绝(string key, string value)
     {
         // tasks 5.1：配置文件（run --config）里的旧键 MUST 报错并说明已删除——静默忽略会让一份旧扫档配置"跑通了但参数没生效"（testing.md）。

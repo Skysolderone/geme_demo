@@ -154,25 +154,4 @@ public class 链接档地图标识与确定性Tests
         }
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 同链接序列同最终图()
-    {
-        // Scenario：在 link:12345 上两次都依次链接 (1,4)、(2,5)、(1,2)（规格 1 起编号；这里用 0 起的出生棋盘编号 (0,3)、(1,4)、(0,1)）→ 两次的最终地图逐格相同。
-        LinkStep[] steps = [new(0, 3, LinkSide.East), new(1, 4, LinkSide.East), new(0, 1, LinkSide.North)];
-        Assert.Equal(MapFile.ToJson(Run(steps)), MapFile.ToJson(Run(steps)));
-
-        // 样本口径：换一条序列最终图就不同，上面的相等断言不是恒真。
-        Assert.NotEqual(MapFile.ToJson(Run(steps)), MapFile.ToJson(Run([new(0, 4, LinkSide.East), new(1, 3, LinkSide.East), new(0, 1, LinkSide.North)])));
-
-        static MapData Run(LinkStep[] steps)
-        {
-            MapData map = LinkMapGenerator.Generate(12345);
-            foreach (LinkStep step in steps)
-            {
-                map = LinkMapGenerator.Link(map, step.X, step.Y, step.Side).Map;
-            }
-
-            return map;
-        }
-    }
 }

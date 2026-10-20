@@ -35,7 +35,4 @@ public sealed record PlayerFlowState(
 
     /// <summary>战场落败时记录的势力（可以大于 0）；其他情形为 <c>null</c>。</summary>
     public BigInteger? PowerAtDefeat { get; init; }
-
-    /// <summary>链接模式：作为等待者（构筑期之后独处一个战场的在局玩家）度过的大回合数（match-telemetry 第 11 项）。</summary>
-    public int WaitingRounds { get; init; }
 }

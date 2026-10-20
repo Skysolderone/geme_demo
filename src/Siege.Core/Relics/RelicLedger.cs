@@ -36,38 +36,7 @@ public sealed class RelicLedger
     /// <summary>开局生成记录（种子 + 全部分布）。</summary>
     public RelicGenerationRecord Generation { get; }
 
-    /// <summary>
-    /// 拼接（board-link-mode D2 拼接版 / 裁决 J3）：把账本里每枚信物的坐标与揭示事件的坐标按 <paramref name="move"/>（拼接前可落子格 → 新坐标）整体迁移，
-    /// 内容、揭示状态、揭示大回合与控制逐项不变。<see cref="Generation"/> 是开局生成记录（开局图坐标的历史），不随之改写。
-    /// 两枚信物映射到同一格即抛 <see cref="SiegeRuleException"/>，账本不变。
-    /// </summary>
-    internal void Translate(Func<Coord, Coord> move)
-    {
-        ArgumentNullException.ThrowIfNull(move);
-        var moved = new SortedDictionary<Coord, RelicState>();
-        foreach (RelicState relic in _relics.Values)
-        {
-            Coord target = move(relic.Coord);
-            if (moved.ContainsKey(target))
-            {
-                throw new SiegeRuleException($"拼接把两枚信物送到了同一格 {target.ToNotation()}。");
-            }
-
-            moved.Add(target, relic.MovedTo(target));
-        }
-
-        List<RelicRevealEvent> reveals = [.. _reveals.Select(e => e with { Coord = move(e.Coord) })];
-        _relics.Clear();
-        foreach ((Coord coord, RelicState relic) in moved)
-        {
-            _relics.Add(coord, relic);
-        }
-
-        _reveals.Clear();
-        _reveals.AddRange(reveals);
-    }
-
-    /// <summary>任意信物格的<b>真实</b>内容（不论是否已揭示），按账本当前坐标（拼接后即平移后的坐标）。只供调试视图与测试。</summary>
+    /// <summary>任意信物格的<b>真实</b>内容（不论是否已揭示）。只供调试视图与测试。</summary>
     internal RelicContent ContentAt(Coord coord) => Require(coord).Content;
 
     /// <summary>全部揭示事件，按发生顺序。</summary>
@@ -140,7 +109,7 @@ public sealed class RelicLedger
     /// <summary>
     /// 本账本的独立副本（表现层只读入口的试算用：<c>MatchFlow.PublishSupplement</c> 在副本上读结构参数与先手修正，不碰正式账本）：
     /// 逐枚复制活状态（当前坐标、内容、揭示、控制）与揭示事件、峰值遥测。
-    /// 账本坐标已随拼接平移，MUST NOT 再从开局生成记录重建（那是开局图坐标，已揭示的被平移信物会被当作"非信物格"而抛出——段 D-a 在图形版自检里实测过同类缺陷）。
+    /// 逐枚复制活状态，MUST NOT 从开局生成记录重建（揭示与控制是对局状态，不在生成记录里）。
     /// </summary>
     public RelicLedger Copy() => new(Generation, _relics.Values.Select(r => r.Clone()), _reveals) { DeployLimitPeak = DeployLimitPeak };
 
@@ -156,7 +125,7 @@ public sealed class RelicLedger
     }
 
     /// <summary>
-    /// 把 <see cref="ExportState"/> 的结果写回尚未有任何揭示的账本（存档恢复用：先重放链接——账本坐标随拼接平移（<see cref="Translate"/>）——再调本方法，存档里的揭示坐标即平移后的坐标）。
+    /// 把 <see cref="ExportState"/> 的结果写回尚未有任何揭示的账本（存档恢复用）。
     /// 揭示按存档顺序重放；存档里出现非信物格即视为损坏。
     /// </summary>
     internal void RestoreState(RelicLedgerState state)
@@ -367,9 +336,6 @@ public sealed class RelicLedger
             RevealedInMajorRound = from.RevealedInMajorRound;
             Control = from.Control;
         }
-
-        /// <summary>同一枚信物搬到新坐标（拼接平移）。</summary>
-        internal RelicState MovedTo(Coord coord) => new(coord, this);
 
         /// <summary>逐项复制（账本副本）。</summary>
         internal RelicState Clone() => new(Coord, this);

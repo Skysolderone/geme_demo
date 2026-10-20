@@ -189,8 +189,9 @@ public class 平衡分析方向Tests
         string sample = Hash(SimFixtures.Sample.Value);
         string ranked = Hash(SimFixtures.RankedSample.Value);
         // open-map 1.5 重钉：link:1 改为 3+2 紧贴布局，样本走法随之变；旧值 8AF0C0CD430175146C459064F0BD0DFEFE6031C8B55B2D41076061466B8BF8D5 / B9C2D624CFB570D60F38A0A0EEA964BC8F2D98A876FB13861203F8A8FF237872。
-        Assert.True("65989D85FBCD0A4242831076A7BB0E7285D17A55A8621A35CF08D2693621DCC7" == sample, $"Sample 报告哈希：{sample}");
-        Assert.True("A2EA5792DD56CBBA25D83ED5457CC970E7F4E9083FF5B4C31DED0310A5BC0EBA" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // open-map 段 B 重钉：报告删等待者 / 倒计时段、链接模式段改为同区率 + 各棋盘被选次数 + 对局大回合数、主题表现改整局胜率（报告格式变化，走法不变）；旧值 65989D85… / A2EA5792…。
+        Assert.True("8F6ED4820B4C8DB95982A2A78AEBBA48158B17D4A621E4E529D0C782F93D9C91" == sample, $"Sample 报告哈希：{sample}");
+        Assert.True("5CBE36F0FB0BC878C9C01CF816BAF35E9C0C39010B09AAA23D6060EFA8D86B19" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

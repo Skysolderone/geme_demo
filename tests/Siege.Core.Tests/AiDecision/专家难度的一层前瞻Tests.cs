@@ -311,8 +311,8 @@ public class 专家难度的一层前瞻Tests
         // 变异 E-P1 / E-P2（预设的多样补充上限改回 8 / 两层权重改回 1000）→ 本测试红（见预设退回记录）。
         AiSearchConfig preset = AiSearchConfig.Expert with { PassThreshold = PassThreshold };
         MatchSession session = CreateSession(LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, Standard, Standard, Standard) with { CandidateCellLimit = 0 }, seed);
-        // ai-seat-vision 1.3：AI 视野是会话层对全部玩家的叠加项（批次配置顶层 SeatVision），夹具写死全知 → 落成的配置 = 预设 + 全知，其余逐字段等于预设。
-        Assert.Equal(preset with { SeatVision = false }, session.AiOf(P0)!.Config);
+        // open-map 段 B：全知开关随拼接规则删除，落成的配置逐字段等于预设。
+        Assert.Equal(preset, session.AiOf(P0)!.Config);
         AssertG1(preset, seed);
     }
 
@@ -322,8 +322,8 @@ public class 专家难度的一层前瞻Tests
         MatchSession session = CreateSession(
             LinkConfig(Standard, new PlayerAiConfig { Difficulty = difficulty, Search = search }, Standard, Standard), 1);
         HeuristicTurnController ai = session.AiOf(P1)!;
-        // ai-seat-vision 1.3：显式的搜索配置原样生效，只有视野取会话值（夹具写死全知，见 LookaheadFixtures.LinkConfig）。
-        Assert.Equal(search with { SeatVision = false }, ai.Config);
+        // 显式的搜索配置原样生效。
+        Assert.Equal(search, ai.Config);
         MatchLog log = session.Run();
         Assert.Null(log.Failure);
         return (log, ai.Decisions);

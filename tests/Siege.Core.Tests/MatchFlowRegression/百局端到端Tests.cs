@@ -28,8 +28,7 @@ public class 百局端到端Tests(ITestOutputHelper output)
         {
             var seed = new GameSeed(s);
             MatchFlow match = MatchFlow.Create(map, seed, players, MatchOptions.Immediate);
-            match.PairingSource = new ScriptedPairingSource();
-            match.PlantSequentially(players.Select((p, i) => (p, i)));
+                match.PlantSequentially(players.Select((p, i) => (p, i)));
             var runner = new MatchRunner(match);
             foreach (PlayerId p in players)
             {

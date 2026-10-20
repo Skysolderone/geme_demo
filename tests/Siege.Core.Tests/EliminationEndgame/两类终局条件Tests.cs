@@ -70,26 +70,6 @@ public class 两类终局条件Tests
         Assert.Equal(5, match.MajorRound);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 决赛结算即终局()
-    {
-        // Scenario：决赛战场内两名玩家在同一大回合都 Pass，地图上另有无人的出生棋盘 → 该大回合结束时终止，原因"最后战场结算"。
-        MatchFlow match = Started([0, 1, 3, 4], new ScriptedPairingSource()).PassRounds(4);
-        Assert.Equal(LinkStage.Final, match.LinkStage);
-        Assert.Equal(MatchPhase.InProgress, match.Phase);
-        Assert.Equal(5, match.MajorRound);
-
-        match.PassRound();
-
-        Assert.Equal(MatchPhase.Ended, match.Phase);
-        Assert.Equal(EndReason.LastBattlefieldSettled, match.Result!.Reason);
-        Assert.Equal(5, match.Result.MajorRound);
-        Assert.Equal(5, match.MajorRound);
-        Assert.Single(match.OccupiedBattlefields());
-        Assert.Equal(4, match.Result.Standings.Length);
-        Assert.Equal(match.Settlements[^1].Winner, match.Result.Winners.Single());
-    }
-
     [Fact]
     public void 构筑期内整轮Pass即终局()
     {
@@ -115,14 +95,13 @@ public class 两类终局条件Tests
         PlayerId winner = match.Settlements.Single().Winner;
         Assert.Equal(winner, match.Result.Winners.Single());
         Assert.All(All.Where(p => p != winner), p => Assert.Equal(EliminationReason.BattlefieldDefeat, match.StateOf(p).EliminationReason));
-        Assert.Empty(match.Pairings);
     }
 
     [Fact]
     public void 轮数再多也不结束()
     {
         // Scenario：对局进行到第 40 大回合且两类终局条件均未满足 → 对局继续。
-        MatchFlow match = Started([0, 0, 3, 4], new ScriptedPairingSource()).PlayRound(P0).AtRound(40, [P0, P1, P2, P3]).PlayRound(P1);
+        MatchFlow match = Started([0, 0, 3, 4]).PlayRound(P0).AtRound(40, [P0, P1, P2, P3]).PlayRound(P1);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
         Assert.Equal(41, match.MajorRound);
     }

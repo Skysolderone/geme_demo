@@ -24,7 +24,7 @@ public class 终端专家对局Tests
         int exit = PlayCommand.Run(
             42, 4, 1, AiDifficulty.Expert, new StringReader("1\n1\nR3 B\nv\nok\n\npass\n"), output,
             weights: LookaheadFixtures.Weights, passThreshold: LookaheadFixtures.PassThreshold, contentSet: ContentSet.V1,
-            onAi: (p, ai) => ais.Add(p, ai), map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // retire-legacy-maps 1.8：地图由 v5 改为 link:1（落点 B1 → V3；link-map-terrain 起为 X3），冒险概率随旧地图删除
+            onAi: (p, ai) => ais.Add(p, ai), map: MapCatalog.Resolve("link:1"));   // retire-legacy-maps 1.8：地图由 v5 改为 link:1（落点 B1 → V3；link-map-terrain 起为 X3），冒险概率随旧地图删除
         string text = output.ToString();
 
         Assert.Equal(0, exit);

@@ -24,28 +24,20 @@ internal static class LinkModeFixtures
     internal static readonly PlayerId P3 = TestMaps.P3;
     internal static readonly PlayerId[] All = TestMaps.All;
 
-    /// <summary><c>link:1</c> 的初始图（5 块隔绝的出生棋盘）。</summary>
+    /// <summary><c>link:1</c> 的初始图（5 块紧贴成一张连通地图的出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
 
-    /// <summary>
-    /// 链接模式、插旗立即。final-countdown：夹具显式取 K = 0（不启用决赛倒计时）——既有链接模式测试的期望都写于倒计时引入之前，
-    /// 用 K = 0 守住原期望（battlefield「决赛倒计时」K 为 0 不启用：与引入之前逐步相同），不改期望；倒计时的测试用 <see cref="CountdownOptions"/>。
-    /// </summary>
-    internal static MatchOptions Options => MatchOptions.Immediate with { FinalCountdownRounds = 0 };
-
-    /// <summary>链接模式、插旗立即、决赛倒计时 K = <paramref name="rounds"/>（final-countdown）。</summary>
-    internal static MatchOptions CountdownOptions(int rounds = MatchOptions.DefaultFinalCountdownRounds) =>
-        MatchOptions.Immediate with { FinalCountdownRounds = rounds };
+    /// <summary>链接模式、插旗立即（open-map 段 B：决赛倒计时 K 随拼接规则删除，选项即缺省）。</summary>
+    internal static MatchOptions Options => MatchOptions.Immediate;
 
     /// <summary>插旗阶段的链接模式对局。</summary>
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
         MatchFlow.Create(Map, seed ?? TestMaps.Seed, All, options ?? Options);
 
-    /// <summary>按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。可挂接配对来源。</summary>
-    internal static MatchFlow Started(int[] zones, IPairingSource? source = null, GameSeed? seed = null, MatchOptions? options = null)
+    /// <summary>按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
+    internal static MatchFlow Started(int[] zones, GameSeed? seed = null, MatchOptions? options = null)
     {
         MatchFlow match = Create(seed, options);
-        match.PairingSource = source;
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
@@ -149,8 +141,7 @@ internal static class LinkModeFixtures
     /// 原 9×9 夹具的用例都写于决赛倒计时之前；建局后另断言地图确为链接图（<see cref="RequireLink"/>）。
     /// retire-legacy-rules 第 3 组：对局模式删除，<see cref="MatchFlow.CreateUnvalidated"/> 恒按链接规则建局，原"强制链接模式"一项随之去掉。
     /// </summary>
-    internal static MatchOptions PlainOptions(MatchOptions? options) =>
-        (options ?? Options) with { FinalCountdownRounds = 0 };
+    internal static MatchOptions PlainOptions(MatchOptions? options) => options ?? Options;
 
     /// <summary>断言对局建在链接图上（见 <see cref="PlainOptions"/>；retire-legacy-rules 第 3 组起对局只有链接规则，原"模式为链接"的断言改为断言地图标识）。</summary>
     internal static MatchFlow RequireLink(MatchFlow match) =>
@@ -354,20 +345,6 @@ internal static class LinkModeFixtures
     }
 
     /// <summary>
-    /// 把开局坐标 <paramref name="before"/>（位于出生棋盘 <paramref name="zone"/>）沿本局全部链接记录平移到当前坐标——经唯一的换算工具 <see cref="Siege.Core.Board.Maps.LinkLayout"/>。
-    /// </summary>
-    internal static Coord Track(this MatchFlow match, Coord before, int zone)
-    {
-        var layout = new Siege.Core.Board.Maps.LinkLayout(match.Board.BaseMap.Boards, match.Links.Select(l => l.ShiftStep));
-        if (layout.ZoneAt(before, 0) != zone)
-        {
-            throw new ArgumentException($"{before.ToNotation()} 不在开局出生棋盘 {zone} 上。", nameof(before));
-        }
-
-        return layout.Translate(before, 0, layout.Versions);
-    }
-
-    /// <summary>
     /// 出生棋盘 <paramref name="zone"/> 左下角起的相对坐标。link-map-terrain 第 2 组：出生区缩成核心区后改读棋盘清单（整块棋盘的左下角），
     /// 不再取出生区的最小坐标；棋盘内可能有岩石 / 深水，调用方取的偏移须落在可落子格上（用 <see cref="CoreCell"/> 取核心区内恒可落子的格）。
     /// </summary>
@@ -391,7 +368,4 @@ internal static class LinkModeFixtures
         match.EnterRecruit();
         return match.EnterDeploy();
     }
-
-    /// <summary>首轮配对 / 决赛事件的便捷写法。</summary>
-    internal static PairingDecision Pairs(int? waiter, params (int X, int Y)[] pairs) => new([.. pairs], waiter);
 }

@@ -121,7 +121,6 @@ public class 盲选插旗Tests
         Assert.Equal(formal.PlayerStates.Select(s => s.BirthZone), debug.PlayerStates.Select(s => s.BirthZone));
         Assert.Equal(formal.ActionOrder, debug.ActionOrder);
         Assert.Equal(1, debug.MajorRound);
-        Assert.Equal(LinkStage.Building, debug.LinkStage);
         debug.PassTurn();
     }
 

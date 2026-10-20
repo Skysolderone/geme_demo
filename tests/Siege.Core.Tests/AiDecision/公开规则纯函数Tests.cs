@@ -107,7 +107,6 @@ public class 公开规则纯函数Tests
             match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(probe + 1));
         }
 
-        match.PairingSource = new ScriptedPairingSource();
         match.PlantPrototype();
         Assert.Contains(match.Relics.Generation.Placements, p => p.Content.Type is RelicType.Command or RelicType.Workshop or RelicType.Vanguard);   // 样本口径
         var runner = new MatchRunner(match);

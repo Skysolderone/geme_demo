@@ -47,48 +47,6 @@ public readonly record struct CameraPose(float FocusX, float FocusZ, float Dista
 
     /// <summary>相机所在的世界坐标：自注视目标沿固定俯角向后上方退 <see cref="Distance"/>。棋盘"上"（−Z）始终朝屏幕上方。</summary>
     public Vector3 Eye => Target + new Vector3(0f, Distance * MathF.Sin(PitchRadians), Distance * MathF.Cos(PitchRadians));
-
-    /// <summary>
-    /// 滑入期间相机跟随本机棋盘（board-link-mode F.4b / 裁决 J11-5）：本机是被贴方、本机棋盘在滑——注视点 = 滑入开始时的位姿 + 本机棋盘此刻的平面偏移
-    /// （与滑入同一插值：遮罩给的千分之一格偏移，经引擎侧的格心映射 <paramref name="planeCenterOf"/> 换成平面位移），距离不变；画面里本机棋盘因此不动、对方相对靠拢。
-    /// 本机不在滑动格里（锚点一方）或没有滑入时为 <c>null</c>（相机不跟）。格心映射是线性的，取 (0,0)、(1,0)、(0,1) 三格得两个方向的单位位移，不另写换算。
-    /// </summary>
-    public static CameraPose? FollowSlide(CameraPose start, Siege.Presentation.Show.ShowMask mask, IReadOnlySet<Coord> own, Func<Coord, (float X, float Z)> planeCenterOf)
-    {
-        ArgumentNullException.ThrowIfNull(mask);
-        ArgumentNullException.ThrowIfNull(own);
-        ArgumentNullException.ThrowIfNull(planeCenterOf);
-        if (mask.Slide is not { } slide)
-        {
-            return null;
-        }
-
-        Coord? mine = null;
-        foreach (Coord cell in slide.Cells)
-        {
-            if (own.Contains(cell))
-            {
-                mine = cell;
-                break;
-            }
-        }
-
-        if (mine is not { } anchor)
-        {
-            return null;
-        }
-
-        (int dx, int dy) = mask.SlideOffsetOf(anchor);
-        (float ox, float oz) = planeCenterOf(new Coord(0, 0));
-        (float ex, float ez) = planeCenterOf(new Coord(1, 0));
-        (float nx, float nz) = planeCenterOf(new Coord(0, 1));
-        float fx = dx / 1000f;
-        float fy = dy / 1000f;
-        return new CameraPose(
-            start.FocusX + ((ex - ox) * fx) + ((nx - ox) * fy),
-            start.FocusZ + ((ez - oz) * fx) + ((nz - oz) * fy),
-            start.Distance);
-    }
 }
 
 /// <summary>
@@ -134,7 +92,7 @@ public sealed class BoardCamera
     /// 以外接矩形（含坐标标注外圈）建相机：初始在矩形中心、最远缩放。
     /// <paramref name="focus"/> 是"当前战场"的外接矩形（board-link-mode 4.4 / 裁决 D22 / D26）：全局预览以它一屏可见为准、注视点锁它的中心；
     /// 未给出即等于 <paramref name="bounds"/>（旧地图：整张图就是唯一的战场，行为与引入之前逐位相同）。
-    /// <paramref name="bounds"/> 则是注视点可行矩形与最远缩放的依据——链接模式下取"当前战场 ∪ 5 个占位"的包围盒，所以能推到占位、看得见别人的占位。
+    /// <paramref name="bounds"/> 则是注视点可行矩形与最远缩放的依据——取"全部可见格 ∪ 5 个占位"的包围盒，所以能推到占位、看得见别人的占位。
     /// </summary>
     public BoardCamera(PlaneRect bounds, float aspect = 16f / 9f, PlaneRect? focus = null)
     {
@@ -149,17 +107,17 @@ public sealed class BoardCamera
         Clamp();
     }
 
-    /// <summary>注视点可行矩形的依据（旧地图：地图外接矩形；链接模式：当前战场 ∪ 占位的包围盒）。</summary>
+    /// <summary>注视点可行矩形的依据（全部可见格 ∪ 占位的包围盒）。</summary>
     public PlaneRect Bounds => _bounds;
 
     /// <summary>当前战场的外接矩形（全局预览与"一屏看全"的依据）。旧地图等于 <see cref="Bounds"/>。</summary>
     public PlaneRect Focus => _focus;
 
     /// <summary>
-    /// 重定界（board-link-mode 4.4：链接后可行矩形随战场扩大）：<b>保位姿</b>换上新的外接矩形与战场矩形，只按新矩形重夹一次——不复位到中心、不改缩放、
+    /// 重定界（board-link-mode 4.4：锁定后可行矩形由占位扩到全图）：<b>保位姿</b>换上新的外接矩形与战场矩形，只按新矩形重夹一次——不复位到中心、不改缩放、
     /// 不退出全局预览（预览中的距离与注视点按新战场重算）。矩形相同且不平移时什么都不变。
     /// <paramref name="shiftX"/> / <paramref name="shiftZ"/>（board-link-mode F.4）：拼接后布局整体变化、本机棋盘在平面上随之移动时，注视点按同一位移平移再夹取，
-    /// 使画面里本机棋盘不跳（锚点通常不动，但他人链接把本机战场收拢东移、或整体越界平移时本机也会动）。
+    /// 使画面里本机棋盘不跳。
     /// </summary>
     public void Rebound(PlaneRect bounds, PlaneRect? focus = null, float shiftX = 0f, float shiftZ = 0f)
     {

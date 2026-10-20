@@ -44,10 +44,7 @@ public class 带入带出配置Tests
                 ContentSet = config.ContentSet!.Value,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
-                // final-countdown：复刻 MatchSession.Create 的建局，决赛倒计时取跑局配置的值（黄金配置写死 K = 0）。
-                FinalCountdownRounds = config.FinalCountdownRounds!.Value,
             });
-        match.PairingSource = new SeededPairingSource(31, config.PairingSeed);
         string opening = string.Join(" | ", match.Players.Select(p => $"{p}:{CarryFixtures.HandText(match, p)}"))
             + $" | recruit={match.Hands.Export().RecruitConsumed}";
         match.PlantPrototype();

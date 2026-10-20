@@ -211,28 +211,16 @@ public static class ReportWriter
             AppendThemes(sb, themes);
         }
 
-        // ai-pass-review 1.2 / 1.3：两段只在链接模式样本里出现（旧日志的报告逐字节不变）。
+        // ai-pass-review 1.2：只在链接模式样本里出现（旧日志的报告逐字节不变）。
         if (r.DefeatReview is { } review)
         {
             AppendDefeatReview(sb, review);
-        }
-
-        if (r.Waiters is { } waiters)
-        {
-            AppendWaiters(sb, waiters);
         }
 
         // ai-terrain-review 1.3 / 1.2：两段追加在最末（缺省报告只多「主题表现」，旧报告前缀逐字节不变）；改造诊断只在 --review-artisan 时出现。
         if (r.Themes is { } performance)
         {
             AppendThemePerformance(sb, performance);
-        }
-
-        // final-countdown 2.1：排在「主题表现」之后、可选的「AI 改造诊断」之前（缺省报告仍是 --review-artisan 报告的前缀）；
-        // 只在样本里有 K > 0 的局时出现，K = 0 与旧日志的报告逐字节不变。
-        if (r.FinalCountdown is { } countdown)
-        {
-            AppendFinalCountdown(sb, countdown);
         }
 
         if (r.ArtisanReview is { } artisan)
@@ -243,35 +231,14 @@ public static class ReportWriter
         return sb.ToString();
     }
 
-    /// <summary>决赛倒计时（final-countdown 2.1）：K 分布、起点、到期结算次数与到期时势力差；等待者胜率等见「等待者评估」。</summary>
-    private static void AppendFinalCountdown(StringBuilder sb, FinalCountdownSection c)
-    {
-        sb.AppendLine();
-        sb.AppendLine("## 决赛倒计时（final-countdown：出现等待决赛的玩家后，其余未结算多人战场最多再打 K 个大回合，到期按势力强制结算）");
-        sb.AppendLine($"- 纳入链接模式 {c.Matches} 局；K 分布：{Histogram(c.Ks)}（其中首部缺 K 的旧日志 {c.MissingK} 局按 0 计）");
-        sb.AppendLine($"- 启动倒计时的局 {c.Started}/{c.Matches}；起点 R（第一次出现等待者的大回合）分布：{Histogram(c.Starts)}；进入倒计时的战场 {c.CountdownFields} 个");
-        sb.AppendLine($"- 战场结算按原因：{Histogram(c.SettlementReasons)}");
-        sb.AppendLine($"- 到期结算 {c.ExpiredCount} 次；所在大回合分布：{Histogram(c.ExpiredRounds)}");
-        sb.AppendLine($"- 到期时势力差（胜者 − 第二名）分位数：{Quantiles(c.ExpiredGaps)}");
-        sb.AppendLine($"  - 分布：{(c.ExpiredGaps.Count == 0 ? "无样本" : string.Join("，", c.ExpiredGaps))}");
-        foreach (ExpiredSettlementEntry e in c.Expired)
-        {
-            sb.AppendLine($"  - {e.Seed} R{e.MajorRound} 战场{BirthZoneLabel.Number(e.Battlefield)} 胜者 P{e.Winner} 期限 {(e.Deadline is { } d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-")} 差 {e.Gap}");
-        }
-    }
-
-    /// <summary>链接模式一段（board-link-mode 3.5）：只在样本里有链接模式局时出现，旧日志的报告逐字节不变。</summary>
+    /// <summary>链接模式一段（board-link-mode 3.5 → open-map B5）：同区率、各出生棋盘被选次数、对局大回合数、终局原因、出局原因、过早 Pass 落败与耗时。</summary>
     private static void AppendLinkMode(StringBuilder sb, LinkModeSection l)
     {
         sb.AppendLine();
-        sb.AppendLine("## 链接模式（board-link-mode）");
+        sb.AppendLine("## 链接模式（open-map：5 块出生棋盘紧贴成一张连通地图，唯一战场）");
         sb.AppendLine($"- 纳入 {l.Matches} 局，其中截断 {l.Truncated} 局；终局原因：{Histogram(l.EndReasons)}");
-        sb.AppendLine($"- 同区率（锁定时有棋盘旗数 ≥ 2）：{l.SharedMatches}/{l.Matches}（{Pct(l.SharedShare)}）；开局布局：{Histogram(l.Layouts)}");
-        sb.AppendLine($"- 首轮配对分布（棋盘编号 1–5，\"等\" = 等待者）：{Histogram(l.FirstRoundPairings)}");
-        sb.AppendLine($"- 各阶段平均大回合数：构筑 {Num(l.BuildRounds)}，首轮交战 {Num(l.FirstFightRounds)}，决赛 {Num(l.FinalRounds)}（到达决赛 {l.FinalMatches} 局）");
-        sb.AppendLine($"- 链接（拼接）{l.Links} 次，共享边长度分布：{Histogram(l.SharedEdges)}；整体越界平移 {l.GlobalShifts} 次");
-        sb.AppendLine($"- 决赛合并战场可落子格数（每局一个）：{Histogram(l.FinalBattlefieldCells)}；终局全图可落子格均值 {Num(l.EndPlayableCells)}");
-        sb.AppendLine($"- 等待大回合数：全部玩家均值 {Num(l.WaitingMean)}，等待过的 {l.Waiters} 人次均值 {Num(l.WaitingMeanOfWaiters)}，最大 {l.WaitingMax}");
+        sb.AppendLine($"- 同区率（锁定时有棋盘旗数 ≥ 2）：{l.SharedMatches}/{l.Matches}（{Pct(l.SharedShare)}）；开局布局：{Histogram(l.Layouts)}；各出生棋盘被选次数（棋盘编号 1–5）：{Histogram(l.BoardPicks)}");
+        sb.AppendLine($"- 对局大回合数：均值 {Num(l.MeanMajorRounds)}，中位 {Num(l.MedianMajorRounds)}，最小 {l.MinMajorRounds}，最大 {l.MaxMajorRounds}；终局全图可落子格均值 {Num(l.EndPlayableCells)}");
         sb.AppendLine($"- 出局：战场落败 {l.BattlefieldDefeats} 人次，势力归零 {l.PowerZeroEliminations} 人次；整轮 Pass 结算落败 {l.AllPassedDefeats} 人次，其中过早 Pass 落败（结算那一大回合本人 Pass 且手牌仍有子；未逐格核对禁入与部署上限，为上界）{l.PrematurePassDefeats} 人次");
         sb.AppendLine($"- 单个小回合耗时：中位 {Num(l.TurnMedianMs)} ms，最大 {l.TurnMaxMs} ms；整局耗时合计 {l.TotalMatchMs} ms");
     }
@@ -329,41 +296,18 @@ public static class ReportWriter
         }
     }
 
-    /// <summary>等待者评估（ai-pass-review 1.3）：等待者 vs 首轮刚结算的胜者，决赛胜率、决赛开始势力差、等待大回合数分布。</summary>
-    private static void AppendWaiters(StringBuilder sb, WaiterSection w)
-    {
-        sb.AppendLine();
-        sb.AppendLine("## 等待者评估（ai-pass-review：决赛参与者按进入决赛时的等待大回合数分组；等待者 = 等过 ≥ 1 个大回合，首轮刚结算的胜者 = 0）");
-        sb.AppendLine($"- 纳入到达决赛、未截断的 {w.Finals} 局，决赛参与者 {w.Participants.Count} 人次");
-        foreach ((FinalistGroup group, string name) in new[] { (FinalistGroup.Waiter, "等待者"), (FinalistGroup.FreshWinner, "首轮刚结算的胜者") })
-        {
-            List<FinalistEntry> g = [.. w.Participants.Where(p => p.Group == group)];
-            int wins = g.Count(p => p.Won);
-            sb.AppendLine($"- {name}：{g.Count} 人次，决赛胜 {wins}（{Pct(Share(wins, g.Count))}）；决赛开始势力差（己方 − 其余决赛者最高）均值 {Num(Statistics.Mean(g.Select(p => (double)p.PowerGap)))}，"
-                + $"中位 {Num(Statistics.Median(g.Select(p => (double)p.PowerGap)))}；等待大回合数分布：{Histogram(new SortedDictionary<int, int>(g.GroupBy(p => p.WaitingRounds).ToDictionary(x => x.Key, x => x.Count())))}");
-        }
-
-        sb.AppendLine($"- 等待者来由：{Histogram(new SortedDictionary<string, int>(w.Participants.Where(p => p.Group == FinalistGroup.Waiter).GroupBy(p => p.Origin.ToString()).ToDictionary(x => x.Key, x => x.Count()), StringComparer.Ordinal))}");
-        sb.AppendLine("- 逐人明细（种子 / 玩家 / 分组 / 来由 / 等待大回合 / 决赛开始势力 / 势力差 / 决赛胜）：");
-        foreach (FinalistEntry p in w.Participants)
-        {
-            sb.AppendLine($"  - {p.Seed} P{p.Player} {(p.Group == FinalistGroup.Waiter ? "等待者" : "首轮胜者")} {p.Origin} 等 {p.WaitingRounds} 势力 {p.Power} 差 {p.PowerGap} {(p.Won ? "胜" : "负")}");
-        }
-    }
-
-    /// <summary>主题表现（ai-terrain-review 1.3）：按玩家锁定的出生棋盘主题分组，首轮战场胜率、名次均值、第 3 大回合结束时势力、该主题棋盘上的改造次数与类别。</summary>
+    /// <summary>主题表现（ai-terrain-review 1.3 → open-map B6）：按玩家锁定的出生棋盘主题分组，整局胜率、名次均值、第 3 大回合结束时势力、该主题棋盘上的改造次数与类别。</summary>
     private static void AppendThemePerformance(StringBuilder sb, ThemeSection t)
     {
         sb.AppendLine();
         sb.AppendLine("## 主题表现（ai-terrain-review：按玩家锁定的出生棋盘主题分组，同区多人各计）");
-        sb.AppendLine($"- 纳入带主题的链接模式 {t.Matches} 局（有名次 {t.RankedMatches} 局）。口径：首轮战场 = 该玩家出现在名单里的第一次战场结算、且早于决赛配对事件；未经结算即在决赛配对前出局（势力归零等）记首轮落败；"
-            + "决赛前既未经历结算也未出局者（3+1 单人棋盘、首轮未配对的等待者、截断前未结算）单列「无首轮」、不进分母；名次只计有名次的局；"
-            + $"第 {ThemeAnalyzer.Round3} 大回合结束时 = 该大回合最后一条快照，势力名次 = 本局四人里的名次（1 最高，并列取高）；改造按目标所在棋盘归主题（同「按主题统计」）");
+        sb.AppendLine($"- 纳入带主题的链接模式 {t.Matches} 局（有名次 {t.RankedMatches} 局）。口径：整局胜率 = 锁定在该主题棋盘上、在有名次的局里是本局胜者的人次 / 有名次人次（open-map：唯一战场，原按首轮结算口径的胜率改为整局胜率）；"
+            + $"名次只计有名次的局；第 {ThemeAnalyzer.Round3} 大回合结束时 = 该大回合最后一条快照，势力名次 = 本局四人里的名次（1 最高，并列取高）；改造按目标所在棋盘归主题（同「按主题统计」）");
         foreach (ThemeStat s in t.Themes)
         {
             string edits = string.Join(" / ", ArtisanEditReview.Kinds.Select(k => $"{EditActionName(k.ToString())} {s.Edits.GetValueOrDefault(k.ToString())}"));
-            sb.AppendLine($"- {s.Theme.DisplayName()}：锁定 {s.Seats} 人次；首轮战场胜 {s.FirstFieldWins}/{s.FirstFieldSeats}（{Pct(Share(s.FirstFieldWins, s.FirstFieldSeats))}；其中未经结算即出局 {s.FirstFieldEliminated}），无首轮 {s.NoFirstField}；"
-                + $"平均名次 {Num(s.MeanRank)}（有名次 {s.RankedSeats} 人次），胜 {s.Wins}；"
+            sb.AppendLine($"- {s.Theme.DisplayName()}：锁定 {s.Seats} 人次；整局胜 {s.Wins}/{s.RankedSeats}（{Pct(Share(s.Wins, s.RankedSeats))}）；"
+                + $"平均名次 {Num(s.MeanRank)}（有名次 {s.RankedSeats} 人次）；"
                 + $"第 {ThemeAnalyzer.Round3} 大回合结束时势力 均值 {Num(Statistics.Mean(s.Round3Powers.Select(v => (double)v)))}，中位 {Num(Statistics.Median(s.Round3Powers.Select(v => (double)v)))}，"
                 + $"范围 {(s.Round3Powers.Count == 0 ? "无样本" : $"{s.Round3Powers[0]}–{s.Round3Powers[^1]}")}，势力名次均值 {Num(Statistics.Mean(s.Round3PowerRanks.Select(v => (double)v)))}（样本 {s.Round3Powers.Count}）；"
                 + $"该主题棋盘上的匠人改造 {s.EditTotal} 次（{edits}）");

@@ -56,8 +56,6 @@ public class 自动演示全流程自检Tests
 
         // 全图解禁：第 4 大回合范围 = 全图可落子格 − 本人禁入格，且大于自己棋盘的可落子格数；没有配对 / 链接事件。
         Assert.Equal(4, match.MajorRound);
-        Assert.Empty(match.Pairings);
-        Assert.Empty(match.Links);
         (HashSet<Coord> playable, HashSet<Coord> forbidden, int own) = UnlockInputs(match, P0, 0);
         Assert.True(audit.Unlocked(match.MajorRound, match.LegalRangeFor(P0), playable, forbidden, own).Ok);
 
@@ -100,54 +98,6 @@ public class 自动演示全流程自检Tests
         Assert.False(audit.Unlocked(4, building.LegalRangeFor(P0), p2, f2, own2).Ok);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 配对记录来源必须是脚本()
-    {
-        var audit = new LinkDemoAudit();
-        var scripted = new PairingRecord(1, PairingKind.FirstRound, 4, [0, 1, 3, 4], [(0, 1), (3, 4)], null, ScriptedPairingSource.ScriptSource);
-        Assert.True(audit.Pairing(scripted).Ok);
-
-        Assert.False(audit.Pairing(scripted with { Source = PairingSourceNames.Random }).Ok);
-        Assert.False(audit.Pairing(scripted with { Pairs = [(0, 2)] }).Ok, "对里出现不在候选里的战场");
-        Assert.False(audit.Pairing(scripted with { Candidates = [0, 1, 3, 4, 2], Waiter = null }).Ok, "候选奇数却没有等待者");
-        Assert.True(audit.Pairing(scripted with { Candidates = [0, 1, 2, 3, 4], Waiter = 2 }).Ok);
-        Assert.False(audit.Pairing(scripted with { Candidates = [0, 1, 2, 3, 4], Waiter = 1 }).Ok, "等待者出现在对里");
-    }
-
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 决赛链接须在首轮之后_且把全部候选链成一个()
-    {
-        var audit = new LinkDemoAudit();
-        var final = new PairingRecord(2, PairingKind.Final, 10, [0, 3], [(0, 3)], null, ScriptedPairingSource.ScriptSource);
-        Assert.False(audit.Pairing(final).Ok, "还没见过首轮配对");
-
-        Assert.True(audit.Pairing(new PairingRecord(1, PairingKind.FirstRound, 4, [0, 1, 3, 4], [(0, 1), (3, 4)], null, ScriptedPairingSource.ScriptSource)).Ok);
-        Assert.True(audit.Pairing(final).Ok);
-        Assert.False(audit.Pairing(final with { Candidates = [0, 2, 3], Pairs = [(0, 3)] }).Ok, "决赛漏了一个候选");
-        Assert.False(audit.Pairing(final with { Waiter = 3 }).Ok, "决赛不该有等待者");
-    }
-
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 链接后可见格数等于本战场格数()
-    {
-        var audit = new LinkDemoAudit();
-        MatchFlow match = Started([0, 1, 3, 4], new ScriptedPairingSource());
-        DefaultBoardView before = match.World(P0).Board();
-        match.PassRounds(3);
-        DefaultBoardView after = match.World(P0).Board();
-        int cells = BattlefieldCellsOf(match, P0);
-        Assert.Equal(cells, after.Cells.Length);   // 按座位过滤的格 = 战场导出的格（独立口径一致）
-
-        // board-link-mode F.4：拼接口径——可见格 = 本战场 = 拼接前可见格 + 拼入的对方出生棋盘格数（两战场格数之和守恒）。
-        int[] expandedBefore = [.. before.Placeholders.Where(p => p.Expanded).Select(p => p.Zone)];
-        Assert.Equal(before.Cells.Length + (Map.BirthBoard(1).Width * Map.BirthBoard(1).Height), cells);
-        Assert.True(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells, expandedBefore).Ok);
-        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, after, cells + 1, expandedBefore).Ok, "可见格数与本战场格数不等");
-        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length, before, before.Cells.Length, expandedBefore).Ok, "参与了链接可见格却没增加");
-        Assert.False(audit.Linked(match.Links[0], mine: true, before.Cells.Length - 1, after, cells, expandedBefore).Ok, "拼接前后格数不守恒");
-        Assert.False(audit.Linked(match.Links[1], mine: false, before.Cells.Length, after, cells, expandedBefore).Ok, "他人链接本机可见格却变了");
-    }
-
     [Fact]
     public void 插旗锁定与构筑期()
     {
@@ -165,22 +115,6 @@ public class 自动演示全流程自检Tests
         Assert.False(audit.BuildingRange(1, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(1).Cells()]).Ok, "范围落在别人的棋盘上");
         Assert.False(audit.BuildingRange(4, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(0).Cells()]).Ok, "第 4 大回合不是构筑期");
         Assert.False(audit.BuildingRange(1, ImmutableHashSet<Coord>.Empty, [.. match.Map.BirthBoard(0).Cells()]).Ok, "范围为空");
-    }
-
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 战场结算三种口径()
-    {
-        var audit = new LinkDemoAudit();
-        var record = new BattlefieldSettlementRecord(1, 5, 0, SettlementReason.AllPassed, P0,
-            [new SettlementEntry(P0, 1, 100, 0, 0, 10), new SettlementEntry(P1, 2, 50, 0, 0, 8)], 1);
-
-        Assert.True(audit.Settled(record, P0, matchEnded: false, [LinkShowBeats.BattlefieldWonText], []).Ok);
-        Assert.True(audit.Settled(record, P1, matchEnded: false, ["红方出局", LinkShowBeats.BattlefieldLostText(2)], []).Ok);
-        Assert.False(audit.Settled(record, P1, matchEnded: false, ["红方出局"], []).Ok, "本机落败却没有战场落败横幅");
-        Assert.True(audit.Settled(record, P2, matchEnded: false, [], [LinkShowBeats.SettledElsewhereText(0, P0)]).Ok);
-        Assert.False(audit.Settled(record, P2, matchEnded: false, [], []).Ok, "他场结算却没有提示条");
-        Assert.True(audit.Settled(record, P0, matchEnded: true, ["对局结束"], []).Ok);
-        Assert.False(audit.Settled(record, P0, matchEnded: true, [LinkShowBeats.BattlefieldWonText], []).Ok, "终局重复了战场横幅");
     }
 
     [Fact]

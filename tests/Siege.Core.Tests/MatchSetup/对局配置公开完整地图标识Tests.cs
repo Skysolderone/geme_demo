@@ -22,7 +22,6 @@ public class 对局配置公开完整地图标识Tests
     {
         MatchOptions options = MatchOptions.Immediate;
         MatchFlow match = MatchFlow.Create(MapCatalog.Resolve(mapId), seed, Four, contentSet is { } set ? options with { ContentSet = set } : options);
-        match.PairingSource = new ScriptedPairingSource();
         return match;
     }
 

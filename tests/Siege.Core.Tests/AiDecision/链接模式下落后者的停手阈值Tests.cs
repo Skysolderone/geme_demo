@@ -115,16 +115,4 @@ public class 链接模式下落后者的停手阈值Tests
         AssertPassed(Decide(match));
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 等待者照常停手()
-    {
-        // Scenario「等待者照常停手」：AI 独自在单人战场（P0 独占棋盘 0），即便全局势力低于别的战场里的玩家，阈值仍为缺省值 → Pass。
-        MatchFlow match = Started([0, 3, 3, 4]).Place(P0, FarCorner)
-            .Place(P1, BirthCell(Map, 3, 0, 0), BirthCell(Map, 3, 1, 0), BirthCell(Map, 3, 0, 1));
-        MatchPublicView view = match.Publish();
-        Assert.True(view.Power!.Of(P0).Total < view.Power.Of(P1).Total);   // 样本口径：只比同战场，不比全局
-        Assert.Single(match.ActivePlayersIn(match.BattlefieldOf(P0)));
-
-        AssertPassed(Decide(match));
-    }
 }

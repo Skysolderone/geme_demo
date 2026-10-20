@@ -7,7 +7,7 @@ namespace Siege.Core.Board.Maps;
 /// 5 块出生棋盘按种子决定的次序 o0…o4 一次性边对边紧贴成一张连通地图（3+2 两行），每块以一块具体的棋盘为锚：
 /// 第一行 o0 / o1 / o2 底边对齐、间距 0 自西向东紧贴；o3 贴 o0 北侧（共享边最长、偏西即西对齐）；o4 贴 o1 北侧（共享边最长、不与已放下的棋盘重叠、偏西）。
 /// 布局不消费随机；画布原点固定在 (0,0)，四周留白由调用方的 <c>margin</c> 给出。
-/// 现行拼接几何（<see cref="LinkMapGenerator.Link"/>）段 A 不动、段 B 删除，不强求二者共用（A2）。
+/// 对局中的拼接几何（原 <c>LinkMapGenerator.Link</c>）已随 open-map 段 B 删除，本类是唯一的布局几何实现（A2）。
 /// </summary>
 public static class InitialLayout
 {

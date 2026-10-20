@@ -78,7 +78,6 @@ public class 旧生成器摘要被拒Tests
 
         MatchOptions options = MatchOptions.Immediate;
         MatchFlow match = MatchFlow.Create(now, new GameSeed(11), [new(0), new(1), new(2), new(3)], options);
-        match.PairingSource = new ScriptedPairingSource();
         match.PlantPrototype();
         string json = match.Serialize();
 

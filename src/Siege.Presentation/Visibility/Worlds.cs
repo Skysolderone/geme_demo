@@ -77,27 +77,9 @@ public sealed class ViewerWorld
     /// <summary>本座位锁定的出生棋盘编号（0 起）；尚未锁定为 <c>null</c>。取自公开快照里本座位自己的状态。</summary>
     public int? OwnZone => Public.View.Players.FirstOrDefault(s => s.Player == Viewer)?.BirthZone;
 
-    /// <summary>与本座位同一战场的其他玩家（match-setup「匿名同时插旗」：锁定后只公开"与自己同一块棋盘的玩家有谁"）；没有按座位视图或插旗阶段为空。</summary>
+    /// <summary>与本座位同一战场的其他玩家（open-map 起锁定后整张地图是唯一战场，即全部其他玩家）；没有按座位视图或插旗阶段为空。</summary>
     public ImmutableArray<PlayerId> SameBattlefieldPlayers =>
         Seat is { } seat ? [.. seat.Players.Where(p => p.SameBattlefield && p.Player != Viewer).Select(p => p.Player)] : [];
-
-    /// <summary>
-    /// 某玩家的数值是否对本座位遮蔽（board-link-mode Q1 / 裁决 D20，information-visibility「他人势力不可见」）：不与本座位同战场的其他玩家。
-    /// 判据只读按座位视图的 <see cref="SeatPlayerView.SameBattlefield"/>——引擎层不得自己判"同不同战场"。没有按座位视图、本人、同战场玩家恒为假。
-    /// </summary>
-    public bool IsConcealed(PlayerId player) =>
-        Seat is { } seat && player != Viewer && seat.Players.FirstOrDefault(p => p.Player == player) is { SameBattlefield: false };
-
-    /// <summary>
-    /// 遮蔽行的状态文案（裁决 D20 允许显示的全部）：在局 / 出局 / 弃赛，外加"所在战场已结算（胜出）"——该玩家是某个已结算战场的胜者时。
-    /// 其所在战场是否已结算只能从全局公开的结算记录推出（结算只记胜者；落败者已是出局状态）。
-    /// </summary>
-    public string ConcealedStatusText(PlayerId player)
-    {
-        PlayerStatus status = Public.View.Players.FirstOrDefault(p => p.Player == player)?.Status ?? PlayerStatus.Active;
-        string text = Labels.Status(status) ?? "在局";
-        return Seat is { } seat && seat.Settlements.Any(s => s.Winner == player) ? $"{text} · 所在战场已结算（胜出）" : text;
-    }
 
     /// <summary>观察者。</summary>
     public PlayerId Viewer { get; }
@@ -140,14 +122,8 @@ public sealed class ViewerWorld
     public PreviewPresentation? Preview(LibertyThresholds? thresholds = null) =>
         OwnPreview is null ? null : PreviewPresentation.Build(OwnPreview, OwnHand, thresholds ?? LibertyThresholds.Default);
 
-    /// <summary>全玩家手牌对比面板。他战场玩家的区域被遮蔽（裁决 D20）：没有手牌类型与结构参数。</summary>
-    public HandInfoPanelView HandPanel()
-    {
-        HandInfoPanelView panel = HandInfoPanelView.Build(this);
-        return Seat is { }
-            ? panel with { Opponents = [.. panel.Opponents.Select(o => IsConcealed(o.Player) ? o.Conceal(ConcealedStatusText(o.Player)) : o)] }
-            : panel;
-    }
+    /// <summary>全玩家手牌对比面板（open-map 裁决 O4：全部玩家的公开手牌类型对全员可见，"他战场遮蔽"随唯一战场删除）。</summary>
+    public HandInfoPanelView HandPanel() => HandInfoPanelView.Build(this);
 
     /// <summary>某信息层的内容。只读公开世界。<paramref name="reading"/> 只对盘面层有意义。</summary>
     public LayerContent Layer(
@@ -159,10 +135,9 @@ public sealed class ViewerWorld
             return content;
         }
 
-        // board-link-mode D-b：信息层里逐格 / 逐棋串的内容只保留本座位可见的格——其他战场的格根本不进视图模型。
-        // 势力层 / 顺序层里按玩家列出的行（他战场玩家的势力数值）本段不过滤，见 D-b 报告 D20。
+        // board-link-mode D-b：信息层里逐格 / 逐棋串的内容只保留本座位可见的格（open-map 起锁定后 = 全图；插旗阶段只有占位，没有格）。
+        // 按玩家列出的行（势力层汇总、顺序层先手值）全员可见：open-map 裁决 O4，"他战场遮蔽"随唯一战场删除。
         HashSet<Coord> visible = [.. seat.Cells.Select(c => Coord.Parse(c.Coord))];
-        // 裁决 D20：按玩家列出的行（势力层玩家汇总、顺序层先手值明细）对他战场玩家只留名字 + 状态（势力层）/ 预测位置（顺序层），数值归零。
         return content switch
         {
             TerritoryLayerContent territory => territory with { Cells = [.. territory.Cells.Where(c => visible.Contains(c.Coord))] },
@@ -170,11 +145,9 @@ public sealed class ViewerWorld
             PowerLayerContent power => power with
             {
                 Groups = [.. power.Groups.Where(g => g.Stones.All(visible.Contains))],
-                Players = [.. power.Players.Select(p => IsConcealed(p.Player) ? p.Conceal(ConcealedStatusText(p.Player)) : p)],
                 Territory = [.. power.Territory.Where(c => visible.Contains(c.Coord))],
             },
             RelicLayerContent relics => relics with { Relics = [.. relics.Relics.Where(r => visible.Contains(r.Coord))] },
-            OrderLayerContent order => order with { Rows = [.. order.Rows.Select(r => IsConcealed(r.Player) ? r.Conceal() : r)] },
             _ => content,
         };
     }

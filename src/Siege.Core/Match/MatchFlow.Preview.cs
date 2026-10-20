@@ -64,7 +64,7 @@ public sealed partial class MatchFlow
     /// </summary>
     private ImmutableArray<PlayerStructure> StructuresOf(IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
-        RelicLedger copy = Relics.Copy();   // 含链接追加的公共棋盘信物（否则链接后已揭示的公共信物会被当作非信物格）
+        RelicLedger copy = Relics.Copy();   // 副本含账本的活状态（揭示与控制），不从开局生成记录重建
         ImmutableArray<PlayerStructure>.Builder result = ImmutableArray.CreateBuilder<PlayerStructure>(_players.Length);
         foreach (PlayerId player in _players)
         {
@@ -122,7 +122,7 @@ public sealed partial class MatchFlow
     /// 先手修正在账本副本上读取，公式与同值链走 <see cref="InitiativeOrder"/>。
     /// </summary>
     /// <remarks>
-    /// 链接模式（board-link-mode 裁决 S10 / D6）：大回合结束会先做战场结算，所以预测先用与 <c>SettleAtRoundEnd</c> <b>同一份</b>判定（<c>JudgeAtRoundEnd</c>，无副作用）
+    /// 战场结算（board-link-mode 裁决 S10 / D6）：大回合结束会先做战场结算，所以预测先用与 <c>SettleAtRoundEnd</c> <b>同一份</b>判定（<c>JudgeAtRoundEnd</c>，无副作用）
     /// 算出此刻结束时会落败的玩家——口径"假设此刻结束、未行动者按未 Pass 算"（本大回合尚未行动的玩家不在 Pass 记录里）；落败者不进下一轮顺序，
     /// 其余玩家的势力名次按剔除后的名册重算（与结算后 <see cref="EndMajorRound"/> 的重算同口径）。此刻结束会以"最后战场结算"终局时没有下一轮，返回 <c>null</c>。
     /// </remarks>

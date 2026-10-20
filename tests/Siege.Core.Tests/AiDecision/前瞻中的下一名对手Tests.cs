@@ -227,40 +227,4 @@ public class 前瞻中的下一名对手Tests
         }
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 同战场无对手时退化()
-    {
-        // 规格 Scenario「同战场无对手时退化」：链接模式，专家独自在单人战场（四人各占一块出生棋盘，第 1 大回合）→ 名册为空，不做模拟，
-        // 前瞻后分数等于自身总分，选择与同一局面上的高难相同。缺省视野（按座位）下决策。
-        // 变异 MN-1（去掉同战场过滤）→ 他战场的在局玩家进名册、被模拟，本测试红。
-        static MatchFlow Alone()
-        {
-            MatchFlow match = LinkModeFixtures.Started([0, 1, 3, 4]);
-            while (match.CurrentPlayer != P0)
-            {
-                match.PassTurn();
-            }
-
-            return match;
-        }
-
-        MatchFlow sample = Alone();
-        Assert.Empty(HeuristicTurnController.RivalsInBattlefield(sample.Publish(), P0));   // 样本口径：本战场没有其他在局玩家
-        Assert.All(new[] { P1, P2, P3 }, p => Assert.True(sample.StateOf(p).IsActive));
-
-        HeuristicTurnController hard = DecideHard(Alone());
-        HeuristicTurnController expert = DecideExpert(Alone());
-        Assert.True(expert.Config.SeatVision);
-        LookaheadRecord record = Record(expert);
-
-        Assert.True(record.Entries.Length >= 2, record.ToText());   // 样本口径：前瞻集不止一个候选（否则不前瞻是另一条退化）
-        Assert.All(record.Entries, e =>
-        {
-            Assert.Null(e.Responder);
-            Assert.Null(e.ResponseKey);
-            Assert.Equal(e.ScoreBefore, e.ScoreAfter);
-        });
-        Assert.Equal(0, record.SimulatedRehearsals);
-        Assert.Equal(hard.LastChoice!.Key, expert.LastChoice!.Key);
-    }
 }

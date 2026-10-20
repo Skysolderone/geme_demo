@@ -157,7 +157,7 @@ public static class MapFile
         int value = version ?? 0;
         return value >= 0
             ? value
-            : throw new FormatException($"地图文件的 MapVersion 为 {value}：地图版本号不得为负（初始地图为 0，每次链接 +1）。");
+            : throw new FormatException($"地图文件的 MapVersion 为 {value}：地图版本号不得为负（open-map 起恒为 0）。");
     }
 
     /// <summary>

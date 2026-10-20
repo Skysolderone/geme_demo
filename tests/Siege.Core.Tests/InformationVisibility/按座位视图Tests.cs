@@ -100,35 +100,6 @@ public class 按座位视图Tests
         Assert.NotNull(self.HandTypes);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 链接后立即可见()
-    {
-        // Scenario：战场 1 与战场 4 链接 → A 立即可读到原战场 4 的全部棋子、设施与 C 的势力明细（含链接前的改造）。
-        MatchFlow match = Started([0, 1, 3, 4]);
-        Coord cStone = CoreCell(match.Map, 3, 1, 1);
-        Coord fenceA = BirthCell(match.Map, 3, 0, 0);
-        Coord fenceB = new(fenceA.X + 1, fenceA.Y);
-        match.Place(P2, cStone);
-        match.Board.ApplyTerrainEdits([TerrainEdit.Fence(fenceA, fenceB)]);
-        Assert.DoesNotContain($"{fenceA.ToNotation()}-{fenceB.ToNotation()}", match.PublishFor(P0).Fences);
-        match.PassRounds(3);
-        match.ApplyPairing([(0, 3), (1, 4)]);
-
-        // 段 F：战场 3 的格随拼接平移（含第二次链接把合并战场再向东重排），按链接记录追踪到当前坐标。
-        cStone = match.Track(cStone, 3);
-        fenceA = match.Track(fenceA, 3);
-        fenceB = match.Track(fenceB, 3);
-        SeatPublicView a = match.PublishFor(P0);
-        Assert.Equal(P2, a.CellAt(cStone)!.Owner);
-        Assert.Contains($"{fenceA.ToNotation()}-{fenceB.ToNotation()}", a.Fences);
-        SeatPlayerView c = a.Players.Single(p => p.Player == P2);
-        Assert.True(c.SameBattlefield);
-        Assert.Equal(match.Scoreboard.Latest!.Of(P2).Total, c.Power);
-        Assert.Contains(a.Groups, g => g.Owner == P2 && g.Stones.Contains(cStone.ToNotation()));
-        Assert.Contains(a.Relics, r => match.Map.BirthZones[3].Contains(Coord.Parse(r.Coord)));
-        Assert.Null(a.Players.Single(p => p.Player == P1).Power);    // 另一对仍不可见
-    }
-
     [Fact]
     public void 数据层含全图()
     {

@@ -119,7 +119,7 @@ public enum ObstacleArt
     /// <summary>场景格（棋盘之外）：只作装饰，铺满整格、不留格缝，装饰件按坐标散列挑选。</summary>
     Scenery,
 
-    /// <summary>棋盘内的岩石（链接档中间带，D4）：本战场的一格地形，按棋盘格画（地砖 + 岩石部件），随拼接与棋盘一起滑动。</summary>
+    /// <summary>棋盘内的岩石（链接档中间带，D4）：本战场的一格地形，按棋盘格画（地砖 + 岩石部件）。</summary>
     BoardRock,
 }
 
@@ -147,15 +147,14 @@ public sealed record DefaultBoardView(
     ImmutableArray<BoardPlate> Boards)
 {
     /// <summary>
-    /// 5 块出生棋盘的占位（board-link-mode，链接模式）：由 <see cref="ForSeat"/> 填入；全知视图为空。
-    /// 未展开（<see cref="BoardPlaceholderView.Expanded"/> 为假）的占位在 <see cref="Cells"/> 里没有任何格。
+    /// 5 块出生棋盘的占位（board-link-mode）：由 <see cref="ForSeat"/> 填入；全知视图为空。
+    /// 未展开（<see cref="BoardPlaceholderView.Expanded"/> 为假，只在插旗阶段出现——锁定后 5 块一起展开，open-map 裁决 O4）的占位在 <see cref="Cells"/> 里没有任何格。
     /// </summary>
     public ImmutableArray<BoardPlaceholderView> Placeholders { get; init; } = [];
 
     /// <summary>
     /// 布局指纹（引擎层"要不要整体重搭"的唯一判据，board-link-mode F.6 / 裁决 J12-1）：画布尺寸、每格的<b>坐标</b>与可落子 / 高度 / 地表 / 桥、全部栅栏边、
-    /// 棋盘清单与 5 块占位（编号、原点、展开、本机）。拼接会平移格的坐标、重裁画布、平移占位——这些都必须让指纹变；
-    /// 只落子 / 提子不变。原先引擎层的指纹只看逐格属性的序列、不看坐标，他人链接把本机战场收拢平移后格的属性序列不变，于是不重搭、画面停在旧坐标。
+    /// 棋盘清单与 5 块占位（编号、原点、展开、本机）。插旗锁定会把 5 块占位全部展开——必须让指纹变；只落子 / 提子不变。
     /// 预置设施与本局改造在这里本来就分不出——指纹变了只说明"要重搭"，不说明是谁改的。
     /// </summary>
     public string LayoutKey()
@@ -196,11 +195,11 @@ public sealed record DefaultBoardView(
     public ObstacleArt ObstacleArtAt(Coord coord) =>
         !Boards.IsDefault && Boards.Any(b => b.Contains(coord)) ? ObstacleArt.BoardRock : ObstacleArt.Scenery;
 
-    /// <summary>某格。不在本视图里（链接模式下未展开的战场）抛出——拾取 / 悬停请先用 <see cref="CellOrNull"/>。</summary>
+    /// <summary>某格。不在本视图里（插旗阶段未展开的占位格、场景格）抛出——拾取 / 悬停请先用 <see cref="CellOrNull"/>。</summary>
     public BoardCellView CellAt(Coord coord) =>
         CellOrNull(coord) ?? throw new ArgumentOutOfRangeException(nameof(coord), coord.ToNotation(), "坐标不在本视图的格里（超出棋盘范围或未展开）。");
 
-    /// <summary>某格；不在本视图里为 <c>null</c>（链接模式下未展开的战场格、占位格）。</summary>
+    /// <summary>某格；不在本视图里为 <c>null</c>（插旗阶段未展开的占位格、场景格）。</summary>
     public BoardCellView? CellOrNull(Coord coord) => Cells.FirstOrDefault(c => c.Coord == coord);
 
     /// <summary>

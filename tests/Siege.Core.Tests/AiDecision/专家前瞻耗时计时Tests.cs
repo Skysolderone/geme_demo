@@ -25,44 +25,25 @@ public class 专家前瞻耗时计时Tests(ITestOutputHelper output)
     [PerfTheory]
     [Trait("Category", "Perf")]
     [InlineData("link:1")]
-    public void 专家单次部署耗时中位数不超过高难的四倍(string mapId)
-    {
-        // retire-legacy-maps 1.4：局面集改到 link:1（LookaheadFixtures.ProbePositions），断言不变。
-        // ai-seat-vision V9：本条局面集写死全知（LookaheadFixtures.LinkConfig），Shadow 直接读全知视图——量的是全知口径；新缺省（按座位视野）见下一条。
-        Assert.Equal(LookaheadFixtures.MapId, mapId);
-        Measure(seatVision: false);
-    }
-
-    [PerfTheory]
-    [Trait("Category", "Perf")]
-    [InlineData("link:1")]
     public void 按座位视野下专家单次部署耗时中位数不超过高难的四倍(string mapId)
     {
-        // ai-seat-vision V9（check 补）：同上一条口径（同一局面抽样、ABBA、预热、≤ 4 倍），只换成新缺省——局面来自按座位视野的 4 名标准 AI 对局，
+        // ai-seat-vision V9（check 补）→ open-map 段 B：同一局面抽样、ABBA、预热、≤ 4 倍；局面来自按座位视野的 4 名标准 AI 对局（唯一口径，全知开关已删除），
         // 高难与专家两边都经 HeuristicAi.VisionFor 取按座位投影的观察视图与预演口径（LookaheadFixtures.ShadowWithVision），比值不混入投影开销的差异。
         Assert.Equal(LookaheadFixtures.MapId, mapId);
-        Assert.True(AiSearchConfig.Hard.SeatVision && ExpandedExpert.SeatVision, "样本口径：两边的配置都是按座位视野（预设缺省）");
-        Measure(seatVision: true);
+        Measure();
     }
 
-    private void Measure(bool seatVision)
+    private void Measure()
     {
         var hard = new List<long>();
         var expert = new List<long>();
         int index = 0;
-        int positions = ProbePositions(seatVision, every: 3, (match, batch) =>
+        int positions = ProbePositions(every: 3, (match, batch) =>
         {
             long Time(AiDifficulty difficulty, AiSearchConfig config)
             {
                 var sw = Stopwatch.StartNew();
-                if (seatVision)
-                {
-                    ShadowWithVision(match, batch.Context, difficulty, config);
-                }
-                else
-                {
-                    Shadow(match, batch.Context, difficulty, config);
-                }
+                ShadowWithVision(match, batch.Context, difficulty, config);
 
                 sw.Stop();
                 return sw.ElapsedTicks;
@@ -82,7 +63,7 @@ public class 专家前瞻耗时计时Tests(ITestOutputHelper output)
         double hardMedian = Percentile(hard, 0.5);
         double expertMedian = Percentile(expert, 0.5);
         double ratio = expertMedian / hardMedian;
-        output.WriteLine($"视野：{(seatVision ? "按座位视野" : "全知")}；局面 {positions} 个（预热丢弃 {Warmup} 个），每组样本 {hard.Count}");
+        output.WriteLine($"视野：按座位视野（= 全图）；局面 {positions} 个（预热丢弃 {Warmup} 个），每组样本 {hard.Count}");
         output.WriteLine($"高难：中位数 {hardMedian:F1} ms，p90 {Percentile(hard, 0.9):F1} ms");
         output.WriteLine($"专家：中位数 {expertMedian:F1} ms，p90 {Percentile(expert, 0.9):F1} ms");
         output.WriteLine($"中位数比值 专家 / 高难 = {ratio:F3}（上限 {MaxRatio}）");

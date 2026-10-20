@@ -11,7 +11,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
 /// 段 C（board-link-mode 3.0–3.3）Sim 测试的共用夹具：<c>link:1</c> 的跑局配置、走 <c>Program.Execute</c> 的命令行调用、
-/// "四人四区"的对局种子（首轮恰两对、两次链接）与只会 Pass 的控制者。
+/// "四人四区"的对局种子与只会 Pass 的控制者。
 /// </summary>
 internal static class LinkSimFixtures
 {
@@ -22,7 +22,7 @@ internal static class LinkSimFixtures
         SimFixtures.Config(count: count, seedStart: seedStart, turnLimit: turnLimit, difficulty: difficulty) with { MapId = MapId };
 
     /// <summary>
-    /// 第一个"四名 AI 盲选到四块不同出生棋盘"的对局种子（1 起找）：第 3 大回合结束时首轮恰两对、两次链接（第 12 个小回合内）。
+    /// 第一个"四名 AI 盲选到四块不同出生棋盘"的对局种子（1 起找）。
     /// 只建局不跑，找一次。
     /// </summary>
     internal static readonly Lazy<ulong> FourZoneSeed = new(() =>
@@ -39,8 +39,8 @@ internal static class LinkSimFixtures
         throw new InvalidOperationException("种子 1–499 里没有四人四区的开局。");
     });
 
-    /// <summary>四人四区种子上跑到第 3 大回合结束后一个小回合（两次链接已发生）的日志。</summary>
-    internal static readonly Lazy<MatchLog> TwoLinkLog = new(() => MatchSession.Create(Config(turnLimit: 13), FourZoneSeed.Value).Run());
+    /// <summary>四人四区种子上跑到第 3 大回合结束后一个小回合（第 4 大回合已开始、全图解禁）的日志（截断 13 个小回合）。</summary>
+    internal static readonly Lazy<MatchLog> Round4Log = new(() => MatchSession.Create(Config(turnLimit: 13), FourZoneSeed.Value).Run());
 
     /// <summary>经 <c>Program.Execute</c> 跑一次命令行，捕获标准输出与标准错误。</summary>
     internal static (int Code, string Out, string Error) RunMain(Func<ulong>? mapSeedSource, TextReader? input, params string[] args)
@@ -68,12 +68,12 @@ internal static class LinkSimFixtures
     internal static List<LogEvent> EventsOf(this MatchLog log, string type) => [.. log.Events.Where(e => e.Type == type)];
 
     /// <summary>
-    /// 小样本日志（段 C 后半 3.5 的分析测试用，不跑批量）：在 <c>link:1</c> 上按 <paramref name="zones"/> 开局、挂脚本固定配对，经 <see cref="MatchSession"/> 跑到终局——
-    /// 前 <paramref name="stoneRounds"/> 个大回合每人落 1 子，此后一律 Pass（每个多人战场在确定的大回合结算、落败者势力 &gt; 0、Pass 时手里仍有子）。
+    /// 小样本日志（段 C 后半 3.5 的分析测试用，不跑批量）：在 <c>link:1</c> 上按 <paramref name="zones"/> 开局，经 <see cref="MatchSession"/> 跑到终局——
+    /// 前 <paramref name="stoneRounds"/> 个大回合每人落 1 子，此后一律 Pass（唯一战场在第 stoneRounds + 1 大回合整轮 Pass 结算即终局、落败者势力 &gt; 0、Pass 时手里仍有子）。
     /// </summary>
-    internal static (MatchFlow Match, MatchLog Log) PlayScripted(int[] zones, int stoneRounds = 1, IPairingSource? source = null)
+    internal static (MatchFlow Match, MatchLog Log) PlayScripted(int[] zones, int stoneRounds = 1)
     {
-        MatchFlow match = LinkModeFixtures.Started(zones, source ?? new ScriptedPairingSource());
+        MatchFlow match = LinkModeFixtures.Started(zones);
         // 首部配置写明本局的内容集（跑局层建局由 ResolvedFor 落成；ForMatch 不落成，缺项会被分析端按 v1 读，与对局实际的 v2 不符）。
         MatchSession session = MatchSession.ForMatch(match, Config(turnLimit: 200) with { ContentSet = match.ContentSet });
         foreach (PlayerId p in match.Players)

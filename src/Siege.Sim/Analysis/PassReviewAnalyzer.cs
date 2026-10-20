@@ -10,7 +10,7 @@ namespace Siege.Sim.Analysis;
 // 本文件属于离线分析输出层：允许浮点（裁决 14）。
 
 /// <summary>
-/// 战场落败复盘（ai-pass-review 1.2，规格 match-telemetry「战场落败复盘与等待者评估」第 1 条）的汇总。
+/// 战场落败复盘（ai-pass-review 1.2，规格 match-telemetry「战场落败复盘与等待者评估」，open-map 起只剩复盘半边）的汇总。
 /// 复盘对象 = 以"战场落败"出局、且其战场因整轮 Pass 结算的玩家；时刻 = 结算那一大回合本人最后一次 Pass（分析时按日志回放到该时刻）。
 /// </summary>
 /// <param name="Logs">回放的链接模式局数（有结果、有小回合的纳入局；2.4 起全部回放以收集决胜一手）。</param>
@@ -92,45 +92,7 @@ public sealed record DefeatReviewSection(
     }
 }
 
-/// <summary>决赛参与者在等待者评估里的分组（ai-pass-review 1.3，design D3）。</summary>
-public enum FinalistGroup
-{
-    /// <summary>等待者：进入决赛时作为单人战场的在局玩家等过 ≥ 1 个大回合（首轮未配对、同区构筑期结算后无对手、或首轮提前结算后等对面）。</summary>
-    Waiter,
-
-    /// <summary>首轮刚结算的胜者：等待大回合数为 0，其战场在决赛链接前的那个大回合才结算。</summary>
-    FreshWinner,
-}
-
-/// <summary>等待者的来由（只细分等待者；首轮刚结算的胜者记 <see cref="FirstRoundWinner"/>）。</summary>
-public enum WaiterOrigin
-{
-    /// <summary>首轮配对时被指定为等待者（单人战场未配对）。</summary>
-    Unpaired,
-
-    /// <summary>同区（锁定旗数 ≥ 2）的战场在首轮配对之前（构筑期）已结算、之后无对手。</summary>
-    SharedSettledEarly,
-
-    /// <summary>参加了首轮交战（配对或同区就地），所在战场先于其他战场结算，随后等待。</summary>
-    FirstRoundSettledEarly,
-
-    /// <summary>其余：首轮没有配对事件（候选 ≤ 1）时独处单人战场等。</summary>
-    Other,
-
-    /// <summary>首轮刚结算的胜者（不是等待者）。</summary>
-    FirstRoundWinner,
-}
-
-/// <summary>一名决赛参与者。</summary>
-/// <param name="PowerGap">决赛开始时势力差 = 己方 − 其余决赛参与者的最高势力（决赛链接后的那条快照）。</param>
-public sealed record FinalistEntry(string Seed, int Player, FinalistGroup Group, WaiterOrigin Origin, int WaitingRounds, BigInteger Power, BigInteger PowerGap, bool Won);
-
-/// <summary>等待者评估（ai-pass-review 1.3）：只计到达决赛、未被截断、有胜者的链接模式局。</summary>
-/// <param name="Finals">纳入的决赛局数。</param>
-/// <param name="Participants">逐人明细。</param>
-public sealed record WaiterSection(int Finals, IReadOnlyList<FinalistEntry> Participants);
-
-/// <summary>停手复盘与等待者评估的唯一实现（见 <see cref="DefeatReviewSection"/> / <see cref="WaiterSection"/>）。</summary>
+/// <summary>停手复盘的唯一实现（见 <see cref="DefeatReviewSection"/>；open-map：等待者评估随等待者删除）。</summary>
 public static class PassReviewAnalyzer
 {
     /// <summary>
@@ -178,70 +140,6 @@ public static class PassReviewAnalyzer
             .Select(e => (bool?)(e.Settlement!.Winner == d.Player))
             .FirstOrDefault();
 
-    /// <summary>等待者评估：只读日志，不回放。没有到达决赛的纳入局时返回 <c>null</c>（旧日志与无决赛样本的报告不出现这一段）。</summary>
-    public static WaiterSection? Waiters(IReadOnlyList<MatchLog> included)
-    {
-        ArgumentNullException.ThrowIfNull(included);
-        var participants = new List<FinalistEntry>();
-        int finals = 0;
-        foreach (MatchLog log in included.Where(l => l.IsLinkMode && l.Result is { Truncated: false } && l.Result.Winners.Count == 1).OrderBy(l => l.Seed))
-        {
-            List<PairingLogEntry> pairings = [.. log.Events.Where(e => e.Pairing is not null).OrderBy(e => e.Seq).Select(e => e.Pairing!)];
-            PairingLogEntry? final = pairings.FirstOrDefault(p => p.Kind == nameof(PairingKind.Final));
-            if (final is null)
-            {
-                continue;
-            }
-
-            // 决赛开始时 = 决赛链接发生的那个小回合（上一大回合的最后一手）结束时的快照：链接在该小回合内完成，快照已按链接后的盘面记势力。
-            TurnSnapshot? start = log.Turns.LastOrDefault(t => t.MajorRound < final.MajorRound);
-            if (start is null)
-            {
-                continue;
-            }
-
-            List<PlayerEntry> finalists = [.. start.PlayersState.Where(p => p.Status == nameof(PlayerStatus.Active))];
-            if (finalists.Count < 2)
-            {
-                continue;
-            }
-
-            finals++;
-            PairingLogEntry? firstRound = pairings.FirstOrDefault(p => p.Kind == nameof(PairingKind.FirstRound));
-            List<int> flags = log.Header.LockedFlagCounts ?? [];
-            int winner = log.Result!.Winners[0];
-            foreach (PlayerEntry p in finalists)
-            {
-                int waiting = p.WaitingRounds ?? 0;
-                FinalistGroup group = waiting > 0 ? FinalistGroup.Waiter : FinalistGroup.FreshWinner;
-                WaiterOrigin origin = group == FinalistGroup.FreshWinner ? WaiterOrigin.FirstRoundWinner : OriginOf(log, p.Player, firstRound, flags);
-                BigInteger rival = finalists.Where(o => o.Player != p.Player).Max(o => o.Total);
-                participants.Add(new FinalistEntry(log.Header.Seed, p.Player, group, origin, waiting, p.Total, p.Total - rival, p.Player == winner));
-            }
-        }
-
-        return finals == 0 ? null : new WaiterSection(finals, participants);
-    }
-
-    /// <summary>等待者的来由：首轮配对的等待者 → 未配对；同区棋盘在首轮配对之前已结算 → 同区提前结算；参加过首轮配对 → 首轮提前结算；其余 → 其他。</summary>
-    private static WaiterOrigin OriginOf(MatchLog log, int player, PairingLogEntry? firstRound, List<int> flags)
-    {
-        int zone = player < log.Header.Zones.Count ? log.Header.Zones[player] : -1;
-        if (firstRound is not null && firstRound.Waiter == zone)
-        {
-            return WaiterOrigin.Unpaired;
-        }
-
-        bool shared = zone >= 0 && zone < flags.Count && flags[zone] >= 2;
-        if (shared)
-        {
-            int pairingRound = firstRound?.MajorRound ?? int.MaxValue;
-            bool settledEarly = log.Events.Any(e => e.Settlement is { } s && s.Winner == player && s.MajorRound < pairingRound && s.MajorRound <= LinkModeAnalyzer.BuildRounds);
-            return settledEarly ? WaiterOrigin.SharedSettledEarly : WaiterOrigin.FirstRoundSettledEarly;
-        }
-
-        return firstRound is not null && firstRound.Candidates.Contains(zone) ? WaiterOrigin.FirstRoundSettledEarly : WaiterOrigin.Other;
-    }
 }
 
 /// <summary>一次决胜一手与其后果：该玩家所在战场的下一次结算是否由他胜出（之后没有含他的结算为 <c>null</c>）。</summary>

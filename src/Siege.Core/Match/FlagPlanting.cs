@@ -56,16 +56,6 @@ public sealed record MatchOptions
     /// 关闭时，或开启但全员无带入时，对局与引入带入带出之前逐步相同。
     /// </summary>
     public ImmutableSortedDictionary<PlayerId, Carry.CarryIn> CarryIns { get; init; } = ImmutableSortedDictionary<PlayerId, Carry.CarryIn>.Empty;
-
-    /// <summary>决赛倒计时大回合数的缺省值（final-countdown 裁决 W2：2）。</summary>
-    public const int DefaultFinalCountdownRounds = 2;
-
-    /// <summary>
-    /// 决赛倒计时大回合数 K（final-countdown，match-setup「决赛倒计时配置」、battlefield「决赛倒计时」）：出现等待决赛的玩家后，其余未结算的多人战场最多再打 K 个大回合，
-    /// 到期按战场结算的同一比较链强制结算（原因 <see cref="SettlementReason.Expired"/>）。整数 ≥ 0，缺省 2；0 = 不启用（与引入之前逐步相同）；负数建局报错。
-    /// 属于对局配置：开局固定、始终公开，入存档（链接段）、日志首部与批次配置；恢复缺该字段的旧存档按 0（<see cref="MatchFlow.FinalCountdownBackfilled"/> 留痕）。
-    /// </summary>
-    public int FinalCountdownRounds { get; init; } = DefaultFinalCountdownRounds;
 }
 
 /// <summary>

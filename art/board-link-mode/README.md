@@ -1,5 +1,7 @@
 # board-link-mode 截图索引（段 F 拼接版）
 
+> 历史索引：本目录是 `board-link-mode` 时期（隔绝棋盘 + 拼接）的截图；自 `open-map`（2026-10-20，设计文档 v1.28）起拼接、战场横幅与"锁定后只展开自己那块"都已删除，拼接相关行只作记录、不要重截。现行流程的截图见 `art/open-map/README.md`。
+
 全部 1600×900，非 headless，`--screenshot=` 须给绝对路径（`E:/wws/geme_demo/art/board-link-mode/<名>.png:<帧>`）；每张另有 `-gray.png` 灰度版（PIL `convert("L")`）。命令前缀：`Godot_v4.7.2-stable_mono_win64_console.exe --path src/godot --`。帧号为 `--screenshot` 的取图帧；无人值守下帧序列可复现。地图 `link:1`（缺省）。
 
 | 文件 | 命令 | 帧 | 看什么 |
@@ -7,12 +9,12 @@
 | `new-game` | `--map-select --screenshot=…` | 2 | 新局界面：背景 5 块占位一字排开，面板显示 `link:<种子>`，没有棋盘布局 |
 | `flags-placeholders` | `--screenshot=… --overview`（不带 `--auto-demo`，停在插旗） | 2 | 插旗阶段：5 个占位 + 编号一字排开（间距 3），没有任何格 |
 | `locked-own-board` | `--auto-demo --seed=5 --screenshot=… --overview` | 3 | 锁定后：自己那块（出生区 1）展开为棋盘，其余 4 块仍是占位 |
-| `f-splice-mid` | `--auto-demo --seed=5 --shot-show=expand --screenshot=…` | 39 | 拼接演出中间帧（本机为锚点）：对方棋盘（出生区 2）连同它的地砖、台面边框与格线、信物标记一起从东侧滑入半程（508‰；起点封顶 4 格、裁决 J12-2，半程偏移约 2 格），滑入期间两块各自带边框，其上棋子仍隐藏，相机不动 |
-| `f-splice-mid-mover` | `--auto-demo --seed=2 --zone=3 --shot-show=expand --screenshot=…` | 38 | 拼接演出中间帧（本机为被贴方，本机锁定 3 号棋盘）：本机棋盘连同棋子与标记从东侧往西滑过去（500‰；起点封顶 4 格、裁决 J12-2，半程偏移 2 格），相机注视点随本机棋盘同步平移，画面里本机棋盘不动、2 号棋盘相对靠拢 |
+| `f-splice-mid` | ~~`--auto-demo --seed=5 --shot-show=expand --screenshot=…`~~ （已随 open-map 删除：`--shot-show=expand` / `field` 不再是合法值，命令不可用，截图只作历史） | 39 | 拼接演出中间帧（本机为锚点）：对方棋盘（出生区 2）连同它的地砖、台面边框与格线、信物标记一起从东侧滑入半程（508‰；起点封顶 4 格、裁决 J12-2，半程偏移约 2 格），滑入期间两块各自带边框，其上棋子仍隐藏，相机不动 |
+| `f-splice-mid-mover` | ~~`--auto-demo --seed=2 --zone=3 --shot-show=expand --screenshot=…`~~ （已随 open-map 删除：`--shot-show=expand` / `field` 不再是合法值，命令不可用，截图只作历史） | 38 | 拼接演出中间帧（本机为被贴方，本机锁定 3 号棋盘）：本机棋盘连同棋子与标记从东侧往西滑过去（500‰；起点封顶 4 格、裁决 J12-2，半程偏移 2 格），相机注视点随本机棋盘同步平移，画面里本机棋盘不动、2 号棋盘相对靠拢 |
 | `f-spliced-overview` | `--auto-demo --seed=5 --shot-cell=C5 --screenshot=…` | 41 | 首轮拼接（第 39 帧 1+2）后整张画布：连体棋盘 + 3 块占位；他人战场不显示 |
 | `f-spliced-closeup` | `--auto-demo --seed=5 --shot-board=1 --screenshot=…` | 42 | 拼接后近景（对准被贴方出生区 2）：两块出生棋盘的台面、地砖与格线连成一片，接缝无边框、无缝隙；边框只沿合并战场外轮廓 |
 | `f-final-overview` | `--auto-demo --rounds=0 --seed=5 --overview --screenshot=…` | 139 | 决赛拼接（第 137 帧 1+5，北贴）后的全局预览：三块出生棋盘拼成的连体棋盘 |
-| `f-field-lost` | `--auto-demo --rounds=0 --shot-show=field --screenshot=…` | 89 | 横幅"战场落败（第 2 名）"（第 92 帧结算；同一条横幅节拍里其后才是"红方出局"） |
+| `f-field-lost` | ~~`--auto-demo --rounds=0 --shot-show=field --screenshot=…`~~ （已随 open-map 删除：`--shot-show=expand` / `field` 不再是合法值，命令不可用，截图只作历史） | 89 | 横幅"战场落败（第 2 名）"（第 92 帧结算；同一条横幅节拍里其后才是"红方出局"） |
 | `f-strip-elsewhere` | `--auto-demo --seed=5 --rounds=12 --screenshot=…` | 43 | 顶部提示条"战场 出生区 5 已结算，胜者 蓝方(P1)"（第 39 帧入队，不阻塞） |
 | `f-match-end` | `--auto-demo --rounds=0 --screenshot=…` | 110 | 终局面板（第 105 帧"最后一个战场已结算"）：四人名次，没有重复的战场横幅 |
 

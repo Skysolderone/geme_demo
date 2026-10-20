@@ -25,9 +25,8 @@ namespace Siege.Sim.Logging;
 /// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因（链接局为 LastPlayerStanding / LastBattlefieldSettled；旧日志另有 BoardFull / AllPassed，见 <see cref="LogResult.LegacyBoardFull"/> / <see cref="LogResult.LegacyAllPassed"/>），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
 /// <item><term>8. 小回合、大回合与整局耗时</term><description><see cref="TurnSnapshot.ElapsedMs"/>；<see cref="LogResult.MajorRoundMs"/>；<see cref="LogResult.TotalMs"/>（只记录，不参与任何决定）</description></item>
 /// </list>
-/// <para>链接模式（board-link-mode 段 F）：链接时坐标会变（拼接平移）。首部 <see cref="LogHeader.Relics"/> 与 <see cref="LogHeader.Boards"/> 按开局坐标；
-/// 小回合快照的落子 / 提子 / 改造 / 信物状态 / 活形按该小回合结束时（含本回合内的链接）的布局；事件按发生时的布局；末行揭示表按终局布局。
-/// 换算只经 <see cref="LinkLayout"/>（<see cref="LinkLogLayout.VersionAfterTurn"/> / <see cref="LinkLogLayout.VersionAtEvent"/>）。驿站来源与前瞻记录是小回合开始时的决策量，按该回合开始时的布局。</para>
+/// <para>open-map 段 B：地图整局不变，日志各行坐标全部按开局布局解释；配对事件、链接事件、决赛倒计时记录与等待大回合数已随拼接规则删除——
+/// 含这些字段的改动前日志在 <see cref="Parse"/> 时明确拒绝并提示属于已移除的拼接规则（match-telemetry「旧拼接日志被拒绝」）。驿站来源与前瞻记录是小回合开始时的决策量。</para>
 /// <para>life-shape「活形记录与统计」：快照的 <see cref="TurnSnapshot.Life"/>（本小回合的活形确立 / 失去、两类拒绝计数、结算后逐玩家活形状态）；
 /// 暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试另记 <c>LifeRefused</c> 事件（非细粒度，任何保留策略下都在）。</para>
 /// <para>
@@ -58,12 +57,6 @@ public sealed class MatchLog
     /// 本局的对局内容集（match-telemetry 第 1 条；记在首部配置 <see cref="RunConfig.ContentSet"/>）。首部缺该项的旧日志按 v1 读（more-pieces-relics D8）。
     /// </summary>
     public Siege.Core.Board.ContentSet ContentSet => Header.Config.ContentSet ?? Siege.Core.Board.ContentSets.Legacy;
-
-    /// <summary>
-    /// 本局的决赛倒计时大回合数 K（final-countdown，match-telemetry「决赛倒计时的记录」；记在首部配置 <see cref="RunConfig.FinalCountdownRounds"/>，K = 0 时照写）。
-    /// 首部缺该项的旧日志按 0（不启用）读。
-    /// </summary>
-    public int FinalCountdownRounds => Header.Config.FinalCountdownRounds ?? 0;
 
     /// <summary>本局是否开启带入带出（首部 <see cref="LogHeader.CarryInOut"/>）。引入带入带出之前的旧日志缺该项，按关闭读。</summary>
     public bool CarryInOut => Header.CarryInOut ?? false;
@@ -99,26 +92,6 @@ public sealed class MatchLog
 
     /// <summary>是否为链接模式的局（首部 <see cref="LogHeader.Mode"/>）。</summary>
     public bool IsLinkMode => Header.Mode == "Link";
-
-    /// <summary>
-    /// 日志里的配对事件（回放输入，simulation-harness「可复现回放」），按发生顺序。种类或来源名解析不了即 <see cref="FormatException"/>。
-    /// </summary>
-    public List<Siege.Sim.Running.RecordedPairing> RecordedPairings() =>
-        [.. Events.Where(e => e.Pairing is not null).OrderBy(e => e.Seq).Select(e =>
-        {
-            PairingLogEntry p = e.Pairing!;
-            if (!Enum.TryParse(p.Kind, ignoreCase: false, out Siege.Core.Match.PairingKind kind) || !Enum.IsDefined(kind) || int.TryParse(p.Kind, out _))
-            {
-                throw new FormatException($"日志里的配对事件种类 {p.Kind} 无法解析。");
-            }
-
-            var decision = new Siege.Core.Match.PairingDecision(
-                [.. p.Pairs.Select(pair => pair.Count == 2 ? (pair[0], pair[1]) : throw new FormatException("日志里的配对须是两个战场。"))], p.Waiter)
-            {
-                Source = p.Source,
-            };
-            return new Siege.Sim.Running.RecordedPairing(kind, [.. p.Candidates], decision);
-        })];
 
     /// <summary>带前瞻记录的小回合（专家的部署决策，expert-lookahead）。旧日志与只含非专家的日志为空。</summary>
     public IEnumerable<TurnSnapshot> LookaheadTurns => Turns.Where(t => t.Lookahead is not null);
@@ -209,7 +182,82 @@ public sealed class MatchLog
         return path;
     }
 
-    /// <summary>解析 JSON Lines 文本；容忍 CRLF。</summary>
+    /// <summary>含已删除字段的旧日志的拒绝文案前缀（simulation-harness「旧拼接日志被拒」/ match-telemetry「旧拼接日志被拒绝」）。</summary>
+    public const string RetiredLinkMessage = "拼接规则已移除：该日志属于改动前的链接模式";
+
+    /// <summary>
+    /// 已随拼接规则删除的日志字段（open-map 裁决 B2），按固定位置查、不做全树递归（免得日后别处新增同名字段被误伤）：
+    /// 首部 <c>Config</c> 顶层的配对种子 / K / 视野；事件行顶层的配对 / 链接 / 倒计时载荷、<c>Type</c> 取已删除的事件类型、结算里的期限；快照 <c>PlayersState[*]</c> 的等待大回合数。
+    /// 任一命中即拒绝解析并点名，MUST NOT 静默忽略——这些字段只可能来自改动前的链接模式日志。
+    /// </summary>
+    internal static readonly HashSet<string> RetiredConfigFields = new(StringComparer.Ordinal) { "PairingSeed", "FinalCountdownRounds", "SeatVision" };
+
+    /// <summary>事件行顶层的已删除载荷键。</summary>
+    internal static readonly HashSet<string> RetiredEventFields = new(StringComparer.Ordinal) { "Pairing", "Link", "Countdown" };
+
+    /// <summary>已随拼接规则删除的事件类型名。</summary>
+    internal static readonly HashSet<string> RetiredLinkEventTypes = new(StringComparer.Ordinal) { "PairingApplied", "BattlefieldsLinked", "FinalCountdown" };
+
+    /// <summary>全部已删除字段名（测试与文档引用）。</summary>
+    internal static readonly HashSet<string> RetiredLinkFields = new(StringComparer.Ordinal)
+    {
+        "PairingSeed", "FinalCountdownRounds", "SeatVision", "Pairing", "Link", "Countdown", "WaitingRounds", "Deadline",
+    };
+
+    private static string? FindRetired(JsonElement root, string kind)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        switch (kind)
+        {
+            case LogHeader.KindName:
+                if (root.TryGetProperty(nameof(LogHeader.Config), out JsonElement config) && config.ValueKind == JsonValueKind.Object)
+                {
+                    string? key = config.EnumerateObject().Select(p => p.Name).FirstOrDefault(RetiredConfigFields.Contains);
+                    return key is null ? null : $"header.Config.{key}";
+                }
+
+                return null;
+            case LogEvent.KindName:
+                if (root.TryGetProperty("Type", out JsonElement type) && type.ValueKind == JsonValueKind.String && RetiredLinkEventTypes.Contains(type.GetString()!))
+                {
+                    return $"event.Type={type.GetString()}";
+                }
+
+                string? payload = root.EnumerateObject().Select(p => p.Name).FirstOrDefault(RetiredEventFields.Contains);
+                if (payload is not null)
+                {
+                    return $"event.{payload}";
+                }
+
+                return root.TryGetProperty(nameof(LogEvent.Settlement), out JsonElement settlement) && settlement.ValueKind == JsonValueKind.Object && settlement.TryGetProperty("Deadline", out _)
+                    ? "event.Settlement.Deadline"
+                    : null;
+            case TurnSnapshot.KindName:
+                if (root.TryGetProperty(nameof(TurnSnapshot.PlayersState), out JsonElement players) && players.ValueKind == JsonValueKind.Array)
+                {
+                    int index = 0;
+                    foreach (JsonElement player in players.EnumerateArray())
+                    {
+                        if (player.ValueKind == JsonValueKind.Object && player.TryGetProperty("WaitingRounds", out _))
+                        {
+                            return $"turn.PlayersState[{index}].WaitingRounds";
+                        }
+
+                        index++;
+                    }
+                }
+
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>解析 JSON Lines 文本；容忍 CRLF。含配对 / 链接事件或决赛倒计时字段的改动前日志在首部或该行即拒绝（<see cref="RetiredLinkMessage"/>）。</summary>
     public static MatchLog Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -228,6 +276,11 @@ public sealed class MatchLog
 
             using JsonDocument doc = JsonDocument.Parse(line);
             string kind = doc.RootElement.GetProperty("Kind").GetString() ?? throw new FormatException("日志行缺少 Kind。");
+            if (FindRetired(doc.RootElement, kind) is { } retired)
+            {
+                throw new FormatException($"{RetiredLinkMessage}（{retired}：配对 / 链接 / 决赛倒计时 / 等待者已随 open-map 删除），不再支持解析与回放。");
+            }
+
             switch (kind)
             {
                 case LogHeader.KindName:
@@ -391,14 +444,13 @@ public sealed record LogHeader
 
     /// <summary>
     /// 锁定时各出生棋盘上的旗数（match-telemetry 第 2 项；下标 = 出生棋盘编号 0 起，没人选的棋盘为 0）。只在链接模式的局写出；
-    /// 各玩家锁定的出生棋盘见 <see cref="Zones"/>。首轮配对候选 = 旗数恰为 1 的棋盘上仍在局者的战场。
+    /// 各玩家锁定的出生棋盘见 <see cref="Zones"/>。离线统计同区率与各出生棋盘被选次数的数据源。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<int>? LockedFlagCounts { get; init; }
 
     /// <summary>
-    /// 开局的出生棋盘（board-link-mode F.3；下标 = 出生棋盘编号）：只在链接模式的局写出。与链接事件的平移向量一起，离线即可把任一时刻的坐标换算到另一时刻
-    /// （<see cref="LinkLogLayout.Of"/>），不必按地图标识重建地图。<see cref="Relics"/> 按开局坐标写。
+    /// 开局的出生棋盘（board-link-mode F.3；下标 = 出生棋盘编号）：只在链接模式的局写出。离线即可按它把坐标归到棋盘与主题，不必按地图标识重建地图（open-map 起地图整局不变）。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<BoardEntry>? Boards { get; init; }
@@ -797,9 +849,6 @@ public sealed record PlayerEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BigInteger? PowerAtDefeat { get; init; }
 
-    /// <summary>作为等待者（单人战场的在局玩家，构筑期之后）度过的大回合数（match-telemetry 第 11 项）。只在链接模式的局写出（含 0）。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? WaitingRounds { get; init; }
 }
 
 public sealed record GroupEntry
@@ -901,101 +950,9 @@ public sealed record LogEvent
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Reason { get; init; }
 
-    /// <summary>配对事件（<c>PairingApplied</c>，match-telemetry 第 8 项）；回放从这里读配对结果。其余事件为 <c>null</c>。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public PairingLogEntry? Pairing { get; init; }
-
-    /// <summary>链接事件（<c>BattlefieldsLinked</c>，match-telemetry 第 9 项）。其余事件为 <c>null</c>。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public LinkLogEntry? Link { get; init; }
-
-    /// <summary>战场结算（<c>BattlefieldSettled</c>，match-telemetry 第 10 项）。其余事件为 <c>null</c>。</summary>
+    /// <summary>战场结算（<c>BattlefieldSettled</c>，match-telemetry 第 8 项）。其余事件为 <c>null</c>。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SettlementLogEntry? Settlement { get; init; }
-
-    /// <summary>决赛倒计时（<c>FinalCountdown</c>，final-countdown：起点 R、战场与期限）。其余事件为 <c>null</c>。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public FinalCountdownLogEntry? Countdown { get; init; }
-}
-
-/// <summary>一个战场进入决赛倒计时（final-countdown）：记录序号、战场标识（出生棋盘编号 0 起）、倒计时起点 R、期限大回合、得到期限的大回合。</summary>
-public sealed record FinalCountdownLogEntry
-{
-    public int Sequence { get; init; }
-
-    public int Battlefield { get; init; }
-
-    public int Start { get; init; }
-
-    public int Deadline { get; init; }
-
-    public int AssignedInMajorRound { get; init; }
-}
-
-/// <summary>一次配对事件（match-telemetry 第 8 项）：序号、种类、大回合、候选、规范次序的配对、等待者与来源（真随机 / 配对种子 / 脚本）。战场标识为出生棋盘编号 0 起。</summary>
-public sealed record PairingLogEntry
-{
-    public int Sequence { get; init; }
-
-    /// <summary><see cref="Siege.Core.Match.PairingKind"/> 名：<c>FirstRound</c> / <c>Final</c>。</summary>
-    public required string Kind { get; init; }
-
-    public int MajorRound { get; init; }
-
-    public List<int> Candidates { get; init; } = [];
-
-    /// <summary>规范次序的配对，每项 <c>[X, Y]</c>（X &lt; Y）。</summary>
-    public List<List<int>> Pairs { get; init; } = [];
-
-    public int? Waiter { get; init; }
-
-    /// <summary>结果来源：<c>random</c>（真随机）/ <c>pairing-seed</c>（配对种子）/ <c>script</c>（脚本）/ <c>external</c>（外部未注明）。</summary>
-    public required string Source { get; init; }
-}
-
-/// <summary>
-/// 一次链接事件（match-telemetry 第 9 项；board-link-mode 段 F 拼接版）：链接序号、所属配对、两个战场（X 为锚点、Y 为被贴方）、贴边（东 / 北）、链接后的地图版本、
-/// 共享边长度、拼接前每个战场的平移向量（含锚点，通常为零；整体越界平移时非零）、合并战场格数、链接后地图摘要与几何摘要。
-/// 链接之前的事件与快照里的坐标按链接前的布局解释，换算只经 <see cref="LinkLayout"/>。
-/// </summary>
-public sealed record LinkLogEntry
-{
-    public int Sequence { get; init; }
-
-    public int PairingSequence { get; init; }
-
-    public int X { get; init; }
-
-    public int Y { get; init; }
-
-    /// <summary>贴边：<c>East</c>（首轮）/ <c>North</c>（决赛）。</summary>
-    public required string Side { get; init; }
-
-    public int MapVersion { get; init; }
-
-    /// <summary>共享边长度：接缝两侧都有可落子格的格数。</summary>
-    public int SharedEdge { get; init; }
-
-    /// <summary>拼接前每个战场的平移向量，按战场标识升序（含锚点）。</summary>
-    public List<BattlefieldShiftEntry> Shifts { get; init; } = [];
-
-    /// <summary>链接后合并战场的可落子格数（开局 + 链接的地图、不含改造；决赛战场取决赛链接这一条）。</summary>
-    public int BattlefieldCells { get; init; }
-
-    /// <summary>链接后（开局 + 链接、不含改造）地图的内容摘要；回放逐行比对它即核对"每次链接后的地图与原局逐格相同"。</summary>
-    public required string MapDigest { get; init; }
-
-    public required string Summary { get; init; }
-}
-
-/// <summary>一个战场在一次链接里的平移向量。</summary>
-public sealed record BattlefieldShiftEntry
-{
-    public int Battlefield { get; init; }
-
-    public int Dx { get; init; }
-
-    public int Dy { get; init; }
 }
 
 /// <summary>开局的一块出生棋盘（链接模式日志首部 <see cref="LogHeader.Boards"/>，下标 = 出生棋盘编号）。</summary>
@@ -1012,7 +969,7 @@ public sealed record BoardEntry
     public Siege.Core.Board.BoardTheme? Theme { get; init; }
 }
 
-/// <summary>一次战场结算（match-telemetry 第 10 项）：大回合、战场标识、原因（<c>AllPassed</c> / <c>BoardFull</c> / <c>Attrition</c> / <c>Expired</c>）、名次与各玩家势力、胜者、期限。</summary>
+/// <summary>一次战场结算（match-telemetry 第 8 项）：大回合、战场标识、原因（<c>AllPassed</c> / <c>BoardFull</c> / <c>Attrition</c>）、名次与各玩家势力、胜者。</summary>
 public sealed record SettlementLogEntry
 {
     public int Sequence { get; init; }
@@ -1028,9 +985,6 @@ public sealed record SettlementLogEntry
     public int? EliminationOrder { get; init; }
 
     public List<SettlementRankEntry> Entries { get; init; } = [];
-
-    /// <summary>结算时该战场的决赛倒计时期限大回合（final-countdown）；不在倒计时中（及旧日志）为 <c>null</c>、不写出。原因为 <c>Expired</c> 时恒非空。</summary>
-    public int? Deadline { get; init; }
 }
 
 /// <summary>战场结算的一名玩家：名次与结算时的比较量（势力 → 控制信物 → 独占空格 → 棋子数）。</summary>
@@ -1067,17 +1021,8 @@ public static class LogEventType
     public const string Takeover = "Takeover";
     public const string FlagsLocked = "FlagsLocked";
 
-    /// <summary>配对事件（链接模式，<see cref="LogEvent.Pairing"/>）。</summary>
-    public const string PairingApplied = "PairingApplied";
-
-    /// <summary>链接事件（链接模式，<see cref="LogEvent.Link"/>）。</summary>
-    public const string BattlefieldsLinked = "BattlefieldsLinked";
-
-    /// <summary>战场结算（链接模式，<see cref="LogEvent.Settlement"/>）。</summary>
+    /// <summary>战场结算（<see cref="LogEvent.Settlement"/>）。</summary>
     public const string BattlefieldSettled = "BattlefieldSettled";
-
-    /// <summary>决赛倒计时：一个战场得到期限（final-countdown，<see cref="LogEvent.Countdown"/>）。K = 0 的局不出现。</summary>
-    public const string FinalCountdown = "FinalCountdown";
 
     /// <summary>暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试（life-shape 4.1）；预演环节的同类失败见细粒度 <see cref="Rehearsal"/> 与快照计数。</summary>
     public const string LifeRefused = "LifeRefused";

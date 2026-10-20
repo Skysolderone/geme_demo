@@ -12,7 +12,7 @@
 | `theme-forest` | `--auto-demo --zone=5 --shot-board=0 --screenshot=…` | 3 | 林地：2 团林地（含外圈），每格一丛小树 |
 | `board-rock` | `--map=link:9 --auto-demo --zone=1 --shot-board=0 --screenshot=…` | 3 | 棋盘内岩石（link:9 的 1 号棋盘 高台，岩石在 H7）：障碍色地砖 + 岩石部件，格线照常连续；不是松树 / 断柱（不会读成林地） |
 | `spliced-closeup` | `--auto-demo --seed=5 --shot-board=1 --screenshot=…` | 42 | 首轮拼接（第 39 帧 出生区 1 高台 + 出生区 2 栅栏阵）后近景，对准被贴方 2 号棋盘：两块台面、地砖与格线连成一片，接缝无边框；两块各自的核心区阵营色描边仍在各自中央 3×3 |
-| `splice-mid` | `--auto-demo --seed=5 --shot-show=expand --screenshot=…:39` | 140 | 拼接滑入半程（500‰）：栅栏阵棋盘连同地砖、栅栏、林地小树一起从东侧滑入，树不停在原地 |
+| `splice-mid` | ~~`--auto-demo --seed=5 --shot-show=expand --screenshot=…:39`~~ （已随 open-map 删除：`--shot-show=expand` / `field` 不再是合法值，命令不可用，截图只作历史） | 140 | 拼接滑入半程（500‰）：栅栏阵棋盘连同地砖、栅栏、林地小树一起从东侧滑入，树不停在原地 |
 
 自证行（headless 自检同样打印）：
 - `[placeholders] 未展开占位 5 块，带主题名 5 块（字体缺字 0 个）：1·高台、2·栅栏阵、3·混合、4·河流、5·林地`（每次搭建一行；新局界面的背景占位按裁决 Q5 不带主题名）。

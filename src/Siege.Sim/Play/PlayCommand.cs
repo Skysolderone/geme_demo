@@ -27,15 +27,10 @@ internal static class PlayCommand
     /// <param name="profile">带入带出的档案存取（carry-in-out D10）；<c>null</c> = 关闭带入带出、不读写任何档案（缺省）。
     /// 入口 <c>Program.Play</c> 缺省传缺省档案、<c>--no-carry</c> 传 <c>null</c>；脚本化测试不传即关闭，不碰真实用户目录，只在需要时注入临时档案。</param>
     /// <param name="onAi">测试接缝：每名 AI 玩家的控制者建好后回调一次（终端不写对局日志，脚本测试经它核对 AI 的难度、搜索配置与前瞻记录）。终端入口不传。</param>
-    /// <param name="pairingSource">测试接缝：链接图对局的配对来源；<c>null</c> = 真随机 <see cref="Running.RandomPairingSource"/>（规格 simulation-harness：有人值守对局 MUST 用真随机源）。
-    /// 终端入口不传；脚本测试注入固定配对使转录可复现。旧地图（Legacy 夹具）的对局不读它。</param>
-    /// <param name="finalCountdown">决赛倒计时大回合数 K（final-countdown）；<c>null</c> = 对局配置缺省值（<see cref="MatchOptions.DefaultFinalCountdownRounds"/>）。
-    /// 终端入口由 <c>--final-countdown</c> 传入；依赖走法的脚本测试写死 0，使脚本不随倒计时改变的对局走向而失步。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, ContentSet? contentSet = null,
-        CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null,
-        IPairingSource? pairingSource = null, int? finalCountdown = null)
+        CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? LinkPlayers;
@@ -60,7 +55,6 @@ internal static class PlayCommand
         // retire-legacy-maps 3.6：建局分叉删除——公开 MatchFlow.Create 恒以链接模式建局（3.5），冒险概率测试接缝已删（3.1）。
         MatchOptions options = MatchOptions.Immediate;
         options = contentSet is { } set ? options with { ContentSet = set } : options;
-        options = finalCountdown is { } countdown ? options with { FinalCountdownRounds = countdown } : options;
         var render = new BoardRenderer(output);
 
         // 带入带出（carry-in-out）：开启时在建局之前读档、处理残留在途记录、兑换与选择带入；AI 按本机玩家的带入数从 carry-ai 子流抽取。
@@ -87,7 +81,6 @@ internal static class PlayCommand
         }
 
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), players, options);
-        match.PairingSource = pairingSource ?? new Running.RandomPairingSource();
 
         // 本机玩家读到的公开快照：按座位投影（其他战场的棋子、信物、势力与手牌类型不可见，information-visibility）。
         Func<MatchPublicView> observe = () => match.PublishSeatProjection(me);
@@ -109,12 +102,8 @@ internal static class PlayCommand
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI{lookahead}");
         output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
-        output.WriteLine("战场：前 3 个大回合各自在出生棋盘上构筑；第 3 大回合结束时独占一块棋盘的玩家被随机配对、棋盘之间长出公共棋盘连通；"
-            + "一个战场里全员在一个大回合内都 Pass、或战场填满即结算，势力最高者胜、其余出局；两对都分出胜负后胜者链接打决赛。曾有势力而势力降到 0 同样出局。");
-        if (match.FinalCountdownRounds > 0)
-        {
-            output.WriteLine($"决赛倒计时：一旦有人等待决赛，其余未结算的战场最多再打 {match.FinalCountdownRounds} 个大回合，到期按当前势力强制结算。");
-        }
+        output.WriteLine("流程：5 块出生棋盘紧贴成一张连通地图；前 3 个大回合只能在自己的出生棋盘内落子与改造（同区者共享），第 4 大回合起全图可落；"
+            + "四人在一个大回合内全部 Pass、或地图填满即结算终局，势力最高者胜；只剩一人也终局。曾有势力而势力降到 0 即出局。");
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         if (store is not null)
@@ -156,17 +145,12 @@ internal static class PlayCommand
 
             output.WriteLine($"第 1 大回合顺序随机：{string.Join(" > ", match.ActionOrder.Select(p => BoardRenderer.Label(p, me)))}");
 
-            int pairings = 0;
-            int links = 0;
             int settlements = 0;
             while (match.Phase == MatchPhase.InProgress)
             {
                 PlayerId current = match.CurrentPlayer!.Value;
                 int round = match.MajorRound;
                 MatchPublicView before = observe();
-                int linksBefore = match.Links.Count;   // 本小回合末尾可能发生拼接：Summarize 按它把拼接前的格平移到新画布（retire-legacy-maps 4b.1 / L15）
-                // 行动者是否在本座位的战场里：在行动之前判定（本小回合结束时可能发生链接，之后再判会把刚展开的棋子算成这一手的落子）。
-                bool visibleActor = match.BattlefieldOf(current) == match.BattlefieldOf(me);
                 if (current != me)
                 {
                     output.Write($"{BoardRenderer.Label(current, me)} 思考中… ");
@@ -197,32 +181,10 @@ internal static class PlayCommand
                 MatchPublicView after = observe();
                 if (!resigned)
                 {
-                    if (!visibleActor)
-                    {
-                        // 其他战场的行动不可见（information-visibility）：只报"已行动"。
-                        render.Line($"{BoardRenderer.Label(current, me)} 在其他战场行动完毕。", ConsoleColor.DarkGray);
-                    }
-                    else
-                    {
-                        Summarize(before, after, current, me, output, render, MovedSince(match, linksBefore));
-                    }
+                    Summarize(before, after, current, me, output, render);
                 }
 
-                // 配对、链接与战场结算对所有玩家公开（battlefield / information-visibility：链接与结算是全局项）。
-                for (; pairings < match.Pairings.Count; pairings++)
-                {
-                    PairingRecord p = match.Pairings[pairings];
-                    render.Line($"── {(p.Kind == PairingKind.FirstRound ? "首轮配对" : "决赛链接")}：{string.Join("、", p.Pairs.Select(x => $"{BirthZoneLabel.Number(x.X)} 号与 {BirthZoneLabel.Number(x.Y)} 号战场"))}"
-                        + (p.Waiter is { } w ? $"；{BirthZoneLabel.Number(w)} 号战场等待决赛" : string.Empty) + " ──", ConsoleColor.Yellow);
-                }
-
-                for (; links < match.Links.Count; links++)
-                {
-                    LinkRecord l = match.Links[links];
-                    // 段 F 最小适配（F.3 再按平移向量改写）：拼接取代公共棋盘 / 通道。
-                    render.Line($"   棋盘拼接：{BirthZoneLabel.Number(l.Y)} 号战场平移贴到 {BirthZoneLabel.Number(l.X)} 号战场{(l.Side == Siege.Core.Board.Maps.LinkSide.East ? "东" : "北")}侧，两个战场连通。", ConsoleColor.Yellow);
-                }
-
+                // 战场结算对所有玩家公开（battlefield / information-visibility：结算是全局项）。
                 for (; settlements < match.Settlements.Count; settlements++)
                 {
                     BattlefieldSettlementRecord s = match.Settlements[settlements];
@@ -314,34 +276,15 @@ internal static class PlayCommand
     }
 
     /// <summary>
-    /// 自 <paramref name="linksBefore"/> 次链接以来的坐标映射（拼接前盘面的格 → 拼接后坐标），经 Core 的唯一换算 <see cref="LinkLayout"/>；期间没有链接为 <c>null</c>（恒等）。
-    /// 与跑局层 <c>MatchSession.RecordTurn</c>、图形版 <c>MatchSession.MovedSince</c> 同口径。
+    /// 对比前后快照，说明这一小回合发生了什么（open-map：地图整局不变，逐格比对同一坐标）。
     /// </summary>
-    private static Func<Coord, Coord>? MovedSince(MatchFlow match, int linksBefore)
-    {
-        if (match.Links.Count == linksBefore)
-        {
-            return null;
-        }
-
-        var layout = new LinkLayout(match.Board.BaseMap.Boards, match.Links.Select(l => l.ShiftStep));
-        int to = layout.Versions;
-        return c => layout.Translate(c, linksBefore, to);
-    }
-
-    /// <summary>
-    /// 对比前后快照，说明这一小回合发生了什么。本小回合末尾发生了拼接时（<paramref name="moved"/> 非空），逐格比对的是拼接前的可落子格与它平移后的坐标——
-    /// retire-legacy-maps 4b.1（L15）：原先拿拼接后画布的坐标去索引拼接前的盘面，画布变大即越界崩溃，未越界时也会把平移的棋子误报成落子 / 提子。
-    /// </summary>
-    private static void Summarize(MatchPublicView before, MatchPublicView after, PlayerId actor, PlayerId me, TextWriter output, BoardRenderer render, Func<Coord, Coord>? moved = null)
+    private static void Summarize(MatchPublicView before, MatchPublicView after, PlayerId actor, PlayerId me, TextWriter output, BoardRenderer render)
     {
         var placed = new List<string>();
         var lost = new Dictionary<PlayerId, int>();
-        IEnumerable<Coord> cells = moved is null ? after.Board.AllCoords() : before.Board.AllCoords().Where(before.Board.Map.IsPlayable);
-        foreach (Coord from in cells)
+        foreach (Coord c in after.Board.AllCoords())
         {
-            Coord c = moved?.Invoke(from) ?? from;
-            Occupant? was = before.Board[from].Occupant;
+            Occupant? was = before.Board[c].Occupant;
             Occupant? now = after.Board[c].Occupant;
             if (now is { } n && was is null && n.Owner == actor)
             {

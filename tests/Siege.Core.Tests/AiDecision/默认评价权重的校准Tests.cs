@@ -193,11 +193,9 @@ public class 默认评价权重的校准Tests
         EvaluationWeights other = EvaluationWeights.Default with { Growth = EvaluationWeights.Default.Growth + 1 };
         RunConfig changed = config with { Players = [.. config.Players.Select(p => p with { Weights = other })] };
         // retire-legacy-maps 1.8：样本由 v5（105 格，不落成候选格上限）改到 link:1（157 格 > 150，落成 K = 24），期望的落成项随之换为"候选格上限 24、无冒险概率"。
-        // final-countdown：未配置的决赛倒计时大回合数同样落成缺省 2 写进 config.json，两条期望的落成项都多这一项（否则反面断言因缺项而恒不等）。
-        // ai-seat-vision D1：未配置的 AI 视野同样落成 true 写进 config.json（缺省值也写），两条期望的落成项都多这一项。
-        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0, FinalCountdownRounds = Siege.Core.Match.MatchOptions.DefaultFinalCountdownRounds, SeatVision = true }).Effective().ToJson());
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
         // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。
-        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0, FinalCountdownRounds = Siege.Core.Match.MatchOptions.DefaultFinalCountdownRounds, SeatVision = true }).Effective().ToJson());
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0 }).Effective().ToJson());
     }
 
     [Fact]

@@ -157,8 +157,7 @@ internal sealed class BoardRenderer
         ImmutableDictionary<Coord, PlayerId> forbidden = life.ForbiddenCellsFor(me)
             .ToImmutableDictionary(c => c, c => life.EyeSpaceAt(c)!.Owner);
 
-        // 链接模式（board-link-mode，information-visibility「其他战场不可见」）：只画本座位战场的外接矩形，矩形内不属于本战场的格留空（未展开）；
-        // 插旗阶段只画 5 块出生棋盘的占位（编号），不画棋盘内部布局（盲选）。
+        // 锁定后画本座位战场（open-map 起 = 整张地图）的外接矩形；插旗阶段只画 5 块出生棋盘的占位（编号），不画棋盘内部布局（盲选）。
         (int x0, int y0, int x1, int y1, IReadOnlySet<Coord>? shown, bool placeholders) = Viewport(view, me, zones);
         WriteColumns(x0, x1);
         for (int y = y1; y >= y0; y--)
@@ -287,19 +286,6 @@ internal sealed class BoardRenderer
         return (cells.Min(c => c.X), cells.Min(c => c.Y), cells.Max(c => c.X), cells.Max(c => c.Y), shown, zones || zone is null);
     }
 
-    /// <summary>某玩家是否与本座位同一战场（他人战场玩家的势力与手牌类型不显示）。</summary>
-    private static bool SameBattlefield(MatchPublicView view, PlayerId me, PlayerId other)
-    {
-        if (other == me)
-        {
-            return true;
-        }
-
-        int? mine = view.Players.FirstOrDefault(p => p.Player == me)?.BirthZone;
-        int? theirs = view.Players.FirstOrDefault(p => p.Player == other)?.BirthZone;
-        return mine is int a && theirs is int b && PublicRules.BattlefieldOf(view.Board, a).Id == PublicRules.BattlefieldOf(view.Board, b).Id;
-    }
-
     /// <summary>对局状态：大回合、行动顺序、各家势力与公开手牌类型、已揭示信物。</summary>
     public void Status(MatchPublicView view, PlayerId me)
     {
@@ -318,13 +304,6 @@ internal sealed class BoardRenderer
             string types = hand is null || hand.IsEmpty ? "无" : string.Join("", hand.Types.Select(Letter));
             string status = state.Status == PlayerStatus.Active ? "" : $"  [{state.Status}]";
             Ink($"  {Label(state.Player, me),-8}", ColorOf(state.Player), bright: state.Player == me);
-            if (!SameBattlefield(view, me, state.Player))
-            {
-                // 链接模式：他人战场玩家的势力、名次与手牌类型不可见（information-visibility / 裁决 Q1），只显示在局状态。
-                _out.WriteLine($" 其他战场（势力不可见）{status}");
-                continue;
-            }
-
             _out.WriteLine($" {PowerText(detail)}  名次 {rank}  手牌类型 {types}{status}");
         }
 

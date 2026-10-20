@@ -22,6 +22,9 @@ public sealed class CommandLine
         ["dominance-start"] = "势力碾压已随 restore-go-core-rules（裁决 #4）删除",
         ["no-catch-up"] = "落后者征募补偿已随 restore-go-core-rules（裁决 #7）删除",
         ["site-values"] = "据点已随 restore-go-core-rules（裁决 #14）整体移除",
+        ["pairing-seed"] = "拼接规则已移除（open-map 裁决 B1：配对、链接、等待者与决赛倒计时随之删除，没有配对种子可配）",
+        ["final-countdown"] = "拼接规则已移除（open-map 裁决 B1：决赛倒计时 K 随决赛删除）",
+        ["links"] = "拼接规则已移除（open-map 裁决 B1：地图整局不变，map 子命令不再模拟链接）",
     };
 
     private readonly Dictionary<string, string> _options = new(StringComparer.Ordinal);

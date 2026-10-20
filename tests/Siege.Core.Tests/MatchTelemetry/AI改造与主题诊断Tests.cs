@@ -284,42 +284,43 @@ public class AI改造与主题诊断Tests
         Assert.StartsWith("回放在第 1 小回合分歧", Assert.Single(skipped.SkippedLogs).Key, StringComparison.Ordinal);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
+    [Fact]
     public void 主题表现可查()
     {
-        // 规格 Scenario「主题表现可查」：三份样本——A 四人四区（首轮两对都在第 4 大回合结算：4 人有首轮、2 胜）；C 3+1（棋盘 1 的三人里一人第 1 大回合被提光、势力归零出局
-        // → 未经结算即出局，记首轮落败；另两人第 2 大回合结算：1 胜；棋盘 2 的单人首轮无配对、直到决赛才结算 → "无首轮"）；
-        // T 四人四区截到第 13 个小回合（还没有任何结算 → 4 人"无首轮"，被排除的样本）。合计：有首轮 4 + 3 = 7 人次、胜 3、未经结算即出局 1、无首轮 1 + 4 = 5。
-        // 判别力：变异 MA-5"首轮战场不限早于决赛"→ C 的单人把决赛记成首轮，本条红。
+        // 规格 Scenario「主题表现可查」（open-map B6：原"首轮战场胜率"改为整局胜率）：三份样本——A 四人四区、C 3+1（都在第 2 大回合整轮 Pass 结算即终局：各 4 人有名次、1 胜）；
+        // T 四人四区截到第 13 个小回合（截断、无名次，只计锁定人次）。合计：锁定 12 人次、有名次 8 人次、胜 2；第 3 大回合结束时势力只有 T 有第 3 大回合快照（4 人）。
+        // 判别力：变异"胜场改按截断局也计"→ 有名次人次 / 胜场对不上，本条红。
         MatchLog a = MatchLog.Parse(LinkSimFixtures.PlayScripted([0, 1, 2, 3]).Log.FullText());
         MatchLog c = MatchLog.Parse(LinkSimFixtures.PlayScripted([0, 0, 0, 1]).Log.FullText());
-        MatchLog t = MatchLog.Parse(LinkSimFixtures.TwoLinkLog.Value.FullText());
+        MatchLog t = MatchLog.Parse(LinkSimFixtures.Round4Log.Value.FullText());
         Assert.True(t.Result!.Truncated);
-        Assert.Contains(c.Events, e => e.Pairing is { Kind: nameof(PairingKind.Final) });   // 样本口径：C 到了决赛
+        Assert.All(new[] { a, c }, l => Assert.Equal(4, l.Result!.Standings.Count));   // 样本口径：A、C 有名次
+        Assert.All(new[] { a, c }, l => Assert.Empty(l.Turns.Where(x => x.MajorRound == 3)));   // 样本口径：A、C 第 2 大回合即终局
         ThemeSection section = ThemeAnalyzer.Analyze([a, c, t])!;
 
-        Assert.Equal(7, section.Themes.Sum(s => s.FirstFieldSeats));
-        Assert.Equal(3, section.Themes.Sum(s => s.FirstFieldWins));
-        Assert.Equal(1, section.Themes.Sum(s => s.FirstFieldEliminated));
-        Assert.Equal(5, section.Themes.Sum(s => s.NoFirstField));
         Assert.Equal(12, section.Themes.Sum(s => s.Seats));
+        Assert.Equal(8, section.Themes.Sum(s => s.RankedSeats));
+        Assert.Equal(2, section.Themes.Sum(s => s.Wins));
+        Assert.Equal(2, section.RankedMatches);
+        foreach (MatchLog log in new[] { a, c })
+        {
+            int winner = log.Result!.Winners.Single();
+            BoardTheme theme = log.Header.Boards![log.Header.Zones[winner]].Theme!.Value;
+            Assert.True(section.Themes.Single(s => s.Theme == theme).Wins >= 1);
+        }
 
-        // C 的单人（锁定棋盘 1）的主题里至少记了 1 个"无首轮"。
-        int single = c.Header.Players.Single(p => c.Header.Zones[p] == 1);
-        BoardTheme singleTheme = c.Header.Boards![1].Theme!.Value;
-        Assert.True(section.Themes.Single(s => s.Theme == singleTheme).NoFirstField >= 1);
-        Assert.Null(ThemeAnalyzer.FirstField(c, single));
-
-        // 第 3 大回合结束时势力：三局各 4 人；合计等于各局第 3 大回合最后一条快照的四人势力之和。
-        Assert.Equal(12, section.Themes.Sum(s => s.Round3Powers.Count));
-        BigInteger expected = new[] { a, c, t }.Select(l => l.Turns.Last(x => x.MajorRound == 3).PlayersState.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total)).Aggregate(BigInteger.Zero, (x, y) => x + y);
+        // 第 3 大回合结束时势力：只有 T 有第 3 大回合快照，4 人；合计等于该快照四人势力之和。
+        Assert.Equal(4, section.Themes.Sum(s => s.Round3Powers.Count));
+        BigInteger expected = t.Turns.Last(x => x.MajorRound == 3).PlayersState.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total);
         Assert.Equal(expected, section.Themes.SelectMany(s => s.Round3Powers).Aggregate(BigInteger.Zero, (x, y) => x + y));
         Assert.All(section.Themes.SelectMany(s => s.Round3PowerRanks), r => Assert.InRange(r, 1, 4));
 
         string report = ReportWriter.Render(BalanceAnalyzer.Analyze([a, c, t]));
         int performance = report.IndexOf("## 主题表现", StringComparison.Ordinal);
-        Assert.True(performance > report.IndexOf("## 按主题统计", StringComparison.Ordinal) && performance > report.IndexOf("## 等待者评估", StringComparison.Ordinal));
-        Assert.Contains("首轮战场胜", report, StringComparison.Ordinal);
+        Assert.True(performance > report.IndexOf("## 按主题统计", StringComparison.Ordinal));
+        Assert.Contains("整局胜", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("首轮战场", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("等待者评估", report, StringComparison.Ordinal);
 
         // 旧日志（非链接模式）的报告没有这一段。
         MatchLog[] old = [SimFixtures.Synthetic(1, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(6, [0]))];

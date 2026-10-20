@@ -114,7 +114,6 @@ public sealed partial class MatchFlow
         RequireLinkMatch(map, list.Length);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
-        RequireValidFinalCountdown(options.FinalCountdownRounds);
         // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
         // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
         if (options.CarryIns.Count > 0)
@@ -243,7 +242,6 @@ public sealed partial class MatchFlow
         {
             EliminationReason = r.EliminationReason,
             PowerAtDefeat = r.Defeat?.Power,
-            WaitingRounds = r.WaitingRounds,
         };
     }
 
@@ -716,7 +714,7 @@ public sealed partial class MatchFlow
     {
         int completed = MajorRound;
         // 先逐战场结算（落败者不进下一轮顺序），再判"最后战场结算"终局（battlefield「战场结算」「阶段推进」）。
-        SettleAtRoundEnd(completed);
+        SettleAtRoundEnd();
         if (LastBattlefieldSettled())
         {
             Finish(EndReason.LastBattlefieldSettled);
@@ -766,10 +764,7 @@ public sealed partial class MatchFlow
         MajorRound = completed + 1;
         Emit(FlowEventKind.MajorRoundEnded, null,
             $"第 {completed} 大回合结束；先手值 {string.Join(" ", report.Entries.Select(e => $"{e.Player}={e.Value}(名次{e.Rank},修正{e.Bonus})"))}；下一轮 {string.Join(">", report.NextOrder)}");
-        // 阶段转换全部在大回合结束时执行（battlefield「阶段推进」）：首轮配对、决赛触发。
-        AdvanceLinkPhase(completed);
-        // final-countdown：结算与阶段转换（含挂接来源时当场执行的首轮配对）之后推进决赛倒计时；停在待配对时由 ApplyPairing 补做。
-        UpdateFinalCountdown(completed);
+        // open-map：阶段只剩 插旗 → 构筑 → 交战 → 终局，大回合结束时没有任何阶段事件（第 3 → 第 4 大回合只是合法落子范围与改造范围变大）。
     }
 
     // ---------- 内部 ----------
@@ -902,9 +897,6 @@ public sealed partial class MatchFlow
 
         /// <summary>战场落败时的比较量（势力 / 信物 / 独占空格 / 棋子，名次比较链）；其他情形为 <c>null</c>。</summary>
         internal SettlementEntry? Defeat { get; set; }
-
-        /// <summary>链接模式：作为等待者度过的大回合数。</summary>
-        internal int WaitingRounds { get; set; }
     }
 
     /// <summary>复合结算钩子：把 §6.3 各步转发到对应的层。本类不自行计算任何一步。</summary>

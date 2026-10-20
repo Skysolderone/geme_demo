@@ -141,7 +141,7 @@ public class 终端活形与禁入标示Tests
             }
 
             var output = new StringWriter();
-            int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // more-pieces-relics：写死内容集 v1
+            int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"));   // more-pieces-relics：写死内容集 v1
             string text = output.ToString();
 
             Assert.Equal(0, exit);

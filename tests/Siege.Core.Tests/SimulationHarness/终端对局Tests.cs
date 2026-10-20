@@ -27,7 +27,7 @@ public class 终端对局Tests
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(45, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());   // more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(45, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"));   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);
@@ -86,46 +86,13 @@ public class 终端对局Tests
     {
         var output = new StringWriter();
         // retire-legacy-maps 1.8：地图由 v5 改为 link:1。开场说明的"怎样结束"一行随模式改为链接模式的战场规则说明（Legacy 那句只在旧地图局打印）。
-        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output, map: MapCatalog.Resolve("link:1"), pairingSource: new ScriptedPairingSource());
+        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output, map: MapCatalog.Resolve("link:1"));
 
         Assert.Equal(0, exit);
         Assert.Contains("已退出。种子 7", output.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("碾压", output.ToString(), StringComparison.Ordinal);   // 段 C：势力碾压已删除，开场说明不再提
-        Assert.Contains("两对都分出胜负后胜者链接打决赛", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("第 4 大回合起全图可落", output.ToString(), StringComparison.Ordinal);   // open-map：开场说明改为开放地图流程，不再提配对 / 链接 / 决赛
+        Assert.DoesNotContain("决赛", output.ToString(), StringComparison.Ordinal);
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 终端链接局跨过拼接后小回合播报不崩溃且不误报()
-    {
-        // retire-legacy-maps 4b.1（L15）：本机在第 1 大回合于 3 号出生棋盘落 1 子、此后一直 Pass；种子 2 下本机独占 3 号棋盘，
-        // 首轮配对 2 号与 3 号战场，3 号战场（连同本机的子）平移贴到 2 号东侧——这次拼接发生在本机第 3 大回合的 Pass 小回合末尾。
-        // 修复前 Summarize 拿拼接后画布的坐标去索引拼接前的盘面：画布变大即 ArgumentOutOfRangeException（原探针 135 / 200 崩溃）；
-        // 未越界时会把平移的那枚子误报成"落子"并"提走 玩家1(你) 1 子"。修复后拼接前的格经 LinkLayout 平移再比对：本机这一手照实报 Pass，子还在。
-        // 变异记录见 implement.md「4b」（Summarize 不传平移 → 本测试红）。
-        MapData map = MapCatalog.Resolve("link:1");
-        string origin = map.Boards[2].Origin.ToNotation();
-        string script = "3\n1\n" + origin + " B\nv\nok\n" + string.Concat(Enumerable.Repeat("\npass\n", 8));
-        var output = new StringWriter();
-
-        int exit = PlayCommand.Run(2, 4, 1, AiDifficulty.Standard, new StringReader(script), output, map: map, pairingSource: new ScriptedPairingSource());
-
-        string text = output.ToString();
-        string[] lines = text.Split('\n');
-        Assert.Equal(0, exit);
-        Assert.Contains("你锁定了 3 号棋盘；这块棋盘上只有你。", text, StringComparison.Ordinal);
-        Assert.Contains($"玩家1(你) 落子 {origin}B", text, StringComparison.Ordinal);
-        int pairing = Array.FindIndex(lines, l => l.Contains("── 首轮配对：2 号与 3 号战场 ──", StringComparison.Ordinal));
-        Assert.True(pairing > 0, "没有走到首轮配对。");
-        Assert.Contains("3 号战场平移贴到 2 号战场东侧", lines[pairing + 1], StringComparison.Ordinal);
-
-        // 拼接发生在本机这一手的末尾：这一手的播报照实是 Pass，没有平移带来的假落子 / 假提子，本机那枚子仍在（棋串 1）。
-        string linkTurn = lines[pairing - 1];
-        Assert.StartsWith("玩家1(你) Pass（", linkTurn, StringComparison.Ordinal);
-        Assert.Contains("棋串 1）", linkTurn, StringComparison.Ordinal);
-        Assert.DoesNotContain("提走", linkTurn, StringComparison.Ordinal);
-
-        // 拼接之后对局继续逐手播报（同战场对手的落子坐标落在拼接后的画布上），退出码 0。
-        Assert.Contains("第 4 大回合", text, StringComparison.Ordinal);
-        Assert.Contains(lines[(pairing + 1)..], l => l.StartsWith("玩家", StringComparison.Ordinal) && l.Contains(" 落子 ", StringComparison.Ordinal));
-    }
 }

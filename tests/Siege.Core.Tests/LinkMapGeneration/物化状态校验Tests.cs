@@ -26,29 +26,6 @@ public class 物化状态校验Tests
         return new TerrainData(t.Heights.SetItems(extra.Heights), t.Surfaces.SetItems(extra.Surfaces), t.Bridges, t.Fences.Union(extra.Fences));
     }
 
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 链接后校验()
-    {
-        // Scenario：任一链接执行完毕 → 当前布局通过校验，版本号加 1；手写的"链接 0 与 1 之后"状态同样通过。
-        MapData initial = LinkMapFixtures.Initial();
-        Assert.True(MapValidator.Validate(initial).IsValid, MapValidator.Validate(initial).ToString());
-        Assert.Empty(MapValidator.Validate(initial).Reports);   // 链接档没有距离报告项
-
-        MapData linked = LinkMapFixtures.Linked01();
-        MapValidationResult result = MapValidator.Validate(linked);
-        Assert.True(result.IsValid, result.ToString());
-        Assert.Equal(1, linked.MapVersion);
-        Assert.Equal(4, Battlefields.Of(linked).Count);
-        Assert.Equal([0, 1], Battlefields.Of(linked).ById(0)!.BirthZones);
-
-        // 生成器的拼接：版本号 +1、校验通过；手写的拼接态与生成器对同一初始图拼出来的逐格相同。
-        MapData generated = LinkMapGenerator.Generate(4);
-        LinkResult link = LinkMapGenerator.Link(generated, 1, 2, LinkSide.East);
-        Assert.Equal(1, link.Map.MapVersion);
-        Assert.True(MapValidator.Validate(link.Map).IsValid);
-        Assert.Equal(MapFile.ToJson(linked), MapFile.ToJson(LinkMapGenerator.Link(initial, 0, 1, LinkSide.East).Map));
-    }
-
     [Fact]
     public void 分量数不为一被拒()
     {
@@ -64,8 +41,7 @@ public class 物化状态校验Tests
         MapValidationException ex = Assert.Throws<MapValidationException>(() => GameBoard.Load(bad));
         Assert.Contains("BATTLEFIELD_COUNT_MISMATCH", ex.Message, StringComparison.Ordinal);
 
-        // 改动前的隔绝布局（46×10、5 个分量）同样被拒（先在外接尺寸这一关被挡住）；合规的紧贴图恰 1 个分量、含全部 5 块。
-        Assert.False(MapValidator.Validate(LinkMapFixtures.Isolated()).IsValid);
+        // 合规的紧贴图恰 1 个分量、含全部 5 块。
         MapData initial = LinkMapFixtures.Initial();
         Assert.True(MapValidator.Validate(initial).IsValid, MapValidator.Validate(initial).ToString());
         Assert.Empty(MapValidator.Validate(initial).Reports);   // 链接档没有距离报告项
@@ -108,18 +84,6 @@ public class 物化状态校验Tests
         // 反面：留一对没挡（H8–J8 高度差只有 1）→ 接缝有气边，不报。
         MapData oneOpen = linked with { TerrainData = With(linked, fences: [.. rows.Select(r => ("H" + r, "J" + r))], heights: [("J8", 1)]) };
         Assert.DoesNotContain(MapValidator.Validate(oneOpen).Failures, f => f.Code == "LINK_SEAM_NO_LIBERTY");
-    }
-
-    [Fact(Skip = "open-map 段 B 删除")]
-    public void 未链接战场不相邻()
-    {
-        // 角对角相触（间隔 0 但几何不相邻）仍是"相邻"：不同战场的棋盘至少隔 1 格；同一战场内（拼接后）的棋盘紧贴不报。
-        MapData corner = LinkMapFixtures.Build("test-link-corner", [LinkMapFixtures.Births[0], LinkMapFixtures.Births[1] with { Origin = new Coord(8, 8) }, .. LinkMapFixtures.Births.Skip(2)]);
-        MapValidationFailure failure = Assert.Single(MapValidator.Validate(corner).Failures, f => f.Code == "BOARD_TOO_CLOSE");
-        Assert.Contains("未链接的战场不得相邻", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(5, Battlefields.Of(corner).Count);
-
-        Assert.DoesNotContain(MapValidator.Validate(LinkMapFixtures.Linked01()).Failures, f => f.Code == "BOARD_TOO_CLOSE");
     }
 
     [Fact]
@@ -213,7 +177,7 @@ public class 物化状态校验Tests
         Assert.Equal(stray, Assert.Single(result.Failures, f => f.Code == "BATTLEFIELD_WITHOUT_BIRTH_BOARD").Coords);
         Assert.DoesNotContain(result.Failures, f => f.Code == "BATTLEFIELD_COUNT_MISMATCH");
 
-        MapData overlap = LinkMapFixtures.Build("test-link-overlap", [LinkMapFixtures.Births[0], LinkMapFixtures.Births[1] with { Origin = new Coord(6, 2) }, .. LinkMapFixtures.Births.Skip(2)], mapVersion: 1);
+        MapData overlap = LinkMapFixtures.Build("test-link-overlap", [LinkMapFixtures.Births[0], LinkMapFixtures.Births[1] with { Origin = new Coord(6, 2) }, .. LinkMapFixtures.Births.Skip(2)]);
         MapValidationFailure overlapped = Assert.Single(MapValidator.Validate(overlap).Failures, f => f.Code == "BOARD_OVERLAP");
         Assert.Equal(TestMaps.Rect(6, 2, 2, 6).Order(), overlapped.Coords.Order());   // retire-legacy-maps：Rect 由已删除的 FrontierFixtures 原样迁到 TestMaps
 
@@ -237,36 +201,6 @@ public class 物化状态校验Tests
         Assert.Equal(initial.Obstacles.Order(), restored.Obstacles.Order());
         Assert.Equal(initial.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
         Assert.Equal(json, MapFile.ToJson(restored));
-
-        MapData linked = LinkMapFixtures.Linked01();
-        string linkedJson = MapFile.ToJson(linked);
-        Assert.Contains("\"MapVersion\": 1", linkedJson, StringComparison.Ordinal);
-        MapData linkedBack = MapFile.FromJson(linkedJson);
-        Assert.Equal(1, linkedBack.MapVersion);
-        Assert.Equal(linked.Boards, linkedBack.Boards);
-        Assert.Equal(linkedJson, MapFile.ToJson(linkedBack));
-
-        // 负的版本号拒绝读入；未知规格档的报错文案列出链接档。
-        Assert.Throws<FormatException>(() => MapFile.FromJson(linkedJson.Replace("\"MapVersion\": 1", "\"MapVersion\": -1", StringComparison.Ordinal)));
-        FormatException profile = Assert.Throws<FormatException>(() => MapFile.FromJson(json.Replace("\"Profile\": \"Link\"", "\"Profile\": 9", StringComparison.Ordinal)));
-        Assert.Contains("Link", profile.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void 非链接档不可增长()
-    {
-        // Scenario：对一张棋盘档地图尝试执行链接 → 系统拒绝并指出该规格档不允许增长；标准档、边疆档同理。
-        // retire-legacy-maps：棋盘图 / v5 / gen: 载体随旧地图删除，改为手写 9×9 夹具；4.1 起枚举只剩 Link，非链接档改用已移除旧档的原数值 0 / 1 / 2（断言不变）。
-        foreach (MapData map in new[] { 0, 1, 2 }.Select(v => TestMaps.NineByNine() with { Profile = (MapProfile)v }))
-        {
-            SiegeRuleException ex = Assert.Throws<SiegeRuleException>(() => LinkMapGenerator.Link(map, 0, 1, LinkSide.East));
-            Assert.Contains("不允许增长", ex.Message, StringComparison.Ordinal);
-        }
-
-        // 链接档但标识不存在 / 相同 → ArgumentException。
-        MapData link = LinkMapFixtures.Initial();
-        Assert.Throws<ArgumentException>(() => LinkMapGenerator.Link(link, 0, 0, LinkSide.East));
-        Assert.Throws<ArgumentException>(() => LinkMapGenerator.Link(link, 0, 7, LinkSide.North));
     }
 
     [Fact]

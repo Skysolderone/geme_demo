@@ -6,31 +6,23 @@ namespace Siege.Sim.Analysis;
 // 本文件属于离线分析输出层：允许浮点（裁决 14）。只读日志对象，不引用任何对局运行时对象。
 
 /// <summary>
-/// 链接模式统计（board-link-mode tasks 3.5 / 规格 match-telemetry「对局日志的记录内容」：同区率、首轮配对分布、各阶段大回合数、等待时长；
-/// 另按负责人要求列终局原因分布、出局原因计数、拼接的共享边长度分布与整体越界平移次数（段 F.3）、决赛合并战场格数、过早 Pass 落败次数与 AI 小回合耗时）。
-/// 只统计首部 <see cref="LogHeader.Mode"/> 为链接模式的纳入局；没有这样的局时整段不出现（旧日志的报告逐字节不变）。
+/// 链接模式统计（board-link-mode tasks 3.5 → open-map B5 / 规格 match-telemetry「对局日志的记录内容」：同区率、各出生棋盘被选次数、对局大回合数；
+/// 另列终局原因分布、出局原因计数、过早 Pass 落败次数与 AI 小回合耗时）。配对分布、链接 / 共享边、等待时长与决赛统计随拼接规则删除。
+/// 只统计首部 <see cref="LogHeader.Mode"/> 为链接模式的纳入局；没有这样的局时整段不出现。
 /// </summary>
 /// <param name="Matches">纳入的链接模式局数（含截断局）。</param>
 /// <param name="Truncated">其中被小回合数截断的局数。</param>
 /// <param name="SharedMatches">同区局数：锁定时有出生棋盘的旗数 ≥ 2（首部 <see cref="LogHeader.LockedFlagCounts"/>）。</param>
 /// <param name="Layouts">开局布局分布：锁定旗数降序拼成 <c>1+1+1+1</c> / <c>2+1+1</c> / <c>2+2</c> / <c>3+1</c> / <c>4</c>。</param>
-/// <param name="FirstRoundPairings">首轮配对分布：规范次序的配对（面向人的棋盘编号 1–5）+ 等待者；没有首轮配对的局记"无"。</param>
-/// <param name="BuildRounds">构筑期大回合数的均值（= min(3, 最后一个大回合)）。</param>
-/// <param name="FirstFightRounds">首轮交战大回合数的均值：第 4 大回合起到决赛开始前（或到局终）。</param>
-/// <param name="FinalRounds">决赛大回合数的均值，只计到达决赛的局（<see cref="FinalMatches"/>）。</param>
-/// <param name="FinalMatches">到达决赛（有决赛链接事件）的局数。</param>
-/// <param name="Links">链接总次数。</param>
-/// <param name="SharedEdges">每次拼接的共享边长度分布（段 F.3）。</param>
-/// <param name="GlobalShifts">整体越界平移（锚点向量非零，裁决 J8-3）的次数。</param>
-/// <param name="WaitingMean">每名玩家等待大回合数的均值（全部玩家，取最后一个快照）。</param>
-/// <param name="WaitingMeanOfWaiters">等待过（&gt; 0）的玩家的均值。</param>
-/// <param name="WaitingMax">等待大回合数的最大值。</param>
-/// <param name="Waiters">等待过的玩家人次。</param>
+/// <param name="BoardPicks">各出生棋盘被选次数（面向人的棋盘编号 1–5 → 锁定人次；首部 <see cref="LogHeader.Zones"/>）。</param>
+/// <param name="MeanMajorRounds">对局大回合数（结果行的终局大回合）的均值。</param>
+/// <param name="MedianMajorRounds">对局大回合数的中位数。</param>
+/// <param name="MinMajorRounds">对局大回合数的最小值。</param>
+/// <param name="MaxMajorRounds">对局大回合数的最大值。</param>
 /// <param name="EndReasons">终局原因分布（含 <c>turn_limit</c>）。</param>
 /// <param name="BattlefieldDefeats">战场落败出局人次。</param>
 /// <param name="PowerZeroEliminations">势力归零出局人次。</param>
-/// <param name="FinalBattlefieldCells">决赛战场（决赛链接后的合并战场）的可落子格数，每局一个样本。</param>
-/// <param name="EndPlayableCells">每局最后一个快照的全图可落子格（<c>Life.PlayableCells</c>，链接后的分母口径）的均值。</param>
+/// <param name="EndPlayableCells">每局最后一个快照的全图可落子格（<c>Life.PlayableCells</c>）的均值。</param>
 /// <param name="AllPassedDefeats">在"整轮 Pass"结算中落败的人次。</param>
 /// <param name="PrematurePassDefeats">过早 Pass 落败：在整轮 Pass 结算中落败，且结算那一大回合本人的小回合是 Pass、Pass 后公开手牌类型仍非空（手里还有子）。手里有子不等于有合法可落的格（未逐格核对禁入格与部署上限），故为上界。</param>
 /// <param name="TurnMedianMs">单个小回合耗时（含 AI 决策）的中位数，毫秒。</param>
@@ -41,22 +33,14 @@ public sealed record LinkModeSection(
     int Truncated,
     int SharedMatches,
     SortedDictionary<string, int> Layouts,
-    SortedDictionary<string, int> FirstRoundPairings,
-    double BuildRounds,
-    double FirstFightRounds,
-    double FinalRounds,
-    int FinalMatches,
-    int Links,
-    SortedDictionary<int, int> SharedEdges,
-    int GlobalShifts,
-    double WaitingMean,
-    double WaitingMeanOfWaiters,
-    int WaitingMax,
-    int Waiters,
+    SortedDictionary<int, int> BoardPicks,
+    double MeanMajorRounds,
+    double MedianMajorRounds,
+    int MinMajorRounds,
+    int MaxMajorRounds,
     SortedDictionary<string, int> EndReasons,
     int BattlefieldDefeats,
     int PowerZeroEliminations,
-    SortedDictionary<int, int> FinalBattlefieldCells,
     double EndPlayableCells,
     int AllPassedDefeats,
     int PrematurePassDefeats,
@@ -84,17 +68,12 @@ public static class LinkModeAnalyzer
         }
 
         var layouts = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        var pairings = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var picks = new SortedDictionary<int, int>();
         var endReasons = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        var sharedEdges = new SortedDictionary<int, int>();
-        var finalCells = new SortedDictionary<int, int>();
-        var build = new List<double>();
-        var firstFight = new List<double>();
-        var final = new List<double>();
-        var waiting = new List<double>();
+        var rounds = new List<double>();
         var turnMs = new List<double>();
         var endPlayable = new List<double>();
-        int shared = 0, links = 0, globalShifts = 0, defeats = 0, powerZero = 0, allPassedDefeats = 0, premature = 0, truncated = 0;
+        int shared = 0, defeats = 0, powerZero = 0, allPassedDefeats = 0, premature = 0, truncated = 0;
         long turnMax = 0, totalMs = 0;
 
         foreach (MatchLog log in logs)
@@ -103,45 +82,19 @@ public static class LinkModeAnalyzer
             truncated += result.Truncated ? 1 : 0;
             Add(endReasons, result.Reason);
             totalMs += result.TotalMs ?? 0;
+            rounds.Add(result.MajorRound);
 
             List<int> flags = log.Header.LockedFlagCounts ?? [];
             shared += flags.Any(f => f >= 2) ? 1 : 0;
             Add(layouts, string.Join("+", flags.Where(f => f > 0).OrderDescending()));
-
-            List<PairingLogEntry> events = [.. log.Events.Where(e => e.Pairing is not null).OrderBy(e => e.Seq).Select(e => e.Pairing!)];
-            PairingLogEntry? firstRound = events.FirstOrDefault(p => p.Kind == nameof(PairingKind.FirstRound));
-            PairingLogEntry? finalPairing = events.FirstOrDefault(p => p.Kind == nameof(PairingKind.Final));
-            Add(pairings, firstRound is null ? "无" : PairingText(firstRound));
-
-            // 阶段：构筑 = 第 1–3 大回合；首轮交战 = 第 4 大回合起到决赛开始前；决赛 = 决赛链接事件记的大回合（链接后的第一个大回合）到局终。
-            int last = result.MajorRound;
-            build.Add(Math.Min(BuildRounds, last));
-            firstFight.Add(Math.Max(0, Math.Min(last, (finalPairing?.MajorRound ?? last + 1) - 1) - BuildRounds));
-            if (finalPairing is not null)
+            foreach (int zone in log.Header.Zones)
             {
-                final.Add(Math.Max(0, last - finalPairing.MajorRound + 1));
+                Add(picks, zone + 1);
             }
 
-            foreach (LinkLogEntry link in log.Events.Where(e => e.Link is not null).Select(e => e.Link!))
+            if (log.Turns.Count > 0 && log.Turns[^1].Life is { } life)
             {
-                links++;
-                Add(sharedEdges, link.SharedEdge);
-                globalShifts += link.Shifts.Any(s => s.Battlefield == link.X && (s.Dx != 0 || s.Dy != 0)) ? 1 : 0;
-
-                if (finalPairing is not null && link.PairingSequence == finalPairing.Sequence)
-                {
-                    Add(finalCells, link.BattlefieldCells);
-                }
-            }
-
-            if (log.Turns.Count > 0)
-            {
-                TurnSnapshot lastTurn = log.Turns[^1];
-                waiting.AddRange(lastTurn.PlayersState.Select(p => (double)(p.WaitingRounds ?? 0)));
-                if (lastTurn.Life is { } life)
-                {
-                    endPlayable.Add(life.PlayableCells);
-                }
+                endPlayable.Add(life.PlayableCells);
             }
 
             foreach (LogEvent e in log.Events.Where(e => e.Type == LogEventType.PlayerEliminated))
@@ -161,19 +114,12 @@ public static class LinkModeAnalyzer
             }
         }
 
-        double[] waiters = [.. waiting.Where(w => w > 0)];
         return new LinkModeSection(
-            logs.Count, truncated, shared, layouts, pairings,
-            Statistics.Mean(build), Statistics.Mean(firstFight), Statistics.Mean(final), final.Count,
-            links, sharedEdges, globalShifts,
-            Statistics.Mean(waiting), Statistics.Mean(waiters), waiting.Count == 0 ? 0 : (int)waiting.Max(), waiters.Length,
-            endReasons, defeats, powerZero, finalCells, Statistics.Mean(endPlayable),
+            logs.Count, truncated, shared, layouts, picks,
+            Statistics.Mean(rounds), Statistics.Median(rounds), (int)rounds.Min(), (int)rounds.Max(),
+            endReasons, defeats, powerZero, Statistics.Mean(endPlayable),
             allPassedDefeats, premature, Statistics.Median(turnMs), turnMax, totalMs);
     }
-
-    /// <summary>首轮配对的文本：规范次序的配对（棋盘编号 1–5），等待者另记。</summary>
-    internal static string PairingText(PairingLogEntry pairing) =>
-        string.Join(" ", pairing.Pairs.Select(p => $"{p[0] + 1}-{p[1] + 1}")) + (pairing.Waiter is { } w ? $" 等{w + 1}" : string.Empty);
 
     /// <summary>
     /// 一局里"整轮 Pass"结算的落败人次，以及其中的过早 Pass 落败人次：结算那一大回合（结算事件所在小回合的快照大回合）里，

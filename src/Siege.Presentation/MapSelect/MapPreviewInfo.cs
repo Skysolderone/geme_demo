@@ -31,7 +31,7 @@ public static class MapPreviewInfo
             int smallest = board.Placeholders.Min(p => Math.Min(p.Width, p.Height));
             int largest = board.Placeholders.Max(p => Math.Max(p.Width, p.Height));
             string edge = smallest == largest ? $"{smallest}×{smallest}" : $"{smallest}–{largest}";
-            return $"{board.Width}×{board.Height} 画布，{board.Placeholders.Length} 块出生棋盘（边长 {edge}）；各自盲选一块，三个大回合后随机配对链接";
+            return $"{board.Width}×{board.Height} 画布，{board.Placeholders.Length} 块出生棋盘（边长 {edge}）；5 块紧贴成一张连通地图，各自盲选一块，前 3 个大回合只在自己棋盘构筑、第 4 大回合起全图开战";
         }
 
         int zones = board.Cells.Where(c => c.BirthZone is not null).Select(c => c.BirthZone).Distinct().Count();

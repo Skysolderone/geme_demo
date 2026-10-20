@@ -93,19 +93,15 @@ public static class Program
         Console.WriteLine("用法：");
         Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，链接模式恒为 4>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子，缺省 {DefaultMapId}>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
-        Console.WriteLine($"                [--final-countdown <决赛倒计时大回合数 K，非负整数，缺省 {Core.Match.MatchOptions.DefaultFinalCountdownRounds}；0 = 不启用>]");
-        Console.WriteLine("  Siege.Sim map [--map <地图id或文件>] [--links <出生棋盘对，如 1-4,2-5 或 1-4E,2-5E,1-2N（E 东贴 / N 北贴，不写按阶段推断），只用于 link:>] [--out <导出的地图文件>]（生成图只打印；给 --out 才导出；旧标识族仍可打印，夹具用途）");
+        Console.WriteLine($"  Siege.Sim map [--map <link:地图种子，缺省 {DefaultMapId}>] [--out <导出的地图文件>]（打印文本图与校验报告；给 --out 才导出）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <link:地图种子，缺省 {DefaultMapId}>] [--players <人数，链接模式恒为 4>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
-        Console.WriteLine("                [--pairing-seed <配对种子，非负整数；缺省由对局种子派生，同一批次可重复对比>]");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
-        Console.WriteLine($"                [--final-countdown <决赛倒计时大回合数 K，非负整数，缺省 {Core.Match.MatchOptions.DefaultFinalCountdownRounds}；0 = 不启用（出现等待决赛的玩家后其余多人战场最多再打 K 个大回合，到期按势力强制结算）>]");
         Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
-        Console.WriteLine("                （AI 视野没有命令行选项：缺省按座位视野；全知只作测试与离线分析，经 --config 顶层 \"SeatVision\": false 打开，对全部 AI 生效）");
+        Console.WriteLine("                （AI 一律按座位视野；open-map 起锁定后整张地图是唯一战场，座位视野即全图，没有全知开关）");
         Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
-        Console.WriteLine("            map 子命令另可打印旧标识族（内置图 / 地图文件 / gen: / board:，测试夹具用途）。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--review-defeats] [--review-artisan] [--out <报告文件>]");
         Console.WriteLine("    --review-defeats：按日志回放每局，复盘整轮 Pass 结算的落败者与决胜一手（耗时约等于跑局本身；缺省不做）");
@@ -125,14 +121,13 @@ public static class Program
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
-        int? finalCountdown = cli.Has("final-countdown") ? cli.GetInt("final-countdown", 0) : null;
         Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
         // board-link-mode C1：不给地图选项即 link:1；只接受 link:，旧标识族报错（在任何取种子与解析之前）。
         mapId = RequireLinkMap(string.IsNullOrWhiteSpace(mapId) ? DefaultMapId : mapId.Trim(), "play");
         mapId = MaterializeMapRequest(mapId, output, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
-        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile, finalCountdown: finalCountdown);
+        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile);
     }
 
     /// <summary>
@@ -186,22 +181,17 @@ public static class Program
     // ---------- map ----------
 
     /// <summary>
-    /// 地图工具：打印一张链接图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、校验结果与报告项）。<c>--map</c> 只接受 <c>link:</c>、缺省 <c>link:1</c>；
-    /// <c>--links</c> 模拟链接序列；<c>--out</c> 把这张图另存为指定文件。retire-legacy-maps：旧标识族（内置图、<c>gen:</c>、<c>board:</c>、地图文件路径）与内置图的
+    /// 地图工具：打印一张链接图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、连通分量数、校验结果与报告项）。<c>--map</c> 只接受 <c>link:</c>、缺省 <c>link:1</c>；
+    /// <c>--out</c> 把这张图另存为指定文件。open-map：<c>--links</c>（模拟链接序列）随拼接删除。retire-legacy-maps：旧标识族（内置图、<c>gen:</c>、<c>board:</c>、地图文件路径）与内置图的
     /// 权威文件导出（<c>maps/</c>）随旧地图删除，旧标识与其他入口一样经目录报错。
     /// </summary>
     private static int ExportMap(CommandLine cli, Func<ulong> mapSeedSource)
     {
         string? mapId = cli.GetOrNull("map");
         string? outPath = cli.GetOrNull("out");
-        string? links = cli.GetOrNull("links");
-        cli.EnsureRecognized();   // map 只认 --map / --links / --out；结算在导出之前（strict-cli 2.4）
+        cli.EnsureRecognized();   // map 只认 --map / --out；结算在导出之前（strict-cli 2.4）
         mapId = MaterializeMapRequest(mapId, Console.Out, mapSeedSource);
         MapData map = MapCatalog.Resolve(mapId);   // 只认 link:，缺省 link:1；旧标识族在这里报错（retire-legacy-maps）
-        if (links is not null)
-        {
-            map = SimulateLinks(map, links);
-        }
 
         MapValidationResult result = MapValidator.Validate(map);
         TerrainData terrain = map.TerrainData;
@@ -224,8 +214,10 @@ public static class Program
             + " 个可落子格，高度 "
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
+        // open-map 裁决 B5（simulation-harness「map 子命令缺省地图」）：按几何四邻实算连通分量数，不写死。
+        Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（5 块出生棋盘紧贴成一张连通地图，应为 1）");
 
-        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角（--links 之后为平移后的位置）与该棋盘内的公共信物数。
+        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角与该棋盘内的公共信物数。
         // 主题中文名只经 BoardThemeNames.DisplayName；没有主题的棋盘（手写夹具）写"无主题"。
         Console.WriteLine("出生棋盘（编号 · 主题 · 宽×高）：");
         int boardIndex = 0;
@@ -299,60 +291,6 @@ public static class Program
         return 0;
     }
 
-    /// <summary>
-    /// <c>map --links 1-4,2-5</c>（规格 simulation-harness「map 子命令模拟链接」，段 F.3 / 裁决 J8-8）：在链接图的初始状态上依次执行给定的拼接，打印每一步（含平移向量），返回最终地图。
-    /// 每一项是两块出生棋盘的编号（面向人 1–5）；执行时换算成各自所在战场的标识（= 战场内最小出生棋盘编号），所以已合并的战场可用其中任一块棋盘指代。
-    /// 贴边：可显式写在项尾（<c>1-4E</c> 东贴、<c>1-2N</c> 北贴）；不写时按配对阶段推断——同一串里前面互不重叠的单棋盘配对视为首轮（东贴），
-    /// 一旦某项连到已合并的战场即进入决赛（北贴），之后不写贴边的项都按北贴。
-    /// 只用于链接图；两块棋盘已在同一战场、编号越界、格式不对都报错。拼接的几何与校验全部由 <see cref="LinkMapGenerator.Link(MapData, int, int, LinkSide)"/> 给出，这里不另算。
-    /// </summary>
-    internal static MapData SimulateLinks(MapData map, string links)
-    {
-        if (!LinkMapId.IsLinkMap(map.Id))
-        {
-            throw new ArgumentException($"--links 只用于链接图 {LinkMapId.Prefix}:<地图种子>，当前地图为 {map.Id}。");
-        }
-
-        string[] items = links.Split(',', StringSplitOptions.TrimEntries);
-        int step = 0;
-        bool final = false;
-        foreach (string item in items)
-        {
-            LinkSide? explicitSide = item.EndsWith('E') ? LinkSide.East : item.EndsWith('N') ? LinkSide.North : null;
-            string pair = explicitSide is null ? item : item[..^1];
-            string[] ends = pair.Split('-', StringSplitOptions.TrimEntries);
-            if (ends.Length != 2
-                || !int.TryParse(ends[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int a)
-                || !int.TryParse(ends[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int b)
-                || a < 1 || b < 1 || a > map.BirthZones.Length || b > map.BirthZones.Length)
-            {
-                throw new ArgumentException(
-                    $"--links 的每一项须为两块出生棋盘的编号 1–{map.BirthZones.Length}，写作 1-4，可在项尾加 E（东贴）/ N（北贴），多项用逗号分隔（如 1-4,2-5 或 1-4E,2-5E,1-2N）；无法解析 \"{item}\"。");
-            }
-
-            Battlefields fields = Battlefields.Of(map);
-            int x = fields.All.Single(f => f.BirthZones.Contains(a - 1)).Id;   // 输入解析：面向人的 1 起编号 → 内部 0 起
-            int y = fields.All.Single(f => f.BirthZones.Contains(b - 1)).Id;
-            if (x == y)
-            {
-                throw new ArgumentException($"--links 第 {step + 1} 项 {item}：出生棋盘 {a} 与 {b} 已在同一战场 {BirthZoneLabel.Of(x)}，不能再链接。");
-            }
-
-            // 阶段推断：连到已合并战场即进入决赛，此后都按北贴（显式贴边优先）。
-            final |= fields.ById(x)!.BirthZones.Length > 1 || fields.ById(y)!.BirthZones.Length > 1;
-            LinkSide side = explicitSide ?? (final ? LinkSide.North : LinkSide.East);
-            LinkResult linked = LinkMapGenerator.Link(map, x, y, side);
-            map = linked.Map;
-            step++;
-            Console.WriteLine($"链接 #{step}：战场 {BirthZoneLabel.Of(linked.Anchor)} + {BirthZoneLabel.Of(linked.Mover)}，贴{(side == LinkSide.East ? "东" : "北")}{(explicitSide is null ? "（推断）" : string.Empty)}；地图版本 {map.MapVersion}；{linked.Summary}");
-            Console.WriteLine($"  平移向量：{string.Join("  ", linked.Shifts.Select(s => $"{BirthZoneLabel.Of(s.Battlefield)} ({s.Dx},{s.Dy})"))}");
-        }
-
-        Console.WriteLine($"已模拟 {step} 次链接。棋盘清单：{string.Join("  ", map.Boards.Select(p => $"{p.Kind}@{p.Origin.ToNotation()} {p.Width}×{p.Height}"))}");
-        Console.WriteLine();
-        return map;
-    }
-
     /// <summary>文本图的单格两字符：高度数字 + 标记。岩石与未架桥深水不可落子，画成 ## / ~~，桥格按可落子格画并标 =。</summary>
     private static string Glyph(MapData map, Coord c)
     {
@@ -415,9 +353,7 @@ public static class Program
             ArtisanWeight = cli.GetInt("artisan-weight", config.ArtisanWeight),
             CandidateCellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : config.CandidateCellLimit,
             PassThreshold = cli.Has("pass-threshold") ? cli.GetInt("pass-threshold", 0) : config.PassThreshold,
-            PairingSeed = cli.Has("pairing-seed") ? cli.GetUInt64("pairing-seed", 0) : config.PairingSeed,
             CarryIn = cli.Has("carry-in") ? cli.GetInt("carry-in", 0) : config.CarryIn,
-            FinalCountdownRounds = cli.Has("final-countdown") ? cli.GetInt("final-countdown", 0) : config.FinalCountdownRounds,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,
