@@ -106,7 +106,7 @@ public static class MapValidator
                 ZonesMustExceedPlayers: true,
                 ColumnRange: (22, 30),
                 RowRange: (16, 20),
-                PlateList: new((6, 8), (6, 8), BirthRelics: 2, PublicRelicsMax: 1, MinEditTargets: 2)),
+                PlateList: new((6, 8), (6, 8), BirthRelics: 2, PublicRelicsMax: 1, MinEditTargets: 2, MaxSpecialSurfaces: 4)),
         }.ToImmutableDictionary();
 
     /// <summary>
@@ -125,13 +125,15 @@ public static class MapValidator
     /// 棋盘清单规则：棋盘边长区间、出生棋盘边长区间、每块出生棋盘的出生区档信物格数与公共区档信物格数上限、
     /// 每块出生棋盘的可改造目标（林地格 + 未架桥深水格）下限。
     /// retire-legacy-maps 4.2：通道的宽度与长度区间随棋盘档删除（链接档没有通道）。link-map-terrain D6：加公共区档上限与改造目标下限。
+    /// link-map-surfaces D4：加每块出生棋盘新地表（荒漠 / 沼泽 / 岩台 / 浅滩）格数上限。
     /// </summary>
     private sealed record PlateRules(
         (int Min, int Max) Side,
         (int Min, int Max) BirthSide,
         int BirthRelics,
         int PublicRelicsMax,
-        int MinEditTargets);
+        int MinEditTargets,
+        int MaxSpecialSurfaces);
 
     /// <summary>一档人数的规模预算。</summary>
     private readonly record struct Budget(
@@ -319,7 +321,7 @@ public static class MapValidator
     /// 一块出生棋盘的清单规则（map-definition「地图静态校验规则」链接档清单、link-map-generation「初始布局」，link-map-terrain 裁决 M1 / M4–M7）：
     /// 外圈每格高度 0、可落子、草地或林地，外圈相关的边上没有栅栏（<c>BOARD_RIM_NOT_FLAT</c>）；
     /// 核心区 9 格高度 0 的草地、没有障碍 / 深水 / 桥，两端都在核心区内的边上没有栅栏（<c>BIRTH_CORE_NOT_FLAT</c>）；
-    /// 棋盘内没有荒漠 / 沼泽 / 岩台 / 浅滩（<c>BOARD_SPECIAL_SURFACE</c>）；棋盘内可落子格沿几何四邻连通（<c>BOARD_SPLIT</c>）；
+    /// 荒漠 / 沼泽 / 岩台 / 浅滩只在中间带、每块至多 <see cref="PlateRules.MaxSpecialSurfaces"/> 格（<c>BOARD_SPECIAL_SURFACE</c>，link-map-surfaces D4）；棋盘内可落子格沿几何四邻连通（<c>BOARD_SPLIT</c>）；
     /// 林地格与未架桥深水格合计不少于下限（<c>BOARD_TOO_FEW_EDIT_TARGETS</c>）。
     /// </summary>
     /// <remarks>
@@ -354,13 +356,23 @@ public static class MapValidator
                 [.. coreCells.Concat(coreFences.SelectMany(e => new[] { e.A, e.B })).Distinct().Order()]));
         }
 
-        // 新地表（第一期地形元素只限高差、林地、深水与桥、栅栏、岩石，裁决 M4）。
+        // 新地表（link-map-surfaces D4 / 裁决 E5；原"棋盘内不得有新地表"随之放开）：荒漠、沼泽、岩台与浅滩只许在中间带（不在外圈、不在核心区），每块至多 MaxSpecialSurfaces 格。
+        // 外圈"只许草地或林地"与核心区"9 格高度 0 草地"两条照旧报出；这里另给出更精确的失败信息。"核心区四邻不放"是生成器口径（S1），不是地图合法性要求，这里不查。
         ImmutableArray<Coord> special = [.. plate.Cells().Where(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows)];
-        if (!special.IsEmpty)
+        ImmutableArray<Coord> misplaced = [.. special.Where(c => !plate.InMiddleBand(c))];
+        if (!misplaced.IsEmpty)
         {
             f.Add(new MapValidationFailure(
                 "BOARD_SPECIAL_SURFACE",
-                $"{Describe(plate)} 内不得有荒漠、沼泽、岩台与浅滩：{string.Join("、", special.Select(c => $"{c.ToNotation()} 是{map.SurfaceAt(c).DisplayName()}"))}。",
+                $"{Describe(plate)} 的荒漠、沼泽、岩台与浅滩只许在中间带：{string.Join("、", misplaced.Select(c => $"{c.ToNotation()}（{(plate.InCore(c) ? "核心区" : "外圈")}）是{map.SurfaceAt(c).DisplayName()}"))}。",
+                misplaced));
+        }
+
+        if (special.Length > plates.MaxSpecialSurfaces)
+        {
+            f.Add(new MapValidationFailure(
+                "BOARD_SPECIAL_SURFACE",
+                $"{Describe(plate)} 有 {special.Length} 格荒漠、沼泽、岩台与浅滩：每块出生棋盘至多 {plates.MaxSpecialSurfaces} 格新地表。",
                 special));
         }
 
@@ -755,7 +767,7 @@ public static class MapValidator
                     ImmutableArray<Coord>.Empty));
             }
 
-            // 第 9 条（terrain-surfaces）：出生区是起手阵地，新地表只出现在公共区域，避免起手条件因地表而不对等。
+            // 第 6 条（map-definition「地图静态校验规则」；terrain-surfaces 引入）：出生区是起手阵地，新地表只出现在公共区域，避免起手条件因地表而不对等。
             foreach (Coord c in zone.Where(map.Contains).Order())
             {
                 Surface surface = map.SurfaceAt(c);

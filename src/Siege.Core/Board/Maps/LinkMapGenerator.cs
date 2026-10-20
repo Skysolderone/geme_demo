@@ -8,7 +8,7 @@ namespace Siege.Core.Board.Maps;
 /// 链接档地图生成器（规格 link-map-generation；open-map 负责人 2026-10-19 裁决 O3 = A）。唯一入口 <see cref="Generate(ulong)"/>：由地图种子生成<b>初始布局</b>——
 /// 5 块出生棋盘建局时即边对边紧贴成一张连通地图（3+2 两行，<see cref="InitialLayout"/>），地图在对局中不再变化（<see cref="MapData.MapVersion"/> 恒为 0）。
 /// 对局中的拼接（<c>Link</c> / 链接序列穷举）已随 open-map 段 B 删除。
-/// 全程整数运算，随机只在初始布局（<see cref="MapRandom.ForLinkLayout"/>），布局几何不消费随机；不读时钟与环境，也拿不到对局种子。
+/// 全程整数运算，随机只在初始布局（<see cref="MapRandom.ForLinkLayout"/>）与新地表叠加（<see cref="MapRandom.ForLinkSurfaces"/>，link-map-surfaces D1，两条流互不扰动），布局几何不消费随机；不读时钟与环境，也拿不到对局种子。
 /// </summary>
 /// <remarks>
 /// <para><b>初始布局</b>（link-map-terrain D3 / open-map D1）：5 块出生棋盘边长各 6–8、次序由地图种子决定；5 个主题两两不同、由地图种子排列；每块按主题生成地形（<c>LinkMapGenerator.Themes.cs</c>），
@@ -36,17 +36,35 @@ public static partial class LinkMapGenerator
     public static MapData Generate(string mapId) => Generate(LinkMapId.Parse(mapId));
 
     /// <summary>生成初始地图。<see cref="MapData.Id"/> 为规范化标识，<see cref="MapData.MapVersion"/> 为 0。结果按种子缓存（地图不可变）。</summary>
-    public static MapData Generate(ulong mapSeed) => Cache.GetOrAdd(mapSeed, static seed => Layout(seed).Map);
+    public static MapData Generate(ulong mapSeed) => Cache.GetOrAdd(mapSeed, static seed => Layout(seed, overlaySurfaces: true).Map);
 
     /// <summary>生成初始地图并给出每块出生棋盘（按编号）的重抽次数（tasks 2.3 的分布统计用；不缓存）。</summary>
-    internal static (MapData Map, ImmutableArray<int> Redraws) GenerateWithRedraws(ulong mapSeed) => Layout(mapSeed);
+    internal static (MapData Map, ImmutableArray<int> Redraws) GenerateWithRedraws(ulong mapSeed)
+    {
+        (MapData map, ImmutableArray<int> redraws, _) = Layout(mapSeed, overlaySurfaces: true);
+        return (map, redraws);
+    }
+
+    /// <summary>生成初始地图并给出每块出生棋盘（按编号）实际放下的新地表格数（link-map-surfaces D3：测试与分布统计用；不缓存）。</summary>
+    internal static (MapData Map, ImmutableArray<int> SpecialSurfaces) GenerateWithSurfaceCounts(ulong mapSeed)
+    {
+        (MapData map, _, ImmutableArray<int> surfaces) = Layout(mapSeed, overlaySurfaces: true);
+        return (map, surfaces);
+    }
 
     /// <summary>
-    /// 一次布局（link-map-terrain D3），全部随机数来自 <see cref="MapRandom.ForLinkLayout"/> 这一条流，顺序固定：
-    /// 次序 → 宽高（6–8）→ 主题排列（Fisher–Yates）→ 按编号逐块生成地形（自检失败在同一条流上重抽该块）→ 出生区信物 → 公共信物。
-    /// 布局最后过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。
+    /// 测试接缝（link-map-surfaces D5 / 规格 Scenario「新地表不改其余地形」）：同一地图种子、不做新地表叠加的地图，即引入叠加之前的生成结果。不缓存，不经 <see cref="MapCatalog"/>，任何入口都拿不到它。
     /// </summary>
-    private static (MapData Map, ImmutableArray<int> Redraws) Layout(ulong mapSeed)
+    internal static MapData GenerateWithoutSurfaces(ulong mapSeed) => Layout(mapSeed, overlaySurfaces: false).Map;
+
+    /// <summary>
+    /// 一次布局（link-map-terrain D3），布局与五主题地形的全部随机数来自 <see cref="MapRandom.ForLinkLayout"/> 这一条流，顺序固定：
+    /// 次序 → 宽高（6–8）→ 主题排列（Fisher–Yates）→ 按编号逐块生成地形（自检失败在同一条流上重抽该块）→ 出生区信物 → 公共信物。
+    /// 之后（link-map-surfaces D1）用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按编号逐块叠加新地表（<see cref="OverlaySurfaces"/>），布局流的消费顺序与次数不变；
+    /// <paramref name="overlaySurfaces"/> 为 <c>false</c> 只供 <see cref="GenerateWithoutSurfaces"/> 的对照。
+    /// 布局最后过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）；叠加不做重抽。
+    /// </summary>
+    private static (MapData Map, ImmutableArray<int> Redraws, ImmutableArray<int> SpecialSurfaces) Layout(ulong mapSeed, bool overlaySurfaces)
     {
         string id = LinkMapId.Format(mapSeed);
         RandomStream rng = MapRandom.ForLinkLayout(mapSeed);
@@ -114,6 +132,12 @@ public static partial class LinkMapGenerator
             }
         }
 
+        // link-map-surfaces D1：公共信物之后、组装之前，用独立子流按编号逐块叠加新地表（不消费布局流）。
+        if (overlaySurfaces)
+        {
+            boards = OverlaySurfaces(boards, relics, MapRandom.ForLinkSurfaces(mapSeed));
+        }
+
         TerrainData terrain = new(
             boards.SelectMany(b => b.Heights).ToImmutableDictionary(),
             boards.SelectMany(b => b.Surfaces).ToImmutableDictionary(),
@@ -127,7 +151,7 @@ public static partial class LinkMapGenerator
             throw new MapGenerationException($"地图 {id} 的初始布局未通过链接档静态校验（生成器缺陷）：{string.Join("；", validation.Failures)}");
         }
 
-        return (map, [.. boards.Select(b => b.Redraws)]);
+        return (map, [.. boards.Select(b => b.Redraws)], [.. boards.Select(b => b.SpecialSurfaces)]);
     }
 
     /// <summary>

@@ -37,7 +37,9 @@ public class 候选格上限Tests
     /// </summary>
     /// <para>open-map 1.5 重钉：link:1 改为 3+2 紧贴布局，同一配置的走法随之变；旧值 1CFBFF61319693C0E9593642D890D221A461A4739EA2CCE8E0C1BF85E2ECB538。</para>
     /// <para>open-map 段 B 重钉（格式变化、走法不变）：快照 JSON 的玩家项去掉 WaitingRounds、结算项去掉 Deadline；旧值 8A03DA5EA2B81E5D233B55145161AC101498D71FFD976E9B02CF0E225C1CD1BE。5 份决策序列基线逐字节不变。</para>
-    internal const string LinkGoldenTurnHash = "C898F79260501E911192893115646DE6DE451CCE8A5BA6FECC7242A1A5FC9727";
+    /// <para>link-map-surfaces 2.2 重钉：link:1 的中间带投放了新地表（9 格，见任务目录 export/diff-before-after.txt），同一配置的走法随之变；旧值 C898F79260501E911192893115646DE6DE451CCE8A5BA6FECC7242A1A5FC9727。</para>
+    /// <para>link-map-surfaces 1.3 再重钉（实施后裁决 F1 / F2：小棋盘免除核心区四邻限制、混合主题补位，link:1 新地表 9 → 10 格）；第一次重钉值 900E334FCB5EFA59B2108598EC38E2DF60A9FCBB576E643F9E03DA143B4853C9。</para>
+    internal const string LinkGoldenTurnHash = "A75EDD49F9C3E8EAABD186C5F7D1980CBAB6E47ADFC12DE68D3B8E6E2138FF78";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>

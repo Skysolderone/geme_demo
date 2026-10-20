@@ -137,6 +137,7 @@ public class 各入口支持生成图_链接模式Tests
         MapData map = MapCatalog.Resolve("link:1");
         int contested = 0;
         var names = new List<string>();
+        var specials = new List<int>();
         for (int zone = 0; zone < 5; zone++)
         {
             BoardPlate plate = map.BirthBoard(zone);
@@ -144,8 +145,17 @@ public class 各入口支持生成图_链接模式Tests
             contested += publicRelics;
             string name = plate.Theme!.Value.DisplayName();
             names.Add(name);
-            Assert.Contains($"  {zone + 1} 号棋盘 · {name} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}", output, StringComparison.Ordinal);
+            // link-map-surfaces D3：行尾另给该棋盘内的新地表格数（测试内独立计数）。
+            int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
+            specials.Add(special);
+            Assert.Contains($"  {zone + 1} 号棋盘 · {name} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}  新地表 {special}\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         }
+
+        // 样本口径：各棋盘新地表格数之和 = 全图新地表格数，且全图数大于任何一块（否则按棋盘过滤与否测不出来）。
+        // link-map-surfaces 1.3（F1 / F2）后 link:1 五块都是 2 格，原"各块取值不止一种"的口径失效，改为这条。
+        int mapWide = map.AllCoords().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
+        Assert.Equal(mapWide, specials.Sum());
+        Assert.True(specials.All(n => n < mapWide), $"link:1 新地表 {string.Join("/", specials)}，全图 {mapWide}");
 
         Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合", "高台" }, names.Order(StringComparer.Ordinal));
         // 样本口径：各棋盘公共信物数之和等于全图公共区信物数，且 ≥ 2（否则按棋盘过滤与否测不出来）。

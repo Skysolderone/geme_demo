@@ -171,8 +171,9 @@ public class 专家前瞻的记录Tests
         // ai-seat-vision 1.2 重钉（裁决 V2，见实施记录 V7）：样本已写死全知（LookaheadFixtures.LinkConfig），标准 AI 的评价与选择逻辑在全知下不变（五条全知基线逐字节相同为证）；专家前瞻的名册改为只含同战场玩家后，
         // 原先被选作"下一名对手"的他战场玩家（其模拟回应落在别的战场、对各候选几乎同量平移）换成同战场对手，前瞻重排随之变，专家的选择变了、其余三人的走法随盘面一起变：小回合 46 → 45、前瞻记录 13 → 10。
         // open-map 1.5 重钉：link:1 改为 3+2 紧贴布局、锁定后全图可见、第 4 大回合起全图可落，走法随之变：小回合 45 → 84。
-        Assert.Equal(84, log.Turns.Count);
-        Assert.Equal(21, log.LookaheadTurns.Count());   // open-map：前瞻记录 10 → 21
+        // link-map-surfaces 2.2 重钉：link:1 中间带投放新地表，走法随之变：小回合 84 → 108；1.3 再重钉（F1 / F2）：108 → 76。
+        Assert.Equal(76, log.Turns.Count);
+        Assert.Equal(19, log.LookaheadTurns.Count());   // link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
@@ -186,7 +187,9 @@ public class 专家前瞻的记录Tests
         // cycle-stop 2.1 / 2.2：黄金值不改——首部配置新增的 RoundCap / StagnationRounds 两项遮掉、版本 6 还原为 3 后比对，相等即证明走法与其余文本逐字节不变。
         string digest = Sha256(PreCycleStop(text));
         // open-map 段 B 重钉（格式变化、走法不变：小回合 84 / 前瞻记录 21 两条断言未动）：首部去掉 K 与视野、快照去掉 WaitingRounds；旧值 D8CE9E7E4ABCB570C4F0E22846E59DD925F1603764F4DDA6B3C8C4541CB0DC3D。
-        Assert.True("97B7E1EBA0936485C01B8CB9729F114949C7761ABD1A9845E6A30AD98D961B44" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        // link-map-surfaces 2.2 重钉（link:1 中间带投放新地表，走法变：小回合 84 → 108、前瞻记录 21 → 27）：旧值 97B7E1EBA0936485C01B8CB9729F114949C7761ABD1A9845E6A30AD98D961B44。
+        // link-map-surfaces 1.3 再重钉（F1 / F2：小回合 108 → 76、前瞻记录 27 → 19）：第一次重钉值 179565892F236BB7E6F2586D880CFDA1782540758C48539B093DCF4DB47A8B94。
+        Assert.True("280934BC38C4EA75FCF497B9014ACF896FE2112EC0392FB6B66C0FC24CD7450C" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -314,7 +317,7 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
-        Assert.Equal(80, log.Turns.Count);   // open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
+        Assert.Equal(92, log.Turns.Count);   // link-map-surfaces 1.3 再重钉（F1 / F2）：84 → 92；2.2 重钉：link:1 中间带投放新地表，80 → 84；open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
@@ -326,7 +329,9 @@ public class 专家前瞻的记录Tests
         Assert.DoesNotContain("\"SeatVision\"", text, StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));   // cycle-stop：同上，遮掉首部两项、版本还原后黄金值不变
         // open-map 段 B 重钉（格式变化、走法不变）：旧值 BACC1FF04678B2AD8D8B295EA3446EDCFCEE82EB5173EDCBC650EFE9A53D90F3。
-        Assert.True("388B9A9EC1C57E9B37DB66F9F08422A78E7A87EAAC510CB9974ECB732770D932" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
+        // link-map-surfaces 2.2 重钉（link:1 中间带投放新地表，走法变）：旧值 388B9A9EC1C57E9B37DB66F9F08422A78E7A87EAAC510CB9974ECB732770D932。
+        // link-map-surfaces 1.3 再重钉（F1 / F2）：第一次重钉值 365CE3FDCFC53B0F8B0B82BA1FBB246878F99BC4344C9BF175A20BD19BCF4DFC。
+        Assert.True("EE9D562FA3B5F79655674AA774C2553594724168F05814976BC993FEA0DF1BFB" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]

@@ -11,6 +11,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// 出生区 = 核心区（棋盘左下角起 (1,1)–(3,3)，出生棋盘 1 即 D4–F6），信物格在核心区对角（D4、F6 等），中间带两格林地（出生棋盘 1 的 G4、G7）；
 /// 期望值随之换成新预算（可落子 170–320、单区恰 9、信物 10–15）。新增规格 Scenario「外圈有高差或栅栏」「核心区有地形」「棋盘被切断」「可改造目标不足」「主题重复」，
 /// 「出生棋盘内有新地表」改为中间带浅滩（新失败码 BOARD_SPECIAL_SURFACE，待主会话裁决码名）。
+/// link-map-surfaces 2.1（裁决 E5 / design D4）：「出生棋盘内有新地表」改为「中间带新地表被接受」，另加「外圈或核心区的新地表被拒」（BOARD_SPECIAL_SURFACE 新口径）。
 /// 变异验证（link-map-terrain 第 2 组实跑，见任务汇报）：每条新失败码各删去 / 改恒假一次，对应用例红。
 /// </remarks>
 public class 地图静态校验规则Tests
@@ -522,22 +523,45 @@ public class 地图静态校验规则Tests
     }
 
     [Fact]
-    public void 出生棋盘内有新地表()
+    public void 中间带新地表被接受()
     {
-        // 规格 Scenario（link-map-terrain 改写）：出生棋盘 2 的中间带有一格标为浅滩 → 拒绝并指出该棋盘与该格坐标（BOARD_SPECIAL_SURFACE）。
-        // 棋盘清单把 C3–H8 那块排在第 2 位；G5 在它的中间带，不在出生区（核心区）里，所以出生区第 6 条（BIRTH_ZONE_SPECIAL_SURFACE）不报——棋盘级规则覆盖了出生区之外。
+        // 规格 Scenario（link-map-surfaces 改写，原「出生棋盘内有新地表」被拒）：出生棋盘 2 的中间带有一格标为浅滩 → 接受加载，不报新地表相关的失败。
+        // 棋盘清单把 C3–H8 那块排在第 2 位；G5 在它的中间带，不在外圈、不在出生区（核心区）里。四种新地表逐一试一遍。
         ImmutableArray<BoardPlate> b = LinkMapFixtures.Births;
         MapData map = LinkMapFixtures.Build("test-link-5", [b[1], b[0], b[2], b[3], b[4]]);
         Coord cell = Coord.Parse("G5");
         Assert.True(map.Boards[1].InMiddleBand(cell));
-        MapData tainted = map with { TerrainData = Overlay(map, surfaces: [("G5", Surface.Shallows)]) };
+        Assert.True(MapValidator.Validate(map).IsValid);
+        foreach (Surface surface in new[] { Surface.Shallows, Surface.Desert, Surface.Marsh, Surface.Crag })
+        {
+            MapData painted = map with { TerrainData = Overlay(map, surfaces: [("G5", surface)]) };
+            Assert.Equal(surface, painted.SurfaceAt(cell));
+            MapValidationResult result = MapValidator.Validate(painted);
+            Assert.True(result.IsValid, result.ToString());
+            Assert.NotNull(GameBoard.Load(painted));
+        }
+    }
 
-        MapValidationResult result = MapValidator.Validate(tainted);
-        MapValidationFailure board = Assert.Single(result.Failures, f => f.Code == "BOARD_SPECIAL_SURFACE");
-        Assert.Equal([cell], board.Coords);
-        Assert.Contains("出生棋盘 C3–H8", board.Message, StringComparison.Ordinal);
-        Assert.Contains("G5 是浅滩", board.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(result.Failures, f => f.Code == "BIRTH_ZONE_SPECIAL_SURFACE");
+    [Fact]
+    public void 外圈或核心区的新地表被拒()
+    {
+        // 规格 Scenario（link-map-surfaces D4）：出生棋盘 2（C3–H8）的外圈有一格标为荒漠，或核心区有一格标为沼泽 → 拒绝加载并指出该棋盘与该格坐标（BOARD_SPECIAL_SURFACE）。
+        // 外圈的荒漠同时违反"外圈只许草地或林地"（BOARD_RIM_NOT_FLAT），核心区的沼泽同时违反"核心区 9 格是草地"与出生区第 6 条——那几条原样保留，这里另给出更精确的失败信息。
+        ImmutableArray<BoardPlate> b = LinkMapFixtures.Births;
+        MapData map = LinkMapFixtures.Build("test-link-5", [b[1], b[0], b[2], b[3], b[4]]);
+        foreach ((string at, Surface surface, string where) in new[] { ("C5", Surface.Desert, "外圈"), ("E6", Surface.Marsh, "核心区") })
+        {
+            Coord cell = Coord.Parse(at);
+            Assert.Equal(where == "外圈", map.Boards[1].OnRim(cell));
+            Assert.Equal(where == "核心区", map.Boards[1].InCore(cell));
+            MapValidationResult result = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: [(at, surface)]) });
+            MapValidationFailure board = Assert.Single(result.Failures, f => f.Code == "BOARD_SPECIAL_SURFACE");
+            Assert.Equal([cell], board.Coords);
+            Assert.Contains("出生棋盘 C3–H8", board.Message, StringComparison.Ordinal);
+            Assert.Contains($"{at}（{where}）是{surface.DisplayName()}", board.Message, StringComparison.Ordinal);
+            Assert.Contains("只许在中间带", board.Message, StringComparison.Ordinal);
+            Assert.Contains(result.Failures, f => f.Code == (where == "外圈" ? "BOARD_RIM_NOT_FLAT" : "BIRTH_CORE_NOT_FLAT"));
+        }
 
         // 规格 terrain-surfaces · map-definition 第 6 条（底线）：出生区（核心区 E5）内的新地表另报出生区编号、坐标与地表。
         // 变异验证 M-S0c（retire-legacy-maps 实跑）：ValidateBirthZones 漏掉 Shallows → 本测试与「出生区内四种新地表都被拒(Shallows)」各红 1。
@@ -572,7 +596,7 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario「公共区域的新地表不受限」：棋盘之外标四种新地表，其余校验通过 → 接受。
         // 反面对照：原图本身必须通过（否则"接受"只是恰好没报这条）。
-        // 链接档初始图的棋盘之外全是场景格；四种新地表标在场景格上（棋盘内的新地表由清单规则禁止，见「出生棋盘内有新地表」）。
+        // 链接档初始图的棋盘之外全是场景格；四种新地表标在场景格上（棋盘内的新地表只许在中间带，见「中间带新地表被接受」「外圈或核心区的新地表被拒」）。
         MapData map = Link();
         Assert.True(MapValidator.Validate(map).IsValid);
         Coord[] outside = [.. new[] { "V3", "V4", "V5", "V6" }.Select(Coord.Parse)];   // open-map：棋盘 2 东侧的留白

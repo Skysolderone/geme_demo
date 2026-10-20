@@ -29,7 +29,8 @@ public static partial class LinkMapGenerator
     private const int MaxMiddleArea = ((BirthMaxSide - 2) * (BirthMaxSide - 2)) - (BoardPlate.CoreSide * BoardPlate.CoreSide);
 
     /// <summary>
-    /// 一块出生棋盘生成好的地形（坐标为全图坐标）：高度、地表、预置桥、栅栏、岩石，按主题定义的难到达格（核心区之外、可落子，按坐标升序），以及这块棋盘的重抽次数。
+    /// 一块出生棋盘生成好的地形（坐标为全图坐标）：高度、地表、预置桥、栅栏、岩石，按主题定义的难到达格（核心区之外、可落子，按坐标升序），这块棋盘的重抽次数，
+    /// 以及新地表叠加（link-map-surfaces D3，<c>LinkMapGenerator.Surfaces.cs</c>）实际放下的格数——<see cref="DraftBoard"/> 的产物恒为 0，叠加之后才写入。
     /// </summary>
     internal sealed record BoardTerrain(
         BoardPlate Plate,
@@ -39,7 +40,8 @@ public static partial class LinkMapGenerator
         ImmutableHashSet<FenceEdge> Fences,
         ImmutableHashSet<Coord> Rocks,
         ImmutableArray<Coord> HardCells,
-        int Redraws)
+        int Redraws,
+        int SpecialSurfaces = 0)
     {
         /// <summary>只含这一块棋盘的预览地图（画布 = 棋盘东 / 北边界外各留 <see cref="Margin"/> 格，棋盘之外与岩石为障碍）。自检与单元测试共用。</summary>
         internal MapData Preview() => PreviewOf(Plate, Heights, Surfaces, Bridges, Fences, Rocks);

@@ -219,14 +219,15 @@ public static class Program
         // open-map 裁决 B5（simulation-harness「map 子命令缺省地图」）：按几何四邻实算连通分量数，不写死。
         Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（5 块出生棋盘紧贴成一张连通地图，应为 1）");
 
-        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角与该棋盘内的公共信物数。
+        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角与该棋盘内的公共信物数；link-map-surfaces D3：再给该棋盘内的新地表格数。
         // 主题中文名只经 BoardThemeNames.DisplayName；没有主题的棋盘（手写夹具）写"无主题"。
         Console.WriteLine("出生棋盘（编号 · 主题 · 宽×高）：");
         int boardIndex = 0;
         foreach (BoardPlate plate in map.BirthBoards())
         {
             int publicRelics = map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested && plate.Contains(r.Key));
-            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}");
+            int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
+            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}  新地表 {special}");
         }
 
         Console.WriteLine($"各出生区沿气边最短距离（出生区 {string.Join("/", Enumerable.Range(0, map.BirthZones.Length).Select(BirthZoneLabel.Number))}）：");

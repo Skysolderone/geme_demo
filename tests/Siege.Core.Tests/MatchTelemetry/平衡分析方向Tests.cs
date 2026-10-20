@@ -191,8 +191,10 @@ public class 平衡分析方向Tests
         // open-map 1.5 重钉：link:1 改为 3+2 紧贴布局，样本走法随之变；旧值 8AF0C0CD430175146C459064F0BD0DFEFE6031C8B55B2D41076061466B8BF8D5 / B9C2D624CFB570D60F38A0A0EEA964BC8F2D98A876FB13861203F8A8FF237872。
         // open-map 段 B 重钉：报告删等待者 / 倒计时段、链接模式段改为同区率 + 各棋盘被选次数 + 对局大回合数、主题表现改整局胜率（报告格式变化，走法不变）；旧值 65989D85… / A2EA5792…。
         // cycle-stop 2.1 重钉：链接模式一段多一行"战场结算原因 …；上限结算 N 次"（报告格式变化，走法不变：样本 ≤ 4 个大回合，K = 6 不可能触发、上限 100 到不了）；旧值 8F6ED482… / 5CBE36F0…。
-        Assert.True("D9D339787A0D2AEB81752E78A38464C5D056DCB1235E002866D6DFD86A17D3F4" == sample, $"Sample 报告哈希：{sample}");
-        Assert.True("8FB438E5A61D0BD7C1735F560FCBAF0D8AE23A1B95435729B0EE5C720447E800" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // link-map-surfaces 2.2 重钉：link:1 中间带投放新地表，样本走法随之变；旧值 D9D33978… / 8FB438E5…。
+        // link-map-surfaces 1.3 再重钉（F1 / F2）：第一次重钉值 9312D1D5… / 1552A610…。
+        Assert.True("849F66328C63A2673A5C278A214F0157FAC1806252ADCC5318852B177D1A47CA" == sample, $"Sample 报告哈希：{sample}");
+        Assert.True("23498075BC36232A3E9D35E9155BDFC203C6E203EB493905B027D04E49485B7B" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

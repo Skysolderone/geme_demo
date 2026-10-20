@@ -65,6 +65,32 @@ public class 物化状态校验Tests
     }
 
     [Fact]
+    public void 新地表过多被拒()
+    {
+        // Scenario（link-map-surfaces D4 / 裁决 E5）：手写的链接档地图，出生棋盘 3（下标 2，P3–U8）的中间带有 5 格荒漠 → 校验失败并指出该棋盘与"至多 4 格新地表"。
+        // 6×6 的中间带 7 格，夹具占了两格林地（T4 / T7，可改造目标），其余 5 格（Q7 / R7 / S7 / T5 / T6）全部改荒漠；4 格是边界，接受。
+        MapData map = LinkMapFixtures.Initial();
+        BoardPlate plate = map.Boards[2];
+        Coord[] grass = [.. plate.Cells().Where(c => plate.InMiddleBand(c) && map.SurfaceAt(c) == Surface.Grass).Order()];
+        Assert.Equal(["T5", "T6", "Q7", "R7", "S7"], grass.Notations());
+        MapData five = map with { TerrainData = With(map, surfaces: [.. grass.Select(c => (c.ToNotation(), Surface.Desert))]) };
+        MapValidationResult result = MapValidator.Validate(five);
+        MapValidationFailure failure = Assert.Single(result.Failures);
+        Assert.Equal("BOARD_SPECIAL_SURFACE", failure.Code);
+        Assert.Contains("出生棋盘 P3–U8", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("有 5 格", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("至多 4 格新地表", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(grass, failure.Coords.Order());
+        Assert.Throws<MapValidationException>(() => GameBoard.Load(five));
+
+        // 边界：同一块 4 格（去掉 S7）被接受；4 格分属两种地表也照样计数（3 荒漠 + 2 浅滩 = 5 格被拒）。
+        MapData four = map with { TerrainData = With(map, surfaces: [.. grass.Take(4).Select(c => (c.ToNotation(), Surface.Desert))]) };
+        Assert.True(MapValidator.Validate(four).IsValid, MapValidator.Validate(four).ToString());
+        MapData mixed = map with { TerrainData = With(map, surfaces: [.. grass.Select((c, k) => (c.ToNotation(), k < 3 ? Surface.Desert : Surface.Shallows))]) };
+        Assert.Contains(MapValidator.Validate(mixed).Failures, f => f.Code == "BOARD_SPECIAL_SURFACE" && f.Message.Contains("有 5 格", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void 接缝没有气边被拒()
     {
         // Scenario（link-map-terrain 3.2 / 裁决 M6）：手写的链接档地图，接缝两侧相邻的格之间全部隔着栅栏或高度差 ≥ 2 → 校验失败并指出该接缝。

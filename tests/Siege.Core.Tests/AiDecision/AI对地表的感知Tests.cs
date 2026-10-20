@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.AiDecision;
 /// <summary>
 /// 规格 terrain-surfaces · ai-decision —— Requirement: AI 对地表的感知（tasks 1.4 / 2.4 / 3.4 / 4.5）。
 /// AI 不另写地表判断：覆盖、气、空区、领地计分都经 Core 唯一查询，评价与预筛因而自然感知地表。
-/// 算例都在流程夹具中部摆一枚孤子：retire-legacy-rules 1.4 起是平坦 8×8 链接档图（新地表只能放在未校验的手写链接档图上：校验器禁止出生棋盘内新地表）
+/// 算例都在流程夹具中部摆一枚孤子：retire-legacy-rules 1.4 起是平坦 8×8 链接档图（新地表放在未校验的手写链接档图上：算例的孤子 G7 在棋盘 0 的核心区内、新地表铺在它四周，而校验器只许新地表在中间带、每块至多 4 格——link-map-surfaces D4；生成图的新地表由生成器按主题投放）
 /// 棋盘 0 上的 G7（原 9×9 夹具中央 E5 平移 (+2, +2)；四邻与岩台的八个远格都在棋盘 0 内）。
 /// </summary>
 public class AI对地表的感知Tests

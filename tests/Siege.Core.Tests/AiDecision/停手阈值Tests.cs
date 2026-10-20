@@ -29,10 +29,13 @@ public class 停手阈值Tests
     /// 探针（种子 31–46）取第一个两种阈值走法不同的种子 34（<see cref="StrictImprovementSeed"/>）。旧值（种子 31）F52ACDC37DC0BDB151DE0CD3D5103291048E858F61EB94975A0B48872260C21B。
     /// </summary>
     // open-map 段 B 重钉（格式变化、走法不变）：快照 JSON 去掉 WaitingRounds / Deadline；旧值 D0EB62C1AFA4432791B0283985210D4C09A1DC0529BCAF6598FFF562016630A2。
-    private const string StrictImprovementTurnHash = "8841BD6F62ECC7F00D7D20DFB4B48035D5B743B823ECCAF41D86AB9F2A805776";
+    // link-map-surfaces 2.2 重钉：link:1 中间带投放新地表后，种子 34 的前 24 个小回合在阈值 0 与缺省 20 下走法相同（两者都是 FC49EE87…），反面断言失去样本；
+    // 按 open-map 的探针口径（种子 31–46 依次比对两种阈值）取第一个走法不同的种子 35（31–46 里不同的有 35 / 41 / 44 / 45，记录见任务目录 notes.md）。种子 34 的旧值 8841BD6F62ECC7F00D7D20DFB4B48035D5B743B823ECCAF41D86AB9F2A805776。
+    // link-map-surfaces 1.3 再重钉（F1 / F2 后 link:1 新地表变化，种子 35 不变）：第一次重钉值 477010B3FF16FAE6B1BDD416B0A53AAD032C8C180A9AF169C8CE99B0E6B4520C。
+    private const string StrictImprovementTurnHash = "3831AA4C96D385F658326017FA06EE687A7F7A7B82958DB0AFCB19A926AC0329";
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
-    private const ulong StrictImprovementSeed = 34;
+    private const ulong StrictImprovementSeed = 35;   // link-map-surfaces 2.2：34 → 35（见上）
 
     private static readonly PlayerId Me = AiFixtures.P0;
 

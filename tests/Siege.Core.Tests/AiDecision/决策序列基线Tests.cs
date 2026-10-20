@@ -18,6 +18,12 @@ namespace Siege.Core.Tests.AiDecision;
 /// 基线生成于 ai-turn-speed 的任何 Core 改动之前（`git diff --stat -- src` 为空时）。规则或 AI 行为有意变更后重建：
 /// 设 <c>SIEGE_REBUILD_DECISION_BASELINE=1</c> 再跑本测试，会把当前序列写回源码目录的夹具（仍做比对，重建当次即绿），并在提交记录里写明变更原因。
 /// <para>open-map 段 B（裁决 B4）：原 <c>*-omniscient.txt</c>（ai-seat-vision 改前副本）与 <c>*-k0.txt</c>（final-countdown 改前副本）十份随全知开关与 K 一并删除，只留 5 份缺省基线。</para>
+/// <para>link-map-surfaces 2.2（裁决 E7）重钉 5 份：link:1 中间带投放 9 格新地表，首部地图摘要变、走法随之变；首个分歧小回合与落点（逐份见任务目录 rebaseline.txt）：
+/// 种子 1 第 4 小回合 P1（原落 H9 / G10 挨着新浅滩 G9）、种子 2 第 7 小回合 P0（同上）、种子 3 第 3 小回合 P0（原落 J8 挨着新浅滩 K8）、
+/// 简单种子 1 第 2 小回合 P3（新落点 V8 即新岩台）、困难种子 1 第 4 小回合 P1（原落 H9 挨着 G9）——分歧都发生在新地表格或其四邻。五份仍截到第 12 大回合、48 个小回合。</para>
+/// <para>link-map-surfaces 1.3（实施后裁决 F1 / F2：小棋盘免除核心区四邻限制、混合主题补位）再重钉 5 份：link:1 新地表 9 → 10 格。相对第一次重钉的首个分歧：
+/// 种子 1 / 困难种子 1 第 5 小回合 P2（新落点 K14 即新荒漠）、种子 2 第 5 小回合 P2（原落 K13 挨着新荒漠 K14）、种子 3 第 5 小回合 P0（新落点 P4 即新岩台）、
+/// 简单种子 1 第 14 小回合 P0（原落 V4、新落 P4，都是新岩台）——仍都在新地表格或其四邻；相对改前基线的首个分歧与第一次相同（种子 2 除外：第 5 小回合 P2）。逐份见任务目录 rebaseline.txt。</para>
 /// </remarks>
 public class 决策序列基线Tests
 {

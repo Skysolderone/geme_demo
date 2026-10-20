@@ -226,8 +226,9 @@ public class AI改造与主题诊断Tests
         int artisanMoments = reviews.Values.SelectMany(l => l).Count(r => r.Review.ArtisanStock > 0);
         Assert.True(artisanMoments > 0, "样本口径：基线里没有持匠人的部署。");
 
-        // 对局日志同样逐字节不变：同一种子（四人四区、标准难度、截到第 24 个小回合）挂与不挂诊断各跑一次，确定性文本相同。
-        var config = LinkSimFixtures.Config(turnLimit: 24, difficulty: AiDifficulty.Standard);
+        // 对局日志同样逐字节不变：同一种子（四人四区、标准难度、截到第 36 个小回合）挂与不挂诊断各跑一次，确定性文本相同。
+        // link-map-surfaces 2.2：link:1 投放新地表后走法变化，原 24 个小回合里没有持匠人的部署（样本口径断言红），截断加长到 36（第 9 大回合）以恢复样本；所守性质不变。
+        var config = LinkSimFixtures.Config(turnLimit: 36, difficulty: AiDifficulty.Standard);
         MatchLog plain = MatchSession.Create(config, LinkSimFixtures.FourZoneSeed.Value).Run();
         MatchSession probed = MatchSession.Create(config, LinkSimFixtures.FourZoneSeed.Value);
         int probes = 0, withArtisan = 0;
@@ -240,8 +241,8 @@ public class AI改造与主题诊断Tests
             withArtisan += review.ArtisanStock > 0 ? 1 : 0;
         });
         Assert.Equal(plain.DeterministicText(), probed.Run().DeterministicText());
-        Assert.Equal(24, probes);
-        Assert.True(withArtisan > 0, "样本口径：24 个小回合里没有持匠人的部署。");
+        Assert.Equal(36, probes);
+        Assert.True(withArtisan > 0, $"样本口径：36 个小回合里没有持匠人的部署（{probes} 次部署）。");
     }
 
     [Fact]

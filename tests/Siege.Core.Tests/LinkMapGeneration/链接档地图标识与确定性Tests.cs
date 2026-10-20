@@ -68,7 +68,7 @@ public class 链接档地图标识与确定性Tests
         // retire-legacy-maps：仓库根目录改取 TestPaths.RepoRoot()（原 FrontierFixtures.RepoRoot，原样迁出）。
         // Scenario：生成只用地图种子派生的随机源与整数运算——生成器源码不得出现对局种子、时钟、环境与浮点。
         string src = Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Core", "Board", "Maps");
-        string[] files = [Path.Combine(src, "LinkMapGenerator.cs"), Path.Combine(src, "LinkMapGenerator.Themes.cs"), Path.Combine(src, "LinkMapId.cs")];   // link-map-terrain：主题地形拆在 .Themes.cs
+        string[] files = [Path.Combine(src, "LinkMapGenerator.cs"), Path.Combine(src, "LinkMapGenerator.Themes.cs"), Path.Combine(src, "LinkMapGenerator.Surfaces.cs"), Path.Combine(src, "LinkMapId.cs")];   // link-map-terrain：主题地形拆在 .Themes.cs；link-map-surfaces：新地表叠加在 .Surfaces.cs
         var banned = new Regex(@"GameSeed|DateTime|Stopwatch|Environment\.TickCount|Random\.Shared|new Random\(|Guid\.NewGuid|\bdouble\b|\bfloat\b|\bdecimal\b|Math\.Round|Math\.Floor|Math\.Ceiling");
         foreach (string file in files)
         {
@@ -109,7 +109,7 @@ public class 链接档地图标识与确定性Tests
         //    对局流程（Siege.Core/Match）不见地图随机源、不直接生成地图、不出现地图种子——它只拿到生成好的 MapData 与标识字符串。
         string core = Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Core");
         string maps = Path.Combine(core, "Board", "Maps");
-        string[] generatorNames = ["MapRandom.cs", "LinkMapGenerator.cs", "LinkMapGenerator.Themes.cs", "LinkMapId.cs"];
+        string[] generatorNames = ["MapRandom.cs", "LinkMapGenerator.cs", "LinkMapGenerator.Themes.cs", "LinkMapGenerator.Surfaces.cs", "LinkMapId.cs"];
         Assert.All(generatorNames, name => Assert.DoesNotContain("GameSeed", File.ReadAllText(Path.Combine(maps, name)), StringComparison.Ordinal));
         // MapRandom.cs 同样禁浮点、时钟与环境（原 生成确定性Tests.生成器源码不含散列次序遍历_浮点_时钟与环境 扫过它；LinkMapGenerator / LinkMapId 由上面「对局种子不影响地图」扫）。
         Assert.DoesNotMatch(
@@ -129,6 +129,30 @@ public class 链接档地图标识与确定性Tests
     }
 
     private static ulong[] Take(Siege.Core.Determinism.RandomStream stream, int count) => [.. Enumerable.Range(0, count).Select(_ => stream.NextUInt64())];
+
+    [Fact]
+    public void 新地表子流与布局子流互不扰动()
+    {
+        // link-map-surfaces D1 / 裁决 E4：新地表叠加用独立子流 MapRandom.ForLinkSurfaces（只由地图种子派生、域常量不同）——
+        // 同种子可复现；与布局流、对局各条命名子流都不同构；叠加整段消费多少次都不改变布局流的取值（叠加是在布局流用完之后另起一条流，不共享状态）。
+        foreach (ulong seed in new ulong[] { 1, 7, 12345 })
+        {
+            ulong[] surfaces = Take(MapRandom.ForLinkSurfaces(seed), 8);
+            Assert.Equal(surfaces, Take(MapRandom.ForLinkSurfaces(seed), 8));
+            Assert.NotEqual(Take(MapRandom.ForLinkLayout(seed), 8), surfaces);
+            Assert.NotEqual(Take(MapRandom.ForLinkSurfaces(seed + 1), 8), surfaces);
+            var game = new GameSeed(seed);
+            foreach (string name in new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.FlagPick, GameSeed.CarryAi })
+            {
+                Assert.NotEqual(Take(game.Stream(name), 8), surfaces);
+            }
+        }
+
+        // 子流名可辨（诊断用），两条地图流各自独立构造。
+        Assert.Equal("map-link-surfaces", MapRandom.ForLinkSurfaces(1).Name);
+        Assert.Equal("map-link", MapRandom.ForLinkLayout(1).Name);
+        Assert.Contains("MapRandom.ForLinkSurfaces(", File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Core", "Board", "Maps", "LinkMapGenerator.cs")), StringComparison.Ordinal);
+    }
 
     [Fact]
     public void 目录解析link标识()

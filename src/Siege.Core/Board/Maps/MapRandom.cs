@@ -11,6 +11,7 @@ namespace Siege.Core.Board.Maps;
 /// 规格：openspec/changes/map-generator/specs/map-generation —— Requirement: 地图种子与确定性。
 /// retire-legacy-maps（L10）：只为旧生成器存在的三个随机源（边疆档尝试 <c>map-gen</c>、新地表投放 <c>map-gen-surfaces</c>、棋盘档尝试 <c>map-board</c>）
 /// 及其域常量随旧生成器删除；链接档布局随机源 <see cref="ForLinkLayout"/> 一字未改（取值由三条链接图基线与 link:1–20 快照守住）。
+/// link-map-surfaces D1：另加新地表叠加随机源 <see cref="ForLinkSurfaces"/>（独立域常量）。
 /// </remarks>
 internal static class MapRandom
 {
@@ -29,7 +30,22 @@ internal static class MapRandom
         return new RandomStream("map-link", s0, s1, s2, s3);
     }
 
-    /// <summary>域分隔常量：链接档的地图种子一侧与布局一侧各一个。</summary>
+    /// <summary>
+    /// 链接档新地表叠加（link-map-surfaces D1 / 裁决 E4）的随机源：只由地图种子决定，与 <see cref="ForLinkLayout"/> 同一地图种子一侧、不同的域常量，
+    /// 两条流互不扰动——叠加消费多少次都不改变布局流的任何取值，因此布局、五主题地形与信物格逐格不变。
+    /// </summary>
+    internal static RandomStream ForLinkSurfaces(ulong mapSeed)
+    {
+        ulong root = SplitMix64.Mix(mapSeed ^ LinkDomain) ^ SplitMix64.Mix(LinkSurfacesDomain);
+        ulong s0 = SplitMix64.Next(ref root);
+        ulong s1 = SplitMix64.Next(ref root);
+        ulong s2 = SplitMix64.Next(ref root);
+        ulong s3 = SplitMix64.Next(ref root);
+        return new RandomStream("map-link-surfaces", s0, s1, s2, s3);
+    }
+
+    /// <summary>域分隔常量：链接档的地图种子一侧一个，布局一侧与新地表叠加一侧各一个。</summary>
     private const ulong LinkDomain = 0x17E3_B9A4_6C2D_F581UL;
     private const ulong LinkLayoutDomain = 0x8C4F_2A97_D5E6_031BUL;
+    private const ulong LinkSurfacesDomain = 0x3B6D_E1F0_92A7_C458UL;
 }
