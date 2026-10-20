@@ -1,0 +1,41 @@
+link:1 不同字段=['Surfaces'] 改动格=10 OK
+    Plateau6x7=2[V4:岩台 V8:岩台] | Palisade6x6=2[K14:荒漠 M14:荒漠] | Mixed8x7=2[P4:岩台 K8:浅滩] | River6x8=2[D9:浅滩 G9:浅滩] | Forest6x6=2[G12:沼泽 E15:沼泽]
+link:2 不同字段=['Surfaces'] 改动格=12 OK
+    Palisade8x7=2[X7:荒漠 W8:荒漠] | Forest6x8=3[N9:沼泽 O9:沼泽 P9:沼泽] | River6x8=3[M17:浅滩 N17:浅滩 O17:浅滩] | Mixed8x6=2[J4:浅滩 H7:岩台] | Plateau6x7=2[E10:岩台 G14:岩台]
+link:3 不同字段=['Surfaces'] 改动格=9 OK
+    Forest6x7=2[S4:沼泽 U8:沼泽] | River6x6=0[] | Plateau7x7=2[D4:岩台 H4:岩台] | Palisade6x8=3[L9:荒漠 M9:荒漠 O9:荒漠] | Mixed7x7=2[D11:浅滩 H11:岩台]
+link:4 不同字段=['Surfaces'] 改动格=14 OK
+    Palisade6x8=3[G16:荒漠 D17:荒漠 F17:荒漠] | Mixed8x7=4[O4:荒漠 P5:岩台 P7:浅滩 P8:沼泽] | Plateau7x7=3[O11:岩台 K15:岩台 O15:岩台] | River6x6=2[V4:浅滩 V6:浅滩] | Forest6x8=2[G4:沼泽 E9:沼泽]
+link:5 不同字段=['Surfaces'] 改动格=11 OK
+    Plateau7x8=2[H8:岩台 D9:岩台] | River7x6=2[O12:浅滩 O14:浅滩] | Forest6x8=3[O8:沼泽 L9:沼泽 N9:沼泽] | Palisade6x7=2[D16:荒漠 F16:荒漠] | Mixed8x7=2[R4:浅滩 W6:岩台]
+link:6 不同字段=['Surfaces'] 改动格=11 OK
+    River6x8=2[F15:浅滩 G15:浅滩] | Plateau6x6=2[U5:岩台 U6:岩台] | Palisade6x7=2[O7:荒漠 M8:荒漠] | Mixed8x8=3[P12:沼泽 K15:浅滩 P15:岩台] | Forest7x6=2[D4:沼泽 F7:沼泽]
+link:7 不同字段=['Surfaces'] 改动格=8 OK
+    Plateau6x7=2[G11:岩台 E14:岩台] | Mixed7x7=2[Q4:浅滩 Q8:岩台] | Forest6x6=2[G6:沼泽 D7:沼泽] | River6x6=0[] | Palisade8x8=2[U12:荒漠 U14:荒漠]
+link:8 不同字段=['Surfaces'] 改动格=11 OK
+    Plateau7x7=3[D4:岩台 H4:岩台 H8:岩台] | River7x7=2[K11:浅滩 K15:浅滩] | Mixed7x7=2[V4:岩台 V8:浅滩] | Forest6x7=2[O4:沼泽 M8:沼泽] | Palisade6x7=2[G11:荒漠 E15:荒漠]
+link:9 不同字段=['Surfaces'] 改动格=10 OK
+    Plateau7x8=2[E9:岩台 H9:岩台] | Mixed8x7=2[W6:岩台 V8:浅滩] | Palisade6x8=2[O4:荒漠 O8:荒漠] | River7x8=2[D17:浅滩 F17:浅滩] | Forest6x8=2[M17:沼泽 N17:沼泽]
+link:10 不同字段=['Surfaces'] 改动格=14 OK
+    Mixed7x6=2[O14:岩台 O15:浅滩] | Palisade6x8=3[G4:荒漠 G8:荒漠 E9:荒漠] | River6x8=3[K9:浅滩 L9:浅滩 M9:浅滩] | Forest6x8=3[G12:沼泽 G16:沼泽 G17:沼泽] | Plateau7x8=3[Q8:岩台 R9:岩台 U9:岩台]
+link:11 不同字段=['Surfaces'] 改动格=13 OK
+    Forest7x6=2[Q6:沼泽 M7:沼泽] | Plateau8x6=3[J4:岩台 D7:岩台 J7:岩台] | River6x6=2[N13:浅滩 O13:浅滩] | Palisade7x7=2[D10:荒漠 H14:荒漠] | Mixed7x8=4[X4:浅滩 X8:荒漠 T9:岩台 W9:沼泽]
+link:12 不同字段=['Surfaces'] 改动格=9 OK
+    River8x7=1[U4:浅滩] | Forest6x6=2[D7:沼泽 E7:沼泽] | Plateau6x7=2[G10:岩台 G13:岩台] | Palisade6x8=2[L9:荒漠 N9:荒漠] | Mixed8x7=2[P13:浅滩 K16:岩台]
+link:13 不同字段=['Surfaces'] 改动格=15 OK
+    Forest8x8=3[Q12:沼泽 L16:沼泽 O17:沼泽] | Palisade6x8=3[P4:荒漠 O9:荒漠 P9:荒漠] | Mixed7x8=4[W4:浅滩 W8:沼泽 T9:岩台 W9:荒漠] | Plateau7x8=2[D17:岩台 H17:岩台] | River8x8=3[J6:浅滩 J8:浅滩 G9:浅滩]
+link:14 不同字段=['Surfaces'] 改动格=13 OK
+    Palisade7x8=2[D4:荒漠 D9:荒漠] | Plateau8x6=2[Y4:岩台 Y7:岩台] | Mixed8x7=4[Q4:荒漠 Q6:沼泽 L8:浅滩 Q8:岩台] | Forest8x7=2[M11:沼泽 M15:沼泽] | River8x6=3[J12:浅滩 J13:浅滩 J15:浅滩]
+link:15 不同字段=['Surfaces'] 改动格=10 OK
+    River8x6=2[X5:浅滩 X7:浅滩] | Mixed6x7=2[O13:岩台 N15:浅滩] | Forest7x6=2[H13:沼泽 D15:沼泽] | Plateau7x8=2[D9:岩台 H9:岩台] | Palisade7x7=2[L4:荒漠 P4:荒漠]
+link:16 不同字段=['Surfaces'] 改动格=10 OK
+    Mixed7x8=2[D10:浅滩 D15:岩台] | River7x7=1[M12:浅滩] | Plateau8x6=2[J4:岩台 J7:岩台] | Palisade6x7=2[V4:荒漠 W5:荒漠] | Forest7x8=3[Q8:沼泽 O9:沼泽 Q9:沼泽]
+link:17 不同字段=['Surfaces'] 改动格=11 OK
+    Plateau7x6=2[F13:岩台 G13:岩台] | River7x6=2[P13:浅滩 M15:浅滩] | Mixed6x7=2[U4:浅滩 S8:岩台] | Forest7x8=3[P8:沼泽 M9:沼泽 O9:沼泽] | Palisade7x6=2[D4:荒漠 G7:荒漠]
+link:18 不同字段=['Surfaces'] 改动格=10 OK
+    Palisade7x6=2[S5:荒漠 U7:荒漠] | Mixed7x7=3[M10:沼泽 Q10:浅滩 M14:岩台] | Plateau6x6=2[G12:岩台 D14:岩台] | River6x6=0[] | Forest8x7=3[J6:沼泽 D8:沼泽 H8:沼泽]
+link:19 不同字段=['Surfaces'] 改动格=15 OK
+    Palisade7x6=2[M4:荒漠 O7:荒漠] | Mixed8x7=4[X4:荒漠 Y7:浅滩 X8:沼泽 Y8:岩台] | Plateau8x8=3[H11:岩台 J12:岩台 G16:岩台] | Forest7x8=3[M10:沼泽 Q14:沼泽 O15:沼泽] | River8x7=3[H4:浅滩 D8:浅滩 H8:浅滩]
+link:20 不同字段=['Surfaces'] 改动格=12 OK
+    Plateau7x7=2[V4:岩台 R8:岩台] | Forest6x7=2[D12:沼泽 G16:沼泽] | Palisade8x6=2[K15:荒漠 P15:荒漠] | River6x8=2[L9:浅滩 N9:浅滩] | Mixed7x8=4[H4:岩台 D8:沼泽 F9:浅滩 G9:荒漠]
+全部通过

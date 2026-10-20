@@ -1,0 +1,13 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/link-map-surfaces/proposal.md", "reason": "link-map-surfaces 规划与裁决 E1–E9"}
+{"file": "openspec/changes/link-map-surfaces/design.md", "reason": "link-map-surfaces 规划与裁决 E1–E9"}
+{"file": "openspec/changes/link-map-surfaces/tasks.md", "reason": "link-map-surfaces 规划与裁决 E1–E9"}
+{"file": "openspec/changes/link-map-surfaces/specs/link-map-generation/spec.md", "reason": "link-map-surfaces 规划与裁决 E1–E9"}
+{"file": "openspec/changes/link-map-surfaces/specs/map-definition/spec.md", "reason": "link-map-surfaces 规划与裁决 E1–E9"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "内核规范"}
+{"file": "openspec/specs/terrain/spec.md", "reason": "四种新地表的规则语义（只读，不改）"}
+{"file": "HANDOFF.md", "reason": "命令、自检、基线位置"}

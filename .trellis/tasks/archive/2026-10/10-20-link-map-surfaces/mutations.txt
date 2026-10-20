@@ -1,0 +1,31 @@
+M-LS1 河流配对改沼泽: Failed! Failed 14 Passed 274 :: 新地表按主题投放(seed:
+M-LS2 去掉 S1: Failed! Failed 21 Passed 267 :: 新地表按主题投放(seed:; map子命令打印每块棋盘的编号主题宽高与公共信物数
+M-LS3 不排除信物格: Failed! Failed 5 Passed 283 :: 新地表按主题投放(seed:
+M-LS4 先退基础候选: Failed! Failed 14 Passed 274 :: 新地表按主题投放(seed:
+M-LS5 小中间带目标 3: Passed! Failed 0 Passed 288 :: 
+M-LS6 记数写目标: Failed! Failed 19 Passed 269 :: 新地表按主题投放(seed:
+M-LS7 混合同种可重复: Failed! Failed 8 Passed 280 :: 新地表按主题投放(seed:
+M-LS8 浅滩条件改林地: Failed! Failed 16 Passed 272 :: 新地表按主题投放(seed:
+M-LS9 对照接缝也叠加: Failed! Failed 40 Passed 248 :: 新地表不改其余地形(seed:; 新地表按主题投放(seed:
+M-LS10 叠加改用布局流: Failed! Failed 1 Passed 287 :: 新地表子流与布局子流互不扰动
+M-LV1 位置只查外圈: Failed! Failed 5 Passed 283 :: 出生区内四种新地表都被拒(surface:; 外圈或核心区的新地表被拒
+M-LV2 上限 >= : Failed! Failed 43 Passed 245 :: 种子1到20的重抽次数分布; 三加二布局(seed:; 主题两两不同; 公共区信物位置(seed:; 初始图只有出生棋盘(seed:; 地图只有出生棋盘且连成一片(seed:; 外圈与核心区平坦(seed:; 新地表不改其余地形(seed:; 新地表按主题投放(seed:; 棋盘连通且有改造目标(seed:; 每条接缝至少一条气边(seed:; 画布按布局裁出(seed:; 种子1到20每块新地表格数; 新地表过多被拒
+M-LV3 上限 5: Failed! Failed 1 Passed 287 :: 新地表过多被拒
+M-LV4 删位置检查: Failed! Failed 5 Passed 283 :: 出生区内四种新地表都被拒(surface:; 外圈或核心区的新地表被拒
+M-LP1 map 行全图计数: Failed! Failed 1 Passed 287 :: map子命令打印每块棋盘的编号主题宽高与公共信物数
+ALL RESTORED
+
+## 1.3（F1 / F2）之后重做（12 条，过滤同上，288 条）
+M-LS1 河流配对改沼泽: Failed! Failed 17 Passed 271 :: 新地表按主题投放(seed:
+M-LS2 大棋盘也去掉 S1: Failed! Failed 18 Passed 270 :: 新地表按主题投放(seed:
+M-LS3 不排除信物格: Failed! Failed 7 Passed 281 :: 新地表按主题投放(seed:
+M-LS4 先退基础候选: Failed! Failed 20 Passed 268 :: 新地表按主题投放(seed:
+M-LS5 小中间带目标 3: Failed! Failed 18 Passed 270 :: 新地表按主题投放(seed:; 种子1到20每块新地表格数
+M-LS6 记数写目标: Failed! Failed 7 Passed 281 :: 新地表按主题投放(seed:
+M-LS8 浅滩条件改林地: Failed! Failed 15 Passed 273 :: 新地表按主题投放(seed:
+M-LF1 去掉 F1（小棋盘也查 S1）: Failed! Failed 14 Passed 274 :: 新地表按主题投放(seed:; 种子1到20每块新地表格数
+M-LF2 混合不补位: Failed! Failed 12 Passed 276 :: 新地表按主题投放(seed:
+M-LF2b 混合直接用基础候选: Failed! Failed 14 Passed 274 :: 新地表按主题投放(seed:
+M-LF3 混合同种可重复: Failed! Failed 12 Passed 276 :: 新地表按主题投放(seed:
+M-LP1 map 行全图计数: Failed! Failed 1 Passed 287 :: map子命令打印每块棋盘的编号主题宽高与公共信物数
+ALL RESTORED
