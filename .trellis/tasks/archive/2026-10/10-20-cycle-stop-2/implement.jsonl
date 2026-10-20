@@ -1,0 +1,16 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/cycle-stop/proposal.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": "openspec/changes/cycle-stop/design.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": "openspec/changes/cycle-stop/tasks.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": "openspec/changes/cycle-stop/specs/battlefield/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": "openspec/changes/cycle-stop/specs/elimination-endgame/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": "openspec/changes/cycle-stop/specs/match-setup/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": "openspec/changes/cycle-stop/specs/match-telemetry/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": "openspec/changes/cycle-stop/specs/ai-decision/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6 / D1–D6"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
+{"file": ".trellis/tasks/10-20-cycle-stop-1/diagnosis.md", "reason": "第一段诊断数据与记录"}
+{"file": ".trellis/tasks/10-20-cycle-stop-1/notes.md", "reason": "第一段诊断数据与记录"}
+{"file": "HANDOFF.md", "reason": "命令、自检与基线位置"}
