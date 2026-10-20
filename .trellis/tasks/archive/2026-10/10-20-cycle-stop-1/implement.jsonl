@@ -1,0 +1,13 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/cycle-stop/proposal.md", "reason": "cycle-stop 规划与裁决 C1–C6"}
+{"file": "openspec/changes/cycle-stop/design.md", "reason": "cycle-stop 规划与裁决 C1–C6"}
+{"file": "openspec/changes/cycle-stop/tasks.md", "reason": "cycle-stop 规划与裁决 C1–C6"}
+{"file": "openspec/changes/cycle-stop/specs/match-telemetry/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6"}
+{"file": "openspec/changes/cycle-stop/specs/ai-decision/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6"}
+{"file": "openspec/changes/cycle-stop/specs/battlefield/spec.md", "reason": "cycle-stop 规划与裁决 C1–C6"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
+{"file": ".trellis/tasks/archive/2026-10/10-19-open-map-a/notes.md", "reason": "R-3 原始记录（第 67 行）与冒烟日志位置"}
+{"file": "HANDOFF.md", "reason": "命令与基线位置"}
