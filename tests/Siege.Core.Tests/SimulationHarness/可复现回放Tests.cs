@@ -105,6 +105,36 @@ public class 可复现回放Tests
     }
 
     [Fact]
+    public void 旧日志缺停滞停手字段按未停手回放()
+    {
+        // stagnation-trace 质检：快照 Stalled（S1）只在停手小回合写出；引入之前跑出、含停手的旧日志没有该字段。回放 MUST 逐行一致（缺字段按未停手，
+        // 与离线分析"缺字段计 0"同口径）——落子 / Pass / 提子不变，该字段只是留痕。反向（原日志记了停手、回放文本里没有）仍 MUST 报分歧。
+        // 载体与「停滞停手次数可查」同：link:1 简单、停滞大回合数 1（只为短局触发停手）、权重写死为定值前缺省。
+        // 变异 M-RP1（check.md）：Replayer.Compare 去掉 WithoutUnrecordedStalls（直接比 actual）→ 本测试红（首个停手小回合分歧）。
+        RunConfig config = LinkSimFixtures.Config(turnLimit: 80) with { StagnationRounds = 1 };
+        config = config with { Players = [.. config.Players.Select(p => p with { Weights = SimFixtures.PreCalibrationWeights })] };
+        MatchLog current = MatchSession.Create(config, 1).Run();
+        Assert.Contains(current.Turns, t => t.Stalled == true);   // 样本口径：这局确有停手
+        MatchLog legacy = MatchLog.Parse(current.FullText());
+        for (int i = 0; i < legacy.Turns.Count; i++)
+        {
+            legacy.Turns[i] = legacy.Turns[i] with { Stalled = null };
+        }
+
+        Assert.DoesNotContain("\"Stalled\"", legacy.FullText(), StringComparison.Ordinal);   // 样本口径：旧式日志不含该字段
+
+        ReplayResult replay = Replayer.Replay(legacy);
+        Assert.True(replay.Identical, replay.ToString());
+        Assert.True(replay.LineCount > legacy.Turns.Count, $"回放只比了 {replay.LineCount} 行");
+        Assert.Contains(replay.Replayed.Turns, t => t.Stalled == true);   // 返回的回放日志不被改写
+        Assert.True(Replayer.Replay(current).Identical);   // 新日志照常逐行一致
+
+        ReplayResult reverse = Replayer.Compare(current, legacy);
+        Assert.False(reverse.Identical);
+        Assert.Contains("\"Stalled\"", reverse.Expected, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void 失败局可复现()
     {
         // 批量跑局中某局因断言失败而终止 → 保留种子、配置与终止前完整日志（文件名带 failed），可单独重跑复现同一失败。

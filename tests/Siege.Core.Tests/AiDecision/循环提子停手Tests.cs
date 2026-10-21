@@ -14,7 +14,8 @@ using static Siege.Core.Tests.LinkModeFixtures;
 namespace Siege.Core.Tests.AiDecision;
 
 /// <summary>
-/// 规格：openspec/changes/cycle-stop/specs/ai-decision —— Requirement: 循环提子停手（负责人裁决 D2 K = 6 / D3 候选条件；tasks 2.2）。
+/// 规格：openspec/changes/cycle-stop/specs/ai-decision —— Requirement: 循环提子停手（负责人裁决 D2 K = 6 / D3 候选条件；tasks 2.2）；
+/// stagnation-trace 1.1（负责人裁决 G1）加 Scenario「停滞停手留痕」：停滞成立且最终 Pass 记 <c>D:stall</c>，决胜一手接管照常记落点。
 /// </summary>
 /// <remarks>
 /// <para>载体沿用 <see cref="链接模式下的决胜一手Tests"/> 的平坦手写链接档图（<see cref="FlatMap"/>），简单难度、停手阈值写死 20、权重写死为定值前缺省。
@@ -23,6 +24,8 @@ namespace Siege.Core.Tests.AiDecision;
 /// <para>"会提子"的候选：P1 角上一子只剩一口气，候选格就是那口气（预演提子数 1）；"落在最近被提过的格"的候选：经接缝把该格记为最近观察到被提。</para>
 /// <para>变异（2.2 实跑，记录见任务 notes.md）：M-ST1 停滞判定去掉"候选全是提子 / 反提"条件 → 「有非提子候选不停手」红；M-ST2 势力比较 <c>&gt;</c> 改 <c>&gt;=</c>（相等算增长）→ 「连续无净增且候选全是提子则停手」红；
 /// M-ST3 停滞成立时跳过决胜一手检查 → 「决胜一手优先」红；M-ST4 K = 0 也进入停滞判定 → 「K 为 0 零变化」红；M-ST5 无子豁免去掉 → 「盘上无子不触发」红。</para>
+/// <para>stagnation-trace 1.1 变异（实跑记录见任务 notes.md）：M-TR1 条目恒记 <c>D:pass</c> → 「停滞停手留痕」「连续无净增且候选全是提子则停手」「决胜一手优先」红；
+/// M-TR2 去掉 Pass 门（停滞成立即记 <c>D:stall</c>，决胜一手接管也记）→ 「决胜一手优先」红；M-TR3 不看停滞（Pass 一律记 <c>D:stall</c>）→ 「停滞停手留痕」红。</para>
 /// </remarks>
 [Collection(ConsoleRedirect.Collection)]
 public class 循环提子停手Tests
@@ -83,7 +86,7 @@ public class 循环提子停手Tests
         Assert.True(ai.LastChoice!.IsPass);
         Assert.Empty(ai.LastCandidates);
         Assert.Null(ai.LastDecisive);
-        Assert.Equal("D:pass", ai.Decisions[^1]);
+        Assert.Equal(HeuristicTurnController.StallDecision, ai.Decisions[^1]);   // stagnation-trace 1.1：停滞停手留痕
     }
 
     [Fact]
@@ -166,7 +169,9 @@ public class 循环提子停手Tests
         Assert.False(ai.LastChoice!.IsPass);
         Assert.Equal(candidate, Assert.Single(ai.LastChoice.Placements).Coord);
         Assert.True(decisive.Outcome.PowerAfter >= decisive.Outcome.RivalAfter);
-        Assert.NotEqual("D:pass", ai.Decisions[^1]);
+        // stagnation-trace 1.1：决胜一手接管时照常记落点，不记 D:stall（停滞虽成立，最终没有 Pass）。
+        Assert.Equal($"D:{ai.LastChoice.Key}", ai.Decisions[^1]);
+        Assert.DoesNotContain(HeuristicTurnController.StallDecision, ai.Decisions);
 
         // 对照：没有追平手（P1 远远领先）时停滞照常 Pass。
         MatchFlow hopeless = StartedFlat([0, 0, 3, 4]).Place(P0, Cell(FlatMap.BirthBoard(0).Width - 1, 0))
@@ -184,6 +189,63 @@ public class 循环提子停手Tests
         Assert.NotNull(passing.LastStagnation);
         Assert.Null(passing.LastDecisive);
         Assert.True(passing.LastChoice!.IsPass);
+        Assert.Equal(HeuristicTurnController.StallDecision, passing.Decisions[^1]);   // 停滞成立、没有决胜一手、最终 Pass → D:stall
+    }
+
+    [Fact]
+    public void 停滞停手留痕()
+    {
+        // Scenario（stagnation-trace 1.1）：K = 3，停滞判定成立且本次决策最终 Pass → 该小回合的部署决策条目为 D:stall，不是 D:pass；
+        // 同一局面上 K = 0 时记 D:pass，两者此后的决策逐步相同。
+        // "同一局面"：CornerCapture、唯一候选 = 会提子的那口气、同一停滞采样；两份控制器只差 K。为让 K = 0 也落到 Pass（普通停手），
+        // 两份都把停手阈值写死成远高于该候选收益的定值——K = 3 因停滞 Pass、K = 0 因阈值 Pass，决策相同、只有条目文案不同。
+        // 简单难度候选批次数为 1：两条路径都不消费扰动子流（Consumed 均为 0），"此后逐步相同"由第二次决策逐条目相同与子流消费数相同共同钉住。
+        const int HighThreshold = 1_000_000;
+        MatchFlow stallMatch = CornerCapture();
+        MatchFlow passMatch = CornerCapture();
+        Siege.Core.Determinism.RandomStream stallStream = stallMatch.Seed.Stream(HeuristicAi.StreamName(P0));
+        Siege.Core.Determinism.RandomStream passStream = passMatch.Seed.Stream(HeuristicAi.StreamName(P0));
+        var stall = new HeuristicTurnController(P0, stallMatch.Publish, stallStream, AiDifficulty.Easy, Weights, Config(K) with { PassThreshold = HighThreshold });
+        var pass = new HeuristicTurnController(P0, passMatch.Publish, passStream, AiDifficulty.Easy, Weights, Config(0) with { PassThreshold = HighThreshold });
+        stall.SeedStagnationMemory(Stagnant(stallMatch.MajorRound), []);
+        pass.SeedStagnationMemory(Stagnant(passMatch.MajorRound), []);
+
+        Decide(stallMatch, stall, CaptureCell);
+        Decide(passMatch, pass, CaptureCell);
+
+        PointScore only = Assert.Single(stall.LastPointRanking);
+        Assert.Equal(1, only.Captures);   // 样本口径：唯一候选会提子（停滞的候选条件成立）
+        Assert.True(only.Total <= HighThreshold, $"样本口径：候选收益 {only.Total} 本应不越过写死的阈值，K = 0 才会普通 Pass");
+        Assert.NotNull(stall.LastStagnation);
+        Assert.Null(pass.LastStagnation);
+        Assert.True(stall.LastChoice!.IsPass);
+        Assert.True(pass.LastChoice!.IsPass);
+        Assert.Null(stall.LastDecisive);
+        Assert.Equal(HeuristicTurnController.StallDecision, stall.Decisions[^1]);
+        Assert.Equal("D:pass", pass.Decisions[^1]);
+        PointScore same = Assert.Single(pass.LastPointRanking);
+        Assert.Equal((only.Coord, only.Type, only.Captures, only.Total), (same.Coord, same.Type, same.Captures, same.Total));   // 同一候选、同一评价
+
+        // 此后逐步相同：同一大回合再决策一次（候选换成不提子、也不在被提格上的远处格，停滞不成立），两份的条目、选择与子流消费都相同。
+        Decide(stallMatch, stall, FarCell);
+        Decide(passMatch, pass, FarCell);
+        Assert.Null(stall.LastStagnation);
+        Assert.Equal(pass.Decisions[^1], stall.Decisions[^1]);
+        Assert.Equal(pass.LastChoice!.Key, stall.LastChoice!.Key);
+        Assert.Equal(
+            pass.Decisions.Select(d => d == HeuristicTurnController.StallDecision ? "D:pass" : d),
+            stall.Decisions.Select(d => d == HeuristicTurnController.StallDecision ? "D:pass" : d));
+        Assert.Equal(1, stall.Decisions.Count(d => d == HeuristicTurnController.StallDecision));
+        Assert.Equal(passStream.Consumed, stallStream.Consumed);
+
+        // 普通 Pass 仍记 D:pass：K = 3、势力仍在增长（停滞不成立）、同一高阈值 → 因阈值 Pass，条目为 D:pass。
+        MatchFlow growing = CornerCapture();
+        var normal = new HeuristicTurnController(P0, growing.Publish, growing.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Easy, Weights, Config(K) with { PassThreshold = HighThreshold });
+        normal.SeedStagnationMemory(Growing(growing.MajorRound), []);
+        Decide(growing, normal, CaptureCell);
+        Assert.Null(normal.LastStagnation);
+        Assert.True(normal.LastChoice!.IsPass);
+        Assert.Equal("D:pass", normal.Decisions[^1]);
     }
 
     [Fact]

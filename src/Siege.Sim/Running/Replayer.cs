@@ -98,13 +98,18 @@ public static class Replayer
         return Compare(original, replayed);
     }
 
-    /// <summary>逐行比对两份日志的确定性文本。</summary>
+    /// <summary>
+    /// 逐行比对两份日志的确定性文本。
+    /// 停滞停手留痕（stagnation-trace S1）：<paramref name="expected"/> 某小回合缺 <c>Stalled</c> 字段时按"未停手"比——
+    /// <paramref name="actual"/> 同序号小回合的 <c>Stalled</c> 不参与比对（引入该字段之前跑出、含停手的旧日志照样逐行一致，与离线分析"缺字段计 0"同一口径）；
+    /// 反向（原日志记了 <c>true</c>、回放没有）仍报分歧。字段只是留痕，落子 / Pass / 提子照常逐行比。返回的 <see cref="ReplayResult.Replayed"/> 是未改动的 <paramref name="actual"/>。
+    /// </summary>
     public static ReplayResult Compare(MatchLog expected, MatchLog actual)
     {
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(actual);
         string[] a = expected.DeterministicText().Split('\n');
-        string[] b = actual.DeterministicText().Split('\n');
+        string[] b = WithoutUnrecordedStalls(expected, actual).DeterministicText().Split('\n');
         int n = Math.Max(a.Length, b.Length);
         for (int i = 0; i < n; i++)
         {
@@ -117,6 +122,25 @@ public static class Replayer
         }
 
         return new ReplayResult(true, n, null, null, null, actual);
+    }
+
+    /// <summary>把 <paramref name="actual"/> 里"原日志同序号小回合缺 <c>Stalled</c>"的那些小回合的 <c>Stalled</c> 清掉（只供比对；不改 <paramref name="actual"/>）。</summary>
+    private static MatchLog WithoutUnrecordedStalls(MatchLog expected, MatchLog actual)
+    {
+        if (!actual.Turns.Any(t => t.Stalled is not null))
+        {
+            return actual;
+        }
+
+        HashSet<int> recorded = [.. expected.Turns.Where(t => t.Stalled is not null).Select(t => t.Turn)];
+        return new MatchLog
+        {
+            Header = actual.Header,
+            Turns = [.. actual.Turns.Select(t => t.Stalled is null || recorded.Contains(t.Turn) ? t : t with { Stalled = null })],
+            Events = actual.Events,
+            Result = actual.Result,
+            Failure = actual.Failure,
+        };
     }
 
     /// <summary>读文件回放。</summary>

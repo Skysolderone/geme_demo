@@ -247,6 +247,8 @@ public static class ReportWriter
         sb.AppendLine($"## 循环提子诊断（cycle-stop：末段窗口 {c.WindowRounds} 个大回合，截断局按截断时刻；局部键 = 窗口内被提格 ∪ 四邻的占用者 + 设施，逐小回合比对；判定 = 窗口末 ≥ 2 名在局玩家净势力 ≤ 0 且局部键存在重复周期）");
         sb.AppendLine($"- 诊断 {c.Logs} 局，其中截断 {c.Truncated} 局；判为循环提子 {c.Cyclic} 局（截断局中 {c.CyclicTruncated} 局，规则终局中 {c.Cyclic - c.CyclicTruncated} 局）");
         sb.AppendLine($"- 提子拖延（代理口径，不判定）：窗口首在局玩家 ≥ 2 名净势力 ≤ 0 且窗口内有落子的小回合里提子回合占比 ≥ 75% 的局 {c.ExchangeBound} 局（含上面判为循环的局）");
+        // stagnation-trace D2 / S2：停滞停手次数（整局、不限窗口；快照缺 Stalled 字段的旧日志计 0）。
+        sb.AppendLine($"- 停滞停手 {c.Stalls} 次（按 D:stall 计；整局计，不限窗口），涉及 {c.Entries.Count(e => e.Stalls > 0)} 局");
         List<CycleReviewEntry> cyclic = [.. c.Entries.Where(e => e.Cyclic)];
         List<CycleReviewEntry> normal = [.. c.Entries.Where(e => !e.Cyclic)];
         sb.AppendLine($"- 窗口首在局玩家终局时的连续无净增大回合数（D3 口径：每个大回合首的势力 ≤ 前一大回合首；整局算）：循环局 {Histogram(Counts(cyclic.SelectMany(e => e.Players).Select(p => p.StagnationAtEnd)))}；"
@@ -255,14 +257,14 @@ public static class ReportWriter
             + $"非循环局 {Pct(Share(normal.Sum(e => e.CaptureTurns), normal.Sum(e => e.MoveTurns)))}（{normal.Sum(e => e.CaptureTurns)}/{normal.Sum(e => e.MoveTurns)}）；"
             + $"落在本窗口内此前被提过格上的落子占比：循环局 {Pct(Share(cyclic.Sum(e => e.RecapturePlacements), cyclic.Sum(e => e.TotalPlacements)))}（{cyclic.Sum(e => e.RecapturePlacements)}/{cyclic.Sum(e => e.TotalPlacements)}），"
             + $"非循环局 {Pct(Share(normal.Sum(e => e.RecapturePlacements), normal.Sum(e => e.TotalPlacements)))}（{normal.Sum(e => e.RecapturePlacements)}/{normal.Sum(e => e.TotalPlacements)}）");
-        sb.AppendLine("- 逐局（种子 / 结束 / 窗口；判定；局部周期（小回合）× 回到先前状态次数；被提格 |C| / 局部格数；C 之外新增落子 / 局部之外盘面变化的小回合数 / 窗口内局部新增设施数；有落子回合 其中提子回合；落在此前被提过格的落子 / 落子总数；各在局玩家 落子 提 被提 净势力（窗口首→末）停滞（终局时 / 整局最大）；被提格）：");
+        sb.AppendLine("- 逐局（种子 / 结束 / 窗口；判定；局部周期（小回合）× 回到先前状态次数；被提格 |C| / 局部格数；C 之外新增落子 / 局部之外盘面变化的小回合数 / 窗口内局部新增设施数；有落子回合 其中提子回合；落在此前被提过格的落子 / 落子总数；停滞停手次数；各在局玩家 落子 提 被提 净势力（窗口首→末）停滞（终局时 / 整局最大）；被提格）：");
         foreach (CycleReviewEntry e in c.Entries)
         {
             string players = string.Join("，", e.Players.Select(p =>
                 $"P{p.Player}{(p.EndStatus == nameof(Core.Scoring.PlayerStatus.Active) ? "" : $"（{p.EndStatus}）")} 落 {p.Placements} 提 {p.Captures} 被提 {p.Captured} 净 {Signed(p.NetPower)}（{p.PowerStart}→{p.PowerEnd}）停滞 {p.StagnationAtEnd}/{p.MaxStagnation}"));
             sb.AppendLine($"  - {e.Seed} {(e.Truncated ? "截断" : EndReasonName(e.EndReason))} R{e.EndMajorRound} 窗口 R{e.WindowFirstRound}–R{e.EndMajorRound}（{e.WindowTurns} 小回合）；{(e.Cyclic ? "循环提子" : "非循环")}；"
                 + $"周期 {(e.Period is { } p ? $"{p} 小回合 × {e.Repeats}" : "无")}；被提格 {e.CapturedCells.Count} / 局部格 {e.LocalCells}；C 之外新增落子 {e.OutsidePlacements} / 局部外变化 {e.OutsideChanges} 回合 / 局部新增设施 {e.LocalEdits}；"
-                + $"有落子回合 {e.MoveTurns} 其中提子 {e.CaptureTurns}；被提格上落子 {e.RecapturePlacements}/{e.TotalPlacements}；{players}；被提格 [{string.Join(" ", e.CapturedCells)}]");
+                + $"有落子回合 {e.MoveTurns} 其中提子 {e.CaptureTurns}；被提格上落子 {e.RecapturePlacements}/{e.TotalPlacements}；停滞停手 {e.Stalls} 次（按 D:stall 计）；{players}；被提格 [{string.Join(" ", e.CapturedCells)}]");
         }
     }
 

@@ -43,6 +43,12 @@ internal sealed class TurnTrace
     /// </summary>
     internal LookaheadRecord? Lookahead { get; set; }
 
+    /// <summary>
+    /// 本小回合的部署决策是否为停滞停手（stagnation-trace S1）：装饰器在内层 <c>Deploy</c> 之后读启发式 AI 本次的决策条目，等于 <see cref="HeuristicTurnController.StallDecision"/> 即为真。
+    /// 决策条目不进对局日志，靠这一位让离线分析数出停手次数；每小回合清空。
+    /// </summary>
+    internal bool Stalled { get; set; }
+
     /// <summary>当前小回合效果快照的读取委托（会话挂 <c>MatchFlow.CurrentSnapshot</c>）；为 <c>null</c> 时不采集。不随 <see cref="Reset"/> 清空。</summary>
     internal Func<EffectSnapshot?>? SnapshotSource { get; set; }
 
@@ -64,6 +70,7 @@ internal sealed class TurnTrace
         Batch = null;
         Effects = null;
         Lookahead = null;
+        Stalled = false;
     }
 }
 
@@ -114,6 +121,7 @@ internal sealed class LoggingController(ITurnController inner, TurnTrace trace) 
             return result;
         });
         trace.Lookahead = Heuristic?.LastLookahead;
+        trace.Stalled = Heuristic?.Decisions is { Count: > 0 } decisions && decisions[^1] == HeuristicTurnController.StallDecision;
     }
 
     public bool OnRejected(StagedBatch batch, BatchFailure failure)

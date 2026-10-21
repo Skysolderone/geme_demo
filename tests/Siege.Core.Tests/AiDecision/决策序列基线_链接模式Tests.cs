@@ -80,8 +80,9 @@ public class 决策序列基线_链接模式Tests
 
 /// <summary>
 /// 链接模式固定种子对局的 AI 决策序列导出（tasks 3.4）：格式沿用 <see cref="DecisionSequence"/>，另加战场结算（<c>S</c>）行。
-/// open-map 段 B：配对（<c>P</c>）/ 链接（<c>L</c>）/ 倒计时（<c>C</c>）行与 K / 视野参数随拼接规则删除；首部两行文案原样保留——5 份缺省基线 MUST 逐字节不变（PRD 硬指标），
-/// 其中 <c>mode=Link pairing=script（缺省：升序两两配）</c> 与 <c>P 配对、L 链接</c> 只是历史字样（待负责人裁决是否连同基线一起重钉）。
+/// open-map 段 B：配对（<c>P</c>）/ 链接（<c>L</c>）/ 倒计时（<c>C</c>）行与 K / 视野参数随拼接规则删除。
+/// stagnation-trace 2.1（负责人裁决 G2）：首部第 3 行删去 <c>mode=Link pairing=script（缺省：升序两两配）</c>、第 5 行删去"；P 配对、L 链接"（保留 S 战场结算），
+/// 5 份基线连同首部重钉；决策行除停滞停手的 <c>D:pass</c> → <c>D:stall</c> 外逐字节不变（核对记录见任务 10-21-stagnation-trace 的 baseline-check.txt）。
 /// </summary>
 internal static class LinkDecisionSequence
 {
@@ -104,7 +105,7 @@ internal static class LinkDecisionSequence
 
     /// <summary>
     /// 同上，建会话之前先对跑局配置执行 <paramref name="configure"/>（cycle-stop 2.2「K 为 0 零变化」：显式 <c>StagnationRounds = 0</c>）；为 <c>null</c> 时与上一个重载逐字节相同。
-    /// 首部四行文案不随配置变化（5 份缺省基线 MUST 逐字节不变）。
+    /// 首部文案不随配置变化（5 份缺省基线 MUST 逐字节不变）。
     /// </summary>
     internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, Func<RunConfig, RunConfig>? configure)
     {
@@ -123,9 +124,9 @@ internal static class LinkDecisionSequence
         var sb = new StringBuilder();
         sb.Append("# AI 决策序列基线（board-link-mode 3.4，裁决 C5）\n");
         sb.Append($"# map={match.Map.Id} digest={MapFile.Digest(match.Board.BaseMap)} seed={seed} players={match.Players.Length} difficulty={difficulty} zones={string.Join(",", match.PlayerStates.Select(s => s.BirthZone))}\n");
-        sb.Append($"# cellLimit={session.CellLimit} passThreshold={session.PassThreshold} contentSet={match.ContentSet} artisanWeight={match.ArtisanWeight} mode=Link pairing=script（缺省：升序两两配）\n");
+        sb.Append($"# cellLimit={session.CellLimit} passThreshold={session.PassThreshold} contentSet={match.ContentSet} artisanWeight={match.ArtisanWeight}\n");
         sb.Append($"# maxMajorRounds={maxMajorRounds}\n");
-        sb.Append("# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算\n");
+        sb.Append("# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算\n");
 
         var cursors = new Dictionary<PlayerId, int>();
         int settlements = 0;

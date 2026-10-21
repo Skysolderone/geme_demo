@@ -286,3 +286,11 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 实现：`MapRandom.ForLinkSurfaces` 独立子流，`LinkMapGenerator.Surfaces.OverlaySurfaces` 在公共信物之后按主题配对（河流 → 浅滩、高台 → 岩台、林地 → 沼泽、栅栏阵 → 荒漠、混合四种各至多 1）改写中间带高度 0 草地，每块 2–3（混合 2–4）、候选不足少放；大棋盘不贴核心区，中间带 ≤ 12 的小棋盘免除（F1）；混合找不到时从基础候选补（F2）。校验器 `BOARD_SPECIAL_SURFACE` 改为"只在中间带、每块 ≤ 4"。规则 / AI / Godot 零改动。
 - 数据：种子 1–2000 不足 2 格 2.7%（全是被河道占满的河流块为主）；`link:1`–`link:20` 改前改后只差"草地 → 新地表"；5 份基线首个分歧都在新地表格或其四邻。冒烟 20 局 0 截断、上限 0、大回合中位 25（开放地图 24）、五主题名次 2.17–2.74（第一次 1.92–2.73，噪声内）。全量 2095 / 2089 / 跳过 6 / 0。
 - 登记：Godot `--map-select --auto-demo` 在"换一张"抽到一屏看不全的图后稳定失败（全局预览回到原图关不掉，第 4 步 `!IsOverview`），改前代码同样失败，属既有缺陷，另开小 change（F4）；主题强弱只观察（F3）。
+
+
+## Session: 2026-10-21 — stagnation-trace（停滞停手留痕 + 收尾包）
+
+- 负责人裁决 G1–G5 全按推荐；质检裁决 5 项按建议处理。OpenSpec change `stagnation-trace` 归档 `2026-10-21-stagnation-trace`（主规格 ~2，34 份全过），设计文档 v1.31。
+- 停滞停手成立且最终 Pass 时决策条目记 `D:stall`（AI 决策不变、评价版本不变）；对局日志不含决策条目，按 S1 在快照加 `Stalled`（null 不写出，不含停手的日志与改前逐字节相同）；`analyze --review-cycles` 报告整局停手次数；`Replayer.Compare` 对原日志缺 `Stalled` 的小回合不比该字段（旧日志回放兼容，反方向仍报分歧）。简单 ×4 种子 40–47 实测停手 336 次、涉及 7 局；其中 0x2F 打到 R100 被上限结算 1 次（link-map-surfaces 改图所致，登记观察）。
+- 5 份基线首部删配对 / 链接旧字样，决策行逐字节不变；简单种子 1 第 10–12 大回合 3 条 `D:pass` → `D:stall`。ROADMAP 按现状重写（v1.1–v1.30、57 个归档 change）；HANDOFF 第 8 项、1b 更新。全量 2099 / 2093 / 跳过 6 / 0。
+- 另一会话「地图重新设计」已提交 `040c0b2`：新增 change `fence-eye-rule`（栅栏不参与活形判定，F1–F8 全按推荐），待本 change 归档后实施。

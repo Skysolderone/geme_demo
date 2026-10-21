@@ -715,6 +715,13 @@ public sealed record TurnSnapshot
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LookaheadLogEntry? Lookahead { get; init; }
 
+    /// <summary>
+    /// 停滞停手（stagnation-trace S1，ai-decision「循环提子停手」留痕）：行动玩家本小回合的部署决策条目为 <c>D:stall</c>（停滞判定成立且最终 Pass；决胜一手接管不算）时写 <c>true</c>。
+    /// 其余小回合与引入之前的旧日志为 <c>null</c>、不写出——不含停手的日志与改动前逐字节相同；离线分析按 <c>true</c> 计停滞停手次数，缺字段计 0。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Stalled { get; init; }
+
     /// <summary>小回合墙钟耗时（毫秒）；只记录，不参与任何决定。</summary>
     public long? ElapsedMs { get; init; }
 }

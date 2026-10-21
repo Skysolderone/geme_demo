@@ -509,6 +509,8 @@ public sealed class MatchSession
             },
             // 专家前瞻记录（match-telemetry「专家前瞻的记录」）：只有前瞻宽度 > 0 的控制者本小回合做了部署决策才有；其余为 null、不写出。
             Lookahead = _trace.Lookahead is { } lookahead ? LookaheadLogEntry.From(lookahead) : null,
+            // 停滞停手（stagnation-trace S1）：只有本小回合部署决策为 D:stall 才写 true；其余为 null、不写出。
+            Stalled = _trace.Stalled ? true : null,
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
             RelaySources = RelaySourcesEntry(_trace.Effects, Match.ContentSet),

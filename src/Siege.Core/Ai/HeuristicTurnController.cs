@@ -120,6 +120,12 @@ public sealed class HeuristicTurnController : ITurnController
     public IReadOnlyList<string> Decisions => _decisions;
 
     /// <summary>
+    /// 停滞停手的部署决策条目（stagnation-trace D1）：停滞判定成立（<see cref="LastStagnation"/> 非空）且本次决策最终 Pass 时记它，区别于普通 Pass 的 <c>D:pass</c>；
+    /// 决胜一手接管时照常记落点。跑局层据此在快照写 <c>Stalled</c>（S1），离线分析按它计停滞停手次数。
+    /// </summary>
+    public const string StallDecision = "D:stall";
+
+    /// <summary>
     /// 最近一次部署里进入完整"类型 × 改造目标"枚举的格（坐标序）。候选格上限 K 未启用或合法空格不多于 K 时就是全部合法空格。
     /// </summary>
     public ImmutableArray<Coord> LastCandidateCells { get; private set; } = [];
@@ -412,7 +418,8 @@ public sealed class HeuristicTurnController : ITurnController
             }
         }
 
-        _decisions.Add(choice.IsPass ? "D:pass" : $"D:{choice.Key}");
+        // stagnation-trace D1（ai-decision「循环提子停手」留痕）：停滞成立且最终 Pass 记 D:stall，决胜一手接管照常记落点；只改条目文案，不改任何决策与随机消费。
+        _decisions.Add(choice.IsPass ? (LastStagnation is null ? "D:pass" : StallDecision) : $"D:{choice.Key}");
     }
 
     /// <summary>

@@ -1,13 +1,15 @@
 using System.Numerics;
+using Siege.Core.Ai;
 using Siege.Core.Tests.SimulationHarness;
 using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
+using Siege.Sim.Running;
 
 namespace Siege.Core.Tests.MatchTelemetry;
 
 /// <summary>
-/// 规格：openspec/changes/cycle-stop/specs/match-telemetry —— Requirement: 循环提子诊断（ADDED）。
-/// 三条 Scenario 同名；夹具为手写日志（分析口径用，不跑对局），「诊断不改对局」用一局真实 AI 链接局。
+/// 规格：openspec/changes/cycle-stop/specs/match-telemetry —— Requirement: 循环提子诊断（ADDED）；stagnation-trace 1.2 加 Scenario「停滞停手次数可查」。
+/// 四条 Scenario 同名；夹具为手写日志（分析口径用，不跑对局），「诊断不改对局」用一局真实 AI 链接局，「停滞停手次数可查」另用一局真实 AI 链接局交叉核对。
 /// </summary>
 /// <remarks>
 /// <para>局部键 = 窗口内被提格 ∪ 四邻的占用者 + 设施；周期只数局部键实际变化后的"回到先前状态"（连续 Pass 不算）。</para>
@@ -17,6 +19,8 @@ namespace Siege.Core.Tests.MatchTelemetry;
 /// M-CS3 <c>ShortestPeriod</c> 不压缩连续相同键（每个键都记成一个状态）→ 「正常收官不误判」红 1（整轮 Pass 的末段连续相同状态被当成周期 1）；
 ///   注：把配对循环的 <c>i &lt; j - 1</c> 改 <c>i &lt; j</c> 是等价变异（压缩后相邻状态必不同），0 红，不作为守门证据；
 /// M-CS4 <c>BalanceAnalyzer.Analyze</c> 不看开关、一律做诊断 → 「诊断不改对局」红 1（关闭时报告多出一段）。</para>
+/// <para>stagnation-trace 1.2 变异（实跑记录见任务 notes.md）：M-TC1 计数改数 <c>Passed</c> → 「停滞停手次数可查」红；M-TC2 跑局层快照不写 <c>Stalled</c> → 「停滞停手次数可查」红；
+/// M-TC3 只数窗口内的快照 → 「停滞停手次数可查」红。</para>
 /// </remarks>
 public class 循环提子诊断Tests
 {
@@ -195,6 +199,64 @@ public class 循环提子诊断Tests
         Assert.Equal(((int?)3, 1), CycleAnalyzer.ShortestPeriod(["a", "b", "b", "a"]));
         Assert.Equal(((int?)2, 2), CycleAnalyzer.ShortestPeriod(["a", "b", "a", "b"]));
     }
+
+    [Fact]
+    public void 停滞停手次数可查()
+    {
+        // 规格 Scenario（stagnation-trace 1.2）：以显式开关分析一批含停滞停手的日志 → 报告给出每局与汇总的停滞停手次数，与日志中 D:stall 条目数相同。
+        // 决策条目不随对局日志写出（S1）：日志里的留痕是快照 Stalled = true（只在部署决策条目为 D:stall 的小回合写出），分析按它计数；缺字段的旧日志计 0。
+        // 手写批次：A 局 3 次停手（第 1 / 7 / 14 大回合；第 1 大回合在末段窗口 R3–R14 之外——整局计、不限窗口）、B 局（旧日志，无该字段）0 次、
+        // C 局没有结果行（未完成）被排除——它的 5 次停手 MUST NOT 计入汇总。
+        MatchLog a = CyclicLog();
+        foreach (int i in new[] { 0, 20, 40 })
+        {
+            a.Turns[i] = a.Turns[i] with { Stalled = true };
+        }
+
+        MatchLog b = Rising(CyclicLog(), 2);
+        MatchLog c = CyclicLog();
+        for (int i = 0; i < 5; i++)
+        {
+            c.Turns[i] = c.Turns[i] with { Stalled = true };
+        }
+
+        c.Result = null;
+        c = new MatchLog { Header = c.Header with { Seed = "0000000000009999" }, Turns = c.Turns, Events = c.Events };
+        a = new MatchLog { Header = a.Header with { Seed = "0000000000001111" }, Turns = a.Turns, Events = a.Events, Result = a.Result };
+        b = new MatchLog { Header = b.Header with { Seed = "0000000000002222" }, Turns = b.Turns, Events = b.Events, Result = b.Result };
+        Assert.DoesNotContain(b.FullText().Split('\n'), l => l.Contains("\"Stalled\"", StringComparison.Ordinal));   // 样本口径：B 是不含该字段的旧式日志
+        Assert.Contains(MatchLog.Parse(a.FullText()).Turns, t => t.Stalled == true);   // 样本口径：字段经文本往返仍在
+
+        CycleReviewSection section = Assert.IsType<CycleReviewSection>(CycleAnalyzer.Review([a, b, c]));
+        Assert.Equal(2, section.Logs);   // C 被排除
+        Assert.Equal([3, 0], section.Entries.Select(e => e.Stalls));
+        Assert.Equal(3, section.Stalls);
+        Assert.Equal(3, CycleAnalyzer.ReviewMatch(MatchLog.Parse(a.FullText())).Stalls);   // 读文件口径与内存口径相同
+
+        string report = ReportWriter.Render(BalanceAnalyzer.Analyze([MatchLog.Parse(a.FullText()), MatchLog.Parse(b.FullText())], new AnalysisOptions { ReviewCycles = true }));
+        Assert.Contains("- 停滞停手 3 次（按 D:stall 计；整局计，不限窗口），涉及 1 局", report, StringComparison.Ordinal);
+        Assert.Contains(report.Split('\n'), l => l.Contains("  - 0000000000001111 ", StringComparison.Ordinal) && l.Contains("停滞停手 3 次（按 D:stall 计）", StringComparison.Ordinal));
+        Assert.Contains(report.Split('\n'), l => l.Contains("  - 0000000000002222 ", StringComparison.Ordinal) && l.Contains("停滞停手 0 次（按 D:stall 计）", StringComparison.Ordinal));
+        Assert.DoesNotContain("停滞停手", ReportWriter.Render(BalanceAnalyzer.Analyze([a, b])), StringComparison.Ordinal);   // 缺省报告不出现
+
+        // 真实跑局交叉核对：link:1 简单 × 4、停滞大回合数显式取 1（只为在短局里触发停手，缺省 K 不变），
+        // 跑局层快照的 Stalled 数 = 四名 AI 决策条目里 D:stall 的个数 = 诊断给出的次数；且确有停手（样本口径下界）。
+        // 样本下界依赖 AI 实际走法：四名 AI 的评价权重写死为定值前缺省（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），不跟随 EvaluationWeights.Default。
+        // 实测（stagnation-trace 1.2）：种子 1、80 小回合内 D:stall 47 次。
+        var config = LinkSimFixtures.Config(turnLimit: StallRunTurns) with { StagnationRounds = 1 };
+        config = config with { Players = [.. config.Players.Select(p => p with { Weights = SimFixtures.PreCalibrationWeights })] };
+        MatchSession session = MatchSession.Create(config, StallRunSeed);
+        MatchLog real = session.Run();
+        int entries = session.Match.Players.Sum(p => session.AiOf(p)!.Decisions.Count(d => d == HeuristicTurnController.StallDecision));
+        Assert.True(entries > 0, $"样本口径：这局里应有停滞停手（D:stall 条目），实测 {entries}");
+        Assert.Equal(entries, real.Turns.Count(t => t.Stalled == true));
+        Assert.All(real.Turns.Where(t => t.Stalled == true), t => Assert.True(t.Passed, $"第 {t.Turn} 个小回合记了停手却有落子"));
+        Assert.Equal(entries, CycleAnalyzer.ReviewMatch(MatchLog.Parse(real.FullText())).Stalls);
+    }
+
+    private const ulong StallRunSeed = 1;
+
+    private const int StallRunTurns = 80;
 
     [Fact]
     public void 诊断不改对局()

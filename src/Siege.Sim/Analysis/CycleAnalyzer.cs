@@ -30,6 +30,9 @@ public sealed record CycleReviewSection(int Logs, int Truncated, int WindowRound
     /// 覆盖"互相提子但被提格不断换位、局部键不严格回归"的拖延局，供裁决"候选全是提子"判定是否要收窄。
     /// </summary>
     public int ExchangeBound => Entries.Count(e => e.Players.Count(p => p.NetPower <= 0) >= 2 && e.MoveTurns > 0 && e.CaptureTurns * 4 >= e.MoveTurns * 3);
+
+    /// <summary>停滞停手次数合计（stagnation-trace D2：各局 <see cref="CycleReviewEntry.Stalls"/> 之和）。</summary>
+    public int Stalls => Entries.Sum(e => e.Stalls);
 }
 
 /// <summary>一局的循环提子诊断。</summary>
@@ -52,6 +55,7 @@ public sealed record CycleReviewSection(int Logs, int Truncated, int WindowRound
 /// <param name="TotalPlacements">窗口内落子总数。</param>
 /// <param name="RecapturePlacements">其中落在"本窗口内此前被提过的格"上的落子数（"落在最近被提过的格"判定的代理口径）。</param>
 /// <param name="Cyclic">是否判为循环提子。</param>
+/// <param name="Stalls">整局的停滞停手次数（stagnation-trace D2 / S1：快照 <c>Stalled</c> 为真的小回合数，即 AI 部署决策条目 <c>D:stall</c> 的次数；不限窗口，缺字段的旧日志计 0）。</param>
 public sealed record CycleReviewEntry(
     string Seed,
     bool Truncated,
@@ -71,7 +75,8 @@ public sealed record CycleReviewEntry(
     int CaptureTurns,
     int TotalPlacements,
     int RecapturePlacements,
-    bool Cyclic);
+    bool Cyclic,
+    int Stalls);
 
 /// <summary>一名在局玩家在窗口内的统计。</summary>
 /// <param name="Player">玩家编号。</param>
@@ -270,7 +275,8 @@ public static class CycleAnalyzer
             captureTurns,
             totalPlacements,
             recapture,
-            cyclic);
+            cyclic,
+            turns.Count(t => t.Stalled == true));
     }
 
     /// <summary>
