@@ -1,6 +1,6 @@
 # 《围杀 Siege》路线图
 
-权威设计来源：`2026-09-10-siege-core-gameplay-design-v1.md`（v1.31）。现行规格在 `openspec/specs/`，已完成的 change 在 `openspec/changes/archive/`，现状与接手说明见根目录 `HANDOFF.md`。
+权威设计来源：`2026-09-10-siege-core-gameplay-design-v1.md`（v1.34）。现行规格在 `openspec/specs/`，已完成的 change 在 `openspec/changes/archive/`，现状与接手说明见根目录 `HANDOFF.md`。
 
 现在整个游戏只有一个模式：4 人开放地图（链接模式，`link:<地图种子>`，5 块出生棋盘建局即紧贴成一张连通地图，前 3 个大回合只在自己棋盘落子，第 4 大回合起全图混战）。下表列到设计文档 v1.30；被后续 change 删除或取代的项在括号里注明。
 
@@ -25,7 +25,7 @@
   - 新地表投放：`link-map-surfaces`（v1.30，中间带按主题放荒漠 / 沼泽 / 岩台 / 浅滩）。
 - **AI**：
   - 启发式 AI 校准：`ai-safety-weight`、`ai-eye`（v1.9）、`pass-threshold-first-stone`（v1.11）、`v2-recalibration`（v1.17，停手阈值 20）；
-  - 专家难度（§19 第 3 项首期）：`expert-lookahead`（v1.16，一层前瞻）、`expert-strength`（v1.18，多样候选与近似两层保留为可配置项，预设退回一层）；
+  - 专家难度（§19 第 3 项首期）：`expert-lookahead`（v1.16，一层前瞻）、`expert-strength`（v1.18，多样候选与近似两层保留为可配置项，预设退回一层）、`expert-tiebreak`（v1.34，构筑期不前瞻、两层加分改为容差带平局裁决，扫档未优于困难、预设不改值）；
   - 停手复核与决胜一手：`ai-pass-review`（v1.22）；
   - 地形与主题诊断：`ai-terrain-review`（v1.24）；
   - 按座位视野：`ai-seat-vision`（v1.26）；
@@ -40,7 +40,7 @@
 | 优先级 | 事项 | 说明 |
 |---:|---|---|
 | 1 | 试玩待定项 | 负责人试玩后再定，只登记不调参：**对局长度**（开放地图下标准 × 4 中位 24–25 大回合，是否缩棋盘边长 / 构筑期）、**主题强弱**（两次 20 局冒烟最强 / 最弱主题互相矛盾，在噪声内）、**栅栏造眼是否太便宜**（`ai-terrain-review` T13，规则层观察） |
-| 2 | 专家强度归因 | `expert-strength` 扩样中专家弱于高难（配对 好 7 / 同 33 / 差 20），预设已退回一层；下一步先归因（专家落子更少、Pass 更多）再另开 change |
+| 2 | 专家对手模型对齐 | 归因已完成（`10-21-expert-diagnosis`）、修法 A 已实施（`expert-tiebreak`，v1.34）：开放地图上预设专家对困难配对 3 / 9 / 8（方向偏负、不显著），差距来自全图阶段的一层改选；下一步修法 B——前瞻模拟回应改用困难口径（HANDOFF「后续 change」第 15 项），开工前先给编号裁决 |
 | 3 | 画面精修重规划 | `map-elements-v2`（地图元素造型精修，0/17，未开工）按开放地图与新地表重新规划后再实施 |
 | 4 | AI 整批评价 | `ai-pass-review` P14：逐枚贪心会漏掉"整批为正、逐枚为负"的组合 |
 | 5 | 联网（§19 第 4 项） | 同步、断线、匹配、匿名同时插旗；需先定架构 |
