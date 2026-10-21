@@ -9,7 +9,7 @@ namespace Siege.Godot;
 /// </summary>
 /// <remarks>
 /// <para>资源是 <see cref="LowPoly"/> 的烘焙快照，也可以被美术替换成正式模型：只要文件名不变、原点仍在地砖上表面，棋盘就直接用新模型。</para>
-/// <para>代价：程序生成里连续变化的量（岩石 / 松树的朝向）在加载资源时只剩导出的那几档。</para>
+/// <para>代价：程序生成里连续变化的量（松树 / 遗迹的朝向）在加载资源时只剩导出的那几档；段 C 重建的岩石与点缀在建模函数里先按档数取模，程序生成与资源同形。</para>
 /// <para>每条路径的 <see cref="PackedScene"/> 只加载一次并缓存；不存在的路径也记下，不重复探测。</para>
 /// </remarks>
 public static class TerrainParts
@@ -33,14 +33,15 @@ public static class TerrainParts
         public string FileName(int variant) => Variants == 1 ? $"{Name}.tscn" : $"{Name}_{((variant % Variants) + Variants) % Variants}.tscn";
     }
 
-    public static readonly Kind Rock = new("rock", 4, LowPoly.Rock);
+    // 障碍与装饰（map-elements-v2 段 C 用 LowPolyMesh 重建；档数在 LowPoly 一处，建模函数按它取模）。pines / ruins 只服务场景格，按裁决 M3 不重建、不扩档。
+    public static readonly Kind Rock = new("rock", LowPoly.RockVariants, LowPoly.Rock);
     public static readonly Kind Ruins = new("ruins", 4, LowPoly.Ruins);
     public static readonly Kind Pines = new("pines", 7, LowPoly.Pines);
-    public static readonly Kind Trees = new("trees", 3, LowPoly.Trees);
-    public static readonly Kind Desert = new("desert", 6, LowPoly.Desert);
-    public static readonly Kind Marsh = new("marsh", 6, LowPoly.Marsh);
-    public static readonly Kind Crag = new("crag", 4, LowPoly.Crag);
-    public static readonly Kind Shallows = new("shallows", 6, LowPoly.Shallows);
+    public static readonly Kind Trees = new("trees", LowPoly.TreesVariants, LowPoly.Trees);
+    public static readonly Kind Desert = new("desert", LowPoly.DesertVariants, LowPoly.Desert);
+    public static readonly Kind Marsh = new("marsh", LowPoly.MarshVariants, LowPoly.Marsh);
+    public static readonly Kind Crag = new("crag", LowPoly.CragVariants, LowPoly.Crag);
+    public static readonly Kind Shallows = new("shallows", LowPoly.ShallowsVariants, LowPoly.Shallows);
     public static readonly Kind FenceX = new("fence_x", 1, _ => LowPoly.Fence(alongX: true));
     public static readonly Kind FenceZ = new("fence_z", 1, _ => LowPoly.Fence(alongX: false));
     public static readonly Kind Bridge = new("bridge", 1, _ => LowPoly.Bridge());
@@ -110,7 +111,7 @@ public static class TerrainParts
 
     /// <summary>
     /// 合批用的模板（board-render-perf D2）：该档资源的一份实例，<b>不计数</b>；没有资源时返回 <c>null</c>——
-    /// 程序生成的造型随 <paramref name="variant"/> 连续变化（朝向不按档数取模），归并不成有限几种，调用方应退回 <see cref="Create"/> 逐件画。
+    /// 程序生成的松树 / 遗迹随 <paramref name="variant"/> 连续变化（朝向不按档数取模），归并不成有限几种，调用方应退回 <see cref="Create"/> 逐件画。
     /// </summary>
     public static Node3D? Template(Kind kind, int variant) => SceneOf(kind, variant)?.Instantiate() as Node3D;
 

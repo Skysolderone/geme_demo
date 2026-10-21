@@ -230,8 +230,13 @@ public static class LowPolyMesh
     /// 多面岩块（岩石、碎石、垂岩）：低细分球（<paramref name="facets"/> 条经线、facets / 2 圈纬线），顶点按散列沿径向抖动，平直着色。
     /// 原点在球心；网格是闭合的（相邻三角面共用抖动后的同一点）。
     /// </summary>
-    public static ArrayMesh FacetRock(float radius, int facets, float jitter, int seed)
+    /// <param name="stretch">
+    /// 各轴的拉伸（缺省不拉伸）：直接乘在顶点上、再按三角面自身求法线，所以压扁的鹅卵石、拉长的香蒲穗法线仍正确——
+    /// 不要在 <see cref="Merge"/> 的变换里做非均匀缩放（<c>AppendFrom</c> 只用 basis 转法线）。
+    /// </param>
+    public static ArrayMesh FacetRock(float radius, int facets, float jitter, int seed, Vector3? stretch = null)
     {
+        Vector3 scale = stretch ?? Vector3.One;
         facets = Math.Max(3, facets);
         int rings = Math.Max(2, facets / 2);
         var tool = Begin();
@@ -241,19 +246,19 @@ public static class LowPolyMesh
         {
             if (ring <= 0)
             {
-                return Vector3.Up * radius * (1f + (jitter * Signed(seed, -1)));
+                return Vector3.Up * radius * (1f + (jitter * Signed(seed, -1))) * scale;
             }
 
             if (ring >= rings)
             {
-                return Vector3.Down * radius * (1f + (jitter * Signed(seed, -2)));
+                return Vector3.Down * radius * (1f + (jitter * Signed(seed, -2))) * scale;
             }
 
             int index = ((segment % facets) + facets) % facets;
             float polar = MathF.PI * ring / rings;
             float azimuth = 2f * MathF.PI * index / facets;
             var direction = new Vector3(MathF.Sin(polar) * MathF.Cos(azimuth), MathF.Cos(polar), MathF.Sin(polar) * MathF.Sin(azimuth));
-            return direction * radius * (1f + (jitter * Signed(seed, (ring * facets) + index)));
+            return direction * radius * (1f + (jitter * Signed(seed, (ring * facets) + index))) * scale;
         }
 
         int face = 0;
@@ -361,6 +366,75 @@ public static class LowPolyMesh
 
         Quad(tool, start[0], start[1], start[2], start[3], from - to, shade);
         Quad(tool, end[0], end[1], end[2], end[3], to - from, shade);
+        return tool.Commit();
+    }
+
+    /// <summary>
+    /// 竖立的棱台 / 棱锥（树干、锥形树冠、仙人掌柱、芦苇叶）：底面是 <paramref name="sides"/> 边形、在 y = 0，顶面在 y = <paramref name="height"/>，
+    /// 顶面中心可水平偏移 <paramref name="lean"/>（x, z），做出斜立的叶片。<paramref name="topRadius"/> ≤ 0 时收成一个尖。原点在底面中心。
+    /// 侧面都建；顶面（非尖顶时）建；底面只在 <paramref name="bottomCap"/> 为真时建（悬空的树冠要，插在地上的不要）。网格闭合，所以竖起的细叶两面都看得到——
+    /// 这是 <see cref="Ribbon"/> 立起时做不到的（它只有一面），也是 <see cref="Beam"/> 做不到的（竖直输入返回空网格）。
+    /// </summary>
+    public static ArrayMesh Frustum(float bottomRadius, float topRadius, float height, int sides, float shade = 1f, Vector2 lean = default, float yaw = 0f, bool bottomCap = false)
+    {
+        sides = Math.Max(3, sides);
+        var tool = Begin();
+        var top = new Vector3(lean.X, height, lean.Y);
+        bool apex = topRadius <= 0f;
+        Vector3 Ring(float radius, Vector3 center, int k)
+        {
+            float a = yaw + (2f * MathF.PI * k / sides);
+            return center + new Vector3(MathF.Cos(a) * radius, 0f, MathF.Sin(a) * radius);
+        }
+
+        for (int k = 0; k < sides; k++)
+        {
+            Vector3 b0 = Ring(bottomRadius, Vector3.Zero, k), b1 = Ring(bottomRadius, Vector3.Zero, k + 1);
+            if (apex)
+            {
+                Tri(tool, b0, b1, top, ((b0 + b1 + top) / 3f) - (top * (1f / 3f)), shade);
+            }
+            else
+            {
+                Vector3 t0 = Ring(topRadius, top, k), t1 = Ring(topRadius, top, k + 1);
+                Quad(tool, b0, b1, t1, t0, ((b0 + b1 + t0 + t1) * 0.25f) - (top * 0.5f), shade);
+                Tri(tool, top, t0, t1, Vector3.Up, shade);
+            }
+
+            if (bottomCap)
+            {
+                Tri(tool, Vector3.Zero, b0, b1, Vector3.Down, shade * 0.95f);
+            }
+        }
+
+        return tool.Commit();
+    }
+
+    /// <summary>
+    /// 贴地的扁斑块（水洼）：<paramref name="sides"/> 边形，各顶点半径按散列在 ±<paramref name="jitter"/> 内错开（星形，从中心扇形三角化总是合法），
+    /// z 向乘 <paramref name="aspect"/> 压成椭圆。顶面在 y = <paramref name="thickness"/>、底在 y = 0；顶面与侧面都建，底面不建（压在地砖上）。原点在底面中心。
+    /// </summary>
+    public static ArrayMesh Patch(float radius, int sides, float thickness, int seed, float jitter, float aspect = 1f, float shade = 1f)
+    {
+        sides = Math.Max(3, sides);
+        var tool = Begin();
+        var outline = new Vector3[sides];
+        for (int k = 0; k < sides; k++)
+        {
+            float a = 2f * MathF.PI * k / sides;
+            float r = radius * (1f + (jitter * Signed(seed, k)));
+            outline[k] = new Vector3(MathF.Cos(a) * r, 0f, MathF.Sin(a) * r * aspect);
+        }
+
+        var center = new Vector3(0f, thickness, 0f);
+        var lift = new Vector3(0f, thickness, 0f);
+        for (int k = 0; k < sides; k++)
+        {
+            Vector3 a = outline[k], b = outline[(k + 1) % sides];
+            Tri(tool, center, a + lift, b + lift, Vector3.Up, shade);
+            Quad(tool, a + lift, b + lift, b, a, new Vector3(a.X + b.X, 0f, a.Z + b.Z), shade * 0.96f);
+        }
+
         return tool.Commit();
     }
 

@@ -8,7 +8,7 @@ namespace Siege.Godot;
 /// </summary>
 /// <remarks>
 /// 同色同粗糙度的材质合并成一份 <c>materials/*.tres</c>，各部件场景外部引用它（改一处材质，全部部件跟着变）；网格作为场景内子资源内嵌。
-/// 变体只导出"看得出差别"的那几档（档数见 <see cref="TerrainParts"/>）：岩石 / 遗迹的朝向随 variant 连续变，取前 4 档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
+/// 变体只导出"看得出差别"的那几档（档数见 <see cref="TerrainParts"/>）：遗迹的朝向随 variant 连续变，取前 4 档；岩石与林地 / 新地表点缀（map-elements-v2 段 C）在建模函数里按档数取模，导出全部档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
 /// </remarks>
 public static class PartExport
 {
