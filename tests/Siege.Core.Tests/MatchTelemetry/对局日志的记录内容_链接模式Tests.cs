@@ -62,7 +62,9 @@ public class 对局日志的记录内容_链接模式Tests
         // 规格 Scenario「上限结算可查」（cycle-stop）：第 6 大回合因到达大回合上限结算 → 日志中有该结算记录、原因为"上限"，首部记录大回合上限 6；
         // 离线分析能统计上限结算次数（链接模式一段）。样本：四名控制者每小回合都落 1 子（永不 Pass、填不满），上限 6 → 只可能因上限结算。
         // 旧日志：首部缺该项按 100 读、不拒绝（D2）。变异 M-RC5：MatchSession 建局不把 RoundCap 写进对局配置 → 样本跑到 turn_limit 截断，本条红。
-        MatchFlow match = Started([0, 1, 2, 3], options: Options with { RoundCap = 6 });
+        // terrain-barriers 3.1（地图变了）：link:1 上按坐标序落子的样本里有一人被提光出局（结算只剩 3 人），"四人都落过子、势力非 0"的样本口径落空——
+        // 载体改为手写平坦图 FlatMap（link:90003，不随生成器变），本条守的是上限结算的记录与统计，与地形无关。
+        MatchFlow match = StartedFlat([0, 1, 2, 3], options: Options with { RoundCap = 6 });
         MatchSession session = MatchSession.ForMatch(match, LinkSimFixtures.Config(turnLimit: 200) with { ContentSet = match.ContentSet, RoundCap = match.RoundCap });
         foreach (PlayerId p in match.Players)
         {

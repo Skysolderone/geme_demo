@@ -51,6 +51,12 @@ public class 链接档地图标识与确定性Tests
         Assert.Equal("link:12345", first.Id);
         Assert.Equal(MapFile.Digest(first), MapFile.Digest(second));
 
+        // terrain-barriers 1.3：Generate 按种子缓存，上面两次拿到的是同一个对象；这里绕过缓存再独立生成两次（各自从头消费布局流与新地表子流），逐字节相同且与缓存入口同图。
+        string fresh1 = MapFile.ToJson(LinkMapGenerator.GenerateWithRedraws(12345).Map);
+        string fresh2 = MapFile.ToJson(LinkMapGenerator.GenerateWithRedraws(12345).Map);
+        Assert.Equal(fresh1, fresh2);
+        Assert.Equal(MapFile.ToJson(first), fresh1);
+
         // 不同种子不同图（样本口径：相等断言不是恒真）。
         Assert.NotEqual(MapFile.ToJson(LinkMapGenerator.Generate(1)), MapFile.ToJson(LinkMapGenerator.Generate(2)));
 

@@ -33,7 +33,8 @@ public class 停手阈值Tests
     // 按 open-map 的探针口径（种子 31–46 依次比对两种阈值）取第一个走法不同的种子 35（31–46 里不同的有 35 / 41 / 44 / 45，记录见任务目录 notes.md）。种子 34 的旧值 8841BD6F62ECC7F00D7D20DFB4B48035D5B743B823ECCAF41D86AB9F2A805776。
     // link-map-surfaces 1.3 再重钉（F1 / F2 后 link:1 新地表变化，种子 35 不变）：第一次重钉值 477010B3FF16FAE6B1BDD416B0A53AAD032C8C180A9AF169C8CE99B0E6B4520C。
     // fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变；种子 35 不变，反面断言"缺省阈值下走法不同"照旧成立）：旧值 3831AA4C96D385F658326017FA06EE687A7F7A7B82958DB0AFCB19A926AC0329。
-    private const string StrictImprovementTurnHash = "6AE56FC2EA8D168033CAB7A9B9AE3B420D54D4653CD998A9AF8C176351B9B8B8";
+    // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；种子 35 不变，旧值 6AE56FC2EA8D168033CAB7A9B9AE3B420D54D4653CD998A9AF8C176351B9B8B8。
+    private const string StrictImprovementTurnHash = "3570899326EE8AE29DA4FD9B3F3B7CB3663C96411DB6D9F1B813150B04780058";
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
     private const ulong StrictImprovementSeed = 35;   // link-map-surfaces 2.2：34 → 35（见上）

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Board;
@@ -148,7 +149,21 @@ public class 终端活形与禁入标示Tests
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, MapCatalog.Resolve("link:1"), null, null, null, ContentSet.V1, null, null, Arrange);   // more-pieces-relics：写死内容集 v1
+        // terrain-barriers 3.1（地图变了）：link:1 左下角那块的河道横穿第 4 行（C4–H4 是深水 / 桥），摆不下这条活形——载体改为手写平坦图 FlatMap（link:90003，
+        // 出生棋盘 0 = C3–H8，左下角与 link:1 改动前同形：西、南是场景格，C3–F4 高度 0、无栅栏）；棋盘 0 的两个出生区档信物移到核心区上排 D6 / F6，
+        // 不压在摆出的棋子下（原 F4 会被直接摆子控制而未揭示）。
+        MapData flat = LinkModeFixtures.FlatMap;
+        BoardPlate zero = flat.Boards[0];
+        var birth = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+        MapData map = flat with
+        {
+            RelicCells = flat.RelicCells.Where(kv => !zero.Contains(kv.Key))
+                .Append(KeyValuePair.Create(Coord.Parse("D6"), birth))
+                .Append(KeyValuePair.Create(Coord.Parse("F6"), birth))
+                .ToImmutableDictionary(),
+        };
+        Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
+        int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, map, null, null, null, ContentSet.V1, null, null, Arrange);   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(LifeState.Alive, arrangedLife);   // 前提：摆出来的确是已确定活形

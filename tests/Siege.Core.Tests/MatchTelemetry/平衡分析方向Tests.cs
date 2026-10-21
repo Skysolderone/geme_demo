@@ -193,8 +193,9 @@ public class 平衡分析方向Tests
         // cycle-stop 2.1 重钉：链接模式一段多一行"战场结算原因 …；上限结算 N 次"（报告格式变化，走法不变：样本 ≤ 4 个大回合，K = 6 不可能触发、上限 100 到不了）；旧值 8F6ED482… / 5CBE36F0…。
         // link-map-surfaces 2.2 重钉：link:1 中间带投放新地表，样本走法随之变；旧值 D9D33978… / 8FB438E5…。
         // link-map-surfaces 1.3 再重钉（F1 / F2）：第一次重钉值 9312D1D5… / 1552A610…。
-        Assert.True("849F66328C63A2673A5C278A214F0157FAC1806252ADCC5318852B177D1A47CA" == sample, $"Sample 报告哈希：{sample}");
-        Assert.True("23498075BC36232A3E9D35E9155BDFC203C6E203EB493905B027D04E49485B7B" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；旧值 849F6632… / 23498075…。
+        Assert.True("AE582F0C2C081B9E7ABA71313755980E3FA99E5BC068FDB1123BD86A425BB822" == sample, $"Sample 报告哈希：{sample}");
+        Assert.True("EB76C9ACFF40959DEE583F3AA5DBE49DD76B9339BE502EA1FCF9CB259A0418F0" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

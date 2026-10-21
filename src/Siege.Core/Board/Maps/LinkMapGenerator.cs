@@ -38,17 +38,24 @@ public static partial class LinkMapGenerator
     /// <summary>生成初始地图。<see cref="MapData.Id"/> 为规范化标识，<see cref="MapData.MapVersion"/> 为 0。结果按种子缓存（地图不可变）。</summary>
     public static MapData Generate(ulong mapSeed) => Cache.GetOrAdd(mapSeed, static seed => Layout(seed, overlaySurfaces: true).Map);
 
+    /// <summary>生成初始地图并给出每块出生棋盘（按编号）生成好的地形（terrain-barriers 测试用：湖泊 / 岩区、隔断线的逐块核对；不缓存）。</summary>
+    internal static (MapData Map, ImmutableArray<BoardTerrain> Boards) GenerateWithBoards(ulong mapSeed)
+    {
+        (MapData map, _, _, ImmutableArray<BoardTerrain> boards) = Layout(mapSeed, overlaySurfaces: true);
+        return (map, boards);
+    }
+
     /// <summary>生成初始地图并给出每块出生棋盘（按编号）的重抽次数（tasks 2.3 的分布统计用；不缓存）。</summary>
     internal static (MapData Map, ImmutableArray<int> Redraws) GenerateWithRedraws(ulong mapSeed)
     {
-        (MapData map, ImmutableArray<int> redraws, _) = Layout(mapSeed, overlaySurfaces: true);
+        (MapData map, ImmutableArray<int> redraws, _, _) = Layout(mapSeed, overlaySurfaces: true);
         return (map, redraws);
     }
 
     /// <summary>生成初始地图并给出每块出生棋盘（按编号）实际放下的新地表格数（link-map-surfaces D3：测试与分布统计用；不缓存）。</summary>
     internal static (MapData Map, ImmutableArray<int> SpecialSurfaces) GenerateWithSurfaceCounts(ulong mapSeed)
     {
-        (MapData map, _, ImmutableArray<int> surfaces) = Layout(mapSeed, overlaySurfaces: true);
+        (MapData map, _, ImmutableArray<int> surfaces, _) = Layout(mapSeed, overlaySurfaces: true);
         return (map, surfaces);
     }
 
@@ -59,12 +66,12 @@ public static partial class LinkMapGenerator
 
     /// <summary>
     /// 一次布局（link-map-terrain D3），布局与五主题地形的全部随机数来自 <see cref="MapRandom.ForLinkLayout"/> 这一条流，顺序固定：
-    /// 次序 → 宽高（6–8）→ 主题排列（Fisher–Yates）→ 按编号逐块生成地形（自检失败在同一条流上重抽该块）→ 出生区信物 → 公共信物。
+    /// 次序 → 宽高（6–8）→ 主题排列（Fisher–Yates）→ 按编号逐块生成地形（主题地形含隔断线 → 散布岩石 → 湖泊 / 岩区，terrain-barriers D4；自检失败在同一条流上重抽该块）→ 出生区信物 → 公共信物。
     /// 之后（link-map-surfaces D1）用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按编号逐块叠加新地表（<see cref="OverlaySurfaces"/>），布局流的消费顺序与次数不变；
     /// <paramref name="overlaySurfaces"/> 为 <c>false</c> 只供 <see cref="GenerateWithoutSurfaces"/> 的对照。
     /// 布局最后过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）；叠加不做重抽。
     /// </summary>
-    private static (MapData Map, ImmutableArray<int> Redraws, ImmutableArray<int> SpecialSurfaces) Layout(ulong mapSeed, bool overlaySurfaces)
+    private static (MapData Map, ImmutableArray<int> Redraws, ImmutableArray<int> SpecialSurfaces, ImmutableArray<BoardTerrain> Boards) Layout(ulong mapSeed, bool overlaySurfaces)
     {
         string id = LinkMapId.Format(mapSeed);
         RandomStream rng = MapRandom.ForLinkLayout(mapSeed);
@@ -101,11 +108,11 @@ public static partial class LinkMapGenerator
             plates[order[k]] = arranged[k];
         }
 
-        // 按编号逐块生成地形（自检失败在同一条流上重抽该块，D3）。
+        // 按编号逐块生成地形（自检失败在同一条流上重抽该块，D3）；布局已排好，自检含与已生成各块之间的接缝气边（terrain-barriers 实施修订 J2）。
         var boards = new BoardTerrain[BirthBoards];
         for (int zone = 0; zone < BirthBoards; zone++)
         {
-            boards[zone] = DraftBoard(plates[zone], rng);
+            boards[zone] = DraftBoard(plates[zone], rng, [.. boards.Take(zone)]);
         }
 
         // 出生区信物：按编号顺序每块 2 个，在核心区内；第二个与第一个不相邻，尽量不同行不同列（没有这样的格时退到"不相邻"）。
@@ -151,7 +158,7 @@ public static partial class LinkMapGenerator
             throw new MapGenerationException($"地图 {id} 的初始布局未通过链接档静态校验（生成器缺陷）：{string.Join("；", validation.Failures)}");
         }
 
-        return (map, [.. boards.Select(b => b.Redraws)], [.. boards.Select(b => b.SpecialSurfaces)]);
+        return (map, [.. boards.Select(b => b.Redraws)], [.. boards.Select(b => b.SpecialSurfaces)], [.. boards]);
     }
 
     /// <summary>

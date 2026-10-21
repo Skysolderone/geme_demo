@@ -90,12 +90,14 @@ public static class MapValidator
         new Dictionary<MapProfile, ProfileRules>
         {
             // 链接档（board-link-mode D2 / 裁决 J1–J7；link-map-terrain D6 / 裁决 M1 / M4–M9；open-map D1 / D2）：可落子格 = 5 块出生棋盘内可落子格之和、信物 10–15（每块出生棋盘 2 个出生区档 + 至多 1 个公共区档）、
-            // 出生区恰 5 个、各恰 9 格（核心区）；出生棋盘边长 6–8、带两两不同的主题、外圈平坦、核心区平坦、棋盘内连通、改造目标 ≥ 2；
+            // 出生区恰 5 个、各恰 9 格（核心区）；出生棋盘边长 6–8、带两两不同的主题、外圈平坦（河流 / 高台的隔断线两端除外，terrain-barriers H4；有隔断线须恰 1 处通道，BOARD_BARRIER_INVALID）、核心区平坦、棋盘内连通、改造目标 ≥ 2；
             // 5 块建局时边对边紧贴成一张连通地图（3+2 两行）、没有通道；连通分量恰 1 个且含全部出生棋盘；每条接缝至少一条气边；
             // 不要求到中央入口可达、不做距离均衡、不要求标注咽喉。
             // 可落子格总数与画布区间（open-map tasks 1.1 回写）：种子 1–20 实测全图可落子 212–280、画布宽 23–27、高 17–20（种子 1–2000：可落子 184–300、宽 22–28、高 16–20）——
             // 可落子格取生成器的理论边界向外取整（5 块 6×6 减最长河道与混合主题的深水 = 173，5 块 8×8 = 320），画布取 3+2 布局的理论边界
             // （宽 = 第一行三块 18–24 + 第二行向东伸出至多 2 + 留白 4 → 22–30；高 = 两行 12–16 + 留白 4 → 16–20）。
+            // terrain-barriers 2.2 回写（河流 / 高台横穿棋盘、大棋盘加湖泊 / 岩区）：种子 1–20 实测全图可落子 202–258、画布宽 23–27、高 17–20（种子 1–2000：可落子 182–282、宽 22–28、高 16–20）；
+            // 理论下界变为 5 块 6×6 减 6×6 河道 5 格与混合主题未架桥深水 1 格 = 174（6×6 不放湖泊 / 岩区，实施修订 J4），仍在 170 之上，声明区间不变。
             // （旧值：可落子 125–245、列 20–75、行 8–21；拼接版：列 20–85、行 8–24。）
             [MapProfile.Link] = new(
                 "链接档只提供 4 人的预算表（本模式只有 4 人局）",
@@ -326,13 +328,22 @@ public static class MapValidator
     /// </summary>
     /// <remarks>
     /// 连通性读战场导出（<see cref="Battlefields"/>，几何四邻的唯一分量实现），不另写一份 BFS：棋盘内的可落子格落在不止一个分量里即被切断。
-    /// 外圈全部可落子（本方法的外圈规则）时，棋盘内被隔开的一片碰不到外圈、也就碰不到别的棋盘，"跨棋盘绕回来连上"不会发生。
+    /// 外圈全部可落子时，棋盘内被隔开的一片碰不到外圈、也就碰不到别的棋盘，"跨棋盘绕回来连上"不会发生；河流主题的河道两端占外圈各 1 格（terrain-barriers），
+    /// 对岸一片可能经邻盘绕回来，这里放过而生成器的单盘自检（只看本块）照样挡住。
     /// </remarks>
     private static void ValidateBirthBoardTerrain(MapData map, BoardPlate plate, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        // 外圈。
-        ImmutableArray<Coord> rimCells = [.. plate.Cells().Where(plate.OnRim)
-            .Where(c => !map.IsPlayable(c) || map.HeightAt(c) != 0 || map.SurfaceAt(c) is not (Surface.Grass or Surface.Forest))];
+        // 外圈（terrain-barriers 裁决 H4）：河流主题河道、高台主题山脊两端经过的外圈格除外——河道端格是深水（可架桥）、不是岩石，山脊端格高度 ≥ 1、可落子、草地或林地。
+        List<Barrier> barriers = BarriersOf(map, plate);
+        HashSet<Coord> ends = [.. barriers
+            .Where(l => (l.Ridge ? BoardTheme.Plateau : BoardTheme.River) == plate.Theme)
+            .SelectMany(l => l.Cells.Where(plate.OnRim))];
+        bool RimFlat(Coord c) => ends.Contains(c)
+            ? plate.Theme == BoardTheme.River
+                ? map.SurfaceAt(c) == Surface.DeepWater && !map.Obstacles.Contains(c)
+                : map.IsPlayable(c) && map.HeightAt(c) >= 1 && map.SurfaceAt(c) is Surface.Grass or Surface.Forest
+            : map.IsPlayable(c) && map.HeightAt(c) == 0 && map.SurfaceAt(c) is Surface.Grass or Surface.Forest;
+        ImmutableArray<Coord> rimCells = [.. plate.Cells().Where(plate.OnRim).Where(c => !RimFlat(c))];
         FenceEdge[] rimFences = [.. map.TerrainData.Fences.Where(e => plate.OnRim(e.A) || plate.OnRim(e.B)).OrderBy(e => e.A).ThenBy(e => e.B)];
         if (!rimCells.IsEmpty || rimFences.Length > 0)
         {
@@ -341,6 +352,36 @@ public static class MapValidator
                 "BOARD_RIM_NOT_FLAT",
                 $"{Describe(plate)} 的外圈每格必须高度 0、可落子、地表为草地或林地，外圈相关的边上不得有栅栏{edges}。",
                 [.. rimCells.Concat(rimFences.SelectMany(e => new[] { e.A, e.B })).Distinct().Order()]));
+        }
+
+        // 隔断线（terrain-barriers D5，实施修订 J5）：棋盘内若有横穿棋盘的隔断线，它不得经过核心区、须恰 1 处通道，线上除通道外的格与线外的格之间没有气边。不要求一定有隔断线。
+        foreach (Barrier line in barriers)
+        {
+            string what = line.Ridge ? "山脊" : "河道";
+            string name = $"{what} {line.Cells[0].ToNotation()}–{line.Cells[^1].ToNotation()}";
+            ImmutableArray<Coord> passages = [.. line.Cells.Where(c => line.Ridge ? map.HeightAt(c) == 1 : map.HasBridge(c))];
+            ImmutableArray<Coord> inCore = [.. line.Cells.Where(plate.InCore)];
+            ImmutableArray<Coord> leaks = [.. line.Cells
+                .Where(c => passages.Length != 1 || c != passages[0])
+                .Where(c => Adjacency.LibertyNeighbors(map, c).Any(n => !line.Cells.Contains(n)))];
+            if (!inCore.IsEmpty)
+            {
+                f.Add(new MapValidationFailure(
+                    "BOARD_BARRIER_INVALID", $"{Describe(plate)} 的{name}横穿棋盘并经过核心区：隔断线不得经过核心区。", inCore));
+            }
+
+            if (passages.Length != 1)
+            {
+                f.Add(new MapValidationFailure(
+                    "BOARD_BARRIER_INVALID",
+                    $"{Describe(plate)} 的{name}横穿棋盘，有 {passages.Length} 处通道（{(line.Ridge ? "高 1 坡口" : "桥")}）：隔断线须恰有 1 处通道。",
+                    passages.IsEmpty ? line.Cells : passages));
+            }
+            else if (!leaks.IsEmpty)
+            {
+                f.Add(new MapValidationFailure(
+                    "BOARD_BARRIER_INVALID", $"{Describe(plate)} 的{name}横穿棋盘，除通道外仍有格与两侧相连：两侧之间除通道外不得有气边。", leaks));
+            }
         }
 
         // 核心区。
@@ -411,6 +452,43 @@ public static class MapValidator
                 $"{Describe(plate)} 内林地格与未架桥深水格合计 {targets} 个：每块出生棋盘必须至少 {plates.MinEditTargets} 个可改造目标。",
                 [plate.Origin]));
         }
+    }
+
+    /// <summary>一条横穿棋盘的隔断线（terrain-barriers D5）：整列（<see cref="Column"/>）或整行、第几列 / 行、是不是山脊（否则是河道），线上的格按先行后列。</summary>
+    private sealed record Barrier(bool Column, int Index, bool Ridge, ImmutableArray<Coord> Cells);
+
+    /// <summary>
+    /// 棋盘内的隔断线（terrain-barriers D1 / D5，实施修订 J1 / J2 / J5）：只看地图数据，不读生成器，也不看主题。候选是中间带的整列（先）与整行（后），即不是外圈那一列 / 行；
+    /// 整列 / 整行每格都是深水（含桥）即河道，每格高度 ≥ 1 即山脊。
+    /// </summary>
+    private static List<Barrier> BarriersOf(MapData map, BoardPlate plate)
+    {
+        var lines = new List<Barrier>();
+        void Consider(bool column, int index, ImmutableArray<Coord> cells)
+        {
+            if (cells.All(c => map.SurfaceAt(c) == Surface.DeepWater))
+            {
+                lines.Add(new Barrier(column, index, Ridge: false, cells));
+            }
+            else if (cells.All(c => map.HeightAt(c) >= 1))
+            {
+                lines.Add(new Barrier(column, index, Ridge: true, cells));
+            }
+        }
+
+        for (int x = plate.Origin.X + 1; x < plate.Origin.X + plate.Width - 1; x++)
+        {
+            int col = x;
+            Consider(true, x, [.. Enumerable.Range(plate.Origin.Y, plate.Height).Select(y => new Coord(col, y))]);
+        }
+
+        for (int y = plate.Origin.Y + 1; y < plate.Origin.Y + plate.Height - 1; y++)
+        {
+            int row = y;
+            Consider(false, y, [.. Enumerable.Range(plate.Origin.X, plate.Width).Select(x => new Coord(x, row))]);
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -572,7 +650,7 @@ public static class MapValidator
     /// <summary>
     /// 接缝气边（link-map-generation「物化状态校验」，link-map-terrain 裁决 M6，<c>LINK_SEAM_NO_LIBERTY</c>）：两块棋盘的外接矩形边对边相触即有一条接缝；
     /// 隔着接缝互为几何邻居的格对里，至少要有一对之间存在气边（<see cref="Adjacency.LibertyNeighbors"/>，唯一的气边实现）。
-    /// 合规生成图上恒成立（外圈高度 0、无栅栏）——这条是给手写地图与以后改外圈规则时用的底线。
+    /// terrain-barriers 起外圈不再全平（河道 / 山脊两端占外圈各 1 格），这条在生成图上不再恒成立：生成器的棋盘级自检用同一判定（<see cref="SeamHasLiberty"/>）在生成时重抽，这里仍是底线。
     /// </summary>
     private static void ValidateSeams(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -582,26 +660,8 @@ public static class MapValidator
             {
                 BoardPlate a = map.Boards[i];
                 BoardPlate b = map.Boards[j];
-                var pairs = new List<(Coord P, Coord Q)>();
-                if (a.Origin.X + a.Width == b.Origin.X || b.Origin.X + b.Width == a.Origin.X)
-                {
-                    (BoardPlate west, BoardPlate east) = a.Origin.X < b.Origin.X ? (a, b) : (b, a);
-                    for (int y = Math.Max(a.Origin.Y, b.Origin.Y); y < Math.Min(a.Origin.Y + a.Height, b.Origin.Y + b.Height); y++)
-                    {
-                        pairs.Add((new Coord(west.Origin.X + west.Width - 1, y), new Coord(east.Origin.X, y)));
-                    }
-                }
-                else if (a.Origin.Y + a.Height == b.Origin.Y || b.Origin.Y + b.Height == a.Origin.Y)
-                {
-                    (BoardPlate south, BoardPlate north) = a.Origin.Y < b.Origin.Y ? (a, b) : (b, a);
-                    for (int x = Math.Max(a.Origin.X, b.Origin.X); x < Math.Min(a.Origin.X + a.Width, b.Origin.X + b.Width); x++)
-                    {
-                        pairs.Add((new Coord(x, south.Origin.Y + south.Height - 1), new Coord(x, north.Origin.Y)));
-                    }
-                }
-
-                pairs.RemoveAll(p => !map.Contains(p.P) || !map.Contains(p.Q));
-                if (pairs.Count == 0 || pairs.Any(p => Adjacency.LibertyNeighbors(map, p.P).Contains(p.Q)))
+                List<(Coord P, Coord Q)> pairs = SeamPairs(map, a, b);
+                if (pairs.Count == 0 || SeamHasLiberty(map, a, b))
                 {
                     continue;
                 }
@@ -612,6 +672,43 @@ public static class MapValidator
                     [.. pairs.SelectMany(p => new[] { p.P, p.Q }).Order()]));
             }
         }
+    }
+
+    /// <summary>
+    /// 两块棋盘之间的接缝格对（外接矩形边对边相触即有接缝）：隔着接缝互为几何邻居的格对，只保留两格都在 <paramref name="map"/> 画布内的。不相触时为空。
+    /// </summary>
+    private static List<(Coord P, Coord Q)> SeamPairs(MapData map, BoardPlate a, BoardPlate b)
+    {
+        var pairs = new List<(Coord P, Coord Q)>();
+        if (a.Origin.X + a.Width == b.Origin.X || b.Origin.X + b.Width == a.Origin.X)
+        {
+            (BoardPlate west, BoardPlate east) = a.Origin.X < b.Origin.X ? (a, b) : (b, a);
+            for (int y = Math.Max(a.Origin.Y, b.Origin.Y); y < Math.Min(a.Origin.Y + a.Height, b.Origin.Y + b.Height); y++)
+            {
+                pairs.Add((new Coord(west.Origin.X + west.Width - 1, y), new Coord(east.Origin.X, y)));
+            }
+        }
+        else if (a.Origin.Y + a.Height == b.Origin.Y || b.Origin.Y + b.Height == a.Origin.Y)
+        {
+            (BoardPlate south, BoardPlate north) = a.Origin.Y < b.Origin.Y ? (a, b) : (b, a);
+            for (int x = Math.Max(a.Origin.X, b.Origin.X); x < Math.Min(a.Origin.X + a.Width, b.Origin.X + b.Width); x++)
+            {
+                pairs.Add((new Coord(x, south.Origin.Y + south.Height - 1), new Coord(x, north.Origin.Y)));
+            }
+        }
+
+        pairs.RemoveAll(p => !map.Contains(p.P) || !map.Contains(p.Q));
+        return pairs;
+    }
+
+    /// <summary>
+    /// 接缝是否有气边（<c>LINK_SEAM_NO_LIBERTY</c> 的唯一判定，生成器的棋盘级自检也调它——terrain-barriers 实施修订 J2）：两块不相触时为 <c>true</c>（没有接缝可缺），
+    /// 否则隔着接缝的格对里至少一对之间存在气边（<see cref="Adjacency.LibertyNeighbors"/>）。
+    /// </summary>
+    internal static bool SeamHasLiberty(MapData map, BoardPlate a, BoardPlate b)
+    {
+        List<(Coord P, Coord Q)> pairs = SeamPairs(map, a, b);
+        return pairs.Count == 0 || pairs.Any(p => Adjacency.LibertyNeighbors(map, p.P).Contains(p.Q));
     }
 
     /// <summary>

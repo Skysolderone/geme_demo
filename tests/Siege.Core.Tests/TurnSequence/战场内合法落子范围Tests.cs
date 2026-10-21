@@ -118,21 +118,23 @@ public class 战场内合法落子范围Tests
         // Scenario：玩家 A 有一条已确定活形棋串，B 与 A 同战场 → B 的合法落子范围不含 A 的眼空间，A 的含。
         // 在出生棋盘 0 的上边角做出与旧模式同形的"角上两眼"（眼 (0,0)、(2,0)），P0 与 P1 同区。
         // link-map-terrain：两眼形摆在棋盘左下角的外圈两行（第 0 行外圈 + 第 1 行）；6×6 棋盘的第 1 行第 1–3 列是核心区，整片高度 0、无栅栏。
-        // open-map：眼形要摆在画布留白角上的棋盘（下边与左边都是场景格）——link:1 的 3+2 布局里是出生棋盘 4（下标 3，o0，左下角 (2,2)）；先断言这 8 格平坦（样本口径）。
-        MatchFlow match = Started([3, 3, 4, 0]).AtRound(2);
+        // open-map：眼形要摆在画布留白角上的棋盘（下边与左边都是场景格）；先断言这 8 格平坦（样本口径）。
+        // terrain-barriers 3.1（地图变了）：link:1 左下角那块是河流棋盘，河道横穿第 4 行（C4–H4），角上不再平坦——载体改为手写平坦图 FlatMap（link:90003，
+        // 出生棋盘 0 = C3–H8，左下角 (2,2)，下边与左边都是场景格；"依赖平坦的角"的测试本就用这张图），P0 / P1 同锁棋盘 0。
+        MatchFlow match = StartedFlat([0, 0, 1, 2]).AtRound(2);
         MapData map = match.Map;
-        Coord[] shape = [.. from dy in new[] { 0, 1 } from dx in new[] { 0, 1, 2, 3 } select BirthCell(map, 3, dx, dy)];
-        Assert.Equal(new Coord(2, 2), map.BirthBoard(3).Origin);
+        Coord[] shape = [.. from dy in new[] { 0, 1 } from dx in new[] { 0, 1, 2, 3 } select BirthCell(map, 0, dx, dy)];
+        Assert.Equal(new Coord(2, 2), map.BirthBoard(0).Origin);
         Assert.All(shape, c => Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 0 && !shape.Any(n => map.HasFence(c, n)), c.ToNotation()));
-        Coord eyeA = BirthCell(map, 3, 0, 0);
-        Coord eyeB = BirthCell(map, 3, 2, 0);
-        match.Place(P0, BirthCell(map, 3, 1, 0), BirthCell(map, 3, 3, 0), BirthCell(map, 3, 0, 1), BirthCell(map, 3, 1, 1), BirthCell(map, 3, 2, 1), BirthCell(map, 3, 3, 1));
+        Coord eyeA = BirthCell(map, 0, 0, 0);
+        Coord eyeB = BirthCell(map, 0, 2, 0);
+        match.Place(P0, BirthCell(map, 0, 1, 0), BirthCell(map, 0, 3, 0), BirthCell(map, 0, 0, 1), BirthCell(map, 0, 1, 1), BirthCell(map, 0, 2, 1), BirthCell(map, 0, 3, 1));
         Assert.Equal(new HashSet<Coord> { eyeA, eyeB }, LifeShapeReport.Analyze(match.Board).ForbiddenCellsFor(P1).ToHashSet());
 
         IReadOnlySet<Coord> p1 = match.LegalRangeFor(P1);
         Assert.DoesNotContain(eyeA, p1);
         Assert.DoesNotContain(eyeB, p1);
-        Assert.Equal(map.BirthBoard(3).Cells().Where(map.IsPlayable).Except([eyeA, eyeB]).ToHashSet(), p1);   // 构筑期：自己的出生棋盘 − 禁入格
+        Assert.Equal(map.BirthBoard(0).Cells().Where(map.IsPlayable).Except([eyeA, eyeB]).ToHashSet(), p1);   // 构筑期：自己的出生棋盘 − 禁入格
         Assert.Contains(eyeA, match.LegalRangeFor(P0));
     }
 

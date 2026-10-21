@@ -79,7 +79,7 @@ public class 初始布局Tests(ITestOutputHelper output)
             }
         }
 
-        Assert.InRange(map.PlayableCount, 212, 280);   // 校验器链接行回写：种子 1–20 实测 212–280
+        Assert.InRange(map.PlayableCount, 202, 258);   // 校验器链接行回写：种子 1–20 实测 202–258（terrain-barriers 2.2；原 212–280）
     }
 
     [Theory]
@@ -207,7 +207,9 @@ public class 初始布局Tests(ITestOutputHelper output)
             HashSet<Coord> core = [.. Enumerable.Range(0, 9).Select(k => new Coord(cx + (k % 3), cy + (k / 3)))];
             Assert.True(map.BirthZones[i].SetEquals(core), $"link:{seed} 棋盘 {i}：出生区不是核心区");
 
-            foreach (Coord c in b.Cells().Where(c => c.X == b.Origin.X || c.X == b.Origin.X + b.Width - 1 || c.Y == b.Origin.Y || c.Y == b.Origin.Y + b.Height - 1))
+            // terrain-barriers 裁决 H4：河流 / 高台的隔断线两端占外圈各 1 格，这两格除外（隔断线本身见「河流与高台横穿棋盘」）。
+            HashSet<Coord> ends = (b.Theme is BoardTheme.River or BoardTheme.Plateau) ? [.. 主题地形Tests.Barrier(b, map).Line] : [];
+            foreach (Coord c in b.Cells().Where(c => c.X == b.Origin.X || c.X == b.Origin.X + b.Width - 1 || c.Y == b.Origin.Y || c.Y == b.Origin.Y + b.Height - 1).Where(c => !ends.Contains(c)))
             {
                 Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 0 && map.SurfaceAt(c) is Surface.Grass or Surface.Forest, $"link:{seed} 外圈 {c}");
                 Assert.DoesNotContain(map.TerrainData.Fences, e => e.A == c || e.B == c);
@@ -251,9 +253,9 @@ public class 初始布局Tests(ITestOutputHelper output)
 
             Assert.Equal(playable.Count, reached.Count);
             Assert.True(b.Cells().Count(c => map.SurfaceAt(c) == Surface.Forest || (map.SurfaceAt(c) == Surface.DeepWater && !map.HasBridge(c))) >= 2, $"link:{seed} {b.Origin}");
-            // 岩石只在中间带、每块至多 2 格；高差只有 0 / 1 / 2（TerrainData 构造期保证上限）。
+            // 岩石只在中间带、每块至多 2 格散布 + 至多 5 格岩区（terrain-barriers D3）；高差只有 0 / 1 / 2（TerrainData 构造期保证上限）。
             Coord[] rocks = [.. b.Cells().Where(c => !map.IsPlayable(c) && map.SurfaceAt(c) != Surface.DeepWater)];
-            Assert.InRange(rocks.Length, 0, 2);
+            Assert.InRange(rocks.Length, 0, 2 + LinkMapGenerator.MaxCluster);
             Assert.All(rocks, r => Assert.True(b.InMiddleBand(r), $"link:{seed} 岩石 {r} 不在中间带"));
         }
     }
@@ -452,7 +454,9 @@ public class 初始布局Tests(ITestOutputHelper output)
             }
         }
 
-        // 算例（tasks 1.1）：link:1 的河流块只有浅滩且每格与深水或桥相邻、林地块只有沼泽且每格与林地相邻（样本口径：两块都确有新地表）。
+        // 算例（tasks 1.1）：link:1 的河流块只有浅滩、林地块只有沼泽，且各有与深水 / 林地相邻的格（样本口径：两块都确有新地表，主题候选分支不是空跑）。
+        // terrain-barriers 3.1（地图变了）：link:1 的河流块河道改到第 4 行、湖泊在 D8–F9，大棋盘不贴核心区的主题候选只剩 G9，第二格 G8 按 S2 退到基础候选——
+        // 原"每格都与深水相邻"改为"至少一格"，退基础候选的口径由上面的通用断言守住。
         if (seed == 1)
         {
             foreach ((BoardTheme theme, Surface surface) in new[] { (BoardTheme.River, Surface.Shallows), (BoardTheme.Forest, Surface.Marsh) })
@@ -461,7 +465,7 @@ public class 初始布局Tests(ITestOutputHelper output)
                 Coord[] cells = [.. b.Cells().Where(c => SpecialSurfaces.Contains(map.SurfaceAt(c)))];
                 Assert.NotEmpty(cells);
                 Assert.All(cells, c => Assert.Equal(surface, map.SurfaceAt(c)));
-                Assert.All(cells, c => Assert.True(ThemeFits(plain, surface, c), $"link:1 {c.ToNotation()}"));
+                Assert.Contains(cells, c => ThemeFits(plain, surface, c));
             }
         }
     }
@@ -544,6 +548,102 @@ public class 初始布局Tests(ITestOutputHelper output)
         Assert.Equal(MapFile.ToJson(plain), MapFile.ToJson(reverted));
         Assert.NotEqual(MapFile.ToJson(plain), MapFile.ToJson(map));
         Assert.True(MapValidator.Validate(plain).IsValid, MapValidator.Validate(plain).ToString());
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void 河流与高台横穿棋盘(ulong seed)
+    {
+        // Scenario（terrain-barriers，实施修订 J1–J3）：河道 / 山脊是一整列或一整行、取自中间带、两端到达棋盘外沿、不经过核心区；河道恰有 1 座桥、山脊恰有 1 处坡口；
+        // 两侧之间除桥 / 坡口外没有气边。逐块判定用 主题地形Tests 的测试内独立算式（不读生成器），在整张图上（含新地表叠加）复核。
+        MapData map = LinkMapGenerator.Generate(seed);
+        foreach (BoardPlate b in map.Boards.Where(p => p.Theme is BoardTheme.River or BoardTheme.Plateau))
+        {
+            (Coord[] line, Coord[] beyond, Coord passage) = 主题地形Tests.Barrier(b, map);
+            string at = $"link:{seed} {b.Theme} {b.Origin.ToNotation()}";
+            Assert.True(line.Length == b.Width || line.Length == b.Height, at);
+            Assert.Equal(2, line.Count(b.OnRim));
+            Assert.All(line, c => Assert.False(map.BirthZones.Any(z => z.Contains(c)), $"{at}：{c} 在核心区"));
+
+            // 去掉通道：从核心区沿气边（只在本块内）走不到线上与对侧任何格；留着通道：走得到全部。
+            HashSet<Coord> far = [.. line, .. beyond];
+            HashSet<Coord> Walk(bool open)
+            {
+                var reached = new HashSet<Coord>(b.CoreCells());
+                var queue = new Queue<Coord>(reached);
+                while (queue.Count > 0)
+                {
+                    foreach (Coord n in Adjacency.LibertyNeighbors(map, queue.Dequeue()).Where(b.Contains))
+                    {
+                        if ((open || n != passage) && reached.Add(n))
+                        {
+                            queue.Enqueue(n);
+                        }
+                    }
+                }
+
+                return reached;
+            }
+
+            Assert.DoesNotContain(Walk(open: false), far.Contains);
+            HashSet<Coord> all = Walk(open: true);
+            Assert.All(far.Where(map.IsPlayable), c => Assert.Contains(c, all));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void 湖泊或岩区不切断棋盘(ulong seed)
+    {
+        // Scenario（terrain-barriers，裁决 H5 / 实施修订 J4）：中间带多于 12 格的棋盘恰有 1 团 3–5 格的未架桥深水或岩石（≤ 12 格的不放），
+        // 棋盘内可落子格仍几何四邻连通（见「棋盘连通且有改造目标」），全图可落子格落在校验器声明的区间内。
+        (MapData map, ImmutableArray<LinkMapGenerator.BoardTerrain> boards) = LinkMapGenerator.GenerateWithBoards(seed);
+        Assert.Equal(MapFile.ToJson(LinkMapGenerator.Generate(seed)), MapFile.ToJson(map));
+        for (int i = 0; i < boards.Length; i++)
+        {
+            BoardPlate b = map.Boards[i];
+            Coord[] cluster = [.. boards[i].Cluster];
+            if (Bands(b).Middle.Length <= 12)
+            {
+                Assert.Empty(cluster);
+                continue;
+            }
+
+            Assert.InRange(cluster.Length, 3, 5);
+            Assert.All(cluster, c => Assert.Contains(c, Bands(b).Middle));
+            Assert.True(cluster.All(map.TerrainData.IsUnbridgedDeepWater) || cluster.All(c => map.Obstacles.Contains(c)), $"link:{seed} 棋盘 {i}");
+            var reached = new HashSet<Coord> { cluster[0] };
+            var queue = new Queue<Coord>(reached);
+            while (queue.Count > 0)
+            {
+                foreach (Coord n in Adjacency.Neighbors(map.Width, map.Height, queue.Dequeue()).Where(cluster.Contains))
+                {
+                    if (reached.Add(n))
+                    {
+                        queue.Enqueue(n);
+                    }
+                }
+            }
+
+            Assert.Equal(cluster.Length, reached.Count);
+        }
+
+        Assert.True(MapValidator.Validate(map).IsValid);   // 可落子格总数落在声明区间内（PLAYABLE_COUNT_OUT_OF_RANGE 是其中一条）
+        if (seed == 20)
+        {
+            // 样本口径：种子 1–20 里大棋盘确有湖泊与岩区两种、也确有小棋盘不放。
+            var kinds = new HashSet<string>(StringComparer.Ordinal);
+            for (ulong s = 1; s <= 20; s++)
+            {
+                (MapData m, ImmutableArray<LinkMapGenerator.BoardTerrain> bs) = LinkMapGenerator.GenerateWithBoards(s);
+                foreach (LinkMapGenerator.BoardTerrain t in bs)
+                {
+                    kinds.Add(t.Cluster.IsEmpty ? "无" : m.TerrainData.IsUnbridgedDeepWater(t.Cluster[0]) ? "湖泊" : "岩区");
+                }
+            }
+
+            Assert.Equal(["岩区", "无", "湖泊"], kinds.Order(StringComparer.Ordinal));
+        }
     }
 
     /// <summary>
