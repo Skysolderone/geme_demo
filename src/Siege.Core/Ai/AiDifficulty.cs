@@ -111,8 +111,10 @@ public sealed record AiSearchConfig(
     public const int DefaultPassThreshold = 20;
 
     /// <summary>默认停手阈值的校准口径（ai-decision「默认评价权重的校准」要求的显式标注）。</summary>
-    /// <remarks>v2-recalibration 段 A 在内容集 V2 上复核后改写，不再带"more-pieces-relics 扩展计分后未重扫"的补注（九维权重仍带，见 <see cref="EvaluationWeights.ScoringExtendedStatus"/>）。</remarks>
-    public const string PassThresholdCalibrationStatus = "v2-recalibration 段 A 复核（内容集 V2、小样本）：siege-4p-base-v5、4 人标准难度、带入 0、种子 1–20、每档 20 局；0 / 20 / 40 / 80 四档（截断 / 整局无提子 / 已终局局平均结束大回合：0 → 0 / 3 / 9.15；20 → 0 / 3 / 9.25；40 → 0 / 5 / 9.05；80 → 0 / 8 / 8.40）；选定 20（0 与 20 无提子并列最低、均在 7–10，取离 80 最近）；80 为档位上界、非完整双向扫档；sim-out/v2-recalibration/pass-*";
+    /// <remarks>v2-recalibration 段 A 在内容集 V2 上复核后改写，不再带"more-pieces-relics 扩展计分后未重扫"的补注（九维权重仍带，见 <see cref="EvaluationWeights.ScoringExtendedStatus"/>）。
+    /// fence-eye-rule（testing.md「活形规则变更后权重与停手阈值先标未校准」，主会话裁决 #4）：活形判定改为无视栅栏后未重扫，末尾接
+    /// <see cref="EvaluationWeights.FenceEyeUncalibratedStatus"/>；取值 20 不变。</remarks>
+    public const string PassThresholdCalibrationStatus = "v2-recalibration 段 A 复核（内容集 V2、小样本）：siege-4p-base-v5、4 人标准难度、带入 0、种子 1–20、每档 20 局；0 / 20 / 40 / 80 四档（截断 / 整局无提子 / 已终局局平均结束大回合：0 → 0 / 3 / 9.15；20 → 0 / 3 / 9.25；40 → 0 / 5 / 9.05；80 → 0 / 8 / 8.40）；选定 20（0 与 20 无提子并列最低、均在 7–10，取离 80 最近）；80 为档位上界、非完整双向扫档；sim-out/v2-recalibration/pass-*；未校准（fence-eye-rule 后）";
 
     /// <summary>大图的缺省候选格上限（边疆图上实测选定——当时 377 格，平台留白后为 411 格，见任务 09-19-frontier-map 的实施记录）。</summary>
     public const int LargeMapCellLimit = 24;

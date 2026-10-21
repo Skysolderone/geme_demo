@@ -156,8 +156,9 @@ public class 活形记录与统计Tests
         // more-pieces-relics 段 A 探针 P1（新四种权重 8 → 400）下本测试红：样本口径下界依赖走法、原先跟随缺省内容集 → 写死 v1。
         // ai-pass-review 2.1（决胜一手，裁决 P7）改变了种子 1 的走法（第 20 小回合起三次决胜一手），40 个小回合里不再出现预演阶段的破坏活形，样本口径下界②落空；
         // 断言不改，样本换到按序第一个满足三条下界的种子 3（种子 2 同样为 0 次；种子 3 破坏活形 17 次、终局活形棋串 10、贴地形小空区 12）。待负责人确认（P12）。
-        RunConfig config = SimFixtures.Config(count: 1, seedStart: 3, turnLimit: 40, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 };
-        MatchSession session = MatchSession.Create(config, config.SeedAt(0));   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        // fence-eye-rule 2.2：栅栏不再造眼后种子 3 的 40 个小回合里也不再出现预演阶段的破坏活形（下界②落空）。按 testing.md「不许挑单个种子凑绿」，
+        // 样本改为不依赖 AI 走法的脚本局（BreakAttemptSession）：断言不变，三条下界都由脚本保证。
+        MatchSession session = BreakAttemptSession();
         MatchLog log = RoundTrip(session.Run());
 
         Assert.All(log.Turns, t => Assert.NotNull(t.Life));
@@ -190,6 +191,51 @@ public class 活形记录与统计Tests
         Assert.True(terrainSmall > 0, "终局没有贴地形小空区形成的眼空间，R8 统计是空证。");
         Assert.Equal(terrainSmall, last.Players.Sum(p => p.TerrainSmallEyeSpaces));
         Assert.Equal(session.Match.Board.AllCoords().Count(c => session.Match.Board[c].Terrain == Terrain.Playable), last.PlayableCells);
+    }
+
+    /// <summary>
+    /// 「真实跑局的活形字段自洽」的脚本局（fence-eye-rule 2.2）：平坦 8×8 链接载体、四人同锁棋盘 0，第 1 大回合开局前摆好 P0 的一字两眼活形
+    /// D3…J3（两端的墙是未架桥深水 C4、K4 与棋盘外沿，眼 C3、K3 都贴地形 → R8 贴地形小空区）。P1 每个小回合先暂放"匠人落 F4、立栅 F3–G3"
+    /// 并预演一次（把 P0 切成各一眼的两段 → 预演第 6 步破坏活形），再清空暂放、Pass；P0 只 Pass；P2、P3 是会话配置的 AI。截到第 8 个小回合。
+    /// </summary>
+    private static MatchSession BreakAttemptSession()
+    {
+        MatchFlow match = LinkModeFixtures.PlainStarted(
+                TestMaps.Terrain(surfaces: [("C4", Surface.DeepWater), ("K4", Surface.DeepWater)]),
+                options: MatchOptions.Immediate with { ContentSet = ContentSet.V1 })
+            .Stones(LinkModeFixtures.P0, "D3", "E3", "F3", "G3", "H3", "J3");
+        match.Debug.SeedHand(LinkModeFixtures.P1, (PieceType.Artisan, 4), (PieceType.Basic, 4));
+        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("D3"))!.Life);   // 前提
+        MatchSession session = MatchSession.ForMatch(match, SimulationHarness.LinkSimFixtures.Config(turnLimit: 8) with { ContentSet = match.ContentSet });
+        session.SetController(LinkModeFixtures.P0, new SimulationHarness.LinkSimFixtures.PassController());
+        session.SetController(LinkModeFixtures.P1, new BreakAttemptSeat(
+            BatchFixtures.Artisan("F4", TerrainEdit.Fence(TestMaps.At("F3"), TestMaps.At("G3")))));
+        return session;
+    }
+
+    /// <summary>每个小回合暂放一次给定落子、预演一次（被拒也照样记入预演留痕），然后清空暂放、Pass。</summary>
+    private sealed class BreakAttemptSeat(Placement attempt) : ITurnController
+    {
+        public void OrganizeHand(PlayerHandAccess hand, int overflow)
+        {
+        }
+
+        public void Recruit(PlayerHandAccess hand, RecruitPanelView panel)
+        {
+        }
+
+        public void Deploy(StagedBatch batch, Func<RehearsalResult> rehearse)
+        {
+            if (batch.Stage(attempt.Coord, attempt.Type, attempt.Edit) is { } failure)
+            {
+                throw new InvalidOperationException($"脚本暂放 {attempt.Coord.ToNotation()} 被拒：{failure.Message}");
+            }
+
+            _ = rehearse();
+            batch.Clear();
+        }
+
+        public bool OnRejected(StagedBatch batch, BatchFailure failure) => false;
     }
 
     // ---------- 分析（合成日志，手算期望） ----------

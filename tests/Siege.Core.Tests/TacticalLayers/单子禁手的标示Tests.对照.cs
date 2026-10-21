@@ -263,43 +263,49 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void 与完整预演一致_暂放立栅造出他人的新眼()
+    public void 与完整预演一致_暂放搭桥造出他人的新眼()
     {
-        // 预筛"不在结算后盘面上他人的眼空间里"这一条的守门局面。P0 的大串原有两个单格眼 D7、H1（已确定活形）；它围着的 3×3 空区 C3–E5
-        // 在 F4 处贴着 P1 的棋子，不封闭、不是眼，因此不在 P1 的禁入格里。P1 暂放两枚匠人：H3 立栅 H1–H2（眼 H1 不再贴 P0 串），
-        // G4 立栅 E4–F4（3×3 空区从此只贴 P0 → 成了 P0 的新眼，眼值 2）。暂放自身合法：P0 串仍有 D7 + 新眼 = 3。
-        // 再落 D4（新眼正中，四邻全空、不贴任何棋子）：新眼贴上 P1 的棋子不再封闭，P0 串只剩 D7 → 破坏活形。
-        // 变异 M-P4（预筛去掉"不在他人眼空间里"）→ D4 被当成安静候选漏报，红 1（本测试）。
+        // 预筛"不在结算后盘面上他人的眼空间里"这一条的守门局面（fence-eye-rule 改名，原「…_暂放立栅造出他人的新眼」：栅栏不再造眼，改由暂放的搭桥造出新眼）。
+        // P0 的竖串 A1–A5 原有两个单格眼 B5（C5 岩石、B4 是高 2 的崖）与 B1（B2 岩石、C1 未架桥深水）→ 已确定活形。
+        // C3–D3 是一块被岩石、深水 B3 与高 2 台地围住的空区，不贴任何棋子 → 不封闭、不是眼，不在 P1 的禁入格里。
+        // P1 暂放两枚匠人：B4（台地，与 B3 是崖）给 B3 搭桥 → {B3, C3, D3} 只沿眼边贴 P0 的 A3 → 成了 P0 的新眼（3 格，眼值 1）；
+        // D1 给 C1 搭桥 → 眼 B1 连到 C1、贴上 P1 的 D1，不再封闭。暂放自身合法：P0 串有 B5 + 新眼 = 2。
+        // 再落 C3 或 D3（四邻没有任何敌子、能呼吸，只有"在他人眼空间里"这一条不安静）：新眼贴上 P1 的棋子不再封闭，P0 串只剩 B5 → 破坏活形。
+        // 变异 M-P4（预筛去掉"不在他人眼空间里"）→ C3 / D3 被当成安静候选漏报，红 1（本测试；fence-eye-rule 改写夹具后重做，见任务 implement.md）。
         GameBoard board = LifeShapeFixtures.Grid(
-        [
-            "..0.0....",
-            ".00000...",
-            ".0...0...",
-            ".0...1...",
-            ".0...0...",
-            ".0000000.",
-            "......#.#",
-        ]);
+            [
+                "0.#...",
+                "0.....",
+                "0~..#.",
+                "0###..",
+                "0.~...",
+            ],
+            heights: [("B4", 2), ("C4", 2), ("D4", 2), ("E4", 2), ("F4", 2), ("D5", 2), ("E5", 2), ("F5", 2)]);
         LifeShapeReport before = LifeShapeReport.Analyze(board);
-        Assert.Equal(LifeState.Alive, before.LifeOf("B2"));
-        Assert.Equal(["H1", "D7"], before.EyeSpacesOf("B2"));
+        Assert.Equal(LifeState.Alive, before.LifeOf("A1"));
+        Assert.Equal(["B1", "B5"], before.EyeSpacesOf("A1"));
+        Assert.Null(before.EyeSpaceAt(TestMaps.At("C3")));
         IReadOnlySet<Coord> range = RangeOf(board, P1);
-        Assert.Contains(TestMaps.At("D4"), range);
+        Assert.Contains(TestMaps.At("C3"), range);
+        Assert.Contains(TestMaps.At("D3"), range);
         Placement[] staged =
         [
-            BatchFixtures.Artisan("H3", TerrainEdit.Fence(TestMaps.At("H1"), TestMaps.At("H2"))),
-            BatchFixtures.Artisan("G4", TerrainEdit.Fence(TestMaps.At("E4"), TestMaps.At("F4"))),
+            BatchFixtures.Artisan("B4", TerrainEdit.Bridge(TestMaps.At("B3"))),
+            BatchFixtures.Artisan("D1", TerrainEdit.Bridge(TestMaps.At("C1"))),
         ];
         RehearsalResult alone = BatchRehearsal.Rehearse(board, BatchFixtures.Context(board, P1, range: range), staged, new BoardHistory());
         Assert.True(alone.IsLegal, alone.Failure?.Message);
-        Assert.Equal(3, LifeShapeReport.Analyze(alone.ProjectedBoard!).GroupLifeAt(TestMaps.At("B2"))!.EyeValueSum);
+        LifeShapeReport settled = LifeShapeReport.Analyze(alone.ProjectedBoard!);
+        Assert.Equal(2, settled.GroupLifeAt(TestMaps.At("A1"))!.EyeValueSum);
+        Assert.Equal(["B3,C3,D3", "B5"], settled.EyeSpacesOf("A1"));
 
-        (int candidates, int full, int forbidden) = AssertSame("立栅造出新眼", board, P1, range, staged, new BoardHistory());
+        (int candidates, int full, int forbidden) = AssertSame("搭桥造出新眼", board, P1, range, staged, new BoardHistory());
 
         ForbiddenMoveReport report = ForbiddenMoves.Query(board, P1, range, staged, new BoardHistory());
-        Assert.Equal((ForbiddenMoveKind.BreaksLife, (PlayerId?)P0), (report.At(TestMaps.At("D4"))!.Kind, report.At(TestMaps.At("D4"))!.LifeOwner));
-        Assert.Equal(["C3", "D3", "E3", "C4", "D4", "E4", "C5", "D5", "E5"], report.Moves.Select(m => m.Coord).Notations());
-        Assert.Equal(9, forbidden);
+        Assert.Equal((ForbiddenMoveKind.BreaksLife, (PlayerId?)P0), (report.At(TestMaps.At("C3"))!.Kind, report.At(TestMaps.At("C3"))!.LifeOwner));
+        Assert.Equal((ForbiddenMoveKind.BreaksLife, (PlayerId?)P0), (report.At(TestMaps.At("D3"))!.Kind, report.At(TestMaps.At("D3"))!.LifeOwner));
+        Assert.Equal(["C3", "D3"], report.Moves.Select(m => m.Coord).Notations());
+        Assert.Equal(2, forbidden);
         Assert.True(full < candidates);
     }
 

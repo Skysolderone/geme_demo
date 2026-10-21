@@ -90,9 +90,11 @@ public class 活形三态Tests
     }
 
     [Fact]
-    public void 被栅栏隔开的2x2不是方四()
+    public void 栅栏隔开的2x2仍是方四()
     {
-        // 与「方四为死形」同一局面，A2–B2 之间立栅：四格沿气边是 A2–A1–B1–B2 一条折线，不成环。
+        // 规格 fence-eye-rule「栅栏隔开的 2×2 仍是方四」（原「被栅栏隔开的 2×2 不是方四」，裁决 F4 反转）：与「方四为死形」同一局面，
+        // A2–B2 之间立栅——栅栏不影响眼边，四格在眼边图上仍成环，按方四判定，眼值 0，该棋串为死。
+        // 变异验证见 .trellis/tasks/10-21-fence-eye-rule/implement.md（M-F1：眼边加回"无栅栏"一条 → 本测试红；M-F4：方四判定改回气边 → 本测试红）。
         GameBoard board = Grid(
             [
                 "........1",
@@ -103,6 +105,33 @@ public class 活形三态Tests
             fences: [("A2", "B2")]);
         LifeShapeReport report = LifeShapeReport.Analyze(board);
 
+        Assert.DoesNotContain(TestMaps.At("B2"), board.LibertyNeighbors(TestMaps.At("A2")));   // 前提：栅栏照常挡气
+        Assert.Equal(["A1,B1,A2,B2"], report.EyeSpacesOf("A3"));
+        Assert.Equal(0, report.EyeSpaceAt(TestMaps.At("A1"))!.EyeValue);
+        Assert.Equal(LifeState.Dead, report.LifeOf("A3"));
+    }
+
+    [Fact]
+    public void 崖壁隔开的2x2不是方四()
+    {
+        // 规格 fence-eye-rule「崖壁隔开的 2×2 不是方四」：与「方四为死形」同一局面，四格高度 A1 = 0、B1 = 1、B2 = 2、A2 = 0——
+        // 只有 A2–B2 一对高差达到崖壁阈值，四格沿眼边连成 A2–A1–B1–B2 一条折线，不成环，按"其余"判定，眼值 2，该棋串为活。
+        // 围墙 A3 / B3 / C3 / C2 / C1 都在高度 0：B2 与 B3、C2 之间同为崖壁（墙），C1–B1 高差 1 仍有眼边，棋串照常贴着这块空区。
+        // 变异验证见 implement.md（M-F5：眼边去掉高差一条 → 本测试红）。
+        GameBoard board = Grid(
+            [
+                "........1",
+                "000......",
+                "..0......",
+                "..0......",
+            ],
+            heights: [("B1", 1), ("B2", 2)]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        Assert.DoesNotContain(TestMaps.At("B2"), board.EyeNeighbors(TestMaps.At("A2")));   // 前提：A2–B2 是崖壁，没有眼边
+        Assert.Contains(TestMaps.At("B1"), board.EyeNeighbors(TestMaps.At("B2")));
+        Assert.Contains(TestMaps.At("B1"), board.EyeNeighbors(TestMaps.At("A1")));
+        Assert.Contains(TestMaps.At("A1"), board.EyeNeighbors(TestMaps.At("A2")));
         Assert.Equal(["A1,B1,A2,B2"], report.EyeSpacesOf("A3"));
         Assert.Equal(2, report.EyeSpaceAt(TestMaps.At("A1"))!.EyeValue);
         Assert.Equal(LifeState.Alive, report.LifeOf("A3"));

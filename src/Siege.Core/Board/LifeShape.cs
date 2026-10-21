@@ -16,7 +16,8 @@ public enum LifeState
 }
 
 /// <summary>
-/// 一块对 <see cref="Owner"/> 封闭的空区，即与它有气边相连的 <see cref="Owner"/> 的<b>每一条</b>棋串的眼空间。
+/// 一块对 <see cref="Owner"/> 封闭的空区，即与它有眼边相连的 <see cref="Owner"/> 的<b>每一条</b>棋串的眼空间
+/// （fence-eye-rule D2：只隔栅栏贴着它的棋串也算，即便这块空区不是那条棋串的气）。
 /// </summary>
 public sealed class EyeSpace
 {
@@ -69,12 +70,13 @@ public sealed class GroupLife
 /// 预演（活棋禁入、破坏活形）、合法落子范围契约、公开视图与 AI 共用它。
 /// </summary>
 /// <remarks>
-/// <para>纯计算、只读盘面：棋子来自 <see cref="GameBoard.AllGroups"/>，邻接只来自 <see cref="GameBoard.LibertyNeighbors"/>——
-/// 无气边的方向（障碍、未架桥深水、崖壁、栅栏、棋盘外沿）不产生邻格，天然是墙，不另写判定（design D1）。</para>
+/// <para>纯计算、只读盘面：棋子（棋串，按气边连通）来自 <see cref="GameBoard.AllGroups"/>，空区与封闭的邻接只来自 <see cref="GameBoard.EyeNeighbors"/>
+/// （fence-eye-rule D1：眼边 = 两格可落子且 |Δh| ≤ 1，不看栅栏）——无眼边的方向（障碍、未架桥深水、崖壁、棋盘外沿）不产生邻格，天然是墙，不另写判定；
+/// <b>栅栏不是墙</b>：它既不切分空区，也不挡住对面的棋子参与封闭判定（裁决 F1 / F3）。</para>
 /// <para>不接名册：所有者从棋子读出，弃赛 / 出局者遗留的活形照常产生禁入。不入存档（design D5）；不做增量——唯一的记忆化是
 /// <see cref="GameBoard.LifeMemo"/>（ai-turn-speed D2）：同一盘面实例在没有任何写入原语之间再次分析时返回同一份全量结果，写入之后整份重算。</para>
 /// <para>确定性：内部只用按 <c>y * 宽 + x</c> 编址（段 C2 起按可落子格序号编址，序号升序即坐标序）的数组与按坐标序构造的列表，不遍历无序集合。</para>
-/// <para>规格：openspec/changes/life-shape/specs/life-shape；单子不成活见 openspec/changes/life-single-stone（「活形三态」MODIFIED）。</para>
+/// <para>规格：openspec/specs/life-shape；单子不成活见 life-single-stone（「活形三态」MODIFIED），栅栏不参与活形判定见 fence-eye-rule（两条 Requirement MODIFIED）。</para>
 /// </remarks>
 public sealed class LifeShapeReport
 {
@@ -122,7 +124,7 @@ public sealed class LifeShapeReport
     private static LifeShapeReport AnalyzeCore(GameBoard board)
     {
         // 段 C2（board-link-mode 裁决 C18 / P2，决策不变的数据结构改写）：逐格表只为可落子格存放、按可落子格序号编址
-        // （序号升序即坐标序）——棋子、气与空区都只在可落子格上（气边两端都可落子），73×73 画布上省掉九成的逐格分配与扫描。
+        // （序号升序即坐标序）——棋子、气与空区都只在可落子格上（气边、眼边两端都可落子），73×73 画布上省掉九成的逐格分配与扫描。
         int width = board.Width;
         ImmutableArray<int> playable = board.PlayableIndices;
         ImmutableArray<int> slot = board.PlayableOrdinals;
@@ -140,21 +142,22 @@ public sealed class LifeShapeReport
             }
         }
 
-        // ② 候选起点：棋串的气。没有贴任何棋子的空区不可能封闭，不必走到。
-        bool[] isLiberty = new bool[size];
+        // ② 候选起点：沿眼边贴着棋子的空格（能作气的地表）。没有贴任何棋子的空区不可能封闭，不必走到。
+        // fence-eye-rule D2：只隔栅栏贴着棋子的空格不是该棋串的气，却同样是起点——空区归属按眼边，不按气。
+        bool[] isStart = new bool[size];
         foreach (Group group in groups)
         {
             foreach (Coord stone in group.Stones)
             {
-                foreach (Coord n in board.LibertyNeighbors(stone))
+                foreach (Coord n in board.EyeNeighbors(stone))
                 {
                     int ni = SlotOf(slot, width, n);
-                    isLiberty[ni] = groupAt[ni] < 0 && board.GivesLiberty(n);
+                    isStart[ni] = groupAt[ni] < 0 && board.GivesLiberty(n);
                 }
             }
         }
 
-        // ③ 空区：按坐标序从未走过的气出发，沿气边 flood fill，同一遍收集贴边的棋串。
+        // ③ 空区：按坐标序从未走过的起点出发，沿眼边 flood fill，同一遍收集贴边（有眼边相连）的棋串。
         // 早停（不改语义）：格数一超过 EyeSpaceMax，或贴到第二名玩家的棋子，该空区不可能封闭，立即放弃；已走过的格留着本次的标记。
         // 之后任何一次 flood 碰到"别的 flood 留下的标记"，说明两者是同一个空区——而完整走完的小空区不可能从外面碰到，
         // 所以碰到的必是一个已放弃（不可能封闭）的空区，本次也立即放弃。每格至多被走一次。
@@ -168,7 +171,7 @@ public sealed class LifeShapeReport
         // 段 C2：按可落子格序号升序找起点（即 AllCoords 的坐标序），不经坐标枚举器逐格构造坐标。
         for (int startIndex = 0; startIndex < size; startIndex++)
         {
-            if (!isLiberty[startIndex] || floodOf[startIndex] != 0)
+            if (!isStart[startIndex] || floodOf[startIndex] != 0)
             {
                 continue;
             }
@@ -182,7 +185,7 @@ public sealed class LifeShapeReport
             bool open = false;
             for (int head = 0; head < region.Count && !open; head++)
             {
-                foreach (Coord n in board.LibertyNeighbors(region[head]))
+                foreach (Coord n in board.EyeNeighbors(region[head]))
                 {
                     int ni = SlotOf(slot, width, n);
                     int g = groupAt[ni];
@@ -197,7 +200,7 @@ public sealed class LifeShapeReport
                     }
                     else if (!board.GivesLiberty(n))
                     {
-                        // 空浅滩（terrain-surfaces）：不属于任何空区；它有气边、谁都能落进去，所以贴着它的空区不封闭——不是墙。
+                        // 空浅滩（terrain-surfaces）：不属于任何空区；它有眼边、谁都能落进去，所以贴着它的空区不封闭——不是墙。
                         open = true;
                     }
                     else if (floodOf[ni] == 0)
@@ -317,7 +320,7 @@ public sealed class LifeShapeReport
 
     /// <summary>
     /// 封闭判定（design D1）：贴边棋串同属一名玩家 ∧ 至少贴一条棋串 ∧ 格数 ≤ <see cref="EyeSpaceMax"/>。
-    /// 贴边棋串由气边 flood fill 收集，无气边的方向天然不贡献。
+    /// 贴边棋串由眼边 flood fill 收集，无眼边的方向（障碍、未架桥深水、崖壁、棋盘外沿）天然不贡献；栅栏不挡眼边（fence-eye-rule F1）。
     /// </summary>
     private static bool IsClosed(ImmutableArray<Group> groups, List<int> touching, int cellCount, out PlayerId owner)
     {
@@ -341,7 +344,7 @@ public sealed class LifeShapeReport
 
     /// <summary>
     /// 眼值（design D2）：先把本空区格登记进 <paramref name="eyeSpaceAt"/>，再按格数查表；
-    /// 4 格时按空区内部的气边图判方四——四格连通且每格恰有 2 个区内气边邻格 ⇔ 成 4-环。
+    /// 4 格时按空区内部的眼边图判方四——四格连通且每格恰有 2 个区内眼边邻格 ⇔ 成 4-环（内部的栅栏不影响形状，fence-eye-rule F4）。
     /// </summary>
     private static int EyeValueOf(GameBoard board, ImmutableArray<Coord> cells, int[] eyeSpaceAt, ImmutableArray<int> slot, int width, int spaceIndex)
     {
@@ -366,7 +369,7 @@ public sealed class LifeShapeReport
         foreach (Coord c in cells)
         {
             int inside = 0;
-            foreach (Coord n in board.LibertyNeighbors(c))
+            foreach (Coord n in board.EyeNeighbors(c))
             {
                 if (eyeSpaceAt[SlotOf(slot, width, n)] == spaceIndex)
                 {
@@ -410,7 +413,7 @@ public sealed class LifeShapeReport
     }
 
     /// <summary>
-    /// 分析途中的坐标 → 序号：棋子与气边两端都只可能在可落子格上（落子与气边都要求可落子，改造与链接只增不减可落子格），
+    /// 分析途中的坐标 → 序号：棋子与眼边两端都只可能在可落子格上（落子与眼边都要求可落子，改造与链接只增不减可落子格），
     /// 不可落子即盘面状态自相矛盾，响亮失败而不是静默当作空格。
     /// </summary>
     private static int SlotOf(ImmutableArray<int> slot, int width, Coord c)
@@ -418,7 +421,7 @@ public sealed class LifeShapeReport
         int o = slot[Index(width, c)];
         if (o < 0)
         {
-            throw new SiegeRuleException($"活形分析遇到不可落子格上的棋子或气边：{c.ToNotation()}。");
+            throw new SiegeRuleException($"活形分析遇到不可落子格上的棋子或眼边：{c.ToNotation()}。");
         }
 
         return o;

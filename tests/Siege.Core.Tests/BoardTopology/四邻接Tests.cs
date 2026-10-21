@@ -90,7 +90,7 @@ public class 四邻接Tests
     {
         // 规格「几何邻居枚举、气边与覆盖关系 MUST 各自只有一处实现；任何规则 MUST NOT 绕过它们手写邻居遍历或地形过滤」。
         // 逐条解析 Siege.Core 全部方法体的 IL，收集两类 call：
-        //   ① Adjacency.Neighbors：只允许 Adjacency 自身（两个导出关系）与 GameBoard.Neighbors（几何委托）。
+        //   ① Adjacency.Neighbors：只允许 Adjacency 自身（导出关系：眼边 / 覆盖；气边经眼边到达）与 GameBoard.Neighbors（几何委托）。
         //      MapValidator 在段 A 已改走气边、段 B 的盘内 / 旋转校验只做坐标算术，按裁决 A-3 从名单移除。
         //   ② GameBoard.Neighbors：Core 内公开的几何入口，段 B 3.4 起 Core 内不再有任何调用者
         //      （PieceEffects.Step 改走 LibertyNeighbors，裁决 A-6）；它只留给表现层几何。
@@ -146,7 +146,8 @@ public class 四邻接Tests
 
         // 反面断言：① 段扫描确实命中了允许名单里的调用者，不是扫了个空集；② 段与 ① 共用同一份 refs，扫描器坏了 ① 先红。
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(GameBoard) && c.Name == nameof(GameBoard.Neighbors));
-        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.LibertyNeighbors));
+        // fence-eye-rule 1.1：气边改为"眼边 ∧ 无栅栏"，直接枚举几何邻居的是眼边导出（气边经它到达），反面断言随之换成 EyeNeighbors。
+        Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.EyeNeighbors));
         Assert.Contains(adjacencyCallers, c => Outermost(c.DeclaringType!) == typeof(Adjacency) && c.Name == nameof(Adjacency.CoverageTargets));
 
         // retire-legacy-maps 4.2：豁免 ⑤ 收回后，校验器整个类型都不得直接枚举几何四邻（距离 / 连通 / 口袋走气边，拼接分量走 Battlefields）。

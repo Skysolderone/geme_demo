@@ -42,6 +42,29 @@ public class 各棋子势力占比Tests
         Assert.Null(JsonSerializer.Deserialize<GroupEntry>(oldGroupLine, LogJson.Options)!.PieceCounts);
     }
 
+    /// <summary>
+    /// 原 Standard 小样本的脚本替身（fence-eye-rule 2.2）：平坦 8×8 链接载体、四人同锁棋盘 0、内容集 v1；P0 第 1 大回合落 D3 匠人（不改造）与 E3 协同子（同一条棋串），
+    /// 第 2 大回合接着落 F3 普通子与 G3 堡垒子（仍同串）；其余小回合与其余玩家一律 Pass，截到第 8 个小回合——快照里必有"含匠人且含协同子""同时含普通子与堡垒子"
+    /// 的棋串与协同加值，不依赖任何 AI 走法。
+    /// </summary>
+    private static MatchSession ArtisanSynergySession()
+    {
+        Siege.Core.Match.MatchFlow match = LinkModeFixtures.PlainStarted(options: Siege.Core.Match.MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
+        match.Debug.SeedHand(LinkModeFixtures.P0, (PieceType.Artisan, 1), (PieceType.Synergy, 1), (PieceType.Basic, 1), (PieceType.Fortress, 1));
+        MatchSession session = MatchSession.ForMatch(match, SimulationHarness.LinkSimFixtures.Config(turnLimit: 8) with { ContentSet = match.ContentSet });
+        session.SetController(LinkModeFixtures.P0, new SimulationHarness.LinkSimFixtures.ScriptedSeat(match, new Dictionary<int, (Coord, PieceType, TerrainEdit?)[]>
+        {
+            [1] = [(TestMaps.At("D3"), PieceType.Artisan, null), (TestMaps.At("E3"), PieceType.Synergy, null)],
+            [2] = [(TestMaps.At("F3"), PieceType.Basic, null), (TestMaps.At("G3"), PieceType.Fortress, null)],
+        }));
+        foreach (PlayerId p in new[] { LinkModeFixtures.P1, LinkModeFixtures.P2, LinkModeFixtures.P3 })
+        {
+            session.SetController(p, new SimulationHarness.LinkSimFixtures.PassController());
+        }
+
+        return session;
+    }
+
     [Fact]
     public void 真实跑局快照的类型计数与明细自洽()
     {
@@ -61,8 +84,9 @@ public class 各棋子势力占比Tests
         //（link:1 种子 14、12 个小回合：含匠人棋串 12 条、其中与协同同串 11 条）；断言不变，只换样本。
         // open-map 1.5：link:1 改为 3+2 紧贴布局后种子 14–15 不再出现"匠人与协同同串"（探针种子 10–40 步长 2：只有 10 / 30 / 38 有），按探针换为种子 10–11
         //（含匠人棋串 42 条、其中与协同同串 5 条）；断言不变，只换样本。
-        List<MatchLog> withArtisan = BatchRunner.Execute(
-            SimFixtures.Config(count: 2, seedStart: 10, turnLimit: 12, difficulty: AiDifficulty.Standard) with { ContentSet = ContentSet.V1 }, parallelism: 1);
+        // fence-eye-rule 2.2：活形规则变更后种子 10–11 不再出现"匠人与协同同串"（下界响亮失败，第四次因走法换样本）。按 testing.md「不许挑单个种子凑绿」，
+        // 原 Standard 小样本改为不依赖 AI 走法的脚本局（ArtisanSynergySession：匠人 + 协同 + 普通 + 堡垒同串），与 Easy 共用样本合并统计。
+        List<MatchLog> withArtisan = [ArtisanSynergySession().Run()];
         List<GroupEntry> groups =
             [.. SimFixtures.Sample.Value.Concat(withArtisan).SelectMany(l => l.Turns).SelectMany(t => t.PlayersState).SelectMany(p => p.Groups)];
         Assert.NotEmpty(groups);

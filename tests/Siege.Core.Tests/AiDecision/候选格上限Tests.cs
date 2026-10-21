@@ -27,7 +27,9 @@ public class 候选格上限Tests
     /// <para>原黄金值 <c>V4GoldenTurnHash</c>（v5、种子 31、24 个小回合的快照哈希，历次重建记录见 git 历史）随 v5 删除：v5 的 105 格不超过 150、缺省 K = 0，
     /// 守的是"小图不限制时走法不变"；链接图一律超过 150 格（<c>link:1</c> 为 157），这条规则今后只能在手写小图上守（规格「小图不限制」：如 9×9 手写测试夹具）。</para>
     /// </summary>
-    internal const string SmallMapGoldenHash = "26AF3B28F94F88CA44847D5F9BF7B41733CFEC357CFF6A9CA7F337523CB4BD41";
+    /// <para>fence-eye-rule 2.2 重钉：本值是 AI 决策日志 + 终了盘面，<b>不是</b>只依赖地图的值——小图上的 AI 会征募匠人并立栅。首个分歧在第 1 大回合首位行动者 P3 的第一手：
+    /// 旧规则下它落 F3 匠人并立栅 G3–G4（贴着 5×5 棋盘外沿的格被栅栏围成"眼"），新规则下栅栏不再造眼，改落 D4 普通子；此后全局走法随之变。旧值 26AF3B28F94F88CA44847D5F9BF7B41733CFEC357CFF6A9CA7F337523CB4BD41。</para>
+    internal const string SmallMapGoldenHash = "5B16259CE148873CE2540C584BCA9645B525906ADCA02827E674099170BDE994";
 
     /// <summary>
     /// 链接图上"此前记录过的对局"（retire-legacy-maps 1.5：原 v5 的 <c>V4GoldenTurnHash</c> 在 <c>对局内容集Tests</c>、<c>带入带出配置Tests</c>、<c>批量跑局Tests</c> 里充当这一角色）：
@@ -39,7 +41,8 @@ public class 候选格上限Tests
     /// <para>open-map 段 B 重钉（格式变化、走法不变）：快照 JSON 的玩家项去掉 WaitingRounds、结算项去掉 Deadline；旧值 8A03DA5EA2B81E5D233B55145161AC101498D71FFD976E9B02CF0E225C1CD1BE。5 份决策序列基线逐字节不变。</para>
     /// <para>link-map-surfaces 2.2 重钉：link:1 的中间带投放了新地表（9 格，见任务目录 export/diff-before-after.txt），同一配置的走法随之变；旧值 C898F79260501E911192893115646DE6DE451CCE8A5BA6FECC7242A1A5FC9727。</para>
     /// <para>link-map-surfaces 1.3 再重钉（实施后裁决 F1 / F2：小棋盘免除核心区四邻限制、混合主题补位，link:1 新地表 9 → 10 格）；第一次重钉值 900E334FCB5EFA59B2108598EC38E2DF60A9FCBB576E643F9E03DA143B4853C9。</para>
-    internal const string LinkGoldenTurnHash = "A75EDD49F9C3E8EAABD186C5F7D1980CBAB6E47ADFC12DE68D3B8E6E2138FF78";
+    /// <para>fence-eye-rule 2.2 重钉：活形判定无视栅栏（栅栏不再造眼、栅栏阵主题的预置栅栏也不再算墙），同一配置的 AI 走法随之变；旧值 A75EDD49F9C3E8EAABD186C5F7D1980CBAB6E47ADFC12DE68D3B8E6E2138FF78。</para>
+    internal const string LinkGoldenTurnHash = "F471700800B1A38A72AF2C31B6516847F2BD04136D2E622FEF3BD374EB7ED47A";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>

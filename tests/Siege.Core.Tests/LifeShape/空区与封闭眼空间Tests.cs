@@ -81,31 +81,119 @@ public class 空区与封闭眼空间Tests
     }
 
     [Fact]
-    public void 崖壁与栅栏算墙()
+    public void 崖壁算墙()
     {
-        // E5（h=0）东侧 F5 高 2（崖壁），F5 上是 B 的棋子；北侧 E5–E6 有栅栏，E6 上也是 B 的棋子。
-        // 其余两个气边邻格 D5、E4 是 A 的棋子 → {E5} 对 A 封闭，崖上与栅栏另一侧的 B 子不算邻格。
+        // fence-eye-rule 改写（原「崖壁与栅栏算墙」拆成本条与「栅栏不是墙」）：E5（h=0）东侧 F5 高 2（崖壁），F5 上是 B 的棋子；
+        // 其余三个眼边邻格 D5、E4、E6 是 A 的棋子 → {E5} 对 A 封闭，崖上的 B 子不算邻格。
         GameBoard board = Grid(
             [
                 ".........",
-                "....1....",
+                "....0....",
                 "...0.1...",
                 "....0....",
                 ".........",
                 ".........",
                 "........1",
             ],
-            heights: [("F5", 2)],
-            fences: [("E5", "E6")]);
+            heights: [("F5", 2)]);
         LifeShapeReport report = LifeShapeReport.Analyze(board);
 
+        Assert.DoesNotContain(TestMaps.At("F5"), board.EyeNeighbors(TestMaps.At("E5")));   // 前提：崖壁处没有眼边
         EyeSpace eye = report.EyeSpaceAt(TestMaps.At("E5"))!;
         Assert.Equal(["E5"], eye.Cells());
         Assert.Equal(A, eye.Owner);
         Assert.Equal(["E5"], report.EyeSpacesOf("D5"));
         Assert.Equal(["E5"], report.EyeSpacesOf("E4"));
+        Assert.Equal(["E5"], report.EyeSpacesOf("E6"));
         Assert.Empty(report.GroupLifeAt(TestMaps.At("F5"))!.EyeSpaces);
-        Assert.Empty(report.GroupLifeAt(TestMaps.At("E6"))!.EyeSpaces);
+    }
+
+    [Fact]
+    public void 栅栏不是墙()
+    {
+        // 规格 fence-eye-rule「栅栏不是墙」：E5 北侧隔着栅栏是 B 的棋子 E6，其余三个眼边邻格 D5、F5、E4 是 A 的棋子
+        // → {E5} 对 A 不封闭、不是 A 的眼空间；E5 仍不是 E6 那条棋串的气（栅栏照常挡气）。
+        // 变异验证见 .trellis/tasks/10-21-fence-eye-rule/implement.md（M-F1：眼边加回"无栅栏"一条 → 本测试红）。
+        GameBoard board = Grid(
+            [
+                ".........",
+                "....1....",
+                "...0.0...",
+                "....0....",
+                ".........",
+                ".........",
+                "........1",
+            ],
+            fences: [("E5", "E6")]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        Assert.Null(report.EyeSpaceAt(TestMaps.At("E5")));
+        Assert.Empty(report.EyeSpaces);
+        Assert.All(report.Groups, g => Assert.Empty(g.EyeSpaces));
+        Siege.Core.Board.Group e6 = board.GroupAt(TestMaps.At("E6"))!;
+        Assert.DoesNotContain(TestMaps.At("E5"), board.LibertiesOf(e6));
+        Assert.DoesNotContain(TestMaps.At("E5"), board.LibertyNeighbors(TestMaps.At("E6")));
+        Assert.Contains(TestMaps.At("E5"), board.EyeNeighbors(TestMaps.At("E6")));
+    }
+
+    [Fact]
+    public void 栅栏不切分空区()
+    {
+        // 规格 fence-eye-rule「栅栏不切分空区」：A 的棋子围住 2 格空区 {E5, F5}，E5–F5 之间立栅 → 仍是同一个 2 格空区，眼值 0，不是两个单格眼。
+        // 变异验证见 implement.md（M-F1 → 本测试红；M-F3：flood 改回气边 → 本测试红）。
+        GameBoard board = Grid(
+            [
+                ".........",
+                "....00...",
+                "...0..0..",
+                "....00...",
+                ".........",
+                ".........",
+                "........1",
+            ],
+            fences: [("E5", "F5")]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        EyeSpace space = report.EyeSpaceAt(TestMaps.At("E5"))!;
+        Assert.Same(space, report.EyeSpaceAt(TestMaps.At("F5")));
+        Assert.Equal(["E5", "F5"], space.Cells());
+        Assert.Equal(A, space.Owner);
+        Assert.Equal(0, space.EyeValue);
+        Assert.Single(report.EyeSpaces);
+        Assert.All(report.Groups.Where(g => g.Group.Owner == A), g => Assert.Equal(0, g.EyeValueSum));
+    }
+
+    [Fact]
+    public void 只隔栅栏贴着空区的棋串也拥有该眼空间()
+    {
+        // 实现守门（design D2，非 Scenario）：E5 四面立栅，四个几何邻格 D5、F5、E4、E6 都是 A 的单子——E5 不是任何一条棋串的气，
+        // 却与四条棋串都有眼边相连，所以 {E5} 对 A 封闭，是这四条棋串的眼空间（活形只决定禁入与"不得破坏他人活形"，不决定提子）。
+        // 空区起点只能沿眼边找到：变异验证见 implement.md（M-F2：起点改回气边 → 本测试红；M-F3：flood 改回气边 → 本测试红）。
+        GameBoard board = Grid(
+            [
+                ".........",
+                ".........",
+                "....0....",
+                "...0.0...",
+                "....0....",
+                ".........",
+                ".........",
+                "........1",
+            ],
+            fences: [("E5", "E6"), ("E5", "D5"), ("E5", "F5"), ("E5", "E4")]);
+        LifeShapeReport report = LifeShapeReport.Analyze(board);
+
+        Assert.Empty(board.LibertyNeighbors(TestMaps.At("E5")));   // 前提：E5 四面皆栅，不是任何棋串的气
+        foreach (string stone in new[] { "D5", "F5", "E4", "E6" })
+        {
+            Assert.DoesNotContain(TestMaps.At("E5"), board.LibertiesOf(board.GroupAt(TestMaps.At(stone))!));
+            Assert.Equal(["E5"], report.EyeSpacesOf(stone));
+        }
+
+        EyeSpace eye = report.EyeSpaceAt(TestMaps.At("E5"))!;
+        Assert.Equal(["E5"], eye.Cells());
+        Assert.Equal(A, eye.Owner);
+        Assert.Equal(4, eye.GroupIndices.Length);
     }
 
     [Fact]
@@ -230,15 +318,16 @@ public class 空区与封闭眼空间Tests
     }
 
     [Fact]
-    public void 活形分析只经气边邻格查询取邻接()
+    public void 活形分析只经眼边邻格查询取邻接()
     {
-        // 守门（tasks 1.2）：活形分析文件里不得出现几何四邻偏移量、几何邻居调用或第二处邻接实现，只能调 LibertyNeighbors。
-        // 变异验证记录见 .trellis/tasks/09-22-life-shape/implement.md 段 A。
+        // 守门（life-shape tasks 1.2 → fence-eye-rule 1.2 改写）：活形分析文件里不得出现几何四邻偏移量、几何邻居调用或第二处邻接实现，
+        // 空区、封闭、眼空间归属与方四只能调 EyeNeighbors；气边（LibertyNeighbors）在本文件里一处也不许出现——棋串由 AllGroups 给出。
+        // 原变异验证记录见 .trellis/tasks/09-22-life-shape/implement.md 段 A；fence-eye-rule 的变异（M-F2 / M-F3 / M-F4：任一处改回 LibertyNeighbors → 本测试红）见该任务 implement.md。
         string code = StripComments(File.ReadAllText(LifeShapeSource()));
-        Assert.Matches("LibertyNeighbors\\(", code);
+        Assert.Matches("EyeNeighbors\\(", code);
         string[] forbidden =
         [
-            "(?<!Liberty)Neighbors\\s*\\(",
+            "(?<!Eye)Neighbors\\s*\\(",
             "Adjacency\\.",
             "CoverageTargets",
             "\\.[XY]\\s*[+-]\\s*1",
@@ -248,6 +337,63 @@ public class 空区与封闭眼空间Tests
         ];
         string[] hits = [.. forbidden.Where(p => Regex.IsMatch(code, p))];
         Assert.Empty(hits);
+
+        // 反面：判据确实命中改造前的写法（否则"不含"只是正则写错）。
+        Assert.Matches(forbidden[0], "foreach (Coord n in board.LibertyNeighbors(region[head]))");
+        Assert.DoesNotMatch(forbidden[0], "foreach (Coord n in board.EyeNeighbors(region[head]))");
+    }
+
+    [Fact]
+    public void 眼边只去掉气边的栅栏一条()
+    {
+        // fence-eye-rule tasks 1.1：同一对格子之间立栅后，气边消失、眼边保留；崖壁 / 未架桥深水 / 障碍处两者都没有；双向对称。
+        // E5–E6 立栅；F5 高 2（崖壁）；D5 未架桥深水；E4 岩石。E5 的四个几何邻居恰好各占一种情形。
+        // 变异验证见 implement.md（M-F1：眼边加回"无栅栏"一条 → 本测试红；M-F5：眼边去掉高差一条 → 本测试红）。
+        GameBoard board = Grid(
+            [
+                ".........",
+                "....0....",
+                "...~.0...",
+                "....#....",
+                ".........",
+                ".........",
+                ".........",
+            ],
+            heights: [("F5", 2)],
+            fences: [("E5", "E6")]);
+        Coord e5 = TestMaps.At("E5");
+
+        Assert.Equal(["E6"], board.EyeNeighbors(e5).Notations());
+        Assert.Empty(board.LibertyNeighbors(e5));
+        Assert.Contains(e5, board.EyeNeighbors(TestMaps.At("E6")));
+        Assert.DoesNotContain(e5, board.LibertyNeighbors(TestMaps.At("E6")));
+        Assert.Empty(board.EyeNeighbors(TestMaps.At("D5")));   // 深水自身不可落子：两种边都没有
+        Assert.Empty(board.EyeNeighbors(TestMaps.At("E4")));   // 障碍同上
+        Assert.DoesNotContain(e5, board.EyeNeighbors(TestMaps.At("F5")));   // 崖壁：反方向同样没有
+
+        // 盘面的记忆表与唯一实现逐格相同，且气边恰是眼边去掉有栅栏的那一对。
+        foreach (Coord c in board.AllCoords())
+        {
+            Assert.Equal(Adjacency.EyeNeighbors(board.Map, c), board.EyeNeighbors(c));
+            Assert.Equal(
+                board.EyeNeighbors(c).Where(n => !board.Map.HasFence(c, n)).Notations(),
+                board.LibertyNeighbors(c).Notations());
+        }
+
+        // 对照：拆掉栅栏的同一盘面上，E5–E6 两种边都在。
+        GameBoard open = Grid(
+            [
+                ".........",
+                "....0....",
+                "...~.0...",
+                "....#....",
+                ".........",
+                ".........",
+                ".........",
+            ],
+            heights: [("F5", 2)]);
+        Assert.Equal(["E6"], open.EyeNeighbors(e5).Notations());
+        Assert.Equal(["E6"], open.LibertyNeighbors(e5).Notations());
     }
 
     internal static string LifeShapeSource([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "")

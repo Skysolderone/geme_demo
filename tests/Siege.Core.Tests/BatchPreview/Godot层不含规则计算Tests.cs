@@ -44,7 +44,7 @@ public class Godot层不含规则计算Tests
             "CaptureResolver", "FinalStandings", "Adjacency", "MapValidator", "RelicGenerator", "InitiativeOrder",
             ".GroupAt(", ".LibertiesOf(", ".AllGroups(", ".GroupsOf(", ".IsCaptured(", ".RemoveStones(", ".Apply(",
             // terrain-model：几何邻居 / 气边 / 覆盖关系三个导出入口，Godot 层不得自算邻接或地形过滤
-            ".Neighbors(", ".LibertyNeighbors(", ".CoverageTargets(",
+            ".Neighbors(", ".LibertyNeighbors(", ".CoverageTargets(", ".EyeNeighbors(",   // fence-eye-rule 1.1：眼边同样只供规则层
             // 高地加值的唯一实现入口。只禁调用形态——GroupPowerView.HighGroundBonus 属性是合法读数。
             // 变异验证（scoring-sites 段 B）M-B8：BoardView 里改调 `PieceEffects.HighGroundBonus(null!, null!)` → 本测试红 1。
             "PieceEffects", ".HighGroundBonus(",

@@ -4,13 +4,13 @@ namespace Siege.Core.Board;
 
 /// <summary>
 /// 四邻接是全项目<b>唯一</b>的几何邻接语义，这里是它<b>唯一</b>的实现；
-/// 在几何四邻之上导出的两套关系——<b>气边</b>（<see cref="LibertyNeighbors"/>）与<b>覆盖关系</b>（<see cref="CoverageTargets"/>）——也各自只在此处实现一次。
-/// 连接、棋串、气与围杀判定 MUST 全部走气边；覆盖、空格归属与信物发现 MUST 全部走覆盖关系；
+/// 在几何四邻之上导出的三套关系——<b>气边</b>（<see cref="LibertyNeighbors"/>）、<b>眼边</b>（<see cref="EyeNeighbors"/>，fence-eye-rule）与<b>覆盖关系</b>（<see cref="CoverageTargets"/>）——也各自只在此处实现一次。
+/// 连接、棋串、气与围杀判定 MUST 全部走气边；活形判定（空区、封闭、眼空间归属、方四）MUST 走眼边；覆盖、空格归属与信物发现 MUST 全部走覆盖关系；
 /// MUST NOT 在别处手写邻居遍历或地形过滤。
 /// </summary>
 /// <remarks>
 /// <para>越界方向与障碍格具有相同的封堵语义，<see cref="Neighbors"/> 只负责"棋盘内的上下左右"。</para>
-/// <para>两个导出关系每次调用按当前 <see cref="MapData"/> 实时导出，不缓存；全整数，无浮点。</para>
+/// <para>三个导出关系每次调用按当前 <see cref="MapData"/> 实时导出，不缓存；全整数，无浮点。</para>
 /// <para>规格：openspec/changes/terrain-model/specs/board-topology —— Requirement: 四邻接是唯一邻接语义；
 /// specs/terrain —— Requirement: 气边 / 覆盖关系</para>
 /// </remarks>
@@ -54,9 +54,31 @@ public static class Adjacency
     /// <summary>
     /// 气边导出：<paramref name="c"/> 的几何邻居中，与 <paramref name="c"/> 之间存在气边者——
     /// 两格都可落子（非障碍、非未架桥深水）∧ |Δh| &lt; <see cref="TerrainData.CliffDrop"/>（即 ≤ 1）∧ 之间无栅栏。对称关系。
+    /// 即 <see cref="EyeNeighbors"/> 再去掉与 <paramref name="c"/> 之间有栅栏的格（fence-eye-rule D1：气边 = 眼边 ∧ 无栅栏，两者共用同一份可落子与高差判定）。
     /// <paramref name="c"/> 自身不可落子时返回空。顺序沿用 <see cref="Neighbors"/>（字典序）。
     /// </summary>
     public static ImmutableArray<Coord> LibertyNeighbors(MapData map, Coord c)
+    {
+        ImmutableArray<Coord> eye = EyeNeighbors(map, c);
+        ImmutableArray<Coord>.Builder builder = ImmutableArray.CreateBuilder<Coord>(eye.Length);
+        foreach (Coord n in eye)
+        {
+            if (!map.HasFence(c, n))
+            {
+                builder.Add(n);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// 眼边导出（fence-eye-rule D1，裁决 F1 / F2 / F3）：<paramref name="c"/> 的几何邻居中，与 <paramref name="c"/> 之间存在眼边者——
+    /// 两格都可落子（非障碍、非未架桥深水）∧ |Δh| &lt; <see cref="TerrainData.CliffDrop"/>（即 ≤ 1）。即气边去掉"之间无栅栏"一条：<b>不看栅栏</b>
+    /// （预置栅栏与造出的栅栏同样不看）。对称关系。<b>只</b>供活形判定（空区、封闭、眼空间归属、方四）使用；气、棋串、提子一律走 <see cref="LibertyNeighbors"/>。
+    /// <paramref name="c"/> 自身不可落子时返回空。顺序沿用 <see cref="Neighbors"/>（字典序）。
+    /// </summary>
+    public static ImmutableArray<Coord> EyeNeighbors(MapData map, Coord c)
     {
         ArgumentNullException.ThrowIfNull(map);
         if (!map.IsPlayable(c))
@@ -68,7 +90,7 @@ public static class Adjacency
         ImmutableArray<Coord>.Builder builder = ImmutableArray.CreateBuilder<Coord>(4);
         foreach (Coord n in Neighbors(map.Width, map.Height, c))
         {
-            if (map.IsPlayable(n) && Math.Abs(map.HeightAt(n) - h) < TerrainData.CliffDrop && !map.HasFence(c, n))
+            if (map.IsPlayable(n) && Math.Abs(map.HeightAt(n) - h) < TerrainData.CliffDrop)
             {
                 builder.Add(n);
             }

@@ -32,7 +32,8 @@ public class 停手阈值Tests
     // link-map-surfaces 2.2 重钉：link:1 中间带投放新地表后，种子 34 的前 24 个小回合在阈值 0 与缺省 20 下走法相同（两者都是 FC49EE87…），反面断言失去样本；
     // 按 open-map 的探针口径（种子 31–46 依次比对两种阈值）取第一个走法不同的种子 35（31–46 里不同的有 35 / 41 / 44 / 45，记录见任务目录 notes.md）。种子 34 的旧值 8841BD6F62ECC7F00D7D20DFB4B48035D5B743B823ECCAF41D86AB9F2A805776。
     // link-map-surfaces 1.3 再重钉（F1 / F2 后 link:1 新地表变化，种子 35 不变）：第一次重钉值 477010B3FF16FAE6B1BDD416B0A53AAD032C8C180A9AF169C8CE99B0E6B4520C。
-    private const string StrictImprovementTurnHash = "3831AA4C96D385F658326017FA06EE687A7F7A7B82958DB0AFCB19A926AC0329";
+    // fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变；种子 35 不变，反面断言"缺省阈值下走法不同"照旧成立）：旧值 3831AA4C96D385F658326017FA06EE687A7F7A7B82958DB0AFCB19A926AC0329。
+    private const string StrictImprovementTurnHash = "6AE56FC2EA8D168033CAB7A9B9AE3B420D54D4653CD998A9AF8C176351B9B8B8";
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
     private const ulong StrictImprovementSeed = 35;   // link-map-surfaces 2.2：34 → 35（见上）
@@ -166,9 +167,20 @@ public class 停手阈值Tests
         string hash = 候选格上限Tests.TurnHash(log);
         Assert.True(StrictImprovementTurnHash == hash, $"阈值 0 的小回合快照哈希：{hash}");
 
-        // 反面：缺省阈值下同一局走法不同——否则"阈值确实传到了 AI"无从证明（open-map 起改为实跑同一种子的缺省阈值局比对，不比两个常量）。
-        MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = StrictImprovementSeed }, parallelism: 1)[0];
-        Assert.NotEqual(hash, 候选格上限Tests.TurnHash(byDefault));
+        // 反面：缺省阈值下走法不同——否则"阈值确实传到了 AI"无从证明（open-map 起改为实跑同一种子的缺省阈值局比对，不比两个常量）。
+        // fence-eye-rule 2.2：活形规则变更后种子 35 的前 24 个小回合在阈值 0 与缺省 20 下走法相同，反面断言失去样本。按 testing.md「不许挑单个种子凑绿」，
+        // 反面改为写死的固定种子区间（沿用 open-map 的探针区间 31–46）：区间内至少一颗种子的两种阈值走法不同；逐颗按序比对，找到即停。
+        bool differs = false;
+        for (ulong seed = 31; seed <= 46 && !differs; seed++)
+        {
+            string atZero = seed == StrictImprovementSeed
+                ? hash
+                : 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { SeedStart = seed }, parallelism: 1)[0]);
+            MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = seed }, parallelism: 1)[0];
+            differs = atZero != 候选格上限Tests.TurnHash(byDefault);
+        }
+
+        Assert.True(differs, "种子 31–46 里没有一颗在阈值 0 与缺省阈值下走法不同，无从证明阈值传到了 AI");
     }
 
     [Fact]

@@ -31,6 +31,16 @@ internal static class PlayCommand
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, ContentSet? contentSet = null,
         CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null)
+        => Run(seedArg, playerCountArg, seat, difficulty, input, output, map, cellLimit, weights, passThreshold, contentSet, profile, onAi, arrange: null);
+
+    /// <summary>
+    /// 同上；<paramref name="arrange"/> 是测试接缝（fence-eye-rule 2.2）：插旗锁定之后、第一个小回合之前对权威对局摆子，供终端测试造出不依赖 AI 走法的局面。
+    /// 生产调用方一律走上面的重载（<c>null</c> = 不摆，与引入之前逐步相同）。
+    /// </summary>
+    internal static int Run(
+        ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map, int? cellLimit,
+        EvaluationWeights? weights, int? passThreshold, ContentSet? contentSet,
+        CarryProfileStore? profile, Action<PlayerId, HeuristicTurnController>? onAi, Action<MatchFlow>? arrange)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? LinkPlayers;
@@ -120,6 +130,7 @@ internal static class PlayCommand
             int zone = ChooseZone(match, me, map, input, output, quitWarning);
             // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4 / board-link-mode B2）：盲选。
             ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
+            arrange?.Invoke(match);
 
             var runner = new MatchRunner(match);
             // retire-legacy-maps 3.3：地图专属评价权重覆盖已删除，入口未给权重即缺省表。

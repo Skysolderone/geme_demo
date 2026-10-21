@@ -122,36 +122,41 @@ public class 终端活形与禁入标示Tests
     [Fact]
     public void 脚本对局里出现禁入与已活标示()
     {
-        // 脚本化终端测试：link:1、种子 31（内置固定配对脚本），人类坐 1 号位、选 2 号出生棋盘后每个小回合都 Pass；AI（Standard）按规则落子。
-        // retire-legacy-maps 1.8：原为 v5、选 1 号区、Pass 8 次（第 4 大回合盘上已有活形棋串）。改到 link:1 后人类只看得见自己的战场，
-        // 探针（种子 1–40 × 棋盘 1–5）选同棋盘有 AI、构筑期内即出现活形与禁入的组合：种子 31 选 2 号棋盘；Pass 改为 2 次（停在第 3 大回合、链接之前——
-        // 终端对局在链接后的小回合播报会越界崩溃，见 migration.md 待决 L15）。断言不变。
+        // 脚本化终端测试：link:1，人类坐 1 号位、选 2 号出生棋盘后每个小回合都 Pass；AI（Standard）按规则落子。
         // 样本口径下界：输出的棋盘行里必须真的出现 "@" 与 "x" 标记，并且图例同步出现——否则上面的逐格断言只证明了渲染函数，不证明终端对局真的走到了它。
-        // link-map-terrain 裁决 T1 = A：原为单一种子 31（探针挑出），改图后该局前 3 大回合没有已活棋串。
-        // "x"是别家（AI）活形的眼，脚本落子控制不了 AI，而 "@" 与 "x" 要在同一份终端输出里出现，所以改为固定种子区间：
-        // 种子 1–10（写死，不针对单个种子挑）、人类选 2 号出生棋盘、每小回合 Pass，区间内至少一局的棋盘行同时出现 "@" 与 "x" 标记，且图例同步出现。
-        // 每局各自的断言（退出码 0、棋盘行 ≥ 20）照旧逐局检查。每局约 0.2 s。
-        bool found = false;
-        for (ulong seed = 1; seed <= 10 && !found; seed++)
+        // 历史：原为单一种子 31（探针挑出）；link-map-terrain 裁决 T1 = A 改为固定种子区间 1–10（"x"是别家 AI 活形的眼，脚本落子控制不了 AI）。
+        // fence-eye-rule 2.2：栅栏不再造眼后，前 3 大回合里 AI 成活的棋串极少（探针：种子 1–20 × Pass 2 / 4 / 6 次只有 0 / 1 / 1 局满足；1–40 × Pass 2 次为 0），
+        // 区间法守不住。改为不依赖 AI 走法：经 PlayCommand 的测试接缝 arrange 在插旗锁定后、第一个小回合前给 P1（AI）摆一条两眼活形——
+        // 左下角 C4–D4–E4–F4 + D3 + F3，眼 C3（西、南是岩石）与 E3（南是岩石），全在高度 0、无栅栏；他人不得破坏、P1 的活形硬约束不拆自己的活形，
+        // 所以人类看到的每一份棋盘都有 P1 的 "@" 与它两眼上的 "x"。逐格断言、退出码、棋盘行数下界照旧。
+        var script = new System.Text.StringBuilder("2\n");
+        for (int i = 0; i < 2; i++)
         {
-            var script = new System.Text.StringBuilder("2\n");
-            for (int i = 0; i < 2; i++)
-            {
-                script.Append("\npass\n");
-            }
-
-            var output = new StringWriter();
-            int exit = PlayCommand.Run(seed, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"));   // more-pieces-relics：写死内容集 v1
-            string text = output.ToString();
-
-            Assert.Equal(0, exit);
-            string[] boardRows = [.. text.Split('\n').Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s{0,2}\d{1,2} ( [#~.?+] |\d[BFLMSA][ @]|x\d | \d |\*[BFLMSA] | [pcdove] )+ \d+\s*$"))];
-            Assert.True(boardRows.Length >= 20, $"种子 {seed} 只找到 {boardRows.Length} 行棋盘");
-            found = boardRows.Any(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"\d[BFLMSA]@"))
-                && boardRows.Any(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"x\d "))
-                && text.Contains("@=已活棋串", StringComparison.Ordinal);
+            script.Append("\npass\n");
         }
 
-        Assert.True(found, "种子 1–10 里没有一局的终端棋盘同时出现已活标示与禁入标示");
+        LifeState? arrangedLife = null;
+        void Arrange(MatchFlow match)
+        {
+            foreach (string cell in new[] { "C4", "D4", "E4", "F4", "D3", "F3" })
+            {
+                match.Board.Place(Coord.Parse(cell), TestMaps.P1, PieceType.Basic);
+            }
+
+            match.Debug.Recalculate();
+            arrangedLife = LifeShapeReport.Analyze(match.Board).GroupLifeAt(Coord.Parse("C4"))!.Life;
+        }
+
+        var output = new StringWriter();
+        int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, MapCatalog.Resolve("link:1"), null, null, null, ContentSet.V1, null, null, Arrange);   // more-pieces-relics：写死内容集 v1
+        string text = output.ToString();
+
+        Assert.Equal(LifeState.Alive, arrangedLife);   // 前提：摆出来的确是已确定活形
+        Assert.Equal(0, exit);
+        string[] boardRows = [.. text.Split('\n').Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s{0,2}\d{1,2} ( [#~.?+] |\d[BFLMSA][ @]|x\d | \d |\*[BFLMSA] | [pcdove] )+ \d+\s*$"))];
+        Assert.True(boardRows.Length >= 20, $"只找到 {boardRows.Length} 行棋盘");
+        Assert.Contains(boardRows, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"\d[BFLMSA]@"));   // 终端按看盘者编号显示玩家：P1 显示为 2
+        Assert.Contains(boardRows, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"x\d "));
+        Assert.Contains("@=已活棋串", text, StringComparison.Ordinal);
     }
 }

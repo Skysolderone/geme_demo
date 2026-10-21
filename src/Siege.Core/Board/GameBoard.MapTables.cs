@@ -10,9 +10,9 @@ namespace Siege.Core.Board;
 public sealed partial class GameBoard
 {
     /// <summary>
-    /// 一份 <see cref="MapData"/> 的逐格派生表（ai-turn-speed D2「数据结构」）：可落子 / 可作气的地表 / 出生区 / 信物格、气边邻居、覆盖目标。
+    /// 一份 <see cref="MapData"/> 的逐格派生表（ai-turn-speed D2「数据结构」）：可落子 / 可作气的地表 / 出生区 / 信物格、气边邻居、眼边邻居、覆盖目标。
     /// 每一项都在第一次读取时由唯一实现算出并记住（<see cref="MapData.IsPlayable"/> / <see cref="MapData.SurfaceAt"/> / <see cref="MapData.BirthZoneOf"/> /
-    /// <see cref="MapData.RelicCells"/> / <see cref="Adjacency.LibertyNeighbors"/> / <see cref="Adjacency.CoverageTargets"/>），本类不含任何地形判定；
+    /// <see cref="MapData.RelicCells"/> / <see cref="Adjacency.LibertyNeighbors"/> / <see cref="Adjacency.EyeNeighbors"/> / <see cref="Adjacency.CoverageTargets"/>），本类不含任何地形判定；
     /// 地图不可变，表随地图实例存亡——<see cref="GameBoard.ApplyTerrainEdits"/> 换地图即换表。
     /// </summary>
     /// <remarks>
@@ -20,7 +20,7 @@ public sealed partial class GameBoard
     /// 只把改造目标周围 <see cref="EditReach"/> 格（切比雪夫距离）内的格作废、留待按新地图重算。派生表的每一项与在新地图上从零建表逐项相同
     /// （<c>盘面派生量提速对照Tests.改造派生表与从零建表逐项相同</c> 穷举守门）：改造只改目标格的地表 / 桥或一条边的栅栏，不碰高度、障碍、出生区与信物格
     /// （<see cref="TerrainWriter"/> 的每类改造只改目标格或目标边——若将来新增会改动邻格地形的改造，<see cref="Invalidate"/> 的中心必须一并包含那些格）；
-    /// 一格的可落子与地表标志只看本格，气边邻居只看本格与四邻及其间的栅栏（距离 1），覆盖目标最远经隔水 / 岩台远格到达距离 2 的格。
+    /// 一格的可落子与地表标志只看本格，气边 / 眼边邻居只看本格与四邻（气边另看其间的栅栏，距离 1），覆盖目标最远经隔水 / 岩台远格到达距离 2 的格。
     /// AI 每小回合对匠人的每个改造选项各预演一次，从零建表要对 73×73 画布逐格查一遍地图。
     /// </remarks>
     private sealed class MapTables
@@ -37,6 +37,7 @@ public sealed partial class GameBoard
         private readonly byte[] _flags;
         private readonly int[] _zone;
         private readonly ImmutableArray<Coord>[] _liberty;
+        private readonly ImmutableArray<Coord>[] _eye;
         private readonly ImmutableArray<Coord>[] _coverage;
 
         private ImmutableArray<int> _playable;
@@ -49,6 +50,7 @@ public sealed partial class GameBoard
             _flags = new byte[size];
             _zone = new int[size];
             _liberty = new ImmutableArray<Coord>[size];
+            _eye = new ImmutableArray<Coord>[size];
             _coverage = new ImmutableArray<Coord>[size];
         }
 
@@ -58,6 +60,7 @@ public sealed partial class GameBoard
             _flags = (byte[])parent._flags.Clone();
             _zone = (int[])parent._zone.Clone();
             _liberty = (ImmutableArray<Coord>[])parent._liberty.Clone();
+            _eye = (ImmutableArray<Coord>[])parent._eye.Clone();
             _coverage = (ImmutableArray<Coord>[])parent._coverage.Clone();
         }
 
@@ -105,6 +108,7 @@ public sealed partial class GameBoard
                     int i = (y * width) + x;
                     _flags[i] = 0;
                     _liberty[i] = default;
+                    _eye[i] = default;
                     _coverage[i] = default;
                 }
             }
@@ -174,6 +178,16 @@ public sealed partial class GameBoard
             }
 
             return _liberty[i];
+        }
+
+        public ImmutableArray<Coord> EyeNeighbors(int i, Coord c)
+        {
+            if (_eye[i].IsDefault)
+            {
+                _eye[i] = Adjacency.EyeNeighbors(map, c);
+            }
+
+            return _eye[i];
         }
 
         public ImmutableArray<Coord> CoverageTargets(int i, Coord c)

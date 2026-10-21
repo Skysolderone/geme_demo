@@ -380,6 +380,7 @@ public class 盘面派生量提速对照Tests
         {
             _ = board[c];
             _ = board.LibertyNeighbors(c);
+            _ = board.EyeNeighbors(c);
             _ = board.CoverageTargets(c);
         }
 
@@ -395,6 +396,7 @@ public class 盘面派生量提速对照Tests
             Assert.True(fresh[c] == derived[c], $"{label}：{c} 格视图不同");
             Assert.True(fresh.GivesLiberty(c) == derived.GivesLiberty(c), $"{label}：{c} 可作气不同");
             Assert.True(fresh.LibertyNeighbors(c).SequenceEqual(derived.LibertyNeighbors(c)), $"{label}：{c} 气边邻居不同");
+            Assert.True(fresh.EyeNeighbors(c).SequenceEqual(derived.EyeNeighbors(c)), $"{label}：{c} 眼边邻居不同");   // fence-eye-rule 1.1：新增的眼边表同样派生
             Assert.True(fresh.CoverageTargets(c).SequenceEqual(derived.CoverageTargets(c)), $"{label}：{c} 覆盖目标不同");
         }
 

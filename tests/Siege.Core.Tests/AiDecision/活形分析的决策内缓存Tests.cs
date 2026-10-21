@@ -134,11 +134,12 @@ public class 活形分析的决策内缓存Tests
         // 同一格落匠人，带不带改造：占用者网格完全相同，气边不同（同「活形硬约束 · 用改造拆自己的活形也被淘汰」的盘面：
         // 预置栅栏 A1–A2、J1–J2，P0 一排 B1…H1 两端各一个单格眼；匠人落 D2 不改造 → 活形不变；落 D2 并立栅 D1–E1 → 切成两条未定棋串）。
         // retire-legacy-rules 1.4：随「活形硬约束」同一盘面迁到平坦 8×8 链接载体并缩一子——预置栅栏 C3–C4、K3–K4，P0 一排 D3…J3，匠人 F4、立栅 F3–G3。
+        // fence-eye-rule：同「活形硬约束」，两端的墙改为未架桥深水 C4、K4（栅栏不再挡眼边）。
         // 先评价不改造的、再评价立栅的：指纹若不含地形，后者命中前者的分析，判不出失活。
         // 变异 M-C6（指纹去掉改造段）→ 红 5：本测试、活形硬约束 · 用改造拆自己的活形也被淘汰、缓存开关不改变决策序列、
         // 候选格上限黄金哈希、阈值为0时零变化（v5 实战里匠人改造常见，漏掉改造段即整局走法改变）。
         MatchFlow match = LinkModeFixtures
-            .PlainStarted(TestMaps.Terrain(fences: [("C3", "C4"), ("K3", "K4")]))
+            .PlainStarted(TestMaps.Terrain(surfaces: [("C4", Surface.DeepWater), ("K4", Surface.DeepWater)]))
             .AtRound(5, [Me, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3])
             .Stones(Me, "D3", "E3", "F3", "G3", "H3", "J3");
         TerrainEdit cut = TerrainEdit.Fence(TestMaps.At("F3"), TestMaps.At("G3"));

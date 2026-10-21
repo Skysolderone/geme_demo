@@ -172,12 +172,13 @@ public class 专家前瞻的记录Tests
         // 原先被选作"下一名对手"的他战场玩家（其模拟回应落在别的战场、对各候选几乎同量平移）换成同战场对手，前瞻重排随之变，专家的选择变了、其余三人的走法随盘面一起变：小回合 46 → 45、前瞻记录 13 → 10。
         // open-map 1.5 重钉：link:1 改为 3+2 紧贴布局、锁定后全图可见、第 4 大回合起全图可落，走法随之变：小回合 45 → 84。
         // link-map-surfaces 2.2 重钉：link:1 中间带投放新地表，走法随之变：小回合 84 → 108；1.3 再重钉（F1 / F2）：108 → 76。
-        Assert.Equal(76, log.Turns.Count);
-        Assert.Equal(19, log.LookaheadTurns.Count());   // link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
+        // fence-eye-rule 2.2 重钉：活形判定无视栅栏（栅栏不再造眼），AI 的改造与落子随之变：小回合 76 → 116。
+        Assert.Equal(116, log.Turns.Count);
+        Assert.Equal(29, log.LookaheadTurns.Count());   // fence-eye-rule 2.2：19 → 29；link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
-        Assert.Contains("\"AiEvaluationVersion\":6", text, StringComparison.Ordinal);
+        Assert.Contains("\"AiEvaluationVersion\":7", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B（地图内容变，整局走法变，不再能逐行比对出"只差首部"）。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
@@ -189,7 +190,8 @@ public class 专家前瞻的记录Tests
         // open-map 段 B 重钉（格式变化、走法不变：小回合 84 / 前瞻记录 21 两条断言未动）：首部去掉 K 与视野、快照去掉 WaitingRounds；旧值 D8CE9E7E4ABCB570C4F0E22846E59DD925F1603764F4DDA6B3C8C4541CB0DC3D。
         // link-map-surfaces 2.2 重钉（link:1 中间带投放新地表，走法变：小回合 84 → 108、前瞻记录 21 → 27）：旧值 97B7E1EBA0936485C01B8CB9729F114949C7761ABD1A9845E6A30AD98D961B44。
         // link-map-surfaces 1.3 再重钉（F1 / F2：小回合 108 → 76、前瞻记录 27 → 19）：第一次重钉值 179565892F236BB7E6F2586D880CFDA1782540758C48539B093DCF4DB47A8B94。
-        Assert.True("280934BC38C4EA75FCF497B9014ACF896FE2112EC0392FB6B66C0FC24CD7450C" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        // fence-eye-rule 2.2 重钉（活形判定无视栅栏，走法变：小回合 76 → 116、前瞻记录 19 → 29）：旧值 280934BC38C4EA75FCF497B9014ACF896FE2112EC0392FB6B66C0FC24CD7450C。
+        Assert.True("7C1D707A798F384C11881762F983BE8FD6C14EB09A741E4336F3706A1B319276" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -207,7 +209,7 @@ public class 专家前瞻的记录Tests
     {
         string[] lines = text.Split('\n');
         lines[0] = lines[0]
-            .Replace("\"AiEvaluationVersion\":6", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
+            .Replace("\"AiEvaluationVersion\":7", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
             .Replace(",\"RoundCap\":100", string.Empty, StringComparison.Ordinal)
             .Replace(",\"StagnationRounds\":6", string.Empty, StringComparison.Ordinal);
         return string.Join('\n', lines);
@@ -317,11 +319,11 @@ public class 专家前瞻的记录Tests
         string text = log.DeterministicText();
         Assert.Empty(log.LookaheadTurns);
         Assert.DoesNotContain("Lookahead", log.FullText(), StringComparison.Ordinal);
-        Assert.Equal(92, log.Turns.Count);   // link-map-surfaces 1.3 再重钉（F1 / F2）：84 → 92；2.2 重钉：link:1 中间带投放新地表，80 → 84；open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
+        Assert.Equal(132, log.Turns.Count);   // fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变）：92 → 132；link-map-surfaces 1.3 再重钉（F1 / F2）：84 → 92；2.2 重钉：link:1 中间带投放新地表，80 → 84；open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
-        Assert.Contains("\"AiEvaluationVersion\":6", text, StringComparison.Ordinal);
+        Assert.Contains("\"AiEvaluationVersion\":7", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
@@ -331,7 +333,8 @@ public class 专家前瞻的记录Tests
         // open-map 段 B 重钉（格式变化、走法不变）：旧值 BACC1FF04678B2AD8D8B295EA3446EDCFCEE82EB5173EDCBC650EFE9A53D90F3。
         // link-map-surfaces 2.2 重钉（link:1 中间带投放新地表，走法变）：旧值 388B9A9EC1C57E9B37DB66F9F08422A78E7A87EAAC510CB9974ECB732770D932。
         // link-map-surfaces 1.3 再重钉（F1 / F2）：第一次重钉值 365CE3FDCFC53B0F8B0B82BA1FBB246878F99BC4344C9BF175A20BD19BCF4DFC。
-        Assert.True("EE9D562FA3B5F79655674AA774C2553594724168F05814976BC993FEA0DF1BFB" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
+        // fence-eye-rule 2.2 重钉（活形判定无视栅栏，走法变：小回合 92 → 132）：旧值 EE9D562FA3B5F79655674AA774C2553594724168F05814976BC993FEA0DF1BFB。
+        Assert.True("2E77EFB4C08EA62FAC32B6E60CFAA1660D799EB279C2DAE23A664A1293A75FF3" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]

@@ -205,10 +205,12 @@ public class 以整批最终状态判定合法性Tests
 
     /// <summary>
     /// 一字两眼：A 串 A2–E2，单格眼 A1（B1 岩石）与 E1（D1 岩石），每个眼只有一条气边通向 A 子；
-    /// A2–E2 与第 3 行之间全是既有栅栏，第 3 行是空的、可供 B 的匠人落脚（几何上贴着 A 串，但不是 A 的气）。
+    /// A2–E2 与第 3 行之间全是既有栅栏，第 3、4 行是空的、可供 B 的匠人落脚（几何上贴着 A 串，但不是 A 的气）。
+    /// fence-eye-rule：栅栏不再挡眼边，第 3、4 行的空区沿眼边贴着 A 串——A4 放一枚 B 子让它贴到 B、不封闭，否则它会成为 A 的 10 格眼空间、B 的匠人落不进去。
     /// </summary>
     internal static GameBoard FencedLineTwoEyes() => LifeShapeFixtures.Grid(
         [
+            "1....",
             ".....",
             "00000",
             ".###.",
@@ -302,18 +304,23 @@ public class 以整批最终状态判定合法性Tests
     }
 
     [Fact]
-    public void 立栅隔开眼与棋子被拒()
+    public void 立栅隔开眼与棋子不再破坏活形()
     {
-        // B 的匠人落 A3，在 A1–A2 立栅：眼 A1 不再贴任何棋串（B1 岩石），A 串只剩眼 E1 → 未定 → 第 6 步破坏活形。
+        // fence-eye-rule 改写（原「立栅隔开眼与棋子被拒」）：B 的匠人落 A3、在 A1–A2 立栅——栅栏挡住 A1 与 A 串之间的气边，却不挡眼边（裁决 F1）：
+        // A1 仍沿眼边贴着 A2，仍是 A 串的眼空间（design D2：不是气也照样归属），A 串仍是两眼活形，第 6 步通过、批次合法。
+        // capture-resolution 主规格的同名 Scenario 的 WHEN（"使该眼不再与这条棋串相连"）在新规则下不再可能发生，改写待主会话裁决（见任务 implement.md）。
+        // 变异验证见 implement.md（M-F1：眼边加回"无栅栏"一条 → 本测试红）。
         GameBoard board = FencedLineTwoEyes();
 
         RehearsalResult result = Rehearse(board, B, Fence("A3", "A1", "A2"));
 
-        Assert.False(result.IsLegal);
-        Assert.Equal(BatchFailureKind.BreaksLife, result.Failure!.Kind);
-        LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard!);
-        Assert.Equal(LifeState.Undetermined, after.LifeOf("A2"));
-        Assert.Null(after.EyeSpaceAt(TestMaps.At("A1")));
+        Assert.True(result.IsLegal, result.Failure?.Message);
+        Assert.Empty(result.Captures);
+        GameBoard projected = result.ProjectedBoard!;
+        Assert.Equal(["E1"], projected.LibertiesOf(projected.GroupAt(TestMaps.At("A2"))!).Notations());   // A1 已不是 A 串的气
+        LifeShapeReport after = LifeShapeReport.Analyze(projected);
+        Assert.Equal(LifeState.Alive, after.LifeOf("A2"));
+        Assert.Equal(["A1", "E1"], after.EyeSpacesOf("A2"));
     }
 
     [Fact]
@@ -398,19 +405,29 @@ public class 以整批最终状态判定合法性Tests
     public void 提子后恢复活形的批次合法()
     {
         // 规格顺序：第 5 步（提子）在第 6 步（破坏活形）之前，第 6 步看的是提子后的盘面。
-        // A 串 A3–E3，眼 A2、E2（各只有一条气边）；C 的孤子 C2 两侧岩石，唯一的气是 C1（C1–D1 是 C 的两格空区，眼值 0）。
-        // B 一批两枚匠人：A4 立 A2–A3（A 失去眼 A2），C1 立 C1–C2（C2 无气）。放置 + 改造后、提子前 A 只剩眼 E2 → 未定；
-        // 第 5 步提走 C2 后，C2 只贴 A 的 C3 → A 新得单格眼 C2 → 回到已确定活形 → 批次合法。
+        // fence-eye-rule 改写夹具：栅栏不再能隔开眼与棋子，原"立栅让 A 失去眼 A2"的做法失效，改为"搭桥漏眼 + 同批提子补眼"。
+        // A 串 B2–B3–B4–C4–D4–E4–E3–E2–F3，眼 B1（A1 岩石、C1 未架桥深水）与 F2（F1 岩石）→ 两眼活形。
+        // C 的孤子 D1：C1–D1 之间是既有栅栏，D2 是高 2 的崖（无气边），唯一的气是 E1。C2 / D2 / C3 / D3 是高 2 的台地，不贴任何棋子。
+        // B 一批两枚匠人：C2 给 C1 搭桥、D2 立 D1–E1。放置 + 改造后、提子前：C1 成了空格，{B1, C1} 沿眼边贴到 C 的 D1（栅栏不挡眼边）→ 不封闭，
+        // A 只剩眼 F2 → 未定；第 5 步 D1 无气被提，B1–C1–D1–E1 连成一条只贴 A 的 4 格直线（C2 / D2 与它们是崖）→ 眼值 2 → 回到已确定活形 → 批次合法。
         GameBoard board = LifeShapeFixtures.Grid(
             [
-                ".....",
-                "00000",
-                ".#2#.",
-                "##..#",
+                "#0000#",
+                "#0..00",
+                "#0..0.",
+                "#.~2.#",
             ],
-            fences: [("A3", "A4"), ("B3", "B4"), ("C3", "C4"), ("D3", "D4"), ("E3", "E4")]);
-        Placement[] batch = [Fence("A4", "A2", "A3"), Fence("C1", "C1", "C2")];
-        Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(board).LifeOf("A3"));
+            heights: [("C2", 2), ("D2", 2), ("C3", 2), ("D3", 2)],
+            fences: [("C1", "D1")]);
+        Placement[] batch =
+        [
+            BatchFixtures.Artisan("C2", TerrainEdit.Bridge(TestMaps.At("C1"))),
+            Fence("D2", "D1", "E1"),
+        ];
+        LifeShapeReport before = LifeShapeReport.Analyze(board);
+        Assert.Equal(LifeState.Alive, before.LifeOf("B2"));
+        Assert.Equal(["B1", "F2"], before.EyeSpacesOf("B2"));
+        Assert.Equal(["E1"], board.LibertiesOf(board.GroupAt(TestMaps.At("D1"))!).Notations());
 
         // 夹具几何上确实经过"提子前未定"：手工复现第 3–4 步
         GameBoard placed = board.Clone();
@@ -420,15 +437,15 @@ public class 以整批最终状态判定合法性Tests
         }
 
         placed.ApplyTerrainEdits(batch.Select(p => p.Edit!.Value));
-        Assert.Equal(LifeState.Undetermined, LifeShapeReport.Analyze(placed).LifeOf("A3"));
+        Assert.Equal(LifeState.Undetermined, LifeShapeReport.Analyze(placed).LifeOf("B2"));
 
         RehearsalResult result = Rehearse(board, B, batch);
 
         Assert.True(result.IsLegal, result.Failure?.Message);
-        Assert.Equal(["C2"], result.Captures.Select(s => s.Coord).Notations());
+        Assert.Equal(["D1"], result.Captures.Select(s => s.Coord).Notations());
         LifeShapeReport after = LifeShapeReport.Analyze(result.ProjectedBoard!);
-        Assert.Equal(LifeState.Alive, after.LifeOf("A3"));
-        Assert.Equal(["C2", "E2"], after.EyeSpacesOf("A3"));
+        Assert.Equal(LifeState.Alive, after.LifeOf("B2"));
+        Assert.Equal(["B1,C1,D1,E1", "F2"], after.EyeSpacesOf("B2"));
     }
 
     [Fact]

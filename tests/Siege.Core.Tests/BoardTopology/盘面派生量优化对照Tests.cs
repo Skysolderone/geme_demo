@@ -49,6 +49,7 @@ public class 盘面派生量优化对照Tests
                 Assert.Equal(RefCell(board, c), board[c]);
                 Assert.Equal(RefGivesLiberty(board, c), board.GivesLiberty(c));
                 Assert.Equal(Adjacency.LibertyNeighbors(board.Map, c), board.LibertyNeighbors(c));
+                Assert.Equal(Adjacency.EyeNeighbors(board.Map, c), board.EyeNeighbors(c));
                 Assert.Equal(Adjacency.CoverageTargets(board.Map, c), board.CoverageTargets(c));
                 Group? expected = RefGroupAt(board, c);
                 Group? actual = board.GroupAt(c);

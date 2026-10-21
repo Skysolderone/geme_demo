@@ -167,6 +167,17 @@ public sealed partial class GameBoard
     }
 
     /// <summary>
+    /// 眼边邻居：与 <paramref name="c"/> 之间存在眼边的格（两格可落子、|Δh| ≤ 1，<b>不看栅栏</b>；fence-eye-rule D1）。
+    /// 委托给 <see cref="Adjacency.EyeNeighbors"/>，<b>只</b>供活形判定（<see cref="LifeShapeReport"/> 的空区、封闭、眼空间归属与方四）使用；
+    /// 气、棋串、提子一律走 <see cref="LibertyNeighbors"/>（结果按当前地图逐格记忆，改造后整表重算）。
+    /// </summary>
+    public ImmutableArray<Coord> EyeNeighbors(Coord c)
+    {
+        RequireInBounds(c);
+        return _tables.EyeNeighbors(Index(c), c);
+    }
+
+    /// <summary>
     /// 覆盖目标：位于 <paramref name="c"/> 的棋子会向哪些格提供覆盖。委托给 <see cref="Adjacency.CoverageTargets"/>（结果按当前地图逐格记忆，改造后整表重算）。
     /// </summary>
     public ImmutableArray<Coord> CoverageTargets(Coord c)

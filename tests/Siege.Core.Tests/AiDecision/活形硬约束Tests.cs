@@ -168,13 +168,14 @@ public class 活形硬约束Tests
         // 地图预置栅栏 A1–A2、J1–J2，P0 一排 B1…H1：A1 的气边邻居只剩 B1、J1 的只剩 H1 → 两个单格眼，整排是已确定活形。
         // retire-legacy-rules 1.4：载体为平坦 8×8 链接档图（四人同锁棋盘 0），棋盘 0 只有 8 列放不下 9 格宽的一排，
         // 同形缩一子：预置栅栏 C3–C4、K3–K4，P0 一排 D3…J3（6 子），C3 / K3 两个单格眼；匠人落 F4、立栅 F3–G3 把整排切成各只剩一个眼的左右两段。
+        // fence-eye-rule：栅栏不再挡眼边（C3 会沿眼边连到 C4 的外部大空区），两端的"墙"由预置栅栏改为未架桥深水 C4、K4（裁决 F2：深水照旧是墙）。
         //  4 . . . ! . . . .     ! = 匠人落点 F4
         //  3 . O O O|O O O .     | = 本候选立的栅栏 F3–G3（左右两段各只剩一个眼 → 两条未定棋串）
         //    C D E F G H J K
         // 立栅不落进任何眼，"单格眼"条件不成立——只靠"原活形棋串失去活形"淘汰。
         // 变异 M-B4（去掉"原活形失活"条件）→ 红 1（本测试）。
         MatchFlow match = LinkModeFixtures
-            .PlainStarted(TestMaps.Terrain(fences: [("C3", "C4"), ("K3", "K4")]))
+            .PlainStarted(TestMaps.Terrain(surfaces: [("C4", Surface.DeepWater), ("K4", Surface.DeepWater)]))
             .AtRound(5, [Me, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3])
             .Stones(Me, "D3", "E3", "F3", "G3", "H3", "J3");
         Assert.Equal(LifeState.Alive, LifeShapeReport.Analyze(match.Board).GroupLifeAt(TestMaps.At("D3"))!.Life);
