@@ -1,0 +1,6 @@
+{"file": "openspec/changes/map-elements-v2/design.md", "reason": "D1、D2、D4、D7、裁决记录、源码扫描守门清单"}
+{"file": "openspec/changes/map-elements-v2/tasks.md", "reason": "按任务实施（段 B = 2.1–2.2）"}
+{"file": "openspec/changes/map-elements-v2/specs/visual-style-baseline/spec.md", "reason": "Scenario 对照"}
+{"file": ".trellis/tasks/archive/2026-10/10-21-map-elements-v2-a/implement.md", "reason": "0.1 基线与段 A 实施记录（PieceOf、导出归一比对规则）"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "地形属性在表现层只能用于渲染"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Godot 验证前须 Debug 构建；源码扫描守门"}
