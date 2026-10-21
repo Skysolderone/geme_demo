@@ -37,16 +37,16 @@ _surfaces = [{
 "vertex_data": PackedByteArray("MGhOOm8Sgzthdqc+WHSHvW8Sgzu9ezs+o1oPvW8SgzuB8TM+MGhOOm8Sgzthdqc+2qj4vG8Sgzt/O6s+WHSHvW8Sgzu9ezs+rnYUvW8SgzthaTA+7vYJvm8SgztGdD094ELZvW8SgztUCgM9rnYUvW8SgzthaTA+U+aEvW8SgzvdAz8+7vYJvm8SgztGdD09CHTWvW8SgztvfxM9u3Yqvm8SgzsnEuO9ZVIKvm8SgzsF0u+9CHTWvW8SgztvfxM9Wl4Lvm8Sgzsr/yw9u3Yqvm8SgzsnEuO98BoMvm8Sgzuse/m98uV3vm8SgztN2nm+slJbvm8Sgzvy8YS+8BoMvm8Sgzuse/m9MK4ovm8SgzuAaNm98uV3vm8SgztN2nm+V5NkPm8Sgzsd+YA+R6wHPm8Sgzusu/g9j8olPm8Sgzt66t49V5NkPm8Sgzsd+YA+D3VGPm8SgztpbYc+R6wHPm8Sgzusu/g9DpkmPm8SgzvwpeM9Tl++PW8SgztW9f+82tX9PW8Sgzs3ryC9DpkmPm8SgzvwpeM9yN0GPm8Sgzs2APQ9Tl++PW8SgztW9f+8EHT9PW8Sgzu2ZyO98rNEPW8SgzvjMDe+8QyhPW8SgztFukC+EHT9PW8Sgzu2ZyO9GMG+PW8SgztYhPq88rNEPW8SgzvjMDe+WbCgPW8Sgzs2SUG+rDMQu28Sgzs3YKa+ruDlPG8SgzvZs6u+WbCgPW8Sgzs2SUG+IW1FPW8SgzvyoTa+rDMQu28Sgzs3YKa+/3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+//3/+//9//7//f/7//3//v/9//v//f/+/")
 }]
 
-[node name="Desert5" type="Node3D" unique_id=91449755]
+[node name="Desert5" type="Node3D" unique_id=552285002]
 
-[node name="Cactus" type="MeshInstance3D" parent="." unique_id=1569451951]
+[node name="Cactus" type="MeshInstance3D" parent="." unique_id=1906135169]
 material_override = ExtResource("1_7unoj")
 mesh = SubResource("desert_5_0")
 
-[node name="Bone" type="MeshInstance3D" parent="." unique_id=961178790]
+[node name="Bone" type="MeshInstance3D" parent="." unique_id=800375910]
 material_override = ExtResource("2_whtnt")
 mesh = SubResource("desert_5_1")
 
-[node name="Ripple" type="MeshInstance3D" parent="." unique_id=203861902]
+[node name="Ripple" type="MeshInstance3D" parent="." unique_id=2046430683]
 material_override = ExtResource("3_k3j2r")
 mesh = SubResource("desert_5_2")

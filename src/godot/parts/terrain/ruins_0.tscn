@@ -26,29 +26,29 @@ rings = 0
 [sub_resource type="BoxMesh" id="BoxMesh_fiq13"]
 size = Vector3(0.16, 0.1, 0.14)
 
-[node name="Ruins0" type="Node3D" unique_id=1779470240]
+[node name="Ruins0" type="Node3D" unique_id=364348672]
 
-[node name="@MeshInstance3D@5" type="MeshInstance3D" parent="." unique_id=208718134]
+[node name="@MeshInstance3D@2" type="MeshInstance3D" parent="." unique_id=1038991894]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.035, 0)
 material_override = ExtResource("1_ts646")
 mesh = SubResource("BoxMesh_a2r0n")
 
-[node name="@MeshInstance3D@6" type="MeshInstance3D" parent="." unique_id=1715346709]
+[node name="@MeshInstance3D@3" type="MeshInstance3D" parent="." unique_id=1098929060]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.1, -0.12)
 material_override = ExtResource("2_ultlf")
 mesh = SubResource("BoxMesh_mbrmh")
 
-[node name="@MeshInstance3D@7" type="MeshInstance3D" parent="." unique_id=197833845]
+[node name="@MeshInstance3D@4" type="MeshInstance3D" parent="." unique_id=1986816511]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.31, -0.12)
 material_override = ExtResource("2_ultlf")
 mesh = SubResource("CylinderMesh_mx3cw")
 
-[node name="@MeshInstance3D@8" type="MeshInstance3D" parent="." unique_id=984988724]
+[node name="@MeshInstance3D@5" type="MeshInstance3D" parent="." unique_id=509220303]
 transform = Transform3D(0.81915206, 0.57357645, -2.5071824e-08, 0, -4.371139e-08, -1, -0.57357645, 0.81915206, -3.5806274e-08, 0.12, 0.15, 0.14)
 material_override = ExtResource("2_ultlf")
 mesh = SubResource("CylinderMesh_hm8hb")
 
-[node name="@MeshInstance3D@9" type="MeshInstance3D" parent="." unique_id=623212368]
+[node name="@MeshInstance3D@6" type="MeshInstance3D" parent="." unique_id=1565081378]
 transform = Transform3D(0.89748764, -0.12613367, 0.42261827, 0.1391731, 0.99026805, 0, -0.41850537, 0.058817096, 0.90630776, 0.18, 0.12, -0.18)
 material_override = ExtResource("1_ts646")
 mesh = SubResource("BoxMesh_fiq13")
