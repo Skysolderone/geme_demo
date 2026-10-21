@@ -565,58 +565,116 @@ public static class LowPoly
     }
 
     /// <summary>
-    /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
+    /// 一段栅栏（terrain-model 边属性）：三根立柱（顶上一枚倒角柱帽）+ 两根横杆，横杆在两柱之间略下垂；沿一格边长立起，厚度只有 0.05，
     /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
     /// 返回节点原点在缝中心、地砖上表面。
     /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 B：用 <see cref="LowPolyMesh"/> 拼成一个网格（一个 surface、一份木料材质，顶点色只当亮度系数）。
+    /// 外形不超出改前的包围盒：x ∈ ±0.48（横杆两端）、y ∈ [0, 0.30]（柱帽顶）、厚 ±0.025（柱帽，柱身与横杆更细）。
+    /// </remarks>
     public static Node3D Fence(bool alongX)
     {
-        var root = new Node3D { Name = "Fence" };
-        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
-        float length = BoardGeometry.TileSize + 0.06f;
+        const float half = (BoardGeometry.TileSize + 0.06f) * 0.5f;   // 横杆半长 0.48，与改前同
+        const float post = 0.04f, cap = 0.05f, capHeight = 0.035f, height = 0.30f, sag = 0.012f;
+        var parts = new List<(ArrayMesh, Transform3D)>();
         for (int i = -1; i <= 1; i++)
         {
-            float offset = i * 0.40f;
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.05f, 0.30f, 0.05f) }, timber,
-                alongX ? new Vector3(offset, 0.15f, 0f) : new Vector3(0f, 0.15f, offset)));
+            float x = i * 0.40f;
+            float shade = 0.95f + (0.04f * LowPolyMesh.Unit(509, i + 1));
+            parts.Add((LowPolyMesh.BeveledSlab(new Vector3(post, height - capHeight, post), 0f, shade, top: height - capHeight, sideShade: 0.96f), At(x)));
+            parts.Add((LowPolyMesh.BeveledSlab(new Vector3(cap, capHeight, cap), 0.014f, 1f, top: height, sideShade: 0.95f), At(x)));
         }
 
+        // 横杆：两柱之间的每一跨在跨中下垂 sag，柱外的短伸出段水平。
+        float[] knots = [-half, -0.40f, -0.20f, 0f, 0.20f, 0.40f, half];
         foreach (float y in new[] { 0.11f, 0.23f })
         {
-            root.AddChild(Mesh(new BoxMesh { Size = alongX ? new Vector3(length, 0.035f, 0.03f) : new Vector3(0.03f, 0.035f, length) }, timber,
-                new Vector3(0f, y, 0f)));
-        }
-
-        return root;
-    }
-
-    /// <summary>
-    /// 预置桥（terrain-model 设施）：一块木板面 + 四根角柱，铺在深水格上，面与同层地砖齐平——桥格是普通可落子格，
-    /// 棋子与标记照常放在面上。角柱只有 0.07 见方，不遮挡落点。返回节点原点在桥面（地砖上表面）。
-    /// </summary>
-    public static Node3D Bridge()
-    {
-        var root = new Node3D { Name = "Bridge" };
-        StandardMaterial3D deck = Visuals.Matte(Visuals.BridgeDeck, 1f);
-        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
-        const float half = BoardGeometry.TileSize * 0.5f;
-        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.06f, BoardGeometry.TileSize) }, deck, new Vector3(0f, -0.03f, 0f)));
-
-        // 板缝：三条深色细槽，让桥面在缩略图里也读得出"木板"。
-        for (int i = -1; i <= 1; i++)
-        {
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.004f, 0.02f) }, timber, new Vector3(0f, 0.002f, i * 0.28f)));
-        }
-
-        foreach (float sx in new[] { -half + 0.05f, half - 0.05f })
-        {
-            foreach (float sz in new[] { -half + 0.05f, half - 0.05f })
+            for (int k = 0; k + 1 < knots.Length; k++)
             {
-                root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.07f, 0.16f, 0.07f) }, timber, new Vector3(sx, 0.05f, sz)));
+                var from = new Vector3(knots[k], y - Droop(knots[k]), 0f);
+                var to = new Vector3(knots[k + 1], y - Droop(knots[k + 1]), 0f);
+                parts.Add((LowPolyMesh.Beam(from, to, 0.03f, 0.035f, 0.97f), Transform3D.Identity));
             }
         }
 
+        // 沿 Z 的那一段由沿 X 的绕 Y 转 90° 得到（造型对称，正反一样）；基向量直接写成 0 / ±1，免得三角函数的舍入让厚度超出 ±0.025 一丝。
+        Basis turn = alongX ? Basis.Identity : new Basis(new Vector3(0f, 0f, -1f), Vector3.Up, new Vector3(1f, 0f, 0f));
+        var root = new Node3D { Name = "Fence" };
+        root.AddChild(new MeshInstance3D
+        {
+            Name = "Mesh",
+            Mesh = LowPolyMesh.Merge(parts.Select(p => (p.Item1, new Transform3D(turn, Vector3.Zero) * p.Item2))),
+            MaterialOverride = Shaded(Visuals.Timber),
+        });
         return root;
+
+        static Transform3D At(float x) => new(Basis.Identity, new Vector3(x, 0f, 0f));
+
+        // 跨中（±0.20）下垂 sag，立柱处（0、±0.40）与伸出端不垂。
+        static float Droop(float x) => Mathf.Abs(Mathf.Abs(x) - 0.20f) < 0.001f ? sag : 0f;
+    }
+
+    /// <summary>
+    /// 预置桥（terrain-model 设施）：一层木板桥面（六块板，板间露出下面深色的垫木，读作板缝）+ 两侧栏杆（四根角墩、两根中柱、一道扶手），
+    /// 铺在深水格上，面与同层地砖齐平——桥格是普通可落子格，棋子与标记照常放在面上。栏杆贴在桥面两侧、只有 0.13 高，不遮挡落点。
+    /// 返回节点原点在桥面（地砖上表面）；网格里过桥方向沿 Z（栏杆沿 Z 走），BoardView 按河道走向绕 Y 转。
+    /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 B：用 <see cref="LowPolyMesh"/> 拼成两个网格（桥面木板一份、深色木料一份，各一个 surface，顶点色只当亮度系数）。
+    /// 外形不超出改前的包围盒：x、z ∈ ±0.45（TileSize 见方）、y ∈ [−0.06, 0.13]。角墩是桥墩：从桥底（−0.06）一直立到栏杆顶，比中柱粗。
+    /// </remarks>
+    public static Node3D Bridge()
+    {
+        const float half = BoardGeometry.TileSize * 0.5f;
+        const float deckDepth = 0.04f, bottom = -0.06f, top = 0.13f;
+        const int planks = 6;
+        const float seam = 0.012f;
+        float plank = (BoardGeometry.TileSize - ((planks - 1) * seam)) / planks;
+
+        // 桥面：六块横板（沿 X 长、沿 Z 排开），每块亮度按散列错开一点。
+        var deck = new List<(ArrayMesh, Transform3D)>();
+        for (int i = 0; i < planks; i++)
+        {
+            float z = -half + (plank * 0.5f) + (i * (plank + seam));
+            ArrayMesh board = LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, deckDepth, plank), 0.006f, 0.95f + (0.05f * LowPolyMesh.Unit(601, i)),
+                seed: 601 + i, facetJitter: 0.02f, sideShade: 0.94f);
+            deck.Add((board, new Transform3D(Basis.Identity, new Vector3(0f, 0f, z))));
+        }
+
+        // 深色木料：板下的垫木（板缝里露出的就是它）、四根角墩、两根中柱、两道扶手。
+        var timber = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, -bottom - deckDepth, BoardGeometry.TileSize), 0f, 0.96f, top: -deckDepth), Transform3D.Identity),
+        };
+        const float pier = 0.07f, post = 0.04f, rail = 0.03f;
+        float side = half - (pier * 0.5f);
+        foreach (float sx in new[] { -side, side })
+        {
+            foreach (float sz in new[] { -(half - (pier * 0.5f) - 0.015f), half - (pier * 0.5f) - 0.015f })
+            {
+                timber.Add((LowPolyMesh.BeveledSlab(new Vector3(pier, top - bottom, pier), 0.012f, 1f, top: top, sideShade: 0.95f),
+                    new Transform3D(Basis.Identity, new Vector3(sx, 0f, sz))));
+            }
+
+            timber.Add((LowPolyMesh.BeveledSlab(new Vector3(post, 0.10f, post), 0.008f, 0.97f, top: 0.10f, sideShade: 0.95f),
+                new Transform3D(Basis.Identity, new Vector3(sx, 0f, 0f))));
+            float reach = half - pier - 0.015f;
+            timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.105f, -reach), new Vector3(sx, 0.105f, reach), rail, 0.025f, 0.97f), Transform3D.Identity));
+        }
+
+        var root = new Node3D { Name = "Bridge" };
+        root.AddChild(new MeshInstance3D { Name = "Deck", Mesh = LowPolyMesh.Merge(deck), MaterialOverride = Shaded(Visuals.BridgeDeck) });
+        root.AddChild(new MeshInstance3D { Name = "Timber", Mesh = LowPolyMesh.Merge(timber), MaterialOverride = Shaded(Visuals.Timber) });
+        return root;
+    }
+
+    /// <summary>设施（桥、栅栏）的木料材质：沿用现有木色、粗糙度 1，打开顶点色（顶点色只当亮度系数，最终色 = 底色 × 顶点色）。</summary>
+    private static StandardMaterial3D Shaded(Color color)
+    {
+        StandardMaterial3D material = Visuals.Matte(color, 1f);
+        material.VertexColorUseAsAlbedo = true;
+        return material;
     }
 
     /// <summary>

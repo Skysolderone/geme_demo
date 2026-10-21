@@ -314,6 +314,56 @@ public static class LowPolyMesh
         return tool.Commit();
     }
 
+    /// <summary>
+    /// 把几块网格按各自的变换并成一个网格（仍是 1 个 surface）：多块拼成的部件（石沿、桥、栅栏）用它，一件部件只占一次绘制。
+    /// 法线随变换的旋转部分一起转，顶点色原样保留；输入顺序即顶点顺序，所以结果仍是确定的。
+    /// </summary>
+    public static ArrayMesh Merge(IEnumerable<(ArrayMesh Mesh, Transform3D Transform)> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        var tool = Begin();
+        foreach ((ArrayMesh mesh, Transform3D transform) in parts)
+        {
+            tool.AppendFrom(mesh, 0, transform);
+        }
+
+        return tool.Commit();
+    }
+
+    /// <summary>
+    /// 一根直梁（栏杆、横杆、立柱）：从 <paramref name="from"/> 到 <paramref name="to"/>，截面 <paramref name="width"/> × <paramref name="height"/>（宽沿水平、与梁垂直，高沿竖直）。
+    /// 两端面都建，底面也建（横杆悬空，侧下方看得到）；竖直的梁（立柱）请用 <see cref="BeveledSlab"/>。
+    /// </summary>
+    public static ArrayMesh Beam(Vector3 from, Vector3 to, float width, float height, float shade = 1f)
+    {
+        var tool = Begin();
+        Vector3 along = to - from;
+        var flat = new Vector3(along.X, 0f, along.Z);
+        if (flat.LengthSquared() < 1e-10f)
+        {
+            return tool.Commit();
+        }
+
+        Vector3 side = Vector3.Up.Cross(flat.Normalized()) * (width * 0.5f);
+        Vector3 rise = Vector3.Up * (height * 0.5f);
+        Vector3 center = (from + to) * 0.5f;
+
+        // 截面四角（自左上起逆着看），两端各一圈。
+        Vector3[] start = [from + side + rise, from - side + rise, from - side - rise, from + side - rise];
+        Vector3[] end = [to + side + rise, to - side + rise, to - side - rise, to + side - rise];
+        for (int k = 0; k < 4; k++)
+        {
+            int n = (k + 1) % 4;
+            Vector3 mid = (start[k] + start[n] + end[k] + end[n]) * 0.25f;
+            float s = k == 2 ? shade * 0.94f : shade;   // 底面略暗
+            Quad(tool, start[k], start[n], end[n], end[k], mid - center, s);
+        }
+
+        Quad(tool, start[0], start[1], start[2], start[3], from - to, shade);
+        Quad(tool, end[0], end[1], end[2], end[3], to - from, shade);
+        return tool.Commit();
+    }
+
     /// <summary>某条色带的亮度系数：<paramref name="baseShade"/> 起，按散列在 ±<paramref name="spread"/> / 2 内错开。</summary>
     private static float BandShade(int seed, int band, float baseShade, float spread) =>
         baseShade + (spread * 0.5f * Signed(seed, 900 + band));

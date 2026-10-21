@@ -223,6 +223,16 @@ public sealed partial class BoardView : Node3D
             return !hole;
         }
 
+        // 河岸石沿与桥的朝向（map-elements-v2 D4）：邻格是不是深水只按视图模型的格子地表查表——这是渲染，不进规则，不调用规则内核的任何邻接查询。
+        // 邻格不在本次视图里（连体棋盘外缘、画布留白）也算"不是深水"，河道在那里收口。格 → 世界的方向只经 BoardGeometry.Center 那一份映射推出。
+        Dictionary<Coord, Surface> surfaceAt = board.Cells.ToDictionary(c => c.Coord, c => c.Surface);
+        bool DeepAt(int x, int y) =>
+            x >= 0 && y >= 0 && x < _width && y < _height && surfaceAt.TryGetValue(new Coord(x, y), out Surface s) && s == Surface.DeepWater;
+        Vector3 gridOrigin = BoardGeometry.Center(new Coord(0, 0), _width, _height);
+        Vector3 stepX = BoardGeometry.Center(new Coord(1, 0), _width, _height) - gridOrigin;
+        Vector3 stepY = BoardGeometry.Center(new Coord(0, 1), _width, _height) - gridOrigin;
+        int deepCells = 0, bridgedCells = 0, bankLips = 0;
+
         int variant = 0;
         int boardRocks = 0;
         var zoneStrips = new SortedDictionary<int, int>();
@@ -242,11 +252,39 @@ public sealed partial class BoardView : Node3D
                 Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
                 Color water = Visuals.DeepWater;
                 _tileMaterials.Add((AddWater(tiles, waterCenter, water), water));
+                deepCells++;
+
+                // 每条"邻格不是深水"的边一件石沿（含架桥的格：石沿顶低于桥面，桥面盖住重叠的那 0.01）。
+                (int Dx, int Dy)[] edges = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+                for (int e = 0; e < edges.Length; e++)
+                {
+                    (int dx, int dy) = edges[e];
+                    if (DeepAt(cell.Coord.X + dx, cell.Coord.Y + dy))
+                    {
+                        continue;
+                    }
+
+                    // 沿 X 走向的边（上下两侧）再压低 0.005：格角上相遇的两件石沿必是一纵一横，顶面错开、不共面闪烁。
+                    Vector3 half = ((stepX * dx) + (stepY * dy)) * 0.5f;
+                    Vector3 lift = new(0f, dy != 0 ? -0.005f : 0f, 0f);
+                    AddBankLip(tiles, TerrainParts.PieceOf(TerrainParts.BankLip, TileVariant(cell.Coord, 10 + e)), waterCenter + half + lift, -half);
+                    bankLips++;
+                }
+
                 if (cell.HasBridge)
                 {
+                    // 桥沿河道的垂直方向架：网格里栏杆沿 Z 走（过桥方向 = 格的 y 向）；河道沿格的 y 向走（上下邻格是水的多）时转 90°。预置的与对局中架起的同一部件、同一规则。
+                    int alongY = (DeepAt(cell.Coord.X, cell.Coord.Y + 1) ? 1 : 0) + (DeepAt(cell.Coord.X, cell.Coord.Y - 1) ? 1 : 0);
+                    int alongX = (DeepAt(cell.Coord.X + 1, cell.Coord.Y) ? 1 : 0) + (DeepAt(cell.Coord.X - 1, cell.Coord.Y) ? 1 : 0);
                     Node3D bridge = TerrainParts.Create(TerrainParts.Bridge);
                     bridge.Position = waterCenter;
+                    if (alongY > alongX)
+                    {
+                        bridge.RotationDegrees = new Vector3(0f, 90f, 0f);
+                    }
+
                     tiles.AddChild(bridge);
+                    bridgedCells++;
                 }
 
                 continue;
@@ -398,6 +436,7 @@ public sealed partial class BoardView : Node3D
         AddFloatingIsland(board, apron, frameCenter, spanX + (apron * BoardGeometry.CellSize), spanZ + (apron * BoardGeometry.CellSize));
 
         // 自证地形部件的来源：有资源时应当全部来自资源（TerrainParts），程序生成数为 0。
+        GD.Print($"[water] 深水 {deepCells} 格（架桥 {bridgedCells} 格）、河岸石沿 {bankLips} 件");
         GD.Print($"[parts] 本次搭建地形部件：资源 {TerrainParts.LoadedCount - loadedBefore} 件、程序生成 {TerrainParts.GeneratedCount - generatedBefore} 件（{TerrainParts.Directory}）");
         PartBatch[] batches = [.. _partBatches.Values.OfType<PartBatch>()];
         GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_partMultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
@@ -707,6 +746,22 @@ public sealed partial class BoardView : Node3D
     {
         _tileMeshes.Add(mesh);
         parent.AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = material, Position = position });
+    }
+
+    /// <summary>
+    /// 放一件河岸石沿：锚点在水格边中点；网格里石沿朝 +Z 展开，这里绕 Y 转到朝水格内侧（<paramref name="inward"/>）。
+    /// 石沿只有 0.085 高、贴着水面，不投影（省下阴影通道的绘制）。材质用部件自带的岩灰，不登记压暗表（与侧面同口径）。
+    /// </summary>
+    private static void AddBankLip(Node3D parent, TerrainParts.Piece piece, Vector3 position, Vector3 inward)
+    {
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = piece.Mesh,
+            MaterialOverride = piece.Material ?? CliffMaterial,
+            Position = position,
+            Rotation = new Vector3(0f, MathF.Atan2(inward.X, inward.Z), 0f),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
     }
 
     /// <summary>地块部件的变体号：按全图坐标散列（不按棋盘内坐标，接缝两侧的图案不断层），<paramref name="salt"/> 区分顶板与各层侧面，让它们的档位不同步。</summary>

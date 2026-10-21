@@ -68,8 +68,19 @@ public static class TerrainParts
     /// <summary>砖缝衬底：铺满整格、厚 <see cref="LinerThickness"/>。材质由 BoardView 按底色覆盖；导出时带中性白材质。</summary>
     public static readonly Kind Liner = new("liner", 1, _ => Single("Liner", LinerMesh(), NeutralMaterial()), "衬底中心");
 
+    // —— 水系部件（map-elements-v2 段 B，design D4）。
+
+    /// <summary>河岸石沿占水格边缘的宽度（O-2：一格宽河的水面可见宽度 = 1 − 2 × 0.06 = 0.88 ≥ 0.78）。</summary>
+    public const float BankLipWidth = 0.06f;
+
+    /// <summary>
+    /// 河岸石沿（一条边一件）：沿水格一条边排三块倒角石，占水格边缘 <see cref="BankLipWidth"/>，顶面比地砖上表面低 0.015 起，底没入水面之下。
+    /// 网格里边沿 X 轴、石沿朝 +Z（水格内侧）展开；BoardView 按边的朝向绕 Y 旋转。内置岩灰（与崖壁侧面同一份材质）。
+    /// </summary>
+    public static readonly Kind BankLip = new("bank_lip", 3, v => Single("BankLip", BankLipMesh(v), SideMaterial(Visuals.CliffSide)), "水格边中点（高度取该格地砖上表面）");
+
     /// <summary>全部部件，导出顺序即此顺序（新部件追加在末尾，既有部件的导出顺序不变）。</summary>
-    public static readonly Kind[] All = [Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner];
+    public static readonly Kind[] All = [Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip];
 
     /// <summary>单网格部件取出的网格与它自带的材质（自带材质可能为空：由调用方覆盖的部件只带中性白）。</summary>
     public readonly record struct Piece(Mesh Mesh, Material? Material);
@@ -200,6 +211,34 @@ public static class TerrainParts
 
     private static ArrayMesh LinerMesh() => LowPolyMesh.BeveledSlab(
         new Vector3(BoardGeometry.CellSize, LinerThickness, BoardGeometry.CellSize), 0f, 1f, top: LinerThickness * 0.5f);
+
+    /// <summary>
+    /// 石沿网格：三块石头沿边（x ∈ ±0.495，两端离格角 0.005，与相邻那条石沿的外侧面不共面）排开，块间留 0.008 的缝；
+    /// 分块点、中间那块的顶高与内沿按散列错开（只往低、往窄走：顶不高于 −0.015，宽不超过 <see cref="BankLipWidth"/>）。底在 −0.10，没入水面（−0.092）。
+    /// </summary>
+    private static ArrayMesh BankLipMesh(int variant)
+    {
+        int seed = 401 + Wrap(variant, BankLip.Variants);
+        const float end = 0.495f, gap = 0.004f, top = -0.015f, bottom = -0.10f;
+        float cut1 = -0.165f + (LowPolyMesh.Signed(seed, 0) * 0.06f);
+        float cut2 = 0.165f + (LowPolyMesh.Signed(seed, 1) * 0.06f);
+        (float From, float To, float Top, float Width)[] stones =
+        [
+            (-end, cut1 - gap, top, BankLipWidth),
+            (cut1 + gap, cut2 - gap, top - 0.003f - (0.006f * LowPolyMesh.Unit(seed, 2)), BankLipWidth - (0.01f * LowPolyMesh.Unit(seed, 3))),
+            (cut2 + gap, end, top, BankLipWidth),
+        ];
+        var parts = new List<(ArrayMesh, Transform3D)>();
+        for (int i = 0; i < stones.Length; i++)
+        {
+            (float from, float to, float stoneTop, float width) = stones[i];
+            ArrayMesh stone = LowPolyMesh.BeveledSlab(new Vector3(to - from, stoneTop - bottom, width), 0.012f, 0.98f,
+                seed: seed + (i * 7), facetJitter: 0.03f, top: stoneTop, sideShade: 0.95f);
+            parts.Add((stone, new Transform3D(Basis.Identity, new Vector3((from + to) * 0.5f, 0f, width * 0.5f))));
+        }
+
+        return LowPolyMesh.Merge(parts);
+    }
 
     private static int Wrap(int variant, int variants) => ((variant % variants) + variants) % variants;
 
