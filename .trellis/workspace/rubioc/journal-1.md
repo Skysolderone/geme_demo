@@ -303,3 +303,10 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 冒烟 20 局（标准 × 4，28 并行）：大回合 21 / 28 / 33（原 19 / 25 / 32），提子 1600（原 1151），改造 立栅 / 搭桥 / 烧林 224 / 34 / 6（原 175 / 1 / 2），致提子改造 73，停滞停手 16 次；按主题 林地 2.20、栅栏阵 2.36、高台 2.38、混合 2.50、河流 3.00。
 - 待负责人：R2 + R3 裁决表 H1–H8；是否在独立 worktree 并行开 `map-elements-v2`。
 - `terrain-barriers`（R2 + R3，H1–H8 + 实施修订 J1–J5）：首次实施因"避开核心区四邻"的隔断线在 6 / 7 边长上只剩外圈线，种子 1–2000 有 584 张接缝缺气边，agent 按停止条件停下；改为中间带整列 / 行、高台山脊、小棋盘不放湖泊、校验器不强制有隔断线后，1–20 与 1–2000 生成零失败。提交 88b023e。冒烟 20 局：大回合 19 / 24 / 35（原 21 / 28 / 33），提子 1216，改造 147 / 33 / 5，按主题 栅栏阵 2.00、高台 2.44、河流 2.62、林地 2.70、混合 3.00；可落子 202–258；Godot 自检四条退出 0、拾取 202/202。观察登记 §19 第 21 条。
+
+## Session: 2026-10-21 — map-elements-v2（地图元素部件化与造型精修，独立 worktree，只动画面）
+
+- 按开放地图重做规划：载体 `link:1` / `link:7`，删场景格与棋盘档条目；裁决 M1–M10、O-1–O-4 全按推荐；每段 implement + check、截图交负责人过目。
+- 段 A 地块（`LowPolyMesh`、tile_top / side_slope / side_cliff / liner）→ 段 B 河岸石沿、桥与栅栏 → 段 C 岩石、林地、四种新地表点缀 → 段 D 底座石沿、出生区亮条、外轮廓边框 + 转角、浮岛 → 段 E 全量重导、清孤儿材质；看图裁决 A1–A3、B1–B5（不加 water_bed）、C1–C3、D1–D4 全按推荐。
+- 段 E 前合入本地 main（`terrain-barriers` v1.33）并按新图重核关键格；绘制调用 `link:1` 773→615、`link:7` 779→622；新增截图选项 `--shot-near`。
+- 设计文档 v1.34；`openspec archive map-elements-v2` 同步 visual-style-baseline（+3 ~2），`validate --specs --strict` 34/34。合回 main 由负责人决定。

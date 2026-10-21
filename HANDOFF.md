@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-10-21（`map-elements-v2` 实施待归档：地图元素部件化与造型精修，v1.34；此前 `terrain-barriers` 归档，v1.33）。 仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-10-21（`map-elements-v2` 归档：地图元素部件化与造型精修，v1.34；此前 `terrain-barriers` 归档，v1.33）。 仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续；最近进度以 `.trellis/workspace/rubioc/journal-1.md` 最后一节为准。
 
 ## 一句话
@@ -120,7 +120,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 13. **偶发失败观察**（G5）：`批量跑局Tests.已删除的选项报已删除(no-catch-up)` 偶发失败一次，重跑通过。
 14. ~~**新局界面自检全局预览关不掉**~~：**已修复**（`4706c4e`，裁决 F4）——换回一屏看得全的图时 `GameRoot.DropStaleOverview` 把残留预览复位到新图初始位姿；`-- --map=link:501492606 --map-select --auto-demo` 退出 0，`全局预览Tests` 新增一条守门。
 
-另有已实施待归档的 change `map-elements-v2`（地图元素部件化与造型精修，v1.34；段 A–E 已实施，部件资源 75 件 / 共享材质 27 份，资源缺失退回程序建模）。已归档（2026-09-28 之后）：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`、`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`、`link-map-terrain`、`ai-terrain-review`、`final-countdown`、`ai-seat-vision`、`retire-legacy-rules`、`open-map`、`cycle-stop`、`link-map-surfaces`、`stagnation-trace`、`fence-eye-rule`、`terrain-barriers`。
+已归档的 change `map-elements-v2`（`openspec/changes/archive/2026-10-21-map-elements-v2/`）（地图元素部件化与造型精修，v1.34；段 A–E 已实施，部件资源 75 件 / 共享材质 27 份，资源缺失退回程序建模）。已归档（2026-09-28 之后）：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`、`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`、`link-map-terrain`、`ai-terrain-review`、`final-countdown`、`ai-seat-vision`、`retire-legacy-rules`、`open-map`、`cycle-stop`、`link-map-surfaces`、`stagnation-trace`、`fence-eye-rule`、`terrain-barriers`。
 
 ## 权威来源（按优先级）
 
