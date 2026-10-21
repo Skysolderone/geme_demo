@@ -59,6 +59,7 @@ public sealed partial class BoardView : Node3D
     private readonly Dictionary<Color, StandardMaterial3D> _surfaceMaterials = [];
     private readonly Dictionary<Color, StandardMaterial3D> _linerMaterials = [];
     private readonly Dictionary<Color, StandardMaterial3D> _flatMaterials = [];
+    private readonly Dictionary<Color, StandardMaterial3D> _inlayMaterials = [];
     private readonly Dictionary<Vector3, BoxMesh> _boxMeshes = [];
     private readonly HashSet<Mesh> _tileMeshes = [];
     private readonly Dictionary<Coord, int> _levels = [];
@@ -136,6 +137,7 @@ public sealed partial class BoardView : Node3D
         _surfaceMaterials.Clear();
         _linerMaterials.Clear();
         _flatMaterials.Clear();
+        _inlayMaterials.Clear();
         _boxMeshes.Clear();
         _tileMeshes.Clear();
         _levels.Clear();
@@ -168,6 +170,7 @@ public sealed partial class BoardView : Node3D
             MaterialOverride = Visuals.Matte(Visuals.IslandRim),
             Position = frameCenter + new Vector3(0f, BoardGeometry.TopY - WaterDrop - (BoardGeometry.TileHeight * 0.5f), 0f),
         });
+        int rims = AddRim(frameCenter, spanX + (apron * BoardGeometry.CellSize), spanZ + (apron * BoardGeometry.CellSize), BoardGeometry.TopY - WaterDrop);
 
         _decoration = new Node3D { Name = "Decoration" };
         AddChild(_decoration);
@@ -331,7 +334,7 @@ public sealed partial class BoardView : Node3D
                 Color zoneColor = ZoneColorOf(zone);
                 color = color.Lerp(zoneColor, owned ? 0.10f : zoneOwners.Count > 0 ? 0.08f : 0.30f);
 
-                StandardMaterial3D edge = FlatOf(zoneColor);
+                StandardMaterial3D edge = InlayOf(zoneColor);
                 foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                 {
                     if (!IsZoneEdge(cell.Coord, zone, dx, dy))
@@ -339,15 +342,15 @@ public sealed partial class BoardView : Node3D
                         continue;
                     }
 
-                    // Coord 的 y 向上（北）对应世界 −Z。描边条贴在格内侧边缘、略高于面砖，不占落点。
+                    // Coord 的 y 向上（北）对应世界 −Z。亮条（map-elements-v2 D5，zone_strip）锚在格边中点、朝格内展开 0.07、高 0.03——
+                    // 与改前的描边盒逐值同包围盒：贴在格内侧边缘、略高于面砖，不占落点。归属色、不受光、不投影。
                     zoneStrips[zone] = zoneStrips.GetValueOrDefault(zone) + 1;
-                    const float strip = 0.07f;
-                    float offset = (BoardGeometry.CellSize * 0.5f) - (strip * 0.5f);
+                    float half = BoardGeometry.CellSize * 0.5f;
                     tiles.AddChild(new MeshInstance3D
                     {
-                        Mesh = BoxOf(dx != 0 ? new Vector3(strip, 0.03f, BoardGeometry.CellSize) : new Vector3(BoardGeometry.CellSize, 0.03f, strip)),
+                        Mesh = TerrainParts.PieceOf(TerrainParts.ZoneStrip, 0).Mesh,
                         MaterialOverride = edge,
-                        Position = center + new Vector3(dx * offset, 0.015f, -dy * offset),
+                        Transform = new Transform3D(Facing(new Vector3(-dx, 0f, dy)), center + new Vector3(dx * half, 0f, -dy * half)),
                         CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                     });
                 }
@@ -437,11 +440,12 @@ public sealed partial class BoardView : Node3D
 
         // 自证地形部件的来源：有资源时应当全部来自资源（TerrainParts），程序生成数为 0。
         GD.Print($"[water] 深水 {deepCells} 格（架桥 {bridgedCells} 格）、河岸石沿 {bankLips} 件");
+        GD.Print($"[rim] 底座外圈石沿 {rims} 件");
         GD.Print($"[parts] 本次搭建地形部件：资源 {TerrainParts.LoadedCount - loadedBefore} 件、程序生成 {TerrainParts.GeneratedCount - generatedBefore} 件（{TerrainParts.Directory}）");
         PartBatch[] batches = [.. _partBatches.Values.OfType<PartBatch>()];
         GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_partMultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
             + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
-        GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
+        GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count + _inlayMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
 
         BuildCoordinateLabels(low, high);
 
@@ -579,28 +583,32 @@ public sealed partial class BoardView : Node3D
         StandardMaterial3D rock = Visuals.Matte(Visuals.CliffSide.Darkened(0.10f), 1f);
         StandardMaterial3D deepRock = Visuals.Matte(Visuals.CliffSide.Darkened(0.30f), 1f);
 
-        // 逐层收窄的岩体：一层土、两层岩，越往下越窄越暗。
-        (float Shrink, float Thickness, StandardMaterial3D Material)[] layers =
+        // 逐层收窄的岩体：一层土、两层岩，越往下越窄越暗。部件 island_layer（map-elements-v2 D5）是单位块（顶面 1 × 1、高 1，锚在顶面中心），
+        // 按画幅与层厚整体缩放（非均匀缩放：Godot 4 对带非均匀缩放的实例用模型矩阵的逆转置变换法线，平直着色的法线仍正确）；三档即土 / 岩 / 深岩三种内置岩色。
+        (float Shrink, float Thickness, int Tier, StandardMaterial3D Fallback)[] layers =
         [
-            (0.985f, 0.9f, earth),
-            (0.90f, 1.6f, rock),
-            (0.72f, 2.2f, rock),
-            (0.48f, 2.6f, deepRock),
-            (0.22f, 2.4f, deepRock),
+            (0.985f, 0.9f, 0, earth),
+            (0.90f, 1.6f, 1, rock),
+            (0.72f, 2.2f, 1, rock),
+            (0.48f, 2.6f, 2, deepRock),
+            (0.22f, 2.4f, 2, deepRock),
         ];
         float y = baseTop;
-        foreach ((float shrink, float thickness, StandardMaterial3D material) in layers)
+        foreach ((float shrink, float thickness, int tier, StandardMaterial3D fallback) in layers)
         {
+            TerrainParts.Piece layer = TerrainParts.PieceOf(TerrainParts.IslandLayer, tier);
             island.AddChild(new MeshInstance3D
             {
-                Mesh = new BoxMesh { Size = new Vector3(spanX * shrink, thickness, spanZ * shrink) },
-                MaterialOverride = material,
-                Position = frameCenter + new Vector3(0f, y - (thickness * 0.5f), 0f),
+                Mesh = layer.Mesh,
+                MaterialOverride = layer.Material ?? fallback,
+                Position = frameCenter + new Vector3(0f, y, 0f),
+                Scale = new Vector3(spanX * shrink, thickness, spanZ * shrink),
             });
             y -= thickness;
         }
 
-        // 沿底座四边垂下的石笋：位置与长短按序号散列。
+        // 沿底座四边垂下的石笋：位置与长短按序号散列。部件 island_spike 是单位长倒锥（锚在尖顶），按长短缩放：顶面半径 0.55 + 0.12 × 长（与改前圆锥同），
+        // 尖在改前圆锥底端（顶面仍贴着土层底面）。改前 i % 3 == 0 用深岩：深岩只有 0 档，其余在 1–3 档里按序号散列挑。
         int count = Math.Max(10, (_width + _height) / 2);
         for (int i = 0; i < count; i++)
         {
@@ -610,30 +618,37 @@ public sealed partial class BoardView : Node3D
             bool alongX = (i & 1) == 0;
             float side = ((i >> 1) & 1) == 0 ? -1f : 1f;
             var at = alongX
-                ? new Vector3(t * spanX * 0.92f, baseTop - 0.9f - (length * 0.5f), side * spanZ * 0.46f)
-                : new Vector3(side * spanX * 0.46f, baseTop - 0.9f - (length * 0.5f), t * spanZ * 0.92f);
+                ? new Vector3(t * spanX * 0.92f, baseTop - 0.9f - length, side * spanZ * 0.46f)
+                : new Vector3(side * spanX * 0.46f, baseTop - 0.9f - length, t * spanZ * 0.92f);
+            float topRadius = 0.55f + (length * 0.12f);
+            bool deep = (i % 3) == 0;
+            TerrainParts.Piece spike = TerrainParts.PieceOf(TerrainParts.IslandSpike, deep ? 0 : 1 + (int)(LowPolyMesh.Hash(37, i) % 3u));
             island.AddChild(new MeshInstance3D
             {
-                Mesh = new CylinderMesh { TopRadius = 0.55f + (length * 0.12f), BottomRadius = 0.02f, Height = length, RadialSegments = 5, Rings = 0 },
-                MaterialOverride = (i % 3) == 0 ? deepRock : rock,
+                Mesh = spike.Mesh,
+                MaterialOverride = spike.Material ?? (deep ? deepRock : rock),
                 Position = at,
                 RotationDegrees = new Vector3(0f, i * 37f, 0f),
+                Scale = new Vector3(topRadius, length, topRadius),
             });
         }
 
-        // 云海：岛下与四周的几团扁平白云（不投影、不受光）。
-        StandardMaterial3D cloud = Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f));
+        // 云海：岛下与四周的几团扁平白云（不投影、不受光、半透明）。部件 cloud 是半径 1、厚 0.55 的扁团（锚在云心），按大小等比缩放；档号与改前的三档大小一致（i % 3）。
+        StandardMaterial3D cloudFallback = Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f));
         float reach = Math.Max(spanX, spanZ);
         for (int i = 0; i < 26; i++)
         {
             float angle = i * 2.399963f;
             float radius = reach * (0.50f + (0.42f * ((i * 7) % 5) / 4f));
             float size = reach * (0.07f + (0.03f * (i % 3)));
+            TerrainParts.Piece cloud = TerrainParts.PieceOf(TerrainParts.Cloud, i % 3);
             island.AddChild(new MeshInstance3D
             {
-                Mesh = new SphereMesh { Radius = size, Height = size * 0.55f, RadialSegments = 8, Rings = 3 },
-                MaterialOverride = cloud,
+                Mesh = cloud.Mesh,
+                MaterialOverride = cloud.Material ?? cloudFallback,
                 Position = new Vector3(MathF.Cos(angle) * radius, baseTop - 5.5f - (i % 4 * 1.1f), MathF.Sin(angle) * radius * 0.9f),
+                RotationDegrees = new Vector3(0f, i * 53f, 0f),
+                Scale = new Vector3(size, size, size),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             });
         }
@@ -764,6 +779,60 @@ public sealed partial class BoardView : Node3D
         });
     }
 
+    /// <summary>
+    /// 底座外圈石沿（map-elements-v2 D5，<c>rim</c>）：沿底座四边逐段摆，一段一件。石沿只占底座外缘向内 <see cref="TerrainParts.RimDepth"/>（外凸 <see cref="TerrainParts.RimOverhang"/>），
+    /// 落在底座外缘那 0.45 格的边里——坐标标注离格外缘最远 1.2（远边）/ 0.7（其余三边），底座伸出格外缘 2.15，石沿内沿在 1.87 处，标注区不碰；
+    /// 石沿顶面 ≤ 底座顶面 + <see cref="TerrainParts.RimRise"/> = TopY − 0.02，比标注所在的 h=0 平面低，近边石沿也挡不到身后的标注。
+    /// 摆法：南北两边贯通全长（含转角），东西两边只排两条南北石沿之间的内段；每边 n = round(边长) 件、节距 = 边长 / n（≈ 1 格），件长 <see cref="TerrainParts.RimLength"/> 不缩放，余量读作石块间的缝。
+    /// 变体按 (边号, 段序) 整数散列。返回件数。
+    /// </summary>
+    private int AddRim(Vector3 center, float width, float depth, float top)
+    {
+        var rim = new Node3D { Name = "Rim" };
+        AddChild(rim);
+        float hx = width * 0.5f, hz = depth * 0.5f;
+        int count = 0;
+        for (int side = 0; side < 4; side++)
+        {
+            // 0 南（+Z）、1 北（−Z）：沿 X 贯通；2 东（+X）、3 西（−X）：沿 Z 排内段。
+            bool alongX = side < 2;
+            float sign = (side & 1) == 0 ? 1f : -1f;
+            float length = alongX ? 2f * (hx + TerrainParts.RimOverhang) : 2f * (hz - TerrainParts.RimDepth);
+            int n = Math.Max(1, (int)MathF.Round(length / BoardGeometry.CellSize));
+            float pitch = length / n;
+            Basis facing = Facing(alongX ? new Vector3(0f, 0f, -sign) : new Vector3(-sign, 0f, 0f));
+            for (int i = 0; i < n; i++)
+            {
+                float t = (-length * 0.5f) + (pitch * (i + 0.5f));
+                Vector3 at = center + (alongX ? new Vector3(t, top, sign * hz) : new Vector3(sign * hx, top, t));
+                TerrainParts.Piece piece = TerrainParts.PieceOf(TerrainParts.Rim, (int)(LowPolyMesh.Hash(side + 1, i) % 3u));
+                rim.AddChild(new MeshInstance3D { Mesh = piece.Mesh, MaterialOverride = piece.Material ?? CliffMaterial, Transform = new Transform3D(facing, at) });
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// 网格里"沿 X 轴、朝 +Z 展开"的部件转到朝 <paramref name="inward"/>（水平单位向量，只取 ±X / ±Z）的基：+Z → inward，+X → Up × inward。
+    /// 直接写基向量（0 / ±1），不经三角函数，摆出的位置逐值精确。
+    /// </summary>
+    private static Basis Facing(Vector3 inward) => new(new Vector3(inward.Z, 0f, -inward.X), Vector3.Up, inward);
+
+    /// <summary>某颜色的不受光嵌条材质（出生区亮条、连体外轮廓边框）：打开顶点色（倒角与侧面靠顶点色读出），同色共用一份。<see cref="FlatOf"/> 不动（占位边框仍用它）。</summary>
+    private StandardMaterial3D InlayOf(Color color)
+    {
+        if (!_inlayMaterials.TryGetValue(color, out StandardMaterial3D? material))
+        {
+            material = Visuals.Flat(color);
+            material.VertexColorUseAsAlbedo = true;
+            _inlayMaterials[color] = material;
+        }
+
+        return material;
+    }
+
     /// <summary>地块部件的变体号：按全图坐标散列（不按棋盘内坐标，接缝两侧的图案不断层），<paramref name="salt"/> 区分顶板与各层侧面，让它们的档位不同步。</summary>
     private static int TileVariant(Coord coord, int salt) =>
         (int)(LowPolyMesh.Hash(unchecked((coord.X * 73856093) ^ (coord.Y * 19349663)), 17 + salt) & 0x7FFFFFFFu);
@@ -804,7 +873,7 @@ public sealed partial class BoardView : Node3D
         return material;
     }
 
-    /// <summary>某颜色的不受光材质（出生区描边条、棋盘边框）：同色共用一份。只给搭建后不再改色的地形件用。</summary>
+    /// <summary>某颜色的不受光材质（占位边框、单块棋盘边框；出生区亮条与连体外轮廓边框改用 <see cref="InlayOf"/>）：同色共用一份。只给搭建后不再改色的地形件用。</summary>
     private StandardMaterial3D FlatOf(Color color)
     {
         if (!_flatMaterials.TryGetValue(color, out StandardMaterial3D? material))
@@ -1144,10 +1213,43 @@ public sealed partial class BoardView : Node3D
             }
 
             float top = BoardGeometry.TopYOf(0);
-            StandardMaterial3D frame = FlatOf(Visuals.PublicBoardFrame);
+            StandardMaterial3D frame = InlayOf(Visuals.PublicBoardFrame);
             int outline = 0, seams = 0;
-            float frameY = top + (frameHeight * 0.5f);
             float lineY = top + (lineHeight * 0.5f);
+
+            // 外轮廓边框（map-elements-v2 D5，plate_frame）：段长不一，所以逐格边摆一件单位长的边框件（锚在格边中点、不缩放），
+            // 每段两端各盖一件转角件 plate_corner（0.14 见方）——与改前"段长 + frameWidth"的边框盒逐值同包围盒（段端各外伸 frameWidth / 2）。
+            // 段的划分与计数（outline / seams）不变；转角按端点去重（相邻两段在同一角相接时只放一件）。
+            var corners = new HashSet<(int, int)>();
+            int framePieces = 0;
+            void FramePiece(Coord cell, int salt, Vector3 at, bool alongX)
+            {
+                TerrainParts.Piece piece = TerrainParts.PieceOf(TerrainParts.PlateFrame, TileVariant(cell, salt));
+                root.AddChild(new MeshInstance3D
+                {
+                    Mesh = piece.Mesh,
+                    MaterialOverride = frame,
+                    Transform = new Transform3D(alongX ? Basis.Identity : Facing(Vector3.Right), at),
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+                framePieces++;
+            }
+
+            void CornerPiece(float x, float z)
+            {
+                if (!corners.Add(((int)MathF.Round(x * 2f), (int)MathF.Round(z * 2f))))
+                {
+                    return;
+                }
+
+                root.AddChild(new MeshInstance3D
+                {
+                    Mesh = TerrainParts.PieceOf(TerrainParts.PlateCorner, 0).Mesh,
+                    MaterialOverride = frame,
+                    Position = new Vector3(x, top, z),
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+            }
 
             // 横边（Coord 的南 / 北边 → 世界 +Z / −Z）：同一行的连续格合成一条。dy = −1 南边、+1 北边。
             foreach (int dy in new[] { -1, 1 })
@@ -1161,9 +1263,20 @@ public sealed partial class BoardView : Node3D
                         float z = a.Z - (dy * half);
                         float length = b.X - a.X + BoardGeometry.CellSize;
                         _ = seam ? seams++ : outline++;
-                        root.AddChild(seam
-                            ? Strip(new Vector3(length, lineHeight, lineWidth), new Vector3((a.X + b.X) * 0.5f, lineY, z), ink)
-                            : Strip(new Vector3(length + frameWidth, frameHeight, frameWidth), new Vector3((a.X + b.X) * 0.5f, frameY, z), frame));
+                        if (seam)
+                        {
+                            root.AddChild(Strip(new Vector3(length, lineHeight, lineWidth), new Vector3((a.X + b.X) * 0.5f, lineY, z), ink));
+                            continue;
+                        }
+
+                        for (int x = x0; x <= x1; x++)
+                        {
+                            Vector3 c = BoardGeometry.Center(new Coord(x, row.Key), _width, _height);
+                            FramePiece(new Coord(x, row.Key), dy > 0 ? 20 : 21, new Vector3(c.X, top, z), alongX: true);
+                        }
+
+                        CornerPiece(a.X - half, z);
+                        CornerPiece(b.X + half, z);
                     }
                 }
             }
@@ -1180,15 +1293,27 @@ public sealed partial class BoardView : Node3D
                         float x = a.X + (dx * half);
                         float length = a.Z - b.Z + BoardGeometry.CellSize;
                         _ = seam ? seams++ : outline++;
-                        root.AddChild(seam
-                            ? Strip(new Vector3(lineWidth, lineHeight, length), new Vector3(x, lineY, (a.Z + b.Z) * 0.5f), ink)
-                            : Strip(new Vector3(frameWidth, frameHeight, length + frameWidth), new Vector3(x, frameY, (a.Z + b.Z) * 0.5f), frame));
+                        if (seam)
+                        {
+                            root.AddChild(Strip(new Vector3(lineWidth, lineHeight, length), new Vector3(x, lineY, (a.Z + b.Z) * 0.5f), ink));
+                            continue;
+                        }
+
+                        for (int y = y0; y <= y1; y++)
+                        {
+                            Vector3 c = BoardGeometry.Center(new Coord(column.Key, y), _width, _height);
+                            FramePiece(new Coord(column.Key, y), dx > 0 ? 22 : 23, new Vector3(x, top, c.Z), alongX: false);
+                        }
+
+                        CornerPiece(x, a.Z + half);
+                        CornerPiece(x, b.Z - half);
                     }
                 }
             }
 
             // 自证行（board-link-mode F.4，供自检与截图核对"接缝无边框"）：组内棋盘、外轮廓边框段数（中性色）、接缝格线段数；接缝上没有任何边框段。
             GD.Print($"[plates] 连体棋盘（出生区 {string.Join("+", Enumerable.Range(0, plates.Length).Where(i => groups[i] == group && ZoneOfPlate(plates[i]) is not null).Select(i => BirthZoneLabel.Number(ZoneOfPlate(plates[i])!.Value)))}，{cells.Count} 格）：外轮廓边框 {outline} 段，接缝格线 {seams} 段，接缝边框 0 段");
+            GD.Print($"[frame] 连体外轮廓边框件 {framePieces} 件、转角件 {corners.Count} 件（按 {outline} 段逐格边摆放）");
 
             // 某格朝 (dx, dy) 一侧：外轮廓（邻格不在组内）→ 边框；接缝（邻格在组内另一块棋盘上）→ 格线；同一块棋盘内部 → 不画（内部格线已画）。
             int? Kind(Coord c, int dx, int dy)

@@ -438,6 +438,62 @@ public static class LowPolyMesh
         return tool.Commit();
     }
 
+    /// <summary>
+    /// 放样（浮岛岩层、垂岩）：若干圈点数相同的环自上而下排列，相邻两圈连成四边面；某圈收成一点即成尖（退化的三角面自动跳过）。
+    /// 每条带的亮度系数取 <paramref name="shades"/>[k]（第 k 圈到第 k + 1 圈）；可选封顶 / 封底（从该圈中心扇形三角化，环须是星形）。
+    /// 面朝向按"从环的中轴朝外"判定，所以环的点序顺逆都可以。
+    /// </summary>
+    public static ArrayMesh Loft(IReadOnlyList<Vector3[]> rings, IReadOnlyList<float> shades, bool capTop = false, bool capBottom = false)
+    {
+        ArgumentNullException.ThrowIfNull(rings);
+        ArgumentNullException.ThrowIfNull(shades);
+        var tool = Begin();
+        for (int k = 0; k + 1 < rings.Count; k++)
+        {
+            Vector3[] upper = rings[k], lower = rings[k + 1];
+            Vector3 axis = (Centroid(upper) + Centroid(lower)) * 0.5f;
+            for (int i = 0; i < upper.Length; i++)
+            {
+                int j = (i + 1) % upper.Length;
+                Vector3 middle = (upper[i] + upper[j] + lower[i] + lower[j]) * 0.25f;
+                var outward = new Vector3(middle.X - axis.X, 0f, middle.Z - axis.Z);
+                Quad(tool, upper[i], upper[j], lower[j], lower[i], outward, shades[Math.Min(k, shades.Count - 1)]);
+            }
+        }
+
+        if (capTop)
+        {
+            Fan(rings[0], Vector3.Up, shades[0]);
+        }
+
+        if (capBottom)
+        {
+            Fan(rings[^1], Vector3.Down, MinShade);
+        }
+
+        return tool.Commit();
+
+        void Fan(Vector3[] ring, Vector3 outward, float shade)
+        {
+            Vector3 center = Centroid(ring);
+            for (int i = 0; i < ring.Length; i++)
+            {
+                Tri(tool, center, ring[i], ring[(i + 1) % ring.Length], outward, shade);
+            }
+        }
+
+        static Vector3 Centroid(Vector3[] ring)
+        {
+            Vector3 sum = Vector3.Zero;
+            foreach (Vector3 p in ring)
+            {
+                sum += p;
+            }
+
+            return sum / ring.Length;
+        }
+    }
+
     /// <summary>某条色带的亮度系数：<paramref name="baseShade"/> 起，按散列在 ±<paramref name="spread"/> / 2 内错开。</summary>
     private static float BandShade(int seed, int band, float baseShade, float spread) =>
         baseShade + (spread * 0.5f * Signed(seed, 900 + band));

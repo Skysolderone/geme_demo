@@ -67,11 +67,14 @@ public static class PartExport
             if (child is MeshInstance3D { MaterialOverride: StandardMaterial3D m } mesh)
             {
                 // 打开顶点色的材质（LowPolyMesh 部件）键里多一个 _vc：与同色同粗糙度、不用顶点色的既有材质分开存，既有材质文件名不变。
-                string key = $"{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}{(m.VertexColorUseAsAlbedo ? "_vc" : "")}";
+                // 不受光的材质（段 D 的云团）文件名前缀改 flat_、半透明的再带 _a<不透明度百分比>：与同色的哑光材质分开存；哑光材质的键与文件名不变。
+                bool unshaded = m.ShadingMode == BaseMaterial3D.ShadingModeEnum.Unshaded;
+                string alpha = m.AlbedoColor.A < 1f ? $"_a{m.AlbedoColor.A * 100f:0}" : "";
+                string key = $"{(unshaded ? "flat" : "matte")}_{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}{(m.VertexColorUseAsAlbedo ? "_vc" : "")}{alpha}";
                 if (!materials.TryGetValue(key, out StandardMaterial3D? shared))
                 {
                     shared = m;
-                    string path = $"{materialDir}/matte_{key}.tres";
+                    string path = $"{materialDir}/{key}.tres";
                     Error saved = ResourceSaver.Save(shared, path);
                     if (saved != Error.Ok)
                     {

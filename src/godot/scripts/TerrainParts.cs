@@ -80,8 +80,64 @@ public static class TerrainParts
     /// </summary>
     public static readonly Kind BankLip = new("bank_lip", 3, v => Single("BankLip", BankLipMesh(v), SideMaterial(Visuals.CliffSide)), "水格边中点（高度取该格地砖上表面）");
 
+    // —— 外框与底座部件（map-elements-v2 段 D，design D5）。
+
+    /// <summary>底座外圈石沿：每件沿边的长度（节距约 1 格，余下的读作石块间的缝）。</summary>
+    public const float RimLength = 0.95f;
+
+    /// <summary>底座外圈石沿：自底座外缘向内的进深（石沿只占底座外缘那 0.45 格的边，标注离格外缘最远 1.2，这一带净空）。</summary>
+    public const float RimDepth = 0.28f;
+
+    /// <summary>底座外圈石沿：外侧面凸出底座侧面的量（与底座侧面不共面）。</summary>
+    public const float RimOverhang = 0.02f;
+
+    /// <summary>底座外圈石沿：顶面高出底座顶面的上限——底座顶面在 TopY − WaterDrop，所以石沿顶最高到 TopY − 0.02，比坐标标注所在的 h=0 平面低。</summary>
+    public const float RimRise = 0.08f;
+
+    /// <summary>
+    /// 底座外圈石沿（一段一件）：沿边排 1–3 块倒角石（档号 + 1 块，分块点按散列），长 <see cref="RimLength"/>、进深 <see cref="RimDepth"/>、外凸 <see cref="RimOverhang"/>、
+    /// 顶高 ≤ <see cref="RimRise"/>、底下探到底座底面之下。网格里边沿 X 轴、石沿朝 +Z（底座内侧）展开，BoardView 按边的朝向转。内置岩灰（与崖壁侧面、河岸石沿同一份材质）。
+    /// </summary>
+    public static readonly Kind Rim = new("rim", 3, v => Single("Rim", RimMesh(v), SideMaterial(Visuals.CliffSide)), "段中点（底座外缘线上，高度取底座顶面）");
+
+    /// <summary>
+    /// 出生区亮条（一格边一件）：长 1 格、宽 0.07、高 0.03，贴在格内侧边缘——与改前的描边盒逐值同包围盒；顶边细倒角、侧面压暗，读作嵌进地砖边缘的亮条。
+    /// 网格里边沿 X 轴、亮条朝 +Z（格内侧）展开。材质由 BoardView 按归属色覆盖（不受光）；导出时带中性白材质。
+    /// </summary>
+    public static readonly Kind ZoneStrip = new("zone_strip", 1, _ => Single("ZoneStrip", ZoneStripMesh(), NeutralMaterial()), "格边中点（高度取该格地砖上表面）");
+
+    /// <summary>
+    /// 连体外轮廓边框（逐格边一件）：长 1 格、宽 0.13、高 0.065，骑在格边线上（内外各一半）；顶边倒角，两档只差顶面色差。
+    /// 网格里边沿 X 轴。材质由 BoardView 按台面边框色覆盖（不受光）；导出时带中性白材质。
+    /// </summary>
+    public static readonly Kind PlateFrame = new("plate_frame", 2, v => Single("PlateFrame", PlateFrameMesh(v), NeutralMaterial()), "段中点（逐格边一件：格边中点，高度取 h=0 地砖上表面）");
+
+    /// <summary>
+    /// 连体外轮廓边框的转角件：0.14 见方、高 0.07，盖在每段外轮廓的两端（与改前边框盒在段端外伸的 0.07 逐值同形），比边框件略高略宽，相交处不共面。材质同 <see cref="PlateFrame"/>。
+    /// </summary>
+    public static readonly Kind PlateCorner = new("plate_corner", 1, _ => Single("PlateCorner", PlateCornerMesh(), NeutralMaterial()), "外轮廓段端点（高度取 h=0 地砖上表面）");
+
+    /// <summary>
+    /// 浮岛岩层：单位块（顶面 1 × 1、高 1，锚在顶面中心），BoardView 按画幅与层厚整体缩放。八边形外廓（四角小切角）、三条色带、向下略收，侧面按散列微微凹凸。
+    /// 三档即三种岩色（暗度递进）：0 土层、1 岩层、2 深岩，材质内置。
+    /// </summary>
+    public static readonly Kind IslandLayer = new("island_layer", 3, v => Single("IslandLayer", IslandLayerMesh(v), VertexMaterial(IslandColor(v), 1f)), "底座中心（单位块顶面中心，按画幅缩放）");
+
+    /// <summary>
+    /// 浮岛垂岩：单位长的倒锥（尖在原点、顶面在 y = 1、顶面半径 1），五 / 六棱、中段按散列歪斜；BoardView 按长短缩放。
+    /// 0 档深岩、1–3 档岩灰，材质内置。
+    /// </summary>
+    public static readonly Kind IslandSpike = new("island_spike", 4, v => Single("IslandSpike", IslandSpikeMesh(v), VertexMaterial(IslandColor(Wrap(v, 4) == 0 ? 2 : 1), 1f)), "尖顶（单位长倒锥的尖端，按长短缩放）");
+
+    /// <summary>浮岛云团：半径 1、厚 0.55 的扁平多面团（与改前的扁球同尺寸），BoardView 按大小等比缩放。不受光、半透明，材质内置。</summary>
+    public static readonly Kind Cloud = new("cloud", 3, v => Single("Cloud", CloudMesh(v), CloudMaterial()), "云心");
+
     /// <summary>全部部件，导出顺序即此顺序（新部件追加在末尾，既有部件的导出顺序不变）。</summary>
-    public static readonly Kind[] All = [Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip];
+    public static readonly Kind[] All =
+    [
+        Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip,
+        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud,
+    ];
 
     /// <summary>单网格部件取出的网格与它自带的材质（自带材质可能为空：由调用方覆盖的部件只带中性白）。</summary>
     public readonly record struct Piece(Mesh Mesh, Material? Material);
@@ -239,6 +295,165 @@ public static class TerrainParts
         }
 
         return LowPolyMesh.Merge(parts);
+    }
+
+    /// <summary>
+    /// 石沿网格：第 v 档沿边排 v + 1 块倒角石（总长 <see cref="RimLength"/>，分块点按散列错开、块间留 0.012 的缝），z ∈ [−<see cref="RimOverhang"/>, <see cref="RimDepth"/>]；
+    /// 顶面 ≤ <see cref="RimRise"/>（各块按散列再低 0–0.012），底在 −0.14（底座厚 0.12，即探到底座底面之下 0.02）。
+    /// </summary>
+    private static ArrayMesh RimMesh(int variant)
+    {
+        int v = Wrap(variant, Rim.Variants);
+        int seed = 501 + v;
+        const float half = RimLength * 0.5f, gap = 0.006f, bottom = -0.14f;
+        float[] cuts = v switch
+        {
+            0 => [],
+            1 => [LowPolyMesh.Signed(seed, 0) * 0.18f],
+            _ => [-0.17f + (LowPolyMesh.Signed(seed, 0) * 0.06f), 0.17f + (LowPolyMesh.Signed(seed, 1) * 0.06f)],
+        };
+        float[] edges = [-half, .. cuts, half];
+        var parts = new List<(ArrayMesh, Transform3D)>();
+        for (int i = 0; i + 1 < edges.Length; i++)
+        {
+            float from = edges[i] + (i > 0 ? gap : 0f), to = edges[i + 1] - (i + 2 < edges.Length ? gap : 0f);
+            float top = RimRise - (0.012f * LowPolyMesh.Unit(seed, 10 + i));
+            float depth = RimDepth + RimOverhang;
+            ArrayMesh stone = LowPolyMesh.BeveledSlab(new Vector3(to - from, top - bottom, depth), 0.03f, 0.97f,
+                seed: seed + (i * 7), facetJitter: 0.03f, top: top, sideShade: 0.94f);
+            parts.Add((stone, new Transform3D(Basis.Identity, new Vector3((from + to) * 0.5f, 0f, (depth * 0.5f) - RimOverhang))));
+        }
+
+        return LowPolyMesh.Merge(parts);
+    }
+
+    /// <summary>亮条网格：x ∈ ±0.5、y ∈ [0, 0.03]、z ∈ [0, 0.07]（与改前描边盒逐值同包围盒），顶边倒角 0.008、侧面亮度 0.92。</summary>
+    private static ArrayMesh ZoneStripMesh()
+    {
+        const float width = 0.07f, height = 0.03f;
+        ArrayMesh strip = LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.CellSize, height, width), 0.008f, 1f, top: height, sideShade: 0.92f);
+        return LowPolyMesh.Merge([(strip, new Transform3D(Basis.Identity, new Vector3(0f, 0f, width * 0.5f)))]);
+    }
+
+    /// <summary>边框网格：x ∈ ±0.5、y ∈ [0, 0.065]、z ∈ ±0.065，顶边倒角 0.015，顶面四个三角面按档散列带 ±2% 色差，侧面亮度 0.92。</summary>
+    private static ArrayMesh PlateFrameMesh(int variant) => LowPolyMesh.BeveledSlab(
+        new Vector3(BoardGeometry.CellSize, 0.065f, 0.13f), 0.015f, 1f, seed: 701 + Wrap(variant, PlateFrame.Variants), facetJitter: 0.04f, top: 0.065f, sideShade: 0.92f);
+
+    /// <summary>转角件网格：x、z ∈ ±0.07，y ∈ [0, 0.07]，顶边倒角 0.02。</summary>
+    private static ArrayMesh PlateCornerMesh() => LowPolyMesh.BeveledSlab(new Vector3(0.14f, 0.07f, 0.14f), 0.02f, 1f, top: 0.07f, sideShade: 0.92f);
+
+    /// <summary>
+    /// 岩层网格（单位块）：外廓是四角切去 0.035 的八边形，长边各分 4 段；自上而下 4 圈（3 条色带），每圈向内收 taper × 圈序 / 3（底圈收到 0.46），
+    /// 中间两圈的段点按散列再向内凹 ≤ 0.012（外轮廓不超出顶圈）。顶面不建（压在上一层 / 底座下面），底面封上。
+    /// </summary>
+    private static ArrayMesh IslandLayerMesh(int variant)
+    {
+        int seed = 801 + Wrap(variant, IslandLayer.Variants);
+        const float chamfer = 0.035f, taper = 0.04f, jitter = 0.012f;
+        const int segments = 4, bands = 3;
+
+        // 外廓（顶圈，半边长 0.5）：四条长边各 segments + 1 个点，相邻两边之间那一小段即切角。
+        var outline = new List<Vector2>();
+        Vector2[] corners = [new(-0.5f, -0.5f), new(0.5f, -0.5f), new(0.5f, 0.5f), new(-0.5f, 0.5f)];
+        for (int side = 0; side < 4; side++)
+        {
+            Vector2 a = corners[side], b = corners[(side + 1) % 4];
+            Vector2 along = (b - a).Normalized();
+            Vector2 start = a + (along * chamfer), end = b - (along * chamfer);
+            for (int c = 0; c <= segments; c++)
+            {
+                outline.Add(start.Lerp(end, c / (float)segments));
+            }
+        }
+
+        var rings = new List<Vector3[]>();
+        var shades = new List<float>();
+        for (int r = 0; r <= bands; r++)
+        {
+            float scale = 1f - (2f * taper * r / bands);
+            var ring = new Vector3[outline.Count];
+            for (int i = 0; i < outline.Count; i++)
+            {
+                bool rough = r > 0 && r < bands && (i % (segments + 1)) is > 0 and < segments;
+                float dent = rough ? jitter * LowPolyMesh.Unit(seed, (r * 100) + i) * 2f : 0f;
+                Vector2 p = outline[i] * (scale - dent);
+                ring[i] = new Vector3(p.X, -r / (float)bands, p.Y);
+            }
+
+            rings.Add(ring);
+            if (r < bands)
+            {
+                shades.Add(1f - (0.025f * r) - (0.01f * LowPolyMesh.Unit(seed, 900 + r)));
+            }
+        }
+
+        return LowPolyMesh.Loft(rings, shades, capBottom: true);
+    }
+
+    /// <summary>
+    /// 垂岩网格（单位长倒锥）：顶圈 y = 1、半径 1；中段两圈 y = 0.62 / 0.30、半径 0.58 / 0.27，按散列在 ±0.08 内横向歪斜、各点径向抖 ±12%；尖在原点。
+    /// 0、2 档五棱，1、3 档六棱。顶面封上（贴着岩层底面，几乎看不见）。
+    /// </summary>
+    private static ArrayMesh IslandSpikeMesh(int variant)
+    {
+        int v = Wrap(variant, IslandSpike.Variants);
+        int seed = 901 + v;
+        int sides = 5 + (v & 1);
+        (float Y, float Radius, float Lean)[] profile = [(1f, 1f, 0f), (0.62f, 0.58f, 0.08f), (0.30f, 0.27f, 0.08f), (0f, 0f, 0f)];
+        var rings = new List<Vector3[]>();
+        for (int r = 0; r < profile.Length; r++)
+        {
+            (float y, float radius, float lean) = profile[r];
+            var offset = new Vector2(LowPolyMesh.Signed(seed, 50 + r) * lean, LowPolyMesh.Signed(seed, 60 + r) * lean);
+            var ring = new Vector3[sides];
+            for (int k = 0; k < sides; k++)
+            {
+                float angle = (2f * MathF.PI * k / sides) + (LowPolyMesh.Signed(seed, 70) * 0.3f);
+                float rr = radius * (1f + (0.12f * LowPolyMesh.Signed(seed, (r * 10) + k)));
+                ring[k] = new Vector3(offset.X + (MathF.Cos(angle) * rr), y, offset.Y + (MathF.Sin(angle) * rr));
+            }
+
+            rings.Add(ring);
+        }
+
+        return LowPolyMesh.Loft(rings, [1f, 0.96f, 0.93f], capTop: true);
+    }
+
+    /// <summary>云团网格：多面扁团（经线 8 / 9 / 7 条，径向抖 ±10%），半径约 1、厚约 0.55，各档横向略拉长、错开。</summary>
+    private static ArrayMesh CloudMesh(int variant)
+    {
+        int v = Wrap(variant, Cloud.Variants);
+        Vector3 stretch = v switch
+        {
+            0 => new Vector3(1.04f, 0.275f, 0.96f),
+            1 => new Vector3(0.98f, 0.29f, 1.02f),
+            _ => new Vector3(1.08f, 0.26f, 0.92f),
+        };
+        return LowPolyMesh.FacetRock(1f, v switch { 0 => 8, 1 => 9, _ => 7 }, 0.10f, 1001 + v, stretch);
+    }
+
+    /// <summary>浮岛三档岩色（改前 AddFloatingIsland 的三份材质色）：0 土层、1 岩层、2 深岩。</summary>
+    private static Color IslandColor(int tier) => tier switch
+    {
+        0 => Visuals.SlopeSide.Darkened(0.12f),
+        1 => Visuals.CliffSide.Darkened(0.10f),
+        _ => Visuals.CliffSide.Darkened(0.30f),
+    };
+
+    /// <summary>打开顶点色的哑光材质（浮岛部件内置）。</summary>
+    private static StandardMaterial3D VertexMaterial(Color color, float roughness)
+    {
+        StandardMaterial3D material = Visuals.Matte(color, roughness);
+        material.VertexColorUseAsAlbedo = true;
+        return material;
+    }
+
+    /// <summary>云团材质：改前的不受光半透明白（Visuals.Flat，α 0.55），打开顶点色（顶点色 α 恒 1，乘出来仍是 0.55）。</summary>
+    private static StandardMaterial3D CloudMaterial()
+    {
+        StandardMaterial3D material = Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f));
+        material.VertexColorUseAsAlbedo = true;
+        return material;
     }
 
     private static int Wrap(int variant, int variants) => ((variant % variants) + variants) % variants;

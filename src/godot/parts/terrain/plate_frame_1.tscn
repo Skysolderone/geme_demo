@@ -1,0 +1,20 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain/materials/matte_ffffff_r90_vc.tres" id="1_f2b6m"]
+
+[sub_resource type="ArrayMesh" id="plate_frame_1_0"]
+_surfaces = [{
+"aabb": AABB(-0.5, 0, -0.065, 1, 0.065, 0.13),
+"attribute_data": PackedByteArray("/////////////////////////////////f39//39/f/9/f3/+/v7//v7+//7+/v/////////////////////////////////6urq/+rq6v/q6ur/6urq/+rq6v/q6ur/////////////////////////////////6urq/+rq6v/q6ur/6urq/+rq6v/q6ur/////////////////////////////////6urq/+rq6v/q6ur/6urq/+rq6v/q6ur/////////////////////////////////6urq/+rq6v/q6ur/6urq/+rq6v/q6ur/"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 60,
+"vertex_data": PackedByteArray("Xz4LPbgehT2BtzO77FH4vrgehT3MzEy97FH4PrgehT3MzEy9Xz4LPbgehT2BtzO77FH4PrgehT3MzEy97FH4PrgehT3MzEw9Xz4LPbgehT2BtzO77FH4PrgehT3MzEw97FH4vrgehT3MzEw9Xz4LPbgehT2BtzO77FH4vrgehT3MzEw97FH4vrgehT3MzEy97FH4vrgehT3MzEy9AAAAP8zMTD24HoW97FH4PrgehT3MzEy97FH4vrgehT3MzEy9AAAAv8zMTD24HoW9AAAAP8zMTD24HoW9AAAAv8zMTD24HoW9AAAAPwAAAAC4HoW9AAAAP8zMTD24HoW9AAAAv8zMTD24HoW9AAAAvwAAAAC4HoW9AAAAPwAAAAC4HoW97FH4PrgehT3MzEy9AAAAP8zMTD24HoU97FH4PrgehT3MzEw97FH4PrgehT3MzEy9AAAAP8zMTD24HoW9AAAAP8zMTD24HoU9AAAAP8zMTD24HoW9AAAAPwAAAAC4HoU9AAAAP8zMTD24HoU9AAAAP8zMTD24HoW9AAAAPwAAAAC4HoW9AAAAPwAAAAC4HoU97FH4PrgehT3MzEw9AAAAv8zMTD24HoU97FH4vrgehT3MzEw97FH4PrgehT3MzEw9AAAAP8zMTD24HoU9AAAAv8zMTD24HoU9AAAAP8zMTD24HoU9AAAAvwAAAAC4HoU9AAAAv8zMTD24HoU9AAAAP8zMTD24HoU9AAAAPwAAAAC4HoU9AAAAvwAAAAC4HoU97FH4vrgehT3MzEw9AAAAv8zMTD24HoW97FH4vrgehT3MzEy97FH4vrgehT3MzEw9AAAAv8zMTD24HoU9AAAAv8zMTD24HoW9AAAAv8zMTD24HoU9AAAAvwAAAAC4HoW9AAAAv8zMTD24HoW9AAAAv8zMTD24HoU9AAAAvwAAAAC4HoU9AAAAvwAAAAC4HoW9/3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//7///6oqVJX/v///qipUlf+///+qKlSV/7///6oqVJX/v///qipUlf+///+qKlSV//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA/7//v1VVVNX/v/+/VVVU1f+//79VVVTV/7//v1VVVNX/v/+/VVVU1f+//79VVVTV////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//3//v1RVqar/f/+/VFWpqv9//79UVamq/3//v1RVqar/f/+/VFWpqv9//79UVamq/3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA/z//v1VVqar/P/+/VVWpqv8//79VVamq/z//v1VVqqr/P/+/VVWqqv8//79VVaqqAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/")
+}]
+
+[node name="PlateFrame1" type="Node3D" unique_id=1688040319]
+
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=1832164447]
+material_override = ExtResource("1_f2b6m")
+mesh = SubResource("plate_frame_1_0")
