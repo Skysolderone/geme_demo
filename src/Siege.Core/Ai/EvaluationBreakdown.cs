@@ -18,11 +18,12 @@ public sealed record EvaluationBreakdown(ImmutableArray<BigInteger> Raw, Evaluat
     /// 4 = 链接模式下的决胜一手（ai-pass-review 裁决 P7 / P13；此前 board-link-mode 的 C15 落后者阈值取 0 未递增，一并归入本版）；
     /// 5 = AI 缺省按座位视野 + 专家前瞻名册限同战场（ai-seat-vision 裁决 V1 / V2 / D4：链接模式下专家的前瞻重排在全知与按座位视野下都变了）；
     /// 6 = 循环提子停手（cycle-stop 裁决 D2 / D3：停滞大回合数 K 缺省 6，连续 K 个大回合无净增且前 N 候选全是提子 / 反提即视同无改善手 Pass；K = 0 与版本 5 逐步相同）；
-    /// 7 = 活形判定无视栅栏（fence-eye-rule 裁决 F5：眼位 / 安全 / 威胁读到的活形与眼空间随规则变了，同一局面的评价不同；评价代码本身未改）。
+    /// 7 = 活形判定无视栅栏（fence-eye-rule 裁决 F5：眼位 / 安全 / 威胁读到的活形与眼空间随规则变了，同一局面的评价不同；评价代码本身未改）；
+    /// 8 = 专家构筑期不前瞻 + 两层平局裁决（expert-tiebreak 裁决 1–5：构筑期决策直接取高难的选择；前瞻后分数即一层分数，两层加分只在两层平局带宽内裁决。简单 / 标准 / 高难逐步不变）。
     /// 维度数、任一维原始值的算法、或"哪些候选参与打分 / 保留"的规则变化 MUST 递增它：旧版本日志的 AI 决策不能用新评价逐步重现，
     /// 回放按首部版本处理（版本不同即在首部报分歧、不重跑）。
     /// </summary>
-    public const int Version = 7;
+    public const int Version = 8;
 
     /// <summary>全零分解（空批次 / Pass）。</summary>
     public static EvaluationBreakdown Zero(EvaluationWeights weights) => new([.. new BigInteger[DimensionCount]], weights);

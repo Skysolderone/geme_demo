@@ -10,7 +10,7 @@ public enum LookaheadStatus
     /// <summary>已前瞻：前瞻宽度 ≥ 2 且前瞻集至少 2 个候选，逐个模拟了下一名对手的回应。</summary>
     Applied,
 
-    /// <summary>不前瞻：前瞻宽度不大于 1，或前瞻集只有 1 个候选——直接取前瞻集的第一个。</summary>
+    /// <summary>不前瞻：构筑期决策（expert-tiebreak，直接取高难的选择）、前瞻宽度不大于 1，或前瞻集只有 1 个候选——直接取前瞻集的第一个。</summary>
     NotApplied,
 
     /// <summary>Pass：候选生成只得到空批次（前瞻集为空），与高难同样 Pass。</summary>
@@ -37,11 +37,11 @@ public enum CandidateSource
 /// <param name="SimulatedDeployLimit">模拟部署上限（= 模拟对手持有的普通子数）；没有对手为 <c>null</c>。</param>
 /// <param name="ResponseKey">模拟回应的批次键：Pass 为空串；没有对手为 <c>null</c>。</param>
 /// <param name="ScoreAfter">
-/// 前瞻后分数：一层分数（回应之后的局面上、以决策起点为"前"的九维加权总分）与 <paramref name="TwoPlyBonus"/> 之和；不做模拟时等于 <paramref name="ScoreBefore"/>
-/// （混合无对手的前瞻集里，没有下一名对手的候选另加它在 B1 上的两层加分）。
+/// 前瞻后分数：即一层分数（回应之后的局面上、以决策起点为"前"的九维加权总分）；不做模拟时等于 <paramref name="ScoreBefore"/>。
+/// expert-tiebreak D4 起 <paramref name="TwoPlyBonus"/> 不计入本项（此前为两者之和），只在平局集内裁决。
 /// </param>
 /// <param name="Source">候选来源（expert-strength）：原排序或多样补充。</param>
-/// <param name="TwoPlyBonus">两层加分（expert-strength D4）：⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋；一层分数 = 前瞻后分数 − 两层加分。</param>
+/// <param name="TwoPlyBonus">两层加分（expert-strength D4）：⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋；单独记录，不计入前瞻后分数（expert-tiebreak D4）。</param>
 public sealed record LookaheadEntry(
     string CandidateKey,
     BigInteger ScoreBefore,

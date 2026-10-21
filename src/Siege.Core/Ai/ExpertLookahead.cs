@@ -11,6 +11,7 @@ namespace Siege.Core.Ai;
 /// <summary>
 /// 专家难度的一层前瞻（expert-lookahead，ai-decision「专家难度的一层前瞻」）：在与高难完全相同的候选生成之后、复摆之前，
 /// 对自身评价前 W 个非空候选各预演（B1）、用标准难度启发式模拟下一名对手的回应并预演（B2），按专家自己的评价器在 B2 上重打分，取最高者。
+/// 构筑期决策（expert-tiebreak：下一名对手的行动大回合 ≤ 构筑期大回合数）不前瞻，直接取高难的选择。
 /// </summary>
 /// <remarks>
 /// <para><b>不是博弈树</b>（D1）：只重排已有候选，不产生新候选、不改候选内容；只看一名对手的一次回应。</para>
@@ -19,7 +20,8 @@ namespace Siege.Core.Ai;
 /// 在信息边界守门里单列为类型闭包的根。</para>
 /// <para><b>停手口径</b>（D4）：停手阈值与活形硬约束只在候选生成里生效；这里只在已过阈值的非空候选之间重排，不引入 Pass。</para>
 /// <para><b>多样候选与近似两层</b>（expert-strength D2–D5）：前瞻集按落点格集合去重，不足 W 个时以排除重跑补足（重跑由调用方给出，仍是同一停手阈值下的贪心组批，零随机）；
-/// 前瞻后分数 = 一层分数 + 两层加分，两层加分是"专家在回应后局面上的下一手最佳单点增量"这一静态评价项——不组批、不模拟之后的对手、不递归，不是第二层搜索。
+/// 两层加分是"专家在回应后局面上的下一手最佳单点增量"这一静态评价项——不组批、不模拟之后的对手、不递归，不是第二层搜索；
+/// expert-tiebreak D3 起它不再加进前瞻后分数（前瞻后分数 = 一层分数），只在一层分数的容差带（两层平局带宽）内作平局裁决。
 /// 两层扫描只读 B2 的投影公开视图与专家本人决策起点的持有类型，同属本类的信息边界。</para>
 /// </remarks>
 internal sealed class ExpertLookahead
@@ -82,6 +84,16 @@ internal sealed class ExpertLookahead
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(batch);
         ArgumentNullException.ThrowIfNull(rehearse);
+        if (IsBuildPhaseDecision(_view, _me))
+        {
+            // 第 3 步（expert-tiebreak D1 / D2）：构筑期决策——在建前瞻集之前判定，不做多样补充的排除重跑、不模拟、不做两层扫描。
+            // 只有空批次时与高难同样 Pass；否则直接取高难的选择（与控制器在前瞻宽度 0 时同一个 CandidateSelection.Best），记"不前瞻"，候选表只含它。
+            CandidateBatch best = CandidateSelection.Best(candidates);
+            return best.IsPass
+                ? (best, LookaheadRecord.Passed)
+                : (best, new LookaheadRecord(LookaheadStatus.NotApplied, [Unsimulated(new LookaheadMember(best, CandidateSource.Original))], 0, 0));
+        }
+
         ImmutableArray<LookaheadMember> set = LookaheadSet(candidates, Math.Max(_config.LookaheadWidth, 1), _config.DiverseSupplementLimit, rerun);
         if (set.IsEmpty)
         {
@@ -109,13 +121,44 @@ internal sealed class ExpertLookahead
             for (int i = 0; i < entries.Length; i++)
             {
                 BigInteger bonus = TwoPlyBonusOn(simulations[i].TwoPlyView(_view, _me), simulations[i].History, batch.Context);
-                entries[i] = entries[i] with { TwoPlyBonus = bonus, ScoreAfter = entries[i].ScoreAfter + bonus };
+                entries[i] = entries[i] with { TwoPlyBonus = bonus };
             }
         }
 
-        // 第 8–9 步：前瞻后分数 = 一层分数 + 两层加分；取最高者，同分取前瞻集靠前者。
-        int chosen = SelectIndex([.. entries.Select(e => e.ScoreAfter)]);
+        // 第 8–9 步（expert-tiebreak D3）：前瞻后分数 = 一层分数（两层加分不加进去）；一层分数不低于最高 − B 的为平局集，集内取两层加分最大者，并列取一层分数高者，再并列取前瞻集靠前者。
+        int chosen = SelectIndex([.. entries.Select(e => e.ScoreAfter)], [.. entries.Select(e => e.TwoPlyBonus)], _config.TwoPlyTieBand);
         return (set[chosen].Candidate, new LookaheadRecord(LookaheadStatus.Applied, [.. entries], chosen, _simulatedRehearsals, TwoPlyRehearsals: _twoPlyRehearsals));
+    }
+
+    /// <summary>
+    /// 构筑期决策的判定（ai-decision「专家难度的一层前瞻」第 3 步，expert-tiebreak D1）：设 R = <see cref="PublicRules.BuildProtectionRounds"/>、r = 决策起点的大回合，
+    /// r &lt; R，或 r = R 且本大回合行动顺序中专家之后仍有在局玩家（参赛中：未弃赛、未出局）时为构筑期决策——等价于"按决策起点的名册，下一名对手的行动大回合 ≤ R"。
+    /// 只读决策起点公开快照中的大回合、行动顺序与参赛状态（公平信息）；不看 Pass 名单（Pass 不移出顺序）。名册口径同 <see cref="NextOpponent"/> 第 1–2 步（同战场的在局玩家）。
+    /// </summary>
+    internal static bool IsBuildPhaseDecision(MatchPublicView view, PlayerId me)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        if (view.MajorRound < PublicRules.BuildProtectionRounds)
+        {
+            return true;
+        }
+
+        if (view.MajorRound > PublicRules.BuildProtectionRounds)
+        {
+            return false;
+        }
+
+        // 在局玩家 = 同战场的参赛中玩家（RivalsInBattlefield 已去掉弃赛、出局者与专家本人；唯一战场上即全部其他在局玩家）。
+        HashSet<PlayerId> rivals = [.. HeuristicTurnController.RivalsInBattlefield(view, me)];
+        for (int i = view.ActionOrder.IndexOf(me) + 1; i < view.ActionOrder.Length; i++)
+        {
+            if (rivals.Contains(view.ActionOrder[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -186,19 +229,40 @@ internal sealed class ExpertLookahead
     /// <summary>落点格集合的键：只看格（坐标序），不看类型与改造目标。</summary>
     private static string CellSetKey(CandidateBatch candidate) => string.Join(",", candidate.SortedCoords.Select(c => c.ToNotation()));
 
-    /// <summary>第 7 步：前瞻后分数最高者的下标；同分取靠前者（严格大于才替换）。</summary>
+    /// <summary>两层权重为 0 时的第 9 步：一层分数最高者的下标；同分取靠前者（即两层加分全为 0、带宽 0 的平局裁决）。</summary>
     internal static int SelectIndex(IReadOnlyList<BigInteger> scoresAfter)
     {
         ArgumentNullException.ThrowIfNull(scoresAfter);
-        if (scoresAfter.Count == 0)
+        return SelectIndex(scoresAfter, [.. scoresAfter.Select(_ => BigInteger.Zero)], BigInteger.Zero);
+    }
+
+    /// <summary>
+    /// 第 9 步（expert-tiebreak D3，两层平局裁决）：s* = 一层分数的最大值；一层分数不低于 s* − <paramref name="band"/> 的候选组成平局集，
+    /// 取集内两层加分最大者；两层加分并列时取一层分数最高者（负责人裁决 2026-10-21）；仍并列取前瞻集下标最小者。两层加分 MUST NOT 与一层分数相加（原"相加"口径已删除）。
+    /// 前瞻集按自身总分排序，下标 0 不一定在平局集内（一层分数可能后者更高），故从"尚未选定"起算。
+    /// </summary>
+    /// <param name="oneLayer">各候选的一层分数（= 前瞻后分数）。</param>
+    /// <param name="twoPly">各候选的两层加分（两层权重为 0 或不扫描时全为 0）。</param>
+    /// <param name="band">两层平局带宽 B（非负）。</param>
+    internal static int SelectIndex(IReadOnlyList<BigInteger> oneLayer, IReadOnlyList<BigInteger> twoPly, BigInteger band)
+    {
+        ArgumentNullException.ThrowIfNull(oneLayer);
+        ArgumentNullException.ThrowIfNull(twoPly);
+        if (oneLayer.Count == 0)
         {
-            throw new ArgumentException("前瞻集为空。", nameof(scoresAfter));
+            throw new ArgumentException("前瞻集为空。", nameof(oneLayer));
         }
 
-        int best = 0;
-        for (int i = 1; i < scoresAfter.Count; i++)
+        if (twoPly.Count != oneLayer.Count)
         {
-            if (scoresAfter[i] > scoresAfter[best])
+            throw new ArgumentException("两层加分与一层分数的个数不同。", nameof(twoPly));
+        }
+
+        BigInteger floor = oneLayer.Max() - band;
+        int best = -1;
+        for (int i = 0; i < oneLayer.Count; i++)
+        {
+            if (oneLayer[i] >= floor && (best < 0 || twoPly[i] > twoPly[best] || (twoPly[i] == twoPly[best] && oneLayer[i] > oneLayer[best])))
             {
                 best = i;
             }

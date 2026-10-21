@@ -19,8 +19,8 @@ public enum AiDifficulty
     Hard,
 
     /// <summary>
-    /// 专家（expert-lookahead / expert-strength）：候选生成与高难完全相同，按落点格集合去重并以排除重跑补足落点不同的候选（多样候选，零随机），
-    /// 再对前瞻集做一层前瞻、加上近似两层加分后重排。
+    /// 专家（expert-lookahead / expert-strength / expert-tiebreak）：候选生成与高难完全相同；构筑期决策不前瞻、直接取高难的选择；
+    /// 否则按落点格集合去重并以排除重跑补足落点不同的候选（多样候选，零随机），对前瞻集做一层前瞻后按一层分数重排，近似两层加分只在一层分数的容差带内裁决。
     /// </summary>
     Expert,
 }
@@ -56,8 +56,14 @@ public enum AiDifficulty
 /// 为 0 时不写出，缺字段按 0 读（与 <see cref="LookaheadWidth"/> 同一口径）。
 /// </param>
 /// <param name="TwoPlyWeightPermille">
-/// 两层权重 λ（expert-strength D4 / D7，千分数，非负整数）：前瞻后分数 = 一层分数 + ⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋。
+/// 两层权重 λ（expert-strength D4 / D7，千分数，非负整数）：两层加分 = ⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋。expert-tiebreak D3 起两层加分不再加进前瞻后分数，
+/// 只在一层分数的容差带（<see cref="TwoPlyTieBand"/>）内作平局裁决；λ 只作开关（λ &gt; 0 才做两层扫描）与取整口径。
 /// 0 = 不计两层加分、不做两层扫描。四档预设都为 0（专家预设已退回一层，见 <see cref="Expert"/>）；可配置项，<c>Search</c> 显式给出时生效。为 0 时不写出，缺字段按 0 读。
+/// </param>
+/// <param name="TwoPlyTieBand">
+/// 两层平局带宽 B（expert-tiebreak D3 / D4，非负整数，加权总分单位，与停手阈值同量纲）：前瞻集中一层分数不低于"最高一层分数 − B"的候选组成平局集，
+/// 集内取两层加分最大者，两层加分并列时取一层分数最高者，仍并列取前瞻集靠前者。B = 0 时只在一层分数严格相等时由两层加分裁决。B &gt; 0 而两层权重为 0 的配置无作用，<see cref="Validated"/> 拒绝。
+/// 四档预设都为 0；可配置项，<c>Search</c> 显式给出时生效。为 0 时不写出（序列化紧接 <see cref="TwoPlyWeightPermille"/> 之后），缺字段按 0 读。
 /// </param>
 /// <param name="StagnationRounds">
 /// 停滞大回合数 K（cycle-stop D3，ai-decision「循环提子停手」，非负整数；0 = 不启用）：部署决策开始时，若本 AI 盘上有子、最近 K 个大回合（本人每个大回合首次决策时采样的公开势力）
@@ -74,6 +80,7 @@ public sealed record AiSearchConfig(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LookaheadWidth = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DiverseSupplementLimit = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyTieBand = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int StagnationRounds = 0)
 {
     /// <summary>
@@ -165,7 +172,7 @@ public sealed record AiSearchConfig(
     public static AiSearchConfig ForMap(AiDifficulty difficulty, int playableCells, int? cellLimit = null) =>
         ForDifficulty(difficulty) with { CandidateCellLimit = cellLimit ?? DefaultCellLimitFor(playableCells) };
 
-    /// <summary>参数校验：N、M 至少为 1；K、停手阈值、前瞻宽度、多样补充上限、两层权重与停滞大回合数非负。</summary>
+    /// <summary>参数校验：N、M 至少为 1；K、停手阈值、前瞻宽度、多样补充上限、两层权重、两层平局带宽与停滞大回合数非负；两层平局带宽大于 0 时两层权重须大于 0（expert-tiebreak D3）。</summary>
     public AiSearchConfig Validated()
     {
         if (StagnationRounds < 0)
@@ -201,6 +208,16 @@ public sealed record AiSearchConfig(
         if (TwoPlyWeightPermille < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(TwoPlyWeightPermille), "两层权重须为非负整数（千分数；0 = 不计两层加分）。");
+        }
+
+        if (TwoPlyTieBand < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(TwoPlyTieBand), "两层平局带宽须为非负整数（加权总分单位；0 = 只裁决严格平局）。");
+        }
+
+        if (TwoPlyTieBand > 0 && TwoPlyWeightPermille == 0)
+        {
+            throw new ArgumentException("两层平局带宽只在两层权重 > 0 时生效。", nameof(TwoPlyTieBand));
         }
 
         return this;

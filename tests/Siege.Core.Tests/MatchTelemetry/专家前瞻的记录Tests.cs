@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Siege.Core.Ai;
 using Siege.Core.Board;
+using Siege.Core.Match;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
@@ -140,13 +141,17 @@ public class 专家前瞻的记录Tests
         Assert.Contains(live.Values, r => r!.Status == LookaheadStatus.Pass);
 
         // 不前瞻：前瞻宽度 1 的专家（经配置文件的 Search 显式给出）每次非 Pass 的决策都记"不前瞻"，前瞻集只有 1 个候选、前后分数相同、无对手。
+        // expert-tiebreak 1.5：原 TurnLimit 8 只跑到第 2 大回合——构筑期决策本就记"不前瞻"，W ≤ 1 的语义测不到；规格把本 Scenario 改到第 5 大回合，
+        // 这里放到 TurnLimit 24（跑进构筑期之后），并加样本下界：第 4 大回合以后确有"不前瞻"的记录。
         RunConfig w1 = LookaheadFixtures.LinkConfig(
             new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.ExpertConfig(LookaheadFixtures.PassThreshold, width: 1) with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit } },
-            LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 8 };
+            LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 24 };
         (MatchLog small, _) = RunCapturing(w1, 1, P0);
-        LookaheadLogEntry[] notApplied = [.. MatchLog.Parse(small.FullText()).LookaheadTurns.Select(t => t.Lookahead!)];
+        TurnSnapshot[] w1Turns = [.. MatchLog.Parse(small.FullText()).LookaheadTurns];
+        LookaheadLogEntry[] notApplied = [.. w1Turns.Select(t => t.Lookahead!)];
         Assert.NotEmpty(notApplied);
         Assert.Contains(notApplied, l => l.Status == nameof(LookaheadStatus.NotApplied));
+        Assert.Contains(w1Turns, t => t.MajorRound > PublicRules.BuildProtectionRounds && t.Lookahead!.Status == nameof(LookaheadStatus.NotApplied));
         Assert.All(notApplied.Where(l => l.Status == nameof(LookaheadStatus.NotApplied)), l =>
         {
             LookaheadCandidateEntry only = Assert.Single(l.Candidates);
@@ -155,6 +160,33 @@ public class 专家前瞻的记录Tests
             Assert.Equal(only.Before, only.After);
             Assert.Null(only.Responder);
         });
+    }
+
+    [Fact]
+    public void 构筑期决策记为不前瞻()
+    {
+        // 规格（expert-tiebreak）：专家在第 2 大回合做部署决策、本大回合其后还有在局玩家，基础候选有 ≥ 3 个非空候选 →
+        // 前瞻记录状态"不前瞻"，候选表只有 1 项且为同一局面上高难的选择，模拟预演次数为 0；日志端与"前瞻集只有 1 个候选"的不前瞻记录同形。
+        // 变异 T-B5（去掉构筑期判定）→ 本测试红。
+        MatchFlow Position() => Siege.Core.Tests.AiDecision.专家难度的一层前瞻Tests.BuildContact(2, [P0, LookaheadFixtures.P1, LookaheadFixtures.P2, LookaheadFixtures.P3]);
+        HeuristicTurnController hard = LookaheadFixtures.DecideHard(Position());
+        HeuristicTurnController expert = LookaheadFixtures.DecideExpert(Position());
+        LookaheadRecord record = LookaheadFixtures.Record(expert);
+
+        Assert.True(expert.LastCandidates.Count(c => !c.IsPass) >= 3, record.ToText());
+        Assert.Equal(LookaheadStatus.NotApplied, record.Status);
+        LookaheadEntry only = Assert.Single(record.Entries);
+        Assert.Equal(hard.LastChoice!.Key, only.CandidateKey);
+        Assert.Equal(0, record.SimulatedRehearsals);
+
+        LookaheadLogEntry logged = ParseSnapshot(SnapshotLine(record));
+        Assert.Equal(nameof(LookaheadStatus.NotApplied), logged.Status);
+        LookaheadCandidateEntry candidate = Assert.Single(logged.Candidates);
+        Assert.Equal(0, logged.Chosen);
+        Assert.False(logged.Changed);
+        Assert.Equal(candidate.Before, candidate.After);
+        Assert.Null(candidate.Responder);
+        Assert.Equal((0, 0, 0), (logged.SimulatedRehearsals, logged.SupplementRehearsals, logged.TwoPlyRehearsals));
     }
 
     [Fact]
@@ -179,7 +211,8 @@ public class 专家前瞻的记录Tests
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
-        Assert.Contains("\"AiEvaluationVersion\":7", text, StringComparison.Ordinal);
+        // expert-tiebreak 1.4：版本 7 → 8（同上，只改首部版本字段；PreCycleStop 还原为 3 后比对）。
+        Assert.Contains("\"AiEvaluationVersion\":8", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B（地图内容变，整局走法变，不再能逐行比对出"只差首部"）。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
@@ -193,25 +226,29 @@ public class 专家前瞻的记录Tests
         // link-map-surfaces 1.3 再重钉（F1 / F2：小回合 108 → 76、前瞻记录 27 → 19）：第一次重钉值 179565892F236BB7E6F2586D880CFDA1782540758C48539B093DCF4DB47A8B94。
         // fence-eye-rule 2.2 重钉（活形判定无视栅栏，走法变：小回合 76 → 116、前瞻记录 19 → 29）：旧值 280934BC38C4EA75FCF497B9014ACF896FE2112EC0392FB6B66C0FC24CD7450C。
         // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）：小回合 116 → 80、前瞻记录 29 → 20，旧值 7C1D707A798F384C11881762F983BE8FD6C14EB09A741E4336F3706A1B319276。
-        Assert.True("298777E823AD1C9C7D9D419A2149D14CD43C3B04C49C06032BA5CC6354F4F079" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        // expert-tiebreak 1.7 重钉（构筑期不前瞻；小回合 80 / 前瞻记录 20 不变）：确定性文本 2990 行中只差 6 行——P0 在第 1、2、3 大回合（小回合 1 / 8 / 11）的快照行前瞻记录
+        // 由"已前瞻"改为"不前瞻"，以及同三小回合的结算事件预演计数各少 4（不再预演 4 个前瞻候选的 B1：870 → 866、759 → 755 等）；落点、提子与其余各行逐字节相同。
+        // 首个分歧：小回合 1（第 1 大回合 P0 的首次部署）。旧值 298777E823AD1C9C7D9D419A2149D14CD43C3B04C49C06032BA5CC6354F4F079。
+        Assert.True("2B88061DD750AF481987BBE6528F0250116ACE295560C75729BAF981C2B16DBD" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
         Assert.NotEmpty(lookaheadLines);
         Assert.DoesNotContain("\"Source\"", lookaheadLines, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"TwoPly", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"TwoPly", text, StringComparison.Ordinal);   // 含首部的两层平局带宽（expert-tiebreak：为 0 不写出）
+        Assert.DoesNotContain("TwoPlyTieBand", text.Split('\n')[0], StringComparison.Ordinal);
         Assert.DoesNotContain("\"SupplementRehearsals\"", text, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// cycle-stop 之前的确定性文本口径：首部配置去掉 <c>RoundCap</c> / <c>StagnationRounds</c> 两项（含玩家搜索配置里的停滞大回合数）、AI 评价版本 6 还原为 3
+    /// cycle-stop 之前的确定性文本口径：首部配置去掉 <c>RoundCap</c> / <c>StagnationRounds</c> 两项（含玩家搜索配置里的停滞大回合数）、AI 评价版本（现为 8，expert-tiebreak）还原为 3
     /// （黄金值历来按"版本字段还原为 3"比对）。只改首部行；其余行原样，任何决策差异都会让哈希不等。
     /// </summary>
     private static string PreCycleStop(string text)
     {
         string[] lines = text.Split('\n');
         lines[0] = lines[0]
-            .Replace("\"AiEvaluationVersion\":7", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
+            .Replace("\"AiEvaluationVersion\":8", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
             .Replace(",\"RoundCap\":100", string.Empty, StringComparison.Ordinal)
             .Replace(",\"StagnationRounds\":6", string.Empty, StringComparison.Ordinal);
         return string.Join('\n', lines);
@@ -246,30 +283,44 @@ public class 专家前瞻的记录Tests
     }
 
     [Fact]
-    public void 两层加分可查()
+    public void 两层加分与一层分数分开记录()
     {
-        // 规格原样：一层分数 −40、两层加分 65 → 记录写两层加分 65 与前瞻后分数 25。
+        // expert-tiebreak（迁移自 expert-strength「两层加分可查」：原口径前瞻后分数 = 一层 + 两层，算例写 25）。
+        // 规格原样：某候选一层分数 −40、两层加分 65 → 记录写两层加分 65 与前瞻后分数 −40（前瞻后分数即一层分数，两层加分不计入）。
         LookaheadRecord record = new(LookaheadStatus.Applied,
         [
             Entry("A1:Basic", 100, 10, CandidateSource.Original),
-            Entry("B1:Basic", 90, 25, CandidateSource.Original, twoPly: 65),
-        ], 1, 0, TwoPlyRehearsals: 7);
+            Entry("B1:Basic", 90, -40, CandidateSource.Original, twoPly: 65),
+        ], 0, 0, TwoPlyRehearsals: 7);
         string json = SnapshotLine(record);
         Assert.Contains("\"TwoPlyBonus\":65,", json, StringComparison.Ordinal);
-        Assert.Contains("\"After\":25", json, StringComparison.Ordinal);
+        Assert.Contains("\"After\":-40", json, StringComparison.Ordinal);
         Assert.Equal(1, Count(json, "\"TwoPlyBonus\""));   // 加分为 0 的第 1 个候选不写
         Assert.Contains("\"TwoPlyRehearsals\":7", json, StringComparison.Ordinal);
         LookaheadLogEntry parsed = ParseSnapshot(json);
         Assert.Equal([0, 65], parsed.Candidates.Select(c => (int)c.TwoPlyBonus));
-        Assert.Equal(-40, (int)(parsed.Candidates[1].After - parsed.Candidates[1].TwoPlyBonus));   // 一层分数 = 前瞻后分数 − 两层加分
+        Assert.Equal(-40, (int)parsed.Candidates[1].After);   // 前瞻后分数即一层分数
         Assert.Equal(7, parsed.TwoPlyRehearsals);
         Assert.Equal(0, parsed.SupplementRehearsals);
 
-        // 真实样本：有非零两层加分，且都不为负。
+        // 真实样本（两层权重 750‰、带宽 0）：有非零两层加分，且都不为负；被选者在平局集内、两层加分为其中最大，并列取一层分数高者、再并列取靠前（平局集可由前瞻后分数与首部带宽推得）。
+        // 变异 T-S2（集内改回相加）→ 本测试红。
         (MatchLog log, _) = StrengthSample.Value;
-        LookaheadCandidateEntry[] candidates = [.. MatchLog.Parse(log.FullText()).LookaheadTurns.SelectMany(t => t.Lookahead!.Candidates)];
+        MatchLog parsedLog = MatchLog.Parse(log.FullText());
+        Assert.Equal(0, parsedLog.TwoPlyTieBandOf(0));
+        LookaheadLogEntry[] applied = [.. parsedLog.LookaheadTurns.Select(t => t.Lookahead!).Where(l => l.Status == nameof(LookaheadStatus.Applied))];
+        LookaheadCandidateEntry[] candidates = [.. parsedLog.LookaheadTurns.SelectMany(t => t.Lookahead!.Candidates)];
         Assert.Contains(candidates, c => c.TwoPlyBonus > 0);
         Assert.All(candidates, c => Assert.True(c.TwoPlyBonus >= 0));
+        Assert.NotEmpty(applied);
+        Assert.All(applied, l =>
+        {
+            System.Numerics.BigInteger top = l.Candidates.Max(c => c.After);
+            int[] tie = [.. Enumerable.Range(0, l.Candidates.Count).Where(i => l.Candidates[i].After >= top - parsedLog.TwoPlyTieBandOf(0))];
+            System.Numerics.BigInteger best = tie.Max(i => l.Candidates[i].TwoPlyBonus);
+            System.Numerics.BigInteger bestOne = tie.Where(i => l.Candidates[i].TwoPlyBonus == best).Max(i => l.Candidates[i].After);
+            Assert.Equal(tie.First(i => l.Candidates[i].TwoPlyBonus == best && l.Candidates[i].After == bestOne), l.Chosen);
+        });
     }
 
     [Fact]
@@ -283,6 +334,7 @@ public class 专家前瞻的记录Tests
         Assert.Equal(4, legacy.LookaheadWidthOf(0));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(legacy.DiverseSupplementLimitOf));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(legacy.TwoPlyWeightPermilleOf));
+        Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(legacy.TwoPlyTieBandOf));   // expert-tiebreak：缺两层平局带宽按 0 读
         TurnSnapshot[] lookahead = [.. legacy.LookaheadTurns];
         Assert.True(lookahead.Count(t => t.Lookahead!.Status == nameof(LookaheadStatus.Applied)) >= 5);
         Assert.All(lookahead.SelectMany(t => t.Lookahead!.Candidates), c =>
@@ -326,7 +378,8 @@ public class 专家前瞻的记录Tests
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
-        Assert.Contains("\"AiEvaluationVersion\":7", text, StringComparison.Ordinal);
+        // expert-tiebreak 1.4：版本 7 → 8（同上，只改首部版本字段；PreCycleStop 还原为 3 后比对）。
+        Assert.Contains("\"AiEvaluationVersion\":8", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
@@ -354,6 +407,7 @@ public class 专家前瞻的记录Tests
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(old.LookaheadWidthOf));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(old.DiverseSupplementLimitOf));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(old.TwoPlyWeightPermilleOf));
+        Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(old.TwoPlyTieBandOf));   // expert-tiebreak：缺两层平局带宽按 0 读
         ReplayResult replay = Replayer.Replay(old);
         Assert.True(replay.Identical, replay.ToString());
 
@@ -366,6 +420,7 @@ public class 专家前瞻的记录Tests
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(legacy.LookaheadWidthOf));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(legacy.DiverseSupplementLimitOf));
         Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(legacy.TwoPlyWeightPermilleOf));
+        Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(legacy.TwoPlyTieBandOf));
     }
 
     [Fact]
@@ -387,6 +442,8 @@ public class 专家前瞻的记录Tests
         Assert.Equal([4, 2, 0, 0], Enumerable.Range(0, 4).Select(original.LookaheadWidthOf));
         Assert.Equal([0, 8, 0, 0], Enumerable.Range(0, 4).Select(original.DiverseSupplementLimitOf));
         Assert.Equal([0, SamplePermille, 0, 0], Enumerable.Range(0, 4).Select(original.TwoPlyWeightPermilleOf));
+        Assert.Equal([0, 0, 0, 0], Enumerable.Range(0, 4).Select(original.TwoPlyTieBandOf));   // expert-tiebreak：B 为 0 不写出、按 0 读
+        Assert.DoesNotContain("TwoPlyTieBand", header, StringComparison.Ordinal);
         Assert.Contains($"\"TwoPlyWeightPermille\":{SamplePermille}", header, StringComparison.Ordinal);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(header, "TwoPlyWeightPermille"));
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(header, "DiverseSupplementLimit"));

@@ -3,7 +3,7 @@
   "name": "expert-tiebreak",
   "title": "expert-tiebreak：专家构筑期不前瞻 + 两层平局裁决",
   "description": "修法 A；需求、裁决 1–12 与验收以 openspec/changes/expert-tiebreak/ 为准",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

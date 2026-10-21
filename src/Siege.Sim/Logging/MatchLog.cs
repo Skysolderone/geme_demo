@@ -114,6 +114,9 @@ public sealed class MatchLog
     /// <summary>某玩家实际生效的两层权重（千分数，expert-strength D7）：口径同 <see cref="LookaheadWidthOf"/>，缺搜索配置或缺该字段按 0 读。</summary>
     public int TwoPlyWeightPermilleOf(int player) => Header.Config.Players[player].Search?.TwoPlyWeightPermille ?? 0;
 
+    /// <summary>某玩家实际生效的两层平局带宽（expert-tiebreak D4）：口径同 <see cref="LookaheadWidthOf"/>，缺搜索配置或缺该字段按 0 读。</summary>
+    public int TwoPlyTieBandOf(int player) => Header.Config.Players[player].Search?.TwoPlyTieBand ?? 0;
+
     /// <summary>本局是否用过调试 AI 或发生过人工接管（design.md D7：默认排除）。</summary>
     public bool IsContaminated => (Result?.UsedDebugAi ?? Failure?.UsedDebugAi ?? false)
         || (Result?.Takeovers.Count ?? Failure?.Takeovers.Count ?? 0) > 0;
@@ -813,12 +816,12 @@ public sealed record LookaheadCandidateEntry
 
     /// <summary>
     /// 两层加分（expert-strength D4 / D9）：⌊λ‰ × max(0, 专家下一手最佳单点增量) / 1000⌋，不失真的十进制整数。为 0 时不写出，
-    /// 缺字段（本 change 之前的日志）按 0 读；一层分数 = <see cref="After"/> − 本项。
+    /// 缺字段（本 change 之前的日志）按 0 读。expert-tiebreak D4 起不计入 <see cref="After"/>（版本 8 起 <see cref="After"/> 即一层分数；版本 7 的日志里 After = 一层 + 本项）。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public BigInteger TwoPlyBonus { get; init; }
 
-    /// <summary>前瞻后分数：一层分数（回应之后的局面上、以决策起点为"前"的加权总分）与 <see cref="TwoPlyBonus"/> 之和；不做模拟时等于 <see cref="Before"/>（另加 B1 上的两层加分，见 Core 记录）。</summary>
+    /// <summary>前瞻后分数：即一层分数（回应之后的局面上、以决策起点为"前"的加权总分；expert-tiebreak D4 起不含 <see cref="TwoPlyBonus"/>）；不做模拟时等于 <see cref="Before"/>。平局集可由各候选的本项与首部的两层平局带宽推得。</summary>
     public BigInteger After { get; init; }
 
     /// <summary>

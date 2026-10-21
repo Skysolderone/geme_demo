@@ -219,8 +219,8 @@ internal static class LookaheadFixtures
     }
 }
 
-/// <summary>包一层原 AI：部署前先调用探针，再交给原 AI；其余阶段直接转交。</summary>
-internal sealed class ProbeController(HeuristicTurnController inner, Action<StagedBatch> beforeDeploy) : ITurnController
+/// <summary>包一层原 AI：部署前先调用探针，再交给原 AI（<paramref name="afterDeploy"/> 给出时部署后再调用它）；其余阶段直接转交。</summary>
+internal sealed class ProbeController(HeuristicTurnController inner, Action<StagedBatch> beforeDeploy, Action? afterDeploy = null) : ITurnController
 {
     public HeuristicTurnController Inner => inner;
 
@@ -232,6 +232,7 @@ internal sealed class ProbeController(HeuristicTurnController inner, Action<Stag
     {
         beforeDeploy(batch);
         inner.Deploy(batch, rehearse);
+        afterDeploy?.Invoke();
     }
 
     public bool OnRejected(StagedBatch batch, BatchFailure failure) => inner.OnRejected(batch, failure);

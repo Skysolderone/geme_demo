@@ -132,26 +132,66 @@ public class 前瞻模拟的公平信息Tests
     }
 
     [Fact]
-    public void 构筑期内只在本战场回应()
+    public void 构筑期不模拟回应()
     {
-        // 规格 Scenario「构筑期内只在本战场回应」（retire-legacy-rules 1.4：原「保护期内只在出生区回应」，旧模式保护期的合法范围是出生区）：
-        // 第 2 大回合模拟下一名对手 P1：模拟回应的全部落点都在 P1 所在战场内（构筑期即其锁定的出生棋盘——载体为平坦 8×8 链接档图，四人同锁棋盘 0，
-        // 其余四块棋盘不在战场里），部署上限为 3 加其控制的军令强度（+1）= 4（设计文档 §15.2）。
-        MatchFlow position = ProtectionPosition();
-        IReadOnlySet<Coord> field = position.Board.Battlefields.ById(position.StateOf(P1).BirthZone!.Value)!.Cells.ToHashSet();
-        Assert.Equal(position.Map.Boards[0].Cells().ToHashSet(), field);   // 样本口径：战场确是棋盘 0，不是整张图
-        HeuristicTurnController expert = DecideExpert(position);
-        LookaheadRecord record = Record(expert);
+        // 规格（expert-tiebreak，替换原 Scenario「构筑期内只在本战场回应」）：第 2 大回合专家做部署决策，本大回合专家之后还有在局玩家（P1、P2）→
+        // 不构造任何模拟对手、不做模拟预演，前瞻记录的模拟预演次数为 0；打开多样补充与两层加分时排除重跑与两层预演也为 0。
+        // 原断言（迁移前）：已前瞻、每个候选的下一名对手 P1 @ 第 2 大回合、模拟部署上限 3 + 1 = 4、回应落点都在棋盘 0。
+        // 变异 T-B5（去掉构筑期判定）、T-B3（构筑期仍跑排除重跑）→ 本测试红。
+        foreach (AiSearchConfig config in new[] { ExpertConfig(), StrengthConfig() with { TwoPlyTieBand = 20 } })
+        {
+            MatchFlow position = ProtectionPosition();
+            Assert.Equal(2, position.MajorRound);
+            HeuristicTurnController hard = DecideHard(ProtectionPosition());
+            HeuristicTurnController expert = Decide(position, AiDifficulty.Expert, config);
+            LookaheadRecord record = Record(expert);
 
+            Assert.True(expert.LastCandidates.Count(c => !c.IsPass) >= 2, record.ToText());
+            Assert.Equal(LookaheadStatus.NotApplied, record.Status);
+            LookaheadEntry only = Assert.Single(record.Entries);
+            Assert.Null(only.Responder);
+            Assert.Null(only.SimulatedDeployLimit);
+            Assert.Equal((0, 0, 0), (record.SimulatedRehearsals, record.SupplementRehearsals, record.TwoPlyRehearsals));
+            Assert.Equal(hard.LastChoice!.Key, expert.LastChoice!.Key);
+        }
+    }
+
+    [Fact]
+    public void 第3大回合末位专家按第4大回合全图模拟()
+    {
+        // 规格（expert-tiebreak）：第 3 大回合专家末位，下一名对手的行动大回合为第 4 大回合 → 模拟回应的落点范围为全图可落子格扣除其禁入格（不再限于其出生棋盘），
+        // 部署上限按第 4 大回合（基础 4）。载体：link:1 初始图（5 块紧贴成一张连通地图），P0 / P1 锁棋盘 0、P2 锁棋盘 3、P3 锁棋盘 4；第 1–2 大回合四人各落 1 子，
+        // 第 3 大回合顺序 P1 → P2 → P3 → P0，前三人 Pass。
+        MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 4]);
+        match.PlayRounds(2, TestMaps.All);
+        match.AtRound(3, [P1, P2, P3, P0]);
+        match.PassTurn();
+        match.PassTurn();
+        match.PassTurn();
+        Assert.Equal(P0, match.CurrentPlayer);
+        Assert.Equal(3, match.MajorRound);
+
+        LookaheadRecord record = Record(Decide(match, AiDifficulty.Expert, ExpertConfig() with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit }));
         Assert.Equal(LookaheadStatus.Applied, record.Status);
         Assert.All(record.Entries, e =>
         {
-            Assert.Equal(P1, e.Responder);
-            Assert.Equal(2, e.ResponderRound);
-            Assert.Equal(4, e.SimulatedDeployLimit);
-            Assert.All(CoordsOf(e.ResponseKey!), c => Assert.Contains(c, field));
+            Assert.NotNull(e.Responder);
+            Assert.Equal(4, e.ResponderRound);
+            Assert.True(e.SimulatedDeployLimit >= 4, e.ToString());
         });
-        Assert.Contains(record.Entries, e => e.ResponseKey!.Length > 0);
+
+        // 范围：对每名可能的应答者，按第 4 大回合构造的模拟上下文 = 全图可落子格扣除其禁入格，含其出生棋盘之外的格。
+        MatchPublicView view = match.Publish();
+        MatchPublicView projected = ExpertLookahead.Project(view, view.Board, P0);
+        foreach (PlayerId responder in record.Entries.Select(e => e.Responder!.Value).Distinct())
+        {
+            BatchContext context = ExpertLookahead.SimulatedContext(projected, responder, 4);
+            Coord[] expected = [.. projected.Board.AllCoords().Where(c => projected.Board.Map.IsPlayable(c)).Except(projected.LifeShape.ForbiddenCellsFor(responder)).Order()];
+            Assert.Equal(expected, context.LegalRange.Order());
+            BoardPlate birth = projected.Board.Map.BirthBoard(projected.Players.Single(p => p.Player == responder).BirthZone!.Value);
+            Assert.Contains(context.LegalRange, c => !birth.Contains(c));
+            Assert.Equal(ExpertLookahead.SimulatedContext(projected, responder, 3).DeployLimit + 1, context.DeployLimit);   // 分阶段基础上限 3 → 4，信物加成相同
+        }
     }
 
     /// <summary>
@@ -216,6 +256,8 @@ public class 前瞻模拟的公平信息Tests
         Assert.Contains(aiFiles, f => Path.GetFileName(f) == "ExpertLookahead.cs");
         // expert-strength：多样补充与两层加分的新代码都在已扫描的 ExpertLookahead.cs / HeuristicTurnController.cs 里（不新增文件、不新增入口类型）——口径下界。
         Assert.Contains("TwoPlyBonusOn", File.ReadAllText(aiFiles.Single(f => Path.GetFileName(f) == "ExpertLookahead.cs")), StringComparison.Ordinal);
+        // expert-tiebreak：构筑期判定（只读公开快照的大回合、行动顺序与参赛状态）同在已扫描的 ExpertLookahead.cs 里——口径下界。
+        Assert.Contains("IsBuildPhaseDecision", File.ReadAllText(aiFiles.Single(f => Path.GetFileName(f) == "ExpertLookahead.cs")), StringComparison.Ordinal);
         Assert.Contains("DiverseSupplementLimit", File.ReadAllText(aiFiles.Single(f => Path.GetFileName(f) == "HeuristicTurnController.cs")), StringComparison.Ordinal);
         Assert.DoesNotContain(aiFiles, f => LifeShape.空区与封闭眼空间Tests.StripComments(File.ReadAllText(f)).Contains("TrueContents(", StringComparison.Ordinal));
 

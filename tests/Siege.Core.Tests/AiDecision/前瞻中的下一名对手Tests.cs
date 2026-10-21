@@ -151,12 +151,13 @@ public class 前瞻中的下一名对手Tests
     }
 
     /// <summary>
-    /// 第 2 大回合、顺序 P0（专家）→ P1 → P2 → P3，P2 / P3 已弃赛（只剩 P0 与 P1）。P1 在盘上只有 B2 一子（曾建立正势力），
+    /// 第 5 大回合、顺序 P0（专家）→ P1 → P2 → P3，P2 / P3 已弃赛（只剩 P0 与 P1）。P1 在盘上只有 B2 一子（曾建立正势力），
     /// 被 P0 的 A2 / C2 / B1 围住、只剩一口气 B3——在 P0 的出生区里。P0 的部署上限放到 9：贪心组批会走完全部候选落点，每个候选都含 B3。
+    /// expert-tiebreak 1.5：原为第 2 大回合——构筑期决策不前瞻，局面移到全图阶段（平坦 8×8 载体的五块棋盘互不连通、四人同锁棋盘 0，第 2 与第 5 大回合的合法范围同为棋盘 0，几何上中性）。
     /// </summary>
     internal static MatchFlow LastOpponentPosition()
     {
-        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(2, [P0, P1, P2, P3])
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P0, P1, P2, P3])
             .Stones(P0, "C4", "E4", "D3").Stones(P1, "D4").Stones(P2, "D10").Stones(P3, "K10");
         match.Resign(P2);
         match.Resign(P3);
@@ -185,19 +186,37 @@ public class 前瞻中的下一名对手Tests
         Assert.Equal(BigInteger.Zero, record.Entries[record.ChosenIndex].ScoreAfter - hard.LastChoice.Total);
     }
 
+    [Fact]
+    public void 构筑期不判定下一名对手()
+    {
+        // 规格（expert-tiebreak）：第 2 大回合专家 P0 之后还有在局玩家（P1–P3）→ 构筑期决策，前瞻记录中没有下一名对手与模拟回应（不调用下一名对手的判定）。
+        // 变异 T-B5（去掉构筑期判定）→ 本测试红。
+        LookaheadRecord record = Record(DecideExpert(专家难度的一层前瞻Tests.BuildContact(2, [P0, P1, P2, P3])));
+        Assert.Equal(LookaheadStatus.NotApplied, record.Status);
+        LookaheadEntry only = Assert.Single(record.Entries);
+        Assert.Null(only.Responder);
+        Assert.Null(only.ResponderRound);
+        Assert.Null(only.SimulatedDeployLimit);
+        Assert.Null(only.ResponseKey);
+        Assert.Equal(0, record.SimulatedRehearsals);
+    }
+
     // ---------- ai-seat-vision（裁决 V2 / D2，tasks 1.2）：链接模式下名册限同战场，修 C12 ----------
 
     [Fact]
-    public void 不同棋盘的玩家进名册()
+    public void 不同出生棋盘的玩家进名册()
     {
-        // 规格 Scenario「不同棋盘的玩家进名册」（open-map；编号映射：专家 P0、同棋盘 P1 在出生棋盘 0；P2、P3 在出生棋盘 3、4，整局只有一个战场）：
-        // 第 2 大回合本大回合顺序 P0、P2、P1、P3 → 每个候选的下一名对手都是 P2，模拟 P2 的回应落点全在棋盘 4（下标 3）内；全知视图与按座位投影视图（= 全图）都如此。
+        // 规格 Scenario「不同出生棋盘的玩家进名册」（open-map；编号映射：专家 P0、同棋盘 P1 在出生棋盘 0；P2、P3 在出生棋盘 3、4，整局只有一个战场）：
+        // 第 5 大回合本大回合顺序 P0、P2、P1、P3 → 每个候选的下一名对手都是 P2，模拟回应的合法落子范围为全图可落子格扣除 P2 的禁入格；全知视图与按座位投影视图（= 全图）都如此。
         // 专家末位时（顺序 P1、P2、P3、P0）跨大回合预测在全部名册玩家之间比较 → 下一名对手是预测顺序里的第一名他人，行动大回合 + 1。
         // 原「他战场玩家不进名册」随 open-map 反向（名册 = 全部其他在局玩家）。
+        // expert-tiebreak 1.5：原为第 2 大回合、断言"构筑期内模拟范围 = 其出生棋盘（棋盘 4）"——构筑期决策不前瞻、不模拟，被模拟的下一名对手总在全图阶段行动，
+        // 局面改到第 5 大回合（第 1 大回合四人各落 1 子后把大回合摆到 5），范围断言改为全图口径。
         MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 4]);
         match.PlayRounds(1, TestMaps.All);
+        match.Debug.SetMajorRound(5);
         int round = match.MajorRound;
-        Assert.Equal(2, round);
+        Assert.Equal(5, round);
         Assert.True(match.Publish().Power!.Of(P2).Total > 0, "样本口径：别的棋盘上的玩家确有势力");
         Assert.All(TestMaps.All, p => Assert.True(match.StateOf(p).HasEstablishedPower, $"样本口径：{p} 曾建立正势力"));
         Assert.All(TestMaps.All, p => Assert.Equal(match.BattlefieldOf(P0), match.BattlefieldOf(p)));
@@ -212,12 +231,13 @@ public class 前瞻中的下一名对手Tests
             MatchPublicView projected = ExpertLookahead.Project(view, view.Board, P0);
             Assert.All(new[] { P1, P2, P3 }, p => Assert.Equal(PlayerStatus.Active, projected.Players.Single(s => s.Player == p).Status));
             Assert.Equal((P2, round), ExpertLookahead.NextOpponent(view, P0, projected));
-            // 构筑期内模拟对手的合法落子范围 = 其出生棋盘（棋盘 4）的可落子格 − 禁入格。
+            // 全图阶段模拟对手的合法落子范围 = 全图可落子格 − P2 的禁入格（含其出生棋盘之外的格）；改造范围为全图。
             Batch.BatchContext simulated = ExpertLookahead.SimulatedContext(projected, P2, round);
-            Assert.NotEmpty(simulated.LegalRange);
-            Assert.All(simulated.LegalRange, c => Assert.Contains(c, board3));
+            Coord[] expected = [.. projected.Board.AllCoords().Where(c => projected.Board.Map.IsPlayable(c)).Except(projected.LifeShape.ForbiddenCellsFor(P2)).Order()];
+            Assert.Equal(expected, simulated.LegalRange.Order());
+            Assert.Contains(simulated.LegalRange, c => !board3.Contains(c));
             Assert.NotNull(simulated.EditScope);
-            Assert.All(simulated.EditScope!, c => Assert.Contains(c, board3));
+            Assert.Equal(projected.Board.AllCoords().Count(), simulated.EditScope!.Count);
 
             MatchPublicView last = start with { ActionOrder = [P1, P2, P3, P0] };
             (PlayerId Responder, int MajorRound)? next = ExpertLookahead.NextOpponent(last, P0, ExpertLookahead.Project(last, projected.Board, P0));

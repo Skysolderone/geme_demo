@@ -5,6 +5,7 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.Scoring;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
@@ -108,20 +109,73 @@ public class 专家难度的一层前瞻Tests
     }
 
     [Fact]
-    public void 前瞻后分数是两项之和()
+    public void 前瞻后分数等于一层分数()
     {
-        // 前瞻后分数 = 一层分数 + 两层加分（规格算例：一层 −40、加分 65 → 25，以 25 参与选择）。
-        // 取样：叫吃局面上同一前瞻集，两层权重 0（一层配置）与 1000‰（多样候选关闭）两种配置——逐候选
-        // 前瞻后分数(1000‰) − 两层加分(1000‰) = 前瞻后分数(0)，即一层分数；样本口径：至少一个候选的两层加分为正。
+        // expert-tiebreak D3（迁移自 expert-strength「前瞻后分数是两项之和」）：前瞻后分数 = 一层分数，两层加分不加进去、只参与平局裁决。
+        // 规格算例：两层权重 1000‰，一层分数 −40、两层加分 65 → 前瞻后分数 −40（记录端见 专家前瞻的记录Tests.两层加分与一层分数分开记录）。
+        // 取样：叫吃局面（第 5 大回合）上同一前瞻集，两层权重 0（一层配置）与 1000‰（多样候选关闭、带宽 0、20 两档）——逐候选前瞻后分数与一层配置逐项相同；
+        // 被选下标等于按（一层分数, 两层加分, 带宽）的平局裁决。样本口径：至少一个候选的两层加分为正。
+        // 变异 T-S2（平局集内改回"一层 + 两层"相加）→ 本测试红。
         LookaheadRecord one = Record(DecideExpert(AtariPosition()));
-        LookaheadRecord two = Record(Decide(AtariPosition(), AiDifficulty.Expert, StrengthConfig(supplement: 0)));
+        foreach (int band in new[] { 0, 20 })
+        {
+            LookaheadRecord two = Record(Decide(AtariPosition(), AiDifficulty.Expert, StrengthConfig(supplement: 0) with { TwoPlyTieBand = band }));
 
-        Assert.Equal(LookaheadStatus.Applied, two.Status);
-        Assert.Equal(one.Entries.Select(e => e.CandidateKey), two.Entries.Select(e => e.CandidateKey));
-        Assert.All(one.Entries, e => Assert.Equal(BigInteger.Zero, e.TwoPlyBonus));
-        Assert.Contains(two.Entries, e => e.TwoPlyBonus > 0);
-        Assert.Equal(one.Entries.Select(e => e.ScoreAfter), two.Entries.Select(e => e.ScoreAfter - e.TwoPlyBonus));
-        Assert.Equal(ExpertLookahead.SelectIndex([.. two.Entries.Select(e => e.ScoreAfter)]), two.ChosenIndex);
+            Assert.Equal(LookaheadStatus.Applied, two.Status);
+            Assert.Equal(one.Entries.Select(e => e.CandidateKey), two.Entries.Select(e => e.CandidateKey));
+            Assert.All(one.Entries, e => Assert.Equal(BigInteger.Zero, e.TwoPlyBonus));
+            Assert.Contains(two.Entries, e => e.TwoPlyBonus > 0);
+            Assert.Equal(one.Entries.Select(e => e.ScoreAfter), two.Entries.Select(e => e.ScoreAfter));
+            Assert.Equal(ExpertLookahead.SelectIndex([.. two.Entries.Select(e => e.ScoreAfter)], [.. two.Entries.Select(e => e.TwoPlyBonus)], band), two.ChosenIndex);
+        }
+    }
+
+    [Fact]
+    public void 带内由两层加分裁决()
+    {
+        // 规格算例（expert-tiebreak 1.3）：两层权重 1000‰、带宽 20；A 排在 B 之前，A 一层 100 / 两层 0，B 一层 85 / 两层 200 → 85 ≥ 100 − 20，B 在平局集内，选 B。
+        // 带边界：B 一层恰为 80（= 100 − 20）仍在集内。变异 T-S1（平局集用 > 代替 ≥）→ 本测试红。
+        Assert.Equal(1, ExpertLookahead.SelectIndex([100, 85], [0, 200], 20));
+        Assert.Equal(1, ExpertLookahead.SelectIndex([100, 80], [0, 200], 20));
+        // 集内只比两层加分、不与一层分数相加：A 100 / 10、B 85 / 20 → 选 B（相加口径 110 > 105 会选 A）。变异 T-S2（集内改回相加）→ 本测试红。
+        Assert.Equal(1, ExpertLookahead.SelectIndex([100, 85], [10, 20], 20));
+        // 集内两层加分并列 → 先比一层分数（见 两层加分并列时再比一层分数），一层也并列才取前瞻集靠前者。变异 T-S3（并列改取下标最大）→ 本测试红。
+        Assert.Equal(1, ExpertLookahead.SelectIndex([90, 100, 95, 85], [0, 50, 50, 50], 10));
+        Assert.Equal(0, ExpertLookahead.SelectIndex([100, 95], [7, 7], 20));
+        Assert.Equal(0, ExpertLookahead.SelectIndex([100, 100], [7, 7], 20));
+        Assert.Equal(1, ExpertLookahead.SelectIndex([90, 100, 100], [7, 7, 7], 20));
+    }
+
+    [Fact]
+    public void 两层加分并列时再比一层分数()
+    {
+        // 规格算例（负责人裁决 2026-10-21，expert-tiebreak 段 A 待决项 1）：两层权重 1000‰、带宽 20，前瞻集 A / B / C / D 一层 3864 / 3862 / 3862 / 3878、两层加分都是 829 →
+        // 四者都在平局集内（≥ 3858），两层并列，选一层最高的 D（原"并列取靠前"会选 A）。一层也并列时才取前瞻集靠前者。
+        // 变异 T-S4（去掉一层分数二级键，退回并列取下标最小）→ 本测试红。
+        Assert.Equal(3, ExpertLookahead.SelectIndex([3864, 3862, 3862, 3878], [829, 829, 829, 829], 20));
+        Assert.Equal(1, ExpertLookahead.SelectIndex([3858, 3878, 3878, 3870], [829, 829, 829, 829], 20));
+        Assert.Equal(0, ExpertLookahead.SelectIndex([3864, 3878], [830, 829], 20));   // 一级键仍是两层加分
+    }
+
+    [Fact]
+    public void 带外不被两层加分翻转()
+    {
+        // 规格算例：两层权重 1000‰、带宽 20；A 一层 100 / 两层 0，B 一层 70 / 两层 1000 → B 不在平局集内，选 A（相加口径会选 B：70 + 1000 > 100）。
+        // 变异 T-S2（集内改回相加）→ 本测试红。
+        Assert.Equal(0, ExpertLookahead.SelectIndex([100, 70], [0, 1000], 20));
+        Assert.Equal(0, ExpertLookahead.SelectIndex([100, 79], [0, 1000], 20));
+    }
+
+    [Fact]
+    public void 带宽为0只裁决严格平局()
+    {
+        // 规格算例：两层权重 1000‰、带宽 0；A、B 一层都是 100，A 在前，两层 10 / 30 → 选 B；若 B 的一层为 99 → 选 A。
+        // 首个候选不在平局集内时（前瞻集按自身总分排序，一层分数可能后者更高）不得因"从下标 0 起算"而误选它。
+        Assert.Equal(1, ExpertLookahead.SelectIndex([100, 100], [10, 30], 0));
+        Assert.Equal(0, ExpertLookahead.SelectIndex([100, 99], [10, 30], 0));
+        Assert.Equal(1, ExpertLookahead.SelectIndex([85, 100], [500, 0], 0));
+        // 两层权重为 0（两层加分恒 0）时退化为"一层分数最高、同分取靠前者"，与单参重载逐项相同。
+        Assert.Equal(ExpertLookahead.SelectIndex([5, 9, 9, 1]), ExpertLookahead.SelectIndex([5, 9, 9, 1], [0, 0, 0, 0], 0));
     }
 
     [Fact]
@@ -149,14 +203,16 @@ public class 专家难度的一层前瞻Tests
     }
 
     /// <summary>
-    /// 第 2 大回合、顺序 P0 → P3：下一名对手 P1 的合法落子范围里没有空格 → 对每个候选的模拟回应都是 Pass。
+    /// 第 5 大回合、顺序 P0 → P3：下一名对手 P1 的合法落子范围里没有空格 → 对每个候选的模拟回应都是 Pass。
+    /// expert-tiebreak 1.5：原为第 2 大回合——构筑期决策不前瞻，局面移到全图阶段；平坦 8×8 载体的五块棋盘互不连通，四人同锁棋盘 0 时第 5 大回合的合法范围（所在战场 = 棋盘 0）
+    /// 与第 2 大回合（出生棋盘 ∩ 战场）相同，"P1 的范围里没有空格"的构造不变。
     /// retire-legacy-rules 1.4：原 9×9 局面是"P1 的 3×3 出生区被自己的 9 枚子填满"——旧模式保护期内合法范围只是出生区；链接模式下合法范围是整个战场，
     /// 四人同锁棋盘 0 时只要有空格 P1 就能落。改为：P0 占满棋盘 0、只留三块直三眼空间（<see cref="NoResponseEyes"/>，眼值 1 + 1 + 1，P0 为已确定活形）——
     /// 全部空格都是 P0 活形的眼空间、对 P1 是禁入格，P1 的合法范围里没有空格；P0 自己可以点直三的中间（眼位 +1，非单格眼、不失活形），候选不止一个。
     /// </summary>
     private static MatchFlow NoResponsePosition()
     {
-        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(2, [P0, P1, P2, P3]);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P0, P1, P2, P3]);
         match.Stones(P0, [.. match.Map.Boards[0].Cells().Select(c => c.ToNotation()).Except(NoResponseEyes)]);
         match.SetDeployLimit(1);   // 单子候选：三处直三中间各是一个候选（部署上限 3 时贪心组批会把三处并成同一个批次，前瞻集只剩 1 个）
         return match;
@@ -253,9 +309,13 @@ public class 专家难度的一层前瞻Tests
         // (1, EB64AF2FB155B777…, 39001220DE9D06FA…) (2, D4DBE024E7A2B359…, 4A53F34D09955038…) (3, 24A9B777CD3BF721…, 4EC036D2E418FFD7…)。
         // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；条数 / 消费 / 记录数仍为 24 / 8556 / 12。旧值：
         // (1, 565CB9392D540698…, D6304D1307C2ACA2…) (2, A5550052BCF414FE…, BB8C1F993F763A59…) (3, B9A222ADE7601D46…, 3061AE8C815967AD…)。
-        (1, 24, "697432832ABA4E55E6BA0A8FB2411D342D9205122E3E985F048098AAFFB06D7D", 8556, 12, "9EB5DEF5AAF9EC398E716CF0D4E07F3FB873A7EE5E4B9DE8EE923A35FAF32320"),
-        (2, 24, "370170EE8D4031EFF3E50FC9D15C3F278FAC0807126BB5BF33127E48D18C4444", 8556, 12, "96D0C33599A2274F32198DD4E23ED01D8ED763771851B20682111E0B2CFD9326"),
-        (3, 24, "5CE58EFA77268970E147F6D30C568EBFE196F27DB460CCC77D00747F0DFCC1A9", 8556, 12, "5BCAB1A5B7F19181B190F64BD247528147617A857347E6AF14DD3B93314890F6"),
+        // expert-tiebreak 1.7 重钉（构筑期不前瞻）：决策序列、条数与 ai-P0 消费逐项不变（24 / 8556），只有前瞻记录变了——构筑期决策的记录由"已前瞻 #0"改为"不前瞻 #0"
+        // （候选表只剩高难的选择、前后分数相同、sim=0），其余记录逐条相同。首个分歧：每颗种子 P0 的第 1 条记录（第 1 大回合）；分歧的记录种子 1 为第 1–2 条（第 3 大回合 P0 末位、照常前瞻），
+        // 种子 2 / 3 为第 1–3 条（见 .trellis/tasks/10-21-expert-tiebreak/rebaseline.txt）。旧 RecordsHash：
+        // 1 → 9EB5DEF5AAF9EC398E716CF0D4E07F3FB873A7EE5E4B9DE8EE923A35FAF32320；2 → 96D0C33599A2274F32198DD4E23ED01D8ED763771851B20682111E0B2CFD9326；3 → 5BCAB1A5B7F19181B190F64BD247528147617A857347E6AF14DD3B93314890F6。
+        (1, 24, "697432832ABA4E55E6BA0A8FB2411D342D9205122E3E985F048098AAFFB06D7D", 8556, 12, "4169B2F72BBF8178100ACDAD6F19EA77681C9982805B3B42787C7967365C5B0C"),
+        (2, 24, "370170EE8D4031EFF3E50FC9D15C3F278FAC0807126BB5BF33127E48D18C4444", 8556, 12, "D2AE1D4A05092D7A11A92D6DF1402A7E11A14910584F878E39370750FE15A398"),
+        (3, 24, "5CE58EFA77268970E147F6D30C568EBFE196F27DB460CCC77D00747F0DFCC1A9", 8556, 12, "5EE764BC9925BE5245FF3AD664CB869725EB91BA04E7694D099F5A72CBB53B19"),
     ];
 
     /// <summary>G1 口径的一局：座位 1（P0）按 <paramref name="search"/> 做专家，与 <see cref="G1Golden"/> 逐项比对。</summary>
@@ -353,6 +413,196 @@ public class 专家难度的一层前瞻Tests
     }
 
     private const int TwoCandidateThreshold = 700;
+
+    // ---------- expert-tiebreak 1.2：构筑期不前瞻（design.md D1 / D2） ----------
+
+    /// <summary>
+    /// 接触局面（P0 与 P1 在棋盘 0 中部接触，落子同 <see cref="前瞻模拟的公平信息Tests.ContactPosition"/>；平坦 8×8 链接载体、四人同锁棋盘 0），摆到第 <paramref name="round"/> 大回合、给定顺序。
+    /// 停手阈值 0 下基础候选有多个非空候选（用例逐个断言 ≥ 3）。
+    /// </summary>
+    internal static MatchFlow BuildContact(int round, PlayerId[] order) =>
+        LinkModeFixtures.PlainStarted().AtRound(round, order)
+            .Stones(P0, "E6", "F6", "F5").Stones(P1, "G6", "G7", "F7").Stones(P2, "D9").Stones(P3, "J4");
+
+    /// <summary>第 3 大回合、顺序 P1 → P2 → P3 → P0（专家末位）：前三人先 Pass，轮到专家。</summary>
+    internal static MatchFlow Round3LastSeat()
+    {
+        MatchFlow match = BuildContact(3, [P1, P2, P3, P0]);
+        match.PassTurn();
+        match.PassTurn();
+        match.PassTurn();
+        Assert.Equal(P0, match.CurrentPlayer);
+        Assert.Equal(3, match.MajorRound);
+        return match;
+    }
+
+    /// <summary>断言构筑期决策的前瞻记录：不前瞻、候选表只有高难的选择、前瞻前后分数相同、无对手，模拟 / 排除重跑 / 两层预演都为 0；专家与高难选同一个。</summary>
+    internal static void AssertBuildPhase(HeuristicTurnController hard, HeuristicTurnController expert)
+    {
+        LookaheadRecord record = Record(expert);
+        Assert.True(expert.LastCandidates.Count(c => !c.IsPass) >= 3, $"基础候选只有 {expert.LastCandidates.Count(c => !c.IsPass)} 个非空候选");
+        Assert.Equal(hard.LastCandidates.Select(c => c.Key), expert.LastCandidates.Select(c => c.Key));
+        Assert.Equal(LookaheadStatus.NotApplied, record.Status);
+        LookaheadEntry only = Assert.Single(record.Entries);
+        Assert.Equal(0, record.ChosenIndex);
+        Assert.Equal(hard.LastChoice!.Key, only.CandidateKey);
+        Assert.Equal(hard.LastChoice.Key, expert.LastChoice!.Key);
+        Assert.Equal(hard.LastChoice.Total, only.ScoreBefore);
+        Assert.Equal(only.ScoreBefore, only.ScoreAfter);
+        Assert.Null(only.Responder);
+        Assert.Null(only.ResponderRound);
+        Assert.Null(only.ResponseKey);
+        Assert.Equal(CandidateSource.Original, only.Source);
+        Assert.Equal(BigInteger.Zero, only.TwoPlyBonus);
+        Assert.Equal((0, 0, 0), (record.SimulatedRehearsals, record.SupplementRehearsals, record.TwoPlyRehearsals));
+    }
+
+    [Fact]
+    public void 第3大回合末位照常前瞻()
+    {
+        // 规格（expert-tiebreak 1.2）：第 3 大回合专家是本大回合行动顺序中最后一名在局玩家，基础候选有 ≥ 3 个非空候选 →
+        // 不是构筑期决策（下一名对手在第 4 大回合全图行动），按第 4–9 步前瞻，状态"已前瞻"；每个候选的下一名对手都按第 4 大回合模拟。
+        // 变异 T-B1（判据改成 r ≤ R）→ 本测试红。
+        HeuristicTurnController expert = DecideExpert(Round3LastSeat());
+        LookaheadRecord record = Record(expert);
+
+        Assert.True(expert.LastCandidates.Count(c => !c.IsPass) >= 3, record.ToText());
+        Assert.Equal(LookaheadStatus.Applied, record.Status);
+        Assert.True(record.Entries.Length >= 2, record.ToText());
+        Assert.All(record.Entries, e =>
+        {
+            Assert.NotNull(e.Responder);
+            Assert.Equal(4, e.ResponderRound);
+        });
+        Assert.True(record.SimulatedRehearsals > 0);
+    }
+
+    [Fact]
+    public void 第3大回合非末位不前瞻()
+    {
+        // 规格：第 3 大回合专家之后还有在局玩家，基础候选有 ≥ 3 个非空候选 → 构筑期决策：专家选同一局面上高难的选择，状态"不前瞻"，
+        // 不做多样补充的排除重跑、不模拟、不做两层扫描（打开 S 8 / λ 1000 / B 20 也一样）。另取第 1、2 大回合（r < R）与第 3 大回合居中（前面的 P1 已 Pass）。
+        // 变异 T-B2（判据只看 r：r < R）、T-B3（构筑期仍跑排除重跑）→ 本测试红。
+        (int Round, PlayerId[] Order, int Passes)[] cases =
+        [
+            (3, [P0, P1, P2, P3], 0),
+            (3, [P1, P0, P2, P3], 1),
+            (2, [P0, P1, P2, P3], 0),
+            (1, [P0, P1, P2, P3], 0),
+        ];
+        foreach ((int round, PlayerId[] order, int passes) in cases)
+        {
+            MatchFlow Position()
+            {
+                MatchFlow match = BuildContact(round, order);
+                for (int i = 0; i < passes; i++)
+                {
+                    match.PassTurn();
+                }
+
+                Assert.Equal(P0, match.CurrentPlayer);
+                Assert.Equal(round, match.MajorRound);
+                return match;
+            }
+
+            HeuristicTurnController hard = DecideHard(Position());
+            AssertBuildPhase(hard, DecideExpert(Position()));
+            AssertBuildPhase(hard, Decide(Position(), AiDifficulty.Expert, StrengthConfig() with { TwoPlyTieBand = 20 }));
+        }
+    }
+
+    [Fact]
+    public void 其后只剩已出局者时不算构筑期()
+    {
+        // 规格：第 3 大回合专家之后的玩家都已弃赛或出局 → 不是构筑期决策（下一名对手按第 4 大回合预测）。
+        // 顺序 P1 → P0（专家）→ P2 → P3：P1 先在 D8 提走 P2 在盘上唯一的子 D9（P2 曾建立正势力 → 出局），P3 弃赛。专家之后只剩出局者与弃赛者 → 已前瞻，下一名对手 P1 @ 第 4 大回合。
+        // 对照：P3 不弃赛时专家之后仍有在局玩家 → 构筑期，不前瞻（判定不看 Pass 名单，只看参赛状态）。
+        // 变异 T-B4（"在局"不看参赛状态，按顺序位置判）→ 本测试红。
+        MatchFlow Position(bool resignP3)
+        {
+            MatchFlow match = BuildContact(3, [P1, P0, P2, P3]).Stones(P1, "C9", "E9", "D10");
+            match.PlayTurn("D8");
+            Assert.Equal(PlayerStatus.Eliminated, match.StateOf(P2).Status);
+            if (resignP3)
+            {
+                match.Resign(P3);
+                Assert.Equal(PlayerStatus.Resigned, match.StateOf(P3).Status);
+            }
+
+            Assert.Equal(P0, match.CurrentPlayer);
+            return match;
+        }
+
+        HeuristicTurnController expert = DecideExpert(Position(resignP3: true));
+        LookaheadRecord record = Record(expert);
+        Assert.True(expert.LastCandidates.Count(c => !c.IsPass) >= 3, record.ToText());
+        Assert.Equal(LookaheadStatus.Applied, record.Status);
+        Assert.All(record.Entries, e =>
+        {
+            Assert.Equal(P1, e.Responder);
+            Assert.Equal(4, e.ResponderRound);
+        });
+
+        AssertBuildPhase(DecideHard(Position(resignP3: false)), DecideExpert(Position(resignP3: false)));
+    }
+
+    [Fact]
+    public void 构筑期专家与高难逐步相同()
+    {
+        // 守门（expert-tiebreak D6 / tasks 1.6）：link:1、对局种子 1–3、内置固定配对脚本、1 专家（座位 1）+ 3 标准、写死权重与停手阈值（LinkConfig），截断到第 2 大回合结束；
+        // 专家分别取专家预设与"W 4 / S 8 / λ 1000 / B 20"，对照同座位换成高难的对局：每一步决策与 ai-P0 子流的消费逐项相同；
+        // 专家的每条前瞻记录都是"不前瞻"或"Pass"，排除重跑与两层扫描（及模拟）的预演次数都为 0。跑局配置给候选格上限 0，使专家与高难落成同一 K。
+        // 变异 T-B5（去掉构筑期判定）→ 本测试红。
+        AiSearchConfig[] experts =
+        [
+            AiSearchConfig.Expert with { PassThreshold = PassThreshold },
+            AiSearchConfig.Expert with { PassThreshold = PassThreshold, DiverseSupplementLimit = StrengthSupplement, TwoPlyWeightPermille = StrengthPermille, TwoPlyTieBand = 20 },
+        ];
+        foreach (ulong seed in new ulong[] { 1, 2, 3 })
+        {
+            (IReadOnlyList<string> hardDecisions, List<long> hardConsumed, _) = RunSeat0ToRound(AiDifficulty.Hard, AiSearchConfig.Hard with { PassThreshold = PassThreshold }, seed, 2);
+            Assert.True(hardDecisions.Count >= 2, $"种子 {seed}：高难只有 {hardDecisions.Count} 条决策");
+            Assert.True(hardConsumed.Count >= 2 && hardConsumed[^1] > 0, $"种子 {seed}：高难部署 {hardConsumed.Count} 次、没有消费扰动子流");
+            foreach (AiSearchConfig search in experts)
+            {
+                (IReadOnlyList<string> decisions, List<long> consumed, List<LookaheadRecord> records) = RunSeat0ToRound(AiDifficulty.Expert, search, seed, 2);
+                Assert.Equal(hardDecisions, decisions);
+                Assert.Equal(hardConsumed, consumed);   // 每次部署之后的累计消费逐项相同
+                Assert.NotEmpty(records);
+                Assert.Contains(records, r => r.Status == LookaheadStatus.NotApplied);
+                Assert.All(records, r =>
+                {
+                    Assert.Contains(r.Status, new[] { LookaheadStatus.NotApplied, LookaheadStatus.Pass });
+                    Assert.Equal((0, 0, 0), (r.SimulatedRehearsals, r.SupplementRehearsals, r.TwoPlyRehearsals));
+                    Assert.True(r.Entries.Length <= 1, r.ToText());
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>link:1</c> 一局（1.6 守门口径）：座位 1（P0）按 <paramref name="difficulty"/> / <paramref name="search"/>，其余三名标准，内置固定配对脚本、跑局候选格上限 0、截断到第 <paramref name="rounds"/> 大回合结束；
+    /// 返回 P0 的决策序列（含征募与整理）、每次部署之后 ai-P0 子流的累计消费次数与每次部署的前瞻记录（高难没有记录）。
+    /// </summary>
+    internal static (IReadOnlyList<string> Decisions, List<long> Consumed, List<LookaheadRecord> Records) RunSeat0ToRound(AiDifficulty difficulty, AiSearchConfig search, ulong seed, int rounds)
+    {
+        MatchSession session = CreateSession(
+            LinkConfig(new PlayerAiConfig { Difficulty = difficulty, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = 0 }, seed);
+        Siege.Core.Determinism.RandomStream stream = session.Match.Seed.Stream(HeuristicAi.StreamName(P0));
+        var inner = new HeuristicTurnController(P0, session.Match.Publish, stream, difficulty, Weights, search);
+        var consumed = new List<long>();
+        var records = new List<LookaheadRecord>();
+        session.SetController(P0, new ProbeController(inner, _ => { }, () =>
+        {
+            consumed.Add(stream.Consumed);
+            if (inner.LastLookahead is { } record)
+            {
+                records.Add(record);
+            }
+        }));
+        RunToRound(session, rounds);
+        return (inner.Decisions, consumed, records);
+    }
 
     [Fact]
     public void 前瞻集不足W个()
@@ -488,6 +738,90 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(1000, back.Players[0].Search!.TwoPlyWeightPermille);
         Assert.Equal(AiDifficulty.Expert, back.Players[0].Difficulty);
         Assert.All(back.Players.Skip(1), p => Assert.Equal(AiSearchConfig.Standard, p.Search));
+
+        // expert-tiebreak 1.1：两层平局带宽为 0 时不写出——上面专家预设、一层配置与 S 8 / λ 1000 三行字面量不含该字段，配置记录同样不含。
+        Assert.DoesNotContain("TwoPlyTieBand", json, StringComparison.Ordinal);
+        Assert.Equal(0, back.Players[0].Search!.TwoPlyTieBand);
+    }
+
+    [Fact]
+    public void 显式给出的多样补充上限两层权重与带宽进入记录()
+    {
+        // expert-tiebreak 1.1 算例：{前瞻宽度 4, 多样补充上限 8, 两层权重 1000‰, 两层平局带宽 20} 依次写出 W / S / λ / B（B 紧接两层权重、在停滞大回合数之前）；
+        // 三名标准玩家不含这些字段。配置记录（RunConfig.ToJson / FromJson）与日志首部（MatchLog）都走同一个序列化。
+        // 变异 T-C1（B 为 0 照样写出）→ 前瞻宽度进入记录 红；本测试钉字段次序与非 0 写出。
+        AiSearchConfig banded = ExpandedExpert with { PassThreshold = LookaheadFixtures.PassThreshold, TwoPlyTieBand = 20 };
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000,"TwoPlyTieBand":20,"StagnationRounds":6}""",
+            JsonSerializer.Serialize(banded));
+
+        var config = new RunConfig
+        {
+            Players =
+            [
+                new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = banded },
+                new PlayerAiConfig { Difficulty = AiDifficulty.Standard, Search = AiSearchConfig.Standard },
+                new PlayerAiConfig { Difficulty = AiDifficulty.Standard, Search = AiSearchConfig.Standard },
+                new PlayerAiConfig { Difficulty = AiDifficulty.Standard, Search = AiSearchConfig.Standard },
+            ],
+        };
+        string json = config.ToJson();
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(json, "TwoPlyTieBand"));
+        Assert.Contains("\"TwoPlyTieBand\": 20", json, StringComparison.Ordinal);
+        int w = json.IndexOf("\"LookaheadWidth\"", StringComparison.Ordinal);
+        int s = json.IndexOf("\"DiverseSupplementLimit\"", StringComparison.Ordinal);
+        int l = json.IndexOf("\"TwoPlyWeightPermille\"", StringComparison.Ordinal);
+        int b = json.IndexOf("\"TwoPlyTieBand\"", StringComparison.Ordinal);
+        Assert.True(w >= 0 && w < s && s < l && l < b, json);
+        RunConfig back = RunConfig.FromJson(json);
+        Assert.Equal(banded, back.Players[0].Search);
+        Assert.All(back.Players.Skip(1), p => Assert.Equal(0, p.Search!.TwoPlyTieBand));
+
+        // 日志首部：专家一名记有 B 20（紧接两层权重），三名标准不含；离线解析按首部读回。
+        RunConfig run = LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = banded }, Standard, Standard, Standard) with { TurnLimit = 2 };
+        MatchLog log = CreateSession(run, 1).Run();
+        string header = log.DeterministicText().Split('\n')[0];
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(header, "TwoPlyTieBand"));
+        Assert.Contains("\"LookaheadWidth\":4,\"DiverseSupplementLimit\":8,\"TwoPlyWeightPermille\":1000,\"TwoPlyTieBand\":20", header, StringComparison.Ordinal);
+        MatchLog parsed = MatchLog.Parse(log.FullText());
+        Assert.Equal([20, 0, 0, 0], Enumerable.Range(0, 4).Select(parsed.TwoPlyTieBandOf));
+        Assert.Equal(banded, parsed.Header.Config.Players[0].Search);
+    }
+
+    [Fact]
+    public void 无效带宽被拒绝()
+    {
+        // expert-tiebreak 1.1：两层平局带宽为负、或大于 0 而两层权重为 0 的配置被拒绝，不静默改为 0（design.md Open Questions 3 的文案）。
+        // 入口：搜索配置的 Validated()（控制者构造、配置文件 RunConfig.FromJson、日志首部重建会话 MatchSession.Create 共用）。
+        // 变异 T-C2（放过"B > 0 而 λ = 0"）、T-C3（放过负数）→ 本测试红。
+        Assert.Throws<ArgumentOutOfRangeException>(() => (ExpandedExpert with { TwoPlyTieBand = -1 }).Validated());
+        ArgumentException noWeight = Assert.Throws<ArgumentException>(() => (AiSearchConfig.Expert with { TwoPlyTieBand = 20 }).Validated());
+        Assert.Contains("两层平局带宽只在两层权重 > 0 时生效", noWeight.Message, StringComparison.Ordinal);
+        Assert.Equal(20, (ExpandedExpert with { TwoPlyTieBand = 20 }).Validated().TwoPlyTieBand);
+        Assert.Equal(0, (AiSearchConfig.Expert with { TwoPlyTieBand = 0 }).Validated().TwoPlyTieBand);
+
+        // 配置文件入口：报错退出，不改成 0。
+        RunConfig Bad(AiSearchConfig search) => new()
+        {
+            Players =
+            [
+                new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search },
+                Standard, Standard, Standard,
+            ],
+        };
+        Assert.Throws<ArgumentException>(() => RunConfig.FromJson(Bad(AiSearchConfig.Expert with { TwoPlyTieBand = 20 }).ToJson()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => RunConfig.FromJson(Bad(ExpandedExpert with { TwoPlyTieBand = -1 }).ToJson()));
+
+        // 日志首部入口：首部里 B 20 而 λ 为 0 的配置在重建会话（回放走的同一入口）时被拒绝。
+        RunConfig run = LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = ExpandedExpert with { PassThreshold = LookaheadFixtures.PassThreshold, TwoPlyTieBand = 20 } }, Standard, Standard, Standard) with { TurnLimit = 1 };
+        string text = CreateSession(run, 1).Run().FullText();
+        Assert.Contains("\"TwoPlyWeightPermille\":1000,", text, StringComparison.Ordinal);
+        MatchLog forged = MatchLog.Parse(text.Replace("\"TwoPlyWeightPermille\":1000,", string.Empty, StringComparison.Ordinal));
+        Assert.Equal(20, forged.TwoPlyTieBandOf(0));
+        Assert.Equal(0, forged.TwoPlyWeightPermilleOf(0));
+        Assert.Throws<ArgumentException>(() => CreateSession(forged.Header.Config, 1));
+
+        // 控制者构造同样拒绝。
+        Assert.Throws<ArgumentException>(() => HeuristicAi.Create(AtariPosition(), P0, AiDifficulty.Expert, Weights, AiSearchConfig.Expert with { TwoPlyTieBand = 20 }));
     }
 
     [Fact]
@@ -511,6 +845,13 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0 }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));   // cycle-stop：旧专家记录缺 K 按 0 读
         Assert.Equal(AiSearchConfig.Expert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(AiSearchConfig.Expert)));
         Assert.Equal(ExpandedExpert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(ExpandedExpert)));
+
+        // expert-tiebreak 1.1：缺两层平局带宽按 0 读（旧记录、旧专家记录、S 8 / λ 1000 的记录都没有该字段）；显式 B 往返不丢。
+        Assert.Equal(0, old.TwoPlyTieBand);
+        Assert.Equal(0, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert)!.TwoPlyTieBand);
+        Assert.Equal(0, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(ExpandedExpert))!.TwoPlyTieBand);
+        AiSearchConfig banded = ExpandedExpert with { TwoPlyTieBand = 20 };
+        Assert.Equal(banded, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(banded)));
 
         // 宽度 0 的控制者不产生前瞻记录（与引入之前的行为一致）。
         HeuristicTurnController hard = HeuristicAi.Create(AtariPosition(), P0, AiDifficulty.Hard, Weights, old);
