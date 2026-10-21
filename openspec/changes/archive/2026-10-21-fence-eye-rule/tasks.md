@@ -17,5 +17,5 @@
 
 ## 4. 文档与归档
 
-- [ ] 4.1 设计文档 §6.4 改写"无气边即墙"与方四说明；§3.1 一句话记法补"栅栏不造眼"；§19 第 12 条标为已处理；升版并写变更记录；HANDOFF 同步。验收：人工检查
-- [ ] 4.2 `openspec validate fence-eye-rule --strict` 通过后归档；归档后 `openspec validate --specs --strict` 全部通过。验收：两条命令退出 0
+- [x] 4.1 设计文档 §6.4 改写"无气边即墙"与方四说明；§3.1 一句话记法补"栅栏不造眼"；§19 第 12 条标为已处理；升版并写变更记录；HANDOFF 同步。验收：人工检查
+- [x] 4.2 `openspec validate fence-eye-rule --strict` 通过后归档；归档后 `openspec validate --specs --strict` 全部通过。验收：两条命令退出 0

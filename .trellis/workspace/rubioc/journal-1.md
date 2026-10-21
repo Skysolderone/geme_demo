@@ -294,3 +294,11 @@ Non-monotonic; raising it makes things worse. High Safety keeps a score-improvin
 - 停滞停手成立且最终 Pass 时决策条目记 `D:stall`（AI 决策不变、评价版本不变）；对局日志不含决策条目，按 S1 在快照加 `Stalled`（null 不写出，不含停手的日志与改前逐字节相同）；`analyze --review-cycles` 报告整局停手次数；`Replayer.Compare` 对原日志缺 `Stalled` 的小回合不比该字段（旧日志回放兼容，反方向仍报分歧）。简单 ×4 种子 40–47 实测停手 336 次、涉及 7 局；其中 0x2F 打到 R100 被上限结算 1 次（link-map-surfaces 改图所致，登记观察）。
 - 5 份基线首部删配对 / 链接旧字样，决策行逐字节不变；简单种子 1 第 10–12 大回合 3 条 `D:pass` → `D:stall`。ROADMAP 按现状重写（v1.1–v1.30、57 个归档 change）；HANDOFF 第 8 项、1b 更新。全量 2099 / 2093 / 跳过 6 / 0。
 - 另一会话「地图重新设计」已提交 `040c0b2`：新增 change `fence-eye-rule`（栅栏不参与活形判定，F1–F8 全按推荐），待本 change 归档后实施。
+
+
+## Session: 2026-10-21 — 地形诊断与 fence-eye-rule（栅栏不参与活形判定）
+
+- 诊断（`sim-out/link-map-surfaces-f1f2` 20 局，只读日志）：各圈层落子比例≈面积比例，第 4 大回合后 72% 落子在他人棋盘、79% 被提子在受害者出生棋盘之外——"地形不在交战区"不成立；改造 178 次中立栅 175。负责人定 R1 先做，R2 + R3（河流 / 崖壁横穿棋盘、用地形缩短对局）合并排后。
+- `fence-eye-rule`（F1–F8 全按推荐）：新增眼边 `Adjacency.EyeNeighbors`，活形改沿眼边；AI 评价版本 7，Safety / Eye / Threat 与停手阈值标未校准；基线与 AI 黄金值全部重钉（地图摘要不变）。提交 118c24f。
+- 冒烟 20 局（标准 × 4，28 并行）：大回合 21 / 28 / 33（原 19 / 25 / 32），提子 1600（原 1151），改造 立栅 / 搭桥 / 烧林 224 / 34 / 6（原 175 / 1 / 2），致提子改造 73，停滞停手 16 次；按主题 林地 2.20、栅栏阵 2.36、高台 2.38、混合 2.50、河流 3.00。
+- 待负责人：R2 + R3 裁决表 H1–H8；是否在独立 worktree 并行开 `map-elements-v2`。
