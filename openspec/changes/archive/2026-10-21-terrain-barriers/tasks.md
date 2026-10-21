@@ -22,5 +22,5 @@
 
 ## 5. 文档与归档
 
-- [ ] 5.1 设计文档 §3.3 改写、§19 第 11 / 20 条更新，升到 v1.33 并写变更记录；HANDOFF 同步。验收：人工检查
-- [ ] 5.2 `openspec validate terrain-barriers --strict` 通过后归档；归档后 `openspec validate --specs --strict` 全部通过。验收：两条命令退出 0
+- [x] 5.1 设计文档 §3.3 改写、§19 第 11 / 20 条更新，升到 v1.33 并写变更记录；HANDOFF 同步。验收：人工检查
+- [x] 5.2 `openspec validate terrain-barriers --strict` 通过后归档；归档后 `openspec validate --specs --strict` 全部通过。验收：两条命令退出 0
