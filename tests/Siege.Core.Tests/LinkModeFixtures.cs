@@ -69,9 +69,9 @@ internal static class LinkModeFixtures
     }
 
     /// <summary>在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
-    internal static MatchFlow StartedFlat(int[] zones)
+    internal static MatchFlow StartedFlat(int[] zones, MatchOptions? options = null)
     {
-        MatchFlow match = MatchFlow.Create(FlatMap, TestMaps.Seed, All, Options);
+        MatchFlow match = MatchFlow.Create(FlatMap, TestMaps.Seed, All, options ?? Options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));

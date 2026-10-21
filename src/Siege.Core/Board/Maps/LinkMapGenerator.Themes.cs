@@ -10,6 +10,7 @@ namespace Siege.Core.Board.Maps;
 /// </summary>
 /// <remarks>
 /// <para><b>分圈</b>（<see cref="BoardPlate.OnRim"/> / <see cref="BoardPlate.InCore"/> / <see cref="BoardPlate.InMiddleBand"/>）：外圈只放林地（裁决 Q1），核心区什么都不放，其余地形只在中间带；
+/// 例外是河流 / 高台的隔断线（terrain-barriers 裁决 H1–H4、实施修订 J1–J3）：取中间带的一整列 / 一整行，两端各占外圈 1 格。
 /// 栅栏只立在两端都在中间带、或一端中间带一端核心区的边上（Q4）。</para>
 /// <para><b>按面积缩放</b>（D4 末段）：每个计数区间 [下限, 上限] 的实际上限按中间带面积在 7 格（6×6）到 27 格（8×8）之间线性插值、向下取整，
 /// 再在 [下限, 插值上限] 里均匀抽取——6×6 恒取下限，8×8 才能取到上限。</para>
@@ -24,12 +25,17 @@ public static partial class LinkMapGenerator
     /// <summary>可改造目标（林地格 + 未架桥深水格）的下限（裁决 M7），生成器自检与校验器同一口径。</summary>
     internal const int MinEditTargets = 2;
 
+    /// <summary>湖泊 / 岩区一团的格数区间（terrain-barriers 裁决 H5）；中间带 ≤ <see cref="SmallMiddleBand"/> 格的小棋盘不放（实施修订 J4）。</summary>
+    internal const int MinCluster = 3;
+    internal const int MaxCluster = 5;
+
     /// <summary>中间带面积的两端：6×6 与 8×8（边长区间两端各去外圈与核心区）。</summary>
     private const int MinMiddleArea = ((BirthMinSide - 2) * (BirthMinSide - 2)) - (BoardPlate.CoreSide * BoardPlate.CoreSide);
     private const int MaxMiddleArea = ((BirthMaxSide - 2) * (BirthMaxSide - 2)) - (BoardPlate.CoreSide * BoardPlate.CoreSide);
 
     /// <summary>
-    /// 一块出生棋盘生成好的地形（坐标为全图坐标）：高度、地表、预置桥、栅栏、岩石，按主题定义的难到达格（核心区之外、可落子，按坐标升序），这块棋盘的重抽次数，
+    /// 一块出生棋盘生成好的地形（坐标为全图坐标）：高度、地表、预置桥、栅栏、岩石，按主题定义的难到达格（核心区之外、可落子，按坐标升序），
+    /// 湖泊 / 岩区一团的格（terrain-barriers D3，按坐标升序；湖泊格也在 <see cref="Surfaces"/> 里、岩区格也在 <see cref="Rocks"/> 里），这块棋盘的重抽次数，
     /// 以及新地表叠加（link-map-surfaces D3，<c>LinkMapGenerator.Surfaces.cs</c>）实际放下的格数——<see cref="DraftBoard"/> 的产物恒为 0，叠加之后才写入。
     /// </summary>
     internal sealed record BoardTerrain(
@@ -40,6 +46,7 @@ public static partial class LinkMapGenerator
         ImmutableHashSet<FenceEdge> Fences,
         ImmutableHashSet<Coord> Rocks,
         ImmutableArray<Coord> HardCells,
+        ImmutableArray<Coord> Cluster,
         int Redraws,
         int SpecialSurfaces = 0)
     {
@@ -49,8 +56,9 @@ public static partial class LinkMapGenerator
 
     /// <summary>
     /// 生成一块出生棋盘的主题地形（D3 / D4）：按 <paramref name="plate"/> 的主题调用对应的生成函数，自检不通过即在同一条流上重抽，至多 <see cref="MaxBoardRedraws"/> 次。
+    /// <paramref name="drafted"/> 是同一张图里已经生成好的棋盘（布局在生成地形之前已排好，terrain-barriers 实施修订 J2）：自检另要求这块与其中每块紧贴的棋盘之间的接缝至少有 1 条气边。
     /// </summary>
-    internal static BoardTerrain DraftBoard(BoardPlate plate, RandomStream rng)
+    internal static BoardTerrain DraftBoard(BoardPlate plate, RandomStream rng, IReadOnlyList<BoardTerrain>? drafted = null)
     {
         BoardTheme theme = plate.Theme ?? throw new ArgumentException($"出生棋盘 {plate.Origin.ToNotation()} 没有主题，无法生成地形。", nameof(plate));
         for (int redraw = 0; redraw <= MaxBoardRedraws; redraw++)
@@ -78,7 +86,8 @@ public static partial class LinkMapGenerator
             }
 
             draft.ScatterRocks();
-            if (draft.Finish(redraw) is { } done)
+            draft.PlaceCluster();
+            if (draft.Finish(redraw, drafted ?? []) is { } done)
             {
                 return done;
             }
@@ -86,6 +95,47 @@ public static partial class LinkMapGenerator
 
         throw new MapGenerationException(
             $"出生棋盘 {plate.Origin.ToNotation()}（{plate.Width}×{plate.Height}，主题{theme.DisplayName()}）重抽 {MaxBoardRedraws} 次仍未通过棋盘级自检（生成器缺陷）。");
+    }
+
+    /// <summary>
+    /// 本块与一块已生成的邻块合成的预览（接缝气边自检用，terrain-barriers 实施修订 J2）：画布覆盖两块，两块之外与岩石为障碍。
+    /// </summary>
+    private static MapData PairPreview(BoardTerrain self, BoardTerrain other)
+    {
+        int width = Math.Max(self.Plate.Origin.X + self.Plate.Width, other.Plate.Origin.X + other.Plate.Width) + Margin;
+        int height = Math.Max(self.Plate.Origin.Y + self.Plate.Height, other.Plate.Origin.Y + other.Plate.Height) + Margin;
+        var obstacles = ImmutableHashSet.CreateBuilder<Coord>();
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                var c = new Coord(x, y);
+                if (!(self.Plate.Contains(c) || other.Plate.Contains(c)) || self.Rocks.Contains(c) || other.Rocks.Contains(c))
+                {
+                    obstacles.Add(c);
+                }
+            }
+        }
+
+        return new MapData
+        {
+            Id = "link-seam-preview",
+            Width = width,
+            Height = height,
+            MaxPlayers = 4,
+            Profile = MapProfile.Link,
+            Obstacles = obstacles.ToImmutable(),
+            TerrainData = new TerrainData(
+                self.Heights.SetItems(other.Heights),
+                self.Surfaces.SetItems(other.Surfaces),
+                self.Bridges.Union(other.Bridges),
+                self.Fences.Union(other.Fences)),
+            BirthZones = [[.. self.Plate.CoreCells()], [.. other.Plate.CoreCells()]],
+            Boards = [self.Plate, other.Plate],
+            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
+            ChokePoints = [],
+            CentralEntrance = self.Plate.CoreOrigin,
+        };
     }
 
     private static MapData PreviewOf(
@@ -144,8 +194,11 @@ public static partial class LinkMapGenerator
         /// <summary>主题要素是否都放下了（数量达到下限）；放不下即本次尝试失败、重抽。</summary>
         private bool _ok = true;
 
-        /// <summary>高台主题的平台格（自检要求都能从高度 0 沿气边走上去）。</summary>
-        private readonly List<Coord> _tops = [];
+        /// <summary>河流 / 高台的隔断线格（自检要求棋盘内全部可落子格都能从核心区沿气边走到，即通道确实连起两侧）。</summary>
+        private readonly List<Coord> _line = [];
+
+        /// <summary>湖泊 / 岩区一团的格（terrain-barriers D3）。</summary>
+        private readonly List<Coord> _cluster = [];
 
         internal Draft(BoardPlate plate, RandomStream rng)
         {
@@ -181,57 +234,38 @@ public static partial class LinkMapGenerator
         // ---------- 五个主题 ----------
 
         /// <summary>
-        /// 高台：高度 2 的平台 2–4 格（连成一片），平台在中间带里的四邻全部是高度 1 的坡；平台格优先取不与外圈相邻的中间带格。
-        /// 待裁决（ws 汇报 #1）：边长都 ≤ 7 的棋盘没有"不与外圈相邻"的中间带格，此时放宽为全部中间带格（外圈仍是高度 0，平台与外圈之间是崖壁）。
-        /// 难到达格 = 高度 2 的格；另散布 2–3 格林地（中间带空格或外圈）作改造目标。
+        /// 高台（terrain-barriers D1，实施修订 J3）：抽一条隔断线（<see cref="DrawBarrier"/>），线上全部抬到高度 2 成为山脊，再抽 1 格设为高度 1 的坡口；
+        /// 线外两侧保持高度 0，于是两侧与山脊之间都是崖壁，只有坡口把两侧（h0 → h1 → h0）与山脊（h1 → h2）沿气边连起来。
+        /// 难到达格 = 山脊格（高度 2）；另散布 2–3 格林地（空格，可在外圈）作改造目标。
         /// </summary>
         internal void Plateau()
         {
-            int want = Draw(2, 4);
-            List<Coord> inner = [.. Middle.Where(c => !Rim.Any(r => Adjacency.AreAdjacent(r, c)))];
-            List<Coord> pool = inner.Count > 0 ? inner : Middle;
-            _tops.Add(Pick(pool));
-            while (_tops.Count < want)
+            (List<Coord> line, _) = DrawBarrier();
+            foreach (Coord c in line)
             {
-                List<Coord> grow = [.. pool.Where(c => !_tops.Contains(c) && _tops.Any(t => Adjacency.AreAdjacent(t, c)))];
-                if (grow.Count == 0)
-                {
-                    break;
-                }
-
-                _tops.Add(Pick(grow));
+                _heights[c] = 2;
             }
 
-            foreach (Coord top in _tops)
-            {
-                _heights[top] = 2;
-                _hard.Add(top);
-            }
-
-            foreach (Coord c in Middle.Where(c => !_tops.Contains(c) && _tops.Any(t => Adjacency.AreAdjacent(t, c))))
-            {
-                _heights[c] = 1;
-            }
-
-            _ok &= _tops.Count >= 2;
+            Coord ramp = Pick(line);
+            _heights[ramp] = 1;
+            _hard.UnionWith(line.Where(c => c != ramp));
             ScatterForest(Draw(2, 3));
         }
 
         /// <summary>
-        /// 河流：宽 1 的深水贯穿中间带（直线或一次折弯，两端抵到外圈内侧），其中 1 格预置桥。
-        /// 难到达格 = 与核心区隔着深水的一侧（河道两端各向外圈延长一格后把棋盘分成两侧，取不含核心区的那一侧）。改造目标 = 未架桥的深水格。
+        /// 河流（terrain-barriers D1，实施修订 J1 / J2）：抽一条隔断线（<see cref="DrawBarrier"/>），线上全部格为深水，再抽 1 格预置桥。
+        /// 难到达格 = 不含核心区的一侧。改造目标 = 未架桥的深水格。
         /// </summary>
         internal void River()
         {
-            List<(List<Coord> Cells, HashSet<Coord> Far)> courses = RiverCourses();
-            (List<Coord> cells, HashSet<Coord> far) = Pick(courses);
-            foreach (Coord c in cells)
+            (List<Coord> line, List<Coord> beyond) = DrawBarrier();
+            foreach (Coord c in line)
             {
                 _surfaces[c] = Surface.DeepWater;
             }
 
-            _bridges.Add(Pick(cells));
-            _hard.UnionWith(far);
+            _bridges.Add(Pick(line));
+            _hard.UnionWith(beyond);
         }
 
         /// <summary>林地：2–3 团林地，每团 2–4 格，团与团互不相邻；从中间带起团，可以延伸到外圈（Q1）。难到达格 = 至少两面挨着林地的格（核心区之外、非林地、可落子；负责人 2026-10-14 裁决 T2 = A，原为三面）。</summary>
@@ -460,71 +494,104 @@ public static partial class LinkMapGenerator
         }
 
         /// <summary>
-        /// 全部合规的河道（先竖直线、再横直线、再一次折弯）与各自"隔着深水的一侧"。河道每格都在中间带；直线贯穿内圈全长，折弯的两臂各至少 2 格（含拐角）、各自抵到外圈内侧，
-        /// 且两臂朝向核心区、把核心区围在夹出的象限里（两臂背向核心区只是切掉一个角，不算贯穿）。
-        /// 隔着深水的一侧：直线取与核心区不同侧的半平面；折弯取象限之外（去掉河道与两端延长到外圈的格）。
+        /// 隔断线候选（terrain-barriers D1，实施修订 J1 / J2）：中间带的整列（先，自西向东）与整行（后，自南向北）——不是外圈那一列 / 行，也不穿过核心区（可以紧贴核心区）。
+        /// 边长 6 只有相对第 4 列 / 行一条，边长 7 有第 1、5 两条，边长 8 有第 1、5、6 三条。
         /// </summary>
-        private List<(List<Coord> Cells, HashSet<Coord> Far)> RiverCourses()
+        private List<(bool Column, int Index)> BarrierLines()
         {
-            var courses = new List<(List<Coord>, HashSet<Coord>)>();
-            int x0 = Plate.Origin.X + 1, x1 = Plate.Origin.X + Plate.Width - 2;
-            int y0 = Plate.Origin.Y + 1, y1 = Plate.Origin.Y + Plate.Height - 2;
             Coord core = Plate.CoreOrigin;
-            List<int> columns = [.. Enumerable.Range(x0, x1 - x0 + 1).Where(x => Enumerable.Range(y0, y1 - y0 + 1).All(y => Plate.InMiddleBand(new Coord(x, y))))];
-            List<int> rows = [.. Enumerable.Range(y0, y1 - y0 + 1).Where(y => Enumerable.Range(x0, x1 - x0 + 1).All(x => Plate.InMiddleBand(new Coord(x, y))))];
-
-            foreach (int x in columns)
+            var lines = new List<(bool, int)>();
+            for (int x = Plate.Origin.X + 1; x < Plate.Origin.X + Plate.Width - 1; x++)
             {
-                int side = Math.Sign(core.X - x);
-                courses.Add(([.. Enumerable.Range(y0, y1 - y0 + 1).Select(y => new Coord(x, y))], [.. Plate.Cells().Where(c => Math.Sign(c.X - x) == -side)]));
-            }
-
-            foreach (int y in rows)
-            {
-                int side = Math.Sign(core.Y - y);
-                courses.Add(([.. Enumerable.Range(x0, x1 - x0 + 1).Select(x => new Coord(x, y))], [.. Plate.Cells().Where(c => Math.Sign(c.Y - y) == -side)]));
-            }
-
-            foreach (int x in columns)
-            {
-                foreach (int y in rows)
+                if (x < core.X || x >= core.X + BoardPlate.CoreSide)
                 {
-                    foreach (int dy in new[] { -1, 1 })
-                    {
-                        foreach (int dx in new[] { -1, 1 })
-                        {
-                            int endY = dy < 0 ? y0 : y1;
-                            int endX = dx < 0 ? x0 : x1;
-                            if ((endY - y) * dy < 1 || (endX - x) * dx < 1)
-                            {
-                                continue;   // 某一臂只有拐角一格
-                            }
-
-                            bool InQuadrant(Coord c) => Math.Sign(c.X - x) == dx && Math.Sign(c.Y - y) == dy;
-                            if (!InQuadrant(core))
-                            {
-                                continue;   // 两臂背向核心区时只是切掉一个角，不算"贯穿中间带"
-                            }
-
-                            List<Coord> cells = [.. Enumerable.Range(0, ((endY - y) * dy) + 1).Select(k => new Coord(x, y + (k * dy)))];
-                            cells.AddRange(Enumerable.Range(1, (endX - x) * dx).Select(k => new Coord(x + (k * dx), y)));
-                            var extension = new HashSet<Coord> { new(x, endY + dy), new(endX + dx, y) };
-                            courses.Add((cells, [.. Plate.Cells().Where(c => !InQuadrant(c) && !cells.Contains(c) && !extension.Contains(c))]));
-                        }
-                    }
+                    lines.Add((true, x));
                 }
             }
 
-            return courses;
+            for (int y = Plate.Origin.Y + 1; y < Plate.Origin.Y + Plate.Height - 1; y++)
+            {
+                if (y < core.Y || y >= core.Y + BoardPlate.CoreSide)
+                {
+                    lines.Add((false, y));
+                }
+            }
+
+            return lines;
+        }
+
+        /// <summary>
+        /// 抽一条隔断线（D1 / D4：方向与候选合在一起在 <see cref="BarrierLines"/> 里均匀抽 1 次），返回线上的格（横穿整块棋盘、两端各占外圈 1 格）
+        /// 与不含核心区的一侧的格，都按先行后列；线上的格同时记进 <see cref="_line"/>。
+        /// </summary>
+        private (List<Coord> Line, List<Coord> Beyond) DrawBarrier()
+        {
+            (bool column, int index) = Pick(BarrierLines());
+            Coord core = Plate.CoreOrigin;
+            int Along(Coord c) => column ? c.X : c.Y;
+            int side = Math.Sign((column ? core.X : core.Y) - index);   // 核心区在直线的哪一侧（候选不穿过核心区，核心区整块在同一侧，恒非 0）
+            List<Coord> line = [.. Plate.Cells().Where(c => Along(c) == index)];
+            List<Coord> beyond = [.. Plate.Cells().Where(c => Math.Sign(Along(c) - index) == -side)];
+            _line.AddRange(line);
+            return (line, beyond);
+        }
+
+        /// <summary>
+        /// 湖泊 / 岩区（terrain-barriers D3，裁决 H5）：主题地形与散布岩石之后，在中间带剩余的空格里放 1 团：先抽种类（湖泊 = 未架桥深水 / 岩区 = 岩石），
+        /// 再抽目标格数 3–5（不按面积缩放），从一格空的中间带格起沿几何四邻在空的中间带格里生长；长不到 3 格即本次尝试失败、重抽该块。
+        /// 中间带 ≤ <see cref="SmallMiddleBand"/> 格的小棋盘（6×6 / 6×7 / 7×6）不放、也不消费随机（实施修订 J4）。
+        /// </summary>
+        internal void PlaceCluster()
+        {
+            if (Middle.Count <= SmallMiddleBand)
+            {
+                return;
+            }
+
+            bool lake = _rng.NextInt(2) == 0;
+            int size = MinCluster + _rng.NextInt(MaxCluster - MinCluster + 1);
+            List<Coord> seeds = [.. Middle.Where(Free)];
+            if (seeds.Count == 0)
+            {
+                _ok = false;
+                return;
+            }
+
+            _cluster.Add(Pick(seeds));
+            while (_cluster.Count < size)
+            {
+                List<Coord> grow = [.. Middle.Where(c => Free(c) && !_cluster.Contains(c) && _cluster.Any(t => Adjacency.AreAdjacent(t, c)))];
+                if (grow.Count == 0)
+                {
+                    break;
+                }
+
+                _cluster.Add(Pick(grow));
+            }
+
+            _ok &= _cluster.Count >= MinCluster;
+            foreach (Coord c in _cluster)
+            {
+                if (lake)
+                {
+                    _surfaces[c] = Surface.DeepWater;
+                }
+                else
+                {
+                    _rocks.Add(c);
+                }
+            }
         }
 
         // ---------- 自检 ----------
 
         /// <summary>
         /// 棋盘级自检（D3）：主题要素都放下了；棋盘内可落子格沿几何四邻连通（只有一个战场分量）；可改造目标 ≥ <see cref="MinEditTargets"/>；
-        /// 高台的每个高度 2 格都能从核心区沿气边走上去。通过返回成品，否则 <c>null</c>（调用方重抽）。
+        /// 有隔断线时（河流 / 高台）棋盘内每个可落子格都能从核心区沿气边走到（通道确实连起两侧与山脊）；
+        /// 与 <paramref name="drafted"/> 里每块紧贴的棋盘之间的接缝至少有 1 条气边（terrain-barriers 实施修订 J2，判定与校验器 <c>LINK_SEAM_NO_LIBERTY</c> 共用 <see cref="MapValidator.SeamHasLiberty"/>）。
+        /// 通过返回成品，否则 <c>null</c>（调用方重抽）。
         /// </summary>
-        internal BoardTerrain? Finish(int redraws)
+        internal BoardTerrain? Finish(int redraws, IReadOnlyList<BoardTerrain> drafted)
         {
             if (!_ok)
             {
@@ -548,7 +615,7 @@ public static partial class LinkMapGenerator
                 return null;
             }
 
-            if (_tops.Count > 0)
+            if (_line.Count > 0)
             {
                 var reached = new HashSet<Coord>(Plate.CoreCells());
                 var queue = new Queue<Coord>(reached.Order());
@@ -563,14 +630,23 @@ public static partial class LinkMapGenerator
                     }
                 }
 
-                if (!_tops.All(reached.Contains))
+                if (Plate.Cells().Any(c => preview.IsPlayable(c) && !reached.Contains(c)))
                 {
                     return null;
                 }
             }
 
             ImmutableArray<Coord> hard = [.. _hard.Where(c => Plate.Contains(c) && !Plate.InCore(c) && preview.IsPlayable(c)).Order()];
-            return new BoardTerrain(Plate, heights, surfaces, bridges, fences, rocks, hard, redraws);
+            var done = new BoardTerrain(Plate, heights, surfaces, bridges, fences, rocks, hard, [.. _cluster.Order()], redraws);
+            foreach (BoardTerrain other in drafted)
+            {
+                if (!MapValidator.SeamHasLiberty(PairPreview(done, other), Plate, other.Plate))
+                {
+                    return null;
+                }
+            }
+
+            return done;
         }
     }
 }

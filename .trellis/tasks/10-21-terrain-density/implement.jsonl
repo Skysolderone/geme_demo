@@ -1,0 +1,9 @@
+{"file": "openspec/changes/terrain-density/proposal.md", "reason": "terrain-density change 产物"}
+{"file": "openspec/changes/terrain-density/design.md", "reason": "terrain-density change 产物"}
+{"file": "openspec/changes/terrain-density/tasks.md", "reason": "terrain-density change 产物"}
+{"file": "openspec/changes/terrain-density/specs/link-map-generation/spec.md", "reason": "terrain-density change 产物"}
+{"file": "openspec/changes/terrain-density/specs/map-definition/spec.md", "reason": "terrain-density change 产物"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}

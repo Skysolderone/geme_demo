@@ -85,8 +85,9 @@ public class 冲突占用率口径Tests
         // retire-legacy-maps 1.8：共用样本由 v5（105 格）改到 link:1（157 格），期望值随之改，断言不变。
         List<MatchLog> sample = SimFixtures.Sample.Value;
         // link-map-terrain 第 2 组：link:1 初始图的可落子格 157 → 214（出生棋盘 6–8、扣掉岩石与未架桥深水）。
-        Assert.All(sample, l => Assert.Equal(214, l.Header.PlayableCells));
-        Assert.All(sample, l => Assert.Equal(214, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
+        // terrain-barriers 3.1（地图变了）：link:1 河流棋盘的河道横穿棋盘、大棋盘加湖泊 / 岩区，可落子格 214 → 202。
+        Assert.All(sample, l => Assert.Equal(202, l.Header.PlayableCells));
+        Assert.All(sample, l => Assert.Equal(202, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
 
         // 报告段落在真实批次上也能算出来（可能全批次无提子，那就只断言段落存在与分母自洽）。
         BalanceReport report = BalanceAnalyzer.Analyze(sample);

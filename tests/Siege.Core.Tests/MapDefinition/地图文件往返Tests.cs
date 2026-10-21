@@ -112,6 +112,7 @@ public class 地图文件往返Tests
         Assert.Contains("\"CentralEntrance\": \"U6\"", json, StringComparison.Ordinal);
         Assert.Contains("\"M5\"", json, StringComparison.Ordinal);
         Assert.Contains("\"Origin\": \"J10\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"F8\"", json, StringComparison.Ordinal);
+        // terrain-barriers 3.1（地图变了）：河流棋盘的河道改为横穿棋盘的第 4 行（C4–H4），预置桥由 F8 移到 G4。
+        Assert.Contains("\"G4\"", json, StringComparison.Ordinal);
     }
 }

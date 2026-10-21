@@ -171,6 +171,90 @@ public class 地图静态校验规则Tests
 
         // 反面：外圈可以有林地（裁决 Q1）。
         Assert.True(MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: [("C5", Surface.Forest)]) }).IsValid);
+
+        // terrain-barriers（规格 Scenario 改写为林地主题）：林地主题的出生棋盘 3（P3–U8）有一整列中间带深水横穿棋盘、恰 1 座桥——外圈规则只对河流 / 高台放开，
+        // 两端的外圈格 T3 / T8 照样被拒；隔断线本身合规，不报 BOARD_BARRIER_INVALID。
+        MapValidationResult forest = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: Column("T", Surface.DeepWater), bridges: ["T5"]) });
+        MapValidationFailure water = Assert.Single(forest.Failures, f => f.Code == "BOARD_RIM_NOT_FLAT");
+        Assert.Equal(["T3", "T8"], water.Coords.Notations());
+        Assert.DoesNotContain(forest.Failures, f => f.Code == "BOARD_BARRIER_INVALID");
+
+        // 同一棋盘换成一整列山脊 T3–T8（高 2、坡口 T5 高 1）：山脊两端的外圈格放开只给高台主题，林地主题照样报 T3 / T8 的高差。
+        MapValidationResult forestRidge = MapValidator.Validate(map with { TerrainData = Overlay(map, heights: [.. Ridge("T", 2).Where(h => h.Cell != "T5"), ("T5", 1)]) });
+        Assert.Equal(["T3", "T8"], Assert.Single(forestRidge.Failures, f => f.Code == "BOARD_RIM_NOT_FLAT").Coords.Notations());
+
+        // 隔断线只取中间带的列 / 行（实施修订 J2）：河流棋盘（J3–O8）外圈那一整列 O3–O8 都是深水、一座桥，不算隔断线，外圈规则照样报出（桥格也不是草地或林地）。
+        MapValidationResult rimLine = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: Column("O", Surface.DeepWater), bridges: ["O5"]) });
+        Assert.Equal(["O3", "O4", "O5", "O6", "O7", "O8"], Assert.Single(rimLine.Failures, f => f.Code == "BOARD_RIM_NOT_FLAT").Coords.Notations());
+    }
+
+    /// <summary>出生棋盘第一行（第 3–8 行）某一列整列的同一地表。</summary>
+    private static (string Cell, Surface Surface)[] Column(string letter, Surface surface) =>
+        [.. Enumerable.Range(3, 6).Select(row => ($"{letter}{row}", surface))];
+
+    /// <summary>出生棋盘第一行（第 3–8 行）某一列整列的同一高度。</summary>
+    private static (string Cell, int Height)[] Ridge(string letter, int height) =>
+        [.. Enumerable.Range(3, 6).Select(row => ($"{letter}{row}", height))];
+
+    [Fact]
+    public void 隔断线经过外圈合法()
+    {
+        // 规格 Scenario（terrain-barriers，实施修订 J2）：河流主题的出生棋盘 2（J3–O8）有一整列中间带深水 N3–N8 横穿棋盘、两端外圈格 N3 / N8 是深水，河上恰 1 座桥 N5 → 接受。
+        // 高台主题的出生棋盘 1（C3–H8）有一整列山脊 G3–G8（高 2）、坡口 G5（高 1）、两端 G3 / G8 在外圈 → 同样接受（G4 / G7 的林地留在山脊上）。
+        MapData map = Link();
+        MapData river = map with { TerrainData = Overlay(map, surfaces: Column("N", Surface.DeepWater), bridges: ["N5"]) };
+        MapValidationResult result = MapValidator.Validate(river);
+        Assert.True(result.IsValid, result.ToString());
+        Assert.Equal(180 - 5, river.PlayableCount);   // 样本口径：河道确实写进了图（6 格深水、1 格是桥）
+
+        MapData ridge = map with { TerrainData = Overlay(map, heights: [.. Ridge("G", 2).Where(h => h.Cell != "G5"), ("G5", 1)]) };
+        Assert.True(MapValidator.Validate(ridge).IsValid, MapValidator.Validate(ridge).ToString());
+        Assert.Equal(2, ridge.HeightAt(TestMaps.At("G3")));
+    }
+
+    [Fact]
+    public void 隔断线没有通道被拒()
+    {
+        // 规格 Scenario（terrain-barriers D5 / 实施修订 J5）：河道横穿棋盘但没有桥（或山脊没有坡口）→ 拒绝并指出该棋盘与"隔断线须恰有 1 处通道"。
+        MapData map = Link();
+        MapValidationResult noBridge = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: Column("N", Surface.DeepWater)) });
+        MapValidationFailure river = Assert.Single(noBridge.Failures, f => f.Code == "BOARD_BARRIER_INVALID");
+        Assert.Contains("出生棋盘 J3–O8", river.Message, StringComparison.Ordinal);
+        Assert.Contains("恰有 1 处通道", river.Message, StringComparison.Ordinal);
+        Assert.Contains("有 0 处通道", river.Message, StringComparison.Ordinal);
+        Assert.Equal(["N3", "N4", "N5", "N6", "N7", "N8"], river.Coords.Notations());
+
+        // 两座桥 = 两处通道，同样被拒（只指出两座桥）。
+        MapValidationFailure twoBridges = Assert.Single(
+            MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: Column("N", Surface.DeepWater), bridges: ["N4", "N7"]) }).Failures, f => f.Code == "BOARD_BARRIER_INVALID");
+        Assert.Equal(["N4", "N7"], twoBridges.Coords.Notations());
+
+        // 山脊没有坡口：G3–G8 全部高 2。
+        MapValidationFailure ridge = Assert.Single(
+            MapValidator.Validate(map with { TerrainData = Overlay(map, heights: Ridge("G", 2)) }).Failures, f => f.Code == "BOARD_BARRIER_INVALID");
+        Assert.Contains("出生棋盘 C3–H8", ridge.Message, StringComparison.Ordinal);
+        Assert.Contains("山脊", ridge.Message, StringComparison.Ordinal);
+        Assert.Contains("恰有 1 处通道", ridge.Message, StringComparison.Ordinal);
+
+        // 两侧除通道外仍有气边：山脊 G3–G8 坡口 G5，另把山脊旁的 F7 抬到高 1，F7 与山脊 G7（高 2）之间成了缓坡 → 被拒，指出 G7。
+        MapValidationFailure leak = Assert.Single(
+            MapValidator.Validate(map with { TerrainData = Overlay(map, heights: [.. Ridge("G", 2).Where(h => h.Cell != "G5"), ("G5", 1), ("F7", 1)]) }).Failures,
+            f => f.Code == "BOARD_BARRIER_INVALID");
+        Assert.Contains("除通道外", leak.Message, StringComparison.Ordinal);
+        Assert.Equal(["G7"], leak.Coords.Notations());
+    }
+
+    [Fact]
+    public void 隔断线经过核心区被拒()
+    {
+        // tasks 2.1：河流棋盘（J3–O8，核心区 K4–M6）的第 5 行 J5–O5 整行深水、桥 O5 → 隔断线经过核心区，BOARD_BARRIER_INVALID 指出 K5–M5；核心区规则同时报出。
+        MapData map = Link();
+        string[] row = ["J5", "K5", "L5", "M5", "N5", "O5"];
+        MapValidationResult result = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: [.. row.Select(c => (c, Surface.DeepWater))], bridges: ["N5"]) });
+        MapValidationFailure core = Assert.Single(result.Failures, f => f.Code == "BOARD_BARRIER_INVALID");
+        Assert.Contains("经过核心区", core.Message, StringComparison.Ordinal);
+        Assert.Equal(["K5", "L5", "M5"], core.Coords.Notations());
+        Assert.Contains(result.Failures, f => f.Code == "BIRTH_CORE_NOT_FLAT");
     }
 
     [Fact]

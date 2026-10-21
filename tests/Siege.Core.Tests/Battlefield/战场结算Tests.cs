@@ -139,16 +139,18 @@ public class 战场结算Tests
     public void 势力归零的减员结算()
     {
         // 势力归零出局：被提光者记"势力归零"；open-map 下唯一战场仍有 3 人在局，不触发减员结算。
-        // 载体：link:1 里左下角在画布留白角上的出生棋盘 3（3+2 布局的 o0，(2,2)），其左下角格只有两口气；棋盘 0 的左下角自 open-map 起紧贴棋盘 2，有三口气。
-        MatchFlow match = Started([3, 3, 0, 4]).AtRound(2, [P0, P1, P2, P3]);
-        Coord corner = BirthCell(match.Map, 3, 0, 0);
+        // 载体：左下角在画布留白角上的出生棋盘，其左下角格只有两口气。
+        // terrain-barriers 3.1（地图变了）：link:1 左下角那块是河流棋盘，河道横穿第 4 行，角格 C3 只剩一口气——载体改为手写平坦图 FlatMap（出生棋盘 0 = C3–H8，角格两口气 D3 / C4）。
+        MatchFlow match = StartedFlat([0, 0, 1, 2]).AtRound(2, [P0, P1, P2, P3]);
+        Coord corner = BirthCell(match.Map, 0, 0, 0);
         Assert.Equal(new Coord(2, 2), corner);
+        Assert.Equal(2, Adjacency.LibertyNeighbors(match.Map, corner).Length);   // 样本口径：角上一子恰两口气
         match.Place(P1, corner);
         Assert.True(match.StateOf(P1).HasEstablishedPower);
         // P0 在角的两个气上落子提走 P1（角上一子只有两口气）。
         StagedBatch batch = match.ToDeploy();
-        Assert.Null(batch.Stage(BirthCell(match.Map, 3, 1, 0), PieceType.Basic));
-        Assert.Null(batch.Stage(BirthCell(match.Map, 3, 0, 1), PieceType.Basic));
+        Assert.Null(batch.Stage(BirthCell(match.Map, 0, 1, 0), PieceType.Basic));
+        Assert.Null(batch.Stage(BirthCell(match.Map, 0, 0, 1), PieceType.Basic));
         Assert.True(match.Confirm().Confirmed);
 
         Assert.Equal(PlayerStatus.Eliminated, match.StateOf(P1).Status);

@@ -45,7 +45,10 @@ public class 防死锁硬停Tests
         Assert.Equal(30, log.Failure.Turn);
         Assert.Contains("failed", log.FileName);
         Assert.Equal(MatchPhase.InProgress, session.Match.Phase);
-        Assert.Equal(8, session.Match.MajorRound);   // 30 个小回合 = 7 个完整大回合 + 2 个小回合
+        // terrain-barriers 3.1 重钉（地图变了）：原 8（30 个小回合 = 4 人 × 7 个完整大回合 + 2 个小回合）。link:1 的地形变了，
+        // 按坐标序落子的 P0 / P3 被提光、势力归零出局，其余两人每大回合各 1 个小回合，30 个小回合跨到第 13 大回合。
+        Assert.Equal(2, session.Match.Players.Count(p => session.Match.StateOf(p).Status == Siege.Core.Scoring.PlayerStatus.Eliminated));
+        Assert.Equal(13, session.Match.MajorRound);
     }
 }
 
