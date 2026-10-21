@@ -1,0 +1,8 @@
+{"file": "openspec/changes/fence-eye-rule/proposal.md", "reason": "fence-eye-rule change 产物"}
+{"file": "openspec/changes/fence-eye-rule/design.md", "reason": "fence-eye-rule change 产物"}
+{"file": "openspec/changes/fence-eye-rule/tasks.md", "reason": "fence-eye-rule change 产物"}
+{"file": "openspec/changes/fence-eye-rule/specs/life-shape/spec.md", "reason": "fence-eye-rule change 产物"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
