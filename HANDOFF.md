@@ -135,7 +135,7 @@ opsx:propose 开 change → task.py create + start 建 Trellis 任务
   → 下一段 … → 设计文档升版 → openspec archive → task.py archive → journal 记一节
 ```
 - 派子 agent 前，把待决项写成编号裁决，连同派发方式选项一次性交负责人确认；逐项裁决沿用负责人看到的表格行序和编号。
-- **同一时间只跑一个任务**（跨会话也算）：agent 在跑时主会话不另起 dotnet、变异脚本、Godot 或第二个 agent。
+- **最多 3 条线并行**（跨会话也算，负责人 2026-10-21 放开，原为一次一个）：每条并行线必须在独立 git worktree / 分支，构建与测试互不干扰；不得两条线同时改规则、AI 走法或地图（都要重钉基线）；共用同一目录的线不得同时跑 dotnet / Godot，提交只按路径清单暂存自己的文件。同一条线内 agent 在跑时主会话不另起 dotnet、变异脚本、Godot 或第二个 agent。
 - **不跑 200 局**，每个配置不超过 20 局；需要更多先问。**可玩优先**：负责人问"能不能玩"时立刻给可玩入口。
 - **先红后绿**；变异还原要逐字节校验并刷新 mtime，否则 MSBuild 跳过重建得到假绿（testing.md）。
 - 测试不得写真实的 `%APPDATA%\Siege`；依赖 AI 实际走法的断言要写死权重与停手阈值，不许挑种子凑绿。
@@ -162,6 +162,6 @@ opsx:propose 开 change → task.py create + start 建 Trellis 任务
 ```
 读 E:\wws\geme_demo\.trellis\workspace\rubioc\journal-1.md 的最后一节，再读 E:\wws\geme_demo\HANDOFF.md。
 从 HANDOFF「后续 change」里按优先级选下一项，先给我方案和编号裁决，我确认后再开 change / 派 agent。
-遵守 HANDOFF「执行流程与工作约定」与 .trellis/spec/core/：同一时间只跑一个任务；不跑 200 局，每配置 ≤ 20 局；先红后绿。
+遵守 HANDOFF「执行流程与工作约定」与 .trellis/spec/core/：最多 3 条线并行且各在独立 worktree；不跑 200 局，每配置 ≤ 20 局；先红后绿。
 每段结束汇报：测试数、变异验证情况、待决项。使用中文，每次回答开头报数（ws:N）。
 ```
