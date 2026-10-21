@@ -1,10 +1,12 @@
 # 专家诊断（10-21-expert-diagnosis）：只读日志，成对比较座位 1（P0）在 H / E0 / E8 三臂的表现。
-# 用法：python analyze.py <sim-out/expert-diagnosis 目录>  → 打印汇总，并写 <目录>/summary.json
+# 用法：python analyze.py <目录> [臂列表，逗号分隔，首个为对照，缺省 H,E0,E8]  → 打印汇总，并写 <目录>/summary.json
+# 一层分数：AI 评价版本 ≥ 8（expert-tiebreak）的日志 After 即一层分数；更早的日志 After = 一层 + 两层加分。
 import json, sys, glob, os, math, statistics
 from collections import Counter, defaultdict
 
 ROOT = sys.argv[1]
-ARMS = ["H", "E0", "E8"]
+ARMS = sys.argv[2].split(",") if len(sys.argv) > 2 else ["H", "E0", "E8"]
+BASE = ARMS[0]
 ME = 0
 
 
@@ -56,6 +58,10 @@ def power_at_round_end(turns, player):
 def per_game(path):
     header, turns, result = load(path)
     g = {"seed": seed_of(path), "reason": result["Reason"], "rounds": result["MajorRound"], "turns": result["TurnCount"]}
+    g["_ver"] = header.get("AiEvaluationVersion") or 1
+    search = header["Config"]["Players"][ME].get("Search") or {}
+    g["_band"] = search.get("TwoPlyTieBand", 0)
+    g["ms"] = [t["ElapsedMs"] for t in turns if t["Player"] == ME and t.get("ElapsedMs") is not None]
     st = {s["Player"]: s for s in result["Standings"]}
     g["rank"] = st[ME]["Rank"] if ME in st else None
     g["win"] = ME in result["Winners"]
@@ -103,14 +109,23 @@ def lookahead_stats(games):
     s = Counter()
     deltas_stones, deltas_before, firsts = [], [], []
     two_ply_driven = 0
+    tie_sizes = Counter()
     for g in games:
         first_changed = None
+        one = (lambda x: int(x["After"])) if g["_ver"] >= 8 else (lambda x: int(x["After"]) - int(x.get("TwoPlyBonus", 0)))
         for turn, rnd, e in g["_la"]:
             s["records"] += 1
             s["status:" + e["Status"]] += 1
+            if rnd <= 3 and e["Status"] == "NotApplied":
+                s["build_notapplied"] += 1
             if e["Status"] != "Applied":
                 continue
             c = e["Candidates"]
+            ones = [one(x) for x in c]
+            best = max(ones)
+            tie_sizes[sum(v >= best - g["_band"] for v in ones)] += 1
+            if e["Chosen"] != ones.index(best):
+                s["tiebreak_changed"] += 1
             s["applied"] += 1
             s["cands"] += len(c)
             s["uniq_cellsets"] += len({cells(x["Batch"]) for x in c})
@@ -130,14 +145,15 @@ def lookahead_stats(games):
                 deltas_before.append(int(c0["Before"]) - int(ch["Before"]))
                 if ch.get("Source") == "Supplement":
                     s["changed_to_supplement"] += 1
-                one_ch = int(ch["After"]) - int(ch.get("TwoPlyBonus", 0))
-                one_c0 = int(c0["After"]) - int(c0.get("TwoPlyBonus", 0))
+                one_ch = one(ch)
+                one_c0 = one(c0)
                 if one_ch < one_c0:
                     two_ply_driven += 1
                 s["changed_build" if rnd <= 3 else "changed_open"] += 1
                 s["changed_fewer" if ds < 0 else ("changed_more" if ds > 0 else "changed_equal")] += 1
         firsts.append((g["seed"], first_changed))
     s["two_ply_driven"] = two_ply_driven
+    s["tie_set_sizes"] = dict(sorted(tie_sizes.items()))
     return dict(s), deltas_stones, deltas_before, firsts
 
 
@@ -163,7 +179,8 @@ for arm in ARMS:
     data[arm] = {g["seed"]: g for g in map(per_game, files)}
 
 summary = {}
-H = data["H"]
+H = data[BASE]
+ms_base = statistics.median([m for g in H.values() for m in g["ms"]]) if H else None
 for arm in ARMS:
     gs = list(data[arm].values())
     ranks = [g["rank"] for g in gs if g["rank"] is not None]
@@ -179,7 +196,10 @@ for arm in ARMS:
         "stalls": sum(g["stalls"] for g in gs),
         "captures": sum(g["captures"] for g in gs),
         "final_stones": sum(g["final_stones"] or 0 for g in gs),
+        "truncated": sum(g["reason"] == "turn_limit" for g in gs),
+        "p0_turn_ms_median": statistics.median([m for g in gs for m in g["ms"]]),
     }
+    row["p0_turn_ms_ratio_vs_base"] = round(row["p0_turn_ms_median"] / ms_base, 2) if ms_base else None
     pr, ar = Counter(), Counter()
     ph = defaultdict(lambda: [0, 0, 0])
     for g in gs:
@@ -189,7 +209,7 @@ for arm in ARMS:
                 ph[k][i] += v[i]
     row["pass_by_rank_before"] = {k: f"{pr[k]}/{ar[k]}" for k in sorted(ar)}
     row["by_phase(turns,stones,passes)"] = dict(ph)
-    if arm != "H":
+    if arm != BASE:
         good = same = bad = 0
         pairs = []
         for seed, g in sorted(data[arm].items()):
