@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-10-21（`expert-tiebreak` 实施完：专家构筑期不前瞻 + 两层加分改为容差带平局裁决，v1.34，待归档）。 仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-10-21（`expert-tiebreak` 归档：专家构筑期不前瞻 + 两层加分改为容差带平局裁决，v1.34）。 仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续；最近进度以 `.trellis/workspace/rubioc/journal-1.md` 最后一节为准。
 
 ## 一句话
@@ -87,7 +87,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 
 - `dotnet build siege.sln -c Release` 与 Godot 工程（`src/godot/Siege.Godot.csproj`）均 0 警告 0 错误（cycle-stop 第二段实测，2026-10-20）；Godot 四条 headless 自检退出 0。临近上限时图形版打印 `[round-cap] 第 N 帧、第 R 大回合：…` 一行（自检四条都在第 95 大回合前结束，不会出现）。
 - `dotnet test`：**2173 条，通过 2166，跳过 7**（expert-tiebreak 段 A 后实测，2026-10-21，退出码 0；新增带内 / 带外 / 严格平局 / 两层并列再比一层、构筑期三条与守门 `构筑期专家与高难逐步相同`、无效带宽被拒等）。此前 terrain-barriers：**2160 条，通过 2153，跳过 7**（实施后实测，2026-10-21，退出码 0；新增隔断线 / 湖泊 / 校验器测试，含慢测试 `种子1到2000生成不抛异常`）。此前 fence-eye-rule：**2106 条，通过 2100，跳过 6**（实施后实测，2026-10-21，退出码 0；新增眼边与活形 7 条：`栅栏不是墙`、`栅栏不切分空区`、`崖壁隔开的2x2不是方四`、`只隔栅栏贴着空区的棋串也拥有该眼空间`、`眼边只去掉气边的栅栏一条`、`隔着栅栏贴眼的他人棋子解除禁入`、`深水贴眼时禁入照旧`）。此前 stagnation-trace：**2099 条，通过 2093，跳过 6**（质检后实测，2026-10-21，退出码 0；新增 `循环提子停手Tests.停滞停手留痕`、`循环提子诊断Tests.停滞停手次数可查`、`可复现回放Tests.旧日志缺停滞停手字段按未停手回放`；另有 4706c4e 的 `全局预览Tests` 一条）。此前 link-map-surfaces：**2095 条，通过 2089，跳过 6**（实施后实测，2026-10-20，退出码 0；新增 `初始布局Tests` 新地表三条（1–20 两组 Theory + 分布）、`物化状态校验Tests.新地表过多被拒`、`地图静态校验规则Tests.外圈或核心区的新地表被拒`、`链接档地图标识与确定性Tests.新地表子流与布局子流互不扰动`）。此前 cycle-stop：**2051 条，通过 2045，跳过 6**（第二段实施后实测，退出码 0；新增 `循环提子诊断Tests` 3、`大回合上限配置Tests` 4、`战场结算Tests` 上限三条、`两类终局条件Tests.上限结算即终局`、`对局日志的记录内容_链接模式Tests.上限结算可查`、`循环提子停手Tests` 9、`大回合上限提示条Tests` 3；跳过全是 Perf / Slow）。此前 open-map 段 B 质检：2027 / 2021 / 6。
-- 决策序列基线：**只剩 5 份**——`link:1` + 标准难度、对局种子 1 / 2 / 3，简单 / 困难种子 1（截到第 12 大回合；`AiDecision/Fixtures/decisions-link1-*.txt`），link-map-surfaces 2.2 重钉、1.3（F1 / F2）再重钉（首个分歧都在新地表格或其四邻，记录见该任务 `rebaseline.txt`）；链接图黄金哈希、严格提高哈希（种子 34 → 35）、专家 G1、平衡报告与前瞻记录黄金值同时重钉。`*-omniscient.txt` / `*-k0.txt` 十份副本与比对用例已随全知开关与 K 删除。专家 G1 黄金值与前瞻计时局面集钉在 `link:1` 种子 1–3。`stagnation-trace` 2.1 删去首部的配对 / 链接旧字样并重钉（只差首部两行 + 简单种子 1 三条 `D:stall`，见该任务 `baseline-check.txt`）。`fence-eye-rule` 2.2 再重钉 5 份基线与链接图黄金哈希、`SmallMapGoldenHash`、严格提高哈希、专家 G1 与前瞻记录（首个分歧都是"栅栏不再造眼"，地图摘要不变，记录见 `.trellis/tasks/archive/2026-10/10-21-fence-eye-rule/implement.md`）。`expert-tiebreak` 段 A 只重钉专家 G1 与前瞻记录黄金值（第 1–3 大回合记录 Applied → NotApplied，决策与扰动消费不变），5 份基线与各黄金哈希不变（`.trellis/tasks/10-21-expert-tiebreak/rebaseline.txt`）。
+- 决策序列基线：**只剩 5 份**——`link:1` + 标准难度、对局种子 1 / 2 / 3，简单 / 困难种子 1（截到第 12 大回合；`AiDecision/Fixtures/decisions-link1-*.txt`），link-map-surfaces 2.2 重钉、1.3（F1 / F2）再重钉（首个分歧都在新地表格或其四邻，记录见该任务 `rebaseline.txt`）；链接图黄金哈希、严格提高哈希（种子 34 → 35）、专家 G1、平衡报告与前瞻记录黄金值同时重钉。`*-omniscient.txt` / `*-k0.txt` 十份副本与比对用例已随全知开关与 K 删除。专家 G1 黄金值与前瞻计时局面集钉在 `link:1` 种子 1–3。`stagnation-trace` 2.1 删去首部的配对 / 链接旧字样并重钉（只差首部两行 + 简单种子 1 三条 `D:stall`，见该任务 `baseline-check.txt`）。`fence-eye-rule` 2.2 再重钉 5 份基线与链接图黄金哈希、`SmallMapGoldenHash`、严格提高哈希、专家 G1 与前瞻记录（首个分歧都是"栅栏不再造眼"，地图摘要不变，记录见 `.trellis/tasks/archive/2026-10/10-21-fence-eye-rule/implement.md`）。`expert-tiebreak` 段 A 只重钉专家 G1 与前瞻记录黄金值（第 1–3 大回合记录 Applied → NotApplied，决策与扰动消费不变），5 份基线与各黄金哈希不变（`.trellis/tasks/archive/2026-10/10-21-expert-tiebreak/rebaseline.txt`）。
 
 ## 旧地图 / 旧规则（已删除）
 
@@ -122,7 +122,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 15. **专家对手模型对齐（修法 B，下一项候选）**：`10-21-expert-diagnosis` 与 `expert-tiebreak` 扫档显示，预设专家在开放地图上方向偏负（对困难配对 3 / 9 / 8，不显著），差距全部来自全图阶段由一层分数驱动的改选；前瞻的模拟回应用标准启发式，实际对手为困难，落点完全命中只约 1 / 3。候选改法：模拟回应改用专家本人的困难口径（N 24、不扰动那一条、同一停手阈值），不读对手配置、信息边界不变；风险是模拟预演约 ×2，需复核"耗时 ≤ 困难 4 倍"门控，专家 G1 / 前瞻记录黄金值与前瞻计时局面集须重钉。只登记，未建目录；开工前先给负责人编号裁决。
 15a. **扫档附带观察**（`expert-tiebreak` sweep.md）：S 8 / λ 1000‰ 的 B 0 / 20 两档停滞停手 12 / 11 次，困难 3 次、B 60 0 次；20 局小样本，未归因。
 
-进行中的 change：`expert-tiebreak`（段 A fd69bdb、段 B 扫档 fd2fc6f 与文档已提交，待负责人决定归档与合并）。另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。已归档（2026-09-28 之后）：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`、`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`、`link-map-terrain`、`ai-terrain-review`、`final-countdown`、`ai-seat-vision`、`retire-legacy-rules`、`open-map`、`cycle-stop`、`link-map-surfaces`、`stagnation-trace`、`fence-eye-rule`、`terrain-barriers`。
+另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。已归档（2026-09-28 之后）：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`、`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`、`link-map-terrain`、`ai-terrain-review`、`final-countdown`、`ai-seat-vision`、`retire-legacy-rules`、`open-map`、`cycle-stop`、`link-map-surfaces`、`stagnation-trace`、`fence-eye-rule`、`terrain-barriers`、`expert-tiebreak`。
 
 ## 权威来源（按优先级）
 
