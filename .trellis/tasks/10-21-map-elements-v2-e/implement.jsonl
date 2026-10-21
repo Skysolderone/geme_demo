@@ -1,0 +1,5 @@
+{"file": "openspec/changes/map-elements-v2/design.md", "reason": "全部裁决、D7 验收、源码扫描守门清单"}
+{"file": "openspec/changes/map-elements-v2/tasks.md", "reason": "段 E = 5.1、5.4"}
+{"file": "openspec/changes/map-elements-v2/proposal.md", "reason": "§20 条目要点"}
+{"file": ".trellis/tasks/archive/2026-10/10-21-map-elements-v2-d/implement.md", "reason": "段 D 记录（导出比对、孤儿材质清单）"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Godot 验证前须 Debug 构建"}
