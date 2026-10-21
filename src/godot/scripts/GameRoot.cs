@@ -90,6 +90,7 @@ public sealed partial class GameRoot : Node3D
     private bool _shotRecruitCollapsed;
     private bool _shotForbidden;
     private Coord? _shotCell;
+    private bool _shotNear;
 
     /// <summary>
     /// 本局 AI 难度（expert-lookahead D10）：<c>--difficulty=&lt;名称&gt;</c> 或选图界面的难度选择，缺省标准。
@@ -154,6 +155,9 @@ public sealed partial class GameRoot : Node3D
 
             // --shot-cell=<记法坐标>：截图前把相机注视点移到该格（缩放不变；仅截图用，如截底边的列标）。须与 --screenshot= 同用。
             string? shotCell = args.Text("shot-cell", "围棋记法坐标（如 AB1）");
+
+            // --shot-near：配合 --shot-cell= 把缩放拉到最近（map-elements-v2 0.1，截地块 / 水系近景用；一屏看得全的图上 --shot-cell= 单用不会拉近）。仅截图用。
+            _shotNear = args.Flag("shot-near");
 
             // --shot-show=placement|capture|power|banner（turn-settlement-show 3.3 / 3.4，settlement-show-callouts 2.2，仅截图用）：须与 --auto-demo 和 --screenshot= 同用。
             // 到达截图帧之后，等下一次结算的节拍序列里含所选节拍（placement = 落子、capture = 提子、power = 势力重算、banner = 横幅），
@@ -226,6 +230,11 @@ public sealed partial class GameRoot : Node3D
                 _shotCell = Coord.TryParse(shotCell, out Coord parsed)
                     ? parsed
                     : throw new System.FormatException($"--shot-cell={shotCell} 无效：应为围棋记法坐标（如 AB1）。");
+            }
+
+            if (_shotNear && shotCell is null)
+            {
+                throw new System.FormatException("--shot-near 须与 --shot-cell= 同用。");
             }
 
             if (_shotBoard is not null && (_screenshotFrame < 0 || _shotOverview || mapSelect))
@@ -715,7 +724,7 @@ public sealed partial class GameRoot : Node3D
 
             SyncAspect();
             (float x, float z) = _board.PlaneCenterOf(cell);
-            _board.Rig.Set(new CameraPose(x, z, _board.Rig.Pose.Distance));
+            _board.Rig.Set(new CameraPose(x, z, _shotNear ? _board.Rig.Nearest : _board.Rig.Pose.Distance));
             ApplyCamera("截图对准格");
         }
 
