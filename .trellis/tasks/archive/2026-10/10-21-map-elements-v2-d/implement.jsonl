@@ -1,0 +1,6 @@
+{"file": "openspec/changes/map-elements-v2/design.md", "reason": "D2、D5、D7、裁决记录、源码扫描守门清单"}
+{"file": "openspec/changes/map-elements-v2/tasks.md", "reason": "按任务实施（段 D = 4.1–4.3）"}
+{"file": "openspec/changes/map-elements-v2/specs/visual-style-baseline/spec.md", "reason": "「外框与底座的造型」「双字母列标不重叠」Scenario"}
+{"file": "openspec/specs/visual-style-baseline/spec.md", "reason": "「棋盘坐标标注」「棋盘台面的可视表现」「未展开区域的可视表现」现行约束"}
+{"file": ".trellis/tasks/archive/2026-10/10-21-map-elements-v2-c/implement.md", "reason": "段 C 记录（建模工具、导出比对脚本、还原漂移资源的做法）"}
+{"file": ".trellis/spec/core/testing.md", "reason": "Godot 验证前须 Debug 构建；源码扫描守门"}

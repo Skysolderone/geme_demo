@@ -305,18 +305,61 @@ public static class LowPoly
         return root;
     }
 
-    /// <summary>障碍格的低多边形岩石（装饰层，渲染顺序在一切判读信息之下）。</summary>
+    // —— 障碍与装饰（map-elements-v2 段 C）：用 LowPolyMesh 拼成按材质合并的网格，节点名写死，根下一层各一个 MeshInstance3D
+    //    （场景格的合批 NewPartBatch 要求这个形状）。变体号先按档数取模，程序生成与资源同形；形状变化只取自整数散列与变体号。
+
+    /// <summary>岩石档数（棋盘内岩石 + 场景格巨石共用）。</summary>
+    public const int RockVariants = 6;
+
+    /// <summary>林地小树档数（每档空出一个不同的格角）。</summary>
+    public const int TreesVariants = 4;
+
+    /// <summary>荒漠点缀档数。</summary>
+    public const int DesertVariants = 6;
+
+    /// <summary>沼泽点缀档数。</summary>
+    public const int MarshVariants = 6;
+
+    /// <summary>岩台点缀档数。</summary>
+    public const int CragVariants = 4;
+
+    /// <summary>浅滩点缀档数。</summary>
+    public const int ShallowsVariants = 6;
+
+    /// <summary>
+    /// 岩石（棋盘内岩石格与场景格巨石）：一大一中两块多面岩（大块浅、中块深）+ 一块小石 + 两粒碎石，挤在一格之内、底部没入地砖，
+    /// 读作"一格岩石"——灰色、块状、没有任何锥形或绿色，不会被读成林地。返回节点原点在地砖上表面。
+    /// </summary>
+    /// <remarks>
+    /// 两个 surface：浅色岩（<see cref="Visuals.Rock"/>）与深色岩（同色压暗 0.14），顶点色只当亮度系数（多面岩自带 0.94–1.0 的面差）。
+    /// 外形：最高 0.36–0.40（≤ 0.75）；水平方向不出地砖（导出实测 |x|、|z| ≤ 0.41，地砖半边长 0.45），整组按变体绕 Y 每档转 60°。
+    /// </remarks>
     public static Node3D Rock(int variant)
     {
+        int v = Wrap(variant, RockVariants);
+        int seed = 701 + (v * 16);
+        var turn = new Basis(Vector3.Up, Mathf.DegToRad((v * 60f) + 15f));
+
+        // 位置在格内按散列错开至多 ±0.015；每块各自绕 Y 转一个散列角，岩块的抖动种子逐块不同。
+        Transform3D At(float x, float y, float z, int salt) => new(
+            turn * new Basis(Vector3.Up, LowPolyMesh.Unit(seed, salt) * Mathf.Tau),
+            turn * new Vector3(x + (0.015f * LowPolyMesh.Signed(seed, salt + 1)), y, z + (0.015f * LowPolyMesh.Signed(seed, salt + 2))));
+
+        var light = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.FacetRock(0.27f, 8, 0.14f, seed, new Vector3(1.12f, 0.80f, 1.0f)), At(-0.05f, 0.16f, 0.03f, 20)),
+            (LowPolyMesh.FacetRock(0.12f, 6, 0.18f, seed + 2, new Vector3(1.1f, 0.85f, 1.0f)), At(0.10f, 0.07f, 0.25f, 30)),
+            (LowPolyMesh.FacetRock(0.05f, 5, 0.25f, seed + 3, new Vector3(1.2f, 0.7f, 1.0f)), At(-0.27f, 0.025f, 0.22f, 40)),
+        };
+        var dark = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.FacetRock(0.17f, 7, 0.16f, seed + 1, new Vector3(1.1f, 0.85f, 1.05f)), At(0.17f, 0.11f, -0.12f, 50)),
+            (LowPolyMesh.FacetRock(0.06f, 5, 0.25f, seed + 4, new Vector3(1.2f, 0.75f, 1.0f)), At(-0.22f, 0.03f, -0.24f, 60)),
+        };
+
         var root = new Node3D { Name = "Rock" };
-        StandardMaterial3D material = Visuals.Matte(Visuals.Rock, 1f);
-        StandardMaterial3D shade = Visuals.Matte(Visuals.Rock.Darkened(0.14f), 1f);
-        root.AddChild(Mesh(new SphereMesh { Radius = 0.30f, Height = 0.56f, RadialSegments = 5, Rings = 2 }, material,
-            new Vector3(-0.06f, 0.18f, 0.04f), new Vector3(8f, variant * 37f, 6f), new Vector3(1f, 0.9f, 1.1f)));
-        root.AddChild(Mesh(new SphereMesh { Radius = 0.20f, Height = 0.34f, RadialSegments = 5, Rings = 2 }, shade,
-            new Vector3(0.20f, 0.11f, -0.14f), new Vector3(0f, variant * 61f, 10f), new Vector3(1f, 0.9f, 1f)));
-        root.AddChild(Mesh(new SphereMesh { Radius = 0.13f, Height = 0.20f, RadialSegments = 4, Rings = 1 }, material,
-            new Vector3(0.10f, 0.07f, 0.24f), new Vector3(0f, variant * 23f, 0f)));
+        root.AddChild(Merged("Stone", light, Visuals.Rock));
+        root.AddChild(Merged("Shade", dark, Visuals.Rock.Darkened(0.14f)));
         return root;
     }
 
@@ -381,25 +424,40 @@ public static class LowPoly
     }
 
     /// <summary>
-    /// 林地格的三棵小树（装饰层）：放在地砖三个角上、树冠半径 0.09、高 0.24，落在棋子底座（半径 0.36）之外，
+    /// 林地格的三棵小树（装饰层）：四个格角里每档空出一个、其余三个各一棵；树是一根短干 + 两层锥形树冠（锥形树冠是林地的形状提示，
+    /// 与沼泽的芦苇、荒漠的仙人掌分得开）。树冠最宽半径 0.085、树高 ≤ 0.26，整棵落在棋子底座（半径 0.36）之外，
     /// 不遮挡该格的落点、气与归属标记（visual-style-baseline「装饰不遮挡判读」）。返回节点原点在地砖上表面。
     /// </summary>
+    /// <remarks>两个 surface：树冠（<see cref="Visuals.TreeCanopy"/>）与树干（<see cref="Visuals.Timber"/>）。每棵的大小、朝向与明暗按散列错开。</remarks>
     public static Node3D Trees(int variant)
     {
-        var root = new Node3D { Name = "Trees" };
-        StandardMaterial3D canopy = Visuals.Matte(Visuals.TreeCanopy, 1f);
-        StandardMaterial3D trunk = Visuals.Matte(Visuals.Timber, 1f);
-        Vector2[] corners = [new(-0.31f, -0.30f), new(0.30f, -0.29f), new(-0.02f, 0.31f)];
-        for (int i = 0; i < corners.Length; i++)
+        int v = Wrap(variant, TreesVariants);
+        var canopy = new List<(ArrayMesh, Transform3D)>();
+        var trunk = new List<(ArrayMesh, Transform3D)>();
+        Vector2[] corners = [new(-1f, -1f), new(1f, -1f), new(1f, 1f), new(-1f, 1f)];
+        for (int k = 0; k < corners.Length; k++)
         {
-            float scale = 0.85f + (0.15f * (((variant + i) % 3) / 2f));
-            Vector3 at = new(corners[i].X, 0f, corners[i].Y);
-            root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.02f, BottomRadius = 0.025f, Height = 0.08f, RadialSegments = 5, Rings = 0 }, trunk,
-                at + new Vector3(0f, 0.04f, 0f)));
-            root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.09f * scale, Height = 0.20f * scale, RadialSegments = 5, Rings = 0 }, canopy,
-                at + new Vector3(0f, 0.08f + (0.10f * scale), 0f), new Vector3(0f, (variant * 53f) + (i * 40f), 0f)));
+            if (k == v)
+            {
+                continue;
+            }
+
+            int seed = 801 + (v * 8) + k;
+            float s = 0.88f + (0.12f * LowPolyMesh.Unit(seed, 0));
+            float reach = 0.33f + (0.01f * LowPolyMesh.Unit(seed, 1));   // 只往格角方向错开：内沿始终在底座之外
+            var at = new Vector3(corners[k].X * reach, 0f, corners[k].Y * reach);
+            float yaw = LowPolyMesh.Unit(seed, 2) * Mathf.Tau;
+            float tone = 0.94f + (0.06f * LowPolyMesh.Unit(seed, 3));
+            trunk.Add((LowPolyMesh.Frustum(0.028f * s, 0.02f * s, 0.09f * s, 5, 0.97f, yaw: yaw), new Transform3D(Basis.Identity, at)));
+            canopy.Add((LowPolyMesh.Frustum(0.085f * s, 0f, 0.15f * s, 6, tone, yaw: yaw, bottomCap: true),
+                new Transform3D(Basis.Identity, at + new Vector3(0f, 0.06f * s, 0f))));
+            canopy.Add((LowPolyMesh.Frustum(0.06f * s, 0f, 0.12f * s, 6, tone, yaw: yaw + (Mathf.Pi / 6f), bottomCap: true),
+                new Transform3D(Basis.Identity, at + new Vector3(0f, 0.14f * s, 0f))));
         }
 
+        var root = new Node3D { Name = "Trees" };
+        root.AddChild(Merged("Canopy", canopy, Visuals.TreeCanopy));
+        root.AddChild(Merged("Trunk", trunk, Visuals.Timber));
         return root;
     }
 
@@ -408,40 +466,76 @@ public static class LowPoly
     /// 全部落在棋子底座（半径 0.36）之外，不遮挡落点、气与归属标记。仙人掌是"竖柱 + 侧臂"，与林地的锥形小树、沼泽的芦苇轮廓都不同。
     /// 返回节点原点在地砖上表面；<paramref name="variant"/> 决定放哪一组对角与朝向。
     /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 C：三个 surface（仙人掌绿、兽骨白、沙纹深沙——三种底色差得远，顶点色 0.92–1 的亮度系数拉不开，只能分开）。
+    /// 布局先按变体镜像（x 取反，只改位置、不翻网格）再整组转 90° 的整数倍，六档各不相同。仙人掌的侧臂沿格角的切向伸出，不朝格心。
+    /// </remarks>
     public static Node3D Desert(int variant)
     {
-        var root = new Node3D { Name = "Desert" };
-        StandardMaterial3D cactus = Visuals.Matte(Visuals.Cactus, 1f);
-        StandardMaterial3D bone = Visuals.Matte(Visuals.Bone, 1f);
-        StandardMaterial3D ripple = Visuals.Matte(Visuals.TileDesert.Darkened(0.16f), 1f);
-        float sx = variant % 2 == 0 ? 1f : -1f;
+        int v = Wrap(variant, DesertVariants);
+        int seed = 901 + (v * 16);
+        float sx = v < 4 ? 1f : -1f;
+        Basis turn = QuarterTurn(v % 4);
+        var cactus = new List<(ArrayMesh, Transform3D)>();
+        var bone = new List<(ArrayMesh, Transform3D)>();
+        var ripple = new List<(ArrayMesh, Transform3D)>();
+        Transform3D At(Vector3 p) => new(turn, turn * p);
 
-        // 沙纹：两道贴地的深沙色细条，斜穿地砖中部——灰度下也读得出"这块地是沙"，且贴地不遮挡任何标记。
+        // 沙纹：两道贴地的波状细条斜穿地砖中部（高 0.004）——灰度下也读得出"这块地是沙"，且贴地不遮挡任何标记。
+        float slant = Mathf.DegToRad(18f * sx);
+        var along = new Vector3(Mathf.Cos(slant), 0f, Mathf.Sin(slant));
+        var across = new Vector3(-along.Z, 0f, along.X);
         for (int i = -1; i <= 1; i += 2)
         {
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.62f, 0.006f, 0.035f) }, ripple,
-                new Vector3(0f, 0.003f, i * 0.12f), new Vector3(0f, 18f * sx, 0f)));
+            var points = new List<Vector3>();
+            for (int k = 0; k <= 4; k++)
+            {
+                float t = -0.31f + (k * 0.155f);
+                float wave = 0.022f * LowPolyMesh.Signed(seed, 10 + (i * 5) + k);
+                points.Add((along * t) + (across * ((i * 0.12f) + wave)) + new Vector3(0f, 0.004f, 0f));
+            }
+
+            ripple.Add((LowPolyMesh.Ribbon(points, 0.032f, shade: 0.97f), At(Vector3.Zero)));
         }
 
-        // 仙人掌：主柱 + 一侧的曲臂（短横段 + 竖段），顶高 0.24；放在一个角上。
-        var cactusAt = new Vector3(0.30f * sx, 0f, -0.29f);
-        float arm = variant % 3 == 0 ? -1f : 1f;
-        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.06f, Height = 0.24f, RadialSegments = 6, Rings = 0 }, cactus,
-            cactusAt + new Vector3(0f, 0.12f, 0f)));
-        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.09f, 0.045f, 0.045f) }, cactus,
-            cactusAt + new Vector3(0.065f * arm, 0.10f, 0f)));
-        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.03f, BottomRadius = 0.035f, Height = 0.11f, RadialSegments = 5, Rings = 0 }, cactus,
-            cactusAt + new Vector3(0.11f * arm, 0.15f, 0f)));
+        // 仙人掌：六棱主柱 + 尖顶，一侧沿格角切向伸出一条曲臂（横段 + 竖段 + 尖顶），顶高 0.23；放在一个格角上。
+        var cactusAt = new Vector3(0.34f * sx, 0f, -0.34f);
+        float arm = v % 3 == 0 ? -1f : 1f;
+        var tangent = new Vector3(1f, 0f, sx).Normalized() * arm;
+        cactus.Add((LowPolyMesh.Frustum(0.052f, 0.046f, 0.19f, 6, 1f, yaw: 0.3f), At(cactusAt)));
+        cactus.Add((LowPolyMesh.Frustum(0.046f, 0f, 0.04f, 6, 0.97f, yaw: 0.3f), At(cactusAt + new Vector3(0f, 0.19f, 0f))));
+        cactus.Add((LowPolyMesh.Beam(cactusAt + (tangent * 0.03f) + new Vector3(0f, 0.09f, 0f), cactusAt + (tangent * 0.09f) + new Vector3(0f, 0.09f, 0f), 0.04f, 0.04f, 0.97f),
+            At(Vector3.Zero)));
+        Vector3 elbow = cactusAt + (tangent * 0.09f);
+        cactus.Add((LowPolyMesh.Frustum(0.026f, 0.022f, 0.07f, 5, 0.98f), At(elbow + new Vector3(0f, 0.07f, 0f))));
+        cactus.Add((LowPolyMesh.Frustum(0.022f, 0f, 0.025f, 5, 0.96f), At(elbow + new Vector3(0f, 0.14f, 0f))));
 
-        // 第二株矮仙人掌放在对角，只有主柱（顶高 0.14）。
-        root.AddChild(Mesh(new CylinderMesh { TopRadius = 0.04f, BottomRadius = 0.05f, Height = 0.14f, RadialSegments = 6, Rings = 0 }, cactus,
-            new Vector3(-0.30f * sx, 0.07f, 0.30f)));
+        // 第二株矮仙人掌放在对角，只有主柱 + 尖顶（顶高 0.14）。
+        var smallAt = new Vector3(-0.34f * sx, 0f, 0.34f);
+        cactus.Add((LowPolyMesh.Frustum(0.044f, 0.038f, 0.11f, 6, 0.98f, yaw: 0.1f), At(smallAt)));
+        cactus.Add((LowPolyMesh.Frustum(0.038f, 0f, 0.03f, 6, 0.96f, yaw: 0.1f), At(smallAt + new Vector3(0f, 0.11f, 0f))));
 
-        // 兽骨：两根交叉的细骨贴地横放在第三个角，高 0.035。
-        var boneAt = new Vector3(0.28f * sx, 0f, 0.30f);
-        float turn = (variant * 37f) % 180f;
-        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.22f, 0.035f, 0.045f) }, bone, boneAt + new Vector3(0f, 0.018f, 0f), new Vector3(0f, turn, 0f)));
-        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.14f, 0.03f, 0.04f) }, bone, boneAt + new Vector3(0f, 0.02f, 0f), new Vector3(0f, turn + 70f, 0f)));
+        // 兽骨：第三个格角上两根交叉的细骨（骨干 + 两端骨节），贴地横放，高约 0.04。长的那根沿切向，短的那根在格角外侧斜搭。
+        var boneAt = new Vector3(0.32f * sx, 0f, 0.32f);
+        var outward = new Vector3(sx, 0f, 1f).Normalized();
+        var side = new Vector3(1f, 0f, -sx).Normalized();
+        float tilt = 0.35f * LowPolyMesh.Signed(seed, 30);
+        Vector3 longDir = (side * Mathf.Cos(tilt)) + (outward * Mathf.Sin(tilt));
+        Vector3 shortDir = (side * Mathf.Cos(tilt + 1.2f)) + (outward * Mathf.Sin(tilt + 1.2f));
+        foreach ((Vector3 center, Vector3 dir, float half) in new[] { (boneAt, longDir, 0.10f), (boneAt + (outward * 0.025f), shortDir, 0.065f) })
+        {
+            Vector3 lift = new(0f, 0.016f, 0f);
+            bone.Add((LowPolyMesh.Beam(center - (dir * half) + lift, center + (dir * half) + lift, 0.03f, 0.026f, 0.98f), At(Vector3.Zero)));
+            for (int end = -1; end <= 1; end += 2)
+            {
+                bone.Add((LowPolyMesh.FacetRock(0.02f, 5, 0.15f, seed + 40 + end, new Vector3(1f, 0.8f, 1f)), At(center + (dir * (half * end)) + new Vector3(0f, 0.017f, 0f))));
+            }
+        }
+
+        var root = new Node3D { Name = "Desert" };
+        root.AddChild(Merged("Cactus", cactus, Visuals.Cactus));
+        root.AddChild(Merged("Bone", bone, Visuals.Bone));
+        root.AddChild(Merged("Ripple", ripple, Visuals.TileDesert.Darkened(0.16f)));
         return root;
     }
 
@@ -450,38 +544,57 @@ public static class LowPoly
     /// 刻意不用锥形树冠（visual-style-baseline「沼泽不被读成林地」）；芦苇在棋子底座（半径 0.36）之外，水洼贴地，不遮挡判读。
     /// 返回节点原点在地砖上表面。
     /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 C：两个 surface（水洼、芦苇）。水洼是散列抖边的扁斑块（高 0.007，粗糙度 0.35 保留水光）；
+    /// 芦苇是细长的三棱尖叶（闭合网格，两面都看得到），从丛心向外斜出，每丛最高那片叶顶上一枚香蒲穗（同色）。
+    /// </remarks>
     public static Node3D Marsh(int variant)
     {
-        var root = new Node3D { Name = "Marsh" };
-        StandardMaterial3D puddle = Visuals.Matte(Visuals.MarshPuddle, 0.35f);
-        StandardMaterial3D reed = Visuals.Matte(Visuals.Reed, 1f);
-        float sx = variant % 2 == 0 ? 1f : -1f;
+        int v = Wrap(variant, MarshVariants);
+        int seed = 1001 + (v * 16);
+        float sx = v % 2 == 0 ? 1f : -1f;
+        var puddle = new List<(ArrayMesh, Transform3D)>();
+        var reed = new List<(ArrayMesh, Transform3D)>();
 
-        // 积水：扁的不规则多边形（低段数圆柱压扁），贴地、各转一个角度。
-        (Vector2 At, float R)[] puddles = variant % 3 == 0
+        // 积水：扁的不规则多边形，贴地、各转一个角度。
+        (Vector2 At, float R)[] puddles = v % 3 == 0
             ? [(new(-0.10f, 0.05f), 0.20f), (new(0.16f, -0.10f), 0.12f)]
             : [(new(0.08f, 0.10f), 0.17f), (new(-0.14f, -0.08f), 0.14f), (new(0.18f, -0.18f), 0.08f)];
         for (int i = 0; i < puddles.Length; i++)
         {
             (Vector2 at, float r) = puddles[i];
-            root.AddChild(Mesh(new CylinderMesh { TopRadius = r, BottomRadius = r, Height = 0.008f, RadialSegments = 6, Rings = 0 }, puddle,
-                new Vector3(at.X * sx, 0.004f, at.Y), new Vector3(0f, (variant * 29f) + (i * 50f), 0f), new Vector3(1f, 1f, 0.7f)));
+            float yaw = Mathf.DegToRad((v * 29f) + (i * 50f));
+            puddle.Add((LowPolyMesh.Patch(r, 7, 0.007f, seed + i, 0.16f, 0.7f),
+                new Transform3D(new Basis(Vector3.Up, yaw), new Vector3(at.X * sx, 0f, at.Y))));
         }
 
-        // 芦苇：两丛，各四五根细竖条，略向外倾。
-        foreach (Vector3 clump in new[] { new Vector3(0.31f * sx, 0f, -0.30f), new Vector3(-0.30f * sx, 0f, 0.31f) })
+        // 芦苇：两丛，各五片尖叶，从丛心向外斜出；叶高 0.15–0.21。
+        int clumpIndex = 0;
+        foreach (Vector3 clump in new[] { new Vector3(0.33f * sx, 0f, -0.33f), new Vector3(-0.33f * sx, 0f, 0.33f) })
         {
             for (int k = 0; k < 5; k++)
             {
-                float a = (k * 72f) + (variant * 13f);
-                float rad = Mathf.DegToRad(a);
-                float height = 0.16f + (0.02f * ((k + variant) % 4));
-                var offset = new Vector3(Mathf.Cos(rad) * 0.035f, 0f, Mathf.Sin(rad) * 0.035f);
-                root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.018f, height, 0.018f) }, reed,
-                    clump + offset + new Vector3(0f, height * 0.5f, 0f), new Vector3(Mathf.Sin(rad) * 8f, 0f, -Mathf.Cos(rad) * 8f)));
+                float rad = Mathf.DegToRad((k * 72f) + (v * 13f) + (clumpIndex * 36f));
+                var dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+                float height = 0.15f + (0.02f * ((k + v) % 4));
+                float leanBy = 0.02f + (0.015f * LowPolyMesh.Unit(seed, 20 + (clumpIndex * 10) + k));
+                var basePoint = clump + new Vector3(dir.X * 0.035f, 0f, dir.Y * 0.035f);
+                reed.Add((LowPolyMesh.Frustum(0.013f, 0f, height, 3, 0.96f + (0.04f * LowPolyMesh.Unit(seed, 40 + k)), dir * leanBy, rad),
+                    new Transform3D(Basis.Identity, basePoint)));
+                if (k == 0)
+                {
+                    // 香蒲穗：挂在这片叶 0.82 高处的一枚竖长多面体，顶不超过 0.24。
+                    Vector3 spike = basePoint + new Vector3(dir.X * leanBy * 0.82f, height * 0.82f, dir.Y * leanBy * 0.82f);
+                    reed.Add((LowPolyMesh.FacetRock(0.016f, 5, 0.1f, seed + 60 + clumpIndex, new Vector3(1f, 2.2f, 1f)), new Transform3D(Basis.Identity, spike)));
+                }
             }
+
+            clumpIndex++;
         }
 
+        var root = new Node3D { Name = "Marsh" };
+        root.AddChild(Merged("Puddle", puddle, Visuals.MarshPuddle, 0.35f));
+        root.AddChild(Merged("Reed", reed, Visuals.Reed));
         return root;
     }
 
@@ -490,46 +603,73 @@ public static class LowPoly
     /// 石沿只高 0.03、远低于一层地砖（高差 1 的缓坡侧面明显更高），读起来是"一块石台"而不是高一层（visual-style-baseline「岩台不被读成高一层」）。
     /// 碎石在棋子底座（半径 0.36）之外，裂纹贴地，不遮挡判读。返回节点原点在地砖上表面。
     /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 C：两个 surface（石沿浅石色、裂纹与碎石深色）。石沿每边两块倒角石（分块点按散列错开、块间留 0.008 的缝、顶高 0.026–0.03），
+    /// 块底下探到 −0.03，把地砖顶板倒角处的空隙填上；裂纹是贴地（高 0.004）的折线；碎石是压扁的多面岩。
+    /// </remarks>
     public static Node3D Crag(int variant)
     {
-        var root = new Node3D { Name = "Crag" };
-        StandardMaterial3D rim = Visuals.Matte(Visuals.TileCrag.Lightened(0.08f), 1f);
-        StandardMaterial3D crack = Visuals.Matte(Visuals.CragCrack, 1f);
+        int v = Wrap(variant, CragVariants);
+        int seed = 1101 + (v * 16);
         const float half = BoardGeometry.TileSize * 0.5f;
         const float band = 0.05f;
         const float lip = 0.03f;
+        const float gap = 0.004f;
+        var rim = new List<(ArrayMesh, Transform3D)>();
+        var crack = new List<(ArrayMesh, Transform3D)>();
 
-        // 石沿：四条贴内缘的矮条。
-        foreach ((Vector3 at, Vector3 size) in new[]
+        // 石沿：上下两边铺满整条边，左右两边夹在中间（与改前四条矮条的占位相同），每边在散列分块点断成两块。
+        (Vector3 Center, bool AlongX, float Length)[] sides =
+        [
+            (new Vector3(0f, 0f, -half + (band * 0.5f)), true, BoardGeometry.TileSize),
+            (new Vector3(0f, 0f, half - (band * 0.5f)), true, BoardGeometry.TileSize),
+            (new Vector3(-half + (band * 0.5f), 0f, 0f), false, BoardGeometry.TileSize - (2f * band)),
+            (new Vector3(half - (band * 0.5f), 0f, 0f), false, BoardGeometry.TileSize - (2f * band)),
+        ];
+        for (int s = 0; s < sides.Length; s++)
         {
-            (new Vector3(0f, lip * 0.5f, -half + (band * 0.5f)), new Vector3(BoardGeometry.TileSize, lip, band)),
-            (new Vector3(0f, lip * 0.5f, half - (band * 0.5f)), new Vector3(BoardGeometry.TileSize, lip, band)),
-            (new Vector3(-half + (band * 0.5f), lip * 0.5f, 0f), new Vector3(band, lip, BoardGeometry.TileSize - (2f * band))),
-            (new Vector3(half - (band * 0.5f), lip * 0.5f, 0f), new Vector3(band, lip, BoardGeometry.TileSize - (2f * band))),
-        })
-        {
-            root.AddChild(Mesh(new BoxMesh { Size = size }, rim, at));
+            (Vector3 center, bool alongX, float length) = sides[s];
+            float cut = 0.12f * LowPolyMesh.Signed(seed, s);
+            (float From, float To)[] blocks = [(-length * 0.5f, cut - gap), (cut + gap, length * 0.5f)];
+            for (int b = 0; b < blocks.Length; b++)
+            {
+                (float from, float to) = blocks[b];
+                int salt = 10 + (s * 4) + b;
+                float top = lip - (0.004f * LowPolyMesh.Unit(seed, salt));
+                float mid = (from + to) * 0.5f;
+                Vector3 size = alongX ? new Vector3(to - from, top + 0.03f, band) : new Vector3(band, top + 0.03f, to - from);
+                Vector3 at = center + (alongX ? new Vector3(mid, 0f, 0f) : new Vector3(0f, 0f, mid));
+                rim.Add((LowPolyMesh.BeveledSlab(size, 0.008f, 0.96f + (0.04f * LowPolyMesh.Unit(seed, salt + 50)), seed + salt, 0.03f, top, 0.95f),
+                    new Transform3D(Basis.Identity, at)));
+            }
         }
 
-        // 裂纹：三四道折线段，贴地。
-        float turn = (variant * 41f) % 90f;
+        // 裂纹：三四道贴地折线（中点按散列侧偏），整组按变体转一个角度。
+        float turn = Mathf.DegToRad((v * 41f) % 90f);
         (Vector2 At, float Len, float Angle)[] cracks =
         [
             (new(-0.12f, -0.08f), 0.26f, 25f), (new(0.02f, -0.02f), 0.18f, -40f), (new(0.12f, 0.12f), 0.22f, 70f), (new(-0.16f, 0.16f), 0.14f, -10f),
         ];
-        for (int i = 0; i < cracks.Length - (variant % 2); i++)
+        for (int i = 0; i < cracks.Length - (v % 2); i++)
         {
             (Vector2 at, float len, float angle) = cracks[i];
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(len, 0.006f, 0.022f) }, crack,
-                new Vector3(at.X, 0.003f, at.Y), new Vector3(0f, angle + turn, 0f)));
+            float a = Mathf.DegToRad(angle) + turn;
+            var dir = new Vector3(Mathf.Cos(a), 0f, -Mathf.Sin(a));
+            var normal = new Vector3(-dir.Z, 0f, dir.X);
+            var c = new Vector3(at.X, 0.004f, at.Y);
+            Vector3 bend = normal * (0.025f * LowPolyMesh.Signed(seed, 30 + i));
+            Vector3[] points = [c - (dir * (len * 0.5f)), c - (dir * (len * 0.12f)) + bend, c + (dir * (len * 0.5f)) - (bend * 0.4f)];
+            crack.Add((LowPolyMesh.Ribbon(points, 0.018f), Transform3D.Identity));
         }
 
-        // 碎石：两颗小多面体，放在两个角上。
-        float sx = variant % 2 == 0 ? 1f : -1f;
-        root.AddChild(Mesh(new SphereMesh { Radius = 0.05f, Height = 0.07f, RadialSegments = 5, Rings = 2 }, crack,
-            new Vector3(0.30f * sx, 0.03f, -0.29f), new Vector3(0f, variant * 31f, 0f)));
-        root.AddChild(Mesh(new SphereMesh { Radius = 0.035f, Height = 0.05f, RadialSegments = 4, Rings = 1 }, crack,
-            new Vector3(-0.29f * sx, 0.02f, 0.30f)));
+        // 碎石：两颗压扁的多面岩，放在石沿以内的两个格角上。
+        float sx = v % 2 == 0 ? 1f : -1f;
+        crack.Add((LowPolyMesh.FacetRock(0.045f, 6, 0.2f, seed + 70, new Vector3(1.15f, 0.7f, 1f)), new Transform3D(Basis.Identity, new Vector3(0.31f * sx, 0.022f, -0.31f))));
+        crack.Add((LowPolyMesh.FacetRock(0.032f, 5, 0.2f, seed + 71, new Vector3(1.1f, 0.75f, 1f)), new Transform3D(Basis.Identity, new Vector3(-0.31f * sx, 0.016f, 0.31f))));
+
+        var root = new Node3D { Name = "Crag" };
+        root.AddChild(Merged("Rim", rim, Visuals.TileCrag.Lightened(0.08f)));
+        root.AddChild(Merged("Crack", crack, Visuals.CragCrack));
         return root;
     }
 
@@ -538,86 +678,181 @@ public static class LowPoly
     /// 与深水的区分靠两条通道：高度（深水水面低于地砖、浅滩齐平）与纹理（深水没有鹅卵石）（visual-style-baseline「浅滩不被读成深水」）。
     /// 全部贴地（≤ 0.03），不遮挡落点、气点与"浅滩：不算气"的标记。返回节点原点在地砖上表面。
     /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 C：两个 surface（鹅卵石、水纹；水纹保留粗糙度 0.4 的水光）。鹅卵石排在格心半径 0.402 的一圈上（角度按散列错开），
+    /// 自身水平半径 ≤ 0.04：内沿 ≥ 0.36（底座之外），沿轴方向外沿 ≤ 0.445（不出地砖）。水纹是两道贴地（高 0.003）的弧。
+    /// </remarks>
     public static Node3D Shallows(int variant)
     {
-        var root = new Node3D { Name = "Shallows" };
-        StandardMaterial3D pebble = Visuals.Matte(Visuals.Pebble, 1f);
-        StandardMaterial3D ripple = Visuals.Matte(Visuals.Ripple, 0.4f);
-        float sx = variant % 2 == 0 ? 1f : -1f;
+        int v = Wrap(variant, ShallowsVariants);
+        int seed = 1201 + (v * 16);
+        float sx = v % 2 == 0 ? 1f : -1f;
+        var pebble = new List<(ArrayMesh, Transform3D)>();
+        var ripple = new List<(ArrayMesh, Transform3D)>();
 
-        // 水纹：两道斜向细条。
+        // 水纹：两道弧，弧心错开在格心两侧。
         for (int i = -1; i <= 1; i += 2)
         {
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.34f, 0.004f, 0.018f) }, ripple,
-                new Vector3(0.06f * i * sx, 0.002f, 0.14f * i), new Vector3(0f, (-20f * sx) + (i * 8f), 0f)));
+            var center = new Vector3(0.06f * i * sx, 0.003f, 0.14f * i);
+            float start = Mathf.DegToRad((-20f * sx) + (i * 8f) + (40f * LowPolyMesh.Signed(seed, 10 + i)));
+            var points = new List<Vector3>();
+            for (int k = 0; k <= 3; k++)
+            {
+                float a = start + (k * 0.38f);
+                points.Add(center + new Vector3((Mathf.Cos(a) * 0.17f) - (Mathf.Cos(start + 0.57f) * 0.17f), 0f, (Mathf.Sin(a) * 0.08f) - (Mathf.Sin(start + 0.57f) * 0.08f)));
+            }
+
+            ripple.Add((LowPolyMesh.Ribbon(points, 0.016f), Transform3D.Identity));
         }
 
-        // 鹅卵石：沿地砖外圈散放，扁球，避开格心的棋子底座。
-        Vector2[] spots = [new(-0.33f, -0.18f), new(-0.30f, 0.26f), new(0.32f, -0.30f), new(0.20f, 0.34f), new(0.34f, 0.10f), new(-0.10f, -0.35f)];
-        for (int i = 0; i < spots.Length - (variant % 2); i++)
+        // 鹅卵石：一圈压扁的多面小石，避开格心的棋子底座。
+        const float ring = 0.402f;
+        for (int i = 0; i < 6 - (v % 2); i++)
         {
-            float r = 0.028f + (0.008f * ((i + variant) % 3));
-            root.AddChild(Mesh(new SphereMesh { Radius = r, Height = r, RadialSegments = 6, Rings = 2 }, pebble,
-                new Vector3(spots[i].X * sx, r * 0.4f, spots[i].Y), new Vector3(0f, (variant * 23f) + (i * 37f), 0f), new Vector3(1.3f, 1f, 1f)));
+            float r = 0.022f + (0.006f * LowPolyMesh.Unit(seed, 20 + i));
+            float a = Mathf.DegToRad((i * 60f) + (v * 17f) + (20f * LowPolyMesh.Signed(seed, 30 + i)));
+            var at = new Vector3(Mathf.Cos(a) * ring, r * 0.25f, Mathf.Sin(a) * ring);
+            pebble.Add((LowPolyMesh.FacetRock(r, 6, 0.12f, seed + 40 + i, new Vector3(1.25f, 0.6f, 1f)),
+                new Transform3D(new Basis(Vector3.Up, LowPolyMesh.Unit(seed, 50 + i) * Mathf.Tau), at)));
         }
 
+        var root = new Node3D { Name = "Shallows" };
+        root.AddChild(Merged("Pebble", pebble, Visuals.Pebble));
+        root.AddChild(Merged("Ripple", ripple, Visuals.Ripple, 0.4f));
         return root;
     }
 
     /// <summary>
-    /// 一段栅栏（terrain-model 边属性）：三根立柱 + 两根横杆，沿一格边长立起，厚度只有 0.05，
+    /// 一段栅栏（terrain-model 边属性）：三根立柱（顶上一枚倒角柱帽）+ 两根横杆，横杆在两柱之间略下垂；沿一格边长立起，厚度只有 0.05，
     /// 放在两格之间的缝上，不占任一格的落点。<paramref name="alongX"/> 为 <c>true</c> 时沿 X 轴（两格上下相邻），否则沿 Z 轴。
     /// 返回节点原点在缝中心、地砖上表面。
     /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 B：用 <see cref="LowPolyMesh"/> 拼成一个网格（一个 surface、一份木料材质，顶点色只当亮度系数）。
+    /// 外形不超出改前的包围盒：x ∈ ±0.48（横杆两端）、y ∈ [0, 0.30]（柱帽顶）、厚 ±0.025（柱帽，柱身与横杆更细）。
+    /// </remarks>
     public static Node3D Fence(bool alongX)
     {
-        var root = new Node3D { Name = "Fence" };
-        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
-        float length = BoardGeometry.TileSize + 0.06f;
+        const float half = (BoardGeometry.TileSize + 0.06f) * 0.5f;   // 横杆半长 0.48，与改前同
+        const float post = 0.04f, cap = 0.05f, capHeight = 0.035f, height = 0.30f, sag = 0.012f;
+        var parts = new List<(ArrayMesh, Transform3D)>();
         for (int i = -1; i <= 1; i++)
         {
-            float offset = i * 0.40f;
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.05f, 0.30f, 0.05f) }, timber,
-                alongX ? new Vector3(offset, 0.15f, 0f) : new Vector3(0f, 0.15f, offset)));
+            float x = i * 0.40f;
+            float shade = 0.95f + (0.04f * LowPolyMesh.Unit(509, i + 1));
+            parts.Add((LowPolyMesh.BeveledSlab(new Vector3(post, height - capHeight, post), 0f, shade, top: height - capHeight, sideShade: 0.96f), At(x)));
+            parts.Add((LowPolyMesh.BeveledSlab(new Vector3(cap, capHeight, cap), 0.014f, 1f, top: height, sideShade: 0.95f), At(x)));
         }
 
+        // 横杆：两柱之间的每一跨在跨中下垂 sag，柱外的短伸出段水平。
+        float[] knots = [-half, -0.40f, -0.20f, 0f, 0.20f, 0.40f, half];
         foreach (float y in new[] { 0.11f, 0.23f })
         {
-            root.AddChild(Mesh(new BoxMesh { Size = alongX ? new Vector3(length, 0.035f, 0.03f) : new Vector3(0.03f, 0.035f, length) }, timber,
-                new Vector3(0f, y, 0f)));
+            for (int k = 0; k + 1 < knots.Length; k++)
+            {
+                var from = new Vector3(knots[k], y - Droop(knots[k]), 0f);
+                var to = new Vector3(knots[k + 1], y - Droop(knots[k + 1]), 0f);
+                parts.Add((LowPolyMesh.Beam(from, to, 0.03f, 0.035f, 0.97f), Transform3D.Identity));
+            }
         }
 
+        // 沿 Z 的那一段由沿 X 的绕 Y 转 90° 得到（造型对称，正反一样）；基向量直接写成 0 / ±1，免得三角函数的舍入让厚度超出 ±0.025 一丝。
+        Basis turn = alongX ? Basis.Identity : new Basis(new Vector3(0f, 0f, -1f), Vector3.Up, new Vector3(1f, 0f, 0f));
+        var root = new Node3D { Name = "Fence" };
+        root.AddChild(new MeshInstance3D
+        {
+            Name = "Mesh",
+            Mesh = LowPolyMesh.Merge(parts.Select(p => (p.Item1, new Transform3D(turn, Vector3.Zero) * p.Item2))),
+            MaterialOverride = Shaded(Visuals.Timber),
+        });
+        return root;
+
+        static Transform3D At(float x) => new(Basis.Identity, new Vector3(x, 0f, 0f));
+
+        // 跨中（±0.20）下垂 sag，立柱处（0、±0.40）与伸出端不垂。
+        static float Droop(float x) => Mathf.Abs(Mathf.Abs(x) - 0.20f) < 0.001f ? sag : 0f;
+    }
+
+    /// <summary>
+    /// 预置桥（terrain-model 设施）：一层木板桥面（六块板，板间露出下面深色的垫木，读作板缝）+ 两侧栏杆（四根角墩、两根中柱、一道扶手），
+    /// 铺在深水格上，面与同层地砖齐平——桥格是普通可落子格，棋子与标记照常放在面上。栏杆贴在桥面两侧、只有 0.13 高，不遮挡落点。
+    /// 返回节点原点在桥面（地砖上表面）；网格里过桥方向沿 Z（栏杆沿 Z 走），BoardView 按河道走向绕 Y 转。
+    /// </summary>
+    /// <remarks>
+    /// map-elements-v2 段 B：用 <see cref="LowPolyMesh"/> 拼成两个网格（桥面木板一份、深色木料一份，各一个 surface，顶点色只当亮度系数）。
+    /// 外形不超出改前的包围盒：x、z ∈ ±0.45（TileSize 见方）、y ∈ [−0.06, 0.13]。角墩是桥墩：从桥底（−0.06）一直立到栏杆顶，比中柱粗。
+    /// </remarks>
+    public static Node3D Bridge()
+    {
+        const float half = BoardGeometry.TileSize * 0.5f;
+        const float deckDepth = 0.04f, bottom = -0.06f, top = 0.13f;
+        const int planks = 6;
+        const float seam = 0.012f;
+        float plank = (BoardGeometry.TileSize - ((planks - 1) * seam)) / planks;
+
+        // 桥面：六块横板（沿 X 长、沿 Z 排开），每块亮度按散列错开一点。
+        var deck = new List<(ArrayMesh, Transform3D)>();
+        for (int i = 0; i < planks; i++)
+        {
+            float z = -half + (plank * 0.5f) + (i * (plank + seam));
+            ArrayMesh board = LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, deckDepth, plank), 0.006f, 0.95f + (0.05f * LowPolyMesh.Unit(601, i)),
+                seed: 601 + i, facetJitter: 0.02f, sideShade: 0.94f);
+            deck.Add((board, new Transform3D(Basis.Identity, new Vector3(0f, 0f, z))));
+        }
+
+        // 深色木料：板下的垫木（板缝里露出的就是它）、四根角墩、两根中柱、两道扶手。
+        var timber = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, -bottom - deckDepth, BoardGeometry.TileSize), 0f, 0.96f, top: -deckDepth), Transform3D.Identity),
+        };
+        const float pier = 0.07f, post = 0.04f, rail = 0.03f;
+        float side = half - (pier * 0.5f);
+        foreach (float sx in new[] { -side, side })
+        {
+            foreach (float sz in new[] { -(half - (pier * 0.5f) - 0.015f), half - (pier * 0.5f) - 0.015f })
+            {
+                timber.Add((LowPolyMesh.BeveledSlab(new Vector3(pier, top - bottom, pier), 0.012f, 1f, top: top, sideShade: 0.95f),
+                    new Transform3D(Basis.Identity, new Vector3(sx, 0f, sz))));
+            }
+
+            timber.Add((LowPolyMesh.BeveledSlab(new Vector3(post, 0.10f, post), 0.008f, 0.97f, top: 0.10f, sideShade: 0.95f),
+                new Transform3D(Basis.Identity, new Vector3(sx, 0f, 0f))));
+            float reach = half - pier - 0.015f;
+            timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.105f, -reach), new Vector3(sx, 0.105f, reach), rail, 0.025f, 0.97f), Transform3D.Identity));
+        }
+
+        var root = new Node3D { Name = "Bridge" };
+        root.AddChild(new MeshInstance3D { Name = "Deck", Mesh = LowPolyMesh.Merge(deck), MaterialOverride = Shaded(Visuals.BridgeDeck) });
+        root.AddChild(new MeshInstance3D { Name = "Timber", Mesh = LowPolyMesh.Merge(timber), MaterialOverride = Shaded(Visuals.Timber) });
         return root;
     }
 
     /// <summary>
-    /// 预置桥（terrain-model 设施）：一块木板面 + 四根角柱，铺在深水格上，面与同层地砖齐平——桥格是普通可落子格，
-    /// 棋子与标记照常放在面上。角柱只有 0.07 见方，不遮挡落点。返回节点原点在桥面（地砖上表面）。
+    /// LowPolyMesh 部件的材质：沿用现有色（设施木料、岩石、点缀）、缺省粗糙度 1（水洼 / 水纹保留各自的低粗糙度），
+    /// 打开顶点色（顶点色只当亮度系数，最终色 = 底色 × 顶点色）。
     /// </summary>
-    public static Node3D Bridge()
+    private static StandardMaterial3D Shaded(Color color, float roughness = 1f)
     {
-        var root = new Node3D { Name = "Bridge" };
-        StandardMaterial3D deck = Visuals.Matte(Visuals.BridgeDeck, 1f);
-        StandardMaterial3D timber = Visuals.Matte(Visuals.Timber, 1f);
-        const float half = BoardGeometry.TileSize * 0.5f;
-        root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.06f, BoardGeometry.TileSize) }, deck, new Vector3(0f, -0.03f, 0f)));
-
-        // 板缝：三条深色细槽，让桥面在缩略图里也读得出"木板"。
-        for (int i = -1; i <= 1; i++)
-        {
-            root.AddChild(Mesh(new BoxMesh { Size = new Vector3(BoardGeometry.TileSize, 0.004f, 0.02f) }, timber, new Vector3(0f, 0.002f, i * 0.28f)));
-        }
-
-        foreach (float sx in new[] { -half + 0.05f, half - 0.05f })
-        {
-            foreach (float sz in new[] { -half + 0.05f, half - 0.05f })
-            {
-                root.AddChild(Mesh(new BoxMesh { Size = new Vector3(0.07f, 0.16f, 0.07f) }, timber, new Vector3(sx, 0.05f, sz)));
-            }
-        }
-
-        return root;
+        StandardMaterial3D material = Visuals.Matte(color, roughness);
+        material.VertexColorUseAsAlbedo = true;
+        return material;
     }
+
+    /// <summary>一组网格按各自变换并成一个 surface，挂在一个写死名字的 MeshInstance3D 上（导出产物不带进程内自增序号）。</summary>
+    private static MeshInstance3D Merged(string name, IEnumerable<(ArrayMesh, Transform3D)> parts, Color color, float roughness = 1f) =>
+        new() { Name = name, Mesh = LowPolyMesh.Merge(parts), MaterialOverride = Shaded(color, roughness) };
+
+    /// <summary>绕 Y 转 <paramref name="quarters"/> 个 90°：基向量直接写 0 / ±1，免得三角函数的舍入让点缀的外沿多出一丝。</summary>
+    private static Basis QuarterTurn(int quarters) => (((quarters % 4) + 4) % 4) switch
+    {
+        0 => Basis.Identity,
+        1 => new Basis(new Vector3(0f, 0f, -1f), Vector3.Up, new Vector3(1f, 0f, 0f)),
+        2 => new Basis(new Vector3(-1f, 0f, 0f), Vector3.Up, new Vector3(0f, 0f, -1f)),
+        _ => new Basis(new Vector3(0f, 0f, 1f), Vector3.Up, new Vector3(-1f, 0f, 0f)),
+    };
+
+    /// <summary>变体号按档数取模（负数也落在 0…档数 − 1）：程序生成与按档导出的资源同形。</summary>
+    private static int Wrap(int variant, int variants) => ((variant % variants) + variants) % variants;
 
     /// <summary>
     /// 程序化直棱柱（低多边形硬边）：<paramref name="profile"/> 是 XY 平面上的凸多边形，沿 Z 轴居中拉伸 <paramref name="depth"/>。

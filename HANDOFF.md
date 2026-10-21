@@ -1,6 +1,6 @@
 # 续接说明（HANDOFF）
 
-> 更新于 2026-10-21（`expert-tiebreak` 归档：专家构筑期不前瞻 + 两层加分改为容差带平局裁决，v1.34）。 仓库：`git@github.com:Skysolderone/geme_demo.git`。
+> 更新于 2026-10-21（`expert-tiebreak` 归档：专家构筑期不前瞻 + 两层加分改为容差带平局裁决，v1.35；此前 `map-elements-v2` 归档，v1.34）。 仓库：`git@github.com:Skysolderone/geme_demo.git`。
 > 读完本文即可在新会话中继续；最近进度以 `.trellis/workspace/rubioc/journal-1.md` 最后一节为准。
 
 ## 一句话
@@ -42,7 +42,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 - 对局：`--map=link:<种子>`（只写 `link` 随机取种子并打印）`--seed=<对局种子>` `--difficulty=Easy|Standard|Hard|Expert` `--cell-limit=<K，0=不限>` `--map-select`（强制进新局界面，配合截图 / 自检）。
 - 带入带出：`--profile=<路径>` `--no-carry` `--carry-preview=supply|settlement`。
 - 无人值守：`--auto-demo` `--rounds=<N，缺省 4，0=跑到终局>` `--zone=<1–5，本机锁定的出生棋盘，缺省 1>` `--pick-check`。
-- 截图：`--screenshot=<绝对路径>[:帧]` `--overview` `--shot-cell=<坐标>` `--shot-board=<棋盘下标>` `--shot-show=placement|capture|power|banner`（`expand` / `field` 随拼接演出与战场横幅删除）`--shot-power` `--shot-groups` `--shot-ownership` `--shot-forbidden` `--shot-recruit-collapsed` `--perf-sample=<秒>`。
+- 截图：`--screenshot=<绝对路径>[:帧]` `--overview` `--shot-cell=<坐标>` `--shot-board=<棋盘下标>` `--shot-show=placement|capture|power|banner`（`expand` / `field` 随拼接演出与战场横幅删除）`--shot-power` `--shot-groups` `--shot-ownership` `--shot-forbidden` `--shot-recruit-collapsed` `--shot-near`（配合 `--shot-cell=` 拉到最近缩放，map-elements-v2 新增；单给报错）`--perf-sample=<秒>`。
 - 其他：`--mute`（演出不发声）`--export-parts=<目录>` `--piece-gallery=<PNG>`（不建局，导完退出）。
 - 未给 `--map=`：有人值守进新局界面，无人值守取 `link:1`。无人值守（`--auto-demo` / `--pick-check` / `--screenshot=`）固定标准难度（同时给 `--difficulty=` 报错）、关闭带入带出；`--auto-demo` 缺省对局种子 20260915。
 
@@ -53,7 +53,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 - `replay`：`--file <match-*.jsonl>` 或 `--dir <目录> --seed <十六进制种子>`（只回放 `link:` 日志）。`analyze`：`--dir` `--include-contaminated` `--review-defeats`（按日志回放复盘整轮 Pass 结算的落败者与决胜一手，耗时约等于跑局；缺省不做）`--review-artisan` `--review-cycles`（循环提子诊断：只读日志快照、不回放，末段 12 个大回合窗口；另报每局与汇总的停滞停手次数——按快照 `Stalled`（= 决策条目 `D:stall`）整局计，旧日志计 0；缺省不做）`--out`。
 - 已删除：`--flag-risk`（冒险概率随盲选废除，`retire-legacy-maps`）；`--pairing-seed` / `--final-countdown` / `map --links`（open-map 段 B，严格命令行下报错退出）；`--config` 文件里写 `FlagRisk` / `PairingSeed` / `FinalCountdownRounds` / `SeatVision` 字段即报错退出（后三者提示"拼接规则已移除"；`Players[].Search.SeatVision` 同样点名拒绝）。Link 局固定 4 人，`--players` 给别的值建局报错。AI 一律按座位视野（锁定后 = 全图），没有全知开关。难度名不区分大小写、不接受数字（`AiDifficultyNames`）。
 
-## 现行规则速览（设计文档 v1.34）
+## 现行规则速览（设计文档 v1.35）
 
 - **地图**（§3.3，`link-map-terrain` + `open-map`）：`link:<种子>` 生成 5 块出生棋盘（宽高 6–8），五主题高台 / 河流 / 林地 / 栅栏阵 / 混合各一块；外圈平坦，中央 3×3 核心区是出生区（2 个出生区信物），中间带按主题放高差 / 深水与桥 / 林地 / 栅栏 / 岩石，另有 0–1 个公共区档信物在难到达格；最后用独立地图子流按主题叠加 0–4 格新地表（`link-map-surfaces`：河流 → 浅滩、高台 → 岩台、林地 → 沼泽、栅栏阵 → 荒漠、混合四种各至多 1 格；只放中间带高度 0 的空草地，不进外圈与核心区，中间带 > 12 格的棋盘也不贴核心区（6×6 / 6×7 免除，F1）；目标 2–3、混合 2–4、中间带 ≤ 12 取 2，混合某种找不到就从候选格补该种（F2），候选用完才少放；校验器只许中间带、每块 ≤ 4 格）；5 块按种子次序贴成 3+2 两行（第一行底边对齐东贴，后两块北贴，共享边最长、偏西优先，放不下即换锚），画布原点固定、留白 2；全图可落子 212–280、信物 10–15；地图整局不变（`MapVersion` 恒 0）。插旗占位公开主题名。棋盘外是不可落子、不可改造的场景格。**战场** = 可落子格连通分量，开局即恰 1 个（整张地图）。
 - **隔断线与湖泊**（`terrain-barriers`，v1.33）：河流 / 高台主题各有一条横穿整块棋盘的中间带整列 / 行——河道恰 1 座桥、高 2 山脊恰 1 格高 1 坡口，两侧只经这一处通道相连；中间带 > 12 格的棋盘另有 1 团 3–5 格湖泊或岩区。全图可落子格 202–258（种子 1–20）。
@@ -80,7 +80,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
   4. `-- --auto-demo --rounds=0 --seed=5`：跑到终局，`[flow]` 要求四步齐全（插旗锁定 → 构筑期 → 全图解禁 → 终局），任一步不符退出 1。
 - 第 3 条偶发退出 1（link-map-surfaces 3.2 实测，可复现：`-- --map=link:501492606 --map-select --auto-demo`）：进入时的图一屏看得全、"换一张"随机到一屏看不全的图时，全局预览被自动打开，回到进入时的图后关不掉，第 4 步 `!IsOverview` 失败；与地图内容无关，重跑换到别的随机种子即过（见「后续 change」第 14 项）。
 - 换出生棋盘看取景：`-- --auto-demo --zone=<1–5> --seed=<S>`。
-- 截图（非 headless）命令与人工试玩清单：`art/open-map/README.md`（锁定后全图、第 4 大回合跨棋盘落子）、`art/link-map-terrain/README.md`（五主题、棋盘内岩石 `link:9`）、`art/link-map-surfaces/README.md`（锁定后整图，`link:1` 十格新地表（F1 / F2 后），四种点缀）。
+- 截图（非 headless）命令与人工试玩清单：`art/open-map/README.md`（锁定后全图、第 4 大回合跨棋盘落子）、`art/link-map-terrain/README.md`（五主题、棋盘内岩石 `link:9`）、`art/link-map-surfaces/README.md`（锁定后整图，`link:1` 十格新地表（F1 / F2 后），四种点缀）、`art/map-elements-v2/README.md`（地图元素部件化：改前改后全局预览与近景、灰度图、绘制调用对照）。
 - 规格：`openspec validate open-map --strict`（归档后 `openspec validate --specs --strict`）。
 
 ## 测试现状
@@ -122,11 +122,11 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 15. **专家对手模型对齐（修法 B，下一项候选）**：`10-21-expert-diagnosis` 与 `expert-tiebreak` 扫档显示，预设专家在开放地图上方向偏负（对困难配对 3 / 9 / 8，不显著），差距全部来自全图阶段由一层分数驱动的改选；前瞻的模拟回应用标准启发式，实际对手为困难，落点完全命中只约 1 / 3。候选改法：模拟回应改用专家本人的困难口径（N 24、不扰动那一条、同一停手阈值），不读对手配置、信息边界不变；风险是模拟预演约 ×2，需复核"耗时 ≤ 困难 4 倍"门控，专家 G1 / 前瞻记录黄金值与前瞻计时局面集须重钉。只登记，未建目录；开工前先给负责人编号裁决。
 15a. **扫档附带观察**（`expert-tiebreak` sweep.md）：S 8 / λ 1000‰ 的 B 0 / 20 两档停滞停手 12 / 11 次，困难 3 次、B 60 0 次；20 局小样本，未归因。
 
-另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。已归档（2026-09-28 之后）：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`、`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`、`link-map-terrain`、`ai-terrain-review`、`final-countdown`、`ai-seat-vision`、`retire-legacy-rules`、`open-map`、`cycle-stop`、`link-map-surfaces`、`stagnation-trace`、`fence-eye-rule`、`terrain-barriers`、`expert-tiebreak`。
+已归档的 change `map-elements-v2`（`openspec/changes/archive/2026-10-21-map-elements-v2/`）（地图元素部件化与造型精修，v1.34；段 A–E 已实施，部件资源 75 件 / 共享材质 27 份，资源缺失退回程序建模）。已归档（2026-09-28 之后）：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`、`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`、`link-map-terrain`、`ai-terrain-review`、`final-countdown`、`ai-seat-vision`、`retire-legacy-rules`、`open-map`、`cycle-stop`、`link-map-surfaces`、`stagnation-trace`、`fence-eye-rule`、`terrain-barriers`、`expert-tiebreak`。
 
 ## 权威来源（按优先级）
 
-1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.34**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
+1. `openspec/specs/`（Requirement / Scenario 是验收基准）与 `2026-09-10-siege-core-gameplay-design-v1.md`（**v1.35**，文末变更记录）。`Siege-玩法介绍-v1.docx` 是旧玩家向稿，与 md 冲突时以 md 为准。
 2. `openspec/changes/archive/<日期>-<change>/` 的 proposal 裁决表与 design.md：设计文档没写到的以它判定（开放地图的裁决 O1–O8 / B1–B10 在 `openspec/changes/archive/2026-10-20-open-map/`，大回合上限与停滞停手的 C1–C6 / D1–D6 在 `2026-10-20-cycle-stop/`）。
 3. `.trellis/spec/core/`：`index` / `boundaries` / `determinism` / `coordinates` / `testing`，**必读**。
 4. `.trellis/workspace/rubioc/journal-1.md` 与 `.trellis/tasks/archive/<月>/<任务>/implement.md`（逐段记录、冒烟数字、自检输出）。

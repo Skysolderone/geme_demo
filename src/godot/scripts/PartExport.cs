@@ -8,7 +8,7 @@ namespace Siege.Godot;
 /// </summary>
 /// <remarks>
 /// 同色同粗糙度的材质合并成一份 <c>materials/*.tres</c>，各部件场景外部引用它（改一处材质，全部部件跟着变）；网格作为场景内子资源内嵌。
-/// 变体只导出"看得出差别"的那几档（档数见 <see cref="TerrainParts"/>）：岩石 / 遗迹的朝向随 variant 连续变，取前 4 档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
+/// 变体只导出"看得出差别"的那几档（档数见 <see cref="TerrainParts"/>）：遗迹的朝向随 variant 连续变，取前 4 档；岩石与林地 / 新地表点缀（map-elements-v2 段 C）在建模函数里按档数取模，导出全部档；松树丛布局按 variant % 3、秋色按 variant % 7 == 3，取 0–6 共 7 档。
 /// </remarks>
 public static class PartExport
 {
@@ -31,10 +31,16 @@ public static class PartExport
 
         var materials = new Dictionary<string, StandardMaterial3D>();
         int failures = 0;
+        var triangles = new List<string>();
         foreach ((string name, Node3D node) in parts)
         {
             node.Name = ToPascal(name);
             ShareMaterials(node, node, materials, materialDir, ref failures);
+            if (StableMeshIds(node, name) is int count and > 0)
+            {
+                triangles.Add($"{name} {count}");
+            }
+
             var scene = new PackedScene();
             Error packed = scene.Pack(node);
             Error saved = packed == Error.Ok ? ResourceSaver.Save(scene, $"{dir}/{name}.tscn") : packed;
@@ -48,6 +54,7 @@ public static class PartExport
         }
 
         GD.Print($"[export-parts] 部件 {parts.Count - failures} / {parts.Count}、共享材质 {materials.Count} → {dir}");
+        GD.Print($"[export-parts] 程序建模网格（LowPolyMesh）三角形数：{string.Join("、", triangles)}");
         return failures;
     }
 
@@ -59,11 +66,15 @@ public static class PartExport
             child.Owner = root;
             if (child is MeshInstance3D { MaterialOverride: StandardMaterial3D m } mesh)
             {
-                string key = $"{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}";
+                // 打开顶点色的材质（LowPolyMesh 部件）键里多一个 _vc：与同色同粗糙度、不用顶点色的既有材质分开存，既有材质文件名不变。
+                // 不受光的材质（段 D 的云团）文件名前缀改 flat_、半透明的再带 _a<不透明度百分比>：与同色的哑光材质分开存；哑光材质的键与文件名不变。
+                bool unshaded = m.ShadingMode == BaseMaterial3D.ShadingModeEnum.Unshaded;
+                string alpha = m.AlbedoColor.A < 1f ? $"_a{m.AlbedoColor.A * 100f:0}" : "";
+                string key = $"{(unshaded ? "flat" : "matte")}_{m.AlbedoColor.ToHtml(false)}_r{m.Roughness * 100f:0}{(m.VertexColorUseAsAlbedo ? "_vc" : "")}{alpha}";
                 if (!materials.TryGetValue(key, out StandardMaterial3D? shared))
                 {
                     shared = m;
-                    string path = $"{materialDir}/matte_{key}.tres";
+                    string path = $"{materialDir}/{key}.tres";
                     Error saved = ResourceSaver.Save(shared, path);
                     if (saved != Error.Ok)
                     {
@@ -79,6 +90,31 @@ public static class PartExport
             }
 
             ShareMaterials(root, child, materials, materialDir, ref failures);
+        }
+    }
+
+    /// <summary>
+    /// 程序建模的网格（<see cref="ArrayMesh"/>，LowPolyMesh 产出）按"部件名_序号"给定子资源 id，免得每次导出随机取名；返回这些网格的三角形总数（导出日志自证面数）。
+    /// 内置几何体（BoxMesh 等）不动——既有部件的产物与引入本条之前相同。
+    /// </summary>
+    private static int StableMeshIds(Node node, string name)
+    {
+        int triangles = 0, index = 0;
+        Visit(node);
+        return triangles;
+
+        void Visit(Node current)
+        {
+            foreach (Node child in current.GetChildren())
+            {
+                if (child is MeshInstance3D { Mesh: ArrayMesh mesh })
+                {
+                    mesh.ResourceSceneUniqueId = $"{name}_{index++}";
+                    triangles += mesh.GetFaces().Length / 3;
+                }
+
+                Visit(child);
+            }
         }
     }
 
