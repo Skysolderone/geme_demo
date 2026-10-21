@@ -1,0 +1,50 @@
+== decisions-link1-seed1.txt：HEAD 55 行 / 现 55 行；HEAD 含 CR 0，现含 CR 0
+  第 3 行（首部）
+    HEAD：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10 mode=Link pairing=script（缺省：升序两两配）
+    现在：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
+  第 5 行（首部）
+    HEAD：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算
+    现在：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
+  结论：首部差异行 [3, 5]；D:stall 单列 0 行 []；其他差异 0 行
+== decisions-link1-seed2.txt：HEAD 55 行 / 现 55 行；HEAD 含 CR 0，现含 CR 0
+  第 3 行（首部）
+    HEAD：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10 mode=Link pairing=script（缺省：升序两两配）
+    现在：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
+  第 5 行（首部）
+    HEAD：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算
+    现在：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
+  结论：首部差异行 [3, 5]；D:stall 单列 0 行 []；其他差异 0 行
+== decisions-link1-seed3.txt：HEAD 55 行 / 现 55 行；HEAD 含 CR 0，现含 CR 0
+  第 3 行（首部）
+    HEAD：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10 mode=Link pairing=script（缺省：升序两两配）
+    现在：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
+  第 5 行（首部）
+    HEAD：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算
+    现在：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
+  结论：首部差异行 [3, 5]；D:stall 单列 0 行 []；其他差异 0 行
+== decisions-link1-easy-seed1.txt：HEAD 55 行 / 现 55 行；HEAD 含 CR 0，现含 CR 0
+  第 3 行（首部）
+    HEAD：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10 mode=Link pairing=script（缺省：升序两两配）
+    现在：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
+  第 5 行（首部）
+    HEAD：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算
+    现在：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
+  第 45 行（D:pass → D:stall）
+    HEAD：10	P1	R:0:Fortress,1:Fortress,2:Synergy D:pass
+    现在：10	P1	R:0:Fortress,1:Fortress,2:Synergy D:stall
+  第 49 行（D:pass → D:stall）
+    HEAD：11	P1	R:0:Fortress,4:Fortress,1:Multiplier D:pass
+    现在：11	P1	R:0:Fortress,4:Fortress,1:Multiplier D:stall
+  第 53 行（D:pass → D:stall）
+    HEAD：12	P1	R:1:Artisan,2:Synergy,3:Synergy D:pass
+    现在：12	P1	R:1:Artisan,2:Synergy,3:Synergy D:stall
+  结论：首部差异行 [3, 5]；D:stall 单列 3 行 [45, 49, 53]；其他差异 0 行
+== decisions-link1-hard-seed1.txt：HEAD 55 行 / 现 55 行；HEAD 含 CR 0，现含 CR 0
+  第 3 行（首部）
+    HEAD：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10 mode=Link pairing=script（缺省：升序两两配）
+    现在：# cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
+  第 5 行（首部）
+    HEAD：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；P 配对、L 链接、S 战场结算
+    现在：# 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
+  结论：首部差异行 [3, 5]；D:stall 单列 0 行 []；其他差异 0 行
+总结论：5 份基线与 HEAD 相比只有首部第 3 / 5 行不同（另有上面单列的 D:pass → D:stall 行），其余决策行逐字节相同

@@ -1,0 +1,10 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "openspec/changes/stagnation-trace/proposal.md", "reason": "stagnation-trace 规划与裁决 G1–G5"}
+{"file": "openspec/changes/stagnation-trace/design.md", "reason": "stagnation-trace 规划与裁决 G1–G5"}
+{"file": "openspec/changes/stagnation-trace/tasks.md", "reason": "stagnation-trace 规划与裁决 G1–G5"}
+{"file": "openspec/changes/stagnation-trace/specs/ai-decision/spec.md", "reason": "stagnation-trace 规划与裁决 G1–G5"}
+{"file": "openspec/changes/stagnation-trace/specs/match-telemetry/spec.md", "reason": "stagnation-trace 规划与裁决 G1–G5"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
