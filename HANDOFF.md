@@ -114,7 +114,7 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 11. **Sim 贴地形小空区口径观察**（`retire-legacy-rules` G1）。
 12. **前瞻投影缺出局字段**（G2）：前瞻投影不填 `EliminationReason` / `PowerAtDefeat`（只用于前瞻、不影响决策）。
 13. **偶发失败观察**（G5）：`批量跑局Tests.已删除的选项报已删除(no-catch-up)` 偶发失败一次，重跑通过。
-14. **新局界面自检全局预览关不掉**（link-map-surfaces 3.2 发现，F4 另开 change；1.3 复跑时在 `link:775536878` 上又失败一次；质检在改前 `2a2c039` 的 worktree 上跑 `--map=link:501492606` 同样第 4 步失败、退出 1——既有缺陷，与新地表无关）：见「自检命令」第 3 条附注；修法候选：回到一屏看得全的图时关掉全局预览，或 `StartMatch` 不经 `ToggleOverview` 直接复位。
+14. ~~**新局界面自检全局预览关不掉**~~：**已修复**（`4706c4e`，裁决 F4）——换回一屏看得全的图时 `GameRoot.DropStaleOverview` 把残留预览复位到新图初始位姿；`-- --map=link:501492606 --map-select --auto-demo` 退出 0，`全局预览Tests` 新增一条守门。
 
 另有未开工的 change `map-elements-v2`（地图元素造型精修，0/17）。已归档（2026-09-28 之后）：`recruit-panel-collapse`、`board-map`、`forbidden-marks`、`turn-settlement-show`、`settlement-show-callouts`、`ai-turn-speed`、`board-render-perf`、`show-sound-cues`、`board-link-mode`、`retire-legacy-maps`、`ai-pass-review`、`link-map-terrain`、`ai-terrain-review`、`final-countdown`、`ai-seat-vision`、`retire-legacy-rules`、`open-map`、`cycle-stop`；`link-map-surfaces` 待质检后归档（4.2）。
 
