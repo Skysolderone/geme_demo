@@ -14,19 +14,19 @@
   - 信息层打开时地砖照常压暗（截图）；
   - 出生区淡染和明暗棋盘格照常；接缝处顶板与格线连成一片；
   - `--pick-check` 在 `link:1`、`link:7` 上通过。
-- [ ] 1.4 段 A 截图：`link:1` 全局预览、`S4` 近景（崖壁 S4–T4 与缓坡 U4、K4 同屏）、`link:7` 全局预览，彩色和灰度，放进 `art/map-elements-v2/`。验证：负责人确认地块方向，确认后才进入段 B。
+- [x] 1.4 段 A 截图：`link:1` 全局预览、`S4` 近景（崖壁 S4–T4 与缓坡 U4、K4 同屏）、`link:7` 全局预览，彩色和灰度，放进 `art/map-elements-v2/`。验证：负责人确认地块方向，确认后才进入段 B。
 
 ## 2. 段 B——水系与设施
 
 - [x] 2.1 `bank_lip`（`water_bed` 按裁决 B1 不加）：每条"邻格不是深水"的边放一件石沿，邻格不在视图里也算（design D4）；水面板和流纹 shader 不变；邻格判断只按 `Dictionary<Coord, Surface>` 查表，不调 Core 邻接 API。验证：`link:1` 一格宽河 D8–G8 的水面可见宽度不小于 0.78 格（截图量像素）；浅滩 D9 / G9 与深水可辨；`Godot层不含规则计算Tests` 通过。
 - [x] 2.2 桥重建（栏杆、桥墩、板缝）、栅栏重建（柱帽、横杆略下垂），外形不超出现有包围盒。验证：桥面仍与地砖齐平、可拾取（`link:1` F8、K6）；栅栏不占格（`link:1` N7–O8 截图）；对局中新架的桥、新立的栅栏与预置的同形。
-- [ ] 2.3 段 B 截图：`link:1` 河段近景（`--shot-cell=E8 --shot-near`）、`link:7` 河段近景（`--shot-cell=M7 --shot-near`）、全局预览，彩色和灰度。验证：负责人确认。
+- [x] 2.3 段 B 截图：`link:1` 河段近景（`--shot-cell=E8 --shot-near`）、`link:7` 河段近景（`--shot-cell=M7 --shot-near`）、全局预览，彩色和灰度。验证：负责人确认。
 
 ## 3. 段 C——障碍与装饰
 
 - [x] 3.1 用 `LowPolyMesh` 重建 `rock`（4→6，服务棋盘内岩石）与 `trees`；`pines` / `ruins` 按裁决 M3 处理。验证：`link:7` Q16、U15 的岩石读作"一格岩石"、不读成林地；装饰高 ≤ 0.75、林地小树仍在棋子底座之外。
 - [x] 3.2 重建四种地表点缀（`desert` / `marsh` / `crag` / `shallows`），保持 terrain-surfaces 的形状约束：沼泽不用锥形树冠、岩台不读成高一层、浅滩齐平、点缀高 ≤ 0.25 且在底座（半径 0.36）之外。验证：`link:1` 灰度图七种地表逐格可辨（人工；关键格见 design Context 表）。
-- [ ] 3.3 段 C 截图：`link:1` 新地表近景（`--shot-cell=K14 --shot-near`、`--shot-cell=V8 --shot-near`）、`link:7` 岩石近景（`--shot-cell=Q16 --shot-near`），彩色和灰度。验证：负责人确认。
+- [x] 3.3 段 C 截图：`link:1` 新地表近景（`--shot-cell=K14 --shot-near`、`--shot-cell=V8 --shot-near`）、`link:7` 岩石近景（`--shot-cell=Q16 --shot-near`），彩色和灰度。验证：负责人确认。
 
 ## 4. 段 D——外框与底座
 
