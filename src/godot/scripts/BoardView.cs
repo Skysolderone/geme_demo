@@ -60,6 +60,7 @@ public sealed partial class BoardView : Node3D
     private readonly Dictionary<Color, StandardMaterial3D> _linerMaterials = [];
     private readonly Dictionary<Color, StandardMaterial3D> _flatMaterials = [];
     private readonly Dictionary<Vector3, BoxMesh> _boxMeshes = [];
+    private readonly HashSet<Mesh> _tileMeshes = [];
     private readonly Dictionary<Coord, int> _levels = [];
     private Node3D _decoration = null!;
     private Node3D _batch = null!;
@@ -136,6 +137,7 @@ public sealed partial class BoardView : Node3D
         _linerMaterials.Clear();
         _flatMaterials.Clear();
         _boxMeshes.Clear();
+        _tileMeshes.Clear();
         _levels.Clear();
         _partBatches.Clear();
         _unbatchedObstacles = 0;
@@ -269,7 +271,7 @@ public sealed partial class BoardView : Node3D
                 Node3D rock = TerrainParts.Create(TerrainParts.Rock, variant++);
                 rock.Position = center;
                 _decoration.AddChild(rock);
-                AddTileStack(tiles, center, cell.Height, SurfaceOf(color), color);
+                AddTileStack(tiles, cell.Coord, center, cell.Height, SurfaceOf(color), color);
                 boardRocks++;
                 continue;
             }
@@ -366,7 +368,7 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
-            AddTileStack(tiles, center, cell.Height, material, color);
+            AddTileStack(tiles, cell.Coord, center, cell.Height, material, color);
         }
 
         // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内岩石逐格画了几格。
@@ -400,7 +402,7 @@ public sealed partial class BoardView : Node3D
         PartBatch[] batches = [.. _partBatches.Values.OfType<PartBatch>()];
         GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_partMultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
             + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
-        GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份");
+        GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
 
         BuildCoordinateLabels(low, high);
 
@@ -670,43 +672,53 @@ public sealed partial class BoardView : Node3D
     /// 一格地砖：h=0 只有一块面砖；h=1 在面砖下垫一层土色侧面；h=2 再垫一层岩灰侧面。
     /// 相邻格高度差越大露出的色带越多（Δh=1 一条土色，Δh=2 土色 + 岩灰），崖壁与缓坡因此可分。
     /// </summary>
-    private static readonly StandardMaterial3D SlopeMaterial = Visuals.Matte(Visuals.SlopeSide);
-    private static readonly StandardMaterial3D CliffMaterial = Visuals.Matte(Visuals.CliffSide);
+    /// <remarks>
+    /// map-elements-v2 D3：三样都取部件（<see cref="TerrainParts.PieceOf"/>，网格只有"种类 × 档数"份）——第 1 层侧面 <c>side_slope</c>、第 2 层 <c>side_cliff</c>，
+    /// 再放 <c>liner</c>、<c>tile_top</c>；侧面与顶板的变体按<b>全图坐标</b>散列（棋盘接缝处不出现图案断层）。几何边界与改前的盒子逐值相同：
+    /// 侧面铺满整格（CellSize）、高一层，顶板 TileSize 见方、TileHeight 厚，衬底铺满整格、厚 <see cref="TerrainParts.LinerThickness"/>、位置不变。
+    /// 顶板 / 衬底的材质仍是按底色共用的那一份（顶点色只当亮度系数），侧面用部件自带的土色 / 岩灰。
+    /// </remarks>
+    private static readonly StandardMaterial3D SlopeMaterial = SideFallback(Visuals.SlopeSide);
+    private static readonly StandardMaterial3D CliffMaterial = SideFallback(Visuals.CliffSide);
 
-    private void AddTileStack(Node3D parent, Vector3 top, int level, StandardMaterial3D surface, Color color)
+    private void AddTileStack(Node3D parent, Coord coord, Vector3 top, int level, StandardMaterial3D surface, Color color)
     {
-        const float half = BoardGeometry.TileHeight * 0.5f;
-        float bandBottom = -half;
         for (int layer = 1; layer <= level; layer++)
         {
             float bandTop = BoardGeometry.TopYOf(layer) - BoardGeometry.TileHeight;
-            parent.AddChild(new MeshInstance3D
-            {
-                // 侧面色带铺满整格（CellSize）：高台读作一整块实心的土 / 岩，而不是一根根立柱之间透着黑缝。
-                Mesh = BoxOf(new Vector3(BoardGeometry.CellSize, bandTop - bandBottom, BoardGeometry.CellSize)),
-                MaterialOverride = layer == 1 ? SlopeMaterial : CliffMaterial,
-                Position = new Vector3(top.X, (bandTop + bandBottom) * 0.5f, top.Z),
-            });
-            bandBottom = bandTop;
+
+            // 侧面色带铺满整格（CellSize）：高台读作一整块实心的土 / 岩，而不是一根根立柱之间透着黑缝。部件锚点在该层带的顶面中心。
+            TerrainParts.Piece side = TerrainParts.PieceOf(layer == 1 ? TerrainParts.SideSlope : TerrainParts.SideCliff, TileVariant(coord, layer));
+            AddTilePiece(parent, side.Mesh, side.Material ?? (layer == 1 ? SlopeMaterial : CliffMaterial), new Vector3(top.X, bandTop, top.Z));
         }
 
         // 面砖之下垫一块铺满整格的薄衬底，颜色取面砖压暗：面砖之间那 0.10 的缝露出的就是它——
         // 网格线仍然清楚（visual-style-baseline「方格边界始终清晰」），但是同色系的细线，不再是黑缝。
-        // 衬底色由面砖基色推出、不参与信息层压暗（不登记进压暗表）。
-        const float liner = 0.03f;
-        parent.AddChild(new MeshInstance3D
-        {
-            Mesh = BoxOf(new Vector3(BoardGeometry.CellSize, liner, BoardGeometry.CellSize)),
-            MaterialOverride = LinerOf(color),
-            Position = top - new Vector3(0f, BoardGeometry.TileHeight - (liner * 0.5f), 0f),
-        });
+        // 衬底色由面砖基色推出、不参与信息层压暗（不登记进压暗表）。部件锚点在衬底中心。
+        const float liner = TerrainParts.LinerThickness;
+        AddTilePiece(parent, TerrainParts.PieceOf(TerrainParts.Liner, 0).Mesh, LinerOf(color), top - new Vector3(0f, BoardGeometry.TileHeight - (liner * 0.5f), 0f));
 
-        parent.AddChild(new MeshInstance3D
-        {
-            Mesh = BoxOf(new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize)),
-            MaterialOverride = surface,
-            Position = top - new Vector3(0f, half, 0f),
-        });
+        // 顶板：部件锚点在地砖上表面中心；变体只做细微色差（O-1），明暗棋盘格与出生区淡染仍靠底色。
+        AddTilePiece(parent, TerrainParts.PieceOf(TerrainParts.TileTop, TileVariant(coord, 0)).Mesh, surface, top);
+    }
+
+    /// <summary>放一件地块部件：逐格一个节点，网格与材质共用。</summary>
+    private void AddTilePiece(Node3D parent, Mesh mesh, Material material, Vector3 position)
+    {
+        _tileMeshes.Add(mesh);
+        parent.AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = material, Position = position });
+    }
+
+    /// <summary>地块部件的变体号：按全图坐标散列（不按棋盘内坐标，接缝两侧的图案不断层），<paramref name="salt"/> 区分顶板与各层侧面，让它们的档位不同步。</summary>
+    private static int TileVariant(Coord coord, int salt) =>
+        (int)(LowPolyMesh.Hash(unchecked((coord.X * 73856093) ^ (coord.Y * 19349663)), 17 + salt) & 0x7FFFFFFFu);
+
+    /// <summary>侧面部件资源不带材质时的退路：现有侧面色、打开顶点色。</summary>
+    private static StandardMaterial3D SideFallback(Color color)
+    {
+        StandardMaterial3D material = Visuals.Matte(color);
+        material.VertexColorUseAsAlbedo = true;
+        return material;
     }
 
     /// <summary>某基色的面砖材质：同基色共用一份，并登记进压暗表（<see cref="Refresh"/> 按基色整批改色）。</summary>
@@ -714,7 +726,9 @@ public sealed partial class BoardView : Node3D
     {
         if (!_surfaceMaterials.TryGetValue(color, out StandardMaterial3D? material))
         {
+            // 顶板网格的顶点色只当亮度系数（map-elements-v2 D1）：最终色 = 底色 × 顶点色，压暗表照常整批改底色。
             material = Visuals.Matte(color);
+            material.VertexColorUseAsAlbedo = true;
             _surfaceMaterials[color] = material;
             _tileMaterials.Add((material, color));
         }
@@ -728,6 +742,7 @@ public sealed partial class BoardView : Node3D
         if (!_linerMaterials.TryGetValue(color, out StandardMaterial3D? material))
         {
             material = Visuals.Matte(color.Darkened(0.30f));
+            material.VertexColorUseAsAlbedo = true;
             _linerMaterials[color] = material;
         }
 
