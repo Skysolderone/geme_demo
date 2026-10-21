@@ -3,7 +3,7 @@
   "name": "expert-diagnosis",
   "title": "专家难度弱于高难的只读归因诊断",
   "description": "现行 link: 图上 H / E0 / E8 三臂成对对照，产出归因报告与修法候选，不改 AI 行为",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
