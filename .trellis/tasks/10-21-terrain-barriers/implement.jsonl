@@ -1,0 +1,9 @@
+{"file": "openspec/changes/terrain-barriers/proposal.md", "reason": "terrain-barriers change 产物"}
+{"file": "openspec/changes/terrain-barriers/design.md", "reason": "terrain-barriers change 产物"}
+{"file": "openspec/changes/terrain-barriers/tasks.md", "reason": "terrain-barriers change 产物"}
+{"file": "openspec/changes/terrain-barriers/specs/link-map-generation/spec.md", "reason": "terrain-barriers change 产物"}
+{"file": "openspec/changes/terrain-barriers/specs/map-definition/spec.md", "reason": "terrain-barriers change 产物"}
+{"file": ".trellis/spec/core/index.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "内核规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "内核规范"}
