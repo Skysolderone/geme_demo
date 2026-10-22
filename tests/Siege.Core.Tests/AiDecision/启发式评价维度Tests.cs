@@ -502,7 +502,8 @@ public class 启发式评价维度Tests
         // cycle-stop D3：循环提子停手（K 缺省 6）改变"哪些候选参与保留"，版本 5 → 6（K = 0 与版本 5 逐步相同，由 循环提子停手Tests.K为0零变化 守）。
         // fence-eye-rule 2.1（裁决 F5）：活形判定无视栅栏，眼位 / 安全 / 威胁读到的活形变了，版本 6 → 7。
         // expert-tiebreak 1.4：专家构筑期不前瞻 + 两层平局裁决（前瞻后分数不再含两层加分）改变专家的选择与前瞻记录口径，版本 7 → 8。
-        Assert.Equal(8, EvaluationBreakdown.Version);
+        // expert-opponent-model 1.3：专家前瞻的模拟对手改用专家本人的高难口径（原为标准预设）改变专家的选择与前瞻记录，版本 8 → 9。
+        Assert.Equal(9, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
 
         // 往返：写出再读回仍在（写入路径漏写则读回 null）。

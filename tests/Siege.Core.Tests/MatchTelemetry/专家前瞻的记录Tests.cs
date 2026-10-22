@@ -213,7 +213,8 @@ public class 专家前瞻的记录Tests
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
         // expert-tiebreak 1.4：版本 7 → 8（同上，只改首部版本字段；PreCycleStop 还原为 3 后比对）。
-        Assert.Contains("\"AiEvaluationVersion\":8", text, StringComparison.Ordinal);
+        // expert-opponent-model 1.3：版本 8 → 9（同上，只改首部版本字段；PreCycleStop 还原为 3 后比对）。
+        Assert.Contains("\"AiEvaluationVersion\":9", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 5B39BFE4D1EB3C9F5958415BED818533D914E383439436CF02C3BFAE21E8F87F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 4BB74D84000E371D6A1A1F2950614AA00832876BE78DEC85F2ED43D1C292528B（地图内容变，整局走法变，不再能逐行比对出"只差首部"）。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。
@@ -231,7 +232,10 @@ public class 专家前瞻的记录Tests
         // 由"已前瞻"改为"不前瞻"，以及同三小回合的结算事件预演计数各少 4（不再预演 4 个前瞻候选的 B1：870 → 866、759 → 755 等）；落点、提子与其余各行逐字节相同。
         // 首个分歧：小回合 1（第 1 大回合 P0 的首次部署）。旧值 298777E823AD1C9C7D9D419A2149D14CD43C3B04C49C06032BA5CC6354F4F079。
         // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）：小回合 80 → 92、前瞻记录 20 → 23，旧值 2B88061DD750AF481987BBE6528F0250116ACE295560C75729BAF981C2B16DBD。
-        Assert.True("66501E9CE1122B8E5FB4555FC83E5D8E71C3FB28B0BDEF0931ACB2CB98A084A3" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        // expert-opponent-model 1.5 重钉（模拟对手改用专家本人的高难口径；小回合 92 / 前瞻记录 23 不变）：确定性文本 3391 行中除首部版本号外只差 4 行——小回合 32 / 36 / 48 / 52 的快照行
+        // SimulatedRehearsals 392 → 440、328 → 376、90 → 94、174 → 180（N 24 多预演第 13 名以后的单点、全部被拒），回应键、前瞻后分数、选择与落点逐字节相同；构筑期记录不变。
+        // 首个分歧：小回合 32（已前瞻）。旧值 66501E9CE1122B8E5FB4555FC83E5D8E71C3FB28B0BDEF0931ACB2CB98A084A3。
+        Assert.True("4668AB92F8178A93817E7F368851526C0C5F1231E633E6BBF48D3A46E8B603EB" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -243,14 +247,14 @@ public class 专家前瞻的记录Tests
     }
 
     /// <summary>
-    /// cycle-stop 之前的确定性文本口径：首部配置去掉 <c>RoundCap</c> / <c>StagnationRounds</c> 两项（含玩家搜索配置里的停滞大回合数）、AI 评价版本（现为 8，expert-tiebreak）还原为 3
+    /// cycle-stop 之前的确定性文本口径：首部配置去掉 <c>RoundCap</c> / <c>StagnationRounds</c> 两项（含玩家搜索配置里的停滞大回合数）、AI 评价版本（现为 9，expert-opponent-model）还原为 3
     /// （黄金值历来按"版本字段还原为 3"比对）。只改首部行；其余行原样，任何决策差异都会让哈希不等。
     /// </summary>
     private static string PreCycleStop(string text)
     {
         string[] lines = text.Split('\n');
         lines[0] = lines[0]
-            .Replace("\"AiEvaluationVersion\":8", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
+            .Replace("\"AiEvaluationVersion\":9", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
             .Replace(",\"RoundCap\":100", string.Empty, StringComparison.Ordinal)
             .Replace(",\"StagnationRounds\":6", string.Empty, StringComparison.Ordinal);
         return string.Join('\n', lines);
@@ -381,7 +385,8 @@ public class 专家前瞻的记录Tests
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
         // expert-tiebreak 1.4：版本 7 → 8（同上，只改首部版本字段；PreCycleStop 还原为 3 后比对）。
-        Assert.Contains("\"AiEvaluationVersion\":8", text, StringComparison.Ordinal);
+        // expert-opponent-model 1.3：版本 8 → 9（同上，只改首部版本字段；PreCycleStop 还原为 3 后比对）。
+        Assert.Contains("\"AiEvaluationVersion\":9", text, StringComparison.Ordinal);
         // link-map-terrain 第 1 组重钉（主会话裁决①②）：旧值 403829277F918814814BD8D19F376996ABE17D1EA27D554E8547DF752466118F。新旧确定性文本逐行比对只差 3 行——首部（MapDigest 变、开局棋盘 Boards 每块多一个 Theme）与 2 条链接事件（MapDigest 变）；把这两类字段遮掉后全文逐字节相同，决策与快照行无一变化。
         // 第 2 组重钉：旧值 999708DA93E835A93109FD879417A941EBC0449DA9F2D67E1027A425B64F44F5。
         // open-map 段 B：K 与视野开关已删除，首部不再有 FinalCountdownRounds / SeatVision 两项（原黄金值按"遮掉这两项"比对，现在首部本就没有）。

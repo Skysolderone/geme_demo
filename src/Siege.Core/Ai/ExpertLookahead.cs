@@ -10,7 +10,7 @@ namespace Siege.Core.Ai;
 
 /// <summary>
 /// 专家难度的一层前瞻（expert-lookahead，ai-decision「专家难度的一层前瞻」）：在与高难完全相同的候选生成之后、复摆之前，
-/// 对自身评价前 W 个非空候选各预演（B1）、用标准难度启发式模拟下一名对手的回应并预演（B2），按专家自己的评价器在 B2 上重打分，取最高者。
+/// 对自身评价前 W 个非空候选各预演（B1）、用专家本人的高难口径（expert-opponent-model：专家本人的搜索配置、只取不扰动的一条贪心）模拟下一名对手的回应并预演（B2），按专家自己的评价器在 B2 上重打分，取最高者。
 /// 构筑期决策（expert-tiebreak：下一名对手的行动大回合 ≤ 构筑期大回合数）不前瞻，直接取高难的选择。
 /// </summary>
 /// <remarks>
@@ -63,15 +63,19 @@ internal sealed class ExpertLookahead
     internal int TwoPlyRehearsals => _twoPlyRehearsals;
 
     /// <summary>
-    /// 模拟对手的搜索配置（D5 / 裁决 ①）：标准预设的九维与候选落点数 N，只取不扰动的那一条贪心（M = 1，即 k = 0，零随机），
-    /// 本局生效的候选格上限与停手阈值（无子豁免由模拟对手按 B1 判定），不前瞻。
+    /// 模拟对手的搜索配置（expert-opponent-model D1 / 裁决 1、2，取代 expert-lookahead D5 / 裁决 ① 的标准预设口径）：专家本人的高难口径——
+    /// 只由专家本人本局生效的搜索配置推得：候选落点数 N、只看即时收益开关、候选格上限、停手阈值（无子豁免与落后者豁免由模拟对手按 B1 与其本人判定）随专家本人；
+    /// 只取不扰动的那一条贪心（M = 1，即 k = 0，零随机）；不前瞻（前瞻宽度、多样补充上限、两层权重清零）。两层平局带宽必须一并清零，
+    /// 否则显式带宽 &gt; 0 的专家派生出"带宽 &gt; 0 而两层权重 = 0"，被 <see cref="AiSearchConfig.Validated"/> 拒绝。停滞大回合数虽随专家本人，
+    /// 但模拟对手每次新建、没有停滞记忆，循环提子停手在模拟中不会触发。MUST NOT 读被模拟玩家的难度、配置或控制器状态。
     /// </summary>
-    internal AiSearchConfig SimulatedConfig => AiSearchConfig.Standard with
+    internal AiSearchConfig SimulatedConfig => _config with
     {
         CandidateBatchCount = 1,
-        CandidateCellLimit = _config.CandidateCellLimit,
-        PassThreshold = _config.PassThreshold,
         LookaheadWidth = 0,
+        DiverseSupplementLimit = 0,
+        TwoPlyWeightPermille = 0,
+        TwoPlyTieBand = 0,
     };
 
     /// <summary>
@@ -466,7 +470,7 @@ internal sealed class ExpertLookahead
         new(member.Candidate.Key, member.Candidate.Total, Responder: null, ResponderRound: null, SimulatedDeployLimit: null, ResponseKey: null, member.Candidate.Total, member.Source);
 
     /// <summary>
-    /// 第 5 步：模拟对手在投影视图（B1）上的回应。模拟对手是只在本次决策内存在的标准启发式实例，不持有随机流；
+    /// 第 5 步：模拟对手在投影视图（B1）上的回应。模拟对手是只在本次决策内存在、按专家本人的高难口径（<see cref="SimulatedConfig"/>）的启发式实例，不持有随机流；
     /// 预演用 <see cref="BatchRehearsal.Rehearse"/> 与局部同形历史 <paramref name="history"/>（决策起点盘面 + B1，D8 的已知近似）。返回回应（Pass 为 <c>null</c>）、B2 与回应的提子。
     /// </summary>
     private (CandidateBatch? Response, GameBoard B2, ImmutableArray<CapturedStone> Captures) Respond(MatchPublicView projected, BatchContext context, BoardHistory history)

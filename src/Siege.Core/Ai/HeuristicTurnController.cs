@@ -190,7 +190,8 @@ public sealed class HeuristicTurnController : ITurnController
     public BatchEvaluator CreateEvaluator() => CreateEvaluator(_observe());
 
     /// <summary>
-    /// 前瞻里的模拟对手（expert-lookahead D5）：对 <paramref name="responder"/> 固定观察投影视图 <paramref name="view"/>，标准难度、不持有任何随机流。
+    /// 前瞻里的模拟对手（expert-lookahead D5；expert-opponent-model 起配置为专家本人的高难口径，见 <see cref="ExpertLookahead.SimulatedConfig"/>）：对 <paramref name="responder"/> 固定观察投影视图 <paramref name="view"/>，不持有任何随机流。
+    /// 传入的难度标签 <see cref="AiDifficulty.Standard"/> 只是构造参数：配置已显式给出、不按难度取预设；该实例只在本次前瞻内存在，难度标签不进入前瞻记录、日志或任何确定性文本。
     /// <paramref name="config"/> 须只取一条贪心（M = 1，只走 k = 0 的无扰动次序）——一旦走到扰动即抛出，零随机消费由此在结构上成立。
     /// </summary>
     internal static HeuristicTurnController ForSimulation(

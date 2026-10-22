@@ -7,6 +7,8 @@ using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Core.Relics;
 using Siege.Core.Scoring;
+using Siege.Sim.Config;
+using Siege.Sim.Running;
 using static Siege.Core.Tests.LookaheadFixtures;
 
 namespace Siege.Core.Tests.AiDecision;
@@ -233,6 +235,180 @@ public class 前瞻模拟的公平信息Tests
     }
 
     private static bool IsAdjacentOrOn(Coord c, Coord target) => Math.Abs(c.X - target.X) + Math.Abs(c.Y - target.Y) <= 1;
+
+    // ---------- 模拟对手的口径（expert-opponent-model，design D1：专家本人的高难口径） ----------
+
+    [Fact]
+    public void 模拟对手取专家本人的口径()
+    {
+        // 规格（expert-opponent-model）：专家预设（候选落点数 24、贪心条数 32）在本局候选格上限 24、停手阈值 20 下做一次已前瞻的部署决策 →
+        // 模拟对手的搜索配置为 N 24、M 1、只看即时收益为否、候选格上限 24、停手阈值 20，前瞻宽度、多样补充上限、两层权重与两层平局带宽都为 0。
+        // 期望值逐项写成字面量（不经任何预设推得）；停滞大回合数随专家本人（预设 6；模拟对手每次新建、没有停滞记忆，循环提子停手不会触发）。
+        // 改前（标准预设派生）红：候选落点数为 12。
+        AiSearchConfig expert = AiSearchConfig.Expert with { CandidateCellLimit = 24 };
+        Assert.Equal((24, 32, 20, 4), (expert.CandidatePointCount, expert.CandidateBatchCount, expert.PassThreshold, expert.LookaheadWidth));   // 前提：专家预设的口径
+
+        LookaheadRecord record = Record(Decide(ContactPosition((PieceType.Basic, 4)), AiDifficulty.Expert, expert));
+        Assert.Equal(LookaheadStatus.Applied, record.Status);
+        Assert.All(record.Entries, e => Assert.NotNull(e.Responder));
+        Assert.True(record.SimulatedRehearsals > 0, record.ToText());
+
+        AiSearchConfig simulated = Engine(ContactPosition((PieceType.Basic, 4)), expert).Engine.SimulatedConfig;
+        var expected = new AiSearchConfig(
+            CandidatePointCount: 24, CandidateBatchCount: 1, ImmediateOnly: false, CandidateCellLimit: 24, PassThreshold: 20,
+            LookaheadWidth: 0, DiverseSupplementLimit: 0, TwoPlyWeightPermille: 0, TwoPlyTieBand: 0, StagnationRounds: 6);
+        Assert.Equal(expected, simulated);
+    }
+
+    [Theory]
+    [InlineData(12)]
+    [InlineData(16)]
+    public void 模拟对手随专家显式配置(int points)
+    {
+        // 规格（expert-opponent-model）：专家的搜索配置显式给出候选落点数 12、多样补充上限 8、两层权重 1000‰、两层平局带宽 20 →
+        // 模拟对手的候选落点数为 12、贪心条数 1，前瞻宽度、多样补充上限、两层权重与两层平局带宽都为 0；配置校验通过，前瞻照常进行。
+        // 12 是 Scenario 原值，恰与标准预设的 N 相同（标准预设的 S / λ / B 本就为 0），这一例在改前代码上不红；补 16 一例，使"随专家本人"与"随标准预设"可分（改前红：12 ≠ 16）。
+        // 带宽 > 0 而两层权重为 0 的配置被 Validated 拒绝：派生时漏清两层平局带宽，模拟对手一构造就抛，两例都红（变异记录见任务 implement.md）。
+        AiSearchConfig expert = StrengthConfig() with { CandidatePointCount = points, TwoPlyTieBand = 20 };
+        Assert.Equal((8, 1000, 20), (expert.DiverseSupplementLimit, expert.TwoPlyWeightPermille, expert.TwoPlyTieBand));
+
+        AiSearchConfig simulated = Engine(ContactPosition((PieceType.Basic, 4)), expert).Engine.SimulatedConfig;
+        Assert.Equal((points, 1), (simulated.CandidatePointCount, simulated.CandidateBatchCount));
+        Assert.Equal((0, 0, 0, 0), (simulated.LookaheadWidth, simulated.DiverseSupplementLimit, simulated.TwoPlyWeightPermille, simulated.TwoPlyTieBand));
+        Assert.Same(simulated, simulated.Validated());
+
+        LookaheadRecord record = Record(Decide(ContactPosition((PieceType.Basic, 4)), AiDifficulty.Expert, expert));
+        Assert.Equal(LookaheadStatus.Applied, record.Status);
+        Assert.All(record.Entries, e => Assert.NotNull(e.Responder));
+        Assert.True(record.SimulatedRehearsals > 0, record.ToText());
+    }
+
+    /// <summary>
+    /// 「模拟回应等于专家口径的不扰动贪心」的样本：G1 口径（一层配置的专家 + 3 标准、link:1）的对局种子。改前代码上逐一探查种子 1 / 2 / 3（截断第 12 大回合）与种子 6（整局）：
+    /// 改前的记录与"标准预设派生"的独立复算逐条相同（36 / 35 / 35 / 69 条）；两种口径给出不同回应的候选只在种子 3 出现（第 7 大回合小回合 28、第 12 大回合小回合 45 各一条），故取 3。
+    /// </summary>
+    internal const ulong IndependentResponseSeed = 3;
+
+    [Fact]
+    public void 模拟回应等于专家口径的不扰动贪心()
+    {
+        // 规格（expert-opponent-model）：对前瞻集中的每个候选 c，以 c 的下一名对手为主体、按第 1–3、5、6 项构造模拟输入，
+        // 再以专家本人的搜索配置（贪心条数改为 1、不前瞻）的启发式在 B1 上不扰动地求一次批次 → 与 c 的前瞻记录中的模拟回应批次键相同。
+        // 样本：G1 口径的一局（IndependentResponseSeed），逐个检查专家已前瞻决策的每个候选，直到遇到第一个"按标准预设派生会得到不同回应"的候选为止。
+        // 样本口径：该候选确实存在（N 12 与 N 24 的不扰动贪心在此给出不同批次）——改前（标准预设派生）的记录在这里与独立复算不同，本测试红。
+        List<ResponseCheck> checks = CheckSimulatedResponses(IndependentResponseSeed, OneLayerConfig(), MaxMajorRounds, stopAtDiscriminating: true);
+
+        Assert.NotEmpty(checks);
+        Assert.Contains(checks, c => c.ExpertDerived != c.StandardDerived);
+        Assert.All(checks, c => Assert.True(c.ExpertDerived == c.Recorded, c.ToString()));
+    }
+
+    /// <summary>一次独立复算：小回合、大回合、候选键、前瞻记录里的模拟回应键、按专家本人口径与按标准预设口径不扰动求得的批次键（Pass 为空串）。</summary>
+    internal sealed record ResponseCheck(int Turn, int MajorRound, string CandidateKey, string Recorded, string ExpertDerived, string StandardDerived);
+
+    /// <summary>
+    /// G1 口径（<c>link:1</c>、座位 1 专家按 <paramref name="search"/>、其余三名标准、全知观察）的一局，跑到第 <paramref name="maxMajorRounds"/> 大回合结束或终局；
+    /// 在专家每次已前瞻的决策之后、确认之前，对每个做了模拟的候选独立复算模拟回应（只用前瞻的公开纯函数 Project / NextOpponent / SimulatedContext 构造输入，
+    /// 模拟对手经公开构造函数新建、配置在这里另写，不经 <see cref="ExpertLookahead.SimulatedConfig"/>）。<paramref name="stopAtDiscriminating"/> 为真时，
+    /// 遇到第一个两种口径给出不同批次的候选，做完该次决策后停下。
+    /// </summary>
+    internal static List<ResponseCheck> CheckSimulatedResponses(ulong seed, AiSearchConfig search, int maxMajorRounds, bool stopAtDiscriminating, int? cellLimit = 0)
+    {
+        MatchSession session = CreateSession(
+            LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = cellLimit }, seed);
+        MatchFlow match = session.Match;
+        var inner = new HeuristicTurnController(P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Expert, Weights, search);
+        AiSearchConfig expertDerived = search with { CandidateBatchCount = 1, LookaheadWidth = 0, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0, TwoPlyTieBand = 0 };
+        AiSearchConfig standardDerived = AiSearchConfig.Standard with
+        {
+            CandidateBatchCount = 1, CandidateCellLimit = search.CandidateCellLimit, PassThreshold = search.PassThreshold, LookaheadWidth = 0,
+        };
+
+        var checks = new List<ResponseCheck>();
+        bool stop = false;
+        StagedBatch? current = null;
+        session.SetController(P0, new ProbeController(inner, batch => current = batch, () =>
+        {
+            if (inner.LastLookahead is not { Status: LookaheadStatus.Applied } record)
+            {
+                return;
+            }
+
+            MatchPublicView view = match.Publish();
+            foreach (LookaheadEntry entry in record.Entries.Where(e => e.Responder is not null))
+            {
+                CandidateBatch candidate = inner.LastCandidates.Single(c => c.Key == entry.CandidateKey);
+                RehearsalResult b1 = BatchRehearsal.Rehearse(match.Board, current!.Context, candidate.Placements, match.History);
+                Assert.True(b1.IsLegal, b1.Failure?.Message);
+                MatchPublicView projected = ExpertLookahead.Project(view, b1.ProjectedBoard!, P0);
+                (PlayerId responder, int round) = ExpertLookahead.NextOpponent(view, P0, projected) ?? throw new InvalidOperationException("记录有下一名对手而复算没有。");
+                Assert.Equal((entry.Responder, entry.ResponderRound), (responder, round));
+                BatchContext context = ExpertLookahead.SimulatedContext(projected, responder, round);
+                Assert.Equal(entry.SimulatedDeployLimit, context.DeployLimit);
+                var history = new BoardHistory();
+                history.Record(view.BoardSerialized);
+                history.Record(projected.BoardSerialized);
+
+                string Respond(AiSearchConfig config)
+                {
+                    var batch = new StagedBatch(projected.Board, context);
+                    Siege.Core.Determinism.RandomStream stream = match.Seed.Stream("模拟回应守门");
+                    var opponent = new HeuristicTurnController(responder, () => projected, stream, AiDifficulty.Hard, Weights, config);
+                    opponent.Deploy(batch, () => BatchRehearsal.Rehearse(projected.Board, context, batch.Placements, history));
+                    Assert.Equal(0, stream.Consumed);   // 不扰动：贪心条数 1 只走 k = 0 的无扰动次序，零随机消费
+                    return opponent.LastChoice is { IsPass: false } response ? response.Key : string.Empty;
+                }
+
+                var check = new ResponseCheck(session.TurnCount + 1, view.MajorRound, entry.CandidateKey, entry.ResponseKey!, Respond(expertDerived), Respond(standardDerived));
+                checks.Add(check);
+                stop |= stopAtDiscriminating && check.ExpertDerived != check.StandardDerived;
+            }
+        }));
+
+        while (!stop && match.Phase == MatchPhase.InProgress && match.MajorRound <= maxMajorRounds && session.RunTurn())
+        {
+        }
+
+        return checks;
+    }
+
+    [Fact]
+    public void 被模拟玩家的难度不影响模拟()
+    {
+        // 规格（expert-opponent-model）：两局的公开状态逐项相同，下一名对手（P1）在一局中是标准难度、在另一局中是高难 →
+        // 两局中专家的模拟回应、前瞻后分数与最终选择逐项相同。两局都经同一个运行器驱动一个完整小回合（整理、征募、部署、确认），
+        // 被模拟玩家的控制者（标准 N 12 / M 8 与高难 N 24 / M 32）挂在同一运行器上；模拟对手的配置只由专家本人的配置推得，不读它们。
+        // 样本口径：已前瞻、每个候选的下一名对手都是 P1、两名 P1 的配置确实不同。
+        // 先红例外（主会话已接受，见任务 implement.md）：改前代码上同样绿——前瞻只拿到公开快照，公开快照不含任何难度 / 搜索配置，信息边界内写不出使其变红的变异；
+        // 本测试是回归守门（将来把对手控制者或其配置引入前瞻即红），越界读取由信息边界守门（类型闭包 + 源码扫描）兜底。
+        (LookaheadRecord Record, string Choice, string Board) Run(AiDifficulty responder)
+        {
+            MatchFlow match = ContactPosition((PieceType.Basic, 4));
+            var runner = new MatchRunner(match);
+            HeuristicTurnController expert = HeuristicAi.Create(match, P0, AiDifficulty.Expert, Weights, AiSearchConfig.Expert with { CandidateCellLimit = 24 });
+            HeuristicTurnController opponent = HeuristicAi.Create(match, P1, responder, Weights);
+            Assert.Equal(AiSearchConfig.ForDifficulty(responder), opponent.Config);
+            runner.SetController(P0, expert);
+            runner.SetController(P1, opponent);
+            runner.SetController(P2, HeuristicAi.Create(match, P2, AiDifficulty.Standard, Weights));
+            runner.SetController(P3, HeuristicAi.Create(match, P3, AiDifficulty.Standard, Weights));
+            Assert.Equal(P0, match.CurrentPlayer);
+            runner.RunTurn();
+            Assert.NotEqual(P0, match.CurrentPlayer);
+            return (Record(expert), expert.LastChoice!.Key, match.Publish().BoardSerialized);
+        }
+
+        Assert.NotEqual(AiSearchConfig.Standard, AiSearchConfig.Hard);
+        (LookaheadRecord standard, string standardChoice, string standardBoard) = Run(AiDifficulty.Standard);
+        (LookaheadRecord hard, string hardChoice, string hardBoard) = Run(AiDifficulty.Hard);
+
+        Assert.Equal(LookaheadStatus.Applied, standard.Status);
+        Assert.All(standard.Entries, e => Assert.Equal(P1, e.Responder));
+        Assert.Equal(standard.Entries.Select(e => (e.CandidateKey, e.ResponseKey, e.ScoreAfter)), hard.Entries.Select(e => (e.CandidateKey, e.ResponseKey, e.ScoreAfter)));
+        Assert.Equal(standard.ToText(), hard.ToText());
+        Assert.Equal(standardChoice, hardChoice);
+        Assert.Equal(standardBoard, hardBoard);
+    }
 
     [Fact]
     public void 守门覆盖前瞻代码()
