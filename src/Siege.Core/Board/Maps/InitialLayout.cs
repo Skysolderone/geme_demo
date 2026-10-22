@@ -78,7 +78,7 @@ public static class InitialLayout
     /// o0 的左下角在 (<paramref name="margin"/>, <paramref name="margin"/>)；o1 / o2 底边对齐东贴；o3 锚 o0 北贴、o4 锚 o1 北贴（<see cref="AttachNorth"/>）。
     /// 锚的北侧被已放下的棋盘挡死或只剩不足 <see cref="MinSharedEdge"/> 格的缝（o3 比 o0 宽且 o1 比 o0 高；o4 比 o1 宽且 o2 比 o1 高 / 被 o3 挡住）时，
     /// 改锚第一行三块里共享边最长的那块（并列取编号小者）——布局仍是 3+2 两行、每块都北贴第一行的一块，不出现塔（open-map 段 A 实施记录 R-1）。
-    /// 三个锚都挡死在 6–8 的边长区间内不会发生（种子 1–2000 实测为 0），真发生即抛 <see cref="MapGenerationException"/>（生成器缺陷，MUST NOT 静默继续）。
+    /// 三个锚都挡死在 6–7 的边长区间内不会发生（terrain-density：1024 种尺寸组合穷举为 0，见 初始布局Tests；6–8 时种子 1–2000 实测为 0），真发生即抛 <see cref="MapGenerationException"/>（生成器缺陷，MUST NOT 静默继续）。
     /// </summary>
     public static ImmutableArray<BoardPlate> Arrange(ImmutableArray<BoardPlate> ordered, int margin)
     {

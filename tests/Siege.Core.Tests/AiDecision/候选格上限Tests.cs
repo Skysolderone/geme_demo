@@ -43,7 +43,8 @@ public class 候选格上限Tests
     /// <para>link-map-surfaces 1.3 再重钉（实施后裁决 F1 / F2：小棋盘免除核心区四邻限制、混合主题补位，link:1 新地表 9 → 10 格）；第一次重钉值 900E334FCB5EFA59B2108598EC38E2DF60A9FCBB576E643F9E03DA143B4853C9。</para>
     /// <para>fence-eye-rule 2.2 重钉：活形判定无视栅栏（栅栏不再造眼、栅栏阵主题的预置栅栏也不再算墙），同一配置的 AI 走法随之变；旧值 A75EDD49F9C3E8EAABD186C5F7D1980CBAB6E47ADFC12DE68D3B8E6E2138FF78。</para>
     /// <para>terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；旧值 F471700800B1A38A72AF2C31B6516847F2BD04136D2E622FEF3BD374EB7ED47A。</para>
-    internal const string LinkGoldenTurnHash = "DC4CDF0CFC681BF1455267BF5FD8D7DE448201ADBBBDCB921268123FA124842B";
+    /// <para>terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 的五块棋盘与地形全部重抽，同一配置的走法随之变）；旧值 DC4CDF0CFC681BF1455267BF5FD8D7DE448201ADBBBDCB921268123FA124842B。</para>
+    internal const string LinkGoldenTurnHash = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>

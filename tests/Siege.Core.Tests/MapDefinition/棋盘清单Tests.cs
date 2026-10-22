@@ -55,15 +55,17 @@ public class 棋盘清单Tests
             Assert.All(b.Cells(), c => Assert.Equal(core.Contains(c) ? (int?)i : null, map.BirthZoneOf(c)));
         }
 
-        // link:1 的第 2 块（open-map 3+2 布局）：左下角 J10、6×6 → 出生区 K11–M13（西起第 2–4 列、南起第 2–4 行）。
-        Assert.Equal("J10", births[1].Origin.ToNotation());
-        Assert.Equal(["K11", "M13"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
+        // link:1 的第 2 块（open-map 3+2 布局）：左下角 K9、6×6 → 出生区 L10–N12（西起第 2–4 列、南起第 2–4 行）。
+        // terrain-density（边长 6–7，地图变了）：原为左下角 J10、出生区 K11–M13。
+        Assert.Equal("K9", births[1].Origin.ToNotation());
+        Assert.Equal(["L10", "N12"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
 
-        // 规格算例：宽 7、高 8 的第 2 块出生棋盘 → 出生区恰是西起第 3–5 列、南起第 3–5 行这 9 格。在 link:1 起的种子里找一张第 2 块是 7×8 的图。
-        MapData sample = Enumerable.Range(1, 400).Select(s => LinkMapGenerator.Generate((ulong)s)).First(m => m.Boards[1] is { Width: 7, Height: 8 });
+        // 规格算例：宽 7（奇）、高 6（偶）的第 2 块出生棋盘 → 出生区恰是西起第 3–5 列、南起第 2–4 行这 9 格（高为偶数偏南）。在 link:1 起的种子里找一张第 2 块是 7×6 的图。
+        // terrain-density：主规格算例原为"宽 7、高 8 → 西起第 3–5 列、南起第 3–5 行"，边长 6–7 后生成不出 8，换成同为"奇宽偶高"的 7×6（归档时规格算例同步改）。
+        MapData sample = Enumerable.Range(1, 400).Select(s => LinkMapGenerator.Generate((ulong)s)).First(m => m.Boards[1] is { Width: 7, Height: 6 });
         BoardPlate seven = sample.Boards[1];
         HashSet<(int Column, int Row)> relative = [.. sample.BirthZones[1].Select(c => (c.X - seven.Origin.X + 1, c.Y - seven.Origin.Y + 1))];
-        Assert.True(relative.SetEquals(from r in new[] { 3, 4, 5 } from c in new[] { 3, 4, 5 } select (c, r)), $"{sample.Id}：{string.Join(" ", relative)}");
+        Assert.True(relative.SetEquals(from r in new[] { 2, 3, 4 } from c in new[] { 3, 4, 5 } select (c, r)), $"{sample.Id}：{string.Join(" ", relative)}");
     }
 
     [Fact]

@@ -34,7 +34,7 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 可落子格越界()
     {
-        // 链接档 4 人可落子格区间 170–320（link-map-terrain 3.3 回写；原 125–245）。
+        // 链接档 4 人可落子格区间 170–245（terrain-density 1.3：上界 = 5 块 7×7 = 245；link-map-terrain 3.3 起为 170–320，原 125–245）。
         // 下界：出生棋盘 1–4 的中间带各放 3 块岩石（G5 / G6 / E7 一类，不切断棋盘）→ 180 − 12 = 168；上界：画布 22×16 的场景格全部开放 → 352（open-map 载体改 3+2 紧贴图）。
         MapData map = Link();
         Coord[] rocks = [.. map.Boards.Take(4).SelectMany(b => new[] { new Coord(b.Origin.X + 4, b.Origin.Y + 2), new Coord(b.Origin.X + 4, b.Origin.Y + 3), new Coord(b.Origin.X + 2, b.Origin.Y + 4) })];
@@ -43,16 +43,16 @@ public class 地图静态校验规则Tests
         MapValidationFailure low = Assert.Single(
             MapValidator.Validate(tooFew).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
         Assert.Contains("可落子格为 168", low.Message, StringComparison.Ordinal);
-        Assert.Contains("170–320", low.Message, StringComparison.Ordinal);
+        Assert.Contains("170–245", low.Message, StringComparison.Ordinal);
         Assert.Throws<MapValidationException>(() => GameBoard.Load(tooFew));
 
-        // 上界 320 同样要挡住：区间只有下界有算例时，把上界写成 2000 只会让消息文本变化，行为上一条测试都不红。
+        // 上界 245 同样要挡住：区间只有下界有算例时，把上界写成 2000 只会让消息文本变化，行为上一条测试都不红。
         MapData tooOpen = map with { Obstacles = [] };
         Assert.Equal(352, tooOpen.PlayableCount);
         MapValidationFailure high = Assert.Single(
             MapValidator.Validate(tooOpen).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
         Assert.Contains("可落子格为 352", high.Message, StringComparison.Ordinal);
-        Assert.Contains("170–320", high.Message, StringComparison.Ordinal);
+        Assert.Contains("170–245", high.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -60,14 +60,15 @@ public class 地图静态校验规则Tests
     {
         // retire-legacy-maps（check 补回覆盖）：自已删除的 边疆档静态校验Tests.超宽地图被拒绝而不是抛异常 迁来（原载体为边疆档的 25 列上限）。
         // 所守规则不变：外接尺寸不合该档声明的列 / 行区间 → 报拒绝项并到此为止，不往下跑规模与棋盘规则、不在枚举格子时崩溃。
-        // 链接档区间取自 MapValidator 声明表：列 22–30、行 16–20（open-map 1.1 回写：3+2 紧贴布局的理论边界；拼接版为列 20–85、行 8–24）；载体是合规的 22×16 手写链接档图，只改外接尺寸一处。
+        // 链接档区间取自 MapValidator 声明表：列 22–25、行 16–18（terrain-density 1.3：边长 6–7 的 3+2 紧贴布局理论边界，1024 种尺寸组合穷举见 初始布局Tests；
+        // open-map 1.1 起为 6–8 的列 22–30、行 16–20；拼接版为列 20–85、行 8–24）；载体是合规的 22×16 手写链接档图，只改外接尺寸一处。
         MapData map = Link();
         (MapData Map, string Code, string Value, string Bound)[] cases =
         [
-            (map with { Width = 31 }, "MAP_TOO_WIDE", "31", "30"),
-            (map with { Width = 1000 }, "MAP_TOO_WIDE", "1000", "30"),
+            (map with { Width = 26 }, "MAP_TOO_WIDE", "26", "25"),
+            (map with { Width = 1000 }, "MAP_TOO_WIDE", "1000", "25"),
             (map with { Width = 21 }, "MAP_TOO_NARROW", "21", "22"),
-            (map with { Height = 21 }, "MAP_TOO_TALL", "21", "20"),
+            (map with { Height = 19 }, "MAP_TOO_TALL", "19", "18"),
             (map with { Height = 15 }, "MAP_TOO_SHORT", "15", "16"),
         ];
         foreach ((MapData bad, string code, string value, string bound) in cases)
@@ -82,9 +83,9 @@ public class 地图静态校验规则Tests
         }
 
         // 区间端点本身合法（只看本条规则：改了尺寸的图别的规则照样会报，这里不管）。
-        Assert.DoesNotContain(MapValidator.Validate(map with { Width = 30 }).Failures, f => f.Code == "MAP_TOO_WIDE");
+        Assert.DoesNotContain(MapValidator.Validate(map with { Width = 25 }).Failures, f => f.Code == "MAP_TOO_WIDE");
         Assert.DoesNotContain(MapValidator.Validate(map with { Width = 22 }).Failures, f => f.Code == "MAP_TOO_NARROW");
-        Assert.DoesNotContain(MapValidator.Validate(map with { Height = 20 }).Failures, f => f.Code == "MAP_TOO_TALL");
+        Assert.DoesNotContain(MapValidator.Validate(map with { Height = 18 }).Failures, f => f.Code == "MAP_TOO_TALL");
         Assert.DoesNotContain(MapValidator.Validate(map with { Height = 16 }).Failures, f => f.Code == "MAP_TOO_SHORT");
     }
 
@@ -280,9 +281,11 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario：出生棋盘 5 的一组中间带格被岩石与深水围住、与外圈不连通 → 拒绝并指出该棋盘与被隔开的格（BOARD_SPLIT）。
         // 6×6 的中间带每格都挨着外圈，围不出孤岛；这里把出生棋盘 5 换成 8×8，左下角起 (5,5) 的 AT8 四邻：西 / 东两格岩石、南 / 北两格深水。
+        // terrain-density（边长 6–7）：6×6 / 6×7 / 7×7 的中间带每格都挨着外圈（外圈必须可落子），合法尺寸里围不出孤岛，本条在链接档上与第 1 / 5 / 6 条同为底线；
+        // 载体仍用 8×8（夹具不动），它本身只多报一条边长越界——棋盘清单规则不通过时其余各条照常执行，BOARD_SPLIT 照样判得到。
         ImmutableArray<BoardPlate> b = LinkMapFixtures.Births;
         MapData map = LinkMapFixtures.Build("test-link-split", [b[0], b[1], b[2], b[3], b[4] with { Width = 8, Height = 8 }]);
-        Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
+        Assert.Equal("BOARD_SIZE_OUT_OF_RANGE", Assert.Single(MapValidator.Validate(map).Failures).Code);
         BoardPlate fifth = map.Boards[4];
         Coord At(int dx, int dy) => new(fifth.Origin.X + dx, fifth.Origin.Y + dy);
         Coord island = At(5, 5);

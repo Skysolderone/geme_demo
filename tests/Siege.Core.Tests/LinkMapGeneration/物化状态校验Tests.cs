@@ -126,18 +126,19 @@ public class 物化状态校验Tests
         MapValidationResult empty = MapValidator.Validate(map with { Boards = [] });
         Assert.Equal("BOARDS_REQUIRED", Assert.Single(empty.Failures).Code);
 
-        // ② 出生棋盘边长 6–8（link-map-terrain 裁决 M9）：一块 9×6（其余四块挪开、保持紧贴连通，规模仍在预算内）→ 只报这一条。
+        // ② 出生棋盘边长 6–7（link-map-terrain 裁决 M9，terrain-density 裁决 K1 由 6–8 改为 6–7）：一块 8×6（其余四块挪开、保持紧贴连通，规模仍在预算内）→ 只报这一条。
+        // 8 恰是旧上限：旧校验器接受、新校验器拒绝，才是区分新旧上限的算例（原算例 9×6 对新旧都红）。
         MapData wide = LinkMapFixtures.Build("test-link-wide",
         [
-            new(new Coord(2, 2), 9, 6, BoardPlateKind.Birth, BoardTheme.Plateau),
-            new(new Coord(11, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
-            new(new Coord(17, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest),
+            new(new Coord(2, 2), 8, 6, BoardPlateKind.Birth, BoardTheme.Plateau),
+            new(new Coord(10, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
+            new(new Coord(16, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest),
             new(new Coord(2, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Palisade),
-            new(new Coord(11, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
+            new(new Coord(10, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
         ]);
         MapValidationFailure size = Assert.Single(MapValidator.Validate(wide).Failures);
         Assert.Equal("BOARD_SIZE_OUT_OF_RANGE", size.Code);
-        Assert.Contains("6–8", size.Message, StringComparison.Ordinal);
+        Assert.Contains("6–7", size.Message, StringComparison.Ordinal);
         Assert.Equal([new Coord(2, 2)], size.Coords);
 
         // ③ link-map-terrain D6：删除"棋盘内不得有障碍"——中间带的岩石（G5）合规；外圈的岩石（C5）与核心区的岩石（E5）各由外圈 / 核心区规则报出并指出该格。

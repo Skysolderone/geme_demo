@@ -113,7 +113,7 @@ public class 按座位视图Tests
         string json = JsonSerializer.Serialize(match.PublishFor(P0), Json);
 
         HashSet<Coord> all = [.. match.Map.Boards.SelectMany(b => b.Cells())];
-        Assert.True(all.Count > 200);
+        Assert.Equal(198, all.Count);   // 样本口径：link:1 五块棋盘 6×6 ×2 + 7×6 ×2 + 6×7 = 198 格（terrain-density 地图变了，原断言 > 200）
         Assert.All(all, c => Assert.Contains($"\"{c.ToNotation()}\"", json, StringComparison.Ordinal));
         // 全部玩家的势力数值都出现：没有任何 Power 为 null 的玩家。
         Assert.DoesNotContain("\"Power\":null", json, StringComparison.Ordinal);

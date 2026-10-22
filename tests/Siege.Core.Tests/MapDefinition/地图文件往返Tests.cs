@@ -109,10 +109,12 @@ public class 地图文件往返Tests
         // retire-legacy-maps 1.6：原样本为 v3 的 G7（入口兼信物）/ B2（出生区信物）/ G4（桥）；第三处取棋盘清单的双字母列坐标。
         // link-map-terrain 第 2 组：link:1 随生成器改变（出生棋盘 6–8、带地形），三处坐标重取；再加一处桥（F8，河流主题的预置桥）。
         // open-map 1.1：link:1 改为 3+2 紧贴布局（24×18，没有双字母列），三处坐标重取（原 AA6 / P5 / AQ3），桥 F8 不变（河流棋盘仍在 C3）。
-        Assert.Contains("\"CentralEntrance\": \"U6\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"M5\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"Origin\": \"J10\"", json, StringComparison.Ordinal);
         // terrain-barriers 3.1（地图变了）：河流棋盘的河道改为横穿棋盘的第 4 行（C4–H4），预置桥由 F8 移到 G4。
-        Assert.Contains("\"G4\"", json, StringComparison.Ordinal);
+        // terrain-density 2.2（地图变了，边长 6–7）：入口仍为 U6；出生区信物格改取 M6（3 号棋盘 K3 的核心区）；2 号棋盘左下角 J10 → K9（K 紧跟 J，同样跳过 I）；
+        // 河流棋盘（C3，7×6）的河道为第 D 列，预置桥由 G4 移到 D6。
+        Assert.Contains("\"CentralEntrance\": \"U6\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"M6\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Origin\": \"K9\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"D6\"", json, StringComparison.Ordinal);
     }
 }

@@ -12,8 +12,8 @@ namespace Siege.Core.Board.Maps;
 /// <para><b>分圈</b>（<see cref="BoardPlate.OnRim"/> / <see cref="BoardPlate.InCore"/> / <see cref="BoardPlate.InMiddleBand"/>）：外圈只放林地（裁决 Q1），核心区什么都不放，其余地形只在中间带；
 /// 例外是河流 / 高台的隔断线（terrain-barriers 裁决 H1–H4、实施修订 J1–J3）：取中间带的一整列 / 一整行，两端各占外圈 1 格。
 /// 栅栏只立在两端都在中间带、或一端中间带一端核心区的边上（Q4）。</para>
-/// <para><b>按面积缩放</b>（D4 末段）：每个计数区间 [下限, 上限] 的实际上限按中间带面积在 7 格（6×6）到 27 格（8×8）之间线性插值、向下取整，
-/// 再在 [下限, 插值上限] 里均匀抽取——6×6 恒取下限，8×8 才能取到上限。</para>
+/// <para><b>按面积缩放</b>（D4 末段）：每个计数区间 [下限, 上限] 的实际上限按中间带面积在 7 格（6×6）到 16 格（7×7）之间线性插值、向下取整，
+/// 再在 [下限, 插值上限] 里均匀抽取——6×6 恒取下限，7×7 才能取到上限（terrain-density：端点随边长上限由 8×8 的 27 格变为 7×7 的 16 格，插值逻辑不变）。</para>
 /// <para><b>邻接</b>：只用 <see cref="Adjacency.AreAdjacent"/> 判两格是否几何相邻、用 <see cref="Adjacency.LibertyNeighbors"/> 走气边，不自己枚举四邻；
 /// 棋盘内连通性读 <see cref="Battlefields"/>（几何四邻分量的唯一实现）。</para>
 /// </remarks>
@@ -29,7 +29,7 @@ public static partial class LinkMapGenerator
     internal const int MinCluster = 3;
     internal const int MaxCluster = 5;
 
-    /// <summary>中间带面积的两端：6×6 与 8×8（边长区间两端各去外圈与核心区）。</summary>
+    /// <summary>中间带面积的两端：6×6 与 7×7（边长区间两端各去外圈与核心区）。</summary>
     private const int MinMiddleArea = ((BirthMinSide - 2) * (BirthMinSide - 2)) - (BoardPlate.CoreSide * BoardPlate.CoreSide);
     private const int MaxMiddleArea = ((BirthMaxSide - 2) * (BirthMaxSide - 2)) - (BoardPlate.CoreSide * BoardPlate.CoreSide);
 
@@ -368,7 +368,7 @@ public static partial class LinkMapGenerator
             }
         }
 
-        /// <summary>岩石：每块 0–2 格（按面积缩放，6×6 取 0），只放在中间带的空格上。</summary>
+        /// <summary>岩石：每块 0–2 格（按面积缩放，6×6 / 6×7 取 0、7×7 取 0–2），只放在中间带的空格上。</summary>
         internal void ScatterRocks()
         {
             int rocks = Draw(0, 2);
@@ -495,7 +495,7 @@ public static partial class LinkMapGenerator
 
         /// <summary>
         /// 隔断线候选（terrain-barriers D1，实施修订 J1 / J2）：中间带的整列（先，自西向东）与整行（后，自南向北）——不是外圈那一列 / 行，也不穿过核心区（可以紧贴核心区）。
-        /// 边长 6 只有相对第 4 列 / 行一条，边长 7 有第 1、5 两条，边长 8 有第 1、5、6 三条。
+        /// 边长 6 只有相对第 4 列 / 行一条，边长 7 有第 1、5 两条（terrain-density 起没有边长 8）。
         /// </summary>
         private List<(bool Column, int Index)> BarrierLines()
         {

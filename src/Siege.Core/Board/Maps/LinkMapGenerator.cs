@@ -20,9 +20,9 @@ public static partial class LinkMapGenerator
     /// <summary>出生棋盘数，固定。</summary>
     public const int BirthBoards = 5;
 
-    /// <summary>出生棋盘边长区间（link-map-terrain 裁决 M9）。</summary>
+    /// <summary>出生棋盘边长区间（link-map-terrain 裁决 M9；terrain-density 裁决 K1 = A 由 6–8 改为 6–7，抽取次数与顺序不变）。</summary>
     public const int BirthMinSide = 6;
-    public const int BirthMaxSide = 8;
+    public const int BirthMaxSide = 7;
 
     /// <summary>每块出生棋盘的出生区档信物格数（裁决 J2），都在核心区内（link-map-terrain D1）。</summary>
     public const int RelicsPerBirthBoard = 2;

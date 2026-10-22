@@ -8,7 +8,7 @@ using Xunit.Abstractions;
 namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
-/// 规格：openspec/changes/open-map/specs/link-map-generation —— Requirement: 初始布局（link-map-terrain 第 2 组：边长 6–8、主题、外圈 / 核心区 / 中间带；open-map：3+2 紧贴连通）。
+/// 规格：openspec/changes/open-map/specs/link-map-generation —— Requirement: 初始布局（link-map-terrain 第 2 组：边长 6–8，terrain-density 改 6–7；主题、外圈 / 核心区 / 中间带；open-map：3+2 紧贴连通）。
 /// </summary>
 /// <remarks>
 /// 变异验证（段 F 实跑，只跑本类）：M-F3 <c>Assemble</c> 的东侧留白改为 1 → 「画布按布局裁出」全红。
@@ -26,7 +26,7 @@ public class 初始布局Tests(ITestOutputHelper output)
     [MemberData(nameof(Seeds))]
     public void 初始图只有出生棋盘(ulong seed)
     {
-        // Scenario：link:1–link:20 每张恰有 5 块出生棋盘，宽与高都在 6–8 之间，棋盘清单中没有其他棋盘，棋盘之外没有可落子格。
+        // Scenario：link:1–link:20 每张恰有 5 块出生棋盘，宽与高都在 6–7 之间（terrain-density 裁决 K1，原 6–8），棋盘清单中没有其他棋盘，棋盘之外没有可落子格。
         MapData map = LinkMapGenerator.Generate(seed);
 
         Assert.Equal(MapProfile.Link, map.Profile);
@@ -35,9 +35,9 @@ public class 初始布局Tests(ITestOutputHelper output)
         Assert.Equal(LinkMapGenerator.BirthBoards, map.Boards.Length);
         Assert.All(map.Boards, b => Assert.Equal(BoardPlateKind.Birth, b.Kind));
         Assert.Equal(5, map.BirthZones.Length);
-        Assert.All(map.Boards, b => Assert.InRange(b.Width, 6, 8));
-        Assert.All(map.Boards, b => Assert.InRange(b.Height, 6, 8));
-        Assert.Equal((6, 8), (LinkMapGenerator.BirthMinSide, LinkMapGenerator.BirthMaxSide));
+        Assert.All(map.Boards, b => Assert.InRange(b.Width, 6, 7));
+        Assert.All(map.Boards, b => Assert.InRange(b.Height, 6, 7));
+        Assert.Equal((6, 7), (LinkMapGenerator.BirthMinSide, LinkMapGenerator.BirthMaxSide));
 
         HashSet<Coord> boardCells = [.. map.Boards.SelectMany(b => b.Cells())];
         Assert.All(map.AllCoords().Where(map.IsPlayable), c => Assert.Contains(c, boardCells));
@@ -79,7 +79,48 @@ public class 初始布局Tests(ITestOutputHelper output)
             }
         }
 
-        Assert.InRange(map.PlayableCount, 202, 258);   // 校验器链接行回写：种子 1–20 实测 202–258（terrain-barriers 2.2；原 212–280）
+        Assert.InRange(map.PlayableCount, 182, 207);   // 校验器链接行回写：种子 1–20 实测 182–207（terrain-density 1.3，边长 6–7；terrain-barriers 2.2 为 202–258，原 212–280）
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void 全图可落子格不超过230(ulong seed)
+    {
+        // Scenario（terrain-density，裁决 K1 = A）：link:1–link:20 的初始地图可落子格总数都不超过 230，且不低于校验器链接行声明的下限 170。
+        MapData map = LinkMapGenerator.Generate(seed);
+        Assert.InRange(map.PlayableCount, 170, 230);
+    }
+
+    [Fact]
+    public void 全部尺寸组合都放得下且画布在理论边界内()
+    {
+        // terrain-density 1.3（D2）：边长 6–7 时 5 块的宽高共 2^10 = 1024 种组合；布局不消费随机、只看宽高与次序，逐一摆放即穷举全部可能的布局。
+        // 每种都放得下（Arrange 放不下即抛 MapGenerationException）、两两不重叠，画布（包围盒 + 四周留白）的列 / 行区间就是校验器链接行声明的理论边界。
+        int minW = int.MaxValue, maxW = 0, minH = int.MaxValue, maxH = 0, swaps = 0;
+        for (int mask = 0; mask < 1 << 10; mask++)
+        {
+            ImmutableArray<BoardPlate> ordered = [.. Enumerable.Range(0, 5).Select(k =>
+                new BoardPlate(new Coord(0, 0), 6 + ((mask >> (2 * k)) & 1), 6 + ((mask >> ((2 * k) + 1)) & 1), BoardPlateKind.Birth, BoardTheme.Plateau))];
+            ImmutableArray<BoardPlate> placed = InitialLayout.Arrange(ordered, LinkMapGenerator.Margin);
+            for (int i = 0; i < placed.Length; i++)
+            {
+                for (int j = i + 1; j < placed.Length; j++)
+                {
+                    Assert.False(InitialLayout.Overlaps(placed[i], placed[j]), $"组合 {mask}：棋盘 {i} 与 {j} 重叠");
+                }
+            }
+
+            // 换锚（只作汇报）：o3 不在 o0 北侧西对齐，或 o4 与 o1 的共享边不足 4。
+            bool swapped = placed[3].Origin != new Coord(LinkMapGenerator.Margin, placed[0].Origin.Y + placed[0].Height)
+                || InitialLayout.SharedEdge(placed[1], placed[4]) < InitialLayout.MinSharedEdge;
+            swaps += swapped ? 1 : 0;
+            int width = placed.Max(b => b.Origin.X + b.Width) + LinkMapGenerator.Margin;
+            int height = placed.Max(b => b.Origin.Y + b.Height) + LinkMapGenerator.Margin;
+            (minW, maxW, minH, maxH) = (Math.Min(minW, width), Math.Max(maxW, width), Math.Min(minH, height), Math.Max(maxH, height));
+        }
+
+        _output.WriteLine($"1024 种尺寸组合：画布宽 {minW}–{maxW}、高 {minH}–{maxH}；换锚 {swaps} 种");
+        Assert.Equal((22, 25, 16, 18), (minW, maxW, minH, maxH));
     }
 
     [Theory]
@@ -125,7 +166,8 @@ public class 初始布局Tests(ITestOutputHelper output)
     {
         // Scenario（open-map D1）：次序 o0、o1、o2 底边对齐、自西向东依次紧贴（间距 0）；o3 的最南行紧贴 o0 的最北行且西边与 o0 对齐；
         // o4 的最南行紧贴 o1 的最北行、与 o1 共享边 ≥ 4、与 o3 不重叠。次序本身不公开，这里按几何反推：第一行 = 底边在留白行的三块（自西向东即 o0 / o1 / o2）。
-        // 实施记录 R-1：锚的北侧被挡死（o3 比 o0 宽且 o1 比 o0 高 / o4 比 o1 宽且 o2 比 o1 高）时换锚第一行共享边最长的一块；种子 1–20 里只有 link:7 的 o4 改锚 o2。
+        // 实施记录 R-1：锚的北侧被挡死（o3 比 o0 宽且 o1 比 o0 高 / o4 比 o1 宽且 o2 比 o1 高 / 被 o3 挡住）时换锚第一行共享边最长的一块。
+        // terrain-density（边长 6–7）后种子 1–20 的换锚为 link:2（o3 改锚 o1、o4 改锚 o2）与 link:6（o4 改锚 o2）；原 6–8 时只有 link:7 的 o4 改锚 o2，link:7 现不换锚。
         MapData map = LinkMapGenerator.Generate(seed);
         BoardPlate[] row1 = [.. map.Boards.Where(b => b.Origin.Y == LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
         BoardPlate[] row2 = [.. map.Boards.Where(b => b.Origin.Y != LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
@@ -142,21 +184,79 @@ public class 初始布局Tests(ITestOutputHelper output)
             Assert.True(best >= InitialLayout.MinSharedEdge, $"link:{seed}: 第二行棋盘 {top.Origin} 与锚的共享边只有 {best}");
         }
 
-        // 设计规则本身（o3 锚 o0 西对齐；o4 锚 o1）：除 R-1 的换锚种子外逐条成立。
+        _output.WriteLine($"link:{seed} 第一行 {string.Join(" ", row1.Select(b => $"{b.Origin.ToNotation()}:{b.Width}x{b.Height}"))} 第二行 {string.Join(" ", row2.Select(b => $"{b.Origin.ToNotation()}:{b.Width}x{b.Height}"))}");
+
+        // 设计规则本身（o3 锚 o0 西对齐；o4 锚 o1）：除 R-1 的换锚种子外逐条成立（换锚种子名单由其余种子逐条成立反证是全的）。
         BoardPlate o3 = row2[0];
-        Assert.Equal(new Coord(LinkMapGenerator.Margin, row1[0].Origin.Y + row1[0].Height), o3.Origin);
-        Assert.Equal(Math.Min(row1[0].Width, o3.Width), InitialLayout.SharedEdge(row1[0], o3));
-        if (seed != 7)
+        BoardPlate o4 = row2[1];
+        if (seed != 2)
         {
-            BoardPlate o4 = row2[1];
+            Assert.Equal(new Coord(LinkMapGenerator.Margin, row1[0].Origin.Y + row1[0].Height), o3.Origin);
+            Assert.Equal(Math.Min(row1[0].Width, o3.Width), InitialLayout.SharedEdge(row1[0], o3));
+        }
+        else
+        {
+            // link:2：o3（7×7）比 o0（6×6）宽、o1（6×7）比 o0 高 → o0 北侧放不下，换锚 o1。
+            Assert.True(o3.Width > row1[0].Width && row1[1].Height > row1[0].Height);
+            Assert.Equal(row1[1].Origin.Y + row1[1].Height, o3.Origin.Y);
+            Assert.True(InitialLayout.SharedEdge(row1[1], o3) >= InitialLayout.MinSharedEdge);
+        }
+
+        if (seed is not (2 or 6))
+        {
             Assert.Equal(row1[1].Origin.Y + row1[1].Height, o4.Origin.Y);
             Assert.True(InitialLayout.SharedEdge(row1[1], o4) >= InitialLayout.MinSharedEdge);
             Assert.True(o4.Origin.X >= o3.Origin.X + o3.Width);
         }
         else
         {
-            Assert.Equal(row1[2].Origin.Y + row1[2].Height, row2[1].Origin.Y);   // link:7：o4（8×8）比 o1（6×6）宽、o2（7×7）比 o1 高 → 换锚 o2
+            // link:2：o1 北侧已被换锚的 o3 占住；link:6：o3（7×6）占住 o1 北侧西端、o2（6×7）比 o1（6×6）高挡住东端 → o4 换锚 o2。
+            Assert.True(seed == 2 || row1[2].Height > row1[1].Height);
+            Assert.Equal(row1[2].Origin.Y + row1[2].Height, o4.Origin.Y);
+            Assert.True(InitialLayout.SharedEdge(row1[2], o4) >= InitialLayout.MinSharedEdge);
         }
+    }
+
+    [Fact]
+    public void 换锚()
+    {
+        // Scenario「换锚」（terrain-density 实施后裁决 N3：载体 link:7 → link:6）：link:6 的 o1 北侧被已放下的 o3 挡住、放不下 o4 → o4 改以 o2 为锚北贴，
+        // 布局仍为 3+2 两行、恰 1 个连通分量。"放不下"用测试内独立枚举判定：o4 贴 o1 北侧的每个列偏移，要么与 o3 / 第一行某块重叠，要么与 o1 的共享边 < 4。
+        MapData map = LinkMapGenerator.Generate(6);
+        BoardPlate[] row1 = [.. map.Boards.Where(b => b.Origin.Y == LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
+        BoardPlate[] row2 = [.. map.Boards.Where(b => b.Origin.Y != LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
+        Assert.Equal(3, row1.Length);
+        Assert.Equal(2, row2.Length);
+        (BoardPlate o1, BoardPlate o2, BoardPlate o3, BoardPlate o4) = (row1[1], row1[2], row2[0], row2[1]);
+
+        // o3 照常锚 o0（西对齐北贴），东端伸进 o1 的北侧。
+        Assert.Equal(new Coord(LinkMapGenerator.Margin, row1[0].Origin.Y + row1[0].Height), o3.Origin);
+        Assert.True(o3.Origin.X + o3.Width > o1.Origin.X);
+
+        Assert.False(FitsNorthOfO1(map));
+
+        // 反面（枚举本身有判别力）：不换锚的 link:1 用同一枚举能在 o1 北侧找到 o4 的位置。
+        Assert.True(FitsNorthOfO1(LinkMapGenerator.Generate(1)));
+
+        // o4 改锚 o2：北贴 o2、共享边 ≥ 4；仍是 3+2 两行、恰 1 个连通分量。
+        Assert.Equal(o2.Origin.Y + o2.Height, o4.Origin.Y);
+        Assert.True(InitialLayout.SharedEdge(o2, o4) >= InitialLayout.MinSharedEdge);
+        Assert.False(InitialLayout.Overlaps(o3, o4));
+        Assert.Equal(1, Battlefields.Of(map).Count);
+    }
+
+    /// <summary>o4 能否贴在 o1 北侧：逐个列偏移试放，不越出原点、不与 o3 / 第一行任一块重叠、与 o1 共享边 ≥ 4 即算放得下（测试内独立枚举，不调 AttachNorth）。</summary>
+    private static bool FitsNorthOfO1(MapData map)
+    {
+        BoardPlate[] row1 = [.. map.Boards.Where(b => b.Origin.Y == LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
+        BoardPlate[] row2 = [.. map.Boards.Where(b => b.Origin.Y != LinkMapGenerator.Margin).OrderBy(b => b.Origin.X)];
+        (BoardPlate o1, BoardPlate o3, BoardPlate o4) = (row1[1], row2[0], row2[1]);
+        int north = o1.Origin.Y + o1.Height;
+        return Enumerable.Range(o1.Origin.X - o4.Width + 1, o1.Width + o4.Width - 1).Any(x =>
+        {
+            var at = new BoardPlate(new Coord(x, north), o4.Width, o4.Height, BoardPlateKind.Birth, o4.Theme);
+            return x >= 0 && !InitialLayout.Overlaps(at, o3) && !row1.Any(b => InitialLayout.Overlaps(at, b)) && InitialLayout.SharedEdge(o1, at) >= InitialLayout.MinSharedEdge;
+        });
     }
 
     [Theory]
@@ -169,8 +269,8 @@ public class 初始布局Tests(ITestOutputHelper output)
         Assert.Equal(LinkMapGenerator.Margin, map.Boards.Min(b => b.Origin.Y));
         Assert.Equal(map.Boards.Max(b => b.Origin.X + b.Width) + LinkMapGenerator.Margin, map.Width);
         Assert.Equal(map.Boards.Max(b => b.Origin.Y + b.Height) + LinkMapGenerator.Margin, map.Height);
-        Assert.InRange(map.Width, 23, 27);    // 种子 1–20 实测（校验器链接行取理论边界 22–30）
-        Assert.InRange(map.Height, 17, 20);   // 种子 1–20 实测（理论边界 16–20）
+        Assert.InRange(map.Width, 22, 25);    // 种子 1–20 实测（terrain-density 1.3；校验器链接行取理论边界 22–25，原 6–8 时实测 23–27、理论 22–30）
+        Assert.InRange(map.Height, 16, 18);   // 种子 1–20 实测（理论边界 16–18；原实测 17–20、理论 16–20）
 
         // 次序随种子变化（样本口径：20 个种子里不止一种排列）。
         Assert.True(Seeds().Select(s => string.Join(",", LinkMapGenerator.Generate((ulong)s[0]).Boards.OrderBy(b => b.Origin.Y).ThenBy(b => b.Origin.X).Select(b => Array.IndexOf([.. LinkMapGenerator.Generate((ulong)s[0]).Boards], b)))).Distinct().Count() > 1);

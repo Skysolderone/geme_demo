@@ -28,8 +28,9 @@ public class 链接模式下落后者的停手阈值Tests
     /// <summary>出生棋盘 0 的宽（读棋盘清单；link-map-terrain 起出生区是 3×3 核心区，不能再拿它量边长）。</summary>
     private static int Side => Map.BirthBoard(0).Width;
 
-    /// <summary>孤子点：棋盘 0 左上起 (2, 3)，离两个上角的棋子都 ≥ 2 格。</summary>
-    private static Coord Candidate => BirthCell(Map, 0, 2, 3);
+    /// <summary>孤子点：棋盘 0 左下起 (3, 2)，离各角上的棋子都 ≥ 2 格。
+    /// terrain-density（地图变了，边长 6–7）：原 (2, 3)；link:1 棋盘 0 改为 R3 起 6×6 高台（第 7 行是山脊），(2, 3) = T6 贴着山脊、收益 5 → 4，改取收益恰为 5 的核心区格 U5。</summary>
+    private static Coord Candidate => BirthCell(Map, 0, 3, 2);
 
     private static Coord Corner(int dx, int dy) => BirthCell(Map, 0, dx, dy);
 

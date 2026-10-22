@@ -8,14 +8,14 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
 /// 规格：openspec/changes/link-map-terrain/specs/link-map-generation —— Requirement: 初始布局（中间带按主题放置地形）；design D3 / D4（tasks 2.2 / 2.3）。
-/// 每个主题的生成函数单测其主题特征，各取 6×6 与 8×8 两种尺寸、布局流种子 1–30；另统计种子 1–20 的重抽次数分布与各主题的实际地形量（输出到测试日志，抄进任务汇报）。
+/// 每个主题的生成函数单测其主题特征，各取 6×6 与 7×7 两种尺寸（terrain-density 裁决 K1：边长 6–7，原 6×6 / 7×7 / 8×8）、布局流种子 1–30；另统计种子 1–20 的重抽次数分布与各主题的实际地形量（输出到测试日志，抄进任务汇报）。
 /// </summary>
 /// <remarks>变异验证见任务汇报（M-T*）。</remarks>
 public class 主题地形Tests(ITestOutputHelper output)
 {
     private const int StreamSeeds = 30;
 
-    public static IEnumerable<object[]> Sizes() => [[6], [7], [8]];
+    public static IEnumerable<object[]> Sizes() => [[6], [7]];
 
     private static IEnumerable<(ulong Seed, LinkMapGenerator.BoardTerrain Board, MapData Map)> Draft(BoardTheme theme, int side)
     {
@@ -174,7 +174,7 @@ public class 主题地形Tests(ITestOutputHelper output)
         line.Select(c => c.X).Distinct().Count() == 1 ? $"c{line[0].X - plate.Origin.X}" : $"r{line[0].Y - plate.Origin.Y}";
 
     /// <summary>
-    /// 候选（实施修订 J1 / J2，独立列表）：中间带里不穿过核心区的整列 / 整行——边长 6 只有 c4 / r4，边长 7 为 c1 / c5 与 r1 / r5，边长 8 为 c1 / c5 / c6 与 r1 / r5 / r6；
+    /// 候选（实施修订 J1 / J2，独立列表）：中间带里不穿过核心区的整列 / 整行——边长 6 只有 c4 / r4，边长 7 为 c1 / c5 与 r1 / r5（terrain-density 起没有边长 8）；
     /// 30 个流种子取到的线都在候选里，且候选全部取到过（样本口径：均匀抽取不是只取一条）。
     /// </summary>
     private static void AssertCandidates(int side, HashSet<string> chosen)
@@ -183,7 +183,7 @@ public class 主题地形Tests(ITestOutputHelper output)
         {
             6 => ["c4", "r4"],
             7 => ["c1", "c5", "r1", "r5"],
-            _ => ["c1", "c5", "c6", "r1", "r5", "r6"],
+            _ => throw new ArgumentOutOfRangeException(nameof(side), side, "出生棋盘边长只有 6–7"),
         };
         Assert.Equal(allowed.Order(StringComparer.Ordinal), chosen.Order(StringComparer.Ordinal));
     }
@@ -425,12 +425,12 @@ public class 主题地形Tests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void 各主题在六乘六与八乘八上的实际地形量()
+    public void 各主题在六乘六与七乘七上的实际地形量()
     {
         // 汇报用统计（tasks 2.2 / 5.4 回调的起点）：流种子 1–30 的平均量。断言只做样本口径下界。
         foreach (BoardTheme theme in Enum.GetValues<BoardTheme>())
         {
-            foreach (int side in new[] { 6, 8 })
+            foreach (int side in new[] { 6, 7 })
             {
                 var rows = Draft(theme, side).ToList();
                 double Avg(Func<(ulong Seed, LinkMapGenerator.BoardTerrain Board, MapData Map), int> f) => rows.Average(r => (double)f(r));
@@ -441,6 +441,31 @@ public class 主题地形Tests(ITestOutputHelper output)
                     + $"可落子 {Avg(r => r.Map.PlayableCount):0.0} 重抽 {Avg(r => r.Board.Redraws):0.00}");
                 Assert.Equal(StreamSeeds, rows.Count);
             }
+        }
+    }
+
+    [Theory]
+    [InlineData(6, 6, false)]
+    [InlineData(6, 7, false)]
+    [InlineData(7, 6, false)]
+    [InlineData(7, 7, true)]
+    public void 面积缩放端点随边长上限推算(int width, int height, bool top)
+    {
+        // terrain-density 实施后裁决 N1：插值终点由边长上限推算（7×7 的中间带 16 格），6×6 / 6×7 / 7×6（中间带 7 / 11 格）恒取下限，7×7 才取得到上限。
+        // 栅栏阵取下限 = 2 段 × 2 条 = 4 条栅栏边、散布岩石 0 格（Draw(0, 2)）；7×7 在流种子 1–30 里至少一颗多于 4 条、至少一颗有散布岩石（样本口径）。
+        // 判别力：终点钉回 8×8 的 27 格时 7×7 的插值上限退化为下限，本条 7×7 一行即红。
+        var plate = new BoardPlate(new Coord(2, 2), width, height, BoardPlateKind.Birth, BoardTheme.Palisade);
+        List<LinkMapGenerator.BoardTerrain> boards = [.. Enumerable.Range(1, StreamSeeds).Select(s => LinkMapGenerator.DraftBoard(plate, MapRandom.ForLinkLayout((ulong)s)))];
+        static int Scattered(LinkMapGenerator.BoardTerrain b) => b.Rocks.Count(r => !b.Cluster.Contains(r));
+        if (top)
+        {
+            Assert.Contains(boards, b => b.Fences.Count > 4);
+            Assert.Contains(boards, b => Scattered(b) > 0);
+        }
+        else
+        {
+            Assert.All(boards, b => Assert.Equal(4, b.Fences.Count));
+            Assert.All(boards, b => Assert.Equal(0, Scattered(b)));
         }
     }
 

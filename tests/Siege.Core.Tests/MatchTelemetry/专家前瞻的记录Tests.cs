@@ -206,8 +206,9 @@ public class 专家前瞻的记录Tests
         // link-map-surfaces 2.2 重钉：link:1 中间带投放新地表，走法随之变：小回合 84 → 108；1.3 再重钉（F1 / F2）：108 → 76。
         // fence-eye-rule 2.2 重钉：活形判定无视栅栏（栅栏不再造眼），AI 的改造与落子随之变：小回合 76 → 116。
         // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）：小回合 116 → 80。
-        Assert.Equal(80, log.Turns.Count);
-        Assert.Equal(20, log.LookaheadTurns.Count());   // terrain-barriers 3.1：29 → 20；fence-eye-rule 2.2：19 → 29；link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
+        // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）：小回合 80 → 92、前瞻记录 20 → 23。
+        Assert.Equal(92, log.Turns.Count);
+        Assert.Equal(23, log.LookaheadTurns.Count());   // terrain-barriers 3.1：29 → 20；fence-eye-rule 2.2：19 → 29；link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
@@ -229,7 +230,8 @@ public class 专家前瞻的记录Tests
         // expert-tiebreak 1.7 重钉（构筑期不前瞻；小回合 80 / 前瞻记录 20 不变）：确定性文本 2990 行中只差 6 行——P0 在第 1、2、3 大回合（小回合 1 / 8 / 11）的快照行前瞻记录
         // 由"已前瞻"改为"不前瞻"，以及同三小回合的结算事件预演计数各少 4（不再预演 4 个前瞻候选的 B1：870 → 866、759 → 755 等）；落点、提子与其余各行逐字节相同。
         // 首个分歧：小回合 1（第 1 大回合 P0 的首次部署）。旧值 298777E823AD1C9C7D9D419A2149D14CD43C3B04C49C06032BA5CC6354F4F079。
-        Assert.True("2B88061DD750AF481987BBE6528F0250116ACE295560C75729BAF981C2B16DBD" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）：小回合 80 → 92、前瞻记录 20 → 23，旧值 2B88061DD750AF481987BBE6528F0250116ACE295560C75729BAF981C2B16DBD。
+        Assert.True("66501E9CE1122B8E5FB4555FC83E5D8E71C3FB28B0BDEF0931ACB2CB98A084A3" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -391,7 +393,8 @@ public class 专家前瞻的记录Tests
         // link-map-surfaces 1.3 再重钉（F1 / F2）：第一次重钉值 365CE3FDCFC53B0F8B0B82BA1FBB246878F99BC4344C9BF175A20BD19BCF4DFC。
         // fence-eye-rule 2.2 重钉（活形判定无视栅栏，走法变：小回合 92 → 132）：旧值 EE9D562FA3B5F79655674AA774C2553594724168F05814976BC993FEA0DF1BFB。
         // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）：小回合 132 → 100，旧值 2E77EFB4C08EA62FAC32B6E60CFAA1660D799EB279C2DAE23A664A1293A75FF3。
-        Assert.True("4288BC9A971F9B49087C6937E0982ED172064F3F2A919E0512C89001BF2305B2" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
+        // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变；小回合恰好仍为 100）：旧值 4288BC9A971F9B49087C6937E0982ED172064F3F2A919E0512C89001BF2305B2。
+        Assert.True("AFBD43C98B8AFD39D4BCF8B2580DBCDAF0821F8729BFD6DA85D81ACEF1D4193F" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]
