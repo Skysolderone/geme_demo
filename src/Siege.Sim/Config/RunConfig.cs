@@ -151,6 +151,26 @@ public sealed record RunConfig
         init => WholeBatch = value;
     }
 
+    /// <summary>
+    /// AI 搭桥候选开关（<see cref="AiSearchConfig.EditSeed"/>，ai-bridge-candidate D3；0 / 1）：<c>null</c> = 新建的局取 <see cref="AiSearchConfig.DefaultEditSeed"/>（1），
+    /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；与整批候选开关同口径：只作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家。
+    /// 值为 0 时 MUST NOT 写出（规格「搭桥候选」：关闭时日志首部不含该字段，与引入之前逐字节相同），按日志首部重建（回放）时缺该项按 0 重建。
+    /// 命令行 <c>--edit-seed</c>。序列化只经 <see cref="EditSeedRecorded"/>。
+    /// </summary>
+    [JsonIgnore]
+    public int? EditSeed { get; init; }
+
+    /// <summary>
+    /// <see cref="EditSeed"/> 的序列化影子（同 <see cref="WholeBatchRecorded"/>）：0 写成缺省（不写出），读入原样；"显式 0"与"缺该项的旧记录"读回都按 0 重建。
+    /// </summary>
+    [JsonInclude]
+    [JsonPropertyName(nameof(EditSeed))]
+    private int? EditSeedRecorded
+    {
+        get => EditSeed == 0 ? null : EditSeed;
+        init => EditSeed = value;
+    }
+
     // retire-legacy-maps 3.2：冒险概率字段 FlagRisk 删除；配置文件写了即报错（见 RetiredKeys）。
 
     /// <summary>
@@ -269,6 +289,11 @@ public sealed record RunConfig
             throw new ArgumentException($"整批候选开关须为 0 或 1（0 = 关闭），实际为 {wholeBatch}。");
         }
 
+        if (EditSeed is { } editSeed && editSeed is not (0 or 1))
+        {
+            throw new ArgumentException($"搭桥候选开关须为 0 或 1（0 = 关闭），实际为 {editSeed}。");
+        }
+
         if (ContentSet is { } contentSet && !Enum.IsDefined(contentSet))
         {
             throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
@@ -333,6 +358,8 @@ public sealed record RunConfig
         resolved = resolved.StagnationRounds is null ? resolved with { StagnationRounds = AiSearchConfig.DefaultStagnationRounds } : resolved;
         // 整批候选开关（ai-whole-batch D4）：未配置落成缺省 1，首部写明；显式 0 保持 0（序列化时不写出，回放缺该项按 0）。
         resolved = resolved.WholeBatch is null ? resolved with { WholeBatch = AiSearchConfig.DefaultWholeBatch } : resolved;
+        // 搭桥候选开关（ai-bridge-candidate D3）同上：未配置落成缺省 1；显式 0 保持 0（不写出，回放缺该项按 0）。
+        resolved = resolved.EditSeed is null ? resolved with { EditSeed = AiSearchConfig.DefaultEditSeed } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
@@ -344,7 +371,7 @@ public sealed record RunConfig
             ? resolved with
             {
                 Players = [.. resolved.Players.Select(p => p.Search is null && AiSearchConfig.ForDifficulty(p.Difficulty).LookaheadWidth > 0
-                    ? p with { Search = AiSearchConfig.ForMap(p.Difficulty, map.PlayableCount, resolved.CandidateCellLimit ?? 0) with { PassThreshold = resolved.PassThreshold!.Value, StagnationRounds = resolved.StagnationRounds!.Value, WholeBatch = resolved.WholeBatch!.Value } }
+                    ? p with { Search = AiSearchConfig.ForMap(p.Difficulty, map.PlayableCount, resolved.CandidateCellLimit ?? 0) with { PassThreshold = resolved.PassThreshold!.Value, StagnationRounds = resolved.StagnationRounds!.Value, WholeBatch = resolved.WholeBatch!.Value, EditSeed = resolved.EditSeed!.Value } }
                     : p)],
             }
             : resolved;

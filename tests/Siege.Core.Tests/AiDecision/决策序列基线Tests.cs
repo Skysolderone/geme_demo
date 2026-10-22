@@ -107,7 +107,26 @@ public class 决策序列基线Tests
         Assert.True(File.Exists(path), $"找不到改前基线副本：{path}");
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
-        Assert.Equal(expected, LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, configure: c => c with { WholeBatch = 0 }));
+        Assert.Equal(expected, LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, configure: c => c with { WholeBatch = 0, EditSeed = 0 }));
+    }
+
+    /// <summary>
+    /// ai-bridge-candidate 守门（规格「搭桥候选」Scenario「关闭时逐步不变」）：5 份基线在引入搭桥候选之前（HEAD 01efcd4，整批候选缺省开）的原文另存为 <c>*-es0.txt</c>，
+    /// 以跑局配置显式给搭桥候选开关 0（整批候选仍取缺省 1）重跑同一导出，逐字节比对。整批候选的守门（<c>*-wb0.txt</c>）同时关掉两个开关。
+    /// </summary>
+    [Theory]
+    [InlineData(1UL, AiDifficulty.Standard, "decisions-link1-seed1-es0.txt")]
+    [InlineData(2UL, AiDifficulty.Standard, "decisions-link1-seed2-es0.txt")]
+    [InlineData(3UL, AiDifficulty.Standard, "decisions-link1-seed3-es0.txt")]
+    [InlineData(1UL, AiDifficulty.Easy, "decisions-link1-easy-seed1-es0.txt")]
+    [InlineData(1UL, AiDifficulty.Hard, "decisions-link1-hard-seed1-es0.txt")]
+    public void 搭桥候选关闭时与改前基线相同(ulong seed, AiDifficulty difficulty, string fixture)
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", fixture);
+        Assert.True(File.Exists(path), $"找不到改前基线副本：{path}");
+        string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
+        Assert.Equal(expected, LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, configure: c => c with { EditSeed = 0 }));
     }
 
     private static string SourceFixtureDirectory([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>

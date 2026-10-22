@@ -159,7 +159,8 @@ public class 整批候选Tests
     {
         // 开关为 0：与引入之前的实现逐步相同——(1) 链接图黄金对局（link:1、种子 31、标准、24 个小回合）的小回合快照哈希等于改前钉值；
         // (2) 日志首部与批次配置都不含该字段；(3) 决策序列（link:1、种子 3、标准、截断第 12 大回合）与改前基线副本逐字节相同（5 份副本的全量守门见 决策序列基线Tests）。
-        MatchLog log = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { WholeBatch = 0 }, parallelism: 1)[0];
+        // ai-bridge-candidate：两处样本同时关掉搭桥候选（EditSeed = 0），钉值是引入整批候选之前的口径。
+        MatchLog log = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { WholeBatch = 0, EditSeed = 0 }, parallelism: 1)[0];
         string hash = 候选格上限Tests.TurnHash(log);
         Assert.True(候选格上限Tests.LinkGoldenTurnHashWholeBatchOff == hash, $"开关 0 的链接图黄金小回合哈希：{hash}");
         Assert.DoesNotContain("WholeBatch", log.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
@@ -172,7 +173,7 @@ public class 整批候选Tests
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", name)).Replace("\r\n", "\n", StringComparison.Ordinal);
         string expected = Fixture("decisions-link1-seed3-wb0.txt");
         Assert.NotEqual(expected, Fixture("decisions-link1-seed3.txt"));
-        Assert.Equal(expected, LinkDecisionSequence.Export(3, 12, AiDifficulty.Standard, attach: null, configure: c => c with { WholeBatch = 0 }));
+        Assert.Equal(expected, LinkDecisionSequence.Export(3, 12, AiDifficulty.Standard, attach: null, configure: c => c with { WholeBatch = 0, EditSeed = 0 }));
     }
 
     [Fact]

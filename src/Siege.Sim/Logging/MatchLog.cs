@@ -123,6 +123,11 @@ public sealed class MatchLog
     /// </summary>
     public int WholeBatchOf(int player) => Header.Config.Players[player].Search is { } search ? search.WholeBatch : Header.Config.WholeBatch ?? 0;
 
+    /// <summary>
+    /// 某玩家实际生效的搭桥候选开关（ai-bridge-candidate D3）：口径同 <see cref="WholeBatchOf"/>——显式搜索配置的值优先（缺该字段按 0），否则取首部跑局配置的开关（缺该项按 0）。
+    /// </summary>
+    public int EditSeedOf(int player) => Header.Config.Players[player].Search is { } search ? search.EditSeed : Header.Config.EditSeed ?? 0;
+
     /// <summary>本局是否用过调试 AI 或发生过人工接管（design.md D7：默认排除）。</summary>
     public bool IsContaminated => (Result?.UsedDebugAi ?? Failure?.UsedDebugAi ?? false)
         || (Result?.Takeovers.Count ?? Failure?.Takeovers.Count ?? 0) > 0;

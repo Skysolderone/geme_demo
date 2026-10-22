@@ -158,13 +158,17 @@ internal static class LookaheadFixtures
     /// <remarks>
     /// 取四个座位的全部部署决策按固定间隔抽样（expert-lookahead 段 A 起的口径）；局面覆盖构筑期与链接之后的交战（规格「耗时上限」）。
     /// </remarks>
-    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
+    internal static int ProbePositions(int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds) => ProbePositionsWith(null, every, probe, seeds);
+
+    /// <summary>同 <see cref="ProbePositions"/>，产出局面的对局配置先经 <paramref name="configure"/>（ai-bridge-candidate：依赖走法的样本写死旧口径用）；为 <c>null</c> 时与之逐字节相同。</summary>
+    internal static int ProbePositionsWith(Func<RunConfig, RunConfig>? configure, int every, Action<MatchFlow, StagedBatch> probe, params ulong[] seeds)
     {
         int decision = 0;
         int probed = 0;
         foreach (ulong seed in seeds.Length == 0 ? [1, 2, 3] : seeds)
         {
-            MatchSession session = CreateSession(LinkConfig(Standard, Standard, Standard, Standard), seed);
+            RunConfig config = LinkConfig(Standard, Standard, Standard, Standard);
+            MatchSession session = CreateSession(configure?.Invoke(config) ?? config, seed);
             foreach (PlayerId player in session.Match.Players)
             {
                 HeuristicTurnController inner = session.AiOf(player)!;

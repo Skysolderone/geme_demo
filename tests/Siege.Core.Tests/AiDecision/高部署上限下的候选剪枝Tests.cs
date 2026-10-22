@@ -42,8 +42,11 @@ public class 高部署上限下的候选剪枝Tests
         ai.Deploy(batch, Counted);
 
         // ai-whole-batch（规格 MODIFIED）：标准预设开着整批候选，候选数 ≤ M + 2，预演另加整批候选的上界（仍远小于 C(60, 8)）。
+        // ai-bridge-candidate（规格 MODIFIED）：预设也开着搭桥候选，候选数 ≤ M + 3；本局面没有深水，搭桥候选不预演（留痕无起点），预演上界不变。
         Assert.Equal(AiSearchConfig.Standard.CandidatePointCount, ai.LastPointRanking.Length);
-        Assert.InRange(ai.LastCandidates.Length, 1, AiSearchConfig.Standard.CandidateBatchCount + 2);
+        Assert.InRange(ai.LastCandidates.Length, 1, AiSearchConfig.Standard.CandidateBatchCount + 3);
+        Assert.Null(ai.LastBridgeSeed!.Seed);
+        Assert.Equal(0, ai.LastBridgeSeed.Scored);
         int types = batch.Context.Stock.Count(kv => kv.Value > 0);
         Assert.True(
             rehearsals <= (empties * types) + (AiSearchConfig.Standard.CandidateBatchCount * (AiSearchConfig.Standard.CandidatePointCount + 1))
@@ -75,6 +78,23 @@ public class 高部署上限下的候选剪枝Tests
         Assert.Equal(2, on.LastCandidates.Length);
         Assert.InRange(on.LastCandidates.Length, 1, on.Config.CandidateBatchCount + 2);
         Assert.Contains(on.LastCandidates, c => c.Key == on.LastWholeBatch!.Pruned!.Key);
+    }
+
+    [Fact]
+    public void 整批候选与搭桥候选都不计入候选批次上限()
+    {
+        // ai-bridge-candidate（规格 MODIFIED「高部署上限下的候选剪枝」：开启搭桥候选时另有至多 1 个搭桥候选，与整批候选一样不计入上限 M）。
+        // 构造局面同 搭桥候选Tests（搭桥单点在前 N 之外）：M = 1 时贪心只得 {G8}，开启后另加搭桥候选 {E6 匠人 + 搭桥 E5, G8}，候选数 2 ≤ M + 3；关闭时 ≤ M + 2（整批候选与贪心同键被去重）。
+        static HeuristicTurnController Run(int editSeed) =>
+            搭桥候选Tests.Deploy(AiDifficulty.Standard, AiSearchConfig.Standard with { CandidateBatchCount = 1, PassThreshold = 20, EditSeed = editSeed }).Ai;
+
+        HeuristicTurnController off = Run(0);
+        Assert.Single(off.LastCandidates);
+        HeuristicTurnController on = Run(1);
+        Assert.Equal(1, on.Config.WholeBatch);
+        Assert.Equal(2, on.LastCandidates.Length);
+        Assert.InRange(on.LastCandidates.Length, 1, on.Config.CandidateBatchCount + 3);
+        Assert.Contains(on.LastCandidates, c => c.Key == on.LastBridgeSeed!.Candidate!.Key);
     }
 
     [Fact]

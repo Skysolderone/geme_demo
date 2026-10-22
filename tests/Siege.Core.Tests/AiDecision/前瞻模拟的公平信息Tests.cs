@@ -296,11 +296,18 @@ public class 前瞻模拟的公平信息Tests
         // 再以专家本人的搜索配置（贪心条数改为 1、不前瞻）的启发式在 B1 上不扰动地求一次批次 → 与 c 的前瞻记录中的模拟回应批次键相同。
         // 样本：G1 口径的一局（IndependentResponseSeed），逐个检查专家已前瞻决策的每个候选，直到遇到第一个"按标准预设派生会得到不同回应"的候选为止。
         // 样本口径：该候选确实存在（N 12 与 N 24 的不扰动贪心在此给出不同批次）——改前（标准预设派生）的记录在这里与独立复算不同，本测试红。
-        List<ResponseCheck> checks = CheckSimulatedResponses(IndependentResponseSeed, OneLayerConfig(), MaxMajorRounds, stopAtDiscriminating: true);
+        // ai-bridge-candidate 1.6：样本对局写死引入搭桥候选之前的口径（专家与三名标准的搭桥候选开关都为 0，boundaries.md「依赖走法的既有夹具显式写死旧口径」）——
+        // 缺省开时这局的走法变了（三名标准第 4 大回合起会选中搭桥候选），截断前不再出现"两种口径给出不同回应"的候选，样本口径失效。
+        List<ResponseCheck> checks = CheckSimulatedResponses(IndependentResponseSeed, OneLayerConfig() with { EditSeed = 0 }, MaxMajorRounds, stopAtDiscriminating: true, editSeed: 0);
 
         Assert.NotEmpty(checks);
         Assert.Contains(checks, c => c.ExpertDerived != c.StandardDerived);
         Assert.All(checks, c => Assert.True(c.ExpertDerived == c.Recorded, c.ToString()));
+
+        // 缺省开（专家与三名标准都带搭桥候选）的同一局整段（截断第 12 大回合）：每个候选的模拟回应仍等于专家口径、不生成搭桥候选的不扰动贪心（design D2：模拟对手不生成搭桥候选）。
+        List<ResponseCheck> on = CheckSimulatedResponses(IndependentResponseSeed, OneLayerConfig(), MaxMajorRounds, stopAtDiscriminating: false);
+        Assert.NotEmpty(on);
+        Assert.All(on, c => Assert.True(c.ExpertDerived == c.Recorded, c.ToString()));
     }
 
     /// <summary>一次独立复算：小回合、大回合、候选键、前瞻记录里的模拟回应键、按专家本人口径与按标准预设口径不扰动求得的批次键（Pass 为空串）。</summary>
@@ -312,17 +319,17 @@ public class 前瞻模拟的公平信息Tests
     /// 模拟对手经公开构造函数新建、配置在这里另写，不经 <see cref="ExpertLookahead.SimulatedConfig"/>）。<paramref name="stopAtDiscriminating"/> 为真时，
     /// 遇到第一个两种口径给出不同批次的候选，做完该次决策后停下。
     /// </summary>
-    internal static List<ResponseCheck> CheckSimulatedResponses(ulong seed, AiSearchConfig search, int maxMajorRounds, bool stopAtDiscriminating, int? cellLimit = 0)
+    internal static List<ResponseCheck> CheckSimulatedResponses(ulong seed, AiSearchConfig search, int maxMajorRounds, bool stopAtDiscriminating, int? cellLimit = 0, int? editSeed = null)
     {
         MatchSession session = CreateSession(
-            LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = cellLimit }, seed);
+            LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = cellLimit, EditSeed = editSeed }, seed);
         MatchFlow match = session.Match;
         var inner = new HeuristicTurnController(P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Expert, Weights, search);
         // ai-whole-batch D3（裁决 3）：前瞻模拟的对手不生成整批候选——两种口径的独立复算都显式关掉整批候选（标准预设派生是改前的历史口径，同样不带）。
-        AiSearchConfig expertDerived = search with { CandidateBatchCount = 1, LookaheadWidth = 0, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0, TwoPlyTieBand = 0, WholeBatch = 0 };
+        AiSearchConfig expertDerived = search with { CandidateBatchCount = 1, LookaheadWidth = 0, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0, TwoPlyTieBand = 0, WholeBatch = 0, EditSeed = 0 };
         AiSearchConfig standardDerived = AiSearchConfig.Standard with
         {
-            CandidateBatchCount = 1, CandidateCellLimit = search.CandidateCellLimit, PassThreshold = search.PassThreshold, LookaheadWidth = 0, WholeBatch = 0,
+            CandidateBatchCount = 1, CandidateCellLimit = search.CandidateCellLimit, PassThreshold = search.PassThreshold, LookaheadWidth = 0, WholeBatch = 0, EditSeed = 0,
         };
 
         var checks = new List<ResponseCheck>();

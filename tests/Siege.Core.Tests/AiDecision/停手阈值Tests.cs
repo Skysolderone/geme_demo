@@ -45,6 +45,12 @@ public class 停手阈值Tests
     /// </summary>
     private const string StrictImprovementTurnHashWholeBatch = "7A40128226D2E6959CFD5CAEDC9DB23D00CCFFB17610CA17339AB9B11F50B392";
 
+    /// <summary>
+    /// ai-bridge-candidate 1.6：同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选与搭桥候选都缺省开时的哈希（搭桥候选关时即 <see cref="StrictImprovementTurnHashWholeBatch"/>）。
+    /// 首个分歧：第 15 小回合（第 4 大回合）P3，原落 C6 普通，开启后选中搭桥候选 C4 匠人搭桥 D4 + C6 普通（见任务目录 rebaseline.txt）。
+    /// </summary>
+    private const string StrictImprovementTurnHashEditSeed = "43F6E259B07F2A1FAC98FC13BD3C9D1DBB9644C055ACA3B77BB45B9A01C6005C";
+
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
     private const ulong StrictImprovementSeed = 35;   // link-map-surfaces 2.2：34 → 35（见上）
 
@@ -162,6 +168,32 @@ public class 停手阈值Tests
         Assert.NotNull(ai.LastWholeBatch);
         Assert.Null(ai.LastWholeBatch.Pruned);
         Assert.Null(ai.LastWholeBatch.Paired);
+
+        // ai-bridge-candidate（规格 MODIFIED：Pass 另要求搭桥候选为空）：预设开着搭桥候选，它确实走过生成（留痕非空），且没有起点、没有候选。
+        Assert.Equal(1, ai.Config.EditSeed);
+        Assert.NotNull(ai.LastBridgeSeed);
+        Assert.Null(ai.LastBridgeSeed.Seed);
+        Assert.Null(ai.LastBridgeSeed.Candidate);
+    }
+
+    [Fact]
+    public void 搭桥单点收益不过阈值时仍Pass()
+    {
+        // ai-bridge-candidate（规格 MODIFIED「停手阈值」Scenario「无落点被保留则Pass」的搭桥一侧）：局面同 搭桥候选Tests（搭桥单点收益 150、提子单点 1351），
+        // 阈值取 1351：全部单点的边际提升都不超过阈值、整批候选为空、搭桥候选也为空（收益 150 不大于阈值）→ 0 落子 Pass。
+        // 阈值取 149 时同一局面落下搭桥候选（反面：否则 Pass 是恒真）。
+        (HeuristicTurnController ai, _, StagedBatch batch, _) = 搭桥候选Tests.Deploy(AiDifficulty.Standard, AiSearchConfig.Standard with { PassThreshold = 1351 });
+        Assert.Equal(1351, ai.LastPointRanking[0].Total);
+        Assert.NotNull(ai.LastWholeBatch);
+        Assert.Null(ai.LastWholeBatch.Pruned);
+        Assert.Null(ai.LastWholeBatch.Paired);
+        Assert.NotNull(ai.LastBridgeSeed);
+        Assert.Null(ai.LastBridgeSeed.Candidate);
+        AssertPassed(ai);
+        Assert.Equal(0, batch.Count);
+
+        (HeuristicTurnController eager, _, _, _) = 搭桥候选Tests.Deploy(AiDifficulty.Standard, AiSearchConfig.Standard with { PassThreshold = 149 });
+        Assert.True(eager.LastBridgeSeed!.IsSourceOf(eager.LastChoice));
     }
 
     [Fact]
@@ -175,7 +207,7 @@ public class 停手阈值Tests
         // 默认权重改为校准值（Eye 200、Threat 25）后若仍跟随缺省，对照哈希就不再是"严格提高实现"的产物（testing.md「校准与保真度分离」）。
         // retire-legacy-maps 1.5：样本由 v4 改到 link:1（对照哈希在删除 v4 之前重钉，见 StrictImprovementTurnHash），断言不变。
         // ai-whole-batch 1.6：对照实现早于整批候选，样本与反面比对都显式关掉整批候选（两边同口径，只差阈值）。
-        RunConfig zero = 候选格上限Tests.LinkGoldenConfig() with { SeedStart = StrictImprovementSeed, PassThreshold = 0, WholeBatch = 0 };
+        RunConfig zero = 候选格上限Tests.LinkGoldenConfig() with { SeedStart = StrictImprovementSeed, PassThreshold = 0, WholeBatch = 0, EditSeed = 0 };
         MatchLog log = BatchRunner.Execute(zero, parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
@@ -193,15 +225,19 @@ public class 停手阈值Tests
             string atZero = seed == StrictImprovementSeed
                 ? hash
                 : 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { SeedStart = seed }, parallelism: 1)[0]);
-            MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = seed, WholeBatch = 0 }, parallelism: 1)[0];
+            MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = seed, WholeBatch = 0, EditSeed = 0 }, parallelism: 1)[0];
             differs = atZero != 候选格上限Tests.TurnHash(byDefault);
         }
 
         Assert.True(differs, "种子 31–46 里没有一颗在阈值 0 与缺省阈值下走法不同，无从证明阈值传到了 AI");
 
-        // 整批候选缺省开（跑局层不给开关）的同一局：钉 StrictImprovementTurnHashWholeBatch。
+        // 整批候选缺省开（跑局层不给开关）、搭桥候选关的同一局：钉 StrictImprovementTurnHashWholeBatch（ai-bridge-candidate：即引入搭桥候选之前的口径，开关 0 守门）。
         string on = 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { WholeBatch = null }, parallelism: 1)[0]);
         Assert.True(StrictImprovementTurnHashWholeBatch == on, $"阈值 0、整批候选缺省开的小回合快照哈希：{on}");
+
+        // 整批候选与搭桥候选都缺省开的同一局：钉 StrictImprovementTurnHashEditSeed。
+        string both = 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { WholeBatch = null, EditSeed = null }, parallelism: 1)[0]);
+        Assert.True(StrictImprovementTurnHashEditSeed == both, $"阈值 0、整批候选与搭桥候选缺省开的小回合快照哈希：{both}");
     }
 
     [Fact]

@@ -160,6 +160,12 @@ public sealed class HeuristicTurnController : ITurnController
     /// </summary>
     public WholeBatchCandidates? LastWholeBatch { get; private set; }
 
+    /// <summary>
+    /// 最近一次部署的搭桥候选留痕（ai-bridge-candidate，ai-decision「搭桥候选」）：生成过搭桥候选（开关为 1、非简单难度、走到候选生成）即为留痕，
+    /// 否则（含尚未部署、开关为 0、简单难度、停滞停手、无合法落点）为 <c>null</c>。被选中的是否搭桥候选见 <see cref="BridgeSeedCandidate.IsSourceOf"/>。
+    /// </summary>
+    public BridgeSeedCandidate? LastBridgeSeed { get; private set; }
+
     /// <summary>测试接缝：最近一次采样所在的大回合（尚未采样 / K = 0 为 <c>null</c>）。</summary>
     internal int? LastSampledRound => _powerByRound.Count == 0 ? null : _powerByRound.Keys.Max();
 
@@ -382,6 +388,7 @@ public sealed class HeuristicTurnController : ITurnController
         LastDecisive = null;
         LastStagnation = null;
         LastWholeBatch = null;
+        LastBridgeSeed = null;
         if (ranking.IsEmpty || context.DeployLimit == 0)
         {
             LastCandidates = [];
@@ -403,7 +410,7 @@ public sealed class HeuristicTurnController : ITurnController
         }
         else
         {
-            choice = ChooseByCandidates(ranking, batch, rehearse, evaluator, passThreshold, view);
+            choice = ChooseByCandidates(ranking, ranked, batch, rehearse, evaluator, passThreshold, view);
         }
 
         // 决胜一手（ai-pass-review 2.1，P7 = A 窄版）：只在"本将 Pass、这次 Pass 会让本战场整轮 Pass 结算、自己落后"时检查；
@@ -433,10 +440,12 @@ public sealed class HeuristicTurnController : ITurnController
     /// <summary>
     /// 候选生成与选优（<see cref="Deploy"/> 原有的中段，cycle-stop 2.2 原样抽出、行为不变）：贪心 + 种子扰动组合出不超过 M 个候选批次，
     /// 整批候选开关为 1 且不是简单难度时再追加至多 2 个整批候选（<see cref="AppendWholeBatch"/>，ai-whole-batch D1），
-    /// 前瞻宽度大于 0 时交给一层前瞻重排，否则确定性选优。
+    /// 搭桥候选开关为 1 且不是简单难度时再追加至多 1 个搭桥候选（<see cref="AppendBridgeSeed"/>，ai-bridge-candidate D1），
+    /// 前瞻宽度大于 0 时交给一层前瞻重排，否则确定性选优。<paramref name="ranked"/> 是单点评价的全部单点（已排序、未截断），搭桥候选从中复用已评过的搭桥单点。
     /// </summary>
     private CandidateBatch ChooseByCandidates(
-        ImmutableArray<PointScore> ranking, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold, MatchPublicView view)
+        ImmutableArray<PointScore> ranking, ImmutableArray<PointScore> ranked, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold,
+        MatchPublicView view)
     {
         var candidates = new List<CandidateBatch>();
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -450,10 +459,21 @@ public sealed class HeuristicTurnController : ITurnController
             }
         }
 
+        // Pass 的评价（整批候选与搭桥候选共用，至多预演一次）：整批候选开着时首先算它（与引入搭桥候选之前同一时机、同一次序），
+        // 只开搭桥候选时等到真有可评的搭桥单点才算。
+        EvaluationBreakdown? passEvaluation = null;
+        EvaluationBreakdown Pass() => passEvaluation ??= EvaluateSet([], batch, rehearse, evaluator)!;
+
         // ai-whole-batch D1 / D3：开关为 0 或简单难度（只看即时收益）时整段不进入——一次额外预演都没有，与引入之前逐步相同。
         if (Config.WholeBatch == 1 && !Config.ImmediateOnly)
         {
-            LastWholeBatch = AppendWholeBatch(ranking, batch, rehearse, evaluator, passThreshold, candidates, keys);
+            LastWholeBatch = AppendWholeBatch(ranking, batch, rehearse, evaluator, passThreshold, Pass(), candidates, keys);
+        }
+
+        // ai-bridge-candidate D1 / D2：同上，开关为 0 或简单难度时整段不进入，与引入之前逐步相同。追加在整批候选之后，不调用 Perturb，零随机。
+        if (Config.EditSeed == 1 && !Config.ImmediateOnly)
+        {
+            LastBridgeSeed = AppendBridgeSeed(ranking, ranked, batch, rehearse, evaluator, passThreshold, Pass, candidates, keys);
         }
 
         LastCandidates = [.. candidates];
@@ -1159,11 +1179,9 @@ public sealed class HeuristicTurnController : ITurnController
     /// 只用不扰动的单点排序前 N（<paramref name="ranking"/>）。复用同一套预演与评价（<see cref="Greedy"/> / <see cref="ContinueGreedy"/> / <see cref="EvaluateSet"/>）。
     /// </summary>
     private WholeBatchCandidates AppendWholeBatch(
-        ImmutableArray<PointScore> ranking, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold,
+        ImmutableArray<PointScore> ranking, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold, EvaluationBreakdown pass,
         List<CandidateBatch> candidates, HashSet<string> keys)
     {
-        EvaluationBreakdown pass = EvaluateSet([], batch, rehearse, evaluator)!;
-
         // 强制贪心与决胜一手的强制批次同一调用（阈值 −∞、前 N、至部署上限）。
         CandidateBatch? pruned = PrunedCandidate(Greedy(ranking, batch, rehearse, evaluator, int.MinValue), batch, rehearse, evaluator, passThreshold, pass);
         bool prunedAdded = pruned is not null && keys.Add(pruned.Key);
@@ -1181,6 +1199,79 @@ public sealed class HeuristicTurnController : ITurnController
 
         return new WholeBatchCandidates(pruned, prunedAdded, paired, pairedAdded);
     }
+
+    // ---------- 搭桥候选（ai-bridge-candidate，ai-decision「搭桥候选」） ----------
+
+    /// <summary>
+    /// 在既有候选（含整批候选）之后追加搭桥候选（design D1）：手中有匠人时，对合法落子范围内的<b>全部</b>可落子空格（不经 <see cref="PrefilterCells"/>、不受前 N）
+    /// 枚举"匠人 × 搭桥目标"（目标只取 <see cref="EditOptions"/> 经 <see cref="TerrainEditRules.LegalTargets(MapData, Coord, bool, IReadOnlySet{Coord}?)"/> 给出的搭桥类改造）的单点：
+    /// 进入过完整枚举的格（<see cref="LastCandidateCells"/>）上的单点已由 <see cref="ScorePoints"/> 评过——通过的从 <paramref name="ranked"/> 复用分数，落选的不再预演；
+    /// 只有预筛挡掉的格才经 <see cref="ScoreOne"/>（与单点评价同一条暂放 → 预演 → 活形硬约束 → 九维评价路径）新评。
+    /// 起点 = 收益（单点总分 − Pass 总分）<b>严格大于</b>实际生效阈值 <paramref name="passThreshold"/> 者中按 <see cref="Rank"/> 排第一的（总分最高，并列按坐标 → 类型 → 改造记法）；
+    /// 复摆起点后 <see cref="ContinueGreedy"/>（不扰动的前 N <paramref name="ranking"/>、同一阈值）至部署上限。键与既有候选相同按去重不加。零随机。
+    /// 返回留痕：手中无匠人或没有可评的搭桥单点时起点为空（此时连 Pass 的评价都不做）。
+    /// </summary>
+    private BridgeSeedCandidate AppendBridgeSeed(
+        ImmutableArray<PointScore> ranking, ImmutableArray<PointScore> ranked, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold,
+        Func<EvaluationBreakdown> pass, List<CandidateBatch> candidates, HashSet<string> keys)
+    {
+        BatchContext context = batch.Context;
+        if (context.StockOf(TerrainEditRules.EditorType) <= 0)
+        {
+            return new BridgeSeedCandidate(null, null, false, 0);
+        }
+
+        var enumerated = new HashSet<Coord>(LastCandidateCells);
+        var bridges = new List<PointScore>(ranked.Where(p => p.Type == TerrainEditRules.EditorType && p.Edit?.Kind == TerrainEditKind.Bridge));
+        int scored = 0;
+        foreach (Coord cell in context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty && !enumerated.Contains(c)).Order())
+        {
+            foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, TerrainEditRules.EditorType, context.WorkshopActive, context.EditScope))
+            {
+                if (edit?.Kind != TerrainEditKind.Bridge)
+                {
+                    continue;
+                }
+
+                scored++;
+                if (ScoreOne(batch, rehearse, evaluator, cell, TerrainEditRules.EditorType, edit, rejections: null) is { } point)
+                {
+                    bridges.Add(point);
+                }
+            }
+        }
+
+        batch.Clear();
+        if (bridges.Count == 0)
+        {
+            return new BridgeSeedCandidate(null, null, false, scored);
+        }
+
+        BigInteger passTotal = pass().Total;
+        PointScore? seed = Rank(bridges.Where(p => BridgeSeedHolds(p.Total - passTotal, passThreshold))).FirstOrDefault();
+        if (seed is null)
+        {
+            return new BridgeSeedCandidate(null, null, false, scored);
+        }
+
+        batch.Clear();
+        if (batch.Stage(seed.Coord, seed.Type, seed.Edit) is { } failure)
+        {
+            throw new SiegeRuleException($"搭桥候选复摆已预演通过的起点被拒绝：{failure.Message}");
+        }
+
+        CandidateBatch candidate = ContinueGreedy(ranking, batch, rehearse, evaluator, passThreshold, seed.Evaluation);
+        bool added = keys.Add(candidate.Key);
+        if (added)
+        {
+            candidates.Add(candidate);
+        }
+
+        return new BridgeSeedCandidate(seed, candidate, added, scored);
+    }
+
+    /// <summary>搭桥候选的起点口径（design D1，ai-decision「搭桥候选」第 2 条）：单点收益 <paramref name="gain"/>（相对 Pass）<b>严格大于</b>实际生效的停手阈值。</summary>
+    private static bool BridgeSeedHolds(BigInteger gain, int passThreshold) => gain > passThreshold;
 
     /// <summary>
     /// 留一法口径（design D2，ai-decision「停手阈值」）：从整批中拿掉一枚使整批加权总分的下降 <paramref name="drop"/> <b>严格大于</b>停手阈值，这一枚才算出力。

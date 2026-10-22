@@ -59,6 +59,19 @@ public enum WholeBatchSource
 }
 
 /// <summary>
+/// 一次部署决策的搭桥候选留痕（ai-bridge-candidate D1，ai-decision「搭桥候选」）：生成过（开关为 1、非简单难度、走到候选生成）即有本留痕。
+/// <see cref="Seed"/> 为起点搭桥单点（手中无匠人、合法范围内没有可评的搭桥单点、或收益都不大于停手阈值时为 <c>null</c>），
+/// <see cref="Candidate"/> 为以它为起点续贪心的批次（无起点时为 <c>null</c>），<see cref="Added"/> 为它是否作为新键加入了候选集（键与既有候选相同时按去重不加）。
+/// <see cref="Scored"/> 为本次新评（暂放 → 预演 → 活形硬约束）的搭桥选项数：只有预筛挡掉的格上的搭桥选项才新评；进入过完整枚举的格上的已由单点评价评过，复用其分数、不计入。只是留痕，不改决策日志。
+/// </summary>
+public sealed record BridgeSeedCandidate(PointScore? Seed, CandidateBatch? Candidate, bool Added, int Scored)
+{
+    /// <summary>被选中的候选是否就是已加入的搭桥候选（键相同）。</summary>
+    public bool IsSourceOf(CandidateBatch? choice) =>
+        choice is not null && !choice.IsPass && Added && Candidate is not null && Candidate.Key == choice.Key;
+}
+
+/// <summary>
 /// 一次部署决策的整批候选留痕（ai-whole-batch D1，ai-decision「整批候选」）：剪枝候选与配对候选（空批次 / 无有效配对为 <c>null</c>），
 /// 以及各自是否作为新键加入了候选集（键与既有候选相同时按去重不加）。只是留痕，不改决策日志。
 /// </summary>

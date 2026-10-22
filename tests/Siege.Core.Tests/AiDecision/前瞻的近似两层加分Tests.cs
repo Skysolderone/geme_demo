@@ -66,7 +66,9 @@ public class 前瞻的近似两层加分Tests
         int compared = 0;
         int scored = 0;
         int changed = 0;
-        ProbePositions(every: 2, (match, batch) =>
+        // ai-bridge-candidate 1.6：局面集写死引入搭桥候选之前的口径（产出局面的 4 名标准关掉搭桥候选，boundaries.md「依赖走法的既有夹具显式写死旧口径」）——
+        // 缺省开时种子 1 的对局走法变了，局面集上两层加分不再改变任何选择，"至少改变一次选择"的样本口径失效。被测的两名专家仍按缺省带搭桥候选。
+        ProbePositionsWith(c => c with { EditSeed = 0 }, every: 2, (match, batch) =>
         {
             (HeuristicTurnController one, _, _) = Shadow(match, batch.Context, AiDifficulty.Expert, ExpertConfig(PassThreshold));
             (HeuristicTurnController two, _, _) = Shadow(match, batch.Context, AiDifficulty.Expert, StrengthConfig(PassThreshold, supplement: 0) with { TwoPlyTieBand = band });

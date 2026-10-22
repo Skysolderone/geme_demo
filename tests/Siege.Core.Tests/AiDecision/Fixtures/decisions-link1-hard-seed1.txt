@@ -47,8 +47,8 @@
 11	P0	R:4:Multiplier,0:Line,2:Line,5:Fortress D:G3:Basic,L3:Fortress,N3:Multiplier,M5:Line,Q7:Line
 11	P1	R:0:Line,3:Line,2:Fortress D:M6:Fortress,F10:Line,H11:Line
 11	P3	R:0:Fortress,1:Artisan,2:Basic D:R5:Artisan+F:Q6-R6,D8:Fortress
-12	P0	R:0:Artisan,1:Boundary,2:Basic,3:Basic D:D9:Basic,E10:Basic,E11:Artisan+F:D12-E12
-12	P2	R:2:Synergy,1:Line,0:Basic,3:Basic D:N4:Synergy,T5:Line
-12	P3	R:0:Synergy,2:Fortress,3:Fortress D:S4:Basic,U5:Fortress,T6:Fortress,D13:Synergy
+12	P0	R:0:Artisan,1:Boundary,2:Basic,3:Basic D:P7:Artisan+B:O7,D9:Basic,E10:Basic
+12	P2	R:2:Synergy,1:Line,0:Basic,3:Basic D:M4:Basic,N4:Line,T5:Basic,O6:Synergy
+12	P3	R:0:Synergy,2:Fortress,3:Fortress D:S4:Fortress,U5:Basic,C9:Synergy,E11:Fortress
 12	P1	R:1:Fortress,0:Artisan,2:Bannerman D:E9:Fortress,H12:Artisan+F:G13-H13
 # end phase=InProgress majorRound=13 reason=- turns=48

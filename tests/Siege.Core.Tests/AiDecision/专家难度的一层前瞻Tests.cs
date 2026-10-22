@@ -323,9 +323,13 @@ public class 专家难度的一层前瞻Tests
         // 首个分歧（全体玩家的决策序列与 P0 的前瞻记录逐小回合比对）：种子 1 第 33 小回合 P1（标准）选中配对候选；种子 2 第 41 小回合 P0（专家）前瞻后选中配对候选 #0；
         // 种子 3 第 29 小回合 P1（标准）选中剪枝候选（见 .trellis/tasks/10-22-ai-whole-batch/rebaseline.txt）。旧值（开关 0 下逐项不变，由 G1WholeBatchOffGolden 守）：
         // (1, CA7E6B310E26D1A1…, 5F47E90672832C44…) (2, 01E794D4421D2251…, FEC148D78BCD690A…) (3, AFFC6C75B9908670…, C472B8516CC677B9…)。
-        (1, 24, "09C8BB1DF33C9DE90A3D3D8BCF74CBC7FF4B7959D219DE01357E84A4977E5A9E", 8556, 12, "66150B7B2E52249F82CFD24DE1951AC43C27A47EC28B7CB1E8A15367275ED406"),
-        (2, 24, "937FA090817BBF5D14BC8E6752BA090094D60F1EDE5A8ECEA7012B51C3395624", 8556, 12, "F8F59B6F5AD53C2101A24742D9C6B67F45A53494E1D457832DB8ACE43FC9C90A"),
-        (3, 24, "58B9DB9D6C01892D367D62A5AF0CF63F1D28C2524938E546C2A3D3297B6275C3", 8556, 12, "0C6FB2249A01BD6AFBF4B48D2DB56A2FEB4AEFC77EA68AD0E37194CDBC934780"),
+        // ai-bridge-candidate 1.6 重钉（搭桥候选缺省开：一层配置随专家预设带开关 1，三名标准随跑局层缺省 1）：条数 / 消费 / 记录数仍为 24 / 8556 / 12（搭桥候选零随机）。
+        // 首个分歧（全体玩家的决策序列与 P0 的前瞻记录逐小回合比对）：种子 1 第 26 小回合 P2（标准）、种子 2 第 14 小回合 P2（标准）、种子 3 第 14 小回合 P3（标准），
+        // 都选中搭桥候选（见 .trellis/tasks/10-22-ai-bridge-candidate/rebaseline.txt）。旧值（开关 0 下逐项不变，由 G1EditSeedOffGolden 守）：
+        // (1, 09C8BB1DF33C9DE9…, 66150B7B2E52249F…) (2, 937FA090817BBF5D…, F8F59B6F5AD53C21…) (3, 58B9DB9D6C01892D…, 0C6FB2249A01BD6A…)。
+        (1, 24, "37A7618730455EDA40E814CAD40CC342C997038ED61E0C9FD9D68CE978F0268C", 8556, 12, "B6880D164500CD5FBD4E70C9FF5DB4ECF250361274596141892CDEBEF25AF27C"),
+        (2, 24, "523BFD4F35A9D9868AC42E181F6A09A080259E53F25BA46CA5421856D61189C3", 8556, 12, "B488478039790B18A4BAF8D90327501ACD7E18EC6BC0C71E4E33D5B2B633F251"),
+        (3, 24, "4DE433DD807E1D2FCAE4A669475646C423447614063AED2D9244678EAAB8B1D4", 8556, 12, "6BAD726E139A41E84D053AB8B6D742173E17BB149D71ABDB9F20465874928A0E"),
     ];
 
     /// <summary>
@@ -340,14 +344,25 @@ public class 专家难度的一层前瞻Tests
     ];
 
     /// <summary>
+    /// ai-bridge-candidate 守门（规格「搭桥候选」：开关为 0 时与引入之前逐步相同）：G1 口径、专家与三名标准的搭桥候选开关都为 0 时的黄金值——
+    /// 即引入搭桥候选之前（HEAD 01efcd4）的 <see cref="G1Golden"/>，逐项不改。
+    /// </summary>
+    internal static readonly (ulong Seed, int Decisions, string DecisionsHash, long Consumed, int Records, string RecordsHash)[] G1EditSeedOffGolden =
+    [
+        (1, 24, "09C8BB1DF33C9DE90A3D3D8BCF74CBC7FF4B7959D219DE01357E84A4977E5A9E", 8556, 12, "66150B7B2E52249F82CFD24DE1951AC43C27A47EC28B7CB1E8A15367275ED406"),
+        (2, 24, "937FA090817BBF5D14BC8E6752BA090094D60F1EDE5A8ECEA7012B51C3395624", 8556, 12, "F8F59B6F5AD53C2101A24742D9C6B67F45A53494E1D457832DB8ACE43FC9C90A"),
+        (3, 24, "58B9DB9D6C01892D367D62A5AF0CF63F1D28C2524938E546C2A3D3297B6275C3", 8556, 12, "0C6FB2249A01BD6AFBF4B48D2DB56A2FEB4AEFC77EA68AD0E37194CDBC934780"),
+    ];
+
+    /// <summary>
     /// G1 口径的一局：座位 1（P0）按 <paramref name="search"/> 做专家，与 <paramref name="goldens"/>（缺省 <see cref="G1Golden"/>）逐项比对。
     /// <paramref name="wholeBatch"/> 是跑局层的整批候选开关（只作用于三名标准；<c>null</c> = 缺省 1）。
     /// </summary>
     private static void AssertG1(
         AiSearchConfig search, ulong seed, int cellLimit = 0, int? wholeBatch = null,
-        (ulong Seed, int Decisions, string DecisionsHash, long Consumed, int Records, string RecordsHash)[]? goldens = null)
+        (ulong Seed, int Decisions, string DecisionsHash, long Consumed, int Records, string RecordsHash)[]? goldens = null, int? editSeed = null)
     {
-        (IReadOnlyList<string> decisions, long consumed, List<string> records) = RunExpertSeat0(search, seed, cellLimit, wholeBatch);
+        (IReadOnlyList<string> decisions, long consumed, List<string> records) = RunExpertSeat0(search, seed, cellLimit, wholeBatch, editSeed);
         string actual = $"{seed} {decisions.Count} {Sha256(decisions)} {consumed} {records.Count} {Sha256(records)}";
 
         // 样本口径：该局专家确有已前瞻的决策，决策不止几条，扰动子流确被消费。
@@ -364,10 +379,10 @@ public class 专家难度的一层前瞻Tests
     /// <c>link:1</c> 一局（retire-legacy-maps 1.4：原 v5 整局）：座位 1（P0）按 <paramref name="search"/> 做专家，其余三名标准，内置固定配对脚本、截断到第 12 大回合；
     /// 返回 P0 的决策序列、ai-P0 子流消费次数与每次部署的前瞻记录文本。<paramref name="cellLimit"/> 是跑局配置的候选格上限（只作用于未显式给 Search 的三名标准）。
     /// </summary>
-    internal static (IReadOnlyList<string> Decisions, long Consumed, List<string> Records) RunExpertSeat0(AiSearchConfig search, ulong seed, int cellLimit = 0, int? wholeBatch = null)
+    internal static (IReadOnlyList<string> Decisions, long Consumed, List<string> Records) RunExpertSeat0(AiSearchConfig search, ulong seed, int cellLimit = 0, int? wholeBatch = null, int? editSeed = null)
     {
         MatchSession session = CreateSession(
-            LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = cellLimit, WholeBatch = wholeBatch }, seed);
+            LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = cellLimit, WholeBatch = wholeBatch, EditSeed = editSeed }, seed);
         Siege.Core.Determinism.RandomStream stream = session.Match.Seed.Stream(HeuristicAi.StreamName(P0));
         var inner = new HeuristicTurnController(P0, session.Match.Publish, stream, AiDifficulty.Expert, Weights, search);
         var recorder = new LookaheadRecorder(inner);
@@ -398,7 +413,18 @@ public class 专家难度的一层前瞻Tests
     public void 整批候选关闭时一层配置的专家黄金值与改前相同(ulong seed)
     {
         // ai-whole-batch 守门：专家（一层配置）与三名标准的整批候选开关都为 0 → 与引入整批候选之前的 G1 黄金值逐项相同（G1WholeBatchOffGolden）。
-        AssertG1(OneLayerConfig() with { WholeBatch = 0 }, seed, wholeBatch: 0, goldens: G1WholeBatchOffGolden);
+        // ai-bridge-candidate：两边同时关掉搭桥候选（引入整批候选之前没有它）。
+        AssertG1(OneLayerConfig() with { WholeBatch = 0, EditSeed = 0 }, seed, wholeBatch: 0, goldens: G1WholeBatchOffGolden, editSeed: 0);
+    }
+
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void 搭桥候选关闭时一层配置的专家黄金值与改前相同(ulong seed)
+    {
+        // ai-bridge-candidate 守门：专家（一层配置）与三名标准的搭桥候选开关都为 0（整批候选照缺省开）→ 与引入搭桥候选之前的 G1 黄金值逐项相同（G1EditSeedOffGolden）。
+        AssertG1(OneLayerConfig() with { EditSeed = 0 }, seed, goldens: G1EditSeedOffGolden, editSeed: 0);
     }
 
     [Theory]
@@ -728,27 +754,28 @@ public class 专家难度的一层前瞻Tests
         // 字面量一字不改。缺省阈值本身由 难度分级Tests.难度名称与次序 与 默认评价权重的校准Tests.默认停手阈值被改动 守门。
         // cycle-stop 2.2：四档预设带停滞大回合数 6（接在末尾；为 0 不写出——按 0 的记录与改动前逐字节相同，见下面 K = 0 的三行）。
         // ai-whole-batch 1.2：四档预设带整批候选开关 1（接在停滞大回合数之后；为 0 不写出——K = 0 且开关 0 的三行与改动前逐字节相同）。
-        Assert.Equal("""{"CandidatePointCount":6,"CandidateBatchCount":1,"ImmediateOnly":true,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6,"WholeBatch":1}""",
+        // ai-bridge-candidate 1.2：四档预设带搭桥候选开关 1（接在整批候选开关之后；为 0 不写出——K = 0 且两个开关都为 0 的三行与改动前逐字节相同）。
+        Assert.Equal("""{"CandidatePointCount":6,"CandidateBatchCount":1,"ImmediateOnly":true,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6,"WholeBatch":1,"EditSeed":1}""",
             JsonSerializer.Serialize(AiSearchConfig.Easy with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        Assert.Equal("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6,"WholeBatch":1}""",
+        Assert.Equal("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6,"WholeBatch":1,"EditSeed":1}""",
             JsonSerializer.Serialize(AiSearchConfig.Standard with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6,"WholeBatch":1}""",
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"StagnationRounds":6,"WholeBatch":1,"EditSeed":1}""",
             JsonSerializer.Serialize(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold }));
         Assert.Equal("""{"CandidatePointCount":6,"CandidateBatchCount":1,"ImmediateOnly":true,"CandidateCellLimit":0,"PassThreshold":80}""",
-            JsonSerializer.Serialize(AiSearchConfig.Easy with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0 }));
+            JsonSerializer.Serialize(AiSearchConfig.Easy with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0, EditSeed = 0 }));
         Assert.Equal("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
-            JsonSerializer.Serialize(AiSearchConfig.Standard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0 }));
+            JsonSerializer.Serialize(AiSearchConfig.Standard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0, EditSeed = 0 }));
         Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80}""",
-            JsonSerializer.Serialize(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0 }));
+            JsonSerializer.Serialize(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0, EditSeed = 0 }));
         // expert-strength：专家预设退回一层（负责人裁决 2026-09-28，段 B 后：多样补充上限 0、两层权重 0，为 0 不写出）——专家一行回到 expert-lookahead 时的字面量；
         // 三档旧难度的三行一字不改。两项非 0 即写出、字段次序接在前瞻宽度之后，由显式 S 8 / λ 1000 的配置钉住。
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"StagnationRounds":6,"WholeBatch":1}""",
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"StagnationRounds":6,"WholeBatch":1,"EditSeed":1}""",
             JsonSerializer.Serialize(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold }));
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000,"StagnationRounds":6,"WholeBatch":1}""",
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000,"StagnationRounds":6,"WholeBatch":1,"EditSeed":1}""",
             JsonSerializer.Serialize(ExpandedExpert with { PassThreshold = LookaheadFixtures.PassThreshold }));
         // 一层配置（两项为 0）的序列化与 expert-lookahead 时代的专家预设逐字节相同（ai-whole-batch：一层配置随预设带开关 1，关掉后即引入前的一层配置）。
         Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""",
-            JsonSerializer.Serialize(OneLayerConfig() with { WholeBatch = 0 }));
+            JsonSerializer.Serialize(OneLayerConfig() with { WholeBatch = 0, EditSeed = 0 }));
 
         // 1 名专家（显式 S 8 / λ 1000）+ 3 名标准的配置记录：只有专家那一名带前瞻宽度 4 与两项。
         var config = new RunConfig
@@ -788,7 +815,7 @@ public class 专家难度的一层前瞻Tests
         // 三名标准玩家不含这些字段。配置记录（RunConfig.ToJson / FromJson）与日志首部（MatchLog）都走同一个序列化。
         // 变异 T-C1（B 为 0 照样写出）→ 前瞻宽度进入记录 红；本测试钉字段次序与非 0 写出。
         AiSearchConfig banded = ExpandedExpert with { PassThreshold = LookaheadFixtures.PassThreshold, TwoPlyTieBand = 20 };
-        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000,"TwoPlyTieBand":20,"StagnationRounds":6,"WholeBatch":1}""",
+        Assert.Equal("""{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4,"DiverseSupplementLimit":8,"TwoPlyWeightPermille":1000,"TwoPlyTieBand":20,"StagnationRounds":6,"WholeBatch":1,"EditSeed":1}""",
             JsonSerializer.Serialize(banded));   // ai-whole-batch 1.2：预设带整批候选开关 1，接在末尾
 
         var config = new RunConfig
@@ -871,7 +898,7 @@ public class 专家难度的一层前瞻Tests
         // v2-recalibration 段 A（1.6）：旧记录里的阈值是写入时的 80，与现行缺省无关——比对对象写死同一阈值，旧记录字面量不改。
         // cycle-stop 2.2：缺停滞大回合数同样按 0 读。
         // ai-whole-batch 1.2：缺整批候选开关同样按 0 读。
-        Assert.Equal(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0 }, old);
+        Assert.Equal(AiSearchConfig.Hard with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0, EditSeed = 0 }, old);
         Assert.Equal(0, old.StagnationRounds);
         Assert.Equal(4, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(AiSearchConfig.Expert))!.LookaheadWidth);
 
@@ -879,8 +906,8 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(0, old.DiverseSupplementLimit);
         Assert.Equal(0, old.TwoPlyWeightPermille);
         const string legacyExpert = """{"CandidatePointCount":24,"CandidateBatchCount":32,"ImmediateOnly":false,"CandidateCellLimit":0,"PassThreshold":80,"LookaheadWidth":4}""";
-        Assert.Equal(OneLayerConfig() with { WholeBatch = 0 }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));   // ai-whole-batch：旧专家记录缺开关按 0 读
-        Assert.Equal(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0 }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));   // cycle-stop：旧专家记录缺 K 按 0 读
+        Assert.Equal(OneLayerConfig() with { WholeBatch = 0, EditSeed = 0 }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));   // ai-whole-batch：旧专家记录缺开关按 0 读
+        Assert.Equal(AiSearchConfig.Expert with { PassThreshold = LookaheadFixtures.PassThreshold, StagnationRounds = 0, WholeBatch = 0, EditSeed = 0 }, JsonSerializer.Deserialize<AiSearchConfig>(legacyExpert));   // cycle-stop：旧专家记录缺 K 按 0 读
         Assert.Equal(AiSearchConfig.Expert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(AiSearchConfig.Expert)));
         Assert.Equal(ExpandedExpert, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(ExpandedExpert)));
 

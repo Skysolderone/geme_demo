@@ -1,6 +1,6 @@
 # 《围杀 Siege》路线图
 
-权威设计来源：`2026-09-10-siege-core-gameplay-design-v1.md`（v1.38）。现行规格在 `openspec/specs/`，已完成的 change 在 `openspec/changes/archive/`，现状与接手说明见根目录 `HANDOFF.md`。
+权威设计来源：`2026-09-10-siege-core-gameplay-design-v1.md`（v1.39）。现行规格在 `openspec/specs/`，已完成的 change 在 `openspec/changes/archive/`，现状与接手说明见根目录 `HANDOFF.md`。
 
 现在整个游戏只有一个模式：4 人开放地图（链接模式，`link:<地图种子>`，5 块出生棋盘建局即紧贴成一张连通地图，前 3 个大回合只在自己棋盘落子，第 4 大回合起全图混战）。下表列到设计文档 v1.30；被后续 change 删除或取代的项在括号里注明。
 
@@ -31,7 +31,8 @@
   - 按座位视野：`ai-seat-vision`（v1.26）；
   - 循环提子停手：`cycle-stop`（v1.29，停滞大回合数 K = 6）；
   - 决策提速：`ai-turn-speed`（只改性能，决策逐步不变）；
-  - 整批候选：`ai-whole-batch`（v1.38，补"逐枚为负、整批为正"的组合，`ai-pass-review` P14）。
+  - 整批候选：`ai-whole-batch`（v1.38，补"逐枚为负、整批为正"的组合，`ai-pass-review` P14）；
+  - 搭桥候选：`ai-bridge-candidate`（v1.39，"路线价值"诊断后改为候选生成修法，§19 第 22 条）。
 - **表现与工具**：战术信息层合并 `merge-board-layer`、棋盘坐标标注 `board-coordinates`、禁手事先标示 `forbidden-marks`（v1.19）、`recruit-panel-collapse`、`turn-settlement-show`、`settlement-show-callouts`、`board-render-perf`、`show-sound-cues`（程序合成占位音）；跑局命令行严格校验 `strict-cli`。
 
 时间线与提交号见 `HANDOFF.md` 与设计文档文末变更记录。

@@ -504,7 +504,8 @@ public class 启发式评价维度Tests
         // expert-tiebreak 1.4：专家构筑期不前瞻 + 两层平局裁决（前瞻后分数不再含两层加分）改变专家的选择与前瞻记录口径，版本 7 → 8。
         // expert-opponent-model 1.3：专家前瞻的模拟对手改用专家本人的高难口径（原为标准预设）改变专家的选择与前瞻记录，版本 8 → 9。
         // ai-whole-batch 1.4：标准 / 高难 / 专家追加整批候选（"哪些候选参与打分 / 保留"的规则变了），版本 9 → 10。
-        Assert.Equal(10, EvaluationBreakdown.Version);
+        // ai-bridge-candidate 1.4：标准 / 高难 / 专家追加搭桥候选（"哪些候选参与打分 / 保留"的规则变了），版本 10 → 11。
+        Assert.Equal(11, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
 
         // 往返：写出再读回仍在（写入路径漏写则读回 null）。

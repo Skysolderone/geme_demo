@@ -36,6 +36,9 @@ public class 候选格上限Tests
     /// <summary>ai-whole-batch 守门：<see cref="SmallMapGoldenHash"/> 同口径、整批候选开关为 0 时的黄金值——即引入整批候选之前的钉值。</summary>
     internal const string SmallMapGoldenHashWholeBatchOff = "5B16259CE148873CE2540C584BCA9645B525906ADCA02827E674099170BDE994";
 
+    /// <summary>ai-bridge-candidate 守门：<see cref="SmallMapGoldenHash"/> 同口径、搭桥候选开关为 0（整批候选开）时的黄金值——即引入搭桥候选之前（HEAD 01efcd4）的钉值。</summary>
+    internal const string SmallMapGoldenHashEditSeedOff = "E77AA12B9687CA621913356A833543C1EA9E2B17807B5C56DE50235B93869298";
+
     /// <summary>
     /// 链接图上"此前记录过的对局"（retire-legacy-maps 1.5：原 v5 的 <c>V4GoldenTurnHash</c> 在 <c>对局内容集Tests</c>、<c>带入带出配置Tests</c>、<c>批量跑局Tests</c> 里充当这一角色）：
     /// <c>link:1</c>、种子 31、4 名标准 AI、24 个小回合、跑局层（<see cref="BatchRunner"/>，种子派生配对）、<see cref="SimFixtures.PinPreCalibration"/> 写死口径，
@@ -49,13 +52,21 @@ public class 候选格上限Tests
     /// <para>fence-eye-rule 2.2 重钉：活形判定无视栅栏（栅栏不再造眼、栅栏阵主题的预置栅栏也不再算墙），同一配置的 AI 走法随之变；旧值 A75EDD49F9C3E8EAABD186C5F7D1980CBAB6E47ADFC12DE68D3B8E6E2138FF78。</para>
     /// <para>terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；旧值 F471700800B1A38A72AF2C31B6516847F2BD04136D2E622FEF3BD374EB7ED47A。</para>
     /// <para>terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 的五块棋盘与地形全部重抽，同一配置的走法随之变）；旧值 DC4CDF0CFC681BF1455267BF5FD8D7DE448201ADBBBDCB921268123FA124842B。</para>
-    internal const string LinkGoldenTurnHash = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
+    /// <para>ai-bridge-candidate 1.6 重钉（标准预设缺省开搭桥候选）：首个分歧在第 16 小回合（第 4 大回合）P1，原落 E10 堡垒 + D13 普通，开启后选中搭桥候选
+    /// E7 匠人搭桥 D7 + D13 堡垒（见任务目录 rebaseline.txt）。旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A（开关 0 下不变，见 <see cref="LinkGoldenTurnHashEditSeedOff"/>）。</para>
+    internal const string LinkGoldenTurnHash = "AA44B22BB943731EDDAB8F3FEE7A175622352069E604667F5AA66542B8CD0814";
 
     /// <summary>
     /// ai-whole-batch 守门（规格「整批候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给整批候选开关 0 时的小回合快照哈希——
     /// 即引入整批候选之前（HEAD 0b1b4bf）的 <see cref="LinkGoldenTurnHash"/>，开关 0 MUST 与它逐步相同（首部不写该字段，哈希输入不变）。
     /// </summary>
     internal const string LinkGoldenTurnHashWholeBatchOff = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
+
+    /// <summary>
+    /// ai-bridge-candidate 守门（规格「搭桥候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给搭桥候选开关 0 时的小回合快照哈希——
+    /// 即引入搭桥候选之前（HEAD 01efcd4）的 <see cref="LinkGoldenTurnHash"/>（首部不写该字段，哈希输入不变）。
+    /// </summary>
+    internal const string LinkGoldenTurnHashEditSeedOff = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>
@@ -157,8 +168,12 @@ public class 候选格上限Tests
         Assert.True(SmallMapGoldenHash == hash, $"小链接档图种子 31 的决策与盘面哈希变了：现为 {hash}。");
 
         // ai-whole-batch 守门：整批候选开关为 0 时与引入之前的钉值逐字节相同。
-        string off = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SmallMapRun(auto with { WholeBatch = 0 }))));
+        string off = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SmallMapRun(auto with { WholeBatch = 0, EditSeed = 0 }))));
         Assert.True(SmallMapGoldenHashWholeBatchOff == off, $"开关 0 的小链接档图哈希：{off}。");
+
+        // ai-bridge-candidate 守门：搭桥候选开关为 0（整批候选开）时与引入搭桥候选之前的钉值逐字节相同。
+        string editSeedOff = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SmallMapRun(auto with { EditSeed = 0 }))));
+        Assert.True(SmallMapGoldenHashEditSeedOff == editSeedOff, $"搭桥候选开关 0 的小链接档图哈希：{editSeedOff}。");
     }
 
     [Fact]
@@ -547,7 +562,7 @@ public class 候选格上限Tests
         AiSearchConfig old = JsonSerializer.Deserialize<AiSearchConfig>("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false}""")!;
         // cycle-stop 2.2：旧文本同样没有停滞大回合数，按 0 读入（预设为 6）。
         // ai-whole-batch 1.2：旧文本同样没有整批候选开关，按 0 读入（预设为 1）。
-        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0, StagnationRounds = 0, WholeBatch = 0 }, old);
+        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0, StagnationRounds = 0, WholeBatch = 0, EditSeed = 0 }, old);   // ai-bridge-candidate 1.2：缺搭桥候选开关同样按 0 读
         AiSearchConfig tuned = AiSearchConfig.Standard with { PassThreshold = 7 };
         Assert.Equal(tuned, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(tuned)));
 
