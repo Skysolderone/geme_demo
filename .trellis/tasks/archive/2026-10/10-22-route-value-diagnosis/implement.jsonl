@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/core/index.md", "reason": "规范入口"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "必读规范"}
