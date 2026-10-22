@@ -29,7 +29,12 @@ public class 候选格上限Tests
     /// </summary>
     /// <para>fence-eye-rule 2.2 重钉：本值是 AI 决策日志 + 终了盘面，<b>不是</b>只依赖地图的值——小图上的 AI 会征募匠人并立栅。首个分歧在第 1 大回合首位行动者 P3 的第一手：
     /// 旧规则下它落 F3 匠人并立栅 G3–G4（贴着 5×5 棋盘外沿的格被栅栏围成"眼"），新规则下栅栏不再造眼，改落 D4 普通子；此后全局走法随之变。旧值 26AF3B28F94F88CA44847D5F9BF7B41733CFEC357CFF6A9CA7F337523CB4BD41。</para>
-    internal const string SmallMapGoldenHash = "5B16259CE148873CE2540C584BCA9645B525906ADCA02827E674099170BDE994";
+    /// <para>ai-whole-batch 1.6 重钉（标准预设缺省开整批候选）：首个分歧在第 2 大回合 P0 的第一手（第 6 小回合），原落 E5 堡垒子，开启后选中配对候选
+    /// E5 连珠 + C6 哨兵 + D7 堡垒（见任务目录 rebaseline.txt）。旧值 5B16259CE148873CE2540C584BCA9645B525906ADCA02827E674099170BDE994（开关 0 下不变，见 <see cref="SmallMapGoldenHashWholeBatchOff"/>）。</para>
+    internal const string SmallMapGoldenHash = "E77AA12B9687CA621913356A833543C1EA9E2B17807B5C56DE50235B93869298";
+
+    /// <summary>ai-whole-batch 守门：<see cref="SmallMapGoldenHash"/> 同口径、整批候选开关为 0 时的黄金值——即引入整批候选之前的钉值。</summary>
+    internal const string SmallMapGoldenHashWholeBatchOff = "5B16259CE148873CE2540C584BCA9645B525906ADCA02827E674099170BDE994";
 
     /// <summary>
     /// 链接图上"此前记录过的对局"（retire-legacy-maps 1.5：原 v5 的 <c>V4GoldenTurnHash</c> 在 <c>对局内容集Tests</c>、<c>带入带出配置Tests</c>、<c>批量跑局Tests</c> 里充当这一角色）：
@@ -45,6 +50,12 @@ public class 候选格上限Tests
     /// <para>terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；旧值 F471700800B1A38A72AF2C31B6516847F2BD04136D2E622FEF3BD374EB7ED47A。</para>
     /// <para>terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 的五块棋盘与地形全部重抽，同一配置的走法随之变）；旧值 DC4CDF0CFC681BF1455267BF5FD8D7DE448201ADBBBDCB921268123FA124842B。</para>
     internal const string LinkGoldenTurnHash = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
+
+    /// <summary>
+    /// ai-whole-batch 守门（规格「整批候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给整批候选开关 0 时的小回合快照哈希——
+    /// 即引入整批候选之前（HEAD 0b1b4bf）的 <see cref="LinkGoldenTurnHash"/>，开关 0 MUST 与它逐步相同（首部不写该字段，哈希输入不变）。
+    /// </summary>
+    internal const string LinkGoldenTurnHashWholeBatchOff = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>
@@ -144,6 +155,10 @@ public class 候选格上限Tests
         Assert.Contains(" D:", byDefault, StringComparison.Ordinal);
         string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(byDefault)));
         Assert.True(SmallMapGoldenHash == hash, $"小链接档图种子 31 的决策与盘面哈希变了：现为 {hash}。");
+
+        // ai-whole-batch 守门：整批候选开关为 0 时与引入之前的钉值逐字节相同。
+        string off = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SmallMapRun(auto with { WholeBatch = 0 }))));
+        Assert.True(SmallMapGoldenHashWholeBatchOff == off, $"开关 0 的小链接档图哈希：{off}。");
     }
 
     [Fact]
@@ -172,7 +187,9 @@ public class 候选格上限Tests
         Assert.All(limited.Ai.LastCandidates, c => Assert.All(c.Placements, p => Assert.Contains(p.Coord, cells)));
 
         // 预演次数：预筛每格 1 次 + K 格 × 类型数（库存无匠人，每格每类型 1 次）+ 组合 M × (N + 1)。
-        int combine = AiSearchConfig.Standard.CandidateBatchCount * (AiSearchConfig.Standard.CandidatePointCount + 1);
+        // ai-whole-batch：标准预设开着整批候选，组合另加整批候选的上界（见 高部署上限下的候选剪枝Tests.WholeBatchRehearsalBound）。
+        int combine = AiSearchConfig.Standard.CandidateBatchCount * (AiSearchConfig.Standard.CandidatePointCount + 1)
+            + 高部署上限下的候选剪枝Tests.WholeBatchRehearsalBound(AiSearchConfig.Standard.CandidatePointCount, 8);
         Assert.True(limited.Rehearsals <= limited.Empties + (k * limited.Types) + combine, $"预演 {limited.Rehearsals} 次");
     }
 
@@ -529,7 +546,8 @@ public class 候选格上限Tests
         // ai-eye 段 B：旧文本没有停手阈值，按 0 读入（当时的保留条件就是严格提高），所以等于"标准预设去掉阈值"，不再等于预设本身（预设阈值为缺省 20）。
         AiSearchConfig old = JsonSerializer.Deserialize<AiSearchConfig>("""{"CandidatePointCount":12,"CandidateBatchCount":8,"ImmediateOnly":false}""")!;
         // cycle-stop 2.2：旧文本同样没有停滞大回合数，按 0 读入（预设为 6）。
-        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0, StagnationRounds = 0 }, old);
+        // ai-whole-batch 1.2：旧文本同样没有整批候选开关，按 0 读入（预设为 1）。
+        Assert.Equal(AiSearchConfig.Standard with { PassThreshold = 0, StagnationRounds = 0, WholeBatch = 0 }, old);
         AiSearchConfig tuned = AiSearchConfig.Standard with { PassThreshold = 7 };
         Assert.Equal(tuned, JsonSerializer.Deserialize<AiSearchConfig>(JsonSerializer.Serialize(tuned)));
 

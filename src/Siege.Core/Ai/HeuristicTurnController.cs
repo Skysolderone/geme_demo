@@ -154,6 +154,12 @@ public sealed class HeuristicTurnController : ITurnController
     /// </summary>
     public StagnationStop? LastStagnation { get; private set; }
 
+    /// <summary>
+    /// 最近一次部署的整批候选留痕（ai-whole-batch，ai-decision「整批候选」）：生成过整批候选（开关为 1、非简单难度、走到候选生成）即为留痕，
+    /// 否则（含尚未部署、开关为 0、简单难度、停滞停手、无合法落点）为 <c>null</c>。被选中的是否整批候选见 <see cref="WholeBatchCandidates.SourceOf"/>。
+    /// </summary>
+    public WholeBatchCandidates? LastWholeBatch { get; private set; }
+
     /// <summary>测试接缝：最近一次采样所在的大回合（尚未采样 / K = 0 为 <c>null</c>）。</summary>
     internal int? LastSampledRound => _powerByRound.Count == 0 ? null : _powerByRound.Keys.Max();
 
@@ -375,6 +381,7 @@ public sealed class HeuristicTurnController : ITurnController
         LastPointRanking = ranking;
         LastDecisive = null;
         LastStagnation = null;
+        LastWholeBatch = null;
         if (ranking.IsEmpty || context.DeployLimit == 0)
         {
             LastCandidates = [];
@@ -425,6 +432,7 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>
     /// 候选生成与选优（<see cref="Deploy"/> 原有的中段，cycle-stop 2.2 原样抽出、行为不变）：贪心 + 种子扰动组合出不超过 M 个候选批次，
+    /// 整批候选开关为 1 且不是简单难度时再追加至多 2 个整批候选（<see cref="AppendWholeBatch"/>，ai-whole-batch D1），
     /// 前瞻宽度大于 0 时交给一层前瞻重排，否则确定性选优。
     /// </summary>
     private CandidateBatch ChooseByCandidates(
@@ -440,6 +448,12 @@ public sealed class HeuristicTurnController : ITurnController
             {
                 candidates.Add(candidate);
             }
+        }
+
+        // ai-whole-batch D1 / D3：开关为 0 或简单难度（只看即时收益）时整段不进入——一次额外预演都没有，与引入之前逐步相同。
+        if (Config.WholeBatch == 1 && !Config.ImmediateOnly)
+        {
+            LastWholeBatch = AppendWholeBatch(ranking, batch, rehearse, evaluator, passThreshold, candidates, keys);
         }
 
         LastCandidates = [.. candidates];
@@ -1090,6 +1104,18 @@ public sealed class HeuristicTurnController : ITurnController
         BatchContext context = batch.Context;
         batch.Clear();
         EvaluationBreakdown current = evaluator.Evaluate([], rehearse(), context);
+        return ContinueGreedy(order, batch, rehearse, evaluator, passThreshold, current);
+    }
+
+    /// <summary>
+    /// 贪心组批的逐枚加入本体（<see cref="Greedy"/> 的后半段，ai-whole-batch 抽出、行为不变）：从批次里已暂放的起点（总评价 <paramref name="current"/>）出发，
+    /// 按 <paramref name="order"/> 逐枚加入，跳过已占的格，边际提升不大于 <paramref name="passThreshold"/> 即撤回，直到部署上限。返回时批次已清空。
+    /// 配对候选（<see cref="PairedCandidate"/>）以最佳有效配对为起点调用它，与贪心组批共用同一份实现。
+    /// </summary>
+    private CandidateBatch ContinueGreedy(
+        ImmutableArray<PointScore> order, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold, EvaluationBreakdown current)
+    {
+        BatchContext context = batch.Context;
         foreach (PointScore point in order)
         {
             if (batch.Count >= context.DeployLimit)
@@ -1124,6 +1150,177 @@ public sealed class HeuristicTurnController : ITurnController
         var candidate = new CandidateBatch(batch.Placements, current);
         batch.Clear();
         return candidate;
+    }
+
+    // ---------- 整批候选（ai-whole-batch，ai-decision「整批候选」） ----------
+
+    /// <summary>
+    /// 在既有候选之后追加整批候选（design D1）：剪枝候选与配对候选，空批次不加，键与已有候选相同按去重不加。零随机——不调用 <see cref="Perturb"/>，
+    /// 只用不扰动的单点排序前 N（<paramref name="ranking"/>）。复用同一套预演与评价（<see cref="Greedy"/> / <see cref="ContinueGreedy"/> / <see cref="EvaluateSet"/>）。
+    /// </summary>
+    private WholeBatchCandidates AppendWholeBatch(
+        ImmutableArray<PointScore> ranking, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold,
+        List<CandidateBatch> candidates, HashSet<string> keys)
+    {
+        EvaluationBreakdown pass = EvaluateSet([], batch, rehearse, evaluator)!;
+
+        // 强制贪心与决胜一手的强制批次同一调用（阈值 −∞、前 N、至部署上限）。
+        CandidateBatch? pruned = PrunedCandidate(Greedy(ranking, batch, rehearse, evaluator, int.MinValue), batch, rehearse, evaluator, passThreshold, pass);
+        bool prunedAdded = pruned is not null && keys.Add(pruned.Key);
+        if (prunedAdded)
+        {
+            candidates.Add(pruned!);
+        }
+
+        CandidateBatch? paired = PairedCandidate(ranking, batch, rehearse, evaluator, passThreshold, pass);
+        bool pairedAdded = paired is not null && keys.Add(paired.Key);
+        if (pairedAdded)
+        {
+            candidates.Add(paired!);
+        }
+
+        return new WholeBatchCandidates(pruned, prunedAdded, paired, pairedAdded);
+    }
+
+    /// <summary>
+    /// 留一法口径（design D2，ai-decision「停手阈值」）：从整批中拿掉一枚使整批加权总分的下降 <paramref name="drop"/> <b>严格大于</b>停手阈值，这一枚才算出力。
+    /// 剪枝与配对共用这一处比较。
+    /// </summary>
+    private static bool LeaveOneOutHolds(BigInteger drop, int passThreshold) => drop > passThreshold;
+
+    /// <summary>
+    /// 剪枝候选（design D1 第 1 条）：从强制贪心批次 <paramref name="forced"/> 出发，每轮对当前批次的每一枚算"拿掉它后整批总分的下降"
+    /// （拿掉后暂放被拒 / 预演不合法 / 被活形硬约束淘汰视为下降无穷大；拿到空批次时以 Pass 的评价 <paramref name="pass"/> 为准），
+    /// 下降最小者若不满足留一法口径（不大于阈值）就拿掉它（并列取批次次序靠后者），直到每一枚都满足或批次为空。空批次返回 <c>null</c>。
+    /// </summary>
+    private CandidateBatch? PrunedCandidate(
+        CandidateBatch forced, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold, EvaluationBreakdown pass)
+    {
+        var kept = new List<Placement>(forced.Placements);
+        EvaluationBreakdown current = forced.Evaluation;
+        while (kept.Count > 0)
+        {
+            int weakest = -1;
+            BigInteger weakestDrop = BigInteger.Zero;
+            EvaluationBreakdown? weakestRest = null;
+            for (int i = 0; i < kept.Count; i++)
+            {
+                int skip = i;
+                EvaluationBreakdown? rest = kept.Count == 1 ? pass : EvaluateSet(kept.Where((_, j) => j != skip), batch, rehearse, evaluator);
+                if (rest is null)
+                {
+                    continue;   // 拿掉它后不合法：下降无穷大，永不是最弱者。
+                }
+
+                BigInteger drop = current.Total - rest.Total;
+                if (weakest < 0 || drop <= weakestDrop)
+                {
+                    // 小于等于：下降并列时取批次次序靠后者（D1）。
+                    weakest = i;
+                    weakestDrop = drop;
+                    weakestRest = rest;
+                }
+            }
+
+            if (weakest < 0 || LeaveOneOutHolds(weakestDrop, passThreshold))
+            {
+                break;
+            }
+
+            kept.RemoveAt(weakest);
+            current = weakestRest!;
+        }
+
+        return kept.Count == 0 ? null : new CandidateBatch([.. kept], current);
+    }
+
+    /// <summary>
+    /// 配对候选（design D1 第 2 条）：单点排序前 N 中单点边际提升（相对 Pass）不大于停手阈值的落点，枚举落点格不同的两两组合（按排序次序）；
+    /// 组合暂放、预演合法、通过活形硬约束，且两枚的留一法下降（组合总分 − 另一枚的单点总分）都满足留一法口径者为有效配对。
+    /// 取组合总分最高的有效配对（并列按 <see cref="CandidateSelection.Compare"/>，仍并列取先枚举到的），以它为起点按不扰动排序继续逐枚贪心（同一阈值，跳过已占格）至部署上限。
+    /// 部署上限小于 2 或没有有效配对时返回 <c>null</c>。
+    /// </summary>
+    private CandidateBatch? PairedCandidate(
+        ImmutableArray<PointScore> ranking, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator, int passThreshold, EvaluationBreakdown pass)
+    {
+        if (batch.Context.DeployLimit < 2)
+        {
+            return null;
+        }
+
+        PointScore[] weak = [.. ranking.Where(p => p.Total - pass.Total <= passThreshold)];
+        CandidateBatch? best = null;
+        for (int i = 0; i < weak.Length; i++)
+        {
+            for (int j = i + 1; j < weak.Length; j++)
+            {
+                if (weak[i].Coord == weak[j].Coord)
+                {
+                    continue;
+                }
+
+                ImmutableArray<Placement> pair = [weak[i].Placement, weak[j].Placement];
+                if (EvaluateSet(pair, batch, rehearse, evaluator) is not { } both
+                    || !LeaveOneOutHolds(both.Total - weak[j].Total, passThreshold)
+                    || !LeaveOneOutHolds(both.Total - weak[i].Total, passThreshold))
+                {
+                    continue;
+                }
+
+                var candidate = new CandidateBatch(pair, both);
+                if (best is null || CandidateSelection.Compare(candidate, best) < 0)
+                {
+                    best = candidate;
+                }
+            }
+        }
+
+        if (best is null)
+        {
+            return null;
+        }
+
+        batch.Clear();
+        foreach (Placement placement in best.Placements)
+        {
+            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
+            {
+                throw new SiegeRuleException($"配对候选复摆已预演通过的落点被拒绝：{failure.Message}");
+            }
+        }
+
+        return ContinueGreedy(ranking, batch, rehearse, evaluator, passThreshold, best.Evaluation);
+    }
+
+    /// <summary>
+    /// 预演一组落点并求整批评价（与贪心组批同一条预演 / 评价路径）：暂放被拒、预演不合法或被活形硬约束淘汰时为 <c>null</c>；空集即 Pass 的评价。返回时批次已清空。
+    /// </summary>
+    private static EvaluationBreakdown? EvaluateSet(IEnumerable<Placement> placements, StagedBatch batch, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+    {
+        BatchContext context = batch.Context;
+        batch.Clear();
+        foreach (Placement placement in placements)
+        {
+            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is not null)
+            {
+                batch.Clear();
+                return null;
+            }
+        }
+
+        RehearsalResult result = rehearse();
+        EvaluationBreakdown? evaluation;
+        if (batch.Count == 0)
+        {
+            evaluation = evaluator.Evaluate([], result, context);
+        }
+        else if (!result.IsLegal || !evaluator.TryEvaluate(batch.Placements, result, context, out evaluation))
+        {
+            evaluation = null;
+        }
+
+        batch.Clear();
+        return evaluation;
     }
 
     /// <summary>种子驱动的局部扰动：位置 i 与 [i, i + 窗口) 内的一个位置交换。消费次数只取决于 N。</summary>

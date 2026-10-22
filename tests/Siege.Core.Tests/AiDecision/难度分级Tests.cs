@@ -135,14 +135,16 @@ public class 难度分级Tests
 
         // v2-recalibration 段 A（1.7）：四档预设的停手阈值随缺省值由 80 改为 20（V2 复核选定值，四档共用）；其余字段与 HEAD 03d45f6 相同。
         // cycle-stop 2.2（裁决 D2）：四档预设的停滞大回合数取缺省 6（四档共用）；构造参数缺省仍为 0（旧记录按 0 读）。
+        // ai-whole-batch 1.2（裁决 4）：四档预设的整批候选开关取缺省 1（四档共用；简单难度不生成）；构造参数缺省仍为 0（旧记录按 0 读）。
         Assert.Equal(6, AiSearchConfig.DefaultStagnationRounds);
-        Assert.Equal(new AiSearchConfig(6, 1, true, 0, 20, StagnationRounds: 6), AiSearchConfig.Easy);
-        Assert.Equal(new AiSearchConfig(12, 8, false, 0, 20, StagnationRounds: 6), AiSearchConfig.Standard);
-        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, StagnationRounds: 6), AiSearchConfig.Hard);
+        Assert.Equal(1, AiSearchConfig.DefaultWholeBatch);
+        Assert.Equal(new AiSearchConfig(6, 1, true, 0, 20, StagnationRounds: 6, WholeBatch: 1), AiSearchConfig.Easy);
+        Assert.Equal(new AiSearchConfig(12, 8, false, 0, 20, StagnationRounds: 6, WholeBatch: 1), AiSearchConfig.Standard);
+        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, StagnationRounds: 6, WholeBatch: 1), AiSearchConfig.Hard);
         Assert.Equal(6, AiSearchConfig.Expert.StagnationRounds);
         // expert-strength：专家预设退回一层（负责人裁决 2026-09-28，段 B 后：扩样配对 好 7 / 同 33 / 差 20，p = 0.019）= 高难 + 前瞻宽度 4，
         // 多样补充上限与两层权重为 0（可配置项，Search 显式给出才生效）；三档旧预设三行一字不改、两项为 0。
-        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, LookaheadWidth: 4, StagnationRounds: 6), AiSearchConfig.Expert);
+        Assert.Equal(new AiSearchConfig(24, 32, false, 0, 20, LookaheadWidth: 4, StagnationRounds: 6, WholeBatch: 1), AiSearchConfig.Expert);
         Assert.Equal(0, AiSearchConfig.Expert.DiverseSupplementLimit);
         Assert.Equal(0, AiSearchConfig.Expert.TwoPlyWeightPermille);
         Assert.All([AiDifficulty.Easy, AiDifficulty.Standard, AiDifficulty.Hard], d => Assert.Equal(0, AiSearchConfig.ForDifficulty(d).DiverseSupplementLimit));

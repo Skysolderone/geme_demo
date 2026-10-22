@@ -76,6 +76,8 @@ internal sealed class ExpertLookahead
         DiverseSupplementLimit = 0,
         TwoPlyWeightPermille = 0,
         TwoPlyTieBand = 0,
+        // ai-whole-batch D3（裁决 3）：前瞻模拟的对手不生成整批候选，保持修法 B 的口径与开销。
+        WholeBatch = 0,
     };
 
     /// <summary>

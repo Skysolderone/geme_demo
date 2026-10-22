@@ -66,6 +66,8 @@ public sealed class MatchSession
         PassThreshold = Config.PassThreshold ?? (recorded ? 0 : AiSearchConfig.DefaultPassThreshold);
         // 停滞大回合数同理（cycle-stop D3）：首部没有该项 = 该项出现之前的旧日志，按 0（不启用）重建。
         StagnationRounds = Config.StagnationRounds ?? (recorded ? 0 : AiSearchConfig.DefaultStagnationRounds);
+        // 整批候选开关同理（ai-whole-batch D4）：首部没有该项 = 该项出现之前的旧日志或显式 0（0 不写出），按 0（关闭）重建。
+        WholeBatch = Config.WholeBatch ?? (recorded ? 0 : AiSearchConfig.DefaultWholeBatch);
         if (match.Phase != MatchPhase.InProgress)
         {
             throw new SiegeRuleException("会话要求对局已完成插旗并处于进行中。");
@@ -119,6 +121,9 @@ public sealed class MatchSession
 
     /// <summary>本局未显式配置剪枝参数的 AI 实际生效的停滞大回合数 K（cycle-stop D3；0 = 不启用）。</summary>
     public int StagnationRounds { get; }
+
+    /// <summary>本局未显式配置剪枝参数的 AI 实际生效的整批候选开关（ai-whole-batch D4；0 = 关闭）。</summary>
+    public int WholeBatch { get; }
 
     public GameSeed Seed { get; }
 
@@ -196,7 +201,7 @@ public sealed class MatchSession
     {
         // 显式的剪枝参数原样生效；未配置时按难度取，候选格上限取跑局配置的值，仍未给出则按地图大小取（阈值逻辑在 Core，三个入口共用）。
         // 停手阈值同样只作用于未显式配置剪枝参数的玩家（显式的 Search 自带阈值）。
-        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold, StagnationRounds = StagnationRounds });
+        AiSearchConfig search = ai.Search ?? (AiSearchConfig.ForMap(ai.Difficulty, Match.Map.PlayableCount, CellLimit) with { PassThreshold = PassThreshold, StagnationRounds = StagnationRounds, WholeBatch = WholeBatch });
         if (ai.DebugAi)
         {
             DebugTurnController.Create(Runner, player, debugMode: true, ai.Difficulty, ai.Weights, search);

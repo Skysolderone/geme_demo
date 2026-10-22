@@ -45,6 +45,33 @@ public sealed record CandidateBatch(ImmutableArray<Placement> Placements, Evalua
     public override string ToString() => $"[{Key}] {Evaluation}";
 }
 
+/// <summary>整批候选的来源（ai-whole-batch D1）。</summary>
+public enum WholeBatchSource
+{
+    /// <summary>不是整批候选（贪心 / 扰动候选，或整批候选与它们键相同而被去重）。</summary>
+    None,
+
+    /// <summary>剪枝候选：强制贪心后留一法剪枝。</summary>
+    Pruned,
+
+    /// <summary>配对候选：最佳有效次阈值配对后继续逐枚贪心。</summary>
+    Paired,
+}
+
+/// <summary>
+/// 一次部署决策的整批候选留痕（ai-whole-batch D1，ai-decision「整批候选」）：剪枝候选与配对候选（空批次 / 无有效配对为 <c>null</c>），
+/// 以及各自是否作为新键加入了候选集（键与既有候选相同时按去重不加）。只是留痕，不改决策日志。
+/// </summary>
+public sealed record WholeBatchCandidates(CandidateBatch? Pruned, bool PrunedAdded, CandidateBatch? Paired, bool PairedAdded)
+{
+    /// <summary>被选中的候选来自哪个整批候选：键与某个<b>已加入</b>的整批候选相同即为该来源，否则 <see cref="WholeBatchSource.None"/>。</summary>
+    public WholeBatchSource SourceOf(CandidateBatch? choice) =>
+        choice is null || choice.IsPass ? WholeBatchSource.None
+        : PrunedAdded && Pruned is not null && Pruned.Key == choice.Key ? WholeBatchSource.Pruned
+        : PairedAdded && Paired is not null && Paired.Key == choice.Key ? WholeBatchSource.Paired
+        : WholeBatchSource.None;
+}
+
 /// <summary>
 /// 候选选择的确定性规则（design.md D4）：总分高者优先；总分相同比落点排序后的坐标序列字典序（小者优先，前缀更短者优先）；
 /// 仍相同比同一排序下的棋子类型序列。MUST NOT 引入随机。

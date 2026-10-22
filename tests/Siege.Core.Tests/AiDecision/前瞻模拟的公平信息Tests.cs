@@ -318,10 +318,11 @@ public class 前瞻模拟的公平信息Tests
             LinkConfig(new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = search }, Standard, Standard, Standard) with { CandidateCellLimit = cellLimit }, seed);
         MatchFlow match = session.Match;
         var inner = new HeuristicTurnController(P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(P0)), AiDifficulty.Expert, Weights, search);
-        AiSearchConfig expertDerived = search with { CandidateBatchCount = 1, LookaheadWidth = 0, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0, TwoPlyTieBand = 0 };
+        // ai-whole-batch D3（裁决 3）：前瞻模拟的对手不生成整批候选——两种口径的独立复算都显式关掉整批候选（标准预设派生是改前的历史口径，同样不带）。
+        AiSearchConfig expertDerived = search with { CandidateBatchCount = 1, LookaheadWidth = 0, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0, TwoPlyTieBand = 0, WholeBatch = 0 };
         AiSearchConfig standardDerived = AiSearchConfig.Standard with
         {
-            CandidateBatchCount = 1, CandidateCellLimit = search.CandidateCellLimit, PassThreshold = search.PassThreshold, LookaheadWidth = 0,
+            CandidateBatchCount = 1, CandidateCellLimit = search.CandidateCellLimit, PassThreshold = search.PassThreshold, LookaheadWidth = 0, WholeBatch = 0,
         };
 
         var checks = new List<ResponseCheck>();

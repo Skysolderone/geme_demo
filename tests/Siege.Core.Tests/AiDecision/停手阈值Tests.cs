@@ -35,7 +35,15 @@ public class 停手阈值Tests
     // fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变；种子 35 不变，反面断言"缺省阈值下走法不同"照旧成立）：旧值 3831AA4C96D385F658326017FA06EE687A7F7A7B82958DB0AFCB19A926AC0329。
     // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；种子 35 不变，旧值 6AE56FC2EA8D168033CAB7A9B9AE3B420D54D4653CD998A9AF8C176351B9B8B8。
     // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）；种子 35 不变，旧值 3570899326EE8AE29DA4FD9B3F3B7CB3663C96411DB6D9F1B813150B04780058。
+    // ai-whole-batch 1.6：本值钉的是"阈值 0 = 严格提高"的对照实现（引入整批候选之前），样本显式关掉整批候选（WholeBatch = 0），值不改；
+    // 缺省开整批候选的同一局另钉 StrictImprovementTurnHashWholeBatch。
     private const string StrictImprovementTurnHash = "D405B8853F396D5D5DD90D69C1D05DC96D753EAF2F75826DD9494D9F0DA094FB";
+
+    /// <summary>
+    /// ai-whole-batch 1.6：<see cref="StrictImprovementTurnHash"/> 同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选缺省开时的哈希。首个分歧：第 7 小回合（第 2 大回合）P0，
+    /// 原落 F9 堡垒 + G9 协同 + G10 普通，开启后选中剪枝候选 F9 普通 + G10 普通（见任务目录 rebaseline.txt）。
+    /// </summary>
+    private const string StrictImprovementTurnHashWholeBatch = "7A40128226D2E6959CFD5CAEDC9DB23D00CCFFB17610CA17339AB9B11F50B392";
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
     private const ulong StrictImprovementSeed = 35;   // link-map-surfaces 2.2：34 → 35（见上）
@@ -148,6 +156,12 @@ public class 停手阈值Tests
         Assert.Contains(ai.LastPointRanking, p => p.Total > 0);
         AssertPassed(ai);
         Assert.Equal(0, batch.Count);
+
+        // ai-whole-batch（规格 MODIFIED：Pass = 贪心无保留且整批候选为空）：预设开着整批候选，它们确实生成过（留痕非空），且剪枝 / 配对都为空。
+        Assert.Equal(1, ai.Config.WholeBatch);
+        Assert.NotNull(ai.LastWholeBatch);
+        Assert.Null(ai.LastWholeBatch.Pruned);
+        Assert.Null(ai.LastWholeBatch.Paired);
     }
 
     [Fact]
@@ -160,7 +174,8 @@ public class 停手阈值Tests
         // ai-eye 段 D2（4.5）：九维权重写死为对照实现当时的缺省（Eye / Threat = 0）。本测试钉的是"阈值 0 = 严格提高"，不是默认权重；
         // 默认权重改为校准值（Eye 200、Threat 25）后若仍跟随缺省，对照哈希就不再是"严格提高实现"的产物（testing.md「校准与保真度分离」）。
         // retire-legacy-maps 1.5：样本由 v4 改到 link:1（对照哈希在删除 v4 之前重钉，见 StrictImprovementTurnHash），断言不变。
-        RunConfig zero = 候选格上限Tests.LinkGoldenConfig() with { SeedStart = StrictImprovementSeed, PassThreshold = 0 };
+        // ai-whole-batch 1.6：对照实现早于整批候选，样本与反面比对都显式关掉整批候选（两边同口径，只差阈值）。
+        RunConfig zero = 候选格上限Tests.LinkGoldenConfig() with { SeedStart = StrictImprovementSeed, PassThreshold = 0, WholeBatch = 0 };
         MatchLog log = BatchRunner.Execute(zero, parallelism: 1)[0];
 
         Assert.False(log.IsFailed);
@@ -178,11 +193,15 @@ public class 停手阈值Tests
             string atZero = seed == StrictImprovementSeed
                 ? hash
                 : 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { SeedStart = seed }, parallelism: 1)[0]);
-            MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = seed }, parallelism: 1)[0];
+            MatchLog byDefault = BatchRunner.Execute(候选格上限Tests.LinkGoldenConfig() with { SeedStart = seed, WholeBatch = 0 }, parallelism: 1)[0];
             differs = atZero != 候选格上限Tests.TurnHash(byDefault);
         }
 
         Assert.True(differs, "种子 31–46 里没有一颗在阈值 0 与缺省阈值下走法不同，无从证明阈值传到了 AI");
+
+        // 整批候选缺省开（跑局层不给开关）的同一局：钉 StrictImprovementTurnHashWholeBatch。
+        string on = 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { WholeBatch = null }, parallelism: 1)[0]);
+        Assert.True(StrictImprovementTurnHashWholeBatch == on, $"阈值 0、整批候选缺省开的小回合快照哈希：{on}");
     }
 
     [Fact]

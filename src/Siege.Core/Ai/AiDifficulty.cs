@@ -71,6 +71,12 @@ public enum AiDifficulty
 /// 四档预设都取 <see cref="DefaultStagnationRounds"/>（四档共用）。构造参数的缺省值是 0 而不是 <see cref="DefaultStagnationRounds"/>：该项出现之前记录的剪枝参数缺这个字段，
 /// 按 0 读入才能原样重建（同 <see cref="PassThreshold"/> 的先例）；为 0 时不写出。
 /// </param>
+/// <param name="WholeBatch">
+/// 整批候选开关（ai-whole-batch D1–D4，ai-decision「整批候选」，0 / 1）：1 = 标准 / 高难 / 专家在既有候选（贪心 + 扰动）之后再生成至多 2 个不扰动的整批候选
+/// （剪枝候选：强制贪心后留一法剪枝；配对候选：最佳有效次阈值配对后继续贪心），每一枚的留一法下降都严格大于停手阈值；零随机。
+/// 简单难度（<see cref="ImmediateOnly"/>）即使为 1 也不生成。四档预设都取 <see cref="DefaultWholeBatch"/>（与 <see cref="StagnationRounds"/> 同口径：
+/// 构造参数缺省 0，缺该字段的旧记录按 0 读入；为 0 时不写出，与引入之前逐步相同）。<see cref="Validated"/> 拒绝 0 / 1 以外的值。
+/// </param>
 public sealed record AiSearchConfig(
     int CandidatePointCount,
     int CandidateBatchCount,
@@ -81,8 +87,12 @@ public sealed record AiSearchConfig(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DiverseSupplementLimit = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyWeightPermille = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TwoPlyTieBand = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int StagnationRounds = 0)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int StagnationRounds = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int WholeBatch = 0)
 {
+    /// <summary>默认整批候选开关 = 1（ai-whole-batch 裁决 4：缺省开）。四档共用（简单难度不生成，见 <see cref="WholeBatch"/>）。</summary>
+    public const int DefaultWholeBatch = 1;
+
     /// <summary>
     /// 默认停滞大回合数 K = 6（负责人 2026-10-20 裁决 D2，依据 cycle-stop 第一段诊断：正常 20 局（标准 × 4）里任一玩家在任一大回合的连续无净增 ≥ 8 的点 0 个、≥ 6 的 6 个点（2 局）；
     /// 循环局 0x2C 终局时停滞 15 / 1 / 11 / 0、提子拖延局 6–10；取 6 兜住循环与拖延、少误伤正常收官；2.4 验证后可调）。四档共用。
@@ -127,13 +137,13 @@ public sealed record AiSearchConfig(
     public const int LargeMapCellLimit = 24;
 
     /// <summary>简单：贪心一条、只看即时收益与眼位。</summary>
-    public static readonly AiSearchConfig Easy = new(CandidatePointCount: 6, CandidateBatchCount: 1, ImmediateOnly: true, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds);
+    public static readonly AiSearchConfig Easy = new(CandidatePointCount: 6, CandidateBatchCount: 1, ImmediateOnly: true, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds, WholeBatch: DefaultWholeBatch);
 
     /// <summary>标准。</summary>
-    public static readonly AiSearchConfig Standard = new(CandidatePointCount: 12, CandidateBatchCount: 8, ImmediateOnly: false, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds);
+    public static readonly AiSearchConfig Standard = new(CandidatePointCount: 12, CandidateBatchCount: 8, ImmediateOnly: false, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds, WholeBatch: DefaultWholeBatch);
 
     /// <summary>高难。</summary>
-    public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds);
+    public static readonly AiSearchConfig Hard = new(CandidatePointCount: 24, CandidateBatchCount: 32, ImmediateOnly: false, PassThreshold: DefaultPassThreshold, StagnationRounds: DefaultStagnationRounds, WholeBatch: DefaultWholeBatch);
 
     /// <summary>
     /// 专家：候选生成同高难（N 24 / M 32、同一扰动子流、同一停手阈值），另加前瞻宽度 <see cref="DefaultLookaheadWidth"/> 的一层前瞻（expert-lookahead）。
@@ -177,9 +187,14 @@ public sealed record AiSearchConfig(
     public static AiSearchConfig ForMap(AiDifficulty difficulty, int playableCells, int? cellLimit = null) =>
         ForDifficulty(difficulty) with { CandidateCellLimit = cellLimit ?? DefaultCellLimitFor(playableCells) };
 
-    /// <summary>参数校验：N、M 至少为 1；K、停手阈值、前瞻宽度、多样补充上限、两层权重、两层平局带宽与停滞大回合数非负；两层平局带宽大于 0 时两层权重须大于 0（expert-tiebreak D3）。</summary>
+    /// <summary>参数校验：N、M 至少为 1；K、停手阈值、前瞻宽度、多样补充上限、两层权重、两层平局带宽与停滞大回合数非负；整批候选开关为 0 或 1；两层平局带宽大于 0 时两层权重须大于 0（expert-tiebreak D3）。</summary>
     public AiSearchConfig Validated()
     {
+        if (WholeBatch is not (0 or 1))
+        {
+            throw new ArgumentOutOfRangeException(nameof(WholeBatch), WholeBatch, "整批候选开关须为 0 或 1（0 = 关闭）。");
+        }
+
         if (StagnationRounds < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(StagnationRounds), "停滞大回合数须为非负整数（0 = 不启用）。");

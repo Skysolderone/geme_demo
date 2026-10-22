@@ -24,6 +24,8 @@ namespace Siege.Core.Tests.AiDecision;
 /// <para>link-map-surfaces 1.3（实施后裁决 F1 / F2：小棋盘免除核心区四邻限制、混合主题补位）再重钉 5 份：link:1 新地表 9 → 10 格。相对第一次重钉的首个分歧：
 /// 种子 1 / 困难种子 1 第 5 小回合 P2（新落点 K14 即新荒漠）、种子 2 第 5 小回合 P2（原落 K13 挨着新荒漠 K14）、种子 3 第 5 小回合 P0（新落点 P4 即新岩台）、
 /// 简单种子 1 第 14 小回合 P0（原落 V4、新落 P4，都是新岩台）——仍都在新地表格或其四邻；相对改前基线的首个分歧与第一次相同（种子 2 除外：第 5 小回合 P2）。逐份见任务目录 rebaseline.txt。</para>
+/// <para>ai-whole-batch 1.6（整批候选缺省开）重钉 2 份：困难种子 1 首个分歧在第 37 小回合（第 10 大回合）P2 选中配对候选；种子 3 见 <see cref="决策序列基线_链接模式Tests"/>。
+/// 种子 1 / 2 与简单种子 1 逐字节不变。改前 5 份另存为 <c>*-wb0.txt</c>，由 <see cref="整批候选关闭时与改前基线相同"/> 以开关 0 逐字节比对（见任务 10-22-ai-whole-batch 的 rebaseline.txt）。</para>
 /// </remarks>
 public class 决策序列基线Tests
 {
@@ -87,6 +89,25 @@ public class 决策序列基线Tests
         Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
         Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains("majorRound=13", StringComparison.Ordinal));
         Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// ai-whole-batch 守门（规格「整批候选」：开关为 0 时 AI 决策与引入之前逐步相同）：5 份基线在引入整批候选之前（HEAD 0b1b4bf）的原文另存为 <c>*-wb0.txt</c>，
+    /// 以跑局配置显式给开关 0 重跑同一导出，逐字节比对。首部文案不随配置变化，副本与改前文件逐字节相同。
+    /// </summary>
+    [Theory]
+    [InlineData(1UL, AiDifficulty.Standard, "decisions-link1-seed1-wb0.txt")]
+    [InlineData(2UL, AiDifficulty.Standard, "decisions-link1-seed2-wb0.txt")]
+    [InlineData(3UL, AiDifficulty.Standard, "decisions-link1-seed3-wb0.txt")]
+    [InlineData(1UL, AiDifficulty.Easy, "decisions-link1-easy-seed1-wb0.txt")]
+    [InlineData(1UL, AiDifficulty.Hard, "decisions-link1-hard-seed1-wb0.txt")]
+    public void 整批候选关闭时与改前基线相同(ulong seed, AiDifficulty difficulty, string fixture)
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", fixture);
+        Assert.True(File.Exists(path), $"找不到改前基线副本：{path}");
+        string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
+        Assert.Equal(expected, LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, configure: c => c with { WholeBatch = 0 }));
     }
 
     private static string SourceFixtureDirectory([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>

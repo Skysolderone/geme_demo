@@ -1,6 +1,6 @@
 # 《围杀 Siege》路线图
 
-权威设计来源：`2026-09-10-siege-core-gameplay-design-v1.md`（v1.37）。现行规格在 `openspec/specs/`，已完成的 change 在 `openspec/changes/archive/`，现状与接手说明见根目录 `HANDOFF.md`。
+权威设计来源：`2026-09-10-siege-core-gameplay-design-v1.md`（v1.38）。现行规格在 `openspec/specs/`，已完成的 change 在 `openspec/changes/archive/`，现状与接手说明见根目录 `HANDOFF.md`。
 
 现在整个游戏只有一个模式：4 人开放地图（链接模式，`link:<地图种子>`，5 块出生棋盘建局即紧贴成一张连通地图，前 3 个大回合只在自己棋盘落子，第 4 大回合起全图混战）。下表列到设计文档 v1.30；被后续 change 删除或取代的项在括号里注明。
 
@@ -30,7 +30,8 @@
   - 地形与主题诊断：`ai-terrain-review`（v1.24）；
   - 按座位视野：`ai-seat-vision`（v1.26）；
   - 循环提子停手：`cycle-stop`（v1.29，停滞大回合数 K = 6）；
-  - 决策提速：`ai-turn-speed`（只改性能，决策逐步不变）。
+  - 决策提速：`ai-turn-speed`（只改性能，决策逐步不变）；
+  - 整批候选：`ai-whole-batch`（v1.38，补"逐枚为负、整批为正"的组合，`ai-pass-review` P14）。
 - **表现与工具**：战术信息层合并 `merge-board-layer`、棋盘坐标标注 `board-coordinates`、禁手事先标示 `forbidden-marks`（v1.19）、`recruit-panel-collapse`、`turn-settlement-show`、`settlement-show-callouts`、`board-render-perf`、`show-sound-cues`（程序合成占位音）；跑局命令行严格校验 `strict-cli`。
 
 时间线与提交号见 `HANDOFF.md` 与设计文档文末变更记录。
@@ -42,7 +43,7 @@
 | 1 | 试玩待定项 | 负责人试玩后再定，只登记不调参：**对局长度**（开放地图下标准 × 4 中位 24–25 大回合，是否缩棋盘边长 / 构筑期）、**主题强弱**（两次 20 局冒烟最强 / 最弱主题互相矛盾，在噪声内）、**栅栏造眼是否太便宜**（`ai-terrain-review` T13，规则层观察） |
 | 2 | 专家强度后续方向 | 归因（`10-21-expert-diagnosis`）、修法 A（`expert-tiebreak`，v1.35）、修法 B（`expert-opponent-model`，v1.37，模拟对手改用专家本人困难口径）均已完成：开放地图上预设专家对困难配对 2 / 13 / 5（不显著），修法 B 未改变实际走法；剩余失配来自困难的扰动择优（信息边界内不可建模）。方向待负责人另定 |
 | 3 | 画面精修重规划 | `map-elements-v2`（地图元素造型精修，0/17，未开工）按开放地图与新地表重新规划后再实施 |
-| 4 | AI 整批评价 | `ai-pass-review` P14：逐枚贪心会漏掉"整批为正、逐枚为负"的组合 |
+| 4 | ~~AI 整批评价~~ | 已完成（`ai-whole-batch`，v1.38）：剪枝候选 + 配对候选，开关缺省开 |
 | 5 | 联网（§19 第 4 项） | 同步、断线、匹配、匿名同时插旗；需先定架构 |
 | 6 | 正式美术与音效 | 当前为程序化低多边形部件与程序化提示音 |
 

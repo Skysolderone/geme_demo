@@ -99,6 +99,7 @@ public static class Program
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
         Console.WriteLine($"                [--round-cap <大回合上限安全网，非负整数，缺省 {Core.Match.MatchOptions.DefaultRoundCap}，0=不启用；到达时按势力强制结算（cycle-stop）>] [--stagnation-rounds <AI 停滞大回合数 K，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultStagnationRounds}，0=不启用；连续 K 个大回合无净增且候选全是提子 / 反提即 Pass>]");
+        Console.WriteLine($"                [--whole-batch <AI 整批候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultWholeBatch}；1 = 标准 / 高难 / 专家另加剪枝候选与配对候选（逐枚为负、整批为正的组合），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("                （AI 一律按座位视野；open-map 起锁定后整张地图是唯一战场，座位视野即全图，没有全知开关）");
@@ -359,6 +360,7 @@ public static class Program
             CarryIn = cli.Has("carry-in") ? cli.GetInt("carry-in", 0) : config.CarryIn,
             RoundCap = cli.Has("round-cap") ? cli.GetInt("round-cap", 0) : config.RoundCap,
             StagnationRounds = cli.Has("stagnation-rounds") ? cli.GetInt("stagnation-rounds", 0) : config.StagnationRounds,
+            WholeBatch = cli.Has("whole-batch") ? cli.GetInt("whole-batch", 0) : config.WholeBatch,
             EventRetention = Enum.Parse<EventRetention>(cli.Get("retention", config.EventRetention.ToString()), ignoreCase: true),
             FullEventSamplePermille = cli.GetInt("sample-permille", config.FullEventSamplePermille),
             Compress = cli.Flag("gzip") || config.Compress,

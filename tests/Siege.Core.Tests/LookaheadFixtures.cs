@@ -38,6 +38,8 @@ internal static class LookaheadFixtures
     /// 专家预设退回一层（负责人裁决 2026-09-28，段 B 后）之后它与预设逐字段相同（阈值除外）；仍显式清零两项，使 G1 不随预设改动。
     /// 凡钉一层前瞻行为的既有测试改用它，断言与期望值一字不改；它的走法由 G1 黄金值（<c>专家难度的一层前瞻Tests.一层配置与改动前的专家逐步相同</c>）钉住。
     /// cycle-stop 2.2：停滞大回合数同样写死为引入前的 0（boundaries.md「依赖走法的既有夹具显式写死旧口径」），G1 与记录字面量不随预设的 K = 6 改动。
+    /// ai-whole-batch 1.6：整批候选开关<b>不</b>写死，随专家预设取 1——design D5 要求缺省开下重钉 G1 / 前瞻记录、开关 0 另设守门
+    /// （<c>专家难度的一层前瞻Tests.整批候选关闭时一层配置的专家黄金值与改前相同</c>，显式 <c>with { WholeBatch = 0 }</c> 即引入前的一层配置）。
     /// </summary>
     internal static AiSearchConfig OneLayerConfig(int passThreshold = PassThreshold) =>
         AiSearchConfig.Expert with { PassThreshold = passThreshold, DiverseSupplementLimit = 0, TwoPlyWeightPermille = 0, StagnationRounds = 0 };

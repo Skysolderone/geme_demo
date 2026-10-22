@@ -9,6 +9,12 @@ namespace Siege.Core.Tests.AiDecision;
 /// <summary>规格：ai-decision —— Requirement: 高部署上限下的候选剪枝</summary>
 public class 高部署上限下的候选剪枝Tests
 {
+    /// <summary>
+    /// 整批候选（ai-whole-batch）一次决策的预演次数上界：Pass 评价 1 + 强制贪心 (N + 1) + 留一法剪枝（至多 D 轮、每轮至多 D 次）
+    /// + 配对枚举 C(N, 2) + 配对后继续贪心 N。<paramref name="deployLimit"/> = D。
+    /// </summary>
+    internal static int WholeBatchRehearsalBound(int n, int deployLimit) => 1 + (n + 1) + (deployLimit * deployLimit) + (n * (n - 1) / 2) + n;
+
     [Fact]
     public void 不穷举排列()
     {
@@ -35,12 +41,40 @@ public class 高部署上限下的候选剪枝Tests
 
         ai.Deploy(batch, Counted);
 
+        // ai-whole-batch（规格 MODIFIED）：标准预设开着整批候选，候选数 ≤ M + 2，预演另加整批候选的上界（仍远小于 C(60, 8)）。
         Assert.Equal(AiSearchConfig.Standard.CandidatePointCount, ai.LastPointRanking.Length);
-        Assert.InRange(ai.LastCandidates.Length, 1, AiSearchConfig.Standard.CandidateBatchCount);
+        Assert.InRange(ai.LastCandidates.Length, 1, AiSearchConfig.Standard.CandidateBatchCount + 2);
         int types = batch.Context.Stock.Count(kv => kv.Value > 0);
-        Assert.True(rehearsals <= (empties * types) + (AiSearchConfig.Standard.CandidateBatchCount * (AiSearchConfig.Standard.CandidatePointCount + 1)), $"预演 {rehearsals} 次");
+        Assert.True(
+            rehearsals <= (empties * types) + (AiSearchConfig.Standard.CandidateBatchCount * (AiSearchConfig.Standard.CandidatePointCount + 1))
+                + WholeBatchRehearsalBound(AiSearchConfig.Standard.CandidatePointCount, 8),
+            $"预演 {rehearsals} 次");
         Assert.Equal(8, batch.Count);
         Assert.True(match.Confirm().Confirmed);
+    }
+
+    [Fact]
+    public void 整批候选不计入候选批次上限()
+    {
+        // ai-whole-batch（规格 MODIFIED「高部署上限下的候选剪枝」：开启整批候选时另有至多 2 个整批候选，不计入上限 M）。
+        // 构造局面同 整批候选Tests（G7 只剩 F7 / H7 两口气）：M = 1 时贪心只得 Pass，开启后另加整批候选 {F7, H7}，候选数 2 = M + 1 ≤ M + 2；关闭时 ≤ M。
+        static HeuristicTurnController Run(int wholeBatch)
+        {
+            MatchFlow match = 整批候选Tests.Atari();
+            (StagedBatch batch, SettlementDriver driver) = 活形硬约束Tests.Staging(match, PieceType.Basic, 2, "F7", "H7");
+            var weights = new EvaluationWeights(PowerGain: 1, EnemyLoss: 0, Relic: 0, Safety: 0, Growth: 0, Initiative: 0, Supply: 0, Eye: 595, Threat: 0);
+            AiSearchConfig config = AiSearchConfig.Standard with { CandidateBatchCount = 1, PassThreshold = 20, WholeBatch = wholeBatch };
+            var ai = new HeuristicTurnController(AiFixtures.P0, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(AiFixtures.P0)), AiDifficulty.Standard, weights, config);
+            ai.Deploy(batch, () => driver.Rehearse(batch.Context, batch.Placements));
+            return ai;
+        }
+
+        HeuristicTurnController off = Run(0);
+        Assert.Single(off.LastCandidates);
+        HeuristicTurnController on = Run(1);
+        Assert.Equal(2, on.LastCandidates.Length);
+        Assert.InRange(on.LastCandidates.Length, 1, on.Config.CandidateBatchCount + 2);
+        Assert.Contains(on.LastCandidates, c => c.Key == on.LastWholeBatch!.Pruned!.Key);
     }
 
     [Fact]

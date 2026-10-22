@@ -117,6 +117,12 @@ public sealed class MatchLog
     /// <summary>某玩家实际生效的两层平局带宽（expert-tiebreak D4）：口径同 <see cref="LookaheadWidthOf"/>，缺搜索配置或缺该字段按 0 读。</summary>
     public int TwoPlyTieBandOf(int player) => Header.Config.Players[player].Search?.TwoPlyTieBand ?? 0;
 
+    /// <summary>
+    /// 某玩家实际生效的整批候选开关（ai-whole-batch D4）：显式搜索配置的值优先（缺该字段按 0），否则取首部跑局配置的开关（缺该项 = 旧日志或显式 0，按 0）。
+    /// 与会话建 AI 的派生同一口径（<c>MatchSession</c>：只作用于未显式配置搜索配置的玩家）。
+    /// </summary>
+    public int WholeBatchOf(int player) => Header.Config.Players[player].Search is { } search ? search.WholeBatch : Header.Config.WholeBatch ?? 0;
+
     /// <summary>本局是否用过调试 AI 或发生过人工接管（design.md D7：默认排除）。</summary>
     public bool IsContaminated => (Result?.UsedDebugAi ?? Failure?.UsedDebugAi ?? false)
         || (Result?.Takeovers.Count ?? Failure?.Takeovers.Count ?? 0) > 0;

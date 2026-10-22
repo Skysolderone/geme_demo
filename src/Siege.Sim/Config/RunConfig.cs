@@ -130,6 +130,27 @@ public sealed record RunConfig
     /// </summary>
     public int? StagnationRounds { get; init; }
 
+    /// <summary>
+    /// AI 整批候选开关（<see cref="AiSearchConfig.WholeBatch"/>，ai-whole-batch D4；0 / 1）：<c>null</c> = 新建的局取 <see cref="AiSearchConfig.DefaultWholeBatch"/>（1），
+    /// 并由 <see cref="ResolvedFor"/> 落成具体数值写进批次 <c>config.json</c> 与日志首部；与停滞大回合数同口径：只作用于未显式配置 <see cref="PlayerAiConfig.Search"/> 的玩家。
+    /// 值为 0 时 MUST NOT 写出（规格「整批候选」：关闭时日志首部不含该字段，与引入之前逐字节相同），按日志首部重建（回放）时缺该项按 0 重建。
+    /// 命令行 <c>--whole-batch</c>。序列化只经 <see cref="WholeBatchRecorded"/>。
+    /// </summary>
+    [JsonIgnore]
+    public int? WholeBatch { get; init; }
+
+    /// <summary>
+    /// <see cref="WholeBatch"/> 的序列化影子：0 写成缺省（不写出），读入原样。于是"显式 0"与"缺该项的旧记录"在文本上相同、读回都按 0 重建（会话里 <c>recorded</c> 取 0）；
+    /// 代价：把一份 <c>--whole-batch 0</c> 批次的 <c>config.json</c> 当作新配置再跑时，缺该项按缺省 1 落成（见任务 10-22-ai-whole-batch 的 implement.md 待决项）。
+    /// </summary>
+    [JsonInclude]
+    [JsonPropertyName(nameof(WholeBatch))]
+    private int? WholeBatchRecorded
+    {
+        get => WholeBatch == 0 ? null : WholeBatch;
+        init => WholeBatch = value;
+    }
+
     // retire-legacy-maps 3.2：冒险概率字段 FlagRisk 删除；配置文件写了即报错（见 RetiredKeys）。
 
     /// <summary>
@@ -243,6 +264,11 @@ public sealed record RunConfig
             throw new ArgumentException("停滞大回合数须为非负整数（0 = 不启用）。");
         }
 
+        if (WholeBatch is { } wholeBatch && wholeBatch is not (0 or 1))
+        {
+            throw new ArgumentException($"整批候选开关须为 0 或 1（0 = 关闭），实际为 {wholeBatch}。");
+        }
+
         if (ContentSet is { } contentSet && !Enum.IsDefined(contentSet))
         {
             throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
@@ -305,6 +331,8 @@ public sealed record RunConfig
         // 大回合上限与停滞大回合数（cycle-stop D2 / D3）：未配置一律落成缺省值，config.json 与首部写明实际生效值。
         resolved = resolved.RoundCap is null ? resolved with { RoundCap = MatchOptions.DefaultRoundCap } : resolved;
         resolved = resolved.StagnationRounds is null ? resolved with { StagnationRounds = AiSearchConfig.DefaultStagnationRounds } : resolved;
+        // 整批候选开关（ai-whole-batch D4）：未配置落成缺省 1，首部写明；显式 0 保持 0（序列化时不写出，回放缺该项按 0）。
+        resolved = resolved.WholeBatch is null ? resolved with { WholeBatch = AiSearchConfig.DefaultWholeBatch } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
@@ -316,7 +344,7 @@ public sealed record RunConfig
             ? resolved with
             {
                 Players = [.. resolved.Players.Select(p => p.Search is null && AiSearchConfig.ForDifficulty(p.Difficulty).LookaheadWidth > 0
-                    ? p with { Search = AiSearchConfig.ForMap(p.Difficulty, map.PlayableCount, resolved.CandidateCellLimit ?? 0) with { PassThreshold = resolved.PassThreshold!.Value, StagnationRounds = resolved.StagnationRounds!.Value } }
+                    ? p with { Search = AiSearchConfig.ForMap(p.Difficulty, map.PlayableCount, resolved.CandidateCellLimit ?? 0) with { PassThreshold = resolved.PassThreshold!.Value, StagnationRounds = resolved.StagnationRounds!.Value, WholeBatch = resolved.WholeBatch!.Value } }
                     : p)],
             }
             : resolved;
