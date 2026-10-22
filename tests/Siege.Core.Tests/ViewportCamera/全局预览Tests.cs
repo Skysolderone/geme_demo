@@ -121,21 +121,32 @@ public class 全局预览Tests
     }
 
     [Fact]
-    public void 预览中重定界到一屏看全的图_置位到中心最远即与新建相机相同()
+    public void 预览中重定界到一屏看全的图_自动退出预览且位姿与新建相机相同()
     {
-        // 新局界面"换一张"到一屏看不全的图会自动开预览，再换回一屏看全的图时 GameRoot.DropStaleOverview 按这个做法复位。
+        // 新局界面"换一张"到一屏看不全的图会自动开预览，再换回一屏看全的图时 ToggleOverview 对这类图不起作用、预览关不掉
+        // （原由 GameRoot.DropStaleOverview 在表现层补救，现收进 Rebound 本身）：重定界到不需要预览的矩形即退出预览、复位到新建相机的初始位姿。
         var camera = new BoardCamera(BoundsOf(Frontier));
-        camera.ToggleOverview();
-        camera.Rebound(BoundsOf(V4));
-        Assert.True(camera.IsOverview, "前提：重定界保留预览状态；此处失败说明重定界已自行退出预览，GameRoot.DropStaleOverview 可删");
-        Assert.False(camera.ToggleOverview(), "前提：一屏看全的图上 ToggleOverview 不起作用");
+        Assert.True(camera.ToggleOverview(), "前提：一屏看不全的图能开预览");
 
-        PlaneRect bounds = camera.Bounds;
-        camera.Set(new CameraPose(bounds.CenterX, bounds.CenterZ, camera.Farthest));
+        camera.Rebound(BoundsOf(V4));
 
         Assert.False(camera.IsOverview);
         Assert.False(camera.OverviewAvailable);
         Assert.Equal(new BoardCamera(BoundsOf(V4)).Pose, camera.Pose);
+    }
+
+    [Fact]
+    public void 预览中重定界到仍需预览的图_保留预览()
+    {
+        // 反面：新矩形仍一屏看不全时，重定界照旧保位姿、不退出预览（预览中的距离与注视点按新矩形重算）。
+        var camera = new BoardCamera(BoundsOf(V4));
+        camera.Rebound(BoundsOf(Frontier));
+        Assert.True(camera.ToggleOverview(), "前提：一屏看不全的图能开预览");
+
+        camera.Rebound(BoundsOf(Frontier));
+
+        Assert.True(camera.IsOverview);
+        Assert.True(camera.OverviewAvailable);
     }
 
     [Fact]

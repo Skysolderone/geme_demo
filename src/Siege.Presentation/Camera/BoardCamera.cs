@@ -116,6 +116,8 @@ public sealed class BoardCamera
     /// <summary>
     /// 重定界（board-link-mode 4.4：锁定后可行矩形由占位扩到全图）：<b>保位姿</b>换上新的外接矩形与战场矩形，只按新矩形重夹一次——不复位到中心、不改缩放、
     /// 不退出全局预览（预览中的距离与注视点按新战场重算）。矩形相同且不平移时什么都不变。
+    /// 例外：预览中重定界到一屏看得全、不需要预览的矩形时（<see cref="OverviewAvailable"/> 为假，<see cref="ToggleOverview"/> 对它不起作用），
+    /// 退出预览并复位到新建相机的初始位姿（地图中心、最远缩放），否则预览关不掉（新局界面"换一张"到大图再换回小图，原由表现层补救）。
     /// <paramref name="shiftX"/> / <paramref name="shiftZ"/>（board-link-mode F.4）：拼接后布局整体变化、本机棋盘在平面上随之移动时，注视点按同一位移平移再夹取，
     /// 使画面里本机棋盘不跳。
     /// </summary>
@@ -131,6 +133,12 @@ public sealed class BoardCamera
 
         _bounds = bounds;
         _focus = next;
+        if (_overview && !OverviewAvailable)
+        {
+            Set(new CameraPose(_bounds.CenterX, _bounds.CenterZ, Farthest));
+            return;
+        }
+
         _x += shiftX;
         _z += shiftZ;
         Clamp();
