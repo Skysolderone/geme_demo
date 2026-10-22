@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/core/boundaries.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "必读规范"}
+{"file": "openspec/changes/expert-opponent-model/proposal.md", "reason": "change 产物"}
+{"file": "openspec/changes/expert-opponent-model/design.md", "reason": "change 产物"}
+{"file": "openspec/changes/expert-opponent-model/tasks.md", "reason": "change 产物"}
+{"file": "openspec/changes/expert-opponent-model/specs/ai-decision/spec.md", "reason": "change 产物"}

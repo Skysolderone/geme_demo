@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/core/index.md", "reason": "规则内核规范入口"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "必读规范"}
+{"file": "openspec/changes/expert-opponent-model/proposal.md", "reason": "change 产物"}
+{"file": "openspec/changes/expert-opponent-model/design.md", "reason": "change 产物"}
+{"file": "openspec/changes/expert-opponent-model/tasks.md", "reason": "change 产物"}
+{"file": "openspec/changes/expert-opponent-model/specs/ai-decision/spec.md", "reason": "change 产物"}
+{"file": ".trellis/tasks/archive/2026-10/10-21-expert-tiebreak/rebaseline.txt", "reason": "重钉记录格式先例"}
