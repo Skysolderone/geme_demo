@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/core/index.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "必读规范"}
+{"file": "openspec/changes/ai-bridge-candidate/proposal.md", "reason": "change 产物"}
+{"file": "openspec/changes/ai-bridge-candidate/design.md", "reason": "change 产物"}
+{"file": "openspec/changes/ai-bridge-candidate/tasks.md", "reason": "change 产物"}
+{"file": "openspec/changes/ai-bridge-candidate/specs/ai-decision/spec.md", "reason": "change 产物"}
+{"file": ".trellis/tasks/10-22-route-value-diagnosis/research/report.md", "reason": "诊断报告"}
+{"file": ".trellis/tasks/archive/2026-10/10-22-ai-whole-batch/rebaseline.txt", "reason": "重钉记录先例"}

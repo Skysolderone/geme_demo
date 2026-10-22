@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/core/index.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "必读规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "必读规范"}
+{"file": "openspec/changes/ai-bridge-candidate/proposal.md", "reason": "change 产物"}
+{"file": "openspec/changes/ai-bridge-candidate/design.md", "reason": "change 产物"}
+{"file": "openspec/changes/ai-bridge-candidate/tasks.md", "reason": "change 产物"}
+{"file": "openspec/changes/ai-bridge-candidate/specs/ai-decision/spec.md", "reason": "change 产物"}

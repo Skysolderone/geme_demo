@@ -1,0 +1,94 @@
+ai-bridge-candidate（搭桥候选）tasks 1.5 / 1.6 守门与重钉记录
+==========================================================
+
+口径：改前 = 本分支 HEAD 01efcd4（AI 评价版本 10，整批候选缺省开）；改后 = 本 change 实现（AI 评价版本 11，搭桥候选缺省开）。
+"开关 0"即与改前逐步相同（第一节的守门全绿为证），故首个分歧用改后代码在同一配置下以搭桥候选开关 0 / 1 同步跑局、逐小回合比对全体玩家的决策条目
+与专家的前瞻记录 ToText() 求得（临时诊断测试 ZzDivergence，已删除）；每份记下分歧小回合、改前 / 改后决策、开启侧被选中的是否搭桥候选（BridgeSeedCandidate.IsSourceOf）、
+起点单点与总分。重钉值取自改后代码全量测试的实际输出，不凭导出推算。
+判据（design D4 / 派发说明）：首个分歧处被选中的是搭桥候选。下列每一份都满足；分歧之前开启侧没有任何一回合选中过搭桥候选。
+
+一、开关 0 的守门（全部逐步不变，钉的是改前原值）
+------------------------------------------------
+- 决策序列基线 5 份：改前原文在任何改动之前另存为 AiDecision/Fixtures/decisions-link1-{seed1,seed2,seed3,easy-seed1,hard-seed1}-es0.txt（逐字节复制，未改）；
+  决策序列基线Tests.搭桥候选关闭时与改前基线相同 以跑局配置 EditSeed = 0（整批候选照缺省 1）重跑同一导出，5 份逐字节相同。
+  搭桥候选Tests.关闭时逐步不变 另以种子 1–3 的标准基线复核。
+- 整批候选的旧守门（*-wb0.txt、LinkGoldenTurnHashWholeBatchOff、SmallMapGoldenHashWholeBatchOff、StrictImprovementTurnHash、G1WholeBatchOffGolden、
+  整批候选关闭时一层配置的记录 / 非专家日志）：样本同时显式关掉两个开关（WholeBatch = 0, EditSeed = 0），钉值一字不改。
+- 链接图黄金哈希：候选格上限Tests.LinkGoldenTurnHashEditSeedOff = 58F2C051…（= 改前 LinkGoldenTurnHash），搭桥候选Tests.关闭时逐步不变 守；首部不含 EditSeed。
+- 严格提高：StrictImprovementTurnHashWholeBatch 7A401282…（整批候选开、搭桥候选关）不改，即开关 0 守门。
+- 小图黄金哈希：候选格上限Tests.SmallMapGoldenHashEditSeedOff = E77AA12B…（= 改前 SmallMapGoldenHash）。
+- 专家 G1：专家（一层配置 with { EditSeed = 0 }）与三名标准开关都为 0 → G1EditSeedOffGolden（= 改前 G1Golden 三行）逐项相同
+  （专家难度的一层前瞻Tests.搭桥候选关闭时一层配置的专家黄金值与改前相同）。
+- 前瞻记录（link:1 种子 6、一层专家 + 3 标准、整局）：开关 0 → 小回合 108、前瞻记录 27、PreCycleStop 后哈希 85B44320… 不变
+  （专家前瞻的记录Tests.搭桥候选关闭时一层配置的记录与改动前相同）。
+- 非专家日志（4 标准、link:1 种子 1、整局）：开关 0 → 小回合 92、哈希 7E180336… 不变（搭桥候选关闭时非专家日志与改动前相同）。
+- 简单基线 decisions-link1-easy-seed1.txt：开关 1 下也逐字节不变（文件未改；搭桥候选Tests.简单难度不受影响 另以开关 0 / 1 对照）。
+- 开关 1 下本来就不变、未重钉：decisions-link1-easy-seed1.txt；SmallMapGoldenHash（手写小链接档图全平地、没有深水，没有任何搭桥目标）；平衡分析方向Tests 的两条哈希（简单难度）；
+  StrictImprovementTurnHash / StrictImprovementTurnHashWholeBatch（样本显式关开关）。
+
+二、版本号例外：只因 AI 评价版本 10 → 11 而改的字面量
+------------------------------------------------
+- 启发式评价维度Tests.日志首部写入AI评价版本且分解值为九项：期望 10 → 11。
+- 专家前瞻的记录Tests：两处 Contains "\"AiEvaluationVersion\":10" → ":11"；PreCycleStop 的被还原字面量 10 → 11（还原为 3 的口径不变）。
+  开关 0 的两条守门（上节）在 PreCycleStop 后与改前哈希逐字节相同，即差异只在版本号。
+
+三、预设带开关 1 而改的格式字面量（走法无关）
+------------------------------------------------
+- 难度分级Tests.难度名称与次序：四档预设 + EditSeed: 1；DefaultEditSeed = 1。
+- 专家难度的一层前瞻Tests.前瞻宽度进入记录 / 显式给出的多样补充上限两层权重与带宽进入记录：预设序列化末尾多 "EditSeed":1（接在 "WholeBatch":1 之后）；
+  K = 0 的三行与一层配置行显式 WholeBatch = 0, EditSeed = 0，字面量不改。
+- 候选格上限Tests.剪枝参数的文本往返与旧文本兼容、专家难度的一层前瞻Tests.旧记录按不前瞻读入：旧文本缺该字段按 0 读（期望补 EditSeed = 0）。
+- 默认评价权重的校准Tests.引用未校准维度产出的数据、可复现回放Tests.失败局可复现、批量跑局Tests.批量执行并汇总（两处）：config.json / 首部落成 EditSeed = 1。
+- 前瞻模拟的公平信息Tests.CheckSimulatedResponses：独立复算的两种口径显式 EditSeed = 0（design D2：模拟对手不生成搭桥候选）。
+- 预演上界：高部署上限下的候选剪枝Tests.不穷举排列 的局面没有深水（搭桥候选不预演，留痕无起点、Scored = 0），候选数上界改为 M + 3，预演上界不变。
+
+四、重钉（开关 1 = 缺省）
+------------------------------------------------
+1. decisions-link1-seed1.txt（4 标准、link:1 种子 1、截断第 12 大回合）
+   首个分歧：第 1 小回合（第 1 大回合）P0。改前 D:C6:Fortress → 改后 D:C4:Artisan+B:D4,C6:Fortress。
+   被选中的是搭桥候选（起点 C4 匠人搭桥 D4 = 485；批次 1242，既有最佳 C6:Fortress = 557；候选 3 个）。
+   循环提子停手Tests.K为0零变化 读同一文件（K = 0 的同一导出），随之转绿。
+2. decisions-link1-seed2.txt（同上，种子 2）
+   首个分歧：第 3 小回合（第 1 大回合）P0。改前 D:C6:Fortress → 改后 D:C4:Artisan+B:D4,C6:Fortress。
+   搭桥候选（起点 485；批次 1242，既有最佳 557；候选 4 个）。
+3. decisions-link1-seed3.txt（同上，种子 3）
+   首个分歧：第 14 小回合（第 4 大回合）P3。改前 D:O10:Multiplier,D13:Artisan+F:D11-D12 → 改后 D:C4:Artisan+B:D4,O10:Multiplier。
+   搭桥候选（起点 C4 匠人搭桥 D4 = 483；批次 859，既有最佳 681；候选 3 个）。
+   决策序列基线_链接模式Tests.决策序列与基线相同、AI改造与主题诊断Tests.诊断不改对局、战场落败复盘Tests.复盘不改对局 读同一文件，随之转绿。
+4. decisions-link1-hard-seed1.txt（4 高难、link:1 种子 1、截断第 12 大回合）
+   首个分歧：第 45 小回合（第 12 大回合）P0。改前 D:D9:Basic,E10:Basic,E11:Artisan+F:D12-E12 → 改后 D:P7:Artisan+B:O7,D9:Basic,E10:Basic。
+   搭桥候选（起点 P7 匠人搭桥 O7 = 424；批次 975，既有最佳 730；候选 5 个）。整段只这一次分歧（第 12 大回合截断）。
+   以上 4 份由临时测试按 LinkDecisionSequence.Export 原样导出、换成 CRLF 写回（与原文件行尾一致），diff 只在分歧之后的行。
+5. 链接图黄金哈希 LinkGoldenTurnHash（link:1、种子 31、4 标准、写死口径、24 个小回合）
+   首个分歧：第 16 小回合（第 4 大回合）P1。改前 D:E10:Fortress,D13:Basic → 改后 D:E7:Artisan+B:D7,D13:Fortress。
+   搭桥候选（起点 E7 匠人搭桥 D7 = 304；批次 626，既有最佳 594；候选 5 个）。新 AA44B22B…；旧 58F2C051…（LinkGoldenTurnHashEditSeedOff）。
+   以它为"此前记录过的对局"的 带入带出配置Tests.关闭时逐步相同 / 开启但无人带入时逐步相同、对局内容集Tests.v1逐步相同、批量跑局Tests.缺省关闭带入 随之转绿。
+6. 严格提高的缺省开对照（停手阈值Tests.StrictImprovementTurnHashEditSeed，新增钉值；link:1 种子 35、阈值 0、24 个小回合，整批候选与搭桥候选都缺省开）
+   首个分歧：第 15 小回合（第 4 大回合）P3。改前 D:C6:Basic → 改后 D:C4:Artisan+B:D4,C6:Basic。
+   搭桥候选（起点 285；批次 824，既有最佳 339；候选 3 个）。新值 43F6E259…（关时即 7A401282…）。
+7. 专家 G1（G1Golden，link:1 种子 1–3、一层专家 + 3 标准、标准 K = 0、写死权重 / 阈值 80、截断第 12 大回合）：条数 / ai-P0 消费 / 记录数仍为 24 / 8556 / 12。
+   - 种子 1：首个分歧第 26 小回合（第 7 大回合）P2（标准）。改前 D:H8:Artisan+F:G7-G8,H9:Synergy,F10:Artisan+F:D10-E10 → 改后 D:N7:Artisan+B:O7,H9:Synergy,F10:Artisan+F:D10-E10，
+     搭桥候选（起点 248；795，既有最佳 552）。新 37A76187… / B6880D16…；旧 09C8BB1D… / 66150B7B…
+   - 种子 2：首个分歧第 14 小回合（第 4 大回合）P2（标准）。改前 D:P13:Fortress → 改后 D:O6:Artisan+B:O7,P13:Fortress，搭桥候选（起点 260；955，既有最佳 695）。
+     新 523BFD4F… / B4884780…；旧 937FA090… / F8F59B6F…
+   - 种子 3：首个分歧第 14 小回合（第 4 大回合）P3（标准）。改前 D:S5:Artisan+F:Q5-R5 → 改后 D:S5:Multiplier,N7:Artisan+B:O7，搭桥候选（起点 248；580，既有最佳 353）。
+     新 4DE433DD… / 6BAD726E…；旧 58B9DB9D… / 0C6FB224…
+   - 缺省预设的专家与一层配置逐步相同：预设与一层配置同带开关 1，共用新黄金值。
+8. 前瞻记录（专家前瞻的记录Tests.一层配置的记录与改动前相同，link:1 种子 6、一层专家 + 3 标准、整局，标准 K 按地图 24）
+   首个分歧：第 1 小回合（第 1 大回合）P0（专家，构筑期不前瞻 = 取高难的选择，记录 NotApplied）。
+   改前 D:N4:Artisan,M5:Line,P8:Line → 改后 D:N4:Line,M5:Line,O8:Artisan+B:O7。被选中的是搭桥候选（起点 O8 匠人搭桥 O7 = 302），
+   但两者总分并列（都是 902）：按 CandidateSelection 的并列规则（总分同则比排序后坐标序列字典序，小者优先）O8 先于 P8，搭桥候选胜出。候选 13 个。
+   小回合 108 → 104、前瞻记录 27 → 26；首部另多 "EditSeed":1（PreCycleStop 不遮它）。新哈希 D0B31501…；旧 85B44320…（开关 0 守门不变）。
+9. 非专家日志（专家前瞻的记录Tests.非专家没有前瞻记录，4 标准、link:1 种子 1、整局）
+   首个分歧：第 1 小回合 P0，同第 1 份（C6:Fortress → C4 匠人搭桥 D4 + C6:Fortress，搭桥候选）。小回合 92 → 101；首部另多 "EditSeed":1。
+   新哈希 4C6E18B4…；旧 7E180336…（开关 0 守门不变）。
+
+五、样本口径写死旧口径（不是钉值，依赖走法的样本；boundaries.md「依赖走法的既有夹具显式写死旧口径」）
+------------------------------------------------
+- 前瞻模拟的公平信息Tests.模拟回应等于专家口径的不扰动贪心：开关 1 下种子 3 的对局走法变了（标准第 4 大回合起选中搭桥候选），截断前不再出现
+  "两种口径给出不同回应"的候选（Assert.Contains 红）。样本对局改为专家与三名标准都 EditSeed = 0（= 改前对局，断言不改）；
+  另加缺省开的同一局整段（截断第 12 大回合）复核"每个候选的模拟回应 = 专家口径、不生成搭桥候选的不扰动贪心"。
+- 前瞻的近似两层加分Tests.两层加分在平局集内改变选择：局面集（种子 1、每 2 取 1）由 4 名标准对局产出，开关 1 下走法变了，两层加分一次都没改变选择（changed 0）。
+  局面集改为产出对局 EditSeed = 0（LookaheadFixtures.ProbePositionsWith），被测两名专家仍按缺省带搭桥候选。诊断（种子 1–3、每 2 取 1）：
+  局面开关 0 → changed 5（专家开关 0 / 1 相同），局面开关 1 → changed 1——变化来自局面集，与专家是否带搭桥候选无关。
+- 其余用 ProbePositions 的测试（预演代理、不消费新随机、耗时计时等）局面集照缺省（开关 1）产出，未写死。
