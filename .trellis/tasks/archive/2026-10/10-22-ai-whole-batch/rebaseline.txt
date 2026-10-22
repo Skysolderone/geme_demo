@@ -1,0 +1,68 @@
+ai-whole-batch（整批候选）tasks 1.5 / 1.6 守门与重钉记录
+==========================================================
+
+口径：改前 = 本分支 HEAD 0b1b4bf（另有 scratchpad 里的 git worktree 副本备查，未用于重钉）；改后 = 本 change 实现（AI 评价版本 10，整批候选缺省开）。
+"开关 0"即与改前逐步相同（第一节的守门全绿为证），故首个分歧用改后代码在同一配置下以开关 0 / 1 同步跑局、逐小回合比对全体玩家的决策条目
+与专家的前瞻记录 ToText() 求得（临时诊断测试，已删除）；每份记下分歧小回合、改前 / 改后决策、开启侧被选候选的来源（WholeBatchCandidates.SourceOf）。
+重钉值取自改后代码全量测试的实际输出，不凭导出推算。
+判据（design D5 / 派发说明）：首个分歧处被选中的是整批候选（剪枝或配对来源）。下列每一份都满足，没有"只因前瞻集变化而选择不变"的首个分歧。
+
+一、开关 0 的守门（全部逐步不变，钉的是改前原值）
+------------------------------------------------
+- 决策序列基线 5 份：改前原文另存为 AiDecision/Fixtures/decisions-link1-{seed1,seed2,seed3,easy-seed1,hard-seed1}-wb0.txt（逐字节复制，未改）；
+  决策序列基线Tests.整批候选关闭时与改前基线相同 以跑局配置 WholeBatch = 0 重跑同一导出，5 份逐字节相同。
+- 链接图黄金哈希 候选格上限Tests.LinkGoldenTurnHashWholeBatchOff = 58F2C051…（= 改前 LinkGoldenTurnHash），整批候选Tests.关闭时逐步不变 守；首部不含 WholeBatch。
+- 严格提高哈希（停手阈值Tests.阈值为0时零变化）：对照实现早于整批候选，样本与反面比对显式 WholeBatch = 0，StrictImprovementTurnHash D405B885… 不改。
+- SmallMapGoldenHash：开关 0 的同一局 = 改前值 5B16259C…（候选格上限Tests.SmallMapGoldenHashWholeBatchOff，小图不限制 内断言）。
+- 专家 G1：专家（一层配置 with { WholeBatch = 0 }）与三名标准开关都为 0 → G1WholeBatchOffGolden（= 改前 G1Golden 三行）逐项相同
+  （专家难度的一层前瞻Tests.整批候选关闭时一层配置的专家黄金值与改前相同）。
+- 前瞻记录（link:1 种子 6、一层专家 + 3 标准、整局）：开关 0 → 小回合 92、前瞻记录 23、PreCycleStop 后哈希 4668AB92… 不变
+  （专家前瞻的记录Tests.整批候选关闭时一层配置的记录与改动前相同）。
+- 非专家日志（4 标准、link:1 种子 1、整局）：开关 0 → 小回合 100、哈希 AFBD43C9… 不变（整批候选关闭时非专家日志与改动前相同）。
+- 简单基线 decisions-link1-easy-seed1.txt：开关 1 下也逐字节不变（文件未改；整批候选Tests.简单难度不受影响 另以开关 0 / 1 对照）。
+- 开关 1 下本来就不变、未重钉：decisions-link1-seed1.txt / seed2.txt（标准、截断第 12 大回合，整批候选从未被选中）；
+  链接图黄金哈希 LinkGoldenTurnHash（种子 31、24 个小回合，整批候选从未被选中）；平衡分析方向Tests 的两条哈希（样本为简单难度）；前瞻计时局面集与代理（见 implement.md 门控）。
+
+二、版本号例外：只因 AI 评价版本 9 → 10 而改的字面量
+------------------------------------------------
+- 启发式评价维度Tests.日志首部写入AI评价版本且分解值为九项：期望 9 → 10。
+- 专家前瞻的记录Tests：两处 Contains "\"AiEvaluationVersion\":9" → ":10"；PreCycleStop 的被还原字面量 9 → 10（还原为 3 的口径不变）。
+  开关 0 的两条守门（上节）在 PreCycleStop 后与改前哈希逐字节相同，即差异只在版本号。
+
+三、预设带开关 1 而改的格式字面量（走法无关）
+------------------------------------------------
+- 难度分级Tests.难度名称与次序：四档预设 + WholeBatch: 1；DefaultWholeBatch = 1。
+- 专家难度的一层前瞻Tests.前瞻宽度进入记录 / 显式给出的多样补充上限两层权重与带宽进入记录：预设序列化末尾多 "WholeBatch":1；K = 0 的三行与一层配置行显式 WholeBatch = 0，字面量不改。
+- 候选格上限Tests.剪枝参数的文本往返与旧文本兼容、专家难度的一层前瞻Tests.旧记录按不前瞻读入：旧文本缺该字段按 0 读（期望补 WholeBatch = 0）。
+- 默认评价权重的校准Tests.引用未校准维度产出的数据、可复现回放Tests.失败局可复现、批量跑局Tests.批量执行并汇总（两处）：config.json / 首部落成 WholeBatch = 1。
+- 前瞻模拟的公平信息Tests.模拟回应等于专家口径的不扰动贪心：独立复算的两种口径显式 WholeBatch = 0（design D3：模拟对手不生成整批候选）；样本与断言不改，开关 1 下仍绿。
+- 预演上界：高部署上限下的候选剪枝Tests.不穷举排列（候选数 ≤ M + 2）与 候选格上限Tests.启用后只对前K格做完整枚举 加整批候选的预演上界
+  1 + (N + 1) + D² + C(N, 2) + N（WholeBatchRehearsalBound）。
+
+四、重钉（开关 1 = 缺省）
+------------------------------------------------
+1. decisions-link1-seed3.txt（4 标准、link:1 种子 3、截断第 12 大回合）
+   首个分歧：第 11 小回合（第 3 大回合）P0。改前 D:K7:Basic,K8:Multiplier,L8:Basic → 改后 D:K7:Basic,L8:Basic。
+   被选中的是剪枝候选（K7:Basic,L8:Basic = 496，候选 6 个）。分歧前开启侧没有任何一回合加入过整批候选。整段只这一次被选中（剪枝 1 / 配对 0）。
+   诊断不改对局 / 复盘不改对局（MatchTelemetry）读同一文件，随之转绿。
+2. decisions-link1-hard-seed1.txt（4 高难、link:1 种子 1、截断第 12 大回合）
+   首个分歧：第 37 小回合（第 10 大回合）P2。改前 D:N5:Basic,F9:Basic,M9:Line → 改后 D:N5:Line,F9:Basic,M10:Basic,N11:Boundary,M12:Basic。
+   被选中的是配对候选（= 1474；同回合剪枝候选 N5:Line,F9:Basic,M9:Basic = 539），候选 9 个。整段只这一次被选中。
+3. 专家 G1（G1Golden，link:1 种子 1–3、一层专家 + 3 标准、写死权重 / 阈值 80、截断第 12 大回合）：条数 / ai-P0 消费 / 记录数仍为 24 / 8556 / 12。
+   - 种子 1：首个分歧第 33 小回合（第 9 大回合）P1（标准）。改前 D:L7:Basic,P10:Line,E15:Line,G15:Line → 改后 D:L7:Basic,M14:Line,N14:Line,E15:Basic,G15:Line，
+     配对候选（2581；剪枝候选 2482）。新 09C8BB1D… / 66150B7B…；旧 CA7E6B31… / 5F47E906…
+   - 种子 2：首个分歧第 41 小回合（第 11 大回合）P0（专家）。改前 D:D12:Fortress → 改后 D:C10:Fortress,C12:Boundary；前瞻集首位换成配对候选（937 → 前瞻后 −209），
+     前瞻后选中 #0 即该配对候选（改前选中 D12:Fortress，前瞻后 −769）。新 937FA090… / F8F59B6F…；旧 01E794D4… / FEC148D7…
+   - 种子 3：首个分歧第 29 小回合（第 8 大回合）P1（标准）。改前 D:U6:Line → 改后 D:W5:Synergy,V6:Multiplier，剪枝候选（1976）。新 58B9DB9D… / 0C6FB224…；旧 AFFC6C75… / C472B851…
+   - 缺省预设的专家与一层配置逐步相同：预设与一层配置同带开关 1，共用新黄金值。
+4. 前瞻记录（专家前瞻的记录Tests.一层配置的记录与改动前相同，link:1 种子 6、一层专家 + 3 标准、整局）
+   首个分歧：第 40 小回合（第 10 大回合）P0（专家）。改前 D:E8:Basic,F8:Sentry,H13:Basic,F15:Basic（前瞻 #1）→ 改后 D:H13:Basic,C14:Basic,D15:Sentry,F15:Basic，
+   前瞻集首位为配对候选（1495 → 前瞻后 −53）并被选中（#0）。小回合 92 → 108、前瞻记录 23 → 27。新哈希 85B44320…；旧 4668AB92…（开关 0 守门不变）。
+5. 非专家日志（专家前瞻的记录Tests.非专家没有前瞻记录，4 标准、link:1 种子 1、整局）
+   首个分歧：第 37 小回合（第 10 大回合）P0。改前 D:P3:Multiplier,C14:Line → 改后 D:Q4:Multiplier,Q5:Line,C14:Line，配对候选（281；剪枝候选 C14:Multiplier = 112）。
+   小回合 100 → 92。新哈希 7E180336…；旧 AFBD43C9…（开关 0 守门不变）。
+6. SmallMapGoldenHash（手写小链接档图、种子 31、4 标准、写死权重与阈值 20、6 个大回合）
+   首个分歧：第 6 小回合（第 2 大回合）P0。改前 D:E5:Fortress → 改后 D:E5:Chain,C6:Sentry,D7:Fortress，配对候选（418；剪枝候选 E5:Fortress = 164）。
+   新 E77AA12B…；旧 5B16259C…（SmallMapGoldenHashWholeBatchOff）。
+7. 严格提高的缺省开对照（停手阈值Tests.StrictImprovementTurnHashWholeBatch，新增钉值；link:1 种子 35、阈值 0、24 个小回合）
+   首个分歧：第 7 小回合（第 2 大回合）P0。改前 D:F9:Fortress,G9:Synergy,G10:Basic → 改后 D:F9:Basic,G10:Basic，剪枝候选（470）。新值 7A401282…。
