@@ -4,7 +4,7 @@ namespace Siege.Godot;
 
 /// <summary>
 /// 地形 / 设施部件目录：部件名、变体档数与程序生成函数的唯一一张表。<see cref="PartExport"/> 按它导出 <c>.tscn</c>，
-/// <see cref="BoardView"/> 按它取部件——<b>有资源就加载资源</b>（<c>res://parts/terrain/&lt;名&gt;_&lt;变体 % 档数&gt;.tscn</c>），
+/// <see cref="BoardView"/> 按它取部件——<b>有资源就加载资源</b>（<c>res://parts/terrain_full_art/&lt;名&gt;_&lt;变体 % 档数&gt;.tscn</c>），
 /// 没有才退回 <see cref="LowPoly"/> 程序生成。两边共用同一张表，变体档数不会对不上。
 /// </summary>
 /// <remarks>
@@ -15,7 +15,7 @@ namespace Siege.Godot;
 public static class TerrainParts
 {
     /// <summary>部件资源目录。</summary>
-    public const string Directory = "res://parts/terrain";
+    public const string Directory = "res://parts/terrain_full_art";
 
     /// <summary>
     /// 一类部件：名字、变体档数（1 表示没有变体后缀）、程序生成函数、锚点约定。
@@ -33,18 +33,33 @@ public static class TerrainParts
         public string FileName(int variant) => Variants == 1 ? $"{Name}.tscn" : $"{Name}_{((variant % Variants) + Variants) % Variants}.tscn";
     }
 
+    // 明亮的棋盘由 BoardView 保持地表判读；这些颜色只作用于部件自身。
+    // 石板偏暖灰紫，植物用青绿与少量暮紫，结构件为哑光木与旧金。
+    private static readonly Color ArtStone = Color.Color8(151, 139, 145);
+    private static readonly Color ArtRimStone = Color.Color8(195, 177, 154);
+    private static readonly Color ArtDarkStone = Color.Color8(103, 96, 114);
+    private static readonly Color ArtSoil = Color.Color8(154, 111, 103);
+    private static readonly Color ArtTeal = Color.Color8(53, 125, 112);
+    private static readonly Color ArtLightTeal = Color.Color8(91, 155, 138);
+    private static readonly Color ArtViolet = Color.Color8(132, 104, 165);
+    private static readonly Color ArtWood = Color.Color8(130, 93, 74);
+    private static readonly Color ArtDeck = Color.Color8(191, 141, 105);
+    private static readonly Color ArtGold = Color.Color8(215, 179, 100);
+    private static readonly Color ArtIvory = Color.Color8(220, 204, 177);
+    private static readonly Color ArtWater = Color.Color8(100, 161, 176);
+
     // 障碍与装饰（map-elements-v2 段 C 用 LowPolyMesh 重建；档数在 LowPoly 一处，建模函数按它取模）。pines / ruins 只服务场景格，按裁决 M3 不重建、不扩档。
-    public static readonly Kind Rock = new("rock", LowPoly.RockVariants, LowPoly.Rock);
-    public static readonly Kind Ruins = new("ruins", 4, LowPoly.Ruins);
-    public static readonly Kind Pines = new("pines", 7, LowPoly.Pines);
-    public static readonly Kind Trees = new("trees", LowPoly.TreesVariants, LowPoly.Trees);
-    public static readonly Kind Desert = new("desert", LowPoly.DesertVariants, LowPoly.Desert);
-    public static readonly Kind Marsh = new("marsh", LowPoly.MarshVariants, LowPoly.Marsh);
-    public static readonly Kind Crag = new("crag", LowPoly.CragVariants, LowPoly.Crag);
-    public static readonly Kind Shallows = new("shallows", LowPoly.ShallowsVariants, LowPoly.Shallows);
-    public static readonly Kind FenceX = new("fence_x", 1, _ => LowPoly.Fence(alongX: true));
-    public static readonly Kind FenceZ = new("fence_z", 1, _ => LowPoly.Fence(alongX: false));
-    public static readonly Kind Bridge = new("bridge", 1, _ => LowPoly.Bridge());
+    public static readonly Kind Rock = new("rock", LowPoly.RockVariants, v => Themed("rock", LowPoly.Rock(v), v));
+    public static readonly Kind Ruins = new("ruins", 4, v => Themed("ruins", LowPoly.Ruins(v), v));
+    public static readonly Kind Pines = new("pines", 7, v => Themed("pines", LowPoly.Pines(v), v));
+    public static readonly Kind Trees = new("trees", LowPoly.TreesVariants, v => Themed("trees", LowPoly.Trees(v), v));
+    public static readonly Kind Desert = new("desert", LowPoly.DesertVariants, v => Themed("desert", LowPoly.Desert(v), v));
+    public static readonly Kind Marsh = new("marsh", LowPoly.MarshVariants, v => Themed("marsh", LowPoly.Marsh(v), v));
+    public static readonly Kind Crag = new("crag", LowPoly.CragVariants, v => Themed("crag", LowPoly.Crag(v), v));
+    public static readonly Kind Shallows = new("shallows", LowPoly.ShallowsVariants, v => Themed("shallows", LowPoly.Shallows(v), v));
+    public static readonly Kind FenceX = new("fence_x", 1, _ => Themed("fence", LowPoly.Fence(alongX: true), 0));
+    public static readonly Kind FenceZ = new("fence_z", 1, _ => Themed("fence", LowPoly.Fence(alongX: false), 0));
+    public static readonly Kind Bridge = new("bridge", 1, _ => Themed("bridge", LowPoly.Bridge(), 0));
 
     // —— 地块部件（map-elements-v2 段 A，design D2 / D3）：每件只有一个 MeshInstance3D、一个 surface，棋盘逐格只取它的网格（见 PieceOf）。
 
@@ -52,19 +67,19 @@ public static class TerrainParts
     public const float LinerThickness = 0.03f;
 
     /// <summary>地砖顶板的倒角宽。</summary>
-    public const float TileBevel = 0.03f;
+    public const float TileBevel = 0.038f;
 
     /// <summary>
-    /// 地砖顶板（七种地表共用网格）：TileSize 见方、TileHeight 厚、顶面四边倒角，顶面四个三角面带去均值的细微色差（各档 ±2%，O-1：不盖过明暗棋盘格的 5%）。
+    /// 地砖顶板（七种地表共用网格）：TileSize 见方、TileHeight 厚、顶面四边倒角，顶面带细微面差与远离格心的两枚阴刻角饰。
     /// 材质由 BoardView 按底色覆盖；导出时带中性白材质。
     /// </summary>
     public static readonly Kind TileTop = new("tile_top", 3, v => Single("TileTop", TileTopMesh(v), NeutralMaterial()), "地砖上表面中心");
 
-    /// <summary>第 1 层侧面（缓坡）：铺满整格、高一层，三条土层色带，棱与格边齐平。内置土色。</summary>
-    public static readonly Kind SideSlope = new("side_slope", 2, v => Single("SideSlope", SideSlopeMesh(v), SideMaterial(Visuals.SlopeSide)), "该层带的顶面中心");
+    /// <summary>第 1 层侧面（缓坡）：铺满整格、高一层，四条暖土色带，棱与格边齐平。</summary>
+    public static readonly Kind SideSlope = new("side_slope", 2, v => Single("SideSlope", SideSlopeMesh(v), SideMaterial(ArtSoil)), "该层带的顶面中心");
 
-    /// <summary>第 2 层侧面（崖壁）：铺满整格、高一层，顶边岩沿与格边齐平、岩体内缩、每面一道深岩缝。内置岩灰。</summary>
-    public static readonly Kind SideCliff = new("side_cliff", 3, v => Single("SideCliff", SideCliffMesh(v), SideMaterial(Visuals.CliffSide)), "该层带的顶面中心");
+    /// <summary>第 2 层侧面（崖壁）：铺满整格、高一层，保留岩沿与深缝，在内缩岩体上叠两排错缝砌石。</summary>
+    public static readonly Kind SideCliff = new("side_cliff", 3, v => Single("SideCliff", SideCliffMesh(v), SideMaterial(ArtStone)), "该层带的顶面中心");
 
     /// <summary>砖缝衬底：铺满整格、厚 <see cref="LinerThickness"/>。材质由 BoardView 按底色覆盖；导出时带中性白材质。</summary>
     public static readonly Kind Liner = new("liner", 1, _ => Single("Liner", LinerMesh(), NeutralMaterial()), "衬底中心");
@@ -78,7 +93,7 @@ public static class TerrainParts
     /// 河岸石沿（一条边一件）：沿水格一条边排三块倒角石，占水格边缘 <see cref="BankLipWidth"/>，顶面比地砖上表面低 0.015 起，底没入水面之下。
     /// 网格里边沿 X 轴、石沿朝 +Z（水格内侧）展开；BoardView 按边的朝向绕 Y 旋转。内置岩灰（与崖壁侧面同一份材质）。
     /// </summary>
-    public static readonly Kind BankLip = new("bank_lip", 3, v => Single("BankLip", BankLipMesh(v), SideMaterial(Visuals.CliffSide)), "水格边中点（高度取该格地砖上表面）");
+    public static readonly Kind BankLip = new("bank_lip", 3, v => Single("BankLip", BankLipMesh(v), SideMaterial(ArtStone)), "水格边中点（高度取该格地砖上表面）");
 
     // —— 外框与底座部件（map-elements-v2 段 D，design D5）。
 
@@ -96,9 +111,9 @@ public static class TerrainParts
 
     /// <summary>
     /// 底座外圈石沿（一段一件）：沿边排 1–3 块倒角石（档号 + 1 块，分块点按散列），长 <see cref="RimLength"/>、进深 <see cref="RimDepth"/>、外凸 <see cref="RimOverhang"/>、
-    /// 顶高 ≤ <see cref="RimRise"/>、底下探到底座底面之下。网格里边沿 X 轴、石沿朝 +Z（底座内侧）展开，BoardView 按边的朝向转。内置岩灰（与崖壁侧面、河岸石沿同一份材质）。
+    /// 顶高 ≤ <see cref="RimRise"/>、底下探到底座底面之下。网格里边沿 X 轴、石沿朝 +Z（底座内侧）展开，BoardView 按边的朝向转。内置暖石材质与顶点古金短铭文。
     /// </summary>
-    public static readonly Kind Rim = new("rim", 3, v => Single("Rim", RimMesh(v), SideMaterial(Visuals.CliffSide)), "段中点（底座外缘线上，高度取底座顶面）");
+    public static readonly Kind Rim = new("rim", 3, v => Single("Rim", RimMesh(v), SideMaterial(ArtRimStone)), "段中点（底座外缘线上，高度取底座顶面）");
 
     /// <summary>
     /// 出生区亮条（一格边一件）：长 1 格、宽 0.07、高 0.03，贴在格内侧边缘——与改前的描边盒逐值同包围盒；顶边细倒角、侧面压暗，读作嵌进地砖边缘的亮条。
@@ -107,7 +122,7 @@ public static class TerrainParts
     public static readonly Kind ZoneStrip = new("zone_strip", 1, _ => Single("ZoneStrip", ZoneStripMesh(), NeutralMaterial()), "格边中点（高度取该格地砖上表面）");
 
     /// <summary>
-    /// 连体外轮廓边框（逐格边一件）：长 1 格、宽 0.13、高 0.065，骑在格边线上（内外各一半）；顶边倒角，两档只差顶面色差。
+    /// 连体外轮廓边框（逐格边一件）：长 1 格、宽 0.13、高 0.065，骑在格边线上（内外各一半）；顶边倒角并带双道阴刻线，两档只差顶面色差。
     /// 网格里边沿 X 轴。材质由 BoardView 按台面边框色覆盖（不受光）；导出时带中性白材质。
     /// </summary>
     public static readonly Kind PlateFrame = new("plate_frame", 2, v => Single("PlateFrame", PlateFrameMesh(v), NeutralMaterial()), "段中点（逐格边一件：格边中点，高度取 h=0 地砖上表面）");
@@ -255,12 +270,91 @@ public static class TerrainParts
         return material;
     }
 
-    private static ArrayMesh TileTopMesh(int variant) => LowPolyMesh.BeveledSlab(
-        new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize), TileBevel, 0.98f,
-        seed: 101 + Wrap(variant, TileTop.Variants), facetJitter: 0.02f, sideShade: 0.96f);
+    /// <summary>给所有程序部件与导出快照使用同一套新材质；不改棋子所用的 LowPoly 源材质。</summary>
+    private static Node3D Themed(string kind, Node3D root, int variant)
+    {
+        Paint(root);
+        if (kind == "rock" || kind == "ruins")
+        {
+            // 只有障碍格有高于格面的晶簇；它们本来不可落子，晶簇保持在原有障碍高度内。
+            float x = kind == "rock" ? -0.14f : 0.24f;
+            float z = kind == "rock" ? 0.10f : -0.04f;
+            float y = kind == "rock" ? 0.27f : 0.08f;
+            var crystal = new MeshInstance3D
+            {
+                Name = "Crystal",
+                Mesh = LowPolyMesh.Frustum(0.043f, 0f, kind == "rock" ? 0.13f : 0.17f, 5, 0.98f,
+                    yaw: LowPolyMesh.Unit(variant + 1701, 0) * Mathf.Tau, bottomCap: true),
+                MaterialOverride = SideMaterial(kind == "rock" ? ArtViolet.Lightened(0.16f) : ArtGold),
+                Position = new Vector3(x, y, z),
+            };
+            root.AddChild(crystal);
+        }
+        else if (kind == "fence")
+        {
+            root.AddChild(new MeshInstance3D
+            {
+                Name = "Finial",
+                Mesh = LowPolyMesh.BeveledSlab(new Vector3(0.045f, 0.008f, 0.045f), 0.002f, 1f, top: 0.303f),
+                MaterialOverride = SideMaterial(ArtGold),
+            });
+        }
+        else if (kind == "bridge")
+        {
+            var gilding = new List<(ArrayMesh, Transform3D)>();
+            foreach (float x in new[] { -0.415f, 0.415f })
+            {
+                gilding.Add((LowPolyMesh.Beam(new Vector3(x, 0.121f, -0.32f), new Vector3(x, 0.121f, 0.32f),
+                    0.008f, 0.006f, 0.98f), Transform3D.Identity));
+            }
+
+            root.AddChild(new MeshInstance3D
+            {
+                Name = "Gilding",
+                Mesh = LowPolyMesh.Merge(gilding),
+                MaterialOverride = SideMaterial(ArtGold),
+            });
+        }
+
+        return root;
+
+        void Paint(Node node)
+        {
+            foreach (Node child in node.GetChildren())
+            {
+                if (child is MeshInstance3D { MaterialOverride: StandardMaterial3D original } mesh)
+                {
+                    var material = (StandardMaterial3D)original.Duplicate();
+                    material.AlbedoColor = ArtColor(kind, mesh.Name, original.AlbedoColor);
+                    mesh.MaterialOverride = material;
+                }
+
+                Paint(child);
+            }
+        }
+    }
+
+    private static Color ArtColor(string kind, string part, Color original) => kind switch
+    {
+        "rock" => part == "Shade" ? ArtDarkStone : ArtStone,
+        "ruins" => part == "Shade" ? ArtDarkStone : ArtIvory,
+        "pines" => part == "Trunk" ? ArtWood : part == "CanopyDusk" ? ArtViolet
+            : part == "CanopyLight" ? ArtLightTeal : ArtTeal,
+        "trees" => part == "Trunk" ? ArtWood : ArtTeal,
+        "desert" => part == "Cactus" ? ArtTeal : part == "Bone" ? ArtIvory : ArtDarkStone,
+        "marsh" => part == "Puddle" ? ArtWater : ArtLightTeal,
+        "crag" => part == "Rim" ? ArtStone.Lightened(0.13f) : ArtDarkStone,
+        "shallows" => part == "Pebble" ? ArtIvory : ArtIvory.Lightened(0.10f),
+        "fence" => ArtWood,
+        "bridge" => part == "Deck" ? ArtDeck : ArtWood,
+        _ => original,
+    };
+
+    private static ArrayMesh TileTopMesh(int variant) => LowPolyMesh.CarvedTile(
+        new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize), TileBevel, Wrap(variant, TileTop.Variants));
 
     private static ArrayMesh SideSlopeMesh(int variant) => LowPolyMesh.Strata(
-        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 3, jitter: 0.014f, seed: 201 + Wrap(variant, SideSlope.Variants));
+        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 4, jitter: 0.018f, seed: 201 + Wrap(variant, SideSlope.Variants));
 
     private static ArrayMesh SideCliffMesh(int variant) => LowPolyMesh.CoursedCliff(
         new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), seed: 301 + Wrap(variant, SideCliff.Variants));
@@ -321,6 +415,17 @@ public static class TerrainParts
             ArrayMesh stone = LowPolyMesh.BeveledSlab(new Vector3(to - from, top - bottom, depth), 0.03f, 0.97f,
                 seed: seed + (i * 7), facetJitter: 0.03f, top: top, sideShade: 0.94f);
             parts.Add((stone, new Transform3D(Basis.Identity, new Vector3((from + to) * 0.5f, 0f, (depth * 0.5f) - RimOverhang))));
+
+            // 古金 V 字短铭文压在石沿顶面的中段；它与石块合成一个网格，不增加节点和绘制调用。
+            float mid = (from + to) * 0.5f;
+            float glyphHalf = Math.Min(0.055f, (to - from) * 0.22f);
+            Vector3[] rune =
+            [
+                new(mid - glyphHalf, top + 0.002f, 0.08f),
+                new(mid, top + 0.002f, 0.125f),
+                new(mid + glyphHalf, top + 0.002f, 0.08f),
+            ];
+            parts.Add((LowPolyMesh.Ribbon(rune, 0.011f, tint: new Color(1f, 0.89f, 0.47f)), Transform3D.Identity));
         }
 
         return LowPolyMesh.Merge(parts);
@@ -335,8 +440,21 @@ public static class TerrainParts
     }
 
     /// <summary>边框网格：x ∈ ±0.5、y ∈ [0, 0.065]、z ∈ ±0.065，顶边倒角 0.015，顶面四个三角面按档散列带 ±2% 色差，侧面亮度 0.92。</summary>
-    private static ArrayMesh PlateFrameMesh(int variant) => LowPolyMesh.BeveledSlab(
-        new Vector3(BoardGeometry.CellSize, 0.065f, 0.13f), 0.015f, 1f, seed: 701 + Wrap(variant, PlateFrame.Variants), facetJitter: 0.04f, top: 0.065f, sideShade: 0.92f);
+    private static ArrayMesh PlateFrameMesh(int variant)
+    {
+        var parts = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.CellSize, 0.065f, 0.13f), 0.015f, 1f,
+                seed: 701 + Wrap(variant, PlateFrame.Variants), facetJitter: 0.04f, top: 0.065f, sideShade: 0.92f), Transform3D.Identity),
+        };
+        foreach (float z in new[] { -0.032f, 0.032f })
+        {
+            parts.Add((LowPolyMesh.Ribbon([new Vector3(-0.43f, 0.0665f, z), new Vector3(0.43f, 0.0665f, z)],
+                0.009f, shade: 0.70f, minShade: 0.68f), Transform3D.Identity));
+        }
+
+        return LowPolyMesh.Merge(parts);
+    }
 
     /// <summary>转角件网格：x、z ∈ ±0.07，y ∈ [0, 0.07]，顶边倒角 0.02。</summary>
     private static ArrayMesh PlateCornerMesh() => LowPolyMesh.BeveledSlab(new Vector3(0.14f, 0.07f, 0.14f), 0.02f, 1f, top: 0.07f, sideShade: 0.92f);
@@ -434,9 +552,9 @@ public static class TerrainParts
     /// <summary>浮岛三档岩色（改前 AddFloatingIsland 的三份材质色）：0 土层、1 岩层、2 深岩。</summary>
     private static Color IslandColor(int tier) => tier switch
     {
-        0 => Visuals.SlopeSide.Darkened(0.12f),
-        1 => Visuals.CliffSide.Darkened(0.10f),
-        _ => Visuals.CliffSide.Darkened(0.30f),
+        0 => ArtSoil.Darkened(0.10f),
+        1 => ArtStone.Darkened(0.11f),
+        _ => ArtDarkStone.Darkened(0.18f),
     };
 
     /// <summary>打开顶点色的哑光材质（浮岛部件内置）。</summary>
@@ -447,10 +565,10 @@ public static class TerrainParts
         return material;
     }
 
-    /// <summary>云团材质：改前的不受光半透明白（Visuals.Flat，α 0.55），打开顶点色（顶点色 α 恒 1，乘出来仍是 0.55）。</summary>
+    /// <summary>云团材质：不受光的浅暮紫半透明色（Visuals.Flat，α 0.55），打开顶点色（顶点色 α 恒 1，乘出来仍是 0.55）。</summary>
     private static StandardMaterial3D CloudMaterial()
     {
-        StandardMaterial3D material = Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f));
+        StandardMaterial3D material = Visuals.Flat(new Color(0.91f, 0.89f, 0.98f, 0.55f));
         material.VertexColorUseAsAlbedo = true;
         return material;
     }

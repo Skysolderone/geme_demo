@@ -1,0 +1,20 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_867c81_r100_vc.tres" id="1_gfyri"]
+
+[sub_resource type="ArrayMesh" id="island_spike_1_0"]
+_surfaces = [{
+"aabb": AABB(-0.9595132, 0, -0.80207896, 1.8980356, 1, 1.7135489),
+"attribute_data": PackedByteArray("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/////////////////////////////////////////////////////////////////////////////////////////////////"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 108,
+"vertex_data": PackedByteArray("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")
+}]
+
+[node name="IslandSpike1" type="Node3D" unique_id=988889035]
+
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=1412156733]
+material_override = ExtResource("1_gfyri")
+mesh = SubResource("island_spike_1_0")

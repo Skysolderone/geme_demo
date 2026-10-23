@@ -1,0 +1,80 @@
+[gd_scene load_steps=11 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_Enamel"]
+albedo_color = Color(0.77, 0.23, 0.19, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="mat_Metal"]
+albedo_color = Color(0.69, 0.57, 0.36, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_Shade"]
+albedo_color = Color(0.36, 0.32, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_Stone"]
+albedo_color = Color(0.75, 0.65, 0.59, 1)
+roughness = 0.88
+
+[sub_resource type="CylinderMesh" id="mesh_1"]
+top_radius = 0.11
+bottom_radius = 0.13
+height = 0.07
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="mesh_2"]
+size = Vector3(0.045, 0.64, 0.045)
+
+[sub_resource type="CylinderMesh" id="mesh_3"]
+top_radius = 0.002
+bottom_radius = 0.061
+height = 0.16
+radial_segments = 4
+
+[sub_resource type="BoxMesh" id="mesh_4"]
+size = Vector3(0.045, 0.64, 0.045)
+
+[sub_resource type="CylinderMesh" id="mesh_5"]
+top_radius = 0.002
+bottom_radius = 0.061
+height = 0.16
+radial_segments = 4
+
+[sub_resource type="BoxMesh" id="mesh_6"]
+size = Vector3(0.14, 0.095, 0.095)
+
+[node name="CrossedSpears" type="Node3D"]
+
+[node name="Shade_SpearSocket" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.16, 0)
+mesh = SubResource("mesh_1")
+material_override = SubResource("mat_Shade")
+
+[node name="Metal_ShaftLeft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.455, 0)
+rotation_degrees = Vector3(0, 0, -29)
+mesh = SubResource("mesh_2")
+material_override = SubResource("mat_Metal")
+
+[node name="Stone_PointLeft" type="MeshInstance3D" parent="."]
+position = Vector3(0.214, 0.785, 0)
+rotation_degrees = Vector3(0, 0, -29)
+mesh = SubResource("mesh_3")
+material_override = SubResource("mat_Stone")
+
+[node name="Metal_ShaftRight" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.455, 0)
+rotation_degrees = Vector3(0, 0, 29)
+mesh = SubResource("mesh_4")
+material_override = SubResource("mat_Metal")
+
+[node name="Stone_PointRight" type="MeshInstance3D" parent="."]
+position = Vector3(-0.214, 0.785, 0)
+rotation_degrees = Vector3(0, 0, 29)
+mesh = SubResource("mesh_5")
+material_override = SubResource("mat_Stone")
+
+[node name="Enamel_CrossBinding" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.455, 0)
+mesh = SubResource("mesh_6")
+material_override = SubResource("mat_Enamel")

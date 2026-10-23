@@ -76,7 +76,7 @@ public sealed partial class Hud
             bool active = MapSelectModel.DifficultyOptions[i] == model.Difficulty;
             Button button = _difficultyButtons[i];
             button.Text = (active ? "● " : "○ ") + Labels.Difficulty(MapSelectModel.DifficultyOptions[i]);
-            button.AddThemeColorOverride("font_color", active ? Ui.PanelBorder : Ui.InfoText);
+            Ui.Selected(button, active);
         }
     }
 
@@ -123,6 +123,7 @@ public sealed partial class Hud
             CustomMinimumSize = new Vector2(0f, UiTheme.ButtonHeightPx),
         };
         _mapSeedInput.AddThemeFontSizeOverride("font_size", UiTheme.BodyFontPx);
+        Ui.Field(_mapSeedInput);
         _mapSeedInput.TextSubmitted += text => MapSeedSubmitted?.Invoke(text);
         seedRow.AddChild(_mapSeedInput);
         _mapSeedApply = Ui.Action("采用", 56);
@@ -161,7 +162,7 @@ public sealed partial class Hud
 
         body.AddChild(Ui.Separator());
         Button start = Ui.Action("开始");
-        start.AddThemeColorOverride("font_color", Ui.PanelBorder);
+        Ui.Primary(start);
         start.Pressed += () => MapStartPressed?.Invoke();
         body.AddChild(start);
     }

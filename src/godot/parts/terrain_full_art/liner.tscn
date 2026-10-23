@@ -1,0 +1,20 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_ffffff_r90_vc.tres" id="1_al1te"]
+
+[sub_resource type="ArrayMesh" id="liner_0"]
+_surfaces = [{
+"aabb": AABB(-0.5, -0.015, -0.5, 1, 0.03, 1),
+"attribute_data": PackedByteArray("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 36,
+"vertex_data": PackedByteArray("AAAAAI/CdTwAAAAAAAAAv4/CdTwAAAC/AAAAP4/CdTwAAAC/AAAAAI/CdTwAAAAAAAAAP4/CdTwAAAC/AAAAP4/CdTwAAAA/AAAAAI/CdTwAAAAAAAAAP4/CdTwAAAA/AAAAv4/CdTwAAAA/AAAAAI/CdTwAAAAAAAAAv4/CdTwAAAA/AAAAv4/CdTwAAAC/AAAAv4/CdTwAAAC/AAAAP4/CdbwAAAC/AAAAP4/CdTwAAAC/AAAAv4/CdTwAAAC/AAAAv4/CdbwAAAC/AAAAP4/CdbwAAAC/AAAAP4/CdTwAAAC/AAAAP4/CdbwAAAA/AAAAP4/CdTwAAAA/AAAAP4/CdTwAAAC/AAAAP4/CdbwAAAC/AAAAP4/CdbwAAAA/AAAAP4/CdTwAAAA/AAAAv4/CdbwAAAA/AAAAv4/CdTwAAAA/AAAAP4/CdTwAAAA/AAAAP4/CdbwAAAA/AAAAv4/CdbwAAAA/AAAAv4/CdTwAAAA/AAAAv4/CdbwAAAC/AAAAv4/CdTwAAAC/AAAAv4/CdTwAAAA/AAAAv4/CdbwAAAA/AAAAv4/CdbwAAAC//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+///////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCAAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/")
+}]
+
+[node name="Liner" type="Node3D" unique_id=1518748512]
+
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=109471658]
+material_override = ExtResource("1_al1te")
+mesh = SubResource("liner_0")

@@ -1,0 +1,6 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+vertex_color_use_as_albedo = true
+albedo_color = Color(0.59482354, 0.5025883, 0.7035294, 1)
+roughness = 0.9

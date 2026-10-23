@@ -1,0 +1,72 @@
+[gd_scene load_steps=11 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_Enamel"]
+albedo_color = Color(0.77, 0.23, 0.19, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="mat_Metal"]
+albedo_color = Color(0.69, 0.57, 0.36, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_Shade"]
+albedo_color = Color(0.36, 0.32, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_Stone"]
+albedo_color = Color(0.75, 0.65, 0.59, 1)
+roughness = 0.88
+
+[sub_resource type="BoxMesh" id="mesh_1"]
+size = Vector3(0.245, 0.075, 0.205)
+
+[sub_resource type="BoxMesh" id="mesh_2"]
+size = Vector3(0.072, 0.56, 0.072)
+
+[sub_resource type="BoxMesh" id="mesh_3"]
+size = Vector3(0.38, 0.13, 0.15)
+
+[sub_resource type="BoxMesh" id="mesh_4"]
+size = Vector3(0.085, 0.135, 0.155)
+
+[sub_resource type="BoxMesh" id="mesh_5"]
+size = Vector3(0.055, 0.39, 0.055)
+
+[sub_resource type="BoxMesh" id="mesh_6"]
+size = Vector3(0.17, 0.055, 0.13)
+
+[node name="LeaningHammer" type="Node3D"]
+
+[node name="HammerLean" type="Node3D" parent="."]
+position = Vector3(-0.055, 0.13, 0)
+rotation_degrees = Vector3(0, 0, -17)
+
+[node name="Shade_AnvilFoot" type="MeshInstance3D" parent="."]
+position = Vector3(0.06, 0.15, 0)
+mesh = SubResource("mesh_1")
+material_override = SubResource("mat_Shade")
+
+[node name="Metal_ToolShaft" type="MeshInstance3D" parent="HammerLean"]
+position = Vector3(0, 0.285, 0)
+mesh = SubResource("mesh_2")
+material_override = SubResource("mat_Metal")
+
+[node name="Stone_HammerHead" type="MeshInstance3D" parent="HammerLean"]
+position = Vector3(0, 0.59, 0)
+mesh = SubResource("mesh_3")
+material_override = SubResource("mat_Stone")
+
+[node name="Enamel_HeadBinding" type="MeshInstance3D" parent="HammerLean"]
+position = Vector3(0, 0.59, 0)
+mesh = SubResource("mesh_4")
+material_override = SubResource("mat_Enamel")
+
+[node name="Metal_SlantBrace" type="MeshInstance3D" parent="."]
+position = Vector3(0.145, 0.285, 0.025)
+rotation_degrees = Vector3(0, 0, 34)
+mesh = SubResource("mesh_5")
+material_override = SubResource("mat_Metal")
+
+[node name="Shade_BraceFoot" type="MeshInstance3D" parent="."]
+position = Vector3(0.18, 0.16, 0.025)
+mesh = SubResource("mesh_6")
+material_override = SubResource("mat_Shade")

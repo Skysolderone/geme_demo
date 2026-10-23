@@ -99,7 +99,7 @@ public sealed partial class Hud
         _carryBarText.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(_carryBarText);
         _resignButton = Ui.Action("弃赛", 64);
-        _resignButton.AddThemeColorOverride("font_color", Ui.DangerText);
+        Ui.Danger(_resignButton);
         _resignButton.Pressed += () => ShowConfirm(
             "确认弃赛？弃赛后不再行动，AI 继续把对局下完。带入带出开启时：返还带入的补给，并按弃赛时的势力名次带出一半补给点（构筑保护期内为 0）。",
             "确认弃赛", () => ResignConfirmed?.Invoke());
@@ -170,6 +170,7 @@ public sealed partial class Hud
             {
                 types = new OptionButton { CustomMinimumSize = new Vector2(110f, UiTheme.ButtonHeightPx) };
                 types.AddThemeFontSizeOverride("font_size", UiTheme.BodyFontPx);
+                Ui.Field(types);
                 foreach (CarryCandidate candidate in data.Candidates)
                 {
                     types.AddItem(Labels.Piece(candidate.Type));
@@ -182,6 +183,7 @@ public sealed partial class Hud
             }
 
             Button carry = Ui.Action("带入并开始", 110);
+            Ui.Primary(carry);
             carry.Disabled = !data.CarryAllowed || stock < 1;
             ImmutableArray<CarryCandidate> candidates = data.Candidates;
             carry.Pressed += () => SupplyCarryPressed?.Invoke(captured,
@@ -197,7 +199,7 @@ public sealed partial class Hud
 
         body.AddChild(Ui.Separator());
         Button skip = Ui.Action("不带入，开始");
-        skip.AddThemeColorOverride("font_color", Ui.PanelBorder);
+        Ui.Primary(skip);
         skip.Pressed += () => SupplySkipPressed?.Invoke();
         body.AddChild(skip);
     }
@@ -248,7 +250,7 @@ public sealed partial class Hud
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
         Button ok = Ui.Action(yes, 110);
-        ok.AddThemeColorOverride("font_color", Ui.DangerText);
+        Ui.Danger(ok);
         ok.Pressed += () =>
         {
             _confirmPanel!.Visible = false;

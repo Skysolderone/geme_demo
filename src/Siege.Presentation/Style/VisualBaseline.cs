@@ -481,11 +481,27 @@ public static class LayerVisuals
 /// </summary>
 public static class UiTheme
 {
-    public static readonly Rgba PanelFill = new(18, 20, 26, 208);
+    public static readonly Rgba PanelFill = new(16, 25, 34, 222);
 
-    public static readonly Rgba PanelBorder = new(184, 146, 72);
+    public static readonly Rgba PanelBorder = new(198, 163, 98);
 
-    public static readonly Rgba InfoText = new(236, 232, 220);
+    public static readonly Rgba PanelTop = new(228, 195, 126);
+
+    public static readonly Rgba PanelInset = new(48, 67, 76);
+
+    public static readonly Rgba ButtonFill = new(32, 49, 60, 238);
+
+    public static readonly Rgba ButtonHover = new(44, 69, 77, 246);
+
+    public static readonly Rgba ButtonPressed = new(73, 61, 44, 250);
+
+    public static readonly Rgba ButtonDisabled = new(28, 36, 43, 192);
+
+    public static readonly Rgba ActiveFill = new(60, 64, 55, 246);
+
+    public static readonly Rgba Accent = new(126, 216, 213);
+
+    public static readonly Rgba InfoText = new(239, 239, 226);
 
     public static readonly Rgba DangerText = new(236, 96, 80);
 

@@ -913,10 +913,11 @@ public sealed partial class GameRoot : Node3D
         Rect2 view = GetViewport().GetVisibleRect();
         int width = _session.Match.Map.Width;
         int height = _session.Match.Map.Height;
+        (Coord low, Coord high) = _board.Extent;
         Vector3[] anchors =
         [
-            .. Enumerable.Range(0, width).SelectMany(x => new[] { BoardGeometry.ColumnLabelAnchor(x, width, height, far: false), BoardGeometry.ColumnLabelAnchor(x, width, height, far: true) }),
-            .. Enumerable.Range(0, height).SelectMany(y => new[] { BoardGeometry.RowLabelAnchor(y, width, height, right: false), BoardGeometry.RowLabelAnchor(y, width, height, right: true) }),
+            .. Enumerable.Range(low.X, high.X - low.X + 1).SelectMany(x => new[] { BoardGeometry.ColumnLabelAnchor(x, low.Y, width, height, far: false), BoardGeometry.ColumnLabelAnchor(x, high.Y, width, height, far: true) }),
+            .. Enumerable.Range(low.Y, high.Y - low.Y + 1).SelectMany(y => new[] { BoardGeometry.RowLabelAnchor(y, low.X, width, height, right: false), BoardGeometry.RowLabelAnchor(y, high.X, width, height, right: true) }),
         ];
         Vector2[] onScreen = [.. anchors.Where(a => !_board.Camera.IsPositionBehind(a)).Select(a => _board.Camera.UnprojectPosition(a)).Where(view.HasPoint)];
         int covered = _hud.RecruitBarOpen ? onScreen.Count(grown.HasPoint) : 0;

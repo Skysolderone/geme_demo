@@ -1,78 +1,114 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=15 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_Enamel"]
+albedo_color = Color(0.77, 0.23, 0.19, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="mat_Metal"]
+albedo_color = Color(0.69, 0.57, 0.36, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_Shade"]
+albedo_color = Color(0.36, 0.32, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_Stone"]
+albedo_color = Color(0.75, 0.65, 0.59, 1)
+roughness = 0.88
 
 [sub_resource type="CylinderMesh" id="mesh_1"]
-top_radius = 0.225
+top_radius = 0.235
 bottom_radius = 0.255
 height = 0.075
-radial_segments = 8
+radial_segments = 10
 
 [sub_resource type="CylinderMesh" id="mesh_2"]
-top_radius = 0.187
-bottom_radius = 0.218
-height = 0.43
+top_radius = 0.185
+bottom_radius = 0.215
+height = 0.45
 radial_segments = 8
 
 [sub_resource type="CylinderMesh" id="mesh_3"]
 top_radius = 0.225
 bottom_radius = 0.225
-height = 0.047
-radial_segments = 8
+height = 0.035
+radial_segments = 10
 
 [sub_resource type="CylinderMesh" id="mesh_4"]
-top_radius = 0.255
-bottom_radius = 0.255
-height = 0.07
-radial_segments = 8
+top_radius = 0.235
+bottom_radius = 0.235
+height = 0.045
+radial_segments = 10
 
-[sub_resource type="BoxMesh" id="mesh_5"]
-size = Vector3(0.13, 0.19, 0.025)
+[sub_resource type="CylinderMesh" id="mesh_5"]
+top_radius = 0.265
+bottom_radius = 0.265
+height = 0.075
+radial_segments = 10
 
 [sub_resource type="BoxMesh" id="mesh_6"]
-size = Vector3(0.115, 0.14, 0.115)
+size = Vector3(0.135, 0.215, 0.025)
 
 [sub_resource type="BoxMesh" id="mesh_7"]
-size = Vector3(0.115, 0.14, 0.115)
+size = Vector3(0.115, 0.145, 0.115)
 
 [sub_resource type="BoxMesh" id="mesh_8"]
-size = Vector3(0.115, 0.14, 0.115)
+size = Vector3(0.115, 0.145, 0.115)
 
 [sub_resource type="BoxMesh" id="mesh_9"]
-size = Vector3(0.115, 0.14, 0.115)
+size = Vector3(0.115, 0.145, 0.115)
 
-[node name="FortressBody" type="Node3D"]
+[sub_resource type="BoxMesh" id="mesh_10"]
+size = Vector3(0.115, 0.145, 0.115)
 
-[node name="Shade_Footing" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.1075, 0)
+[node name="CarvedKeep" type="Node3D"]
+
+[node name="Shade_WideFoot" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.15, 0)
 mesh = SubResource("mesh_1")
+material_override = SubResource("mat_Shade")
 
 [node name="Stone_Keep" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.355, 0)
+position = Vector3(0, 0.395, 0)
 mesh = SubResource("mesh_2")
+material_override = SubResource("mat_Stone")
 
-[node name="Faction_WaistBand" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.435, 0)
+[node name="Metal_LowerHoop" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.245, 0)
 mesh = SubResource("mesh_3")
+material_override = SubResource("mat_Metal")
+
+[node name="Enamel_UpperHoop" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.53, 0)
+mesh = SubResource("mesh_4")
+material_override = SubResource("mat_Enamel")
 
 [node name="Stone_Parapet" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.604, 0)
-mesh = SubResource("mesh_4")
-
-[node name="Shade_Gate" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0.24, 0.216)
+position = Vector3(0, 0.65, 0)
 mesh = SubResource("mesh_5")
+material_override = SubResource("mat_Stone")
+
+[node name="Shade_ArchedGate" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.36, 0.218)
+mesh = SubResource("mesh_6")
+material_override = SubResource("mat_Shade")
 
 [node name="Stone_MerlonNW" type="MeshInstance3D" parent="."]
-position = Vector3(-0.163, 0.705, -0.163)
-mesh = SubResource("mesh_6")
+position = Vector3(-0.18, 0.762, -0.18)
+mesh = SubResource("mesh_7")
+material_override = SubResource("mat_Stone")
 
 [node name="Stone_MerlonNE" type="MeshInstance3D" parent="."]
-position = Vector3(0.163, 0.705, -0.163)
-mesh = SubResource("mesh_7")
+position = Vector3(0.18, 0.762, -0.18)
+mesh = SubResource("mesh_8")
+material_override = SubResource("mat_Stone")
 
 [node name="Stone_MerlonSW" type="MeshInstance3D" parent="."]
-position = Vector3(-0.163, 0.705, 0.163)
-mesh = SubResource("mesh_8")
+position = Vector3(-0.18, 0.762, 0.18)
+mesh = SubResource("mesh_9")
+material_override = SubResource("mat_Stone")
 
 [node name="Stone_MerlonSE" type="MeshInstance3D" parent="."]
-position = Vector3(0.163, 0.705, 0.163)
-mesh = SubResource("mesh_9")
+position = Vector3(0.18, 0.762, 0.18)
+mesh = SubResource("mesh_10")
+material_override = SubResource("mat_Stone")

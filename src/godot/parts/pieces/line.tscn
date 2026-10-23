@@ -1,0 +1,90 @@
+[gd_scene load_steps=12 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_Enamel"]
+albedo_color = Color(0.77, 0.23, 0.19, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="mat_Metal"]
+albedo_color = Color(0.69, 0.57, 0.36, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_Shade"]
+albedo_color = Color(0.36, 0.32, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_Stone"]
+albedo_color = Color(0.75, 0.65, 0.59, 1)
+roughness = 0.88
+
+[sub_resource type="CylinderMesh" id="mesh_1"]
+top_radius = 0.075
+bottom_radius = 0.1
+height = 0.18
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="mesh_2"]
+size = Vector3(0.49, 0.075, 0.075)
+
+[sub_resource type="BoxMesh" id="mesh_3"]
+size = Vector3(0.38, 0.026, 0.079)
+
+[sub_resource type="SphereMesh" id="mesh_4"]
+radius = 0.145
+height = 0.29
+radial_segments = 9
+rings = 4
+
+[sub_resource type="SphereMesh" id="mesh_5"]
+radius = 0.037
+height = 0.074
+radial_segments = 6
+rings = 4
+
+[sub_resource type="SphereMesh" id="mesh_6"]
+radius = 0.145
+height = 0.29
+radial_segments = 9
+rings = 4
+
+[sub_resource type="SphereMesh" id="mesh_7"]
+radius = 0.037
+height = 0.074
+radial_segments = 6
+rings = 4
+
+[node name="TwinOrbs" type="Node3D"]
+
+[node name="Shade_CentralFoot" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.205, 0)
+mesh = SubResource("mesh_1")
+material_override = SubResource("mat_Shade")
+
+[node name="Metal_JoiningBeam" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.42, 0)
+mesh = SubResource("mesh_2")
+material_override = SubResource("mat_Metal")
+
+[node name="Enamel_BeamInlay" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.448, 0.003)
+mesh = SubResource("mesh_3")
+material_override = SubResource("mat_Enamel")
+
+[node name="Stone_OrbLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-0.215, 0.42, 0)
+mesh = SubResource("mesh_4")
+material_override = SubResource("mat_Stone")
+
+[node name="Metal_PinLeft" type="MeshInstance3D" parent="."]
+position = Vector3(-0.215, 0.57, 0)
+mesh = SubResource("mesh_5")
+material_override = SubResource("mat_Metal")
+
+[node name="Stone_OrbRight" type="MeshInstance3D" parent="."]
+position = Vector3(0.215, 0.42, 0)
+mesh = SubResource("mesh_6")
+material_override = SubResource("mat_Stone")
+
+[node name="Metal_PinRight" type="MeshInstance3D" parent="."]
+position = Vector3(0.215, 0.57, 0)
+mesh = SubResource("mesh_7")
+material_override = SubResource("mat_Metal")

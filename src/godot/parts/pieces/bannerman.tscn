@@ -1,0 +1,84 @@
+[gd_scene load_steps=12 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_Cloth"]
+albedo_color = Color(0.72, 0.28, 0.25, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_Enamel"]
+albedo_color = Color(0.77, 0.23, 0.19, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="mat_Metal"]
+albedo_color = Color(0.69, 0.57, 0.36, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_Shade"]
+albedo_color = Color(0.36, 0.32, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="mesh_1"]
+top_radius = 0.065
+bottom_radius = 0.095
+height = 0.105
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="mesh_2"]
+top_radius = 0.027
+bottom_radius = 0.032
+height = 0.78
+radial_segments = 7
+
+[sub_resource type="SphereMesh" id="mesh_3"]
+radius = 0.052
+height = 0.104
+radial_segments = 7
+rings = 4
+
+[sub_resource type="BoxMesh" id="mesh_4"]
+size = Vector3(0.26, 0.27, 0.024)
+
+[sub_resource type="BoxMesh" id="mesh_5"]
+size = Vector3(0.09, 0.095, 0.024)
+
+[sub_resource type="BoxMesh" id="mesh_6"]
+size = Vector3(0.09, 0.095, 0.024)
+
+[sub_resource type="BoxMesh" id="mesh_7"]
+size = Vector3(0.27, 0.032, 0.03)
+
+[node name="HighPennant" type="Node3D"]
+
+[node name="Shade_PoleSocket" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.17, 0)
+mesh = SubResource("mesh_1")
+material_override = SubResource("mat_Shade")
+
+[node name="Metal_TrueStaff" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.51, 0)
+mesh = SubResource("mesh_2")
+material_override = SubResource("mat_Metal")
+
+[node name="Metal_Finial" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.922, 0)
+mesh = SubResource("mesh_3")
+material_override = SubResource("mat_Metal")
+
+[node name="Cloth_BannerField" type="MeshInstance3D" parent="."]
+position = Vector3(0.16, 0.68, 0)
+mesh = SubResource("mesh_4")
+material_override = SubResource("mat_Cloth")
+
+[node name="Cloth_LeftTail" type="MeshInstance3D" parent="."]
+position = Vector3(0.075, 0.51, 0)
+mesh = SubResource("mesh_5")
+material_override = SubResource("mat_Cloth")
+
+[node name="Cloth_RightTail" type="MeshInstance3D" parent="."]
+position = Vector3(0.245, 0.51, 0)
+mesh = SubResource("mesh_6")
+material_override = SubResource("mat_Cloth")
+
+[node name="Enamel_BannerHeading" type="MeshInstance3D" parent="."]
+position = Vector3(0.16, 0.83, 0)
+mesh = SubResource("mesh_7")
+material_override = SubResource("mat_Enamel")

@@ -9,7 +9,7 @@ namespace Siege.Godot;
 /// <remarks>
 /// <para><b>顶点色只当亮度系数</b>：材质打开 <c>VertexColorUseAsAlbedo</c>，最终颜色 = 材质底色 × 顶点色。所以按底色共用的材质仍是一色一份，
 /// 压暗表照常整批改底色，出生区淡染与明暗棋盘格照旧改底色就能生效。Godot 4 的顶点色按每通道 8 位存（超过 1 的部分会被截掉），
-/// 所以系数的有效区间是 <see cref="MinShade"/>–1：以 1 为本色，色差只往暗处走。</para>
+/// 常规面系数的有效区间是 <see cref="MinShade"/>–1：以 1 为本色，色差只往暗处走；阴刻线允许局部更暗，古金铭文使用顶点色分通道调色。</para>
 /// <para><b>确定性</b>：抖动与色差一律取自整数散列 <see cref="Hash"/>，不用随机数；同一组参数产出逐字节相同的网格。</para>
 /// <para>绕序约定与 <see cref="LowPoly"/> 的棱柱相同：按"期望朝外"的方向用叉积定顶点顺序，不依赖调用方给的顺逆时针。</para>
 /// </remarks>
@@ -104,6 +104,35 @@ public static class LowPolyMesh
         }
 
         return tool.Commit();
+    }
+
+    /// <summary>
+    /// 共用地砖的雕刻角饰。两枚很短的 L 形刻线避开格心与格边，和顶板合并为一个 surface；
+    /// 颜色仍由 BoardView 按地表覆盖，顶点色只把刻线轻压暗。
+    /// </summary>
+    public static ArrayMesh CarvedTile(Vector3 size, float bevel, int variant)
+    {
+        var parts = new List<(ArrayMesh, Transform3D)>
+        {
+            (BeveledSlab(size, bevel, 0.98f, seed: 101 + variant, facetJitter: 0.035f, sideShade: 0.95f), Transform3D.Identity),
+        };
+        float inner = size.X * 0.325f;
+        float outer = size.X * 0.41f;
+        float y = 0.0015f;
+        for (int i = 0; i < 2; i++)
+        {
+            float sx = ((variant + i) & 1) == 0 ? 1f : -1f;
+            float sz = i == 0 ? 1f : -1f;
+            Vector3[] line =
+            [
+                new(sx * inner, y, sz * outer),
+                new(sx * outer, y, sz * outer),
+                new(sx * outer, y, sz * inner),
+            ];
+            parts.Add((Ribbon(line, 0.012f, shade: 0.70f, minShade: 0.68f), Transform3D.Identity));
+        }
+
+        return Merge(parts);
     }
 
     /// <summary>
@@ -341,7 +370,8 @@ public static class LowPolyMesh
     /// 细条（裂纹、水纹、芦苇等）：沿折线 <paramref name="points"/> 铺一条宽 <paramref name="size"/> 的带。
     /// <paramref name="upright"/> 为假时贴地（在 XZ 平面内向两侧各展开一半宽，朝上）；为真时立起（从折线向上展开整宽，朝折线的左侧）。
     /// </summary>
-    public static ArrayMesh Ribbon(IReadOnlyList<Vector3> points, float size, bool upright = false, float shade = 1f)
+    public static ArrayMesh Ribbon(IReadOnlyList<Vector3> points, float size, bool upright = false, float shade = 1f,
+        float minShade = MinShade, Color? tint = null)
     {
         ArgumentNullException.ThrowIfNull(points);
         var tool = Begin();
@@ -358,12 +388,26 @@ public static class LowPolyMesh
             if (upright)
             {
                 Vector3 lift = Vector3.Up * size;
-                Quad(tool, p, q, q + lift, p + lift, side, shade);
+                if (tint is { } color)
+                {
+                    Quad(tool, p, q, q + lift, p + lift, side, color);
+                }
+                else
+                {
+                    Quad(tool, p, q, q + lift, p + lift, side, shade, minShade);
+                }
             }
             else
             {
                 Vector3 half = side * (size * 0.5f);
-                Quad(tool, p - half, q - half, q + half, p + half, Vector3.Up, shade);
+                if (tint is { } color)
+                {
+                    Quad(tool, p - half, q - half, q + half, p + half, Vector3.Up, color);
+                }
+                else
+                {
+                    Quad(tool, p - half, q - half, q + half, p + half, Vector3.Up, shade, minShade);
+                }
             }
         }
 
@@ -557,17 +601,31 @@ public static class LowPolyMesh
     }
 
     /// <summary>四边形 a-b-c-d（沿边依次排列）拆成两个三角面。</summary>
-    private static void Quad(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 outward, float shade)
+    private static void Quad(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 outward, float shade,
+        float minShade = MinShade)
     {
-        Tri(tool, a, b, c, outward, shade);
-        Tri(tool, a, c, d, outward, shade);
+        Tri(tool, a, b, c, outward, shade, minShade);
+        Tri(tool, a, c, d, outward, shade, minShade);
+    }
+
+    private static void Quad(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 outward, Color tint)
+    {
+        Tri(tool, a, b, c, outward, tint);
+        Tri(tool, a, c, d, outward, tint);
     }
 
     /// <summary>
     /// 一个平直着色的三角面：法线取三角面自身的法线（朝 <paramref name="outward"/> 一侧），绕序按 Godot 的正面约定（从正面看顺时针）调整。
-    /// 退化三角面（面积为 0）跳过。顶点色是灰度亮度系数，截到 [<see cref="MinShade"/>, <see cref="MaxShade"/>]。
+    /// 退化三角面（面积为 0）跳过。常规面使用灰度亮度系数，阴刻线可传入更低的局部下限。
     /// </summary>
-    private static void Tri(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 outward, float shade)
+    private static void Tri(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 outward, float shade,
+        float minShade = MinShade)
+    {
+        float s = Math.Clamp(shade, minShade, MaxShade);
+        Tri(tool, a, b, c, outward, new Color(s, s, s));
+    }
+
+    private static void Tri(SurfaceTool tool, Vector3 a, Vector3 b, Vector3 c, Vector3 outward, Color tint)
     {
         Vector3 cross = (b - a).Cross(c - a);
         if (cross.LengthSquared() < 1e-12f)
@@ -577,12 +635,10 @@ public static class LowPolyMesh
 
         bool counterClockwise = cross.Dot(outward) > 0f;
         Vector3 normal = (counterClockwise ? cross : -cross).Normalized();
-        float s = Math.Clamp(shade, MinShade, MaxShade);
-        var color = new Color(s, s, s);
         foreach (Vector3 v in counterClockwise ? new[] { a, c, b } : new[] { a, b, c })
         {
             tool.SetNormal(normal);
-            tool.SetColor(color);
+            tool.SetColor(tint);
             tool.AddVertex(v);
         }
     }

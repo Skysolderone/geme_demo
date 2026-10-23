@@ -157,8 +157,9 @@ public sealed partial class Hud : CanvasLayer
         row.AddChild(_turnEmblem);
         var texts = new VBoxContainer();
         texts.AddThemeConstantOverride("separation", 0);
-        _turnTitle = Ui.Text("—");
-        _turnSubtitle = Ui.Text("—", Ui.MutedText, UiTheme.BodyFontPx - 2);
+        _turnTitle = Ui.Text("—", Visuals.ToColor(UiTheme.PanelTop), UiTheme.BodyFontPx + 1);
+        // 长状态说明允许在固定宽度内折行，避免把左上面板撑进中央行动顺序条。
+        _turnSubtitle = Ui.Text("—", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true);
         texts.AddChild(_turnTitle);
         texts.AddChild(_turnSubtitle);
         row.AddChild(texts);
@@ -482,6 +483,7 @@ public sealed partial class Hud : CanvasLayer
                 button.Pressed += () => HandTypeSelected?.Invoke(type);
             }
 
+            PieceIcon.Attach(button, type, selected);
             _handBody.AddChild(button);
         }
     }
@@ -547,6 +549,7 @@ public sealed partial class Hud : CanvasLayer
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 4);
         Button confirm = Ui.Action("确认落子 [Enter]", 132);
+        Ui.Primary(confirm);
         confirm.Disabled = !preview.CanConfirm;
         confirm.Pressed += () => ConfirmPressed?.Invoke();
         row.AddChild(confirm);
@@ -706,10 +709,10 @@ public sealed partial class Hud : CanvasLayer
         if (session.AwaitingZone)
         {
             // 插旗提示放左列（信息层面板的位置，此时它是隐藏的）：居中放在顶部会盖住棋盘远边的列标注（terrain-model 6.3）。
-            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 92f, 392f, CameraHintVisible ? 268f : 222f);
+            Ui.Anchor(_centerPanel, 0f, 0f, 14f, 160f, 392f, CameraHintVisible ? 450f : 400f);
             _centerBody.AddChild(Ui.Heading("开局盲选出生棋盘"));
-            _centerBody.AddChild(Ui.Text("点 5 个占位里的任意一块，旗就插在那块出生棋盘上——选中即锁定，锁定后 5 块棋盘一起展开、整张地图可见；别人的旗看不到，可能与你同区。", Ui.InfoText, wrap: true));
-            _centerBody.AddChild(Ui.Text("前 3 个大回合只能在自己的出生棋盘落子与改造（构筑期），第 4 大回合起全图可落；四人整轮 Pass、地图填满或只剩一人即终局。", Ui.MutedText, wrap: true));
+            _centerBody.AddChild(Ui.Text("点选任意一块占位棋盘，旗即锁定。\n锁定后五块棋盘展开，地图可见。\n其他玩家的旗不可见，可能与你同区。", Ui.InfoText, wrap: true));
+            _centerBody.AddChild(Ui.Text("前三个大回合限在出生区落子、改造；\n第四回合起可在全图行动。\n四人整轮 Pass、地图填满，\n或只剩一人时终局。", Ui.MutedText, wrap: true));
             if (CameraHintVisible)
             {
                 _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));
@@ -756,6 +759,7 @@ public sealed partial class Hud : CanvasLayer
             Button button = Ui.Action($"[{candidate.Index + 1}] {Labels.Piece(candidate.Type)}{suffix}", 300);
             button.Alignment = HorizontalAlignment.Left;
             button.Disabled = candidate.IsPicked || !candidate.IsSelectable;
+            PieceIcon.Attach(button, candidate.Type, disabled: button.Disabled);
             int index = candidate.Index;
             button.Pressed += () => RecruitPicked?.Invoke(index);
             _centerBody.AddChild(button);
@@ -765,6 +769,7 @@ public sealed partial class Hud : CanvasLayer
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
         Button done = Ui.Action("完成征募，进入部署", 300);
+        Ui.Primary(done);
         done.Pressed += () => RecruitFinished?.Invoke();
         row.AddChild(done);
         Button collapse = Ui.Action("收起 [V]", 120);

@@ -10,88 +10,88 @@ namespace Siege.Godot;
 public static class Visuals
 {
     /// <summary>棋盘底座色（缝隙露出的颜色，即网格线）。</summary>
-    public static readonly Color GridInk = Color.Color8(58, 66, 78);
+    public static readonly Color GridInk = Color.Color8(48, 55, 58);
 
-    /// <summary>浮空岛的岛缘（棋盘外圈、坐标标注所在的那一圈）：压暗的暖色岩石，浅色标注字在上面读得清。</summary>
-    public static readonly Color IslandRim = Color.Color8(92, 82, 74);
+    /// <summary>新棋盘的深色板岩岛缘，金色坐标和浅色地砖在其上形成清楚的内外层次。</summary>
+    public static readonly Color IslandRim = Color.Color8(55, 68, 77);
 
     /// <summary>棋盘四边坐标标注的字色。棋盘外是深色背景，深灰字读不出来，取浅色并配深色描边。</summary>
-    public static readonly Color CoordinateLabel = Color.Color8(206, 202, 190);
+    public static readonly Color CoordinateLabel = Color.Color8(250, 230, 184);
 
     /// <summary>坐标标注的描边色：压住浅色字在亮地砖上的反差不足。</summary>
     public static readonly Color CoordinateLabelOutline = Color.Color8(18, 19, 23);
 
     /// <summary>可落子地砖（草地，terrain-model 缺省地表）。</summary>
-    public static readonly Color TilePlayable = Color.Color8(138, 190, 88);
+    public static readonly Color TilePlayable = Color.Color8(177, 197, 148);
 
     /// <summary>土路地表：比草地暖、比岩石亮，只作视觉，帮玩家读出"下山的路"。</summary>
-    public static readonly Color TileRoad = Color.Color8(222, 192, 132);
+    public static readonly Color TileRoad = Color.Color8(226, 196, 149);
 
     /// <summary>林地地表：深绿，配角落的小树；林地不接收覆盖，靠占据拿。</summary>
-    public static readonly Color TileForest = Color.Color8(86, 150, 78);
+    public static readonly Color TileForest = Color.Color8(75, 136, 113);
 
     /// <summary>
-    /// 荒漠地表（terrain-surfaces）：比土路更浅更白的沙色。去色后亮度约 224，与土路（≈194）、草地（≈163）拉开；
+    /// 荒漠地表（terrain-surfaces）：比土路更浅更白的沙色。去色后仍与土路、草地拉开；
     /// 与土路的区分主要靠格角的仙人掌 / 兽骨（段 1 补装饰）。
     /// </summary>
-    public static readonly Color TileDesert = Color.Color8(242, 226, 170);
+    public static readonly Color TileDesert = Color.Color8(246, 222, 165);
 
     /// <summary>仙人掌（荒漠装饰）：偏灰的橄榄绿，比林地树冠浅、比沼泽亮；轮廓是竖柱带侧臂，不是锥形树冠。</summary>
-    public static readonly Color Cactus = Color.Color8(110, 150, 86);
+    public static readonly Color Cactus = Color.Color8(80, 133, 107);
 
     /// <summary>兽骨（荒漠装饰）：暖白，贴地横放，灰度下是地砖上最亮的一小块。</summary>
-    public static readonly Color Bone = Color.Color8(238, 230, 212);
+    public static readonly Color Bone = Color.Color8(251, 236, 205);
 
     /// <summary>沼泽水洼：暗蓝灰的积水斑块，贴地；比深水暗、比浅滩深，读起来是"泥里的水"。</summary>
-    public static readonly Color MarshPuddle = Color.Color8(70, 92, 96);
+    public static readonly Color MarshPuddle = Color.Color8(52, 84, 101);
 
     /// <summary>芦苇（沼泽装饰）：干草黄褐。细长竖条成簇，轮廓与林地锥形树冠、荒漠仙人掌都不同。</summary>
-    public static readonly Color Reed = Color.Color8(176, 156, 96);
+    public static readonly Color Reed = Color.Color8(203, 170, 106);
 
     /// <summary>岩台的裂纹与碎石：比岩台地砖深一档的冷褐，贴地细线；灰度下是石面上的深色纹理。</summary>
-    public static readonly Color CragCrack = Color.Color8(96, 86, 74);
+    public static readonly Color CragCrack = Color.Color8(82, 85, 90);
 
     /// <summary>浅滩的鹅卵石：浅暖灰，比浅滩水色暗一档，灰度下是水面上的一颗颗小斑点。</summary>
-    public static readonly Color Pebble = Color.Color8(168, 160, 146);
+    public static readonly Color Pebble = Color.Color8(218, 201, 169);
 
     /// <summary>浅滩的水纹：近白的细弧线，贴地；深水没有这个纹理，二者靠它与高度一眼分开。</summary>
-    public static readonly Color Ripple = Color.Color8(232, 246, 250);
+    public static readonly Color Ripple = Color.Color8(226, 247, 237);
 
-    /// <summary>沼泽地表：暗橄榄泥色，去色后（≈93）比林地（≈123）更暗；形状提示是水洼与芦苇，不用锥形树冠（段 2 补装饰）。</summary>
-    public static readonly Color TileMarsh = Color.Color8(92, 98, 70);
+    /// <summary>沼泽地表：暗蓝灰泥色，去色后比林地更暗；形状提示是水洼与芦苇，不用锥形树冠。</summary>
+    public static readonly Color TileMarsh = Color.Color8(76, 97, 96);
 
-    /// <summary>岩台地表：灰褐石面，去色后 ≈140，与障碍岩石的冷灰区分；形状提示是裂纹与加厚边缘（段 3 补装饰）。</summary>
-    public static readonly Color TileCrag = Color.Color8(150, 138, 120);
+    /// <summary>岩台地表：灰褐石面，与障碍岩石靠材质和裂纹区分；形状提示是裂纹与加厚边缘。</summary>
+    public static readonly Color TileCrag = Color.Color8(161, 151, 135);
 
-    /// <summary>浅滩地表：与地砖齐平的浅青水色，去色后 ≈181；与深水（低于地砖、深蓝）靠高度与鹅卵石区分（段 4 补装饰）。</summary>
-    public static readonly Color TileShallows = Color.Color8(130, 200, 215);
+    /// <summary>浅滩地表：与地砖齐平的浅青水色；与深水（低于地砖、深蓝）靠高度、水纹与鹅卵石区分。</summary>
+    public static readonly Color TileShallows = Color.Color8(121, 198, 201);
 
     /// <summary>深水：低于地砖的蓝色水面，不可落子。</summary>
-    public static readonly Color DeepWater = Color.Color8(46, 138, 204);
+    public static readonly Color DeepWater = Color.Color8(39, 112, 159);
 
     /// <summary>深水的浅色波纹。</summary>
-    public static readonly Color WaterRipple = Color.Color8(170, 222, 246);
+    public static readonly Color WaterRipple = Color.Color8(173, 235, 225);
 
     /// <summary>预置桥的木板面。</summary>
-    public static readonly Color BridgeDeck = Color.Color8(176, 128, 78);
+    public static readonly Color BridgeDeck = Color.Color8(171, 126, 81);
 
     /// <summary>栅栏与桥墩的深色木料。</summary>
-    public static readonly Color Timber = Color.Color8(112, 84, 54);
+    public static readonly Color Timber = Color.Color8(103, 75, 60);
 
     /// <summary>h=1 那一层的侧面（缓坡侧面）：土色。</summary>
-    public static readonly Color SlopeSide = Color.Color8(158, 112, 72);
+    public static readonly Color SlopeSide = Color.Color8(172, 135, 102);
 
     /// <summary>h=2 那一层的侧面（崖壁侧面）：岩灰。Δh=2 的崖壁露出土色 + 岩灰两条色带，Δh=1 的缓坡只露土色一条。</summary>
-    public static readonly Color CliffSide = Color.Color8(136, 124, 116);
+    public static readonly Color CliffSide = Color.Color8(143, 127, 117);
 
     /// <summary>林地小树的树冠。</summary>
-    public static readonly Color TreeCanopy = Color.Color8(48, 128, 72);
+    public static readonly Color TreeCanopy = Color.Color8(49, 119, 100);
 
     /// <summary>松树丛里点缀的秋色树冠（装饰层）。</summary>
-    public static readonly Color PineAutumn = Color.Color8(222, 176, 58);
+    public static readonly Color PineAutumn = Color.Color8(224, 176, 86);
 
     /// <summary>断柱遗迹的浅色石材（装饰层）。</summary>
-    public static readonly Color RuinStone = Color.Color8(160, 152, 138);
+    public static readonly Color RuinStone = Color.Color8(199, 183, 158);
 
     /// <summary>
     /// 公共棋盘的边框（board-map D10）：不属于任何阵营的浅石色。与四个阵营主色、插旗阶段的出生区提示色（金）、
@@ -106,31 +106,31 @@ public static class Visuals
     public static readonly Color PlaceholderLabel = ToColor(BoardPlatePalette.PlaceholderLabel);
 
     /// <summary>棋盘台面的格线（board-map D10）：压暗的墨色细线，只画在棋盘清单里的棋盘之内。</summary>
-    public static readonly Color BoardGridLine = Color.Color8(52, 60, 48);
+    public static readonly Color BoardGridLine = Color.Color8(56, 67, 64);
 
     /// <summary>障碍岩石（装饰层）。</summary>
-    public static readonly Color TileObstacle = Color.Color8(118, 150, 96);
+    public static readonly Color TileObstacle = Color.Color8(122, 143, 119);
 
     /// <summary>岩石。</summary>
-    public static readonly Color Rock = Color.Color8(142, 138, 134);
+    public static readonly Color Rock = Color.Color8(155, 146, 132);
 
     /// <summary>旗帜图案 / 棋子高光：高亮度，保证去色后与阵营主色拉开明度差。</summary>
-    public static readonly Color EmblemInk = Color.Color8(242, 240, 232);
+    public static readonly Color EmblemInk = Color.Color8(255, 242, 205);
 
     /// <summary>插旗阶段的出生区提示色（尚无归属时统一高亮）。</summary>
     public static readonly Color BirthHint = ToColor(BoardPlatePalette.BirthHint);   // board-link-mode D-b：唯一来源在 Presentation 调色板
 
     /// <summary>未知信物标记。</summary>
-    public static readonly Color RelicUnknown = Color.Color8(196, 180, 120);
+    public static readonly Color RelicUnknown = Color.Color8(234, 189, 93);
 
     /// <summary>已揭示信物标记。</summary>
-    public static readonly Color RelicRevealed = Color.Color8(120, 208, 176);
+    public static readonly Color RelicRevealed = Color.Color8(111, 224, 202);
 
     /// <summary>光标。</summary>
-    public static readonly Color Cursor = Color.Color8(248, 248, 240);
+    public static readonly Color Cursor = Color.Color8(255, 246, 210);
 
     /// <summary>领地层四态。</summary>
-    public static readonly Color Contested = Color.Color8(216, 176, 72);
+    public static readonly Color Contested = Color.Color8(238, 187, 81);
 
     /// <summary>中立。</summary>
     public static readonly Color Neutral = Color.Color8(110, 112, 120);
@@ -214,7 +214,7 @@ public static class Visuals
             Code = """
                 shader_type spatial;
                 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
-                uniform vec4 foam : source_color = vec4(0.78, 0.92, 1.0, 0.85);
+                uniform vec4 foam : source_color = vec4(0.68, 0.94, 0.88, 0.72);
                 uniform float speed = 0.55;
                 uniform float dim = 1.0;
                 varying vec3 world;
@@ -242,7 +242,7 @@ public static class Visuals
             Code = """
                 shader_type spatial;
                 render_mode unshaded, blend_mix, cull_disabled, shadows_disabled;
-                uniform vec4 water : source_color = vec4(0.55, 0.82, 0.96, 0.88);
+                uniform vec4 water : source_color = vec4(0.31, 0.73, 0.75, 0.90);
                 uniform float speed = 3.2;
                 varying vec3 world;
                 void vertex() { world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }

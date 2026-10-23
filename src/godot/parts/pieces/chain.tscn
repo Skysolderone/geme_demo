@@ -1,0 +1,52 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_Enamel"]
+albedo_color = Color(0.77, 0.23, 0.19, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="mat_Metal"]
+albedo_color = Color(0.69, 0.57, 0.36, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_Shade"]
+albedo_color = Color(0.36, 0.32, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="mesh_1"]
+top_radius = 0.095
+bottom_radius = 0.105
+height = 0.055
+radial_segments = 8
+
+[sub_resource type="TorusMesh" id="mesh_2"]
+inner_radius = 0.105
+outer_radius = 0.18
+rings = 12
+ring_segments = 7
+
+[sub_resource type="TorusMesh" id="mesh_3"]
+inner_radius = 0.105
+outer_radius = 0.18
+rings = 12
+ring_segments = 7
+
+[node name="InterlockedRings" type="Node3D"]
+
+[node name="Shade_LinkFoot" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.145, 0)
+mesh = SubResource("mesh_1")
+material_override = SubResource("mat_Shade")
+
+[node name="Metal_LowerOpenLink" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.337, 0)
+rotation_degrees = Vector3(90, 0, 0)
+scale = Vector3(1, 1, 1.32)
+mesh = SubResource("mesh_2")
+material_override = SubResource("mat_Metal")
+
+[node name="Enamel_UpperOpenLink" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.517, 0)
+rotation_degrees = Vector3(0, 0, 90)
+scale = Vector3(1.32, 1, 1)
+mesh = SubResource("mesh_3")
+material_override = SubResource("mat_Enamel")

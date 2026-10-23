@@ -81,6 +81,7 @@ public sealed partial class BoardView : Node3D
     private Node3D _show = null!;
     private MeshInstance3D _cursor = null!;
     private WorldEnvironment _environment = null!;
+    private static Texture2D? _backdropTexture;
     private IReadOnlyDictionary<int, PlayerId> _zoneOwners = new Dictionary<int, PlayerId>();
 
     /// <summary>
@@ -470,7 +471,7 @@ public sealed partial class BoardView : Node3D
             // 暖色主光 + 柔和阴影：高台、树、棋子落下影子，层次才读得出来（基准图的"温暖自然光"）。
             RotationDegrees = new Vector3(-52f, -38f, 0f),
             LightColor = Color.Color8(255, 240, 208),
-            LightEnergy = 1.25f,
+            LightEnergy = 1.05f,
             ShadowEnabled = true,
             ShadowBlur = 1.6f,
             ShadowOpacity = 0.55f,
@@ -481,29 +482,65 @@ public sealed partial class BoardView : Node3D
         {
             RotationDegrees = new Vector3(-20f, 140f, 0f),
             LightColor = Color.Color8(168, 190, 226),
-            LightEnergy = 0.35f,
+            LightEnergy = 0.28f,
         });
+
+        // 新天空原画作为画布背景保持原始透视，避免把非全景插画拉成天空球。
+        const string backdropPath = "res://art/sky/floating-realm-panorama.png";
+        Texture2D? backdropTexture = _backdropTexture;
+        if (backdropTexture is null && ResourceLoader.Exists(backdropPath))
+        {
+            backdropTexture = GD.Load<Texture2D>(backdropPath);
+        }
+        // 直接从源码目录启动 Godot、尚未跑编辑器导入时才读取原始 PNG；
+        // 导出包优先使用上面的已导入纹理，不依赖原始文件。
+        if (backdropTexture is null && global::Godot.FileAccess.FileExists(backdropPath))
+        {
+            Image sourceImage = Image.LoadFromFile(backdropPath);
+            if (!sourceImage.IsEmpty())
+            {
+                backdropTexture = ImageTexture.CreateFromImage(sourceImage);
+            }
+        }
+        _backdropTexture = backdropTexture;
+        if (backdropTexture is not null)
+        {
+            var backdrop = new CanvasLayer { Name = "RealmBackdrop", Layer = -1 };
+            var backdropImage = new TextureRect
+            {
+                Texture = backdropTexture,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            };
+            backdropImage.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            backdrop.AddChild(backdropImage);
+            AddChild(backdrop);
+        }
 
         _environment = new WorldEnvironment
         {
             Environment = new global::Godot.Environment
             {
-                // 明亮的天空渐变：沙盘悬浮在天上（基准图），不再是深色虚空。地平线以下同样取浅色，俯视时画面边缘是云海的颜色。
-                BackgroundMode = global::Godot.Environment.BGMode.Sky,
-                Sky = new Sky
-                {
-                    SkyMaterial = new ProceduralSkyMaterial
+                BackgroundMode = backdropTexture is null
+                    ? global::Godot.Environment.BGMode.Sky
+                    : global::Godot.Environment.BGMode.Canvas,
+                Sky = backdropTexture is null
+                    ? new Sky
                     {
-                        SkyTopColor = Color.Color8(86, 148, 222),
-                        SkyHorizonColor = Color.Color8(206, 228, 246),
-                        GroundHorizonColor = Color.Color8(206, 228, 246),
-                        GroundBottomColor = Color.Color8(148, 190, 232),
-                        SunAngleMax = 0f,
-                    },
-                },
+                        SkyMaterial = new ProceduralSkyMaterial
+                        {
+                            SkyTopColor = Color.Color8(70, 154, 190),
+                            SkyHorizonColor = Color.Color8(234, 223, 202),
+                            GroundHorizonColor = Color.Color8(234, 223, 202),
+                            GroundBottomColor = Color.Color8(148, 177, 188),
+                            SunAngleMax = 0f,
+                        },
+                    }
+                    : null,
                 AmbientLightSource = global::Godot.Environment.AmbientSource.Color,
                 AmbientLightColor = Color.Color8(186, 200, 222),
-                AmbientLightEnergy = 0.62f,
+                AmbientLightEnergy = 0.52f,
                 TonemapMode = global::Godot.Environment.ToneMapper.Filmic,
                 TonemapWhite = 1.4f,
                 AdjustmentEnabled = true,
@@ -633,25 +670,7 @@ public sealed partial class BoardView : Node3D
             });
         }
 
-        // 云海：岛下与四周的几团扁平白云（不投影、不受光、半透明）。部件 cloud 是半径 1、厚 0.55 的扁团（锚在云心），按大小等比缩放；档号与改前的三档大小一致（i % 3）。
-        StandardMaterial3D cloudFallback = Visuals.Flat(new Color(0.94f, 0.97f, 1f, 0.55f));
-        float reach = Math.Max(spanX, spanZ);
-        for (int i = 0; i < 26; i++)
-        {
-            float angle = i * 2.399963f;
-            float radius = reach * (0.50f + (0.42f * ((i * 7) % 5) / 4f));
-            float size = reach * (0.07f + (0.03f * (i % 3)));
-            TerrainParts.Piece cloud = TerrainParts.PieceOf(TerrainParts.Cloud, i % 3);
-            island.AddChild(new MeshInstance3D
-            {
-                Mesh = cloud.Mesh,
-                MaterialOverride = cloud.Material ?? cloudFallback,
-                Position = new Vector3(MathF.Cos(angle) * radius, baseTop - 5.5f - (i % 4 * 1.1f), MathF.Sin(angle) * radius * 0.9f),
-                RotationDegrees = new Vector3(0f, i * 53f, 0f),
-                Scale = new Vector3(size, size, size),
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            });
-        }
+        // 远景云层已经绘进天空原画，避免再用近处的几何云团遮住棋盘与岛屿。
 
         // 瀑布：贴着地图边缘的深水格，沿外侧垂下一道水帘，落到云海里。
         const float drop = 9f;
@@ -1606,15 +1625,23 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
-            // 未发现的信物统一标记，不区分预算分区（裁决 5）。
+            // 未发现的信物统一用八角铭牌与小型双锥晶石，不泄露预算分区（裁决 5）。
             Color color = cell.Relic == RelicMarker.Revealed ? Visuals.RelicRevealed : Visuals.RelicUnknown;
-            _overlay.AddChild(new MeshInstance3D
+            var token = new Node3D { Name = "RelicToken", Position = CenterOf(cell.Coord) };
+            token.AddChild(new MeshInstance3D
             {
-                Mesh = new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.12f, Height = 0.16f, RadialSegments = 4 },
-                MaterialOverride = Visuals.Glow(color, 0.5f, false),
-                Position = CenterOf(cell.Coord) + new Vector3(0f, 0.09f, 0f),
+                Mesh = new CylinderMesh { TopRadius = 0.125f, BottomRadius = 0.125f, Height = 0.026f, RadialSegments = 8 },
+                MaterialOverride = Visuals.Matte(Color.Color8(88, 73, 68), 0.72f),
+                Position = new Vector3(0f, 0.023f, 0f),
+            });
+            token.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.100f, Height = 0.115f, RadialSegments = 4 },
+                MaterialOverride = Visuals.Glow(color.Lightened(0.18f), 0.85f, false),
+                Position = new Vector3(0f, 0.090f, 0f),
                 RotationDegrees = new Vector3(0f, 45f, 0f),
             });
+            _overlay.AddChild(token);
         }
     }
 
@@ -1968,7 +1995,7 @@ public sealed partial class BoardView : Node3D
         FactionStyle faction = FactionTable.For(occupant.Owner);
         PieceStyle style = PieceStyleTable.For(occupant.Type);
         Color primary = Visuals.Damp(Visuals.ToColor(faction.Primary), emphasisPercent);
-        Color body = Visuals.Damp(Visuals.ToColor(faction.Primary).Lerp(Colors.White, 0.42f), emphasisPercent);
+        Color body = Visuals.Damp(Visuals.ToColor(faction.Primary).Lerp(Colors.White, 0.30f), emphasisPercent);
         Color ink = Visuals.Damp(Visuals.EmblemInk, Math.Max(emphasisPercent, 60));
         return PieceModels.TryBuild(style.Silhouette, faction.Emblem, primary, body, ink, emphasisPercent)
             ?? LowPoly.Piece(style.Silhouette, faction.Emblem, primary, body, ink);
@@ -2147,12 +2174,13 @@ public sealed partial class BoardView : Node3D
 
         foreach (StagedPieceView staged in preview.StagedPieces)
         {
-            // 暂放：半透明发光（HighlightStyle.TranslucentGlow），单独渲染在 StagedPieces 层。
+            // 暂放：亮色发光棋形与半透明落点（HighlightStyle.TranslucentGlow），单独渲染在 StagedPieces 层。
             Node3D piece = BuildPiece(new Occupant(preview.Player, staged.Type), 100);
             piece.Position = CenterOf(staged.Coord) + new Vector3(0f, 0.02f, 0f);
-            Translucent(piece, 0.55f);
+            PreviewGhost(piece);
             _preview.AddChild(piece);
             AddTint(staged.Coord, Visuals.FactionColorOf(preview.Player).Lerp(Colors.White, 0.4f), 0.42f, _preview);
+            AddRing(_preview, staged.Coord, Visuals.FactionColorOf(preview.Player), false, 0.075f, 0.04f);
         }
 
         foreach (CellHighlight highlight in preview.Highlights)
@@ -2366,6 +2394,26 @@ public sealed partial class BoardView : Node3D
         foreach (Node child in node.GetChildren())
         {
             Translucent(child, alpha);
+        }
+    }
+
+    private static void PreviewGhost(Node node)
+    {
+        if (node is MeshInstance3D instance && instance.MaterialOverride is StandardMaterial3D material)
+        {
+            // The merged silhouette has several overlapping material slots. Alpha blending
+            // hides its upper body behind the plinth in Godot's transparent pass, so give
+            // staged pieces a pale, emissive solid silhouette and a separate floor tint.
+            material.AlbedoColor = material.AlbedoColor.Lerp(Color.Color8(243, 220, 191), 0.12f);
+            material.EmissionEnabled = true;
+            material.Emission = material.AlbedoColor;
+            material.EmissionEnergyMultiplier = 0.12f;
+            instance.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        }
+
+        foreach (Node child in node.GetChildren())
+        {
+            PreviewGhost(child);
         }
     }
 

@@ -1,0 +1,20 @@
+[gd_scene format=4]
+
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_867c81_r100_vc.tres" id="1_7c62e"]
+
+[sub_resource type="ArrayMesh" id="island_spike_3_0"]
+_surfaces = [{
+"aabb": AABB(-0.9853324, 0, -0.85569006, 2.050515, 1, 1.7401977),
+"attribute_data": PackedByteArray("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/9PT0//T09P/09PT/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/7e3t/+3t7f/t7e3/////////////////////////////////////////////////////////////////////////////////////////////////"),
+"format": 34359738383,
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 108,
+"vertex_data": PackedByteArray("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")
+}]
+
+[node name="IslandSpike3" type="Node3D" unique_id=1761662440]
+
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=819163939]
+material_override = ExtResource("1_7c62e")
+mesh = SubResource("island_spike_3_0")

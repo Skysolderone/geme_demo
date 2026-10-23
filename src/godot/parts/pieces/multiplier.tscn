@@ -1,0 +1,129 @@
+[gd_scene load_steps=16 format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_Enamel"]
+albedo_color = Color(0.77, 0.23, 0.19, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="mat_Metal"]
+albedo_color = Color(0.69, 0.57, 0.36, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_Shade"]
+albedo_color = Color(0.36, 0.32, 0.36, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_Stone"]
+albedo_color = Color(0.75, 0.65, 0.59, 1)
+roughness = 0.88
+
+[sub_resource type="CylinderMesh" id="mesh_1"]
+top_radius = 0.19
+bottom_radius = 0.225
+height = 0.085
+radial_segments = 4
+
+[sub_resource type="CylinderMesh" id="mesh_2"]
+top_radius = 0.002
+bottom_radius = 0.24
+height = 0.47
+radial_segments = 4
+
+[sub_resource type="CylinderMesh" id="mesh_3"]
+top_radius = 0.13
+bottom_radius = 0.13
+height = 0.055
+radial_segments = 4
+
+[sub_resource type="BoxMesh" id="mesh_4"]
+size = Vector3(0.205, 0.042, 0.065)
+
+[sub_resource type="SphereMesh" id="mesh_5"]
+radius = 0.035
+height = 0.07
+radial_segments = 6
+rings = 4
+
+[sub_resource type="BoxMesh" id="mesh_6"]
+size = Vector3(0.205, 0.042, 0.065)
+
+[sub_resource type="SphereMesh" id="mesh_7"]
+radius = 0.035
+height = 0.07
+radial_segments = 6
+rings = 4
+
+[sub_resource type="BoxMesh" id="mesh_8"]
+size = Vector3(0.065, 0.042, 0.205)
+
+[sub_resource type="SphereMesh" id="mesh_9"]
+radius = 0.035
+height = 0.07
+radial_segments = 6
+rings = 4
+
+[sub_resource type="BoxMesh" id="mesh_10"]
+size = Vector3(0.065, 0.042, 0.205)
+
+[sub_resource type="SphereMesh" id="mesh_11"]
+radius = 0.035
+height = 0.07
+radial_segments = 6
+rings = 4
+
+[node name="RadialPyramid" type="Node3D"]
+
+[node name="Shade_SteppedFoot" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.155, 0)
+mesh = SubResource("mesh_1")
+material_override = SubResource("mat_Shade")
+
+[node name="Stone_FourSidedSpire" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.415, 0)
+rotation_degrees = Vector3(0, 45, 0)
+mesh = SubResource("mesh_2")
+material_override = SubResource("mat_Stone")
+
+[node name="Metal_SpireCollar" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.28, 0)
+mesh = SubResource("mesh_3")
+material_override = SubResource("mat_Metal")
+
+[node name="Enamel_RayWest" type="MeshInstance3D" parent="."]
+position = Vector3(-0.245, 0.235, 0)
+mesh = SubResource("mesh_4")
+material_override = SubResource("mat_Enamel")
+
+[node name="Metal_RayTipWest" type="MeshInstance3D" parent="."]
+position = Vector3(-0.3185, 0.235, 0)
+mesh = SubResource("mesh_5")
+material_override = SubResource("mat_Metal")
+
+[node name="Enamel_RayEast" type="MeshInstance3D" parent="."]
+position = Vector3(0.245, 0.235, 0)
+mesh = SubResource("mesh_6")
+material_override = SubResource("mat_Enamel")
+
+[node name="Metal_RayTipEast" type="MeshInstance3D" parent="."]
+position = Vector3(0.3185, 0.235, 0)
+mesh = SubResource("mesh_7")
+material_override = SubResource("mat_Metal")
+
+[node name="Enamel_RayNorth" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.235, -0.245)
+mesh = SubResource("mesh_8")
+material_override = SubResource("mat_Enamel")
+
+[node name="Metal_RayTipNorth" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.235, -0.3185)
+mesh = SubResource("mesh_9")
+material_override = SubResource("mat_Metal")
+
+[node name="Enamel_RaySouth" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.235, 0.245)
+mesh = SubResource("mesh_10")
+material_override = SubResource("mat_Enamel")
+
+[node name="Metal_RayTipSouth" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.235, 0.3185)
+mesh = SubResource("mesh_11")
+material_override = SubResource("mat_Metal")
