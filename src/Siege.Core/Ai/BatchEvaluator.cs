@@ -33,6 +33,7 @@ public sealed class BatchEvaluator
     private readonly ImmutableSortedDictionary<PlayerId, PlayerStatus> _roster;
     private readonly ImmutableArray<RelicPublicState> _relics;
     private readonly ImmutableSortedDictionary<Coord, RelicType> _knownRelics;
+    private readonly ScoringVersion _scoring;
     private readonly PowerSnapshot _before;
     private readonly long _relicBefore;
     private readonly long _safetyBefore;
@@ -79,7 +80,8 @@ public sealed class BatchEvaluator
         // 计分信物（连营 / 犄角，more-pieces-relics D3）只用批次开始前已揭示的公开内容：结算前后两次势力计算共用这一份，
         // 本批将首次揭示的信物不在其中，其计分效果不进"即时势力增量"（只按未揭示期望进信物维）。
         _knownRelics = RevealedRelics.Of(view.Relics);
-        _before = PowerCalculator.Compute(view.Board, _roster, _knownRelics);
+        _scoring = ScoringVersions.RequireValid(view.ScoringVersion);
+        _before = PowerCalculator.Compute(view.Board, _roster, _knownRelics, _scoring);
         _rankBefore = _before.RankOf(me);
         _relicBefore = RelicScore(_before.Coverage);
 
@@ -111,7 +113,7 @@ public sealed class BatchEvaluator
     /// 按本评价器的势力口径（构造时的名册 + 批次开始前已揭示的信物内容）对任一盘面算势力：与"即时势力增量"维的结算后势力同一份计算。
     /// 供停手复盘（<see cref="HeuristicTurnController.ReviewBestMove"/>）在候选预演结果上判"本可翻盘"，不另写势力口径。
     /// </summary>
-    internal PowerSnapshot PowerOf(GameBoard board) => PowerCalculator.Compute(board, _roster, _knownRelics);
+    internal PowerSnapshot PowerOf(GameBoard board) => PowerCalculator.Compute(board, _roster, _knownRelics, _scoring);
 
     /// <summary>是否只评价即时收益与眼位（简单难度，ai-eye R26）。</summary>
     public bool ImmediateOnly => _immediateOnly;
@@ -150,7 +152,7 @@ public sealed class BatchEvaluator
         }
 
         GameBoard after = result.ProjectedBoard;
-        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _knownRelics);
+        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _knownRelics, _scoring);
 
         raw[(int)EvaluationDimension.PowerGain] = afterPower.Of(_me).Total - _before.Of(_me).Total;
 

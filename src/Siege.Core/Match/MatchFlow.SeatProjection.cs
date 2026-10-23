@@ -33,7 +33,7 @@ public sealed partial class MatchFlow
         GameBoard board = full.Board;   // Publish 给的已是副本
         StripOutside(board, visible);
         ImmutableSortedDictionary<Coord, RelicType> known = Relics.TrueContents().Where(kv => visible.Contains(kv.Key)).ToImmutableSortedDictionary();
-        PowerSnapshot? power = full.Power is null ? null : PowerCalculator.Compute(board, Roster, known);
+        PowerSnapshot? power = full.Power is null ? null : PowerCalculator.Compute(board, Roster, known, ScoringVersion);
         ImmutableArray<RelicPublicState> relics = [.. full.Relics.Select(r => visible.Contains(r.Coord)
             ? r
             : r with { IsRevealed = false, Content = null, RevealedInMajorRound = null, Control = new RelicControl(RelicControlKind.Uncontrolled, null) })];

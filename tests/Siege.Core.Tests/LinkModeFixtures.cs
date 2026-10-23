@@ -28,7 +28,7 @@ internal static class LinkModeFixtures
     internal static MapData Map => LazyMap.Value;
 
     /// <summary>链接模式、插旗立即（open-map 段 B：决赛倒计时 K 随拼接规则删除，选项即缺省）。</summary>
-    internal static MatchOptions Options => MatchOptions.Immediate;
+    internal static MatchOptions Options => MatchOptions.Immediate with { ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
 
     /// <summary>插旗阶段的链接模式对局。</summary>
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
@@ -141,7 +141,8 @@ internal static class LinkModeFixtures
     /// 原 9×9 夹具的用例都写于决赛倒计时之前；建局后另断言地图确为链接图（<see cref="RequireLink"/>）。
     /// retire-legacy-rules 第 3 组：对局模式删除，<see cref="MatchFlow.CreateUnvalidated"/> 恒按链接规则建局，原"强制链接模式"一项随之去掉。
     /// </summary>
-    internal static MatchOptions PlainOptions(MatchOptions? options) => options ?? Options;
+    internal static MatchOptions PlainOptions(MatchOptions? options) =>
+        (options ?? Options) with { ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
 
     /// <summary>断言对局建在链接图上（见 <see cref="PlainOptions"/>；retire-legacy-rules 第 3 组起对局只有链接规则，原"模式为链接"的断言改为断言地图标识）。</summary>
     internal static MatchFlow RequireLink(MatchFlow match) =>

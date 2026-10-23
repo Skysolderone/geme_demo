@@ -207,9 +207,9 @@ public class 默认评价权重的校准Tests
         // cycle-stop 2.1 / 2.2：未配置的大回合上限与停滞大回合数同样落成缺省值（100 / 6）写进 config.json。
         // ai-whole-batch 1.3：未配置的整批候选开关同样落成缺省 1 写进 config.json。
         // ai-bridge-candidate 1.3：未配置的搭桥候选开关同样落成缺省 1 写进 config.json。
-        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0, RoundCap = Siege.Core.Match.MatchOptions.DefaultRoundCap, StagnationRounds = AiSearchConfig.DefaultStagnationRounds, WholeBatch = AiSearchConfig.DefaultWholeBatch, EditSeed = AiSearchConfig.DefaultEditSeed }).Effective().ToJson());
+        Assert.NotEqual(saved.ToJson(), (changed with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, ScoringVersion = Siege.Core.Scoring.ScoringVersions.Default, CarryIn = 0, RoundCap = Siege.Core.Match.MatchOptions.DefaultRoundCap, StagnationRounds = AiSearchConfig.DefaultStagnationRounds, WholeBatch = AiSearchConfig.DefaultWholeBatch, EditSeed = AiSearchConfig.DefaultEditSeed }).Effective().ToJson());
         // carry-in-out 段 C：未配置的带入数量同样落成 0 写进 config.json。
-        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, CarryIn = 0, RoundCap = Siege.Core.Match.MatchOptions.DefaultRoundCap, StagnationRounds = AiSearchConfig.DefaultStagnationRounds, WholeBatch = AiSearchConfig.DefaultWholeBatch, EditSeed = AiSearchConfig.DefaultEditSeed }).Effective().ToJson());
+        Assert.Equal(saved.ToJson(), (config with { PassThreshold = AiSearchConfig.DefaultPassThreshold, CandidateCellLimit = AiSearchConfig.LargeMapCellLimit, ContentSet = ContentSets.Default, ScoringVersion = Siege.Core.Scoring.ScoringVersions.Default, CarryIn = 0, RoundCap = Siege.Core.Match.MatchOptions.DefaultRoundCap, StagnationRounds = AiSearchConfig.DefaultStagnationRounds, WholeBatch = AiSearchConfig.DefaultWholeBatch, EditSeed = AiSearchConfig.DefaultEditSeed }).Effective().ToJson());
         Assert.Equal(AiSearchConfig.DefaultStagnationRounds, saved.StagnationRounds);
         Assert.Equal(Siege.Core.Match.MatchOptions.DefaultRoundCap, saved.RoundCap);
     }

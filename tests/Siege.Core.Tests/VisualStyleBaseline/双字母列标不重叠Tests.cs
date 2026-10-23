@@ -54,8 +54,10 @@ public class 双字母列标不重叠Tests
         // board-link-mode D-c：行号沿画幅（当前战场 ∪ 占位的包围盒）的左右边缘列放（裁决 D26），锚点换成 BoardGeometry 带边缘列的重载；
         // 本条要守的是"行号不走列标字号"（仍用 Label 的默认字号 / 描边），字面量相应更新，旧地图的边缘列仍是 0 与末列、位置逐值不变。
         string view = File.ReadAllText(Path.Combine(RepoRoot(), "src", "godot", "scripts", "BoardView.cs"));
-        Assert.Contains("labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, low.X, _width, _height, right: false)));", view, StringComparison.Ordinal);
-        Assert.Contains("labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, high.X, _width, _height, right: true)));", view, StringComparison.Ordinal);
+        Assert.Contains("Label3D left = Label(text, BoardGeometry.RowLabelAnchor(y, low.X, _width, _height, right: false));", view, StringComparison.Ordinal);
+        Assert.Contains("Label3D right = Label(text, BoardGeometry.RowLabelAnchor(y, high.X, _width, _height, right: true));", view, StringComparison.Ordinal);
+        Assert.Contains("labels.AddChild(left);", view, StringComparison.Ordinal);
+        Assert.Contains("labels.AddChild(right);", view, StringComparison.Ordinal);
         Assert.Contains("int fontSize = CoordinateLabelStyle.FontSize, int outlineSize = CoordinateLabelStyle.OutlineSize", view, StringComparison.Ordinal);
         Assert.DoesNotContain("FontSize = 96", view, StringComparison.Ordinal);
     }

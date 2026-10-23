@@ -96,4 +96,8 @@ internal static class ShowFixtures
     internal static string StageText(PowerStageDisplay display) => $"{display.Stage}:{display.StagePermille}:{display.Value}:{display.StageText}";
 
     internal static BigInteger Pow10(int exponent) => BigInteger.Pow(10, exponent);
+
+    internal static GroupPower Group(PlayerId owner, int baseTotal, int bonus, int multipliers, BigInteger power, params string[] cells) =>
+        new(owner, [.. cells.Select(Coord.Parse)], BaseTotal: baseTotal, LineBonus: bonus, SynergyBonus: 0, HighGroundBonus: 0,
+            BannerBonus: 0, ChainBonus: 0, SentryBonus: 0, BoundaryBonus: 0, MultiplierCount: multipliers, Power: power);
 }

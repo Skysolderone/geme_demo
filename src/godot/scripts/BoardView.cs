@@ -458,6 +458,8 @@ public sealed partial class BoardView : Node3D
         AddChild(_preview);
         _show = new Node3D { Name = "Show" };
         AddChild(_show);
+        _groupLabelLayer = new Node3D { Name = "GroupPowerLabels" };
+        AddChild(_groupLabelLayer);
         _cursor = new MeshInstance3D
         {
             Mesh = LowPoly.Marker(BoardGeometry.TileSize),
@@ -729,8 +731,7 @@ public sealed partial class BoardView : Node3D
         CameraPose pose = Rig.Pose;
         bool changed = pose != _appliedPose;
         _appliedPose = pose;
-        Camera.Position = new Vector3(pose.Eye.X, pose.Eye.Y, pose.Eye.Z);
-        Camera.LookAt(new Vector3(pose.Target.X, pose.Target.Y, pose.Target.Z), Vector3.Up);
+        WriteCamera(pose);
         return changed;
     }
 
@@ -1598,7 +1599,11 @@ public sealed partial class BoardView : Node3D
         DrawRelicMarkers(board);
         DrawPlacementMarks(board);
         DrawPieces(board, treatment, mask ?? ShowMask.Empty);
+        SetShake(mask?.ShakePermille);
         DrawShow(mask ?? ShowMask.Empty);
+        DrawCoordinateYield(mask ?? ShowMask.Empty);
+        _groupLabels = Rig.IsOverview ? [] : GroupPowerLabels.Of((PowerLayerContent)world.Layer(TacticalLayer.Power), board.Width);
+        DrawGroupPower(mask ?? ShowMask.Empty);
         DrawLayer(content);
         DrawPreview(preview, focus);
         DrawFlash(flash);
@@ -1758,7 +1763,14 @@ public sealed partial class BoardView : Node3D
         _lastShowRedraw = DrawPieces(board, treatment, mask);
         _totalShowRedraw += _lastShowRedraw;
         _showFrames++;
+        SetShake(mask.ShakePermille);
         DrawShow(mask);
+        DrawCoordinateYield(mask);
+        if (!mask.GroupLabelPermille.IsEmpty || _groupLabelsMasked)
+        {
+            DrawGroupPower(mask);
+            _groupLabelShowRedraws++;
+        }
     }
 
     /// <summary>
@@ -1808,6 +1820,8 @@ public sealed partial class BoardView : Node3D
             label.RenderPriority = 2;
             _show.AddChild(label);
         }
+        DrawRings(mask);
+        DrawReveals(mask);
     }
 
     /// <summary>
@@ -2431,6 +2445,10 @@ public sealed partial class BoardView : Node3D
     {
         var labels = new Node3D { Name = "CoordinateLabels" };
         AddChild(labels);
+        _farColumnLabels = new Label3D?[_width];
+        _leftRowLabels = new Label3D?[_height];
+        _rightRowLabels = new Label3D?[_height];
+        _coordinatesYielded = false;
 
         for (int x = low.X; x <= high.X; x++)
         {
@@ -2439,14 +2457,20 @@ public sealed partial class BoardView : Node3D
             int size = CoordinateLabelStyle.ColumnFontSizeOf(text);
             int outline = CoordinateLabelStyle.ColumnOutlineSizeOf(text);
             labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, low.Y, _width, _height, far: false), size, outline));
-            labels.AddChild(Label(text, BoardGeometry.ColumnLabelAnchor(x, high.Y, _width, _height, far: true), size, outline));
+            Label3D far = Label(text, BoardGeometry.ColumnLabelAnchor(x, high.Y, _width, _height, far: true), size, outline);
+            labels.AddChild(far);
+            _farColumnLabels[x] = far;
         }
 
         for (int y = low.Y; y <= high.Y; y++)
         {
             string text = new Coord(0, y).Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, low.X, _width, _height, right: false)));
-            labels.AddChild(Label(text, BoardGeometry.RowLabelAnchor(y, high.X, _width, _height, right: true)));
+            Label3D left = Label(text, BoardGeometry.RowLabelAnchor(y, low.X, _width, _height, right: false));
+            Label3D right = Label(text, BoardGeometry.RowLabelAnchor(y, high.X, _width, _height, right: true));
+            labels.AddChild(left);
+            labels.AddChild(right);
+            _leftRowLabels[y] = left;
+            _rightRowLabels[y] = right;
         }
     }
 

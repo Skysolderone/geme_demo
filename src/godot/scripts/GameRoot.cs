@@ -48,6 +48,8 @@ public sealed partial class GameRoot : Node3D
     /// </summary>
     private ShowTimeline _show = ShowTimeline.Finished;
 
+    private readonly CameraFollow _follow = new();
+
     /// <summary>演出播完后要挂上的"回合高亮"（落子格 / 被提格，由节拍推出）：玩家提速看完后仍能找到刚才发生的位置（D6）。</summary>
     private TurnFlash _pendingFlash = TurnFlash.None;
 
@@ -164,6 +166,8 @@ public sealed partial class GameRoot : Node3D
             // 该次演出按正常时长播放（其余无人值守结算仍为零时长），以固定 16 ms/帧推进到该节拍进行中（见 ShotShowReady）取图。不给此项时无人值守路径与引入演出之前完全相同。
             _shotShow = args.Text("shot-show", "placement / capture / power / banner（等该节拍进行中再截图）");
 
+            ReadRevealArgs(args);
+
             // --map-select：强制进入选图界面（仅用于截图 / 自检；可再给 --map=<标识> 预选一项）。
             // 配 --screenshot 截选图界面；配 --auto-demo 则先把选图操作自动走一遍（SelfCheckMapSelect）再照常演示。
             bool mapSelect = args.Flag("map-select");
@@ -181,13 +185,14 @@ public sealed partial class GameRoot : Node3D
             ReadScreenshotArg(args.Text("screenshot", "截图路径[:第几帧]"));
 
             // --profile=<档案路径> / --no-carry / --carry-preview=：带入带出（carry-in-out D10，见 GameRoot.Carry）。自动化模式一律关闭、不读写档案。
-            ReadCarryArgs(args, Unattended);
+            ReadCarryArgs(args, Unattended || RevealPreviewing);
 
             // --export-parts=<目录>：把地形 / 设施部件导出成 .tscn（PartExport），导完即退出，不建局。
             string? exportParts = args.Text("export-parts", "导出目录（如 res://parts/terrain）");
 
             // --piece-gallery=<PNG 路径>：不建局，拍一张十种棋子轮廓对照图后退出（more-pieces-relics 段 D 人工检查清单用，见 PieceGallery）。
             string? pieceGallery = args.Text("piece-gallery", "PNG 输出路径");
+            string? uiGallery = args.Text("ui-gallery", "PNG 输出路径");
 
             // --difficulty=<名称>：AI 难度（expert-lookahead D10），经 Core 的唯一解析——只认 Easy / Standard / Hard / Expert（不区分大小写），
             // 数字与未知名称由结算报错退出，不回落到标准。未给出取标准；进入选图界面时作为难度选择的预选。
@@ -197,6 +202,7 @@ public sealed partial class GameRoot : Node3D
             // --mute：结算演出不发任何声音（show-sound-cues）。只有这一个音量开关，没有设置界面。
             _mute = args.Flag("mute");
             args.EnsureRecognized();
+            CheckRevealArgs(mapSelect);
             if (_shotRecruitCollapsed && (!_autoDemo || _screenshotFrame < 0))
             {
                 throw new System.FormatException("--shot-recruit-collapsed 须与 --auto-demo 和 --screenshot= 同用。");
@@ -260,6 +266,15 @@ public sealed partial class GameRoot : Node3D
                 return;
             }
 
+            if (uiGallery is not null)
+            {
+                SetProcess(false);
+                SetProcessInput(false);
+                SetProcessUnhandledInput(false);
+                AddChild(new UiGallery(uiGallery) { Name = "UiGallery" });
+                return;
+            }
+
             if (mapSelect && _pickCheck && !_autoDemo)
             {
                 throw new System.FormatException("--map-select 下没有人点「开始」：--pick-check 须与 --auto-demo 同用（先自动走完选图再自检拾取）。");
@@ -297,7 +312,7 @@ public sealed partial class GameRoot : Node3D
             }
 
             // 新局界面（board-link-mode D8）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图 link:1、跳过新局界面（既有自检命令不变）。
-            if (mapSelect || (mapId is null && !Unattended))
+            if (mapSelect || (mapId is null && !Unattended && !RevealPreviewing))
             {
                 _session = BeginMapSelect(mapId);
             }
@@ -412,7 +427,7 @@ public sealed partial class GameRoot : Node3D
         GD.Print($"[siege] 落成反馈：{(_flash.Edits.IsEmpty ? "无" : string.Join("、", _flash.Edits.Select(Labels.TerrainEdit)))}");
 
         // 结算演出的取景自证（settlement-show 3.3 / 3.4）：截图那一帧时间线停在哪个节拍、进度多少，遮罩里隐藏 / 出现中 / 仍显示的被提棋子与滚动中的势力显示值。
-        ShowMask shownMask = _show.Mask();
+        ShowMask shownMask = ShownMask();
         GD.Print(_show.IsFinished
             ? "[show] 截图时演出：无（遮罩为空，画面即结算后快照）"
             : $"[show] 截图时演出：当前节拍 {_show.Current?.GetType().Name ?? "空序列停顿"}，进度 {_show.ProgressPermille}‰，时长模式 {_show.Duration}；"
@@ -428,6 +443,10 @@ public sealed partial class GameRoot : Node3D
         if (!_show.IsFinished)
         {
             GD.Print($"[show-perf] {_board.ShowRedrawReadout()}");
+        }
+        if (RevealPreviewing || _shotShow is not null)
+        {
+            PrintTierShot(shownMask);
         }
 
         // 渲染开销读数（frontier-map 5.6）：帧率受垂直同步封顶，绘制调用数才反映"750 格要不要合批"。
@@ -488,11 +507,19 @@ public sealed partial class GameRoot : Node3D
         _hud.LayerPressed += ToggleLayer;
         _hud.ReadingPressed += CycleReading;
         _hud.OverviewPressed += ToggleOverview;
+        _hud.FollowPressed += ToggleFollow;
+    }
+
+    private void ToggleFollow()
+    {
+        _follow.Toggle();
+        _dirty = true;
     }
 
     /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。</summary>
     private void ToggleOverview()
     {
+        _follow.ManualInput(opponentActing: !_session.IsMyTurn);
         if (_board.Rig.ToggleOverview())
         {
             ApplyCamera("全局预览");
@@ -655,7 +682,7 @@ public sealed partial class GameRoot : Node3D
             }
         }
 
-        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null)
+        if (_screenshotFrame >= 0 && _frame >= _screenshotFrame && RecruitShotReady() && ForbiddenShotReady() && _shotShow is null && _revealAtMs < 0)
         {
             _screenshotFrame = -1;
             BeginCapture();
@@ -821,7 +848,7 @@ public sealed partial class GameRoot : Node3D
     /// <summary>把当前状态刷到棋盘与 HUD。选图阶段 HUD 只显示选图面板（对局面板隐藏），棋盘照常刷新——预览与插旗前的盘面是同一条渲染路径。</summary>
     private void RefreshViews()
     {
-        ShowMask mask = _show.Mask();
+        ShowMask mask = ShownMask();
         _board.Refresh(_session.World, _layers.Active, _layers.Reading, _layers.Treatment, LibertyThresholds.Default, _flash, _hover, mask);
         _hud.SetHoverReadout(HoverReadout.Of(_hover, _session.World.Board())); // life-shape 3.4：盘面变了（如新成活形），悬停格的禁入读数随之刷新
         if (Selecting)
@@ -837,6 +864,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _hud.OverviewActive = _board.Rig.IsOverview;
+        _hud.FollowActive = _follow.Enabled;
         _hud.OverviewAvailable = _board.Rig.OverviewAvailable;   // 一屏看不全才出现"全局"按钮（viewport-camera「全局预览」）
         if (_session.RoundCapNotice is { } capNotice && capNotice != _loggedRoundCapNotice)
         {
@@ -1080,12 +1108,26 @@ public sealed partial class GameRoot : Node3D
 
     private void Drive(double delta)
     {
+        if (RevealPreviewing)
+        {
+            DriveRevealPreview(delta);
+            return;
+        }
+
         // 结算演出播放中（settlement-show D5）：不调用任何推进对局的入口——不跑 AI 小回合、不推进本机玩家阶段、不收尾。
         // 镜头与信息层的输入在 _Process 里另行处理，不受影响。无人值守下时间线创建即播完，永远不进这里。
         if (!_show.IsFinished)
         {
-            AdvanceShow(delta);
+            if (!_follow.IsTravelling)
+            {
+                AdvanceShow(delta);
+            }
             return;
+        }
+
+        if (_session.IsMyTurn && (_follow.HasReturnPose || _follow.Suppressed))
+        {
+            _follow.OwnTurnStarted(_board.Rig.Pose);
         }
 
         // 自动演示的停止点（--rounds）：表现层自己的无人值守收尾，不改对局状态、不产生名次。
@@ -1155,6 +1197,7 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
+        PlayerId aiActor = _session.Match.CurrentPlayer!.Value;
         TurnFlash flash = _session.RunAiTurn();
         if (_session.LastAiLookahead is { } lookahead)
         {
@@ -1176,7 +1219,26 @@ public sealed partial class GameRoot : Node3D
         // 有人在看：演出时长取代 AI 小回合之间的固定停顿（D5）；落子格 / 被提格的高亮等演出播完再挂（D6）。
         _pendingFlash = flash;
         BeginShow(beats, ShowDuration.Normal, "AI");
+        FollowOpponent(aiActor, beats);
         _aiTimer = 0d;
+    }
+
+    private void FollowOpponent(PlayerId actor, ImmutableArray<SettlementBeat> beats)
+    {
+        _hud.SetTurnSummary(TurnSummary.Of(actor, beats), Visuals.FactionColorOf(actor));
+
+        (float X, float Z)[] points =
+        [
+            .. beats.SelectMany(beat => beat switch
+            {
+                PlacementBeat placement => placement.Pieces.Select(p => p.Coord),
+                CaptureBeat capture => capture.Pieces.Select(p => p.Coord),
+                _ => [],
+            }).Select(_board.PlaneCenterOf),
+        ];
+        SyncAspect();
+        BoardCamera rig = _board.Rig;
+        _follow.Begin(rig.Pose, rig.VisibleWidth, rig.VisibleDepth, rig.IsOverview, points);
     }
 
     // ---------- 结算演出（settlement-show）：节拍来自会话层，时间线与遮罩都在 Siege.Presentation.Show，这里只推进、取遮罩、画 ----------
@@ -1202,6 +1264,7 @@ public sealed partial class GameRoot : Node3D
         }
 
         _pendingFlash = TurnFlash.Of(beats);
+        _hud.SetTurnSummary(null, default);
         BeginShow(beats, ShowDuration.Normal, "本机");
     }
 
@@ -1209,6 +1272,7 @@ public sealed partial class GameRoot : Node3D
     private void BeginShow(ImmutableArray<SettlementBeat> beats, ShowDuration duration, string who)
     {
         _show = new ShowTimeline(beats, duration);
+        _showClockMs = 0;
         GD.Print($"[show] 第 {_frame} 帧 {who}结算：节拍 {beats.Length}"
             + $"（落子 {beats.OfType<PlacementBeat>().Sum(b => b.Pieces.Length)} / 提子 {beats.OfType<CaptureBeat>().Sum(b => b.Pieces.Length)}"
             + $" / 信物 {beats.OfType<RelicRevealBeat>().Sum(b => b.Relics.Length)} / 势力 {beats.OfType<PowerBeat>().Sum(b => b.Changes.Length)} / 横幅 {beats.OfType<BannerBeat>().Sum(b => b.Banners.Length)}）"
@@ -1221,7 +1285,7 @@ public sealed partial class GameRoot : Node3D
 
             // 创建瞬间的提示（show-sound-cues D1）：首拍在进度 0 就已"当前"（势力 0 ms 即领地段、提子 / 信物 / 横幅 0 ms 即显示），没有 Advance 跨越它，
             // 以空遮罩为"前"导出一次。无人值守下 _sounds 为 null，且零时长遮罩恒空。
-            _sounds?.Play(SoundCues.Between(ShowMask.Empty, _show.Mask(), []), FastHeld());
+            EmitCues(SoundCues.Between(ShowMask.Empty, _show.Mask(), []), FastHeld());
         }
     }
 
@@ -1239,12 +1303,7 @@ public sealed partial class GameRoot : Node3D
         bool fast = !shot && FastHeld();
 
         // 音效提示（show-sound-cues D1）：推进前后的遮罩与跨过的节拍交给纯函数导出，再按序号交给播放器池；有音效节点时才取前遮罩。
-        ShowMask? heard = _sounds is null ? null : _show.Mask();
-        ImmutableArray<SettlementBeat> crossed = _show.Advance(ms, fast);
-        if (heard is not null)
-        {
-            _sounds!.Play(SoundCues.Between(heard, _show.Mask(), crossed), fast);
-        }
+        ShowMask mask = StepShow(ms, fast);
 
         if (shot && ShotShowTarget(_show.Current) && ShotShowReady())
         {
@@ -1260,7 +1319,6 @@ public sealed partial class GameRoot : Node3D
             return;
         }
 
-        ShowMask mask = _show.Mask();
         _board.RefreshShow(_session.World, _layers.Treatment, mask);
         _hud.RefreshShow(_session.World, mask);
     }
@@ -1590,7 +1648,15 @@ public sealed partial class GameRoot : Node3D
 
         if (right != 0f || up != 0f)
         {
+            _follow.ManualInput(opponentActing: !_session.IsMyTurn);
             _board.Rig.Pan(right, up, (float)delta);
+        }
+        else if (_follow.IsTravelling)
+        {
+            int ms = _shotShow is not null ? 16 : System.Math.Max(1, (int)System.Math.Round(delta * 1000d));
+            _board.Rig.Set(_follow.Advance(ms));
+            ApplyCamera("跟随对手");
+            return;
         }
 
         ApplyCamera("输入");
@@ -1736,6 +1802,7 @@ public sealed partial class GameRoot : Node3D
                 // 演出期间空格是提速（按住状态由 AdvanceShow 逐帧轮询），不回家；非演出期间仍是镜头回家。
                 if (!ShowPlaying)
                 {
+                    _follow.ManualInput(opponentActing: !_session.IsMyTurn);
                     FocusHome(opening: false);
                     _dirty = true;
                 }
@@ -1743,6 +1810,10 @@ public sealed partial class GameRoot : Node3D
             else if (action == InputBindings.CameraOverviewAction && @event.IsActionPressed(action))
             {
                 ToggleOverview();
+            }
+            else if (action == InputBindings.CameraFollowAction && @event.IsActionPressed(action))
+            {
+                ToggleFollow();
             }
 
             GetViewport().SetInputAsHandled();
@@ -1774,6 +1845,7 @@ public sealed partial class GameRoot : Node3D
         if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown } wheel)
         {
             bool wasOverview = _board.Rig.IsOverview;
+            _follow.ManualInput(opponentActing: !_session.IsMyTurn);
             _board.Rig.Zoom(wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1);
             ApplyCamera("缩放");
             _dirty |= wasOverview != _board.Rig.IsOverview;

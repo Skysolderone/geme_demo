@@ -4,11 +4,12 @@ using Siege.Core.Board;
 namespace Siege.Core.Scoring;
 
 /// <summary>
-/// 倍增子倍率 <c>1.5^n</c> 的精确表示：分子 <c>3^n</c>、分母 <c>2^n</c>，<c>n = 倍增子数量</c>，不设任何封顶（restore-go-core-rules D1）。
+/// 倍率 <c>1.5^n</c> 的精确表示：分子 <c>3^n</c>、分母 <c>2^n</c>，<c>n</c> = 倍率指数 = 倍增子数量 + 阵型阶数（formation-tiers D1；计分规则 v1 下阵型恒 0），
+/// 倍增子数量不设任何封顶（restore-go-core-rules D1）。
 /// 计分路径上 MUST NOT 出现二进制浮点——取整对边界值极其敏感，整数运算才能保证跨平台、跨架构结果一致。
 /// </summary>
 /// <remarks>
-/// <para><c>n</c> 的上界是地图可落子格数（边疆档可达数百），<c>3^n</c> 远超 64 位乃至 128 位整数，
+/// <para><c>n</c> 的上界是地图可落子格数（棋盘图可达数百，如 4 人内置棋盘图 465 格），<c>3^n</c> 远超 64 位乃至 128 位整数，
 /// 因此分子、分母与 <see cref="Apply"/> 的结果一律用任意精度整数 <see cref="BigInteger"/>：精确、不溢出、不截断、不饱和。
 /// 饱和到某个上限等于变相封顶，已被裁决否决。</para>
 /// <para><see cref="ToString"/> 给精确十进制显示串，同样只走整数。</para>
@@ -28,7 +29,7 @@ public readonly record struct Multiplier
         Count = count;
     }
 
-    /// <summary>倍增子数量 n，即倍率指数。</summary>
+    /// <summary>倍率指数 n（倍增子数量 + 阵型阶数）。</summary>
     public int Count { get; }
 
     /// <summary>分子 <c>3^n</c>。</summary>

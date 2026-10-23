@@ -1,12 +1,14 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Presentation.Style;
 
 namespace Siege.Presentation.Show;
 
 /// <summary>
-/// 演出音效提示的种类（show-sound-cues design.md D1）。枚举的整数值即同一帧内的稳定排序序号：按节拍顺序 落子 → 提子 → 信物 → 领地 → 军势 → 横幅。
+/// 演出音效提示的种类（show-sound-cues design.md D1）。枚举的整数值即同一帧内的稳定排序序号：按节拍顺序 落子 → 提子 → 信物 → 揭示 → 领地 → 军势 → 横幅
+/// （tiered-number-show D7 在信物之后、领地之前插入"揭示"；序号只在内存使用、不落盘）。
 /// </summary>
-public enum SoundCue
+public enum SoundCueKind
 {
     /// <summary>落子"嗒"：某枚棋子由"未落下"变为"已落下"（压缩落子整批一次）。</summary>
     Placement,
@@ -16,6 +18,9 @@ public enum SoundCue
 
     /// <summary>信物"叮"：跨入信物揭示节拍。</summary>
     Relic,
+
+    /// <summary>揭示短音：军势揭示节拍的每一步开始。</summary>
+    Reveal,
 
     /// <summary>领地到账"咣"：某玩家势力段进入领地段。</summary>
     Territory,
@@ -28,8 +33,14 @@ public enum SoundCue
 }
 
 /// <summary>
+/// 一个音效提示（tiered-number-show D7）：种类 + 数值档位。揭示取该步的档位，领地到账与军势到账取该段增量的档位，其余恒为一档；
+/// 图形侧按档位给揭示 / 领地 / 军势三种升调（<see cref="NumberTierStyle.PitchSemitones"/>）。
+/// </summary>
+public readonly record struct SoundCue(SoundCueKind Kind, int Tier = NumberTier.Lowest);
+
+/// <summary>
 /// 由时间线一次推进的结果纯函数地导出音效提示（settlement-show「演出音效提示」，design.md D1）：只比较推进前后的遮罩与本次跨过的节拍，
-/// 不读时钟、不消费随机、不修改任何状态；同一帧内同种提示合并为一个，输出按 <see cref="SoundCue"/> 的枚举序排列。
+/// 不读时钟、不消费随机、不修改任何状态；同一帧内同种提示合并为一个、档位取其中最高的，输出按 <see cref="SoundCueKind"/> 的枚举序排列。
 /// </summary>
 /// <remarks>
 /// <para>"跨入"某节拍不能只看 <see cref="ShowTimeline.Advance"/>（它报告的是<b>播完</b>的节拍）：单帧可能跨入并跨过同一节拍，而播完后遮罩为空。
@@ -51,41 +62,49 @@ public static class SoundCues
         ArgumentNullException.ThrowIfNull(after);
         ImmutableArray<SettlementBeat> passed = crossed.IsDefault ? [] : crossed;
 
-        ImmutableArray<SoundCue>.Builder cues = ImmutableArray.CreateBuilder<SoundCue>(6);
+        ImmutableArray<SoundCue>.Builder cues = ImmutableArray.CreateBuilder<SoundCue>(7);
 
         // 落子：某格由"尚未落下"（在 Hidden 里）变为"已落下 / 正在落下"（不在 Hidden 里，含播完后的空遮罩）。每枚一次、同帧合并。
         if (PlacementAppeared(before, after))
         {
-            cues.Add(SoundCue.Placement);
+            cues.Add(new SoundCue(SoundCueKind.Placement));
         }
 
         // 提子 / 信物：之前不是当前节拍，且（之后是当前节拍 或 本帧跨过了该节拍）。
         if (before.CaptureSummary is null && (after.CaptureSummary is not null || passed.Any(b => b is CaptureBeat)))
         {
-            cues.Add(SoundCue.Capture);
+            cues.Add(new SoundCue(SoundCueKind.Capture));
         }
 
         if (before.RelicFlash.IsEmpty && (!after.RelicFlash.IsEmpty || passed.Any(b => b is RelicRevealBeat)))
         {
-            cues.Add(SoundCue.Relic);
+            cues.Add(new SoundCue(SoundCueKind.Relic));
+        }
+
+        // 揭示：军势揭示节拍里本帧新开始的步（之后仍在该节拍里按已开始的步计；跨过该节拍按其全部步计）。同帧多步合并，取最高档。
+        int reveal = RevealTierStarted(before, after, passed);
+        if (reveal > 0)
+        {
+            cues.Add(new SoundCue(SoundCueKind.Reveal, reveal));
         }
 
         // 领地 / 军势：某玩家的段由"该段之前"跨到"该段或之后"，且该玩家确实有这一段（增量为 0 的段被跳过，不发声）。
-        (bool territory, bool group) = PowerStagesEntered(before, after);
-        if (territory)
+        // 档位取该段增量的档；同帧多名玩家进入同一段合并，取最高档。
+        (int territory, int group) = PowerStagesEntered(before, after);
+        if (territory > 0)
         {
-            cues.Add(SoundCue.Territory);
+            cues.Add(new SoundCue(SoundCueKind.Territory, territory));
         }
 
-        if (group)
+        if (group > 0)
         {
-            cues.Add(SoundCue.Group);
+            cues.Add(new SoundCue(SoundCueKind.Group, group));
         }
 
         // 横幅：已开始的条数增加（之后仍在横幅节拍里按当前序号计；跨过横幅节拍按其条数计）。
         if (BannersStarted(after, passed) > BannersStarted(before, []))
         {
-            cues.Add(SoundCue.Banner);
+            cues.Add(new SoundCue(SoundCueKind.Banner));
         }
 
         return cues.ToImmutable();
@@ -114,10 +133,39 @@ public static class SoundCues
         _ => 3,
     };
 
-    private static (bool Territory, bool Group) PowerStagesEntered(ShowMask before, ShowMask after)
+    /// <summary>
+    /// 本帧新开始的揭示步里最高的档位；没有新开始的步为 0。推进后仍在军势揭示节拍里：取遮罩给出的已开始各步；
+    /// 不在而本帧跨过了它：取其全部步。推进前已开始的步数从中扣除（推进前不在该节拍里即 0）。
+    /// </summary>
+    private static int RevealTierStarted(ShowMask before, ShowMask after, ImmutableArray<SettlementBeat> passed)
     {
-        bool territory = false;
-        bool group = false;
+        ImmutableArray<int> started = after.RevealStepTiers;
+        if (started.IsEmpty)
+        {
+            foreach (SettlementBeat beat in passed)
+            {
+                if (beat is PowerRevealBeat reveal)
+                {
+                    started = reveal.StepTiersStartedBy(reveal.DurationMs);
+                    break;
+                }
+            }
+        }
+
+        int highest = 0;
+        for (int i = before.RevealStepTiers.Length; i < started.Length; i++)
+        {
+            highest = Math.Max(highest, started[i]);
+        }
+
+        return highest;
+    }
+
+    /// <summary>本帧进入领地段 / 军势段的玩家里各自最高的增量档位；没有玩家进入该段为 0。</summary>
+    private static (int Territory, int Group) PowerStagesEntered(ShowMask before, ShowMask after)
+    {
+        int territory = 0;
+        int group = 0;
         foreach (PlayerId player in before.Power.Keys.Concat(after.Power.Keys).Distinct())
         {
             // 之前不在遮罩里（创建瞬间）按未开始；之后不在遮罩里按全部走完。
@@ -131,8 +179,15 @@ public static class SoundCues
                 continue;
             }
 
-            territory |= !change.TerritoryDelta.IsZero && from < Rank(PowerStage.Territory) && to >= Rank(PowerStage.Territory);
-            group |= !change.GroupDelta.IsZero && from < Rank(PowerStage.Group) && to >= Rank(PowerStage.Group);
+            if (!change.TerritoryDelta.IsZero && from < Rank(PowerStage.Territory) && to >= Rank(PowerStage.Territory))
+            {
+                territory = Math.Max(territory, change.TerritoryTier);
+            }
+
+            if (!change.GroupDelta.IsZero && from < Rank(PowerStage.Group) && to >= Rank(PowerStage.Group))
+            {
+                group = Math.Max(group, change.GroupTier);
+            }
         }
 
         return (territory, group);

@@ -414,4 +414,20 @@ internal static class PresentationFixtures
 
         return dir ?? throw new InvalidOperationException("找不到 siege.sln 所在目录。");
     }
+
+    internal static string GodotScriptCode(string fileName)
+    {
+        string source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "godot", "scripts", fileName))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        return System.Text.RegularExpressions.Regex.Replace(source, @"//[^\n]*", string.Empty);
+    }
+
+    internal static string MethodBody(string code, string signature)
+    {
+        int start = code.IndexOf(signature, StringComparison.Ordinal);
+        if (start < 0 || code.IndexOf(signature, start + signature.Length, StringComparison.Ordinal) >= 0)
+            throw new InvalidOperationException($"签名「{signature}」应恰好出现一次。");
+        int end = code.IndexOf("\n    }", start, StringComparison.Ordinal);
+        return end > start ? code[start..end] : throw new InvalidOperationException($"找不到「{signature}」的方法体结尾。");
+    }
 }

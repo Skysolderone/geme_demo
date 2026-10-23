@@ -58,6 +58,9 @@ public sealed class MatchLog
     /// </summary>
     public Siege.Core.Board.ContentSet ContentSet => Header.Config.ContentSet ?? Siege.Core.Board.ContentSets.Legacy;
 
+    /// <summary>旧日志缺版本时沿用 v1 计分。</summary>
+    public ScoringVersion ScoringVersion => Header.Config.ScoringVersion ?? ScoringVersions.Legacy;
+
     /// <summary>本局是否开启带入带出（首部 <see cref="LogHeader.CarryInOut"/>）。引入带入带出之前的旧日志缺该项，按关闭读。</summary>
     public bool CarryInOut => Header.CarryInOut ?? false;
 
@@ -925,6 +928,15 @@ public sealed record GroupEntry
     /// <summary>倍增子数量，即倍率指数（restore-go-core-rules：不封顶，"生效倍率指数"字段已删；旧日志里的该字段读入时忽略）。</summary>
     public int MultiplierCount { get; init; }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? FormationTier { get; init; }
+
+    [JsonIgnore]
+    public int MultiplierExponent => MultiplierCount + (FormationTier ?? 0);
+
+    [JsonIgnore]
+    public Multiplier Multiplier => new(MultiplierExponent);
+
     /// <summary>取整后军势，精确整数。</summary>
     public BigInteger Power { get; init; }
 
@@ -1180,6 +1192,9 @@ public sealed record PeakEntry
 {
     /// <summary>峰值串的倍增子数量（峰值按它取），即倍率指数。</summary>
     public int MultiplierCount { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? FormationTier { get; init; }
 
     public int MajorRound { get; init; }
 

@@ -42,6 +42,17 @@ public sealed record PlayerAiConfig
 /// <see cref="PlayerAiConfig.Difficulty"/> 的读写：读入只认字符串名称并经 <see cref="AiDifficultyNames.Parse"/>，不合法抛 <see cref="ArgumentException"/>（列出可用名称）；
 /// 写出为枚举名（与 <see cref="JsonStringEnumConverter"/> 的输出相同）。
 /// </summary>
+internal sealed class ScoringVersionNameConverter : JsonConverter<ScoringVersion>
+{
+    public override ScoringVersion Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType == JsonTokenType.String
+            ? ScoringVersions.Parse(reader.GetString())
+            : throw new ArgumentException($"计分规则版本须为名称字符串（{ScoringVersions.Usage}），不接受 {reader.TokenType}。");
+
+    public override void Write(Utf8JsonWriter writer, ScoringVersion value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(ScoringVersions.RequireValid(value).ToString());
+}
+
 internal sealed class AiDifficultyNameConverter : JsonConverter<AiDifficulty>
 {
     public override bool HandleNull => true;
@@ -180,6 +191,10 @@ public sealed record RunConfig
     /// </summary>
     public ContentSet? ContentSet { get; init; }
 
+    /// <summary>新局缺省 v2；旧日志缺字段时按 v1 回放。</summary>
+    [JsonConverter(typeof(ScoringVersionNameConverter))]
+    public ScoringVersion? ScoringVersion { get; init; }
+
     /// <summary>
     /// 每名 AI 玩家的带入数量（carry-in-out D11 / simulation-harness「批量跑局」；取 0 或 1）：0 = 关闭带入带出，批次与引入之前逐局相同；
     /// 1 = 开启，每名 AI 按 <see cref="Siege.Core.Carry.CarryAi.Draw"/> 从 <c>carry-ai</c> 子流随机带入 1 件补给，带出结算只写日志、不读写任何档案。
@@ -222,7 +237,18 @@ public sealed record RunConfig
     public PlayerId[] PlayerIds() => [.. Enumerable.Range(0, Players.Count).Select(i => new PlayerId(i))];
 
     /// <summary>有效并行度。</summary>
+    [JsonIgnore]
     public int EffectiveParallelism => Parallelism > 0 ? Parallelism : Environment.ProcessorCount;
+
+    private int? _recordedParallelism;
+
+    /// <summary>保留旧日志记载的并行度；新配置只记录显式指定的并行度。</summary>
+    [JsonPropertyName("EffectiveParallelism")]
+    public int? RecordedParallelism
+    {
+        get => _recordedParallelism ?? (Parallelism > 0 ? Parallelism : null);
+        init => _recordedParallelism = value;
+    }
 
     /// <summary>基本校验：人数、局数、上限。</summary>
     public RunConfig Validated()
@@ -299,6 +325,11 @@ public sealed record RunConfig
             throw new ArgumentException($"对局内容集须为 V1 或 V2，实际为 {contentSet}。");
         }
 
+        if (ScoringVersion is { } scoring && !Enum.IsDefined(scoring))
+        {
+            throw new ArgumentException($"计分规则版本须为 V1 或 V2，实际为 {scoring}。");
+        }
+
         if (CarryIn is { } carryIn && carryIn is not (0 or 1))
         {
             throw new ArgumentException($"带入数量须为 0 或 1（每名玩家每局至多带入 1 件补给；0 = 关闭带入带出），实际为 {carryIn}。");
@@ -362,6 +393,7 @@ public sealed record RunConfig
         resolved = resolved.EditSeed is null ? resolved with { EditSeed = AiSearchConfig.DefaultEditSeed } : resolved;
         // 内容集同理（more-pieces-relics D8）：缺省 v2 与"首部缺该项 = 旧日志 = v1"必须可区分，未配置一律落成 v2。
         resolved = resolved.ContentSet is null ? resolved with { ContentSet = ContentSets.Default } : resolved;
+        resolved = resolved.ScoringVersion is null ? resolved with { ScoringVersion = ScoringVersions.Default } : resolved;
         // 带入数量（carry-in-out D11）：未配置落成 0，config.json 与首部写明"关闭"；首部缺该项 = 该项出现之前的旧日志（回放不读它，带入按首部的各玩家带入重建）。
         resolved = resolved.CarryIn is null ? resolved with { CarryIn = 0 } : resolved;
         // 前瞻宽度（expert-lookahead D9）：未显式配置搜索参数、而难度预设带前瞻的玩家（专家），把实际生效的搜索配置落成具体值写进 config.json 与首部，
@@ -437,6 +469,7 @@ public sealed record RunConfig
             }
         }
 
-        return (JsonSerializer.Deserialize<RunConfig>(json, JsonOptions) ?? throw new FormatException("配置 JSON 为空。")).Validated();
+        RunConfig config = JsonSerializer.Deserialize<RunConfig>(json, JsonOptions) ?? throw new FormatException("配置 JSON 为空。");
+        return (config with { RecordedParallelism = null }).Validated();
     }
 }

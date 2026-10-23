@@ -50,7 +50,7 @@ public class 落子与提子节拍的内容Tests
     }
 
     [Fact]
-    public void 落子飘字带算式()
+    public void 落子飘字只标类型并单独揭示军势()
     {
         // C3 落一枚堡垒子，结算后它所在棋串（C3、C4）基础 5、连珠 2、倍增 1 枚 → 军势 10。
         // 飘字 = 棋子类型名（Labels.Piece）+ " · " + 该棋串的军势短算式（GroupPowerView.ShortFormulaText，只列非零项），
@@ -65,9 +65,9 @@ public class 落子与提子节拍的内容Tests
         ImmutableArray<SettlementBeat> beats = SettlementBeats.Generate(Side(before, Reading(P1, 0, 3, 1)), afterSide, Order("C3"));
         PlacedPiece piece = Assert.Single(Assert.IsType<PlacementBeat>(beats[0]).Pieces);
         GroupPowerView view = GroupPowerView.From(group);
-        Assert.Equal(view.ShortFormulaText, piece.Formula);
-        Assert.Equal("堡垒子 · (5+2)×1.5 = 10", piece.CalloutText);
-        Assert.Equal(Labels.Piece(PieceType.Fortress) + " · " + view.ShortFormulaText, piece.CalloutText);
+        Assert.Equal("堡垒子", piece.CalloutText);
+        PowerRevealBeat reveal = Assert.Single(beats.OfType<PowerRevealBeat>());
+        Assert.Equal(view.ShortFormulaText, Assert.Single(reveal.Entries).Steps[^1].RunningText);
         Assert.Equal("（基础 5 + 位置加值 2（连珠 2 / 协同 0 / 高地 0））× 1.5 = 10", view.FormulaText);   // 势力层算式一字不改
         Assert.EndsWith($"= {view.Power}", view.FormulaText);
         Assert.EndsWith($"= {view.Power}", view.ShortFormulaText);
@@ -80,7 +80,6 @@ public class 落子与提子节拍的内容Tests
         // 找不到棋串（快照里没有含该格的棋串）时只显示类型名。
         ImmutableArray<SettlementBeat> bare = SettlementBeats.Generate(Side(before, Reading(P1, 0, 3, 1)), Side(after, Reading(P1, 0, 10, 1)), Order("C3"));
         PlacedPiece unknown = Assert.Single(Assert.IsType<PlacementBeat>(bare[0]).Pieces);
-        Assert.Null(unknown.Formula);
         Assert.Equal("堡垒子", unknown.CalloutText);
     }
 
@@ -123,17 +122,17 @@ public class 落子与提子节拍的内容Tests
     {
         // design.md D4：每枚棋子开始出现时飘字同时出现，1.6 秒内淡出（试玩裁决：0.6 秒看不清），可跨到下一节拍。两枚落子（0.5 秒拍）后接势力节拍（0.9 秒）：
         // 第 1 枚 0 ms 出现、第 2 枚 250 ms 出现；300 ms 时两条都在（年龄 300 / 50），600 ms（势力拍内 100 ms）两条仍在。
-        var placement = new PlacementBeat([new PlacedPiece(Coord.Parse("C3"), PieceType.Basic, P1, "1"), new PlacedPiece(Coord.Parse("C4"), PieceType.Fortress, P1)]);
+        var placement = new PlacementBeat([new PlacedPiece(Coord.Parse("C3"), PieceType.Basic, P1), new PlacedPiece(Coord.Parse("C4"), PieceType.Fortress, P1)]);
         var timeline = new ShowTimeline([placement, new PowerBeat([new PowerChange(P1, 3, 5, 1, 1)])], ShowDuration.Normal);
         Assert.Equal(1600, Callout.LifetimeMs);
 
         timeline.Advance(100);
-        Assert.Equal(["C3:Placement:普通子 · 1:62"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:62"], timeline.Mask().Callouts.Select(Line));
         timeline.Advance(200);
-        Assert.Equal(["C3:Placement:普通子 · 1:187", "C4:Placement:堡垒子:31"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:187", "C4:Placement:堡垒子:31"], timeline.Mask().Callouts.Select(Line));
         timeline.Advance(300);
         Assert.IsType<PowerBeat>(timeline.Current);
-        Assert.Equal(["C3:Placement:普通子 · 1:375", "C4:Placement:堡垒子:218"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:375", "C4:Placement:堡垒子:218"], timeline.Mask().Callouts.Select(Line));
 
         // 势力拍在 1400 ms 播完后，演出不立即结束：尾段等最后一条飘字（250 + 1600 = 1850 ms）淡完，尾段里只有飘字。
         Assert.Equal(1850, timeline.TotalDurationMs);
@@ -142,7 +141,7 @@ public class 落子与提子节拍的内容Tests
         Assert.False(timeline.IsFinished);
         Assert.Null(timeline.Current);
         Assert.Empty(timeline.Mask().Power);
-        Assert.Equal(["C3:Placement:普通子 · 1:937", "C4:Placement:堡垒子:781"], timeline.Mask().Callouts.Select(Line));
+        Assert.Equal(["C3:Placement:普通子:937", "C4:Placement:堡垒子:781"], timeline.Mask().Callouts.Select(Line));
         Assert.Empty(timeline.Advance(100));
         Assert.Equal(["C4:Placement:堡垒子:843"], timeline.Mask().Callouts.Select(Line));
         Assert.Empty(timeline.Advance(250));

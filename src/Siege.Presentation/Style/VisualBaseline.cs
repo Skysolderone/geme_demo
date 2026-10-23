@@ -479,7 +479,7 @@ public static class LayerVisuals
 /// 默认 UI 的风格基准（§20：深色半透明面板、克制金色边框、高对比信息色、PC 策略游戏信息密度）。
 /// 尺寸以 1080p 参考分辨率计，Godot 层按实际分辨率缩放。
 /// </summary>
-public static class UiTheme
+public static partial class UiTheme
 {
     public static readonly Rgba PanelFill = new(16, 25, 34, 222);
 

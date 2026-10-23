@@ -58,6 +58,9 @@ public sealed record MatchOptions
     /// </summary>
     public ContentSet ContentSet { get; init; } = ContentSets.Default;
 
+    /// <summary>本局计分规则；新局默认采用阵型阶数。</summary>
+    public ScoringVersion ScoringVersion { get; init; } = ScoringVersions.Default;
+
     /// <summary>
     /// 带入带出开关（carry-in-out，match-setup「带入带出配置」）：是否对本局进行带出结算。缺省关闭。
     /// 属于对局配置：开局固定、始终公开，入存档；恢复缺该字段的旧存档按关闭（<see cref="MatchFlow.CarryInOutBackfilled"/> 留痕）。

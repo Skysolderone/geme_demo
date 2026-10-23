@@ -59,7 +59,11 @@ public sealed class MatchSession
     {
         _carryHeader = carryHeader;
         Match = match ?? throw new ArgumentNullException(nameof(match));
-        Config = (config ?? throw new ArgumentNullException(nameof(config))).Validated();
+        RunConfig validated = (config ?? throw new ArgumentNullException(nameof(config))).Validated();
+        // 手工接入的新局也必须在日志首部写出实际规则；旧日志回放保留缺字段以便逐字节重放。
+        Config = !recorded && validated.ScoringVersion is null
+            ? validated with { ScoringVersion = match.ScoringVersion }
+            : validated;
         // 回放（recorded）：首部配置里没有候选格上限 = 这局当时就是不限制（小图省略，或该项出现之前的旧日志），MUST NOT 再按地图自动取。
         CellLimit = Config.CandidateCellLimit ?? (recorded ? 0 : AiSearchConfig.DefaultCellLimitFor(match.Map.PlayableCount));
         // 停手阈值同理：首部没有该项 = 该项出现之前的旧日志，当时的保留条件是严格提高（= 0），MUST NOT 按今天的缺省阈值重建。
@@ -88,6 +92,11 @@ public sealed class MatchSession
         if (config.ContentSet is { } contentSet && contentSet != match.ContentSet)
         {
             throw new SiegeRuleException($"跑局配置的内容集为 {contentSet}，对局配置却为 {match.ContentSet}。");
+        }
+
+        if (config.ScoringVersion is { } scoring && scoring != match.ScoringVersion)
+        {
+            throw new SiegeRuleException($"跑局配置的计分规则为 {scoring}，对局配置却为 {match.ScoringVersion}。");
         }
 
         if (config.CarryIn == 1 && !match.CarryInOut)
@@ -165,6 +174,7 @@ public sealed class MatchSession
         PlayerId[] players = config.PlayerIds();
         // 内容集（more-pieces-relics D8）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时只有原六 + 六，按 v1 重建。
         ContentSet contentSet = config.ContentSet ?? (recorded ? ContentSets.Legacy : ContentSets.Default);
+        ScoringVersion scoringVersion = config.ScoringVersion ?? (recorded ? ScoringVersions.Legacy : ScoringVersions.Default);
         // 带入带出（carry-in-out D11）：新建的局按带入数量从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
         // 按日志首部重建时只读首部记录的带入（征召签已是抽得的类型），MUST NOT 按配置或种子重抽——人机对局的带入不可由种子推出。首部缺该项 = 旧日志 = 关闭。
         bool carryInOut;
@@ -188,6 +198,7 @@ public sealed class MatchSession
             {
                 ArtisanWeight = config.ArtisanWeight,
                 ContentSet = contentSet,
+                ScoringVersion = scoringVersion,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
                 // 大回合上限（cycle-stop D2 / C4）：新建的局已落成具体值；按首部重建时缺该项 = 旧日志，按 100 读（安全网默认开启；旧日志最长 94 大回合，到不了上限）。
@@ -669,6 +680,7 @@ public sealed class MatchSession
                     EncampmentBonus = NewField(g.EncampmentBonus, view.ContentSet),
                     PincerBonus = NewField(g.PincerBonus, view.ContentSet),
                     MultiplierCount = g.MultiplierCount,
+                    FormationTier = FormationField(g.FormationTier, view.ScoringVersion),
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
                 })],
@@ -686,6 +698,8 @@ public sealed class MatchSession
     /// 使 v1 局的日志与引入新内容之前逐字节相同。旧日志与 v1 日志读入时按 0 / 否 / 空。
     /// </summary>
     internal static bool WritesNewContent(ContentSet contentSet) => contentSet != ContentSet.V1;
+
+    internal static int? FormationField(int tier, ScoringVersion scoring) => scoring == ScoringVersion.V1 ? null : tier;
 
     private static int? NewField(int value, ContentSet contentSet) => WritesNewContent(contentSet) ? value : null;
 
@@ -941,6 +955,7 @@ public sealed class MatchSession
             Peak = peak is null ? null : new PeakEntry
             {
                 MultiplierCount = peak.MultiplierCount,
+                FormationTier = FormationField(peak.FormationTier, Match.ScoringVersion),
                 MajorRound = peak.MajorRound,
                 Player = peak.Player.Value,
                 Power = peak.Power,

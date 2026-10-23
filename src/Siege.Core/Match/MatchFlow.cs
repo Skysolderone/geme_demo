@@ -114,6 +114,7 @@ public sealed partial class MatchFlow
         RequireLinkMatch(map, list.Length);
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
+        ScoringVersions.RequireValid(options.ScoringVersion);
         RequireValidRoundCap(options.RoundCap);
         // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
         // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
@@ -164,6 +165,10 @@ public sealed partial class MatchFlow
 
     /// <summary>对局内容集（more-pieces-relics D8）。对局配置，始终公开，入存档。</summary>
     public ContentSet ContentSet => Options.ContentSet;
+
+    public ScoringVersion ScoringVersion => Options.ScoringVersion;
+
+    public bool ScoringVersionBackfilled { get; private set; }
 
     /// <summary>恢复自不含内容集字段的旧存档时为 <c>true</c>：按 v1（<see cref="ContentSets.Legacy"/>）回填。</summary>
     public bool ContentSetBackfilled { get; private set; }
@@ -526,6 +531,7 @@ public sealed partial class MatchFlow
         {
             PassedThisRound = PassedThisRound,
             RoundCap = RoundCap,
+            ScoringVersion = ScoringVersion,
         };
     }
 
@@ -542,7 +548,7 @@ public sealed partial class MatchFlow
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(context.Board, roster);
         // more-pieces-relics D3：正式结算按真实信物内容读取计分信物（连营 / 犄角），控制在同一次计算里按结算后盘面现算。
-        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound, Relics.TrueContents()));
+        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound, Relics.TrueContents(), ScoringVersion));
     }
 
     private void OnCheckEndConditions(SettlementContext context)
@@ -730,7 +736,7 @@ public sealed partial class MatchFlow
         }
 
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
-        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, Relics.TrueContents());
+        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, Relics.TrueContents(), ScoringVersion);
         MarkEstablishedPower(power);
         ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.ReadInitiativeBonuses(Board, roster);
         int active = ActiveCount;
@@ -782,7 +788,7 @@ public sealed partial class MatchFlow
     {
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
         Relics.RecalculateControl(Board, roster);
-        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1), Relics.TrueContents()));
+        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1), Relics.TrueContents(), ScoringVersion));
     }
 
     /// <summary>流程事件的<b>唯一</b>发出点。</summary>

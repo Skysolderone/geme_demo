@@ -21,7 +21,7 @@ public sealed partial class MatchFlow
     public BatchPreview PreviewCurrentBatch()
     {
         RequireStage(TurnStage.Deploy);
-        return BatchPreviewBuilder.Build(Board, _batch!.Context, _batch.Placements, History, Roster, Relics, MajorRound);
+        return BatchPreviewBuilder.Build(Board, _batch!.Context, _batch.Placements, History, Roster, Relics, MajorRound, ScoringVersion);
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public sealed partial class MatchFlow
         }
 
         int completed = MajorRound;
-        PowerSnapshot power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
+        PowerSnapshot power = PowerCalculator.Compute(Board, roster, Relics.TrueContents(), ScoringVersion);
         ImmutableArray<BattlefieldVerdict> verdicts = JudgeAtRoundEnd(power, _passedThisRound);
         if (verdicts.Length > 0)
         {
@@ -146,7 +146,7 @@ public sealed partial class MatchFlow
                 return null;
             }
 
-            power = PowerCalculator.Compute(Board, roster, Relics.TrueContents());
+            power = PowerCalculator.Compute(Board, roster, Relics.TrueContents(), ScoringVersion);
         }
 
         int active = roster.Count(kv => kv.Value == PlayerStatus.Active);

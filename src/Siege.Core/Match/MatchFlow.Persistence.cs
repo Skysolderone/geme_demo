@@ -48,6 +48,7 @@ public sealed partial class MatchFlow
             FlagTimeLimitTicks = Options.FlagTimeLimit.Ticks,
             ArtisanWeight = ArtisanWeight,
             ContentSet = ContentSet,
+            ScoringVersion = ScoringVersion,
             CarryInOut = CarryInOut,
             CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
             RoundCap = RoundCap,
@@ -251,6 +252,7 @@ public sealed partial class MatchFlow
         // more-pieces-relics D8：旧存档没有内容集字段 → 那局只可能是原六 + 六，按 v1 恢复（同种子重建出同一份征募序列），ContentSetBackfilled 留痕。
         // MUST NOT 按新局缺省 v2 回填——那会静默换一个棋池。
         bool contentSetBackfilled = data.ContentSet is null;
+        bool scoringVersionBackfilled = data.ScoringVersion is null;
         // carry-in-out D8：旧存档没有带入带出字段 → 那局只可能是关闭、全员无带入，按此回填并在 CarryInOutBackfilled 留痕。
         bool carryInOutBackfilled = data.CarryInOut is null;
         // cycle-stop 裁决 C4 / D4：旧存档没有大回合上限字段 → 按缺省 100 回填并在 RoundCapBackfilled 留痕——安全网默认开启（与当年决赛倒计时 K 按 0 相反），
@@ -261,6 +263,7 @@ public sealed partial class MatchFlow
             FlagTimeLimit = TimeSpan.FromTicks(data.FlagTimeLimitTicks),
             ArtisanWeight = data.ArtisanWeight ?? MatchOptions.DefaultArtisanWeight,
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
+            ScoringVersion = data.ScoringVersion ?? ScoringVersions.Legacy,
             CarryInOut = data.CarryInOut ?? false,
             CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
             RoundCap = data.RoundCap ?? MatchOptions.DefaultRoundCap,
@@ -277,6 +280,7 @@ public sealed partial class MatchFlow
         }
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
+        ScoringVersions.RequireValid(options.ScoringVersion);
         try
         {
             RequireValidRoundCap(options.RoundCap);
@@ -298,6 +302,7 @@ public sealed partial class MatchFlow
             options);
         match.ArtisanWeightBackfilled = artisanWeightBackfilled;
         match.ContentSetBackfilled = contentSetBackfilled;
+        match.ScoringVersionBackfilled = scoringVersionBackfilled;
         match.CarryInOutBackfilled = carryInOutBackfilled;
         match.RoundCapBackfilled = roundCapBackfilled;
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
@@ -396,6 +401,9 @@ public sealed class MatchSaveData
     /// <see cref="MatchFlow.ContentSetBackfilled"/> 为 <c>true</c>。
     /// </summary>
     public ContentSet? ContentSet { get; set; }
+
+    /// <summary>旧存档缺少此字段时按 v1 恢复；新存档总是显式写出。</summary>
+    public ScoringVersion? ScoringVersion { get; set; }
 
     /// <summary>
     /// 带入带出开关（carry-in-out D8）。旧存档无此字段（<c>null</c>）→ 恢复时按关闭，<see cref="MatchFlow.CarryInOutBackfilled"/> 为 <c>true</c>。

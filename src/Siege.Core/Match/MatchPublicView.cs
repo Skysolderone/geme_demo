@@ -57,4 +57,7 @@ public sealed record MatchPublicView(
     /// 对局配置，开局固定、始终公开、插旗阶段即可读；表现层据此在临近上限时提示。不是位置参数，旧的构造写法不变（手写视图缺省 0 = 不启用）。
     /// </summary>
     public int RoundCap { get; init; }
+
+    /// <summary>本局使用的计分规则版本。</summary>
+    public ScoringVersion ScoringVersion { get; init; } = ScoringVersions.Legacy;
 }

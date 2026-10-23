@@ -115,7 +115,7 @@ public static class BatchPreviewBuilder
         BoardHistory history,
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster,
         RelicLedger relics,
-        int majorRound)
+        int majorRound, ScoringVersion scoring = ScoringVersions.Legacy)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(context);
@@ -150,14 +150,14 @@ public static class BatchPreviewBuilder
         // 计分信物（more-pieces-relics D3 / batch-preview「计分信物与新棋子的预演」）：只用批次开始前已揭示的公开内容，
         // 本批将首次揭示的信物不计入任何玩家的预演势力（其内容只显示为"将揭示"）；预演与正式结算的差异只来自它。
         ImmutableSortedDictionary<Coord, RelicType> known = RevealedRelics.Of(relics.PublicStates());
-        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, known) : null;
+        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, known, scoring) : null;
         ImmutableArray<GroupOutlook> own = OwnGroups(projected, context.Player, ordered, rehearsal.Failure, after);
 
         ImmutableArray<PowerChange> changes = [];
         ImmutableArray<Coord> willReveal = [];
         if (after is not null)
         {
-            PowerSnapshot before = PowerCalculator.Compute(board, roster, known);
+            PowerSnapshot before = PowerCalculator.Compute(board, roster, known, scoring);
             changes =
             [
                 .. after.Players.Select(p =>

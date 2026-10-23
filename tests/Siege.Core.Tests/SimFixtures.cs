@@ -74,6 +74,7 @@ internal static class SimFixtures
         PassThreshold = PreCalibrationPassThreshold,
         // more-pieces-relics D8：新局缺省内容集 v2 会改变征募序列；这些样本与黄金值都在引入内容集之前钉下，写死 v1（v1 与引入之前逐步相同）。
         ContentSet = ContentSet.V1,
+        ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1,
         Players = [.. config.Players.Select(p => p with { Weights = PreCalibrationWeights })],
     };
 
@@ -98,6 +99,11 @@ internal static class SimFixtures
     }
 
     /// <summary>独立的临时目录（每次调用都清空重建）。</summary>
+    /// <summary>跨平台比较文本哈希时统一为 LF 行尾。</summary>
+    internal static string Sha256Lf(string value) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(value.Replace("\r\n", "\n", StringComparison.Ordinal))));
+
     internal static string TempDir(string name)
     {
         string dir = Path.Combine(Path.GetTempPath(), "siege-sim-tests", $"{name}-{Environment.ProcessId}");

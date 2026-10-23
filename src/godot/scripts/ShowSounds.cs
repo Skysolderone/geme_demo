@@ -1,13 +1,14 @@
 using System.Collections.Immutable;
 using Godot;
 using Siege.Presentation.Show;
+using Siege.Presentation.Style;
 
 namespace Siege.Godot;
 
 /// <summary>
-/// 结算演出的占位音效（show-sound-cues design.md D2 / D3）：启动时按下面一张参数表把六段短音<b>程序合成</b>成内存里的 16-bit 单声道 PCM
+/// 结算演出的占位音效（show-sound-cues design.md D2 / D3）：启动时按下面一张参数表把七段短音<b>程序合成</b>成内存里的 16-bit 单声道 PCM
 /// （44.1 kHz，不引入任何音频文件），挂一个 4 个 <see cref="AudioStreamPlayer"/> 的池；每帧由 <see cref="SoundCues.Between"/> 导出的提示按序号依次占用空闲播放器，
-/// 同帧多于池容量的丢弃；提速期间音量 −9 dB。
+/// 同帧多于池容量的丢弃；提速期间音量 −9 dB。揭示、领地到账、军势到账三种按提示带的数值档位升调（tiered-number-show D7，见 <see cref="PitchScaleOf"/>），其余四种不变。
 /// </summary>
 /// <remarks>
 /// <para><c>--mute</c> 与无人值守（零时长模式）下本节点<b>根本不创建</b>（GameRoot 里判定），因而不合成波形、场景树里没有任何音频节点。</para>
@@ -33,17 +34,18 @@ public partial class ShowSounds : Node
     }
 
     /// <summary>一段占位音的合成参数：波形、起止频率（双音在中点切换）、时长、每秒衰减（越大越快；0 = 不衰减）、峰值。</summary>
-    private readonly record struct Voice(SoundCue Cue, Wave Wave, double StartHz, double EndHz, int DurationMs, double DecayPerSecond, double Gain);
+    private readonly record struct Voice(SoundCueKind Cue, Wave Wave, double StartHz, double EndHz, int DurationMs, double DecayPerSecond, double Gain);
 
     /// <summary>D2 参数表（时长 60–250 ms 为设计值，横幅 400 ms）。</summary>
     private static readonly Voice[] Table =
     [
-        new(SoundCue.Placement, Wave.Triangle, 880, 880, 60, 50, 0.45),     // 落子"嗒"：三角波 + 快速衰减
-        new(SoundCue.Capture, Wave.Noise, 0, 0, 120, 25, 0.5),              // 提子"啪"：噪声 + 衰减
-        new(SoundCue.Relic, Wave.Sine, 1320, 1760, 180, 8, 0.4),            // 信物"叮"：正弦双音 1320 → 1760
-        new(SoundCue.Territory, Wave.Sine, 440, 440, 200, 12, 0.5),         // 领地到账"咣"：正弦 + 中等衰减
-        new(SoundCue.Group, Wave.Sine, 330, 330, 250, 6, 0.8),              // 军势到账：更低、更慢衰减、音量更大
-        new(SoundCue.Banner, Wave.Sine, 220, 220, 400, 4, 0.6),             // 横幅低音
+        new(SoundCueKind.Placement, Wave.Triangle, 880, 880, 60, 50, 0.45),     // 落子"嗒"：三角波 + 快速衰减
+        new(SoundCueKind.Capture, Wave.Noise, 0, 0, 120, 25, 0.5),              // 提子"啪"：噪声 + 衰减
+        new(SoundCueKind.Relic, Wave.Sine, 1320, 1760, 180, 8, 0.4),            // 信物"叮"：正弦双音 1320 → 1760
+        new(SoundCueKind.Reveal, Wave.Triangle, 1175, 1175, 70, 42, 0.4),       // 揭示"嘀"：比落子高一个纯四度的三角波短音，清脆、一步一声
+        new(SoundCueKind.Territory, Wave.Sine, 440, 440, 200, 12, 0.5),         // 领地到账"咣"：正弦 + 中等衰减
+        new(SoundCueKind.Group, Wave.Sine, 330, 330, 250, 6, 0.8),              // 军势到账：更低、更慢衰减、音量更大
+        new(SoundCueKind.Banner, Wave.Sine, 220, 220, 400, 4, 0.6),             // 横幅低音
     ];
 
     private readonly AudioStreamWav[] _streams = new AudioStreamWav[Table.Length];
@@ -79,19 +81,31 @@ public partial class ShowSounds : Node
         float volume = fast ? FastVolumeDb : 0f;
         foreach (SoundCue cue in cues)
         {
+            int voice = IndexOf(cue.Kind);
             AudioStreamPlayer? free = System.Array.Find(_players, p => !p.Playing);
             if (free is null)
             {
                 return;
             }
 
-            free.Stream = _streams[IndexOf(cue)];
+            free.Stream = _streams[voice];
             free.VolumeDb = volume;
+            free.PitchScale = PitchScaleOf(cue);
             free.Play();
         }
     }
 
-    private static int IndexOf(SoundCue cue)
+    /// <summary>
+    /// 某个提示相对参数表原调升高的半音数（tiered-number-show D7）：揭示、领地到账、军势到账按提示带的档位取样式表的"音高"，其余种类恒为 0。
+    /// 档位由 Presentation 给出，这里不取档。
+    /// </summary>
+    public static int SemitonesOf(SoundCue cue) =>
+        cue.Kind is SoundCueKind.Reveal or SoundCueKind.Territory or SoundCueKind.Group ? NumberTierStyle.For(cue.Tier).PitchSemitones : 0;
+
+    /// <summary>播放器的音高倍率 = 2^(半音 / 12)：五档升 12 个半音即高一个八度（时长随之减半）。</summary>
+    public static float PitchScaleOf(SoundCue cue) => Mathf.Pow(2f, SemitonesOf(cue) / 12f);
+
+    private static int IndexOf(SoundCueKind cue)
     {
         for (int i = 0; i < Table.Length; i++)
         {

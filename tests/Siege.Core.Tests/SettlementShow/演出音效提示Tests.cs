@@ -31,7 +31,7 @@ public class 演出音效提示Tests
         return Text(SoundCues.Between(before, timeline.Mask(), crossed));
     }
 
-    private static string Text(ImmutableArray<SoundCue> cues) => string.Join(",", cues);
+    private static string Text(ImmutableArray<SoundCue> cues) => string.Join(",", cues.Select(c => c.Kind));
 
     private static ImmutableArray<PlacedPiece> Pieces(int count) =>
         [.. Enumerable.Range(1, count).Select(i => new PlacedPiece(Coord.Parse($"A{i}"), PieceType.Basic, P1))];

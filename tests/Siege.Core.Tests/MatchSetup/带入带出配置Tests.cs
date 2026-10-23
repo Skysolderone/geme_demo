@@ -42,6 +42,7 @@ public class 带入带出配置Tests
             {
                 ArtisanWeight = config.ArtisanWeight,
                 ContentSet = config.ContentSet!.Value,
+                ScoringVersion = config.ScoringVersion!.Value,
                 CarryInOut = carryInOut,
                 CarryIns = carryIns,
             });

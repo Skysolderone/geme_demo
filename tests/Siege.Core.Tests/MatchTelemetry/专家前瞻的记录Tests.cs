@@ -241,7 +241,7 @@ public class 专家前瞻的记录Tests
         // 首个分歧：小回合 32（已前瞻）。旧值 66501E9CE1122B8E5FB4555FC83E5D8E71C3FB28B0BDEF0931ACB2CB98A084A3。
         // ai-whole-batch 1.6 重钉（同上，走法变：小回合 92 → 108）：旧值 4668AB92F8178A93817E7F368851526C0C5F1231E633E6BBF48D3A46E8B603EB（开关 0 下不变，由 整批候选关闭时一层配置的记录与改动前相同 守）。
         // ai-bridge-candidate 1.6 重钉（同上，走法变：小回合 108 → 104、前瞻记录 27 → 26；首部另多 "EditSeed":1）：旧值 85B44320410FCBEAF7CD02D907147467CAD2B8DE25F9361F8BE100AFBA3EC062（开关 0 下不变）。
-        Assert.True("D0B31501282F595C60F44E97EDDB0C81E4E450B0475665717CF32904DC42CDFB" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        Assert.True("1B605EF21E8DA2FC0172156C055F187E60351FFBE8C5DBFC7D4349E65D865499" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -265,7 +265,7 @@ public class 专家前瞻的记录Tests
         Assert.Equal(23, log.LookaheadTurns.Count());
         Assert.DoesNotContain("WholeBatch", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("4668AB92F8178A93817E7F368851526C0C5F1231E633E6BBF48D3A46E8B603EB" == digest, $"开关 0 的一层专家日志确定性文本哈希：{digest}");
+        Assert.True("FC570B684E0185FC2FB8FABCB6787441D523B18C9E308175ED7EC5850F088FBB" == digest, $"开关 0 的一层专家日志确定性文本哈希：{digest}");
     }
 
     [Fact]
@@ -279,7 +279,7 @@ public class 专家前瞻的记录Tests
         Assert.Equal(100, log.Turns.Count);
         Assert.DoesNotContain("WholeBatch", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("AFBD43C98B8AFD39D4BCF8B2580DBCDAF0821F8729BFD6DA85D81ACEF1D4193F" == digest, $"开关 0 的非专家日志确定性文本哈希：{digest}");
+        Assert.True("3878113D35C5D4469492ACC084CCDF5D848EEC0267F8D74D85BF446AE49F5EF1" == digest, $"开关 0 的非专家日志确定性文本哈希：{digest}");
     }
 
     [Fact]
@@ -295,7 +295,7 @@ public class 专家前瞻的记录Tests
         Assert.Equal(27, log.LookaheadTurns.Count());
         Assert.DoesNotContain("EditSeed", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("85B44320410FCBEAF7CD02D907147467CAD2B8DE25F9361F8BE100AFBA3EC062" == digest, $"搭桥候选开关 0 的一层专家日志确定性文本哈希：{digest}");
+        Assert.True("7F4C323059287D2AC1B5E0D839646901754AC3E6994D3B6A044F977153CBA8D3" == digest, $"搭桥候选开关 0 的一层专家日志确定性文本哈希：{digest}");
     }
 
     [Fact]
@@ -309,7 +309,7 @@ public class 专家前瞻的记录Tests
         Assert.Equal(92, log.Turns.Count);
         Assert.DoesNotContain("EditSeed", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("7E180336B84B99D3C33EE84E43DCA397962E93B2FE113E138603863DCFC766A6" == digest, $"搭桥候选开关 0 的非专家日志确定性文本哈希：{digest}");
+        Assert.True("AF724AB0DD978DD6893A8E576AE3AE7B8725BBCA51A40A9996AEAE8BEE24B26E" == digest, $"搭桥候选开关 0 的非专家日志确定性文本哈希：{digest}");
     }
 
     /// <summary>
@@ -322,6 +322,7 @@ public class 专家前瞻的记录Tests
         lines[0] = lines[0]
             .Replace("\"AiEvaluationVersion\":11", "\"AiEvaluationVersion\":3", StringComparison.Ordinal)
             .Replace(",\"RoundCap\":100", string.Empty, StringComparison.Ordinal)
+            .Replace(",\"ScoringVersion\":\"V1\"", string.Empty, StringComparison.Ordinal)
             .Replace(",\"StagnationRounds\":6", string.Empty, StringComparison.Ordinal);
         return string.Join('\n', lines);
     }
@@ -471,7 +472,7 @@ public class 专家前瞻的记录Tests
         // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变；小回合恰好仍为 100）：旧值 4288BC9A971F9B49087C6937E0982ED172064F3F2A919E0512C89001BF2305B2。
         // ai-whole-batch 1.6 重钉（同上，走法变：小回合 100 → 92）：旧值 AFBD43C98B8AFD39D4BCF8B2580DBCDAF0821F8729BFD6DA85D81ACEF1D4193F。
         // ai-bridge-candidate 1.6 重钉（同上，走法变：小回合 92 → 101；首部另多 "EditSeed":1）：旧值 7E180336B84B99D3C33EE84E43DCA397962E93B2FE113E138603863DCFC766A6（开关 0 下不变）。
-        Assert.True("4C6E18B4F0E69C5A43EC7BA6E38D27EC559CB867C5181B8DA1F5038570F0DCB0" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
+        Assert.True("E19BA9F47ACF2AADCA0A73E82875E419E58ED3E16626D1383C30B98BBF936067" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]
@@ -618,5 +619,5 @@ public class 专家前瞻的记录Tests
         return reader.ReadToEnd();
     }
 
-    private static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+    private static string Sha256(string text) => SimFixtures.Sha256Lf(text);
 }

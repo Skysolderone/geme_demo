@@ -102,6 +102,7 @@ public static class Program
         Console.WriteLine($"                [--whole-batch <AI 整批候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultWholeBatch}；1 = 标准 / 高难 / 专家另加剪枝候选与配对候选（逐枚为负、整批为正的组合），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine($"                [--edit-seed <AI 搭桥候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultEditSeed}；1 = 标准 / 高难 / 专家另加以搭桥单点为起点的候选（全部合法空格、不经预筛、不受前 N），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
+        Console.WriteLine("                [--scoring <v1|v2，计分规则版本，缺省 v2>]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("                （AI 一律按座位视野；open-map 起锁定后整张地图是唯一战场，座位视野即全图，没有全知开关）");
         Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
@@ -360,6 +361,7 @@ public static class Program
             PassThreshold = cli.Has("pass-threshold") ? cli.GetInt("pass-threshold", 0) : config.PassThreshold,
             CarryIn = cli.Has("carry-in") ? cli.GetInt("carry-in", 0) : config.CarryIn,
             RoundCap = cli.Has("round-cap") ? cli.GetInt("round-cap", 0) : config.RoundCap,
+            ScoringVersion = cli.Has("scoring") ? Core.Scoring.ScoringVersions.Parse(cli.Get("scoring", string.Empty)) : config.ScoringVersion,
             StagnationRounds = cli.Has("stagnation-rounds") ? cli.GetInt("stagnation-rounds", 0) : config.StagnationRounds,
             WholeBatch = cli.Has("whole-batch") ? cli.GetInt("whole-batch", 0) : config.WholeBatch,
             EditSeed = cli.Has("edit-seed") ? cli.GetInt("edit-seed", 0) : config.EditSeed,

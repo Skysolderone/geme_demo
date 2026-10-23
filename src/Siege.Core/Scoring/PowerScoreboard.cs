@@ -10,8 +10,14 @@ namespace Siege.Core.Scoring;
 /// </summary>
 public sealed record MultiplierPeak(int MultiplierCount, int MajorRound, PlayerId Player, ImmutableArray<Coord> Stones, BigInteger Power)
 {
-    /// <summary>峰值倍率的精确表示 <c>1.5^<see cref="MultiplierCount"/></c>。</summary>
-    public Multiplier Multiplier => new(MultiplierCount);
+    /// <summary>
+    /// 峰值串在峰值出现时的阵型阶数（formation-tiers D3：峰值记录保留倍增子数量与阵型阶数；计分规则 v1 下恒 0）。
+    /// 峰值仍按 <see cref="MultiplierCount"/>（倍增子的枚数）取——它回答"堆了多少倍增子"，阵型只是随行记录。
+    /// </summary>
+    public int FormationTier { get; init; }
+
+    /// <summary>峰值串总倍率的精确表示 <c>1.5^(<see cref="MultiplierCount"/> + <see cref="FormationTier"/>)</c>。</summary>
+    public Multiplier Multiplier => new(MultiplierCount + FormationTier);
 }
 
 /// <summary>
@@ -33,17 +39,22 @@ public sealed class PowerScoreboard
     /// <summary>整局倍率峰值遥测；尚未出现任何倍增子时为 <c>null</c>。</summary>
     public MultiplierPeak? Peak { get; private set; }
 
-    /// <summary>对当前盘面全量重算并替换 <see cref="Latest"/>；<paramref name="majorRound"/> 只用于倍率峰值遥测的轮次标记。</summary>
+    /// <summary>
+    /// 对当前盘面全量重算并替换 <see cref="Latest"/>；<paramref name="majorRound"/> 只用于倍率峰值遥测的轮次标记。
+    /// <b>不带版本 = 计分规则 v1</b>（formation-tiers D2：不计阵型、不读计分信物）：只留给旧算例测试，产品代码 MUST NOT 调用。
+    /// </summary>
     public PowerSnapshot Recalculate(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound) =>
-        Track(PowerCalculator.Compute(board, roster), majorRound);
+        Recalculate(board, roster, majorRound, ImmutableDictionary<Coord, Relics.RelicType>.Empty, ScoringVersions.Legacy);
 
     /// <summary>
     /// 同 <see cref="Recalculate(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, int)"/>，并按 <paramref name="knownRelics"/> 读取计分信物
-    /// （more-pieces-relics D3）。正式对局的结算第 5 步、弃赛 / 大回合结束 / 恢复时的重算都走本重载，传真实信物内容。
+    /// （more-pieces-relics D3）、按 <paramref name="scoring"/> 计分（formation-tiers D2）。正式对局的结算第 5 步、弃赛 / 大回合结束 / 恢复时的重算
+    /// 都走本重载，传真实信物内容与对局的计分规则版本。
     /// </summary>
     public PowerSnapshot Recalculate(
-        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound, IReadOnlyDictionary<Coord, Relics.RelicType> knownRelics) =>
-        Track(PowerCalculator.Compute(board, roster, knownRelics), majorRound);
+        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound,
+        IReadOnlyDictionary<Coord, Relics.RelicType> knownRelics, ScoringVersion scoring) =>
+        Track(PowerCalculator.Compute(board, roster, knownRelics, scoring), majorRound);
 
     private PowerSnapshot Track(PowerSnapshot snapshot, int majorRound)
     {
@@ -62,7 +73,7 @@ public sealed class PowerScoreboard
             {
                 if (group.MultiplierCount > 0 && (Peak is null || group.MultiplierCount > Peak.MultiplierCount))
                 {
-                    Peak = new MultiplierPeak(group.MultiplierCount, majorRound, player.Player, group.Stones, group.Power);
+                    Peak = new MultiplierPeak(group.MultiplierCount, majorRound, player.Player, group.Stones, group.Power) { FormationTier = group.FormationTier };
                 }
             }
         }

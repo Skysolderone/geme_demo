@@ -7,6 +7,7 @@ using Siege.Core.Match;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 using Siege.Presentation.Hand;
+using Siege.Presentation.Hud;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Show;
@@ -31,6 +32,7 @@ public sealed partial class Hud : CanvasLayer
     private Label _turnTitle = null!;
     private Label _turnSubtitle = null!;
     private Button _orderButton = null!;
+    private HBoxContainer _orderContent = null!;
     private VBoxContainer _rankBody = null!;
     private PanelContainer _rankPanel = null!;
     private VBoxContainer _handBody = null!;
@@ -45,6 +47,7 @@ public sealed partial class Hud : CanvasLayer
     private PanelContainer _recruitBar = null!;
     private Button _recruitBarButton = null!;
     private Label _notice = null!;
+    private Label _turnSummary = null!;
     private Label _showCaption = null!;
     private Label _showBanner = null!;
     private Label _hoverReadout = null!;
@@ -85,6 +88,11 @@ public sealed partial class Hud : CanvasLayer
     /// <summary>盘面层的读法切换（Tab 或按钮）。</summary>
     public event Action? ReadingPressed;
 
+    /// <summary>切换对手回合镜头跟随。</summary>
+    public event Action? FollowPressed;
+
+    public bool FollowActive { get; set; } = true;
+
     /// <summary>搭出全部面板。只调用一次。</summary>
     public void Build()
     {
@@ -108,6 +116,14 @@ public sealed partial class Hud : CanvasLayer
         // 通知条放在顶部顺序条之下：13×13 + 60° 相机下棋盘近边的行 / 列标注已经贴到底部 HUD 上沿，放底部会压住近边字母。
         Ui.Anchor(_notice, 0.5f, 0f, -420f, 66f, 420f, 90f);
         _root.AddChild(_notice);
+
+        _turnSummary = Ui.HintBanner(string.Empty, Ui.PanelBorder);
+        _turnSummary.HorizontalAlignment = HorizontalAlignment.Center;
+        _turnSummary.Visible = false;
+        var summaryBox = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        Ui.Anchor(summaryBox, 0.5f, 0f, -620f, 60f, 620f, 96f);
+        summaryBox.AddChild(_turnSummary);
+        _root.AddChild(summaryBox);
 
         // 事件提示条（settlement-show「战场结算横幅」：他场结算"不打断操作的提示条"）：通知条之下一行，文案来自会话层，不是节拍、不阻塞输入。
 
@@ -148,9 +164,17 @@ public sealed partial class Hud : CanvasLayer
     /// <summary>相机当前是否处于全局预览（由主场景在刷新前同步，按钮据此显示按下态）。</summary>
     public bool OverviewActive { get; set; }
 
+    public void SetTurnSummary(string? text, Color color)
+    {
+        _turnSummary.Text = text ?? string.Empty;
+        _turnSummary.Visible = text is not null;
+        _turnSummary.AddThemeColorOverride("font_color", color.Lightened(0.35f));
+        _notice.Visible = text is null;
+    }
+
     private void BuildTurnBanner()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
         _turnEmblem = new EmblemIcon { CustomMinimumSize = new Vector2(34f, 34f), MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -170,9 +194,15 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildOrderBar()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(6);
-        _orderButton = Ui.Action("行动顺序");
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space3, UiTheme.Space1);
+        _orderButton = Ui.Action(string.Empty);
         _orderButton.Pressed += () => LayerPressed?.Invoke(TacticalLayer.Order);
+        // 按钮里放一条居中的徽记条（hud-panels D3）：整条仍是这一个按钮，点了切换顺序层；子控件一律不接鼠标。
+        var center = new CenterContainer();
+        Ui.FillButton(_orderButton, center);
+        _orderContent = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _orderContent.AddThemeConstantOverride("separation", UiTheme.Space2);
+        center.AddChild(_orderContent);
         body.AddChild(_orderButton);
         Ui.Anchor(panel, 0.5f, 0f, -290f, 14f, 290f, 60f);
         _root.AddChild(panel);
@@ -180,10 +210,10 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildRankPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         body.AddChild(Ui.Heading("势力排名"));
         _rankBody = new VBoxContainer();
-        _rankBody.AddThemeConstantOverride("separation", 1);
+        _rankBody.AddThemeConstantOverride("separation", UiTheme.Space1);
         body.AddChild(_rankBody);
         Ui.Anchor(panel, 1f, 0f, -300f, 14f, -14f, 146f);
         // 贴右上角：内容比最小宽度宽时向左长（缺省 End 会向右长出屏幕——restore-go-core-rules 段 E 截图里"领地 + 棋串"那半行被截掉）。
@@ -194,10 +224,10 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildHandBar()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         body.AddChild(Ui.Heading("手牌（点选后再点格子落子）"));
         _handBody = new VBoxContainer();
-        _handBody.AddThemeConstantOverride("separation", 2);
+        _handBody.AddThemeConstantOverride("separation", UiTheme.Space1);
         body.AddChild(_handBody);
         Ui.Anchor(panel, 0f, 1f, 14f, -186f, 378f, -58f);
         _root.AddChild(panel);
@@ -205,17 +235,17 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildLayerButtons()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(6);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space3, UiTheme.Space1);
         _layerButtons = new HBoxContainer();
         _layerButtons.AddThemeConstantOverride("separation", 4);
         body.AddChild(_layerButtons);
-        Ui.Anchor(panel, 0.5f, 1f, -318f, -50f, 318f, -10f);
+        Ui.Anchor(panel, 0.5f, 1f, -366f, -50f, 366f, -10f);
         _root.AddChild(panel);
     }
 
     private void BuildActionPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         _actionBody = body;
         Ui.Anchor(panel, 1f, 1f, -300f, -186f, -14f, -58f);
         _root.AddChild(panel);
@@ -223,7 +253,7 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildPreviewPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space4, UiTheme.Space1);
         _previewPanel = panel;
         body.AddChild(Ui.Heading("批次预演"));
         _previewBody = new VBoxContainer();
@@ -235,7 +265,7 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildLayerPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel();
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space4, UiTheme.Space1);
         _layerPanel = panel;
         _layerBody = new VBoxContainer();
         _layerBody.AddThemeConstantOverride("separation", 2);
@@ -247,7 +277,7 @@ public sealed partial class Hud : CanvasLayer
 
     private void BuildCenterPanel()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(12, 4);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Primary, UiTheme.Space5, UiTheme.Space2);
         _centerPanel = panel;
         _centerBody = body;
         CenterBox(0.5f, 660f, 480f);
@@ -262,7 +292,7 @@ public sealed partial class Hud : CanvasLayer
     /// </summary>
     private void BuildRecruitBar()
     {
-        (PanelContainer panel, VBoxContainer body) = Ui.Panel(3);
+        (PanelContainer panel, VBoxContainer body) = Ui.Panel(PanelTier.Secondary, UiTheme.Space2, UiTheme.Space1);
         _recruitBar = panel;
         _recruitBarButton = Ui.Action(string.Empty);
         _recruitBarButton.Pressed += () => RecruitCollapsePressed?.Invoke();
@@ -372,11 +402,39 @@ public sealed partial class Hud : CanvasLayer
 
     private void RefreshOrderBar(ViewerWorld world)
     {
-        MatchPublicView view = world.Public.View;
-        string order = view.ActionOrder.IsDefaultOrEmpty
-            ? "未定"
-            : string.Join(" > ", view.ActionOrder.Select(p => FactionTable.For(p).Name + (p == view.CurrentPlayer ? "◀" : string.Empty)));
-        _orderButton.Text = $"行动顺序：{order}　[5] 展开顺序层";
+        OrderBarView bar = HudPanelRows.OrderBar(world.Public.View);
+        Ui.Clear(_orderContent);
+        _orderContent.AddChild(Ui.Text(HudPanelRows.OrderTitleText, Ui.MutedText, UiTheme.Caption));
+        _orderContent.AddChild(Ui.Spacer(UiTheme.Space3, 0f));
+        if (bar.EmptyText is { } empty)
+        {
+            _orderContent.AddChild(Ui.Text(empty, Ui.InfoText, UiTheme.Small));
+        }
+
+        for (int i = 0; i < bar.Entries.Length; i++)
+        {
+            OrderBarEntry entry = bar.Entries[i];
+            if (i > 0)
+            {
+                _orderContent.AddChild(Ui.Text("›", Ui.MutedText, UiTheme.Small));
+            }
+
+            FactionStyle faction = FactionTable.For(entry.Player);
+            var item = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+            item.AddThemeConstantOverride("separation", UiTheme.Space0);
+            var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            line.AddThemeConstantOverride("separation", UiTheme.Space1);
+            var icon = new EmblemIcon { CustomMinimumSize = new Vector2(14f, 14f), MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+            icon.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
+            line.AddChild(icon);
+            line.AddChild(Ui.Text(entry.NameText, entry.IsCurrent ? Ui.PanelBorder : Ui.InfoText, UiTheme.Small));
+            item.AddChild(line);
+            item.AddChild(entry.IsCurrent ? Ui.Bar(Ui.PanelBorder, 0f, UiTheme.SelectedEdgeWidthPx) : Ui.Spacer(0f, UiTheme.SelectedEdgeWidthPx));
+            _orderContent.AddChild(item);
+        }
+
+        _orderContent.AddChild(Ui.Spacer(UiTheme.Space3, 0f));
+        _orderContent.AddChild(Ui.Text(bar.HintText, Ui.MutedText, UiTheme.Caption));
     }
 
     /// <summary>
@@ -400,57 +458,84 @@ public sealed partial class Hud : CanvasLayer
         int? ShownRank(PlayerPowerRowView row) =>
             mask.Power.TryGetValue(row.Player, out PowerDisplay? shown) && !shown.Rolling ? shown.Change.OldRank : row.Rank;
 
+        // 六列（hud-panels D2）：自家标记、徽记、名次、阵营、势力（右对齐）、明细。列宽由最宽的一格决定，各行自然对齐。
+        // 每行的文字整份取自 HudPanelRows.RankRow（演出前旧名次 / 演出中滚动值 / 明细规则都在那里），这里只摆放与取色。
+        var grid = new GridContainer { Columns = 6, MouseFilter = Control.MouseFilterEnum.Ignore };
+        grid.AddThemeConstantOverride("h_separation", UiTheme.Space3);
+        grid.AddThemeConstantOverride("v_separation", UiTheme.Space1);
         foreach (PlayerPowerRowView row in power.Players.OrderBy(p => ShownRank(p) ?? int.MaxValue).ThenBy(p => p.Player.Value))
         {
-            var line = new HBoxContainer();
-            line.AddThemeConstantOverride("separation", 6);
-            FactionStyle faction = FactionTable.For(row.Player);
-            var icon = new EmblemIcon { CustomMinimumSize = new Vector2(16f, 16f), MouseFilter = Control.MouseFilterEnum.Ignore };
+            PowerDisplay? display = mask.Power.TryGetValue(row.Player, out PowerDisplay? shown) ? shown : null;
+            RankRowView view = HudPanelRows.RankRow(row, display, world.Viewer);
+            FactionStyle faction = FactionTable.For(view.Player);
+            Color textColor = view.IsMuted ? Ui.MutedText : Ui.InfoText;
+
+            // 自家标记：本机玩家一条金色竖条，其他行同尺寸空占位（不靠文字颜色区分，D2）。
+            grid.AddChild(view.IsViewer
+                ? Ui.Bar(Ui.PanelBorder, UiTheme.ViewerMarkWidthPx, 16f)
+                : Ui.Spacer(UiTheme.ViewerMarkWidthPx, 16f));
+
+            var icon = new EmblemIcon { CustomMinimumSize = new Vector2(16f, 16f), MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
             icon.Set(faction.Emblem, Visuals.ToColor(faction.Primary));
-            line.AddChild(icon);
-            string rank = ShownRank(row) is int r ? $"第 {r} 名" : "—";
-            string suffix = row.StatusText is null ? string.Empty : $"（{row.StatusText}）";
+            grid.AddChild(icon);
+            // 一行里势力列放大时行变高，其余各格纵向居中（下同）。
+            grid.AddChild(Centered(Ui.Text(view.RankText, textColor)));
+            grid.AddChild(Centered(Ui.Text(view.NameText, textColor)));
 
-            if (mask.Power.TryGetValue(row.Player, out PowerDisplay? display))
+            // 势力列：演出中按段首放大的字号（呈现层给档位、RankFontPx 折算），其余时候正文字号；放大时这一格变宽，整列跟着变宽。
+            Label powerLabel = Ui.Text(view.PowerText, textColor, display is null ? UiTheme.Body : RankFontPx(display));
+            powerLabel.HorizontalAlignment = HorizontalAlignment.Right;
+            grid.AddChild(Centered(powerLabel));
+
+            // 明细列：状态部分恒为次要色（D9-6），其余部分演出增量取增量色（负数警示色、否则阵营色），平时次要色。不截断（D9-1）。
+            var detail = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            detail.AddThemeConstantOverride("separation", UiTheme.Space3);
+            if (view.DetailStatusText is { } status)
             {
-                // 演出中间态（settlement-show-callouts D2 分段到账）：总势力按段滚动（领地段 → 军势段 → 定格，整数插值 D7），
-                // 段首数字放大 1.3 倍、段内回落（缩放只在这里由段内千分比折算成整数字号）；段内标"领地 +a" / "军势 +b"，定格后标总增量；名次变动提示随滚动显示。
-                bool bouncing = display.Stage is PowerStage.Territory or PowerStage.Group;
-                int fontSize = bouncing
-                    ? UiTheme.BodyFontPx + (UiTheme.BodyFontPx * 3 * (1000 - display.StagePermille) / 10000)
-                    : UiTheme.BodyFontPx;
-                string delta = bouncing ? $"　{display.StageText}" : display.Stage == PowerStage.Hold ? $"　{display.Change.DeltaText}" : string.Empty;
-                System.Numerics.BigInteger shown = display.Stage switch
-                {
-                    PowerStage.Territory => display.Change.TerritoryDelta,
-                    PowerStage.Group => display.Change.GroupDelta,
-                    _ => display.Change.Delta,
-                };
-                string rankHint = display.Rolling && display.Change.RankText is { } rankText
-                    ? $"　{rankText}{(display.Change.NewRank < display.Change.OldRank ? " ↑" : " ↓")}"
-                    : string.Empty;
-                Color textColor = row.StatusText is null ? Ui.InfoText : Ui.MutedText;
-                line.AddChild(Ui.Text($"{rank}　{faction.Name}　势力 ", textColor));
-                line.AddChild(Ui.Text(Labels.CompactPower(display.Value), textColor, fontSize));
-                if (suffix.Length > 0)
-                {
-                    line.AddChild(Ui.Text(suffix, Ui.MutedText));
-                }
-
-                if (delta.Length > 0 || rankHint.Length > 0)
-                {
-                    line.AddChild(Ui.Text($"{delta}{rankHint}", shown.Sign < 0 ? Ui.DangerText : Visuals.ToColor(faction.Primary), bouncing ? fontSize : null));
-                }
-
-                _rankBody.AddChild(line);
-                continue;
+                detail.AddChild(Centered(Ui.Text(status, Ui.MutedText, UiTheme.Caption)));
             }
 
-            // 概览栏：势力拆成"领地 + 棋串"，≥ 10^6 缩写（restore-go-core-rules 段 E）；精确值在势力层明细里。
-            line.AddChild(Ui.Text($"{rank}　{faction.Name}　{row.CompactText}{suffix}",
-                row.StatusText is null ? Ui.InfoText : Ui.MutedText));
-            _rankBody.AddChild(line);
+            Color restColor = !view.DetailIsDelta ? Ui.MutedText : view.DeltaIsNegative ? Ui.DangerText : Visuals.ToColor(faction.Primary);
+            if (view.DetailRestText.Length > 0)
+            {
+                // 领地段 / 军势段：本段增量与段首数字一起弹（tiered-number-show），字号同势力列；定格与平时仍是注释字号。
+                int restSize = display is { Stage: PowerStage.Territory or PowerStage.Group } ? RankFontPx(display) : UiTheme.Caption;
+                detail.AddChild(Centered(Ui.Text(view.DetailRestText, restColor, restSize)));
+            }
+
+            // 名次提示另起一个标签、恒为正文字号，不随段首放大：面板贴右上角向左长，五档 200% 时连它一起放大会压住顶部的行动顺序条。
+            if (view.DetailRankHintText is { } rankHint)
+            {
+                detail.AddChild(Centered(Ui.Text(rankHint, restColor, UiTheme.Body)));
+            }
+
+            grid.AddChild(detail);
         }
+
+        _rankBody.AddChild(grid);
+    }
+
+    /// <summary>文字在所在格里纵向居中（格比文字高时：势力排名里放大的势力列、按钮里的两列）。</summary>
+    private static Label Centered(Label label)
+    {
+        label.VerticalAlignment = VerticalAlignment.Center;
+        return label;
+    }
+
+    /// <summary>
+    /// 势力栏分段到账时数字的字号（像素）：领地段 / 军势段的段首放大到样式表的"势力栏放大"幅度（按本段增量的数值档位，档位由 Presentation 给出），
+    /// 段内线性回落到正文字号；其余时候（未开始 / 定格）就是正文字号。缩放只在这里由段内千分比折算成整数字号。
+    /// </summary>
+    public static int RankFontPx(PowerDisplay display)
+    {
+        ArgumentNullException.ThrowIfNull(display);
+        if (display.Stage is not (PowerStage.Territory or PowerStage.Group))
+        {
+            return UiTheme.BodyFontPx;
+        }
+
+        int extraPercent = NumberTierStyle.For(display.Change.TierOf(display.Stage)).RankScalePercent - 100;
+        return UiTheme.BodyFontPx + (UiTheme.BodyFontPx * extraPercent * (1000 - display.StagePermille) / 100000);
     }
 
     private void RefreshHand(MatchSession session, ViewerWorld world)
@@ -459,7 +544,7 @@ public sealed partial class Hud : CanvasLayer
         OwnHandAreaView own = world.HandPanel().Own;
         bool mustDiscard = session.IsMyTurn && session.Match.Stage == TurnStage.OrganizeHand;
         string slots = own.TypeSlots is int s ? $"{own.OccupiedSlots} / {s}" : $"{own.OccupiedSlots} / —";
-        _handBody.AddChild(Ui.Text($"类型槽 {slots}　本轮新征募 {own.PendingGained} 枚", Ui.MutedText, UiTheme.BodyFontPx - 2));
+        _handBody.AddChild(Ui.Text($"类型槽 {slots}　本轮新征募 {own.PendingGained} 枚", Ui.MutedText, UiTheme.Caption));
 
         if (own.Rows.IsDefaultOrEmpty)
         {
@@ -467,15 +552,27 @@ public sealed partial class Hud : CanvasLayer
             return;
         }
 
+        // 每类一个按钮，按钮里左右两列（hud-panels D4）：类型名靠左、数量靠右，文字取自 HudPanelRows.HandRow。
+        // 选中仍由按钮主题画金色底边；子 Label 不随按钮状态变色，字色按"语义 + 是否选中"取按钮常态的字色。
         foreach (OwnHandRowView row in own.Rows)
         {
-            bool selected = session.SelectedType == row.Type;
-            Button button = Ui.Toggle((selected ? "▶ " : "　") + row.Text, selected);
-            button.Alignment = HorizontalAlignment.Left;
-            PieceType type = row.Type;
+            HandRowView view = HudPanelRows.HandRow(row, mustDiscard);
+            bool selected = !mustDiscard && session.SelectedType == view.Type;
+            Button button = view.Kind == ButtonKind.Default ? Ui.Toggle(string.Empty, selected) : Ui.Action(string.Empty, view.Kind);
+            Color color = Ui.ButtonTextColor(view.Kind, selected);
+            var columns = new HBoxContainer();
+            columns.AddThemeConstantOverride("separation", UiTheme.Space3);
+            Label name = Centered(Ui.Text(view.NameText, color, UiTheme.Small));
+            name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            columns.AddChild(name);
+            Label count = Centered(Ui.Text(view.CountText, color, UiTheme.Small));
+            count.HorizontalAlignment = HorizontalAlignment.Right;
+            columns.AddChild(count);
+            Ui.FillButton(button, columns);
+
+            PieceType type = view.Type;
             if (mustDiscard)
             {
-                button.Text = $"弃掉整类：{row.Text}";
                 button.Pressed += () => DiscardRequested?.Invoke(type);
             }
             else
@@ -483,7 +580,6 @@ public sealed partial class Hud : CanvasLayer
                 button.Pressed += () => HandTypeSelected?.Invoke(type);
             }
 
-            PieceIcon.Attach(button, type, selected);
             _handBody.AddChild(button);
         }
     }
@@ -520,6 +616,10 @@ public sealed partial class Hud : CanvasLayer
         Button mode = Ui.Toggle(layers.Mode == LayerInputMode.HoldToShow ? "按住 [T]" : "点击 [T]", false, 76);
         mode.Pressed += () => LayerModePressed?.Invoke();
         _layerButtons.AddChild(mode);
+
+        Button follow = Ui.Toggle("跟随 [F]", FollowActive, 92);
+        follow.Pressed += () => FollowPressed?.Invoke();
+        _layerButtons.AddChild(follow);
 
         // 全局预览：只在当前战场一屏看不全时给（v4 整盘本来就看得全、链接模式构筑期只有一块棋盘：按钮没有意义，画面也保持不变）。
         if (OverviewAvailable)

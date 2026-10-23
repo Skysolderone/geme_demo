@@ -132,6 +132,7 @@ internal static class LookaheadFixtures
         TurnLimit = 600,
         PassThreshold = PassThreshold,
         ContentSet = ContentSet.V2,
+        ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1,
         EventRetention = EventRetention.Full,
         FullEventSamplePermille = 0,
     };

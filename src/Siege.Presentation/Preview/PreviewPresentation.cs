@@ -98,10 +98,24 @@ public sealed record GroupPowerView(
     int PositionBonus,
     int MultiplierCount,
     string MultiplierText,
+    int FormationTier,
+    string FormationText,
     BigInteger Power,
     string FormulaText,
     string ShortFormulaText)
 {
+    /// <summary>倍率因子依次为倍增子和阵型；倍率为一的因子省略。</summary>
+    public ImmutableArray<string> Factors
+    {
+        get
+        {
+            ImmutableArray<string>.Builder factors = ImmutableArray.CreateBuilder<string>(2);
+            if (MultiplierCount != 0) factors.Add(MultiplierText);
+            if (FormationTier != 0) factors.Add(FormationText);
+            return factors.ToImmutable();
+        }
+    }
+
     /// <summary>
     /// 由棋串军势明细投影。<see cref="FormulaText"/>（势力层 / 预演的完整算式）与 <see cref="ShortFormulaText"/>（结算演出飘字的短算式，
     /// settlement-show-callouts 裁决 1）在这里由同一份数值一次生成：短算式只列非零项——"(5+2)×1.5 = 10"；无加值 "5×1.5 = 7"；无倍增 "5+2 = 7"；两者都无 "5"。
@@ -109,7 +123,10 @@ public sealed record GroupPowerView(
     public static GroupPowerView From(GroupPower power)
     {
         ArgumentNullException.ThrowIfNull(power);
-        string multiplier = power.Multiplier.ToString();
+        string multiplier = power.FormationTier == 0
+            ? power.Multiplier.ToString()
+            : new Multiplier(power.MultiplierCount).ToString();
+        string formation = new Multiplier(power.FormationTier).ToString();
         // 来源拆分（more-pieces-relics：七项）：连珠 / 协同 / 高地照旧恒列；旗手 / 铁链 / 哨兵 / 界碑只在非 0 时列出——
         // v1 局它们恒为 0，恒列只会给每条棋串多挂四个 0。略去的项为 0，各项之和仍等于位置加值；数值字段七项都在。
         string[] parts =
@@ -123,18 +140,19 @@ public sealed record GroupPowerView(
             ? "位置加值 0"
             : $"位置加值 {power.PositionBonus}（{string.Join(" / ", parts)}）";
         string sum = power.PositionBonus == 0 ? $"{power.BaseTotal}" : $"{power.BaseTotal}+{power.PositionBonus}";
-        string shortFormula = (power.MultiplierCount, power.PositionBonus) switch
-        {
-            (0, 0) => sum,
-            (0, _) => $"{sum} = {power.Power}",
-            (_, 0) => $"{sum}×{multiplier} = {power.Power}",
-            _ => $"({sum})×{multiplier} = {power.Power}",
-        };
-        return new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus,
+        string factors = power.FormationTier == 0
+            ? $"× {multiplier}"
+            : power.MultiplierCount == 0 ? $"× 阵型 {formation}" : $"× {multiplier} × 阵型 {formation}";
+        var view = new GroupPowerView(power.BaseTotal, power.LineBonus, power.SynergyBonus, power.HighGroundBonus,
             power.BannerBonus, power.ChainBonus, power.SentryBonus, power.BoundaryBonus, power.PositionBonus,
-            power.MultiplierCount, multiplier, power.Power,
-            $"（基础 {power.BaseTotal} + {bonus}）× {multiplier} = {power.Power}",
-            shortFormula);
+            power.MultiplierCount, multiplier, power.FormationTier, formation, power.Power,
+            $"（基础 {power.BaseTotal} + {bonus}）{factors} = {power.Power}",
+            string.Empty);
+        string chain = string.Join(string.Empty, view.Factors.Select(f => $"×{f}"));
+        string shortFormula = chain.Length == 0
+            ? power.PositionBonus == 0 ? sum : $"{sum} = {power.Power}"
+            : $"{(power.PositionBonus == 0 ? sum : $"({sum})")}{chain} = {power.Power}";
+        return view with { ShortFormulaText = shortFormula };
     }
 }
 

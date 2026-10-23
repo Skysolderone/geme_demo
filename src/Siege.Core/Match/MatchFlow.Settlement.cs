@@ -72,7 +72,7 @@ public sealed partial class MatchFlow
     private void SettleAtRoundEnd()
     {
         // 结算用的势力按此刻盘面现算（与终局名次同一口径）。
-        PowerSnapshot power = Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents());
+        PowerSnapshot power = Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents(), ScoringVersion);
         MarkEstablishedPower(power);
         int? order = null;
         foreach (BattlefieldVerdict verdict in JudgeAtRoundEnd(power, _passedThisRound))
@@ -241,7 +241,7 @@ public sealed partial class MatchFlow
     internal void DebugSettleBattlefield(int battlefieldId, PlayerId winner)
     {
         RequireStage(TurnStage.Idle);
-        MarkEstablishedPower(Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents()));
+        MarkEstablishedPower(Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents(), ScoringVersion));
         SettleBattlefield(battlefieldId, SettlementReason.AllPassed, order: null, winner);
         RecalculateDerived();
         if (LastBattlefieldSettled())
