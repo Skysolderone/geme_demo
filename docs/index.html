@@ -7,7 +7,7 @@
 <meta name="description" content="《围杀 Siege》：4 人回合制策略构筑游戏原型。五块主题棋盘拼成一张图，先在自己的棋盘上筑阵，第 4 大回合起全图交战。围棋式围杀、地块争夺与“加值 × 倍率”成长。提供 Windows 下载。">
 <meta property="og:title" content="围杀 Siege">
 <meta property="og:description" content="开放地图版：先筑阵、再全图交战的围棋式回合制策略构筑原型。">
-<meta property="og:image" content="assets/hero.jpg">
+<meta property="og:image" content="assets/hero-v050.jpg">
 <style>
   :root {
     --ground: #f4f1e8;
@@ -158,11 +158,11 @@
       <h1>围杀 Siege<small>回合制策略构筑 · 原型</small></h1>
       <p class="lead">四方各选一块主题棋盘，五块棋盘拼成一张图。前三个大回合只在自己的棋盘上筑阵，第四个大回合起全图开放：像围棋一样围住对手的棋串把它提走，抢地块、找信物，把“加值 × 倍率”滚成势力。</p>
       <div class="cta">
-        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.4.0/Siege-windows-x64-20261023.zip">下载 Windows 版<span>64 位 · 约 70 MB · v0.4.0</span></a>
+        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.5.0/Siege-windows-x64-v0.5.0.zip">下载 Windows 版<span>64 位 · 约 72 MB · v0.5.0</span></a>
         <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
       </div>
-      <p class="note">当前版本 v0.4.0 开放地图版（2026-10-23，预发布）。单机人机对局，1 名玩家对 3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
-      <div class="shot"><img src="assets/hero.jpg" width="1600" height="900" alt="第 2 大回合的开放地图：五块主题棋盘拼成 3+2 两行，四方各在自己锁定的棋盘上落了几枚子，河流、桥、浅滩、岩台与山脊散在各块棋盘里"></div>
+      <p class="note">当前版本 v0.5.0 开放地图版·美术版（2026-10-23，预发布）。单机人机对局，1 名玩家对 3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <div class="shot"><img src="assets/hero-v050.jpg" width="1600" height="900" alt="第 4 大回合的开放地图：砂岩与苔绿的棋盘浮在浅青天空下，四方棋子散在各自的棋盘上，河流、桥、栅栏与高台穿插其间，远处是浮岛"></div>
     </div>
   </div>
 
@@ -203,18 +203,18 @@
   <section id="shots">
     <div class="wrap">
       <h2>截图</h2>
-      <p class="sub">全部是 v0.4.0 游戏内实拍。地图元素是引擎里程序建模的低多边形部件，不用贴图。</p>
+      <p class="sub">全部是 v0.5.0 游戏内实拍。棋盘、地形与棋子是引擎里的低多边形模型，背后是一张宽幅浮岛天空图。</p>
       <div class="gallery">
-        <figure class="wide"><img src="assets/open-board.jpg" width="1600" height="900" loading="lazy" alt="第 10 大回合的全图：四方棋子已经越过接缝混在一起">
+        <figure class="wide"><img src="assets/open-board-v050.jpg" width="1600" height="900" loading="lazy" alt="第 10 大回合的全图：四方棋子已经越过接缝混在一起">
           <figcaption><b>全图交战。</b>第 4 大回合起棋盘之间的接缝不再是界线，四方在同一张图上争地块、互相围杀。</figcaption></figure>
-        <figure><img src="assets/river.jpg" width="1600" height="900" loading="lazy" alt="近景：一条河穿过棋盘，中间一座木桥，岸边有石沿，旁边是浅滩">
+        <figure><img src="assets/river-v050.jpg" width="1600" height="900" loading="lazy" alt="近景：一条青碧的河纵穿棋盘，中间一座木桥，旁边是浅滩">
           <figcaption><b>河流与桥。</b>深水断气，桥是唯一的通道；浅滩空着时不算气。</figcaption></figure>
-        <figure><img src="assets/ridge.jpg" width="1600" height="900" loading="lazy" alt="近景：一排山脊横在棋盘中部，旁边是岩台与红方棋子">
+        <figure><img src="assets/ridge-v050.jpg" width="1600" height="900" loading="lazy" alt="近景：一排砂岩高台横在棋盘中部，旁边是栅栏与棋子">
           <figcaption><b>山脊与岩台。</b>高度差 2 的崖壁断气，山脊只在坡口留一条路。</figcaption></figure>
-        <figure><img src="assets/layer-power.jpg" width="1600" height="900" loading="lazy" alt="势力信息层：场景压暗，各方独占的格子按阵营色着色">
-          <figcaption><b>势力层。</b>场景压暗，只突出各方的独占格与棋串军势。</figcaption></figure>
-        <figure class="wide"><img src="assets/pieces.jpg" width="1320" height="600" loading="lazy" alt="十种棋子的轮廓对照：连珠子、铁链子、堡垒子、界碑子、普通子、匠人、旗手子、倍增子、协同子、哨兵子">
-          <figcaption><b>十种棋子。</b>每种的轮廓都不同，去掉颜色也分得开。</figcaption></figure>
+        <figure><img src="assets/staged-v050.jpg" width="1600" height="900" loading="lazy" alt="暂放一枚匠人：落点高亮，右侧预演面板列出改造目标、棋串的气与势力排名变化">
+          <figcaption><b>暂放与预演。</b>暂放的棋子用发光轮廓标出，落点单独高亮；确认前先看会改造什么、棋串还剩几口气、势力怎么变。</figcaption></figure>
+        <figure class="wide"><img src="assets/pieces-v050.jpg" width="1600" height="900" loading="lazy" alt="十种棋子的石雕造型：连珠子、铁链子、堡垒子、界碑子、普通子、匠人、旗手子、倍增子、协同子、哨兵子">
+          <figcaption><b>十种棋子。</b>每种都有独立的石雕造型，去掉颜色也分得开；对局中按阵营着色。</figcaption></figure>
       </div>
     </div>
   </section>
@@ -226,17 +226,17 @@
       <div class="dl">
         <div class="card" style="--c:var(--ink)">
           <h3>Windows</h3>
-          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.4.0/Siege-windows-x64-20261023.zip">Siege-windows-x64-20261023.zip<span>Windows 10 / 11，64 位 · v0.4.0</span></a>
+          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.5.0/Siege-windows-x64-v0.5.0.zip">Siege-windows-x64-v0.5.0.zip<span>Windows 10 / 11，64 位 · v0.5.0</span></a>
           <ol>
             <li>解压整个文件夹（<code>Siege.exe</code>、<code>Siege.pck</code> 和 <code>data_Siege.Godot_windows_x86_64</code> 要放在一起，别只拿出 exe）。</li>
             <li>运行 <code>Siege.exe</code>。</li>
             <li>出现“Windows 已保护你的电脑”时：点“更多信息”→“仍要运行”。</li>
           </ol>
-          <p class="note" style="word-break:break-all">SHA256：<code>78FEF6B4F367391715E4F1D3F42543C2521EE6E262E6AC8E26992AC4F9046F93</code></p>
+          <p class="note" style="word-break:break-all">SHA256：<code>682067048344607D02D9F872A5E0FD182F07F5677D3FE8F9DAFB0445BC0F88D1</code></p>
         </div>
         <div class="card" style="--c:var(--line)">
           <h3>macOS</h3>
-          <p>v0.4.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
+          <p>v0.5.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
         </div>
       </div>
       <p class="note">显卡需要支持 Vulkan。不需要另装 .NET，运行时已经打在包里。遇到问题请到 <a href="https://github.com/Skysolderone/geme_demo/issues">Issues</a> 反馈。</p>
@@ -281,6 +281,15 @@ godot --path src/godot -- --map=link:12345          # 直接开一张指定种�
     <div class="wrap">
       <h2>更新记录</h2>
       <div class="log">
+        <h3>v0.5.0 开放地图版·美术版 <time datetime="2026-10-23">2026-10-23</time></h3>
+        <ul>
+          <li><b>浮空国度美术第一版</b>：全新宽幅浮岛天空；砂岩与苔绿棋盘、青碧水系，棋盘、边缘、河流、桥、树、岩、遗迹、栅栏、浮岛全部换新。</li>
+          <li><b>棋子</b>：十种棋子都有独立的低多边形石雕造型，按阵营着色。</li>
+          <li><b>界面</b>：石墨蓝面板、旧金边框、阵营徽记与十种手牌轮廓图标；暂放棋子用发光轮廓，落点单独高亮。</li>
+          <li>规则、地图生成与 AI 与 v0.4.0 相同。</li>
+        </ul>
+      </div>
+      <div class="log" style="margin-top:22px">
         <h3>v0.4.0 开放地图版 <time datetime="2026-10-23">2026-10-23</time></h3>
         <ul>
           <li><b>开放地图</b>：5 块主题出生棋盘建局时拼成一整张图（3+2 两行）；第 1–3 大回合只能在自己锁定的棋盘落子与改造，第 4 大回合起全图可落；插旗锁定后全图可见。</li>
