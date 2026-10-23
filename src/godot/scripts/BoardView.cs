@@ -1970,7 +1970,8 @@ public sealed partial class BoardView : Node3D
         Color primary = Visuals.Damp(Visuals.ToColor(faction.Primary), emphasisPercent);
         Color body = Visuals.Damp(Visuals.ToColor(faction.Primary).Lerp(Colors.White, 0.42f), emphasisPercent);
         Color ink = Visuals.Damp(Visuals.EmblemInk, Math.Max(emphasisPercent, 60));
-        return LowPoly.Piece(style.Silhouette, faction.Emblem, primary, body, ink);
+        return PieceModels.TryBuild(style.Silhouette, faction.Emblem, primary, body, ink, emphasisPercent)
+            ?? LowPoly.Piece(style.Silhouette, faction.Emblem, primary, body, ink);
     }
 
     // ---------- 信息层 ----------

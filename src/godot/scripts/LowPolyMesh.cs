@@ -227,6 +227,57 @@ public static class LowPolyMesh
     }
 
     /// <summary>
+    /// 崖壁的错缝砌石面：在原有岩层与深缝前方嵌入两排小块面石。面石仍在整格轮廓内，
+    /// 顶部岩沿、底部坡脚和格角保持原有形状；一层只用一份网格及岩灰材质。
+    /// </summary>
+    public static ArrayMesh CoursedCliff(Vector3 size, int seed)
+    {
+        var parts = new List<(ArrayMesh, Transform3D)>
+        {
+            (Strata(size, bands: 3, jitter: 0.02f, seed: seed, lip: 0.05f, crevice: 0.05f), Transform3D.Identity),
+        };
+
+        float edge = (size.X * 0.5f) - 0.045f;
+        float front = -(size.Z * 0.5f) + 0.008f;
+        float courseHeight = size.Y * 0.27f;
+        float gapY = size.Y * 0.05f;
+        float firstTop = -size.Y * 0.23f;
+        const float joint = 0.012f;
+        var faceBasis = new Basis(Vector3.Right, -Mathf.Pi * 0.5f);
+
+        for (int face = 0; face < 4; face++)
+        {
+            var turn = new Transform3D(new Basis(Vector3.Up, -face * Mathf.Pi * 0.5f), Vector3.Zero);
+            for (int row = 0; row < 2; row++)
+            {
+                // 上下两排错开竖缝；散列只轻微移动内部切口，不改变外轮廓。
+                float[] cuts = row == 0
+                    ? [-edge, -size.X * 0.16f, size.X * 0.16f, edge]
+                    : [-edge, -size.X * 0.275f, 0f, size.X * 0.275f, edge];
+                for (int i = 1; i + 1 < cuts.Length; i++)
+                {
+                    cuts[i] += Signed(seed, (face * 31) + (row * 11) + i) * size.X * 0.018f;
+                }
+
+                for (int block = 0; block + 1 < cuts.Length; block++)
+                {
+                    float left = cuts[block] + (block == 0 ? 0f : joint * 0.5f);
+                    float right = cuts[block + 1] - (block + 2 == cuts.Length ? 0f : joint * 0.5f);
+                    float lowered = Unit(seed, 100 + (face * 29) + (row * 7) + block) * 0.004f;
+                    float top = firstTop - (row * (courseHeight + gapY)) - lowered;
+                    float shade = 0.95f + (0.05f * Unit(seed, 200 + (face * 29) + (row * 7) + block));
+                    ArrayMesh stone = BeveledSlab(new Vector3(right - left, 0.028f, courseHeight - 0.002f), 0.007f,
+                        shade, seed: seed + (face * 41) + (row * 13) + block, facetJitter: 0.02f, sideShade: 0.97f);
+                    var at = new Vector3((left + right) * 0.5f, top - (courseHeight * 0.5f), front);
+                    parts.Add((stone, turn * new Transform3D(faceBasis, at)));
+                }
+            }
+        }
+
+        return Merge(parts);
+    }
+
+    /// <summary>
     /// 多面岩块（岩石、碎石、垂岩）：低细分球（<paramref name="facets"/> 条经线、facets / 2 圈纬线），顶点按散列沿径向抖动，平直着色。
     /// 原点在球心；网格是闭合的（相邻三角面共用抖动后的同一点）。
     /// </summary>

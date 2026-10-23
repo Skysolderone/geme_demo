@@ -1,0 +1,78 @@
+[gd_scene load_steps=10 format=3]
+
+[sub_resource type="CylinderMesh" id="mesh_1"]
+top_radius = 0.225
+bottom_radius = 0.255
+height = 0.075
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="mesh_2"]
+top_radius = 0.187
+bottom_radius = 0.218
+height = 0.43
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="mesh_3"]
+top_radius = 0.225
+bottom_radius = 0.225
+height = 0.047
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="mesh_4"]
+top_radius = 0.255
+bottom_radius = 0.255
+height = 0.07
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="mesh_5"]
+size = Vector3(0.13, 0.19, 0.025)
+
+[sub_resource type="BoxMesh" id="mesh_6"]
+size = Vector3(0.115, 0.14, 0.115)
+
+[sub_resource type="BoxMesh" id="mesh_7"]
+size = Vector3(0.115, 0.14, 0.115)
+
+[sub_resource type="BoxMesh" id="mesh_8"]
+size = Vector3(0.115, 0.14, 0.115)
+
+[sub_resource type="BoxMesh" id="mesh_9"]
+size = Vector3(0.115, 0.14, 0.115)
+
+[node name="FortressBody" type="Node3D"]
+
+[node name="Shade_Footing" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.1075, 0)
+mesh = SubResource("mesh_1")
+
+[node name="Stone_Keep" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.355, 0)
+mesh = SubResource("mesh_2")
+
+[node name="Faction_WaistBand" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.435, 0)
+mesh = SubResource("mesh_3")
+
+[node name="Stone_Parapet" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.604, 0)
+mesh = SubResource("mesh_4")
+
+[node name="Shade_Gate" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.24, 0.216)
+mesh = SubResource("mesh_5")
+
+[node name="Stone_MerlonNW" type="MeshInstance3D" parent="."]
+position = Vector3(-0.163, 0.705, -0.163)
+mesh = SubResource("mesh_6")
+
+[node name="Stone_MerlonNE" type="MeshInstance3D" parent="."]
+position = Vector3(0.163, 0.705, -0.163)
+mesh = SubResource("mesh_7")
+
+[node name="Stone_MerlonSW" type="MeshInstance3D" parent="."]
+position = Vector3(-0.163, 0.705, 0.163)
+mesh = SubResource("mesh_8")
+
+[node name="Stone_MerlonSE" type="MeshInstance3D" parent="."]
+position = Vector3(0.163, 0.705, 0.163)
+mesh = SubResource("mesh_9")

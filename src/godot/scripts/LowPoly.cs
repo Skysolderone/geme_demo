@@ -424,8 +424,8 @@ public static class LowPoly
     }
 
     /// <summary>
-    /// 林地格的三棵小树（装饰层）：四个格角里每档空出一个、其余三个各一棵；树是一根短干 + 两层锥形树冠（锥形树冠是林地的形状提示，
-    /// 与沼泽的芦苇、荒漠的仙人掌分得开）。树冠最宽半径 0.085、树高 ≤ 0.26，整棵落在棋子底座（半径 0.36）之外，
+    /// 林地格的三棵小树（装饰层）：四个格角里每档空出一个、其余三个各一棵；短干上叠三层多面树冠，
+    /// 与沼泽的芦苇、荒漠的仙人掌分得开。树冠最宽半径 0.093、树高 ≤ 0.26，整棵落在棋子底座（半径 0.36）之外，
     /// 不遮挡该格的落点、气与归属标记（visual-style-baseline「装饰不遮挡判读」）。返回节点原点在地砖上表面。
     /// </summary>
     /// <remarks>两个 surface：树冠（<see cref="Visuals.TreeCanopy"/>）与树干（<see cref="Visuals.Timber"/>）。每棵的大小、朝向与明暗按散列错开。</remarks>
@@ -443,16 +443,19 @@ public static class LowPoly
             }
 
             int seed = 801 + (v * 8) + k;
-            float s = 0.88f + (0.12f * LowPolyMesh.Unit(seed, 0));
-            float reach = 0.33f + (0.01f * LowPolyMesh.Unit(seed, 1));   // 只往格角方向错开：内沿始终在底座之外
+            float s = 0.90f + (0.10f * LowPolyMesh.Unit(seed, 0));
+            float reach = 0.35f + (0.005f * LowPolyMesh.Unit(seed, 1));  // 最外沿 < 0.45，最近角点在棋子底座之外
             var at = new Vector3(corners[k].X * reach, 0f, corners[k].Y * reach);
             float yaw = LowPolyMesh.Unit(seed, 2) * Mathf.Tau;
-            float tone = 0.94f + (0.06f * LowPolyMesh.Unit(seed, 3));
-            trunk.Add((LowPolyMesh.Frustum(0.028f * s, 0.02f * s, 0.09f * s, 5, 0.97f, yaw: yaw), new Transform3D(Basis.Identity, at)));
-            canopy.Add((LowPolyMesh.Frustum(0.085f * s, 0f, 0.15f * s, 6, tone, yaw: yaw, bottomCap: true),
-                new Transform3D(Basis.Identity, at + new Vector3(0f, 0.06f * s, 0f))));
-            canopy.Add((LowPolyMesh.Frustum(0.06f * s, 0f, 0.12f * s, 6, tone, yaw: yaw + (Mathf.Pi / 6f), bottomCap: true),
-                new Transform3D(Basis.Identity, at + new Vector3(0f, 0.14f * s, 0f))));
+            float tone = 0.95f + (0.04f * LowPolyMesh.Unit(seed, 3));
+            var lean = new Vector2(LowPolyMesh.Signed(seed, 4), LowPolyMesh.Signed(seed, 5)) * 0.008f * s;
+            trunk.Add((LowPolyMesh.Frustum(0.028f * s, 0.018f * s, 0.09f * s, 5, 0.96f, yaw: yaw), new Transform3D(Basis.Identity, at)));
+            canopy.Add((LowPolyMesh.Frustum(0.093f * s, 0.022f * s, 0.13f * s, 6, tone * 0.97f, lean, yaw, bottomCap: true),
+                new Transform3D(Basis.Identity, at + new Vector3(0f, 0.055f * s, 0f))));
+            canopy.Add((LowPolyMesh.Frustum(0.068f * s, 0.013f * s, 0.105f * s, 6, tone, lean, yaw + (Mathf.Pi / 6f), bottomCap: true),
+                new Transform3D(Basis.Identity, at + new Vector3(0f, 0.115f * s, 0f))));
+            canopy.Add((LowPolyMesh.Frustum(0.045f * s, 0f, 0.08f * s, 5, Mathf.Min(1f, tone * 1.02f), lean * 0.5f, yaw, bottomCap: true),
+                new Transform3D(Basis.Identity, at + new Vector3(0f, 0.175f * s, 0f))));
         }
 
         var root = new Node3D { Name = "Trees" };
@@ -800,7 +803,7 @@ public static class LowPoly
             deck.Add((board, new Transform3D(Basis.Identity, new Vector3(0f, 0f, z))));
         }
 
-        // 深色木料：板下的垫木（板缝里露出的就是它）、四根角墩、两根中柱、两道扶手。
+        // 深色木料：板下的垫木、四根角墩、两根中柱、两道扶手；格角内的小木钉与斜撑给桥近景细节。
         var timber = new List<(ArrayMesh, Transform3D)>
         {
             (LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, -bottom - deckDepth, BoardGeometry.TileSize), 0f, 0.96f, top: -deckDepth), Transform3D.Identity),
@@ -819,6 +822,19 @@ public static class LowPoly
                 new Transform3D(Basis.Identity, new Vector3(sx, 0f, 0f))));
             float reach = half - pier - 0.015f;
             timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.105f, -reach), new Vector3(sx, 0.105f, reach), rail, 0.025f, 0.97f), Transform3D.Identity));
+            timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.025f, -reach), new Vector3(sx, 0.095f, -0.10f), 0.024f, 0.023f, 0.95f), Transform3D.Identity));
+            timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.095f, 0.10f), new Vector3(sx, 0.025f, reach), 0.024f, 0.023f, 0.95f), Transform3D.Identity));
+        }
+
+        // 每块板两颗低矮木钉；只做几何与顶点明暗，不增加材质或绘制批次。
+        for (int i = 0; i < planks; i++)
+        {
+            float z = -half + (plank * 0.5f) + (i * (plank + seam));
+            foreach (float x in new[] { -0.37f, 0.37f })
+            {
+                timber.Add((LowPolyMesh.BeveledSlab(new Vector3(0.018f, 0.004f, 0.018f), 0.002f, 0.96f,
+                    top: 0.004f, sideShade: 0.94f), new Transform3D(Basis.Identity, new Vector3(x, 0f, z))));
+            }
         }
 
         var root = new Node3D { Name = "Bridge" };

@@ -262,9 +262,8 @@ public static class TerrainParts
     private static ArrayMesh SideSlopeMesh(int variant) => LowPolyMesh.Strata(
         new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 3, jitter: 0.014f, seed: 201 + Wrap(variant, SideSlope.Variants));
 
-    private static ArrayMesh SideCliffMesh(int variant) => LowPolyMesh.Strata(
-        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 3, jitter: 0.02f, seed: 301 + Wrap(variant, SideCliff.Variants),
-        lip: 0.05f, crevice: 0.05f);
+    private static ArrayMesh SideCliffMesh(int variant) => LowPolyMesh.CoursedCliff(
+        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), seed: 301 + Wrap(variant, SideCliff.Variants));
 
     private static ArrayMesh LinerMesh() => LowPolyMesh.BeveledSlab(
         new Vector3(BoardGeometry.CellSize, LinerThickness, BoardGeometry.CellSize), 0f, 1f, top: LinerThickness * 0.5f);

@@ -1,0 +1,53 @@
+[gd_scene load_steps=6 format=3]
+
+[sub_resource type="CylinderMesh" id="mesh_1"]
+top_radius = 0.18
+bottom_radius = 0.19
+height = 0.05
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="mesh_2"]
+top_radius = 0.105
+bottom_radius = 0.165
+height = 0.22
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="mesh_3"]
+top_radius = 0.115
+bottom_radius = 0.115
+height = 0.045
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="mesh_4"]
+radius = 0.17
+height = 0.34
+radial_segments = 8
+rings = 4
+
+[sub_resource type="CylinderMesh" id="mesh_5"]
+top_radius = 0.018
+bottom_radius = 0.028
+height = 0.04
+radial_segments = 6
+
+[node name="BasicBody" type="Node3D"]
+
+[node name="Shade_FootRing" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.095, 0)
+mesh = SubResource("mesh_1")
+
+[node name="Stone_Coat" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.215, 0)
+mesh = SubResource("mesh_2")
+
+[node name="Faction_Collar" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.345, 0)
+mesh = SubResource("mesh_3")
+
+[node name="Stone_RoundHead" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.52, 0)
+mesh = SubResource("mesh_4")
+
+[node name="Metal_CrownPin" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.705, 0)
+mesh = SubResource("mesh_5")
