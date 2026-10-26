@@ -3,14 +3,14 @@
 《围杀》是四人回合制策略构筑游戏原型。五块主题出生棋盘拼成一张开放地图：前 3 个大回合在自己的出生棋盘筑阵，第 4 大回合起全图交战。围住敌方棋串可以提子，控制地块、信物与棋串来积累势力。当前提供 1 名玩家对 3 个 AI 的单机对局。
 
 - [下载 Windows 版与玩法介绍](https://siege.wws741.workers.dev)
-- [全部 GitHub Releases](https://github.com/Skysolderone/geme_demo/releases)
+- [全部 GitHub Releases](https://github.com/Skysolderone/geme_demo/releases)，发布台账见 [RELEASES.md](RELEASES.md)
 - [基础版美术资源清单](art/full-art-v1/README.md)（`art-base-v1`）
 
 ![v0.5.0 开放地图实机画面](docs/assets/hero-v050.jpg)
 
 ## 下载与运行
 
-当前 `v0.5.0` 提供 Windows 10 / 11 64 位版本。解压整个包后运行 `Siege.exe`；`Siege.pck` 和 `data_Siege.Godot_windows_x86_64` 必须留在同一目录。首次启动如遇 Windows SmartScreen 提示，按发布页的说明操作。这个版本没有 macOS 包；早期 macOS 包来自规则不同的开发线。
+当前 `v0.6.0`（战斗流程 MVP，基础版 `base-v1`）提供 Windows 10 / 11 64 位版本。解压整个包后运行 `Siege.exe`；`Siege.pck` 和 `data_Siege.Godot_windows_x86_64` 必须留在同一目录。首次启动如遇 Windows SmartScreen 提示，按发布页的说明操作。这个版本没有 macOS 包；早期 macOS 包来自规则不同的开发线。
 
 ## 怎么玩
 
@@ -51,6 +51,6 @@ dotnet run --project src/Siege.Sim -- play --map link:1 --difficulty Standard --
 
 ## 打包与发布
 
-Windows 上运行 `tools/export-release.ps1 -Version 0.5.0`；Bash 环境可运行 `tools/export-release.sh 0.5.0`。脚本导出到当前工作树的 `build/windows/Siege/`，并生成 `build/Siege-windows-x64-v0.5.0.zip`。`build/` 被 Git 忽略，上传 GitHub Releases 是单独的发布步骤。导出后应在 Windows 上从包内启动游戏进行验收。
+发版流程与各版本台账统一记录在 [RELEASES.md](RELEASES.md)。Windows 上运行 `tools/export-release.ps1 -Version 0.6.0`；Bash 环境可运行 `tools/export-release.sh 0.6.0`。脚本导出到当前工作树的 `build/windows/Siege/`，并生成 `build/Siege-windows-x64-v0.6.0.zip`。`build/` 被 Git 忽略，上传 GitHub Releases 是单独的发布步骤。导出后应在 Windows 上从包内启动游戏进行验收。
 
 `docs/` 是静态发布页，由根目录 `wrangler.jsonc` 配置。美术基础版的生成源、Godot 场景与实机截图在 [art/full-art-v1](art/full-art-v1/README.md)。

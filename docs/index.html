@@ -158,10 +158,10 @@
       <h1>围杀 Siege<small>回合制策略构筑 · 原型</small></h1>
       <p class="lead">四方各选一块主题棋盘，五块棋盘拼成一张图。前三个大回合只在自己的棋盘上筑阵，第四个大回合起全图开放：像围棋一样围住对手的棋串把它提走，抢地块、找信物，把“加值 × 倍率”滚成势力。</p>
       <div class="cta">
-        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.5.0/Siege-windows-x64-v0.5.0.zip">下载 Windows 版<span>64 位 · 约 72 MB · v0.5.0</span></a>
+        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.6.0/Siege-windows-x64-v0.6.0.zip">下载 Windows 版<span>64 位 · 约 72 MB · v0.6.0</span></a>
         <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
       </div>
-      <p class="note">当前版本 v0.5.0 开放地图版·美术版（2026-10-23，预发布）。单机人机对局，1 名玩家对 3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <p class="note">当前版本 v0.6.0 战斗流程 MVP（2026-10-26）。单机人机对局，1 名玩家对 3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
       <div class="shot"><img src="assets/hero-v050.jpg" width="1600" height="900" alt="第 4 大回合的开放地图：砂岩与苔绿的棋盘浮在浅青天空下，四方棋子散在各自的棋盘上，河流、桥、栅栏与高台穿插其间，远处是浮岛"></div>
     </div>
   </div>
@@ -203,7 +203,7 @@
   <section id="shots">
     <div class="wrap">
       <h2>截图</h2>
-      <p class="sub">全部是 v0.5.0 游戏内实拍。棋盘、地形与棋子是引擎里的低多边形模型，背后是一张宽幅浮岛天空图。</p>
+      <p class="sub">全部是 v0.5.0 游戏内实拍，v0.6.0 新增的信息面板、回合摘要与军势揭示未在图中。棋盘、地形与棋子是引擎里的低多边形模型，背后是一张宽幅浮岛天空图。</p>
       <div class="gallery">
         <figure class="wide"><img src="assets/open-board-v050.jpg" width="1600" height="900" loading="lazy" alt="第 10 大回合的全图：四方棋子已经越过接缝混在一起">
           <figcaption><b>全图交战。</b>第 4 大回合起棋盘之间的接缝不再是界线，四方在同一张图上争地块、互相围杀。</figcaption></figure>
@@ -226,17 +226,17 @@
       <div class="dl">
         <div class="card" style="--c:var(--ink)">
           <h3>Windows</h3>
-          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.5.0/Siege-windows-x64-v0.5.0.zip">Siege-windows-x64-v0.5.0.zip<span>Windows 10 / 11，64 位 · v0.5.0</span></a>
+          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.6.0/Siege-windows-x64-v0.6.0.zip">Siege-windows-x64-v0.6.0.zip<span>Windows 10 / 11，64 位 · v0.6.0</span></a>
           <ol>
             <li>解压整个文件夹（<code>Siege.exe</code>、<code>Siege.pck</code> 和 <code>data_Siege.Godot_windows_x86_64</code> 要放在一起，别只拿出 exe）。</li>
             <li>运行 <code>Siege.exe</code>。</li>
             <li>出现“Windows 已保护你的电脑”时：点“更多信息”→“仍要运行”。</li>
           </ol>
-          <p class="note" style="word-break:break-all">SHA256：<code>682067048344607D02D9F872A5E0FD182F07F5677D3FE8F9DAFB0445BC0F88D1</code></p>
+          <p class="note" style="word-break:break-all">SHA256：<code>2915CFD5CD4BB0AFDAAB2CDF6CCBBC69732375D0378A06842FBA1A18493D9745</code></p>
         </div>
         <div class="card" style="--c:var(--line)">
           <h3>macOS</h3>
-          <p>v0.5.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
+          <p>v0.6.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
         </div>
       </div>
       <p class="note">显卡需要支持 Vulkan。不需要另装 .NET，运行时已经打在包里。遇到问题请到 <a href="https://github.com/Skysolderone/geme_demo/issues">Issues</a> 反馈。</p>
@@ -257,7 +257,7 @@
             <tr><td>信息层</td><td><kbd>1</kbd> 盘面　<kbd>2</kbd> 势力　<kbd>3</kbd> 信物　<kbd>4</kbd> 顺序；<kbd>Tab</kbd> 切换盘面读法；<kbd>T</kbd> 切换按住 / 点击显示</td></tr>
             <tr><td>手牌</td><td><kbd>H</kbd> 打开手牌面板；<kbd>V</kbd> 收起征募面板</td></tr>
             <tr><td>匠人</td><td><kbd>E</kbd> 轮换地形改造目标（搭桥 / 立栅 / 烧林）</td></tr>
-            <tr><td>视角</td><td>方向键或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 平移，<kbd>M</kbd> 全局预览，<kbd>空格</kbd> 回到自己的棋盘</td></tr>
+            <tr><td>视角</td><td>方向键或 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 平移，<kbd>M</kbd> 全局预览，<kbd>空格</kbd> 回到自己的棋盘，<kbd>F</kbd> 切换跟随对手镜头</td></tr>
             <tr><td>返回</td><td><kbd>Esc</kbd></td></tr>
           </tbody>
         </table>
@@ -268,8 +268,8 @@
   <section id="source">
     <div class="wrap">
       <h2>从源码运行</h2>
-      <p class="sub">需要 Godot 4.7.2 .NET 版与 .NET 8 SDK。规则内核是纯 C#，不依赖引擎，自带测试。开放地图版在 <code>link-mode</code> 分支。</p>
-<pre><code>git clone -b link-mode https://github.com/Skysolderone/geme_demo.git
+      <p class="sub">需要 Godot 4.7.2 .NET 版与 .NET 8 SDK。规则内核是纯 C#，不依赖引擎，自带测试。开放地图版在 <code>main</code> 分支，各版本发布记录见仓库根目录 <code>RELEASES.md</code>。</p>
+<pre><code>git clone https://github.com/Skysolderone/geme_demo.git
 cd geme_demo
 dotnet build src/godot/Siege.Godot.csproj
 godot --path src/godot                              # 进新局界面
@@ -281,6 +281,17 @@ godot --path src/godot -- --map=link:12345          # 直接开一张指定种�
     <div class="wrap">
       <h2>更新记录</h2>
       <div class="log">
+        <h3>v0.6.0 战斗流程 MVP <time datetime="2026-10-26">2026-10-26</time></h3>
+        <ul>
+          <li><b>完整战斗流程</b>：插旗选盘 → 征募暂放 → 预演确认 → 结算揭示 → 回合摘要 → 终局排名，一局能顺畅打完。本版是后续开发的基础版（<code>base-v1</code>）。</li>
+          <li><b>阵型（计分 V2）</b>：同色连通棋串达到 3 / 5 / 8 / 12 枚时依次升为 1–4 阶；旧存档沿用计分 V1。</li>
+          <li><b>军势逐步揭示</b>：结算时逐条棋串揭示算式，数值分档放大并配音效。</li>
+          <li><b>镜头跟随与回合摘要</b>：<kbd>F</kbd> 切换跟随对手镜头；对手行动后给出本回合摘要。</li>
+          <li><b>界面</b>：信息面板重排、三级主题、棋串军势标签与坐标标签避让。</li>
+          <li>找回了 v0.4.0 起缺少的阵型、镜头跟随、军势揭示与对手回合摘要；地图、AI 与美术同 v0.5.0。</li>
+        </ul>
+      </div>
+      <div class="log" style="margin-top:22px">
         <h3>v0.5.0 开放地图版·美术版 <time datetime="2026-10-23">2026-10-23</time></h3>
         <ul>
           <li><b>浮空国度美术基础版</b>：全新宽幅浮岛天空；砂岩与苔绿棋盘、青碧水系，棋盘、边缘、河流、桥、树、岩、遗迹、栅栏、浮岛全部换新。基线标识为 <code>art-base-v1</code>，供后续美术版本对照。</li>
@@ -298,7 +309,7 @@ godot --path src/godot -- --map=link:12345          # 直接开一张指定种�
           <li><b>活形</b>：栅栏不再参与眼的判定。</li>
           <li><b>AI</b>：循环提子时主动停手；会落“单看每枚不划算、合起来划算”的组合；会为打通路线搭桥；专家构筑期不前瞻。</li>
           <li><b>画面</b>：地砖倒角与侧面分层、河岸石沿、重建的桥与栅栏、新地表点缀、外框与浮岛底座。</li>
-          <li>v0.4.0 来自另一条开发线，没有 v0.2.0–v0.3.0 的阵型、镜头跟随、军势逐步揭示与对手回合摘要；暂无 macOS 包。</li>
+          <li>v0.4.0 来自另一条开发线，没有 v0.2.0–v0.3.0 的阵型、镜头跟随、军势逐步揭示与对手回合摘要（v0.6.0 已找回）；暂无 macOS 包。</li>
         </ul>
       </div>
       <div class="log" style="margin-top:22px">
