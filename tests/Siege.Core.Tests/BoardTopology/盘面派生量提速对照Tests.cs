@@ -259,9 +259,9 @@ public class 盘面派生量提速对照Tests
     private static IEnumerable<MapData> Maps()
     {
         // open-map：link:1 建局即 5 块紧贴的连体棋盘（没有拼接）；样本改为 link:1 / link:2 / link:7 三张初始图，断言不变。
-        yield return LinkMapGenerator.Generate(1);
-        yield return MapCatalog.Resolve("link:2");
-        yield return LinkMapGenerator.Generate(7);
+        yield return LinkMapGenerator.Generate(1, 4);
+        yield return MapCatalog.Resolve("link:2:4");
+        yield return LinkMapGenerator.Generate(7, 4);
         for (int seed = 1; seed <= 12; seed++)
         {
             yield return RandomMap(seed);

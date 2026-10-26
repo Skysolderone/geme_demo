@@ -159,7 +159,7 @@ public class 视图模型按座位过滤Tests
     /// <summary>链接档手写夹具（link:90002，不发生链接）：五块 6×6 出生棋盘，棋盘 1 的左下角 C3 与内部 E6 是岩石；没有信物格。只经 CreateUnvalidated 建局。</summary>
     private static MapData RockyMap()
     {
-        MapData built = LinkMapFixtures.Build("link:90002", LinkMapFixtures.Births);
+        MapData built = LinkMapFixtures.Build("link:90002:4", LinkMapFixtures.Births);
         return built with
         {
             Obstacles = built.Obstacles.Add(new Coord(2, 2)).Add(new Coord(4, 5)),

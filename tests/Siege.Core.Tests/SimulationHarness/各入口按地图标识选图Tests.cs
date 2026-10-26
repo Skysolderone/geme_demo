@@ -28,7 +28,7 @@ public class 各入口按地图标识选图Tests
     {
         // tasks 2.2：--map 已在 play 的严格命令行解析里登记；拼错的 --mapp 按 strict-cli 报错，并建议 --map。
         // 变异 M-A11：Program.Play 不读 "map" 选项 → 合法的 --map 也成了未知选项，下面的反面断言红。
-        (int code, string err) = RunMain("play", "--mapp", "link:1", "--seed", "1");   // retire-legacy-maps 1.8：拼错选项的取值由 v5 改为 link:1（取值与本条无关）
+        (int code, string err) = RunMain("play", "--mapp", "link:1:4", "--seed", "1");   // retire-legacy-maps 1.8：拼错选项的取值由 v5 改为 link:1（取值与本条无关）
         Assert.NotEqual(0, code);
         Assert.Contains("--mapp", err, StringComparison.Ordinal);
         Assert.Contains("是否想用 --map？", err, StringComparison.Ordinal);
@@ -57,7 +57,7 @@ public class 各入口按地图标识选图Tests
         EvaluationWeights w = SimFixtures.PreCalibrationWeights;
         const int t = SimFixtures.PreCalibrationPassThreshold;
         PlayCommand.Run(5, 4, 2, AiDifficulty.Easy, new StringReader(script), implicitOut, weights: w, passThreshold: t, contentSet: ContentSet.V1);
-        PlayCommand.Run(5, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("link:1"), weights: w, passThreshold: t, contentSet: ContentSet.V1);
+        PlayCommand.Run(5, 4, 2, AiDifficulty.Easy, new StringReader(script), explicitOut, MapCatalog.Resolve("link:1:4"), weights: w, passThreshold: t, contentSet: ContentSet.V1);
 
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());

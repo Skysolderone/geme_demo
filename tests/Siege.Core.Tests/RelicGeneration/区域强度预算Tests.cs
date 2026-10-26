@@ -11,7 +11,7 @@ public class 区域强度预算Tests
 {
     // retire-legacy-maps 1.6：载体由 v5（4 个出生区 × 2 枚）改为 link:1 初始图（5 块出生棋盘 × 2 枚，规格 Scenario「出生区稀有度均衡」），断言不变。
     // L12 实测（只调用生成器）：link:1 × 对局种子 0–499 未收敛 v1 109 / 500、v2 96 / 500；地图种子 link:1–100 × 对局种子 = 地图种子 未收敛 v1 24 / 100、v2 15 / 100。
-    private static readonly MapData Map = MapCatalog.Resolve("link:1");
+    private static readonly MapData Map = MapCatalog.Resolve("link:1:4");
 
     /// <summary>
     /// more-pieces-relics 段 B：本类各用例的字面量（稀有度 222 / 2000、预算 600 / 690 / 780、不收敛图的稀有度集合）都出自 v1 的百分制表，

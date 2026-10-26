@@ -15,7 +15,7 @@ public class 百局端到端Tests(ITestOutputHelper output)
     [Fact]
     public void 连续一百局四人对局无死锁无非法状态()
     {
-        MapData map = MapCatalog.Resolve("link:1");
+        MapData map = MapCatalog.Resolve("link:1:4");
         PlayerId[] players = [new(0), new(1), new(2), new(3)];
         var reasons = new SortedDictionary<EndReason, int>();
         var winners = new SortedDictionary<PlayerId, int>();

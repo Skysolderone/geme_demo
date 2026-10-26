@@ -30,12 +30,12 @@ public class 对局配置公开完整地图标识Tests
     {
         // 变异 MB-8：Publish 把 MapId 写成空串 → 本测试红。
         var seed = new GameSeed(20260920);
-        MatchFlow match = CreateLink("link:12345", seed);
+        MatchFlow match = CreateLink("link:12345:4", seed);
 
         MatchPublicView view = match.Publish();
 
         Assert.Equal(MatchPhase.FlagPlanting, view.Phase);
-        Assert.Equal("link:12345", view.MapId);
+        Assert.Equal("link:12345:4", view.MapId);
         Assert.Equal(seed.ToString(), view.Seed);
         Assert.DoesNotContain("12345", view.Seed, StringComparison.Ordinal);      // 没有合并成一个数
         Assert.DoesNotContain(view.Seed, view.MapId, StringComparison.Ordinal);
@@ -44,7 +44,7 @@ public class 对局配置公开完整地图标识Tests
         Assert.Equal(MapFile.ToJson(match.Board.BaseMap), MapFile.ToJson(MapCatalog.Resolve(view.MapId)));
 
         // 规范化写法：前导零按数值。retire-legacy-maps：原另有"内置图的标识就是内置图的标识""gen: 省略缺省平台数"两句，随旧地图删除。
-        Assert.Equal("link:42", CreateLink("link:0042", seed).Publish().MapId);
+        Assert.Equal("link:42:4", CreateLink("link:0042:4", seed).Publish().MapId);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class 对局配置公开完整地图标识Tests
         // 现状核实：存档不含整张地图（盘面段只有棋子与本局改造），恢复时地图由调用方提供。取法：调用方读存档里的完整标识 →
         // MapCatalog 按标识重新生成 → Restore。这里的"恢复方"手里没有保存方的任何对象，只有那段 JSON。
         // 变异 MB-9：Serialize 写错地图标识 → 本测试红（按错标识重建出另一张图，标识或摘要不符被拒）。
-        MatchFlow match = CreateLink("link:12345", new GameSeed(11));
+        MatchFlow match = CreateLink("link:12345:4", new GameSeed(11));
         match.PlantPrototype();
         var runner = new MatchRunner(match);
         foreach (PlayerId p in Four)
@@ -68,12 +68,12 @@ public class 对局配置公开完整地图标识Tests
 
         string json = match.Serialize();
         Assert.DoesNotContain("\"Heights\"", json, StringComparison.Ordinal);      // 存档里没有地图数据
-        Assert.Equal("link:12345", MatchFlow.SavedMapId(json));
+        Assert.Equal("link:12345:4", MatchFlow.SavedMapId(json));
 
         MapData rebuilt = MapCatalog.Resolve(MatchFlow.SavedMapId(json));
         MatchFlow restored = MatchFlow.Restore(rebuilt, json);
 
-        Assert.Equal("link:12345", restored.Publish().MapId);
+        Assert.Equal("link:12345:4", restored.Publish().MapId);
         Assert.Equal(MapFile.ToJson(match.Board.BaseMap), MapFile.ToJson(restored.Board.BaseMap));
         Assert.Equal(MapFile.ToJson(match.Map), MapFile.ToJson(restored.Map));
         Assert.Equal(match.Board.Serialize(), restored.Board.Serialize());
@@ -81,12 +81,12 @@ public class 对局配置公开完整地图标识Tests
         Assert.Equal(json, restored.Serialize());
 
         // 给错图（相邻地图种子）响亮失败，不静默在另一张图上恢复。
-        Assert.Throws<FormatException>(() => MatchFlow.Restore(MapCatalog.Resolve("link:12346"), json));
+        Assert.Throws<FormatException>(() => MatchFlow.Restore(MapCatalog.Resolve("link:12346:4"), json));
     }
 
     [Theory]
-    [InlineData("link:12345")]
-    [InlineData("link:7")]
+    [InlineData("link:12345:4")]
+    [InlineData("link:7:4")]
     public void 存档记地图内容摘要_标识相同而内容不同的地图_恢复时报地图不一致(string mapId)
     {
         // 段 B 检查（负责人裁决 4）：存档只存标识，生成器改版之后按标识会重建出另一张图——与日志同一风险（design D5），同样响亮失败。
@@ -122,7 +122,7 @@ public class 对局配置公开完整地图标识Tests
     {
         // 照既有回填口径（ZoneCount、匠人权重……）：旧存档读入不抛；MapDigestBackfilled 为 true 供调用方查知"这张图的内容没有核对过"。
         // 变异 CB-3：把"存档没有摘要"当成不一致 → 本测试红。
-        MatchFlow match = CreateLink("link:12345", new GameSeed(11));
+        MatchFlow match = CreateLink("link:12345:4", new GameSeed(11));
         match.PlantPrototype();
         string json = match.Serialize();
         System.Text.Json.Nodes.JsonNode node = System.Text.Json.Nodes.JsonNode.Parse(json)!;
@@ -143,8 +143,8 @@ public class 对局配置公开完整地图标识Tests
     public void 对局种子不影响地图(ulong gameSeedA, ulong gameSeedB)
     {
         // 规格 Scenario：同一地图种子、两个不同的对局种子各开一局 → 两局的地图数据逐项相同（而对局里的随机确实不同）。
-        MatchFlow a = CreateLink("link:777", new GameSeed(gameSeedA));
-        MatchFlow b = CreateLink("link:777", new GameSeed(gameSeedB));
+        MatchFlow a = CreateLink("link:777:4", new GameSeed(gameSeedA));
+        MatchFlow b = CreateLink("link:777:4", new GameSeed(gameSeedB));
 
         Assert.Equal(MapFile.ToJson(a.Map), MapFile.ToJson(b.Map));
         Assert.Equal(a.Publish().MapId, b.Publish().MapId);
@@ -161,7 +161,7 @@ public class 对局配置公开完整地图标识Tests
         // 原黄金值属于边疆图、随之删除；这里改钉 link:1 / 种子 42 / v1 的首回合顺序与盲选结果（删除旧图之前按当时实现取下）。
         static (string Relics, string Order, string Zones) Open()
         {
-            MatchFlow match = CreateLink("link:1", new GameSeed(42), ContentSet.V1);
+            MatchFlow match = CreateLink("link:1:4", new GameSeed(42), ContentSet.V1);
             var choices = match.PlantPrototype();
             return (match.Relics.Generation.Serialize(), string.Join(",", match.ActionOrder.Select(p => p.Value)), string.Join(",", choices.Select(c => c.Zone)));
         }
@@ -169,11 +169,11 @@ public class 对局配置公开完整地图标识Tests
         (string relics, string order, string zones) = Open();
         for (ulong s = 1; s <= 5; s++)
         {
-            LinkMapGenerator.Generate(s);
+            LinkMapGenerator.Generate(s, 4);
         }
 
         Assert.Equal((relics, order, zones), Open());
-        Assert.Contains("link:1", relics, StringComparison.Ordinal);
+        Assert.Contains("link:1:4", relics, StringComparison.Ordinal);
         Assert.Equal(GoldenLinkOrder, order);
         Assert.Equal(GoldenLinkZones, zones);
 
@@ -185,8 +185,8 @@ public class 对局配置公开完整地图标识Tests
             return string.Join(",", match.ActionOrder.Select(p => p.Value));
         }
 
-        Assert.Equal(OrderOn("link:12345"), OrderOn("link:12346"));
-        Assert.Equal(OrderOn("link:12345"), OrderOn("link:99"));
+        Assert.Equal(OrderOn("link:12345:4"), OrderOn("link:12346:4"));
+        Assert.Equal(OrderOn("link:12345:4"), OrderOn("link:99:4"));
     }
 
     private const string GoldenLinkOrder = "3,0,2,1";

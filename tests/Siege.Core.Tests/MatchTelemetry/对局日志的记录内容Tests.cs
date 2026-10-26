@@ -35,7 +35,7 @@ public class 对局日志的记录内容Tests
         MatchLog log = MatchLog.Read(path);
 
         // 1. 地图、种子、完整信物分布及揭示时间
-        Assert.Equal("link:1", log.Header.MapId); // retire-legacy-maps 1.8：共用样本由 v5 改到 link:1（原注：scoring-sites：RunConfig 默认地图切到 v4）
+        Assert.Equal("link:1:4", log.Header.MapId); // retire-legacy-maps 1.8：共用样本由 v5 改到 link:1（原注：scoring-sites：RunConfig 默认地图切到 v4）
         Assert.Equal(live.Header.Seed, log.Header.Seed);
         Assert.NotEmpty(log.Header.Relics);
         Assert.All(log.Header.Relics, r => Assert.True(Coord.TryParse(r.Coord, out _) && Enum.TryParse<Relics.RelicType>(r.Type, out _)));
@@ -169,7 +169,7 @@ public class 对局日志的记录内容Tests
         // retire-legacy-rules 1.6：同 终端对局Tests.状态栏大数势力缩写不撑破一行——12×12 全平地改以链接模式建局（link:90012，整图一块出生棋盘、四人同锁）。
         MapData map = TestMaps.NineByNine() with
         {
-            Id = "link:90012",
+            Id = "link:90012:4",
             Width = 12,
             Height = 12,
             Profile = MapProfile.Link,
@@ -491,7 +491,7 @@ public class 对局日志的记录内容Tests
     /// </summary>
     internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, CarryIn> carries, int turnLimit)
     {
-        MapData map = MapCatalog.Resolve("link:1");
+        MapData map = MapCatalog.Resolve("link:1:4");
         RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), TestMaps.All, MatchOptions.Immediate with
         {

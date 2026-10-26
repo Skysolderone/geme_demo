@@ -15,7 +15,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// </summary>
 internal static class LinkSimFixtures
 {
-    internal const string MapId = "link:1";
+    internal const string MapId = "link:1:4";
 
     /// <summary><c>link:1</c> 上 4 人 Easy 的跑局配置（完整事件流、不抽样）。</summary>
     internal static RunConfig Config(int turnLimit, ulong seedStart = 1, int count = 1, AiDifficulty difficulty = AiDifficulty.Easy) =>

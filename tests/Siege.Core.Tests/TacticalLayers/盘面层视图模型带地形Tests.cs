@@ -23,7 +23,7 @@ public class 盘面层视图模型带地形Tests
             fences: [("G5", "H5"), ("E6", "E7"), ("J7", "J8"), ("F9", "G9")]);
         MapData map = TestMaps.Synthetic(13, maxPlayers: 4, obstacles: [TestMaps.At("A13")], terrain: terrain) with
         {
-            Id = "link:90013",
+            Id = "link:90013:4",
             BirthZones =
             [
                 [TestMaps.At("A1"), TestMaps.At("B1"), TestMaps.At("A2"), TestMaps.At("B2")],

@@ -219,7 +219,7 @@ public class 活形分析的决策内缓存Tests
     // 旧图删除后只剩一族地图，合并为下面一条 link:1 到终局（Slow 类别、默认跳过，跳过数 2 → 1）。
     [SlowFact]
     [Trait("Category", "Slow")]
-    public void 缓存开关不改变决策序列_链接图种子1至20() => RunSeeds("link:1", turnLimit: 600);
+    public void 缓存开关不改变决策序列_链接图种子1至20() => RunSeeds("link:1:4", turnLimit: 600);
 
     /// <summary>
     /// 种子 1–20、4 名 Standard AI、完整事件流，跑到终局（跑局缺省截断 600）。

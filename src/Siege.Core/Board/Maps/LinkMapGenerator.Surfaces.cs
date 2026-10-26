@@ -5,13 +5,13 @@ namespace Siege.Core.Board.Maps;
 
 /// <summary>
 /// 链接档出生棋盘的新地表叠加（link-map-surfaces D1–D3，负责人 2026-10-20 裁决 E1–E5，实施裁决 S1–S4）：五主题地形、出生区信物与公共信物全部生成之后，
-/// 用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按出生棋盘编号 0–4 逐块把若干中间带草地改为荒漠 / 沼泽 / 岩台 / 浅滩。
+/// 用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按平台编号逐块把若干中间带草地改为荒漠 / 沼泽 / 岩台 / 浅滩。
 /// 只改各块 <see cref="BoardTerrain.Surfaces"/> 里若干格的取值，不碰高度、林地、深水、桥、栅栏、岩石与信物格，也不消费布局流——不含新地表的部分与叠加前逐格相同（E4）。
 /// </summary>
 /// <remarks>
 /// <para><b>基础候选</b>（D2 / S1）：该块中间带里高度 0、地表草地、非岩石、非信物格、且不与核心区任一格几何相邻的格（核心区四邻不放，保证起手条件不因地表而不对等）；
 /// 中间带 ≤ <see cref="SmallMiddleBand"/> 格的小棋盘免除"不与核心区相邻"这一条（实施后裁决 F1）。</para>
-/// <para><b>主题配对</b>（E1 / D2 表）：河流 → 浅滩（与深水格相邻，未架桥与桥格同为深水地表）；高台 → 岩台（与高度 ≥ 1 的格相邻）；林地 → 沼泽（与林地格相邻）；
+/// <para><b>主题配对</b>（E1 / D2 表）：河流 → 浅滩（与深水格相邻，未架桥与桥格同为深水地表）；林地 → 沼泽（与林地格相邻）；
 /// 栅栏阵 → 荒漠（至少一条边有栅栏，或与这样的格相邻）；混合 → 四种按 浅滩 → 岩台 → 沼泽 → 荒漠（S4）各至多 1 格，某种按条件找不到时从基础候选补该种（实施后裁决 F2）。</para>
 /// <para><b>数量</b>（D3 / S3）：中间带 ≤ <see cref="SmallMiddleBand"/> 格时目标 2，否则单一地表的主题在 2–3、混合在 2–4 里均匀抽（先抽目标，再抽格，消费顺序与地形无关）。
 /// 单一地表的主题：主题候选抽完退到基础候选补足同一地表，基础候选也抽完即少放（S2），不重抽。候选按坐标字典序排好后不放回地抽。</para>
@@ -46,7 +46,6 @@ public static partial class LinkMapGenerator
     private static Surface SurfaceOf(BoardTheme theme) => theme switch
     {
         BoardTheme.River => Surface.Shallows,
-        BoardTheme.Plateau => Surface.Crag,
         BoardTheme.Forest => Surface.Marsh,
         BoardTheme.Palisade => Surface.Desert,
         _ => throw new ArgumentOutOfRangeException(nameof(theme), theme, "混合主题没有单一的新地表。"),

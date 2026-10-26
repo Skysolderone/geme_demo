@@ -26,15 +26,15 @@ public class 各入口按地图标识选图_链接模式Tests
         Assert.True(playCode == 0, playErr);
         Assert.Contains("地图 link:1（", playOut, StringComparison.Ordinal);
         // retire-legacy-maps：自已删除的「各入口按地图标识选图Tests.缺省地图不变」迁入——目录常量与批次配置的缺省同为 link:1（原 v5）。
-        Assert.Equal("link:1", MapCatalog.DefaultId);
-        Assert.Equal("link:1", new RunConfig().MapId);
+        Assert.Equal("link:1:4", MapCatalog.DefaultId);
+        Assert.Equal("link:1:4", new RunConfig().MapId);
 
         string outDir = Path.Combine(SimFixtures.TempDir("link-default-run"), "out");
         (int runCode, _, string runErr) = RunMain(null, null, "run", "--out", outDir, "--count", "1", "--seed", "1", "--turn-limit", "4", "--difficulty", "Easy", "--serial");
         Assert.True(runCode == 0, runErr);
         MatchLog log = MatchLog.ReadDirectory(outDir).Single();
-        Assert.Equal("link:1", log.Header.MapId);
-        Assert.Equal("link:1", RunConfig.FromJson(File.ReadAllText(Path.Combine(outDir, "config.json"))).MapId);
+        Assert.Equal("link:1:4", log.Header.MapId);
+        Assert.Equal("link:1:4", RunConfig.FromJson(File.ReadAllText(Path.Combine(outDir, "config.json"))).MapId);
         Assert.True(log.IsLinkMode);
     }
 
@@ -155,7 +155,7 @@ public class 各入口按地图标识选图_链接模式Tests
         // 规格 Scenario「链接图批量跑局」的冒烟（不跑批量：1 局、截断到第 4 大回合）：run --map link:1 能建局并跑起来，日志首部记链接模式；
         // open-map：对局里不再有配对 / 链接事件（候选 ≤ 1 直接进入交战）。
         string outDir = Path.Combine(SimFixtures.TempDir("link-run"), "out");
-        (int code, _, string err) = RunMain(null, null, "run", "--out", outDir, "--map", "link:1", "--count", "1", "--seed", "1", "--turn-limit", "14", "--difficulty", "Easy", "--serial");
+        (int code, _, string err) = RunMain(null, null, "run", "--out", outDir, "--map", "link:1:4", "--count", "1", "--seed", "1", "--turn-limit", "14", "--difficulty", "Easy", "--serial");
         Assert.True(code == 0, err);
         MatchLog log = MatchLog.ReadDirectory(outDir).Single();
         Assert.False(log.IsFailed, log.Failure?.Message);

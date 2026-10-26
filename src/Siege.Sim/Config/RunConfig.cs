@@ -231,7 +231,7 @@ public sealed record RunConfig
     /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>link:&lt;起始 + index&gt;</c>（规范化），否则恒为 <see cref="MapId"/>。</summary>
     public string MapIdAt(int index) =>
         // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>。
-        MapPerMatch ? LinkMapId.Format(checked(LinkMapId.Parse(MapId) + (ulong)index)) : MapId;
+        MapPerMatch ? LinkMapId.Format(checked(LinkMapId.Parse(MapId).Seed + (ulong)index), LinkMapId.Parse(MapId).Players) : MapId;   // map-expand-25 段 A1：标识带人数，换图时人数不变
 
     /// <summary>玩家编号列表。</summary>
     public PlayerId[] PlayerIds() => [.. Enumerable.Range(0, Players.Count).Select(i => new PlayerId(i))];

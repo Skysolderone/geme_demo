@@ -18,10 +18,10 @@ public class 日志首部区数Tests
         // 确定性文本与完整文本两条往返都保留；共用样本同为 5。
         // retire-legacy-maps 1.8：原用边疆图（6 区 4 人）与标准图样本（4 区）；旧图删除，改用 link:1（5 区 4 人），"区数 ≠ 人数"这一非恒等口径不变。
         // 变异 M-B5：MatchSession.BuildHeader 不写 ZoneCount → 本测试红。
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:7" }, seed: 7).Run();
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:7:4" }, seed: 7).Run();
 
         Assert.False(frontier.IsFailed, frontier.Failure?.Message);
-        Assert.Equal("link:7", frontier.Header.MapId);
+        Assert.Equal("link:7:4", frontier.Header.MapId);
         Assert.Equal(5, frontier.Header.ZoneCount);
         Assert.Equal(4, frontier.Header.Zones.Count);
         Assert.Equal(5, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);

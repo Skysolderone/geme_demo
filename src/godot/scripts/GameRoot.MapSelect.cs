@@ -175,7 +175,7 @@ public sealed partial class GameRoot
             what = "输入种子 12345";
             OnSelectionChanged(model.SubmitSeed("12345"));
             // 预览会话未插旗：按座位过滤后没有任何格，只有 5 个占位（D18：背景只画占位轮廓，不显示棋盘布局）。
-            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && model.CurrentId == "link:12345" && _session.Match.Map.Id == model.CurrentId
+            ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && model.CurrentId == "link:12345:4" && _session.Match.Map.Id == model.CurrentId
                 && _session.World.Board().Placeholders.Length == 5 && _session.World.Board().Cells.IsEmpty;
         }
         else if (step == 2)

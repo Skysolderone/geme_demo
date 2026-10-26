@@ -27,7 +27,7 @@ public class 终端对局Tests
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(45, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"));   // more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(45, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1:4"));   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);
@@ -52,7 +52,7 @@ public class 终端对局Tests
         // retire-legacy-rules 1.6：12×12 全平地夹具改以链接模式建局——标识 link:90012、整张图登记为一块 12×12 出生棋盘、四人同锁这一块（原为 9×9 夹具放大、旧模式、各锁一角）。
         MapData map = TestMaps.NineByNine() with
         {
-            Id = "link:90012",
+            Id = "link:90012:4",
             Width = 12,
             Height = 12,
             Profile = MapProfile.Link,
@@ -86,7 +86,7 @@ public class 终端对局Tests
     {
         var output = new StringWriter();
         // retire-legacy-maps 1.8：地图由 v5 改为 link:1。开场说明的"怎样结束"一行随模式改为链接模式的战场规则说明（Legacy 那句只在旧地图局打印）。
-        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output, map: MapCatalog.Resolve("link:1"));
+        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output, map: MapCatalog.Resolve("link:1:4"));
 
         Assert.Equal(0, exit);
         Assert.Contains("已退出。种子 7", output.ToString(), StringComparison.Ordinal);

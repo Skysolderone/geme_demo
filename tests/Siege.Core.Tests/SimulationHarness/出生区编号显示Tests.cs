@@ -108,7 +108,7 @@ public class 出生区编号显示Tests
     private static MapData SixZoneMap() =>
         new()
         {
-            Id = "link:90006",
+            Id = "link:90006:4",
             Width = 20,
             Height = 20,
             MaxPlayers = 4,

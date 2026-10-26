@@ -248,7 +248,7 @@ public class 停手阈值Tests
         // 以及回放 / 配置记录类 11 条：首部缺该项 → 回放按 0 重建而分歧 / 配置记录不符，逐条见任务 09-23-ai-eye 段 D2 记录）。
         // 变异 M-B14（会话建 AI 时不传跑局配置的阈值）→ 红 2（本测试的逐玩家断言、阈值为0时零变化）。
         // retire-legacy-maps 1.5：样本地图由 v5 改为 link:1，断言不变。
-        RunConfig blank = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" };
+        RunConfig blank = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1:4" };
         Assert.Null(blank.PassThreshold);
         string dir = SimFixtures.TempDir("pass-threshold-default");
         BatchRunner.ExecuteToDirectory(blank, dir, parallelism: 1);
@@ -381,7 +381,7 @@ public class 停手阈值Tests
         // 样本：阈值 0 跑出的局去掉这一项。它与缺省阈值下的同一局走法不同（「阈值为0时零变化」的反面），所以按缺省重建必然分歧。
         // 变异 M-B10（按首部重建时缺字段取缺省阈值而不是 0）→ 红 1（本测试）。
         // retire-legacy-maps 1.5：样本地图由 v4 改为 link:1，断言不变。
-        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1" };
+        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4" };
         MatchLog zero = BatchRunner.Execute(config with { PassThreshold = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"PassThreshold\":0,", text, StringComparison.Ordinal);
@@ -438,8 +438,8 @@ public class 停手阈值Tests
     {
         // retire-legacy-maps 1.5（规格 Scenario「阈值不随地图变化」）：原「地图覆盖不改阈值」（2 人图登记了评价权重覆盖，与 v5 比停手阈值）随 2 人图与地图覆盖删除，
         // 改为两张不同的链接图 link:1 / link:2：未显式配置阈值的批量跑局开局，批次配置记录与日志首部里的停手阈值都等于默认停手阈值。所守规则（阈值不按地图取）不变。
-        (string oneConfig, MatchLog oneLog) = RunOne("threshold-link1", "link:1");
-        (string twoConfig, MatchLog twoLog) = RunOne("threshold-link2", "link:2");
+        (string oneConfig, MatchLog oneLog) = RunOne("threshold-link1", "link:1:4");
+        (string twoConfig, MatchLog twoLog) = RunOne("threshold-link2", "link:2:4");
 
         Assert.NotEqual(oneLog.Header.MapDigest, twoLog.Header.MapDigest);   // 样本口径：确是两张不同的图
         Assert.Equal(AiSearchConfig.DefaultPassThreshold, RunConfig.FromJson(oneConfig).PassThreshold);

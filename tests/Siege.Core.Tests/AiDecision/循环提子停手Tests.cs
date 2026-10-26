@@ -357,7 +357,7 @@ public class 循环提子停手Tests
         // 四档共用：四档预设与按地图取的配置都带 6；专家未显式给 Search 时落成的 Search 也带 6。
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.DefaultStagnationRounds, AiSearchConfig.ForMap(d, 300).StagnationRounds));
         RunConfig expert = (SimFixtures.Config(turnLimit: 1) with { Players = [new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, new(), new(), new()] })
-            .ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1"));
+            .ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1:4"));
         Assert.Equal(AiSearchConfig.DefaultStagnationRounds, expert.Players[0].Search!.StagnationRounds);
 
         // 显式 Search：原样生效、原样记录（K = 2）；旧记录缺该项按 0 读。
@@ -376,7 +376,7 @@ public class 循环提子停手Tests
 
         // 命令行：--stagnation-rounds / --round-cap 进 config.json。
         string dir = SimFixtures.TempDir("stagnation-cli");
-        (int code, _, string err) = LinkSimFixtures.RunMain(null, null, "run", "--out", dir, "--map", "link:1", "--count", "1", "--turn-limit", "1", "--stagnation-rounds", "2", "--round-cap", "50");
+        (int code, _, string err) = LinkSimFixtures.RunMain(null, null, "run", "--out", dir, "--map", "link:1:4", "--count", "1", "--turn-limit", "1", "--stagnation-rounds", "2", "--round-cap", "50");
         Assert.True(code == 0, err);
         RunConfig saved = RunConfig.FromJson(File.ReadAllText(Path.Combine(dir, "config.json")));
         Assert.Equal(2, saved.StagnationRounds);

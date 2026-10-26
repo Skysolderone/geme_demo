@@ -76,7 +76,7 @@ public class 地图文件健壮性Tests
         // 载体改为 link:1 的导出文本，把第二个信物格的键改写成第一个的小写，断言不变。
         // link-map-terrain：信物格区间改为 10–15、link:1 有 13 个（含 3 个公共区档），少一个仍在区间内；改为折叠两个出生区档信物格，
         // 由"每块出生棋盘恰 2 个出生区档信物格"报出——同样不会带着丢了一个信物格的地图开局。
-        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
         MapData parsed = MapFile.FromJson(canonical);
         Coord[] relics = [.. parsed.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).Select(kv => kv.Key).Order()];
         Assert.Equal(10, relics.Length);   // 样本口径
@@ -97,7 +97,7 @@ public class 地图文件健壮性Tests
         // 设计师手写的键名不必与 DTO 的大小写一致。把基准图的全部 JSON 键名压成小写，
         // 往返后 MUST 与原图逐字节一致——包括嵌套的 zone / budget 与豁免理由。
         // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图（本类各条同），断言不变。
-        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
         string lowerKeys = System.Text.RegularExpressions.Regex.Replace(
             canonical, "\"([A-Za-z0-9_]+)\":", m => $"\"{m.Groups[1].Value.ToLowerInvariant()}\":");
         Assert.NotEqual(canonical, lowerKeys);
@@ -115,7 +115,7 @@ public class 地图文件健壮性Tests
         // PropertyNameCaseInsensitive 只管键名，枚举值走 JsonStringEnumConverter；
         // 它读取时同样不区分大小写。这里把 Zone / Budget 的全部枚举值压成小写钉住这一点，
         // 免得日后换转换器或加 JsonNamingPolicy 时静默变成"看起来能用的坏地图"。
-        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
         string lowerValues = canonical
             .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"birthzone\"", StringComparison.Ordinal)
             .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"contested\"", StringComparison.Ordinal)
@@ -136,7 +136,7 @@ public class 地图文件健壮性Tests
     {
         // 大小写宽容不等于任意字符串宽容：拼错的分区名 MUST 报错，不能落成默认值 BirthZone。
         // retire-legacy-maps 1.6：link:1 的信物格都在出生区，拼错的分区名改为把 BirthZone 写成 BirthZon（原为 Contested → Contest）。
-        string broken = MapFile.ToJson(MapCatalog.Resolve("link:1"))
+        string broken = MapFile.ToJson(MapCatalog.Resolve("link:1:4"))
             .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"BirthZon\"", StringComparison.Ordinal);
         Assert.Contains("BirthZon\"", broken, StringComparison.Ordinal);
 
@@ -148,7 +148,7 @@ public class 地图文件健壮性Tests
     {
         // 地图文件里允许写 _comment 之类的说明字段：顶层与嵌套对象都不报错、不影响数据。
         // retire-legacy-maps 1.6：载体由 v5 改为 link:1；嵌套对象里的说明字段改挂在出生区信物上（link:1 没有公共区信物）。
-        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1"));
+        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
         string withComments = canonical
             .Replace("{\n  \"Id\":", "{\n  \"_comment\": \"设计师备注：中央区与咽喉承担高预算\",\n  \"Id\":", StringComparison.Ordinal)
             .Replace("\"Zone\": \"BirthZone\",", "\"_comment\": \"出生区\",\n      \"Zone\": \"BirthZone\",", StringComparison.Ordinal);

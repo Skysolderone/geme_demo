@@ -229,8 +229,8 @@ public class 整批候选Tests
     {
         // 专家的搜索配置由 RunConfig.ResolvedFor 落成写进首部：开关随跑局配置（缺省 1 写出，0 不写出）。
         RunConfig expert = SimFixtures.Config(turnLimit: 0, difficulty: AiDifficulty.Expert);
-        Assert.All(expert.ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1")).Players, p => Assert.Equal(1, p.Search!.WholeBatch));
-        RunConfig off = (expert with { WholeBatch = 0 }).ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1"));
+        Assert.All(expert.ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1:4")).Players, p => Assert.Equal(1, p.Search!.WholeBatch));
+        RunConfig off = (expert with { WholeBatch = 0 }).ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1:4"));
         Assert.All(off.Players, p => Assert.Equal(0, p.Search!.WholeBatch));
         Assert.DoesNotContain("WholeBatch", off.ToJson(), StringComparison.Ordinal);
     }

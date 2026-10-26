@@ -115,7 +115,7 @@ public class 六类原型信物的效果Tests
 
         int fresh4 = 0;
         // retire-legacy-maps 1.6：样本地图由四张内置图改为四张链接图 link:1–link:4（各 1000 个种子），断言不变。
-        foreach (string mapId in new[] { "link:1", "link:2", "link:3", "link:4" })
+        foreach (string mapId in new[] { "link:1:4", "link:2:4", "link:3:4", "link:4:4" })
         {
             MapData map = MapCatalog.Resolve(mapId);
             for (ulong seed = 0; seed < 1000; seed++)

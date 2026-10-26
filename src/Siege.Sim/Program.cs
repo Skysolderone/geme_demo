@@ -21,7 +21,7 @@ public static class Program
     /// 与 Core 的 <see cref="MapCatalog.DefaultId"/> 同为 <c>link:1</c>；<c>map</c> 调试子命令与批次配置的内部缺省同样是 <c>link:1</c>
     /// （retire-legacy-maps：原为 Legacy 夹具的 v5，实现裁决 C10，随旧地图删除）。
     /// </summary>
-    internal const string DefaultMapId = "link:1";
+    internal const string DefaultMapId = "link:1:4";
 
     /// <summary>
     /// 玩家入口的地图门（board-link-mode 实现裁决 C1）：<c>run</c> / <c>play</c> 只接受链接图 <c>link:&lt;地图种子&gt;</c>。旧标识族（内置图、<c>gen:</c>、<c>board:</c>、
@@ -175,7 +175,7 @@ public static class Program
         if (LinkMapId.IsBareRequest(mapId))
         {
             // 裸 link（board-link-mode / 规格 simulation-harness「各入口支持生成图」）：同一个取种子来源，拼成链接图的完整标识。
-            string linkId = LinkMapId.Format(mapSeedSource());
+            string linkId = LinkMapId.Format(mapSeedSource(), LinkMapId.MaxPlayers);   // map-expand-25 段 A1 最小修复：人数暂取 4，段 B 接 --players
             output.WriteLine($"随机取了一个地图种子：本次地图为 {linkId}（用 --map {linkId} 可重开同一张图）");
             return linkId;
         }

@@ -125,7 +125,7 @@ public class 开局信息公开范围Tests
         // 主题中文名唯一来源 BoardThemeNames.DisplayName；仍不画任何棋盘内部布局。期望取自 link:1 的棋盘清单（整块棋盘，不是核心区）。
         // 不经 Program（不碰控制台、不读写带入档案）：直接调 PlayCommand.Run，不给档案即不带入带出。
         // 变异 MLT-5（PlayCommand.ChooseZone 占位行去掉主题）→ 红 2（本测试、各入口支持生成图_链接模式Tests.终端版开新局）。
-        MapData map = Siege.Core.Board.Maps.MapCatalog.Resolve("link:1");
+        MapData map = Siege.Core.Board.Maps.MapCatalog.Resolve("link:1:4");
         var output = new StringWriter();
 
         int code = PlayCommand.Run(5, null, 1, Siege.Core.Ai.AiDifficulty.Standard, new StringReader("q\n"), output, map);
@@ -164,7 +164,7 @@ public class 开局信息公开范围Tests
             new(new Coord(37, 2), 5, 5, BoardPlateKind.Birth, Themes[4]),
         ];
         // 标识须是 link:<种子>（链接模式只配链接图）；本局不发生链接，不会按该种子重新生成。
-        MapData built = LinkMapFixtures.Build("link:90001", boards);
+        MapData built = LinkMapFixtures.Build("link:90001:4", boards);
         return built with
         {
             BirthZones = [.. boards.Select(b => (ImmutableHashSet<Coord>)[.. TestMaps.Rect(b.Origin.X + ((b.Width - 3) / 2), b.Origin.Y + ((b.Height - 3) / 2), 3, 3)])],

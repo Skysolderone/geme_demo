@@ -30,7 +30,7 @@ public class 棋盘台面的可视表现Tests
         int rocks = 0;
         for (int seed = 1; seed <= SeedSpan; seed++)
         {
-            MapData map = MapCatalog.Resolve($"link:{seed}");
+            MapData map = MapCatalog.Resolve($"link:{seed}:4");
             MatchFlow match = MatchFlow.Create(map, TestMaps.Seed, All, Options);
             match.PlantSequentially(All.Select((p, i) => (p, i)));
             DefaultBoardView board = match.World(P0).Board();

@@ -70,7 +70,7 @@ public class 候选格上限Tests
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>
-        SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1" });
+        SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4" });
 
 
     internal static string TurnHash(MatchLog log) =>
@@ -120,7 +120,7 @@ public class 候选格上限Tests
     /// 可落子 125 格（不超过 <see cref="AiSearchConfig.LargeMapPlayableThreshold"/>）。链接档图的可落子格恒超过 150，"小图"只能是未校验的手写图（边长 5 低于出生棋盘下限 6）。
     /// </summary>
     private static readonly MapData SmallLinkMap = LinkMapFixtures.Build(
-        "link:90005", [.. Enumerable.Range(0, 5).Select(i => new BoardPlate(new Coord(2 + (i * 8), 2), 5, 5, BoardPlateKind.Birth, (BoardTheme)i))])
+        "link:90005:4", [.. Enumerable.Range(0, 5).Select(i => new BoardPlate(new Coord(2 + (i * 8), 2), 5, 5, BoardPlateKind.Birth, (BoardTheme)i))])
         with { RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty };
 
     /// <summary>
@@ -459,7 +459,7 @@ public class 候选格上限Tests
         // 显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
         // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局，证明 K 确实传到了 AI。
         static MatchLog Run(int k) => BatchRunner.Execute(
-            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1", CandidateCellLimit = k }, parallelism: 1)[0];
+            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4", CandidateCellLimit = k }, parallelism: 1)[0];
 
         // 变异 M-K9：Sim 的 MatchSession 建 AI 时不传跑局配置的 K → 与不限制的那一局相同 → 本测试红。
         MatchLog a = Run(2);
@@ -483,7 +483,7 @@ public class 候选格上限Tests
 
         // retire-legacy-maps 1.5：小图由 v4（105 格）改为 9×9 手写夹具（81 格），大图由边疆图（411 格）改为 link:1（157 格）；断言不变。
         int v4 = TestMaps.NineByNine().PlayableCount;
-        int frontier = MapCatalog.Resolve("link:1").PlayableCount;
+        int frontier = MapCatalog.Resolve("link:1:4").PlayableCount;
         Assert.True(v4 <= AiSearchConfig.LargeMapPlayableThreshold, $"小图可落子格 {v4}");
         Assert.True(frontier > AiSearchConfig.LargeMapPlayableThreshold, $"大图可落子格 {frontier}");
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.ForDifficulty(d), AiSearchConfig.ForMap(d, v4)));
@@ -534,7 +534,7 @@ public class 候选格上限Tests
         // 该项出现之前的大图日志首部没有 CandidateCellLimit：当时就是不限制。回放 MUST NOT 按今天的大图缺省 K 重跑，重建的首部也不得多出一项。
         // 变异 M-K12：Replayer 改回不带 recorded 的 MatchSession.Create → 重建首部多出该项、第 1 行即分歧 → 本测试红。
         // retire-legacy-maps 1.5：大图由边疆图改为 link:1（157 格 > 150），断言不变。
-        RunConfig frontier = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" };
+        RunConfig frontier = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1:4" };
         MatchLog zero = BatchRunner.Execute(frontier with { CandidateCellLimit = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"CandidateCellLimit\":0,", text, StringComparison.Ordinal);
@@ -596,7 +596,7 @@ public class 候选格上限Tests
         // link:1（大图）、Easy、1 个大回合（构筑期只有自家出生棋盘可落，跑得快）。读 config.json 原文，不经反序列化，避免缺省值掩盖漏写。
         // 变异 M-K8：BatchRunner.ExecuteToDirectory 去掉 ResolvedFor → config.json 不含该项 → 本测试红。
         // retire-legacy-maps 1.5：大图由边疆图改为 link:1；小图一段见下。
-        RunConfig auto = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" };
+        RunConfig auto = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1:4" };
         string autoDir = SimFixtures.TempDir("cell-limit-auto");
         BatchRunner.ExecuteToDirectory(auto, autoDir, parallelism: 1);
         Assert.Contains($"\"CandidateCellLimit\": {AiSearchConfig.LargeMapCellLimit}", File.ReadAllText(Path.Combine(autoDir, "config.json")), StringComparison.Ordinal);

@@ -50,7 +50,7 @@ public class 按座位视图Tests
         // G1（负责人 2026-10-14 裁决 A，tasks 2.6）：战斗阶段按座位可见的格 = 本战场所含各棋盘外接矩形内的全部格，包括岩石与未架桥深水
         // （否则河流与岩石在视图里成了空缺）；open-map：本战场 = 全图，5 块都在。Core 视图与表现层的按座位过滤一致。
         // 载体：从 link:1 起找第一张"河流主题棋盘里同时有岩石与未架桥深水"的图（link:1 的河流棋盘是 6×8，按面积缩放不放岩石）。
-        (MapData map, int zone) = Enumerable.Range(1, 200).Select(s => LinkMapGenerator.Generate((ulong)s))
+        (MapData map, int zone) = Enumerable.Range(1, 200).Select(s => LinkMapGenerator.Generate((ulong)s, 4))
             .SelectMany(m => Enumerable.Range(0, 5).Select(z => (Map: m, Zone: z)))
             .First(t => t.Map.Boards[t.Zone].Theme == BoardTheme.River && t.Map.Boards[t.Zone].Cells().Any(c => t.Map.Obstacles.Contains(c)));
         BoardPlate plate = map.BirthBoard(zone);

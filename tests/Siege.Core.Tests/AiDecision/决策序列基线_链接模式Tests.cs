@@ -111,7 +111,7 @@ internal static class LinkDecisionSequence
     /// </summary>
     internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, Func<RunConfig, RunConfig>? configure)
     {
-        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
+        var config = new RunConfig { MapId = "link:1:4", SeedStart = seed, Count = 1, TurnLimit = 0, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
         if (difficulty != AiDifficulty.Standard)
         {
             config = config with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };

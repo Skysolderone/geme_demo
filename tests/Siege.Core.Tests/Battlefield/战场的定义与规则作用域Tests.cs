@@ -17,7 +17,7 @@ public class 战场的定义与规则作用域Tests
     public void 开局即唯一战场()
     {
         // Scenario（open-map）：加载一张 link: 地图 → 导出恰好 1 个战场，其格集合等于 5 块出生棋盘可落子格的并集，标识为 0。
-        foreach (MapData map in new[] { LinkMapGenerator.Generate(1), LinkMapGenerator.Generate(7), LinkMapFixtures.Initial() })
+        foreach (MapData map in new[] { LinkMapGenerator.Generate(1, 4), LinkMapGenerator.Generate(7, 4), LinkMapFixtures.Initial() })
         {
             Battlefields fields = Battlefields.Of(map);
             Assert.Equal(1, fields.Count);

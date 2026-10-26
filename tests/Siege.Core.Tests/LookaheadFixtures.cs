@@ -114,7 +114,7 @@ internal static class LookaheadFixtures
     // ---------- link:1 真实对局（retire-legacy-maps 1.4：原 v5 真实对局改到 link:1，裁决 L2 / L8） ----------
 
     /// <summary>真实对局的地图（retire-legacy-maps：原 <c>siege-4p-base-v5</c>）。</summary>
-    internal const string MapId = "link:1";
+    internal const string MapId = "link:1:4";
 
     /// <summary>真实对局的截断：跑到第 12 大回合结束（与链接图决策序列基线同口径，board-link-mode 裁决 C5）。</summary>
     internal const int MaxMajorRounds = 12;

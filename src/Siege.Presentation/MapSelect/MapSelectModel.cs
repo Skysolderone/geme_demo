@@ -38,7 +38,7 @@ public sealed class MapSelectModel
     public ulong MapSeed => _current;
 
     /// <summary>当前地图的完整标识 <c>link:&lt;种子&gt;</c>（下次可用命令行 <c>--map=</c> 复现），经链接图标识的唯一实现拼出。</summary>
-    public string CurrentId => LinkMapId.Format(_current);
+    public string CurrentId => LinkMapId.Format(_current, LinkMapId.MaxPlayers);   // map-expand-25 段 A1 最小修复：人数暂取 4，段 B 加人数选项
 
     /// <summary>种子输入框该显示的文本：操作成功后是当前种子，非法输入后保留用户敲的原文。</summary>
     public string SeedText { get; private set; }
@@ -77,7 +77,7 @@ public sealed class MapSelectModel
         try
         {
             // 裸 link（没有种子）与写错的标识都由唯一实现的 Parse 抛出 FormatException → 拒绝。
-            Move(LinkMapId.Parse(mapId));
+            Move(LinkMapId.Parse(mapId).Seed);
             return true;
         }
         catch (FormatException)
@@ -103,7 +103,7 @@ public sealed class MapSelectModel
                 throw new FormatException();
             }
 
-            seed = LinkMapId.Parse($"{LinkMapId.Prefix}:{digits}");
+            seed = LinkMapId.Parse($"{LinkMapId.Prefix}:{digits}:{LinkMapId.MaxPlayers}").Seed;
         }
         catch (FormatException)
         {

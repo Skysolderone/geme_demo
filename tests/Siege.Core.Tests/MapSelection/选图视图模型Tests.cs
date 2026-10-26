@@ -39,14 +39,14 @@ public class 选图视图模型Tests
 
         Assert.Equal(InitialSeed, model.MapSeed);
         Assert.Equal("424242", model.SeedText);
-        Assert.Equal("link:424242", model.CurrentId);
-        Assert.Equal(LinkMapId.Format(InitialSeed), model.CurrentId);
+        Assert.Equal("link:424242:4", model.CurrentId);
+        Assert.Equal(LinkMapId.Format(InitialSeed, 4), model.CurrentId);
         Assert.Equal(string.Empty, model.Notice);
         Assert.False(model.IsConfirmed);
         Assert.Equal(AiDifficulty.Standard, model.Difficulty);
 
         // 批量 / 终端入口的缺省地图由目录决定（Q4：link:1），与界面随机取的种子无关。
-        Assert.Equal("link:1", MapCatalog.DefaultId);
+        Assert.Equal("link:1:4", MapCatalog.DefaultId);
     }
 
     [Fact]
@@ -61,13 +61,13 @@ public class 选图视图模型Tests
 
         Assert.Equal(987654321UL, model.MapSeed);
         Assert.Equal("987654321", model.SeedText);
-        Assert.Equal("link:987654321", model.CurrentId);
+        Assert.Equal("link:987654321:4", model.CurrentId);
         Assert.NotEqual(before, model.CurrentId);
 
         // 注入值恰好与当前种子相同：仍然要"换"。
         model.Accept();
         Assert.True(model.Reroll(987654321UL));
-        Assert.Equal("link:987654322", model.CurrentId);
+        Assert.Equal("link:987654322:4", model.CurrentId);
     }
 
     [Theory]
@@ -81,7 +81,7 @@ public class 选图视图模型Tests
     [InlineData("5:p7")]
     [InlineData("0x10")]
     [InlineData("１２３")]
-    [InlineData("link:5")]
+    [InlineData("link:5:4")]
     [InlineData("18446744073709551616")]
     public void 非法种子_提示须为非负整数_当前种子不变(string text)
     {
@@ -92,14 +92,14 @@ public class 选图视图模型Tests
         Assert.False(model.SubmitSeed(text));
 
         Assert.Contains("非负整数", model.Notice, StringComparison.Ordinal);
-        Assert.Equal("link:424242", model.CurrentId);
+        Assert.Equal("link:424242:4", model.CurrentId);
         Assert.Equal(InitialSeed, model.MapSeed);
         Assert.Equal(text, model.SeedText);
 
         // 随后一次合法输入清掉提示；上界 2^64 − 1 可用。
         Assert.True(model.SubmitSeed("18446744073709551615"));
         Assert.Equal(string.Empty, model.Notice);
-        Assert.Equal("link:18446744073709551615", model.CurrentId);
+        Assert.Equal("link:18446744073709551615:4", model.CurrentId);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class 选图视图模型Tests
 
         Assert.True(first.SubmitSeed("12345"));
         Assert.True(second.SubmitSeed(" 12345 "));
-        Assert.Equal("link:12345", first.CurrentId);
+        Assert.Equal("link:12345:4", first.CurrentId);
         Assert.Equal(first.CurrentId, second.CurrentId);
         Assert.Equal(MapFile.ToJson(MapCatalog.Resolve(first.CurrentId)), MapFile.ToJson(MapCatalog.Resolve(second.CurrentId)));
         Assert.Equal("12345", second.SeedText);
@@ -120,7 +120,7 @@ public class 选图视图模型Tests
         Assert.False(first.SubmitSeed("12345"));
         Assert.Equal(string.Empty, first.Notice);
         Assert.True(first.SubmitSeed("007"));
-        Assert.Equal("link:7", first.CurrentId);
+        Assert.Equal("link:7:4", first.CurrentId);
         Assert.Equal("7", first.SeedText);
     }
 
@@ -132,14 +132,14 @@ public class 选图视图模型Tests
         var model = new MapSelectModel(InitialSeed);
 
         Assert.True(model.TrySelectId(" link:12345 "));
-        Assert.Equal((12345UL, "12345", "link:12345"), (model.MapSeed, model.SeedText, model.CurrentId));
-        Assert.True(model.TrySelectId("link:007"));
-        Assert.Equal("link:7", model.CurrentId);   // 规范化
+        Assert.Equal((12345UL, "12345", "link:12345:4"), (model.MapSeed, model.SeedText, model.CurrentId));
+        Assert.True(model.TrySelectId("link:007:4"));
+        Assert.Equal("link:7:4", model.CurrentId);   // 规范化
 
         foreach (string bad in new[] { "link", "link:abc", "link:1:n9", "siege-4p-base-v5", "siege-frontier-v2", "gen:12345", "board:12345", "no-such-map", "maps/x.json", "", null! })
         {
             Assert.False(model.TrySelectId(bad), bad ?? "<null>");
-            Assert.Equal("link:7", model.CurrentId);
+            Assert.Equal("link:7:4", model.CurrentId);
         }
     }
 
@@ -154,7 +154,7 @@ public class 选图视图模型Tests
         Assert.True(model.Reroll(6UL));
         model.RollBack("地图生成失败：尝试次数耗尽。");
 
-        Assert.Equal("link:5", model.CurrentId);
+        Assert.Equal("link:5:4", model.CurrentId);
         Assert.Equal(5UL, model.MapSeed);
         Assert.Equal("5", model.SeedText);
         Assert.Equal("地图生成失败：尝试次数耗尽。", model.Notice);
@@ -178,15 +178,15 @@ public class 选图视图模型Tests
         Assert.True(model.IsConfirmed);
         Assert.Throws<InvalidOperationException>(() => model.Reroll(1UL));
         Assert.Throws<InvalidOperationException>(() => model.SubmitSeed("1"));
-        Assert.Throws<InvalidOperationException>(() => model.TrySelectId("link:2"));
+        Assert.Throws<InvalidOperationException>(() => model.TrySelectId("link:2:4"));
         Assert.Throws<InvalidOperationException>(() => model.SelectDifficulty(AiDifficulty.Easy));
 
         // 还没被接受的候选（预览尚未搭成功）不会被带进对局：确认给出的是上一次接受的标识。
         var pending = new MapSelectModel(InitialSeed);
         pending.Accept();
         Assert.True(pending.Reroll(99UL));
-        Assert.Equal("link:424242", pending.Confirm());
-        Assert.Equal("link:424242", pending.CurrentId);
+        Assert.Equal("link:424242:4", pending.Confirm());
+        Assert.Equal("link:424242:4", pending.CurrentId);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class 选图视图模型Tests
     {
         // 新局界面的一行说明由 MapPreviewInfo 给出。段 D-b（D18）：预览会话按座位过滤后只有 5 个占位——文案只提画布与 5 块出生棋盘（边长范围），
         // 不提信物格与可落子格。读默认棋盘视图模型，不读地图、不判规则。retire-legacy-rules 1.7（清单"删反面段"、P5）：旧地图（无占位、9×9 手写夹具）文案那一行删除——旧模式退役后不再有无占位的对局。
-        MapData map = MapCatalog.Resolve("link:1");
+        MapData map = MapCatalog.Resolve("link:1:4");
         MatchFlow match = MatchFlow.CreateUnvalidated(
             map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
@@ -213,7 +213,7 @@ public class 选图视图模型Tests
         // 主题清空（ThemeName 为 null，渲染层不画主题名），编号、外接矩形、展开 / 本机、格与棋盘清单原样；LayoutKey 不含主题，因此与插旗阶段的视图同一指纹，
         // 刷新路径不会因此重搭成带主题的画面。图形版的接线（新局界面两处 Build 都经 Backdrop）由 选图界面守门Tests 的源码扫描守住。
         // 变异 MLT-G5（Backdrop 原样返回，实跑）→ 红 1（本测试）。
-        MapData map = MapCatalog.Resolve("link:1");
+        MapData map = MapCatalog.Resolve("link:1:4");
         MatchFlow match = MatchFlow.CreateUnvalidated(
             map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });

@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// 「v3历史文件仍可读入并通过校验」随 <c>maps/</c> 目录在第 2 组删除。</remarks>
 public class 地图文件往返Tests
 {
-    private static MapData Link1() => MapCatalog.Resolve("link:1");
+    private static MapData Link1() => MapCatalog.Resolve("link:1:4");
 
     [Fact]
     public void 往返读写无信息丢失()
@@ -79,7 +79,7 @@ public class 地图文件往返Tests
 
         MapData restored = MapFile.FromJson(json);
 
-        Assert.Equal("link:1", restored.Id);
+        Assert.Equal("link:1:4", restored.Id);
         Assert.True(MapValidator.Validate(restored).IsValid);
     }
 

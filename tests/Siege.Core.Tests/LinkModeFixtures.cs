@@ -14,7 +14,7 @@ namespace Siege.Core.Tests;
 /// </summary>
 internal static class LinkModeFixtures
 {
-    internal const string MapId = "link:1";
+    internal const string MapId = "link:1:4";
 
     private static readonly Lazy<MapData> LazyMap = new(() => MapCatalog.Resolve(MapId));
 
@@ -56,7 +56,7 @@ internal static class LinkModeFixtures
 
     private static MapData BuildFlatMap()
     {
-        MapData built = LinkMapFixtures.Build("link:90003", LinkMapFixtures.Births);
+        MapData built = LinkMapFixtures.Build("link:90003:4", LinkMapFixtures.Births);
         BoardPlate zero = built.Boards[0];
         var birth = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
         return built with
@@ -87,7 +87,7 @@ internal static class LinkModeFixtures
     internal const int PlainSize = 8;
 
     /// <summary>平坦变体的地图标识。</summary>
-    internal const string PlainMapId = "link:90008";
+    internal const string PlainMapId = "link:90008:4";
 
     /// <summary>
     /// 平坦变体的棋盘清单：棋盘 0 为 8×8、左下角 (2, 2)（画布口径同生成器：底边第 2 行、最西列第 2 列）；其余四块同 <see cref="LinkMapFixtures.Births"/> 的 6×6，

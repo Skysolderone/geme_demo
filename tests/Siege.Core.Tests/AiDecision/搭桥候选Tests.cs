@@ -229,8 +229,8 @@ public class 搭桥候选Tests
     {
         // 专家的搜索配置由 RunConfig.ResolvedFor 落成写进首部：开关随跑局配置（缺省 1 写出，0 不写出）。
         RunConfig expert = SimFixtures.Config(turnLimit: 0, difficulty: AiDifficulty.Expert);
-        Assert.All(expert.ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1")).Players, p => Assert.Equal(1, p.Search!.EditSeed));
-        RunConfig off = (expert with { EditSeed = 0 }).ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1"));
+        Assert.All(expert.ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1:4")).Players, p => Assert.Equal(1, p.Search!.EditSeed));
+        RunConfig off = (expert with { EditSeed = 0 }).ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1:4"));
         Assert.All(off.Players, p => Assert.Equal(0, p.Search!.EditSeed));
         Assert.DoesNotContain("EditSeed", off.ToJson(), StringComparison.Ordinal);
     }

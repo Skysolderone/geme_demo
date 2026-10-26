@@ -5,20 +5,23 @@ using Siege.Core.Board.Maps;
 namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
-/// 规格：openspec/changes/open-map/specs/link-map-generation —— Requirement: 物化状态校验（open-map：恰 1 个连通分量且含全部出生棋盘）；
-/// map-definition —— Requirement: 地图规格档（Scenario 规格档读写往返 / 非链接档不可增长 / 规格档不改规则）。
-/// 载体 <see cref="LinkMapFixtures.Initial"/> 自 open-map 起为 22×16 的 3+2 紧贴图（棋盘 0 的坐标不变）。
+/// 规格：任务 10-26-map-expand-25 design D7（链接档校验改为按人数的浮空岛规则）；map-definition —— Requirement: 地图规格档（Scenario 规格档读写往返 / 规格档不改规则）。
+/// 载体：生成图 <c>link:1:2</c>（合规基线），每条用例只改坏一处，断言对应的失败码被报出；另断言生成图逐张通过校验。
+/// 旧的紧贴布局规则（外圈平坦、棋盘外不得有深水、可落子格都属于棋盘、连通分量恰 1、接缝气边、主题两两不同、每块至多 1 个公共信物）随 D7 删除，其用例一并删除。
 /// </summary>
 /// <remarks>
-/// 变异验证（段 F 实跑，只跑本类）：
-/// M-F7 <c>MapValidator.ValidateSpliced</c> 不报 BATTLEFIELD_COUNT_MISMATCH（条件改恒假）→ 「分量数不为一被拒」红（open-map 1.1 重跑）；
-/// M-F8 <c>ValidateSpliced</c> 不查每块出生棋盘的信物格数 → 「每块出生棋盘恰两个信物格」红；
-/// M-F9 <c>ValidatePlateGaps</c> 对不同战场也跳过间隔 → 「未链接战场不相邻」红；
-/// M-A10 <c>LinkMapGenerator.Link</c> 删去规格档检查 → 「非链接档不可增长」红。
+/// 变异验证（map-expand-25 段 A1 实跑，过滤 LinkMapGeneration 命名空间）：
+/// M1 ISLAND_EXTENT 下限改 W−1 → 「可落子区外接矩形不足被拒」红 1；M2 PlatesApart 间隔改 gap−1 → 本类「平台间隔不足被拒」+ 浮空岛布局Tests「平台数与尺寸」×3 共红 4；
+/// M5 坡道朝外只查在盘内 → 「平台高度与坡道不合规被拒」红 1；M6 LibertySplit 恒空 → 「全图气边不连通被拒」+ 浮空岛布局Tests「全图可落子格沿气边连通」×3 共红 4；
+/// M7 公共信物上限 +10 → 「公共信物在平台内或超过人数加二被拒」红 1；M8 平台高度只查坡道 → 「平台高度与坡道不合规被拒」红 1；M9 不拒高台主题 → 「高台主题被拒」红 1。
 /// </remarks>
 public class 物化状态校验Tests
 {
-    /// <summary>在地图原有地形（夹具的林地）之上再加若干地表 / 栅栏，免得替换地形时把改造目标一起抹掉、引出无关的失败项。</summary>
+    private static MapData Base => LinkMapGenerator.Generate(1, 2);
+
+    private static ImmutableArray<MapValidationFailure> Failures(MapData map) => MapValidator.Validate(map).Failures;
+
+    /// <summary>在地图原有地形之上再加若干地表 / 栅栏 / 高度（其他测试类共用，如 构筑期内的改造范围Tests）。</summary>
     internal static TerrainData With(MapData map, (string Cell, Surface Surface)[]? surfaces = null, (string A, string B)[]? fences = null, (string Cell, int Height)[]? heights = null)
     {
         TerrainData extra = TestMaps.Terrain(heights: heights, surfaces: surfaces, fences: fences);
@@ -26,218 +29,215 @@ public class 物化状态校验Tests
         return new TerrainData(t.Heights.SetItems(extra.Heights), t.Surfaces.SetItems(extra.Surfaces), t.Bridges, t.Fences.Union(extra.Fences));
     }
 
-    [Fact]
-    public void 分量数不为一被拒()
+    private static MapData WithHeights(MapData map, params (Coord Cell, int Height)[] heights)
     {
-        // Scenario（open-map）：手写的链接档地图，某块出生棋盘与其余 4 块不相邻 → 校验失败并指出连通分量数为 2；加载即异常中止。
-        // 棋盘 4 挪到棋盘 2 北侧隔 2 行（(16, 10)，画布 22×18 仍在区间内）：导出 2 个含出生棋盘的分量。
-        MapData bad = LinkMapFixtures.Build("test-link-split", [.. LinkMapFixtures.Births.Take(4), LinkMapFixtures.Births[4] with { Origin = new Coord(16, 10) }]);
-        MapValidationResult result = MapValidator.Validate(bad);
-        Assert.False(result.IsValid);
-        MapValidationFailure failure = Assert.Single(result.Failures, f => f.Code == "BATTLEFIELD_COUNT_MISMATCH");
-        Assert.Contains("连通分量为 2 个", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(bad.AllCoords().Where(bad.IsPlayable).Order(), failure.Coords.Order());   // 指出全部分量
-
-        MapValidationException ex = Assert.Throws<MapValidationException>(() => GameBoard.Load(bad));
-        Assert.Contains("BATTLEFIELD_COUNT_MISMATCH", ex.Message, StringComparison.Ordinal);
-
-        // 合规的紧贴图恰 1 个分量、含全部 5 块。
-        MapData initial = LinkMapFixtures.Initial();
-        Assert.True(MapValidator.Validate(initial).IsValid, MapValidator.Validate(initial).ToString());
-        Assert.Empty(MapValidator.Validate(initial).Reports);   // 链接档没有距离报告项
-        Assert.Equal(0, initial.MapVersion);
-        Assert.Equal(1, Battlefields.Of(initial).Count);
-        Assert.Equal([0, 1, 2, 3, 4], Battlefields.Of(initial).All[0].BirthZones);
+        TerrainData t = map.TerrainData;
+        return map with { TerrainData = new TerrainData(t.Heights.SetItems(heights.Select(h => KeyValuePair.Create(h.Cell, h.Height))), t.Surfaces, t.Bridges, t.Fences) };
     }
+
+    private static Coord[] Ramps(MapData map, BoardPlate plate) => [.. plate.Cells().Where(c => map.IsPlayable(c) && map.HeightAt(c) == 1)];
 
     [Theory]
-    [InlineData(1ul)]
-    [InlineData(7ul)]
-    [InlineData(20ul)]
-    public void 生成后校验(ulong seed)
+    [InlineData(1ul, 2)]
+    [InlineData(7ul, 2)]
+    [InlineData(20ul, 2)]
+    [InlineData(1ul, 3)]
+    [InlineData(7ul, 3)]
+    [InlineData(20ul, 3)]
+    [InlineData(1ul, 4)]
+    [InlineData(7ul, 4)]
+    [InlineData(20ul, 4)]
+    public void 生成后校验(ulong seed, int players)
     {
-        // Scenario（open-map）：由任一种子生成地图 → 布局通过校验，版本号为 0；可落子格总数与画布尺寸都落在校验器声明的区间内（种子 1–20 全部通过见 初始布局Tests）。
-        MapData map = LinkMapGenerator.Generate(seed);
+        // Scenario：由任一 (种子, 人数) 生成地图 → 通过校验，版本号为 0，没有报告项；能直接加载。
+        MapData map = LinkMapGenerator.Generate(seed, players);
         MapValidationResult result = MapValidator.Validate(map);
         Assert.True(result.IsValid, result.ToString());
+        Assert.Empty(result.Reports);
         Assert.Equal(0, map.MapVersion);
-        Assert.Equal(1, Battlefields.Of(map).Count);
+        _ = GameBoard.Load(map);
     }
 
     [Fact]
-    public void 新地表过多被拒()
+    public void 删除的紧贴布局规则不再报出()
     {
-        // Scenario（link-map-surfaces D4 / 裁决 E5）：手写的链接档地图，出生棋盘 3（下标 2，P3–U8）的中间带有 5 格荒漠 → 校验失败并指出该棋盘与"至多 4 格新地表"。
-        // 6×6 的中间带 7 格，夹具占了两格林地（T4 / T7，可改造目标），其余 5 格（Q7 / R7 / S7 / T5 / T6）全部改荒漠；4 格是边界，接受。
-        MapData map = LinkMapFixtures.Initial();
-        BoardPlate plate = map.Boards[2];
-        Coord[] grass = [.. plate.Cells().Where(c => plate.InMiddleBand(c) && map.SurfaceAt(c) == Surface.Grass).Order()];
-        Assert.Equal(["T5", "T6", "Q7", "R7", "S7"], grass.Notations());
-        MapData five = map with { TerrainData = With(map, surfaces: [.. grass.Select(c => (c.ToNotation(), Surface.Desert))]) };
-        MapValidationResult result = MapValidator.Validate(five);
-        MapValidationFailure failure = Assert.Single(result.Failures);
-        Assert.Equal("BOARD_SPECIAL_SURFACE", failure.Code);
-        Assert.Contains("出生棋盘 P3–U8", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("有 5 格", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("至多 4 格新地表", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(grass, failure.Coords.Order());
-        Assert.Throws<MapValidationException>(() => GameBoard.Load(five));
-
-        // 边界：同一块 4 格（去掉 S7）被接受；4 格分属两种地表也照样计数（3 荒漠 + 2 浅滩 = 5 格被拒）。
-        MapData four = map with { TerrainData = With(map, surfaces: [.. grass.Take(4).Select(c => (c.ToNotation(), Surface.Desert))]) };
-        Assert.True(MapValidator.Validate(four).IsValid, MapValidator.Validate(four).ToString());
-        MapData mixed = map with { TerrainData = With(map, surfaces: [.. grass.Select((c, k) => (c.ToNotation(), k < 3 ? Surface.Desert : Surface.Shallows))]) };
-        Assert.Contains(MapValidator.Validate(mixed).Failures, f => f.Code == "BOARD_SPECIAL_SURFACE" && f.Message.Contains("有 5 格", StringComparison.Ordinal));
+        // D7：低地是棋盘之外的可落子格、低地上有深水河道，主题可重复——这些在旧规则下分别报 SCENERY_CELL_PLAYABLE / BOARD_MAP_DEEP_WATER / BOARD_THEME_INVALID，现在合法。
+        MapData map = Base;
+        Assert.Contains(map.AllCoords(), c => map.IsPlayable(c) && !map.Boards.Any(p => p.Contains(c)));
+        Assert.Contains(map.AllCoords(), c => map.SurfaceAt(c) == Surface.DeepWater && !map.Boards.Any(p => p.Contains(c)));
+        MapData repeated = Enumerable.Range(1, 20).Select(s => LinkMapGenerator.Generate((ulong)s, 2)).First(m => m.Boards.GroupBy(p => p.Theme).Any(g => g.Count() > 1));
+        Assert.True(MapValidator.Validate(repeated).IsValid);
+        string[] retired = ["BOARD_RIM_NOT_FLAT", "BOARD_MAP_DEEP_WATER", "RELIC_OUTSIDE_BOARD", "SCENERY_CELL_PLAYABLE", "BOARD_OVERLAP", "BATTLEFIELD_WITHOUT_BIRTH_BOARD", "BATTLEFIELD_COUNT_MISMATCH", "LINK_SEAM_NO_LIBERTY", "BOARD_THEME_INVALID"];
+        string source = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Core", "Board", "MapValidator.cs"));
+        Assert.All(retired, code => Assert.DoesNotContain($"\"{code}\"", source, StringComparison.Ordinal));
+        Assert.Contains("\"ISLAND_LIBERTY_SPLIT\"", source, StringComparison.Ordinal);   // 反面：扫的确实是校验器
     }
 
     [Fact]
-    public void 接缝没有气边被拒()
+    public void 平台间隔不足被拒()
     {
-        // Scenario（link-map-terrain 3.2 / 裁决 M6）：手写的链接档地图，接缝两侧相邻的格之间全部隔着栅栏或高度差 ≥ 2 → 校验失败并指出该接缝。
-        // 载体（open-map：建局即紧贴）：初始图里出生棋盘 1 东边外圈 H 列紧贴出生棋盘 2 西边外圈 J 列（记法跳过 I），H3–H8 / J3–J8 六对。
-        // 这样的图同时违反外圈规则（外圈不得有栅栏与高差）——合规生成图上接缝恒有气边，这条是给手写地图与以后改外圈规则时用的底线。
-        MapData linked = LinkMapFixtures.Initial();
-        Assert.True(MapValidator.Validate(linked).IsValid);
-        string[] rows = ["3", "4", "5", "6", "7"];
-        MapData blocked = linked with { TerrainData = With(linked, fences: [.. rows.Select(r => ("H" + r, "J" + r))], heights: [("J8", 2)]) };
-        MapValidationResult result = MapValidator.Validate(blocked);
-        MapValidationFailure seam = Assert.Single(result.Failures, f => f.Code == "LINK_SEAM_NO_LIBERTY");
-        Assert.Equal([.. new[] { "3", "4", "5", "6", "7", "8" }.SelectMany(r => new[] { "H" + r, "J" + r })], seam.Coords.Notations());
-        Assert.Contains("出生棋盘 C3–H8", seam.Message, StringComparison.Ordinal);
-        Assert.Contains("出生棋盘 J3–O8", seam.Message, StringComparison.Ordinal);
-        Assert.Contains(result.Failures, f => f.Code == "BOARD_RIM_NOT_FLAT");   // 外圈规则同时报出
+        // ISLAND_PLATE_GAP：两块平台外接矩形在横纵两个方向上的间隔都小于 3（含重叠）即拒。判定式先单测边界（恰 3 通过、2 不通过、重叠不通过）。
+        var a = new BoardPlate(new Coord(4, 4), 6, 6, BoardPlateKind.Birth);
+        Assert.True(MapValidator.PlatesApart(a, a with { Origin = new Coord(13, 4) }, 3));    // 间隔 3
+        Assert.False(MapValidator.PlatesApart(a, a with { Origin = new Coord(12, 4) }, 3));   // 间隔 2
+        Assert.True(MapValidator.PlatesApart(a, a with { Origin = new Coord(12, 13) }, 3));   // 纵向间隔 3 即可（斜对角）
+        Assert.False(MapValidator.PlatesApart(a, a with { Origin = new Coord(7, 7) }, 3));    // 重叠
 
-        // 反面：留一对没挡（H8–J8 高度差只有 1）→ 接缝有气边，不报。
-        MapData oneOpen = linked with { TerrainData = With(linked, fences: [.. rows.Select(r => ("H" + r, "J" + r))], heights: [("J8", 1)]) };
-        Assert.DoesNotContain(MapValidator.Validate(oneOpen).Failures, f => f.Code == "LINK_SEAM_NO_LIBERTY");
+        MapData map = Base;
+        BoardPlate first = map.Boards[0];
+        var near = new BoardPlate(new Coord(first.Origin.X + first.Width + 2, first.Origin.Y), 6, 6, BoardPlateKind.Public);
+        MapData bad = map with { Boards = map.Boards.Add(near) };
+        Assert.Contains(Failures(bad), f => f.Code == "ISLAND_PLATE_GAP" && f.Coords.SequenceEqual([first.Origin, near.Origin]));
+        Assert.DoesNotContain(Failures(map), f => f.Code == "ISLAND_PLATE_GAP");
     }
 
     [Fact]
-    public void 棋盘清单规则逐条报出()
+    public void 平台高度与坡道不合规被拒()
     {
-        // retire-legacy-maps（check 补回覆盖）：MapValidator 的棋盘清单规则（ValidatePlateList / ValidatePlateCells / ValidateBirthPlates / ValidateFlatScenery）
-        // 是链接档仍在执行的代码，但下面这些失败码此前只在 棋盘档预算与校验Tests（board: 档，整类随旧档删除）里有用例。
-        // 这里把同样的断言换到手写链接档图（LinkMapFixtures，open-map 起 22×16 的 3+2 紧贴图、五块 6×6）上，每例只改一处；所守规则见 map-definition「地图静态校验规则」
-        // 的棋盘清单段与 link-map-generation「物化状态校验」，规则本身不变。
-        MapData map = LinkMapFixtures.Initial();
-        Assert.True(MapValidator.Validate(map).IsValid);   // 载体本身合规
+        // PLATE_HEIGHT（D3 / D7）：平台内可落子格除坡道外须 h=2；坡道 2–3 个、外圈非角格、草地、朝外是 h=0 可落子低地。
+        MapData map = Base;
+        BoardPlate plate = map.Boards[0];
+        Coord[] ramps = Ramps(map, plate);
+        Assert.InRange(ramps.Length, 2, 3);
 
-        // ① 清单不得为空：报 BOARDS_REQUIRED 并到此为止（不再报棋盘与规模派生失败）。
-        MapValidationResult empty = MapValidator.Validate(map with { Boards = [] });
-        Assert.Equal("BOARDS_REQUIRED", Assert.Single(empty.Failures).Code);
+        // ① 只剩 1 个坡道。
+        MapData fewer = WithHeights(map, [.. ramps.Skip(1).Select(r => (r, 2))]);
+        Assert.Contains(Failures(fewer), f => f.Code == "PLATE_HEIGHT" && f.Message.Contains("有 1 个坡道", StringComparison.Ordinal));
 
-        // ② 出生棋盘边长 6–7（link-map-terrain 裁决 M9，terrain-density 裁决 K1 由 6–8 改为 6–7）：一块 8×6（其余四块挪开、保持紧贴连通，规模仍在预算内）→ 只报这一条。
-        // 8 恰是旧上限：旧校验器接受、新校验器拒绝，才是区分新旧上限的算例（原算例 9×6 对新旧都红）。
-        MapData wide = LinkMapFixtures.Build("test-link-wide",
-        [
-            new(new Coord(2, 2), 8, 6, BoardPlateKind.Birth, BoardTheme.Plateau),
-            new(new Coord(10, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River),
-            new(new Coord(16, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest),
-            new(new Coord(2, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Palisade),
-            new(new Coord(10, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
-        ]);
-        MapValidationFailure size = Assert.Single(MapValidator.Validate(wide).Failures);
-        Assert.Equal("BOARD_SIZE_OUT_OF_RANGE", size.Code);
-        Assert.Contains("6–7", size.Message, StringComparison.Ordinal);
-        Assert.Equal([new Coord(2, 2)], size.Coords);
+        // ② 中间带一格降到 0。
+        Coord middle = plate.Cells().First(c => plate.InMiddleBand(c) && map.IsPlayable(c));
+        Assert.Contains(Failures(WithHeights(map, (middle, 0))), f => f.Code == "PLATE_HEIGHT" && f.Coords.SequenceEqual([middle]));
 
-        // ③ link-map-terrain D6：删除"棋盘内不得有障碍"——中间带的岩石（G5）合规；外圈的岩石（C5）与核心区的岩石（E5）各由外圈 / 核心区规则报出并指出该格。
-        Assert.True(MapValidator.Validate(map with { Obstacles = map.Obstacles.Add(TestMaps.At("G5")) }).IsValid);
-        MapValidationFailure rimRock = Assert.Single(
-            MapValidator.Validate(map with { Obstacles = map.Obstacles.Add(TestMaps.At("C5")) }).Failures, f => f.Code == "BOARD_RIM_NOT_FLAT");
-        Assert.Equal([TestMaps.At("C5")], rimRock.Coords);
-        MapValidationFailure coreRock = Assert.Single(
-            MapValidator.Validate(map with { Obstacles = map.Obstacles.Add(TestMaps.At("E5")) }).Failures, f => f.Code == "BIRTH_CORE_NOT_FLAT");
-        Assert.Equal([TestMaps.At("E5")], coreRock.Coords);
+        // ③ 坡道朝外的低地格改成深水（不可落子）。
+        Coord ramp = ramps[0];
+        Coord outlet = Outlets(map, plate)[ramp];
+        TerrainData t = map.TerrainData;
+        MapData flooded = map with { TerrainData = new TerrainData(t.Heights, t.Surfaces.SetItem(outlet, Surface.DeepWater), t.Bridges, t.Fences) };
+        Assert.Contains(Failures(flooded), f => f.Code == "PLATE_HEIGHT" && f.Coords.SequenceEqual([ramp]));
 
-        // ④ 棋盘之外不得有深水（场景格 A1）；⑤ 核心区内部的边上不得有栅栏（E5–E6），核心区与中间带之间的边可以有（F6–G6，裁决 Q4）。
-        MapValidationFailure water = Assert.Single(
-            MapValidator.Validate(map with { TerrainData = With(map, surfaces: [("A1", Surface.DeepWater)]) }).Failures, f => f.Code == "BOARD_MAP_DEEP_WATER");
-        Assert.Equal([TestMaps.At("A1")], water.Coords);
-        MapValidationFailure fence = Assert.Single(
-            MapValidator.Validate(map with { TerrainData = With(map, fences: [("E5", "E6")]) }).Failures, f => f.Code == "BIRTH_CORE_NOT_FLAT");
-        Assert.Equal([TestMaps.At("E5"), TestMaps.At("E6")], fence.Coords.Order().ToArray());
-        Assert.True(MapValidator.Validate(map with { TerrainData = With(map, fences: [("F6", "G6")]) }).IsValid);
+        // ④ 坡道放在中间带（不在外圈）。
+        MapData inner = WithHeights(map, (middle, 1));
+        Assert.Contains(Failures(inner), f => f.Code == "PLATE_HEIGHT" && f.Coords.Contains(middle) && f.Message.Contains("外圈非角格", StringComparison.Ordinal));
 
-        // ⑥ 出生棋盘与出生区一一对应：出生区 1 / 2 对调 → 两块棋盘各报一次。
-        MapData swapped = map with { BirthZones = [map.BirthZones[1], map.BirthZones[0], .. map.BirthZones.Skip(2)] };
-        Assert.Equal(2, MapValidator.Validate(swapped).Failures.Count(f => f.Code == "BIRTH_BOARD_MISMATCH"));
-
-        // ⑦ 信物格必须在棋盘内：把场景格 V5（出生棋盘 2 东侧的留白，记法跳过 I）开放并标成信物格 → 指出该格。
-        MapData stray = map with
-        {
-            Obstacles = map.Obstacles.Remove(TestMaps.At("V5")),
-            RelicCells = map.RelicCells.Add(TestMaps.At("V5"), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)),
-        };
-        MapValidationFailure outside = Assert.Single(MapValidator.Validate(stray).Failures, f => f.Code == "RELIC_OUTSIDE_BOARD");
-        Assert.Equal([TestMaps.At("V5")], outside.Coords);
-
-        // ⑧ 出生区数须多于人数（声明表 ZonesMustExceedPlayers）：只有 4 块出生棋盘的 4 人图 → 与区间越界同时报出。
-        MapData four = LinkMapFixtures.Build("test-link-4", [.. LinkMapFixtures.Births.Take(4)]);
-        MapValidationResult fourResult = MapValidator.Validate(four);
-        Assert.Contains(fourResult.Failures, f => f.Code == "BIRTH_ZONE_COUNT_NOT_ABOVE_PLAYERS");
-        Assert.Contains(fourResult.Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
+        Assert.DoesNotContain(Failures(map), f => f.Code == "PLATE_HEIGHT");
     }
 
     [Fact]
-    public void 每块出生棋盘恰两个信物格()
+    public void 核心区不是高二草地被拒()
     {
-        MapData initial = LinkMapFixtures.Initial();
-        Coord one = initial.RelicCells.Keys.First(initial.BirthZones[2].Contains);
-        MapData fewer = initial with { RelicCells = initial.RelicCells.Remove(one) };
-        Assert.Contains(MapValidator.Validate(fewer).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT" && f.Coords.SequenceEqual([initial.Boards[2].Origin]));
-        Assert.Contains(MapValidator.Validate(fewer).Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
-
-        MapData more = initial with { RelicCells = initial.RelicCells.Add(new Coord(5, 3), new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)) };
-        Assert.Contains(MapValidator.Validate(more).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT" && f.Coords.SequenceEqual([initial.Boards[0].Origin]));
+        MapData map = Base;
+        Coord core = map.Boards[1].CoreCells().First();
+        MapData lowered = WithHeights(map, (core, 1));
+        Assert.Contains(Failures(lowered), f => f.Code == "BIRTH_CORE_NOT_FLAT" && f.Coords.SequenceEqual([core]));
+        Assert.DoesNotContain(Failures(map), f => f.Code == "BIRTH_CORE_NOT_FLAT");
     }
 
     [Fact]
-    public void 可落子格都属于棋盘_场景格不可落子()
+    public void 高台主题被拒()
     {
-        // 棋盘之外的可落子格（不挨任何棋盘）→ SCENERY_CELL_PLAYABLE，且这片格没有出生棋盘 → BATTLEFIELD_WITHOUT_BIRTH_BOARD；棋盘重叠 → BOARD_OVERLAP。
-        MapData initial = LinkMapFixtures.Initial();
-        ImmutableArray<Coord> stray = [new Coord(3, 0), new Coord(4, 0)];
-        MapData loose = initial with { Obstacles = initial.Obstacles.Except(stray) };
-        MapValidationResult result = MapValidator.Validate(loose);
-        Assert.Equal(stray, Assert.Single(result.Failures, f => f.Code == "SCENERY_CELL_PLAYABLE").Coords);
-        Assert.Equal(stray, Assert.Single(result.Failures, f => f.Code == "BATTLEFIELD_WITHOUT_BIRTH_BOARD").Coords);
-        Assert.DoesNotContain(result.Failures, f => f.Code == "BATTLEFIELD_COUNT_MISMATCH");
+        // PLATE_THEME（R3）：平台主题不得为高台；缺主题照旧被拒。
+        MapData map = Base;
+        MapData plateau = map with { Boards = map.Boards.SetItem(0, map.Boards[0] with { Theme = BoardTheme.Plateau }) };
+        Assert.Contains(Failures(plateau), f => f.Code == "PLATE_THEME" && f.Message.Contains("高台", StringComparison.Ordinal) && f.Coords.SequenceEqual([map.Boards[0].Origin]));
+        MapData none = map with { Boards = map.Boards.SetItem(0, map.Boards[0] with { Theme = null }) };
+        Assert.Contains(Failures(none), f => f.Code == "PLATE_THEME");
+        Assert.DoesNotContain(Failures(map), f => f.Code == "PLATE_THEME");
+    }
 
-        MapData overlap = LinkMapFixtures.Build("test-link-overlap", [LinkMapFixtures.Births[0], LinkMapFixtures.Births[1] with { Origin = new Coord(6, 2) }, .. LinkMapFixtures.Births.Skip(2)]);
-        MapValidationFailure overlapped = Assert.Single(MapValidator.Validate(overlap).Failures, f => f.Code == "BOARD_OVERLAP");
-        Assert.Equal(TestMaps.Rect(6, 2, 2, 6).Order(), overlapped.Coords.Order());   // retire-legacy-maps：Rect 由已删除的 FrontierFixtures 原样迁到 TestMaps
+    [Fact]
+    public void 全图气边不连通被拒()
+    {
+        // ISLAND_LIBERTY_SPLIT：把平台 0 的坡道全部抬到 h=2，平台四周全成崖壁 → 平台 0 的可落子格与低地隔开，失败项指出这些格。
+        MapData map = Base;
+        BoardPlate plate = map.Boards[0];
+        MapData sealedOff = WithHeights(map, [.. Ramps(map, plate).Select(r => (r, 2))]);
+        MapValidationFailure split = Assert.Single(Failures(sealedOff), f => f.Code == "ISLAND_LIBERTY_SPLIT");
+        Assert.Equal(plate.Cells().Where(sealedOff.IsPlayable).Order(), split.Coords);
+        Assert.Contains(Failures(sealedOff), f => f.Code == "PLATE_HEIGHT");   // 同时坡道数为 0
+        Assert.Empty(MapValidator.LibertySplit(map));
+    }
 
-        // 出生区数与信物预算：塞第 6 块出生棋盘即超出。
-        MapData tooMany = LinkMapFixtures.Build("test-link-6", [.. LinkMapFixtures.Births, new(new Coord(14, 8), 7, 7, BoardPlateKind.Birth)]);
-        Assert.Contains(MapValidator.Validate(tooMany).Failures, f => f.Code is "BIRTH_ZONE_COUNT_OUT_OF_RANGE" or "RELIC_COUNT_OUT_OF_RANGE");
+    [Fact]
+    public void 可落子区外接矩形不足被拒()
+    {
+        // ISLAND_EXTENT（验收的核心断言）：把岛最南一行全部改成障碍，可落子区外接矩形变成 W×(W−1) → 拒。
+        MapData map = Base;
+        int bottom = map.AllCoords().Where(map.IsPlayable).Min(c => c.Y);
+        MapData cut = map with { Obstacles = map.Obstacles.Union(map.AllCoords().Where(c => c.Y == bottom)) };
+        MapValidationFailure extent = Assert.Single(Failures(cut), f => f.Code == "ISLAND_EXTENT");
+        Assert.Contains("30×29", extent.Message, StringComparison.Ordinal);
+        Assert.Contains("至少 30×30", extent.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Failures(map), f => f.Code == "ISLAND_EXTENT");
+    }
+
+    [Fact]
+    public void 画布不合人数被拒()
+    {
+        // 画布边长恰等于 W(n)+2M：2 人图标成 3 人 → 画布 34 不足 39 → MAP_TOO_NARROW，到此为止（不再报平台规则）；人数 5 没有预算行 → UNSUPPORTED_PLAYER_COUNT，画布不查。
+        MapData map = Base;
+        ImmutableArray<MapValidationFailure> three = Failures(map with { MaxPlayers = 3 });
+        Assert.Equal(["MAP_TOO_NARROW"], three.Select(f => f.Code));
+        Assert.Contains("39", three[0].Message, StringComparison.Ordinal);
+        ImmutableArray<MapValidationFailure> five = Failures(map with { MaxPlayers = 5 });
+        Assert.Contains(five, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
+        Assert.DoesNotContain(five, f => f.Code.StartsWith("MAP_TOO_", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void 公共信物在平台内或超过人数加二被拒()
+    {
+        // ISLAND_PUBLIC_RELIC（D5 / D7）：公共区档信物必须在低地；至多 n+2 个。
+        MapData map = Base;
+        var contested = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
+        Coord inside = map.Boards[0].Cells().First(c => map.Boards[0].InMiddleBand(c) && map.IsPlayable(c) && !map.RelicCells.ContainsKey(c));
+        MapData onPlate = map with { RelicCells = map.RelicCells.Add(inside, contested) };
+        Assert.Contains(Failures(onPlate), f => f.Code == "ISLAND_PUBLIC_RELIC" && f.Coords.SequenceEqual([inside]));
+
+        int existing = map.RelicCells.Count(kv => kv.Value.Zone == RelicZone.Contested);
+        Coord[] extra = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(p => p.Contains(c)) && !map.RelicCells.ContainsKey(c)).Take(4 + 1 - existing)];
+        MapData tooMany = map with { RelicCells = map.RelicCells.AddRange(extra.Select(c => KeyValuePair.Create(c, contested))) };
+        Assert.Contains(Failures(tooMany), f => f.Code == "ISLAND_PUBLIC_RELIC" && f.Message.Contains("至多 4 个", StringComparison.Ordinal));
+        Assert.DoesNotContain(Failures(map), f => f.Code == "ISLAND_PUBLIC_RELIC");
+    }
+
+    [Fact]
+    public void 每块平台恰两个出生区信物()
+    {
+        MapData map = Base;
+        Coord one = map.RelicCells.Keys.First(map.BirthZones[2].Contains);
+        MapData fewer = map with { RelicCells = map.RelicCells.Remove(one) };
+        Assert.Contains(Failures(fewer), f => f.Code == "BIRTH_BOARD_RELIC_COUNT" && f.Coords.SequenceEqual([map.Boards[2].Origin]));
+        Assert.DoesNotContain(Failures(map), f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
     }
 
     [Fact]
     public void 规格档读写往返()
     {
-        // Scenario：把一张链接档地图的初始状态导出为文件再读入 → 规格档仍为链接，棋盘清单与其余字段逐项相等；版本号非零时写出、零时省略。
-        MapData initial = LinkMapFixtures.Initial();
-        string json = MapFile.ToJson(initial);
+        // Scenario：把一张链接档地图的初始状态导出为文件再读入 → 规格档仍为链接，棋盘清单与其余字段逐项相等；版本号零时省略。
+        MapData map = Base;
+        string json = MapFile.ToJson(map);
         Assert.Contains("\"Profile\": \"Link\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"MapVersion\"", json, StringComparison.Ordinal);
         MapData restored = MapFile.FromJson(json);
         Assert.Equal(MapProfile.Link, restored.Profile);
         Assert.Equal(0, restored.MapVersion);
-        Assert.Equal(initial.Boards, restored.Boards);
-        Assert.Equal(initial.Obstacles.Order(), restored.Obstacles.Order());
-        Assert.Equal(initial.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
+        Assert.Equal(2, restored.MaxPlayers);
+        Assert.Equal(map.Boards, restored.Boards);
+        Assert.Equal(map.Obstacles.Order(), restored.Obstacles.Order());
+        Assert.Equal(map.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
         Assert.Equal(json, MapFile.ToJson(restored));
+        Assert.True(MapValidator.Validate(restored).IsValid);
     }
 
     [Fact]
     public void 规格档不改规则()
     {
         // Scenario：在链接档地图上，一条棋串的全部气边邻格均被敌子占据 → 无气，判定与标准档相同。
-        GameBoard board = GameBoard.Load(LinkMapFixtures.Initial());
+        MapData map = Base;
+        GameBoard board = GameBoard.Load(map);
         var a = new PlayerId(0);
         var b = new PlayerId(1);
-        var center = new Coord(4, 4);   // 0 号棋盘中心
+        Coord center = map.Boards[0].CoreCells().ElementAt(4);
         board.Place(center, a, PieceType.Basic);
         foreach (Coord n in board.LibertyNeighbors(center))
         {
@@ -248,9 +248,24 @@ public class 物化状态校验Tests
         Assert.Empty(board.LibertiesOf(group));
         Assert.True(board.IsCaptured(group));
 
-        // 棋盘角上的棋子只有 2 口气（棋盘外是障碍，与画布边缘同义）。
-        GameBoard corner = GameBoard.Load(LinkMapFixtures.Initial());
-        corner.Place(new Coord(2, 2), a, PieceType.Basic);
-        Assert.Equal(2, corner.LibertiesOf(corner.GroupAt(new Coord(2, 2))!).Length);
+        // 崖壁（D3）：平台外圈非坡道格与朝外的低地格几何相邻，但没有气边；坡道格与朝外格之间有气边。
+        BoardPlate plate = map.Boards[0];
+        Dictionary<Coord, Coord> outlets = Outlets(map, plate);
+        Coord ramp = outlets.Keys.First();
+        Assert.Contains(outlets[ramp], Adjacency.LibertyNeighbors(map, ramp));
+        Coord wall = plate.Cells().First(c => plate.OnRim(c) && map.IsPlayable(c) && map.HeightAt(c) == 2 && c.Y == plate.Origin.Y && c.X > plate.Origin.X && c.X < plate.Origin.X + plate.Width - 1 && map.IsPlayable(new Coord(c.X, c.Y - 1)));
+        var below = new Coord(wall.X, wall.Y - 1);
+        Assert.True(map.IsPlayable(below) && map.HeightAt(below) == 0);
+        Assert.True(Adjacency.AreAdjacent(wall, below));
+        Assert.DoesNotContain(below, Adjacency.LibertyNeighbors(map, wall));
+    }
+
+    /// <summary>平台的坡道 → 朝外格（坐标算术，测试内独立实现）。</summary>
+    private static Dictionary<Coord, Coord> Outlets(MapData map, BoardPlate p)
+    {
+        int l = p.Origin.X, r = p.Origin.X + p.Width - 1, b = p.Origin.Y, t = p.Origin.Y + p.Height - 1;
+        return Ramps(map, p).ToDictionary(
+            c => c,
+            c => c.X == l ? new Coord(c.X - 1, c.Y) : c.X == r ? new Coord(c.X + 1, c.Y) : c.Y == b ? new Coord(c.X, c.Y - 1) : new Coord(c.X, c.Y + 1));
     }
 }

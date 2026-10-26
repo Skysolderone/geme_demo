@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.RelicGeneration;
 public class 信物在开局一次性生成Tests
 {
     // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图（10 个出生区信物格），断言不变。
-    private static readonly MapData Map = MapCatalog.Resolve("link:1");
+    private static readonly MapData Map = MapCatalog.Resolve("link:1:4");
 
     [Fact]
     public void 种子可复现()

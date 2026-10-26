@@ -307,7 +307,7 @@ public sealed partial class GameRoot : Node3D
             // 旧的裸 gen / 裸 board 不再识别（board-link-mode 实现裁决 D7）：与其他旧标识一样由 MapCatalog.Resolve 报错退出。
             if (LinkMapId.IsBareRequest(mapId))
             {
-                mapId = LinkMapId.Format(LinkMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()));
+                mapId = LinkMapId.Format(LinkMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), LinkMapId.MaxPlayers);   // map-expand-25 段 A1 最小修复：人数暂取 4
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
