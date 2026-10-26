@@ -8,6 +8,8 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 /// 规格：任务 10-26-map-expand-25 design D7（链接档校验改为按人数的浮空岛规则）；map-definition —— Requirement: 地图规格档（Scenario 规格档读写往返 / 规格档不改规则）。
 /// 载体：生成图 <c>link:1:2</c>（合规基线），每条用例只改坏一处，断言对应的失败码被报出；另断言生成图逐张通过校验。
 /// 旧的紧贴布局规则（外圈平坦、棋盘外不得有深水、可落子格都属于棋盘、连通分量恰 1、接缝气边、主题两两不同、每块至多 1 个公共信物）随 D7 删除，其用例一并删除。
+/// 段 A3：浮空岛不放静态信物格（relic-redesign R29，2026-10-26 用户裁决），ISLAND_PUBLIC_RELIC 与 BIRTH_BOARD_RELIC_COUNT 删除，
+/// 「公共信物在平台内或超过人数加二被拒」「每块平台恰两个出生区信物」两条随之删除（下面 M7 一项随之作废）。
 /// </summary>
 /// <remarks>
 /// 变异验证（map-expand-25 段 A1 实跑，过滤 LinkMapGeneration 命名空间）：
@@ -181,33 +183,6 @@ public class 物化状态校验Tests
         ImmutableArray<MapValidationFailure> five = Failures(map with { MaxPlayers = 5 });
         Assert.Contains(five, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
         Assert.DoesNotContain(five, f => f.Code.StartsWith("MAP_TOO_", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void 公共信物在平台内或超过人数加二被拒()
-    {
-        // ISLAND_PUBLIC_RELIC（D5 / D7）：公共区档信物必须在低地；至多 n+2 个。
-        MapData map = Base;
-        var contested = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
-        Coord inside = map.Boards[0].Cells().First(c => map.Boards[0].InMiddleBand(c) && map.IsPlayable(c) && !map.RelicCells.ContainsKey(c));
-        MapData onPlate = map with { RelicCells = map.RelicCells.Add(inside, contested) };
-        Assert.Contains(Failures(onPlate), f => f.Code == "ISLAND_PUBLIC_RELIC" && f.Coords.SequenceEqual([inside]));
-
-        int existing = map.RelicCells.Count(kv => kv.Value.Zone == RelicZone.Contested);
-        Coord[] extra = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(p => p.Contains(c)) && !map.RelicCells.ContainsKey(c)).Take(4 + 1 - existing)];
-        MapData tooMany = map with { RelicCells = map.RelicCells.AddRange(extra.Select(c => KeyValuePair.Create(c, contested))) };
-        Assert.Contains(Failures(tooMany), f => f.Code == "ISLAND_PUBLIC_RELIC" && f.Message.Contains("至多 4 个", StringComparison.Ordinal));
-        Assert.DoesNotContain(Failures(map), f => f.Code == "ISLAND_PUBLIC_RELIC");
-    }
-
-    [Fact]
-    public void 每块平台恰两个出生区信物()
-    {
-        MapData map = Base;
-        Coord one = map.RelicCells.Keys.First(map.BirthZones[2].Contains);
-        MapData fewer = map with { RelicCells = map.RelicCells.Remove(one) };
-        Assert.Contains(Failures(fewer), f => f.Code == "BIRTH_BOARD_RELIC_COUNT" && f.Coords.SequenceEqual([map.Boards[2].Origin]));
-        Assert.DoesNotContain(Failures(map), f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
     }
 
     [Fact]

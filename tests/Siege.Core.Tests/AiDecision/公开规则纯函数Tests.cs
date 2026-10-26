@@ -100,11 +100,12 @@ public class 公开规则纯函数Tests
         // ④ 出局：此刻没有"应出局而仍参赛"的玩家，每个已出局者都满足判据（旧判据）。
         int checkedTurns = 0;
         // open-map 1.1：link:1 的信物格随 3+2 布局改变，种子 1 / 3 生成的信物里不再有军令 / 工坊 / 先锋；从给定种子起取第一个满足样本口径的对局种子。
-        MatchFlow match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(seed));
+        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
+        MatchFlow match = LinkModeFixtures.CreateWithRelics(new Siege.Core.Determinism.GameSeed(seed));
         for (ulong probe = seed; !match.Relics.Generation.Placements.Any(p => p.Content.Type is RelicType.Command or RelicType.Workshop or RelicType.Vanguard); probe++)
         {
             Assert.True(probe < seed + 50, "50 个对局种子里没有军令 / 工坊 / 先锋");
-            match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(probe + 1));
+            match = LinkModeFixtures.CreateWithRelics(new Siege.Core.Determinism.GameSeed(probe + 1));
         }
 
         match.PlantPrototype();

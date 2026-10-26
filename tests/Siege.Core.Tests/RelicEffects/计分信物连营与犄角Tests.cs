@@ -146,7 +146,8 @@ public class 计分信物连营与犄角Tests
         // 每个盘面先做一次"结算"（第 4 步揭示 + 第 5 步重算控制），再比较两种输入下全部玩家的势力明细。
         // 样本口径下界：足够多的盘面上计分信物确实改变了势力（与"不传已知内容"不同），否则两边相等是恒真。
         // retire-legacy-maps 1.6：载体由标准图 v5 改为 link:1 初始图，断言不变。
-        MapData map = MapCatalog.Resolve("link:1:4");
+        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为手写夹具 LinkMapFixtures.WithRelics（link:1:4 补上段 A2 口径的信物格）。
+        MapData map = LinkMapFixtures.WithRelics(MapCatalog.Resolve("link:1:4"));
         PlayerId[] players = [TestMaps.P0, TestMaps.P1, RelicFixtures.P2, RelicFixtures.P3];
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = RelicFixtures.AllActive(players);
         PieceType[] types = [.. ContentSets.PieceTypesOf(ContentSet.V2)];

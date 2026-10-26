@@ -155,7 +155,8 @@ public class 按座位视图Tests
     public void 插旗阶段的可见信息()
     {
         // Scenario：插旗阶段 → 可见全部占位（map-expand-25：link:1:4 为 10 块平台）的位置与边长、对局种子与地图标识，看不到任何棋盘内部的格，也看不到任何旗帜。
-        MatchFlow match = Create();
+        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
+        MatchFlow match = CreateWithRelics();
         match.Flags.Plant(P1, 2);
         SeatPublicView a = match.PublishFor(P0);
         Assert.Equal(10, a.Placeholders.Length);

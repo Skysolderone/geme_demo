@@ -11,6 +11,25 @@ namespace Siege.Core.Tests.MapDefinition;
 /// <remarks>规格：map-definition —— Requirement: 地图为设计师固定的静态数据</remarks>
 public class 地图文件健壮性Tests
 {
+    /// <summary>
+    /// 信物表读写的载体：link:1:4 手工补 3 个信物格——出生区 0 核心区两格（出生区档、Birth）与第一个低地可落子格（公共区档、Standard）。
+    /// map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29，2026-10-26 用户裁决），生成图的信物表为空；本类钉的是信物表 DTO 的
+    /// 大小写宽容、未知字段、重复键折叠，载体改为这张补了信物格的图（不过校验器——只走序列化往返），断言不变。
+    /// </summary>
+    private static MapData RelicCarrier()
+    {
+        MapData link = MapCatalog.Resolve("link:1:4");
+        Coord[] core = [.. link.BirthZones[0].Order()];
+        Coord lowland = link.AllCoords().First(c => link.IsPlayable(c) && !link.Boards.Any(b => b.Contains(c)));
+        return link with
+        {
+            RelicCells = link.RelicCells
+                .Add(core[0], new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth))
+                .Add(core[8], new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth))
+                .Add(lowland, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)),
+        };
+    }
+
     // retire-legacy-maps 4.1（L7）：规格档字段改为必填（缺失即报"已移除"），本类手写的残缺 / 畸形 JSON 一律补上 "Profile":"Link"，
     // 使各条仍落在它原本要测的那一处错误上；断言不变。
     [Theory]
@@ -71,25 +90,26 @@ public class 地图文件健壮性Tests
     public void 同一坐标重复写会被合并而不是静默取一个()
     {
         // JSON 对象的重复键由序列化器"后者胜出"地吞掉，坐标记法的大小写差异同样会折叠成同一格。
-        // 这里钉住：折叠后信物格数量变了，信物格预算会报出来——不会带着"丢了一个信物格"的地图开局。
+        // 这里钉住：折叠后信物格数量变了（合并，而不是静默保留两个之一的原样）。
         // retire-legacy-maps 4.1：原载体是 11×11 的手写残缺图（无规格档字段）；4.1 起它先因外接尺寸被链接档拒绝、到不了信物预算，
         // 载体改为 link:1 的导出文本，把第二个信物格的键改写成第一个的小写，断言不变。
         // link-map-terrain：信物格区间改为 10–15、link:1 有 13 个（含 3 个公共区档），少一个仍在区间内；改为折叠两个出生区档信物格，
         // 由"每块出生棋盘恰 2 个出生区档信物格"报出——同样不会带着丢了一个信物格的地图开局。
         // map-expand-25 段 A2：link:1:4 浮空岛 10 块平台各 2 个出生区档 + 低地 6 个公共区档 = 26（原 10 + 3 = 13），折叠后 25。
-        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
+        // map-expand-25 段 A3：浮空岛不放静态信物格，载体改为 RelicCarrier（2 个出生区档 + 1 个公共区档 = 3，折叠后 2）；
+        // 每块出生棋盘恰 2 个出生区档信物格的规则（BIRTH_BOARD_RELIC_COUNT）随之删除，信物格数量不再有校验规则可报，删去校验断言，只钉折叠本身。
+        string canonical = MapFile.ToJson(RelicCarrier());
         MapData parsed = MapFile.FromJson(canonical);
         Coord[] relics = [.. parsed.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).Select(kv => kv.Key).Order()];
-        Assert.Equal(20, relics.Length);   // 样本口径
-        Assert.Equal(26, parsed.RelicCells.Count);
+        Assert.Equal(2, relics.Length);   // 样本口径
+        Assert.Equal(3, parsed.RelicCells.Count);
         string json = canonical.Replace($"\"{relics[1].ToNotation()}\": {{", $"\"{relics[0].ToNotation().ToLowerInvariant()}\": {{", StringComparison.Ordinal);
         Assert.NotEqual(canonical, json);
 
         MapData folded = MapFile.FromJson(json);
 
-        Assert.Equal(25, folded.RelicCells.Count);
-        Assert.Contains(
-            MapValidator.Validate(folded).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
+        Assert.Equal(2, folded.RelicCells.Count);
+        Assert.False(folded.RelicCells.ContainsKey(relics[1]));
     }
 
     [Fact]
@@ -116,7 +136,8 @@ public class 地图文件健壮性Tests
         // PropertyNameCaseInsensitive 只管键名，枚举值走 JsonStringEnumConverter；
         // 它读取时同样不区分大小写。这里把 Zone / Budget 的全部枚举值压成小写钉住这一点，
         // 免得日后换转换器或加 JsonNamingPolicy 时静默变成"看起来能用的坏地图"。
-        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
+        // map-expand-25 段 A3：载体改为 RelicCarrier（浮空岛不放静态信物格）。
+        string canonical = MapFile.ToJson(RelicCarrier());
         string lowerValues = canonical
             .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"birthzone\"", StringComparison.Ordinal)
             .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"contested\"", StringComparison.Ordinal)
@@ -137,7 +158,8 @@ public class 地图文件健壮性Tests
     {
         // 大小写宽容不等于任意字符串宽容：拼错的分区名 MUST 报错，不能落成默认值 BirthZone。
         // retire-legacy-maps 1.6：link:1 的信物格都在出生区，拼错的分区名改为把 BirthZone 写成 BirthZon（原为 Contested → Contest）。
-        string broken = MapFile.ToJson(MapCatalog.Resolve("link:1:4"))
+        // map-expand-25 段 A3：载体改为 RelicCarrier（浮空岛不放静态信物格）。
+        string broken = MapFile.ToJson(RelicCarrier())
             .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"BirthZon\"", StringComparison.Ordinal);
         Assert.Contains("BirthZon\"", broken, StringComparison.Ordinal);
 
@@ -149,7 +171,8 @@ public class 地图文件健壮性Tests
     {
         // 地图文件里允许写 _comment 之类的说明字段：顶层与嵌套对象都不报错、不影响数据。
         // retire-legacy-maps 1.6：载体由 v5 改为 link:1；嵌套对象里的说明字段改挂在出生区信物上（link:1 没有公共区信物）。
-        string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
+        // map-expand-25 段 A3：载体改为 RelicCarrier（浮空岛不放静态信物格）。
+        string canonical = MapFile.ToJson(RelicCarrier());
         string withComments = canonical
             .Replace("{\n  \"Id\":", "{\n  \"_comment\": \"设计师备注：中央区与咽喉承担高预算\",\n  \"Id\":", StringComparison.Ordinal)
             .Replace("\"Zone\": \"BirthZone\",", "\"_comment\": \"出生区\",\n      \"Zone\": \"BirthZone\",", StringComparison.Ordinal);

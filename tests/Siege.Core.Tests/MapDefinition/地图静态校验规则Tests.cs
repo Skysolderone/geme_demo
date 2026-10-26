@@ -12,6 +12,9 @@ namespace Siege.Core.Tests.MapDefinition;
 /// 可落子 820、信物 16（出生区档 12 + 公共区档 4）。各用例的格子取平台相对坐标或按条件挑选，只在必须写死坐标时写死并先断言前提。
 /// 期望值换成 2 人档预算（可落子 760–876、出生区 6–8、信物 12–20、画布恰 34）。
 /// 删除的断言：山脊隔断线（高台主题去掉、平台整体高 2 后校验器只认河道，见 MapValidator.BarriersOf）；外圈新地表另报 BOARD_RIM_NOT_FLAT（外圈平坦规则删除，D7）。
+/// map-expand-25 段 A3：浮空岛不放静态信物格（relic-redesign R29，2026-10-26 用户裁决），link:1:2 信物 0、可落子 833（信物不再消费布局流，坡道与低地重抽；
+/// 平台落位、主题与平台内部不变）；信物区间与"每块恰 2 个出生区档"规则删除，「信物格数越界」「出生棋盘信物数不对」两条随之删除；
+/// 信物格合法性（分区、档位、可落子）的用例改为在图上手工补信物格。
 /// </remarks>
 public class 地图静态校验规则Tests
 {
@@ -31,9 +34,9 @@ public class 地图静态校验规则Tests
         MapData map = Link();
         MapValidationResult result = MapValidator.Validate(map);
         Assert.True(result.IsValid, result.ToString());
-        Assert.Equal(820, map.PlayableCount);
+        Assert.Equal(833, map.PlayableCount);
         Assert.Equal(6, map.Boards.Length);
-        Assert.Equal(16, map.RelicCells.Count);
+        Assert.Empty(map.RelicCells);   // 不放静态信物格（段 A3）
         Assert.Equal("Q25", Clean.Origin.ToNotation());
         Assert.Equal(BoardTheme.Forest, Clean.Theme);
         Assert.All(Clean.Cells(), c => Assert.True(map.IsPlayable(c), c.ToNotation()));
@@ -43,9 +46,9 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 可落子格越界()
     {
-        // 2 人浮空岛可落子格区间 760–876（MapValidator 声明表）。下界：低地（平台外）按坐标序挖掉 61 格 → 820 − 61 = 759；上界：画布全部开放。
+        // 2 人浮空岛可落子格区间 760–876（MapValidator 声明表）。下界：低地（平台外）按坐标序挖掉 74 格 → 833 − 74 = 759；上界：画布全部开放。
         MapData map = Link();
-        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(61)];
+        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(74)];
         MapData tooFew = map with { Obstacles = map.Obstacles.Union(rocks) };
         Assert.Equal(759, tooFew.PlayableCount);
         MapValidationFailure low = Assert.Single(
@@ -122,56 +125,12 @@ public class 地图静态校验规则Tests
     }
 
     [Fact]
-    public void 信物格数越界()
-    {
-        // 2 人浮空岛信物格 12–20（每平台 2 个出生区档 + 低地至多 n+2 = 4 个公共区档）。
-        // 下界：拿掉 4 个公共区档与 1 个出生区档 → 11 → 少于下限 12。
-        MapData map = Link();
-        Coord[] contested = [.. map.RelicCells.Where(kv => kv.Value.Zone == RelicZone.Contested).Select(kv => kv.Key).Order()];
-        Assert.Equal(4, contested.Length);
-        MapData stripped = map with { RelicCells = map.RelicCells.RemoveRange(contested).Remove(map.RelicCells.Keys.Except(contested).Order().First()) };
-        Assert.Equal(11, stripped.RelicCells.Count);
-        MapValidationFailure failure = Assert.Single(
-            MapValidator.Validate(stripped).Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
-        Assert.Contains("12–20", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("少于下限 12", failure.Message, StringComparison.Ordinal);
-
-        // 上界：低地再放 4 个公共区档 → 20 → 不报信物数（公共区档 8 个超出 n+2，另由 ISLAND_PUBLIC_RELIC 报）；再放 1 个 → 21 → 多于上限 20。
-        var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
-        Coord[] lowland = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c)) && !map.RelicCells.ContainsKey(c)).Order().Take(5)];
-        MapData twenty = map with { RelicCells = map.RelicCells.AddRange(lowland.Take(4).Select(c => KeyValuePair.Create(c, spec))) };
-        Assert.Equal(20, twenty.RelicCells.Count);
-        MapValidationResult atMax = MapValidator.Validate(twenty);
-        Assert.DoesNotContain(atMax.Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE");
-        Assert.Contains("有 8 个公共区档", Assert.Single(atMax.Failures, f => f.Code == "ISLAND_PUBLIC_RELIC").Message, StringComparison.Ordinal);
-        MapData over = twenty with { RelicCells = twenty.RelicCells.Add(lowland[4], spec) };
-        Assert.Contains("多于上限 20", Assert.Single(MapValidator.Validate(over).Failures, f => f.Code == "RELIC_COUNT_OUT_OF_RANGE").Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void 不支持的人数被拒绝()
     {
         // 链接档只提供 2–4 人的预算表（map-expand-25：原只有 4 人一行，3 人曾是反例）。
         Assert.Contains(MapValidator.Validate(Link() with { MaxPlayers = 5 }).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
         Assert.Contains(MapValidator.Validate(Link() with { MaxPlayers = 1 }).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
         Assert.DoesNotContain(MapValidator.Validate(Link()).Failures, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
-    }
-
-    [Fact]
-    public void 出生棋盘信物数不对()
-    {
-        // 规格 Scenario：出生棋盘 3 的核心区里有 3 个出生区档信物格 → 拒绝并指出该棋盘与"每块平台恰 2 个出生区档信物格"。
-        MapData map = Link();
-        BoardPlate third = map.Boards[2];
-        Coord extra = third.CoreCells().Order().First(c => !map.RelicCells.ContainsKey(c));
-        Assert.Contains(extra, map.BirthZones[2]);
-        MapData three = map with { RelicCells = map.RelicCells.Add(extra, new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)) };
-
-        MapValidationFailure failure = Assert.Single(
-            MapValidator.Validate(three).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
-        Assert.Equal([third.Origin], failure.Coords);
-        Assert.Contains("有 3 个出生区档", failure.Message, StringComparison.Ordinal);
-        Assert.Contains("恰有 2 个", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -327,8 +286,9 @@ public class 地图静态校验规则Tests
         // 公共区的信物格被标成出生区档位，或出生区的信物格被标成公共区，都必须报错——
         // 分区标错会让信物生成用错强度预算，而那时已经在对局里了。
         // map-expand-25：低地本身可落子，不必再开放场景格；取低地上按坐标序第一个没有信物的格放一枚标成出生区档位的信物。
+        // 段 A3：浮空岛不放静态信物格，出生区那一枚改为在出生区 1 按坐标序第一格手工放（标成公共区档）。
         MapData map = Link();
-        Coord inBirthZone = map.RelicCells.Keys.Order().First(c => map.BirthZoneOf(c) is not null);
+        Coord inBirthZone = map.BirthZones[0].Order().First();
         Coord contested = map.AllCoords().Order().First(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c)) && !map.RelicCells.ContainsKey(c));
 
         MapData zoneSwapped = map with
@@ -350,8 +310,9 @@ public class 地图静态校验规则Tests
     public void 出生区不得出现高阶预算信物()
     {
         // 设计文档 §8.1：出生区不生成效果 +2 的高阶信物
+        // map-expand-25 段 A3：浮空岛不放静态信物格，改为在出生区 1 按坐标序第一格手工放一枚出生区档、高阶预算的信物。
         MapData map = Link();
-        Coord inBirthZone = map.RelicCells.Keys.Order().First(c => map.BirthZoneOf(c) is not null);
+        Coord inBirthZone = map.BirthZones[0].Order().First();
         MapData upgraded = map with
         {
             RelicCells = map.RelicCells.SetItem(inBirthZone, new RelicCellSpec(RelicZone.BirthZone, BudgetTier.High)),
@@ -442,9 +403,11 @@ public class 地图静态校验规则Tests
         // 规格："连通空区面积小于 8 即判失败"——8 本身是合法的，阈值是闭的下界。
         // map-expand-25：6 号平台东南角 T25–V26 与 T27 / U27 共 8 格（含核心区 T26 / T27），南 / 东两侧是平台崖壁（高 2 对低地高 0，不通气），
         // 再用障碍 S25 / S26 / S27 / T28 / U28 / V27 封住西、北两侧，空区就是封闭的。
+        // 段 A3：坡道重抽后 T25 成了坡道（高 1，与南侧低地通气），空区东移一列：U25–V27 六格与核心区 T26 / T27 共 8 格，
+        // 南 / 东两侧是平台崖壁，用障碍 T25 / S26 / S27 / T28 / U28 / V28 封住西、北两侧。
         MapData map = Link();
-        Assert.DoesNotContain(new[] { "T25", "U25", "V25", "T26", "U26", "V26", "T27", "U27" }.Select(Coord.Parse), c => map.HeightAt(c) != 2);
-        Coord[] walls = [.. new[] { "S25", "S26", "S27", "T28", "U28", "V27" }.Select(Coord.Parse)];
+        Assert.DoesNotContain(new[] { "U25", "V25", "T26", "U26", "V26", "T27", "U27", "V27" }.Select(Coord.Parse), c => map.HeightAt(c) != 2);
+        Coord[] walls = [.. new[] { "T25", "S26", "S27", "T28", "U28", "V28" }.Select(Coord.Parse)];
         MapData eightCellPocket = map with { Obstacles = map.Obstacles.Union(walls) };
 
         Assert.DoesNotContain(
@@ -457,7 +420,7 @@ public class 地图静态校验规则Tests
         };
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(sevenCellPocket).Failures, f => f.Code == "DEAD_POCKET");
-        Assert.Equal(["T25", "U25", "T26", "U26", "V26", "T27", "U27"], failure.Coords.Notations());
+        Assert.Equal(["U25", "T26", "U26", "V26", "T27", "U27", "V27"], failure.Coords.Notations());
     }
 
     [Fact]

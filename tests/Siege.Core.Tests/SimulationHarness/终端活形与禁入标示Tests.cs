@@ -133,6 +133,8 @@ public class 终端活形与禁入标示Tests
         // map-expand-25 段 A2：手写紧贴图在浮空岛校验器下恒不合规（终端入口经 MatchFlow.Create 校验），载体改为生成图 link:1:4；
         // 活形摆在 8 号平台 F30–L37（林地主题）的东南角，与原形左右镜像：L31–K31–J31–H31 + K30 + H30（H30 是坡道，高 1），眼 L30 与 J30——
         // 平台高 2、四周低地高 0，东、南两侧是崖壁（不通气），眼不漏到低地；摆子都在核心区之外，不压信物格。
+        // 段 A3：信物不再消费布局流，坡道重抽——8 号平台的坡道移到 K30（南，高 1）/ L32（东）/ H37（北），H30 回到高 2。K30 上的子多一口通向低地 K29 的气，
+        // 眼 L30 / J30 仍只与平台内的子相邻（南、东两侧是崖壁），活形不变；高度断言改为 K30 高 1、其余高 2。
         var script = new System.Text.StringBuilder("2\n");
         for (int i = 0; i < 2; i++)
         {
@@ -156,8 +158,8 @@ public class 终端活形与禁入标示Tests
         MapData map = MapCatalog.Resolve("link:1:4");
         BoardPlate eighth = map.Boards[7];
         Assert.Equal(("F30", 6, 8), (eighth.Origin.ToNotation(), eighth.Width, eighth.Height));
-        Assert.All(new[] { "L31", "K31", "J31", "H31", "K30", "L30", "J30" }, c => Assert.Equal(2, map.HeightAt(Coord.Parse(c))));
-        Assert.Equal(1, map.HeightAt(Coord.Parse("H30")));
+        Assert.All(new[] { "L31", "K31", "J31", "H31", "H30", "L30", "J30" }, c => Assert.Equal(2, map.HeightAt(Coord.Parse(c))));
+        Assert.Equal(1, map.HeightAt(Coord.Parse("K30")));
         Assert.DoesNotContain(map.RelicCells.Keys, c => c.Y is 29 or 30 && eighth.Contains(c));   // 第 30 / 31 行（Y 从 0 起）
         Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
         int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, map, null, null, null, ContentSet.V1, null, null, Arrange);   // more-pieces-relics：写死内容集 v1

@@ -242,7 +242,8 @@ public class 专家难度的一层前瞻Tests
         Assert.Equal(0, record.ChosenIndex);
     }
 
-    [Fact]
+    [Fact(Skip = "AI 缺陷（map-expand-25 段 A3 用户裁决跳过）：ExpertLookahead.Choose（约 112–115 行）在非构筑期且前瞻宽度 ≤ 1 时直接取前瞻集第一个，"
+        + "未与 CandidateSelection.Best 的 Pass 比较；换浮空岛后暴露。留给后续 AI 任务，本任务不改 AI 代码。")]
     public void 前瞻宽度为1且关闭多样候选时与高难逐步相同()
     {
         // G2（expert-strength D6；沿用 expert-lookahead 的"前瞻宽度为 1 时与高难逐步相同"，改配置）：

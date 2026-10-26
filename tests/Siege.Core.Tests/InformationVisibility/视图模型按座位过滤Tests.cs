@@ -176,7 +176,7 @@ public class 视图模型按座位过滤Tests
     public void 信息层含全图的格()
     {
         // visual-style-baseline（open-map）：信息层在全图的格上出现。四块棋盘各有棋子；P0 的盘面层 / 势力层 / 信物层含棋盘 4 的格与棋串（原「只含本战场的格」反向）。
-        MatchFlow match = Started([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);
+        MatchFlow match = StartedWithRelics([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);   // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
         ViewerWorld world = match.World(P0);
         HashSet<Coord> mine = [.. world.Board().Cells.Select(c => c.Coord)];
         Assert.Contains(match.Board.AllGroups(), g => g.Owner == P2);   // 样本口径：别的棋盘上确有棋串

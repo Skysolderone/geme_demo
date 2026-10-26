@@ -166,8 +166,9 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, names.Distinct().Order(StringComparer.Ordinal));
         // map-expand-25 D5：公共信物都在平台之间的低地上，每块平台的公共信物数恒为 0（行内照常打印）；全图确有公共信物，所以"不按棋盘过滤"的变异 MLT-7 会打出非 0 而红。
         // 原"各棋盘之和 = 全图数且 ≥ 2"的样本口径在新布局下不成立，改为下面两条。
+        // 段 A3：浮空岛不放静态信物格（relic-redesign R29），全图公共信物为 0，"全图确有公共信物"一条删除——MLT-7 在生成图上不再可测（旧信物系统随 relic-redesign 拆除）。
         Assert.Equal(0, contested);
-        Assert.True(map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested) >= 2);
+        Assert.Empty(map.RelicCells);
     }
 
     [Theory]

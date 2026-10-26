@@ -3,6 +3,7 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Tests.AiDecision;
+using Siege.Core.Tests.CaptureResolution;
 using Siege.Core.Tests.SimulationHarness;
 using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
@@ -31,7 +32,7 @@ public class 战场落败复盘Tests
     /// <summary>一局真实 AI 链接局（四人四区种子、简单难度、跑到终局）的日志，经文本往返。</summary>
     // map-expand-25 段 A2 实测（未改）：link:1:4 换成浮空岛后，这局四名 Easy 要跑约 13 分钟（turnLimit 600 / 大回合上限 100 先到者收尾），全局没有一次整轮 Pass 结算，
     // DefeatReplay.TargetsOf 为空，「落败者复盘可查」的样本口径失效（红）；探针 PassThreshold 120–4000 六分钟内都未终局（落后者阈值取 0、决胜一手会接管最后一个 Pass）。
-    // 复盘要按首部地图标识回放，不能改用手写图；待主会话裁决（换载体 / 转慢测试）。
+    // 复盘要按首部地图标识回放，不能改用手写图；段 A3 用户裁决：两条使用者转慢测试（见各测试上方注释）。
     private static readonly Lazy<MatchLog> RealLog = new(() =>
         MatchLog.Parse(MatchSession.Create(LinkSimFixtures.Config(turnLimit: 600), LinkSimFixtures.FourZoneSeed.Value).Run().FullText()));
 
@@ -213,7 +214,10 @@ public class 战场落败复盘Tests
         Assert.Equal(13, probes);
     }
 
-    [Fact]
+    // map-expand-25 段 A3（用户裁决 2026-10-26）：归入慢测试（Slow 类别、默认跳过）——浮空岛大图上需要自然终局，单条 7–13 分钟；
+    // 落败复盘在 link:1:4 上找不到整轮 Pass 结算样本（DefeatReplay.TargetsOf 为空，SIEGE_SLOW=1 下仍红，待换载体 / 改样本口径）。
+    [SlowFact]
+    [Trait("Category", "Slow")]
     public void 落败者复盘可查()
     {
         // 规格 Scenario「落败者复盘可查」：一局真实 AI 链接局（四人四区种子、简单难度、跑到终局）按日志回放，每名整轮 Pass 结算落败者都复盘到，
@@ -248,7 +252,10 @@ public class 战场落败复盘Tests
         Assert.StartsWith("回放在第 1 小回合分歧", skipped.SkippedLogs.Keys.Single(), StringComparison.Ordinal);
     }
 
-    [Fact]
+    // map-expand-25 段 A3（用户裁决 2026-10-26）：与「落败者复盘可查」共用 RealLog（一局跑到自然终局的真实 AI 链接局），同归慢测试——
+    // 浮空岛大图上需要自然终局，单条 7–13 分钟；落败复盘在 link:1:4 上找不到整轮 Pass 结算样本。
+    [SlowFact]
+    [Trait("Category", "Slow")]
     public void 分析命令的复盘开关()
     {
         // 裁决 P10（tasks 2.3）：analyze 缺省不做战场落败复盘（不回放）；--review-defeats 开启复盘。用法文本列出该开关。

@@ -5,7 +5,7 @@ using Xunit.Abstractions;
 namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
-/// 规格：任务 10-26-map-expand-25 design D2–D5（多平台浮空岛）/ prd 验收标准：岛尺寸、平台数与尺寸、平台高度与坡道、低地河道与桥、岛缘点缀、全图气边连通、信物。
+/// 规格：任务 10-26-map-expand-25 design D2–D5（多平台浮空岛）/ prd 验收标准：岛尺寸、平台数与尺寸、平台高度与坡道、低地河道与桥、岛缘点缀、全图气边连通、不放静态信物格（段 A3）。
 /// 种子 1–20 × 人数 2 / 3 / 4，全部判定在测试内独立算（岛范围、切角、坡道朝外格、气边连通都不读生成器的私有实现）。
 /// </summary>
 /// <remarks>
@@ -157,7 +157,6 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
                     Coord o = Assert.IsType<Coord>(Outward(p, ramp));
                     Assert.True(OnIsland(o, w) && map.IsPlayable(o) && map.HeightAt(o) == 0 && !InPlate(map, o), $"{at}：坡道 {ramp.ToNotation()} 朝外 {o.ToNotation()} 不是低地");
                     Assert.Equal(Surface.Grass, map.SurfaceAt(ramp));
-                    Assert.False(map.RelicCells.ContainsKey(ramp));
                     sides.Add((o.X - ramp.X, o.Y - ramp.Y));
                     Assert.Contains(o, Adjacency.LibertyNeighbors(map, ramp));   // 坡道两头都通（h0 → h1 → h2）
                 }
@@ -250,38 +249,14 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
 
     [Theory]
     [MemberData(nameof(Players))]
-    public void 信物数量与位置(int players)
+    public void 不放静态信物格(int players)
     {
-        // design D5：每平台核心区 2 个出生区信物（互不相邻）；公共信物 ≤ n+2，在低地草地上（非桥 / 非坡道朝外格），距任一平台外接矩形切比雪夫距离 ≥ 2，两两切比雪夫距离 ≥ 5。
-        int w = Side[players];
-        int full = 0;
+        // design D5（段 A3 改写，依据 relic-redesign R29，2026-10-26 用户裁决）：浮空岛不放静态信物格——出生区信物与低地公共信物都没有。
+        // 原「信物数量与位置」（每平台核心区 2 个出生区信物、低地公共信物 ≤ n+2）随之改为本条。
         foreach ((ulong seed, MapData map) in Maps(players))
         {
-            string at = $"link:{seed}:{players}";
-            foreach (BoardPlate p in map.Boards)
-            {
-                Coord[] birth = [.. map.RelicCells.Where(kv => p.Contains(kv.Key)).Select(kv => kv.Key)];
-                Assert.Equal(2, birth.Length);
-                Assert.All(birth, c => Assert.True(p.InCore(c) && map.RelicCells[c] == new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth), $"{at}：{c.ToNotation()}"));
-                Assert.False(Adjacency.AreAdjacent(birth[0], birth[1]));
-            }
-
-            Coord[] contested = [.. map.RelicCells.Where(kv => kv.Value.Zone == RelicZone.Contested).Select(kv => kv.Key)];
-            Assert.InRange(contested.Length, 1, players + 2);
-            full += contested.Length == players + 2 ? 1 : 0;
-            Assert.Equal((2 * map.Boards.Length) + contested.Length, map.RelicCells.Count);
-            foreach (Coord c in contested)
-            {
-                Assert.Equal(BudgetTier.Standard, map.RelicCells[c].Budget);
-                Assert.True(OnIsland(c, w) && map.IsPlayable(c) && map.SurfaceAt(c) == Surface.Grass && !map.HasBridge(c), $"{at}：公共信物 {c.ToNotation()} 不在低地草地");
-                Assert.All(map.Boards, p => Assert.True(
-                    Math.Max(Math.Max(p.Origin.X - c.X, c.X - (p.Origin.X + p.Width - 1)), Math.Max(p.Origin.Y - c.Y, c.Y - (p.Origin.Y + p.Height - 1))) >= 2,
-                    $"{at}：公共信物 {c.ToNotation()} 离平台太近"));
-                Assert.All(contested.Where(o => o != c), o => Assert.True(Math.Max(Math.Abs(o.X - c.X), Math.Abs(o.Y - c.Y)) >= 5, $"{at}：公共信物 {c.ToNotation()} 与 {o.ToNotation()} 太近"));
-            }
+            Assert.True(map.RelicCells.IsEmpty, $"link:{seed}:{players} 有 {map.RelicCells.Count} 个信物格");
         }
-
-        Assert.True(full > 0, "样本口径：至少有一张图放满 n+2 个公共信物");
     }
 
     [Theory]

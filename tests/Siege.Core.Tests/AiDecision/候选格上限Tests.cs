@@ -56,21 +56,25 @@ public class 候选格上限Tests
     /// E7 匠人搭桥 D7 + D13 堡垒（见任务目录 rebaseline.txt）。旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A（开关 0 下不变，见 <see cref="LinkGoldenTurnHashEditSeedOff"/>）。</para>
     /// <para>map-expand-25 段 A2 重钉（地图变了：link:1:4 换成 44×44 浮空岛，同一配置的走法随之变）；旧值 AA44B22BB943731EDDAB8F3FEE7A175622352069E604667F5AA66542B8CD0814。
     /// 本值是当前实现在新图上的自证钉值；旁证只有"同一配置经 对局内容集（v1 逐步相同）/ 带入带出（关闭、开启但无人带入）/ 批量跑局（缺省关闭带入）四条路径得到同一哈希"。</para>
-    internal const string LinkGoldenTurnHash = "101B7111E1A1DE624BF275A1D72736AEC78BB07B339EE334045737D0D4A8CF3E";
+    /// <para>map-expand-25 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）；旧值 101B7111E1A1DE624BF275A1D72736AEC78BB07B339EE334045737D0D4A8CF3E。
+    /// 四条路径实跑得到同一新值。</para>
+    internal const string LinkGoldenTurnHash = "C3CB36FB366073E995D97B344C7B7EC8B405FD488FD4B824C9FD93BA1C5EC4EC";
 
     /// <summary>
     /// ai-whole-batch 守门（规格「整批候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给整批候选开关 0 时的小回合快照哈希——
     /// 即引入整批候选之前（HEAD 0b1b4bf）的 <see cref="LinkGoldenTurnHash"/>，开关 0 MUST 与它逐步相同（首部不写该字段，哈希输入不变）。
     /// </summary>
-    /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后不再是"引入整批候选之前"的独立参照，而是开关 0 路径在新图上的自证值（与 <see cref="LinkGoldenTurnHashEditSeedOff"/> 同值，改前亦同值）。</remarks>
-    internal const string LinkGoldenTurnHashWholeBatchOff = "F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F";
+    /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后不再是"引入整批候选之前"的独立参照，而是开关 0 路径在新图上的自证值（与 <see cref="LinkGoldenTurnHashEditSeedOff"/> 同值，改前亦同值）。
+    /// 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：旧值 F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F，仍与 EditSeedOff 同值。</remarks>
+    internal const string LinkGoldenTurnHashWholeBatchOff = "622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01";
 
     /// <summary>
     /// ai-bridge-candidate 守门（规格「搭桥候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给搭桥候选开关 0 时的小回合快照哈希——
     /// 即引入搭桥候选之前（HEAD 01efcd4）的 <see cref="LinkGoldenTurnHash"/>（首部不写该字段，哈希输入不变）。
     /// </summary>
-    /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后是开关 0 路径在新图上的自证值。</remarks>
-    internal const string LinkGoldenTurnHashEditSeedOff = "F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F";
+    /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后是开关 0 路径在新图上的自证值。
+    /// 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：旧值 F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F。</remarks>
+    internal const string LinkGoldenTurnHashEditSeedOff = "622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>

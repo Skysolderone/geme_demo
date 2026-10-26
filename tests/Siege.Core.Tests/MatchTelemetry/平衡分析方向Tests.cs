@@ -196,8 +196,9 @@ public class 平衡分析方向Tests
         // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）；旧值 849F6632… / 23498075…。
         // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）；旧值 AE582F0C… / EB76C9AC…。
         // map-expand-25 段 A2 重钉（地图变了：link:1:4 换成 44×44 浮空岛，同一配置的走法随之变）；旧值 D75715D6… / 12BEB16D…。
-        Assert.True("A1282AA4B0D5B81B703EEE4A72405A69CE081EE7B2C48E46C8861D3B1FE5E487" == sample, $"Sample 报告哈希：{sample}");
-        Assert.True("F76C100EC39455F860C9ED18ABB1A9835EBEF8FBB7F9707CAAEAB954E3549DB8" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // map-expand-25 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）；旧值 A1282AA4… / F76C100E…。
+        Assert.True("6375D25399977F745F343CCFC701C7A57EBB32BC4C433BE80C16F0319092B168" == sample, $"Sample 报告哈希：{sample}");
+        Assert.True("A4D11329E59A0AC281E4E5295A02FA5B4921F85F010FCBDC0EB6F6039EBC0822" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

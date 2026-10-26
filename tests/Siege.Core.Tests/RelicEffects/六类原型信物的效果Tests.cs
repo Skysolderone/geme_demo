@@ -117,7 +117,8 @@ public class 六类原型信物的效果Tests
         // retire-legacy-maps 1.6：样本地图由四张内置图改为四张链接图 link:1–link:4（各 1000 个种子），断言不变。
         foreach (string mapId in new[] { "link:1:4", "link:2:4", "link:3:4", "link:4:4" })
         {
-            MapData map = MapCatalog.Resolve(mapId);
+            // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为手写夹具 LinkMapFixtures.WithRelics（link:1:4 补上段 A2 口径的信物格）。
+            MapData map = LinkMapFixtures.WithRelics(MapCatalog.Resolve(mapId));
             for (ulong seed = 0; seed < 1000; seed++)
             {
                 foreach (RelicPlacement p in RelicGenerator.Generate(map, new GameSeed(seed), ContentSet.V2).Placements)

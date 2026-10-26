@@ -18,6 +18,8 @@ internal static class LinkModeFixtures
 
     private static readonly Lazy<MapData> LazyMap = new(() => MapCatalog.Resolve(MapId));
 
+    private static readonly Lazy<MapData> LazyRelicMap = new(() => LinkMapFixtures.WithRelics(MapCatalog.Resolve(MapId)));
+
     internal static readonly PlayerId P0 = TestMaps.P0;
     internal static readonly PlayerId P1 = TestMaps.P1;
     internal static readonly PlayerId P2 = TestMaps.P2;
@@ -27,6 +29,12 @@ internal static class LinkModeFixtures
     /// <summary><c>link:1</c> 的初始图（5 块紧贴成一张连通地图的出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
 
+    /// <summary>
+    /// <c>link:1:4</c> 补上段 A2 口径信物格的手写夹具（<see cref="LinkMapFixtures.WithRelics"/>；map-expand-25 段 A3：生成图不再放静态信物格）。
+    /// 只给仍在测旧信物系统（生成、揭示、控制、可见范围）的对局测试用；标识仍是 <see cref="MapId"/>，按标识回放的日志会解析回无信物的生成图，不得用于回放类测试。
+    /// </summary>
+    internal static MapData RelicMap => LazyRelicMap.Value;
+
     /// <summary>链接模式、插旗立即（open-map 段 B：决赛倒计时 K 随拼接规则删除，选项即缺省）。</summary>
     internal static MatchOptions Options => MatchOptions.Immediate with { ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
 
@@ -34,10 +42,18 @@ internal static class LinkModeFixtures
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
         MatchFlow.Create(Map, seed ?? TestMaps.Seed, All, options ?? Options);
 
+    /// <summary>插旗阶段的链接模式对局，地图为 <see cref="RelicMap"/>（带信物格的手写夹具）。</summary>
+    internal static MatchFlow CreateWithRelics(GameSeed? seed = null, MatchOptions? options = null) =>
+        MatchFlow.Create(RelicMap, seed ?? TestMaps.Seed, All, options ?? Options);
+
     /// <summary>按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
-    internal static MatchFlow Started(int[] zones, GameSeed? seed = null, MatchOptions? options = null)
+    internal static MatchFlow Started(int[] zones, GameSeed? seed = null, MatchOptions? options = null) => Plant(Create(seed, options), zones);
+
+    /// <summary>同 <see cref="Started"/>，地图为 <see cref="RelicMap"/>（带信物格的手写夹具）。</summary>
+    internal static MatchFlow StartedWithRelics(int[] zones, GameSeed? seed = null, MatchOptions? options = null) => Plant(CreateWithRelics(seed, options), zones);
+
+    private static MatchFlow Plant(MatchFlow match, int[] zones)
     {
-        MatchFlow match = Create(seed, options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));

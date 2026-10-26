@@ -46,9 +46,6 @@ public static partial class LinkMapGenerator
     public const int PlateMinSide = 6;
     public const int PlateMaxSide = 8;
 
-    /// <summary>每块平台的出生区档信物格数（D5），都在核心区内。</summary>
-    public const int RelicsPerPlate = 2;
-
     /// <summary>每块平台的坡道数区间（D3）。</summary>
     public const int MinRamps = 2;
     public const int MaxRamps = 3;
@@ -58,10 +55,6 @@ public static partial class LinkMapGenerator
 
     /// <summary>河道最短格数：去掉两端后至少 4 格，总能放下两座不相邻的桥。</summary>
     internal const int MinRiverLength = 6;
-
-    /// <summary>公共信物两两之间的切比雪夫距离下限、与任一平台外接矩形的切比雪夫距离下限（D5）。</summary>
-    internal const int PublicRelicSpacing = 5;
-    internal const int PublicRelicClearance = 2;
 
     /// <summary>整张布局（平台落位 → 主题地形 → 坡道）在同一条流上的最多重抽次数（D2）；超出即 <see cref="MapGenerationException"/>。</summary>
     public const int MaxLayoutRedraws = 50;
@@ -89,13 +82,6 @@ public static partial class LinkMapGenerator
     {
         LinkMapId.RequirePlayers(players);
         return ((2 * players) + 2, (2 * players) + 4);
-    }
-
-    /// <summary>人数为 <paramref name="players"/> 时的公共信物上限 n + 2（D5）。</summary>
-    public static int PublicRelics(int players)
-    {
-        LinkMapId.RequirePlayers(players);
-        return players + 2;
     }
 
     /// <summary>按完整标识（<c>link:&lt;种子&gt;:&lt;人数&gt;</c>）生成初始地图。</summary>
@@ -140,9 +126,10 @@ public static partial class LinkMapGenerator
 
     /// <summary>
     /// 一次生成（D2–D5）。布局流 <see cref="MapRandom.ForLinkLayout"/> 的消费顺序固定：
-    /// 平台数 → 逐块（宽、高 → 落位）→ 按编号抽主题 → 按编号逐块生成平台内部（<see cref="DraftBoard"/>，自检失败在同一条流上重抽该块）→ 出生区信物 → 按编号逐块坡道（数量 → 边的次序 → 每边一格）；
+    /// 平台数 → 逐块（宽、高 → 落位）→ 按编号抽主题 → 按编号逐块生成平台内部（<see cref="DraftBoard"/>，自检失败在同一条流上重抽该块）→ 按编号逐块坡道（数量 → 边的次序 → 每边一格）；
     /// 任何一步放不下即整张布局在同一条流上重抽（至多 <see cref="MaxLayoutRedraws"/> 次）。之后低地：n 条河道（起点 → 朝向 → 逐步前进 → 两座桥）→ 岛缘林地（逐格）→ 岛缘岩石，
-    /// 全图可落子格沿气边不连通即重抽低地（至多 <see cref="MaxLowlandRedraws"/> 次，仍不行即整张布局重抽）→ 公共信物。
+    /// 全图可落子格沿气边不连通即重抽低地（至多 <see cref="MaxLowlandRedraws"/> 次，仍不行即整张布局重抽）。
+    /// 不放静态信物格（D5：依据 relic-redesign R29，2026-10-26 用户裁决），<see cref="MapData.RelicCells"/> 恒为空，布局流也不为信物消费随机。
     /// 最后（link-map-surfaces D1）用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按编号逐块叠加新地表（读抬升前的高度，D3），组装时把平台抬到 h=2、坡道 h=1。
     /// 叠加只改平台中间带的草地，不影响前面任何一步的判定，所以 <paramref name="overlaySurfaces"/> 为 <c>false</c> 的对照图与正式图只差新地表。
     /// 成品过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。
@@ -166,11 +153,10 @@ public static partial class LinkMapGenerator
                     continue;
                 }
 
-                ImmutableDictionary<Coord, RelicCellSpec> relics = PlacePublicRelics(island, players, layout, lowland, rng);
                 BoardTerrain[] boards = overlaySurfaces
-                    ? OverlaySurfaces(layout.Boards, relics, MapRandom.ForLinkSurfaces(mapSeed, players))
+                    ? OverlaySurfaces(layout.Boards, MapRandom.ForLinkSurfaces(mapSeed, players))
                     : [.. layout.Boards];
-                MapData map = Assemble(id, players, island, layout, boards, lowland, relics);
+                MapData map = Assemble(id, players, island, layout, boards, lowland);
                 MapValidationResult validation = MapValidator.Validate(map);
                 if (!validation.IsValid)
                 {
@@ -229,11 +215,10 @@ public static partial class LinkMapGenerator
         }
     }
 
-    /// <summary>平台一侧的布局结果：平台（按编号）、各平台抬升前的地形、出生区信物、坡道格与坡道朝外格。</summary>
+    /// <summary>平台一侧的布局结果：平台（按编号）、各平台抬升前的地形、坡道格与坡道朝外格。</summary>
     private sealed record PlateLayout(
         ImmutableArray<BoardPlate> Plates,
         ImmutableArray<BoardTerrain> Boards,
-        ImmutableDictionary<Coord, RelicCellSpec> BirthRelics,
         ImmutableHashSet<Coord> Ramps,
         ImmutableHashSet<Coord> RampOutlets)
     {
@@ -248,7 +233,7 @@ public static partial class LinkMapGenerator
         ImmutableHashSet<Coord> Forest,
         ImmutableHashSet<Coord> Rocks);
 
-    /// <summary>一次布局尝试（D2 / D3）：平台落位 → 主题 → 平台内部 → 出生区信物 → 坡道。放不下返回 <c>null</c>（调用方在同一条流上重抽）。</summary>
+    /// <summary>一次布局尝试（D2 / D3）：平台落位 → 主题 → 平台内部 → 坡道。放不下返回 <c>null</c>（调用方在同一条流上重抽）。</summary>
     private static PlateLayout? TryLayout(Island island, int players, RandomStream rng)
     {
         if (PlacePlates(island, players, rng) is not { } rects)
@@ -261,20 +246,6 @@ public static partial class LinkMapGenerator
         for (int zone = 0; zone < plates.Length; zone++)
         {
             boards[zone] = DraftBoard(plates[zone], rng);
-        }
-
-        // 出生区信物：按编号顺序每块 2 个，在核心区内；第二个与第一个不相邻，尽量不同行不同列（没有这样的格时退到"不相邻"）。
-        var relics = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
-        foreach (BoardPlate plate in plates)
-        {
-            List<Coord> core = [.. plate.CoreCells()];
-            Coord first = core[rng.NextInt(core.Count)];
-            List<Coord> apart = [.. core.Where(c => !Adjacency.AreAdjacent(c, first) && c != first)];
-            List<Coord> preferred = [.. apart.Where(c => c.X != first.X && c.Y != first.Y)];
-            List<Coord> candidates = preferred.Count > 0 ? preferred : apart;
-            Coord second = candidates[rng.NextInt(candidates.Count)];
-            relics[first] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
-            relics[second] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
         }
 
         // 坡道（D3）：每块 2–3 个，各在不同的一条边上（四条边的次序 Fisher–Yates 打乱后依次取，某边没有候选即跳过），落在外圈非角格。
@@ -316,7 +287,7 @@ public static partial class LinkMapGenerator
             }
         }
 
-        return new PlateLayout([.. plates], [.. boards], relics.ToImmutable(), ramps.ToImmutable(), outlets.ToImmutable());
+        return new PlateLayout([.. plates], [.. boards], ramps.ToImmutable(), outlets.ToImmutable());
     }
 
     /// <summary>
@@ -452,7 +423,7 @@ public static partial class LinkMapGenerator
         }
 
         var lowland = new Lowland([.. water], [.. bridges], [.. forest], [.. rocks]);
-        MapData preview = Assemble("link-island-preview", players, island, layout, layout.Boards, lowland, ImmutableDictionary<Coord, RelicCellSpec>.Empty);
+        MapData preview = Assemble("link-island-preview", players, island, layout, layout.Boards, lowland);
         return MapValidator.LibertySplit(preview).IsEmpty ? lowland : null;
     }
 
@@ -514,33 +485,9 @@ public static partial class LinkMapGenerator
     private static bool UnderCliff(BoardPlate p, Coord c) =>
         Math.Max(Math.Max(p.Origin.X - c.X, c.X - (p.Origin.X + p.Width - 1)), 0) + Math.Max(Math.Max(p.Origin.Y - c.Y, c.Y - (p.Origin.Y + p.Height - 1)), 0) == 1;
 
-    /// <summary>格到平台外接矩形的切比雪夫距离（矩形内为 0）。</summary>
-    private static int PlateChebyshev(BoardPlate p, Coord c) =>
-        Math.Max(Math.Max(Math.Max(p.Origin.X - c.X, c.X - (p.Origin.X + p.Width - 1)), 0), Math.Max(Math.Max(p.Origin.Y - c.Y, c.Y - (p.Origin.Y + p.Height - 1)), 0));
-
-    /// <summary>
-    /// 公共信物（D5）：n + 2 个，档位 (Contested, Standard)；候选 = 低地草地、不是桥 / 河道 / 林地 / 岩石 / 坡道朝外格、距任一平台外接矩形切比雪夫距离 ≥ 2，按坐标升序；
-    /// 逐个均匀抽，抽到后剔除与它切比雪夫距离 &lt; 5 的候选；候选抽完即少放，不重抽。返回含出生区信物在内的全部信物格。
-    /// </summary>
-    private static ImmutableDictionary<Coord, RelicCellSpec> PlacePublicRelics(Island island, int players, PlateLayout layout, Lowland lowland, RandomStream rng)
-    {
-        List<Coord> candidates = [.. island.Cells().Where(c =>
-            !lowland.Water.Contains(c) && !lowland.Forest.Contains(c) && !lowland.Rocks.Contains(c) && !layout.RampOutlets.Contains(c)
-            && layout.Plates.All(p => PlateChebyshev(p, c) >= PublicRelicClearance))];
-        ImmutableDictionary<Coord, RelicCellSpec>.Builder relics = layout.BirthRelics.ToBuilder();
-        for (int k = 0; k < PublicRelics(players) && candidates.Count > 0; k++)
-        {
-            Coord pick = candidates[rng.NextInt(candidates.Count)];
-            relics[pick] = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
-            candidates = [.. candidates.Where(c => Math.Max(Math.Abs(c.X - pick.X), Math.Abs(c.Y - pick.Y)) >= PublicRelicSpacing)];
-        }
-
-        return relics.ToImmutable();
-    }
-
     /// <summary>
     /// 灌成链接档地图数据：画布 (W+2M)²，岛外、切角与全部岩石为障碍；平台抬升（D3：外接矩形内每格 h=2、坡道 h=1，主题自带的高度——混合主题的 1 格台——一并抹平）、
-    /// 平台地表与低地河道 / 林地、平台与河道的预置桥、平台栅栏；出生区 = 各平台核心区（按编号），中央入口取中央平台中心格，没有咽喉。
+    /// 平台地表与低地河道 / 林地、平台与河道的预置桥、平台栅栏；出生区 = 各平台核心区（按编号），中央入口取中央平台中心格，没有咽喉，没有信物格（D5）。
     /// </summary>
     private static MapData Assemble(
         string id,
@@ -548,8 +495,7 @@ public static partial class LinkMapGenerator
         Island island,
         PlateLayout layout,
         IReadOnlyList<BoardTerrain> boards,
-        Lowland lowland,
-        ImmutableDictionary<Coord, RelicCellSpec> relics)
+        Lowland lowland)
     {
         ImmutableHashSet<Coord> rocks = [.. boards.SelectMany(b => b.Rocks), .. lowland.Rocks];
         var obstacles = ImmutableHashSet.CreateBuilder<Coord>();
@@ -584,7 +530,7 @@ public static partial class LinkMapGenerator
             TerrainData = terrain,
             BirthZones = [.. layout.Plates.Select(p => (ImmutableHashSet<Coord>)[.. p.CoreCells()])],
             Boards = layout.Plates,
-            RelicCells = relics,
+            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
             ChokePoints = [],
             CentralEntrance = new Coord(island.Centre + (CentralSide / 2), island.Centre + (CentralSide / 2)),
             MapVersion = 0,

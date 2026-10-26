@@ -9,7 +9,8 @@ namespace Siege.Core.Tests.RelicGeneration;
 public class 生成结果可完整记录Tests
 {
     // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图，断言不变。
-    private static readonly MapData Map = MapCatalog.Resolve("link:1:4");
+    // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本类测的是旧信物系统，载体改为手写夹具 LinkMapFixtures.WithRelics（link:1:4 补上段 A2 口径的信物格）。
+    private static readonly MapData Map = LinkMapFixtures.WithRelics(MapCatalog.Resolve("link:1:4"));
 
     [Fact]
     public void 分布可导出()
@@ -42,7 +43,7 @@ public class 生成结果可完整记录Tests
         }
 
         // 离线复现：从记录取种子，在同一地图上重新生成
-        RelicGenerationRecord replay = RelicGenerator.Generate(MapCatalog.Resolve("link:1:4"), GameSeed.Parse(lines[0].Split(';')[0]["seed=".Length..]));
+        RelicGenerationRecord replay = RelicGenerator.Generate(LinkMapFixtures.WithRelics(MapCatalog.Resolve("link:1:4")), GameSeed.Parse(lines[0].Split(';')[0]["seed=".Length..]));
         Assert.Equal(record.Placements, replay.Placements);
         Assert.Equal(record.Converged, replay.Converged);
     }

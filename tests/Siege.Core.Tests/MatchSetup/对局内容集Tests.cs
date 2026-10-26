@@ -25,7 +25,9 @@ public class 对局内容集Tests
     /// <summary>按指定内容集跑 <paramref name="turns"/> 个小回合的真实 AI 对局（权重、阈值、冒险概率写死为既有口径）。</summary>
     private static MatchSession Played(ContentSet? set, ulong seed, int turns)
     {
-        MatchSession session = MatchSession.Create(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 0)) with { ContentSet = set }, seed);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
+        // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve。
+        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
+        MatchSession session = MatchSession.Create(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 0)) with { ContentSet = set }, seed, LinkModeFixtures.RelicMap);
         for (int i = 0; i < turns && session.RunTurn(); i++)
         {
         }
@@ -48,7 +50,8 @@ public class 对局内容集Tests
         Assert.True(node.Remove("ContentSet"), "新存档应写出内容集字段");
         string legacy = node.ToJsonString();
 
-        MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(legacy)), legacy);
+        Assert.Equal(LinkModeFixtures.MapId, MatchFlow.SavedMapId(legacy));
+        MatchFlow restored = MatchFlow.Restore(LinkModeFixtures.RelicMap, legacy);   // 段 A3：存档的标识解析回无信物的生成图，恢复改用同一张带信物的夹具
 
         Assert.Equal(ContentSet.V1, restored.ContentSet);
         Assert.True(restored.ContentSetBackfilled);
@@ -127,7 +130,8 @@ public class 对局内容集Tests
         MatchSession session = Played(ContentSet.V2, seed: 11, turns: 8);
         string json = session.Match.Serialize();
 
-        MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(json)), json);
+        Assert.Equal(LinkModeFixtures.MapId, MatchFlow.SavedMapId(json));
+        MatchFlow restored = MatchFlow.Restore(LinkModeFixtures.RelicMap, json);   // 段 A3：对局跑在带信物的夹具上，恢复用同一张图（经目录解析会因地图摘要不一致被拒）
 
         Assert.Equal(ContentSet.V2, restored.ContentSet);
         Assert.False(restored.ContentSetBackfilled);

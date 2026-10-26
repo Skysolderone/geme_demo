@@ -6,6 +6,7 @@ using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Carry;
+using Siege.Core.Tests.CaptureResolution;
 using Siege.Sim;
 using Siege.Sim.Cli;
 using Siege.Sim.Play;
@@ -75,7 +76,10 @@ public class 终端的带入选择弃赛与结算显示Tests
         Assert.Equal(1, CarryProfile.Parse(temp.Read()).StockOf(SupplyKind.DraftLot));
     }
 
-    [Fact]
+    // map-expand-25 段 A3（用户裁决 2026-10-26）：归入慢测试（Slow 类别、默认跳过）——弃赛后 AI 要在浮空岛大图上跑到自然终局，单条 7–13 分钟
+    // （同批裁决的落败复盘另有"link:1:4 上找不到整轮 Pass 结算样本"一条理由，与本条无关）。
+    [SlowFact]
+    [Trait("Category", "Slow")]
     public void 弃赛命令()
     {
         // 规格 Scenario：第 6 大回合轮到本机玩家时输入 resign 并确认 → 终端打印"弃赛：弃赛名次第 r，带出 p，换型令已返还"，此后 AI 继续直至终局。

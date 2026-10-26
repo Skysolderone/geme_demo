@@ -80,13 +80,14 @@ public static class MapValidator
     /// （守门 <c>规格档分流守门Tests</c>：本文件里规格档枚举的字面量只在本表内、地图的规格档属性只在 <see cref="RulesOf"/> 读一次）。
     /// <para>retire-legacy-maps 4.2（裁决 L1 / L7）：标准档、边疆档、棋盘档随旧地图删除，表里只剩链接档一行。</para>
     /// <para>
-    /// map-expand-25 D7（多平台浮空岛）：链接档按人数 2 / 3 / 4 各一行预算——可落子格区间、信物区间（每平台 2 个出生区档 + 低地至多 n+2 个公共区档）、
-    /// 出生区数 = 平台数区间（裁决 R2）、出生区恰 9 格（核心区）、公共信物上限 n+2、岛边长 W(n) 与画布边长 W(n)+2M（恰等；原表外的列 / 行区间并入每行）。
+    /// map-expand-25 D7（多平台浮空岛）：链接档按人数 2 / 3 / 4 各一行预算——可落子格区间、
+    /// 出生区数 = 平台数区间（裁决 R2）、出生区恰 9 格（核心区）、岛边长 W(n) 与画布边长 W(n)+2M（恰等；原表外的列 / 行区间并入每行）。
+    /// 浮空岛不放静态信物格（D5：依据 relic-redesign R29，2026-10-26 用户裁决），信物数量 / 位置类规则（信物区间、出生区信物、公共信物）一并删除。
     /// W(n) = 30 / 35 / 40（段 A1 实施修订：design D2 原定 26 / 31 / 36 在"中央 8×8 + 其余 ≥ 6 + 距岛边 2 + 间隔 3"下放不够平台，见 <c>LinkMapGenerator.IslandBaseSide</c>）。
     /// 可落子格区间取种子 1–20 实测（段 A1）向外取整，回写记录见任务 10-26-map-expand-25。
-    /// 平台清单规则：边长 6–8、每块恰 2 个出生区档信物、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个。
+    /// 平台清单规则：边长 6–8、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个。
     /// </para>
-    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格与信物格预算、出生区（保护期容量、出生区内无新地表）、信物格合法、豁免理由、必死口袋。
+    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格预算、出生区（保护期容量、出生区内无新地表）、信物格合法（有信物格时）、豁免理由、必死口袋。
     /// 旋转对称不在校验器里（原 MapSymmetry 只由标准档基准图的测试调用，已随旧地图删除——retire-legacy-maps）。
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
@@ -97,12 +98,12 @@ public static class MapValidator
                 "链接档只提供 2–4 人的预算表",
                 new Dictionary<int, Budget>
                 {
-                    [2] = new(760, 876, 12, 20, (6, 8), (9, 9), PublicRelicsMax: 4, IslandSide: 30, Canvas: 34),
-                    [3] = new(1050, 1201, 16, 25, (8, 10), (9, 9), PublicRelicsMax: 5, IslandSide: 35, Canvas: 39),
-                    [4] = new(1400, 1576, 20, 30, (10, 12), (9, 9), PublicRelicsMax: 6, IslandSide: 40, Canvas: 44),
+                    [2] = new(760, 876, (6, 8), (9, 9), IslandSide: 30, Canvas: 34),
+                    [3] = new(1050, 1201, (8, 10), (9, 9), IslandSide: 35, Canvas: 39),
+                    [4] = new(1400, 1576, (10, 12), (9, 9), IslandSide: 40, Canvas: 44),
                 }.ToImmutableDictionary(),
                 ZonesMustExceedPlayers: true,
-                PlateList: new((6, 8), (6, 8), BirthRelics: 2, MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3))),
+                PlateList: new((6, 8), (6, 8), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3))),
         }.ToImmutableDictionary();
 
     /// <summary>
@@ -117,28 +118,24 @@ public static class MapValidator
         PlateRules PlateList);
 
     /// <summary>
-    /// 棋盘清单规则：棋盘边长区间、出生棋盘（平台）边长区间、每块平台的出生区档信物格数、可改造目标（林地格 + 未架桥深水格）下限、
+    /// 棋盘清单规则：棋盘边长区间、出生棋盘（平台）边长区间、可改造目标（林地格 + 未架桥深水格）下限、
     /// 新地表（荒漠 / 沼泽 / 岩台 / 浅滩）格数上限、两块平台外接矩形的最小间隔、每块平台的坡道数区间。
-    /// map-expand-25 D7：每块至多 1 个公共区档信物的上限删除（公共信物移到低地，上限按人数进预算行），加间隔与坡道。
+    /// map-expand-25 D7：加间隔与坡道；不放静态信物格（D5，relic-redesign R29）后，出生区档信物格数与每块公共信物上限一并删除。
     /// </summary>
     private sealed record PlateRules(
         (int Min, int Max) Side,
         (int Min, int Max) BirthSide,
-        int BirthRelics,
         int MinEditTargets,
         int MaxSpecialSurfaces,
         int MinGap,
         (int Min, int Max) Ramps);
 
-    /// <summary>一档人数的规模预算（map-expand-25 D7：另带公共信物上限、岛边长与画布边长）。</summary>
+    /// <summary>一档人数的规模预算（map-expand-25 D7：另带岛边长与画布边长；信物区间随"不放静态信物格"删除）。</summary>
     private readonly record struct Budget(
         int MinPlayable,
         int MaxPlayable,
-        int MinRelics,
-        int MaxRelics,
         (int Min, int Max) BirthZones,
         (int Min, int Max)? BirthZoneCells,
-        int PublicRelicsMax,
         int IslandSide,
         int Canvas);
 
@@ -214,7 +211,7 @@ public static class MapValidator
     /// 棋盘清单（board-map「棋盘清单」、map-definition「地图静态校验规则」的清单规则）：清单不得为空，逐块校验平台，再做整岛校验（<see cref="ValidateIsland"/>）。
     /// 返回 <c>false</c> 表示清单与该档根本不符，后面的规则不必再跑。
     /// map-expand-25 D7：删除外圈平坦、棋盘外不得有深水、紧贴布局（含"可落子格都属于棋盘"与战场分量恰 1 个）、接缝气边、主题两两不同、每块至多 1 个公共信物；
-    /// 改为平台高度与坡道、主题不为高台、平台间隔、整岛气边连通、可落子区外接矩形、公共信物在低地且不超过 n+2。
+    /// 改为平台高度与坡道、主题不为高台、平台间隔、整岛气边连通、可落子区外接矩形（不放静态信物格后，公共信物位置 / 数量规则一并删除）。
     /// </summary>
     private static bool ValidatePlateList(MapData map, ProfileRules rules, Budget? budget, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -245,7 +242,7 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 第 1、2 条：棋盘在盘内、边长在区间内；出生棋盘（平台）再逐块校验高度与坡道、隔断线、核心区、新地表、连通、改造目标与出生区信物（<see cref="ValidateBirthBoardTerrain"/>）。
+    /// 第 1、2 条：棋盘在盘内、边长在区间内；出生棋盘（平台）再逐块校验高度与坡道、隔断线、核心区、新地表、连通与改造目标（<see cref="ValidateBirthBoardTerrain"/>）。
     /// 重叠与间隔由 <see cref="ValidateIsland"/> 报出。
     /// </summary>
     private static void ValidatePlateCells(MapData map, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
@@ -283,7 +280,7 @@ public static class MapValidator
     /// 平台内可落子格除坡道外高度 2，坡道高度 1、数量在区间内、都在外圈非角格且朝外的邻格是高度 0 的可落子低地（<c>PLATE_HEIGHT</c>）；
     /// 河流隔断线恰 1 座桥（<c>BOARD_BARRIER_INVALID</c>）；核心区 9 格高度 2 的草地、没有障碍 / 深水 / 桥，两端都在核心区内的边上没有栅栏（<c>BIRTH_CORE_NOT_FLAT</c>）；
     /// 荒漠 / 沼泽 / 岩台 / 浅滩只在中间带、每块至多 <see cref="PlateRules.MaxSpecialSurfaces"/> 格（<c>BOARD_SPECIAL_SURFACE</c>）；平台内可落子格沿几何四邻连通（<c>BOARD_SPLIT</c>）；
-    /// 林地格与未架桥深水格合计不少于下限（<c>BOARD_TOO_FEW_EDIT_TARGETS</c>）；恰 <see cref="PlateRules.BirthRelics"/> 个出生区档信物格（<c>BIRTH_BOARD_RELIC_COUNT</c>）。
+    /// 林地格与未架桥深水格合计不少于下限（<c>BOARD_TOO_FEW_EDIT_TARGETS</c>）。
     /// </summary>
     /// <remarks>连通性读战场导出（<see cref="Battlefields"/>，几何四邻的唯一分量实现），不另写一份 BFS：平台内的可落子格落在不止一个分量里即被切断。</remarks>
     private static void ValidateBirthBoardTerrain(MapData map, BoardPlate plate, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
@@ -321,15 +318,6 @@ public static class MapValidator
         {
             f.Add(new MapValidationFailure(
                 "PLATE_HEIGHT", $"{Describe(plate)} 的坡道必须是外圈非角格上的草地，且朝外的邻格是高度 0 的可落子低地（不是深水、岩石、岛外或另一块平台）。", [.. badRamps]));
-        }
-
-        int birthRelics = map.RelicCells.Count(kv => plate.Contains(kv.Key) && kv.Value.Zone == RelicZone.BirthZone);
-        if (birthRelics != plates.BirthRelics)
-        {
-            f.Add(new MapValidationFailure(
-                "BIRTH_BOARD_RELIC_COUNT",
-                $"{Describe(plate)} 有 {birthRelics} 个出生区档信物格：每块平台必须恰有 {plates.BirthRelics} 个（在核心区内）。",
-                [plate.Origin]));
         }
 
         List<Barrier> barriers = BarriersOf(map, plate);
@@ -523,8 +511,7 @@ public static class MapValidator
     /// <summary>
     /// 整岛规则（map-expand-25 D7）：
     /// 平台两两不重叠、外接矩形间隔 ≥ <see cref="PlateRules.MinGap"/>（<c>ISLAND_PLATE_GAP</c>）；全部可落子格沿气边连成一片（<c>ISLAND_LIBERTY_SPLIT</c>）；
-    /// 可落子区外接矩形 ≥ W(n)×W(n)（<c>ISLAND_EXTENT</c>，验收的核心断言）；公共区档信物都在低地（不在任何平台外接矩形内）、至多 n+2 个（<c>ISLAND_PUBLIC_RELIC</c>）。
-    /// 人数不受支持（没有预算行）时只查前两条。
+    /// 可落子区外接矩形 ≥ W(n)×W(n)（<c>ISLAND_EXTENT</c>，验收的核心断言）。人数不受支持（没有预算行）时只查前两条。
     /// </summary>
     private static void ValidateIsland(MapData map, PlateRules plates, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -567,22 +554,6 @@ public static class MapValidator
                 "ISLAND_EXTENT",
                 $"可落子区外接矩形 {columns}×{rows}：{map.MaxPlayers} 人浮空岛必须至少 {budget.IslandSide}×{budget.IslandSide}。",
                 ImmutableArray<Coord>.Empty));
-        }
-
-        Coord[] contested = [.. map.RelicCells.Where(kv => kv.Value.Zone != RelicZone.BirthZone).Select(kv => kv.Key).Order()];
-        Coord[] onPlate = [.. contested.Where(c => map.Boards.Any(p => p.Contains(c)))];
-        if (onPlate.Length > 0)
-        {
-            f.Add(new MapValidationFailure(
-                "ISLAND_PUBLIC_RELIC", "公共区档信物格必须在平台之间的低地上，不得在平台内。", [.. onPlate]));
-        }
-
-        if (contested.Length > budget.PublicRelicsMax)
-        {
-            f.Add(new MapValidationFailure(
-                "ISLAND_PUBLIC_RELIC",
-                $"有 {contested.Length} 个公共区档信物格：{map.MaxPlayers} 人浮空岛至多 {budget.PublicRelicsMax} 个（人数 + 2）。",
-                [.. contested]));
         }
     }
 
@@ -701,19 +672,6 @@ public static class MapValidator
                 $"不支持的人数 {map.MaxPlayers}：{rules.SupportedPlayers}。",
                 ImmutableArray<Coord>.Empty));
             return;
-        }
-
-        int relics = map.RelicCells.Count;
-        if (relics < budget.MinRelics || relics > budget.MaxRelics)
-        {
-            // 规格的 Scenario 要求报出方向（"信物格少于 7"），不只是"超出区间"。
-            string direction = relics < budget.MinRelics
-                ? $"少于下限 {budget.MinRelics}"
-                : $"多于上限 {budget.MaxRelics}";
-            f.Add(new MapValidationFailure(
-                "RELIC_COUNT_OUT_OF_RANGE",
-                $"{map.MaxPlayers} 人地图的信物格为 {relics}，{direction}，超出 {budget.MinRelics}–{budget.MaxRelics} 区间。",
-                ImmutableArray<Coord>.Empty));
         }
 
         // 规则第 4 条：出生区数在区间外即报区间与方向（链接档恰 5 个）。
