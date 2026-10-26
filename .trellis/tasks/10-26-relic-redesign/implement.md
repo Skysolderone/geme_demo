@@ -40,6 +40,12 @@ dotnet test
 
 Godot 走查：选图 → 带入面板 → 开局 → 挂出 → 拾取 → 结算面板。
 
+## 岛图线遗留（feat/island-map 97b7d21，R29 落实）
+
+- 岛图 `MapData.RelicCells` 恒为空，旧信物系统空跑。
+- 仍测旧信物的测试改用手写夹具：`tests/Siege.Core.Tests/LinkMapFixtures.WithRelics(map)`、`LinkModeFixtures.RelicMap / CreateWithRelics / StartedWithRelics` —— 拆旧信物系统时随旧测试一起删。
+- `RelicMap` 标识也是 `link:1:4` 但摘要不同，不能用于按标识从目录恢复的回放。
+
 ## 风险点
 
 - 157 个测试文件引用旧信物：段 A 改动面最大，先删旧测试再补新测试，避免逐个修补。
