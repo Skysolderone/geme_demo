@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/core/index.md", "reason": "core 规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "刷新 / 掉落 / AI 带入新子流须确定性可复现"}
+{"file": ".trellis/spec/core/testing.md", "reason": "core 测试规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "Core / Presentation / Sim / Godot 分层边界"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "信物层按坐标存取"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "信物层贯穿规则、存档、AI、界面"}

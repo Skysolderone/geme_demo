@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/core/index.md", "reason": "core 规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "核对新子流不扰动既有序列"}
+{"file": ".trellis/spec/core/testing.md", "reason": "核对 AC 测试覆盖"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "核对分层边界"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "望台复用岩台覆盖、结算复用现行流程"}
