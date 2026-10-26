@@ -76,17 +76,18 @@ public class 地图文件健壮性Tests
         // 载体改为 link:1 的导出文本，把第二个信物格的键改写成第一个的小写，断言不变。
         // link-map-terrain：信物格区间改为 10–15、link:1 有 13 个（含 3 个公共区档），少一个仍在区间内；改为折叠两个出生区档信物格，
         // 由"每块出生棋盘恰 2 个出生区档信物格"报出——同样不会带着丢了一个信物格的地图开局。
+        // map-expand-25 段 A2：link:1:4 浮空岛 10 块平台各 2 个出生区档 + 低地 6 个公共区档 = 26（原 10 + 3 = 13），折叠后 25。
         string canonical = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
         MapData parsed = MapFile.FromJson(canonical);
         Coord[] relics = [.. parsed.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).Select(kv => kv.Key).Order()];
-        Assert.Equal(10, relics.Length);   // 样本口径
-        Assert.Equal(13, parsed.RelicCells.Count);
+        Assert.Equal(20, relics.Length);   // 样本口径
+        Assert.Equal(26, parsed.RelicCells.Count);
         string json = canonical.Replace($"\"{relics[1].ToNotation()}\": {{", $"\"{relics[0].ToNotation().ToLowerInvariant()}\": {{", StringComparison.Ordinal);
         Assert.NotEqual(canonical, json);
 
         MapData folded = MapFile.FromJson(json);
 
-        Assert.Equal(12, folded.RelicCells.Count);
+        Assert.Equal(25, folded.RelicCells.Count);
         Assert.Contains(
             MapValidator.Validate(folded).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
     }

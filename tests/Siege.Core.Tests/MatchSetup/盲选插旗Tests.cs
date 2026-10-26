@@ -25,7 +25,7 @@ public class 盲选插旗Tests
         SeatFlagView b = match.Flags.ViewFor(LinkModeFixtures.P1);
         Assert.Null(b.OwnZone);
         Assert.Empty(b.SameBoard);
-        Assert.Equal(5, b.ZoneCount);
+        Assert.Equal(10, b.ZoneCount);   // map-expand-25：link:1:4 浮空岛 10 块平台（原 5 块）
         // 公开视图不暴露任何旗数（retire-legacy-rules 第 3 组：旧模式的每区旗数字段删除，改为断言公开视图只有"是否已锁定"一项）。
         Assert.Equal([nameof(FlagPublicView.IsLocked)], typeof(FlagPublicView).GetProperties().Select(p => p.Name));
         Assert.Equal(new FlagPublicView(false), match.Flags.PublicView());
@@ -67,7 +67,7 @@ public class 盲选插旗Tests
         match.Flags.Plant(LinkModeFixtures.P0, 3);
         match.LockFlags();
 
-        int[] expected = ExpectedPicks(TestMaps.Seed, 4, 5);
+        int[] expected = ExpectedPicks(TestMaps.Seed, 4, LinkModeFixtures.Map.Boards.Length);   // map-expand-25：在全部平台（link:1:4 为 10 块）里均匀抽
         Assert.Equal(3, match.StateOf(LinkModeFixtures.P0).BirthZone);
         for (int i = 1; i < 4; i++)
         {
@@ -133,10 +133,10 @@ public class 盲选插旗Tests
         int[] twice = PlantWithHuman(TestMaps.Seed, 1);
         Assert.Equal(once, twice);
         Assert.Equal(1, once[0]);
-        int[] expected = ExpectedPicks(TestMaps.Seed, 4, 5);
+        int[] expected = ExpectedPicks(TestMaps.Seed, 4, LinkModeFixtures.Map.Boards.Length);
         Assert.Equal(expected[1..], once[1..]);
 
-        // 均匀盲选：多个种子下 AI 会与人同区、彼此同区，五块棋盘都会被选到（不看已插的旗、不避让）。
+        // 均匀盲选：多个种子下 AI 会与人同区、彼此同区，每块棋盘都会被选到（不看已插的旗、不避让）。map-expand-25：link:1:4 为 10 块平台。
         var zones = new HashSet<int>();
         bool sharedWithHuman = false;
         for (ulong s = 1; s <= 40; s++)
@@ -147,7 +147,7 @@ public class 盲选插旗Tests
             sharedWithHuman |= picks[1..].Contains(1);
         }
 
-        Assert.Equal(5, zones.Count);
+        Assert.Equal(10, zones.Count);
         Assert.True(sharedWithHuman);
     }
 
@@ -155,11 +155,12 @@ public class 盲选插旗Tests
     public void 选区不扰动其他随机()
     {
         // Scenario：用某种子开局并改变本机玩家的人工选择 → 信物内容与首回合顺序逐项不变（AI 的选择也不变）。
-        // 人工选择取遍 5 块棋盘：必有某次与某名 AI 同区，"同区时多消费一次别的子流"这类耦合才会被触发。
+        // 人工选择取遍全部棋盘：必有某次与某名 AI 同区，"同区时多消费一次别的子流"这类耦合才会被触发。
         MatchFlow a = LinkModeFixtures.Create();
         a.PlantPrototype((LinkModeFixtures.P0, 0));
-        Assert.Equal(13, a.Relics.Coords.Count());   // 裁决 J2：5 块出生棋盘各 2 枚出生区档；link-map-terrain D5：link:1 另有 3 枚公共区档（重钉，原 10）
-        for (int zone = 1; zone < 5; zone++)
+        // 裁决 J2：每块出生棋盘 2 枚出生区档。map-expand-25 D5：link:1:4 浮空岛 10 块平台 20 枚 + 低地 6 枚公共区档 = 26（重钉，原 13）。
+        Assert.Equal(26, a.Relics.Coords.Count());
+        for (int zone = 1; zone < a.Map.Boards.Length; zone++)
         {
             MatchFlow b = LinkModeFixtures.Create();
             b.PlantPrototype((LinkModeFixtures.P0, zone));

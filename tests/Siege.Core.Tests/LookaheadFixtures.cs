@@ -116,7 +116,10 @@ internal static class LookaheadFixtures
     /// <summary>真实对局的地图（retire-legacy-maps：原 <c>siege-4p-base-v5</c>）。</summary>
     internal const string MapId = "link:1:4";
 
-    /// <summary>真实对局的截断：跑到第 12 大回合结束（与链接图决策序列基线同口径，board-link-mode 裁决 C5）。</summary>
+    /// <summary>
+    /// 真实对局的截断：跑到第 12 大回合结束（board-link-mode 裁决 C5）。map-expand-25 段 A2：真实对局改在平坦手写图上（见 <see cref="CreateSession"/>），
+    /// 截断仍为 12；链接图决策序列基线另改为 <see cref="Siege.Core.Tests.AiDecision.LinkDecisionSequence.BaselineRounds"/>，两者不再同口径。
+    /// </summary>
     internal const int MaxMajorRounds = 12;
 
     /// <summary>
@@ -139,8 +142,38 @@ internal static class LookaheadFixtures
 
     internal static PlayerAiConfig Standard => new() { Difficulty = AiDifficulty.Standard };
 
-    /// <summary>按 <paramref name="config"/> 在 <c>link:1</c> 上建一局（与链接图决策序列基线同一口径）。</summary>
-    internal static MatchSession CreateSession(RunConfig config, ulong seed) =>
+    /// <summary>
+    /// 按 <paramref name="config"/> 建一局真实对局：载体为手写平坦链接档图 <see cref="LinkModeFixtures.FlatMap"/>（180 格，5 块 6×6 紧贴）。
+    /// map-expand-25 段 A2：<c>link:1:4</c> 换成约 1500 格的浮空岛后，专家 / 标准 AI 的整局与 12 大回合截断单条要十几分钟到一小时（实测「模拟回应等于专家口径的不扰动贪心」18 分钟），
+    /// 依赖走法的样本口径（"恰一次改变选择""两种口径给出不同回应"等）也随之失效；这些只依赖 AI 行为、不依赖按标识重建地图的测试改到与旧 <c>link:1</c> 同量级的手写平坦图，
+    /// 样本种子与黄金值在新载体上重挑 / 重钉。建局与 <see cref="MatchSession.Create(RunConfig, ulong, MapData?)"/> 同口径：配置先按地图落成（<see cref="RunConfig.ResolvedFor"/>），
+    /// 内容集 / 计分版本 / 匠人权重 / 大回合上限取落成值，信物按内容集由 <see cref="Siege.Core.Relics.RelicGenerator"/> 生成，盲选插旗（<see cref="MatchFlow.PlantPrototype"/>），
+    /// 再经测试接缝 <see cref="MatchSession.ForMatch"/> 挂上按配置建的 AI。手写图不能按标识重建，<b>不能</b>经 <see cref="Replayer.Replay"/> 回放——要回放的测试用 <see cref="CreateLinkSession"/>。
+    /// </summary>
+    internal static MatchSession CreateSession(RunConfig config, ulong seed)
+    {
+        MapData map = LinkModeFixtures.FlatMap;
+        RunConfig resolved = config.Validated().ResolvedFor(map);
+        var gameSeed = new Siege.Core.Determinism.GameSeed(seed);
+        ContentSet contentSet = resolved.ContentSet ?? ContentSets.Default;
+        MatchFlow match = MatchFlow.CreateUnvalidated(
+            map, gameSeed, resolved.PlayerIds(), Siege.Core.Relics.RelicGenerator.Generate(map, gameSeed, contentSet),
+            MatchOptions.Immediate with
+            {
+                ArtisanWeight = resolved.ArtisanWeight,
+                ContentSet = contentSet,
+                ScoringVersion = resolved.ScoringVersion ?? Siege.Core.Scoring.ScoringVersions.Default,
+                RoundCap = resolved.RoundCap ?? MatchOptions.DefaultRoundCap,
+            });
+        match.PlantPrototype();
+        return MatchSession.ForMatch(match, resolved);
+    }
+
+    /// <summary>
+    /// 按 <paramref name="config"/> 在 <c>link:1:4</c>（生成图）上建一局：日志要经 <see cref="Replayer.Replay"/> 按首部地图标识重建的测试用它，
+    /// 调用方须以 <see cref="RunConfig.TurnLimit"/> 截短（map-expand-25 段 A2：浮空岛上一个小回合的 AI 决策比旧 <c>link:1</c> 慢一个数量级）。
+    /// </summary>
+    internal static MatchSession CreateLinkSession(RunConfig config, ulong seed) =>
         MatchSession.Create(config, seed, MapCatalog.Resolve(config.MapId), recorded: false, carry: null);
 
     /// <summary>逐小回合驱动到第 <paramref name="maxMajorRounds"/> 大回合结束或终局（不经 <see cref="MatchSession.Run"/>，不产出日志）。</summary>

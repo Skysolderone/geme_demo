@@ -58,7 +58,7 @@ public class 区域强度预算Tests
             long[] sums = ZoneRarities(record);
             long total = sums.Sum();
             int zones = sums.Length;
-            Assert.Equal(5, zones);
+            Assert.Equal(10, zones);   // map-expand-25：link:1:4 浮空岛 10 块平台（原 5 块）
             foreach (long sum in sums)
             {
                 // |sum − total/n| ≤ total/n × 8%  ⇔  |sum×n − total| × 100 ≤ total × 8（n = 出生区数；retire-legacy-maps：原 v5 的 n 写死为 4）

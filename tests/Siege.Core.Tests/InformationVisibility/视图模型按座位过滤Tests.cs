@@ -25,17 +25,21 @@ public class 视图模型按座位过滤Tests
     /// <summary>某块出生棋盘的全部坐标（围棋记法）：整块外接矩形（link-map-terrain：读棋盘清单，不读出生区；G1 起战斗阶段可见格即整块棋盘，含岩石与深水）。</summary>
     private static string[] ZoneNotations(int zone) => [.. Map.BirthBoard(zone).Cells().Select(c => c.ToNotation()).Order()];
 
+    /// <summary>全部出生棋盘的编号（map-expand-25：link:1:4 浮空岛 10 块平台；原为 5 块）。</summary>
+    private static IEnumerable<int> Zones => Enumerable.Range(0, Map.Boards.Length);
+
     [Fact]
-    public void 插旗阶段只有五个占位_没有任何格()
+    public void 插旗阶段只有占位_没有任何格()
     {
-        // match-setup Scenario「插旗阶段的可见信息」：5 个占位的位置与边长可见，看不到任何棋盘内部的格与信物格位置。
+        // match-setup Scenario「插旗阶段的可见信息」：全部占位的位置与边长可见，看不到任何棋盘内部的格与信物格位置。
+        // map-expand-25 段 A2：原名「插旗阶段只有五个占位_没有任何格」，占位数随平台数（link:1:4 为 10）。
         MatchFlow match = Create();
         DefaultBoardView board = match.World(P0).Board();
 
         Assert.Empty(board.Cells);
         Assert.Empty(board.Boards);
-        Assert.Equal(5, board.Placeholders.Length);
-        Assert.Equal([0, 1, 2, 3, 4], board.Placeholders.Select(p => p.Zone));
+        Assert.Equal(10, board.Placeholders.Length);
+        Assert.Equal(Zones, board.Placeholders.Select(p => p.Zone));
         Assert.All(board.Placeholders, p => Assert.False(p.Expanded || p.Own));
         // 占位取整块棋盘的外接矩形（match-setup「占位尺寸取整块棋盘」），不是出生区（核心区）。
         Assert.All(board.Placeholders, p => Assert.Equal(Map.BirthBoard(p.Zone).Origin, p.Origin));
@@ -46,14 +50,15 @@ public class 视图模型按座位过滤Tests
 
         // 新局界面的一行说明只提占位，不提信物与可落子格。
         string info = MapPreviewInfo.Of(board);
-        Assert.Contains("5 块出生棋盘", info, StringComparison.Ordinal);
+        Assert.Contains("10 块出生棋盘", info, StringComparison.Ordinal);
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void 锁定后全图可见_五块占位全部展开()
+    public void 锁定后全图可见_全部占位展开()
     {
+        // map-expand-25 段 A2：原名「锁定后全图可见_五块占位全部展开」，块数随平台数。
         // open-map 裁决 O4（visual-style-baseline「锁定后全图展开」）：P0 在棋盘 1（索引 0），锁定后 5 块棋盘全部展开、视图含全图的格（原「构筑期只见自己的棋盘」反向）。
         MatchFlow match = Started([0, 1, 3, 4]);
         ViewerWorld world = match.World(P0);
@@ -61,13 +66,13 @@ public class 视图模型按座位过滤Tests
         SeatPublicView seat = match.PublishFor(P0);
 
         Assert.Equal(seat.Cells.Select(c => c.Coord).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.Equal(Enumerable.Range(0, 5).SelectMany(ZoneNotations).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
+        Assert.Equal(Zones.SelectMany(ZoneNotations).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
         Assert.All(board.Cells, c => Assert.Equal(Map.BirthZoneOf(c.Coord), c.BirthZone));   // 出生区 = 核心区，棋盘内其余格不属于出生区
-        Assert.Equal(5, board.Boards.Length);
+        Assert.Equal(10, board.Boards.Length);
         Assert.Equal(0, world.OwnZone);
         BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);
         Assert.Equal((0, true), (own.Zone, own.Expanded));
-        Assert.Equal(5, board.Placeholders.Count(p => p.Expanded));
+        Assert.Equal(10, board.Placeholders.Count(p => p.Expanded));
         Assert.Equal([P1, P2, P3], world.SameBattlefieldPlayers);
 
         // 他人棋盘上的格都在视图里；拾取 / 悬停用的 CellOrNull 对它们返回格。
@@ -87,7 +92,7 @@ public class 视图模型按座位过滤Tests
         string seat = JsonSerializer.Serialize(match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()), Json);
         string omniscient = JsonSerializer.Serialize(DefaultBoardView.From(match.PublicWorldOf()).Cells.Select(c => c.Coord.ToNotation()), Json);
 
-        foreach (int zone in new[] { 0, 1, 2, 3, 4 })
+        foreach (int zone in Zones)
         {
             foreach (string notation in ZoneNotations(zone))
             {
@@ -96,7 +101,7 @@ public class 视图模型按座位过滤Tests
         }
 
         // 全知棋盘另含画布留白的场景格（A1 …），按座位的只有 5 块棋盘的格：棋盘内的格集合相同。
-        HashSet<string> boards = [.. Enumerable.Range(0, 5).SelectMany(ZoneNotations)];
+        HashSet<string> boards = [.. Zones.SelectMany(ZoneNotations)];
         Assert.Equal(boards.Order(), match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
         Assert.All(boards, n => Assert.Contains($"\"{n}\"", omniscient, StringComparison.Ordinal));
     }
@@ -109,7 +114,7 @@ public class 视图模型按座位过滤Tests
         Assert.Equal([P1, P2, P3], match.World(P0).SameBattlefieldPlayers);
         Assert.Equal([P0, P2, P3], match.World(P1).SameBattlefieldPlayers);
         Assert.Equal([P0, P1, P3], match.World(P2).SameBattlefieldPlayers);
-        Assert.Equal(Enumerable.Range(0, 5).SelectMany(ZoneNotations).Order(), match.World(P1).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
+        Assert.Equal(Zones.SelectMany(ZoneNotations).Order(), match.World(P1).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
     }
 
     [Fact]
@@ -122,7 +127,7 @@ public class 视图模型按座位过滤Tests
         DefaultBoardView board = match.World(P0).Board();
         BoardTheme?[] expected = [.. Map.Boards.Select(b => b.Theme)];
         Assert.All(expected, t => Assert.NotNull(t));
-        Assert.Equal(5, expected.Distinct().Count());
+        Assert.True(expected.Distinct().Count() > 1);   // map-expand-25（裁决 R3）：平台主题可以重复，样本口径改为至少两种
 
         Assert.Equal(expected, board.Placeholders.Select(p => p.Theme));
         Assert.Equal(match.PublishFor(P0).Placeholders.Select(p => p.Theme), board.Placeholders.Select(p => p.Theme));

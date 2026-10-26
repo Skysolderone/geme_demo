@@ -54,19 +54,23 @@ public class 候选格上限Tests
     /// <para>terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 的五块棋盘与地形全部重抽，同一配置的走法随之变）；旧值 DC4CDF0CFC681BF1455267BF5FD8D7DE448201ADBBBDCB921268123FA124842B。</para>
     /// <para>ai-bridge-candidate 1.6 重钉（标准预设缺省开搭桥候选）：首个分歧在第 16 小回合（第 4 大回合）P1，原落 E10 堡垒 + D13 普通，开启后选中搭桥候选
     /// E7 匠人搭桥 D7 + D13 堡垒（见任务目录 rebaseline.txt）。旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A（开关 0 下不变，见 <see cref="LinkGoldenTurnHashEditSeedOff"/>）。</para>
-    internal const string LinkGoldenTurnHash = "AA44B22BB943731EDDAB8F3FEE7A175622352069E604667F5AA66542B8CD0814";
+    /// <para>map-expand-25 段 A2 重钉（地图变了：link:1:4 换成 44×44 浮空岛，同一配置的走法随之变）；旧值 AA44B22BB943731EDDAB8F3FEE7A175622352069E604667F5AA66542B8CD0814。
+    /// 本值是当前实现在新图上的自证钉值；旁证只有"同一配置经 对局内容集（v1 逐步相同）/ 带入带出（关闭、开启但无人带入）/ 批量跑局（缺省关闭带入）四条路径得到同一哈希"。</para>
+    internal const string LinkGoldenTurnHash = "101B7111E1A1DE624BF275A1D72736AEC78BB07B339EE334045737D0D4A8CF3E";
 
     /// <summary>
     /// ai-whole-batch 守门（规格「整批候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给整批候选开关 0 时的小回合快照哈希——
     /// 即引入整批候选之前（HEAD 0b1b4bf）的 <see cref="LinkGoldenTurnHash"/>，开关 0 MUST 与它逐步相同（首部不写该字段，哈希输入不变）。
     /// </summary>
-    internal const string LinkGoldenTurnHashWholeBatchOff = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
+    /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后不再是"引入整批候选之前"的独立参照，而是开关 0 路径在新图上的自证值（与 <see cref="LinkGoldenTurnHashEditSeedOff"/> 同值，改前亦同值）。</remarks>
+    internal const string LinkGoldenTurnHashWholeBatchOff = "F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F";
 
     /// <summary>
     /// ai-bridge-candidate 守门（规格「搭桥候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给搭桥候选开关 0 时的小回合快照哈希——
     /// 即引入搭桥候选之前（HEAD 01efcd4）的 <see cref="LinkGoldenTurnHash"/>（首部不写该字段，哈希输入不变）。
     /// </summary>
-    internal const string LinkGoldenTurnHashEditSeedOff = "58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A";
+    /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后是开关 0 路径在新图上的自证值。</remarks>
+    internal const string LinkGoldenTurnHashEditSeedOff = "F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>
@@ -458,8 +462,10 @@ public class 候选格上限Tests
         // retire-legacy-maps 1.5：原在 v4（105 格）上跑，改到 link:1（157 格）；对照局由"v4 不限制的黄金局"改为同种子显式 K = 0 的一局，断言不变。
         // 显式 K = 2：每个小回合都走预筛。预筛不消费随机流、平分按坐标序 → 两次运行快照逐字节相同。
         // K 取 2（小于部署上限）是为了让这一局必然不同于不限制的那一局，证明 K 确实传到了 AI。
+        // map-expand-25 段 A2：link:1:4 换成约 1500 格的浮空岛后，K = 0（不限制）的标准 AI 每步要逐格评价全岛，24 个小回合单条数分钟；截断改为 8 个小回合（前 2 个大回合），
+        // 所守的"K = 2 两次逐步相同、且与不限制的那一局不同"不变。
         static MatchLog Run(int k) => BatchRunner.Execute(
-            SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4", CandidateCellLimit = k }, parallelism: 1)[0];
+            SimFixtures.Config(seedStart: 31, turnLimit: 8, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4", CandidateCellLimit = k }, parallelism: 1)[0];
 
         // 变异 M-K9：Sim 的 MatchSession 建 AI 时不传跑局配置的 K → 与不限制的那一局相同 → 本测试红。
         MatchLog a = Run(2);

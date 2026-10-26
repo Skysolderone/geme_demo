@@ -37,15 +37,17 @@ public sealed class LinkDemoAudit
     public ImmutableArray<string> Seen => [.. FullFlow.Where(_seen.Contains)];
 
     /// <summary>
-    /// 插旗锁定（open-map 裁决 O4：锁定后全图全可见）：5 块占位全部展开、本机那块标为本机，可见格 = 全图应可见的格数。
+    /// 插旗锁定（open-map 裁决 O4：锁定后全图全可见）：全部占位展开（占位数 = 棋盘清单块数）、本机那块标为本机，可见格 = 全图应可见的格数。
     /// <paramref name="battlefieldCells"/> 由调用方从战场导出与棋盘清单独立算出：link-map-terrain G1 起为本战场（= 全图）各棋盘外接矩形的格数之和（含岩石与未架桥深水）。
+    /// map-expand-25 段 A2：浮空岛的平台数随人数与种子变化（6–12 块），原写死的"5 块"改读视图模型的棋盘清单块数。
     /// </summary>
     public AuditLine FlagsLocked(DefaultBoardView board, int ownZone, int battlefieldCells)
     {
         ArgumentNullException.ThrowIfNull(board);
+        int boards = board.Boards.Length;
         int expanded = board.Placeholders.Count(p => p.Expanded);
         bool ownExpanded = board.Placeholders.Any(p => p.Zone == ownZone && p.Own && p.Expanded);
-        bool ok = board.Placeholders.Length == 5 && expanded == 5 && ownExpanded && board.Cells.Length == battlefieldCells && battlefieldCells > 0;
+        bool ok = boards > 0 && board.Placeholders.Length == boards && expanded == boards && ownExpanded && board.Cells.Length == battlefieldCells && battlefieldCells > 0;
         return Record("插旗锁定",
             $"本机 {BirthZoneLabel.Of(ownZone)} 已展开 {(ownExpanded ? "是" : "否")}，占位 {board.Placeholders.Length} 块、已展开 {expanded} 块，可见格 {board.Cells.Length} / 全图 {battlefieldCells}", ok);
     }

@@ -172,7 +172,7 @@ public class 搭桥候选Tests
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", name)).Replace("\r\n", "\n", StringComparison.Ordinal);
         foreach (ulong seed in new ulong[] { 1, 2, 3 })
         {
-            Assert.Equal(Fixture($"decisions-link1-seed{seed}-es0.txt"), LinkDecisionSequence.Export(seed, 12, AiDifficulty.Standard, attach: null, configure: c => c with { EditSeed = 0 }));
+            Assert.Equal(Fixture($"decisions-link1-seed{seed}-es0.txt"), LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds, AiDifficulty.Standard, attach: null, configure: c => c with { EditSeed = 0 }));
         }
     }
 
@@ -180,8 +180,8 @@ public class 搭桥候选Tests
     public void 简单难度不受影响()
     {
         // 开关为 1 时 4 名简单 AI 在 link:1 种子 1 下到第 12 大回合的决策序列与开关为 0 时逐字节相同，且就是钉住的简单基线（简单难度不生成搭桥候选）。
-        string on = LinkDecisionSequence.Export(1, 12, AiDifficulty.Easy, attach: null, configure: c => c with { EditSeed = 1 });
-        string off = LinkDecisionSequence.Export(1, 12, AiDifficulty.Easy, attach: null, configure: c => c with { EditSeed = 0 });
+        string on = LinkDecisionSequence.Export(1, LinkDecisionSequence.BaselineRounds, AiDifficulty.Easy, attach: null, configure: c => c with { EditSeed = 1 });
+        string off = LinkDecisionSequence.Export(1, LinkDecisionSequence.BaselineRounds, AiDifficulty.Easy, attach: null, configure: c => c with { EditSeed = 0 });
 
         Assert.Equal(off, on);
         string expected = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", "decisions-link1-easy-seed1.txt")).Replace("\r\n", "\n", StringComparison.Ordinal);

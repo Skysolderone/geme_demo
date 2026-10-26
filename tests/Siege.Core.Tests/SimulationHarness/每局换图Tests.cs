@@ -62,11 +62,12 @@ public class 每局换图Tests
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
         Assert.Equal(["link:100:4", "link:101:4", "link:102:4"], logs.Select(l => l.Header.MapId));
         Assert.Equal(3, logs.Select(l => l.Header.MapDigest).Distinct().Count());
-        Assert.All(logs, l => Assert.Equal(5, l.Header.ZoneCount));
+        // map-expand-25 段 A2：三张都是 4 人浮空岛，平台数 link:100:4 / 101:4 / 102:4 = 10 / 11 / 10（原紧贴布局恒 5）。
+        Assert.Equal(new int?[] { 10, 11, 10 }, logs.Select(l => l.Header.ZoneCount));
 
         // 批次配置记录：起始地图种子（在起始标识里）+ "每局换图"这一事实；每局首部的配置同样带着。
         string saved = File.ReadAllText(Path.Combine(dir, "config.json"));
-        Assert.Contains("\"MapId\": \"link:100\"", saved, StringComparison.Ordinal);
+        Assert.Contains("\"MapId\": \"link:100:4\"", saved, StringComparison.Ordinal);
         Assert.Contains("\"MapPerMatch\": true", saved, StringComparison.Ordinal);
         RunConfig reread = RunConfig.FromJson(saved);
         Assert.True(reread.MapPerMatch);

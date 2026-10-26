@@ -14,8 +14,9 @@ public class 地图规格档Tests
         // Scenario：把一张链接档地图的初始状态导出为文件再读入 → 规格档仍为链接，棋盘清单与其余字段逐项相等。
         // 「写出时漏字段」只有往返测试抓得到（testing.md）。
         // retire-legacy-maps 1.6：载体由边疆档夹具（FrontierFixtures，随边疆档删除）改为手写链接档初始图，并按规格补比棋盘清单；断言不变。
+        // map-expand-25 段 A2：手写紧贴图在浮空岛校验器下恒不合规（末行"读回仍合规"无从成立），载体改为生成图 link:1:2（6 块平台）。
         // 变异 M-A1：MapFile.ToJson 不写 Profile（恒 null）→ 本测试红。变异 M-A2：FromJson 不读 Profile → 本测试红。
-        MapData original = LinkMapFixtures.Initial();
+        MapData original = LinkMapGenerator.Generate(1, 2);
 
         string json = MapFile.ToJson(original);
         MapData restored = MapFile.FromJson(json);
@@ -23,13 +24,13 @@ public class 地图规格档Tests
         Assert.Contains("\"Profile\": \"Link\"", json, StringComparison.Ordinal);
         Assert.Equal(MapProfile.Link, restored.Profile);
         Assert.Equal(original.Boards.AsEnumerable(), restored.Boards.AsEnumerable());
-        Assert.Equal(5, restored.Boards.Length);
+        Assert.Equal(6, restored.Boards.Length);
         Assert.Equal(original.Id, restored.Id);
         Assert.Equal(original.Width, restored.Width);
         Assert.Equal(original.Height, restored.Height);
         Assert.Equal(original.MaxPlayers, restored.MaxPlayers);
         Assert.Equal(original.Obstacles.Order(), restored.Obstacles.Order());
-        Assert.Equal(5, restored.BirthZones.Length);
+        Assert.Equal(6, restored.BirthZones.Length);
         for (int i = 0; i < original.BirthZones.Length; i++)
         {
             Assert.Equal(original.BirthZones[i].Order(), restored.BirthZones[i].Order());
@@ -49,9 +50,10 @@ public class 地图规格档Tests
     {
         // 没有声明行的只剩未定义的取值（只可能来自手工构造）：报成拒绝项并说明原因，不崩。
         // retire-legacy-maps 1.6：原名「棋盘档按自己的声明行校验_未定义的规格档值仍被拒绝而不是抛异常」；棋盘档那一半随棋盘档删除，
-        // 未定义取值这一半的载体由棋盘档夹具改为手写链接档初始图，断言不变。
-        Assert.True(MapValidator.Validate(LinkMapFixtures.Initial()).IsValid);
-        MapData unknown = LinkMapFixtures.Initial() with { Profile = (MapProfile)9 };
+        // 未定义取值这一半的载体由棋盘档夹具改为手写链接档初始图，断言不变。map-expand-25 段 A2：手写紧贴图恒不合规，载体改为生成图 link:1:2。
+        MapData island = LinkMapGenerator.Generate(1, 2);
+        Assert.True(MapValidator.Validate(island).IsValid);
+        MapData unknown = island with { Profile = (MapProfile)9 };
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(unknown).Failures);
         Assert.Equal("MAP_PROFILE_UNKNOWN", failure.Code);
         Assert.Throws<MapValidationException>(() => GameBoard.Load(unknown));

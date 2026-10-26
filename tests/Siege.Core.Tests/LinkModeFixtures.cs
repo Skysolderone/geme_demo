@@ -68,10 +68,15 @@ internal static class LinkModeFixtures
         };
     }
 
-    /// <summary>在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
+    /// <summary>
+    /// 在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。
+    /// map-expand-25 段 A2：手写的 3+2 紧贴图在浮空岛校验器下恒不合规（画布、平台高度、坡道），改经 <see cref="MatchFlow.CreateUnvalidated"/> 建局；
+    /// 信物照常按本局内容集由 <see cref="RelicGenerator"/> 生成（与 <see cref="MatchFlow.Create"/> 同一调用），对局与改前逐步相同。
+    /// </summary>
     internal static MatchFlow StartedFlat(int[] zones, MatchOptions? options = null)
     {
-        MatchFlow match = MatchFlow.Create(FlatMap, TestMaps.Seed, All, options ?? Options);
+        options ??= Options;
+        MatchFlow match = MatchFlow.CreateUnvalidated(FlatMap, TestMaps.Seed, All, RelicGenerator.Generate(FlatMap, TestMaps.Seed, options.ContentSet), options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));

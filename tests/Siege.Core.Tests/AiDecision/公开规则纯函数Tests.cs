@@ -121,7 +121,10 @@ public class 公开规则纯函数Tests
         }
 
         int guard = 0;
-        while (match.Phase == MatchPhase.InProgress)
+        // map-expand-25 段 A2：link:1:4 换成约 1500 格的浮空岛后，4 名标准 AI 的整局要跑到大回合上限 100（全量里单条半小时以上），
+        // 改为截断到第 6 大回合结束（构筑期 3 个大回合 + 全图解禁后 3 个大回合）；所守的是"每个小回合三方逐项相等"，与跑多长无关，小回合下界 20 不变。
+        const int Rounds = 6;
+        while (match.Phase == MatchPhase.InProgress && match.MajorRound <= Rounds)
         {
             Assert.True(++guard < 2000, "跑局超过 2000 个小回合");
             runner.RunTurn();

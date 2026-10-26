@@ -20,7 +20,8 @@ public class 终端对局Tests
         // 玩家2 在轮到你之前提走了你唯一的 B1，你出局、对局自动跑到终局，永远走不到"输入耗尽"。改为只 Pass 一次、在第 3 大回合的提示处耗尽——
         // 保护期内别家不能进你的出生区，这一步不再依赖 AI 的走法；断言未改。
         // open-map：link:1 改为 3+2 紧贴布局，1 号出生棋盘的左下角 X3 → R3。
-        var script = new System.Text.StringBuilder("1\n1\nR3 B\nv\nok\n");
+        // map-expand-25 段 A2：link:1:4 换成浮空岛，1 号平台 E5–L12（7×8，F 列是河道），落点改为平台右下角 L5（两口气 K5 / L6）。
+        var script = new System.Text.StringBuilder("1\n1\nL5 B\nv\nok\n");
         for (int i = 0; i < 1; i++)
         {
             script.Append("\npass\n");
@@ -31,7 +32,7 @@ public class 终端对局Tests
         string text = output.ToString();
 
         Assert.Equal(0, exit);
-        Assert.Contains("玩家1(你) 落子 R3B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 L5B", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 45", text, StringComparison.Ordinal);
 

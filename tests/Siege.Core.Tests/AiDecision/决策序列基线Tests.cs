@@ -39,7 +39,7 @@ public class 决策序列基线Tests
     [InlineData(2UL, "decisions-link1-seed2.txt")]
     public void 链接图决策序列与基线相同(ulong seed, string fixture)
     {
-        string actual = LinkDecisionSequence.Export(seed, 12);
+        string actual = LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds);
         if (Environment.GetEnvironmentVariable("SIEGE_REBUILD_DECISION_BASELINE") == "1")
         {
             File.WriteAllText(Path.Combine(SourceFixtureDirectory(), fixture), actual, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -55,8 +55,9 @@ public class 决策序列基线Tests
         Assert.DoesNotContain(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, l => l.StartsWith("L\t", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.StartsWith("4\t", StringComparison.Ordinal));   // 跑过了第 3 大回合，没有配对 / 链接
-        Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
-        Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains("majorRound=13", StringComparison.Ordinal));
+        // map-expand-25 段 A2：截断改为 LinkDecisionSequence.BaselineRounds（6）个大回合，小回合下界 30 → 20、收尾大回合 13 → BaselineRounds + 1。
+        Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 20, "基线小回合不足 20 个");
+        Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains($"majorRound={LinkDecisionSequence.BaselineRounds + 1}", StringComparison.Ordinal));
         Assert.Equal(expected, actual);
     }
 
@@ -69,7 +70,7 @@ public class 决策序列基线Tests
     [InlineData(AiDifficulty.Hard, "decisions-link1-hard-seed1.txt")]
     public void 链接图其他难度决策序列与基线相同(AiDifficulty difficulty, string fixture)
     {
-        string actual = LinkDecisionSequence.Export(1, 12, difficulty);
+        string actual = LinkDecisionSequence.Export(1, LinkDecisionSequence.BaselineRounds, difficulty);
         if (Environment.GetEnvironmentVariable("SIEGE_REBUILD_DECISION_BASELINE") == "1")
         {
             File.WriteAllText(Path.Combine(SourceFixtureDirectory(), fixture), actual, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -86,8 +87,9 @@ public class 决策序列基线Tests
         Assert.DoesNotContain(lines, l => l.StartsWith("P\t", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, l => l.StartsWith("L\t", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.StartsWith("4\t", StringComparison.Ordinal));
-        Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 30, "基线小回合不足 30 个");
-        Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains("majorRound=13", StringComparison.Ordinal));
+        // map-expand-25 段 A2：截断改为 LinkDecisionSequence.BaselineRounds（6）个大回合，小回合下界 30 → 20、收尾大回合 13 → BaselineRounds + 1。
+        Assert.True(lines.Count(l => l.Length > 0 && char.IsDigit(l[0])) >= 20, "基线小回合不足 20 个");
+        Assert.Contains(lines, l => l.StartsWith("# end phase=Ended", StringComparison.Ordinal) || l.Contains($"majorRound={LinkDecisionSequence.BaselineRounds + 1}", StringComparison.Ordinal));
         Assert.Equal(expected, actual);
     }
 
@@ -107,7 +109,7 @@ public class 决策序列基线Tests
         Assert.True(File.Exists(path), $"找不到改前基线副本：{path}");
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
-        Assert.Equal(expected, LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, configure: c => c with { WholeBatch = 0, EditSeed = 0 }));
+        Assert.Equal(expected, LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds, difficulty, attach: null, configure: c => c with { WholeBatch = 0, EditSeed = 0 }));
     }
 
     /// <summary>
@@ -126,7 +128,7 @@ public class 决策序列基线Tests
         Assert.True(File.Exists(path), $"找不到改前基线副本：{path}");
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
-        Assert.Equal(expected, LinkDecisionSequence.Export(seed, 12, difficulty, attach: null, configure: c => c with { EditSeed = 0 }));
+        Assert.Equal(expected, LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds, difficulty, attach: null, configure: c => c with { EditSeed = 0 }));
     }
 
     private static string SourceFixtureDirectory([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>

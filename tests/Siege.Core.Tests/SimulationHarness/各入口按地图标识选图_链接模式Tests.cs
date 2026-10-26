@@ -24,7 +24,7 @@ public class 各入口按地图标识选图_链接模式Tests
         // 变异 MC-1：Program.Play 的缺省改回 MapCatalog.DefaultId → 本测试红（终端打印的地图不是 link:1）。
         (int playCode, string playOut, string playErr) = RunMain(null, new StringReader("q\n"), "play", "--seed", "5", "--no-carry");
         Assert.True(playCode == 0, playErr);
-        Assert.Contains("地图 link:1（", playOut, StringComparison.Ordinal);
+        Assert.Contains("地图 link:1:4（", playOut, StringComparison.Ordinal);   // map-expand-25：缺省 link:1:4
         // retire-legacy-maps：自已删除的「各入口按地图标识选图Tests.缺省地图不变」迁入——目录常量与批次配置的缺省同为 link:1（原 v5）。
         Assert.Equal("link:1:4", MapCatalog.DefaultId);
         Assert.Equal("link:1:4", new RunConfig().MapId);

@@ -287,7 +287,9 @@ public class 前瞻模拟的公平信息Tests
     /// 「模拟回应等于专家口径的不扰动贪心」的样本：G1 口径（一层配置的专家 + 3 标准、link:1）的对局种子。改前代码上逐一探查种子 1 / 2 / 3（截断第 12 大回合）与种子 6（整局）：
     /// 改前的记录与"标准预设派生"的独立复算逐条相同（36 / 35 / 35 / 69 条）；两种口径给出不同回应的候选只在种子 3 出现（第 7 大回合小回合 28、第 12 大回合小回合 45 各一条），故取 3。
     /// </summary>
-    internal const ulong IndependentResponseSeed = 3;
+    // map-expand-25 段 A2：载体改为平坦手写图（LookaheadFixtures.CreateSession）后重探种子 1–8（截断第 12 大回合、搭桥候选关）：
+    // "两种口径给出不同回应"的候选只在种子 2 出现（4 条；独立复算条数依次 40 / 28 / 36 / 35 / 36 / 40 / 33 / 36），故取 2（原 3）。
+    internal const ulong IndependentResponseSeed = 2;
 
     [Fact]
     public void 模拟回应等于专家口径的不扰动贪心()

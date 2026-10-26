@@ -322,7 +322,7 @@ public class 循环提子停手Tests
         // Scenario：K 配置为 0，其余配置不变，用相同种子对照引入本条之前的实现各跑一局 → 两局 AI 的每一步决策逐步相同。
         // 引入之前的走法 = 钉在 cycle-stop 之前的 5 份决策序列基线（本段实测 K = 6 也逐字节不变，见 notes.md）；这里取 link:1 种子 1 标准 × 4，
         // 跑局配置显式 StagnationRounds = 0，导出与基线逐字节相同；同一停滞局面下 K = 0 不停手（结构守门：K = 0 时整段判定不进入）。
-        string actual = LinkDecisionSequence.Export(1, 12, AiDifficulty.Standard, attach: null, configure: c => c with { StagnationRounds = 0 });
+        string actual = LinkDecisionSequence.Export(1, LinkDecisionSequence.BaselineRounds, AiDifficulty.Standard, attach: null, configure: c => c with { StagnationRounds = 0 });
         string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", "decisions-link1-seed1.txt");
         Assert.True(File.Exists(path), $"找不到决策序列基线：{path}");
         Assert.Equal(File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal), actual);

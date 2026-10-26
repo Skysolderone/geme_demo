@@ -46,10 +46,10 @@ public class 锁定后全图可见Tests
         Assert.NotNull(c.HandTypes);
         Assert.All(seat.Players, p => Assert.True(p.SameBattlefield));
 
-        // 5 个占位全部展开；插旗阶段仍只有占位（D5）。
+        // 全部占位展开（map-expand-25：link:1:4 为 10 块平台）；插旗阶段仍只有占位（D5）。
         DefaultBoardView board = match.World(P0).Board();
-        Assert.Equal(5, board.Placeholders.Count(p => p.Expanded));
-        Assert.Equal(5, board.Boards.Length);
+        Assert.Equal(10, board.Placeholders.Count(p => p.Expanded));
+        Assert.Equal(10, board.Boards.Length);
         Assert.Equal([P1, P2, P3], match.World(P0).SameBattlefieldPlayers);
         DefaultBoardView planting = Create().World(P0).Board();
         Assert.Empty(planting.Cells);
@@ -62,7 +62,7 @@ public class 锁定后全图可见Tests
         // tasks 1.4 验收：按座位序列化含全部 5 块棋盘的格数据，与全知棋盘的格集合相同。
         MatchFlow match = Started([0, 1, 3, 4]);
         string seat = JsonSerializer.Serialize(match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()), Json);
-        for (int zone = 0; zone < 5; zone++)
+        for (int zone = 0; zone < match.Map.Boards.Length; zone++)
         {
             Assert.All(ZoneNotations(zone), n => Assert.Contains($"\"{n}\"", seat, StringComparison.Ordinal));
         }

@@ -29,6 +29,9 @@ public class 战场落败复盘Tests
     private static readonly EvaluationWeights Weights = SimFixtures.PreCalibrationWeights with { PowerGain = 1 };
 
     /// <summary>一局真实 AI 链接局（四人四区种子、简单难度、跑到终局）的日志，经文本往返。</summary>
+    // map-expand-25 段 A2 实测（未改）：link:1:4 换成浮空岛后，这局四名 Easy 要跑约 13 分钟（turnLimit 600 / 大回合上限 100 先到者收尾），全局没有一次整轮 Pass 结算，
+    // DefeatReplay.TargetsOf 为空，「落败者复盘可查」的样本口径失效（红）；探针 PassThreshold 120–4000 六分钟内都未终局（落后者阈值取 0、决胜一手会接管最后一个 Pass）。
+    // 复盘要按首部地图标识回放，不能改用手写图；待主会话裁决（换载体 / 转慢测试）。
     private static readonly Lazy<MatchLog> RealLog = new(() =>
         MatchLog.Parse(MatchSession.Create(LinkSimFixtures.Config(turnLimit: 600), LinkSimFixtures.FourZoneSeed.Value).Run().FullText()));
 
@@ -132,7 +135,7 @@ public class 战场落败复盘Tests
         var reviews = new Dictionary<PlayerId, List<(BestMoveReview Review, int Index)>>();
         var deciders = new List<HeuristicTurnController>();
         var decisive = new List<bool>();
-        string actual = LinkDecisionSequence.Export(3, 12, AiDifficulty.Standard, session => session.ObserveDeploy(batch =>
+        string actual = LinkDecisionSequence.Export(3, LinkDecisionSequence.BaselineRounds, AiDifficulty.Standard, session => session.ObserveDeploy(batch =>
         {
             if (deciders.Count > 0)
             {
@@ -170,7 +173,8 @@ public class 战场落败复盘Tests
             total += list.Count;
         }
 
-        Assert.True(total >= 40, $"样本口径：只复盘了 {total} 次部署。");
+        // map-expand-25 段 A2：基线截断由 12 改为 LinkDecisionSequence.BaselineRounds（6）个大回合，部署次数上限 24，下界 40 → 20。
+        Assert.True(total >= 20, $"样本口径：只复盘了 {total} 次部署。");
 
         // 决胜一手那条腿用手写局面确定地走到（link-map-terrain 裁决 T1 = A）：平坦手写图上 P0 落后、其余三人已 Pass、权重写死使唯一单点评价为负——
         // 同一个 AI 对象先复盘、再正式部署，复盘结论"本将 Pass"、正式决策被决胜一手改落。

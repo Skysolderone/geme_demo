@@ -87,8 +87,9 @@ public class 冲突占用率口径Tests
         // link-map-terrain 第 2 组：link:1 初始图的可落子格 157 → 214（出生棋盘 6–8、扣掉岩石与未架桥深水）。
         // terrain-barriers 3.1（地图变了）：link:1 河流棋盘的河道横穿棋盘、大棋盘加湖泊 / 岩区，可落子格 214 → 202。
         // terrain-density 2.2（地图变了，出生棋盘边长 6–7）：202 → 192。
-        Assert.All(sample, l => Assert.Equal(192, l.Header.PlayableCells));
-        Assert.All(sample, l => Assert.Equal(192, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
+        // map-expand-25 段 A2（地图变了，link:1:4 换成 44×44 浮空岛）：192 → 1485（与 map 子命令打印的可落子格数一致）。
+        Assert.All(sample, l => Assert.Equal(1485, l.Header.PlayableCells));
+        Assert.All(sample, l => Assert.Equal(1485, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
 
         // 报告段落在真实批次上也能算出来（可能全批次无提子，那就只断言段落存在与分母自洽）。
         BalanceReport report = BalanceAnalyzer.Analyze(sample);

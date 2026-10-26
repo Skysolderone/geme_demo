@@ -131,12 +131,13 @@ public class 选图视图模型Tests
         // 旧标识族（内置图、gen:、board:、文件路径）、裸 link 与写错的标识一律拒绝、状态不变——新局界面只有 link: 一种地图。
         var model = new MapSelectModel(InitialSeed);
 
-        Assert.True(model.TrySelectId(" link:12345 "));
+        // map-expand-25 段 A2：标识改为 link:<种子>:<人数>，旧两段格式 link:<种子> 报错作废（裁决 Q4），归入拒绝一列。
+        Assert.True(model.TrySelectId(" link:12345:4 "));
         Assert.Equal((12345UL, "12345", "link:12345:4"), (model.MapSeed, model.SeedText, model.CurrentId));
         Assert.True(model.TrySelectId("link:007:4"));
         Assert.Equal("link:7:4", model.CurrentId);   // 规范化
 
-        foreach (string bad in new[] { "link", "link:abc", "link:1:n9", "siege-4p-base-v5", "siege-frontier-v2", "gen:12345", "board:12345", "no-such-map", "maps/x.json", "", null! })
+        foreach (string bad in new[] { "link", "link:12345", "link:abc", "link:1:n9", "siege-4p-base-v5", "siege-frontier-v2", "gen:12345", "board:12345", "no-such-map", "maps/x.json", "", null! })
         {
             Assert.False(model.TrySelectId(bad), bad ?? "<null>");
             Assert.Equal("link:7:4", model.CurrentId);
@@ -173,8 +174,8 @@ public class 选图视图模型Tests
         Assert.Equal(shown, confirmed);
         MapData map = MapCatalog.Resolve(confirmed);
         Assert.Equal(confirmed, map.Id);
-        Assert.Equal(5, map.BirthZones.Length);   // 5 块出生棋盘的占位
-        Assert.Equal(5, ViewOf(map).Boards.Length);
+        Assert.InRange(map.BirthZones.Length, 10, 12);   // map-expand-25：4 人浮空岛 10–12 块平台（出生棋盘）的占位
+        Assert.Equal(map.BirthZones.Length, ViewOf(map).Boards.Length);
         Assert.True(model.IsConfirmed);
         Assert.Throws<InvalidOperationException>(() => model.Reroll(1UL));
         Assert.Throws<InvalidOperationException>(() => model.SubmitSeed("1"));
@@ -200,7 +201,7 @@ public class 选图视图模型Tests
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         DefaultBoardView preview = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         string info = MapPreviewInfo.Of(preview);
-        Assert.StartsWith($"{map.Width}×{map.Height} 画布，5 块出生棋盘（边长 ", info, StringComparison.Ordinal);
+        Assert.StartsWith($"{map.Width}×{map.Height} 画布，{map.Boards.Length} 块出生棋盘（边长 ", info, StringComparison.Ordinal);   // map-expand-25：块数随平台数
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
         Assert.Empty(preview.Cells);
@@ -221,7 +222,7 @@ public class 选图视图模型Tests
         DefaultBoardView backdrop = MapPreviewInfo.Backdrop(flags);
 
         Assert.All(flags.Placeholders, p => Assert.NotNull(p.ThemeName));   // 样本口径：插旗阶段的占位确实带主题
-        Assert.Equal(5, backdrop.Placeholders.Length);
+        Assert.Equal(map.Boards.Length, backdrop.Placeholders.Length);   // map-expand-25：占位数 = 平台数
         Assert.All(backdrop.Placeholders, p => Assert.Null(p.ThemeName));
         Assert.Equal(
             flags.Placeholders.Select(p => (p.Zone, p.Origin, p.Width, p.Height, p.Expanded, p.Own)),

@@ -133,11 +133,17 @@ public class 先手顺序预测_链接模式Tests
     public void 此刻结束即终局时没有预测()
     {
         // 四人同区且地图填满（open-map：唯一战场 = 全图，5 块棋盘都填满）：此刻结束 → 唯一战场结算 → 终局（「最后战场结算」），没有下一轮可预测。
+        // map-expand-25 段 A2：浮空岛除平台（link:1:4 为 10 块）外还有平台之间的低地，"地图填满"另把低地的可落子格全部摆给 P0。
         MatchFlow match = Started([0, 0, 0, 0]);
-        for (int zone = 0; zone < 5; zone++)
+        for (int zone = 0; zone < Map.Boards.Length; zone++)
         {
             FillBoard(match, zone, majority: P0, minority: P1);
         }
+
+        match.Place(P0, [.. Map.AllCoords().Where(c => Map.IsPlayable(c) && match.Board[c].Occupant is null).Order()]);
+        match.Relics.Reveal(match.Board, match.MajorRound);
+        match.Debug.Recalculate();
+        Assert.DoesNotContain(Map.AllCoords(), c => Map.IsPlayable(c) && match.Board[c].Occupant is null);   // 样本口径：全图确实填满
 
         Assert.Null(Forecast(match));
         Assert.Equal(MatchPhase.InProgress, match.Phase);   // 预测不结束对局

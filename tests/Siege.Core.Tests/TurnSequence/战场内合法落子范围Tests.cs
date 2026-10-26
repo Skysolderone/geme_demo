@@ -46,10 +46,12 @@ public class 战场内合法落子范围Tests
 
         Assert.Equal(4, match.MajorRound);
         Siege.Core.Board.Battlefield whole = match.Board.Battlefields.ById(0)!;
-        Assert.Equal([0, 1, 2, 3, 4], whole.BirthZones);
+        Assert.Equal(Enumerable.Range(0, match.Map.Boards.Length), whole.BirthZones);
         Assert.Equal(whole.Cells.ToHashSet(), match.LegalRangeFor(P0));
         Assert.Equal(whole.Cells.ToHashSet(), match.LegalRangeFor(P2));
-        Assert.Equal(match.Map.Boards.Sum(b => b.Cells().Count(match.Board.Map.IsPlayable)), match.LegalRangeFor(P0).Count);   // 全图 = 5 块可落子格之和
+        // 全图 = 全部可落子格。map-expand-25 段 A2：浮空岛的可落子格除平台外还有平台之间的低地（原"5 块可落子格之和"在紧贴布局下与之相同）。
+        Assert.Equal(match.Board.Map.AllCoords().Count(match.Board.Map.IsPlayable), match.LegalRangeFor(P0).Count);
+        Assert.True(match.LegalRangeFor(P0).Count > match.Map.Boards.Sum(b => b.Cells().Count(match.Board.Map.IsPlayable)));   // 样本口径：低地确实在范围内
     }
 
     [Fact]

@@ -13,26 +13,29 @@ public class 出生区信物权重Tests
     // retire-legacy-maps 1.6：载体由 v5（8 个出生区信物格）改为 link:1 初始图（5 块出生棋盘 × 2 = 10 个），样本数与期望格数随之改，断言不变。
     private static readonly MapData Map = MapCatalog.Resolve("link:1:4");
 
-    /// <summary>第一阶段统计的样本数：10000 种子 × 10 格。</summary>
+    /// <summary>第一阶段统计的样本数：5000 种子 × 20 格（map-expand-25 段 A2：link:1:4 浮空岛 10 块平台 × 2 = 20 格；原 10000 种子 × 10 格，样本数不变）。</summary>
+    private const int StageOneSeeds = 5000;
+
+    /// <summary>第一阶段统计的样本数。</summary>
     private const int StageOneSamples = 100000;
 
     [Fact]
     public void 出生区无高阶信物()
     {
-        // 规格 Scenario：link: 初始地图 10 个出生区信物格（5 块出生棋盘各 2 个）；2000 个种子下强度全为 +1（徽记为单枚等效）。
+        // 规格 Scenario：link: 初始地图的出生区信物格（map-expand-25：link:1:4 浮空岛 10 块平台各 2 个 = 20 个；原 5 块 × 2 = 10 个）；2000 个种子下强度全为 +1（徽记为单枚等效）。
         // 变异验证 M-G4：Draw 里去掉 `spec.Zone == BirthZone ? 0 :`，改用 options.UpgradePermilleOf(spec.Budget) 且 Birth 档给 200 → 红 1（本测试）。
         for (ulong seed = 0; seed < 2000; seed++)
         {
             RelicGenerationRecord record = RelicGenerator.Generate(Map, new GameSeed(seed));
             RelicPlacement[] birth = [.. record.Placements.Where(p => p.Spec.Zone == RelicZone.BirthZone)];
-            Assert.Equal(10, birth.Length);
+            Assert.Equal(20, birth.Length);
             Assert.All(birth, p => Assert.False(p.Content.IsAdvanced, $"种子 {seed} 出生区 {p} 为高阶"));
             Assert.All(birth, p => Assert.Equal(1, p.Content.Magnitude));
         }
     }
 
     /// <summary>
-    /// 第一阶段（MaxRerolls = 0）出生区类型计数，按 <see cref="RelicWeights.Order"/> 下标。10000 种子 × 10 格 = 100000 样本。
+    /// 第一阶段（MaxRerolls = 0）出生区类型计数，按 <see cref="RelicWeights.Order"/> 下标。<see cref="StageOneSeeds"/> 种子 × 20 格 = 100000 样本。
     /// 只跑信物生成，不跑对局（tasks 2.2）。
     /// </summary>
     private static int[] StageOneBirthCounts(ContentSet set)
@@ -40,7 +43,7 @@ public class 出生区信物权重Tests
         RelicGenerationOptions stageOneOnly = RelicGenerationOptions.Default with { MaxRerolls = 0, ContentSet = set };
         int[] counts = new int[RelicWeights.Order.Length];
         int total = 0;
-        for (ulong seed = 0; seed < 10000; seed++)
+        for (ulong seed = 0; seed < StageOneSeeds; seed++)
         {
             foreach (RelicPlacement p in RelicGenerator.Generate(Map, new GameSeed(seed), stageOneOnly).Placements)
             {
@@ -101,7 +104,9 @@ public class 出生区信物权重Tests
         // open-map 1.1 重钉：link:1 改为 3+2 紧贴布局（信物格坐标随棋盘位置变），未收敛 113 → 114；旧值 7DCEB00E865B03671ABC4C31C253E357CE98A400E056C637088CD72B9CC09119。
         // terrain-barriers 3.1 重钉（地图变了：link:1 的信物格随隔断线与湖泊 / 岩区变，公共区档 3 → 2），未收敛 114 → 98；旧值 AEA0BA6CE5ADEB7B31EC3C7068B76B61DCAAB9FEFB5A713DDCAC5D3DA0FCE281。
         // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，信物格坐标与公共区档 2 → 3 个随之变），未收敛 98 → 109；旧值 A46CF39FAB9856ABD9DB2EA51A60DD6A71A352355856252F5AC556B46F1EEB39。
-        ("link:1:4", "C9E58AA867942BA083EC041B8931463AA1DD0B6DE96829EC3ECB7C5F9E111CD1", 109),
+        // map-expand-25 段 A2 重钉（地图变了：link:1:4 换成 44×44 浮空岛，出生区档 10 → 20 个、公共区档 3 → 6 个移到低地），未收敛 109 → 95；
+        // 旧值 C9E58AA867942BA083EC041B8931463AA1DD0B6DE96829EC3ECB7C5F9E111CD1。
+        ("link:1:4", "9CED266420723A11A3CE1A81D720B4900D2751C4D99B48BF10E34AD70C43DA46", 95),
     ];
 
     [Fact]

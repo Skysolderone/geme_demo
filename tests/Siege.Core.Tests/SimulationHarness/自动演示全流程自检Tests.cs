@@ -40,9 +40,9 @@ public class 自动演示全流程自检Tests
         var audit = new LinkDemoAudit();
         MatchFlow match = Started([0, 1, 3, 4]);
 
-        // 插旗锁定：5 块占位全部展开（open-map 裁决 O4），可见格 = 全图各棋盘外接矩形之和。
+        // 插旗锁定：全部占位展开（open-map 裁决 O4；map-expand-25：link:1:4 为 10 块平台），可见格 = 全图各棋盘外接矩形之和。
         DefaultBoardView locked = match.World(P0).Board();
-        Assert.Equal(5, locked.Placeholders.Count(p => p.Expanded));
+        Assert.Equal(10, locked.Placeholders.Count(p => p.Expanded));
         Assert.True(audit.FlagsLocked(locked, 0, BattlefieldCellsOf(match, P0)).Ok);
         Assert.Equal(match.Map.Boards.Sum(b => b.Width * b.Height), locked.Cells.Length);
 
@@ -108,7 +108,7 @@ public class 自动演示全流程自检Tests
         Assert.True(audit.FlagsLocked(board, 0, cells).Ok);
         Assert.False(audit.FlagsLocked(board, 1, cells).Ok, "本机那块不是标为本机的那块");
         Assert.False(audit.FlagsLocked(board, 0, cells + 1).Ok);
-        Assert.False(audit.FlagsLocked(match.World(P0).Board() with { Placeholders = board.Placeholders[1..] }, 0, cells).Ok, "占位不足 5 块");
+        Assert.False(audit.FlagsLocked(match.World(P0).Board() with { Placeholders = board.Placeholders[1..] }, 0, cells).Ok, "占位少于棋盘清单块数");
         Assert.False(audit.FlagsLocked(board with { Placeholders = [.. board.Placeholders.Select(p => p.Own ? p : p with { Expanded = false })] }, 0, cells).Ok, "锁定后仍有占位未展开（open-map O4）");
 
         Assert.True(audit.BuildingRange(1, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(0).Cells()]).Ok);

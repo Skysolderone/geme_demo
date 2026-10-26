@@ -62,10 +62,10 @@ public class 各入口按地图标识选图Tests
         string text = implicitOut.ToString();
         Assert.Equal(text, explicitOut.ToString());
         Assert.True(text.Split('\n').Length > 100, "转录过短，对局没有真正进行。");
-        Assert.Contains("盲选出生棋盘：以上是 5 块棋盘的占位（1–5）", text, StringComparison.Ordinal);
+        Assert.Contains("盲选出生棋盘：以上是 10 块棋盘的占位（1–10）", text, StringComparison.Ordinal);   // map-expand-25：link:1:4 浮空岛 10 块平台
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 5", text, StringComparison.Ordinal);
-        Assert.Contains("地图 link:1（5 块紧贴成一张连通地图的出生棋盘）", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);
+        Assert.Contains("地图 link:1:4（10 块", text.Split('\n')[..6].Aggregate(string.Concat), StringComparison.Ordinal);
     }
 
     [Fact]

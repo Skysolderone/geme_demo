@@ -104,14 +104,14 @@ public class 开局信息公开范围Tests
         Siege.Presentation.Visibility.DefaultBoardView board = match.World(TestMaps.P0).Board();
 
         Assert.Empty(board.Cells);
-        Assert.Equal(5, board.Placeholders.Length);
+        Assert.Equal(10, board.Placeholders.Length);   // map-expand-25：link:1:4 浮空岛 10 块平台（原 5 块）
         foreach (Siege.Presentation.Visibility.BoardPlaceholderView p in board.Placeholders)
         {
             Assert.Equal(LinkModeFixtures.Map.BirthBoard(p.Zone).Theme!.Value.DisplayName(), p.ThemeName);
         }
 
-        // 五块主题两两不同，恰是五个主题的中文名（测试内字面量，不经 DisplayName 反推）。
-        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合", "高台" }, board.Placeholders.Select(p => p.ThemeName).Order(StringComparer.Ordinal));
+        // 四种平台主题都出现、没有高台（测试内字面量，不经 DisplayName 反推）。map-expand-25（裁决 R3）：主题可以重复、高台主题去掉，原"五块两两不同、恰五个主题"改为去重后的集合。
+        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, board.Placeholders.Select(p => p.ThemeName).Distinct().Order(StringComparer.Ordinal));
 
         // 没有主题的占位（手写夹具）不给主题名：渲染层不画这一行。
         var bare = new Siege.Presentation.Visibility.BoardPlaceholderView(0, new Coord(0, 0), 5, 5, Expanded: false, Own: false, Theme: null);
@@ -132,16 +132,17 @@ public class 开局信息公开范围Tests
 
         Assert.Equal(0, code);
         string text = output.ToString();
-        string[] themeNames = new string[5];
-        for (int zone = 0; zone < 5; zone++)
+        string[] themeNames = new string[map.Boards.Length];
+        for (int zone = 0; zone < map.Boards.Length; zone++)
         {
             BoardPlate plate = map.BirthBoard(zone);
             themeNames[zone] = plate.Theme!.Value.DisplayName();
             Assert.Contains($"  {zone + 1} 号棋盘 · {themeNames[zone]} · {plate.Width}×{plate.Height}（左下角 {plate.Origin.ToNotation()}）", text, StringComparison.Ordinal);
         }
 
-        // 五块主题两两不同，恰是五个主题的中文名（测试内字面量，不经 DisplayName 反推）。
-        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合", "高台" }, themeNames.Order(StringComparer.Ordinal));
+        // 四种平台主题都出现、没有高台（测试内字面量，不经 DisplayName 反推；map-expand-25 裁决 R3，见上一条）。
+        Assert.Equal(10, themeNames.Length);
+        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, themeNames.Distinct().Order(StringComparer.Ordinal));
         Assert.Contains("盲选出生棋盘", text, StringComparison.Ordinal);
         Assert.DoesNotContain(" ? ", text, StringComparison.Ordinal);   // 不暴露棋盘内部布局（信物格）
     }
