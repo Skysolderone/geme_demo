@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Text;
 using System.Text.Json;
-using Siege.Core.Carry;
 
 namespace Siege.Core.PieceRelics;
 
@@ -30,7 +29,7 @@ public sealed record RelicInFlight(string MatchId, ImmutableArray<CarriedRelic> 
 
 /// <summary>
 /// 本机玩家档案 v2（relic-redesign design.md D7 / R18 / R20）：格式版本、补给点、五种信物库存与至多一条在途记录。
-/// 与旧 <c>Carry.CarryProfile</c>（v1）并存，接线段再切换；读入 v1 时按原价把补给折成补给点（<see cref="MigrateFromV1"/>）。
+/// 读入 v1（旧补给档案）时按原价把补给折成补给点（<see cref="MigrateFromV1"/>）。
 /// </summary>
 /// <remarks>
 /// JSON 形状固定、不缩进：<c>{"version":2,"points":17,"inventory":{"WarDrum":1,"Command":0,"Watchtower":2,"Chameleon":0,"Banner":1},"inFlight":null}</c>；
@@ -75,20 +74,11 @@ public sealed record RelicProfile
     }
 
     /// <summary>
-    /// v1 迁移（R20 / D7）：补给库存按原价折回补给点（备用子 3、征召签 2、换型令 4，取 <see cref="Supplies.PriceOf"/>，不另写价格表），信物库存为 0；
+    /// v1 迁移（R20 / D7）：补给库存按原价（备用子 3、征召签 2、换型令 4，见 <see cref="LegacyProfileV1.UncalibratedSupplyPrices"/>）折回补给点，信物库存为 0；
     /// v1 残留的在途记录按中途退出结算（补给丢失、带出 0）后清除。v1 档案不是新档案，不送新档案的 3 件。结果的版本为 2。
+    /// <paramref name="json"/> 是 v1 档案原文（解析的唯一实现 <see cref="LegacyProfileV1.RefundedPoints"/>，严格程度同旧补给档案）。
     /// </summary>
-    public static RelicProfile MigrateFromV1(CarryProfile legacy)
-    {
-        ArgumentNullException.ThrowIfNull(legacy);
-        int refund = 0;
-        foreach (SupplyKind kind in Supplies.Order)
-        {
-            refund += legacy.StockOf(kind) * Supplies.PriceOf(kind);
-        }
-
-        return Empty with { Points = legacy.Points + refund };
-    }
+    public static RelicProfile MigrateFromV1(string json) => Empty with { Points = LegacyProfileV1.RefundedPoints(json) };
 
     /// <summary>写出档案 JSON（固定键序、不缩进，五种信物总是全部写出）。</summary>
     public string ToJson()
@@ -138,7 +128,7 @@ public sealed record RelicProfile
 
     /// <summary>
     /// 解析档案 JSON。格式版本高于 <see cref="CurrentVersion"/> 时抛 <see cref="RelicProfileVersionException"/>（不再往下校验）；
-    /// 版本 1 时按 v1 解析（唯一实现 <see cref="CarryProfile.Parse"/>）再迁移，<paramref name="migratedFromV1"/> 为 <c>true</c>；
+    /// 版本 1 时按 v1 解析（唯一实现 <see cref="LegacyProfileV1"/>）再迁移，<paramref name="migratedFromV1"/> 为 <c>true</c>；
     /// 无法解析、缺必需字段（version / points / inventory）、负数、非整数、重复键、未知字段、未知信物名、在途记录不合形时抛 <see cref="FormatException"/>。
     /// </summary>
     public static RelicProfile Parse(string json, out bool migratedFromV1)
@@ -173,7 +163,7 @@ public sealed record RelicProfile
             if (version == LegacyVersion)
             {
                 migratedFromV1 = true;
-                return MigrateFromV1(CarryProfile.Parse(json));
+                return MigrateFromV1(json);
             }
 
             if (version < LegacyVersion)

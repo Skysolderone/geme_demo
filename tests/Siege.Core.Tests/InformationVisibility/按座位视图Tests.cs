@@ -199,19 +199,22 @@ public class 按座位视图Tests
     }
 
     [Fact]
-    public void 行动顺序与带入全局公开()
+    public void 行动顺序全局公开带入清单只给本人()
     {
-        // Scenario：任意玩家查询当前行动顺序 → 可读到全部在局玩家的顺序；带入不论对方在哪块棋盘都可读。
+        // Scenario：任意玩家查询当前行动顺序 → 可读到全部在局玩家的顺序。
+        // relic-redesign R22（接线段 W2 改写，原"带入全局公开"属旧补给规则）：带入清单挂出之前只对本人可见——别的座位看不到，本座位看到自己的未挂出件。
         MatchFlow match = MatchFlow.Create(Map, TestMaps.Seed, All, Options with
         {
             CarryInOut = true,
-            CarryIns = System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Carry.CarryIn>.Empty.Add(P2, new Carry.CarryIn(Carry.SupplyKind.SpareStone)),
+            CarryIns = System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Siege.Core.PieceRelics.RelicLoadout>.Empty
+                .Add(P2, new([new Siege.Core.PieceRelics.CarriedRelic(Siege.Core.PieceRelics.RelicKind.WarDrum, true)])),
         });
         match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 4 }[i])));
         SeatPublicView a = match.PublishFor(P0);
         Assert.Equal(match.ActionOrder, a.ActionOrder);
         Assert.Equal(4, a.ActionOrder.Length);
-        Assert.Equal(P2, a.CarryIns.Single().Player);
-        Assert.Equal(Carry.SupplyKind.SpareStone, a.CarryIns.Single().CarryIn.Kind);
+        Assert.Empty(a.OwnCarried);
+        SeatCarriedView own = Assert.Single(match.PublishFor(P2).OwnCarried);
+        Assert.Equal((0, Siege.Core.PieceRelics.RelicKind.WarDrum, true), (own.Index, own.Kind, own.Insured));
     }
 }

@@ -24,16 +24,11 @@ public readonly record struct GameSeed(ulong Value)
     // 链接模式的盲选用 FlagPick（flag-pick），取值不变。
 
     /// <summary>
-    /// AI 带入的抽取子流名（carry-in-out D7）：按玩家编号升序为每名 AI 抽补给种类（及换型令的类型）。
-    /// 独立命名，MUST NOT 扰动征募、流程初始化、信物刷新与 AI 决策的既有序列。
+    /// AI 带入的抽取子流名（relic-redesign R21 / D5，沿用 carry-in-out D7 的名字）：按玩家编号升序为每名 AI 抽带入的普通信物与保险件
+    /// （消费顺序见 <c>PieceRelics.RelicCarryAi</c>）。独立命名，MUST NOT 扰动征募、流程初始化、信物刷新与 AI 决策的既有序列。
+    /// 旧补给的征召签子流 <c>carry-draft:&lt;编号&gt;</c> 随补给删除（接线段 W2）。
     /// </summary>
     public const string CarryAi = "carry-ai";
-
-    /// <summary>
-    /// 某名玩家征召签的抽签子流名 <c>carry-draft:&lt;玩家编号&gt;</c>（carry-in-out D7，编号从 0 起）。每名玩家一条，
-    /// 任一玩家的征召签结果与其他玩家带了什么无关；同样 MUST NOT 扰动任何既有子流。
-    /// </summary>
-    public static string CarryDraft(int player) => $"carry-draft:{player}";
 
     /// <summary>
     /// 链接模式的盲选插旗子流名（board-link-mode 实现裁决 B2，match-setup「原型插旗替代路径」）：每名玩家按编号升序各抽一次 <c>[0, 出生棋盘数)</c>，
@@ -44,7 +39,7 @@ public readonly record struct GameSeed(ulong Value)
 
     /// <summary>
     /// 挂在棋子上的信物的地图刷新子流名 <c>relic-spawn:&lt;落位大回合&gt;</c>（relic-redesign D2）：每批一条，在落位前 1 个大回合预告时一次抽完本批的位置与类型。
-    /// 按批命名（同 <see cref="CarryDraft"/> 的做法），刷新是纯函数、不需要持久化消费次数；任一批的消费次数 MUST NOT 扰动其他批，
+    /// 按批命名（每批一条子流），刷新是纯函数、不需要持久化消费次数；任一批的消费次数 MUST NOT 扰动其他批，
     /// 更不扰动征募、流程初始化、盲选插旗、带入与 AI 决策的既有序列。唯一消费者 <c>PieceRelics.RelicSpawner</c>。
     /// </summary>
     public static string RelicSpawn(int landingRound) => $"relic-spawn:{landingRound}";

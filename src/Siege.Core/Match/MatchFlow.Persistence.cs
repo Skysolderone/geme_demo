@@ -5,7 +5,6 @@ using System.Text.Json.Serialization;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
@@ -50,7 +49,7 @@ public sealed partial class MatchFlow
             ContentSet = ContentSet,
             ScoringVersion = ScoringVersion,
             CarryInOut = CarryInOut,
-            CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
+            CarryIns = ExportCarried(),
             RoundCap = RoundCap,
             // 实现裁决 B5：模式与结算流程状态恒写出（retire-legacy-rules R10 = A：模式照写常量 "Link"；open-map 段 B 删配对 / 链接 / K 字段，段名不变）。
             Mode = MatchSaveData.LinkMode,
@@ -259,7 +258,7 @@ public sealed partial class MatchFlow
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
             ScoringVersion = data.ScoringVersion ?? ScoringVersions.Legacy,
             CarryInOut = data.CarryInOut ?? false,
-            CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
+            CarryIns = ImportLoadouts(data.CarryIns),
             RoundCap = data.RoundCap ?? MatchOptions.DefaultRoundCap,
         };
         // 与建局同一处校验（裁决 B1 / S1 → map-expand-25 D1）：只能是链接图、人数恰等于地图人数。
@@ -284,8 +283,16 @@ public sealed partial class MatchFlow
             throw new FormatException($"存档的大回合上限不合法：{ex.Message}", ex);
         }
 
-        // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
-        _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
+        // 与建局同一处校验（relic-redesign D5：清单 ≤ 5 件、保险 ≤ 2、带入者在名册）。
+        try
+        {
+            RequireValidCarryIns(options.CarryInOut, options.CarryIns, players);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new FormatException($"存档的带入清单不合法：{ex.Message}", ex);
+        }
+
         var match = new MatchFlow(
             map, board, seed, players,
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight, options.ContentSet),
@@ -299,6 +306,7 @@ public sealed partial class MatchFlow
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
         match.RestoreLink(data);
+        match.RestoreCarried(data.CarryIns);
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -398,7 +406,7 @@ public sealed class MatchSaveData
     /// </summary>
     public bool? CarryInOut { get; set; }
 
-    /// <summary>各玩家的带入（征召签记录抽得的类型）；旧存档无此字段（<c>null</c>）→ 全员无带入。</summary>
+    /// <summary>各玩家的带入清单与逐件本局编号（relic-redesign W2；未挂出为 <c>null</c>）；无此字段（<c>null</c>）→ 全员无带入。</summary>
     public List<CarryInSaveData>? CarryIns { get; set; }
 
     /// <summary>
@@ -524,16 +532,6 @@ public sealed class ResignationSaveData
 
     /// <summary>弃赛时势力名次（carry-in-out D5）；旧存档无此字段（<c>null</c>）→ 恢复后为空，MUST NOT 重算。</summary>
     public int? RankAtResign { get; set; }
-}
-
-/// <summary>一名玩家的带入：玩家编号、补给种类（按名字写出）与换入类型（备用子为 <c>null</c>）。</summary>
-public sealed class CarryInSaveData
-{
-    public int Player { get; set; }
-
-    public Carry.SupplyKind Kind { get; set; }
-
-    public PieceType? Type { get; set; }
 }
 
 public sealed class StandingSaveData

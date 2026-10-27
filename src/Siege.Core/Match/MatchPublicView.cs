@@ -15,8 +15,8 @@ namespace Siege.Core.Match;
 /// <see cref="RoundCap"/> 是 cycle-stop 新增的大回合上限安全网（对局配置，始终公开，0 = 不启用），不是终局条件。
 /// <see cref="ArtisanWeight"/> 是匠人征募权重（artisan-terrain-edit R-2）：开局固定、始终公开、插旗阶段即可读。
 /// <see cref="ContentSet"/> 是对局内容集（more-pieces-relics D8）：同样开局固定、始终公开、插旗阶段即可读。
-/// <see cref="CarryInOut"/> / <see cref="CarryIns"/> 是带入带出开关与各玩家的带入（carry-in-out，information-visibility 第 7 条）：
-/// 开局固定、始终公开、插旗阶段即可读；征召签给出的是建局时抽得的类型。
+/// <see cref="CarryInOut"/> 是带入带出开关（对局配置，始终公开）。各玩家的带入清单是私有信息（relic-redesign R22：挂出之前只对本人可见），
+/// 不在这里——挂出的带入件在 <see cref="Board"/> 的信物层里（含带入者与保险标记），全公开。
 /// <see cref="MapId"/> 是完整的地图标识（map-generator D3：对生成图即 <c>gen:&lt;地图种子&gt;[:p&lt;平台数&gt;]</c>，凭它能重新得到同一张图），
 /// <see cref="Seed"/> 是对局种子的文本（<see cref="Siege.Core.Determinism.GameSeed.ToString"/>）。二者始终公开、插旗阶段即可读，
 /// <b>分开给出、MUST NOT 合并成一个数</b>：地图种子只决定地图，对局种子只决定对局里的随机，互不影响。都是字符串——视图的结构里不放随机源类型。
@@ -44,8 +44,7 @@ public sealed record MatchPublicView(
     int PassStreak,
     MatchResult? Result,
     LifeShapeReport LifeShape,
-    bool CarryInOut,
-    ImmutableSortedDictionary<PlayerId, Carry.CarryIn> CarryIns)
+    bool CarryInOut)
 {
     /// <summary>
     /// 本大回合已 Pass 的玩家（升序；Pass 是公开行动）。AI 的决胜一手据此判断"本次 Pass 是否会让本战场整轮 Pass"

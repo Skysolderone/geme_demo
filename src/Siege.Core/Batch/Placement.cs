@@ -11,13 +11,17 @@ namespace Siege.Core.Batch;
 /// <remarks>
 /// <para><see cref="Edit"/> 只有匠人能带（terrain-edit「匠人落子即改造」），且与该匠人<b>共用同一枚部署额度</b>、不另计（batch-deployment）。
 /// 改造可选：<c>null</c> 即按普通棋子处理。</para>
-/// <para><see cref="ToString"/> 含改造——AI 候选批次去重的键（<c>CandidateBatch.Key</c>）就是拼它，
+/// <para><see cref="AttachCarried"/>（relic-redesign R14）：给这枚新落子挂上本人带入清单第几件（清单下标，从 0 起）；<c>null</c> 不挂。
+/// 每枚至多 1 件、同一件只能挂一次、落点已有地图信物时不能挂（预演第 1 步，<see cref="BatchFailureKind.CarriedRelicIllegal"/>）；
+/// 挂上即公开（R22），本局编号在结算第 2 步按批内顺序从 <see cref="BatchContext.NextRelicId"/> 起分配。</para>
+/// <para><see cref="ToString"/> 含改造与挂出——AI 候选批次去重的键（<c>CandidateBatch.Key</c>）就是拼它，
 /// 漏了会让"同一落点带 / 不带改造"的两个候选被静默去重成一个。</para>
 /// </remarks>
-public readonly record struct Placement(Coord Coord, PieceType Type, TerrainEdit? Edit = null)
+public readonly record struct Placement(Coord Coord, PieceType Type, TerrainEdit? Edit = null, int? AttachCarried = null)
 {
     public override string ToString() =>
-        Edit is { } edit ? $"{Coord.ToNotation()}:{Type}+{edit}" : $"{Coord.ToNotation()}:{Type}";
+        (Edit is { } edit ? $"{Coord.ToNotation()}:{Type}+{edit}" : $"{Coord.ToNotation()}:{Type}")
+        + (AttachCarried is { } index ? $"@{index}" : string.Empty);
 }
 
 /// <summary>被提走的一枚棋子：坐标、原所有者与类型。足以完整重建被提棋串。</summary>

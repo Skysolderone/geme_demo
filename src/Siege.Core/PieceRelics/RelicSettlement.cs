@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Carry;
 using Siege.Core.Match;
 
 namespace Siege.Core.PieceRelics;
@@ -84,7 +83,7 @@ public sealed record RelicMatchSettlement(ImmutableSortedDictionary<PlayerId, Re
 /// 地图刷出的信物只按第 ② 条带出。②在③之前，所以自己的非保险件挂在另一名完赛者棋子上时归对方（R27），同一件不会被两人带出。</para>
 /// <para>出局 / 弃赛 / 中途退出者不是完赛者，按上面三条恰好只拿回保险件——与"在其出局 / 弃赛时立即结算"的结果相同，
 /// 所以这里一次算全员即可（带入者出局后其保险件仍可能被别人挂着用，局终照样归原主）。</para>
-/// <para>补给点（R19，沿用现行名次表与折算的唯一实现 <see cref="CarryPoints"/> / <see cref="CarryOutSettlement.ResignShare"/>）：
+/// <para>补给点（R19，沿用现行名次表与折算的唯一实现 <see cref="RelicPoints"/>）：
 /// 完赛按最终名次全额；弃赛按弃赛时名次的 50%，构筑保护期内弃赛 0；出局与中途退出 0。参赛人数取 <c>outcomes</c> 的人数。</para>
 /// <para>每件信物在一局结算中只归属一次：以编号去重，同一编号在输入里出现两种内容即抛出；档案层再以对局标识去重（<see cref="RelicProfileStore.Settle"/>）。</para>
 /// </remarks>
@@ -96,10 +95,10 @@ public static class RelicSettlement
         ArgumentNullException.ThrowIfNull(outcome);
         return outcome.Outcome switch
         {
-            RelicOutcome.Finished => CarryPoints.For(playerCount, RequireRank(outcome)),
+            RelicOutcome.Finished => RelicPoints.For(playerCount, RequireRank(outcome)),
             RelicOutcome.Resigned => (outcome.MajorRound ?? throw new ArgumentException("弃赛结局缺少弃赛大回合。", nameof(outcome))) <= MatchFlow.BuildProtectionRounds
                 ? 0
-                : CarryOutSettlement.ResignShare(CarryPoints.For(playerCount, RequireRank(outcome))),
+                : RelicPoints.ResignShare(RelicPoints.For(playerCount, RequireRank(outcome))),
             RelicOutcome.Eliminated or RelicOutcome.Abandoned => 0,
             _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome.Outcome, "未知结局。"),
         };

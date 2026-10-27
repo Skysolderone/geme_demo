@@ -215,6 +215,7 @@ public sealed partial class MatchFlow
             r.EliminationReason = EliminationReason.BattlefieldDefeat;
             r.Defeat = loser;
             Emit(FlowEventKind.PlayerEliminated, loser.Player, $"第 {eliminationOrder} 个出局（战场 {BirthZoneLabel.Of(verdict.Battlefield)} 落败，势力 {loser.Power}）");
+            DropCarriedOf(loser.Player);   // R17
         }
 
         return record;

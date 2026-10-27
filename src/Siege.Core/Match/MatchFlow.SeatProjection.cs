@@ -12,7 +12,7 @@ namespace Siege.Core.Match;
 /// <remarks>
 /// 口径与 <see cref="PublishFor"/>（<see cref="SeatPublicView"/>）一致：本座位所在战场之外——未与之链接的战场——的棋子不出现（其上挂着的信物随之成为空格上的信物，信物层本身全公开），
 /// 他人战场玩家的手牌类型为空；势力快照与活形分析对投影盘面现算（唯一实现 <see cref="PowerCalculator"/> / <see cref="LifeShapeReport.Analyze"/>），
-/// 他人战场玩家的势力因此只剩本战场里的部分（即 0）。地形、行动顺序、在局状态、带入与结果是全局项，不过滤。
+/// 他人战场玩家的势力因此只剩本战场里的部分（即 0）。地形、行动顺序、在局状态与结果是全局项，不过滤；带入清单是私有信息，本来就不在全知视图里（R22）。
 /// 插旗阶段（还没有战场）原样返回 <see cref="Publish"/>。
 /// </remarks>
 public sealed partial class MatchFlow

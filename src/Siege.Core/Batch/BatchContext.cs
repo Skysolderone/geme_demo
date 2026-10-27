@@ -42,6 +42,15 @@ public sealed record BatchContext
     /// <summary>手牌库存：按棋子类型的数量映射。缺失的类型视为 0。</summary>
     public required IReadOnlyDictionary<PieceType, int> Stock { get; init; }
 
+    /// <summary>
+    /// 本人尚未挂出的带入件（relic-redesign R14）：带入清单下标 → 种类与保险。只在本人的部署阶段构造（私有，R22）；
+    /// <c>null</c> 或空 = 没有可挂的带入件（不经对局流程构造的上下文与引入之前相同）。
+    /// </summary>
+    public IReadOnlyDictionary<int, PieceRelics.CarriedRelic>? Carried { get; init; }
+
+    /// <summary>本批挂出的带入件从这个本局编号起按批内顺序分配（对局的编号游标，刷新与挂出共用，design.md D1）。</summary>
+    public int NextRelicId { get; init; }
+
     /// <summary>某类型的库存数量，缺失视为 0。</summary>
     public int StockOf(PieceType type) => Stock.TryGetValue(type, out int count) ? count : 0;
 

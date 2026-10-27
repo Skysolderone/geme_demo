@@ -4,20 +4,21 @@ using System.Collections.Immutable;
 using System.Linq;
 using Godot;
 using Siege.Core.Board;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Presentation.Style;
 using Siege.Presentation.Text;
 
 namespace Siege.Godot;
 
-/// <summary>补给选择面板的一份数据（全部取自档案存取的当前档案与 Core 的补给表 / 候选表；本类不判断能否兑换或带入之外的任何规则）。</summary>
-/// <param name="Notices">档案提示（新建 / 损坏已备份 / 版本不符 / 上一局中途退出），逐行显示。</param>
-/// <param name="Current">当前档案（补给点与库存）。</param>
-/// <param name="Candidates">换型令可指定的类型（本局内容集的换型候选，固定次序）。</param>
+/// <summary>
+/// 开局前信物面板的一份数据（relic-redesign 接线段 W2 的最小版本：只看档案、兑换，不带入——带入选择与部署挂出的新面板在段 C）。
+/// </summary>
+/// <param name="Notices">档案提示（新建 / 损坏已备份 / 版本不符 / v1 迁移 / 上一局中途退出），逐行显示。</param>
+/// <param name="Current">当前档案（补给点与信物库存）。</param>
 /// <param name="Feedback">最近一次兑换的结果；无则为空串。</param>
-/// <param name="CarryAllowed">本局能否兑换与带入：档案来自更新的版本时为 <c>false</c>（只剩"不带入，开始"，本局关闭带入带出）。</param>
+/// <param name="CarryAllowed">本局能否兑换：档案来自更新的版本时为 <c>false</c>（只剩"开始"，本局关闭带入带出）。</param>
 /// <param name="Preview">只做展示（截图预览）：按钮不接任何档案操作。</param>
-public sealed record SupplyPanelData(ImmutableArray<string> Notices, CarryProfile Current, ImmutableArray<CarryCandidate> Candidates, string Feedback, bool CarryAllowed, bool Preview);
+public sealed record SupplyPanelData(ImmutableArray<string> Notices, RelicProfile Current, string Feedback, bool CarryAllowed, bool Preview);
 
 /// <summary>
 /// HUD 的带入带出面板（carry-in-out「图形版的补给选择面板与结算面板」）：选图之后、插旗之前的补给选择面板；对局中的带入一栏与"弃赛"按钮；
@@ -39,13 +40,8 @@ public sealed partial class Hud
     private VBoxContainer? _settlementBody;
     private PanelContainer? _confirmPanel;
     private VBoxContainer? _confirmBody;
-    private int _commissionIndex;
-
-    /// <summary>点某补给的"兑换"。</summary>
-    public event Action<SupplyKind>? SupplyExchangePressed;
-
-    /// <summary>点某补给的"带入"（换型令附下拉里选中的类型）。</summary>
-    public event Action<SupplyKind, PieceType?>? SupplyCarryPressed;
+    /// <summary>点某种普通信物的"兑换"。</summary>
+    public event Action<RelicKind>? SupplyExchangePressed;
 
     /// <summary>点"不带入，开始"。</summary>
     public event Action? SupplySkipPressed;
@@ -101,7 +97,7 @@ public sealed partial class Hud
         _resignButton = Ui.Action("弃赛", 64);
         Ui.Danger(_resignButton);
         _resignButton.Pressed += () => ShowConfirm(
-            "确认弃赛？弃赛后不再行动，AI 继续把对局下完。带入带出开启时：返还带入的补给，并按弃赛时的势力名次带出一半补给点（构筑保护期内为 0）。",
+            "确认弃赛？弃赛后不再行动，AI 继续把对局下完。带入带出开启时：带回保险件，并按弃赛时的势力名次带出一半补给点（构筑保护期内为 0）。",
             "确认弃赛", () => ResignConfirmed?.Invoke());
         row.AddChild(_resignButton);
         barBody.AddChild(row);
@@ -138,58 +134,34 @@ public sealed partial class Hud
         VBoxContainer body = _supplyBody!;
         Ui.Clear(body);
 
-        body.AddChild(Ui.Text("补给（开局前）" + (data.Preview ? "　· 预览" : string.Empty), Ui.PanelBorder, UiTheme.BodyFontPx + 4));
+        body.AddChild(Ui.Text("信物（开局前）" + (data.Preview ? "　· 预览" : string.Empty), Ui.PanelBorder, UiTheme.BodyFontPx + 4));
         foreach (string notice in data.Notices)
         {
             body.AddChild(Ui.Text(notice, Ui.DangerText, UiTheme.BodyFontPx - 2, wrap: true));
         }
 
-        body.AddChild(Ui.Text("补给只改开局手牌，每局至多带入 1 件；局终按名次带出补给点（4 人局 24 / 16 / 12 / 10），弃赛带出一半并返还补给，出局补给丢失。",
+        // 接线段 W2 的最小版本：只看档案与兑换；带入选择、勾保险与部署挂出在段 C 的新面板里（图形版本局不带入，AI 也不带）。
+        body.AddChild(Ui.Text($"局终按名次带出补给点（4 人局 24 / 16 / 12 / 10），普通信物 {RelicKinds.UncalibratedExchangePrice} 点兑换 1 件；带入选择即将提供，本版本图形界面暂不带入。",
             Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Text(CarryTexts.Stock(data.Current), Ui.InfoText, UiTheme.BodyFontPx + 1));
 
-        foreach (SupplyKind kind in Supplies.Order)
+        foreach (RelicKind kind in RelicKinds.Order)
         {
-            int price = Supplies.PriceOf(kind);
-            int stock = data.Current.StockOf(kind);
             body.AddChild(Ui.Separator());
-            body.AddChild(Ui.Text($"{CarryTexts.Supply(kind)}　价 {price}　库存 {stock}", Ui.PanelBorder));
+            body.AddChild(Ui.Text($"{CarryTexts.Relic(kind)}　库存 {data.Current.StockOf(kind)}", Ui.PanelBorder));
             body.AddChild(Ui.Text(CarryTexts.Effect(kind), Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
-
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 6);
-            Button exchange = Ui.Action($"兑换（{price} 点）", 110);
-            exchange.Disabled = !data.CarryAllowed || data.Current.Points < price;
-            SupplyKind captured = kind;
-            exchange.Pressed += () => SupplyExchangePressed?.Invoke(captured);
-            row.AddChild(exchange);
-
-            OptionButton? types = null;
-            if (kind == SupplyKind.Commission)
+            if (RelicKinds.TierOf(kind) != RelicTier.Common)
             {
-                types = new OptionButton { CustomMinimumSize = new Vector2(110f, UiTheme.ButtonHeightPx) };
-                types.AddThemeFontSizeOverride("font_size", UiTheme.BodyFontPx);
-                Ui.Field(types);
-                foreach (CarryCandidate candidate in data.Candidates)
-                {
-                    types.AddItem(Labels.Piece(candidate.Type));
-                }
-
-                _commissionIndex = Math.Clamp(_commissionIndex, 0, Math.Max(0, data.Candidates.Length - 1));
-                types.Selected = _commissionIndex;
-                types.ItemSelected += index => _commissionIndex = (int)index;
-                row.AddChild(types);
+                continue;
             }
 
-            Button carry = Ui.Action("带入并开始", 110);
-            Ui.Primary(carry);
-            carry.Disabled = !data.CarryAllowed || stock < 1;
-            ImmutableArray<CarryCandidate> candidates = data.Candidates;
-            carry.Pressed += () => SupplyCarryPressed?.Invoke(captured,
-                captured == SupplyKind.Commission && candidates.Length > 0 ? candidates[Math.Clamp(_commissionIndex, 0, candidates.Length - 1)].Type : null);
-            row.AddChild(carry);
-            body.AddChild(row);
+            int price = RelicKinds.UncalibratedExchangePrice;
+            Button exchange = Ui.Action($"兑换（{price} 点）", 110);
+            exchange.Disabled = !data.CarryAllowed || data.Current.Points < price;
+            RelicKind captured = kind;
+            exchange.Pressed += () => SupplyExchangePressed?.Invoke(captured);
+            body.AddChild(exchange);
         }
 
         if (data.Feedback.Length > 0)
@@ -198,7 +170,7 @@ public sealed partial class Hud
         }
 
         body.AddChild(Ui.Separator());
-        Button skip = Ui.Action("不带入，开始");
+        Button skip = Ui.Action("开始（不带入）");
         Ui.Primary(skip);
         skip.Pressed += () => SupplySkipPressed?.Invoke();
         body.AddChild(skip);
@@ -215,7 +187,7 @@ public sealed partial class Hud
         _root.Visible = true;
     }
 
-    /// <summary>对局中的带入一栏（公开信息，全部玩家）与弃赛按钮；<paramref name="text"/> 为 <c>null</c> 时整栏隐藏。</summary>
+    /// <summary>对局中的带入一栏（本人自己的带入清单，私有，R22）与弃赛按钮；<paramref name="text"/> 为 <c>null</c> 时整栏隐藏。</summary>
     public void RefreshCarryBar(string? text, bool canResign)
     {
         EnsureCarryRoot();
@@ -224,7 +196,7 @@ public sealed partial class Hud
         _resignButton!.Visible = canResign;
     }
 
-    /// <summary>弹出结算面板：<paramref name="headline"/> 如"完赛 · 第 2 名 · 带出 16 · 补给已消耗"，<paramref name="detail"/> 为结算后的补给点与库存。</summary>
+    /// <summary>弹出结算面板：<paramref name="headline"/> 如"完赛 · 第 2 名 · 带出 16 点 · 带出信物 …"，<paramref name="detail"/> 为结算后的补给点与库存。</summary>
     public void ShowSettlement(string headline, string detail)
     {
         EnsureCarryRoot();
@@ -264,7 +236,7 @@ public sealed partial class Hud
         _confirmPanel!.Visible = true;
     }
 
-    /// <summary>补给名单（供主场景打印取景自证）。</summary>
-    internal static IEnumerable<string> SupplyLines(CarryProfile current) =>
-        Supplies.Order.Select(k => $"{CarryTexts.Supply(k)} 价 {Supplies.PriceOf(k)} 库存 {current.StockOf(k)}");
+    /// <summary>信物库存名单（供主场景打印取景自证）。</summary>
+    internal static IEnumerable<string> SupplyLines(RelicProfile current) =>
+        RelicKinds.Order.Select(k => $"{CarryTexts.Relic(k)} 库存 {current.StockOf(k)}");
 }

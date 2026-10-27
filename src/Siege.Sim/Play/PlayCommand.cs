@@ -4,7 +4,7 @@ using System.Numerics;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 
@@ -21,13 +21,13 @@ internal static class PlayCommand
     /// 依赖 AI 实际走法的脚本测试用这两项写死权重与阈值，使脚本不随默认值校准而失步（testing.md「依赖 AI 实际怎么走的断言要把权重写死」）。</param>
     /// <param name="contentSet">测试接缝：对局内容集；<c>null</c> = 对局配置缺省值（<see cref="ContentSets.Default"/>，v2）。终端入口不传（more-pieces-relics D8）。
     /// 依赖走法的脚本测试写死 v1（征募棋池随内容集变），使脚本不随缺省内容集变化而失步。</param>
-    /// <param name="profile">带入带出的档案存取（carry-in-out D10）；<c>null</c> = 关闭带入带出、不读写任何档案（缺省）。
+    /// <param name="profile">带入带出的档案存取（relic-redesign D8，档案 v2）；<c>null</c> = 关闭带入带出、不读写任何档案（缺省）。
     /// 入口 <c>Program.Play</c> 缺省传缺省档案、<c>--no-carry</c> 传 <c>null</c>；脚本化测试不传即关闭，不碰真实用户目录，只在需要时注入临时档案。</param>
     /// <param name="onAi">测试接缝：每名 AI 玩家的控制者建好后回调一次（终端不写对局日志，脚本测试经它核对 AI 的难度、搜索配置与前瞻记录）。终端入口不传。</param>
     public static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map = null, int? cellLimit = null,
         EvaluationWeights? weights = null, int? passThreshold = null, ContentSet? contentSet = null,
-        CarryProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null)
+        RelicProfileStore? profile = null, Action<PlayerId, HeuristicTurnController>? onAi = null)
         => Run(seedArg, playerCountArg, seat, difficulty, input, output, map, cellLimit, weights, passThreshold, contentSet, profile, onAi, arrange: null);
 
     /// <summary>
@@ -37,7 +37,7 @@ internal static class PlayCommand
     internal static int Run(
         ulong? seedArg, int? playerCountArg, int seat, AiDifficulty difficulty, TextReader input, TextWriter output, MapData? map, int? cellLimit,
         EvaluationWeights? weights, int? passThreshold, ContentSet? contentSet,
-        CarryProfileStore? profile, Action<PlayerId, HeuristicTurnController>? onAi, Action<MatchFlow>? arrange)
+        RelicProfileStore? profile, Action<PlayerId, HeuristicTurnController>? onAi, Action<MatchFlow>? arrange)
     {
         map ??= MapCatalog.Resolve(null);
         int playerCount = playerCountArg ?? map.MaxPlayers;
@@ -64,15 +64,15 @@ internal static class PlayCommand
         options = contentSet is { } set ? options with { ContentSet = set } : options;
         var render = new BoardRenderer(output);
 
-        // 带入带出（carry-in-out）：开启时在建局之前读档、处理残留在途记录、兑换与选择带入；AI 按本机玩家的带入数从 carry-ai 子流抽取。
+        // 带入带出（relic-redesign W2）：开启时在建局之前读档、处理残留在途记录、兑换与选择带入清单；AI 按本机玩家的带入件数从 carry-ai 子流抽取（R21）。
         // 档案来自更新的版本或人数没有点数表时，本局按关闭进行（store 为 null）。关闭时对局选项不变，与引入带入带出之前逐步相同。
-        CarryProfileStore? store = null;
+        RelicProfileStore? store = null;
+        RelicLoadout mine = RelicLoadout.Empty;
         if (profile is not null)
         {
-            CarryIn? mine;
             try
             {
-                (store, mine) = CarryTerminal.Prepare(profile, playerCount, options.ContentSet, input, output, render);
+                (store, mine) = CarryTerminal.Prepare(profile, playerCount, input, output, render);
             }
             catch (PlayQuitException)
             {
@@ -83,7 +83,7 @@ internal static class PlayCommand
 
             if (store is not null)
             {
-                options = options with { CarryInOut = true, CarryIns = CarryAi.ForHumanMatch(new GameSeed(seed), players, me, mine, options.ContentSet) };
+                options = options with { CarryInOut = true, CarryIns = RelicCarryAi.ForHumanMatch(new GameSeed(seed), players, me, mine) };
             }
         }
 
@@ -93,10 +93,10 @@ internal static class PlayCommand
         Func<MatchPublicView> observe = () => match.PublishSeatProjection(me);
         // 对局标识：只用于在途记录的"同一局只结算一次"。种子 + 计时器读数（不参与任何对局随机）。
         string matchId = $"{seed:X16}-{Stopwatch.GetTimestamp():X}";
-        CarryIn? myCarry = match.CarryIns.GetValueOrDefault(me);   // 征召签在建局时已解析出类型
-        store?.Begin(matchId, myCarry);
-        string? quitWarning = store is not null && myCarry is not null ? "退出将丢失带入的补给；弃赛可返还补给并带出 50%。" : null;
-        CarryOutResult? settled = null;
+        // 开局：从库存扣除全部带入件、写在途记录（同一局只结算一次以对局标识去重）。
+        store?.Begin(matchId, mine);
+        string? quitWarning = store is not null && mine.Count > 0 ? "退出将丢失带入的非保险信物（保险件下次启动时归还）；弃赛可带回保险件并带出一半补给点。" : null;
+        RelicPlayerSettlement? settled = null;
 
         output.WriteLine();
         render.Line("══════════ 围杀 Siege · 终端对局 ══════════", ConsoleColor.Yellow);
@@ -115,9 +115,9 @@ internal static class PlayCommand
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         if (store is not null)
         {
-            // 所有玩家的带入从插旗阶段起公开（information-visibility），取自公开视图。
-            output.WriteLine(CarryTerminal.CarryListText(match.Publish().CarryIns, me));
-            output.WriteLine("对局中输入 resign（或 弃赛）可弃赛：返还带入的补给，并按弃赛时的势力名次带出一半补给点（保护期内为 0）。");
+            // 带入清单是私有信息（R22）：只给本人看；部署时用 @N 挂出，挂上即公开。
+            output.WriteLine(CarryTerminal.LoadoutText(mine));
+            output.WriteLine("对局中输入 resign（或 弃赛）可弃赛：带回保险件，未挂出的其余带入件掉到地图上；按弃赛时的势力名次带出一半补给点（保护期内为 0）。");
         }
 
         output.WriteLine();
@@ -177,10 +177,10 @@ internal static class PlayCommand
                     render.Line($"{BoardRenderer.Label(me, me)} 弃赛（弃赛时势力 {snapshot.Power}）。此后由 AI 继续把对局下完。", ConsoleColor.Red);
                     if (store is not null)
                     {
-                        // 弃赛立即结算并写档（design.md D5）：弃赛时势力名次的点数一半；保护期内为 0；补给返还。之后的对局事件不再改变它。
-                        settled = CarryOutSettlement.Resigned(players.Length, snapshot.RankAtResign!.Value, snapshot.MajorRound, myCarry);
+                        // 弃赛立即结算并写档（D6）：只回保险件；弃赛时势力名次的点数一半，保护期内为 0。之后的对局事件不再改变它。
+                        settled = match.EarlySettlementFor(me);
                         store.Settle(matchId, settled);
-                        render.Line(CarryTerminal.ResignText(settled), ConsoleColor.Yellow);
+                        render.Line(CarryTerminal.SettlementText(settled, me), ConsoleColor.Yellow);
                     }
 
                     resigned = true;
@@ -203,10 +203,10 @@ internal static class PlayCommand
 
                 if (store is not null && settled is null && match.StateOf(me).Status == Core.Scoring.PlayerStatus.Eliminated)
                 {
-                    // 出局立即结算（carry-in-out「出局结算」）：补给丢失、带出 0，之后的对局事件不再改变它。
-                    settled = CarryOutSettlement.Eliminated(myCarry);
+                    // 出局立即结算（D6）：只回保险件、带出 0 点，之后的对局事件不再改变它。
+                    settled = match.EarlySettlementFor(me);
                     store.Settle(matchId, settled);
-                    render.Line(CarryTerminal.EliminatedText(settled), ConsoleColor.Red);
+                    render.Line(CarryTerminal.SettlementText(settled, me), ConsoleColor.Red);
                 }
 
                 if (match.Phase == MatchPhase.InProgress && match.MajorRound != round)
@@ -221,14 +221,21 @@ internal static class PlayCommand
             PrintResult(match.Result!, me, output, render);
             if (store is not null)
             {
-                // 局终结算（只在带入带出开启时——implement 段 A 待决「入口只在开关开启时结算」）：弃赛 / 出局已在当时结算过，这里只补完赛者；结算只写一次。
+                // 局终结算（只在带入带出开启时）：弃赛 / 出局已在当时结算过，这里只补完赛者；结算只写一次（在途记录以对局标识去重）。
+                RelicMatchSettlement full = match.SettleCarried();
                 if (settled is null)
                 {
-                    settled = CarryOutSettlement.Settle(match.Result, match.Resignations, match.CarryIns, match.Players)[me];
+                    settled = full.Of(me);
                     store.Settle(matchId, settled);
                 }
 
-                render.Line(CarryTerminal.SettlementText(settled), ConsoleColor.Yellow);
+                render.Line(CarryTerminal.SettlementText(settled, me), ConsoleColor.Yellow);
+                output.WriteLine("信物去向：");
+                foreach (string line in CarryTerminal.DestinationLines(full, me))
+                {
+                    output.WriteLine("  " + line);
+                }
+
                 output.WriteLine(CarryTerminal.ProfileText(store.Current));
             }
 

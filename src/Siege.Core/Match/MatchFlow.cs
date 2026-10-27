@@ -3,8 +3,8 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
 using Siege.Core.Determinism;
+using Siege.Core.PieceRelics;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 
@@ -66,6 +66,7 @@ public sealed partial class MatchFlow
             _records.Add(player, new PlayerRecord());
         }
 
+        InitCarried();
         Debug = new MatchDebugAccess(this);
     }
 
@@ -111,19 +112,12 @@ public sealed partial class MatchFlow
         ContentSets.RequireValid(options.ContentSet);
         ScoringVersions.RequireValid(options.ScoringVersion);
         RequireValidRoundCap(options.RoundCap);
-        // carry-in-out D8：校验各玩家带入并解析征召签（各玩家自己的 carry-draft 子流），解析结果写回配置——存档与日志记录的是结果。
-        // 无带入时原样返回、选项对象不换，不派生任何子流：关闭或全员无带入时与引入带入带出之前逐步相同。
-        if (options.CarryIns.Count > 0)
-        {
-            ImmutableSortedDictionary<PlayerId, CarryIn> carryIns = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, list, options.ContentSet, seed);
-            if (!ReferenceEquals(carryIns, options.CarryIns))
-            {
-                options = options with { CarryIns = carryIns };
-            }
-        }
+        // relic-redesign D5：校验各玩家带入清单（≤ 5 件、保险 ≤ 2；库存由入口层对照档案校验）。带入件不改开局手牌、不派生任何子流：
+        // 关闭或全员不带入时与引入带入之前逐步相同；带入件挂出之前不在盘面上，不产生任何效果（R14）。
+        RequireValidCarryIns(options.CarryInOut, options.CarryIns, list);
 
         return new MatchFlow(map, board, seed, list,
-            new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet, options.CarryIns), new BoardHistory(), options);
+            new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet), new BoardHistory(), options);
     }
 
     // ---------- 组成部分 ----------
@@ -171,8 +165,11 @@ public sealed partial class MatchFlow
     /// <summary>带入带出开关（carry-in-out，match-setup「带入带出配置」）。对局配置，始终公开，入存档。</summary>
     public bool CarryInOut => Options.CarryInOut;
 
-    /// <summary>各玩家的带入（征召签为建局时抽得的类型）。对局配置，始终公开，入存档；关闭时为空。</summary>
-    public ImmutableSortedDictionary<PlayerId, CarryIn> CarryIns => Options.CarryIns;
+    /// <summary>
+    /// 各玩家的带入清单（relic-redesign D5）。<b>私有信息</b>（R22：挂出之前只对本人可见）：不进 <see cref="Publish"/> / <see cref="PublishFor"/> 的公开项，
+    /// 本人可见的未挂出件见 <see cref="PendingCarriedOf"/>；入存档（存档不是对局内的公开信息）。关闭时为空。
+    /// </summary>
+    public ImmutableSortedDictionary<PlayerId, RelicLoadout> CarryIns => Options.CarryIns;
 
     /// <summary>恢复自不含带入带出字段的旧存档时为 <c>true</c>：按"关闭、全员无带入"回填。</summary>
     public bool CarryInOutBackfilled { get; private set; }
@@ -368,6 +365,9 @@ public sealed partial class MatchFlow
             LegalRange = LegalRangeFor(player),
             EditScope = EditScopeFor(player),
             Stock = hand.Entries.ToDictionary(kv => kv.Key, kv => kv.Value.Total),
+            // R14：本人未挂出的带入件与编号游标（私有，只进本人的部署上下文）；没有带入件时为 null，上下文与引入之前相同。
+            Carried = PendingCarriedOf(player) is { Count: > 0 } pending ? pending : null,
+            NextRelicId = _nextRelicId,
         };
         _batch = new StagedBatch(Board, context);
         SetStage(TurnStage.Deploy, player);
@@ -481,6 +481,8 @@ public sealed partial class MatchFlow
         record.ResignedInMajorRound = MajorRound;
         record.PowerAtResign = power;
         Emit(FlowEventKind.PlayerResigned, player, $"弃赛时势力 {power}");
+        // R17：未挂出的非保险带入件立即掉到地图（地图信物落在空格上不改变势力，下面的重算照常）。
+        DropCarriedOf(player);
         RecalculateDerived();
         // 多人战场因弃赛只剩 1 人 → 减员结算（即时标记；势力按弃赛后的重算结果记录）。
         SettleByAttrition(occupancy);
@@ -517,7 +519,7 @@ public sealed partial class MatchFlow
         // 活形分析在同一份副本上做，与 Board / BoardSerialized 同一时刻（life-shape D6）。
         return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order, PlayerStates, board,
             Board.Serialize(), power, PendingRelicForecast, Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board),
-            CarryInOut, CarryIns)
+            CarryInOut)
         {
             PassedThisRound = PassedThisRound,
             RoundCap = RoundCap,
@@ -537,6 +539,9 @@ public sealed partial class MatchFlow
 
     private void OnCheckEndConditions(SettlementContext context)
     {
+        // relic-redesign R14：先记下本批挂出的带入件（推进编号游标），再做出局检查——出局者的 R17 掉落也从游标取编号。
+        RecordCarriedAttachments(context);
+
         // D2：连续 Pass 计数——落子 ≥1 枚即清零。
         _passStreak = context.IsPass ? _passStreak + 1 : 0;
         if (context.IsPass)
@@ -597,6 +602,7 @@ public sealed partial class MatchFlow
             record.EliminatedInMajorRound = MajorRound;
             record.EliminationReason = EliminationReason.PowerZero;
             Emit(FlowEventKind.PlayerEliminated, player, $"第 {order} 个出局（势力归零）");
+            DropCarriedOf(player);   // R17
         }
 
         // 多人战场因势力归零只剩 1 人 → 减员结算（即时标记）。

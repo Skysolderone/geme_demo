@@ -4,9 +4,9 @@ using System.Text.Json;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Core.Tests.AiDecision;
-using Siege.Core.Tests.CarryInOut;
+using Siege.Core.Tests.PieceRelics;
 using Siege.Sim.Analysis;
 using Siege.Sim.Cli;
 using Siege.Sim.Config;
@@ -206,7 +206,7 @@ public class 批量跑局Tests
         // 变异 M-G1：Running/MatchSession.cs 加一处 TimeProvider.System → 红；M-G2：Program.cs 再加一处 → 红（Single）。
         string program = File.ReadAllText(Path.Combine(root, "Program.cs"));
         System.Text.RegularExpressions.Match clock = System.Text.RegularExpressions.Regex.Matches(program, "TimeProvider").Single();
-        int playProfile = program.IndexOf("CarryProfileStore? PlayProfile(CommandLine cli)", StringComparison.Ordinal);
+        int playProfile = program.IndexOf("RelicProfileStore? PlayProfile(CommandLine cli)", StringComparison.Ordinal);
         int nextMember = program.IndexOf("MaterializeMapRequest(string? mapId", StringComparison.Ordinal);
         Assert.True(playProfile > 0 && nextMember > playProfile && clock.Index > playProfile && clock.Index < nextMember, "唯一的 TimeProvider 必须在 PlayProfile 之内");
         Assert.Contains("TimeProvider.System.GetLocalNow)", program, StringComparison.Ordinal);
@@ -274,10 +274,10 @@ public class 批量跑局Tests
     [Fact]
     public void 开启带入()
     {
-        // 规格 Scenario：以 --carry-in 1、种子 1–20 执行 4 人 AI 对局 → 每局 4 名 AI 各带入 1 件补给并写入日志首部，同一种子重跑时带入逐项相同，
-        // 用户目录下的档案不被读写。机制验证只跑每局 4 个小回合（截断局：带出结算全员未结算）；20 局完整冒烟走 CLI（tasks 3.4）。
+        // 规格 Scenario（relic-redesign W2 改写：--carry-in 取 0–5 件信物）：以 --carry-in 3、种子 1–20 执行 4 人 AI 对局 → 每局 4 名 AI 各带入 3 件普通信物（其中 2 件保险）
+        // 并写入日志首部，同一种子重跑时带入逐项相同，用户目录下的档案不被读写（D8）。机制验证只跑每局 4 个小回合（截断局：带出结算全员未结算）。
         string before = RealProfileDir.State();
-        RunConfig config = SimFixtures.Config(count: 20, seedStart: 1, turnLimit: 4) with { CarryIn = 1 };
+        RunConfig config = SimFixtures.Config(count: 20, seedStart: 1, turnLimit: 4) with { CarryIn = 3 };
 
         List<MatchLog> logs = BatchRunner.Execute(config, parallelism: 4);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
@@ -287,35 +287,33 @@ public class 批量跑局Tests
             Assert.False(log.IsFailed);
             Assert.True(log.CarryInOut);
             Assert.Equal([0, 1, 2, 3], log.Header.CarryIns!.Select(e => e.Player));
-            // 与规格口径独立复算：每名 AI 的带入 = carry-ai 子流按编号升序抽取、征召签再经 carry-draft:<编号> 解析（CarryAi / CarryCandidates 各有纯函数测试）。
-            ImmutableSortedDictionary<PlayerId, CarryIn> drawn = CarryAi.Draw(new GameSeed(log.Seed), CarryFixtures.Four, 1, ContentSet.V2);
-            Assert.Equal(
-                CarryFixtures.CarryText(drawn.ToImmutableSortedDictionary(kv => kv.Key, kv => kv.Value.Kind == SupplyKind.DraftLot
-                    ? kv.Value with { Type = CarryCandidates.Draw(new GameSeed(log.Seed), kv.Key, ContentSet.V2) }
-                    : kv.Value)),
-                CarryFixtures.CarryText(log.CarryIns));
+            // 与规格口径独立复算：每名 AI 的带入 = carry-ai 子流按编号升序抽取（RelicCarryAi 有纯函数测试）。
+            ImmutableSortedDictionary<PlayerId, RelicLoadout> drawn = RelicCarryAi.Draw(new GameSeed(log.Seed), TestMaps.All, 3);
+            Assert.Equal(drawn, log.CarryIns);
+            Assert.All(log.CarryIns.Values, l => Assert.Equal((3, 2), (l.Count, l.InsuredCount)));
             Assert.All(log.Result!.CarryOut!, e => Assert.Equal("Unsettled", e.Outcome));   // 截断局不结算（carry-in-out「中途退出与截断」）
             Assert.Equal(4, log.Result.CarryOut!.Count);
         });
 
-        // 样本口径下界：三种补给都出现过。
-        Assert.Equal(["Commission", "DraftLot", "SpareStone"], logs.SelectMany(l => l.Header.CarryIns!).Select(e => e.Supply).Distinct().Order(StringComparer.Ordinal));
+        // 样本口径下界：四种普通信物都出现过，稀有（军旗）不进 AI 带入。
+        Assert.Equal(["Chameleon", "Command", "WarDrum", "Watchtower"],
+            logs.SelectMany(l => l.Header.CarryIns!).SelectMany(e => e.Items!).Select(i => i.Kind).Distinct().Order(StringComparer.Ordinal));
 
         // 同一种子重跑：带入逐项相同。
         MatchLog again = BatchRunner.Execute(config with { Count = 1, SeedStart = 7 }, parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         MatchLog first = logs.Single(l => l.Seed == 7);
-        Assert.Equal(CarryFixtures.CarryText(first.CarryIns), CarryFixtures.CarryText(again.CarryIns));
+        Assert.Equal(first.CarryIns, again.CarryIns);
         Assert.Equal(SimFixtures.TurnTexts(first.Turns), SimFixtures.TurnTexts(again.Turns));   // 首部配置的种子 / 局数不同，只比走法
 
         Assert.Equal(before, RealProfileDir.State());
     }
 
     [Theory]
-    [InlineData("2")]
+    [InlineData("6")]
     [InlineData("-1")]
     public void 非法带入数量(string value)
     {
-        // 规格 Scenario：以 --carry-in 2 执行 → 入口报错退出，不回退到缺省值；不写出任何输出。配置文件里写非法值同样报错。
+        // 规格 Scenario（relic-redesign W2：合法值 0–5）：以 --carry-in 6 执行 → 入口报错退出，不回退到缺省值；不写出任何输出。配置文件里写非法值同样报错。
         string outDir = Path.Combine(SimFixtures.TempDir("carry-illegal"), "out");
         var err = new StringWriter();
         TextWriter saved = Console.Error;
@@ -332,7 +330,7 @@ public class 批量跑局Tests
 
         Assert.NotEqual(0, code);
         Assert.False(Directory.Exists(outDir));
-        Assert.Contains("带入数量", err.ToString(), StringComparison.Ordinal);
+        Assert.Contains("带入件数", err.ToString(), StringComparison.Ordinal);
         Assert.Throws<ArgumentException>(() => RunConfig.FromJson($"{{ \"CarryIn\": {value} }}"));
     }
 

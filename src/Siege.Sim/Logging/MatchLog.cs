@@ -72,19 +72,18 @@ public sealed class MatchLog
     public int RoundCap => Header.Config.RoundCap ?? Siege.Core.Match.MatchOptions.DefaultRoundCap;
 
     /// <summary>
-    /// 各玩家的带入（首部 <see cref="LogHeader.CarryIns"/>，解析成对局配置的形状）。旧日志缺该项，按全员无带入读；
-    /// 补给名或类型名解析不了即 <see cref="FormatException"/>（不静默当成无带入）。
+    /// 各玩家的带入清单（首部 <see cref="LogHeader.CarryIns"/>，解析成对局配置的形状）。旧日志缺该项，按全员无带入读；
+    /// 信物名解析不了即 <see cref="FormatException"/>（不静默当成无带入）。旧补给日志（补给名）不兼容（relic-redesign R26）。
     /// </summary>
-    public System.Collections.Immutable.ImmutableSortedDictionary<Siege.Core.Board.PlayerId, Siege.Core.Carry.CarryIn> CarryIns
+    public System.Collections.Immutable.ImmutableSortedDictionary<Siege.Core.Board.PlayerId, Siege.Core.PieceRelics.RelicLoadout> CarryIns
     {
         get
         {
-            var carries = System.Collections.Immutable.ImmutableSortedDictionary.CreateBuilder<Siege.Core.Board.PlayerId, Siege.Core.Carry.CarryIn>();
+            var carries = System.Collections.Immutable.ImmutableSortedDictionary.CreateBuilder<Siege.Core.Board.PlayerId, Siege.Core.PieceRelics.RelicLoadout>();
             foreach (CarryInEntry entry in Header.CarryIns ?? [])
             {
-                var carry = new Siege.Core.Carry.CarryIn(
-                    ParseName<Siege.Core.Carry.SupplyKind>(entry.Supply, "补给"),
-                    entry.Type is null ? null : ParseName<Siege.Core.Board.PieceType>(entry.Type, "棋子类型"));
+                var carry = new Siege.Core.PieceRelics.RelicLoadout([.. (entry.Items ?? throw new FormatException($"日志首部玩家 {entry.Player} 的带入缺少清单（旧补给日志不兼容）。"))
+                    .Select(i => new Siege.Core.PieceRelics.CarriedRelic(ParseName<Siege.Core.PieceRelics.RelicKind>(i.Kind, "信物"), i.Insured))]);
                 if (!carries.TryAdd(new Siege.Core.Board.PlayerId(entry.Player), carry))
                 {
                     throw new FormatException($"日志首部的带入重复记录了玩家 {entry.Player}。");
@@ -449,8 +448,9 @@ public sealed record LogHeader
     public bool? CarryInOut { get; init; }
 
     /// <summary>
-    /// 各玩家的带入（按玩家编号升序；无带入的玩家不列）：补给种类、换型令指定类型 / 征召签抽得类型。新日志总是写出（无人带入时为空表），
-    /// 旧日志为 <c>null</c>，按全员无带入读（<see cref="MatchLog.CarryIns"/>）。回放按它重建开局手牌（simulation-harness「可复现回放」）。
+    /// 各玩家的带入清单（按玩家编号升序；不带入的玩家不列）：逐件信物名与保险。新日志总是写出（无人带入时为空表），
+    /// 旧日志为 <c>null</c>，按全员无带入读（<see cref="MatchLog.CarryIns"/>）。回放按它重建带入（simulation-harness「可复现回放」）。
+    /// 日志是离线遥测、不是对局内的公开信息，所以写出全部清单（R22 只约束对局内视图）。
     /// </summary>
     public List<CarryInEntry>? CarryIns { get; init; }
 
@@ -474,19 +474,25 @@ public sealed record LogHeader
     public List<BoardEntry>? Boards { get; init; }
 }
 
-/// <summary>日志首部的一名玩家的带入：补给种类名（<see cref="Siege.Core.Carry.SupplyKind"/>）与换入类型名（备用子为 <c>null</c>）。</summary>
+/// <summary>日志首部的一名玩家的带入清单（relic-redesign W2）：逐件信物名（<see cref="Siege.Core.PieceRelics.RelicKind"/>）与保险。</summary>
 public sealed record CarryInEntry
 {
     public int Player { get; init; }
 
-    public required string Supply { get; init; }
+    public List<CarriedLogEntry>? Items { get; init; }
+}
 
-    public string? Type { get; init; }
+/// <summary>带入清单的一件：信物名与是否保险。</summary>
+public sealed record CarriedLogEntry
+{
+    public required string Kind { get; init; }
+
+    public bool Insured { get; init; }
 }
 
 /// <summary>
-/// 结果行的一名玩家的带出结算（match-telemetry 第 7 条）：结局类别（<see cref="Siege.Core.Carry.CarryOutcome"/> 名）、所用名次（出局 / 未结算为 <c>null</c>）、
-/// 带出补给点、带入的补给（无带入为 <c>null</c>）与它是否返还。截断局全员为 <c>Unsettled</c>。
+/// 结果行的一名玩家的带出结算（match-telemetry 第 7 条，relic-redesign D6）：结局类别（<see cref="Siege.Core.PieceRelics.RelicOutcome"/> 名，截断局为 <c>Unsettled</c>）、
+/// 所用名次（出局 / 未结算为 <c>null</c>）、带出补给点、带出的信物（<c>#编号:信物名</c>，按编号升序）。
 /// </summary>
 public sealed record CarryOutEntry
 {
@@ -498,11 +504,7 @@ public sealed record CarryOutEntry
 
     public int Points { get; init; }
 
-    public string? Supply { get; init; }
-
-    public string? Type { get; init; }
-
-    public bool Returned { get; init; }
+    public List<string> BroughtOut { get; init; } = [];
 }
 
 /// <summary>
@@ -1070,7 +1072,7 @@ public sealed record LogResult
 
     /// <summary>
     /// 带出结算（按玩家编号升序，每名玩家一条）：只在带入带出开启的局写出；关闭的局与旧日志为 <c>null</c>（无带出结算）。
-    /// 截断局全员 <c>Unsettled</c>（carry-in-out「中途退出与截断」）。
+    /// 截断局全员 <c>Unsettled</c>、不带出（截断不结算）。
     /// </summary>
     public List<CarryOutEntry>? CarryOut { get; init; }
 }

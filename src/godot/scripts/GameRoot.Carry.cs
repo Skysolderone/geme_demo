@@ -5,13 +5,14 @@ using System.Linq;
 using Godot;
 using Siege.Core.Ai;
 using Siege.Core.Board;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Presentation.Text;
 
 namespace Siege.Godot;
 
 /// <summary>
-/// 带入带出的入口（carry-in-out D9 / D10）：<c>--profile=&lt;路径&gt;</c> / <c>--no-carry</c>、选图之后插旗之前的补给阶段、弃赛、结算面板与关窗提示。
+/// 带入带出的入口（relic-redesign 接线段 W2 的最小版本）：<c>--profile=&lt;路径&gt;</c> / <c>--no-carry</c>、选图之后插旗之前的信物档案阶段（看档案、兑换，暂不带入）、弃赛、结算面板与关窗提示。
+/// 带入选择、勾保险、部署挂出与信物去向面板在段 C。
 /// </summary>
 /// <remarks>
 /// <para>档案与结算都在 Core：本类只读命令行、构造档案存取（注入墙钟——Core 不读时钟，图形版里唯一一处系统墙钟在 <see cref="ReadCarryArgs"/> 里，只用于损坏备份的文件名）、
@@ -21,7 +22,7 @@ namespace Siege.Godot;
 /// </remarks>
 public sealed partial class GameRoot
 {
-    private CarryProfileStore? _carryStore;
+    private RelicProfileStore? _carryStore;
     private MapData? _supplyMap;
     private SupplyPanelData? _supplyData;
     private string? _carryPreview;
@@ -62,7 +63,7 @@ public sealed partial class GameRoot
 
         if (!noCarry)
         {
-            _carryStore = new CarryProfileStore(path ?? CarryProfileStore.DefaultPath(), TimeProvider.System.GetLocalNow);
+            _carryStore = new RelicProfileStore(path ?? RelicProfileStore.DefaultPath(), TimeProvider.System.GetLocalNow);
         }
     }
 
@@ -76,13 +77,13 @@ public sealed partial class GameRoot
         {
             _supplyNotices.Clear();
             _supplyNotices.Add("预览：示例档案（内存中），不读写任何档案文件。");
-            var sample = new CarryProfile
+            var sample = new RelicProfile
             {
                 Points = 17,
-                Inventory = ImmutableSortedDictionary<SupplyKind, int>.Empty.Add(SupplyKind.SpareStone, 1).Add(SupplyKind.Commission, 2),
+                Inventory = ImmutableSortedDictionary<RelicKind, int>.Empty.Add(RelicKind.WarDrum, 1).Add(RelicKind.Watchtower, 2).Add(RelicKind.Banner, 1),
             };
             _supplyMap = map;
-            _supplyData = new SupplyPanelData([.. _supplyNotices], sample, CarryCandidates.Of(_session.Match.ContentSet), string.Empty, CarryAllowed: true, Preview: true);
+            _supplyData = new SupplyPanelData([.. _supplyNotices], sample, string.Empty, CarryAllowed: true, Preview: true);
             _dirty = true;
             return true;
         }
@@ -93,21 +94,21 @@ public sealed partial class GameRoot
         }
 
         _supplyNotices.Clear();
-        CarryProfileLoad load = _carryStore.Load();
+        RelicProfileLoad load = _carryStore.Load();
         _supplyNotices.Add(load.Message);
         GD.Print($"[carry] {load.Message}");
-        _supplyCarryOff = load.Status == CarryProfileLoadStatus.NewerVersion;
+        _supplyCarryOff = load.Status == RelicProfileLoadStatus.NewerVersion;
         if (_supplyCarryOff)
         {
             // 版本不符：档案只读不写，本局关闭带入带出；提示仍在补给面板上显示，面板只剩"不带入，开始"。
             _supplyMap = map;
-            _supplyData = new SupplyPanelData([.. _supplyNotices], CarryProfile.Empty, CarryCandidates.Of(_session.Match.ContentSet), "本局不提供带入、局终不结算。", CarryAllowed: false, Preview: false);
+            _supplyData = new SupplyPanelData([.. _supplyNotices], RelicProfile.Empty, "本局不提供带入、局终不结算。", CarryAllowed: false, Preview: false);
             _dirty = true;
             return true;
         }
 
         int players = map.MaxPlayers;
-        if (!CarryPoints.Supports(players))
+        if (!RelicPoints.Supports(players))
         {
             GD.Print($"[carry] {players} 人局没有名次补给点表，本局不提供带入、局终不结算。");
             return false;
@@ -115,19 +116,20 @@ public sealed partial class GameRoot
 
         if (_carryStore.SettleAbandoned() is { } abandoned)
         {
-            string lost = abandoned.Carry is { } c ? $"{CarryTexts.Supply(c.Kind)}已丢失" : "上一局未带入补给";
-            _supplyNotices.Add($"上一局中途退出：{lost}，补给点不变。");
+            CarriedRelic[] returned = [.. abandoned.Carried.Where(c => c.Insured)];
+            string back = returned.Length == 0 ? "没有保险件" : $"保险件 {string.Join("、", returned.Select(c => CarryTexts.Relic(c.Kind)))} 已归还";
+            _supplyNotices.Add($"上一局中途退出：{back}，其余带入件丢失，补给点不变。");
         }
 
         _supplyMap = map;
         RefreshSupplyData(string.Empty);
-        GD.Print($"[carry] 补给阶段：{CarryTexts.Stock(_carryStore.Current)}（档案 {_carryStore.FilePath}）");
+        GD.Print($"[carry] 信物档案阶段：{CarryTexts.Stock(_carryStore.Current)}（档案 {_carryStore.FilePath}）");
         return true;
     }
 
     private void RefreshSupplyData(string feedback)
     {
-        _supplyData = new SupplyPanelData([.. _supplyNotices], _carryStore!.Current, CarryCandidates.Of(_session.Match.ContentSet), feedback, CarryAllowed: true, Preview: false);
+        _supplyData = new SupplyPanelData([.. _supplyNotices], _carryStore!.Current, feedback, CarryAllowed: true, Preview: false);
         _dirty = true;
     }
 
@@ -141,10 +143,10 @@ public sealed partial class GameRoot
             }
 
             bool ok = _carryStore.TryExchange(kind, out string? refusal);
-            RefreshSupplyData(ok ? $"已兑换 1 件{CarryTexts.Supply(kind)}。" : $"兑换失败：{refusal}。");
+            RefreshSupplyData(ok ? $"已兑换 1 件{CarryTexts.Relic(kind)}。" : $"兑换失败：{refusal}。");
         };
-        _hud.SupplyCarryPressed += (kind, type) => FinishSupply(new CarryIn(kind, kind == SupplyKind.Commission ? type : null));
-        _hud.SupplySkipPressed += () => FinishSupply(null);
+        // 最小版本只有"开始（不带入）"：本机玩家不带入，AI 同等件数也为 0；带入选择在段 C。
+        _hud.SupplySkipPressed += () => FinishSupply(RelicLoadout.Empty);
         _hud.ResignConfirmed += () =>
         {
             CutShow();   // 演出中弃赛：演出先以终态结束（settlement-show A5）
@@ -154,8 +156,8 @@ public sealed partial class GameRoot
         };
     }
 
-    /// <summary>补给面板确认：按所选带入建真正的对局（AI 同等数量），开局登记在途记录，进入插旗。</summary>
-    private void FinishSupply(CarryIn? mine)
+    /// <summary>信物面板确认：按所选带入建真正的对局（AI 同等件数），开局登记在途记录，进入插旗。</summary>
+    private void FinishSupply(RelicLoadout mine)
     {
         if (_supplyMap is not { } map || _carryStore is null)
         {
@@ -169,9 +171,9 @@ public sealed partial class GameRoot
         }
         else
         {
-            if (mine is not null && _carryStore.Current.StockOf(mine.Kind) < 1)
+            if (mine.RefusalAgainst(_carryStore.Current) is { } refusal)
             {
-                RefreshSupplyData($"没有{CarryTexts.Supply(mine.Kind)}库存，先兑换。");
+                RefreshSupplyData($"不能这样带入：{refusal}。");
                 return;
             }
 
@@ -204,7 +206,7 @@ public sealed partial class GameRoot
     /// <summary>补给阶段的面板刷新（由 <c>RefreshViews</c> 调用）。</summary>
     private void RefreshSupply() => _hud.ShowSupply(_supplyData!);
 
-    /// <summary>对局面板刷新之后：带入一栏（公开信息）与弃赛按钮。</summary>
+    /// <summary>对局面板刷新之后：带入一栏（本人自己的带入清单，私有）与弃赛按钮。</summary>
     private void RefreshCarry()
     {
         if (Unattended && !_session.Match.CarryInOut)
@@ -218,9 +220,8 @@ public sealed partial class GameRoot
         _hud.RefreshCarryBar(inProgress || _session.Match.CarryInOut ? text : null, _session.CanResign && !Unattended);
     }
 
-    /// <summary>全部玩家的带入（公开视图里的带入，从插旗阶段起公开）。</summary>
-    private string CarryListText() =>
-        CarryTexts.List(_session.World.Public.View.CarryIns, p => p == _session.Me ? "你" : Labels.Player(p));
+    /// <summary>本人的带入清单（R22：别人的带入挂出之前不公开，这里只显示自己的）。</summary>
+    private string CarryListText() => CarryTexts.Loadout(_session.MyCarry);
 
     /// <summary>每帧推进之后：本机玩家出局或对局终局即结算并弹出结算面板（弃赛在按钮回调里已结算）。</summary>
     private void CheckCarrySettlement()
@@ -232,16 +233,17 @@ public sealed partial class GameRoot
         }
     }
 
-    private void ShowCarrySettlement(CarryOutResult? settled)
+    private void ShowCarrySettlement(RelicPlayerSettlement? settled)
     {
         if (settled is null || _session.CarryStore is not { } store)
         {
             return;
         }
 
-        GetTree().AutoAcceptQuit = true;   // 已结算：关窗不再有可丢的补给
-        _hud.ShowSettlement(CarryTexts.Settlement(settled), "结算后：" + CarryTexts.Stock(store.Current));
-        GD.Print($"[carry] 结算：{CarryTexts.Settlement(settled)}；{CarryTexts.Stock(store.Current)}");
+        GetTree().AutoAcceptQuit = true;   // 已结算：关窗不再有可丢的信物
+        string headline = CarryTexts.Settlement(settled, PlayerName);
+        _hud.ShowSettlement(headline, "结算后：" + CarryTexts.Stock(store.Current));
+        GD.Print($"[carry] 结算：{headline}；{CarryTexts.Stock(store.Current)}");
     }
 
     /// <summary>
@@ -255,17 +257,17 @@ public sealed partial class GameRoot
             return;
         }
 
-        if (_session.CarryStore is null || _session.CarrySettled is not null || _session.MyCarry is null || _session.IsOver)
+        if (_session.CarryStore is null || _session.CarrySettled is not null || _session.MyCarry.Count == 0 || _session.IsOver)
         {
             GetTree().Quit();
             return;
         }
 
-        _hud.ShowConfirm("退出将丢失带入的补给；弃赛可返还补给并带出 50%。确认退出？", "确认退出", () => GetTree().Quit());
+        _hud.ShowConfirm("退出将丢失带入的非保险信物；弃赛可带回保险件并带出一半补给点。确认退出？", "确认退出", () => GetTree().Quit());
     }
 
     /// <summary>
-    /// <c>--carry-preview=settlement</c>：对局面板照常，叠一张示例结算面板（4 人局完赛第 2 名、带入备用子），只做展示、不碰档案。
+    /// <c>--carry-preview=settlement</c>：对局面板照常，叠一张示例结算面板（4 人局完赛第 2 名、带出一件保险战鼓与一件地图军旗），只做展示、不碰档案。
     /// </summary>
     private void ShowCarryPreview()
     {
@@ -274,14 +276,20 @@ public sealed partial class GameRoot
             return;
         }
 
-        CarryOutResult sample = CarryOutSettlement.Finished(4, 2, new CarryIn(SupplyKind.SpareStone));
-        var after = new CarryProfile
+        var me = new PlayerId(0);
+        var sample = new RelicPlayerSettlement(me, RelicPlayerOutcome.Finished(2), RelicPoints.For(4, 2),
+            [RelicToken.Carried(0, RelicKind.WarDrum, me, insured: true), RelicToken.Spawned(5, RelicKind.Banner)]);
+        var after = new RelicProfile
         {
             Points = 33,
-            Inventory = ImmutableSortedDictionary<SupplyKind, int>.Empty.Add(SupplyKind.Commission, 1),
+            Inventory = ImmutableSortedDictionary<RelicKind, int>.Empty.Add(RelicKind.WarDrum, 2).Add(RelicKind.Banner, 1),
         };
-        _hud.ShowSettlement(CarryTexts.Settlement(sample), "结算后：" + CarryTexts.Stock(after) + "（预览：示例结算，不读写任何档案）");
+        _hud.ShowSettlement(CarryTexts.Settlement(sample, p => p == me ? "你" : Labels.Player(p)), "结算后：" + CarryTexts.Stock(after) + "（预览：示例结算，不读写任何档案）");
     }
+
+    /// <summary>结算文案里的玩家名：本机玩家写"你"。</summary>
+    private string PlayerName(PlayerId p) => p == _session.Me ? "你" : Labels.Player(p);
+
 
     /// <summary>截图取景自证的一行：两个带入带出面板的开关与位置。</summary>
     private string CarryShotLine()
@@ -290,7 +298,7 @@ public sealed partial class GameRoot
         Rect2 settlement = _hud.SettlementRect;
         string stock = _supplyData is { } data ? string.Join("、", Hud.SupplyLines(data.Current)) : "—";
         return $"[carry] 补给面板 {(_hud.SupplyOpen ? $"开 ({supply.Position.X:0}, {supply.Position.Y:0}) {supply.Size.X:0}×{supply.Size.Y:0}" : "关")}，"
-            + $"结算面板 {(_hud.SettlementOpen ? $"开 ({settlement.Position.X:0}, {settlement.Position.Y:0}) {settlement.Size.X:0}×{settlement.Size.Y:0}" : "关")}；补给 {stock}；"
+            + $"结算面板 {(_hud.SettlementOpen ? $"开 ({settlement.Position.X:0}, {settlement.Position.Y:0}) {settlement.Size.X:0}×{settlement.Size.Y:0}" : "关")}；信物 {stock}；"
             + $"档案存取 {(_carryStore is null ? "无（不读写档案）" : _carryStore.FilePath)}";
     }
 }

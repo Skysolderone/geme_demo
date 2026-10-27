@@ -1,94 +1,102 @@
 using Siege.Core.Board;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Presentation.Text;
 
 /// <summary>
-/// 带入带出（carry-in-out）面向玩家的文案：补给名、效果、带入、结算与档案概览。终端与图形版共用这一份（段 B 后裁决 3），
-/// 只做"值 → 文字"，不做任何规则判断——结算一律由 Core 的 <see cref="CarryOutSettlement"/> 给出，这里只把结果写成字。
+/// 带入带出（relic-redesign 接线段 W2）面向玩家的文案：信物名、效果、带入清单、结算与档案概览。终端与图形版共用这一份，
+/// 只做"值 → 文字"，不做任何规则判断——结算一律由 Core（<c>MatchFlow.SettleCarried</c> / <c>EarlySettlementFor</c>，唯一实现 <see cref="RelicSettlement"/>）给出。
 /// </summary>
 public static class CarryTexts
 {
-    /// <summary>补给名称。</summary>
-    public static string Supply(SupplyKind kind) => kind switch
+    /// <summary>信物名称（Core 的唯一映射 <see cref="RelicKinds.DisplayName"/>）。</summary>
+    public static string Relic(RelicKind kind) => kind.DisplayName();
+
+    /// <summary>信物效果（一句话，R12 未校准初值）。</summary>
+    public static string Effect(RelicKind kind) => kind switch
     {
-        SupplyKind.SpareStone => "备用子",
-        SupplyKind.DraftLot => "征召签",
-        SupplyKind.Commission => "换型令",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知补给种类。"),
+        RelicKind.WarDrum => "持物棋子基础军势 +3",
+        RelicKind.Command => "所在棋串位置加值 + 棋串棋子数 / 2",
+        RelicKind.Watchtower => "持物棋子按岩台覆盖（四方向直线距离 2）",
+        RelicKind.Chameleon => "协同计数多算 1 种类型，所在棋串位置加值 +2",
+        RelicKind.Banner => "所在棋串倍率指数 +1（×1.5），稀有",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知信物种类。"),
     };
 
-    /// <summary>补给的开局效果（一句话）。</summary>
-    public static string Effect(SupplyKind kind) => kind switch
-    {
-        SupplyKind.SpareStone => "开局多 1 枚普通子（共 6 枚）",
-        SupplyKind.DraftLot => "开局 1 枚普通子换成随机类型（按基础权重抽取）",
-        SupplyKind.Commission => "开局 1 枚普通子换成指定类型",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知补给种类。"),
-    };
+    /// <summary>一件带入：<c>战鼓（保险）</c>。</summary>
+    public static string Carried(CarriedRelic item) => item.Kind.DisplayName() + (item.Insured ? "（保险）" : string.Empty);
 
-    /// <summary>一件带入：<c>换型令 → 连珠子</c>；备用子只写名称。</summary>
-    public static string Carry(CarryIn carry)
+    /// <summary>一份带入清单：<c>带入：战鼓（保险）、望台</c>；空清单 <c>带入：不带入</c>。清单是私有信息（R22），只给本人看。</summary>
+    public static string Loadout(RelicLoadout loadout)
     {
-        ArgumentNullException.ThrowIfNull(carry);
-        return carry.Type is { } type ? $"{Supply(carry.Kind)} → {Labels.Piece(type)}" : Supply(carry.Kind);
+        ArgumentNullException.ThrowIfNull(loadout);
+        return "带入：" + (loadout.Count == 0 ? "不带入" : string.Join("、", loadout.Items.Select(Carried)));
     }
 
-    /// <summary>
-    /// 全部玩家的带入（公开信息）：<c>带入：你：换型令 → 连珠子；玩家2：征召签 → 堡垒子</c>，按玩家编号升序；无人带入时 <c>带入：全员不带入</c>。
-    /// 玩家名由调用方给（终端"你 / 玩家2"，图形版阵营名）。
-    /// </summary>
-    public static string List(IReadOnlyDictionary<PlayerId, CarryIn> carries, Func<PlayerId, string> name)
+    /// <summary>本人未挂出的带入件（部署挂出参数用清单下标，从 1 起显示）：<c>未挂出：[1] 战鼓（保险） [3] 望台</c>；没有时 <c>未挂出：无</c>。</summary>
+    public static string Pending(IEnumerable<KeyValuePair<int, CarriedRelic>> pending)
     {
-        ArgumentNullException.ThrowIfNull(carries);
+        ArgumentNullException.ThrowIfNull(pending);
+        string[] items = [.. pending.Select(kv => $"[{kv.Key + 1}] {Carried(kv.Value)}")];
+        return "未挂出：" + (items.Length == 0 ? "无" : string.Join(" ", items));
+    }
+
+    /// <summary>一件信物：<c>#3 战鼓（玩家2 带入，保险）</c> / <c>#5 军旗（地图）</c>。</summary>
+    public static string Token(RelicToken token, Func<PlayerId, string> name)
+    {
         ArgumentNullException.ThrowIfNull(name);
-        return carries.Count == 0
-            ? "带入：全员不带入"
-            : "带入：" + string.Join("；", carries.OrderBy(kv => kv.Key).Select(kv => $"{name(kv.Key)}：{Carry(kv.Value)}"));
+        return $"#{token.Id} {token.Kind.DisplayName()}"
+            + (token.Origin is { } origin ? $"（{name(origin)} 带入{(token.Insured ? "，保险" : string.Empty)}）" : "（地图）");
     }
 
-    /// <summary>弃赛当时的结算行：<c>弃赛：弃赛名次第 2，带出 8，换型令已返还</c>；带出 0 时注明保护期。</summary>
-    public static string Resign(CarryOutResult result)
+    /// <summary>结局正文：<c>完赛 · 第 2 名 · 带出 16 点</c> / <c>弃赛 · 弃赛名次第 2 名 · 带出 8 点</c> / <c>出局 · 带出 0 点</c>。</summary>
+    public static string Outcome(RelicPlayerSettlement result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return $"弃赛：弃赛名次第 {result.Rank}，带出 {result.Points}，{Item(result)}" + (result.Points == 0 ? "（构筑保护期内弃赛不带出补给点）" : string.Empty);
-    }
-
-    /// <summary>出局当时的结算行：<c>出局：带出 0，换型令已丢失</c>。</summary>
-    public static string Eliminated(CarryOutResult result)
-    {
-        ArgumentNullException.ThrowIfNull(result);
-        return $"出局：带出 0，{Item(result)}";
-    }
-
-    /// <summary>结算正文：<c>完赛 · 第 2 名 · 带出 16 · 补给已消耗</c>（终端前缀"结算："，图形版结算面板直接显示）。</summary>
-    public static string Settlement(CarryOutResult result)
-    {
-        ArgumentNullException.ThrowIfNull(result);
-        return result.Outcome switch
+        return result.Outcome.Outcome switch
         {
-            CarryOutcome.Finished => $"完赛 · 第 {result.Rank} 名 · 带出 {result.Points} · {Item(result)}",
-            CarryOutcome.Resigned => $"弃赛 · 弃赛名次第 {result.Rank} 名 · 带出 {result.Points} · {Item(result)}",
-            CarryOutcome.Eliminated => $"出局 · 带出 0 · {Item(result)}",
+            RelicOutcome.Finished => $"完赛 · 第 {result.Outcome.Rank} 名 · 带出 {result.Points} 点",
+            RelicOutcome.Resigned => $"弃赛 · 弃赛名次第 {result.Outcome.Rank} 名 · 带出 {result.Points} 点"
+                + (result.Points == 0 ? "（构筑保护期内弃赛不带出补给点）" : string.Empty),
+            RelicOutcome.Eliminated => "出局 · 带出 0 点",
+            RelicOutcome.Abandoned => "中途退出 · 带出 0 点",
             _ => "未结算",
         };
     }
 
-    /// <summary>档案概览：<c>补给点 17   库存 备用子×1  征召签×0  换型令×2</c>。</summary>
-    public static string Stock(CarryProfile profile)
-    {
-        ArgumentNullException.ThrowIfNull(profile);
-        return $"补给点 {profile.Points}   库存 {string.Join("  ", Supplies.Order.Select(k => $"{Supply(k)}×{profile.StockOf(k)}"))}";
-    }
-
-    /// <summary>带入物的去向：未带入 / 已返还 / 已消耗（完赛）/ 已丢失。</summary>
-    public static string Item(CarryOutResult result)
+    /// <summary>本人结算一行：<c>完赛 · 第 1 名 · 带出 24 点 · 带出信物 #3 战鼓（你 带入，保险）、#7 军旗（地图）</c>。</summary>
+    public static string Settlement(RelicPlayerSettlement result, Func<PlayerId, string> name)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return result.CarryIn is not { } carry
-            ? "未带入补给"
-            : result.Returned ? $"{Supply(carry.Kind)}已返还"
-            : result.Outcome == CarryOutcome.Finished ? "补给已消耗"
-            : $"{Supply(carry.Kind)}已丢失";
+        return Outcome(result) + " · " + (result.BroughtOut.IsEmpty ? "未带出信物" : "带出信物 " + string.Join("、", result.BroughtOut.Select(t => Token(t, name))));
+    }
+
+    /// <summary>
+    /// 整局每件信物的去向（D6）：每名带走了信物的玩家一行 <c>玩家2 带走：#3 战鼓（你 带入）……</c>，消失的一行 <c>消失：……</c>。按玩家编号升序。
+    /// </summary>
+    public static IReadOnlyList<string> Destinations(RelicMatchSettlement settlement, Func<PlayerId, string> name)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        ArgumentNullException.ThrowIfNull(name);
+        List<string> lines = [.. settlement.Players.Values.Where(p => !p.BroughtOut.IsEmpty)
+            .Select(p => $"{name(p.Player)} 带走：{string.Join("、", p.BroughtOut.Select(t => Token(t, name)))}")];
+        if (!settlement.Vanished.IsEmpty)
+        {
+            lines.Add($"消失：{string.Join("、", settlement.Vanished.Select(t => Token(t, name)))}");
+        }
+
+        if (lines.Count == 0)
+        {
+            lines.Add("本局没有带出的信物");
+        }
+
+        return lines;
+    }
+
+    /// <summary>档案概览：<c>补给点 17   库存 战鼓×1  号令×0  望台×2  百变×0  军旗×1</c>。</summary>
+    public static string Stock(RelicProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return $"补给点 {profile.Points}   库存 {string.Join("  ", RelicKinds.Order.Select(k => $"{k.DisplayName()}×{profile.StockOf(k)}"))}";
     }
 }

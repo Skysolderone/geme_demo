@@ -49,6 +49,24 @@ public sealed class StagedBatch
     public BatchFailure? Stage(Coord coord, PieceType type, TerrainEdit? edit = null) =>
         TryApply([.. _placements, new Placement(coord, type, edit)]);
 
+    /// <summary>
+    /// 暂放一枚并给它挂上本人带入清单第 <paramref name="attachCarried"/> 件（relic-redesign R14；<c>null</c> 不挂）。合法性同 <see cref="Stage(Coord, PieceType, TerrainEdit?)"/>，
+    /// 另按预演第 1 步校验挂出（<see cref="BatchFailureKind.CarriedRelicIllegal"/>）。
+    /// </summary>
+    public BatchFailure? Stage(Coord coord, PieceType type, TerrainEdit? edit, int? attachCarried) =>
+        TryApply([.. _placements, new Placement(coord, type, edit, attachCarried)]);
+
+    /// <summary>改挂：把 <paramref name="coord"/> 上的暂放改为挂带入清单第 <paramref name="attachCarried"/> 件（<c>null</c> = 不挂），保留其批次内顺序。</summary>
+    public BatchFailure? Attach(Coord coord, int? attachCarried)
+    {
+        int index = IndexOf(coord);
+        var candidate = new List<Placement>(_placements)
+        {
+            [index] = _placements[index] with { AttachCarried = attachCarried },
+        };
+        return TryApply(candidate);
+    }
+
     /// <summary>换位：把 <paramref name="from"/> 上的暂放移到 <paramref name="to"/>，保留其批次内顺序与类型。</summary>
     public BatchFailure? Move(Coord from, Coord to)
     {

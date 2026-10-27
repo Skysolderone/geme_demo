@@ -40,7 +40,7 @@ public sealed record RelicProfileLoad(RelicProfileLoadStatus Status, string Path
 }
 
 /// <summary>
-/// 档案 v2 存取（relic-redesign design.md D7）：读（含 v1 迁移）、兑换、开局扣除、结算。与旧 <c>Carry.CarryProfileStore</c> 并存，接线段再切换入口。
+/// 档案 v2 存取（relic-redesign design.md D7）：读（含 v1 迁移）、兑换、开局扣除、结算。终端与图形版共用（接线段 W2 起替换旧补给档案存取）。
 /// </summary>
 /// <remarks>
 /// <para>写入先写同目录的 <c>.tmp</c>，再用 <see cref="File.Move(string, string, bool)"/> 覆盖原文件：替换之前中断时原档案保持写入前的状态。内存中的档案只在写入成功后更新。</para>
@@ -70,6 +70,10 @@ public sealed class RelicProfileStore
         _clock = clock;
         _beforeReplace = beforeReplace;
     }
+
+    /// <summary>缺省档案路径：用户数据目录下的 <c>Siege/profile.json</c>（Windows 为 <c>%APPDATA%\Siege\profile.json</c>），终端与图形版共用。v1 补给档案在同一路径，读入时迁移。</summary>
+    public static string DefaultPath() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Siege", "profile.json");
 
     public string FilePath { get; }
 

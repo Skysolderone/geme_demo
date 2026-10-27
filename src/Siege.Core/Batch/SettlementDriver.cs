@@ -94,11 +94,13 @@ public sealed class SettlementDriver
         // 1. 从手牌扣除已部署棋子
         _hooks.DeductHand(context.Player, CountByType(ordered));
 
-        // 2. 将整个批次加入正式盘面
+        // 2. 将整个批次加入正式盘面（带入件随落子挂上：relic-redesign R14，与预演副本同一实现，编号从 context.NextRelicId 起按批内顺序）
         foreach (Placement placement in ordered)
         {
             Board.Place(placement.Coord, context.Player, placement.Type);
         }
+
+        BatchRehearsal.AttachCarried(Board, context, ordered);
 
         // 3. 同时应用本批次的全部改造（§6.3 + terrain-edit「改造先于提子生效」）。
         // 与第 4 步调换顺序会让"立栅致提子"失效——预演副本与正式盘面的 Serialize 比对会当场抓住。

@@ -100,7 +100,7 @@ public static class Program
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
-        Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
+        Console.WriteLine("                [--carry-in <每名 AI 的带入件数 0–5，缺省 0 = 关闭带入带出；1–5 = 每名 AI 从 carry-ai 子流随机带入该件数的普通信物（随机至多 2 件保险），结算只写日志、不读写档案>]");
         Console.WriteLine($"                [--round-cap <大回合上限安全网，非负整数，缺省 {Core.Match.MatchOptions.DefaultRoundCap}，0=不启用；到达时按势力强制结算（cycle-stop）>] [--stagnation-rounds <AI 停滞大回合数 K，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultStagnationRounds}，0=不启用；连续 K 个大回合无净增且候选全是提子 / 反提即 Pass>]");
         Console.WriteLine($"                [--whole-batch <AI 整批候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultWholeBatch}；1 = 标准 / 高难 / 专家另加剪枝候选与配对候选（逐枚为负、整批为正的组合），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine($"                [--edit-seed <AI 搭桥候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultEditSeed}；1 = 标准 / 高难 / 专家另加以搭桥单点为起点的候选（全部合法空格、不经预筛、不受前 N），0 = 关闭（与引入之前逐步相同）>]");
@@ -130,7 +130,7 @@ public static class Program
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
-        Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
+        Core.PieceRelics.RelicProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
         // board-link-mode C1 / map-expand-25 D1：不给地图选项即 link:1:<人数>；只接受 link:，旧标识族报错（在任何取种子与解析之前）；标识人数与 --players 不一致报错。
         (string resolvedId, int count) = ResolveLinkRequest(mapId, players, "play", output, mapSeedSource);
@@ -139,12 +139,12 @@ public static class Program
     }
 
     /// <summary>
-    /// play 的档案选项（carry-in-out D10）：缺省开启带入带出、读写缺省档案（<see cref="Core.Carry.CarryProfileStore.DefaultPath"/>）；
+    /// play 的档案选项（carry-in-out D10）：缺省开启带入带出、读写缺省档案（<see cref="Core.PieceRelics.RelicProfileStore.DefaultPath"/>）；
     /// <c>--profile &lt;路径&gt;</c> 改用其他文件；<c>--no-carry</c> 关闭带入带出、不读写任何档案（返回 <c>null</c>）。严格解析：
     /// <c>--no-carry</c> 不带值（后面跟了非选项的词即报错，不静默当成未给），<c>--profile</c> 必须给路径，两者不能同时给出。
     /// 只构造存取、不做任何 I/O。
     /// </summary>
-    internal static Core.Carry.CarryProfileStore? PlayProfile(CommandLine cli)
+    internal static Core.PieceRelics.RelicProfileStore? PlayProfile(CommandLine cli)
     {
         ArgumentNullException.ThrowIfNull(cli);
         string? noCarry = cli.GetOrNull("no-carry");
@@ -165,7 +165,7 @@ public static class Program
         }
 
         // 档案损坏时备份文件名要带本地时间：Core 不读时钟，由入口注入。这是 Sim 里唯一一处取墙钟，只进备份文件名，不参与任何对局、日志或配置记录。
-        return noCarry is not null ? null : new Core.Carry.CarryProfileStore(path ?? Core.Carry.CarryProfileStore.DefaultPath(), TimeProvider.System.GetLocalNow);
+        return noCarry is not null ? null : new Core.PieceRelics.RelicProfileStore(path ?? Core.PieceRelics.RelicProfileStore.DefaultPath(), TimeProvider.System.GetLocalNow);
     }
 
     /// <summary>

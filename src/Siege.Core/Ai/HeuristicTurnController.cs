@@ -418,10 +418,15 @@ public sealed class HeuristicTurnController : ITurnController
         LastChoice = choice;
 
         batch.Clear();
+        // AI 挂出带入件（relic-redesign R21，接线段 W2 的临时确定性规则）：按落子顺序把未挂出件按清单下标升序逐枚挂上，落点已有地图信物的跳过（落子即拾取）。
+        // 挂出不改变气、提子、活形与同形（R28），复摆的合法性不变；不消费任何随机。没有带入件时这里什么都不做，与引入之前逐步相同。
+        // TODO(relic-redesign 段 C)：改为"挂在本批势力增量最大的落点"，并让候选评价算上挂出后的势力。
+        Queue<int> pendingCarried = new(context.Carried is { } carried ? carried.Keys.Order() : Enumerable.Empty<int>());
         foreach (Placement placement in choice.Placements)
         {
+            int? attach = pendingCarried.Count > 0 && batch.Board.RelicAt(placement.Coord) is null ? pendingCarried.Dequeue() : null;
             // 复摆 MUST 带上改造目标：漏了会静默丢掉改造（匠人照落，地形不动），而候选评分是按带改造算的。
-            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
+            if (batch.Stage(placement.Coord, placement.Type, placement.Edit, attach) is { } failure)
             {
                 throw new SiegeRuleException($"AI 复摆已预演通过的批次被拒绝：{failure.Message}");
             }

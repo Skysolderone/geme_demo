@@ -79,6 +79,12 @@ public enum FlowEventKind
 
     /// <summary>信物落位（relic-redesign D2 / R8）：大回合开始时按预告落位（被占格跳过）。</summary>
     RelicsLanded,
+
+    /// <summary>带入信物挂出（relic-redesign R14 / R22）：本批确认后公开挂出的每件（格、编号、种类、保险）。只在有挂出的批次发出。</summary>
+    CarriedRelicsAttached,
+
+    /// <summary>带入信物掉落（relic-redesign R17）：出局 / 弃赛者未挂出的非保险件立即落到地图。只在有可掉落件时发出。</summary>
+    CarriedRelicsDropped,
 }
 
 /// <summary>一条流程事件：种类、发生时的大回合、相关玩家（若有）与文字说明。</summary>

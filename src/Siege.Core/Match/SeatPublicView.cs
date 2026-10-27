@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
-using Siege.Core.Carry;
 using Siege.Core.PieceRelics;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
@@ -48,14 +47,15 @@ public sealed record SeatPlayerView(
 /// <summary>一个已结算战场的公开结果（第 10 项）：战场标识、结算大回合、胜者。不含盘面与势力。</summary>
 public sealed record SeatSettlementView(int Battlefield, int MajorRound, PlayerId Winner);
 
-/// <summary>一名玩家的带入（第 8 项，全局公开）。</summary>
-public sealed record SeatCarryInView(PlayerId Player, CarryIn CarryIn);
+/// <summary>本座位自己的一件未挂出带入件（relic-redesign R22：只对本人可见）：清单下标（部署挂出参数用）、种类与保险。</summary>
+public sealed record SeatCarriedView(int Index, RelicKind Kind, bool Insured);
 
 /// <summary>
 /// 按座位过滤的公开视图（board-link-mode 实现裁决 B4，information-visibility「始终公开的信息」「其他战场不可见」）。
 /// 数据层过滤：结构里只有本座位所在战场的格、棋子、设施、归属、信物、棋串与活形，以及同战场玩家的势力明细与手牌类型；
 /// 其他战场的格根本不在 <see cref="Cells"/> 里（呈现为"未展开"，<see cref="IsExpanded"/> 为 <c>false</c>）。
-/// 全局公开项（配置、地图标识与种子、带入、行动顺序、各玩家状态、战场结算与胜者、占位）不过滤。open-map 起锁定后整张地图是唯一战场；map-expand-25 段 B 起插旗阶段之后的可见格即整张图的全部格。
+/// 全局公开项（配置、地图标识与种子、行动顺序、各玩家状态、战场结算与胜者、占位）不过滤。
+/// <see cref="OwnCarried"/> 是本座位自己尚未挂出的带入件（R22：挂出之前只对本人可见），别人的带入清单不在视图里；挂出的在 <see cref="Relics"/> 里，全公开。open-map 起锁定后整张地图是唯一战场；map-expand-25 段 B 起插旗阶段之后的可见格即整张图的全部格。
 /// 全知视图 <see cref="MatchFlow.Publish"/> 原样保留（批量分析、遥测与回放仍用它）。
 /// </summary>
 public sealed record SeatPublicView(
@@ -70,7 +70,7 @@ public sealed record SeatPublicView(
     PlayerId? CurrentPlayer,
     ImmutableArray<PlayerId> ActionOrder,
     bool CarryInOut,
-    ImmutableArray<SeatCarryInView> CarryIns,
+    ImmutableArray<SeatCarriedView> OwnCarried,
     int? Battlefield,
     ImmutableArray<BoardPlaceholder> Placeholders,
     ImmutableArray<SeatCellView> Cells,
@@ -144,7 +144,7 @@ public sealed partial class MatchFlow
 
         return new SeatPublicView(
             seat, Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order,
-            CarryInOut, [.. CarryIns.Select(kv => new SeatCarryInView(kv.Key, kv.Value))], battlefield,
+            CarryInOut, [.. PendingCarriedOf(seat).Select(kv => new SeatCarriedView(kv.Key, kv.Value.Kind, kv.Value.Insured))], battlefield,
             // 占位取地图的出生棋盘（open-map 起地图整局不变）。
             // 取棋盘清单的整块外接矩形与主题（match-setup「占位尺寸取整块棋盘」，link-map-terrain D1 / D7），不取出生区（核心区）。
             [.. Board.Map.BirthBoards().Select((plate, z) => new BoardPlaceholder(z, plate.Origin.ToNotation(), plate.Width, plate.Height, plate.Theme))],

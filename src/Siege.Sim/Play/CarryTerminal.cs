@@ -1,143 +1,132 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Presentation.Text;
 
 namespace Siege.Sim.Play;
 
 /// <summary>
-/// 终端的带入带出界面（carry-in-out「终端的带入选择、弃赛与结算显示」）：插旗前读档、处理残留在途记录、兑换与选择带入；
-/// 以及带入列表、弃赛 / 出局 / 局终结算与档案概览的文本。规则与档案读写都在 Core（<see cref="CarryProfileStore"/>、<see cref="CarryOutSettlement"/>），这里只做输入输出。
+/// 终端的带入带出界面（relic-redesign 接线段 W2，D8）：插旗前读档、处理残留在途记录、兑换与选择带入清单（选件、勾保险）；
+/// 以及结算与档案概览的文本。规则与档案读写都在 Core（<see cref="RelicProfileStore"/>、<c>MatchFlow.SettleCarried</c> / <c>EarlySettlementFor</c>），这里只做输入输出。
 /// </summary>
 internal static class CarryTerminal
 {
     /// <summary>
-    /// 插旗之前：读档并提示（新建 / 损坏重置 / 版本更新）；有残留在途记录先按中途退出结算并提示；然后显示档案，允许兑换、带入或不带入。
-    /// 返回可用的存取与本机玩家的带入；档案来自更新的版本、或人数没有点数表时返回 <c>(null, null)</c>，本局按关闭带入带出进行。
-    /// 输入 <c>q</c> 或输入耗尽抛 <see cref="PlayQuitException"/>（此时还没有建局，没有可丢的补给）。
+    /// 插旗之前：读档并提示（新建 / 损坏重置 / 版本更新 / v1 迁移）；有残留在途记录先按中途退出结算（只回保险件）并提示；然后显示档案，允许兑换、选择带入或不带入。
+    /// 返回可用的存取与本机玩家的带入清单；档案来自更新的版本、或人数没有点数表时返回 <c>(null, 空清单)</c>，本局按关闭带入带出进行。
+    /// 输入 <c>q</c> 或输入耗尽抛 <see cref="PlayQuitException"/>（此时还没有建局，没有可丢的信物）。
     /// </summary>
-    internal static (CarryProfileStore? Store, CarryIn? Carry) Prepare(
-        CarryProfileStore store, int playerCount, ContentSet contentSet, TextReader input, TextWriter output, BoardRenderer render)
+    internal static (RelicProfileStore? Store, RelicLoadout Loadout) Prepare(
+        RelicProfileStore store, int playerCount, TextReader input, TextWriter output, BoardRenderer render)
     {
         output.WriteLine();
-        render.Line("══════════ 围杀 Siege · 补给 ══════════", ConsoleColor.Yellow);
-        CarryProfileLoad load = store.Load();
-        render.Line(load.Message, load.Status is CarryProfileLoadStatus.Loaded or CarryProfileLoadStatus.Created ? ConsoleColor.Gray : ConsoleColor.Red);
-        if (load.Status == CarryProfileLoadStatus.NewerVersion)
+        render.Line("══════════ 围杀 Siege · 信物带入 ══════════", ConsoleColor.Yellow);
+        RelicProfileLoad load = store.Load();
+        render.Line(load.Message, load.Status is RelicProfileLoadStatus.Loaded or RelicProfileLoadStatus.Created ? ConsoleColor.Gray : ConsoleColor.Red);
+        if (load.Status == RelicProfileLoadStatus.NewerVersion)
         {
-            return (null, null);
+            return (null, RelicLoadout.Empty);
         }
 
-        if (!CarryPoints.Supports(playerCount))
+        if (!RelicPoints.Supports(playerCount))
         {
             render.Line($"{playerCount} 人局没有名次补给点表，本局不提供带入、局终不结算。", ConsoleColor.Red);
-            return (null, null);
+            return (null, RelicLoadout.Empty);
         }
 
         if (store.SettleAbandoned() is { } abandoned)
         {
-            string lost = abandoned.Carry is { } c ? $"{CarryTexts.Supply(c.Kind)}已丢失" : "上一局未带入补给";
-            render.Line($"上一局中途退出：{lost}，补给点不变。", ConsoleColor.Red);
+            CarriedRelic[] returned = [.. abandoned.Carried.Where(c => c.Insured)];
+            string back = returned.Length == 0 ? "没有保险件" : $"保险件 {string.Join("、", returned.Select(c => c.Kind.DisplayName()))} 已归还";
+            render.Line($"上一局中途退出：{back}，其余带入件丢失，补给点不变。", ConsoleColor.Red);
         }
 
-        output.WriteLine("补给只改开局手牌，每局至多带入 1 件；局终按名次带出补给点（4 人局 24 / 16 / 12 / 10），弃赛带出一半并返还补给，出局补给丢失。");
-        foreach (SupplyKind kind in Supplies.Order)
+        output.WriteLine($"每局至多带入 {RelicKinds.MaxCarried} 件信物，其中至多 {RelicKinds.MaxInsured} 件勾为保险；部署时挂到新落的棋子上才生效，挂上即公开。");
+        output.WriteLine("完赛（任何名次）：带入的与终局挂在你棋子上的信物都带出；出局 / 弃赛 / 中途退出只带回保险件。弃赛带出一半补给点（保护期内 0），出局 0。");
+        output.WriteLine($"普通信物 {RelicKinds.UncalibratedExchangePrice} 补给点兑换 1 件；军旗是稀有信物，只能局内带出。");
+        foreach (RelicKind kind in RelicKinds.Order)
         {
-            output.WriteLine($"  [{Number(kind)}] {CarryTexts.Supply(kind)}  价 {Supplies.PriceOf(kind)}  {CarryTexts.Effect(kind)}");
+            output.WriteLine($"  [{Number(kind)}] {kind.DisplayName()}  {CarryTexts.Effect(kind)}");
         }
 
         while (true)
         {
             output.WriteLine(ProfileText(store.Current));
-            ImmutableArray<SupplyKind> carriable = store.Current.Carriable;
-            string options = carriable.IsEmpty ? "无（库存为空）" : string.Join(" ", carriable.Select(k => $"{Number(k)} {CarryTexts.Supply(k)}"));
-            output.Write($"可带入：{options}。输入编号带入，buy 编号 兑换，直接回车不带入 > ");
+            output.Write("输入要带入的编号（空格分隔，编号后加 ! 勾为保险，如 1! 3 3 5!），buy 编号 兑换，直接回车不带入 > ");
             string line = ReadLine(input);
             if (line.Length == 0 || line == "0")
             {
-                return (store, null);
+                return (store, RelicLoadout.Empty);
             }
 
             string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts[0] is "buy" or "兑换")
             {
-                if (parts.Length == 2 && TryKind(parts[1], out SupplyKind bought))
+                if (parts.Length == 2 && TryKind(parts[1], out RelicKind bought))
                 {
-                    output.WriteLine(store.TryExchange(bought, out string? refusal) ? $"已兑换 1 件{CarryTexts.Supply(bought)}。" : $"兑换失败：{refusal}。");
+                    output.WriteLine(store.TryExchange(bought, out string? refusal) ? $"已兑换 1 件{bought.DisplayName()}。" : $"兑换失败：{refusal}。");
                 }
                 else
                 {
-                    output.WriteLine("兑换请输入 buy 1 / buy 2 / buy 3。");
+                    output.WriteLine($"兑换请输入 buy 1 – buy {RelicKinds.Order.Length}。");
                 }
 
                 continue;
             }
 
-            if (parts.Length != 1 || !TryKind(parts[0], out SupplyKind kind))
+            if (ParseLoadout(parts) is not { } loadout)
             {
-                output.WriteLine("看不懂这个输入：带入输入编号，兑换输入 buy 编号，不带入直接回车。");
+                output.WriteLine("看不懂这个输入：带入输入编号（加 ! 勾保险），兑换输入 buy 编号，不带入直接回车。");
                 continue;
             }
 
-            if (store.Current.StockOf(kind) < 1)
+            if (loadout.RefusalAgainst(store.Current) is { } refused)
             {
-                output.WriteLine($"没有{CarryTexts.Supply(kind)}库存，先用 buy {Number(kind)} 兑换。");
+                output.WriteLine($"不能这样带入：{refused}。");
                 continue;
             }
 
-            if (kind != SupplyKind.Commission)
-            {
-                return (store, new CarryIn(kind));
-            }
-
-            if (ChooseType(contentSet, input, output) is { } type)
-            {
-                return (store, new CarryIn(kind, type));
-            }
+            return (store, loadout);
         }
     }
 
-    /// <summary>全部玩家的带入（公开）：<c>带入：你：换型令 → 连珠子；玩家2：征召签 → 堡垒子；……</c>，无人带入时 <c>带入：全员不带入</c>。文案在 <see cref="CarryTexts"/>，与图形版共用。</summary>
-    internal static string CarryListText(IReadOnlyDictionary<PlayerId, CarryIn> carries, PlayerId me) =>
-        CarryTexts.List(carries, p => p == me ? "你" : $"玩家{p.Value + 1}");
+    /// <summary>本机玩家自己的带入清单（私有，R22：只有本人看得到）。</summary>
+    internal static string LoadoutText(RelicLoadout loadout) => CarryTexts.Loadout(loadout) + "（只有你看得到，挂出后公开）";
 
-    /// <summary>弃赛当时的结算行（<see cref="CarryTexts.Resign"/>）。</summary>
-    internal static string ResignText(CarryOutResult result) => CarryTexts.Resign(result);
+    /// <summary>中途（弃赛 / 出局）或局终的本机结算行：<c>结算：</c> + <see cref="CarryTexts.Settlement"/>。</summary>
+    internal static string SettlementText(RelicPlayerSettlement result, PlayerId me) => "结算：" + CarryTexts.Settlement(result, p => BoardRenderer.Label(p, me));
 
-    /// <summary>出局当时的结算行（<see cref="CarryTexts.Eliminated"/>）。</summary>
-    internal static string EliminatedText(CarryOutResult result) => CarryTexts.Eliminated(result);
-
-    /// <summary>局终打印的本机结算：<c>结算：</c> + <see cref="CarryTexts.Settlement"/>。</summary>
-    internal static string SettlementText(CarryOutResult result) => "结算：" + CarryTexts.Settlement(result);
+    /// <summary>局终每件信物的去向（<see cref="CarryTexts.Destinations"/>）。</summary>
+    internal static IReadOnlyList<string> DestinationLines(RelicMatchSettlement settlement, PlayerId me) =>
+        CarryTexts.Destinations(settlement, p => BoardRenderer.Label(p, me));
 
     /// <summary>档案概览（<see cref="CarryTexts.Stock"/>）。</summary>
-    internal static string ProfileText(CarryProfile profile) => CarryTexts.Stock(profile);
+    internal static string ProfileText(RelicProfile profile) => CarryTexts.Stock(profile);
 
-    private static PieceType? ChooseType(ContentSet contentSet, TextReader input, TextWriter output)
+    /// <summary>解析一行带入：每个词是编号（1 起），后缀 <c>!</c> 勾保险。不合形返回 <c>null</c>（件数 / 保险 / 库存的规则校验交给 <see cref="RelicLoadout"/>）。</summary>
+    internal static RelicLoadout? ParseLoadout(IEnumerable<string> words)
     {
-        ImmutableArray<CarryCandidate> candidates = CarryCandidates.Of(contentSet);
-        while (true)
+        ImmutableArray<CarriedRelic>.Builder items = ImmutableArray.CreateBuilder<CarriedRelic>();
+        foreach (string word in words)
         {
-            output.Write($"换型令指定类型：{string.Join(" ", candidates.Select((c, i) => $"[{i + 1}] {Labels.Piece(c.Type)}"))}，直接回车取消 > ");
-            string line = ReadLine(input);
-            if (line.Length == 0)
+            bool insured = word.EndsWith('!') || word.EndsWith('！');
+            if (!TryKind(insured ? word[..^1] : word, out RelicKind kind))
             {
                 return null;
             }
 
-            if (int.TryParse(line, out int n) && n >= 1 && n <= candidates.Length)
-            {
-                return candidates[n - 1].Type;
-            }
+            items.Add(new CarriedRelic(kind, insured));
         }
+
+        return items.Count == 0 ? null : new RelicLoadout(items.ToImmutable());
     }
 
-    private static int Number(SupplyKind kind) => Supplies.Order.IndexOf(kind) + 1;
+    private static int Number(RelicKind kind) => RelicKinds.Order.IndexOf(kind) + 1;
 
-    private static bool TryKind(string text, out SupplyKind kind)
+    private static bool TryKind(string text, out RelicKind kind)
     {
-        bool ok = int.TryParse(text, out int n) && n >= 1 && n <= Supplies.Order.Length;
-        kind = ok ? Supplies.Order[n - 1] : default;
+        bool ok = int.TryParse(text, out int n) && n >= 1 && n <= RelicKinds.Order.Length;
+        kind = ok ? RelicKinds.Order[n - 1] : default;
         return ok;
     }
 

@@ -210,6 +210,7 @@ public sealed record FailurePresentation(
         BatchFailureKind.DuplicateEditInBatch => "同一批次内重复的改造目标",
         BatchFailureKind.LifeForbidden => "活棋禁入",
         BatchFailureKind.BreaksLife => "破坏活形",
+        BatchFailureKind.CarriedRelicIllegal => "带入信物挂出非法",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知失败类别。"),
     };
 

@@ -5,7 +5,7 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
@@ -18,7 +18,7 @@ namespace Siege.Sim.Running;
 /// <summary>
 /// 按日志首部重建（回放）时的带入带出：首部记录的开关与各玩家带入（征召签已是抽得的类型）。<c>null</c> 即首部缺该项的旧日志——按关闭、全员无带入重建，重建出的首部也不写这两项。
 /// </summary>
-internal sealed record RecordedCarry(bool CarryInOut, ImmutableSortedDictionary<PlayerId, CarryIn> CarryIns);
+internal sealed record RecordedCarry(bool CarryInOut, ImmutableSortedDictionary<PlayerId, RelicLoadout> CarryIns);
 
 /// <summary>
 /// 一局的跑局会话：建局、装 AI、逐小回合驱动 <see cref="MatchRunner"/>、记日志、到终局或小回合数截断（restore-go-core-rules D5，记 turn_limit、无名次）、捕获失败。
@@ -98,9 +98,9 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的计分规则为 {scoring}，对局配置却为 {match.ScoringVersion}。");
         }
 
-        if (config.CarryIn == 1 && !match.CarryInOut)
+        if (config.CarryIn > 0 && !match.CarryInOut)
         {
-            throw new SiegeRuleException("跑局配置的带入数量为 1，对局却没有开启带入带出。");
+            throw new SiegeRuleException($"跑局配置的带入件数为 {config.CarryIn}，对局却没有开启带入带出。");
         }
 
         Runner = new MatchRunner(match);
@@ -173,20 +173,21 @@ public sealed class MatchSession
         // 内容集（more-pieces-relics D8）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时只有原六 + 六，按 v1 重建。
         ContentSet contentSet = config.ContentSet ?? (recorded ? ContentSets.Legacy : ContentSets.Default);
         ScoringVersion scoringVersion = config.ScoringVersion ?? (recorded ? ScoringVersions.Legacy : ScoringVersions.Default);
-        // 带入带出（carry-in-out D11）：新建的局按带入数量从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
-        // 按日志首部重建时只读首部记录的带入（征召签已是抽得的类型），MUST NOT 按配置或种子重抽——人机对局的带入不可由种子推出。首部缺该项 = 旧日志 = 关闭。
+        // 带入带出（relic-redesign R21）：新建的局按带入件数从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
+        // 按日志首部重建时只读首部记录的带入清单，MUST NOT 按配置或种子重抽——人机对局的带入不可由种子推出。首部缺该项 = 旧日志 = 关闭。
+        // 自动化模式不读写档案（D8）：AI 带入不受任何库存限制。
         bool carryInOut;
-        ImmutableSortedDictionary<PlayerId, CarryIn> carryIns;
+        ImmutableSortedDictionary<PlayerId, RelicLoadout> carryIns;
         if (recorded)
         {
             carryInOut = carry?.CarryInOut ?? false;
-            carryIns = carry?.CarryIns ?? ImmutableSortedDictionary<PlayerId, CarryIn>.Empty;
+            carryIns = carry?.CarryIns ?? ImmutableSortedDictionary<PlayerId, RelicLoadout>.Empty;
         }
         else
         {
             int count = config.CarryIn ?? 0;
-            carryInOut = count == 1;
-            carryIns = CarryAi.Draw(new GameSeed(seed), players, count, contentSet);
+            carryInOut = count > 0;
+            carryIns = RelicCarryAi.Draw(new GameSeed(seed), players, count);
         }
 
         // board-link-mode 实现裁决 C1：一律以链接模式建局。retire-legacy-maps 3.6：建局分叉删除——公开 MatchFlow.Create 恒为链接模式（3.5）。
@@ -815,7 +816,11 @@ public sealed class MatchSession
             // 带入带出（match-telemetry 第 1 条）：新日志总是写明（关闭时 false / 空表）；按缺该项的旧日志回放时不写，重建首部与原首部相同。
             CarryInOut = _carryHeader ? Match.CarryInOut : null,
             CarryIns = _carryHeader
-                ? [.. Match.CarryIns.Select(kv => new CarryInEntry { Player = kv.Key.Value, Supply = kv.Value.Kind.ToString(), Type = kv.Value.Type?.ToString() })]
+                ? [.. Match.CarryIns.Select(kv => new CarryInEntry
+                {
+                    Player = kv.Key.Value,
+                    Items = [.. kv.Value.Items.Select(i => new CarriedLogEntry { Kind = i.Kind.ToString(), Insured = i.Insured })],
+                })]
                 : null,
             // match-telemetry 第 1、2 项（board-link-mode C3）：模式与锁定时各出生棋盘的旗数（retire-legacy-rules R10 = A：模式照写常量 "Link"）。
             Mode = "Link",
@@ -826,22 +831,20 @@ public sealed class MatchSession
     }
 
     /// <summary>
-    /// 带出结算（match-telemetry 第 7 条）：只在带入带出开启的局写；结算一律由 Core 的纯函数 <see cref="CarryOutSettlement.Settle"/> 给出，
-    /// 截断局（<paramref name="result"/> 为 <c>null</c>）全员未结算。批量跑局不读写任何档案。
+    /// 带出结算（match-telemetry 第 7 条）：只在带入带出开启的局写；结算一律由 Core 给出（<see cref="MatchFlow.SettleCarried"/>，D6），
+    /// 截断局（<paramref name="result"/> 为 <c>null</c>）不结算、全员记 <c>Unsettled</c>。批量跑局不读写任何档案（D8）。
     /// </summary>
     private List<CarryOutEntry>? CarryOutEntries(MatchResult? result) =>
-        !Match.CarryInOut
-            ? null
-            : [.. CarryOutSettlement.Settle(result, Match.Resignations, Match.CarryIns, Match.Players).Select(kv => new CarryOutEntry
-            {
-                Player = kv.Key.Value,
-                Outcome = kv.Value.Outcome.ToString(),
-                Rank = kv.Value.Rank,
-                Points = kv.Value.Points,
-                Supply = kv.Value.CarryIn?.Kind.ToString(),
-                Type = kv.Value.CarryIn?.Type?.ToString(),
-                Returned = kv.Value.Returned,
-            })];
+        !Match.CarryInOut ? null
+        : result is null ? [.. Match.Players.Select(p => new CarryOutEntry { Player = p.Value, Outcome = "Unsettled" })]
+        : [.. Match.SettleCarried().Players.Values.Select(s => new CarryOutEntry
+        {
+            Player = s.Player.Value,
+            Outcome = s.Outcome.Outcome.ToString(),
+            Rank = s.Outcome.Rank,
+            Points = s.Points,
+            BroughtOut = [.. s.BroughtOut.Select(t => $"#{t.Id}:{t.Kind}")],
+        })];
 
     /// <summary>出生区的边长：格子外接矩形的较长边（生成图与手工边疆图的平台都是整块正方形，平台内无障碍）。</summary>
     /// <summary>出生棋盘的边长（宽高中的较大者）：取整块棋盘（棋盘清单），不取出生区——链接档的出生区是核心区（link-map-terrain D1）。</summary>
