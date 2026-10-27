@@ -30,8 +30,8 @@ public class 活形分析性能基线Tests
 
     [PerfTheory]
     [Trait("Category", "Perf")]
-    [InlineData("link:1")]   // retire-legacy-maps 1.8：原 siege-4p-base-v5 / siege-frontier-v2
-    [InlineData("link:2")]
+    [InlineData("link:1:4")]   // retire-legacy-maps 1.8：原 siege-4p-base-v5 / siege-frontier-v2
+    [InlineData("link:2:4")]
     public void 中盘全盘活形分析不超过含气棋串计算的三倍(string mapId)
     {
         RunConfig config = SimFixtures.Config(turnLimit: 0) with { MapId = mapId };

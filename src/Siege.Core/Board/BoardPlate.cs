@@ -11,7 +11,7 @@ public enum BoardPlateKind
 }
 
 /// <summary>
-/// 出生棋盘的主题（link-map-terrain 裁决 M2 / D2）：决定该块棋盘中间带的地形。同一张链接档地图的 5 块出生棋盘主题两两不同。
+/// 出生棋盘的主题（link-map-terrain 裁决 M2 / D2）：决定该块棋盘中间带的地形。map-expand-25 R3：浮空岛的平台主题只取河流 / 林地 / 栅栏阵 / 混合、可重复，高台不再生成（取值保留供读旧文件时报错）。
 /// 主题只用于生成、校验与呈现，不进入任何结算；地图文件里按枚举名读写，未识别的取值拒绝加载。
 /// </summary>
 public enum BoardTheme

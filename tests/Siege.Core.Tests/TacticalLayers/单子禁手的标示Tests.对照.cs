@@ -112,9 +112,9 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
     [Theory]
     // retire-legacy-maps 1.8：三行由 v5 种子 7 / 11 与 board:1 种子 3（拨过保护期）改为链接图；断言不变。链接图上构筑期的合法范围只是一块出生棋盘，
     // 原种子 7 只对照到 112 个候选格（下界 200 响亮失败），探针（link:1 种子 1–20 × 首段 14 / 20 / 24 个小回合）改取种子 1（首段 14）与种子 4（首段 20）。
-    [InlineData("link:1", 1UL, 14, 3, 4, false, true)]
-    [InlineData("link:1", 4UL, 20, 3, 3, false, true)]
-    [InlineData("link:2", 3UL, 5, 2, 2, true, false)]
+    [InlineData("link:1:4", 1UL, 14, 3, 4, false, true)]
+    [InlineData("link:1:4", 4UL, 20, 3, 3, false, true)]
+    [InlineData("link:2:4", 3UL, 5, 2, 2, true, false)]
     public void 与完整预演一致(string mapId, ulong seed, int firstTurns, int step, int checkpoints, bool skipProtection, bool requireContact) =>
         Compare(mapId, seed, firstTurns, step, checkpoints, skipProtection, requireContact);
 
@@ -124,7 +124,7 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
     /// </summary>
     [SlowFact]
     [Trait("Category", "Slow")]
-    public void 与完整预演一致_棋盘图中盘() => Compare("link:2", 3UL, 14, 5, 3, skipProtection: false, requireContact: true);   // retire-legacy-maps 1.8：原 board:1，改为 link:2（Slow，默认跳过）
+    public void 与完整预演一致_棋盘图中盘() => Compare("link:2:4", 3UL, 14, 5, 3, skipProtection: false, requireContact: true);   // retire-legacy-maps 1.8：原 board:1，改为 link:2（Slow，默认跳过）
 
     private void Compare(string mapId, ulong seed, int firstTurns, int step, int checkpoints, bool skipProtection, bool requireContact)
     {
@@ -311,7 +311,7 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
 
     [PerfTheory]
     [Trait("Category", "Perf")]
-    [InlineData("link:3", 3UL, 28)]   // retire-legacy-maps 1.8：原 board:1:n10（Perf，默认跳过）
+    [InlineData("link:3:4", 3UL, 28)]   // retire-legacy-maps 1.8：原 board:1:n10（Perf，默认跳过）
     public void 单次查询耗时(string mapId, ulong seed, int turns)
     {
         // tasks 1.4：中盘局面的单次查询耗时，只出数字不守门（testing.md「慢测试与计时测试」）。预热后各取 20 次的中位数。

@@ -29,7 +29,7 @@
 | 一屏预览地图 | `M` |
 | 切换跟随对手镜头 | `F` |
 
-详细规则与现状见 [HANDOFF.md](HANDOFF.md) 和 [规格目录](openspec/specs/)。地图标识只接受 `link:<种子>`；旧的隔离棋盘图及 `board:`、`gen:` 标识已删除。
+详细规则与现状见 [HANDOFF.md](HANDOFF.md) 和 [规格目录](openspec/specs/)。地图标识只接受 `link:<种子>:<人数>`（人数 2–4，例如 `link:1:4`）；旧的隔离棋盘图及 `board:`、`gen:` 标识已删除。
 
 ## 从源码运行
 
@@ -37,7 +37,7 @@
 
 ```powershell
 dotnet build src/godot/Siege.Godot.csproj
-godot --path src/godot -- --map=link:1 --no-carry
+godot --path src/godot -- --map=link:1:4 --no-carry
 dotnet test tests/Siege.Core.Tests/Siege.Core.Tests.csproj
 ```
 
@@ -46,7 +46,7 @@ dotnet test tests/Siege.Core.Tests/Siege.Core.Tests.csproj
 终端版示例：
 
 ```powershell
-dotnet run --project src/Siege.Sim -- play --map link:1 --difficulty Standard --no-carry
+dotnet run --project src/Siege.Sim -- play --map link:1:4 --difficulty Standard --no-carry
 ```
 
 ## 打包与发布

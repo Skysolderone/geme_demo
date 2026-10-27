@@ -106,7 +106,7 @@ public sealed partial class GameRoot
             return true;
         }
 
-        int players = System.Math.Min(4, map.MaxPlayers);
+        int players = map.MaxPlayers;
         if (!CarryPoints.Supports(players))
         {
             GD.Print($"[carry] {players} 人局没有名次补给点表，本局不提供带入、局终不结算。");
@@ -165,7 +165,7 @@ public sealed partial class GameRoot
         if (_supplyCarryOff)
         {
             // 版本不符：本局按关闭带入带出开局，不写档案。
-            _session = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, _difficulty, _cellLimit);
+            _session = MatchSession.Create(map, _matchSeed, map.MaxPlayers, 1, _difficulty, _cellLimit);
         }
         else
         {
@@ -175,7 +175,7 @@ public sealed partial class GameRoot
                 return;
             }
 
-            _session = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, _difficulty, _cellLimit, carryInOut: true, carry: mine);
+            _session = MatchSession.Create(map, _matchSeed, map.MaxPlayers, 1, _difficulty, _cellLimit, carryInOut: true, carry: mine);
             // 对局标识只用于在途记录的"同一局只结算一次"：种子 + 计时器读数（不参与任何对局随机）。
             _session.BeginCarry(_carryStore, $"{_matchSeed:X16}-{Stopwatch.GetTimestamp():X}");
             GetTree().AutoAcceptQuit = false;   // 有带入时关窗先提示（见 OnCarryNotification）

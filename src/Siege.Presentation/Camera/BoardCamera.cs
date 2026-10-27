@@ -92,7 +92,7 @@ public sealed class BoardCamera
     /// 以外接矩形（含坐标标注外圈）建相机：初始在矩形中心、最远缩放。
     /// <paramref name="focus"/> 是"当前战场"的外接矩形（board-link-mode 4.4 / 裁决 D22 / D26）：全局预览以它一屏可见为准、注视点锁它的中心；
     /// 未给出即等于 <paramref name="bounds"/>（旧地图：整张图就是唯一的战场，行为与引入之前逐位相同）。
-    /// <paramref name="bounds"/> 则是注视点可行矩形与最远缩放的依据——取"全部可见格 ∪ 5 个占位"的包围盒，所以能推到占位、看得见别人的占位。
+    /// <paramref name="bounds"/> 则是注视点可行矩形与最远缩放的依据——取"全部可见格 ∪ 各块占位"的包围盒，所以能推到占位、看得见别人的占位。
     /// </summary>
     public BoardCamera(PlaneRect bounds, float aspect = 16f / 9f, PlaneRect? focus = null)
     {

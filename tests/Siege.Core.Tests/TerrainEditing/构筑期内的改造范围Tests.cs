@@ -24,7 +24,7 @@ public class 构筑期内的改造范围Tests
     /// <summary>P0 在棋盘 0、P1 在棋盘 1、P2 / P3 在棋盘 3 / 4；P0 手里有匠人。</summary>
     private static MatchFlow Started()
     {
-        MapData built = LinkMapFixtures.Build("link:90011", LinkMapFixtures.Births);
+        MapData built = LinkMapFixtures.Build("link:90011:4", LinkMapFixtures.Births);
         MapData map = built with { TerrainData = LinkMapGeneration.物化状态校验Tests.With(built, surfaces: [("J5", Surface.Forest)]) };
         MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, All, TestMaps.Relics(map), Options);
         foreach (PlayerId p in All)

@@ -41,7 +41,7 @@ public class 决策序列基线_链接模式Tests
 {
     private const string Fixture = "decisions-link1-seed3.txt";
     private const ulong Seed = 3;
-    private const int MaxMajorRounds = 12;
+    private const int MaxMajorRounds = LinkDecisionSequence.BaselineRounds;
 
     [Fact]
     public void 决策序列与基线相同()
@@ -89,6 +89,12 @@ public class 决策序列基线_链接模式Tests
 internal static class LinkDecisionSequence
 {
     /// <summary>
+    /// 链接图决策序列基线的截断大回合（全部 <c>decisions-link1-*.txt</c> 与引用它们的测试共用）。map-expand-25 段 A2：link:1:4 换成约 1500 格的浮空岛后，
+    /// 4 名标准 / 困难 AI 跑满 12 个大回合单条要数分钟，截断改为 6（构筑期 3 个大回合 + 全图解禁后 3 个大回合，仍覆盖样本口径要求的第 4 大回合），基线随之全部重钉（原为 12）。
+    /// </summary>
+    internal const int BaselineRounds = 6;
+
+    /// <summary>
     /// 在 <c>link:1</c> 上以种子 <paramref name="seed"/> 建一局（4 名标准难度 AI，跑局层缺省配置、不截断小回合），逐小回合驱动到第 <paramref name="maxMajorRounds"/> 大回合结束或终局。
     /// 每行：<c>大回合 TAB 玩家 TAB 决策条目</c>；本小回合内发生的战场结算紧随其后各占一行。<c>\n</c> 行尾。
     /// </summary>
@@ -111,7 +117,7 @@ internal static class LinkDecisionSequence
     /// </summary>
     internal static string Export(ulong seed, int maxMajorRounds, AiDifficulty difficulty, Action<MatchSession>? attach, Func<RunConfig, RunConfig>? configure)
     {
-        var config = new RunConfig { MapId = "link:1", SeedStart = seed, Count = 1, TurnLimit = 0, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
+        var config = new RunConfig { MapId = "link:1:4", SeedStart = seed, Count = 1, TurnLimit = 0, ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
         if (difficulty != AiDifficulty.Standard)
         {
             config = config with { Players = [.. Enumerable.Range(0, 4).Select(_ => new PlayerAiConfig { Difficulty = difficulty })] };

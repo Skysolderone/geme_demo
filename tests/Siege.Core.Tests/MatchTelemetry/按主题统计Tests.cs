@@ -21,14 +21,17 @@ public class 按主题统计Tests
     private static readonly Lazy<(MatchLog A, MatchLog B)> Sample = new(() =>
         (MatchLog.Parse(LinkSimFixtures.PlayScripted([0, 1, 2, 3]).Log.FullText()), MatchLog.Parse(LinkSimFixtures.PlayScripted([0, 0, 1, 2]).Log.FullText())));
 
-    /// <summary>克隆一局：主题按 <see cref="Themes"/> 改写、清空改造与控制事件；<paramref name="ranks"/> 为 null 即改成截断局（无名次、无胜者）。</summary>
+    /// <summary>
+    /// 克隆一局：主题按 <see cref="Themes"/> 改写、清空改造与控制事件；<paramref name="ranks"/> 为 null 即改成截断局（无名次、无胜者）。
+    /// map-expand-25 段 A2：link:1:4 浮空岛有 10 块平台，主题按编号循环改写（第 z 块取 Themes[z mod 5]），每个主题每局 2 块。
+    /// </summary>
     private static MatchLog Prepare(MatchLog source, int[]? ranks, int[] winners)
     {
         MatchLog copy = SimFixtures.Clone(source);
         LogResult result = copy.Result!;
         return new MatchLog
         {
-            Header = copy.Header with { Boards = [.. copy.Header.Boards!.Select((b, z) => b with { Theme = Themes[z] })] },
+            Header = copy.Header with { Boards = [.. copy.Header.Boards!.Select((b, z) => b with { Theme = Themes[z % Themes.Length] })] },
             Turns = [.. copy.Turns.Select(t => t with { Edits = null })],
             Events = [.. copy.Events.Where(e => e.Type != LogEventType.ControlChanged)],
             Result = ranks is null
@@ -61,7 +64,7 @@ public class 按主题统计Tests
         Assert.Equal(3, s.Matches);
         Assert.Equal(2, s.RankedMatches);
         Assert.Equal(Themes.Order(), s.Themes.Select(t => t.Theme));
-        Assert.All(s.Themes, t => Assert.Equal(3, t.Boards));
+        Assert.All(s.Themes, t => Assert.Equal(6, t.Boards));   // map-expand-25：3 局 × 每局 2 块（10 块平台按编号循环改写主题）
         Assert.Equal(new[] { 4, 3, 3, 2, 0 }, Themes.Select(t => Stat(s, t).Seats));
         Assert.Equal(new[] { 3, 2, 2, 1, 0 }, Themes.Select(t => Stat(s, t).RankedSeats));
         Assert.Equal(new[] { 1, 1, 0, 0, 0 }, Themes.Select(t => Stat(s, t).Wins));
@@ -82,9 +85,10 @@ public class 按主题统计Tests
         Assert.NotNull(report.Themes);
         string text = ReportWriter.Render(report);
         Assert.Contains("## 按主题统计（link-map-terrain）", text, StringComparison.Ordinal);
-        Assert.Contains("- 高台：棋盘 3 块，锁定 4 人次（有名次 3 人次），平均名次 2，胜 1；匠人改造 0 次；公共信物 3 个，被控制 0 次", text, StringComparison.Ordinal);
-        Assert.Contains("- 河流：棋盘 3 块，锁定 3 人次（有名次 2 人次），平均名次 1.5，胜 1；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
-        Assert.Contains("- 混合：棋盘 3 块，锁定 0 人次（有名次 0 人次），平均名次 无样本，胜 0；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
+        // map-expand-25 D5：公共信物都在平台之间的低地上，按平台主题统计的公共信物恒为 0 个（原高台棋盘 0 上有 1 个、3 局共 3 个）。
+        Assert.Contains("- 高台：棋盘 6 块，锁定 4 人次（有名次 3 人次），平均名次 2，胜 1；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
+        Assert.Contains("- 河流：棋盘 6 块，锁定 3 人次（有名次 2 人次），平均名次 1.5，胜 1；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
+        Assert.Contains("- 混合：棋盘 6 块，锁定 0 人次（有名次 0 人次），平均名次 无样本，胜 0；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
 
         MatchLog themeless = SimFixtures.Clone(a);
         themeless = new MatchLog { Header = themeless.Header with { Boards = [.. themeless.Header.Boards!.Select(x => x with { Theme = null })] }, Turns = themeless.Turns, Events = themeless.Events, Result = themeless.Result };

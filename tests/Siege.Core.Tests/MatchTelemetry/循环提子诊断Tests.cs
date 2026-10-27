@@ -243,9 +243,9 @@ public class 循环提子诊断Tests
         // 跑局层快照的 Stalled 数 = 四名 AI 决策条目里 D:stall 的个数 = 诊断给出的次数；且确有停手（样本口径下界）。
         // 样本下界依赖 AI 实际走法：四名 AI 的评价权重写死为定值前缺省（testing.md「依赖 AI 实际怎么走的断言要把权重写死」），不跟随 EvaluationWeights.Default。
         // 实测（stagnation-trace 1.2）：种子 1、80 小回合内 D:stall 47 次。
-        var config = LinkSimFixtures.Config(turnLimit: StallRunTurns) with { StagnationRounds = 1 };
-        config = config with { Players = [.. config.Players.Select(p => p with { Weights = SimFixtures.PreCalibrationWeights })] };
-        MatchSession session = MatchSession.Create(config, StallRunSeed);
+        // map-expand-25 段 A2：link:1:4 换成浮空岛后这局 D:stall 0 次（单条十余分钟），载体改为手写平坦图（见 LinkSimFixtures.FlatStallSession）；
+        // 平坦图上种子 1–12 × 80 小回合的 D:stall 次数探针：只有种子 2 / 6 / 12 非 0（1 / 2 / 1 次），取种子 6。
+        MatchSession session = LinkSimFixtures.FlatStallSession(StallRunTurns, StallRunSeed);
         MatchLog real = session.Run();
         int entries = session.Match.Players.Sum(p => session.AiOf(p)!.Decisions.Count(d => d == HeuristicTurnController.StallDecision));
         Assert.True(entries > 0, $"样本口径：这局里应有停滞停手（D:stall 条目），实测 {entries}");
@@ -254,7 +254,7 @@ public class 循环提子诊断Tests
         Assert.Equal(entries, CycleAnalyzer.ReviewMatch(MatchLog.Parse(real.FullText())).Stalls);
     }
 
-    private const ulong StallRunSeed = 1;
+    private const ulong StallRunSeed = 6;
 
     private const int StallRunTurns = 80;
 

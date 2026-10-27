@@ -78,77 +78,66 @@ public static class MapValidator
     /// 规格档声明表（frontier-map D2）：规格档的人数预算与各条分流规则的处理方式，<b>全部</b>写在这一张表里。
     /// 校验器里对规格档的分支只允许出现在这里——各条规则只读 <see cref="ProfileRules"/> 的字段，不得再写"如果是某档"的散落分支
     /// （守门 <c>规格档分流守门Tests</c>：本文件里规格档枚举的字面量只在本表内、地图的规格档属性只在 <see cref="RulesOf"/> 读一次）。
+    /// <para>retire-legacy-maps 4.2（裁决 L1 / L7）：标准档、边疆档、棋盘档随旧地图删除，表里只剩链接档一行。</para>
     /// <para>
-    /// retire-legacy-maps 4.2（裁决 L1 / L7）：标准档、边疆档、棋盘档随旧地图删除，表里只剩链接档一行；随之删除的分流规则：
-    /// 距离均衡（拒绝 / 只报告两种处理）、出生区须到达中央入口、咽喉必须标注、全部棋盘须经通道连成一片、通道宽 / 长、旧档的列宽区间与"清单必须为空"。
+    /// map-expand-25 D7（多平台浮空岛）：链接档按人数 2 / 3 / 4 各一行预算——可落子格区间、
+    /// 出生区数 = 平台数区间（裁决 R2）、出生区恰 9 格（核心区）、岛边长 W(n) 与画布边长 W(n)+2M（恰等；原表外的列 / 行区间并入每行）。
+    /// 浮空岛不放静态信物格（D5：依据 relic-redesign R29，2026-10-26 用户裁决），信物数量 / 位置类规则（信物区间、出生区信物、公共信物）一并删除。
+    /// W(n) = 30 / 35 / 40（段 A1 实施修订：design D2 原定 26 / 31 / 36 在"中央 8×8 + 其余 ≥ 6 + 距岛边 2 + 间隔 3"下放不够平台，见 <c>LinkMapGenerator.IslandBaseSide</c>）。
+    /// 可落子格区间取种子 1–20 实测（段 A1）向外取整，回写记录见任务 10-26-map-expand-25。
+    /// 平台清单规则：边长 6–8、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个。
     /// </para>
-    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格与信物格预算、出生区（保护期容量、出生区内无新地表）、信物格合法、
-    /// 豁免理由、必死口袋，以及链接档的布局校验（<see cref="ValidateSpliced"/>）。中央入口 / 咽喉须可落子与容差两条随 retire-legacy-rules（L18）删除。
+    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格预算、出生区（保护期容量、出生区内无新地表）、信物格合法（有信物格时）、豁免理由、必死口袋。
     /// 旋转对称不在校验器里（原 MapSymmetry 只由标准档基准图的测试调用，已随旧地图删除——retire-legacy-maps）。
-    /// <para>链接档可落子格总数与画布区间的回写记录（原写在声明表内，terrain-density check 移到这里，守门 规格档分流守门Tests 限声明表区间长度）：
-    /// 可落子格总数与画布区间（open-map tasks 1.1 回写）：种子 1–20 实测全图可落子 212–280、画布宽 23–27、高 17–20（种子 1–2000：可落子 184–300、宽 22–28、高 16–20）——
-    /// 可落子格取生成器的理论边界向外取整（5 块 6×6 减最长河道与混合主题的深水 = 173，5 块 8×8 = 320），画布取 3+2 布局的理论边界
-    /// （宽 = 第一行三块 18–24 + 第二行向东伸出至多 2 + 留白 4 → 22–30；高 = 两行 12–16 + 留白 4 → 16–20）。
-    /// terrain-barriers 2.2 回写（河流 / 高台横穿棋盘、大棋盘加湖泊 / 岩区）：种子 1–20 实测全图可落子 202–258、画布宽 23–27、高 17–20（种子 1–2000：可落子 182–282、宽 22–28、高 16–20）；
-    /// 理论下界变为 5 块 6×6 减 6×6 河道 5 格与混合主题未架桥深水 1 格 = 174（6×6 不放湖泊 / 岩区，实施修订 J4），仍在 170 之上，声明区间不变。
-    /// terrain-density 1.3 回写（边长 6–7）：可落子上界取 5 块 7×7 = 245、下界维持 170；画布取 6–7 的 3+2 布局理论边界（1024 种尺寸组合穷举：列 22–25、行 16–18，
-    /// 宽 = 包围盒 18–21 + 留白 4：第一行三块 18–21，第二行向东伸出 1 格只在东端那块宽 6 时发生，此时第一行 ≤ 20，包围盒宽恒 ≤ 21；高 = 两行 12–14 + 留白 4）。实测见 初始布局Tests / 主题地形Tests 与任务 notes.md。
-    /// （旧值：可落子 125–245、列 20–75、行 8–21；拼接版：列 20–85、行 8–24。）</para>
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
         new Dictionary<MapProfile, ProfileRules>
         {
-            // 链接档（board-link-mode D2 / 裁决 J1–J7；link-map-terrain D6 / 裁决 M1 / M4–M9；open-map D1 / D2）：可落子格 = 5 块出生棋盘内可落子格之和、信物 10–15（每块出生棋盘 2 个出生区档 + 至多 1 个公共区档）、
-            // 出生区恰 5 个、各恰 9 格（核心区）；出生棋盘边长 6–7（terrain-density 裁决 K1，原 6–8）、带两两不同的主题、外圈平坦（河流 / 高台的隔断线两端除外，terrain-barriers H4；有隔断线须恰 1 处通道，BOARD_BARRIER_INVALID）、核心区平坦、棋盘内连通、改造目标 ≥ 2；
-            // 5 块建局时边对边紧贴成一张连通地图（3+2 两行）、没有通道；连通分量恰 1 个且含全部出生棋盘；每条接缝至少一条气边；
-            // 不要求到中央入口可达、不做距离均衡、不要求标注咽喉。
-            // 可落子格总数与画布区间的回写记录（open-map / terrain-barriers / terrain-density）见上方注释。
+            // 链接档（map-expand-25 D7）：按人数的浮空岛；没有咽喉、不做距离均衡、不要求到中央入口可达。
             [MapProfile.Link] = new(
-                "链接档只提供 4 人的预算表（本模式只有 4 人局）",
+                "链接档只提供 2–4 人的预算表",
                 new Dictionary<int, Budget>
                 {
-                    [4] = new(170, 245, 10, 15, (5, 5), (9, 9)),
+                    [2] = new(760, 876, (6, 8), (9, 9), IslandSide: 30, Canvas: 34),
+                    [3] = new(1050, 1201, (8, 10), (9, 9), IslandSide: 35, Canvas: 39),
+                    [4] = new(1400, 1576, (10, 12), (9, 9), IslandSide: 40, Canvas: 44),
                 }.ToImmutableDictionary(),
                 ZonesMustExceedPlayers: true,
-                ColumnRange: (22, 25),
-                RowRange: (16, 18),
-                PlateList: new((6, 8), (6, 7), BirthRelics: 2, PublicRelicsMax: 1, MinEditTargets: 2, MaxSpecialSurfaces: 4)),
+                PlateList: new((6, 8), (6, 8), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3))),
         }.ToImmutableDictionary();
 
     /// <summary>
-    /// 一个规格档的全部分流声明：支持的人数说明、人数预算、出生区数是否须多于人数、外接列数与行数区间、棋盘清单规则。
+    /// 一个规格档的全部分流声明：支持的人数说明、人数预算、出生区数是否须多于人数、棋盘清单规则。
     /// retire-legacy-maps 4.2：距离处理方式、连通性模式、咽喉标注、出生区到中央入口四个字段随旧档删除。
+    /// map-expand-25 D7：外接列数与行数区间并入按人数的预算行（画布边长恰等于 W(n)+2M）。
     /// </summary>
     private sealed record ProfileRules(
         string SupportedPlayers,
         ImmutableDictionary<int, Budget> Budgets,
         bool ZonesMustExceedPlayers,
-        (int Min, int Max) ColumnRange,
-        (int Min, int Max) RowRange,
         PlateRules PlateList);
 
     /// <summary>
-    /// 棋盘清单规则：棋盘边长区间、出生棋盘边长区间、每块出生棋盘的出生区档信物格数与公共区档信物格数上限、
-    /// 每块出生棋盘的可改造目标（林地格 + 未架桥深水格）下限。
-    /// retire-legacy-maps 4.2：通道的宽度与长度区间随棋盘档删除（链接档没有通道）。link-map-terrain D6：加公共区档上限与改造目标下限。
-    /// link-map-surfaces D4：加每块出生棋盘新地表（荒漠 / 沼泽 / 岩台 / 浅滩）格数上限。
+    /// 棋盘清单规则：棋盘边长区间、出生棋盘（平台）边长区间、可改造目标（林地格 + 未架桥深水格）下限、
+    /// 新地表（荒漠 / 沼泽 / 岩台 / 浅滩）格数上限、两块平台外接矩形的最小间隔、每块平台的坡道数区间。
+    /// map-expand-25 D7：加间隔与坡道；不放静态信物格（D5，relic-redesign R29）后，出生区档信物格数与每块公共信物上限一并删除。
     /// </summary>
     private sealed record PlateRules(
         (int Min, int Max) Side,
         (int Min, int Max) BirthSide,
-        int BirthRelics,
-        int PublicRelicsMax,
         int MinEditTargets,
-        int MaxSpecialSurfaces);
+        int MaxSpecialSurfaces,
+        int MinGap,
+        (int Min, int Max) Ramps);
 
-    /// <summary>一档人数的规模预算。</summary>
+    /// <summary>一档人数的规模预算（map-expand-25 D7：另带岛边长与画布边长；信物区间随"不放静态信物格"删除）。</summary>
     private readonly record struct Budget(
         int MinPlayable,
         int MaxPlayable,
-        int MinRelics,
-        int MaxRelics,
         (int Min, int Max) BirthZones,
-        (int Min, int Max)? BirthZoneCells);
+        (int Min, int Max)? BirthZoneCells,
+        int IslandSide,
+        int Canvas);
 
     /// <summary>全文件唯一读取规格档的地方。未定义的规格档值（只可能来自手工构造）没有声明行，返回 <c>null</c>。</summary>
     private static ProfileRules? RulesOf(MapData map) => Rules.GetValueOrDefault(map.Profile);
@@ -172,13 +161,14 @@ public static class MapValidator
             return new MapValidationResult(f.ToImmutable());
         }
 
-        // 外接尺寸不合该档的区间、或棋盘清单与该档不符：规模已经不对，到此为止——后面的规则只会报出一堆派生失败。
-        if (!ValidateExtent(map, rules.ColumnRange, rules.RowRange, f) || !ValidatePlateList(map, rules, f))
+        Budget? budget = rules.Budgets.TryGetValue(map.MaxPlayers, out Budget found) ? found : null;
+
+        // 画布尺寸不合该人数的预算、或棋盘清单与该档不符：规模已经不对，到此为止——后面的规则只会报出一堆派生失败。
+        // 人数不受支持时没有预算行，画布不查，由 ValidateBudgets 报 UNSUPPORTED_PLAYER_COUNT。
+        if (!ValidateExtent(map, budget, f) || !ValidatePlateList(map, rules, budget, f))
         {
             return new MapValidationResult(f.ToImmutable());
         }
-
-        Budget? budget = rules.Budgets.TryGetValue(map.MaxPlayers, out Budget found) ? found : null;
 
         ValidateTerrainBounds(map, f);
         ValidatePlayableCount(map, budget, f);
@@ -192,44 +182,25 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 外接宽度与行数必须落在该档声明的区间内。不通过返回 <c>false</c>。
+    /// 画布宽与高必须恰等于该人数预算行的画布边长 W(n)+2M（map-expand-25 D7）。没有预算行（人数不受支持）时不查。不通过返回 <c>false</c>。
     /// </summary>
-    private static bool ValidateExtent(
-        MapData map, (int Min, int Max) columns, (int Min, int Max) range, ImmutableArray<MapValidationFailure>.Builder f)
+    private static bool ValidateExtent(MapData map, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        if (map.Width > columns.Max)
+        if (known is not { } budget)
         {
-            f.Add(new MapValidationFailure(
-                "MAP_TOO_WIDE",
-                $"地图宽 {map.Width} 列，超出该规格档的 {columns.Max} 列上限。",
-                ImmutableArray<Coord>.Empty));
-            return false;
+            return true;
         }
 
-        if (map.Width < columns.Min)
+        int canvas = budget.Canvas;
+        (string Code, string Message)? wrong =
+            map.Width > canvas ? ("MAP_TOO_WIDE", $"地图宽 {map.Width} 列，超出 {map.MaxPlayers} 人浮空岛的画布 {canvas} 列。")
+            : map.Width < canvas ? ("MAP_TOO_NARROW", $"地图宽 {map.Width} 列，不足 {map.MaxPlayers} 人浮空岛的画布 {canvas} 列。")
+            : map.Height > canvas ? ("MAP_TOO_TALL", $"地图高 {map.Height} 行，超出 {map.MaxPlayers} 人浮空岛的画布 {canvas} 行。")
+            : map.Height < canvas ? ("MAP_TOO_SHORT", $"地图高 {map.Height} 行，不足 {map.MaxPlayers} 人浮空岛的画布 {canvas} 行。")
+            : null;
+        if (wrong is { } w)
         {
-            f.Add(new MapValidationFailure(
-                "MAP_TOO_NARROW",
-                $"地图宽 {map.Width} 列，不足该规格档的 {columns.Min} 列下限。",
-                ImmutableArray<Coord>.Empty));
-            return false;
-        }
-
-        if (map.Height > range.Max)
-        {
-            f.Add(new MapValidationFailure(
-                "MAP_TOO_TALL",
-                $"地图高 {map.Height} 行，超出该规格档的 {range.Max} 行上限。",
-                ImmutableArray<Coord>.Empty));
-            return false;
-        }
-
-        if (map.Height < range.Min)
-        {
-            f.Add(new MapValidationFailure(
-                "MAP_TOO_SHORT",
-                $"地图高 {map.Height} 行，不足该规格档的 {range.Min} 行下限。",
-                ImmutableArray<Coord>.Empty));
+            f.Add(new MapValidationFailure(w.Code, w.Message, ImmutableArray<Coord>.Empty));
             return false;
         }
 
@@ -237,12 +208,12 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 棋盘清单（board-map「棋盘清单」、link-map-generation「物化状态校验」、map-definition「地图静态校验规则」的清单规则）：清单不得为空，逐块校验棋盘，再做拼接后校验。
+    /// 棋盘清单（board-map「棋盘清单」、map-definition「地图静态校验规则」的清单规则）：清单不得为空，逐块校验平台，再做整岛校验（<see cref="ValidateIsland"/>）。
     /// 返回 <c>false</c> 表示清单与该档根本不符，后面的规则不必再跑。
-    /// retire-legacy-maps 4.2："清单必须为空"（标准档 / 边疆档）与通道、全图连通两条棋盘档规则随旧档删除。
-    /// link-map-terrain D6：删除"棋盘内全部是高度 0 的可落子草地"与"棋盘内不得有栅栏"，改为外圈 / 核心区 / 新地表 / 连通 / 改造目标 / 主题六条逐块规则与接缝气边校验。
+    /// map-expand-25 D7：删除外圈平坦、棋盘外不得有深水、紧贴布局（含"可落子格都属于棋盘"与战场分量恰 1 个）、接缝气边、主题两两不同、每块至多 1 个公共信物；
+    /// 改为平台高度与坡道、主题不为高台、平台间隔、整岛气边连通、可落子区外接矩形（不放静态信物格后，公共信物位置 / 数量规则一并删除）。
     /// </summary>
-    private static bool ValidatePlateList(MapData map, ProfileRules rules, ImmutableArray<MapValidationFailure>.Builder f)
+    private static bool ValidatePlateList(MapData map, ProfileRules rules, Budget? budget, ImmutableArray<MapValidationFailure>.Builder f)
     {
         PlateRules plates = rules.PlateList;
         if (map.Boards.IsDefaultOrEmpty)
@@ -252,14 +223,11 @@ public static class MapValidator
             return false;
         }
 
-        // 链接档（open-map D2）：5 块出生棋盘边对边紧贴成一张连通地图；没有通道，可落子格都必须属于某块棋盘；连通分量恰 1 个且含全部出生棋盘。
         Battlefields fields = Battlefields.Of(map);
-        int[,] owner = ValidatePlateCells(map, plates, fields, f);
+        ValidatePlateCells(map, plates, fields, f);
         ValidateThemes(map, f);
         ValidateBirthPlates(map, f);
-        ValidateFlatScenery(map, owner, f);
-        ValidateSpliced(map, plates, owner, fields, f);
-        ValidateSeams(map, f);
+        ValidateIsland(map, plates, budget, f);
         return true;
     }
 
@@ -274,17 +242,11 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 第 1、2 条：棋盘在盘内、边长在区间内；出生棋盘再逐块校验外圈、核心区、新地表、连通与改造目标（<see cref="ValidateBirthBoardTerrain"/>）。
-    /// 返回"格 → 所属棋盘下标"的表（不属于任何棋盘为 −1；重叠时取清单里靠前的一块，重叠本身由间隔规则报出）。
+    /// 第 1、2 条：棋盘在盘内、边长在区间内；出生棋盘（平台）再逐块校验高度与坡道、隔断线、核心区、新地表、连通与改造目标（<see cref="ValidateBirthBoardTerrain"/>）。
+    /// 重叠与间隔由 <see cref="ValidateIsland"/> 报出。
     /// </summary>
-    private static int[,] ValidatePlateCells(MapData map, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidatePlateCells(MapData map, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        var owner = new int[Math.Max(0, map.Width), Math.Max(0, map.Height)];
-        foreach (Coord c in map.AllCoords())
-        {
-            owner[c.X, c.Y] = -1;
-        }
-
         for (int i = 0; i < map.Boards.Length; i++)
         {
             BoardPlate plate = map.Boards[i];
@@ -306,64 +268,66 @@ public static class MapValidator
                 continue;
             }
 
-            foreach (Coord c in plate.Cells())
-            {
-                if (owner[c.X, c.Y] < 0)
-                {
-                    owner[c.X, c.Y] = i;
-                }
-            }
-
             if (plate.Kind == BoardPlateKind.Birth)
             {
                 ValidateBirthBoardTerrain(map, plate, plates, fields, f);
             }
         }
-
-        return owner;
     }
 
     /// <summary>
-    /// 一块出生棋盘的清单规则（map-definition「地图静态校验规则」链接档清单、link-map-generation「初始布局」，link-map-terrain 裁决 M1 / M4–M7）：
-    /// 外圈每格高度 0、可落子、草地或林地，外圈相关的边上没有栅栏（<c>BOARD_RIM_NOT_FLAT</c>）；
-    /// 核心区 9 格高度 0 的草地、没有障碍 / 深水 / 桥，两端都在核心区内的边上没有栅栏（<c>BIRTH_CORE_NOT_FLAT</c>）；
-    /// 荒漠 / 沼泽 / 岩台 / 浅滩只在中间带、每块至多 <see cref="PlateRules.MaxSpecialSurfaces"/> 格（<c>BOARD_SPECIAL_SURFACE</c>，link-map-surfaces D4）；棋盘内可落子格沿几何四邻连通（<c>BOARD_SPLIT</c>）；
+    /// 一块平台（出生棋盘）的清单规则（map-definition「地图静态校验规则」链接档清单；map-expand-25 D3 / D7）：
+    /// 平台内可落子格除坡道外高度 2，坡道高度 1、数量在区间内、都在外圈非角格且朝外的邻格是高度 0 的可落子低地（<c>PLATE_HEIGHT</c>）；
+    /// 河流隔断线恰 1 座桥（<c>BOARD_BARRIER_INVALID</c>）；核心区 9 格高度 2 的草地、没有障碍 / 深水 / 桥，两端都在核心区内的边上没有栅栏（<c>BIRTH_CORE_NOT_FLAT</c>）；
+    /// 荒漠 / 沼泽 / 岩台 / 浅滩只在中间带、每块至多 <see cref="PlateRules.MaxSpecialSurfaces"/> 格（<c>BOARD_SPECIAL_SURFACE</c>）；平台内可落子格沿几何四邻连通（<c>BOARD_SPLIT</c>）；
     /// 林地格与未架桥深水格合计不少于下限（<c>BOARD_TOO_FEW_EDIT_TARGETS</c>）。
     /// </summary>
-    /// <remarks>
-    /// 连通性读战场导出（<see cref="Battlefields"/>，几何四邻的唯一分量实现），不另写一份 BFS：棋盘内的可落子格落在不止一个分量里即被切断。
-    /// 外圈全部可落子时，棋盘内被隔开的一片碰不到外圈、也就碰不到别的棋盘，"跨棋盘绕回来连上"不会发生；河流主题的河道两端占外圈各 1 格（terrain-barriers），
-    /// 对岸一片可能经邻盘绕回来，这里放过而生成器的单盘自检（只看本块）照样挡住。
-    /// </remarks>
+    /// <remarks>连通性读战场导出（<see cref="Battlefields"/>，几何四邻的唯一分量实现），不另写一份 BFS：平台内的可落子格落在不止一个分量里即被切断。</remarks>
     private static void ValidateBirthBoardTerrain(MapData map, BoardPlate plate, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
     {
-        // 外圈（terrain-barriers 裁决 H4）：河流主题河道、高台主题山脊两端经过的外圈格除外——河道端格是深水（可架桥）、不是岩石，山脊端格高度 ≥ 1、可落子、草地或林地。
-        List<Barrier> barriers = BarriersOf(map, plate);
-        HashSet<Coord> ends = [.. barriers
-            .Where(l => (l.Ridge ? BoardTheme.Plateau : BoardTheme.River) == plate.Theme)
-            .SelectMany(l => l.Cells.Where(plate.OnRim))];
-        bool RimFlat(Coord c) => ends.Contains(c)
-            ? plate.Theme == BoardTheme.River
-                ? map.SurfaceAt(c) == Surface.DeepWater && !map.Obstacles.Contains(c)
-                : map.IsPlayable(c) && map.HeightAt(c) >= 1 && map.SurfaceAt(c) is Surface.Grass or Surface.Forest
-            : map.IsPlayable(c) && map.HeightAt(c) == 0 && map.SurfaceAt(c) is Surface.Grass or Surface.Forest;
-        ImmutableArray<Coord> rimCells = [.. plate.Cells().Where(plate.OnRim).Where(c => !RimFlat(c))];
-        FenceEdge[] rimFences = [.. map.TerrainData.Fences.Where(e => plate.OnRim(e.A) || plate.OnRim(e.B)).OrderBy(e => e.A).ThenBy(e => e.B)];
-        if (!rimCells.IsEmpty || rimFences.Length > 0)
+        // 高度与坡道（D3）：坡道 = 平台内高度 1 的可落子格。朝外的邻格用坐标算术取（外圈非角格恰有一个朝外方向），不枚举邻居。
+        int left = plate.Origin.X, right = plate.Origin.X + plate.Width - 1, bottom = plate.Origin.Y, top = plate.Origin.Y + plate.Height - 1;
+        Coord? Outlet(Coord c)
         {
-            string edges = rimFences.Length > 0 ? $"；外圈相关的栅栏 {string.Join("、", rimFences)}" : string.Empty;
-            f.Add(new MapValidationFailure(
-                "BOARD_RIM_NOT_FLAT",
-                $"{Describe(plate)} 的外圈每格必须高度 0、可落子、地表为草地或林地，外圈相关的边上不得有栅栏{edges}。",
-                [.. rimCells.Concat(rimFences.SelectMany(e => new[] { e.A, e.B })).Distinct().Order()]));
+            bool corner = (c.X == left || c.X == right) && (c.Y == bottom || c.Y == top);
+            return corner || !plate.OnRim(c) ? null
+                : c.X == left ? new Coord(c.X - 1, c.Y)
+                : c.X == right ? new Coord(c.X + 1, c.Y)
+                : c.Y == bottom ? new Coord(c.X, c.Y - 1)
+                : new Coord(c.X, c.Y + 1);
         }
 
-        // 隔断线（terrain-barriers D5，实施修订 J5）：棋盘内若有横穿棋盘的隔断线，它不得经过核心区、须恰 1 处通道，线上除通道外的格与线外的格之间没有气边。不要求一定有隔断线。
+        bool Lowland(Coord o) => map.Contains(o) && map.IsPlayable(o) && map.HeightAt(o) == 0 && !map.Boards.Any(b => b.Contains(o));
+        Coord[] playable = [.. plate.Cells().Where(map.IsPlayable)];
+        Coord[] ramps = [.. playable.Where(c => map.HeightAt(c) == 1)];
+        Coord[] flat = [.. playable.Where(c => map.HeightAt(c) is not (1 or 2))];
+        Coord[] badRamps = [.. ramps.Where(c => Outlet(c) is not { } o || !Lowland(o) || map.SurfaceAt(c) != Surface.Grass)];
+        if (flat.Length > 0)
+        {
+            f.Add(new MapValidationFailure(
+                "PLATE_HEIGHT", $"{Describe(plate)} 内可落子格除坡道（高度 1）外必须是高度 2：{string.Join("、", flat.Select(c => $"{c.ToNotation()} 高 {map.HeightAt(c)}"))}。", [.. flat]));
+        }
+
+        if (ramps.Length < plates.Ramps.Min || ramps.Length > plates.Ramps.Max)
+        {
+            f.Add(new MapValidationFailure(
+                "PLATE_HEIGHT", $"{Describe(plate)} 有 {ramps.Length} 个坡道（高度 1 的格）：每块平台必须有 {plates.Ramps.Min}–{plates.Ramps.Max} 个。", ramps.Length > 0 ? [.. ramps] : [plate.Origin]));
+        }
+
+        if (badRamps.Length > 0)
+        {
+            f.Add(new MapValidationFailure(
+                "PLATE_HEIGHT", $"{Describe(plate)} 的坡道必须是外圈非角格上的草地，且朝外的邻格是高度 0 的可落子低地（不是深水、岩石、岛外或另一块平台）。", [.. badRamps]));
+        }
+
+        List<Barrier> barriers = BarriersOf(map, plate);
+
+        // 隔断线（terrain-barriers D5，实施修订 J5）：平台内若有横穿平台的河道，它不得经过核心区、须恰 1 座桥，线上除桥外的格与线外的格之间没有气边。不要求一定有隔断线。
+        // map-expand-25：高台主题去掉、平台整体抬到高度 2 后"每格高度 ≥ 1 的整行 / 整列"不再是山脊，只认河道。
         foreach (Barrier line in barriers)
         {
-            string what = line.Ridge ? "山脊" : "河道";
-            string name = $"{what} {line.Cells[0].ToNotation()}–{line.Cells[^1].ToNotation()}";
-            ImmutableArray<Coord> passages = [.. line.Cells.Where(c => line.Ridge ? map.HeightAt(c) == 1 : map.HasBridge(c))];
+            string name = $"河道 {line.Cells[0].ToNotation()}–{line.Cells[^1].ToNotation()}";
+            ImmutableArray<Coord> passages = [.. line.Cells.Where(map.HasBridge)];
             ImmutableArray<Coord> inCore = [.. line.Cells.Where(plate.InCore)];
             ImmutableArray<Coord> leaks = [.. line.Cells
                 .Where(c => passages.Length != 1 || c != passages[0])
@@ -378,7 +342,7 @@ public static class MapValidator
             {
                 f.Add(new MapValidationFailure(
                     "BOARD_BARRIER_INVALID",
-                    $"{Describe(plate)} 的{name}横穿棋盘，有 {passages.Length} 处通道（{(line.Ridge ? "高 1 坡口" : "桥")}）：隔断线须恰有 1 处通道。",
+                    $"{Describe(plate)} 的{name}横穿棋盘，有 {passages.Length} 座桥：隔断线须恰有 1 处通道。",
                     passages.IsEmpty ? line.Cells : passages));
             }
             else if (!leaks.IsEmpty)
@@ -388,21 +352,21 @@ public static class MapValidator
             }
         }
 
-        // 核心区。
+        // 核心区（map-expand-25 D7：随平台抬升改为高度 2）。
         ImmutableArray<Coord> coreCells = [.. plate.CoreCells()
-            .Where(c => !map.IsPlayable(c) || map.HeightAt(c) != 0 || map.SurfaceAt(c) != Surface.Grass || map.HasBridge(c))];
+            .Where(c => !map.IsPlayable(c) || map.HeightAt(c) != 2 || map.SurfaceAt(c) != Surface.Grass || map.HasBridge(c))];
         FenceEdge[] coreFences = [.. map.TerrainData.Fences.Where(e => plate.InCore(e.A) && plate.InCore(e.B)).OrderBy(e => e.A).ThenBy(e => e.B)];
         if (!coreCells.IsEmpty || coreFences.Length > 0)
         {
             string edges = coreFences.Length > 0 ? $"；核心区内部的栅栏 {string.Join("、", coreFences)}" : string.Empty;
             f.Add(new MapValidationFailure(
                 "BIRTH_CORE_NOT_FLAT",
-                $"{Describe(plate)} 的核心区 9 格必须都是高度 0 的草地，没有障碍、深水与桥，两端都在核心区内的边上不得有栅栏{edges}。",
+                $"{Describe(plate)} 的核心区 9 格必须都是高度 2 的草地，没有障碍、深水与桥，两端都在核心区内的边上不得有栅栏{edges}。",
                 [.. coreCells.Concat(coreFences.SelectMany(e => new[] { e.A, e.B })).Distinct().Order()]));
         }
 
         // 新地表（link-map-surfaces D4 / 裁决 E5；原"棋盘内不得有新地表"随之放开）：荒漠、沼泽、岩台与浅滩只许在中间带（不在外圈、不在核心区），每块至多 MaxSpecialSurfaces 格。
-        // 外圈"只许草地或林地"与核心区"9 格高度 0 草地"两条照旧报出；这里另给出更精确的失败信息。"核心区四邻不放"是生成器口径（S1），不是地图合法性要求，这里不查。
+        // 核心区"9 格高度 2 草地"照旧报出；这里另给出更精确的失败信息。"核心区四邻不放"是生成器口径（S1），不是地图合法性要求，这里不查。
         ImmutableArray<Coord> special = [.. plate.Cells().Where(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows)];
         ImmutableArray<Coord> misplaced = [.. special.Where(c => !plate.InMiddleBand(c))];
         if (!misplaced.IsEmpty)
@@ -458,12 +422,12 @@ public static class MapValidator
         }
     }
 
-    /// <summary>一条横穿棋盘的隔断线（terrain-barriers D5）：整列（<see cref="Column"/>）或整行、第几列 / 行、是不是山脊（否则是河道），线上的格按先行后列。</summary>
-    private sealed record Barrier(bool Column, int Index, bool Ridge, ImmutableArray<Coord> Cells);
+    /// <summary>一条横穿平台的河道隔断线（terrain-barriers D5）：整列（<see cref="Column"/>）或整行、第几列 / 行，线上的格按先行后列。</summary>
+    private sealed record Barrier(bool Column, int Index, ImmutableArray<Coord> Cells);
 
     /// <summary>
     /// 棋盘内的隔断线（terrain-barriers D1 / D5，实施修订 J1 / J2 / J5）：只看地图数据，不读生成器，也不看主题。候选是中间带的整列（先）与整行（后），即不是外圈那一列 / 行；
-    /// 整列 / 整行每格都是深水（含桥）即河道，每格高度 ≥ 1 即山脊。
+    /// 整列 / 整行每格都是深水（含桥）即河道（map-expand-25：山脊随高台主题去掉）。
     /// </summary>
     private static List<Barrier> BarriersOf(MapData map, BoardPlate plate)
     {
@@ -472,11 +436,7 @@ public static class MapValidator
         {
             if (cells.All(c => map.SurfaceAt(c) == Surface.DeepWater))
             {
-                lines.Add(new Barrier(column, index, Ridge: false, cells));
-            }
-            else if (cells.All(c => map.HeightAt(c) >= 1))
-            {
-                lines.Add(new Barrier(column, index, Ridge: true, cells));
+                lines.Add(new Barrier(column, index, cells));
             }
         }
 
@@ -496,8 +456,8 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 主题（link-map-terrain D2 / 裁决 M2，<c>BOARD_THEME_INVALID</c>）：出生棋盘必须带一个取值合法的主题，非出生棋盘不得带主题；出生棋盘的主题两两不同。
-    /// 主题只用于生成、校验与呈现，这里只核对取值，不按主题校验地形内容（各主题的地形特征由生成器构造与其单元测试守住）。
+    /// 主题（link-map-terrain D2；map-expand-25 D7 / 裁决 R3，<c>PLATE_THEME</c>）：出生棋盘（平台）必须带一个取值合法的主题、且不是高台，非出生棋盘不得带主题。
+    /// 主题可以重复（原"两两不同"随 R3 删除）。主题只用于生成、校验与呈现，这里只核对取值，不按主题校验地形内容。
     /// </summary>
     private static void ValidateThemes(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -505,28 +465,20 @@ public static class MapValidator
         {
             if (plate.Kind == BoardPlateKind.Birth && plate.Theme is not { } theme)
             {
-                f.Add(new MapValidationFailure("BOARD_THEME_INVALID", $"{Describe(plate)} 没有主题：链接档的出生棋盘必须带主题。", [plate.Origin]));
+                f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 没有主题：链接档的平台必须带主题。", [plate.Origin]));
             }
             else if (plate.Kind == BoardPlateKind.Birth && !Enum.IsDefined(plate.Theme!.Value))
             {
-                f.Add(new MapValidationFailure("BOARD_THEME_INVALID", $"{Describe(plate)} 的主题取值 {(int)plate.Theme!.Value} 无法识别。", [plate.Origin]));
+                f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 的主题取值 {(int)plate.Theme!.Value} 无法识别。", [plate.Origin]));
+            }
+            else if (plate.Kind == BoardPlateKind.Birth && plate.Theme == BoardTheme.Plateau)
+            {
+                f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 的主题是高台：平台主题只能是河流、林地、栅栏阵或混合（高台主题已去掉）。", [plate.Origin]));
             }
             else if (plate.Kind != BoardPlateKind.Birth && plate.Theme is not null)
             {
-                f.Add(new MapValidationFailure("BOARD_THEME_INVALID", $"{Describe(plate)} 不是出生棋盘，不得带主题。", [plate.Origin]));
+                f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 不是出生棋盘，不得带主题。", [plate.Origin]));
             }
-        }
-
-        foreach (IGrouping<BoardTheme, BoardPlate> same in map.Boards
-            .Where(p => p.Kind == BoardPlateKind.Birth && p.Theme is { } t && Enum.IsDefined(t))
-            .GroupBy(p => p.Theme!.Value)
-            .Where(g => g.Count() > 1)
-            .OrderBy(g => g.Key))
-        {
-            f.Add(new MapValidationFailure(
-                "BOARD_THEME_INVALID",
-                $"{string.Join("、", same.Select(Describe))} 的主题都是{same.Key.DisplayName()}：同一张图的出生棋盘主题必须两两不同。",
-                [.. same.Select(p => p.Origin)]));
         }
     }
 
@@ -556,107 +508,12 @@ public static class MapValidator
         }
     }
 
-    /// <summary>深水只许在棋盘内（棋盘之外是不可落子、不可改造的场景格，深水是搭桥的目标）；信物格必须在棋盘内（通道格不得是信物格）。</summary>
-    private static void ValidateFlatScenery(MapData map, int[,] owner, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        ImmutableArray<Coord> water = [.. map.AllCoords().Where(c => map.SurfaceAt(c) == Surface.DeepWater && owner[c.X, c.Y] < 0)];
-        if (!water.IsEmpty)
-        {
-            f.Add(new MapValidationFailure(
-                "BOARD_MAP_DEEP_WATER",
-                "棋盘之外不得有深水格（含架了桥的）：棋盘之外的格子必须全部是不可改造的场景格。",
-                water));
-        }
-
-        ImmutableArray<Coord> strayRelics = map.RelicCells.Keys
-            .Where(c => map.IsPlayable(c) && owner[c.X, c.Y] < 0)
-            .Order()
-            .ToImmutableArray();
-        if (!strayRelics.IsEmpty)
-        {
-            f.Add(new MapValidationFailure(
-                "RELIC_OUTSIDE_BOARD", "信物格必须位于棋盘内，通道格不得是信物格。", strayRelics));
-        }
-    }
-
     /// <summary>
-    /// 链接档的布局校验（规格 link-map-generation「物化状态校验」）：
-    /// 可落子格都属于某块棋盘（没有通道）；棋盘两两不重叠；每块出生棋盘恰 <see cref="PlateRules.BirthRelics"/> 个出生区档信物格、至多 <see cref="PlateRules.PublicRelicsMax"/> 个公共区档信物格；
-    /// 按几何四邻导出的连通分量（<see cref="Battlefields"/>）恰 1 个且含全部出生棋盘（open-map D2：建局时即紧贴成一张连通地图，对局中不变）。
+    /// 整岛规则（map-expand-25 D7）：
+    /// 平台两两不重叠、外接矩形间隔 ≥ <see cref="PlateRules.MinGap"/>（<c>ISLAND_PLATE_GAP</c>）；全部可落子格沿气边连成一片（<c>ISLAND_LIBERTY_SPLIT</c>）；
+    /// 可落子区外接矩形 ≥ W(n)×W(n)（<c>ISLAND_EXTENT</c>，验收的核心断言）。人数不受支持（没有预算行）时只查前两条。
     /// </summary>
-    private static void ValidateSpliced(MapData map, PlateRules plates, int[,] owner, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        ImmutableArray<Coord> loose = [.. map.AllCoords().Where(c => map.IsPlayable(c) && owner[c.X, c.Y] < 0)];
-        if (!loose.IsEmpty)
-        {
-            f.Add(new MapValidationFailure(
-                "SCENERY_CELL_PLAYABLE",
-                "可落子格都必须属于某块出生棋盘：没有通道，棋盘之外必须全部是障碍格。",
-                loose));
-        }
-
-        for (int i = 0; i < map.Boards.Length; i++)
-        {
-            BoardPlate plate = map.Boards[i];
-            bool inside = plate.Width > 0 && plate.Height > 0 && plate.Origin.X >= 0 && plate.Origin.Y >= 0
-                && plate.Origin.X + plate.Width <= map.Width && plate.Origin.Y + plate.Height <= map.Height;
-            if (!inside)
-            {
-                continue;
-            }
-
-            ImmutableArray<Coord> overlapped = [.. plate.Cells().Where(c => owner[c.X, c.Y] != i)];
-            if (!overlapped.IsEmpty)
-            {
-                f.Add(new MapValidationFailure(
-                    "BOARD_OVERLAP", $"{Describe(plate)} 与清单里靠前的棋盘重叠：棋盘只能边对边紧贴，不得重叠。", overlapped));
-            }
-
-            if (plate.Kind == BoardPlateKind.Birth)
-            {
-                int birth = map.RelicCells.Count(kv => plate.Contains(kv.Key) && kv.Value.Zone == RelicZone.BirthZone);
-                int contested = map.RelicCells.Count(kv => plate.Contains(kv.Key) && kv.Value.Zone != RelicZone.BirthZone);
-                if (birth != plates.BirthRelics || contested > plates.PublicRelicsMax)
-                {
-                    f.Add(new MapValidationFailure(
-                        "BIRTH_BOARD_RELIC_COUNT",
-                        $"{Describe(plate)} 有 {birth} 个出生区档、{contested} 个公共区档信物格：每块出生棋盘必须恰有 {plates.BirthRelics} 个出生区档（在核心区内）、至多 {plates.PublicRelicsMax} 个公共区档（在核心区外）。",
-                        [plate.Origin]));
-                }
-            }
-        }
-
-        foreach (Battlefield field in fields.All)
-        {
-            if (!field.HasBirthBoard)
-            {
-                f.Add(new MapValidationFailure(
-                    "BATTLEFIELD_WITHOUT_BIRTH_BOARD",
-                    $"有一片 {field.Cells.Length} 格的可落子格不含任何出生棋盘：每个战场都必须由出生棋盘拼出来。",
-                    field.Cells));
-            }
-        }
-
-        // open-map D2：恰 1 个连通分量且含全部出生棋盘（5 块建局时即紧贴成一张连通地图；地图在对局中不变）。
-        int births = map.Boards.Count(b => b.Kind == BoardPlateKind.Birth);
-        Battlefield[] withBirth = [.. fields.All.Where(field => field.HasBirthBoard)];
-        int covered = withBirth.Length == 1 ? withBirth[0].BirthZones.Length : 0;
-        if (withBirth.Length != 1 || covered != births)
-        {
-            f.Add(new MapValidationFailure(
-                "BATTLEFIELD_COUNT_MISMATCH",
-                $"按几何四邻导出的连通分量为 {withBirth.Length} 个（含出生棋盘 {string.Join(" / ", withBirth.Select(field => field.BirthZones.Length))}）："
-                + $"链接档地图必须恰有 1 个连通分量且含全部 {births} 块出生棋盘（出生棋盘建局时边对边紧贴成一张连通地图）。",
-                [.. withBirth.SelectMany(field => field.Cells)]));
-        }
-    }
-
-    /// <summary>
-    /// 接缝气边（link-map-generation「物化状态校验」，link-map-terrain 裁决 M6，<c>LINK_SEAM_NO_LIBERTY</c>）：两块棋盘的外接矩形边对边相触即有一条接缝；
-    /// 隔着接缝互为几何邻居的格对里，至少要有一对之间存在气边（<see cref="Adjacency.LibertyNeighbors"/>，唯一的气边实现）。
-    /// terrain-barriers 起外圈不再全平（河道 / 山脊两端占外圈各 1 格），这条在生成图上不再恒成立：生成器的棋盘级自检用同一判定（<see cref="SeamHasLiberty"/>）在生成时重抽，这里仍是底线。
-    /// </summary>
-    private static void ValidateSeams(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidateIsland(MapData map, PlateRules plates, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
         for (int i = 0; i < map.Boards.Length; i++)
         {
@@ -664,55 +521,70 @@ public static class MapValidator
             {
                 BoardPlate a = map.Boards[i];
                 BoardPlate b = map.Boards[j];
-                List<(Coord P, Coord Q)> pairs = SeamPairs(map, a, b);
-                if (pairs.Count == 0 || SeamHasLiberty(map, a, b))
+                if (!PlatesApart(a, b, plates.MinGap))
                 {
-                    continue;
+                    f.Add(new MapValidationFailure(
+                        "ISLAND_PLATE_GAP",
+                        $"{Describe(a)} 与 {Describe(b)} 重叠或间隔不足 {plates.MinGap} 格：平台之间必须隔着至少 {plates.MinGap} 格宽的低地。",
+                        [a.Origin, b.Origin]));
                 }
-
-                f.Add(new MapValidationFailure(
-                    "LINK_SEAM_NO_LIBERTY",
-                    $"{Describe(a)} 与 {Describe(b)} 之间的接缝（{pairs.Count} 对相邻格）没有任何气边：接缝两侧全部隔着栅栏、崖壁或不可落子格。",
-                    [.. pairs.SelectMany(p => new[] { p.P, p.Q }).Order()]));
             }
+        }
+
+        ImmutableArray<Coord> split = LibertySplit(map);
+        if (!split.IsEmpty)
+        {
+            f.Add(new MapValidationFailure(
+                "ISLAND_LIBERTY_SPLIT",
+                $"全图可落子格沿气边不连通：有 {split.Length} 格与最大的一片隔着崖壁、栅栏、深水或障碍。",
+                split));
+        }
+
+        if (known is not { } budget)
+        {
+            return;
+        }
+
+        Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
+        int columns = playable.Length == 0 ? 0 : playable.Max(c => c.X) - playable.Min(c => c.X) + 1;
+        int rows = playable.Length == 0 ? 0 : playable.Max(c => c.Y) - playable.Min(c => c.Y) + 1;
+        if (columns < budget.IslandSide || rows < budget.IslandSide)
+        {
+            f.Add(new MapValidationFailure(
+                "ISLAND_EXTENT",
+                $"可落子区外接矩形 {columns}×{rows}：{map.MaxPlayers} 人浮空岛必须至少 {budget.IslandSide}×{budget.IslandSide}。",
+                ImmutableArray<Coord>.Empty));
         }
     }
 
+    /// <summary>两块平台外接矩形在横向或纵向上隔开至少 <paramref name="gap"/> 格（<c>ISLAND_PLATE_GAP</c> 的唯一判定，生成器落位也调它）。重叠时为 <c>false</c>。</summary>
+    internal static bool PlatesApart(BoardPlate a, BoardPlate b, int gap) =>
+        a.Origin.X + a.Width + gap <= b.Origin.X || b.Origin.X + b.Width + gap <= a.Origin.X
+        || a.Origin.Y + a.Height + gap <= b.Origin.Y || b.Origin.Y + b.Height + gap <= a.Origin.Y;
+
     /// <summary>
-    /// 两块棋盘之间的接缝格对（外接矩形边对边相触即有接缝）：隔着接缝互为几何邻居的格对，只保留两格都在 <paramref name="map"/> 画布内的。不相触时为空。
+    /// 全部可落子格沿气边（<see cref="Adjacency.LibertyNeighbors"/>）分片后，最大一片之外的格（并列取先出现的一片为最大，按坐标升序）；连成一片时为空。
+    /// <c>ISLAND_LIBERTY_SPLIT</c> 的唯一判定，生成器的低地自检也调它。
     /// </summary>
-    private static List<(Coord P, Coord Q)> SeamPairs(MapData map, BoardPlate a, BoardPlate b)
+    internal static ImmutableArray<Coord> LibertySplit(MapData map)
     {
-        var pairs = new List<(Coord P, Coord Q)>();
-        if (a.Origin.X + a.Width == b.Origin.X || b.Origin.X + b.Width == a.Origin.X)
+        var visited = new HashSet<Coord>();
+        List<ImmutableArray<Coord>> parts = [];
+        foreach (Coord start in map.AllCoords())
         {
-            (BoardPlate west, BoardPlate east) = a.Origin.X < b.Origin.X ? (a, b) : (b, a);
-            for (int y = Math.Max(a.Origin.Y, b.Origin.Y); y < Math.Min(a.Origin.Y + a.Height, b.Origin.Y + b.Height); y++)
+            if (!visited.Contains(start) && map.IsPlayable(start))
             {
-                pairs.Add((new Coord(west.Origin.X + west.Width - 1, y), new Coord(east.Origin.X, y)));
-            }
-        }
-        else if (a.Origin.Y + a.Height == b.Origin.Y || b.Origin.Y + b.Height == a.Origin.Y)
-        {
-            (BoardPlate south, BoardPlate north) = a.Origin.Y < b.Origin.Y ? (a, b) : (b, a);
-            for (int x = Math.Max(a.Origin.X, b.Origin.X); x < Math.Min(a.Origin.X + a.Width, b.Origin.X + b.Width); x++)
-            {
-                pairs.Add((new Coord(x, south.Origin.Y + south.Height - 1), new Coord(x, north.Origin.Y)));
+                parts.Add(FloodFill(map, start, visited));
             }
         }
 
-        pairs.RemoveAll(p => !map.Contains(p.P) || !map.Contains(p.Q));
-        return pairs;
-    }
+        if (parts.Count <= 1)
+        {
+            return [];
+        }
 
-    /// <summary>
-    /// 接缝是否有气边（<c>LINK_SEAM_NO_LIBERTY</c> 的唯一判定，生成器的棋盘级自检也调它——terrain-barriers 实施修订 J2）：两块不相触时为 <c>true</c>（没有接缝可缺），
-    /// 否则隔着接缝的格对里至少一对之间存在气边（<see cref="Adjacency.LibertyNeighbors"/>）。
-    /// </summary>
-    internal static bool SeamHasLiberty(MapData map, BoardPlate a, BoardPlate b)
-    {
-        List<(Coord P, Coord Q)> pairs = SeamPairs(map, a, b);
-        return pairs.Count == 0 || pairs.Any(p => Adjacency.LibertyNeighbors(map, p.P).Contains(p.Q));
+        ImmutableArray<Coord> main = parts.MaxBy(p => p.Length);
+        return [.. parts.Where(p => p != main).SelectMany(p => p).Order()];
     }
 
     /// <summary>
@@ -770,7 +642,7 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 校验规则第 5 条：可落子格总数必须落在该人数的预算区间内（4 人 95–110，terrain-model 裁决 D18）。
+    /// 校验规则第 5 条：可落子格总数必须落在该人数的预算区间内（区间见声明表的按人数预算行；terrain-model 裁决 D18 引入）。
     /// 单列成一步而不是混在信物 / 出生区预算里——改图时越界是最容易发生、又最难在对局中归因的一类错误
     /// （表现为"密度不对、冲突时点漂移"，而不是任何一条规则报错）。denser-map 裁决 5。
     /// </summary>
@@ -802,21 +674,8 @@ public static class MapValidator
             return;
         }
 
-        int relics = map.RelicCells.Count;
-        if (relics < budget.MinRelics || relics > budget.MaxRelics)
-        {
-            // 规格的 Scenario 要求报出方向（"信物格少于 7"），不只是"超出区间"。
-            string direction = relics < budget.MinRelics
-                ? $"少于下限 {budget.MinRelics}"
-                : $"多于上限 {budget.MaxRelics}";
-            f.Add(new MapValidationFailure(
-                "RELIC_COUNT_OUT_OF_RANGE",
-                $"{map.MaxPlayers} 人地图的信物格为 {relics}，{direction}，超出 {budget.MinRelics}–{budget.MaxRelics} 区间。",
-                ImmutableArray<Coord>.Empty));
-        }
-
-        // 规则第 4 条：出生区数在区间外即报区间与方向（链接档恰 5 个）。
-        // retire-legacy-maps 4b.2（L19）：区间退化成"恰等于人数"时的 BIRTH_ZONE_COUNT_MISMATCH 报文只属于已删除的标准档，链接档（5 区对 4 人）走不到，分支删除。
+        // 规则第 4 条：出生区数在区间外即报区间与方向（map-expand-25：出生区数 = 平台数，2 / 3 / 4 人 6–8 / 8–10 / 10–12）。
+        // retire-legacy-maps 4b.2（L19）：区间退化成"恰等于人数"时的 BIRTH_ZONE_COUNT_MISMATCH 报文只属于已删除的标准档，链接档（出生区数恒多于人数）走不到，分支删除。
         int zones = map.BirthZones.Length;
         (int minZones, int maxZones) = budget.BirthZones;
         if (zones < minZones || zones > maxZones)
@@ -858,7 +717,7 @@ public static class MapValidator
                     ImmutableArray<Coord>.Empty));
             }
 
-            // 出生区内可以有障碍或深水，但不得把该区压到区间之外（denser-map：4 人图每区 12–14 格）。
+            // 出生区内可以有障碍或深水，但不得把该区压到区间之外（denser-map 引入；map-expand-25：出生区即平台核心区，恰 9 格）。
             if (budget?.BirthZoneCells is { } range
                 && (playable < range.Min || playable > range.Max))
             {

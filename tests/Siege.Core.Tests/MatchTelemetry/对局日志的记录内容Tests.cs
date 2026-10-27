@@ -35,9 +35,11 @@ public class 对局日志的记录内容Tests
         MatchLog log = MatchLog.Read(path);
 
         // 1. 地图、种子、完整信物分布及揭示时间
-        Assert.Equal("link:1", log.Header.MapId); // retire-legacy-maps 1.8：共用样本由 v5 改到 link:1（原注：scoring-sites：RunConfig 默认地图切到 v4）
+        Assert.Equal("link:1:4", log.Header.MapId); // retire-legacy-maps 1.8：共用样本由 v5 改到 link:1（原注：scoring-sites：RunConfig 默认地图切到 v4）
         Assert.Equal(live.Header.Seed, log.Header.Seed);
-        Assert.NotEmpty(log.Header.Relics);
+        // map-expand-25 段 A3：浮空岛不放静态信物格（relic-redesign R29），共用样本的首部信物表为空；信物分布与揭示时间这一类的非空样本由
+        // 「揭示时间可查」（LinkModeFixtures.RelicMap 夹具）覆盖，这里只钉"首部信物表与结果揭示表一一对应"。
+        Assert.Empty(log.Header.Relics);
         Assert.All(log.Header.Relics, r => Assert.True(Coord.TryParse(r.Coord, out _) && Enum.TryParse<Relics.RelicType>(r.Type, out _)));
         Assert.Equal(log.Header.Relics.Count, log.Result!.RelicReveals.Count);
 
@@ -63,7 +65,8 @@ public class 对局日志的记录内容Tests
         Assert.Equal(settled.Count, log.Turns.Count(t => !t.Passed));
 
         // 4. 信物控制变化、结构参数、行动顺序
-        Assert.Contains(log.Events, e => e.Type == LogEventType.ControlChanged && e.Coords!.Count == 1);
+        // map-expand-25 段 A3：共用样本的地图不再有信物格，信物控制变化事件的非空样本改由「揭示时间可查」（RelicMap 夹具）断言；这里只守"有则每条恰一格"。
+        Assert.All(log.Events.Where(e => e.Type == LogEventType.ControlChanged), e => Assert.Single(e.Coords!));
         Assert.All(log.Turns, t =>
         {
             Assert.True(t.ShowCount >= 5 && t.FreePickCount >= 3 && t.TypeSlots >= 5 && t.DeployLimit >= 3, t.ToString());
@@ -169,7 +172,7 @@ public class 对局日志的记录内容Tests
         // retire-legacy-rules 1.6：同 终端对局Tests.状态栏大数势力缩写不撑破一行——12×12 全平地改以链接模式建局（link:90012，整图一块出生棋盘、四人同锁）。
         MapData map = TestMaps.NineByNine() with
         {
-            Id = "link:90012",
+            Id = "link:90012:4",
             Width = 12,
             Height = 12,
             Profile = MapProfile.Link,
@@ -216,10 +219,12 @@ public class 对局日志的记录内容Tests
         // retire-legacy-maps 1.8：共用样本改到 link:1 后，第 3 大回合结束即发生链接，坐标随链接平移（match-telemetry「坐标随链接平移」），首部信物格（开局坐标）
         // 与结果行（终局坐标）不再可逐格对照。这里改用同一批配置截断到第 11 个小回合（第 3 大回合结束前、尚无链接——链接在第 12 个小回合收尾时发生）的种子 11 一局，断言不变；
         // 链接图上至少有一块出生棋盘无人插旗，其上的信物整局不揭示，"未揭示标为 null"一支有样本。
-        MatchLog log = MatchLog.Parse(BatchRunner.Execute(SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 11, turnLimit: 11)), parallelism: 1)[0].FullText());
+        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
+        MatchLog log = MatchLog.Parse(BatchRunner.Execute(SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 11, turnLimit: 11)), parallelism: 1, map: LinkModeFixtures.RelicMap)[0].FullText());
         Assert.Equal(log.Header.Relics.Select(r => r.Coord).Order(), log.Result!.RelicReveals.Select(r => r.Coord).Order());
         List<LogEvent> reveals = [.. log.Events.Where(e => e.Type == LogEventType.Reveal)];
         Assert.NotEmpty(reveals);
+        Assert.Contains(log.Events, e => e.Type == LogEventType.ControlChanged && e.Coords!.Count == 1);   // 段 A3：自「日志覆盖八类记录」第 4 类移来（共用样本已无信物格）
         foreach (RelicRevealEntry entry in log.Result.RelicReveals)
         {
             LogEvent? reveal = reveals.SingleOrDefault(e => e.Coords![0] == entry.Coord);
@@ -491,7 +496,7 @@ public class 对局日志的记录内容Tests
     /// </summary>
     internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, CarryIn> carries, int turnLimit)
     {
-        MapData map = MapCatalog.Resolve("link:1");
+        MapData map = MapCatalog.Resolve("link:1:4");
         RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
         MatchFlow match = MatchFlow.Create(map, new GameSeed(seed), TestMaps.All, MatchOptions.Immediate with
         {

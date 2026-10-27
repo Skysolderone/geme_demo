@@ -150,7 +150,7 @@ public sealed partial class BoardView : Node3D
         _height = board.Height;
         _visible = [.. board.Cells.Select(c => c.Coord)];
 
-        // 画幅（board-link-mode 裁决 D26 / tasks 4.4）：底座、坐标标注与相机可行矩形都以"全部可见格 ∪ 5 个占位"的格包围盒为准（锁定后 = 整张地图）；
+        // 画幅（board-link-mode 裁决 D26 / tasks 4.4）：底座、坐标标注与相机可行矩形都以"全部可见格 ∪ 各块占位"的格包围盒为准（锁定后 = 整张地图）；
         // 旧地图没有占位、视图含全图每一格，包围盒就是整张图，与引入之前逐值相同。格包围盒 → 平面矩形只经 BoardGeometry.Center 的那一份映射。
         (Coord low, Coord high) = ExtentOf(board);
         Vector3 lowCenter = BoardGeometry.Center(low, _width, _height);
@@ -1387,7 +1387,7 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>
-    /// 棋盘分组（board-link-mode F.4 → open-map）：外接矩形边对边紧贴（共享一段边、不只是角）的棋盘归为一组——建局即紧贴的 5 块归为一组，台面按整组外轮廓画。
+    /// 棋盘分组（board-link-mode F.4 → open-map）：外接矩形边对边紧贴（共享一段边、不只是角）的棋盘归为一组——浮空岛的平台彼此隔开（map-expand-25），各成一组；手写夹具里紧贴的几块仍归为一组，台面按整组外轮廓画。
     /// 返回每块棋盘的组号（组内最小下标）。
     /// </summary>
     private static int[] PlateGroups(ImmutableArray<BoardPlate> plates)

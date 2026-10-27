@@ -62,7 +62,9 @@ public class 规格档分流守门Tests
         // retire-legacy-maps 4.2：距离处理方式、连通性模式、咽喉标注、出生区须到达中央入口四个字段与通道宽 / 长随旧档删除——声明行只剩六个字段，各只读一次；
         // 删掉的字段与两种处理方式的枚举类型不得再出现（含注释之外的任何写法）。
         Assert.DoesNotMatch(@"(?<![\w])(DistanceHandling|PlateConnectivity|RequireLandmarks|BirthZonesMustReachEntrance|CorridorWidth|CorridorLength|ValidateCorridors|ValidateDistanceBalance|ValidateBirthZoneConnectivity)(?![\w])", source);
-        foreach (string field in new[] { "SupportedPlayers", "Budgets", "ZonesMustExceedPlayers", "ColumnRange", "RowRange", "PlateList" })
+        // map-expand-25 D7：外接列 / 行区间（ColumnRange / RowRange）并入按人数的预算行（画布边长恰等），声明行只剩四个字段；删掉的两个字段名不得再出现。
+        Assert.DoesNotMatch(@"(?<![\w])(ColumnRange|RowRange)(?![\w])", source);
+        foreach (string field in new[] { "SupportedPlayers", "Budgets", "ZonesMustExceedPlayers", "PlateList" })
         {
             MatchCollection fieldReads = Regex.Matches(source, @"\.\s*" + field + @"(?![\w])");
             Assert.True(

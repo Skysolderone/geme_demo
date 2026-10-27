@@ -147,14 +147,14 @@ public sealed record DefaultBoardView(
     ImmutableArray<BoardPlate> Boards)
 {
     /// <summary>
-    /// 5 块出生棋盘的占位（board-link-mode）：由 <see cref="ForSeat"/> 填入；全知视图为空。
-    /// 未展开（<see cref="BoardPlaceholderView.Expanded"/> 为假，只在插旗阶段出现——锁定后 5 块一起展开，open-map 裁决 O4）的占位在 <see cref="Cells"/> 里没有任何格。
+    /// 各块出生棋盘（平台）的占位（board-link-mode）：由 <see cref="ForSeat"/> 填入；全知视图为空。
+    /// 未展开（<see cref="BoardPlaceholderView.Expanded"/> 为假，只在插旗阶段出现——插旗阶段结束后全部一起展开，open-map 裁决 O4）的占位在 <see cref="Cells"/> 里没有任何格。
     /// </summary>
     public ImmutableArray<BoardPlaceholderView> Placeholders { get; init; } = [];
 
     /// <summary>
     /// 布局指纹（引擎层"要不要整体重搭"的唯一判据，board-link-mode F.6 / 裁决 J12-1）：画布尺寸、每格的<b>坐标</b>与可落子 / 高度 / 地表 / 桥、全部栅栏边、
-    /// 棋盘清单与 5 块占位（编号、原点、展开、本机）。插旗锁定会把 5 块占位全部展开——必须让指纹变；只落子 / 提子不变。
+    /// 棋盘清单与各块占位（编号、原点、展开、本机）。插旗锁定会把占位展开——必须让指纹变；只落子 / 提子不变。
     /// 预置设施与本局改造在这里本来就分不出——指纹变了只说明"要重搭"，不说明是谁改的。
     /// </summary>
     public string LayoutKey()
@@ -206,7 +206,7 @@ public sealed record DefaultBoardView(
     /// 按座位过滤（board-link-mode 实现裁决 B4 在表现层的镜像，information-visibility「其他战场不可见」「数据层过滤」）：
     /// 只保留 <paramref name="seat"/> 可见的格（<see cref="SeatPublicView.Cells"/>，即本座位所在战场；插旗阶段为本座位已选的那块、未选时为空），
     /// 棋盘清单只留整块可见的台面（棋盘内的<b>可落子格</b>全部可见，link-map-terrain 第 1 组裁决④；G1 起战斗阶段的可见格已含本战场棋盘内的岩石 / 未架桥深水，判据不变），
-    /// 栅栏两端可见、改造的目标格 / 边可见才保留；<see cref="Placeholders"/> 取 5 块出生棋盘的占位，
+    /// 栅栏两端可见、改造的目标格 / 边可见才保留；<see cref="Placeholders"/> 取各块出生棋盘的占位，
     /// 已展开 = 外接矩形内有可见格（出生棋盘整块一起展开；不假设左下角格可落子），本座位所在 = 编号等于 <paramref name="ownZone"/>，主题原样透传。
     /// 本方法不读地图、不判规则，只按座位视图给出的坐标做集合过滤。
     /// </summary>

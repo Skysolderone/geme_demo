@@ -15,7 +15,7 @@
 
 改变其中一条子流的**消费次数**，MUST NOT 影响其他子流的取值。
 
-**地图随机源不在这张表里，也不是 `GameSeed` 的子流**（map-generator D2，retire-legacy-maps 后只剩链接档）。链接图 `link:<地图种子>` 的初始布局用一条只由地图种子决定的整数序列（`MapRandom.ForLinkLayout`，与对局随机源同一份 PRNG 实现、独立的域常量），3+2 紧贴的建局布局 `InitialLayout` 也不消费随机（对局中的拼接已随 open-map 删除）；两边互不可见：`MapRandom.cs` / `LinkMapGenerator.cs` / `LinkMapId.cs` 里不得出现 `GameSeed`，`Siege.Core/Match` 下不得出现 `MapRandom` 或地图种子——对局流程只拿到生成好的 `MapData` 与标识字符串。Core 永不读时钟：裸 `link` 的地图种子只在三个入口最外层取（经 `LinkMapId.FriendlySeed` 折成九位以内），取完即拼成完整标识，裸 `link` 不得写进任何记录。生成路径上同样禁浮点、禁时钟与环境（源码扫描守门 `链接档地图标识与确定性Tests.对局种子不影响地图` / `地图随机源与对局随机互不可见`）。旧 `gen:` / `board:` 生成器的尝试序号随机源（`ForAttempt` / `ForSurfaces` / `ForBoardAttempt`）已随生成器删除。
+**地图随机源不在这张表里，也不是 `GameSeed` 的子流**（map-generator D2，retire-legacy-maps 后只剩链接档）。链接图 `link:<地图种子>:<人数>` 的浮空岛布局用一条只由地图种子与人数决定的整数序列（`MapRandom.ForLinkLayout`，地表叠加另用 `ForLinkSurfaces`，与对局随机源同一份 PRNG 实现、独立的域常量；人数进入两条流的派生，同种子不同人数是不同的图；消费顺序写在 `LinkMapGenerator.Layout` 的 summary 里，生成器改消费顺序即换图，须重钉快照与基线）（对局中的拼接已随 open-map 删除）；两边互不可见：`MapRandom.cs` / `LinkMapGenerator.cs` / `LinkMapId.cs` 里不得出现 `GameSeed`，`Siege.Core/Match` 下不得出现 `MapRandom` 或地图种子——对局流程只拿到生成好的 `MapData` 与标识字符串。Core 永不读时钟：裸 `link` 的地图种子只在三个入口最外层取（经 `LinkMapId.FriendlySeed` 折成九位以内），取完即拼成完整标识，裸 `link` 不得写进任何记录。生成路径上同样禁浮点、禁时钟与环境（源码扫描守门 `链接档地图标识与确定性Tests.对局种子不影响地图` / `地图随机源与对局随机互不可见`）。旧 `gen:` / `board:` 生成器的尝试序号随机源（`ForAttempt` / `ForSurfaces` / `ForBoardAttempt`）已随生成器删除。
 
 **为什么。** 若共用一条序列，玩家改一个征募决策就会让后续所有随机取值偏移，"改一个决策重放整局"立刻失效，调试与回归都会变得极难。
 

@@ -43,7 +43,7 @@ public class 棋盘清单Tests
     {
         // Scenario（link-map-terrain map-definition「棋盘清单」，原「出生棋盘即出生区」）：出生区 i 恰是第 i 块出生棋盘中央的 3×3 核心区（宽或高为偶数时偏西 / 偏南）；
         // 棋盘内核心区之外的格不属于任何出生区。期望值用测试内独立算式（西起第 ⌊(W−3)/2⌋+1 列、南起第 ⌊(H−3)/2⌋+1 行起 3×3）。
-        MapData map = MapFile.FromJson(MapFile.ToJson(MapCatalog.Resolve("link:1")));
+        MapData map = MapFile.FromJson(MapFile.ToJson(MapCatalog.Resolve("link:1:2")));
         BoardPlate[] births = [.. map.Boards.Where(b => b.Kind == BoardPlateKind.Birth)];
         Assert.Equal(map.BirthZones.Length, births.Length);
         for (int i = 0; i < births.Length; i++)
@@ -55,14 +55,14 @@ public class 棋盘清单Tests
             Assert.All(b.Cells(), c => Assert.Equal(core.Contains(c) ? (int?)i : null, map.BirthZoneOf(c)));
         }
 
-        // link:1 的第 2 块（open-map 3+2 布局）：左下角 K9、6×6 → 出生区 L10–N12（西起第 2–4 列、南起第 2–4 行）。
-        // terrain-density（边长 6–7，地图变了）：原为左下角 J10、出生区 K11–M13。
-        Assert.Equal("K9", births[1].Origin.ToNotation());
-        Assert.Equal(["L10", "N12"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
+        // link:1:2 的第 2 块（map-expand-25 浮空岛）：左下角 Y5、7×6 → 出生区 AA6–AC8（西起第 3–5 列、南起第 2–4 行）。
+        // 历史：terrain-density 时为左下角 J10、出生区 K11–M13；open-map 3+2 布局时为左下角 K9、出生区 L10–N12。
+        Assert.Equal("Y5", births[1].Origin.ToNotation());
+        Assert.Equal(["AA6", "AC8"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
 
         // 规格算例：宽 7（奇）、高 6（偶）的第 2 块出生棋盘 → 出生区恰是西起第 3–5 列、南起第 2–4 行这 9 格（高为偶数偏南）。在 link:1 起的种子里找一张第 2 块是 7×6 的图。
         // terrain-density：主规格算例原为"宽 7、高 8 → 西起第 3–5 列、南起第 3–5 行"，边长 6–7 后生成不出 8，换成同为"奇宽偶高"的 7×6（归档时规格算例同步改）。
-        MapData sample = Enumerable.Range(1, 400).Select(s => LinkMapGenerator.Generate((ulong)s)).First(m => m.Boards[1] is { Width: 7, Height: 6 });
+        MapData sample = Enumerable.Range(1, 400).Select(s => LinkMapGenerator.Generate((ulong)s, 2)).First(m => m.Boards[1] is { Width: 7, Height: 6 });
         BoardPlate seven = sample.Boards[1];
         HashSet<(int Column, int Row)> relative = [.. sample.BirthZones[1].Select(c => (c.X - seven.Origin.X + 1, c.Y - seven.Origin.Y + 1))];
         Assert.True(relative.SetEquals(from r in new[] { 2, 3, 4 } from c in new[] { 3, 4, 5 } select (c, r)), $"{sample.Id}：{string.Join(" ", relative)}");
@@ -105,7 +105,7 @@ public class 棋盘清单Tests
         // D2 / D10：渲染用的棋盘清单全部取自视图模型，Godot 不自行推断。
         // retire-legacy-maps 1.6：载体由棋盘档夹具改为手写链接档初始图（link-map-terrain 起 46×10），断言不变。
         // retire-legacy-rules 1.7：链接模式只配 link: 标识，建局前把手写夹具的标识换成 link:90046（清单、尺寸不变）。
-        MapData map = LinkMapFixtures.Initial() with { Id = "link:90046" };
+        MapData map = LinkMapFixtures.Initial() with { Id = "link:90046:4" };
 
         DefaultBoardView view = DefaultBoardView.From(Started(map).PublicWorldOf());
 
@@ -148,11 +148,12 @@ public class 棋盘清单Tests
         // 样本口径：主题确实存在且两两不同（全是 null 时"逐块相同"恒真）。
         // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F1 ToJson 不写 Theme → 本类红 8（本测试，及凡经 link:1 / 带主题夹具文件往返的 7 条：读回缺主题被拒）；
         // M-F2 ParseBoards 读入时丢掉主题（恒取 null）→ 本类红 2（本测试、棋盘清单项的文件写法）。
-        MapData map = MapCatalog.Resolve("link:1");
+        // map-expand-25 段 A2：浮空岛平台主题可以重复（裁决 R3），样本口径改为"至少两种主题"（全同时逐块相同同样恒真）；link:1:2 为 河流 ×3、栅栏阵 ×2、林地 ×1。
+        MapData map = MapCatalog.Resolve("link:1:2");
         BoardTheme?[] themes = [.. map.Boards.Select(b => b.Theme)];
-        Assert.Equal(5, themes.Length);
+        Assert.Equal(6, themes.Length);
         Assert.All(themes, t => Assert.NotNull(t));
-        Assert.Equal(5, themes.Distinct().Count());
+        Assert.Equal(3, themes.Distinct().Count());
 
         string json = MapFile.ToJson(map);
         Assert.Contains($"\"Theme\": \"{themes[2]}\"", json, StringComparison.Ordinal);   // 主题写成枚举名
@@ -167,7 +168,7 @@ public class 棋盘清单Tests
     {
         // 规格 Scenario：读入一张链接档地图文件，其某块出生棋盘没有主题字段 → 拒绝加载并指出该棋盘；MUST NOT 静默取缺省主题。
         // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F3 ParseBoards 删去"链接档出生棋盘缺主题"的拒绝 → 本测试红 1。
-        JsonObject root = JsonNode.Parse(MapFile.ToJson(MapCatalog.Resolve("link:1")))!.AsObject();
+        JsonObject root = JsonNode.Parse(MapFile.ToJson(MapCatalog.Resolve("link:1:4")))!.AsObject();
         Assert.True(root["Boards"]![2]!.AsObject().Remove("Theme"));
 
         string message = Assert.Throws<FormatException>(() => MapFile.FromJson(root.ToJsonString())).Message;
@@ -201,7 +202,7 @@ public class 棋盘清单Tests
     {
         // 规格：主题取值无法识别 MUST 拒绝加载，MUST NOT 静默取缺省主题；数字不按枚举序号读（只认名字）。
         // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F5 主题改按 Enum.TryParse + IsDefined 解析（接受数字）→ 本类红 1（"1" 一条）。
-        string json = MapFile.ToJson(MapCatalog.Resolve("link:1"));
+        string json = MapFile.ToJson(MapCatalog.Resolve("link:1:4"));
         JsonObject root = JsonNode.Parse(json)!.AsObject();
         root["Boards"]![3]!["Theme"] = JsonNode.Parse(raw);
 

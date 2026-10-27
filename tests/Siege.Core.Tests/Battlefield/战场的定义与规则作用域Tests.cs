@@ -16,17 +16,20 @@ public class 战场的定义与规则作用域Tests
     [Fact]
     public void 开局即唯一战场()
     {
-        // Scenario（open-map）：加载一张 link: 地图 → 导出恰好 1 个战场，其格集合等于 5 块出生棋盘可落子格的并集，标识为 0。
-        foreach (MapData map in new[] { LinkMapGenerator.Generate(1), LinkMapGenerator.Generate(7), LinkMapFixtures.Initial() })
+        // Scenario（open-map）：加载一张 link: 地图 → 导出恰好 1 个战场，其格集合等于全部可落子格，标识为 0。
+        // map-expand-25 段 A2：浮空岛的可落子格除平台外还有平台之间的低地（同属唯一战场），格集合改为全图可落子格（手写紧贴图上两者相同）；
+        // 出生区数随平台数变化。手写紧贴图在浮空岛校验器下恒不合规，经 LoadUnvalidated 加载。
+        foreach ((MapData map, bool validated) in new[] { (LinkMapGenerator.Generate(1, 4), true), (LinkMapGenerator.Generate(7, 2), true), (LinkMapFixtures.Initial(), false) })
         {
             Battlefields fields = Battlefields.Of(map);
             Assert.Equal(1, fields.Count);
             Siege.Core.Board.Battlefield field = fields.All[0];
             Assert.Equal(0, field.Id);
             Assert.True(field.HasBirthBoard);
-            Assert.Equal(map.Boards.SelectMany(b => b.Cells()).Where(map.IsPlayable).Order(), field.Cells);   // link-map-terrain：棋盘内的岩石 / 未架桥深水不属于战场
-            Assert.Equal([0, 1, 2, 3, 4], field.BirthZones);
-            Assert.Equal([0, 1, 2, 3, 4], field.Boards);
+            Assert.Equal(map.AllCoords().Where(map.IsPlayable).Order(), field.Cells);   // link-map-terrain：棋盘内的岩石 / 未架桥深水不属于战场
+            Assert.Contains(field.Cells, c => !map.Boards.Any(b => b.Contains(c)) || !validated);   // 样本口径：生成图的战场含平台之外的低地
+            Assert.Equal(Enumerable.Range(0, map.Boards.Length), field.BirthZones);
+            Assert.Equal(Enumerable.Range(0, map.Boards.Length), field.Boards);
             Assert.Same(field, fields.ById(0));
             Assert.All(field.Cells, c => Assert.Same(field, fields.At(c)));
 
@@ -37,7 +40,7 @@ public class 战场的定义与规则作用域Tests
             Assert.Null(fields.ById(1));
 
             // GameBoard 暴露同一份导出。
-            GameBoard board = GameBoard.Load(map);
+            GameBoard board = validated ? GameBoard.Load(map) : GameBoard.LoadUnvalidated(map);
             Assert.Same(fields, board.Battlefields);
         }
     }
@@ -54,7 +57,8 @@ public class 战场的定义与规则作用域Tests
         Assert.Equal(Battlefields.Of(map).Count, Battlefields.Of(copy).Count);
 
         // 改造换图：GameBoard.ApplyTerrainEdits 换上新 MapData，战场导出跟着换实例（立栅不改变战场数）。
-        GameBoard board = GameBoard.Load(map);
+        // map-expand-25 段 A2：手写紧贴图在浮空岛校验器下恒不合规，经 LoadUnvalidated 加载（本条不涉及校验）。
+        GameBoard board = GameBoard.LoadUnvalidated(map);
         Battlefields before = board.Battlefields;
         board.ApplyTerrainEdits([TerrainEdit.Fence(new Coord(3, 3), new Coord(4, 3))]);
         Assert.NotSame(before, board.Battlefields);
@@ -66,7 +70,8 @@ public class 战场的定义与规则作用域Tests
     {
         // Scenario（open-map）：玩家 A 在自己棋盘靠接缝的格落子，接缝另一侧是玩家 B 的棋盘的空格 → 该空格计入 A 棋串的气，并按覆盖规则参与空格归属；
         // B 不能在构筑期落到那里由 turn-sequence 守（战场内合法落子范围Tests），这里只看气与覆盖不为"战场 / 出生棋盘"设任何过滤。
-        GameBoard board = GameBoard.Load(LinkMapFixtures.Initial());
+        // map-expand-25 段 A2：浮空岛的平台互不相邻、没有接缝，载体仍是手写紧贴图，经 LoadUnvalidated 加载（本条不涉及校验）。
+        GameBoard board = GameBoard.LoadUnvalidated(LinkMapFixtures.Initial());
         var a = new PlayerId(0);
         Coord a1 = new(7, 4);          // 0 号棋盘东缘（H5）
         Coord across = new(8, 4);      // 接缝另一侧：1 号棋盘西缘（J5）
@@ -97,7 +102,7 @@ public class 战场的定义与规则作用域Tests
         Assert.DoesNotContain(TerrainEditRules.LegalTargets(map, corner, workshop: true), e => e.Kind != TerrainEditKind.Fence && !map.Boards.Any(b => b.Contains(e.Cell)));
 
         // 场景格上的栅栏：合法但无效果——应用后场景格仍不可落子、气边集合逐格不变、战场不变。
-        GameBoard fenced = GameBoard.Load(map);
+        GameBoard fenced = GameBoard.LoadUnvalidated(map);   // map-expand-25 段 A2：手写紧贴图恒不合规，不经校验加载
         Dictionary<Coord, ImmutableArray<Coord>> libertiesBefore = map.AllCoords().Where(map.IsPlayable).ToDictionary(c => c, fenced.LibertyNeighbors);
         foreach (TerrainEdit edit in new[] { TerrainEdit.Fence(scenery, scenery2), TerrainEdit.Fence(corner, scenery) })
         {
@@ -110,7 +115,7 @@ public class 战场的定义与规则作用域Tests
         Assert.Equal(1, fenced.Battlefields.Count);
 
         // 把 0 号棋盘每个格上匠人的全部合法改造都做一遍，战场数量仍是 1、战场的格集合不变。
-        GameBoard board = GameBoard.Load(map);
+        GameBoard board = GameBoard.LoadUnvalidated(map);
         ImmutableArray<Siege.Core.Board.Battlefield> before = board.Battlefields.All;
         var applied = new HashSet<TerrainEdit>();
         foreach (Coord cell in LinkMapFixtures.Births[0].Cells())

@@ -100,11 +100,12 @@ public class 公开规则纯函数Tests
         // ④ 出局：此刻没有"应出局而仍参赛"的玩家，每个已出局者都满足判据（旧判据）。
         int checkedTurns = 0;
         // open-map 1.1：link:1 的信物格随 3+2 布局改变，种子 1 / 3 生成的信物里不再有军令 / 工坊 / 先锋；从给定种子起取第一个满足样本口径的对局种子。
-        MatchFlow match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(seed));
+        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
+        MatchFlow match = LinkModeFixtures.CreateWithRelics(new Siege.Core.Determinism.GameSeed(seed));
         for (ulong probe = seed; !match.Relics.Generation.Placements.Any(p => p.Content.Type is RelicType.Command or RelicType.Workshop or RelicType.Vanguard); probe++)
         {
             Assert.True(probe < seed + 50, "50 个对局种子里没有军令 / 工坊 / 先锋");
-            match = LinkModeFixtures.Create(new Siege.Core.Determinism.GameSeed(probe + 1));
+            match = LinkModeFixtures.CreateWithRelics(new Siege.Core.Determinism.GameSeed(probe + 1));
         }
 
         match.PlantPrototype();
@@ -121,7 +122,10 @@ public class 公开规则纯函数Tests
         }
 
         int guard = 0;
-        while (match.Phase == MatchPhase.InProgress)
+        // map-expand-25 段 A2：link:1:4 换成约 1500 格的浮空岛后，4 名标准 AI 的整局要跑到大回合上限 100（全量里单条半小时以上），
+        // 改为截断到第 6 大回合结束（构筑期 3 个大回合 + 全图解禁后 3 个大回合）；所守的是"每个小回合三方逐项相等"，与跑多长无关，小回合下界 20 不变。
+        const int Rounds = 6;
+        while (match.Phase == MatchPhase.InProgress && match.MajorRound <= Rounds)
         {
             Assert.True(++guard < 2000, "跑局超过 2000 个小回合");
             runner.RunTurn();

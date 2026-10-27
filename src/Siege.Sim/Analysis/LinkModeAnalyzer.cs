@@ -14,7 +14,7 @@ namespace Siege.Sim.Analysis;
 /// <param name="Truncated">其中被小回合数截断的局数。</param>
 /// <param name="SharedMatches">同区局数：锁定时有出生棋盘的旗数 ≥ 2（首部 <see cref="LogHeader.LockedFlagCounts"/>）。</param>
 /// <param name="Layouts">开局布局分布：锁定旗数降序拼成 <c>1+1+1+1</c> / <c>2+1+1</c> / <c>2+2</c> / <c>3+1</c> / <c>4</c>。</param>
-/// <param name="BoardPicks">各出生棋盘被选次数（面向人的棋盘编号 1–5 → 锁定人次；首部 <see cref="LogHeader.Zones"/>）。</param>
+/// <param name="BoardPicks">各出生棋盘被选次数（面向人的棋盘编号 1 起、至多平台数 → 锁定人次；首部 <see cref="LogHeader.Zones"/>）。</param>
 /// <param name="MeanMajorRounds">对局大回合数（结果行的终局大回合）的均值。</param>
 /// <param name="MedianMajorRounds">对局大回合数的中位数。</param>
 /// <param name="MinMajorRounds">对局大回合数的最小值。</param>

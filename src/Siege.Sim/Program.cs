@@ -17,14 +17,17 @@ public static class Program
     public static int Main(string[] args) => Execute(args, ClockMapSeed);
 
     /// <summary>
-    /// 批量与终端入口的缺省地图（board-link-mode Q4 / 规格 map-selection「批量入口缺省」、simulation-harness「各入口按地图标识选图」）：未给地图选项时加载 <c>link:1</c>。
-    /// 与 Core 的 <see cref="MapCatalog.DefaultId"/> 同为 <c>link:1</c>；<c>map</c> 调试子命令与批次配置的内部缺省同样是 <c>link:1</c>
-    /// （retire-legacy-maps：原为 Legacy 夹具的 v5，实现裁决 C10，随旧地图删除）。
+    /// 批量与终端入口的缺省地图（board-link-mode Q4 / 规格 map-selection「批量入口缺省」、simulation-harness「各入口按地图标识选图」）：地图与人数都没给时加载 <c>link:1:4</c>。
+    /// 与 Core 的 <see cref="MapCatalog.DefaultId"/> 相同；<c>map</c> 调试子命令与批次配置的内部缺省同样是它（retire-legacy-maps：原为 Legacy 夹具的 v5，实现裁决 C10，随旧地图删除）。
+    /// 只给了人数时缺省地图为 <c>link:1:&lt;人数&gt;</c>（map-expand-25 D1，见 <see cref="ResolveLinkRequest"/>）。
     /// </summary>
-    internal const string DefaultMapId = "link:1";
+    internal const string DefaultMapId = "link:1:4";
+
+    /// <summary>地图与人数都没给时的人数（<see cref="DefaultMapId"/> 的人数段）。</summary>
+    internal const int DefaultPlayers = 4;
 
     /// <summary>
-    /// 玩家入口的地图门（board-link-mode 实现裁决 C1）：<c>run</c> / <c>play</c> 只接受链接图 <c>link:&lt;地图种子&gt;</c>。旧标识族（内置图、<c>gen:</c>、<c>board:</c>、
+    /// 玩家入口的地图门（board-link-mode 实现裁决 C1）：<c>run</c> / <c>play</c> / <c>map</c> 只接受链接图 <c>link:&lt;地图种子&gt;:&lt;人数&gt;</c>（裸 <c>link</c> 由入口取种子）。旧标识族（内置图、<c>gen:</c>、<c>board:</c>、
     /// 地图文件路径）与解析不了的标识一律报错并说明，MUST NOT 静默回落到缺省地图。判定只看标识前缀（<see cref="LinkMapId.IsLinkMap"/>），
     /// 格式错误的 <c>link:</c> 标识由随后的解析报出。段 D（实现裁决 D7）起 <see cref="MapCatalog.Resolve"/> 自身也只接受 <c>link:</c>，本门只是让入口先于解析给出更贴切的文案。
     /// </summary>
@@ -33,7 +36,7 @@ public static class Program
         if (!LinkMapId.IsLinkMap(mapId))
         {
             throw new ArgumentException(
-                $"{entry} 的地图标识 {mapId} 不受支持：只接受 {LinkMapId.Prefix}:<地图种子>（例如 {DefaultMapId}、{LinkMapId.Prefix}:12345；只写 {LinkMapId.Prefix} 即随机取一个地图种子）。"
+                $"{entry} 的地图标识 {mapId} 不受支持：只接受 {LinkMapId.Prefix}:<地图种子>:<人数>（例如 {DefaultMapId}、{LinkMapId.Prefix}:12345:2；只写 {LinkMapId.Prefix} 即随机取一个地图种子，人数取 --players）。"
                 + "内置图、gen:、board: 与地图文件属于已移除的地图模式（retire-legacy-maps 已删除）。");
         }
 
@@ -91,21 +94,22 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数，链接模式恒为 4>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子，缺省 {DefaultMapId}>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
-        Console.WriteLine($"  Siege.Sim map [--map <link:地图种子，缺省 {DefaultMapId}>] [--out <导出的地图文件>]（打印文本图与校验报告；给 --out 才导出）");
+        Console.WriteLine("  Siege.Sim map [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4>] [--out <导出的地图文件>]（打印文本图与校验报告；给 --out 才导出）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
-        Console.WriteLine($"                [--map <link:地图种子，缺省 {DefaultMapId}>] [--players <人数，链接模式恒为 4>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
+        Console.WriteLine($"                [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
         Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
         Console.WriteLine($"                [--round-cap <大回合上限安全网，非负整数，缺省 {Core.Match.MatchOptions.DefaultRoundCap}，0=不启用；到达时按势力强制结算（cycle-stop）>] [--stagnation-rounds <AI 停滞大回合数 K，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultStagnationRounds}，0=不启用；连续 K 个大回合无净增且候选全是提子 / 反提即 Pass>]");
         Console.WriteLine($"                [--whole-batch <AI 整批候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultWholeBatch}；1 = 标准 / 高难 / 专家另加剪枝候选与配对候选（逐枚为负、整批为正的组合），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine($"                [--edit-seed <AI 搭桥候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultEditSeed}；1 = 标准 / 高难 / 专家另加以搭桥单点为起点的候选（全部合法空格、不经预筛、不受前 N），0 = 关闭（与引入之前逐步相同）>]");
-        Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>，第 i 局用 起始 + i）]");
+        Console.WriteLine("                [--map-per-match（每局换一张图：--map link:<起始地图种子>:<人数>，第 i 局用 起始 + i，人数不变）]");
         Console.WriteLine("                [--scoring <v1|v2，计分规则版本，缺省 v2>]");
         Console.WriteLine("                [--retention <SnapshotsOnly|Full>] [--sample-permille <千分比>] [--gzip] [--serial]");
         Console.WriteLine("                （AI 一律按座位视野；open-map 起锁定后整张地图是唯一战场，座位视野即全图，没有全知开关）");
-        Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>（缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子并打印完整标识。");
+        Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>:<人数>（人数 2–4，缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子、人数取 --players，并打印完整标识。");
+        Console.WriteLine("    人数：--players 决定人数；不给 --map 即 link:1:<人数>；--map 给了完整标识而不给人数即按标识的人数；两者不一致报错退出。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--review-defeats] [--review-artisan] [--review-cycles] [--out <报告文件>]");
         Console.WriteLine("    --review-defeats：按日志回放每局，复盘整轮 Pass 结算的落败者与决胜一手（耗时约等于跑局本身；缺省不做）");
@@ -122,17 +126,16 @@ public static class Program
         ulong? seed = cli.Has("seed") ? cli.GetUInt64("seed", 0) : null;
         // 难度名称经 Core 的唯一解析（expert-lookahead D10）：数字、未知名称在开局之前报错并列出可用名称，不回落到标准。
         var difficulty = Core.Ai.AiDifficultyNames.Parse(cli.Get("difficulty", nameof(Core.Ai.AiDifficulty.Standard)));
-        int? players = cli.Has("players") ? cli.GetInt("players", 0) : null;   // 不给人数 = 4；给非 4 的值按 S1 报错（retire-legacy-maps 4b.3）
+        int? players = cli.Has("players") ? cli.GetInt("players", 0) : null;   // map-expand-25 D1：与地图标识的合并见 ResolveLinkRequest
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
         Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
-        // board-link-mode C1：不给地图选项即 link:1；只接受 link:，旧标识族报错（在任何取种子与解析之前）。
-        mapId = RequireLinkMap(string.IsNullOrWhiteSpace(mapId) ? DefaultMapId : mapId.Trim(), "play");
-        mapId = MaterializeMapRequest(mapId, output, mapSeedSource);
-        MapData map = MapCatalog.Resolve(mapId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
-        return Siege.Sim.Play.PlayCommand.Run(seed, players, seat, difficulty, input, output, map, cellLimit, profile: profile);
+        // board-link-mode C1 / map-expand-25 D1：不给地图选项即 link:1:<人数>；只接受 link:，旧标识族报错（在任何取种子与解析之前）；标识人数与 --players 不一致报错。
+        (string resolvedId, int count) = ResolveLinkRequest(mapId, players, "play", output, mapSeedSource);
+        MapData map = MapCatalog.Resolve(resolvedId);   // 未知标识在开局前报错并列出可用标识，不回落到缺省地图（frontier-map D5）
+        return Siege.Sim.Play.PlayCommand.Run(seed, count, seat, difficulty, input, output, map, cellLimit, profile: profile);
     }
 
     /// <summary>
@@ -169,13 +172,14 @@ public static class Program
     /// 裸 <c>link</c>（"随机取一个地图种子"）：规则内核不读时钟，取种子只在入口最外层做。取到后拼成完整标识、打印给用户，再交给
     /// <see cref="MapCatalog"/>；裸 <c>link</c> MUST NOT 进入 Core，也 MUST NOT 写进任何记录（配置记录、日志首部）。其余标识原样返回，
     /// 此时 <paramref name="mapSeedSource"/> 不被调用。retire-legacy-maps：裸 <c>gen</c> / 裸 <c>board</c> 的取种子分支随旧生成器删除（旧标识由地图门 / 目录报错）。
+    /// <paramref name="players"/> 是裸 <c>link</c> 拼标识用的人数（map-expand-25 D1：<c>link:&lt;友好种子&gt;:&lt;人数&gt;</c>）。
     /// </summary>
-    internal static string? MaterializeMapRequest(string? mapId, TextWriter output, Func<ulong> mapSeedSource)
+    internal static string? MaterializeMapRequest(string? mapId, int players, TextWriter output, Func<ulong> mapSeedSource)
     {
         if (LinkMapId.IsBareRequest(mapId))
         {
-            // 裸 link（board-link-mode / 规格 simulation-harness「各入口支持生成图」）：同一个取种子来源，拼成链接图的完整标识。
-            string linkId = LinkMapId.Format(mapSeedSource());
+            // 裸 link（board-link-mode / 规格 simulation-harness「各入口支持生成图」）：同一个取种子来源，拼成链接图的完整标识；人数由入口给出（map-expand-25 D1）。
+            string linkId = LinkMapId.Format(mapSeedSource(), players);
             output.WriteLine($"随机取了一个地图种子：本次地图为 {linkId}（用 --map {linkId} 可重开同一张图）");
             return linkId;
         }
@@ -183,20 +187,55 @@ public static class Program
         return mapId;
     }
 
+    /// <summary>
+    /// 地图标识与人数的合并（map-expand-25 D1，<c>play</c> / <c>run</c> / <c>map</c> 共用）：<paramref name="players"/> 是显式给出的人数（命令行 <c>--players</c>，
+    /// 或 <c>run</c> 的配置文件写明的玩家列表），<c>null</c> = 没给。
+    /// <list type="bullet">
+    /// <item>人数给了但不在 2–4 → 报错。</item>
+    /// <item>没给地图 → <c>link:1:&lt;人数&gt;</c>（人数也没给即 <see cref="DefaultMapId"/>）。</item>
+    /// <item>裸 <c>link</c> → <c>link:&lt;友好种子&gt;:&lt;人数&gt;</c>（人数没给即 <see cref="DefaultPlayers"/>）。</item>
+    /// <item>完整标识 → 人数取标识的人数段；与显式人数不一致即报错退出，MUST NOT 静默改掉任何一边。</item>
+    /// </list>
+    /// 旧标识族由 <see cref="RequireLinkMap"/> 先报，格式错误的 <c>link:</c> 标识（含已作废的两段写法）由 <see cref="LinkMapId.Parse"/> 报出。返回完整标识（原样，不另规范化）与对局人数。
+    /// </summary>
+    internal static (string MapId, int Players) ResolveLinkRequest(string? mapId, int? players, string entry, TextWriter output, Func<ulong> mapSeedSource)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        if (players is { } wanted && (wanted < LinkMapId.MinPlayers || wanted > LinkMapId.MaxPlayers))
+        {
+            throw new ArgumentException($"{entry} 的人数 {wanted} 不受支持：链接图的人数为 {LinkMapId.MinPlayers}–{LinkMapId.MaxPlayers}。");
+        }
+
+        string id = string.IsNullOrWhiteSpace(mapId)
+            ? (players is { } n ? LinkMapId.Format(1, n) : DefaultMapId)
+            : RequireLinkMap(mapId.Trim(), entry);
+        id = MaterializeMapRequest(id, players ?? DefaultPlayers, output, mapSeedSource)!;
+        (ulong seed, int fromId) = LinkMapId.Parse(id);
+        if (players is { } given && given != fromId)
+        {
+            throw new ArgumentException(
+                $"{entry} 的人数 {given} 与地图标识 {id} 的人数 {fromId} 不一致：浮空岛按人数生成，请改用 {LinkMapId.Format(seed, given)}，或去掉人数选项按标识的 {fromId} 人开局。");
+        }
+
+        return (id, fromId);
+    }
+
     // ---------- map ----------
 
     /// <summary>
-    /// 地图工具：打印一张链接图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、连通分量数、校验结果与报告项）。<c>--map</c> 只接受 <c>link:</c>、缺省 <c>link:1</c>；
+    /// 地图工具：打印一张链接图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、连通分量数、校验结果与报告项）。<c>--map</c> 只接受 <c>link:</c>、缺省 <c>link:1:&lt;人数&gt;</c>（<c>--players</c> 也没给即 <c>link:1:4</c>，见 <see cref="ResolveLinkRequest"/>）；
     /// <c>--out</c> 把这张图另存为指定文件。open-map：<c>--links</c>（模拟链接序列）随拼接删除。retire-legacy-maps：旧标识族（内置图、<c>gen:</c>、<c>board:</c>、地图文件路径）与内置图的
     /// 权威文件导出（<c>maps/</c>）随旧地图删除，旧标识与其他入口一样经目录报错。
     /// </summary>
     private static int ExportMap(CommandLine cli, Func<ulong> mapSeedSource)
     {
         string? mapId = cli.GetOrNull("map");
+        int? players = cli.Has("players") ? cli.GetInt("players", 0) : null;
         string? outPath = cli.GetOrNull("out");
-        cli.EnsureRecognized();   // map 只认 --map / --out；结算在导出之前（strict-cli 2.4）
-        mapId = MaterializeMapRequest(mapId, Console.Out, mapSeedSource);
-        MapData map = MapCatalog.Resolve(mapId);   // 只认 link:，缺省 link:1；旧标识族在这里报错（retire-legacy-maps）
+        cli.EnsureRecognized();   // map 只认 --map / --players / --out；结算在导出之前（strict-cli 2.4）
+        // 只认 link:，缺省 link:1:<人数>；旧标识族报错（retire-legacy-maps）；人数口径与 play / run 相同（map-expand-25 D1）。
+        (string resolvedId, _) = ResolveLinkRequest(mapId, players, "map", Console.Out, mapSeedSource);
+        MapData map = MapCatalog.Resolve(resolvedId);
 
         MapValidationResult result = MapValidator.Validate(map);
         TerrainData terrain = map.TerrainData;
@@ -220,7 +259,7 @@ public static class Program
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
         Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
         // open-map 裁决 B5（simulation-harness「map 子命令缺省地图」）：按几何四邻实算连通分量数，不写死。
-        Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（5 块出生棋盘紧贴成一张连通地图，应为 1）");
+        Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（出生平台与其间的低地连成一座浮空岛，应为 1）");
 
         // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角与该棋盘内的公共信物数；link-map-surfaces D3：再给该棋盘内的新地表格数。
         // 主题中文名只经 BoardThemeNames.DisplayName；没有主题的棋盘（手写夹具）写"无主题"。
@@ -342,15 +381,13 @@ public static class Program
         string? configText = cli.GetOrNull("config") is { } file ? File.ReadAllText(file) : null;
         RunConfig config = configText is not null ? RunConfig.FromJson(configText) : new RunConfig();
 
-        config = RebuildPlayers(
-            config,
-            cli.Has("players") ? cli.GetInt("players", config.PlayerCount) : null,
-            cli.Has("difficulty") ? Core.Ai.AiDifficultyNames.Parse(cli.Get("difficulty", config.Players[0].Difficulty.ToString())) : null);   // 同一处严格解析（D10）
+        int? cliPlayers = cli.Has("players") ? cli.GetInt("players", config.PlayerCount) : null;
+        Core.Ai.AiDifficulty? difficulty = cli.Has("difficulty") ? Core.Ai.AiDifficultyNames.Parse(cli.Get("difficulty", config.Players[0].Difficulty.ToString())) : null;   // 同一处严格解析（D10）
 
+        // board-link-mode C1 / map-expand-25 D1：命令行与配置文件都没给地图 → link:1:<人数>（人数也没给即 link:1:4，与 RunConfig 自身的缺省相同）。
+        string? requestedMap = cli.GetOrNull("map") ?? (configText is not null && DeclaresKey(configText, nameof(RunConfig.MapId)) ? config.MapId : null);
         config = config with
         {
-            // board-link-mode C1：命令行与配置文件都没给地图 → link:1（retire-legacy-maps：RunConfig 自身的缺省也已是 link:1）。
-            MapId = cli.GetOrNull("map") ?? (configText is not null && DeclaresKey(configText, nameof(RunConfig.MapId)) ? config.MapId : DefaultMapId),
             MapPerMatch = cli.Flag("map-per-match") || config.MapPerMatch,
             SeedStart = cli.GetUInt64("seed", config.SeedStart),
             Count = cli.GetInt("count", config.Count),
@@ -372,11 +409,14 @@ public static class Program
         bool serial = cli.Flag("serial");
         cli.EnsureRecognized();   // 读完所有选项、创建输出目录与跑局之前结算（strict-cli 2.4；先于 Validated 以便未知选项优先报出）
         // 裸 link 在这里就落成完整标识：config.json 与日志首部不得出现裸 link（配置文件里写的裸 link 同样处理）。
-        // 命令行 --map link --map-per-match：起始地图种子取自 mapSeedSource，落成 link:<起始> 后再校验，同样打印并记入 config.json。
-        // （retire-legacy-maps：原文针对已删除的裸 gen，口径同上。）
-        config = config with { MapId = MaterializeMapRequest(RequireLinkMap(config.MapId.Trim(), "run"), Console.Out, mapSeedSource)! };
+        // 命令行 --map link --map-per-match：起始地图种子取自 mapSeedSource，落成 link:<起始>:<人数> 后再校验，同样打印并记入 config.json。
+        // map-expand-25 D1：显式人数 = 命令行 --players，否则配置文件写明的玩家列表人数；都没给即按标识的人数（再没有标识即 4）。显式人数与标识人数不一致报错退出。
+        // 人数与标识的合并放在合并命令行之后、Validated 之前——不放进 RunConfig.Validated：FromJson 读入时就调它，那时命令行还没合并。
+        int? declaredPlayers = cliPlayers ?? (configText is not null && DeclaresKey(configText, nameof(RunConfig.Players)) ? config.PlayerCount : null);
+        (string mapId, int players) = ResolveLinkRequest(requestedMap, declaredPlayers, "run", Console.Out, mapSeedSource);
+        // 玩家列表按最终人数重建：命令行给了人数或难度照旧重建（design D5）；人数来自标识、与配置的缺省 4 名不同时同样重建（配置没写玩家列表，没有逐玩家设置可丢）。
+        config = RebuildPlayers(config with { MapId = mapId }, cliPlayers ?? (players != config.PlayerCount ? players : null), difficulty);
         config.Validated();
-        // retire-legacy-maps 4b.3（L20）：原"命令行与配置文件都没给人数时取地图人数上限"删除——链接图恒为 4 人，与缺省的 4 名玩家相同；给非 4 的人数在建局时按 S1 报错。
 
         int parallelism = serial ? 1 : config.EffectiveParallelism;
 

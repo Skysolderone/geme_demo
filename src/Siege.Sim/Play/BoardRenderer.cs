@@ -157,7 +157,7 @@ internal sealed class BoardRenderer
         ImmutableDictionary<Coord, PlayerId> forbidden = life.ForbiddenCellsFor(me)
             .ToImmutableDictionary(c => c, c => life.EyeSpaceAt(c)!.Owner);
 
-        // 锁定后画本座位战场（open-map 起 = 整张地图）的外接矩形；插旗阶段只画 5 块出生棋盘的占位（编号），不画棋盘内部布局（盲选）。
+        // 锁定后画本座位战场（open-map 起 = 整张地图）的外接矩形；插旗阶段只画各块出生平台的占位（编号），不画棋盘内部布局（盲选），取景仍是整座岛（含低地）。
         (int x0, int y0, int x1, int y1, IReadOnlySet<Coord>? shown, bool placeholders) = Viewport(view, me, zones);
         WriteColumns(x0, x1);
         for (int y = y1; y >= y0; y--)
@@ -172,7 +172,8 @@ internal sealed class BoardRenderer
                     // 占位画整块出生棋盘（棋盘清单），不画出生区——链接档的出生区是核心区（link-map-terrain D1）。
                     if (map.BirthBoardAt(c) is { } placeholder)
                     {
-                        Ink($" {BirthZoneLabel.Number(placeholder)} ", ZoneColor);
+                        // 每格恰 3 个字符：浮空岛的平台可达 12 块，两位编号右对齐成"10 "（原" 10 "占 4 格，把整行挤歪）。
+                        Ink($"{BirthZoneLabel.Number(placeholder),2} ", ZoneColor);
                     }
                     else
                     {
@@ -224,7 +225,7 @@ internal sealed class BoardRenderer
                 }
                 else if (zones && map.BirthZoneOf(c) is { } z)
                 {
-                    Ink($" {BirthZoneLabel.Number(z)} ", ZoneColor);
+                    Ink($"{BirthZoneLabel.Number(z),2} ", ZoneColor);
                 }
                 else if (legal is not null && legal.Contains(c))
                 {
@@ -262,8 +263,8 @@ internal sealed class BoardRenderer
     }
 
     /// <summary>
-    /// 画哪一块：插旗阶段为 5 块出生棋盘的外接矩形（只画占位），此后为本座位所在战场的外接矩形，<c>shown</c> 为该战场的格。
-    /// 战场取自公开视图里的地形与本座位锁定的出生棋盘（<see cref="PublicRules.BattlefieldOf"/>），不做规则计算。
+    /// 画哪一块：插旗阶段为整张岛全部可落子格的外接矩形（map-expand-25 段 B：平台之间与岛缘的低地也在取景内，只画占位），此后为本座位所在战场的外接矩形，<c>shown</c> 为该战场的格
+    /// （浮空岛的唯一战场即全部可落子格，含低地）。战场取自公开视图里的地形与本座位锁定的出生棋盘（<see cref="PublicRules.BattlefieldOf"/>），不做规则计算。
     /// </summary>
     private static (int X0, int Y0, int X1, int Y1, IReadOnlySet<Coord>? Shown, bool Placeholders) Viewport(MatchPublicView view, PlayerId me, bool zones)
     {
@@ -273,7 +274,8 @@ internal sealed class BoardRenderer
         IReadOnlySet<Coord>? shown;
         if (zones || zone is null)
         {
-            cells = [.. map.BirthBoards().SelectMany(b => b.Cells())];
+            // 原为各出生棋盘的格之并：浮空岛的平台距岛边 ≥ 2 格，按平台取景会把岛缘低地切掉。
+            cells = [.. map.AllCoords().Where(map.IsPlayable)];
             shown = null;
         }
         else

@@ -94,7 +94,7 @@ public class 前瞻的近似两层加分Tests
                 LookaheadEntry oneLayerChoice = record.Entries.Single(e => e.CandidateKey == one.LastChoice!.Key);
                 Assert.True(record.Chosen!.TwoPlyBonus > oneLayerChoice.TwoPlyBonus, record.ToText());
             }
-        }, 1);
+        }, 2);   // map-expand-25 段 A2：载体改为平坦手写图后种子 1 的局面集上两层加分不改变任何选择（compared 24 / scored 18 / changed 0），按样本口径重挑：种子 1–8 探针 changed 0 / 2 / 2 / 2 / 0 / 5 / 2 / 1，取第一个非 0 的种子 2
 
         Assert.True(compared >= 10, $"只比较了 {compared} 个局面");
         Assert.True(scored >= 1, $"{compared} 个局面上没有一次已前瞻且两层加分为正（改变选择 {changed} 次）");

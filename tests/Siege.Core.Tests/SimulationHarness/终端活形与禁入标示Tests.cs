@@ -130,6 +130,11 @@ public class 终端活形与禁入标示Tests
         // 区间法守不住。改为不依赖 AI 走法：经 PlayCommand 的测试接缝 arrange 在插旗锁定后、第一个小回合前给 P1（AI）摆一条两眼活形——
         // 左下角 C4–D4–E4–F4 + D3 + F3，眼 C3（西、南是岩石）与 E3（南是岩石），全在高度 0、无栅栏；他人不得破坏、P1 的活形硬约束不拆自己的活形，
         // 所以人类看到的每一份棋盘都有 P1 的 "@" 与它两眼上的 "x"。逐格断言、退出码、棋盘行数下界照旧。
+        // map-expand-25 段 A2：手写紧贴图在浮空岛校验器下恒不合规（终端入口经 MatchFlow.Create 校验），载体改为生成图 link:1:4；
+        // 活形摆在 8 号平台 F30–L37（林地主题）的东南角，与原形左右镜像：L31–K31–J31–H31 + K30 + H30（H30 是坡道，高 1），眼 L30 与 J30——
+        // 平台高 2、四周低地高 0，东、南两侧是崖壁（不通气），眼不漏到低地；摆子都在核心区之外，不压信物格。
+        // 段 A3：信物不再消费布局流，坡道重抽——8 号平台的坡道移到 K30（南，高 1）/ L32（东）/ H37（北），H30 回到高 2。K30 上的子多一口通向低地 K29 的气，
+        // 眼 L30 / J30 仍只与平台内的子相邻（南、东两侧是崖壁），活形不变；高度断言改为 K30 高 1、其余高 2。
         var script = new System.Text.StringBuilder("2\n");
         for (int i = 0; i < 2; i++)
         {
@@ -139,29 +144,23 @@ public class 终端活形与禁入标示Tests
         LifeState? arrangedLife = null;
         void Arrange(MatchFlow match)
         {
-            foreach (string cell in new[] { "C4", "D4", "E4", "F4", "D3", "F3" })
+            foreach (string cell in new[] { "L31", "K31", "J31", "H31", "K30", "H30" })
             {
                 match.Board.Place(Coord.Parse(cell), TestMaps.P1, PieceType.Basic);
             }
 
             match.Debug.Recalculate();
-            arrangedLife = LifeShapeReport.Analyze(match.Board).GroupLifeAt(Coord.Parse("C4"))!.Life;
+            arrangedLife = LifeShapeReport.Analyze(match.Board).GroupLifeAt(Coord.Parse("L31"))!.Life;
         }
 
         var output = new StringWriter();
-        // terrain-barriers 3.1（地图变了）：link:1 左下角那块的河道横穿第 4 行（C4–H4 是深水 / 桥），摆不下这条活形——载体改为手写平坦图 FlatMap（link:90003，
-        // 出生棋盘 0 = C3–H8，左下角与 link:1 改动前同形：西、南是场景格，C3–F4 高度 0、无栅栏）；棋盘 0 的两个出生区档信物移到核心区上排 D6 / F6，
-        // 不压在摆出的棋子下（原 F4 会被直接摆子控制而未揭示）。
-        MapData flat = LinkModeFixtures.FlatMap;
-        BoardPlate zero = flat.Boards[0];
-        var birth = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
-        MapData map = flat with
-        {
-            RelicCells = flat.RelicCells.Where(kv => !zero.Contains(kv.Key))
-                .Append(KeyValuePair.Create(Coord.Parse("D6"), birth))
-                .Append(KeyValuePair.Create(Coord.Parse("F6"), birth))
-                .ToImmutableDictionary(),
-        };
+        // terrain-barriers 3.1 起载体曾为手写平坦图 FlatMap（link:90003）；map-expand-25 段 A2 改为生成图 link:1:4（见上）。
+        MapData map = MapCatalog.Resolve("link:1:4");
+        BoardPlate eighth = map.Boards[7];
+        Assert.Equal(("F30", 6, 8), (eighth.Origin.ToNotation(), eighth.Width, eighth.Height));
+        Assert.All(new[] { "L31", "K31", "J31", "H31", "H30", "L30", "J30" }, c => Assert.Equal(2, map.HeightAt(Coord.Parse(c))));
+        Assert.Equal(1, map.HeightAt(Coord.Parse("K30")));
+        Assert.DoesNotContain(map.RelicCells.Keys, c => c.Y is 29 or 30 && eighth.Contains(c));   // 第 30 / 31 行（Y 从 0 起）
         Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
         int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, map, null, null, null, ContentSet.V1, null, null, Arrange);   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();

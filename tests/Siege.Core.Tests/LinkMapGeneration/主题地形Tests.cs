@@ -8,28 +8,29 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
 /// 规格：openspec/changes/link-map-terrain/specs/link-map-generation —— Requirement: 初始布局（中间带按主题放置地形）；design D3 / D4（tasks 2.2 / 2.3）。
-/// 每个主题的生成函数单测其主题特征，各取 6×6 与 7×7 两种尺寸（terrain-density 裁决 K1：边长 6–7，原 6×6 / 7×7 / 8×8）、布局流种子 1–30；另统计种子 1–20 的重抽次数分布与各主题的实际地形量（输出到测试日志，抄进任务汇报）。
+/// 每个主题的生成函数单测其主题特征（抬升前的平台内部），各取 6×6 / 7×7 / 8×8 三种尺寸（map-expand-25 D2：平台边长 6–8，中央 8×8）、布局流种子 1–30；
+/// 另统计种子 1–20 × 人数 2–4 的重抽次数分布与各主题的实际地形量（输出到测试日志，抄进任务汇报）。map-expand-25 R3：高台主题去掉，接缝自检与难到达格随紧贴布局删除。
 /// </summary>
 /// <remarks>变异验证见任务汇报（M-T*）。</remarks>
 public class 主题地形Tests(ITestOutputHelper output)
 {
     private const int StreamSeeds = 30;
 
-    public static IEnumerable<object[]> Sizes() => [[6], [7]];
+    public static IEnumerable<object[]> Sizes() => [[6], [7], [8]];
 
     private static IEnumerable<(ulong Seed, LinkMapGenerator.BoardTerrain Board, MapData Map)> Draft(BoardTheme theme, int side)
     {
         var plate = new BoardPlate(new Coord(2, 2), side, side, BoardPlateKind.Birth, theme);
         for (ulong seed = 1; seed <= StreamSeeds; seed++)
         {
-            LinkMapGenerator.BoardTerrain board = LinkMapGenerator.DraftBoard(plate, MapRandom.ForLinkLayout(seed));
+            LinkMapGenerator.BoardTerrain board = LinkMapGenerator.DraftBoard(plate, MapRandom.ForLinkLayout(seed, 4));
             yield return (seed, board, board.Preview());
         }
     }
 
     /// <summary>
-    /// 每个主题都满足的公共约束：外圈 / 核心区平坦（河流、高台的隔断线经过处除外，terrain-barriers 裁决 H4）、散布岩石只在中间带且 ≤ 2（6×6 为 0）、
-    /// 湖泊 / 岩区一团（见「湖泊或岩区恰一团且不切断棋盘」）、棋盘内连通、可改造目标 ≥ 2。
+    /// 每个主题都满足的公共约束（抬升前）：外圈 / 核心区平坦（河流的隔断线经过处除外，terrain-barriers 裁决 H4）、散布岩石只在中间带且 ≤ 2（6×6 为 0）、
+    /// 湖泊 / 岩区一团（见「湖泊或岩区恰一团且不切断棋盘」）、棋盘内连通、可改造目标 ≥ 2；平台内全部可落子格从核心区沿气边走得到（map-expand-25：对全部主题查）。
     /// </summary>
     private static void AssertCommon(BoardPlate plate, MapData map, LinkMapGenerator.BoardTerrain board, ulong seed)
     {
@@ -44,13 +45,26 @@ public class 主题地形Tests(ITestOutputHelper output)
         Assert.Equal(1, Battlefields.Of(map).Count);
         Assert.True(plate.Cells().Count(c => map.SurfaceAt(c) == Surface.Forest || map.TerrainData.IsUnbridgedDeepWater(c)) >= 2, $"{at} 改造目标不足");
         Assert.All(map.TerrainData.Heights.Keys.Concat(map.TerrainData.Surfaces.Where(kv => kv.Value != Surface.Forest).Select(kv => kv.Key)).Where(c => !barrier.Contains(c)), c => Assert.True(plate.InMiddleBand(c), $"{at} {c} 的高差 / 深水不在中间带"));
-        Assert.All(board.HardCells, c => Assert.True(plate.Contains(c) && !plate.InCore(c) && map.IsPlayable(c), $"{at} 难到达格 {c}"));
         Assert.InRange(board.Redraws, 0, LinkMapGenerator.MaxBoardRedraws);
+        var reached = new HashSet<Coord>(plate.CoreCells());
+        var queue = new Queue<Coord>(reached);
+        while (queue.Count > 0)
+        {
+            foreach (Coord n in Adjacency.LibertyNeighbors(map, queue.Dequeue()).Where(plate.Contains))
+            {
+                if (reached.Add(n))
+                {
+                    queue.Enqueue(n);
+                }
+            }
+        }
+
+        Assert.All(plate.Cells().Where(map.IsPlayable), c => Assert.True(reached.Contains(c), $"{at}：{c} 从核心区沿气边走不到"));
     }
 
     /// <summary>
-    /// 隔断线（terrain-barriers D1 / 实施修订 J1–J3，测试内独立判定，不读生成器）：棋盘内不在外圈的整列 / 整行，河流 = 每格都是深水的那一条，
-    /// 高台 = 每格高度 ≥ 1 的那一条（山脊）。断言恰有一条，返回线上的格、不含核心区的一侧的格与通道格（桥 / 唯一的高 1 坡口）。核心区中心用独立算式。
+    /// 隔断线（terrain-barriers D1 / 实施修订 J1–J3，测试内独立判定，不读生成器）：棋盘内不在外圈的整列 / 整行中每格都是深水的那一条（河流）。
+    /// 断言恰有一条，返回线上的格、不含核心区的一侧的格与通道格（桥）。核心区中心用独立算式。
     /// </summary>
     internal static (Coord[] Line, Coord[] Beyond, Coord Passage) Barrier(BoardPlate plate, MapData map)
     {
@@ -67,25 +81,20 @@ public class 主题地形Tests(ITestOutputHelper output)
         }
 
         Coord[] Cells((bool Column, int Index) l) => [.. plate.Cells().Where(c => (l.Column ? c.X : c.Y) == l.Index)];
-        Func<Coord[], bool> full = plate.Theme == BoardTheme.River
-            ? cells => cells.All(c => map.SurfaceAt(c) == Surface.DeepWater)
-            : cells => cells.All(c => map.HeightAt(c) >= 1);
-        (bool Column, int Index) line = Assert.Single(lines, l => full(Cells(l)));
+        (bool Column, int Index) line = Assert.Single(lines, l => Cells(l).All(c => map.SurfaceAt(c) == Surface.DeepWater));
         Coord[] onLine = Cells(line);
         int side = Math.Sign((line.Column ? center.X : center.Y) - line.Index);
         Coord[] beyond = [.. plate.Cells().Where(c => Math.Sign((line.Column ? c.X : c.Y) - line.Index) == -side)];
-        Coord passage = plate.Theme == BoardTheme.River
-            ? Assert.Single(onLine, map.HasBridge)
-            : Assert.Single(onLine, c => map.HeightAt(c) == 1);
+        Coord passage = Assert.Single(onLine, map.HasBridge);
         return (onLine, beyond, passage);
     }
 
-    /// <summary>外圈规则的放开范围（H4）：河流 / 高台为隔断线的格（两端在外圈）；其余主题为空。</summary>
+    /// <summary>外圈规则的放开范围（H4）：河流为隔断线的格（两端在外圈）；其余主题为空。</summary>
     private static HashSet<Coord> BarrierRegion(BoardPlate plate, MapData map) =>
-        (plate.Theme is BoardTheme.River or BoardTheme.Plateau) ? [.. Barrier(plate, map).Line] : [];
+        plate.Theme == BoardTheme.River ? [.. Barrier(plate, map).Line] : [];
 
     /// <summary>
-    /// 隔断线公共断言（规格 Scenario「河流与高台横穿棋盘」）：整行 / 整列、不在外圈（两端各占外圈 1 格）、不经过核心区、恰 1 处通道；
+    /// 隔断线公共断言（规格 Scenario「河流横穿棋盘」）：整行 / 整列、不在外圈（两端各占外圈 1 格）、不经过核心区、恰 1 处通道；
     /// 从核心区沿气边在棋盘内走：去掉通道格时走不到线上与对侧的任何格，留着通道格时走得到线上与对侧的全部可落子格（两侧除通道外无气边）。
     /// </summary>
     private static (Coord[] Line, Coord[] Beyond, Coord Passage) AssertBarrier(BoardPlate plate, MapData map, ulong seed)
@@ -126,42 +135,17 @@ public class 主题地形Tests(ITestOutputHelper output)
 
     [Theory]
     [MemberData(nameof(Sizes))]
-    public void 高台横穿棋盘且恰有一处坡口(int side)
-    {
-        // terrain-barriers 实施修订 J3：线本身高 2 成山脊、线上恰 1 格高 1 坡口，线外两侧保持高 0；难到达格 = 山脊格。另散布 2–3 格林地作改造目标。
-        var chosen = new HashSet<string>(StringComparer.Ordinal);
-        foreach ((ulong seed, LinkMapGenerator.BoardTerrain board, MapData map) in Draft(BoardTheme.Plateau, side))
-        {
-            BoardPlate plate = board.Plate;
-            AssertCommon(plate, map, board, seed);
-            (Coord[] line, _, Coord ramp) = AssertBarrier(plate, map, seed);
-            Coord[] ridge = [.. line.Where(c => c != ramp)];
-            Assert.All(ridge, c => Assert.Equal(2, map.HeightAt(c)));
-            Assert.Equal(1, map.HeightAt(ramp));
-            Assert.All(plate.Cells().Where(c => !line.Contains(c)), c => Assert.Equal(0, map.HeightAt(c)));
-            Assert.Equal(ridge.Order(), board.HardCells);
-            Assert.InRange(plate.Cells().Count(c => map.SurfaceAt(c) == Surface.Forest), 2, 3);
-            chosen.Add(LineName(plate, line));
-        }
-
-        output.WriteLine($"高台 {side}×{side}：{StreamSeeds} 个流种子取到的隔断线 {string.Join(" ", chosen.Order(StringComparer.Ordinal))}");
-        AssertCandidates(side, chosen);
-    }
-
-    [Theory]
-    [MemberData(nameof(Sizes))]
     public void 河流横穿棋盘且恰有一座桥(int side)
     {
-        // terrain-barriers D1 / 实施修订 J1、J2：中间带整行 / 整列深水、恰 1 座桥；难到达格 = 不含核心区一侧的可落子格。
+        // terrain-barriers D1 / 实施修订 J1、J2：中间带整行 / 整列深水、恰 1 座桥。
         var chosen = new HashSet<string>(StringComparer.Ordinal);
         foreach ((ulong seed, LinkMapGenerator.BoardTerrain board, MapData map) in Draft(BoardTheme.River, side))
         {
             BoardPlate plate = board.Plate;
             AssertCommon(plate, map, board, seed);
-            (Coord[] line, Coord[] beyond, Coord bridge) = AssertBarrier(plate, map, seed);
+            (Coord[] line, _, Coord bridge) = AssertBarrier(plate, map, seed);
             Assert.Equal([bridge], map.TerrainData.Bridges);
             Assert.All(line.Where(c => c != bridge), c => Assert.True(map.TerrainData.IsUnbridgedDeepWater(c)));
-            Assert.Equal(beyond.Where(c => map.IsPlayable(c)).Order(), board.HardCells);
             chosen.Add(LineName(plate, line));
         }
 
@@ -174,7 +158,7 @@ public class 主题地形Tests(ITestOutputHelper output)
         line.Select(c => c.X).Distinct().Count() == 1 ? $"c{line[0].X - plate.Origin.X}" : $"r{line[0].Y - plate.Origin.Y}";
 
     /// <summary>
-    /// 候选（实施修订 J1 / J2，独立列表）：中间带里不穿过核心区的整列 / 整行——边长 6 只有 c4 / r4，边长 7 为 c1 / c5 与 r1 / r5（terrain-density 起没有边长 8）；
+    /// 候选（实施修订 J1 / J2，独立列表）：中间带里不穿过核心区的整列 / 整行——边长 6 只有 c4 / r4，边长 7 为 c1 / c5 与 r1 / r5，边长 8（核心区偏西南、占 2–4）为 c1 / c5 / c6 与 r1 / r5 / r6；
     /// 30 个流种子取到的线都在候选里，且候选全部取到过（样本口径：均匀抽取不是只取一条）。
     /// </summary>
     private static void AssertCandidates(int side, HashSet<string> chosen)
@@ -183,7 +167,8 @@ public class 主题地形Tests(ITestOutputHelper output)
         {
             6 => ["c4", "r4"],
             7 => ["c1", "c5", "r1", "r5"],
-            _ => throw new ArgumentOutOfRangeException(nameof(side), side, "出生棋盘边长只有 6–7"),
+            8 => ["c1", "c5", "c6", "r1", "r5", "r6"],
+            _ => throw new ArgumentOutOfRangeException(nameof(side), side, "平台边长只有 6–8"),
         };
         Assert.Equal(allowed.Order(StringComparer.Ordinal), chosen.Order(StringComparer.Ordinal));
     }
@@ -193,9 +178,9 @@ public class 主题地形Tests(ITestOutputHelper output)
     public void 湖泊或岩区恰一团且不切断棋盘(int side)
     {
         // terrain-barriers D3 / 裁决 H5 / 实施修订 J4：中间带多于 12 格的棋盘恰 1 团 3–5 格，全为未架桥深水（湖泊）或全为岩石（岩区），几何四邻连成一团；
-        // 中间带 ≤ 12 格（6×6 的 7 格）不放。放完后棋盘内可落子格几何四邻连通、可改造目标 ≥ 2（AssertCommon）。五个主题都放。
+        // 中间带 ≤ 12 格（6×6 的 7 格）不放。放完后棋盘内可落子格几何四邻连通、可改造目标 ≥ 2（AssertCommon）。四个主题都放。
         int lakes = 0, rockFields = 0;
-        foreach (BoardTheme theme in Enum.GetValues<BoardTheme>())
+        foreach (BoardTheme theme in LinkMapGenerator.IslandThemes)
         {
             foreach ((ulong seed, LinkMapGenerator.BoardTerrain board, MapData map) in Draft(theme, side))
             {
@@ -238,11 +223,6 @@ public class 主题地形Tests(ITestOutputHelper output)
             Assert.All(clumps, k => Assert.InRange(k.Count, 2, 4));
             Assert.Empty(map.TerrainData.Fences);
             Assert.Empty(map.TerrainData.Heights);
-
-            // 难到达格（负责人 2026-10-14 裁决 T2 = A，原为三面）：核心区之外、可落子、非林地、至少两面挨着林地的格——测试内独立算式。
-            Coord[] hard = [.. plate.Cells().Where(c => !plate.InCore(c) && map.IsPlayable(c) && map.SurfaceAt(c) != Surface.Forest
-                && plate.Cells().Count(n => map.SurfaceAt(n) == Surface.Forest && Adjacency.AreAdjacent(n, c)) >= 2).Order()];
-            Assert.Equal(hard, board.HardCells);
         }
     }
 
@@ -260,10 +240,6 @@ public class 主题地形Tests(ITestOutputHelper output)
             Coord[] forest = [.. plate.Cells().Where(c => map.SurfaceAt(c) == Surface.Forest)];
             Assert.Equal(2, forest.Length);
             Assert.All(forest, f => Assert.True(plate.OnRim(f)));
-
-            // 难到达格（裁决 T2 = A）：核心区之外、可落子、至少两条边有栅栏的格——测试内独立算式。
-            Coord[] hard = [.. plate.Cells().Where(c => !plate.InCore(c) && map.IsPlayable(c) && map.TerrainData.Fences.Count(e => e.A == c || e.B == c) >= 2).Order()];
-            Assert.Equal(hard, board.HardCells);
         }
     }
 
@@ -293,113 +269,64 @@ public class 主题地形Tests(ITestOutputHelper output)
     [Fact]
     public void 种子1到20的重抽次数分布()
     {
-        // tasks 2.3：种子 1–20 全部一次生成成功或在上限内成功（不抛 MapGenerationException），记录各种子的重抽次数分布。
+        // tasks 2.3 / map-expand-25 D2–D4：种子 1–20 × 人数 2–4 全部在上限内成功（不抛 MapGenerationException），记录平台级、整张布局与低地三种重抽次数的分布。
         var histogram = new SortedDictionary<int, int>();
         var byTheme = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        for (ulong seed = 1; seed <= 20; seed++)
+        int plates = 0;
+        foreach (int players in new[] { 2, 3, 4 })
         {
-            (MapData map, ImmutableArray<int> redraws) = LinkMapGenerator.GenerateWithRedraws(seed);
-            Assert.Equal(MapFile.ToJson(LinkMapGenerator.Generate(seed)), MapFile.ToJson(map));   // 统计入口与缓存入口同图
-            Assert.All(redraws, r => Assert.InRange(r, 0, LinkMapGenerator.MaxBoardRedraws));
-            for (int z = 0; z < redraws.Length; z++)
+            var layout = new List<int>();
+            var lowland = new List<int>();
+            for (ulong seed = 1; seed <= 20; seed++)
             {
-                histogram[redraws[z]] = histogram.GetValueOrDefault(redraws[z]) + 1;
-                string key = $"{map.Boards[z].Theme!.Value.DisplayName()} {map.Boards[z].Width}×{map.Boards[z].Height}";
-                byTheme[key] = byTheme.GetValueOrDefault(key) + redraws[z];
+                LinkMapGenerator.IslandGeneration g = LinkMapGenerator.GenerateDetailed(seed, players);
+                Assert.Equal(MapFile.ToJson(LinkMapGenerator.Generate(seed, players)), MapFile.ToJson(g.Map));   // 统计入口与缓存入口同图
+                Assert.InRange(g.LayoutRedraws, 0, LinkMapGenerator.MaxLayoutRedraws);
+                Assert.InRange(g.LowlandRedraws, 0, LinkMapGenerator.MaxLowlandRedraws);
+                layout.Add(g.LayoutRedraws);
+                lowland.Add(g.LowlandRedraws);
+                foreach (LinkMapGenerator.BoardTerrain board in g.Boards)
+                {
+                    Assert.InRange(board.Redraws, 0, LinkMapGenerator.MaxBoardRedraws);
+                    histogram[board.Redraws] = histogram.GetValueOrDefault(board.Redraws) + 1;
+                    string key = $"{board.Plate.Theme!.Value.DisplayName()} {board.Plate.Width}×{board.Plate.Height}";
+                    byTheme[key] = byTheme.GetValueOrDefault(key) + board.Redraws;
+                    plates++;
+                }
             }
 
-            output.WriteLine($"link:{seed} 重抽 {string.Join(" ", redraws)}");
+            output.WriteLine($"{players} 人：整张布局重抽 均值 {layout.Average():0.00} 最多 {layout.Max()}；低地重抽 均值 {lowland.Average():0.00} 最多 {lowland.Max()}");
         }
 
-        output.WriteLine($"重抽次数分布（100 块棋盘）：{string.Join(" ", histogram.Select(kv => $"{kv.Key}次:{kv.Value}块"))}");
+        output.WriteLine($"平台级重抽次数分布（{plates} 块）：{string.Join(" ", histogram.Select(kv => $"{kv.Key}次:{kv.Value}块"))}");
         output.WriteLine($"按主题与尺寸累计重抽：{string.Join("；", byTheme.Where(kv => kv.Value > 0).Select(kv => $"{kv.Key} {kv.Value}"))}");
-        Assert.Equal(100, histogram.Values.Sum());
+        Assert.Equal(plates, histogram.Values.Sum());
+        Assert.True(plates >= 60 * 6, $"样本口径：60 张图只数到 {plates} 块平台");
     }
 
     [Fact]
-    public void 接缝缺气边时同流重抽()
+    public void 种子1到20生成不抛异常()
     {
-        // terrain-barriers 实施修订 J2：生成地形时布局已知，这块的隔断线若让与已生成邻块之间的接缝缺气边，按棋盘级自检失败处理、在同一条流上重抽。
-        // 手写邻块：河流棋盘 A = C3–H8（6×6，候选只有 c4 = G 列、r4 = 第 7 行）；北邻 B = C9–H14，其南排 C9–H9 除 G9 外都是深水，
-        // 于是 A、B 之间的接缝只剩 G8–G9 一对可能有气边——A 取 G 列河道且桥不在 G8 时接缝就缺气边。
-        var a = new BoardPlate(new Coord(2, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.River);
-        var bPlate = new BoardPlate(new Coord(2, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Forest);
-        Coord g8 = TestMaps.At("G8");
-        var b = new LinkMapGenerator.BoardTerrain(
-            bPlate,
-            ImmutableDictionary<Coord, int>.Empty,
-            new[] { "C9", "D9", "E9", "F9", "H9" }.ToImmutableDictionary(TestMaps.At, _ => Surface.DeepWater),
-            [],
-            [],
-            [],
-            [],
-            [],
-            0);
-        bool Blocked(LinkMapGenerator.BoardTerrain t) => t.Surfaces.GetValueOrDefault(g8) == Surface.DeepWater && !t.Bridges.Contains(g8);
-        int blockedAlone = 0, redrawn = 0;
-        for (ulong seed = 1; seed <= StreamSeeds; seed++)
+        // 逐种子逐人数生成（不经缓存），失败按失败码归类输出；另记可落子格与平台数区间（抄进任务汇报）。
+        var failures = new List<string>();
+        foreach (int players in new[] { 2, 3, 4 })
         {
-            blockedAlone += Blocked(LinkMapGenerator.DraftBoard(a, MapRandom.ForLinkLayout(seed))) ? 1 : 0;
-            LinkMapGenerator.BoardTerrain withNeighbor = LinkMapGenerator.DraftBoard(a, MapRandom.ForLinkLayout(seed), [b]);
-            Assert.False(Blocked(withNeighbor), $"流种子 {seed}：G8 是未架桥深水，A / B 接缝缺气边却没有重抽");
-            redrawn += withNeighbor.Redraws > 0 ? 1 : 0;
-        }
-
-        output.WriteLine($"30 个流种子：不看邻块时 G8 被堵 {blockedAlone} 次，看邻块时重抽过的 {redrawn} 次");
-        Assert.True(blockedAlone > 0 && redrawn > 0, "样本口径：确有会堵住接缝的抽法，且确实重抽了");
-    }
-
-    [Fact]
-    public void 种子1到20生成不抛异常() => ScanSeeds(1, 20);
-
-    /// <summary>terrain-barriers 1.3（D2）：种子 1–2000 抽查不抛 <see cref="MapGenerationException"/>。慢测试（SIEGE_SLOW=1 + Category=Slow），默认套件跑缩小版 1–20（同一测试体）。</summary>
-    [SlowFact]
-    [Trait("Category", "Slow")]
-    public void 种子1到2000生成不抛异常() => ScanSeeds(1, 2000);
-
-    /// <summary>逐种子生成（不经缓存），失败按失败码归类输出；另记全图可落子格、画布宽高区间与每块重抽次数分布。</summary>
-    private void ScanSeeds(ulong from, ulong to)
-    {
-        var failures = new SortedDictionary<string, List<ulong>>(StringComparer.Ordinal);
-        var redraws = new SortedDictionary<int, int>();
-        int minPlayable = int.MaxValue, maxPlayable = 0, minW = int.MaxValue, maxW = 0, minH = int.MaxValue, maxH = 0;
-        var samples = new List<string>();
-        for (ulong seed = from; seed <= to; seed++)
-        {
-            try
+            int minPlayable = int.MaxValue, maxPlayable = 0, minPlates = int.MaxValue, maxPlates = 0;
+            for (ulong seed = 1; seed <= 20; seed++)
             {
-                (MapData map, ImmutableArray<int> r) = LinkMapGenerator.GenerateWithRedraws(seed);
-                foreach (int n in r)
+                try
                 {
-                    redraws[n] = redraws.GetValueOrDefault(n) + 1;
+                    MapData map = LinkMapGenerator.GenerateDetailed(seed, players).Map;
+                    (minPlayable, maxPlayable) = (Math.Min(minPlayable, map.PlayableCount), Math.Max(maxPlayable, map.PlayableCount));
+                    (minPlates, maxPlates) = (Math.Min(minPlates, map.Boards.Length), Math.Max(maxPlates, map.Boards.Length));
                 }
-
-                (minPlayable, maxPlayable) = (Math.Min(minPlayable, map.PlayableCount), Math.Max(maxPlayable, map.PlayableCount));
-                (minW, maxW, minH, maxH) = (Math.Min(minW, map.Width), Math.Max(maxW, map.Width), Math.Min(minH, map.Height), Math.Max(maxH, map.Height));
-            }
-            catch (MapGenerationException ex)
-            {
-                string[] codes = [.. System.Text.RegularExpressions.Regex.Matches(ex.Message, @"\[([A-Z_]+)\]").Select(m => m.Groups[1].Value).Distinct()];
-                string key = codes.Length > 0 ? string.Join("+", codes) : (ex.Message.Contains("重抽", StringComparison.Ordinal) ? "重抽上限" : "其他");
-                if (!failures.TryGetValue(key, out List<ulong>? list))
+                catch (MapGenerationException ex)
                 {
-                    failures[key] = list = [];
-                }
-
-                list.Add(seed);
-                if (samples.Count < 12)
-                {
-                    samples.Add($"link:{seed} {ex.Message}");
+                    failures.Add($"link:{seed}:{players} {ex.Message}");
                 }
             }
-        }
 
-        output.WriteLine($"种子 {from}–{to}：失败 {failures.Values.Sum(l => l.Count)} 张；{string.Join("；", failures.Select(kv => $"{kv.Key} {kv.Value.Count} 张（{string.Join(",", kv.Value.Take(15))}）"))}");
-        output.WriteLine($"重抽分布（块）：{string.Join(" ", redraws.Select(kv => $"{kv.Key}次:{kv.Value}"))}");
-        output.WriteLine($"全图可落子 {minPlayable}–{maxPlayable}，画布宽 {minW}–{maxW}、高 {minH}–{maxH}");
-        foreach (string s in samples)
-        {
-            output.WriteLine(s);
+            output.WriteLine($"{players} 人：可落子 {minPlayable}–{maxPlayable}，平台 {minPlates}–{maxPlates} 块");
         }
 
         Assert.Empty(failures);
@@ -409,10 +336,10 @@ public class 主题地形Tests(ITestOutputHelper output)
     public void 自检失败在同一条流上重抽_到上限即抛()
     {
         // D3：自检失败就在同一条随机流上重抽该块，至多 MaxBoardRedraws 次，仍失败抛 MapGenerationException（生成器缺陷，不静默）。
-        // 种子 1–20 实测从不重抽，这里用一块 5×5 的林地主题棋盘（没有中间带，一团林地都起不了）走到上限：
+        // 这里用一块 5×5 的林地主题棋盘（没有中间带，一团林地都起不了）走到上限：
         // 每次尝试都消费随机数（同一条流在推进，不是同一次尝试重复 17 遍），17 次后抛出并指出棋盘、尺寸与主题。
         var plate = new BoardPlate(new Coord(2, 2), 5, 5, BoardPlateKind.Birth, BoardTheme.Forest);
-        Siege.Core.Determinism.RandomStream rng = MapRandom.ForLinkLayout(1);
+        Siege.Core.Determinism.RandomStream rng = MapRandom.ForLinkLayout(1, 4);
         MapGenerationException ex = Assert.Throws<MapGenerationException>(() => LinkMapGenerator.DraftBoard(plate, rng));
         Assert.Contains($"重抽 {LinkMapGenerator.MaxBoardRedraws} 次", ex.Message, StringComparison.Ordinal);
         Assert.Contains("C3", ex.Message, StringComparison.Ordinal);
@@ -421,23 +348,26 @@ public class 主题地形Tests(ITestOutputHelper output)
         Assert.True(rng.Consumed >= LinkMapGenerator.MaxBoardRedraws + 1, $"随机流只消费了 {rng.Consumed} 次");
 
         // 主题缺失的棋盘不生成（不静默取缺省主题）。
-        Assert.Throws<ArgumentException>(() => LinkMapGenerator.DraftBoard(plate with { Theme = null }, MapRandom.ForLinkLayout(1)));
+        Assert.Throws<ArgumentException>(() => LinkMapGenerator.DraftBoard(plate with { Theme = null }, MapRandom.ForLinkLayout(1, 4)));
+
+        // map-expand-25 R3：高台主题不再生成（不静默换成别的主题）。
+        Assert.Throws<ArgumentOutOfRangeException>(() => LinkMapGenerator.DraftBoard(plate with { Width = 7, Height = 7, Theme = BoardTheme.Plateau }, MapRandom.ForLinkLayout(1, 4)));
     }
 
     [Fact]
-    public void 各主题在六乘六与七乘七上的实际地形量()
+    public void 各主题在各边长上的实际地形量()
     {
         // 汇报用统计（tasks 2.2 / 5.4 回调的起点）：流种子 1–30 的平均量。断言只做样本口径下界。
-        foreach (BoardTheme theme in Enum.GetValues<BoardTheme>())
+        foreach (BoardTheme theme in LinkMapGenerator.IslandThemes)
         {
-            foreach (int side in new[] { 6, 7 })
+            foreach (int side in new[] { 6, 7, 8 })
             {
                 var rows = Draft(theme, side).ToList();
                 double Avg(Func<(ulong Seed, LinkMapGenerator.BoardTerrain Board, MapData Map), int> f) => rows.Average(r => (double)f(r));
                 output.WriteLine(
                     $"{theme.DisplayName()} {side}×{side}：高2 {Avg(r => r.Board.Heights.Count(kv => kv.Value == 2)):0.0} 高1 {Avg(r => r.Board.Heights.Count(kv => kv.Value == 1)):0.0} "
                     + $"深水 {Avg(r => r.Board.Surfaces.Count(kv => kv.Value == Surface.DeepWater)):0.0} 桥 {Avg(r => r.Board.Bridges.Count):0.0} 林地 {Avg(r => r.Board.Surfaces.Count(kv => kv.Value == Surface.Forest)):0.0} "
-                    + $"栅栏边 {Avg(r => r.Board.Fences.Count):0.0} 岩石 {Avg(r => r.Board.Rocks.Count):0.0} 难到达格 {Avg(r => r.Board.HardCells.Length):0.0}（有候选 {rows.Count(r => r.Board.HardCells.Length > 0)}/{rows.Count}） "
+                    + $"栅栏边 {Avg(r => r.Board.Fences.Count):0.0} 岩石 {Avg(r => r.Board.Rocks.Count):0.0} "
                     + $"可落子 {Avg(r => r.Map.PlayableCount):0.0} 重抽 {Avg(r => r.Board.Redraws):0.00}");
                 Assert.Equal(StreamSeeds, rows.Count);
             }
@@ -449,13 +379,14 @@ public class 主题地形Tests(ITestOutputHelper output)
     [InlineData(6, 7, false)]
     [InlineData(7, 6, false)]
     [InlineData(7, 7, true)]
+    [InlineData(8, 8, true)]
     public void 面积缩放端点随边长上限推算(int width, int height, bool top)
     {
         // terrain-density 实施后裁决 N1：插值终点由边长上限推算（7×7 的中间带 16 格），6×6 / 6×7 / 7×6（中间带 7 / 11 格）恒取下限，7×7 才取得到上限。
         // 栅栏阵取下限 = 2 段 × 2 条 = 4 条栅栏边、散布岩石 0 格（Draw(0, 2)）；7×7 在流种子 1–30 里至少一颗多于 4 条、至少一颗有散布岩石（样本口径）。
-        // 判别力：终点钉回 8×8 的 27 格时 7×7 的插值上限退化为下限，本条 7×7 一行即红。
+        // 判别力：终点钉回 8×8 的 27 格时 7×7 的插值上限退化为下限，本条 7×7 一行即红。map-expand-25：8×8（中央平台）按 7×7 封顶，同样取得到上限。
         var plate = new BoardPlate(new Coord(2, 2), width, height, BoardPlateKind.Birth, BoardTheme.Palisade);
-        List<LinkMapGenerator.BoardTerrain> boards = [.. Enumerable.Range(1, StreamSeeds).Select(s => LinkMapGenerator.DraftBoard(plate, MapRandom.ForLinkLayout((ulong)s)))];
+        List<LinkMapGenerator.BoardTerrain> boards = [.. Enumerable.Range(1, StreamSeeds).Select(s => LinkMapGenerator.DraftBoard(plate, MapRandom.ForLinkLayout((ulong)s, 4)))];
         static int Scattered(LinkMapGenerator.BoardTerrain b) => b.Rocks.Count(r => !b.Cluster.Contains(r));
         if (top)
         {
