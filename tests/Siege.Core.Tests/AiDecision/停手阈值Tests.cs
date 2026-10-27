@@ -37,22 +37,29 @@ public class 停手阈值Tests
     // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）；种子 35 不变，旧值 3570899326EE8AE29DA4FD9B3F3B7CB3663C96411DB6D9F1B813150B04780058。
     // ai-whole-batch 1.6：本值钉的是"阈值 0 = 严格提高"的对照实现（引入整批候选之前），样本显式关掉整批候选（WholeBatch = 0），值不改；
     // 缺省开整批候选的同一局另钉 StrictImprovementTurnHashWholeBatch。
-    private const string StrictImprovementTurnHash = "D405B8853F396D5D5DD90D69C1D05DC96D753EAF2F75826DD9494D9F0DA094FB";
+    // map-expand-25 段 A2 重钉（地图变了：link:1:4 换成 44×44 浮空岛，同一配置的走法随之变）：按本条原口径（种子 31–46 依次比对两种阈值，取第一个走法不同的种子）
+    // 新图上只有种子 46 不同（31–45 两种阈值走法相同），种子 35 → 46；三个值（种子 35）的旧值依次为
+    // D405B8853F396D5D5DD90D69C1D05DC96D753EAF2F75826DD9494D9F0DA094FB / 7A40128226D2E6959CFD5CAEDC9DB23D00CCFFB17610CA17339AB9B11F50B392 / 43F6E259B07F2A1FAC98FC13BD3C9D1DBB9644C055ACA3B77BB45B9A01C6005C。
+    // 新图上整批候选开与关在这一局走法相同（StrictImprovementTurnHashWholeBatch 与本值相同），搭桥候选开则不同。
+    // map-expand-25 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：种子 46 不变，旧值 9600A068FAE1F9ABEFF0928E978B04C2FDF2F91C6593EEF6A8A57BEBCA9CC12F。
+    private const string StrictImprovementTurnHash = "A335B30E1714994AEACDF7BEB5CF567B26A2D215CFAE3F6655CBACC50AF8640B";
 
     /// <summary>
     /// ai-whole-batch 1.6：<see cref="StrictImprovementTurnHash"/> 同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选缺省开时的哈希。首个分歧：第 7 小回合（第 2 大回合）P0，
     /// 原落 F9 堡垒 + G9 协同 + G10 普通，开启后选中剪枝候选 F9 普通 + G10 普通（见任务目录 rebaseline.txt）。
     /// </summary>
-    private const string StrictImprovementTurnHashWholeBatch = "7A40128226D2E6959CFD5CAEDC9DB23D00CCFFB17610CA17339AB9B11F50B392";
+    // map-expand-25 段 A3 重钉（地图变了：坡道与低地重抽）：旧值 9600A068…（段 A2 时与 StrictImprovementTurnHash 同值）；新图上整批候选开与关在这一局走法不再相同。
+    private const string StrictImprovementTurnHashWholeBatch = "117DFC78B1F1A8BD4116D77B0D1FB196769285DA0793594A6E0CD244D66377DE";
 
     /// <summary>
     /// ai-bridge-candidate 1.6：同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选与搭桥候选都缺省开时的哈希（搭桥候选关时即 <see cref="StrictImprovementTurnHashWholeBatch"/>）。
     /// 首个分歧：第 15 小回合（第 4 大回合）P3，原落 C6 普通，开启后选中搭桥候选 C4 匠人搭桥 D4 + C6 普通（见任务目录 rebaseline.txt）。
     /// </summary>
-    private const string StrictImprovementTurnHashEditSeed = "43F6E259B07F2A1FAC98FC13BD3C9D1DBB9644C055ACA3B77BB45B9A01C6005C";
+    // map-expand-25 段 A3 重钉（地图变了：坡道与低地重抽）：旧值 9BA424135733142E12C8D96882E39E70F0C631C5BD1147CDC19DAE53A0C2EEDA。
+    private const string StrictImprovementTurnHashEditSeed = "A266ED8FD203B43CA8D9753FBF088973145948832A9EFB3B076D2D988BD50FD7";
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
-    private const ulong StrictImprovementSeed = 35;   // link-map-surfaces 2.2：34 → 35（见上）
+    private const ulong StrictImprovementSeed = 46;   // link-map-surfaces 2.2：34 → 35；map-expand-25 段 A2：35 → 46（见上）
 
     private static readonly PlayerId Me = AiFixtures.P0;
 
@@ -219,9 +226,16 @@ public class 停手阈值Tests
         // 反面：缺省阈值下走法不同——否则"阈值确实传到了 AI"无从证明（open-map 起改为实跑同一种子的缺省阈值局比对，不比两个常量）。
         // fence-eye-rule 2.2：活形规则变更后种子 35 的前 24 个小回合在阈值 0 与缺省 20 下走法相同，反面断言失去样本。按 testing.md「不许挑单个种子凑绿」，
         // 反面改为写死的固定种子区间（沿用 open-map 的探针区间 31–46）：区间内至少一颗种子的两种阈值走法不同；逐颗按序比对，找到即停。
+        // map-expand-25 段 A2：区间不变，比对次序改为先比 StrictImprovementSeed（本局已跑、只需补一局缺省阈值）、再按序比其余种子——所守的"区间内至少一颗不同"不变；
+        // 新图上区间内只有种子 46 不同，按原次序要先跑完 31–45 的 30 局（约 5 分钟）才找到它。
         bool differs = false;
-        for (ulong seed = 31; seed <= 46 && !differs; seed++)
+        foreach (ulong seed in Enumerable.Range(31, 16).Select(s => (ulong)s).OrderBy(s => s == StrictImprovementSeed ? 0 : 1).ThenBy(s => s))
         {
+            if (differs)
+            {
+                break;
+            }
+
             string atZero = seed == StrictImprovementSeed
                 ? hash
                 : 候选格上限Tests.TurnHash(BatchRunner.Execute(zero with { SeedStart = seed }, parallelism: 1)[0]);
@@ -248,7 +262,7 @@ public class 停手阈值Tests
         // 以及回放 / 配置记录类 11 条：首部缺该项 → 回放按 0 重建而分歧 / 配置记录不符，逐条见任务 09-23-ai-eye 段 D2 记录）。
         // 变异 M-B14（会话建 AI 时不传跑局配置的阈值）→ 红 2（本测试的逐玩家断言、阈值为0时零变化）。
         // retire-legacy-maps 1.5：样本地图由 v5 改为 link:1，断言不变。
-        RunConfig blank = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" };
+        RunConfig blank = SimFixtures.Config(turnLimit: 4) with { MapId = "link:1:4" };
         Assert.Null(blank.PassThreshold);
         string dir = SimFixtures.TempDir("pass-threshold-default");
         BatchRunner.ExecuteToDirectory(blank, dir, parallelism: 1);
@@ -381,7 +395,7 @@ public class 停手阈值Tests
         // 样本：阈值 0 跑出的局去掉这一项。它与缺省阈值下的同一局走法不同（「阈值为0时零变化」的反面），所以按缺省重建必然分歧。
         // 变异 M-B10（按首部重建时缺字段取缺省阈值而不是 0）→ 红 1（本测试）。
         // retire-legacy-maps 1.5：样本地图由 v4 改为 link:1，断言不变。
-        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1" };
+        RunConfig config = SimFixtures.Config(seedStart: 31, turnLimit: 24, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4" };
         MatchLog zero = BatchRunner.Execute(config with { PassThreshold = 0 }, parallelism: 1)[0];
         string text = zero.DeterministicText();
         Assert.Contains("\"PassThreshold\":0,", text, StringComparison.Ordinal);
@@ -438,8 +452,8 @@ public class 停手阈值Tests
     {
         // retire-legacy-maps 1.5（规格 Scenario「阈值不随地图变化」）：原「地图覆盖不改阈值」（2 人图登记了评价权重覆盖，与 v5 比停手阈值）随 2 人图与地图覆盖删除，
         // 改为两张不同的链接图 link:1 / link:2：未显式配置阈值的批量跑局开局，批次配置记录与日志首部里的停手阈值都等于默认停手阈值。所守规则（阈值不按地图取）不变。
-        (string oneConfig, MatchLog oneLog) = RunOne("threshold-link1", "link:1");
-        (string twoConfig, MatchLog twoLog) = RunOne("threshold-link2", "link:2");
+        (string oneConfig, MatchLog oneLog) = RunOne("threshold-link1", "link:1:4");
+        (string twoConfig, MatchLog twoLog) = RunOne("threshold-link2", "link:2:4");
 
         Assert.NotEqual(oneLog.Header.MapDigest, twoLog.Header.MapDigest);   // 样本口径：确是两张不同的图
         Assert.Equal(AiSearchConfig.DefaultPassThreshold, RunConfig.FromJson(oneConfig).PassThreshold);

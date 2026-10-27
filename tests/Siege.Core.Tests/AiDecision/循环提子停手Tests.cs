@@ -322,7 +322,7 @@ public class 循环提子停手Tests
         // Scenario：K 配置为 0，其余配置不变，用相同种子对照引入本条之前的实现各跑一局 → 两局 AI 的每一步决策逐步相同。
         // 引入之前的走法 = 钉在 cycle-stop 之前的 5 份决策序列基线（本段实测 K = 6 也逐字节不变，见 notes.md）；这里取 link:1 种子 1 标准 × 4，
         // 跑局配置显式 StagnationRounds = 0，导出与基线逐字节相同；同一停滞局面下 K = 0 不停手（结构守门：K = 0 时整段判定不进入）。
-        string actual = LinkDecisionSequence.Export(1, 12, AiDifficulty.Standard, attach: null, configure: c => c with { StagnationRounds = 0 });
+        string actual = LinkDecisionSequence.Export(1, LinkDecisionSequence.BaselineRounds, AiDifficulty.Standard, attach: null, configure: c => c with { StagnationRounds = 0 });
         string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", "decisions-link1-seed1.txt");
         Assert.True(File.Exists(path), $"找不到决策序列基线：{path}");
         Assert.Equal(File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal), actual);
@@ -357,7 +357,7 @@ public class 循环提子停手Tests
         // 四档共用：四档预设与按地图取的配置都带 6；专家未显式给 Search 时落成的 Search 也带 6。
         Assert.All(Enum.GetValues<AiDifficulty>(), d => Assert.Equal(AiSearchConfig.DefaultStagnationRounds, AiSearchConfig.ForMap(d, 300).StagnationRounds));
         RunConfig expert = (SimFixtures.Config(turnLimit: 1) with { Players = [new PlayerAiConfig { Difficulty = AiDifficulty.Expert }, new(), new(), new()] })
-            .ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1"));
+            .ResolvedFor(Siege.Core.Board.Maps.MapCatalog.Resolve("link:1:4"));
         Assert.Equal(AiSearchConfig.DefaultStagnationRounds, expert.Players[0].Search!.StagnationRounds);
 
         // 显式 Search：原样生效、原样记录（K = 2）；旧记录缺该项按 0 读。
@@ -376,7 +376,7 @@ public class 循环提子停手Tests
 
         // 命令行：--stagnation-rounds / --round-cap 进 config.json。
         string dir = SimFixtures.TempDir("stagnation-cli");
-        (int code, _, string err) = LinkSimFixtures.RunMain(null, null, "run", "--out", dir, "--map", "link:1", "--count", "1", "--turn-limit", "1", "--stagnation-rounds", "2", "--round-cap", "50");
+        (int code, _, string err) = LinkSimFixtures.RunMain(null, null, "run", "--out", dir, "--map", "link:1:4", "--count", "1", "--turn-limit", "1", "--stagnation-rounds", "2", "--round-cap", "50");
         Assert.True(code == 0, err);
         RunConfig saved = RunConfig.FromJson(File.ReadAllText(Path.Combine(dir, "config.json")));
         Assert.Equal(2, saved.StagnationRounds);

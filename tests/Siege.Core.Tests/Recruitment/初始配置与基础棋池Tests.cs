@@ -239,7 +239,7 @@ public class 初始配置与基础棋池Tests
         // 征募子流未被消费，第 1 大回合第一位行动者的征募候选与全员不带入时相同。
         // 对照局：同一种子、同一真实地图、关闭带入带出。另把 P3 也放上征召签，让"解析征召签"这一步也在建局里发生。
         // retire-legacy-maps 1.8：真实地图由 v5（Legacy 缺省图）改为 link:1，链接模式建局（盲选插旗），断言不变。
-        MapData map = MapCatalog.Resolve("link:1");
+        MapData map = MapCatalog.Resolve("link:1:4");
         PlayerId[] four = [new(0), new(1), new(2), new(3)];
         var seed = new GameSeed(23);
         MatchFlow carried = MatchFlow.Create(map, seed, four, MatchOptions.Immediate with

@@ -74,4 +74,43 @@ internal static class LinkMapFixtures
             CentralEntrance = new Coord(boards[0].Origin.X + (boards[0].Width / 2), boards[0].Origin.Y + (boards[0].Height / 2)),
         };
     }
+
+    /// <summary>
+    /// 浮空岛生成图补上段 A2 口径的信物格（手写夹具，map-expand-25 段 A3）：生成器已不放静态信物格（relic-redesign R29，2026-10-26 用户裁决），
+    /// 本夹具只给仍在测<b>旧信物系统</b>（开局生成、强度预算、权重、揭示与控制）的测试保留覆盖，旧系统拆除时随 relic-redesign 一并删除。
+    /// 每块平台核心区对角两格为出生区档（Birth，同 <see cref="Build"/>）；低地上按坐标升序贪心取至多 n+2 格公共区档（Standard）：
+    /// 草地、非桥、可落子、距任一平台外接矩形切比雪夫距离 ≥ 2、两两切比雪夫距离 ≥ 5（与原生成器 D5 的候选条件相同，只是不随机）。
+    /// 结果仍通过静态校验（信物格合法性规则只查分区与档位）。<see cref="MapData.Id"/> 不变：本图不得经地图标识回放。
+    /// </summary>
+    internal static MapData WithRelics(MapData map)
+    {
+        ImmutableDictionary<Coord, RelicCellSpec>.Builder relics = map.RelicCells.ToBuilder();
+        foreach (BoardPlate plate in map.Boards)
+        {
+            Coord core = plate.CoreOrigin;
+            relics[core] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+            relics[new Coord(core.X + 2, core.Y + 2)] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
+        }
+
+        static int Chebyshev(BoardPlate p, Coord c) =>
+            Math.Max(Math.Max(Math.Max(p.Origin.X - c.X, c.X - (p.Origin.X + p.Width - 1)), 0), Math.Max(Math.Max(p.Origin.Y - c.Y, c.Y - (p.Origin.Y + p.Height - 1)), 0));
+        var picked = new List<Coord>();
+        foreach (Coord c in map.AllCoords().Order())
+        {
+            if (picked.Count == map.MaxPlayers + 2)
+            {
+                break;
+            }
+
+            if (map.IsPlayable(c) && map.SurfaceAt(c) == Surface.Grass && !map.HasBridge(c)
+                && map.Boards.All(p => Chebyshev(p, c) >= 2)
+                && picked.All(o => Math.Max(Math.Abs(o.X - c.X), Math.Abs(o.Y - c.Y)) >= 5))
+            {
+                picked.Add(c);
+                relics[c] = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
+            }
+        }
+
+        return map with { RelicCells = relics.ToImmutable() };
+    }
 }

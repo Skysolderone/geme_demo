@@ -14,7 +14,7 @@ public class AI带入Tests
     private static readonly PlayerId Me = Four[0];
 
     // retire-legacy-maps 1.8：建局地图由 v5（Legacy 夹具缺省图）改为 link:1，链接模式建局；断言不变。
-    private static MapData Map => MapCatalog.Resolve("link:1");
+    private static MapData Map => MapCatalog.Resolve("link:1:4");
 
     /// <summary>人机对局的建局：本机玩家 P0 的选择 + AI 的抽取，开启带入带出。</summary>
     private static MatchFlow Create(GameSeed seed, CarryIn? mine, ContentSet set = ContentSet.V2) =>

@@ -19,9 +19,15 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// </remarks>
 public class 自动演示全流程自检Tests
 {
-    /// <summary>本机战场（open-map：= 全图）应可见的格数，与图形版 <c>MatchSession.MyBattlefieldCells</c> 同口径：G1（link-map-terrain）起为本战场各棋盘外接矩形的格数之和（含岩石与未架桥深水）。</summary>
-    private static int BattlefieldCellsOf(MatchFlow match, PlayerId me) =>
-        Battlefields.Of(match.Map).ById(match.BattlefieldOf(me))!.Boards.Sum(b => match.Map.Boards[b].Width * match.Map.Boards[b].Height);
+    /// <summary>
+    /// 插旗阶段之后应可见的格数，与图形版 <c>MatchSession.MyBattlefieldCells</c> 同口径：map-expand-25 段 B 起为整张图的格数（宽 × 高，含平台之间的低地与画布留白；
+    /// 原 G1 为本战场各棋盘外接矩形的格数之和——浮空岛的低地不在任何棋盘里，按棋盘算会让「全图解禁」的全图可落子格漏掉低地）。
+    /// </summary>
+    private static int BattlefieldCellsOf(MatchFlow match, PlayerId me)
+    {
+        Assert.Equal(0, match.BattlefieldOf(me));   // 样本口径：唯一战场
+        return match.Map.Width * match.Map.Height;
+    }
 
     /// <summary>全图解禁一步的三项输入（与 Godot <c>GameRoot</c> 同口径，都读按座位视图模型）：全图可落子格、本机禁入格、自己出生棋盘的可落子格数。</summary>
     private static (HashSet<Coord> Playable, HashSet<Coord> Forbidden, int OwnPlayable) UnlockInputs(MatchFlow match, PlayerId me, int zone)
@@ -40,11 +46,11 @@ public class 自动演示全流程自检Tests
         var audit = new LinkDemoAudit();
         MatchFlow match = Started([0, 1, 3, 4]);
 
-        // 插旗锁定：5 块占位全部展开（open-map 裁决 O4），可见格 = 全图各棋盘外接矩形之和。
+        // 插旗锁定：全部占位展开（open-map 裁决 O4；map-expand-25：link:1:4 为 10 块平台），可见格 = 整张图（段 B：含平台之间的低地）。
         DefaultBoardView locked = match.World(P0).Board();
-        Assert.Equal(5, locked.Placeholders.Count(p => p.Expanded));
+        Assert.Equal(10, locked.Placeholders.Count(p => p.Expanded));
         Assert.True(audit.FlagsLocked(locked, 0, BattlefieldCellsOf(match, P0)).Ok);
-        Assert.Equal(match.Map.Boards.Sum(b => b.Width * b.Height), locked.Cells.Length);
+        Assert.Equal(match.Map.Width * match.Map.Height, locked.Cells.Length);
 
         // 构筑期：第 1–3 大回合合法范围非空且 ⊆ 自己的出生棋盘（P0 每个大回合落一子，其余 Pass，不触发整轮 Pass 结算）。
         for (int round = 1; round <= 3; round++)
@@ -108,7 +114,7 @@ public class 自动演示全流程自检Tests
         Assert.True(audit.FlagsLocked(board, 0, cells).Ok);
         Assert.False(audit.FlagsLocked(board, 1, cells).Ok, "本机那块不是标为本机的那块");
         Assert.False(audit.FlagsLocked(board, 0, cells + 1).Ok);
-        Assert.False(audit.FlagsLocked(match.World(P0).Board() with { Placeholders = board.Placeholders[1..] }, 0, cells).Ok, "占位不足 5 块");
+        Assert.False(audit.FlagsLocked(match.World(P0).Board() with { Placeholders = board.Placeholders[1..] }, 0, cells).Ok, "占位少于棋盘清单块数");
         Assert.False(audit.FlagsLocked(board with { Placeholders = [.. board.Placeholders.Select(p => p.Own ? p : p with { Expanded = false })] }, 0, cells).Ok, "锁定后仍有占位未展开（open-map O4）");
 
         Assert.True(audit.BuildingRange(1, match.LegalRangeFor(P0), [.. match.Map.BirthBoard(0).Cells()]).Ok);

@@ -47,7 +47,7 @@ public class 两位数行号贯通Tests
         HashSet<Coord> onBoards = [.. plates.SelectMany(b => b.Cells())];
         return tall with
         {
-            Id = "link:90032",
+            Id = "link:90032:4",
             MaxPlayers = 4,
             Boards = [.. plates],
             Obstacles = tall.Obstacles.Union(TestMaps.Rect(0, 0, tall.Width, tall.Height).Where(c => !onBoards.Contains(c))),

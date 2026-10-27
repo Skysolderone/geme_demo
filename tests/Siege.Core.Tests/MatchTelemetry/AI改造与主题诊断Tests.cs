@@ -185,7 +185,7 @@ public class AI改造与主题诊断Tests
         var reviews = new Dictionary<PlayerId, List<(ArtisanEditReview Review, int Index)>>();
         var deciders = new List<HeuristicTurnController>();
         var decisive = new List<bool>();
-        string actual = LinkDecisionSequence.Export(3, 12, AiDifficulty.Standard, session => session.ObserveDeploy(batch =>
+        string actual = LinkDecisionSequence.Export(3, LinkDecisionSequence.BaselineRounds, AiDifficulty.Standard, session => session.ObserveDeploy(batch =>
         {
             if (deciders.Count > 0)
             {
@@ -222,13 +222,16 @@ public class AI改造与主题诊断Tests
             total += list.Count;
         }
 
-        Assert.True(total >= 40, $"样本口径：只诊断了 {total} 次部署。");
+        // map-expand-25 段 A2：基线截断由 12 改为 LinkDecisionSequence.BaselineRounds（6）个大回合，部署次数上限 24，下界 40 → 20。
+        Assert.True(total >= 20, $"样本口径：只诊断了 {total} 次部署。");
         int artisanMoments = reviews.Values.SelectMany(l => l).Count(r => r.Review.ArtisanStock > 0);
         Assert.True(artisanMoments > 0, "样本口径：基线里没有持匠人的部署。");
 
         // 对局日志同样逐字节不变：同一种子（四人四区、标准难度、截到第 36 个小回合）挂与不挂诊断各跑一次，确定性文本相同。
         // link-map-surfaces 2.2：link:1 投放新地表后走法变化，原 24 个小回合里没有持匠人的部署（样本口径断言红），截断加长到 36（第 9 大回合）以恢复样本；所守性质不变。
-        var config = LinkSimFixtures.Config(turnLimit: 36, difficulty: AiDifficulty.Standard);
+        // map-expand-25 段 A2：link:1:4 换成浮空岛后单条 87 秒（孤立跑），截断改回 24 个小回合（第 6 大回合）——新图上 24 个小回合内已有持匠人的部署，样本口径仍成立。
+        const int Turns = 24;
+        var config = LinkSimFixtures.Config(turnLimit: Turns, difficulty: AiDifficulty.Standard);
         MatchLog plain = MatchSession.Create(config, LinkSimFixtures.FourZoneSeed.Value).Run();
         MatchSession probed = MatchSession.Create(config, LinkSimFixtures.FourZoneSeed.Value);
         int probes = 0, withArtisan = 0;
@@ -241,8 +244,8 @@ public class AI改造与主题诊断Tests
             withArtisan += review.ArtisanStock > 0 ? 1 : 0;
         });
         Assert.Equal(plain.DeterministicText(), probed.Run().DeterministicText());
-        Assert.Equal(36, probes);
-        Assert.True(withArtisan > 0, $"样本口径：36 个小回合里没有持匠人的部署（{probes} 次部署）。");
+        Assert.Equal(Turns, probes);
+        Assert.True(withArtisan > 0, $"样本口径：{Turns} 个小回合里没有持匠人的部署（{probes} 次部署）。");
     }
 
     [Fact]

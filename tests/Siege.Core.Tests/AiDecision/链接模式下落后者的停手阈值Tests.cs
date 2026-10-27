@@ -25,17 +25,24 @@ public class 链接模式下落后者的停手阈值Tests
 
     private static readonly EvaluationWeights Weights = SimFixtures.PreCalibrationWeights with { PowerGain = 1 };
 
-    /// <summary>出生棋盘 0 的宽（读棋盘清单；link-map-terrain 起出生区是 3×3 核心区，不能再拿它量边长）。</summary>
-    private static int Side => Map.BirthBoard(0).Width;
+    /// <summary>
+    /// 局面所在的出生棋盘（内部编号）。map-expand-25 段 A2：link:1:4 换成浮空岛后棋盘 0 是 E5 起 7×8 的河流平台（F 列河道），
+    /// 改用棋盘 1 = Q5–V10（林地主题 6×6，四周是崖壁、东南角旁 U5 是坡道）；P0、P1 同锁它，P2、P3 各锁棋盘 3、4。
+    /// </summary>
+    private const int Zone = 1;
+
+    /// <summary>出生棋盘 <see cref="Zone"/> 的宽（读棋盘清单；link-map-terrain 起出生区是 3×3 核心区，不能再拿它量边长）。</summary>
+    private static int Side => Map.BirthBoard(Zone).Width;
 
     /// <summary>孤子点：棋盘 0 左下起 (3, 2)，离各角上的棋子都 ≥ 2 格。
-    /// terrain-density（地图变了，边长 6–7）：原 (2, 3)；link:1 棋盘 0 改为 R3 起 6×6 高台（第 7 行是山脊），(2, 3) = T6 贴着山脊、收益 5 → 4，改取收益恰为 5 的核心区格 U5。</summary>
-    private static Coord Candidate => BirthCell(Map, 0, 3, 2);
+    /// terrain-density（地图变了，边长 6–7）：原 (2, 3)；link:1 棋盘 0 改为 R3 起 6×6 高台（第 7 行是山脊），(2, 3) = T6 贴着山脊、收益 5 → 4，改取收益恰为 5 的核心区格 U5。
+    /// map-expand-25 段 A2：改取棋盘 1 的 (3, 3) = T8（核心区格，四邻 S8 / U8 / T7 / T9 皆空，收益恰为 5）；(3, 2) = T7 东邻 U7 是林地，收益 4。</summary>
+    private static Coord Candidate => BirthCell(Map, Zone, 3, 3);
 
-    private static Coord Corner(int dx, int dy) => BirthCell(Map, 0, dx, dy);
+    private static Coord Corner(int dx, int dy) => BirthCell(Map, Zone, dx, dy);
 
-    /// <summary>右上角（与左上角对称）：两角各一枚孤子势力相等。</summary>
-    private static Coord FarCorner => BirthCell(Map, 0, Side - 1, 0);
+    /// <summary>右下角（与左下角对称）：两角各一枚孤子势力相等。</summary>
+    private static Coord FarCorner => BirthCell(Map, Zone, Side - 1, 0);
 
     /// <summary>P0 以 <paramref name="simulated"/> 指定的控制器在 <see cref="Candidate"/> 一格上决策（部署上限 1、阈值 20）。</summary>
     private static HeuristicTurnController Decide(MatchFlow match, bool simulated = false)
@@ -68,9 +75,9 @@ public class 链接模式下落后者的停手阈值Tests
         Assert.Equal("D:pass", ai.Decisions[^1]);
     }
 
-    /// <summary>P0、P1 同在棋盘 0（双人战场），P2、P3 各占一块。P0 一枚右上角孤子；P1 左上角三子成串，势力高于 P0。</summary>
+    /// <summary>P0、P1 同在棋盘 1（双人战场），P2、P3 各占一块。P0 一枚右下角孤子；P1 左下角三子成串，势力高于 P0。</summary>
     private static MatchFlow Trailing() =>
-        Started([0, 0, 3, 4]).Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1));
+        Started([Zone, Zone, 3, 4]).Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1));
 
     [Theory]
     [InlineData(false)]
@@ -96,7 +103,7 @@ public class 链接模式下落后者的停手阈值Tests
     public void 领先者照常停手(bool simulated)
     {
         // Scenario「领先者照常停手」：同一局面换成 AI 势力高于对手 → 停手阈值为缺省值，收益 5 不过阈值，AI Pass。
-        MatchFlow match = Started([0, 0, 3, 4]).Place(P1, FarCorner).Place(P0, Corner(0, 0), Corner(1, 0), Corner(0, 1));
+        MatchFlow match = Started([Zone, Zone, 3, 4]).Place(P1, FarCorner).Place(P0, Corner(0, 0), Corner(1, 0), Corner(0, 1));
         MatchPublicView view = match.Publish();
         Assert.True(view.Power!.Of(P0).Total > view.Power.Of(P1).Total);   // 样本口径
 
@@ -108,8 +115,9 @@ public class 链接模式下落后者的停手阈值Tests
     {
         // 规格："并列最高视为最高"——两人各一枚角上的孤子、势力相等 → 不算落后，阈值为缺省值，AI Pass。
         // open-map：link:1 棋盘 0（R3 起 6×7）的西南角紧贴棋盘 2（多一口气），改用东南角（FarCorner）与东北角两枚孤子，各 2 气、势力 3。
+        // map-expand-25 段 A2：棋盘 1（Q5–V10）东南角 V5 的两口气是 V6 与坡道 U5，东北角 V10 的两口气是 V9 / U10，崖壁外的低地不通气。
         // 判别力：比较由严格大于改为大于等于即红。
-        MatchFlow match = Started([0, 0, 3, 4]).Place(P0, FarCorner).Place(P1, BirthCell(Map, 0, Side - 1, Map.BirthBoard(0).Height - 1));
+        MatchFlow match = Started([Zone, Zone, 3, 4]).Place(P0, FarCorner).Place(P1, BirthCell(Map, Zone, Side - 1, Map.BirthBoard(Zone).Height - 1));
         MatchPublicView view = match.Publish();
         Assert.Equal(view.Power!.Of(P1).Total, view.Power.Of(P0).Total);   // 样本口径
 

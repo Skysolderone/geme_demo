@@ -66,7 +66,7 @@ public class 本地玩家档案Tests
         Assert.False(File.Exists(temp.FilePath));
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(7, 4, 1, AiDifficulty.Easy, new StringReader("\n"), output, contentSet: Board.ContentSet.V1, profile: store, map: MapCatalog.Resolve("link:1"));   // retire-legacy-maps 1.8：地图由 v5 改为 link:1，冒险概率随旧地图删除
+        int exit = PlayCommand.Run(7, 4, 1, AiDifficulty.Easy, new StringReader("\n"), output, contentSet: Board.ContentSet.V1, profile: store, map: MapCatalog.Resolve("link:1:4"));   // retire-legacy-maps 1.8：地图由 v5 改为 link:1，冒险概率随旧地图删除
 
         Assert.Equal(0, exit);
         Assert.True(File.Exists(temp.FilePath), "档案应写到 --profile 指定的路径");

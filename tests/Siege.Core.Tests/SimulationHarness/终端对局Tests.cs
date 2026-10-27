@@ -20,18 +20,19 @@ public class 终端对局Tests
         // 玩家2 在轮到你之前提走了你唯一的 B1，你出局、对局自动跑到终局，永远走不到"输入耗尽"。改为只 Pass 一次、在第 3 大回合的提示处耗尽——
         // 保护期内别家不能进你的出生区，这一步不再依赖 AI 的走法；断言未改。
         // open-map：link:1 改为 3+2 紧贴布局，1 号出生棋盘的左下角 X3 → R3。
-        var script = new System.Text.StringBuilder("1\n1\nR3 B\nv\nok\n");
+        // map-expand-25 段 A2：link:1:4 换成浮空岛，1 号平台 E5–L12（7×8，F 列是河道），落点改为平台右下角 L5（两口气 K5 / L6）。
+        var script = new System.Text.StringBuilder("1\n1\nL5 B\nv\nok\n");
         for (int i = 0; i < 1; i++)
         {
             script.Append("\npass\n");
         }
 
         var output = new StringWriter();
-        int exit = PlayCommand.Run(45, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1"));   // more-pieces-relics：写死内容集 v1
+        int exit = PlayCommand.Run(45, 4, 1, AiDifficulty.Easy, new StringReader(script.ToString()), output, contentSet: ContentSet.V1, map: MapCatalog.Resolve("link:1:4"));   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();
 
         Assert.Equal(0, exit);
-        Assert.Contains("玩家1(你) 落子 R3B", text, StringComparison.Ordinal);
+        Assert.Contains("玩家1(你) 落子 L5B", text, StringComparison.Ordinal);
         Assert.Contains("第 3 大回合", text, StringComparison.Ordinal);
         Assert.Contains("已退出。种子 45", text, StringComparison.Ordinal);
 
@@ -52,7 +53,7 @@ public class 终端对局Tests
         // retire-legacy-rules 1.6：12×12 全平地夹具改以链接模式建局——标识 link:90012、整张图登记为一块 12×12 出生棋盘、四人同锁这一块（原为 9×9 夹具放大、旧模式、各锁一角）。
         MapData map = TestMaps.NineByNine() with
         {
-            Id = "link:90012",
+            Id = "link:90012:4",
             Width = 12,
             Height = 12,
             Profile = MapProfile.Link,
@@ -86,7 +87,7 @@ public class 终端对局Tests
     {
         var output = new StringWriter();
         // retire-legacy-maps 1.8：地图由 v5 改为 link:1。开场说明的"怎样结束"一行随模式改为链接模式的战场规则说明（Legacy 那句只在旧地图局打印）。
-        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output, map: MapCatalog.Resolve("link:1"));
+        int exit = PlayCommand.Run(7, 4, 2, AiDifficulty.Easy, new StringReader("2\n"), output, map: MapCatalog.Resolve("link:1:4"));
 
         Assert.Equal(0, exit);
         Assert.Contains("已退出。种子 7", output.ToString(), StringComparison.Ordinal);

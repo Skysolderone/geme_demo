@@ -24,7 +24,7 @@ public class 专家前瞻耗时计时Tests(ITestOutputHelper output)
 
     [PerfTheory]
     [Trait("Category", "Perf")]
-    [InlineData("link:1")]
+    [InlineData("link:1:4")]
     public void 按座位视野下专家单次部署耗时中位数不超过高难的四倍(string mapId)
     {
         // ai-seat-vision V9（check 补）→ open-map 段 B：同一局面抽样、ABBA、预热、≤ 4 倍；局面来自按座位视野的 4 名标准 AI 对局（唯一口径，全知开关已删除），

@@ -14,9 +14,11 @@ namespace Siege.Core.Tests;
 /// </summary>
 internal static class LinkModeFixtures
 {
-    internal const string MapId = "link:1";
+    internal const string MapId = "link:1:4";
 
     private static readonly Lazy<MapData> LazyMap = new(() => MapCatalog.Resolve(MapId));
+
+    private static readonly Lazy<MapData> LazyRelicMap = new(() => LinkMapFixtures.WithRelics(MapCatalog.Resolve(MapId)));
 
     internal static readonly PlayerId P0 = TestMaps.P0;
     internal static readonly PlayerId P1 = TestMaps.P1;
@@ -24,8 +26,14 @@ internal static class LinkModeFixtures
     internal static readonly PlayerId P3 = TestMaps.P3;
     internal static readonly PlayerId[] All = TestMaps.All;
 
-    /// <summary><c>link:1</c> 的初始图（5 块紧贴成一张连通地图的出生棋盘）。</summary>
+    /// <summary><see cref="MapId"/>（<c>link:1:4</c>）的初始图：4 人浮空岛，10 块出生平台（map-expand-25；原为 <c>link:1</c> 的 5 块紧贴出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
+
+    /// <summary>
+    /// <c>link:1:4</c> 补上段 A2 口径信物格的手写夹具（<see cref="LinkMapFixtures.WithRelics"/>；map-expand-25 段 A3：生成图不再放静态信物格）。
+    /// 只给仍在测旧信物系统（生成、揭示、控制、可见范围）的对局测试用；标识仍是 <see cref="MapId"/>，按标识回放的日志会解析回无信物的生成图，不得用于回放类测试。
+    /// </summary>
+    internal static MapData RelicMap => LazyRelicMap.Value;
 
     /// <summary>链接模式、插旗立即（open-map 段 B：决赛倒计时 K 随拼接规则删除，选项即缺省）。</summary>
     internal static MatchOptions Options => MatchOptions.Immediate with { ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
@@ -34,10 +42,18 @@ internal static class LinkModeFixtures
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
         MatchFlow.Create(Map, seed ?? TestMaps.Seed, All, options ?? Options);
 
+    /// <summary>插旗阶段的链接模式对局，地图为 <see cref="RelicMap"/>（带信物格的手写夹具）。</summary>
+    internal static MatchFlow CreateWithRelics(GameSeed? seed = null, MatchOptions? options = null) =>
+        MatchFlow.Create(RelicMap, seed ?? TestMaps.Seed, All, options ?? Options);
+
     /// <summary>按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
-    internal static MatchFlow Started(int[] zones, GameSeed? seed = null, MatchOptions? options = null)
+    internal static MatchFlow Started(int[] zones, GameSeed? seed = null, MatchOptions? options = null) => Plant(Create(seed, options), zones);
+
+    /// <summary>同 <see cref="Started"/>，地图为 <see cref="RelicMap"/>（带信物格的手写夹具）。</summary>
+    internal static MatchFlow StartedWithRelics(int[] zones, GameSeed? seed = null, MatchOptions? options = null) => Plant(CreateWithRelics(seed, options), zones);
+
+    private static MatchFlow Plant(MatchFlow match, int[] zones)
     {
-        MatchFlow match = Create(seed, options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
@@ -56,7 +72,7 @@ internal static class LinkModeFixtures
 
     private static MapData BuildFlatMap()
     {
-        MapData built = LinkMapFixtures.Build("link:90003", LinkMapFixtures.Births);
+        MapData built = LinkMapFixtures.Build("link:90003:4", LinkMapFixtures.Births);
         BoardPlate zero = built.Boards[0];
         var birth = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
         return built with
@@ -68,10 +84,15 @@ internal static class LinkModeFixtures
         };
     }
 
-    /// <summary>在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
+    /// <summary>
+    /// 在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。
+    /// map-expand-25 段 A2：手写的 3+2 紧贴图在浮空岛校验器下恒不合规（画布、平台高度、坡道），改经 <see cref="MatchFlow.CreateUnvalidated"/> 建局；
+    /// 信物照常按本局内容集由 <see cref="RelicGenerator"/> 生成（与 <see cref="MatchFlow.Create"/> 同一调用），对局与改前逐步相同。
+    /// </summary>
     internal static MatchFlow StartedFlat(int[] zones, MatchOptions? options = null)
     {
-        MatchFlow match = MatchFlow.Create(FlatMap, TestMaps.Seed, All, options ?? Options);
+        options ??= Options;
+        MatchFlow match = MatchFlow.CreateUnvalidated(FlatMap, TestMaps.Seed, All, RelicGenerator.Generate(FlatMap, TestMaps.Seed, options.ContentSet), options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
@@ -87,7 +108,7 @@ internal static class LinkModeFixtures
     internal const int PlainSize = 8;
 
     /// <summary>平坦变体的地图标识。</summary>
-    internal const string PlainMapId = "link:90008";
+    internal const string PlainMapId = "link:90008:4";
 
     /// <summary>
     /// 平坦变体的棋盘清单：棋盘 0 为 8×8、左下角 (2, 2)（画布口径同生成器：底边第 2 行、最西列第 2 列）；其余四块同 <see cref="LinkMapFixtures.Births"/> 的 6×6，

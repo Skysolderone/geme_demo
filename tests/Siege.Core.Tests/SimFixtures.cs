@@ -25,7 +25,7 @@ internal static class SimFixtures
         EventRetention retention = EventRetention.Full, int players = 4, int? injectFailureAtTurn = null, bool compress = false) =>
         new()
         {
-            MapId = "link:1",
+            MapId = "link:1:4",
             Players = [.. Enumerable.Range(0, players).Select(_ => new PlayerAiConfig { Difficulty = difficulty })],
             SeedStart = seedStart,
             Count = count,

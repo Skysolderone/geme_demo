@@ -209,8 +209,9 @@ public class 专家前瞻的记录Tests
         // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）：小回合 80 → 92、前瞻记录 20 → 23。
         // ai-whole-batch 1.6 重钉（整批候选缺省开）：小回合 92 → 108、前瞻记录 23 → 27（首个分歧：第 40 小回合 P0 前瞻后选中配对候选，见任务目录 rebaseline.txt）。
         // ai-bridge-candidate 1.6 重钉（搭桥候选缺省开）：小回合 108 → 104（首个分歧：第 1 小回合 P0 构筑期不前瞻，高难的选择换成同分 902 的搭桥候选，见任务目录 rebaseline.txt）。
-        Assert.Equal(104, log.Turns.Count);
-        Assert.Equal(26, log.LookaheadTurns.Count());   // ai-bridge-candidate 1.6：27 → 26；terrain-barriers 3.1：29 → 20；fence-eye-rule 2.2：19 → 29；link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
+        // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 104 → 120、前瞻记录 26 → 31。
+        Assert.Equal(120, log.Turns.Count);
+        Assert.Equal(31, log.LookaheadTurns.Count());   // ai-bridge-candidate 1.6：27 → 26；terrain-barriers 3.1：29 → 20；fence-eye-rule 2.2：19 → 29；link-map-surfaces 1.3（F1 / F2）：27 → 19；2.2：前瞻记录 21 → 27；open-map：前瞻记录 10 → 21
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
@@ -241,7 +242,8 @@ public class 专家前瞻的记录Tests
         // 首个分歧：小回合 32（已前瞻）。旧值 66501E9CE1122B8E5FB4555FC83E5D8E71C3FB28B0BDEF0931ACB2CB98A084A3。
         // ai-whole-batch 1.6 重钉（同上，走法变：小回合 92 → 108）：旧值 4668AB92F8178A93817E7F368851526C0C5F1231E633E6BBF48D3A46E8B603EB（开关 0 下不变，由 整批候选关闭时一层配置的记录与改动前相同 守）。
         // ai-bridge-candidate 1.6 重钉（同上，走法变：小回合 108 → 104、前瞻记录 27 → 26；首部另多 "EditSeed":1）：旧值 85B44320410FCBEAF7CD02D907147467CAD2B8DE25F9361F8BE100AFBA3EC062（开关 0 下不变）。
-        Assert.True("1B605EF21E8DA2FC0172156C055F187E60351FFBE8C5DBFC7D4349E65D865499" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
+        // map-expand-25 段 A2 重钉（同上）：旧值 1B605EF21E8DA2FC0172156C055F187E60351FFBE8C5DBFC7D4349E65D865499。
+        Assert.True("C8D89AA6851B26A68BB50DF222F93C8B5F0C5D6F02DDF308259FCFB172C30DDB" == digest, $"一层专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 0DAA51469519CA9193C48EB201DB2687BCB39FD07A15F3659FF39634D604D0AC
         // retire-legacy-maps 1.4：样本改到 link:1 后日志里多出配对事件，其 "Source" 键是配对来源（script），与前瞻记录无关；
         // "一层配置不写候选来源 / 两层字段"只针对前瞻记录，断言改为只看带前瞻记录的快照行（样本口径：这样的行确实存在）。
         string lookaheadLines = string.Join('\n', text.Split('\n').Where(l => l.Contains("\"Lookahead\":", StringComparison.Ordinal)));
@@ -261,11 +263,12 @@ public class 专家前瞻的记录Tests
             new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.OneLayerConfig() with { WholeBatch = 0, EditSeed = 0 } },
             LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { WholeBatch = 0, EditSeed = 0 }, 6, P0);
         string text = log.DeterministicText();
-        Assert.Equal(92, log.Turns.Count);
-        Assert.Equal(23, log.LookaheadTurns.Count());
+        // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 92 → 64、前瞻记录 23 → 16；钉值从此是开关 0 路径的自证值，不再是"引入之前"的独立参照。
+        Assert.Equal(64, log.Turns.Count);
+        Assert.Equal(16, log.LookaheadTurns.Count());
         Assert.DoesNotContain("WholeBatch", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("FC570B684E0185FC2FB8FABCB6787441D523B18C9E308175ED7EC5850F088FBB" == digest, $"开关 0 的一层专家日志确定性文本哈希：{digest}");
+        Assert.True("DFEE9276235A54E479669646F504307147A35CD04A733F552404C4214FDFE334" == digest, $"开关 0 的一层专家日志确定性文本哈希：{digest}");   // 旧值 FC570B68…
     }
 
     [Fact]
@@ -276,10 +279,11 @@ public class 专家前瞻的记录Tests
             LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { WholeBatch = 0, EditSeed = 0 }, 1);
         MatchLog log = session.Run();
         string text = log.DeterministicText();
-        Assert.Equal(100, log.Turns.Count);
+        // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 100 → 104；钉值从此是开关 0 路径的自证值。
+        Assert.Equal(104, log.Turns.Count);
         Assert.DoesNotContain("WholeBatch", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("3878113D35C5D4469492ACC084CCDF5D848EEC0267F8D74D85BF446AE49F5EF1" == digest, $"开关 0 的非专家日志确定性文本哈希：{digest}");
+        Assert.True("C9C92C2A0ACF002EAD7D28EA92D26774AA2F350F68D1AAAE3699DF5CA48EA05C" == digest, $"开关 0 的非专家日志确定性文本哈希：{digest}");   // 旧值 3878113D…
     }
 
     [Fact]
@@ -291,11 +295,12 @@ public class 专家前瞻的记录Tests
             new PlayerAiConfig { Difficulty = AiDifficulty.Expert, Search = LookaheadFixtures.OneLayerConfig() with { EditSeed = 0 } },
             LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { EditSeed = 0 }, 6, P0);
         string text = log.DeterministicText();
-        Assert.Equal(108, log.Turns.Count);
-        Assert.Equal(27, log.LookaheadTurns.Count());
+        // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 108 → 120、前瞻记录 27 → 31；钉值从此是开关 0 路径的自证值。
+        Assert.Equal(120, log.Turns.Count);
+        Assert.Equal(31, log.LookaheadTurns.Count());
         Assert.DoesNotContain("EditSeed", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("7F4C323059287D2AC1B5E0D839646901754AC3E6994D3B6A044F977153CBA8D3" == digest, $"搭桥候选开关 0 的一层专家日志确定性文本哈希：{digest}");
+        Assert.True("8621274918F15B2BE4073EF98C8D3B6A3827FBB4419756DEAE4D10EF37C2A613" == digest, $"搭桥候选开关 0 的一层专家日志确定性文本哈希：{digest}");   // 旧值 7F4C3230…
     }
 
     [Fact]
@@ -306,10 +311,11 @@ public class 专家前瞻的记录Tests
             LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { EditSeed = 0 }, 1);
         MatchLog log = session.Run();
         string text = log.DeterministicText();
-        Assert.Equal(92, log.Turns.Count);
+        // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 92 → 96；钉值从此是开关 0 路径的自证值。
+        Assert.Equal(96, log.Turns.Count);
         Assert.DoesNotContain("EditSeed", text.Split('\n')[0], StringComparison.Ordinal);
         string digest = Sha256(PreCycleStop(text));
-        Assert.True("AF724AB0DD978DD6893A8E576AE3AE7B8725BBCA51A40A9996AEAE8BEE24B26E" == digest, $"搭桥候选开关 0 的非专家日志确定性文本哈希：{digest}");
+        Assert.True("AE9FE60C108EA624D2CB75F644FD771C1ABF3DA501F9FFD6726545F1E85D83D6" == digest, $"搭桥候选开关 0 的非专家日志确定性文本哈希：{digest}");   // 旧值 AF724AB0…
     }
 
     /// <summary>
@@ -449,7 +455,8 @@ public class 专家前瞻的记录Tests
         // terrain-barriers 3.1 重钉（地图变了：link:1 的河流 / 高台改为横穿棋盘的隔断线、大棋盘加湖泊 / 岩区，同一配置的走法随之变）：小回合 132 → 100。
         // ai-whole-batch 1.6 重钉（整批候选缺省开，首个分歧：第 37 小回合 P0 选中配对候选）：小回合 100 → 92。开关 0 的守门见 整批候选关闭时非专家日志与改动前相同。
         // ai-bridge-candidate 1.6 重钉（搭桥候选缺省开，首个分歧：第 1 小回合 P0 选中搭桥候选）：小回合 92 → 101。开关 0 的守门见 搭桥候选关闭时非专家日志与改动前相同。
-        Assert.Equal(101, log.Turns.Count);   // fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变）：92 → 132；link-map-surfaces 1.3 再重钉（F1 / F2）：84 → 92；2.2 重钉：link:1 中间带投放新地表，80 → 84；open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
+        // map-expand-25 段 A2 重钉（载体变了：样本改在平坦手写图 FlatMap 上，见 LookaheadFixtures.CreateSession；link:1:4 浮空岛上的整局单条要十几分钟以上）：小回合 101 → 96。
+        Assert.Equal(96, log.Turns.Count);   // fence-eye-rule 2.2 重钉（活形判定无视栅栏，AI 走法随之变）：92 → 132；link-map-surfaces 1.3 再重钉（F1 / F2）：84 → 92；2.2 重钉：link:1 中间带投放新地表，80 → 84；open-map 1.5 重钉：3+2 紧贴布局 + 全图解禁，65 → 80；link-map-terrain 第 2 组重钉（M10）：link:1 的地图内容变了（出生棋盘 6–8、主题地形、出生区为核心区、10–15 个信物格），同一配置的走法随之变：整局小回合 40 → 65
         // ai-pass-review 裁决 P13：AI 评价版本 3 → 4 只改首部的版本字段；黄金值按"版本字段还原为 3"后的文本比对，证明除版本号外逐字节不变。
         // ai-seat-vision D4：版本 4 → 5（同上，只改首部版本字段，还原为 3 后比对）。
         // cycle-stop D3：版本 5 → 6（同上，只改首部版本字段）。
@@ -472,7 +479,7 @@ public class 专家前瞻的记录Tests
         // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变；小回合恰好仍为 100）：旧值 4288BC9A971F9B49087C6937E0982ED172064F3F2A919E0512C89001BF2305B2。
         // ai-whole-batch 1.6 重钉（同上，走法变：小回合 100 → 92）：旧值 AFBD43C98B8AFD39D4BCF8B2580DBCDAF0821F8729BFD6DA85D81ACEF1D4193F。
         // ai-bridge-candidate 1.6 重钉（同上，走法变：小回合 92 → 101；首部另多 "EditSeed":1）：旧值 7E180336B84B99D3C33EE84E43DCA397962E93B2FE113E138603863DCFC766A6（开关 0 下不变）。
-        Assert.True("E19BA9F47ACF2AADCA0A73E82875E419E58ED3E16626D1383C30B98BBF936067" == digest, $"非专家日志确定性文本哈希：{digest}");   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
+        Assert.True("9EDABD9A57D072DCFFAC704A6D89CDADC16CB3792A82BE78FD1163087AADFD23" == digest, $"非专家日志确定性文本哈希：{digest}");   // map-expand-25 段 A2 重钉（载体改为平坦手写图），旧值 E19BA9F4…；   // open-map 1.5 重钉，旧值 3B68112E98DB89548D0E3F19BCE9057FF8E9D9C2E753068EFBEAE51C8503A217
     }
 
     [Fact]
@@ -480,7 +487,7 @@ public class 专家前瞻的记录Tests
     {
         // 引入专家难度之前产生的日志：4 名标准的日志与改动前逐字节相同（上一条的黄金值），直接当作旧日志离线解析、回放。
         // 另造一份首部里带显式 Search（无前瞻宽度字段）的旧式日志：前瞻宽度读为 0。
-        MatchLog fresh = LookaheadFixtures.CreateSession(LookaheadFixtures.LinkConfig(
+        MatchLog fresh = LookaheadFixtures.CreateLinkSession(LookaheadFixtures.LinkConfig(
             LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 12 }, 1).Run();   // retire-legacy-maps 1.4：样本改到 link:1
         MatchLog old = MatchLog.Parse(fresh.FullText());
         Assert.Empty(old.LookaheadTurns);
@@ -513,7 +520,7 @@ public class 专家前瞻的记录Tests
         // 变异 M-B3c（回放不读首部的前瞻宽度）、E-B3（回放不读首部的两层权重）→ 本测试红。
         PlayerAiConfig w2 = StrengthExpert(width: 2) with { Search = StrengthExpert(width: 2).Search! with { CandidateCellLimit = AiSearchConfig.LargeMapCellLimit } };
         RunConfig config = LookaheadFixtures.LinkConfig(Expert, w2, LookaheadFixtures.Standard, LookaheadFixtures.Standard) with { TurnLimit = 16 };
-        MatchLog log = LookaheadFixtures.CreateSession(config, 2).Run();   // retire-legacy-maps 1.4：样本改到 link:1
+        MatchLog log = LookaheadFixtures.CreateLinkSession(config, 2).Run();   // retire-legacy-maps 1.4：样本改到 link:1
         string path = log.WriteTo(SimFixtures.TempDir("lookahead-replay"));
 
         string header = File.ReadLines(path).First();

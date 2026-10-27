@@ -61,7 +61,7 @@ public class 出生区编号显示Tests
         string source = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Sim", "Play", "BoardRenderer.cs"));
         Assert.True(source.Length > 8_000, "样本口径：BoardRenderer.cs 过短。");
         Assert.DoesNotContain("new PlayerId(z)", source, StringComparison.Ordinal);
-        Assert.Contains("BirthZoneLabel.Number(z)} \", ZoneColor)", source, StringComparison.Ordinal);   // 反面：区号那一格确实用中性色上色
+        Assert.Contains("BirthZoneLabel.Number(z),2} \", ZoneColor)", source, StringComparison.Ordinal);   // 反面：区号那一格确实用中性色上色（map-expand-25 段 B：两位编号右对齐成 3 个字符）
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class 出生区编号显示Tests
     private static MapData SixZoneMap() =>
         new()
         {
-            Id = "link:90006",
+            Id = "link:90006:4",
             Width = 20,
             Height = 20,
             MaxPlayers = 4,

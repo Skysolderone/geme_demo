@@ -11,7 +11,8 @@ public class 区域强度预算Tests
 {
     // retire-legacy-maps 1.6：载体由 v5（4 个出生区 × 2 枚）改为 link:1 初始图（5 块出生棋盘 × 2 枚，规格 Scenario「出生区稀有度均衡」），断言不变。
     // L12 实测（只调用生成器）：link:1 × 对局种子 0–499 未收敛 v1 109 / 500、v2 96 / 500；地图种子 link:1–100 × 对局种子 = 地图种子 未收敛 v1 24 / 100、v2 15 / 100。
-    private static readonly MapData Map = MapCatalog.Resolve("link:1");
+    // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本类测的是旧信物系统，载体改为手写夹具 LinkMapFixtures.WithRelics（link:1:4 补上段 A2 口径的信物格）。
+    private static readonly MapData Map = LinkMapFixtures.WithRelics(MapCatalog.Resolve("link:1:4"));
 
     /// <summary>
     /// more-pieces-relics 段 B：本类各用例的字面量（稀有度 222 / 2000、预算 600 / 690 / 780、不收敛图的稀有度集合）都出自 v1 的百分制表，
@@ -58,7 +59,7 @@ public class 区域强度预算Tests
             long[] sums = ZoneRarities(record);
             long total = sums.Sum();
             int zones = sums.Length;
-            Assert.Equal(5, zones);
+            Assert.Equal(10, zones);   // map-expand-25：link:1:4 浮空岛 10 块平台（原 5 块）
             foreach (long sum in sums)
             {
                 // |sum − total/n| ≤ total/n × 8%  ⇔  |sum×n − total| × 100 ≤ total × 8（n = 出生区数；retire-legacy-maps：原 v5 的 n 写死为 4）

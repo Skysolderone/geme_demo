@@ -52,7 +52,7 @@ public sealed record SeatCarryInView(PlayerId Player, CarryIn CarryIn);
 /// 按座位过滤的公开视图（board-link-mode 实现裁决 B4，information-visibility「始终公开的信息」「其他战场不可见」）。
 /// 数据层过滤：结构里只有本座位所在战场的格、棋子、设施、归属、信物、棋串与活形，以及同战场玩家的势力明细与手牌类型；
 /// 其他战场的格根本不在 <see cref="Cells"/> 里（呈现为"未展开"，<see cref="IsExpanded"/> 为 <c>false</c>）。
-/// 全局公开项（配置、地图标识与种子、带入、行动顺序、各玩家状态、战场结算与胜者、占位）不过滤。open-map 起锁定后整张地图是唯一战场，过滤边界自然含全图。
+/// 全局公开项（配置、地图标识与种子、带入、行动顺序、各玩家状态、战场结算与胜者、占位）不过滤。open-map 起锁定后整张地图是唯一战场；map-expand-25 段 B 起插旗阶段之后的可见格即整张图的全部格。
 /// 全知视图 <see cref="MatchFlow.Publish"/> 原样保留（批量分析、遥测与回放仍用它）。
 /// </summary>
 public sealed record SeatPublicView(
@@ -88,7 +88,7 @@ public sealed record SeatPublicView(
 public sealed partial class MatchFlow
 {
     /// <summary>
-    /// 按座位发布公开视图（实现裁决 B4）：插旗阶段只展开本座位已选的那块出生棋盘；此后只展开本座位所在战场的各块棋盘（整块外接矩形，含岩石与未架桥深水，G1；随链接扩大）。
+    /// 按座位发布公开视图（实现裁决 B4）：插旗阶段只展开本座位已选的那块出生棋盘（未选为空）；插旗阶段结束后展开整张图的全部格（map-expand-25 段 B：含平台之间的低地与画布留白）。
     /// </summary>
     public SeatPublicView PublishFor(PlayerId seat)
     {
@@ -99,9 +99,9 @@ public sealed partial class MatchFlow
         ImmutableHashSet<Coord> visible = zone is null ? []
             // 插旗阶段锁定后只公开这一块出生棋盘的布局：取整块棋盘（棋盘清单），不是出生区——链接档的出生区是核心区（link-map-terrain D1）。
             : Phase == MatchPhase.FlagPlanting ? [.. Board.Map.BirthBoard(zone.Value).Cells()]
-            // 战斗阶段（G1，负责人 2026-10-14 裁决 A）：本战场所含各棋盘外接矩形内的全部格，含岩石与未架桥深水——否则河流与岩石在视图里成了空缺；
-            // 战场只由可落子格组成，棋盘归属读 Battlefield.Boards（棋盘内任一可落子格所在的分量，D7）。其他战场的棋盘不在这里。
-            : [.. PublicRules.BattlefieldOf(Board, zone.Value).Boards.SelectMany(b => Board.Map.Boards[b].Cells())];
+            // 插旗阶段结束（全员锁定）之后（map-expand-25 段 B；原 G1 = 本战场各棋盘外接矩形）：整张图的全部格——平台、平台之间的低地（河道、桥、岩石）与画布留白。
+            // 浮空岛的低地不在任何棋盘外接矩形里，按棋盘取会让低地整片不可见（第 4 大回合起能落子却看不见）；open-map 起锁定后整张图是唯一战场。
+            : [.. Board.Map.AllCoords()];
         bool SameField(PlayerId p) => battlefield is { } id && _records[p].BirthZone is { } z && PublicRules.BattlefieldOf(Board, z).Id == id;
 
         bool started = Phase != MatchPhase.FlagPlanting;

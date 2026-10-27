@@ -83,7 +83,7 @@ public class 正式对战AI的信息边界_链接模式Tests
         // 规格 Scenario「全图可读」（open-map）：按座位投影的过滤边界是所在战场 = 全图——别的棋盘上的棋子、势力、手牌类型与信物揭示都可读，与全知视图相同；
         // 读取接口只在 VisionFor 一处（open-map 段 B：全知开关已删除，恒给按座位投影 + 预演投影）。
         MatchFlow match = Started([0, 0, 3, 4]);
-        Coord mine = BirthCell(Map, 0, 1, 1);
+        Coord mine = CoreCell(Map, 0, 0, 0);   // map-expand-25 段 A2：link:1:4 棋盘 0（E5 起 7×8 河流平台）的 (1, 1) = F6 是河道深水，改取核心区左下角 G7
         Coord theirs = BirthCell(Map, 3, 2, 2);
         match.Place(P0, mine).Place(P2, theirs, BirthCell(Map, 3, 2, 3));
         match.Debug.SeedHand(P2, (PieceType.Fortress, 1));
@@ -159,7 +159,7 @@ public class 正式对战AI的信息边界_链接模式Tests
         // 缺省 = 不给配置 / 四档预设 / 按地图取的配置（终端版与图形版都经 ForMap）/ 跑局层缺省配置（会话落成 true、对全部 AI 生效）。
         MatchFlow match = Started([0, 0, 3, 4]);
         Coord theirs = BirthCell(Map, 3, 2, 2);
-        match.Place(P0, BirthCell(Map, 0, 1, 1)).Place(P2, theirs, BirthCell(Map, 3, 2, 3));
+        match.Place(P0, CoreCell(Map, 0, 0, 0)).Place(P2, theirs, BirthCell(Map, 3, 2, 3));   // map-expand-25 段 A2：原 BirthCell(0, 1, 1) = F6 是河道深水
         Assert.NotNull(match.Board[theirs].Occupant);   // 样本口径：别的棋盘上确有棋子与势力
         Assert.True(match.Publish().Power!.Of(P2).Total > 0);
         ImmutableHashSet<Coord> field = [.. match.Board.Battlefields.ById(match.BattlefieldOf(P0))!.Cells];

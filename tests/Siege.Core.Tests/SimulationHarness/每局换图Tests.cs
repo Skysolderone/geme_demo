@@ -14,7 +14,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// </summary>
 public class 每局换图Tests
 {
-    private static RunConfig Rotating(int count, string mapId = "link:100") =>
+    private static RunConfig Rotating(int count, string mapId = "link:100:4") =>
         SimFixtures.Config(count: count, seedStart: 1, turnLimit: 4) with { MapId = mapId, MapPerMatch = true };
 
     [Fact]
@@ -22,13 +22,13 @@ public class 每局换图Tests
     {
         // retire-legacy-maps 1.8：原名「…_平台数不变」；平台数（:p7）是 gen: 的参数，随边疆档生成器删除，链接图标识没有参数。
         RunConfig six = Rotating(20);
-        Assert.Equal(Enumerable.Range(100, 20).Select(n => $"link:{n}"), Enumerable.Range(0, 20).Select(six.MapIdAt));
+        Assert.Equal(Enumerable.Range(100, 20).Select(n => $"link:{n}:4"), Enumerable.Range(0, 20).Select(six.MapIdAt));
 
-        RunConfig seven = Rotating(3, "link:18446744073709551613");
-        Assert.Equal(["link:18446744073709551613", "link:18446744073709551614", "link:18446744073709551615"], Enumerable.Range(0, 3).Select(seven.MapIdAt));
+        RunConfig seven = Rotating(3, "link:18446744073709551613:4");
+        Assert.Equal(["link:18446744073709551613:4", "link:18446744073709551614:4", "link:18446744073709551615:4"], Enumerable.Range(0, 3).Select(seven.MapIdAt));
 
         // 不换图：恒为配置的地图标识。
-        Assert.Equal("link:7", (SimFixtures.Config(count: 3) with { MapId = "link:7" }).MapIdAt(2));
+        Assert.Equal("link:7:4", (SimFixtures.Config(count: 3) with { MapId = "link:7:4" }).MapIdAt(2));
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class 每局换图Tests
         // retire-legacy-maps 1.8：裸标识与种子上溢改用 link:；gen: 的平台数越界（gen:1:p9）随生成器删除。旧标识照旧报错。
         Assert.Throws<ArgumentException>(() => Rotating(2, "siege-frontier-v2").Validated());
         Assert.Throws<ArgumentException>(() => Rotating(2, "link").Validated());
-        Assert.Throws<ArgumentException>(() => Rotating(2, "link:18446744073709551615").Validated());
+        Assert.Throws<ArgumentException>(() => Rotating(2, "link:18446744073709551615:4").Validated());
 
         // 会话自己解析不了"本局是第几局"：不给地图就拒绝，而不是悄悄用起始那张图。
         Assert.Throws<ArgumentException>(() => MatchSession.Create(Rotating(2), seed: 1));
@@ -54,25 +54,26 @@ public class 每局换图Tests
         // 变异 MB-10：BatchRunner 每局都用第 0 局的图 → 本测试红（首部标识全是 link:100）。
         // retire-legacy-maps 1.8：起始标识由 gen:100:p7（7 个平台）改为 link:100（5 块出生棋盘），断言不变（区数期望 7 → 5）。
         string dir = SimFixtures.TempDir("rotate-batch");
-        RunConfig config = Rotating(3, "link:100");
+        RunConfig config = Rotating(3, "link:100:4");
 
         BatchSummary summary = BatchRunner.ExecuteToDirectory(config, dir, parallelism: 2);
 
         Assert.Equal((3, 0), (summary.Completed, summary.Failed));
         List<MatchLog> logs = MatchLog.ReadDirectory(dir);
-        Assert.Equal(["link:100", "link:101", "link:102"], logs.Select(l => l.Header.MapId));
+        Assert.Equal(["link:100:4", "link:101:4", "link:102:4"], logs.Select(l => l.Header.MapId));
         Assert.Equal(3, logs.Select(l => l.Header.MapDigest).Distinct().Count());
-        Assert.All(logs, l => Assert.Equal(5, l.Header.ZoneCount));
+        // map-expand-25 段 A2：三张都是 4 人浮空岛，平台数 link:100:4 / 101:4 / 102:4 = 10 / 11 / 10（原紧贴布局恒 5）。
+        Assert.Equal(new int?[] { 10, 11, 10 }, logs.Select(l => l.Header.ZoneCount));
 
         // 批次配置记录：起始地图种子（在起始标识里）+ "每局换图"这一事实；每局首部的配置同样带着。
         string saved = File.ReadAllText(Path.Combine(dir, "config.json"));
-        Assert.Contains("\"MapId\": \"link:100\"", saved, StringComparison.Ordinal);
+        Assert.Contains("\"MapId\": \"link:100:4\"", saved, StringComparison.Ordinal);
         Assert.Contains("\"MapPerMatch\": true", saved, StringComparison.Ordinal);
         RunConfig reread = RunConfig.FromJson(saved);
         Assert.True(reread.MapPerMatch);
-        Assert.Equal("link:102", reread.MapIdAt(2));
+        Assert.Equal("link:102:4", reread.MapIdAt(2));
         Assert.All(logs, l => Assert.True(l.Header.Config.MapPerMatch));
-        Assert.All(logs, l => Assert.Equal("link:100", l.Header.Config.MapId));
+        Assert.All(logs, l => Assert.Equal("link:100:4", l.Header.Config.MapId));
 
         // 回放：只凭日志文件。本局的图取首部的地图标识（不是配置里的起始标识）。变异 MB-11：Replayer 一律按配置的 MapId 解析 → 第 2、3 局报地图不一致。
         foreach (MatchLog log in logs)
@@ -94,7 +95,7 @@ public class 每局换图Tests
         // 测试内独立来源改为"由该局初始地图的出生区格子现算外接矩形较长边"（测试内算式，不调用 SideOf），断言不变。
         // 变异 MB-12：SideOf 少加 1（把"跨度"当边长）→ 本测试红。link-map-terrain 1.4 改写 SideOf 后重跑：SideOf 改为 Max(宽, 高) − 1 → 本类红 1（本测试）。
         // 注：第 1 组出生区仍等于整块棋盘，"改读棋盘清单"本身在这里区分不出来，到 2.1 出生区改为核心区后才由本测试守住。
-        List<MatchLog> logs = BatchRunner.Execute(Rotating(4, "link:1"), parallelism: 1);
+        List<MatchLog> logs = BatchRunner.Execute(Rotating(4, "link:1:4"), parallelism: 1);
 
         for (int i = 0; i < logs.Count; i++)
         {
@@ -107,7 +108,7 @@ public class 每局换图Tests
         }
 
         // 不换图的批次（哪怕是生成图）不写这一项。
-        MatchLog single = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:1" }, seed: 1).Run();
+        MatchLog single = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:1:4" }, seed: 1).Run();
         Assert.Null(single.Header.ZoneSides);
     }
 

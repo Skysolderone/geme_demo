@@ -14,7 +14,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 public class 日志首部地图摘要Tests
 {
     private static readonly Lazy<MatchLog> Gen12345 = new(() =>
-        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "link:12345" }, seed: 5).Run());
+        MatchSession.Create(SimFixtures.Config(turnLimit: 8) with { MapId = "link:12345:4" }, seed: 5).Run());
 
     [Fact]
     public void 真实跑局把开局地图的摘要写进首部并经文本往返_内置图同样写()
@@ -26,14 +26,14 @@ public class 日志首部地图摘要Tests
 
         MatchLog gen = Gen12345.Value;
         Assert.False(gen.IsFailed, gen.Failure?.Message);
-        Assert.Equal(Expect(MapCatalog.Resolve("link:12345")), gen.Header.MapDigest);
+        Assert.Equal(Expect(MapCatalog.Resolve("link:12345:4")), gen.Header.MapDigest);
         Assert.Equal(gen.Header.MapDigest, MatchLog.Parse(gen.DeterministicText()).Header.MapDigest);
         Assert.Equal(gen.Header.MapDigest, MatchLog.Parse(gen.FullText()).Header.MapDigest);
         Assert.Contains($"\"MapDigest\":\"{gen.Header.MapDigest}\"", gen.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
-        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(MapCatalog.Resolve("link:1")), l.Header.MapDigest));
-        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:7" }, seed: 7).Run();
-        Assert.Equal(Expect(MapCatalog.Resolve("link:7")), frontier.Header.MapDigest);
+        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(Expect(MapCatalog.Resolve("link:1:4")), l.Header.MapDigest));
+        MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:7:4" }, seed: 7).Run();
+        Assert.Equal(Expect(MapCatalog.Resolve("link:7:4")), frontier.Header.MapDigest);
         Assert.NotEqual(gen.Header.MapDigest, frontier.Header.MapDigest);
     }
 
@@ -47,7 +47,7 @@ public class 日志首部地图摘要Tests
 
         Assert.True(replay.Identical, replay.ToString());
         Assert.Null(replay.MapMismatch);
-        Assert.Equal("link:12345", replay.Replayed.Header.MapId);
+        Assert.Equal("link:12345:4", replay.Replayed.Header.MapId);
         Assert.Equal(original.Turns.Count, replay.Replayed.Turns.Count);
         Assert.True(original.Turns.Count > 4);
     }
@@ -60,7 +60,7 @@ public class 日志首部地图摘要Tests
         // ② 调用方给的地图被人改了一格（标识没变）。
         // 变异 MB-6：Replayer 去掉摘要比对 → 本测试红（①只在首部分歧但重跑了整局；②带着另一张图跑出中途分歧）。
         MatchLog original = MatchLog.Parse(Gen12345.Value.DeterministicText());
-        string otherDigest = MapFile.Digest(MapCatalog.Resolve("link:12346"));
+        string otherDigest = MapFile.Digest(MapCatalog.Resolve("link:12346:4"));
         var stale = new MatchLog { Header = original.Header with { MapDigest = otherDigest }, Turns = original.Turns, Events = original.Events, Result = original.Result };
 
         ReplayResult fromStale = Replayer.Replay(stale);
@@ -69,7 +69,7 @@ public class 日志首部地图摘要Tests
         Assert.Equal(1, fromStale.FirstDivergentLine);
         Assert.NotNull(fromStale.MapMismatch);
         Assert.Contains("地图不一致", fromStale.ToString(), StringComparison.Ordinal);
-        Assert.Contains("link:12345", fromStale.MapMismatch, StringComparison.Ordinal);
+        Assert.Contains("link:12345:4", fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Contains(otherDigest, fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Contains(original.Header.MapDigest!, fromStale.MapMismatch, StringComparison.Ordinal);
         Assert.Empty(fromStale.Replayed.Turns);                       // 没有重跑
@@ -78,7 +78,7 @@ public class 日志首部地图摘要Tests
         Assert.Contains(original.Header.MapDigest!, fromStale.Actual, StringComparison.Ordinal);
 
         // ② 改一格：把一个不是出生区 / 信物的岩石格挖掉（导出文本里把它从 Obstacles 移走），标识仍是 link:12345。
-        MapData map = MapCatalog.Resolve("link:12345");
+        MapData map = MapCatalog.Resolve("link:12345:4");
         MapData tampered = TamperOneCell(map);
         Assert.Equal(map.Id, tampered.Id);
         Assert.NotEqual(MapFile.Digest(map), MapFile.Digest(tampered));

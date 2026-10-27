@@ -146,13 +146,13 @@ public class 对局日志的记录内容_链接模式Tests
     public void 开局棋盘主题经日志往返逐块相同()
     {
         // link-map-terrain 第 1 组裁决②：日志首部的开局棋盘带主题（枚举名），JSON Lines 往返后逐块相同（open-map 段 B：LinkLogLayout 随链接删除，只比首部）。
-        // 样本口径：主题确实存在且两两不同（全是 null 时"逐块相同"恒真）。
+        // 样本口径：主题确实存在且不全相同（全是 null 时"逐块相同"恒真）。map-expand-25：link:1:4 浮空岛 10 块平台、主题可以重复（裁决 R3），四种主题都出现。
         // 变异验证（link-map-terrain 第 1 组收尾实跑，只跑本类）：M-L1 MatchSession 写首部时不写 Theme → 本测试红 1；
         (MatchFlow match, MatchLog log) = Play([0, 1, 2, 3], stoneRounds: 1);
         BoardTheme?[] expected = [.. match.Board.BaseMap.Boards.Select(b => b.Theme)];
-        Assert.Equal(5, expected.Length);
+        Assert.Equal(10, expected.Length);
         Assert.All(expected, t => Assert.NotNull(t));
-        Assert.Equal(5, expected.Distinct().Count());
+        Assert.Equal(4, expected.Distinct().Count());
 
         string text = log.FullText();
         Assert.Contains($"\"Theme\":\"{expected[1]}\"", text, StringComparison.Ordinal);   // 写成枚举名

@@ -98,7 +98,7 @@ public class 开放地图阶段推进Tests
     [Theory]
     [InlineData("四人四区", new[] { 0, 1, 3, 4 }, 5)]
     [InlineData("两人同区加两人独占", new[] { 1, 1, 3, 4 }, 5)]
-    [InlineData("四人同区", new[] { 0, 0, 0, 0 }, 5)]
+    [InlineData("四人同区", new[] { 1, 1, 1, 1 }, 5)]   // map-expand-25 段 A2：link:1:4 棋盘 0 是 E5 起的河流平台（F 列河道、第 6 行岩石），坐标序落子会把人提光（LastPlayerStanding），改锁棋盘 1（Q5 林地平台）
     [InlineData("构筑期内整轮Pass", new[] { 0, 1, 3, 4 }, 1)]
     public void 从插旗跑到终局_开放地图(string 开局, int[] zones, int placeRounds)
     {

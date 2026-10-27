@@ -7,7 +7,7 @@ namespace Siege.Core.Tests.MapDefinition;
 public class 出生区归属Tests
 {
     // retire-legacy-maps 1.6：载体由 v5 改为 link:1 初始图（期望值随之改：出生区 2 是 5×5 的 2 号出生棋盘；link-map-terrain 起出生区是 3×3 核心区）。
-    private static readonly MapData Map = MapCatalog.Resolve("link:1");
+    private static readonly MapData Map = MapCatalog.Resolve("link:1:4");
 
     [Fact]
     public void 共享出生区()

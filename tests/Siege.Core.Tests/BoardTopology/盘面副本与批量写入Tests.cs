@@ -69,18 +69,18 @@ public class 盘面副本与批量写入Tests
     [Fact]
     public void 副本不重跑校验()
     {
-        // 诱饵：拿掉一枚出生棋盘信物，这张图 MUST 过不了静态校验。
-        // 若 Clone() 偷偷走了 Load，就会在这里抛 MapValidationException。
-        // retire-legacy-maps 1.8：原诱饵是 v5 清空咽喉标注（CHOKE_NOT_ANNOTATED，旧三档规则，第 4 组删除）；改为 link:1 拿掉一枚出生棋盘信物
-        //（BIRTH_BOARD_RELIC_COUNT，链接档清单规则，保留），断言不变。
-        MapData link = MapCatalog.Resolve("link:1");
-        // link-map-terrain：link:1 带公共区档信物（至多 1 个 / 棋盘，拿掉不违规），诱饵改拿第一个出生区档信物。
-        MapData bait = link with { RelicCells = link.RelicCells.Remove(link.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).Select(kv => kv.Key).Order().First()) };
-        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "BIRTH_BOARD_RELIC_COUNT");
+        // 诱饵：一张 MUST 过不了静态校验的图。若 Clone() 偷偷走了 Load，就会在这里抛 MapValidationException。
+        // retire-legacy-maps 1.8：原诱饵是 v5 清空咽喉标注（CHOKE_NOT_ANNOTATED，旧三档规则，第 4 组删除），后改为 link:1 拿掉一枚出生棋盘信物（BIRTH_BOARD_RELIC_COUNT）。
+        // map-expand-25 段 A3：浮空岛不放静态信物格、BIRTH_BOARD_RELIC_COUNT 删除（relic-redesign R29），诱饵改为在留白障碍格 (0, 0) 放一枚信物格（RELIC_ON_NON_PLAYABLE，保留的通用规则），断言不变。
+        MapData link = MapCatalog.Resolve("link:1:4");
+        var origin = new Coord(0, 0);
+        Assert.False(link.IsPlayable(origin));
+        MapData bait = link with { RelicCells = link.RelicCells.Add(origin, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)) };
+        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "RELIC_ON_NON_PLAYABLE");
         Assert.Throws<MapValidationException>(() => GameBoard.Load(bait));
 
         GameBoard board = GameBoard.LoadUnvalidated(bait);
-        board.Place(TestMaps.At("N5"), TestMaps.P0, PieceType.Basic);   // link:1：N5 在出生棋盘 3 上、非信物格
+        board.Place(link.BirthZones[0].Order().First(), TestMaps.P0, PieceType.Basic);   // 出生区 0 的一格（核心区，可落子）
 
         GameBoard clone = board.Clone();
 

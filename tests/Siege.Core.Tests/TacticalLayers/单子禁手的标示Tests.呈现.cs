@@ -38,7 +38,8 @@ public partial class 单子禁手的标示Tests
         Assert.Equal("F6 · 自杀手：落下后无气", HoverReadout.Of(TestMaps.At("F6"), board));
 
         // 其余格没有标记；F6 仍在合法落子范围里（范围契约只扣禁入格）——它与"超出合法落子范围"是两回事。
-        Assert.Equal(["F6"], board.Cells.Where(c => c.Block != PlacementBlock.None).Select(c => c.Coord).Notations());
+        // map-expand-25 段 B：座位视图含整张图（画布留白的障碍格也在，它们按地形阻断），这里只看可落子格。
+        Assert.Equal(["F6"], board.Cells.Where(c => c.Terrain == Terrain.Playable && c.Block != PlacementBlock.None).Select(c => c.Coord).Notations());
         Assert.Contains(TestMaps.At("F6"), match.LegalRangeFor(P0));
         Assert.Equal("C6", HoverReadout.Of(TestMaps.At("C6"), board));
     }

@@ -30,17 +30,19 @@ public class 棋盘台面的可视表现Tests
         int rocks = 0;
         for (int seed = 1; seed <= SeedSpan; seed++)
         {
-            MapData map = MapCatalog.Resolve($"link:{seed}");
+            MapData map = MapCatalog.Resolve($"link:{seed}:4");
             MatchFlow match = MatchFlow.Create(map, TestMaps.Seed, All, Options);
             match.PlantSequentially(All.Select((p, i) => (p, i)));
             DefaultBoardView board = match.World(P0).Board();
             BoardPlate own = map.BirthBoard(0);
 
+            // map-expand-25 段 B：插旗阶段之后座位可见整张图——视图里的岩石既有平台内的，也有平台之间低地 / 岛缘的与画布留白；
+            // 平台外接矩形内的取岩石造型，之外的（低地岩石、留白）一律场景装饰。
             foreach (BoardCellView cell in board.Cells.Where(c => c.Terrain == Terrain.Obstacle && c.Surface != Surface.DeepWater))
             {
-                Assert.True(map.Boards.Any(b => b.Contains(cell.Coord)), $"link:{seed} {cell.Coord.ToNotation()} 不在任何棋盘内");
-                Assert.Equal(ObstacleArt.BoardRock, board.ObstacleArtAt(cell.Coord));
-                rocks++;
+                bool inBoard = map.Boards.Any(b => b.Contains(cell.Coord));
+                Assert.Equal(inBoard ? ObstacleArt.BoardRock : ObstacleArt.Scenery, board.ObstacleArtAt(cell.Coord));
+                rocks += inBoard ? 1 : 0;
             }
 
             // 画布留白的场景格（西南角 A1）：不属于任何可见棋盘 → 场景装饰。

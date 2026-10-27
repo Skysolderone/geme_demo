@@ -21,7 +21,7 @@ public sealed record MapData
     /// <summary>外接高度（行数）。</summary>
     public required int Height { get; init; }
 
-    /// <summary>该地图支持的最大人数。链接档出生区（出生棋盘）数 MUST 多于它（5 块对 4 人）。</summary>
+    /// <summary>该地图的人数（链接档即标识 <c>link:&lt;种子&gt;:&lt;人数&gt;</c> 的人数段，对局人数须恰等于它）。链接档出生区（出生平台）数 MUST 多于它（map-expand-25：2 人 6–8 块、3 人 8–10 块、4 人 10–12 块）。</summary>
     public required int MaxPlayers { get; init; }
 
     /// <summary>

@@ -13,10 +13,7 @@ namespace Siege.Sim.Play;
 /// <summary>终端对局：一名人类玩家对若干启发式 AI。</summary>
 internal static class PlayCommand
 {
-    /// <summary>链接模式的参赛人数（裁决 3b / S1：只有 4 人局）。</summary>
-    private const int LinkPlayers = 4;
-
-    /// <param name="playerCountArg">参赛人数；<c>null</c> = 4。链接模式恒为 4 人局（S1），给别的值即报错（retire-legacy-maps 4b.3 / L20：原"缺省取地图人数上限"随 2 / 3 人图删除）。</param>
+    /// <param name="playerCountArg">参赛人数；<c>null</c> = 地图人数 <see cref="MapData.MaxPlayers"/>（map-expand-25 D1：链接图的人数即标识的人数段，2–4）。给出的人数与地图人数不同即报错，不静默改。</param>
     /// <param name="map">对局地图；<c>null</c> 即缺省地图（<see cref="MapCatalog.DefaultId"/>）。标识 → 地图的解析在入口（<c>Program.Play</c>）经 <see cref="MapCatalog"/> 完成。</param>
     /// <param name="cellLimit">AI 候选格上限 K；<c>null</c> 按地图的可落子格数自动取（<see cref="AiSearchConfig.ForMap"/>），0 = 不限制。</param>
     /// <param name="weights">测试接缝：AI 评价权重（整表）；<c>null</c> = 默认权重表 <see cref="EvaluationWeights.Default"/>（retire-legacy-maps 3.3：地图专属覆盖已删除）。终端入口不传（ai-eye R12：终端对局一律用缺省值，不加选项）。</param>
@@ -43,13 +40,13 @@ internal static class PlayCommand
         CarryProfileStore? profile, Action<PlayerId, HeuristicTurnController>? onAi, Action<MatchFlow>? arrange)
     {
         map ??= MapCatalog.Resolve(null);
-        int playerCount = playerCountArg ?? LinkPlayers;
+        int playerCount = playerCountArg ?? map.MaxPlayers;
         AiSearchConfig search = AiSearchConfig.ForMap(difficulty, map.PlayableCount, cellLimit);
         search = (passThreshold is int threshold ? search with { PassThreshold = threshold } : search).Validated();
-        if (playerCount != LinkPlayers)
+        if (playerCount != map.MaxPlayers)
         {
-            // 裁决 3b / S1：与 Core 建局同一口径的报文；在入口先报，免得非正人数先在建玩家列表时崩掉。
-            throw new ArgumentException($"链接模式只有 {LinkPlayers} 人局，实际 {playerCount} 人。");
+            // map-expand-25 D1（原裁决 3b / S1）：与 Core 建局同一口径的报文；在入口先报，免得非正人数先在建玩家列表时崩掉。
+            throw new ArgumentException($"链接图 {map.Id} 是 {map.MaxPlayers} 人局，实际 {playerCount} 人。");
         }
 
         if (seat < 1 || seat > playerCount)
@@ -106,14 +103,14 @@ internal static class PlayCommand
         // 地图那一行：一律打印完整标识（retire-legacy-maps：旧地图族的缺省图 v5 随旧地图删除，"缺省图不多打一行"的例外随之删除）。
         // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
         string shownMapId = match.Publish().MapId;
-        output.WriteLine($"地图 {shownMapId}（{map.BirthZones.Length} 块紧贴成一张连通地图的出生棋盘）——用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关");
+        output.WriteLine($"地图 {shownMapId}（{map.BirthZones.Length} 块出生平台的 {playerCount} 人浮空岛）——用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关");
 
         // 专家（前瞻宽度 > 0）另写明实际生效的前瞻宽度；其余三档这一行与引入专家之前逐字相同。
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI{lookahead}");
         output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
-        output.WriteLine("流程：5 块出生棋盘紧贴成一张连通地图；前 3 个大回合只能在自己的出生棋盘内落子与改造（同区者共享），第 4 大回合起全图可落；"
-            + "四人在一个大回合内全部 Pass、或地图填满即结算终局，势力最高者胜；只剩一人也终局。曾有势力而势力降到 0 即出局。");
+        output.WriteLine("流程：出生平台散布在浮空岛上，平台之间是低地（河道与桥）；前 3 个大回合只能在自己的出生平台内落子与改造（同区者共享），第 4 大回合起全图可落（含平台之间的低地）；"
+            + "全员在一个大回合内全部 Pass、或地图填满即结算终局，势力最高者胜；只剩一人也终局。曾有势力而势力降到 0 即出局。");
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         if (store is not null)
@@ -248,7 +245,7 @@ internal static class PlayCommand
     /// <summary>retire-legacy-maps 3.6：终端只剩链接模式，旧模式的整图选区分支（画全图 + "选择你的出生区"）删除。</summary>
     private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, string? quitWarning)
     {
-        // 盲选（match-setup「开局信息公开范围」）：只列 5 块出生棋盘的占位（位置、宽高与主题名，取自按座位视图），不画棋盘内部布局。
+        // 盲选（match-setup「开局信息公开范围」）：只列各块出生平台的占位（位置、宽高与主题名，取自按座位视图），不画棋盘内部布局。
         // link-map-terrain 5.1：每行"编号 · 主题 · 宽×高"，主题中文名只经 BoardThemeNames.DisplayName；没有主题的占位（手写夹具）写"无主题"。
         foreach (BoardPlaceholder p in match.PublishFor(me).Placeholders)
         {

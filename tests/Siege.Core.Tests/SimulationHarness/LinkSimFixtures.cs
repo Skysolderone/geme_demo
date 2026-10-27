@@ -15,7 +15,7 @@ namespace Siege.Core.Tests.SimulationHarness;
 /// </summary>
 internal static class LinkSimFixtures
 {
-    internal const string MapId = "link:1";
+    internal const string MapId = "link:1:4";
 
     /// <summary><c>link:1</c> 上 4 人 Easy 的跑局配置（完整事件流、不抽样）。</summary>
     internal static RunConfig Config(int turnLimit, ulong seedStart = 1, int count = 1, AiDifficulty difficulty = AiDifficulty.Easy) =>
@@ -38,6 +38,24 @@ internal static class LinkSimFixtures
 
         throw new InvalidOperationException("种子 1–499 里没有四人四区的开局。");
     });
+
+    /// <summary>
+    /// 停滞停手的真实跑局（stagnation-trace「停滞停手次数可查」与回放「旧日志缺停滞停手字段按未停手回放」共用）：4 名简单 AI、停滞大回合数 1、权重写死为定值前缺省，
+    /// 截断 <paramref name="turnLimit"/> 个小回合。map-expand-25 段 A2：link:1:4 换成约 1500 格的浮空岛后，短局里 AI 不会停滞（实测种子 1、80 小回合 D:stall 0 次，单条耗时十余分钟），
+    /// 载体改为手写平坦链接档图 <see cref="LinkModeFixtures.FlatMap"/>（180 格，与旧 link:1 同量级）：经 <see cref="MatchFlow.CreateUnvalidated"/> 建局、盲选插旗（与 MatchSession.Create 同一实现），
+    /// 再经测试接缝 <see cref="MatchSession.ForMatch"/> 挂上按配置建的 AI。手写图不能按标识重建，所以这局只能跑、不能经 <see cref="Replayer.Replay"/> 重建回放。
+    /// </summary>
+    internal static MatchSession FlatStallSession(int turnLimit, ulong seed)
+    {
+        RunConfig config = Config(turnLimit: turnLimit) with { StagnationRounds = 1 };
+        config = config with { Players = [.. config.Players.Select(p => p with { Weights = SimFixtures.PreCalibrationWeights })] };
+        var gameSeed = new Siege.Core.Determinism.GameSeed(seed);
+        MatchFlow match = MatchFlow.CreateUnvalidated(
+            LinkModeFixtures.FlatMap, gameSeed, TestMaps.All, Siege.Core.Relics.RelicGenerator.Generate(LinkModeFixtures.FlatMap, gameSeed, ContentSet.V2),
+            MatchOptions.Immediate with { ContentSet = ContentSet.V2 });
+        match.PlantPrototype();
+        return MatchSession.ForMatch(match, config with { ContentSet = match.ContentSet });
+    }
 
     /// <summary>四人四区种子上跑到第 3 大回合结束后一个小回合（第 4 大回合已开始、全图解禁）的日志（截断 13 个小回合）。</summary>
     internal static readonly Lazy<MatchLog> Round4Log = new(() => MatchSession.Create(Config(turnLimit: 13), FourZoneSeed.Value).Run());

@@ -9,7 +9,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// 「v3历史文件仍可读入并通过校验」随 <c>maps/</c> 目录在第 2 组删除。</remarks>
 public class 地图文件往返Tests
 {
-    private static MapData Link1() => MapCatalog.Resolve("link:1");
+    private static MapData Link1() => MapCatalog.Resolve("link:1:4");
 
     [Fact]
     public void 往返读写无信息丢失()
@@ -79,7 +79,7 @@ public class 地图文件往返Tests
 
         MapData restored = MapFile.FromJson(json);
 
-        Assert.Equal("link:1", restored.Id);
+        Assert.Equal("link:1:4", restored.Id);
         Assert.True(MapValidator.Validate(restored).IsValid);
     }
 
@@ -112,9 +112,11 @@ public class 地图文件往返Tests
         // terrain-barriers 3.1（地图变了）：河流棋盘的河道改为横穿棋盘的第 4 行（C4–H4），预置桥由 F8 移到 G4。
         // terrain-density 2.2（地图变了，边长 6–7）：入口仍为 U6；出生区信物格改取 M6（3 号棋盘 K3 的核心区）；2 号棋盘左下角 J10 → K9（K 紧跟 J，同样跳过 I）；
         // 河流棋盘（C3，7×6）的河道为第 D 列，预置桥由 G4 移到 D6。
-        Assert.Contains("\"CentralEntrance\": \"U6\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"M6\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"Origin\": \"K9\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"D6\"", json, StringComparison.Ordinal);
+        // map-expand-25 段 A2（link:1:4 换成 44×44 浮空岛）：入口 X23；出生区信物格取 H8（1 号平台 E5 的核心区）；4 号平台左下角 AJ9（双字母列）；
+        // 1 号平台（河流主题，F 列河道）的预置桥 F10。
+        Assert.Contains("\"CentralEntrance\": \"X23\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"H8\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Origin\": \"AJ9\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"F10\"", json, StringComparison.Ordinal);
     }
 }

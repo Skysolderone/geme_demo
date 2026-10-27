@@ -20,11 +20,13 @@ public class 各入口支持生成图_链接模式Tests
     {
         // 规格 Scenario「终端版开新局」：play --map link:12345 的插旗提示列出 5 个占位（位置与边长），盲选，不画任何棋盘的内部布局；打印的地图标识为 link:12345。
         // 变异 MC-6：PlayCommand 在链接模式仍画全图（render.Board(zones: true)）→ "号棋盘 · …（左下角 …）" 不出现，本测试红。
-        (int code, string output, string err) = RunMain(null, new StringReader("q\n"), "play", "--map", "link:12345", "--seed", "5", "--no-carry");
+        (int code, string output, string err) = RunMain(null, new StringReader("q\n"), "play", "--map", "link:12345:4", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
-        Assert.Contains("地图 link:12345（5 块紧贴成一张连通地图的出生棋盘）", output, StringComparison.Ordinal);
-        MapData map = MapCatalog.Resolve("link:12345");
-        for (int zone = 0; zone < 5; zone++)
+        // map-expand-25 段 A2：标识带人数（link:12345:4），占位数随平台数（10 块）；只钉标识与块数，说明文字的其余部分由段 B 改写。
+        MapData map = MapCatalog.Resolve("link:12345:4");
+        Assert.Contains($"地图 link:12345:4（{map.BirthZones.Length} 块", output, StringComparison.Ordinal);
+        Assert.Equal(10, map.BirthZones.Length);
+        for (int zone = 0; zone < map.BirthZones.Length; zone++)
         {
             BoundsOf(map, zone, out Coord origin, out int width, out int height);
             // link-map-terrain 5.1：占位行改为"编号 · 主题 · 宽×高（左下角 …）"（match-setup「插旗阶段的可见信息」）。
@@ -40,7 +42,7 @@ public class 各入口支持生成图_链接模式Tests
     {
         // tasks 3.0「play 在 link: 上能建局并跑起来」→ open-map：选棋盘后锁定、开始第 1 大回合并轮到本机玩家；全图全可见（没有"势力不可见"的玩家），
         // 棋盘画整张地图（唯一战场 = 5 块棋盘的包围盒），构筑期提示"只能在自己的出生棋盘落子"。
-        (int code, string output, string err) = RunMain(null, new StringReader("2\nq\n"), "play", "--map", "link:12345", "--seed", "5", "--no-carry");
+        (int code, string output, string err) = RunMain(null, new StringReader("2\nq\n"), "play", "--map", "link:12345:4", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
         Assert.Contains("你锁定了 2 号棋盘", output, StringComparison.Ordinal);
         Assert.DoesNotContain("出生区锁定：", output, StringComparison.Ordinal);   // 不列出别人的旗
@@ -48,10 +50,12 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Contains("只能在自己的出生棋盘落子", output, StringComparison.Ordinal);
         Assert.Contains("════════ 轮到你了 ════════", output, StringComparison.Ordinal);
 
-        // 画整张地图：列标行是 5 块棋盘包围盒的列（第 2 列起到东边留白前），不含画布留白列 A / B。
-        MapData map = MapCatalog.Resolve("link:12345");
-        int minX = map.Boards.Min(b => b.Origin.X);
-        int maxX = map.Boards.Max(b => b.Origin.X + b.Width - 1);
+        // 画整张地图：列标行是唯一战场包围盒的列，不含画布留白列 A / B。
+        // map-expand-25 段 A2：浮空岛的战场除平台外还有平台之间的低地，包围盒改取战场格（原取 5 块棋盘的包围盒，紧贴布局下两者相同）。
+        MapData map = MapCatalog.Resolve("link:12345:4");
+        Coord[] field = [.. Battlefields.Of(map).All[0].Cells];
+        int minX = field.Min(c => c.X);
+        int maxX = field.Max(c => c.X);
         string columns = "    " + string.Concat(Enumerable.Range(minX, maxX - minX + 1).Select(x => $" {new Coord(x, 0).Column,-2}"));
         Assert.Contains(columns + Environment.NewLine, output, StringComparison.Ordinal);
         Assert.DoesNotContain(" A  B  C ", output, StringComparison.Ordinal);
@@ -66,7 +70,7 @@ public class 各入口支持生成图_链接模式Tests
         Assert.True(code == 0, err);
         Assert.Equal(1, calls);
         Assert.Contains("本次地图为 link:777", output, StringComparison.Ordinal);
-        Assert.Contains("地图 link:777（", output, StringComparison.Ordinal);
+        Assert.Contains("地图 link:777:4（", output, StringComparison.Ordinal);   // map-expand-25：完整标识带人数
     }
 
     [Fact]
@@ -74,9 +78,9 @@ public class 各入口支持生成图_链接模式Tests
     {
         // 规格 Scenario「每局换图的批次」的缩小版（不跑批量：3 局、各截断 4 个小回合）：起始地图种子 100、每局换图，日志首部地图标识依次为 link:100..link:102。
         // 变异 MC-7：RunConfig.MapIdAt 的链接分支去掉 → 解析成 gen: 报错，本测试红。
-        RunConfig config = Config(turnLimit: 4, count: 3) with { MapId = "link:100", MapPerMatch = true };
+        RunConfig config = Config(turnLimit: 4, count: 3) with { MapId = "link:100:4", MapPerMatch = true };
         List<MatchLog> logs = BatchRunner.Execute(config.Validated(), parallelism: 1);
-        Assert.Equal(["link:100", "link:101", "link:102"], logs.Select(l => l.Header.MapId));
+        Assert.Equal(["link:100:4", "link:101:4", "link:102:4"], logs.Select(l => l.Header.MapId));
         Assert.All(logs, l => Assert.False(l.IsFailed, l.Failure?.Message));
         Assert.All(logs, l => Assert.Equal(MapFile.Digest(MapCatalog.Resolve(l.Header.MapId)), l.Header.MapDigest));
     }
@@ -100,10 +104,10 @@ public class 各入口支持生成图_链接模式Tests
     public void map子命令打印链接初始图()
     {
         // 规格：map 子命令能打印任一 link: 初始地图的文本图与校验报告。
-        (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1");
+        (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1:4");
         Assert.True(code == 0, err);
-        MapData initial = MapCatalog.Resolve("link:1");
-        Assert.Contains($"地图 link:1  {initial.Width}×{initial.Height}", output, StringComparison.Ordinal);
+        MapData initial = MapCatalog.Resolve("link:1:4");
+        Assert.Contains($"地图 link:1:4  {initial.Width}×{initial.Height}", output, StringComparison.Ordinal);   // map-expand-25：完整标识带人数
         Assert.Contains("地图校验通过", output, StringComparison.Ordinal);
         Assert.Contains("连通分量 1", output, StringComparison.Ordinal);   // open-map 裁决 B5：按几何四邻实算（唯一战场）
         Assert.DoesNotContain("链接 #", output, StringComparison.Ordinal);
@@ -119,7 +123,7 @@ public class 各入口支持生成图_链接模式Tests
         // 规格 simulation-harness「各入口支持生成图」（open-map）：任何入口 MUST NOT 提供配对或链接相关选项——严格命令行下 --links / --pairing-seed / --final-countdown 一律报错退出，
         // 不建局、不写任何输出目录。
         string outDir = Path.Combine(SimFixtures.TempDir($"retired-{option[2..]}"), "out");
-        string[] args = command == "run" ? [command, "--out", outDir, "--seed", "1", option, value] : [command, "--map", "link:1", option, value];
+        string[] args = command == "run" ? [command, "--out", outDir, "--seed", "1", option, value] : [command, "--map", "link:1:4", option, value];
         (int code, string output, string err) = RunMain(null, new StringReader(string.Empty), args);
         Assert.NotEqual(0, code);
         Assert.Contains(option[2..], err + output, StringComparison.Ordinal);
@@ -132,13 +136,13 @@ public class 各入口支持生成图_链接模式Tests
         // link-map-terrain 5.1：map --map link:1 每块出生棋盘一行"编号 · 主题 · 宽×高"，并给左下角与该棋盘内的公共信物数；主题中文名唯一来源 BoardThemeNames.DisplayName。
         // 输出里本来就有"林地 n"与图例"F 林地"，只断言"含林地"恒真——所以逐块拼出整行断言，并另查五个主题名两两不同。
         // 变异（实跑，过滤本类）：MLT-6（map 的棋盘行固定打印"高台"）→ 红 1（本测试）；MLT-7（公共信物数不按棋盘过滤、打全图公共信物数）→ 红 1（本测试）。
-        (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1");
+        (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1:4");
         Assert.True(code == 0, err);
-        MapData map = MapCatalog.Resolve("link:1");
+        MapData map = MapCatalog.Resolve("link:1:4");
         int contested = 0;
         var names = new List<string>();
         var specials = new List<int>();
-        for (int zone = 0; zone < 5; zone++)
+        for (int zone = 0; zone < map.BirthZones.Length; zone++)
         {
             BoardPlate plate = map.BirthBoard(zone);
             int publicRelics = map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested && plate.Contains(r.Key));
@@ -157,10 +161,14 @@ public class 各入口支持生成图_链接模式Tests
         Assert.Equal(mapWide, specials.Sum());
         Assert.True(specials.All(n => n < mapWide), $"link:1 新地表 {string.Join("/", specials)}，全图 {mapWide}");
 
-        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合", "高台" }, names.Order(StringComparer.Ordinal));
-        // 样本口径：各棋盘公共信物数之和等于全图公共区信物数，且 ≥ 2（否则按棋盘过滤与否测不出来）。
-        Assert.Equal(map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested), contested);
-        Assert.True(contested >= 2, $"link:1 公共信物 {contested} 个；每块至多 1 个，≥ 2 时全图数才不等于任何一块的数");
+        // map-expand-25 段 A2（裁决 R3）：link:1:4 浮空岛 10 块平台、主题可以重复且没有高台，原"五个主题名两两不同"改为去重后恰是四种平台主题。
+        Assert.Equal(10, names.Count);
+        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, names.Distinct().Order(StringComparer.Ordinal));
+        // map-expand-25 D5：公共信物都在平台之间的低地上，每块平台的公共信物数恒为 0（行内照常打印）；全图确有公共信物，所以"不按棋盘过滤"的变异 MLT-7 会打出非 0 而红。
+        // 原"各棋盘之和 = 全图数且 ≥ 2"的样本口径在新布局下不成立，改为下面两条。
+        // 段 A3：浮空岛不放静态信物格（relic-redesign R29），全图公共信物为 0，"全图确有公共信物"一条删除——MLT-7 在生成图上不再可测（旧信物系统随 relic-redesign 拆除）。
+        Assert.Equal(0, contested);
+        Assert.Empty(map.RelicCells);
     }
 
     [Theory]
@@ -188,13 +196,13 @@ public class 各入口支持生成图_链接模式Tests
         bool mapsBefore = Directory.Exists(Path.Combine(before, "maps"));
         (int code, string output, string err) = RunMain(null, null, "map");
         Assert.True(code == 0, err);
-        MapData initial = MapCatalog.Resolve("link:1");
-        Assert.Contains($"地图 link:1  {initial.Width}×{initial.Height}", output, StringComparison.Ordinal);
+        MapData initial = MapCatalog.Resolve("link:1:4");
+        Assert.Contains($"地图 link:1:4  {initial.Width}×{initial.Height}", output, StringComparison.Ordinal);   // map-expand-25：缺省 link:1:4
         Assert.Contains("地图校验通过", output, StringComparison.Ordinal);
         Assert.DoesNotContain("已导出", output, StringComparison.Ordinal);
         Assert.Equal(mapsBefore, Directory.Exists(Path.Combine(before, "maps")));
 
-        (int badCode, _, string badErr) = RunMain(null, null, "map", "--mapp", "link:1");
+        (int badCode, _, string badErr) = RunMain(null, null, "map", "--mapp", "link:1:4");
         Assert.NotEqual(0, badCode);
         Assert.Contains("--mapp", badErr, StringComparison.Ordinal);
     }

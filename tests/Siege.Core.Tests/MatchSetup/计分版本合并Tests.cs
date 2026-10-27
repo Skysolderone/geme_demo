@@ -47,7 +47,7 @@ public class 计分版本合并Tests
     [Fact]
     public void 新局默认V2而旧存档回填V1()
     {
-        var map = MapCatalog.Resolve("link:1");
+        var map = MapCatalog.Resolve("link:1:4");
         MatchFlow match = MatchFlow.Create(map, new GameSeed(5), TestMaps.All);
         Assert.Equal(ScoringVersion.V2, match.ScoringVersion);
         Assert.Equal(ScoringVersion.V2, match.Publish().ScoringVersion);

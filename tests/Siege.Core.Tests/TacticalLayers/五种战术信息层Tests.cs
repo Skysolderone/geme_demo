@@ -27,7 +27,10 @@ public class 五种战术信息层Tests
         Assert.Equal((TerritoryState.Contested, (PlayerId?)null), State(layer, "G5"));
         Assert.Equal((TerritoryState.Neutral, (PlayerId?)null), State(layer, "C10"));
         CoverageMap coverage = match.Scoreboard.Latest!.Coverage;
-        Assert.Equal(64, layer.Cells.Length);   // retire-legacy-rules 1.6（R8）：原 9×9 的 81 格 → 平坦载体上实测 64 格（= 棋盘 0 的 8×8）
+        // retire-legacy-rules 1.6（R8）：原 9×9 的 81 格 → 平坦载体上 64 格（= 棋盘 0 的 8×8）；map-expand-25 段 B：插旗阶段之后座位可见整张图，
+        // 平坦载体其余四块 6×6（各自是孤立战场）也在视图里，层内格 = 全图可落子格 64 + 4 × 36 = 208。
+        Assert.Equal(64 + (4 * 36), layer.Cells.Length);
+        Assert.Equal(match.Map.PlayableCount, layer.Cells.Length);
         Assert.All(layer.Cells, c => Assert.Equal(coverage.OwnershipOf(c.Coord).Kind.ToString(), c.State.ToString()));
         Assert.True(LayerVisuals.For(TacticalLayer.Board, BoardReading.Ownership).PieceEmphasisPercent < 100);
     }
