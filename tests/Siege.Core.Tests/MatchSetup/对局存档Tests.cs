@@ -183,7 +183,8 @@ public class 对局存档Tests
         Assert.Equal(a.SettledBattlefields, b.SettledBattlefields);
         Assert.Equal(a.Settlements.Select(Text), b.Settlements.Select(Text));
         Assert.Equal(a.PlayerStates.Select(Text), b.PlayerStates.Select(Text));
-        Assert.Equal(a.Relics.PublicStates().Select(r => r.ToString()), b.Relics.PublicStates().Select(r => r.ToString()));
+        Assert.Equal(a.RelicBatches.Select(r => r.ToString()), b.RelicBatches.Select(r => r.ToString()));
+        Assert.Equal(a.NextRelicId, b.NextRelicId);
     }
 
     private static string Text(BattlefieldSettlementRecord s) =>

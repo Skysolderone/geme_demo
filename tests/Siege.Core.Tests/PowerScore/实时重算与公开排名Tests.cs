@@ -26,7 +26,7 @@ public class 实时重算与公开排名Tests
 
         Assert.True(driver.Confirm(BatchFixtures.Context(board, TestMaps.P0), [BatchFixtures.P("D5")]).Confirmed);
 
-        Assert.Equal(["DeductHand", "OnRevealRelics", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
+        Assert.Equal(["DeductHand", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
         Assert.Equal(1, hooks.Scoreboard.Version);
         PowerSnapshot latest = hooks.Scoreboard.Latest!;
         Assert.Equal(3, latest.Players.Length);

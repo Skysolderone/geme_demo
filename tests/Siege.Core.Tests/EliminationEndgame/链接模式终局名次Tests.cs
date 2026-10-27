@@ -48,7 +48,7 @@ public class 链接模式终局名次Tests
     [Fact]
     public void 同一战场多名落败者按势力排()
     {
-        // Scenario：三人战场结算，落败者 B 势力 55、C 势力 55，B 控制信物 2 枚、C 控制 1 枚 → B 的名次高于 C（不共享）。
+        // Scenario：三人战场结算，落败者 B 势力 55、C 势力 55，B 持有信物 2 枚、C 控制 1 枚 → B 的名次高于 C（不共享）。
         var result = FinalStandings.Compute([
             Finisher(A, 80),
             Defeated(C, 55, order: 1, relics: 1),
@@ -61,7 +61,7 @@ public class 链接模式终局名次Tests
     [Fact]
     public void 信物相同比独占空格数()
     {
-        // Scenario：两名玩家势力值均为 60、控制信物数量均为 2，独占空格数分别为 14 与 9 → 独占空格数 14 的玩家名次更高。
+        // Scenario：两名玩家势力值均为 60、持有信物数量均为 2，独占空格数分别为 14 与 9 → 独占空格数 14 的玩家名次更高。
         var result = FinalStandings.Compute([
             Finisher(A, 100),
             Defeated(B, 60, order: 1, relics: 2, exclusive: 9),

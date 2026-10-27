@@ -4,7 +4,6 @@ using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Tests.AiDecision;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -14,8 +13,8 @@ namespace Siege.Core.Tests.MatchSetup;
 
 /// <summary>规格：more-pieces-relics match-setup —— Requirement: 对局内容集</summary>
 /// <remarks>
-/// v1 = 原六种棋子 + 原六类信物（与引入新内容之前逐步相同），v2 = 十 + 十；新局缺省 v2，旧存档 / 旧日志缺字段按 v1 并留痕（design.md D8）。
-/// 段 A 只有征募棋池随内容集变化（信物表的 v1 / v2 分流在段 B），因此"信物分布与保存时一致"在段 A 由同一生成器保证，段 B 起才有分流可测。
+/// v1 = 原六种棋子（与引入新内容之前逐步相同），v2 = 十种；新局缺省 v2，旧存档 / 旧日志缺字段按 v1 并留痕（design.md D8）。
+/// relic-redesign W1：旧十类信物删除后内容集只管棋池；原"信物分布与保存时一致"改为"盘面（含信物层）与刷新记录与保存时一致"。
 /// </remarks>
 // retire-legacy-maps 1.8：样本对局由 v5（Legacy 夹具，经内部口 MatchFlow.RestoreLegacy 恢复）改到 link:1（链接模式，经玩家入口 MatchFlow.Restore 恢复）；断言不变。
 public class 对局内容集Tests
@@ -26,8 +25,8 @@ public class 对局内容集Tests
     private static MatchSession Played(ContentSet? set, ulong seed, int turns)
     {
         // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve。
-        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
-        MatchSession session = MatchSession.Create(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 0)) with { ContentSet = set }, seed, LinkModeFixtures.RelicMap);
+        // relic-redesign W1：原载体 LinkModeFixtures.RelicMap（手写信物格夹具）随旧信物删除，回到 link:1:4 生成图本身。
+        MatchSession session = MatchSession.Create(SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 0)) with { ContentSet = set }, seed, LinkModeFixtures.Map);
         for (int i = 0; i < turns && session.RunTurn(); i++)
         {
         }
@@ -35,28 +34,27 @@ public class 对局内容集Tests
         return session;
     }
 
-    private static (bool Revealed, RelicContent? Content)[] RelicStates(MatchFlow match) =>
-        [.. match.Relics.Coords.Order().Select(c => (match.Relics.IsRevealed(c), match.Relics.PublicStateOf(c).Content))];
+    /// <summary>盘面（含信物层）与信物刷新记录（预告 / 落位）的确定性文本。</summary>
+    private static string RelicStates(MatchFlow match) =>
+        match.Board.Serialize() + "\n" + string.Join("\n", match.RelicBatches.Select(b => b.ToString())) + $"\nnext={match.NextRelicId}";
 
     [Fact]
     public void 旧存档照常读取()
     {
-        // 规格 Scenario：恢复一个引入新棋子与新信物之前保存、已揭示若干信物的存档 → 恢复成功，内容集为 v1，每个信物格的类型与强度与保存时一致，后续征募不出现新棋子。
+        // 规格 Scenario：恢复一个引入新棋子之前保存的存档 → 恢复成功，内容集为 v1，盘面与信物刷新记录与保存时一致，后续征募不出现新棋子。
         // 旧存档的样本：v1 对局跑 16 个小回合后存档，再删掉 ContentSet 字段（引入之前的存档结构就是如此，其余字段不变）。
         MatchSession session = Played(ContentSet.V1, seed: 11, turns: 16);
         MatchFlow match = session.Match;
-        Assert.True(match.Relics.Coords.Count(match.Relics.IsRevealed) > 0, "样本口径：存档时应已揭示若干信物");
         JsonObject node = JsonNode.Parse(match.Serialize())!.AsObject();
         Assert.True(node.Remove("ContentSet"), "新存档应写出内容集字段");
         string legacy = node.ToJsonString();
 
         Assert.Equal(LinkModeFixtures.MapId, MatchFlow.SavedMapId(legacy));
-        MatchFlow restored = MatchFlow.Restore(LinkModeFixtures.RelicMap, legacy);   // 段 A3：存档的标识解析回无信物的生成图，恢复改用同一张带信物的夹具
+        MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(legacy)), legacy);
 
         Assert.Equal(ContentSet.V1, restored.ContentSet);
         Assert.True(restored.ContentSetBackfilled);
         Assert.Equal(ContentSet.V1, restored.Hands.ContentSet);
-        Assert.Equal(match.Relics.Generation, restored.Relics.Generation);
         Assert.Equal(RelicStates(match), RelicStates(restored));
 
         // 后续征募：恢复后的局再跑 24 个小回合，全部候选都在原六种之内。
@@ -124,18 +122,17 @@ public class 对局内容集Tests
     [Fact]
     public void 新存档往返()
     {
-        // 规格 Scenario：保存一局内容集为 v2 的对局并恢复 → 恢复后的内容集仍为 v2，信物分布与保存时一致。
+        // 规格 Scenario：保存一局内容集为 v2 的对局并恢复 → 恢复后的内容集仍为 v2，盘面（含信物层）与信物刷新记录与保存时一致。
         // v2 不是回填值（缺字段回填 v1），所以本用例同时证伪"写入路径漏写内容集"（testing.md「带回填兜底的字段，写入路径要用非回填值证伪」）。
         // 再各自续跑 8 个小回合：恢复局与原局的征募候选逐位相同（征募子流与棋池一起恢复）。
         MatchSession session = Played(ContentSet.V2, seed: 11, turns: 8);
         string json = session.Match.Serialize();
 
         Assert.Equal(LinkModeFixtures.MapId, MatchFlow.SavedMapId(json));
-        MatchFlow restored = MatchFlow.Restore(LinkModeFixtures.RelicMap, json);   // 段 A3：对局跑在带信物的夹具上，恢复用同一张图（经目录解析会因地图摘要不一致被拒）
+        MatchFlow restored = MatchFlow.Restore(MapCatalog.Resolve(MatchFlow.SavedMapId(json)), json);
 
         Assert.Equal(ContentSet.V2, restored.ContentSet);
         Assert.False(restored.ContentSetBackfilled);
-        Assert.Equal(session.Match.Relics.Generation, restored.Relics.Generation);
         Assert.Equal(RelicStates(session.Match), RelicStates(restored));
 
         int original = session.Match.Hands.Records.Count;

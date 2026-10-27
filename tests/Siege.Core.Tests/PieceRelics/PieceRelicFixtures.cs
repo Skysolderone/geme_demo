@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.PieceRelics;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.PieceRelics;
@@ -33,7 +32,7 @@ internal static class PieceRelicFixtures
     internal static GroupPower OnlyGroupV2(GameBoard board, PlayerId player)
     {
         var roster = board.AllGroups().Select(g => g.Owner).Distinct().ToDictionary(p => p, _ => PlayerStatus.Active);
-        PowerSnapshot snapshot = PowerCalculator.Compute(board, roster, ImmutableDictionary<Coord, RelicType>.Empty, ScoringVersion.V2);
+        PowerSnapshot snapshot = PowerCalculator.Compute(board, roster, ScoringVersion.V2);
         return Assert.Single(snapshot.Of(player).Groups);
     }
 

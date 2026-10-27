@@ -27,8 +27,10 @@ public class 开放地图阶段推进Tests
         Assert.Equal(4, match.MajorRound);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
         Assert.Empty(match.Settlements);
+        // relic-redesign W1：大回合开始时的信物预告 / 落位（D2）属于信物层，不是配对 / 链接事件，也不改地图——放进允许名单。
         Assert.DoesNotContain(match.Events, e => e.Kind != FlowEventKind.FlagsLocked && e.Kind != FlowEventKind.TurnStarted && e.Kind != FlowEventKind.StageEntered
-            && e.Kind != FlowEventKind.TurnEnded && e.Kind != FlowEventKind.MajorRoundEnded);
+            && e.Kind != FlowEventKind.TurnEnded && e.Kind != FlowEventKind.MajorRoundEnded
+            && e.Kind != FlowEventKind.RelicsForecast && e.Kind != FlowEventKind.RelicsLanded);
         Assert.NotNull(match.CurrentPlayer);
         Assert.Equal(4, match.ActionOrder.Length);
         Assert.Equal(P0, match.ActionOrder[0]);   // 只有 P0 有势力 → 势力名次第一、先手

@@ -95,15 +95,22 @@ public class 各棋子势力占比Tests
         int synergyWithBonus = 0;
         int withArtisanGroups = 0;
         int artisanWithSynergy = 0;
+        int exact = 0;
         foreach (GroupEntry g in groups)
         {
             Dictionary<string, int> c = Assert.IsType<Dictionary<string, int>>(g.PieceCounts);
             Assert.Equal(ContentSets.PieceTypesOf(ContentSet.V1).Select(t => t.ToString()), c.Keys.ToArray());   // 两份样本都是 v1：键 = 原六种（改写前为 Enum.GetNames，枚举追加四值后不再等于 v1 的键集合）
             Assert.Equal(g.Stones.Count, c.Values.Sum());
             Assert.Equal(g.MultiplierCount, c["Multiplier"]);
-            Assert.Equal(g.Base, c["Basic"] * 1 + c["Fortress"] * 4 + c["Line"] + c["Multiplier"] + c["Synergy"] + c["Artisan"]);
+            // relic-redesign W1：对局中途刷新的地图信物会被拾取——战鼓每件并入基础军势 +3、百变每件给协同子多算 1 种（日志的棋串条目不记挂着的信物，段 C 补遥测），
+            // 所以棋子计数给出的是下界，余量须是这两项的整数倍；无余量的棋串仍逐项相等。
+            int baseFromPieces = c["Basic"] * 1 + c["Fortress"] * 4 + c["Line"] + c["Multiplier"] + c["Synergy"] + c["Artisan"];
+            int baseResidual = g.Base - baseFromPieces;
+            Assert.True(baseResidual >= 0 && baseResidual % Siege.Core.PieceRelics.RelicKinds.UncalibratedWarDrumBase == 0, $"基础 {g.Base}，棋子计数给出 {baseFromPieces}");
             int otherTypes = new[] { "Basic", "Fortress", "Line", "Multiplier", "Artisan" }.Count(t => c[t] > 0);
-            Assert.Equal(g.SynergyBonus, c["Synergy"] * otherTypes * 2);
+            int synergyResidual = g.SynergyBonus - c["Synergy"] * otherTypes * 2;
+            Assert.True(synergyResidual == 0 || (c["Synergy"] > 0 && synergyResidual > 0 && synergyResidual % (c["Synergy"] * 2) == 0), $"协同加值 {g.SynergyBonus}，棋子计数给出 {c["Synergy"] * otherTypes * 2}");
+            exact += baseResidual == 0 && synergyResidual == 0 ? 1 : 0;
             if (g.LineBonus > 0)
             {
                 Assert.True(c["Line"] >= 2, $"连珠加值 {g.LineBonus} 但连珠子计数 {c["Line"]}");
@@ -115,6 +122,7 @@ public class 各棋子势力占比Tests
             artisanWithSynergy += c["Artisan"] > 0 && c["Synergy"] > 0 ? 1 : 0;
         }
 
+        Assert.True(exact * 10 >= groups.Count * 9, $"逐项相等的棋串只有 {exact} / {groups.Count}（挂信物的棋串应是少数）");
         Assert.True(fortressAndBasic > 0, "样本里没有同时含普通子与堡垒子的棋串");
         Assert.True(synergyWithBonus > 0, "样本里没有协同加值");
         Assert.True(withArtisanGroups > 0, "样本里没有含匠人的棋串 —— Base 等式的匠人项没有被触发");

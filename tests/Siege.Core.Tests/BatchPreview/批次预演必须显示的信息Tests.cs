@@ -55,7 +55,7 @@ public class 批次预演必须显示的信息Tests
         Assert.Null(batch.Stage(TestMaps.At("D4"), PieceType.Basic));
         Assert.Null(batch.Stage(TestMaps.At("C4"), PieceType.Basic));
 
-        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1), EmptyRelics(board), 5);
+        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1));
         PreviewPresentation shown = PreviewPresentation.Build(preview, EmptyHand(P0), LibertyThresholds.Default);
 
         Assert.False(shown.CanConfirm);

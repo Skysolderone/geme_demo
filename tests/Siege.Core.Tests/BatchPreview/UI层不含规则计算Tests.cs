@@ -5,7 +5,6 @@ using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using static Siege.Core.Tests.PresentationFixtures;
 
@@ -21,7 +20,7 @@ public class UI层不含规则计算Tests
         typeof(TerrainEditRules), typeof(TerrainWriter),          // artisan-terrain-edit 4.1：改造合法性与地形写入口的唯一实现在规则层。可改造目标由 Core 富预演的 EditOutlook.Legal 带过来，
                                                                   // 表现层只拼文案与高亮（变异 M-SC4 实做：PreviewPresentation.ArtisanEdit 自调 TerrainEditRules.Reject → 本测试红 1）
         typeof(LibertySnapshot), typeof(global::Siege.Core.Match.InitiativeOrder), typeof(FinalStandings), typeof(Adjacency), typeof(MapValidator),
-        typeof(RelicLedger), typeof(RelicGenerator), typeof(HandLedger), typeof(PlayerHandAccess), typeof(PowerScoreboard),
+        typeof(HandLedger), typeof(PlayerHandAccess), typeof(PowerScoreboard),
         typeof(MatchFlow), typeof(MatchRunner), typeof(SettlementDriver), typeof(StagedBatch), typeof(BoardHistory), typeof(FlagPlanting),
     ];
 
@@ -74,7 +73,7 @@ public class UI层不含规则计算Tests
     {
         // Presentation 是视图模型：任何字段、属性、方法参数与返回值都不得是对局本体、账本、暂放批次或私有句柄——对局操作意图由 Godot 层直接调 MatchFlow。
         // 变异验证 M-D3：给 ViewerWorld 加 `public StagedBatch? Batch { get; init; }` → 本测试红 1。
-        Type[] mutable = [typeof(MatchFlow), typeof(MatchRunner), typeof(HandLedger), typeof(RelicLedger), typeof(StagedBatch), typeof(PlayerHandAccess), typeof(SettlementDriver), typeof(BoardHistory), typeof(PowerScoreboard)];
+        Type[] mutable = [typeof(MatchFlow), typeof(MatchRunner), typeof(HandLedger), typeof(StagedBatch), typeof(PlayerHandAccess), typeof(SettlementDriver), typeof(BoardHistory), typeof(PowerScoreboard)];
         const BindingFlags all = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
         var found = new List<string>();
         foreach (Type type in PresentationAssembly.GetTypes())

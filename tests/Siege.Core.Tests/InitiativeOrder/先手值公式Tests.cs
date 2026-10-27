@@ -9,16 +9,13 @@ namespace Siege.Core.Tests.InitiativeOrder;
 /// <summary>规格：initiative-order —— Requirement: 先手值公式</summary>
 public class 先手值公式Tests
 {
-    private static InitiativeEntry Entry(PlayerId p, int active, int rank, int bonus, long power = 0, int? previous = null, int seedRank = 0) =>
-        new(p, rank, power, bonus, Flow.ValueOf(active, rank, bonus), previous, seedRank);
-
     [Fact]
     public void 四人局基础先手值()
     {
-        // 设计文档 §11.2：4 名参赛玩家，势力名次 4 且无先锋 → (4 − 4) + 0 = 0。
+        // 设计文档 §11.2：4 名参赛玩家，势力名次 4 → 4 − 4 = 0（relic-redesign D4：先锋修正随旧信物删除）。
         // 变异验证 M-I3：ValueOf 写成 activeCount − rank + 1 → 红 3（本类三个测试）。
-        Assert.Equal(0, Flow.ValueOf(4, 4, 0));
-        Assert.Equal(3, Flow.ValueOf(4, 1, 0));
+        Assert.Equal(0, Flow.ValueOf(4, 4));
+        Assert.Equal(3, Flow.ValueOf(4, 1));
 
         // 流程层：第 4 名的明细 Value 为 0
         MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
@@ -29,35 +26,15 @@ public class 先手值公式Tests
         match.PlayTurn("K10");
         InitiativeEntry last = match.InitiativeReports.Single().Of(TestMaps.P3);
         Assert.Equal(4, last.Rank);
-        Assert.Equal(0, last.Bonus);
         Assert.Equal(0, last.Value);
-    }
-
-    [Fact]
-    public void 先锋推动低名次玩家前移()
-    {
-        // 设计文档 §11.2 算例：第 4 名拥有先手 +2 → 先手值 (4 − 4) + 2 = 2，可与原第 2 名（4 − 2 = 2）竞争行动位置；
-        // 同值链第 1 条"先手修正更高者优先"让第 4 名排到第 2 名之前。
-        ImmutableArray<InitiativeEntry> entries =
-        [
-            Entry(TestMaps.P0, 4, 1, 0, power: 80),
-            Entry(TestMaps.P1, 4, 2, 0, power: 55),
-            Entry(TestMaps.P2, 4, 3, 0, power: 40),
-            Entry(TestMaps.P3, 4, 4, 2, power: 12),
-        ];
-        Assert.Equal(2, entries[3].Value);
-        Assert.Equal(2, entries[1].Value);
-
-        InitiativeReport report = Flow.Generate(1, entries);
-        Assert.Equal(new[] { TestMaps.P0, TestMaps.P3, TestMaps.P1, TestMaps.P2 }, report.NextOrder);
     }
 
     [Fact]
     public void 参赛人数变化影响公式()
     {
-        // 设计文档 §11.2：4 人局 2 人已出局，剩余 2 名参赛玩家，名次第 1 无先锋 → (2 − 1) + 0 = 1。
+        // 设计文档 §11.2：4 人局 2 人已出局，剩余 2 名参赛玩家，名次第 1 → 2 − 1 = 1。
         // 变异验证 M-I4：EndMajorRound 用 _players.Length 代替参赛人数 → 红 1（本测试流程断言）。
-        Assert.Equal(1, Flow.ValueOf(2, 1, 0));
+        Assert.Equal(1, Flow.ValueOf(2, 1));
 
         MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
             .Stones(TestMaps.P0, "D4", "D3", "J10")

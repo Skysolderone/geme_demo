@@ -1,8 +1,8 @@
 using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
+using Siege.Core.Recruit;
 
 namespace Siege.Core.Tests.CoverageTerritory;
 
@@ -34,31 +34,6 @@ public class 弃赛玩家的遗留棋子仍产生覆盖Tests
         Assert.Equal(3, d.ExclusiveCells.Length);
         Assert.Equal((3, (BigInteger)4), (d.TerritoryScore, d.Total));
         Assert.Equal(["C6", "E6", "D7"], d.ExclusiveCells.Notations());
-    }
-
-    [Fact]
-    public void 弃赛者遗留棋子封锁信物()
-    {
-        // restore-go-core-rules coverage-territory 规格（段 A 新增的 Scenario）：
-        // 已弃赛玩家 D（F7）与参赛玩家 A（D7）同时覆盖空的信物格 E7 → 该信物判定为争议，A 不获得其效果。
-        // 与「弃赛者遗留棋子制造争议」的区别在于落点是信物格：归属三态与信物控制读同一份覆盖表，弃赛者的覆盖照常参与。
-        // A 的效果快照取缺省值（部署上限 3）即"没拿到军令"；同时钉住 A 的领地分不含 E7。
-        // 变异验证 M-AC8（本次 check 实跑）：RelicLedger.RecalculateCore 的 OwnershipKind.Contested 分支改为
-        // Resolve(最小编号的覆盖者, …)（争议也判给人）→ 红 12，含本测试。
-        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
-        board.Place("D7", TestMaps.P0).Place("F7", ScoringFixtures.P3);
-        IReadOnlyDictionary<PlayerId, PlayerStatus> roster = ScoringFixtures.Roster(
-            (TestMaps.P0, PlayerStatus.Active), (ScoringFixtures.P3, PlayerStatus.Resigned));
-
-        ledger.Settle(board, 1, roster);
-        PowerSnapshot snapshot = PowerCalculator.Compute(board, roster);
-
-        Assert.True(board[TestMaps.At("E7")].IsRelicCell);
-        Assert.Equal(OwnershipKind.Contested, snapshot.Coverage.OwnershipOf(TestMaps.At("E7")).Kind);
-        Assert.Equal(RelicControl.Contested, ledger.ControlOf(TestMaps.At("E7")));
-        Assert.False(ledger.ControlOf(TestMaps.At("E7")).GrantsEffectTo(TestMaps.P0));
-        Assert.Equal(EffectSnapshot.BaseDeployLimitFor(1), ledger.SnapshotFor(TestMaps.P0, board, roster, 0, 1).DeployLimit);
-        Assert.DoesNotContain(TestMaps.At("E7"), snapshot.Of(TestMaps.P0).ExclusiveCells);
     }
 
     [Fact]

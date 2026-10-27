@@ -110,7 +110,7 @@ public sealed class FlagPlanting
         _seed = seed;
     }
 
-    /// <summary>地图（地形、出生区、信物格位置全部公开）。</summary>
+    /// <summary>地图（地形、出生区全部公开）。</summary>
     public MapData Map { get; }
 
     /// <summary>配置的时限；<see cref="TimeSpan.Zero"/> 为立即。</summary>

@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
@@ -72,7 +71,7 @@ public sealed partial class MatchFlow
     private void SettleAtRoundEnd()
     {
         // 结算用的势力按此刻盘面现算（与终局名次同一口径）。
-        PowerSnapshot power = Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents(), ScoringVersion);
+        PowerSnapshot power = Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), ScoringVersion);
         MarkEstablishedPower(power);
         int? order = null;
         foreach (BattlefieldVerdict verdict in JudgeAtRoundEnd(power, _passedThisRound))
@@ -93,7 +92,6 @@ public sealed partial class MatchFlow
     /// </summary>
     private ImmutableArray<BattlefieldVerdict> JudgeAtRoundEnd(PowerSnapshot power, IReadOnlySet<PlayerId> passed)
     {
-        ImmutableArray<RelicPublicState> relics = Relics.PublicStates();
         ImmutableArray<BattlefieldVerdict>.Builder verdicts = ImmutableArray.CreateBuilder<BattlefieldVerdict>();
         foreach (int id in OccupiedBattlefields())
         {
@@ -109,7 +107,7 @@ public sealed partial class MatchFlow
                 : null;
             if (reason is { } r)
             {
-                verdicts.Add(Judge(id, r, power, relics, winner: null));
+                verdicts.Add(Judge(id, r, power, winner: null));
             }
         }
 
@@ -156,15 +154,15 @@ public sealed partial class MatchFlow
     private BattlefieldSettlementRecord SettleBattlefield(int battlefieldId, SettlementReason reason, int? order, PlayerId? winner)
     {
         PowerSnapshot power = Scoreboard.Latest ?? throw new SiegeRuleException("尚无势力快照，不能结算战场。");
-        return ExecuteSettlement(Judge(battlefieldId, reason, power, Relics.PublicStates(), winner), order);
+        return ExecuteSettlement(Judge(battlefieldId, reason, power, winner), order);
     }
 
     /// <summary>
-    /// 结算判定的<b>唯一</b>比较链（battlefield「战场结算」，<b>无副作用</b>）：战场内在局玩家按 势力 → 控制信物数 → 独占空格数 → 盘面棋子数 排序
+    /// 结算判定的<b>唯一</b>比较链（battlefield「战场结算」，<b>无副作用</b>）：战场内在局玩家按 势力 → 持有信物数 → 独占空格数 → 盘面棋子数 排序
     /// （链全同时按种子兜底顺序 <c>SeedRank</c> 靠前者为胜者、不因并列而不结算，裁决 S6），第一名为胜者、其余为落败者并给出名次（比较链全同者并列）。
     /// <paramref name="winner"/> 非空时直接以它为胜者（减员结算与测试接缝），其余照常排序。
     /// </summary>
-    private BattlefieldVerdict Judge(int battlefieldId, SettlementReason reason, PowerSnapshot power, ImmutableArray<RelicPublicState> relics, PlayerId? winner)
+    private BattlefieldVerdict Judge(int battlefieldId, SettlementReason reason, PowerSnapshot power, PlayerId? winner)
     {
         if (_settledBattlefields.Contains(battlefieldId))
         {
@@ -178,7 +176,7 @@ public sealed partial class MatchFlow
         }
 
         List<SettlementEntry> chain = [.. members
-            .Select(p => new SettlementEntry(p, 0, power.Of(p).Total, relics.Count(s => s.Control.GrantsEffectTo(p)),
+            .Select(p => new SettlementEntry(p, 0, power.Of(p).Total, Board.HeldRelicCount(p),
                 power.Of(p).ExclusiveCells.Length, Board.GroupsOf(p).Sum(g => g.Size)))
             .OrderBy(e => e, SettlementChain.Instance)
             .ThenBy(e => _records[e.Player].SeedRank)];
@@ -241,7 +239,7 @@ public sealed partial class MatchFlow
     internal void DebugSettleBattlefield(int battlefieldId, PlayerId winner)
     {
         RequireStage(TurnStage.Idle);
-        MarkEstablishedPower(Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), Relics.TrueContents(), ScoringVersion));
+        MarkEstablishedPower(Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), ScoringVersion));
         SettleBattlefield(battlefieldId, SettlementReason.AllPassed, order: null, winner);
         RecalculateDerived();
         if (LastBattlefieldSettled())
@@ -261,7 +259,7 @@ public sealed partial class MatchFlow
         }
     }
 
-    /// <summary>战场结算与名次的比较链：势力 → 控制信物数 → 独占空格数 → 盘面棋子数，全部"高者在前"；四级全同返回 0。</summary>
+    /// <summary>战场结算与名次的比较链：势力 → 持有信物数 → 独占空格数 → 盘面棋子数，全部"高者在前"；四级全同返回 0。</summary>
     private sealed class SettlementChain : IComparer<SettlementEntry>
     {
         internal static readonly SettlementChain Instance = new();
@@ -273,7 +271,7 @@ public sealed partial class MatchFlow
             int c = b.Power.CompareTo(a.Power);
             if (c == 0)
             {
-                c = b.ControlledRelics.CompareTo(a.ControlledRelics);
+                c = b.HeldRelics.CompareTo(a.HeldRelics);
             }
 
             if (c == 0)

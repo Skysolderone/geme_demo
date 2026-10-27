@@ -4,7 +4,6 @@ using Siege.Core.Board;
 using Siege.Core.Carry;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.CarryInOut;
@@ -41,7 +40,7 @@ internal static class CarryFixtures
     internal static ResignationSnapshot Resignation(PlayerId player, int majorRound, int? rankAtResign) =>
         new(player, majorRound, string.Empty,
             new HandPrivateView(player, ImmutableSortedDictionary<PieceType, HandEntry>.Empty, TurnPhase.Idle, null),
-            EffectSnapshot.Defaults(player, majorRound, 0), [], BigInteger.Zero, rankAtResign);
+            EffectSnapshot.Defaults(player, majorRound, 0), BigInteger.Zero, rankAtResign);
 
     /// <summary>纯函数用的名次输入：只给状态与势力（出局者给出局序号），其余并列链项取 0。</summary>
     internal static StandingInput Input(int player, PlayerStatus status, int power, int? eliminationOrder = null) =>

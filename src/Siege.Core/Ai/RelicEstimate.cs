@@ -1,63 +1,54 @@
 using Siege.Core.Board;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
+using Siege.Core.Scoring;
 
 namespace Siege.Core.Ai;
 
 /// <summary>
-/// 对信物的价值估计（设计文档 §15.1）。未揭示信物只用<b>公开输入</b>：对局内容集（<c>MatchPublicView.ContentSet</c>，开局固定、始终公开）
-/// 下所在分区的权重表（直接引用 <see cref="RelicWeights"/>，单一实现）。
-/// 输入类型是 <see cref="RelicPublicState"/>——未揭示时其 <c>Content</c> 为 <c>null</c>，真实内容在类型上不可达。
+/// AI 评价"信物"维的盘面总分（设计文档 §15.1，维度 3）。relic-redesign 接线段 W1：旧十类地图信物（揭示 / 控制 / 分区先验）随旧系统删除，
+/// 这里只给<b>按新信物层的最简估计</b>——挂在己方棋子上的每件 +<see cref="UncalibratedFlatValue"/>、挂在参赛中敌方棋子上的每件 −<see cref="UncalibratedFlatValue"/>，
+/// 地图信物（空格上）与弃赛 / 出局者棋子上的不计。<b>段 C 重写</b>（design.md D5：按"拾取后势力增量 / 提走后掉落可被拾取"估值、重标权重）。
 /// </summary>
+/// <remarks>
+/// 信物的计分效果（战鼓 / 号令 / 百变 / 军旗、旗手子）已经经唯一的势力计算进入"即时势力增量"维：盘面副本带信物层，预演即可看到拾取后的势力。
+/// 本维只反映"持有"本身的价值，输入只有公开盘面（信物层全公开，R22），不读任何私有信息。
+/// </remarks>
 public static class RelicEstimate
 {
+    /// <summary>每件持有信物的价值：<b>未校准的初值 5</b>（不分种类；段 C 重写）。</summary>
+    public const int UncalibratedFlatValue = 5;
+
     /// <summary>
-    /// 类型价值（强度 +1）。军令最高：部署上限直接放大每回合的行动量。
-    /// 新四类（more-pieces-relics D10）是<b>未校准的初值</b>：驿站 6、工坊 4、连营 3、犄角 3。连营 / 犄角取低值，
-    /// 因为它们的计分效果已经经唯一的势力计算进入"即时势力增量"，信物维只反映"占到它"的一次性价值。
+    /// 盘面总分：Σ 挂在 <paramref name="me"/> 棋子上的信物 × 价值 − Σ 挂在参赛中敌方棋子上的信物 × 价值。
+    /// <paramref name="roster"/> 里不在册或非参赛中的持有者不计（与旧维度"弃赛者封锁 0"同口径）。
     /// </summary>
-    public static int ValueOf(RelicType type) => type switch
+    public static long Score(GameBoard board, PlayerId me, IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
-        RelicType.Command => 10,
-        RelicType.Conscription => 8,
-        RelicType.Vanguard => 7,
-        RelicType.Prospecting => 6,
-        RelicType.Depot => 5,
-        RelicType.SchoolEmblem => 4,
-        RelicType.Relay => 6,         // 未校准初值（D10）
-        RelicType.Workshop => 4,      // 未校准初值（D10）
-        RelicType.Encampment => 3,    // 未校准初值（D10）
-        RelicType.Pincer => 3,        // 未校准初值（D10）
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知信物类型。"),
-    };
-
-    /// <summary>已揭示内容的价值：类型价值 × 强度。</summary>
-    public static int ValueOf(RelicContent content) => ValueOf(content.Type) * content.Magnitude;
-
-    /// <summary>某内容集、某分区中某类型的先验权重（设计文档 §8.2；v1 百分制、v2 千分制），直接读生成权重表。</summary>
-    public static int PriorWeight(RelicZone zone, RelicType type, ContentSet set) => RelicWeights.WeightOf(zone, type, set);
-
-    /// <summary>归一分母 = 该内容集权重表的合计（v1 100、v2 1000，D6：取自表，不写死）。</summary>
-    public static int ScaleOf(ContentSet set) => RelicWeights.TotalOf(set);
-
-    /// <summary>未揭示信物的期望价值（× <see cref="ScaleOf"/> 单位）：Σ 该内容集下所在分区的先验权重 × 类型价值，按强度 +1 计。</summary>
-    public static int ExpectedValueScaled(RelicZone zone, ContentSet set)
-    {
-        int total = 0;
-        foreach (RelicType type in RelicWeights.OrderOf(set))
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(roster);
+        if (!board.HasRelics)
         {
-            total = checked(total + (PriorWeight(zone, type, set) * ValueOf(type)));
+            return 0;
         }
 
-        return total;
-    }
+        long score = 0;
+        foreach (BoardRelic relic in board.RelicsOnBoard())
+        {
+            if (board[relic.Cell].Occupant is not { } holder)
+            {
+                continue;
+            }
 
-    /// <summary>
-    /// 对一个公开状态的价值估计（价值单位）：已揭示 → 真实内容；未揭示 → 该对局内容集下的分区先验期望，按表合计归一后向下取整
-    /// （v2：出生区 5152 / 1000 → 5、公共区 5692 / 1000 → 5；v1：544 / 100 → 5、635 / 100 → 6）。
-    /// </summary>
-    public static int Estimate(RelicPublicState state, ContentSet set)
-    {
-        ArgumentNullException.ThrowIfNull(state);
-        return state.Content is { } content ? ValueOf(content) : ExpectedValueScaled(state.Spec.Zone, set) / ScaleOf(set);
+            if (holder.Owner == me)
+            {
+                score += UncalibratedFlatValue;
+            }
+            else if (roster.TryGetValue(holder.Owner, out PlayerStatus status) && status == PlayerStatus.Active)
+            {
+                score -= UncalibratedFlatValue;
+            }
+        }
+
+        return score;
     }
 }

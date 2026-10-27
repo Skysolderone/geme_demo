@@ -49,7 +49,7 @@ public sealed record RelicForecast(int LandingRound, ImmutableArray<RelicSpawnSl
 /// <para>位置：候选 = 可落子空格 − 出生区域 − 与任一棋子切比雪夫距离 &lt; 2 的格 − 已有信物的格，按坐标字典序排列后逐件不放回抽取。
 /// 落位时若预告格已被占或已有信物，则跳过该件（不重抽，保持预告与落位一致）。</para>
 /// <para>类型：85 / 15 普通 / 稀有，普通四种等权。数值全是未校准初值（<see cref="RelicKinds"/>）。</para>
-/// <para>relic-redesign 加法段：只提供函数，对局流程尚未调用。</para>
+/// <para>对局流程由 <c>MatchFlow</c> 在大回合开始时调用（relic-redesign 接线段 W1）：先落位到期的预告，再预告下一批。</para>
 /// </remarks>
 public static class RelicSpawner
 {

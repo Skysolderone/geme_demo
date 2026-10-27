@@ -50,7 +50,7 @@ public class 盘面派生量提速对照Tests
             int fences = 0;
             foreach (Coord c in map.AllCoords())
             {
-                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, c, workshop: true))
+                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, c))
                 {
                     if (seen.Add(edit) && (small || edit.Kind != TerrainEditKind.Fence || fences++ % FenceStride == 0))
                     {
@@ -336,7 +336,6 @@ public class 盘面派生量提速对照Tests
             }
         }
 
-        var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
         return new MapData
         {
             Id = $"test-c2-random-{seed}",
@@ -345,7 +344,6 @@ public class 盘面派生量提速对照Tests
             MaxPlayers = 4,
             Obstacles = [.. obstacles],
             BirthZones = [[new Coord(0, 0), new Coord(1, 0)], [new Coord(size - 1, size - 1)]],
-            RelicCells = new[] { new Coord(size / 2, size / 2), new Coord(1, size - 2) }.ToImmutableDictionary(c => c, _ => spec),
             ChokePoints = [new Coord(size / 2, size / 2)],
             CentralEntrance = new Coord(size / 2, size / 2),
             TerrainData = new TerrainData(heights.ToImmutableDictionary(), surfaces.ToImmutableDictionary(), [.. bridges], [.. fences]),

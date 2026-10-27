@@ -14,12 +14,13 @@ namespace Siege.Sim.Logging;
 /// <remarks>
 /// <para>match-telemetry「对局日志的记录内容」八类记录 → 字段映射：</para>
 /// <list type="table">
-/// <item><term>1. 地图、种子、对局内容集、完整信物分布及揭示时间</term><description><see cref="LogHeader.MapId"/> / <see cref="LogHeader.Seed"/>、内容集在首部配置 <c>Config.ContentSet</c>（缺项的旧日志按 v1，见 <see cref="ContentSet"/>）与 <see cref="LogHeader.Relics"/>（含真实内容）；揭示大回合在 <see cref="LogResult.RelicReveals"/>（未揭示为 <c>null</c>），过程中的揭示为 <c>Reveal</c> 事件</description></item>
+/// <item><term>1. 地图、种子、对局内容集</term><description><see cref="LogHeader.MapId"/> / <see cref="LogHeader.Seed"/>、内容集在首部配置 <c>Config.ContentSet</c>（缺项的旧日志按 v1，见 <see cref="ContentSet"/>）。
+/// relic-redesign 接线段 W1：旧静态信物分布、揭示与控制随旧信物删除；挂在棋子上的信物的刷新 / 拾取 / 掉落 / 带出遥测留给段 C</description></item>
 /// <item><term>2. 每轮征募候选、玩家选择、被 Pass 撤销的征募数</term><description><c>Recruit</c> 事件：<see cref="LogEvent.Detail"/> 为候选 / 选取 / 弃牌文本，<see cref="LogEvent.Values"/> 含 <c>Recruited</c> / <c>Revoked</c> / <c>Deployed</c>（私有量，来源玩家 = <see cref="LogEvent.Player"/>）</description></item>
 /// <item><term>3. 每次批次落子、合法性结果、提子数、同形检查</term><description><c>Settled</c> 事件（落点、提子、<c>SuperkoPassed</c>）、<c>Rejected</c> 事件（失败类别 + 坐标）、<c>Rehearsal</c> 事件（预演失败，仅完整模式）；快照的 <see cref="TurnSnapshot.Placements"/> / <see cref="TurnSnapshot.Captures"/></description></item>
-/// <item><term>4. 每次地形改造（大回合、小回合、改造方、动作、目标、是否致提子）</term><description><see cref="TurnSnapshot.Edits"/>（大回合 / 小回合由所在快照给出；是否经工坊扩展 <see cref="TerrainEditEntry.ViaWorkshop"/>）；配置的匠人权重在 <see cref="LogHeader.ArtisanWeight"/></description></item>
-/// <item><term>5. 信物控制变化、结构参数、行动顺序</term><description><c>ControlChanged</c> 事件（信物）；<see cref="TurnSnapshot.ShowCount"/>（驿站来源 <see cref="TurnSnapshot.RelaySources"/>、工坊 <see cref="TurnSnapshot.WorkshopActive"/>）/ <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手修正在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>（<c>P0.Bonus</c>）；<see cref="TurnSnapshot.ActionOrder"/></description></item>
-/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍增子数量、倍率与最终军势；每名玩家的领地分</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>BannerBonus</c> / <c>ChainBonus</c> / <c>SentryBonus</c> / <c>BoundaryBonus</c>（七项来源；另有连营 / 犄角子拆分）/ <c>MultiplierCount</c>（即倍率指数，倍率 = 1.5^n 由它得出）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；
+/// <item><term>4. 每次地形改造（大回合、小回合、改造方、动作、目标、是否致提子）</term><description><see cref="TurnSnapshot.Edits"/>（大回合 / 小回合由所在快照给出）；配置的匠人权重在 <see cref="LogHeader.ArtisanWeight"/></description></item>
+/// <item><term>5. 结构参数、行动顺序</term><description><see cref="TurnSnapshot.ShowCount"/> / <see cref="TurnSnapshot.FreePickCount"/> / <see cref="TurnSnapshot.TypeSlots"/> / <see cref="TurnSnapshot.DeployLimit"/>；先手值明细在 <c>MajorRoundEnded</c> 事件的 <see cref="LogEvent.Values"/>；<see cref="TurnSnapshot.ActionOrder"/></description></item>
+/// <item><term>6. 每个棋串的基础军势、位置加值（来源拆分）、倍增子数量、倍率与最终军势；每名玩家的领地分</term><description><see cref="GroupEntry"/>：<c>Base</c> / <c>LineBonus</c> / <c>SynergyBonus</c> / <c>HighGroundBonus</c> / <c>BannerBonus</c> / <c>ChainBonus</c> / <c>SentryBonus</c> / <c>BoundaryBonus</c>（七项来源）/ <c>MultiplierCount</c>（即倍率指数，倍率 = 1.5^n 由它得出）/ <c>Power</c> / <c>PieceCounts</c>（各棋子类型计数）；
 /// <see cref="PlayerEntry.TerritoryScore"/>（独占空格数）与 <see cref="PlayerEntry.Total"/>（= 领地分 + Σ军势）。势力与军势一律精确十进制整数（JSON 数字，不加引号、无指数）</description></item>
 /// <item><term>7. 势力排名变化、Pass、出局、弃赛、最终结果与结束原因</term><description><c>RankChanged</c> 事件；<see cref="TurnSnapshot.Passed"/>；<c>PlayerEliminated</c> / <c>PlayerResigned</c> 事件；<see cref="PlayerEntry.HasEstablishedPower"/>（出局判据的"曾建立正势力"标记）；
 /// <see cref="LogResult"/>：<see cref="LogResult.Reason"/> 为规则终局原因（链接局为 LastPlayerStanding / LastBattlefieldSettled；旧日志另有 BoardFull / AllPassed，见 <see cref="LogResult.LegacyBoardFull"/> / <see cref="LogResult.LegacyAllPassed"/>），或跑局层截断 <see cref="LogResult.TurnLimitReason"/>（此时无名次与胜者）</description></item>
@@ -436,12 +437,6 @@ public sealed record LogHeader
     /// <summary>首回合行动顺序。</summary>
     public List<int> FirstOrder { get; init; } = [];
 
-    public List<RelicEntry> Relics { get; init; } = [];
-
-    public bool RelicsConverged { get; init; }
-
-    public int RelicRerolls { get; init; }
-
     public List<int> DebugAiPlayers { get; init; } = [];
 
     /// <summary>本局实际采用的事件保留策略（抽样 / 失败提升后的结果）。</summary>
@@ -536,13 +531,6 @@ public sealed record TerrainEditEntry
     /// <summary>该次改造是否直接导致提子。</summary>
     public bool CausedCapture { get; init; }
 
-    /// <summary>
-    /// 目标是否经工坊扩展（隔一格，more-pieces-relics D12），取自 Core 留痕 <c>TerrainEditRecord.ViaWorkshop</c>。
-    /// 只在内容集 v2 的对局写出（含 <c>false</c>）；v1 局与旧日志为 <c>null</c>，按"否"读。
-    /// 本类新字段一律 <c>WhenWritingNull</c>（属性级，任何序列化选项下都生效）：v1 局日志与快照比对文本逐字节不变。
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? ViaWorkshop { get; init; }
 }
 
 /// <summary>
@@ -642,23 +630,7 @@ public sealed record LifePlayerEntry
     public int TerrainSmallEyeSpaces { get; init; }
 }
 
-/// <summary>一枚信物的完整内容（事后记录）。</summary>
-public sealed record RelicEntry
-{
-    public required string Coord { get; init; }
-
-    public required string Zone { get; init; }
-
-    public required string Budget { get; init; }
-
-    public required string Type { get; init; }
-
-    public int Magnitude { get; init; }
-
-    public string? EmblemPiece { get; init; }
-}
-
-/// <summary>每小回合结束时的快照：各玩家势力明细、结构参数、控制信物、手牌类型（无数量）。</summary>
+/// <summary>每小回合结束时的快照：各玩家势力明细、结构参数、手牌类型（无数量）。</summary>
 public sealed record TurnSnapshot
 {
     public const string KindName = "turn";
@@ -698,24 +670,11 @@ public sealed record TurnSnapshot
 
     public List<PlayerEntry> PlayersState { get; init; } = [];
 
-    public List<RelicStateEntry> Relics { get; init; } = [];
-
     /// <summary>
     /// 本小回合完成的地形改造（坐标序由结算顺序给出）。<b>没有改造时写空表 <c>[]</c>，不是 <c>null</c></b>——
     /// artisan-terrain-edit 之前的旧日志才是 <c>null</c>，分析时整局排除并计数（R-6），MUST NOT 回填成空表。
     /// </summary>
     public List<TerrainEditEntry>? Edits { get; init; }
-
-    /// <summary>
-    /// 行动玩家本小回合展示数的驿站来源（坐标 → 该枚加成，含 +0，逐枚；more-pieces-relics D4 / D12），取自效果快照。
-    /// 只在内容集 v2 的对局写出（没有驿站即空表）；v1 局与旧日志为 <c>null</c>，按"无驿站加成"读。
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, int>? RelaySources { get; init; }
-
-    /// <summary>行动玩家本小回合工坊是否生效（快照标记，D5）。只在内容集 v2 的对局写出；v1 局与旧日志为 <c>null</c>，按"否"读。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? WorkshopActive { get; init; }
 
     /// <summary>
     /// 活形记录（life-shape 4.1）。新日志每条快照都写（没有变化就是空表与 0），life-shape 之前的旧日志为 <c>null</c>：
@@ -727,7 +686,7 @@ public sealed record TurnSnapshot
     /// 专家前瞻记录（expert-lookahead / match-telemetry「专家前瞻的记录」）：行动玩家本小回合的部署决策是专家（前瞻宽度大于 0）时写出，
     /// 大回合 / 小回合 / 玩家由本快照给出。非专家的小回合与引入之前的旧日志为 <c>null</c>，不写出——只含简单 / 标准 / 高难的日志与改动前逐字节相同。
     /// 只含确定性内容（不含墙钟耗时），回放时重新产生、随确定性文本逐行核对。
-    /// 属性级 <c>WhenWritingNull</c>（同 <see cref="RelaySources"/>）：任何序列化选项下都不写出 <c>null</c>，既有快照文本与黄金哈希不变。
+    /// 属性级 <c>WhenWritingNull</c>：任何序列化选项下都不写出 <c>null</c>，既有快照文本与黄金哈希不变。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LookaheadLogEntry? Lookahead { get; init; }
@@ -895,7 +854,7 @@ public sealed record GroupEntry
     public int? HighGroundBonus { get; init; }
 
     /// <summary>
-    /// 旗手子来源（more-pieces-relics D1 / D12）。以下四项新来源与两项计分信物子拆分只在内容集 v2 的对局写出（含 0）；
+    /// 旗手子来源（more-pieces-relics D1 / D12）。以下四项新来源只在内容集 v2 的对局写出（含 0）；
     /// v1 局与旧日志为 <c>null</c>，按 0 读（规格明文允许回填：v1 局里不存在这些来源，0 就是真值；与 <see cref="HighGroundBonus"/> 等"MUST NOT 回填"的字段不同）。
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -912,14 +871,6 @@ public sealed record GroupEntry
     /// <summary>界碑子来源（同上）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? BoundaryBonus { get; init; }
-
-    /// <summary><see cref="LineBonus"/> 中由连营带来的额外部分（子拆分，不是第八项来源；取自 <c>GroupPower.EncampmentBonus</c>）。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? EncampmentBonus { get; init; }
-
-    /// <summary><see cref="SynergyBonus"/> 中由犄角带来的额外部分（子拆分；取自 <c>GroupPower.PincerBonus</c>）。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? PincerBonus { get; init; }
 
     /// <summary>四种新来源之和，缺字段（v1 局 / 旧日志）按 0 读。只读派生量，不写进日志。</summary>
     [JsonIgnore]
@@ -945,17 +896,6 @@ public sealed record GroupEntry
     /// 此前的旧日志没有该字段，解析为 <c>null</c>（未知）：分析时跳过该局的占比统计，MUST NOT 回填成 0——那会把旧局错算成"全是某种棋子"。
     /// </summary>
     public Dictionary<string, int>? PieceCounts { get; init; }
-}
-
-public sealed record RelicStateEntry
-{
-    public required string Coord { get; init; }
-
-    public bool Revealed { get; init; }
-
-    public required string Control { get; init; }
-
-    public int? Holder { get; init; }
 }
 
 /// <summary>一条事件。<see cref="Type"/> 见 <see cref="LogEventType"/>。</summary>
@@ -1035,7 +975,7 @@ public sealed record SettlementRankEntry
 
     public BigInteger Power { get; init; }
 
-    public int ControlledRelics { get; init; }
+    public int HeldRelics { get; init; }
 
     public int ExclusiveCells { get; init; }
 
@@ -1050,8 +990,6 @@ public static class LogEventType
     public const string Rejected = "Rejected";
     public const string Settled = "Settled";
     public const string Candidates = "Candidates";
-    public const string Reveal = "Reveal";
-    public const string ControlChanged = "ControlChanged";
     public const string RankChanged = "RankChanged";
     public const string MajorRoundEnded = "MajorRoundEnded";
     public const string PlayerEliminated = "PlayerEliminated";
@@ -1121,15 +1059,10 @@ public sealed record LogResult
 
     public List<TakeoverEntry> Takeovers { get; init; } = [];
 
-    /// <summary>每枚信物的揭示大回合；整局未揭示为 <c>null</c>。</summary>
-    public List<RelicRevealEntry> RelicReveals { get; init; } = [];
-
     public PeakEntry? Peak { get; init; }
 
     /// <summary>峰值串是否在之后被摧毁（日志层比对相邻快照，裁决 6）；无峰值为 <c>null</c>。</summary>
     public bool? PeakDestroyed { get; init; }
-
-    public int? DeployLimitPeak { get; init; }
 
     public long? TotalMs { get; init; }
 
@@ -1154,7 +1087,7 @@ public sealed record StandingEntry
 
     public BigInteger Power { get; init; }
 
-    public int ControlledRelics { get; init; }
+    public int HeldRelics { get; init; }
 
     /// <summary>独占空格数（并列链第 3 级，restore-go-core-rules D4）。旧日志为 <c>null</c>。</summary>
     public int? ExclusiveCells { get; init; }
@@ -1179,13 +1112,6 @@ public sealed record TakeoverEntry
     public required string Stage { get; init; }
 
     public required string Kind { get; init; }
-}
-
-public sealed record RelicRevealEntry
-{
-    public required string Coord { get; init; }
-
-    public int? RevealedInMajorRound { get; init; }
 }
 
 public sealed record PeakEntry

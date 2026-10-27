@@ -25,7 +25,7 @@ public class 棋盘清单Tests
     {
         // 规格 Scenario：导出一张没有棋盘清单的手写测试夹具地图再读回 → 导出文件不含棋盘清单字段，读回后清单为空。
         // retire-legacy-maps 1.6 新增：接替「旧地图没有棋盘清单」（读入七张旧地图文件再导出；maps/ 随旧地图删除）。
-        MapData map = TestMaps.NineByNine("E5");
+        MapData map = TestMaps.NineByNine();
         string json = MapFile.ToJson(map);
         MapData restored = MapFile.FromJson(json);
 
@@ -280,7 +280,7 @@ public class 棋盘清单Tests
     private static MatchFlow Started(MapData map)
     {
         MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
-            map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate with { ContentSet = ContentSet.V1 })));
+            map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate with { ContentSet = ContentSet.V1 })));
         foreach (PlayerId p in TestMaps.All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));

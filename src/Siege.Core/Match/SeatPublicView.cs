@@ -2,8 +2,8 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
@@ -15,15 +15,18 @@ namespace Siege.Core.Match;
 public sealed record BoardPlaceholder(int Zone, string Origin, int Width, int Height, BoardTheme? Theme);
 
 /// <summary>
-/// 座位可见的一格（information-visibility 第 1–4 项）：坐标（围棋记法）、地形 / 高度 / 地表 / 桥、占用（所属与类型）、格子归属、是否信物格。
+/// 座位可见的一格（information-visibility 第 1–4 项）：坐标（围棋记法）、地形 / 高度 / 地表 / 桥、占用（所属与类型）、格子归属。该格的信物见 <see cref="SeatPublicView.Relics"/>。
 /// 设施没有改造者字段。<see cref="Ownership"/> 是空格归属三态（独占及独占者 / 争议 / 中立；被占据的格为"占据"、障碍为"障碍"），
 /// 原样取自势力快照里的覆盖表（全项目唯一的归属实现，与领地分同一份），本文件不另算覆盖（裁决 S8）。尚无势力快照（插旗阶段）时为 <c>null</c>。
 /// </summary>
 public sealed record SeatCellView(
-    string Coord, Terrain Terrain, int Height, Surface Surface, bool Bridge, PlayerId? Owner, PieceType? Piece, CellOwnership? Ownership, bool RelicCell);
+    string Coord, Terrain Terrain, int Height, Surface Surface, bool Bridge, PlayerId? Owner, PieceType? Piece, CellOwnership? Ownership);
 
-/// <summary>可见的一枚信物：坐标、档位、是否揭示、已揭示的内容与揭示大回合、控制状态（第 4 项）。未揭示的信物没有内容。</summary>
-public sealed record SeatRelicView(string Coord, RelicZone Zone, bool Revealed, RelicContent? Content, int? RevealedInMajorRound, RelicControlKind Control, PlayerId? Holder);
+/// <summary>
+/// 可见的一件信物（relic-redesign R22：地图信物与挂出的信物全公开）：坐标、本局编号、种类、带入者（地图刷出为 <c>null</c>）、保险标记，
+/// 以及持有者（该格棋子的主人；空格上的地图信物为 <c>null</c>）。
+/// </summary>
+public sealed record SeatRelicView(string Coord, int Id, RelicKind Kind, PlayerId? Origin, bool Insured, PlayerId? Holder);
 
 /// <summary>可见的一条棋串（第 5、6 项）：所属、棋子坐标、军势、活形状态与眼空间。</summary>
 public sealed record SeatGroupView(PlayerId Owner, ImmutableArray<string> Stones, BigInteger Power, LifeState Life, ImmutableArray<ImmutableArray<string>> EyeSpaces);
@@ -78,6 +81,9 @@ public sealed record SeatPublicView(
     ImmutableArray<SeatSettlementView> Settlements,
     MatchResult? Result)
 {
+    /// <summary>尚未落位的信物预告（relic-redesign R11 / R22，全公开）；没有时为 <c>null</c>。不是位置参数。</summary>
+    public RelicForecast? RelicForecast { get; init; }
+
     /// <summary>该格是否对本座位展开（在 <see cref="Cells"/> 里）。未展开的格不提供任何地形或占用。</summary>
     public bool IsExpanded(Coord c) => Cells.Any(cell => cell.Coord == c.ToNotation());
 
@@ -113,15 +119,15 @@ public sealed partial class MatchFlow
         {
             Occupant? occupant = Board[c].Occupant;
             return new SeatCellView(c.ToNotation(), Board[c].Terrain, Board.Map.HeightAt(c), Board.Map.SurfaceAt(c), Board.Map.HasBridge(c),
-                occupant?.Owner, occupant?.Type, power?.Coverage.OwnershipOf(c), Board.Map.RelicCells.ContainsKey(c));
+                occupant?.Owner, occupant?.Type, power?.Coverage.OwnershipOf(c));
         })];
         // 栅栏取地形数据里的栅栏边（含预置与对局中立的，形式相同、没有立栅者），两端都展开才给出。
         ImmutableArray<string> fences = [.. Board.Map.TerrainData.Fences
             .Where(f => visible.Contains(f.A) && visible.Contains(f.B))
             .Select(f => f.ToString())
             .Order(StringComparer.Ordinal)];
-        ImmutableArray<SeatRelicView> relics = [.. Relics.PublicStates().Where(r => visible.Contains(r.Coord)).Select(r =>
-            new SeatRelicView(r.Coord.ToNotation(), r.Spec.Zone, r.IsRevealed, r.Content, r.RevealedInMajorRound, r.Control.Kind, r.Control.Holder))];
+        ImmutableArray<SeatRelicView> relics = [.. Board.RelicsOnBoard().Where(r => visible.Contains(r.Cell)).Select(r =>
+            new SeatRelicView(r.Cell.ToNotation(), r.Token.Id, r.Token.Kind, r.Token.Origin, r.Token.Insured, Board[r.Cell].Occupant?.Owner))];
         ImmutableArray<SeatGroupView> groups = !started ? [] : [.. life.Groups.Where(g => g.Group.Stones.All(visible.Contains)).Select(g =>
             new SeatGroupView(g.Group.Owner, [.. g.Group.Stones.Select(s => s.ToNotation())],
                 power?.Of(g.Group.Owner).Groups.FirstOrDefault(p => p.Stones.Contains(g.Group.Stones[0]))?.Power ?? BigInteger.Zero,
@@ -144,6 +150,9 @@ public sealed partial class MatchFlow
             [.. Board.Map.BirthBoards().Select((plate, z) => new BoardPlaceholder(z, plate.Origin.ToNotation(), plate.Width, plate.Height, plate.Theme))],
             cells, fences, relics, groups, players,
             [.. _settlements.Select(s => new SeatSettlementView(s.Battlefield, s.MajorRound, s.Winner))],
-            Result);
+            Result)
+        {
+            RelicForecast = PendingRelicForecast,
+        };
     }
 }

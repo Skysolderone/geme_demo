@@ -4,7 +4,7 @@ namespace Siege.Core.PieceRelics;
 
 /// <summary>
 /// 挂在棋子上的信物种类（relic-redesign R12，design.md D3）。首批五种，只动计分与覆盖，不改气与提子。
-/// 与旧 <c>Siege.Core.Relics</c> 的十类地图信物（<c>RelicType</c>）并存，两者互不引用；接线段删除旧系统。
+/// 旧十类地图信物（<c>Siege.Core.Relics.RelicType</c>）已在接线段 W1 删除。
 /// </summary>
 /// <remarks>末尾追加式枚举：档案 v2 的库存与盘面序列化按名字 / 类型码写出，既有值的编号与名字 MUST NOT 改动。</remarks>
 public enum RelicKind

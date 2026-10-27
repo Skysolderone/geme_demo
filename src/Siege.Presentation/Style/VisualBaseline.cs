@@ -226,7 +226,7 @@ public static class VisualLayering
         HighlightKind.Staged => HighlightStyle.TranslucentGlow,
         HighlightKind.PredictedCapture => HighlightStyle.DashedOutline,
         HighlightKind.SuicideRisk => HighlightStyle.WarningOutline,
-        HighlightKind.WillReveal => HighlightStyle.RevealBadge,
+        HighlightKind.WillPickUp => HighlightStyle.RevealBadge,
         HighlightKind.FailureFocus => HighlightStyle.FailureOutline,
         HighlightKind.EditTarget => HighlightStyle.EditTargetHint,
         HighlightKind.ChosenEdit => HighlightStyle.EditChosenMark,
@@ -239,7 +239,7 @@ public static class VisualLayering
     {
         HighlightKind.Staged => RenderLayer.StagedPieces,
         // 可改造目标与已选目标同在预览层：tactical-layers 要求它们在<b>默认棋盘</b>上就能看到，MUST NOT 依赖打开任何信息层。
-        HighlightKind.PredictedCapture or HighlightKind.SuicideRisk or HighlightKind.WillReveal or HighlightKind.FailureFocus
+        HighlightKind.PredictedCapture or HighlightKind.SuicideRisk or HighlightKind.WillPickUp or HighlightKind.FailureFocus
             or HighlightKind.EditTarget or HighlightKind.ChosenEdit or HighlightKind.LifeGroup
             => RenderLayer.PreviewHighlights,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知高亮类别。"),

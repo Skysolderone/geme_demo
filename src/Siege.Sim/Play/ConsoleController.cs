@@ -2,6 +2,7 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
@@ -93,12 +94,6 @@ internal sealed class ConsoleController : ITurnController
 
     public void Recruit(PlayerHandAccess hand, RecruitPanelView panel)
     {
-        // 展示数的来源拆分（探勘、驿站逐枚；+0 的驿站不列）：只在有可列的来源时打印一行。
-        if (_supplement().Structures.FirstOrDefault(s => s.Player == _me)?.Parameters?.RevealCount is { } reveal && BoardRenderer.VisibleSources(reveal).Any())
-        {
-            _out.WriteLine(BoardRenderer.RevealSourcesText(reveal));
-        }
-
         while (true)
         {
             RecruitPanelView current = hand.Panel();
@@ -311,8 +306,8 @@ internal sealed class ConsoleController : ITurnController
     }
 
     /// <summary>
-    /// 预演：一律取 Core 的富预演（<see cref="BatchPreview"/>），终端不自己算势力——势力前后值已按"批次开始前已揭示的计分信物"算好
-    /// （本批将首次揭示的信物不计入，列在"将揭示"里；more-pieces-relics batch-preview）。匠人的合法改造目标同样取自富预演
+    /// 预演：一律取 Core 的富预演（<see cref="BatchPreview"/>），终端不自己算势力——势力前后值已含本批拾取的信物（落在地图信物上即挂上，
+    /// 列在"将拾取"里；relic-redesign W1）。匠人的合法改造目标同样取自富预演
     /// （改造合法性唯一实现），不合法时也照列，玩家正要靠它换目标。
     /// </summary>
     private void Preview(StagedBatch batch)
@@ -333,21 +328,16 @@ internal sealed class ConsoleController : ITurnController
             BigInteger after = mine?.After ?? before;
             string captures = p.CapturedCoords.IsDefaultOrEmpty ? "不提子" : $"提走对手 {p.CapturedCoords.Length} 子";
             _render.Line($"预演：合法，{captures}，你的势力 {before} → {after}", ConsoleColor.Green);
-            if (!p.WillReveal.IsDefaultOrEmpty)
+            if (!p.WillPickUp.IsDefaultOrEmpty)
             {
-                _out.WriteLine($"  将揭示信物：{string.Join(" ", p.WillReveal.Select(c => c.ToNotation()))}（内容揭示后才计入势力）");
+                _out.WriteLine($"  将拾取信物：{string.Join(" ", p.WillPickUp.Select(r => $"{r.Cell.ToNotation()}{r.Token.Kind.DisplayName()}"))}（已计入上面的势力）");
             }
-        }
-
-        if (!p.EditOptions.IsDefaultOrEmpty && batch.Context.WorkshopActive)
-        {
-            _out.WriteLine("  工坊生效：搭桥 / 烧林的目标可隔一格（同行 / 同列距离 2）");
         }
 
         foreach (EditOutlook outlook in p.EditOptions)
         {
-            string chosen = outlook.Chosen is { } e ? "已选 " + BoardRenderer.EditText(outlook.ArtisanCell, e) : "不改造";
-            string legal = outlook.Legal.IsDefaultOrEmpty ? "无" : string.Join("、", outlook.Legal.Select(t => BoardRenderer.EditText(outlook.ArtisanCell, t)));
+            string chosen = outlook.Chosen is { } e ? "已选 " + BoardRenderer.EditText(e) : "不改造";
+            string legal = outlook.Legal.IsDefaultOrEmpty ? "无" : string.Join("、", outlook.Legal.Select(t => BoardRenderer.EditText(t)));
             _out.WriteLine($"  匠人 {outlook.ArtisanCell.ToNotation()}：{chosen}；合法目标 {outlook.Legal.Length} 个：{legal}");
         }
     }

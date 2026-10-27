@@ -5,7 +5,6 @@ using System.Linq;
 using Godot;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Camera;
 using Siege.Presentation.Layers;
@@ -1630,8 +1629,8 @@ public sealed partial class BoardView : Node3D
                 continue;
             }
 
-            // 未发现的信物统一用八角铭牌与小型双锥晶石，不泄露预算分区（裁决 5）。
-            Color color = cell.Relic == RelicMarker.Revealed ? Visuals.RelicRevealed : Visuals.RelicUnknown;
+            // relic-redesign W1 最小版本：沿用原八角铭牌与双锥晶石，地图信物 / 持物棋子用"已揭示"色、预告用"未知"色；三种正式标记留给段 C。
+            Color color = cell.Relic == RelicMarker.Forecast ? Visuals.RelicUnknown : Visuals.RelicRevealed;
             var token = new Node3D { Name = "RelicToken", Position = CenterOf(cell.Coord) };
             token.AddChild(new MeshInstance3D
             {
@@ -2113,15 +2112,10 @@ public sealed partial class BoardView : Node3D
     {
         foreach (RelicCellView relic in relics.Relics)
         {
-            Color color = relic.Control switch
-            {
-                RelicControlKind.Controlled => Visuals.FactionColorOf(relic.Holder!.Value),
-                RelicControlKind.Contested => Visuals.Contested,
-                RelicControlKind.Blocked => Visuals.Urgent,
-                _ => Visuals.Neutral,
-            };
+            // relic-redesign W1 最小版本：持物棋子按持有者阵营色、地图信物与预告中性色；预告画虚线环。正式标记留给段 C。
+            Color color = relic.Holder is { } holder ? Visuals.FactionColorOf(holder) : Visuals.Neutral;
             AddTint(relic.Coord, color, 0.5f);
-            AddRing(_overlay, relic.Coord, relic.IsRevealed ? Visuals.RelicRevealed : Visuals.RelicUnknown, !relic.IsRevealed, 0.032f);
+            AddRing(_overlay, relic.Coord, relic.IsForecast ? Visuals.RelicUnknown : Visuals.RelicRevealed, relic.IsForecast, 0.032f);
         }
     }
 

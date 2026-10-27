@@ -1,6 +1,7 @@
 using Siege.Core.Board.Maps;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
@@ -34,12 +35,9 @@ public class 随机子流隔离Tests
         Assert.NotEqual(logA.Events.Where(e => e.Type == LogEventType.Recruit && e.Player == 0).Select(e => e.Detail), logB.Events.Where(e => e.Type == LogEventType.Recruit && e.Player == 0).Select(e => e.Detail));
         Assert.True(c.Match.Hands.RecruitStreamConsumed > a.Match.Hands.RecruitStreamConsumed);
 
-        // 信物生成逐格不变
-        Assert.Equal(a.Match.Relics.Generation, b.Match.Relics.Generation);
-        Assert.Equal(a.Match.Relics.Generation, c.Match.Relics.Generation);
-        Assert.Equal(a.Match.Relics.Generation.Placements, c.Match.Relics.Generation.Placements);
-        Assert.Equal(logA.Header.Relics.Select(r => $"{r.Coord}:{r.Type}:{r.Magnitude}:{r.EmblemPiece}"), logB.Header.Relics.Select(r => $"{r.Coord}:{r.Type}:{r.Magnitude}:{r.EmblemPiece}"));
-        Assert.Equal(logA.Header.Relics.Select(r => $"{r.Coord}:{r.Type}:{r.Magnitude}:{r.EmblemPiece}"), logC.Header.Relics.Select(r => $"{r.Coord}:{r.Type}:{r.Magnitude}:{r.EmblemPiece}"));
+        // 信物刷新子流不受影响（relic-redesign W1：开局生成随旧信物删除；刷新是盘面的纯函数，这里取同一张开局盘面上的预告，三局逐格相同）
+        Assert.Equal(StartForecast(a.Match), StartForecast(b.Match));
+        Assert.Equal(StartForecast(a.Match), StartForecast(c.Match));
         Assert.Equal(logA.Header.FirstOrder, logB.Header.FirstOrder);
         Assert.Equal(logA.Header.Zones, logC.Header.Zones);
 
@@ -71,7 +69,7 @@ public class 随机子流隔离Tests
             Assert.Empty(off.Match.CarryIns);
             Assert.True(on.Match.CarryInOut);
             Assert.Equal(4, on.Match.CarryIns.Count);
-            Assert.Equal(off.Match.Relics.Generation.Placements.Select(r => r.ToString()), on.Match.Relics.Generation.Placements.Select(r => r.ToString()));
+            Assert.Equal(StartForecast(off.Match), StartForecast(on.Match));
             Assert.Equal(off.Match.ActionOrder.Select(p => p.Value), on.Match.ActionOrder.Select(p => p.Value));
             Assert.Equal(1, off.Match.MajorRound);
             Assert.Equal(1, on.Match.MajorRound);
@@ -80,4 +78,8 @@ public class 随机子流隔离Tests
 
         Assert.Equal(5, handsDiffer);
     }
+
+    /// <summary>开局盘面（空盘）上第 3 大回合的信物预告：只由对局种子与地图决定（子流 relic-spawn:4）。</summary>
+    private static string StartForecast(MatchFlow match) =>
+        string.Join(",", RelicSpawner.Forecast(GameBoard.Load(match.Board.BaseMap), new BirthBoardArea(match.Board.BaseMap), match.Seed, 3, match.Players.Length, 0)!.Slots);
 }

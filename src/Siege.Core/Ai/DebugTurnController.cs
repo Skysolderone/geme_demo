@@ -6,7 +6,8 @@ using Siege.Core.Recruit;
 namespace Siege.Core.Ai;
 
 /// <summary>
-/// <b>测试专用</b>调试 AI（设计文档 §15.3）：与正式 AI 同一套启发式，但信物估值读 <see cref="MatchDebugView"/> 里的真实内容。
+/// <b>测试专用</b>调试 AI（设计文档 §15.3）：与正式 AI 同一套启发式，另持有可读完整权威状态的 <see cref="MatchDebugView"/>（手牌数量、征募面板、暂放批次）。
+/// relic-redesign 起信物全公开、没有未揭示内容，决策本身与正式 AI 相同（原"信物估值读真实内容"随旧信物删除）。
 /// 类型与构造入口都是 <c>internal</c>，没有 public 构造 / 工厂；构造 MUST 显式传 <c>debugMode: true</c>，并在
 /// <see cref="MatchRunner.Annotations"/> 上标注本局用过调试 AI（裁决 9）。
 /// </summary>
@@ -21,7 +22,7 @@ internal sealed class DebugTurnController : ITurnController
     /// <summary>全量视图。</summary>
     internal MatchDebugView View { get; }
 
-    /// <summary>实际做决策的启发式 AI（估值函数已换成读真实内容）。</summary>
+    /// <summary>实际做决策的启发式 AI。</summary>
     internal HeuristicTurnController Inner { get; }
 
     /// <summary>
@@ -44,8 +45,7 @@ internal sealed class DebugTurnController : ITurnController
         MatchFlow match = runner.Match;
         var view = new MatchDebugView(match);
         var inner = new HeuristicTurnController(
-            player, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(player)), difficulty, weights, config,
-            relicValue: state => RelicEstimate.ValueOf(view.ContentOf(state.Coord)));
+            player, match.Publish, match.Seed.Stream(HeuristicAi.StreamName(player)), difficulty, weights, config);
         var controller = new DebugTurnController(view, inner);
         runner.Annotations.MarkDebugAi(player);
         runner.SetController(player, controller);

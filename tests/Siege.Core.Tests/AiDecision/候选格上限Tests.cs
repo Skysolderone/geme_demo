@@ -58,23 +58,27 @@ public class 候选格上限Tests
     /// 本值是当前实现在新图上的自证钉值；旁证只有"同一配置经 对局内容集（v1 逐步相同）/ 带入带出（关闭、开启但无人带入）/ 批量跑局（缺省关闭带入）四条路径得到同一哈希"。</para>
     /// <para>map-expand-25 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）；旧值 101B7111E1A1DE624BF275A1D72736AEC78BB07B339EE334045737D0D4A8CF3E。
     /// 四条路径实跑得到同一新值。</para>
-    internal const string LinkGoldenTurnHash = "C3CB36FB366073E995D97B344C7B7EC8B405FD488FD4B824C9FD93BA1C5EC4EC";
+    /// <para>relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）；快照行另删去旧信物字段（信物状态 / 驿站来源 / 工坊、棋串连营 / 犄角），哈希输入格式也变了。
+    /// 旧值 C3CB36FB366073E995D97B344C7B7EC8B405FD488FD4B824C9FD93BA1C5EC4EC；四条路径实跑得到同一新值。</para>
+    internal const string LinkGoldenTurnHash = "1E42C386CD06B6BA1BBC2CD138D0EC05742AFC7F569EE9D98937E3260F30D8EE";
 
     /// <summary>
     /// ai-whole-batch 守门（规格「整批候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给整批候选开关 0 时的小回合快照哈希——
     /// 即引入整批候选之前（HEAD 0b1b4bf）的 <see cref="LinkGoldenTurnHash"/>，开关 0 MUST 与它逐步相同（首部不写该字段，哈希输入不变）。
     /// </summary>
     /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后不再是"引入整批候选之前"的独立参照，而是开关 0 路径在新图上的自证值（与 <see cref="LinkGoldenTurnHashEditSeedOff"/> 同值，改前亦同值）。
-    /// 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：旧值 F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F，仍与 EditSeedOff 同值。</remarks>
-    internal const string LinkGoldenTurnHashWholeBatchOff = "622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01";
+    /// 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：旧值 F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F，仍与 EditSeedOff 同值。
+    /// relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01，仍与 EditSeedOff 同值、与缺省开的 <see cref="LinkGoldenTurnHash"/> 不同。</remarks>
+    internal const string LinkGoldenTurnHashWholeBatchOff = "1F68747E41B1158C6AF3035364EE51D478322ED49C6D929E5B0618087A8956B2";
 
     /// <summary>
     /// ai-bridge-candidate 守门（规格「搭桥候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给搭桥候选开关 0 时的小回合快照哈希——
     /// 即引入搭桥候选之前（HEAD 01efcd4）的 <see cref="LinkGoldenTurnHash"/>（首部不写该字段，哈希输入不变）。
     /// </summary>
     /// <remarks>map-expand-25 段 A2 重钉（地图变了）：旧值 58F2C051F9797F545F4D9F81F44AA98DB4D51000CDE00009DDBADE265BC4248A。重钉后是开关 0 路径在新图上的自证值。
-    /// 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：旧值 F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F。</remarks>
-    internal const string LinkGoldenTurnHashEditSeedOff = "622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01";
+    /// 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：旧值 F785984A642F4D97CA4EA8B5DB98C3B7E8267190EEB961D8D02AF8A2EEB5CF6F。
+    /// relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01（仍与 WholeBatchOff 同值）。</remarks>
+    internal const string LinkGoldenTurnHashEditSeedOff = "1F68747E41B1158C6AF3035364EE51D478322ED49C6D929E5B0618087A8956B2";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>
@@ -128,8 +132,7 @@ public class 候选格上限Tests
     /// 可落子 125 格（不超过 <see cref="AiSearchConfig.LargeMapPlayableThreshold"/>）。链接档图的可落子格恒超过 150，"小图"只能是未校验的手写图（边长 5 低于出生棋盘下限 6）。
     /// </summary>
     private static readonly MapData SmallLinkMap = LinkMapFixtures.Build(
-        "link:90005:4", [.. Enumerable.Range(0, 5).Select(i => new BoardPlate(new Coord(2 + (i * 8), 2), 5, 5, BoardPlateKind.Birth, (BoardTheme)i))])
-        with { RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty };
+        "link:90005:4", [.. Enumerable.Range(0, 5).Select(i => new BoardPlate(new Coord(2 + (i * 8), 2), 5, 5, BoardPlateKind.Birth, (BoardTheme)i))]);
 
     /// <summary>
     /// 小链接档图上 4 名标准 AI 跑满 6 个大回合：返回全体 AI 的决策日志与终了盘面序列化。retire-legacy-maps 1.5 起是 v5 整局的替身（9×9 手写夹具，Legacy 规则）；
@@ -139,7 +142,7 @@ public class 候选格上限Tests
     private static string SmallMapRun(AiSearchConfig config, ulong seed = 31)
     {
         MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
-            SmallLinkMap, new Siege.Core.Determinism.GameSeed(seed), TestMaps.All, TestMaps.Relics(SmallLinkMap), LinkModeFixtures.PlainOptions(null)));
+            SmallLinkMap, new Siege.Core.Determinism.GameSeed(seed), TestMaps.All, LinkModeFixtures.PlainOptions(null)));
         foreach (PlayerId p in TestMaps.All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
@@ -442,7 +445,7 @@ public class 候选格上限Tests
                 .Stones(AiFixtures.P0, "E5", "E6", "G6", "H5", "F4", "G4")
                 .Stones(AiFixtures.P1, "E7", "F7", "D6", "D5", "F5", "G5", "E4")
                 .AsLeader(AiFixtures.P0, "J9", "K9", "J10", "K10"),
-            "c" => AiFixtures.Round5(relics: [("F7", RelicFixtures.Conscription())])
+            "c" => AiFixtures.Round5()
                 .Stones(AiFixtures.P0, "E6", "E7", "F5", "F8", "G8", "H7")
                 .Stones(AiFixtures.P1, "F6", "F7", "G7"),
             _ => throw new ArgumentOutOfRangeException(nameof(position)),

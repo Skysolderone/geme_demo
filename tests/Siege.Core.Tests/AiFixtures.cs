@@ -6,7 +6,6 @@ using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests;
@@ -20,24 +19,19 @@ internal static class AiFixtures
     internal static readonly PlayerId P3 = TestMaps.P3;
 
     /// <summary>
-    /// 正式 AI 的可达类型闭包中 MUST NOT 出现的类型：账本本体、对局本体、调试接缝、生成记录（含真实内容）、种子（可重算 relic-gen）。
+    /// 正式 AI 的可达类型闭包中 MUST NOT 出现的类型：手牌账本本体、对局本体、调试接缝、种子（可重算征募与刷新子流）。relic-redesign 起旧信物账本与生成记录随旧信物删除。
     /// </summary>
     internal static readonly Type[] ForbiddenForOfficialAi =
     [
         typeof(HandLedger),
-        typeof(RelicLedger),
         typeof(MatchFlow),
         typeof(MatchRunner),
         typeof(MatchDebugAccess),
         typeof(HandDebugAccess),
         typeof(MatchDebugView),
         typeof(DebugTurnController),
-        typeof(RelicGenerationRecord),
-        typeof(RelicPlacement),
-        typeof(RelicGenerator),
         typeof(GameSeed),
         typeof(HandLedgerState),
-        typeof(RelicLedgerState),
     ];
 
     /// <summary>
@@ -131,12 +125,12 @@ internal static class AiFixtures
     // ---------- 局面 ----------
 
     /// <summary>
-    /// 开局并摆到第 5 大回合、顺序 P0 → P3。retire-legacy-rules 第 1 组：载体为平坦 8×8 链接档图上四人同锁棋盘 0（<see cref="LinkModeFixtures.PlainStarted(GameSeed?, int[], MatchOptions?, (string Cell, RelicContent Content)[])"/>）——
+    /// 开局并摆到第 5 大回合、顺序 P0 → P3。retire-legacy-rules 第 1 组：载体为平坦 8×8 链接档图上四人同锁棋盘 0（<see cref="LinkModeFixtures.PlainStarted(GameSeed?, int[], MatchOptions?)"/>）——
     /// 单一战场、合法范围即整块棋盘 0（原 9×9 第 4 大回合起的全图阶段最近的等价物）；坐标写在棋盘 0 上（原 9×9 坐标平移 (+2, +2)）。
     /// 链接规则的两道门（落后者停手阈值取 0、决胜一手）只看本战场势力：被测 AI 须居本战场势力首位（并列即首位），局面构造时注意。
     /// </summary>
-    internal static MatchFlow Round5(GameSeed? seed = null, params (string Cell, RelicContent Content)[] relics) =>
-        LinkModeFixtures.PlainStarted(seed, relics: relics).AtRound(5, [P0, P1, P2, P3]);
+    internal static MatchFlow Round5(GameSeed? seed = null) =>
+        LinkModeFixtures.PlainStarted(seed).AtRound(5, [P0, P1, P2, P3]);
 
     /// <summary>
     /// 迁移清单 P2（retire-legacy-rules 1.4）：链接规则下被测 AI 若在本战场势力落后，停手阈值按落后者取 0（ai-decision「链接模式下落后者的停手阈值」），
@@ -175,7 +169,7 @@ internal static class AiFixtures
     /// <summary>把当前玩家本小回合的部署上限改成 <paramref name="deployLimit"/>（只改快照，不改生成路径）。</summary>
     internal static void SetDeployLimit(this MatchFlow match, int deployLimit) =>
         match.Debug.SetSnapshotTransform(s => new EffectSnapshot(
-            s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, s.TypeSlots, deployLimit, s.EmblemCounts, s.HeldTypeCount));
+            s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, s.TypeSlots, deployLimit, s.HeldTypeCount));
 
     /// <summary>跑完前 <paramref name="majorRounds"/> 个大回合（或直到终局）。</summary>
     internal static void RunMajorRounds(this MatchRunner runner, int majorRounds)
@@ -226,7 +220,7 @@ internal static class AiFixtures
         $"{m.Phase}/{m.MajorRound}/{m.Stage}/{m.CurrentPlayer}/{string.Join(">", m.ActionOrder)}/{m.PassStreak}/" +
         string.Join(";", m.PlayerStates.Select(s => s.ToString())) + "/" +
         string.Join(";", m.Hands.PublicViews().Select(h => h.ToString())) + "/" +
-        string.Join(";", m.Relics.PublicStates().Select(r => r.ToString()));
+        string.Join(";", m.RelicBatches.Select(b => b.ToString())) + $"/next={m.NextRelicId}";
 }
 
 /// <summary>脚本化的人工控制者：记录每个阶段被调用的次数，部署时摆指定落点（普通子）。</summary>

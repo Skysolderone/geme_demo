@@ -3,6 +3,7 @@ using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Tests.MatchSetup;
 
@@ -149,13 +150,13 @@ public class 对局配置公开完整地图标识Tests
         Assert.Equal(MapFile.ToJson(a.Map), MapFile.ToJson(b.Map));
         Assert.Equal(a.Publish().MapId, b.Publish().MapId);
         Assert.NotEqual(a.Publish().Seed, b.Publish().Seed);
-        Assert.NotEqual(a.Relics.Generation.Serialize(), b.Relics.Generation.Serialize());
+        Assert.NotEqual(Forecast(a), Forecast(b));   // relic-redesign W1：对局里的随机改看信物刷新（开局生成随旧信物删除）
     }
 
     [Fact]
     public void 地图种子不扰动对局随机()
     {
-        // 规格 Scenario：在某张图上用某对局种子开局，信物内容、首回合顺序与插旗结果不因此前生成过别的地图而变——生成器不与对局共享任何随机状态。
+        // 规格 Scenario：在某张图上用某对局种子开局，信物刷新、首回合顺序与插旗结果不因此前生成过别的地图而变——生成器不与对局共享任何随机状态。
         // retire-legacy-maps 1.8：原在内置边疆图上（黄金值取自生成器出现之前的提交 71761d6，冒险概率写死 0）；内置图与 gen: 生成器删除后改到 link:1、
         // 夹在中间的改为链接档生成器 LinkMapGenerator；结构性对照（夹生成前后逐项相同、换地图种子不改首回合顺序）不变。
         // 原黄金值属于边疆图、随之删除；这里改钉 link:1 / 种子 42 / v1 的首回合顺序与盲选结果（删除旧图之前按当时实现取下）。
@@ -163,7 +164,7 @@ public class 对局配置公开完整地图标识Tests
         {
             MatchFlow match = CreateLink("link:1:4", new GameSeed(42), ContentSet.V1);
             var choices = match.PlantPrototype();
-            return (match.Relics.Generation.Serialize(), string.Join(",", match.ActionOrder.Select(p => p.Value)), string.Join(",", choices.Select(c => c.Zone)));
+            return (Forecast(match), string.Join(",", match.ActionOrder.Select(p => p.Value)), string.Join(",", choices.Select(c => c.Zone)));
         }
 
         (string relics, string order, string zones) = Open();
@@ -173,7 +174,7 @@ public class 对局配置公开完整地图标识Tests
         }
 
         Assert.Equal((relics, order, zones), Open());
-        Assert.Contains("link:1:4", relics, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrEmpty(relics));
         Assert.Equal(GoldenLinkOrder, order);
         Assert.Equal(GoldenLinkZones, zones);
 
@@ -192,4 +193,8 @@ public class 对局配置公开完整地图标识Tests
     private const string GoldenLinkOrder = "3,0,2,1";
     // map-expand-25 段 A2：link:1:4 浮空岛 10 块平台，flag-pick 子流的同一组抽取按 10 取模（原 5 块时为 "4,3,1,0"，逐项 ≡ mod 5）；首回合顺序不变。
     private const string GoldenLinkZones = "9,8,1,5";
+
+    /// <summary>该局开局盘面上第 3 大回合的信物预告（relic-redesign W1：对局随机的代表，子流 relic-spawn:4）。</summary>
+    private static string Forecast(MatchFlow match) =>
+        string.Join(",", RelicSpawner.Forecast(match.Board, new BirthBoardArea(match.Board.Map), match.Seed, 3, match.Players.Length, 0)!.Slots);
 }

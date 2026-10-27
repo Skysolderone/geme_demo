@@ -13,7 +13,7 @@ namespace Siege.Core.Board;
 /// 掉落 = <see cref="RemoveStones"/> / <see cref="Clear"/> 移走棋子（信物不动，自然变成"地图信物"）。两个写入原语都不碰信物层。</para>
 /// <para>稀疏存放、空层为 <c>null</c>：空层时 <see cref="Clone"/>、<see cref="Serialize"/>、覆盖与计分多出的代价为零，行为与信物层上线之前逐字节相同。</para>
 /// <para>挂载（<see cref="AttachRelic"/>）是写入原语：推进突变版本号，令序列化记忆失效。同形禁则不比较信物层（R28，<see cref="SuperkoKey"/> 剥掉信物段）。</para>
-/// <para>relic-redesign 加法段：只提供盘面层面的存取，对局流程尚未调用。</para>
+/// <para>对局流程经 <c>MatchFlow</c> 在大回合开始时按 <see cref="RelicSpawner"/> 落位地图信物（relic-redesign 接线段 W1）。</para>
 /// </remarks>
 public sealed partial class GameBoard
 {
@@ -52,6 +52,29 @@ public sealed partial class GameBoard
         }
 
         return builder.MoveToImmutable();
+    }
+
+    /// <summary>
+    /// <paramref name="player"/> 持有的信物件数 = 挂在其棋子上的信物件数（relic-redesign R24：终局 / 战场结算比较链的第二项"持有信物数"的唯一实现）。
+    /// 不论信物种类、带入者与保险；地图信物（空格上）不计。
+    /// </summary>
+    public int HeldRelicCount(PlayerId player)
+    {
+        if (_relics is not { Count: > 0 } relics)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        foreach (int index in relics.Keys)
+        {
+            if (_occupants[index] is { } occupant && occupant.Owner == player)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     /// <summary>

@@ -13,7 +13,7 @@ namespace Siege.Core.Board;
 /// <para>唯一的例外是<b>盘面未变时的记忆化</b>（ai-turn-speed D2；board-link-mode 段 C2 加上 <see cref="Serialize"/>）：全盘棋串（<see cref="AllGroups"/>）、活形报告（<see cref="LifeShapeReport.Analyze"/>）
 /// 与盘面序列化按突变版本号记忆——每次写入原语（<see cref="Place"/> / <see cref="Clear"/> / <see cref="RemoveStones"/> / <see cref="ApplyTerrainEdits"/>，以及 relic-redesign 的 <see cref="AttachRelic"/>）都让版本号 +1
 /// （空集合的 <see cref="RemoveStones"/> 什么都没写，不算写入），版本号不同即整份重算，副本从零起。它不是增量维护：命中时返回的是同一盘面上同一份全量结果，任何一次写入之后的第一次查询都重算。</para>
-/// <para>地图派生量（每格可落子 / 出生区 / 信物格、气边邻居、覆盖目标、可落子格清单）按<b>当前 <see cref="MapData"/> 实例</b>逐格惰性记忆：
+/// <para>地图派生量（每格可落子 / 出生区、气边邻居、覆盖目标、可落子格清单）按<b>当前 <see cref="MapData"/> 实例</b>逐格惰性记忆：
 /// 改造换上新地图即换表（<see cref="ApplyTerrainEdits"/>：段 C2 起新表由旧表派生，只作废改造目标周围 2 格，与从零建表逐项相同），
 /// 副本与原盘面共用同一地图时共用同一张表。表里的每一项都由唯一实现（<see cref="MapData"/> 的查询与 <see cref="Adjacency"/>）算出，本类不另写地形判定。</para>
 /// <para>几何四邻、气边与覆盖关系的唯一实现都在 <see cref="Adjacency"/>，本类只是委托：
@@ -112,7 +112,7 @@ public sealed partial class GameBoard
         {
             RequireInBounds(c);
             int i = Index(c);
-            return new Cell(c, _tables.TerrainAt(i, c), _tables.BirthZoneOf(i, c), _tables.IsRelicCell(i, c), _occupants[i]);
+            return new Cell(c, _tables.TerrainAt(i, c), _tables.BirthZoneOf(i, c), _occupants[i]);
         }
     }
 

@@ -100,7 +100,7 @@ public static class BatchRehearsal
             }
 
             // 合法性唯一实现；按批次开始前的地形判定（本批的改造还没应用到 board.Map 上）；改造范围（open-map D4）随上下文传入。
-            if (TerrainEditRules.Reject(board.Map, c, edit, context.WorkshopActive, context.EditScope) is { } reason)
+            if (TerrainEditRules.Reject(board.Map, c, edit, context.EditScope) is { } reason)
             {
                 return BatchFailure.IllegalEdit(c, edit, reason);
             }
@@ -223,8 +223,11 @@ public static class BatchRehearsal
         return projected;
     }
 
-    /// <summary>第 8 步的比对：<paramref name="settled"/>（结算后盘面）与哪一次历史提交同形；不同形为 <c>null</c>。</summary>
-    internal static int? DuplicateOf(BoardHistory history, GameBoard settled) => history.FindDuplicate(settled.Serialize());
+    /// <summary>
+    /// 第 8 步的比对：<paramref name="settled"/>（结算后盘面）与哪一次历史提交同形；不同形为 <c>null</c>。
+    /// 喂不含信物层的 <see cref="GameBoard.SerializeShape"/>（relic-redesign R28：只差信物位置的两个盘面算同形）。
+    /// </summary>
+    internal static int? DuplicateOf(BoardHistory history, GameBoard settled) => history.FindDuplicate(settled.SerializeShape());
 
     /// <summary>
     /// 第 6 步：批次开始前每条所有者不是 <paramref name="mover"/> 的已确定活形棋串，按其原有棋子在副本上所在的棋串重查；

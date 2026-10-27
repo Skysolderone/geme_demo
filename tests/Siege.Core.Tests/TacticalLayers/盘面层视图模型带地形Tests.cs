@@ -34,7 +34,7 @@ public class 盘面层视图模型带地形Tests
         };
         PlayerId[] players = [P0, P1, P2, P3];
         MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
-            map, new Siege.Core.Determinism.GameSeed(1), players, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+            map, new Siege.Core.Determinism.GameSeed(1), players, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         return DefaultBoardView.From(match.PublicWorldOf());
     }
 

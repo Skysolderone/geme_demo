@@ -107,8 +107,6 @@ internal sealed class RecordingHooks : ISettlementHooks
         Calls.Add(("DeductHand", Board?.Serialize() ?? string.Empty));
     }
 
-    public void OnRevealRelics(SettlementContext context) => Record("OnRevealRelics", context);
-
     public void OnRecalculatePower(SettlementContext context) => Record("OnRecalculatePower", context);
 
     public void OnCheckEndConditions(SettlementContext context) => Record("OnCheckEndConditions", context);

@@ -1,6 +1,7 @@
 using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Tests.PowerScore;
 
@@ -229,12 +230,14 @@ public class 势力明细Tests
     public void 位置加值七来源可溯源()
     {
         // more-pieces-relics 规格 power-score「位置加值可溯源」（七部分）：位置加值 14 拆成连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑，七者之和为 14。
-        // 第 6 行 C6 旗手（C6、C5 为信物格 → 3 × 2 = 6）、D6 铁链（6 子棋串 → 5）、E6 哨兵（E7 有敌子 → 2）、F6 界碑、G6 / H6 普通子；
+        // 第 6 行 C6 旗手（本串 C6、D6 各挂一件望台 → 3 × 2 = 6，relic-redesign R23；望台只扩大覆盖、不进军势）、D6 铁链（6 子棋串 → 5）、E6 哨兵（E7 有敌子 → 2）、F6 界碑、G6 / H6 普通子；
         // 界碑 F6 的空邻格 F5 由 A 独占（+1），F7 同时被 E7 的敌子覆盖、为争议格（0）。连珠 / 协同 / 高地均为 0。军势 = 基础 6 + 14 = 20。
-        GameBoard board = TestMaps.WithRelicCells(["C6", "C5"])
+        GameBoard board = TestMaps.Blank()
             .Place("C6", TestMaps.P0, PieceType.Bannerman).Place("D6", TestMaps.P0, PieceType.Chain).Place("E6", TestMaps.P0, PieceType.Sentry)
             .Place("F6", TestMaps.P0, PieceType.Boundary).Place("G6", TestMaps.P0).Place("H6", TestMaps.P0)
             .Place("E7", TestMaps.P1);
+        board.AttachRelic(TestMaps.At("C6"), RelicToken.Spawned(0, RelicKind.Watchtower));
+        board.AttachRelic(TestMaps.At("D6"), RelicToken.Spawned(1, RelicKind.Watchtower));
 
         GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "C6");
 

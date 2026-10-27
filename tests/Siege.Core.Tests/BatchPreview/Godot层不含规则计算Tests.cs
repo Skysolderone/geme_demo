@@ -41,7 +41,7 @@ public class Godot层不含规则计算Tests
         string[] forbidden =
         [
             "PowerCalculator", "CoverageMap", "BatchRehearsal", "BatchPreviewBuilder", "LibertySnapshot",
-            "CaptureResolver", "FinalStandings", "Adjacency", "MapValidator", "RelicGenerator", "InitiativeOrder",
+            "CaptureResolver", "FinalStandings", "Adjacency", "MapValidator", "RelicSpawner", "RelicEffects", "InitiativeOrder",
             ".GroupAt(", ".LibertiesOf(", ".AllGroups(", ".GroupsOf(", ".IsCaptured(", ".RemoveStones(", ".Apply(",
             // terrain-model：几何邻居 / 气边 / 覆盖关系三个导出入口，Godot 层不得自算邻接或地形过滤
             ".Neighbors(", ".LibertyNeighbors(", ".CoverageTargets(", ".EyeNeighbors(",   // fence-eye-rule 1.1：眼边同样只供规则层

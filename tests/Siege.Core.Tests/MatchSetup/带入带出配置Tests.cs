@@ -123,7 +123,7 @@ public class 带入带出配置Tests
         Assert.True(node["Resignations"]![0]!.AsObject().Remove("RankAtResign"), "新存档应写出弃赛时名次");
         string legacy = node.ToJsonString();
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, legacy);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, legacy);
 
         Assert.False(restored.CarryInOut);
         Assert.Empty(restored.CarryIns);
@@ -132,7 +132,7 @@ public class 带入带出配置Tests
         Assert.Equal(PlayerStatus(restored), PlayerStatus(match));
 
         // 新存档不留回填痕迹。
-        Assert.False(MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json).CarryInOutBackfilled);
+        Assert.False(MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json).CarryInOutBackfilled);
 
         static string PlayerStatus(MatchFlow m) => string.Join(" ", m.PlayerStates.Select(s => $"{s.Player}:{s.Status}"));
     }
@@ -153,7 +153,7 @@ public class 带入带出配置Tests
         match.PlayTurn();
         string json = match.Serialize();
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
 
         Assert.True(restored.CarryInOut);
         Assert.False(restored.CarryInOutBackfilled);

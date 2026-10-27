@@ -108,7 +108,7 @@ public class 日志首部区数Tests
         Assert.StartsWith("  - 出生区 1：胜率 25.0% (4/16", zoneLines[0], StringComparison.Ordinal);
         Assert.EndsWith("；被选 16 次", zoneLines[0], StringComparison.Ordinal);
         Assert.Equal("  - 出生区 6：胜率 无样本；被选 0 次", zoneLines[5]);
-        Assert.StartsWith("  - 出生区 1：", zoneLines[6], StringComparison.Ordinal);   // 第 7 行已是下一段
+        Assert.Equal(6, zoneLines.Length);   // relic-redesign W1：原"收敛局 / 未收敛局"两段随旧信物生成删除，只剩「全部局」一段
     }
 
     [Fact]

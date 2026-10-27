@@ -104,8 +104,8 @@ public class 难度分级Tests
     public void 高难度不越权()
     {
         // 设计文档 §15.2：最高难度读取的信息集合与简单难度完全相同——三档是同一个类型 + 不同的纯数值配置，
-        // 配置对象里只有整数与布尔；闭包无违禁类型；且高难 AI 的决策同样与隐藏内容无关。
-        // 变异验证 M-A1（HeuristicTurnController 加 `public RelicLedger? Leak` 属性）→ 红 3（本测试、未知信物不可读、敌方手牌数量不可读）。
+        // 配置对象里只有整数与布尔；闭包无违禁类型（relic-redesign W1：原"高难 AI 的决策与未揭示信物内容无关"随旧信物删除，信物全公开）。
+        // 变异验证 M-A1（HeuristicTurnController 加 `public HandLedger? Leak` 属性）→ 红 3（本测试、正式AI拿不到对局本体与账本、敌方手牌数量不可读）。
         HeuristicTurnController hard = HeuristicAi.Create(LinkModeFixtures.PlainStarted(), AiFixtures.P0, AiDifficulty.Hard);
         Assert.Equal(32, hard.Config.CandidateBatchCount);
         Assert.Equal(24, hard.Config.CandidatePointCount);
@@ -116,10 +116,6 @@ public class 难度分级Tests
         Assert.Equal(ImmutableHashSet.Create(typeof(AiSearchConfig)), AiFixtures.ReachableTypes(typeof(AiSearchConfig)));
         Assert.All(typeof(AiSearchConfig).GetProperties(), p => Assert.True(p.PropertyType == typeof(int) || p.PropertyType == typeof(bool), p.Name));
         Assert.Contains(typeof(MatchPublicView), closure);
-
-        (string a, string b, int compared) = 对隐藏信息的概率估计Tests.RunUntilReveal(AiDifficulty.Hard);
-        Assert.Equal(a, b);
-        Assert.True(compared >= 1);
     }
 
     [Fact]

@@ -6,7 +6,6 @@ using Siege.Core.Board.Maps;
 using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
@@ -16,11 +15,11 @@ namespace Siege.Core.Match;
 /// 它自己几乎不做计算，但决定<b>每件事发生的时机</b>。
 /// </summary>
 /// <remarks>
-/// <para><b>时机（design.md Context）</b>：信物快照在小回合<b>开始</b>时读一次（<see cref="BeginTurn"/>）；先锋在大回合<b>结束</b>时
-/// 单次拉取、不缓存（<see cref="EndMajorRound"/>，D4）；出局检查在每次合法批次结算后与每次 Pass 后对<b>全部</b>参赛玩家执行
+/// <para><b>时机（design.md Context）</b>：效果快照在小回合<b>开始</b>时读一次（<see cref="BeginTurn"/>）；地图信物在大回合<b>开始</b>时落位 / 预告
+/// （<see cref="StartMajorRoundRelics"/>，relic-redesign D2）；出局检查在每次合法批次结算后与每次 Pass 后对<b>全部</b>参赛玩家执行
 /// （<see cref="CheckEliminations"/>，restore-go-core-rules D3）；整轮 Pass 用跨回合的连续 Pass 计数器（<see cref="PassStreak"/>，D2 / 裁决 3）。</para>
-/// <para><b>结算接线</b>：本类以 <see cref="Hooks"/> 实现 <see cref="ISettlementHooks"/>，把手牌扣减（第 1 步）、信物揭示（第 4 步）、
-/// 控制与势力重算（第 5 步）、出局与终局检查（第 6 步）按 §6.3 顺序接到 <see cref="SettlementDriver"/>。</para>
+/// <para><b>结算接线</b>：本类以 <see cref="Hooks"/> 实现 <see cref="ISettlementHooks"/>，把手牌扣减（第 1 步）、
+/// 势力重算（第 5 步）、出局与终局检查（第 6 步）按 §6.3 顺序接到 <see cref="SettlementDriver"/>（relic-redesign：信物揭示步随旧信物删除）。</para>
 /// <para><b>事件</b>：全部流程事件只由本类的 <see cref="Emit"/> 在阶段切换点发出。</para>
 /// <para><b>线程模型</b>（裁决 1）：单线程游戏循环；表现层与 AI 只消费 <see cref="Publish"/> 的快照。</para>
 /// </remarks>
@@ -50,13 +49,12 @@ public sealed partial class MatchFlow
 
     private MatchFlow(
         MapData map, GameBoard board, GameSeed seed, ImmutableArray<PlayerId> players,
-        RelicLedger relics, HandLedger hands, BoardHistory history, MatchOptions options)
+        HandLedger hands, BoardHistory history, MatchOptions options)
     {
         Board = board;
         Seed = seed;
         Options = options;
         _players = players;
-        Relics = relics;
         Hands = hands;
         History = history;
         Scoreboard = new PowerScoreboard();
@@ -74,7 +72,7 @@ public sealed partial class MatchFlow
     // ---------- 构造 ----------
 
     /// <summary>
-    /// 创建一局：地图经静态校验，信物按 <c>relic-gen</c> 子流一次性生成，手牌账本派生 <c>recruit</c> 子流，本类持有 <c>setup</c> 子流。
+    /// 创建一局：地图经静态校验，手牌账本派生 <c>recruit</c> 子流，本类持有 <c>setup</c> 子流。开局没有信物（relic-redesign R8：第 4 大回合起刷新）。
     /// 创建后处于插旗阶段。地图须是链接图、人数恰等于地图人数（retire-legacy-rules：对局只有链接规则一套，旧模式与对局模式枚举一并删除）。
     /// </summary>
     public static MatchFlow Create(MapData map, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions? options = null)
@@ -82,17 +80,14 @@ public sealed partial class MatchFlow
         ArgumentNullException.ThrowIfNull(map);
         GameBoard board = GameBoard.Load(map);
         options ??= MatchOptions.Default;
-        // more-pieces-relics D8：信物按本局内容集的权重表与徽记绑定集合生成（v1 与改动前逐格相同）。
-        return Build(map, board, seed, players, RelicGenerator.Generate(map, seed, options.ContentSet), options);
+        return Build(map, board, seed, players, options);
     }
 
-    /// <summary>测试专用：跳过地图校验并使用手工指定的信物分布。建局约束（链接图标识、人数恰等于地图人数）照常执行。</summary>
-    internal static MatchFlow CreateUnvalidated(
-        MapData map, GameSeed seed, IEnumerable<PlayerId> players, RelicGenerationRecord relics, MatchOptions? options = null) =>
-        Build(map, GameBoard.LoadUnvalidated(map), seed, players, relics, options ?? MatchOptions.Immediate);
+    /// <summary>测试专用：跳过地图校验。建局约束（链接图标识、人数恰等于地图人数）照常执行。</summary>
+    internal static MatchFlow CreateUnvalidated(MapData map, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions? options = null) =>
+        Build(map, GameBoard.LoadUnvalidated(map), seed, players, options ?? MatchOptions.Immediate);
 
-    private static MatchFlow Build(
-        MapData map, GameBoard board, GameSeed seed, IEnumerable<PlayerId> players, RelicGenerationRecord relics, MatchOptions options)
+    private static MatchFlow Build(MapData map, GameBoard board, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions options)
     {
         ArgumentNullException.ThrowIfNull(players);
         ImmutableArray<PlayerId> list = [.. players.Order()];
@@ -127,7 +122,7 @@ public sealed partial class MatchFlow
             }
         }
 
-        return new MatchFlow(map, board, seed, list, new RelicLedger(relics),
+        return new MatchFlow(map, board, seed, list,
             new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet, options.CarryIns), new BoardHistory(), options);
     }
 
@@ -192,8 +187,6 @@ public sealed partial class MatchFlow
     public GameBoard Board { get; }
 
     public BoardHistory History { get; }
-
-    public RelicLedger Relics { get; }
 
     public HandLedger Hands { get; }
 
@@ -315,7 +308,7 @@ public sealed partial class MatchFlow
     // ---------- 小回合阶段机 ----------
 
     /// <summary>
-    /// 开始当前玩家的小回合：第 1 阶段信物快照（三次跨层调用集中在此：持有类型数 → 效果快照 → 手牌账本开始），随后停在整理手牌阶段。
+    /// 开始当前玩家的小回合：第 1 阶段效果快照（三次跨层调用集中在此：持有类型数 → 效果快照 → 手牌账本开始），随后停在整理手牌阶段。
     /// </summary>
     public void BeginTurn()
     {
@@ -332,8 +325,8 @@ public sealed partial class MatchFlow
         SetStage(TurnStage.RelicSnapshot, player);
 
         int held = Hands.HeldTypeCount(player);
-        // restore-go-core-rules D7：快照只读信物与当前大回合，MUST NOT 读取势力名次。
-        EffectSnapshot snapshot = Relics.SnapshotFor(player, Board, Roster, held, MajorRound);
+        // restore-go-core-rules D7：快照只读当前大回合，MUST NOT 读取势力名次；relic-redesign D4 起只有默认基础值。
+        EffectSnapshot snapshot = EffectSnapshot.Defaults(player, MajorRound, held);
         if (_snapshotTransform is { } transform)
         {
             snapshot = transform(snapshot);
@@ -375,7 +368,6 @@ public sealed partial class MatchFlow
             LegalRange = LegalRangeFor(player),
             EditScope = EditScopeFor(player),
             Stock = hand.Entries.ToDictionary(kv => kv.Key, kv => kv.Value.Total),
-            WorkshopActive = _snapshot.WorkshopActive,
         };
         _batch = new StagedBatch(Board, context);
         SetStage(TurnStage.Deploy, player);
@@ -407,8 +399,7 @@ public sealed partial class MatchFlow
         foreach (AppliedTerrainEdit applied in outcome.CaptureRecord?.Edits ?? [])
         {
             _terrainEdits.Add(new TerrainEditRecord(
-                majorRound, _terrainEdits.Count + 1, player, applied.Edit, applied.ArtisanCoord, applied.CausedCapture,
-                TerrainEditRules.IsWorkshopReach(applied.ArtisanCoord, applied.Edit)));
+                majorRound, _terrainEdits.Count + 1, player, applied.Edit, applied.ArtisanCoord, applied.CausedCapture));
         }
 
         SetStage(TurnStage.Settlement, player);
@@ -450,7 +441,7 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 主动弃赛（设计文档 §12.2）。保护期内同样允许（裁决 2）。当前行动玩家可在任意阶段弃赛；其他玩家须在小回合边界弃赛。
-    /// 弃赛时记录完整快照（裁决 5），遗留棋子照常参与覆盖与势力，先锋不再提供修正。
+    /// 弃赛时记录完整快照（裁决 5），遗留棋子照常参与覆盖与势力（挂在其上的信物照常生效）。
     /// </summary>
     public void Resign(PlayerId player)
     {
@@ -471,13 +462,12 @@ public sealed partial class MatchFlow
         HandPrivateView hand = Hands.AccessFor(player).PrivateView();
         EffectSnapshot effects = inOwnTurn && _snapshot is not null
             ? _snapshot
-            : Relics.SnapshotFor(player, Board, Roster, Hands.HeldTypeCount(player), MajorRound);
-        ImmutableArray<Coord> controlled = [.. Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(player)).Select(s => s.Coord)];
+            : EffectSnapshot.Defaults(player, MajorRound, Hands.HeldTypeCount(player));
         BigInteger power = Scoreboard.Latest?.Of(player).Total ?? BigInteger.Zero;
         // carry-in-out D5：弃赛时势力名次在改状态之前一次算定（此刻全部玩家的总势力；出局者不计，此前已弃赛者计入）。只供带出结算读取，不进 FinalStandings。
         int rankAtResign = ResignationRank.Compute(player, _players.Select(p =>
             (p, _records[p].Status, Scoreboard.Latest?.Of(p).Total ?? BigInteger.Zero)));
-        _resignations.Add(new ResignationSnapshot(player, MajorRound, Board.Serialize(), hand, effects, controlled, power, rankAtResign));
+        _resignations.Add(new ResignationSnapshot(player, MajorRound, Board.Serialize(), hand, effects, power, rankAtResign));
 
         if (inOwnTurn)
         {
@@ -526,7 +516,7 @@ public sealed partial class MatchFlow
         // 地图标识取开局地图的（改造不改标识，二者恒等；写 BaseMap 是为了把"这是哪张图"与活地形分开）。
         // 活形分析在同一份副本上做，与 Board / BoardSerialized 同一时刻（life-shape D6）。
         return new(Board.BaseMap.Id, Seed.ToString(), Phase, MajorRound, ArtisanWeight, ContentSet, Stage, CurrentPlayer, _order, PlayerStates, board,
-            Board.Serialize(), power, Relics.PublicStates(), Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board),
+            Board.Serialize(), power, PendingRelicForecast, Hands.PublicViews(), _passStreak, Result, LifeShapeReport.Analyze(board),
             CarryInOut, CarryIns)
         {
             PassedThisRound = PassedThisRound,
@@ -541,15 +531,9 @@ public sealed partial class MatchFlow
 
     private void OnPass(PlayerId player) => Hands.OnPass(player);
 
-    private void OnRevealRelics(SettlementContext context) => Relics.Reveal(context.Board, MajorRound);
-
-    private void OnRecalculatePower(SettlementContext context)
-    {
-        IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
-        Relics.RecalculateControl(context.Board, roster);
-        // more-pieces-relics D3：正式结算按真实信物内容读取计分信物（连营 / 犄角），控制在同一次计算里按结算后盘面现算。
-        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, roster, MajorRound, Relics.TrueContents(), ScoringVersion));
-    }
+    private void OnRecalculatePower(SettlementContext context) =>
+        // 挂在棋子上的信物直接从结算后盘面的信物层读（relic-redesign D3）：本批拾取 / 提走后的掉落在这一次重算里即生效。
+        MarkEstablishedPower(Scoreboard.Recalculate(context.Board, Roster, MajorRound, ScoringVersion));
 
     private void OnCheckEndConditions(SettlementContext context)
     {
@@ -643,7 +627,6 @@ public sealed partial class MatchFlow
     {
         RecalculateDerived();
         PowerSnapshot power = Scoreboard.Latest!;
-        ImmutableArray<RelicPublicState> relics = Relics.PublicStates();
         var inputs = new List<StandingInput>(_players.Length);
         foreach (PlayerId player in _players)
         {
@@ -652,7 +635,7 @@ public sealed partial class MatchFlow
             if (record.Defeat is { } defeat)
             {
                 // 战场落败者按结算时的比较量排名（elimination-endgame「终局名次与并列判定」第 2 条），不按终局时盘面。
-                inputs.Add(new StandingInput(player, record.Status, defeat.Power, defeat.ControlledRelics, defeat.ExclusiveCells, defeat.Stones, record.EliminationOrder)
+                inputs.Add(new StandingInput(player, record.Status, defeat.Power, defeat.HeldRelics, defeat.ExclusiveCells, defeat.Stones, record.EliminationOrder)
                 {
                     Reason = EliminationReason.BattlefieldDefeat,
                 });
@@ -663,7 +646,7 @@ public sealed partial class MatchFlow
                 player,
                 record.Status,
                 record.Status == PlayerStatus.Resigned ? record.PowerAtResign!.Value : detail.Total,
-                relics.Count(s => s.Control.GrantsEffectTo(player)),
+                Board.HeldRelicCount(player),
                 detail.ExclusiveCells.Length,
                 Board.GroupsOf(player).Sum(g => g.Size),
                 record.EliminationOrder)
@@ -723,7 +706,7 @@ public sealed partial class MatchFlow
         }
     }
 
-    /// <summary>大回合结束：单次拉取先手修正（不缓存），按势力名次与先手值公式生成下一大回合顺序（设计文档 §11）。</summary>
+    /// <summary>大回合结束：按势力名次与先手值公式生成下一大回合顺序（设计文档 §11），随后开始下一大回合（地图信物落位 / 预告）。</summary>
     private void EndMajorRound()
     {
         int completed = MajorRound;
@@ -736,9 +719,8 @@ public sealed partial class MatchFlow
         }
 
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
-        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, Relics.TrueContents(), ScoringVersion);
+        PowerSnapshot power = Scoreboard.Recalculate(Board, roster, completed, ScoringVersion);
         MarkEstablishedPower(power);
-        ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.ReadInitiativeBonuses(Board, roster);
         int active = ActiveCount;
         if (active == 0)
         {
@@ -760,10 +742,9 @@ public sealed partial class MatchFlow
             }
 
             int rank = power.RankOf(player) ?? throw new SiegeRuleException($"参赛玩家 {player} 没有势力名次。");
-            int bonus = bonuses.TryGetValue(player, out int b) ? b : 0;
             int? previous = completed >= 2 ? _order.IndexOf(player) : null;
-            entries.Add(new InitiativeEntry(player, rank, power.Of(player).Total, bonus,
-                InitiativeOrder.ValueOf(active, rank, bonus), previous, record.SeedRank));
+            entries.Add(new InitiativeEntry(player, rank, power.Of(player).Total,
+                InitiativeOrder.ValueOf(active, rank), previous, record.SeedRank));
         }
 
         InitiativeReport report = InitiativeOrder.Generate(completed, entries.MoveToImmutable());
@@ -778,17 +759,16 @@ public sealed partial class MatchFlow
         _orderIndex = 0;
         MajorRound = completed + 1;
         Emit(FlowEventKind.MajorRoundEnded, null,
-            $"第 {completed} 大回合结束；先手值 {string.Join(" ", report.Entries.Select(e => $"{e.Player}={e.Value}(名次{e.Rank},修正{e.Bonus})"))}；下一轮 {string.Join(">", report.NextOrder)}");
+            $"第 {completed} 大回合结束；先手值 {string.Join(" ", report.Entries.Select(e => $"{e.Player}={e.Value}(名次{e.Rank})"))}；下一轮 {string.Join(">", report.NextOrder)}");
         // open-map：阶段只剩 插旗 → 构筑 → 交战 → 终局，大回合结束时没有任何阶段事件（第 3 → 第 4 大回合只是合法落子范围与改造范围变大）。
+        StartMajorRoundRelics();
     }
 
     // ---------- 内部 ----------
 
     private void RecalculateDerived()
     {
-        IReadOnlyDictionary<PlayerId, PlayerStatus> roster = Roster;
-        Relics.RecalculateControl(Board, roster);
-        MarkEstablishedPower(Scoreboard.Recalculate(Board, roster, Math.Max(MajorRound, 1), Relics.TrueContents(), ScoringVersion));
+        MarkEstablishedPower(Scoreboard.Recalculate(Board, Roster, Math.Max(MajorRound, 1), ScoringVersion));
     }
 
     /// <summary>流程事件的<b>唯一</b>发出点。</summary>
@@ -895,8 +875,7 @@ public sealed partial class MatchFlow
     internal void DebugRecalculate() => RecalculateDerived();
 
     /// <summary>
-    /// 测试专用：改写小回合开始时生成的效果快照。棋子类型增至六种（artisan-terrain-edit）后，五槽装不下全部六种，
-    /// 但靠信物只会把槽位<b>加多</b>；要造出"类型数超过槽位"仍需缩水的快照（兵站丢失路径除外），生成路径本身不变。
+    /// 测试专用：改写小回合开始时生成的效果快照（快照只剩默认基础值后，要造出"类型数超过槽位"或别的部署上限只能经此接缝），生成路径本身不变。
     /// </summary>
     internal void DebugSetSnapshotTransform(Func<EffectSnapshot, EffectSnapshot>? transform) => _snapshotTransform = transform;
 
@@ -924,7 +903,7 @@ public sealed partial class MatchFlow
         /// <summary>出局原因；未出局为 <c>null</c>。</summary>
         internal EliminationReason? EliminationReason { get; set; }
 
-        /// <summary>战场落败时的比较量（势力 / 信物 / 独占空格 / 棋子，名次比较链）；其他情形为 <c>null</c>。</summary>
+        /// <summary>战场落败时的比较量（势力 / 持有信物 / 独占空格 / 棋子，名次比较链）；其他情形为 <c>null</c>。</summary>
         internal SettlementEntry? Defeat { get; set; }
     }
 
@@ -932,8 +911,6 @@ public sealed partial class MatchFlow
     private sealed class Hooks(MatchFlow match) : ISettlementHooks
     {
         public void DeductHand(PlayerId player, IReadOnlyDictionary<PieceType, int> deployed) => match.OnDeductHand(player, deployed);
-
-        public void OnRevealRelics(SettlementContext context) => match.OnRevealRelics(context);
 
         public void OnRecalculatePower(SettlementContext context) => match.OnRecalculatePower(context);
 

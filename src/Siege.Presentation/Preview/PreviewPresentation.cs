@@ -23,8 +23,8 @@ public enum HighlightKind
     /// <summary>结算后仍无气的己方棋子（自杀手）。</summary>
     SuicideRisk,
 
-    /// <summary>将揭示的未知信物格（只标记，不显示内容）。</summary>
-    WillReveal,
+    /// <summary>将拾取的信物格：本批落点落在地图信物上（relic-redesign W1）。</summary>
+    WillPickUp,
 
     /// <summary>非法批次的相关落点。</summary>
     FailureFocus,
@@ -290,8 +290,8 @@ public sealed record FailurePresentation(
     }
 }
 
-/// <summary>将揭示提示：只有坐标与固定文案，结构上没有信物内容字段（tactical-ui D3）。</summary>
-public sealed record RevealHintView(Coord Coord, string Text);
+/// <summary>将拾取提示：坐标与文案（如「将拾取 #3 战鼓」；信物全公开，relic-redesign R22）。</summary>
+public sealed record PickUpHintView(Coord Coord, string Text);
 
 /// <summary>
 /// 批次预演的呈现（batch-preview 全部 Requirement）。只把 Core 的 <see cref="BatchPreview"/> 映射为界面数据，不做任何规则计算。
@@ -306,7 +306,7 @@ public sealed record PreviewPresentation(
     ImmutableArray<CaptureView> Captures,
     ImmutableArray<OwnGroupView> OwnGroups,
     ImmutableArray<PowerChangeView> PowerChanges,
-    ImmutableArray<RevealHintView> RevealHints,
+    ImmutableArray<PickUpHintView> PickUpHints,
     ImmutableArray<ArtisanEditView> ArtisanEdits,
     ImmutableArray<CellHighlight> Highlights,
     ImmutableArray<EdgeHighlight> EdgeHighlights,
@@ -314,9 +314,6 @@ public sealed record PreviewPresentation(
     string? PassWarning,
     bool CanConfirm)
 {
-    /// <summary>「将揭示」固定文案。</summary>
-    public const string RevealHintText = "将揭示";
-
     /// <summary>
     /// 构建。<paramref name="ownHand"/> 只用于 Pass 警示的「本轮新征募」枚数（tactical-ui 裁决 4），MUST 属于预演玩家本人。
     /// </summary>
@@ -336,7 +333,7 @@ public sealed record PreviewPresentation(
         ImmutableArray<CellHighlight>.Builder highlights = ImmutableArray.CreateBuilder<CellHighlight>();
         highlights.AddRange(preview.Placements.Select(p => new CellHighlight(p.Coord, HighlightKind.Staged)));
         highlights.AddRange(preview.CapturedCoords.Select(c => new CellHighlight(c, HighlightKind.PredictedCapture)));
-        highlights.AddRange(preview.WillReveal.Select(c => new CellHighlight(c, HighlightKind.WillReveal)));
+        highlights.AddRange(preview.WillPickUp.Select(r => new CellHighlight(r.Cell, HighlightKind.WillPickUp)));
         ImmutableArray<EdgeHighlight>.Builder edges = ImmutableArray.CreateBuilder<EdgeHighlight>();
         if (failure is not null)
         {
@@ -389,7 +386,7 @@ public sealed record PreviewPresentation(
                 $"将提走 {Labels.Player(g.Owner)} 的 {g.Size} 子棋串：{Labels.Coords(g.Coords)}"))],
             [.. preview.OwnGroups.Select(g => OwnGroup(g, thresholds))],
             [.. preview.PowerChanges.Select(c => PowerChangeOf(c, preview.Player))],
-            [.. preview.WillReveal.Select(c => new RevealHintView(c, RevealHintText))],
+            [.. preview.WillPickUp.Select(r => new PickUpHintView(r.Cell, $"将拾取 {Labels.Relic(r.Token)}"))],
             artisanEdits,
             [.. highlights.OrderBy(h => h.Kind).ThenBy(h => h.Coord)],
             [.. edges.OrderBy(h => h.Kind).ThenBy(h => h.Edge.A).ThenBy(h => h.Edge.B)],

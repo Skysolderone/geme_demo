@@ -36,7 +36,7 @@ public class 地图静态校验规则Tests
         Assert.True(result.IsValid, result.ToString());
         Assert.Equal(833, map.PlayableCount);
         Assert.Equal(6, map.Boards.Length);
-        Assert.Empty(map.RelicCells);   // 不放静态信物格（段 A3）
+        Assert.DoesNotContain("RelicCells", MapFile.ToJson(map), StringComparison.Ordinal);   // 不放静态信物格（段 A3；relic-redesign W1 起地图数据没有该字段）
         Assert.Equal("Q25", Clean.Origin.ToNotation());
         Assert.Equal(BoardTheme.Forest, Clean.Theme);
         Assert.All(Clean.Cells(), c => Assert.True(map.IsPlayable(c), c.ToNotation()));
@@ -106,7 +106,6 @@ public class 地图静态校验规则Tests
         {
             Boards = map.Boards.RemoveAt(map.Boards.Length - 1),
             BirthZones = map.BirthZones.RemoveAt(map.BirthZones.Length - 1),
-            RelicCells = map.RelicCells.Where(kv => !last.Contains(kv.Key)).ToImmutableDictionary(),
         };
         Assert.Equal(5, five.BirthZones.Length);
         MapValidationFailure low = Assert.Single(
@@ -281,49 +280,6 @@ public class 地图静态校验规则Tests
     }
 
     [Fact]
-    public void 信物格必须标注所属分区()
-    {
-        // 公共区的信物格被标成出生区档位，或出生区的信物格被标成公共区，都必须报错——
-        // 分区标错会让信物生成用错强度预算，而那时已经在对局里了。
-        // map-expand-25：低地本身可落子，不必再开放场景格；取低地上按坐标序第一个没有信物的格放一枚标成出生区档位的信物。
-        // 段 A3：浮空岛不放静态信物格，出生区那一枚改为在出生区 1 按坐标序第一格手工放（标成公共区档）。
-        MapData map = Link();
-        Coord inBirthZone = map.BirthZones[0].Order().First();
-        Coord contested = map.AllCoords().Order().First(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c)) && !map.RelicCells.ContainsKey(c));
-
-        MapData zoneSwapped = map with
-        {
-            RelicCells = map.RelicCells
-                .SetItem(inBirthZone, new RelicCellSpec(RelicZone.Contested, BudgetTier.High))
-                .SetItem(contested, new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)),
-        };
-
-        var failures = MapValidator.Validate(zoneSwapped).Failures
-            .Where(f => f.Code == "RELIC_ZONE_MISMATCH").ToArray();
-
-        Assert.Equal(2, failures.Length);
-        Assert.Contains(failures, f => f.Coords.Contains(inBirthZone));
-        Assert.Contains(failures, f => f.Coords.Contains(contested));
-    }
-
-    [Fact]
-    public void 出生区不得出现高阶预算信物()
-    {
-        // 设计文档 §8.1：出生区不生成效果 +2 的高阶信物
-        // map-expand-25 段 A3：浮空岛不放静态信物格，改为在出生区 1 按坐标序第一格手工放一枚出生区档、高阶预算的信物。
-        MapData map = Link();
-        Coord inBirthZone = map.BirthZones[0].Order().First();
-        MapData upgraded = map with
-        {
-            RelicCells = map.RelicCells.SetItem(inBirthZone, new RelicCellSpec(RelicZone.BirthZone, BudgetTier.High)),
-        };
-
-        MapValidationFailure failure = Assert.Single(
-            MapValidator.Validate(upgraded).Failures, f => f.Code == "RELIC_BUDGET_MISMATCH");
-        Assert.Contains(inBirthZone, failure.Coords);
-    }
-
-    [Fact]
     public void 出生区容不下九枚部署()
     {
         MapData map = Link();
@@ -484,20 +440,6 @@ public class 地图静态校验规则Tests
         Assert.Equal(3, back.DistanceTolerance);
         Assert.Null(back.ToleranceRelaxReason);
         Assert.Equal(MapFile.ToJson(map), MapFile.ToJson(back));
-    }
-
-    [Fact]
-    public void 信物格不在可落子格上()
-    {
-        // 规格 Scenario：某个信物格落在不可落子的场景格上 → 拒绝并指出该信物格坐标。
-        MapData map = Link();
-        Coord scenery = Coord.Parse("A5");   // map-expand-25：画布西侧留白
-        Assert.False(map.IsPlayable(scenery));
-        MapData broken = map with { RelicCells = map.RelicCells.Add(scenery, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)) };
-
-        Assert.Contains(
-            MapValidator.Validate(broken).Failures,
-            f => f.Code == "RELIC_ON_NON_PLAYABLE" && f.Coords.Contains(scenery));
     }
 
     [Fact]

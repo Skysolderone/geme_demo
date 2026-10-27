@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Style;
 
@@ -65,45 +65,12 @@ public static class Labels
     /// <summary>一条边的文案，如「E5–E6」。两端顺序取 <see cref="FenceEdge"/> 归一后的顺序。</summary>
     public static string Edge(FenceEdge edge) => $"{edge.A.ToNotation()}–{edge.B.ToNotation()}";
 
-    /// <summary>信物类型名称。</summary>
-    public static string Relic(RelicType type) => type switch
-    {
-        RelicType.Prospecting => "探勘",
-        RelicType.Conscription => "征召",
-        RelicType.Depot => "兵站",
-        RelicType.Command => "军令",
-        RelicType.Vanguard => "先锋",
-        RelicType.SchoolEmblem => "流派徽记",
-        // more-pieces-relics：新四类信物（手牌面板来源文案经这里）。
-        RelicType.Encampment => "连营",
-        RelicType.Pincer => "犄角",
-        RelicType.Relay => "驿站",
-        RelicType.Workshop => "工坊",
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知信物类型。"),
-    };
+    /// <summary>信物种类名称（relic-redesign：挂在棋子上的五种信物；取 <see cref="RelicKinds.DisplayName"/>，不另写一份）。</summary>
+    public static string Relic(RelicKind kind) => kind.DisplayName();
 
-    /// <summary>已揭示信物的内容文案，如「军令 +1」「流派徽记·倍增子 ×2」。</summary>
-    public static string RelicContent(RelicContent content) =>
-        content.Type == RelicType.SchoolEmblem
-            ? $"{Relic(content.Type)}·{Piece(content.EmblemPiece!.Value)} ×{content.Magnitude}"
-            : $"{Relic(content.Type)} +{content.Magnitude}";
-
-    /// <summary>信物强度预算分区名称（只在信物层出现，tactical-ui 裁决 5）。</summary>
-    public static string Zone(RelicZone zone) => zone switch
-    {
-        RelicZone.BirthZone => "出生区",
-        RelicZone.Contested => "公共争夺区",
-        _ => throw new ArgumentOutOfRangeException(nameof(zone), zone, "未知分区。"),
-    };
-
-    /// <summary>预算档位名称。</summary>
-    public static string Budget(BudgetTier tier) => tier switch
-    {
-        BudgetTier.Birth => "出生档",
-        BudgetTier.Standard => "标准档",
-        BudgetTier.High => "高档",
-        _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知档位。"),
-    };
+    /// <summary>一件信物的文案，如「#3 战鼓」「#5 军旗（P1 带入·保险）」。</summary>
+    public static string Relic(RelicToken token) =>
+        $"#{token.Id} {Relic(token.Kind)}{(token.Origin is { } o ? $"（{Player(o)} 带入{(token.Insured ? "·保险" : string.Empty)}）" : string.Empty)}";
 
     /// <summary>AI 难度的显示名（expert-lookahead：图形版选图界面的难度选择）。</summary>
     public static string Difficulty(Siege.Core.Ai.AiDifficulty difficulty) => difficulty switch

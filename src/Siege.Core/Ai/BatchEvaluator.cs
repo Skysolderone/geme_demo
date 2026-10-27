@@ -4,7 +4,6 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Ai;
@@ -15,8 +14,8 @@ namespace Siege.Core.Ai;
 /// 提子、军势、覆盖全部由下层算出（<see cref="PowerCalculator"/>）；眼、眼值与活形状态只来自 <see cref="LifeShapeReport"/>，本类不重造规则。
 /// </summary>
 /// <remarks>
-/// 输入只有 <see cref="MatchPublicView"/> 与本人的 <see cref="BatchContext"/>：结构上没有手牌数量、征募面板与未揭示信物内容。
-/// 未揭示信物的价值经 <see cref="RelicEstimate"/> 的分区先验估计；调试 AI 可经 <c>internal</c> 构造传入读真实内容的估值函数。
+/// 输入只有 <see cref="MatchPublicView"/> 与本人的 <see cref="BatchContext"/>：结构上没有手牌数量与征募面板。
+/// 信物维经 <see cref="RelicEstimate"/> 按公开盘面的信物层估计（relic-redesign W1 的最简估计，段 C 重写）。
 /// </remarks>
 public sealed class BatchEvaluator
 {
@@ -29,10 +28,7 @@ public sealed class BatchEvaluator
     private readonly PlayerId _me;
     private readonly EvaluationWeights _weights;
     private readonly bool _immediateOnly;
-    private readonly Func<RelicPublicState, int> _relicValue;
     private readonly ImmutableSortedDictionary<PlayerId, PlayerStatus> _roster;
-    private readonly ImmutableArray<RelicPublicState> _relics;
-    private readonly ImmutableSortedDictionary<Coord, RelicType> _knownRelics;
     private readonly ScoringVersion _scoring;
     private readonly PowerSnapshot _before;
     private readonly long _relicBefore;
@@ -48,12 +44,11 @@ public sealed class BatchEvaluator
     private readonly long _safetyBeforeWithoutLife;
 
     public BatchEvaluator(PlayerId me, MatchPublicView view, EvaluationWeights weights, bool immediateOnly)
-        : this(me, view, weights, immediateOnly, relicValue: null)
+        : this(me, view, weights, immediateOnly, lifeQuery: null)
     {
     }
 
     /// <summary>
-    /// 调试 AI 旁路：<paramref name="relicValue"/> 可读真实内容。正式 AI 走公开构造，估值只能来自 <see cref="RelicEstimate.Estimate"/>。
     /// 测试接缝：<paramref name="lifeQuery"/> 替换活形查询（计数桩；缺省即 <see cref="LifeShapeReport.Analyze"/>），
     /// <paramref name="cacheLife"/> 为 <c>false</c> 时关闭决策内缓存（开 / 关比对用；缓存 MUST NOT 影响结果）。
     /// </summary>
@@ -62,28 +57,20 @@ public sealed class BatchEvaluator
         MatchPublicView view,
         EvaluationWeights weights,
         bool immediateOnly,
-        Func<RelicPublicState, int>? relicValue,
-        Func<GameBoard, LifeShapeReport>? lifeQuery = null,
+        Func<GameBoard, LifeShapeReport>? lifeQuery,
         bool cacheLife = true)
     {
         ArgumentNullException.ThrowIfNull(view);
         _me = me;
         _weights = weights ?? throw new ArgumentNullException(nameof(weights));
         _immediateOnly = immediateOnly;
-        ContentSet contentSet = view.ContentSet;
-        _relicValue = relicValue ?? (state => RelicEstimate.Estimate(state, contentSet));
         _lifeQuery = lifeQuery ?? LifeShapeReport.Analyze;
         _lifeCache = cacheLife ? new Dictionary<string, LifeShapeReport>(StringComparer.Ordinal) : null;
         _roster = view.Players.ToImmutableSortedDictionary(p => p.Player, p => p.Status);
-        _relics = view.Relics;
-
-        // 计分信物（连营 / 犄角，more-pieces-relics D3）只用批次开始前已揭示的公开内容：结算前后两次势力计算共用这一份，
-        // 本批将首次揭示的信物不在其中，其计分效果不进"即时势力增量"（只按未揭示期望进信物维）。
-        _knownRelics = RevealedRelics.Of(view.Relics);
         _scoring = ScoringVersions.RequireValid(view.ScoringVersion);
-        _before = PowerCalculator.Compute(view.Board, _roster, _knownRelics, _scoring);
+        _before = PowerCalculator.Compute(view.Board, _roster, _scoring);
         _rankBefore = _before.RankOf(me);
-        _relicBefore = RelicScore(_before.Coverage);
+        _relicBefore = RelicEstimate.Score(view.Board, me, _roster);
 
         // 批次开始前的活形查询：活形硬约束与眼位维（全部难度，眼位下放到简单难度见 ai-eye R26）、安全 / 威胁两维（非简单难度）共用，每个盘面一次。
         LifeShapeReport life = Life(view.Board);
@@ -110,10 +97,10 @@ public sealed class BatchEvaluator
     public PlayerId Player => _me;
 
     /// <summary>
-    /// 按本评价器的势力口径（构造时的名册 + 批次开始前已揭示的信物内容）对任一盘面算势力：与"即时势力增量"维的结算后势力同一份计算。
+    /// 按本评价器的势力口径（构造时的名册与计分规则版本）对任一盘面算势力：与"即时势力增量"维的结算后势力同一份计算。
     /// 供停手复盘（<see cref="HeuristicTurnController.ReviewBestMove"/>）在候选预演结果上判"本可翻盘"，不另写势力口径。
     /// </summary>
-    internal PowerSnapshot PowerOf(GameBoard board) => PowerCalculator.Compute(board, _roster, _knownRelics, _scoring);
+    internal PowerSnapshot PowerOf(GameBoard board) => PowerCalculator.Compute(board, _roster, _scoring);
 
     /// <summary>是否只评价即时收益与眼位（简单难度，ai-eye R26）。</summary>
     public bool ImmediateOnly => _immediateOnly;
@@ -152,7 +139,7 @@ public sealed class BatchEvaluator
         }
 
         GameBoard after = result.ProjectedBoard;
-        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _knownRelics, _scoring);
+        PowerSnapshot afterPower = PowerCalculator.Compute(after, _roster, _scoring);
 
         raw[(int)EvaluationDimension.PowerGain] = afterPower.Of(_me).Total - _before.Of(_me).Total;
 
@@ -169,7 +156,7 @@ public sealed class BatchEvaluator
 
         if (!_immediateOnly)
         {
-            raw[(int)EvaluationDimension.Relic] = checked(RelicScore(afterPower.Coverage) - _relicBefore);
+            raw[(int)EvaluationDimension.Relic] = checked(RelicEstimate.Score(after, _me, _roster) - _relicBefore);
             raw[(int)EvaluationDimension.Growth] = checked(GrowthOf(after) - _growthBefore);
             raw[(int)EvaluationDimension.Initiative] = InitiativeShift(afterPower);
             if (prefilter)
@@ -274,31 +261,6 @@ public sealed class BatchEvaluator
 
         long remaining = stock - placed;
         return -Math.Max(0, context.DeployLimit - remaining);
-    }
-
-    /// <summary>
-    /// 维度 3 的盘面总分：己方控制（占据或独占覆盖）+V，参赛中的敌方控制 −V，争议 / 中立 / 弃赛者封锁 0；
-    /// 未揭示信物首次进入任何覆盖（将被揭示）再 +V/2 作为发现价值。V 由估值函数给出。
-    /// </summary>
-    private long RelicScore(CoverageMap coverage)
-    {
-        long score = 0;
-        foreach (RelicPublicState relic in _relics)
-        {
-            int value = _relicValue(relic);
-            CellOwnership ownership = coverage.OwnershipOf(relic.Coord);
-            if (ownership.Owner is { } holder && _roster.TryGetValue(holder, out PlayerStatus status) && status == PlayerStatus.Active)
-            {
-                score += holder == _me ? value : -value;
-            }
-
-            if (!relic.IsRevealed && ownership.Kind != OwnershipKind.Neutral && ownership.Kind != OwnershipKind.Obstacle)
-            {
-                score += value / 2;
-            }
-        }
-
-        return score;
     }
 
     /// <summary>
@@ -431,7 +393,7 @@ public sealed class BatchEvaluator
 
     /// <summary>
     /// 维度 5 的盘面总分：倍增子数 × 棋串大小 + 连珠子数 × 2 + 协同加值，对己方全部棋串求和。
-    /// 口径保持不变（more-pieces-relics D10）：MUST NOT 计入旗手 / 铁链 / 哨兵 / 界碑四种新来源与计分信物（协同加值走不带犄角的旧重载）——
+    /// 口径保持不变（more-pieces-relics D10）：MUST NOT 计入旗手 / 铁链 / 哨兵 / 界碑四种新来源（协同加值走不带百变的重载）——
     /// 它们已经经唯一的势力计算进入"即时势力增量"，再计一次就是双计。
     /// </summary>
     private long GrowthOf(GameBoard board)

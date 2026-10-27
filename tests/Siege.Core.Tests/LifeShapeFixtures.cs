@@ -82,7 +82,6 @@ internal static class LifeShapeFixtures
             MaxPlayers = 4,
             Obstacles = [.. obstacles],
             BirthZones = [],
-            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
             ChokePoints = ImmutableHashSet<Coord>.Empty,
             CentralEntrance = new Coord(width / 2, height / 2),
             TerrainData = terrain,

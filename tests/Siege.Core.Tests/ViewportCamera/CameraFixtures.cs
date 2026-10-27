@@ -28,7 +28,6 @@ internal static class CameraFixtures
             Cells("M10", "N10", "K11", "L11", "M11", "N11", "K12", "L12", "M12", "N12", "K13", "L13", "M13"),
             Cells("A10", "B10", "C10", "A11", "B11", "C11", "A12", "B12", "C12", "D12", "B13", "C13", "D13"),
         ],
-        RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
         ChokePoints = [],
         CentralEntrance = Coord.Parse("G7"),
     };
@@ -58,7 +57,6 @@ internal static class CameraFixtures
             MaxPlayers = 4,
             Obstacles = [],
             BirthZones = zones,
-            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
             ChokePoints = [],
             CentralEntrance = Coord.Parse("M15"),
             TerrainData = TestMaps.Terrain(heights: [.. zones.SelectMany(z => z).Select(c => (c.ToNotation(), 2))]),

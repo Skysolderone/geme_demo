@@ -3,7 +3,7 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Preview;
-using Siege.Core.Relics;
+using Siege.Core.Recruit;
 
 namespace Siege.Core.Tests.BatchDeployment;
 
@@ -164,18 +164,16 @@ public class 批次数量与库存约束Tests
     public void 基础值随阶段提高_阶段边界(int majorRound, int expected)
     {
         // growth-pass-1 design.md D2：阶段边界与构筑保护期、§16 三段对齐——第 1–3 / 4–6 / 7+ 大回合为 3 / 4 / 5。两侧边界各取一行。
-        // 经效果快照生成（账本）与无信物默认快照两条路径读取，二者都只能经由 BaseDeployLimitFor。
+        // 经对局流程在小回合开始时生成的快照与默认快照两条路径读取，二者都只能经由 BaseDeployLimitFor（relic-redesign D4：快照只剩默认基础值）。
         // 变异验证 M-GP1（`<= 3 => 3` 改 `<= 4 => 3`、`<= 6 => 4` 改 `<= 7 => 4`，即第 4 大回合仍取 3）→ 全套红 6，含本 Theory 的 4、7 两行、「分阶段基础部署上限唯一实现」、
         // 「来源可拆分」、「分阶段基础值只在生成快照时读取一次」、「成长轴部署阈值按分阶段基础值」。
-        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(("E7", RelicFixtures.Command()));
-        board.Place("A1", TestMaps.P0);
-        ledger.Settle(board, majorRound);
-
-        EffectSnapshot snapshot = ledger.SnapshotFor(TestMaps.P0, board, 0, majorRound);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(majorRound);
+        match.BeginTurn();
+        EffectSnapshot snapshot = match.CurrentSnapshot!;
 
         Assert.Equal(expected, snapshot.DeployLimit);
         Assert.Equal(expected, EffectSnapshot.BaseDeployLimitFor(majorRound));
-        Assert.Equal(snapshot, EffectSnapshot.Defaults(TestMaps.P0, majorRound, 0));
+        Assert.Equal(snapshot, EffectSnapshot.Defaults(snapshot.Player, majorRound, snapshot.HeldTypeCount));
     }
 
     [Fact]
@@ -238,7 +236,7 @@ public class 批次数量与库存约束Tests
         StructureParameter deploy = match.PublishSupplement().Structures.Single(s => s.Player == TestMaps.P0).Parameters!.DeployLimit;
 
         Assert.Equal((3, 3), (deploy.Value, deploy.Base));
-        Assert.Empty(deploy.Sources);
+        Assert.Equal(0, deploy.Bonus);
         Assert.Equal(3, EffectSnapshot.BaseDeployLimitFor(0));
     }
 }

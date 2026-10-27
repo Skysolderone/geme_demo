@@ -4,6 +4,7 @@ using Siege.Core.Board.Maps;
 using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Tests.CarryInOut;
 
@@ -25,8 +26,9 @@ public class AI带入Tests
             CarryIns = CarryAi.ForHumanMatch(seed, Four, Me, mine, set),
         });
 
+    /// <summary>该局第 3 大回合的信物预告（relic-redesign W1：开局生成随旧信物删除，改看刷新子流 relic-spawn；带入子流不得扰动它）。</summary>
     private static string Relics(MatchFlow match) =>
-        string.Join(" ", match.Relics.Generation.Placements.Select(p => $"{p.Coord.ToNotation()}:{p.Content}"));
+        string.Join(" ", RelicSpawner.Forecast(match.Board, new BirthBoardArea(match.Board.Map), match.Seed, 3, match.Players.Length, 0)!.Slots);
 
     private static string AiCarries(IReadOnlyDictionary<PlayerId, CarryIn> carries) =>
         CarryFixtures.CarryText(carries.Where(kv => kv.Key != Me).ToImmutableSortedDictionary(kv => kv.Key, kv => kv.Value));

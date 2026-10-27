@@ -695,7 +695,7 @@ public sealed partial class Hud : CanvasLayer
         AddSection(_previewBody, "己方棋串", preview.OwnGroups.Select(GroupLine), Ui.InfoText);
         AddSection(_previewBody, "军势预览", preview.OwnGroups.Where(g => g.Power is not null).Select(g => g.Power!.FormulaText), Ui.MutedText);
         AddSection(_previewBody, "势力与排名", preview.PowerChanges.Select(c => c.Text), Ui.InfoText);
-        AddSection(_previewBody, "将揭示", preview.RevealHints.Select(h => $"{h.Coord.ToNotation()} {h.Text}"), Ui.InfoText);
+        AddSection(_previewBody, "将拾取", preview.PickUpHints.Select(h => $"{h.Coord.ToNotation()} {h.Text}"), Ui.InfoText);
     }
 
     private static string DiffText(ImmutableArray<ReadingDiffCell> cells) =>
@@ -779,8 +779,8 @@ public sealed partial class Hud : CanvasLayer
 
             case RelicLayerContent relics:
                 AddScroll(_layerBody, relics.Relics.Select(r => (
-                    $"{r.Coord.ToNotation()}　{r.ZoneText}　{r.ContentText}　{r.ControlText}" + (r.IneffectiveReason is null ? string.Empty : $"　{r.IneffectiveReason}"),
-                    r.IneffectiveReason is null ? Ui.InfoText : Ui.MutedText)));
+                    $"{r.Coord.ToNotation()}　{r.Text}",
+                    r.IsForecast ? Ui.MutedText : Ui.InfoText)));
                 break;
 
             case OrderLayerContent order:
@@ -923,7 +923,7 @@ public sealed partial class Hud : CanvasLayer
         foreach (Standing standing in result.Standings)
         {
             _centerBody.AddChild(Ui.Text(
-                $"第 {standing.Rank} 名　{Labels.Player(standing.Player)}　势力 {standing.Input.Power}　信物 {standing.Input.ControlledRelics}　独占空格 {standing.Input.ExclusiveCells}",
+                $"第 {standing.Rank} 名　{Labels.Player(standing.Player)}　势力 {standing.Input.Power}　信物 {standing.Input.HeldRelics}　独占空格 {standing.Input.ExclusiveCells}",
                 standing.Player == me ? Ui.PanelBorder : Ui.InfoText));
         }
     }

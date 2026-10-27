@@ -2,7 +2,6 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.MatchFlowRegression;
@@ -10,34 +9,6 @@ namespace Siege.Core.Tests.MatchFlowRegression;
 /// <summary>implement 8.3 的流程回归用例集中未被 Scenario 覆盖的部分：最后一手抢先锋、人工接管、事件唯一发出点。</summary>
 public class 流程回归Tests
 {
-    [Fact]
-    public void 最后一手抢到的先锋本大回合结束即生效()
-    {
-        // design.md D4 / 设计文档 §8.1：先手修正在大回合结束时单次拉取、不缓存——本大回合最后一手抢到的先锋立刻影响下一轮顺序。
-        // 盘面：P0 三孤子 15、P1 两孤子 10、P2 一孤子 5、P3 空；P0–P2 Pass，P3 最后落 G7（先锋）→ P3 势力 5 与 P2 并列第 3，
-        // 先手值 (4−3)+1 = 2 与 P1 的 (4−2)+0 = 2 同值，同值链第 1 条（修正）让 P3 排在 P1 之前。
-        // 变异验证 M-R3：把 ReadInitiativeBonuses 移到大回合开始时读取并缓存 → 红 1（本测试：P3 修正为 0，顺序 P0>P1>P2>P3）。
-        // retire-legacy-rules 1.5：载体为平坦 8×8 链接档图（四人同锁棋盘 0；P3 落子 → 本战场不是整轮 Pass，不结算）。原 9×9 的七个孤子分布在第 2 / 5 / 8 行，
-        // 8×8 棋盘放不下"三行都不贴边"，重排为棋盘 0 内圈两两曼哈顿距离 ≥ 3 的七格（每子仍是四邻独占的孤子，势力 15 / 10 / 5 / 5 不变）。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Vanguard())])
-            .AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
-            .Stones(TestMaps.P0, "D4", "G4", "J5")
-            .Stones(TestMaps.P1, "D8", "J8")
-            .Stones(TestMaps.P2, "E6");
-        Assert.Equal([15, 10, 5, 0], TestMaps.All.Select(p => (int)match.Scoreboard.Latest!.Of(p).Total));   // 前提：与原局面相同的势力
-        match.PassTurn();
-        match.PassTurn();
-        match.PassTurn();
-        match.PlayTurn("G7");
-
-        InitiativeReport report = match.InitiativeReports.Single();
-        Assert.Equal(1, report.Of(TestMaps.P3).Bonus);
-        Assert.Equal(3, report.Of(TestMaps.P3).Rank);
-        Assert.Equal(2, report.Of(TestMaps.P3).Value);
-        Assert.Equal(2, report.Of(TestMaps.P1).Value);
-        Assert.Equal(new[] { TestMaps.P0, TestMaps.P3, TestMaps.P1, TestMaps.P2 }, report.NextOrder);
-    }
-
     [Fact]
     public void 任意阶段可替换决策来源()
     {

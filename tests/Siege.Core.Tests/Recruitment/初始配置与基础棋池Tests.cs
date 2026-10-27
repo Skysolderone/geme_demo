@@ -5,7 +5,6 @@ using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Sim.Running;
 
 namespace Siege.Core.Tests.Recruitment;
@@ -48,12 +47,10 @@ public class 初始配置与基础棋池Tests
         Assert.Equal(18, RecruitWeights.BaseWeightOf(PieceType.Line));
         Assert.Equal(10, RecruitWeights.BaseWeightOf(PieceType.Artisan));
 
-        HandLedger ledger = HandFixtures.Ledger();
-        EffectSnapshot a = HandFixtures.Snapshot(ledger, HandFixtures.P0);
-        EffectSnapshot b = HandFixtures.Snapshot(ledger, HandFixtures.P3);
-        Assert.Equal(RecruitWeights.AdjustedTable(a), RecruitWeights.AdjustedTable(b));
-        // 无徽记：分子倍数 4，表为基础 × 4
-        Assert.Equal([160, 80, 72, 48, 40, 40, 32, 32, 32, 32], RecruitWeights.AdjustedTable(a));
+        // 抽样表全部玩家共用、只按基础权重（relic-redesign D4：徽记调权删除）；保留 ×4 的整数倍（无徽记时的旧口径），征募抽样逐位不变。
+        Assert.Equal(4, RecruitWeights.SamplingScale);
+        Assert.Equal([160, 80, 72, 48, 40, 40, 32, 32, 32, 32], RecruitWeights.SamplingTable(RecruitWeights.DefaultArtisanWeight, ContentSet.V2));
+        Assert.Equal([160, 80, 72, 48, 40, 40], RecruitWeights.SamplingTable(RecruitWeights.DefaultArtisanWeight, ContentSet.V1));
     }
 
     [Fact]
@@ -259,9 +256,10 @@ public class 初始配置与基础棋池Tests
         carried.PlantPrototype();
         plain.PlantPrototype();
         Assert.Equal(plain.ActionOrder, carried.ActionOrder);
-        Assert.Equal(
-            plain.Relics.Generation.Placements.Select(p => $"{p.Coord.ToNotation()}:{p.Content}"),
-            carried.Relics.Generation.Placements.Select(p => $"{p.Coord.ToNotation()}:{p.Content}"));
+        Assert.Equal(Forecast(plain), Forecast(carried));   // relic-redesign W1：信物刷新（relic-spawn）不受带入扰动
+
+        static string Forecast(MatchFlow m) =>
+            string.Join(",", Siege.Core.PieceRelics.RelicSpawner.Forecast(m.Board, new Siege.Core.PieceRelics.BirthBoardArea(m.Map), m.Seed, 3, m.Players.Length, 0)!.Slots);
 
         carried.BeginTurn();
         plain.BeginTurn();

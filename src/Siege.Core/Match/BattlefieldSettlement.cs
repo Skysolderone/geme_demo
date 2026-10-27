@@ -31,10 +31,10 @@ public enum SettlementReason
 }
 
 /// <summary>
-/// 战场结算时一名玩家的比较量（名次比较链：势力 → 控制信物数 → 独占空格数 → 盘面棋子数，elimination-endgame「终局名次与并列判定」）。
+/// 战场结算时一名玩家的比较量（名次比较链：势力 → 持有信物数 → 独占空格数 → 盘面棋子数，elimination-endgame「终局名次与并列判定」）。
 /// <paramref name="Rank"/> 是本次结算内的名次：胜者恒为 1；落败者从 2 起按比较链排、链全同者共享。
 /// </summary>
-public sealed record SettlementEntry(PlayerId Player, int Rank, BigInteger Power, int ControlledRelics, int ExclusiveCells, int Stones);
+public sealed record SettlementEntry(PlayerId Player, int Rank, BigInteger Power, int HeldRelics, int ExclusiveCells, int Stones);
 
 /// <summary>
 /// 一次战场结算的记录（match-telemetry 第 10 项；存档往返）：序号（从 1 起）、大回合、战场标识、原因、胜者、各玩家名次与势力（胜者在前）。

@@ -9,7 +9,6 @@ using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -105,7 +104,6 @@ public sealed class MatchSession
         }
 
         Runner = new MatchRunner(match);
-        _trace.SnapshotSource = () => match.CurrentSnapshot;
         Seed = match.Seed;
         bool sampled = Seed.Stream(SampleStream).NextPermille(config.FullEventSamplePermille);
         _retention = config.EventRetention == EventRetention.Full || sampled ? EventRetention.Full : EventRetention.SnapshotsOnly;
@@ -146,7 +144,7 @@ public sealed class MatchSession
 
     // ---------- 建局 ----------
 
-    /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
+    /// <summary>按配置与种子建一局：地图静态校验、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
     public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null) =>
         Create(config, seed, map, recorded: false);
 
@@ -398,7 +396,6 @@ public sealed class MatchSession
                 Player = e.Player.Value,
                 Artisan = e.ArtisanCoord.ToNotation(),
                 CausedCapture = e.CausedCapture,
-                ViaWorkshop = WritesNewContent(Match.ContentSet) ? e.ViaWorkshop : null,
             });
         }
 
@@ -480,27 +477,6 @@ public sealed class MatchSession
             Add(turn, majorRound, LogEventType.Candidates, pid, string.Join(" | ", ai.LastCandidates));
         }
 
-        foreach (RelicPublicState now in after.Relics)
-        {
-            // 链接模式：本小回合的链接新增的公共棋盘信物在 before 里没有（未揭示、无人控制；信物本身记在链接事件里）。没有链接的小回合恒能取到。
-            RelicPublicState? was = before.Relics.FirstOrDefault(r => r.Coord == now.Coord);
-            if (was is null)
-            {
-                continue;
-            }
-
-            if (was.RevealedInMajorRound is null && now.RevealedInMajorRound is { } round)
-            {
-                Add(turn, round, LogEventType.Reveal, pid, now.Content!.Value.ToString(), coords: [now.Coord.ToNotation()]);
-            }
-
-            if (was.Control != now.Control)
-            {
-                Add(turn, majorRound, LogEventType.ControlChanged, now.Control.Holder is { } h ? h.Value : null,
-                    $"{now.Coord.ToNotation()}: {was.Control} -> {now.Control}", coords: [now.Coord.ToNotation()]);
-            }
-        }
-
         string rankBefore = RankingText(before.Power);
         string rankAfter = RankingText(after.Power);
         if (rankBefore != rankAfter)
@@ -534,21 +510,12 @@ public sealed class MatchSession
             Stalled = _trace.Stalled ? true : null,
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
-            RelaySources = RelaySourcesEntry(_trace.Effects, Match.ContentSet),
-            WorkshopActive = WritesNewContent(Match.ContentSet) ? _trace.Effects?.WorkshopActive : null,
             FreePickCount = _trace.FreePickCount,
             TypeSlots = _trace.TypeSlots,
             DeployLimit = _trace.DeployLimit,
             ActionOrder = [.. after.ActionOrder.Select(p => p.Value)],
             PassStreak = after.PassStreak,
             PlayersState = PlayerEntries(after),
-            Relics = [.. after.Relics.Select(r => new RelicStateEntry
-            {
-                Coord = r.Coord.ToNotation(),
-                Revealed = r.IsRevealed,
-                Control = r.Control.Kind.ToString(),
-                Holder = r.Control.Holder?.Value,
-            })],
             ElapsedMs = elapsedMs,
         });
     }
@@ -677,8 +644,6 @@ public sealed class MatchSession
                     ChainBonus = NewField(g.ChainBonus, view.ContentSet),
                     SentryBonus = NewField(g.SentryBonus, view.ContentSet),
                     BoundaryBonus = NewField(g.BoundaryBonus, view.ContentSet),
-                    EncampmentBonus = NewField(g.EncampmentBonus, view.ContentSet),
-                    PincerBonus = NewField(g.PincerBonus, view.ContentSet),
                     MultiplierCount = g.MultiplierCount,
                     FormationTier = FormationField(g.FormationTier, view.ScoringVersion),
                     Power = g.Power,
@@ -702,12 +667,6 @@ public sealed class MatchSession
     internal static int? FormationField(int tier, ScoringVersion scoring) => scoring == ScoringVersion.V1 ? null : tier;
 
     private static int? NewField(int value, ContentSet contentSet) => WritesNewContent(contentSet) ? value : null;
-
-    /// <summary>快照记录的驿站来源：坐标 → 该枚驿站的展示数加成（含 +0，逐枚），直接取效果快照的 <see cref="EffectSnapshot.RelaySources"/>（唯一实现在账本）。</summary>
-    internal static Dictionary<string, int>? RelaySourcesEntry(EffectSnapshot? effects, ContentSet contentSet) =>
-        !WritesNewContent(contentSet) || effects is null
-            ? null
-            : effects.RelaySources.ToDictionary(kv => kv.Key.ToNotation(), kv => kv.Value, StringComparer.Ordinal);
 
     /// <summary>
     /// 棋串各棋子类型的数量（本局内容集的全部类型都写，含 0，按固定类型次序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。
@@ -748,7 +707,6 @@ public sealed class MatchSession
                     {
                         values[$"{entry.Player}.Rank"] = entry.Rank;
                         values[$"{entry.Player}.Power"] = entry.Power;
-                        values[$"{entry.Player}.Bonus"] = entry.Bonus;
                         values[$"{entry.Player}.Value"] = entry.Value;
                         values[$"{entry.Player}.Prev"] = entry.PreviousPosition ?? -1;
                         values[$"{entry.Player}.Next"] = report.NextOrder.IndexOf(entry.Player);
@@ -797,7 +755,7 @@ public sealed class MatchSession
                                 Player = x.Player.Value,
                                 Rank = x.Rank,
                                 Power = x.Power,
-                                ControlledRelics = x.ControlledRelics,
+                                HeldRelics = x.HeldRelics,
                                 ExclusiveCells = x.ExclusiveCells,
                                 Stones = x.Stones,
                             })],
@@ -834,7 +792,6 @@ public sealed class MatchSession
 
     private LogHeader BuildHeader(EventRetention retention)
     {
-        RelicGenerationRecord gen = Match.Relics.Generation;
         return new LogHeader
         {
             MapId = Match.Map.Id,
@@ -853,9 +810,6 @@ public sealed class MatchSession
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],
             FirstOrder = [.. _firstOrder],
-            Relics = [.. gen.Placements.Select(RelicEntryOf)],
-            RelicsConverged = gen.Converged,
-            RelicRerolls = gen.Rerolls,
             DebugAiPlayers = [.. Runner.Annotations.DebugAiPlayers.Select(p => p.Value)],
             Retention = retention,
             // 带入带出（match-telemetry 第 1 条）：新日志总是写明（关闭时 false / 空表）；按缺该项的旧日志回放时不写，重建首部与原首部相同。
@@ -870,17 +824,6 @@ public sealed class MatchSession
             Boards = [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })],
         };
     }
-
-    /// <summary>信物分布的一项（首部的开局信物）。</summary>
-    private static RelicEntry RelicEntryOf(RelicPlacement r) => new()
-    {
-        Coord = r.Coord.ToNotation(),
-        Zone = r.Spec.Zone.ToString(),
-        Budget = r.Spec.Budget.ToString(),
-        Type = r.Content.Type.ToString(),
-        Magnitude = r.Content.Magnitude,
-        EmblemPiece = r.Content.EmblemPiece?.ToString(),
-    };
 
     /// <summary>
     /// 带出结算（match-telemetry 第 7 条）：只在带入带出开启的局写；结算一律由 Core 的纯函数 <see cref="CarryOutSettlement.Settle"/> 给出，
@@ -941,7 +884,7 @@ public sealed class MatchSession
                 Group = s.Group.ToString(),
                 Status = s.Input.Status.ToString(),
                 Power = s.Input.Power,
-                ControlledRelics = s.Input.ControlledRelics,
+                HeldRelics = s.Input.HeldRelics,
                 ExclusiveCells = s.Input.ExclusiveCells,
                 Stones = s.Input.Stones,
                 EliminationOrder = s.Input.EliminationOrder,
@@ -951,7 +894,6 @@ public sealed class MatchSession
             UsedDebugAi = Runner.Annotations.UsedDebugAi,
             DebugAiPlayers = [.. Runner.Annotations.DebugAiPlayers.Select(p => p.Value)],
             Takeovers = TakeoverEntries(),
-            RelicReveals = [.. view.Relics.Select(r => new RelicRevealEntry { Coord = r.Coord.ToNotation(), RevealedInMajorRound = r.RevealedInMajorRound })],
             Peak = peak is null ? null : new PeakEntry
             {
                 MultiplierCount = peak.MultiplierCount,
@@ -962,7 +904,6 @@ public sealed class MatchSession
                 Stones = [.. peak.Stones.Select(s => s.ToNotation())],
             },
             PeakDestroyed = peak is null ? null : PeakDestroyed(peak),
-            DeployLimitPeak = Match.Relics.DeployLimitPeak?.DeployLimit,
             TotalMs = _total.ElapsedMilliseconds,
             MajorRoundMs = [.. _majorRoundMs],
             CarryOut = CarryOutEntries(result),

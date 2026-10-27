@@ -17,7 +17,7 @@ public static class Names
     public static string Stage(TurnStage stage) => stage switch
     {
         TurnStage.Idle => "等待",
-        TurnStage.RelicSnapshot => "信物结算",
+        TurnStage.RelicSnapshot => "回合准备",
         TurnStage.OrganizeHand => "整理手牌",
         TurnStage.Recruit => "征募",
         TurnStage.Deploy => "部署",

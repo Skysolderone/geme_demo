@@ -16,26 +16,6 @@ public class 槽位缩水时的强制整类弃牌Tests
     }
 
     [Fact]
-    public void 兵站丢失触发强制弃牌()
-    {
-        // 设计文档 §5.2 / design.md D7：持有类型数超过本小回合快照槽位 → 征募阶段不可进入（阻断式，不是提示式），随机子流也不被消费。
-        // 变异验证 M-H8：EnterRecruit 去掉超限检查（只在 PrivateView 标 Overflow 提示）→ 红 1（本测试）。
-        (HandLedger ledger, PlayerHandAccess access) = SixTypesFiveSlots();
-        Assert.Equal(1, access.PrivateView().Overflow);
-
-        var ex = Assert.Throws<SiegeRuleException>(() => access.EnterRecruit());
-
-        Assert.Contains("超出", ex.Message);
-        Assert.Contains("整类弃牌", ex.Message);
-        Assert.Equal(TurnPhase.Organize, ledger.PhaseOf(HandFixtures.P0));
-        Assert.Equal(0, ledger.RecruitStreamConsumed);
-        Assert.Throws<SiegeRuleException>(() => access.Panel());
-        // 超限期间也不能跳过征募直接结算
-        Assert.Throws<SiegeRuleException>(() => ledger.OnPass(HandFixtures.P0));
-        Assert.Throws<SiegeRuleException>(() => ledger.DeductHand(HandFixtures.P0, HandFixtures.Deployed((PieceType.Basic, 1))));
-    }
-
-    [Fact]
     public void 超限解除后继续()
     {
         // 设计文档 §5.2：完成 1 次整类弃牌、类型数降至槽位数 → 超限解除，小回合继续进入征募阶段。
@@ -58,7 +38,7 @@ public class 槽位缩水时的强制整类弃牌Tests
         // boundaries.md「显式输入的名册：未知玩家必须响亮失败」的同类规则：快照携带的 HeldTypeCount 是手牌层给出的输入，对不上就抛出，不静默采用任何一边。
         // 变异验证 M-H9：BeginTurn 去掉 HeldTypeCount 一致性检查 → 红 1（本测试）。
         HandLedger ledger = HandFixtures.Ledger();
-        var wrong = new Relics.EffectSnapshot(HandFixtures.P0, 1, 5, 3, 5, 3, System.Collections.Immutable.ImmutableSortedDictionary<PieceType, int>.Empty, heldTypeCount: 3);
+        var wrong = new EffectSnapshot(HandFixtures.P0, 1, 5, 3, 5, 3, heldTypeCount: 3);
 
         var ex = Assert.Throws<SiegeRuleException>(() => ledger.BeginTurn(HandFixtures.P0, wrong));
         Assert.Contains("不一致", ex.Message);

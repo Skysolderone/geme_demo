@@ -245,6 +245,7 @@ public class 循环提子诊断Tests
         // 实测（stagnation-trace 1.2）：种子 1、80 小回合内 D:stall 47 次。
         // map-expand-25 段 A2：link:1:4 换成浮空岛后这局 D:stall 0 次（单条十余分钟），载体改为手写平坦图（见 LinkSimFixtures.FlatStallSession）；
         // 平坦图上种子 1–12 × 80 小回合的 D:stall 次数探针：只有种子 2 / 6 / 12 非 0（1 / 2 / 1 次），取种子 6。
+        // relic-redesign W1 重探（信物刷新接入对局后走法变了，种子 6 不再停手）：种子 1–16 × 80 小回合，非 0 的是 3 / 8 / 9 / 10 / 11 / 13（1 / 1 / 4 / 1 / 1 / 2 次），取次数最多的种子 9。
         MatchSession session = LinkSimFixtures.FlatStallSession(StallRunTurns, StallRunSeed);
         MatchLog real = session.Run();
         int entries = session.Match.Players.Sum(p => session.AiOf(p)!.Decisions.Count(d => d == HeuristicTurnController.StallDecision));
@@ -254,7 +255,7 @@ public class 循环提子诊断Tests
         Assert.Equal(entries, CycleAnalyzer.ReviewMatch(MatchLog.Parse(real.FullText())).Stalls);
     }
 
-    private const ulong StallRunSeed = 6;
+    private const ulong StallRunSeed = 9;
 
     private const int StallRunTurns = 80;
 

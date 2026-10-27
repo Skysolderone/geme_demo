@@ -97,7 +97,7 @@ public class 百局端到端Tests(ITestOutputHelper output)
         foreach (InitiativeReport report in match.InitiativeReports)
         {
             Assert.Equal(report.Entries.Length, report.ActiveCount);
-            Assert.All(report.Entries, e => Assert.Equal((report.ActiveCount - e.Rank) + e.Bonus, e.Value));
+            Assert.All(report.Entries, e => Assert.Equal(report.ActiveCount - e.Rank, e.Value));
         }
 
         // 存档往返

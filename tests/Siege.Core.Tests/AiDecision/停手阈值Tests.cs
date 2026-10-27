@@ -42,24 +42,28 @@ public class 停手阈值Tests
     // D405B8853F396D5D5DD90D69C1D05DC96D753EAF2F75826DD9494D9F0DA094FB / 7A40128226D2E6959CFD5CAEDC9DB23D00CCFFB17610CA17339AB9B11F50B392 / 43F6E259B07F2A1FAC98FC13BD3C9D1DBB9644C055ACA3B77BB45B9A01C6005C。
     // 新图上整批候选开与关在这一局走法相同（StrictImprovementTurnHashWholeBatch 与本值相同），搭桥候选开则不同。
     // map-expand-25 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）：种子 46 不变，旧值 9600A068FAE1F9ABEFF0928E978B04C2FDF2F91C6593EEF6A8A57BEBCA9CC12F。
-    private const string StrictImprovementTurnHash = "A335B30E1714994AEACDF7BEB5CF567B26A2D215CFAE3F6655CBACC50AF8640B";
+    // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：种子 46 在两种阈值下走法变得相同，按本条原口径重探种子 31–46，第一个走法不同的是种子 36（31–35 相同），种子 46 → 36；
+    // 新种子上整批候选开与关走法仍相同（StrictImprovementTurnHashWholeBatch 与本值相同），搭桥候选开则不同。旧值 A335B30E1714994AEACDF7BEB5CF567B26A2D215CFAE3F6655CBACC50AF8640B。
+    private const string StrictImprovementTurnHash = "D74CC0B25A53F9DDAD4B20AE2CF8E804AF4944F8948A40EA5F09674A966F2D2C";
 
     /// <summary>
     /// ai-whole-batch 1.6：<see cref="StrictImprovementTurnHash"/> 同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选缺省开时的哈希。首个分歧：第 7 小回合（第 2 大回合）P0，
     /// 原落 F9 堡垒 + G9 协同 + G10 普通，开启后选中剪枝候选 F9 普通 + G10 普通（见任务目录 rebaseline.txt）。
     /// </summary>
     // map-expand-25 段 A3 重钉（地图变了：坡道与低地重抽）：旧值 9600A068…（段 A2 时与 StrictImprovementTurnHash 同值）；新图上整批候选开与关在这一局走法不再相同。
-    private const string StrictImprovementTurnHashWholeBatch = "117DFC78B1F1A8BD4116D77B0D1FB196769285DA0793594A6E0CD244D66377DE";
+    // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：种子 46 → 36，旧值 117DFC78B1F1A8BD4116D77B0D1FB196769285DA0793594A6E0CD244D66377DE；新种子上与 StrictImprovementTurnHash 同值。
+    private const string StrictImprovementTurnHashWholeBatch = "D74CC0B25A53F9DDAD4B20AE2CF8E804AF4944F8948A40EA5F09674A966F2D2C";
 
     /// <summary>
     /// ai-bridge-candidate 1.6：同一局（link:1 种子 35、阈值 0、24 个小回合）在整批候选与搭桥候选都缺省开时的哈希（搭桥候选关时即 <see cref="StrictImprovementTurnHashWholeBatch"/>）。
     /// 首个分歧：第 15 小回合（第 4 大回合）P3，原落 C6 普通，开启后选中搭桥候选 C4 匠人搭桥 D4 + C6 普通（见任务目录 rebaseline.txt）。
     /// </summary>
     // map-expand-25 段 A3 重钉（地图变了：坡道与低地重抽）：旧值 9BA424135733142E12C8D96882E39E70F0C631C5BD1147CDC19DAE53A0C2EEDA。
-    private const string StrictImprovementTurnHashEditSeed = "A266ED8FD203B43CA8D9753FBF088973145948832A9EFB3B076D2D988BD50FD7";
+    // relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：种子 46 → 36，旧值 A266ED8FD203B43CA8D9753FBF088973145948832A9EFB3B076D2D988BD50FD7。
+    private const string StrictImprovementTurnHashEditSeed = "4801F7C7A32D7F127A4AA086BAB06B09C2257CCEFB26E16E0B2531BCCE5E8DCE";
 
     /// <summary>「阈值为0时零变化」的对局种子（见 <see cref="StrictImprovementTurnHash"/>）。</summary>
-    private const ulong StrictImprovementSeed = 46;   // link-map-surfaces 2.2：34 → 35；map-expand-25 段 A2：35 → 46（见上）
+    private const ulong StrictImprovementSeed = 36;   // link-map-surfaces 2.2：34 → 35；map-expand-25 段 A2：35 → 46；relic-redesign W1：46 → 36（见上）
 
     private static readonly PlayerId Me = AiFixtures.P0;
 

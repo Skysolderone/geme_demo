@@ -114,8 +114,8 @@ public class 可复现回放Tests
         // map-expand-25 段 A2：link:1:4 换成浮空岛后短局里不再停滞，载体改为手写平坦图（LinkSimFixtures.FlatStallSession）。手写图不能按标识重建，
         // "回放"改为同一会话确定性重跑一次、再经 Replayer.Compare（Replayer.Replay 重建之后调用的同一比对，M-RP1 变异点就在其中）与旧式日志比对；
         // 按标识重建地图的那一半由本类其余用例与 每局换图Tests 守。
-        MatchLog current = LinkSimFixtures.FlatStallSession(80, 6).Run();   // 种子 6：平坦图上 80 小回合内停手 2 次（探针见 循环提子诊断Tests.停滞停手次数可查）
-        MatchLog rerun = LinkSimFixtures.FlatStallSession(80, 6).Run();
+        MatchLog current = LinkSimFixtures.FlatStallSession(80, 9).Run();   // 种子 9：平坦图上 80 小回合内停手 4 次（relic-redesign W1 重探，原种子 6；探针见 循环提子诊断Tests.停滞停手次数可查）
+        MatchLog rerun = LinkSimFixtures.FlatStallSession(80, 9).Run();
         Assert.Contains(current.Turns, t => t.Stalled == true);   // 样本口径：这局确有停手
         MatchLog legacy = MatchLog.Parse(current.FullText());
         for (int i = 0; i < legacy.Turns.Count; i++)

@@ -61,7 +61,7 @@ public class 终端对局Tests
             BirthZones = [[.. TestMaps.Rect(0, 0, 12, 12)]],
         };
         MatchFlow match = LinkModeFixtures.RequireLink(
-            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
         for (int y = 0; y < 10; y++)
         {

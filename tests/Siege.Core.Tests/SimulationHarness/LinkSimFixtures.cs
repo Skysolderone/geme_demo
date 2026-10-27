@@ -51,7 +51,7 @@ internal static class LinkSimFixtures
         config = config with { Players = [.. config.Players.Select(p => p with { Weights = SimFixtures.PreCalibrationWeights })] };
         var gameSeed = new Siege.Core.Determinism.GameSeed(seed);
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            LinkModeFixtures.FlatMap, gameSeed, TestMaps.All, Siege.Core.Relics.RelicGenerator.Generate(LinkModeFixtures.FlatMap, gameSeed, ContentSet.V2),
+            LinkModeFixtures.FlatMap, gameSeed, TestMaps.All,
             MatchOptions.Immediate with { ContentSet = ContentSet.V2 });
         match.PlantPrototype();
         return MatchSession.ForMatch(match, config with { ContentSet = match.ContentSet });

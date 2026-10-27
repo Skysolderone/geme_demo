@@ -5,7 +5,6 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.AiDecision;
 
@@ -13,29 +12,21 @@ namespace Siege.Core.Tests.AiDecision;
 public class 正式对战AI的信息边界Tests
 {
     [Fact]
-    public void 未知信物不可读()
+    public void 正式AI拿不到对局本体与账本()
     {
-        // 设计文档 §15.1 / 裁决 9：正式 AI 的输入 = MatchPublicView + 本人句柄；未揭示信物在公开状态里 Content 为 null，
-        // 且 AI 的类型化可达闭包里不存在 RelicLedger / RelicGenerationRecord / MatchFlow 等能读到真实内容的类型。
-        // 变异验证 M-A1：给 HeuristicTurnController 加 `public RelicLedger? Leak { get; init; }` → 红 3（本测试、敌方手牌数量不可读、高难度不越权）。
+        // 设计文档 §15.1 / 裁决 9：正式 AI 的输入 = MatchPublicView + 本人句柄；AI 的类型化可达闭包里不存在 HandLedger / MatchFlow / 种子等能读到私有信息的类型。
+        // relic-redesign W1：原"未知信物不可读"随旧信物删除——挂在棋子上的信物与预告全公开（R22），公开视图经盘面信物层与 RelicForecast 给出。
+        // 变异验证 M-A1：给 HeuristicTurnController 加 `public HandLedger? Leak { get; init; }` → 红 3（本测试、敌方手牌数量不可读、高难度不越权）。
         //（未用字段的写法会先撞 CS0169 警告即错误，编译期就被拦下。）
-        // 变异验证 M-C1（check）：给非根类型 BatchEvaluator 加 `public RelicGenerationRecord? Leak` 属性（经 CreateEvaluator 返回类型可达）→ 红 3（同上三条），证明闭包确实展开了非根类型的公开成员。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command())]);
+        // 变异验证 M-C1（check）：给非根类型 BatchEvaluator 加 `public HandLedger? Leak` 属性（经 CreateEvaluator 返回类型可达）→ 红 3（同上三条），证明闭包确实展开了非根类型的公开成员。
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         HeuristicTurnController ai = HeuristicAi.Create(match, AiFixtures.P0);
 
         Assert.Empty(AiFixtures.Violations(typeof(HeuristicTurnController)));
         ImmutableHashSet<Type> reachable = AiFixtures.ReachableTypes(typeof(HeuristicTurnController));
         Assert.Contains(typeof(MatchPublicView), reachable);
-        Assert.Contains(typeof(RelicPublicState), reachable);
-
-        // 行为：AI 能看到的信物状态里没有类型与强度；评价器只能对它做先验估计
-        RelicPublicState state = match.Publish().Relics.Single(r => r.Coord == TestMaps.At("G7"));
+        Assert.Contains(typeof(Siege.Core.PieceRelics.RelicForecast), reachable);
         Assert.Equal(AiFixtures.P0, ai.CreateEvaluator().Player);
-        Assert.Equal(RelicEstimate.ExpectedValueScaled(RelicZone.Contested, match.ContentSet) / RelicEstimate.ScaleOf(match.ContentSet), RelicEstimate.Estimate(state, match.ContentSet));
-        Assert.False(state.IsRevealed);
-        Assert.Null(state.Content);
-        Assert.Equal(RelicZone.Contested, state.Spec.Zone);
-        Assert.DoesNotContain("Command", state.ToString());
     }
 
     [Fact]
@@ -87,29 +78,5 @@ public class 正式对战AI的信息边界Tests
         Assert.DoesNotContain(typeof(StagedBatch), fromPublicView);
         Assert.DoesNotContain(typeof(Placement), fromPublicView);
         Assert.DoesNotContain(typeof(BatchContext), fromPublicView);
-    }
-
-    [Fact]
-    public void AI源码不读取真实信物内容()
-    {
-        // more-pieces-relics D3 / ai-decision「新棋子与新信物的 AI 适配」：AI 评价中的计分信物 MUST 只用批次开始前已揭示的公开内容。
-        // 真实内容的出口是 RelicLedger.TrueContents()（public，供正式结算用）；Siege.Core/Ai 与账本同程序集，类型闭包守门（未知信物不可读）
-        // 只看公开成员的可达类型，挡不住一个 private 方法直接调用它——本条补一道源码扫描（去掉 // 注释）：Ai 目录下不得出现 "TrueContents("。
-        // 调试 AI 读真实内容走 MatchDebugView.ContentOf（逐格、显式标注调试），不经 TrueContents，故无白名单。
-        // 反面命中：判据在 Match/MatchFlow.cs（正式结算的调用点）确实命中；口径下界：文件数 ≥ 10。
-        // 变异 MC-T1（BatchEvaluator 加 private static 方法调用 l.TrueContents()，闭包守门看不到）应红。
-        string root = PresentationFixtures.RepoRoot();
-        string[] files = Directory.GetFiles(Path.Combine(root, "src", "Siege.Core", "Ai"), "*.cs", SearchOption.AllDirectories);
-        Assert.True(files.Length >= 10, $"只扫到 {files.Length} 个文件");
-        string[] hits =
-        [
-            .. files.Order(StringComparer.Ordinal)
-                .Where(f => LifeShape.空区与封闭眼空间Tests.StripComments(File.ReadAllText(f)).Contains("TrueContents(", StringComparison.Ordinal))
-                .Select(Path.GetFileName)
-                .OfType<string>(),
-        ];
-
-        Assert.Empty(hits);
-        Assert.Contains("Relics.TrueContents(", File.ReadAllText(Path.Combine(root, "src", "Siege.Core", "Match", "MatchFlow.cs")), StringComparison.Ordinal);
     }
 }

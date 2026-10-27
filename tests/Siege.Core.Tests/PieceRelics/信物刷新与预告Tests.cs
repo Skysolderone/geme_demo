@@ -279,7 +279,7 @@ public class 信物刷新与预告Tests
     public void 刷新不消费任何既有子流()
     {
         // 各条既有子流的前若干个值与是否调用过刷新 / 掉落无关（子流按名字从种子派生，本来就独立；这里钉住刷新没有改用既有子流名）。
-        string[] existing = [GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.FlagPick, GameSeed.CarryAi];
+        string[] existing = [GameSeed.Recruit, GameSeed.Setup, GameSeed.FlagPick, GameSeed.CarryAi];
         ulong[] Head(string name)
         {
             RandomStream stream = TestMaps.Seed.Stream(name);

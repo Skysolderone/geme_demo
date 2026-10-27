@@ -1,7 +1,7 @@
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Tests.Determinism;
 
@@ -14,8 +14,8 @@ public class 随机子流隔离Tests
     public void 同种子同子流逐项一致()
     {
         // 变异验证 M-D1：GameSeed.Stream 在派生根里混入 Environment.TickCount → 红 4（本测试 + 三条生成可复现测试）。
-        RandomStream a = Seed.Stream(GameSeed.RelicGeneration);
-        RandomStream b = Seed.Stream(GameSeed.RelicGeneration);
+        RandomStream a = Seed.Stream(GameSeed.RelicSpawn(4));
+        RandomStream b = Seed.Stream(GameSeed.RelicSpawn(4));
 
         for (int i = 0; i < 1000; i++)
         {
@@ -39,7 +39,7 @@ public class 随机子流隔离Tests
                 recruit.NextInt(100);
             }
 
-            RandomStream relic = Seed.Stream(GameSeed.RelicGeneration);
+            RandomStream relic = Seed.Stream(GameSeed.RelicSpawn(4));
             return [.. Enumerable.Range(0, 64).Select(_ => relic.NextUInt64())];
         }
 
@@ -51,7 +51,7 @@ public class 随机子流隔离Tests
     public void 不同子流名序列不同()
     {
         // 变异验证 M-D2（Stream 忽略 name）→ 红 1（本测试）。
-        RandomStream relic = Seed.Stream(GameSeed.RelicGeneration);
+        RandomStream relic = Seed.Stream(GameSeed.RelicSpawn(4));
         RandomStream recruit = Seed.Stream(GameSeed.Recruit);
         RandomStream setup = Seed.Stream(GameSeed.Setup);
 
@@ -63,17 +63,22 @@ public class 随机子流隔离Tests
         Assert.NotEqual(r, s);
         Assert.NotEqual(c, s);
         // 不同种子、同子流名也必须不同
-        Assert.NotEqual(r, [.. Enumerable.Range(0, 8).Select(_ => new GameSeed(Seed.Value + 1).Stream(GameSeed.RelicGeneration).NextUInt64())]);
+        Assert.NotEqual(r, [.. Enumerable.Range(0, 8).Select(_ => new GameSeed(Seed.Value + 1).Stream(GameSeed.RelicSpawn(4)).NextUInt64())]);
     }
 
     [Fact]
-    public void 改变征募决策后信物生成逐格不变()
+    public void 改变征募决策后信物刷新逐格不变()
     {
-        // 规范强制回归：改变某玩家的一次征募决策（= recruit 子流消费次数变化）后，该局信物生成结果逐格不变。
+        // 规范强制回归（relic-redesign W1 起改为刷新）：改变某玩家的一次征募决策（= recruit 子流消费次数变化）后，同一盘面上每个预告轮的刷新逐格不变。
+        // relic-gen 与开局一次性生成随旧信物删除；刷新子流 relic-spawn:<落位大回合> 每批一条（GameSeed.RelicSpawn）。
         // 变异验证 M-D3（Stream 返回共享实例）→ 本测试红。
-        MapData map = MapCatalog.Resolve("link:1:4");   // retire-legacy-maps 1.8：原取 v5，改为 link:1（10 个信物格），断言不变
+        MapData map = MapCatalog.Resolve("link:1:4");
+        GameBoard board = GameBoard.Load(map);
+        IBirthArea birth = new BirthBoardArea(map);
+        string Forecasts() => string.Join("\n", new[] { 3, 5, 7 }.Select(round =>
+            string.Join(",", RelicSpawner.Forecast(board, birth, Seed, round, playerCount: 4, unclaimedOnBoard: 0)!.Slots)));
 
-        RelicGenerationRecord baseline = RelicGenerator.Generate(map, Seed);
+        string baseline = Forecasts();
 
         RandomStream recruit = Seed.Stream(GameSeed.Recruit);
         for (int i = 0; i < 17; i++)
@@ -81,8 +86,8 @@ public class 随机子流隔离Tests
             recruit.WeightedPick([40, 20, 18, 12, 10]);
         }
 
-        RelicGenerationRecord after = RelicGenerator.Generate(map, Seed);
-        Assert.Equal(baseline.Placements, after.Placements);
+        Assert.Equal(baseline, Forecasts());
+        Assert.Equal(6, baseline.Split('\n').Sum(line => line.Split(',').Length));   // 样本口径：三批各 ⌈4/2⌉ = 2 件
     }
 
     [Fact]
@@ -132,11 +137,11 @@ public class 随机子流隔离Tests
     [Fact]
     public void 随机与生成路径不含浮点()
     {
-        // 规范「禁止浮点」：Determinism/ 与 Relics/ 的源码不得出现 double / float / decimal 类型或 Math.Round/Floor。
-        // 变异验证 M-D5：在 RelicGenerator 里加一行 `double _ = 0.08;` → 红 1（本测试）。
+        // 规范「禁止浮点」：Determinism/ 与 PieceRelics/ 的源码不得出现 double / float / decimal 类型或 Math.Round/Floor（relic-redesign W1：旧 Relics/ 删除，换成刷新所在的 PieceRelics/）。
+        // 变异验证 M-D5：在 RelicSpawner 里加一行 `double _ = 0.08;` → 红 1（本测试）。
         string root = SourceRoot();
         string[] files = [.. Directory.GetFiles(Path.Combine(root, "src", "Siege.Core", "Determinism"), "*.cs"),
-                          .. Directory.GetFiles(Path.Combine(root, "src", "Siege.Core", "Relics"), "*.cs")];
+                          .. Directory.GetFiles(Path.Combine(root, "src", "Siege.Core", "PieceRelics"), "*.cs")];
         Assert.NotEmpty(files);
         foreach (string file in files)
         {

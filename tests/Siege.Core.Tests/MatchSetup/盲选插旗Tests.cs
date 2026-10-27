@@ -1,7 +1,7 @@
 using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Tests.MatchSetup;
 
@@ -154,17 +154,15 @@ public class 盲选插旗Tests
     [Fact]
     public void 选区不扰动其他随机()
     {
-        // Scenario：用某种子开局并改变本机玩家的人工选择 → 信物内容与首回合顺序逐项不变（AI 的选择也不变）。
+        // Scenario：用某种子开局并改变本机玩家的人工选择 → 信物刷新与首回合顺序逐项不变（AI 的选择也不变）。
         // 人工选择取遍全部棋盘：必有某次与某名 AI 同区，"同区时多消费一次别的子流"这类耦合才会被触发。
-        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
-        MatchFlow a = LinkModeFixtures.CreateWithRelics();
+        // relic-redesign W1：开局信物生成随旧信物删除，改看开局盘面上第 3 大回合的预告（子流 relic-spawn:4）；原载体 RelicMap 随之删除。
+        MatchFlow a = LinkModeFixtures.Create();
         a.PlantPrototype((LinkModeFixtures.P0, 0));
-        // 裁决 J2：每块出生棋盘 2 枚出生区档。map-expand-25 D5：link:1:4 浮空岛 10 块平台 20 枚 + 低地 6 枚公共区档 = 26（重钉，原 13）。
-        // 段 A3：生成图不再放信物格，26 枚来自 RelicMap 夹具（每块平台核心区对角 2 枚 + 低地 6 枚）。
-        Assert.Equal(26, a.Relics.Coords.Count());
+        Assert.Equal(2, RelicSpawner.Forecast(a.Board, new BirthBoardArea(a.Map), a.Seed, 3, a.Players.Length, 0)!.Slots.Length);   // 样本口径：⌈4/2⌉ = 2 件
         for (int zone = 1; zone < a.Map.Boards.Length; zone++)
         {
-            MatchFlow b = LinkModeFixtures.CreateWithRelics();
+            MatchFlow b = LinkModeFixtures.Create();
             b.PlantPrototype((LinkModeFixtures.P0, zone));
 
             Assert.Equal(RelicText(a), RelicText(b));
@@ -187,5 +185,5 @@ public class 盲选插旗Tests
     }
 
     private static string RelicText(MatchFlow match) =>
-        string.Join(";", match.Relics.Generation.Placements.Select(p => p.ToString()));
+        string.Join(";", RelicSpawner.Forecast(match.Board, new BirthBoardArea(match.Map), match.Seed, 3, match.Players.Length, 0)!.Slots);
 }

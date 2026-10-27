@@ -2,12 +2,9 @@ using System.Collections.Immutable;
 
 namespace Siege.Core.Board;
 
-/// <summary>信物格的分区与预算档位。</summary>
-public readonly record struct RelicCellSpec(RelicZone Zone, BudgetTier Budget);
-
 /// <summary>
-/// 地图静态数据。地形、障碍、出生区与信物格位置由设计师固定，MUST NOT 参与随机；
-/// 对局内唯一的随机来源是信物的具体内容，由信物系统按对局种子生成。
+/// 地图静态数据。地形、障碍与出生区由地图固定，MUST NOT 参与对局随机；地图上没有静态信物格
+/// （relic-redesign D4：信物改由对局中途按对局种子刷新，见 <c>PieceRelics.RelicSpawner</c>）。
 /// </summary>
 /// <remarks>规格：openspec/changes/add-board-core/specs/map-definition；地形字段见 openspec/changes/terrain-model/specs/terrain</remarks>
 public sealed record MapData
@@ -53,9 +50,6 @@ public sealed record MapData
     /// <see cref="Boards"/> 即全部出生棋盘。不参与任何规则计算，只供存档、日志与校验核对。
     /// </summary>
     public int MapVersion { get; init; }
-
-    /// <summary>信物格及其分区与预算档位。</summary>
-    public required ImmutableDictionary<Coord, RelicCellSpec> RelicCells { get; init; }
 
     /// <summary>设计师显式标注的主要咽喉格。不做自动识别——自动识别的错误会静默污染距离均衡校验。</summary>
     public required ImmutableHashSet<Coord> ChokePoints { get; init; }

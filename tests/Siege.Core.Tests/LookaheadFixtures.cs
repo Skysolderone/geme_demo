@@ -147,7 +147,7 @@ internal static class LookaheadFixtures
     /// map-expand-25 段 A2：<c>link:1:4</c> 换成约 1500 格的浮空岛后，专家 / 标准 AI 的整局与 12 大回合截断单条要十几分钟到一小时（实测「模拟回应等于专家口径的不扰动贪心」18 分钟），
     /// 依赖走法的样本口径（"恰一次改变选择""两种口径给出不同回应"等）也随之失效；这些只依赖 AI 行为、不依赖按标识重建地图的测试改到与旧 <c>link:1</c> 同量级的手写平坦图，
     /// 样本种子与黄金值在新载体上重挑 / 重钉。建局与 <see cref="MatchSession.Create(RunConfig, ulong, MapData?)"/> 同口径：配置先按地图落成（<see cref="RunConfig.ResolvedFor"/>），
-    /// 内容集 / 计分版本 / 匠人权重 / 大回合上限取落成值，信物按内容集由 <see cref="Siege.Core.Relics.RelicGenerator"/> 生成，盲选插旗（<see cref="MatchFlow.PlantPrototype"/>），
+    /// 内容集 / 计分版本 / 匠人权重 / 大回合上限取落成值，开局没有信物（relic-redesign：地图信物由对局流程中途刷新），盲选插旗（<see cref="MatchFlow.PlantPrototype"/>），
     /// 再经测试接缝 <see cref="MatchSession.ForMatch"/> 挂上按配置建的 AI。手写图不能按标识重建，<b>不能</b>经 <see cref="Replayer.Replay"/> 回放——要回放的测试用 <see cref="CreateLinkSession"/>。
     /// </summary>
     internal static MatchSession CreateSession(RunConfig config, ulong seed)
@@ -157,7 +157,7 @@ internal static class LookaheadFixtures
         var gameSeed = new Siege.Core.Determinism.GameSeed(seed);
         ContentSet contentSet = resolved.ContentSet ?? ContentSets.Default;
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, gameSeed, resolved.PlayerIds(), Siege.Core.Relics.RelicGenerator.Generate(map, gameSeed, contentSet),
+            map, gameSeed, resolved.PlayerIds(),
             MatchOptions.Immediate with
             {
                 ArtisanWeight = resolved.ArtisanWeight,

@@ -62,7 +62,7 @@ public class 棋盘台面的可视表现Tests
         GameBoard nine = GameBoard.LoadUnvalidated(TestMaps.NineByNine());
         var view = new MatchPublicView(
             nine.Map.Id, TestMaps.Seed.ToString(), MatchPhase.FlagPlanting, 0, MatchOptions.DefaultArtisanWeight, ContentSets.Default, TurnStage.Idle,
-            null, [], [], nine, nine.Serialize(), null, [], [], 0, null, LifeShapeReport.Analyze(nine), false,
+            null, [], [], nine, nine.Serialize(), null, null, [], 0, null, LifeShapeReport.Analyze(nine), false,
             ImmutableSortedDictionary<PlayerId, Siege.Core.Carry.CarryIn>.Empty);
         DefaultBoardView board = DefaultBoardView.From(PublicWorld.From(view, new PublicSupplement(nine.Serialize(), 0, [], [], null, null)));
         Assert.Equal(81, board.Cells.Length);   // 样本口径：确是整张 9×9

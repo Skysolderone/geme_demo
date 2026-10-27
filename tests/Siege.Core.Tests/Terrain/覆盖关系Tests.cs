@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.TerrainSpec;
@@ -41,16 +40,12 @@ public class 覆盖关系Tests
     [Fact]
     public void 林地不接收覆盖()
     {
-        // 玩家 A 的棋子位于 F6，其右侧 G6 为空的林地信物格 → G6 无覆盖；信物不因此被发现
-        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(
-            TestMaps.Terrain(surfaces: [("G6", Surface.Forest)]),
-            ("G6", RelicFixtures.Command()));
-        board.Place("F6", TestMaps.P0);
+        // 玩家 A 的棋子位于 F6，其右侧 G6 为空的林地 → G6 无覆盖、中立（relic-redesign W1：原"林地信物不因此被发现"随旧信物揭示删除）。
+        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("G6", Surface.Forest)]), size: 9).Place("F6", TestMaps.P0);
 
-        Assert.Equal(CellCoverage.None, CoverageMap.Compute(board).CoverageOf(TestMaps.At("G6")));
-        Assert.Empty(ledger.Settle(board, majorRound: 1));
-        Assert.False(ledger.IsRevealed(TestMaps.At("G6")));
-        Assert.Equal(RelicControl.Uncontrolled, ledger.ControlOf(TestMaps.At("G6")));
+        CoverageMap coverage = CoverageMap.Compute(board);
+        Assert.Equal(CellCoverage.None, coverage.CoverageOf(TestMaps.At("G6")));
+        Assert.Equal(new CellOwnership(OwnershipKind.Neutral, null), coverage.OwnershipOf(TestMaps.At("G6")));
     }
 
     [Fact]

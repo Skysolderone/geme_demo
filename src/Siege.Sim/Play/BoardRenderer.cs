@@ -3,9 +3,9 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Sim.Play;
@@ -83,68 +83,31 @@ internal sealed class BoardRenderer
         }
     }
 
-    public static string RelicName(RelicType type) => type switch
-    {
-        RelicType.Prospecting => "探勘(展示+)",
-        RelicType.Conscription => "征召(选取+)",
-        RelicType.Depot => "兵站(槽位+)",
-        RelicType.Command => "军令(部署+)",
-        RelicType.Vanguard => "先锋(先手+)",
-        RelicType.SchoolEmblem => "徽记",
-        RelicType.Encampment => "连营(连珠+)",
-        RelicType.Pincer => "犄角(协同+)",
-        RelicType.Relay => "驿站(展示+)",
-        RelicType.Workshop => "工坊(改造隔一格)",
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知信物类型。"),
-    };
-
-    /// <summary>已揭示信物在盘面上的字母（小写，与棋子的大写类型码分开；more-pieces-relics D9：连营 y、犄角 j、驿站 r、工坊 w）。</summary>
-    internal static char RelicLetter(RelicType type) => type switch
-    {
-        RelicType.Prospecting => 'p',
-        RelicType.Conscription => 'c',
-        RelicType.Depot => 'd',
-        RelicType.Command => 'o',
-        RelicType.Vanguard => 'v',
-        RelicType.SchoolEmblem => 'e',
-        RelicType.Encampment => 'y',
-        RelicType.Pincer => 'j',
-        RelicType.Relay => 'r',
-        RelicType.Workshop => 'w',
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知信物类型。"),
-    };
-
-    /// <summary>信物短名（去掉括号里的效果提示）。</summary>
-    private static string RelicShortName(RelicType type) => RelicName(type).Split('(')[0];
-
     /// <summary>
-    /// 展示数的来源拆分文案（hand-info-panel「驿站来源逐枚列出」的终端版）：基础值 + 各枚信物，驿站逐枚列出并注明它计入的其他受控信物枚数
-    /// （每枚驿站的加成就是这个枚数，D4）。加成为 +0 的驿站（只控制驿站本身）不列——对玩家没有信息量（段 B 待决 4；图形面板同样不列，段 D）。
-    /// 数值全部取自 Core 公开补充载荷的结构参数，终端不重算。
+    /// 信物在盘面上的字母（小写，与棋子的大写类型码分开；relic-redesign 接线段 W1 的终端最小版本）：战鼓 d、号令 o、望台 w、百变 v、军旗 g。
+    /// 空格上的地图信物与预告格画在格子中间；挂在棋子上的信物在棋串后面单列（见 <see cref="Board"/> 的信物行）。
     /// </summary>
-    internal static string RevealSourcesText(StructureParameter parameter)
+    internal static char RelicLetter(RelicKind kind) => kind switch
     {
-        ArgumentNullException.ThrowIfNull(parameter);
-        IEnumerable<string> sources = VisibleSources(parameter).Select(s => s.Type == RelicType.Relay
-            ? $"驿站 {s.Coord.ToNotation()} +{s.Magnitude}（控制 {s.Magnitude} 枚其他信物）"
-            : $"{RelicShortName(s.Type)} {s.Coord.ToNotation()} +{s.Magnitude}");
-        return $"展示数 {parameter.Value} = {string.Join(" + ", [$"基础 {parameter.Base}", .. sources])}";
-    }
+        RelicKind.WarDrum => 'd',
+        RelicKind.Command => 'o',
+        RelicKind.Watchtower => 'w',
+        RelicKind.Chameleon => 'v',
+        RelicKind.Banner => 'g',
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知信物种类。"),
+    };
 
-    /// <summary>要列出的来源：略去 +0 的驿站。过滤取 Core 的 <see cref="StructureParameter.ListedSources"/>，与图形手牌面板同一份（段 D）。</summary>
-    internal static IEnumerable<ParameterSource> VisibleSources(StructureParameter parameter) => parameter.ListedSources;
-
-    /// <summary>改造目标的文案：动作 + 目标格 / 边；经工坊扩展（隔一格）的目标另注"（隔一格）"（判定走 <see cref="TerrainEditRules.IsWorkshopReach"/>）。</summary>
-    internal static string EditText(Coord artisanCell, TerrainEdit edit) =>
-        $"{TerrainEdit.DisplayName(edit.Kind)} {(edit.Kind == TerrainEditKind.Fence ? edit.Edge.ToString() : edit.Cell.ToNotation())}"
-        + (TerrainEditRules.IsWorkshopReach(artisanCell, edit) ? "（隔一格）" : string.Empty);
+    /// <summary>改造目标的文案：动作 + 目标格 / 边。</summary>
+    internal static string EditText(TerrainEdit edit) =>
+        $"{TerrainEdit.DisplayName(edit.Kind)} {(edit.Kind == TerrainEditKind.Fence ? edit.Edge.ToString() : edit.Cell.ToNotation())}";
 
     /// <summary>画棋盘。<paramref name="batch"/> 非空时叠加暂放棋子并标出合法空格；<paramref name="zones"/> 为插旗阶段显示出生区编号。</summary>
     public void Board(MatchPublicView view, PlayerId me, StagedBatch? batch = null, bool zones = false)
     {
         GameBoard board = view.Board;
         MapData map = board.Map;
-        ImmutableDictionary<Coord, RelicPublicState> relics = view.Relics.ToImmutableDictionary(r => r.Coord);
+        ImmutableDictionary<Coord, RelicToken> relics = board.RelicsOnBoard().Where(r => board[r.Cell].Occupant is null).ToImmutableDictionary(r => r.Cell, r => r.Token);
+        ImmutableDictionary<Coord, RelicKind> forecast = view.RelicForecast is { } f ? f.Slots.ToImmutableDictionary(s => s.Cell, s => s.Kind) : ImmutableDictionary<Coord, RelicKind>.Empty;
         ImmutableDictionary<Coord, PieceType> staged = batch is null
             ? ImmutableDictionary<Coord, PieceType>.Empty
             : batch.Placements.ToImmutableDictionary(p => p.Coord, p => p.Type);
@@ -206,17 +169,14 @@ internal sealed class BoardRenderer
                     string glyph = $"{o.Owner.Value + 1}{Letter(o.Type)}{alive}";
                     Ink(glyph, ColorOf(o.Owner), bright: o.Owner == me);
                 }
-                else if (relics.TryGetValue(c, out RelicPublicState? relic))
+                else if (relics.TryGetValue(c, out RelicToken relic))
                 {
                     // 裁决 R13：信物排在禁入格之前（信物更少见、信息量更大）；被盖住的禁入格在图例下方单列一行。
-                    if (relic.IsRevealed && relic.Content is { } content)
-                    {
-                        Ink($" {RelicLetter(content.Type)} ", ConsoleColor.DarkYellow);
-                    }
-                    else
-                    {
-                        Ink(" ? ", ConsoleColor.DarkYellow);
-                    }
+                    Ink($" {RelicLetter(relic.Kind)} ", ConsoleColor.DarkYellow);
+                }
+                else if (forecast.TryGetValue(c, out RelicKind coming))
+                {
+                    Ink($"!{RelicLetter(coming)} ", ConsoleColor.DarkYellow);
                 }
                 else if (forbidden.TryGetValue(c, out PlayerId lifeOwner))
                 {
@@ -241,20 +201,19 @@ internal sealed class BoardRenderer
         }
 
         WriteColumns(x0, x1);
-        _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=岩石  ~=深水");
+        _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  #=岩石  ~=深水");
         _out.WriteLine($"        {AliveMark}=已活棋串(如 1B{AliveMark})  {ForbiddenMark}N=玩家N活形的眼(你禁入)");
 
-        // 图例按对局内容集（公开、开局固定）：v1 与引入新内容之前逐字相同；v2 另列新四种棋子，并在已揭示信物一行末尾追加新四类。
+        // 图例按对局内容集（公开、开局固定）：v2 另列新四种棋子。
         ContentSet legacy = ContentSets.Legacy;
         PieceType[] newPieces = [.. ContentSets.PieceTypesOf(view.ContentSet).Except(ContentSets.PieceTypesOf(legacy))];
-        RelicType[] newRelics = [.. RelicWeights.OrderOf(view.ContentSet).Except(RelicWeights.OrderOf(legacy))];
         if (newPieces.Length > 0)
         {
             _out.WriteLine("        新棋子（只提供位置加值）：" + string.Join(" ", newPieces.Select(t => $"{Letter(t)}{Name(t)}")));
         }
 
-        _out.WriteLine("        已揭示信物：p探勘 c征召 d兵站 o军令 v先锋 e徽记"
-            + string.Concat(newRelics.Select(t => $" {RelicLetter(t)}{RelicShortName(t)}")));
+        _out.WriteLine("        信物（空格上即地图信物，落子拾取）：" + string.Join(" ", RelicKinds.Order.Select(k => $"{RelicLetter(k)}{k.DisplayName()}"))
+            + "  !x=预告下一批落位");
         Coord[] covered = [.. forbidden.Keys.Where(relics.ContainsKey).Order()];
         if (covered.Length > 0)
         {
@@ -309,12 +268,17 @@ internal sealed class BoardRenderer
             _out.WriteLine($" {PowerText(detail)}  名次 {rank}  手牌类型 {types}{status}");
         }
 
-        var owned = view.Relics.Where(r => r.IsRevealed && r.Content is not null).ToList();
-        if (owned.Count > 0)
+        // 挂在棋子上的信物（持有者 = 该格棋子的主人）与预告：信物层全公开（relic-redesign R22）。
+        List<BoardRelic> held = [.. view.Board.RelicsOnBoard().Where(r => view.Board[r.Cell].Occupant is not null)];
+        if (held.Count > 0)
         {
-            _out.WriteLine("  已揭示信物：" + string.Join("  ", owned.Select(r =>
-                $"{r.Coord.ToNotation()}{RelicName(r.Content!.Value.Type)}+{r.Content.Value.Magnitude}" +
-                (r.Control.Holder is { } h ? $"→{Label(h, me)}" : r.Control.Kind == RelicControlKind.Contested ? "→争夺中" : ""))));
+            _out.WriteLine("  持物棋子：" + string.Join("  ", held.Select(r =>
+                $"{r.Cell.ToNotation()}{r.Token.Kind.DisplayName()}→{Label(view.Board[r.Cell].Occupant!.Value.Owner, me)}")));
+        }
+
+        if (view.RelicForecast is { IsEmpty: false } forecast)
+        {
+            _out.WriteLine($"  信物预告（第 {forecast.LandingRound} 大回合开始时落位）：" + string.Join("  ", forecast.Slots.Select(s => $"{s.Cell.ToNotation()}{s.Kind.DisplayName()}")));
         }
     }
 

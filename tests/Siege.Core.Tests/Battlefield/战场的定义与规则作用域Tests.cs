@@ -99,7 +99,7 @@ public class 战场的定义与规则作用域Tests
         Assert.Contains("深水", TerrainEditRules.Reject(map, corner, TerrainEdit.Bridge(scenery)), StringComparison.Ordinal);
         Assert.Contains("林地", TerrainEditRules.Reject(map, corner, TerrainEdit.Burn(scenery)), StringComparison.Ordinal);
         // 工坊范围内的格目标只落在棋盘内（夹具中间带的林地 G4 / G7 是合法的烧林目标），场景格上没有搭桥 / 烧林目标。
-        Assert.DoesNotContain(TerrainEditRules.LegalTargets(map, corner, workshop: true), e => e.Kind != TerrainEditKind.Fence && !map.Boards.Any(b => b.Contains(e.Cell)));
+        Assert.DoesNotContain(TerrainEditRules.LegalTargets(map, corner), e => e.Kind != TerrainEditKind.Fence && !map.Boards.Any(b => b.Contains(e.Cell)));
 
         // 场景格上的栅栏：合法但无效果——应用后场景格仍不可落子、气边集合逐格不变、战场不变。
         GameBoard fenced = GameBoard.LoadUnvalidated(map);   // map-expand-25 段 A2：手写紧贴图恒不合规，不经校验加载
@@ -120,9 +120,9 @@ public class 战场的定义与规则作用域Tests
         var applied = new HashSet<TerrainEdit>();
         foreach (Coord cell in LinkMapFixtures.Births[0].Cells())
         {
-            foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(board.Map, cell, workshop: true))
+            foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(board.Map, cell))
             {
-                if (TerrainEditRules.IsLegal(board.Map, cell, edit, workshop: true) && applied.Add(edit))
+                if (TerrainEditRules.IsLegal(board.Map, cell, edit) && applied.Add(edit))
                 {
                     board.ApplyTerrainEdits([edit]);
                 }
@@ -149,11 +149,11 @@ public class 战场的定义与规则作用域Tests
         Assert.Equal(Enumerable.Range(0, v5.BirthZones.Length), whole.All[0].BirthZones);
         Assert.Empty(whole.All[0].Boards);
 
-        // 挑第一个"不在出生区、四邻也不在出生区且不是信物格"的可落子格，把它的四邻全改成障碍：它成为无出生棋盘的分量，Id 为 −1、排在最后。
+        // 挑第一个"不在出生区、四邻也不在出生区"的可落子格，把它的四邻全改成障碍：它成为无出生棋盘的分量，Id 为 −1、排在最后。
         // （check 阶段改写：原先按 A1 的几何写成 if 分支，变异 HasBirthBoard 恒真时不红——分支从未执行；改写后同一变异 → 本测试红 1。）
         Coord pick = v5.AllCoords().First(c =>
             v5.IsPlayable(c) && v5.BirthZoneOf(c) is null
-            && Adjacency.Neighbors(v5.Width, v5.Height, c).All(n => v5.BirthZoneOf(n) is null && !v5.RelicCells.ContainsKey(n)));
+            && Adjacency.Neighbors(v5.Width, v5.Height, c).All(n => v5.BirthZoneOf(n) is null));
         MapData isolated = v5 with { Obstacles = v5.Obstacles.Union(Adjacency.Neighbors(v5.Width, v5.Height, pick)) };
         Battlefields split = Battlefields.Of(isolated);
         Assert.True(split.Count >= 2);

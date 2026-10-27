@@ -199,7 +199,6 @@ public class 物化状态校验Tests
         Assert.Equal(2, restored.MaxPlayers);
         Assert.Equal(map.Boards, restored.Boards);
         Assert.Equal(map.Obstacles.Order(), restored.Obstacles.Order());
-        Assert.Equal(map.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
         Assert.Equal(json, MapFile.ToJson(restored));
         Assert.True(MapValidator.Validate(restored).IsValid);
     }

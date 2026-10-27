@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Recruit;
 
@@ -420,7 +419,7 @@ public sealed class HandLedger
 
         // D3 / D4：权重按当前快照现算，每个候选位独立抽取、允许重复；只消费 recruit 子流。
         // 表长随内容集（more-pieces-relics D8）：v1 六档，与引入新棋子之前的累积权重逐位相同；下标对 Order 通用（v1 是 v2 的前缀）。
-        int[] table = RecruitWeights.AdjustedTable(snapshot, _artisanWeight, ContentSet);
+        int[] table = RecruitWeights.SamplingTable(_artisanWeight, ContentSet);
         ImmutableArray<PieceType>.Builder candidates = ImmutableArray.CreateBuilder<PieceType>(snapshot.RevealCount);
         for (int i = 0; i < snapshot.RevealCount; i++)
         {

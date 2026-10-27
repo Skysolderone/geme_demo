@@ -1,16 +1,17 @@
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Sim.Play;
 
 namespace Siege.Core.Tests.SimulationHarness;
 
 /// <summary>
 /// more-pieces-relics tasks 3.6：终端（<see cref="BoardRenderer"/> / <see cref="ConsoleController"/>）的四种新棋子字母与名称、中文快捷输入、图例、
-/// 新信物名称与字母、驿站来源与工坊目标（含隔一格）的文字列出。字母取 D9：旗手 N、铁链 C、哨兵 T、界碑 K；连营 y、犄角 j、驿站 r、工坊 w。
+/// 信物字母与匠人改造目标的文字列出。字母取 D9：旗手 N、铁链 C、哨兵 T、界碑 K。
+/// relic-redesign W1：旧十类信物的字母、驿站来源与工坊"隔一格"随旧信物删除；挂在棋子上的五种信物字母为战鼓 d、号令 o、望台 w、百变 v、军旗 g（终端最小版本）。
 /// 本段是终端表现，没有 openspec Scenario；方法名按 tasks 条目命名。
 /// retire-legacy-rules 1.6：局面载体为平坦 8×8 链接档图上四人同锁棋盘 0，原 9×9 坐标平移 (+2, +2)；链接终端只画本战场外接矩形（从棋盘 0 的 C 列起），<c>CellText</c> 的列号按视口左缘计（平移后不变），行号随平移 +2。
 /// </summary>
@@ -50,26 +51,25 @@ public class 终端新棋子与新信物Tests
             }
         }
 
-        RelicType[] relics = Enum.GetValues<RelicType>();
+        RelicKind[] relics = Enum.GetValues<RelicKind>();
         Assert.Equal(relics.Length, relics.Select(BoardRenderer.RelicLetter).Distinct().Count());
-        Assert.DoesNotContain('?', relics.Select(BoardRenderer.RelicLetter));
-        Assert.Equal(relics.Length, relics.Select(BoardRenderer.RelicName).Distinct().Count());
-        Assert.Equal("yjrw", new string([.. new[] { RelicType.Encampment, RelicType.Pincer, RelicType.Relay, RelicType.Workshop }.Select(BoardRenderer.RelicLetter)]));
+        Assert.Equal("dowvg", new string([.. RelicKinds.Order.Select(BoardRenderer.RelicLetter)]));
 
-        // 信物字母与棋子字母不在同一位置出现（信物占格中间、棋子带玩家号），但仍要求小写、与"未揭示 ?"不撞。
+        // 信物字母与棋子字母不在同一位置出现（信物占格中间、棋子带玩家号），但仍要求小写。
         Assert.All(relics.Select(BoardRenderer.RelicLetter), c => Assert.True(char.IsLower(c)));
     }
 
     [Fact]
-    public void 新棋子与已揭示新信物的渲染快照()
+    public void 新棋子与信物的渲染快照()
     {
-        // v2 局：P0 在 E7 落哨兵子（显示 1T）、P1 在 G7 落界碑子（2K）；已揭示的驿站 K7（被 P0 的 K6 覆盖，格上显示 " r "）。
-        // 图例按内容集列出新四种棋子与新四类信物；状态栏的已揭示信物用新名称。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("K7", RelicFixtures.Relay())]).AtRound(5, TestMaps.All);
+        // v2 局：P0 在 E7 落哨兵子（显示 1T）、P1 在 G7 落界碑子（2K）；K7 空格上一件地图信物战鼓（格上显示 " d "），P0 的 K6 挂着一件军旗。
+        // 图例按内容集列出新四种棋子与五种信物；状态栏列出持物棋子（relic-redesign W1 终端最小版本）。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All);
         match.Board.Place(TestMaps.At("E7"), Me, PieceType.Sentry);
         match.Board.Place(TestMaps.At("K6"), Me, PieceType.Basic);
         match.Board.Place(TestMaps.At("G7"), TestMaps.P1, PieceType.Boundary);
-        match.Relics.Reveal(match.Board, 5);
+        match.Board.AttachRelic(TestMaps.At("K7"), RelicToken.Spawned(0, RelicKind.WarDrum));
+        match.Board.AttachRelic(TestMaps.At("K6"), RelicToken.Spawned(1, RelicKind.Banner));
         match.Debug.Recalculate();
 
         var output = new StringWriter();
@@ -80,107 +80,48 @@ public class 终端新棋子与新信物Tests
 
         Assert.Equal("1T ", CellText(text, 7, 2));
         Assert.Equal("2K ", CellText(text, 7, 4));
-        Assert.Equal(" r ", CellText(text, 7, 7));
+        Assert.Equal(" d ", CellText(text, 7, 7));
         Assert.Contains("N旗手 C铁链 T哨兵 K界碑", text, StringComparison.Ordinal);
-        Assert.Contains("y连营 j犄角 r驿站 w工坊", text, StringComparison.Ordinal);
-        Assert.Contains("K7" + BoardRenderer.RelicName(RelicType.Relay) + "+1→玩家1(你)", text, StringComparison.Ordinal);
+        Assert.Contains("d战鼓 o号令 w望台 v百变 g军旗", text, StringComparison.Ordinal);
+        Assert.Contains("持物棋子：K6军旗→玩家1(你)", text, StringComparison.Ordinal);
     }
 
     [Fact]
     public void 内容集v1的图例不变()
     {
-        // v1 局没有新内容：图例与引入新棋子之前逐字相同（不列 N / C / T / K 与 y / j / r / w）。
+        // v1 局没有新棋子：图例不列 N / C / T / K；信物图例一行与内容集无关（relic-redesign W1：五种信物，旧"已揭示信物"一行随旧信物删除）。
         MatchFlow match = LinkModeFixtures.PlainStarted(options: MatchOptions.Immediate with { ContentSet = ContentSet.V1 }).AtRound(5, TestMaps.All);
         var output = new StringWriter();
         new BoardRenderer(output).Board(match.Publish(), Me);
         string text = output.ToString();
 
-        Assert.Contains("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  ?=未揭示信物  #=岩石  ~=深水" + Environment.NewLine, text, StringComparison.Ordinal);
-        Assert.Contains("        已揭示信物：p探勘 c征召 d兵站 o军令 v先锋 e徽记" + Environment.NewLine, text, StringComparison.Ordinal);
+        Assert.Contains("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  #=岩石  ~=深水" + Environment.NewLine, text, StringComparison.Ordinal);
+        Assert.Contains("        信物（空格上即地图信物，落子拾取）：d战鼓 o号令 w望台 v百变 g军旗  !x=预告下一批落位" + Environment.NewLine, text, StringComparison.Ordinal);
         Assert.DoesNotContain("旗手", text, StringComparison.Ordinal);
         Assert.DoesNotContain("驿站", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void 驿站来源逐枚列出且隐藏零加成()
+    public void 匠人改造目标只列相邻()
     {
-        // 征募阶段打印展示数的来源拆分（取 Core 公开补充载荷的结构参数来源，终端不重算）：驿站逐枚列出并标注计入的其他受控信物枚数；
-        // 只控制驿站本身时它的加成是 +0，终端不列这一条（段 B 待决 4；图形面板的做法留段 D）。
-        // P0 占据驿站 K7 与先锋 D10（均已揭示）→ 展示数 5 + 1：驿站计入 1 枚其他信物。
-        string withVanguard = RecruitOutput(("K7", RelicFixtures.Relay()), ("D10", RelicFixtures.Vanguard()));
-        Assert.Contains("展示数 6 = 基础 5 + 驿站 K7 +1（控制 1 枚其他信物）", withVanguard, StringComparison.Ordinal);
-
-        // 只有驿站本身：来源里那条 +0 不列（也就没有拆分行）。
-        string alone = RecruitOutput(("K7", RelicFixtures.Relay()));
-        Assert.DoesNotContain("驿站 K7", alone, StringComparison.Ordinal);
-        Assert.DoesNotContain("展示数 5 =", alone, StringComparison.Ordinal);
-
-        // 文案函数本身：探勘与驿站并列、+0 的驿站被略去、各来源之和 = 展示数。
-        var parameter = new StructureParameter(5, 8,
-        [
-            new ParameterSource(TestMaps.At("D4"), RelicType.Prospecting, 1),
-            new ParameterSource(TestMaps.At("E5"), RelicType.Relay, 2),
-            new ParameterSource(TestMaps.At("F5"), RelicType.Relay, 0),
-        ]);
-        Assert.Equal("展示数 8 = 基础 5 + 探勘 D4 +1 + 驿站 E5 +2（控制 2 枚其他信物）", BoardRenderer.RevealSourcesText(parameter));
-    }
-
-    [Fact]
-    public void 工坊目标含隔一格的文字列出()
-    {
-        // 本小回合快照标记工坊生效、手里只有匠人：暂放 "G7 A B:G9"（隔一格搭桥）被接受，预演列出该匠人的全部合法改造目标（来自 Core 富预演，
-        // 即改造合法性唯一实现），隔一格的目标带"（隔一格）"标记，并提示工坊生效；确认后暂放带着该改造。
-        // 快照未标记工坊时同一输入被拒（拒绝理由来自唯一实现），预演目标里没有 G9。
-        (string text, StagedBatch batch) = DeployScript(workshop: true, "G7 A B:G9", "v", "ok");
-        Assert.Contains("工坊生效", text, StringComparison.Ordinal);
-        Assert.Contains("搭桥 G9（隔一格）", text, StringComparison.Ordinal);
+        // relic-redesign D4：工坊删除后匠人的格改造范围固定为几何四邻。手里只有匠人：暂放 "G7 A B:G9"（隔一格搭桥）被拒（拒绝理由来自改造合法性唯一实现），
+        // 预演列出的合法改造目标里没有 G9，也不再有"工坊生效"提示。
+        (string text, StagedBatch batch) = DeployScript("G7 A B:G9", "G7 A", "v", "ok");
+        Assert.DoesNotContain("搭桥 G9", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("工坊", text, StringComparison.Ordinal);
         Assert.Contains("立栅 G7-G8", text, StringComparison.Ordinal);
-        Placement staged = Assert.Single(batch.Placements);
-        Assert.Equal((TestMaps.At("G7"), PieceType.Artisan, (TerrainEdit?)TerrainEdit.Bridge(TestMaps.At("G9"))), (staged.Coord, staged.Type, staged.Edit));
-
-        (string without, StagedBatch rejected) = DeployScript(workshop: false, "G7 A B:G9", "G7 A", "v", "ok");
-        Assert.DoesNotContain("搭桥 G9", without, StringComparison.Ordinal);
-        Assert.DoesNotContain("工坊生效", without, StringComparison.Ordinal);
-        Assert.Contains(TerrainEditRules.Reject(rejected.Board.Map, TestMaps.At("G7"), TerrainEdit.Bridge(TestMaps.At("G9")))!, without, StringComparison.Ordinal);
-        Assert.Null(Assert.Single(rejected.Placements).Edit);
+        Assert.Contains(TerrainEditRules.Reject(batch.Board.Map, TestMaps.At("G7"), TerrainEdit.Bridge(TestMaps.At("G9")))!, text, StringComparison.Ordinal);
+        Assert.Null(Assert.Single(batch.Placements).Edit);
     }
 
-    /// <summary>v2、第 5 大回合、P0 先行；打开征募并让终端控制者读一行空输入（不征募），返回输出。</summary>
-    private static string RecruitOutput(params (string Cell, RelicContent Content)[] relics)
-    {
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: relics).AtRound(5, TestMaps.All);
-        foreach ((string cell, _) in relics)
-        {
-            match.Board.Place(TestMaps.At(cell), Me, PieceType.Basic);
-        }
-
-        match.Relics.Reveal(match.Board, 5);
-        match.Debug.Recalculate();
-        match.BeginTurn();
-        match.EnterRecruit();
-        PlayerHandAccess hand = match.CurrentHand();
-
-        var output = new StringWriter();
-        var controller = new ConsoleController(Me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch, new StringReader("\n"), output);
-        controller.Recruit(hand, hand.Panel());
-        return output.ToString();
-    }
-
-    /// <summary>G9 深水的 v2 局，P0 手里只有匠人；<paramref name="workshop"/> 经测试专用的快照改写标记工坊生效。按脚本走完部署，返回输出与部署批次。</summary>
-    private static (string Text, StagedBatch Batch) DeployScript(bool workshop, params string[] lines)
+    /// <summary>G9 深水的 v2 局，P0 手里只有匠人。按脚本走完部署，返回输出与部署批次。</summary>
+    private static (string Text, StagedBatch Batch) DeployScript(params string[] lines)
     {
         MatchFlow match = LinkModeFixtures.PlainStarted(TestMaps.Terrain(surfaces: [("G9", Surface.DeepWater)])).AtRound(5, TestMaps.All);
         match.Debug.SeedHand(Me, (PieceType.Artisan, 3));
-        if (workshop)
-        {
-            match.Debug.SetSnapshotTransform(s => new EffectSnapshot(
-                s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, s.TypeSlots, s.DeployLimit, s.EmblemCounts, s.HeldTypeCount, s.RelaySources, workshopActive: true));
-        }
-
         match.BeginTurn();
         match.EnterRecruit();
         StagedBatch batch = match.EnterDeploy();
-        Assert.Equal(workshop, batch.Context.WorkshopActive);
 
         var output = new StringWriter();
         var controller = new ConsoleController(Me, match.Publish, match.PublishSupplement, match.PreviewCurrentBatch,

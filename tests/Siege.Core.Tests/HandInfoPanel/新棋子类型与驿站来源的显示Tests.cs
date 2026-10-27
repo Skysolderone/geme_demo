@@ -1,6 +1,5 @@
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Text;
 using static Siege.Core.Tests.PresentationFixtures;
@@ -35,53 +34,8 @@ public class 新棋子类型与驿站来源的显示Tests
         Assert.Equal(["旗手子", "界碑子"], seen.Types.Zip(seen.TypeNames).OrderBy(t => t.First).Select(t => t.Second));
     }
 
-    [Fact]
-    public void 驿站来源逐枚列出()
-    {
-        // Scenario「驿站来源逐枚列出」：玩家 B 的展示数为 8，来源为基础 5、探勘 +1、驿站 +2（计入 2 枚其他信物）
-        // → 面板显示展示数 8，并分别列出探勘 +1 与"驿站 +2（控制 2 枚其他信物）"，各来源之和为 8。
-        // 局面（同 私人征募面板Tests.驿站生效）：B = P1 占据驿站 H6、探勘 J6、军令 K6（retire-legacy-rules：平坦 8×8 链接载体，原 9×9 的 G4 / H4 / J4 列 +1、行 +2）——驿站计除自身外 2 枚受控信物 → +2；探勘 +1；军令只进部署上限。
-        // 数值来自 Core 公开补充载荷（MatchFlow 结构参数来源），面板只拼文案。Godot 手牌面板显示的是 ParameterView.Text，所以驿站明细必须在 Text 里。
-        // 先红：骨架态文案按类型合并为"驿站×1"，来源文案不注"控制 N 枚其他信物"。
-        MatchFlow match = B控制驿站探勘军令();
-
-        foreach (ParameterView reveal in new[]
-        {
-            match.World(P0).HandPanel().Opponents.Single(o => o.Player == P1).Structure!.RevealCount,
-            match.World(P1).HandPanel().Own.Structure!.RevealCount,
-        })
-        {
-            Assert.Equal((8, 5), (reveal.Value, reveal.Base));
-            Assert.Equal(["J6 探勘 +1", "H6 驿站 +2（控制 2 枚其他信物）"], reveal.Sources.Select(s => s.Text).OrderBy(t => t.Contains("驿站", StringComparison.Ordinal)));
-            Assert.Equal(8, reveal.Base + reveal.Sources.Sum(s => s.Magnitude));
-            Assert.Equal("展示数 8（基础 5，+3 来自 探勘×1、驿站 H6 +2（控制 2 枚其他信物））", reveal.Text);
-        }
-    }
-
-    [Fact]
-    public void 零加成的驿站不列出()
-    {
-        // 段 C 待决 5 / 段 B 待决 4 的图形面板口径（段 D 定）：只控制驿站本身时它的加成为 +0，面板与终端一样不列这一条——
-        // 两处共用 Core 的 StructureParameter.ListedSources（略去 0 加成来源），不各写过滤；略去的项为 0，各来源之和仍等于当前值。
-        // 规则层的来源拆分照旧逐枚保留 +0（遥测照记）。先红：骨架态 ListedSources 不过滤。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay())])
-            .AtRound(7, TestMaps.All)
-            .Pieces(P1, PieceType.Basic, "H6");
-
-        Siege.Core.Preview.StructureParameter core = match.PublishSupplement().Structures.Single(s => s.Player == P1).Parameters!.RevealCount;
-        Siege.Core.Preview.ParameterSource relay = Assert.Single(core.Sources);
-        Assert.Equal((RelicType.Relay, 0), (relay.Type, relay.Magnitude));
-        Assert.Empty(core.ListedSources);
-
-        ParameterView reveal = match.World(P0).HandPanel().Opponents.Single(o => o.Player == P1).Structure!.RevealCount;
-        Assert.Equal((5, 5), (reveal.Value, reveal.Base));
-        Assert.Empty(reveal.Sources);
-        Assert.Equal("展示数 5（基础）", reveal.Text);
-        Assert.DoesNotContain("驿站", reveal.Text, StringComparison.Ordinal);
-    }
-
     private static MatchFlow B控制驿站探勘军令() =>
-        LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay()), ("J6", RelicFixtures.Prospecting()), ("K6", RelicFixtures.Command())])
+        LinkModeFixtures.PlainStarted()
             .AtRound(7, TestMaps.All)
             .Pieces(P1, PieceType.Basic, "H6", "J6", "K6");
 }

@@ -3,7 +3,6 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
@@ -34,7 +33,7 @@ public readonly record struct PowerReading(PlayerId Player, BigInteger Total, in
 /// <summary>某玩家的参赛状态读数（横幅节拍用：状态变为出局的玩家各一条）。</summary>
 public readonly record struct StatusReading(PlayerId Player, PlayerStatus Status);
 
-/// <summary>信物揭示节拍里的一格：坐标与信物名（经 <see cref="Labels.RelicContent"/>；只存文案，不存信物对象）。</summary>
+/// <summary>信物节拍里的一格：坐标与文案（经 <see cref="Labels.Relic(Core.PieceRelics.RelicToken)"/>；只存文案，不存信物对象）。</summary>
 public readonly record struct RevealedRelic(Coord Coord, string Name);
 
 /// <summary>势力重算节拍播放中某玩家所处的段（settlement-show-callouts D2）。</summary>
@@ -266,7 +265,10 @@ public sealed record CaptureBeat(ImmutableArray<CapturedPiece> Pieces) : Settlem
     public string SummaryText => $"提 {Pieces.Length} 子";
 }
 
-/// <summary>信物揭示节拍（settlement-show-callouts D3）：本次结算新揭示的信物格闪光并弹出信物名，0.6 秒，与数量无关。</summary>
+/// <summary>
+/// 信物节拍（settlement-show-callouts D3 的揭示节拍，类型名沿用）：relic-redesign 接线段 W1 起展示<b>本次结算拾取的信物</b>——落子落在地图信物上即挂上——
+/// 格闪光并弹出"拾取 + 信物"，0.6 秒，与数量无关。旧"信物揭示"随旧信物删除；拾取 / 掉落的正式演出留给段 C。
+/// </summary>
 public sealed record RelicRevealBeat(ImmutableArray<RevealedRelic> Relics) : SettlementBeat
 {
     /// <summary>基准时长（毫秒）。</summary>
@@ -381,14 +383,13 @@ public sealed record BannerBeat(ImmutableArray<string> Banners) : SettlementBeat
 }
 
 /// <summary>
-/// 结算的一侧（结算前或结算后）供节拍生成读取的公开数据：盘面、势力读数、逐棋串军势明细（军势揭示的算式）、信物公开状态（揭示）、玩家状态（出局）、有无终局结果。
+/// 结算的一侧（结算前或结算后）供节拍生成读取的公开数据：盘面（含信物层，信物节拍读它）、势力读数、逐棋串军势明细（军势揭示的算式）、玩家状态（出局）、有无终局结果。
 /// 全部取自公开快照，不含任何私有信息。
 /// </summary>
 public sealed record SettlementSide(
     GameBoard Board,
     ImmutableArray<PowerReading> Power,
     ImmutableArray<GroupPower> Groups,
-    ImmutableArray<RelicPublicState> Relics,
     ImmutableArray<StatusReading> Statuses,
     bool HasResult)
 {
@@ -400,16 +401,15 @@ public sealed record SettlementSide(
             view.Board,
             SettlementBeats.Readings(view.Power),
             view.Power is { } power ? [.. power.Players.SelectMany(p => p.Groups)] : [],
-            view.Relics.IsDefault ? [] : view.Relics,
             view.Players.IsDefault ? [] : [.. view.Players.Select(p => new StatusReading(p.Player, p.Status))],
             view.Result is not null);
     }
 
-    /// <summary>只有盘面与势力读数的一侧（棋串、信物、玩家状态为空，无终局结果）。</summary>
+    /// <summary>只有盘面与势力读数的一侧（棋串、玩家状态为空，无终局结果）。</summary>
     public static SettlementSide Of(GameBoard board, ImmutableArray<PowerReading> power)
     {
         ArgumentNullException.ThrowIfNull(board);
-        return new SettlementSide(board, power.IsDefault ? [] : power, [], [], [], false);
+        return new SettlementSide(board, power.IsDefault ? [] : power, [], [], false);
     }
 }
 
@@ -421,7 +421,7 @@ public sealed record SettlementSide(
 /// <para>落子与被提棋子只凭两份快照的盘面之差得出：结算前空、结算后有子 = 落子；结算前有子、结算后空 = 被提。
 /// 结算记录只用于给落子排序（放置顺序）；没有记录（AI 小回合经运行器推进）时按坐标字典序（<see cref="Coord.CompareTo"/>）。</para>
 /// <para>势力与名次变化取两份快照势力明细之差（总势力、竞争名次、领地分、棋串军势）。结算前没有势力快照（本局首次结算前）时旧值按 0、旧名次按无。</para>
-/// <para>信物揭示取两份快照信物公开状态之差（<c>IsRevealed</c> 假 → 真）；横幅取玩家状态之差（变为出局）与终局结果由无变有（settlement-show-callouts D1 / D3）。</para>
+/// <para>信物节拍取两份快照盘面之差：结算后挂在棋子上、结算前在空格上的信物即本次拾取；横幅取玩家状态之差（变为出局）与终局结果由无变有（settlement-show-callouts D1 / D3）。</para>
 /// <para>军势揭示取"盘面之差得出的本次落子"与结算后快照的棋串军势明细（tiered-number-show D2）：数值一律原样转录，不重算军势。</para>
 /// </remarks>
 public static class SettlementBeats
@@ -435,7 +435,7 @@ public static class SettlementBeats
         return Generate(SettlementSide.From(before), SettlementSide.From(after), record?.Placements, compressPlacement);
     }
 
-    /// <summary>同上，输入已拆成盘面与势力读数（便于按设计文档算例直接构造；没有棋串、信物、玩家状态与终局信息）。</summary>
+    /// <summary>同上，输入已拆成盘面与势力读数（便于按设计文档算例直接构造；没有棋串、玩家状态与终局信息）。</summary>
     /// <param name="placementOrder">结算记录里的放置序列（有则按其顺序排落子），<c>null</c> 即没有结算记录。</param>
     public static ImmutableArray<SettlementBeat> Generate(
         GameBoard before,
@@ -475,7 +475,7 @@ public static class SettlementBeats
             beats.Add(new CaptureBeat(captured));
         }
 
-        ImmutableArray<RevealedRelic> revealed = RevealedRelics(before.Relics, after.Relics);
+        ImmutableArray<RevealedRelic> revealed = PickedUpRelics(before.Board, after.Board);
         if (!revealed.IsEmpty)
         {
             beats.Add(new RelicRevealBeat(revealed));
@@ -513,28 +513,16 @@ public static class SettlementBeats
         return [.. power.Players.OrderBy(p => p.Player.Value).Select(p => new PowerReading(p.Player, p.Total, power.RankOf(p.Player), p.TerritoryScore, p.GroupScore))];
     }
 
-    /// <summary>本次结算新揭示的信物格（坐标字典序）：结算后已揭示且有内容，而结算前没有该格记录或尚未揭示。</summary>
-    public static ImmutableArray<RevealedRelic> RevealedRelics(ImmutableArray<RelicPublicState> before, ImmutableArray<RelicPublicState> after)
+    /// <summary>
+    /// 本次结算拾取的信物（坐标字典序）：结算后该格有子且有信物，结算前该格为空（落子落在地图信物上）。只读两份盘面的信物层，不调用规则。
+    /// </summary>
+    public static ImmutableArray<RevealedRelic> PickedUpRelics(GameBoard before, GameBoard after)
     {
-        var wasRevealed = new HashSet<Coord>();
-        foreach (RelicPublicState relic in before.IsDefault ? [] : before)
-        {
-            if (relic.IsRevealed)
-            {
-                wasRevealed.Add(relic.Coord);
-            }
-        }
-
-        var revealed = new SortedDictionary<Coord, RevealedRelic>();
-        foreach (RelicPublicState relic in after.IsDefault ? [] : after)
-        {
-            if (relic.IsRevealed && relic.Content is { } content && !wasRevealed.Contains(relic.Coord))
-            {
-                revealed[relic.Coord] = new RevealedRelic(relic.Coord, Labels.RelicContent(content));
-            }
-        }
-
-        return [.. revealed.Values];
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        return [.. after.RelicsOnBoard()
+            .Where(r => after[r.Cell].Occupant is not null && before[r.Cell].Occupant is null)
+            .Select(r => new RevealedRelic(r.Cell, $"拾取 {Labels.Relic(r.Token)}"))];
     }
 
     /// <summary>横幅文案：状态变为出局的玩家各一条（玩家升序），再是终局结果由无变有的一条。弃赛不是结算效果，不产生横幅。</summary>

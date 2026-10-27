@@ -36,7 +36,6 @@ public class 地图规格档Tests
             Assert.Equal(original.BirthZones[i].Order(), restored.BirthZones[i].Order());
         }
 
-        Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
         Assert.Equal(original.ChokePoints.Order(), restored.ChokePoints.Order());
         Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
         Assert.Equal(original.DistanceTolerance, restored.DistanceTolerance);

@@ -2,6 +2,7 @@ using System.Reflection;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Visibility;
@@ -48,9 +49,15 @@ public class 信息层的可用时机与无副作用Tests
         // 设计文档 §14.2 / D4 / implement 3.11：部署期间反复开关各信息层（两种模式）并构建内容 → 暂放状态、正式盘面与全部对局状态不变。
         // 两条腿：部署阶段指纹不变；结束小回合后与孪生局 Serialize 逐字节一致。状态机结构上不引用任何 Core 对象。
         // 变异验证 M-A2：MatchFlow.ForecastInitiative 的势力改用 `Scoreboard.Recalculate(Board, roster, completed)` → 本测试红 1（势力榜版本号）。
-        // 变异验证 M-A3：MatchFlow.StructuresOf 改用正式账本 `Relics.SnapshotFor(...)`（部署上限峰值遥测被推进）→ 本测试红 1——P1 控制军令，副本外求快照会把部署上限峰值从 3 推到 4。
-        MatchFlow viewed = AiFixtures.Round5(relics: ("E5", RelicFixtures.Command())).Pieces(P1, PieceType.Basic, "E6");
-        MatchFlow twin = AiFixtures.Round5(relics: ("E5", RelicFixtures.Command())).Pieces(P1, PieceType.Basic, "E6");
+        // relic-redesign W1：原变异 M-A3（结构参数改用正式信物账本推进部署上限峰值）随旧信物删除；P1 的 E6 挂一件战鼓，盘面信物层同样不得被查看改动。
+        MatchFlow viewed = AiFixtures.Round5().Pieces(P1, PieceType.Basic, "E6");
+        MatchFlow twin = AiFixtures.Round5().Pieces(P1, PieceType.Basic, "E6");
+        foreach (MatchFlow m in new[] { viewed, twin })
+        {
+            m.Board.AttachRelic(TestMaps.At("E6"), RelicToken.Spawned(0, RelicKind.WarDrum));
+            m.Debug.Recalculate();
+        }
+
         StagedBatch batch = viewed.OpenDeploy();
         Assert.Null(batch.Stage(TestMaps.At("H8"), PieceType.Basic));
         string fingerprint = Fingerprint(viewed);
@@ -82,7 +89,6 @@ public class 信息层的可用时机与无副作用Tests
         Assert.True(twin.Confirm().Confirmed);
         Assert.Equal(twin.Serialize(), viewed.Serialize());
         Assert.Equal(twin.Scoreboard.Version, viewed.Scoreboard.Version);
-        Assert.Equal(twin.Relics.DeployLimitPeak, viewed.Relics.DeployLimitPeak);
 
         const BindingFlags all = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         Assert.DoesNotContain(typeof(TacticalLayerState).GetFields(all), f => f.FieldType.Assembly == typeof(GameBoard).Assembly);
@@ -114,8 +120,8 @@ public class 信息层的可用时机与无副作用Tests
     [Fact]
     public void 信息层不越权()
     {
-        // 设计文档 §14.2：任意信息层都不显示对手手牌数量、对手未确认批次或未发现的信物内容。
-        // 结构：五层内容类型闭包里没有私有类型；行为：P1 手牌数量、P1 暂放、G7 真实内容三者任意变化，P0 看到的五层投影逐字相同。
+        // 设计文档 §14.2：任意信息层都不显示对手手牌数量或对手未确认批次（relic-redesign W1："未发现的信物内容"随旧信物删除，信物全公开）。
+        // 结构：五层内容类型闭包里没有私有类型；行为：P1 手牌数量、P1 暂放两者任意变化，P0 看到的五层投影逐字相同。
         // 变异验证 M-A4（非根类型）：给 GroupScoreView 加 `public Siege.Core.Recruit.HandEntry? Leak { get; init; }` → 本测试红 1。
         foreach (Type content in new[] { typeof(LayerContent), typeof(TerritoryLayerContent), typeof(LibertyLayerContent), typeof(PowerLayerContent), typeof(RelicLayerContent), typeof(OrderLayerContent) })
         {
@@ -125,9 +131,9 @@ public class 信息层的可用时机与无副作用Tests
         Assert.All(typeof(Siege.Presentation.Layers.TacticalLayers).GetMethods(BindingFlags.Public | BindingFlags.Static).SelectMany(m => m.GetParameters()),
             p => Assert.DoesNotContain(p.ParameterType, new[] { typeof(ViewerWorld), typeof(Recruit.HandPrivateView), typeof(Core.Preview.BatchPreview) }));
 
-        string Layers(Core.Relics.RelicContent hidden, int p1Basic, bool p1Stages)
+        string Layers(int p1Basic, bool p1Stages)
         {
-            MatchFlow match = LinkModeFixtures.PlainStarted(relics: ("G7", hidden)).AtRound(5, [P1, P0, P2, P3]).Pieces(P2, PieceType.Basic, "E5");
+            MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [P1, P0, P2, P3]).Pieces(P2, PieceType.Basic, "E5");
             match.Debug.SeedHand(P1, (PieceType.Basic, p1Basic), (PieceType.Fortress, 1));
             StagedBatch batch = match.OpenDeploy();
             if (p1Stages)
@@ -139,10 +145,8 @@ public class 信息层的可用时机与无副作用Tests
             return string.Concat(Enum.GetValues<TacticalLayer>().Select(l => Dump(world.Layer(l))));
         }
 
-        string baseline = Layers(RelicFixtures.Command(), 9, p1Stages: false);
-        Assert.Equal(baseline, Layers(RelicFixtures.Depot(2), 9, p1Stages: false));
-        Assert.Equal(baseline, Layers(RelicFixtures.Command(), 2, p1Stages: false));
-        Assert.Equal(baseline, Layers(RelicFixtures.Command(), 9, p1Stages: true));
-        Assert.Contains("未知信物", baseline);
+        string baseline = Layers(9, p1Stages: false);
+        Assert.Equal(baseline, Layers(2, p1Stages: false));
+        Assert.Equal(baseline, Layers(9, p1Stages: true));
     }
 }

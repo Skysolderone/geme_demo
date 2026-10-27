@@ -32,7 +32,6 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
             DeployLimit = staged.Count + 1,
             LegalRange = range,
             Stock = Enum.GetValues<PieceType>().ToDictionary(t => t, _ => 1000),
-            WorkshopActive = true,
         };
         var taken = staged.Select(p => p.Coord).ToHashSet();
         var lines = new List<string>();
@@ -113,7 +112,9 @@ public partial class 单子禁手的标示Tests(ITestOutputHelper output)
     // retire-legacy-maps 1.8：三行由 v5 种子 7 / 11 与 board:1 种子 3（拨过保护期）改为链接图；断言不变。链接图上构筑期的合法范围只是一块出生棋盘，
     // 原种子 7 只对照到 112 个候选格（下界 200 响亮失败），探针（link:1 种子 1–20 × 首段 14 / 20 / 24 个小回合）改取种子 1（首段 14）与种子 4（首段 20）。
     [InlineData("link:1:4", 1UL, 14, 3, 4, false, true)]
-    [InlineData("link:1:4", 4UL, 20, 3, 3, false, true)]
+    // relic-redesign W1 重探（信物刷新接入对局后走法变了，种子 4 首段 14 / 20 / 24 都不再触发完整预演）：种子 1–12 × 首段 14 / 20 / 24，首段 14 种子 4 / 6 失败、首段 20 只有种子 4 失败、首段 24 种子 4 / 9 失败；
+    // 第一行（种子 1、首段 14）照常通过不动，第二行改取首段 20 里完整预演最多的种子 7（98 个；其次种子 2 的 86 个）。
+    [InlineData("link:1:4", 7UL, 20, 3, 3, false, true)]
     [InlineData("link:2:4", 3UL, 5, 2, 2, true, false)]
     public void 与完整预演一致(string mapId, ulong seed, int firstTurns, int step, int checkpoints, bool skipProtection, bool requireContact) =>
         Compare(mapId, seed, firstTurns, step, checkpoints, skipProtection, requireContact);

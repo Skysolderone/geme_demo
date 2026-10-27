@@ -33,7 +33,7 @@ public class 按主题统计Tests
         {
             Header = copy.Header with { Boards = [.. copy.Header.Boards!.Select((b, z) => b with { Theme = Themes[z % Themes.Length] })] },
             Turns = [.. copy.Turns.Select(t => t with { Edits = null })],
-            Events = [.. copy.Events.Where(e => e.Type != LogEventType.ControlChanged)],
+            Events = [.. copy.Events],
             Result = ranks is null
                 ? result with { Reason = LogResult.TurnLimitReason, Standings = [], Winners = [] }
                 : result with { Standings = [.. result.Standings.Select(s => s with { Rank = ranks[s.Player] })], Winners = [.. winners] },
@@ -85,10 +85,10 @@ public class 按主题统计Tests
         Assert.NotNull(report.Themes);
         string text = ReportWriter.Render(report);
         Assert.Contains("## 按主题统计（link-map-terrain）", text, StringComparison.Ordinal);
-        // map-expand-25 D5：公共信物都在平台之间的低地上，按平台主题统计的公共信物恒为 0 个（原高台棋盘 0 上有 1 个、3 局共 3 个）。
-        Assert.Contains("- 高台：棋盘 6 块，锁定 4 人次（有名次 3 人次），平均名次 2，胜 1；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
-        Assert.Contains("- 河流：棋盘 6 块，锁定 3 人次（有名次 2 人次），平均名次 1.5，胜 1；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
-        Assert.Contains("- 混合：棋盘 6 块，锁定 0 人次（有名次 0 人次），平均名次 无样本，胜 0；匠人改造 0 次；公共信物 0 个，被控制 0 次", text, StringComparison.Ordinal);
+        // relic-redesign W1：静态信物格删除，行尾"公共信物 n 个，被控制 n 次"一项随之删除（原 map-expand-25 D5 起恒为 0）。
+        Assert.Contains("- 高台：棋盘 6 块，锁定 4 人次（有名次 3 人次），平均名次 2，胜 1；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("- 河流：棋盘 6 块，锁定 3 人次（有名次 2 人次），平均名次 1.5，胜 1；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("- 混合：棋盘 6 块，锁定 0 人次（有名次 0 人次），平均名次 无样本，胜 0；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
 
         MatchLog themeless = SimFixtures.Clone(a);
         themeless = new MatchLog { Header = themeless.Header with { Boards = [.. themeless.Header.Boards!.Select(x => x with { Theme = null })] }, Turns = themeless.Turns, Events = themeless.Events, Result = themeless.Result };

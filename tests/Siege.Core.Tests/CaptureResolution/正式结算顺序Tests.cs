@@ -7,35 +7,7 @@ namespace Siege.Core.Tests.CaptureResolution;
 /// <summary>规格：capture-resolution —— Requirement: 正式结算顺序</summary>
 public class 正式结算顺序Tests
 {
-    private static readonly string[] ExpectedSteps = ["DeductHand", "OnRevealRelics", "OnRecalculatePower", "OnCheckEndConditions"];
-
-    [Fact]
-    public void 提子先于信物揭示()
-    {
-        // E7 是信物格；P1 的 E5 原本是唯一贴近它的棋子。批次落 E6 既提走 E5 又让己方进入 E7 的邻域。
-        // 第 4 步回调看到的盘面必须已经完成提子（E5 空、E6 为 P0）。
-        // 变异验证：Confirm 把 OnRevealRelics 调用移到 RemoveStones 之前 → 本测试红 1（「结算的原子性」同时红）。
-        MapData map = TestMaps.Synthetic(
-            size: 9, maxPlayers: 4,
-            relics: [KeyValuePair.Create(TestMaps.At("E7"), new RelicCellSpec(RelicZone.Contested, BudgetTier.High))]);
-        GameBoard board = GameBoard.LoadUnvalidated(map)
-            .Place("E5", TestMaps.P1)
-            .Place("D5", TestMaps.P0).Place("F5", TestMaps.P0).Place("E4", TestMaps.P0);
-        Assert.True(board[TestMaps.At("E7")].IsRelicCell);
-        var hooks = new RecordingHooks { Board = board };
-        SettlementDriver driver = BatchFixtures.Driver(board, hooks);
-
-        SettlementOutcome outcome = driver.Confirm(BatchFixtures.Context(board, TestMaps.P0), [BatchFixtures.P("E6")]);
-
-        Assert.True(outcome.Confirmed);
-        (string step, string snapshot) = hooks.Calls[1];
-        Assert.Equal("OnRevealRelics", step);
-        Assert.Equal(board.Serialize(), snapshot);
-        SettlementContext reveal = hooks.Contexts[0];
-        Assert.Null(reveal.Board[TestMaps.At("E5")].Occupant);
-        Assert.Equal(new Occupant(TestMaps.P0, PieceType.Basic), reveal.Board[TestMaps.At("E6")].Occupant);
-        Assert.Equal([new CapturedStone(TestMaps.At("E5"), TestMaps.P1, PieceType.Basic)], reveal.Captures);
-    }
+    private static readonly string[] ExpectedSteps = ["DeductHand", "OnRecalculatePower", "OnCheckEndConditions"];
 
     [Fact]
     public void 势力重算后才检查终局()
@@ -94,9 +66,8 @@ public class 正式结算顺序Tests
     [Fact]
     public void 结算驱动器步骤顺序()
     {
-        // implement.md 4.1 / 4.2：四个回调各恰好一次，顺序 1 → 4 → 5 → 6；调换任意两步即失败。
-        // 变异验证：分别交换 (DeductHand, OnRevealRelics)、(OnRevealRelics, OnRecalculatePower)、
-        // (OnRecalculatePower, OnCheckEndConditions) → 各红 1；删掉任一回调 → 红 1。
+        // implement.md 4.1 / 4.2：三个回调各恰好一次，顺序 扣手牌 → 势力重算 → 终局检查（relic-redesign D4：原第 4 步"信物揭示"删除）；调换任意两步即失败。
+        // 变异验证：分别交换 (DeductHand, OnRecalculatePower)、(OnRecalculatePower, OnCheckEndConditions) → 各红 1；删掉任一回调 → 红 1。
         GameBoard board = TestMaps.Blank(size: 7).Place("D4", TestMaps.P1);
         var hooks = new RecordingHooks { Board = board };
         SettlementDriver driver = BatchFixtures.Driver(board, hooks);
@@ -110,8 +81,8 @@ public class 正式结算顺序Tests
         // 第 1 步在盘面变更之前：扣手牌请求发出时盘面仍是结算前
         Assert.Equal(before, hooks.Calls[0].Board);
         Assert.Equal(new Dictionary<PieceType, int> { [PieceType.Basic] = 1, [PieceType.Fortress] = 1 }, hooks.Deductions[0].Deployed);
-        // 第 4–6 步共享同一份上下文
-        Assert.Equal(3, hooks.Contexts.Count);
+        // 第 5–6 步（势力重算、终局检查）共享同一份上下文
+        Assert.Equal(2, hooks.Contexts.Count);
         Assert.All(hooks.Contexts, c => Assert.Same(hooks.Contexts[0], c));
         Assert.Equal(1, hooks.Contexts[0].Sequence);
         Assert.False(hooks.Contexts[0].IsPass);

@@ -26,7 +26,7 @@ public class 构筑期内的改造范围Tests
     {
         MapData built = LinkMapFixtures.Build("link:90011:4", LinkMapFixtures.Births);
         MapData map = built with { TerrainData = LinkMapGeneration.物化状态校验Tests.With(built, surfaces: [("J5", Surface.Forest)]) };
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, All, TestMaps.Relics(map), Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, All, Options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 20), (PieceType.Artisan, 5));
@@ -67,8 +67,8 @@ public class 构筑期内的改造范围Tests
         Assert.Equal(board0, scope);
         Assert.Equal(PublicRules.EditScope(match.Board, 0, 2), scope);
 
-        ImmutableArray<TerrainEdit> scoped = TerrainEditRules.LegalTargets(match.Map, Seam, workshop: false, scope);
-        ImmutableArray<TerrainEdit> unscoped = TerrainEditRules.LegalTargets(match.Map, Seam, workshop: false);
+        ImmutableArray<TerrainEdit> scoped = TerrainEditRules.LegalTargets(match.Map, Seam, scope);
+        ImmutableArray<TerrainEdit> unscoped = TerrainEditRules.LegalTargets(match.Map, Seam);
         Assert.NotEmpty(scoped);
         Assert.All(scoped, e => Assert.True(e.Kind == TerrainEditKind.Fence ? board0.Contains(e.Edge.A) && board0.Contains(e.Edge.B) : board0.Contains(e.Cell), e.ToString()));
         Assert.Contains(unscoped, e => e.Kind == TerrainEditKind.Burn && e.Cell == Across);   // 样本口径：不限范围时接缝另一侧的林地与跨接缝的边都是候选
@@ -81,8 +81,8 @@ public class 构筑期内的改造范围Tests
         HeuristicTurnController ai = HeuristicAi.Create(match, P0, AiDifficulty.Standard, SimFixtures.PreCalibrationWeights, AiSearchConfig.Standard with { CandidateCellLimit = 0 });
         ArtisanEditReview review = ai.ReviewArtisanEdits(batch, match.Rehearse);
         Coord[] legal = [.. batch.Context.LegalRange.Where(c => match.Board[c].IsPlayableEmpty)];
-        int scopedFences = legal.Sum(c => TerrainEditRules.LegalTargets(match.Map, c, batch.Context.WorkshopActive, scope).Count(e => e.Kind == TerrainEditKind.Fence));
-        int unscopedFences = legal.Sum(c => TerrainEditRules.LegalTargets(match.Map, c, batch.Context.WorkshopActive).Count(e => e.Kind == TerrainEditKind.Fence));
+        int scopedFences = legal.Sum(c => TerrainEditRules.LegalTargets(match.Map, c, scope).Count(e => e.Kind == TerrainEditKind.Fence));
+        int unscopedFences = legal.Sum(c => TerrainEditRules.LegalTargets(match.Map, c).Count(e => e.Kind == TerrainEditKind.Fence));
         Assert.True(unscopedFences > scopedFences);   // 样本口径
         Assert.Equal(scopedFences, review.KindReviews.Single(k => k.Kind == TerrainEditKind.Fence).RangeTargets);
     }
@@ -109,18 +109,16 @@ public class 构筑期内的改造范围Tests
         int blocked = 0;
         foreach (Coord cell in match.Map.BirthBoard(0).Cells())
         {
-            foreach (bool workshop in new[] { false, true })
+            // relic-redesign D4：工坊标记随旧信物删除，原"工坊两种取值各查一遍"改为单一口径。
+            HashSet<TerrainEdit> scoped = [.. TerrainEditRules.LegalTargets(match.Map, cell, scope)];
+            foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(match.Map, cell))
             {
-                HashSet<TerrainEdit> scoped = [.. TerrainEditRules.LegalTargets(match.Map, cell, workshop, scope)];
-                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(match.Map, cell, workshop))
+                string? reason = TerrainEditRules.Reject(match.Map, cell, edit, scope);
+                Assert.Equal(scoped.Contains(edit), reason is null);
+                if (reason is not null)
                 {
-                    string? reason = TerrainEditRules.Reject(match.Map, cell, edit, workshop, scope);
-                    Assert.Equal(scoped.Contains(edit), reason is null);
-                    if (reason is not null)
-                    {
-                        blocked++;
-                        Assert.StartsWith(TerrainEditRules.OutOfScopeReason, reason, StringComparison.Ordinal);
-                    }
+                    blocked++;
+                    Assert.StartsWith(TerrainEditRules.OutOfScopeReason, reason, StringComparison.Ordinal);
                 }
             }
         }

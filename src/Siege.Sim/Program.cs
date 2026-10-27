@@ -257,19 +257,17 @@ public static class Program
             + string.Join("/", map.BirthZones.Select(z => z.Count(map.IsPlayable)))
             + " 个可落子格，高度 "
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
-        Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
         // open-map 裁决 B5（simulation-harness「map 子命令缺省地图」）：按几何四邻实算连通分量数，不写死。
         Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（出生平台与其间的低地连成一座浮空岛，应为 1）");
 
-        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角与该棋盘内的公共信物数；link-map-surfaces D3：再给该棋盘内的新地表格数。
+        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角；link-map-surfaces D3：再给该棋盘内的新地表格数（relic-redesign 起地图没有静态信物格，原"公共信物"列删除）。
         // 主题中文名只经 BoardThemeNames.DisplayName；没有主题的棋盘（手写夹具）写"无主题"。
         Console.WriteLine("出生棋盘（编号 · 主题 · 宽×高）：");
         int boardIndex = 0;
         foreach (BoardPlate plate in map.BirthBoards())
         {
-            int publicRelics = map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested && plate.Contains(r.Key));
             int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
-            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}  新地表 {special}");
+            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  新地表 {special}");
         }
 
         Console.WriteLine($"各出生区沿气边最短距离（出生区 {string.Join("/", Enumerable.Range(0, map.BirthZones.Length).Select(BirthZoneLabel.Number))}）：");
@@ -317,8 +315,8 @@ public static class Program
 
         Console.WriteLine();
         Console.WriteLine();
-        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区  r 出生区信物  o 公共信物  R 公共高档信物");
-        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =）  F 林地  . 土路  D 荒漠  M 沼泽  P 岩台  S 浅滩   格间 | 与行间 -- 为栅栏");
+        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区");
+        Console.WriteLine("@ 中央入口  ^ 咽喉（与桥同格时显示桥的标记 =）  F 林地  . 土路  D 荒漠  M 沼泽  P 岩台  S 浅滩   格间 | 与行间 -- 为栅栏");
 
         // --out：把这张图导出到指定文件（map-generator 2.6）。生成图靠它落成普通地图文件——标识里有冒号，做不了 Windows 文件名。
         if (outPath is not null)
@@ -349,9 +347,7 @@ public static class Program
             return "~~";
         }
 
-        char mark = map.RelicCells.TryGetValue(c, out RelicCellSpec spec)
-            ? spec.Budget switch { BudgetTier.Birth => 'r', BudgetTier.High => 'R', _ => 'o' }
-            : c == map.CentralEntrance ? '@'
+        char mark = c == map.CentralEntrance ? '@'
             : map.HasBridge(c) ? '='
             : map.ChokePoints.Contains(c) ? '^'
             : SurfaceMark(map.SurfaceAt(c)) is char s ? s

@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
@@ -11,7 +10,7 @@ namespace Siege.Core.Match;
 /// 供正式 AI（缺省按座位视野，经 <see cref="Ai.HeuristicAi.VisionFor"/>）与终端的人类玩家读取，评价代码与终端渲染不需要知道差别。
 /// </summary>
 /// <remarks>
-/// 口径与 <see cref="PublishFor"/>（<see cref="SeatPublicView"/>）一致：本座位所在战场之外——未与之链接的战场——的棋子不出现，其上的信物呈未揭示、无人控制，
+/// 口径与 <see cref="PublishFor"/>（<see cref="SeatPublicView"/>）一致：本座位所在战场之外——未与之链接的战场——的棋子不出现（其上挂着的信物随之成为空格上的信物，信物层本身全公开），
 /// 他人战场玩家的手牌类型为空；势力快照与活形分析对投影盘面现算（唯一实现 <see cref="PowerCalculator"/> / <see cref="LifeShapeReport.Analyze"/>），
 /// 他人战场玩家的势力因此只剩本战场里的部分（即 0）。地形、行动顺序、在局状态、带入与结果是全局项，不过滤。
 /// 插旗阶段（还没有战场）原样返回 <see cref="Publish"/>。
@@ -32,11 +31,7 @@ public sealed partial class MatchFlow
 
         GameBoard board = full.Board;   // Publish 给的已是副本
         StripOutside(board, visible);
-        ImmutableSortedDictionary<Coord, RelicType> known = Relics.TrueContents().Where(kv => visible.Contains(kv.Key)).ToImmutableSortedDictionary();
-        PowerSnapshot? power = full.Power is null ? null : PowerCalculator.Compute(board, Roster, known, ScoringVersion);
-        ImmutableArray<RelicPublicState> relics = [.. full.Relics.Select(r => visible.Contains(r.Coord)
-            ? r
-            : r with { IsRevealed = false, Content = null, RevealedInMajorRound = null, Control = new RelicControl(RelicControlKind.Uncontrolled, null) })];
+        PowerSnapshot? power = full.Power is null ? null : PowerCalculator.Compute(board, Roster, ScoringVersion);
         ImmutableArray<Recruit.HandPublicView> hands = [.. full.Hands.Select(h => sameField.Contains(h.Player) ? h : h with { Types = [] })];
 
         return full with
@@ -44,7 +39,6 @@ public sealed partial class MatchFlow
             Board = board,
             BoardSerialized = board.Serialize(),
             Power = power,
-            Relics = relics,
             Hands = hands,
             LifeShape = LifeShapeReport.Analyze(board),
             PassedThisRound = [.. full.PassedThisRound.Where(sameField.Contains)],

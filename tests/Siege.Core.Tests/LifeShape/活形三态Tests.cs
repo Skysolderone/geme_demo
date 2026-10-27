@@ -233,7 +233,7 @@ public class 活形三态Tests
             Assert.DoesNotContain(word, json, StringComparison.OrdinalIgnoreCase);
         }
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
         LifeShapeReport after = LifeShapeReport.Analyze(restored.Board);
 
         Assert.Equal(Describe(before), Describe(after));

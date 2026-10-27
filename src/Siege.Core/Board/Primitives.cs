@@ -38,7 +38,7 @@ public enum PieceType
     /// <summary>匠人，基础军势 1；能力只在落子瞬间改造地形（见 <c>terrain-edit</c>），落子后与普通子完全相同。</summary>
     Artisan,
 
-    /// <summary>旗手子，基础军势 1；自身格与气边邻格中每个信物格 +3 位置加值（more-pieces-relics）。</summary>
+    /// <summary>旗手子，基础军势 1；所在棋串每挂 1 件信物 +3 位置加值（relic-redesign R23）。</summary>
     Bannerman,
 
     /// <summary>铁链子，基础军势 1；为所在棋串提供"棋串棋子数 − 1"位置加值。</summary>
@@ -49,29 +49,6 @@ public enum PieceType
 
     /// <summary>界碑子，基础军势 1；气边邻格中每个己方独占空格 +1 位置加值。</summary>
     Boundary,
-}
-
-/// <summary>信物格所属的强度预算分区。</summary>
-public enum RelicZone
-{
-    /// <summary>出生区：不生成高阶信物。</summary>
-    BirthZone,
-
-    /// <summary>公共争夺区。</summary>
-    Contested,
-}
-
-/// <summary>信物强度预算档位。中央区、交通咽喉与高风险边缘承担更高预算。</summary>
-public enum BudgetTier
-{
-    /// <summary>出生区档位，预算最低。</summary>
-    Birth,
-
-    /// <summary>公共区标准档位。</summary>
-    Standard,
-
-    /// <summary>公共区高档位：中央、咽喉与高风险边缘。</summary>
-    High,
 }
 
 /// <summary>玩家标识。</summary>
@@ -93,7 +70,6 @@ public readonly record struct Cell(
     Coord Coord,
     Terrain Terrain,
     int? BirthZone,
-    bool IsRelicCell,
     Occupant? Occupant)
 {
     /// <summary>该格当前是否为空的可落子格。</summary>

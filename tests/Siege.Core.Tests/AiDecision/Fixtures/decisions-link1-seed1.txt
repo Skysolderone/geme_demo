@@ -1,5 +1,5 @@
 # AI 决策序列基线（board-link-mode 3.4，裁决 C5）
-# map=link:1:4 digest=58EF4E072730A40F7926C6A89DBBDBA5C46981E546ACF088BF385F9CA1200EAD seed=1 players=4 difficulty=Standard zones=8,3,1,5
+# map=link:1:4 digest=AF22F0AB0CCAFB9188B0392CCC750C69023B6BECF846BAB15A8CFB1BB738332C seed=1 players=4 difficulty=Standard zones=8,3,1,5
 # cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
 # maxMajorRounds=6
 # 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
@@ -15,15 +15,15 @@
 3	P1	R:2:Synergy,0:Basic,1:Basic D:AO9:Artisan+B:AO10,AO14:Basic
 3	P0	R:0:Fortress,3:Line,1:Basic D:P36:Fortress
 3	P3	R:1:Fortress,0:Boundary,2:Basic D:V22:Fortress,X22:Boundary
-4	P2	R:4:Synergy,0:Basic,3:Bannerman D:X5:Basic,AD11:Basic,W23:Basic
-4	P3	R:4:Fortress,0:Basic,1:Line D:M4:Fortress
-4	P1	R:0:Fortress,1:Basic,3:Basic D:O6:Fortress
-4	P0	R:3:Synergy,2:Line,0:Artisan D:P4:Line,AA4:Line,J40:Artisan+B:J39
-5	P2	R:0:Basic,3:Bannerman,4:Basic D:AE4:Basic,AG4:Basic,AH4:Basic
-5	P0	R:0:Fortress,1:Chain,2:Artisan D:AL4:Fortress,H41:Artisan+B:H42
-5	P1	R:4:Synergy,2:Multiplier,0:Basic D:AC5:Multiplier
+4	P2	R:4:Synergy,0:Basic,3:Bannerman D:X5:Basic,AD11:Basic,W13:Bannerman
+4	P3	R:4:Fortress,0:Basic,1:Line D:O6:Fortress
+4	P1	R:0:Fortress,1:Basic,3:Basic D:W23:Fortress
+4	P0	R:3:Synergy,2:Line,0:Artisan D:M4:Line,N4:Line,J40:Artisan+B:J39
+5	P2	R:0:Basic,3:Bannerman,4:Basic D:AA4:Basic,AC4:Basic,AE4:Basic
+5	P0	R:0:Fortress,1:Chain,2:Artisan D:AH4:Fortress,H41:Artisan+B:H42
+5	P1	R:4:Synergy,2:Multiplier,0:Basic D:AL4:Multiplier
 5	P3	R:4:Synergy,2:Basic,3:Line D:AN5:Line,Z6:Line
-6	P2	R:0:Multiplier,1:Basic,2:Basic D:AF6:Multiplier
+6	P2	R:1:Basic,2:Basic,4:Basic D:AD6:Basic,AF6:Basic,AD30:Bannerman
 6	P0	R:0:Synergy,4:Line,1:Basic D:AJ6:Line
 6	P3	R:3:Line,0:Basic,1:Basic D:AP6:Line
 6	P1	R:1:Fortress,0:Multiplier,2:Basic D:AB7:Fortress

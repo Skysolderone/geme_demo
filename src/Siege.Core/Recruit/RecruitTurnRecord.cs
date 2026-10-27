@@ -67,7 +67,7 @@ public sealed record RecruitTurnRecord(
         return hash.ToHashCode();
     }
 
-    /// <summary>单行文本：供对局日志与人工复盘（与 <see cref="Relics.RelicRevealEvent"/> 同风格：<c>R{大回合}</c> 前缀，<c>key=value</c> 字段）。不涉及坐标。</summary>
+    /// <summary>单行文本：供对局日志与人工复盘（<c>R{大回合}</c> 前缀，<c>key=value</c> 字段）。不涉及坐标。</summary>
     public override string ToString() =>
         $"#{Sequence} {Player} R{MajorRound} candidates={string.Join(",", Candidates)} picks={string.Join(",", PickedIndices)}"
         + $" discards={string.Join(",", Discarded)} deployed={DeployedCount} revoked={RevokedCount} pass={(Passed ? "yes" : "no")}";
