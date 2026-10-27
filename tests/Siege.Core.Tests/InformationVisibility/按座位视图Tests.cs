@@ -39,8 +39,8 @@ public class 按座位视图Tests
         Assert.True(a.IsExpanded(other));
         Assert.Equal(P2, a.CellAt(other)!.Owner);
         Assert.True(a.IsExpanded(BirthCell(match.Map, 0, 0, 0)));
-        // G1（link-map-terrain 2.6）：展开的是整块棋盘的外接矩形（含岩石与未架桥深水）；open-map：5 块全部展开。
-        Assert.Equal(match.Map.Boards.Sum(b => b.Width * b.Height), a.Cells.Length);
+        // G1（link-map-terrain 2.6）：展开的是整块棋盘的外接矩形（含岩石与未架桥深水）；map-expand-25 段 B：插旗阶段之后展开整张图的全部格。
+        Assert.Equal(match.Map.Width * match.Map.Height, a.Cells.Length);
         Assert.Equal(0, a.Battlefield);
     }
 

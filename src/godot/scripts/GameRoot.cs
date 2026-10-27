@@ -116,7 +116,7 @@ public sealed partial class GameRoot : Node3D
 
         // 命令行：先把全部选项读完，再结算未知选项（LaunchArgs：合法选项集合 = 读取过的名字，没有第二张表）。
         // --map=link:<地图种子>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5；board-link-mode 实现裁决 D7：只接受 link:，旧标识由 MapCatalog.Resolve 报错、退出码 1）。
-        // 未给时有人值守进新局界面、无人值守取 link:1（MapCatalog.DefaultId）；选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
+        // 未给时有人值守进新局界面、无人值守取 link:1:4（MapCatalog.DefaultId）；选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
         ulong seed;
         int rounds;
         try
@@ -133,7 +133,7 @@ public sealed partial class GameRoot : Node3D
             // --shot-board=<棋盘清单下标>：截图前把相机对准棋盘清单里的第几块棋盘（board-map 3.4：给负责人看一块棋盘的近景，仅截图用）。
             // 须与 --screenshot= 同用；下标越界报错退出。棋盘的外接矩形取自视图模型的棋盘清单。
             _shotBoard = args.Value<int>("shot-board", "棋盘清单下标（非负整数，截图时对准该棋盘）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
-            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生棋盘编号（1–5）", t => int.TryParse(t, out int v) && v is >= 1 and <= 5 ? v : null) ?? 1;
+            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生平台编号（1–平台数，浮空岛至多 12 块）", t => int.TryParse(t, out int v) && v is >= 1 and <= 12 ? v : null) ?? 1;
 
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
@@ -307,7 +307,8 @@ public sealed partial class GameRoot : Node3D
             // 旧的裸 gen / 裸 board 不再识别（board-link-mode 实现裁决 D7）：与其他旧标识一样由 MapCatalog.Resolve 报错退出。
             if (LinkMapId.IsBareRequest(mapId))
             {
-                mapId = LinkMapId.Format(LinkMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), LinkMapId.MaxPlayers);   // map-expand-25 段 A1 最小修复：人数暂取 4
+                // map-expand-25 D1：图形版没有人数选项（人数在新局界面里选），裸 link 取新局界面的缺省人数 4。
+                mapId = LinkMapId.Format(LinkMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp()), MapSelectModel.DefaultPlayers);
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
@@ -319,7 +320,7 @@ public sealed partial class GameRoot : Node3D
             else
             {
                 MapData map = MapCatalog.Resolve(mapId);
-                _session = MatchSession.Create(map, seed, System.Math.Min(4, map.MaxPlayers), 1, _difficulty, cellLimit);
+                _session = MatchSession.Create(map, seed, map.MaxPlayers, 1, _difficulty, cellLimit);
                 BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
             }
         }
@@ -337,6 +338,10 @@ public sealed partial class GameRoot : Node3D
         AddChild(_board);
         // 停在新局界面时背景占位不带主题名（link-map-terrain Q5），插旗阶段才显示。
         _board.Build(Selecting ? MapPreviewInfo.Backdrop(_session.World.Board()) : _session.World.Board(), _session.ZoneOwners);
+        if (!Selecting && !Unattended && !RevealPreviewing)
+        {
+            EnterOverviewForPlanting();   // --map= 直接开局（有人值守）：插旗阶段同样以整岛取景（D9）；无人值守的自检 / 截图与揭示预览的取景不变
+        }
 
         _hud = new Hud { Name = "Hud" };
         AddChild(_hud);
@@ -349,7 +354,7 @@ public sealed partial class GameRoot : Node3D
         ShowCarryPreview();
 
         GD.Print(Selecting
-            ? $"[siege] 新局界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=link:<地图种子> 可跳过新局界面）"
+            ? $"[siege] 新局界面：当前 {_select!.CurrentId}（点「开始」后建局；命令行给 --map=link:<地图种子>:<人数> 可跳过新局界面）"
             : $"[siege] 地图 {_session.Match.Map.Id}，对局种子 {seed}，你是 {Labels.Player(_session.Me)}，{DifficultyText()}{(_autoDemo ? $"，自动演示模式（{(rounds == 0 ? "跑到终局" : $"跑满 {rounds} 个大回合停止")}）" : string.Empty)}");
     }
 
@@ -517,6 +522,18 @@ public sealed partial class GameRoot : Node3D
     }
 
     /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。</summary>
+    /// <summary>
+    /// 插旗阶段的初始取景（map-expand-25 D9）：浮空岛（40 + 4 = 44 格见方）在平时的最远缩放下一屏看不全，切全局预览让整座岛（各块平台的占位）一屏可见；
+    /// 一屏看得全的图 <see cref="BoardCamera.ToggleOverview"/> 不起作用。拉近即退出预览、照常缩放与平移；锁定后开局对准自己的平台时也退出预览。
+    /// </summary>
+    private void EnterOverviewForPlanting()
+    {
+        if (_board.Rig.OverviewAvailable && !_board.Rig.IsOverview)
+        {
+            _board.Rig.ToggleOverview();
+        }
+    }
+
     private void ToggleOverview()
     {
         _follow.ManualInput(opponentActing: !_session.IsMyTurn);

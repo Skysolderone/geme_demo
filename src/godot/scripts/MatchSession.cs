@@ -81,11 +81,10 @@ public sealed class MatchSession
     public string? RoundCapNotice { get; private set; }
 
     /// <summary>
-    /// 本机所在战场应可见的格数（独立于按座位过滤的口径：由地图的战场导出 <see cref="Battlefields"/> 与棋盘清单给出），供自检比对可见格数；未锁定出生区为 0。
-    /// link-map-terrain G1（裁决 A）：战斗阶段可见格 = 本战场所含各棋盘外接矩形内的全部格（含岩石与未架桥深水），所以取各棋盘宽 × 高之和，不取战场的可落子格数。
+    /// 本机插旗阶段之后应可见的格数（独立于按座位过滤的口径：直接由地图尺寸给出），供自检比对可见格数；插旗阶段为 0。
+    /// map-expand-25 段 B：插旗阶段结束后可见格 = 整张图的全部格（平台、平台之间的低地与画布留白），所以取宽 × 高（原 G1 为本战场各棋盘外接矩形之和）。
     /// </summary>
-    public int MyBattlefieldCells => Match.Phase == MatchPhase.FlagPlanting ? 0
-        : Battlefields.Of(Match.Map).ById(Match.BattlefieldOf(Me))?.Boards.Sum(b => Match.Map.Boards[b].Width * Match.Map.Boards[b].Height) ?? 0;
+    public int MyBattlefieldCells => Match.Phase == MatchPhase.FlagPlanting ? 0 : Match.Map.Width * Match.Map.Height;
 
     /// <summary>本机此刻的合法落子范围（只读查询，Core 的唯一实现）；不在进行中为空。</summary>
     public IReadOnlySet<Coord> MyLegalRange => Match.Phase == MatchPhase.InProgress ? Match.LegalRangeFor(Me) : ImmutableHashSet<Coord>.Empty;
@@ -627,7 +626,7 @@ public sealed class MatchSession
     {
         MatchPublicView view = Match.Publish();
         PublicSupplement supplement = Match.PublishSupplement();
-        // board-link-mode 实现裁决 B4 / D-b：按座位视图决定本机能看到哪些格（链接模式只有本战场 + 5 个占位；旧模式全图），与公开快照同一时刻取。
+        // board-link-mode 实现裁决 B4 / D-b：按座位视图决定本机能看到哪些格（插旗阶段只有占位与已选的那块，此后全图），与公开快照同一时刻取。
         SeatPublicView seat = Match.PublishFor(Me);
         HandPrivateView hand = Match.Hands.AccessFor(Me).PrivateView();
         BatchPreview? preview = Match.Stage == TurnStage.Deploy && Match.CurrentPlayer == Me ? Match.PreviewCurrentBatch() : null;

@@ -75,7 +75,7 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 创建一局：地图经静态校验，信物按 <c>relic-gen</c> 子流一次性生成，手牌账本派生 <c>recruit</c> 子流，本类持有 <c>setup</c> 子流。
-    /// 创建后处于插旗阶段。地图须是链接图、恰 4 人（retire-legacy-rules：对局只有链接规则一套，旧模式与对局模式枚举一并删除）。
+    /// 创建后处于插旗阶段。地图须是链接图、人数恰等于地图人数（retire-legacy-rules：对局只有链接规则一套，旧模式与对局模式枚举一并删除）。
     /// </summary>
     public static MatchFlow Create(MapData map, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions? options = null)
     {
@@ -86,7 +86,7 @@ public sealed partial class MatchFlow
         return Build(map, board, seed, players, RelicGenerator.Generate(map, seed, options.ContentSet), options);
     }
 
-    /// <summary>测试专用：跳过地图校验并使用手工指定的信物分布。建局约束（链接图标识、恰 4 人）照常执行。</summary>
+    /// <summary>测试专用：跳过地图校验并使用手工指定的信物分布。建局约束（链接图标识、人数恰等于地图人数）照常执行。</summary>
     internal static MatchFlow CreateUnvalidated(
         MapData map, GameSeed seed, IEnumerable<PlayerId> players, RelicGenerationRecord relics, MatchOptions? options = null) =>
         Build(map, GameBoard.LoadUnvalidated(map), seed, players, relics, options ?? MatchOptions.Immediate);
@@ -814,16 +814,21 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 建局约束（实现裁决 B1 / S1）：只能配链接图、恰 4 人；不满足即建局报错（恢复路径同一处校验）。
-    /// retire-legacy-rules：原 <c>RequireModeMatchesMap</c> 去掉模式参数——对局只有链接规则一套。
+    /// 建局约束（实现裁决 B1 / S1 → map-expand-25 D1）：只能配链接图，对局人数恰等于地图人数 <see cref="MapData.MaxPlayers"/>（2–4，标识 <c>link:&lt;种子&gt;:&lt;人数&gt;</c> 的人数段）；
+    /// 不满足即建局报错（恢复路径同一处校验）。retire-legacy-rules：原 <c>RequireModeMatchesMap</c> 去掉模式参数——对局只有链接规则一套。
     /// 按地图标识判定（<see cref="LinkMapId.IsLinkMap"/>）：对局层不读规格档（boundaries「地图规格档的分流」），而链接本身也要从标识取地图种子。
     /// </summary>
     private static void RequireLinkMatch(MapData map, int players)
     {
-        if (players != 4)
+        if (map.MaxPlayers < LinkMapId.MinPlayers || map.MaxPlayers > LinkMapId.MaxPlayers)
         {
-            // 裁决 3b / S1：链接模式只有 4 人局。
-            throw new ArgumentException($"链接模式只有 4 人局，实际 {players} 人。", nameof(players));
+            throw new ArgumentException($"链接图 {map.Id} 的人数 {map.MaxPlayers} 不在 {LinkMapId.MinPlayers}–{LinkMapId.MaxPlayers} 之间。", nameof(map));
+        }
+
+        if (players != map.MaxPlayers)
+        {
+            // map-expand-25 D1（原裁决 3b / S1"只有 4 人局"）：浮空岛按人数生成，对局人数须与地图人数相同，不静默改。
+            throw new ArgumentException($"链接图 {map.Id} 是 {map.MaxPlayers} 人局，实际 {players} 人。", nameof(players));
         }
 
         if (!LinkMapId.IsLinkMap(map.Id))

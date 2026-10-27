@@ -285,7 +285,7 @@ public static class ReportWriter
     private static void AppendLinkMode(StringBuilder sb, LinkModeSection l)
     {
         sb.AppendLine();
-        sb.AppendLine("## 链接模式（open-map：5 块出生棋盘紧贴成一张连通地图，唯一战场）");
+        sb.AppendLine("## 链接模式（open-map：出生平台与其间的低地连成一座浮空岛，唯一战场）");
         sb.AppendLine($"- 纳入 {l.Matches} 局，其中截断 {l.Truncated} 局；终局原因：{Histogram(l.EndReasons)}");
         sb.AppendLine($"- 同区率（锁定时有棋盘旗数 ≥ 2）：{l.SharedMatches}/{l.Matches}（{Pct(l.SharedShare)}）；开局布局：{Histogram(l.Layouts)}；各出生棋盘被选次数（棋盘编号 1–5）：{Histogram(l.BoardPicks)}");
         sb.AppendLine($"- 对局大回合数：均值 {Num(l.MeanMajorRounds)}，中位 {Num(l.MedianMajorRounds)}，最小 {l.MinMajorRounds}，最大 {l.MaxMajorRounds}；终局全图可落子格均值 {Num(l.EndPlayableCells)}");

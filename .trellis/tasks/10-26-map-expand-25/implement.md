@@ -19,7 +19,7 @@
 
 1. Sim `play` / `run` / `map`：按 D1 处理 `--players` 与标识人数（缺省、裸 link、不一致报错）；`--map-per-match` 同口径。
 2. `MapSelectModel`：人数属性与切换（2/3/4），`CurrentId` 带人数；HUD 加人数选项；开局人数取 `map.MaxPlayers`。
-3. Godot 取景按 D9：40×40 画布默认能看全。
+3. Godot 取景按 D9：40×40 岛 + 留白 = 44×44 画布默认能看全。
 4. 验收：Sim 跑一局 `run --count 1 --players 2` 与 `--players 4` 成功；Godot 构建通过；`--map-select` 截图自检能显示整岛。
 
 ## 段 C：试玩验证 + 检查

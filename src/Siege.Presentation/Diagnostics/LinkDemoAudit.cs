@@ -38,7 +38,7 @@ public sealed class LinkDemoAudit
 
     /// <summary>
     /// 插旗锁定（open-map 裁决 O4：锁定后全图全可见）：全部占位展开（占位数 = 棋盘清单块数）、本机那块标为本机，可见格 = 全图应可见的格数。
-    /// <paramref name="battlefieldCells"/> 由调用方从战场导出与棋盘清单独立算出：link-map-terrain G1 起为本战场（= 全图）各棋盘外接矩形的格数之和（含岩石与未架桥深水）。
+    /// <paramref name="battlefieldCells"/> 由调用方从地图尺寸独立算出：map-expand-25 段 B 起为整张图的格数（宽 × 高，含平台之间的低地与画布留白；原 G1 为各棋盘外接矩形的格数之和）。
     /// map-expand-25 段 A2：浮空岛的平台数随人数与种子变化（6–12 块），原写死的"5 块"改读视图模型的棋盘清单块数。
     /// </summary>
     public AuditLine FlagsLocked(DefaultBoardView board, int ownZone, int battlefieldCells)

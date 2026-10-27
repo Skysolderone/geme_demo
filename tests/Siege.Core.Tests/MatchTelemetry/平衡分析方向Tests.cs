@@ -197,8 +197,10 @@ public class 平衡分析方向Tests
         // terrain-density 2.2 重钉（地图变了：出生棋盘边长 6–8 → 6–7，link:1 重抽，同一配置的走法随之变）；旧值 AE582F0C… / EB76C9AC…。
         // map-expand-25 段 A2 重钉（地图变了：link:1:4 换成 44×44 浮空岛，同一配置的走法随之变）；旧值 D75715D6… / 12BEB16D…。
         // map-expand-25 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）；旧值 A1282AA4… / F76C100E…。
-        Assert.True("6375D25399977F745F343CCFC701C7A57EBB32BC4C433BE80C16F0319092B168" == sample, $"Sample 报告哈希：{sample}");
-        Assert.True("A4D11329E59A0AC281E4E5295A02FA5B4921F85F010FCBDC0EB6F6039EBC0822" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // map-expand-25 段 B 重钉（报告格式变化，走法不变）：链接模式一段的标题由"5 块出生棋盘紧贴成一张连通地图"改为"出生平台与其间的低地连成一座浮空岛"；
+        // 实跑核对：把标题临时改回旧文案，旧值照常通过。旧值 6375D253… / A4D11329…。
+        Assert.True("EB8CF1082951A730F6E5044D883B2B4CE69F648190757F5EC77B829C7A99B8F7" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
+        Assert.True("45017B88F8C27A59906456DF695F9CE8BB169DE5415AA84F2B3C30AB3CAA8D80" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

@@ -268,7 +268,7 @@ public sealed partial class MatchFlow
             CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
             RoundCap = data.RoundCap ?? MatchOptions.DefaultRoundCap,
         };
-        // 与建局同一处校验（裁决 B1 / S1）：只能是链接图、4 人。
+        // 与建局同一处校验（裁决 B1 / S1 → map-expand-25 D1）：只能是链接图、人数恰等于地图人数。
         try
         {
             RequireLinkMatch(map, players.Length);

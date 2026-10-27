@@ -133,21 +133,8 @@ public class 各入口按地图标识选图_链接模式Tests
         Assert.Contains("\"PassThreshold\":", header, StringComparison.Ordinal);   // 反面：配置确实写进了首部
     }
 
-    [Theory]
-    [InlineData("3")]
-    [InlineData("5")]
-    public void 参赛人数不是4即按S1报错(string players)
-    {
-        // retire-legacy-maps 4b.3（L20）："缺省取地图人数上限"删除后，终端与批量入口不给人数即 4；给别的值按裁决 3b / S1 报错退出、不建输出目录。
-        (int playCode, _, string playErr) = RunMain(null, new StringReader("q\n"), "play", "--seed", "5", "--no-carry", "--players", players);
-        Assert.Equal(1, playCode);
-        Assert.Contains("链接模式只有 4 人局", playErr, StringComparison.Ordinal);
-
-        string outDir = Path.Combine(SimFixtures.TempDir("link-players-" + players), "out");
-        (int runCode, _, string runErr) = RunMain(null, null, "run", "--out", outDir, "--count", "1", "--seed", "1", "--turn-limit", "2", "--serial", "--players", players);
-        Assert.NotEqual(0, runCode);
-        Assert.Contains("4 人", runErr, StringComparison.Ordinal);
-    }
+    // map-expand-25 段 B：原「参赛人数不是4即按S1报错」（链接模式只有 4 人局）随 D1 改写——人数 2–4 由 --players 与标识的人数段决定，
+    // 不一致 / 越界的报错移到「各入口人数选项Tests」。
 
     [Fact]
     public void 链接图批量跑局()

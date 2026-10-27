@@ -145,6 +145,43 @@ public class 选图视图模型Tests
     }
 
     [Fact]
+    public void 人数选项_2到4人_标识带人数_缺省4人()
+    {
+        // map-expand-25 D1：新局界面加人数选项（2 / 3 / 4，缺省 4）；人数是标识的一部分——改人数返回"标识变了"、种子不变，
+        // 换一张 / 输入种子保持人数，预填完整标识带上其中的人数；回退把种子与人数一起退回上一张成功的图；确认后不再接受。
+        // 变异（实跑，只跑本类）：MB-7 RollBack 只退种子、不退人数 → 本测试红 1；MB-8 CurrentId 的人数写死 4 → 本测试红 1。
+        var model = new MapSelectModel(InitialSeed);
+        Assert.Equal([2, 3, 4], MapSelectModel.PlayerOptions);
+        Assert.Equal((4, "link:424242:4"), (model.Players, model.CurrentId));
+        model.Accept();
+
+        Assert.True(model.SelectPlayers(2));
+        Assert.Equal((2, InitialSeed, "link:424242:2"), (model.Players, model.MapSeed, model.CurrentId));
+        Assert.False(model.SelectPlayers(2));   // 同一人数：标识没变
+        Assert.Throws<ArgumentOutOfRangeException>(() => model.SelectPlayers(5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => model.SelectPlayers(1));
+
+        Assert.True(model.Reroll(77UL));
+        Assert.Equal("link:77:2", model.CurrentId);
+        Assert.True(model.SubmitSeed("12"));
+        Assert.Equal("link:12:2", model.CurrentId);
+        Assert.True(model.TrySelectId("link:9:3"));
+        Assert.Equal((3, "link:9:3"), (model.Players, model.CurrentId));
+
+        // 预览失败回退：种子与人数都回到上一次接受的 link:424242:4。
+        model.RollBack("这张图没有生成出来。");
+        Assert.Equal((4, "link:424242:4"), (model.Players, model.CurrentId));
+
+        // 按所选人数解析出的地图人数即开局人数。
+        Assert.True(model.SelectPlayers(3));
+        model.Accept();
+        string confirmed = model.Confirm();
+        Assert.Equal("link:424242:3", confirmed);
+        Assert.Equal(3, MapCatalog.Resolve(confirmed).MaxPlayers);
+        Assert.Throws<InvalidOperationException>(() => model.SelectPlayers(2));
+    }
+
+    [Fact]
     public void 生成失败_回到上一张成功的图并给出提示()
     {
         // 地图由调用方解析；解析 / 建预览失败时调用方 RollBack：回到上一次 Accept 的状态，面板显示原因。

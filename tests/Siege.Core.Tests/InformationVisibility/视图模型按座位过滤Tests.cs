@@ -66,7 +66,9 @@ public class 视图模型按座位过滤Tests
         SeatPublicView seat = match.PublishFor(P0);
 
         Assert.Equal(seat.Cells.Select(c => c.Coord).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.Equal(Zones.SelectMany(ZoneNotations).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
+        // map-expand-25 段 B：插旗阶段之后视图含整张图的全部格（平台之间的低地与画布留白也在；原为各棋盘的格之并）。
+        Assert.Equal(Map.AllCoords().Select(c => c.ToNotation()).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
+        Assert.All(Zones.SelectMany(ZoneNotations), n => Assert.NotNull(board.CellOrNull(Coord.Parse(n))));
         Assert.All(board.Cells, c => Assert.Equal(Map.BirthZoneOf(c.Coord), c.BirthZone));   // 出生区 = 核心区，棋盘内其余格不属于出生区
         Assert.Equal(10, board.Boards.Length);
         Assert.Equal(0, world.OwnZone);
@@ -100,10 +102,9 @@ public class 视图模型按座位过滤Tests
             }
         }
 
-        // 全知棋盘另含画布留白的场景格（A1 …），按座位的只有 5 块棋盘的格：棋盘内的格集合相同。
-        HashSet<string> boards = [.. Zones.SelectMany(ZoneNotations)];
-        Assert.Equal(boards.Order(), match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
-        Assert.All(boards, n => Assert.Contains($"\"{n}\"", omniscient, StringComparison.Ordinal));
+        // map-expand-25 段 B：按座位的格集合与全知棋盘相同（含画布留白的场景格 A1 … 与平台之间的低地；原为"按座位的只有棋盘的格"）。
+        Assert.Equal(omniscient, JsonSerializer.Serialize(match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()), Json));
+        Assert.Contains("\"A1\"", seat, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -114,7 +115,7 @@ public class 视图模型按座位过滤Tests
         Assert.Equal([P1, P2, P3], match.World(P0).SameBattlefieldPlayers);
         Assert.Equal([P0, P2, P3], match.World(P1).SameBattlefieldPlayers);
         Assert.Equal([P0, P1, P3], match.World(P2).SameBattlefieldPlayers);
-        Assert.Equal(Zones.SelectMany(ZoneNotations).Order(), match.World(P1).Board().Cells.Select(c => c.Coord.ToNotation()).Order());
+        Assert.Equal(Map.AllCoords().Select(c => c.ToNotation()).Order(), match.World(P1).Board().Cells.Select(c => c.Coord.ToNotation()).Order());   // map-expand-25 段 B：整张图
     }
 
     [Fact]
@@ -153,7 +154,9 @@ public class 视图模型按座位过滤Tests
         Assert.Equal(MatchPhase.InProgress, match.Phase);
 
         DefaultBoardView board = match.World(P0).Board();
-        Assert.Equal(180, board.Cells.Length);   // 5 块 6×6 整块，含 2 块岩石
+        // map-expand-25 段 B：插旗阶段之后可见整张图的全部格（画布 = 宽 × 高）；5 块 6×6 整块（180 格，含 2 块岩石）都在其中。
+        Assert.Equal(map.Width * map.Height, board.Cells.Length);
+        Assert.All(map.Boards.SelectMany(b => b.Cells()), c => Assert.NotNull(board.CellOrNull(c)));
         Assert.All(new[] { new Coord(2, 2), new Coord(4, 5) }, rock => Assert.Equal(Terrain.Obstacle, board.CellAt(rock).Terrain));
         Assert.Equal(map.Boards, board.Boards);
         BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);

@@ -83,11 +83,14 @@ public sealed record RunConfig
     /// <summary>默认小回合硬停（防死锁保险，以异常记为失败局，不是终局原因）。截断为 0（不截断，仅供调试）时它是唯一兜底。</summary>
     public const int DefaultMaxTurns = 1_000;
 
-    /// <summary>地图标识：链接图 <c>link:&lt;地图种子&gt;</c>。缺省 <see cref="MapCatalog.DefaultId"/>（<c>link:1</c>；retire-legacy-maps：原为 v5，随旧地图删除）。</summary>
+    /// <summary>
+    /// 地图标识：链接图 <c>link:&lt;地图种子&gt;:&lt;人数&gt;</c>，人数须与 <see cref="Players"/> 的人数相同（map-expand-25 D1；不一致由命令行入口报错、建局再拦一次）。
+    /// 缺省 <see cref="MapCatalog.DefaultId"/>（<c>link:1:4</c>；retire-legacy-maps：原为 v5，随旧地图删除）。
+    /// </summary>
     public string MapId { get; init; } = MapCatalog.DefaultId;
 
     /// <summary>
-    /// 每局换图（map-generator D6）：<see cref="MapId"/> 须是带起始地图种子的链接图标识 <c>link:&lt;起始地图种子&gt;</c>，第 <i>i</i> 局用地图种子 <c>起始 + i</c>
+    /// 每局换图（map-generator D6）：<see cref="MapId"/> 须是带起始地图种子的链接图标识 <c>link:&lt;起始地图种子&gt;:&lt;人数&gt;</c>，第 <i>i</i> 局用地图种子 <c>起始 + i</c>、人数不变
     /// （<see cref="MapIdAt"/>；retire-legacy-maps：<c>gen:</c> 生成图随旧生成器删除）。起始地图种子就写在 <see cref="MapId"/> 里，不另设字段——
     /// 同一件事只有一处记录。各局的完整地图标识写入该局日志首部的 <see cref="Logging.LogHeader.MapId"/>；首部里的 <see cref="MapId"/> 仍是批次的起始标识。
     /// 为 <c>false</c> 时不写出（标准批次的配置记录与日志首部与引入本项之前逐字节相同）。命令行 <c>--map-per-match</c>。
@@ -228,10 +231,10 @@ public sealed record RunConfig
     /// <summary>第 <paramref name="index"/> 局的种子。</summary>
     public ulong SeedAt(int index) => checked(SeedStart + (ulong)index);
 
-    /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>link:&lt;起始 + index&gt;</c>（规范化），否则恒为 <see cref="MapId"/>。</summary>
+    /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>link:&lt;起始 + index&gt;:&lt;人数&gt;</c>（规范化，人数取起始标识的人数），否则恒为 <see cref="MapId"/>。</summary>
     public string MapIdAt(int index) =>
-        // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>。
-        MapPerMatch ? LinkMapId.Format(checked(LinkMapId.Parse(MapId).Seed + (ulong)index), LinkMapId.Parse(MapId).Players) : MapId;   // map-expand-25 段 A1：标识带人数，换图时人数不变
+        // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>:<人数>（map-expand-25 D1：人数不变）。
+        MapPerMatch ? LinkMapId.Format(checked(LinkMapId.Parse(MapId).Seed + (ulong)index), LinkMapId.Parse(MapId).Players) : MapId;
 
     /// <summary>玩家编号列表。</summary>
     public PlayerId[] PlayerIds() => [.. Enumerable.Range(0, Players.Count).Select(i => new PlayerId(i))];
@@ -272,7 +275,7 @@ public sealed record RunConfig
         {
             if (!LinkMapId.IsLinkMap(MapId) || LinkMapId.IsBareRequest(MapId))
             {
-                throw new ArgumentException($"每局换图要求地图标识带起始地图种子：链接图 link:<起始地图种子>；实际为 {MapId}。");
+                throw new ArgumentException($"每局换图要求地图标识带起始地图种子：链接图 link:<起始地图种子>:<人数>；实际为 {MapId}。");
             }
 
             try

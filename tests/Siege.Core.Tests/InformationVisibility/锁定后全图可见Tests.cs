@@ -33,7 +33,7 @@ public class 锁定后全图可见Tests
         SeatPublicView seat = match.PublishFor(P0);
 
         Assert.Equal(0, seat.Battlefield);
-        Assert.Equal(match.Map.Boards.Sum(b => b.Width * b.Height), seat.Cells.Length);   // 全图 5 块棋盘的整块外接矩形（含岩石与未架桥深水）
+        Assert.Equal(match.Map.Width * match.Map.Height, seat.Cells.Length);   // map-expand-25 段 B：整张图的全部格（平台、低地与画布留白；原为各棋盘外接矩形之和）
         Coord onBoard4 = BirthCell(match.Map, 3, 0, 0);
         Assert.True(seat.IsExpanded(onBoard4));
         Assert.NotNull(seat.CellAt(onBoard4));
@@ -67,11 +67,43 @@ public class 锁定后全图可见Tests
             Assert.All(ZoneNotations(zone), n => Assert.Contains($"\"{n}\"", seat, StringComparison.Ordinal));
         }
 
-        // 全知棋盘另含画布留白的场景格，按座位的只有 5 块棋盘的格：棋盘内的格集合相同。
-        HashSet<Coord> boards = [.. match.Map.Boards.SelectMany(b => b.Cells())];
+        // map-expand-25 段 B：按座位的格集合与全知棋盘相同（含平台之间的低地与画布留白；原为"只有棋盘内的格"）。
         Assert.Equal(
-            DefaultBoardView.From(match.PublicWorldOf()).Cells.Select(c => c.Coord).Where(boards.Contains).Order(),
+            DefaultBoardView.From(match.PublicWorldOf()).Cells.Select(c => c.Coord).Order(),
             match.World(P0).Board().Cells.Select(c => c.Coord).Order());
+    }
+
+    [Fact]
+    public void 插旗阶段之后座位可见整座岛含低地()
+    {
+        // map-expand-25 段 B：浮空岛的平台之间是低地（河道、桥、岩石），不在任何平台外接矩形里。插旗阶段结束后按座位视图 = 整张图的全部格，
+        // 低地的地形与占用都给出；插旗阶段锁定后仍只见自己那块平台（match-setup「锁定后只见自己的棋盘」不变）。
+        // 变异 MB-5（实跑，过滤本类与 自动演示全流程自检Tests）：PublishFor 插旗阶段之后的可见格改回"本战场各棋盘外接矩形" → 本测试、「他人棋盘从第1大回合起可见」
+        // 「按座位序列化含全部五块棋盘」与 自动演示全流程自检Tests 的「真对局走一遍_四步全通过」「全图解禁」「插旗锁定与构筑期」红 6。
+        MatchFlow match = Started([0, 1, 3, 4]);
+        HashSet<Coord> boards = [.. match.Map.Boards.SelectMany(b => b.Cells())];
+        Coord[] lowland = [.. match.Map.AllCoords().Where(c => match.Map.IsPlayable(c) && !boards.Contains(c))];
+        Coord[] water = [.. match.Map.AllCoords().Where(c => !boards.Contains(c) && match.Map.TerrainData.IsUnbridgedDeepWater(c))];
+        Assert.NotEmpty(lowland);   // 样本口径：link:1:4 确有低地可落子格与低地河道
+        Assert.NotEmpty(water);
+
+        SeatPublicView seat = match.PublishFor(P0);
+        Assert.Equal(match.Map.AllCoords().Order().Select(c => c.ToNotation()), seat.Cells.Select(c => c.Coord));
+        Assert.All(lowland, c => Assert.Equal((Terrain.Playable, match.Map.HeightAt(c)), (seat.CellAt(c)!.Terrain, seat.CellAt(c)!.Height)));
+        Assert.Equal((Terrain.Obstacle, Surface.DeepWater), (seat.CellAt(water[0])!.Terrain, seat.CellAt(water[0])!.Surface));
+
+        // 低地上的棋子对其他座位可见（第 4 大回合起可落低地）。
+        match.Place(P2, lowland[0]);
+        Assert.Equal(P2, match.PublishFor(P0).CellAt(lowland[0])!.Owner);
+        Assert.Equal(P2, match.World(P0).Board().CellAt(lowland[0]).Occupant!.Value.Owner);   // 表现层按座位过滤同一组格
+
+        // 插旗阶段：锁定后只见自己那块平台，低地一格也没有；未锁定者什么也看不见。
+        MatchFlow planting = Create();
+        planting.Flags.Plant(P0, 2);
+        SeatPublicView locked = planting.PublishFor(P0);
+        Assert.Equal(planting.Map.BirthBoard(2).Cells().Order().Select(c => c.ToNotation()), locked.Cells.Select(c => c.Coord));
+        Assert.DoesNotContain(lowland, locked.IsExpanded);
+        Assert.Empty(planting.PublishFor(P1).Cells);
     }
 
     [Fact]

@@ -11,13 +11,13 @@ namespace Siege.Godot;
 
 /// <summary>
 /// 建局之前的新局界面（board-link-mode D8 / 实现裁决 D7，规格 map-selection「开局选图界面」）：未给 <c>--map=</c> 且非无人值守时进入；
-/// 显示随机取好的地图种子与完整标识 <c>link:&lt;种子&gt;</c>，可输入种子、换一张、选难度，点"开始"才建真正的对局、进入插旗。旧地图清单已删除。
+/// 显示随机取好的地图种子与完整标识 <c>link:&lt;种子&gt;:&lt;人数&gt;</c>，可输入种子、换一张、选人数（map-expand-25 D1：2 / 3 / 4）、选难度，点"开始"才建真正的对局、进入插旗。旧地图清单已删除。
 /// </summary>
 /// <remarks>
 /// <para>新局状态机在零引擎依赖的 <see cref="MapSelectModel"/> 里，它只产出地图标识；地图一律经三个入口共用的目录解析，这里不自带清单、不自行出图。</para>
 /// <para>预览不另写渲染：用候选地图建一个<b>尚未插旗</b>的会话，只为取它的默认棋盘视图模型交给 <see cref="BoardView.Build"/>（与开局插旗前的盘面同构）；
-/// 确认开局时按最终选择重新建局。一屏看不全的图切全局预览。背景是 5 块出生棋盘的占位轮廓（规格「界面背景 SHALL 显示 5 块出生棋盘的占位轮廓，MUST NOT 显示棋盘内部布局」）：
-/// 预览会话尚未插旗，按座位过滤后的默认棋盘没有任何格、只有 5 个占位，渲染层据此只画边框与编号（段 D-b，D18）。</para>
+/// 确认开局时按最终选择重新建局。一屏看不全的图切全局预览（map-expand-25 D9：浮空岛一屏看不全，初始取景即整岛）。背景是各块出生平台的占位轮廓（规格「界面背景 SHALL 显示出生棋盘的占位轮廓，MUST NOT 显示棋盘内部布局」）：
+/// 预览会话尚未插旗，按座位过滤后的默认棋盘没有任何格、只有各块占位，渲染层据此只画边框与编号（段 D-b，D18）。</para>
 /// <para>该阶段不接受落子、插旗、推屏与缩放：<c>_Process</c> 不走 <c>Drive</c> / 悬停 / 平移，<c>_UnhandledInput</c> 整体不处理，
 /// <c>_Input</c> 不认领相机键——否则 W A S D、空格、方向键进不了种子输入框。</para>
 /// </remarks>
@@ -40,7 +40,7 @@ public sealed partial class GameRoot
     private static ulong NewMapSeed() => LinkMapId.FriendlySeed((ulong)Stopwatch.GetTimestamp());
 
     /// <summary>
-    /// 进入新局界面并搭好第一张预览。<paramref name="preselect"/> 只来自 <c>--map-select --map=link:&lt;种子&gt;</c>（截图 / 自检），只作为预填种子；
+    /// 进入新局界面并搭好第一张预览。<paramref name="preselect"/> 只来自 <c>--map-select --map=link:&lt;种子&gt;:&lt;人数&gt;</c>（截图 / 自检），只作为预填种子与人数；
     /// 启动时解析失败与其他命令行错误同样处理（由 <c>_Ready</c> 报错退出）。
     /// </summary>
     private MatchSession BeginMapSelect(string? preselect)
@@ -48,7 +48,7 @@ public sealed partial class GameRoot
         _select = new MapSelectModel(NewMapSeed(), _difficulty);
         if (preselect is not null && !_select.TrySelectId(preselect))
         {
-            throw new System.FormatException($"--map-select 只能用完整的链接图标识预填种子（{LinkMapId.Prefix}:<地图种子>），{preselect} 不是：新局界面只有 {LinkMapId.Prefix}: 一种地图。");
+            throw new System.FormatException($"--map-select 只能用完整的链接图标识预填种子与人数（{LinkMapId.Prefix}:<地图种子>:<人数>），{preselect} 不是：新局界面只有 {LinkMapId.Prefix}: 一种地图。");
         }
 
         MatchSession preview = PreviewSession();
@@ -57,11 +57,11 @@ public sealed partial class GameRoot
         return preview;
     }
 
-    /// <summary>按视图模型当前的标识解析地图，建一个尚未插旗的会话供预览。</summary>
+    /// <summary>按视图模型当前的标识解析地图，建一个尚未插旗的会话供预览（人数 = 地图人数，map-expand-25 D1）。</summary>
     private MatchSession PreviewSession()
     {
         MapData map = MapCatalog.Resolve(_select!.CurrentId);
-        MatchSession preview = MatchSession.Create(map, _matchSeed, System.Math.Min(4, map.MaxPlayers), 1, AiDifficulty.Standard, _cellLimit);
+        MatchSession preview = MatchSession.Create(map, _matchSeed, map.MaxPlayers, 1, AiDifficulty.Standard, _cellLimit);
         _previewMap = map;
         return preview;
     }
@@ -71,6 +71,7 @@ public sealed partial class GameRoot
         _hud.MapSeedSubmitted += text => OnSelectionChanged(_select?.SubmitSeed(text));
         _hud.MapRerollPressed += () => OnSelectionChanged(_select?.Reroll(NewMapSeed()));
         _hud.MapStartPressed += StartMatch;
+        _hud.MapPlayersPicked += players => OnSelectionChanged(_select?.SelectPlayers(players));   // 人数是标识的一部分：变了即重解析、重搭预览
         _hud.MapDifficultyPicked += difficulty =>
         {
             _select?.SelectDifficulty(difficulty);
@@ -138,7 +139,7 @@ public sealed partial class GameRoot
 
     /// <summary>
     /// 无人值守自检（<c>--map-select --auto-demo</c>，规格 map-selection「强制进入新局界面的自检选项」）：每帧一步，把新局操作经与面板事件<b>同一组处理函数</b>走一遍——
-    /// 输入非法种子 → 输入合法种子 → 换一张 → 开始；随后照常自动演示。任何一步不符预期即以退出码 1 结束（否则新局 → 建局这条路径只有人工能验）。
+    /// 输入非法种子 → 输入合法种子 → 换一张 → 选 2 人 → 选 3 人 → 回到进入时的标识 → 开始；随后照常自动演示。任何一步不符预期即以退出码 1 结束（否则新局 → 建局这条路径只有人工能验）。
     /// </summary>
     private void SelfCheckMapSelect()
     {
@@ -148,8 +149,8 @@ public sealed partial class GameRoot
         string what;
         bool ok;
 
-        // 节点不泄漏：每步在上一帧的延迟释放落定之后读数。反复重搭预览之后，棋盘子树的节点数与游离节点数都应回到进入时的值（5 块出生棋盘的格数不随种子变，只随边长变——
-        // 开始那一步按"进入时的那张图"比，所以最后一步先把种子换回进入时的值再开始）。
+        // 节点不泄漏：每步在上一帧的延迟释放落定之后读数。反复重搭预览之后，棋盘子树的节点数与游离节点数都应回到进入时的值（平台块数与边长随种子与人数变——
+        // 开始那一步按"进入时的那张图"比，所以最后一步先把种子与人数换回进入时的值再开始）。
         // 第 0 步此刻还没刷新过（标注、信物标记等由 Refresh 搭），先刷一次，与后面各步"搭完并刷新过"的状态同口径。
         if (step == 0)
         {
@@ -174,20 +175,31 @@ public sealed partial class GameRoot
         {
             what = "输入种子 12345";
             OnSelectionChanged(model.SubmitSeed("12345"));
-            // 预览会话未插旗：按座位过滤后没有任何格，只有 5 个占位（D18：背景只画占位轮廓，不显示棋盘布局）。
+            // 预览会话未插旗：按座位过滤后没有任何格，只有各块占位（D18：背景只画占位轮廓，不显示棋盘布局；map-expand-25：块数 = 棋盘清单块数）。
             ok = model.MapSeed == 12345UL && model.Notice.Length == 0 && model.CurrentId == "link:12345:4" && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Placeholders.Length == 5 && _session.World.Board().Cells.IsEmpty;
+                && PlaceholdersOnly();
         }
         else if (step == 2)
         {
             what = "换一张";
             OnSelectionChanged(model.Reroll(NewMapSeed()));
             ok = model.CurrentId != before && model.MapSeed != 12345UL && _session.Match.Map.Id == model.CurrentId
-                && _session.World.Board().Placeholders.Length == 5 && _session.World.Board().Cells.IsEmpty;
+                && PlaceholdersOnly();
         }
-        else if (step == 3)
+        else if (step is 3 or 4)
         {
-            what = "回到进入时的种子";
+            // map-expand-25 D1：人数选项经与面板同一组处理函数（SelectPlayers → OnSelectionChanged）；标识带上人数、预览会话的人数 = 地图人数、种子不变。
+            int players = step == 3 ? 2 : 3;
+            ulong seedBefore = model.MapSeed;
+            what = $"选 {players} 人";
+            OnSelectionChanged(model.SelectPlayers(players));
+            ok = model.Players == players && model.MapSeed == seedBefore && model.CurrentId == LinkMapId.Format(seedBefore, players)
+                && _session.Match.Map.Id == model.CurrentId && _session.Match.Map.MaxPlayers == players && _session.Match.Players.Length == players
+                && PlaceholdersOnly();
+        }
+        else if (step == 5)
+        {
+            what = "回到进入时的标识（种子与人数）";
             ok = model.TrySelectId(_selectEntryId);
             OnSelectionChanged(model.CurrentId != before);
             ok &= model.CurrentId == _selectEntryId && _session.Match.Map.Id == _selectEntryId;
@@ -198,10 +210,12 @@ public sealed partial class GameRoot
             StartMatch();
             RefreshViews();
             // 插旗阶段的占位比新局界面的背景多一行主题名（link-map-terrain 6.1 / Q5：背景不带主题名）：建局后的节点数 = 进入时 + 主题名标注数，多出别的即是重搭泄漏。
+            // map-expand-25 D9：建局后保持全局预览（整岛一屏看全）——一屏看不全的图上预览开着，看得全的图上没有预览。
             int themeLabels = _session.World.Board().Placeholders.Count(p => !p.Expanded && p.ThemeName is not null);
             int afterStart = CountNodes(_board);
-            what += $"，建局后棋盘节点 {afterStart} = 进入时 + 主题名 {themeLabels}";
-            ok = !Selecting && _session.AwaitingZone && _session.Match.Map.Id == _selectEntryId && !_board.Rig.IsOverview && !_hud.MapSelectOpen
+            what += $"，建局后棋盘节点 {afterStart} = 进入时 + 主题名 {themeLabels}，全局预览 {(_board.Rig.IsOverview ? "开" : "关")}";
+            ok = !Selecting && _session.AwaitingZone && _session.Match.Map.Id == _selectEntryId && _board.Rig.IsOverview == _board.Rig.OverviewAvailable && !_hud.MapSelectOpen
+                && _session.Match.Players.Length == _session.Match.Map.MaxPlayers
                 && boardNodes == _selectEntryBoardNodes && orphans == _selectEntryOrphans && afterStart == _selectEntryBoardNodes + themeLabels;
         }
 
@@ -213,6 +227,13 @@ public sealed partial class GameRoot
             SetProcess(false);
             GetTree().Quit(1);
         }
+    }
+
+    /// <summary>预览会话（未插旗）的按座位棋盘：没有任何格，占位块数 = 地图棋盘清单块数（浮空岛 6–12 块）。</summary>
+    private bool PlaceholdersOnly()
+    {
+        DefaultBoardView board = _session.World.Board();
+        return board.Cells.IsEmpty && board.Placeholders.Length > 0 && board.Placeholders.Length == _session.Match.Map.Boards.Length;
     }
 
     private static int CountNodes(Node node)
@@ -230,7 +251,7 @@ public sealed partial class GameRoot
     private string PreviewInfo() => MapPreviewInfo.Of(_session.World.Board());
 
     /// <summary>
-    /// 点"开始"：按视图模型确认的标识建真正的对局，进入插旗；相机退出全局预览回到平时的初始位姿。
+    /// 点"开始"：按视图模型确认的标识建真正的对局（人数 = 地图人数），进入插旗；相机保持全局预览（map-expand-25 D9：整座岛一屏看全，锁定后开局对准自己的平台时退出预览）。
     /// </summary>
     private void StartMatch()
     {
@@ -246,15 +267,11 @@ public sealed partial class GameRoot
         }
 
         _difficulty = _select.Difficulty;
-        _session = MatchSession.Create(_previewMap, _matchSeed, System.Math.Min(4, _previewMap.MaxPlayers), 1, _difficulty, _cellLimit);
+        _session = MatchSession.Create(_previewMap, _matchSeed, _previewMap.MaxPlayers, 1, _difficulty, _cellLimit);
         _select = null;
         BeginSupply(_previewMap);   // 带入带出开启时：新局之后、插旗之前进补给阶段（本会话留作未插旗的预览，确认后按所选带入重建）
         _board.Build(_session.World.Board(), _session.ZoneOwners);
-        if (_board.Rig.IsOverview)
-        {
-            _board.Rig.ToggleOverview();
-        }
-
+        EnterOverviewForPlanting();
         ApplyCamera("新局确认");
         _hud.HideMapSelect();
         _hud.CameraHintVisible = !_board.Rig.FitsOneScreen;
