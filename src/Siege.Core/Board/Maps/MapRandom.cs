@@ -16,7 +16,7 @@ namespace Siege.Core.Board.Maps;
 internal static class MapRandom
 {
     /// <summary>
-    /// 链接档初始布局（map-expand-25 D2–D5：平台落位、主题地形、坡道、河道、岛缘、信物）的随机源：由地图种子与人数共同决定（D8：同种子不同人数是不同的图），
+    /// 链接档初始布局（map-expand-25 D2–D4：平台落位、主题地形、坡道、河道、岛缘；D5 / 段 A3 起不放静态信物格，不为信物消费随机）的随机源：由地图种子与人数共同决定（D8：同种子不同人数是不同的图），
     /// 用独立的域常量，与已删除的旧生成器随机源的任何取值都不同构。
     /// </summary>
     internal static RandomStream ForLinkLayout(ulong mapSeed, int players) => Create("map-link", mapSeed, players, LinkLayoutDomain);

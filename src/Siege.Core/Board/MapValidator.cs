@@ -642,7 +642,7 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 校验规则第 5 条：可落子格总数必须落在该人数的预算区间内（4 人 95–110，terrain-model 裁决 D18）。
+    /// 校验规则第 5 条：可落子格总数必须落在该人数的预算区间内（区间见声明表的按人数预算行；terrain-model 裁决 D18 引入）。
     /// 单列成一步而不是混在信物 / 出生区预算里——改图时越界是最容易发生、又最难在对局中归因的一类错误
     /// （表现为"密度不对、冲突时点漂移"，而不是任何一条规则报错）。denser-map 裁决 5。
     /// </summary>
@@ -674,8 +674,8 @@ public static class MapValidator
             return;
         }
 
-        // 规则第 4 条：出生区数在区间外即报区间与方向（链接档恰 5 个）。
-        // retire-legacy-maps 4b.2（L19）：区间退化成"恰等于人数"时的 BIRTH_ZONE_COUNT_MISMATCH 报文只属于已删除的标准档，链接档（5 区对 4 人）走不到，分支删除。
+        // 规则第 4 条：出生区数在区间外即报区间与方向（map-expand-25：出生区数 = 平台数，2 / 3 / 4 人 6–8 / 8–10 / 10–12）。
+        // retire-legacy-maps 4b.2（L19）：区间退化成"恰等于人数"时的 BIRTH_ZONE_COUNT_MISMATCH 报文只属于已删除的标准档，链接档（出生区数恒多于人数）走不到，分支删除。
         int zones = map.BirthZones.Length;
         (int minZones, int maxZones) = budget.BirthZones;
         if (zones < minZones || zones > maxZones)
@@ -717,7 +717,7 @@ public static class MapValidator
                     ImmutableArray<Coord>.Empty));
             }
 
-            // 出生区内可以有障碍或深水，但不得把该区压到区间之外（denser-map：4 人图每区 12–14 格）。
+            // 出生区内可以有障碍或深水，但不得把该区压到区间之外（denser-map 引入；map-expand-25：出生区即平台核心区，恰 9 格）。
             if (budget?.BirthZoneCells is { } range
                 && (playable < range.Min || playable > range.Max))
             {

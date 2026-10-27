@@ -115,7 +115,7 @@ public sealed partial class GameRoot : Node3D
         _bindings.Install();
 
         // 命令行：先把全部选项读完，再结算未知选项（LaunchArgs：合法选项集合 = 读取过的名字，没有第二张表）。
-        // --map=link:<地图种子>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5；board-link-mode 实现裁决 D7：只接受 link:，旧标识由 MapCatalog.Resolve 报错、退出码 1）。
+        // --map=link:<地图种子>:<人数>：与批量 / 终端版共用 Core 的 MapCatalog（frontier-map D5；board-link-mode 实现裁决 D7：只接受 link:，旧标识由 MapCatalog.Resolve 报错、退出码 1）。
         // 未给时有人值守进新局界面、无人值守取 link:1:4（MapCatalog.DefaultId）；选项拼错、值解析不了、地图解析不了或校验不过，都在建局之前报错退出，MUST NOT 静默回落到缺省值。
         ulong seed;
         int rounds;
@@ -133,7 +133,8 @@ public sealed partial class GameRoot : Node3D
             // --shot-board=<棋盘清单下标>：截图前把相机对准棋盘清单里的第几块棋盘（board-map 3.4：给负责人看一块棋盘的近景，仅截图用）。
             // 须与 --screenshot= 同用；下标越界报错退出。棋盘的外接矩形取自视图模型的棋盘清单。
             _shotBoard = args.Value<int>("shot-board", "棋盘清单下标（非负整数，截图时对准该棋盘）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
-            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生平台编号（1–平台数，浮空岛至多 12 块）", t => int.TryParse(t, out int v) && v is >= 1 and <= 12 ? v : null) ?? 1;
+            // 上界随地图（map-expand-25：平台数随人数与种子变），这里只拦非正整数；建局之后按本图的棋盘清单块数再查（见下方 --zone 越界检查）。
+            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生平台编号（正整数，1–本图平台数）", t => int.TryParse(t, out int v) && v >= 1 ? v : null) ?? 1;
 
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
@@ -181,7 +182,7 @@ public sealed partial class GameRoot : Node3D
 
             // --cell-limit=K：AI 候选格上限（0 = 不限制）；未给出由 Core 按地图的可落子格数取缺省值。
             int? cellLimit = args.Value<int>("cell-limit", "非负整数（AI 候选格上限，0 = 不限制）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
-            string? mapId = args.Text("map", "地图标识（link:<地图种子>）");
+            string? mapId = args.Text("map", "地图标识（link:<地图种子>:<人数>）");
             ReadScreenshotArg(args.Text("screenshot", "截图路径[:第几帧]"));
 
             // --profile=<档案路径> / --no-carry / --carry-preview=：带入带出（carry-in-out D10，见 GameRoot.Carry）。自动化模式一律关闭、不读写档案。
@@ -312,7 +313,7 @@ public sealed partial class GameRoot : Node3D
                 GD.Print($"[siege] 随机取了一个地图种子：本次地图为 {mapId}（用 --map={mapId} 可重开同一张图）");
             }
 
-            // 新局界面（board-link-mode D8）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图 link:1、跳过新局界面（既有自检命令不变）。
+            // 新局界面（board-link-mode D8）：未给 --map= 且非无人值守才进入；无人值守未给 --map= 时取缺省图 link:1:4、跳过新局界面（既有自检命令不变）。
             if (mapSelect || (mapId is null && !Unattended && !RevealPreviewing))
             {
                 _session = BeginMapSelect(mapId);
@@ -322,6 +323,14 @@ public sealed partial class GameRoot : Node3D
                 MapData map = MapCatalog.Resolve(mapId);
                 _session = MatchSession.Create(map, seed, map.MaxPlayers, 1, _difficulty, cellLimit);
                 BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
+            }
+
+            // --zone= 越界：按本图棋盘清单块数校验，与其他选项的错值同样在开局之前报错、退出码 1（原写死的上限 5 / 12 不随地图变，越界要到锁定时才抛）。
+            // 选图界面路径上 _session 是进入时那张图的预览；自检（SelfCheckMapSelect）开始之前换回进入时的标识，锁定时用的正是这张图。
+            int plates = _session.Match.Map.Boards.Length;
+            if (_autoZone > plates)
+            {
+                throw new System.FormatException($"--zone={_autoZone} 越界：地图 {_session.Match.Map.Id} 的出生平台共 {plates} 块，应为 1–{plates}。");
             }
         }
         catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException or MapGenerationException)
@@ -521,7 +530,6 @@ public sealed partial class GameRoot : Node3D
         _dirty = true;
     }
 
-    /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。</summary>
     /// <summary>
     /// 插旗阶段的初始取景（map-expand-25 D9）：浮空岛（40 + 4 = 44 格见方）在平时的最远缩放下一屏看不全，切全局预览让整座岛（各块平台的占位）一屏可见；
     /// 一屏看得全的图 <see cref="BoardCamera.ToggleOverview"/> 不起作用。拉近即退出预览、照常缩放与平移；锁定后开局对准自己的平台时也退出预览。
@@ -534,6 +542,7 @@ public sealed partial class GameRoot : Node3D
         }
     }
 
+    /// <summary>全局预览开关（按钮与 M 键同一入口）：位姿计算全在视图模型里，这里只转发并刷新按钮状态。</summary>
     private void ToggleOverview()
     {
         _follow.ManualInput(opponentActing: !_session.IsMyTurn);

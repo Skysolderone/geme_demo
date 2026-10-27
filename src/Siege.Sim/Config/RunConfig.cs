@@ -232,9 +232,17 @@ public sealed record RunConfig
     public ulong SeedAt(int index) => checked(SeedStart + (ulong)index);
 
     /// <summary>第 <paramref name="index"/> 局的地图标识：每局换图时为 <c>link:&lt;起始 + index&gt;:&lt;人数&gt;</c>（规范化，人数取起始标识的人数），否则恒为 <see cref="MapId"/>。</summary>
-    public string MapIdAt(int index) =>
+    public string MapIdAt(int index)
+    {
+        if (!MapPerMatch)
+        {
+            return MapId;
+        }
+
         // 链接图每局换图（simulation-harness「每局换图的批次」）：第 i 局用 link:<起始 + i>:<人数>（map-expand-25 D1：人数不变）。
-        MapPerMatch ? LinkMapId.Format(checked(LinkMapId.Parse(MapId).Seed + (ulong)index), LinkMapId.Parse(MapId).Players) : MapId;
+        (ulong start, int players) = LinkMapId.Parse(MapId);
+        return LinkMapId.Format(checked(start + (ulong)index), players);
+    }
 
     /// <summary>玩家编号列表。</summary>
     public PlayerId[] PlayerIds() => [.. Enumerable.Range(0, Players.Count).Select(i => new PlayerId(i))];

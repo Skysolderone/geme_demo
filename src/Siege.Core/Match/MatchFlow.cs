@@ -833,7 +833,7 @@ public sealed partial class MatchFlow
 
         if (!LinkMapId.IsLinkMap(map.Id))
         {
-            throw new ArgumentException($"链接模式只能配链接图（link:<地图种子>），地图 {map.Id} 不是。", nameof(map));
+            throw new ArgumentException($"链接模式只能配链接图（link:<地图种子>:<人数>），地图 {map.Id} 不是。", nameof(map));
         }
     }
 

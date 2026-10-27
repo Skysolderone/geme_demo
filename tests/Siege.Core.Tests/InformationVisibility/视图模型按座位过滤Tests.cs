@@ -11,7 +11,7 @@ namespace Siege.Core.Tests.InformationVisibility;
 /// <summary>
 /// information-visibility「始终公开的信息」（open-map：锁定后全图可见）在表现层的镜像（board-link-mode 段 D-b，tasks 4.2 / 4.3 → open-map 1.4）：
 /// 观察者世界（<see cref="ViewerWorld"/>）带本座位的 <see cref="SeatPublicView"/>，默认棋盘 <see cref="ViewerWorld.Board"/> 与信息层 <see cref="ViewerWorld.Layer"/>
-/// 含本座位所在战场（= 全图）的格；插旗阶段 5 块只是占位（编号 + 外接矩形），锁定后全部展开。
+/// 含本座位所在战场（= 全图）的格；插旗阶段各块平台只是占位（编号 + 外接矩形），锁定后全部展开。
 /// 规格：match-setup「开局信息公开范围」「匿名同时插旗」；visual-style-baseline「未展开区域的可视表现」（视图模型部分）。
 /// </summary>
 /// <remarks>
@@ -59,7 +59,7 @@ public class 视图模型按座位过滤Tests
     public void 锁定后全图可见_全部占位展开()
     {
         // map-expand-25 段 A2：原名「锁定后全图可见_五块占位全部展开」，块数随平台数。
-        // open-map 裁决 O4（visual-style-baseline「锁定后全图展开」）：P0 在棋盘 1（索引 0），锁定后 5 块棋盘全部展开、视图含全图的格（原「构筑期只见自己的棋盘」反向）。
+        // open-map 裁决 O4（visual-style-baseline「锁定后全图展开」）：P0 在棋盘 1（索引 0），锁定后全部平台展开、视图含全图的格（原「构筑期只见自己的棋盘」反向）。
         MatchFlow match = Started([0, 1, 3, 4]);
         ViewerWorld world = match.World(P0);
         DefaultBoardView board = world.Board();
@@ -88,7 +88,7 @@ public class 视图模型按座位过滤Tests
     [Fact]
     public void 序列化含全部出生棋盘的坐标()
     {
-        // information-visibility（open-map）的表现层镜像：按座位的默认棋盘序列化后含全部 5 块棋盘的坐标，与全知棋盘相同（原「不含其他出生棋盘的任何坐标」反向）。
+        // information-visibility（open-map）的表现层镜像：按座位的默认棋盘序列化后含全部平台的坐标，与全知棋盘相同（原「不含其他出生棋盘的任何坐标」反向）。
         // Coord 序列化为 {X,Y} 对象，这里按围棋记法投影后再序列化，便于按坐标文本断言。
         MatchFlow match = Started([0, 1, 3, 4]);
         string seat = JsonSerializer.Serialize(match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()), Json);

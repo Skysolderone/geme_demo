@@ -48,8 +48,8 @@ public class 按座位视图Tests
     public void 本战场棋盘内的岩石与未架桥深水可见()
     {
         // G1（负责人 2026-10-14 裁决 A，tasks 2.6）：战斗阶段按座位可见的格 = 本战场所含各棋盘外接矩形内的全部格，包括岩石与未架桥深水
-        // （否则河流与岩石在视图里成了空缺）；open-map：本战场 = 全图，5 块都在。Core 视图与表现层的按座位过滤一致。
-        // 载体：从 link:1 起找第一张"河流主题棋盘里同时有岩石与未架桥深水"的图（link:1 的河流棋盘是 6×8，按面积缩放不放岩石）。
+        // （否则河流与岩石在视图里成了空缺）；open-map：本战场 = 全图，全部平台都在。Core 视图与表现层的按座位过滤一致。
+        // 载体：从 link:1:4 起找第一张"河流主题棋盘里同时有岩石与未架桥深水"的图（只在每张图的前 5 块平台里找）。
         (MapData map, int zone) = Enumerable.Range(1, 200).Select(s => LinkMapGenerator.Generate((ulong)s, 4))
             .SelectMany(m => Enumerable.Range(0, 5).Select(z => (Map: m, Zone: z)))
             .First(t => t.Map.Boards[t.Zone].Theme == BoardTheme.River && t.Map.Boards[t.Zone].Cells().Any(c => t.Map.Obstacles.Contains(c)));
@@ -75,7 +75,7 @@ public class 按座位视图Tests
         // map-expand-25 段 A2：浮空岛有 10–12 块平台，原"5 块里除自己外的 4 块"改为全部其他平台。
         Assert.All(Enumerable.Range(0, map.Boards.Length).Where(z => z != zone), z => Assert.All(map.BirthBoard(z).Cells(), c => Assert.NotNull(a.CellAt(c))));
 
-        // 表现层按座位过滤与 Core 视图同一组格；5 块棋盘都整块可见，棋盘清单 5 块都留。
+        // 表现层按座位过滤与 Core 视图同一组格；全部平台都整块可见，棋盘清单全部保留。
         DefaultBoardView view = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(a, zone);
         Assert.Equal(a.Cells.Select(c => Coord.Parse(c.Coord)).Order(), view.Cells.Select(c => c.Coord).Order());
         Assert.Equal(map.Boards.AsEnumerable(), view.Boards.AsEnumerable());

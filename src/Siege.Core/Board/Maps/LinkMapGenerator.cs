@@ -50,10 +50,7 @@ public static partial class LinkMapGenerator
     public const int MinRamps = 2;
     public const int MaxRamps = 3;
 
-    /// <summary>每条河道的预置桥数（D4）。</summary>
-    public const int BridgesPerRiver = 2;
-
-    /// <summary>河道最短格数：去掉两端后至少 4 格，总能放下两座不相邻的桥。</summary>
+    /// <summary>河道最短格数：去掉两端后至少 4 格，总能放下两座不相邻的桥（D4：每条河道恰 2 座预置桥，见 <see cref="TryLowland"/>）。</summary>
     internal const int MinRiverLength = 6;
 
     /// <summary>整张布局（平台落位 → 主题地形 → 坡道）在同一条流上的最多重抽次数（D2）；超出即 <see cref="MapGenerationException"/>。</summary>

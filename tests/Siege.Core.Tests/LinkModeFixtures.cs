@@ -26,7 +26,7 @@ internal static class LinkModeFixtures
     internal static readonly PlayerId P3 = TestMaps.P3;
     internal static readonly PlayerId[] All = TestMaps.All;
 
-    /// <summary><c>link:1</c> 的初始图（5 块紧贴成一张连通地图的出生棋盘）。</summary>
+    /// <summary><see cref="MapId"/>（<c>link:1:4</c>）的初始图：4 人浮空岛，10 块出生平台（map-expand-25；原为 <c>link:1</c> 的 5 块紧贴出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
 
     /// <summary>

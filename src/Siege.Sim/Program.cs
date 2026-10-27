@@ -27,7 +27,7 @@ public static class Program
     internal const int DefaultPlayers = 4;
 
     /// <summary>
-    /// 玩家入口的地图门（board-link-mode 实现裁决 C1）：<c>run</c> / <c>play</c> 只接受链接图 <c>link:&lt;地图种子&gt;</c>。旧标识族（内置图、<c>gen:</c>、<c>board:</c>、
+    /// 玩家入口的地图门（board-link-mode 实现裁决 C1）：<c>run</c> / <c>play</c> / <c>map</c> 只接受链接图 <c>link:&lt;地图种子&gt;:&lt;人数&gt;</c>（裸 <c>link</c> 由入口取种子）。旧标识族（内置图、<c>gen:</c>、<c>board:</c>、
     /// 地图文件路径）与解析不了的标识一律报错并说明，MUST NOT 静默回落到缺省地图。判定只看标识前缀（<see cref="LinkMapId.IsLinkMap"/>），
     /// 格式错误的 <c>link:</c> 标识由随后的解析报出。段 D（实现裁决 D7）起 <see cref="MapCatalog.Resolve"/> 自身也只接受 <c>link:</c>，本门只是让入口先于解析给出更贴切的文案。
     /// </summary>
@@ -223,7 +223,7 @@ public static class Program
     // ---------- map ----------
 
     /// <summary>
-    /// 地图工具：打印一张链接图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、连通分量数、校验结果与报告项）。<c>--map</c> 只接受 <c>link:</c>、缺省 <c>link:1</c>；
+    /// 地图工具：打印一张链接图（高度 / 地表 / 桥 / 栅栏 / 信物 / 出生区与距离表、连通分量数、校验结果与报告项）。<c>--map</c> 只接受 <c>link:</c>、缺省 <c>link:1:&lt;人数&gt;</c>（<c>--players</c> 也没给即 <c>link:1:4</c>，见 <see cref="ResolveLinkRequest"/>）；
     /// <c>--out</c> 把这张图另存为指定文件。open-map：<c>--links</c>（模拟链接序列）随拼接删除。retire-legacy-maps：旧标识族（内置图、<c>gen:</c>、<c>board:</c>、地图文件路径）与内置图的
     /// 权威文件导出（<c>maps/</c>）随旧地图删除，旧标识与其他入口一样经目录报错。
     /// </summary>

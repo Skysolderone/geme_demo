@@ -122,7 +122,7 @@ public sealed class MatchSession
     public ImmutableArray<Placement> Staged => Match.CurrentBatch?.Placements ?? [];
 
     /// <summary>
-    /// 开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（链接图 <c>link:&lt;地图种子&gt;</c>），本机玩家坐第 <paramref name="seat"/> 位（1 起）。
+    /// 开一局：地图由入口经 <see cref="MapCatalog"/> 解析后传入（链接图 <c>link:&lt;地图种子&gt;:&lt;人数&gt;</c>，对局人数 = 地图人数），本机玩家坐第 <paramref name="seat"/> 位（1 起）。
     /// 一律以链接模式建局（board-link-mode 实现裁决 B1 / D7；retire-legacy-maps 3.6：建局分叉删除，公开 <c>MatchFlow.Create</c> 恒为链接模式）。
     /// <paramref name="carryInOut"/> 为真即开启带入带出（carry-in-out D10）：本机玩家带 <paramref name="carry"/>（可为空），
     /// 各 AI 按"与本机玩家同等数量"从 <c>carry-ai</c> 子流抽取（<see cref="CarryAi.ForHumanMatch"/>，与终端版同一实现）。关闭时对局选项与引入之前相同。

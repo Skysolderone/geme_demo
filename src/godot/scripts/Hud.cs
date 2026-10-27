@@ -812,7 +812,7 @@ public sealed partial class Hud : CanvasLayer
             Ui.Anchor(_centerPanel, 0f, 0f, 14f, 160f, 392f, CameraHintVisible ? 450f : 400f);
             _centerBody.AddChild(Ui.Heading("开局盲选出生棋盘"));
             _centerBody.AddChild(Ui.Text("点选任意一块占位平台，旗即锁定。\n全员锁定后整座浮空岛展开，地图可见。\n其他玩家的旗不可见，可能与你同区。", Ui.InfoText, wrap: true));
-            _centerBody.AddChild(Ui.Text("前三个大回合限在出生区落子、改造；\n第四回合起可在全图行动。\n四人整轮 Pass、地图填满，\n或只剩一人时终局。", Ui.MutedText, wrap: true));
+            _centerBody.AddChild(Ui.Text("前三个大回合限在出生区落子、改造；\n第四回合起可在全图行动。\n全员整轮 Pass、地图填满，\n或只剩一人时终局。", Ui.MutedText, wrap: true));
             if (CameraHintVisible)
             {
                 _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));
