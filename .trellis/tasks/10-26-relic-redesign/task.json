@@ -12,7 +12,7 @@
   "assignee": "rubioc",
   "createdAt": "2026-10-26",
   "completedAt": null,
-  "branch": null,
+  "branch": "feat/relic-redesign",
   "base_branch": "main",
   "worktree_path": null,
   "commit": null,
