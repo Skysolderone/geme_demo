@@ -63,25 +63,6 @@ public class 带入清单校验Tests
     public void 不带入总是合规()
     {
         Assert.Null(RelicLoadout.Empty.RefusalAgainst(RelicProfile.Empty));
-        Assert.Empty(RelicLoadout.Empty.ToTokens(TestMaps.P0, firstId: 0));
-    }
-
-    [Fact]
-    public void 清单按次序变成本局信物()
-    {
-        RelicLoadout loadout = Loadout((RelicKind.Banner, true), (RelicKind.WarDrum, false));
-
-        ImmutableArray<RelicToken> tokens = loadout.ToTokens(TestMaps.P2, firstId: 7);
-
-        Assert.Equal([RelicToken.Carried(7, RelicKind.Banner, TestMaps.P2, insured: true), RelicToken.Carried(8, RelicKind.WarDrum, TestMaps.P2, insured: false)], tokens);
-    }
-
-    [Fact]
-    public void 不合规清单不能变成本局信物()
-    {
-        RelicLoadout loadout = Loadout((RelicKind.WarDrum, true), (RelicKind.Command, true), (RelicKind.Watchtower, true));
-
-        Assert.Throws<InvalidOperationException>(() => loadout.ToTokens(TestMaps.P0, firstId: 0));
     }
 
     [Fact]

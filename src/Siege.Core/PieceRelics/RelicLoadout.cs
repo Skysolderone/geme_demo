@@ -84,28 +84,6 @@ public sealed record RelicLoadout(ImmutableArray<CarriedRelic> Items)
         return null;
     }
 
-    /// <summary>
-    /// 对局创建时把清单变成本局的信物（design.md D1）：按清单次序分配编号 <paramref name="firstId"/>、<paramref name="firstId"/> + 1……，带入者为 <paramref name="origin"/>。
-    /// 这些信物在挂出之前不在盘面上。清单不合规（<see cref="ShapeRefusal"/>）即抛 <see cref="InvalidOperationException"/>。
-    /// </summary>
-    public ImmutableArray<RelicToken> ToTokens(PlayerId origin, int firstId)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(firstId);
-        if (ShapeRefusal() is { } refusal)
-        {
-            throw new InvalidOperationException($"带入清单不合规：{refusal}。");
-        }
-
-        ImmutableArray<RelicToken>.Builder tokens = ImmutableArray.CreateBuilder<RelicToken>(Count);
-        int id = firstId;
-        foreach (CarriedRelic item in Items)
-        {
-            tokens.Add(RelicToken.Carried(id++, item.Kind, origin, item.Insured));
-        }
-
-        return tokens.MoveToImmutable();
-    }
-
     /// <summary>值相等：逐项比较（<see cref="ImmutableArray{T}"/> 默认是引用相等）。</summary>
     public bool Equals(RelicLoadout? other) =>
         other is not null && (Items.IsDefault ? other.Items.IsDefault : !other.Items.IsDefault && Items.SequenceEqual(other.Items));

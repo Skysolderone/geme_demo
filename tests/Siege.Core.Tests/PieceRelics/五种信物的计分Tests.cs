@@ -200,14 +200,13 @@ public class 五种信物的计分Tests
     {
         // AC4：带入清单里的信物在挂出之前不在盘面上，只经盘面信物层读取的计分看不到它们。
         GameBoard board = TestMaps.Blank(size: 9).Place("B2", TestMaps.P0).Place("C2", TestMaps.P0);
-        var loadout = new RelicLoadout([new(RelicKind.WarDrum, true), new(RelicKind.Banner, false), new(RelicKind.Command, false)]);
-        System.Collections.Immutable.ImmutableArray<RelicToken> tokens = loadout.ToTokens(TestMaps.P0, firstId: 0);
+        RelicToken carried = RelicToken.Carried(0, RelicKind.WarDrum, TestMaps.P0, insured: true);   // R40：带入件在挂出时才编号，这里模拟挂出那一刻
         System.Numerics.BigInteger before = OnlyGroup(board, TestMaps.P0).Power;
 
         Assert.Equal(2, before);
         Assert.False(board.HasRelics);
 
-        board.AttachRelic(TestMaps.At("B2"), tokens[0]);
+        board.AttachRelic(TestMaps.At("B2"), carried);
         Assert.Equal(5, OnlyGroup(board, TestMaps.P0).Power);
     }
 
