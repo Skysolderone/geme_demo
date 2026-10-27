@@ -46,7 +46,7 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 玩家 SHALL 可以主动弃赛并继续观战。弃赛 SHALL 立即使该玩家失去本局胜利资格，并 MUST NOT 再获得小回合、征募与先手效果。
 
-弃赛者已有的棋子与棋串 MUST NOT 消失，SHALL 继续产生覆盖、制造争议、占据与控制信物、产生势力，并 SHALL 可以被其他玩家围杀。
+弃赛者已有的棋子与棋串 MUST NOT 消失，SHALL 继续产生覆盖、制造争议、持有挂在其上的信物、产生势力，并 SHALL 可以被其他玩家围杀。弃赛者未挂出的非保险带入件 SHALL 立即掉到地图（`relic-spawn`）。
 
 弃赛者遗留的两眼活棋 MAY 永久留在棋盘上成为地形压力。
 
@@ -56,7 +56,7 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 #### Scenario: 弃赛后停止行动
 - **WHEN** 玩家 D 在第 6 大回合主动弃赛
-- **THEN** 第 7 大回合起 D 不再获得小回合、不再征募、其先锋信物不再提供先手修正
+- **THEN** 第 7 大回合起 D 不再获得小回合、不再征募
 
 #### Scenario: 保护期内允许弃赛
 - **WHEN** 玩家在第 2 大回合主动弃赛
@@ -90,7 +90,7 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 
 最终名次 SHALL 按下列顺序排列：
 
-1. 最后战场结算的胜者第 1；该战场内其他玩家按结算势力依次排名，势力相同时依次比较：控制中的信物数量 → 独占空格数 → 盘面棋子数；仍完全相同则共享同一名次。
+1. 最后战场结算的胜者第 1；该战场内其他玩家按结算势力依次排名，势力相同时依次比较：持有信物数（挂在该玩家棋子上的件数，relic-redesign 裁决 R24）→ 独占空格数 → 盘面棋子数；仍完全相同则共享同一名次。
 2. 更早出局者按出局先后倒序排列（越晚出局名次越高）。同一次战场结算中出局的多名落败者按上述势力与判定链排序，MUST NOT 共享名次（除判定链全部相同）；同一次结算中因势力归零同时出局者共享同一名次。同一大回合结束时多个战场同时结算的，各战场落败者合并后按同一判定链跨战场统一排序（裁决 S7）。
 3. 弃赛者 SHALL 排在所有正常完赛与出局玩家之后；多名弃赛者按各自弃赛时的势力值排序。
 
@@ -99,15 +99,15 @@ TBD - created by archiving change add-match-flow. Update Purpose after archive.
 - **THEN** 名次为 A、C、D、B
 
 #### Scenario: 同一战场多名落败者按势力排
-- **WHEN** 三人战场结算，落败者 B 势力 55、C 势力 55，B 控制信物 2 枚、C 控制 1 枚
+- **WHEN** 三人战场结算，落败者 B 势力 55、C 势力 55，B 的棋子上挂着 2 件信物、C 的棋子上挂着 1 件
 - **THEN** B 的名次高于 C
 
 #### Scenario: 信物相同比独占空格数
-- **WHEN** 两名玩家势力值均为 60、控制信物数量均为 2，独占空格数分别为 14 与 9
+- **WHEN** 两名玩家势力值均为 60、持有信物数均为 2，独占空格数分别为 14 与 9
 - **THEN** 独占空格数 14 的玩家名次更高
 
 #### Scenario: 逐级比较到棋子数
-- **WHEN** 两名玩家势力值、信物数量与独占空格数均相同，盘面棋子数分别为 11 与 8
+- **WHEN** 两名玩家势力值、持有信物数与独占空格数均相同，盘面棋子数分别为 11 与 8
 - **THEN** 盘面棋子数 11 的玩家名次更高
 
 ### Requirement: 两类终局条件

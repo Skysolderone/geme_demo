@@ -223,6 +223,36 @@ public sealed class MatchSession
         return CarrySettled;
     }
 
+    /// <summary>本机尚未挂出的带入件（私有，R22：按座位视图的 <see cref="SeatPublicView.OwnCarried"/>，别人的清单取不到）；不带入、关闭带入带出或插旗阶段为空。</summary>
+    public ImmutableArray<SeatCarriedView> PendingCarried => World.Seat?.OwnCarried ?? [];
+
+    /// <summary>
+    /// 部署阶段（R14）：把 <paramref name="coord"/> 上的暂放改为挂带入清单第 <paramref name="index"/> 件（<c>null</c> = 不挂）。
+    /// 合法性一律由 Core 回答（<see cref="StagedBatch.Attach"/>：下标须是本人未挂出的件、同一件不挂两次、落点有地图信物不能再挂）；被拒时暂放不变，原因进 <see cref="LastFailure"/> / <see cref="Notice"/>。
+    /// 该格没有暂放时什么也不做、返回 <c>false</c>。
+    /// </summary>
+    public bool AttachCarried(Coord coord, int? index)
+    {
+        if (!IsMyTurn || Match.Stage != TurnStage.Deploy || Match.CurrentBatch is not { } batch || !batch.Placements.Any(p => p.Coord == coord))
+        {
+            return false;
+        }
+
+        BatchFailure? failure = batch.Attach(coord, index);
+        LastFailure = failure is null ? null : FailurePresentation.From(failure);
+        Notice = failure is null
+            ? (index is { } i ? $"{coord.ToNotation()} 挂上带入清单第 {i + 1} 件（确认后公开）" : $"{coord.ToNotation()} 不挂信物")
+            : LastFailure!.Detail;
+        Rebuild();
+        return failure is null;
+    }
+
+    /// <summary>
+    /// 终局每件信物的去向（D6，<see cref="MatchFlow.SettleCarried"/> 只读、不改对局、不写档案——档案写入只在 <see cref="SettleCarryIfDue"/> / <see cref="Resign"/>）。
+    /// 未终局或带入带出关闭为 <c>null</c>（未终局调用 Core 会抛，这里先守门）。
+    /// </summary>
+    public RelicMatchSettlement? FinalDestinations() => IsOver && Match.CarryInOut ? Match.SettleCarried() : null;
+
     /// <summary>
     /// 某格落在哪块出生棋盘上（插旗时点占位选棋盘）；不在任何出生棋盘内为 <c>null</c>。取整块棋盘（棋盘清单），
     /// 不取出生区——链接档的出生区是核心区，点在核心区之外的棋盘格上也要选中这块（link-map-terrain D1）。

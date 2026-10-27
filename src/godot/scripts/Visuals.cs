@@ -120,11 +120,11 @@ public static class Visuals
     /// <summary>插旗阶段的出生区提示色（尚无归属时统一高亮）。</summary>
     public static readonly Color BirthHint = ToColor(BoardPlatePalette.BirthHint);   // board-link-mode D-b：唯一来源在 Presentation 调色板
 
-    /// <summary>未知信物标记。</summary>
-    public static readonly Color RelicUnknown = Color.Color8(234, 189, 93);
+    /// <summary>信物预告标记（relic-redesign R11：下一批的落位格，尚不可拾取）。</summary>
+    public static readonly Color RelicForecast = Color.Color8(234, 189, 93);
 
-    /// <summary>已揭示信物标记。</summary>
-    public static readonly Color RelicRevealed = Color.Color8(111, 224, 202);
+    /// <summary>地图信物 / 持物棋子的信物标记、拾取闪光与"将拾取"徽记。</summary>
+    public static readonly Color RelicMark = Color.Color8(111, 224, 202);
 
     /// <summary>光标。</summary>
     public static readonly Color Cursor = Color.Color8(255, 246, 210);

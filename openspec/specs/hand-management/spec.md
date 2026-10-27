@@ -5,17 +5,13 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 ## Requirements
 ### Requirement: 手牌类型槽
 
-系统 SHALL 以"类型槽"组织手牌：默认 5 个槽位（兵站信物 +1），每个槽位对应一种棋子类型，同一类型的棋子数量 MUST 无限叠加而只占用 1 个槽位。
+系统 SHALL 以"类型槽"组织手牌：5 个槽位（relic-redesign D4：旧"兵站"信物随旧系统删除，槽位数恒为默认值），每个槽位对应一种棋子类型，同一类型的棋子数量 MUST 无限叠加而只占用 1 个槽位。
 
 类型槽限制的是玩家同时持有的棋子**种类数**，MUST NOT 限制棋子总数。棋子类型共六种（含匠人），因此默认 5 槽下玩家 MUST NOT 同时持有全部六种。
 
 #### Scenario: 同类无限叠加
 - **WHEN** 玩家持有 14 枚普通子
 - **THEN** 该类型只占用 1 个槽位，系统不因数量拒绝继续叠加
-
-#### Scenario: 兵站扩展槽位
-- **WHEN** 玩家控制 2 枚普通兵站信物
-- **THEN** 其效果快照中的手牌类型槽为 7
 
 #### Scenario: 槽位统计种类而非总数
 - **WHEN** 玩家持有普通子×9、堡垒子×1
@@ -47,8 +43,8 @@ TBD - created by archiving change add-recruit-hand. Update Purpose after archive
 
 在超限状态被解除之前，征募阶段 MUST NOT 开始。
 
-#### Scenario: 兵站丢失触发强制弃牌
-- **WHEN** 玩家持有 6 种类型，其唯一兵站信物被夺走，本小回合快照槽位数为 5
+#### Scenario: 超限触发强制弃牌
+- **WHEN** 玩家持有 6 种类型（经测试接缝改写快照造出），本小回合快照槽位数为 5
 - **THEN** 系统要求玩家弃掉至少 1 整类，征募阶段在此之前不可进入
 
 #### Scenario: 超限解除后继续

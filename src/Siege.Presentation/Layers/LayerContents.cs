@@ -214,8 +214,8 @@ public sealed record PowerLayerContent(
 // ---------- 信物层 ----------
 
 /// <summary>
-/// 信物层的一格（relic-redesign 接线段 W1 的最小版本，全公开 R22）：盘面上的一件信物——地图信物（空格上，<see cref="Holder"/> 为 <c>null</c>）
-/// 或挂在棋子上的信物（持有者 = 该格棋子的主人）；或尚未落位的预告（<see cref="IsForecast"/>，没有编号与持有者）。界面新标记留给段 C。
+/// 信物层的一格（relic-redesign R22 全公开）：盘面上的一件信物——地图信物（空格上，<see cref="Holder"/> 为 <c>null</c>）
+/// 或挂在棋子上的信物（持有者 = 该格棋子的主人，<see cref="Insured"/> 是公开的保险标记）；或尚未落位的预告（<see cref="IsForecast"/>，没有编号与持有者，落位大回合在 <see cref="LandingRound"/>）。
 /// </summary>
 public sealed record RelicCellView(
     Coord Coord,
@@ -225,7 +225,11 @@ public sealed record RelicCellView(
     bool Insured,
     PlayerId? Holder,
     bool IsForecast,
-    string Text);
+    string Text)
+{
+    /// <summary>预告格的落位大回合（relic-redesign R11 / R25）；非预告为 <c>null</c>。原样取自公开快照的 <c>RelicForecast.LandingRound</c>。</summary>
+    public int? LandingRound { get; init; }
+}
 
 /// <summary>信物层。</summary>
 public sealed record RelicLayerContent(ImmutableArray<RelicCellView> Relics) : LayerContent(TacticalLayer.Relics);
@@ -440,7 +444,7 @@ public static class TacticalLayers
         ];
         ImmutableArray<RelicCellView> forecast = world.View.RelicForecast is { } f
             ? [.. f.Slots.Select(s => new RelicCellView(s.Cell, s.Kind, null, null, false, null, IsForecast: true,
-                $"预告：第 {f.LandingRound} 大回合开始时刷新 {Labels.Relic(s.Kind)}"))]
+                $"预告：第 {f.LandingRound} 大回合开始时刷新 {Labels.Relic(s.Kind)}") { LandingRound = f.LandingRound })]
             : [];
         return new RelicLayerContent([.. onBoard, .. forecast]);
     }
