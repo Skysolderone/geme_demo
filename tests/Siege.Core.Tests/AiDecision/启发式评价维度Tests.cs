@@ -510,8 +510,9 @@ public class 启发式评价维度Tests
         // expert-opponent-model 1.3：专家前瞻的模拟对手改用专家本人的高难口径（原为标准预设）改变专家的选择与前瞻记录，版本 8 → 9。
         // ai-whole-batch 1.4：标准 / 高难 / 专家追加整批候选（"哪些候选参与打分 / 保留"的规则变了），版本 9 → 10。
         // ai-bridge-candidate 1.4：标准 / 高难 / 专家追加搭桥候选（"哪些候选参与打分 / 保留"的规则变了），版本 10 → 11。
-        // relic-redesign W1：信物维改读挂在棋子上的信物（RelicEstimate 未校准平值，旧地图信物删除），任一维原始值的算法变了，版本 11 → 12。
-        Assert.Equal(12, EvaluationBreakdown.Version);
+        // relic-redesign W1：信物维改读挂在棋子上的信物（RelicEstimate 未校准平值，旧地图信物删除），任一维原始值的算法变了，版本 11 → 12；
+        // relic-redesign C1：信物维改为势力增量口径（三桶，design.md D5）+ AI 挂出改为"本批势力增量最大的落点"，版本 12 → 13。
+        Assert.Equal(13, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
 
         // 往返：写出再读回仍在（写入路径漏写则读回 null）。

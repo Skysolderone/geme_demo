@@ -539,6 +539,8 @@ public sealed partial class MatchFlow
 
     private void OnCheckEndConditions(SettlementContext context)
     {
+        // relic-redesign 段 C1：本批的拾取与提走掉落只发事件（盘面不需要任何操作，D1）。
+        RecordRelicPickupsAndDrops(context);
         // relic-redesign R14：先记下本批挂出的带入件（推进编号游标），再做出局检查——出局者的 R17 掉落也从游标取编号。
         RecordCarriedAttachments(context);
 

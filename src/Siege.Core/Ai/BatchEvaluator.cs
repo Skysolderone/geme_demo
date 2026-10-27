@@ -15,7 +15,7 @@ namespace Siege.Core.Ai;
 /// </summary>
 /// <remarks>
 /// 输入只有 <see cref="MatchPublicView"/> 与本人的 <see cref="BatchContext"/>：结构上没有手牌数量与征募面板。
-/// 信物维经 <see cref="RelicEstimate"/> 按公开盘面的信物层估计（relic-redesign W1 的最简估计，段 C 重写）。
+/// 信物维经 <see cref="RelicEstimate"/> 按公开盘面的信物层、公开预告与势力快照估计（relic-redesign 段 C1：机会表在构造时建一次，每次评价只查表）。
 /// </remarks>
 public sealed class BatchEvaluator
 {
@@ -31,7 +31,8 @@ public sealed class BatchEvaluator
     private readonly ImmutableSortedDictionary<PlayerId, PlayerStatus> _roster;
     private readonly ScoringVersion _scoring;
     private readonly PowerSnapshot _before;
-    private readonly long _relicBefore;
+    private readonly RelicEstimate.RelicSurvey _relicSurvey;
+    private readonly BigInteger _relicBefore;
     private readonly long _safetyBefore;
     private readonly long _growthBefore;
     private readonly long _eyeBefore;
@@ -70,7 +71,9 @@ public sealed class BatchEvaluator
         _scoring = ScoringVersions.RequireValid(view.ScoringVersion);
         _before = PowerCalculator.Compute(view.Board, _roster, _scoring);
         _rankBefore = _before.RankOf(me);
-        _relicBefore = RelicEstimate.Score(view.Board, me, _roster);
+        // 信物维（relic-redesign C1）：简单难度不算本维，机会表留空、一次 Clone 都不做；其余难度按决策前盘面与公开预告建表一次。
+        _relicSurvey = immediateOnly ? RelicEstimate.RelicSurvey.Empty : RelicEstimate.Survey(view.Board, _before, view.RelicForecast, _roster, _scoring);
+        _relicBefore = immediateOnly ? BigInteger.Zero : RelicEstimate.Score(view.Board, _before, me, _roster, _relicSurvey);
 
         // 批次开始前的活形查询：活形硬约束与眼位维（全部难度，眼位下放到简单难度见 ai-eye R26）、安全 / 威胁两维（非简单难度）共用，每个盘面一次。
         LifeShapeReport life = Life(view.Board);
@@ -156,7 +159,7 @@ public sealed class BatchEvaluator
 
         if (!_immediateOnly)
         {
-            raw[(int)EvaluationDimension.Relic] = checked(RelicEstimate.Score(after, _me, _roster) - _relicBefore);
+            raw[(int)EvaluationDimension.Relic] = RelicEstimate.Score(after, afterPower, _me, _roster, _relicSurvey) - _relicBefore;
             raw[(int)EvaluationDimension.Growth] = checked(GrowthOf(after) - _growthBefore);
             raw[(int)EvaluationDimension.Initiative] = InitiativeShift(afterPower);
             if (prefilter)

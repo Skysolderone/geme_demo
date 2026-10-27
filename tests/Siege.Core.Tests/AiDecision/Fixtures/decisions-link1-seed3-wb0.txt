@@ -23,8 +23,8 @@
 5	P2	R:4:Line,1:Basic,2:Basic D:AL4:Line
 5	P3	R:2:Fortress,0:Basic,1:Basic D:AC5:Fortress
 5	P0	R:0:Basic,1:Artisan,2:Basic D:AN5:Basic
-6	P1	R:0:Line,1:Basic,2:Sentry D:O6:Line
-6	P3	R:4:Line,0:Basic,1:Bannerman D:R6:Line,AF6:Line
+6	P1	R:0:Line,1:Basic,2:Sentry D:AP32:Line
+6	P3	R:4:Line,0:Basic,1:Bannerman D:O6:Line,R6:Line
 6	P2	R:4:Synergy,0:Line,2:Basic D:Z6:Line
-6	P0	R:2:Basic,3:Basic,4:Multiplier D:AJ6:Multiplier
+6	P0	R:2:Basic,3:Basic,4:Multiplier D:AF6:Multiplier
 # end phase=InProgress majorRound=7 reason=- turns=24

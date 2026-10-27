@@ -418,22 +418,54 @@ public sealed class HeuristicTurnController : ITurnController
         LastChoice = choice;
 
         batch.Clear();
-        // AI 挂出带入件（relic-redesign R21，接线段 W2 的临时确定性规则）：按落子顺序把未挂出件按清单下标升序逐枚挂上，落点已有地图信物的跳过（落子即拾取）。
-        // 挂出不改变气、提子、活形与同形（R28），复摆的合法性不变；不消费任何随机。没有带入件时这里什么都不做，与引入之前逐步相同。
-        // TODO(relic-redesign 段 C)：改为"挂在本批势力增量最大的落点"，并让候选评价算上挂出后的势力。
-        Queue<int> pendingCarried = new(context.Carried is { } carried ? carried.Keys.Order() : Enumerable.Empty<int>());
         foreach (Placement placement in choice.Placements)
         {
-            int? attach = pendingCarried.Count > 0 && batch.Board.RelicAt(placement.Coord) is null ? pendingCarried.Dequeue() : null;
             // 复摆 MUST 带上改造目标：漏了会静默丢掉改造（匠人照落，地形不动），而候选评分是按带改造算的。
-            if (batch.Stage(placement.Coord, placement.Type, placement.Edit, attach) is { } failure)
+            if (batch.Stage(placement.Coord, placement.Type, placement.Edit) is { } failure)
             {
                 throw new SiegeRuleException($"AI 复摆已预演通过的批次被拒绝：{failure.Message}");
             }
         }
 
+        AttachCarried(batch, choice, rehearse, evaluator);
+
         // stagnation-trace D1（ai-decision「循环提子停手」留痕）：停滞成立且最终 Pass 记 D:stall，决胜一手接管照常记落点；只改条目文案，不改任何决策与随机消费。
         _decisions.Add(choice.IsPass ? (LastStagnation is null ? "D:pass" : StallDecision) : $"D:{choice.Key}");
+    }
+
+    /// <summary>
+    /// AI 挂出带入件（relic-redesign R21 / design.md D5，段 C1）：把本人尚未挂出的带入件挂到<b>本批势力增量最大的落点</b>——规划的唯一实现在 <see cref="RelicAttachPlan.Plan"/>
+    /// （对复摆后的预演盘面逐（件 × 落点）Clone 比较势力增量、贪心、前几批挂完；并列打破：非保险件优先 → 清单下标 → 坐标），势力经评价器同一口径的 <see cref="BatchEvaluator.PowerOf"/>。
+    /// 落点已有地图信物的跳过（落子即拾取，不能再挂）。挂出不改变气、提子、活形与同形（R28），复摆的合法性不变；不消费任何随机；决策日志条目仍是不带挂出的批次键。
+    /// 没有带入件或 Pass 时什么都不做，与引入之前逐步相同。候选批次的评价本身不算挂出后的势力（挂出只在选定批次之后决定落点）。
+    /// </summary>
+    private void AttachCarried(StagedBatch batch, CandidateBatch choice, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+    {
+        BatchContext context = batch.Context;
+        if (choice.IsPass || context.Carried is not { Count: > 0 } carried)
+        {
+            return;
+        }
+
+        Coord[] cells = [.. choice.Placements.Select(p => p.Coord).Where(c => batch.Board.RelicAt(c) is null)];
+        if (cells.Length == 0)
+        {
+            return;
+        }
+
+        RehearsalResult projected = rehearse();
+        if (!projected.IsLegal || projected.ProjectedBoard is null)
+        {
+            throw new SiegeRuleException("AI 复摆后的批次预演非法，无法决定挂出落点。");
+        }
+
+        foreach ((Coord cell, int index) in RelicAttachPlan.Plan(projected.ProjectedBoard, Player, cells, carried, context.NextRelicId, b => evaluator.PowerOf(b).Of(Player).Total))
+        {
+            if (batch.Attach(cell, index) is { } failure)
+            {
+                throw new SiegeRuleException($"AI 挂出带入件被拒绝：{failure.Message}");
+            }
+        }
     }
 
     /// <summary>

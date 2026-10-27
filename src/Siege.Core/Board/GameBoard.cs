@@ -176,6 +176,25 @@ public sealed partial class GameBoard
     }
 
     /// <summary>
+    /// 与 <paramref name="c"/> 气边相邻、且有棋子的格（<see cref="LibertyNeighbors"/> 的占用子集，按坐标序）。供需要"谁的棋子紧贴这一格"的读取方
+    /// （relic-redesign C1：AI 信物维判某件地图信物 / 预告格与哪些玩家相邻）直接取用，不必自己枚举邻格再读占用者。邻接语义仍只有一处（<see cref="Adjacency"/>）。
+    /// </summary>
+    public ImmutableArray<Coord> AdjacentStones(Coord c)
+    {
+        ImmutableArray<Coord> neighbors = LibertyNeighbors(c);
+        ImmutableArray<Coord>.Builder occupied = ImmutableArray.CreateBuilder<Coord>(neighbors.Length);
+        foreach (Coord n in neighbors)
+        {
+            if (_occupants[Index(n)] is not null)
+            {
+                occupied.Add(n);
+            }
+        }
+
+        return occupied.ToImmutable();
+    }
+
+    /// <summary>
     /// 眼边邻居：与 <paramref name="c"/> 之间存在眼边的格（两格可落子、|Δh| ≤ 1，<b>不看栅栏</b>；fence-eye-rule D1）。
     /// 委托给 <see cref="Adjacency.EyeNeighbors"/>，<b>只</b>供活形判定（<see cref="LifeShapeReport"/> 的空区、封闭、眼空间归属与方四）使用；
     /// 气、棋串、提子一律走 <see cref="LibertyNeighbors"/>（结果按当前地图逐格记忆，改造后整表重算）。

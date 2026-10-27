@@ -50,6 +50,10 @@ public class 各棋子势力占比Tests
     private static MatchSession ArtisanSynergySession()
     {
         Siege.Core.Match.MatchFlow match = LinkModeFixtures.PlainStarted(options: Siege.Core.Match.MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
+        // relic-redesign C1：F3 / G3 空格上各放一件地图信物（战鼓、百变），P0 第 2 大回合落到上面即拾取——同一条棋串同时含战鼓（进 Base）与百变（进协同的"其他类型数"），
+        // 两项信物算式在脚本局里确定被触发，不依赖 AI 走法。
+        match.Board.AttachRelic(TestMaps.At("F3"), Siege.Core.PieceRelics.RelicToken.Spawned(0, Siege.Core.PieceRelics.RelicKind.WarDrum));
+        match.Board.AttachRelic(TestMaps.At("G3"), Siege.Core.PieceRelics.RelicToken.Spawned(1, Siege.Core.PieceRelics.RelicKind.Chameleon));
         match.Debug.SeedHand(LinkModeFixtures.P0, (PieceType.Artisan, 1), (PieceType.Synergy, 1), (PieceType.Basic, 1), (PieceType.Fortress, 1));
         MatchSession session = MatchSession.ForMatch(match, SimulationHarness.LinkSimFixtures.Config(turnLimit: 8) with { ContentSet = match.ContentSet });
         session.SetController(LinkModeFixtures.P0, new SimulationHarness.LinkSimFixtures.ScriptedSeat(match, new Dictionary<int, (Coord, PieceType, TerrainEdit?)[]>
@@ -95,22 +99,24 @@ public class 各棋子势力占比Tests
         int synergyWithBonus = 0;
         int withArtisanGroups = 0;
         int artisanWithSynergy = 0;
-        int exact = 0;
+        int withDrum = 0;
+        int synergyWithChameleon = 0;
         foreach (GroupEntry g in groups)
         {
             Dictionary<string, int> c = Assert.IsType<Dictionary<string, int>>(g.PieceCounts);
             Assert.Equal(ContentSets.PieceTypesOf(ContentSet.V1).Select(t => t.ToString()), c.Keys.ToArray());   // 两份样本都是 v1：键 = 原六种（改写前为 Enum.GetNames，枚举追加四值后不再等于 v1 的键集合）
             Assert.Equal(g.Stones.Count, c.Values.Sum());
             Assert.Equal(g.MultiplierCount, c["Multiplier"]);
-            // relic-redesign W1：对局中途刷新的地图信物会被拾取——战鼓每件并入基础军势 +3、百变每件给协同子多算 1 种（日志的棋串条目不记挂着的信物，段 C 补遥测），
-            // 所以棋子计数给出的是下界，余量须是这两项的整数倍；无余量的棋串仍逐项相等。
-            int baseFromPieces = c["Basic"] * 1 + c["Fortress"] * 4 + c["Line"] + c["Multiplier"] + c["Synergy"] + c["Artisan"];
-            int baseResidual = g.Base - baseFromPieces;
-            Assert.True(baseResidual >= 0 && baseResidual % Siege.Core.PieceRelics.RelicKinds.UncalibratedWarDrumBase == 0, $"基础 {g.Base}，棋子计数给出 {baseFromPieces}");
-            int otherTypes = new[] { "Basic", "Fortress", "Line", "Multiplier", "Artisan" }.Count(t => c[t] > 0);
-            int synergyResidual = g.SynergyBonus - c["Synergy"] * otherTypes * 2;
-            Assert.True(synergyResidual == 0 || (c["Synergy"] > 0 && synergyResidual > 0 && synergyResidual % (c["Synergy"] * 2) == 0), $"协同加值 {g.SynergyBonus}，棋子计数给出 {c["Synergy"] * otherTypes * 2}");
-            exact += baseResidual == 0 && synergyResidual == 0 ? 1 : 0;
+            // relic-redesign C1（R37 恢复逐项相等）：棋串条目补记挂着的信物（RelicCounts）——战鼓每件并入基础军势 +3、百变每件给协同子多算 1 种"其他类型"，
+            // 两项都按条目里的件数算进等式；没有信物的棋串 RelicCounts 为 null、按 0 读。W1 期间的"余量是整数倍"放宽到此结束。
+            int drums = g.RelicCountOf(Siege.Core.PieceRelics.RelicKind.WarDrum);
+            int chameleons = g.RelicCountOf(Siege.Core.PieceRelics.RelicKind.Chameleon);
+            int baseFromPieces = c["Basic"] * 1 + c["Fortress"] * 4 + c["Line"] + c["Multiplier"] + c["Synergy"] + c["Artisan"]
+                + drums * Siege.Core.PieceRelics.RelicKinds.UncalibratedWarDrumBase;
+            Assert.Equal(baseFromPieces, g.Base);
+            int otherTypes = new[] { "Basic", "Fortress", "Line", "Multiplier", "Artisan" }.Count(t => c[t] > 0)
+                + chameleons * Siege.Core.PieceRelics.RelicKinds.UncalibratedChameleonExtraTypes;
+            Assert.Equal(c["Synergy"] * otherTypes * 2, g.SynergyBonus);
             if (g.LineBonus > 0)
             {
                 Assert.True(c["Line"] >= 2, $"连珠加值 {g.LineBonus} 但连珠子计数 {c["Line"]}");
@@ -120,9 +126,13 @@ public class 各棋子势力占比Tests
             synergyWithBonus += g.SynergyBonus > 0 ? 1 : 0;
             withArtisanGroups += c["Artisan"] > 0 ? 1 : 0;
             artisanWithSynergy += c["Artisan"] > 0 && c["Synergy"] > 0 ? 1 : 0;
+            withDrum += drums > 0 ? 1 : 0;
+            synergyWithChameleon += chameleons > 0 && c["Synergy"] > 0 ? 1 : 0;
         }
 
-        Assert.True(exact * 10 >= groups.Count * 9, $"逐项相等的棋串只有 {exact} / {groups.Count}（挂信物的棋串应是少数）");
+        // 样本口径下界（C1）：两项信物算式都要真的被触发——至少一条棋串挂战鼓、至少一条含协同子的棋串挂百变（脚本局保证，不依赖 AI 走法）。
+        Assert.True(withDrum > 0, "样本里没有挂战鼓的棋串 —— Base 等式的战鼓项没有被触发");
+        Assert.True(synergyWithChameleon > 0, "样本里没有含协同子且挂百变的棋串 —— otherTypes 里的百变项没有被触发");
         Assert.True(fortressAndBasic > 0, "样本里没有同时含普通子与堡垒子的棋串");
         Assert.True(synergyWithBonus > 0, "样本里没有协同加值");
         Assert.True(withArtisanGroups > 0, "样本里没有含匠人的棋串 —— Base 等式的匠人项没有被触发");

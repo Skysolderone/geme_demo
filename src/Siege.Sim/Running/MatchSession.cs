@@ -649,6 +649,7 @@ public sealed class MatchSession
                     FormationTier = FormationField(g.FormationTier, view.ScoringVersion),
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
+                    RelicCounts = RelicCountsOf(view.Board, g),
                 })],
                 // match-telemetry 第 11 项。
                 EliminationReason = state.EliminationReason?.ToString(),
@@ -689,6 +690,35 @@ public sealed class MatchSession
 
         return counts;
     }
+
+    /// <summary>
+    /// 棋串上挂着的信物件数（relic-redesign 段 C1 遥测）：从快照盘面信物层按棋子坐标逐枚数，键为种类名、只写出现的种类；没有信物返回 <c>null</c>（日志不写该项）。
+    /// internal 供测试用真实盘面走写入路径。
+    /// </summary>
+    internal static Dictionary<string, int>? RelicCountsOf(GameBoard board, GroupPower group)
+    {
+        if (!board.HasRelics)
+        {
+            return null;
+        }
+
+        Dictionary<string, int>? counts = null;
+        foreach (Coord stone in group.Stones)
+        {
+            if (board.RelicAt(stone) is { } token)
+            {
+                counts ??= new Dictionary<string, int>(StringComparer.Ordinal);
+                string key = token.Kind.ToString();
+                counts[key] = counts.GetValueOrDefault(key) + 1;
+            }
+        }
+
+        return counts;
+    }
+
+    /// <summary>信物事件说明里的格：每件写作 <c>格#编号:种类…</c>、空格分隔（Core 的 <c>MatchFlow.Describe</c>），取 <c>#</c> 之前的记法。</summary>
+    private static List<string> RelicCells(string detail) =>
+        [.. detail.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(part => part.Contains('#', StringComparison.Ordinal)).Select(part => part[..part.IndexOf('#', StringComparison.Ordinal)])];
 
     /// <summary>把流程层新增的事件（不含阶段噪声）复制进日志；大回合结束附先手值明细。</summary>
     private void CopyFlowEvents()
@@ -736,6 +766,41 @@ public sealed class MatchSession
                 case FlowEventKind.MatchEnded:
                 case FlowEventKind.FlagsLocked:
                     Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail);
+                    break;
+                case FlowEventKind.RelicsForecast:
+                    // relic-redesign 段 C1 遥测：预告 / 落位读 Core 的批次记录——预告事件对应"预告大回合 = 事件大回合"的那一批，落位事件对应"落位大回合 = 事件大回合"的那一批
+                    //（不用游标：恢复存档后的对局批次齐全、事件列表却没有历史预告事件，游标会错位）。
+                    RelicBatchRecord forecastBatch = Match.RelicBatches.Last(b => b.Forecast.ForecastRound == e.MajorRound);
+                    Add(_turn, e.MajorRound, LogEventType.RelicsForecast, null, e.Detail,
+                        coords: [.. forecastBatch.Forecast.Slots.Select(slot => slot.Cell.ToNotation())],
+                        values: new Dictionary<string, BigInteger> { ["Count"] = forecastBatch.Forecast.Slots.Length, ["LandingRound"] = forecastBatch.Forecast.LandingRound });
+                    break;
+                case FlowEventKind.RelicsLanded:
+                    RelicBatchRecord landedBatch = Match.RelicBatches.Last(b => b.HasLanded && b.Forecast.LandingRound == e.MajorRound);
+                    Add(_turn, e.MajorRound, LogEventType.RelicsLanded, null, e.Detail,
+                        coords: [.. landedBatch.Landed!.Value.Select(r => r.Cell.ToNotation())],
+                        values: new Dictionary<string, BigInteger> { ["Count"] = landedBatch.Landed!.Value.Length, ["Forecast"] = landedBatch.Forecast.Slots.Length });
+                    break;
+                case FlowEventKind.RelicsPickedUp:
+                case FlowEventKind.RelicsDropped:
+                case FlowEventKind.CarriedRelicsAttached:
+                    List<string> cells = RelicCells(e.Detail);
+                    Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail, coords: cells, values: new Dictionary<string, BigInteger> { ["Count"] = cells.Count });
+                    break;
+                case FlowEventKind.CarriedRelicsDropped:
+                    // R17：说明末尾可能带"；n 件无处可落、消失"。
+                    List<string> droppedCells = RelicCells(e.Detail);
+                    int lost = 0;
+                    int marker = e.Detail.IndexOf('；', StringComparison.Ordinal);
+                    if (marker >= 0)
+                    {
+                        string tail = e.Detail[(marker + 1)..];
+                        int end = tail.IndexOf(' ', StringComparison.Ordinal);
+                        _ = int.TryParse(end >= 0 ? tail[..end] : tail, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out lost);
+                    }
+
+                    Add(_turn, e.MajorRound, LogEventType.CarriedRelicsDropped, e.Player?.Value, e.Detail, coords: droppedCells,
+                        values: new Dictionary<string, BigInteger> { ["Count"] = droppedCells.Count, ["Lost"] = lost });
                     break;
                 case FlowEventKind.BattlefieldSettled:
                     BattlefieldSettlementRecord settled = Match.Settlements[_settlementCursor++];

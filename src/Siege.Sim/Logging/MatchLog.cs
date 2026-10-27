@@ -898,6 +898,16 @@ public sealed record GroupEntry
     /// 此前的旧日志没有该字段，解析为 <c>null</c>（未知）：分析时跳过该局的占比统计，MUST NOT 回填成 0——那会把旧局错算成"全是某种棋子"。
     /// </summary>
     public Dictionary<string, int>? PieceCounts { get; init; }
+
+    /// <summary>
+    /// 挂在本串棋子上的信物件数，键为 <see cref="Siege.Core.PieceRelics.RelicKind"/> 名、只写出现的种类（relic-redesign 段 C1 遥测，match-telemetry 第 7 项补记）。
+    /// 没有信物的棋串不写（<c>null</c>，JSON 里整项省略）：无信物的局与引入之前逐字节相同；读入时 <c>null</c> 按"无信物"处理（信物层上线前不存在信物，0 就是真值）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, int>? RelicCounts { get; init; }
+
+    /// <summary>某种信物在本串上的件数（缺字段按 0）。</summary>
+    public int RelicCountOf(Siege.Core.PieceRelics.RelicKind kind) => RelicCounts?.GetValueOrDefault(kind.ToString()) ?? 0;
 }
 
 /// <summary>一条事件。<see cref="Type"/> 见 <see cref="LogEventType"/>。</summary>
@@ -1005,6 +1015,24 @@ public static class LogEventType
 
     /// <summary>暂放或确认环节因活棋禁入 / 破坏活形被拒的尝试（life-shape 4.1）；预演环节的同类失败见细粒度 <see cref="Rehearsal"/> 与快照计数。</summary>
     public const string LifeRefused = "LifeRefused";
+
+    /// <summary>信物预告（relic-redesign 段 C1 遥测；<see cref="LogEvent.Coords"/> 为预告格、<see cref="LogEvent.Values"/> 的 <c>Count</c> 为件数，空批也记）。</summary>
+    public const string RelicsForecast = "RelicsForecast";
+
+    /// <summary>信物落位（同上；<c>Count</c> 为实际落位件数、<c>Forecast</c> 为预告件数，被占格跳过时两者不等）。</summary>
+    public const string RelicsLanded = "RelicsLanded";
+
+    /// <summary>拾取（同上；<c>Player</c> 为拾取者，<c>Coords</c> 为拾取格）。</summary>
+    public const string RelicsPickedUp = "RelicsPickedUp";
+
+    /// <summary>提走掉落（同上；<c>Player</c> 为提子者，<c>Coords</c> 为掉落格）。</summary>
+    public const string RelicsDropped = "RelicsDropped";
+
+    /// <summary>带入件挂出（同上；<c>Player</c> 为挂出者）。</summary>
+    public const string CarriedRelicsAttached = "CarriedRelicsAttached";
+
+    /// <summary>出局 / 弃赛者未挂出件掉落（R17；<c>Count</c> 为落到地图的件数，<c>Lost</c> 为无处可落而消失的件数）。</summary>
+    public const string CarriedRelicsDropped = "CarriedRelicsDropped";
 
     /// <summary>只在完整模式保留的细粒度事件。</summary>
     public static bool IsFineGrained(string type) => type is Rehearsal or Candidates;

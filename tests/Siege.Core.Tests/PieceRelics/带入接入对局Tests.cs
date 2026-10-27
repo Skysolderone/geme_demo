@@ -20,7 +20,7 @@ namespace Siege.Core.Tests.PieceRelics;
 /// 变异验证（W2 实跑，均已恢复；"红 n"为本类与日志 / 配置 / 终端相关测试类合计）：
 /// W1 <c>BatchRehearsal.Project</c> 不挂带入件（只正式第 2 步挂）→ 红 11（凡有挂出的局都在结算核对处抛"正式结算结果与预演副本不一致"）；
 /// W2 <c>ValidateShape</c> 去掉"落点已有地图信物"一条 → 红 2（非法挂出被拒、终局结算按D6归属）；
-/// W3 <c>RecordCarriedAttachments</c> 不推进游标 → 红 5（保护期内挂出、存档往返、终局结算按D6归属、AI前几批按落子顺序挂完、关闭时逐步相同的反面对照）；
+/// W3 <c>RecordCarriedAttachments</c> 不推进游标 → 红 5（保护期内挂出、存档往返、终局结算按D6归属、AI前几批挂完且每子一件、关闭时逐步相同的反面对照）；
 /// W4 <c>DropCarriedOf</c> 把保险件也掉落 → 红 2（弃赛时非保险件掉到地图、日志的带出结算可查）；
 /// W5 <c>PublishFor</c> 的 OwnCarried 不按座位过滤（给全员的清单）→ 红 1（带入清单只给本人）。
 /// </remarks>
@@ -316,10 +316,10 @@ public class 带入接入对局Tests
     }
 
     [Fact]
-    public void AI前几批按落子顺序挂完()
+    public void AI前几批挂完且每子一件()
     {
-        // R21（W2 临时规则）：AI 在最终复摆时按落子顺序把未挂出件逐枚挂上，落点已有地图信物的跳过。第 1–3 大回合没有地图信物，
-        // 所以每名 AI 落下第 2 枚棋子时 2 件已全部挂出。样本：link:1、4 名 Easy、--carry-in 2、12 个小回合。
+        // R21 / D5（段 C1）：AI 在最终复摆后把未挂出件挂到本批势力增量最大的落点（规划在 RelicAttachPlan，方向性与并列打破见 AiDecision.信物估值与挂出Tests），
+        // 每子 1 件、有落点就挂、落点已有地图信物的跳过。第 1–3 大回合没有地图信物，所以每名 AI 落下第 2 枚棋子时 2 件已全部挂出。样本：link:1、4 名 Easy、--carry-in 2、12 个小回合。
         Siege.Sim.Config.RunConfig config = SimFixtures.Config(turnLimit: 12) with { CarryIn = 2 };
         Siege.Sim.Running.MatchSession session = Siege.Sim.Running.MatchSession.Create(config, 9);
         session.Run();

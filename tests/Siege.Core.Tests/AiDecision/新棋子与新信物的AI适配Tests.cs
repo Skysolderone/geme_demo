@@ -13,7 +13,7 @@ namespace Siege.Core.Tests.AiDecision;
 /// 规格：more-pieces-relics ai-decision —— Requirement: 新棋子与新信物的 AI 适配（D10）。
 /// AI 只经唯一的势力计算感知新棋子与挂在棋子上的信物；"组合成长"维口径不变。
 /// relic-redesign 接线段 W1：旧十类信物的估值（类型价值、分区先验期望）、工坊扩展目标与"未揭示计分信物"三组用例随旧信物删除；
-/// 信物维改为按盘面信物层的最简估计（<see cref="RelicEstimate"/>，段 C 重写），由 <see cref="拾取信物进入即时势力增量与信物维"/> 钉住。
+/// 信物维按势力增量口径估值（<see cref="RelicEstimate"/>，段 C1 重写），由 <see cref="拾取信物进入即时势力增量与信物维"/> 钉住。
 /// </summary>
 public class 新棋子与新信物的AI适配Tests
 {
@@ -79,7 +79,7 @@ public class 新棋子与新信物的AI适配Tests
     {
         // relic-redesign W1：落子到地图信物上即拾取（R4）。G7 空格上有一件地图刷出的战鼓（D3：持物棋子基础军势 +3）。
         // 候选 G7 普通子：即时势力增量 = 结算后势力 − 结算前势力（预演副本带信物层，由唯一势力计算给出），其中该子基础军势 1 + 3 = 4；
-        // 信物维 = 挂在己方棋子上的件数 × 未校准值 5（RelicEstimate 最简估计，段 C 重写）= 5。对照候选 C3（无信物）信物维 0。
+        // 信物维（段 C1 重写，design.md D5）= 己方持物的军势边际贡献：孤子 + 战鼓 = ⌊(1 + 3) × 1⌋ − ⌊1 × 1⌋ = 3（G7 决策前无人相邻，机会项为 0）。对照候选 C3（无信物）信物维 0。
         // 变异 MC-R1（Clone 不复制信物层）→ 预演看不到拾取，基础军势与信物维都红；MC-R2（RelicEstimate 返回 0）→ 信物维红。
         MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All);
         match.Board.AttachRelic(TestMaps.At("G7"), RelicToken.Spawned(0, RelicKind.WarDrum));
@@ -92,7 +92,8 @@ public class 新棋子与新信物的AI适配Tests
         PowerSnapshot after = PowerCalculator.Compute(pick.ProjectedBoard!, match.Roster);
         Assert.Equal(4, after.GroupContaining(Me, "G7").BaseTotal);
         Assert.Equal(after.Of(Me).Total - match.Scoreboard.Latest!.Of(Me).Total, pickScore.RawOf(EvaluationDimension.PowerGain));
-        Assert.Equal(RelicEstimate.UncalibratedFlatValue, pickScore.RawOf(EvaluationDimension.Relic));
+        Assert.Equal(after.GroupContaining(Me, "G7").RelicContribution, pickScore.RawOf(EvaluationDimension.Relic));
+        Assert.Equal(3, pickScore.RawOf(EvaluationDimension.Relic));
 
         RehearsalResult plain = match.RehearseBatch(batch, ("C3", PieceType.Basic));
         Assert.Equal(0, evaluator.Evaluate(batch.Placements, plain, batch.Context).RawOf(EvaluationDimension.Relic));

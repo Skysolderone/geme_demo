@@ -24,11 +24,13 @@ public sealed record EvaluationBreakdown(ImmutableArray<BigInteger> Raw, Evaluat
     /// 10 = 整批候选（ai-whole-batch 裁决 1–5：标准 / 高难 / 专家在既有候选之后追加剪枝候选与配对候选，按留一法口径施加停手阈值；Pass = 贪心无保留且整批候选为空。跑局层开关为 0 时与版本 9 逐步相同；简单难度逐步不变）；
     /// 11 = 搭桥候选（ai-bridge-candidate 裁决 1–6：标准 / 高难 / 专家在既有候选之后追加至多 1 个以搭桥单点为起点的不扰动候选，枚举全部合法空格、不经预筛、不受前 N；Pass 另要求搭桥候选为空。跑局层开关为 0 时与版本 10 逐步相同；简单难度逐步不变）；
     /// 12 = 旧地图信物删除、信物维改读挂在棋子上的信物（relic-redesign 接线段 W1：信物维由"控制 / 估计未揭示的地图信物格"改为 <c>RelicEstimate</c> 的未校准平值——己方棋子上的信物每件 +5、在局对手棋子上的每件 −5；
-    /// 段 C 重写信物估值时再递增。盘面没有信物时各维原始值与版本 11 相同，但对局中途刷新的信物会被拾取，整局走法随之变）。
+    /// 段 C 重写信物估值时再递增。盘面没有信物时各维原始值与版本 11 相同，但对局中途刷新的信物会被拾取，整局走法随之变）；
+    /// 13 = 信物维按势力增量估值（relic-redesign 段 C1 / design.md D5：<c>RelicEstimate</c> 改为三桶——己方 / 参赛敌方持物的军势边际贡献（由唯一势力计算给出，望台取平值）、
+    /// 相邻者对地图信物格 / 预告格的拾取机会（折价 1/2、1/4）；AI 挂出带入件改为"挂在本批势力增量最大的落点"。盘面没有信物也没有预告时各维原始值与版本 12 相同；简单难度逐步不变）。
     /// 维度数、任一维原始值的算法、或"哪些候选参与打分 / 保留"的规则变化 MUST 递增它：旧版本日志的 AI 决策不能用新评价逐步重现，
     /// 回放按首部版本处理（版本不同即在首部报分歧、不重跑）。
     /// </summary>
-    public const int Version = 12;
+    public const int Version = 13;
 
     /// <summary>全零分解（空批次 / Pass）。</summary>
     public static EvaluationBreakdown Zero(EvaluationWeights weights) => new([.. new BigInteger[DimensionCount]], weights);

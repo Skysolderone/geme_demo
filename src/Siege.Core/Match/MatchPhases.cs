@@ -83,6 +83,12 @@ public enum FlowEventKind
     /// <summary>带入信物挂出（relic-redesign R14 / R22）：本批确认后公开挂出的每件（格、编号、种类、保险）。只在有挂出的批次发出。</summary>
     CarriedRelicsAttached,
 
+    /// <summary>拾取（relic-redesign R4 / RQ1，段 C1 遥测）：本批落点上原有的地图信物随落子挂到新子上，逐件（格、编号、种类）。只在有拾取的批次发出。</summary>
+    RelicsPickedUp,
+
+    /// <summary>掉落（relic-redesign R4，段 C1 遥测）：本批提走的持物棋子上的信物留在原格成为地图信物，逐件（格、编号、种类、原持有者）。只在有掉落的批次发出；R17 出局 / 弃赛者未挂出件的掉落另见 <see cref="CarriedRelicsDropped"/>。</summary>
+    RelicsDropped,
+
     /// <summary>带入信物掉落（relic-redesign R17）：出局 / 弃赛者未挂出的非保险件立即落到地图。只在有可掉落件时发出。</summary>
     CarriedRelicsDropped,
 }

@@ -92,12 +92,20 @@ public static class PowerCalculator
         int positionBonus = lineBonus + synergyBonus + highGroundBonus + bannerBonus + chainBonus + sentryBonus + boundaryBonus + relicPositionBonus;
         BigInteger power = GroupPowerOf(baseTotal, positionBonus, multiplierCount, formationTier, pieceRelics.Exponent);
 
+        // relic-redesign C1（design.md D5）：同一条棋串不挂任何信物时的军势，与上式同一条公式、同一次遍历的各项，只去掉四处信物项
+        //（战鼓基础、百变额外类型、号令 / 百变位置加值、军旗指数）。差值 = 信物对这条棋串军势的边际贡献，AI 信物维只读它、不自算效果。无信物时恒等于 power，贡献 0。
+        BigInteger withoutRelics = pieceRelics.Total == 0 ? power : GroupPowerOf(
+            baseTotal - pieceRelics.BaseBonus,
+            positionBonus - relicPositionBonus - synergyBonus + PieceEffects.SynergyBonus(board, group),
+            multiplierCount, formationTier, relicExponent: 0);
+
         return new GroupPower(group.Owner, group.Stones, baseTotal, lineBonus, synergyBonus, highGroundBonus,
             bannerBonus, chainBonus, sentryBonus, boundaryBonus, multiplierCount, power)
         {
             FormationTier = formationTier,
             RelicPositionBonus = relicPositionBonus,
             RelicExponent = pieceRelics.Exponent,
+            RelicContribution = power - withoutRelics,
         };
     }
 

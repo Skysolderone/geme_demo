@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.PieceRelics;
 
@@ -53,6 +54,47 @@ public sealed partial class MatchFlow
         {
             _relicBatches.Add(new RelicBatchRecord(forecast, Landed: null));
             Emit(FlowEventKind.RelicsForecast, null, _relicBatches[^1].ToString());
+        }
+    }
+
+    /// <summary>
+    /// 结算第 6 步开头（段 C1 遥测）：本批落点上已有信物且不是本批挂出的带入件 → 拾取（落子即拾取，D1：信物不动、自然变成"挂上"）；
+    /// 本批提走的棋子所在格上有信物 → 掉落成地图信物（信物不动）。两者盘面都无需任何操作，这里只发事件（<see cref="FlowEventKind.RelicsPickedUp"/> / <see cref="FlowEventKind.RelicsDropped"/>），
+    /// 供对局日志计数（AC8）。Pass 或盘面无信物时什么都不发。
+    /// </summary>
+    private void RecordRelicPickupsAndDrops(SettlementContext context)
+    {
+        if (context.IsPass || !Board.HasRelics)
+        {
+            return;
+        }
+
+        var picked = new List<string>();
+        foreach (Placement placement in context.Placements)
+        {
+            if (placement.AttachCarried is null && Board.RelicAt(placement.Coord) is { } token)
+            {
+                picked.Add(Describe(new BoardRelic(placement.Coord, token)));
+            }
+        }
+
+        if (picked.Count > 0)
+        {
+            Emit(FlowEventKind.RelicsPickedUp, context.Player, string.Join(" ", picked));
+        }
+
+        var dropped = new List<string>();
+        foreach (CapturedStone captured in context.Captures)
+        {
+            if (Board.RelicAt(captured.Coord) is { } token)
+            {
+                dropped.Add($"{Describe(new BoardRelic(captured.Coord, token))}<{captured.Owner}");
+            }
+        }
+
+        if (dropped.Count > 0)
+        {
+            Emit(FlowEventKind.RelicsDropped, context.Player, string.Join(" ", dropped));
         }
     }
 

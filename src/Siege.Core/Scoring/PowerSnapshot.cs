@@ -50,6 +50,13 @@ public sealed record GroupPower(
     public int RelicExponent { get; init; }
 
     /// <summary>
+    /// 挂在本串棋子上的全部信物对本串军势的边际贡献 = <see cref="Power"/> − 同一条棋串不挂任何信物时的军势（relic-redesign C1 / design.md D5）。
+    /// 由唯一构造点 <see cref="PowerCalculator.Evaluate(GameBoard, CoverageMap, Group, ScoringVersion)"/> 按同一公式算出；望台只改覆盖、不进军势，不在本项。
+    /// AI 信物维（<c>RelicEstimate</c>）只读它，不自算任何信物效果。无信物时恒 0；手工构造的明细缺省 0。
+    /// </summary>
+    public BigInteger RelicContribution { get; init; }
+
+    /// <summary>
     /// 阵型阶数 0–4（formation-tiers D1 / D3）：按整条棋串的棋子数取（3 / 5 / 8 / 12 枚为一至四阶，唯一实现 <see cref="FormationTiers"/>），
     /// 计分规则 v1 下恒为 0。由唯一构造点 <see cref="PowerCalculator.Evaluate(GameBoard, CoverageMap, Group, ScoringVersion)"/> 给出；
     /// 表现层与遥测读它，不自己数棋子。手工构造的明细缺省 0。
