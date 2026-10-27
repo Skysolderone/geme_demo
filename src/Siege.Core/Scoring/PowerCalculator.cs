@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
+using Siege.Core.PieceRelics;
 using Siege.Core.Relics;
 
 namespace Siege.Core.Scoring;
@@ -38,7 +39,14 @@ public static class PowerCalculator
     /// 仍经唯一的 <see cref="Multiplier.Apply"/> 精确整数运算，逐串向下取整一次。
     /// </summary>
     public static BigInteger GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount, int formationTier) =>
-        new Multiplier(multiplierCount + formationTier).Apply((BigInteger)baseTotal + positionBonus);
+        GroupPowerOf(baseTotal, positionBonus, multiplierCount, formationTier, relicExponent: 0);
+
+    /// <summary>
+    /// 同上，另加挂在棋子上的军旗（relic-redesign D3）：倍率指数 = 倍增子数量 + 阵型阶数 + <paramref name="relicExponent"/>（军旗件数），
+    /// 仍经唯一的 <see cref="Multiplier.Apply"/> 精确整数运算，逐串向下取整一次。<paramref name="relicExponent"/> 为 0 时与原式逐项相同。
+    /// </summary>
+    public static BigInteger GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount, int formationTier, int relicExponent) =>
+        new Multiplier(multiplierCount + formationTier + relicExponent).Apply((BigInteger)baseTotal + positionBonus);
 
     /// <summary>
     /// 独占空格是否计领地分（terrain-surfaces D1 / D4 的唯一落点）：荒漠格可以被独占（归属、信物控制照常），但不计分。
@@ -76,9 +84,12 @@ public static class PowerCalculator
         ArgumentNullException.ThrowIfNull(coverage);
         ArgumentNullException.ThrowIfNull(group);
 
-        int baseTotal = PieceEffects.BaseTotal(board, group);
+        // relic-redesign D3：挂在棋子上的信物逐棋串从盘面信物层读出（信物层为空时全 0，下面每一项都与信物层上线之前相同）。
+        // 战鼓并入基础军势、百变的额外类型并入协同来源、号令与百变的固定加值记为信物位置加值、军旗加倍率指数——都在倍率之前，与现行顺序一致。
+        RelicTally pieceRelics = RelicEffects.Tally(board, group);
+        int baseTotal = PieceEffects.BaseTotal(board, group) + pieceRelics.BaseBonus;
         int lineBonus = PieceEffects.LineBonus(board, group, relics.Encampments);
-        int synergyBonus = PieceEffects.SynergyBonus(board, group, relics.Pincers);
+        int synergyBonus = PieceEffects.SynergyBonus(board, group, relics.Pincers, pieceRelics.ExtraSynergyTypes);
         int highGroundBonus = PieceEffects.HighGroundBonus(board, group);
         int bannerBonus = PieceEffects.BannerBonus(board, group);
         int chainBonus = PieceEffects.ChainBonus(board, group);
@@ -86,18 +97,21 @@ public static class PowerCalculator
         int boundaryBonus = PieceEffects.BoundaryBonus(board, coverage, group);
         int multiplierCount = PieceEffects.MultiplierCount(board, group);
         int formationTier = FormationTiers.TierOf(scoring, group.Size);
-        int positionBonus = lineBonus + synergyBonus + highGroundBonus + bannerBonus + chainBonus + sentryBonus + boundaryBonus;
-        BigInteger power = GroupPowerOf(baseTotal, positionBonus, multiplierCount, formationTier);
+        int relicPositionBonus = pieceRelics.PositionBonus(group.Size);
+        int positionBonus = lineBonus + synergyBonus + highGroundBonus + bannerBonus + chainBonus + sentryBonus + boundaryBonus + relicPositionBonus;
+        BigInteger power = GroupPowerOf(baseTotal, positionBonus, multiplierCount, formationTier, pieceRelics.Exponent);
 
         // 计分信物的子拆分（遥测用）：同一份加值实现在"无计分信物"下再求一次，差即额外部分；不控制计分信物时不重算。
         int encampmentBonus = relics.Encampments == 0 ? 0 : lineBonus - PieceEffects.LineBonus(board, group, 0);
-        int pincerBonus = relics.Pincers == 0 ? 0 : synergyBonus - PieceEffects.SynergyBonus(board, group, 0);
+        int pincerBonus = relics.Pincers == 0 ? 0 : synergyBonus - PieceEffects.SynergyBonus(board, group, 0, pieceRelics.ExtraSynergyTypes);
         return new GroupPower(group.Owner, group.Stones, baseTotal, lineBonus, synergyBonus, highGroundBonus,
             bannerBonus, chainBonus, sentryBonus, boundaryBonus, multiplierCount, power)
         {
             EncampmentBonus = encampmentBonus,
             PincerBonus = pincerBonus,
             FormationTier = formationTier,
+            RelicPositionBonus = relicPositionBonus,
+            RelicExponent = pieceRelics.Exponent,
         };
     }
 

@@ -142,10 +142,17 @@ public static class PieceEffects
     /// 同 <see cref="SynergyBonus(GameBoard, Group)"/>，另计犄角（more-pieces-relics D3）：棋串所有者控制 <paramref name="pincers"/> 枚犄角时，
     /// 每种类型的加值由 2 变为 <c>2 + k</c>，即 <c>协同子数量 × 其他类型数 × (2 + k)</c>。额外加值属于协同来源、随之被倍率放大。
     /// </summary>
-    public static int SynergyBonus(GameBoard board, Group group, int pincers)
+    public static int SynergyBonus(GameBoard board, Group group, int pincers) => SynergyBonus(board, group, pincers, extraTypes: 0);
+
+    /// <summary>
+    /// 同 <see cref="SynergyBonus(GameBoard, Group, int)"/>，另计百变（relic-redesign D3）：该串每枚协同子计"除协同子外的类型种数"时额外加 <paramref name="extraTypes"/> 种
+    /// （每件百变 +1，不论百变挂在哪种棋子上，包括挂在协同子自己身上），即 <c>协同子数量 × (其他类型数 + extraTypes) × (2 + k)</c>。<paramref name="extraTypes"/> 为 0 时与原式逐项相同。
+    /// </summary>
+    public static int SynergyBonus(GameBoard board, Group group, int pincers, int extraTypes)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(group);
+        ArgumentOutOfRangeException.ThrowIfNegative(extraTypes);
 
         int synergyCount = 0;
         var otherTypes = new HashSet<PieceType>();
@@ -162,7 +169,7 @@ public static class PieceEffects
             }
         }
 
-        return synergyCount * otherTypes.Count * (SynergyPerType + pincers);
+        return synergyCount * (otherTypes.Count + extraTypes) * (SynergyPerType + pincers);
     }
 
     /// <summary>

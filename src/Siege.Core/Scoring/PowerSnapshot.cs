@@ -34,9 +34,20 @@ public sealed record GroupPower(
     BigInteger Power)
 {
     /// <summary>
-    /// 位置加值总计 = 连珠 + 协同 + 高地 + 旗手 + 铁链 + 哨兵 + 界碑七项来源（design.md D3：分来源记账；more-pieces-relics D1 由三项扩为七项）。
+    /// 位置加值总计 = 连珠 + 协同 + 高地 + 旗手 + 铁链 + 哨兵 + 界碑七项来源（design.md D3：分来源记账；more-pieces-relics D1 由三项扩为七项），
+    /// 再加挂在棋子上的信物带来的 <see cref="RelicPositionBonus"/>（relic-redesign D3；无信物时恒 0，七项恒等式不变）。
     /// </summary>
-    public int PositionBonus => LineBonus + SynergyBonus + HighGroundBonus + BannerBonus + ChainBonus + SentryBonus + BoundaryBonus;
+    public int PositionBonus => LineBonus + SynergyBonus + HighGroundBonus + BannerBonus + ChainBonus + SentryBonus + BoundaryBonus + RelicPositionBonus;
+
+    /// <summary>
+    /// 挂在本串棋子上的信物带来的位置加值（relic-redesign D3）：号令每件 ⌊棋串棋子数 / 2⌋、百变每件 +2（未校准初值，见 <c>RelicKinds</c>）。
+    /// 战鼓并入 <see cref="BaseTotal"/>（"持物棋子基础军势 +3"）、百变对协同子的额外类型并入 <see cref="SynergyBonus"/>、军旗进 <see cref="RelicExponent"/>，都不在本项。
+    /// 由唯一构造点 <see cref="PowerCalculator.Evaluate(GameBoard, CoverageMap, Group, ScoringRelicCounts, ScoringVersion)"/> 给出；手工构造的明细与无信物的盘面缺省 0。
+    /// </summary>
+    public int RelicPositionBonus { get; init; }
+
+    /// <summary>挂在本串棋子上的军旗带来的倍率指数加值（relic-redesign D3：每件 +1，可叠加）。无信物时恒 0。</summary>
+    public int RelicExponent { get; init; }
 
     /// <summary>
     /// <see cref="LineBonus"/> 中由连营带来的额外部分（more-pieces-relics D3：连营并入连珠来源）。这是<b>子拆分</b>，不是第八项来源——七项恒等式不变；
@@ -54,14 +65,14 @@ public sealed record GroupPower(
     /// </summary>
     public int FormationTier { get; init; }
 
-    /// <summary>倍率指数 = 倍增子数量 + 阵型阶数。</summary>
-    public int MultiplierExponent => MultiplierCount + FormationTier;
+    /// <summary>倍率指数 = 倍增子数量 + 阵型阶数 + 军旗件数（<see cref="RelicExponent"/>，无信物时恒 0）。</summary>
+    public int MultiplierExponent => MultiplierCount + FormationTier + RelicExponent;
 
     /// <summary>总倍率 <c>1.5^n</c> 的精确表示（分子 <c>3^n</c>、分母 <c>2^n</c>），<c>n</c> = <see cref="MultiplierExponent"/>（含阵型），不封顶。</summary>
     public Multiplier Multiplier => new(MultiplierExponent);
 
     public override string ToString() =>
-        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] (基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus}/旗手{BannerBonus}/铁链{ChainBonus}/哨兵{SentryBonus}/界碑{BoundaryBonus})) ×{Multiplier}{(FormationTier == 0 ? string.Empty : $"(阵型{FormationTier}阶)")} = {Power}";
+        $"{Owner}[{string.Join(",", Stones.Select(s => s.ToNotation()))}] (基础{BaseTotal}+加值{PositionBonus}(连珠{LineBonus}/协同{SynergyBonus}/高地{HighGroundBonus}/旗手{BannerBonus}/铁链{ChainBonus}/哨兵{SentryBonus}/界碑{BoundaryBonus}{(RelicPositionBonus == 0 ? string.Empty : $"/信物{RelicPositionBonus}")})) ×{Multiplier}{(FormationTier == 0 ? string.Empty : $"(阵型{FormationTier}阶)")}{(RelicExponent == 0 ? string.Empty : $"(军旗{RelicExponent})")} = {Power}";
 }
 
 /// <summary>

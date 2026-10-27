@@ -11,7 +11,7 @@ namespace Siege.Core.Board;
 /// 设计文档 §9.2 / §10.1 要求实时重算；一次提子可能同时改变覆盖、棋串分裂、连珠断线与倍率，
 /// 增量维护的组合爆炸不可控。</para>
 /// <para>唯一的例外是<b>盘面未变时的记忆化</b>（ai-turn-speed D2；board-link-mode 段 C2 加上 <see cref="Serialize"/>）：全盘棋串（<see cref="AllGroups"/>）、活形报告（<see cref="LifeShapeReport.Analyze"/>）
-/// 与盘面序列化按突变版本号记忆——每次写入原语（<see cref="Place"/> / <see cref="Clear"/> / <see cref="RemoveStones"/> / <see cref="ApplyTerrainEdits"/>）都让版本号 +1
+/// 与盘面序列化按突变版本号记忆——每次写入原语（<see cref="Place"/> / <see cref="Clear"/> / <see cref="RemoveStones"/> / <see cref="ApplyTerrainEdits"/>，以及 relic-redesign 的 <see cref="AttachRelic"/>）都让版本号 +1
 /// （空集合的 <see cref="RemoveStones"/> 什么都没写，不算写入），版本号不同即整份重算，副本从零起。它不是增量维护：命中时返回的是同一盘面上同一份全量结果，任何一次写入之后的第一次查询都重算。</para>
 /// <para>地图派生量（每格可落子 / 出生区 / 信物格、气边邻居、覆盖目标、可落子格清单）按<b>当前 <see cref="MapData"/> 实例</b>逐格惰性记忆：
 /// 改造换上新地图即换表（<see cref="ApplyTerrainEdits"/>：段 C2 起新表由旧表派生，只作废改造目标周围 2 格，与从零建表逐项相同），
@@ -35,6 +35,10 @@ public sealed partial class GameBoard
     private LifeShapeReport? _life;
     private int _serialVersion = -1;
     private string? _serial;
+
+    /// <summary>含信物段的完整序列化的记忆（只在信物层非空时使用；空层时 <see cref="Serialize"/> 直接返回 <see cref="SerializeShape"/> 的记忆）。</summary>
+    private int _fullSerialVersion = -1;
+    private string? _fullSerial;
 
     private GameBoard(MapData map)
         : this(map, map, new Occupant?[map.Width * map.Height], [], new MapTables(map))
@@ -72,9 +76,14 @@ public sealed partial class GameBoard
     /// <summary>
     /// 副本：复制占用状态、共享不可变的 <see cref="MapData"/>（及其派生表），<b>不重跑</b>地图静态校验。
     /// 副本与原盘面之后的修改互不可见；副本的棋串 / 活形记忆从零起。批次结算层的合法性预演在副本上进行，
-    /// 这是"预演不污染正式盘面"得以成立的前提。
+    /// 这是"预演不污染正式盘面"得以成立的前提。信物层一并复制（relic-redesign D1：预演即可看到拾取 / 掉落后的势力），空层仍为空。
     /// </summary>
-    public GameBoard Clone() => new(BaseMap, Map, (Occupant?[])_occupants.Clone(), [.. _edits], _tables);
+    public GameBoard Clone()
+    {
+        var copy = new GameBoard(BaseMap, Map, (Occupant?[])_occupants.Clone(), [.. _edits], _tables);
+        CopyRelicsTo(copy);
+        return copy;
+    }
 
     /// <summary>
     /// 地图数据。<b>地形不再是对局内的不变量</b>（artisan-terrain-edit）：每次改造经 <see cref="ApplyTerrainEdits"/> 换上一份新的
@@ -178,12 +187,18 @@ public sealed partial class GameBoard
     }
 
     /// <summary>
-    /// 覆盖目标：位于 <paramref name="c"/> 的棋子会向哪些格提供覆盖。委托给 <see cref="Adjacency.CoverageTargets"/>（结果按当前地图逐格记忆，改造后整表重算）。
+    /// 覆盖目标：位于 <paramref name="c"/> 的棋子会向哪些格提供覆盖。委托给 <see cref="Adjacency.CoverageTargets(MapData, Coord)"/>（结果按当前地图逐格记忆，改造后整表重算）。
+    /// <para>relic-redesign D3（望台）：该格的信物是望台时，按岩台规则额外覆盖四方向距离 2——走同一份实现的远格分支
+    /// （<see cref="Adjacency.CoverageTargets(MapData, Coord, bool)"/>），不另写覆盖判定；站在岩台上又挂望台不再扩大，沼泽上的子仍不提供覆盖。
+    /// 信物随盘面变化，这一支不进地图派生表的记忆。信物层为空时只走记忆表，与信物层上线之前逐项相同。</para>
     /// </summary>
     public ImmutableArray<Coord> CoverageTargets(Coord c)
     {
         RequireInBounds(c);
-        return _tables.CoverageTargets(Index(c), c);
+        int i = Index(c);
+        return _relics is not null && RelicAtIndex(i) is { Kind: PieceRelics.RelicKind.Watchtower }
+            ? Adjacency.CoverageTargets(Map, c, farReach: true)
+            : _tables.CoverageTargets(i, c);
     }
 
     /// <summary>该格所属棋串；空格或障碍返回 <c>null</c>。</summary>
@@ -387,8 +402,33 @@ public sealed partial class GameBoard
     /// ① 预置设施在一局内恒定，写不写对同形比对等价；② 无改造时输出与改造上线之前逐字节相同，旧存档与旧历史天然按"无改造"读入（R-6）；
     /// ③ 改造不可逆且同一目标只能改一次，"已应用集合"与"当前地形"一一对应，排序后即规范形。
     /// 格式：棋子网格后接 <c>|</c> 与按记法字典序排好的改造列表，如 <c>…|B:F7,F:F6-G6</c>；无改造时不写 <c>|</c>。
+    /// <para>relic-redesign D1：信物层非空时再接 <c>#</c> 与信物段（格式见 <c>GameBoard.Relics.cs</c>），存档与结算核对因此能看出"挂出只在一侧生效"；
+    /// <b>信物层为空时不写 <c>#</c>，输出与 <see cref="SerializeShape"/> 是同一个串、与信物层上线之前逐字节相同</b>。同形比对键不含信物段（<see cref="SuperkoKey"/>，R28）。</para>
     /// </remarks>
     public string Serialize()
+    {
+        string shape = SerializeShape();
+        if (_relics is not { Count: > 0 })
+        {
+            return shape;
+        }
+
+        if (_fullSerialVersion == _version && _fullSerial is not null)
+        {
+            return _fullSerial;
+        }
+
+        string full = string.Concat(shape, RelicSeparator.ToString(), RelicSegment());
+        _fullSerial = full;
+        _fullSerialVersion = _version;
+        return full;
+    }
+
+    /// <summary>
+    /// 棋形序列化（relic-redesign D1）：只含棋子网格与改造段、<b>不含信物层</b>——即信物层上线之前 <see cref="Serialize"/> 的输出，逐字节相同。
+    /// 供同形比对（盘面同形禁则不比较信物层，R28）；存档与结算核对用含信物层的 <see cref="Serialize"/>。
+    /// </summary>
+    public string SerializeShape()
     {
         // board-link-mode 段 C2（裁决 C18 / P2）：按突变版本号记忆，与 LifeMemo 同一口径——任何写入原语之后的第一次调用重算，副本从零起。
         // 预演第 8 步、结算核对与日志会对同一盘面多次序列化，73×73 画布上每次约 1 万字符。
@@ -491,7 +531,7 @@ public sealed partial class GameBoard
     /// </summary>
     internal void LoadState(string serialized)
     {
-        if (_edits.Count > 0 || AllCoords().Any(c => this[c].Occupant is not null))
+        if (_edits.Count > 0 || HasRelics || AllCoords().Any(c => this[c].Occupant is not null))
         {
             throw new SiegeRuleException("只能在空盘上写入存档盘面。");
         }
@@ -503,6 +543,15 @@ public sealed partial class GameBoard
     {
         ArgumentNullException.ThrowIfNull(serialized);
         string text = serialized.Trim();
+
+        // relic-redesign D1：信物段在最后（# 之后），先剥下，等改造与棋子都写好再挂（挂载校验"可落子"要看改造后的地形）。缺该段即空信物层。
+        string? relicSegment = null;
+        int hash = text.IndexOf(RelicSeparator, StringComparison.Ordinal);
+        if (hash >= 0)
+        {
+            relicSegment = text[(hash + 1)..];
+            text = text[..hash];
+        }
 
         // 改造段先读：气边、覆盖与"该格可不可落子"都依赖地形，棋子必须写进改造后的地形里
         // （否则本局架过桥的格会被 Place 当成未架桥的深水拒绝）。缺该段即"无改造"，旧存档由此天然回填（R-6）。
@@ -550,6 +599,11 @@ public sealed partial class GameBoard
                 int owner = Convert.ToInt32(ownerCode.ToString(), 16);
                 Place(new Coord(x, y), new PlayerId(owner), TypeFromCode(typeCode));
             }
+        }
+
+        if (relicSegment is not null)
+        {
+            FillRelics(relicSegment);
         }
     }
 
@@ -696,6 +750,15 @@ public sealed partial class GameBoard
     public static string SuperkoKey(string serialized)
     {
         ArgumentNullException.ThrowIfNull(serialized);
+
+        // relic-redesign R28：同形禁则不比较信物层——先剥掉 # 之后的信物段（只差信物位置的两个盘面算同形）。
+        // 无信物段时不分配、原样往下走，与信物层上线之前逐字节相同；喂 Serialize 或 SerializeShape 的输出得到同一个键。
+        int hash = serialized.IndexOf(RelicSeparator, StringComparison.Ordinal);
+        if (hash >= 0)
+        {
+            serialized = serialized[..hash];
+        }
+
         int bar = serialized.IndexOf(TerrainSeparator, StringComparison.Ordinal);
         ReadOnlySpan<char> grid = bar >= 0 ? serialized.AsSpan(0, bar) : serialized.AsSpan();
 

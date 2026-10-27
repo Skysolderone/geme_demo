@@ -12,6 +12,10 @@
 | `recruit` | 每小回合的征募候选抽取 |
 | `setup` | 插旗后的首回合顺序、以及其他流程初始化 |
 | `flag-pick` | 链接模式的盲选插旗（board-link-mode B2）：每名玩家按编号升序各抽一次 `[0, 出生棋盘数)`，未由人指定或时限到时未选的玩家取自己那一次的结果，不看已插的旗（`PrototypeZoneAssignment.AssignBlind` 与正式插旗共用）。retire-legacy-maps 删除了只服务旧路径的 `zone-pick`（边疆档种子选区）与 `flag-risk`（冒险抽签）两条子流 |
+| `relic-spawn:<落位大回合>` | 挂在棋子上的信物的地图刷新（relic-redesign D2，`GameSeed.RelicSpawn(int)`）：每批一条，名字带该批的落位大回合（第 4、6、8……），在落位前 1 个大回合预告时一次抽完本批的位置与类型（逐件：先 `NextInt(剩余候选数)` 不放回抽格，再按 85 / 15 加权抽普通 / 稀有、普通四种 `NextInt(4)` 等权）；落位时不再抽。`RelicSpawner` 是唯一消费者。relic-redesign 加法段只加不接线，对局流程尚未调用 |
+| `relic-drop:<玩家编号>` | 出局 / 弃赛者手里未挂出的非保险带入件立即掉到地图（relic-redesign R17，`GameSeed.RelicDrop(int)`）：每名玩家一条（一名玩家只会出局或弃赛一次），候选规则与 `relic-spawn` 相同，逐件 `NextInt(剩余候选数)` 不放回抽格，不占刷新上限。同上，加法段尚未接线 |
+
+`relic-spawn` / `relic-drop` 按批次 / 玩家各派生一条（同 `carry-draft:<编号>` 的做法），所以刷新与掉落都是纯函数：输入盘面、出生区域、种子、大回合、人数与场上未拾取件数即可复算本批，不需要持久化子流的消费次数；任一批的消费次数不影响其他批，更不影响上表任何既有子流。
 
 改变其中一条子流的**消费次数**，MUST NOT 影响其他子流的取值。
 

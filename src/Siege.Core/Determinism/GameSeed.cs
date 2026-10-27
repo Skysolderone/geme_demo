@@ -45,6 +45,19 @@ public readonly record struct GameSeed(ulong Value)
     /// </summary>
     public const string FlagPick = "flag-pick";
 
+    /// <summary>
+    /// 挂在棋子上的信物的地图刷新子流名 <c>relic-spawn:&lt;落位大回合&gt;</c>（relic-redesign D2）：每批一条，在落位前 1 个大回合预告时一次抽完本批的位置与类型。
+    /// 按批命名（同 <see cref="CarryDraft"/> 的做法），刷新是纯函数、不需要持久化消费次数；任一批的消费次数 MUST NOT 扰动其他批，
+    /// 更不扰动信物生成、征募、流程初始化、盲选插旗、带入与 AI 决策的既有序列。唯一消费者 <c>PieceRelics.RelicSpawner</c>。
+    /// </summary>
+    public static string RelicSpawn(int landingRound) => $"relic-spawn:{landingRound}";
+
+    /// <summary>
+    /// 出局 / 弃赛者未挂出的非保险带入件掉落的子流名 <c>relic-drop:&lt;玩家编号&gt;</c>（relic-redesign R17）：每名玩家一条（一名玩家只会出局或弃赛一次）。
+    /// 同样 MUST NOT 扰动任何既有子流。唯一消费者 <c>PieceRelics.RelicSpawner</c>。
+    /// </summary>
+    public static string RelicDrop(int player) => $"relic-drop:{player}";
+
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
     private const ulong Golden = 0x9E3779B97F4A7C15UL;

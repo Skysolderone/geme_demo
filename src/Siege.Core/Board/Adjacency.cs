@@ -108,7 +108,14 @@ public static class Adjacency
     /// <para>terrain-surfaces：<paramref name="s"/> 是沼泽时返回空（沼泽源，design D2 第 1 步）——沼泽上的棋子不产生覆盖，
     /// 空格归属、信物发现与高地压制都经本方法自然继承，不另设地表例外。</para>
     /// </summary>
-    public static ImmutableArray<Coord> CoverageTargets(MapData map, Coord s)
+    public static ImmutableArray<Coord> CoverageTargets(MapData map, Coord s) => CoverageTargets(map, s, farReach: false);
+
+    /// <summary>
+    /// 同 <see cref="CoverageTargets(MapData, Coord)"/>，<paramref name="farReach"/> 为 <c>true</c> 时<b>不论地表</b>都走岩台远格分支
+    /// （relic-redesign D3：挂望台的子"按岩台规则额外覆盖四方向距离 2"）。条件是"站在岩台上 <b>或</b> 挂望台"——岩台上的子再挂望台不再扩大；
+    /// 沼泽源仍最先返回空（沼泽优先）。<paramref name="farReach"/> 为 <c>false</c> 时与原重载逐项相同。只由 <see cref="GameBoard.CoverageTargets"/> 按信物层调用。
+    /// </summary>
+    public static ImmutableArray<Coord> CoverageTargets(MapData map, Coord s, bool farReach)
     {
         ArgumentNullException.ThrowIfNull(map);
         if (!map.IsPlayable(s) || map.SurfaceAt(s) == Surface.Marsh)
@@ -152,7 +159,7 @@ public static class Adjacency
 
         // terrain-surfaces 岩台远格（design D2 第 3 步）：沿每个方向越过中间格 m 再覆盖一格 u。
         // m 是障碍、盘外或比源高出崖壁阈值时阻挡；深水、林地、有子的格、栅栏都不阻挡。u 与隔水覆盖可能是同一格，按格去重。
-        if (map.SurfaceAt(s) == Surface.Crag)
+        if (farReach || map.SurfaceAt(s) == Surface.Crag)
         {
             foreach (Coord m in Neighbors(map.Width, map.Height, s))
             {
