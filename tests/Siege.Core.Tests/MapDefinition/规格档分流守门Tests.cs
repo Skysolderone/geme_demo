@@ -65,6 +65,7 @@ public class 规格档分流守门Tests
         // map-expand-25 D7：外接列 / 行区间（ColumnRange / RowRange）并入按人数的预算行（画布边长恰等），声明行只剩四个字段；删掉的两个字段名不得再出现。
         Assert.DoesNotMatch(@"(?<![\w])(ColumnRange|RowRange)(?![\w])", source);
         // seat-gap-25 E5：出生区数恰等于人数（预算行区间 (n, n)），"出生区数须多于人数"的声明字段删除，声明行只剩三个字段；删掉的字段名不得再出现。
+        // 变异 M-S9（seat-gap-25 检查阶段实跑，只跑本类）：在 MapValidator.cs 的 RulesOf 上方加一行注释 `// 变异 ZonesMustExceedPlayers` → 本测试红 1（红在下面这条 DoesNotMatch）；备份还原、逐字节比对、刷新时间戳。
         Assert.DoesNotMatch(@"(?<![\w])ZonesMustExceedPlayers(?![\w])", source);
         foreach (string field in new[] { "SupportedPlayers", "Budgets", "PlateList" })
         {

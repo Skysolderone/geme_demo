@@ -8,7 +8,7 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
 /// 规格：openspec/changes/link-map-terrain/specs/link-map-generation —— Requirement: 初始布局（中间带按主题放置地形）；design D3 / D4（tasks 2.2 / 2.3）。
-/// 每个主题的生成函数单测其主题特征（抬升前的平台内部），各取 6×6 / 7×7 / 8×8 三种尺寸（map-expand-25 D2：平台边长 6–8，中央 8×8）、布局流种子 1–30；
+/// 每个主题的生成函数单测其主题特征（抬升前的平台内部），各取 6×6 / 7×7 / 8×8 三种尺寸（map-expand-25 D2：平台边长 6–8；seat-gap-25 E1 / E2 起出生座位固定 8×8、中立平台 6–8）、布局流种子 1–30；
 /// 另统计种子 1–20 × 人数 2–4 的重抽次数分布与各主题的实际地形量（输出到测试日志，抄进任务汇报）。map-expand-25 R3：高台主题去掉，接缝自检与难到达格随紧贴布局删除。
 /// </summary>
 /// <remarks>变异验证见任务汇报（M-T*）。</remarks>
@@ -391,7 +391,7 @@ public class 主题地形Tests(ITestOutputHelper output)
     {
         // terrain-density 实施后裁决 N1：插值终点由边长上限推算（7×7 的中间带 16 格），6×6 / 6×7 / 7×6（中间带 7 / 11 格）恒取下限，7×7 才取得到上限。
         // 栅栏阵取下限 = 2 段 × 2 条 = 4 条栅栏边、散布岩石 0 格（Draw(0, 2)）；7×7 在流种子 1–30 里至少一颗多于 4 条、至少一颗有散布岩石（样本口径）。
-        // 判别力：终点钉回 8×8 的 27 格时 7×7 的插值上限退化为下限，本条 7×7 一行即红。map-expand-25：8×8（中央平台）按 7×7 封顶，同样取得到上限。
+        // 判别力：终点钉回 8×8 的 27 格时 7×7 的插值上限退化为下限，本条 7×7 一行即红。map-expand-25：8×8（seat-gap-25 起即出生座位与 8×8 的中立平台）按 7×7 封顶，同样取得到上限。
         var plate = new BoardPlate(new Coord(2, 2), width, height, BoardPlateKind.Birth, BoardTheme.Palisade);
         List<LinkMapGenerator.BoardTerrain> boards = [.. Enumerable.Range(1, StreamSeeds).Select(s => LinkMapGenerator.DraftBoard(plate, MapRandom.ForLinkLayout((ulong)s, 4)))];
         static int Scattered(LinkMapGenerator.BoardTerrain b) => b.Rocks.Count(r => !b.Cluster.Contains(r));

@@ -163,7 +163,7 @@ public sealed class FlagPlanting
     }
 
     /// <summary>
-    /// 某一座位能看到的旗帜（实现裁决 B2）：只有自己那面旗；全部锁定后另含与自己同一块棋盘的玩家。
+    /// 某一座位能看到的旗帜（实现裁决 B2）：只有自己那面旗；全部锁定后另含与自己同一块棋盘的玩家（seat-gap-25 E4 起座位互斥，正式路径锁定后只有本人）。
     /// </summary>
     public SeatFlagView ViewFor(PlayerId seat)
     {

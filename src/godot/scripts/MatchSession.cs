@@ -262,7 +262,7 @@ public sealed class MatchSession
     /// <summary>
     /// 插旗：本机玩家选定出生座位，其余玩家的座位由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：AI 用 <c>flag-pick</c> 子流在空座位里盲选，
     /// seat-gap-25 E4 起座位互斥、本机先插旗必得所选座位），选中即锁定并开始第 1 大回合。<paramref name="zone"/> 只能是出生座位（<see cref="BirthZoneAt"/> 只认座位，中立平台为 <c>null</c>）。
-    /// <see cref="ZoneOwners"/> 只记每块棋盘上<b>第一个</b>登记的玩家（旧模式一区一人；链接模式同区时只剩首位，段 D-b 改为按座位视图读取）。
+    /// <see cref="ZoneOwners"/> 记每个座位上登记的玩家（seat-gap-25 E4 起座位互斥、一座一人；"只记第一个登记者"的写法是旧同区口径的遗留，现已不会丢人）。
     /// </summary>
     public void ChooseZone(int zone)
     {
