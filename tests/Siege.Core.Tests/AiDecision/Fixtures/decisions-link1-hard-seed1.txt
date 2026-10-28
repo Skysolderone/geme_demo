@@ -1,30 +1,30 @@
 # AI 决策序列基线（board-link-mode 3.4，裁决 C5）
-# map=link:1:4 digest=AF22F0AB0CCAFB9188B0392CCC750C69023B6BECF846BAB15A8CFB1BB738332C seed=1 players=4 difficulty=Hard zones=8,3,1,5
+# map=link:1:4 digest=941775BDBC5CD00AAF62C3745CD5DACF9459AF55F116E8CE2579DB5EF7974AC3 seed=1 players=4 difficulty=Hard zones=2,3,1,0
 # cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
 # maxMajorRounds=6
 # 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
-1	P0	R:1:Fortress,0:Line,2:Artisan D:Q33:Fortress,R34:Line
-1	P3	R:0:Multiplier,1:Basic,2:Sentry D:U19:Basic,T20:Basic,AA20:Multiplier
-1	P2	R:0:Basic,1:Boundary,2:Basic D:Q6:Basic,S6:Boundary,R8:Basic
-1	P1	R:3:Fortress,0:Basic,1:Synergy D:AM11:Fortress,AJ12:Basic,AL12:Basic
-2	P2	R:0:Artisan,1:Artisan,2:Bannerman D:R5:Basic,U7:Artisan+X:U6,T9:Artisan+X:S9
-2	P1	R:2:Fortress,3:Fortress,0:Sentry D:AM9:Fortress,AN12:Synergy,AN13:Fortress
-2	P3	R:0:Synergy,3:Multiplier,1:Basic D:V22:Basic,X22:Multiplier,W23:Basic
-2	P0	R:1:Synergy,4:Multiplier,3:Basic D:V34:Artisan+X:W34,U35:Basic,P36:Multiplier
-3	P1	R:3:Fortress,0:Bannerman,1:Basic D:AK11:Basic,AK13:Fortress,AM13:Basic
-3	P2	R:2:Synergy,3:Multiplier,0:Basic D:T5:Basic,R7:Synergy,V9:Multiplier
-3	P0	R:0:Fortress,3:Line,1:Basic D:Q35:Basic,S36:Fortress,R37:Line
-3	P3	R:1:Fortress,2:Basic,3:Basic D:Z19:Basic,W21:Basic,Y24:Fortress
-4	P1	R:4:Synergy,0:Basic,3:Bannerman D:N4:Bannerman,O4:Bannerman,X5:Basic,AD11:Basic
-4	P2	R:4:Fortress,0:Basic,1:Line D:AA4:Fortress
-4	P3	R:0:Fortress,1:Basic,3:Basic D:O6:Fortress
-4	P0	R:3:Synergy,2:Line,0:Artisan D:AE4:Line,J40:Artisan+B:J39
-5	P1	R:0:Basic,1:Boundary,4:Basic D:AH4:Boundary
-5	P0	R:0:Fortress,1:Chain,2:Artisan D:AG5:Fortress,H41:Artisan+B:H42
-5	P2	R:4:Synergy,0:Basic,1:Basic D:AK4:Line
-5	P3	R:4:Synergy,0:Multiplier,1:Multiplier D:AN4:Multiplier,AC5:Multiplier
-6	P1	R:0:Multiplier,1:Basic,2:Basic D:F17:Multiplier,AC28:Basic,AB29:Basic
-6	P0	R:0:Synergy,4:Line,1:Basic D:AC30:Line
-6	P3	R:2:Multiplier,0:Basic,1:Basic D:Z6:Multiplier
-6	P2	R:1:Fortress,0:Multiplier,2:Basic D:AJ6:Fortress
+1	P0	R:1:Fortress,0:Line,2:Artisan D:G39:Fortress,J39:Line
+1	P3	R:0:Multiplier,1:Basic,2:Sentry D:H5:Basic,E8:Basic,G8:Multiplier
+1	P2	R:0:Basic,1:Boundary,2:Basic D:AQ5:Basic,AR6:Boundary,AT6:Basic
+1	P1	R:3:Fortress,0:Basic,1:Synergy D:AO39:Basic,AQ39:Fortress,AP40:Basic
+2	P2	R:0:Artisan,1:Artisan,2:Bannerman D:AQ8:Basic,AS8:Basic,AR12:Artisan+B:AR11
+2	P3	R:2:Fortress,3:Fortress,0:Sentry D:K6:Basic,J7:Fortress,L7:Fortress
+2	P1	R:0:Synergy,3:Multiplier,1:Basic D:AR41:Basic,AO42:Basic,AN43:Multiplier
+2	P0	R:1:Synergy,4:Multiplier,3:Basic D:H41:Basic,K41:Basic,L41:Multiplier
+3	P3	R:3:Fortress,0:Bannerman,1:Basic D:G6:Basic,K8:Basic,H12:Fortress
+3	P2	R:2:Synergy,0:Basic,1:Basic D:AS5:Basic,AU10:Basic
+3	P1	R:0:Fortress,1:Basic,2:Artisan D:AP38:Fortress,AN41:Basic,AU43:Artisan+B:AT43
+3	P0	R:1:Fortress,2:Basic,3:Basic D:H38:Basic,L43:Artisan+X:M43,E44:Fortress
+4	P3	R:4:Synergy,0:Basic,3:Bannerman D:T4:Basic,W4:Synergy,AH11:Bannerman,AH12:Bannerman
+4	P1	R:4:Fortress,0:Basic,1:Line D:AF12:Fortress
+4	P0	R:0:Fortress,1:Basic,2:Boundary D:N4:Fortress,AK4:Boundary
+4	P2	R:3:Synergy,0:Artisan,1:Artisan D:AJ5:Artisan+F:AJ4-AK4,AL5:Artisan+F:AK4-AK5,U16:Artisan+B:U17
+5	P3	R:0:Basic,1:Boundary,2:Chain D:P5:Boundary
+5	P0	R:0:Fortress,1:Chain,2:Artisan D:O6:Fortress,AN20:Artisan+B:AO20
+5	P2	R:4:Synergy,2:Multiplier,0:Basic D:R5:Basic,AK12:Basic,AH14:Multiplier
+5	P1	R:4:Synergy,0:Multiplier,1:Multiplier D:Y5:Line
+6	P3	R:0:Multiplier,1:Basic,2:Basic D:N19:Basic,M20:Basic,O20:Basic
+6	P0	R:0:Synergy,4:Line,1:Basic D:AC5:Line
+6	P2	R:2:Multiplier,0:Basic,1:Basic D:U6:Multiplier
+6	P1	R:1:Fortress,0:Multiplier,2:Basic D:AA6:Fortress
 # end phase=InProgress majorRound=7 reason=- turns=24

@@ -124,7 +124,7 @@ public sealed partial class Hud
         _selectPanel = panel;
 
         body.AddChild(Ui.Text("开始新局", Ui.PanelBorder, UiTheme.BodyFontPx + 4));
-        body.AddChild(Ui.Text("出生平台散布在浮空岛上、平台之间是低地，每名玩家各盲选一块平台；前 3 个大回合在自己平台构筑，第 4 大回合起全岛开战。地图由地图种子与人数决定。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        body.AddChild(Ui.Text($"{Siege.Presentation.Text.Labels.SeatLayout}（不可出生）；每名玩家盲选一个座位，前 3 个大回合在自己座位构筑，第 4 大回合起全岛开战。地图由地图种子与人数决定。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
 
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("地图种子"));

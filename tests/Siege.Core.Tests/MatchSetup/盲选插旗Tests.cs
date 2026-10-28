@@ -12,6 +12,9 @@ namespace Siege.Core.Tests.MatchSetup;
 /// 变异验证（段 B 前半实跑）：
 /// M-B3 <c>GameSeed.FlagPick</c> 改为 <c>"setup"</c> → 「AI均匀盲选可复现」「时限到时未选者由flag-pick均匀指定」红 2（钉住子流名）；
 /// M-B6 <c>MatchFlow.PlantPrototype</c> 链接分支里对每个与人工同区的 AI 多抽一次 setup 子流（把选区与首回合顺序耦合）→ 「选区不扰动其他随机」红 1。
+/// seat-gap-25 E4（裁决 S2）：座位互斥——锁定时按插旗先后，撞座位的后插旗者与未插旗者按编号升序、各从 flag-pick 子流在当前空座位里抽一次（期望值用测试内独立算式 <see cref="ExpectedSeats"/>）。
+/// 变异 M-S5（seat-gap-25 实跑）：BlindPicks 改为在全部座位里抽（不避开已占座位）→ 「AI均匀盲选可复现」「撞座位按插旗先后判定」「时限到时未选者只落空座位」「调试依次插旗」「选区不扰动其他随机」红 5。
+/// 原「多人同区」「AI 均匀盲选会与人同区」的口径作废，改为「撞座位时后插旗者改派到空座位」「未选者只落空座位」；link:1:4 换图后只有 4 个座位（原 10 块平台）。
 /// </remarks>
 public class 盲选插旗Tests
 {
@@ -25,7 +28,7 @@ public class 盲选插旗Tests
         SeatFlagView b = match.Flags.ViewFor(LinkModeFixtures.P1);
         Assert.Null(b.OwnZone);
         Assert.Empty(b.SameBoard);
-        Assert.Equal(10, b.ZoneCount);   // map-expand-25：link:1:4 浮空岛 10 块平台（原 5 块）
+        Assert.Equal(4, b.ZoneCount);   // seat-gap-25：link:1:4 恰 4 个出生座位（map-expand-25 时为 10 块平台，更早为 5 块）
         // 公开视图不暴露任何旗数（retire-legacy-rules 第 3 组：旧模式的每区旗数字段删除，改为断言公开视图只有"是否已锁定"一项）。
         Assert.Equal([nameof(FlagPublicView.IsLocked)], typeof(FlagPublicView).GetProperties().Select(p => p.Name));
         Assert.Equal(new FlagPublicView(false), match.Flags.PublicView());
@@ -46,33 +49,73 @@ public class 盲选插旗Tests
     }
 
     [Fact]
-    public void 多人同区()
+    public void 撞座位时后插旗者改派到空座位()
     {
-        // Scenario：A 与 B 都锁定棋盘 2 → 接受；锁定后 A 与 B 各自看到对方在棋盘 2 上，其他玩家看不到棋盘 2 上有谁。
-        MatchFlow match = LinkModeFixtures.Started([1, 1, 3, 4]);
+        // seat-gap-25 E4（原 Scenario「多人同区」作废）：P1 先插座位 2、P0 后插同一座位、P2 插座位 4、P3 未插 → 锁定后 P1 保住座位 2；
+        // P0（撞座位）与 P3（未插旗）按编号升序各从 flag-pick 子流在当前空座位（座位 1 / 3）里抽一次——四人各占一个座位，同座只剩本人。
+        // 插旗时仍接受选别人已选的座位（盲选不泄露信息）。
+        MatchFlow match = LinkModeFixtures.Create();
+        match.Flags.Plant(LinkModeFixtures.P1, 1);
+        match.Flags.Plant(LinkModeFixtures.P0, 1);
+        match.Flags.Plant(LinkModeFixtures.P2, 3);
+        Assert.Equal(1, match.Flags.FlagOf(LinkModeFixtures.P0));   // 锁定前自己看到的仍是自己插的旗
+        match.LockFlags();
         Assert.Equal(MatchPhase.InProgress, match.Phase);
 
-        Assert.Equal([LinkModeFixtures.P0, LinkModeFixtures.P1], match.Flags.ViewFor(LinkModeFixtures.P0).SameBoard);
-        Assert.Equal([LinkModeFixtures.P0, LinkModeFixtures.P1], match.Flags.ViewFor(LinkModeFixtures.P1).SameBoard);
-        Assert.Equal([LinkModeFixtures.P2], match.Flags.ViewFor(LinkModeFixtures.P2).SameBoard);
+        int[] expected = ExpectedSeats(TestMaps.Seed, 4, [(1, 1), (0, 1), (2, 3)]);
+        Assert.Equal(1, expected[1]);
+        Assert.Equal(3, expected[2]);
+        Assert.Equal(expected, match.PlayerStates.Select(st => st.BirthZone!.Value));
+        Assert.Equal(4, expected.Distinct().Count());
+        foreach (PlayerId p in LinkModeFixtures.All)
+        {
+            Assert.Equal([p], match.Flags.ViewFor(p).SameBoard);
+            Assert.Equal(match.StateOf(p).BirthZone, match.Flags.ViewFor(p).OwnZone);
+        }
+
         Assert.Equal(new FlagPublicView(true), match.Flags.PublicView());   // 只有"已锁定"，没有旗数（retire-legacy-rules 第 3 组：原断言旗数字段为空）
-        Assert.Equal(2, match.LockedFlagCounts[1]);
+        Assert.All(match.LockedFlagCounts.Values, c => Assert.Equal(1, c));
     }
 
     [Fact]
-    public void 时限到时未选者由flag_pick均匀指定()
+    public void 撞座位按插旗先后判定()
     {
-        // 正式插旗：只有 P0 选了棋盘 3，时限到 → 其余三人取 flag-pick 子流里各自那一次（按编号升序每人一次），不看 P0 的旗。
+        // seat-gap-25 E4：同一对局种子、同样两人插同一座位，只是先后相反 → 先插者保住座位，后插者被改派；同种子同先后两次结果相同。
+        static int[] Run(params (PlayerId Player, int Zone)[] plants)
+        {
+            MatchFlow match = LinkModeFixtures.Create();
+            foreach ((PlayerId player, int zone) in plants)
+            {
+                match.Flags.Plant(player, zone);
+            }
+
+            match.LockFlags();
+            return [.. match.PlayerStates.Select(st => st.BirthZone!.Value)];
+        }
+
+        int[] p0First = Run((LinkModeFixtures.P0, 2), (LinkModeFixtures.P1, 2));
+        int[] p1First = Run((LinkModeFixtures.P1, 2), (LinkModeFixtures.P0, 2));
+        Assert.Equal(2, p0First[0]);
+        Assert.NotEqual(2, p0First[1]);
+        Assert.Equal(2, p1First[1]);
+        Assert.NotEqual(2, p1First[0]);
+        Assert.Equal(p0First, Run((LinkModeFixtures.P0, 2), (LinkModeFixtures.P1, 2)));
+        Assert.Equal(ExpectedSeats(TestMaps.Seed, 4, [(0, 2), (1, 2)]), p0First);
+        Assert.Equal(ExpectedSeats(TestMaps.Seed, 4, [(1, 2), (0, 2)]), p1First);
+    }
+
+    [Fact]
+    public void 时限到时未选者只落空座位()
+    {
+        // 正式插旗：只有 P0 选了座位 4，时限到 → 其余三人按编号升序各从 flag-pick 子流在当前空座位里抽一次（seat-gap-25 E4：原为在全部平台里各抽一次、可与 P0 同区）。
         MatchFlow match = LinkModeFixtures.Create();
         match.Flags.Plant(LinkModeFixtures.P0, 3);
         match.LockFlags();
 
-        int[] expected = ExpectedPicks(TestMaps.Seed, 4, LinkModeFixtures.Map.Boards.Length);   // map-expand-25：在全部平台（link:1:4 为 10 块）里均匀抽
+        int[] expected = ExpectedSeats(TestMaps.Seed, 4, [(0, 3)]);
         Assert.Equal(3, match.StateOf(LinkModeFixtures.P0).BirthZone);
-        for (int i = 1; i < 4; i++)
-        {
-            Assert.Equal(expected[i], match.StateOf(LinkModeFixtures.All[i]).BirthZone);
-        }
+        Assert.Equal(expected, match.PlayerStates.Select(st => st.BirthZone!.Value));
+        Assert.Equal([0, 1, 2, 3], expected.Order());
     }
 
     [Fact]
@@ -110,15 +153,18 @@ public class 盲选插旗Tests
     public void 调试依次插旗()
     {
         // Scenario：在调试界面依次为 4 名玩家指定出生棋盘 → 对局进入与正式插旗结果等价的状态，可正常开始第 1 大回合。
+        // seat-gap-25 E4：依次插旗与同时插旗走同一个锁定（含撞座位改派）——P0 / P1 撞座位 3，两条路径改派结果相同。
         MatchFlow formal = LinkModeFixtures.Create();
         formal.Flags.Plant(LinkModeFixtures.P0, 2);
         formal.Flags.Plant(LinkModeFixtures.P1, 2);
         formal.Flags.Plant(LinkModeFixtures.P2, 0);
-        formal.Flags.Plant(LinkModeFixtures.P3, 4);
+        formal.Flags.Plant(LinkModeFixtures.P3, 3);
         formal.LockFlags();
-        MatchFlow debug = LinkModeFixtures.Started([2, 2, 0, 4]);
+        MatchFlow debug = LinkModeFixtures.Create();
+        debug.PlantSequentially([(LinkModeFixtures.P0, 2), (LinkModeFixtures.P1, 2), (LinkModeFixtures.P2, 0), (LinkModeFixtures.P3, 3)]);
 
         Assert.Equal(formal.PlayerStates.Select(s => s.BirthZone), debug.PlayerStates.Select(s => s.BirthZone));
+        Assert.Equal(4, debug.PlayerStates.Select(s => s.BirthZone).Distinct().Count());
         Assert.Equal(formal.ActionOrder, debug.ActionOrder);
         Assert.Equal(1, debug.MajorRound);
         debug.PassTurn();
@@ -128,46 +174,44 @@ public class 盲选插旗Tests
     public void AI均匀盲选可复现()
     {
         // Scenario：本机玩家选棋盘 2，其余三名 AI 自动插旗，同一对局种子重复开局两次 → 三名 AI 两次锁定的棋盘完全相同。
-        // 钉住子流：AI 的结果等于 flag-pick 子流（字面量子流名）按编号升序每人一次的抽取。
+        // 钉住子流：AI 的结果等于 flag-pick 子流（字面量子流名）按编号升序每人一次、在当前空座位里的抽取（seat-gap-25 E4）。
         int[] once = PlantWithHuman(TestMaps.Seed, 1);
         int[] twice = PlantWithHuman(TestMaps.Seed, 1);
         Assert.Equal(once, twice);
         Assert.Equal(1, once[0]);
-        int[] expected = ExpectedPicks(TestMaps.Seed, 4, LinkModeFixtures.Map.Boards.Length);
-        Assert.Equal(expected[1..], once[1..]);
+        Assert.Equal(ExpectedSeats(TestMaps.Seed, 4, [(0, 1)]), once);
 
-        // 均匀盲选：多个种子下 AI 会与人同区、彼此同区，每块棋盘都会被选到（不看已插的旗、不避让）。map-expand-25：link:1:4 为 10 块平台。
+        // 盲选只落空座位：多个种子下 AI 从不与人或彼此同座，人没选的三个座位都会被 AI 坐到（原 map-expand-25 口径"会与人同区、10 块平台都被选到"作废）。
         var zones = new HashSet<int>();
-        bool sharedWithHuman = false;
         for (ulong s = 1; s <= 40; s++)
         {
             // 只取选区的唯一实现（不建局，减轻并行负载）；建局路径与它同源由上面两条断言钉住。
             int[] picks = [.. PrototypeZoneAssignment.AssignBlind(LinkModeFixtures.Map, new GameSeed(s), LinkModeFixtures.All, (LinkModeFixtures.P0, 1)).Select(c => c.Zone)];
+            Assert.Equal(4, picks.Distinct().Count());
+            Assert.Equal(1, picks[0]);
             zones.UnionWith(picks[1..]);
-            sharedWithHuman |= picks[1..].Contains(1);
         }
 
-        Assert.Equal(10, zones.Count);
-        Assert.True(sharedWithHuman);
+        Assert.Equal([0, 2, 3], zones.Order());
     }
 
     [Fact]
     public void 选区不扰动其他随机()
     {
-        // Scenario：用某种子开局并改变本机玩家的人工选择 → 信物刷新与首回合顺序逐项不变（AI 的选择也不变）。
-        // 人工选择取遍全部棋盘：必有某次与某名 AI 同区，"同区时多消费一次别的子流"这类耦合才会被触发。
+        // Scenario：用某种子开局并改变本机玩家的人工选择 → 信物刷新与首回合顺序逐项不变。
+        // seat-gap-25 E4：AI 只落空座位，人选哪个座位会改变 AI 落在哪（原断言"AI 的选择也不变"作废），改为断言四人座位互不相同。
         // relic-redesign W1：开局信物生成随旧信物删除，改看开局盘面上第 3 大回合的预告（子流 relic-spawn:4）；原载体 RelicMap 随之删除。
         MatchFlow a = LinkModeFixtures.Create();
         a.PlantPrototype((LinkModeFixtures.P0, 0));
         Assert.Equal(2, RelicSpawner.Forecast(a.Board, new BirthBoardArea(a.Map), a.Seed, 3, a.Players.Length, 0)!.Slots.Length);   // 样本口径：⌈4/2⌉ = 2 件
-        for (int zone = 1; zone < a.Map.Boards.Length; zone++)
+        for (int zone = 1; zone < a.Map.BirthZones.Length; zone++)
         {
             MatchFlow b = LinkModeFixtures.Create();
             b.PlantPrototype((LinkModeFixtures.P0, zone));
 
             Assert.Equal(RelicText(a), RelicText(b));
             Assert.Equal(a.ActionOrder, b.ActionOrder);
-            Assert.Equal(a.PlayerStates.Skip(1).Select(s => s.BirthZone), b.PlayerStates.Skip(1).Select(s => s.BirthZone));
+            Assert.Equal(4, b.PlayerStates.Select(s => s.BirthZone).Distinct().Count());
             Assert.Equal(zone, b.StateOf(LinkModeFixtures.P0).BirthZone);
         }
     }
@@ -178,10 +222,36 @@ public class 盲选插旗Tests
         return [.. match.PlantPrototype((LinkModeFixtures.P0, humanZone)).Select(c => c.Zone)];
     }
 
-    private static int[] ExpectedPicks(GameSeed seed, int players, int zones)
+    /// <summary>
+    /// 锁定后各玩家（P0..P(n−1)）的座位（seat-gap-25 E4，测试内独立算式）：<paramref name="plants"/> 按插旗先后给出（玩家编号, 座位）；先到先得，
+    /// 撞座位者与未插旗者合并、按编号升序，各从 flag-pick 子流抽 <c>NextInt(空座位数)</c>，在升序的空座位里取。座位数取 <see cref="LinkModeFixtures.Map"/> 的出生区数。
+    /// </summary>
+    private static int[] ExpectedSeats(GameSeed seed, int players, (int Player, int Zone)[] plants)
     {
+        int seats = LinkModeFixtures.Map.BirthZones.Length;
+        int?[] result = new int?[players];
+        var pending = new List<int>();
+        foreach ((int player, int zone) in plants)
+        {
+            if (result.Contains(zone))
+            {
+                pending.Add(player);
+            }
+            else
+            {
+                result[player] = zone;
+            }
+        }
+
+        pending.AddRange(Enumerable.Range(0, players).Where(p => !plants.Any(x => x.Player == p)));
         RandomStream stream = seed.Stream("flag-pick");
-        return [.. Enumerable.Range(0, players).Select(_ => stream.NextInt(zones))];
+        foreach (int player in pending.Order())
+        {
+            int[] empty = [.. Enumerable.Range(0, seats).Where(z => !result.Contains(z))];
+            result[player] = empty[stream.NextInt(empty.Length)];
+        }
+
+        return [.. result.Select(z => z!.Value)];
     }
 
     private static string RelicText(MatchFlow match) =>

@@ -25,7 +25,7 @@ public class 战场结算Tests
     {
         // Scenario：战场 1 内 A、B 同一大回合各自 Pass，A 势力高于 B → 该大回合结束时战场 1 结算，A 胜，B 以"战场落败"出局且势力记为结算时的值（> 0）。
         // open-map：唯一战场，结算名单是全部 4 名在局玩家（P2、P3 未落子势力为 0），结算即终局。
-        MatchFlow match = Started([0, 0, 3, 4]).PlayRound(P0, P1).PlayRound(P0);
+        MatchFlow match = Started([0, 0, 3, 2]).PlayRound(P0, P1).PlayRound(P0);
         Assert.Empty(match.Settlements);
         System.Numerics.BigInteger bPower = match.Scoreboard.Latest!.Of(P1).Total;
         Assert.True(bPower > 0);
@@ -53,7 +53,7 @@ public class 战场结算Tests
     public void 一方落子即不结算()
     {
         // Scenario：战场 1 内 A Pass、B 落子 1 枚 → 本大回合结束时战场 1 不结算。
-        MatchFlow match = Started([0, 0, 3, 4]).PlayRound(P1);
+        MatchFlow match = Started([0, 0, 3, 2]).PlayRound(P1);
         Assert.Empty(match.Settlements);
         Assert.Equal(4, match.ActiveCount);
         Assert.Empty(match.PassedThisRound);   // 大回合结束时清空
@@ -63,7 +63,7 @@ public class 战场结算Tests
     public void 填满结算()
     {
         // Scenario：一次结算后战场 1 内不存在可落子空格 → 该大回合结束时战场 1 结算（原因"填满"，即便有人本大回合落了子）。
-        MatchFlow match = Started([0, 0, 3, 4]).AtRound(1, [P0, P1, P2, P3]);
+        MatchFlow match = Started([0, 0, 3, 2]).AtRound(1, [P0, P1, P2, P3]);
         match.PlaceOne();
         bool toP1 = false;
         foreach (Coord c in match.Board.Battlefields.ById(0)!.Cells.Where(c => match.Board[c].Occupant is null))   // open-map：填满整张地图（唯一战场）
@@ -191,7 +191,7 @@ public class 战场结算Tests
     public void 构筑期也结算()
     {
         // Scenario（open-map「构筑期也结算」）：第 1 大回合 4 名玩家都 Pass → 第 1 大回合结束时唯一战场结算、终局。
-        MatchFlow match = Started([0, 0, 3, 4]).PassRound();
+        MatchFlow match = Started([0, 0, 3, 2]).PassRound();
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
         Assert.Equal(1, settled.MajorRound);
         Assert.Equal(1, match.ActiveCount);
@@ -202,7 +202,7 @@ public class 战场结算Tests
     [Fact]
     public void 已结算的战场不再结算()
     {
-        MatchFlow match = Started([0, 0, 3, 4]).PassRounds(2);
+        MatchFlow match = Started([0, 0, 3, 2]).PassRounds(2);
         Assert.Single(match.Settlements);
         Assert.Throws<SiegeRuleException>(() => match.Debug.SettleBattlefield(0, match.Settlements[0].Winner));
     }
@@ -211,7 +211,7 @@ public class 战场结算Tests
     public void 全零局面按种子兜底顺序定胜者()
     {
         // 比较链四级全同（都没落子）时，胜者取种子兜底顺序靠前者（裁决 S6 待定）；落败者名次 2。
-        MatchFlow match = Started([0, 0, 3, 4]).PassRound();
+        MatchFlow match = Started([0, 0, 3, 2]).PassRound();
         BattlefieldSettlementRecord settled = match.Settlements.Single();
         PlayerId expected = All.OrderBy(p => match.Debug.SeedRankOf(p)).First();   // open-map：唯一战场，四人全零
         Assert.Equal(expected, settled.Winner);
@@ -223,7 +223,7 @@ public class 战场结算Tests
     private static MatchFlow ThreeUnderCap(int roundCap, int round)
     {
         // 四人四块棋盘：P0 多落的子都在自己的出生棋盘核心区（PlaceOne 先落核心区），不会提走别人的子、不会让谁势力归零。
-        MatchFlow match = Started([0, 1, 3, 4], options: Options with { RoundCap = roundCap }).PlayRound(P0, P1, P2).PlayRounds(6, P0);
+        MatchFlow match = Started([0, 1, 3, 2], options: Options with { RoundCap = roundCap }).PlayRound(P0, P1, P2).PlayRounds(6, P0);
         match.Resign(P3);
         Assert.Equal(3, match.ActiveCount);
         Assert.Empty(match.Settlements);

@@ -165,6 +165,13 @@ public sealed record DefaultBoardView(
     public ImmutableArray<BoardPlaceholderView> Placeholders { get; init; } = [];
 
     /// <summary>
+    /// 尚未展开的中立平台轮廓（seat-gap-25 E6）：棋盘清单里的公共棋盘（<see cref="BoardPlateKind.Public"/>，不可出生）中，可落子格没有全部可见的那些，
+    /// 只有外接矩形（与出生座位的占位同一类静态公开信息），由 <see cref="ForSeat"/> 填入；全知视图与锁定之后（整块可见，已在 <see cref="Boards"/> 里）为空。
+    /// 渲染层只能画轮廓（不带编号、不可点选、样式与座位占位明显不同），不画格线与内部布局。
+    /// </summary>
+    public ImmutableArray<BoardPlate> NeutralPlates { get; init; } = [];
+
+    /// <summary>
     /// 当前预告批次的落位大回合（relic-redesign R11 / R25：预告格标记写"种类 + 落位大回合"）；没有预告时为 <c>null</c>。
     /// 全部 <see cref="RelicMarker.Forecast"/> 格同属这一批（Core 一次只有一批预告），所以放在棋盘上而不是逐格重复。原样取自公开快照的 <c>RelicForecast.LandingRound</c>。
     /// </summary>
@@ -201,6 +208,12 @@ public sealed record DefaultBoardView(
         foreach (BoardPlaceholderView p in Placeholders)
         {
             sb.Append(p.Zone).Append('@').Append(p.Origin.X).Append(',').Append(p.Origin.Y).Append(p.Expanded ? 'E' : '-').Append(p.Own ? 'O' : '-').Append(';');
+        }
+
+        sb.Append('|');
+        foreach (BoardPlate plate in NeutralPlates.IsDefault ? [] : NeutralPlates)
+        {
+            sb.Append(plate.Origin.X).Append(',').Append(plate.Origin.Y).Append(':').Append(plate.Width).Append('x').Append(plate.Height).Append(';');
         }
 
         return sb.ToString();
@@ -249,6 +262,8 @@ public sealed record DefaultBoardView(
             Edits = [.. Edits.Where(e => e.Kind == TerrainEditKind.Fence ? visible.Contains(e.Edge.A) && visible.Contains(e.Edge.B) : visible.Contains(e.Cell))],
             Boards = [.. Boards.Where(b => b.Cells().Where(playable.Contains).All(visible.Contains))],
             Placeholders = placeholders,
+            // seat-gap-25 E6：没展开的中立平台只给轮廓（外接矩形），供选图预览与插旗阶段照常画出、与座位区分；它们没有编号，不进占位、不可插旗。
+            NeutralPlates = [.. (Boards.IsDefault ? [] : Boards).Where(b => b.Kind == BoardPlateKind.Public && !b.Cells().Where(playable.Contains).All(visible.Contains))],
         };
     }
 

@@ -289,14 +289,14 @@ public sealed partial class MatchFlow
 
     /// <summary>
     /// 原型替代路径的一站式入口（frontier-map D4）：<paramref name="manual"/> 是人工指定的那一名玩家及其区号，其余玩家的区由
-    /// <see cref="PrototypeZoneAssignment.AssignBlind"/> 盲选给出（flag-pick 子流，不看已插的旗），随后依次插旗并锁定。
+    /// <see cref="PrototypeZoneAssignment.AssignBlind"/> 盲选给出（flag-pick 子流，seat-gap-25 E4 起只在空座位里抽），随后依次插旗并锁定。
     /// 批量跑局、终端版与图形版都走这里；返回每名玩家的选择（顺序同 <see cref="Players"/>）。
     /// retire-legacy-maps 3.1：旧模式的冒险概率 / 顺排 / 种子选区分支删除，原型路径恒走盲选（手写夹具用 <see cref="PlantSequentially"/> 显式插旗）。
     /// </summary>
     public ImmutableArray<(PlayerId Player, int Zone)> PlantPrototype((PlayerId Player, int Zone)? manual = null)
     {
         RequirePhase(MatchPhase.FlagPlanting);
-        // 实现裁决 B2：flag-pick 子流均匀盲选，不看已插的旗。
+        // 实现裁决 B2 / seat-gap-25 E4：flag-pick 子流在空座位里均匀盲选，座位互斥。
         ImmutableArray<(PlayerId Player, int Zone)> choices = PrototypeZoneAssignment.AssignBlind(Board.BaseMap, Seed, _players, manual);
         PlantSequentially(choices);
         return choices;

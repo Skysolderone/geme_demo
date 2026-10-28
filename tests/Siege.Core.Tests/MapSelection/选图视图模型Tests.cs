@@ -211,8 +211,9 @@ public class 选图视图模型Tests
         Assert.Equal(shown, confirmed);
         MapData map = MapCatalog.Resolve(confirmed);
         Assert.Equal(confirmed, map.Id);
-        Assert.InRange(map.BirthZones.Length, 10, 12);   // map-expand-25：4 人浮空岛 10–12 块平台（出生棋盘）的占位
-        Assert.Equal(map.BirthZones.Length, ViewOf(map).Boards.Length);
+        Assert.Equal(4, map.BirthZones.Length);   // seat-gap-25：4 人浮空岛恰 4 个出生座位（map-expand-25 时为 10–12 块平台）
+        Assert.Equal(map.Boards.Length, ViewOf(map).Boards.Length);   // 棋盘清单原样进视图（座位 + 中立平台）
+        Assert.Equal(map.BirthZones.Length, ViewOf(map).Boards.Count(b => b.Kind == BoardPlateKind.Birth));
         Assert.True(model.IsConfirmed);
         Assert.Throws<InvalidOperationException>(() => model.Reroll(1UL));
         Assert.Throws<InvalidOperationException>(() => model.SubmitSeed("1"));
@@ -238,7 +239,8 @@ public class 选图视图模型Tests
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         DefaultBoardView preview = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         string info = MapPreviewInfo.Of(preview);
-        Assert.StartsWith($"{map.Width}×{map.Height} 画布，{map.Boards.Length} 块出生棋盘（边长 ", info, StringComparison.Ordinal);   // map-expand-25：块数随平台数
+        Assert.StartsWith($"{map.Width}×{map.Height} 画布，{map.BirthZones.Length} 个出生座位（边长 8×8）、{map.Boards.Length - map.BirthZones.Length} 块中立平台；", info, StringComparison.Ordinal);   // map-expand-25：块数随平台数；seat-gap-25：座位与中立平台分开数
+        Assert.Contains("玩家各占一个出生座位，座位之间至少隔 25 格战场，其余为中立平台", info, StringComparison.Ordinal);   // seat-gap-25 段 B：文案改为座位 / 中立平台的说法（25 为测试内字面量）
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
         Assert.Empty(preview.Cells);
@@ -259,7 +261,7 @@ public class 选图视图模型Tests
         DefaultBoardView backdrop = MapPreviewInfo.Backdrop(flags);
 
         Assert.All(flags.Placeholders, p => Assert.NotNull(p.ThemeName));   // 样本口径：插旗阶段的占位确实带主题
-        Assert.Equal(map.Boards.Length, backdrop.Placeholders.Length);   // map-expand-25：占位数 = 平台数
+        Assert.Equal(map.BirthZones.Length, backdrop.Placeholders.Length);   // map-expand-25：占位数 = 平台数；seat-gap-25：占位数 = 出生座位数（中立平台不给占位）
         Assert.All(backdrop.Placeholders, p => Assert.Null(p.ThemeName));
         Assert.Equal(
             flags.Placeholders.Select(p => (p.Zone, p.Origin, p.Width, p.Height, p.Expanded, p.Own)),

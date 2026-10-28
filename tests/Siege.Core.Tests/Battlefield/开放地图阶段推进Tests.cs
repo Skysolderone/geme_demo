@@ -22,7 +22,7 @@ public class 开放地图阶段推进Tests
     {
         // Scenario（open-map）：四人四区，第 3 大回合结束 → 对局直接进入第 4 大回合，没有配对、链接或等待者事件；行动顺序照常按势力生成；地图与开局逐格相同、版本号 0。
         // P0 每个大回合落 1 子、其余 Pass（不触发整轮 Pass 结算）。
-        MatchFlow match = Started([0, 1, 3, 4]).PlayRounds(3, P0);
+        MatchFlow match = Started([0, 1, 3, 2]).PlayRounds(3, P0);
 
         Assert.Equal(4, match.MajorRound);
         Assert.Equal(MatchPhase.InProgress, match.Phase);
@@ -51,7 +51,7 @@ public class 开放地图阶段推进Tests
     public void 构筑期内整轮Pass即终局()
     {
         // Scenario（open-map）：第 2 大回合 4 名玩家全部 Pass → 第 2 大回合结束时唯一战场结算，对局终局，名次按势力与判定链（P0 第 1 大回合落了 1 子 → 胜者）。
-        MatchFlow match = Started([0, 1, 3, 4]).PlayRound(P0);
+        MatchFlow match = Started([0, 1, 3, 2]).PlayRound(P0);
         Assert.Equal(2, match.MajorRound);
         match.PassRound();
 
@@ -98,10 +98,10 @@ public class 开放地图阶段推进Tests
     /// 控制器：前 <c>placeRounds</c> 个大回合每小回合落 1 子（合法范围内坐标序第一个能确认的空格），之后一律 Pass。
     /// </summary>
     [Theory]
-    [InlineData("四人四区", new[] { 0, 1, 3, 4 }, 5)]
-    [InlineData("两人同区加两人独占", new[] { 1, 1, 3, 4 }, 5)]
+    [InlineData("四人四区", new[] { 0, 1, 3, 2 }, 5)]
+    [InlineData("两人同区加两人独占", new[] { 1, 1, 3, 2 }, 5)]
     [InlineData("四人同区", new[] { 1, 1, 1, 1 }, 5)]   // map-expand-25 段 A2：link:1:4 棋盘 0 是 E5 起的河流平台（F 列河道、第 6 行岩石），坐标序落子会把人提光（LastPlayerStanding），改锁棋盘 1（Q5 林地平台）
-    [InlineData("构筑期内整轮Pass", new[] { 0, 1, 3, 4 }, 1)]
+    [InlineData("构筑期内整轮Pass", new[] { 0, 1, 3, 2 }, 1)]
     public void 从插旗跑到终局_开放地图(string 开局, int[] zones, int placeRounds)
     {
         (MatchFlow match, MatchRunner runner) = Build(zones, placeRounds);

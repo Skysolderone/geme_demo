@@ -22,7 +22,7 @@ public class 按人数开局Tests
         MapData map = MapCatalog.Resolve(LinkMapId.Format(1, players));
         PlayerId[] seats = [.. All.Take(players)];
         Assert.Equal(players, map.MaxPlayers);   // 样本口径：标识的人数即地图人数
-        Assert.True(map.Boards.Length > players);
+        Assert.Equal(players, map.BirthZones.Length);   // seat-gap-25：恰 n 个出生座位（map-expand-25 时为"平台数多于人数"）
 
         MatchFlow match = MatchFlow.Create(map, TestMaps.Seed, seats, Options);
         foreach (PlayerId p in seats)

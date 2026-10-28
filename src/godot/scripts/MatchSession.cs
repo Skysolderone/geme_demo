@@ -260,9 +260,9 @@ public sealed class MatchSession
     public int? BirthZoneAt(Coord coord) => Match.Map.BirthBoardAt(coord);
 
     /// <summary>
-    /// 插旗：本机玩家选定出生棋盘，其余玩家的棋盘由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：链接模式下三名 AI 用 <c>flag-pick</c> 子流盲选，
-    /// 可与本机玩家同区——board-link-mode 实现裁决 D2；旧模式按编号顺排 / 由种子选区），选中即锁定并开始第 1 大回合。
-    /// <see cref="ZoneOwners"/> 只记每块棋盘上<b>第一个</b>登记的玩家（旧模式一区一人；链接模式同区时只剩首位，段 D-b 改为按座位视图读取）。
+    /// 插旗：本机玩家选定出生座位，其余玩家的座位由 Core 的唯一实现给出（<see cref="MatchFlow.PlantPrototype"/>：AI 用 <c>flag-pick</c> 子流在空座位里盲选，
+    /// seat-gap-25 E4 起座位互斥、本机先插旗必得所选座位），选中即锁定并开始第 1 大回合。<paramref name="zone"/> 只能是出生座位（<see cref="BirthZoneAt"/> 只认座位，中立平台为 <c>null</c>）。
+    /// <see cref="ZoneOwners"/> 记每个座位上登记的玩家（seat-gap-25 E4 起座位互斥、一座一人；"只记第一个登记者"的写法是旧同区口径的遗留，现已不会丢人）。
     /// </summary>
     public void ChooseZone(int zone)
     {
@@ -285,9 +285,8 @@ public sealed class MatchSession
             _runner.SetController(player, HeuristicAi.Create(Match, player, Difficulty, Weights, Search));
         }
 
-        Rebuild();   // 先重建世界再读同棋盘玩家（按座位视图在锁定后才有）
-        ImmutableArray<PlayerId> sameBoard = World.SameBattlefieldPlayers;
-        Notice = $"出生棋盘锁定{(sameBoard.IsEmpty ? "，这块棋盘只有你" : $"，同棋盘：{string.Join("、", sameBoard.Select(Siege.Presentation.Text.Labels.Player))}")}。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
+        // seat-gap-25 E4：座位互斥，本机先插旗、必得所选座位，其余玩家改派到空座位。原"同棋盘：…"读的是同战场玩家——open-map 起唯一战场即全员，那句会把所有对手都列成"同棋盘"，删去。
+        Notice = $"{BirthZoneLabel.Number(zone)} 号出生座位锁定，其余玩家各占一个座位。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
         Rebuild();
     }
 

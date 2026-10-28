@@ -387,7 +387,7 @@ public sealed partial class Hud : CanvasLayer
             : $"第 {view.MajorRound} 大回合 · {Labels.Player(banner)}";
         _turnSubtitle.Text = view.Phase switch
         {
-            MatchPhase.FlagPlanting => "点一块出生棋盘的占位插旗（选中即锁定）",
+            MatchPhase.FlagPlanting => "点带编号的出生座位插旗（选中即锁定）",
             MatchPhase.Ended => "对局结束",
             _ => $"{Names.Stage(view.Stage)} · 信息层模式：{(layers.Mode == LayerInputMode.HoldToShow ? "按住显示" : "点击切换")}（T 切换）{SameBoardText(world)}",
         };
@@ -636,7 +636,7 @@ public sealed partial class Hud : CanvasLayer
         PreviewPresentation? preview = world.Preview();
         if (preview is null)
         {
-            _actionBody.AddChild(Ui.Text(session.IsOver ? "对局已结束" : session.AwaitingZone ? "先点一块出生棋盘的占位插旗（选中即锁定）" : "等待其他玩家行动…", Ui.MutedText, wrap: true));
+            _actionBody.AddChild(Ui.Text(session.IsOver ? "对局已结束" : session.AwaitingZone ? "先点一个带编号的出生座位插旗（选中即锁定）" : "等待其他玩家行动…", Ui.MutedText, wrap: true));
             return;
         }
 
@@ -810,9 +810,9 @@ public sealed partial class Hud : CanvasLayer
         {
             // 插旗提示放左列（信息层面板的位置，此时它是隐藏的）：居中放在顶部会盖住棋盘远边的列标注（terrain-model 6.3）。
             Ui.Anchor(_centerPanel, 0f, 0f, 14f, 160f, 392f, CameraHintVisible ? 450f : 400f);
-            _centerBody.AddChild(Ui.Heading("开局盲选出生棋盘"));
-            _centerBody.AddChild(Ui.Text("点选任意一块占位平台，旗即锁定。\n全员锁定后整座浮空岛展开，地图可见。\n其他玩家的旗不可见，可能与你同区。", Ui.InfoText, wrap: true));
-            _centerBody.AddChild(Ui.Text("前三个大回合限在出生区落子、改造；\n第四回合起可在全图行动。\n全员整轮 Pass、地图填满，\n或只剩一人时终局。", Ui.MutedText, wrap: true));
+            _centerBody.AddChild(Ui.Heading("开局盲选出生座位"));
+            _centerBody.AddChild(Ui.Text($"{Labels.SeatLayout}（淡色细框，不可出生）。\n点选一个带编号的座位，旗即锁定；其他玩家的旗不可见，撞座位时按插旗先后改派到空座位。\n全员锁定后整座浮空岛展开，地图可见。", Ui.InfoText, wrap: true));
+            _centerBody.AddChild(Ui.Text("前三个大回合限在自己的座位落子、改造；\n第四回合起可在全图行动（含中立平台）。\n全员整轮 Pass、地图填满，\n或只剩一人时终局。", Ui.MutedText, wrap: true));
             if (CameraHintVisible)
             {
                 _centerBody.AddChild(Ui.Text("地图一屏看不全：贴边 / 方向键 / WASD 推屏，滚轮缩放，空格回家。", Ui.MutedText, wrap: true));

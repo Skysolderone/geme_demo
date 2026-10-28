@@ -17,7 +17,7 @@ public static class PublicRules
 
     /// <summary>
     /// 合法落子范围（turn-sequence「合法落子范围的对外契约」，open-map D3）：第 1–3 大回合 = 该玩家锁定的出生棋盘 <paramref name="birthZone"/> 的格 ∩ 所在战场的可落子格
-    /// （同区者共享；按当前地形现算，改造出来的桥立即可落，岩石与未架桥深水不可落）；第 4 大回合起 = 所在战场（= 全图）的可落子格。
+    /// （同区者共享——seat-gap-25 E4 起正式插旗座位互斥，同区只出现在经调试接缝直接锁定的夹具里；按当前地形现算，改造出来的桥立即可落，岩石与未架桥深水不可落）；第 4 大回合起 = 所在战场（= 全图）的可落子格。
     /// 两段都扣除 <paramref name="player"/> 的禁入格——扣除只在这里一处（裁决 R12）。出生区标记（3×3 核心区）不施加任何限制。
     /// </summary>
     /// <param name="board">盘面（地形取其当前 <see cref="GameBoard.Map"/>）。</param>

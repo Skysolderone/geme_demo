@@ -62,7 +62,7 @@ public class 终端对局Tests
         };
         MatchFlow match = LinkModeFixtures.RequireLink(
             MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
-        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
+        match.Debug.LockFlagsAs(TestMaps.All.Select(p => (p, 0)));   // seat-gap-25 E4：同座次直接锁定（规则层夹具，不做撞座位改派）
         for (int y = 0; y < 10; y++)
         {
             for (int x = 0; x < 12; x++)

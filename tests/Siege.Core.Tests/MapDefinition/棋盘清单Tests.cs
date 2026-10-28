@@ -55,17 +55,18 @@ public class 棋盘清单Tests
             Assert.All(b.Cells(), c => Assert.Equal(core.Contains(c) ? (int?)i : null, map.BirthZoneOf(c)));
         }
 
-        // link:1:2 的第 2 块（map-expand-25 浮空岛）：左下角 Y5、7×6 → 出生区 AA6–AC8（西起第 3–5 列、南起第 2–4 行）。
-        // 历史：terrain-density 时为左下角 J10、出生区 K11–M13；open-map 3+2 布局时为左下角 K9、出生区 L10–N12。
-        Assert.Equal("Y5", births[1].Origin.ToNotation());
-        Assert.Equal(["AA6", "AC8"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
+        // link:1:2 的第 2 块（seat-gap-25 东座位）：左下角 AN15、8×8 → 出生区 AP17–AR19（西起第 3–5 列、南起第 3–5 行，宽高为偶数偏西 / 偏南）；中立平台不对应出生区。
+        // 历史：map-expand-25 浮空岛时为左下角 Y5、7×6、出生区 AA6–AC8；terrain-density 时为左下角 J10、出生区 K11–M13；open-map 3+2 布局时为左下角 K9、出生区 L10–N12。
+        Assert.Equal("AN15", births[1].Origin.ToNotation());
+        Assert.Equal(["AP17", "AR19"], new[] { map.BirthZones[1].Min(), map.BirthZones[1].Max() }.Select(c => c.ToNotation()));
+        Assert.All(map.Boards.Where(b => b.Kind == BoardPlateKind.Public).SelectMany(b => b.Cells()), c => Assert.Null(map.BirthZoneOf(c)));
 
-        // 规格算例：宽 7（奇）、高 6（偶）的第 2 块出生棋盘 → 出生区恰是西起第 3–5 列、南起第 2–4 行这 9 格（高为偶数偏南）。在 link:1 起的种子里找一张第 2 块是 7×6 的图。
+        // 规格算例：宽 7（奇）、高 6（偶）的出生棋盘 → 出生区（核心区）恰是西起第 3–5 列、南起第 2–4 行这 9 格（高为偶数偏南）。
+        // seat-gap-25 E1：出生座位固定 8×8，生成图里再找不到 7×6 的出生棋盘（原在 link:1 起的种子里找第 2 块是 7×6 的图），算例改在手写的 7×6 出生棋盘上算核心区（核心区的唯一定义 BoardPlate.CoreCells）。
         // terrain-density：主规格算例原为"宽 7、高 8 → 西起第 3–5 列、南起第 3–5 行"，边长 6–7 后生成不出 8，换成同为"奇宽偶高"的 7×6（归档时规格算例同步改）。
-        MapData sample = Enumerable.Range(1, 400).Select(s => LinkMapGenerator.Generate((ulong)s, 2)).First(m => m.Boards[1] is { Width: 7, Height: 6 });
-        BoardPlate seven = sample.Boards[1];
-        HashSet<(int Column, int Row)> relative = [.. sample.BirthZones[1].Select(c => (c.X - seven.Origin.X + 1, c.Y - seven.Origin.Y + 1))];
-        Assert.True(relative.SetEquals(from r in new[] { 2, 3, 4 } from c in new[] { 3, 4, 5 } select (c, r)), $"{sample.Id}：{string.Join(" ", relative)}");
+        var seven = new BoardPlate(new Coord(10, 20), 7, 6, BoardPlateKind.Birth, BoardTheme.River);
+        HashSet<(int Column, int Row)> relative = [.. seven.CoreCells().Select(c => (c.X - seven.Origin.X + 1, c.Y - seven.Origin.Y + 1))];
+        Assert.True(relative.SetEquals(from r in new[] { 2, 3, 4 } from c in new[] { 3, 4, 5 } select (c, r)), string.Join(" ", relative));
     }
 
     [Fact]
@@ -129,7 +130,8 @@ public class 棋盘清单Tests
 
         // retire-legacy-maps（check 补回覆盖）：类别"公共"仍是文件格式的一部分（map-definition「棋盘清单」类别为 出生 / 公共，BoardPlateKind.Public 按 L10 保留），
         // 原载体（棋盘档夹具）里的公共棋盘随旧档删除后"写成 Public"一处无人守。这里在手写链接档图的清单末尾补一块公共棋盘，只做文件往返、不经校验。
-        BoardPlate open = new(new Coord(2, 2), 5, 5, BoardPlateKind.Public);
+        // seat-gap-25 E2：链接档的公共棋盘（中立平台）同样必须带主题，补的这块带河流主题。
+        BoardPlate open = new(new Coord(2, 2), 5, 5, BoardPlateKind.Public, BoardTheme.River);
         string withPublic = MapFile.ToJson(LinkMapFixtures.Initial() with { Boards = [.. LinkMapFixtures.Births, open] });
         Assert.Contains("\"Kind\": \"Public\"", withPublic, StringComparison.Ordinal);
         Assert.Equal(open, MapFile.FromJson(withPublic).Boards[^1]);
@@ -148,10 +150,12 @@ public class 棋盘清单Tests
         // 样本口径：主题确实存在且两两不同（全是 null 时"逐块相同"恒真）。
         // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F1 ToJson 不写 Theme → 本类红 8（本测试，及凡经 link:1 / 带主题夹具文件往返的 7 条：读回缺主题被拒）；
         // M-F2 ParseBoards 读入时丢掉主题（恒取 null）→ 本类红 2（本测试、棋盘清单项的文件写法）。
-        // map-expand-25 段 A2：浮空岛平台主题可以重复（裁决 R3），样本口径改为"至少两种主题"（全同时逐块相同同样恒真）；link:1:2 为 河流 ×3、栅栏阵 ×2、林地 ×1。
+        // map-expand-25 段 A2：浮空岛平台主题可以重复（裁决 R3），样本口径改为"至少两种主题"（全同时逐块相同同样恒真）。
+        // seat-gap-25：link:1:2 换图为 2 个座位 + 3 块中立平台（中立平台同样带主题）：林地 ×2、混合 ×2、河流 ×1（原 6 块：河流 ×3、栅栏阵 ×2、林地 ×1）。
         MapData map = MapCatalog.Resolve("link:1:2");
         BoardTheme?[] themes = [.. map.Boards.Select(b => b.Theme)];
-        Assert.Equal(6, themes.Length);
+        Assert.Equal(5, themes.Length);
+        Assert.Contains(map.Boards, b => b.Kind == BoardPlateKind.Public);
         Assert.All(themes, t => Assert.NotNull(t));
         Assert.Equal(3, themes.Distinct().Count());
 
@@ -178,20 +182,25 @@ public class 棋盘清单Tests
     }
 
     [Fact]
-    public void 非出生棋盘带主题被拒()
+    public void 公共棋盘也须带主题()
     {
-        // 规格（map-definition「棋盘清单」）：链接档的出生棋盘 MUST 带主题；其他类别 MUST NOT 带主题。
-        // 变异验证（link-map-terrain 1.1 实跑，只跑本类）：M-F4 ParseBoards 删去"非出生棋盘带主题"的拒绝 → 本测试红 1。
+        // seat-gap-25 E2（推翻 link-map-terrain 的"其他类别 MUST NOT 带主题"）：链接档的公共棋盘（中立平台）与出生棋盘一样 MUST 带主题——带主题可读回，缺主题拒绝加载并指名该棋盘。
+        // 变异 M-F4（原"非出生棋盘带主题被拒"）随规则翻转作废；新口径的变异 M-S3（seat-gap-25 实跑）：ParseTheme 缺主题时只拒出生棋盘 → 本测试红 1。
         BoardPlate open = new(new Coord(2, 2), 5, 5, BoardPlateKind.Public, BoardTheme.River);
-        string json = MapFile.ToJson(LinkMapFixtures.Initial() with { Boards = [.. LinkMapFixtures.Births, open] });
+        Assert.Equal(open, MapFile.FromJson(MapFile.ToJson(LinkMapFixtures.Initial() with { Boards = [.. LinkMapFixtures.Births, open] })).Boards[^1]);
 
+        string json = MapFile.ToJson(LinkMapFixtures.Initial() with { Boards = [.. LinkMapFixtures.Births, open with { Theme = null }] });
         string message = Assert.Throws<FormatException>(() => MapFile.FromJson(json)).Message;
         Assert.Contains("Boards[5]", message, StringComparison.Ordinal);
+        Assert.Contains("公共棋盘", message, StringComparison.Ordinal);
         Assert.Contains("Theme", message, StringComparison.Ordinal);
 
-        // 反面：同一块公共棋盘不带主题即可读回。
-        BoardPlate plain = open with { Theme = null };
-        Assert.Equal(plain, MapFile.FromJson(MapFile.ToJson(LinkMapFixtures.Initial() with { Boards = [.. LinkMapFixtures.Births, plain] })).Boards[^1]);
+        // 生成图里的中立平台同样：删掉 link:1:4 最后一块（中立平台）的主题即拒。
+        JsonObject root = JsonNode.Parse(MapFile.ToJson(MapCatalog.Resolve("link:1:4")))!.AsObject();
+        JsonArray boards = root["Boards"]!.AsArray();
+        Assert.Equal("Public", (string?)boards[boards.Count - 1]!["Kind"]);
+        Assert.True(boards[boards.Count - 1]!.AsObject().Remove("Theme"));
+        Assert.Contains("公共棋盘", Assert.Throws<FormatException>(() => MapFile.FromJson(root.ToJsonString())).Message, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -113,9 +113,11 @@ public class 地图文件往返Tests
         // 河流棋盘（C3，7×6）的河道为第 D 列，预置桥由 G4 移到 D6。
         // map-expand-25 段 A2（link:1:4 换成 44×44 浮空岛）：入口 X23；出生区信物格取 H8（1 号平台 E5 的核心区）；4 号平台左下角 AJ9（双字母列）；
         // 1 号平台（河流主题，F 列河道）的预置桥 F10。
-        Assert.Contains("\"CentralEntrance\": \"X23\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"H8\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"Origin\": \"AJ9\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"F10\"", json, StringComparison.Ordinal);
+        // seat-gap-25 段 A（link:1:4 换成 49×49 的四角座位岛）：入口取岛中心 Z25；出生区格取 G7（1 号座位 E5 的核心区左下角）；2 号座位左下角 AN5（双字母列）；
+        // 1 号座位（河流主题）的预置桥 F8。
+        Assert.Contains("\"CentralEntrance\": \"Z25\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"G7\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Origin\": \"AN5\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"F8\"", json, StringComparison.Ordinal);
     }
 }

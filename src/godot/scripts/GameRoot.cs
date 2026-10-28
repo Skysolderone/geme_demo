@@ -133,8 +133,8 @@ public sealed partial class GameRoot : Node3D
             // --shot-board=<棋盘清单下标>：截图前把相机对准棋盘清单里的第几块棋盘（board-map 3.4：给负责人看一块棋盘的近景，仅截图用）。
             // 须与 --screenshot= 同用；下标越界报错退出。棋盘的外接矩形取自视图模型的棋盘清单。
             _shotBoard = args.Value<int>("shot-board", "棋盘清单下标（非负整数，截图时对准该棋盘）", t => int.TryParse(t, out int v) && v >= 0 ? v : null);
-            // 上界随地图（map-expand-25：平台数随人数与种子变），这里只拦非正整数；建局之后按本图的棋盘清单块数再查（见下方 --zone 越界检查）。
-            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生平台编号（正整数，1–本图平台数）", t => int.TryParse(t, out int v) && v >= 1 ? v : null) ?? 1;
+            // 上界随地图（seat-gap-25：出生座位数 = 人数），这里只拦非正整数；建局之后按本图的出生座位数再查（见下方 --zone 越界检查）。
+            _autoZone = args.Value<int>("zone", "无人值守演示里本机锁定的出生座位编号（正整数，1–本图出生座位数 = 人数；中立平台不可选）", t => int.TryParse(t, out int v) && v >= 1 ? v : null) ?? 1;
 
             // --shot-groups：截图时打开盘面层的棋串读法（life-shape 3.4：给负责人看"已活"标记——实线环 + 悬浮眼徽记）。
             _shotGroups = args.Flag("shot-groups");
@@ -325,12 +325,12 @@ public sealed partial class GameRoot : Node3D
                 BeginSupply(map);   // 带入带出开启时先进补给阶段（本会话留作未插旗的预览）
             }
 
-            // --zone= 越界：按本图棋盘清单块数校验，与其他选项的错值同样在开局之前报错、退出码 1（原写死的上限 5 / 12 不随地图变，越界要到锁定时才抛）。
+            // --zone= 越界：按本图出生座位数校验，与其他选项的错值同样在开局之前报错、退出码 1（原写死的上限 5 / 12 不随地图变，越界要到锁定时才抛）。
             // 选图界面路径上 _session 是进入时那张图的预览；自检（SelfCheckMapSelect）开始之前换回进入时的标识，锁定时用的正是这张图。
-            int plates = _session.Match.Map.Boards.Length;
-            if (_autoZone > plates)
+            int seats = _session.Match.Map.BirthZones.Length;   // seat-gap-25：只数出生座位（中立平台不可出生）
+            if (_autoZone > seats)
             {
-                throw new System.FormatException($"--zone={_autoZone} 越界：地图 {_session.Match.Map.Id} 的出生平台共 {plates} 块，应为 1–{plates}。");
+                throw new System.FormatException($"--zone={_autoZone} 越界：地图 {_session.Match.Map.Id} 的出生座位共 {seats} 个（中立平台不可出生），应为 1–{seats}。");
             }
         }
         catch (System.Exception ex) when (ex is System.IO.FileNotFoundException or System.FormatException or System.Text.Json.JsonException or MapValidationException or MapGenerationException)

@@ -115,6 +115,12 @@ public static class Labels
     /// <summary>提示条出现的窗口：还剩 ≤ 5 个大回合（cycle-stop 裁决 S3）。</summary>
     public const int RoundCapNoticeWindow = 5;
 
+    /// <summary>
+    /// 链接图座位布局的一句话（seat-gap-25 E6）：选图说明、插旗面板与新局面板共用，间距只取生成器常量 <see cref="Core.Board.Maps.LinkMapGenerator.SeatGap"/>，不另写数字。
+    /// 选图界面的源码不直接引用生成器（选图界面守门），经这里取文案。
+    /// </summary>
+    public static string SeatLayout => $"玩家各占一个出生座位，座位之间至少隔 {Core.Board.Maps.LinkMapGenerator.SeatGap} 格战场，其余为中立平台";
+
     /// <summary>终端大回合开始行的上限段：<c>上限 100（还剩 97）</c>；不启用时 <c>上限 不启用</c>。</summary>
     public static string RoundCapStatus(int roundCap, int majorRound) =>
         roundCap <= 0 ? "上限 不启用" : $"上限 {roundCap}（还剩 {Math.Max(roundCap - majorRound, 0)}）";

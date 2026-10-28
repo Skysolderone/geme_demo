@@ -6,7 +6,7 @@ public enum BoardPlateKind
     /// <summary>出生棋盘：与出生区一一对应，第 i 块出生棋盘的格子集合恰等于出生区 i。</summary>
     Birth = 0,
 
-    /// <summary>公共棋盘：不属于任何出生区。</summary>
+    /// <summary>公共棋盘：不属于任何出生区（链接档的中立平台，seat-gap-25 E2：带主题、可落子、不可出生）。</summary>
     Public = 1,
 }
 
@@ -57,7 +57,7 @@ public static class BoardThemeNames
 /// <param name="Width">宽（列数）。</param>
 /// <param name="Height">高（行数）。</param>
 /// <param name="Kind">类别。</param>
-/// <param name="Theme">主题（link-map-terrain D2）：链接档的出生棋盘 MUST 带主题，其他类别 MUST NOT 带；手写测试夹具可以缺省（<c>null</c>）。拼接平移经 <c>with</c> 原样保留。</param>
+/// <param name="Theme">主题（link-map-terrain D2；seat-gap-25 E2）：链接档的出生棋盘与公共棋盘（中立平台）都 MUST 带主题；手写测试夹具可以缺省（<c>null</c>）。拼接平移经 <c>with</c> 原样保留。</param>
 public readonly record struct BoardPlate(Coord Origin, int Width, int Height, BoardPlateKind Kind, BoardTheme? Theme = null)
 {
     /// <summary>核心区边长（link-map-terrain D1 / 裁决 M1）：棋盘中央 3×3。</summary>

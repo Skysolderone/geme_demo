@@ -116,7 +116,7 @@ public class 活形与禁入格的标示Tests
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
         }
 
-        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
+        match.Debug.LockFlagsAs(TestMaps.All.Select(p => (p, 0)));   // seat-gap-25 E4：同座次直接锁定（规则层夹具，不做撞座位改派）
         match.AtRound(1, [P1, P0, P2, P3]).Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7);
         match.OpenDeploy();
         DefaultBoardView board = match.World(P1).Board();

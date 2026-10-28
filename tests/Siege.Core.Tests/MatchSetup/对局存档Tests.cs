@@ -22,7 +22,7 @@ public class 对局存档Tests
     public void 小回合边界存档续跑一致()
     {
         // 恢复后续跑同样的决策：两局走到终局，结果、名次与再存档逐字节相同（随机子流位置、本大回合 Pass 记录都用上了）。
-        MatchFlow match = Started([1, 1, 3, 4]).PlayRounds(3, P0, P2);
+        MatchFlow match = Started([1, 1, 3, 2]).PlayRounds(3, P0, P2);
         match.PassTurn();    // 第 4 大回合中途：已有人 Pass
         Assert.NotEmpty(match.PassedThisRound);
 
@@ -60,7 +60,7 @@ public class 对局存档Tests
     public void 锁定结果可持久化()
     {
         // match-setup Scenario：插旗完成后保存 → 每名玩家锁定的出生棋盘编号与锁定时各棋盘旗数被完整保存并可恢复。
-        MatchFlow match = Started([2, 2, 0, 4]);
+        MatchFlow match = Started([2, 2, 0, 1]);
         MatchFlow restored = RoundTrip(match);
         Assert.Equal(match.PlayerStates.Select(s => s.BirthZone), restored.PlayerStates.Select(s => s.BirthZone));
         Assert.Equal(match.LockedFlagCounts, restored.LockedFlagCounts);
@@ -74,7 +74,7 @@ public class 对局存档Tests
         // match-setup Scenario「旧存档被拒绝」（Q6 / 实现裁决 D7）：恢复一个地图标识不是 link: 的旧存档 → 玩家入口 MatchFlow.Restore 拒绝读取并提示属于已移除的地图模式；
         // 变异 M-D3（段 D-a 实跑）：Restore 去掉地图标识门 → 本测试红 1。
         // retire-legacy-rules 1.5：对局只能建在链接档图上，旧存档样本改为"把一份链接存档的地图标识改成非 link: 的 test-match-9x9"，交玩家入口 → 照样拒绝。
-        MatchFlow link = Started([0, 1, 3, 4]);
+        MatchFlow link = Started([0, 1, 3, 2]);
         string linkJson = link.Serialize();
         JsonObject node = JsonNode.Parse(linkJson)!.AsObject();
         node["MapId"] = "test-match-9x9";
@@ -94,7 +94,7 @@ public class 对局存档Tests
     public void 链接图上缺模式字段的存档被拒()
     {
         // 去掉模式字段 = 按旧模式读入；链接图只能以链接模式恢复 → 拒绝（FormatException，与"地图不一致"同口径）。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         JsonObject root = JsonNode.Parse(match.Serialize())!.AsObject();
         root.Remove("Mode");
         FormatException ex = Assert.Throws<FormatException>(() => MatchFlow.Restore(Map, root.ToJsonString()));
@@ -107,7 +107,7 @@ public class 对局存档Tests
         // 裁决 S1 → map-expand-25 D1（人数恰等于地图人数）在恢复路径同样成立（段 B 质检遗留，tasks 3.0）：把一份 4 人图的存档手改成 3 人 → 恢复被拒，
         // 报出的是人数（不是别处碰巧失败）；未改的原存档照常恢复（反面）。
         // 变异 MC-23：RestoreCore 的人数校验传恒为 4 的人数 → 本测试红（3 人存档被接受或在别处失败）。
-        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(1);
+        MatchFlow match = Started([0, 1, 3, 2]).PassRounds(1);
         string json = match.Serialize();
         Assert.Equal(json, MatchFlow.Restore(Map, json).Serialize());
 
@@ -135,7 +135,7 @@ public class 对局存档Tests
         // 恢复时 MUST 明确拒绝并提示属于已移除的拼接规则——而且先于地图摘要比对（真旧存档的地图摘要同样对不上，要报的是"拼接规则已移除"而不是"地图不一致"）。
         // 样本：在一份新存档的 Link 段里手工加回该字段，并把地图摘要改坏。反面：不加字段、摘要正确的同一份照常恢复。
         // 变异：Parse 不扫描已删除字段 → 带 Pairings=[] 的存档会被静默恢复（或因摘要不符报"地图不一致"），本测试红。
-        MatchFlow match = Started([0, 1, 3, 4]).PassRounds(1);
+        MatchFlow match = Started([0, 1, 3, 2]).PassRounds(1);
         string json = match.Serialize();
         JsonObject root = JsonNode.Parse(json)!.AsObject();
         root["Link"]![field] = JsonNode.Parse(value);

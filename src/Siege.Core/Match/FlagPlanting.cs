@@ -82,23 +82,28 @@ public sealed record MatchOptions
 public sealed record FlagPublicView(bool IsLocked);
 
 /// <summary>
-/// 某一座位在插旗阶段看到的旗帜（board-link-mode 实现裁决 B2，match-setup「匿名同时插旗」）：出生棋盘数、本座位自己选的那块（未选为 <c>null</c>）；
-/// 全部锁定后另含"与自己同一块棋盘的玩家"（含本人，升序），锁定前为空。MUST NOT 含任何其他棋盘上的旗与旗数。
+/// 某一座位在插旗阶段看到的旗帜（board-link-mode 实现裁决 B2，match-setup「匿名同时插旗」）：出生棋盘数、本座位自己选的那块（未选为 <c>null</c>；
+/// 锁定后为改派后的座位）；全部锁定后另含"与自己同一块棋盘的玩家"（含本人，升序），锁定前为空。MUST NOT 含任何其他棋盘上的旗与旗数。
+/// seat-gap-25 E4 起座位互斥，锁定后这一项只有本人（测试夹具经调试入口直接写入同座位的局面除外）。
 /// </summary>
 public sealed record SeatFlagView(PlayerId Seat, int ZoneCount, int? OwnZone, bool IsLocked, ImmutableArray<PlayerId> SameBoard);
 
 /// <summary>
 /// 盲选插旗（设计文档 §4.1，board-link-mode 实现裁决 B2，match-setup「匿名同时插旗」）：选中即锁定、旗帜互不可见、公开视图不含旗数；
-/// 身份只在锁定后进入对局状态。允许多人同区；时限可配置，单机与 AI 路径配置为立即。
+/// 身份只在锁定后进入对局状态。插旗时仍允许选别人已选的座位（盲选不泄露信息），锁定时座位互斥（seat-gap-25 E4）；时限可配置，单机与 AI 路径配置为立即。
 /// </summary>
 /// <remarks>
-/// 本类不计时：联网宿主在时限到达时调用 <see cref="LockAll"/>；单机路径直接调用。到时仍未插旗的玩家由 <c>flag-pick</c> 子流在全部出生棋盘里均匀指定
-/// （每名玩家一次、按编号升序，与他人选了什么无关），避免联网掉线让整局卡死。原型的依次插旗（<see cref="PlantSequentially"/>）
+/// 本类不计时：联网宿主在时限到达时调用 <see cref="LockAll"/>；单机路径直接调用。锁定时按插旗先后，撞座位的后插旗者与到时仍未插旗的玩家
+/// 由 <c>flag-pick</c> 子流改派到空座位（按编号升序、每人一次，<see cref="PrototypeZoneAssignment.BlindPicks"/>），避免联网掉线让整局卡死。原型的依次插旗（<see cref="PlantSequentially"/>）
 /// 产出与同时插旗完全相同的锁定结果——两条路径只是输入方式不同。retire-legacy-rules：旧模式的非盲选路径（看得见旗数、锁定前可改、超时分到旗数最少的区）删除。
 /// </remarks>
 public sealed class FlagPlanting
 {
     private readonly SortedDictionary<PlayerId, int> _flags = [];
+
+    /// <summary>插旗先后（<see cref="Plant"/> 的调用顺序）：锁定时撞座位按它判先后（seat-gap-25 E4）。</summary>
+    private readonly List<PlayerId> _plantOrder = [];
+
     private readonly ImmutableArray<PlayerId> _players;
 
     private readonly GameSeed _seed;
@@ -154,10 +159,11 @@ public sealed class FlagPlanting
         }
 
         _flags[player] = zone;
+        _plantOrder.Add(player);
     }
 
     /// <summary>
-    /// 某一座位能看到的旗帜（实现裁决 B2）：只有自己那面旗；全部锁定后另含与自己同一块棋盘的玩家。
+    /// 某一座位能看到的旗帜（实现裁决 B2）：只有自己那面旗；全部锁定后另含与自己同一块棋盘的玩家（seat-gap-25 E4 起座位互斥，正式路径锁定后只有本人）。
     /// </summary>
     public SeatFlagView ViewFor(PlayerId seat)
     {
@@ -177,8 +183,8 @@ public sealed class FlagPlanting
     public int? FlagOf(PlayerId player) => _flags.TryGetValue(player, out int zone) ? zone : null;
 
     /// <summary>
-    /// 锁定全部旗帜（时限到达或全员确认）。未插旗的玩家由 <c>flag-pick</c> 子流均匀指定。
-    /// 返回每名玩家锁定的出生区。
+    /// 锁定全部旗帜（时限到达或全员确认）。座位互斥（seat-gap-25 E4）：按插旗先后，撞座位的后插旗者与未插旗的玩家由 <c>flag-pick</c> 子流改派到空座位
+    /// （唯一实现 <see cref="PrototypeZoneAssignment.BlindPicks"/>）。返回每名玩家锁定的出生区。
     /// </summary>
     public ImmutableSortedDictionary<PlayerId, int> LockAll()
     {
@@ -187,15 +193,10 @@ public sealed class FlagPlanting
             throw new SiegeRuleException("插旗已锁定。");
         }
 
-        // 时限到时未选者用 flag-pick 子流在全部出生棋盘里均匀指定（每名玩家一次、按编号升序，与他人选了什么无关）。
-        ImmutableArray<int> picks = PrototypeZoneAssignment.BlindPicks(_seed, _players, ZoneCount);
+        ImmutableArray<int> seats = PrototypeZoneAssignment.BlindPicks(_seed, _players, ZoneCount, [.. _plantOrder.Select(p => (p, _flags[p]))]);
         for (int i = 0; i < _players.Length; i++)
         {
-            PlayerId player = _players[i];
-            if (!_flags.ContainsKey(player))
-            {
-                _flags[player] = picks[i];
-            }
+            _flags[_players[i]] = seats[i];
         }
 
         IsLocked = true;

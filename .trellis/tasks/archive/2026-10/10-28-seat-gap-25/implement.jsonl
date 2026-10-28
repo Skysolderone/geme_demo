@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/core/index.md", "reason": "core 规范"}
+{"file": ".trellis/spec/core/determinism.md", "reason": "core 规范"}
+{"file": ".trellis/spec/core/testing.md", "reason": "core 规范"}
+{"file": ".trellis/spec/core/coordinates.md", "reason": "core 规范"}
+{"file": ".trellis/spec/core/boundaries.md", "reason": "core 规范"}
+{"file": ".trellis/tasks/10-28-seat-gap-25/prd.md", "reason": "任务规划"}
+{"file": ".trellis/tasks/10-28-seat-gap-25/design.md", "reason": "任务规划"}
+{"file": ".trellis/tasks/10-28-seat-gap-25/implement.md", "reason": "任务规划"}

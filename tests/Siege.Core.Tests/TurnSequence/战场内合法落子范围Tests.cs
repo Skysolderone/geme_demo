@@ -22,7 +22,7 @@ public class 战场内合法落子范围Tests
     public void 构筑期内越区落子被拒()
     {
         // Scenario：第 2 大回合，玩家尝试在自己战场之外的空格暂放棋子 → 系统拒绝并说明违反当前合法落子范围。
-        MatchFlow match = Started([0, 1, 3, 4]).AtRound(2);
+        MatchFlow match = Started([0, 1, 3, 2]).AtRound(2);
         StagedBatch batch = match.ToDeploy();
         BatchFailure? failure = batch.Stage(BirthCell(match.Map, 1, 0, 0), PieceType.Basic);
         Assert.Equal(BatchFailureKind.OutOfLegalRange, failure?.Kind);
@@ -35,7 +35,7 @@ public class 战场内合法落子范围Tests
     {
         // Scenario（open-map「合法落子范围的对外契约」范围随大回合扩大）：第 3 大回合的范围为其出生棋盘的可落子格集合，第 4 大回合起为全图可落子格集合；
         // 同区者共享同一范围。P0 每个大回合落一子、其余 Pass（不触发整轮 Pass 结算）。
-        MatchFlow match = Started([0, 0, 3, 4]).PlayRounds(2, P0);
+        MatchFlow match = Started([0, 0, 3, 2]).PlayRounds(2, P0);
         Assert.Equal(3, match.MajorRound);
         HashSet<Coord> board0 = [.. match.Map.BirthBoard(0).Cells().Where(match.Board.Map.IsPlayable)];
         Assert.Equal(board0, match.LegalRangeFor(P0));   // 范围是整块出生棋盘的可落子格（含靠接缝的外圈），出生区只是核心区
@@ -46,7 +46,7 @@ public class 战场内合法落子范围Tests
 
         Assert.Equal(4, match.MajorRound);
         Siege.Core.Board.Battlefield whole = match.Board.Battlefields.ById(0)!;
-        Assert.Equal(Enumerable.Range(0, match.Map.Boards.Length), whole.BirthZones);
+        Assert.Equal(Enumerable.Range(0, match.Map.BirthZones.Length), whole.BirthZones);   // seat-gap-25：出生区 = 座位
         Assert.Equal(whole.Cells.ToHashSet(), match.LegalRangeFor(P0));
         Assert.Equal(whole.Cells.ToHashSet(), match.LegalRangeFor(P2));
         // 全图 = 全部可落子格。map-expand-25 段 A2：浮空岛的可落子格除平台外还有平台之间的低地（原"5 块可落子格之和"在紧贴布局下与之相同）。
@@ -58,7 +58,7 @@ public class 战场内合法落子范围Tests
     public void 第4大回合进入对方棋盘()
     {
         // Scenario（open-map「第 4 大回合起的全图落子」）：第 4 大回合，玩家在另一名玩家的出生棋盘上暂放棋子 → 接受；第 2 大回合同一落点被拒。
-        MatchFlow match = Started([0, 1, 3, 4]).AtRound(2, [P0, P1, P2, P3]);
+        MatchFlow match = Started([0, 1, 3, 2]).AtRound(2, [P0, P1, P2, P3]);
         BoardPlate plate = match.Map.Boards[3];   // P2 锁定的棋盘
         Assert.Equal(BatchFailureKind.OutOfLegalRange, match.ToDeploy().Stage(plate.Origin, PieceType.Basic)?.Kind);
         match.Pass();
@@ -74,7 +74,7 @@ public class 战场内合法落子范围Tests
     public void 无人棋盘可落子()
     {
         // Scenario（open-map）：第 6 大回合，玩家在无人锁定的出生棋盘（棋盘 2）上暂放棋子 → 接受；范围含其他玩家的出生棋盘。
-        MatchFlow match = Started([0, 1, 3, 4]).AtRound(6, [P0, P1, P2, P3]);
+        MatchFlow match = Started([0, 1, 3, 2]).AtRound(6, [P0, P1, P2, P3]);
         IReadOnlySet<Coord> range = match.LegalRangeFor(P0);
         Assert.Contains(BirthCell(match.Map, 1, 0, 0), range);
         Assert.Contains(BirthCell(match.Map, 2, 0, 0), range);   // 无人的出生棋盘
@@ -90,7 +90,7 @@ public class 战场内合法落子范围Tests
     {
         // Scenario：第 4 大回合，某玩家盘面无棋子但完成征募后持有手牌 → 可在全图任意合法空格重新落子（不只是出生棋盘）。
         // open-map：构筑期由 P1 落子、其余 Pass 走到第 4 大回合（没有配对 / 链接）。
-        MatchFlow match = Started([0, 1, 3, 4]).PlayRounds(3, P1);
+        MatchFlow match = Started([0, 1, 3, 2]).PlayRounds(3, P1);
         match.AtRound(4, [P0, P1, P2, P3]);
         match.Debug.SeedHand(P0);
         // retire-legacy-rules 质检：随清单 (j) 合并补回原「第4大回合的全图解禁Tests.空盘面玩家重新进入」的前提——盘面与手牌皆空、征募后持有手牌。

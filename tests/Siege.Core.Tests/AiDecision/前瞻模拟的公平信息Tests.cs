@@ -158,7 +158,7 @@ public class 前瞻模拟的公平信息Tests
         // 规格（expert-tiebreak）：第 3 大回合专家末位，下一名对手的行动大回合为第 4 大回合 → 模拟回应的落点范围为全图可落子格扣除其禁入格（不再限于其出生棋盘），
         // 部署上限按第 4 大回合（基础 4）。载体：link:1 初始图（5 块紧贴成一张连通地图），P0 / P1 锁棋盘 0、P2 锁棋盘 3、P3 锁棋盘 4；第 1–2 大回合四人各落 1 子，
         // 第 3 大回合顺序 P1 → P2 → P3 → P0，前三人 Pass。
-        MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 4]);
+        MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 2]);
         match.PlayRounds(2, TestMaps.All);
         match.AtRound(3, [P1, P2, P3, P0]);
         match.PassTurn();

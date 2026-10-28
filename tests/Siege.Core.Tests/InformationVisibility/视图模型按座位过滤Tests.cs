@@ -26,8 +26,8 @@ public class 视图模型按座位过滤Tests
     /// <summary>某块出生棋盘的全部坐标（围棋记法）：整块外接矩形（link-map-terrain：读棋盘清单，不读出生区；G1 起战斗阶段可见格即整块棋盘，含岩石与深水）。</summary>
     private static string[] ZoneNotations(int zone) => [.. Map.BirthBoard(zone).Cells().Select(c => c.ToNotation()).Order()];
 
-    /// <summary>全部出生棋盘的编号（map-expand-25：link:1:4 浮空岛 10 块平台；原为 5 块）。</summary>
-    private static IEnumerable<int> Zones => Enumerable.Range(0, Map.Boards.Length);
+    /// <summary>全部出生棋盘的编号（seat-gap-25：link:1:4 恰 4 个出生座位，中立平台不是出生棋盘；map-expand-25 时为 10 块平台，更早为 5 块）。</summary>
+    private static IEnumerable<int> Zones => Enumerable.Range(0, Map.BirthZones.Length);
 
     [Fact]
     public void 插旗阶段只有占位_没有任何格()
@@ -39,7 +39,7 @@ public class 视图模型按座位过滤Tests
 
         Assert.Empty(board.Cells);
         Assert.Empty(board.Boards);
-        Assert.Equal(10, board.Placeholders.Length);
+        Assert.Equal(4, board.Placeholders.Length);   // seat-gap-25：占位只给 4 个出生座位（原 10 块平台）
         Assert.Equal(Zones, board.Placeholders.Select(p => p.Zone));
         Assert.All(board.Placeholders, p => Assert.False(p.Expanded || p.Own));
         // 占位取整块棋盘的外接矩形（match-setup「占位尺寸取整块棋盘」），不是出生区（核心区）。
@@ -51,7 +51,7 @@ public class 视图模型按座位过滤Tests
 
         // 新局界面的一行说明只提占位，不提信物与可落子格。
         string info = MapPreviewInfo.Of(board);
-        Assert.Contains("10 块出生棋盘", info, StringComparison.Ordinal);
+        Assert.Contains("4 个出生座位", info, StringComparison.Ordinal);   // seat-gap-25 段 B：原"4 块出生棋盘"
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
     }
@@ -61,7 +61,7 @@ public class 视图模型按座位过滤Tests
     {
         // map-expand-25 段 A2：原名「锁定后全图可见_五块占位全部展开」，块数随平台数。
         // open-map 裁决 O4（visual-style-baseline「锁定后全图展开」）：P0 在棋盘 1（索引 0），锁定后全部平台展开、视图含全图的格（原「构筑期只见自己的棋盘」反向）。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         ViewerWorld world = match.World(P0);
         DefaultBoardView board = world.Board();
         SeatPublicView seat = match.PublishFor(P0);
@@ -71,11 +71,12 @@ public class 视图模型按座位过滤Tests
         Assert.Equal(Map.AllCoords().Select(c => c.ToNotation()).Order(), board.Cells.Select(c => c.Coord.ToNotation()).Order());
         Assert.All(Zones.SelectMany(ZoneNotations), n => Assert.NotNull(board.CellOrNull(Coord.Parse(n))));
         Assert.All(board.Cells, c => Assert.Equal(Map.BirthZoneOf(c.Coord), c.BirthZone));   // 出生区 = 核心区，棋盘内其余格不属于出生区
-        Assert.Equal(10, board.Boards.Length);
+        Assert.Equal(Map.Boards.Length, board.Boards.Length);   // seat-gap-25：棋盘清单含 4 个座位与中立平台（link:1:4 共 8 块；原 10 块平台）
+        Assert.Equal(8, board.Boards.Length);
         Assert.Equal(0, world.OwnZone);
         BoardPlaceholderView own = Assert.Single(board.Placeholders, p => p.Own);
         Assert.Equal((0, true), (own.Zone, own.Expanded));
-        Assert.Equal(10, board.Placeholders.Count(p => p.Expanded));
+        Assert.Equal(4, board.Placeholders.Count(p => p.Expanded));   // 占位 = 出生座位
         Assert.Equal([P1, P2, P3], world.SameBattlefieldPlayers);
 
         // 他人棋盘上的格都在视图里；拾取 / 悬停用的 CellOrNull 对它们返回格。
@@ -91,7 +92,7 @@ public class 视图模型按座位过滤Tests
     {
         // information-visibility（open-map）的表现层镜像：按座位的默认棋盘序列化后含全部平台的坐标，与全知棋盘相同（原「不含其他出生棋盘的任何坐标」反向）。
         // Coord 序列化为 {X,Y} 对象，这里按围棋记法投影后再序列化，便于按坐标文本断言。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         string seat = JsonSerializer.Serialize(match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()), Json);
         string omniscient = JsonSerializer.Serialize(DefaultBoardView.From(match.PublicWorldOf()).Cells.Select(c => c.Coord.ToNotation()), Json);
 
@@ -112,7 +113,7 @@ public class 视图模型按座位过滤Tests
     public void 同区与异区都互见()
     {
         // match-setup Scenario「多人同区」→ open-map：A、B 都在棋盘 3 → 彼此可见，其他玩家同样看得到棋盘 3 上有谁（原「他人不见」反向）。
-        MatchFlow match = Started([2, 2, 0, 4]);
+        MatchFlow match = Started([2, 2, 0, 1]);
         Assert.Equal([P1, P2, P3], match.World(P0).SameBattlefieldPlayers);
         Assert.Equal([P0, P2, P3], match.World(P1).SameBattlefieldPlayers);
         Assert.Equal([P0, P1, P3], match.World(P2).SameBattlefieldPlayers);
@@ -127,7 +128,7 @@ public class 视图模型按座位过滤Tests
         // 变异验证（link-map-terrain 第 1 组收尾实跑，只跑本类）：M-V1 ForSeat 构造占位时主题恒写 null → 本测试红 1。
         MatchFlow match = Create();
         DefaultBoardView board = match.World(P0).Board();
-        BoardTheme?[] expected = [.. Map.Boards.Select(b => b.Theme)];
+        BoardTheme?[] expected = [.. Map.BirthBoards().Select(b => b.Theme)];   // seat-gap-25：占位只给出生座位（中立平台不给占位）
         Assert.All(expected, t => Assert.NotNull(t));
         Assert.True(expected.Distinct().Count() > 1);   // map-expand-25（裁决 R3）：平台主题可以重复，样本口径改为至少两种
 
@@ -151,7 +152,7 @@ public class 视图模型按座位过滤Tests
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
         }
 
-        match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 4 }[i])));
+        match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 2 }[i])));
         Assert.Equal(MatchPhase.InProgress, match.Phase);
 
         DefaultBoardView board = match.World(P0).Board();
@@ -179,7 +180,7 @@ public class 视图模型按座位过滤Tests
     public void 信息层含全图的格()
     {
         // visual-style-baseline（open-map）：信息层在全图的格上出现。四块棋盘各有棋子；P0 的盘面层 / 势力层 / 信物层含棋盘 4 的格与棋串（原「只含本战场的格」反向）。
-        MatchFlow match = Started([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);
+        MatchFlow match = Started([0, 1, 3, 2]).PlayRound(P0, P1, P2, P3);
         // relic-redesign W1：原载体 RelicMap（手写信物格夹具）随旧信物删除；在棋盘 3 上放一件地图信物，信物层照样能看到别的棋盘上的信物。
         match.Board.AttachRelic(Map.BirthBoard(3).Cells().First(c => match.Board[c].IsPlayableEmpty), RelicToken.Spawned(0, RelicKind.WarDrum));
         match.Debug.Recalculate();   // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
@@ -213,7 +214,7 @@ public class 视图模型按座位过滤Tests
     [Fact]
     public void 别人的座位视图不得进入观察者世界()
     {
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         ArgumentException ex = Assert.Throws<ArgumentException>(() => ViewerWorld.Build(
             P0, match.Publish(), match.PublishSupplement(), match.Hands.AccessFor(P0).PrivateView(), null, null, match.PublishFor(P1)));
         Assert.Contains("座位视图属于", ex.Message, StringComparison.Ordinal);

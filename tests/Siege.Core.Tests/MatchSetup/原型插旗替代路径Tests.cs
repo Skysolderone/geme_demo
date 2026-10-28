@@ -44,12 +44,13 @@ public class 原型插旗替代路径Tests
         // 插旗完成后保存对局 → 每名玩家锁定的出生区编号被完整保存并可恢复。
         // 变异验证 M-S9：Serialize 不写 BirthZone → 红 1（本测试）。
         // retire-legacy-rules 1.5：载体由 9×9 旧模式夹具换为 link:1，恢复走公开入口 MatchFlow.Restore（链接图过校验），断言不变。
+        // seat-gap-25 E4：座位互斥，原选区 2 / 2 / 0 / 3（P0 / P1 同区）改为互不相同的 2 / 1 / 0 / 3（同区会被改派，撞座位改派的持久化由下面的恢复同样覆盖）。
         MatchFlow match = LinkModeFixtures.Create();
-        match.PlantSequentially([(TestMaps.P0, 2), (TestMaps.P1, 2), (TestMaps.P2, 0), (TestMaps.P3, 3)]);
+        match.PlantSequentially([(TestMaps.P0, 2), (TestMaps.P1, 1), (TestMaps.P2, 0), (TestMaps.P3, 3)]);
 
         MatchFlow restored = MatchFlow.Restore(LinkModeFixtures.Map, match.Serialize());
-        Assert.Equal(new int?[] { 2, 2, 0, 3 }, restored.PlayerStates.Select(s => s.BirthZone));
-        Assert.Equal(new int?[] { 2, 2, 0, 3 }, TestMaps.All.Select(restored.Flags.FlagOf));
+        Assert.Equal(new int?[] { 2, 1, 0, 3 }, restored.PlayerStates.Select(s => s.BirthZone));
+        Assert.Equal(new int?[] { 2, 1, 0, 3 }, TestMaps.All.Select(restored.Flags.FlagOf));
         Assert.True(restored.Flags.IsLocked);
         Assert.Equal(match.ActionOrder, restored.ActionOrder);
         Assert.Equal(match.LegalRangeFor(TestMaps.P1), restored.LegalRangeFor(TestMaps.P1));

@@ -18,7 +18,7 @@ public sealed record MapData
     /// <summary>外接高度（行数）。</summary>
     public required int Height { get; init; }
 
-    /// <summary>该地图的人数（链接档即标识 <c>link:&lt;种子&gt;:&lt;人数&gt;</c> 的人数段，对局人数须恰等于它）。链接档出生区（出生平台）数 MUST 多于它（map-expand-25：2 人 6–8 块、3 人 8–10 块、4 人 10–12 块）。</summary>
+    /// <summary>该地图的人数（链接档即标识 <c>link:&lt;种子&gt;:&lt;人数&gt;</c> 的人数段，对局人数须恰等于它）。链接档出生区（出生座位）数 MUST 恰等于它（seat-gap-25 S2：每名玩家一个出生座位，其余平台是不可出生的中立平台）。</summary>
     public required int MaxPlayers { get; init; }
 
     /// <summary>
@@ -40,14 +40,14 @@ public sealed record MapData
     public required ImmutableArray<ImmutableHashSet<Coord>> BirthZones { get; init; }
 
     /// <summary>
-    /// 棋盘清单（board-map D2），缺省为空（旧地图与既有测试不必显式给出）。出生棋盘与出生区一一对应、次序一致。
+    /// 棋盘清单（board-map D2），缺省为空（旧地图与既有测试不必显式给出）。出生棋盘与出生区一一对应、次序一致；链接档另有公共棋盘（中立平台，seat-gap-25 E2），排在出生棋盘之后。
     /// 只用于静态校验与呈现，对局规则不读它；标准档与边疆档地图的清单必须为空。
     /// </summary>
     public ImmutableArray<BoardPlate> Boards { get; init; } = [];
 
     /// <summary>
     /// 地图版本号：恒为 0（open-map 裁决 O3：地图在对局中不再变化；对局中增长的路径已随拼接规则删除）。
-    /// <see cref="Boards"/> 即全部出生棋盘。不参与任何规则计算，只供存档、日志与校验核对。
+    /// 不参与任何规则计算，只供存档、日志与校验核对。
     /// </summary>
     public int MapVersion { get; init; }
 

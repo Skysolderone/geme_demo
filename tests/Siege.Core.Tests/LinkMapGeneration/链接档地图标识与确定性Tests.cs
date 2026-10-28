@@ -117,9 +117,9 @@ public class 链接档地图标识与确定性Tests
             Assert.Equal(2, two.MaxPlayers);
             Assert.Equal(4, four.MaxPlayers);
             Assert.Equal($"link:{seed}:2", two.Id);
-            Assert.NotEqual(two.Width, four.Width);
+            Assert.NotEqual(two.Height, four.Height);   // seat-gap-25 E1：三档岛宽同为 45，2 人岛高 33、4 人 45（原 map-expand-25 断言宽不同）
 
-            // 中央平台两张图都有（固定 8×8 居中）；其余平台相对岛左下角的摆法不同。
+            // 座位位置只由人数决定；中立平台相对岛左下角的摆法与主题另抽，2 人与 3 人的图不同。
             static string Shape(MapData m) => string.Join(";", m.Boards.Select(p => $"{p.Origin.X - m.Boards.Min(b => b.Origin.X)},{p.Origin.Y - m.Boards.Min(b => b.Origin.Y)},{p.Width}x{p.Height},{p.Theme}"));
             Assert.NotEqual(Shape(two), Shape(LinkMapGenerator.Generate(seed, 3)));
         }

@@ -16,7 +16,7 @@ public class 链接模式对局记录Tests
     public void 战场结算可查()
     {
         // Scenario：某战场因整轮 Pass 结算 → 记录含战场标识、原因"整轮 Pass"、名次与胜者；出局区分原因并含出局时势力。
-        MatchFlow match = Started([0, 0, 3, 4]).PlayRound(P0).PassRound();
+        MatchFlow match = Started([0, 0, 3, 2]).PlayRound(P0).PassRound();
         BattlefieldSettlementRecord settled = Assert.Single(match.Settlements);
         Assert.Equal((2, 0, SettlementReason.AllPassed), (settled.MajorRound, settled.Battlefield, settled.Reason));
         Assert.Equal(P0, settled.Winner);

@@ -1,3 +1,4 @@
+using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
@@ -18,18 +19,24 @@ public class 日志首部区数Tests
         // 确定性文本与完整文本两条往返都保留；共用样本同为 5。
         // retire-legacy-maps 1.8：原用边疆图（6 区 4 人）与标准图样本（4 区）；旧图删除，改用 link:1（5 区 4 人），"区数 ≠ 人数"这一非恒等口径不变。
         // map-expand-25 段 A2：link:7:4 与 link:1:4 都换成 10 块平台的浮空岛，区数期望由 5 改为 10（仍 ≠ 人数 4）。
+        // seat-gap-25：出生区 = 出生座位 = 人数，区数期望由 10 改为 4——"区数 ≠ 人数"的非恒等口径随裁决 S2 失效：链接图的座位数恒等于人数（校验器守），
+        // 且 Sim 各入口只接受 link: 标识，造不出"区数 ≠ 人数"的真实跑局，"首部写成人数"的变异本测试不再能区分（二者在现行地图上同值，不再是错误）。
+        // 段 B 换成现行的非恒等口径：区数（出生座位 4）≠ 棋盘清单块数（座位 + 中立平台，样本口径断言 > 4）——守"首部把中立平台也算成出生区"这一现实的回归。
         // 变异 M-B5：MatchSession.BuildHeader 不写 ZoneCount → 本测试红。
+        // 变异 MB2-3（段 B 实跑，只跑本类）：BuildHeader 的 ZoneCount 改为 Match.Map.Boards.Length（把中立平台算进去）→ 红 2（本测试与「回放缺区数字段的旧日志只在首部分歧对局逐步相同」）。
         MatchLog frontier = MatchSession.Create(SimFixtures.Config(turnLimit: 4) with { MapId = "link:7:4" }, seed: 7).Run();
+        MapData map = MapCatalog.Resolve("link:7:4");
+        Assert.True(map.Boards.Length > 4, $"样本口径：link:7:4 的棋盘清单（{map.Boards.Length} 块）须多于出生座位数 4，否则把中立平台算进区数测不出来");
 
         Assert.False(frontier.IsFailed, frontier.Failure?.Message);
         Assert.Equal("link:7:4", frontier.Header.MapId);
-        Assert.Equal(10, frontier.Header.ZoneCount);
+        Assert.Equal(4, frontier.Header.ZoneCount);
         Assert.Equal(4, frontier.Header.Zones.Count);
-        Assert.Equal(10, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);
-        Assert.Equal(10, MatchLog.Parse(frontier.FullText()).Header.ZoneCount);
-        Assert.Contains("\"ZoneCount\":10", frontier.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
+        Assert.Equal(4, MatchLog.Parse(frontier.DeterministicText()).Header.ZoneCount);
+        Assert.Equal(4, MatchLog.Parse(frontier.FullText()).Header.ZoneCount);
+        Assert.Contains("\"ZoneCount\":4", frontier.DeterministicText().Split('\n')[0], StringComparison.Ordinal);
 
-        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(10, l.Header.ZoneCount));
+        Assert.All(SimFixtures.Sample.Value, l => Assert.Equal(4, l.Header.ZoneCount));
     }
 
     [Fact]
@@ -62,16 +69,16 @@ public class 日志首部区数Tests
         // retire-legacy-maps 1.8：样本由 v5（区数 4）改到 link:1（区数 5），期望值随之由 4 改为 5，断言不变。
         MatchLog current = BatchRunner.Execute(SimFixtures.Config(turnLimit: 4), parallelism: 1)[0];   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
         string text = current.DeterministicText();
-        Assert.Contains("\"ZoneCount\":10,", text, StringComparison.Ordinal);   // map-expand-25 段 A2：link:1:4 浮空岛区数 10
-        MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":10,", string.Empty, StringComparison.Ordinal));
+        Assert.Contains("\"ZoneCount\":4,", text, StringComparison.Ordinal);   // map-expand-25 段 A2：link:1:4 浮空岛区数 10；seat-gap-25：区数 = 座位数 4
+        MatchLog old = MatchLog.Parse(text.Replace("\"ZoneCount\":4,", string.Empty, StringComparison.Ordinal));
         Assert.Null(old.Header.ZoneCount);
 
         ReplayResult replay = Replayer.Replay(old);   // retire-legacy-maps：去掉 Legacy 地图解析（resolveMap），一律经 MapCatalog.Resolve
 
         Assert.False(replay.Identical);
         Assert.Equal(1, replay.FirstDivergentLine);
-        Assert.Contains("\"ZoneCount\":10", replay.Actual, StringComparison.Ordinal);
-        Assert.Equal(10, replay.Replayed.Header.ZoneCount);
+        Assert.Contains("\"ZoneCount\":4", replay.Actual, StringComparison.Ordinal);
+        Assert.Equal(4, replay.Replayed.Header.ZoneCount);
         Assert.Equal(SimFixtures.TurnTexts(old.Turns), SimFixtures.TurnTexts(replay.Replayed.Turns));
         Assert.Equal(old.DeterministicText().Split('\n')[1..], replay.Replayed.DeterministicText().Split('\n')[1..]);
 

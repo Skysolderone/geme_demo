@@ -31,7 +31,7 @@ public class 按座位视图Tests
     public void 他人棋盘锁定后即展开()
     {
         // Scenario（open-map「他人棋盘从第 1 大回合起可见」）：玩家 A 在棋盘 1，查询棋盘 4 内任一格 → 返回该格的地形与占用（原「他人战场呈现为未展开」反向）。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         match.Place(P2, CoreCell(match.Map, 3, 1, 1));
         SeatPublicView a = match.PublishFor(P0);
 
@@ -49,16 +49,16 @@ public class 按座位视图Tests
     {
         // G1（负责人 2026-10-14 裁决 A，tasks 2.6）：战斗阶段按座位可见的格 = 本战场所含各棋盘外接矩形内的全部格，包括岩石与未架桥深水
         // （否则河流与岩石在视图里成了空缺）；open-map：本战场 = 全图，全部平台都在。Core 视图与表现层的按座位过滤一致。
-        // 载体：从 link:1:4 起找第一张"河流主题棋盘里同时有岩石与未架桥深水"的图（只在每张图的前 5 块平台里找）。
+        // 载体：从 link:1:4 起找第一张"河流主题棋盘里同时有岩石与未架桥深水"的图（seat-gap-25：只在每张图的 4 个出生座位里找，原为前 5 块平台）。
         (MapData map, int zone) = Enumerable.Range(1, 200).Select(s => LinkMapGenerator.Generate((ulong)s, 4))
-            .SelectMany(m => Enumerable.Range(0, 5).Select(z => (Map: m, Zone: z)))
+            .SelectMany(m => Enumerable.Range(0, 4).Select(z => (Map: m, Zone: z)))
             .First(t => t.Map.Boards[t.Zone].Theme == BoardTheme.River && t.Map.Boards[t.Zone].Cells().Any(c => t.Map.Obstacles.Contains(c)));
         BoardPlate plate = map.BirthBoard(zone);
         Coord[] water = [.. plate.Cells().Where(map.TerrainData.IsUnbridgedDeepWater)];
         Coord[] rocks = [.. plate.Cells().Where(map.Obstacles.Contains)];
         Assert.NotEmpty(water);   // 样本口径
         Assert.NotEmpty(rocks);
-        int[] others = [.. Enumerable.Range(0, 5).Where(z => z != zone).Take(3)];
+        int[] others = [.. Enumerable.Range(0, 4).Where(z => z != zone)];
         MatchFlow match = MatchFlow.Create(map, TestMaps.Seed, All, Options);
         match.PlantSequentially([(P0, zone), (P1, others[0]), (P2, others[1]), (P3, others[2])]);
         Assert.NotEqual(MatchPhase.FlagPlanting, match.Phase);
@@ -72,8 +72,9 @@ public class 按座位视图Tests
         Assert.Equal((Terrain.Obstacle, Surface.Grass), (r.Terrain, r.Surface));
 
         // 其他棋盘（open-map）：整块外接矩形（含它们的岩石与深水）也全部出现。
-        // map-expand-25 段 A2：浮空岛有 10–12 块平台，原"5 块里除自己外的 4 块"改为全部其他平台。
-        Assert.All(Enumerable.Range(0, map.Boards.Length).Where(z => z != zone), z => Assert.All(map.BirthBoard(z).Cells(), c => Assert.NotNull(a.CellAt(c))));
+        // map-expand-25 段 A2：浮空岛有 10–12 块平台，原"5 块里除自己外的 4 块"改为全部其他平台；seat-gap-25：其他座位与中立平台都在内。
+        Assert.Contains(map.Boards, b => b.Kind == BoardPlateKind.Public);
+        Assert.All(map.Boards.Where(b => b != plate), b => Assert.All(b.Cells(), c => Assert.NotNull(a.CellAt(c))));
 
         // 表现层按座位过滤与 Core 视图同一组格；全部平台都整块可见，棋盘清单全部保留。
         DefaultBoardView view = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(a, zone);
@@ -85,7 +86,7 @@ public class 按座位视图Tests
     public void 他人势力可见()
     {
         // Scenario（open-map「他人棋盘从第 1 大回合起可见」）：A 在棋盘 1，查询棋盘 4 内玩家 C 的势力 → 返回 C 的势力明细（领地分、独占格、手牌类型）。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         match.Place(P2, CoreCell(match.Map, 3, 1, 1));
         SeatPlayerView c = match.PublishFor(P0).Players.Single(p => p.Player == P2);
 
@@ -105,16 +106,16 @@ public class 按座位视图Tests
     public void 数据层含全图()
     {
         // Scenario（open-map，原「数据层过滤」反向）：以座位 A 的视图序列化整局公开信息 → 序列化结果含全图每一格的数据与全部玩家的势力数值。
-        MatchFlow match = Started([0, 1, 3, 4]);
-        foreach (int zone in new[] { 1, 3, 4 })
+        MatchFlow match = Started([0, 1, 3, 2]);
+        foreach (int zone in new[] { 1, 3, 2 })
         {
-            match.Place(All[Array.IndexOf([0, 1, 3, 4], zone)], BirthCell(match.Map, zone, 2, 2));
+            match.Place(All[Array.IndexOf([0, 1, 3, 2], zone)], BirthCell(match.Map, zone, 2, 2));
         }
 
         string json = JsonSerializer.Serialize(match.PublishFor(P0), Json);
 
         HashSet<Coord> all = [.. match.Map.Boards.SelectMany(b => b.Cells())];
-        Assert.Equal(513, all.Count);   // 样本口径：link:1:4 十块平台 7×8 ×2 + 6×6 + 6×7 + 7×7 ×3 + 8×8 ×2 + 6×8 = 513 格（map-expand-25 浮空岛；terrain-density 时为五块 198 格）
+        Assert.Equal(452, all.Count);   // 样本口径：link:1:4 四座位 8×8 ×4 + 中立平台 6×7 + 7×7 ×2 + 7×8 = 452 格（seat-gap-25；map-expand-25 十块平台时为 513 格，terrain-density 时为五块 198 格）
         Assert.All(all, c => Assert.Contains($"\"{c.ToNotation()}\"", json, StringComparison.Ordinal));
         // 全部玩家的势力数值都出现：没有任何 Power 为 null 的玩家。
         Assert.DoesNotContain("\"Power\":null", json, StringComparison.Ordinal);
@@ -125,7 +126,7 @@ public class 按座位视图Tests
     {
         // 「始终公开的信息」第 3 项（裁决 S8）：每个空格的归属——独占及独占者 / 争议 / 中立——对全部玩家公开（open-map：唯一战场 = 全图）；
         // 取自势力快照里唯一的覆盖表（与领地分同一份）。
-        MatchFlow match = Started([1, 1, 3, 4]);
+        MatchFlow match = Started([1, 1, 3, 2]);
         match.Place(P0, BirthCell(match.Map, 1, 2, 2));
         match.Place(P1, BirthCell(match.Map, 1, 4, 2));
         match.Place(P2, BirthCell(match.Map, 3, 2, 2));
@@ -154,12 +155,12 @@ public class 按座位视图Tests
     [Fact]
     public void 插旗阶段的可见信息()
     {
-        // Scenario：插旗阶段 → 可见全部占位（map-expand-25：link:1:4 为 10 块平台）的位置与边长、对局种子与地图标识，看不到任何棋盘内部的格，也看不到任何旗帜。
+        // Scenario：插旗阶段 → 可见全部占位（seat-gap-25：link:1:4 为 4 个出生座位，中立平台不给占位；map-expand-25 时为 10 块平台）的位置与边长、对局种子与地图标识，看不到任何棋盘内部的格，也看不到任何旗帜。
         // relic-redesign W1：原载体 LinkModeFixtures.RelicMap（手写信物格夹具）随旧信物删除；开局没有信物（第 4 大回合起刷新），插旗阶段与锁定后的信物列表都为空。
         MatchFlow match = Create();
         match.Flags.Plant(P1, 2);
         SeatPublicView a = match.PublishFor(P0);
-        Assert.Equal(10, a.Placeholders.Length);
+        Assert.Equal(4, a.Placeholders.Length);
         Assert.Empty(a.Cells);
         Assert.Empty(a.Relics);
         Assert.Equal(MapId, a.MapId);
@@ -179,7 +180,7 @@ public class 按座位视图Tests
     public void 多人同区锁定后全员互见()
     {
         // match-setup Scenario → open-map：A 与 B 都锁定棋盘 2 → 锁定后 A、B 与其他玩家都在唯一战场上，彼此可见（原「只见同棋盘者」反向）。
-        MatchFlow match = Started([1, 1, 3, 4]);
+        MatchFlow match = Started([1, 1, 3, 2]);
         Assert.True(match.PublishFor(P0).Players.Single(p => p.Player == P1).SameBattlefield);
         Assert.True(match.PublishFor(P2).Players.Single(p => p.Player == P0).SameBattlefield);
         Assert.True(match.PublishFor(P2).Players.Single(p => p.Player == P1).SameBattlefield);
@@ -209,7 +210,7 @@ public class 按座位视图Tests
             CarryIns = System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Siege.Core.PieceRelics.RelicLoadout>.Empty
                 .Add(P2, new([new Siege.Core.PieceRelics.CarriedRelic(Siege.Core.PieceRelics.RelicKind.WarDrum, true)])),
         });
-        match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 4 }[i])));
+        match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 2 }[i])));
         SeatPublicView a = match.PublishFor(P0);
         Assert.Equal(match.ActionOrder, a.ActionOrder);
         Assert.Equal(4, a.ActionOrder.Length);
