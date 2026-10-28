@@ -95,14 +95,15 @@ public class 开局信息公开范围Tests
         Siege.Presentation.Visibility.DefaultBoardView board = match.World(TestMaps.P0).Board();
 
         Assert.Empty(board.Cells);
-        Assert.Equal(10, board.Placeholders.Length);   // map-expand-25：link:1:4 浮空岛 10 块平台（原 5 块）
+        Assert.Equal(4, board.Placeholders.Length);   // seat-gap-25：link:1:4 占位 = 4 个出生座位（map-expand-25 时为 10 块平台，更早为 5 块）
         foreach (Siege.Presentation.Visibility.BoardPlaceholderView p in board.Placeholders)
         {
             Assert.Equal(LinkModeFixtures.Map.BirthBoard(p.Zone).Theme!.Value.DisplayName(), p.ThemeName);
         }
 
-        // 四种平台主题都出现、没有高台（测试内字面量，不经 DisplayName 反推）。map-expand-25（裁决 R3）：主题可以重复、高台主题去掉，原"五块两两不同、恰五个主题"改为去重后的集合。
-        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, board.Placeholders.Select(p => p.ThemeName).Distinct().Order(StringComparer.Ordinal));
+        // 没有高台（测试内字面量，不经 DisplayName 反推）。map-expand-25（裁决 R3）：主题可以重复、高台主题去掉，原"五块两两不同、恰五个主题"改为去重后的集合。
+        // seat-gap-25：占位只给 4 个出生座位（河流、栅栏阵 ×3），原"10 块平台四种主题都出现"作废。
+        Assert.Equal(new[] { "栅栏阵", "河流" }, board.Placeholders.Select(p => p.ThemeName).Distinct().Order(StringComparer.Ordinal));
 
         // 没有主题的占位（手写夹具）不给主题名：渲染层不画这一行。
         var bare = new Siege.Presentation.Visibility.BoardPlaceholderView(0, new Coord(0, 0), 5, 5, Expanded: false, Own: false, Theme: null);
@@ -123,17 +124,18 @@ public class 开局信息公开范围Tests
 
         Assert.Equal(0, code);
         string text = output.ToString();
-        string[] themeNames = new string[map.Boards.Length];
-        for (int zone = 0; zone < map.Boards.Length; zone++)
+        string[] themeNames = new string[map.BirthZones.Length];
+        for (int zone = 0; zone < map.BirthZones.Length; zone++)
         {
             BoardPlate plate = map.BirthBoard(zone);
             themeNames[zone] = plate.Theme!.Value.DisplayName();
             Assert.Contains($"  {zone + 1} 号棋盘 · {themeNames[zone]} · {plate.Width}×{plate.Height}（左下角 {plate.Origin.ToNotation()}）", text, StringComparison.Ordinal);
         }
 
-        // 四种平台主题都出现、没有高台（测试内字面量，不经 DisplayName 反推；map-expand-25 裁决 R3，见上一条）。
-        Assert.Equal(10, themeNames.Length);
-        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, themeNames.Distinct().Order(StringComparer.Ordinal));
+        // 没有高台、主题可重复（测试内字面量，不经 DisplayName 反推；map-expand-25 裁决 R3，见上一条）。
+        // seat-gap-25：插旗只列 4 个出生座位（河流、栅栏阵 ×3；中立平台不列），原"10 块平台四种主题都出现"作废。
+        Assert.Equal(4, themeNames.Length);
+        Assert.Equal(new[] { "河流", "栅栏阵", "栅栏阵", "栅栏阵" }, themeNames);
         Assert.Contains("盲选出生棋盘", text, StringComparison.Ordinal);
         Assert.DoesNotContain(" ? ", text, StringComparison.Ordinal);   // 不暴露棋盘内部布局（信物格）
     }

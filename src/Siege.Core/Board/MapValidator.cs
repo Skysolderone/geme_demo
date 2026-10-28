@@ -80,12 +80,14 @@ public static class MapValidator
     /// （守门 <c>规格档分流守门Tests</c>：本文件里规格档枚举的字面量只在本表内、地图的规格档属性只在 <see cref="RulesOf"/> 读一次）。
     /// <para>retire-legacy-maps 4.2（裁决 L1 / L7）：标准档、边疆档、棋盘档随旧地图删除，表里只剩链接档一行。</para>
     /// <para>
-    /// map-expand-25 D7（多平台浮空岛）：链接档按人数 2 / 3 / 4 各一行预算——可落子格区间、
-    /// 出生区数 = 平台数区间（裁决 R2）、出生区恰 9 格（核心区）、岛边长 W(n) 与画布边长 W(n)+2M（恰等；原表外的列 / 行区间并入每行）。
+    /// seat-gap-25 E5（出生座位 + 25×25 战场，取代 map-expand-25 D7 的"全部平台都可出生"）：链接档按人数 2 / 3 / 4 各一行预算——可落子格区间、
+    /// 出生区数恰等于人数（原"出生区数须多于人数"的声明字段随之删除：区间退化成 (n, n) 即可表达）、出生区恰 9 格（核心区）、
+    /// 中立平台数区间（裁决 S4：2–3 / 3–4 / 4–5）、岛宽高 W×H 与画布 (W+2M)×(H+2M)（恰等；2 人 45×33，3 / 4 人 45×45，见 <c>LinkMapGenerator.IslandSize</c>）。
     /// 浮空岛不放静态信物格（D5：依据 relic-redesign R29，2026-10-26 用户裁决），信物数量 / 位置类规则（信物区间、出生区信物、公共信物）一并删除。
-    /// W(n) = 30 / 35 / 40（段 A1 实施修订：design D2 原定 26 / 31 / 36 在"中央 8×8 + 其余 ≥ 6 + 距岛边 2 + 间隔 3"下放不够平台，见 <c>LinkMapGenerator.IslandBaseSide</c>）。
-    /// 可落子格区间取种子 1–20 实测（段 A1）向外取整，回写记录见任务 10-26-map-expand-25。
-    /// 平台清单规则：边长 6–8、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个。
+    /// 可落子格区间（seat-gap-25 段 A）：种子 1–20 实测 2 人 1389–1438、3 人 1902–1951、4 人 1861–1952；先按它向外取整的 1350 / 1850 / 1800 下限在种子 21–200 上
+    /// 撞到 5 张图（link:59:2 为 1333 等，生成器即抛异常），改用种子 1–600 扫描（只生成地图、不跑局）：最小 1324 / 1819 / 1795、最大 1440 / 1968 / 1952，
+    /// 下限再各留约 70–100 格余量取 1250 / 1750 / 1700，上限取岛内格数上界附近的 1480 / 2000。记录见任务 10-28-seat-gap-25（原 map-expand-25 的 760–876 / 1050–1201 / 1400–1576 随岛尺寸作废）。
+    /// 平台清单规则：平台（座位与中立平台）边长 6–8、座位恰 8×8、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个、任意两座位间距 ≥ 25。
     /// </para>
     /// 各地图共用、不在表里的规则：结构、地形边界、可落子格预算、出生区（保护期容量、出生区内无新地表）、豁免理由、必死口袋。
     /// 旋转对称不在校验器里（原 MapSymmetry 只由标准档基准图的测试调用，已随旧地图删除——retire-legacy-maps）。
@@ -93,34 +95,33 @@ public static class MapValidator
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
         new Dictionary<MapProfile, ProfileRules>
         {
-            // 链接档（map-expand-25 D7）：按人数的浮空岛；没有咽喉、不做距离均衡、不要求到中央入口可达。
+            // 链接档（seat-gap-25 E5）：按人数的出生座位浮空岛；没有咽喉、不做距离均衡、不要求到中央入口可达。
             [MapProfile.Link] = new(
                 "链接档只提供 2–4 人的预算表",
                 new Dictionary<int, Budget>
                 {
-                    [2] = new(760, 876, (6, 8), (9, 9), IslandSide: 30, Canvas: 34),
-                    [3] = new(1050, 1201, (8, 10), (9, 9), IslandSide: 35, Canvas: 39),
-                    [4] = new(1400, 1576, (10, 12), (9, 9), IslandSide: 40, Canvas: 44),
+                    [2] = new(1250, 1480, (2, 2), (9, 9), (2, 3), Island: (45, 33), Canvas: (49, 37)),
+                    [3] = new(1750, 2000, (3, 3), (9, 9), (3, 4), Island: (45, 45), Canvas: (49, 49)),
+                    [4] = new(1700, 2000, (4, 4), (9, 9), (4, 5), Island: (45, 45), Canvas: (49, 49)),
                 }.ToImmutableDictionary(),
-                ZonesMustExceedPlayers: true,
-                PlateList: new((6, 8), (6, 8), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3))),
+                PlateList: new((6, 8), (8, 8), MinEditTargets: 2, MaxSpecialSurfaces: 4, MinGap: 3, Ramps: (2, 3), SeatGap: 25)),
         }.ToImmutableDictionary();
 
     /// <summary>
-    /// 一个规格档的全部分流声明：支持的人数说明、人数预算、出生区数是否须多于人数、棋盘清单规则。
+    /// 一个规格档的全部分流声明：支持的人数说明、人数预算、棋盘清单规则。
     /// retire-legacy-maps 4.2：距离处理方式、连通性模式、咽喉标注、出生区到中央入口四个字段随旧档删除。
     /// map-expand-25 D7：外接列数与行数区间并入按人数的预算行（画布边长恰等于 W(n)+2M）。
+    /// seat-gap-25 E5：声明字段"出生区数须多于人数"删除——出生区数恰等于人数，由预算行的出生区数区间 (n, n) 表达。
     /// </summary>
     private sealed record ProfileRules(
         string SupportedPlayers,
         ImmutableDictionary<int, Budget> Budgets,
-        bool ZonesMustExceedPlayers,
         PlateRules PlateList);
 
     /// <summary>
-    /// 棋盘清单规则：棋盘边长区间、出生棋盘（平台）边长区间、可改造目标（林地格 + 未架桥深水格）下限、
-    /// 新地表（荒漠 / 沼泽 / 岩台 / 浅滩）格数上限、两块平台外接矩形的最小间隔、每块平台的坡道数区间。
-    /// map-expand-25 D7：加间隔与坡道；不放静态信物格（D5，relic-redesign R29）后，出生区档信物格数与每块公共信物上限一并删除。
+    /// 棋盘清单规则：平台边长区间、出生座位边长区间（<c>SEAT_SIZE</c>）、可改造目标（林地格 + 未架桥深水格）下限、
+    /// 新地表（荒漠 / 沼泽 / 岩台 / 浅滩）格数上限、两块平台外接矩形的最小间隔、每块平台的坡道数区间、任意两座位外接矩形的最小间距（<c>SEAT_GAP</c>）。
+    /// map-expand-25 D7：加间隔与坡道；不放静态信物格（D5，relic-redesign R29）后，出生区档信物格数与每块公共信物上限一并删除。seat-gap-25 E5：加座位间距。
     /// </summary>
     private sealed record PlateRules(
         (int Min, int Max) Side,
@@ -128,16 +129,18 @@ public static class MapValidator
         int MinEditTargets,
         int MaxSpecialSurfaces,
         int MinGap,
-        (int Min, int Max) Ramps);
+        (int Min, int Max) Ramps,
+        int SeatGap);
 
-    /// <summary>一档人数的规模预算（map-expand-25 D7：另带岛边长与画布边长；信物区间随"不放静态信物格"删除）。</summary>
+    /// <summary>一档人数的规模预算（map-expand-25 D7：另带岛与画布尺寸；seat-gap-25 E5：岛与画布改为宽 × 高，另带中立平台数区间）。</summary>
     private readonly record struct Budget(
         int MinPlayable,
         int MaxPlayable,
         (int Min, int Max) BirthZones,
         (int Min, int Max)? BirthZoneCells,
-        int IslandSide,
-        int Canvas);
+        (int Min, int Max) NeutralPlates,
+        (int Width, int Height) Island,
+        (int Width, int Height) Canvas);
 
     /// <summary>全文件唯一读取规格档的地方。未定义的规格档值（只可能来自手工构造）没有声明行，返回 <c>null</c>。</summary>
     private static ProfileRules? RulesOf(MapData map) => Rules.GetValueOrDefault(map.Profile);
@@ -181,7 +184,7 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 画布宽与高必须恰等于该人数预算行的画布边长 W(n)+2M（map-expand-25 D7）。没有预算行（人数不受支持）时不查。不通过返回 <c>false</c>。
+    /// 画布宽与高必须恰等于该人数预算行的画布尺寸 (W+2M)×(H+2M)（map-expand-25 D7；seat-gap-25 E5 起宽高分开）。没有预算行（人数不受支持）时不查。不通过返回 <c>false</c>。
     /// </summary>
     private static bool ValidateExtent(MapData map, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -190,12 +193,12 @@ public static class MapValidator
             return true;
         }
 
-        int canvas = budget.Canvas;
+        (int columns, int rows) = budget.Canvas;
         (string Code, string Message)? wrong =
-            map.Width > canvas ? ("MAP_TOO_WIDE", $"地图宽 {map.Width} 列，超出 {map.MaxPlayers} 人浮空岛的画布 {canvas} 列。")
-            : map.Width < canvas ? ("MAP_TOO_NARROW", $"地图宽 {map.Width} 列，不足 {map.MaxPlayers} 人浮空岛的画布 {canvas} 列。")
-            : map.Height > canvas ? ("MAP_TOO_TALL", $"地图高 {map.Height} 行，超出 {map.MaxPlayers} 人浮空岛的画布 {canvas} 行。")
-            : map.Height < canvas ? ("MAP_TOO_SHORT", $"地图高 {map.Height} 行，不足 {map.MaxPlayers} 人浮空岛的画布 {canvas} 行。")
+            map.Width > columns ? ("MAP_TOO_WIDE", $"地图宽 {map.Width} 列，超出 {map.MaxPlayers} 人浮空岛的画布 {columns} 列。")
+            : map.Width < columns ? ("MAP_TOO_NARROW", $"地图宽 {map.Width} 列，不足 {map.MaxPlayers} 人浮空岛的画布 {columns} 列。")
+            : map.Height > rows ? ("MAP_TOO_TALL", $"地图高 {map.Height} 行，超出 {map.MaxPlayers} 人浮空岛的画布 {rows} 行。")
+            : map.Height < rows ? ("MAP_TOO_SHORT", $"地图高 {map.Height} 行，不足 {map.MaxPlayers} 人浮空岛的画布 {rows} 行。")
             : null;
         if (wrong is { } w)
         {
@@ -211,6 +214,7 @@ public static class MapValidator
     /// 返回 <c>false</c> 表示清单与该档根本不符，后面的规则不必再跑。
     /// map-expand-25 D7：删除外圈平坦、棋盘外不得有深水、紧贴布局（含"可落子格都属于棋盘"与战场分量恰 1 个）、接缝气边、主题两两不同、每块至多 1 个公共信物；
     /// 改为平台高度与坡道、主题不为高台、平台间隔、整岛气边连通、可落子区外接矩形（不放静态信物格后，公共信物位置 / 数量规则一并删除）。
+    /// seat-gap-25 E5：平台规则对出生座位与中立平台（公共棋盘）同样适用；另加座位尺寸、座位间距与中立平台数。
     /// </summary>
     private static bool ValidatePlateList(MapData map, ProfileRules rules, Budget? budget, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -227,6 +231,7 @@ public static class MapValidator
         ValidateThemes(map, f);
         ValidateBirthPlates(map, f);
         ValidateIsland(map, plates, budget, f);
+        ValidateSeats(map, plates, budget, f);
         return true;
     }
 
@@ -241,21 +246,20 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 第 1、2 条：棋盘在盘内、边长在区间内；出生棋盘（平台）再逐块校验高度与坡道、隔断线、核心区、新地表、连通与改造目标（<see cref="ValidateBirthBoardTerrain"/>）。
-    /// 重叠与间隔由 <see cref="ValidateIsland"/> 报出。
+    /// 第 1、2 条：棋盘在盘内、边长在区间内；每块平台（seat-gap-25 E5：出生座位与中立平台一视同仁）再逐块校验高度与坡道、隔断线、核心区、新地表、连通与改造目标（<see cref="ValidatePlateTerrain"/>）。
+    /// 出生座位的尺寸（<c>SEAT_SIZE</c>）与间距由 <see cref="ValidateSeats"/> 报出，重叠与间隔由 <see cref="ValidateIsland"/> 报出。
     /// </summary>
     private static void ValidatePlateCells(MapData map, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
     {
         for (int i = 0; i < map.Boards.Length; i++)
         {
             BoardPlate plate = map.Boards[i];
-            (int Min, int Max) side = plate.Kind == BoardPlateKind.Birth ? plates.BirthSide : plates.Side;
+            (int Min, int Max) side = plates.Side;
             if (plate.Width < side.Min || plate.Width > side.Max || plate.Height < side.Min || plate.Height > side.Max)
             {
-                string birth = plate.Kind == BoardPlateKind.Birth ? $"，出生棋盘 {plates.BirthSide.Min}–{plates.BirthSide.Max}" : string.Empty;
                 f.Add(new MapValidationFailure(
                     "BOARD_SIZE_OUT_OF_RANGE",
-                    $"{Describe(plate)} 的宽与高必须各在合法边长 {plates.Side.Min}–{plates.Side.Max} 之内{birth}。",
+                    $"{Describe(plate)} 的宽与高必须各在合法边长 {side.Min}–{side.Max} 之内。",
                     [plate.Origin]));
             }
 
@@ -267,22 +271,19 @@ public static class MapValidator
                 continue;
             }
 
-            if (plate.Kind == BoardPlateKind.Birth)
-            {
-                ValidateBirthBoardTerrain(map, plate, plates, fields, f);
-            }
+            ValidatePlateTerrain(map, plate, plates, fields, f);
         }
     }
 
     /// <summary>
-    /// 一块平台（出生棋盘）的清单规则（map-definition「地图静态校验规则」链接档清单；map-expand-25 D3 / D7）：
+    /// 一块平台（出生座位与中立平台一视同仁，seat-gap-25 E5）的清单规则（map-definition「地图静态校验规则」链接档清单；map-expand-25 D3 / D7）：
     /// 平台内可落子格除坡道外高度 2，坡道高度 1、数量在区间内、都在外圈非角格且朝外的邻格是高度 0 的可落子低地（<c>PLATE_HEIGHT</c>）；
     /// 河流隔断线恰 1 座桥（<c>BOARD_BARRIER_INVALID</c>）；核心区 9 格高度 2 的草地、没有障碍 / 深水 / 桥，两端都在核心区内的边上没有栅栏（<c>BIRTH_CORE_NOT_FLAT</c>）；
     /// 荒漠 / 沼泽 / 岩台 / 浅滩只在中间带、每块至多 <see cref="PlateRules.MaxSpecialSurfaces"/> 格（<c>BOARD_SPECIAL_SURFACE</c>）；平台内可落子格沿几何四邻连通（<c>BOARD_SPLIT</c>）；
     /// 林地格与未架桥深水格合计不少于下限（<c>BOARD_TOO_FEW_EDIT_TARGETS</c>）。
     /// </summary>
     /// <remarks>连通性读战场导出（<see cref="Battlefields"/>，几何四邻的唯一分量实现），不另写一份 BFS：平台内的可落子格落在不止一个分量里即被切断。</remarks>
-    private static void ValidateBirthBoardTerrain(MapData map, BoardPlate plate, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
+    private static void ValidatePlateTerrain(MapData map, BoardPlate plate, PlateRules plates, Battlefields fields, ImmutableArray<MapValidationFailure>.Builder f)
     {
         // 高度与坡道（D3）：坡道 = 平台内高度 1 的可落子格。朝外的邻格用坐标算术取（外圈非角格恰有一个朝外方向），不枚举邻居。
         int left = plate.Origin.X, right = plate.Origin.X + plate.Width - 1, bottom = plate.Origin.Y, top = plate.Origin.Y + plate.Height - 1;
@@ -380,7 +381,7 @@ public static class MapValidator
         {
             f.Add(new MapValidationFailure(
                 "BOARD_SPECIAL_SURFACE",
-                $"{Describe(plate)} 有 {special.Length} 格荒漠、沼泽、岩台与浅滩：每块出生棋盘至多 {plates.MaxSpecialSurfaces} 格新地表。",
+                $"{Describe(plate)} 有 {special.Length} 格荒漠、沼泽、岩台与浅滩：每块平台至多 {plates.MaxSpecialSurfaces} 格新地表。",
                 special));
         }
 
@@ -416,7 +417,7 @@ public static class MapValidator
         {
             f.Add(new MapValidationFailure(
                 "BOARD_TOO_FEW_EDIT_TARGETS",
-                $"{Describe(plate)} 内林地格与未架桥深水格合计 {targets} 个：每块出生棋盘必须至少 {plates.MinEditTargets} 个可改造目标。",
+                $"{Describe(plate)} 内林地格与未架桥深水格合计 {targets} 个：每块平台必须至少 {plates.MinEditTargets} 个可改造目标。",
                 [plate.Origin]));
         }
     }
@@ -455,28 +456,25 @@ public static class MapValidator
     }
 
     /// <summary>
-    /// 主题（link-map-terrain D2；map-expand-25 D7 / 裁决 R3，<c>PLATE_THEME</c>）：出生棋盘（平台）必须带一个取值合法的主题、且不是高台，非出生棋盘不得带主题。
+    /// 主题（link-map-terrain D2；map-expand-25 D7 / 裁决 R3，<c>PLATE_THEME</c>）：每块平台必须带一个取值合法的主题、且不是高台。
+    /// seat-gap-25 E2：中立平台（公共棋盘）同样带主题——原"非出生棋盘不得带主题"一条删除（链接档是唯一规格档，非链接档的口径已无对象）。
     /// 主题可以重复（原"两两不同"随 R3 删除）。主题只用于生成、校验与呈现，这里只核对取值，不按主题校验地形内容。
     /// </summary>
     private static void ValidateThemes(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
     {
         foreach (BoardPlate plate in map.Boards)
         {
-            if (plate.Kind == BoardPlateKind.Birth && plate.Theme is not { } theme)
+            if (plate.Theme is not { } theme)
             {
                 f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 没有主题：链接档的平台必须带主题。", [plate.Origin]));
             }
-            else if (plate.Kind == BoardPlateKind.Birth && !Enum.IsDefined(plate.Theme!.Value))
+            else if (!Enum.IsDefined(theme))
             {
-                f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 的主题取值 {(int)plate.Theme!.Value} 无法识别。", [plate.Origin]));
+                f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 的主题取值 {(int)theme} 无法识别。", [plate.Origin]));
             }
-            else if (plate.Kind == BoardPlateKind.Birth && plate.Theme == BoardTheme.Plateau)
+            else if (theme == BoardTheme.Plateau)
             {
                 f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 的主题是高台：平台主题只能是河流、林地、栅栏阵或混合（高台主题已去掉）。", [plate.Origin]));
-            }
-            else if (plate.Kind != BoardPlateKind.Birth && plate.Theme is not null)
-            {
-                f.Add(new MapValidationFailure("PLATE_THEME", $"{Describe(plate)} 不是出生棋盘，不得带主题。", [plate.Origin]));
             }
         }
     }
@@ -510,7 +508,7 @@ public static class MapValidator
     /// <summary>
     /// 整岛规则（map-expand-25 D7）：
     /// 平台两两不重叠、外接矩形间隔 ≥ <see cref="PlateRules.MinGap"/>（<c>ISLAND_PLATE_GAP</c>）；全部可落子格沿气边连成一片（<c>ISLAND_LIBERTY_SPLIT</c>）；
-    /// 可落子区外接矩形 ≥ W(n)×W(n)（<c>ISLAND_EXTENT</c>，验收的核心断言）。人数不受支持（没有预算行）时只查前两条。
+    /// 可落子区外接矩形 ≥ W×H（<c>ISLAND_EXTENT</c>，验收的核心断言；seat-gap-25 E5 起为长方形）。人数不受支持（没有预算行）时只查前两条。
     /// </summary>
     private static void ValidateIsland(MapData map, PlateRules plates, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
     {
@@ -547,11 +545,59 @@ public static class MapValidator
         Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
         int columns = playable.Length == 0 ? 0 : playable.Max(c => c.X) - playable.Min(c => c.X) + 1;
         int rows = playable.Length == 0 ? 0 : playable.Max(c => c.Y) - playable.Min(c => c.Y) + 1;
-        if (columns < budget.IslandSide || rows < budget.IslandSide)
+        if (columns < budget.Island.Width || rows < budget.Island.Height)
         {
             f.Add(new MapValidationFailure(
                 "ISLAND_EXTENT",
-                $"可落子区外接矩形 {columns}×{rows}：{map.MaxPlayers} 人浮空岛必须至少 {budget.IslandSide}×{budget.IslandSide}。",
+                $"可落子区外接矩形 {columns}×{rows}：{map.MaxPlayers} 人浮空岛必须至少 {budget.Island.Width}×{budget.Island.Height}。",
+                ImmutableArray<Coord>.Empty));
+        }
+    }
+
+    /// <summary>
+    /// 出生座位与中立平台（seat-gap-25 E5 / 裁决 S1、S4）：每个出生座位恰为 <see cref="PlateRules.BirthSide"/> 见方（<c>SEAT_SIZE</c>）；
+    /// 任意两座位外接矩形的间距（两矩形相隔的格数取横纵较大者）≥ <see cref="PlateRules.SeatGap"/>（<c>SEAT_GAP</c>，判定即 <see cref="PlatesApart"/>）；
+    /// 中立平台（公共棋盘）块数在该人数预算行的区间内（<c>NEUTRAL_PLATE_COUNT</c>；没有预算行时不查）。
+    /// </summary>
+    private static void ValidateSeats(MapData map, PlateRules plates, Budget? known, ImmutableArray<MapValidationFailure>.Builder f)
+    {
+        BoardPlate[] seats = [.. map.BirthBoards()];
+        foreach (BoardPlate seat in seats)
+        {
+            if (seat.Width < plates.BirthSide.Min || seat.Width > plates.BirthSide.Max || seat.Height < plates.BirthSide.Min || seat.Height > plates.BirthSide.Max)
+            {
+                f.Add(new MapValidationFailure(
+                    "SEAT_SIZE",
+                    $"{Describe(seat)} 的宽与高必须各在 {plates.BirthSide.Min}–{plates.BirthSide.Max} 之内：出生座位大小一致，座位之间公平。",
+                    [seat.Origin]));
+            }
+        }
+
+        for (int i = 0; i < seats.Length; i++)
+        {
+            for (int j = i + 1; j < seats.Length; j++)
+            {
+                if (!PlatesApart(seats[i], seats[j], plates.SeatGap))
+                {
+                    f.Add(new MapValidationFailure(
+                        "SEAT_GAP",
+                        $"{Describe(seats[i])} 与 {Describe(seats[j])} 的间距不足 {plates.SeatGap} 格：任意两个出生座位之间必须留出 {plates.SeatGap}×{plates.SeatGap} 的战场。",
+                        [seats[i].Origin, seats[j].Origin]));
+                }
+            }
+        }
+
+        if (known is not { } budget)
+        {
+            return;
+        }
+
+        int neutral = map.Boards.Count(b => b.Kind == BoardPlateKind.Public);
+        if (neutral < budget.NeutralPlates.Min || neutral > budget.NeutralPlates.Max)
+        {
+            f.Add(new MapValidationFailure(
+                "NEUTRAL_PLATE_COUNT",
+                $"{map.MaxPlayers} 人地图的中立平台为 {neutral} 块，超出 {budget.NeutralPlates.Min}–{budget.NeutralPlates.Max} 区间。",
                 ImmutableArray<Coord>.Empty));
         }
     }
@@ -673,24 +719,18 @@ public static class MapValidator
             return;
         }
 
-        // 规则第 4 条：出生区数在区间外即报区间与方向（map-expand-25：出生区数 = 平台数，2 / 3 / 4 人 6–8 / 8–10 / 10–12）。
-        // retire-legacy-maps 4b.2（L19）：区间退化成"恰等于人数"时的 BIRTH_ZONE_COUNT_MISMATCH 报文只属于已删除的标准档，链接档（出生区数恒多于人数）走不到，分支删除。
+        // 规则第 4 条：出生区数在区间外即报区间与方向（seat-gap-25 E5：出生区数 = 出生座位数，恰等于人数，区间为 (n, n)）。
+        // retire-legacy-maps 4b.2（L19）删除的 BIRTH_ZONE_COUNT_MISMATCH 不恢复：区间退化成"恰等于人数"时仍报这一条，报文写明"恰为 n 个"。
+        // seat-gap-25：原 BIRTH_ZONE_COUNT_NOT_ABOVE_PLAYERS（出生区数须多于人数，中立争夺区 = 没人选的平台）随同名声明字段删除——中立平台改为不可出生的公共棋盘。
         int zones = map.BirthZones.Length;
         (int minZones, int maxZones) = budget.BirthZones;
         if (zones < minZones || zones > maxZones)
         {
             string direction = zones < minZones ? $"低于下限 {minZones}" : $"高于上限 {maxZones}";
+            string range = minZones == maxZones ? $"必须恰为 {minZones} 个（每名玩家一个出生座位）" : $"超出 {minZones}–{maxZones} 区间";
             f.Add(new MapValidationFailure(
                 "BIRTH_ZONE_COUNT_OUT_OF_RANGE",
-                $"{map.MaxPlayers} 人地图的出生区为 {zones} 个，{direction}，超出 {minZones}–{maxZones} 区间。",
-                ImmutableArray<Coord>.Empty));
-        }
-
-        if (rules.ZonesMustExceedPlayers && zones <= map.MaxPlayers)
-        {
-            f.Add(new MapValidationFailure(
-                "BIRTH_ZONE_COUNT_NOT_ABOVE_PLAYERS",
-                $"出生区数量 {zones} 必须多于该地图支持的最大人数 {map.MaxPlayers}：没人选的平台是中立争夺区。",
+                $"{map.MaxPlayers} 人地图的出生区为 {zones} 个，{direction}，{range}。",
                 ImmutableArray<Coord>.Empty));
         }
     }

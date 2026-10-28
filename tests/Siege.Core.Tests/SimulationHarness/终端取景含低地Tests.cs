@@ -56,7 +56,7 @@ public class 终端取景含低地Tests
     [Fact]
     public void 锁定后取景为整座岛()
     {
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         (int x0, int y0, int x1, int y1) = PlayableBounds(match.Map);
 
         var output = new StringWriter();

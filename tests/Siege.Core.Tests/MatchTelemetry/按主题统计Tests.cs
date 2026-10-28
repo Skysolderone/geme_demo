@@ -24,6 +24,7 @@ public class 按主题统计Tests
     /// <summary>
     /// 克隆一局：主题按 <see cref="Themes"/> 改写、清空改造与控制事件；<paramref name="ranks"/> 为 null 即改成截断局（无名次、无胜者）。
     /// map-expand-25 段 A2：link:1:4 浮空岛有 10 块平台，主题按编号循环改写（第 z 块取 Themes[z mod 5]），每个主题每局 2 块。
+    /// seat-gap-25：日志首部的棋盘只列 4 个出生座位（中立平台不列），循环改写后高台 / 河流 / 林地 / 栅栏阵每局各 1 块、混合 0 块。
     /// </summary>
     private static MatchLog Prepare(MatchLog source, int[]? ranks, int[] winners)
     {
@@ -64,7 +65,7 @@ public class 按主题统计Tests
         Assert.Equal(3, s.Matches);
         Assert.Equal(2, s.RankedMatches);
         Assert.Equal(Themes.Order(), s.Themes.Select(t => t.Theme));
-        Assert.All(s.Themes, t => Assert.Equal(6, t.Boards));   // map-expand-25：3 局 × 每局 2 块（10 块平台按编号循环改写主题）
+        Assert.Equal(new[] { 3, 3, 3, 3, 0 }, Themes.Select(t => Stat(s, t).Boards));   // seat-gap-25：3 局 × 每局 4 个座位按编号循环改写主题（map-expand-25 时 10 块平台、每主题 6 块）
         Assert.Equal(new[] { 4, 3, 3, 2, 0 }, Themes.Select(t => Stat(s, t).Seats));
         Assert.Equal(new[] { 3, 2, 2, 1, 0 }, Themes.Select(t => Stat(s, t).RankedSeats));
         Assert.Equal(new[] { 1, 1, 0, 0, 0 }, Themes.Select(t => Stat(s, t).Wins));
@@ -86,9 +87,9 @@ public class 按主题统计Tests
         string text = ReportWriter.Render(report);
         Assert.Contains("## 按主题统计（link-map-terrain）", text, StringComparison.Ordinal);
         // relic-redesign W1：静态信物格删除，行尾"公共信物 n 个，被控制 n 次"一项随之删除（原 map-expand-25 D5 起恒为 0）。
-        Assert.Contains("- 高台：棋盘 6 块，锁定 4 人次（有名次 3 人次），平均名次 2，胜 1；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
-        Assert.Contains("- 河流：棋盘 6 块，锁定 3 人次（有名次 2 人次），平均名次 1.5，胜 1；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
-        Assert.Contains("- 混合：棋盘 6 块，锁定 0 人次（有名次 0 人次），平均名次 无样本，胜 0；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("- 高台：棋盘 3 块，锁定 4 人次（有名次 3 人次），平均名次 2，胜 1；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("- 河流：棋盘 3 块，锁定 3 人次（有名次 2 人次），平均名次 1.5，胜 1；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("- 混合：棋盘 0 块，锁定 0 人次（有名次 0 人次），平均名次 无样本，胜 0；匠人改造 0 次\n", text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
 
         MatchLog themeless = SimFixtures.Clone(a);
         themeless = new MatchLog { Header = themeless.Header with { Boards = [.. themeless.Header.Boards!.Select(x => x with { Theme = null })] }, Turns = themeless.Turns, Events = themeless.Events, Result = themeless.Result };

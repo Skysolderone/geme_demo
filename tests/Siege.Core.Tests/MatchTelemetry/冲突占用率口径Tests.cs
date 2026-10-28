@@ -89,8 +89,9 @@ public class 冲突占用率口径Tests
         // terrain-density 2.2（地图变了，出生棋盘边长 6–7）：202 → 192。
         // map-expand-25 段 A2（地图变了，link:1:4 换成 44×44 浮空岛）：192 → 1485（与 map 子命令打印的可落子格数一致）。
         // map-expand-25 段 A3（地图变了：不放静态信物格后布局流前移，坡道与低地重抽，平台不变）：1485 → 1484。
-        Assert.All(sample, l => Assert.Equal(1484, l.Header.PlayableCells));
-        Assert.All(sample, l => Assert.Equal(1484, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
+        // seat-gap-25（地图变了：link:1:4 改为 49×49 四角座位岛）：1484 → 1927。
+        Assert.All(sample, l => Assert.Equal(1927, l.Header.PlayableCells));
+        Assert.All(sample, l => Assert.Equal(1927, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
 
         // 报告段落在真实批次上也能算出来（可能全批次无提子，那就只断言段落存在与分母自洽）。
         BalanceReport report = BalanceAnalyzer.Analyze(sample);

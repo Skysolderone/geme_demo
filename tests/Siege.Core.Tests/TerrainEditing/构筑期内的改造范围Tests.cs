@@ -32,7 +32,7 @@ public class 构筑期内的改造范围Tests
             match.Debug.SeedHand(p, (PieceType.Basic, 20), (PieceType.Artisan, 5));
         }
 
-        match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 4 }[i])));
+        match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 2 }[i])));
         Assert.Equal(Surface.Forest, match.Map.SurfaceAt(Across));
         return match;
     }

@@ -890,8 +890,8 @@ public sealed class MatchSession
             // match-telemetry 第 1、2 项（board-link-mode C3）：模式与锁定时各出生棋盘的旗数（retire-legacy-rules R10 = A：模式照写常量 "Link"）。
             Mode = "Link",
             LockedFlagCounts = [.. Enumerable.Range(0, Match.Board.BaseMap.BirthZones.Length).Select(z => Match.LockedFlagCounts.GetValueOrDefault(z))],
-            // 段 F.3：开局出生棋盘（离线按棋盘归主题的依据；open-map 起地图整局不变）。
-            Boards = [.. Match.Board.BaseMap.Boards.Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })],
+            // 段 F.3：开局出生棋盘（离线按棋盘归主题的依据；open-map 起地图整局不变）。seat-gap-25：只列出生座位（下标 = 出生棋盘编号），中立平台不列。
+            Boards = [.. Match.Board.BaseMap.BirthBoards().Select(b => new BoardEntry { Origin = b.Origin.ToNotation(), Width = b.Width, Height = b.Height, Theme = b.Theme })],
         };
     }
 

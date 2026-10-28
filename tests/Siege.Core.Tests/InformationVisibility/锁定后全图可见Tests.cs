@@ -26,7 +26,7 @@ public class 锁定后全图可见Tests
     public void 他人棋盘从第1大回合起可见()
     {
         // Scenario：第 1 大回合，玩家 A 锁定棋盘 1，查询棋盘 4 内任一格与锁定棋盘 4 的玩家 C 的势力明细 → 返回该格的地形与占用，以及 C 的领地分与各棋串军势。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         Assert.Equal(1, match.MajorRound);
         Assert.True(match.PublishFor(P0).IsExpanded(BirthCell(match.Map, 3, 0, 0)));   // 第 1 大回合一开始即可见
         match.PlayRound(P0, P1, P2, P3);   // 四人各落一子（走到第 2 大回合），再看势力明细
@@ -46,10 +46,10 @@ public class 锁定后全图可见Tests
         Assert.NotNull(c.HandTypes);
         Assert.All(seat.Players, p => Assert.True(p.SameBattlefield));
 
-        // 全部占位展开（map-expand-25：link:1:4 为 10 块平台）；插旗阶段仍只有占位（D5）。
+        // 全部占位展开（seat-gap-25：占位 = link:1:4 的 4 个出生座位，棋盘清单另含 4 块中立平台共 8 块；map-expand-25 时均为 10 块平台）；插旗阶段仍只有占位（D5）。
         DefaultBoardView board = match.World(P0).Board();
-        Assert.Equal(10, board.Placeholders.Count(p => p.Expanded));
-        Assert.Equal(10, board.Boards.Length);
+        Assert.Equal(4, board.Placeholders.Count(p => p.Expanded));
+        Assert.Equal(8, board.Boards.Length);
         Assert.Equal([P1, P2, P3], match.World(P0).SameBattlefieldPlayers);
         DefaultBoardView planting = Create().World(P0).Board();
         Assert.Empty(planting.Cells);
@@ -60,9 +60,9 @@ public class 锁定后全图可见Tests
     public void 按座位序列化含全部五块棋盘()
     {
         // tasks 1.4 验收：按座位序列化含全部 5 块棋盘的格数据，与全知棋盘的格集合相同。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         string seat = JsonSerializer.Serialize(match.World(P0).Board().Cells.Select(c => c.Coord.ToNotation()), Json);
-        for (int zone = 0; zone < match.Map.Boards.Length; zone++)
+        for (int zone = 0; zone < match.Map.BirthZones.Length; zone++)   // seat-gap-25：出生棋盘 = 座位（中立平台另由下面的"与全知棋盘相同"覆盖）
         {
             Assert.All(ZoneNotations(zone), n => Assert.Contains($"\"{n}\"", seat, StringComparison.Ordinal));
         }
@@ -80,7 +80,7 @@ public class 锁定后全图可见Tests
         // 低地的地形与占用都给出；插旗阶段锁定后仍只见自己那块平台（match-setup「锁定后只见自己的棋盘」不变）。
         // 变异 MB-5（实跑，过滤本类与 自动演示全流程自检Tests）：PublishFor 插旗阶段之后的可见格改回"本战场各棋盘外接矩形" → 本测试、「他人棋盘从第1大回合起可见」
         // 「按座位序列化含全部五块棋盘」与 自动演示全流程自检Tests 的「真对局走一遍_四步全通过」「全图解禁」「插旗锁定与构筑期」红 6。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         HashSet<Coord> boards = [.. match.Map.Boards.SelectMany(b => b.Cells())];
         Coord[] lowland = [.. match.Map.AllCoords().Where(c => match.Map.IsPlayable(c) && !boards.Contains(c))];
         Coord[] water = [.. match.Map.AllCoords().Where(c => !boards.Contains(c) && match.Map.TerrainData.IsUnbridgedDeepWater(c))];
@@ -110,7 +110,7 @@ public class 锁定后全图可见Tests
     public void HUD视图模型不遮蔽任何玩家()
     {
         // tasks 1.4 验收：势力排名栏、顺序层、手牌对比面板对四人四区的任何玩家都不遮蔽（原「他战场玩家数值不进 HUD 视图模型」的反向）。
-        MatchFlow match = Started([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);
+        MatchFlow match = Started([0, 1, 3, 2]).PlayRound(P0, P1, P2, P3);
         ViewerWorld world = match.World(P0);
 
         var power = Assert.IsType<PowerLayerContent>(world.Layer(TacticalLayer.Power));
@@ -130,7 +130,7 @@ public class 锁定后全图可见Tests
     public void 全员Pass可见()
     {
         // Scenario：本大回合任一在局对手已 Pass → 本机座位视图的 Pass 名单含该对手（不论其锁定哪块棋盘）。
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         PlayerId first = match.CurrentPlayer!.Value;
         match.PassTurn();
         foreach (PlayerId seat in All.Where(p => p != first))

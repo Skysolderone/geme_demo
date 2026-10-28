@@ -229,11 +229,11 @@ public sealed partial class GameRoot
         }
     }
 
-    /// <summary>预览会话（未插旗）的按座位棋盘：没有任何格，占位块数 = 地图棋盘清单块数（浮空岛 6–12 块）。</summary>
+    /// <summary>预览会话（未插旗）的按座位棋盘：没有任何格，占位块数 = 地图出生座位数（seat-gap-25：= 人数，中立平台不给占位）。</summary>
     private bool PlaceholdersOnly()
     {
         DefaultBoardView board = _session.World.Board();
-        return board.Cells.IsEmpty && board.Placeholders.Length > 0 && board.Placeholders.Length == _session.Match.Map.Boards.Length;
+        return board.Cells.IsEmpty && board.Placeholders.Length > 0 && board.Placeholders.Length == _session.Match.Map.BirthZones.Length;
     }
 
     private static int CountNodes(Node node)

@@ -23,7 +23,7 @@ internal static class LinkModeFixtures
     internal static readonly PlayerId P3 = TestMaps.P3;
     internal static readonly PlayerId[] All = TestMaps.All;
 
-    /// <summary><see cref="MapId"/>（<c>link:1:4</c>）的初始图：4 人浮空岛，10 块出生平台（map-expand-25；原为 <c>link:1</c> 的 5 块紧贴出生棋盘）。</summary>
+    /// <summary><see cref="MapId"/>（<c>link:1:4</c>）的初始图：4 人浮空岛，4 个出生座位 + 4 块中立平台（seat-gap-25；map-expand-25 时为 10 块出生平台；原为 <c>link:1</c> 的 5 块紧贴出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
 
     /// <summary>链接模式、插旗立即（open-map 段 B：决赛倒计时 K 随拼接规则删除，选项即缺省）。</summary>
@@ -43,7 +43,7 @@ internal static class LinkModeFixtures
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
         }
 
-        match.PlantSequentially(All.Select((p, i) => (p, zones[i])));
+        match.Debug.LockFlagsAs(All.Select((p, i) => (p, zones[i])));   // seat-gap-25 E4：给定座次直接锁定，不做撞座位改派（规则层夹具）
         return match;
     }
 
@@ -67,7 +67,7 @@ internal static class LinkModeFixtures
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
         }
 
-        match.PlantSequentially(All.Select((p, i) => (p, zones[i])));
+        match.Debug.LockFlagsAs(All.Select((p, i) => (p, zones[i])));   // seat-gap-25 E4：给定座次直接锁定，不做撞座位改派（规则层夹具）
         return match;
     }
 
@@ -164,7 +164,7 @@ internal static class LinkModeFixtures
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
         }
 
-        match.PlantSequentially(All.Select((p, i) => (p, zones[i])));
+        match.Debug.LockFlagsAs(All.Select((p, i) => (p, zones[i])));   // seat-gap-25 E4：给定座次直接锁定，不做撞座位改派（规则层夹具）
         return match;
     }
 

@@ -138,6 +138,8 @@ public class 终端活形与禁入标示Tests
         // 平台高 2、四周低地高 0，东、南两侧是崖壁（不通气），眼不漏到低地；摆子都在核心区之外，不压信物格。
         // 段 A3：信物不再消费布局流，坡道重抽——8 号平台的坡道移到 K30（南，高 1）/ L32（东）/ H37（北），H30 回到高 2。K30 上的子多一口通向低地 K29 的气，
         // 眼 L30 / J30 仍只与平台内的子相邻（南、东两侧是崖壁），活形不变；高度断言改为 K30 高 1、其余高 2。
+        // seat-gap-25（换图：link:1:4 改为四角座位 + 4 块中立平台）：活形改摆在中立平台 T16–Y22（河流主题，第 5 块；前 3 大回合谁都不能落中立平台，没人能动它）的东北角，
+        // 与原形上下镜像：Y21–X21–W21–V21 + X22 + V22（V22 是坡道，高 1），眼 Y22 与 W22——北、东两侧是崖壁，眼不漏到低地；都在核心区 U18–W20 之外。
         var script = new System.Text.StringBuilder("2\n");
         for (int i = 0; i < 2; i++)
         {
@@ -147,22 +149,23 @@ public class 终端活形与禁入标示Tests
         LifeState? arrangedLife = null;
         void Arrange(MatchFlow match)
         {
-            foreach (string cell in new[] { "L31", "K31", "J31", "H31", "K30", "H30" })
+            foreach (string cell in new[] { "Y21", "X21", "W21", "V21", "X22", "V22" })
             {
                 match.Board.Place(Coord.Parse(cell), TestMaps.P1, PieceType.Basic);
             }
 
             match.Debug.Recalculate();
-            arrangedLife = LifeShapeReport.Analyze(match.Board).GroupLifeAt(Coord.Parse("L31"))!.Life;
+            arrangedLife = LifeShapeReport.Analyze(match.Board).GroupLifeAt(Coord.Parse("Y21"))!.Life;
         }
 
         var output = new StringWriter();
         // terrain-barriers 3.1 起载体曾为手写平坦图 FlatMap（link:90003）；map-expand-25 段 A2 改为生成图 link:1:4（见上）。
         MapData map = MapCatalog.Resolve("link:1:4");
-        BoardPlate eighth = map.Boards[7];
-        Assert.Equal(("F30", 6, 8), (eighth.Origin.ToNotation(), eighth.Width, eighth.Height));
-        Assert.All(new[] { "L31", "K31", "J31", "H31", "H30", "L30", "J30" }, c => Assert.Equal(2, map.HeightAt(Coord.Parse(c))));
-        Assert.Equal(1, map.HeightAt(Coord.Parse("K30")));
+        BoardPlate fifth = map.Boards[4];
+        Assert.Equal(("T16", 6, 7, BoardPlateKind.Public), (fifth.Origin.ToNotation(), fifth.Width, fifth.Height, fifth.Kind));
+        Assert.All(new[] { "Y21", "X21", "W21", "V21", "X22", "Y22", "W22" }, c => Assert.Equal(2, map.HeightAt(Coord.Parse(c))));
+        Assert.All(new[] { "Y21", "X21", "W21", "V21", "X22", "V22", "Y22", "W22" }, c => Assert.Equal(Surface.Grass, map.SurfaceAt(Coord.Parse(c))));
+        Assert.Equal(1, map.HeightAt(Coord.Parse("V22")));
         Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
         int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, map, null, null, null, ContentSet.V1, null, null, Arrange);   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();

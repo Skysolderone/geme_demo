@@ -66,14 +66,16 @@ public class 插旗同区统计Tests
         // retire-legacy-maps 1.8：原以冒险概率 100 / 0 造出"全员同区 / 互不同区"两局（v5）；冒险概率随旧地图删除，共用配置改到 link:1（盲选插旗），
         // 改取 link:1 上盲选恰好同区的种子 1（锁定区 3,3,1,0）与四人四区的种子 3（2,0,3,1）——锁定区由 flag-pick 子流决定，与配对来源无关。所守的统计规则不变。
         // map-expand-25 段 A2：link:1:4 浮空岛 10 块平台，同一组抽取按 10 取模——种子 1 变为 8,3,1,5（互不同区），同区样本改取种子 5（1,4,1,9）；种子 3 为 7,0,3,6，仍四人四区。
-        MatchLog always = BatchRunner.Execute(SimFixtures.Config(seedStart: 5, turnLimit: 4), parallelism: 1)[0];
-        MatchLog never = BatchRunner.Execute(SimFixtures.Config(seedStart: 3, turnLimit: 4), parallelism: 1)[0];
+        // seat-gap-25 E4（裁决 S2）：座位互斥，真实跑局再也造不出同区局——种子 5 / 3 的锁定区都互不相同，端到端只守"首部锁定区写入并经分析计为非同区"；
+        // 同区局的统计口径由上面的合成日志用例守（原"种子 5 盲选恰好同区"的样本随改派作废）。是否保留同区统计交段 B 决定。
+        MatchLog first = BatchRunner.Execute(SimFixtures.Config(seedStart: 5, turnLimit: 4), parallelism: 1)[0];
+        MatchLog second = BatchRunner.Execute(SimFixtures.Config(seedStart: 3, turnLimit: 4), parallelism: 1)[0];
 
-        Assert.True(always.Header.Zones.Distinct().Count() < 4, string.Join(",", always.Header.Zones));
-        Assert.Equal(4, never.Header.Zones.Distinct().Count());
-        SharedZoneSection s = BalanceAnalyzer.Analyze([always, never]).SharedZones;
+        Assert.Equal(4, first.Header.Zones.Distinct().Count());
+        Assert.Equal(4, second.Header.Zones.Distinct().Count());
+        SharedZoneSection s = BalanceAnalyzer.Analyze([first, second]).SharedZones;
         Assert.Equal(2, s.Matches);
-        Assert.Equal(1, s.SharedMatches);
+        Assert.Equal(0, s.SharedMatches);
     }
 
     private static MatchLog Log(ulong seed, int[] zones, LogResult result) =>

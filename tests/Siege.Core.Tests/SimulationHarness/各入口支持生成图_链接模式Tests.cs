@@ -25,7 +25,7 @@ public class 各入口支持生成图_链接模式Tests
         // map-expand-25 段 A2：标识带人数（link:12345:4），占位数随平台数（10 块）；只钉标识与块数，说明文字的其余部分由段 B 改写。
         MapData map = MapCatalog.Resolve("link:12345:4");
         Assert.Contains($"地图 link:12345:4（{map.BirthZones.Length} 块", output, StringComparison.Ordinal);
-        Assert.Equal(10, map.BirthZones.Length);
+        Assert.Equal(4, map.BirthZones.Length);   // seat-gap-25：4 个出生座位（map-expand-25 时为 10 块平台）
         for (int zone = 0; zone < map.BirthZones.Length; zone++)
         {
             BoundsOf(map, zone, out Coord origin, out int width, out int height);
@@ -155,12 +155,16 @@ public class 各入口支持生成图_链接模式Tests
         // 样本口径：各棋盘新地表格数之和 = 全图新地表格数，且全图数大于任何一块（否则按棋盘过滤与否测不出来）。
         // link-map-surfaces 1.3（F1 / F2）后 link:1 五块都是 2 格，原"各块取值不止一种"的口径失效，改为这条。
         int mapWide = map.AllCoords().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
-        Assert.Equal(mapWide, specials.Sum());
+        // seat-gap-25：中立平台同样投放新地表，但 map 的棋盘行只列出生座位——全图数 = 各座位之和 + 各中立平台之和（测试内独立计数）。
+        int neutralWide = map.Boards.Where(b => b.Kind == BoardPlateKind.Public).Sum(b => b.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows));
+        Assert.True(neutralWide > 0, "样本口径：link:1:4 的中立平台确有新地表");
+        Assert.Equal(mapWide, specials.Sum() + neutralWide);
         Assert.True(specials.All(n => n < mapWide), $"link:1 新地表 {string.Join("/", specials)}，全图 {mapWide}");
 
         // map-expand-25 段 A2（裁决 R3）：link:1:4 浮空岛 10 块平台、主题可以重复且没有高台，原"五个主题名两两不同"改为去重后恰是四种平台主题。
-        Assert.Equal(10, names.Count);
-        Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, names.Distinct().Order(StringComparer.Ordinal));
+        // seat-gap-25：map 输出的棋盘行只列 4 个出生座位（河流、栅栏阵 ×3），中立平台的展示由段 B 决定。
+        Assert.Equal(4, names.Count);
+        Assert.Equal(new[] { "河流", "栅栏阵", "栅栏阵", "栅栏阵" }, names);
         Assert.DoesNotContain("公共信物", output, StringComparison.Ordinal);
         Assert.DoesNotContain("信物格", output, StringComparison.Ordinal);
     }

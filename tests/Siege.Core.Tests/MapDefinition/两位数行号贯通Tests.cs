@@ -89,7 +89,7 @@ public class 两位数行号贯通Tests
         MatchFlow match = LinkModeFixtures.RequireLink(
             MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         match.Debug.SeedHand(P0, (PieceType.Basic, 9));
-        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
+        match.Debug.LockFlagsAs(TestMaps.All.Select(p => (p, 0)));   // seat-gap-25 E4：同座次直接锁定（规则层夹具，不做撞座位改派）
         match.Debug.SetOrder(P0, P1, TestMaps.P2, TestMaps.P3);
 
         match.PlayTurn("A27", "E29");
@@ -128,7 +128,7 @@ public class 两位数行号贯通Tests
         // more-pieces-relics 段 A：跑局配置经 PinPreCalibration 写死内容集 v1（样本下界依赖走法），对局配置须与之一致（MatchSession 核对二者）。
         MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
             map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate with { ContentSet = ContentSet.V1 })));
-        match.PlantSequentially([(P0, 0), (P1, 1), (TestMaps.P2, 0), (TestMaps.P3, 1)]);
+        match.Debug.LockFlagsAs([(P0, 0), (P1, 1), (TestMaps.P2, 0), (TestMaps.P3, 1)]);   // seat-gap-25 E4：两两同座次直接锁定（规则层夹具，不做撞座位改派）
         // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：样本下界"P0 落了子"依赖走法（默认阈值 80 下简单难度第 1 大回合可能一子不落；段 D2 改写）。
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 4)));
 

@@ -151,7 +151,7 @@ public static class MapFile
 
     /// <summary>
     /// 棋盘清单缺省为空（旧地图文件没有该字段）。这里只管"读得成一块矩形"：类别是已定义的取值、宽高为正，以及主题字段（link-map-terrain D2）——
-    /// 链接档的出生棋盘 MUST 带主题、其他类别 MUST NOT 带，主题只认枚举名（大小写不敏感，不认数字），缺失或无法识别都指名该棋盘拒绝加载，不取缺省主题。
+    /// 链接档的棋盘（出生棋盘与公共棋盘，seat-gap-25 E2）MUST 带主题，主题只认枚举名（大小写不敏感，不认数字），缺失或无法识别都指名该棋盘拒绝加载，不取缺省主题。
     /// 边长区间、棋盘内无障碍、出生棋盘与出生区对应、主题两两不同等属于静态校验，不在文件格式里判。
     /// </summary>
     private static ImmutableArray<BoardPlate> ParseBoards(List<BoardDto>? boards, MapProfile profile)
@@ -186,16 +186,12 @@ public static class MapFile
     private static BoardTheme? ParseTheme(BoardDto dto, int index, ref int birth, MapProfile profile)
     {
         string where = dto.Kind == BoardPlateKind.Birth ? $"Boards[{index}]（出生棋盘 {BirthZoneLabel.Number(birth++)}）" : $"Boards[{index}]（公共棋盘）";
+        // seat-gap-25 E2：链接档的公共棋盘（中立平台）同样必须带主题，原"只有出生棋盘带主题"放宽；链接档是唯一规格档，非链接档的口径已无对象。
         if (dto.Theme is null)
         {
-            return dto.Kind == BoardPlateKind.Birth && profile == MapProfile.Link
-                ? throw new FormatException($"地图文件的 {where} 缺少主题字段 Theme：链接档的出生棋盘必须带主题（{LegalThemes}），不取缺省主题。")
+            return profile == MapProfile.Link
+                ? throw new FormatException($"地图文件的 {where} 缺少主题字段 Theme：链接档的棋盘（出生座位与中立平台）必须带主题（{LegalThemes}），不取缺省主题。")
                 : null;
-        }
-
-        if (dto.Kind != BoardPlateKind.Birth)
-        {
-            throw new FormatException($"地图文件的 {where} 带了主题 Theme = {dto.Theme}：只有出生棋盘带主题。");
         }
 
         string text = dto.Theme.Trim();

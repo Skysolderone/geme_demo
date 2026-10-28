@@ -36,6 +36,16 @@ internal sealed class MatchDebugAccess
     /// <summary>链接模式测试桩（2.6 前）：在小回合边界以给定胜者结算一个战场，其余在局玩家出局。</summary>
     internal void SettleBattlefield(int battlefieldId, PlayerId winner) => _match.DebugSettleBattlefield(battlefieldId, winner);
 
+    /// <summary>
+    /// 规则层夹具（seat-gap-25 E4）：按给定座位直接锁定插旗并开始第 1 大回合，<b>不做</b>撞座位改派——测的是"给定座次下的规则"（如四人同锁棋盘 0 的单一战场），
+    /// 座次合法性由插旗测试经正式路径单独守。走存档恢复同一条写入（<see cref="FlagPlanting.RestoreLocked"/>）再 <see cref="MatchFlow.LockFlags"/>，不消费 <c>flag-pick</c> 子流。
+    /// </summary>
+    internal void LockFlagsAs(IEnumerable<(PlayerId Player, int Zone)> seats)
+    {
+        _match.Flags.RestoreLocked(seats.Select(s => KeyValuePair.Create(s.Player, s.Zone)));
+        _match.LockFlags();
+    }
+
     /// <summary>某玩家的种子兜底顺序（插旗锁定时由 setup 子流排出；战场结算比较链全同时定胜者）。</summary>
     internal int SeedRankOf(PlayerId player) => _match.DebugSeedRankOf(player);
 }

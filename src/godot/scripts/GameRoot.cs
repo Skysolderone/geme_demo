@@ -327,7 +327,7 @@ public sealed partial class GameRoot : Node3D
 
             // --zone= 越界：按本图棋盘清单块数校验，与其他选项的错值同样在开局之前报错、退出码 1（原写死的上限 5 / 12 不随地图变，越界要到锁定时才抛）。
             // 选图界面路径上 _session 是进入时那张图的预览；自检（SelfCheckMapSelect）开始之前换回进入时的标识，锁定时用的正是这张图。
-            int plates = _session.Match.Map.Boards.Length;
+            int plates = _session.Match.Map.BirthZones.Length;   // seat-gap-25：只数出生座位（中立平台不可出生）
             if (_autoZone > plates)
             {
                 throw new System.FormatException($"--zone={_autoZone} 越界：地图 {_session.Match.Map.Id} 的出生平台共 {plates} 块，应为 1–{plates}。");

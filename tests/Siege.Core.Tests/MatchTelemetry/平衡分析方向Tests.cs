@@ -181,8 +181,9 @@ public class 平衡分析方向Tests
         // 实跑核对：把标题临时改回旧文案，旧值照常通过。旧值 6375D253… / A4D11329…。
         // relic-redesign W1 重钉（规则与报告格式都变了）：信物从第 3 大回合起刷新预告、第 4 大回合落位，样本里的走法随之变；报告删去旧信物各段（信物控制、收敛 / 未收敛分组、
         // 主题行的公共信物、地图规模的信物格数），第 12 项新内容来源改为四种新棋子。旧值 EB8CF108… / 45017B88…。
-        Assert.True("EC001B28D39AD0E32059AAB56EB025DCF24287363D3D97F65341649F58B74DF3" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
-        Assert.True("088551F56E434434E00E2A2C39B8D90F5E4130CD029DEB2CF734410DFECC9E9C" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // seat-gap-25 段 A 重钉（地图变了：link:1:4 改为四角出生座位岛 + 中立平台；盲选座位互斥，样本座次与走法随之变；首部棋盘只列座位，按主题统计段随之变）；旧值 EC001B28… / 088551F5…。
+        Assert.True("643306080EC7A55FADC8E5AFE47A3CFDB967FCE202172716FF0557B390E34709" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
+        Assert.True("903E5CD5D1442831141EEACB1F62457FE64B1FFD5F867266A3C12788531CFFF0" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

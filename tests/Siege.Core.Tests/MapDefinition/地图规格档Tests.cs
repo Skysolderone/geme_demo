@@ -24,13 +24,13 @@ public class 地图规格档Tests
         Assert.Contains("\"Profile\": \"Link\"", json, StringComparison.Ordinal);
         Assert.Equal(MapProfile.Link, restored.Profile);
         Assert.Equal(original.Boards.AsEnumerable(), restored.Boards.AsEnumerable());
-        Assert.Equal(6, restored.Boards.Length);
+        Assert.Equal(5, restored.Boards.Length);   // seat-gap-25：2 个座位 + 3 块中立平台（原 map-expand-25 的 6 块平台）
         Assert.Equal(original.Id, restored.Id);
         Assert.Equal(original.Width, restored.Width);
         Assert.Equal(original.Height, restored.Height);
         Assert.Equal(original.MaxPlayers, restored.MaxPlayers);
         Assert.Equal(original.Obstacles.Order(), restored.Obstacles.Order());
-        Assert.Equal(6, restored.BirthZones.Length);
+        Assert.Equal(2, restored.BirthZones.Length);   // 出生区 = 座位数 = 人数（原 6）
         for (int i = 0; i < original.BirthZones.Length; i++)
         {
             Assert.Equal(original.BirthZones[i].Order(), restored.BirthZones[i].Order());

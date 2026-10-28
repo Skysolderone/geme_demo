@@ -212,7 +212,7 @@ public class 前瞻中的下一名对手Tests
         // 原「他战场玩家不进名册」随 open-map 反向（名册 = 全部其他在局玩家）。
         // expert-tiebreak 1.5：原为第 2 大回合、断言"构筑期内模拟范围 = 其出生棋盘（棋盘 4）"——构筑期决策不前瞻、不模拟，被模拟的下一名对手总在全图阶段行动，
         // 局面改到第 5 大回合（第 1 大回合四人各落 1 子后把大回合摆到 5），范围断言改为全图口径。
-        MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 4]);
+        MatchFlow match = LinkModeFixtures.Started([0, 0, 3, 2]);
         match.PlayRounds(1, TestMaps.All);
         match.Debug.SetMajorRound(5);
         int round = match.MajorRound;

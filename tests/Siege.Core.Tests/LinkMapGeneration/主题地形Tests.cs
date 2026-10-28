@@ -312,13 +312,19 @@ public class 主题地形Tests(ITestOutputHelper output)
         foreach (int players in new[] { 2, 3, 4 })
         {
             int minPlayable = int.MaxValue, maxPlayable = 0, minPlates = int.MaxValue, maxPlates = 0;
+            var neutral = new SortedDictionary<int, int>();
+            var redraws = new List<(int Layout, int Lowland)>();
             for (ulong seed = 1; seed <= 20; seed++)
             {
                 try
                 {
-                    MapData map = LinkMapGenerator.GenerateDetailed(seed, players).Map;
+                    LinkMapGenerator.IslandGeneration g = LinkMapGenerator.GenerateDetailed(seed, players);
+                    MapData map = g.Map;
                     (minPlayable, maxPlayable) = (Math.Min(minPlayable, map.PlayableCount), Math.Max(maxPlayable, map.PlayableCount));
                     (minPlates, maxPlates) = (Math.Min(minPlates, map.Boards.Length), Math.Max(maxPlates, map.Boards.Length));
+                    int count = map.Boards.Count(b => b.Kind == BoardPlateKind.Public);
+                    neutral[count] = neutral.GetValueOrDefault(count) + 1;
+                    redraws.Add((g.LayoutRedraws, g.LowlandRedraws));
                 }
                 catch (MapGenerationException ex)
                 {
@@ -326,7 +332,8 @@ public class 主题地形Tests(ITestOutputHelper output)
                 }
             }
 
-            output.WriteLine($"{players} 人：可落子 {minPlayable}–{maxPlayable}，平台 {minPlates}–{maxPlates} 块");
+            output.WriteLine($"{players} 人：可落子 {minPlayable}–{maxPlayable}，平台 {minPlates}–{maxPlates} 块；中立平台 {string.Join(" ", neutral.Select(kv => $"{kv.Key}块×{kv.Value}"))}；"
+                + $"整张布局重抽 {string.Join(",", redraws.Select(r => r.Layout))}（合计 {redraws.Sum(r => r.Layout)}）；低地重抽 {string.Join(",", redraws.Select(r => r.Lowland))}（合计 {redraws.Sum(r => r.Lowland)}）");
         }
 
         Assert.Empty(failures);

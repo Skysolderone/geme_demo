@@ -192,7 +192,8 @@ public class 对局配置公开完整地图标识Tests
 
     private const string GoldenLinkOrder = "3,0,2,1";
     // map-expand-25 段 A2：link:1:4 浮空岛 10 块平台，flag-pick 子流的同一组抽取按 10 取模（原 5 块时为 "4,3,1,0"，逐项 ≡ mod 5）；首回合顺序不变。
-    private const string GoldenLinkZones = "9,8,1,5";
+    // seat-gap-25 E4：座位互斥、只从空座位抽（link:1:4 恰 4 个座位）——四人都未插旗，按编号升序依次在 4 / 3 / 2 / 1 个空座位里抽，得 "3,2,1,0"；旧值 "9,8,1,5"。首回合顺序不变。
+    private const string GoldenLinkZones = "3,2,1,0";
 
     /// <summary>该局开局盘面上第 3 大回合的信物预告（relic-redesign W1：对局随机的代表，子流 relic-spawn:4）。</summary>
     private static string Forecast(MatchFlow match) =>

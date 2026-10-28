@@ -149,16 +149,17 @@ public class 对局日志的记录内容_链接模式Tests
         // 样本口径：主题确实存在且不全相同（全是 null 时"逐块相同"恒真）。map-expand-25：link:1:4 浮空岛 10 块平台、主题可以重复（裁决 R3），四种主题都出现。
         // 变异验证（link-map-terrain 第 1 组收尾实跑，只跑本类）：M-L1 MatchSession 写首部时不写 Theme → 本测试红 1；
         (MatchFlow match, MatchLog log) = Play([0, 1, 2, 3], stoneRounds: 1);
-        BoardTheme?[] expected = [.. match.Board.BaseMap.Boards.Select(b => b.Theme)];
-        Assert.Equal(10, expected.Length);
+        // seat-gap-25：首部只列出生座位（下标 = 出生棋盘编号，中立平台不列）——link:1:4 的 4 个座位为 河流、栅栏阵 ×3。
+        BoardTheme?[] expected = [.. match.Board.BaseMap.BirthBoards().Select(b => b.Theme)];
+        Assert.Equal(4, expected.Length);
         Assert.All(expected, t => Assert.NotNull(t));
-        Assert.Equal(4, expected.Distinct().Count());
+        Assert.Equal(2, expected.Distinct().Count());
 
         string text = log.FullText();
         Assert.Contains($"\"Theme\":\"{expected[1]}\"", text, StringComparison.Ordinal);   // 写成枚举名
         MatchLog parsed = MatchLog.Parse(text);
         Assert.Equal(expected, parsed.Header.Boards!.Select(b => b.Theme));
-        Assert.Equal(match.Board.BaseMap.Boards.Select(b => (b.Origin.ToNotation(), b.Width, b.Height)), parsed.Header.Boards!.Select(b => (b.Origin, b.Width, b.Height)));
+        Assert.Equal(match.Board.BaseMap.BirthBoards().Select(b => (b.Origin.ToNotation(), b.Width, b.Height)), parsed.Header.Boards!.Select(b => (b.Origin, b.Width, b.Height)));
     }
 
     /// <summary>

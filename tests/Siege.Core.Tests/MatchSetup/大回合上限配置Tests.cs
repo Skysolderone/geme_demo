@@ -64,7 +64,7 @@ public class 大回合上限配置Tests
     {
         // Scenario：恢复一个不含该字段的存档 → 大回合上限 = 100，恢复结果留痕"按缺省回填"，其余行为与保存前一致。
         // 往返用非回填值 60：带字段恢复 → 60、不留痕、再存档逐字节相等；删掉字段恢复 → 100、留痕；两份恢复对象的其余状态相同。
-        MatchFlow match = Started([1, 1, 3, 4], options: Options with { RoundCap = 60 }).PlayRounds(2, P0, P2);
+        MatchFlow match = Started([1, 1, 3, 2], options: Options with { RoundCap = 60 }).PlayRounds(2, P0, P2);
         match.PassTurn();
         string json = match.Serialize();
         Assert.Equal(60, JsonNode.Parse(json)!["RoundCap"]!.GetValue<int>());
@@ -103,7 +103,7 @@ public class 大回合上限配置Tests
     public void 不启用()
     {
         // Scenario：以大回合上限 0 建局 → 对局不会因大回合数结算（第 300 大回合仍有人落子即继续）；公开视图与存档都写 0（不是缺字段）。
-        MatchFlow match = Started([0, 0, 3, 4], options: Options with { RoundCap = 0 });
+        MatchFlow match = Started([0, 0, 3, 2], options: Options with { RoundCap = 0 });
         Assert.Equal(0, match.RoundCap);
         Assert.Equal(0, match.Publish().RoundCap);
         Assert.Equal(0, JsonNode.Parse(match.Serialize())!["RoundCap"]!.GetValue<int>());

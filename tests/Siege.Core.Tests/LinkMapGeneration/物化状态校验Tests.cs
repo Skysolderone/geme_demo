@@ -17,6 +17,12 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 /// M5 坡道朝外只查在盘内 → 「平台高度与坡道不合规被拒」红 1；M6 LibertySplit 恒空 → 「全图气边不连通被拒」+ 浮空岛布局Tests「全图可落子格沿气边连通」×3 共红 4；
 /// M7 公共信物上限 +10 → 「公共信物在平台内或超过人数加二被拒」红 1；M8 平台高度只查坡道 → 「平台高度与坡道不合规被拒」红 1；M9 不拒高台主题 → 「高台主题被拒」红 1。
 /// </remarks>
+/// <remarks>
+/// seat-gap-25 段 A 变异验证（实跑，过滤 LinkMapGeneration / MapDefinition / 盲选插旗 / 信物刷新与预告 / 原型插旗，共 225 条）：
+/// M-S1 ValidateSeats 的 PlatesApart 用 SeatGap−1 → 「座位间距不足被拒」红 1；M-S2 ValidateThemes 跳过公共棋盘 → 「中立平台同样适用平台规则」红 1；
+/// M-S4 ValidatePlateCells 只对出生棋盘查平台地形 → 「中立平台同样适用平台规则」+ 地图静态校验规则Tests「隔断线没有通道被拒」红 2；
+/// M-S7 中立平台数不查上限 → 「中立平台数越界被拒」红 1；M-S8 座位边长区间放宽到 6–8 → 「座位不是八乘八被拒」红 1。还原后逐字节比对、刷新时间戳。
+/// </remarks>
 public class 物化状态校验Tests
 {
     private static MapData Base => LinkMapGenerator.Generate(1, 2);
@@ -147,6 +153,73 @@ public class 物化状态校验Tests
     }
 
     [Fact]
+    public void 座位间距不足被拒()
+    {
+        // SEAT_GAP（seat-gap-25 裁决 S1 / E5）：任意两出生座位外接矩形相隔的格数（横纵较大者）须 ≥ 25。判定式先单测边界（恰 25 通过、24 不通过、斜对角取较大者）。
+        var a = new BoardPlate(new Coord(4, 4), 8, 8, BoardPlateKind.Birth);
+        Assert.True(MapValidator.PlatesApart(a, a with { Origin = new Coord(37, 4) }, 25));    // 横向间隔 25
+        Assert.False(MapValidator.PlatesApart(a, a with { Origin = new Coord(36, 4) }, 25));   // 横向间隔 24
+        Assert.True(MapValidator.PlatesApart(a, a with { Origin = new Coord(20, 37) }, 25));   // 横向重叠、纵向间隔 25
+
+        // 基图 link:1:2 的东座位西移 1 格 → 两座位间隔 24 → 拒，指出两座位；中立平台与座位间隔不足 25 不报这一条（中立平台可以在战场里）。
+        MapData map = Base;
+        BoardPlate east = map.Boards[1];
+        Assert.Equal(BoardPlateKind.Birth, east.Kind);
+        BoardPlate moved = east with { Origin = new Coord(east.Origin.X - 1, east.Origin.Y) };
+        MapValidationFailure gap = Assert.Single(Failures(map with { Boards = map.Boards.SetItem(1, moved) }), f => f.Code == "SEAT_GAP");
+        Assert.Equal([map.Boards[0].Origin, moved.Origin], gap.Coords);
+        Assert.Contains("不足 25 格", gap.Message, StringComparison.Ordinal);
+        Assert.Contains(map.Boards.Skip(2), p => !MapValidator.PlatesApart(p, map.Boards[0], 25) || !MapValidator.PlatesApart(p, map.Boards[1], 25));   // 前提：确有中立平台离座位不足 25
+        Assert.DoesNotContain(Failures(map), f => f.Code == "SEAT_GAP");
+    }
+
+    [Fact]
+    public void 座位不是八乘八被拒()
+    {
+        // SEAT_SIZE（seat-gap-25 E1 / E5）：出生座位固定 8×8（座位之间公平）；中立平台 6–8 不受此限。
+        MapData map = Base;
+        BoardPlate seat = map.Boards[0];
+        MapValidationFailure size = Assert.Single(Failures(map with { Boards = map.Boards.SetItem(0, seat with { Width = 7 }) }), f => f.Code == "SEAT_SIZE");
+        Assert.Equal([seat.Origin], size.Coords);
+        Assert.Contains(map.Boards, p => p.Kind == BoardPlateKind.Public && (p.Width < 8 || p.Height < 8));   // 前提：基图里有不足 8 的中立平台，它不报
+        Assert.DoesNotContain(Failures(map), f => f.Code == "SEAT_SIZE");
+    }
+
+    [Fact]
+    public void 中立平台数越界被拒()
+    {
+        // NEUTRAL_PLATE_COUNT（裁决 S4 / E5）：2 人图中立平台 2–3 块。基图 3 块；去掉两块 → 1 块，低于下限；补一块远处的 6×6 → 4 块，高于上限。
+        MapData map = Base;
+        BoardPlate[] neutral = [.. map.Boards.Where(p => p.Kind == BoardPlateKind.Public)];
+        Assert.Equal(3, neutral.Length);
+        MapValidationFailure low = Assert.Single(Failures(map with { Boards = map.Boards.RemoveRange(map.Boards.Length - 2, 2) }), f => f.Code == "NEUTRAL_PLATE_COUNT");
+        Assert.Contains("中立平台为 1 块", low.Message, StringComparison.Ordinal);
+        Assert.Contains("2–3", low.Message, StringComparison.Ordinal);
+        MapData four = map with { Boards = map.Boards.Add(neutral[0] with { Origin = new Coord(neutral[0].Origin.X, neutral[0].Origin.Y - 10) }) };
+        MapValidationFailure high = Assert.Single(Failures(four), f => f.Code == "NEUTRAL_PLATE_COUNT");
+        Assert.Contains("中立平台为 4 块", high.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Failures(map), f => f.Code == "NEUTRAL_PLATE_COUNT");
+    }
+
+    [Fact]
+    public void 中立平台同样适用平台规则()
+    {
+        // seat-gap-25 E2 / E5：中立平台（公共棋盘）不是出生区，但主题、高度与坡道、核心区等平台规则与座位一视同仁：缺主题、高台主题、中间带降到 h=0 都被拒。
+        MapData map = Base;
+        int index = map.Boards.Length - 1;
+        BoardPlate plate = map.Boards[index];
+        Assert.Equal(BoardPlateKind.Public, plate.Kind);
+        Assert.NotNull(plate.Theme);   // 中立平台带主题（基图合规）
+        Assert.Contains(Failures(map with { Boards = map.Boards.SetItem(index, plate with { Theme = null }) }), f => f.Code == "PLATE_THEME" && f.Coords.SequenceEqual([plate.Origin]));
+        Assert.Contains(Failures(map with { Boards = map.Boards.SetItem(index, plate with { Theme = BoardTheme.Plateau }) }), f => f.Code == "PLATE_THEME" && f.Message.Contains("高台", StringComparison.Ordinal));
+        Coord middle = plate.Cells().First(c => plate.InMiddleBand(c) && map.IsPlayable(c));
+        Assert.Contains(Failures(WithHeights(map, (middle, 0))), f => f.Code == "PLATE_HEIGHT" && f.Coords.SequenceEqual([middle]) && f.Message.Contains("公共棋盘", StringComparison.Ordinal));
+        Coord core = plate.CoreCells().First();
+        Assert.Contains(Failures(WithHeights(map, (core, 1))), f => f.Code == "BIRTH_CORE_NOT_FLAT" && f.Coords.SequenceEqual([core]));
+        Assert.Null(map.BirthZoneOf(core));   // 中立平台的核心区不是出生区
+    }
+
+    [Fact]
     public void 全图气边不连通被拒()
     {
         // ISLAND_LIBERTY_SPLIT：把平台 0 的坡道全部抬到 h=2，平台四周全成崖壁 → 平台 0 的可落子格与低地隔开，失败项指出这些格。
@@ -162,24 +235,27 @@ public class 物化状态校验Tests
     [Fact]
     public void 可落子区外接矩形不足被拒()
     {
-        // ISLAND_EXTENT（验收的核心断言）：把岛最南一行全部改成障碍，可落子区外接矩形变成 W×(W−1) → 拒。
+        // ISLAND_EXTENT（验收的核心断言）：把岛最南一行全部改成障碍，可落子区外接矩形变成 W×(H−1) → 拒。
+        // seat-gap-25 E1：2 人岛改为 45×33（原 map-expand-25 的 30×30 → 30×29）。
         MapData map = Base;
         int bottom = map.AllCoords().Where(map.IsPlayable).Min(c => c.Y);
         MapData cut = map with { Obstacles = map.Obstacles.Union(map.AllCoords().Where(c => c.Y == bottom)) };
         MapValidationFailure extent = Assert.Single(Failures(cut), f => f.Code == "ISLAND_EXTENT");
-        Assert.Contains("30×29", extent.Message, StringComparison.Ordinal);
-        Assert.Contains("至少 30×30", extent.Message, StringComparison.Ordinal);
+        Assert.Contains("45×32", extent.Message, StringComparison.Ordinal);
+        Assert.Contains("至少 45×33", extent.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(Failures(map), f => f.Code == "ISLAND_EXTENT");
     }
 
     [Fact]
     public void 画布不合人数被拒()
     {
-        // 画布边长恰等于 W(n)+2M：2 人图标成 3 人 → 画布 34 不足 39 → MAP_TOO_NARROW，到此为止（不再报平台规则）；人数 5 没有预算行 → UNSUPPORTED_PLAYER_COUNT，画布不查。
+        // 画布恰等于 (W+2M)×(H+2M)：2 人图（49×37）标成 3 人 → 宽 49 相同、高 37 不足 49 → MAP_TOO_SHORT，到此为止（不再报平台规则）；人数 5 没有预算行 → UNSUPPORTED_PLAYER_COUNT，画布不查。
+        // seat-gap-25 E1：原 map-expand-25 的正方形画布 34 不足 39 → MAP_TOO_NARROW。
         MapData map = Base;
         ImmutableArray<MapValidationFailure> three = Failures(map with { MaxPlayers = 3 });
-        Assert.Equal(["MAP_TOO_NARROW"], three.Select(f => f.Code));
-        Assert.Contains("39", three[0].Message, StringComparison.Ordinal);
+        Assert.Equal(["MAP_TOO_SHORT"], three.Select(f => f.Code));
+        Assert.Contains("37", three[0].Message, StringComparison.Ordinal);
+        Assert.Contains("49", three[0].Message, StringComparison.Ordinal);
         ImmutableArray<MapValidationFailure> five = Failures(map with { MaxPlayers = 5 });
         Assert.Contains(five, f => f.Code == "UNSUPPORTED_PLAYER_COUNT");
         Assert.DoesNotContain(five, f => f.Code.StartsWith("MAP_TOO_", StringComparison.Ordinal));

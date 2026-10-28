@@ -77,7 +77,7 @@ public class 链接模式下落后者的停手阈值Tests
 
     /// <summary>P0、P1 同在棋盘 1（双人战场），P2、P3 各占一块。P0 一枚右下角孤子；P1 左下角三子成串，势力高于 P0。</summary>
     private static MatchFlow Trailing() =>
-        Started([Zone, Zone, 3, 4]).Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1));
+        Started([Zone, Zone, 3, 2]).Place(P0, FarCorner).Place(P1, Corner(0, 0), Corner(1, 0), Corner(0, 1));
 
     [Theory]
     [InlineData(false)]
@@ -103,7 +103,7 @@ public class 链接模式下落后者的停手阈值Tests
     public void 领先者照常停手(bool simulated)
     {
         // Scenario「领先者照常停手」：同一局面换成 AI 势力高于对手 → 停手阈值为缺省值，收益 5 不过阈值，AI Pass。
-        MatchFlow match = Started([Zone, Zone, 3, 4]).Place(P1, FarCorner).Place(P0, Corner(0, 0), Corner(1, 0), Corner(0, 1));
+        MatchFlow match = Started([Zone, Zone, 3, 2]).Place(P1, FarCorner).Place(P0, Corner(0, 0), Corner(1, 0), Corner(0, 1));
         MatchPublicView view = match.Publish();
         Assert.True(view.Power!.Of(P0).Total > view.Power.Of(P1).Total);   // 样本口径
 
@@ -117,7 +117,7 @@ public class 链接模式下落后者的停手阈值Tests
         // open-map：link:1 棋盘 0（R3 起 6×7）的西南角紧贴棋盘 2（多一口气），改用东南角（FarCorner）与东北角两枚孤子，各 2 气、势力 3。
         // map-expand-25 段 A2：棋盘 1（Q5–V10）东南角 V5 的两口气是 V6 与坡道 U5，东北角 V10 的两口气是 V9 / U10，崖壁外的低地不通气。
         // 判别力：比较由严格大于改为大于等于即红。
-        MatchFlow match = Started([Zone, Zone, 3, 4]).Place(P0, FarCorner).Place(P1, BirthCell(Map, Zone, Side - 1, Map.BirthBoard(Zone).Height - 1));
+        MatchFlow match = Started([Zone, Zone, 3, 2]).Place(P0, FarCorner).Place(P1, BirthCell(Map, Zone, Side - 1, Map.BirthBoard(Zone).Height - 1));
         MatchPublicView view = match.Publish();
         Assert.Equal(view.Power!.Of(P1).Total, view.Power.Of(P0).Total);   // 样本口径
 

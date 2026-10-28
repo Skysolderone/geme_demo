@@ -59,7 +59,7 @@ public class 先手顺序预测_链接模式Tests
         // 全零局面按种子兜底顺序 P0 胜、P1 落败出局；预测的下一轮顺序为 P2 > P0 > P3（三人先手值相同，首回合同值链走种子顺序），P1 不在其中。
         // 种子取 InspectionSeed（夹具缺省种子下 P0、P1 排在顺序末尾，Pass 完大回合即结束，取不到预测）。
         // open-map：唯一战场上 P3、P2 尚未行动（按未 Pass 算）→ 此刻结束不结算，预测含四人；P0、P1 全零并列按种子顺序 P0 在前。
-        MatchFlow match = Started([0, 0, 3, 4], seed: InspectionSeed);
+        MatchFlow match = Started([0, 0, 3, 2], seed: InspectionSeed);
         Assert.Equal([P0, P1, P3, P2], match.ActionOrder);
         PassOnly(match, P0, P1);
         Assert.Equal(1, match.MajorRound);
@@ -89,7 +89,7 @@ public class 先手顺序预测_链接模式Tests
     {
         // 「假设此刻结束」：等到只剩最后一名玩家未行动时取预测，再让他 Pass 结束大回合——open-map 下唯一战场里已有人落子（P3），不是整轮 Pass，不结算、势力不变，
         // 所以预测的下一轮顺序 MUST 与第 2 大回合的实际行动顺序逐项相同。
-        MatchFlow match = Started([0, 0, 3, 4], seed: InspectionSeed);
+        MatchFlow match = Started([0, 0, 3, 2], seed: InspectionSeed);
         PassOnly(match, P0, P1);
         while (match.ActionOrder.IndexOf(match.CurrentPlayer!.Value) < 3)
         {
@@ -113,7 +113,7 @@ public class 先手顺序预测_链接模式Tests
     public void 未行动者按未Pass算()
     {
         // 同区两人里只有先行动的那位 Pass 了、另一位尚未行动 → 此刻结束战场不结算（未行动者不算 Pass），预测仍含四人。
-        MatchFlow match = Started([0, 0, 3, 4]);
+        MatchFlow match = Started([0, 0, 3, 2]);
         PlayerId first = match.ActionOrder.First(p => p == P0 || p == P1);
         PlayerId other = first == P0 ? P1 : P0;
         PassOnly(match, first);
@@ -133,7 +133,7 @@ public class 先手顺序预测_链接模式Tests
         // 四人同区且地图填满（open-map：唯一战场 = 全图，5 块棋盘都填满）：此刻结束 → 唯一战场结算 → 终局（「最后战场结算」），没有下一轮可预测。
         // map-expand-25 段 A2：浮空岛除平台（link:1:4 为 10 块）外还有平台之间的低地，"地图填满"另把低地的可落子格全部摆给 P0。
         MatchFlow match = Started([0, 0, 0, 0]);
-        for (int zone = 0; zone < Map.Boards.Length; zone++)
+        for (int zone = 0; zone < Map.BirthZones.Length; zone++)   // seat-gap-25：座位；中立平台与低地由下一句摆给 P0
         {
             FillBoard(match, zone, majority: P0, minority: P1);
         }

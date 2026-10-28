@@ -15,17 +15,23 @@ namespace Siege.Core.Tests.MapDefinition;
 /// map-expand-25 段 A3：浮空岛不放静态信物格（relic-redesign R29，2026-10-26 用户裁决），link:1:2 信物 0、可落子 833（信物不再消费布局流，坡道与低地重抽；
 /// 平台落位、主题与平台内部不变）；信物区间与"每块恰 2 个出生区档"规则删除，「信物格数越界」「出生棋盘信物数不对」两条随之删除；
 /// 信物格合法性（分区、档位、可落子）的用例改为在图上手工补信物格。
+/// seat-gap-25 段 A（换图，原值见各用例注释）：link:1:2 改为 49×37 画布的东西两座位岛——1 号座位 E15–M22（林地）、2 号座位 AN15–AU22（林地，核心区 AP17–AR19）、
+/// 中立平台 AB17–AJ24（混合）、G26–M33（混合）、Q28–W33（河流，V 列河道、桥 V30），可落子 1419；预算改为可落子 1350–1480、出生区恰 2 个、中立平台 2–3、画布恰 49×37。
+/// "干净"的载体平台由 6 号平台 Q25–V30 改为 2 号座位 AN15–AU22（没有岩石与栅栏，西北角有 4 格深水）。
 /// </remarks>
 public class 地图静态校验规则Tests
 {
     /// <summary>生成图 <c>link:1:2</c>（合规；生成器按 (种子, 人数) 缓存，每次取到同一个对象）。</summary>
     private static MapData Link() => LinkMapGenerator.Generate(1, 2);
 
-    /// <summary>6 号平台 Q25–V30（林地主题、6×6）：全部可落子、没有隔断线与栅栏、核心区 R26–T28，用作"干净"的平台。</summary>
-    private static BoardPlate Clean => Link().Boards[5];
+    /// <summary>
+    /// 2 号座位 AN15–AU22（林地主题、8×8）：没有岩石、隔断线与栅栏，核心区 AP17–AR19，用作"干净"的平台（seat-gap-25：原为 6 号平台 Q25–V30）。
+    /// 西北角 AO19–AO21 / AP21 是 4 格深水（不可落子），其余格都可落子。
+    /// </summary>
+    private static BoardPlate Clean => Link().Boards[1];
 
-    /// <summary>6 号平台核心区右下角 T26 用 S26 / T27（核心区）与 U26 / T25（中间带、外圈）四块障碍围死：面积 1 的口袋。</summary>
-    private static readonly Coord[] PocketWalls = [.. new[] { "S26", "U26", "T25", "T27" }.Select(Coord.Parse)];
+    /// <summary>2 号座位核心区右下角 AR17 用 AQ17 / AR18（核心区）与 AS17 / AR16（中间带）四块障碍围死：面积 1 的口袋（seat-gap-25：原为 6 号平台的 T26）。</summary>
+    private static readonly Coord[] PocketWalls = [.. new[] { "AQ17", "AS17", "AR16", "AR18" }.Select(Coord.Parse)];
 
     [Fact]
     public void 合规的链接档生成图通过()
@@ -34,36 +40,39 @@ public class 地图静态校验规则Tests
         MapData map = Link();
         MapValidationResult result = MapValidator.Validate(map);
         Assert.True(result.IsValid, result.ToString());
-        Assert.Equal(833, map.PlayableCount);
-        Assert.Equal(6, map.Boards.Length);
+        Assert.Equal(1419, map.PlayableCount);   // seat-gap-25：原 833（30×30 岛）
+        Assert.Equal(5, map.Boards.Length);      // 2 个座位 + 3 块中立平台（原 6 块平台）
         Assert.DoesNotContain("RelicCells", MapFile.ToJson(map), StringComparison.Ordinal);   // 不放静态信物格（段 A3；relic-redesign W1 起地图数据没有该字段）
-        Assert.Equal("Q25", Clean.Origin.ToNotation());
+        Assert.Equal("AN15", Clean.Origin.ToNotation());
+        Assert.Equal(BoardPlateKind.Birth, Clean.Kind);
         Assert.Equal(BoardTheme.Forest, Clean.Theme);
-        Assert.All(Clean.Cells(), c => Assert.True(map.IsPlayable(c), c.ToNotation()));
-        Assert.Equal("R26", Clean.CoreOrigin.ToNotation());
+        Assert.Equal(["AO19", "AO20", "AO21", "AP21"], Clean.Cells().Where(c => !map.IsPlayable(c)).Order().Notations());
+        Assert.DoesNotContain(map.TerrainData.Fences, e => Clean.Contains(e.A) || Clean.Contains(e.B));
+        Assert.Equal("AP17", Clean.CoreOrigin.ToNotation());
     }
 
     [Fact]
     public void 可落子格越界()
     {
-        // 2 人浮空岛可落子格区间 760–876（MapValidator 声明表）。下界：低地（平台外）按坐标序挖掉 74 格 → 833 − 74 = 759；上界：画布全部开放。
+        // 2 人浮空岛可落子格区间 1250–1480（MapValidator 声明表；seat-gap-25 段 A 种子 1–600 实测 1324–1440 外留余量，原 760–876）。
+        // 下界：低地（平台外）按坐标序挖掉 170 格 → 1419 − 170 = 1249；上界：画布全部开放。
         MapData map = Link();
-        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(74)];
+        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(170)];
         MapData tooFew = map with { Obstacles = map.Obstacles.Union(rocks) };
-        Assert.Equal(759, tooFew.PlayableCount);
+        Assert.Equal(1249, tooFew.PlayableCount);
         MapValidationFailure low = Assert.Single(
             MapValidator.Validate(tooFew).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("可落子格为 759", low.Message, StringComparison.Ordinal);
-        Assert.Contains("760–876", low.Message, StringComparison.Ordinal);
+        Assert.Contains("可落子格为 1249", low.Message, StringComparison.Ordinal);
+        Assert.Contains("1250–1480", low.Message, StringComparison.Ordinal);
         Assert.Throws<MapValidationException>(() => GameBoard.Load(tooFew));
 
-        // 上界 876 同样要挡住：区间只有下界有算例时，把上界写成 2000 只会让消息文本变化，行为上一条测试都不红。
+        // 上界 1480 同样要挡住：区间只有下界有算例时，把上界写得更大只会让消息文本变化，行为上一条测试都不红。
         MapData tooOpen = map with { Obstacles = [] };
-        Assert.True(tooOpen.PlayableCount > 876, tooOpen.PlayableCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.True(tooOpen.PlayableCount > 1480, tooOpen.PlayableCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         MapValidationFailure high = Assert.Single(
             MapValidator.Validate(tooOpen).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
         Assert.Contains($"可落子格为 {tooOpen.PlayableCount}", high.Message, StringComparison.Ordinal);
-        Assert.Contains("760–876", high.Message, StringComparison.Ordinal);
+        Assert.Contains("1250–1480", high.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -72,14 +81,15 @@ public class 地图静态校验规则Tests
         // retire-legacy-maps（check 补回覆盖）：自已删除的 边疆档静态校验Tests.超宽地图被拒绝而不是抛异常 迁来。
         // 所守规则不变：外接尺寸不合该档声明 → 报拒绝项并到此为止，不往下跑规模与棋盘规则、不在枚举格子时崩溃。
         // map-expand-25 D7：画布边长必须恰等于 W(n)+2M，2 人档为 34（原列 22–25、行 16–18 的区间删除）。
+        // seat-gap-25 E1 / E5：画布改为宽 × 高恰等 (W+2M)×(H+2M)，2 人档 49×37（原 34×34）。
         MapData map = Link();
         (MapData Map, string Code, string Value, string Bound)[] cases =
         [
-            (map with { Width = 35 }, "MAP_TOO_WIDE", "35", "34"),
-            (map with { Width = 1000 }, "MAP_TOO_WIDE", "1000", "34"),
-            (map with { Width = 33 }, "MAP_TOO_NARROW", "33", "34"),
-            (map with { Height = 35 }, "MAP_TOO_TALL", "35", "34"),
-            (map with { Height = 33 }, "MAP_TOO_SHORT", "33", "34"),
+            (map with { Width = 50 }, "MAP_TOO_WIDE", "50", "49"),
+            (map with { Width = 1000 }, "MAP_TOO_WIDE", "1000", "49"),
+            (map with { Width = 48 }, "MAP_TOO_NARROW", "48", "49"),
+            (map with { Height = 38 }, "MAP_TOO_TALL", "38", "37"),
+            (map with { Height = 36 }, "MAP_TOO_SHORT", "36", "37"),
         ];
         foreach ((MapData bad, string code, string value, string bound) in cases)
         {
@@ -92,34 +102,33 @@ public class 地图静态校验规则Tests
             Assert.Throws<MapValidationException>(() => GameBoard.Load(bad));
         }
 
-        // 恰等于 34 合法：基图本身四条尺寸码一条都不报。
+        // 恰等于 49×37 合法：基图本身四条尺寸码一条都不报。
         Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code is "MAP_TOO_WIDE" or "MAP_TOO_NARROW" or "MAP_TOO_TALL" or "MAP_TOO_SHORT");
     }
 
     [Fact]
     public void 出生区数越界()
     {
-        // 2 人浮空岛出生区（= 平台）6–8 个。拿掉最后一块平台（连同出生区与其信物）→ 5 个，低于下限；把前三块再列一遍 → 9 个，高于上限。
+        // seat-gap-25 E5：2 人浮空岛出生区（= 出生座位）恰 2 个（原 map-expand-25"出生区 = 平台 6–8 个"）。拿掉 2 号座位（连同出生区）→ 1 个，低于下限；把 1 号座位再列一遍 → 3 个，高于上限。
         MapData map = Link();
-        BoardPlate last = map.Boards[^1];
-        MapData five = map with
+        MapData one = map with
         {
-            Boards = map.Boards.RemoveAt(map.Boards.Length - 1),
-            BirthZones = map.BirthZones.RemoveAt(map.BirthZones.Length - 1),
+            Boards = map.Boards.RemoveAt(1),
+            BirthZones = map.BirthZones.RemoveAt(1),
         };
-        Assert.Equal(5, five.BirthZones.Length);
+        Assert.Single(one.BirthZones);
         MapValidationFailure low = Assert.Single(
-            MapValidator.Validate(five).Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("出生区为 5 个", low.Message, StringComparison.Ordinal);
-        Assert.Contains("低于下限 6", low.Message, StringComparison.Ordinal);
-        Assert.Contains("6–8", low.Message, StringComparison.Ordinal);
+            MapValidator.Validate(one).Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
+        Assert.Contains("出生区为 1 个", low.Message, StringComparison.Ordinal);
+        Assert.Contains("低于下限 2", low.Message, StringComparison.Ordinal);
+        Assert.Contains("必须恰为 2 个", low.Message, StringComparison.Ordinal);
 
-        MapData nine = map with { Boards = map.Boards.AddRange(map.Boards.Take(3)), BirthZones = map.BirthZones.AddRange(map.BirthZones.Take(3)) };
-        Assert.Equal(9, nine.BirthZones.Length);
+        MapData three = map with { Boards = map.Boards.Insert(2, map.Boards[0]), BirthZones = map.BirthZones.Add(map.BirthZones[0]) };
+        Assert.Equal(3, three.BirthZones.Length);
         MapValidationFailure high = Assert.Single(
-            MapValidator.Validate(nine).Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("出生区为 9 个", high.Message, StringComparison.Ordinal);
-        Assert.Contains("高于上限 8", high.Message, StringComparison.Ordinal);
+            MapValidator.Validate(three).Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
+        Assert.Contains("出生区为 3 个", high.Message, StringComparison.Ordinal);
+        Assert.Contains("高于上限 2", high.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(MapValidator.Validate(map).Failures, f => f.Code == "BIRTH_ZONE_COUNT_OUT_OF_RANGE");
     }
 
@@ -137,37 +146,40 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario（terrain-barriers D5 / 实施修订 J5）：河道横穿平台但没有桥 → 拒绝并指出该平台与"隔断线须恰有 1 处通道"。
         // 载体是 1 号平台 E5–L10（河流主题）自带的 F 列河道 F5–F10，桥在 F5。map-expand-25：山脊随高台主题去掉，原山脊三段断言删除。
+        // seat-gap-25：载体改为中立平台 Q28–W33（河流主题）自带的 V 列河道 V28–V33，桥在 V30——隔断线规则对中立平台同样适用（E5）。
         MapData map = Link();
-        Coord bridge = Coord.Parse("F5");
-        string[] column = ["F5", "F6", "F7", "F8", "F9", "F10"];
+        Coord bridge = Coord.Parse("V30");
+        string[] column = ["V28", "V29", "V30", "V31", "V32", "V33"];
         Assert.True(map.HasBridge(bridge));
         Assert.All(column, c => Assert.Equal(Surface.DeepWater, map.SurfaceAt(Coord.Parse(c))));
         TerrainData t = map.TerrainData;
 
         MapValidationResult noBridge = MapValidator.Validate(map with { TerrainData = new TerrainData(t.Heights, t.Surfaces, t.Bridges.Remove(bridge), t.Fences) });
         MapValidationFailure river = Assert.Single(noBridge.Failures, f => f.Code == "BOARD_BARRIER_INVALID");
-        Assert.Contains("出生棋盘 E5–L10", river.Message, StringComparison.Ordinal);   // 记法跳过 I：E–L 共 7 列
+        Assert.Contains("公共棋盘 Q28–W33", river.Message, StringComparison.Ordinal);
         Assert.Contains("有 0 座桥", river.Message, StringComparison.Ordinal);
         Assert.Contains("恰有 1 处通道", river.Message, StringComparison.Ordinal);
         Assert.Equal(column, river.Coords.Notations());
 
         // 两座桥 = 两处通道，同样被拒（只指出两座桥）。
         MapValidationFailure twoBridges = Assert.Single(
-            MapValidator.Validate(map with { TerrainData = new TerrainData(t.Heights, t.Surfaces, t.Bridges.Add(Coord.Parse("F8")), t.Fences) }).Failures,
+            MapValidator.Validate(map with { TerrainData = new TerrainData(t.Heights, t.Surfaces, t.Bridges.Add(Coord.Parse("V32")), t.Fences) }).Failures,
             f => f.Code == "BOARD_BARRIER_INVALID");
-        Assert.Equal(["F5", "F8"], twoBridges.Coords.Notations());
+        Assert.Equal(["V30", "V32"], twoBridges.Coords.Notations());
     }
 
     [Fact]
     public void 隔断线经过核心区被拒()
     {
-        // tasks 2.1：6 号平台（Q25–V30，核心区 R26–T28）的第 27 行 Q27–V27 整行深水、桥 U27 → 隔断线经过核心区，BOARD_BARRIER_INVALID 指出 R27–T27；核心区规则同时报出。
+        // tasks 2.1：干净平台（seat-gap-25：2 号座位 AN15–AU22，核心区 AP17–AR19；原 6 号平台 Q25–V30 的第 27 行）的第 18 行 AN18–AU18 整行深水、桥 AT18
+        // → 隔断线经过核心区，BOARD_BARRIER_INVALID 指出 AP18–AR18；核心区规则同时报出。
         MapData map = Link();
-        string[] row = ["Q27", "R27", "S27", "T27", "U27", "V27"];
-        MapValidationResult result = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: [.. row.Select(c => (c, Surface.DeepWater))], bridges: ["U27"]) });
+        string[] row = ["AN18", "AO18", "AP18", "AQ18", "AR18", "AS18", "AT18", "AU18"];
+        Assert.All(row, c => Assert.True(Clean.Contains(Coord.Parse(c))));
+        MapValidationResult result = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: [.. row.Select(c => (c, Surface.DeepWater))], bridges: ["AT18"]) });
         MapValidationFailure core = Assert.Single(result.Failures, f => f.Code == "BOARD_BARRIER_INVALID");
         Assert.Contains("经过核心区", core.Message, StringComparison.Ordinal);
-        Assert.Equal(["R27", "S27", "T27"], core.Coords.Notations());
+        Assert.Equal(["AP18", "AQ18", "AR18"], core.Coords.Notations());
         Assert.Contains(result.Failures, f => f.Code == "BIRTH_CORE_NOT_FLAT");
     }
 
@@ -175,8 +187,10 @@ public class 地图静态校验规则Tests
     public void 核心区有地形()
     {
         // 规格 Scenario：出生棋盘 4 的核心区有一格是林地 → 拒绝并指出该棋盘与该格坐标（BIRTH_CORE_NOT_FLAT）。
+        // seat-gap-25：2 人图只有 2 个出生座位（第 4 块是中立平台），载体改为出生棋盘 2。
         MapData map = Link();
-        BoardPlate fourth = map.Boards[3];
+        BoardPlate fourth = map.Boards[1];
+        Assert.Equal(BoardPlateKind.Birth, fourth.Kind);
         Coord cell = new(fourth.CoreOrigin.X + 1, fourth.CoreOrigin.Y + 2);
         MapValidationFailure forest = Assert.Single(
             MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: [(cell.ToNotation(), Surface.Forest)]) }).Failures, f => f.Code == "BIRTH_CORE_NOT_FLAT");
@@ -194,11 +208,12 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario：平台内一格被岩石与深水围住、与平台其余格不连通 → 拒绝并指出该平台与被隔开的格（BOARD_SPLIT）。
         // map-expand-25：外圈不再要求可落子，干净的 6 号平台上直接围核心区中心 S27：西 / 东两格岩石、南 / 北两格深水；其余核心区角格仍经中间带与外圈相连。
+        // seat-gap-25：干净平台改为 2 号座位，核心区中心 AQ18。
         MapData map = Link();
         BoardPlate plate = Clean;
         Coord At(int dx, int dy) => new(plate.CoreOrigin.X + dx, plate.CoreOrigin.Y + dy);
         Coord island = At(1, 1);
-        Assert.Equal("S27", island.ToNotation());
+        Assert.Equal("AQ18", island.ToNotation());
         MapData cut = map with
         {
             Obstacles = map.Obstacles.Add(At(0, 1)).Add(At(2, 1)),
@@ -219,13 +234,16 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario：平台内林地格与未架桥深水格合计只有 1 个 → 拒绝并指出该平台与"至少 2 个可改造目标"（BOARD_TOO_FEW_EDIT_TARGETS）。
         // 载体是 6 号平台（林地主题，平台内没有深水）：只留第一格林地，其余林地改回草地。
+        // seat-gap-25：干净平台改为 2 号座位（林地主题，西北角有 4 格未架桥深水）：只留第一格林地，其余林地与深水都改回草地。
         MapData map = Link();
         BoardPlate plate = Clean;
         Coord[] forest = [.. plate.Cells().Where(c => map.SurfaceAt(c) == Surface.Forest).Order()];
+        Coord[] lakes = [.. plate.Cells().Where(c => map.SurfaceAt(c) == Surface.DeepWater)];
         Assert.True(forest.Length >= 2);
-        Assert.DoesNotContain(plate.Cells(), c => map.SurfaceAt(c) == Surface.DeepWater);
+        Assert.Equal(4, lakes.Length);
+        Assert.DoesNotContain(lakes, map.HasBridge);
         TerrainData t = map.TerrainData;
-        TerrainData one = new(t.Heights, t.Surfaces.RemoveRange(forest.Skip(1)), t.Bridges, t.Fences);
+        TerrainData one = new(t.Heights, t.Surfaces.RemoveRange(forest.Skip(1)).RemoveRange(lakes), t.Bridges, t.Fences);
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(map with { TerrainData = one }).Failures, f => f.Code == "BOARD_TOO_FEW_EDIT_TARGETS");
         Assert.Equal([plate.Origin], failure.Coords);
         Assert.Contains("合计 1 个", failure.Message, StringComparison.Ordinal);
@@ -243,17 +261,17 @@ public class 地图静态校验规则Tests
     {
         // 3.2：高度 / 地表 / 桥 / 栅栏端点必须在盘内，越界项不参与任何查询。
         // "桥须在深水、栅栏须相邻"由 TerrainData 构造期抛出（裁决 A-1），校验器不重复。
-        // map-expand-25：载体画布 34×34，越界格改为第 35 / 36 行。
+        // map-expand-25：载体画布 34×34，越界格改为第 35 / 36 行。seat-gap-25：载体画布 49×37，越界格改为第 38 / 39 行。
         TerrainData terrain = Overlay(
             Link(),
-            heights: [("C35", 1)],
-            surfaces: [("D35", Surface.DeepWater)],
-            bridges: ["D35"],
-            fences: [("D35", "D36")]);
+            heights: [("C38", 1)],
+            surfaces: [("D38", Surface.DeepWater)],
+            bridges: ["D38"],
+            fences: [("D38", "D39")]);
         MapData map = Link() with { TerrainData = terrain };
 
         MapValidationFailure failure = Assert.Single(MapValidator.Validate(map).Failures, f => f.Code == "TERRAIN_OUT_OF_BOUNDS");
-        Assert.Equal(["C35", "D35", "D36"], failure.Coords.Notations());
+        Assert.Equal(["C38", "D38", "D39"], failure.Coords.Notations());
 
         Assert.DoesNotContain(MapValidator.Validate(Link()).Failures, f => f.Code == "TERRAIN_OUT_OF_BOUNDS");
     }
@@ -342,7 +360,7 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 必死口袋()
     {
-        // 口袋必须切进核心区才"在出生区内"——用 S26 / T27（核心区）与 U26 / T25 四块障碍把 6 号平台核心区右下角 T26 围成 1 格。
+        // 口袋必须切进核心区才"在出生区内"——用 AQ17 / AR18（核心区）与 AS17 / AR16 四块障碍把 2 号座位核心区右下角 AR17 围成 1 格（seat-gap-25：原 6 号平台的 T26）。
         // 剩下的格仍连成一片，不会多出第二个口袋；核心区的障碍另由清单规则报出，这里只看 DEAD_POCKET。
         MapData map = Link();
         MapData pocketed = map with { Obstacles = map.Obstacles.Union(PocketWalls) };
@@ -350,20 +368,21 @@ public class 地图静态校验规则Tests
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(pocketed).Failures, f => f.Code == "DEAD_POCKET");
         Assert.Contains("小于形成两眼所需的 8 格", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(["T26"], failure.Coords.Notations());
+        Assert.Equal(["AR17"], failure.Coords.Notations());
     }
 
     [Fact]
     public void 面积恰好等于两眼最小格数的空区不算口袋()
     {
         // 规格："连通空区面积小于 8 即判失败"——8 本身是合法的，阈值是闭的下界。
-        // map-expand-25：6 号平台东南角 T25–V26 与 T27 / U27 共 8 格（含核心区 T26 / T27），南 / 东两侧是平台崖壁（高 2 对低地高 0，不通气），
-        // 再用障碍 S25 / S26 / S27 / T28 / U28 / V27 封住西、北两侧，空区就是封闭的。
-        // 段 A3：坡道重抽后 T25 成了坡道（高 1，与南侧低地通气），空区东移一列：U25–V27 六格与核心区 T26 / T27 共 8 格，
-        // 南 / 东两侧是平台崖壁，用障碍 T25 / S26 / S27 / T28 / U28 / V28 封住西、北两侧。
+        // map-expand-25：6 号平台东南角 8 格空区（含核心区格），南 / 东两侧是平台崖壁（高 2 对低地高 0，不通气），再用障碍封住西、北两侧（原 T25–V27 一带）。
+        // seat-gap-25：载体改为 2 号座位 AN15–AU22 东南角 AR16–AU17 两行共 8 格（含核心区 AR17）；东侧外圈 AU 列外是低地（崖壁），
+        // 用障碍 AR15–AU15（南）、AQ16 / AQ17（西）、AR18–AU18（北）封住其余三侧。
         MapData map = Link();
-        Assert.DoesNotContain(new[] { "U25", "V25", "T26", "U26", "V26", "T27", "U27", "V27" }.Select(Coord.Parse), c => map.HeightAt(c) != 2);
-        Coord[] walls = [.. new[] { "T25", "S26", "S27", "T28", "U28", "V28" }.Select(Coord.Parse)];
+        string[] region = ["AR16", "AS16", "AT16", "AU16", "AR17", "AS17", "AT17", "AU17"];
+        Assert.DoesNotContain(region.Select(Coord.Parse), c => map.HeightAt(c) != 2 || !map.IsPlayable(c));
+        Assert.Equal(0, map.HeightAt(Coord.Parse("AV16")));   // 东侧崖下是低地
+        Coord[] walls = [.. new[] { "AR15", "AS15", "AT15", "AU15", "AQ16", "AQ17", "AR18", "AS18", "AT18", "AU18" }.Select(Coord.Parse)];
         MapData eightCellPocket = map with { Obstacles = map.Obstacles.Union(walls) };
 
         Assert.DoesNotContain(
@@ -372,11 +391,11 @@ public class 地图静态校验规则Tests
         // 同一块区域少一格（7 格）就必须失败，证明上面那次通过不是因为规则没跑。
         MapData sevenCellPocket = eightCellPocket with
         {
-            Obstacles = eightCellPocket.Obstacles.Add(Coord.Parse("V25")),
+            Obstacles = eightCellPocket.Obstacles.Add(Coord.Parse("AU16")),
         };
         MapValidationFailure failure = Assert.Single(
             MapValidator.Validate(sevenCellPocket).Failures, f => f.Code == "DEAD_POCKET");
-        Assert.Equal(["U25", "T26", "U26", "V26", "T27", "U27", "V27"], failure.Coords.Notations());
+        Assert.Equal(["AR16", "AS16", "AT16", "AR17", "AS17", "AT17", "AU17"], failure.Coords.Notations());
     }
 
     [Fact]
@@ -402,9 +421,9 @@ public class 地图静态校验规则Tests
         MapData exempted = map with
         {
             Obstacles = map.Obstacles.Union(PocketWalls),
-            PocketExemptions = [Coord.Parse("T26")],
+            PocketExemptions = [Coord.Parse("AR17")],
             PocketExemptionReasons = ImmutableDictionary<Coord, string>.Empty
-                .Add(Coord.Parse("T26"), "测试用：刻意保留的装饰性死角"),
+                .Add(Coord.Parse("AR17"), "测试用：刻意保留的装饰性死角"),
         };
 
         Assert.DoesNotContain(MapValidator.Validate(exempted).Failures, f => f.Code == "DEAD_POCKET");
@@ -413,7 +432,7 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 豁免必须写明理由()
     {
-        MapData map = Link() with { PocketExemptions = [Coord.Parse("T26")] };
+        MapData map = Link() with { PocketExemptions = [Coord.Parse("AR17")] };
 
         Assert.Contains(
             MapValidator.Validate(map).Failures, f => f.Code == "POCKET_EXEMPTION_WITHOUT_REASON");
@@ -458,14 +477,16 @@ public class 地图静态校验规则Tests
     {
         // 规格 Scenario（link-map-surfaces 改写，原「出生棋盘内有新地表」被拒）：平台的中间带有一格标为浅滩 → 接受加载，不报新地表相关的失败。
         // 6 号平台的 S29 在中间带，不在外圈、不在出生区（核心区）里；该平台原有 2 格新地表，加 1 格仍在每块至多 4 格之内。四种新地表逐一试一遍。
+        // seat-gap-25：干净平台改为 2 号座位，中间带草地格取 AS20（该座位原有 2 格新地表 AT16 / AT18）。
         MapData map = Link();
-        Coord cell = Coord.Parse("S29");
+        Coord cell = Coord.Parse("AS20");
+        Assert.Equal(2, Clean.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows));
         Assert.True(Clean.InMiddleBand(cell));
         Assert.Equal(Surface.Grass, map.SurfaceAt(cell));
         Assert.True(MapValidator.Validate(map).IsValid);
         foreach (Surface surface in new[] { Surface.Shallows, Surface.Desert, Surface.Marsh, Surface.Crag })
         {
-            MapData painted = map with { TerrainData = Overlay(map, surfaces: [("S29", surface)]) };
+            MapData painted = map with { TerrainData = Overlay(map, surfaces: [("AS20", surface)]) };
             Assert.Equal(surface, painted.SurfaceAt(cell));
             MapValidationResult result = MapValidator.Validate(painted);
             Assert.True(result.IsValid, result.ToString());
@@ -477,10 +498,11 @@ public class 地图静态校验规则Tests
     public void 外圈或核心区的新地表被拒()
     {
         // 规格 Scenario（link-map-surfaces D4）：6 号平台（Q25–V30）的外圈有一格标为荒漠，或核心区有一格标为沼泽 → 拒绝加载并指出该平台与该格坐标（BOARD_SPECIAL_SURFACE）。
+        // seat-gap-25：载体改为 2 号座位 AN15–AU22（外圈 AN17、核心区 AQ18；核心区出生区格 AP17）。
         // 核心区的沼泽同时违反"核心区 9 格是草地"与出生区第 6 条——那两条原样保留，这里另给出更精确的失败信息。
         // map-expand-25：外圈平坦规则（BOARD_RIM_NOT_FLAT）删除，外圈荒漠只报 BOARD_SPECIAL_SURFACE。
         MapData map = Link();
-        foreach ((string at, Surface surface, string where) in new[] { ("Q27", Surface.Desert, "外圈"), ("S27", Surface.Marsh, "核心区") })
+        foreach ((string at, Surface surface, string where) in new[] { ("AN17", Surface.Desert, "外圈"), ("AQ18", Surface.Marsh, "核心区") })
         {
             Coord cell = Coord.Parse(at);
             Assert.Equal(where == "外圈", Clean.OnRim(cell));
@@ -488,20 +510,20 @@ public class 地图静态校验规则Tests
             MapValidationResult result = MapValidator.Validate(map with { TerrainData = Overlay(map, surfaces: [(at, surface)]) });
             MapValidationFailure board = Assert.Single(result.Failures, f => f.Code == "BOARD_SPECIAL_SURFACE");
             Assert.Equal([cell], board.Coords);
-            Assert.Contains("出生棋盘 Q25–V30", board.Message, StringComparison.Ordinal);
+            Assert.Contains("出生棋盘 AN15–AU22", board.Message, StringComparison.Ordinal);
             Assert.Contains($"{at}（{where}）是{surface.DisplayName()}", board.Message, StringComparison.Ordinal);
             Assert.Contains("只许在中间带", board.Message, StringComparison.Ordinal);
             Assert.Equal(where == "核心区", result.Failures.Any(f => f.Code == "BIRTH_CORE_NOT_FLAT"));
         }
 
-        // 规格 terrain-surfaces · map-definition 第 6 条（底线）：出生区（核心区 S26）内的新地表另报出生区编号、坐标与地表。
+        // 规格 terrain-surfaces · map-definition 第 6 条（底线）：出生区（核心区 AP17；原 6 号平台的 S26）内的新地表另报出生区编号、坐标与地表。
         // 变异验证 M-S0c（retire-legacy-maps 实跑）：ValidateBirthZones 漏掉 Shallows → 本测试与「出生区内四种新地表都被拒(Shallows)」各红 1。
-        MapData core = map with { TerrainData = Overlay(map, surfaces: [("S26", Surface.Shallows)]) };
+        MapData core = map with { TerrainData = Overlay(map, surfaces: [("AP17", Surface.Shallows)]) };
         MapValidationFailure zone = Assert.Single(MapValidator.Validate(core).Failures, f => f.Code == "BIRTH_ZONE_SPECIAL_SURFACE");
-        Assert.Contains("出生区 6", zone.Message, StringComparison.Ordinal);
-        Assert.Contains("S26", zone.Message, StringComparison.Ordinal);
+        Assert.Contains("出生区 2", zone.Message, StringComparison.Ordinal);
+        Assert.Contains("AP17", zone.Message, StringComparison.Ordinal);
         Assert.Contains("浅滩", zone.Message, StringComparison.Ordinal);
-        Assert.Equal([Coord.Parse("S26")], zone.Coords);
+        Assert.Equal([Coord.Parse("AP17")], zone.Coords);
     }
 
     [Theory]

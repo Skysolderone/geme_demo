@@ -132,6 +132,21 @@ public class 信物刷新与预告Tests
         Assert.Equal(expected, candidates);
     }
 
+    [Fact]
+    public void 中立平台属于公共区域可刷新信物()
+    {
+        // seat-gap-25 E6（信物刷新区域核对）：出生区域 = 出生座位（BirthBoardArea 只认棋盘清单里的出生棋盘），中立平台（公共棋盘）不算出生区域——
+        // 空盘面上，每块座位的格都不是候选，每块中立平台的可落子格都是候选。变异 M-S6（实跑）：BirthBoardArea 改为"在任一棋盘外接矩形内" → 本测试红 1。
+        MapData map = Siege.Core.Board.Maps.LinkMapGenerator.Generate(1, 4);
+        GameBoard board = GameBoard.Load(map);
+        IBirthArea birth = Birth(board);
+        BoardPlate[] neutral = [.. map.Boards.Where(b => b.Kind == BoardPlateKind.Public)];
+        Assert.Equal(4, neutral.Length);   // 样本口径：link:1:4 有 4 块中立平台
+        HashSet<Coord> candidates = [.. RelicSpawner.Candidates(board, birth)];
+        Assert.All(map.BirthBoards().SelectMany(b => b.Cells()), c => Assert.True(birth.IsBirthArea(c) && !candidates.Contains(c), c.ToNotation()));
+        Assert.All(neutral.SelectMany(b => b.Cells()).Where(map.IsPlayable), c => Assert.True(!birth.IsBirthArea(c) && candidates.Contains(c), c.ToNotation()));
+    }
+
     [Theory]
     [InlineData(4, 0, 2)]
     [InlineData(3, 0, 2)]

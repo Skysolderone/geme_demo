@@ -28,7 +28,7 @@ public class 战场的定义与规则作用域Tests
             Assert.True(field.HasBirthBoard);
             Assert.Equal(map.AllCoords().Where(map.IsPlayable).Order(), field.Cells);   // link-map-terrain：棋盘内的岩石 / 未架桥深水不属于战场
             Assert.Contains(field.Cells, c => !map.Boards.Any(b => b.Contains(c)) || !validated);   // 样本口径：生成图的战场含平台之外的低地
-            Assert.Equal(Enumerable.Range(0, map.Boards.Length), field.BirthZones);
+            Assert.Equal(Enumerable.Range(0, map.BirthZones.Length), field.BirthZones);   // seat-gap-25：出生区 = 座位（中立平台不是出生区）
             Assert.Equal(Enumerable.Range(0, map.Boards.Length), field.Boards);
             Assert.Same(field, fields.ById(0));
             Assert.All(field.Cells, c => Assert.Same(field, fields.At(c)));

@@ -34,11 +34,11 @@ public class 大回合上限提示条Tests
     public void 提示读公开视图的上限()
     {
         // 图形版与终端都只读公开快照里的 RoundCap / MajorRound（不读 MatchFlow 内部）：按缺省 100 建局第 95 大回合起提示，上限 0 的局不提示。
-        MatchFlow match = Started([0, 1, 3, 4]).AtRound(95, [P0, P1, P2, P3]);
+        MatchFlow match = Started([0, 1, 3, 2]).AtRound(95, [P0, P1, P2, P3]);
         MatchPublicView view = match.Publish();
         Assert.Equal((100, 95), (view.RoundCap, view.MajorRound));
         Assert.Equal("第 100 大回合结束时按势力结算（还剩 5 个大回合）", Labels.RoundCapNotice(view.RoundCap, view.MajorRound));
-        Assert.Null(Labels.RoundCapNotice(Started([0, 1, 3, 4], options: Options with { RoundCap = 0 }).AtRound(95).Publish().RoundCap, 95));
+        Assert.Null(Labels.RoundCapNotice(Started([0, 1, 3, 2], options: Options with { RoundCap = 0 }).AtRound(95).Publish().RoundCap, 95));
     }
 
     [Fact]

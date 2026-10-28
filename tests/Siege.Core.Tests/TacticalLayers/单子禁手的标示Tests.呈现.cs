@@ -179,7 +179,7 @@ public partial class 单子禁手的标示Tests
             match.Debug.SeedHand(p, (PieceType.Artisan, 5), (PieceType.Basic, 5));
         }
 
-        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
+        match.Debug.LockFlagsAs(TestMaps.All.Select(p => (p, 0)));   // seat-gap-25 E4：同座次直接锁定（规则层夹具，不做撞座位改派）
         match.AtRound(5, [P1, P0, P2, P3]).Stones(P0, "C4", "D4", "E4", "F4", "G4");
         StagedBatch batch = match.OpenDeploy();
         DefaultBoardView before = match.World(P1).Board();

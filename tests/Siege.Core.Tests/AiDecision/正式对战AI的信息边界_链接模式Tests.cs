@@ -22,7 +22,7 @@ public class 正式对战AI的信息边界_链接模式Tests
         // 规格 Scenario「构筑期候选不越棋盘」「第 4 大回合候选可全图」（open-map）：正式 AI 第 2–3 大回合的候选落点全部位于其锁定的出生棋盘内；
         // 第 4 大回合候选落点可位于任一棋盘。开局 P0、P1 同在棋盘 1（内部 0），P2、P3 在棋盘 4、5。
         // 变异 MC-19：PublicRules.LegalRange 构筑期不按出生棋盘收窄 → 候选越出棋盘，本测试红。
-        MatchFlow match = Started([0, 0, 3, 4]);
+        MatchFlow match = Started([0, 0, 3, 2]);
         AiSearchConfig config = AiSearchConfig.Easy;
         var runner = new MatchRunner(match);
         // 样本口径（P0、P1 到第 4 大回合仍在局）依赖 AI 实际走法：权重写死，不跟随默认值（testing.md「依赖 AI 实际怎么走的断言要把权重写死」）。
@@ -82,7 +82,7 @@ public class 正式对战AI的信息边界_链接模式Tests
     {
         // 规格 Scenario「全图可读」（open-map）：按座位投影的过滤边界是所在战场 = 全图——别的棋盘上的棋子、势力、手牌类型与信物揭示都可读，与全知视图相同；
         // 读取接口只在 VisionFor 一处（open-map 段 B：全知开关已删除，恒给按座位投影 + 预演投影）。
-        MatchFlow match = Started([0, 0, 3, 4]);
+        MatchFlow match = Started([0, 0, 3, 2]);
         Coord mine = CoreCell(Map, 0, 0, 0);   // map-expand-25 段 A2：link:1:4 棋盘 0（E5 起 7×8 河流平台）的 (1, 1) = F6 是河道深水，改取核心区左下角 G7
         Coord theirs = BirthCell(Map, 3, 2, 2);
         match.Place(P0, mine).Place(P2, theirs, BirthCell(Map, 3, 2, 3));
@@ -130,7 +130,7 @@ public class 正式对战AI的信息边界_链接模式Tests
         // 按座位投影的 AI 走完整的决策（征募、候选、评价、确认）：四名 AI 都用按座位投影的视图跑一个大回合，不抛错、每人都落了子
         // （他人棋盘的棋子不会因"预演前看不到、预演后看得到"被评价成敌方势力变化而压到停手阈值以下）。
         // 变异 MC-24：VisionFor 不给预演口径（Rehearsal 为 null）→ 先手之后的 AI 全部 Pass，本测试红。
-        MatchFlow match = Started([0, 0, 3, 4]);
+        MatchFlow match = Started([0, 0, 3, 2]);
         match.Place(P2, BirthCell(Map, 3, 2, 2));
         var runner = new MatchRunner(match);
         AiSearchConfig config = AiSearchConfig.Standard;
@@ -157,7 +157,7 @@ public class 正式对战AI的信息边界_链接模式Tests
         // ai-seat-vision 规格 Scenario「缺省按座位视野」→ open-map「全图可读」：以缺省配置建局，正式 AI 按座位视野读取，该投影含全图
         // → AI 的读取接口对别的棋盘的格返回地形与占用，读得到别的棋盘玩家的势力数值（与全知相同）。
         // 缺省 = 不给配置 / 四档预设 / 按地图取的配置（终端版与图形版都经 ForMap）/ 跑局层缺省配置（会话落成 true、对全部 AI 生效）。
-        MatchFlow match = Started([0, 0, 3, 4]);
+        MatchFlow match = Started([0, 0, 3, 2]);
         Coord theirs = BirthCell(Map, 3, 2, 2);
         match.Place(P0, CoreCell(Map, 0, 0, 0)).Place(P2, theirs, BirthCell(Map, 3, 2, 3));   // map-expand-25 段 A2：原 BirthCell(0, 1, 1) = F6 是河道深水
         Assert.NotNull(match.Board[theirs].Occupant);   // 样本口径：别的棋盘上确有棋子与势力

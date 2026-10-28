@@ -4,7 +4,7 @@ using Siege.Core.Determinism;
 namespace Siege.Core.Board.Maps;
 
 /// <summary>
-/// 链接档出生棋盘的新地表叠加（link-map-surfaces D1–D3，负责人 2026-10-20 裁决 E1–E5，实施裁决 S1–S4）：平台主题地形与低地全部生成之后，
+/// 链接档平台（座位与中立平台，seat-gap-25 E2）的新地表叠加（link-map-surfaces D1–D3，负责人 2026-10-20 裁决 E1–E5，实施裁决 S1–S4）：平台主题地形与低地全部生成之后，
 /// 用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按平台编号逐块把若干中间带草地改为荒漠 / 沼泽 / 岩台 / 浅滩。
 /// 只改各块 <see cref="BoardTerrain.Surfaces"/> 里若干格的取值，不碰高度、林地、深水、桥、栅栏与岩石，也不消费布局流——不含新地表的部分与叠加前逐格相同（E4）。
 /// </summary>
@@ -19,7 +19,7 @@ namespace Siege.Core.Board.Maps;
 /// </remarks>
 public static partial class LinkMapGenerator
 {
-    /// <summary>每块出生棋盘新地表格数的上限（D4；校验器链接行 <c>MaxSpecialSurfaces</c> 同值）。混合主题的目标上限即此值。</summary>
+    /// <summary>每块平台（座位与中立平台）新地表格数的上限（D4；校验器链接行 <c>MaxSpecialSurfaces</c> 同值）。混合主题的目标上限即此值。</summary>
     internal const int MaxSpecialSurfacesPerBoard = 4;
 
     /// <summary>中间带格数不超过此值时目标格数固定为 2（D3 / S3：6×6 的 7 格、6×7 的 11 格）。</summary>
@@ -54,7 +54,7 @@ public static partial class LinkMapGenerator
     private static BoardTerrain OverlayBoard(BoardTerrain board, RandomStream rng)
     {
         BoardPlate plate = board.Plate;
-        BoardTheme theme = plate.Theme ?? throw new ArgumentException($"出生棋盘 {plate.Origin.ToNotation()} 没有主题，无法投放新地表。", nameof(board));
+        BoardTheme theme = plate.Theme ?? throw new ArgumentException($"平台 {plate.Origin.ToNotation()} 没有主题，无法投放新地表。", nameof(board));
         List<Coord> middle = [.. plate.Cells().Where(plate.InMiddleBand)];
         bool small = middle.Count <= SmallMiddleBand;   // "小棋盘"的唯一判断：S3 的目标格数与 F1 的免除共用
         int most = theme == BoardTheme.Mixed ? MaxSpecialSurfacesPerBoard : 3;

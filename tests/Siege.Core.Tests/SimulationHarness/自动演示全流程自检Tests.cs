@@ -44,11 +44,11 @@ public class 自动演示全流程自检Tests
     {
         // Scenario（simulation-harness「各入口支持生成图」自检四步）：插旗锁定（5 块占位全部展开、可见格 = 全图）→ 构筑期 → 全图解禁 → 终局。
         var audit = new LinkDemoAudit();
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
 
         // 插旗锁定：全部占位展开（open-map 裁决 O4；map-expand-25：link:1:4 为 10 块平台），可见格 = 整张图（段 B：含平台之间的低地）。
         DefaultBoardView locked = match.World(P0).Board();
-        Assert.Equal(10, locked.Placeholders.Count(p => p.Expanded));
+        Assert.Equal(4, locked.Placeholders.Count(p => p.Expanded));   // seat-gap-25：占位 = 4 个出生座位（原 10 块平台）
         Assert.True(audit.FlagsLocked(locked, 0, BattlefieldCellsOf(match, P0)).Ok);
         Assert.Equal(match.Map.Width * match.Map.Height, locked.Cells.Length);
 
@@ -85,7 +85,7 @@ public class 自动演示全流程自检Tests
     {
         // 反例：第 3 大回合不算解禁；范围漏一格 / 多一格场景格 / 含禁入格 / 不大于自己棋盘可落子数 → 失败。
         var audit = new LinkDemoAudit();
-        MatchFlow match = Started([0, 1, 3, 4]).PlayRounds(3, P0);
+        MatchFlow match = Started([0, 1, 3, 2]).PlayRounds(3, P0);
         Assert.Equal(4, match.MajorRound);
         (HashSet<Coord> playable, HashSet<Coord> forbidden, int own) = UnlockInputs(match, P0, 0);
         IReadOnlySet<Coord> range = match.LegalRangeFor(P0);
@@ -99,7 +99,7 @@ public class 自动演示全流程自检Tests
         Assert.False(audit.Unlocked(4, range, playable, forbidden, range.Count).Ok, "范围不大于自己棋盘可落子数");
 
         // 构筑期的范围当作解禁喂进去：漏掉其他棋盘的格 → 失败。
-        MatchFlow building = Started([0, 1, 3, 4]);
+        MatchFlow building = Started([0, 1, 3, 2]);
         (HashSet<Coord> p2, HashSet<Coord> f2, int own2) = UnlockInputs(building, P0, 0);
         Assert.False(audit.Unlocked(4, building.LegalRangeFor(P0), p2, f2, own2).Ok);
     }
@@ -108,7 +108,7 @@ public class 自动演示全流程自检Tests
     public void 插旗锁定与构筑期()
     {
         var audit = new LinkDemoAudit();
-        MatchFlow match = Started([0, 1, 3, 4]);
+        MatchFlow match = Started([0, 1, 3, 2]);
         DefaultBoardView board = match.World(P0).Board();
         int cells = BattlefieldCellsOf(match, P0);
         Assert.True(audit.FlagsLocked(board, 0, cells).Ok);
