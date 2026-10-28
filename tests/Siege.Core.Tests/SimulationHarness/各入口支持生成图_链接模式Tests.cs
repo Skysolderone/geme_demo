@@ -19,21 +19,21 @@ public class 各入口支持生成图_链接模式Tests
     public void 终端版开新局()
     {
         // 规格 Scenario「终端版开新局」：play --map link:12345 的插旗提示列出 5 个占位（位置与边长），盲选，不画任何棋盘的内部布局；打印的地图标识为 link:12345。
-        // 变异 MC-6：PlayCommand 在链接模式仍画全图（render.Board(zones: true)）→ "号棋盘 · …（左下角 …）" 不出现，本测试红。
+        // 变异 MC-6：PlayCommand 在链接模式改回旧模式的整图选区（不列占位行）→ "号棋盘 · …（左下角 …）" 不出现，本测试红。seat-gap-25 段 B：ChooseZone 先画插旗占位图（render.Board(zones: true)，座位编号 + 中立平台记号、不画内部布局）再列座位行，本测试守的是"座位行仍在"。
         (int code, string output, string err) = RunMain(null, new StringReader("q\n"), "play", "--map", "link:12345:4", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
         // map-expand-25 段 A2：标识带人数（link:12345:4），占位数随平台数（10 块）；只钉标识与块数，说明文字的其余部分由段 B 改写。
         MapData map = MapCatalog.Resolve("link:12345:4");
-        Assert.Contains($"地图 link:12345:4（{map.BirthZones.Length} 块", output, StringComparison.Ordinal);
+        Assert.Contains($"地图 link:12345:4（{map.BirthZones.Length} 个出生座位 + {map.Boards.Length - map.BirthZones.Length} 块中立平台", output, StringComparison.Ordinal);
         Assert.Equal(4, map.BirthZones.Length);   // seat-gap-25：4 个出生座位（map-expand-25 时为 10 块平台）
         for (int zone = 0; zone < map.BirthZones.Length; zone++)
         {
             BoundsOf(map, zone, out Coord origin, out int width, out int height);
             // link-map-terrain 5.1：占位行改为"编号 · 主题 · 宽×高（左下角 …）"（match-setup「插旗阶段的可见信息」）。
-            Assert.Contains($"  {zone + 1} 号棋盘 · {map.BirthBoard(zone).Theme!.Value.DisplayName()} · {width}×{height}（左下角 {origin.ToNotation()}）", output, StringComparison.Ordinal);
+            Assert.Contains($"  {zone + 1} 号座位 · {map.BirthBoard(zone).Theme!.Value.DisplayName()} · {width}×{height}（左下角 {origin.ToNotation()}）", output, StringComparison.Ordinal);
         }
 
-        Assert.Contains("盲选出生棋盘", output, StringComparison.Ordinal);
+        Assert.Contains("盲选出生座位", output, StringComparison.Ordinal);
         Assert.DoesNotContain(" ? ", output, StringComparison.Ordinal);   // 插旗阶段没有画任何信物格（不暴露棋盘内部布局）
     }
 
@@ -41,13 +41,13 @@ public class 各入口支持生成图_链接模式Tests
     public void 终端版链接图能开局并按座位渲染()
     {
         // tasks 3.0「play 在 link: 上能建局并跑起来」→ open-map：选棋盘后锁定、开始第 1 大回合并轮到本机玩家；全图全可见（没有"势力不可见"的玩家），
-        // 棋盘画整张地图（唯一战场 = 5 块棋盘的包围盒），构筑期提示"只能在自己的出生棋盘落子"。
+        // 棋盘画整张地图（唯一战场 = 5 块棋盘的包围盒），构筑期提示"只能在自己的出生座位落子"（seat-gap-25 段 B 改称"出生座位"）。
         (int code, string output, string err) = RunMain(null, new StringReader("2\nq\n"), "play", "--map", "link:12345:4", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
-        Assert.Contains("你锁定了 2 号棋盘", output, StringComparison.Ordinal);
+        Assert.Contains("你锁定了 2 号出生座位", output, StringComparison.Ordinal);
         Assert.DoesNotContain("出生区锁定：", output, StringComparison.Ordinal);   // 不列出别人的旗
         Assert.DoesNotContain("其他战场（势力不可见）", output, StringComparison.Ordinal);
-        Assert.Contains("只能在自己的出生棋盘落子", output, StringComparison.Ordinal);
+        Assert.Contains("只能在自己的出生座位落子", output, StringComparison.Ordinal);
         Assert.Contains("════════ 轮到你了 ════════", output, StringComparison.Ordinal);
 
         // 画整张地图：列标行是唯一战场包围盒的列，不含画布留白列 A / B。
@@ -149,7 +149,7 @@ public class 各入口支持生成图_链接模式Tests
             // link-map-surfaces D3：行尾另给该棋盘内的新地表格数（测试内独立计数）。
             int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
             specials.Add(special);
-            Assert.Contains($"  {zone + 1} 号棋盘 · {name} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  新地表 {special}\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+            Assert.Contains($"  {zone + 1} 号座位 · {name} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  新地表 {special}\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         }
 
         // 样本口径：各棋盘新地表格数之和 = 全图新地表格数，且全图数大于任何一块（否则按棋盘过滤与否测不出来）。

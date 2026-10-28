@@ -40,7 +40,7 @@ public class 终端带入选择挂出与结算Tests
         Assert.Equal(0, exit);
         Assert.Contains("已兑换 1 件百变", text, StringComparison.Ordinal);
         Assert.Contains("带入：战鼓（保险）、号令、百变（只有你看得到", text, StringComparison.Ordinal);
-        Assert.True(text.IndexOf("带入：战鼓（保险）", StringComparison.Ordinal) < text.IndexOf("盲选出生棋盘", StringComparison.Ordinal), "带入应在插旗前选定");
+        Assert.True(text.IndexOf("带入：战鼓（保险）", StringComparison.Ordinal) < text.IndexOf("盲选出生座位", StringComparison.Ordinal), "带入应在插旗前选定");
         RelicProfile during = RelicProfile.Parse(temp.Read());
         Assert.Equal((9, 0, 0, 1, 0), (during.Points, during.StockOf(RelicKind.WarDrum), during.StockOf(RelicKind.Command), during.StockOf(RelicKind.Watchtower), during.StockOf(RelicKind.Chameleon)));
         Assert.Equal("战鼓（保险）、号令、百变", new RelicLoadout(during.InFlight!.Carried).ToString());

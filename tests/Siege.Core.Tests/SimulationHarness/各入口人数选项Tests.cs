@@ -82,7 +82,7 @@ public class 各入口人数选项Tests
         (int code, string output, string err) = RunMain(null, new StringReader("q\n"), "play", "--players", "2", "--seed", "5", "--no-carry");
         Assert.True(code == 0, err);
         MapData two = MapCatalog.Resolve("link:1:2");
-        Assert.Contains($"地图 link:1:2（{two.BirthZones.Length} 块出生平台的 2 人浮空岛）", output, StringComparison.Ordinal);
+        Assert.Contains($"地图 link:1:2（{two.BirthZones.Length} 个出生座位 + {two.Boards.Length - two.BirthZones.Length} 块中立平台的 2 人浮空岛）", output, StringComparison.Ordinal);
         Assert.Contains("对手 1 名", output, StringComparison.Ordinal);
 
         (int mapCode, string mapOut, string mapErr) = RunMain(null, null, "map", "--players", "3");

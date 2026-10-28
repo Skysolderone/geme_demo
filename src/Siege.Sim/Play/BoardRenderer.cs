@@ -30,6 +30,13 @@ internal sealed class BoardRenderer
     /// <summary>禁入格：后跟活形所有者的玩家号（life-shape 3.3）。</summary>
     internal const char ForbiddenMark = 'x';
 
+    /// <summary>插旗阶段中立平台（公共棋盘，seat-gap-25 E6）的轮廓记号：不带编号、不可选，与座位编号区分。</summary>
+    internal const char NeutralMark = '=';
+
+    /// <summary>该格是否在某块中立平台（棋盘清单里的公共棋盘）的外接矩形内。只读棋盘清单，不判规则。</summary>
+    internal static bool IsNeutralPlate(MapData map, Coord c) =>
+        !map.Boards.IsDefault && map.Boards.Any(b => b.Kind == BoardPlateKind.Public && b.Contains(c));
+
     /// <summary>
     /// 棋子字母（与盘面类型码同一套，more-pieces-relics D9：旗手 N、铁链 C、哨兵 T、界碑 K）。穷举全部类型，未知类型响亮失败——
     /// 兜底成 '?' 会让新类型在终端里静默显示成"未揭示信物"的符号（段 A 待决 4）。
@@ -135,8 +142,13 @@ internal sealed class BoardRenderer
                     // 占位画整块出生棋盘（棋盘清单），不画出生区——链接档的出生区是核心区（link-map-terrain D1）。
                     if (map.BirthBoardAt(c) is { } placeholder)
                     {
-                        // 每格恰 3 个字符：浮空岛的平台可达 12 块，两位编号右对齐成"10 "（原" 10 "占 4 格，把整行挤歪）。
+                        // 每格恰 3 个字符：两位编号右对齐成"10 "（原" 10 "占 4 格，把整行挤歪）。
                         Ink($"{BirthZoneLabel.Number(placeholder),2} ", ZoneColor);
+                    }
+                    else if (IsNeutralPlate(map, c))
+                    {
+                        // seat-gap-25 E6：中立平台只画轮廓记号（不带编号、不可选），与座位编号一眼可分；不画内部布局。
+                        Ink($" {NeutralMark} ", ConsoleColor.DarkGray);
                     }
                     else
                     {
@@ -201,6 +213,11 @@ internal sealed class BoardRenderer
         }
 
         WriteColumns(x0, x1);
+        if (placeholders)
+        {
+            _out.WriteLine($"  插旗：数字=出生座位编号（可选，共 {map.BirthZones.Length} 个）  {NeutralMark}=中立平台（不可出生，第 {MatchFlow.BuildProtectionRounds + 1} 大回合起可落子）  空白=低地");
+        }
+
         _out.WriteLine("  图例：1B=玩家1的普通子  B普通 F堡垒 L连珠 M倍增 S协同  *=你暂放  +=可落子  #=岩石  ~=深水");
         _out.WriteLine($"        {AliveMark}=已活棋串(如 1B{AliveMark})  {ForbiddenMark}N=玩家N活形的眼(你禁入)");
 
@@ -254,7 +271,7 @@ internal sealed class BoardRenderer
         _out.WriteLine($"第 {view.MajorRound} 大回合    行动顺序：{order}    连续 Pass：{view.PassStreak}    {Siege.Presentation.Text.Labels.RoundCapStatus(view.RoundCap, view.MajorRound)}");
         if (view.MajorRound <= MatchFlow.BuildProtectionRounds)
         {
-            _out.WriteLine($"  构筑保护期（第 1–{MatchFlow.BuildProtectionRounds} 大回合）：只能在自己的出生棋盘落子");
+            _out.WriteLine($"  构筑保护期（第 1–{MatchFlow.BuildProtectionRounds} 大回合）：只能在自己的出生座位落子");
         }
 
         foreach (PlayerFlowState state in view.Players)

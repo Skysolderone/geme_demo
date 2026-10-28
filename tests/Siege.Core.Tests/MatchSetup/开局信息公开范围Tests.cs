@@ -129,14 +129,14 @@ public class 开局信息公开范围Tests
         {
             BoardPlate plate = map.BirthBoard(zone);
             themeNames[zone] = plate.Theme!.Value.DisplayName();
-            Assert.Contains($"  {zone + 1} 号棋盘 · {themeNames[zone]} · {plate.Width}×{plate.Height}（左下角 {plate.Origin.ToNotation()}）", text, StringComparison.Ordinal);
+            Assert.Contains($"  {zone + 1} 号座位 · {themeNames[zone]} · {plate.Width}×{plate.Height}（左下角 {plate.Origin.ToNotation()}）", text, StringComparison.Ordinal);
         }
 
         // 没有高台、主题可重复（测试内字面量，不经 DisplayName 反推；map-expand-25 裁决 R3，见上一条）。
         // seat-gap-25：插旗只列 4 个出生座位（河流、栅栏阵 ×3；中立平台不列），原"10 块平台四种主题都出现"作废。
         Assert.Equal(4, themeNames.Length);
         Assert.Equal(new[] { "河流", "栅栏阵", "栅栏阵", "栅栏阵" }, themeNames);
-        Assert.Contains("盲选出生棋盘", text, StringComparison.Ordinal);
+        Assert.Contains("盲选出生座位", text, StringComparison.Ordinal);
         Assert.DoesNotContain(" ? ", text, StringComparison.Ordinal);   // 不暴露棋盘内部布局（信物格）
     }
 

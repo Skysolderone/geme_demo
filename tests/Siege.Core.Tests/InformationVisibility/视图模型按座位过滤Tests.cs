@@ -51,7 +51,7 @@ public class 视图模型按座位过滤Tests
 
         // 新局界面的一行说明只提占位，不提信物与可落子格。
         string info = MapPreviewInfo.Of(board);
-        Assert.Contains("4 块出生棋盘", info, StringComparison.Ordinal);
+        Assert.Contains("4 个出生座位", info, StringComparison.Ordinal);   // seat-gap-25 段 B：原"4 块出生棋盘"
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
     }

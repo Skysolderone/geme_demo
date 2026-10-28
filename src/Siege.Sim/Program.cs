@@ -94,9 +94,9 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("用法：");
-        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--seat <你的座位>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
+        Console.WriteLine($"  Siege.Sim play [--seed <种子>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--seat <你的玩家编号 1–人数（不是出生座位；出生座位在开局盲选）>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>]");
         Console.WriteLine("                [--profile <档案路径，缺省 %APPDATA%\\Siege\\profile.json>] [--no-carry（关闭带入带出，不读写档案）]");
-        Console.WriteLine("  Siege.Sim map [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4>] [--out <导出的地图文件>]（打印文本图与校验报告；给 --out 才导出）");
+        Console.WriteLine("  Siege.Sim map [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4>] [--out <导出的地图文件>]（打印文本图、出生座位与中立平台清单、校验报告；给 --out 才导出）");
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
@@ -110,6 +110,7 @@ public static class Program
         Console.WriteLine("                （AI 一律按座位视野；open-map 起锁定后整张地图是唯一战场，座位视野即全图，没有全知开关）");
         Console.WriteLine($"  地图标识：play / run / replay 只接受 link:<地图种子>:<人数>（人数 2–4，缺省 {DefaultMapId}）；只写 link 即随机取一个地图种子、人数取 --players，并打印完整标识。");
         Console.WriteLine("    人数：--players 决定人数；不给 --map 即 link:1:<人数>；--map 给了完整标识而不给人数即按标识的人数；两者不一致报错退出。");
+        Console.WriteLine($"    地图：每名玩家一个 8×8 出生座位（座位数 = 人数，开局盲选、座位互斥），座位之间至少隔 {LinkMapGenerator.SeatGap} 格战场，其余为中立平台（不可出生，第 {Core.Match.MatchFlow.BuildProtectionRounds + 1} 大回合起可落子）。");
         Console.WriteLine("  Siege.Sim replay --file <match-*.jsonl>   或   replay --dir <目录> --seed <十六进制种子>（只回放 link: 对局的日志）");
         Console.WriteLine("  Siege.Sim analyze --dir <目录> [--include-contaminated] [--review-defeats] [--review-artisan] [--review-cycles] [--out <报告文件>]");
         Console.WriteLine("    --review-defeats：按日志回放每局，复盘整轮 Pass 结算的落败者与决胜一手（耗时约等于跑局本身；缺省不做）");
@@ -258,16 +259,23 @@ public static class Program
             + " 个可落子格，高度 "
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
         // open-map 裁决 B5（simulation-harness「map 子命令缺省地图」）：按几何四邻实算连通分量数，不写死。
-        Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（出生平台与其间的低地连成一座浮空岛，应为 1）");
+        Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（出生座位、中立平台与其间的低地连成一座浮空岛，应为 1）");
 
-        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角；link-map-surfaces D3：再给该棋盘内的新地表格数（relic-redesign 起地图没有静态信物格，原"公共信物"列删除）。
+        // link-map-terrain 5.1：每块棋盘一行——编号 · 主题 · 宽×高、左下角；link-map-surfaces D3：再给该棋盘内的新地表格数（relic-redesign 起地图没有静态信物格，原"公共信物"列删除）。
         // 主题中文名只经 BoardThemeNames.DisplayName；没有主题的棋盘（手写夹具）写"无主题"。
-        Console.WriteLine("出生棋盘（编号 · 主题 · 宽×高）：");
+        // seat-gap-25 E6：出生座位（Birth，可插旗）与中立平台（Public，不可出生）分两段列，编号各自从 1 起；中立平台的编号只用于对照，不是出生区号。
+        Console.WriteLine($"出生座位 {map.BirthZones.Length} 个（玩家各占一个，任意两座位之间至少隔 {LinkMapGenerator.SeatGap} 格战场；编号 · 主题 · 宽×高）：");
         int boardIndex = 0;
         foreach (BoardPlate plate in map.BirthBoards())
         {
-            int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
-            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  新地表 {special}");
+            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号座位 · {PlateLine(map, plate)}");
+        }
+
+        BoardPlate[] neutral = [.. map.Boards.Where(b => b.Kind == BoardPlateKind.Public)];
+        Console.WriteLine($"中立平台 {neutral.Length} 块（不可出生，第 {Core.Match.MatchFlow.BuildProtectionRounds + 1} 大回合起可落子；编号 · 主题 · 宽×高）：");
+        for (int i = 0; i < neutral.Length; i++)
+        {
+            Console.WriteLine($"  中立 {i + 1} · {PlateLine(map, neutral[i])}");
         }
 
         Console.WriteLine($"各出生区沿气边最短距离（出生区 {string.Join("/", Enumerable.Range(0, map.BirthZones.Length).Select(BirthZoneLabel.Number))}）：");
@@ -315,7 +323,7 @@ public static class Program
 
         Console.WriteLine();
         Console.WriteLine();
-        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区");
+        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生座位的出生区（核心 3×3）  {NeutralGlyph} 中立平台");
         Console.WriteLine("@ 中央入口  ^ 咽喉（与桥同格时显示桥的标记 =）  F 林地  . 土路  D 荒漠  M 沼泽  P 岩台  S 浅滩   格间 | 与行间 -- 为栅栏");
 
         // --out：把这张图导出到指定文件（map-generator 2.6）。生成图靠它落成普通地图文件——标识里有冒号，做不了 Windows 文件名。
@@ -352,8 +360,19 @@ public static class Program
             : map.ChokePoints.Contains(c) ? '^'
             : SurfaceMark(map.SurfaceAt(c)) is char s ? s
             : map.BirthZoneOf(c) is { } z ? (char)('0' + BirthZoneLabel.Number(z))
+            : Siege.Sim.Play.BoardRenderer.IsNeutralPlate(map, c) ? NeutralGlyph
             : ' ';
         return $"{map.HeightAt(c)}{mark}";
+    }
+
+    /// <summary>文本图里中立平台（公共棋盘）格的标记（seat-gap-25 E6）：与出生区编号区分；地表标记优先（同出生区编号）。</summary>
+    private const char NeutralGlyph = 'n';
+
+    /// <summary>棋盘清单一行的公共部分：主题 · 宽×高、左下角与棋盘内的新地表格数（座位与中立平台同一格式）。</summary>
+    private static string PlateLine(MapData map, BoardPlate plate)
+    {
+        int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
+        return $"{plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  新地表 {special}";
     }
 
     /// <summary>文本图的地表标记（8 种地表全覆盖；草地无标记，深水在上面已画成 ~~ / 桥）。</summary>

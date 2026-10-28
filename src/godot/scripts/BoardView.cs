@@ -431,6 +431,7 @@ public sealed partial class BoardView : Node3D
         }
 
         AddPlaceholders(board.Placeholders);
+        AddNeutralOutlines(board.NeutralPlates);
 
         foreach (FenceEdge fence in board.Fences)
         {
@@ -597,9 +598,18 @@ public sealed partial class BoardView : Node3D
     /// 岛下的云海、以及地图边缘深水格外侧垂落的瀑布。全部在底座平面之下或地图外接矩形之外，不进拾取、不遮挡任何格。
     /// 形状只由地图尺寸与格坐标决定，不用随机数——同一张图永远同一副样子。
     /// </summary>
-    /// <summary>本次视图里全部格（本战场）与全部占位格的包围盒（左下角、右上角）；没有任何格时退到整张画布。</summary>
+    /// <summary>
+    /// 本次视图里全部格（本战场）与全部占位格的包围盒（左下角、右上角）；没有任何格时退到整张画布。
+    /// seat-gap-25 E6：还有未展开的占位（选图预览 / 插旗阶段）时取整张画布（= 锁定后全图展开的画幅）——座位只有 n 块、贴着岛的东西两侧，
+    /// 按占位之并取景会把 2 人长方形岛（45×33）裁成一条窄带，中立平台与座位之间的战场都不在画幅里；锁定前后画幅一致，也不因锁定而重定界。
+    /// </summary>
     private static (Coord Low, Coord High) ExtentOf(DefaultBoardView board)
     {
+        if (board.Placeholders.Any(p => !p.Expanded))
+        {
+            return (new Coord(0, 0), new Coord(board.Width - 1, board.Height - 1));
+        }
+
         int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
         foreach (Coord c in board.Cells.Select(c => c.Coord).Concat(board.Placeholders.SelectMany(p => p.Cells())))
         {
@@ -1480,6 +1490,52 @@ public sealed partial class BoardView : Node3D
 
         // 自证行（link-map-terrain 6.1）：画出的占位与各自的主题名，供自检日志核对"插旗阶段占位带主题名"。
         GD.Print($"[placeholders] 未展开占位 {placeholders.Count(p => !p.Expanded)} 块，带主题名 {themed} 块（字体缺字 {missingGlyphs} 个）：{string.Join("、", placeholders.Where(p => !p.Expanded).Select(p => $"{BirthZoneLabel.Number(p.Zone)}·{p.ThemeName ?? "（无）"}"))}");
+
+        MeshInstance3D Strip(Vector3 size, Vector3 position) => new()
+        {
+            Mesh = BoxOf(size),
+            MaterialOverride = frame,
+            Position = position,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+    }
+
+    /// <summary>
+    /// 未展开的中立平台轮廓（seat-gap-25 E6）：选图预览与插旗阶段照常画出中立平台的位置，但样式与出生座位的占位明显不同——
+    /// 只有一圈细而淡的边框（公共棋盘的中性浅石色，与座位占位的深色粗边框在灰度下拉得开），不带编号与主题名；
+    /// 格子不登记层高，拾取不到，点上去不会插旗（插旗只认出生座位，<c>MatchSession.BirthZoneAt</c> → <see cref="MapData.BirthBoardAt"/>）。外接矩形原样取自视图模型。
+    /// </summary>
+    private void AddNeutralOutlines(ImmutableArray<BoardPlate> plates)
+    {
+        if (plates.IsDefaultOrEmpty)
+        {
+            return;
+        }
+
+        var root = new Node3D { Name = "NeutralOutlines" };
+        AddChild(root);
+        const float half = BoardGeometry.CellSize * 0.5f;
+        const float frameWidth = 0.06f;
+        const float frameHeight = 0.04f;
+        StandardMaterial3D frame = FlatOf(Visuals.PublicBoardFrame);
+        foreach (BoardPlate plate in plates)
+        {
+            Vector3 a = BoardGeometry.Center(plate.Origin, _width, _height);
+            Vector3 b = BoardGeometry.Center(new Coord(plate.Origin.X + plate.Width - 1, plate.Origin.Y + plate.Height - 1), _width, _height);
+            float minX = Math.Min(a.X, b.X) - half, maxX = Math.Max(a.X, b.X) + half;
+            float minZ = Math.Min(a.Z, b.Z) - half, maxZ = Math.Max(a.Z, b.Z) + half;
+            float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
+            float y = a.Y + (frameHeight * 0.5f);
+            float spanX = maxX - minX + frameWidth;
+            float spanZ = maxZ - minZ + frameWidth;
+            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, minZ)));
+            root.AddChild(Strip(new Vector3(spanX, frameHeight, frameWidth), new Vector3(midX, y, maxZ)));
+            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(minX, y, midZ)));
+            root.AddChild(Strip(new Vector3(frameWidth, frameHeight, spanZ), new Vector3(maxX, y, midZ)));
+        }
+
+        // 自证行：画出的中立平台轮廓块数（不带编号、不可点选）。
+        GD.Print($"[neutral] 未展开中立平台轮廓 {plates.Length} 块（无编号、不可插旗）：{string.Join("、", plates.Select(p => $"{p.Width}×{p.Height}@{p.Origin.ToNotation()}"))}");
 
         MeshInstance3D Strip(Vector3 size, Vector3 position) => new()
         {

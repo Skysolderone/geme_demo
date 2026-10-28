@@ -239,7 +239,8 @@ public class 选图视图模型Tests
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         DefaultBoardView preview = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         string info = MapPreviewInfo.Of(preview);
-        Assert.StartsWith($"{map.Width}×{map.Height} 画布，{map.BirthZones.Length} 块出生棋盘（边长 ", info, StringComparison.Ordinal);   // map-expand-25：块数随平台数；seat-gap-25：只数出生座位
+        Assert.StartsWith($"{map.Width}×{map.Height} 画布，{map.BirthZones.Length} 个出生座位（边长 8×8）、{map.Boards.Length - map.BirthZones.Length} 块中立平台；", info, StringComparison.Ordinal);   // map-expand-25：块数随平台数；seat-gap-25：座位与中立平台分开数
+        Assert.Contains("玩家各占一个出生座位，座位之间至少隔 25 格战场，其余为中立平台", info, StringComparison.Ordinal);   // seat-gap-25 段 B：文案改为座位 / 中立平台的说法（25 为测试内字面量）
         Assert.DoesNotContain("信物", info, StringComparison.Ordinal);
         Assert.DoesNotContain("可落子", info, StringComparison.Ordinal);
         Assert.Empty(preview.Cells);

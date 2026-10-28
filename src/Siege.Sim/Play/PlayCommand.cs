@@ -103,13 +103,15 @@ internal static class PlayCommand
         // 地图那一行：一律打印完整标识（retire-legacy-maps：旧地图族的缺省图 v5 随旧地图删除，"缺省图不多打一行"的例外随之删除）。
         // 完整地图标识取自公开视图（插旗阶段即公开）。生成图的标识里带地图种子：与下一行的对局种子分开显示，二者互相独立。
         string shownMapId = match.Publish().MapId;
-        output.WriteLine($"地图 {shownMapId}（{map.BirthZones.Length} 块出生平台的 {playerCount} 人浮空岛）——用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关");
+        // seat-gap-25 E6：出生座位与中立平台分开数（座位 = 人数；中立平台不可出生）。
+        int neutralPlates = map.Boards.Count(b => b.Kind == BoardPlateKind.Public);
+        output.WriteLine($"地图 {shownMapId}（{map.BirthZones.Length} 个出生座位 + {neutralPlates} 块中立平台的 {playerCount} 人浮空岛）——用 --map {shownMapId} 可再得到同一张图；地图种子只决定地图，与下面的对局种子无关");
 
         // 专家（前瞻宽度 > 0）另写明实际生效的前瞻宽度；其余三档这一行与引入专家之前逐字相同。
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI{lookahead}");
         output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
-        output.WriteLine("流程：出生平台散布在浮空岛上，平台之间是低地（河道与桥）；前 3 个大回合只能在自己的出生平台内落子与改造（同区者共享），第 4 大回合起全图可落（含平台之间的低地）；"
+        output.WriteLine($"流程：玩家各占一个出生座位，座位之间至少隔 {LinkMapGenerator.SeatGap} 格战场（低地、河道与桥），其余为中立平台（不可出生）；前 3 个大回合只能在自己的出生座位内落子与改造，第 4 大回合起全图可落（含低地与中立平台）；"
             + "全员在一个大回合内全部 Pass、或地图填满即结算终局，势力最高者胜；只剩一人也终局。曾有势力而势力降到 0 即出局。");
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
@@ -124,9 +126,9 @@ internal static class PlayCommand
 
         try
         {
-            int zone = ChooseZone(match, me, map, input, output, quitWarning);
-            // 其余玩家的选区由 Core 的唯一实现给出（frontier-map D4 / board-link-mode B2）：盲选。
-            ImmutableArray<(PlayerId Player, int Zone)> choices = match.PlantPrototype((me, zone));
+            int zone = ChooseZone(match, me, map, input, output, render, quitWarning);
+            // 其余玩家的座位由 Core 的唯一实现给出（frontier-map D4 / board-link-mode B2 / seat-gap-25 E4）：在空座位里盲选，座位互斥；本机先插旗，必得所选座位。
+            match.PlantPrototype((me, zone));
             arrange?.Invoke(match);
 
             var runner = new MatchRunner(match);
@@ -145,11 +147,8 @@ internal static class PlayCommand
                 runner.SetController(p, ai);
             }
 
-            // 盲选（match-setup「匿名同时插旗」）：锁定后只公开与自己同一块棋盘的玩家，不公开其他棋盘上有谁。
-            PlayerId[] mates = [.. choices.Where(c => c.Zone == zone && c.Player != me).Select(c => c.Player)];
-            output.WriteLine($"你锁定了 {BirthZoneLabel.Number(zone)} 号棋盘；" + (mates.Length == 0
-                ? "这块棋盘上只有你。"
-                : $"同一块棋盘上还有 {string.Join("、", mates.Select(p => BoardRenderer.Label(p, me)))}，你们就地开打。"));
+            // 盲选（match-setup「匿名同时插旗」）：seat-gap-25 E4 起座位互斥，锁定后每个座位恰一人；原"同一块棋盘上还有…"分支再也走不到，删去。
+            output.WriteLine($"你锁定了 {BirthZoneLabel.Number(zone)} 号出生座位；其余玩家各占一个座位，与你至少隔 {LinkMapGenerator.SeatGap} 格战场。");
 
             output.WriteLine($"第 1 大回合顺序随机：{string.Join(" > ", match.ActionOrder.Select(p => BoardRenderer.Label(p, me)))}");
 
@@ -249,20 +248,26 @@ internal static class PlayCommand
         }
     }
 
-    /// <summary>retire-legacy-maps 3.6：终端只剩链接模式，旧模式的整图选区分支（画全图 + "选择你的出生区"）删除。</summary>
-    private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, string? quitWarning)
+    /// <summary>retire-legacy-maps 3.6：终端只剩链接模式，旧模式的整图选区分支（画全图 + "选择你的出生区"）删除。seat-gap-25 段 B：先画整座岛的插旗占位图（座位编号、中立平台记号，不画棋盘内部布局），再列座位清单并盲选。</summary>
+    private static int ChooseZone(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, BoardRenderer render, string? quitWarning)
     {
-        // 盲选（match-setup「开局信息公开范围」）：只列各块出生平台的占位（位置、宽高与主题名，取自按座位视图），不画棋盘内部布局。
+        // seat-gap-25 E6：先画整座岛的插旗占位图（座位带编号、中立平台只画记号、低地留白，取景为全部可落子格的外接矩形），再列座位清单。
+        // 读按座位投影，插旗阶段渲染器只读地图的棋盘清单，不画任何棋盘内部布局。
+        render.Board(match.PublishSeatProjection(me), me, zones: true);
+        output.WriteLine();
+
+        // 盲选（match-setup「开局信息公开范围」）：只列各个出生座位的占位（位置、宽高与主题名，取自按座位视图），不画棋盘内部布局。
         // link-map-terrain 5.1：每行"编号 · 主题 · 宽×高"，主题中文名只经 BoardThemeNames.DisplayName；没有主题的占位（手写夹具）写"无主题"。
+        // seat-gap-25 E6：只列座位（占位只给出生座位），中立平台不可出生、不进这份清单。
         foreach (BoardPlaceholder p in match.PublishFor(me).Placeholders)
         {
-            output.WriteLine($"  {BirthZoneLabel.Number(p.Zone)} 号棋盘 · {p.Theme?.DisplayName() ?? "无主题"} · {p.Width}×{p.Height}（左下角 {p.Origin}）");
+            output.WriteLine($"  {BirthZoneLabel.Number(p.Zone)} 号座位 · {p.Theme?.DisplayName() ?? "无主题"} · {p.Width}×{p.Height}（左下角 {p.Origin}）");
         }
 
         output.WriteLine();
         while (true)
         {
-            output.Write($"盲选出生棋盘：以上是 {map.BirthZones.Length} 块棋盘的占位（1–{map.BirthZones.Length}），看不到别人的旗，选中即锁定；前 3 个大回合只能在这块棋盘上落子 > ");
+            output.Write($"盲选出生座位：以上是 {map.BirthZones.Length} 个出生座位（1–{map.BirthZones.Length}），中立平台不可选；看不到别人的旗，选中即锁定，撞座位按插旗先后改派到空座位；前 3 个大回合只能在这个座位上落子 > ");
             string? line = input.ReadLine() ?? throw new PlayQuitException();
             line = line.Trim();
             if (line is "q" or "quit")
