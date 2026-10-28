@@ -6,8 +6,8 @@ using static Siege.Core.Tests.PresentationFixtures;
 
 namespace Siege.Core.Tests.HandInfoPanel;
 
-/// <summary>规格：hand-info-panel —— Requirement: 新棋子类型与驿站来源的显示（more-pieces-relics ADDED）</summary>
-public class 新棋子类型与驿站来源的显示Tests
+/// <summary>规格：hand-info-panel —— Requirement: 新棋子类型的显示（more-pieces-relics ADDED；驿站来源随旧信物删除，R47 改名）</summary>
+public class 新棋子类型的显示Tests
 {
     [Fact]
     public void 新类型在自己区域显示()

@@ -137,3 +137,14 @@ R16 归属细则（design.md D6 定稿，消除"带入的全部带出"与"被他
 | R46 | 新公开面（AdjacentStones、RelicContribution、拾取 / 掉落事件、RelicAttachPlan、RelicCounts） | 接受 |
 
 告知：候选批次评价暂不含挂出后势力，只在选定批次后决定挂点；校准时一起看。
+
+## 第八张表（2026-10-28，C2 验收后，用户 R47–R50 按推荐）
+
+| # | 项 | 裁决 |
+|---|----|------|
+| R47 | hand-info-panel 两条 Requirement 标题含旧名词 | 规格标题与测试类一起改名：公开结构参数与来源 / 新棋子类型的显示 |
+| R48 | 设计文档 §16 "第 7 大回合后部署 5–8" 依赖已删军令 | 接受改为"部署上限 5，待信物经济校准再议" |
+| R49 | Godot 部署挂出交互 | 接受"每枚暂放一个下拉"，不做拖拽 |
+| R50 | `RelicCellView.LandingRound` | 保留（信息层面板文案用） |
+
+合回：用户同意 feat/relic-redesign 合回 main（Godot 界面只经编译 + 走查，未在本机运行）。

@@ -41,9 +41,9 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **WHEN** 玩家 A 正在征募或暂放
 - **THEN** 面板的 A 区域不出现任何征募候选或暂放信息
 
-### Requirement: 公开结构参数与信物来源
+### Requirement: 公开结构参数与来源
 
-面板 SHALL 同时显示每名玩家公开的展示数、免费选取数、手牌类型槽、部署上限，以及这些数值各自的来源。relic-redesign D4 起没有改玩家参数的信物，来源只有分阶段基础值（标题沿用旧名以保持与测试类名的可追溯，待统一改名）。
+面板 SHALL 同时显示每名玩家公开的展示数、免费选取数、手牌类型槽、部署上限，以及这些数值各自的来源。relic-redesign D4 起没有改玩家参数的信物，来源只有分阶段基础值。
 
 #### Scenario: 显示参数与来源
 - **WHEN** 第 7 大回合玩家 B 的部署上限为 5
@@ -65,9 +65,9 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 - **WHEN** 玩家 D 弃赛时持有普通子与连珠子
 - **THEN** 面板保留展示这两种类型，并清楚标记 D 已弃赛、不再行动
 
-### Requirement: 新棋子类型与驿站来源的显示
+### Requirement: 新棋子类型的显示
 
-面板 SHALL 以与盘面、终端一致的名称与标识显示全部十种棋子类型（旧"驿站来源逐枚列出"随旧信物系统删除；标题沿用旧名以保持与测试类名的可追溯，待统一改名）。
+面板 SHALL 以与盘面、终端一致的名称与标识显示全部十种棋子类型（旧"驿站来源逐枚列出"随旧信物系统删除）。
 
 #### Scenario: 新类型在自己区域显示
 - **WHEN** 当前玩家持有旗手子×2、界碑子×1

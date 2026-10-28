@@ -5,8 +5,8 @@ using static Siege.Core.Tests.PresentationFixtures;
 
 namespace Siege.Core.Tests.HandInfoPanel;
 
-/// <summary>规格：hand-info-panel —— Requirement: 公开结构参数与信物来源（relic-redesign D4：信物来源随旧信物删除，只剩基础值）</summary>
-public class 公开结构参数与信物来源Tests
+/// <summary>规格：hand-info-panel —— Requirement: 公开结构参数与来源（relic-redesign D4：信物来源随旧信物删除，只剩基础值；R47 改名）</summary>
+public class 公开结构参数与来源Tests
 {
     [Fact]
     public void 显示参数为基础值()
