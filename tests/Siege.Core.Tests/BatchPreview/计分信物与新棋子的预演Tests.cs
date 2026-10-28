@@ -1,6 +1,7 @@
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Preview;
 using Siege.Core.Scoring;
 
@@ -8,85 +9,75 @@ namespace Siege.Core.Tests.BatchPreview;
 
 /// <summary>
 /// 规格：more-pieces-relics batch-preview —— Requirement: 计分信物与新棋子的预演（D3）。
-/// 预演的棋串军势与预计势力含四种新棋子的位置加值，以及<b>批次开始前已揭示</b>、按预演后盘面由相应玩家控制的连营 / 犄角；
-/// 本批将首次揭示的信物不计入任何人的预演势力，预演与正式结算的差异只来自它。
-/// 同 Requirement 的「工坊下列出隔一格目标」在 <see cref="改造在预演中的呈现Tests.工坊下列出隔一格目标"/>（段 B 2.6 的验证）。
+/// 预演的棋串军势与预计势力含四种新棋子的位置加值。relic-redesign W1：旧计分信物（连营 / 犄角）与"将揭示"随旧信物删除，
+/// 改为挂在棋子上的信物——预演副本带信物层，本批落在地图信物上即拾取，预演势力与正式结算逐项相同，并列出"将拾取"。
 /// </summary>
 public class 计分信物与新棋子的预演Tests
 {
     private static readonly PlayerId Me = TestMaps.P0;
 
-    /// <summary>v2、第 5 大回合、P0 先行；J7 是连营格；P0 已有连珠子 <paramref name="lineCells"/>。<paramref name="revealed"/> 为真时 P0 已占据 J7 且连营已揭示。</summary>
-    private static MatchFlow Match(bool revealed, params string[] lineCells)
+    /// <summary>v2、第 5 大回合、P0 先行；P0 已有连珠子 <paramref name="lineCells"/>；<paramref name="mapRelic"/> 非空时该格空格上有一件地图刷出的号令。</summary>
+    private static MatchFlow Match(string? mapRelic, params string[] lineCells)
     {
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("J7", RelicFixtures.Encampment())]).AtRound(5, TestMaps.All);
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, TestMaps.All);
         foreach (string cell in lineCells)
         {
             match.Board.Place(TestMaps.At(cell), Me, PieceType.Line);
         }
 
-        if (revealed)
+        if (mapRelic is not null)
         {
-            match.Board.Place(TestMaps.At("J7"), Me, PieceType.Basic);
-            match.Relics.Reveal(match.Board, 5);
+            match.Board.AttachRelic(TestMaps.At(mapRelic), RelicToken.Spawned(0, RelicKind.Command));
         }
 
         match.Debug.Recalculate();
         match.Debug.SeedHand(Me, (PieceType.Line, 3), (PieceType.Basic, 3), (PieceType.Sentry, 3));
-        Assert.Equal(revealed, match.Relics.IsRevealed(TestMaps.At("J7")));
         return match;
     }
 
     [Fact]
-    public void 已揭示连营计入预演()
+    public void 拾取的信物计入预演()
     {
-        // 规格 Scenario：A 已控制一枚已揭示的连营，暂放一枚连珠子把长度 2 的线（D7–E7）延长为 3（F7）→ 预演显示该线提供 6 + 3 = 9 点连珠加值。
-        // 预演前后势力都按同一份"已揭示内容"算：势力变化 = 连珠 (2 + 2) → (6 + 3) 的 +5、基础 +1，另加领地变化（与结算后势力独立相减比对）。
-        // 变异 MC-P1（预演不传已揭示内容）应红。
-        MatchFlow match = Match(revealed: true, "D7", "E7");
+        // relic-redesign D1 / D3：A 暂放一枚连珠子 F7，把长度 2 的线（D7–E7）延长为 3；F7 空格上有一件地图信物号令 → 落子即拾取。
+        // 预演中该棋串含号令的信物位置加值 ⌊3 / 2⌋ = 1（D3，未校准初值），"将拾取"列出 F7；正式结算后势力与预演逐项相同。
+        // 变异 MC-P1'（BatchPreviewBuilder 用不带信物层的盘面算预演势力）→ 本测试红。
+        MatchFlow match = Match("F7", "D7", "E7");
         StagedBatch batch = match.OpenDeploy();
         Assert.Null(batch.Stage(TestMaps.At("F7"), PieceType.Line));
 
         Core.Preview.BatchPreview preview = match.PreviewCurrentBatch();
 
         GroupOutlook line = preview.OwnGroups.Single(g => g.Stones.Contains(TestMaps.At("D7")));
-        Assert.Equal(9, line.Power!.LineBonus);
-        Assert.Empty(preview.WillReveal);
+        Assert.Equal((6, 1), (line.Power!.LineBonus, line.Power.RelicPositionBonus));
+        Assert.Equal([TestMaps.At("F7")], preview.WillPickUp.Select(r => r.Cell));
+        Assert.Equal(RelicKind.Command, preview.WillPickUp.Single().Token.Kind);
         PowerChange mine = preview.PowerChanges.Single(c => c.Player == Me);
-        Assert.Equal(match.Scoreboard.Latest!.Of(Me).Total, mine.Before);   // 预演的"之前"与正式势力榜一致（已结算盘面上已揭示 = 真实）
+        Assert.Equal(match.Scoreboard.Latest!.Of(Me).Total, mine.Before);
 
         Assert.True(match.Confirm().Confirmed);
-        Assert.Equal(mine.After, match.Scoreboard.Latest!.Of(Me).Total);   // 已揭示的计分信物：预演与结算相同
+        Assert.Equal(mine.After, match.Scoreboard.Latest!.Of(Me).Total);
+        Assert.Equal(1, match.Scoreboard.Latest!.GroupContaining(Me, "D7").RelicPositionBonus);
     }
 
     [Fact]
-    public void 将揭示的连营不计入预演()
+    public void 不落在信物上时没有将拾取()
     {
-        // 规格 Scenario：A 的暂放（J6 普通子）将首次覆盖一枚未揭示的连营 J7 并唯一覆盖它 → 预演中 A 的势力不含连营加成（D7–F7 长 3 的线仍是 6），
-        // 该信物只显示为"将揭示"；正式结算后 A 的势力含连营加成（6 + 3 = 9），二者之差恰是这 3 点。
-        // 变异 MC-P2（预演改传真实内容 TrueContents()）应红。
-        MatchFlow match = Match(revealed: false, "D7", "E7", "F7");
+        // 反面：同一局面暂放 G8（不在信物格上）→ "将拾取"为空，预演棋串没有信物位置加值。
+        MatchFlow match = Match("F7", "D7", "E7");
         StagedBatch batch = match.OpenDeploy();
-        Assert.Null(batch.Stage(TestMaps.At("J6"), PieceType.Basic));
+        Assert.Null(batch.Stage(TestMaps.At("G8"), PieceType.Line));
 
         Core.Preview.BatchPreview preview = match.PreviewCurrentBatch();
 
-        Assert.Equal([TestMaps.At("J7")], preview.WillReveal);
-        Assert.Equal(6, preview.OwnGroups.Single(g => g.Stones.Contains(TestMaps.At("D7"))).Power!.LineBonus);
-        PowerChange mine = preview.PowerChanges.Single(c => c.Player == Me);
-
-        Assert.True(match.Confirm().Confirmed);
-        Assert.True(match.Relics.IsRevealed(TestMaps.At("J7")));
-        PowerSnapshot settled = match.Scoreboard.Latest!;
-        Assert.Equal(9, settled.GroupContaining(Me, "D7").LineBonus);
-        Assert.Equal(3, settled.Of(Me).Total - mine.After);
+        Assert.Empty(preview.WillPickUp);
+        Assert.All(preview.OwnGroups, g => Assert.Equal(0, g.Power!.RelicPositionBonus));
     }
 
     [Fact]
     public void 新棋子的位置加值计入预演()
     {
         // Requirement 正文：预演的棋串军势含四种新棋子的位置加值。暂放哨兵子 H7，气边邻接 P1 的 H6、H8 → 预演棋串的哨兵加值 4，与结算后一致。
-        MatchFlow match = Match(revealed: false).Stones(TestMaps.P1, "H6", "H8");
+        MatchFlow match = Match(null).Stones(TestMaps.P1, "H6", "H8");
         StagedBatch batch = match.OpenDeploy();
         Assert.Null(batch.Stage(TestMaps.At("H7"), PieceType.Sentry));
 

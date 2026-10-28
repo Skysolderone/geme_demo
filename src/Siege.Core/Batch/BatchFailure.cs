@@ -53,6 +53,12 @@ public enum BatchFailureKind
     /// 或所在棋串不再是已确定活形。
     /// </summary>
     BreaksLife,
+
+    /// <summary>
+    /// 带入信物挂出非法（relic-redesign R13 / R14，预演第 1 步）：清单下标不是本人未挂出的带入件、同一件在本批挂两次，
+    /// 或落点上已有地图信物（落子即拾取，每枚棋子至多 1 件）。
+    /// </summary>
+    CarriedRelicIllegal,
 }
 
 /// <summary>
@@ -117,6 +123,15 @@ public sealed record BatchFailure(
     internal static BatchFailure DuplicateEdit(Coord c, TerrainEdit edit) =>
         new(BatchFailureKind.DuplicateEditInBatch,
             $"同一批次内重复的改造目标：{edit}。", [c, .. edit.Cells.Where(t => t != c)]);
+
+    internal static BatchFailure CarriedUnavailable(Coord c, int index) =>
+        new(BatchFailureKind.CarriedRelicIllegal, $"带入信物不可挂出：{c.ToNotation()} 指定的带入清单第 {index + 1} 件不存在或已挂出。", [c]);
+
+    internal static BatchFailure CarriedTwice(Coord c, int index) =>
+        new(BatchFailureKind.CarriedRelicIllegal, $"同一件带入信物不能挂两次：带入清单第 {index + 1} 件在本批次已挂在别的落点（{c.ToNotation()}）。", [c]);
+
+    internal static BatchFailure CarriedOnRelic(Coord c) =>
+        new(BatchFailureKind.CarriedRelicIllegal, $"每枚棋子至多 1 件信物：{c.ToNotation()} 上已有地图信物（落子即拾取），不能再挂带入件。", [c]);
 
     internal static BatchFailure LifeForbidden(Coord c, PlayerId owner, ImmutableArray<Coord> group) =>
         new(BatchFailureKind.LifeForbidden,

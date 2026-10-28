@@ -20,24 +20,6 @@ public class 地图静态数据Tests
     }
 
     [Fact]
-    public void 信物格只记录位置与分区不含内容()
-    {
-        // 地图数据里 MUST NOT 有"信物类型/强度"字段——那是信物系统按对局种子生成的。
-        // 用反射守门：给 RelicCellSpec 加任何内容字段都会让这个测试红。
-        // （只断言"Zone 是两个枚举值之一"是恒真的，枚举本来就只有两个成员。）
-        string[] members = [.. typeof(RelicCellSpec).GetProperties().Select(p => p.Name).Order()];
-
-        Assert.Equal(["Budget", "Zone"], members);
-
-        // 地图上与信物有关的字段只有"哪些格是信物格"这一项。
-        string[] relicFields = [.. typeof(MapData).GetProperties()
-            .Select(p => p.Name)
-            .Where(n => n.Contains("Relic", StringComparison.Ordinal))
-            .Order()];
-        Assert.Equal(["RelicCells"], relicFields);
-    }
-
-    [Fact]
     public void 地图基准校验通过()
     {
         // retire-legacy-maps 1.6：原为 v5 基准图通过校验；改为链接档生成图 link:1 通过校验（规格 Scenario「生成图经过校验」）。

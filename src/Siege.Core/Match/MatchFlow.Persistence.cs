@@ -5,10 +5,8 @@ using System.Text.Json.Serialization;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
@@ -19,7 +17,8 @@ namespace Siege.Core.Match;
 /// <remarks>
 /// <para><b>存档边界 = 小回合边界</b>：插旗阶段、两个小回合之间（<see cref="TurnStage.Idle"/>）或已结束时可存档；小回合进行中不可——
 /// 进行中的征募面板与暂放批次属于该玩家的私有瞬态，手牌层不导出它们。</para>
-/// <para>随机子流只记录消费次数，恢复时按种子重新派生再推进；信物内容由 <c>relic-gen</c> 子流重算，不存内容。
+/// <para>随机子流只记录消费次数，恢复时按种子重新派生再推进。挂在棋子上的信物随盘面序列化（信物段）往返；刷新的预告与落位记录存在
+/// <see cref="MatchSaveData.RelicSpawn"/> 段（预告是按预告那一刻的盘面抽的，不能复算）。旧信物账本（<c>Relics</c>）存档不再支持（relic-redesign R26）。
 /// 事件日志与征募记录是遥测，不随存档往返；势力榜恢复后按盘面重算。</para>
 /// </remarks>
 public sealed partial class MatchFlow
@@ -50,7 +49,7 @@ public sealed partial class MatchFlow
             ContentSet = ContentSet,
             ScoringVersion = ScoringVersion,
             CarryInOut = CarryInOut,
-            CarryIns = [.. CarryIns.Select(kv => new CarryInSaveData { Player = kv.Key.Value, Kind = kv.Value.Kind, Type = kv.Value.Type })],
+            CarryIns = ExportCarried(),
             RoundCap = RoundCap,
             // 实现裁决 B5：模式与结算流程状态恒写出（retire-legacy-rules R10 = A：模式照写常量 "Link"；open-map 段 B 删配对 / 链接 / K 字段，段名不变）。
             Mode = MatchSaveData.LinkMode,
@@ -79,7 +78,7 @@ public sealed partial class MatchFlow
             })],
             Board = Board.Serialize(),
             History = History.Serialize(),
-            Relics = Relics.ExportState(),
+            RelicSpawn = ExportRelics(),
             Hands = Hands.Export(),
             Initiative = [.. _initiative],
             Resignations = [.. _resignations.Select(r => new ResignationSaveData
@@ -95,10 +94,6 @@ public sealed partial class MatchFlow
                 EffectTypeSlots = r.Effects.TypeSlots,
                 DeployLimit = r.Effects.DeployLimit,
                 HeldTypeCount = r.Effects.HeldTypeCount,
-                Emblems = [.. r.Effects.EmblemCounts.Select(kv => new HandStockEntry(kv.Key, kv.Value))],
-                RelaySources = [.. r.Effects.RelaySources.Select(kv => new RelaySourceSaveData { Relic = kv.Key.ToNotation(), Bonus = kv.Value })],
-                WorkshopActive = r.Effects.WorkshopActive,
-                ControlledRelics = [.. r.ControlledRelics.Select(c => c.ToNotation())],
                 Power = r.Power,
                 RankAtResign = r.RankAtResign,
             })],
@@ -113,7 +108,7 @@ public sealed partial class MatchFlow
                     Group = s.Group,
                     Status = s.Input.Status,
                     Power = s.Input.Power,
-                    ControlledRelics = s.Input.ControlledRelics,
+                    HeldRelics = s.Input.HeldRelics,
                     ExclusiveCells = s.Input.ExclusiveCells,
                     Stones = s.Input.Stones,
                     EliminationOrder = s.Input.EliminationOrder,
@@ -158,22 +153,19 @@ public sealed partial class MatchFlow
     {
         RequireMap(map, data);
         GameSeed seed = GameSeed.Parse(data.Seed!);
-        // more-pieces-relics D8：存档只存种子，信物分布按存档的内容集重新生成——缺字段的旧存档按 v1（与 RestoreCore 的回填同一口径），
-        // 否则旧存档会按新局缺省 v2 的权重表重建出另一份分布。
-        ContentSet contentSet = ContentSets.RequireValid(data.ContentSet ?? ContentSets.Legacy);
-        // B5：盘面先建空，再写入棋子与改造（见 RestoreLink）。
+        // B5：盘面先建空，再写入棋子、改造与信物层（见 RestoreLink）。
         GameBoard board = GameBoard.Load(map);
-        return RestoreCore(map, board, seed, RelicGenerator.Generate(map, seed, contentSet), data);
+        return RestoreCore(map, board, seed, data);
     }
 
-    /// <summary>测试专用：在未校验的合成地图与手工信物分布上恢复。同样只接受带链接模式字段的存档（retire-legacy-rules：不再有"缺字段即旧模式"的读法）。</summary>
-    internal static MatchFlow RestoreUnvalidated(MapData map, RelicGenerationRecord relics, string json)
+    /// <summary>测试专用：在未校验的合成地图上恢复。同样只接受带链接模式字段的存档（retire-legacy-rules：不再有"缺字段即旧模式"的读法）。</summary>
+    internal static MatchFlow RestoreUnvalidated(MapData map, string json)
     {
         MatchSaveData data = Parse(json);
         RequireLinkModeField(data);
         RequireMap(map, data);
         GameBoard board = GameBoard.LoadUnvalidated(map);
-        return RestoreCore(map, board, GameSeed.Parse(data.Seed!), relics, data);
+        return RestoreCore(map, board, GameSeed.Parse(data.Seed!), data);
     }
 
     /// <summary>
@@ -221,6 +213,7 @@ public sealed partial class MatchFlow
         ("CatchUpRecruit", "落后者征募补偿开关已在 restore-go-core-rules（裁决 #7 / #15）删除。"),
         ("DominanceCandidate", "势力碾压已在 restore-go-core-rules 删除，存档不再有碾压候选。"),
         ("DominancePending", "势力碾压已在 restore-go-core-rules 删除，存档不再有待回应名单。"),
+        ("Relics", "旧信物账本（静态信物格的揭示与控制）已在 relic-redesign 整体移除（R26：旧存档不兼容），信物改为挂在棋子上、随盘面存档。"),
     ];
 
     private static void RequireMap(MapData map, MatchSaveData data)
@@ -244,7 +237,7 @@ public sealed partial class MatchFlow
         }
     }
 
-    private static MatchFlow RestoreCore(MapData map, GameBoard board, GameSeed seed, RelicGenerationRecord relicRecord, MatchSaveData data)
+    private static MatchFlow RestoreCore(MapData map, GameBoard board, GameSeed seed, MatchSaveData data)
     {
         ImmutableArray<PlayerId> players = [.. data.Players.Select(p => new PlayerId(p.Player)).Order()];
         // artisan-terrain-edit R-2 / R-6：旧存档没有匠人权重字段 → 按标准局初值 10 回填，并在 ArtisanWeightBackfilled 上留痕。
@@ -265,7 +258,7 @@ public sealed partial class MatchFlow
             ContentSet = data.ContentSet ?? ContentSets.Legacy,
             ScoringVersion = data.ScoringVersion ?? ScoringVersions.Legacy,
             CarryInOut = data.CarryInOut ?? false,
-            CarryIns = (data.CarryIns ?? []).ToImmutableSortedDictionary(c => new PlayerId(c.Player), c => new CarryIn(c.Kind, c.Type)),
+            CarryIns = ImportLoadouts(data.CarryIns),
             RoundCap = data.RoundCap ?? MatchOptions.DefaultRoundCap,
         };
         // 与建局同一处校验（裁决 B1 / S1 → map-expand-25 D1）：只能是链接图、人数恰等于地图人数。
@@ -290,13 +283,18 @@ public sealed partial class MatchFlow
             throw new FormatException($"存档的大回合上限不合法：{ex.Message}", ex);
         }
 
-        // 与建局同一处校验；征召签记录的类型必须与种子抽签一致（存档记录的是结果，不再抽一次写入）。
-        _ = CarrySetup.Resolve(options.CarryInOut, options.CarryIns, players, options.ContentSet, seed);
-        _ = data.Relics ?? throw new FormatException("存档缺少信物账本。");
+        // 与建局同一处校验（relic-redesign D5：清单 ≤ 5 件、保险 ≤ 2、带入者在名册）。
+        try
+        {
+            RequireValidCarryIns(options.CarryInOut, options.CarryIns, players);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new FormatException($"存档的带入清单不合法：{ex.Message}", ex);
+        }
+
         var match = new MatchFlow(
             map, board, seed, players,
-            // 揭示记录在 RestoreLink 里恢复。
-            new RelicLedger(relicRecord),
             HandLedger.Restore(seed, data.Hands ?? throw new FormatException("存档缺少手牌账本。"), options.ArtisanWeight, options.ContentSet),
             BoardHistory.Deserialize(data.History ?? string.Empty),
             options);
@@ -308,6 +306,7 @@ public sealed partial class MatchFlow
         // map-generator：旧存档没有地图内容摘要 → 恢复时跳过了"地图不一致"的比对，在 MapDigestBackfilled 上留痕（再存档会按当前地图补写）。
         match.MapDigestBackfilled = data.MapDigest is null;
         match.RestoreLink(data);
+        match.RestoreCarried(data.CarryIns);
 
         foreach (PlayerSaveData saved in data.Players)
         {
@@ -348,20 +347,16 @@ public sealed partial class MatchFlow
         {
             var player = new PlayerId(r.Player);
             var entries = r.Hand.ToImmutableSortedDictionary(h => h.Type, h => new HandEntry(h.Carried, h.Gained));
-            // more-pieces-relics D12 / Migration 3：旧存档的弃赛快照没有驿站来源与工坊标记 → 缺省为空 / 否。
-            var effects = new EffectSnapshot(player, r.MajorRound, r.RevealCount, r.FreePickCount, r.EffectTypeSlots, r.DeployLimit,
-                r.Emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), r.HeldTypeCount,
-                (r.RelaySources ?? []).ToImmutableSortedDictionary(s => Coord.Parse(s.Relic!), s => s.Bonus),
-                r.WorkshopActive ?? false);
+            var effects = new EffectSnapshot(player, r.MajorRound, r.RevealCount, r.FreePickCount, r.EffectTypeSlots, r.DeployLimit, r.HeldTypeCount);
             match._resignations.Add(new ResignationSnapshot(player, r.MajorRound, r.Board!, new HandPrivateView(player, entries, r.HandPhase, r.TypeSlots),
-                effects, [.. r.ControlledRelics.Select(Coord.Parse)], r.Power, r.RankAtResign));
+                effects, r.Power, r.RankAtResign));
         }
 
         if (data.Result is { } result)
         {
             match.Result = new MatchResult(result.Reason, result.MajorRound, [.. result.Standings.Select(s =>
                 new Standing(s.Rank, new PlayerId(s.Player), s.Group,
-                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.ControlledRelics, s.ExclusiveCells, s.Stones, s.EliminationOrder)
+                    new StandingInput(new PlayerId(s.Player), s.Status, s.Power, s.HeldRelics, s.ExclusiveCells, s.Stones, s.EliminationOrder)
                     {
                         Reason = s.Reason,
                     }))]);
@@ -411,7 +406,7 @@ public sealed class MatchSaveData
     /// </summary>
     public bool? CarryInOut { get; set; }
 
-    /// <summary>各玩家的带入（征召签记录抽得的类型）；旧存档无此字段（<c>null</c>）→ 全员无带入。</summary>
+    /// <summary>各玩家的带入清单与逐件本局编号（relic-redesign W2；未挂出为 <c>null</c>）；无此字段（<c>null</c>）→ 全员无带入。</summary>
     public List<CarryInSaveData>? CarryIns { get; set; }
 
     /// <summary>
@@ -462,7 +457,8 @@ public sealed class MatchSaveData
 
     public string? History { get; set; }
 
-    public RelicLedgerState? Relics { get; set; }
+    /// <summary>信物刷新段（relic-redesign W1）：预告与落位记录、编号游标。新存档恒写出；缺段即拒绝恢复。</summary>
+    public RelicSpawnSaveData? RelicSpawn { get; set; }
 
     public HandLedgerState? Hands { get; set; }
 
@@ -532,38 +528,10 @@ public sealed class ResignationSaveData
 
     public int HeldTypeCount { get; set; }
 
-    public List<HandStockEntry> Emblems { get; set; } = [];
-
-    /// <summary>弃赛快照的驿站来源（more-pieces-relics）；旧存档无此字段（<c>null</c>）→ 空。</summary>
-    public List<RelaySourceSaveData>? RelaySources { get; set; }
-
-    /// <summary>弃赛快照的工坊标记（more-pieces-relics）；旧存档无此字段（<c>null</c>）→ 否。</summary>
-    public bool? WorkshopActive { get; set; }
-
-    public List<string> ControlledRelics { get; set; } = [];
-
     public BigInteger Power { get; set; }
 
     /// <summary>弃赛时势力名次（carry-in-out D5）；旧存档无此字段（<c>null</c>）→ 恢复后为空，MUST NOT 重算。</summary>
     public int? RankAtResign { get; set; }
-}
-
-/// <summary>一名玩家的带入：玩家编号、补给种类（按名字写出）与换入类型（备用子为 <c>null</c>）。</summary>
-public sealed class CarryInSaveData
-{
-    public int Player { get; set; }
-
-    public Carry.SupplyKind Kind { get; set; }
-
-    public PieceType? Type { get; set; }
-}
-
-/// <summary>一枚驿站的加成来源：驿站坐标（围棋记法）与该枚的展示数加成。</summary>
-public sealed class RelaySourceSaveData
-{
-    public string? Relic { get; set; }
-
-    public int Bonus { get; set; }
 }
 
 public sealed class StandingSaveData
@@ -578,7 +546,8 @@ public sealed class StandingSaveData
 
     public BigInteger Power { get; set; }
 
-    public int ControlledRelics { get; set; }
+    /// <summary>持有信物数（并列链第二级，relic-redesign R24）。</summary>
+    public int HeldRelics { get; set; }
 
     /// <summary>独占空格数（并列链第三级）。</summary>
     public int ExclusiveCells { get; set; }

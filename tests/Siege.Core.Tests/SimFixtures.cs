@@ -137,7 +137,7 @@ internal static class SimFixtures
     // ---------- 合成日志（分析口径用；不跑对局） ----------
 
     internal static MatchLog Synthetic(
-        ulong seed, IEnumerable<TurnSnapshot> turns, IEnumerable<LogEvent> events, LogResult result, int players = 4, int[]? zones = null, bool relicsConverged = true, RelicEntry[]? relics = null,
+        ulong seed, IEnumerable<TurnSnapshot> turns, IEnumerable<LogEvent> events, LogResult result, int players = 4, int[]? zones = null,
         int? playableCells = null, int? artisanWeight = null, int? zoneCount = null) =>
         new()
         {
@@ -152,8 +152,6 @@ internal static class SimFixtures
                 Players = [.. Enumerable.Range(0, players)],
                 Zones = [.. zones ?? Enumerable.Range(0, players)],
                 FirstOrder = [.. Enumerable.Range(0, players)],
-                Relics = [.. relics ?? []],
-                RelicsConverged = relicsConverged,
                 Retention = EventRetention.Full,
             },
             Turns = [.. turns],

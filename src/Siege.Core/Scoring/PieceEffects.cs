@@ -103,13 +103,7 @@ public static class PieceEffects
     /// 经气边相邻的同玩家棋子必然同串，因此只需检查所有者与类型，无需再做棋串判定。
     /// 方向步进从 <see cref="GameBoard.LibertyNeighbors"/> 的结果中挑选，不在此处手写邻居偏移或地形过滤。
     /// </remarks>
-    public static int LineBonus(GameBoard board, Group group) => LineBonus(board, group, encampments: 0);
-
-    /// <summary>
-    /// 同 <see cref="LineBonus(GameBoard, Group)"/>，另计连营（more-pieces-relics D3）：棋串所有者控制 <paramref name="encampments"/> 枚连营时，
-    /// 每条长度 <c>L ≥ 2</c> 的线再加 <c>encampments × L</c>，即每线 <c>L × (L − 1) + k × L</c>。额外加值属于连珠来源、随之被倍率放大。
-    /// </summary>
-    public static int LineBonus(GameBoard board, Group group, int encampments)
+    public static int LineBonus(GameBoard board, Group group)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(group);
@@ -122,8 +116,8 @@ public static class PieceEffects
                 continue;
             }
 
-            bonus += RunBonus(board, stone, group.Owner, dx: 1, dy: 0, encampments);
-            bonus += RunBonus(board, stone, group.Owner, dx: 0, dy: 1, encampments);
+            bonus += RunBonus(board, stone, group.Owner, dx: 1, dy: 0);
+            bonus += RunBonus(board, stone, group.Owner, dx: 0, dy: 1);
         }
 
         return bonus;
@@ -133,19 +127,21 @@ public static class PieceEffects
     /// 协同子位置加值：棋串中每枚协同子按"该棋串中除协同子以外的棋子类型种数"每种 2 点，
     /// 即 <c>协同子数量 × 其他类型数 × 2</c>。纯协同子棋串为 0（裁决记录 2）。
     /// </summary>
-    public static int SynergyBonus(GameBoard board, Group group) => SynergyBonus(board, group, pincers: 0);
+    public static int SynergyBonus(GameBoard board, Group group) => SynergyBonus(board, group, extraTypes: 0);
 
     /// <summary>协同子每种其他类型的基础加值。</summary>
     public const int SynergyPerType = 2;
 
     /// <summary>
-    /// 同 <see cref="SynergyBonus(GameBoard, Group)"/>，另计犄角（more-pieces-relics D3）：棋串所有者控制 <paramref name="pincers"/> 枚犄角时，
-    /// 每种类型的加值由 2 变为 <c>2 + k</c>，即 <c>协同子数量 × 其他类型数 × (2 + k)</c>。额外加值属于协同来源、随之被倍率放大。
+    /// 同 <see cref="SynergyBonus(GameBoard, Group)"/>，另计百变（relic-redesign D3）：该串每枚协同子计"除协同子外的类型种数"时额外加 <paramref name="extraTypes"/> 种
+    /// （每件百变 +1，不论百变挂在哪种棋子上，包括挂在协同子自己身上），即 <c>协同子数量 × (其他类型数 + extraTypes) × 2</c>。<paramref name="extraTypes"/> 为 0 时与原式逐项相同。
+    /// （旧计分信物犄角随旧信物系统删除，relic-redesign D4。）
     /// </summary>
-    public static int SynergyBonus(GameBoard board, Group group, int pincers)
+    public static int SynergyBonus(GameBoard board, Group group, int extraTypes)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(group);
+        ArgumentOutOfRangeException.ThrowIfNegative(extraTypes);
 
         int synergyCount = 0;
         var otherTypes = new HashSet<PieceType>();
@@ -162,7 +158,7 @@ public static class PieceEffects
             }
         }
 
-        return synergyCount * otherTypes.Count * (SynergyPerType + pincers);
+        return synergyCount * (otherTypes.Count + extraTypes) * SynergyPerType;
     }
 
     /// <summary>
@@ -196,8 +192,8 @@ public static class PieceEffects
         return bonus;
     }
 
-    /// <summary>旗手子每个信物格的加值（more-pieces-relics 裁决记录）。</summary>
-    public const int BannerPerRelicCell = 3;
+    /// <summary>旗手子：所在棋串每挂 1 件信物的加值（relic-redesign R23；原 more-pieces-relics"每个信物格 3"）。</summary>
+    public const int BannerPerRelic = 3;
 
     /// <summary>哨兵子每个气边相邻非己方棋子的加值。</summary>
     public const int SentryPerForeignStone = 2;
@@ -206,39 +202,16 @@ public static class PieceEffects
     public const int BoundaryPerExclusiveCell = 1;
 
     /// <summary>
-    /// 旗手子位置加值（more-pieces-relics D1，唯一实现）：棋串中每枚旗手子 b，统计「b 所在格 ∪ 与 b 有气边的格」中的信物格个数 k，提供 <c>3 × k</c>。
+    /// 旗手子位置加值（relic-redesign R23，唯一实现）：棋串中每枚旗手子提供 <c>3 × k</c>，k = 挂在<b>本串</b>棋子上的信物件数（盘面信物层，
+    /// 经 <see cref="PieceRelics.RelicEffects.Tally"/> 数出；不看信物种类、带入者与保险）。多枚旗手子各计一次。不再看静态信物格位置（旧口径随旧信物系统删除）。
     /// </summary>
-    /// <remarks>
-    /// 信物格按地图静态位置（<see cref="Cell.IsRelicCell"/>，来自 <see cref="MapData.RelicCells"/>）判定，MUST NOT 读揭示状态、内容或控制者；
-    /// 邻格只经 <see cref="GameBoard.LibertyNeighbors"/>（栅栏、崖壁、未架桥深水隔开的信物格不计），不另写几何邻接或覆盖判断。
-    /// 集合里每个格至多出现一次，同一信物格对同一枚旗手子只计一次；对不同旗手子各计一次。
-    /// </remarks>
     public static int BannerBonus(GameBoard board, Group group)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(group);
 
-        int bonus = 0;
-        foreach (Coord stone in group.Stones)
-        {
-            if (TypeAt(board, stone) != PieceType.Bannerman)
-            {
-                continue;
-            }
-
-            int relicCells = board[stone].IsRelicCell ? 1 : 0;
-            foreach (Coord n in board.LibertyNeighbors(stone))
-            {
-                if (board[n].IsRelicCell)
-                {
-                    relicCells++;
-                }
-            }
-
-            bonus += BannerPerRelicCell * relicCells;
-        }
-
-        return bonus;
+        int bannermen = group.Stones.Count(stone => TypeAt(board, stone) == PieceType.Bannerman);
+        return bannermen == 0 ? 0 : bannermen * BannerPerRelic * PieceRelics.RelicEffects.Tally(board, group).Total;
     }
 
     /// <summary>
@@ -333,7 +306,7 @@ public static class PieceEffects
     }
 
     /// <summary>从 <paramref name="start"/> 沿 (dx, dy) 方向的极长连珠线；若 <paramref name="start"/> 不是该线起点则返回 0，避免子区间重复计分。</summary>
-    private static int RunBonus(GameBoard board, Coord start, PlayerId owner, int dx, int dy, int encampments)
+    private static int RunBonus(GameBoard board, Coord start, PlayerId owner, int dx, int dy)
     {
         if (Step(board, start, -dx, -dy) is { } previous && IsLineStoneOf(board, previous, owner))
         {
@@ -348,7 +321,7 @@ public static class PieceEffects
             current = next;
         }
 
-        return length >= 2 ? (length * (length - 1)) + (encampments * length) : 0;
+        return length >= 2 ? length * (length - 1) : 0;
     }
 
     /// <summary>在气边邻居中挑出位于 (dx, dy) 方向的那一格；越界或无气边（崖壁 / 深水 / 栅栏）则为 <c>null</c>。</summary>

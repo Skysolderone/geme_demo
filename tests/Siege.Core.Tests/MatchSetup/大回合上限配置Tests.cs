@@ -69,7 +69,7 @@ public class 大回合上限配置Tests
         string json = match.Serialize();
         Assert.Equal(60, JsonNode.Parse(json)!["RoundCap"]!.GetValue<int>());
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
         Assert.Equal(60, restored.RoundCap);
         Assert.Equal(60, restored.Options.RoundCap);
         Assert.Equal(60, restored.Publish().RoundCap);
@@ -78,7 +78,7 @@ public class 大回合上限配置Tests
 
         JsonObject node = JsonNode.Parse(json)!.AsObject();
         Assert.True(node.Remove("RoundCap"));
-        MatchFlow legacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, node.ToJsonString());
+        MatchFlow legacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, node.ToJsonString());
         Assert.Equal(100, legacy.RoundCap);
         Assert.True(legacy.RoundCapBackfilled);
         Assert.Equal(100, legacy.Publish().RoundCap);
@@ -94,7 +94,7 @@ public class 大回合上限配置Tests
 
         // 存档里的负数同样拒绝（与建局同一处校验）。
         node["RoundCap"] = -5;
-        Assert.Throws<FormatException>(() => MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, node.ToJsonString()));
+        Assert.Throws<FormatException>(() => MatchFlow.RestoreUnvalidated(match.Board.BaseMap, node.ToJsonString()));
 
         static string State(MatchFlow m) => string.Join(" ", m.PlayerStates.Select(s => $"{s.Player}:{s.Status}:{s.BirthZone}")) + "|" + m.MajorRound + "|" + m.Board.Serialize();
     }

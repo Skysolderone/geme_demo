@@ -2,7 +2,7 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 using static Siege.Core.Tests.LinkModeFixtures;
 
 namespace Siege.Core.Tests.TurnSequence;
@@ -143,20 +143,22 @@ public class 战场内合法落子范围Tests
     [Fact]
     public void 构筑期内规则照常()
     {
-        // Scenario（turn-sequence「构筑保护期的落子限制」构筑期内规则照常）：第 3 大回合两名共享出生棋盘的玩家互相围杀 → 提子、覆盖重算、信物揭示与势力更新全部正常执行。
+        // Scenario（turn-sequence「构筑保护期的落子限制」构筑期内规则照常）：第 3 大回合两名共享出生棋盘的玩家互相围杀 → 提子、覆盖重算、信物拾取 / 掉落与势力更新全部正常执行
+        // （relic-redesign W1：原"信物揭示"随旧信物删除，改为 P1 的 C3 挂着的信物在提子后掉在原格、P0 落在地图信物 D4 上即拾取）。
         // retire-legacy-rules 1.5：由「构筑保护期的落子限制Tests.保护期内规则照常」迁来（原文件整删）。载体换为平坦 8×8 链接档图，P0 / P1 同锁棋盘 0，
         // 原 9×9 的 A1 / B1 / A2 / B2 平移 (+2, +2) 为 C3 / D3 / C4 / D4，断言不变。
-        // 变异验证 M-T9：OnRevealRelics 在保护期内跳过揭示 → 红 1（本测试）。
-        MatchFlow match = PlainStarted(zones: [0, 0, 2, 3], relics: [("D4", RelicFixtures.Depot())])
+        MatchFlow match = PlainStarted(zones: [0, 0, 2, 3])
             .AtRound(3, [P0, P1, P2, P3])
             .Stones(P1, "C3");
-        Assert.False(match.Relics.IsRevealed(TestMaps.At("D4")));
+        match.Board.AttachRelic(TestMaps.At("C3"), RelicToken.Spawned(0, RelicKind.WarDrum));
+        match.Board.AttachRelic(TestMaps.At("D3"), RelicToken.Spawned(1, RelicKind.Command));
+        match.Debug.Recalculate();
 
         match.PlayTurn("D3", "C4");
 
         Assert.Null(match.Board[TestMaps.At("C3")].Occupant);                       // 提子
-        Assert.True(match.Relics.IsRevealed(TestMaps.At("D4")));                     // 信物揭示
-        Assert.Equal(RelicControlKind.Controlled, match.Relics.ControlOf(TestMaps.At("D4")).Kind);
+        Assert.Equal(RelicKind.WarDrum, match.Board.RelicAt(TestMaps.At("C3"))?.Kind);   // 持物棋子被提，信物掉在原格
+        Assert.Equal(1, match.Board.HeldRelicCount(P0));                             // D3 落子即拾取号令
         Assert.Contains(TestMaps.At("C3"), match.Scoreboard.Latest!.Of(P0).ExclusiveCells);   // 覆盖重算
         Assert.Equal(0, match.Scoreboard.Latest.Of(P1).Total);                                // 势力更新
         Assert.True(match.Scoreboard.Latest.Of(P0).Total > 0);

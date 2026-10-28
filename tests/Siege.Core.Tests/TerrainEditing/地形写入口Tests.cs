@@ -144,7 +144,6 @@ public class 地形写入口Tests
         Assert.Equal(Surface.Grass, board.Map.SurfaceAt(TestMaps.At("F4")));
         Assert.True(board.Map.HasFence(TestMaps.At("H6"), TestMaps.At("G6")));
         Assert.Equal(before.Obstacles, board.Map.Obstacles);
-        Assert.Equal(before.RelicCells, board.Map.RelicCells);
     }
 
     [Fact]

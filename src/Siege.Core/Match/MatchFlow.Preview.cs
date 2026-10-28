@@ -2,26 +2,26 @@ using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Preview;
-using Siege.Core.Relics;
+using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
 
 /// <summary>
 /// 表现层的只读入口（tactical-ui 裁决 9）：富预演与公开补充载荷。本文件只<b>读</b>对局状态、只调用既有唯一实现，
-/// 任何需要"试算"的步骤都在副本上进行（盘面副本由预演内部 Clone，信物账本副本经 <see cref="RelicLedger.Copy"/> 构造），
-/// 正式盘面、历史、账本、势力榜、事件与随机子流一律不动。
+/// 任何需要"试算"的步骤都在副本上进行（盘面副本由预演内部 Clone，信物层随副本复制），
+/// 正式盘面、历史、势力榜、事件与随机子流一律不动。
 /// </summary>
 public sealed partial class MatchFlow
 {
     /// <summary>
-    /// 对当前暂放批次做富预演（tactical-ui D2 / D3）：合法性、提子、结算后己方棋串气位、军势明细、势力与名次变化、将揭示格。
+    /// 对当前暂放批次做富预演（tactical-ui D2 / D3）：合法性、提子、结算后己方棋串气位、军势明细、势力与名次变化。
     /// 只在部署阶段可用；零副作用，可在每次暂放变更后调用。结果含当前行动玩家的暂放，只交给该玩家本人。
     /// </summary>
     public BatchPreview PreviewCurrentBatch()
     {
         RequireStage(TurnStage.Deploy);
-        return BatchPreviewBuilder.Build(Board, _batch!.Context, _batch.Placements, History, Roster, Relics, MajorRound, ScoringVersion);
+        return BatchPreviewBuilder.Build(Board, _batch!.Context, _batch.Placements, History, Roster, ScoringVersion);
     }
 
     /// <summary>
@@ -42,7 +42,7 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 发布公开补充载荷：全盘棋串与气、每名玩家的结构参数及信物来源、本轮顺序明细与下一轮顺序预测。
+    /// 发布公开补充载荷：全盘棋串与气、每名玩家的结构参数、本轮顺序明细与下一轮顺序预测。
     /// 与 <see cref="Publish"/> 在同一时刻调用，二者的 <c>BoardSerialized</c> 一致。任何阶段可用，零副作用。
     /// </summary>
     public PublicSupplement PublishSupplement()
@@ -58,13 +58,11 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 结构参数：数值取自账本副本上的 <see cref="RelicLedger.SnapshotFor(PlayerId, GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, int, int)"/>（唯一实现，
-    /// 副本上的遥测峰值变化不回写正式账本）；来源取同一副本中由该玩家控制的已揭示信物。二者不一致即抛出——
-    /// 控制而未揭示只会出现在绕过结算直接改盘的测试局面里，此时列出来源会泄漏内容，宁可响亮失败。
+    /// 结构参数（restore-go-core-rules D7）：relic-redesign D4 起只有默认基础值，数值取自 <see cref="EffectSnapshot.Defaults"/>（与小回合开始时生成快照的同一份实现），
+    /// 当前值恒等于基础值。非参赛中的玩家为 <c>null</c>。
     /// </summary>
     private ImmutableArray<PlayerStructure> StructuresOf(IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
-        RelicLedger copy = Relics.Copy();   // 副本含账本的活状态（揭示与控制），不从开局生成记录重建
         ImmutableArray<PlayerStructure>.Builder result = ImmutableArray.CreateBuilder<PlayerStructure>(_players.Length);
         foreach (PlayerId player in _players)
         {
@@ -75,51 +73,21 @@ public sealed partial class MatchFlow
                 continue;
             }
 
-            EffectSnapshot snapshot = copy.SnapshotFor(player, Board, roster, Hands.HeldTypeCount(player), MajorRound);
-            ImmutableArray<RelicPublicState> granted = [.. copy.PublicStates().Where(s => s.Control.GrantsEffectTo(player))];
-            if (granted.FirstOrDefault(s => !s.IsRevealed) is { } hidden)
-            {
-                throw new SiegeRuleException($"信物 {hidden.Coord.ToNotation()} 由 {player} 控制却未揭示：盘面未经结算被直接修改。");
-            }
-
+            EffectSnapshot snapshot = EffectSnapshot.Defaults(player, MajorRound, Hands.HeldTypeCount(player));
             result.Add(new PlayerStructure(player, status, new StructureParameters(
-                Parameter(EffectSnapshot.BaseRevealCount, snapshot.RevealCount, RelicType.Prospecting, granted, snapshot.RelaySources),
-                Parameter(EffectSnapshot.BaseFreePickCount, snapshot.FreePickCount, RelicType.Conscription, granted),
-                Parameter(EffectSnapshot.BaseTypeSlots, snapshot.TypeSlots, RelicType.Depot, granted),
-                Parameter(EffectSnapshot.BaseDeployLimitFor(snapshot.MajorRound), snapshot.DeployLimit, RelicType.Command, granted))));
+                new StructureParameter(EffectSnapshot.BaseRevealCount, snapshot.RevealCount),
+                new StructureParameter(EffectSnapshot.BaseFreePickCount, snapshot.FreePickCount),
+                new StructureParameter(EffectSnapshot.BaseTypeSlots, snapshot.TypeSlots),
+                new StructureParameter(EffectSnapshot.BaseDeployLimitFor(snapshot.MajorRound), snapshot.DeployLimit))));
         }
 
         return result.MoveToImmutable();
     }
 
     /// <summary>
-    /// 来源只有两类（restore-go-core-rules D7）：<paramref name="baseValue"/>（默认值 / 分阶段基础值）与各枚信物。
-    /// 展示数另含驿站（more-pieces-relics D4）：逐枚列出，每枚的加成直接取快照的 <see cref="EffectSnapshot.RelaySources"/>（唯一实现在账本），不在此重算。
-    /// </summary>
-    private static StructureParameter Parameter(
-        int baseValue, int value, RelicType type, ImmutableArray<RelicPublicState> granted,
-        ImmutableSortedDictionary<Coord, int>? relaySources = null)
-    {
-        ImmutableArray<ParameterSource> sources =
-        [
-            .. granted.Where(s => s.Content!.Value.Type == type).Select(s => new ParameterSource(s.Coord, type, s.Content!.Value.Magnitude)),
-            .. (relaySources ?? ImmutableSortedDictionary<Coord, int>.Empty).Select(kv => new ParameterSource(kv.Key, RelicType.Relay, kv.Value)),
-        ];
-        int relics = sources.Sum(s => s.Magnitude);
-        if (baseValue + relics != value)
-        {
-            throw new SiegeRuleException(
-                $"结构参数来源与效果快照不一致：{type} 基础 {baseValue} + 信物 {relics} ≠ 快照 {value}。");
-        }
-
-        return new StructureParameter(baseValue, value, sources);
-    }
-
-    /// <summary>
     /// 顺序预测（tactical-ui D7）：假设本大回合此刻结束，按 <see cref="EndMajorRound"/> 的同一组输入生成先手值明细与下一轮顺序。
-    /// 势力走 <see cref="PowerCalculator.Compute(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, IReadOnlyDictionary{Coord, RelicType})"/>
-    /// （不经势力榜，避免推进版本号与峰值遥测；与 <see cref="EndMajorRound"/> 同一份真实信物内容——已结算盘面上受控信物必已揭示，不泄露内容），
-    /// 先手修正在账本副本上读取，公式与同值链走 <see cref="InitiativeOrder"/>。
+    /// 势力走 <see cref="PowerCalculator.Compute(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, ScoringVersion)"/>
+    /// （不经势力榜，避免推进版本号与峰值遥测；信物从盘面信物层读，与 <see cref="EndMajorRound"/> 同一口径），公式与同值链走 <see cref="InitiativeOrder"/>。
     /// </summary>
     /// <remarks>
     /// 战场结算（board-link-mode 裁决 S10 / D6）：大回合结束会先做战场结算，所以预测先用与 <c>SettleAtRoundEnd</c> <b>同一份</b>判定（<c>JudgeAtRoundEnd</c>，无副作用）
@@ -134,7 +102,7 @@ public sealed partial class MatchFlow
         }
 
         int completed = MajorRound;
-        PowerSnapshot power = PowerCalculator.Compute(Board, roster, Relics.TrueContents(), ScoringVersion);
+        PowerSnapshot power = PowerCalculator.Compute(Board, roster, ScoringVersion);
         ImmutableArray<BattlefieldVerdict> verdicts = JudgeAtRoundEnd(power, _passedThisRound);
         if (verdicts.Length > 0)
         {
@@ -146,7 +114,7 @@ public sealed partial class MatchFlow
                 return null;
             }
 
-            power = PowerCalculator.Compute(Board, roster, Relics.TrueContents(), ScoringVersion);
+            power = PowerCalculator.Compute(Board, roster, ScoringVersion);
         }
 
         int active = roster.Count(kv => kv.Value == PlayerStatus.Active);
@@ -154,8 +122,6 @@ public sealed partial class MatchFlow
         {
             return null;
         }
-
-        ImmutableSortedDictionary<PlayerId, int> bonuses = Relics.Copy().ReadInitiativeBonuses(Board, roster);
 
         ImmutableArray<InitiativeEntry>.Builder entries = ImmutableArray.CreateBuilder<InitiativeEntry>(active);
         foreach (PlayerId player in _players)
@@ -167,10 +133,9 @@ public sealed partial class MatchFlow
 
             PlayerRecord record = _records[player];
             int rank = power.RankOf(player) ?? throw new SiegeRuleException($"参赛玩家 {player} 没有势力名次。");
-            int bonus = bonuses.TryGetValue(player, out int b) ? b : 0;
             int? previous = completed >= 2 ? _order.IndexOf(player) : null;
-            entries.Add(new InitiativeEntry(player, rank, power.Of(player).Total, bonus,
-                InitiativeOrder.ValueOf(active, rank, bonus), previous, record.SeedRank));
+            entries.Add(new InitiativeEntry(player, rank, power.Of(player).Total,
+                InitiativeOrder.ValueOf(active, rank), previous, record.SeedRank));
         }
 
         return InitiativeOrder.Generate(completed, entries.MoveToImmutable());

@@ -2,7 +2,7 @@ using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Match;
-using Siege.Core.Relics;
+using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 using Siege.Sim.Logging;
 
@@ -68,8 +68,8 @@ public sealed record EndingSection(
     int Ranked);
 
 /// <summary>
-/// 对局时长的调节手段（match-telemetry 数值目标回归「时长与地图规模并列」）：批次地图的可落子格数与信物格数，取自日志首部
-/// （<see cref="LogHeader.PlayableCells"/>、<see cref="LogHeader.Relics"/> 条数），不按地图标识重建地图。每局换图时给出范围与均值。
+/// 对局时长的调节手段（match-telemetry 数值目标回归「时长与地图规模并列」）：批次地图的可落子格数，取自日志首部
+/// （<see cref="LogHeader.PlayableCells"/>），不按地图标识重建地图。每局换图时给出范围与均值。relic-redesign 起地图没有静态信物格，原"信物格数"一并删除。
 /// </summary>
 /// <param name="PlayableSkipped">首部没有可落子格数的旧日志（denser-map 之前）：不进可落子格统计，计数。</param>
 public sealed record MapScaleSection(
@@ -77,11 +77,7 @@ public sealed record MapScaleSection(
     int PlayableSkipped,
     int MinPlayable,
     int MaxPlayable,
-    double MeanPlayable,
-    int RelicMatches,
-    int MinRelics,
-    int MaxRelics,
-    double MeanRelics);
+    double MeanPlayable);
 
 /// <summary>
 /// 领地分占比（match-telemetry 平衡分析方向 10「领地分占比口径」）：逐局取终局快照（最后一条小回合快照）中参赛玩家（Active）的
@@ -141,9 +137,8 @@ public sealed record SnowballSection(
 
 public sealed record PieceStat(string Type, int Offered, int Picked, Proportion SelectionRate, Proportion WinRateOfPickers);
 
-public sealed record RelicStat(string Type, int Count, int Revealed, int ControlledTurns, double MeanControlledTurnsPerRelic, Proportion WinRateOfControllers);
-
-public sealed record SelectionSection(List<PieceStat> Pieces, List<RelicStat> Relics);
+/// <summary>§17.3 棋子选择（relic-redesign 起旧十类信物的数量 / 揭示 / 控制统计随旧信物删除；新信物的遥测留给段 C）。</summary>
+public sealed record SelectionSection(List<PieceStat> Pieces);
 
 /// <summary>§17.4 高倍率棋串。<see cref="PeakCountDistribution"/> 按峰值串的倍增子数量（即倍率指数，不封顶）。均值类统计量是报告口径的近似值；<see cref="MaxPeakPower"/> 是精确整数。</summary>
 public sealed record MultiplierSection(
@@ -172,11 +167,7 @@ public sealed record ZoneStat(int Zone, Proportion WinRate, bool Significant, in
 public sealed record BirthZoneSection(
     int ZoneCount,
     double Baseline,
-    List<ZoneStat> All,
-    List<ZoneStat> RelicsConverged,
-    List<ZoneStat> RelicsNotConverged,
-    int ConvergedMatches,
-    int NotConvergedMatches)
+    List<ZoneStat> All)
 {
     /// <summary>
     /// 按平台边长分组（map-generator D6）：只在每局换图的批次里给出（批内有任何一局的首部配置带 <see cref="Siege.Sim.Config.RunConfig.MapPerMatch"/>），其余为 <c>null</c>。
@@ -261,38 +252,22 @@ public sealed record AiQualitySection(
     string Verdict);
 
 /// <summary>完整平衡报告。</summary>
-/// <summary>第 12 项里的一行来源：名称（旗手 / 铁链 / 哨兵 / 界碑 / 连营 / 犄角）、终局加值合计与占全部位置加值的比例（无位置加值时为 NaN）。</summary>
+/// <summary>第 12 项里的一行来源：名称（旗手 / 铁链 / 哨兵 / 界碑）、终局加值合计与占全部位置加值的比例（无位置加值时为 NaN）。</summary>
 public sealed record NewSourceShare(string Name, long Bonus, double Share);
 
 /// <summary>
-/// match-telemetry「平衡分析方向」第 12 项：新棋子与新信物（more-pieces-relics D12）。只统计内容集 v2 的对局；
+/// match-telemetry「平衡分析方向」第 12 项：新棋子（more-pieces-relics D12；relic-redesign 起旧新信物的驿站 / 工坊 / 连营 / 犄角统计随旧信物删除）。只统计内容集 v2 的对局；
 /// v1 对局（含首部缺内容集的旧日志）单列为 <see cref="NotApplicable"/>，MUST NOT 计为 0 混进任何分母。
 /// </summary>
 /// <param name="Matches">纳入的内容集 v2 对局数。</param>
 /// <param name="NotApplicable">单列为不适用的 v1 对局数。</param>
 /// <param name="FinalPositionBonus">终局快照（最后一条小回合快照）里参赛玩家全部棋串的位置加值（七项来源）之和，是 <see cref="Sources"/> 占比的分母。</param>
-/// <param name="Sources">旗手、铁链、哨兵、界碑四种来源与连营、犄角两项额外加值（后两者是并入连珠 / 协同的子拆分），固定六行、0 也列出。</param>
-/// <param name="RelayTurns">驿站加成的样本：v2 对局的小回合快照数。</param>
-/// <param name="RelayBonusTotal">各小回合行动玩家的驿站展示数加成之和。</param>
-/// <param name="TurnsWithRelay">驿站加成大于 0 的小回合数。</param>
-/// <param name="MeanRelayBonus">每小回合平均驿站加成（无样本为 NaN）。</param>
-/// <param name="MeanRelayBonusWhenPresent">有驿站加成的小回合里的平均加成（无样本为 NaN）。</param>
-/// <param name="Edits">v2 对局的改造总次数。</param>
-/// <param name="WorkshopEdits">其中经工坊扩展（隔一格）的次数。</param>
-/// <param name="WorkshopShare">经工坊扩展占全部改造的比例（无改造为 NaN）。</param>
+/// <param name="Sources">旗手、铁链、哨兵、界碑四种来源，固定四行、0 也列出。</param>
 public sealed record NewContentSection(
     int Matches,
     int NotApplicable,
     long FinalPositionBonus,
-    List<NewSourceShare> Sources,
-    int RelayTurns,
-    long RelayBonusTotal,
-    int TurnsWithRelay,
-    double MeanRelayBonus,
-    double MeanRelayBonusWhenPresent,
-    int Edits,
-    int WorkshopEdits,
-    double WorkshopShare);
+    List<NewSourceShare> Sources);
 
 public sealed record BalanceReport(
     int TotalLogs,
@@ -460,7 +435,7 @@ public static class BalanceAnalyzer
     }
 
     /// <summary>
-    /// 样本的类型列表口径（more-pieces-relics D8）：有任何一局不是内容集 v1 就按 v2 列十种棋子 / 十类信物，否则按 v1 列原六种 / 六类——
+    /// 样本的类型列表口径（more-pieces-relics D8）：有任何一局不是内容集 v1 就按 v2 列十种棋子，否则按 v1 列原六种——
     /// 只有 v1 对局（含首部缺内容集的旧日志）的报告与引入新内容之前逐字节相同，不会多出四行 0。
     /// </summary>
     private static ContentSet ListingSet(List<MatchLog> logs) =>
@@ -470,19 +445,14 @@ public static class BalanceAnalyzer
     private static long PositionBonusOf(GroupEntry g) =>
         (long)g.LineBonus + g.SynergyBonus + (g.HighGroundBonus ?? 0) + g.NewSourceBonus;
 
-    // ---------- §17-12 新棋子与新信物（more-pieces-relics D12） ----------
+    // ---------- §17-12 新棋子（more-pieces-relics D12） ----------
 
     private static NewContentSection NewContent(List<MatchLog> logs)
     {
         int matches = 0;
         int notApplicable = 0;
         long position = 0;
-        long[] bonuses = new long[6];
-        int relayTurns = 0;
-        int turnsWithRelay = 0;
-        long relayTotal = 0;
-        int edits = 0;
-        int workshopEdits = 0;
+        long[] bonuses = new long[4];
         foreach (MatchLog log in logs)
         {
             if (log.ContentSet == ContentSet.V1)
@@ -501,40 +471,13 @@ public static class BalanceAnalyzer
                     bonuses[1] += g.ChainBonus ?? 0;
                     bonuses[2] += g.SentryBonus ?? 0;
                     bonuses[3] += g.BoundaryBonus ?? 0;
-                    bonuses[4] += g.EncampmentBonus ?? 0;
-                    bonuses[5] += g.PincerBonus ?? 0;
-                }
-            }
-
-            foreach (TurnSnapshot turn in log.Turns)
-            {
-                relayTurns++;
-                int relay = turn.RelaySources?.Values.Sum() ?? 0;
-                relayTotal += relay;
-                if (relay > 0)
-                {
-                    turnsWithRelay++;
-                }
-
-                foreach (TerrainEditEntry edit in turn.Edits ?? [])
-                {
-                    edits++;
-                    if (edit.ViaWorkshop == true)
-                    {
-                        workshopEdits++;
-                    }
                 }
             }
         }
 
-        string[] names = ["旗手", "铁链", "哨兵", "界碑", "连营", "犄角"];
+        string[] names = ["旗手", "铁链", "哨兵", "界碑"];
         List<NewSourceShare> sources = [.. names.Select((name, i) => new NewSourceShare(name, bonuses[i], position == 0 ? double.NaN : (double)bonuses[i] / position))];
-        return new NewContentSection(
-            matches, notApplicable, position, sources,
-            relayTurns, relayTotal, turnsWithRelay,
-            relayTurns == 0 ? double.NaN : (double)relayTotal / relayTurns,
-            turnsWithRelay == 0 ? double.NaN : (double)relayTotal / turnsWithRelay,
-            edits, workshopEdits, edits == 0 ? double.NaN : (double)workshopEdits / edits);
+        return new NewContentSection(matches, notApplicable, position, sources);
     }
 
     // ---------- 插旗同区（flag-contest D3） ----------
@@ -770,17 +713,12 @@ public static class BalanceAnalyzer
     private static MapScaleSection MapScale(List<MatchLog> logs)
     {
         List<int> playable = [.. logs.Where(l => l.Header.PlayableCells is > 0).Select(l => l.Header.PlayableCells!.Value)];
-        List<int> relics = [.. logs.Select(l => l.Header.Relics.Count)];
         return new MapScaleSection(
             playable.Count,
             logs.Count - playable.Count,
             playable.Count == 0 ? 0 : playable.Min(),
             playable.Count == 0 ? 0 : playable.Max(),
-            Statistics.Mean(playable.Select(v => (double)v)),
-            relics.Count,
-            relics.Count == 0 ? 0 : relics.Min(),
-            relics.Count == 0 ? 0 : relics.Max(),
-            Statistics.Mean(relics.Select(v => (double)v)));
+            Statistics.Mean(playable.Select(v => (double)v)));
     }
 
     // ---------- §17 第 10 项 领地分占比 ----------
@@ -1258,39 +1196,20 @@ public static class BalanceAnalyzer
             [.. finalByRound3.Select(kv => (kv.Key, Statistics.Mean(kv.Value), kv.Value.Count))]);
     }
 
-    // ---------- §17.3 棋子与信物 ----------
+    // ---------- §17.3 棋子 ----------
 
-    /// <summary>"信物坐标 → 类型"：首部的开局坐标（open-map 起地图整局不变，没有版本换算）。</summary>
-    private static Dictionary<string, string> RelicTypes(MatchLog log) =>
-        log.Header.Relics.ToDictionary(r => r.Coord, r => r.Type, StringComparer.Ordinal);
-
-    private static string RelicTypeAt(Dictionary<string, string> types, string coord, string where) =>
-        types.TryGetValue(coord, out string? type) ? type : throw new FormatException($"{where}里的信物格 {coord} 不在首部的信物分布里：日志损坏。");
-
-    /// <param name="rankable">有名次的局：选择率与控制时长用全部纳入局，"选过 / 控制过它的玩家胜率"只取这些局（截断局没有胜者）。</param>
+    /// <param name="rankable">有名次的局：选择率用全部纳入局，"选过它的玩家胜率"只取这些局（截断局没有胜者）。</param>
     private static SelectionSection Selection(List<MatchLog> logs, HashSet<MatchLog> rankable)
     {
         var offered = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var picked = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var pickerSamples = new SortedDictionary<string, (int Wins, int Samples)>(StringComparer.Ordinal);
-        var relicCount = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        var relicRevealed = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        var relicControlledTurns = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        var controllerSamples = new SortedDictionary<string, (int Wins, int Samples)>(StringComparer.Ordinal);
         ContentSet listing = ListingSet(logs);
         foreach (string type in ContentSets.PieceTypesOf(listing).Select(t => t.ToString()))
         {
             offered[type] = 0;
             picked[type] = 0;
             pickerSamples[type] = (0, 0);
-        }
-
-        foreach (string type in RelicWeights.OrderOf(listing).Select(t => t.ToString()))
-        {
-            relicCount[type] = 0;
-            relicRevealed[type] = 0;
-            relicControlledTurns[type] = 0;
-            controllerSamples[type] = (0, 0);
         }
 
         foreach (MatchLog log in logs)
@@ -1324,56 +1243,13 @@ public static class BalanceAnalyzer
                     pickerSamples[type] = (wins + (winners.Contains(player) ? 1 : 0), samples + 1);
                 }
             }
-
-            // 完整信物分布即首部（开局坐标；open-map 起地图整局不变，快照与揭示表里的坐标与首部同一布局）；对不上即日志损坏，响亮失败。
-            Dictionary<string, string> relicTypes = RelicTypes(log);
-            foreach (RelicEntry relic in log.Header.Relics)
-            {
-                relicCount[relic.Type] = relicCount.TryGetValue(relic.Type, out int n) ? n + 1 : 1;
-            }
-
-            Dictionary<string, string> finalTypes = relicTypes;
-            foreach (RelicRevealEntry reveal in log.Result.RelicReveals.Where(r => r.RevealedInMajorRound is not null))
-            {
-                string type = RelicTypeAt(finalTypes, reveal.Coord, "揭示表");
-                relicRevealed[type] = relicRevealed.TryGetValue(type, out int n) ? n + 1 : 1;
-            }
-
-            var controlledBy = new Dictionary<int, HashSet<string>>();
-            foreach (TurnSnapshot turn in log.Turns)
-            {
-                foreach (RelicStateEntry state in turn.Relics.Where(r => r.Control == nameof(RelicControlKind.Controlled) && r.Holder is not null))
-                {
-                    string type = RelicTypeAt(relicTypes, state.Coord, $"第 {turn.Turn} 小回合快照");
-                    relicControlledTurns[type] = relicControlledTurns.TryGetValue(type, out int n) ? n + 1 : 1;
-                    if (!controlledBy.TryGetValue(state.Holder!.Value, out HashSet<string>? set))
-                    {
-                        controlledBy[state.Holder.Value] = set = [];
-                    }
-
-                    set.Add(type);
-                }
-            }
-
-            foreach ((int player, HashSet<string> types) in controlledBy.Where(_ => rankable.Contains(log)))
-            {
-                foreach (string type in types)
-                {
-                    (int wins, int samples) = controllerSamples.TryGetValue(type, out var t) ? t : (0, 0);
-                    controllerSamples[type] = (wins + (winners.Contains(player) ? 1 : 0), samples + 1);
-                }
-            }
         }
 
         List<PieceStat> pieces = [.. offered.Keys.Select(type => new PieceStat(
             type, offered[type], picked[type],
             Statistics.Wilson(picked[type], offered[type]),
             Statistics.Wilson(pickerSamples[type].Wins, pickerSamples[type].Samples)))];
-        List<RelicStat> relics = [.. relicCount.Keys.Select(type => new RelicStat(
-            type, relicCount[type], relicRevealed[type], relicControlledTurns[type],
-            relicCount[type] == 0 ? double.NaN : (double)relicControlledTurns[type] / relicCount[type],
-            Statistics.Wilson(controllerSamples[type].Wins, controllerSamples[type].Samples)))];
-        return new SelectionSection(pieces, relics);
+        return new SelectionSection(pieces);
     }
 
     /// <summary>从 <c>key=a,b key2=</c> 形式的文本取某字段的列表。</summary>
@@ -1487,7 +1363,7 @@ public static class BalanceAnalyzer
         return new PieceShareSection(matches, skipped, totalStones, totalPower, pieces);
     }
 
-    // ---------- §17.5 出生区（裁决 8：收敛 / 未收敛分组） ----------
+    // ---------- §17.5 出生区 ----------
 
     /// <param name="all">全部纳入局：只用来定区数（地图属性，与名次无关）。</param>
     /// <param name="logs">有名次的局：各区胜率与被选次数的样本（截断局没有胜者，MUST NOT 以"未胜"计入）。</param>
@@ -1499,16 +1375,10 @@ public static class BalanceAnalyzer
         // 基线 = 1 / 参赛人数：各区胜率的分母是"该区被选中的局数"，被选中的区上那名玩家的期望胜率是 1/人数，与地图有几个区无关。
         // 出生区多于玩家的图（边疆档 6 区 4 人）若按 1/区数 = 1/6 取基线，公平的 25% 会被系统性判成"显著偏高"（frontier-map 2.4）。
         double baseline = zones == 0 ? double.NaN : 1.0 / all[0].Header.Players.Count;
-        List<MatchLog> converged = [.. logs.Where(l => l.Header.RelicsConverged)];
-        List<MatchLog> notConverged = [.. logs.Where(l => !l.Header.RelicsConverged)];
         return new BirthZoneSection(
             zones,
             baseline,
-            ZoneStats(logs, zones, baseline),
-            ZoneStats(converged, zones, baseline),
-            ZoneStats(notConverged, zones, baseline),
-            converged.Count,
-            notConverged.Count)
+            ZoneStats(logs, zones, baseline))
         {
             BySide = all.Any(l => l.Header.Config.MapPerMatch) ? SideStats(logs, baseline) : null,
         };

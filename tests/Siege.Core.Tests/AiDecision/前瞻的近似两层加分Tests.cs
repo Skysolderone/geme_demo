@@ -3,7 +3,6 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using static Siege.Core.Tests.LookaheadFixtures;
 
@@ -108,9 +107,9 @@ public class 前瞻的近似两层加分Tests
         // 专家（P0）在第 3 大回合（构筑期末）末位做部署决策 → 两层加分的单点按第 4 大回合枚举：落点为专家所在战场的可落子格扣除 P0 在局面上的禁入格（不再限于出生区），
         // （expert-tiebreak 1.5：规格 Scenario 改为"第 3 大回合末位"——非末位是构筑期决策、不前瞻；顺序由 P2 → P0 → P1 → P3 改为 P2 → P1 → P3 → P0，P1 / P3 先 Pass）
         // （retire-legacy-rules 1.4：规格 Scenario「按下一大回合的口径枚举」由"全图可落子格"改为专家所在战场；载体为平坦 8×8 链接档图，四人同锁棋盘 0，战场即棋盘 0）
-        // 部署上限为 4 加 P0 控制的已揭示军令强度（C3 的 +2 军令，P2 先完成一次结算使其揭示）= 6。
-        // 变异 E-T4（下一手按当前大回合：出生区、上限 3 + 2）→ 见段 A 实施记录。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("E5", RelicFixtures.Command(2))])
+        // 部署上限为第 4 大回合的分阶段基础值 4（relic-redesign W1：原"加 P0 控制的已揭示 +2 军令 = 6"随旧信物删除）。
+        // 变异 E-T4（下一手按当前大回合：出生区、上限 3）→ 见段 A 实施记录。
+        MatchFlow match = LinkModeFixtures.PlainStarted()
             .AtRound(3, [P2, P1, P3, P0])
             .Stones(P0, "E5", "D4").Stones(P1, "J4").Stones(P3, "J9");
         match.PlayTurn("D9");
@@ -119,15 +118,12 @@ public class 前瞻的近似两层加分Tests
         Assert.Equal(P0, match.CurrentPlayer);
         Assert.False(ExpertLookahead.IsBuildPhaseDecision(match.Publish(), P0));   // 末位：不是构筑期决策
         (ExpertLookahead engine, MatchPublicView view, BatchContext mine, _) = Engine(match, StrengthConfig());
-        RelicPublicState c3 = Assert.Single(view.Relics);
-        Assert.True(c3.IsRevealed);
-        Assert.True(c3.Control.GrantsEffectTo(P0));
         Assert.Equal(3, view.MajorRound);
 
         BatchContext next = engine.NextMoveContext(view, mine)!;
 
         Assert.Equal(P0, next.Player);
-        Assert.Equal(4 + 2, next.DeployLimit);
+        Assert.Equal(4, next.DeployLimit);
         Coord[] expected = [.. view.Board.Map.Boards[0].Cells().Where(c => view.Board[c].Terrain == Terrain.Playable).Except(view.LifeShape.ForbiddenCellsFor(P0)).Order()];
         Assert.Equal(expected, next.LegalRange.Order());
         Assert.Contains(TestMaps.At("K10"), next.LegalRange);   // 出生区（棋盘 0 的核心区）之外

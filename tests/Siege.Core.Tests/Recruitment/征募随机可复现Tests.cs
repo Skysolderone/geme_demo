@@ -1,8 +1,8 @@
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
+using Siege.Core.PieceRelics;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Tests.Determinism;
 
 namespace Siege.Core.Tests.Recruitment;
@@ -117,21 +117,23 @@ public class 征募随机可复现Tests
     }
 
     [Fact]
-    public void 改变征募决策后信物生成逐格不变()
+    public void 改变征募决策后信物刷新逐格不变()
     {
-        // 规范强制回归（determinism.md）：改变某玩家的一次征募选择 → 信物生成结果逐格不变；且 recruit 子流消费次数确实不同。
-        // 变异验证 M-R23：HandLedger 构造用 seed.Stream(GameSeed.RelicGeneration) → 红 3（征募只消费 recruit 子流 等），本测试不红——
-        // 账本拿错子流名并不改变 RelicGenerator 自己派生的流；真正的共用序列是 M-D3（GameSeed.Stream 返回共享实例）→ 红 13，含本测试与 Determinism/随机子流隔离Tests。
-        MapData map = MapCatalog.Resolve("link:1:4");   // retire-legacy-maps 1.8：原为 v5，改为 link:1，断言不变
-        RelicGenerationRecord baseline = RelicGenerator.Generate(map, HandFixtures.Seed);
+        // 规范强制回归（determinism.md）：改变某玩家的一次征募选择 → 信物刷新结果逐格不变；且两条脚本的征募候选确实同序列（选取不消费随机数）。
+        // relic-redesign W1：开局信物生成随旧信物删除，改看刷新（relic-spawn:<落位大回合>，纯函数，同盘面同种子同大回合即同一批）。
+        // 真正的共用序列是 M-D3（GameSeed.Stream 返回共享实例）→ 红，含本测试与 Determinism/随机子流隔离Tests。
+        MapData map = MapCatalog.Resolve("link:1:4");
+        GameBoard board = GameBoard.Load(map);
+        string Spawn() => string.Join(",", RelicSpawner.Forecast(board, new BirthBoardArea(map), HandFixtures.Seed, 3, playerCount: 4, unclaimedOnBoard: 0)!.Slots);
+        string baseline = Spawn();
 
         HandLedger fewer = Play(HandFixtures.Seed, p1FirstTurnPicks: 0);
-        RelicGenerationRecord afterFewer = RelicGenerator.Generate(map, HandFixtures.Seed);
+        string afterFewer = Spawn();
         HandLedger more = Play(HandFixtures.Seed, p1FirstTurnPicks: 3);
-        RelicGenerationRecord afterMore = RelicGenerator.Generate(map, HandFixtures.Seed);
+        string afterMore = Spawn();
 
-        Assert.Equal(baseline.Placements, afterFewer.Placements);
-        Assert.Equal(baseline.Placements, afterMore.Placements);
+        Assert.Equal(baseline, afterFewer);
+        Assert.Equal(baseline, afterMore);
         Assert.NotEqual(fewer.Records[1].PickedIndices, more.Records[1].PickedIndices);
         // 选取决策不消费随机数：两条脚本的 recruit 消费次数相同，候选序列也逐轮相同
         Assert.Equal(fewer.RecruitStreamConsumed, more.RecruitStreamConsumed);
@@ -141,7 +143,7 @@ public class 征募随机可复现Tests
     [Fact]
     public void 征募只消费recruit子流()
     {
-        // 面板候选 == 对 GameSeed.Recruit 子流直接做 WeightedPick 的结果；用 relic-gen 或 setup 子流都对不上。
+        // 面板候选 == 对 GameSeed.Recruit 子流直接做 WeightedPick 的结果；用 relic-spawn 或 setup 子流都对不上。
         // 变异验证 M-R23（见上）→ 红 3，含本测试；M-R24：EnterRecruit 用 Random.Shared.Next → 红 11，含本测试与源码扫描；M-R4：等概率 NextInt → 红 5，含本测试。
         // more-pieces-relics 段 A：期望序列用六档字面量表独立抽取 → 写死内容集 v1（v1 棋池与引入新棋子之前相同）。
         HandLedger ledger = HandFixtures.Ledger(ContentSet.V1);
@@ -156,7 +158,7 @@ public class 征募随机可复现Tests
         }
 
         Assert.Equal(Direct(GameSeed.Recruit), panel.CandidateTypes);
-        Assert.NotEqual(Direct(GameSeed.RelicGeneration), panel.CandidateTypes);
+        Assert.NotEqual(Direct(GameSeed.RelicSpawn(4)), panel.CandidateTypes);
         Assert.Equal(ConsumedBy(8), ledger.RecruitStreamConsumed);
 
         static long ConsumedBy(int picks)

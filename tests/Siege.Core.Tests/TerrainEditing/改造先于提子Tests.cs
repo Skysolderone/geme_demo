@@ -315,31 +315,6 @@ public class 改造先于提子Tests
     }
 
     [Fact]
-    public void 烧林后的揭示与控制()
-    {
-        // capture-resolution「烧林后的揭示与控制」：第 3 步改地表 → 覆盖关系立刻变化，
-        // 第 5 步的揭示与第 6 步的控制判定都基于改造后的覆盖（揭示与控制本身由 relic-control 消费同一份覆盖）。
-        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F4", Surface.Forest)]), size: 9);
-        Coord forest = TestMaps.At("F4");
-        var hooks = new RecordingHooks { Board = board };
-        var driver = new SettlementDriver(board, new BoardHistory(), hooks);
-
-        Assert.DoesNotContain(forest, board.CoverageTargets(TestMaps.At("E4")));
-
-        SettlementOutcome outcome = driver.Confirm(
-            BatchFixtures.Context(board, TestMaps.P0),
-            [BatchFixtures.Artisan("E4", TerrainEdit.Burn(forest))]);
-
-        Assert.True(outcome.Confirmed);
-        Assert.Contains(forest, board.CoverageTargets(TestMaps.At("E4")));
-        Assert.Equal(Surface.Grass, board.Map.SurfaceAt(forest));
-
-        // 钩子（揭示 → 重算 → 终局检查）看到的盘面已经是改造后的地形。
-        Assert.Equal(["DeductHand", "OnRevealRelics", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
-        Assert.All(hooks.Contexts, c => Assert.Equal(Surface.Grass, c.Board.Map.SurfaceAt(forest)));
-    }
-
-    [Fact]
     public void 结算的原子性含改造()
     {
         // capture-resolution「结算的原子性」的改造分支：外部观察者 MUST NOT 看到
@@ -355,7 +330,7 @@ public class 改造先于提子Tests
 
         string after = board.Serialize();
         Assert.NotEqual(before, after);
-        Assert.Equal(["DeductHand", "OnRevealRelics", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
+        Assert.Equal(["DeductHand", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
 
         // 第 1 步（扣手牌）看到的还是结算前；此后每一次采样都已经是终态。
         Assert.Equal(before, hooks.Calls[0].Board);

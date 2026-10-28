@@ -69,16 +69,16 @@ public class 盘面序列化Tests
     }
 
     [Fact]
-    public void 非盘面信息不影响序列化()
+    public void 信物层不影响棋形序列化()
     {
-        // 两份盘面的格子占用完全一致；手牌与信物控制不属于序列化内容，因此结果必须相等。
-        // 这里用"地图的信物标注不同但占用相同"来代表非盘面差异。
-        // 13×13，B2 是信物格；空盘取同尺寸。retire-legacy-maps 1.8：带信物的那份原取 v5（B2 为出生区信物格），改用同尺寸手写夹具，断言不变。
+        // 两份盘面的格子占用完全一致，只差 B2 上挂着的一件信物（relic-redesign D1）：棋形序列化（同形比对用）逐字节相等，
+        // 含信物层的完整序列化（存档与结算核对用）不同。原"地图信物格标注不同但占用相同"随静态信物格删除。
         GameBoard plain = TestMaps.Blank(size: 13).Place("B2", TestMaps.P0, PieceType.Line);
-        GameBoard withRelics = TestMaps.WithRelicCells(["B2"], size: 13);
-        withRelics.Place(TestMaps.At("B2"), TestMaps.P0, PieceType.Line);
+        GameBoard withRelics = TestMaps.Blank(size: 13).Place("B2", TestMaps.P0, PieceType.Line);
+        withRelics.AttachRelic(TestMaps.At("B2"), Siege.Core.PieceRelics.RelicToken.Spawned(0, Siege.Core.PieceRelics.RelicKind.WarDrum));
 
-        Assert.Equal(plain.Serialize(), withRelics.Serialize());
+        Assert.Equal(plain.Serialize(), withRelics.SerializeShape());
+        Assert.NotEqual(plain.Serialize(), withRelics.Serialize());
     }
 
     [Fact]

@@ -100,7 +100,7 @@ public static class Program
         Console.WriteLine("  Siege.Sim run --out <目录> [--config <json>] [--seed <首个种子>] [--count <局数>] [--parallel <并行度|0=核数>]");
         Console.WriteLine($"                [--map <link:地图种子:人数，缺省 link:1:<人数>>] [--players <人数 2–4，缺省取地图标识的人数，都没给为 {DefaultPlayers}>] [--difficulty <{Core.Ai.AiDifficultyNames.Usage}>] [--turn-limit <小回合数截断，默认 600，0=不截断>]");
         Console.WriteLine($"                [--artisan-weight <匠人征募权重，默认 10>] [--cell-limit <AI 候选格上限，0=不限，缺省按地图大小>] [--pass-threshold <AI 停手阈值，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultPassThreshold}（v2-recalibration 在内容集 V2 上复核的校准值）>]（AI 权重只能经 --config 的 Players[].Weights 指定，整表生效；优先级：配置文件的权重 > 地图专属覆盖（按地图标识登记，AI 配置而非规则） > 缺省表；同时给 --difficulty / --players 会重建玩家列表、丢弃配置文件里的权重，改按地图覆盖、再按缺省表取值）");
-        Console.WriteLine("                [--carry-in <每名 AI 的带入数量 0|1，缺省 0 = 关闭带入带出；1 = 每名 AI 从 carry-ai 子流随机带入 1 件补给，结算只写日志、不读写档案>]");
+        Console.WriteLine("                [--carry-in <每名 AI 的带入件数 0–5，缺省 0 = 关闭带入带出；1–5 = 每名 AI 从 carry-ai 子流随机带入该件数的普通信物（随机至多 2 件保险），结算只写日志、不读写档案>]");
         Console.WriteLine($"                [--round-cap <大回合上限安全网，非负整数，缺省 {Core.Match.MatchOptions.DefaultRoundCap}，0=不启用；到达时按势力强制结算（cycle-stop）>] [--stagnation-rounds <AI 停滞大回合数 K，非负整数，缺省 {Core.Ai.AiSearchConfig.DefaultStagnationRounds}，0=不启用；连续 K 个大回合无净增且候选全是提子 / 反提即 Pass>]");
         Console.WriteLine($"                [--whole-batch <AI 整批候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultWholeBatch}；1 = 标准 / 高难 / 专家另加剪枝候选与配对候选（逐枚为负、整批为正的组合），0 = 关闭（与引入之前逐步相同）>]");
         Console.WriteLine($"                [--edit-seed <AI 搭桥候选开关 0|1，缺省 {Core.Ai.AiSearchConfig.DefaultEditSeed}；1 = 标准 / 高难 / 专家另加以搭桥单点为起点的候选（全部合法空格、不经预筛、不受前 N），0 = 关闭（与引入之前逐步相同）>]");
@@ -130,7 +130,7 @@ public static class Program
         int seat = cli.GetInt("seat", 1);
         string? mapId = cli.GetOrNull("map");
         int? cellLimit = cli.Has("cell-limit") ? cli.GetInt("cell-limit", 0) : null;
-        Core.Carry.CarryProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
+        Core.PieceRelics.RelicProfileStore? profile = PlayProfile(cli);   // 只解析、不读写档案；读档在选图之后、插旗之前（PlayCommand）
         cli.EnsureRecognized();   // 读完所有选项、开局之前结算（strict-cli 2.4）
         // board-link-mode C1 / map-expand-25 D1：不给地图选项即 link:1:<人数>；只接受 link:，旧标识族报错（在任何取种子与解析之前）；标识人数与 --players 不一致报错。
         (string resolvedId, int count) = ResolveLinkRequest(mapId, players, "play", output, mapSeedSource);
@@ -139,12 +139,12 @@ public static class Program
     }
 
     /// <summary>
-    /// play 的档案选项（carry-in-out D10）：缺省开启带入带出、读写缺省档案（<see cref="Core.Carry.CarryProfileStore.DefaultPath"/>）；
+    /// play 的档案选项（carry-in-out D10）：缺省开启带入带出、读写缺省档案（<see cref="Core.PieceRelics.RelicProfileStore.DefaultPath"/>）；
     /// <c>--profile &lt;路径&gt;</c> 改用其他文件；<c>--no-carry</c> 关闭带入带出、不读写任何档案（返回 <c>null</c>）。严格解析：
     /// <c>--no-carry</c> 不带值（后面跟了非选项的词即报错，不静默当成未给），<c>--profile</c> 必须给路径，两者不能同时给出。
     /// 只构造存取、不做任何 I/O。
     /// </summary>
-    internal static Core.Carry.CarryProfileStore? PlayProfile(CommandLine cli)
+    internal static Core.PieceRelics.RelicProfileStore? PlayProfile(CommandLine cli)
     {
         ArgumentNullException.ThrowIfNull(cli);
         string? noCarry = cli.GetOrNull("no-carry");
@@ -165,7 +165,7 @@ public static class Program
         }
 
         // 档案损坏时备份文件名要带本地时间：Core 不读时钟，由入口注入。这是 Sim 里唯一一处取墙钟，只进备份文件名，不参与任何对局、日志或配置记录。
-        return noCarry is not null ? null : new Core.Carry.CarryProfileStore(path ?? Core.Carry.CarryProfileStore.DefaultPath(), TimeProvider.System.GetLocalNow);
+        return noCarry is not null ? null : new Core.PieceRelics.RelicProfileStore(path ?? Core.PieceRelics.RelicProfileStore.DefaultPath(), TimeProvider.System.GetLocalNow);
     }
 
     /// <summary>
@@ -257,19 +257,17 @@ public static class Program
             + string.Join("/", map.BirthZones.Select(z => z.Count(map.IsPlayable)))
             + " 个可落子格，高度 "
             + string.Join("/", map.BirthZones.Select(z => string.Join(",", z.Select(map.HeightAt).Distinct().Order()))));
-        Console.WriteLine($"信物格 {map.RelicCells.Count}（出生区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.BirthZone)}，公共区 {map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested)}）");
         // open-map 裁决 B5（simulation-harness「map 子命令缺省地图」）：按几何四邻实算连通分量数，不写死。
         Console.WriteLine($"连通分量 {Battlefields.Of(map).All.Length}（出生平台与其间的低地连成一座浮空岛，应为 1）");
 
-        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角与该棋盘内的公共信物数；link-map-surfaces D3：再给该棋盘内的新地表格数。
+        // link-map-terrain 5.1：每块出生棋盘一行——编号 · 主题 · 宽×高、左下角；link-map-surfaces D3：再给该棋盘内的新地表格数（relic-redesign 起地图没有静态信物格，原"公共信物"列删除）。
         // 主题中文名只经 BoardThemeNames.DisplayName；没有主题的棋盘（手写夹具）写"无主题"。
         Console.WriteLine("出生棋盘（编号 · 主题 · 宽×高）：");
         int boardIndex = 0;
         foreach (BoardPlate plate in map.BirthBoards())
         {
-            int publicRelics = map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested && plate.Contains(r.Key));
             int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
-            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}  新地表 {special}");
+            Console.WriteLine($"  {BirthZoneLabel.Number(boardIndex++)} 号棋盘 · {plate.Theme?.DisplayName() ?? "无主题"} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  新地表 {special}");
         }
 
         Console.WriteLine($"各出生区沿气边最短距离（出生区 {string.Join("/", Enumerable.Range(0, map.BirthZones.Length).Select(BirthZoneLabel.Number))}）：");
@@ -317,8 +315,8 @@ public static class Program
 
         Console.WriteLine();
         Console.WriteLine();
-        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区  r 出生区信物  o 公共信物  R 公共高档信物");
-        Console.WriteLine("@ 中央入口  ^ 咽喉（与信物或桥同格时显示信物 / 桥的标记：入口若同时是高档信物显示 R，桥若同时是咽喉显示 =）  F 林地  . 土路  D 荒漠  M 沼泽  P 岩台  S 浅滩   格间 | 与行间 -- 为栅栏");
+        Console.WriteLine($"每格两位：首位是高度 0/1/2，次位是标记。## 岩石  ~~ 深水  = 桥  1-{BirthZoneLabel.Number(map.BirthZones.Length - 1)} 出生区");
+        Console.WriteLine("@ 中央入口  ^ 咽喉（与桥同格时显示桥的标记 =）  F 林地  . 土路  D 荒漠  M 沼泽  P 岩台  S 浅滩   格间 | 与行间 -- 为栅栏");
 
         // --out：把这张图导出到指定文件（map-generator 2.6）。生成图靠它落成普通地图文件——标识里有冒号，做不了 Windows 文件名。
         if (outPath is not null)
@@ -349,9 +347,7 @@ public static class Program
             return "~~";
         }
 
-        char mark = map.RelicCells.TryGetValue(c, out RelicCellSpec spec)
-            ? spec.Budget switch { BudgetTier.Birth => 'r', BudgetTier.High => 'R', _ => 'o' }
-            : c == map.CentralEntrance ? '@'
+        char mark = c == map.CentralEntrance ? '@'
             : map.HasBridge(c) ? '='
             : map.ChokePoints.Contains(c) ? '^'
             : SurfaceMark(map.SurfaceAt(c)) is char s ? s

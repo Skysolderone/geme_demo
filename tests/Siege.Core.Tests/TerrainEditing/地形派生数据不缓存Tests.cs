@@ -157,9 +157,10 @@ public class 地形派生数据不缓存Tests
         // 同一堵墙降为 h=1 缓坡：两条路都能走，距离相等——证明上面的 12 是崖壁造成的而不是别的。
         Assert.Equal(new int?[] { 4, 4 }, Assert.Single(MapValidator.DistanceTable(Wall(1)), m => m.Name == "中央入口").Distances.ToArray());
 
-        // 没有公共信物：该项目标集合为空，整列为 null（不是 0）。
-        BirthZoneDistance relic = Assert.Single(MapValidator.DistanceTable(Wall(2)), m => m.Name == "最近公共信物");
-        Assert.Empty(relic.Targets);
-        Assert.All(relic.Distances, d => Assert.Null(d));
+        // 目标集合为空时整列为 null（不是 0）。relic-redesign W1：原载体"最近公共信物"一项随静态信物格删除，改用没有咽喉的同一张图。
+        Assert.Equal(["中央入口", "最近咽喉"], MapValidator.DistanceTable(Wall(2)).Select(m => m.Name));
+        BirthZoneDistance choke = Assert.Single(MapValidator.DistanceTable(Wall(2) with { ChokePoints = [] }), m => m.Name == "最近咽喉");
+        Assert.Empty(choke.Targets);
+        Assert.All(choke.Distances, d => Assert.Null(d));
     }
 }

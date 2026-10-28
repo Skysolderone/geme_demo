@@ -1,78 +1,105 @@
 using Siege.Core.Board;
+using Siege.Core.PieceRelics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.PieceEffects;
 
-/// <summary>规格：more-pieces-relics piece-effects —— Requirement: 旗手子的位置加值</summary>
+/// <summary>规格：more-pieces-relics piece-effects —— Requirement: 旗手子的位置加值（relic-redesign R23 改写）</summary>
 /// <remarks>
-/// 旗手子：自身格 ∪ 气边邻格中每个信物格 +3；信物格按地图静态位置，不读揭示、内容与控制；气边只经 <see cref="GameBoard.LibertyNeighbors"/>。
-/// 变异记录见 <c>.trellis/tasks/09-25-more-pieces-relics/implement.md</c> 段 A（1.3）。
+/// 旗手子：所在棋串每挂 1 件信物 +3（每枚旗手子各计一次；不看信物种类、带入者与保险）；只数挂在本串棋子上的信物，地图信物（空格上）与别的棋串上的不计。
+/// 原口径"自身格 ∪ 气边邻格中每个静态信物格 +3"随静态信物格删除（relic-redesign D4）。
+/// 用例里的信物多取望台：它只扩大覆盖、不进军势，算例里的军势只多旗手这一项。
 /// </remarks>
 public class 旗手子的位置加值Tests
 {
-    [Fact]
-    public void 站在信物格上并邻接另一信物格()
+    private static GameBoard Board() => TestMaps.Blank(size: 11);
+
+    private static GameBoard Attach(GameBoard board, string cell, RelicToken token)
     {
-        // 规格 Scenario：旗手子位于信物格 F6，G6 也是信物格且二者有气边，其余气边邻格都不是信物格 → 3 × 2 = 6。
-        GameBoard board = TestMaps.WithRelicCells(["F6", "G6"]).Place("F6", TestMaps.P0, PieceType.Bannerman);
+        board.AttachRelic(TestMaps.At(cell), token);
+        return board;
+    }
+
+    [Fact]
+    public void 本串每挂一件信物加三()
+    {
+        // 规格 Scenario（R23）：旗手子 F6 与普通子 G6 成串，F6、G6 各挂一件望台 → 3 × 2 = 6；军势 = 基础 2 + 旗手 6 = 8（无倍率）。
+        GameBoard board = Board().Place("F6", TestMaps.P0, PieceType.Bannerman).Place("G6", TestMaps.P0);
+        Attach(board, "F6", RelicToken.Spawned(0, RelicKind.Watchtower));
+        Attach(board, "G6", RelicToken.Spawned(1, RelicKind.Watchtower));
 
         GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "F6");
 
         Assert.Equal(6, group.BannerBonus);
         Assert.Equal(6, group.PositionBonus);
-        Assert.Equal(1 + 6, group.Power);
+        Assert.Equal(2 + 6, group.Power);
     }
 
     [Fact]
-    public void 栅栏隔开的信物格不计()
+    public void 没有信物时为零()
     {
-        // 规格 Scenario：旗手子位于非信物格 F6，唯一相邻的信物格 E6 与 F6 之间有栅栏 → 0。
-        GameBoard board = TestMaps.WithRelicCells(["E6"], TestMaps.Terrain(fences: [("E6", "F6")])).Place("F6", TestMaps.P0, PieceType.Bannerman);
+        // 反面：同一棋串不挂信物 → 旗手加值 0（原"站在信物格上"的口径已不存在：格子本身没有信物属性）。
+        GameBoard board = Board().Place("F6", TestMaps.P0, PieceType.Bannerman).Place("G6", TestMaps.P0);
 
-        Assert.DoesNotContain(TestMaps.At("E6"), board.LibertyNeighbors(TestMaps.At("F6")));   // 前提：几何相邻、无气边
         Assert.Equal(0, PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "F6").BannerBonus);
     }
 
     [Fact]
-    public void 崖壁隔开的信物格不计()
+    public void 只数本串上的信物()
     {
-        // 规格 Scenario：旗手子位于 h=2 的 F6，几何相邻的信物格 G6 高度 0，二者之间没有气边 → G6 不计。
-        GameBoard board = TestMaps.WithRelicCells(["G6"], TestMaps.Terrain(heights: [("F6", 2)])).Place("F6", TestMaps.P0, PieceType.Bannerman);
+        // 规格 Scenario：旗手子 F6 单独成串；气边相邻的空格 F7 上有一件地图信物、相邻的敌子 G6 挂着一件、己方另一串 H8 也挂着一件 → 都不计，0。
+        // 变异 M-B2（BannerBonus 改数全盘信物）→ 本测试红。
+        GameBoard board = Board().Place("F6", TestMaps.P0, PieceType.Bannerman).Place("G6", TestMaps.P1).Place("H8", TestMaps.P0);
+        Attach(board, "F7", RelicToken.Spawned(0, RelicKind.WarDrum));
+        Attach(board, "G6", RelicToken.Spawned(1, RelicKind.Watchtower));
+        Attach(board, "H8", RelicToken.Spawned(2, RelicKind.Watchtower));
 
-        Assert.DoesNotContain(TestMaps.At("G6"), board.LibertyNeighbors(TestMaps.At("F6")));   // 前提：崖壁切断气边
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal(2, p0.Groups.Length);   // 前提：F6 与 H8 分属两串
+        Assert.Equal(0, p0.Groups.Single(g => g.Stones.Contains(TestMaps.At("F6"))).BannerBonus);
+    }
+
+    [Fact]
+    public void 两枚旗手子各计一次()
+    {
+        // 规格 Scenario：同一棋串里两枚旗手子 F6、G6，本串挂 1 件信物（挂在 G6 上）→ 每枚各 3，合计 6。
+        // 变异 M-B1（BannerBonus 不乘旗手子枚数）→ 本测试红。
+        GameBoard board = Board().Place("F6", TestMaps.P0, PieceType.Bannerman).Place("G6", TestMaps.P0, PieceType.Bannerman);
+        Attach(board, "G6", RelicToken.Spawned(0, RelicKind.Watchtower));
+
+        GroupPower group = PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "F6");
+
+        Assert.Equal(6, group.BannerBonus);
+        Assert.Equal(2 + 6, group.Power);
+    }
+
+    [Fact]
+    public void 不看信物种类与带入者()
+    {
+        // R23："每挂 1 件信物"——别人带入的保险件挂在本串上同样计入（持有者即该格棋子的主人，D1）。
+        // 两串各挂一件：一件地图刷出的望台、一件 P1 带入的保险望台 → 两串旗手加值都是 3。
+        GameBoard board = Board().Place("C3", TestMaps.P0, PieceType.Bannerman).Place("J9", TestMaps.P0, PieceType.Bannerman);
+        Attach(board, "C3", RelicToken.Spawned(0, RelicKind.Watchtower));
+        Attach(board, "J9", RelicToken.Carried(1, RelicKind.Watchtower, TestMaps.P1, insured: true));
+
+        PlayerPower p0 = PowerCalculator.Compute(board).Of(TestMaps.P0);
+
+        Assert.Equal(2, p0.Groups.Length);
+        Assert.All(p0.Groups, g => Assert.Equal(3, g.BannerBonus));
+    }
+
+    [Fact]
+    public void 持物棋子被提后旗手加值随之消失()
+    {
+        // 全量重算（boundaries「全量重算」）：G6 挂着信物的子被移走后信物留在空格上（R4），本串不再挂件 → 旗手加值由 3 变 0。
+        GameBoard board = Board().Place("F6", TestMaps.P0, PieceType.Bannerman).Place("G6", TestMaps.P0);
+        Attach(board, "G6", RelicToken.Spawned(0, RelicKind.Watchtower));
+        Assert.Equal(3, PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "F6").BannerBonus);
+
+        board.RemoveStones([TestMaps.At("G6")]);
+
         Assert.Equal(0, PowerCalculator.Compute(board).GroupContaining(TestMaps.P0, "F6").BannerBonus);
-    }
-
-    [Fact]
-    public void 不看揭示与控制()
-    {
-        // 规格 Scenario：旗手子位于 F6；经气边相邻的 G6 是尚未揭示的空信物格，经气边相邻的 F7 被玩家 B 的棋子占据、由 B 控制 → 3 × 2 = 6。
-        // 计分层的输入只有盘面：揭示状态不在盘面上（本层读不到），控制由占据体现——F7 被 B 占据而仍计入，证明不看控制。
-        GameBoard board = TestMaps.WithRelicCells(["G6", "F7"]).Place("F6", TestMaps.P0, PieceType.Bannerman).Place("F7", TestMaps.P1);
-
-        PowerSnapshot snapshot = PowerCalculator.Compute(board);
-        Assert.True(snapshot.Coverage.OwnershipOf(TestMaps.At("F7")).IsControlledBy(TestMaps.P1));   // 前提：F7 由 B 控制
-        Assert.Equal(6, snapshot.GroupContaining(TestMaps.P0, "F6").BannerBonus);
-
-        // more-pieces-relics 段 B：势力计算多了"已知信物内容"输入（D3；预演与 AI 只传已揭示的公开内容）。
-        // 只知道 F7（已揭示）而不知道 G6（未揭示）时，旗手照样按位置计 2 个信物格——旗手不读这份输入。
-        // 段 A M-A2 的真正变异（旗手只数已知内容里的格）由这一条落地。
-        var revealedOnly = new Dictionary<Coord, Relics.RelicType> { [TestMaps.At("F7")] = Relics.RelicType.Command };
-        Assert.Equal(6, PowerCalculator.Compute(board, RelicFixtures.AllActive(TestMaps.P0, TestMaps.P1), revealedOnly)
-            .GroupContaining(TestMaps.P0, "F6").BannerBonus);
-    }
-
-    [Fact]
-    public void 同一信物格分别为两枚旗手子计分()
-    {
-        // 规格 Scenario：A 的两枚旗手子分别位于 F6 与 H6，二者都与空信物格 G6 有气边、各自没有其他相邻信物格 → 各 3 点，合计 6；分属两条棋串各计入自己的棋串。
-        GameBoard board = TestMaps.WithRelicCells(["G6"])
-            .Place("F6", TestMaps.P0, PieceType.Bannerman).Place("H6", TestMaps.P0, PieceType.Bannerman);
-
-        PlayerPower player = PowerCalculator.Compute(board).Of(TestMaps.P0);
-
-        Assert.Equal(2, player.Groups.Length);   // 前提：G6 空着，两枚分属两条棋串
-        Assert.All(player.Groups, g => Assert.Equal(3, g.BannerBonus));
-        Assert.Equal(6, player.Groups.Sum(g => g.BannerBonus));
+        Assert.Equal(RelicKind.Watchtower, board.RelicAt(TestMaps.At("G6"))?.Kind);
     }
 }

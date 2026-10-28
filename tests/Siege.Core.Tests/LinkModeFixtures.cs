@@ -4,7 +4,6 @@ using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests;
 
@@ -18,8 +17,6 @@ internal static class LinkModeFixtures
 
     private static readonly Lazy<MapData> LazyMap = new(() => MapCatalog.Resolve(MapId));
 
-    private static readonly Lazy<MapData> LazyRelicMap = new(() => LinkMapFixtures.WithRelics(MapCatalog.Resolve(MapId)));
-
     internal static readonly PlayerId P0 = TestMaps.P0;
     internal static readonly PlayerId P1 = TestMaps.P1;
     internal static readonly PlayerId P2 = TestMaps.P2;
@@ -29,12 +26,6 @@ internal static class LinkModeFixtures
     /// <summary><see cref="MapId"/>（<c>link:1:4</c>）的初始图：4 人浮空岛，10 块出生平台（map-expand-25；原为 <c>link:1</c> 的 5 块紧贴出生棋盘）。</summary>
     internal static MapData Map => LazyMap.Value;
 
-    /// <summary>
-    /// <c>link:1:4</c> 补上段 A2 口径信物格的手写夹具（<see cref="LinkMapFixtures.WithRelics"/>；map-expand-25 段 A3：生成图不再放静态信物格）。
-    /// 只给仍在测旧信物系统（生成、揭示、控制、可见范围）的对局测试用；标识仍是 <see cref="MapId"/>，按标识回放的日志会解析回无信物的生成图，不得用于回放类测试。
-    /// </summary>
-    internal static MapData RelicMap => LazyRelicMap.Value;
-
     /// <summary>链接模式、插旗立即（open-map 段 B：决赛倒计时 K 随拼接规则删除，选项即缺省）。</summary>
     internal static MatchOptions Options => MatchOptions.Immediate with { ScoringVersion = Siege.Core.Scoring.ScoringVersion.V1 };
 
@@ -42,15 +33,8 @@ internal static class LinkModeFixtures
     internal static MatchFlow Create(GameSeed? seed = null, MatchOptions? options = null) =>
         MatchFlow.Create(Map, seed ?? TestMaps.Seed, All, options ?? Options);
 
-    /// <summary>插旗阶段的链接模式对局，地图为 <see cref="RelicMap"/>（带信物格的手写夹具）。</summary>
-    internal static MatchFlow CreateWithRelics(GameSeed? seed = null, MatchOptions? options = null) =>
-        MatchFlow.Create(RelicMap, seed ?? TestMaps.Seed, All, options ?? Options);
-
     /// <summary>按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。</summary>
     internal static MatchFlow Started(int[] zones, GameSeed? seed = null, MatchOptions? options = null) => Plant(Create(seed, options), zones);
-
-    /// <summary>同 <see cref="Started"/>，地图为 <see cref="RelicMap"/>（带信物格的手写夹具）。</summary>
-    internal static MatchFlow StartedWithRelics(int[] zones, GameSeed? seed = null, MatchOptions? options = null) => Plant(CreateWithRelics(seed, options), zones);
 
     private static MatchFlow Plant(MatchFlow match, int[] zones)
     {
@@ -65,34 +49,19 @@ internal static class LinkModeFixtures
 
     /// <summary>
     /// 平坦的手写链接档图（link-map-terrain 第 2 组）：<c>link:1</c> 的出生棋盘带主题地形（出生棋盘 0 是高台，外圈内侧有高度 2 的格），
-    /// 角上的气与领地随主题变化；依赖"平坦的角"做势力算例的测试改用这张图。载体是 <see cref="LinkMapFixtures.Births"/>（五块 6×6，中间带只有东列两端两格林地），
-    /// 棋盘 0 的出生区档信物移到核心区左下角起 (3,1) / (1,3)，不压在算例的棋子下。标识取 <c>link:90003</c>（链接模式只接受 link: 标识；不经生成器）。
+    /// 角上的气与领地随主题变化；依赖"平坦的角"做势力算例的测试改用这张图。载体是 <see cref="LinkMapFixtures.Births"/>（五块 6×6，中间带只有东列两端两格林地）。
+    /// 标识取 <c>link:90003</c>（链接模式只接受 link: 标识；不经生成器）。
     /// </summary>
-    internal static readonly MapData FlatMap = BuildFlatMap();
-
-    private static MapData BuildFlatMap()
-    {
-        MapData built = LinkMapFixtures.Build("link:90003:4", LinkMapFixtures.Births);
-        BoardPlate zero = built.Boards[0];
-        var birth = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
-        return built with
-        {
-            RelicCells = built.RelicCells.Where(kv => !zero.Contains(kv.Key))
-                .Append(KeyValuePair.Create(new Coord(zero.Origin.X + 3, zero.Origin.Y + 1), birth))
-                .Append(KeyValuePair.Create(new Coord(zero.Origin.X + 1, zero.Origin.Y + 3), birth))
-                .ToImmutableDictionary(),
-        };
-    }
+    internal static readonly MapData FlatMap = LinkMapFixtures.Build("link:90003:4", LinkMapFixtures.Births);
 
     /// <summary>
     /// 在 <see cref="FlatMap"/> 上按 <paramref name="zones"/>（P0..P3 各自的出生棋盘）锁定并开始第 1 大回合；每人手牌 50 枚普通子。
-    /// map-expand-25 段 A2：手写的 3+2 紧贴图在浮空岛校验器下恒不合规（画布、平台高度、坡道），改经 <see cref="MatchFlow.CreateUnvalidated"/> 建局；
-    /// 信物照常按本局内容集由 <see cref="RelicGenerator"/> 生成（与 <see cref="MatchFlow.Create"/> 同一调用），对局与改前逐步相同。
+    /// map-expand-25 段 A2：手写的 3+2 紧贴图在浮空岛校验器下恒不合规（画布、平台高度、坡道），改经 <see cref="MatchFlow.CreateUnvalidated"/> 建局。
     /// </summary>
     internal static MatchFlow StartedFlat(int[] zones, MatchOptions? options = null)
     {
         options ??= Options;
-        MatchFlow match = MatchFlow.CreateUnvalidated(FlatMap, TestMaps.Seed, All, RelicGenerator.Generate(FlatMap, TestMaps.Seed, options.ContentSet), options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(FlatMap, TestMaps.Seed, All, options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
@@ -123,22 +92,21 @@ internal static class LinkModeFixtures
         new(new Coord(40, 2), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
     ];
 
-    /// <summary>平坦变体地图（无地形、信物格由用例给）。</summary>
-    internal static MapData PlainMap(params string[] relicCells) => PlainMap(null, relicCells);
+    /// <summary>平坦变体地图（无地形）。</summary>
+    internal static MapData PlainMap() => PlainMap(null);
 
     /// <summary>
-    /// 平坦变体地图（标识 <see cref="PlainMapId"/>）：棋盘 0 全是高度 0 的可落子草地——<b>没有</b>林地、深水、岩石，信物格只取 <paramref name="relicCells"/>（一律公共区标准档），
-    /// 其余四块棋盘同样平坦、无信物格。原 9×9 夹具的局面整体平移 (+2, +2) 后落在棋盘 0 上（9×9 的 <c>A1</c> → 这里的 <c>C3</c>），
-    /// 棋盘外一律障碍，与 9×9 的盘边封堵语义相同。偏离校验之处：中间带没有改造目标（裁决 M7）、信物格不按出生区档布置——所以只能经
+    /// 平坦变体地图（标识 <see cref="PlainMapId"/>）：棋盘 0 全是高度 0 的可落子草地——<b>没有</b>林地、深水、岩石，
+    /// 其余四块棋盘同样平坦。原 9×9 夹具的局面整体平移 (+2, +2) 后落在棋盘 0 上（9×9 的 <c>A1</c> → 这里的 <c>C3</c>），
+    /// 棋盘外一律障碍，与 9×9 的盘边封堵语义相同。偏离校验之处：中间带没有改造目标（裁决 M7）——所以只能经
     /// <see cref="MatchFlow.CreateUnvalidated"/> 建局。<paramref name="terrain"/> 写在本图坐标上（需要地形的用例：深水 / 林地 / 栅栏放棋盘 0 中间带）。
     /// </summary>
-    internal static MapData PlainMap(TerrainData? terrain, params string[] relicCells)
+    internal static MapData PlainMap(TerrainData? terrain)
     {
         const int Margin = 2;
         int width = PlainBoards.Max(b => b.Origin.X + b.Width) + Margin;
         int height = PlainBoards.Max(b => b.Origin.Y + b.Height) + Margin;
         ImmutableHashSet<Coord> playable = [.. PlainBoards.SelectMany(b => b.Cells())];
-        var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
         return new MapData
         {
             Id = PlainMapId,
@@ -151,7 +119,6 @@ internal static class LinkModeFixtures
             Obstacles = [.. TestMaps.Rect(0, 0, width, height).Where(c => !playable.Contains(c))],
             TerrainData = terrain ?? TerrainData.Flat,
             BirthZones = [.. PlainBoards.Select(b => (ImmutableHashSet<Coord>)[.. b.CoreCells()])],
-            RelicCells = relicCells.ToImmutableDictionary(Coord.Parse, _ => spec),
             ChokePoints = [],
             CentralEntrance = PlainBoards[0].CoreOrigin,
         };
@@ -169,28 +136,28 @@ internal static class LinkModeFixtures
     internal static MatchFlow RequireLink(MatchFlow match) =>
         LinkMapId.IsLinkMap(match.Map.Id) ? match : throw new InvalidOperationException($"夹具建局不在链接图上（{match.Map.Id}）。");
 
-    /// <summary>平坦变体上建局、停在插旗阶段；信物为手工分布（格与内容由用例给，坐标写在本图上）。</summary>
-    internal static MatchFlow PlainCreate(GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
-        PlainCreate(null, seed, options, relics);
+    /// <summary>平坦变体上建局、停在插旗阶段。</summary>
+    internal static MatchFlow PlainCreate(GameSeed? seed = null, MatchOptions? options = null) =>
+        PlainCreate(null, seed, options);
 
     /// <summary>同上，另可指定地形。</summary>
-    internal static MatchFlow PlainCreate(TerrainData? terrain, GameSeed? seed = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
+    internal static MatchFlow PlainCreate(TerrainData? terrain, GameSeed? seed = null, MatchOptions? options = null)
     {
-        MapData map = PlainMap(terrain, [.. relics.Select(r => r.Cell)]);
-        return RequireLink(MatchFlow.CreateUnvalidated(map, seed ?? TestMaps.Seed, All, TestMaps.Relics(map, relics), PlainOptions(options)));
+        MapData map = PlainMap(terrain);
+        return RequireLink(MatchFlow.CreateUnvalidated(map, seed ?? TestMaps.Seed, All, PlainOptions(options)));
     }
 
     /// <summary>
     /// 平坦变体上建局并依次插旗（缺省四人同锁棋盘 0：单一战场、锁定旗数 4 不进首轮配对、没有链接，第 1 大回合起合法范围即整块棋盘 0），
     /// 给每人 50 枚普通子，进入第 1 大回合。
     /// </summary>
-    internal static MatchFlow PlainStarted(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics) =>
-        PlainStarted(null, seed, zones, options, relics);
+    internal static MatchFlow PlainStarted(GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null) =>
+        PlainStarted(null, seed, zones, options);
 
     /// <summary>同上，另可指定地形。</summary>
-    internal static MatchFlow PlainStarted(TerrainData? terrain, GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null, params (string Cell, RelicContent Content)[] relics)
+    internal static MatchFlow PlainStarted(TerrainData? terrain, GameSeed? seed = null, int[]? zones = null, MatchOptions? options = null)
     {
-        MatchFlow match = PlainCreate(terrain, seed, options, relics);
+        MatchFlow match = PlainCreate(terrain, seed, options);
         zones ??= [0, 0, 0, 0];
         foreach (PlayerId p in All)
         {

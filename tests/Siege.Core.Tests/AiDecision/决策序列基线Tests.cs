@@ -26,6 +26,13 @@ namespace Siege.Core.Tests.AiDecision;
 /// 简单种子 1 第 14 小回合 P0（原落 V4、新落 P4，都是新岩台）——仍都在新地表格或其四邻；相对改前基线的首个分歧与第一次相同（种子 2 除外：第 5 小回合 P2）。逐份见任务目录 rebaseline.txt。</para>
 /// <para>ai-whole-batch 1.6（整批候选缺省开）重钉 2 份：困难种子 1 首个分歧在第 37 小回合（第 10 大回合）P2 选中配对候选；种子 3 见 <see cref="决策序列基线_链接模式Tests"/>。
 /// 种子 1 / 2 与简单种子 1 逐字节不变。改前 5 份另存为 <c>*-wb0.txt</c>，由 <see cref="整批候选关闭时与改前基线相同"/> 以开关 0 逐字节比对（见任务 10-22-ai-whole-batch 的 rebaseline.txt）。</para>
+/// <para>relic-redesign 接线段 W1（旧信物删除 + 地图信物刷新接入对局，AI 评价版本 11 → 12）重录全部 15 份（5 份缺省 + 5 份 <c>*-wb0</c> + 5 份 <c>*-es0</c>，开关副本经 <c>RebuildIfRequested</c>）：
+/// 首部只有地图摘要一行变（地图文件不再写 RelicCells 字段，link:1:4 摘要 58EF4E07… → AF22F0AB…）；决策行第 1–3 大回合逐字节相同，首个分歧都在第一批地图信物落位之后——
+/// 种子 1 / 2 第 4 大回合 P2、种子 3 与困难种子 1 第 4 大回合 P1、简单种子 1 第 5 大回合 P2（第 4 大回合开始时第一批信物落位，盘面与 AI 评价随之变）；三组开关副本的首个分歧与各自缺省份相同。</para>
+/// <para>relic-redesign 段 C1（信物维改为势力增量口径 <c>RelicEstimate</c> 三桶 + AI 挂出改为势力增量最大落点，AI 评价版本 12 → 13）重录 12 份：三份简单难度（缺省 / wb0 / es0）<b>逐字节不变</b>
+/// （简单难度不算信物维、基线不带入，是本次改动不泄漏到简单难度的反面对照）；其余 12 份首部只有版本号变、第 1–3 大回合逐字节相同，首个分歧都在第一批信物落位之后——
+/// 种子 1（三份）第 4 大回合 P2（原 X5 / AD11 / W13 旗手 → X5 / AD11 / W23 普通）、种子 2（三份）第 4 大回合 P2（原 X5 / AA6 倍增 / AD11 / AF14 哨兵 → AA6 / AD11 / U21 倍增）、
+/// 困难种子 1（三份）第 4 大回合 P1（原 O4 旗手 / X5 / AD11 / Q27 旗手 → N4 旗手 / O4 旗手 / X5 / AD11）、种子 3 缺省第 6 大回合 P1（原 O6 连珠 + K14 → 只落 O6）、种子 3 wb0 / es0 第 6 大回合 P1（原 O6 → AP32）。</para>
 /// </remarks>
 public class 决策序列基线Tests
 {
@@ -105,11 +112,13 @@ public class 决策序列基线Tests
     [InlineData(1UL, AiDifficulty.Hard, "decisions-link1-hard-seed1-wb0.txt")]
     public void 整批候选关闭时与改前基线相同(ulong seed, AiDifficulty difficulty, string fixture)
     {
+        string actual = LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds, difficulty, attach: null, configure: c => c with { WholeBatch = 0, EditSeed = 0 });
+        RebuildIfRequested(fixture, actual);
         string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", fixture);
         Assert.True(File.Exists(path), $"找不到改前基线副本：{path}");
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
-        Assert.Equal(expected, LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds, difficulty, attach: null, configure: c => c with { WholeBatch = 0, EditSeed = 0 }));
+        Assert.Equal(expected, actual);
     }
 
     /// <summary>
@@ -124,11 +133,25 @@ public class 决策序列基线Tests
     [InlineData(1UL, AiDifficulty.Hard, "decisions-link1-hard-seed1-es0.txt")]
     public void 搭桥候选关闭时与改前基线相同(ulong seed, AiDifficulty difficulty, string fixture)
     {
+        string actual = LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds, difficulty, attach: null, configure: c => c with { EditSeed = 0 });
+        RebuildIfRequested(fixture, actual);
         string path = Path.Combine(AppContext.BaseDirectory, "AiDecision", "Fixtures", fixture);
         Assert.True(File.Exists(path), $"找不到改前基线副本：{path}");
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains($"difficulty={difficulty} ", expected, StringComparison.Ordinal);
-        Assert.Equal(expected, LinkDecisionSequence.Export(seed, LinkDecisionSequence.BaselineRounds, difficulty, attach: null, configure: c => c with { EditSeed = 0 }));
+        Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// 规则有意变更后重录开关副本（relic-redesign W1 起与主基线同一开关 <c>SIEGE_REBUILD_DECISION_BASELINE=1</c>）：开关副本守的是"关闭时与开关引入前逐步相同"，
+    /// 规则本身变了（例如信物刷新接入对局）时，副本与主基线一起按新规则重录——副本仍是"同一规则下关掉该开关"的导出。
+    /// </summary>
+    private static void RebuildIfRequested(string fixture, string actual)
+    {
+        if (Environment.GetEnvironmentVariable("SIEGE_REBUILD_DECISION_BASELINE") == "1")
+        {
+            File.WriteAllText(Path.Combine(SourceFixtureDirectory(), fixture), actual, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        }
     }
 
     private static string SourceFixtureDirectory([System.Runtime.CompilerServices.CallerFilePath] string thisFile = "") =>

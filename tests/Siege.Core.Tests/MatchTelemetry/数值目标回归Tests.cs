@@ -114,30 +114,26 @@ public class 数值目标回归Tests
     [Fact]
     public void 时长与地图规模并列()
     {
-        // 规格 Scenario：读取对局长度指标 → 报告同时给出该批次地图的可落子格数与信物格数（两者是对局时长的调节手段）。
-        // 取自日志首部（PlayableCells、Relics 条数），不按地图标识重建地图。样本：370 格 / 16 信物 与 411 格 / 20 信物各一局，
-        // 另一局是 denser-map 之前的旧日志（PlayableCells 为 null）：可落子格统计排除并计数，信物格照常计入。
-        // 变异验证 M-E12：MapScale 的可落子格取 Relics.Count（两列取错来源） → 实跑红 1（本测试）。
-        RelicEntry Relic(int i) => new() { Coord = $"A{i + 1}", Zone = "Contested", Budget = "Standard", Type = "Command", Magnitude = 1 };
+        // 规格 Scenario：读取对局长度指标 → 报告同时给出该批次地图的可落子格数（对局时长的调节手段；relic-redesign W1：静态信物格删除，原"信物格数"一列随之删除）。
+        // 取自日志首部（PlayableCells），不按地图标识重建地图。样本：370 格与 411 格各一局，另一局是 denser-map 之前的旧日志（PlayableCells 为 null）：可落子格统计排除并计数。
         MatchLog small = SimFixtures.Synthetic(1, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(7, [0]),
-            playableCells: 370, relics: [.. Enumerable.Range(0, 16).Select(Relic)]);
+            playableCells: 370);
         MatchLog frontier = SimFixtures.Synthetic(2, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(9, [1]),
-            playableCells: 411, relics: [.. Enumerable.Range(0, 20).Select(Relic)]);
+            playableCells: 411);
         MatchLog legacy = SimFixtures.Synthetic(3, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(8, [2]),
-            playableCells: null, relics: [.. Enumerable.Range(0, 18).Select(Relic)]);
+            playableCells: null);
 
         BalanceReport report = BalanceAnalyzer.Analyze([small, frontier, legacy]);
         MapScaleSection m = report.MapScale;
 
         Assert.Equal((2, 1, 370, 411, 390.5), (m.PlayableMatches, m.PlayableSkipped, m.MinPlayable, m.MaxPlayable, m.MeanPlayable));
-        Assert.Equal((3, 16, 20, 18.0), (m.RelicMatches, m.MinRelics, m.MaxRelics, m.MeanRelics));
 
         string text = ReportWriter.Render(report);
         int length = text.IndexOf("### 5. 对局结束的大回合数与整局时长", StringComparison.Ordinal);
         Assert.True(length >= 0);
         string section = text[length..text.IndexOf("### 6.", length, StringComparison.Ordinal)];
         Assert.Contains("地图可落子格 370–411（平均 390.5；未记可落子格的旧日志 1 局）", section);
-        Assert.Contains("信物格 16–20（平均 18）", section);
+        Assert.DoesNotContain("信物格", section, StringComparison.Ordinal);
     }
 
     [Fact]

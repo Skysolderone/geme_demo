@@ -5,7 +5,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 ## Requirements
 ### Requirement: 原型调试 AI
 
-系统 SHALL 提供一种调试 AI，可选择读取完整权威状态（含未揭示信物内容、敌方手牌数量与未确认批次），以更快发现极端组合。
+系统 SHALL 提供一种调试 AI，可选择读取完整权威状态（含敌方手牌数量、未确认批次与未挂出的带入清单），以更快发现极端组合。
 
 该模式 MUST 被显式标记为测试专用，并 MUST NOT 用于任何面向玩家的对局。
 
@@ -13,7 +13,7 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 #### Scenario: 调试 AI 可读全量状态
 - **WHEN** 以测试专用模式启动调试 AI
-- **THEN** AI 可读取未揭示信物内容与敌方手牌数量
+- **THEN** AI 可读取敌方手牌数量与未确认批次
 
 #### Scenario: 面向玩家的对局拒绝调试 AI
 - **WHEN** 尝试在非测试模式的对局中启用调试 AI
@@ -45,9 +45,9 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 系统 SHALL 支持按种子批次自动执行大量对局，并汇总结果。
 
-批量跑局 SHALL 支持配置：地图、玩家数量、各玩家的 AI 难度与权重配置、匠人征募权重、小回合数截断、种子范围、局数、每名玩家的带入数量（`--carry-in`，取 0 或 1）。未显式配置的匠人权重 SHALL 取标准局值。实际生效的匠人权重、小回合数截断、各玩家 AI 权重与带入数量 MUST 写入该批次的配置记录。
+批量跑局 SHALL 支持配置：地图、玩家数量、各玩家的 AI 难度与权重配置、匠人征募权重、小回合数截断、种子范围、局数、每名玩家的带入件数（`--carry-in`，取 0–5）。未显式配置的匠人权重 SHALL 取标准局值。实际生效的匠人权重、小回合数截断、各玩家 AI 权重与带入数量 MUST 写入该批次的配置记录。
 
-带入数量缺省为 0，即关闭带入带出，批次结果 MUST 与引入带入带出之前逐局相同，不影响既有基线。带入数量为 1 时开启带入带出，每名 AI 玩家按 `carry-in-out`「AI 带入」从 `carry-ai` 子流随机带入 1 件补给；批量跑局 MUST NOT 读写任何玩家档案，带出结算只写入日志。
+带入件数缺省为 0，即关闭带入带出，批次结果 MUST 与引入带入带出之前逐局相同，不影响既有基线。带入件数为 1–5 时开启带入带出，每名 AI 玩家按 `carry-in-out`「AI 带入」从 `carry-ai` 子流随机带入该数量的普通信物（至多 2 件保险）；批量跑局 MUST NOT 读写任何玩家档案，带出结算只写入日志。
 
 系统 SHALL 支持并行执行；并行 MUST NOT 改变任何单局的结果。
 
@@ -79,19 +79,19 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 
 #### Scenario: 缺省关闭带入
 - **WHEN** 不传 `--carry-in` 执行一批对局
-- **THEN** 配置记录写明带入数量 0，每局日志与引入带入带出之前逐局相同
+- **THEN** 配置记录写明带入件数 0，每局日志与引入带入带出之前逐局相同
 
 #### Scenario: 开启带入
-- **WHEN** 以 `--carry-in 1`、种子 1–20 执行 4 人 AI 对局
-- **THEN** 每局 4 名 AI 各带入 1 件补给并写入日志首部，同一种子重跑时带入逐项相同，用户目录下的档案不被读写
+- **WHEN** 以 `--carry-in 3`、种子 1–20 执行 4 人 AI 对局
+- **THEN** 每局 4 名 AI 各带入 3 件（2 件保险）并写入日志首部，同一种子重跑时带入逐项相同，用户目录下的档案不被读写
 
 #### Scenario: 非法带入数量
-- **WHEN** 以 `--carry-in 2` 执行
+- **WHEN** 以 `--carry-in 6` 执行
 - **THEN** 入口报错退出，不回退到缺省值
 
 ### Requirement: 可复现回放
 
-任何一局 SHALL 能凭对局种子与配置完整复现（open-map：不再有配对事件）；若对局中包含人工接管，SHALL 另加记录的人工决策序列。带入带出开启的对局，回放 SHALL 按日志首部记录的各玩家带入重建开局手牌。
+任何一局 SHALL 能凭对局种子与配置完整复现（open-map：不再有配对事件）；若对局中包含人工接管，SHALL 另加记录的人工决策序列。带入带出开启的对局，回放 SHALL 按日志首部记录的各玩家带入清单重建对局配置。
 
 出现异常终止或断言失败的局 SHALL 保留足以复现的最小信息。
 
@@ -104,16 +104,16 @@ TBD - created by archiving change add-heuristic-ai. Update Purpose after archive
 - **THEN** 系统保留该局的种子、配置与终止前的完整日志，可单独重跑复现
 
 #### Scenario: 带入对局可回放
-- **WHEN** 回放一局本机玩家带入换型令（连珠子）、三名 AI 各带入 1 件的对局日志
-- **THEN** 回放的开局手牌与原局相同，每一步的征募候选、批次与结算结果逐项一致
+- **WHEN** 回放一局 4 名 AI 各带入 2 件信物的对局日志
+- **THEN** 回放的带入清单与原局相同，每一步的征募候选、批次与结算结果逐项一致
 
 ### Requirement: 随机子流隔离
 
-批量跑局 SHALL 保证各随机子流（信物生成、征募抽取、流程初始化、原型盲选 `flag-pick`、AI 带入 `carry-ai`、各玩家的征召签 `carry-draft:<玩家编号>`）相互隔离；改变其中一个子流的消费次数 MUST NOT 影响其他子流的取值。地图布局 MUST NOT 消费任何对局内子流。
+批量跑局 SHALL 保证各随机子流（信物刷新 `relic-spawn:<落位大回合>`、掉落 `relic-drop:<玩家编号>`、征募抽取、流程初始化、原型盲选 `flag-pick`、AI 带入 `carry-ai`）相互隔离；改变其中一个子流的消费次数 MUST NOT 影响其他子流的取值。地图布局 MUST NOT 消费任何对局内子流。
 
 #### Scenario: 子流互不干扰
 - **WHEN** 改变某玩家的一次征募决策，使征募子流的消费次数变化
-- **THEN** 该局出生棋盘的信物生成结果逐格保持不变
+- **THEN** 该局每批信物刷新的预告与落位逐项保持不变
 
 ### Requirement: 各入口按地图标识选图
 

@@ -28,29 +28,9 @@ public class 改造在预演中的呈现Tests
 
     private static PreviewPresentation Shown(GameBoard board, params Placement[] placements) =>
         PreviewPresentation.Build(
-            BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0), placements, new BoardHistory(), Roster(P0, P1),
-                EmptyRelics(board), majorRound: 5),
+            BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0), placements, new BoardHistory(), Roster(P0, P1)),
             EmptyHand(P0),
             LibertyThresholds.Default);
-
-    [Fact]
-    public void 工坊下列出隔一格目标()
-    {
-        // more-pieces-relics batch-preview「计分信物与新棋子的预演」Scenario「工坊下列出隔一格目标」：本小回合工坊生效，暂放匠人在 F6，F8 是林地
-        // → 预演列出的合法改造目标含"烧林 F8"。工坊标记经批次上下文（来自快照）传入，目标集合仍只由改造合法性唯一实现给出；
-        // 同一暂放在工坊未生效时不含该目标。
-        GameBoard board = TestMaps.Blank(TestMaps.Terrain(surfaces: [("F8", Surface.Forest)]), size: 9);
-        Placement[] placements = [new Placement(TestMaps.At("F6"), PieceType.Artisan, null)];
-
-        Core.Preview.BatchPreview with = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0) with { WorkshopActive = true },
-            placements, new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
-        Core.Preview.BatchPreview without = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0),
-            placements, new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
-
-        Assert.Contains(TerrainEdit.Burn(TestMaps.At("F8")), Assert.Single(with.EditOptions).Legal);
-        Assert.DoesNotContain(TerrainEdit.Burn(TestMaps.At("F8")), Assert.Single(without.EditOptions).Legal);
-        Assert.Equal(TerrainEditRules.LegalTargets(board.Map, TestMaps.At("F6"), workshop: true), Assert.Single(with.EditOptions).Legal);
-    }
 
     [Fact]
     public void 显示改造目标()
@@ -230,7 +210,7 @@ public class 改造在预演中的呈现Tests
         TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("F5"));
 
         Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0), [BatchFixtures.Artisan("F4", fence)],
-            new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
+            new BoardHistory(), Roster(P0, P1));
 
         Assert.True(preview.IsLegal);
         CapturedGroup captured = Assert.Single(preview.Captures);
@@ -255,13 +235,13 @@ public class 改造在预演中的呈现Tests
 
         Core.Preview.BatchPreview fenced = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0),
             [BatchFixtures.Artisan("F4", TerrainEdit.Fence(TestMaps.At("E5"), TestMaps.At("F5")))],
-            new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
+            new BoardHistory(), Roster(P0, P1));
         Assert.True(fenced.IsLegal);
         Assert.Equal([["E5"], ["F5"]], fenced.Captures.Select(g => g.Stones.Select(s => s.Coord).Notations().ToArray()).OrderBy(g => g[0], StringComparer.Ordinal));
 
         Core.Preview.BatchPreview plain = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P0),
             [new Placement(TestMaps.At("F4"), PieceType.Artisan, null)],
-            new BoardHistory(), Roster(P0, P1), EmptyRelics(board), majorRound: 5);
+            new BoardHistory(), Roster(P0, P1));
         Assert.Equal(["E5", "F5"], Assert.Single(plain.Captures).Stones.Select(s => s.Coord).Notations());
     }
 }

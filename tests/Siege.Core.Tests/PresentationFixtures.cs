@@ -10,7 +10,6 @@ using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Visibility;
 using PreviewResult = Siege.Core.Preview.BatchPreview;
@@ -44,10 +43,6 @@ internal static class PresentationFixtures
 
     internal static PublicWorld PublicWorldOf(this MatchFlow match) => PublicWorld.From(match.Publish(), match.PublishSupplement());
 
-    /// <summary>不含任何信物的账本（静态预演用例的盘面没有信物格）。</summary>
-    internal static RelicLedger EmptyRelics(GameBoard board) =>
-        new(new RelicGenerationRecord(TestMaps.Seed, board.Map.Id, [], Converged: true, Rerolls: 0));
-
     /// <summary>空手牌的私有视图（静态预演用例不经手牌账本）。</summary>
     internal static HandPrivateView EmptyHand(PlayerId player) =>
         new(player, ImmutableSortedDictionary<PieceType, HandEntry>.Empty, TurnPhase.Idle, null);
@@ -64,34 +59,9 @@ internal static class PresentationFixtures
             BatchFixtures.Context(board, player, limit, stock),
             [.. placements.Select(p => new Placement(Coord.Parse(p.Cell), p.Type))],
             history ?? new BoardHistory(),
-            roster,
-            EmptyRelics(board),
-            majorRound: 5);
+            roster);
 
-    /// <summary>
-    /// 平坦 8×8 链接载体（<see cref="LinkModeFixtures.PlainMap(string[])"/>），但每个信物格自带分区与档位（平坦载体把信物格一律标为公共区标准档，测不了"默认棋盘不区分分区"）。
-    /// 四人同锁棋盘 0，进入第 1 大回合后摆到第 5 大回合。坐标写在棋盘 0 上。retire-legacy-rules 1.2：原为 9×9 流程夹具（旧模式），各人锁自己的出生区。
-    /// </summary>
-    internal static MatchFlow StartedWithZonedRelics(params (string Cell, RelicContent Content, RelicZone Zone, BudgetTier Tier)[] relics)
-    {
-        MapData map = LinkModeFixtures.PlainMap() with
-        {
-            RelicCells = relics.ToImmutableDictionary(r => Coord.Parse(r.Cell), r => new RelicCellSpec(r.Zone, r.Tier)),
-        };
-        ImmutableArray<RelicPlacement> placements =
-            [.. relics.Select(r => new RelicPlacement(Coord.Parse(r.Cell), r.Content, new RelicCellSpec(r.Zone, r.Tier))).OrderBy(p => p.Coord)];
-        MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All,
-            new RelicGenerationRecord(TestMaps.Seed, map.Id, placements, Converged: true, Rerolls: 0), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
-        foreach (PlayerId p in TestMaps.All)
-        {
-            match.Debug.SeedHand(p, (PieceType.Basic, 50));
-        }
-
-        match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
-        return match.AtRound(5);
-    }
-
-    /// <summary>直接在权威盘面摆指定类型的棋子（绕过规则，只为构造局面），随后揭示并重算，让公开状态与盘面一致。</summary>
+    /// <summary>直接在权威盘面摆指定类型的棋子（绕过规则，只为构造局面），随后重算，让公开状态与盘面一致。</summary>
     internal static MatchFlow Pieces(this MatchFlow match, PlayerId owner, PieceType type, params string[] cells)
     {
         foreach (string cell in cells)
@@ -99,7 +69,6 @@ internal static class PresentationFixtures
             match.Board.Place(Coord.Parse(cell), owner, type);
         }
 
-        match.Relics.Reveal(match.Board, match.MajorRound);
         match.Debug.Recalculate();
         return match;
     }
@@ -194,7 +163,7 @@ internal static class PresentationFixtures
 
     /// <summary>
     /// 对局权威状态的指纹：部署阶段不能 <see cref="MatchFlow.Serialize"/>（只允许小回合边界），用逐项投影代替。
-    /// 覆盖盘面、历史、信物揭示与控制、势力榜版本与峰值、流程状态、事件、全部玩家两段账、征募子流位置、效果快照与暂放批次。
+    /// 覆盖盘面（含信物层）、历史、信物刷新记录、势力榜版本与峰值、流程状态、事件、全部玩家两段账、征募子流位置、效果快照与暂放批次。
     /// </summary>
     internal static string Fingerprint(MatchFlow m)
     {
@@ -202,9 +171,7 @@ internal static class PresentationFixtures
         {
             m.Board.Serialize(),
             m.History.Serialize(),
-            string.Join(";", m.Relics.RevealEvents.Select(e => e.ToString())),
-            m.Relics.DeployLimitPeak?.ToString() ?? "-",
-            string.Join(";", m.Relics.PublicStates().Select(r => r.ToString())),
+            string.Join(";", m.RelicBatches.Select(b => b.ToString())) + $" next={m.NextRelicId}",
             $"v{m.Scoreboard.Version} peak={m.Scoreboard.Peak?.MultiplierCount}/{m.Scoreboard.Peak?.MajorRound}",
             m.Scoreboard.Latest is null ? "-" : AiFixtures.PowerText(m),
             AiFixtures.FlowText(m),
@@ -220,7 +187,7 @@ internal static class PresentationFixtures
 
     // ---------- 信息边界：类型闭包 ----------
 
-    /// <summary>面向"他人"的模型闭包中 MUST NOT 出现的类型：私有视图、征募面板、暂放批次、预演、可变账本与对局本体、种子与生成记录。</summary>
+    /// <summary>面向"他人"的模型闭包中 MUST NOT 出现的类型：私有视图、征募面板、暂放批次、预演、可变账本与对局本体、种子（relic-redesign：旧信物账本与生成记录随旧信物删除）。</summary>
     internal static readonly Type[] PrivateTypes =
     [
         typeof(HandPrivateView),
@@ -234,12 +201,9 @@ internal static class PresentationFixtures
         typeof(PreviewResult),
         typeof(ResignationSnapshot),
         typeof(HandLedger),
-        typeof(RelicLedger),
         typeof(MatchFlow),
         typeof(MatchRunner),
         typeof(MatchDebugView),
-        typeof(RelicGenerationRecord),
-        typeof(RelicPlacement),
         typeof(GameSeed),
     ];
 

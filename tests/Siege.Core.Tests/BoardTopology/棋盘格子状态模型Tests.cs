@@ -17,21 +17,6 @@ public class 棋盘格子状态模型Tests
     }
 
     [Fact]
-    public void 信物格可正常落子()
-    {
-        // retire-legacy-maps 1.8：原取 v5（B2 为出生区信物格）；改用 13×13 手写夹具、B2 设为信物格，断言不变。
-        GameBoard board = TestMaps.WithRelicCells(["B2"], size: 13);
-        Coord relic = TestMaps.At("B2");
-        Assert.True(board[relic].IsRelicCell);
-
-        board.Place(relic, TestMaps.P0, PieceType.Fortress);
-
-        Cell cell = board[relic];
-        Assert.Equal(new Occupant(TestMaps.P0, PieceType.Fortress), cell.Occupant);
-        Assert.True(cell.IsRelicCell, "信物标记不得因落子而改变。");
-    }
-
-    [Fact]
     public void 棋盘外沿等同封堵()
     {
         // A1 在角上：越界的左、下两个方向不贡献气，效果与相邻障碍完全一致

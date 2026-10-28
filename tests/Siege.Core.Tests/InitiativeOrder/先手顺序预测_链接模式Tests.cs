@@ -49,8 +49,6 @@ public class 先手顺序预测_链接模式Tests
         Coord[] cells = [.. Map.BirthBoard(zone).Cells().Where(Map.IsPlayable).Order()];   // link-map-terrain：整块棋盘的可落子格（出生区已缩成核心区）
         match.Place(minority, cells[0]);
         match.Place(majority, cells[1..]);
-        // 直接摆子不经结算：被占据的信物格要先揭示，否则公开补充载荷会因"控制而未揭示"响亮失败（那是守门，不是本测试要验的）。
-        match.Relics.Reveal(match.Board, match.MajorRound);
         match.Debug.Recalculate();
     }
 
@@ -141,7 +139,6 @@ public class 先手顺序预测_链接模式Tests
         }
 
         match.Place(P0, [.. Map.AllCoords().Where(c => Map.IsPlayable(c) && match.Board[c].Occupant is null).Order()]);
-        match.Relics.Reveal(match.Board, match.MajorRound);
         match.Debug.Recalculate();
         Assert.DoesNotContain(Map.AllCoords(), c => Map.IsPlayable(c) && match.Board[c].Occupant is null);   // 样本口径：全图确实填满
 

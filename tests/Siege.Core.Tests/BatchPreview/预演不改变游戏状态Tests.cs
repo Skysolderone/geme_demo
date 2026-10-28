@@ -17,8 +17,8 @@ public class 预演不改变游戏状态Tests
         // 两条腿（testing.md）：部署阶段逐项指纹不变；小回合结束后与"从未预演过"的孪生局 Serialize 逐字节一致，并做字段级投影比对。
         // 变异验证 M-S1：BatchPreviewBuilder 的将揭示改为在正式账本上 `relics.Reveal(projected, majorRound)` → 本测试红 1（指纹里揭示事件变化）。
         // 变异验证 M-S2：MatchFlow.ForecastInitiative 的势力改用 `Scoreboard.Recalculate(Board, roster, completed)` → 本测试红 1（势力榜版本号变化）。
-        MatchFlow previewed = AiFixtures.Round5(relics: ("G7", RelicFixtures.Command()));
-        MatchFlow twin = AiFixtures.Round5(relics: ("G7", RelicFixtures.Command()));
+        MatchFlow previewed = AiFixtures.Round5();
+        MatchFlow twin = AiFixtures.Round5();
         previewed.Debug.SeedHand(P0, (PieceType.Basic, 5), (PieceType.Fortress, 2), (PieceType.Multiplier, 2));
         twin.Debug.SeedHand(P0, (PieceType.Basic, 5), (PieceType.Fortress, 2), (PieceType.Multiplier, 2));
         previewed.Pieces(P1, PieceType.Basic, "F7", "H7");
@@ -60,7 +60,7 @@ public class 预演不改变游戏状态Tests
         Assert.Equal(AiFixtures.PowerText(twin), AiFixtures.PowerText(previewed));
         Assert.Equal(AiFixtures.FlowText(twin), AiFixtures.FlowText(previewed));
         Assert.Equal(twin.Scoreboard.Version, previewed.Scoreboard.Version);
-        Assert.Equal(twin.Relics.RevealEvents.Select(e => e.ToString()), previewed.Relics.RevealEvents.Select(e => e.ToString()));
+        Assert.Equal(twin.RelicBatches.Select(b => b.ToString()), previewed.RelicBatches.Select(b => b.ToString()));
         Assert.Equal(twin.Hands.RecruitStreamConsumed, previewed.Hands.RecruitStreamConsumed);
         Assert.True(twin.Serialize().Length > 1000);
     }

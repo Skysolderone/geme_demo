@@ -242,7 +242,6 @@ public class 盘面派生量优化对照Tests
 
         var terrain = new TerrainData(
             heights.ToImmutableDictionary(), surfaces.ToImmutableDictionary(), [.. bridges], [.. fences]);
-        var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
         var map = new MapData
         {
             Id = $"test-random-{seed}",
@@ -251,7 +250,6 @@ public class 盘面派生量优化对照Tests
             MaxPlayers = 4,
             Obstacles = [.. obstacles],
             BirthZones = [Zone(0, 0), Zone(size - 2, size - 2)],
-            RelicCells = Enumerable.Range(0, 3).Select(_ => new Coord(random.Next(size), random.Next(size))).Distinct().ToImmutableDictionary(c => c, _ => spec),
             ChokePoints = [new Coord(size / 2, size / 2)],
             CentralEntrance = new Coord(size / 2, size / 2),
             TerrainData = terrain,
@@ -280,7 +278,7 @@ public class 盘面派生量优化对照Tests
     // ---------- 参考实现（改动前的代码，只经 Adjacency / MapData 取邻接与地形） ----------
 
     private static Cell RefCell(GameBoard board, Coord c) =>
-        new(c, board.Map.TerrainAt(c), board.Map.BirthZoneOf(c), board.Map.RelicCells.ContainsKey(c), board.OccupantAt(c));
+        new(c, board.Map.TerrainAt(c), board.Map.BirthZoneOf(c), board.OccupantAt(c));
 
     private static bool RefGivesLiberty(GameBoard board, Coord c) =>
         RefCell(board, c).IsPlayableEmpty && board.Map.SurfaceAt(c) != Surface.Shallows;

@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 using Siege.Sim.Analysis;
 using Siege.Sim.Logging;
 
@@ -26,9 +25,8 @@ public class 平衡分析方向Tests
 
         SelectionSection s = BalanceAnalyzer.Analyze([log]).Selection;
 
-        // more-pieces-relics（MODIFIED Scenario「该批次内容集中的每一种棋子」）：合成日志首部没有内容集 → v1，列原六种棋子 / 六类信物（改写前为 Enum.GetNames，枚举追加四值后不再等于 v1 的类型集合）。
+        // more-pieces-relics（MODIFIED Scenario「该批次内容集中的每一种棋子」）：合成日志首部没有内容集 → v1，列原六种棋子（relic-redesign W1：旧十类信物的统计随旧信物删除）。
         Assert.Equal(ContentSets.PieceTypesOf(ContentSet.V1).Select(t => t.ToString()).Order(), s.Pieces.Select(p => p.Type).Order());
-        Assert.Equal(RelicWeights.OrderOf(ContentSet.V1).Select(t => t.ToString()).Order(), s.Relics.Select(r => r.Type).Order());
         PieceStat basic = s.Pieces.Single(p => p.Type == "Basic");
         Assert.Equal((4, 1), (basic.Offered, basic.Picked));
         Assert.Equal(0.25, basic.SelectionRate.Value);
@@ -54,16 +52,14 @@ public class 平衡分析方向Tests
 
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze(SimFixtures.Sample.Value));
         Assert.All(ContentSets.PieceTypesOf(ContentSet.V1), type => Assert.Contains($"- 棋子 {type}：", text));
-        Assert.All(RelicWeights.OrderOf(ContentSet.V1), type => Assert.Contains($"- 信物 {type}：", text));
         Assert.DoesNotContain("- 棋子 Bannerman：", text);
-        Assert.DoesNotContain("- 信物 Relay：", text);
+        Assert.DoesNotContain("- 信物 ", text);
 
-        // 批次里有 v2 对局：列十种棋子、十类信物（未出现的也列出，0 次）。变异 MC-S1（列表不按内容集、恒取 v1）应红。
+        // 批次里有 v2 对局：列十种棋子（未出现的也列出，0 次）。变异 MC-S1（列表不按内容集、恒取 v1）应红。
         MatchLog v2 = WithContentSet(log, ContentSet.V2);
         SelectionSection mixed = BalanceAnalyzer.Analyze([v2, cut]).Selection;
         Assert.Equal(Enum.GetNames<PieceType>().Order(), mixed.Pieces.Select(p => p.Type).Order());
-        Assert.Equal(Enum.GetNames<RelicType>().Order(), mixed.Relics.Select(r => r.Type).Order());
-        Assert.Equal((0, 0), (mixed.Pieces.Single(p => p.Type == "Sentry").Offered, mixed.Relics.Single(r => r.Type == "Workshop").Count));
+        Assert.Equal(0, mixed.Pieces.Single(p => p.Type == "Sentry").Offered);
     }
 
     [Fact]
@@ -72,32 +68,23 @@ public class 平衡分析方向Tests
         // more-pieces-relics 规格 Scenario：读取一批内容集 v2 对局的分析报告 → 给出旗手、铁链、哨兵、界碑四种来源各自占全部位置加值的比例，
         // 以及经工坊扩展的改造次数与占比，即使某项为 0 也 MUST NOT 省略该行（本例界碑、犄角为 0）。第 12 项另给连营 / 犄角额外加值占比与驿站平均展示数加成。
         // 口径：终局快照（最后一条小回合快照）里参赛玩家的全部棋串；驿站加成按每条小回合快照（行动玩家本小回合的快照）平均；工坊按改造记录计。
-        // 合成 v2 局：终局棋串 连珠 2（其中连营 2）/ 高地 1 / 旗手 3 / 铁链 2 / 哨兵 4 / 界碑 0 → 位置加值 12；
-        // 两个小回合的驿站加成 2、0 → 平均 1，有加成的小回合平均 2；改造 2 次，其中经工坊扩展 1 次（50%）。
-        // 被排除的样本（testing.md「统计口径测试必须放一个被排除的样本」）：一局 v1 对局（终局连珠 6、两次改造都不经工坊）单列不适用，不进任何分母。
-        // 变异 MC-A12a（v1 对局也计入）、MC-A12b（工坊占比的分子改为全部改造）应红。
+        // 合成 v2 局：终局棋串 连珠 2 / 高地 1 / 旗手 3 / 铁链 2 / 哨兵 4 / 界碑 0 → 位置加值 12（relic-redesign W1：连营 / 犄角 / 驿站 / 工坊四行随旧信物删除）。
+        // 被排除的样本（testing.md「统计口径测试必须放一个被排除的样本」）：一局 v1 对局（终局连珠 6）单列不适用，不进任何分母。
+        // 变异 MC-A12a（v1 对局也计入）应红。
         GroupEntry[] final =
         [
-            new() { Stones = ["A1", "A2", "A3"], Base = 3, LineBonus = 2, SynergyBonus = 0, HighGroundBonus = 1, BannerBonus = 3, ChainBonus = 2, SentryBonus = 4, BoundaryBonus = 0, EncampmentBonus = 2, PincerBonus = 0, MultiplierCount = 0, Power = 15 },
+            new() { Stones = ["A1", "A2", "A3"], Base = 3, LineBonus = 2, SynergyBonus = 0, HighGroundBonus = 1, BannerBonus = 3, ChainBonus = 2, SentryBonus = 4, BoundaryBonus = 0, MultiplierCount = 0, Power = 15 },
         ];
-        TerrainEditEntry Edit(string target, bool? viaWorkshop) => new() { Action = "Bridge", Target = target, Player = 0, Artisan = "E5", ViaWorkshop = viaWorkshop };
-        TurnSnapshot first = SimFixtures.Turn(1, 1, 0, [15, 1, 1, 1], ["E5:Artisan"], edits: [Edit("B:E7", true), Edit("B:D5", false)]) with
-        {
-            RelaySources = new Dictionary<string, int> { ["H5"] = 2 },
-            WorkshopActive = true,
-        };
-        TurnSnapshot second = SimFixtures.Turn(2, 1, 1, [15, 1, 1, 1], ["H1:Basic"], groupsOfPlayer: null) with
-        {
-            RelaySources = new Dictionary<string, int>(),
-            WorkshopActive = false,
-        };
+        TerrainEditEntry Edit(string target) => new() { Action = "Bridge", Target = target, Player = 0, Artisan = "E5" };
+        TurnSnapshot first = SimFixtures.Turn(1, 1, 0, [15, 1, 1, 1], ["E5:Artisan"], edits: [Edit("B:E7"), Edit("B:D5")]);
+        TurnSnapshot second = SimFixtures.Turn(2, 1, 1, [15, 1, 1, 1], ["H1:Basic"], groupsOfPlayer: null);
         second = second with { PlayersState = [.. second.PlayersState.Select(p => p.Player == 0 ? p with { Groups = [.. final] } : p)] };
         MatchLog v2 = WithContentSet(SimFixtures.Synthetic(1, [first, second], [], SimFixtures.ResultOf(1, [0])), ContentSet.V2);
 
         GroupEntry[] v1Final = [new() { Stones = ["B1", "B2", "B3"], Base = 3, LineBonus = 6, SynergyBonus = 0, HighGroundBonus = 0, MultiplierCount = 0, Power = 9 }];
         MatchLog v1 = SimFixtures.Synthetic(
             2,
-            [SimFixtures.Turn(1, 1, 0, [9, 1, 1, 1], ["B1:Line"], groupsOfPlayer: v1Final, edits: [Edit("B:E4", null), Edit("B:E6", null)])],
+            [SimFixtures.Turn(1, 1, 0, [9, 1, 1, 1], ["B1:Line"], groupsOfPlayer: v1Final, edits: [Edit("B:E4"), Edit("B:E6")])],
             [],
             SimFixtures.ResultOf(1, [0]));
 
@@ -105,26 +92,19 @@ public class 平衡分析方向Tests
         Assert.Equal((1, 1), (n.Matches, n.NotApplicable));
         Assert.Equal(12, n.FinalPositionBonus);
         Assert.Equal(
-            ["旗手 3", "铁链 2", "哨兵 4", "界碑 0", "连营 2", "犄角 0"],
+            ["旗手 3", "铁链 2", "哨兵 4", "界碑 0"],
             n.Sources.Select(x => $"{x.Name} {x.Bonus}"));
         Assert.Equal(0.25, n.Sources[0].Share, 10);
-        Assert.Equal((2, 2L, 1), (n.RelayTurns, n.RelayBonusTotal, n.TurnsWithRelay));
-        Assert.Equal(1.0, n.MeanRelayBonus, 10);
-        Assert.Equal(2.0, n.MeanRelayBonusWhenPresent, 10);
-        Assert.Equal((2, 1), (n.Edits, n.WorkshopEdits));
-        Assert.Equal(0.5, n.WorkshopShare, 10);
 
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze([v2, v1]));
-        Assert.Contains("### 12. 新棋子与新信物", text);
+        Assert.Contains("### 12. 新棋子", text);
         Assert.Contains("- 内容集 v2 纳入 1 局；内容集 v1（含首部缺内容集的旧日志）1 局：本项不适用，不计入下列各项", text);
         Assert.Contains("  - 旗手：3（25.0%）", text);
         Assert.Contains("  - 铁链：2（16.7%）", text);
         Assert.Contains("  - 哨兵：4（33.3%）", text);
         Assert.Contains("  - 界碑：0（0.0%）", text);
-        Assert.Contains("  - 连营（并入连珠的额外加值）：2（16.7%）", text);
-        Assert.Contains("  - 犄角（并入协同的额外加值）：0（0.0%）", text);
-        Assert.Contains("- 驿站平均展示数加成：每小回合 1（样本 2 个小回合）；有驿站加成的小回合 1 个，平均 2", text);
-        Assert.Contains("- 经工坊扩展的改造 1 次，占全部改造 2 次的 50.0%", text);
+        Assert.DoesNotContain("连营", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("驿站", text, StringComparison.Ordinal);
 
         // 只有 v1 对局：本项只单列"不适用"，不给出任何比例行。
         string v1Only = ReportWriter.Render(BalanceAnalyzer.Analyze([v1]));
@@ -199,8 +179,10 @@ public class 平衡分析方向Tests
         // map-expand-25 段 A3 重钉（地图变了：不放静态信物格后布局流不再为信物消费随机，link:1:4 的坡道与低地重抽、可落子 1485 → 1484，平台落位 / 主题 / 平台内部不变）；旧值 A1282AA4… / F76C100E…。
         // map-expand-25 段 B 重钉（报告格式变化，走法不变）：链接模式一段的标题由"5 块出生棋盘紧贴成一张连通地图"改为"出生平台与其间的低地连成一座浮空岛"；
         // 实跑核对：把标题临时改回旧文案，旧值照常通过。旧值 6375D253… / A4D11329…。
-        Assert.True("EB8CF1082951A730F6E5044D883B2B4CE69F648190757F5EC77B829C7A99B8F7" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
-        Assert.True("45017B88F8C27A59906456DF695F9CE8BB169DE5415AA84F2B3C30AB3CAA8D80" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // relic-redesign W1 重钉（规则与报告格式都变了）：信物从第 3 大回合起刷新预告、第 4 大回合落位，样本里的走法随之变；报告删去旧信物各段（信物控制、收敛 / 未收敛分组、
+        // 主题行的公共信物、地图规模的信物格数），第 12 项新内容来源改为四种新棋子。旧值 EB8CF108… / 45017B88…。
+        Assert.True("EC001B28D39AD0E32059AAB56EB025DCF24287363D3D97F65341649F58B74DF3" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
+        Assert.True("088551F56E434434E00E2A2C39B8D90F5E4130CD029DEB2CF734410DFECC9E9C" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>
@@ -219,33 +201,30 @@ public class 平衡分析方向Tests
     [Fact]
     public void 出生区公平性()
     {
-        // 各出生区胜率 + 显著性（基线 1/4 落在 Wilson 区间之外即显著）；裁决 8：收敛局 / 未收敛局分别统计。
-        // 合成 40 局：出生区 0 的玩家全胜（前 20 局信物收敛，后 20 局不收敛）。
+        // 各出生区胜率 + 显著性（基线 1/4 落在 Wilson 区间之外即显著）（relic-redesign W1：原裁决 8 的"信物生成收敛 / 未收敛分组"随旧信物删除）。
+        // 合成 40 局：出生区 0 的玩家全胜。
         // 出生区映射用 zones: [2, 1, 3, 0] 故意错位，zone 与玩家下标不同，抓得住"取 p 而非 Zones[p]"的错误。
         MatchLog[] logs = [.. Enumerable.Range(0, 40).Select(i => SimFixtures.Synthetic(
             (ulong)i + 1,
             [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])],
             [],
             SimFixtures.ResultOf(6, [3]),
-            zones: [2, 1, 3, 0],
-            relicsConverged: i < 20))];
+            zones: [2, 1, 3, 0]))];
 
         BirthZoneSection z = BalanceAnalyzer.Analyze(logs).BirthZones;
 
         Assert.Equal(0.25, z.Baseline);
-        Assert.Equal((20, 20), (z.ConvergedMatches, z.NotConvergedMatches));
         ZoneStat zone0 = z.All.Single(s => s.Zone == 0);
         Assert.Equal((40, 40), (zone0.WinRate.Successes, zone0.WinRate.Trials));
         Assert.True(zone0.Significant);
         ZoneStat zone2 = z.All.Single(s => s.Zone == 2);
         Assert.Equal((0, 40), (zone2.WinRate.Successes, zone2.WinRate.Trials));
         Assert.True(zone2.Significant);
-        Assert.Equal((20, 20), (z.RelicsConverged.Single(s => s.Zone == 0).WinRate.Successes, z.RelicsNotConverged.Single(s => s.Zone == 0).WinRate.Successes));
 
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze(logs));
         Assert.Contains("出生区 1：胜率 100.0% (40/40", text);
         Assert.Contains("，显著", text);
-        Assert.Contains("信物生成未收敛局（20）", text);
+        Assert.DoesNotContain("收敛局", text, StringComparison.Ordinal);   // 原"信物生成收敛 / 未收敛"分组随旧信物删除
 
         // restore-go-core-rules 段 E：再混入 10 局截断局（出生区 2 的玩家"未胜"——截断局没有胜者）→ 各区胜率与样本数不变。
         // 变异验证 M-E4b：BirthZones 的输入改回全部纳入局 → 实跑红 1（本测试；出生区 0 的样本 40 → 50）。

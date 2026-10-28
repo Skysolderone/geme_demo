@@ -26,7 +26,7 @@ public class 选图视图模型Tests
     private static DefaultBoardView ViewOf(MapData map)
     {
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
+            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)],
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         return DefaultBoardView.From(match.PublicWorldOf());
     }
@@ -234,7 +234,7 @@ public class 选图视图模型Tests
         // 不提信物格与可落子格。读默认棋盘视图模型，不读地图、不判规则。retire-legacy-rules 1.7（清单"删反面段"、P5）：旧地图（无占位、9×9 手写夹具）文案那一行删除——旧模式退役后不再有无占位的对局。
         MapData map = MapCatalog.Resolve("link:1:4");
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
+            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)],
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         DefaultBoardView preview = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         string info = MapPreviewInfo.Of(preview);
@@ -253,7 +253,7 @@ public class 选图视图模型Tests
         // 变异 MLT-G5（Backdrop 原样返回，实跑）→ 红 1（本测试）。
         MapData map = MapCatalog.Resolve("link:1:4");
         MatchFlow match = MatchFlow.CreateUnvalidated(
-            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)], TestMaps.Relics(map),
+            map, TestMaps.Seed, [new PlayerId(0), new PlayerId(1), new PlayerId(2), new PlayerId(3)],
             MatchOptions.Immediate with { ContentSet = ContentSet.V1 });
         DefaultBoardView flags = DefaultBoardView.From(match.PublicWorldOf()).ForSeat(match.PublishFor(new PlayerId(0)), null);
         DefaultBoardView backdrop = MapPreviewInfo.Backdrop(flags);

@@ -1,6 +1,5 @@
 using System.Numerics;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.CoverageTerritory;
@@ -141,17 +140,5 @@ public class 空格归属三态Tests
         Assert.Contains(TestMaps.At("G6"), snapshot.Of(TestMaps.P0).ExclusiveCells);
         Assert.DoesNotContain(TestMaps.At("G6"), snapshot.Of(TestMaps.P0).ScoredCells);
         Assert.Equal(3, snapshot.Of(TestMaps.P0).TerritoryScore);
-    }
-
-    [Fact]
-    public void 荒漠上的信物照常被控制()
-    {
-        // 规格 Scenario「荒漠上的信物照常被控制」：信物格 E7 是空荒漠、只被 P1（F7）覆盖 → P1 控制，与草地相同。
-        (GameBoard board, RelicLedger ledger) = RelicFixtures.Scene(TestMaps.Terrain(surfaces: [("E7", Surface.Desert)]), ("E7", RelicFixtures.Conscription()));
-        board.Place("F7", TestMaps.P1);
-
-        ledger.Settle(board, 1);
-
-        Assert.Equal(new RelicControl(RelicControlKind.Controlled, TestMaps.P1), ledger.ControlOf(TestMaps.At("E7")));
     }
 }

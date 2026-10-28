@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text.RegularExpressions;
 using Siege.Core.Board;
 using Siege.Core.Scoring;
+using Siege.Core.PieceRelics;
 using Siege.Presentation.Preview;
 
 namespace Siege.Core.Tests.PowerScore;
@@ -278,10 +279,11 @@ public class 棋串军势公式Tests
     [Fact]
     public void 新来源一并被倍率放大()
     {
-        // more-pieces-relics 规格 power-score「新来源一并被倍率放大」：信物格上的旗手子、铁链子、倍增子各 1 枚连成，旗手子没有其他相邻信物格 →
+        // more-pieces-relics 规格 power-score「新来源一并被倍率放大」：挂着一件望台的旗手子、铁链子、倍增子各 1 枚连成（relic-redesign R23：本串挂 1 件 → 旗手 3）→
         // 基础 3，旗手 3、铁链 3 − 1 = 2，棋串军势 ⌊(3 + 3 + 2) × 1.5⌋ = 12。
-        GameBoard board = TestMaps.WithRelicCells(["C5"])
+        GameBoard board = TestMaps.Blank()
             .Place("C5", TestMaps.P0, PieceType.Bannerman).Place("D5", TestMaps.P0, PieceType.Chain).Place("E5", TestMaps.P0, PieceType.Multiplier);
+        board.AttachRelic(TestMaps.At("C5"), RelicToken.Spawned(0, RelicKind.Watchtower));
 
         GroupPower group = Assert.Single(PowerCalculator.Compute(board).Of(TestMaps.P0).Groups);
 

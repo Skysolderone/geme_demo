@@ -4,6 +4,7 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.AiDecision;
@@ -25,13 +26,16 @@ public class 启发式评价维度Tests
     /// 另有 P1 孤子 C3（棋盘 0 的西南角）。retire-legacy-rules 1.4：原 9×9 局面平移 (+1, +1)，原左上角的 P1 孤子 A9 落在棋盘 0 外，改放到另一个盘角 C3
     /// （同为角上孤子：1 子 + 独占 2），势力与名次的逐格手数不变。
     /// P1 的 F6 只剩一口气 G6；P1 另有 J9、J7、C3 使 P1 势力 14（4 子 + 独占 10）高于 P0 的 10（3 子 + 独占 7）；
-    /// G6 提 F6 后 P0 13 > P1 12，P0 从第 2 名升到第 1 名（段 A：领地重新计分，数值回到 territory-power 时期；逐格手数见「先手位评价生效」）。P0 手牌薄（普通子 2 + 倍增子 1 = 3 枚），第 5 大回合部署上限 4（growth-pass-1 分阶段基础值，原 3），落 1 子后剩 2 枚、下回合缺 2 枚，供给维 −2（原 −1）。
+    /// G6 提 F6 后 P0 16（含拾取战鼓 +3）> P1 12，P0 从第 2 名升到第 1 名（段 A：领地重新计分，数值回到 territory-power 时期；逐格手数见「先手位评价生效」）。P0 手牌薄（普通子 2 + 倍增子 1 = 3 枚），第 5 大回合部署上限 4（growth-pass-1 分阶段基础值，原 3），落 1 子后剩 2 枚、下回合缺 2 枚，供给维 −2（原 −1）。
     /// </summary>
     internal static MatchFlow CaptureRelicPosition()
     {
-        MatchFlow match = AiFixtures.Round5(relics: [("G6", RelicFixtures.Command())])
+        // relic-redesign W1：G6 原是未揭示的军令格，改为空格上的地图信物（战鼓）——落 G6 即拾取，信物维仍为正。
+        MatchFlow match = AiFixtures.Round5()
             .Stones(AiFixtures.P0, "E6", "F5", "F7")
             .Stones(AiFixtures.P1, "F6", "J9", "J7", "C3");
+        match.Board.AttachRelic(TestMaps.At("G6"), RelicToken.Spawned(0, RelicKind.WarDrum));
+        match.Debug.Recalculate();
         match.Debug.SeedHand(AiFixtures.P0, (PieceType.Basic, 2), (PieceType.Multiplier, 1));
         return match;
     }
@@ -109,12 +113,13 @@ public class 启发式评价维度Tests
     [Fact]
     public void 先手位评价生效()
     {
-        // 设计文档 §11.2：先手值 = 参赛人数 − 势力名次 + 修正；名次上升一位 → 先手值 +1 → 下一大回合更早行动。
-        // 局面见 CaptureRelicPosition：P1 14 > P0 10；G6 提 F6 后 P0 13 > P1 12，P0 从第 2 名升到第 1 名，先手值 +1。
+        // 设计文档 §11.2：先手值 = 参赛人数 − 势力名次（relic-redesign W1：旧先锋修正删除）；名次上升一位 → 先手值 +1 → 下一大回合更早行动。
+        // 局面见 CaptureRelicPosition：P1 14 > P0 10；G6 提 F6 后 P0 16（含拾取战鼓 +3）> P1 12，P0 从第 2 名升到第 1 名，先手值 +1。
         // 段 A 重构（领地重新计分）：scoring-sites 为"独占空格不计分"给 P1 补过一子 J1（P1 5 > P0 3、提后 4 = 4）；领地计分后 J1 会让 P1 17 → 提后 15 > P0 13、名次不变，
         // 前提失效，故去掉 J1、回到 territory-power 时期的原局面与原数值（逐格手数；retire-legacy-rules 起为平坦 8×8 链接载体上的平移局面）：
         //   提前 P0 10 = 3 子 + 独占 7（D6 / E5 / E7 / G5 / F4 / G7 / F8）；P1 14 = 4 子 + 独占 10（G6；H9 / K9 / J8 / J10 / H7 / K7 / J6；D3 / C4）。
         //   提后 P0 13 = 4 子 + 独占 9（原 7 + 空出的 F6 + 新邻格 H6）；P1 12 = 3 子 + 独占 9（失去 G6）。
+        // relic-redesign W1：G6 上的地图信物改为战鼓（落子即拾取），提后 P0 再 +3（战鼓基础军势加值）= 16，名次变化不变。
         // 变异验证 M-A9：InitiativeShift 返回 after − before → 红 2（本测试 + 评价覆盖七个维度）。
         MatchFlow match = CaptureRelicPosition();
         PowerSnapshot before = match.Scoreboard.Latest!;
@@ -128,11 +133,11 @@ public class 启发式评价维度Tests
         EvaluationBreakdown e = ai.CreateEvaluator().Evaluate(batch.Placements, result, batch.Context);
 
         PowerSnapshot after = PowerCalculator.Compute(result.ProjectedBoard!, match.Roster);
-        Assert.Equal(13, after.Of(AiFixtures.P0).Total);
+        Assert.Equal(16, after.Of(AiFixtures.P0).Total);
         Assert.Equal(12, after.Of(AiFixtures.P1).Total);
         Assert.Equal(1, after.RankOf(AiFixtures.P0));
         Assert.Equal(1, e.RawOf(EvaluationDimension.Initiative));
-        Assert.Equal(Siege.Core.Match.InitiativeOrder.ValueOf(4, 2, 0) + 1, Siege.Core.Match.InitiativeOrder.ValueOf(4, 1, 0));
+        Assert.Equal(Siege.Core.Match.InitiativeOrder.ValueOf(4, 2) + 1, Siege.Core.Match.InitiativeOrder.ValueOf(4, 1));
         Assert.True(e.ContributionOf(EvaluationDimension.Initiative) > 0);
 
         // 不改变名次的落点（E5：+1 子 +2 独占格 D5 / E4 −1 原独占格 E5 = 12 < 14）：该维度为 0
@@ -505,7 +510,9 @@ public class 启发式评价维度Tests
         // expert-opponent-model 1.3：专家前瞻的模拟对手改用专家本人的高难口径（原为标准预设）改变专家的选择与前瞻记录，版本 8 → 9。
         // ai-whole-batch 1.4：标准 / 高难 / 专家追加整批候选（"哪些候选参与打分 / 保留"的规则变了），版本 9 → 10。
         // ai-bridge-candidate 1.4：标准 / 高难 / 专家追加搭桥候选（"哪些候选参与打分 / 保留"的规则变了），版本 10 → 11。
-        Assert.Equal(11, EvaluationBreakdown.Version);
+        // relic-redesign W1：信物维改读挂在棋子上的信物（RelicEstimate 未校准平值，旧地图信物删除），任一维原始值的算法变了，版本 11 → 12；
+        // relic-redesign C1：信物维改为势力增量口径（三桶，design.md D5）+ AI 挂出改为"本批势力增量最大的落点"，版本 12 → 13。
+        Assert.Equal(13, EvaluationBreakdown.Version);
         Assert.Equal(EvaluationBreakdown.Version, log.Header.AiEvaluationVersion);
 
         // 往返：写出再读回仍在（写入路径漏写则读回 null）。

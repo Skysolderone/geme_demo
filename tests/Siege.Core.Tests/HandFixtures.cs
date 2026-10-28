@@ -3,7 +3,6 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests;
 
@@ -31,10 +30,8 @@ internal static class HandFixtures
         int reveal = EffectSnapshot.BaseRevealCount,
         int freePick = EffectSnapshot.BaseFreePickCount,
         int slots = EffectSnapshot.BaseTypeSlots,
-        int round = 1,
-        params (PieceType Type, int Count)[] emblems) =>
-        new(player, round, reveal, freePick, slots, EffectSnapshot.BaseDeployLimitFor(round),
-            emblems.ToImmutableSortedDictionary(e => e.Type, e => e.Count), ledger.HeldTypeCount(player));
+        int round = 1) =>
+        new(player, round, reveal, freePick, slots, EffectSnapshot.BaseDeployLimitFor(round), ledger.HeldTypeCount(player));
 
     /// <summary>开始小回合并返回该玩家的私有句柄。</summary>
     internal static PlayerHandAccess Begin(
@@ -43,10 +40,9 @@ internal static class HandFixtures
         int reveal = EffectSnapshot.BaseRevealCount,
         int freePick = EffectSnapshot.BaseFreePickCount,
         int slots = EffectSnapshot.BaseTypeSlots,
-        int round = 1,
-        params (PieceType Type, int Count)[] emblems)
+        int round = 1)
     {
-        ledger.BeginTurn(player, Snapshot(ledger, player, reveal, freePick, slots, round, emblems));
+        ledger.BeginTurn(player, Snapshot(ledger, player, reveal, freePick, slots, round));
         return ledger.AccessFor(player);
     }
 
@@ -88,10 +84,6 @@ internal static class HandFixtures
 internal sealed class HandHooks(HandLedger ledger) : ISettlementHooks
 {
     public void DeductHand(PlayerId player, IReadOnlyDictionary<PieceType, int> deployed) => ledger.DeductHand(player, deployed);
-
-    public void OnRevealRelics(SettlementContext context)
-    {
-    }
 
     public void OnRecalculatePower(SettlementContext context)
     {

@@ -8,7 +8,7 @@ namespace Siege.Core.Board;
 /// 地图数据的文件格式（JSON）。坐标一律用围棋记法，使手工编辑的地图文件可被人直接读写。
 /// </summary>
 /// <remarks>
-/// 地形、障碍、出生区与信物格位置由设计师固定，因此它们必须能脱离代码维护。
+/// 地形、障碍与出生区由地图固定，因此它们必须能脱离代码维护（relic-redesign 起地图不含信物格）。
 /// 往返读写 MUST 无信息丢失——丢失的那一项通常是豁免理由或预算档位，而它们恰恰只在校验失败时才被注意到。
 /// 规格：openspec/changes/add-board-core/specs/map-definition —— Requirement: 地图为设计师固定的静态数据
 /// </remarks>
@@ -43,11 +43,6 @@ public static class MapFile
             MapVersion = map.MapVersion == 0 ? null : map.MapVersion,
             Obstacles = Sorted(map.Obstacles),
             BirthZones = [.. map.BirthZones.Select(Sorted)],
-            RelicCells = map.RelicCells
-                .OrderBy(kv => kv.Key)
-                .ToDictionary(
-                    kv => kv.Key.ToNotation(),
-                    kv => new RelicDto { Zone = kv.Value.Zone, Budget = kv.Value.Budget }),
             ChokePoints = Sorted(map.ChokePoints),
             CentralEntrance = map.CentralEntrance.ToNotation(),
             DistanceTolerance = map.DistanceTolerance,
@@ -87,7 +82,6 @@ public static class MapFile
         RejectRetiredFields(dto);
 
         List<List<string>> zones = Required(dto.BirthZones, "BirthZones");
-        Dictionary<string, RelicDto> relicCells = Required(dto.RelicCells, "RelicCells");
         Dictionary<string, string> exemptions = Required(dto.PocketExemptions, "PocketExemptions");
         MapProfile profile = ParseProfile(dto.Profile);
 
@@ -102,11 +96,6 @@ public static class MapFile
             MapVersion = ParseMapVersion(dto.MapVersion),
             Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
-            RelicCells = relicCells.ToImmutableDictionary(
-                kv => Coord.Parse(kv.Key),
-                kv => new RelicCellSpec(
-                    Required(kv.Value, $"RelicCells[\"{kv.Key}\"]").Zone,
-                    kv.Value.Budget)),
             ChokePoints = Parse(Required(dto.ChokePoints, "ChokePoints")),
             CentralEntrance = Coord.Parse(dto.CentralEntrance),
             DistanceTolerance = dto.DistanceTolerance,
@@ -382,6 +371,7 @@ public static class MapFile
     private static readonly (string Field, string Reason)[] RetiredFields =
     [
         ("Sites", "据点已在 restore-go-core-rules 整体移除，地图数据不再含据点。"),
+        ("RelicCells", "静态信物格已在 relic-redesign 整体移除，信物改由对局中途刷新，地图数据不再含信物格。"),
     ];
 
     private static List<string> Sorted(IEnumerable<Coord> coords) =>
@@ -433,8 +423,6 @@ public static class MapFile
         public List<string> Obstacles { get; set; } = [];
 
         public List<List<string>> BirthZones { get; set; } = [];
-
-        public Dictionary<string, RelicDto> RelicCells { get; set; } = [];
 
         public List<string> ChokePoints { get; set; } = [];
 
@@ -498,12 +486,5 @@ public static class MapFile
         };
 
         public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options) => writer.WriteStringValue(value);
-    }
-
-    private sealed class RelicDto
-    {
-        public RelicZone Zone { get; set; }
-
-        public BudgetTier Budget { get; set; }
     }
 }

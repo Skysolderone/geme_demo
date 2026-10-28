@@ -9,7 +9,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 
 `棋串军势 = ⌊(基础军势总和 + 位置加值) × 1.5^倍增子数量⌋`
 
-`位置加值 = 连珠加值 + 协同加值 + 高地加值 + 旗手加值 + 铁链加值 + 哨兵加值 + 界碑加值`（高地加值见 `piece-effects`「高地压制加值」，四种新来源见 `piece-effects` 对应 Requirement）。连营带来的额外加值 SHALL 计入连珠加值，犄角带来的额外加值 SHALL 计入协同加值（见 `relic-effects`「计分信物：连营与犄角」）。
+`位置加值 = 连珠加值 + 协同加值 + 高地加值 + 旗手加值 + 铁链加值 + 哨兵加值 + 界碑加值 + 信物位置加值`（高地加值见 `piece-effects`「高地压制加值」，四种新来源见 `piece-effects` 对应 Requirement；信物位置加值 = 本串挂着的号令 / 百变的加值，战鼓计入基础军势，军旗计入倍率指数，见 `relic-effects`「五种信物」）。倍率指数 = 倍增子数量 + 阵型阶数 + 本串挂着的军旗件数。
 
 倍率 SHALL 作用于基础军势总和与全部位置加值之和。倍率指数 SHALL 等于棋串中倍增子的数量，MUST NOT 设置任何封顶。
 
@@ -50,7 +50,7 @@ TBD - created by archiving change add-territory-power. Update Purpose after arch
 - **THEN** 显示为精确十进制 `3.375`
 
 #### Scenario: 新来源一并被倍率放大
-- **WHEN** 一条棋串由位于信物格上的旗手子、铁链子、倍增子各 1 枚连成，旗手子没有其他相邻信物格，无其他位置加值
+- **WHEN** 一条棋串由旗手子、铁链子、倍增子各 1 枚连成，其中一枚挂着 1 件信物（信物自身无位置加值，如望台），无其他位置加值
 - **THEN** 基础军势为 3，旗手加值 3、铁链加值 2，棋串军势为 `⌊(3 + 3 + 2) × 1.5⌋ = 12`
 
 ### Requirement: 总势力

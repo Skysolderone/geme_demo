@@ -45,7 +45,7 @@ public class 非法批次必须说明原因并高亮Tests
         Assert.True(BatchFixtures.TakeKo(driver, P0, 'A', PieceType.Fortress).Confirmed);
 
         Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P1),
-            [new Placement(BatchFixtures.KoPoint('A', P1), PieceType.Basic)], driver.History, Roster(P0, P1), EmptyRelics(board), 5);
+            [new Placement(BatchFixtures.KoPoint('A', P1), PieceType.Basic)], driver.History, Roster(P0, P1));
         PreviewPresentation previewShown = PreviewPresentation.Build(preview, EmptyHand(P1), LibertyThresholds.Default);
         SettlementOutcome outcome = BatchFixtures.TakeKo(driver, P1, 'A', PieceType.Basic);
         FailurePresentation confirmShown = FailurePresentation.From(outcome.Failure!);
@@ -72,7 +72,7 @@ public class 非法批次必须说明原因并高亮Tests
             .Place("B1", P0).Place("H1", P0).Place("C2", P0).Place("E2", P0).Place("F2", P0).Place("G2", P0);
         var batch = new StagedBatch(board, BatchFixtures.Context(board, P0));
         Assert.Null(batch.Stage(TestMaps.At("D2"), PieceType.Basic));
-        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1), EmptyRelics(board), 5);
+        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, batch.Context, batch.Placements, new BoardHistory(), Roster(P0, P1));
         Assert.Contains(TestMaps.At("C1"), preview.CapturedCoords);
 
         BatchFailure failure = batch.Stage(TestMaps.At("C1"), PieceType.Basic)!;
@@ -122,7 +122,7 @@ public class 非法批次必须说明原因并高亮Tests
         SettlementOutcome outcome = BatchFixtures.Driver(board).Confirm(BatchFixtures.Context(board, P1), [cut]);
         FailurePresentation confirmShown = FailurePresentation.From(outcome.Failure!);
 
-        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P1), [cut], new BoardHistory(), Roster(P0, P1), EmptyRelics(board), 5);
+        Core.Preview.BatchPreview preview = BatchPreviewBuilder.Build(board, BatchFixtures.Context(board, P1), [cut], new BoardHistory(), Roster(P0, P1));
         PreviewPresentation previewShown = PreviewPresentation.Build(preview, EmptyHand(P1), LibertyThresholds.Default);
 
         foreach (FailurePresentation shown in new[] { confirmShown, previewShown.Failure! })
@@ -166,14 +166,14 @@ public class 非法批次必须说明原因并高亮Tests
     }
 
     [Fact]
-    public void 十二类失败标题互不相同()
+    public void 十三类失败标题互不相同()
     {
-        // 规格要求至少区分九类（含 life-shape 的活棋禁入 / 破坏活形；+ 本层补充的批次内重复落点 + artisan-terrain-edit 的改造目标非法 / 批内重复改造目标）：
-        // 每类都有非空且互不相同的标题。枚举是穷举的，新增类别忘了给标题会在这里抛 ArgumentOutOfRangeException。
+        // 规格要求至少区分九类（含 life-shape 的活棋禁入 / 破坏活形；+ 本层补充的批次内重复落点 + artisan-terrain-edit 的改造目标非法 / 批内重复改造目标
+        // + relic-redesign W2 的带入信物挂出非法）：每类都有非空且互不相同的标题。枚举是穷举的，新增类别忘了给标题会在这里抛 ArgumentOutOfRangeException。
         // 变异验证：M-F3（见上）→ 本测试红 1。
         string[] titles = [.. Enum.GetValues<BatchFailureKind>().Select(FailurePresentation.TitleOf)];
 
-        Assert.Equal(12, titles.Length);
+        Assert.Equal(13, titles.Length);
         Assert.Equal(titles.Length, titles.Distinct().Count());
         Assert.All(titles, t => Assert.False(string.IsNullOrWhiteSpace(t)));
         Assert.Equal("该格当前已被占据", FailurePresentation.TitleOf(BatchFailureKind.Occupied));

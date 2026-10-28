@@ -17,7 +17,7 @@ public enum StandingGroup
 /// <param name="Player">玩家。</param>
 /// <param name="Status">终局时的状态。</param>
 /// <param name="Power">当前势力值（弃赛者为弃赛时势力值）。</param>
-/// <param name="ControlledRelics">控制中的信物数量。</param>
+/// <param name="HeldRelics">持有信物数：挂在该玩家棋子上的信物件数（relic-redesign R24，<see cref="GameBoard.HeldRelicCount"/>）。</param>
 /// <param name="ExclusiveCells">独占空格数（restore-go-core-rules D4：并列链第三级）。</param>
 /// <param name="Stones">盘面棋子数。</param>
 /// <param name="EliminationOrder">出局序号；未出局为 <c>null</c>。</param>
@@ -25,7 +25,7 @@ public sealed record StandingInput(
     PlayerId Player,
     PlayerStatus Status,
     BigInteger Power,
-    int ControlledRelics,
+    int HeldRelics,
     int ExclusiveCells,
     int Stones,
     int? EliminationOrder)
@@ -43,7 +43,7 @@ public sealed record Standing(int Rank, PlayerId Player, StandingGroup Group, St
 /// 终局名次比较链（设计文档 §12.3，design.md D7）的<b>唯一</b>实现，纯函数。
 /// </summary>
 /// <remarks>
-/// 完赛者按 势力值 → 控制信物数 → 独占空格数 → 盘面棋子数 逐级比较，四项全同则并列；
+/// 完赛者按 势力值 → 持有信物数 → 独占空格数 → 盘面棋子数 逐级比较，四项全同则并列；
 /// 出局者排在全部完赛者之后，按出局先后倒序（越晚出局名次越高）；弃赛者排在最后，组内按弃赛时势力值。
 /// 终局条件"只剩一名参赛玩家"下唯一的完赛者自然位列第 1，无需特殊分支。
 /// retire-legacy-rules：旧模式的组序（完赛 &gt; 弃赛 &gt; 出局）删除，原链接版 <c>ComputeLink</c> 更名为本方法，是唯一的名次实现。
@@ -129,7 +129,7 @@ public static class FinalStandings
                 return c;
             }
 
-            c = b.ControlledRelics.CompareTo(a.ControlledRelics);
+            c = b.HeldRelics.CompareTo(a.HeldRelics);
             if (c != 0)
             {
                 return c;

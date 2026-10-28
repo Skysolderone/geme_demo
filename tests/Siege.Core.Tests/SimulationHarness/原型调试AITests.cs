@@ -3,7 +3,6 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.SimulationHarness;
 
@@ -14,22 +13,18 @@ public class 原型调试AITests
     [Fact]
     public void 调试AI可读全量状态()
     {
-        // 设计文档 §15.3：测试专用模式下可读未揭示信物内容、敌方手牌数量与未确认批次。
+        // 设计文档 §15.3：测试专用模式下可读敌方手牌数量与未确认批次（relic-redesign W1：信物全公开，原"可读未揭示信物内容"随旧信物删除）。
         // 变异验证：本类以 M-A21（拒绝入口）与 M-A22（标注）为准；全量读取路径由 M-A5（估计不得使用真实值：调试评价器随真实内容变化）间接钉住。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command())]);
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         match.Debug.SeedHand(AiFixtures.P1, (PieceType.Basic, 7));
         var runner = new MatchRunner(match);
         DebugTurnController debug = DebugTurnController.Create(runner, AiFixtures.P0, debugMode: true);
 
-        Coord e5 = TestMaps.At("G7");
-        Assert.False(match.Relics.IsRevealed(e5));
-        Assert.Equal(RelicFixtures.Command(), debug.View.ContentOf(e5));
         Assert.Equal(7, debug.View.HandCountOf(AiFixtures.P1));
         Assert.Equal(7, debug.View.HandOf(AiFixtures.P1).CountOf(PieceType.Basic));
 
-        // 同一时刻的公开视图里这两项都不存在
+        // 同一时刻的公开视图里没有手牌数量
         MatchPublicView pub = debug.View.Public();
-        Assert.Null(pub.Relics.Single(r => r.Coord == e5).Content);
         Assert.DoesNotContain("7", pub.Hands.Single(h => h.Player == AiFixtures.P1).ToString());
 
         // 对手正在暂放：调试视图可读，公开盘面不可读
@@ -39,9 +34,7 @@ public class 原型调试AITests
         Assert.Equal(TestMaps.At("K4"), debug.View.CurrentBatch!.Placements.Single().Coord);
         Assert.Null(match.Publish().Board[TestMaps.At("K4")].Occupant);
 
-        // 调试 AI 的估值读的是真实内容
         Assert.Same(debug, runner.ControllerOf(AiFixtures.P0));
-        Assert.Equal(RelicEstimate.ValueOf(RelicType.Command), RelicEstimate.ValueOf(debug.View.ContentOf(e5)));
     }
 
     [Fact]
@@ -70,7 +63,7 @@ public class 原型调试AITests
     {
         // 设计文档 §15.3 / design.md D7：用过调试 AI 的局带明确标记，平衡分析据此筛除；纯正式 AI 局不带。
         // 变异验证 M-A22：Create 不调用 MarkDebugAi → 红 1（本测试）。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command())]);
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         var runner = new MatchRunner(match);
         runner.AttachAi();
         DebugTurnController.Create(runner, AiFixtures.P2, debugMode: true);

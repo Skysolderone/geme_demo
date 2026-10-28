@@ -37,7 +37,6 @@ public class 地图文件往返Tests
             Assert.Equal(original.BirthZones[i], restored.BirthZones[i]);
         }
 
-        Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
         Assert.Equal(original.ChokePoints, restored.ChokePoints);
         Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
         Assert.Equal(original.DistanceTolerance, restored.DistanceTolerance);

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 
@@ -12,21 +13,18 @@ namespace Siege.Core.Tests.MapDefinition;
 public class 地图文件健壮性Tests
 {
     /// <summary>
-    /// 信物表读写的载体：link:1:4 手工补 3 个信物格——出生区 0 核心区两格（出生区档、Birth）与第一个低地可落子格（公共区档、Standard）。
-    /// map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29，2026-10-26 用户裁决），生成图的信物表为空；本类钉的是信物表 DTO 的
-    /// 大小写宽容、未知字段、重复键折叠，载体改为这张补了信物格的图（不过校验器——只走序列化往返），断言不变。
+    /// 坐标键字典与嵌套对象读写的载体：link:1:4 手工补 2 条必死口袋豁免（出生区 0 核心区的前两格，各带理由）。
+    /// relic-redesign W1：原载体 RelicCarrier（手工补信物格）随静态信物格删除；本类钉的大小写宽容、未知字段、重复键折叠改由豁免表（坐标键字典）
+    /// 与棋盘清单（嵌套对象 + 枚举 Kind）承担，断言不变（不过校验器——只走序列化往返）。
     /// </summary>
-    private static MapData RelicCarrier()
+    private static MapData ExemptionCarrier(string secondReason = "测试豁免二")
     {
         MapData link = MapCatalog.Resolve("link:1:4");
         Coord[] core = [.. link.BirthZones[0].Order()];
-        Coord lowland = link.AllCoords().First(c => link.IsPlayable(c) && !link.Boards.Any(b => b.Contains(c)));
         return link with
         {
-            RelicCells = link.RelicCells
-                .Add(core[0], new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth))
-                .Add(core[8], new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth))
-                .Add(lowland, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)),
+            PocketExemptions = [core[0], core[1]],
+            PocketExemptionReasons = ImmutableDictionary<Coord, string>.Empty.Add(core[0], "测试豁免一").Add(core[1], secondReason),
         };
     }
 
@@ -64,7 +62,7 @@ public class 地图文件健壮性Tests
 
     [Theory]
     [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"Width\":\"eleven\"}")]
-    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"RelicCells\":{\"D4\":{\"Zone\":\"Mystery\",\"Budget\":\"High\"}}}")]
+    [InlineData("{\"Profile\":\"Link\",\"CentralEntrance\":\"F6\",\"Boards\":[{\"Origin\":\"A1\",\"Width\":5,\"Height\":5,\"Kind\":\"Mystery\"}]}")]
     [InlineData("not json at all")]
     public void 类型或枚举不认识时抛JsonException(string json)
     {
@@ -90,26 +88,20 @@ public class 地图文件健壮性Tests
     public void 同一坐标重复写会被合并而不是静默取一个()
     {
         // JSON 对象的重复键由序列化器"后者胜出"地吞掉，坐标记法的大小写差异同样会折叠成同一格。
-        // 这里钉住：折叠后信物格数量变了（合并，而不是静默保留两个之一的原样）。
-        // retire-legacy-maps 4.1：原载体是 11×11 的手写残缺图（无规格档字段）；4.1 起它先因外接尺寸被链接档拒绝、到不了信物预算，
-        // 载体改为 link:1 的导出文本，把第二个信物格的键改写成第一个的小写，断言不变。
-        // link-map-terrain：信物格区间改为 10–15、link:1 有 13 个（含 3 个公共区档），少一个仍在区间内；改为折叠两个出生区档信物格，
-        // 由"每块出生棋盘恰 2 个出生区档信物格"报出——同样不会带着丢了一个信物格的地图开局。
-        // map-expand-25 段 A2：link:1:4 浮空岛 10 块平台各 2 个出生区档 + 低地 6 个公共区档 = 26（原 10 + 3 = 13），折叠后 25。
-        // map-expand-25 段 A3：浮空岛不放静态信物格，载体改为 RelicCarrier（2 个出生区档 + 1 个公共区档 = 3，折叠后 2）；
-        // 每块出生棋盘恰 2 个出生区档信物格的规则（BIRTH_BOARD_RELIC_COUNT）随之删除，信物格数量不再有校验规则可报，删去校验断言，只钉折叠本身。
-        string canonical = MapFile.ToJson(RelicCarrier());
+        // 这里钉住：折叠后豁免数量变了（合并，而不是静默保留两个之一的原样）。
+        // relic-redesign W1：原载体是信物格表（随静态信物格删除），改为豁免表（同样是坐标键字典），把第二条豁免的键改写成第一条的小写，断言不变。
+        // 两条豁免理由取相同文本（原信物格样本两格的内容也相同）——折叠只合并同值；值不同时由字典构造响亮抛错，不在本条口径内。
+        string canonical = MapFile.ToJson(ExemptionCarrier(secondReason: "测试豁免一"));
         MapData parsed = MapFile.FromJson(canonical);
-        Coord[] relics = [.. parsed.RelicCells.Where(kv => kv.Value.Zone == RelicZone.BirthZone).Select(kv => kv.Key).Order()];
-        Assert.Equal(2, relics.Length);   // 样本口径
-        Assert.Equal(3, parsed.RelicCells.Count);
-        string json = canonical.Replace($"\"{relics[1].ToNotation()}\": {{", $"\"{relics[0].ToNotation().ToLowerInvariant()}\": {{", StringComparison.Ordinal);
+        Coord[] keys = [.. parsed.PocketExemptions.Order()];
+        Assert.Equal(2, keys.Length);   // 样本口径
+        string json = canonical.Replace($"\"{keys[1].ToNotation()}\":", $"\"{keys[0].ToNotation().ToLowerInvariant()}\":", StringComparison.Ordinal);
         Assert.NotEqual(canonical, json);
 
         MapData folded = MapFile.FromJson(json);
 
-        Assert.Equal(2, folded.RelicCells.Count);
-        Assert.False(folded.RelicCells.ContainsKey(relics[1]));
+        Assert.Single(folded.PocketExemptions);
+        Assert.DoesNotContain(keys[1], folded.PocketExemptions);
     }
 
     [Fact]
@@ -133,20 +125,13 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 全小写枚举值的地图能正确加载()
     {
-        // PropertyNameCaseInsensitive 只管键名，枚举值走 JsonStringEnumConverter；
-        // 它读取时同样不区分大小写。这里把 Zone / Budget 的全部枚举值压成小写钉住这一点，
-        // 免得日后换转换器或加 JsonNamingPolicy 时静默变成"看起来能用的坏地图"。
-        // map-expand-25 段 A3：载体改为 RelicCarrier（浮空岛不放静态信物格）。
-        string canonical = MapFile.ToJson(RelicCarrier());
-        string lowerValues = canonical
-            .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"birthzone\"", StringComparison.Ordinal)
-            .Replace("\"Zone\": \"Contested\"", "\"Zone\": \"contested\"", StringComparison.Ordinal)
-            .Replace("\"Budget\": \"Birth\"", "\"Budget\": \"birth\"", StringComparison.Ordinal)
-            .Replace("\"Budget\": \"Standard\"", "\"Budget\": \"standard\"", StringComparison.Ordinal)
-            .Replace("\"Budget\": \"High\"", "\"Budget\": \"high\"", StringComparison.Ordinal);
+        // PropertyNameCaseInsensitive 只管键名，枚举值走 JsonStringEnumConverter；它读取时同样不区分大小写。
+        // 这里把棋盘清单的 Kind 枚举值压成小写钉住这一点，免得日后换转换器或加 JsonNamingPolicy 时静默变成"看起来能用的坏地图"。
+        // relic-redesign W1：原载体是信物格的 Zone / Budget 枚举（随静态信物格删除），改为棋盘清单的 Kind，断言不变。
+        string canonical = MapFile.ToJson(ExemptionCarrier());
+        string lowerValues = canonical.Replace("\"Kind\": \"Birth\"", "\"Kind\": \"birth\"", StringComparison.Ordinal);
         Assert.NotEqual(canonical, lowerValues);
-        Assert.DoesNotContain("\"BirthZone\"", lowerValues, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"High\"", lowerValues, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Kind\": \"Birth\"", lowerValues, StringComparison.Ordinal);
 
         MapData loaded = MapFile.FromJson(lowerValues);
 
@@ -156,12 +141,11 @@ public class 地图文件健壮性Tests
     [Fact]
     public void 未知枚举值的地图拒绝加载()
     {
-        // 大小写宽容不等于任意字符串宽容：拼错的分区名 MUST 报错，不能落成默认值 BirthZone。
-        // retire-legacy-maps 1.6：link:1 的信物格都在出生区，拼错的分区名改为把 BirthZone 写成 BirthZon（原为 Contested → Contest）。
-        // map-expand-25 段 A3：载体改为 RelicCarrier（浮空岛不放静态信物格）。
-        string broken = MapFile.ToJson(RelicCarrier())
-            .Replace("\"Zone\": \"BirthZone\"", "\"Zone\": \"BirthZon\"", StringComparison.Ordinal);
-        Assert.Contains("BirthZon\"", broken, StringComparison.Ordinal);
+        // 大小写宽容不等于任意字符串宽容：拼错的枚举名 MUST 报错，不能落成默认值。
+        // relic-redesign W1：原把信物格分区 BirthZone 写成 BirthZon（随静态信物格删除），改为把棋盘类别 Birth 写成 Birt。
+        string broken = MapFile.ToJson(ExemptionCarrier())
+            .Replace("\"Kind\": \"Birth\"", "\"Kind\": \"Birt\"", StringComparison.Ordinal);
+        Assert.Contains("Birt\"", broken, StringComparison.Ordinal);
 
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => MapFile.FromJson(broken));
     }
@@ -170,19 +154,31 @@ public class 地图文件健壮性Tests
     public void 含未知字段的地图能正确加载()
     {
         // 地图文件里允许写 _comment 之类的说明字段：顶层与嵌套对象都不报错、不影响数据。
-        // retire-legacy-maps 1.6：载体由 v5 改为 link:1；嵌套对象里的说明字段改挂在出生区信物上（link:1 没有公共区信物）。
-        // map-expand-25 段 A3：载体改为 RelicCarrier（浮空岛不放静态信物格）。
-        string canonical = MapFile.ToJson(RelicCarrier());
+        // relic-redesign W1：嵌套对象里的说明字段原挂在信物格上（随静态信物格删除），改挂在棋盘清单的出生棋盘上。
+        string canonical = MapFile.ToJson(ExemptionCarrier());
         string withComments = canonical
             .Replace("{\n  \"Id\":", "{\n  \"_comment\": \"设计师备注：中央区与咽喉承担高预算\",\n  \"Id\":", StringComparison.Ordinal)
-            .Replace("\"Zone\": \"BirthZone\",", "\"_comment\": \"出生区\",\n      \"Zone\": \"BirthZone\",", StringComparison.Ordinal);
-        Assert.Contains("\"_comment\": \"出生区\"", withComments, StringComparison.Ordinal);
+            .Replace("\"Kind\": \"Birth\",", "\"_comment\": \"出生平台\", \"Kind\": \"Birth\",", StringComparison.Ordinal);
+        Assert.Contains("\"_comment\": \"出生平台\"", withComments, StringComparison.Ordinal);
         Assert.NotEqual(canonical, withComments);
-        Assert.Contains("_comment", withComments, StringComparison.Ordinal);
 
         MapData loaded = MapFile.FromJson(withComments);
 
         Assert.Equal(canonical, MapFile.ToJson(loaded));
+    }
+
+    [Fact]
+    public void 含已废弃信物格字段的地图拒绝加载()
+    {
+        // relic-redesign W1（D4）：静态信物格整体移除，地图文件里写 RelicCells 即响亮拒绝并点名（与据点 Sites 同一机制），MUST NOT 静默忽略。
+        // 变异：MapFile.RetiredFields 去掉 RelicCells → 本测试红（字段落进 Unknown 被静默放过）。
+        string json = MapFile.ToJson(MapCatalog.Resolve("link:1:4")).Replace("\"Id\":", "\"RelicCells\": {},\n  \"Id\":", StringComparison.Ordinal);
+        Assert.Contains("RelicCells", json, StringComparison.Ordinal);
+
+        FormatException ex = Assert.Throws<FormatException>(() => MapFile.FromJson(json));
+
+        Assert.Contains("RelicCells", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("静态信物格", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -216,7 +212,7 @@ public class 地图文件健壮性Tests
     {
         // 没有地形字段的旧文件 → 全 h=0、全草地、无桥无栅。
         // retire-legacy-maps 1.6：原样本是 maps/siege-4p-base-v2.json（可落子 85）；maps/ 目录随旧地图删除，改用手写的最小地图文本（3×3、A1 为障碍 → 可落子 8）。
-        const string text = "{\"Id\":\"old\",\"Width\":3,\"Height\":3,\"MaxPlayers\":4,\"Profile\":\"Link\",\"Obstacles\":[\"A1\"],\"BirthZones\":[],\"RelicCells\":{},\"ChokePoints\":[],\"CentralEntrance\":\"B2\"}";
+        const string text = "{\"Id\":\"old\",\"Width\":3,\"Height\":3,\"MaxPlayers\":4,\"Profile\":\"Link\",\"Obstacles\":[\"A1\"],\"BirthZones\":[],\"ChokePoints\":[],\"CentralEntrance\":\"B2\"}";
         Assert.DoesNotContain("\"Heights\"", text, StringComparison.Ordinal);
 
         MapData onDisk = MapFile.FromJson(text);

@@ -9,7 +9,7 @@ namespace Siege.Sim.Analysis;
 
 /// <summary>
 /// 一个主题的统计（link-map-terrain 5.2）。归属口径：名次与胜场按<b>玩家锁定的出生棋盘</b>（首部 <see cref="LogHeader.Zones"/>）归主题；
-/// 匠人改造按<b>改造目标所在的棋盘</b>归主题（立栅取两端里第一个落在棋盘内的一端）；公共信物按<b>信物所在的棋盘</b>归主题。
+/// 匠人改造按<b>改造目标所在的棋盘</b>归主题（立栅取两端里第一个落在棋盘内的一端）。relic-redesign 起地图没有静态公共信物，原"公共信物 / 被控制"两列删除。
 /// </summary>
 /// <param name="Theme">主题。</param>
 /// <param name="Boards">纳入局里该主题的棋盘块数（每局每块计 1）。</param>
@@ -18,8 +18,6 @@ namespace Siege.Sim.Analysis;
 /// <param name="MeanRank">平均名次（只计 <see cref="RankedSeats"/>；没有样本为 NaN）。</param>
 /// <param name="Wins">胜场：<see cref="RankedSeats"/> 里是本局胜者的人次（open-map B6："主题表现"的整局胜率 = Wins / RankedSeats，原"首轮战场胜率"随决赛删除）。</param>
 /// <param name="Edits">匠人改造次数，按动作名（<c>TerrainEditKind</c>：Bridge / Fence / Burn）。</param>
-/// <param name="PublicRelics">纳入局里该主题棋盘上的公共信物个数之和（首部信物表的 <c>Contested</c> 档，开局坐标）。</param>
-/// <param name="PublicControls">这些公共信物"变为有人控制"的次数（<c>ControlChanged</c> 事件、控制者非空；失去控制不计）。</param>
 public sealed record ThemeStat(
     BoardTheme Theme,
     int Boards,
@@ -27,9 +25,7 @@ public sealed record ThemeStat(
     int RankedSeats,
     double MeanRank,
     int Wins,
-    SortedDictionary<string, int> Edits,
-    int PublicRelics,
-    int PublicControls)
+    SortedDictionary<string, int> Edits)
 {
     /// <summary>匠人改造合计。</summary>
     public int EditTotal => Edits.Values.Sum();
@@ -66,8 +62,6 @@ public static class ThemeAnalyzer
         var ranks = all.ToDictionary(t => t, _ => new List<double>());
         var wins = all.ToDictionary(t => t, _ => 0);
         var edits = all.ToDictionary(t => t, _ => new SortedDictionary<string, int>(StringComparer.Ordinal));
-        var relics = all.ToDictionary(t => t, _ => 0);
-        var controls = all.ToDictionary(t => t, _ => 0);
         var r3Powers = all.ToDictionary(t => t, _ => new List<BigInteger>());
         var r3Ranks = all.ToDictionary(t => t, _ => new List<int>());
         int ranked = 0;
@@ -135,32 +129,12 @@ public static class ThemeAnalyzer
                     }
                 }
             }
-
-            // 公共信物：首部信物表（开局坐标）的公共区档，按所在棋盘归主题。
-            HashSet<Coord> contested = [.. log.Header.Relics.Where(r => r.Zone == nameof(RelicZone.Contested)).Select(r => Coord.Parse(r.Coord))];
-            foreach (Coord c in contested)
-            {
-                if (ThemeOf(ZoneAt(c)) is { } theme)
-                {
-                    relics[theme]++;
-                }
-            }
-
-            // 被控制：ControlChanged 事件的坐标即开局坐标；查是否公共信物。控制者为空（失去控制）不计。
-            foreach (LogEvent e in log.Events.Where(e => e.Type == LogEventType.ControlChanged && e.Player is not null && e.Coords is { Count: > 0 }))
-            {
-                Coord at = Coord.Parse(e.Coords![0]);
-                if (contested.Contains(at) && ThemeOf(ZoneAt(at)) is { } theme)
-                {
-                    controls[theme]++;
-                }
-            }
         }
 
         return new ThemeSection(
             logs.Count,
             ranked,
-            [.. all.Select(t => new ThemeStat(t, boards[t], seats[t], ranks[t].Count, Statistics.Mean(ranks[t]), wins[t], edits[t], relics[t], controls[t])
+            [.. all.Select(t => new ThemeStat(t, boards[t], seats[t], ranks[t].Count, Statistics.Mean(ranks[t]), wins[t], edits[t])
             {
                 Round3Powers = [.. r3Powers[t].Order()],
                 Round3PowerRanks = [.. r3Ranks[t].Order()],

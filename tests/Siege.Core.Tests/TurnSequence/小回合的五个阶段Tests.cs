@@ -2,7 +2,6 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.TurnSequence;
 
@@ -46,12 +45,12 @@ public class 小回合的五个阶段Tests
     public void 超限阻断征募()
     {
         // 设计文档 §5.2：持有类型数超过快照类型槽 → 征募阶段在强制整类弃牌完成前不可进入。
-        // 原型只有五种棋子、基础槽 5，信物造不出超限，这里用测试接缝把快照的槽位缩到 3（相当于兵站丢失后的缩水）。
+        // 基础槽 5，快照只有默认基础值（relic-redesign D4），这里用测试接缝把快照的槽位缩到 3 造出超限。
         // 变异验证 M-T3：EnterRecruit 捕获账本异常后仍 SetStage(Recruit) → 红 1（本测试）。
         MatchFlow match = LinkModeFixtures.PlainStarted();
         PlayerId p = match.CurrentPlayer!.Value;
         match.Debug.SeedHand(p, (PieceType.Basic, 5), (PieceType.Fortress, 1), (PieceType.Line, 1), (PieceType.Multiplier, 1));
-        match.Debug.SetSnapshotTransform(s => new EffectSnapshot(s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, 3, s.DeployLimit, s.EmblemCounts, s.HeldTypeCount));
+        match.Debug.SetSnapshotTransform(s => new EffectSnapshot(s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, 3, s.DeployLimit, s.HeldTypeCount));
 
         match.BeginTurn();
         Assert.Equal(1, match.CurrentSnapshot!.OverflowTypeCount);
@@ -67,15 +66,16 @@ public class 小回合的五个阶段Tests
     [Fact]
     public void 快照在回合内不变()
     {
-        // 设计文档 §5.1：本小回合批次中占领军令信物 → 本小回合部署上限仍为快照值 4；下一小回合才变 5。
-        // growth-pass-1 改写：第 5 大回合分阶段基础值为 4（原基础 3），快照值 3→4、下一小回合 4→5，暂放多一枚（E10）才触及上限。
-        // 变异验证 M-T4：EnterDeploy 改为现算 Relics.SnapshotFor 而不用 _snapshot → 本测试仍绿（占领在确认时才生效）；
-        // 真正钉住"回合内不变"的是快照对象引用不变 + 上限 4（growth-pass-1 前为 3）：把 CurrentSnapshot 改成每次访问重新生成 → 红 1（本测试）。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command())]).AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3]);
+        // 设计文档 §5.1：小回合开始时生成的快照在本小回合内不变——回合中途快照来源变了（测试接缝把部署上限 +1），本小回合仍按快照值 4；下一小回合才变 5。
+        // relic-redesign W1：原"批次中占领军令信物"随旧信物删除，快照来源的变化改由测试接缝 SetSnapshotTransform 制造（只改来源、不改已生成的快照）。
+        // 钉住"回合内不变"的是快照对象引用不变 + 上限 4：把 CurrentSnapshot 改成每次访问重新生成 → 红 1（本测试）。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3]);
 
         match.BeginTurn();
         EffectSnapshot snapshot = match.CurrentSnapshot!;
         Assert.Equal(4, snapshot.DeployLimit);
+        match.Debug.SetSnapshotTransform(s => new EffectSnapshot(s.Player, s.MajorRound, s.RevealCount, s.FreePickCount, s.TypeSlots, s.DeployLimit + 1, s.HeldTypeCount));
+        Assert.Same(snapshot, match.CurrentSnapshot);
         match.EnterRecruit();
         StagedBatch batch = match.EnterDeploy();
         Assert.Null(batch.Stage(TestMaps.At("G7"), PieceType.Basic));
@@ -87,7 +87,7 @@ public class 小回合的五个阶段Tests
         Assert.Equal(4, batch.Context.DeployLimit);
         Assert.True(match.Confirm().Confirmed);
 
-        // 其余三人 Pass，P0 的下一小回合快照才含军令
+        // 其余三人 Pass，P0 的下一小回合快照才按新来源生成
         match.PassTurn();
         match.PassTurn();
         match.PassTurn();

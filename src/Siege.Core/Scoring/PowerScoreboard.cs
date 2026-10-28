@@ -41,20 +41,17 @@ public sealed class PowerScoreboard
 
     /// <summary>
     /// 对当前盘面全量重算并替换 <see cref="Latest"/>；<paramref name="majorRound"/> 只用于倍率峰值遥测的轮次标记。
-    /// <b>不带版本 = 计分规则 v1</b>（formation-tiers D2：不计阵型、不读计分信物）：只留给旧算例测试，产品代码 MUST NOT 调用。
+    /// <b>不带版本 = 计分规则 v1</b>（formation-tiers D2：不计阵型）：只留给旧算例测试，产品代码 MUST NOT 调用。
     /// </summary>
     public PowerSnapshot Recalculate(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound) =>
-        Recalculate(board, roster, majorRound, ImmutableDictionary<Coord, Relics.RelicType>.Empty, ScoringVersions.Legacy);
+        Recalculate(board, roster, majorRound, ScoringVersions.Legacy);
 
     /// <summary>
-    /// 同 <see cref="Recalculate(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, int)"/>，并按 <paramref name="knownRelics"/> 读取计分信物
-    /// （more-pieces-relics D3）、按 <paramref name="scoring"/> 计分（formation-tiers D2）。正式对局的结算第 5 步、弃赛 / 大回合结束 / 恢复时的重算
-    /// 都走本重载，传真实信物内容与对局的计分规则版本。
+    /// 同 <see cref="Recalculate(GameBoard, IReadOnlyDictionary{PlayerId, PlayerStatus}, int)"/>，按 <paramref name="scoring"/> 计分（formation-tiers D2）。
+    /// 正式对局的结算第 5 步、弃赛 / 大回合结束 / 恢复时的重算都走本重载，传对局的计分规则版本；挂在棋子上的信物从盘面信物层读（relic-redesign D3）。
     /// </summary>
-    public PowerSnapshot Recalculate(
-        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound,
-        IReadOnlyDictionary<Coord, Relics.RelicType> knownRelics, ScoringVersion scoring) =>
-        Track(PowerCalculator.Compute(board, roster, knownRelics, scoring), majorRound);
+    public PowerSnapshot Recalculate(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, int majorRound, ScoringVersion scoring) =>
+        Track(PowerCalculator.Compute(board, roster, scoring), majorRound);
 
     private PowerSnapshot Track(PowerSnapshot snapshot, int majorRound)
     {

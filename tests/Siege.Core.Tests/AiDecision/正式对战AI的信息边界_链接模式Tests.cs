@@ -93,13 +93,13 @@ public class 正式对战AI的信息边界_链接模式Tests
         Assert.NotNull(full.Board[theirs].Occupant);   // 样本口径：别的棋盘上确实有棋子
         Assert.True(full.Power!.Of(P2).Total > 0);
 
-        // 别的棋盘（open-map 裁决 O4）：棋子、势力、手牌类型与信物揭示都与全知视图相同。
+        // 别的棋盘（open-map 裁决 O4）：棋子、势力、手牌类型与信物预告都与全知视图相同（信物层随盘面序列化一并比较）。
         Assert.Equal(full.Board[theirs].Occupant, seat.Board[theirs].Occupant);
         Assert.Equal(full.Board.Serialize(), seat.Board.Serialize());
         Assert.Equal(full.Power.Of(P2).Total, seat.Power!.Of(P2).Total);
         Assert.Equal(full.Hands.Single(h => h.Player == P2).Types, seat.Hands.Single(h => h.Player == P2).Types);
         Assert.NotEmpty(seat.Hands.Single(h => h.Player == P2).Types);
-        Assert.Equal(full.Relics.Select(r => (r.Coord, r.IsRevealed, r.Control)), seat.Relics.Select(r => (r.Coord, r.IsRevealed, r.Control)));
+        Assert.Equal(full.RelicForecast, seat.RelicForecast);
 
         // 本棋盘：与全知视图逐格相同，自己的势力不变；地形与全局项不过滤。
         Assert.Equal(full.Board[mine].Occupant, seat.Board[mine].Occupant);

@@ -110,7 +110,7 @@ public class 活形与禁入格的标示Tests
         MapData plain = LinkModeFixtures.PlainMap();
         MapData map = plain with { Obstacles = plain.Obstacles.Add(TestMaps.At("C8")) };
         MatchFlow match = LinkModeFixtures.RequireLink(
-            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         foreach (PlayerId p in TestMaps.All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));

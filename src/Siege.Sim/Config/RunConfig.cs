@@ -199,8 +199,9 @@ public sealed record RunConfig
     public ScoringVersion? ScoringVersion { get; init; }
 
     /// <summary>
-    /// 每名 AI 玩家的带入数量（carry-in-out D11 / simulation-harness「批量跑局」；取 0 或 1）：0 = 关闭带入带出，批次与引入之前逐局相同；
-    /// 1 = 开启，每名 AI 按 <see cref="Siege.Core.Carry.CarryAi.Draw"/> 从 <c>carry-ai</c> 子流随机带入 1 件补给，带出结算只写日志、不读写任何档案。
+    /// 每名 AI 玩家的带入件数（relic-redesign R21 / simulation-harness「批量跑局」；取 0–5）：0 = 关闭带入带出，批次与引入之前逐局相同；
+    /// 1–5 = 开启，每名 AI 按 <see cref="Siege.Core.PieceRelics.RelicCarryAi.Draw"/> 从 <c>carry-ai</c> 子流随机带入该件数的普通信物（随机 min(2, 件数) 件保险），
+    /// 带出结算只写日志、不读写任何档案（自动化模式，D8）。
     /// <c>null</c> = 未配置，新建的局由 <see cref="ResolvedFor"/> 落成 0 写进 <c>config.json</c> 与日志首部；按日志首部重建（回放）时缺该项即该项出现之前的旧日志，
     /// 回放不读它——带入按首部记录的各玩家带入重建（<see cref="Logging.LogHeader.CarryIns"/>）。命令行 <c>--carry-in</c>。
     /// </summary>
@@ -341,12 +342,12 @@ public sealed record RunConfig
             throw new ArgumentException($"计分规则版本须为 V1 或 V2，实际为 {scoring}。");
         }
 
-        if (CarryIn is { } carryIn && carryIn is not (0 or 1))
+        if (CarryIn is { } carryIn && (carryIn < 0 || carryIn > Siege.Core.PieceRelics.RelicKinds.MaxCarried))
         {
-            throw new ArgumentException($"带入数量须为 0 或 1（每名玩家每局至多带入 1 件补给；0 = 关闭带入带出），实际为 {carryIn}。");
+            throw new ArgumentException($"带入件数须为 0–{Siege.Core.PieceRelics.RelicKinds.MaxCarried}（每名玩家每局至多带入 {Siege.Core.PieceRelics.RelicKinds.MaxCarried} 件信物；0 = 关闭带入带出），实际为 {carryIn}。");
         }
 
-        if (CarryIn == 1 && !Siege.Core.Carry.CarryPoints.Supports(Players.Count))
+        if (CarryIn > 0 && !Siege.Core.PieceRelics.RelicPoints.Supports(Players.Count))
         {
             throw new ArgumentException($"{Players.Count} 人局没有名次补给点表（只有 2–4 人），不能开启带入。");
         }

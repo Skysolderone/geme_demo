@@ -2,21 +2,27 @@ using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Presentation.Visibility;
 
-/// <summary>默认棋盘上的信物标记。未发现的信物统一为 <see cref="Unknown"/>，不区分强度预算分区（tactical-ui 裁决 5）。</summary>
+/// <summary>
+/// 默认棋盘上的信物标记（relic-redesign R22 / R25：信物层全公开，三种标记）：地图信物（空格上）、持物棋子（挂在棋子上）、预告（下一批的落位格）。
+/// 种类在 <see cref="BoardCellView.RelicKind"/>，持物件是否保险在 <see cref="BoardCellView.RelicInsured"/>，预告的落位大回合在 <see cref="DefaultBoardView.RelicForecastRound"/>。
+/// </summary>
 public enum RelicMarker
 {
-    /// <summary>不是信物格。</summary>
+    /// <summary>该格没有信物，也不是预告格。</summary>
     None,
 
-    /// <summary>未知信物。</summary>
-    Unknown,
+    /// <summary>地图信物：空格上的信物，落子即拾取。</summary>
+    OnMap,
 
-    /// <summary>已揭示信物。</summary>
-    Revealed,
+    /// <summary>持物棋子：挂在该格棋子上的信物。</summary>
+    Held,
+
+    /// <summary>预告：下一批将在该格落位（被占则跳过）。</summary>
+    Forecast,
 }
 
 /// <summary>
@@ -30,7 +36,7 @@ public enum RelicMarker
 /// 深水格上<b>当前</b>是否有桥（有桥即可落子）。地图预置的桥与本局架起的桥在这里没有区别——
 /// visual-style-baseline「新旧设施同形」要求二者外观一致，information-visibility「改造结果公开」要求不标记改造者。
 /// </param>
-/// <param name="RevealedType">已揭示信物的类型；未揭示或非信物格为 <c>null</c>。</param>
+/// <param name="RelicKind">该格信物（或预告）的种类；<see cref="RelicMarker.None"/> 时为 <c>null</c>。</param>
 /// <param name="LifeForbiddenBy">
 /// 该格若是<b>当前行动玩家</b>的禁入格（他人已确定活形棋串的眼空间，life-shape D3 / D6），为那条活形的所有者；否则 <c>null</c>。
 /// 所有者本人看自己的眼空间为 <c>null</c>（可以自拆）。集合原样取自公开视图的 <see cref="LifeShapeReport.ForbiddenCellsFor"/>，
@@ -45,7 +51,7 @@ public sealed record BoardCellView(
     int? BirthZone,
     Occupant? Occupant,
     RelicMarker Relic,
-    RelicType? RevealedType,
+    RelicKind? RelicKind,
     PlayerId? LifeForbiddenBy)
 {
     /// <summary>
@@ -54,6 +60,12 @@ public sealed record BoardCellView(
     /// 从公开世界构建的默认棋盘上恒为 <c>null</c>。值原样取自 Core 的单子禁手查询，本层不判气、提子、同形与活形。
     /// </summary>
     public ForbiddenMove? Forbidden { get; init; }
+
+    /// <summary>
+    /// 该格信物是不是<b>保险件</b>（relic-redesign R15：保险标记公开；R25：持物棋子的标记上加保险记号）。只对 <see cref="RelicMarker.OnMap"/> / <see cref="RelicMarker.Held"/> 有意义，
+    /// 预告与无信物格恒为 <c>false</c>。值原样取自盘面信物层的 <see cref="Core.PieceRelics.RelicToken.Insured"/>。
+    /// </summary>
+    public bool RelicInsured { get; init; }
 
     /// <summary>
     /// 该格为什么落不下（对当前行动玩家）。超出合法落子范围不在此列——范围来自合法落子范围契约，默认棋盘不推断它。
@@ -151,6 +163,12 @@ public sealed record DefaultBoardView(
     /// 未展开（<see cref="BoardPlaceholderView.Expanded"/> 为假，只在插旗阶段出现——插旗阶段结束后全部一起展开，open-map 裁决 O4）的占位在 <see cref="Cells"/> 里没有任何格。
     /// </summary>
     public ImmutableArray<BoardPlaceholderView> Placeholders { get; init; } = [];
+
+    /// <summary>
+    /// 当前预告批次的落位大回合（relic-redesign R11 / R25：预告格标记写"种类 + 落位大回合"）；没有预告时为 <c>null</c>。
+    /// 全部 <see cref="RelicMarker.Forecast"/> 格同属这一批（Core 一次只有一批预告），所以放在棋盘上而不是逐格重复。原样取自公开快照的 <c>RelicForecast.LandingRound</c>。
+    /// </summary>
+    public int? RelicForecastRound { get; init; }
 
     /// <summary>
     /// 布局指纹（引擎层"要不要整体重搭"的唯一判据，board-link-mode F.6 / 裁决 J12-1）：画布尺寸、每格的<b>坐标</b>与可落子 / 高度 / 地表 / 桥、全部栅栏边、
@@ -272,12 +290,12 @@ public sealed record DefaultBoardView(
         return this with { Cells = cells };
     }
 
-    /// <summary>从公开世界构建：只读盘面格子视图与信物公开状态。</summary>
+    /// <summary>从公开世界构建：只读盘面格子视图、盘面信物层与信物预告。</summary>
     public static DefaultBoardView From(PublicWorld world)
     {
         ArgumentNullException.ThrowIfNull(world);
         GameBoard board = world.View.Board;
-        var relics = world.View.Relics.ToDictionary(r => r.Coord);
+        Dictionary<Coord, RelicKind> forecast = world.View.RelicForecast is { } f ? f.Slots.ToDictionary(s => s.Cell, s => s.Kind) : [];
         LifeShapeReport life = world.View.LifeShape;
         Dictionary<Coord, PlayerId> forbidden = world.View.CurrentPlayer is { } current
             ? life.ForbiddenCellsFor(current).ToDictionary(
@@ -290,16 +308,26 @@ public sealed record DefaultBoardView(
             {
                 Cell cell = board[c];
                 RelicMarker marker = RelicMarker.None;
-                RelicType? revealed = null;
-                if (relics.TryGetValue(c, out RelicPublicState? state))
+                RelicKind? kind = null;
+                bool insured = false;
+                if (board.RelicAt(c) is { } token)
                 {
-                    marker = state.IsRevealed ? RelicMarker.Revealed : RelicMarker.Unknown;
-                    revealed = state.IsRevealed ? state.Content!.Value.Type : null;
+                    marker = cell.Occupant is null ? RelicMarker.OnMap : RelicMarker.Held;
+                    kind = token.Kind;
+                    insured = token.Insured;
+                }
+                else if (forecast.TryGetValue(c, out RelicKind forecastKind))
+                {
+                    marker = RelicMarker.Forecast;
+                    kind = forecastKind;
                 }
 
                 return new BoardCellView(
                     c, cell.Terrain, board.Map.HeightAt(c), board.Map.SurfaceAt(c), board.Map.HasBridge(c),
-                    cell.BirthZone, cell.Occupant, marker, revealed, forbidden.TryGetValue(c, out PlayerId owner) ? owner : null);
+                    cell.BirthZone, cell.Occupant, marker, kind, forbidden.TryGetValue(c, out PlayerId owner) ? owner : null)
+                {
+                    RelicInsured = insured,
+                };
             }),
         ];
 
@@ -307,6 +335,9 @@ public sealed record DefaultBoardView(
             board.Width, board.Height, cells,
             [.. board.Map.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B)],
             board.TerrainEdits,
-            board.Map.Boards.IsDefault ? [] : board.Map.Boards);
+            board.Map.Boards.IsDefault ? [] : board.Map.Boards)
+        {
+            RelicForecastRound = world.View.RelicForecast?.LandingRound,
+        };
     }
 }

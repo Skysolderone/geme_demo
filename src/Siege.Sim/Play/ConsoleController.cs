@@ -2,6 +2,7 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
 using Siege.Core.Scoring;
@@ -93,12 +94,6 @@ internal sealed class ConsoleController : ITurnController
 
     public void Recruit(PlayerHandAccess hand, RecruitPanelView panel)
     {
-        // 展示数的来源拆分（探勘、驿站逐枚；+0 的驿站不列）：只在有可列的来源时打印一行。
-        if (_supplement().Structures.FirstOrDefault(s => s.Player == _me)?.Parameters?.RevealCount is { } reveal && BoardRenderer.VisibleSources(reveal).Any())
-        {
-            _out.WriteLine(BoardRenderer.RevealSourcesText(reveal));
-        }
-
         while (true)
         {
             RecruitPanelView current = hand.Panel();
@@ -170,7 +165,8 @@ internal sealed class ConsoleController : ITurnController
         PrintDeployHelp(batch);
         while (true)
         {
-            string staged = batch.Count == 0 ? "无" : string.Join(" ", batch.Placements.Select(p => $"{p.Coord.ToNotation()}:{BoardRenderer.Letter(p.Type)}"));
+            string staged = batch.Count == 0 ? "无" : string.Join(" ", batch.Placements.Select(p =>
+                $"{p.Coord.ToNotation()}:{BoardRenderer.Letter(p.Type)}{(p.AttachCarried is { } a ? $"@{a + 1}" : string.Empty)}"));
             _out.Write($"部署 [{batch.Count}/{batch.Context.DeployLimit}] 暂放 {staged} > ");
             string line = Read();
             string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -245,7 +241,32 @@ internal sealed class ConsoleController : ITurnController
                     }
                     else if (Coord.TryParse(parts[0].ToUpperInvariant(), out Coord coord))
                     {
-                        Stage(batch, coord, parts.Length > 1 ? parts[1] : null, parts.Length > 2 ? parts[2] : null);
+                        // 挂出参数（relic-redesign R14）：任一位置的 @N = 给这枚新落子挂上带入清单第 N 件；已暂放的格只给 @N 即改挂。
+                        List<string> rest = [.. parts.Skip(1)];
+                        int? attach = null;
+                        if (rest.FirstOrDefault(t => t.StartsWith('@')) is { } attachText)
+                        {
+                            rest.Remove(attachText);
+                            if (!int.TryParse(attachText[1..], out int n) || n < 1)
+                            {
+                                _out.WriteLine($"看不懂挂出参数 {attachText}：用 @N 挂带入清单第 N 件（见部署帮助里的未挂出列表）。");
+                                break;
+                            }
+
+                            attach = n - 1;
+                        }
+
+                        if (attach is not null && rest.Count == 0 && batch.Placements.Any(p => p.Coord == coord))
+                        {
+                            if (batch.Attach(coord, attach) is { } failure)
+                            {
+                                _render.Line(failure.Message, ConsoleColor.Red);
+                            }
+
+                            break;
+                        }
+
+                        Stage(batch, coord, rest.ElementAtOrDefault(0), rest.ElementAtOrDefault(1), attach);
                     }
                     else
                     {
@@ -257,7 +278,7 @@ internal sealed class ConsoleController : ITurnController
         }
     }
 
-    private void Stage(StagedBatch batch, Coord coord, string? typeText, string? editText)
+    private void Stage(StagedBatch batch, Coord coord, string? typeText, string? editText, int? attach)
     {
         if (!batch.Board.Map.Contains(coord))
         {
@@ -304,15 +325,15 @@ internal sealed class ConsoleController : ITurnController
             return;
         }
 
-        if (batch.Stage(coord, type, edit) is { } failure)
+        if (batch.Stage(coord, type, edit, attach) is { } failure)
         {
             _render.Line(failure.Message, ConsoleColor.Red);
         }
     }
 
     /// <summary>
-    /// 预演：一律取 Core 的富预演（<see cref="BatchPreview"/>），终端不自己算势力——势力前后值已按"批次开始前已揭示的计分信物"算好
-    /// （本批将首次揭示的信物不计入，列在"将揭示"里；more-pieces-relics batch-preview）。匠人的合法改造目标同样取自富预演
+    /// 预演：一律取 Core 的富预演（<see cref="BatchPreview"/>），终端不自己算势力——势力前后值已含本批拾取的信物（落在地图信物上即挂上，
+    /// 列在"将拾取"里；relic-redesign W1）。匠人的合法改造目标同样取自富预演
     /// （改造合法性唯一实现），不合法时也照列，玩家正要靠它换目标。
     /// </summary>
     private void Preview(StagedBatch batch)
@@ -333,21 +354,16 @@ internal sealed class ConsoleController : ITurnController
             BigInteger after = mine?.After ?? before;
             string captures = p.CapturedCoords.IsDefaultOrEmpty ? "不提子" : $"提走对手 {p.CapturedCoords.Length} 子";
             _render.Line($"预演：合法，{captures}，你的势力 {before} → {after}", ConsoleColor.Green);
-            if (!p.WillReveal.IsDefaultOrEmpty)
+            if (!p.WillPickUp.IsDefaultOrEmpty)
             {
-                _out.WriteLine($"  将揭示信物：{string.Join(" ", p.WillReveal.Select(c => c.ToNotation()))}（内容揭示后才计入势力）");
+                _out.WriteLine($"  将拾取信物：{string.Join(" ", p.WillPickUp.Select(r => $"{r.Cell.ToNotation()}{r.Token.Kind.DisplayName()}"))}（已计入上面的势力）");
             }
-        }
-
-        if (!p.EditOptions.IsDefaultOrEmpty && batch.Context.WorkshopActive)
-        {
-            _out.WriteLine("  工坊生效：搭桥 / 烧林的目标可隔一格（同行 / 同列距离 2）");
         }
 
         foreach (EditOutlook outlook in p.EditOptions)
         {
-            string chosen = outlook.Chosen is { } e ? "已选 " + BoardRenderer.EditText(outlook.ArtisanCell, e) : "不改造";
-            string legal = outlook.Legal.IsDefaultOrEmpty ? "无" : string.Join("、", outlook.Legal.Select(t => BoardRenderer.EditText(outlook.ArtisanCell, t)));
+            string chosen = outlook.Chosen is { } e ? "已选 " + BoardRenderer.EditText(e) : "不改造";
+            string legal = outlook.Legal.IsDefaultOrEmpty ? "无" : string.Join("、", outlook.Legal.Select(t => BoardRenderer.EditText(t)));
             _out.WriteLine($"  匠人 {outlook.ArtisanCell.ToNotation()}：{chosen}；合法目标 {outlook.Legal.Length} 个：{legal}");
         }
     }
@@ -360,6 +376,13 @@ internal sealed class ConsoleController : ITurnController
         _render.Line($"── 部署：本回合最多落 {batch.Context.DeployLimit} 枚  库存 {(stock.Length == 0 ? "空" : stock)} ──", ConsoleColor.Yellow);
         _out.WriteLine("  D4 M   在 D4 暂放一枚倍增子（只有一种棋子时可省略类型）");
         _out.WriteLine("  D4 A B:D5  匠人带改造（B:搭桥 / F:D4-E4 立栅 / X:烧林），v 预演列出全部合法目标");
+        if (batch.Context.Carried is { Count: > 0 } carried)
+        {
+            // 带入清单只对本人可见（R22），取自本人的部署上下文。
+            _out.WriteLine($"  D4 M @1  落子并挂上带入清单第 1 件（每枚至多 1 件，落在地图信物上即拾取、不能再挂；已暂放的格只写 D4 @1 即改挂）");
+            _out.WriteLine($"  你的{Siege.Presentation.Text.CarryTexts.Pending(carried.OrderBy(kv => kv.Key))}（未挂出的不生效，挂上即公开）");
+        }
+
         _out.WriteLine("  -D4    撤回 D4      c 清空      v 预演（看提子与势力变化）");
         _out.WriteLine("  ok     确认落子     pass 本回合不落子（撤销本回合征募）");
         _out.WriteLine("  b 看盘  s 看各家状态  resign 弃赛  q 退出游戏");

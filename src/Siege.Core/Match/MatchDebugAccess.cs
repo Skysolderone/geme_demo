@@ -28,9 +28,9 @@ internal sealed class MatchDebugAccess
     internal void SeedHand(PlayerId player, params (PieceType Type, int Count)[] entries) => _match.Hands.Debug.SeedHand(player, entries);
 
     /// <summary>改写小回合开始时生成的效果快照（如把类型槽缩到 3 以触发强制弃牌门）。传 <c>null</c> 取消。</summary>
-    internal void SetSnapshotTransform(Func<Relics.EffectSnapshot, Relics.EffectSnapshot>? transform) => _match.DebugSetSnapshotTransform(transform);
+    internal void SetSnapshotTransform(Func<Recruit.EffectSnapshot, Recruit.EffectSnapshot>? transform) => _match.DebugSetSnapshotTransform(transform);
 
-    /// <summary>盘面被测试直接改动后，重算势力与信物控制，让公开快照与盘面一致。</summary>
+    /// <summary>盘面被测试直接改动后，重算势力，让公开快照与盘面一致。</summary>
     internal void Recalculate() => _match.DebugRecalculate();
 
     /// <summary>链接模式测试桩（2.6 前）：在小回合边界以给定胜者结算一个战场，其余在局玩家出局。</summary>

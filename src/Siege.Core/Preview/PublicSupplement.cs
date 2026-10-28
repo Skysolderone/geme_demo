@@ -1,28 +1,18 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Preview;
 
-/// <summary>结构参数的一个信物来源：信物格、类型与强度（该信物已揭示且由该玩家控制，属 §13.1 公开信息）。</summary>
-public sealed record ParameterSource(Coord Coord, RelicType Type, int Magnitude);
-
 /// <summary>
-/// 一项结构参数：基础值、当前值与全部信物来源。来源只有两类（restore-go-core-rules D7）：
-/// <see cref="Base"/>（默认值；部署上限为分阶段基础值）与各枚信物，<c>Base + Σ Magnitude == Value</c> 由组装方核对，不一致即抛出。
+/// 一项结构参数：基础值与当前值（restore-go-core-rules D7）。relic-redesign D4 起旧十类地图信物删除，结构参数不再有信物来源，
+/// 当前值恒等于基础值（部署上限为分阶段基础值）；仍分两列，是为了界面与遥测沿用"基础 / 当前"的口径。
 /// </summary>
-public sealed record StructureParameter(int Base, int Value, ImmutableArray<ParameterSource> Sources)
+public sealed record StructureParameter(int Base, int Value)
 {
-    /// <summary>基础值之外的加成总计，即全部信物贡献的点数。</summary>
+    /// <summary>基础值之外的加成总计（relic-redesign 起恒 0，除非测试经调试接缝改写了快照）。</summary>
     public int Bonus => Value - Base;
-
-    /// <summary>
-    /// 要向玩家列出的来源：略去加成为 0 的来源（more-pieces-relics：只控制驿站本身时该枚驿站 +0，其余信物来源恒 ≥ 1）。
-    /// 略去的项为 0，<c>Base + Σ 列出来源 == Value</c> 仍成立。终端与图形面板共用这一份，不各写过滤。
-    /// </summary>
-    public IEnumerable<ParameterSource> ListedSources => Sources.Where(s => s.Magnitude != 0);
 }
 
 /// <summary>四项公开结构参数（设计文档 §14.3）：征募展示数、免费选取数、手牌类型槽、部署上限。</summary>
@@ -42,7 +32,7 @@ public sealed record PlayerStructure(PlayerId Player, PlayerStatus Status, Struc
 /// <param name="BoardSerialized">组装时的盘面序列化，供消费方核对与同时刻的 <see cref="MatchPublicView.BoardSerialized"/> 一致。</param>
 /// <param name="MajorRound">组装时的大回合。</param>
 /// <param name="Liberties">全盘棋串与气。</param>
-/// <param name="Structures">每名玩家的公开结构参数及信物来源。</param>
+/// <param name="Structures">每名玩家的公开结构参数。</param>
 /// <param name="CurrentOrderReport">生成本大回合顺序的先手值明细；第 1 大回合（随机顺序）为 <c>null</c>。</param>
 /// <param name="NextOrderForecast">若本大回合此刻结束，下一大回合的先手值明细与顺序预测（tactical-ui D7）；不在对局进行中时为 <c>null</c>。</param>
 public sealed record PublicSupplement(

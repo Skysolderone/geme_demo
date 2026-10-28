@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Scoring;
 
@@ -38,10 +38,17 @@ public static class PowerCalculator
     /// 仍经唯一的 <see cref="Multiplier.Apply"/> 精确整数运算，逐串向下取整一次。
     /// </summary>
     public static BigInteger GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount, int formationTier) =>
-        new Multiplier(multiplierCount + formationTier).Apply((BigInteger)baseTotal + positionBonus);
+        GroupPowerOf(baseTotal, positionBonus, multiplierCount, formationTier, relicExponent: 0);
 
     /// <summary>
-    /// 独占空格是否计领地分（terrain-surfaces D1 / D4 的唯一落点）：荒漠格可以被独占（归属、信物控制照常），但不计分。
+    /// 同上，另加挂在棋子上的军旗（relic-redesign D3）：倍率指数 = 倍增子数量 + 阵型阶数 + <paramref name="relicExponent"/>（军旗件数），
+    /// 仍经唯一的 <see cref="Multiplier.Apply"/> 精确整数运算，逐串向下取整一次。<paramref name="relicExponent"/> 为 0 时与原式逐项相同。
+    /// </summary>
+    public static BigInteger GroupPowerOf(int baseTotal, int positionBonus, int multiplierCount, int formationTier, int relicExponent) =>
+        new Multiplier(multiplierCount + formationTier + relicExponent).Apply((BigInteger)baseTotal + positionBonus);
+
+    /// <summary>
+    /// 独占空格是否计领地分（terrain-surfaces D1 / D4 的唯一落点）：荒漠格可以被独占（归属照常），但不计分。
     /// 过滤只在"归属 → 领地分"这一步，空格归属三态本身不看地表。
     /// </summary>
     public static bool ScoresTerritory(MapData map, Coord cell)
@@ -56,29 +63,24 @@ public static class PowerCalculator
     /// <b>不带版本 = 计分规则 v1</b>（不计阵型）：只留给旧算例测试，产品代码 MUST NOT 调用。
     /// </summary>
     public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group) =>
-        Evaluate(board, coverage, group, ScoringRelicCounts.None, ScoringVersions.Legacy);
-
-    /// <summary>
-    /// 同 <see cref="Evaluate(GameBoard, CoverageMap, Group)"/>，另计棋串所有者控制的计分信物（more-pieces-relics D3）：
-    /// 连营并入连珠加值、犄角并入协同加值，与其余位置加值一起被倍率放大。
-    /// <b>不带版本 = 计分规则 v1</b>（不计阵型）：只留给旧算例测试，产品代码 MUST NOT 调用。
-    /// </summary>
-    public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group, ScoringRelicCounts relics) =>
-        Evaluate(board, coverage, group, relics, ScoringVersions.Legacy);
+        Evaluate(board, coverage, group, ScoringVersions.Legacy);
 
     /// <summary>
     /// 按计分规则版本 <paramref name="scoring"/> 计算一条棋串的军势明细（formation-tiers D1 / D3）：阵型阶数按整条棋串的棋子数取
     /// （<see cref="FormationTiers.TierOf(ScoringVersion, int)"/>，v1 恒 0），与倍增子数量相加成倍率指数。这是 <see cref="GroupPower"/> 的唯一构造点。
     /// </summary>
-    public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group, ScoringRelicCounts relics, ScoringVersion scoring)
+    public static GroupPower Evaluate(GameBoard board, CoverageMap coverage, Group group, ScoringVersion scoring)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(coverage);
         ArgumentNullException.ThrowIfNull(group);
 
-        int baseTotal = PieceEffects.BaseTotal(board, group);
-        int lineBonus = PieceEffects.LineBonus(board, group, relics.Encampments);
-        int synergyBonus = PieceEffects.SynergyBonus(board, group, relics.Pincers);
+        // relic-redesign D3：挂在棋子上的信物逐棋串从盘面信物层读出（信物层为空时全 0，下面每一项都与信物层上线之前相同）。
+        // 战鼓并入基础军势、百变的额外类型并入协同来源、号令与百变的固定加值记为信物位置加值、军旗加倍率指数——都在倍率之前，与现行顺序一致。
+        RelicTally pieceRelics = RelicEffects.Tally(board, group);
+        int baseTotal = PieceEffects.BaseTotal(board, group) + pieceRelics.BaseBonus;
+        int lineBonus = PieceEffects.LineBonus(board, group);
+        int synergyBonus = PieceEffects.SynergyBonus(board, group, pieceRelics.ExtraSynergyTypes);
         int highGroundBonus = PieceEffects.HighGroundBonus(board, group);
         int bannerBonus = PieceEffects.BannerBonus(board, group);
         int chainBonus = PieceEffects.ChainBonus(board, group);
@@ -86,18 +88,24 @@ public static class PowerCalculator
         int boundaryBonus = PieceEffects.BoundaryBonus(board, coverage, group);
         int multiplierCount = PieceEffects.MultiplierCount(board, group);
         int formationTier = FormationTiers.TierOf(scoring, group.Size);
-        int positionBonus = lineBonus + synergyBonus + highGroundBonus + bannerBonus + chainBonus + sentryBonus + boundaryBonus;
-        BigInteger power = GroupPowerOf(baseTotal, positionBonus, multiplierCount, formationTier);
+        int relicPositionBonus = pieceRelics.PositionBonus(group.Size);
+        int positionBonus = lineBonus + synergyBonus + highGroundBonus + bannerBonus + chainBonus + sentryBonus + boundaryBonus + relicPositionBonus;
+        BigInteger power = GroupPowerOf(baseTotal, positionBonus, multiplierCount, formationTier, pieceRelics.Exponent);
 
-        // 计分信物的子拆分（遥测用）：同一份加值实现在"无计分信物"下再求一次，差即额外部分；不控制计分信物时不重算。
-        int encampmentBonus = relics.Encampments == 0 ? 0 : lineBonus - PieceEffects.LineBonus(board, group, 0);
-        int pincerBonus = relics.Pincers == 0 ? 0 : synergyBonus - PieceEffects.SynergyBonus(board, group, 0);
+        // relic-redesign C1（design.md D5）：同一条棋串不挂任何信物时的军势，与上式同一条公式、同一次遍历的各项，只去掉四处信物项
+        //（战鼓基础、百变额外类型、号令 / 百变位置加值、军旗指数）。差值 = 信物对这条棋串军势的边际贡献，AI 信物维只读它、不自算效果。无信物时恒等于 power，贡献 0。
+        BigInteger withoutRelics = pieceRelics.Total == 0 ? power : GroupPowerOf(
+            baseTotal - pieceRelics.BaseBonus,
+            positionBonus - relicPositionBonus - synergyBonus + PieceEffects.SynergyBonus(board, group),
+            multiplierCount, formationTier, relicExponent: 0);
+
         return new GroupPower(group.Owner, group.Stones, baseTotal, lineBonus, synergyBonus, highGroundBonus,
             bannerBonus, chainBonus, sentryBonus, boundaryBonus, multiplierCount, power)
         {
-            EncampmentBonus = encampmentBonus,
-            PincerBonus = pincerBonus,
             FormationTier = formationTier,
+            RelicPositionBonus = relicPositionBonus,
+            RelicExponent = pieceRelics.Exponent,
+            RelicContribution = power - withoutRelics,
         };
     }
 
@@ -108,7 +116,7 @@ public static class PowerCalculator
     public static PowerSnapshot Compute(GameBoard board)
     {
         ArgumentNullException.ThrowIfNull(board);
-        return ComputeCore(board, roster: null, knownRelics: null, ScoringVersions.Legacy);
+        return ComputeCore(board, roster: null, ScoringVersions.Legacy);
     }
 
     /// <summary>
@@ -116,79 +124,27 @@ public static class PowerCalculator
     /// 盘面上出现名册外的玩家几乎一定是接线错误，抛 <see cref="SiegeRuleException"/> 而不是静默视为参赛中。
     /// 名册列出但盘面上没有棋子的玩家（例如刚被提光）势力为 0，仍按状态参与名次。
     /// </summary>
-    /// <remarks>
-    /// 本重载不读任何计分信物（连营 / 犄角视为无人控制）——等同于传入空的已知信物内容。
-    /// <b>不带版本 = 计分规则 v1</b>（不计阵型）：只留给旧算例测试，产品代码 MUST NOT 调用。
-    /// </remarks>
+    /// <remarks><b>不带版本 = 计分规则 v1</b>（不计阵型）：只留给旧算例测试，产品代码 MUST NOT 调用。</remarks>
     public static PowerSnapshot Compute(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(roster);
-        return ComputeCore(board, roster, knownRelics: null, ScoringVersions.Legacy);
+        return ComputeCore(board, roster, ScoringVersions.Legacy);
     }
-
-    /// <summary>
-    /// 全量计算并读取计分信物（more-pieces-relics D3，relic-effects「计分信物：连营与犄角」）。
-    /// <paramref name="knownRelics"/> 是调用方<b>已知</b>的信物内容（坐标 → 类型）：正式结算传真实内容（<see cref="RelicLedger.TrueContents"/>），
-    /// 预演与 AI 只传批次开始前已揭示的公开内容。控制不由调用方给出，而是在本次计算里按同一份覆盖表与名册现算
-    /// （唯一实现 <see cref="RelicControl.Of"/>）：争议 / 无人控制不生效，已弃赛 / 已出局者控制的（封锁）不为其加分。
-    /// 只按当前盘面，不经效果快照——失去控制的那一次重算里立即失效。
-    /// <b>不带版本 = 计分规则 v1</b>（不计阵型）：只留给旧算例测试，产品代码 MUST NOT 调用。
-    /// </summary>
-    public static PowerSnapshot Compute(
-        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, IReadOnlyDictionary<Coord, RelicType> knownRelics) =>
-        Compute(board, roster, knownRelics, ScoringVersions.Legacy);
 
     /// <summary>
     /// 按计分规则版本 <paramref name="scoring"/> 全量计算（formation-tiers D2）——<b>产品代码的唯一入口</b>：结算后的势力快照、批次预演、
     /// AI 评价与专家前瞻、顺序预测都走这里并传对局的版本（<c>MatchOptions.ScoringVersion</c> / <c>MatchPublicView.ScoringVersion</c>）。
-    /// 名册与已知信物内容的含义同上一个重载。
+    /// 名册的含义同上一个重载。挂在棋子上的信物直接从盘面信物层读（relic-redesign D3），不需要调用方另给信物内容。
     /// </summary>
-    public static PowerSnapshot Compute(
-        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, IReadOnlyDictionary<Coord, RelicType> knownRelics, ScoringVersion scoring)
+    public static PowerSnapshot Compute(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus> roster, ScoringVersion scoring)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(roster);
-        ArgumentNullException.ThrowIfNull(knownRelics);
-        return ComputeCore(board, roster, knownRelics, ScoringVersions.RequireValid(scoring));
+        return ComputeCore(board, roster, ScoringVersions.RequireValid(scoring));
     }
 
-    /// <summary>
-    /// 某玩家此刻控制的连营 / 犄角枚数。只看 <paramref name="knownRelics"/> 里列出的格；控制经 <see cref="RelicControl.Of"/> 判定，
-    /// 只有 <see cref="RelicControl.GrantsEffectTo"/>（参赛中且控制）才计。
-    /// </summary>
-    private static ScoringRelicCounts ScoringRelicsOf(
-        PlayerId player, CoverageMap coverage, IReadOnlyDictionary<Coord, RelicType>? knownRelics, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster)
-    {
-        if (knownRelics is null)
-        {
-            return ScoringRelicCounts.None;
-        }
-
-        int encampments = 0;
-        int pincers = 0;
-        foreach ((Coord coord, RelicType type) in knownRelics)
-        {
-            if (type is not (RelicType.Encampment or RelicType.Pincer) || !RelicControl.Of(coverage, coord, roster).GrantsEffectTo(player))
-            {
-                continue;
-            }
-
-            if (type == RelicType.Encampment)
-            {
-                encampments++;
-            }
-            else
-            {
-                pincers++;
-            }
-        }
-
-        return new ScoringRelicCounts(encampments, pincers);
-    }
-
-    private static PowerSnapshot ComputeCore(
-        GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster, IReadOnlyDictionary<Coord, RelicType>? knownRelics, ScoringVersion scoring)
+    private static PowerSnapshot ComputeCore(GameBoard board, IReadOnlyDictionary<PlayerId, PlayerStatus>? roster, ScoringVersion scoring)
     {
         CoverageMap coverage = CoverageMap.Compute(board);
         ImmutableArray<Group> allGroups = board.AllGroups();
@@ -211,10 +167,9 @@ public static class PowerCalculator
             PlayerStatus status = roster is null ? PlayerStatus.Active : roster[player];
             ImmutableArray<Coord> exclusive = coverage.ExclusiveCellsOf(player);
             ImmutableArray<Coord> scored = [.. exclusive.Where(c => ScoresTerritory(board.Map, c))];
-            ScoringRelicCounts relics = ScoringRelicsOf(player, coverage, knownRelics, roster);
             ImmutableArray<GroupPower> groups = allGroups
                 .Where(g => g.Owner == player)
-                .Select(g => Evaluate(board, coverage, g, relics, scoring))
+                .Select(g => Evaluate(board, coverage, g, scoring))
                 .ToImmutableArray();
 
             BigInteger groupTotal = BigInteger.Zero;

@@ -157,16 +157,16 @@ public class 链接档地图标识与确定性Tests
         var game = new GameSeed(12345);
         ulong[] layout = Take(MapRandom.ForLinkLayout(12345, 4), 8);
         Assert.Equal(layout, Take(MapRandom.ForLinkLayout(12345, 4), 8));   // 样本口径：同种子同序列，下面的"不等"不是因为每次取值都变
-        foreach (string name in new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.FlagPick, GameSeed.CarryAi })
+        foreach (string name in new[] { GameSeed.RelicSpawn(4), GameSeed.Recruit, GameSeed.Setup, GameSeed.FlagPick, GameSeed.CarryAi })
         {
             Assert.NotEqual(layout, Take(game.Stream(name), 8));
         }
 
-        // ② 地图随机源复用了 RandomStream 的 internal 构造器与 SplitMix64：钉住对局种子 12345 下三条命名子流的首个取值，
-        //    证明复用没有改动对局侧的派生（黄金值原样沿用删除前的测试；第四条 zone-pick 子流已随旧路径删除）。
+        // ② 地图随机源复用了 RandomStream 的 internal 构造器与 SplitMix64：钉住对局种子 12345 下两条命名子流的首个取值，
+        //    证明复用没有改动对局侧的派生（黄金值原样沿用删除前的测试；zone-pick 已随旧路径删除，relic-gen 已随旧信物删除）。
         Assert.Equal(
-            [10602760394128728250UL, 1172862400557011553UL, 18416610492839591364UL],
-            new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup }.Select(name => game.Stream(name).NextUInt64()));
+            [1172862400557011553UL, 18416610492839591364UL],
+            new[] { GameSeed.Recruit, GameSeed.Setup }.Select(name => game.Stream(name).NextUInt64()));
 
         // ③ 源码扫描：生成侧（MapRandom / 链接档生成器与标识）不见对局种子；Maps 目录下凡碰地图随机源的文件都在名单里；
         //    对局流程（Siege.Core/Match）不见地图随机源、不直接生成地图、不出现地图种子——它只拿到生成好的 MapData 与标识字符串。
@@ -206,7 +206,7 @@ public class 链接档地图标识与确定性Tests
             Assert.NotEqual(Take(MapRandom.ForLinkSurfaces(seed + 1, 4), 8), surfaces);
             Assert.NotEqual(Take(MapRandom.ForLinkSurfaces(seed, 2), 8), surfaces);
             var game = new GameSeed(seed);
-            foreach (string name in new[] { GameSeed.RelicGeneration, GameSeed.Recruit, GameSeed.Setup, GameSeed.FlagPick, GameSeed.CarryAi })
+            foreach (string name in new[] { GameSeed.RelicSpawn(4), GameSeed.Recruit, GameSeed.Setup, GameSeed.FlagPick, GameSeed.CarryAi })
             {
                 Assert.NotEqual(Take(game.Stream(name), 8), surfaces);
             }

@@ -252,10 +252,10 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
     public void 不放静态信物格(int players)
     {
         // design D5（段 A3 改写，依据 relic-redesign R29，2026-10-26 用户裁决）：浮空岛不放静态信物格——出生区信物与低地公共信物都没有。
-        // 原「信物数量与位置」（每平台核心区 2 个出生区信物、低地公共信物 ≤ n+2）随之改为本条。
+        // relic-redesign 接线段 W1 起地图数据连"信物格"字段都没有：导出文件里不出现 RelicCells（信物改由对局中途刷新）。
         foreach ((ulong seed, MapData map) in Maps(players))
         {
-            Assert.True(map.RelicCells.IsEmpty, $"link:{seed}:{players} 有 {map.RelicCells.Count} 个信物格");
+            Assert.DoesNotContain("RelicCells", MapFile.ToJson(map), StringComparison.Ordinal);
         }
     }
 
@@ -282,7 +282,6 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
             Assert.Equal(without.TerrainData.Heights.OrderBy(kv => kv.Key), with.TerrainData.Heights.OrderBy(kv => kv.Key));
             Assert.Equal(without.TerrainData.Bridges.Order(), with.TerrainData.Bridges.Order());
             Assert.Equal(without.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B), with.TerrainData.Fences.OrderBy(f => f.A).ThenBy(f => f.B));
-            Assert.Equal(without.RelicCells.OrderBy(kv => kv.Key), with.RelicCells.OrderBy(kv => kv.Key));
             Assert.Equal(without.Boards, with.Boards);
         }
 

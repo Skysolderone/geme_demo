@@ -5,11 +5,10 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
+using Siege.Core.PieceRelics;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -19,7 +18,7 @@ namespace Siege.Sim.Running;
 /// <summary>
 /// 按日志首部重建（回放）时的带入带出：首部记录的开关与各玩家带入（征召签已是抽得的类型）。<c>null</c> 即首部缺该项的旧日志——按关闭、全员无带入重建，重建出的首部也不写这两项。
 /// </summary>
-internal sealed record RecordedCarry(bool CarryInOut, ImmutableSortedDictionary<PlayerId, CarryIn> CarryIns);
+internal sealed record RecordedCarry(bool CarryInOut, ImmutableSortedDictionary<PlayerId, RelicLoadout> CarryIns);
 
 /// <summary>
 /// 一局的跑局会话：建局、装 AI、逐小回合驱动 <see cref="MatchRunner"/>、记日志、到终局或小回合数截断（restore-go-core-rules D5，记 turn_limit、无名次）、捕获失败。
@@ -99,13 +98,12 @@ public sealed class MatchSession
             throw new SiegeRuleException($"跑局配置的计分规则为 {scoring}，对局配置却为 {match.ScoringVersion}。");
         }
 
-        if (config.CarryIn == 1 && !match.CarryInOut)
+        if (config.CarryIn > 0 && !match.CarryInOut)
         {
-            throw new SiegeRuleException("跑局配置的带入数量为 1，对局却没有开启带入带出。");
+            throw new SiegeRuleException($"跑局配置的带入件数为 {config.CarryIn}，对局却没有开启带入带出。");
         }
 
         Runner = new MatchRunner(match);
-        _trace.SnapshotSource = () => match.CurrentSnapshot;
         Seed = match.Seed;
         bool sampled = Seed.Stream(SampleStream).NextPermille(config.FullEventSamplePermille);
         _retention = config.EventRetention == EventRetention.Full || sampled ? EventRetention.Full : EventRetention.SnapshotsOnly;
@@ -146,7 +144,7 @@ public sealed class MatchSession
 
     // ---------- 建局 ----------
 
-    /// <summary>按配置与种子建一局：地图静态校验、信物按 <c>relic-gen</c> 生成、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
+    /// <summary>按配置与种子建一局：地图静态校验、原型插旗（标准图上 P<i>i</i> 插旗到出生区 <i>i</i>）。</summary>
     public static MatchSession Create(RunConfig config, ulong seed, MapData? map = null) =>
         Create(config, seed, map, recorded: false);
 
@@ -175,20 +173,21 @@ public sealed class MatchSession
         // 内容集（more-pieces-relics D8）同理：新建的局已落成具体值；按首部重建时缺该项 = 该项出现之前的旧日志，当时只有原六 + 六，按 v1 重建。
         ContentSet contentSet = config.ContentSet ?? (recorded ? ContentSets.Legacy : ContentSets.Default);
         ScoringVersion scoringVersion = config.ScoringVersion ?? (recorded ? ScoringVersions.Legacy : ScoringVersions.Default);
-        // 带入带出（carry-in-out D11）：新建的局按带入数量从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
-        // 按日志首部重建时只读首部记录的带入（征召签已是抽得的类型），MUST NOT 按配置或种子重抽——人机对局的带入不可由种子推出。首部缺该项 = 旧日志 = 关闭。
+        // 带入带出（relic-redesign R21）：新建的局按带入件数从 carry-ai 子流给每名 AI 抽取（0 时不派生任何子流，与引入之前逐步相同）；
+        // 按日志首部重建时只读首部记录的带入清单，MUST NOT 按配置或种子重抽——人机对局的带入不可由种子推出。首部缺该项 = 旧日志 = 关闭。
+        // 自动化模式不读写档案（D8）：AI 带入不受任何库存限制。
         bool carryInOut;
-        ImmutableSortedDictionary<PlayerId, CarryIn> carryIns;
+        ImmutableSortedDictionary<PlayerId, RelicLoadout> carryIns;
         if (recorded)
         {
             carryInOut = carry?.CarryInOut ?? false;
-            carryIns = carry?.CarryIns ?? ImmutableSortedDictionary<PlayerId, CarryIn>.Empty;
+            carryIns = carry?.CarryIns ?? ImmutableSortedDictionary<PlayerId, RelicLoadout>.Empty;
         }
         else
         {
             int count = config.CarryIn ?? 0;
-            carryInOut = count == 1;
-            carryIns = CarryAi.Draw(new GameSeed(seed), players, count, contentSet);
+            carryInOut = count > 0;
+            carryIns = RelicCarryAi.Draw(new GameSeed(seed), players, count);
         }
 
         // board-link-mode 实现裁决 C1：一律以链接模式建局。retire-legacy-maps 3.6：建局分叉删除——公开 MatchFlow.Create 恒为链接模式（3.5）。
@@ -398,7 +397,6 @@ public sealed class MatchSession
                 Player = e.Player.Value,
                 Artisan = e.ArtisanCoord.ToNotation(),
                 CausedCapture = e.CausedCapture,
-                ViaWorkshop = WritesNewContent(Match.ContentSet) ? e.ViaWorkshop : null,
             });
         }
 
@@ -480,27 +478,6 @@ public sealed class MatchSession
             Add(turn, majorRound, LogEventType.Candidates, pid, string.Join(" | ", ai.LastCandidates));
         }
 
-        foreach (RelicPublicState now in after.Relics)
-        {
-            // 链接模式：本小回合的链接新增的公共棋盘信物在 before 里没有（未揭示、无人控制；信物本身记在链接事件里）。没有链接的小回合恒能取到。
-            RelicPublicState? was = before.Relics.FirstOrDefault(r => r.Coord == now.Coord);
-            if (was is null)
-            {
-                continue;
-            }
-
-            if (was.RevealedInMajorRound is null && now.RevealedInMajorRound is { } round)
-            {
-                Add(turn, round, LogEventType.Reveal, pid, now.Content!.Value.ToString(), coords: [now.Coord.ToNotation()]);
-            }
-
-            if (was.Control != now.Control)
-            {
-                Add(turn, majorRound, LogEventType.ControlChanged, now.Control.Holder is { } h ? h.Value : null,
-                    $"{now.Coord.ToNotation()}: {was.Control} -> {now.Control}", coords: [now.Coord.ToNotation()]);
-            }
-        }
-
         string rankBefore = RankingText(before.Power);
         string rankAfter = RankingText(after.Power);
         if (rankBefore != rankAfter)
@@ -534,21 +511,12 @@ public sealed class MatchSession
             Stalled = _trace.Stalled ? true : null,
             Rejections = _trace.Rejections.Count,
             ShowCount = _trace.ShowCount,
-            RelaySources = RelaySourcesEntry(_trace.Effects, Match.ContentSet),
-            WorkshopActive = WritesNewContent(Match.ContentSet) ? _trace.Effects?.WorkshopActive : null,
             FreePickCount = _trace.FreePickCount,
             TypeSlots = _trace.TypeSlots,
             DeployLimit = _trace.DeployLimit,
             ActionOrder = [.. after.ActionOrder.Select(p => p.Value)],
             PassStreak = after.PassStreak,
             PlayersState = PlayerEntries(after),
-            Relics = [.. after.Relics.Select(r => new RelicStateEntry
-            {
-                Coord = r.Coord.ToNotation(),
-                Revealed = r.IsRevealed,
-                Control = r.Control.Kind.ToString(),
-                Holder = r.Control.Holder?.Value,
-            })],
             ElapsedMs = elapsedMs,
         });
     }
@@ -677,12 +645,11 @@ public sealed class MatchSession
                     ChainBonus = NewField(g.ChainBonus, view.ContentSet),
                     SentryBonus = NewField(g.SentryBonus, view.ContentSet),
                     BoundaryBonus = NewField(g.BoundaryBonus, view.ContentSet),
-                    EncampmentBonus = NewField(g.EncampmentBonus, view.ContentSet),
-                    PincerBonus = NewField(g.PincerBonus, view.ContentSet),
                     MultiplierCount = g.MultiplierCount,
                     FormationTier = FormationField(g.FormationTier, view.ScoringVersion),
                     Power = g.Power,
                     PieceCounts = PieceCountsOf(view.Board, g, view.ContentSet),
+                    RelicCounts = RelicCountsOf(view.Board, g),
                 })],
                 // match-telemetry 第 11 项。
                 EliminationReason = state.EliminationReason?.ToString(),
@@ -702,12 +669,6 @@ public sealed class MatchSession
     internal static int? FormationField(int tier, ScoringVersion scoring) => scoring == ScoringVersion.V1 ? null : tier;
 
     private static int? NewField(int value, ContentSet contentSet) => WritesNewContent(contentSet) ? value : null;
-
-    /// <summary>快照记录的驿站来源：坐标 → 该枚驿站的展示数加成（含 +0，逐枚），直接取效果快照的 <see cref="EffectSnapshot.RelaySources"/>（唯一实现在账本）。</summary>
-    internal static Dictionary<string, int>? RelaySourcesEntry(EffectSnapshot? effects, ContentSet contentSet) =>
-        !WritesNewContent(contentSet) || effects is null
-            ? null
-            : effects.RelaySources.ToDictionary(kv => kv.Key.ToNotation(), kv => kv.Value, StringComparer.Ordinal);
 
     /// <summary>
     /// 棋串各棋子类型的数量（本局内容集的全部类型都写，含 0，按固定类型次序），从快照盘面按棋子坐标逐枚统计。internal 供测试用真实盘面走写入路径（真实跑局样本未必出现连珠成线）。
@@ -730,6 +691,35 @@ public sealed class MatchSession
         return counts;
     }
 
+    /// <summary>
+    /// 棋串上挂着的信物件数（relic-redesign 段 C1 遥测）：从快照盘面信物层按棋子坐标逐枚数，键为种类名、只写出现的种类；没有信物返回 <c>null</c>（日志不写该项）。
+    /// internal 供测试用真实盘面走写入路径。
+    /// </summary>
+    internal static Dictionary<string, int>? RelicCountsOf(GameBoard board, GroupPower group)
+    {
+        if (!board.HasRelics)
+        {
+            return null;
+        }
+
+        Dictionary<string, int>? counts = null;
+        foreach (Coord stone in group.Stones)
+        {
+            if (board.RelicAt(stone) is { } token)
+            {
+                counts ??= new Dictionary<string, int>(StringComparer.Ordinal);
+                string key = token.Kind.ToString();
+                counts[key] = counts.GetValueOrDefault(key) + 1;
+            }
+        }
+
+        return counts;
+    }
+
+    /// <summary>信物事件说明里的格：每件写作 <c>格#编号:种类…</c>、空格分隔（Core 的 <c>MatchFlow.Describe</c>），取 <c>#</c> 之前的记法。</summary>
+    private static List<string> RelicCells(string detail) =>
+        [.. detail.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(part => part.Contains('#', StringComparison.Ordinal)).Select(part => part[..part.IndexOf('#', StringComparison.Ordinal)])];
+
     /// <summary>把流程层新增的事件（不含阶段噪声）复制进日志；大回合结束附先手值明细。</summary>
     private void CopyFlowEvents()
     {
@@ -748,7 +738,6 @@ public sealed class MatchSession
                     {
                         values[$"{entry.Player}.Rank"] = entry.Rank;
                         values[$"{entry.Player}.Power"] = entry.Power;
-                        values[$"{entry.Player}.Bonus"] = entry.Bonus;
                         values[$"{entry.Player}.Value"] = entry.Value;
                         values[$"{entry.Player}.Prev"] = entry.PreviousPosition ?? -1;
                         values[$"{entry.Player}.Next"] = report.NextOrder.IndexOf(entry.Player);
@@ -778,6 +767,41 @@ public sealed class MatchSession
                 case FlowEventKind.FlagsLocked:
                     Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail);
                     break;
+                case FlowEventKind.RelicsForecast:
+                    // relic-redesign 段 C1 遥测：预告 / 落位读 Core 的批次记录——预告事件对应"预告大回合 = 事件大回合"的那一批，落位事件对应"落位大回合 = 事件大回合"的那一批
+                    //（不用游标：恢复存档后的对局批次齐全、事件列表却没有历史预告事件，游标会错位）。
+                    RelicBatchRecord forecastBatch = Match.RelicBatches.Last(b => b.Forecast.ForecastRound == e.MajorRound);
+                    Add(_turn, e.MajorRound, LogEventType.RelicsForecast, null, e.Detail,
+                        coords: [.. forecastBatch.Forecast.Slots.Select(slot => slot.Cell.ToNotation())],
+                        values: new Dictionary<string, BigInteger> { ["Count"] = forecastBatch.Forecast.Slots.Length, ["LandingRound"] = forecastBatch.Forecast.LandingRound });
+                    break;
+                case FlowEventKind.RelicsLanded:
+                    RelicBatchRecord landedBatch = Match.RelicBatches.Last(b => b.HasLanded && b.Forecast.LandingRound == e.MajorRound);
+                    Add(_turn, e.MajorRound, LogEventType.RelicsLanded, null, e.Detail,
+                        coords: [.. landedBatch.Landed!.Value.Select(r => r.Cell.ToNotation())],
+                        values: new Dictionary<string, BigInteger> { ["Count"] = landedBatch.Landed!.Value.Length, ["Forecast"] = landedBatch.Forecast.Slots.Length });
+                    break;
+                case FlowEventKind.RelicsPickedUp:
+                case FlowEventKind.RelicsDropped:
+                case FlowEventKind.CarriedRelicsAttached:
+                    List<string> cells = RelicCells(e.Detail);
+                    Add(_turn, e.MajorRound, e.Kind.ToString(), e.Player?.Value, e.Detail, coords: cells, values: new Dictionary<string, BigInteger> { ["Count"] = cells.Count });
+                    break;
+                case FlowEventKind.CarriedRelicsDropped:
+                    // R17：说明末尾可能带"；n 件无处可落、消失"。
+                    List<string> droppedCells = RelicCells(e.Detail);
+                    int lost = 0;
+                    int marker = e.Detail.IndexOf('；', StringComparison.Ordinal);
+                    if (marker >= 0)
+                    {
+                        string tail = e.Detail[(marker + 1)..];
+                        int end = tail.IndexOf(' ', StringComparison.Ordinal);
+                        _ = int.TryParse(end >= 0 ? tail[..end] : tail, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out lost);
+                    }
+
+                    Add(_turn, e.MajorRound, LogEventType.CarriedRelicsDropped, e.Player?.Value, e.Detail, coords: droppedCells,
+                        values: new Dictionary<string, BigInteger> { ["Count"] = droppedCells.Count, ["Lost"] = lost });
+                    break;
                 case FlowEventKind.BattlefieldSettled:
                     BattlefieldSettlementRecord settled = Match.Settlements[_settlementCursor++];
                     AddLink(e, new LogEvent
@@ -797,7 +821,7 @@ public sealed class MatchSession
                                 Player = x.Player.Value,
                                 Rank = x.Rank,
                                 Power = x.Power,
-                                ControlledRelics = x.ControlledRelics,
+                                HeldRelics = x.HeldRelics,
                                 ExclusiveCells = x.ExclusiveCells,
                                 Stones = x.Stones,
                             })],
@@ -834,7 +858,6 @@ public sealed class MatchSession
 
     private LogHeader BuildHeader(EventRetention retention)
     {
-        RelicGenerationRecord gen = Match.Relics.Generation;
         return new LogHeader
         {
             MapId = Match.Map.Id,
@@ -853,15 +876,16 @@ public sealed class MatchSession
             Players = [.. Match.Players.Select(p => p.Value)],
             Zones = [.. Match.Players.Select(p => Match.StateOf(p).BirthZone ?? -1)],
             FirstOrder = [.. _firstOrder],
-            Relics = [.. gen.Placements.Select(RelicEntryOf)],
-            RelicsConverged = gen.Converged,
-            RelicRerolls = gen.Rerolls,
             DebugAiPlayers = [.. Runner.Annotations.DebugAiPlayers.Select(p => p.Value)],
             Retention = retention,
             // 带入带出（match-telemetry 第 1 条）：新日志总是写明（关闭时 false / 空表）；按缺该项的旧日志回放时不写，重建首部与原首部相同。
             CarryInOut = _carryHeader ? Match.CarryInOut : null,
             CarryIns = _carryHeader
-                ? [.. Match.CarryIns.Select(kv => new CarryInEntry { Player = kv.Key.Value, Supply = kv.Value.Kind.ToString(), Type = kv.Value.Type?.ToString() })]
+                ? [.. Match.CarryIns.Select(kv => new CarryInEntry
+                {
+                    Player = kv.Key.Value,
+                    Items = [.. kv.Value.Items.Select(i => new CarriedLogEntry { Kind = i.Kind.ToString(), Insured = i.Insured })],
+                })]
                 : null,
             // match-telemetry 第 1、2 项（board-link-mode C3）：模式与锁定时各出生棋盘的旗数（retire-legacy-rules R10 = A：模式照写常量 "Link"）。
             Mode = "Link",
@@ -871,34 +895,21 @@ public sealed class MatchSession
         };
     }
 
-    /// <summary>信物分布的一项（首部的开局信物）。</summary>
-    private static RelicEntry RelicEntryOf(RelicPlacement r) => new()
-    {
-        Coord = r.Coord.ToNotation(),
-        Zone = r.Spec.Zone.ToString(),
-        Budget = r.Spec.Budget.ToString(),
-        Type = r.Content.Type.ToString(),
-        Magnitude = r.Content.Magnitude,
-        EmblemPiece = r.Content.EmblemPiece?.ToString(),
-    };
-
     /// <summary>
-    /// 带出结算（match-telemetry 第 7 条）：只在带入带出开启的局写；结算一律由 Core 的纯函数 <see cref="CarryOutSettlement.Settle"/> 给出，
-    /// 截断局（<paramref name="result"/> 为 <c>null</c>）全员未结算。批量跑局不读写任何档案。
+    /// 带出结算（match-telemetry 第 7 条）：只在带入带出开启的局写；结算一律由 Core 给出（<see cref="MatchFlow.SettleCarried"/>，D6），
+    /// 截断局（<paramref name="result"/> 为 <c>null</c>）不结算、全员记 <c>Unsettled</c>。批量跑局不读写任何档案（D8）。
     /// </summary>
     private List<CarryOutEntry>? CarryOutEntries(MatchResult? result) =>
-        !Match.CarryInOut
-            ? null
-            : [.. CarryOutSettlement.Settle(result, Match.Resignations, Match.CarryIns, Match.Players).Select(kv => new CarryOutEntry
-            {
-                Player = kv.Key.Value,
-                Outcome = kv.Value.Outcome.ToString(),
-                Rank = kv.Value.Rank,
-                Points = kv.Value.Points,
-                Supply = kv.Value.CarryIn?.Kind.ToString(),
-                Type = kv.Value.CarryIn?.Type?.ToString(),
-                Returned = kv.Value.Returned,
-            })];
+        !Match.CarryInOut ? null
+        : result is null ? [.. Match.Players.Select(p => new CarryOutEntry { Player = p.Value, Outcome = "Unsettled" })]
+        : [.. Match.SettleCarried().Players.Values.Select(s => new CarryOutEntry
+        {
+            Player = s.Player.Value,
+            Outcome = s.Outcome.Outcome.ToString(),
+            Rank = s.Outcome.Rank,
+            Points = s.Points,
+            BroughtOut = [.. s.BroughtOut.Select(t => $"#{t.Id}:{t.Kind}")],
+        })];
 
     /// <summary>出生区的边长：格子外接矩形的较长边（生成图与手工边疆图的平台都是整块正方形，平台内无障碍）。</summary>
     /// <summary>出生棋盘的边长（宽高中的较大者）：取整块棋盘（棋盘清单），不取出生区——链接档的出生区是核心区（link-map-terrain D1）。</summary>
@@ -941,7 +952,7 @@ public sealed class MatchSession
                 Group = s.Group.ToString(),
                 Status = s.Input.Status.ToString(),
                 Power = s.Input.Power,
-                ControlledRelics = s.Input.ControlledRelics,
+                HeldRelics = s.Input.HeldRelics,
                 ExclusiveCells = s.Input.ExclusiveCells,
                 Stones = s.Input.Stones,
                 EliminationOrder = s.Input.EliminationOrder,
@@ -951,7 +962,6 @@ public sealed class MatchSession
             UsedDebugAi = Runner.Annotations.UsedDebugAi,
             DebugAiPlayers = [.. Runner.Annotations.DebugAiPlayers.Select(p => p.Value)],
             Takeovers = TakeoverEntries(),
-            RelicReveals = [.. view.Relics.Select(r => new RelicRevealEntry { Coord = r.Coord.ToNotation(), RevealedInMajorRound = r.RevealedInMajorRound })],
             Peak = peak is null ? null : new PeakEntry
             {
                 MultiplierCount = peak.MultiplierCount,
@@ -962,7 +972,6 @@ public sealed class MatchSession
                 Stones = [.. peak.Stones.Select(s => s.ToNotation())],
             },
             PeakDestroyed = peak is null ? null : PeakDestroyed(peak),
-            DeployLimitPeak = Match.Relics.DeployLimitPeak?.DeployLimit,
             TotalMs = _total.ElapsedMilliseconds,
             MajorRoundMs = [.. _majorRoundMs],
             CarryOut = CarryOutEntries(result),

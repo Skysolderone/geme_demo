@@ -3,7 +3,6 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Sim.Running;
@@ -32,12 +31,6 @@ internal sealed class TurnTrace
     internal StagedBatch? Batch { get; set; }
 
     /// <summary>
-    /// 本小回合的效果快照（more-pieces-relics D12：日志记驿站来源与工坊标记）。征募阶段经 <see cref="SnapshotSource"/> 取一次——
-    /// 快照在小回合开始时生成、小回合结束即清空，结算后再读就晚了。来源委托由会话在构造时挂上，装饰器自己不持有对局。
-    /// </summary>
-    internal EffectSnapshot? Effects { get; set; }
-
-    /// <summary>
     /// 本小回合部署决策的前瞻记录（expert-lookahead / match-telemetry「专家前瞻的记录」）：装饰器在内层 <c>Deploy</c> 之后从启发式 AI 取下。
     /// 前瞻宽度为 0 的控制者（简单 / 标准 / 高难）没有记录，保持 <c>null</c>；每小回合清空，避免把上一小回合的记录写进本小回合。
     /// </summary>
@@ -48,9 +41,6 @@ internal sealed class TurnTrace
     /// 决策条目不进对局日志，靠这一位让离线分析数出停手次数；每小回合清空。
     /// </summary>
     internal bool Stalled { get; set; }
-
-    /// <summary>当前小回合效果快照的读取委托（会话挂 <c>MatchFlow.CurrentSnapshot</c>）；为 <c>null</c> 时不采集。不随 <see cref="Reset"/> 清空。</summary>
-    internal Func<EffectSnapshot?>? SnapshotSource { get; set; }
 
     /// <summary>
     /// 分析复盘接缝（ai-pass-review 1.2）：部署阶段在内层控制者决策<b>之前</b>回调，参数是本小回合的正式暂放批次（此刻为空）。
@@ -68,7 +58,6 @@ internal sealed class TurnTrace
         IllegalRehearsals.Clear();
         Rejections.Clear();
         Batch = null;
-        Effects = null;
         Lookahead = null;
         Stalled = false;
     }
@@ -98,7 +87,6 @@ internal sealed class LoggingController(ITurnController inner, TurnTrace trace) 
         trace.ShowCount = panel.ShowCount;
         trace.FreePickCount = panel.FreePickCount;
         trace.TypeSlots = panel.TypeSlots;
-        trace.Effects = trace.SnapshotSource?.Invoke();
         Inner.Recruit(hand, panel);
     }
 

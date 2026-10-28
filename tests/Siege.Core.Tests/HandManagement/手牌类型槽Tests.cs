@@ -1,7 +1,6 @@
 using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests.HandManagement;
 
@@ -28,25 +27,6 @@ public class 手牌类型槽Tests
         Assert.Equal(14, hand.CountOf(PieceType.Basic));
         Assert.Equal(4, hand.OccupiedSlots);
         Assert.Equal(0, hand.Overflow);
-    }
-
-    [Fact]
-    public void 兵站扩展槽位()
-    {
-        // 设计文档 §8.1：控制 2 枚普通兵站信物 → 快照类型槽 5 + 1 + 1 = 7；手牌层原样消费该快照。
-        // 变异验证 M-H3：PrivateViewOf 把 TypeSlots 钉死为 EffectSnapshot.BaseTypeSlots → 红 2（本测试 + 兵站丢失触发强制弃牌）。
-        (GameBoard board, RelicLedger relics) = RelicFixtures.Scene(("E7", RelicFixtures.Depot()), ("C3", RelicFixtures.Depot()));
-        board.Place("E6", TestMaps.P0).Place("C2", TestMaps.P0);
-        relics.Settle(board, 1);
-        HandLedger ledger = HandFixtures.Ledger();
-        EffectSnapshot snapshot = relics.SnapshotFor(TestMaps.P0, board, ledger.HeldTypeCount(TestMaps.P0), 1);
-        Assert.Equal(7, snapshot.TypeSlots);
-
-        ledger.BeginTurn(TestMaps.P0, snapshot);
-        PlayerHandAccess access = ledger.AccessFor(TestMaps.P0);
-
-        Assert.Equal(7, access.PrivateView().TypeSlots);
-        Assert.Equal(7, access.EnterRecruit().TypeSlots);
     }
 
     [Fact]

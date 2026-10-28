@@ -17,9 +17,26 @@
 
 验收：`dotnet build -c Release` 无新警告；`dotnet test` 全绿且旧测试零改动（`git diff --stat main -- tests` 只有新增文件）。
 
-## 接线段（岛图合回 main 后）
+## 接线段（2026-10-27 起，main c570f30 已合入分支 4806003）
 
-旧系统删除、带入挂出 `Placement.AttachCarried`、刷新接入大回合流程、旗手子 / 同分比较、档案切换到 v2、终端、AI 带入；然后原段 C。
+分两步顺序派工，每步一个 trellis-implement 子 agent，步间主会话验收提交。两步都必须保持 `siege.sln` 与 `src/godot/Siege.Godot.csproj` 都能编译（Godot 侧本段只做让它编译通过的最小改动，界面留给段 C）。
+
+### W1 规则接线 + 删旧信物
+1. `IBirthArea` 核对为岛图口径（出生平台 = `MapData.BirthBoards()`），去掉"∪ 出生区"兜底若已无必要。
+2. 刷新接入大回合流程：大回合开始时按 D2 预告 / 落位；预告与刷新记录进对局状态、存档、公开视图（R22）；存档往返。
+3. 同形：`SettlementDriver`、`BatchRehearsal.DuplicateOf`、`ExpertLookahead` 三处改喂 `SerializeShape()`。
+4. 旗手子（R23）、同分比较（R24）。
+5. 删除旧 `Siege.Core.Relics`（生成 / 控制 / 揭示 / 快照加成 / 先锋 / 徽记 / 工坊 / 连营犄角 / `ScoringRelicCounts` / `RelicLedger`）、静态信物格（`MapData.RelicCells`、`RelicCellSpec`、`RelicZone`、`MapFile.RelicDto`、校验器 `ValidateRelicCells`）、`SettlementDriver` 揭示步；`EffectSnapshot` 只剩默认基础值。旧信物测试与岛图线夹具（`LinkMapFixtures.WithRelics`、`LinkModeFixtures.RelicMap / CreateWithRelics / StartedWithRelics`）一并删除；依赖它们的其他测试改写。
+6. AI：`RelicEstimate` 本步只改到能编译、不读旧信物（估值重写在段 C）。
+7. 表现层 / Sim / Godot：按"每格两字符、`/` 分行"自己解析 `Serialize()` 的地方逐处排查，改为容忍 `#` 信物段；旧信物层显示改成显示新信物层的最小版本或暂时移除。
+
+### W2 带入 / 结算接线 + 删旧补给
+1. `Placement.AttachCarried`（R14）：预演合法性、保护期可挂、同格已有信物不能挂。
+2. 对局创建读 `RelicLoadout`，带入件进对局状态与存档；出局 / 弃赛按 R17 掉落；结算按 D6 + R19 写档案（`RelicProfileStore` v2）。
+3. 先把新代码借用的 `CarryPoints`、`CarryOutSettlement.ResignShare`、`CarryProfile.Parse`、`Supplies.PriceOf` 搬到 `PieceRelics`，再删除旧 `Carry/`（补给、补给档案 v1 只留迁移读入）。
+4. AI 带入（R21，`carry-ai` 子流）。
+5. 终端：带入选择（选件、勾保险、兑换）、部署挂出参数、结算打印每件去向；Sim `--carry-in 0..5`。
+6. Godot：旧补给面板改到能编译的最小版本（新面板在段 C）。
 
 ## 段 A：规则核心（RQ1 / RQ2 / RQ3 / RQ7）
 
@@ -40,13 +57,19 @@
 5. 终端：带入选择、部署挂出参数、结算打印；Sim `--carry-in 0..5`。
 6. 测试：AC4–AC6。
 
-## 段 C：AI 估值与 Godot（RQ8 / RQ9）
+## 段 C：AI 估值与 Godot（RQ8 / RQ9，R42 拆为 C1 / C2 顺序派工，W1 45b35d4 / W2 4953400 已提交）
 
-1. `RelicEstimate` 重写、AI 挂出策略、权重重标。
-2. Godot：带入面板、暂放挂出、信物层三种标记、结算面板、文本。
-3. 遥测：刷新 / 拾取 / 掉落 / 带出。
-4. openspec 规格与设计文档按 design.md 表格同步（替换 / 修订）。
-5. 验收：AC8（≤ 20 局小样本）、AC9（Godot 手动走一遍）、AC10。
+### C1 AI 与遥测
+1. `RelicEstimate` 重写（design D5）：对每个地图信物格估"拾取后势力增量"，对敌方持物棋子估"提走后掉落可拾取"的价值；保留 `EvaluationWeights.Relic` 维度、重标权重；AI 评价版本随之递增（R34）。
+2. AI 挂出策略：从 W2 的"按落子顺序"改为"挂在本批势力增量最大的落点"，前几批挂完（D5）；去掉 `HeuristicTurnController` 里的 TODO。
+3. 遥测：刷新预告 / 落位、挂出、拾取、掉落、带出进日志（match-telemetry）；日志棋串条目补记信物，恢复 `各棋子势力占比` 的 Base / 协同逐项相等（R37）。
+4. 验收：AC8（≤ 20 局小样本有拾取行为，遥测可数，不跑 200 局）；决策基线如重录写明原因与首个分歧点。
+
+### C2 Godot 与规格
+1. Godot：带入面板替换 W2 的最小面板（选 ≤5、勾保险、兑换）；暂放棋子时从带入栏点选一件挂上；信物层三种标记（地图信物 / 预告 / 持物棋子，含保险标记）；结算面板列每件去向；文本。只用现有控件 + 简单图标。`--auto-demo` 等自动化模式不读写档案。
+2. 终端 `!` / `@N` 语法沿用或与 Godot 对齐，二选一写进规格。
+3. openspec 规格与设计文档按 design.md 表格同步（替换 / 修订）。
+4. 验收：AC9（Godot 手动走一遍：选图 → 带入 → 开局 → 挂出 → 拾取 → 结算）、AC10。
 
 ## 验证命令
 

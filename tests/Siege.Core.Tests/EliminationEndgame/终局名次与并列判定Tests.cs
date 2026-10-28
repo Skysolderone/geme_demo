@@ -88,7 +88,7 @@ public class 终局名次与并列判定Tests
     [Fact]
     public void 信物相同比独占空格数()
     {
-        // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、控制信物均为 2，独占空格数 14 与 9 → 14 者名次更高（段 C 改用规格算例数值，原为 3 与 1）。
+        // 规格 Scenario（restore-go-core-rules D4）：势力均为 60、持有信物均为 2，独占空格数 14 与 9 → 14 者名次更高（段 C 改用规格算例数值，原为 3 与 1）。
         // 变异验证 M-B13（段 B，实跑红 1）/ M-C（段 C 重跑）：FinisherComparer 删除独占空格级 → 本测试红（二者比到棋子数，P0 棋子多反而第 1）。
         ImmutableArray<Standing> s = FinalStandings.Compute([Active(TestMaps.P0, 60, relics: 2, cells: 9, stones: 20), Active(TestMaps.P1, 60, relics: 2, cells: 14, stones: 5)]);
         Assert.Equal(new[] { 2, 1 }, Ranks(s, TestMaps.P0, TestMaps.P1));

@@ -3,7 +3,6 @@ using Siege.Core.Board;
 using Siege.Core.Match;
 using Siege.Core.Preview;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Text;
 using Siege.Presentation.Visibility;
@@ -23,14 +22,11 @@ public sealed class HandPanelState
     public void Back() => IsOpen = false;
 }
 
-/// <summary>结构参数的一个信物来源。</summary>
-public sealed record ParameterSourceView(Coord Coord, RelicType Type, int Magnitude, string Text);
-
 /// <summary>
-/// 一项公开结构参数：当前值、基础值、信物来源与汇总文案，如「部署上限 5（基础 3，+2 来自 军令×2）」。
-/// 来源只有分阶段基础值与各枚信物两类（restore-go-core-rules D7）；来源拆分由规则层给出，本层只显示，不另算。
+/// 一项公开结构参数：当前值、基础值与汇总文案，如「部署上限 4（基础）」。relic-redesign D4 起结构参数没有信物来源，当前值即基础值；
+/// 仍保留基础值一列，测试经调试接缝改写快照时文案照样能显示差值。本层只显示，不另算。
 /// </summary>
-public sealed record ParameterView(string Label, int Value, int Base, ImmutableArray<ParameterSourceView> Sources, string Text);
+public sealed record ParameterView(string Label, int Value, int Base, string Text);
 
 /// <summary>四项公开结构参数（展示数、免费选取数、手牌类型槽、部署上限）。</summary>
 public sealed record StructureView(ParameterView RevealCount, ParameterView FreePickCount, ParameterView TypeSlots, ParameterView DeployLimit)
@@ -49,33 +45,13 @@ public sealed record StructureView(ParameterView RevealCount, ParameterView Free
             Parameter("部署上限", p.DeployLimit));
     }
 
-    /// <remarks>
-    /// more-pieces-relics（hand-info-panel「驿站来源逐枚列出」）：驿站不按类型合并，每一枚单独列出并注明它计入的其他受控信物枚数
-    /// （该枚的加成就是这个枚数，D4）；加成为 +0 的来源（只控制驿站本身）不列——取 Core 的 <see cref="StructureParameter.ListedSources"/>，
-    /// 与终端同一份过滤。Godot 手牌面板显示的是 <see cref="ParameterView.Text"/>，所以驿站明细写进汇总文案。
-    /// </remarks>
     private static ParameterView Parameter(string label, StructureParameter parameter)
     {
-        ParameterSource[] listed = [.. parameter.ListedSources];
-        ImmutableArray<ParameterSourceView> sources =
-        [
-            .. listed.Select(s => new ParameterSourceView(s.Coord, s.Type, s.Magnitude,
-                $"{s.Coord.ToNotation()} {Labels.Relic(s.Type)} +{s.Magnitude}{RelayNote(s)}")),
-        ];
-        List<string> parts =
-        [
-            .. listed.Where(s => s.Type != RelicType.Relay).GroupBy(s => s.Type).Select(g => $"{Labels.Relic(g.Key)}×{g.Count()}"),
-            .. listed.Where(s => s.Type == RelicType.Relay).Select(s => $"{Labels.Relic(s.Type)} {s.Coord.ToNotation()} +{s.Magnitude}{RelayNote(s)}"),
-        ];
-        string text = parts.Count == 0
+        string text = parameter.Bonus == 0
             ? $"{label} {parameter.Value}（基础）"
-            : $"{label} {parameter.Value}（基础 {parameter.Base}，+{parameter.Bonus} 来自 {string.Join("、", parts)}）";
-        return new ParameterView(label, parameter.Value, parameter.Base, sources, text);
+            : $"{label} {parameter.Value}（基础 {parameter.Base}，{parameter.Bonus:+#;-#}）";
+        return new ParameterView(label, parameter.Value, parameter.Base, text);
     }
-
-    /// <summary>驿站来源的注记：该枚驿站计入的其他受控信物枚数（= 它的加成）；其他类型无注记。</summary>
-    private static string RelayNote(ParameterSource source) =>
-        source.Type == RelicType.Relay ? $"（控制 {source.Magnitude} 枚其他信物）" : string.Empty;
 }
 
 /// <summary>自己区域的一行：类型、准确数量、其中本轮新征募尚未提交的数量。</summary>

@@ -133,26 +133,23 @@ public class 各入口支持生成图_链接模式Tests
     [Fact]
     public void map子命令打印每块棋盘的编号主题宽高与公共信物数()
     {
-        // link-map-terrain 5.1：map --map link:1 每块出生棋盘一行"编号 · 主题 · 宽×高"，并给左下角与该棋盘内的公共信物数；主题中文名唯一来源 BoardThemeNames.DisplayName。
+        // link-map-terrain 5.1：map --map link:1 每块出生棋盘一行"编号 · 主题 · 宽×高"，并给左下角；主题中文名唯一来源 BoardThemeNames.DisplayName（relic-redesign W1：静态信物格删除，原"公共信物数"一列删除）。
         // 输出里本来就有"林地 n"与图例"F 林地"，只断言"含林地"恒真——所以逐块拼出整行断言，并另查五个主题名两两不同。
-        // 变异（实跑，过滤本类）：MLT-6（map 的棋盘行固定打印"高台"）→ 红 1（本测试）；MLT-7（公共信物数不按棋盘过滤、打全图公共信物数）→ 红 1（本测试）。
+        // 变异（实跑，过滤本类）：MLT-6（map 的棋盘行固定打印"高台"）→ 红 1（本测试）。
         (int code, string output, string err) = RunMain(null, null, "map", "--map", "link:1:4");
         Assert.True(code == 0, err);
         MapData map = MapCatalog.Resolve("link:1:4");
-        int contested = 0;
         var names = new List<string>();
         var specials = new List<int>();
         for (int zone = 0; zone < map.BirthZones.Length; zone++)
         {
             BoardPlate plate = map.BirthBoard(zone);
-            int publicRelics = map.RelicCells.Count(r => r.Value.Zone == RelicZone.Contested && plate.Contains(r.Key));
-            contested += publicRelics;
             string name = plate.Theme!.Value.DisplayName();
             names.Add(name);
             // link-map-surfaces D3：行尾另给该棋盘内的新地表格数（测试内独立计数）。
             int special = plate.Cells().Count(c => map.SurfaceAt(c) is Surface.Desert or Surface.Marsh or Surface.Crag or Surface.Shallows);
             specials.Add(special);
-            Assert.Contains($"  {zone + 1} 号棋盘 · {name} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  公共信物 {publicRelics}  新地表 {special}\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+            Assert.Contains($"  {zone + 1} 号棋盘 · {name} · {plate.Width}×{plate.Height}  左下角 {plate.Origin.ToNotation()}  新地表 {special}\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         }
 
         // 样本口径：各棋盘新地表格数之和 = 全图新地表格数，且全图数大于任何一块（否则按棋盘过滤与否测不出来）。
@@ -164,11 +161,8 @@ public class 各入口支持生成图_链接模式Tests
         // map-expand-25 段 A2（裁决 R3）：link:1:4 浮空岛 10 块平台、主题可以重复且没有高台，原"五个主题名两两不同"改为去重后恰是四种平台主题。
         Assert.Equal(10, names.Count);
         Assert.Equal(new[] { "林地", "栅栏阵", "河流", "混合" }, names.Distinct().Order(StringComparer.Ordinal));
-        // map-expand-25 D5：公共信物都在平台之间的低地上，每块平台的公共信物数恒为 0（行内照常打印）；全图确有公共信物，所以"不按棋盘过滤"的变异 MLT-7 会打出非 0 而红。
-        // 原"各棋盘之和 = 全图数且 ≥ 2"的样本口径在新布局下不成立，改为下面两条。
-        // 段 A3：浮空岛不放静态信物格（relic-redesign R29），全图公共信物为 0，"全图确有公共信物"一条删除——MLT-7 在生成图上不再可测（旧信物系统随 relic-redesign 拆除）。
-        Assert.Equal(0, contested);
-        Assert.Empty(map.RelicCells);
+        Assert.DoesNotContain("公共信物", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("信物格", output, StringComparison.Ordinal);
     }
 
     [Theory]

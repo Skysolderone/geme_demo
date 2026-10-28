@@ -173,7 +173,7 @@ public partial class 单子禁手的标示Tests
         MapData plain = LinkModeFixtures.PlainMap();
         MapData map = plain with { Obstacles = plain.Obstacles.Union([TestMaps.At("D3"), TestMaps.At("E3"), TestMaps.At("F3"), TestMaps.At("H3")]) };
         MatchFlow match = LinkModeFixtures.RequireLink(
-            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         foreach (PlayerId p in TestMaps.All)
         {
             match.Debug.SeedHand(p, (PieceType.Artisan, 5), (PieceType.Basic, 5));

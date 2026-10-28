@@ -38,7 +38,7 @@ public class 围杀不产生通用奖励Tests
         (PlayerId player, IReadOnlyDictionary<PieceType, int> deployed) = Assert.Single(hooks.Deductions);
         Assert.Equal(TestMaps.P0, player);
         Assert.Equal(new Dictionary<PieceType, int> { [PieceType.Basic] = 3 }, deployed);
-        Assert.Equal(["DeductHand", "OnRevealRelics", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
+        Assert.Equal(["DeductHand", "OnRecalculatePower", "OnCheckEndConditions"], hooks.Steps);
         Assert.Empty(hooks.Passes);
         // 上游库存对象未被本层触碰
         Assert.Equal(4, stock[PieceType.Basic]);

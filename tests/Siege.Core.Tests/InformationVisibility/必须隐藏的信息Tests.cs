@@ -3,7 +3,6 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Presentation.Hand;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
@@ -12,29 +11,12 @@ using static Siege.Core.Tests.PresentationFixtures;
 
 namespace Siege.Core.Tests.InformationVisibility;
 
-/// <summary>规格：information-visibility —— Requirement: 必须隐藏的信息</summary>
+/// <summary>
+/// 规格：information-visibility —— Requirement: 必须隐藏的信息。relic-redesign W1：「未发现信物内容隐藏」随旧信物删除——挂在棋子上的信物、地图信物与预告全公开（R22）；
+/// 带入清单挂出前不公开属于 W2（带入进对局）。
+/// </summary>
 public class 必须隐藏的信息Tests
 {
-    [Fact]
-    public void 未发现信物内容隐藏()
-    {
-        // 设计文档 §13.2：信物格未进入任何覆盖 → 所有玩家只看到"未知信物"，看不到类型与强度。
-        // 同种子两局只改真实内容：全部观察者的默认棋盘与信物层投影逐字相同。
-        // 变异验证 M-H1：Core `RelicLedger.RelicState.ToPublic` 的 Content 恒填真实内容（`IsRevealed ? Content : null` → `Content`）→ 本测试红 1。
-        //   表现层本身拿不到未揭示内容，隐藏由 Core 的公开状态结构保证；本测试钉住表现层没有把它"补"回来的路径。
-        string command = Views(RelicFixtures.Command());
-        string depot = Views(RelicFixtures.Depot(2));
-
-        Assert.Equal(command, depot);
-        Assert.Contains("未知信物", command);
-        Assert.DoesNotContain("军令", command);
-        Assert.DoesNotContain("Command", command);
-
-        MatchFlow match = AiFixtures.Round5(relics: ("G6", RelicFixtures.Command()));
-        BoardCellView cell = match.World(P1).Board().CellAt(TestMaps.At("G6"));
-        Assert.Equal((RelicMarker.Unknown, (RelicType?)null), (cell.Relic, cell.RevealedType));
-    }
-
     [Fact]
     public void 手牌数量隐藏()
     {
@@ -91,7 +73,7 @@ public class 必须隐藏的信息Tests
 
         // 反面：闭包确实展开到了非根类型（否则"空"只是没扫到）
         ImmutableHashSet<Type> world = ReachableTypes(typeof(PublicWorld));
-        Assert.Contains(typeof(RelicPublicState), world);
+        Assert.Contains(typeof(Core.PieceRelics.RelicForecast), world);
         Assert.Contains(typeof(Preview.GroupLiberties), world);
         Assert.Contains(typeof(Scoring.GroupPower), world);
         Assert.NotEmpty(PrivateLeaks(typeof(ViewerWorld)));
@@ -99,16 +81,6 @@ public class 必须隐藏的信息Tests
         // 同一个公开视图类型
         Assert.Equal(typeof(MatchPublicView), typeof(PublicWorld).GetProperty(nameof(PublicWorld.View))!.PropertyType);
         Assert.Contains(typeof(MatchPublicView), AiFixtures.ReachableTypes(typeof(HeuristicTurnController)));
-    }
-
-    private static string Views(RelicContent content)
-    {
-        MatchFlow match = AiFixtures.Round5(relics: ("G6", content)).Pieces(P1, PieceType.Basic, "D9");
-        return string.Join("\n", TestMaps.All.Select(viewer =>
-        {
-            ViewerWorld world = match.World(viewer);
-            return Dump(world.Board()) + Dump(world.Layer(TacticalLayer.Relics));
-        }));
     }
 
     private static string OpponentAreaOfP0(int basic, int fortress)

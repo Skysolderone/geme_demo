@@ -73,8 +73,7 @@ public static class ReportWriter
         MapScaleSection ms = r.MapScale;
         string playableSkip = ms.PlayableSkipped > 0 ? $"未记可落子格的旧日志 {ms.PlayableSkipped} 局" : string.Empty;
         sb.AppendLine(
-            $"- 本批地图规模（对局时长的调节手段，取自日志首部）：地图可落子格 {Scale(ms.PlayableMatches, ms.MinPlayable, ms.MaxPlayable, ms.MeanPlayable, playableSkip)}，"
-            + $"信物格 {Scale(ms.RelicMatches, ms.MinRelics, ms.MaxRelics, ms.MeanRelics, string.Empty)}");
+            $"- 本批地图规模（对局时长的调节手段，取自日志首部）：地图可落子格 {Scale(ms.PlayableMatches, ms.MinPlayable, ms.MaxPlayable, ms.MeanPlayable, playableSkip)}");
         sb.AppendLine("### 6. 第 3 大回合领先者最终胜率（目标 ≤ 50%）");
         LeaderSection l = r.Leader;
         sb.AppendLine($"- 口径 A（并列组内任一人获胜）：{l.AnyOfGroupWins}；{t.LeaderWinRate}");
@@ -100,15 +99,10 @@ public static class ReportWriter
             sb.AppendLine($"- 第 4 大回合行动位置 {position + 1} 的玩家最终平均名次 {Num(meanRank)}（样本 {samples}）");
         }
 
-        sb.AppendLine("### 3. 各棋子与各信物的选择率、控制时长与胜率");
+        sb.AppendLine("### 3. 各棋子的选择率与胜率");
         foreach (PieceStat p in r.Selection.Pieces)
         {
             sb.AppendLine($"- 棋子 {p.Type}：展示 {p.Offered} 次，选取 {p.Picked} 次，选择率 {p.SelectionRate}；选过它的玩家胜率 {p.WinRateOfPickers}");
-        }
-
-        foreach (RelicStat s in r.Selection.Relics)
-        {
-            sb.AppendLine($"- 信物 {s.Type}：{s.Count} 枚，揭示 {s.Revealed} 枚，被控制 {s.ControlledTurns} 个小回合（平均每枚 {Num(s.MeanControlledTurnsPerRelic)}）；控制过它的玩家胜率 {s.WinRateOfControllers}");
         }
 
         sb.AppendLine("### 4. 高倍率棋串的形成轮次、峰值及被摧毁概率");
@@ -124,7 +118,7 @@ public static class ReportWriter
             sb.AppendLine($"- 棋子 {p.Type}：盘面 {p.Stones} 枚（{Pct(p.StoneShare)}），势力 {p.Power}（{Pct(p.PowerShare)}），每颗平均 {Num(p.MeanPerStone)}");
         }
 
-        sb.AppendLine("### 5. 出生区随机资源是否造成显著胜率差异（裁决 8：按信物生成收敛分组）");
+        sb.AppendLine("### 5. 出生区是否造成显著胜率差异");
         BirthZoneSection z = r.BirthZones;
         sb.AppendLine($"- 区数 {z.ZoneCount}（地图出生区数；多于人数时没人选的平台是中立争夺区，被选 0 次的区同样列出）");
         sb.AppendLine($"- 基线 {Pct(z.Baseline)}；显著 = 基线落在该区 Wilson 区间之外");
@@ -140,8 +134,6 @@ public static class ReportWriter
         else
         {
             AppendZones(sb, "全部局", z.All);
-            AppendZones(sb, $"信物生成收敛局（{z.ConvergedMatches}）", z.RelicsConverged);
-            AppendZones(sb, $"信物生成未收敛局（{z.NotConvergedMatches}）", z.RelicsNotConverged);
         }
         sb.AppendLine("### 6. 供给、部署、槽位、倍率四条成长轴的获取顺序");
         GrowthAxisSection g = r.GrowthAxes;
@@ -300,14 +292,14 @@ public static class ReportWriter
         sb.AppendLine();
         sb.AppendLine("## 按主题统计（link-map-terrain）");
         sb.AppendLine($"- 纳入带主题的链接模式 {t.Matches} 局，其中有名次 {t.RankedMatches} 局。口径：名次与胜场按玩家锁定的出生棋盘归主题，只计有名次的局（截断局只计锁定人次）；"
-            + "匠人改造按目标所在棋盘归主题（立栅取第一个落在棋盘内的一端）；公共信物按所在棋盘归主题，\"被控制\"只数变为有人控制的次数");
+            + "匠人改造按目标所在棋盘归主题（立栅取第一个落在棋盘内的一端）");
         foreach (ThemeStat s in t.Themes)
         {
             string edits = s.EditTotal == 0
                 ? "0 次"
                 : $"{s.EditTotal} 次（{string.Join(" / ", s.Edits.Select(kv => $"{EditActionName(kv.Key)} {kv.Value}"))}）";
             sb.AppendLine($"- {s.Theme.DisplayName()}：棋盘 {s.Boards} 块，锁定 {s.Seats} 人次（有名次 {s.RankedSeats} 人次），平均名次 {Num(s.MeanRank)}，胜 {s.Wins}；"
-                + $"匠人改造 {edits}；公共信物 {s.PublicRelics} 个，被控制 {s.PublicControls} 次");
+                + $"匠人改造 {edits}");
         }
     }
 
@@ -511,12 +503,12 @@ public static class ReportWriter
     }
 
     /// <summary>
-    /// 第 12 项：新棋子与新信物（more-pieces-relics D12）。v1 对局只单列"不适用"、不进任何比例；有 v2 对局时六行来源、驿站、工坊逐行给出，0 也不省略。
+    /// 第 12 项：新棋子（more-pieces-relics D12）。v1 对局只单列"不适用"、不进任何比例；有 v2 对局时四行来源逐行给出，0 也不省略。
     /// 本段各行连续、不含空行（报告回归测试据此把它整段切出）。
     /// </summary>
     private static void AppendNewContent(StringBuilder sb, NewContentSection n)
     {
-        sb.AppendLine("### 12. 新棋子与新信物（more-pieces-relics：终局快照、参赛玩家的全部棋串；驿站按每条小回合快照；内容集 v1 的对局单列不适用）");
+        sb.AppendLine("### 12. 新棋子（more-pieces-relics：终局快照、参赛玩家的全部棋串；内容集 v1 的对局单列不适用）");
         sb.AppendLine($"- 内容集 v2 纳入 {n.Matches} 局；内容集 v1（含首部缺内容集的旧日志）{n.NotApplicable} 局：本项不适用，不计入下列各项");
         if (n.Matches == 0)
         {
@@ -526,17 +518,8 @@ public static class ReportWriter
         sb.AppendLine($"- 终局位置加值合计 {n.FinalPositionBonus}，其中：");
         foreach (NewSourceShare s in n.Sources)
         {
-            string note = s.Name switch
-            {
-                "连营" => "（并入连珠的额外加值）",
-                "犄角" => "（并入协同的额外加值）",
-                _ => string.Empty,
-            };
-            sb.AppendLine($"  - {s.Name}{note}：{s.Bonus}（{Pct(s.Share)}）");
+            sb.AppendLine($"  - {s.Name}：{s.Bonus}（{Pct(s.Share)}）");
         }
-
-        sb.AppendLine($"- 驿站平均展示数加成：每小回合 {Num(n.MeanRelayBonus)}（样本 {n.RelayTurns} 个小回合）；有驿站加成的小回合 {n.TurnsWithRelay} 个，平均 {Num(n.MeanRelayBonusWhenPresent)}");
-        sb.AppendLine($"- 经工坊扩展的改造 {n.WorkshopEdits} 次，占全部改造 {n.Edits} 次的 {Pct(n.WorkshopShare)}");
     }
 
     /// <summary>活形一段（life-shape 4.2）。口径写在各行里：禁入格占比的分子是受保护眼空间格（至少对一名玩家禁入），分母是当时地形的可落子格。</summary>

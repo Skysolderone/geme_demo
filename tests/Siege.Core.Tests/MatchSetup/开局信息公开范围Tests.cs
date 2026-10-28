@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Sim.Play;
 
 namespace Siege.Core.Tests.MatchSetup;
@@ -12,25 +11,17 @@ public class 开局信息公开范围Tests
     [Fact]
     public void 插旗阶段的可见信息()
     {
-        // 设计文档 §4.1：地形、出生区、信物格位置公开；信物具体内容隐藏。
-        // 变异验证 M-S1：RelicState.ToPublic 无条件带出 Content → 红 1（本测试）。
-        MatchFlow match = LinkModeFixtures.PlainCreate(relics: [("G7", RelicFixtures.Command()), ("D4", RelicFixtures.Vanguard())]);
+        // 设计文档 §4.1：地形、出生区公开。relic-redesign W1：地图没有静态信物格、开局没有信物（第 4 大回合起刷新，第 3 大回合开始预告），
+        // 插旗阶段的公开快照里既没有信物也没有预告；原"信物格位置公开、内容隐藏"随旧信物删除。
+        MatchFlow match = LinkModeFixtures.PlainCreate();
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
 
         MapData map = match.Flags.Map;
-        Assert.Equal(5, map.BirthZones.Length);   // retire-legacy-rules 1.5：载体为平坦 8×8 链接档图（五块出生棋盘；原 9×9 夹具 4 个出生区），信物格 E5 / B2 平移为 G7 / D4
-        Assert.Equal(new[] { "D4", "G7" }, map.RelicCells.Keys.Order().Notations());
+        Assert.Equal(5, map.BirthZones.Length);   // retire-legacy-rules 1.5：载体为平坦 8×8 链接档图（五块出生棋盘；原 9×9 夹具 4 个出生区）
         Assert.Equal(Terrain.Playable, map.TerrainAt(TestMaps.At("G7")));
-
-        foreach (RelicPublicState state in match.Relics.PublicStates())
-        {
-            Assert.False(state.IsRevealed);
-            Assert.Null(state.Content);
-        }
-
-        // 公开快照里没有任何"信物内容"字段以外的路径：RelicPublicState 是唯一出口，未揭示时 Content 为 null。
-        Assert.Equal(2, match.Publish().Relics.Length);
-        Assert.All(match.Publish().Relics, r => Assert.Null(r.Content));
+        Assert.False(match.Board.HasRelics);
+        Assert.Null(match.Publish().RelicForecast);
+        Assert.Empty(match.RelicBatches);
     }
 
     [Fact]
@@ -40,7 +31,7 @@ public class 开局信息公开范围Tests
         // 夹具的出生区手写成核心区（与"取出生区"的旧实现区分开）。
         // 变异验证（link-map-terrain 1.4 实跑，只跑本类）：M-P1 SeatPublicView 链接模式的占位改回取出生区外接矩形 → 本测试红 1。
         MapData map = CoreZoneMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.Options);
         Assert.Equal(MatchPhase.FlagPlanting, match.Phase);
 
         SeatPublicView view = match.PublishFor(TestMaps.P0);
@@ -62,7 +53,7 @@ public class 开局信息公开范围Tests
         // match-setup Scenario「锁定后只见自己的棋盘」：锁定棋盘 2 → 该玩家可见这块棋盘的全部格（整块 8×6），不只是出生区（核心区）。
         // 变异验证（link-map-terrain 1.4 实跑，只跑本类）：M-P2 SeatPublicView 插旗阶段的可见格改回取出生区 → 本测试红 1。
         MapData map = CoreZoneMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.Options);
         match.Flags.Plant(TestMaps.P0, 1);
 
         SeatPublicView locked = match.PublishFor(TestMaps.P0);
@@ -79,7 +70,7 @@ public class 开局信息公开范围Tests
         // 变异验证（link-map-terrain 1.4 实跑，只跑本类）：M-P3 BoardRenderer 占位格改回 map.BirthZoneOf → 本测试红 1；
         // M-P4 BoardRenderer.Viewport 插旗取景改回出生区之并 → 本测试红 1。
         MapData map = CoreZoneMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.Options);
         var output = new StringWriter();
 
         new BoardRenderer(output).Board(match.Publish(), TestMaps.P0, zones: true);
@@ -169,7 +160,6 @@ public class 开局信息公开范围Tests
         return built with
         {
             BirthZones = [.. boards.Select(b => (ImmutableHashSet<Coord>)[.. TestMaps.Rect(b.Origin.X + ((b.Width - 3) / 2), b.Origin.Y + ((b.Height - 3) / 2), 3, 3)])],
-            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
         };
     }
 }

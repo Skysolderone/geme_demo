@@ -135,13 +135,24 @@ public class 默认评价权重的校准Tests
             {
                 Assert.EndsWith("more-pieces-relics 扩展计分后未重扫；未校准（link-map-terrain 后）；未校准（fence-eye-rule 后）", status, StringComparison.Ordinal);
             }
+            else if (d == EvaluationDimension.Relic)
+            {
+                // relic-redesign C1：信物维原始值改为势力增量口径，取值 6 沿用、以"未校准（relic-redesign C1 后）"结尾；CalibrationStatus 点名并接它。
+                Assert.EndsWith("more-pieces-relics 扩展计分后未重扫；" + EvaluationWeights.RelicUncalibratedStatus, status, StringComparison.Ordinal);
+                Assert.DoesNotContain("link-map-terrain", status, StringComparison.Ordinal);
+                Assert.DoesNotContain("fence-eye-rule", status, StringComparison.Ordinal);
+            }
             else
             {
                 Assert.EndsWith("more-pieces-relics 扩展计分后未重扫", status, StringComparison.Ordinal);
                 Assert.DoesNotContain("link-map-terrain", status, StringComparison.Ordinal);
                 Assert.DoesNotContain("fence-eye-rule", status, StringComparison.Ordinal);
+                Assert.DoesNotContain("relic-redesign", status, StringComparison.Ordinal);
             }
         }
+
+        Assert.Equal("未校准（relic-redesign C1 后）", EvaluationWeights.RelicUncalibratedStatus);
+        Assert.Contains("Relic 未校准（relic-redesign C1 后，取值 6 沿用）", EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
 
         Assert.Equal("more-pieces-relics 扩展计分后未重扫", EvaluationWeights.ScoringExtendedStatus);
         Assert.Contains(EvaluationWeights.ScoringExtendedStatus, EvaluationWeights.CalibrationStatus, StringComparison.Ordinal);
@@ -266,6 +277,7 @@ public class 默认评价权重的校准Tests
             "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档"
             + "；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）"   // v2-recalibration 1.8：九维取值不变
             + "；more-pieces-relics 扩展计分后未重扫"   // more-pieces-relics 3.4：计分扩展后补注，取值不变
+            + "；信物维原始值改为势力增量口径后 Relic 未校准（relic-redesign C1 后，取值 6 沿用）"   // relic-redesign C1：信物维重写后补注，取值不变
             + "；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）"   // link-map-terrain 4.3（M10）：地形相关三维补注，取值不变
             + "；活形无视栅栏后 Safety / Eye / Threat 三维未校准（fence-eye-rule 后）",   // fence-eye-rule 2.1（F5）：活形规则变更后同三维补注，取值不变
             EvaluationWeights.CalibrationStatus);

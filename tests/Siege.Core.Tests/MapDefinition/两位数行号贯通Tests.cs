@@ -27,7 +27,6 @@ public class 两位数行号贯通Tests
             MaxPlayers = 2,
             Obstacles = [Coord.Parse("Z30")],
             BirthZones = [[.. TestMaps.Rect(0, 24, 5, 5)], [.. TestMaps.Rect(20, 0, 5, 5)]],   // retire-legacy-maps：Rect 由已删除的 FrontierFixtures 原样迁到 TestMaps
-            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty.Add(Coord.Parse("C28"), new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth)),
             ChokePoints = [Coord.Parse("M27")],
             CentralEntrance = Coord.Parse("N16"),
             TerrainData = TestMaps.Terrain(
@@ -70,7 +69,6 @@ public class 两位数行号贯通Tests
         Assert.Equal(original.Obstacles, restored.Obstacles);
         Assert.Equal(0, restored.BirthZoneOf(Coord.Parse("A27")));
         Assert.Equal(original.BirthZones[0].Order(), restored.BirthZones[0].Order());
-        Assert.Equal(original.RelicCells.OrderBy(kv => kv.Key), restored.RelicCells.OrderBy(kv => kv.Key));
         Assert.Equal(original.CentralEntrance, restored.CentralEntrance);
         Assert.Equal(2, restored.HeightAt(Coord.Parse("B31")));
         Assert.Equal(1, restored.HeightAt(Coord.Parse("C31")));
@@ -89,7 +87,7 @@ public class 两位数行号贯通Tests
         // 整图一块棋盘才能把 32 行都画出来；原为旧模式 2 人局、各锁一区。断言不变。
         MapData map = LinkTall(new BoardPlate(new Coord(0, 0), 25, 32, BoardPlateKind.Birth));
         MatchFlow match = LinkModeFixtures.RequireLink(
-            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         match.Debug.SeedHand(P0, (PieceType.Basic, 9));
         match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
         match.Debug.SetOrder(P0, P1, TestMaps.P2, TestMaps.P3);
@@ -97,7 +95,7 @@ public class 两位数行号贯通Tests
         match.PlayTurn("A27", "E29");
 
         Assert.Equal(P0, match.Board[Coord.Parse("A27")].Occupant?.Owner);
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(map, match.Relics.Generation, match.Serialize());
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(map, match.Serialize());
         Assert.Equal(P0, restored.Board[Coord.Parse("A27")].Occupant?.Owner);
         Assert.Equal(P0, restored.Board[Coord.Parse("E29")].Occupant?.Owner);
         Assert.Null(restored.Board[Coord.Parse("A17")].Occupant);
@@ -129,7 +127,7 @@ public class 两位数行号贯通Tests
         MapData map = LinkTall(new BoardPlate(new Coord(0, 24), 5, 5, BoardPlateKind.Birth), new BoardPlate(new Coord(20, 0), 5, 5, BoardPlateKind.Birth));
         // more-pieces-relics 段 A：跑局配置经 PinPreCalibration 写死内容集 v1（样本下界依赖走法），对局配置须与之一致（MatchSession 核对二者）。
         MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
-            map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate with { ContentSet = ContentSet.V1 })));
+            map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate with { ContentSet = ContentSet.V1 })));
         match.PlantSequentially([(P0, 0), (P1, 1), (TestMaps.P2, 0), (TestMaps.P3, 1)]);
         // 权重与停手阈值写死为 ai-eye 4.5 定值之前的缺省：样本下界"P0 落了子"依赖走法（默认阈值 80 下简单难度第 1 大回合可能一子不落；段 D2 改写）。
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.PinPreCalibration(SimFixtures.Config(turnLimit: 4)));

@@ -71,12 +71,12 @@ public class 盘面副本与批量写入Tests
     {
         // 诱饵：一张 MUST 过不了静态校验的图。若 Clone() 偷偷走了 Load，就会在这里抛 MapValidationException。
         // retire-legacy-maps 1.8：原诱饵是 v5 清空咽喉标注（CHOKE_NOT_ANNOTATED，旧三档规则，第 4 组删除），后改为 link:1 拿掉一枚出生棋盘信物（BIRTH_BOARD_RELIC_COUNT）。
-        // map-expand-25 段 A3：浮空岛不放静态信物格、BIRTH_BOARD_RELIC_COUNT 删除（relic-redesign R29），诱饵改为在留白障碍格 (0, 0) 放一枚信物格（RELIC_ON_NON_PLAYABLE，保留的通用规则），断言不变。
+        // map-expand-25 段 A3：诱饵改为在留白障碍格 (0, 0) 放一枚信物格（RELIC_ON_NON_PLAYABLE）；relic-redesign W1 删除静态信物格后，诱饵改为一条没写理由的必死口袋豁免（POCKET_EXEMPTION_WITHOUT_REASON，通用规则），断言不变。
         MapData link = MapCatalog.Resolve("link:1:4");
         var origin = new Coord(0, 0);
         Assert.False(link.IsPlayable(origin));
-        MapData bait = link with { RelicCells = link.RelicCells.Add(origin, new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard)) };
-        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "RELIC_ON_NON_PLAYABLE");
+        MapData bait = link with { PocketExemptions = link.PocketExemptions.Add(origin) };
+        Assert.Contains(MapValidator.Validate(bait).Failures, f => f.Code == "POCKET_EXEMPTION_WITHOUT_REASON");
         Assert.Throws<MapValidationException>(() => GameBoard.Load(bait));
 
         GameBoard board = GameBoard.LoadUnvalidated(bait);

@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Recruit;
 
@@ -53,18 +52,8 @@ public sealed class HandLedger
     }
 
     /// <summary>建立账本，并带上对局内容集（<paramref name="contentSet"/> 决定棋池类型：v1 六种、v2 十种）。</summary>
+    /// <remarks>开局手牌恒为 5 枚普通子（<see cref="InitialBasicCount"/>，全部计入回合前基数）；构造 MUST NOT 消费 <c>recruit</c> 子流。旧补给改开局手牌随补给删除（relic-redesign W2）。</remarks>
     public HandLedger(IEnumerable<PlayerId> players, GameSeed seed, int artisanWeight, ContentSet contentSet)
-        : this(players, seed, artisanWeight, contentSet, null)
-    {
-    }
-
-    /// <summary>
-    /// 建立账本，并按各玩家的带入调整开局手牌（carry-in-out「补给种类与开局效果」，<see cref="Carry.Supplies.InitialHand"/>）：
-    /// 无带入 5 枚普通子；备用子 6 枚；征召签 / 换型令 4 枚普通子 + 1 枚换入类型（征召签须已解析）。全部计入回合前基数。
-    /// 开局手牌的构造 MUST NOT 消费 <c>recruit</c> 子流——征募序列与全员不带入时相同。
-    /// </summary>
-    public HandLedger(
-        IEnumerable<PlayerId> players, GameSeed seed, int artisanWeight, ContentSet contentSet, IReadOnlyDictionary<PlayerId, Carry.CarryIn>? carryIns)
     {
         ArgumentNullException.ThrowIfNull(players);
         RecruitWeights.RequireValidArtisanWeight(artisanWeight);
@@ -78,10 +67,7 @@ public sealed class HandLedger
             }
 
             var state = new PlayerState();
-            foreach ((PieceType type, int count) in Carry.Supplies.InitialHand(carryIns?.GetValueOrDefault(player)))
-            {
-                state.Hand[type] = new HandEntry(count, 0);
-            }
+            state.Hand[PieceType.Basic] = new HandEntry(InitialBasicCount, 0);
 
             _players.Add(player, state);
         }
@@ -420,7 +406,7 @@ public sealed class HandLedger
 
         // D3 / D4：权重按当前快照现算，每个候选位独立抽取、允许重复；只消费 recruit 子流。
         // 表长随内容集（more-pieces-relics D8）：v1 六档，与引入新棋子之前的累积权重逐位相同；下标对 Order 通用（v1 是 v2 的前缀）。
-        int[] table = RecruitWeights.AdjustedTable(snapshot, _artisanWeight, ContentSet);
+        int[] table = RecruitWeights.SamplingTable(_artisanWeight, ContentSet);
         ImmutableArray<PieceType>.Builder candidates = ImmutableArray.CreateBuilder<PieceType>(snapshot.RevealCount);
         for (int i = 0; i < snapshot.RevealCount; i++)
         {

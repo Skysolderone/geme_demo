@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Batch;
 
@@ -51,6 +52,7 @@ public static class BatchRehearsal
         // 第 1 步：逐个落点 + 改造目标
         var seen = new HashSet<Coord>();
         var seenEdits = new HashSet<TerrainEdit>();
+        var seenCarried = new HashSet<int>();
         foreach (Placement placement in placements)
         {
             Coord c = placement.Coord;
@@ -89,6 +91,26 @@ public static class BatchRehearsal
                 return BatchFailure.OutOfLegalRange(c);
             }
 
+            // 带入信物挂出（relic-redesign R13 / R14）：只能挂本人未挂出的件、每件只挂一次、落点已有地图信物（落子即拾取）时不能再挂。
+            // 保护期不另判——落点已过合法落子范围（构筑期即本人出生棋盘）。
+            if (placement.AttachCarried is { } index)
+            {
+                if (context.Carried is not { } carried || !carried.ContainsKey(index))
+                {
+                    return BatchFailure.CarriedUnavailable(c, index);
+                }
+
+                if (!seenCarried.Add(index))
+                {
+                    return BatchFailure.CarriedTwice(c, index);
+                }
+
+                if (board.RelicAt(c) is not null)
+                {
+                    return BatchFailure.CarriedOnRelic(c);
+                }
+            }
+
             if (placement.Edit is not { } edit)
             {
                 continue;
@@ -100,7 +122,7 @@ public static class BatchRehearsal
             }
 
             // 合法性唯一实现；按批次开始前的地形判定（本批的改造还没应用到 board.Map 上）；改造范围（open-map D4）随上下文传入。
-            if (TerrainEditRules.Reject(board.Map, c, edit, context.WorkshopActive, context.EditScope) is { } reason)
+            if (TerrainEditRules.Reject(board.Map, c, edit, context.EditScope) is { } reason)
             {
                 return BatchFailure.IllegalEdit(c, edit, reason);
             }
@@ -159,7 +181,7 @@ public static class BatchRehearsal
             return Rejected(shapeFailure, projected: null);
         }
 
-        return Settle(board, context.Player, placements, history, before);
+        return Settle(board, context.Player, placements, history, before, context);
     }
 
     /// <summary>
@@ -167,11 +189,15 @@ public static class BatchRehearsal
     /// 也从这里进入：它的候选取自合法落子范围里未被暂放占用的空格、暂放本身已过第 1 步，而额度与库存（第 2 步）按规格不参与。
     /// <paramref name="placements"/> MUST 非空且已满足第 1 步；<paramref name="before"/> 是 <paramref name="board"/> 的活形分析。
     /// </summary>
+    /// <remarks>
+    /// <paramref name="carried"/> 非空时第 3 步同时挂上本批的带入件（<see cref="AttachCarried"/>，与正式结算第 2 步同一实现，预演副本与正式盘面的信物层因此一致）；
+    /// 单子禁手查询不传——挂出不改变气、提子、活形与同形（R28），只影响信物层。
+    /// </remarks>
     internal static RehearsalResult Settle(
-        GameBoard board, PlayerId player, IReadOnlyList<Placement> placements, BoardHistory history, LifeShapeReport before)
+        GameBoard board, PlayerId player, IReadOnlyList<Placement> placements, BoardHistory history, LifeShapeReport before, BatchContext? carried = null)
     {
         // 第 3–4 步
-        GameBoard projected = Project(board, player, placements);
+        GameBoard projected = Project(board, player, placements, carried);
 
         // 第 5 步：一次性求出全部无气敌串的并集，再统一移除
         ImmutableArray<CapturedStone> captures = CaptureResolver.FindCaptured(projected, player);
@@ -207,8 +233,10 @@ public static class BatchRehearsal
         return new RehearsalResult(IsLegal: true, IsPass: false, Failure: null, captures, projected);
     }
 
-    /// <summary>第 3–4 步：在副本上放置整个批次，再同时应用本批次的全部改造；返回的副本尚未提子。</summary>
-    internal static GameBoard Project(GameBoard board, PlayerId player, IReadOnlyList<Placement> placements)
+    /// <summary>
+    /// 第 3–4 步：在副本上放置整个批次（<paramref name="carried"/> 非空时同时挂上带入件），再同时应用本批次的全部改造；返回的副本尚未提子。
+    /// </summary>
+    internal static GameBoard Project(GameBoard board, PlayerId player, IReadOnlyList<Placement> placements, BatchContext? carried = null)
     {
         // 第 3 步：在副本上模拟放置整个批次
         GameBoard projected = board.Clone();
@@ -217,14 +245,22 @@ public static class BatchRehearsal
             projected.Place(placement.Coord, player, placement.Type);
         }
 
+        if (carried is not null)
+        {
+            AttachCarried(projected, carried, placements);
+        }
+
         // 第 4 步：同时应用本批次的全部改造（terrain-edit「改造先于提子生效」/ 裁决 T-3）。
         // 顺序不可调换：立栅能敲掉敌串最后一口气而直接提子，对称地，堵死自己就是自杀手。
         projected.ApplyTerrainEdits(EditsOf(placements));
         return projected;
     }
 
-    /// <summary>第 8 步的比对：<paramref name="settled"/>（结算后盘面）与哪一次历史提交同形；不同形为 <c>null</c>。</summary>
-    internal static int? DuplicateOf(BoardHistory history, GameBoard settled) => history.FindDuplicate(settled.Serialize());
+    /// <summary>
+    /// 第 8 步的比对：<paramref name="settled"/>（结算后盘面）与哪一次历史提交同形；不同形为 <c>null</c>。
+    /// 喂不含信物层的 <see cref="GameBoard.SerializeShape"/>（relic-redesign R28：只差信物位置的两个盘面算同形）。
+    /// </summary>
+    internal static int? DuplicateOf(BoardHistory history, GameBoard settled) => history.FindDuplicate(settled.SerializeShape());
 
     /// <summary>
     /// 第 6 步：批次开始前每条所有者不是 <paramref name="mover"/> 的已确定活形棋串，按其原有棋子在副本上所在的棋串重查；
@@ -252,6 +288,41 @@ public static class BatchRehearsal
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 本批挂出的带入件（relic-redesign R14 / D1）：按批内顺序，第 k 件的本局编号为 <see cref="BatchContext.NextRelicId"/> + k，带入者为本人、保险标记取清单。
+    /// 预演副本与正式结算共用这一份（<see cref="AttachCarried"/>），所以二者的信物层逐件相同。调用前第 1 步已校验（下标存在、不重复、落点无信物）。
+    /// </summary>
+    public static ImmutableArray<BoardRelic> CarriedTokens(BatchContext context, IReadOnlyList<Placement> placements)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(placements);
+        ImmutableArray<BoardRelic>.Builder tokens = ImmutableArray.CreateBuilder<BoardRelic>();
+        int id = context.NextRelicId;
+        foreach (Placement placement in placements)
+        {
+            if (placement.AttachCarried is not { } index)
+            {
+                continue;
+            }
+
+            CarriedRelic item = context.Carried is { } carried && carried.TryGetValue(index, out CarriedRelic found)
+                ? found
+                : throw new SiegeRuleException($"带入清单第 {index + 1} 件不是 {context.Player} 未挂出的带入件。");
+            tokens.Add(new BoardRelic(placement.Coord, RelicToken.Carried(id++, item.Kind, context.Player, item.Insured)));
+        }
+
+        return tokens.ToImmutable();
+    }
+
+    /// <summary>第 3 步的挂出：把 <see cref="CarriedTokens"/> 逐件写入 <paramref name="board"/>（落子之后，挂在新子上）。</summary>
+    internal static void AttachCarried(GameBoard board, BatchContext context, IReadOnlyList<Placement> placements)
+    {
+        foreach (BoardRelic relic in CarriedTokens(context, placements))
+        {
+            board.AttachRelic(relic.Cell, relic.Token);
+        }
     }
 
     /// <summary>批次里全部非空的改造目标，按批次内落子顺序。</summary>

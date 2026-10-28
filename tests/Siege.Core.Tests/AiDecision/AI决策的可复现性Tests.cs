@@ -17,7 +17,7 @@ public class AI决策的可复现性Tests
         // 变异验证 M-A16（Perturb 用 new Random()）→ 红 4（本测试、种子扰动由种子驱动、估计不得使用真实值、高难度不越权）。
         static (string Log, string Save) Play()
         {
-            MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command()), ("D9", RelicFixtures.Depot())]);
+            MatchFlow match = LinkModeFixtures.PlainStarted();
             var runner = new MatchRunner(match);
             ImmutableSortedDictionary<PlayerId, HeuristicTurnController> ais = runner.AttachAi(AiDifficulty.Standard);
             runner.RunMajorRounds(3);

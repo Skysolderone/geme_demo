@@ -5,7 +5,6 @@ using Siege.Core.Board;
 using Siege.Core.Board.Maps;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
@@ -33,9 +32,8 @@ public class 计分版本合并Tests
         }
 
         var roster = TestMaps.All.ToDictionary(p => p, _ => PlayerStatus.Active);
-        var known = ImmutableDictionary<Coord, RelicType>.Empty;
-        GroupPower old = Assert.Single(PowerCalculator.Compute(board, roster, known, ScoringVersion.V1).Of(TestMaps.P0).Groups);
-        GroupPower current = Assert.Single(PowerCalculator.Compute(board, roster, known, ScoringVersion.V2).Of(TestMaps.P0).Groups);
+        GroupPower old = Assert.Single(PowerCalculator.Compute(board, roster, ScoringVersion.V1).Of(TestMaps.P0).Groups);
+        GroupPower current = Assert.Single(PowerCalculator.Compute(board, roster, ScoringVersion.V2).Of(TestMaps.P0).Groups);
 
         Assert.Equal(0, old.FormationTier);
         Assert.Equal(count, old.Power);

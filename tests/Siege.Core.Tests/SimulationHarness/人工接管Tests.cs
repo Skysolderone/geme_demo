@@ -52,7 +52,7 @@ public class 人工接管Tests
     {
         // 接管一个小回合后交还：后续小回合恢复 AI 决策，对局正常继续到终局；接管前后存档 → 恢复的状态逐字段一致（implement 5.3）。
         // 变异验证 M-A24：HandBack 不恢复原控制者（SetController 留空）→ 红 1（本测试，P1 的 AI 决策数不增长）。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command())]);
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         match.Debug.SetOrder(AiFixtures.P0, AiFixtures.P1, AiFixtures.P2, AiFixtures.P3);
         var runner = new MatchRunner(match);
         ImmutableSortedDictionary<PlayerId, HeuristicTurnController> ais = runner.AttachAi();
@@ -71,7 +71,7 @@ public class 人工接管Tests
         // 接管后的存档可恢复，且逐字段一致（含 ImmutableArray 的 record 投影成文本比）
         string saveAfter = match.Serialize();
         Assert.NotEqual(saveBefore, saveAfter);
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, saveAfter);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, saveAfter);
         Assert.Equal(match.Board.Serialize(), restored.Board.Serialize());
         Assert.Equal(AiFixtures.PowerText(match), AiFixtures.PowerText(restored));
         Assert.Equal(AiFixtures.FlowText(match), AiFixtures.FlowText(restored));
@@ -87,7 +87,7 @@ public class 人工接管Tests
         // 恢复传开局地图（Board.BaseMap），不传活地形 match.Map：存档记的是开局地图摘要，地形改造经盘面序列化的改造段往返
         // （与 TerrainEditing/同形与存档纳入设施Tests 同一约定）。restore-go-core-rules 段 D 删除名次征募加成后，这 4 个大回合里出现了地形改造，
         // 原先传 match.Map 的写法才暴露为"地图不一致"。
-        Assert.Equal(match.Serialize(), MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, match.Serialize()).Serialize());
+        Assert.Equal(match.Serialize(), MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Serialize()).Serialize());
         Assert.Throws<SiegeRuleException>(() => runner.HandBack(AiFixtures.P1));
     }
 

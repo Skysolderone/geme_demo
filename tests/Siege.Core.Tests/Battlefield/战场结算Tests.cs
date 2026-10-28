@@ -108,7 +108,7 @@ public class 战场结算Tests
         Assert.Equal(order, settled.EliminationOrder);
         SettlementEntry second = settled.Entries[1];
         SettlementEntry third = settled.Entries[2];
-        bool tied = (second.Power, second.ControlledRelics, second.ExclusiveCells, second.Stones) == (third.Power, third.ControlledRelics, third.ExclusiveCells, third.Stones);
+        bool tied = (second.Power, second.HeldRelics, second.ExclusiveCells, second.Stones) == (third.Power, third.HeldRelics, third.ExclusiveCells, third.Stones);
         Assert.Equal(tied ? 2 : 3, third.Rank);
         Assert.Equal(2, second.Rank);
     }

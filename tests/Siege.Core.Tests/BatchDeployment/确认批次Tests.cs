@@ -41,7 +41,7 @@ public class 确认批次Tests
     public void 确认的原子性()
     {
         // 5 枚合法批次：任何回调点看到的盘面要么是结算前，要么是 5 枚全部落下的结算后。
-        // 变异验证：Confirm 在第 2 步循环里每放一枚就调用一次 OnRevealRelics → 本测试红 1。
+        // 变异验证：Confirm 在第 2 步循环里每放一枚就调用一次 OnRecalculatePower → 本测试红 1。
         GameBoard board = TestMaps.Blank(size: 7).Place("A7", TestMaps.P1);
         var hooks = new RecordingHooks { Board = board };
         SettlementDriver driver = BatchFixtures.Driver(board, hooks);

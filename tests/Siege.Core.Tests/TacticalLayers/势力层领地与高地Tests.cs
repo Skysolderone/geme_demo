@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Reflection;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
@@ -151,11 +152,13 @@ public class 势力层领地与高地Tests
     public void 势力层四项新来源各自可读()
     {
         // 同一 Requirement「位置加值的连珠 / 协同 / 高地 / 旗手 / 铁链 / 哨兵 / 界碑拆分」：旗手与界碑两项也要各自落到视图字段与文案（上一条只覆盖铁链 / 哨兵）。
-        // 盘面（独立手算）：信物格 F7；P0 F6 旗手子 + G6 界碑子成串。旗手：气边邻格 F7 是信物格 → +3（按位置计，不看揭示与控制）。
-        //   界碑 G6 的气边邻格 G5、H6、G7 都只被 P0 覆盖（F6 另一侧 E6 / F5 与界碑无关）→ 独占空格 3 个 → +3。基础 2、位置加值 6、军势 8。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("F7", RelicFixtures.Prospecting())]).AtRound(5)
+        // 盘面（独立手算）：P0 F6 旗手子 + G6 界碑子成串，F6 挂一件望台。旗手：本串挂 1 件信物 → +3（relic-redesign R23，不看信物种类）；
+        //   望台只扩大 F6 的覆盖（不进军势）。界碑 G6 的气边邻格 G5、H6、G7 都只被 P0 覆盖 → 独占空格 3 个 → +3。基础 2、位置加值 6、军势 8。
+        MatchFlow match = LinkModeFixtures.PlainStarted().AtRound(5)
             .Pieces(P0, PieceType.Bannerman, "F6")
             .Pieces(P0, PieceType.Boundary, "G6");
+        match.Board.AttachRelic(TestMaps.At("F6"), RelicToken.Spawned(0, RelicKind.Watchtower));
+        match.Debug.Recalculate();
 
         var layer = (PowerLayerContent)match.World(P2).Layer(TacticalLayer.Power);
         GroupScoreView group = Assert.Single(layer.Groups, g => g.Owner == P0);

@@ -3,7 +3,7 @@ using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
+using Siege.Core.Recruit;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Ai;
@@ -16,7 +16,7 @@ namespace Siege.Core.Ai;
 /// <remarks>
 /// <para><b>不是博弈树</b>（D1）：只重排已有候选，不产生新候选、不改候选内容；只看一名对手的一次回应。</para>
 /// <para><b>公平信息</b>（D5 / D6 / D8）：只读决策起点的 <see cref="MatchPublicView"/>、由它与候选预演推得的公开派生量（投影视图），以及专家本人的批次上下文。
-/// 模拟对手持有"部署上限"枚普通子（公开可推得的满额）；未揭示信物在整个模拟中保持未揭示。本类不持有任何随机流（D5 (a)），每次决策新建、随决策丢弃，
+/// 模拟对手持有"部署上限"枚普通子（公开可推得的满额）；信物预告在整个模拟中不变（不模拟大回合开始时的落位）。本类不持有任何随机流（D5 (a)），每次决策新建、随决策丢弃，
 /// 在信息边界守门里单列为类型闭包的根。</para>
 /// <para><b>停手口径</b>（D4）：停手阈值与活形硬约束只在候选生成里生效；这里只在已过阈值的非空候选之间重排，不引入 Pass。</para>
 /// <para><b>多样候选与近似两层</b>（expert-strength D2–D5）：前瞻集按落点格集合去重，不足 W 个时以排除重跑补足（重跑由调用方给出，仍是同一停手阈值下的贪心组批，零随机）；
@@ -294,7 +294,8 @@ internal sealed class ExpertLookahead
             }
 
             MatchPublicView after = Project(view, B2, me);
-            History.Record(after.BoardSerialized);
+            // 同形历史只记棋形（relic-redesign R28：不含信物层，与 SettlementDriver 记入正式历史的口径相同）。
+            History.Record(after.Board.SerializeShape());
             return after;
         }
     }
@@ -321,8 +322,8 @@ internal sealed class ExpertLookahead
 
         MatchPublicView projected = Project(_view, b1.ProjectedBoard, _me);
         var history = new BoardHistory();
-        history.Record(_view.BoardSerialized);
-        history.Record(projected.BoardSerialized);
+        history.Record(_view.Board.SerializeShape());
+        history.Record(projected.Board.SerializeShape());
         if (NextOpponent(_view, _me, projected) is not { } next)
         {
             // 第 4 条（下一名对手）：名册为空 → 不做模拟，B2 即 B1。
@@ -367,7 +368,7 @@ internal sealed class ExpertLookahead
 
     /// <summary>
     /// 专家下一手的单点上下文（D4 / 公平信息第 7 项）：行动大回合 = 决策起点的大回合 + 1（每名玩家每个大回合只行动一次）；
-    /// 合法落子范围与部署上限与模拟对手同一实现（<see cref="PublicRules.LegalRange"/>、<see cref="PublicRelicEffects.Deploy"/>，主体换成专家本人，按 <paramref name="after"/> 的公开状态）；
+    /// 合法落子范围与部署上限与模拟对手同一实现（<see cref="PublicRules.LegalRange"/>、<see cref="EffectSnapshot.BaseDeployLimitFor"/>，主体换成专家本人，按 <paramref name="after"/> 的公开状态）；
     /// 类型 = 决策起点手中数量 &gt; 0 的类型（不扣除候选用掉的枚数：下一大回合的征募不可知，D5 第 1 条），每种给"部署上限"枚——与实验 E5 相同的口径，
     /// 只为让单点预演的库存足额（维度 7 供给匹配因此不罚单点），不是对真实数量的估计。专家出局、没有出生区、部署上限为 0 或没有持有类型时返回 <c>null</c>。
     /// </summary>
@@ -382,9 +383,9 @@ internal sealed class ExpertLookahead
         }
 
         int round = _view.MajorRound + 1;
-        PublicDeployEffects effects = PublicRelicEffects.Deploy(_me, round, after.Relics);
+        int deployLimit = EffectSnapshot.BaseDeployLimitFor(round);
         ImmutableArray<PieceType> types = [.. mine.Stock.Where(kv => kv.Value > 0).Select(kv => kv.Key).Order()];
-        if (effects.DeployLimit == 0 || types.IsEmpty)
+        if (deployLimit == 0 || types.IsEmpty)
         {
             return null;
         }
@@ -392,11 +393,10 @@ internal sealed class ExpertLookahead
         return new BatchContext
         {
             Player = _me,
-            DeployLimit = effects.DeployLimit,
+            DeployLimit = deployLimit,
             LegalRange = PublicRules.LegalRange(after.Board, zone, _me, after.LifeShape, round),
             EditScope = PublicRules.EditScope(after.Board, zone, round),
-            Stock = types.ToDictionary(t => t, _ => effects.DeployLimit),
-            WorkshopActive = effects.WorkshopActive,
+            Stock = types.ToDictionary(t => t, _ => deployLimit),
         };
     }
 
@@ -410,7 +410,7 @@ internal sealed class ExpertLookahead
         ArgumentNullException.ThrowIfNull(after);
         ArgumentNullException.ThrowIfNull(next);
         ArgumentNullException.ThrowIfNull(history);
-        var evaluator = new BatchEvaluator(_me, after, _weights, _evaluator.ImmediateOnly, relicValue: null, _lifeQuery, _cacheLife);
+        var evaluator = new BatchEvaluator(_me, after, _weights, _evaluator.ImmediateOnly, _lifeQuery, _cacheLife);
         var staged = new StagedBatch(after.Board, next);
         RehearsalResult Rehearse()
         {
@@ -504,10 +504,9 @@ internal sealed class ExpertLookahead
     }
 
     /// <summary>
-    /// 投影公开视图（D8）：由决策起点的公开快照与盘面 <paramref name="board"/>（B1）构造同类型视图——盘面换成副本；势力经 <see cref="PowerCalculator"/> 重算
-    /// （已知信物内容只取决策起点已揭示的）；信物控制经 <see cref="RelicControl.Of"/> 重算；揭示状态不变（未揭示的保持未揭示、内容为空）；
-    /// 流程状态按出局判据的唯一实现（<see cref="PublicRules.Eliminated"/>）更新；活形分析重算；其余字段（阶段、顺序、手牌类型集合等）不变。
-    /// 名册口径与真实结算第 5 步相同（出局检查之前的状态），因此在不涉及新揭示的局面上与真实结算后发布的快照逐字段相等。
+    /// 投影公开视图（D8）：由决策起点的公开快照与盘面 <paramref name="board"/>（B1）构造同类型视图——盘面换成副本（信物层随之复制）；势力经 <see cref="PowerCalculator"/> 重算；
+    /// 信物预告不变；流程状态按出局判据的唯一实现（<see cref="PublicRules.Eliminated"/>）更新；活形分析重算；其余字段（阶段、顺序、手牌类型集合等）不变。
+    /// 名册口径与真实结算第 5 步相同（出局检查之前的状态），因此与真实结算后发布的快照逐字段相等。
     /// </summary>
     internal static MatchPublicView Project(MatchPublicView view, GameBoard board) => Project(view, board, judged: null);
 
@@ -529,8 +528,7 @@ internal sealed class ExpertLookahead
         ArgumentNullException.ThrowIfNull(board);
         GameBoard copy = board.Clone();
         ImmutableSortedDictionary<PlayerId, PlayerStatus> roster = view.Players.ToImmutableSortedDictionary(p => p.Player, p => p.Status);
-        PowerSnapshot power = PowerCalculator.Compute(copy, roster, RevealedRelics.Of(view.Relics), view.ScoringVersion);
-        ImmutableArray<RelicPublicState> relics = [.. view.Relics.Select(r => r with { Control = RelicControl.Of(power.Coverage, r.Coord, roster) })];
+        PowerSnapshot power = PowerCalculator.Compute(copy, roster, view.ScoringVersion);
 
         // 「曾建立正势力」置位在出局检查之前（与 MatchFlow 的结算顺序一致；置位只会让总势力 > 0 的玩家变真，不改变谁出局）。
         ImmutableArray<PlayerFlowState> marked =
@@ -549,7 +547,6 @@ internal sealed class ExpertLookahead
             Board = copy,
             BoardSerialized = copy.Serialize(),
             Power = power,
-            Relics = relics,
             Players = players,
             LifeShape = LifeShapeReport.Analyze(copy),
         };
@@ -594,7 +591,7 @@ internal sealed class ExpertLookahead
     }
 
     /// <summary>
-    /// 按 B1 预测下一大回合顺序：与大回合结束时同一组输入与同一个实现——势力名次（出局检查之后的名册）、公开先锋修正（B1 上重算控制）、
+    /// 按 B1 预测下一大回合顺序：与大回合结束时同一组输入与同一个实现——势力名次（出局检查之后的名册）、
     /// 本大回合的行动位置（第 1 大回合结束时不计），公式与同值链走 <see cref="InitiativeOrder"/>；种子兜底以玩家编号代替。
     /// 只在 <paramref name="among"/>（专家与名册玩家）之间比较先后（ai-seat-vision 裁决 V2）：其余玩家按不参与排名处理
     /// （名次与先手值的参赛人数都只数这些玩家），不需要他战场玩家的势力。
@@ -604,41 +601,37 @@ internal sealed class ExpertLookahead
         ImmutableSortedDictionary<PlayerId, PlayerStatus> roster = projected.Players.ToImmutableSortedDictionary(
             p => p.Player, p => among.Contains(p.Player) || !p.IsActive ? p.Status : PlayerStatus.Eliminated);
         ImmutableArray<PlayerId> active = [.. projected.Players.Where(p => p.IsActive && among.Contains(p.Player)).Select(p => p.Player)];
-        PowerSnapshot power = PowerCalculator.Compute(projected.Board, roster, RevealedRelics.Of(view.Relics), view.ScoringVersion);
-        ImmutableArray<RelicPublicState> relics = [.. projected.Relics.Select(r => r with { Control = RelicControl.Of(power.Coverage, r.Coord, roster) })];
-        ImmutableSortedDictionary<PlayerId, int> bonuses = PublicRelicEffects.InitiativeBonuses(active, relics);
+        PowerSnapshot power = PowerCalculator.Compute(projected.Board, roster, view.ScoringVersion);
 
         ImmutableArray<InitiativeEntry>.Builder entries = ImmutableArray.CreateBuilder<InitiativeEntry>(active.Length);
         foreach (PlayerId player in active)
         {
             int rank = power.RankOf(player) ?? throw new SiegeRuleException($"参赛玩家 {player} 没有势力名次。");
-            int bonus = bonuses[player];
             int? previous = view.MajorRound >= 2 ? view.ActionOrder.IndexOf(player) : null;
-            entries.Add(new InitiativeEntry(player, rank, power.Of(player).Total, bonus,
-                InitiativeOrder.ValueOf(active.Length, rank, bonus), previous, SeedRank: player.Value));
+            entries.Add(new InitiativeEntry(player, rank, power.Of(player).Total,
+                InitiativeOrder.ValueOf(active.Length, rank), previous, SeedRank: player.Value));
         }
 
         return InitiativeOrder.Generate(view.MajorRound, entries.MoveToImmutable()).NextOrder;
     }
 
     /// <summary>
-    /// 模拟对手的批次上下文（ai-decision「前瞻模拟的公平信息」第 1–3 项）：应答者、D 枚普通子、D = 公开部署上限（按应答者的行动大回合，军令控制在 B1 上重算、
-    /// 内容未知的按不提供计）、合法落子范围（与对局流程同一实现，按应答者的行动大回合）、工坊标记（B1 上是否控制内容已知的工坊）。
+    /// 模拟对手的批次上下文（ai-decision「前瞻模拟的公平信息」第 1–3 项）：应答者、D 枚普通子、D = 公开部署上限（按应答者的行动大回合的分阶段基础值，
+    /// relic-redesign 起没有信物加成）、合法落子范围（与对局流程同一实现，按应答者的行动大回合）。
     /// </summary>
     internal static BatchContext SimulatedContext(MatchPublicView projected, PlayerId responder, int majorRound)
     {
         ArgumentNullException.ThrowIfNull(projected);
         PlayerFlowState state = projected.Players.Single(p => p.Player == responder);
         int zone = state.BirthZone ?? throw new SiegeRuleException($"玩家 {responder} 尚未锁定出生区。");
-        PublicDeployEffects effects = PublicRelicEffects.Deploy(responder, majorRound, projected.Relics);
+        int deployLimit = EffectSnapshot.BaseDeployLimitFor(majorRound);
         return new BatchContext
         {
             Player = responder,
-            DeployLimit = effects.DeployLimit,
+            DeployLimit = deployLimit,
             LegalRange = PublicRules.LegalRange(projected.Board, zone, responder, projected.LifeShape, majorRound),
             EditScope = PublicRules.EditScope(projected.Board, zone, majorRound),
-            Stock = new Dictionary<PieceType, int> { [PieceType.Basic] = effects.DeployLimit },
-            WorkshopActive = effects.WorkshopActive,
+            Stock = new Dictionary<PieceType, int> { [PieceType.Basic] = deployLimit },
         };
     }
 }

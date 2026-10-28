@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Presentation.Layers;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Visibility;
@@ -144,7 +145,7 @@ public class 视图模型按座位过滤Tests
         // 变异验证（第 1 组收尾实跑）：M-V2 Boards 过滤改回"棋盘内每格都可见"、M-V3 占位展开改回"左下角格可见" 各红 1——G1 之后棋盘内每格都可见，
         // 这两条变异在本测试上不再可分（两种判据结果相同），本测试改为同时钉住 G1 在表现层的镜像（岩石格出现、地形为障碍）。
         MapData map = RockyMap();
-        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, All, TestMaps.Relics(map), Options);
+        MatchFlow match = MatchFlow.CreateUnvalidated(map, TestMaps.Seed, All, Options);
         foreach (PlayerId p in All)
         {
             match.Debug.SeedHand(p, (PieceType.Basic, 50));
@@ -171,7 +172,6 @@ public class 视图模型按座位过滤Tests
         return built with
         {
             Obstacles = built.Obstacles.Add(new Coord(2, 2)).Add(new Coord(4, 5)),
-            RelicCells = System.Collections.Immutable.ImmutableDictionary<Coord, RelicCellSpec>.Empty,
         };
     }
 
@@ -179,7 +179,10 @@ public class 视图模型按座位过滤Tests
     public void 信息层含全图的格()
     {
         // visual-style-baseline（open-map）：信息层在全图的格上出现。四块棋盘各有棋子；P0 的盘面层 / 势力层 / 信物层含棋盘 4 的格与棋串（原「只含本战场的格」反向）。
-        MatchFlow match = StartedWithRelics([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);   // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
+        MatchFlow match = Started([0, 1, 3, 4]).PlayRound(P0, P1, P2, P3);
+        // relic-redesign W1：原载体 RelicMap（手写信物格夹具）随旧信物删除；在棋盘 3 上放一件地图信物，信物层照样能看到别的棋盘上的信物。
+        match.Board.AttachRelic(Map.BirthBoard(3).Cells().First(c => match.Board[c].IsPlayableEmpty), RelicToken.Spawned(0, RelicKind.WarDrum));
+        match.Debug.Recalculate();   // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
         ViewerWorld world = match.World(P0);
         HashSet<Coord> mine = [.. world.Board().Cells.Select(c => c.Coord)];
         Assert.Contains(match.Board.AllGroups(), g => g.Owner == P2);   // 样本口径：别的棋盘上确有棋串

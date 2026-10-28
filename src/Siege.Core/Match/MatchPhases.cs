@@ -5,7 +5,7 @@ namespace Siege.Core.Match;
 /// <summary>对局顶层阶段。</summary>
 public enum MatchPhase
 {
-    /// <summary>插旗阶段：地形 / 出生区 / 信物格位置公开，信物内容隐藏。</summary>
+    /// <summary>插旗阶段：地形 / 出生区公开。</summary>
     FlagPlanting,
 
     /// <summary>对局进行中：大回合与小回合交替推进。构筑期（第 1–3 大回合）与交战期（第 4 起）都是本阶段，只差合法落子范围与改造范围（open-map；待配对 / 待决赛链接阶段已随拼接规则删除）。</summary>
@@ -24,7 +24,7 @@ public enum TurnStage
     /// <summary>不在任何小回合内（两个小回合之间、插旗中或已结束）。</summary>
     Idle,
 
-    /// <summary>第 1 阶段：信物快照。读取此刻控制的非先锋信物，生成本小回合参数。</summary>
+    /// <summary>第 1 阶段：效果快照。生成本小回合参数（relic-redesign 起只有默认基础值；阶段名沿用）。</summary>
     RelicSnapshot,
 
     /// <summary>第 2 阶段：整理手牌。主动整类弃牌；超限必须在此解除。</summary>
@@ -73,6 +73,24 @@ public enum FlowEventKind
 
     /// <summary>战场结算（整轮 Pass / 填满 / 减员 / 上限）。open-map：配对 / 链接 / 决赛倒计时三种事件已随拼接规则删除；cycle-stop：上限安全网走同一事件。</summary>
     BattlefieldSettled,
+
+    /// <summary>信物预告（relic-redesign D2 / R11）：大回合开始时公开下一批的位置与种类（本批为空也发）。</summary>
+    RelicsForecast,
+
+    /// <summary>信物落位（relic-redesign D2 / R8）：大回合开始时按预告落位（被占格跳过）。</summary>
+    RelicsLanded,
+
+    /// <summary>带入信物挂出（relic-redesign R14 / R22）：本批确认后公开挂出的每件（格、编号、种类、保险）。只在有挂出的批次发出。</summary>
+    CarriedRelicsAttached,
+
+    /// <summary>拾取（relic-redesign R4 / RQ1，段 C1 遥测）：本批落点上原有的地图信物随落子挂到新子上，逐件（格、编号、种类）。只在有拾取的批次发出。</summary>
+    RelicsPickedUp,
+
+    /// <summary>掉落（relic-redesign R4，段 C1 遥测）：本批提走的持物棋子上的信物留在原格成为地图信物，逐件（格、编号、种类、原持有者）。只在有掉落的批次发出；R17 出局 / 弃赛者未挂出件的掉落另见 <see cref="CarriedRelicsDropped"/>。</summary>
+    RelicsDropped,
+
+    /// <summary>带入信物掉落（relic-redesign R17）：出局 / 弃赛者未挂出的非保险件立即落到地图。只在有可掉落件时发出。</summary>
+    CarriedRelicsDropped,
 }
 
 /// <summary>一条流程事件：种类、发生时的大回合、相关玩家（若有）与文字说明。</summary>

@@ -129,7 +129,7 @@ public class 同形与存档纳入设施Tests
         match.Board.ApplyTerrainEdits([fence]);
         string json = match.Serialize();
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
 
         Assert.True(restored.Board.Map.HasFence(TestMaps.At("G7"), TestMaps.At("G8")));
         Assert.Equal([fence], restored.Board.TerrainEdits);
@@ -145,7 +145,7 @@ public class 同形与存档纳入设施Tests
         // 旧存档（无 ArtisanWeight 字段）回填 10，公开视图同样读到 10。
         string legacy = System.Text.RegularExpressions.Regex.Replace(json, "\\s*\"ArtisanWeight\": 18,", string.Empty);
         Assert.DoesNotContain("ArtisanWeight", legacy, StringComparison.Ordinal);
-        MatchFlow fromLegacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, legacy);
+        MatchFlow fromLegacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, legacy);
         Assert.True(fromLegacy.ArtisanWeightBackfilled);
         Assert.Equal(MatchOptions.DefaultArtisanWeight, fromLegacy.ArtisanWeight);
         Assert.Equal(MatchOptions.DefaultArtisanWeight, fromLegacy.Publish().ArtisanWeight);

@@ -4,13 +4,12 @@ using System.Text.Json;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Board.Maps;
-using Siege.Core.Carry;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Scoring;
-using Siege.Core.Tests.CarryInOut;
+using Siege.Core.PieceRelics;
+using Siege.Core.Tests.PieceRelics;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Sim.Config;
 using Siege.Sim.Logging;
 using Siege.Sim.Running;
@@ -34,14 +33,9 @@ public class 对局日志的记录内容Tests
         string path = live.WriteTo(dir);
         MatchLog log = MatchLog.Read(path);
 
-        // 1. 地图、种子、完整信物分布及揭示时间
+        // 1. 地图、种子（relic-redesign W1：旧静态信物分布与揭示时间随旧信物删除；新信物的刷新 / 拾取遥测留给段 C）
         Assert.Equal("link:1:4", log.Header.MapId); // retire-legacy-maps 1.8：共用样本由 v5 改到 link:1（原注：scoring-sites：RunConfig 默认地图切到 v4）
         Assert.Equal(live.Header.Seed, log.Header.Seed);
-        // map-expand-25 段 A3：浮空岛不放静态信物格（relic-redesign R29），共用样本的首部信物表为空；信物分布与揭示时间这一类的非空样本由
-        // 「揭示时间可查」（LinkModeFixtures.RelicMap 夹具）覆盖，这里只钉"首部信物表与结果揭示表一一对应"。
-        Assert.Empty(log.Header.Relics);
-        Assert.All(log.Header.Relics, r => Assert.True(Coord.TryParse(r.Coord, out _) && Enum.TryParse<Relics.RelicType>(r.Type, out _)));
-        Assert.Equal(log.Header.Relics.Count, log.Result!.RelicReveals.Count);
 
         // 2. 每轮征募候选、玩家选择、被 Pass 撤销的征募数
         List<LogEvent> recruits = [.. log.Events.Where(e => e.Type == LogEventType.Recruit)];
@@ -64,16 +58,14 @@ public class 对局日志的记录内容Tests
         });
         Assert.Equal(settled.Count, log.Turns.Count(t => !t.Passed));
 
-        // 4. 信物控制变化、结构参数、行动顺序
-        // map-expand-25 段 A3：共用样本的地图不再有信物格，信物控制变化事件的非空样本改由「揭示时间可查」（RelicMap 夹具）断言；这里只守"有则每条恰一格"。
-        Assert.All(log.Events.Where(e => e.Type == LogEventType.ControlChanged), e => Assert.Single(e.Coords!));
+        // 4. 结构参数、行动顺序（relic-redesign W1：信物控制变化事件随旧信物删除）
         Assert.All(log.Turns, t =>
         {
             Assert.True(t.ShowCount >= 5 && t.FreePickCount >= 3 && t.TypeSlots >= 5 && t.DeployLimit >= 3, t.ToString());
             Assert.Equal(4, t.ActionOrder.Count);
         });
         LogEvent roundEnd = log.Events.First(e => e.Type == LogEventType.MajorRoundEnded);
-        Assert.True(roundEnd.Values!.ContainsKey("P0.Bonus") && roundEnd.Values.ContainsKey("P0.Rank"));
+        Assert.True(roundEnd.Values!.ContainsKey("P0.Rank") && !roundEnd.Values.ContainsKey("P0.Bonus"));   // 先锋修正随旧信物删除：先手只按名次
 
         // 5. 每个棋串的基础军势、位置加值（来源拆分）、倍率、最终军势
         GroupEntry group = log.Turns[^1].PlayersState.SelectMany(p => p.Groups).First();
@@ -95,7 +87,7 @@ public class 对局日志的记录内容Tests
         Assert.All(log.Turns, t => Assert.Equal(t.Placements.Count == 0, t.Passed));
         // 段 C：规则层已无大回合上限，4 大回合样本由跑局层的小回合数截断（D5）收住——结束原因 turn_limit，MUST NOT 产生名次与胜者；
         // turn_limit 不是 EndReason 的成员（规则层没有这种终局）。规则级终局的名次记录见本测试末段的第二局。
-        Assert.Equal(LogResult.TurnLimitReason, log.Result.Reason);
+        Assert.Equal(LogResult.TurnLimitReason, log.Result!.Reason);
         Assert.True(log.Result.Truncated);
         Assert.False(log.Result.Converged);
         Assert.DoesNotContain(log.Result.Reason, Enum.GetNames<EndReason>());
@@ -117,7 +109,6 @@ public class 对局日志的记录内容Tests
             log.Turns.Select(t => t.PlayersState.Aggregate(BigInteger.Zero, (sum, p) => sum + p.Total)));
         Assert.Equal(live.Result!.Winners, log.Result.Winners);
         Assert.Equal(live.Result.Reason, log.Result.Reason);
-        Assert.Equal(live.Header.Relics.Select(r => $"{r.Coord}:{r.Type}{r.Magnitude}"), log.Header.Relics.Select(r => $"{r.Coord}:{r.Type}{r.Magnitude}"));
         Assert.Equal(live.FullText(), log.FullText());
         Assert.Equal(live.DeterministicText(), MatchLog.Parse(live.FullText().Replace("\n", "\r\n")).DeterministicText());
 
@@ -180,7 +171,7 @@ public class 对局日志的记录内容Tests
             BirthZones = [[.. TestMaps.Rect(0, 0, 12, 12)]],
         };
         MatchFlow match = LinkModeFixtures.RequireLink(
-            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, TestMaps.Relics(map), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+            MatchFlow.CreateUnvalidated(map, TestMaps.Seed, TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         match.PlantSequentially(TestMaps.All.Select(p => (p, 0)));
         for (int y = 0; y < 10; y++)
         {
@@ -207,40 +198,6 @@ public class 对局日志的记录内容Tests
         Assert.Equal(expected, Assert.Single(p0.Groups).Power);
         Assert.Equal(truth.Total, p0.Total);
         Assert.Equal((12, 120), (p0.TerritoryScore, p0.Groups[0].MultiplierCount));
-    }
-
-    [Fact]
-    public void 揭示时间可查()
-    {
-        // 每枚信物在 Result.RelicReveals 里都有一条：揭示的记大回合序号，且与过程中的 Reveal 事件一致；整局未揭示的标为 null。
-        // 变异验证 M-C4（check）：MatchSession.Finish 把 RelicReveals 置空 → 红 2（本测试、日志覆盖七类记录）。
-        // ai-eye 段 B：样本由第 2 局（种子 12）换为第 1 局（种子 11）。停手阈值（缺省 20）之后种子 12 在 16 个小回合内揭示了全部 13 枚信物，
-        // "整局未揭示的标为 null"这一支没有样本（下界响亮失败）；种子 11 在改动前、硬约束后、阈值后都恰有 1 枚未揭示。断言与期望均未改，只换样本。
-        // retire-legacy-maps 1.8：共用样本改到 link:1 后，第 3 大回合结束即发生链接，坐标随链接平移（match-telemetry「坐标随链接平移」），首部信物格（开局坐标）
-        // 与结果行（终局坐标）不再可逐格对照。这里改用同一批配置截断到第 11 个小回合（第 3 大回合结束前、尚无链接——链接在第 12 个小回合收尾时发生）的种子 11 一局，断言不变；
-        // 链接图上至少有一块出生棋盘无人插旗，其上的信物整局不揭示，"未揭示标为 null"一支有样本。
-        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
-        MatchLog log = MatchLog.Parse(BatchRunner.Execute(SimFixtures.PinPreCalibration(SimFixtures.Config(seedStart: 11, turnLimit: 11)), parallelism: 1, map: LinkModeFixtures.RelicMap)[0].FullText());
-        Assert.Equal(log.Header.Relics.Select(r => r.Coord).Order(), log.Result!.RelicReveals.Select(r => r.Coord).Order());
-        List<LogEvent> reveals = [.. log.Events.Where(e => e.Type == LogEventType.Reveal)];
-        Assert.NotEmpty(reveals);
-        Assert.Contains(log.Events, e => e.Type == LogEventType.ControlChanged && e.Coords!.Count == 1);   // 段 A3：自「日志覆盖八类记录」第 4 类移来（共用样本已无信物格）
-        foreach (RelicRevealEntry entry in log.Result.RelicReveals)
-        {
-            LogEvent? reveal = reveals.SingleOrDefault(e => e.Coords![0] == entry.Coord);
-            if (entry.RevealedInMajorRound is { } round)
-            {
-                Assert.NotNull(reveal);
-                Assert.Equal(round, reveal.MajorRound);
-                Assert.InRange(round, 1, log.Result.MajorRound);
-            }
-            else
-            {
-                Assert.Null(reveal);
-            }
-        }
-
-        Assert.Contains(log.Result.RelicReveals, r => r.RevealedInMajorRound is null);
     }
 
     [Fact]
@@ -297,7 +254,7 @@ public class 对局日志的记录内容Tests
         v1.Board.Place(Coord.Parse("H7"), TestMaps.P0, PieceType.Basic);
         v1.Debug.Recalculate();
         string v1Text = JsonSerializer.Serialize(MatchSession.PlayerEntries(v1.Publish()), LogJson.Options);
-        foreach (string field in new[] { "BannerBonus", "ChainBonus", "SentryBonus", "BoundaryBonus", "EncampmentBonus", "PincerBonus" })
+        foreach (string field in new[] { "BannerBonus", "ChainBonus", "SentryBonus", "BoundaryBonus" })
         {
             Assert.DoesNotContain(field, v1Text, StringComparison.Ordinal);
             Assert.Contains(field, writtenText, StringComparison.Ordinal);
@@ -314,8 +271,6 @@ public class 对局日志的记录内容Tests
         Assert.Equal(((int?)null, (int?)null, (int?)null, (int?)null), (old.BannerBonus, old.ChainBonus, old.SentryBonus, old.BoundaryBonus));
         Assert.Equal(0, old.NewSourceBonus);
 
-        const string oldEditLine = "{\"Action\":\"Bridge\",\"Target\":\"B:E4\",\"Player\":0,\"Artisan\":\"E5\",\"CausedCapture\":false}";
-        Assert.Null(JsonSerializer.Deserialize<TerrainEditEntry>(oldEditLine, LogJson.Options)!.ViaWorkshop);
 
         // 首部缺内容集的合成旧日志与一份既有的 v1 样本日志：离线解析后内容集都是 v1，新字段都不存在。
         MatchLog synthetic = MatchLog.Parse(SimFixtures.Synthetic(3, [SimFixtures.Turn(1, 1, 0, [1, 1, 1, 1], ["A1:Basic"])], [], SimFixtures.ResultOf(1, [0])).FullText());
@@ -324,100 +279,49 @@ public class 对局日志的记录内容Tests
         MatchLog sample = MatchLog.Parse(SimFixtures.Sample.Value[0].FullText());
         Assert.Equal(ContentSet.V1, sample.ContentSet);
         Assert.All(sample.Turns.SelectMany(t => t.PlayersState).SelectMany(p => p.Groups), grp => Assert.Null(grp.SentryBonus));
-        Assert.All(sample.Turns, t => Assert.Null(t.RelaySources));
     }
 
-    [Fact]
-    public void 驿站来源与工坊标记可查()
-    {
-        // 规格第 4、5 条：快照记录展示数的驿站来源与工坊是否生效；改造记录"目标是否经工坊扩展（隔一格）"。真实会话端到端（写入函数 → 日志文本 → 读回）：
-        // v2 局，P0 占据已揭示的驿站 K7、工坊 K5、先锋 D10 → 驿站计入 2 枚其他信物（+2），展示数 7，工坊生效；
-        // P0 的批次：匠人 G7 隔一格搭桥 G9 + 匠人 E7 搭桥四邻的 F7 → 前者经工坊扩展、后者不是。
-        // 变异 MC-L2（快照漏写驿站来源）、MC-L3（改造记录的工坊扩展恒否）应红。v1 局同一脚本：三个字段都不出现在日志文本与快照哈希文本里。
-        (MatchLog log, MatchFlow match) = WorkshopSession(ContentSet.V2);
-        TurnSnapshot first = MatchLog.Parse(log.DeterministicText()).Turns[0];
-        Assert.Equal(0, first.Player);
-        Assert.Equal(7, first.ShowCount);
-        Assert.Equal(["K7=2"], first.RelaySources!.Select(kv => $"{kv.Key}={kv.Value}"));
-        Assert.True(first.WorkshopActive);
-        Assert.Equal(
-            ["B:F7/False", "B:G9/True"],
-            first.Edits!.Select(e => $"{e.Target}/{e.ViaWorkshop}").Order(StringComparer.Ordinal));
-        Assert.Equal(
-            match.TerrainEdits.Select(r => $"{r.Edit}/{r.ViaWorkshop}").Order(StringComparer.Ordinal),
-            first.Edits!.Select(e => $"{e.Target}/{e.ViaWorkshop}").Order(StringComparer.Ordinal));
-
-        (MatchLog v1, _) = WorkshopSession(ContentSet.V1);
-        string v1Text = v1.DeterministicText() + string.Join('\n', SimFixtures.TurnTexts(v1.Turns));
-        foreach (string field in new[] { "RelaySources", "WorkshopActive", "ViaWorkshop" })
-        {
-            Assert.DoesNotContain(field, v1Text, StringComparison.Ordinal);
-        }
-    }
-
-    /// <summary>G9 / F7 深水的局（第 5 大回合、P0 先行）：P0 占据并揭示驿站 K7、工坊 K5、先锋 D10，手里只有匠人；P0 的批次是 G7 隔一格搭桥 G9 + E7 搭桥 F7，跑 1 个小回合。</summary>
-    private static (MatchLog Log, MatchFlow Match) WorkshopSession(ContentSet set)
-    {
-        MatchFlow match = LinkModeFixtures.PlainStarted(
-                TestMaps.Terrain(surfaces: [("G9", Surface.DeepWater), ("F7", Surface.DeepWater)]),
-                options: MatchOptions.Immediate with { ContentSet = set },
-                relics: [("K7", RelicFixtures.Relay()), ("K5", RelicFixtures.Workshop()), ("D10", RelicFixtures.Vanguard())])
-            .AtRound(5, TestMaps.All);
-        foreach (string cell in new[] { "K7", "K5", "D10" })
-        {
-            match.Board.Place(Coord.Parse(cell), TestMaps.P0, PieceType.Basic);
-        }
-
-        match.Relics.Reveal(match.Board, 5);
-        match.Debug.Recalculate();
-        match.Debug.SeedHand(TestMaps.P0, (PieceType.Artisan, 3));
-        MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config(turnLimit: 1));
-        session.SetController(TestMaps.P0, new ArtisanScript(
-            BatchFixtures.Artisan("G7", TerrainEdit.Bridge(Coord.Parse("G9"))),
-            BatchFixtures.Artisan("E7", TerrainEdit.Bridge(Coord.Parse("F7")))));
-        return (session.Run(), match);
-    }
-
-    // ---------- carry-in-out：首部带入、带出结算、旧日志 ----------
+    // ---------- 带入带出（relic-redesign W2）：首部带入清单、带出结算、旧日志 ----------
 
     [Fact]
     public void 首部记录带入()
     {
-        // 规格 Scenario：玩家 1 带入换型令（堡垒子）、玩家 2 带入征召签（抽得哨兵子）、玩家 3 与 4 带入备用子 → 日志首部逐名记录这四项带入与开关状态。
-        // 征召签的抽得类型只由种子与玩家编号决定（carry-draft:1 子流）：取第一颗让玩家 2 抽得哨兵子的种子。
-        // 两条腿：写出文本 → 解析 → 逐项比对活对象（对局配置里的带入）；首部字面值由测试写死。
-        ulong seed = FirstSeed(s => CarryCandidates.Draw(new GameSeed(s), TestMaps.P1, ContentSet.V2) == PieceType.Sentry);
-        var carries = new Dictionary<int, CarryIn>
+        // 规格 Scenario（接线段 W2 改写：带入的是信物清单）：玩家 1 带入战鼓（保险）与军旗、玩家 2 带入号令、玩家 3 带入望台与百变（均保险）、玩家 4 不带入
+        // → 日志首部逐名记录这三份清单与开关状态（不带入的玩家不列）。两条腿：写出文本 → 解析 → 逐项比对活对象（对局配置里的带入）；首部字面值由测试写死。
+        var carries = new Dictionary<int, RelicLoadout>
         {
-            [0] = new(SupplyKind.Commission, PieceType.Fortress),
-            [1] = new(SupplyKind.DraftLot),
-            [2] = new(SupplyKind.SpareStone),
-            [3] = new(SupplyKind.SpareStone),
+            [0] = CarryWiringFixtures.Loadout((RelicKind.WarDrum, true), (RelicKind.Banner, false)),
+            [1] = CarryWiringFixtures.Loadout((RelicKind.Command, false)),
+            [2] = CarryWiringFixtures.Loadout((RelicKind.Watchtower, true), (RelicKind.Chameleon, true)),
         };
-        MatchSession session = CarriedSession(seed, carries, turnLimit: 4);
+        MatchSession session = CarriedSession(5, carries, turnLimit: 4);
         MatchLog live = session.Run();
         MatchLog log = MatchLog.Parse(live.FullText());
 
         Assert.Equal(true, log.Header.CarryInOut);
-        Assert.Equal(["0:Commission:Fortress", "1:DraftLot:Sentry", "2:SpareStone:-", "3:SpareStone:-"], log.Header.CarryIns!.Select(e => $"{e.Player}:{e.Supply}:{e.Type ?? "-"}"));
+        Assert.Equal(["0:WarDrum!,Banner", "1:Command", "2:Watchtower!,Chameleon!"],
+            log.Header.CarryIns!.Select(e => $"{e.Player}:{string.Join(",", e.Items!.Select(i => i.Kind + (i.Insured ? "!" : string.Empty)))}"));
         Assert.True(log.CarryInOut);
-        Assert.Equal(CarryFixtures.CarryText(session.Match.CarryIns), CarryFixtures.CarryText(log.CarryIns));
-        Assert.Equal("P0:Commission>Fortress P1:DraftLot>Sentry P2:SpareStone>- P3:SpareStone>-", CarryFixtures.CarryText(log.CarryIns));
+        Assert.Equal(session.Match.CarryIns, log.CarryIns);
         Assert.Equal(live.DeterministicText(), log.DeterministicText());
 
         // 反面：首部带入解析不了即响亮失败，不静默当成无带入。
-        MatchLog broken = MatchLog.Parse(live.FullText().Replace("\"Supply\":\"DraftLot\"", "\"Supply\":\"Lottery\"", StringComparison.Ordinal));
+        MatchLog broken = MatchLog.Parse(live.FullText().Replace("\"Kind\":\"Command\"", "\"Kind\":\"Lottery\"", StringComparison.Ordinal));
         Assert.Throws<FormatException>(() => broken.CarryIns);
     }
 
     [Fact]
     public void 带出结算可查()
     {
-        // 规格 Scenario：开启带入带出的一局中玩家 4 在第 6 大回合以弃赛时势力名次第 2 弃赛 → 日志中可查到玩家 4 的结算：弃赛、名次 2、带出 8、补给返还。
-        // 局面同 主动弃赛Tests.弃赛时势力名次：C（P2）已出局；A（P0）严格高于 D（P3），B（P1）与 D 相等 → D 第 2。
-        // 随后 B 也弃赛，A 成为唯一参赛者，规则终局（只剩一名参赛玩家）。样本的每名玩家都取非缺省值：完赛 24、出局 0 丢失、两名弃赛者、返还为真。
-        MatchFlow match = LinkModeFixtures.PlainStarted(options: CarryFixtures.On(ContentSet.V1,
-                (0, CarryFixtures.Spare), (2, CarryFixtures.Commission(PieceType.Line)), (3, CarryFixtures.Commission(PieceType.Fortress))))
+        // 规格 Scenario（接线段 W2 改写，D6 + R19）：开启带入带出的一局中玩家 4 在第 6 大回合以弃赛时势力名次第 2 弃赛 → 日志中可查到玩家 4 的结算：弃赛、名次 2、带出 8 点、只带回保险件。
+        // 局面同 主动弃赛Tests.弃赛时势力名次：C（P2）已出局；A（P0）严格高于 D（P3），B（P1）与 D 相等 → D 第 2。随后 B 也弃赛，A 成为唯一参赛者，规则终局。
+        // 带入：A 战鼓（非保险，未挂出）；C 号令（保险）；D 望台（保险）+ 军旗（非保险）。B 不带入。
+        // 编号：AtRound 不经大回合开始、没有刷新，游标从 0 起——D 弃赛时军旗按 R17 掉落取 #0（无处可落即消失）；终局时仍未挂出的件按（玩家、清单下标）临时编号 #1 起：A 战鼓 #1、C 号令 #2、D 望台 #3。
+        // 归属（D6）：A 完赛 → 未挂出的战鼓归 A（第 ③ 条）；C 出局 → 保险号令归 C（第 ① 条）、0 点；D 弃赛 → 保险望台归 D，掉在地上的军旗无人持有、原主未完赛 → 消失。
+        MatchFlow match = LinkModeFixtures.PlainStarted(options: CarryWiringFixtures.On(
+                (0, CarryWiringFixtures.Loadout((RelicKind.WarDrum, false))),
+                (2, CarryWiringFixtures.Loadout((RelicKind.Command, true))),
+                (3, CarryWiringFixtures.Loadout((RelicKind.Watchtower, true), (RelicKind.Banner, false)))))
             .AtRound(6, TestMaps.All)
             .Stones(TestMaps.P2, "C10")
             .Stones(TestMaps.P1, "K3")
@@ -426,6 +330,9 @@ public class 对局日志的记录内容Tests
         Assert.Equal(PlayerStatus.Eliminated, match.StateOf(TestMaps.P2).Status);   // 前提：C 已出局
         match.Resign(TestMaps.P3);
         Assert.Equal(2, match.Resignations.Single().RankAtResign);                        // 前提：D 的弃赛名次第 2
+        // 前提：军旗按 R17 掉落、取编号 #0。平坦夹具的可落子格全在出生平台上（刷新 / 掉落候选为空），所以它无处可落、当场消失（RelicSpawner.Drop 的口径）。
+        Assert.Contains(match.Events, e => e.Kind == FlowEventKind.CarriedRelicsDropped && e.Player == TestMaps.P3 && e.Detail.Contains("1 件无处可落", StringComparison.Ordinal));
+        Assert.Empty(match.Board.RelicsOnBoard());
         MatchSession session = MatchSession.ForMatch(match, SimFixtures.Config());
         match.Resign(TestMaps.P1);
         Assert.Equal(2, match.Resignations[1].RankAtResign);                              // 前提：B 的弃赛名次也是第 2
@@ -434,9 +341,8 @@ public class 对局日志的记录内容Tests
 
         Assert.Equal(nameof(EndReason.LastPlayerStanding), log.Result!.Reason);
         Assert.Equal(
-            // B 弃赛时：A 严格更高、D（已弃赛，计入）与 B 相等 → B 也是第 2，带出 8；B 未带入，无可返还。
-            ["0:Finished:1:24:SpareStone:-:False", "1:Resigned:2:8:-:-:False", "2:Eliminated:-:0:Commission:Line:False", "3:Resigned:2:8:Commission:Fortress:True"],
-            log.Result.CarryOut!.Select(e => $"{e.Player}:{e.Outcome}:{e.Rank?.ToString() ?? "-"}:{e.Points}:{e.Supply ?? "-"}:{e.Type ?? "-"}:{e.Returned}"));
+            ["0:Finished:1:24:#1:WarDrum", "1:Resigned:2:8:", "2:Eliminated:-:0:#2:Command", "3:Resigned:2:8:#3:Watchtower"],
+            log.Result.CarryOut!.Select(e => $"{e.Player}:{e.Outcome}:{e.Rank?.ToString() ?? "-"}:{e.Points}:{string.Join(",", e.BroughtOut)}"));
 
         // 弃赛事件带弃赛时势力名次（match-telemetry 第 7 条"弃赛（含弃赛时势力名次）"）：与弃赛快照逐条相同。
         LogEvent resigned = log.Events.Single(e => e.Type == LogEventType.PlayerResigned && e.Player == 3);
@@ -456,7 +362,7 @@ public class 对局日志的记录内容Tests
         Assert.Empty(synthetic.CarryIns);
         Assert.Null(synthetic.Result!.CarryOut);
 
-        MatchLog carried = CarriedSession(7, new Dictionary<int, CarryIn> { [1] = new(SupplyKind.SpareStone) }, turnLimit: 4).Run();
+        MatchLog carried = CarriedSession(7, new Dictionary<int, RelicLoadout> { [1] = CarryWiringFixtures.Loadout((RelicKind.WarDrum, false)) }, turnLimit: 4).Run();
         Assert.True(carried.CarryInOut);                         // 反面：删字段之前确实是带入局
         Assert.NotNull(carried.Result!.CarryOut);
         string[] lines = carried.FullText().Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -475,26 +381,12 @@ public class 对局日志的记录内容Tests
         Assert.Equal(carried.Turns.Count, legacy.Turns.Count);
     }
 
-    /// <summary>第一颗满足条件的种子（1 起，至多 400 颗）。</summary>
-    private static ulong FirstSeed(Func<ulong, bool> ok)
-    {
-        for (ulong s = 1; s <= 400; s++)
-        {
-            if (ok(s))
-            {
-                return s;
-            }
-        }
-
-        throw new InvalidOperationException("1–400 里没有满足条件的种子。");
-    }
-
     /// <summary>
     /// 一局开启带入带出、各玩家带入由测试指定的真实会话（<c>link:1</c>、内容集 v2、Easy）：与 <c>Siege.Sim.Running.MatchSession.Create</c> 同样先落成配置再建局插旗，
     /// 只是带入不从种子抽，而是像人机对局那样由外部给出——这样的带入不可由种子推出，回放必须读首部。
     /// retire-legacy-maps 1.8：原为缺省图 v5 的 Legacy 建局（含冒险概率）；改为 link:1 的链接模式建局（种子派生配对，与 MatchSession.Create 对 link: 的处理相同）。
     /// </summary>
-    internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, CarryIn> carries, int turnLimit)
+    internal static MatchSession CarriedSession(ulong seed, IReadOnlyDictionary<int, RelicLoadout> carries, int turnLimit)
     {
         MapData map = MapCatalog.Resolve("link:1:4");
         RunConfig config = SimFixtures.Config(turnLimit: turnLimit).ResolvedFor(map);
@@ -507,30 +399,5 @@ public class 对局日志的记录内容Tests
         });
         match.PlantPrototype();
         return MatchSession.ForMatch(match, config);
-    }
-
-    /// <summary>按给定暂放（含改造）部署、不征募的脚本控制者。</summary>
-    private sealed class ArtisanScript(params Placement[] placements) : ITurnController
-    {
-        public void OrganizeHand(PlayerHandAccess hand, int overflow)
-        {
-        }
-
-        public void Recruit(PlayerHandAccess hand, RecruitPanelView panel)
-        {
-        }
-
-        public void Deploy(StagedBatch batch, Func<RehearsalResult> rehearse)
-        {
-            foreach (Placement p in placements)
-            {
-                if (batch.Stage(p.Coord, p.Type, p.Edit) is { } failure)
-                {
-                    throw new InvalidOperationException($"脚本暂放失败：{failure.Message}");
-                }
-            }
-        }
-
-        public bool OnRejected(StagedBatch batch, BatchFailure failure) => throw new InvalidOperationException($"脚本批次被拒：{failure.Message}");
     }
 }

@@ -68,7 +68,6 @@ public class 私人征募面板Tests
             .Stones(TestMaps.P2, "C10", "D10")
             .Stones(TestMaps.P3, "K10");
         Assert.Equal(4, match.Scoreboard.Latest!.RankOf(TestMaps.P3));
-        Assert.Empty(match.Relics.PublicStates().Where(s => s.Control.GrantsEffectTo(TestMaps.P3)));
 
         match.BeginTurn();
         Assert.Equal(TestMaps.P3, match.CurrentPlayer);
@@ -157,21 +156,5 @@ public class 私人征募面板Tests
         RecruitPanelView second = access.EnterRecruit();
         Assert.Equal(nextDirect, second.CandidateTypes);
         Assert.NotSame(first, second);
-    }
-
-    [Fact]
-    public void 驿站生效()
-    {
-        // more-pieces-relics MODIFIED：小回合开始时控制 1 枚驿站、1 枚探勘、1 枚军令 → 面板展示 5 + 1 + 2 = 8 枚候选
-        // （探勘 +1；驿站计除自身外的 2 枚受控信物 +2）。走真实对局流程：P0 直接占据三枚信物，小回合开始时生成快照、进入征募。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay()), ("J6", RelicFixtures.Prospecting()), ("K6", RelicFixtures.Command())])
-            .AtRound(7, TestMaps.All)
-            .Stones(TestMaps.P0, "H6", "J6", "K6");
-
-        match.BeginTurn();
-        RecruitPanelView panel = match.EnterRecruit();
-
-        Assert.Equal(8, panel.ShowCount);
-        Assert.Equal(3, panel.FreePickCount);
     }
 }

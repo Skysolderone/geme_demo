@@ -26,7 +26,7 @@ internal static class LinkMapFixtures
         new(new Coord(8, 8), 6, 6, BoardPlateKind.Birth, BoardTheme.Mixed),
     ];
 
-    /// <summary>22×16 的链接档初始图：只有 5 块紧贴的出生棋盘，各 2 个出生区档信物格（核心区对角）与 2 格林地，其余全部障碍；可落子 180、信物 10；恰 1 个连通分量。</summary>
+    /// <summary>22×16 的链接档初始图：只有 5 块紧贴的出生棋盘，各 2 格林地，其余全部障碍；可落子 180；恰 1 个连通分量。</summary>
     internal static MapData Initial() => Build("test-link-5", Births);
 
     /// <summary>
@@ -41,20 +41,16 @@ internal static class LinkMapFixtures
 
     /// <summary>
     /// 按棋盘清单拼一张链接档图：画布 = 清单外接矩形的东 / 北边界各外扩 2 格（原点固定），棋盘之外一律障碍，出生区 = 出生棋盘的核心区（<see cref="BoardPlate.CoreCells"/>），
-    /// 每块出生棋盘的信物格固定在核心区对角（核心区左下角与右上角：不相邻、不同行不同列），林地见 <see cref="ForestOf"/>。
+    /// 林地见 <see cref="ForestOf"/>（relic-redesign 起地图没有静态信物格）。
     /// </summary>
     internal static MapData Build(string id, ImmutableArray<BoardPlate> boards)
     {
         int width = boards.Max(b => b.Origin.X + b.Width) + LinkMapGenerator.Margin;
         int height = boards.Max(b => b.Origin.Y + b.Height) + LinkMapGenerator.Margin;
         ImmutableHashSet<Coord> playable = [.. boards.SelectMany(b => b.Cells())];
-        ImmutableDictionary<Coord, RelicCellSpec>.Builder relics = ImmutableDictionary.CreateBuilder<Coord, RelicCellSpec>();
         var surfaces = new List<(string, Surface)>();
         foreach (BoardPlate birth in boards.Where(b => b.Kind == BoardPlateKind.Birth))
         {
-            Coord core = birth.CoreOrigin;
-            relics[core] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
-            relics[new Coord(core.X + 2, core.Y + 2)] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
             surfaces.AddRange(ForestOf(birth).Select(c => (c.ToNotation(), Surface.Forest)));
         }
 
@@ -69,48 +65,8 @@ internal static class LinkMapFixtures
             Obstacles = [.. TestMaps.Rect(0, 0, width, height).Where(c => !playable.Contains(c))],   // retire-legacy-maps：Rect 由已删除的 FrontierFixtures 原样迁到 TestMaps
             TerrainData = TestMaps.Terrain(surfaces: [.. surfaces]),
             BirthZones = [.. boards.Where(b => b.Kind == BoardPlateKind.Birth).Select(b => (ImmutableHashSet<Coord>)[.. b.CoreCells()])],
-            RelicCells = relics.ToImmutable(),
             ChokePoints = [],
             CentralEntrance = new Coord(boards[0].Origin.X + (boards[0].Width / 2), boards[0].Origin.Y + (boards[0].Height / 2)),
         };
-    }
-
-    /// <summary>
-    /// 浮空岛生成图补上段 A2 口径的信物格（手写夹具，map-expand-25 段 A3）：生成器已不放静态信物格（relic-redesign R29，2026-10-26 用户裁决），
-    /// 本夹具只给仍在测<b>旧信物系统</b>（开局生成、强度预算、权重、揭示与控制）的测试保留覆盖，旧系统拆除时随 relic-redesign 一并删除。
-    /// 每块平台核心区对角两格为出生区档（Birth，同 <see cref="Build"/>）；低地上按坐标升序贪心取至多 n+2 格公共区档（Standard）：
-    /// 草地、非桥、可落子、距任一平台外接矩形切比雪夫距离 ≥ 2、两两切比雪夫距离 ≥ 5（与原生成器 D5 的候选条件相同，只是不随机）。
-    /// 结果仍通过静态校验（信物格合法性规则只查分区与档位）。<see cref="MapData.Id"/> 不变：本图不得经地图标识回放。
-    /// </summary>
-    internal static MapData WithRelics(MapData map)
-    {
-        ImmutableDictionary<Coord, RelicCellSpec>.Builder relics = map.RelicCells.ToBuilder();
-        foreach (BoardPlate plate in map.Boards)
-        {
-            Coord core = plate.CoreOrigin;
-            relics[core] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
-            relics[new Coord(core.X + 2, core.Y + 2)] = new RelicCellSpec(RelicZone.BirthZone, BudgetTier.Birth);
-        }
-
-        static int Chebyshev(BoardPlate p, Coord c) =>
-            Math.Max(Math.Max(Math.Max(p.Origin.X - c.X, c.X - (p.Origin.X + p.Width - 1)), 0), Math.Max(Math.Max(p.Origin.Y - c.Y, c.Y - (p.Origin.Y + p.Height - 1)), 0));
-        var picked = new List<Coord>();
-        foreach (Coord c in map.AllCoords().Order())
-        {
-            if (picked.Count == map.MaxPlayers + 2)
-            {
-                break;
-            }
-
-            if (map.IsPlayable(c) && map.SurfaceAt(c) == Surface.Grass && !map.HasBridge(c)
-                && map.Boards.All(p => Chebyshev(p, c) >= 2)
-                && picked.All(o => Math.Max(Math.Abs(o.X - c.X), Math.Abs(o.Y - c.Y)) >= 5))
-            {
-                picked.Add(c);
-                relics[c] = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
-            }
-        }
-
-        return map with { RelicCells = relics.ToImmutable() };
     }
 }

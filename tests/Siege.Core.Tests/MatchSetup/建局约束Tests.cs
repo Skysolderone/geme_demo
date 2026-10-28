@@ -21,7 +21,7 @@ public class 建局约束Tests
         // retire-legacy-rules 1.5：9×9 地图数据移到 TestMaps，经测试口以链接选项建局（与原写法同为"链接模式 + 非链接图"），断言不变。
         MapData nine = TestMaps.NineByNine();
         ArgumentException ex = Assert.Throws<ArgumentException>(() =>
-            MatchFlow.CreateUnvalidated(nine, TestMaps.Seed, TestMaps.All, TestMaps.Relics(nine), LinkModeFixtures.Options));
+            MatchFlow.CreateUnvalidated(nine, TestMaps.Seed, TestMaps.All, LinkModeFixtures.Options));
         Assert.Contains("链接模式只能配链接图", ex.Message, StringComparison.Ordinal);
     }
 

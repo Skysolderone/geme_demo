@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Preview;
@@ -68,9 +68,9 @@ public sealed record PowerChange(PlayerId Player, PlayerStatus Status, BigIntege
 /// <remarks>
 /// <para>六项：① <see cref="Placements"/> + <see cref="HandCosts"/>；② <see cref="DeployLimit"/> / <see cref="DeployUsed"/>；
 /// ③ <see cref="Captures"/>；④ <see cref="OwnGroups"/> 的气位与自杀风险；⑤ <see cref="OwnGroups"/> 的军势明细；
-/// ⑥ <see cref="PowerChanges"/>。另有 <see cref="Failure"/>（类别 + 坐标）与 <see cref="WillReveal"/>（将揭示格，<b>只有坐标</b>）
+/// ⑥ <see cref="PowerChanges"/>。另有 <see cref="Failure"/>（类别 + 坐标）、<see cref="WillPickUp"/>（本批落在地图信物上、将拾取的信物，relic-redesign W1）
 /// 与 <see cref="EditOptions"/>（每枚暂放匠人的改造目标与全部合法目标，artisan-terrain-edit 4.1）。</para>
-/// <para>填充规则：第 1–2 步失败时没有结算后盘面，③–⑥ 与将揭示均为空；自杀手 / 同形时 ③④ 有值（供高亮），⑤⑥ 与将揭示为空；
+/// <para>填充规则：第 1–2 步失败时没有结算后盘面，③–⑥ 均为空；自杀手 / 同形时 ③④ 有值（供高亮），⑤⑥ 为空；
 /// 合法非 Pass 时全部有值；Pass 时除额度外均为空。<see cref="EditOptions"/> 是例外：只要批次里有匠人就有值，
 /// <b>失败时照样给</b>——玩家正是要靠它换一个合法目标。</para>
 /// <para>④⑤⑥ 与 ③ 都算在<b>应用本批改造之后</b>的地形上（预演第 4 步先于提子），因此「按改造后地形算气与自杀风险」
@@ -87,7 +87,7 @@ public sealed record BatchPreview(
     ImmutableArray<CapturedGroup> Captures,
     ImmutableArray<GroupOutlook> OwnGroups,
     ImmutableArray<PowerChange> PowerChanges,
-    ImmutableArray<Coord> WillReveal,
+    ImmutableArray<BoardRelic> WillPickUp,
     ImmutableArray<EditOutlook> EditOptions)
 {
     /// <summary>已用部署额度 = 暂放枚数。</summary>
@@ -102,27 +102,25 @@ public sealed record BatchPreview(
 
 /// <summary>
 /// 富预演的<b>唯一</b>组装点。全部复用既有唯一实现：合法性与提子走 <see cref="BatchRehearsal.Rehearse"/>，
-/// 棋串与气走 <see cref="GameBoard"/> 查询，军势与名次走 <see cref="PowerCalculator"/>，
-/// 将揭示走 <see cref="RelicLedger.Reveal"/>（在账本<b>副本</b>上执行）。对正式盘面、历史与账本零副作用。
+/// 棋串与气走 <see cref="GameBoard"/> 查询，军势与名次走 <see cref="PowerCalculator"/>（挂在棋子上的信物随盘面副本进入，预演即可看到拾取后的势力）。
+/// 对正式盘面与历史零副作用。
 /// </summary>
 public static class BatchPreviewBuilder
 {
-    /// <summary>组装富预演。<paramref name="roster"/> 与 <paramref name="majorRound"/> 由流程层提供，含义同结算第 4、5 步。</summary>
+    /// <summary>组装富预演。<paramref name="roster"/> 由流程层提供，含义同结算第 5 步。</summary>
     public static BatchPreview Build(
         GameBoard board,
         BatchContext context,
         IReadOnlyList<Placement> placements,
         BoardHistory history,
         IReadOnlyDictionary<PlayerId, PlayerStatus> roster,
-        RelicLedger relics,
-        int majorRound, ScoringVersion scoring = ScoringVersions.Legacy)
+        ScoringVersion scoring = ScoringVersions.Legacy)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(placements);
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(roster);
-        ArgumentNullException.ThrowIfNull(relics);
 
         RehearsalResult rehearsal = BatchRehearsal.Rehearse(board, context, placements, history);
         ImmutableArray<Placement> ordered = [.. placements];
@@ -132,11 +130,10 @@ public static class BatchPreviewBuilder
         ];
 
         // 改造目标按批次开始前的地形（board.Map）枚举，与预演第 1 步同源；合法性只走 TerrainEditRules 这一份实现。
-        // 工坊（more-pieces-relics D5）按本小回合快照经批次上下文传入，与预演第 1 步的判定同一个输入。
         ImmutableArray<EditOutlook> editOptions =
         [
             .. ordered.Where(p => p.Type == TerrainEditRules.EditorType)
-                .Select(p => new EditOutlook(p.Coord, p.Edit, TerrainEditRules.LegalTargets(board.Map, p.Coord, context.WorkshopActive, context.EditScope))),
+                .Select(p => new EditOutlook(p.Coord, p.Edit, TerrainEditRules.LegalTargets(board.Map, p.Coord, context.EditScope))),
         ];
 
         if (rehearsal.IsPass || rehearsal.ProjectedBoard is not { } projected)
@@ -147,32 +144,30 @@ public static class BatchPreviewBuilder
 
         ImmutableArray<CapturedGroup> captures = GroupCaptures(board, projected, rehearsal.Captures);
 
-        // 计分信物（more-pieces-relics D3 / batch-preview「计分信物与新棋子的预演」）：只用批次开始前已揭示的公开内容，
-        // 本批将首次揭示的信物不计入任何玩家的预演势力（其内容只显示为"将揭示"）；预演与正式结算的差异只来自它。
-        ImmutableSortedDictionary<Coord, RelicType> known = RevealedRelics.Of(relics.PublicStates());
-        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, known, scoring) : null;
+        PowerSnapshot? after = rehearsal.IsLegal ? PowerCalculator.Compute(projected, roster, scoring) : null;
         ImmutableArray<GroupOutlook> own = OwnGroups(projected, context.Player, ordered, rehearsal.Failure, after);
 
         ImmutableArray<PowerChange> changes = [];
-        ImmutableArray<Coord> willReveal = [];
         if (after is not null)
         {
-            PowerSnapshot before = PowerCalculator.Compute(board, roster, known, scoring);
+            PowerSnapshot before = PowerCalculator.Compute(board, roster, scoring);
             changes =
             [
                 .. after.Players.Select(p =>
                     new PowerChange(p.Player, p.Status, before.Of(p.Player).Total, p.Total, before.RankOf(p.Player), after.RankOf(p.Player))),
             ];
-
-            // D3：将揭示 = 结算第 4 步在结算后盘面上会揭示的格。在账本副本上跑同一个 Reveal，正式账本不动；只取坐标，内容不出本方法。
-            // 副本经 RelicLedger.Copy：逐枚复制账本的活状态（揭示与控制），不按开局生成记录重建。
-            RelicLedger copy = relics.Copy();
-            willReveal = [.. copy.Reveal(projected, majorRound).Select(e => e.Coord).Order()];
         }
 
         return new BatchPreview(context.Player, rehearsal.IsLegal, IsPass: false, rehearsal.Failure, ordered, costs,
-            context.DeployLimit, captures, own, changes, willReveal, editOptions);
+            context.DeployLimit, captures, own, changes, PickUps(board, ordered), editOptions);
     }
+
+    /// <summary>
+    /// 将拾取（relic-redesign D1）：本批落点里批次开始前有信物的格——信物不动，落子即挂上（R4）。只读盘面信物层，按放置顺序；
+    /// 合法非 Pass 时才给（与势力变化同一口径），信物全公开（R22），不泄露任何私有信息。
+    /// </summary>
+    private static ImmutableArray<BoardRelic> PickUps(GameBoard board, ImmutableArray<Placement> placements) =>
+        [.. placements.Where(p => board.RelicAt(p.Coord) is not null).Select(p => new BoardRelic(p.Coord, board.RelicAt(p.Coord)!.Value))];
 
     /// <summary>
     /// 把平铺的提子集合按<b>提子那一刻</b>的棋串分组：被提的总是整串，而提子发生在本批改造之后（§6.3 第 3 步先于第 4 步），

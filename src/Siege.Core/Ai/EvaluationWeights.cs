@@ -11,7 +11,7 @@ public enum EvaluationDimension
     /// <summary>2. 敌方势力损失与提子规模。</summary>
     EnemyLoss,
 
-    /// <summary>3. 信物发现、控制与阻断价值。</summary>
+    /// <summary>3. 信物：己方 / 参赛敌方持物的军势边际贡献与相邻者对地图信物格 / 预告格的拾取机会（relic-redesign C1，<see cref="RelicEstimate"/>），以势力增量为单位。</summary>
     Relic,
 
     /// <summary>4. 棋串剩余气、两眼潜力与被围杀风险。</summary>
@@ -56,7 +56,7 @@ public sealed record EvaluationWeights(
     /// <para>守门测试 <c>默认评价权重的校准Tests</c> 断言本常量、<see cref="CalibrationOf"/> 与 <see cref="Default"/> 的每一维同步。
     /// 以未单独扫档维度的当前默认值产出的基线数据，引用时 MUST 注明权重口径，MUST NOT 与别的权重口径下的数据直接比较。</para>
     /// </summary>
-    public const string CalibrationStatus = "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）；more-pieces-relics 扩展计分后未重扫；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）；活形无视栅栏后 Safety / Eye / Threat 三维未校准（fence-eye-rule 后）";
+    public const string CalibrationStatus = "ai-eye 段 D 校准（内容集 V1）：Eye / Safety / Threat 三维与停手阈值已在新规则下双向扫档；PowerGain / EnemyLoss / Relic / Growth / Initiative / Supply 六维沿用旧值、新规则下未单独扫档；停手阈值另经 v2-recalibration 在内容集 V2 上复核（每档 20 局，见 AiSearchConfig.PassThresholdCalibrationStatus）；more-pieces-relics 扩展计分后未重扫；信物维原始值改为势力增量口径后 Relic 未校准（relic-redesign C1 后，取值 6 沿用）；链接档主题化地形后 Safety / Eye / Threat 三维未校准（link-map-terrain 后）；活形无视栅栏后 Safety / Eye / Threat 三维未校准（fence-eye-rule 后）";
 
     /// <summary>
     /// more-pieces-relics（D10，负责人裁决不重新校准）扩展了计分——四种新棋子的位置加值、连营 / 犄角——之后的补注：上面的扫档全部是在旧内容上做的，
@@ -79,6 +79,13 @@ public sealed record EvaluationWeights(
     /// 以当前默认权重在新规则下产出的数据，引用时 MUST 注明这一口径。重新校准归后续 AI change。停手阈值按 testing.md 同样接本补注（<c>AiSearchConfig.PassThresholdCalibrationStatus</c>，主会话裁决 #4）。
     /// </summary>
     public const string FenceEyeUncalibratedStatus = "未校准（fence-eye-rule 后）";
+
+    /// <summary>
+    /// relic-redesign 段 C1 的补注：信物维的原始值由"持有件数 × 平值 5"改为势力增量口径（<see cref="RelicEstimate"/>：持物的军势边际贡献 + 相邻者的拾取机会折价），
+    /// 权重取值 6 沿用、按与 <see cref="PowerGain"/> 同单位重标（持物项是势力增量的子集，6 / 10 即信物相关势力多算 0.6 倍），<b>未校准</b>——Relic 的 <see cref="CalibrationOf"/> 以它结尾，
+    /// <see cref="CalibrationStatus"/> 点名并接它。以当前默认权重产出的数据，引用时 MUST 注明这一口径。重新校准归后续信物数值 change（prd.md「不在范围」）。
+    /// </summary>
+    public const string RelicUncalibratedStatus = "未校准（relic-redesign C1 后）";
 
     /// <summary>与地形相关的评价维度（link-map-terrain 4.3）：Safety（气）、Eye（眼空间）、Threat（敌串气数）。</summary>
     public static readonly ImmutableArray<EvaluationDimension> TerrainDimensions = [EvaluationDimension.Safety, EvaluationDimension.Eye, EvaluationDimension.Threat];
@@ -104,7 +111,8 @@ public sealed record EvaluationWeights(
     /// 25 → 1.0% / 32.0% / 9.81；50 → 0% / 45.5% / 8.51；100 → 0% / 70.0% / 7.87（<c>sim-out/ai-eye-threat-*</c>、<c>sim-out/ai-eye-pass-80</c>）。
     /// 0 / 10 / 25 三档并列且都在 7–10，取离初值最近。</item>
     /// <item><b>PowerGain = 10、EnemyLoss = 8、Relic = 6、Growth = 4、Initiative = 20、Supply = 2</b>——沿用旧值、新规则下未单独扫档（<see cref="NotSweptStatus"/>）。
-    /// 自 heuristic-ai 阶段起就是初值；段 D 的 20 个参数点里 <c>PowerGain</c> 逐批分解中位占比最高 12.5%，未淹没其他维度，不需要对数刻度（任务 4.3）。</item>
+    /// 自 heuristic-ai 阶段起就是初值；段 D 的 20 个参数点里 <c>PowerGain</c> 逐批分解中位占比最高 12.5%，未淹没其他维度，不需要对数刻度（任务 4.3）。
+    /// Relic 的原始值口径在 relic-redesign C1 改为势力增量（原为持有件数 × 平值 5，再早为旧地图信物的控制 / 估计数），取值 6 沿用、另标 <see cref="RelicUncalibratedStatus"/>。</item>
     /// </list>
     /// <para>选定组合（= <c>sim-out/ai-eye-pass-80</c>）：截断 2 / 200（1.0%，种子 101、171，均为多人互提循环——同形判重键含棋子类型，见裁决 R25）、
     /// 整局无提子 64 / 200（32.0%，全部 20 个参数点均未达到 ≤ 5%，按 R20 取最低档如实报告，留给后续地图 / 信物数值 change）、
@@ -121,10 +129,11 @@ public sealed record EvaluationWeights(
     /// <summary>
     /// 某维度默认值的校准口径：扫过档的三维返回"内容集 / 地图 / 局数 / 种子 / 档位 / 数据目录"（ai-eye 段 D 在内容集 V1 上扫档），其余六维返回 <see cref="NotSweptStatus"/>；
     /// 九维一律含 <see cref="ScoringExtendedStatus"/>（more-pieces-relics 扩展计分后未重扫）；与地形相关的三维（<see cref="TerrainDimensions"/>）其后再接 <see cref="TerrainUncalibratedStatus"/>（link-map-terrain 4.3）
-    /// 与 <see cref="FenceEyeUncalibratedStatus"/>（fence-eye-rule 2.1），其余六维以 <see cref="ScoringExtendedStatus"/> 结尾。
+    /// 与 <see cref="FenceEyeUncalibratedStatus"/>（fence-eye-rule 2.1）；Relic 其后接 <see cref="RelicUncalibratedStatus"/>（relic-redesign C1）；其余五维以 <see cref="ScoringExtendedStatus"/> 结尾。
     /// </summary>
     public static string CalibrationOf(EvaluationDimension dimension) => dimension switch
     {
+        EvaluationDimension.Relic => NotSweptStatus + "；" + ScoringExtendedStatus + "；" + RelicUncalibratedStatus,
         EvaluationDimension.Eye => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 50 / 100 / 200 / 400 五档 + 停手阈值 80 下 100 / 200 / 400 复核；sim-out/ai-eye-eye-*、sim-out/ai-eye-eyecheck-*；" + ScoringExtendedStatus + "；" + TerrainUncalibratedStatus + "；" + FenceEyeUncalibratedStatus,
         EvaluationDimension.Safety => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；10 / 20 / 35 / 50 / 70 五档；sim-out/ai-eye-safety-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus + "；" + TerrainUncalibratedStatus + "；" + FenceEyeUncalibratedStatus,
         EvaluationDimension.Threat => "ai-eye 段 D 校准（内容集 V1）：siege-4p-base-v5、种子 1–200、4 人标准难度、每档 200 局；0 / 10 / 25 / 50 / 100 五档；sim-out/ai-eye-threat-*、sim-out/ai-eye-pass-80；" + ScoringExtendedStatus + "；" + TerrainUncalibratedStatus + "；" + FenceEyeUncalibratedStatus,

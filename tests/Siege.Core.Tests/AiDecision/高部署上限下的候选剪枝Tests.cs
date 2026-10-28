@@ -2,7 +2,7 @@ using Siege.Core.Ai;
 using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
+using Siege.Core.PieceRelics;
 
 namespace Siege.Core.Tests.AiDecision;
 
@@ -151,7 +151,7 @@ public class 高部署上限下的候选剪枝Tests
     ///  4 . . . X O O . .
     ///    B C D E F G H J
     /// </code>
-    /// 局面 c（一手提三子并夺回信物）：P1 的 F6-F7-G7 只剩一气 G6，F7 是已揭示的信物格（P1 占据中）。
+    /// 局面 c（一手提三子、持物棋子被提后信物掉落）：P1 的 F6-F7-G7 只剩一气 G6，F7 挂着一件信物（relic-redesign W1：原"已揭示信物格被 P1 占据"）。
     /// <code>
     ///  8 . . . . O O . .
     ///  7 . . . O X X O .
@@ -177,9 +177,9 @@ public class 高部署上限下的候选剪枝Tests
                 .Stones(AiFixtures.P0, "E5", "E6", "G6", "H5", "F4", "G4")
                 .Stones(AiFixtures.P1, "E7", "F7", "D6", "D5", "F5", "G5", "E4")
                 .AsLeader(AiFixtures.P0, "J9", "K9", "J10", "K10"),
-            "c" => AiFixtures.Round5(relics: [("F7", RelicFixtures.Conscription())])
+            "c" => WithRelic(AiFixtures.Round5()
                 .Stones(AiFixtures.P0, "E6", "E7", "F5", "F8", "G8", "H7")
-                .Stones(AiFixtures.P1, "F6", "F7", "G7"),
+                .Stones(AiFixtures.P1, "F6", "F7", "G7"), "F7"),
             _ => throw new ArgumentOutOfRangeException(nameof(position)),
         };
 
@@ -201,7 +201,15 @@ public class 高部署上限下的候选剪枝Tests
         if (position == "c")
         {
             Assert.Equal(3, outcome.CaptureRecord!.Captured.Length);
-            Assert.True(match.Relics.ControlOf(TestMaps.At("F7")).GrantsEffectTo(AiFixtures.P0));
+            Assert.Null(match.Board[TestMaps.At("F7")].Occupant);
+            Assert.Equal(RelicKind.Command, match.Board.RelicAt(TestMaps.At("F7"))?.Kind);   // 持物棋子被提，信物留在原格成为地图信物（R4）
         }
+    }
+
+    private static MatchFlow WithRelic(MatchFlow match, string cell)
+    {
+        match.Board.AttachRelic(TestMaps.At(cell), RelicToken.Spawned(0, RelicKind.Command));
+        match.Debug.Recalculate();
+        return match;
     }
 }

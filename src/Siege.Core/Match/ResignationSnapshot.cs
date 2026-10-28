@@ -1,14 +1,12 @@
-using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Match;
 
 /// <summary>
-/// 弃赛时刻的完整快照（裁决记录 5）：盘面序列化、手牌两段账、效果快照、控制信物列表与势力值，
+/// 弃赛时刻的完整快照（裁决记录 5）：盘面序列化（含信物层）、手牌两段账、效果快照与势力值（relic-redesign 起不再有"控制信物列表"），
 /// 以及弃赛时势力名次（<paramref name="RankAtResign"/>，carry-in-out D5）：供带出结算读取，MUST NOT 进入 <see cref="FinalStandings"/>。
 /// 恢复自引入带入带出之前的旧存档时名次为 <c>null</c>，MUST NOT 重算（快照里没有其他玩家在弃赛时刻的势力）。
 /// </summary>
@@ -18,7 +16,6 @@ public sealed record ResignationSnapshot(
     string Board,
     HandPrivateView Hand,
     EffectSnapshot Effects,
-    ImmutableArray<Coord> ControlledRelics,
     BigInteger Power,
     int? RankAtResign);
 

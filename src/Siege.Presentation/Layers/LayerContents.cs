@@ -2,8 +2,8 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Preview;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Text;
@@ -214,29 +214,30 @@ public sealed record PowerLayerContent(
 // ---------- 信物层 ----------
 
 /// <summary>
-/// 信物层的一格：分区与档位（地图公开信息，只在本层出现）、揭示状态、内容（仅已揭示）、控制与失效原因。
-/// 未揭示时 <see cref="Content"/> 必为 <c>null</c>，文案为「未知信物」。
+/// 信物层的一格（relic-redesign R22 全公开）：盘面上的一件信物——地图信物（空格上，<see cref="Holder"/> 为 <c>null</c>）
+/// 或挂在棋子上的信物（持有者 = 该格棋子的主人，<see cref="Insured"/> 是公开的保险标记）；或尚未落位的预告（<see cref="IsForecast"/>，没有编号与持有者，落位大回合在 <see cref="LandingRound"/>）。
 /// </summary>
 public sealed record RelicCellView(
     Coord Coord,
-    RelicZone Zone,
-    BudgetTier Budget,
-    string ZoneText,
-    bool IsRevealed,
-    RelicContent? Content,
-    string ContentText,
-    RelicControlKind Control,
+    RelicKind Kind,
+    int? Id,
+    PlayerId? Origin,
+    bool Insured,
     PlayerId? Holder,
-    string ControlText,
-    string? IneffectiveReason);
+    bool IsForecast,
+    string Text)
+{
+    /// <summary>预告格的落位大回合（relic-redesign R11 / R25）；非预告为 <c>null</c>。原样取自公开快照的 <c>RelicForecast.LandingRound</c>。</summary>
+    public int? LandingRound { get; init; }
+}
 
 /// <summary>信物层。</summary>
 public sealed record RelicLayerContent(ImmutableArray<RelicCellView> Relics) : LayerContent(TacticalLayer.Relics);
 
 // ---------- 顺序层 ----------
 
-/// <summary>顺序层的一行：势力名次、势力、先手修正、先手值、预测位置（1 起）与公式解释。</summary>
-public sealed record OrderRowView(PlayerId Player, int Rank, BigInteger Power, int Bonus, int Value, int PredictedPosition, string Explanation);
+/// <summary>顺序层的一行：势力名次、势力、先手值、预测位置（1 起）与公式解释。</summary>
+public sealed record OrderRowView(PlayerId Player, int Rank, BigInteger Power, int Value, int PredictedPosition, string Explanation);
 
 /// <summary>顺序层（tactical-ui D7）：本轮顺序 + 若此刻结束本大回合的先手值明细与下一轮顺序预测。</summary>
 public sealed record OrderLayerContent(
@@ -431,31 +432,21 @@ public static class TacticalLayers
     public static RelicLayerContent Relics(PublicWorld world)
     {
         ArgumentNullException.ThrowIfNull(world);
-        var statusOf = world.View.Players.ToDictionary(p => p.Player, p => p.Status);
-        return new RelicLayerContent([.. world.View.Relics.Select(r => RelicCell(r, statusOf))]);
-    }
-
-    private static RelicCellView RelicCell(RelicPublicState r, IReadOnlyDictionary<PlayerId, PlayerStatus> statusOf)
-    {
-        RelicContent? content = r.IsRevealed ? r.Content : null;
-        string contentText = content is { } c ? Labels.RelicContent(c) : "未知信物";
-        (string control, string? reason) = r.Control.Kind switch
-        {
-            RelicControlKind.Uncontrolled => ("无人控制", "无人控制：不向任何玩家提供效果"),
-            RelicControlKind.Contested => ("争议", "争议：多名玩家同时覆盖，不向任何玩家提供效果"),
-            RelicControlKind.Controlled => ($"由 {Labels.Player(r.Control.Holder!.Value)} 控制", (string?)null),
-            RelicControlKind.Blocked => BlockedText(r.Control.Holder!.Value, statusOf),
-            _ => throw new ArgumentOutOfRangeException(nameof(r), r.Control.Kind, "未知控制状态。"),
-        };
-
-        return new RelicCellView(r.Coord, r.Spec.Zone, r.Spec.Budget, $"{Labels.Zone(r.Spec.Zone)} · {Labels.Budget(r.Spec.Budget)}",
-            r.IsRevealed, content, contentText, r.Control.Kind, r.Control.Holder, control, reason);
-    }
-
-    private static (string Control, string? Reason) BlockedText(PlayerId holder, IReadOnlyDictionary<PlayerId, PlayerStatus> statusOf)
-    {
-        string state = statusOf.TryGetValue(holder, out PlayerStatus status) && status == PlayerStatus.Eliminated ? "已出局" : "已弃赛";
-        return ($"由{state}玩家 {Labels.Player(holder)} 控制（封锁）", $"封锁：控制者{state}，不向任何玩家提供效果");
+        GameBoard board = world.View.Board;
+        ImmutableArray<RelicCellView> onBoard =
+        [
+            .. board.RelicsOnBoard().Select(r =>
+            {
+                PlayerId? holder = board[r.Cell].Occupant?.Owner;
+                string text = holder is { } h ? $"{Labels.Relic(r.Token)}，挂在 {Labels.Player(h)} 的棋子上" : $"{Labels.Relic(r.Token)}，地图信物";
+                return new RelicCellView(r.Cell, r.Token.Kind, r.Token.Id, r.Token.Origin, r.Token.Insured, holder, IsForecast: false, text);
+            }),
+        ];
+        ImmutableArray<RelicCellView> forecast = world.View.RelicForecast is { } f
+            ? [.. f.Slots.Select(s => new RelicCellView(s.Cell, s.Kind, null, null, false, null, IsForecast: true,
+                $"预告：第 {f.LandingRound} 大回合开始时刷新 {Labels.Relic(s.Kind)}") { LandingRound = f.LandingRound })]
+            : [];
+        return new RelicLayerContent([.. onBoard, .. forecast]);
     }
 
     public static OrderLayerContent Order(PublicWorld world)
@@ -474,6 +465,6 @@ public static class TacticalLayers
     }
 
     private static OrderRowView OrderRow(InitiativeEntry e, int index, int activeCount) =>
-        new(e.Player, e.Rank, e.Power, e.Bonus, e.Value, index + 1,
-            $"先手值 {e.Value} =（参赛 {activeCount} − 势力名次 {e.Rank}）+ 先手修正 {e.Bonus}；预测第 {index + 1} 位");
+        new(e.Player, e.Rank, e.Power, e.Value, index + 1,
+            $"先手值 {e.Value} = 参赛 {activeCount} − 势力名次 {e.Rank}；预测第 {index + 1} 位");
 }

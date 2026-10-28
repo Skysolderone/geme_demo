@@ -126,7 +126,7 @@ public static partial class LinkMapGenerator
     /// 平台数 → 逐块（宽、高 → 落位）→ 按编号抽主题 → 按编号逐块生成平台内部（<see cref="DraftBoard"/>，自检失败在同一条流上重抽该块）→ 按编号逐块坡道（数量 → 边的次序 → 每边一格）；
     /// 任何一步放不下即整张布局在同一条流上重抽（至多 <see cref="MaxLayoutRedraws"/> 次）。之后低地：n 条河道（起点 → 朝向 → 逐步前进 → 两座桥）→ 岛缘林地（逐格）→ 岛缘岩石，
     /// 全图可落子格沿气边不连通即重抽低地（至多 <see cref="MaxLowlandRedraws"/> 次，仍不行即整张布局重抽）。
-    /// 不放静态信物格（D5：依据 relic-redesign R29，2026-10-26 用户裁决），<see cref="MapData.RelicCells"/> 恒为空，布局流也不为信物消费随机。
+    /// 不放静态信物格（D5：依据 relic-redesign R29，2026-10-26 用户裁决；relic-redesign 接线段起地图数据不再有信物格字段），布局流也不为信物消费随机。
     /// 最后（link-map-surfaces D1）用独立子流 <see cref="MapRandom.ForLinkSurfaces"/> 按编号逐块叠加新地表（读抬升前的高度，D3），组装时把平台抬到 h=2、坡道 h=1。
     /// 叠加只改平台中间带的草地，不影响前面任何一步的判定，所以 <paramref name="overlaySurfaces"/> 为 <c>false</c> 的对照图与正式图只差新地表。
     /// 成品过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。
@@ -527,7 +527,6 @@ public static partial class LinkMapGenerator
             TerrainData = terrain,
             BirthZones = [.. layout.Plates.Select(p => (ImmutableHashSet<Coord>)[.. p.CoreCells()])],
             Boards = layout.Plates,
-            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
             ChokePoints = [],
             CentralEntrance = new Coord(island.Centre + (CentralSide / 2), island.Centre + (CentralSide / 2)),
             MapVersion = 0,

@@ -3,6 +3,7 @@ using Siege.Core.Batch;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Preview;
 using static Siege.Core.Tests.PresentationFixtures;
 
@@ -18,22 +19,19 @@ public class 预演一致性回归Tests
     {
         // 每例：9×9 夹具地图 + 5 个信物格，第 5 大回合（全图可落子）；retire-legacy-rules 1.5：改为平坦 8×8 链接载体（四人同锁棋盘 0，合法范围即整块棋盘 0），
         // 信物格平移 (+2, +2)，随机铺子与暂放只在棋盘 0 内取格；种子驱动的 RandomStream 随机铺子（禁止 System.Random），
-        // 清掉无气棋串、按盘面揭示信物，使局面满足"每条棋串 ≥1 气、被覆盖的信物已揭示"的正式对局不变量；
+        // 清掉无气棋串，使局面满足"每条棋串 ≥1 气"的正式对局不变量；5 个固定格各挂一件信物（relic-redesign W1：五种各一，格上有子即持有、空格即地图信物）；
         // P0 暂放 1–5 枚（部署上限随机，六成落点取自敌方 ≤2 气棋串的气位以提高提子率），预演后确认。
-        // 断言：预演前后指纹不变；合法 ⇔ 确认被接受；预计提子 = 实际提子；将揭示 = 实际新揭示；预计势力与名次 = 结算后势力榜；
+        // 断言：预演前后指纹不变；合法 ⇔ 确认被接受；预计提子 = 实际提子；将拾取 = 落在信物格上的落点；预计势力与名次 = 结算后势力榜（含信物效果）；
         // 结算后己方棋串与气 = 预演的己方棋串与气；非法时失败类别与坐标一致。
-        // 口径守门：提子、将揭示、自杀手、合法无提子四类样本各有下界，防止随机局面退化成从不触发被测路径。
+        // 口径守门：提子、将拾取、自杀手、合法无提子四类样本各有下界，防止随机局面退化成从不触发被测路径。
         // 变异验证 M-C1：BatchPreviewBuilder.GroupCaptures 丢弃每串最后一枚（stones 少加一枚、remaining 照删）→ 本测试红 1。
-        // 变异验证 M-C2：将揭示改为按正式盘面（board）而非结算后盘面（projected）调用 Reveal → 本测试红 1。
         // 变异验证 M-C3：PowerChange 的 After 改用 before 快照 → 本测试红 1。
-        int captures = 0, reveals = 0, suicides = 0, quiet = 0;
+        int captures = 0, pickups = 0, suicides = 0, quiet = 0;
         for (int i = 0; i < Cases; i++)
         {
             var seed = new GameSeed(0x7AC7_0000UL + (ulong)i);
             RandomStream rng = seed.Stream("preview-regression");
-            MatchFlow match = LinkModeFixtures.PlainStarted(seed, relics:
-                [("E5", RelicFixtures.Command()), ("J5", RelicFixtures.Conscription()), ("G7", RelicFixtures.Prospecting()),
-                 ("E9", RelicFixtures.Vanguard()), ("J9", RelicFixtures.Depot(2))]).AtRound(5);
+            MatchFlow match = LinkModeFixtures.PlainStarted(seed).AtRound(5);
             Scatter(match, rng);
             match.Debug.SeedHand(P0, (PieceType.Basic, 3), (PieceType.Fortress, 2), (PieceType.Line, 2), (PieceType.Multiplier, 2), (PieceType.Synergy, 2));
             match.SetDeployLimit(1 + rng.NextInt(5));
@@ -44,7 +42,6 @@ public class 预演一致性回归Tests
             Core.Preview.BatchPreview preview = match.PreviewCurrentBatch();
             Assert.Equal(before, Fingerprint(match));
 
-            int revealedBefore = match.Relics.RevealEvents.Count;
             SettlementOutcome outcome = match.Confirm();
             string label = $"第 {i} 例 批次 {string.Join(" ", preview.Placements)}";
             Assert.True(preview.IsLegal == outcome.Confirmed, $"{label}：预演合法 {preview.IsLegal}，确认 {outcome.Confirmed}（{outcome.Failure?.Message}）");
@@ -59,8 +56,8 @@ public class 预演一致性回归Tests
 
             Assert.Equal(outcome.CaptureRecord!.Captured.Select(s => s.ToString()), preview.Captures.SelectMany(g => g.Stones).OrderBy(s => s.Coord).Select(s => s.ToString()));
             Assert.Equal(
-                match.Relics.RevealEvents.Skip(revealedBefore).Select(e => e.Coord).Order().Notations(),
-                preview.WillReveal.Notations());
+                preview.Placements.Where(p => match.Board.RelicAt(p.Coord) is not null).Select(p => p.Coord).Notations(),
+                preview.WillPickUp.Select(r => r.Cell).Notations());
 
             Scoring.PowerSnapshot settled = match.Scoreboard.Latest!;
             Assert.Equal(
@@ -74,17 +71,17 @@ public class 预演一致性回归Tests
                 preview.OwnGroups.Select(g => g.Power!.ToString()));
 
             captures += preview.Captures.IsEmpty ? 0 : 1;
-            reveals += preview.WillReveal.IsEmpty ? 0 : 1;
+            pickups += preview.WillPickUp.IsEmpty ? 0 : 1;
             quiet += preview.Captures.IsEmpty ? 1 : 0;
         }
 
-        string samples = $"提子 {captures} / 将揭示 {reveals} / 自杀手 {suicides} / 合法无提子 {quiet}";
-        // 本种子区间实测：提子 281 / 将揭示 35 / 自杀手 85 / 合法无提子 634（9×9 旧载体）；retire-legacy-rules 迁到平坦 8×8 链接载体后实测 324 / 46 / 74 / 602，下界不变。
-        // 下界取约七成，种子或局面生成改动后样本塌缩即红。
-        Assert.True(captures >= 200 && reveals >= 25 && suicides >= 50 && quiet >= 400, samples);
+        string samples = $"提子 {captures} / 将拾取 {pickups} / 自杀手 {suicides} / 合法无提子 {quiet}";
+        // 本种子区间实测：提子 281 / 将揭示 35 / 自杀手 85 / 合法无提子 634（9×9 旧载体）；retire-legacy-rules 迁到平坦 8×8 链接载体后实测 324 / 46 / 74 / 602；
+        // relic-redesign W1 把"将揭示"换成"将拾取"（5 个固定格各挂一件信物）后重测：324 / 将拾取 131 / 74 / 602，"将拾取"下界取约七成 90，种子或局面生成改动后样本塌缩即红。
+        Assert.True(captures >= 200 && pickups >= 90 && suicides >= 50 && quiet >= 400, samples);
     }
 
-    /// <summary>每格 45% 落子，所有者与类型均匀；再反复清掉无气棋串，最后按盘面揭示信物并重算。</summary>
+    /// <summary>每格 45% 落子，所有者与类型均匀；再反复清掉无气棋串，最后在 5 个固定格各挂一件信物（五种各一）并重算。</summary>
     private static void Scatter(MatchFlow match, RandomStream rng)
     {
         PieceType[] types = Enum.GetValues<PieceType>();
@@ -107,7 +104,12 @@ public class 预演一致性回归Tests
             match.Board.RemoveStones(dead);
         }
 
-        match.Relics.Reveal(match.Board, match.MajorRound);
+        string[] cells = ["E5", "J5", "G7", "E9", "J9"];
+        for (int k = 0; k < cells.Length; k++)
+        {
+            match.Board.AttachRelic(TestMaps.At(cells[k]), RelicToken.Spawned(k, RelicKinds.Order[k]));
+        }
+
         match.Debug.Recalculate();
     }
 

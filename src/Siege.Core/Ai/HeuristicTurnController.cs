@@ -5,20 +5,19 @@ using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Ai;
 
 /// <summary>
 /// 正式对战 AI（设计文档 §15.1 / §15.2）。信息边界在类型上成立（裁决 9）：只持有 <see cref="MatchPublicView"/> 的观察委托、
-/// 一条种子子流与配置；每阶段的操作只经 <see cref="ITurnController"/> 递入的本人句柄。拿不到 <c>HandLedger</c> / <c>RelicLedger</c> / <c>MatchFlow</c>。
+/// 一条种子子流与配置；每阶段的操作只经 <see cref="ITurnController"/> 递入的本人句柄。拿不到 <c>HandLedger</c> / <c>MatchFlow</c>。
 /// </summary>
 /// <remarks>
 /// <para>部署（design.md D3）：对每个合法空格 × 持有类型做单点预演评价，取前 N；再以"贪心 + 种子扰动"组合出不超过 M 个候选批次，
 /// 按 <see cref="CandidateSelection"/> 选优。候选评价全部靠 <c>rehearse()</c> 的零副作用预演，AI 不重算提子与军势。</para>
 /// <para>征募（裁决 4）：与部署分两步，只用类型价值 + 成长亲和 + 供给匹配做前瞻，不做联合搜索。</para>
-/// <para>随机只来自构造时传入的子流（建议 <see cref="HeuristicAi.StreamName"/>），绝不消费 <c>relic-gen</c> / <c>recruit</c> / <c>setup</c>。</para>
+/// <para>随机只来自构造时传入的子流（建议 <see cref="HeuristicAi.StreamName"/>），绝不消费 <c>recruit</c> / <c>setup</c> / <c>relic-spawn</c>。</para>
 /// </remarks>
 public sealed class HeuristicTurnController : ITurnController
 {
@@ -29,7 +28,6 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>扰动子流；只有前瞻里的模拟对手为 <c>null</c>（它只走 k = 0 的无扰动贪心，D5 (a)），此时任何扰动都会响亮失败。</summary>
     private readonly RandomStream? _perturbation;
-    private readonly Func<RelicPublicState, int>? _relicValue;
     private readonly Func<GameBoard, LifeShapeReport>? _lifeQuery;
     private readonly bool _cacheLife;
     private readonly List<string> _decisions = [];
@@ -55,12 +53,11 @@ public sealed class HeuristicTurnController : ITurnController
         AiDifficulty difficulty = AiDifficulty.Standard,
         EvaluationWeights? weights = null,
         AiSearchConfig? config = null)
-        : this(player, observe, perturbation, difficulty, weights, config, relicValue: null)
+        : this(player, observe, perturbation, difficulty, weights, config, lifeQuery: null)
     {
     }
 
     /// <summary>
-    /// 调试旁路（<c>internal</c>）：<paramref name="relicValue"/> 可读真实信物内容。正式构造不暴露此参数。
     /// 测试接缝：<paramref name="lifeQuery"/> 替换活形查询（计数桩），<paramref name="cacheLife"/> 为 <c>false</c> 关闭决策内活形缓存（见 <see cref="BatchEvaluator"/>）。
     /// </summary>
     internal HeuristicTurnController(
@@ -70,10 +67,9 @@ public sealed class HeuristicTurnController : ITurnController
         AiDifficulty difficulty,
         EvaluationWeights? weights,
         AiSearchConfig? config,
-        Func<RelicPublicState, int>? relicValue,
-        Func<GameBoard, LifeShapeReport>? lifeQuery = null,
+        Func<GameBoard, LifeShapeReport>? lifeQuery,
         bool cacheLife = true)
-        : this(player, observe, difficulty, weights, config, relicValue, lifeQuery, cacheLife,
+        : this(player, observe, difficulty, weights, config, lifeQuery, cacheLife,
             perturbation ?? throw new ArgumentNullException(nameof(perturbation)))
     {
     }
@@ -85,7 +81,6 @@ public sealed class HeuristicTurnController : ITurnController
         AiDifficulty difficulty,
         EvaluationWeights? weights,
         AiSearchConfig? config,
-        Func<RelicPublicState, int>? relicValue,
         Func<GameBoard, LifeShapeReport>? lifeQuery,
         bool cacheLife,
         RandomStream? perturbation)
@@ -96,7 +91,6 @@ public sealed class HeuristicTurnController : ITurnController
         Difficulty = difficulty;
         Weights = weights ?? EvaluationWeights.Default;
         Config = (config ?? AiSearchConfig.ForDifficulty(difficulty)).Validated();
-        _relicValue = relicValue;
         _lifeQuery = lifeQuery;
         _cacheLife = cacheLife;
     }
@@ -218,10 +212,10 @@ public sealed class HeuristicTurnController : ITurnController
         }
 
         return new HeuristicTurnController(
-            responder, () => view, AiDifficulty.Standard, weights, config, relicValue: null, lifeQuery, cacheLife, perturbation: null);
+            responder, () => view, AiDifficulty.Standard, weights, config, lifeQuery, cacheLife, perturbation: null);
     }
 
-    private BatchEvaluator CreateEvaluator(MatchPublicView view) => new(Player, view, Weights, Config.ImmediateOnly, _relicValue, _lifeQuery, _cacheLife);
+    private BatchEvaluator CreateEvaluator(MatchPublicView view) => new(Player, view, Weights, Config.ImmediateOnly, _lifeQuery, _cacheLife);
 
     /// <summary>
     /// 本次决策实际生效的停手阈值（pass-threshold-first-stone D1，无子豁免）：批次开始前的正式盘面上该玩家没有任何棋子时为 0，
@@ -433,8 +427,45 @@ public sealed class HeuristicTurnController : ITurnController
             }
         }
 
+        AttachCarried(batch, choice, rehearse, evaluator);
+
         // stagnation-trace D1（ai-decision「循环提子停手」留痕）：停滞成立且最终 Pass 记 D:stall，决胜一手接管照常记落点；只改条目文案，不改任何决策与随机消费。
         _decisions.Add(choice.IsPass ? (LastStagnation is null ? "D:pass" : StallDecision) : $"D:{choice.Key}");
+    }
+
+    /// <summary>
+    /// AI 挂出带入件（relic-redesign R21 / design.md D5，段 C1）：把本人尚未挂出的带入件挂到<b>本批势力增量最大的落点</b>——规划的唯一实现在 <see cref="RelicAttachPlan.Plan"/>
+    /// （对复摆后的预演盘面逐（件 × 落点）Clone 比较势力增量、贪心、前几批挂完；并列打破：非保险件优先 → 清单下标 → 坐标），势力经评价器同一口径的 <see cref="BatchEvaluator.PowerOf"/>。
+    /// 落点已有地图信物的跳过（落子即拾取，不能再挂）。挂出不改变气、提子、活形与同形（R28），复摆的合法性不变；不消费任何随机；决策日志条目仍是不带挂出的批次键。
+    /// 没有带入件或 Pass 时什么都不做，与引入之前逐步相同。候选批次的评价本身不算挂出后的势力（挂出只在选定批次之后决定落点）。
+    /// </summary>
+    private void AttachCarried(StagedBatch batch, CandidateBatch choice, Func<RehearsalResult> rehearse, BatchEvaluator evaluator)
+    {
+        BatchContext context = batch.Context;
+        if (choice.IsPass || context.Carried is not { Count: > 0 } carried)
+        {
+            return;
+        }
+
+        Coord[] cells = [.. choice.Placements.Select(p => p.Coord).Where(c => batch.Board.RelicAt(c) is null)];
+        if (cells.Length == 0)
+        {
+            return;
+        }
+
+        RehearsalResult projected = rehearse();
+        if (!projected.IsLegal || projected.ProjectedBoard is null)
+        {
+            throw new SiegeRuleException("AI 复摆后的批次预演非法，无法决定挂出落点。");
+        }
+
+        foreach ((Coord cell, int index) in RelicAttachPlan.Plan(projected.ProjectedBoard, Player, cells, carried, context.NextRelicId, b => evaluator.PowerOf(b).Of(Player).Total))
+        {
+            if (batch.Attach(cell, index) is { } failure)
+            {
+                throw new SiegeRuleException($"AI 挂出带入件被拒绝：{failure.Message}");
+            }
+        }
     }
 
     /// <summary>
@@ -657,7 +688,7 @@ public sealed class HeuristicTurnController : ITurnController
     /// 所以复盘只需 k = 0 的无扰动排序，<b>不消费扰动子流</b>（也不需要它的副本），对局逐字节不变。</para>
     /// <para>另给一条"强制落子批次"：同一排序前 N、同一贪心组批（<see cref="Greedy"/>），但把保留条件放宽到"预演合法且未被活形硬约束淘汰即保留"，
     /// 直到部署上限——回答"若不许 Pass，AI 自己的首选落法能否翻盘"。</para>
-    /// <para>势力口径与评价器相同（批次开始前已揭示的信物内容，<see cref="BatchEvaluator.PowerOf"/>）：本批首次揭示的计分信物不计入，偏保守；
+    /// <para>势力口径与评价器相同（<see cref="BatchEvaluator.PowerOf"/>，信物随盘面副本）；
     /// "对手不回应"偏乐观（design Risks）。</para>
     /// <para><paramref name="batch"/> 应是与正式暂放批次分离的影子批次（同一盘面与上下文），<paramref name="rehearse"/> 对它做零副作用预演；
     /// 本方法只在其上暂放 / 清空，不写 <see cref="Decisions"/>、<c>Last*</c> 留痕与任何随机流。</para>
@@ -780,7 +811,7 @@ public sealed class HeuristicTurnController : ITurnController
             var outside = new List<PointScore>();
             foreach (Coord cell in legal)
             {
-                ImmutableArray<TerrainEdit> targets = [.. TerrainEditRules.LegalTargets(map, cell, context.WorkshopActive, context.EditScope).Where(e => e.Kind == kind)];
+                ImmutableArray<TerrainEdit> targets = [.. TerrainEditRules.LegalTargets(map, cell, context.EditScope).Where(e => e.Kind == kind)];
                 rangeTargets += targets.Length;
                 if (enumerated.Contains(cell))
                 {
@@ -975,7 +1006,7 @@ public sealed class HeuristicTurnController : ITurnController
         {
             foreach (PieceType type in types)
             {
-                foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type, context.WorkshopActive, context.EditScope))
+                foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, type, context.EditScope))
                 {
                     if (ScoreOne(batch, rehearse, evaluator, cell, type, edit, rejections) is { } point)
                     {
@@ -1068,7 +1099,7 @@ public sealed class HeuristicTurnController : ITurnController
             BigInteger? total = Score(cell, representative, null);
             if (total is null && holdsEditor)
             {
-                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell, context.WorkshopActive, context.EditScope))
+                foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(batch.Board.Map, cell, context.EditScope))
                 {
                     if (Score(cell, TerrainEditRules.EditorType, edit) is { } edited && (total is null || edited > total))
                     {
@@ -1094,11 +1125,10 @@ public sealed class HeuristicTurnController : ITurnController
 
     /// <summary>
     /// 该落点该类型要枚举的改造选项（design D-J）：匠人为"不改造 + 全部合法目标"，其余九种只有"不改造"。
-    /// 合法目标经 <see cref="TerrainEditRules.LegalTargets(MapData, Coord, bool)"/> 取得（唯一实现），AI MUST NOT 自己判目标合法性，
-    /// 也 MUST NOT 自行扩展或收窄范围：<paramref name="workshop"/> 是本小回合快照的工坊标记（经批次上下文传入，more-pieces-relics D5），
-    /// 为真时隔一格的格目标由唯一实现一并给出。
+    /// 合法目标经 <see cref="TerrainEditRules.LegalTargets(MapData, Coord, IReadOnlySet{Coord})"/> 取得（唯一实现），AI MUST NOT 自己判目标合法性，
+    /// 也 MUST NOT 自行扩展或收窄范围。
     /// </summary>
-    private static IEnumerable<TerrainEdit?> EditOptions(MapData map, Coord cell, PieceType type, bool workshop, IReadOnlySet<Coord>? scope)
+    private static IEnumerable<TerrainEdit?> EditOptions(MapData map, Coord cell, PieceType type, IReadOnlySet<Coord>? scope)
     {
         yield return null;
         if (type != TerrainEditRules.EditorType)
@@ -1106,7 +1136,7 @@ public sealed class HeuristicTurnController : ITurnController
             yield break;
         }
 
-        foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, cell, workshop, scope))
+        foreach (TerrainEdit edit in TerrainEditRules.LegalTargets(map, cell, scope))
         {
             yield return edit;
         }
@@ -1226,7 +1256,7 @@ public sealed class HeuristicTurnController : ITurnController
         int scored = 0;
         foreach (Coord cell in context.LegalRange.Where(c => batch.Board[c].IsPlayableEmpty && !enumerated.Contains(c)).Order())
         {
-            foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, TerrainEditRules.EditorType, context.WorkshopActive, context.EditScope))
+            foreach (TerrainEdit? edit in EditOptions(batch.Board.Map, cell, TerrainEditRules.EditorType, context.EditScope))
             {
                 if (edit?.Kind != TerrainEditKind.Bridge)
                 {

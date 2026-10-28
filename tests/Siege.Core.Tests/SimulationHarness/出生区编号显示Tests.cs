@@ -27,7 +27,7 @@ public class 出生区编号显示Tests
         // 同一张 20×20 六平台图原样搬进本类（SixZoneMap，去掉边疆档规格档），按手写夹具的入口 CreateUnvalidated 建局（信物按同一种子生成）。断言不变。
         MapData map = SixZoneMap();
         MatchFlow match = LinkModeFixtures.RequireLink(MatchFlow.CreateUnvalidated(
-            map, new GameSeed(3), TestMaps.All, Siege.Core.Relics.RelicGenerator.Generate(map, new GameSeed(3)), LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
+            map, new GameSeed(3), TestMaps.All, LinkModeFixtures.PlainOptions(MatchOptions.Immediate)));
         var output = new StringWriter();
 
         new BoardRenderer(output).Board(match.Publish(), TestMaps.P0, zones: true);
@@ -87,13 +87,12 @@ public class 出生区编号显示Tests
 
         string text = ReportWriter.Render(BalanceAnalyzer.Analyze(logs));
         string[] zoneLines = [.. text.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.StartsWith("  - 出生区 ", StringComparison.Ordinal))];
-        Assert.True(zoneLines.Length >= 6, $"各区胜率段只有 {zoneLines.Length} 行。");
+        Assert.True(zoneLines.Length == 6, $"各区胜率段有 {zoneLines.Length} 行。");   // relic-redesign W1：原"收敛局 / 未收敛局"两段随旧信物生成删除，只剩「全部局」一段
         for (int n = 1; n <= 6; n++)
         {
-            Assert.StartsWith($"  - 出生区 {n}：胜率 25.0% (10/40", zoneLines[n - 1], StringComparison.Ordinal);   // 「全部局」一段在最前，恰 6 行
+            Assert.StartsWith($"  - 出生区 {n}：胜率 25.0% (10/40", zoneLines[n - 1], StringComparison.Ordinal);
         }
 
-        Assert.StartsWith("  - 出生区 1：", zoneLines[6], StringComparison.Ordinal);   // 第 7 行已是下一段（收敛局）的 1 号区
         Assert.Contains("基线 25.0%", text, StringComparison.Ordinal);
     }
 
@@ -124,25 +123,6 @@ public class 出生区编号显示Tests
                 [.. TestMaps.Rect(7, 1, 5, 5)],
                 [.. TestMaps.Rect(8, 11, 5, 5)],
             ],
-            RelicCells = new (int X, int Y, RelicZone Zone, BudgetTier Budget)[]
-            {
-                (1, 1, RelicZone.BirthZone, BudgetTier.Birth),
-                (18, 1, RelicZone.BirthZone, BudgetTier.Birth),
-                (1, 16, RelicZone.BirthZone, BudgetTier.Birth),
-                (17, 15, RelicZone.BirthZone, BudgetTier.Birth),
-                (8, 2, RelicZone.BirthZone, BudgetTier.Birth),
-                (11, 14, RelicZone.BirthZone, BudgetTier.Birth),
-                (10, 9, RelicZone.Contested, BudgetTier.High),
-                (6, 6, RelicZone.Contested, BudgetTier.Standard),
-                (13, 10, RelicZone.Contested, BudgetTier.Standard),
-                (5, 12, RelicZone.Contested, BudgetTier.Standard),
-                (16, 7, RelicZone.Contested, BudgetTier.Standard),
-                (12, 7, RelicZone.Contested, BudgetTier.Standard),
-                (7, 10, RelicZone.Contested, BudgetTier.Standard),
-                (3, 8, RelicZone.Contested, BudgetTier.Standard),
-                (18, 10, RelicZone.Contested, BudgetTier.Standard),
-                (6, 14, RelicZone.Contested, BudgetTier.Standard),
-            }.ToImmutableDictionary(r => new Coord(r.X, r.Y), r => new RelicCellSpec(r.Zone, r.Budget)),
             ChokePoints = [new Coord(7, 9), new Coord(13, 9)],
             CentralEntrance = new Coord(10, 9),
         };

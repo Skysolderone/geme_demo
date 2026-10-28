@@ -6,17 +6,14 @@ namespace Siege.Core.Determinism;
 /// 对局种子：全局唯一的随机根。本身不产生随机数，只按<b>名字</b>派生互相独立的子流（<see cref="Stream"/>）。
 /// </summary>
 /// <remarks>
-/// <para>规范 <c>.trellis/spec/core/determinism.md</c>「随机子流隔离」：信物生成（<c>relic-gen</c>）、征募（<c>recruit</c>）、
-/// 流程初始化（<c>setup</c>）各走一条子流，改变其中一条的消费次数 MUST NOT 影响其他子流的取值。
+/// <para>规范 <c>.trellis/spec/core/determinism.md</c>「随机子流隔离」：征募（<c>recruit</c>）、
+/// 流程初始化（<c>setup</c>）、信物刷新（<c>relic-spawn:&lt;批&gt;</c>）等各走一条子流，改变其中一条的消费次数 MUST NOT 影响其他子流的取值。
 /// 做法是每条子流的初始状态只由「种子 + 子流名」决定，与其他子流消费了多少无关。</para>
 /// <para>派生用 FNV-1a 64 位散列子流名，与种子混合后经 SplitMix64 展开成 xoshiro256** 的 256 位状态。
 /// 全部是位级确定的整数运算，不依赖 BCL 的随机类（其算法不承诺跨版本稳定）。</para>
 /// </remarks>
 public readonly record struct GameSeed(ulong Value)
 {
-    /// <summary>信物生成子流名。</summary>
-    public const string RelicGeneration = "relic-gen";
-
     /// <summary>征募子流名。</summary>
     public const string Recruit = "recruit";
 
@@ -27,23 +24,31 @@ public readonly record struct GameSeed(ulong Value)
     // 链接模式的盲选用 FlagPick（flag-pick），取值不变。
 
     /// <summary>
-    /// AI 带入的抽取子流名（carry-in-out D7）：按玩家编号升序为每名 AI 抽补给种类（及换型令的类型）。
-    /// 独立命名，MUST NOT 扰动信物生成、征募、流程初始化、原型选区、冒险抽签与 AI 决策的既有序列。
+    /// AI 带入的抽取子流名（relic-redesign R21 / D5，沿用 carry-in-out D7 的名字）：按玩家编号升序为每名 AI 抽带入的普通信物与保险件
+    /// （消费顺序见 <c>PieceRelics.RelicCarryAi</c>）。独立命名，MUST NOT 扰动征募、流程初始化、信物刷新与 AI 决策的既有序列。
+    /// 旧补给的征召签子流 <c>carry-draft:&lt;编号&gt;</c> 随补给删除（接线段 W2）。
     /// </summary>
     public const string CarryAi = "carry-ai";
 
     /// <summary>
-    /// 某名玩家征召签的抽签子流名 <c>carry-draft:&lt;玩家编号&gt;</c>（carry-in-out D7，编号从 0 起）。每名玩家一条，
-    /// 任一玩家的征召签结果与其他玩家带了什么无关；同样 MUST NOT 扰动任何既有子流。
-    /// </summary>
-    public static string CarryDraft(int player) => $"carry-draft:{player}";
-
-    /// <summary>
     /// 链接模式的盲选插旗子流名（board-link-mode 实现裁决 B2，match-setup「原型插旗替代路径」）：每名玩家按编号升序各抽一次 <c>[0, 出生棋盘数)</c>，
     /// 未由人指定（原型路径）或时限到时尚未选择（正式插旗）的玩家取自己那一次的结果。不看任何已插的旗。
-    /// 独立命名，MUST NOT 扰动信物生成、首回合顺序、征募与 AI 决策的既有序列。
+    /// 独立命名，MUST NOT 扰动首回合顺序、征募、信物刷新与 AI 决策的既有序列。
     /// </summary>
     public const string FlagPick = "flag-pick";
+
+    /// <summary>
+    /// 挂在棋子上的信物的地图刷新子流名 <c>relic-spawn:&lt;落位大回合&gt;</c>（relic-redesign D2）：每批一条，在落位前 1 个大回合预告时一次抽完本批的位置与类型。
+    /// 按批命名（每批一条子流），刷新是纯函数、不需要持久化消费次数；任一批的消费次数 MUST NOT 扰动其他批，
+    /// 更不扰动征募、流程初始化、盲选插旗、带入与 AI 决策的既有序列。唯一消费者 <c>PieceRelics.RelicSpawner</c>。
+    /// </summary>
+    public static string RelicSpawn(int landingRound) => $"relic-spawn:{landingRound}";
+
+    /// <summary>
+    /// 出局 / 弃赛者未挂出的非保险带入件掉落的子流名 <c>relic-drop:&lt;玩家编号&gt;</c>（relic-redesign R17）：每名玩家一条（一名玩家只会出局或弃赛一次）。
+    /// 同样 MUST NOT 扰动任何既有子流。唯一消费者 <c>PieceRelics.RelicSpawner</c>。
+    /// </summary>
+    public static string RelicDrop(int player) => $"relic-drop:{player}";
 
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;

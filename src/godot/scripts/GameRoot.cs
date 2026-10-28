@@ -426,8 +426,7 @@ public sealed partial class GameRoot : Node3D
                 $"{s.Coord.ToNotation()} {Labels.Piece(s.Type)}{(s.EditText is null ? string.Empty : " + " + s.EditText)}")));
             GD.Print("[siege] 改造高亮：" + string.Join("；", shownPreview.ArtisanEdits.Select(a =>
                 $"{a.ArtisanCell.ToNotation()} 已选 {a.ChosenText}，候选 桥 {a.BridgeCells.Length} / 栅 {a.FenceEdges.Length} / 林 {a.BurnCells.Length}"
-                + $"（格目标 {(a.BridgeCells.IsEmpty && a.BurnCells.IsEmpty ? "无" : Labels.Coords(a.BridgeCells.Concat(a.BurnCells)))}）"))
-                + $"；工坊 {(_session.Match.CurrentBatch?.Context.WorkshopActive == true ? "生效" : "未生效")}");
+                + $"（格目标 {(a.BridgeCells.IsEmpty && a.BurnCells.IsEmpty ? "无" : Labels.Coords(a.BridgeCells.Concat(a.BurnCells)))}）")));
         }
 
         if (Selecting)
@@ -1485,8 +1484,7 @@ public sealed partial class GameRoot : Node3D
                     GD.Print($"[auto-demo] 第 {_frame} 帧暂放匠人 {view.ArtisanCell.ToNotation()}："
                         + $"已选 {view.ChosenText}，可改造目标 {view.Targets.Length} 个"
                         + $"（桥 {view.BridgeCells.Length} / 栅 {view.FenceEdges.Length} / 林 {view.BurnCells.Length}）"
-                        + $"；格目标 {(view.BridgeCells.IsEmpty && view.BurnCells.IsEmpty ? "无" : Labels.Coords(view.BridgeCells.Concat(view.BurnCells)))}"
-                        + $"；工坊 {(_session.Match.CurrentBatch?.Context.WorkshopActive == true ? "生效" : "未生效")}");
+                        + $"；格目标 {(view.BridgeCells.IsEmpty && view.BurnCells.IsEmpty ? "无" : Labels.Coords(view.BridgeCells.Concat(view.BurnCells)))}");
                 }
             }
 

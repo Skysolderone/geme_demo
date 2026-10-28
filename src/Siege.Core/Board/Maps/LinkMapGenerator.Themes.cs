@@ -131,7 +131,6 @@ public static partial class LinkMapGenerator
             TerrainData = new TerrainData(heights, surfaces, bridges, fences),
             BirthZones = [[.. plate.CoreCells()]],
             Boards = [plate],
-            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
             ChokePoints = [],
             CentralEntrance = plate.CoreOrigin,
         };

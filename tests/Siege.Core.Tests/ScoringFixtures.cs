@@ -46,8 +46,6 @@ internal sealed class ScoreboardHooks : ISettlementHooks
 
     public void DeductHand(PlayerId player, IReadOnlyDictionary<PieceType, int> deployed) => Steps.Add("DeductHand");
 
-    public void OnRevealRelics(SettlementContext context) => Steps.Add("OnRevealRelics");
-
     public void OnRecalculatePower(SettlementContext context)
     {
         Steps.Add("OnRecalculatePower");

@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
 using Siege.Core.Determinism;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Tests;
 
@@ -19,14 +18,14 @@ internal static class TestMaps
 
     /// <summary>
     /// 9×9 合成地图（retire-legacy-rules 1.2：原 9×9 流程夹具的 <c>Map</c>，数据原样迁来）：四个 3×3 角落出生区（0 左下、1 右下、2 左上、3 右上），
-    /// 无棋盘清单，信物格由用例指定。只供规则层（<see cref="GameBoard.LoadUnvalidated"/>）与地图数据层测试使用——对局只在链接档图上建局。
+    /// 无棋盘清单。只供规则层（<see cref="GameBoard.LoadUnvalidated"/>）与地图数据层测试使用——对局只在链接档图上建局。
+    /// relic-redesign 起地图没有静态信物格；挂在棋子上的信物由用例经 <see cref="GameBoard.AttachRelic"/> 放。
     /// </summary>
-    internal static MapData NineByNine(params string[] relicCells) => NineByNine(null, relicCells);
+    internal static MapData NineByNine() => NineByNine(null);
 
     /// <summary>同上，另可指定地形。</summary>
-    internal static MapData NineByNine(TerrainData? terrain, params string[] relicCells)
+    internal static MapData NineByNine(TerrainData? terrain)
     {
-        var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
         return new MapData
         {
             TerrainData = terrain ?? TerrainData.Flat,
@@ -36,21 +35,12 @@ internal static class TestMaps
             MaxPlayers = 4,
             Obstacles = [],
             BirthZones = [Corner(0, 0), Corner(6, 0), Corner(0, 6), Corner(6, 6)],
-            RelicCells = relicCells.ToImmutableDictionary(Coord.Parse, _ => spec),
             ChokePoints = [Coord.Parse("E5")],
             CentralEntrance = Coord.Parse("E5"),
         };
     }
 
     private static ImmutableHashSet<Coord> Corner(int x0, int y0) => [.. Rect(x0, y0, 3, 3)];
-
-    /// <summary>手工信物分布（原 9×9 流程夹具的 <c>Relics</c>）：给定格与内容，一律记为公共区标准档；生成记录的种子取 <see cref="Seed"/>。</summary>
-    internal static RelicGenerationRecord Relics(MapData map, params (string Cell, RelicContent Content)[] relics)
-    {
-        var spec = new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard);
-        ImmutableArray<RelicPlacement> placements = [.. relics.Select(r => new RelicPlacement(Coord.Parse(r.Cell), r.Content, spec)).OrderBy(p => p.Coord)];
-        return new RelicGenerationRecord(Seed, map.Id, placements, Converged: true, Rerolls: 0);
-    }
 
     /// <summary>构造一个 <paramref name="size"/>×<paramref name="size"/> 的空盘，指定格为障碍。全平地。</summary>
     internal static GameBoard Blank(int size = 11, params string[] obstacles) =>
@@ -66,7 +56,6 @@ internal static class TestMaps
             MaxPlayers = 4,
             Obstacles = obstacles.Select(Coord.Parse).ToImmutableHashSet(),
             BirthZones = [],
-            RelicCells = ImmutableDictionary<Coord, RelicCellSpec>.Empty,
             ChokePoints = ImmutableHashSet<Coord>.Empty,
             CentralEntrance = new Coord(size / 2, size / 2),
             TerrainData = terrain,
@@ -89,14 +78,13 @@ internal static class TestMaps
 
     /// <summary>
     /// 构造一张只用于校验测试的合成地图：<paramref name="size"/>×<paramref name="size"/>，
-    /// 默认无障碍、无出生区、无信物。用它来单独触发某一条校验规则，
+    /// 默认无障碍、无出生区。用它来单独触发某一条校验规则，
     /// 而不是拿 4 人基准图改——基准图的其他属性会连带触发一堆无关失败。
     /// </summary>
     internal static MapData Synthetic(
         int size,
         int maxPlayers,
         IEnumerable<Coord>? obstacles = null,
-        IEnumerable<KeyValuePair<Coord, RelicCellSpec>>? relics = null,
         TerrainData? terrain = null) =>
         new()
         {
@@ -106,20 +94,10 @@ internal static class TestMaps
             MaxPlayers = maxPlayers,
             Obstacles = (obstacles ?? []).ToImmutableHashSet(),
             BirthZones = [],
-            RelicCells = (relics ?? []).ToImmutableDictionary(),
             ChokePoints = [new Coord(0, 0)],
             CentralEntrance = new Coord(size / 2, size / 2),
             TerrainData = terrain ?? TerrainData.Flat,
         };
-
-    /// <summary>
-    /// 带信物格的 <paramref name="size"/>×<paramref name="size"/> 空盘（more-pieces-relics 旗手子测试）：信物格只是地图静态位置，
-    /// 分区与档位对计分无影响，一律记为公共区标准档。
-    /// </summary>
-    internal static GameBoard WithRelicCells(string[] relicCells, TerrainData? terrain = null, int size = 11) =>
-        GameBoard.LoadUnvalidated(Synthetic(size, maxPlayers: 4,
-            relics: relicCells.Select(c => KeyValuePair.Create(At(c), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard))),
-            terrain: terrain));
 
     /// <summary>取该地图前 <paramref name="count"/> 个格（先行后列），用于凑出精确的障碍占比。</summary>
     internal static Coord[] FirstCells(this MapData map, int count) => [.. map.AllCoords().Take(count)];

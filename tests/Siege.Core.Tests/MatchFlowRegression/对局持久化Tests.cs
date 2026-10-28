@@ -1,8 +1,8 @@
 using Siege.Core.Board;
 using Siege.Core.Determinism;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Core.Recruit;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.MatchFlowRegression;
@@ -23,7 +23,7 @@ public class 对局持久化Tests
         // 段 C 改摆法：出局判据改为"曾建立正势力且势力归零"。P2 首轮落 C10（标记置位），第 5 大回合 P0 另有 D10，
         // 批次 G7 / E5 / C9 的 C9 提光 C10 → P2 出局（原为 P2 首轮 Pass、盘面与手牌皆空）。
         // retire-legacy-rules 1.5：载体为平坦 8×8 链接档图、四人同锁棋盘 0；原 9×9 坐标列 +2、第 1–7 行 +2 / 第 8–9 行 +1（左上角 A9 贴棋盘 0 的角 C10），断言不变。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Command()), ("E5", RelicFixtures.Vanguard())]);
+        MatchFlow match = LinkModeFixtures.PlainStarted();
         string?[] cell = ["D4", "K4", "C10", "K9"];
         for (int i = 0; i < 4; i++)
         {
@@ -33,7 +33,7 @@ public class 对局持久化Tests
 
         match.AtRound(5, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3]).Stones(TestMaps.P0, "D10");
         match.Resign(TestMaps.P3);
-        match.PlayTurn("G7", "E5", "C9");   // P0：控制军令与先锋，并提光 P2 的 C10 → P2 出局
+        match.PlayTurn("G7", "E5", "C9");   // P0：提光 P2 的 C10 → P2 出局（relic-redesign W1：原"控制军令与先锋"随旧信物删除，信物层见下）
         Assert.Equal(PlayerStatus.Eliminated, match.StateOf(TestMaps.P2).Status);
         match.PassTurn();             // P1 → 出局 / 弃赛者被跳过，大回合结束，第 6 大回合顺序 [P0, P1]
         Assert.Equal(6, match.MajorRound);
@@ -42,10 +42,13 @@ public class 对局持久化Tests
         // 恢复时 MUST 传 Board.BaseMap；传改造后的活地形 match.Map 会报"地图不一致"（改前实跑红：FormatException）。
         TerrainEdit fence = TerrainEdit.Fence(TestMaps.At("J4"), TestMaps.At("J5"));
         match.Board.ApplyTerrainEdits([fence]);
+        // relic-redesign W1：局面里带信物层——P0 的 G7 挂一件带入保险件、空格 H9 一件地图信物（盘面序列化的 # 段随存档往返）。
+        match.Board.AttachRelic(TestMaps.At("G7"), RelicToken.Carried(0, RelicKind.Banner, TestMaps.P0, insured: true));
+        match.Board.AttachRelic(TestMaps.At("H9"), RelicToken.Spawned(1, RelicKind.Watchtower));
         Assert.NotEqual(MapFile.ToJson(match.Board.BaseMap), MapFile.ToJson(match.Map));
 
         string json = match.Serialize();
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
         Assert.Equal([fence], restored.Board.TerrainEdits);
         Assert.Equal(MapFile.ToJson(match.Map), MapFile.ToJson(restored.Map));   // 恢复出的活地形与改造后的逐字节相同，不只是"没抛异常"
 
@@ -58,7 +61,10 @@ public class 对局持久化Tests
         Assert.Equal(match.PlayerStates, restored.PlayerStates);
         Assert.Equal(match.Board.Serialize(), restored.Board.Serialize());
         Assert.Equal(match.History.Serialize(), restored.History.Serialize());
-        Assert.Equal(match.Relics.PublicStates(), restored.Relics.PublicStates());
+        Assert.Equal(match.Board.RelicsOnBoard(), restored.Board.RelicsOnBoard());
+        Assert.Equal(2, restored.Board.RelicsOnBoard().Length);
+        Assert.Equal(match.RelicBatches.Select(b => b.ToString()), restored.RelicBatches.Select(b => b.ToString()));
+        Assert.Equal(match.NextRelicId, restored.NextRelicId);
         Assert.Equal(match.Hands.PublicViews(), restored.Hands.PublicViews());
         Assert.Equal(match.Hands.RecruitStreamConsumed, restored.Hands.RecruitStreamConsumed);
         foreach (PlayerId p in TestMaps.All)
@@ -66,8 +72,8 @@ public class 对局持久化Tests
             Assert.Equal(match.Hands.Debug.PrivateViewOf(p), restored.Hands.Debug.PrivateViewOf(p));
         }
 
-        Assert.Equal(match.Resignations.Select(r => (r.Player, r.Board, r.Hand, r.Effects, r.Power, r.ControlledRelics.Notations())),
-            restored.Resignations.Select(r => (r.Player, r.Board, r.Hand, r.Effects, r.Power, r.ControlledRelics.Notations())));
+        Assert.Equal(match.Resignations.Select(r => (r.Player, r.Board, r.Hand, r.Effects, r.Power)),
+            restored.Resignations.Select(r => (r.Player, r.Board, r.Hand, r.Effects, r.Power)));
         Assert.Equal(match.InitiativeReports.Select(r => r.NextOrder), restored.InitiativeReports.Select(r => r.NextOrder));
         Assert.Equal(match.InitiativeReports.SelectMany(r => r.Entries), restored.InitiativeReports.SelectMany(r => r.Entries));
         // PlayerPower 含 ImmutableArray 字段，record 相等退化为数组引用比较，须按值投影比较。
@@ -78,7 +84,7 @@ public class 对局持久化Tests
         foreach (MatchFlow m in new[] { match, restored })
         {
             m.BeginTurn();
-            Assert.Equal(5, m.CurrentSnapshot!.DeployLimit);   // 第 6 大回合基础 4 + 军令 +1（growth-pass-1：原基础 3 → 4）
+            Assert.Equal(4, m.CurrentSnapshot!.DeployLimit);   // 第 6 大回合基础 4（relic-redesign W1：旧军令 +1 随旧信物删除）
             RecruitPanelView panel = m.EnterRecruit();
             m.CurrentHand().Pick(panel.Candidates.First(c => c.IsSelectable).Index);
             Assert.Null(m.EnterDeploy().Stage(TestMaps.At("H8"), PieceType.Basic));
@@ -87,35 +93,6 @@ public class 对局持久化Tests
 
         Assert.Equal(match.Hands.Debug.PrivateViewOf(TestMaps.P0), restored.Hands.Debug.PrivateViewOf(TestMaps.P0));
         Assert.Equal(match.Serialize(), restored.Serialize());
-    }
-
-    [Fact]
-    public void 弃赛快照的驿站来源与工坊标记随存档往返且旧存档缺省为空与否()
-    {
-        // more-pieces-relics tasks 2.4 / Migration 3：弃赛快照里的 EffectSnapshot 多了驿站来源与工坊标记——
-        // ① 新存档写出并往返（值相等含这两项）；② 旧存档（无这两个字段）恢复为"无驿站来源、工坊未生效"，其余字段照旧。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("H6", RelicFixtures.Relay()), ("J6", RelicFixtures.Workshop()), ("K6", RelicFixtures.Command())])
-            .AtRound(7, TestMaps.All)
-            .Stones(TestMaps.P3, "H6", "J6", "K6");
-        match.Resign(TestMaps.P3);
-        EffectSnapshot saved = match.Resignations.Single().Effects;
-        Assert.Equal([(TestMaps.At("H6"), 2)], saved.RelaySources.Select(kv => (kv.Key, kv.Value)));
-        Assert.True(saved.WorkshopActive);
-        Assert.Equal(7, saved.RevealCount);
-
-        string json = match.Serialize();
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
-        Assert.Equal(saved, restored.Resignations.Single().Effects);
-        Assert.Equal(json, restored.Serialize());
-
-        System.Text.Json.Nodes.JsonObject root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
-        System.Text.Json.Nodes.JsonObject resignation = root["Resignations"]![0]!.AsObject();
-        Assert.True(resignation.Remove("RelaySources"));
-        Assert.True(resignation.Remove("WorkshopActive"));
-        EffectSnapshot legacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, root.ToJsonString()).Resignations.Single().Effects;
-        Assert.Empty(legacy.RelaySources);
-        Assert.False(legacy.WorkshopActive);
-        Assert.Equal((7, 6), (legacy.RevealCount, legacy.DeployLimit));   // 第 7 大回合基础 5 + 军令 1
     }
 
     private static string PowerText(MatchFlow m)
@@ -141,7 +118,7 @@ public class 对局持久化Tests
         Assert.Equal(EndReason.LastPlayerStanding, match.Result!.Reason);
         Assert.Equal([1, 2, 2, 2], match.Result.Standings.Select(s => s.Rank));
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, match.Serialize());
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Serialize());
         Assert.Equal(MatchPhase.Ended, restored.Phase);
         Assert.Equal(match.Result.Reason, restored.Result!.Reason);
         Assert.Equal(match.Result.Standings, restored.Result.Standings);
@@ -162,7 +139,7 @@ public class 对局持久化Tests
     {
         MatchFlow match = LinkModeFixtures.PlainStarted();
         MapData other = LinkModeFixtures.PlainMap() with { Id = "another-map" };
-        Assert.Throws<FormatException>(() => MatchFlow.RestoreUnvalidated(other, match.Relics.Generation, match.Serialize()));
+        Assert.Throws<FormatException>(() => MatchFlow.RestoreUnvalidated(other, match.Serialize()));
     }
 
     [Fact]
@@ -179,7 +156,7 @@ public class 对局持久化Tests
 
         string json = match.Serialize();
         Assert.Contains("\"ArtisanWeight\": 18", json);
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
         Assert.Equal(18, restored.ArtisanWeight);
         Assert.False(restored.ArtisanWeightBackfilled);
         Assert.Equal(json, restored.Serialize());
@@ -202,7 +179,7 @@ public class 对局持久化Tests
         Assert.True(legacyNode.AsObject().Remove("ArtisanWeight"));
         string legacy = legacyNode.ToJsonString();
         Assert.DoesNotContain("ArtisanWeight", legacy);
-        MatchFlow fromLegacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, legacy);
+        MatchFlow fromLegacy = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, legacy);
         Assert.Equal(MatchOptions.DefaultArtisanWeight, fromLegacy.ArtisanWeight);
         Assert.Equal(10, fromLegacy.ArtisanWeight);
         Assert.True(fromLegacy.ArtisanWeightBackfilled);
@@ -224,10 +201,10 @@ public class 对局持久化Tests
         Assert.True(cells > 0, "前提：终局独占空格数非 0");
 
         string json = match.Serialize();
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
         Assert.Equal(
-            match.Result.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.ControlledRelics, s.Input.ExclusiveCells, s.Input.Stones)),
-            restored.Result!.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.ControlledRelics, s.Input.ExclusiveCells, s.Input.Stones)));
+            match.Result.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.HeldRelics, s.Input.ExclusiveCells, s.Input.Stones)),
+            restored.Result!.Standings.Select(s => (s.Player, s.Rank, s.Input.Power, s.Input.HeldRelics, s.Input.ExclusiveCells, s.Input.Stones)));
         Assert.Equal(json, restored.Serialize());
 
         System.Text.Json.Nodes.JsonNode legacyNode = System.Text.Json.Nodes.JsonNode.Parse(json)!;
@@ -238,14 +215,14 @@ public class 对局持久化Tests
         string legacy = legacyNode.ToJsonString();
 
         FormatException ex = Assert.Throws<FormatException>(
-            () => MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, legacy));
+            () => MatchFlow.RestoreUnvalidated(match.Board.BaseMap, legacy));
         Assert.Contains("SiteValues", ex.Message, StringComparison.Ordinal);
         Assert.Contains("废弃", ex.Message, StringComparison.Ordinal);
 
         // 反面：其余未知字段照旧宽容，不是"任何多余字段都拒绝"。
         System.Text.Json.Nodes.JsonNode extraNode = System.Text.Json.Nodes.JsonNode.Parse(json)!;
         extraNode["_comment"] = "手工批注";
-        MatchFlow withExtra = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, extraNode.ToJsonString());
+        MatchFlow withExtra = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, extraNode.ToJsonString());
         Assert.Equal(json, withExtra.Serialize());
     }
 
@@ -264,7 +241,7 @@ public class 对局持久化Tests
 
         string json = match.Serialize();
         Assert.Contains("\"HasEstablishedPower\": false", json, StringComparison.Ordinal);
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
         Assert.Equal(match.PlayerStates, restored.PlayerStates);
         Assert.False(restored.StateOf(TestMaps.P3).HasEstablishedPower);
         Assert.True(restored.StateOf(TestMaps.P0).HasEstablishedPower);
@@ -283,7 +260,7 @@ public class 对局持久化Tests
             }
         }
 
-        MatchFlow marked = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, forged.ToJsonString());
+        MatchFlow marked = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, forged.ToJsonString());
         Assert.True(marked.StateOf(TestMaps.P3).HasEstablishedPower);
         marked.PassTurn();     // P1 Pass → 检查全部参赛玩家：P3 标记置位且势力 0 → 出局
         Assert.Equal(PlayerStatus.Eliminated, marked.StateOf(TestMaps.P3).Status);
@@ -307,7 +284,7 @@ public class 对局持久化Tests
         System.Text.Json.Nodes.JsonNode legacyNode = System.Text.Json.Nodes.JsonNode.Parse(json)!;
         legacyNode[field] = System.Text.Json.Nodes.JsonNode.Parse(value);
         FormatException ex = Assert.Throws<FormatException>(
-            () => MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, legacyNode.ToJsonString()));
+            () => MatchFlow.RestoreUnvalidated(match.Board.BaseMap, legacyNode.ToJsonString()));
         Assert.Contains(field, ex.Message, StringComparison.Ordinal);
         Assert.Contains("废弃", ex.Message, StringComparison.Ordinal);
     }

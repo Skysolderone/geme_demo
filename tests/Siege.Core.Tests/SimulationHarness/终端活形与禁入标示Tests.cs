@@ -3,6 +3,7 @@ using Siege.Core.Board.Maps;
 using Siege.Core.Ai;
 using Siege.Core.Board;
 using Siege.Core.Match;
+using Siege.Core.PieceRelics;
 using Siege.Sim.Play;
 
 namespace Siege.Core.Tests.SimulationHarness;
@@ -100,18 +101,20 @@ public class 终端活形与禁入标示Tests
     {
         // life-shape 裁决 R13：禁入格与未揭示信物重叠时，格上显示信物标记（信物更少见、信息量更大），
         // 被盖住的禁入格改由图例下方一行列出（格 + 所有者），不丢信息。
-        // P0 的眼 F7 上放一枚未揭示信物，H7 没有：P1 看盘时 F7 为 " ? "，H7 仍为 "x1 "。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("F7", RelicFixtures.Command())])
+        // P0 的眼 F7 上放一件地图信物（战鼓，终端字母 d），H7 没有：P1 看盘时 F7 为 " d "，H7 仍为 "x1 "（relic-redesign W1：原"未揭示信物 ?"）。
+        MatchFlow match = LinkModeFixtures.PlainStarted()
             .AtRound(5, [P1, P0, TestMaps.P2, TestMaps.P3])
             .Stones(P0, BatchDeployment.非法批次必须给出可定位的原因Tests.RingF7H7);
+        match.Board.AttachRelic(TestMaps.At("F7"), RelicToken.Spawned(0, RelicKind.WarDrum));
+        match.Debug.Recalculate();
         string text = Render(match, P1);
 
-        Assert.Equal(" ? ", CellText(text, 7, 3));
+        Assert.Equal(" d ", CellText(text, 7, 3));
         Assert.Equal("x1 ", CellText(text, 7, 5));
 
         // 盘面上的 x 集合 = 禁入格 − 信物格（测试侧独立取数）；被盖住的 F7 出现在图例下方的说明行里，并带所有者。
         MatchPublicView view = match.Publish();
-        Coord[] relicCells = [.. view.Relics.Select(r => r.Coord)];
+        Coord[] relicCells = [.. view.Board.RelicsOnBoard().Select(r => r.Cell)];
         Coord[] marked = [.. Viewport.Where(c => CellText(text, c.Y + 1, c.X - ViewportLeft).StartsWith('x')).Order()];
         Assert.Equal(view.LifeShape.ForbiddenCellsFor(P1).Except(relicCells).Order(), marked);
         Assert.Contains("信物格同为禁入：F7(x1)", text, StringComparison.Ordinal);
@@ -160,7 +163,6 @@ public class 终端活形与禁入标示Tests
         Assert.Equal(("F30", 6, 8), (eighth.Origin.ToNotation(), eighth.Width, eighth.Height));
         Assert.All(new[] { "L31", "K31", "J31", "H31", "H30", "L30", "J30" }, c => Assert.Equal(2, map.HeightAt(Coord.Parse(c))));
         Assert.Equal(1, map.HeightAt(Coord.Parse("K30")));
-        Assert.DoesNotContain(map.RelicCells.Keys, c => c.Y is 29 or 30 && eighth.Contains(c));   // 第 30 / 31 行（Y 从 0 起）
         Assert.True(MapValidator.Validate(map).IsValid, MapValidator.Validate(map).ToString());
         int exit = PlayCommand.Run(1, 4, 1, AiDifficulty.Standard, new StringReader(script.ToString()), output, map, null, null, null, ContentSet.V1, null, null, Arrange);   // more-pieces-relics：写死内容集 v1
         string text = output.ToString();

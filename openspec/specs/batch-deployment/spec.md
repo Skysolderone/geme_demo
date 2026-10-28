@@ -19,7 +19,7 @@ TBD - created by archiving change add-batch-deployment. Update Purpose after arc
 
 ### Requirement: 批次数量与库存约束
 
-系统 SHALL 限制单个批次的暂放数量不超过当前部署上限。部署上限的数值由效果快照提供（基础值按大回合分阶段：第 1–3 大回合为 3，第 4–6 大回合为 4，第 7 大回合及以后为 5；军令信物在该基础值上继续提高），本能力 MUST NOT 施加全局硬上限。
+系统 SHALL 限制单个批次的暂放数量不超过当前部署上限。部署上限的数值由效果快照提供（基础值按大回合分阶段：第 1–3 大回合为 3，第 4–6 大回合为 4，第 7 大回合及以后为 5；relic-redesign D4 起没有改部署上限的信物），本能力 MUST NOT 施加全局硬上限。
 
 批次中每种棋子类型的暂放数量 MUST NOT 超过玩家手牌中该类型的库存数量。
 
@@ -40,7 +40,7 @@ TBD - created by archiving change add-batch-deployment. Update Purpose after arc
 - **THEN** 批次合法，已使用额度为 3
 
 #### Scenario: 高部署上限无硬顶
-- **WHEN** 玩家通过军令信物把部署上限提高到 9
+- **WHEN** 效果快照（测试接缝改写）给出部署上限 9
 - **THEN** 系统允许暂放最多 9 枚棋子，不因任何全局上限而拒绝
 
 #### Scenario: 额度不跨回合
@@ -48,7 +48,7 @@ TBD - created by archiving change add-batch-deployment. Update Purpose after arc
 - **THEN** 下一小回合的部署上限仍由该回合的效果快照决定，未使用的 3 点额度不结转
 
 #### Scenario: 基础值随阶段提高
-- **WHEN** 某玩家未控制任何军令信物，分别在第 3、第 5、第 8 大回合进入部署阶段
+- **WHEN** 某玩家分别在第 3、第 5、第 8 大回合进入部署阶段
 - **THEN** 这三个小回合的部署上限分别为 3、4、5
 
 ### Requirement: 批次内落点的多样性

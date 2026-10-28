@@ -57,16 +57,16 @@ public class 可复现回放Tests
     [Fact]
     public void 带入对局可回放()
     {
-        // 规格 Scenario：回放一局本机玩家带入换型令（连珠子）、三名 AI 各带入 1 件的对局日志 → 开局手牌与原局相同，每一步的征募候选、批次与结算结果逐项一致。
-        // 带入按人机对局的口径给出（CarryAi.ForHumanMatch：P0 的换型令不可由种子推出），所以回放必须读首部记录的带入——按配置或种子重抽都会分歧。
+        // 规格 Scenario（relic-redesign W2 改写：带入的是信物清单）：回放一局本机玩家带入 2 件（一件保险）、三名 AI 各带入同等件数的对局日志
+        // → 每一步的征募候选、批次（含 AI 的挂出）与结算结果逐项一致。
+        // 带入按人机对局的口径给出（RelicCarryAi.ForHumanMatch：P0 的清单不可由种子推出），所以回放必须读首部记录的带入——按配置或种子重抽都会分歧。
         // 变异 M-T1：Replayer 不传首部带入（按配置重建）→ 本测试红。
         const ulong seed = 23;
         var game = new Siege.Core.Determinism.GameSeed(seed);
-        System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Siege.Core.Carry.CarryIn> carries = Siege.Core.Carry.CarryAi.ForHumanMatch(
-            game, TestMaps.All, TestMaps.P0, new Siege.Core.Carry.CarryIn(Siege.Core.Carry.SupplyKind.Commission, PieceType.Line), ContentSet.V2);
-        Assert.Equal(4, carries.Count);                                   // 前提：三名 AI 各带 1 件
+        System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Siege.Core.PieceRelics.RelicLoadout> carries = Siege.Core.PieceRelics.RelicCarryAi.ForHumanMatch(
+            game, TestMaps.All, TestMaps.P0, PieceRelics.CarryWiringFixtures.Loadout((Siege.Core.PieceRelics.RelicKind.Banner, true), (Siege.Core.PieceRelics.RelicKind.Watchtower, false)));
+        Assert.Equal(4, carries.Count);                                   // 前提：三名 AI 各带 2 件
         MatchSession original = MatchTelemetry.对局日志的记录内容Tests.CarriedSession(seed, carries.ToDictionary(kv => kv.Key.Value, kv => kv.Value), turnLimit: 12);
-        string opening = string.Join(" | ", original.Match.Players.Select(p => CarryInOut.CarryFixtures.HandText(original.Match, p)));
         MatchLog log = original.Run();
         string path = log.WriteTo(SimFixtures.TempDir("replay-carry"));
 
@@ -76,9 +76,9 @@ public class 可复现回放Tests
         Assert.Equal(log.DeterministicText(), replay.Replayed.DeterministicText());
         Assert.True(replay.LineCount > log.Turns.Count + log.Events.Count, $"回放只比了 {replay.LineCount} 行");
         Assert.Equal(SimFixtures.TurnTexts(log.Turns), SimFixtures.TurnTexts(replay.Replayed.Turns));
-        Assert.Equal(CarryInOut.CarryFixtures.CarryText(log.CarryIns), CarryInOut.CarryFixtures.CarryText(replay.Replayed.CarryIns));
-        Assert.Contains("P0:Commission>Line", CarryInOut.CarryFixtures.CarryText(replay.Replayed.CarryIns), StringComparison.Ordinal);
-        Assert.Contains("Line×1+0", opening, StringComparison.Ordinal);   // 开局手牌确实含换入的连珠子
+        Assert.Equal(log.CarryIns, replay.Replayed.CarryIns);
+        Assert.Equal("军旗（保险）、望台", replay.Replayed.CarryIns[TestMaps.P0].ToString());
+        Assert.Contains(original.Match.Events, e => e.Kind == Siege.Core.Match.FlowEventKind.CarriedRelicsAttached);   // 前提：带入确实挂出（AI 前几批挂完），回放比的不是空证
     }
 
     [Fact]
@@ -114,8 +114,8 @@ public class 可复现回放Tests
         // map-expand-25 段 A2：link:1:4 换成浮空岛后短局里不再停滞，载体改为手写平坦图（LinkSimFixtures.FlatStallSession）。手写图不能按标识重建，
         // "回放"改为同一会话确定性重跑一次、再经 Replayer.Compare（Replayer.Replay 重建之后调用的同一比对，M-RP1 变异点就在其中）与旧式日志比对；
         // 按标识重建地图的那一半由本类其余用例与 每局换图Tests 守。
-        MatchLog current = LinkSimFixtures.FlatStallSession(80, 6).Run();   // 种子 6：平坦图上 80 小回合内停手 2 次（探针见 循环提子诊断Tests.停滞停手次数可查）
-        MatchLog rerun = LinkSimFixtures.FlatStallSession(80, 6).Run();
+        MatchLog current = LinkSimFixtures.FlatStallSession(80, 9).Run();   // 种子 9：平坦图上 80 小回合内停手 4 次（relic-redesign W1 重探，原种子 6；探针见 循环提子诊断Tests.停滞停手次数可查）
+        MatchLog rerun = LinkSimFixtures.FlatStallSession(80, 9).Run();
         Assert.Contains(current.Turns, t => t.Stalled == true);   // 样本口径：这局确有停手
         MatchLog legacy = MatchLog.Parse(current.FullText());
         for (int i = 0; i < legacy.Turns.Count; i++)

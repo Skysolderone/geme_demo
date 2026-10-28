@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 
 namespace Siege.Core.Recruit;
 
@@ -9,9 +8,9 @@ namespace Siege.Core.Recruit;
 /// 旗手子 / 铁链子 / 哨兵子 / 界碑子各 8（more-pieces-relics，<b>未校准</b>）。全部玩家共用同一张表。
 /// </summary>
 /// <remarks>
-/// <para>徽记调权不在这里重算：<see cref="EffectSnapshot.AdjustedWeight"/> 已把 <c>基础 × (1 + 0.75 × 数量)</c> 写成整数
-/// <c>基础 × (4 + 3 × 数量)</c>（分母 4 对全部类型相同，归一化后消去）。归一化在抽取时由
-/// <see cref="Determinism.RandomStream.WeightedPick"/> 的整数累积权重完成，不预存归一化概率（design.md D3）。</para>
+/// <para>征募只按基础权重（relic-redesign D4：流派徽记调权随旧信物删除）。抽样表是基础表的 <see cref="SamplingScale"/> 倍（<see cref="SamplingTable"/>）：
+/// 整数倍不改变任何类型的概率，保留这个倍数只是让 <c>recruit</c> 子流的抽样结果与删除徽记之前（无徽记时分子恒为 4）逐位相同。
+/// 归一化在抽取时由 <see cref="Determinism.RandomStream.WeightedPick"/> 的整数累积权重完成，不预存归一化概率（design.md D3）。</para>
 /// <para>匠人权重是对局配置（artisan-terrain-edit R-2，待扫档校准）：不传 <c>artisanWeight</c> 的重载取
 /// <see cref="DefaultArtisanWeight"/>；传入值只替换匠人那一档，其余各档 MUST NOT 随之变化。</para>
 /// <para>对局内容集（more-pieces-relics D8）：v1 的棋池只含原六种、表与引入新棋子之前相同；v2 十种。v1 的类型次序与权重表恰是 v2 的前六项
@@ -57,39 +56,27 @@ public static class RecruitWeights
         return type == PieceType.Artisan ? artisanWeight : BaseTable[IndexOf(type)];
     }
 
-    /// <summary>按快照的徽记数量调整后的权重表（按 <see cref="Order"/> 排列），匠人取默认权重。</summary>
-    public static int[] AdjustedTable(EffectSnapshot snapshot) => AdjustedTable(snapshot, DefaultArtisanWeight);
-
-    /// <summary>按快照的徽记数量调整后的权重表（按 <see cref="Order"/> 排列），匠人取对局配置权重，内容集取缺省 v2。</summary>
-    public static int[] AdjustedTable(EffectSnapshot snapshot, int artisanWeight) => AdjustedTable(snapshot, artisanWeight, ContentSets.Default);
+    /// <summary>
+    /// 抽样表相对基础权重的整数倍数：4。删除徽记之前抽样表是 <c>基础 × (4 + 3 × 徽记数)</c>，无徽记时恰为基础 × 4；
+    /// 保留这个倍数使征募抽样逐位不变（整数倍不改变概率）。
+    /// </summary>
+    public const int SamplingScale = 4;
 
     /// <summary>
-    /// 按快照的徽记数量调整后的权重表（按 <see cref="OrderOf"/> 排列），匠人取对局配置权重；供加权抽样直接使用。
-    /// 表长 = 该内容集的类型数：v1 六档（新四种根本不在池中，而不是权重为 0——抽样的累积权重与改动前逐位相同）。
+    /// 征募抽样表（按 <see cref="OrderOf"/> 排列）：基础权重 × <see cref="SamplingScale"/>，匠人取对局配置权重；供加权抽样直接使用。
+    /// 表长 = 该内容集的类型数：v1 六档（新四种根本不在池中，而不是权重为 0）。
     /// </summary>
-    public static int[] AdjustedTable(EffectSnapshot snapshot, int artisanWeight, ContentSet contentSet)
+    public static int[] SamplingTable(int artisanWeight, ContentSet contentSet)
     {
-        ArgumentNullException.ThrowIfNull(snapshot);
         RequireValidArtisanWeight(artisanWeight);
         ImmutableArray<PieceType> order = OrderOf(contentSet);
         int[] table = new int[order.Length];
         for (int i = 0; i < order.Length; i++)
         {
-            table[i] = snapshot.AdjustedWeight(order[i], BaseWeightOf(order[i], artisanWeight));
+            table[i] = checked(BaseWeightOf(order[i], artisanWeight) * SamplingScale);
         }
 
         return table;
-    }
-
-    /// <summary>某类型在快照下的调整后权重，匠人取默认权重。</summary>
-    public static int AdjustedWeightOf(EffectSnapshot snapshot, PieceType type) =>
-        AdjustedWeightOf(snapshot, type, DefaultArtisanWeight);
-
-    /// <summary>某类型在快照与对局配置下的调整后权重。</summary>
-    public static int AdjustedWeightOf(EffectSnapshot snapshot, PieceType type, int artisanWeight)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        return snapshot.AdjustedWeight(type, BaseWeightOf(type, artisanWeight));
     }
 
     /// <summary>匠人权重须为非负整数（0 = 不在池中）。</summary>

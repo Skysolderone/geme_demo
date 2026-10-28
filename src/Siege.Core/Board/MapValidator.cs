@@ -87,7 +87,7 @@ public static class MapValidator
     /// 可落子格区间取种子 1–20 实测（段 A1）向外取整，回写记录见任务 10-26-map-expand-25。
     /// 平台清单规则：边长 6–8、改造目标 ≥ 2、新地表 ≤ 4、两两间隔 ≥ 3、坡道 2–3 个。
     /// </para>
-    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格预算、出生区（保护期容量、出生区内无新地表）、信物格合法（有信物格时）、豁免理由、必死口袋。
+    /// 各地图共用、不在表里的规则：结构、地形边界、可落子格预算、出生区（保护期容量、出生区内无新地表）、豁免理由、必死口袋。
     /// 旋转对称不在校验器里（原 MapSymmetry 只由标准档基准图的测试调用，已随旧地图删除——retire-legacy-maps）。
     /// </summary>
     private static readonly ImmutableDictionary<MapProfile, ProfileRules> Rules =
@@ -174,7 +174,6 @@ public static class MapValidator
         ValidatePlayableCount(map, budget, f);
         ValidateBudgets(map, rules, budget, f);
         ValidateBirthZones(map, budget, f);
-        ValidateRelicCells(map, f);
         ValidatePocketExemptions(map, f);
         ValidatePockets(map, f);
 
@@ -752,50 +751,6 @@ public static class MapValidator
         }
     }
 
-    private static void ValidateRelicCells(MapData map, ImmutableArray<MapValidationFailure>.Builder f)
-    {
-        foreach ((Coord c, RelicCellSpec spec) in map.RelicCells.OrderBy(kv => kv.Key))
-        {
-            if (map.TerrainAt(c) != Terrain.Playable)
-            {
-                f.Add(new MapValidationFailure(
-                    "RELIC_ON_NON_PLAYABLE", "信物格必须位于可落子格上。", [c]));
-                continue;
-            }
-
-            int? zone = map.BirthZoneOf(c);
-            bool inBirthZone = zone is not null;
-
-            if (inBirthZone && spec.Zone != RelicZone.BirthZone)
-            {
-                f.Add(new MapValidationFailure(
-                    "RELIC_ZONE_MISMATCH",
-                    $"位于{BirthZoneLabel.Of(zone!.Value)} 的信物格被标注为 {spec.Zone}。", [c]));
-            }
-            else if (!inBirthZone && spec.Zone != RelicZone.Contested)
-            {
-                f.Add(new MapValidationFailure(
-                    "RELIC_ZONE_MISMATCH",
-                    $"位于公共区的信物格被标注为 {spec.Zone}。", [c]));
-            }
-
-            // 出生区不生成高阶信物；公共区的预算档位必须严格高于出生区。
-            if (spec.Zone == RelicZone.BirthZone && spec.Budget != BudgetTier.Birth)
-            {
-                f.Add(new MapValidationFailure(
-                    "RELIC_BUDGET_MISMATCH",
-                    $"出生区信物格的预算档位必须是 {BudgetTier.Birth}，实际为 {spec.Budget}。", [c]));
-            }
-
-            if (spec.Zone == RelicZone.Contested && spec.Budget <= BudgetTier.Birth)
-            {
-                f.Add(new MapValidationFailure(
-                    "RELIC_BUDGET_MISMATCH",
-                    $"公共争夺区信物格的预算档位必须严格高于出生区，实际为 {spec.Budget}。", [c]));
-            }
-        }
-    }
-
     // retire-legacy-rules L18（裁决 R3）：原 ValidateLandmarks（中央入口 / 咽喉须可落子：CENTRAL_ENTRANCE_NOT_PLAYABLE、CHOKE_NOT_PLAYABLE）与
     // ValidateTolerance 的容差两条（TOLERANCE_NEGATIVE、TOLERANCE_RELAX_WITHOUT_REASON）只为已删除的距离均衡服务，随之删除；
     // MapData 的中央入口、咽喉、距离容差与放宽理由字段保留（地图文件照常读写）。原 ValidateTolerance 里的豁免理由一条移到下面，位置与次序不变。
@@ -849,7 +804,7 @@ public static class MapValidator
 
     /// <summary>
     /// 各出生区到每个距离均衡目标的最短落子距离（沿气边），规则第 1 条的唯一口径。
-    /// 目标依次为：最近公共信物、中央入口、最近咽喉，共三项（restore-go-core-rules 起由五项改三项）。
+    /// 目标依次为：中央入口、最近咽喉，共两项（restore-go-core-rules 起由五项改三项；relic-redesign 删除静态信物格后去掉"最近公共信物"，再改两项）。
     /// 距离为 <c>null</c> 表示该出生区到不了任一目标格；目标集合为空时整项距离全为 <c>null</c>。
     /// retire-legacy-maps 4.2：距离均衡校验随旧档删除，本表只剩 <c>Siege.Sim map</c> 的距离打印一个使用者（L10：保留）。
     /// </summary>
@@ -857,13 +812,8 @@ public static class MapValidator
     {
         ArgumentNullException.ThrowIfNull(map);
 
-        ImmutableArray<Coord> publicRelics = map.RelicCells
-            .Where(kv => kv.Value.Zone == RelicZone.Contested)
-            .Select(kv => kv.Key).Order().ToImmutableArray();
-
         var metrics = new (string Name, ImmutableArray<Coord> Targets)[]
         {
-            ("最近公共信物", publicRelics),
             ("中央入口", [map.CentralEntrance]),
             ("最近咽喉", map.ChokePoints.Order().ToImmutableArray()),
         };

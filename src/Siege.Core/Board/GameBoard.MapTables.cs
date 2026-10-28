@@ -10,15 +10,15 @@ namespace Siege.Core.Board;
 public sealed partial class GameBoard
 {
     /// <summary>
-    /// 一份 <see cref="MapData"/> 的逐格派生表（ai-turn-speed D2「数据结构」）：可落子 / 可作气的地表 / 出生区 / 信物格、气边邻居、眼边邻居、覆盖目标。
+    /// 一份 <see cref="MapData"/> 的逐格派生表（ai-turn-speed D2「数据结构」）：可落子 / 可作气的地表 / 出生区、气边邻居、眼边邻居、覆盖目标。
     /// 每一项都在第一次读取时由唯一实现算出并记住（<see cref="MapData.IsPlayable"/> / <see cref="MapData.SurfaceAt"/> / <see cref="MapData.BirthZoneOf"/> /
-    /// <see cref="MapData.RelicCells"/> / <see cref="Adjacency.LibertyNeighbors"/> / <see cref="Adjacency.EyeNeighbors"/> / <see cref="Adjacency.CoverageTargets"/>），本类不含任何地形判定；
+    /// <see cref="Adjacency.LibertyNeighbors"/> / <see cref="Adjacency.EyeNeighbors"/> / <see cref="Adjacency.CoverageTargets"/>），本类不含任何地形判定；
     /// 地图不可变，表随地图实例存亡——<see cref="GameBoard.ApplyTerrainEdits"/> 换地图即换表。
     /// </summary>
     /// <remarks>
     /// 段 C2（board-link-mode 裁决 C18 / P2）：改造换图时新表由旧表<b>派生</b>（<see cref="Derive"/>）——旧表里已算好的逐格项原样抄过来，
     /// 只把改造目标周围 <see cref="EditReach"/> 格（切比雪夫距离）内的格作废、留待按新地图重算。派生表的每一项与在新地图上从零建表逐项相同
-    /// （<c>盘面派生量提速对照Tests.改造派生表与从零建表逐项相同</c> 穷举守门）：改造只改目标格的地表 / 桥或一条边的栅栏，不碰高度、障碍、出生区与信物格
+    /// （<c>盘面派生量提速对照Tests.改造派生表与从零建表逐项相同</c> 穷举守门）：改造只改目标格的地表 / 桥或一条边的栅栏，不碰高度、障碍与出生区
     /// （<see cref="TerrainWriter"/> 的每类改造只改目标格或目标边——若将来新增会改动邻格地形的改造，<see cref="Invalidate"/> 的中心必须一并包含那些格）；
     /// 一格的可落子与地表标志只看本格，气边 / 眼边邻居只看本格与四邻（气边另看其间的栅栏，距离 1），覆盖目标最远经隔水 / 岩台远格到达距离 2 的格。
     /// AI 每小回合对匠人的每个改造选项各预演一次，从零建表要对 73×73 画布逐格查一遍地图。
@@ -31,7 +31,6 @@ public sealed partial class GameBoard
         private const byte Computed = 1;
         private const byte Playable = 2;
         private const byte LibertyWhenEmpty = 4;
-        private const byte Relic = 8;
 
         private readonly MapData map;
         private readonly byte[] _flags;
@@ -66,15 +65,14 @@ public sealed partial class GameBoard
 
         /// <summary>
         /// 改造换图时的新表：<paramref name="edited"/> 必须是 <see cref="TerrainWriter.ApplyAll"/> 对 <paramref name="parent"/> 所属地图应用 <paramref name="edits"/> 的结果。
-        /// 画布、障碍、出生区与信物格不是同一份（同一实例）时不派生，从零建表。
+        /// 画布、障碍与出生区不是同一份（同一实例）时不派生，从零建表。
         /// </summary>
         public static MapTables Derive(MapTables parent, MapData edited, IReadOnlyList<TerrainEdit> edits)
         {
             MapData old = parent.map;
             if (old.Width != edited.Width || old.Height != edited.Height
                 || !ReferenceEquals(old.Obstacles, edited.Obstacles)
-                || old.BirthZones != edited.BirthZones
-                || !ReferenceEquals(old.RelicCells, edited.RelicCells))
+                || old.BirthZones != edited.BirthZones)
             {
                 return new MapTables(edited);
             }
@@ -162,8 +160,6 @@ public sealed partial class GameBoard
         /// <summary>该格为空时能否作为气：可落子且地表不是浅滩（"空格能否作为气"的唯一判定，见 <see cref="GameBoard.GivesLiberty"/>）。</summary>
         public bool GivesLibertyWhenEmpty(int i, Coord c) => (Flags(i, c) & LibertyWhenEmpty) != 0;
 
-        public bool IsRelicCell(int i, Coord c) => (Flags(i, c) & Relic) != 0;
-
         public int? BirthZoneOf(int i, Coord c)
         {
             _ = Flags(i, c);
@@ -214,11 +210,6 @@ public sealed partial class GameBoard
                     {
                         flags |= LibertyWhenEmpty;
                     }
-                }
-
-                if (map.RelicCells.ContainsKey(c))
-                {
-                    flags |= Relic;
                 }
 
                 _zone[i] = map.BirthZoneOf(c) ?? -1;

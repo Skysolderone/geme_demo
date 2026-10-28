@@ -155,8 +155,8 @@ public class 按座位视图Tests
     public void 插旗阶段的可见信息()
     {
         // Scenario：插旗阶段 → 可见全部占位（map-expand-25：link:1:4 为 10 块平台）的位置与边长、对局种子与地图标识，看不到任何棋盘内部的格，也看不到任何旗帜。
-        // map-expand-25 段 A3：浮空岛不再放静态信物格（relic-redesign R29），本条测旧信物系统，载体改为 LinkModeFixtures.RelicMap（link:1:4 补上段 A2 口径信物格的手写夹具）。
-        MatchFlow match = CreateWithRelics();
+        // relic-redesign W1：原载体 LinkModeFixtures.RelicMap（手写信物格夹具）随旧信物删除；开局没有信物（第 4 大回合起刷新），插旗阶段与锁定后的信物列表都为空。
+        MatchFlow match = Create();
         match.Flags.Plant(P1, 2);
         SeatPublicView a = match.PublishFor(P0);
         Assert.Equal(10, a.Placeholders.Length);
@@ -167,14 +167,12 @@ public class 按座位视图Tests
         Assert.All(a.Players, p => Assert.False(p.SameBattlefield));
         Assert.Equal((match.Map.BirthBoard(2).Width, match.Map.BirthBoard(2).Height), (a.Placeholders[2].Width, a.Placeholders[2].Height));   // 占位取整块棋盘
 
-        // Scenario：锁定后只见自己的棋盘 → 可见棋盘 3 的全部格与信物格位置，其余 4 块仍只是占位。
+        // Scenario：锁定后只见自己的棋盘 → 可见棋盘 3 的全部格，其余仍只是占位。
         match.Flags.Plant(P0, 2);
         SeatPublicView locked = match.PublishFor(P0);
         Assert.Equal(match.Map.BirthBoard(2).Cells().Order().Select(c => c.ToNotation()), locked.Cells.Select(c => c.Coord));
-        // 裁决 J2 / link-map-terrain D5：出生棋盘内的信物格锁定后全部可见（内容隐藏）。map-expand-25 D5：平台内恰 2 个出生区档，公共区档移到低地。
-        Assert.Equal(match.Map.RelicCells.Keys.Count(match.Map.BirthBoard(2).Contains), locked.Relics.Length);
-        Assert.Equal(2, locked.Relics.Length);
-        Assert.All(locked.Relics, r => Assert.Null(r.Content));
+        Assert.Empty(locked.Relics);
+        Assert.Null(locked.RelicForecast);
     }
 
     [Fact]
@@ -201,19 +199,22 @@ public class 按座位视图Tests
     }
 
     [Fact]
-    public void 行动顺序与带入全局公开()
+    public void 行动顺序全局公开带入清单只给本人()
     {
-        // Scenario：任意玩家查询当前行动顺序 → 可读到全部在局玩家的顺序；带入不论对方在哪块棋盘都可读。
+        // Scenario：任意玩家查询当前行动顺序 → 可读到全部在局玩家的顺序。
+        // relic-redesign R22（接线段 W2 改写，原"带入全局公开"属旧补给规则）：带入清单挂出之前只对本人可见——别的座位看不到，本座位看到自己的未挂出件。
         MatchFlow match = MatchFlow.Create(Map, TestMaps.Seed, All, Options with
         {
             CarryInOut = true,
-            CarryIns = System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Carry.CarryIn>.Empty.Add(P2, new Carry.CarryIn(Carry.SupplyKind.SpareStone)),
+            CarryIns = System.Collections.Immutable.ImmutableSortedDictionary<PlayerId, Siege.Core.PieceRelics.RelicLoadout>.Empty
+                .Add(P2, new([new Siege.Core.PieceRelics.CarriedRelic(Siege.Core.PieceRelics.RelicKind.WarDrum, true)])),
         });
         match.PlantSequentially(All.Select((p, i) => (p, new[] { 0, 1, 3, 4 }[i])));
         SeatPublicView a = match.PublishFor(P0);
         Assert.Equal(match.ActionOrder, a.ActionOrder);
         Assert.Equal(4, a.ActionOrder.Length);
-        Assert.Equal(P2, a.CarryIns.Single().Player);
-        Assert.Equal(Carry.SupplyKind.SpareStone, a.CarryIns.Single().CarryIn.Kind);
+        Assert.Empty(a.OwnCarried);
+        SeatCarriedView own = Assert.Single(match.PublishFor(P2).OwnCarried);
+        Assert.Equal((0, Siege.Core.PieceRelics.RelicKind.WarDrum, true), (own.Index, own.Kind, own.Insured));
     }
 }

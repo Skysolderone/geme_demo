@@ -12,7 +12,7 @@ namespace Siege.Core.Match;
 /// 含这些字段的旧存档在解析时明确拒绝并提示属于已移除的拼接规则（<see cref="RejectRetiredLinkFields"/>）。
 /// </summary>
 /// <remarks>
-/// 恢复顺序：开局图建空盘 → 写入盘面（棋子与改造）→ 恢复信物揭示 → 其余流程状态。地图整局不变，<see cref="GameBoard.BaseMap"/> 始终是开局图。
+/// 恢复顺序：开局图建空盘 → 写入盘面（棋子、改造与信物层）→ 恢复信物刷新记录 → 其余流程状态。地图整局不变，<see cref="GameBoard.BaseMap"/> 始终是开局图。
 /// </remarks>
 public sealed partial class MatchFlow
 {
@@ -99,7 +99,7 @@ public sealed partial class MatchFlow
     }
 
     /// <summary>
-    /// 恢复战场结算段（<see cref="RestoreCore"/> 在建好对局对象之后、写回玩家记录之前调用）：写入盘面 → 恢复揭示 → 结算流程状态。
+    /// 恢复战场结算段（<see cref="RestoreCore"/> 在建好对局对象之后、写回玩家记录之前调用）：写入盘面（含信物层）→ 恢复信物刷新记录 → 结算流程状态。
     /// 盘面与地图不符抛 <see cref="FormatException"/>（MUST NOT 静默恢复）。
     /// </summary>
     private void RestoreLink(MatchSaveData data)
@@ -114,7 +114,7 @@ public sealed partial class MatchFlow
             throw new FormatException($"存档盘面与地图不符：{ex.Message}", ex);
         }
 
-        Relics.RestoreState(data.Relics ?? throw new FormatException("存档缺少信物账本。"));
+        RestoreRelics(data.RelicSpawn);
 
         _passedThisRound.UnionWith(link.PassedThisRound.Select(v => new PlayerId(v)));
         _lockedFlagCounts = link.LockedFlagCounts.ToImmutableSortedDictionary(z => z.Zone, z => z.Count);
@@ -182,7 +182,7 @@ public sealed class SettlementEntrySaveData
 
     public BigInteger Power { get; set; }
 
-    public int ControlledRelics { get; set; }
+    public int HeldRelics { get; set; }
 
     public int ExclusiveCells { get; set; }
 
@@ -193,12 +193,12 @@ public sealed class SettlementEntrySaveData
         Player = e.Player.Value,
         Rank = e.Rank,
         Power = e.Power,
-        ControlledRelics = e.ControlledRelics,
+        HeldRelics = e.HeldRelics,
         ExclusiveCells = e.ExclusiveCells,
         Stones = e.Stones,
     };
 
-    internal SettlementEntry ToEntry() => new(new PlayerId(Player), Rank, Power, ControlledRelics, ExclusiveCells, Stones);
+    internal SettlementEntry ToEntry() => new(new PlayerId(Player), Rank, Power, HeldRelics, ExclusiveCells, Stones);
 }
 
 /// <summary>一名玩家的出局原因与战场落败时的比较量。</summary>

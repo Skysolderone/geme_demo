@@ -5,13 +5,13 @@ using System.Linq;
 using Godot;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Camera;
 using Siege.Presentation.Layers;
 using Siege.Presentation.Preview;
 using Siege.Presentation.Show;
 using Siege.Presentation.Style;
+using Siege.Presentation.Text;
 using Siege.Presentation.Visibility;
 
 namespace Siege.Godot;
@@ -1621,33 +1621,63 @@ public sealed partial class BoardView : Node3D
     /// <summary>清空一个逐帧重画的容器，连同它在滑动父节点下的镜像（F.4b：滑动中的节点挪到了镜像里，不能漏清）。</summary>
     private static void ClearLayer(Node3D container) => Clear(container);
 
+    /// <summary>
+    /// 信物层的三种标记（relic-redesign R25；默认棋盘常驻，全公开 R22）：地图信物 = 铭牌底座 + 晶石 + 种类名；预告 = 虚线环 + "种类 · 第 N 大回合"（R11）；
+    /// 持物棋子 = 棋子格后角的种类小字（持有者阵营色），保险件加"保"（R15）。哪格是哪种、种类、保险、落位大回合一律读默认棋盘视图模型，本类不读盘面信物层。
+    /// </summary>
     private void DrawRelicMarkers(DefaultBoardView board)
     {
         foreach (BoardCellView cell in board.Cells)
         {
-            if (cell.Relic == RelicMarker.None)
+            if (cell.Relic == RelicMarker.None || cell.RelicKind is not { } kind || !_visible.Contains(cell.Coord))
             {
                 continue;
             }
 
-            // 未发现的信物统一用八角铭牌与小型双锥晶石，不泄露预算分区（裁决 5）。
-            Color color = cell.Relic == RelicMarker.Revealed ? Visuals.RelicRevealed : Visuals.RelicUnknown;
-            var token = new Node3D { Name = "RelicToken", Position = CenterOf(cell.Coord) };
-            token.AddChild(new MeshInstance3D
+            string name = Labels.Relic(kind);
+            Vector3 center = CenterOf(cell.Coord);
+            switch (cell.Relic)
             {
-                Mesh = new CylinderMesh { TopRadius = 0.125f, BottomRadius = 0.125f, Height = 0.026f, RadialSegments = 8 },
-                MaterialOverride = Visuals.Matte(Color.Color8(88, 73, 68), 0.72f),
-                Position = new Vector3(0f, 0.023f, 0f),
-            });
-            token.AddChild(new MeshInstance3D
-            {
-                Mesh = new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.100f, Height = 0.115f, RadialSegments = 4 },
-                MaterialOverride = Visuals.Glow(color.Lightened(0.18f), 0.85f, false),
-                Position = new Vector3(0f, 0.090f, 0f),
-                RotationDegrees = new Vector3(0f, 45f, 0f),
-            });
-            _overlay.AddChild(token);
+                case RelicMarker.OnMap:
+                    var token = new Node3D { Name = "RelicToken", Position = center };
+                    token.AddChild(new MeshInstance3D
+                    {
+                        Mesh = new CylinderMesh { TopRadius = 0.125f, BottomRadius = 0.125f, Height = 0.026f, RadialSegments = 8 },
+                        MaterialOverride = Visuals.Matte(Color.Color8(88, 73, 68), 0.72f),
+                        Position = new Vector3(0f, 0.023f, 0f),
+                    });
+                    token.AddChild(new MeshInstance3D
+                    {
+                        Mesh = new CylinderMesh { TopRadius = 0.001f, BottomRadius = 0.100f, Height = 0.115f, RadialSegments = 4 },
+                        MaterialOverride = Visuals.Glow(Visuals.RelicMark.Lightened(0.18f), 0.85f, false),
+                        Position = new Vector3(0f, 0.090f, 0f),
+                        RotationDegrees = new Vector3(0f, 45f, 0f),
+                    });
+                    _overlay.AddChild(token);
+                    AddRelicLabel(name, center + new Vector3(0f, 0.12f, 0.34f), Visuals.RelicMark);
+                    break;
+                case RelicMarker.Forecast:
+                    AddRing(_overlay, cell.Coord, Visuals.RelicForecast, true, 0.032f);
+                    AddRelicLabel(board.RelicForecastRound is { } round ? $"{name}·第{round}大回合" : name, center + new Vector3(0f, 0.12f, 0.34f), Visuals.RelicForecast);
+                    break;
+                case RelicMarker.Held:
+                    Color owner = cell.Occupant is { } occupant ? Visuals.FactionColorOf(occupant.Owner) : Visuals.RelicMark;
+                    AddRelicLabel(cell.RelicInsured ? name + "·保" : name, center + new Vector3(-0.33f, 0.12f, -0.34f), owner);
+                    break;
+                default:
+                    break;
+            }
         }
+    }
+
+    /// <summary>信物标记的文字（种类名 / 预告大回合 / 保险记号）：与棋串常驻标注同一画法（平铺、不随远近缩放、不被棋子遮住）。</summary>
+    private void AddRelicLabel(string text, Vector3 at, Color color)
+    {
+        Label3D label = Label(text, at, CoordinateLabelStyle.FontSize - 2, CoordinateLabelStyle.OutlineSize);
+        label.Modulate = color;
+        label.OutlineModulate = Visuals.CoordinateLabelOutline;
+        label.NoDepthTest = true;
+        _overlay.AddChild(label);
     }
 
     /// <summary>
@@ -1793,7 +1823,7 @@ public sealed partial class BoardView : Node3D
             // 亮环随进度衰减：线宽由粗变细、透明度由实变淡。
             float fade = 1f - (permille / 1000f);
             var ring = new Node3D();
-            AddRing(ring, coord, Visuals.RelicRevealed, false, 0.05f, 0.05f + (0.07f * fade));
+            AddRing(ring, coord, Visuals.RelicMark, false, 0.05f, 0.05f + (0.07f * fade));
             foreach (Node child in ring.GetChildren())
             {
                 Translucent(child, 0.2f + (0.8f * fade));
@@ -1809,7 +1839,7 @@ public sealed partial class BoardView : Node3D
             Color color = callout.Kind switch
             {
                 CalloutKind.Capture => Visuals.Urgent,
-                CalloutKind.Relic => Visuals.RelicRevealed,
+                CalloutKind.Relic => Visuals.RelicMark,
                 _ => Visuals.CoordinateLabel,
             };
             Label3D label = Label(callout.Text, CenterOf(callout.Coord) + offset, style.FontSize, style.OutlineSize);
@@ -2113,15 +2143,10 @@ public sealed partial class BoardView : Node3D
     {
         foreach (RelicCellView relic in relics.Relics)
         {
-            Color color = relic.Control switch
-            {
-                RelicControlKind.Controlled => Visuals.FactionColorOf(relic.Holder!.Value),
-                RelicControlKind.Contested => Visuals.Contested,
-                RelicControlKind.Blocked => Visuals.Urgent,
-                _ => Visuals.Neutral,
-            };
+            // 信物层按下时在三种常驻标记之上再点亮格子：持物棋子按持有者阵营色、地图信物与预告中性色；预告是虚线环（tactical-layers「信物层」）。
+            Color color = relic.Holder is { } holder ? Visuals.FactionColorOf(holder) : Visuals.Neutral;
             AddTint(relic.Coord, color, 0.5f);
-            AddRing(_overlay, relic.Coord, relic.IsRevealed ? Visuals.RelicRevealed : Visuals.RelicUnknown, !relic.IsRevealed, 0.032f);
+            AddRing(_overlay, relic.Coord, relic.IsForecast ? Visuals.RelicForecast : Visuals.RelicMark, relic.IsForecast, 0.032f);
         }
     }
 
@@ -2210,7 +2235,7 @@ public sealed partial class BoardView : Node3D
                     AddRing(_preview, highlight.Coord, Visuals.Danger, false, 0.076f);
                     break;
                 case HighlightStyle.RevealBadge:
-                    AddBadge(highlight.Coord, Visuals.RelicUnknown);
+                    AddBadge(highlight.Coord, Visuals.RelicForecast);
                     break;
                 case HighlightStyle.FailureOutline:
                     AddCross(highlight.Coord, Visuals.Urgent);

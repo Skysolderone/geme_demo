@@ -1,7 +1,6 @@
 using System.Numerics;
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 
 namespace Siege.Core.Tests.EliminationEndgame;
@@ -16,19 +15,16 @@ public class 主动弃赛Tests
     [Fact]
     public void 弃赛后停止行动()
     {
-        // 设计文档 §12.2：D 在第 6 大回合弃赛 → 第 7 大回合起不再获得小回合、不再征募，其先锋信物不再提供先手修正。
-        // 变异验证 M-E8：Resign 不改 Status → 红 1（本测试）；M-E9：EndMajorRound 的 bonuses 用无名册重载 → 红 1（本测试：P3 出现在修正表）。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("G7", RelicFixtures.Vanguard())])
+        // 设计文档 §12.2：D 在第 6 大回合弃赛 → 第 7 大回合起不再获得小回合、不再征募、不进先手值明细（relic-redesign W1：先锋先手修正随旧信物删除）。
+        // 变异验证 M-E8：Resign 不改 Status → 红 1（本测试）。
+        MatchFlow match = LinkModeFixtures.PlainStarted()
             .AtRound(6, [TestMaps.P0, TestMaps.P1, TestMaps.P2, TestMaps.P3])
             .Stones(TestMaps.P3, "G7");
-        Assert.Equal(1, match.Relics.ReadInitiativeBonuses(match.Board, match.Roster)[TestMaps.P3]);
 
         match.Resign(TestMaps.P3);
         Assert.Equal(PlayerStatus.Resigned, match.StateOf(TestMaps.P3).Status);
         Assert.Equal(6, match.StateOf(TestMaps.P3).ResignedInMajorRound);
         Assert.False(match.Hands.PublicView(TestMaps.P3).IsActing);
-        Assert.Equal(RelicControlKind.Blocked, match.Relics.ControlOf(TestMaps.At("G7")).Kind);
-        Assert.False(match.Relics.ReadInitiativeBonuses(match.Board, match.Roster).ContainsKey(TestMaps.P3));
 
         match.PlayTurn("D4");
         match.PlayTurn("K4");
@@ -94,9 +90,9 @@ public class 主动弃赛Tests
     [Fact]
     public void 弃赛快照可记录()
     {
-        // 裁决记录 5：弃赛时记录盘面序列化、手牌两段账、效果快照与控制信物列表。
+        // 裁决记录 5：弃赛时记录盘面序列化（含信物层）、手牌两段账与效果快照（relic-redesign W1：控制信物列表随旧信物删除）。
         // 变异验证 M-E12：Resign 在 Hands.Resign 之后才取 PrivateView → 本轮新增被撤销、两段账失真 → 红 1（本测试的 Gained 断言）。
-        MatchFlow match = LinkModeFixtures.PlainStarted(relics: [("J9", RelicFixtures.Command())])
+        MatchFlow match = LinkModeFixtures.PlainStarted()
             .AtRound(5, [TestMaps.P3, TestMaps.P0, TestMaps.P1, TestMaps.P2])
             .Stones(TestMaps.P3, "J9", "K10");
         BigInteger powerBefore = match.Scoreboard.Latest!.Of(TestMaps.P3).Total;
@@ -117,8 +113,7 @@ public class 主动弃赛Tests
         Assert.Equal(1, snapshot.Hand.PendingGained);                        // 本轮新增 1 枚仍在账上，未被弃赛撤销
         Assert.Equal(51, snapshot.Hand.TotalCount);
         Assert.Equal(TestMaps.P3, snapshot.Effects.Player);
-        Assert.Equal(5, snapshot.Effects.DeployLimit);   // 第 5 大回合基础 4 + 控制军令 +1（growth-pass-1：原基础 3 → 4）
-        Assert.Equal(new[] { "J9" }, snapshot.ControlledRelics.Notations());
+        Assert.Equal(4, snapshot.Effects.DeployLimit);   // 第 5 大回合基础 4（growth-pass-1；relic-redesign W1：原"控制军令 +1"随旧信物删除）
         Assert.Equal(powerBefore, snapshot.Power);
         Assert.Equal(powerBefore, match.StateOf(TestMaps.P3).PowerAtResign);
         Assert.Equal(1, snapshot.RankAtResign);   // carry-in-out：快照含弃赛时势力名次（盘面上只有 P3 有子，第 1）
@@ -206,7 +201,7 @@ public class 主动弃赛Tests
         Assert.Equal(2, match.Resignations.Single().RankAtResign);
         string json = match.Serialize();
 
-        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, match.Relics.Generation, json);
+        MatchFlow restored = MatchFlow.RestoreUnvalidated(match.Board.BaseMap, json);
 
         Assert.Equal(match.Resignations.Single().RankAtResign, restored.Resignations.Single().RankAtResign);
         Assert.Equal(json, restored.Serialize());

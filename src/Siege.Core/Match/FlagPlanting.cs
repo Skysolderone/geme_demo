@@ -68,10 +68,11 @@ public sealed record MatchOptions
     public bool CarryInOut { get; init; }
 
     /// <summary>
-    /// 各玩家的带入（每人至多 1 件，缺省全员无带入）。关闭时 MUST 为空。征召签的类型在建局时抽出并写回（<see cref="MatchFlow.Options"/> 里是解析后的值）。
-    /// 关闭时，或开启但全员无带入时，对局与引入带入带出之前逐步相同。
+    /// 各玩家的带入清单（relic-redesign R14 / R15，D5：每人至多 5 件、其中至多 2 件保险；缺省全员不带入）。关闭时 MUST 为空，空清单不列出。
+    /// 清单是私有信息（R22）：挂出之前只有本人可见，不进任何公开视图；存档与跑局日志记录它（二者不是对局内的公开信息）。
+    /// 关闭时，或开启但全员不带入时，对局与引入带入之前逐步相同。
     /// </summary>
-    public ImmutableSortedDictionary<PlayerId, Carry.CarryIn> CarryIns { get; init; } = ImmutableSortedDictionary<PlayerId, Carry.CarryIn>.Empty;
+    public ImmutableSortedDictionary<PlayerId, PieceRelics.RelicLoadout> CarryIns { get; init; } = ImmutableSortedDictionary<PlayerId, PieceRelics.RelicLoadout>.Empty;
 }
 
 /// <summary>
@@ -110,7 +111,7 @@ public sealed class FlagPlanting
         _seed = seed;
     }
 
-    /// <summary>地图（地形、出生区、信物格位置全部公开）。</summary>
+    /// <summary>地图（地形、出生区全部公开）。</summary>
     public MapData Map { get; }
 
     /// <summary>配置的时限；<see cref="TimeSpan.Zero"/> 为立即。</summary>

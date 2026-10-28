@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using System.Numerics;
 using Siege.Core.Batch;
 using Siege.Core.Board;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
 using Siege.Presentation.Show;
 
@@ -38,12 +37,8 @@ internal static class ShowFixtures
     /// <summary>带分项的读数：总值 = 领地 + 军势（与 Core 的 <c>PlayerPower.Total</c> 口径一致）。</summary>
     internal static PowerReading Reading(PlayerId player, long territory, long groupScore, int? rank) => new(player, territory + groupScore, rank, territory, groupScore);
 
-    /// <summary>结算的一侧（只有盘面与势力读数；棋串、信物、玩家状态、终局结果按需 <c>with</c> 补上）。</summary>
+    /// <summary>结算的一侧（只有盘面与势力读数；棋串、玩家状态、终局结果按需 <c>with</c> 补上）。</summary>
     internal static SettlementSide Side(GameBoard board, params PowerReading[] power) => SettlementSide.Of(board, [.. power]);
-
-    /// <summary>一条公开信物状态（默认未揭示、无人控制）。</summary>
-    internal static RelicPublicState Relic(string cell, RelicType type, bool revealed) =>
-        new(Coord.Parse(cell), new RelicCellSpec(RelicZone.Contested, BudgetTier.Standard), revealed, revealed ? new RelicContent(type, 1) : null, revealed ? 2 : null, new RelicControl(RelicControlKind.Uncontrolled, null));
 
     internal static StatusReading Status(PlayerId player, PlayerStatus status) => new(player, status);
 

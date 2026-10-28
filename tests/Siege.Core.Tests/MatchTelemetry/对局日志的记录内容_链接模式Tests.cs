@@ -118,8 +118,8 @@ public class 对局日志的记录内容_链接模式Tests
             SettlementLogEntry entry = settled[i].Settlement!;
             Assert.Equal((record.Sequence, record.MajorRound, record.Battlefield, record.Reason.ToString(), record.Winner.Value, record.EliminationOrder),
                 (entry.Sequence, entry.MajorRound, entry.Battlefield, entry.Reason, entry.Winner, entry.EliminationOrder));
-            Assert.Equal(record.Entries.Select(e => (e.Player.Value, e.Rank, e.Power, e.ControlledRelics, e.ExclusiveCells, e.Stones)),
-                entry.Entries.Select(e => (e.Player, e.Rank, e.Power, e.ControlledRelics, e.ExclusiveCells, e.Stones)));
+            Assert.Equal(record.Entries.Select(e => (e.Player.Value, e.Rank, e.Power, e.HeldRelics, e.ExclusiveCells, e.Stones)),
+                entry.Entries.Select(e => (e.Player, e.Rank, e.Power, e.HeldRelics, e.ExclusiveCells, e.Stones)));
             Assert.Equal(nameof(SettlementReason.AllPassed), entry.Reason);
         }
 

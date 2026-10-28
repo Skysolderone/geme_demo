@@ -12,12 +12,13 @@ public sealed record SettlementOutcome(
 
 /// <summary>
 /// 正式结算顺序（设计文档 §6.3 + artisan-terrain-edit「正式结算顺序」七步）的<b>唯一</b>实现：
-/// 扣手牌 → 放置 → <b>应用改造</b> → 提子 → 信物揭示 → 控制与势力重算 → 排名与终局。
+/// 扣手牌 → 放置 → <b>应用改造</b> → 提子 → 势力重算 → 排名与终局（relic-redesign D4：原"信物揭示"步随旧信物删除）。
 /// 下游 change 只作为被驱动的步骤，MUST NOT 各自"就近"实现结算。
 /// </summary>
 /// <remarks>
 /// <para>确认时 MUST 重跑一次完整预演，不信任任何缓存的预演结果（裁决记录 1）；预演副本不会被提升为正式盘面，
-/// 正式盘面由同一组放置与移除操作重新写入，并与副本逐字节核对（design.md D1）。</para>
+/// 正式盘面由同一组放置与移除操作重新写入，并与副本逐字节核对（design.md D1）。核对用含信物层的 <see cref="GameBoard.Serialize"/>
+/// （relic-redesign D1：挂出只在一侧生效时也能抓到）；记入同形历史的是不含信物层的 <see cref="GameBoard.SerializeShape"/>（R28：同形不比较信物层）。</para>
 /// <para>围杀不产生通用奖励：本类不持有、不修改任何资源计数，对外只有一次手牌扣减请求。</para>
 /// </remarks>
 public sealed class SettlementDriver
@@ -74,7 +75,7 @@ public sealed class SettlementDriver
 
         if (rehearsal.IsPass)
         {
-            // Pass：不扣手牌、不改盘面、不记入已提交盘面集合、不揭示信物（盘面未变，不可能有新格进入覆盖）。
+            // Pass：不扣手牌、不改盘面、不记入已提交盘面集合。
             // 但仍要走第 5、6 步：power-score 规格「Pass 也触发更新」要求 Pass 后执行一次势力重算与排名更新，
             // 设计文档 §12.1 要求"每次合法批次结算或 Pass 完成后"都做出局检查。
             var passContext = new SettlementContext(context.Player, Board, IsPass: true, Sequence: null, [], []);
@@ -93,11 +94,13 @@ public sealed class SettlementDriver
         // 1. 从手牌扣除已部署棋子
         _hooks.DeductHand(context.Player, CountByType(ordered));
 
-        // 2. 将整个批次加入正式盘面
+        // 2. 将整个批次加入正式盘面（带入件随落子挂上：relic-redesign R14，与预演副本同一实现，编号从 context.NextRelicId 起按批内顺序）
         foreach (Placement placement in ordered)
         {
             Board.Place(placement.Coord, context.Player, placement.Type);
         }
+
+        BatchRehearsal.AttachCarried(Board, context, ordered);
 
         // 3. 同时应用本批次的全部改造（§6.3 + terrain-edit「改造先于提子生效」）。
         // 与第 4 步调换顺序会让"立栅致提子"失效——预演副本与正式盘面的 Serialize 比对会当场抓住。
@@ -106,23 +109,19 @@ public sealed class SettlementDriver
         // 4. 同时移除所有无气的敌方棋串（集合在预演中一次性算出）
         Board.RemoveStones(captures.Select(s => s.Coord));
 
-        string settled = Board.Serialize();
-        if (!string.Equals(settled, rehearsal.ProjectedBoard!.Serialize(), StringComparison.Ordinal))
+        if (!string.Equals(Board.Serialize(), rehearsal.ProjectedBoard!.Serialize(), StringComparison.Ordinal))
         {
             throw new SiegeRuleException("正式结算结果与预演副本不一致：盘面在预演与确认之间被修改。");
         }
 
-        int sequence = History.Record(settled);
+        int sequence = History.Record(Board.SerializeShape());
         var record = new CaptureRecord(sequence, context.Player, ordered, captures, edits);
         var settlementContext = new SettlementContext(context.Player, Board, IsPass: false, sequence, ordered, captures);
 
-        // 5. 更新首次进入覆盖范围的信物并永久公开其内容
-        _hooks.OnRevealRelics(settlementContext);
-
-        // 6. 重新计算信物控制、空格归属、棋串军势与总势力
+        // 5. 重新计算空格归属、棋串军势与总势力（挂在棋子上的信物随盘面：本批拾取 / 提走后的掉落即生效）
         _hooks.OnRecalculatePower(settlementContext);
 
-        // 7. 更新公开排名并检查出局与终局条件
+        // 6. 更新公开排名并检查出局与终局条件
         _hooks.OnCheckEndConditions(settlementContext);
 
         return new SettlementOutcome(Confirmed: true, IsPass: false, Failure: null, record);

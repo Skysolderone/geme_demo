@@ -1,7 +1,7 @@
 using Siege.Core.Board;
 using Siege.Core.Match;
-using Siege.Core.Relics;
 using Siege.Core.Scoring;
+using Siege.Core.Recruit;
 
 namespace Siege.Core.Tests.InitiativeOrder;
 
@@ -96,6 +96,6 @@ public class 排名的作用范围Tests
         Assert.Equal(first, last);
 
         static string Params(EffectSnapshot s) =>
-            $"{s.MajorRound}:{s.RevealCount}/{s.FreePickCount}/{s.TypeSlots}/{s.DeployLimit}{(s.EmblemCounts.IsEmpty ? string.Empty : "/徽记")}";
+            $"{s.MajorRound}:{s.RevealCount}/{s.FreePickCount}/{s.TypeSlots}/{s.DeployLimit}";
     }
 }

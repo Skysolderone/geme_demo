@@ -9,7 +9,7 @@ namespace Siege.Core.Ai;
 /// </summary>
 public static class HeuristicAi
 {
-    /// <summary>AI 扰动子流名：按玩家分流（<c>ai-P0</c>），与 <c>relic-gen</c> / <c>recruit</c> / <c>setup</c> 互相独立。</summary>
+    /// <summary>AI 扰动子流名：按玩家分流（<c>ai-P0</c>），与 <c>recruit</c> / <c>setup</c> / <c>relic-spawn</c> 互相独立。</summary>
     public static string StreamName(PlayerId player) => $"ai-{player}";
 
     /// <summary>为某玩家创建正式 AI。</summary>
@@ -43,7 +43,7 @@ public static class HeuristicAi
         ArgumentNullException.ThrowIfNull(match);
         AiVisionPorts vision = VisionFor(match, player, config);
         return new HeuristicTurnController(
-            player, vision.Observe, match.Seed.Stream(StreamName(player)), difficulty, weights, config, relicValue: null, lifeQuery, cacheLife)
+            player, vision.Observe, match.Seed.Stream(StreamName(player)), difficulty, weights, config, lifeQuery, cacheLife)
         {
             RehearsalView = vision.Rehearsal,
         };
