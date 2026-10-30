@@ -712,19 +712,72 @@ public sealed partial class BoardView : Node3D
         var ground = Visuals.Matte(Visuals.IslandRim, 1f);
         island.AddChild(new MeshInstance3D { Name = "IslandSurface", Mesh = surface.Commit(), MaterialOverride = ground });
 
-        float[] depths = [0f, 0.9f, 2.5f, 4.8f, 7.5f, 9.5f];
-        float[] scales = [1f, 0.985f, 0.91f, 0.73f, 0.49f, 0.22f];
-        float[] tones = [1f, 0.97f, 0.88f, 0.80f, 0.72f];
-        foreach ((Vector3 a, Vector3 b, Vector3 outward, Coord _) in border)
+        // map-restyle 段B：岛缘从均匀收窄的锥体改成四层带外凸岩沿的阶梯状断崖（参考图的层叠平台式断崖）。
+        // 剖面自上而下按 (整体缩放, 外凸量, 深度) 给：每层顶上一圈略向外下倾的岩沿台面、近竖直略内倾的侧壁、层间一道朝下的浅缝；
+        // 上面几层矮、往下渐高，上层的整体缩放也收得少：相机俯角恒 60°，朝南的墙只在岛缘到标注环之间露出头几格深，前三层的岩沿台面都要落在这里面才读得出层叠。
+        // 整体缩放仍是改前的 Shrink（岛向下收口），外凸量沿格边法线加在缩放之后，由各顶点的斜接方向保证转角处墙面严丝合缝。
+        // 顶面 0.12 内与岛面齐平：标注底板（厚 TileHeight）盖在这一段外面，第一道岩沿从底板之下才探出来。
+        (float Scale, float Out, float Depth)[] profile =
+        [
+            (1f, 0f, 0f),
+            (1f, 0f, 0.12f),
+            (1f, 0.14f, 0.17f),         // 第 1 层岩沿台面
+            (1f, 0.16f, 0.36f),         // 岩沿正面
+            (1f, 0.12f, 1.00f),         // 侧壁
+            (1f, -0.06f, 1.12f),        // 层间浅缝（朝下）
+            (0.985f, -0.06f, 1.20f),    // 缝的内壁
+            (0.985f, 0.13f, 1.26f),     // 第 2 层
+            (0.985f, 0.15f, 1.46f),
+            (0.985f, 0.10f, 2.50f),
+            (0.985f, -0.07f, 2.64f),
+            (0.965f, -0.07f, 2.74f),
+            (0.965f, 0.12f, 2.80f),     // 第 3 层
+            (0.965f, 0.14f, 3.02f),
+            (0.965f, 0.08f, 4.70f),
+            (0.965f, -0.08f, 4.88f),
+            (0.93f, -0.08f, 5.00f),
+            (0.93f, 0.11f, 5.06f),      // 第 4 层
+            (0.93f, 0.13f, 5.30f),
+            (0.93f, 0.04f, 7.60f),
+            (0.93f, -0.12f, 7.85f),
+            (0.82f, -0.12f, 8.30f),     // 岛底收口
+            (0.62f, -0.12f, 9.40f),
+        ];
+        // 每段剖面（行 i → i+1）的顶点色：岩沿台面最亮、侧壁逐层递暗、层间缝最暗；法线按剖面走向给，台面朝上、缝朝下，受光后层次自然分开。
+        float[] tones = [0.98f, 1f, 0.94f, 0.82f, 0.52f, 0.60f, 1f, 0.92f, 0.80f, 0.52f, 0.60f, 1f, 0.91f, 0.78f, 0.50f, 0.58f, 1f, 0.90f, 0.75f, 0.48f, 0.66f, 0.60f];
+
+        // 顶点斜接：同一格角上一段结束、另一段开始时取 (n1 + n2) / (1 + n1·n2)，两段墙面各外凸同一量后仍在格角相接（直角处即角点沿两法线各挪一份）；
+        // 只有一段相接、或对角相触 / 四段共点的格角退回该段自己的法线。格角键取 2 倍坐标取整（格心在半整数格点上，角点必落在整数上）。
+        // 深水格的边是瀑布口：外凸量取 0、剖面只向内收，水帘仍贴着岛缘；与陆地段共用的角点也取 0，岩沿在那里收尖。
+        var waterAt = board.Cells.Where(c => c.Surface == Surface.DeepWater).ToDictionary(c => c.Coord);
+        var endsAt = new Dictionary<(int, int), int>();
+        var startsAt = new Dictionary<(int, int), int>();
+        var degree = new Dictionary<(int, int), int>();
+        for (int i = 0; i < border.Count; i++)
         {
-            for (int i = 0; i < depths.Length - 1; i++)
+            (Vector3 a, Vector3 b, _, _) = border[i];
+            startsAt[KeyOf(a)] = i;
+            endsAt[KeyOf(b)] = i;
+            degree[KeyOf(a)] = degree.GetValueOrDefault(KeyOf(a)) + 1;
+            degree[KeyOf(b)] = degree.GetValueOrDefault(KeyOf(b)) + 1;
+        }
+
+        for (int i = 0; i < border.Count; i++)
+        {
+            (Vector3 a, Vector3 b, Vector3 outward, Coord cell) = border[i];
+            float own = waterAt.ContainsKey(cell) ? 0f : 1f;
+            (Vector3 miterA, float factorA) = MiterAt(a, outward, own, endsAt);
+            (Vector3 miterB, float factorB) = MiterAt(b, outward, own, startsAt);
+            for (int r = 0; r + 1 < profile.Length; r++)
             {
-                Vector3 upperA = Shrink(a, scales[i], depths[i]);
-                Vector3 upperB = Shrink(b, scales[i], depths[i]);
-                Vector3 lowerA = Shrink(a, scales[i + 1], depths[i + 1]);
-                Vector3 lowerB = Shrink(b, scales[i + 1], depths[i + 1]);
-                float shade = tones[i];
-                AddQuad(walls, upperA, upperB, lowerB, lowerA, outward, new Color(shade, shade, shade));
+                Vector3 upperA = At(a, miterA, factorA, profile[r]);
+                Vector3 upperB = At(b, miterB, factorB, profile[r]);
+                Vector3 lowerA = At(a, miterA, factorA, profile[r + 1]);
+                Vector3 lowerB = At(b, miterB, factorB, profile[r + 1]);
+                float dOut = profile[r + 1].Out - profile[r].Out, dDepth = profile[r + 1].Depth - profile[r].Depth;
+                Vector3 normal = ((outward * dDepth) + (Vector3.Up * dOut)).Normalized();
+                float shade = tones[r];
+                AddQuad(walls, upperA, upperB, lowerB, lowerA, normal, new Color(shade, shade, shade));
             }
         }
         var cliff = Visuals.Matte(Color.Color8(178, 166, 194), 1f);
@@ -745,14 +798,15 @@ public sealed partial class BoardView : Node3D
             island.AddChild(new MeshInstance3D { Name = "IslandRoots", Mesh = LowPolyMesh.Merge(roots), MaterialOverride = Visuals.Matte(Color.Color8(134, 108, 126), 1f) });
 
         // Group repeated spikes by scene variant to bound draw calls.
+        // 石笋改挂在岛底收口面之下（顶没进收口面，缩放 0.72 落在 0.82 → 0.62 两圈之间）：断崖的岩沿外凸之后，原先挂在上层侧壁的石笋会被整个遮住。
         for (int variant = 0; variant < TerrainParts.IslandSpike.Variants; variant++)
         {
             var transforms = new List<Transform3D>();
             for (int i = variant; i < border.Count; i += TerrainParts.IslandSpike.Variants * 6)
             {
-                (Vector3 a, Vector3 b, Vector3 outward, Coord _) = border[i];
+                (Vector3 a, Vector3 b, Vector3 _, Coord _) = border[i];
                 float length = 1.4f + ((i % 9) * 0.17f);
-                Vector3 place = ((a + b) * 0.5f) - (outward * 0.35f) + Vector3.Down * (0.9f + length);
+                Vector3 place = Shrink((a + b) * 0.5f, 0.72f, 8.6f + length);
                 transforms.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(0.38f, length, 0.38f)), place));
             }
             if (transforms.Count > 0)
@@ -783,7 +837,6 @@ public sealed partial class BoardView : Node3D
             AddInstanced("Clouds" + variant, TerrainParts.PieceOf(TerrainParts.Cloud, variant), transforms);
         }
 
-        var waterAt = board.Cells.Where(c => c.Surface == Surface.DeepWater).ToDictionary(c => c.Coord);
         var falls = new SurfaceTool();
         falls.Begin(Mesh.PrimitiveType.Triangles);
         int fallCount = 0;
@@ -806,6 +859,28 @@ public sealed partial class BoardView : Node3D
         {
             Vector3 relative = point - frameCenter;
             return new Vector3(frameCenter.X + relative.X * factor, top - depth, frameCenter.Z + relative.Z * factor);
+        }
+
+        Vector3 At(Vector3 point, Vector3 miter, float factor, (float Scale, float Out, float Depth) row)
+            => Shrink(point, row.Scale, row.Depth) + (miter * (row.Out * factor));
+
+        static (int, int) KeyOf(Vector3 point) => (Mathf.RoundToInt(point.X * 2f), Mathf.RoundToInt(point.Z * 2f));
+
+        // 某段在格角 point 处的斜接方向与外凸系数：邻段取自 neighbours（本段起点查"在此结束"的段，终点查"在此开始"的段）。
+        // 外凸系数按格角散列在 ±25% 内抖一下，岩沿不是一条呆直的线；同一格角两段算出同一个值（键相同），墙面仍相接。
+        (Vector3 Miter, float Factor) MiterAt(Vector3 point, Vector3 outward, float own, Dictionary<(int, int), int> neighbours)
+        {
+            (int, int) key = KeyOf(point);
+            float jitter = 1f + (0.25f * LowPolyMesh.Signed(key.Item1 * 7919, key.Item2));
+            if (degree[key] != 2 || !neighbours.TryGetValue(key, out int other))
+            {
+                return (outward, own * jitter);
+            }
+
+            Vector3 next = border[other].Outward;
+            float cos = outward.Dot(next);
+            float factor = Math.Min(own, waterAt.ContainsKey(border[other].Cell) ? 0f : 1f) * jitter;
+            return cos < -0.9f ? (outward, factor) : ((outward + next) / (1f + cos), factor);
         }
 
         void AddInstanced(string name, TerrainParts.Piece piece, List<Transform3D> transforms)

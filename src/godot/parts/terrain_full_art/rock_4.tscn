@@ -37,17 +37,17 @@ _surfaces = [{
 "vertex_data": PackedByteArray("hH4evQAAAACsoZk8KxH0vAAAAADI//28AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAAKxH0vAAAAADI//28hH4evQAAAACsoZk8KxH0vAAAAADI//28jSWmPAAAAABKThu9AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAAjSWmPAAAAABKThu9KxH0vAAAAADI//28jSWmPAAAAABKThu9LWAtPQAAAABcH/g7AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAALWAtPQAAAABcH/g7jSWmPAAAAABKThu9LWAtPQAAAABcH/g7MqHAOwAAAABteS49AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAAMqHAOwAAAABteS49LWAtPQAAAABcH/g7MqHAOwAAAABteS49iH4evQAAAACfoZk8AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAAiH4evQAAAACfoZk8MqHAOwAAAABteS49/BfEp4pqGrP8F8Snimoas/wXxKeKahqz/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/jhhz841YAImOGHPzjVgAiY4Yc/ONWACJ/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/o+oruJSmCcOj6iu4lKYJw6PqK7iUpgnD/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/vbRelK9Rb7K9tF6Ur1Fvsr20XpSvUW+y/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/wVogldKZGp7BWiCV0pkansFaIJXSmRqe/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/")
 }]
 
-[node name="Rock4" type="Node3D" unique_id=660755117]
+[node name="Rock4" type="Node3D" unique_id=1339438023]
 
-[node name="Stone" type="MeshInstance3D" parent="." unique_id=1004495531]
+[node name="Stone" type="MeshInstance3D" parent="." unique_id=1161819318]
 material_override = ExtResource("1_0w4ti")
 mesh = SubResource("rock_4_0")
 
-[node name="Shade" type="MeshInstance3D" parent="." unique_id=1368327835]
+[node name="Shade" type="MeshInstance3D" parent="." unique_id=1688384893]
 material_override = ExtResource("2_mvh3k")
 mesh = SubResource("rock_4_1")
 
-[node name="Crystal" type="MeshInstance3D" parent="." unique_id=36418871]
+[node name="Crystal" type="MeshInstance3D" parent="." unique_id=218422477]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.27, 0.1)
 material_override = ExtResource("3_x3tnn")
 mesh = SubResource("rock_4_2")

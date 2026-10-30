@@ -795,15 +795,16 @@ public static class LowPoly
     /// 返回节点原点在桥面（地砖上表面）；网格里过桥方向沿 Z（栏杆沿 Z 走），BoardView 按河道走向绕 Y 转。
     /// </summary>
     /// <remarks>
-    /// map-elements-v2 段 B：用 <see cref="LowPolyMesh"/> 拼成两个网格（桥面木板一份、深色木料一份，各一个 surface，顶点色只当亮度系数）。
-    /// 外形不超出改前的包围盒：x、z ∈ ±0.45（TileSize 见方）、y ∈ [−0.06, 0.13]。角墩是桥墩：从桥底（−0.06）一直立到栏杆顶，比中柱粗。
+    /// map-elements-v2 段 B：用 <see cref="LowPolyMesh"/> 拼成几个网格（桥面木板、深色木料、绳栏各一份 surface，顶点色只当亮度系数）。
+    /// map-restyle 段B：扶手与斜撑换成绳栏——两侧各三根立柱（两端角墩 + 中柱），柱间两道下垂的绳；桥面木板缝加宽到 0.018。
+    /// 外形不超出改前的包围盒：x、z ∈ ±0.45（TileSize 见方）、y ∈ [−0.06, 0.13]；绳只在 x = ±0.415 两侧，格心上方净空（拾取按模型）。
     /// </remarks>
     public static Node3D Bridge()
     {
         const float half = BoardGeometry.TileSize * 0.5f;
-        const float deckDepth = 0.04f, bottom = -0.06f, top = 0.13f;
+        const float deckDepth = 0.04f, bottom = -0.06f;
         const int planks = 8;
-        const float seam = 0.012f;
+        const float seam = 0.018f;
         float plank = (BoardGeometry.TileSize - ((planks - 1) * seam)) / planks;
 
         // 桥面：八块横板（沿 X 长、沿 Z 排开），每块亮度按散列错开一点。
@@ -816,27 +817,33 @@ public static class LowPoly
             deck.Add((board, new Transform3D(Basis.Identity, new Vector3(0f, 0f, z))));
         }
 
-        // 深色木料：板下的垫木、四根角墩、两根中柱、两道扶手；格角内的小木钉与斜撑给桥近景细节。
+        // 深色木料：板下的垫木、四根角墩、两根中柱；格角内的小木钉给桥近景细节。立柱位置与顶高由 BridgePostTops 一处给出（TerrainParts 按它加柱顶金帽）。
         var timber = new List<(ArrayMesh, Transform3D)>
         {
             (LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, -bottom - deckDepth, BoardGeometry.TileSize), 0f, 0.96f, top: -deckDepth), Transform3D.Identity),
         };
-        const float pier = 0.07f, post = 0.04f, rail = 0.03f;
-        float side = half - (pier * 0.5f);
-        foreach (float sx in new[] { -side, side })
+        foreach ((float x, float z, float top, float size) in BridgePostTops)
         {
-            foreach (float sz in new[] { -(half - (pier * 0.5f) - 0.015f), half - (pier * 0.5f) - 0.015f })
-            {
-                timber.Add((LowPolyMesh.BeveledSlab(new Vector3(pier, top - bottom, pier), 0.012f, 1f, top: top, sideShade: 0.95f),
-                    new Transform3D(Basis.Identity, new Vector3(sx, 0f, sz))));
-            }
+            bool pier = size > BridgePost;
+            timber.Add((LowPolyMesh.BeveledSlab(new Vector3(size, top - (pier ? bottom : 0f), size), pier ? 0.012f : 0.008f, pier ? 1f : 0.97f, top: top, sideShade: 0.95f),
+                new Transform3D(Basis.Identity, new Vector3(x, 0f, z))));
+        }
 
-            timber.Add((LowPolyMesh.BeveledSlab(new Vector3(post, 0.10f, post), 0.008f, 0.97f, top: 0.10f, sideShade: 0.95f),
-                new Transform3D(Basis.Identity, new Vector3(sx, 0f, 0f))));
-            float reach = half - pier - 0.015f;
-            timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.105f, -reach), new Vector3(sx, 0.105f, reach), rail, 0.025f, 0.97f), Transform3D.Identity));
-            timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.025f, -reach), new Vector3(sx, 0.095f, -0.10f), 0.024f, 0.023f, 0.95f), Transform3D.Identity));
-            timber.Add((LowPolyMesh.Beam(new Vector3(sx, 0.095f, 0.10f), new Vector3(sx, 0.025f, reach), 0.024f, 0.023f, 0.95f), Transform3D.Identity));
+        // 绳栏：每侧上下两道绳，各在角墩与中柱之间分两段下垂（Beam 需要水平分量，竖直段不用它）；绳比柱细得多，读作麻绳而不是横木。
+        var rope = new List<(ArrayMesh, Transform3D)>();
+        const float ropeSize = 0.013f, sag = 0.022f;
+        float reach = half - (BridgePier * 0.5f) - 0.015f;
+        foreach (float sx in new[] { -BridgeSide, BridgeSide })
+        {
+            foreach (float y in new[] { 0.104f, 0.058f })
+            {
+                foreach ((float from, float to) in new[] { (-reach, 0f), (0f, reach) })
+                {
+                    float mid = (from + to) * 0.5f;
+                    rope.Add((LowPolyMesh.Beam(new Vector3(sx, y, from), new Vector3(sx, y - sag, mid), ropeSize, ropeSize, 0.98f), Transform3D.Identity));
+                    rope.Add((LowPolyMesh.Beam(new Vector3(sx, y - sag, mid), new Vector3(sx, y, to), ropeSize, ropeSize, 0.98f), Transform3D.Identity));
+                }
+            }
         }
 
         // 每块板两颗低矮木钉；只做几何与顶点明暗，不增加材质或绘制批次。
@@ -853,7 +860,31 @@ public static class LowPoly
         var root = new Node3D { Name = "Bridge" };
         root.AddChild(new MeshInstance3D { Name = "Deck", Mesh = LowPolyMesh.Merge(deck), MaterialOverride = Shaded(Visuals.BridgeDeck) });
         root.AddChild(new MeshInstance3D { Name = "Timber", Mesh = LowPolyMesh.Merge(timber), MaterialOverride = Shaded(Visuals.Timber) });
+        root.AddChild(new MeshInstance3D { Name = "Rope", Mesh = LowPolyMesh.Merge(rope), MaterialOverride = Shaded(Visuals.BridgeDeck) });
         return root;
+    }
+
+    /// <summary>桥的角墩边长、中柱边长、立柱所在的 x（两侧）。</summary>
+    private const float BridgePier = 0.07f, BridgePost = 0.04f, BridgeSide = (BoardGeometry.TileSize * 0.5f) - (BridgePier * 0.5f);
+
+    /// <summary>
+    /// 桥的六根立柱：位置 (x, z)、柱顶高、边长。角墩顶 0.122、中柱顶 0.112，各留 0.008 给 <see cref="TerrainParts"/> 的柱顶金帽（帽顶 0.13 / 0.12，不超出桥的包围盒）。
+    /// </summary>
+    public static readonly (float X, float Z, float Top, float Size)[] BridgePostTops = BuildBridgePostTops();
+
+    private static (float X, float Z, float Top, float Size)[] BuildBridgePostTops()
+    {
+        const float half = BoardGeometry.TileSize * 0.5f;
+        float end = half - (BridgePier * 0.5f) - 0.015f;
+        var posts = new List<(float, float, float, float)>();
+        foreach (float sx in new[] { -BridgeSide, BridgeSide })
+        {
+            posts.Add((sx, -end, 0.122f, BridgePier));
+            posts.Add((sx, end, 0.122f, BridgePier));
+            posts.Add((sx, 0f, 0.112f, BridgePost));
+        }
+
+        return [.. posts];
     }
 
     /// <summary>

@@ -48,6 +48,7 @@ public static class TerrainParts
     private static readonly Color ArtGold = Color.Color8(222, 190, 110);
     private static readonly Color ArtIvory = Color.Color8(236, 230, 226);
     private static readonly Color ArtWater = Color.Color8(70, 186, 190);
+    private static readonly Color ArtFoam = Color.Color8(226, 243, 238);   // 象牙偏青：河岸泡沫 / 浅滩带，比水面亮、比地砖低调
 
     // 障碍与装饰（map-elements-v2 段 C 用 LowPolyMesh 重建；档数在 LowPoly 一处，建模函数按它取模）。pines / ruins 只服务场景格，按裁决 M3 不重建、不扩档。
     public static readonly Kind Rock = new("rock", LowPoly.RockVariants, v => Themed("rock", LowPoly.Rock(v), v));
@@ -76,10 +77,10 @@ public static class TerrainParts
     /// </summary>
     public static readonly Kind TileTop = new("tile_top", 3, v => Single("TileTop", TileTopMesh(v), NeutralMaterial()), "地砖上表面中心");
 
-    /// <summary>第 1 层侧面（缓坡）：铺满整格、高一层，四条暖土色带，棱与格边齐平。</summary>
+    /// <summary>第 1 层侧面（缓坡）：铺满整格、高一层；两道与格边齐平的土沿，沿下土体略内收，读作两级低矮的土台（map-restyle 段B）。</summary>
     public static readonly Kind SideSlope = new("side_slope", 2, v => Single("SideSlope", SideSlopeMesh(v), SideMaterial(ArtSoil)), "该层带的顶面中心");
 
-    /// <summary>第 2 层侧面（崖壁）：铺满整格、高一层；亮岩沿下是压暗的竖向节理岩体。</summary>
+    /// <summary>第 2 层侧面（崖壁）：铺满整格、高一层；两道亮岩沿外凸、沿下是压暗的竖向节理岩体，层叠石台（map-restyle 段B）。</summary>
     public static readonly Kind SideCliff = new("side_cliff", 3, v => Single("SideCliff", SideCliffMesh(v), SideMaterial(ArtStone.Lightened(0.42f))), "该层带的顶面中心");
 
     /// <summary>砖缝衬底：铺满整格、厚 <see cref="LinerThickness"/>。材质由 BoardView 按底色覆盖；导出时带中性白材质。</summary>
@@ -87,14 +88,15 @@ public static class TerrainParts
 
     // —— 水系部件（map-elements-v2 段 B，design D4）。
 
-    /// <summary>河岸石沿占水格边缘的宽度（O-2：一格宽河的水面可见宽度 = 1 − 2 × 0.06 = 0.88 ≥ 0.78）。</summary>
-    public const float BankLipWidth = 0.06f;
+    /// <summary>河岸泡沫带占水格边缘的最大宽度（O-2：一格宽河的水面可见宽度 = 1 − 2 × 0.10 = 0.80 ≥ 0.78）。</summary>
+    public const float BankLipWidth = 0.10f;
 
     /// <summary>
-    /// 河岸石沿（一条边一件）：沿水格一条边排三块倒角石，占水格边缘 <see cref="BankLipWidth"/>，顶面比地砖上表面低 0.015 起，底没入水面之下。
-    /// 网格里边沿 X 轴、石沿朝 +Z（水格内侧）展开；BoardView 按边的朝向绕 Y 旋转。内置岩灰（与崖壁侧面同一份材质）。
+    /// 河岸泡沫带（一条边一件，map-restyle 段B）：沿水格一条边贴一条薄而宽的浅色带——外侧一道泡沫（顶 −0.068）、内侧一道浅滩（顶 −0.082），
+    /// 内沿按散列起伏，最宽到 <see cref="BankLipWidth"/>；都高于水面（−0.092）、低于桥底（−0.06）。
+    /// 网格里边沿 X 轴、带朝 +Z（水格内侧）展开；BoardView 按边的朝向绕 Y 旋转。内置象牙偏青材质。
     /// </summary>
-    public static readonly Kind BankLip = new("bank_lip", 3, v => Single("BankLip", BankLipMesh(v), SideMaterial(ArtStone)), "水格边中点（高度取该格地砖上表面）");
+    public static readonly Kind BankLip = new("bank_lip", 3, v => Single("BankLip", BankLipMesh(v), SideMaterial(ArtFoam)), "水格边中点（高度取该格地砖上表面）");
 
     // —— 外框与底座部件（map-elements-v2 段 D，design D5）。
 
@@ -302,11 +304,12 @@ public static class TerrainParts
         }
         else if (kind == "bridge")
         {
+            // 绳栏之后扶手不再是一根直木，金饰改成六根立柱的柱顶小金帽（角墩顶 0.122 → 帽顶 0.13，中柱顶 0.112 → 0.12），仍不超出改前包围盒。
             var gilding = new List<(ArrayMesh, Transform3D)>();
-            foreach (float x in new[] { -0.415f, 0.415f })
+            foreach ((float x, float z, float top, float size) in LowPoly.BridgePostTops)
             {
-                gilding.Add((LowPolyMesh.Beam(new Vector3(x, 0.121f, -0.32f), new Vector3(x, 0.121f, 0.32f),
-                    0.008f, 0.006f, 0.98f), Transform3D.Identity));
+                gilding.Add((LowPolyMesh.BeveledSlab(new Vector3(size, 0.008f, size), 0.002f, 0.98f, top: top + 0.008f, sideShade: 0.94f),
+                    new Transform3D(Basis.Identity, new Vector3(x, 0f, z))));
             }
 
             root.AddChild(new MeshInstance3D
@@ -347,7 +350,7 @@ public static class TerrainParts
         "crag" => part == "Rim" ? ArtStone.Lightened(0.13f) : ArtDarkStone,
         "shallows" => part == "Pebble" ? ArtStone.Lightened(0.24f) : ArtLightTeal.Lightened(0.45f),
         "fence" => ArtWood,
-        "bridge" => part == "Deck" ? ArtDeck : ArtWood,
+        "bridge" => part == "Deck" ? ArtDeck : part == "Rope" ? ArtIvory : ArtWood,
         _ => original,
     };
 
@@ -373,64 +376,56 @@ public static class TerrainParts
         return LowPolyMesh.Merge(parts);
     }
 
+    /// <summary>缓坡：两级土台（土沿内收 0.05，没有岩缝），土体两条色带 0.86 / 0.94——比崖壁柔和，仍读作"坡"。</summary>
     private static ArrayMesh SideSlopeMesh(int variant) => LowPolyMesh.Strata(
-        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 3, jitter: 0.008f, seed: 201 + Wrap(variant, SideSlope.Variants));
+        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize),
+        bands: 2, jitter: 0.012f, seed: 201 + Wrap(variant, SideSlope.Variants), lip: 0.05f, ledges: 2, bodyShades: [0.86f, 0.94f]);
 
-    private static ArrayMesh SideCliffMesh(int variant)
-    {
-        // 单一 surface 以顶点色区分岩沿和岩体，既保留共享材质也不增加每格绘制。
-        ArrayMesh source = LowPolyMesh.Strata(
-            new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize),
-            bands: 4, jitter: 0.03f, seed: 301 + Wrap(variant, SideCliff.Variants), lip: 0.08f, crevice: 0.09f);
-        global::Godot.Collections.Array arrays = source.SurfaceGetArrays(0);
-        Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
-        Color[] colors = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            // 岩沿占顶部 0.045；下方岩体压暗，竖向裂缝由 Strata 的内凹保留。
-            int triangle = i - (i % 3);
-            float faceY = (vertices[triangle].Y + vertices[triangle + 1].Y + vertices[triangle + 2].Y) / 3f;
-            float rockDepth = MathF.Max(0.001f, BoardGeometry.LayerHeight - 0.12f);
-            int band = Math.Clamp((int)((-faceY - 0.07f) * 4f / rockDepth), 0, 3);
-            float factor = vertices[i].Y >= -0.0451f ? 1f : ((band & 1) == 0 ? 0.62f : 0.76f);
-            Color color = colors[i];
-            colors[i] = new Color(color.R * factor, color.G * factor, color.B * factor, color.A);
-        }
-
-        arrays[(int)Mesh.ArrayType.Color] = colors;
-        var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-        return mesh;
-    }
+    /// <summary>
+    /// 崖壁：两级石台，每级一圈与格边齐平的亮岩沿（1.0），沿下岩体内收并压暗到 0.62 / 0.76（段A 定的明暗差），竖向节理与岩缝由 Strata 的内凹保留。
+    /// 单一 surface 以顶点色区分岩沿和岩体，既保留共享材质也不增加每格绘制。第二道岩沿顶在 −0.155，TerrainShadow 的底级踏面（−0.18）贴在它正面。
+    /// </summary>
+    private static ArrayMesh SideCliffMesh(int variant) => LowPolyMesh.Strata(
+        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize),
+        bands: 2, jitter: 0.03f, seed: 301 + Wrap(variant, SideCliff.Variants), lip: 0.08f, crevice: 0.09f, ledges: 2, bodyShades: [0.62f, 0.76f]);
 
     private static ArrayMesh LinerMesh() => LowPolyMesh.BeveledSlab(
         new Vector3(BoardGeometry.CellSize, LinerThickness, BoardGeometry.CellSize), 0f, 1f, top: LinerThickness * 0.5f);
 
     /// <summary>
-    /// 石沿网格：三块石头沿边（x ∈ ±0.495，两端离格角 0.005，与相邻那条石沿的外侧面不共面）排开，块间留 0.008 的缝；
-    /// 分块点、中间那块的顶高与内沿按散列错开（只往低、往窄走：顶不高于 −0.015，宽不超过 <see cref="BankLipWidth"/>）。底在 −0.10，没入水面（−0.092）。
+    /// 泡沫带网格：x ∈ ±0.495（两端离格角 0.005，与相邻那条带的端面不共面），外沿贴格边 z = 0，沿边 8 段；
+    /// 浅滩带在下（顶 −0.082，内沿 0.07–0.10 按散列起伏，亮度 0.90），泡沫带叠在上（顶 −0.068，内沿 0.035–0.065，亮度 1），
+    /// 泡沫内沿再压一条更亮的细线。两条带底都在 −0.10，没入水面（−0.092）。
     /// </summary>
     private static ArrayMesh BankLipMesh(int variant)
     {
         int seed = 401 + Wrap(variant, BankLip.Variants);
-        const float end = 0.495f, gap = 0.004f, top = -0.015f, bottom = -0.10f;
-        float cut1 = -0.165f + (LowPolyMesh.Signed(seed, 0) * 0.06f);
-        float cut2 = 0.165f + (LowPolyMesh.Signed(seed, 1) * 0.06f);
-        (float From, float To, float Top, float Width)[] stones =
-        [
-            (-end, cut1 - gap, top, BankLipWidth),
-            (cut1 + gap, cut2 - gap, top - 0.003f - (0.006f * LowPolyMesh.Unit(seed, 2)), BankLipWidth - (0.01f * LowPolyMesh.Unit(seed, 3))),
-            (cut2 + gap, end, top, BankLipWidth),
-        ];
+        const float end = 0.495f, bottom = -0.10f, foamTop = -0.068f, shoalTop = -0.082f;
+        const int segments = 8;
         var parts = new List<(ArrayMesh, Transform3D)>();
-        for (int i = 0; i < stones.Length; i++)
+        var foamInner = new List<Vector3>();
+        foreach ((float top, float near, float far, float shade, int salt) in new[] { (shoalTop, 0.07f, BankLipWidth, 0.90f, 0), (foamTop, 0.035f, 0.065f, 1f, 50) })
         {
-            (float from, float to, float stoneTop, float width) = stones[i];
-            ArrayMesh stone = LowPolyMesh.BeveledSlab(new Vector3(to - from, stoneTop - bottom, width), 0.012f, 0.98f,
-                seed: seed + (i * 7), facetJitter: 0.03f, top: stoneTop, sideShade: 0.95f);
-            parts.Add((stone, new Transform3D(Basis.Identity, new Vector3((from + to) * 0.5f, 0f, width * 0.5f))));
+            var outer = new List<Vector3>();
+            var inner = new List<Vector3>();
+            for (int i = 0; i <= segments; i++)
+            {
+                float x = Mathf.Lerp(-end, end, i / (float)segments);
+                // 两端收窄一点：相邻两条带在格角处相遇时不互相穿插成尖角。
+                float taper = i == 0 || i == segments ? 0.7f : 1f;
+                float width = Mathf.Lerp(near, far, LowPolyMesh.Unit(seed, salt + i)) * taper;
+                outer.Add(new Vector3(x, top, 0f));
+                inner.Add(new Vector3(x, top, width));
+            }
+
+            parts.Add((LowPolyMesh.Band(outer, inner, top - bottom, shade, shade * 0.93f), Transform3D.Identity));
+            if (salt > 0)
+            {
+                foamInner.AddRange(inner.Select(p => new Vector3(p.X, foamTop + 0.002f, p.Z - 0.006f)));
+            }
         }
 
+        parts.Add((LowPolyMesh.Ribbon(foamInner, 0.012f, shade: 1f, minShade: 1f), Transform3D.Identity));
         return LowPolyMesh.Merge(parts);
     }
 

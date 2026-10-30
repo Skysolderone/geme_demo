@@ -149,27 +149,49 @@ public static class LowPolyMesh
     /// （格角处内缩 0.4 倍、段点处 0.7 倍，相邻崖壁之间读出竖向节理），坡脚收回格边、与下一层齐平。
     /// </param>
     /// <param name="crevice">崖壁每个面上一道岩缝的额外深度（位置按散列取）；缓坡给 0。</param>
-    public static ArrayMesh Strata(Vector3 size, int bands, float jitter, int seed, float lip = 0f, float crevice = 0f)
+    /// <param name="ledges">
+    /// 崖壁的岩沿道数（map-restyle 段B）：1 = 只有顶边一圈岩沿（改前形状）；&gt; 1 = 把高度等分成几层石台，每层顶上一圈与格边齐平的岩沿、岩沿下岩体内缩，
+    /// 层与层之间露出一条朝上的窄台面（读作外凸的岩沿）。缓坡（<paramref name="lip"/> = 0）忽略。
+    /// </param>
+    /// <param name="bodyShades">
+    /// 岩体各条色带的亮度系数（按带序循环取，不受 <see cref="MinShade"/> 下限约束；岩沿仍是 1）；空则沿用默认的 0.95 ± 散列。
+    /// 给它是为了让崖壁的明暗差直接写进顶点色，不必导出后再改色。
+    /// </param>
+    public static ArrayMesh Strata(Vector3 size, int bands, float jitter, int seed, float lip = 0f, float crevice = 0f, int ledges = 1, float[]? bodyShades = null)
     {
         bands = Math.Max(1, bands);
+        ledges = Math.Max(1, ledges);
         bool cliff = lip > 0f;
         float depth = size.Y;
+        float minShade = bodyShades is null ? MinShade : 0.5f;
 
         // 行（自上而下）：y、格角处的内缩、段点处的固定内缩、是否参与散列凹凸 / 岩缝、以下一条带的亮度系数。
         var rows = new List<(float Y, float Corner, float Inner, bool Rough, float Shade)>();
         if (cliff)
         {
-            const float lipHeight = 0.045f, underside = 0.025f, foot = 0.05f;
-            rows.Add((0f, 0f, 0f, false, 1f));                                       // 岩沿正面
-            rows.Add((-lipHeight, 0f, 0f, false, 0.93f));                            // 岩沿底面（朝下，压暗）
-            float bodyTop = -(lipHeight + underside), bodyBottom = -(depth - foot);
-            for (int k = 0; k < bands; k++)
+            const float lipHeight = 0.045f, underside = 0.025f, foot = 0.05f, shelf = 0.008f;
+            float group = (depth - foot) / ledges;
+            for (int g = 0; g < ledges; g++)
             {
-                float y = bodyTop + ((bodyBottom - bodyTop) * k / bands);
-                rows.Add((y, lip * 0.4f, lip * 0.7f, k > 0, BandShade(seed, k, 0.95f, 0.04f)));
+                bool last = g + 1 == ledges;
+                float groupTop = 0f - (g * group);   // g = 0 时写成 +0 而不是 −0：单道岩沿（CoursedCliff 等默认调用）的顶点与改前逐位相同
+                rows.Add((groupTop, 0f, 0f, false, 1f));                             // 岩沿正面
+                rows.Add((groupTop - lipHeight, 0f, 0f, false, 0.93f));              // 岩沿底面（朝下，压暗）
+                float bodyTop = groupTop - (lipHeight + underside), bodyBottom = groupTop - group;
+                for (int k = 0; k < bands; k++)
+                {
+                    float y = bodyTop + ((bodyBottom - bodyTop) * k / bands);
+                    int band = (g * bands) + k;
+                    float shade = bodyShades is null
+                        ? BandShade(seed, k, 0.95f, 0.04f)
+                        : bodyShades[band % bodyShades.Length] * BandShade(seed, band, 1f, 0.03f);
+                    rows.Add((y, lip * 0.4f, lip * 0.7f, k > 0, shade));
+                }
+
+                // 最后一层是坡脚：收回格边；其余层的底是下一道岩沿的台面——比岩沿顶高 shelf，面微微向外下倾，法线朝上偏外（水平面会让法线朝向二义）。
+                rows.Add((last ? bodyBottom : bodyBottom + shelf, lip * 0.4f, lip * 0.7f, false, last ? 0.95f : 1f));
             }
 
-            rows.Add((bodyBottom, lip * 0.4f, lip * 0.7f, false, 0.95f));           // 坡脚：收回格边
             rows.Add((-depth, 0f, 0f, false, 0f));
         }
         else
@@ -238,7 +260,7 @@ public static class LowPolyMesh
                 {
                     // 每格面片再带一点散列色差（±1.5%），平直着色下读出碎岩 / 土块的块面感。
                     float s = band * (1f - (0.015f * Unit(seed, salt + 500 + (r * 17) + c)));
-                    Quad(tool, grid[r, c], grid[r, c + 1], grid[r + 1, c + 1], grid[r + 1, c], normal, s);
+                    Quad(tool, grid[r, c], grid[r, c + 1], grid[r + 1, c + 1], grid[r + 1, c], normal, s, minShade);
                 }
             }
         }
@@ -411,6 +433,37 @@ public static class LowPolyMesh
             }
         }
 
+        return tool.Commit();
+    }
+
+    /// <summary>
+    /// 薄带（河岸泡沫 / 浅滩）：外沿折线 <paramref name="outer"/> 与内沿折线 <paramref name="inner"/>（点数相同、同向）之间铺一条顶面，
+    /// 内沿与两端再向下封 <paramref name="thickness"/> 的侧壁（外沿贴着邻格，不封）。顶面亮度 <paramref name="shade"/>，侧壁 <paramref name="sideShade"/>；
+    /// 亮度不受 <see cref="MinShade"/> 下限约束，让浅滩带能比泡沫带暗一档。
+    /// </summary>
+    public static ArrayMesh Band(IReadOnlyList<Vector3> outer, IReadOnlyList<Vector3> inner, float thickness, float shade = 1f, float sideShade = 0.9f)
+    {
+        ArgumentNullException.ThrowIfNull(outer);
+        ArgumentNullException.ThrowIfNull(inner);
+        if (outer.Count != inner.Count || outer.Count < 2)
+        {
+            throw new ArgumentException("外沿与内沿的点数必须相同且至少两点", nameof(inner));
+        }
+
+        var tool = Begin();
+        Vector3 down = Vector3.Down * thickness;
+        for (int i = 0; i + 1 < outer.Count; i++)
+        {
+            Quad(tool, outer[i], outer[i + 1], inner[i + 1], inner[i], Vector3.Up, shade, 0f);
+            Vector3 along = inner[i + 1] - inner[i];
+            Quad(tool, inner[i], inner[i + 1], inner[i + 1] + down, inner[i] + down, new Vector3(-along.Z, 0f, along.X), sideShade, 0f);
+        }
+
+        Vector3 endOut = outer[0] - outer[1];
+        Quad(tool, outer[0], inner[0], inner[0] + down, outer[0] + down, new Vector3(endOut.X, 0f, endOut.Z), sideShade, 0f);
+        int n = outer.Count - 1;
+        Vector3 endIn = outer[n] - outer[n - 1];
+        Quad(tool, outer[n], inner[n], inner[n] + down, outer[n] + down, new Vector3(endIn.X, 0f, endIn.Z), sideShade, 0f);
         return tool.Commit();
     }
 

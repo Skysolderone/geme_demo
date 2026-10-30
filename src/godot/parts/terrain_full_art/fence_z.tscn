@@ -25,12 +25,12 @@ _surfaces = [{
 "vertex_data": PackedByteArray("AAAAANEimz4AAAAAnu+nvNEimz6e76e8nu+nPNEimz6e76e8AAAAANEimz4AAAAAnu+nPNEimz6e76e8nu+nPNEimz6e76c8AAAAANEimz4AAAAAnu+nPNEimz6e76c8nu+nvNEimz6e76c8AAAAANEimz4AAAAAnu+nvNEimz6e76c8nu+nvNEimz6e76e8nu+nvNEimz6e76e87FG4PKwcmj7sUbi8nu+nPNEimz6e76e8nu+nvNEimz6e76e87FG4vKwcmj7sUbi87FG4PKwcmj7sUbi87FG4vKwcmj7sUbi87FG4PD4Klz7sUbi87FG4PKwcmj7sUbi87FG4vKwcmj7sUbi87FG4vD4Klz7sUbi87FG4PD4Klz7sUbi8nu+nPNEimz6e76e87FG4PKwcmj7sUbg8nu+nPNEimz6e76c8nu+nPNEimz6e76e87FG4PKwcmj7sUbi87FG4PKwcmj7sUbg87FG4PKwcmj7sUbi87FG4PD4Klz7sUbg87FG4PKwcmj7sUbg87FG4PKwcmj7sUbi87FG4PD4Klz7sUbi87FG4PD4Klz7sUbg8nu+nPNEimz6e76c87FG4vKwcmj7sUbg8nu+nvNEimz6e76c8nu+nPNEimz6e76c87FG4PKwcmj7sUbg87FG4vKwcmj7sUbg87FG4PKwcmj7sUbg87FG4vD4Klz7sUbg87FG4vKwcmj7sUbg87FG4PKwcmj7sUbg87FG4PD4Klz7sUbg87FG4vD4Klz7sUbg8nu+nvNEimz6e76c87FG4vKwcmj7sUbi8nu+nvNEimz6e76e8nu+nvNEimz6e76c87FG4vKwcmj7sUbg87FG4vKwcmj7sUbi87FG4vKwcmj7sUbg87FG4vD4Klz7sUbi87FG4vKwcmj7sUbi87FG4vKwcmj7sUbg87FG4vD4Klz7sUbg87FG4vD4Klz7sUbi8/3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//7///6oqVJX/v///qipUlf+///+qKlSV/7///6oqVJX/v///qipUlf+///+qKlSV//////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA/7//v1VVVNX/v/+/VVVU1f+//79VVVTV/7//v1VVVNX/v/+/VVVU1f+//79VVVTV////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//3//v1VVqar/f/+/VVWpqv9//79VVamq/3//v1VVqar/f/+/VVWpqv9//79VVamq/3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA/z//v1VVqar/P/+/VVWpqv8//79VVamq/z//v1VVqar/P/+/VVWpqv8//79VVamqAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/")
 }]
 
-[node name="FenceZ" type="Node3D" unique_id=1208783432]
+[node name="FenceZ" type="Node3D" unique_id=1135799990]
 
-[node name="Mesh" type="MeshInstance3D" parent="." unique_id=822860937]
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=996971747]
 material_override = ExtResource("1_cjrep")
 mesh = SubResource("fence_z_0")
 
-[node name="Finial" type="MeshInstance3D" parent="." unique_id=548590244]
+[node name="Finial" type="MeshInstance3D" parent="." unique_id=167563016]
 material_override = ExtResource("2_loeis")
 mesh = SubResource("fence_z_1")
