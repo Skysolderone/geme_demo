@@ -18,7 +18,11 @@
   <Godot> --path src/godot -- --map=link:5:4 --auto-demo --rounds=1 --mute --overview --screenshot=<绝对路径>_overview.png:150
   ```
   截图写到会话的 scratchpad 目录，不要写进仓库。运行输出不要只 grep 截图行，还要 `grep -iE "error|failed|无法|失败"` 看一遍资源加载错误。
-- 拾取自检：`<Godot> --headless --path src/godot -- --map=link:5:4 --pick-check`，输出里的拾取自检行必须是通过。
+- 拾取自检（必须带 `--auto-demo`，否则座位未锁定、格数为 0）：
+  ```
+  <Godot> --path src/godot -- --pick-check --auto-demo --rounds=1 --seed=5 --map=link:5:4 --mute
+  ```
+  要求退出码 0，且 `[pick-check] 逐格居中·合计` 一行为 N / N（段A 收口时为 1861 / 1861）。
 - 代码理解一律先用 codegraph（`codegraph_explore` / `codegraph_node`），不要整文件 Read `BoardView.cs`（2700 行）。
 - 子 agent 不提交；改完汇报改动文件、截图路径、构建 / 拾取自检的输出行。
 
