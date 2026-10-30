@@ -982,8 +982,8 @@ public sealed partial class GameRoot : Node3D
     }
 
     /// <summary>
-    /// 分层拾取往返检查：对视图模型里每个可落子格，把它（含高度）的格心投影到屏幕，再用 <see cref="BoardGeometry.TryPick"/> 拾取，
-    /// 必须回到同一格。高台边缘格是最容易错的地方——射线若先落到身后低地格就会在这里暴露。只用视图模型与 BoardGeometry，不读地图。
+    /// 分层拾取往返检查：对视图模型里每个可落子格，把它（含高度）的格心投影到屏幕，再通过实际点击和悬停所用的 <see cref="BoardView.TryPickScreen"/> 拾取，
+    /// 必须回到同一格。高台边缘格是最容易错的地方——射线若先落到身后低地格就会在这里暴露。只用视图模型与棋盘视图，不读地图。
     /// </summary>
     /// <remarks>
     /// <para>动态相机（viewport-camera「动态相机下的拾取正确」）分两层，任一层失败即整体失败，失败行指出位姿与格坐标：</para>
@@ -1005,8 +1005,6 @@ public sealed partial class GameRoot : Node3D
     /// </remarks>
     private bool RunPickCheck()
     {
-        int width = _session.Match.Map.Width;
-        int height = _session.Match.Map.Height;
         Vector2 size = GetViewport().GetVisibleRect().Size;
         var view = new Rect2(Vector2.Zero, size);
         BoardCellView[] cells = [.. _session.World.Board().Cells.Where(c => c.Terrain == Terrain.Playable)];
@@ -1032,7 +1030,7 @@ public sealed partial class GameRoot : Node3D
                 _board.ApplyCameraPose();
                 Vector3 center = _board.CenterOf(cell.Coord);
                 Vector2 screen = _board.Camera.UnprojectPosition(center);
-                bool hit = BoardGeometry.TryPick(_board.Camera, screen, width, height, _board.LevelOf, out Coord picked);
+                bool hit = _board.TryPickScreen(screen, out Coord picked);
                 if (hit && picked == cell.Coord)
                 {
                     strict.Add(cell.Coord);
@@ -1100,7 +1098,7 @@ public sealed partial class GameRoot : Node3D
 
                 inView++;
                 verified.Add(cell.Coord);
-                bool hit = BoardGeometry.TryPick(_board.Camera, screen, width, height, _board.LevelOf, out Coord picked);
+                bool hit = _board.TryPickScreen(screen, out Coord picked);
                 if (hit && picked == cell.Coord)
                 {
                     continue;
@@ -1635,7 +1633,7 @@ public sealed partial class GameRoot : Node3D
         // 指针在界面面板上（被控件吃掉）或在窗口之外：不算悬停在格上，读数为空。
         Vector2 mouse = GetViewport().GetMousePosition();
         Coord? hover = _mouseInside && GetViewport().GuiGetHoveredControl() is null
-            && BoardGeometry.TryPick(_board.Camera, mouse, _session.Match.Map.Width, _session.Match.Map.Height, _board.LevelOf, out Coord coord)
+            && _board.TryPickScreen(mouse, out Coord coord)
             ? coord
             : null;
         if (hover != _hover)
@@ -1949,7 +1947,7 @@ public sealed partial class GameRoot : Node3D
     }
 
     private Coord? PickCell() =>
-        BoardGeometry.TryPick(_board.Camera, GetViewport().GetMousePosition(), _session.Match.Map.Width, _session.Match.Map.Height, _board.LevelOf, out Coord coord)
+        _board.TryPickScreen(GetViewport().GetMousePosition(), out Coord coord)
             ? coord
             : null;
 
