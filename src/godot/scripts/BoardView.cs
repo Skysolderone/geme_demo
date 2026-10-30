@@ -69,6 +69,7 @@ public sealed partial class BoardView : Node3D
     private float? _batchScale;
     private int _unbatchedObstacles;
     private int _partMultiMeshes;
+    private int _runeRings;
     private readonly Dictionary<Coord, PieceNode> _boardPieces = [];
     private readonly Dictionary<Coord, PieceNode> _capturedPieces = [];
     private int _pieceEmphasis = -1;
@@ -144,6 +145,7 @@ public sealed partial class BoardView : Node3D
         _levels.Clear();
         _partBatches.Clear();
         _unbatchedObstacles = 0;
+        _runeRings = 0;
         _boardPieces.Clear();
         _capturedPieces.Clear();
         _width = board.Width;
@@ -249,6 +251,20 @@ public sealed partial class BoardView : Node3D
         Vector3 stepY = BoardGeometry.Center(new Coord(0, 1), _width, _height) - gridOrigin;
         int deepCells = 0, bridgedCells = 0, bankLips = 0;
 
+        // 装饰套件自证（map-restyle 段C）：按部件名记放在了哪些格，Build 末尾打一行 [deco]（草丛只报格数，其余列格记法，方便截图对准）。
+        var deco = new SortedDictionary<string, List<Coord>>(StringComparer.Ordinal);
+        TerrainParts.Kind Decor(TerrainParts.Kind kind, Coord at)
+        {
+            if (!deco.TryGetValue(kind.Name, out List<Coord>? cells))
+            {
+                cells = [];
+                deco[kind.Name] = cells;
+            }
+
+            cells.Add(at);
+            return kind;
+        }
+
         int variant = 0;
         int boardRocks = 0;
         var zoneStrips = new SortedDictionary<int, int>();
@@ -326,14 +342,15 @@ public sealed partial class BoardView : Node3D
             };
             if (playable && cell.Height > 0)
             {
-                color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.57f, 0.76f, 0.78f), 0.25f).Lightened(0.22f);
+                color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.98f, 0.96f, 1.0f), 0.30f).Lightened(0.06f);
             }
             if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
             {
                 // 棋盘内的岩石（link-map-terrain 6.1，D4 中间带 0–2 格）：本战场的一格地形，不是场景装饰——按棋盘格画（障碍色地砖 + 岩石部件，不在松树 / 断柱里挑，
                 // 免得读成林地），逐格节点挂在地砖与装饰层（场景面砖与合批装饰是整块 MultiMesh）。归属只读视图模型的棋盘清单。
+                // map-restyle 段C：岩石之外按坐标散列换成水晶 / 火盆 / 拱门 / 宝箱——都是石材 / 器物，仍读作"此格不可落子"而不是林地。
                 color = Visuals.TileObstacle;
-                Node3D rock = TerrainParts.Create(TerrainParts.Rock, variant++);
+                Node3D rock = TerrainParts.Create(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: false), cell.Coord), variant++);
                 rock.Position = center;
                 _decoration.AddChild(rock);
                 AddTileStack(tiles, cell.Coord, center, cell.Height, SurfaceOf(color), color);
@@ -343,11 +360,10 @@ public sealed partial class BoardView : Node3D
 
             if (!playable)
             {
-                // 场景格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
+                // 场景格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹，map-restyle 段C 再加水晶 / 火盆 / 拱门 / 宝箱。
+                // 都只是"此格不可落子"的装饰。同一变体的各格合成 MultiMesh 画（board-render-perf D2）：变体序号与逐格变换都不变。
                 color = Visuals.TileObstacle;
-                int pick = unchecked((int)(((uint)(cell.Coord.X * 73856093) ^ (uint)(cell.Coord.Y * 19349663)) % 100u));
-                // 同一变体的各格合成 MultiMesh 画（board-render-perf D2）：挑选规则、变体序号与逐格变换都不变。
-                AddObstacle(pick < 40 ? TerrainParts.Rock : pick < 82 ? TerrainParts.Pines : TerrainParts.Ruins, variant++, center);
+                AddObstacle(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: true), cell.Coord), variant++, center);
             }
             else if (cell.BirthZone is int zone)
             {
@@ -422,6 +438,13 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(shallows);
             }
 
+            // 草丛（map-restyle 段C）：只撒在草地 / 土路格的一个格角（林地 / 荒漠 / 沼泽 / 岩台 / 浅滩的格角已有点缀），约每 7–8 格一簇，h>0 的格也撒。
+            // 格角与有无都按坐标散列，不动 variant 计数器（否则后面岩石 / 松树 / 小树的档号整体平移、段A / 段B 定稿的画面会变）；合批走 AddObstacle 同一条路。
+            if (playable && cell.Surface is Surface.Grass or Surface.Road && TileVariant(cell.Coord, 40) % 100 < 13)
+            {
+                AddObstacle(Decor(TerrainParts.Grass, cell.Coord), (int)(TileVariant(cell.Coord, 41) & 3), center);
+            }
+
             // 场景格只作装饰：铺满整格、不留缝也不垫衬底，相邻场景格连成一片——不出现会被读成"可落子"的格线。
             // 场景格同色（障碍格不参与明暗交替），合成一个 MultiMesh（board-render-perf D2）。
             // 面砖材质按基色共用（2.3）：同基色的格拿到同一份，压暗时每份改一次。
@@ -436,10 +459,10 @@ public sealed partial class BoardView : Node3D
             AddTileStack(tiles, cell.Coord, center, cell.Height, material, color);
         }
 
-        // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内岩石逐格画了几格。
+        // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内障碍格逐格画了几格（map-restyle 段C 起不只是岩石，各件见 [deco]）。
         if (zoneStrips.Count > 0 || boardRocks > 0)
         {
-            GD.Print($"[zone] 出生区描边：{(zoneStrips.Count == 0 ? "无" : string.Join("、", zoneStrips.Select(kv => $"出生区 {BirthZoneLabel.Number(kv.Key)} {kv.Value} 段")))}；棋盘内岩石 {boardRocks} 格（按棋盘格画）");
+            GD.Print($"[zone] 出生区描边：{(zoneStrips.Count == 0 ? "无" : string.Join("、", zoneStrips.Select(kv => $"出生区 {BirthZoneLabel.Number(kv.Key)} {kv.Value} 段")))}；棋盘内障碍 {boardRocks} 格（按棋盘格画）");
         }
 
         AddTerrainRelief(board, tiles);
@@ -473,6 +496,9 @@ public sealed partial class BoardView : Node3D
             + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
         GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count + _inlayMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
 
+        // 自证行（map-restyle 段C）：装饰套件各放了几格（草丛在可落子格角，其余在不可落子格）、中立平台符文环几块。
+        GD.Print($"[deco] 装饰套件：{(deco.Count == 0 ? "无" : string.Join("、", deco.Select(kv => $"{kv.Key} {kv.Value.Count} 格{(kv.Key == TerrainParts.Grass.Name ? string.Empty : $"（{string.Join(" ", kv.Value.Select(c => c.ToNotation()))}）")}")))}；中立平台符文环 {_runeRings} 块");
+
         BuildCoordinateLabels(low, high);
 
         _overlay = new Node3D { Name = "Overlay" };
@@ -497,19 +523,19 @@ public sealed partial class BoardView : Node3D
         {
             // 暖色主光 + 柔和阴影：高台、树、棋子落下影子，层次才读得出来（基准图的"温暖自然光"）。
             RotationDegrees = new Vector3(-52f, -38f, 0f),
-            LightColor = Color.Color8(255, 240, 208),
-            LightEnergy = 1.05f,
+            LightColor = Color.Color8(255, 244, 218),
+            LightEnergy = 1.0f,
             ShadowEnabled = true,
-            ShadowBlur = 1.6f,
-            ShadowOpacity = 0.55f,
+            ShadowBlur = 2.2f,
+            ShadowOpacity = 0.48f,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel2Splits,
             DirectionalShadowMaxDistance = 70f,
         });
         AddChild(new DirectionalLight3D
         {
             RotationDegrees = new Vector3(-20f, 140f, 0f),
-            LightColor = Color.Color8(168, 190, 226),
-            LightEnergy = 0.28f,
+            LightColor = Color.Color8(190, 196, 240),
+            LightEnergy = 0.36f,
         });
 
         // 新天空原画作为画布背景保持原始透视，避免把非全景插画拉成天空球。
@@ -557,17 +583,18 @@ public sealed partial class BoardView : Node3D
                     {
                         SkyMaterial = new ProceduralSkyMaterial
                         {
-                            SkyTopColor = Color.Color8(70, 154, 190),
-                            SkyHorizonColor = Color.Color8(234, 223, 202),
-                            GroundHorizonColor = Color.Color8(234, 223, 202),
-                            GroundBottomColor = Color.Color8(148, 177, 188),
+                            SkyTopColor = Color.Color8(96, 176, 214),
+                            SkyHorizonColor = Color.Color8(240, 230, 236),
+                            GroundHorizonColor = Color.Color8(240, 230, 236),
+                            GroundBottomColor = Color.Color8(170, 190, 206),
                             SunAngleMax = 0f,
                         },
                     }
                     : null,
                 AmbientLightSource = global::Godot.Environment.AmbientSource.Color,
-                AmbientLightColor = Color.Color8(186, 200, 222),
-                AmbientLightEnergy = 0.52f,
+                // map-restyle 段A：偏紫的柔和天光更亮一档，阴影面也保持粉彩，不发黑。
+                AmbientLightColor = Color.Color8(214, 206, 234),
+                AmbientLightEnergy = 0.50f,
                 TonemapMode = global::Godot.Environment.ToneMapper.Filmic,
                 TonemapWhite = 1.4f,
                 AdjustmentEnabled = true,
@@ -711,22 +738,75 @@ public sealed partial class BoardView : Node3D
         var ground = Visuals.Matte(Visuals.IslandRim, 1f);
         island.AddChild(new MeshInstance3D { Name = "IslandSurface", Mesh = surface.Commit(), MaterialOverride = ground });
 
-        float[] depths = [0f, 0.9f, 2.5f, 4.8f, 7.5f, 9.5f];
-        float[] scales = [1f, 0.985f, 0.91f, 0.73f, 0.49f, 0.22f];
-        float[] tones = [1f, 0.96f, 0.84f, 0.72f, 0.62f];
-        foreach ((Vector3 a, Vector3 b, Vector3 outward, Coord _) in border)
+        // map-restyle 段B：岛缘从均匀收窄的锥体改成四层带外凸岩沿的阶梯状断崖（参考图的层叠平台式断崖）。
+        // 剖面自上而下按 (整体缩放, 外凸量, 深度) 给：每层顶上一圈略向外下倾的岩沿台面、近竖直略内倾的侧壁、层间一道朝下的浅缝；
+        // 上面几层矮、往下渐高，上层的整体缩放也收得少：相机俯角恒 60°，朝南的墙只在岛缘到标注环之间露出头几格深，前三层的岩沿台面都要落在这里面才读得出层叠。
+        // 整体缩放仍是改前的 Shrink（岛向下收口），外凸量沿格边法线加在缩放之后，由各顶点的斜接方向保证转角处墙面严丝合缝。
+        // 顶面 0.12 内与岛面齐平：标注底板（厚 TileHeight）盖在这一段外面，第一道岩沿从底板之下才探出来。
+        (float Scale, float Out, float Depth)[] profile =
+        [
+            (1f, 0f, 0f),
+            (1f, 0f, 0.12f),
+            (1f, 0.14f, 0.17f),         // 第 1 层岩沿台面
+            (1f, 0.16f, 0.36f),         // 岩沿正面
+            (1f, 0.12f, 1.00f),         // 侧壁
+            (1f, -0.06f, 1.12f),        // 层间浅缝（朝下）
+            (0.985f, -0.06f, 1.20f),    // 缝的内壁
+            (0.985f, 0.13f, 1.26f),     // 第 2 层
+            (0.985f, 0.15f, 1.46f),
+            (0.985f, 0.10f, 2.50f),
+            (0.985f, -0.07f, 2.64f),
+            (0.965f, -0.07f, 2.74f),
+            (0.965f, 0.12f, 2.80f),     // 第 3 层
+            (0.965f, 0.14f, 3.02f),
+            (0.965f, 0.08f, 4.70f),
+            (0.965f, -0.08f, 4.88f),
+            (0.93f, -0.08f, 5.00f),
+            (0.93f, 0.11f, 5.06f),      // 第 4 层
+            (0.93f, 0.13f, 5.30f),
+            (0.93f, 0.04f, 7.60f),
+            (0.93f, -0.12f, 7.85f),
+            (0.82f, -0.12f, 8.30f),     // 岛底收口
+            (0.62f, -0.12f, 9.40f),
+        ];
+        // 每段剖面（行 i → i+1）的顶点色：岩沿台面最亮、侧壁逐层递暗、层间缝最暗；法线按剖面走向给，台面朝上、缝朝下，受光后层次自然分开。
+        float[] tones = [0.98f, 1f, 0.94f, 0.82f, 0.52f, 0.60f, 1f, 0.92f, 0.80f, 0.52f, 0.60f, 1f, 0.91f, 0.78f, 0.50f, 0.58f, 1f, 0.90f, 0.75f, 0.48f, 0.66f, 0.60f];
+
+        // 顶点斜接：同一格角上一段结束、另一段开始时取 (n1 + n2) / (1 + n1·n2)，两段墙面各外凸同一量后仍在格角相接（直角处即角点沿两法线各挪一份）；
+        // 只有一段相接、或对角相触 / 四段共点的格角退回该段自己的法线。格角键取 2 倍坐标取整（格心在半整数格点上，角点必落在整数上）。
+        // 深水格的边是瀑布口：外凸量取 0、剖面只向内收，水帘仍贴着岛缘；与陆地段共用的角点也取 0，岩沿在那里收尖。
+        var waterAt = board.Cells.Where(c => c.Surface == Surface.DeepWater).ToDictionary(c => c.Coord);
+        var endsAt = new Dictionary<(int, int), int>();
+        var startsAt = new Dictionary<(int, int), int>();
+        var degree = new Dictionary<(int, int), int>();
+        for (int i = 0; i < border.Count; i++)
         {
-            for (int i = 0; i < depths.Length - 1; i++)
+            (Vector3 a, Vector3 b, _, _) = border[i];
+            startsAt[KeyOf(a)] = i;
+            endsAt[KeyOf(b)] = i;
+            degree[KeyOf(a)] = degree.GetValueOrDefault(KeyOf(a)) + 1;
+            degree[KeyOf(b)] = degree.GetValueOrDefault(KeyOf(b)) + 1;
+        }
+
+        for (int i = 0; i < border.Count; i++)
+        {
+            (Vector3 a, Vector3 b, Vector3 outward, Coord cell) = border[i];
+            float own = waterAt.ContainsKey(cell) ? 0f : 1f;
+            (Vector3 miterA, float factorA) = MiterAt(a, outward, own, endsAt);
+            (Vector3 miterB, float factorB) = MiterAt(b, outward, own, startsAt);
+            for (int r = 0; r + 1 < profile.Length; r++)
             {
-                Vector3 upperA = Shrink(a, scales[i], depths[i]);
-                Vector3 upperB = Shrink(b, scales[i], depths[i]);
-                Vector3 lowerA = Shrink(a, scales[i + 1], depths[i + 1]);
-                Vector3 lowerB = Shrink(b, scales[i + 1], depths[i + 1]);
-                float shade = tones[i];
-                AddQuad(walls, upperA, upperB, lowerB, lowerA, outward, new Color(shade, shade, shade));
+                Vector3 upperA = At(a, miterA, factorA, profile[r]);
+                Vector3 upperB = At(b, miterB, factorB, profile[r]);
+                Vector3 lowerA = At(a, miterA, factorA, profile[r + 1]);
+                Vector3 lowerB = At(b, miterB, factorB, profile[r + 1]);
+                float dOut = profile[r + 1].Out - profile[r].Out, dDepth = profile[r + 1].Depth - profile[r].Depth;
+                Vector3 normal = ((outward * dDepth) + (Vector3.Up * dOut)).Normalized();
+                float shade = tones[r];
+                AddQuad(walls, upperA, upperB, lowerB, lowerA, normal, new Color(shade, shade, shade));
             }
         }
-        var cliff = Visuals.Matte(Color.Color8(116, 135, 133), 1f);
+        var cliff = Visuals.Matte(Color.Color8(178, 166, 194), 1f);
         cliff.VertexColorUseAsAlbedo = true;
         cliff.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
         island.AddChild(new MeshInstance3D { Name = "IslandCliffs", Mesh = walls.Commit(), MaterialOverride = cliff });
@@ -741,17 +821,18 @@ public sealed partial class BoardView : Node3D
             roots.Add((LowPolyMesh.Beam(rootTop, rootEnd, 0.075f, 0.085f, 0.92f), Transform3D.Identity));
         }
         if (roots.Count > 0)
-            island.AddChild(new MeshInstance3D { Name = "IslandRoots", Mesh = LowPolyMesh.Merge(roots), MaterialOverride = Visuals.Matte(Color.Color8(99, 91, 71), 1f) });
+            island.AddChild(new MeshInstance3D { Name = "IslandRoots", Mesh = LowPolyMesh.Merge(roots), MaterialOverride = Visuals.Matte(Color.Color8(134, 108, 126), 1f) });
 
         // Group repeated spikes by scene variant to bound draw calls.
+        // 石笋改挂在岛底收口面之下（顶没进收口面，缩放 0.72 落在 0.82 → 0.62 两圈之间）：断崖的岩沿外凸之后，原先挂在上层侧壁的石笋会被整个遮住。
         for (int variant = 0; variant < TerrainParts.IslandSpike.Variants; variant++)
         {
             var transforms = new List<Transform3D>();
             for (int i = variant; i < border.Count; i += TerrainParts.IslandSpike.Variants * 6)
             {
-                (Vector3 a, Vector3 b, Vector3 outward, Coord _) = border[i];
+                (Vector3 a, Vector3 b, Vector3 _, Coord _) = border[i];
                 float length = 1.4f + ((i % 9) * 0.17f);
-                Vector3 place = ((a + b) * 0.5f) - (outward * 0.35f) + Vector3.Down * (0.9f + length);
+                Vector3 place = Shrink((a + b) * 0.5f, 0.72f, 8.6f + length);
                 transforms.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(0.38f, length, 0.38f)), place));
             }
             if (transforms.Count > 0)
@@ -782,7 +863,6 @@ public sealed partial class BoardView : Node3D
             AddInstanced("Clouds" + variant, TerrainParts.PieceOf(TerrainParts.Cloud, variant), transforms);
         }
 
-        var waterAt = board.Cells.Where(c => c.Surface == Surface.DeepWater).ToDictionary(c => c.Coord);
         var falls = new SurfaceTool();
         falls.Begin(Mesh.PrimitiveType.Triangles);
         int fallCount = 0;
@@ -805,6 +885,28 @@ public sealed partial class BoardView : Node3D
         {
             Vector3 relative = point - frameCenter;
             return new Vector3(frameCenter.X + relative.X * factor, top - depth, frameCenter.Z + relative.Z * factor);
+        }
+
+        Vector3 At(Vector3 point, Vector3 miter, float factor, (float Scale, float Out, float Depth) row)
+            => Shrink(point, row.Scale, row.Depth) + (miter * (row.Out * factor));
+
+        static (int, int) KeyOf(Vector3 point) => (Mathf.RoundToInt(point.X * 2f), Mathf.RoundToInt(point.Z * 2f));
+
+        // 某段在格角 point 处的斜接方向与外凸系数：邻段取自 neighbours（本段起点查"在此结束"的段，终点查"在此开始"的段）。
+        // 外凸系数按格角散列在 ±25% 内抖一下，岩沿不是一条呆直的线；同一格角两段算出同一个值（键相同），墙面仍相接。
+        (Vector3 Miter, float Factor) MiterAt(Vector3 point, Vector3 outward, float own, Dictionary<(int, int), int> neighbours)
+        {
+            (int, int) key = KeyOf(point);
+            float jitter = 1f + (0.25f * LowPolyMesh.Signed(key.Item1 * 7919, key.Item2));
+            if (degree[key] != 2 || !neighbours.TryGetValue(key, out int other))
+            {
+                return (outward, own * jitter);
+            }
+
+            Vector3 next = border[other].Outward;
+            float cos = outward.Dot(next);
+            float factor = Math.Min(own, waterAt.ContainsKey(border[other].Cell) ? 0f : 1f) * jitter;
+            return cos < -0.9f ? (outward, factor) : ((outward + next) / (1f + cos), factor);
         }
 
         void AddInstanced(string name, TerrainParts.Piece piece, List<Transform3D> transforms)
@@ -1282,6 +1384,12 @@ public sealed partial class BoardView : Node3D
             var plateNode = new Node3D { Name = $"Plate{index}" };
             root.AddChild(plateNode);
 
+            // 中立平台的符文环（map-restyle 段C）：锁定后公共平台整块可见、在棋盘清单里逐格画，环加在这里；插旗阶段的 NeutralPlates 只有轮廓、底下还没有格，不加。
+            if (plate.Kind == BoardPlateKind.Public)
+            {
+                AddRuneRing(plate, level, new Vector3(midX, top, midZ));
+            }
+
             // 内部格线：压在地砖之间的缝上，略高于面砖、低于一切叠加标记（标记最低在 +0.008）。
             for (int column = 1; column < plate.Width; column++)
             {
@@ -1600,6 +1708,52 @@ public sealed partial class BoardView : Node3D
             Position = position,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
+    }
+
+    /// <summary>不可落子格的造型散列（0–99）：只按坐标，同一张图永远同一副样子；棋盘内岩石格与场景格共用这一个散列、各有一张阈值表。</summary>
+    private static int ObstacleHash(Coord coord) =>
+        unchecked((int)(((uint)(coord.X * 73856093) ^ (uint)(coord.Y * 19349663)) % 100u));
+
+    /// <summary>
+    /// 不可落子格放哪件（map-restyle 段C）：场景格在巨石 / 松树丛 / 断柱遗迹之外再分出水晶 / 火盆 / 拱门 / 宝箱；棋盘内岩石格不挑松树 / 断柱（会读成林地），
+    /// 只在岩石与四件石材 / 器物之间挑。阈值按 link:5:4 实测调过：该图场景格只有 4 格、棋盘内岩石 27 格，四件都要出现。
+    /// </summary>
+    private static TerrainParts.Kind ObstacleKindOf(int pick, bool scenery) => scenery
+        ? pick < 30 ? TerrainParts.Rock : pick < 58 ? TerrainParts.Pines : pick < 70 ? TerrainParts.Ruins
+            : pick < 80 ? TerrainParts.Crystal : pick < 88 ? TerrainParts.Brazier : pick < 94 ? TerrainParts.Arch : TerrainParts.Chest
+        : pick < 48 ? TerrainParts.Rock : pick < 68 ? TerrainParts.Crystal : pick < 80 ? TerrainParts.Brazier : pick < 90 ? TerrainParts.Arch : TerrainParts.Chest;
+
+    /// <summary>
+    /// 中立平台的符文环（map-restyle 段C）：圆心在平台外接矩形中心，半径取短边的一半再退 0.6 格（离边框一段距离），薄片贴在平台顶面（y ≤ +0.0045）。
+    /// 环按段裁剪：段中点所在格不是本层的可落子格（深水、棋盘内岩石）就不建，不在河面上悬空。挂在装饰层（随信息层一起缩小），只是装饰、不改平台格数与边框，
+    /// 也不改拾取（地面拾取是解析几何；薄片低于一切棋子）。
+    /// </summary>
+    private void AddRuneRing(BoardPlate plate, int level, Vector3 center)
+    {
+        float radius = ((Math.Min(plate.Width, plate.Height) * 0.5f) - 0.6f) * BoardGeometry.CellSize;
+        if (radius < BoardGeometry.CellSize)
+        {
+            return;
+        }
+
+        // 偏移 → 格：BoardGeometry.Center 的平面映射是 x = (X − (W−1)/2)·CellSize、z = −(Y − (H−1)/2)·CellSize，用 (0,0) 格的格心反推。
+        Vector3 origin = BoardGeometry.Center(new Coord(0, 0), _width, _height);
+        bool Keep(Vector3 offset)
+        {
+            Vector3 p = center + offset;
+            var coord = new Coord((int)MathF.Round((p.X - origin.X) / BoardGeometry.CellSize), (int)MathF.Round((origin.Z - p.Z) / BoardGeometry.CellSize));
+            return plate.Contains(coord) && _levels.TryGetValue(coord, out int at) && at == level;
+        }
+
+        var ring = new Node3D { Name = "RuneRing", Position = center };
+        ring.AddChild(new MeshInstance3D
+        {
+            Mesh = TerrainParts.RuneRingMesh(radius, Keep),
+            MaterialOverride = TerrainParts.RuneMaterial,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+        _decoration.AddChild(ring);
+        _runeRings++;
     }
 
     /// <summary>

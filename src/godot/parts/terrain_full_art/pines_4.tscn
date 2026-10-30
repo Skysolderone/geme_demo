@@ -1,8 +1,8 @@
 [gd_scene format=4]
 
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_6c4830_r100_vc.tres" id="1_1mdlh"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_2d6e53_r100_vc.tres" id="2_j0j42"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_619b6f_r100_vc.tres" id="3_gubr5"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_7c543a_r100_vc.tres" id="1_1mdlh"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_3e9676_r100_vc.tres" id="2_j0j42"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_78c496_r100_vc.tres" id="3_gubr5"]
 
 [sub_resource type="ArrayMesh" id="pines_4_0"]
 _surfaces = [{
@@ -37,16 +37,16 @@ _surfaces = [{
 "vertex_data": PackedByteArray("L7yxvoEExT1eSQm+roqzvoEExT0OB4W+L0d5vpAPej58uVa+L7yxvoEExT1eSQm+L0d5vpAPej58uVa+kfV4vpAPej7VXEu+aEdvvpAPej7XUVG+kfV4vpAPej7VXEu+L0d5vpAPej58uVa+j8J1voEExT3NzEy+roqzvoEExT0OB4W+L7yxvoEExT1eSQm+roqzvoEExT0OB4W+il95voEExT3FyKa+BplvvpAPej5+rly+roqzvoEExT0OB4W+BplvvpAPej5+rly+L0d5vpAPej58uVa+aEdvvpAPej7XUVG+L0d5vpAPej58uVa+BplvvpAPej5+rly+j8J1voEExT3NzEy+il95voEExT3FyKa+roqzvoEExT0OB4W+il95voEExT3FyKa+wAwIvoEExT0eKIi+P5llvpAPej7ZRle+il95voEExT3FyKa+P5llvpAPej7ZRle+BplvvpAPej5+rly+aEdvvpAPej7XUVG+BplvvpAPej5+rly+P5llvpAPej7ZRle+j8J1voEExT3NzEy+wAwIvoEExT0eKIi+il95voEExT3FyKa+wAwIvoEExT0eKIi+wm8EvoEExT2Aiw++oUdlvpAPej4y6ku+wAwIvoEExT0eKIi+oUdlvpAPej4y6ku+P5llvpAPej7ZRle+aEdvvpAPej7XUVG+P5llvpAPej7ZRle+oUdlvpAPej4y6ku+j8J1voEExT3NzEy+wm8EvoEExT2Aiw++wAwIvoEExT0eKIi+wm8EvoEExT2Aiw++lyVyvoEExT0gEJi9yvVuvpAPej4w9UW+wm8EvoEExT2Aiw++yvVuvpAPej4w9UW+oUdlvpAPej4y6ku+aEdvvpAPej7XUVG+oUdlvpAPej4y6ku+yvVuvpAPej4w9UW+j8J1voEExT3NzEy+lyVyvoEExT0gEJi9wm8EvoEExT2Aiw++lyVyvoEExT0gEJi9MLyxvoEExT1hSQm+kfV4vpAPej7VXEu+lyVyvoEExT0gEJi9kfV4vpAPej7VXEu+yvVuvpAPej4w9UW+aEdvvpAPej7XUVG+yvVuvpAPej4w9UW+kfV4vpAPej7VXEu+j8J1voEExT3NzEy+MLyxvoEExT1hSQm+lyVyvoEExT0gEJi9RKGtvl6YTD6y80m++3yVvl6YTD6Eo5G+mT+BvuhIrj68aFu+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")
 }]
 
-[node name="Pines4" type="Node3D" unique_id=2032239571]
+[node name="Pines4" type="Node3D" unique_id=994354454]
 
-[node name="Trunk" type="MeshInstance3D" parent="." unique_id=856227043]
+[node name="Trunk" type="MeshInstance3D" parent="." unique_id=1424438306]
 material_override = ExtResource("1_1mdlh")
 mesh = SubResource("pines_4_0")
 
-[node name="CanopyTeal" type="MeshInstance3D" parent="." unique_id=1413826795]
+[node name="CanopyTeal" type="MeshInstance3D" parent="." unique_id=1692131911]
 material_override = ExtResource("2_j0j42")
 mesh = SubResource("pines_4_1")
 
-[node name="CanopyLight" type="MeshInstance3D" parent="." unique_id=638737636]
+[node name="CanopyLight" type="MeshInstance3D" parent="." unique_id=839928447]
 material_override = ExtResource("3_gubr5")
 mesh = SubResource("pines_4_2")

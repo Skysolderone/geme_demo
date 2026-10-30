@@ -1,7 +1,7 @@
 [gd_scene format=4]
 
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_98a7ad_r100_vc.tres" id="1_1nww6"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_a8c8b0_r40_vc.tres" id="2_5qadh"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_c0bace_r100_vc.tres" id="1_1nww6"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_b5dfc5_r40_vc.tres" id="2_5qadh"]
 
 [sub_resource type="ArrayMesh" id="shallows_4_0"]
 _surfaces = [{
@@ -25,12 +25,12 @@ _surfaces = [{
 "vertex_data": PackedByteArray("5jfPvaabRDt9SDS+HD17vaabRDtjUCS+biKSvaabRDuP4Ri+5jfPvaabRDt9SDS+BrS6vaabRDtRtz++HD17vaabRDtjUCS+/OCWvaabRDvt8hy+47BWvaabRDu9dwG+blmJvaabRDtJV/y9/OCWvaabRDvt8hy+AMBxvaabRDsFPyC+47BWvaabRDu9dwG+w36HvaabRDsxygO+oieRvaabRDtmK7y9SnOrvaabRDtmDcy9w36HvaabRDsxygO+N2ZavaabRDtisve9oieRvaabRDtmK7y9aGiZPaabRDvYusA9cL2kPaabRDs+XgM+/EeHPaabRDtABv49aGiZPaabRDvYusA93N22PaabRDsUcck9cL2kPaabRDs+XgM+AjyMPaabRDt9iPY95kc9PaabRDsp/iE+GC0WPaabRDtHJRY+AjyMPaabRDt9iPY9asmfPaabRDsgHQc+5kc9PaabRDsp/iE+t/IePaabRDut4BQ+h9/Ju6abRDtniTY+BC47vKabRDtRJyg+t/IePaabRDut4BQ+R4I0PaabRDvDQiM+h9/Ju6abRDtniTY+AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/")
 }]
 
-[node name="Shallows4" type="Node3D" unique_id=1832214832]
+[node name="Shallows4" type="Node3D" unique_id=2046995683]
 
-[node name="Pebble" type="MeshInstance3D" parent="." unique_id=397702721]
+[node name="Pebble" type="MeshInstance3D" parent="." unique_id=1301114553]
 material_override = ExtResource("1_1nww6")
 mesh = SubResource("shallows_4_0")
 
-[node name="Ripple" type="MeshInstance3D" parent="." unique_id=144038867]
+[node name="Ripple" type="MeshInstance3D" parent="." unique_id=2081018642]
 material_override = ExtResource("2_5qadh")
 mesh = SubResource("shallows_4_1")
