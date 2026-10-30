@@ -326,7 +326,7 @@ public sealed partial class BoardView : Node3D
             };
             if (playable && cell.Height > 0)
             {
-                color = color.Lightened(cell.Height == 1 ? 0.06f : 0.12f);
+                color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.57f, 0.76f, 0.78f), 0.25f).Lightened(0.22f);
             }
             if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
             {
