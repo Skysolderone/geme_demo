@@ -49,21 +49,21 @@ _surfaces = [{
 "vertex_data": PackedByteArray("j8J1PnYMej17FC4+iNGgPgnXozx7FC4+QtGEPgnXozy+DWE+j8J1PnYMej17FC4+QtGEPgnXozy+DWE+bu02PgnXozxBH1Q+j8J1PnYMej17FC4+bu02PgnXozxBH1Q+CC04PgnXozw1ywg+j8J1PnYMej17FC4+CC04PgnXozw1ywg+0oCEPgnXozykb/k9j8J1PnYMej17FC4+0oCEPgnXozykb/k9iNGgPgnXozx7FC4+iNGgPgnXozx7FC4+j8J1PvxBgbx7FC4+QtGEPgnXozy+DWE+QtGEPgnXozy+DWE+j8J1PvxBgbx7FC4+bu02PgnXozxBH1Q+bu02PgnXozxBH1Q+j8J1PvxBgbx7FC4+CC04PgnXozw1ywg+CC04PgnXozw1ywg+j8J1PvxBgbx7FC4+0oCEPgnXozykb/k90oCEPgnXozykb/k9j8J1PvxBgbx7FC4+iNGgPgnXozx7FC4+rkdhvp3rFz2amRm+CjUwvo7CdTyamRm+rK5Svo7CdTyxg+G9rkdhvp3rFz2amRm+rK5Svo7CdTyxg+G9M/KIvo3CdTzo+/K9rkdhvp3rFz2amRm+M/KIvo3CdTzo+/K9qPWBvo7CdTydejC+rkdhvp3rFz2amRm+qPWBvo7CdTydejC+Y4tPvo7CdTzaOEu+rkdhvp3rFz2amRm+Y4tPvo7CdTzaOEu+CjUwvo7CdTyamRm+CjUwvo7CdTyamRm+rkdhvmEMFLyamRm+rK5Svo7CdTyxg+G9rK5Svo7CdTyxg+G9rkdhvmEMFLyamRm+M/KIvo3CdTzo+/K9M/KIvo3CdTzo+/K9rkdhvmEMFLyamRm+qPWBvo7CdTydejC+qPWBvo7CdTydejC+rkdhvmEMFLyamRm+Y4tPvo7CdTzaOEu+Y4tPvo7CdTzaOEu+rkdhvmEMFLyamRm+CjUwvo7CdTyamRm+yaAvu7050cTJoC+7vTnRxMmgL7u9OdHER3eBvxJWV6pHd4G/ElZXqkd3gb8SVleq4Eu5zGpDravgS7nMakOtq+BLucxqQ62rxD6E9y4pQZjEPoT3LilBmMQ+hPcuKUGYicWc3wwRMNuJxZzfDBEw24nFnN8METDbsp5rQDMqrqKynmtAMyquorKea0AzKq6i33cYPBEcWZvfdxg8ERxZm993GDwRHFmbD1AmLwY+T9MPUCYvBj5P0w9QJi8GPk/TKEPoB6tFkLIoQ+gHq0WQsihD6AerRZCyJ8FXHmVXHKonwVceZVccqifBVx5lVxyq458vxck3ecnjny/FyTd5yeOfL8XJN3nJzXn1zNJBTLLNefXM0kFMss159czSQUyyPEvt1Xg0uqs8S+3VeDS6qzxL7dV4NLqreUU27CsiPaF5RTbsKyI9oXlFNuwrIj2h8LZS3nYkCdbwtlLediQJ1vC2Ut52JAnWWaGAPTIqkqVZoYA9MiqSpVmhgD0yKpKlfHmlNVcVEKB8eaU1VxUQoHx5pTVXFRCgmUgrLHFA+dCZSCsscUD50JlIKyxxQPnQyUKwFPoxFL7JQrAU+jEUvslCsBT6MRS+mrlNI3hK2KyauU0jeErYrJq5TSN4Stis")
 }]
 
-[node name="Chest1" type="Node3D" unique_id=36685578]
+[node name="Chest1" type="Node3D" unique_id=2061087437]
 transform = Transform3D(-0.15101531, 0, 0.9885314, 0, 1, 0, -0.9885314, 0, -0.15101531, 0, 0, 0)
 
-[node name="Body" type="MeshInstance3D" parent="." unique_id=40421490]
+[node name="Body" type="MeshInstance3D" parent="." unique_id=227100441]
 material_override = ExtResource("1_vg1ct")
 mesh = SubResource("chest_1_0")
 
-[node name="Lid" type="MeshInstance3D" parent="." unique_id=499117682]
+[node name="Lid" type="MeshInstance3D" parent="." unique_id=2051109919]
 material_override = ExtResource("2_fnql0")
 mesh = SubResource("chest_1_1")
 
-[node name="Band" type="MeshInstance3D" parent="." unique_id=693144235]
+[node name="Band" type="MeshInstance3D" parent="." unique_id=1942735622]
 material_override = ExtResource("3_8okqc")
 mesh = SubResource("chest_1_2")
 
-[node name="Shade" type="MeshInstance3D" parent="." unique_id=265376006]
+[node name="Shade" type="MeshInstance3D" parent="." unique_id=1314371112]
 material_override = ExtResource("4_u26vn")
 mesh = SubResource("chest_1_3")

@@ -24,6 +24,15 @@ public static class Visuals
     /// <summary>可落子地砖（草地，terrain-model 缺省地表）。map-restyle 段A：参考图的岛面是淡紫灰的浅色石面，草色只靠草丛装饰（段C）读出来。</summary>
     public static readonly Color TilePlayable = Color.Color8(188, 180, 198);
 
+    /// <summary>
+    /// 草地分片之二（map-surface 裁决 3）：淡草绿。三片靠色相分、明度刻意与淡紫石同档（Rec.601 灰度 187 对 184），
+    /// 灰度下仍是同一档"可落子"；与土路（158）/ 荒漠（212）/ 岩台（136）各差 ≥ 20 级。
+    /// </summary>
+    public static readonly Color TilePlayableGreen = Color.Color8(172, 200, 156);
+
+    /// <summary>草地分片之三（map-surface 裁决 3）：淡泥褐，灰度 187——比土路亮 29 级、比荒漠暗 25 级，不会读成土路或荒漠。</summary>
+    public static readonly Color TilePlayableLoam = Color.Color8(208, 182, 158);
+
     /// <summary>土路地表：暖褐色，比草地与岩台暗；两侧辅以短轮迹。</summary>
     public static readonly Color TileRoad = Color.Color8(190, 150, 120);
 

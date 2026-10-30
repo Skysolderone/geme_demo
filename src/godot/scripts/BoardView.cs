@@ -256,6 +256,7 @@ public sealed partial class BoardView : Node3D
 
         int variant = 0;
         int boardRocks = 0;
+        int[] patchCells = new int[3];
         var zoneStrips = new SortedDictionary<int, int>();
         StandardMaterial3D? slabMaterial = null;
         List<Vector3> slabTops = [];
@@ -319,8 +320,15 @@ public sealed partial class BoardView : Node3D
             }
 
             Vector3 center = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
+            // map-surface 裁决 3：只有草地按坐标噪声分成三片基色（GrassPatch），其余七种地表照旧一色；分片只换基色，仍走 SurfaceOf 的共用材质与压暗表。
+            if (cell.Surface == Surface.Grass)
+            {
+                patchCells[GrassPatch(cell.Coord)]++;
+            }
+
             Color color = cell.Surface switch
             {
+                Surface.Grass => GrassPatchColor(GrassPatch(cell.Coord)),
                 Surface.Road => Visuals.TileRoad,
                 Surface.Forest => Visuals.TileForest,
                 Surface.Desert => Visuals.TileDesert,
@@ -427,11 +435,42 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(shallows);
             }
 
-            // 草丛（map-restyle 段C）：只撒在草地 / 土路格的一个格角（林地 / 荒漠 / 沼泽 / 岩台 / 浅滩的格角已有点缀），约每 7–8 格一簇，h>0 的格也撒。
+            // 草丛（map-restyle 段C；map-surface 裁决 4 加密 13% → 28%）：只撒在草地 / 土路格的一个格角（林地 / 荒漠 / 沼泽 / 岩台 / 浅滩的格角已有点缀），h>0 的格也撒。
             // 格角与有无都按坐标散列，不动 variant 计数器（否则后面岩石 / 松树 / 小树的档号整体平移、段A / 段B 定稿的画面会变）；合批走 AddObstacle 同一条路。
-            if (playable && cell.Surface is Surface.Grass or Surface.Road && TileVariant(cell.Coord, 40) % 100 < 13)
+            if (playable && cell.Surface is Surface.Grass or Surface.Road)
             {
-                AddObstacle(Decor(TerrainParts.Grass, cell.Coord), (int)(TileVariant(cell.Coord, 41) & 3), center);
+                int grassCorner = -1;
+                if (TileVariant(cell.Coord, 40) % 100 < 28)
+                {
+                    grassCorner = (int)(TileVariant(cell.Coord, 41) & 3);
+                    AddObstacle(Decor(TerrainParts.Grass, cell.Coord), grassCorner, center);
+                }
+
+                // 小石块 / 小花（map-surface 裁决 4）：合批只收格心、不带旋转，格角烙在档号里——小石块档 v 在格角 v（0–2）、小花档 v 在格角 v + 1（1–3），
+                // 见 LowPoly.Pebble / Flower。一格最多三件、三角互斥：先定草丛的角，小石块避开它，小花再避开前两者（四角放三件总有空角）。
+                // 有无与档号的盐（42–45）与草丛（40 / 41）错开，三类点缀互不同步。
+                int pebbleCorner = -1;
+                if (TileVariant(cell.Coord, 42) % 100 < 22)
+                {
+                    pebbleCorner = TileVariant(cell.Coord, 43) % 3;
+                    if (pebbleCorner == grassCorner)
+                    {
+                        pebbleCorner = (pebbleCorner + 1) % 3;
+                    }
+
+                    AddObstacle(Decor(TerrainParts.Pebble, cell.Coord), pebbleCorner, center);
+                }
+
+                if (TileVariant(cell.Coord, 44) % 100 < 16)
+                {
+                    int flower = TileVariant(cell.Coord, 45) % 3;
+                    while (flower + 1 == grassCorner || flower + 1 == pebbleCorner)
+                    {
+                        flower = (flower + 1) % 3;
+                    }
+
+                    AddObstacle(Decor(TerrainParts.Flower, cell.Coord), flower, center);
+                }
             }
 
             // 场景格只作装饰：铺满整格、不留缝也不垫衬底，相邻场景格连成一片——不出现会被读成"可落子"的格线。
@@ -485,8 +524,17 @@ public sealed partial class BoardView : Node3D
             + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
         GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count + _inlayMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
 
-        // 自证行（map-restyle 段C）：装饰套件各放了几格（草丛在可落子格角，其余在不可落子格）、中立平台符文环几块。
-        GD.Print($"[deco] 装饰套件：{(deco.Count == 0 ? "无" : string.Join("、", deco.Select(kv => $"{kv.Key} {kv.Value.Count} 格{(kv.Key == TerrainParts.Grass.Name ? string.Empty : $"（{string.Join(" ", kv.Value.Select(c => c.ToNotation()))}）")}")))}；中立平台符文环 {_runeRings} 块");
+        // 自证行（map-restyle 段C；map-surface 裁决 4）：装饰套件各放了几格（草丛 / 小石块 / 小花在可落子格角，其余在不可落子格）、中立平台符文环几块。
+        // 格角三类撒得密，只列前 6 格（近景截图对准用）；其余仍列全。
+        static string DecoCells(string kind, List<Coord> cells)
+        {
+            bool dense = kind == TerrainParts.Grass.Name || kind == TerrainParts.Pebble.Name || kind == TerrainParts.Flower.Name;
+            string listed = string.Join(" ", (dense ? cells.Take(6) : cells).Select(c => c.ToNotation()));
+            return $"{cells.Count} 格（{listed}{(dense && cells.Count > 6 ? " …" : string.Empty)}）";
+        }
+
+        GD.Print($"[deco] 装饰套件：{(deco.Count == 0 ? "无" : string.Join("、", deco.Select(kv => $"{kv.Key} {DecoCells(kv.Key, kv.Value)}")))}；中立平台符文环 {_runeRings} 块");
+        GD.Print($"[patch] 草地分片（map-surface 裁决 3）：淡紫石 {patchCells[0]} / 淡草绿 {patchCells[1]} / 淡泥褐 {patchCells[2]} 格");
 
         BuildCoordinateLabels(low, high);
 
@@ -1058,6 +1106,52 @@ public sealed partial class BoardView : Node3D
     /// <summary>地块部件的变体号：按全图坐标散列（不按棋盘内坐标，接缝两侧的图案不断层），<paramref name="salt"/> 区分顶板与各层侧面，让它们的档位不同步。</summary>
     private static int TileVariant(Coord coord, int salt) =>
         (int)(LowPolyMesh.Hash(unchecked((coord.X * 73856093) ^ (coord.Y * 19349663)), 17 + salt) & 0x7FFFFFFFu);
+
+    /// <summary>
+    /// 草地格属于哪一片（map-surface 裁决 3）：0 淡紫石、1 淡草绿、2 淡泥褐。三个独立的噪声场取最大者——单个场切两刀的中间档永远是夹在另两档之间的窄带，
+    /// 读成描边而不是色块；三场各自取最大，每一档才是真正的团块。每个场是粗（4.5 格）+ 细（2.2 格、权 0.18）两层平滑值噪声，块径约 4–7 格、边缘带毛刺；
+    /// 淡紫石（岛面本色）加 0.05 偏置略占多数。只按全图坐标散列（<see cref="LowPolyMesh.Unit"/>），同一张图永远同一副样子。
+    /// </summary>
+    private static int GrassPatch(Coord coord)
+    {
+        int best = 0;
+        float bestValue = float.MinValue;
+        for (int k = 0; k < 3; k++)
+        {
+            float value = (PatchNoise(coord, 4.5f, 60 + k, 0.37f + (k * 0.21f), 0.61f + (k * 0.13f)) * 0.82f)
+                + (PatchNoise(coord, 2.2f, 70 + k, 0.17f, 0.43f) * 0.18f)
+                + (k == 0 ? 0.05f : 0f);
+            if (value > bestValue)
+            {
+                best = k;
+                bestValue = value;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>某一片的基色（map-surface 裁决 3）：0 淡紫石即原 <see cref="Visuals.TilePlayable"/>，其余两色只在 Visuals 定义。</summary>
+    private static Color GrassPatchColor(int patch) => patch switch
+    {
+        1 => Visuals.TilePlayableGreen,
+        2 => Visuals.TilePlayableLoam,
+        _ => Visuals.TilePlayable,
+    };
+
+    /// <summary>平滑值噪声的一层：格坐标除以 <paramref name="scale"/> 落进格点网，四个格点的散列值按 smoothstep 双线性插值；<paramref name="offsetX"/> / <paramref name="offsetY"/> 让格点网不对齐原点。</summary>
+    private static float PatchNoise(Coord coord, float scale, int salt, float offsetX, float offsetY)
+    {
+        float fx = (coord.X + offsetX) / scale, fy = (coord.Y + offsetY) / scale;
+        int ix = (int)MathF.Floor(fx), iy = (int)MathF.Floor(fy);
+        float tx = fx - ix, ty = fy - iy;
+        tx = tx * tx * (3f - (2f * tx));
+        ty = ty * ty * (3f - (2f * ty));
+        float a = Lattice(ix, iy), b = Lattice(ix + 1, iy), c = Lattice(ix, iy + 1), d = Lattice(ix + 1, iy + 1);
+        return Mathf.Lerp(Mathf.Lerp(a, b, tx), Mathf.Lerp(c, d, tx), ty);
+
+        float Lattice(int x, int y) => LowPolyMesh.Unit(unchecked((x * 73856093) ^ (y * 19349663)), salt);
+    }
 
     /// <summary>侧面部件资源不带材质时的退路：现有侧面色、打开顶点色。</summary>
     private static StandardMaterial3D SideFallback(Color color)

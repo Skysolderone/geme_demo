@@ -25,12 +25,12 @@ _surfaces = [{
 "vertex_data": PackedByteArray("stnqvaabRDs72S++6reKvaabRDsjZiS+JsaavaabRDvFTRe+stnqvaabRDs72S++dsvavaabRDuZ8Ty+6reKvaabRDsjZiS+heyfvaabRDvS5xm+TstDvaabRDvCAwS+QIF4vaabRDv8Pvi9heyfvaabRDvS5xm+i5GFvaabRDsWzCG+TstDvaabRDvCAwS+bx98vaabRDt7wAG+W9JbvaabRDupOr+9VuKLvaabRDsX9sW9bx98vaabRDt7wAG+Hy1AvaabRDuJxfy9W9JbvaabRDupOr+9JlsGPaabRDtqos09fF6FPaabRDuU3vY93lVYPaabRDvnNwQ+JlsGPaabRDtqos09QMI4PaabRDswEbw9fF6FPaabRDuU3vY94BZTPaabRDuMnP09Omt/PaabRDuCuh8+JIZCPaabRDvcrx0+4BZTPaabRDuMnP09+/2HPaabRDvr2AA+Omt/PaabRDuCuh8+uVZLPaabRDs+QRk+gdsFPaabRDu2HUA+Ki+1PKabRDvUNTU+uVZLPaabRDs+QRk+pZp2PaabRDsgKSQ+gdsFPaabRDu2HUA+AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/")
 }]
 
-[node name="Shallows2" type="Node3D" unique_id=1791453302]
+[node name="Shallows2" type="Node3D" unique_id=654158114]
 
-[node name="Pebble" type="MeshInstance3D" parent="." unique_id=2063896998]
+[node name="Pebble" type="MeshInstance3D" parent="." unique_id=1180476990]
 material_override = ExtResource("1_td7po")
 mesh = SubResource("shallows_2_0")
 
-[node name="Ripple" type="MeshInstance3D" parent="." unique_id=1063727310]
+[node name="Ripple" type="MeshInstance3D" parent="." unique_id=1872948986]
 material_override = ExtResource("2_58oi4")
 mesh = SubResource("shallows_2_1")
