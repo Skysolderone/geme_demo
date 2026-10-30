@@ -34,19 +34,19 @@ public static class TerrainParts
     }
 
     // 明亮的棋盘由 BoardView 保持地表判读；这些颜色只作用于部件自身。
-    // 石板偏暖灰紫，植物用青绿与少量暮紫，结构件为哑光木与旧金。
-    private static readonly Color ArtStone = Color.Color8(151, 139, 145);
-    private static readonly Color ArtRimStone = Color.Color8(195, 177, 154);
-    private static readonly Color ArtDarkStone = Color.Color8(103, 96, 114);
-    private static readonly Color ArtSoil = Color.Color8(154, 111, 103);
-    private static readonly Color ArtTeal = Color.Color8(53, 125, 112);
-    private static readonly Color ArtLightTeal = Color.Color8(91, 155, 138);
-    private static readonly Color ArtViolet = Color.Color8(132, 104, 165);
-    private static readonly Color ArtWood = Color.Color8(130, 93, 74);
-    private static readonly Color ArtDeck = Color.Color8(191, 141, 105);
-    private static readonly Color ArtGold = Color.Color8(215, 179, 100);
-    private static readonly Color ArtIvory = Color.Color8(220, 204, 177);
-    private static readonly Color ArtWater = Color.Color8(100, 161, 176);
+    // 石板用冷灰，植物用深浅绿，结构件保留暖木色。
+    private static readonly Color ArtStone = Color.Color8(120, 139, 147);
+    private static readonly Color ArtRimStone = Color.Color8(151, 169, 171);
+    private static readonly Color ArtDarkStone = Color.Color8(67, 85, 96);
+    private static readonly Color ArtSoil = Color.Color8(137, 127, 109);
+    private static readonly Color ArtTeal = Color.Color8(45, 110, 83);
+    private static readonly Color ArtLightTeal = Color.Color8(97, 155, 111);
+    private static readonly Color ArtViolet = Color.Color8(44, 88, 77);
+    private static readonly Color ArtWood = Color.Color8(108, 72, 48);
+    private static readonly Color ArtDeck = Color.Color8(184, 139, 93);
+    private static readonly Color ArtGold = Color.Color8(193, 166, 99);
+    private static readonly Color ArtIvory = Color.Color8(210, 215, 195);
+    private static readonly Color ArtWater = Color.Color8(88, 164, 166);
 
     // 障碍与装饰（map-elements-v2 段 C 用 LowPolyMesh 重建；档数在 LowPoly 一处，建模函数按它取模）。pines / ruins 只服务场景格，按裁决 M3 不重建、不扩档。
     public static readonly Kind Rock = new("rock", LowPoly.RockVariants, v => Themed("rock", LowPoly.Rock(v), v));
@@ -78,8 +78,8 @@ public static class TerrainParts
     /// <summary>第 1 层侧面（缓坡）：铺满整格、高一层，四条暖土色带，棱与格边齐平。</summary>
     public static readonly Kind SideSlope = new("side_slope", 2, v => Single("SideSlope", SideSlopeMesh(v), SideMaterial(ArtSoil)), "该层带的顶面中心");
 
-    /// <summary>第 2 层侧面（崖壁）：铺满整格、高一层，保留岩沿与深缝，在内缩岩体上叠两排错缝砌石。</summary>
-    public static readonly Kind SideCliff = new("side_cliff", 3, v => Single("SideCliff", SideCliffMesh(v), SideMaterial(ArtStone)), "该层带的顶面中心");
+    /// <summary>第 2 层侧面（崖壁）：铺满整格、高一层；亮岩沿下是压暗的竖向节理岩体。</summary>
+    public static readonly Kind SideCliff = new("side_cliff", 3, v => Single("SideCliff", SideCliffMesh(v), SideMaterial(ArtStone.Lightened(0.42f))), "该层带的顶面中心");
 
     /// <summary>砖缝衬底：铺满整格、厚 <see cref="LinerThickness"/>。材质由 BoardView 按底色覆盖；导出时带中性白材质。</summary>
     public static readonly Kind Liner = new("liner", 1, _ => Single("Liner", LinerMesh(), NeutralMaterial()), "衬底中心");
@@ -344,20 +344,59 @@ public static class TerrainParts
         "desert" => part == "Cactus" ? ArtTeal : part == "Bone" ? ArtIvory : ArtDarkStone,
         "marsh" => part == "Puddle" ? ArtWater : ArtLightTeal,
         "crag" => part == "Rim" ? ArtStone.Lightened(0.13f) : ArtDarkStone,
-        "shallows" => part == "Pebble" ? ArtIvory : ArtIvory.Lightened(0.10f),
+        "shallows" => part == "Pebble" ? ArtStone.Lightened(0.24f) : ArtLightTeal.Lightened(0.45f),
         "fence" => ArtWood,
         "bridge" => part == "Deck" ? ArtDeck : ArtWood,
         _ => original,
     };
 
-    private static ArrayMesh TileTopMesh(int variant) => LowPolyMesh.CarvedTile(
-        new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize), TileBevel, Wrap(variant, TileTop.Variants));
+    private static ArrayMesh TileTopMesh(int variant)
+    {
+        // 短刻线留在地砖边角，格心保持清晰。
+        int v = Wrap(variant, TileTop.Variants);
+        var parts = new List<(ArrayMesh, Transform3D)>
+        {
+            (LowPolyMesh.BeveledSlab(new Vector3(BoardGeometry.TileSize, BoardGeometry.TileHeight, BoardGeometry.TileSize),
+                TileBevel, 0.99f, seed: 101 + v, facetJitter: 0.025f, sideShade: 0.91f), Transform3D.Identity),
+        };
+        float corner = BoardGeometry.TileSize * 0.34f;
+        float length = BoardGeometry.TileSize * 0.075f;
+        for (int i = 0; i < 2; i++)
+        {
+            float sign = i == 0 ? 1f : -1f;
+            float x = sign * corner;
+            float z = (((v & 1) == 0) ? sign : -sign) * corner;
+            parts.Add((LowPolyMesh.Ribbon([new Vector3(x - length * 0.5f, 0.0015f, z),
+                new Vector3(x + length * 0.5f, 0.0015f, z)], 0.008f, shade: 0.82f, minShade: 0.8f), Transform3D.Identity));
+        }
+        return LowPolyMesh.Merge(parts);
+    }
 
     private static ArrayMesh SideSlopeMesh(int variant) => LowPolyMesh.Strata(
-        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 4, jitter: 0.018f, seed: 201 + Wrap(variant, SideSlope.Variants));
+        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), bands: 3, jitter: 0.008f, seed: 201 + Wrap(variant, SideSlope.Variants));
 
-    private static ArrayMesh SideCliffMesh(int variant) => LowPolyMesh.CoursedCliff(
-        new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize), seed: 301 + Wrap(variant, SideCliff.Variants));
+    private static ArrayMesh SideCliffMesh(int variant)
+    {
+        // 单一 surface 以顶点色区分岩沿和岩体，既保留共享材质也不增加每格绘制。
+        ArrayMesh source = LowPolyMesh.Strata(
+            new Vector3(BoardGeometry.CellSize, BoardGeometry.LayerHeight, BoardGeometry.CellSize),
+            bands: 4, jitter: 0.03f, seed: 301 + Wrap(variant, SideCliff.Variants), lip: 0.08f, crevice: 0.09f);
+        global::Godot.Collections.Array arrays = source.SurfaceGetArrays(0);
+        Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+        Color[] colors = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            // 岩沿占顶部 0.045；下方岩体压暗，竖向裂缝由 Strata 的内凹保留。
+            float factor = vertices[i].Y >= -0.0451f ? 1f : 0.47f;
+            Color color = colors[i];
+            colors[i] = new Color(color.R * factor, color.G * factor, color.B * factor, color.A);
+        }
+
+        arrays[(int)Mesh.ArrayType.Color] = colors;
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
 
     private static ArrayMesh LinerMesh() => LowPolyMesh.BeveledSlab(
         new Vector3(BoardGeometry.CellSize, LinerThickness, BoardGeometry.CellSize), 0f, 1f, top: LinerThickness * 0.5f);
@@ -425,7 +464,7 @@ public static class TerrainParts
                 new(mid, top + 0.002f, 0.125f),
                 new(mid + glyphHalf, top + 0.002f, 0.08f),
             ];
-            parts.Add((LowPolyMesh.Ribbon(rune, 0.011f, tint: new Color(1f, 0.89f, 0.47f)), Transform3D.Identity));
+            parts.Add((LowPolyMesh.Ribbon(rune, 0.011f, tint: new Color(0.72f, 0.83f, 0.82f)), Transform3D.Identity));
         }
 
         return LowPolyMesh.Merge(parts);
@@ -466,8 +505,8 @@ public static class TerrainParts
     private static ArrayMesh IslandLayerMesh(int variant)
     {
         int seed = 801 + Wrap(variant, IslandLayer.Variants);
-        const float chamfer = 0.035f, taper = 0.04f, jitter = 0.012f;
-        const int segments = 4, bands = 3;
+        const float chamfer = 0.055f, taper = 0.065f, jitter = 0.018f;
+        const int segments = 5, bands = 3;
 
         // 外廓（顶圈，半边长 0.5）：四条长边各 segments + 1 个点，相邻两边之间那一小段即切角。
         var outline = new List<Vector2>();
@@ -515,8 +554,8 @@ public static class TerrainParts
     {
         int v = Wrap(variant, IslandSpike.Variants);
         int seed = 901 + v;
-        int sides = 5 + (v & 1);
-        (float Y, float Radius, float Lean)[] profile = [(1f, 1f, 0f), (0.62f, 0.58f, 0.08f), (0.30f, 0.27f, 0.08f), (0f, 0f, 0f)];
+        int sides = 6 + (v & 1);
+        (float Y, float Radius, float Lean)[] profile = [(1f, 1f, 0f), (0.68f, 0.67f, 0.055f), (0.32f, 0.31f, 0.055f), (0f, 0f, 0f)];
         var rings = new List<Vector3[]>();
         for (int r = 0; r < profile.Length; r++)
         {
@@ -568,7 +607,7 @@ public static class TerrainParts
     /// <summary>云团材质：不受光的浅暮紫半透明色（Visuals.Flat，α 0.55），打开顶点色（顶点色 α 恒 1，乘出来仍是 0.55）。</summary>
     private static StandardMaterial3D CloudMaterial()
     {
-        StandardMaterial3D material = Visuals.Flat(new Color(0.91f, 0.89f, 0.98f, 0.55f));
+        StandardMaterial3D material = Visuals.Flat(new Color(0.86f, 0.93f, 0.94f, 0.55f));
         material.VertexColorUseAsAlbedo = true;
         return material;
     }

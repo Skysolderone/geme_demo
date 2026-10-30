@@ -332,7 +332,7 @@ public static class LowPoly
     /// </summary>
     /// <remarks>
     /// 两个 surface：浅色岩（<see cref="Visuals.Rock"/>）与深色岩（同色压暗 0.14），顶点色只当亮度系数（多面岩自带 0.94–1.0 的面差）。
-    /// 外形：最高 0.36–0.40（≤ 0.75）；水平方向不出地砖（导出实测 |x|、|z| ≤ 0.41，地砖半边长 0.45），整组按变体绕 Y 每档转 60°。
+    /// 外形采用更粗的岩面与不对称轮廓；整组按变体绕 Y 每档转 60°，保持在地砖范围内。
     /// </remarks>
     public static Node3D Rock(int variant)
     {
@@ -347,13 +347,13 @@ public static class LowPoly
 
         var light = new List<(ArrayMesh, Transform3D)>
         {
-            (LowPolyMesh.FacetRock(0.27f, 8, 0.14f, seed, new Vector3(1.12f, 0.80f, 1.0f)), At(-0.05f, 0.16f, 0.03f, 20)),
+            (LowPolyMesh.FacetRock(0.27f, 6, 0.20f, seed, new Vector3(1.10f, 0.92f, 0.96f)), At(-0.05f, 0.16f, 0.03f, 20)),
             (LowPolyMesh.FacetRock(0.12f, 6, 0.18f, seed + 2, new Vector3(1.1f, 0.85f, 1.0f)), At(0.10f, 0.07f, 0.25f, 30)),
             (LowPolyMesh.FacetRock(0.05f, 5, 0.25f, seed + 3, new Vector3(1.2f, 0.7f, 1.0f)), At(-0.27f, 0.025f, 0.22f, 40)),
         };
         var dark = new List<(ArrayMesh, Transform3D)>
         {
-            (LowPolyMesh.FacetRock(0.17f, 7, 0.16f, seed + 1, new Vector3(1.1f, 0.85f, 1.05f)), At(0.17f, 0.11f, -0.12f, 50)),
+            (LowPolyMesh.FacetRock(0.17f, 5, 0.22f, seed + 1, new Vector3(1.08f, 0.95f, 1.00f)), At(0.17f, 0.11f, -0.12f, 50)),
             (LowPolyMesh.FacetRock(0.06f, 5, 0.25f, seed + 4, new Vector3(1.2f, 0.75f, 1.0f)), At(-0.22f, 0.03f, -0.24f, 60)),
         };
 
@@ -390,9 +390,9 @@ public static class LowPoly
             List<(ArrayMesh, Transform3D)> crown = i == 0 && v == 3 ? dusk : ((v + i) & 1) == 0 ? teal : light;
             for (int tier = 0; tier < 3; tier++)
             {
-                float radius = (0.18f - (tier * 0.042f)) * s;
-                float height = (0.22f - (tier * 0.01f)) * s;
-                float bottom = (0.12f + (tier * 0.13f)) * s;
+                float radius = (0.17f - (tier * 0.036f)) * s;
+                float height = (0.20f - (tier * 0.01f)) * s;
+                float bottom = (0.13f + (tier * 0.14f)) * s;
                 var lean = new Vector2(LowPolyMesh.Signed(seed, tier + 2), LowPolyMesh.Signed(seed, tier + 5)) * 0.01f * s;
                 crown.Add((LowPolyMesh.Frustum(radius, tier == 2 ? 0f : 0.015f * s, height, 6,
                     0.95f + (0.04f * LowPolyMesh.Unit(seed, tier + 8)), lean, yaw + (tier * Mathf.Pi / 6f), bottomCap: true),
@@ -418,7 +418,7 @@ public static class LowPoly
         {
             (LowPolyMesh.BeveledSlab(new Vector3(0.24f, 0.07f, 0.24f), 0.018f, 0.98f, top: 0.13f),
                 new Transform3D(Basis.Identity, new Vector3(-0.15f, 0f, -0.12f))),
-            (LowPolyMesh.Frustum(0.105f, 0.079f, 0.30f + ((v & 1) * 0.06f), 6, 0.98f, yaw: v * Mathf.Pi / 7f),
+            (LowPolyMesh.Frustum(0.105f, 0.075f, 0.30f + ((v & 1) * 0.06f), 4, 0.98f, yaw: v * Mathf.Pi / 7f),
                 new Transform3D(Basis.Identity, new Vector3(-0.15f, 0.13f, -0.12f))),
             (LowPolyMesh.Beam(new Vector3(0.05f, 0.095f, 0.12f), new Vector3(0.29f, 0.10f, 0.21f), 0.14f, 0.10f, 0.96f), Transform3D.Identity),
         };
@@ -438,7 +438,7 @@ public static class LowPoly
 
     /// <summary>
     /// 林地格的三棵小树（装饰层）：四个格角里每档空出一个、其余三个各一棵；短干上叠三层多面树冠，
-    /// 与沼泽的芦苇、荒漠的仙人掌分得开。树冠最宽半径 0.093、树高 ≤ 0.26，整棵落在棋子底座（半径 0.36）之外，
+    /// 与沼泽的芦苇、荒漠的仙人掌分得开。树冠最宽半径 0.087、树高 ≤ 0.26，整棵落在棋子底座（半径 0.36）之外，
     /// 不遮挡该格的落点、气与归属标记（visual-style-baseline「装饰不遮挡判读」）。返回节点原点在地砖上表面。
     /// </summary>
     /// <remarks>两个 surface：树冠（<see cref="Visuals.TreeCanopy"/>）与树干（<see cref="Visuals.Timber"/>）。每棵的大小、朝向与明暗按散列错开。</remarks>
@@ -457,17 +457,17 @@ public static class LowPoly
 
             int seed = 801 + (v * 8) + k;
             float s = 0.90f + (0.10f * LowPolyMesh.Unit(seed, 0));
-            float reach = 0.35f + (0.005f * LowPolyMesh.Unit(seed, 1));  // 最外沿 < 0.45，最近角点在棋子底座之外
+            float reach = 0.34f + (0.005f * LowPolyMesh.Unit(seed, 1));  // 留出树冠倾斜余量，最近角点在棋子底座之外
             var at = new Vector3(corners[k].X * reach, 0f, corners[k].Y * reach);
             float yaw = LowPolyMesh.Unit(seed, 2) * Mathf.Tau;
             float tone = 0.95f + (0.04f * LowPolyMesh.Unit(seed, 3));
             var lean = new Vector2(LowPolyMesh.Signed(seed, 4), LowPolyMesh.Signed(seed, 5)) * 0.008f * s;
             trunk.Add((LowPolyMesh.Frustum(0.028f * s, 0.018f * s, 0.09f * s, 5, 0.96f, yaw: yaw), new Transform3D(Basis.Identity, at)));
-            canopy.Add((LowPolyMesh.Frustum(0.093f * s, 0.022f * s, 0.13f * s, 6, tone * 0.97f, lean, yaw, bottomCap: true),
+            canopy.Add((LowPolyMesh.Frustum(0.087f * s, 0.026f * s, 0.11f * s, 5, tone * 0.97f, lean, yaw, bottomCap: true),
                 new Transform3D(Basis.Identity, at + new Vector3(0f, 0.055f * s, 0f))));
-            canopy.Add((LowPolyMesh.Frustum(0.068f * s, 0.013f * s, 0.105f * s, 6, tone, lean, yaw + (Mathf.Pi / 6f), bottomCap: true),
+            canopy.Add((LowPolyMesh.Frustum(0.075f * s, 0.016f * s, 0.11f * s, 5, tone, lean, yaw + (Mathf.Pi / 5f), bottomCap: true),
                 new Transform3D(Basis.Identity, at + new Vector3(0f, 0.115f * s, 0f))));
-            canopy.Add((LowPolyMesh.Frustum(0.045f * s, 0f, 0.08f * s, 5, Mathf.Min(1f, tone * 1.02f), lean * 0.5f, yaw, bottomCap: true),
+            canopy.Add((LowPolyMesh.Frustum(0.052f * s, 0f, 0.08f * s, 5, Mathf.Min(1f, tone * 1.02f), lean * 0.5f, yaw, bottomCap: true),
                 new Transform3D(Basis.Identity, at + new Vector3(0f, 0.175f * s, 0f))));
         }
 
@@ -511,7 +511,7 @@ public static class LowPoly
                 points.Add((along * t) + (across * ((i * 0.12f) + wave)) + new Vector3(0f, 0.004f, 0f));
             }
 
-            ripple.Add((LowPolyMesh.Ribbon(points, 0.032f, shade: 0.97f), At(Vector3.Zero)));
+            ripple.Add((LowPolyMesh.Ribbon(points, 0.026f, shade: 0.94f), At(Vector3.Zero)));
         }
 
         // 仙人掌：六棱主柱 + 尖顶，一侧沿格角切向伸出一条曲臂（横段 + 竖段 + 尖顶），顶高 0.23；放在一个格角上。
@@ -592,10 +592,10 @@ public static class LowPoly
             {
                 float rad = Mathf.DegToRad((k * 72f) + (v * 13f) + (clumpIndex * 36f));
                 var dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
-                float height = 0.15f + (0.02f * ((k + v) % 4));
+                float height = 0.14f + (0.025f * ((k + v) % 4));
                 float leanBy = 0.02f + (0.015f * LowPolyMesh.Unit(seed, 20 + (clumpIndex * 10) + k));
                 var basePoint = clump + new Vector3(dir.X * 0.035f, 0f, dir.Y * 0.035f);
-                reed.Add((LowPolyMesh.Frustum(0.013f, 0f, height, 3, 0.96f + (0.04f * LowPolyMesh.Unit(seed, 40 + k)), dir * leanBy, rad),
+                reed.Add((LowPolyMesh.Frustum(0.010f, 0f, height, 3, 0.96f + (0.04f * LowPolyMesh.Unit(seed, 40 + k)), dir * leanBy, rad),
                     new Transform3D(Basis.Identity, basePoint)));
                 if (k == 0)
                 {
@@ -675,7 +675,7 @@ public static class LowPoly
             var c = new Vector3(at.X, 0.004f, at.Y);
             Vector3 bend = normal * (0.025f * LowPolyMesh.Signed(seed, 30 + i));
             Vector3[] points = [c - (dir * (len * 0.5f)), c - (dir * (len * 0.12f)) + bend, c + (dir * (len * 0.5f)) - (bend * 0.4f)];
-            crack.Add((LowPolyMesh.Ribbon(points, 0.018f), Transform3D.Identity));
+            crack.Add((LowPolyMesh.Ribbon(points, 0.024f), Transform3D.Identity));
         }
 
         // 碎石：两颗压扁的多面岩，放在石沿以内的两个格角上。
@@ -706,7 +706,7 @@ public static class LowPoly
         var pebble = new List<(ArrayMesh, Transform3D)>();
         var ripple = new List<(ArrayMesh, Transform3D)>();
 
-        // 水纹：两道弧，弧心错开在格心两侧。
+        // 水纹：两道短弧，在浅水上读成自然波纹而非规则的横向条块。
         for (int i = -1; i <= 1; i += 2)
         {
             var center = new Vector3(0.06f * i * sx, 0.003f, 0.14f * i);
@@ -718,14 +718,14 @@ public static class LowPoly
                 points.Add(center + new Vector3((Mathf.Cos(a) * 0.17f) - (Mathf.Cos(start + 0.57f) * 0.17f), 0f, (Mathf.Sin(a) * 0.08f) - (Mathf.Sin(start + 0.57f) * 0.08f)));
             }
 
-            ripple.Add((LowPolyMesh.Ribbon(points, 0.016f), Transform3D.Identity));
+            ripple.Add((LowPolyMesh.Ribbon(points, 0.015f), Transform3D.Identity));
         }
 
         // 鹅卵石：一圈压扁的多面小石，避开格心的棋子底座。
         const float ring = 0.402f;
         for (int i = 0; i < 6 - (v % 2); i++)
         {
-            float r = 0.022f + (0.006f * LowPolyMesh.Unit(seed, 20 + i));
+            float r = 0.026f + (0.008f * LowPolyMesh.Unit(seed, 20 + i));
             float a = Mathf.DegToRad((i * 60f) + (v * 17f) + (20f * LowPolyMesh.Signed(seed, 30 + i)));
             var at = new Vector3(Mathf.Cos(a) * ring, r * 0.25f, Mathf.Sin(a) * ring);
             pebble.Add((LowPolyMesh.FacetRock(r, 6, 0.12f, seed + 40 + i, new Vector3(1.25f, 0.6f, 1f)),
@@ -750,7 +750,7 @@ public static class LowPoly
     public static Node3D Fence(bool alongX)
     {
         const float half = (BoardGeometry.TileSize + 0.06f) * 0.5f;   // 横杆半长 0.48，与改前同
-        const float post = 0.04f, cap = 0.05f, capHeight = 0.035f, height = 0.30f, sag = 0.012f;
+        const float post = 0.04f, cap = 0.05f, capHeight = 0.035f, height = 0.30f, sag = 0.006f;
         var parts = new List<(ArrayMesh, Transform3D)>();
         for (int i = -1; i <= 1; i++)
         {
@@ -768,7 +768,7 @@ public static class LowPoly
             {
                 var from = new Vector3(knots[k], y - Droop(knots[k]), 0f);
                 var to = new Vector3(knots[k + 1], y - Droop(knots[k + 1]), 0f);
-                parts.Add((LowPolyMesh.Beam(from, to, 0.03f, 0.035f, 0.97f), Transform3D.Identity));
+                parts.Add((LowPolyMesh.Beam(from, to, 0.03f, 0.04f, 0.97f), Transform3D.Identity));
             }
         }
 
@@ -790,7 +790,7 @@ public static class LowPoly
     }
 
     /// <summary>
-    /// 预置桥（terrain-model 设施）：一层木板桥面（六块板，板间露出下面深色的垫木，读作板缝）+ 两侧栏杆（四根角墩、两根中柱、一道扶手），
+    /// 预置桥（terrain-model 设施）：一层木板桥面（八块板，板间露出下面深色的垫木，读作板缝）+ 两侧栏杆（四根角墩、两根中柱、一道扶手），
     /// 铺在深水格上，面与同层地砖齐平——桥格是普通可落子格，棋子与标记照常放在面上。栏杆贴在桥面两侧、只有 0.13 高，不遮挡落点。
     /// 返回节点原点在桥面（地砖上表面）；网格里过桥方向沿 Z（栏杆沿 Z 走），BoardView 按河道走向绕 Y 转。
     /// </summary>
@@ -802,11 +802,11 @@ public static class LowPoly
     {
         const float half = BoardGeometry.TileSize * 0.5f;
         const float deckDepth = 0.04f, bottom = -0.06f, top = 0.13f;
-        const int planks = 6;
+        const int planks = 8;
         const float seam = 0.012f;
         float plank = (BoardGeometry.TileSize - ((planks - 1) * seam)) / planks;
 
-        // 桥面：六块横板（沿 X 长、沿 Z 排开），每块亮度按散列错开一点。
+        // 桥面：八块横板（沿 X 长、沿 Z 排开），每块亮度按散列错开一点。
         var deck = new List<(ArrayMesh, Transform3D)>();
         for (int i = 0; i < planks; i++)
         {

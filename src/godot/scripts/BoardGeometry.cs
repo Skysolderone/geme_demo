@@ -23,10 +23,10 @@ public static class BoardGeometry
     public const float TopY = TileHeight * 0.5f;
 
     /// <summary>
-    /// 每一层高度（terrain-model 高度 0 / 1 / 2）抬升的世界高度。取格宽的 0.35：Δh=2 的崖壁侧面高 0.7 格宽，
-    /// 在俯角 60° 的固定对局相机下（崖壁侧面投影高度仍有 cos 60° = 0.5）与 Δh=1 的缓坡侧面（0.35）一眼可分，又不至于让高台挡住身后一整行低地的棋子。
+    /// 每一层高度（terrain-model 高度 0 / 1 / 2）抬升的世界高度。取格宽的 0.36，
+    /// 让高台侧面在全局视角下更明显；棋子可见性与拾取需配合实际相机视角检查。
     /// </summary>
-    public const float LayerHeight = 0.35f;
+    public const float LayerHeight = 0.36f;
 
     /// <summary>最高层（与 <c>TerrainData.MaxHeight</c> 一致，拾取按 0..MaxLevel 逐层求交）。</summary>
     public const int MaxLevel = 2;
@@ -98,6 +98,37 @@ public static class BoardGeometry
 
         coord = new Coord(x, y);
         return true;
+    }
+
+    /// <summary>线段沿棋盘平面的候选格范围；返回的矩形右边和上边不包含在范围内。</summary>
+    public static Rect2I CellsAlongSegment(Vector3 first, Vector3 last, int width, int height)
+    {
+        Vector2 a = CellPosition(first, width, height);
+        Vector2 b = CellPosition(last, width, height);
+        int minX = Math.Clamp((int)MathF.Floor(MathF.Min(a.X, b.X)) - 1, 0, width);
+        int maxX = Math.Clamp((int)MathF.Ceiling(MathF.Max(a.X, b.X)) + 2, 0, width);
+        int minY = Math.Clamp((int)MathF.Floor(MathF.Min(a.Y, b.Y)) - 1, 0, height);
+        int maxY = Math.Clamp((int)MathF.Ceiling(MathF.Max(a.Y, b.Y)) + 2, 0, height);
+        return new Rect2I(minX, minY, Math.Max(0, maxX - minX), Math.Max(0, maxY - minY));
+    }
+
+    /// <summary>棋盘局部包围盒覆盖的格范围；用于把跨格的可见物登记到拾取索引。</summary>
+    public static Rect2I CellsOverlapping(Aabb bounds, int width, int height)
+    {
+        Vector2 a = CellPosition(bounds.Position, width, height);
+        Vector2 b = CellPosition(bounds.End, width, height);
+        int minX = Math.Clamp((int)MathF.Floor(MathF.Min(a.X, b.X) + 0.5f), 0, width);
+        int maxX = Math.Clamp((int)MathF.Floor(MathF.Max(a.X, b.X) + 0.5f) + 1, 0, width);
+        int minY = Math.Clamp((int)MathF.Floor(MathF.Min(a.Y, b.Y) + 0.5f), 0, height);
+        int maxY = Math.Clamp((int)MathF.Floor(MathF.Max(a.Y, b.Y) + 0.5f) + 1, 0, height);
+        return new Rect2I(minX, minY, Math.Max(0, maxX - minX), Math.Max(0, maxY - minY));
+    }
+
+    // 以唯一的格心映射作为原点，避免重新实现棋盘居中与行方向换算。
+    private static Vector2 CellPosition(Vector3 point, int width, int height)
+    {
+        Vector3 first = Center(default, width, height);
+        return new Vector2((point.X - first.X) / CellSize, (first.Z - point.Z) / CellSize);
     }
 
     /// <summary>
