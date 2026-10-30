@@ -34,19 +34,20 @@ public static class TerrainParts
     }
 
     // 明亮的棋盘由 BoardView 保持地表判读；这些颜色只作用于部件自身。
-    // 石板用冷灰，植物用深浅绿，结构件保留暖木色。
-    private static readonly Color ArtStone = Color.Color8(120, 139, 147);
-    private static readonly Color ArtRimStone = Color.Color8(151, 169, 171);
-    private static readonly Color ArtDarkStone = Color.Color8(67, 85, 96);
-    private static readonly Color ArtSoil = Color.Color8(137, 127, 109);
-    private static readonly Color ArtTeal = Color.Color8(45, 110, 83);
-    private static readonly Color ArtLightTeal = Color.Color8(97, 155, 111);
-    private static readonly Color ArtViolet = Color.Color8(44, 88, 77);
-    private static readonly Color ArtWood = Color.Color8(108, 72, 48);
-    private static readonly Color ArtDeck = Color.Color8(184, 139, 93);
-    private static readonly Color ArtGold = Color.Color8(193, 166, 99);
-    private static readonly Color ArtIvory = Color.Color8(210, 215, 195);
-    private static readonly Color ArtWater = Color.Color8(88, 164, 166);
+    // map-restyle 段A（粉彩浮岛）：石材用淡紫灰，植物用青绿，结构件用暖木色，晶簇用亮紫。
+    private static readonly Color ArtStone = Color.Color8(172, 164, 190);
+    private static readonly Color ArtRimStone = Color.Color8(200, 190, 212);
+    private static readonly Color ArtDarkStone = Color.Color8(112, 100, 134);
+    private static readonly Color ArtSoil = Color.Color8(186, 156, 146);
+    private static readonly Color ArtTeal = Color.Color8(62, 150, 118);
+    private static readonly Color ArtLightTeal = Color.Color8(120, 196, 150);
+    private static readonly Color ArtViolet = Color.Color8(70, 110, 120);
+    private static readonly Color ArtCrystal = Color.Color8(168, 104, 214);
+    private static readonly Color ArtWood = Color.Color8(124, 84, 58);
+    private static readonly Color ArtDeck = Color.Color8(214, 166, 108);
+    private static readonly Color ArtGold = Color.Color8(222, 190, 110);
+    private static readonly Color ArtIvory = Color.Color8(236, 230, 226);
+    private static readonly Color ArtWater = Color.Color8(70, 186, 190);
 
     // 障碍与装饰（map-elements-v2 段 C 用 LowPolyMesh 重建；档数在 LowPoly 一处，建模函数按它取模）。pines / ruins 只服务场景格，按裁决 M3 不重建、不扩档。
     public static readonly Kind Rock = new("rock", LowPoly.RockVariants, v => Themed("rock", LowPoly.Rock(v), v));
@@ -285,7 +286,7 @@ public static class TerrainParts
                 Name = "Crystal",
                 Mesh = LowPolyMesh.Frustum(0.043f, 0f, kind == "rock" ? 0.13f : 0.17f, 5, 0.98f,
                     yaw: LowPolyMesh.Unit(variant + 1701, 0) * Mathf.Tau, bottomCap: true),
-                MaterialOverride = SideMaterial(kind == "rock" ? ArtViolet.Lightened(0.16f) : ArtGold),
+                MaterialOverride = SideMaterial(kind == "rock" ? ArtCrystal : ArtGold),
                 Position = new Vector3(x, y, z),
             };
             root.AddChild(crystal);
@@ -391,7 +392,7 @@ public static class TerrainParts
             float faceY = (vertices[triangle].Y + vertices[triangle + 1].Y + vertices[triangle + 2].Y) / 3f;
             float rockDepth = MathF.Max(0.001f, BoardGeometry.LayerHeight - 0.12f);
             int band = Math.Clamp((int)((-faceY - 0.07f) * 4f / rockDepth), 0, 3);
-            float factor = vertices[i].Y >= -0.0451f ? 1f : ((band & 1) == 0 ? 0.20f : 0.34f);
+            float factor = vertices[i].Y >= -0.0451f ? 1f : ((band & 1) == 0 ? 0.62f : 0.76f);
             Color color = colors[i];
             colors[i] = new Color(color.R * factor, color.G * factor, color.B * factor, color.A);
         }
@@ -468,7 +469,7 @@ public static class TerrainParts
                 new(mid, top + 0.002f, 0.125f),
                 new(mid + glyphHalf, top + 0.002f, 0.08f),
             ];
-            parts.Add((LowPolyMesh.Ribbon(rune, 0.011f, tint: new Color(0.72f, 0.83f, 0.82f)), Transform3D.Identity));
+            parts.Add((LowPolyMesh.Ribbon(rune, 0.011f, tint: new Color(0.90f, 0.82f, 0.60f)), Transform3D.Identity));
         }
 
         return LowPolyMesh.Merge(parts);
@@ -611,7 +612,7 @@ public static class TerrainParts
     /// <summary>云团材质：不受光的浅暮紫半透明色（Visuals.Flat，α 0.55），打开顶点色（顶点色 α 恒 1，乘出来仍是 0.55）。</summary>
     private static StandardMaterial3D CloudMaterial()
     {
-        StandardMaterial3D material = Visuals.Flat(new Color(0.86f, 0.93f, 0.94f, 0.55f));
+        StandardMaterial3D material = Visuals.Flat(new Color(0.95f, 0.93f, 0.99f, 0.55f));
         material.VertexColorUseAsAlbedo = true;
         return material;
     }

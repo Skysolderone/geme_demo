@@ -13,8 +13,8 @@ _surfaces = [{
 "vertex_data": PackedByteArray("AAAAAI/CdTwAAAAAAAAAv4/CdTwAAAC/AAAAP4/CdTwAAAC/AAAAAI/CdTwAAAAAAAAAP4/CdTwAAAC/AAAAP4/CdTwAAAA/AAAAAI/CdTwAAAAAAAAAP4/CdTwAAAA/AAAAv4/CdTwAAAA/AAAAAI/CdTwAAAAAAAAAv4/CdTwAAAA/AAAAv4/CdTwAAAC/AAAAv4/CdTwAAAC/AAAAP4/CdbwAAAC/AAAAP4/CdTwAAAC/AAAAv4/CdTwAAAC/AAAAv4/CdbwAAAC/AAAAP4/CdbwAAAC/AAAAP4/CdTwAAAC/AAAAP4/CdbwAAAA/AAAAP4/CdTwAAAA/AAAAP4/CdTwAAAC/AAAAP4/CdbwAAAC/AAAAP4/CdbwAAAA/AAAAP4/CdTwAAAA/AAAAv4/CdbwAAAA/AAAAv4/CdTwAAAA/AAAAP4/CdTwAAAA/AAAAP4/CdbwAAAA/AAAAv4/CdbwAAAA/AAAAv4/CdTwAAAA/AAAAv4/CdbwAAAC/AAAAv4/CdTwAAAC/AAAAv4/CdTwAAAA/AAAAv4/CdbwAAAA/AAAAv4/CdbwAAAC//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+//3///wAA/7//f///AAD/v/9///8AAP+///////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA////f/9//7////9//3//v////3//f/+/////f/9//7////9//3//v////3//f/+//3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCAAAD/f/9//78AAP9//3//vwAA/3//f/+/AAD/f/9//78AAP9//3//vwAA/3//f/+/")
 }]
 
-[node name="Liner" type="Node3D" unique_id=904703477]
+[node name="Liner" type="Node3D" unique_id=404576413]
 
-[node name="Mesh" type="MeshInstance3D" parent="." unique_id=1561456037]
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=974539479]
 material_override = ExtResource("1_al1te")
 mesh = SubResource("liner_0")

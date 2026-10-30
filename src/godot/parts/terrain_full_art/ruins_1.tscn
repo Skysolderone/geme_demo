@@ -1,8 +1,8 @@
 [gd_scene format=4]
 
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_d2d7c3_r100_vc.tres" id="1_ddau8"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_435560_r100_vc.tres" id="2_sux86"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_c1a663_r90_vc.tres" id="3_2en3r"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_ece6e2_r100_vc.tres" id="1_ddau8"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_706486_r100_vc.tres" id="2_sux86"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_debe6e_r90_vc.tres" id="3_2en3r"]
 
 [sub_resource type="ArrayMesh" id="ruins_1_0"]
 _surfaces = [{
@@ -37,18 +37,18 @@ _surfaces = [{
 "vertex_data": PackedByteArray("UmwivQAAAABwO4i8tXNpOwAAAADJhS+9AAAAAHsULj4AAAAAAAAAAAAAAAAAAAAAtXNpOwAAAADJhS+9UmwivQAAAABwO4i8tXNpOwAAAADJhS+90nArPQAAAACLcyG8AAAAAHsULj4AAAAAAAAAAAAAAAAAAAAA0nArPQAAAACLcyG8tXNpOwAAAADJhS+90nArPQAAAACLcyG8Gbu2PAAAAAC2kxY9AAAAAHsULj4AAAAAAAAAAAAAAAAAAAAAGbu2PAAAAAC2kxY90nArPQAAAACLcyG8Gbu2PAAAAAC2kxY9kvLlvAAAAACubAU9AAAAAHsULj4AAAAAAAAAAAAAAAAAAAAAkvLlvAAAAACubAU9Gbu2PAAAAAC2kxY9kvLlvAAAAACubAU9UGwivQAAAAB+O4i8AAAAAHsULj4AAAAAAAAAAAAAAAAAAAAAUGwivQAAAAB+O4i8kvLlvAAAAACubAU9mBDt1SRULpqYEO3VJFQumpgQ7dUkVC6a/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/xu9CzMWxyqfG70LMxbHKp8bvQszFscqn/38AAAAA/7//fwAAAAD/v/9/AAAAAP+//M1NkbBa1MH8zU2RsFrUwfzNTZGwWtTB/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/vXdllCCEwYy9d2WUIITBjL13ZZQghMGM/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/dSeckj+QtbR1J5ySP5C1tHUnnJI/kLW0/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/")
 }]
 
-[node name="Ruins1" type="Node3D" unique_id=871330211]
+[node name="Ruins1" type="Node3D" unique_id=1729773538]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
 
-[node name="Stone" type="MeshInstance3D" parent="." unique_id=922934734]
+[node name="Stone" type="MeshInstance3D" parent="." unique_id=1434310593]
 material_override = ExtResource("1_ddau8")
 mesh = SubResource("ruins_1_0")
 
-[node name="Shade" type="MeshInstance3D" parent="." unique_id=1852058063]
+[node name="Shade" type="MeshInstance3D" parent="." unique_id=1682396797]
 material_override = ExtResource("2_sux86")
 mesh = SubResource("ruins_1_1")
 
-[node name="Crystal" type="MeshInstance3D" parent="." unique_id=1408061132]
+[node name="Crystal" type="MeshInstance3D" parent="." unique_id=1686304787]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, 0.08, -0.04)
 material_override = ExtResource("3_2en3r")
 mesh = SubResource("ruins_1_2")

@@ -2,4 +2,4 @@
 
 [resource]
 vertex_color_use_as_albedo = true
-albedo_color = Color(0.38039216, 0.60784316, 0.43529412, 1)
+albedo_color = Color(0.7526275, 0.7287843, 0.80627453, 1)

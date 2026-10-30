@@ -326,7 +326,7 @@ public sealed partial class BoardView : Node3D
             };
             if (playable && cell.Height > 0)
             {
-                color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.57f, 0.76f, 0.78f), 0.25f).Lightened(0.22f);
+                color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.98f, 0.96f, 1.0f), 0.30f).Lightened(0.06f);
             }
             if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
             {
@@ -497,19 +497,19 @@ public sealed partial class BoardView : Node3D
         {
             // 暖色主光 + 柔和阴影：高台、树、棋子落下影子，层次才读得出来（基准图的"温暖自然光"）。
             RotationDegrees = new Vector3(-52f, -38f, 0f),
-            LightColor = Color.Color8(255, 240, 208),
-            LightEnergy = 1.05f,
+            LightColor = Color.Color8(255, 244, 218),
+            LightEnergy = 1.12f,
             ShadowEnabled = true,
-            ShadowBlur = 1.6f,
-            ShadowOpacity = 0.55f,
+            ShadowBlur = 2.2f,
+            ShadowOpacity = 0.48f,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel2Splits,
             DirectionalShadowMaxDistance = 70f,
         });
         AddChild(new DirectionalLight3D
         {
             RotationDegrees = new Vector3(-20f, 140f, 0f),
-            LightColor = Color.Color8(168, 190, 226),
-            LightEnergy = 0.28f,
+            LightColor = Color.Color8(190, 196, 240),
+            LightEnergy = 0.36f,
         });
 
         // 新天空原画作为画布背景保持原始透视，避免把非全景插画拉成天空球。
@@ -557,19 +557,20 @@ public sealed partial class BoardView : Node3D
                     {
                         SkyMaterial = new ProceduralSkyMaterial
                         {
-                            SkyTopColor = Color.Color8(70, 154, 190),
-                            SkyHorizonColor = Color.Color8(234, 223, 202),
-                            GroundHorizonColor = Color.Color8(234, 223, 202),
-                            GroundBottomColor = Color.Color8(148, 177, 188),
+                            SkyTopColor = Color.Color8(96, 176, 214),
+                            SkyHorizonColor = Color.Color8(240, 230, 236),
+                            GroundHorizonColor = Color.Color8(240, 230, 236),
+                            GroundBottomColor = Color.Color8(170, 190, 206),
                             SunAngleMax = 0f,
                         },
                     }
                     : null,
                 AmbientLightSource = global::Godot.Environment.AmbientSource.Color,
-                AmbientLightColor = Color.Color8(186, 200, 222),
-                AmbientLightEnergy = 0.52f,
+                // map-restyle 段A：偏紫的柔和天光更亮一档，阴影面也保持粉彩，不发黑。
+                AmbientLightColor = Color.Color8(214, 206, 234),
+                AmbientLightEnergy = 0.60f,
                 TonemapMode = global::Godot.Environment.ToneMapper.Filmic,
-                TonemapWhite = 1.4f,
+                TonemapWhite = 1.5f,
                 AdjustmentEnabled = true,
                 AdjustmentSaturation = 1f,
             },
@@ -713,7 +714,7 @@ public sealed partial class BoardView : Node3D
 
         float[] depths = [0f, 0.9f, 2.5f, 4.8f, 7.5f, 9.5f];
         float[] scales = [1f, 0.985f, 0.91f, 0.73f, 0.49f, 0.22f];
-        float[] tones = [1f, 0.96f, 0.84f, 0.72f, 0.62f];
+        float[] tones = [1f, 0.97f, 0.88f, 0.80f, 0.72f];
         foreach ((Vector3 a, Vector3 b, Vector3 outward, Coord _) in border)
         {
             for (int i = 0; i < depths.Length - 1; i++)
@@ -726,7 +727,7 @@ public sealed partial class BoardView : Node3D
                 AddQuad(walls, upperA, upperB, lowerB, lowerA, outward, new Color(shade, shade, shade));
             }
         }
-        var cliff = Visuals.Matte(Color.Color8(116, 135, 133), 1f);
+        var cliff = Visuals.Matte(Color.Color8(178, 166, 194), 1f);
         cliff.VertexColorUseAsAlbedo = true;
         cliff.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
         island.AddChild(new MeshInstance3D { Name = "IslandCliffs", Mesh = walls.Commit(), MaterialOverride = cliff });
@@ -741,7 +742,7 @@ public sealed partial class BoardView : Node3D
             roots.Add((LowPolyMesh.Beam(rootTop, rootEnd, 0.075f, 0.085f, 0.92f), Transform3D.Identity));
         }
         if (roots.Count > 0)
-            island.AddChild(new MeshInstance3D { Name = "IslandRoots", Mesh = LowPolyMesh.Merge(roots), MaterialOverride = Visuals.Matte(Color.Color8(99, 91, 71), 1f) });
+            island.AddChild(new MeshInstance3D { Name = "IslandRoots", Mesh = LowPolyMesh.Merge(roots), MaterialOverride = Visuals.Matte(Color.Color8(134, 108, 126), 1f) });
 
         // Group repeated spikes by scene variant to bound draw calls.
         for (int variant = 0; variant < TerrainParts.IslandSpike.Variants; variant++)

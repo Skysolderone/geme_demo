@@ -1,8 +1,8 @@
 [gd_scene format=4]
 
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_788b93_r100_vc.tres" id="1_j68mq"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_435560_r100_vc.tres" id="2_i8rhy"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_4e7369_r90_vc.tres" id="3_iq5xc"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_aca4be_r100_vc.tres" id="1_j68mq"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_706486_r100_vc.tres" id="2_i8rhy"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_a868d6_r90_vc.tres" id="3_iq5xc"]
 
 [sub_resource type="ArrayMesh" id="rock_2_0"]
 _surfaces = [{
@@ -37,17 +37,17 @@ _surfaces = [{
 "vertex_data": PackedByteArray("8IAJPQAAAAAkINw8Z714vAAAAAD3yCQ9AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAAZ714vAAAAAD3yCQ98IAJPQAAAAAkINw8Z714vAAAAAD3yCQ9o+8vvQAAAABjhQO7AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAAo+8vvQAAAABjhQO7Z714vAAAAAD3yCQ9o+8vvQAAAABjhQO7rDI6vAAAAACE3Sm9AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAArDI6vAAAAACE3Sm9o+8vvQAAAABjhQO7rDI6vAAAAACE3Sm9uyoTPQAAAABghsG8AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAAuyoTPQAAAABghsG8rDI6vAAAAACE3Sm9uyoTPQAAAABghsG87oAJPQAAAAAqINw8AAAAALgeBT4AAAAAAAAAAAAAAAAAAAAA7oAJPQAAAAAqINw8uyoTPQAAAABghsG8m5bjlmRkqpubluOWZGSqm5uW45ZkZKqb/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/Rz+5lDSc3qxHP7mUNJzerEc/uZQ0nN6s/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/eBRFxEZTCah4FEXERlMJqHgURcRGUwmo/38AAAAA/7//fwAAAAD/v/9/AAAAAP+//On14jmqNY786fXiOao1jvzp9eI5qjWO/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/XeEUmiN1LMxd4RSaI3UszF3hFJojdSzM/38AAAAA/7//fwAAAAD/v/9/AAAAAP+/")
 }]
 
-[node name="Rock2" type="Node3D" unique_id=318491685]
+[node name="Rock2" type="Node3D" unique_id=481443246]
 
-[node name="Stone" type="MeshInstance3D" parent="." unique_id=711821735]
+[node name="Stone" type="MeshInstance3D" parent="." unique_id=582569348]
 material_override = ExtResource("1_j68mq")
 mesh = SubResource("rock_2_0")
 
-[node name="Shade" type="MeshInstance3D" parent="." unique_id=1357572901]
+[node name="Shade" type="MeshInstance3D" parent="." unique_id=224479554]
 material_override = ExtResource("2_i8rhy")
 mesh = SubResource("rock_2_1")
 
-[node name="Crystal" type="MeshInstance3D" parent="." unique_id=147550843]
+[node name="Crystal" type="MeshInstance3D" parent="." unique_id=29313321]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.27, 0.1)
 material_override = ExtResource("3_iq5xc")
 mesh = SubResource("rock_2_2")

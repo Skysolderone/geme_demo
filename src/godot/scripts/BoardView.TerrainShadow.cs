@@ -46,7 +46,7 @@ public sealed partial class BoardView
                         Vector3 depth = toward * (bandWidth * 0.5f);
                         Quad(edge - along - depth, edge + along - depth,
                             edge + along + depth, edge - along + depth,
-                            new Color(0.12f, 0.18f, 0.19f, 0.38f));
+                            new Color(0.26f, 0.20f, 0.32f, 0.34f));
                     }
                 }
 
@@ -77,7 +77,7 @@ public sealed partial class BoardView
                     Vector3 inner = edge - (toward * (BoardGeometry.CellSize * 0.3f));
                     Vector3 along = across * (BoardGeometry.TileSize * 0.5f);
                     Quad(inner - along, inner + along, edge + along, edge - along,
-                        new Color(0.10f, 0.14f, 0.14f, 0f), new Color(0.10f, 0.14f, 0.14f, 0.72f));
+                        new Color(0.24f, 0.18f, 0.30f, 0f), new Color(0.24f, 0.18f, 0.30f, 0.62f));
                 }
             }
             else if (cell.Height == 1)
@@ -236,9 +236,9 @@ public sealed partial class BoardView
                 Vector3 inner = edge + (toward * (step * treadDepth));
                 Vector3 outer = edge + (toward * ((step + 1) * treadDepth));
                 Quad(new Vector3(inner.X - left.X, y, inner.Z - left.Z), new Vector3(inner.X + left.X, y, inner.Z + left.Z),
-                    new Vector3(outer.X + left.X, y, outer.Z + left.Z), new Vector3(outer.X - left.X, y, outer.Z - left.Z), new Color(0.72f, 0.75f, 0.61f, 0.96f));
+                    new Vector3(outer.X + left.X, y, outer.Z + left.Z), new Vector3(outer.X - left.X, y, outer.Z - left.Z), new Color(0.82f, 0.76f, 0.70f, 0.96f));
                 Quad(new Vector3(outer.X - left.X, y, outer.Z - left.Z), new Vector3(outer.X + left.X, y, outer.Z + left.Z),
-                    new Vector3(outer.X + left.X, nextY, outer.Z + left.Z), new Vector3(outer.X - left.X, nextY, outer.Z - left.Z), new Color(0.43f, 0.48f, 0.40f, 0.96f));
+                    new Vector3(outer.X + left.X, nextY, outer.Z + left.Z), new Vector3(outer.X - left.X, nextY, outer.Z - left.Z), new Color(0.58f, 0.50f, 0.52f, 0.96f));
 
             }
         }

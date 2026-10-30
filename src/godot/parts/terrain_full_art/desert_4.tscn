@@ -1,8 +1,8 @@
 [gd_scene format=4]
 
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_2d6e53_r100_vc.tres" id="1_kmao6"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_d2d7c3_r100_vc.tres" id="2_fn4kk"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_435560_r100_vc.tres" id="3_m3ycj"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_3e9676_r100_vc.tres" id="1_kmao6"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_ece6e2_r100_vc.tres" id="2_fn4kk"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_706486_r100_vc.tres" id="3_m3ycj"]
 
 [sub_resource type="ArrayMesh" id="desert_4_0"]
 _surfaces = [{
@@ -37,16 +37,16 @@ _surfaces = [{
 "vertex_data": PackedByteArray("DwSqvm8SgzuMdj68SGA4vm8SgztHr3S9vJY0vm8SgzuNRQu9DwSqvm8SgzuMdj681eirvm8SgztdBxm9SGA4vm8SgztHr3S929owvm8SgzvguA+91r8svW8SgzuGUv+9RHX/vG8Sgzv8EM+929owvm8SgzvguA+9KRw8vm8Sgzv0O3C91r8svW8SgzuGUv+9fzQFvW8Sgzss+M29UiTZPW8Sgzvg/DK+Di3qPW8SgztMwxm+fzQFvW8Sgzss+M29+UUnvW8SgzurNQC+UiTZPW8Sgzvg/DK+vFTqPW8SgzsQyhm+XUqBPm8SgzsOq2a+Y6CFPm8SgzsCf02+vFTqPW8SgzsQyhm+pPzYPW8Sgzsc9jK+XUqBPm8SgzsOq2a+DGCDvm8Sgzu+P14+o1jjvW8SgzvwHyA+IT/XvW8SgztkDTo+DGCDvm8Sgzu+P14+bGaGvm8SgztKUkQ+o1jjvW8SgzvwHyA+NDbXvW8SgztYDDo+9XolPW8SgzuUdPc9rdE9PW8SgzumpRU+NDbXvW8SgztYDDo+kGHjvW8Sgzv8ICA+9XolPW8SgzuUdPc9eHhMPW8Sgzv2LxQ+pAMyPm8SgztwhC09uGw/Pm8SgzswwoQ9eHhMPW8Sgzv2LxQ+KtQWPW8Sgzv0X/o9pAMyPm8SgztwhC09PDQ9Pm8SgzuL04Y9996kPm8SgzvtXTK8BVupPm8Sgzt9t148PDQ9Pm8SgzuL04Y9IDw0Pm8Sgzu7YSk9996kPm8SgzvtXTK8AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/")
 }]
 
-[node name="Desert4" type="Node3D" unique_id=921665706]
+[node name="Desert4" type="Node3D" unique_id=1928095431]
 
-[node name="Cactus" type="MeshInstance3D" parent="." unique_id=665940950]
+[node name="Cactus" type="MeshInstance3D" parent="." unique_id=1234405064]
 material_override = ExtResource("1_kmao6")
 mesh = SubResource("desert_4_0")
 
-[node name="Bone" type="MeshInstance3D" parent="." unique_id=1454577730]
+[node name="Bone" type="MeshInstance3D" parent="." unique_id=1148821005]
 material_override = ExtResource("2_fn4kk")
 mesh = SubResource("desert_4_1")
 
-[node name="Ripple" type="MeshInstance3D" parent="." unique_id=761990180]
+[node name="Ripple" type="MeshInstance3D" parent="." unique_id=1131849464]
 material_override = ExtResource("3_m3ycj")
 mesh = SubResource("desert_4_2")

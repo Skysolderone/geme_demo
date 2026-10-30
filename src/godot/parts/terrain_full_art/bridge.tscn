@@ -1,8 +1,8 @@
 [gd_scene format=4]
 
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_b88b5d_r100_vc.tres" id="1_c63kj"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_6c4830_r100_vc.tres" id="2_c08qe"]
-[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_c1a663_r90_vc.tres" id="3_u6g5i"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_d6a66c_r100_vc.tres" id="1_c63kj"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_7c543a_r100_vc.tres" id="2_c08qe"]
+[ext_resource type="Material" path="res://parts/terrain_full_art/materials/matte_debe6e_r90_vc.tres" id="3_u6g5i"]
 
 [sub_resource type="ArrayMesh" id="bridge_0"]
 _surfaces = [{
@@ -37,16 +37,16 @@ _surfaces = [{
 "vertex_data": PackedByteArray("l27Svrbz/T0K16O+K4fWvrbz/T0K16M+K4fWvrbz/T0K16O+l27Svrbz/T0K16O+l27Svrbz/T0K16M+K4fWvrbz/T0K16M+K4fWvrbz/T0K16O+K4fWvvyp8T0K16M+K4fWvvyp8T0K16O+K4fWvrbz/T0K16O+K4fWvrbz/T0K16M+K4fWvvyp8T0K16M+K4fWvvyp8T0K16O+l27Svvyp8T0K16M+l27Svvyp8T0K16O+K4fWvvyp8T0K16O+K4fWvvyp8T0K16M+l27Svvyp8T0K16M+l27Svvyp8T0K16O+l27Svrbz/T0K16M+l27Svrbz/T0K16O+l27Svvyp8T0K16O+l27Svvyp8T0K16M+l27Svrbz/T0K16M+l27Svrbz/T0K16O+K4fWvrbz/T0K16O+K4fWvvyp8T0K16O+l27Svrbz/T0K16O+K4fWvvyp8T0K16O+l27Svvyp8T0K16O+l27Svrbz/T0K16M+K4fWvvyp8T0K16M+K4fWvrbz/T0K16M+l27Svrbz/T0K16M+l27Svvyp8T0K16M+K4fWvvyp8T0K16M+K4fWPrbz/T0K16O+l27SPrbz/T0K16M+l27SPrbz/T0K16O+K4fWPrbz/T0K16O+K4fWPrbz/T0K16M+l27SPrbz/T0K16M+l27SPrbz/T0K16O+l27SPvyp8T0K16M+l27SPvyp8T0K16O+l27SPrbz/T0K16O+l27SPrbz/T0K16M+l27SPvyp8T0K16M+l27SPvyp8T0K16O+K4fWPvyp8T0K16M+K4fWPvyp8T0K16O+l27SPvyp8T0K16O+l27SPvyp8T0K16M+K4fWPvyp8T0K16M+K4fWPvyp8T0K16O+K4fWPrbz/T0K16M+K4fWPrbz/T0K16O+K4fWPvyp8T0K16O+K4fWPvyp8T0K16M+K4fWPrbz/T0K16M+K4fWPrbz/T0K16O+l27SPrbz/T0K16O+l27SPvyp8T0K16O+K4fWPrbz/T0K16O+l27SPvyp8T0K16O+K4fWPvyp8T0K16O+K4fWPrbz/T0K16M+l27SPvyp8T0K16M+l27SPrbz/T0K16M+K4fWPrbz/T0K16M+K4fWPvyp8T0K16M+l27SPvyp8T0K16M+AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+///8AgP9//7///wCA/3//v///AID/f/+///8AgP9//7///wCA/3//v///AID/f/+///////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCAAID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+///8AgP9//7///wCA/3//v///AID/f/+///8AgP9//7///wCA/3//v///AID/f/+///////9/AID//////38AgP//////fwCA//////9/AID//////38AgP//////fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA/3//f/9/AID/f/9//38AgP9//3//fwCA")
 }]
 
-[node name="Bridge" type="Node3D" unique_id=82501765]
+[node name="Bridge" type="Node3D" unique_id=1479025318]
 
-[node name="Deck" type="MeshInstance3D" parent="." unique_id=1213122561]
+[node name="Deck" type="MeshInstance3D" parent="." unique_id=707652583]
 material_override = ExtResource("1_c63kj")
 mesh = SubResource("bridge_0")
 
-[node name="Timber" type="MeshInstance3D" parent="." unique_id=2056528639]
+[node name="Timber" type="MeshInstance3D" parent="." unique_id=1059391084]
 material_override = ExtResource("2_c08qe")
 mesh = SubResource("bridge_1")
 
-[node name="Gilding" type="MeshInstance3D" parent="." unique_id=749207099]
+[node name="Gilding" type="MeshInstance3D" parent="." unique_id=1044448450]
 material_override = ExtResource("3_u6g5i")
 mesh = SubResource("bridge_2")

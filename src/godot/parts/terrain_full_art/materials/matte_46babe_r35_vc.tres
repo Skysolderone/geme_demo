@@ -2,5 +2,5 @@
 
 [resource]
 vertex_color_use_as_albedo = true
-albedo_color = Color(0.39215687, 0.6313726, 0.6901961, 1)
+albedo_color = Color(0.27450982, 0.7294118, 0.74509805, 1)
 roughness = 0.35

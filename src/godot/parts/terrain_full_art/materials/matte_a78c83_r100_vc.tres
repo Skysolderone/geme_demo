@@ -1,8 +1,5 @@
 [gd_resource type="StandardMaterial3D" format=3]
 
 [resource]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
 vertex_color_use_as_albedo = true
-albedo_color = Color(0.91, 0.89, 0.98, 0.55)
+albedo_color = Color(0.6564706, 0.55058825, 0.51529413, 1)
