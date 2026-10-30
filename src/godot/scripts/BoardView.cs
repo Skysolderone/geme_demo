@@ -326,7 +326,7 @@ public sealed partial class BoardView : Node3D
             };
             if (playable && cell.Height > 0)
             {
-                color = color.Lightened(cell.Height == 1 ? 0.06f : 0.12f);
+                color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.57f, 0.76f, 0.78f), 0.25f).Lightened(0.22f);
             }
             if (!playable && board.ObstacleArtAt(cell.Coord) == ObstacleArt.BoardRock)
             {
@@ -843,11 +843,11 @@ public sealed partial class BoardView : Node3D
     }
 
     /// <summary>
-    /// 一格地砖：h=0 只有一块面砖；h=1 在面砖下垫一层土色侧面；h=2 再垫一层岩灰侧面。
-    /// 相邻格高度差越大露出的色带越多（Δh=1 一条土色，Δh=2 土色 + 岩灰），崖壁与缓坡因此可分。
+    /// h=0 只有面砖；h=1 使用土色缓坡侧面；h=2 的两层均使用岩灰崖壁侧面。
+    /// 两层深色岩面凸显高台；土色侧面和台阶用于区分缓坡。
     /// </summary>
     /// <remarks>
-    /// map-elements-v2 D3：三样都取部件（<see cref="TerrainParts.PieceOf"/>，网格只有"种类 × 档数"份）——第 1 层侧面 <c>side_slope</c>、第 2 层 <c>side_cliff</c>，
+    /// map-elements-v2 D3：h1 使用 side_slope，h2 的两层均使用 side_cliff。
     /// 再放 <c>liner</c>、<c>tile_top</c>；侧面与顶板的变体按<b>全图坐标</b>散列（棋盘接缝处不出现图案断层）。几何边界与改前的盒子逐值相同：
     /// 侧面铺满整格（CellSize）、高一层，顶板 TileSize 见方、TileHeight 厚，衬底铺满整格、厚 <see cref="TerrainParts.LinerThickness"/>、位置不变。
     /// 顶板 / 衬底的材质仍是按底色共用的那一份（顶点色只当亮度系数），侧面用部件自带的土色 / 岩灰。
@@ -862,8 +862,9 @@ public sealed partial class BoardView : Node3D
             float bandTop = BoardGeometry.TopYOf(layer) - BoardGeometry.TileHeight;
 
             // 侧面色带铺满整格（CellSize）：高台读作一整块实心的土 / 岩，而不是一根根立柱之间透着黑缝。部件锚点在该层带的顶面中心。
-            TerrainParts.Piece side = TerrainParts.PieceOf(layer == 1 ? TerrainParts.SideSlope : TerrainParts.SideCliff, TileVariant(coord, layer));
-            AddTilePiece(parent, side.Mesh, side.Material ?? (layer == 1 ? SlopeMaterial : CliffMaterial), new Vector3(top.X, bandTop, top.Z));
+            bool cliff = level == 2;
+            TerrainParts.Piece side = TerrainParts.PieceOf(cliff ? TerrainParts.SideCliff : TerrainParts.SideSlope, TileVariant(coord, layer));
+            AddTilePiece(parent, side.Mesh, side.Material ?? (cliff ? CliffMaterial : SlopeMaterial), new Vector3(top.X, bandTop, top.Z));
         }
 
         // 面砖之下垫一块铺满整格的薄衬底，颜色取面砖压暗：面砖之间那 0.10 的缝露出的就是它——

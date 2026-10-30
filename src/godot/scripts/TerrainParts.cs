@@ -387,7 +387,11 @@ public static class TerrainParts
         for (int i = 0; i < vertices.Length; i++)
         {
             // 岩沿占顶部 0.045；下方岩体压暗，竖向裂缝由 Strata 的内凹保留。
-            float factor = vertices[i].Y >= -0.0451f ? 1f : 0.47f;
+            int triangle = i - (i % 3);
+            float faceY = (vertices[triangle].Y + vertices[triangle + 1].Y + vertices[triangle + 2].Y) / 3f;
+            float rockDepth = MathF.Max(0.001f, BoardGeometry.LayerHeight - 0.12f);
+            int band = Math.Clamp((int)((-faceY - 0.07f) * 4f / rockDepth), 0, 3);
+            float factor = vertices[i].Y >= -0.0451f ? 1f : ((band & 1) == 0 ? 0.20f : 0.34f);
             Color color = colors[i];
             colors[i] = new Color(color.R * factor, color.G * factor, color.B * factor, color.A);
         }

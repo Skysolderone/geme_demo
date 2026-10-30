@@ -73,10 +73,11 @@ public sealed partial class BoardView
                     Vector3 toward = Direction(cell.Coord, higher.Coord);
                     Vector3 across = Vector3.Up.Cross(toward);
                     // 带位于低地格边内侧，留出格心与棋子底座；顶面略高于地砖，低于所有标记。
-                    Vector3 edge = center + (toward * 0.40f) + (Vector3.Up * 0.002f);
-                    Quad(edge - (across * 0.40f) - (toward * 0.04f), edge + (across * 0.40f) - (toward * 0.04f),
-                        edge + (across * 0.40f) + (toward * 0.04f), edge - (across * 0.40f) + (toward * 0.04f),
-                        new Color(0.12f, 0.18f, 0.19f, 0.38f));
+                    Vector3 edge = center + (toward * (BoardGeometry.TileSize * 0.5f)) + (Vector3.Up * 0.002f);
+                    Vector3 inner = edge - (toward * (BoardGeometry.CellSize * 0.3f));
+                    Vector3 along = across * (BoardGeometry.TileSize * 0.5f);
+                    Quad(inner - along, inner + along, edge + along, edge - along,
+                        new Color(0.10f, 0.14f, 0.14f, 0f), new Color(0.10f, 0.14f, 0.14f, 0.72f));
                 }
             }
             else if (cell.Height == 1)
@@ -221,12 +222,12 @@ public sealed partial class BoardView
 
         void Stair(Vector3 center, Vector3 toward)
         {
-            // 踏面只进入低一层格的边缘 0.12 格，格心保持净空。
+            // 踏面只进入低一层格的边缘 0.21 格，格心保持净空。
             Vector3 across = Vector3.Up.Cross(toward);
             Vector3 edge = center + (toward * (BoardGeometry.CellSize * 0.5f));
             float lowerY = center.Y - BoardGeometry.LayerHeight;
             float upperY = center.Y - BoardGeometry.TileHeight;
-            const float treadDepth = 0.04f, treadHalfWidth = 0.19f;
+            const float treadDepth = 0.07f, treadHalfWidth = 0.26f;
             Vector3 left = across * treadHalfWidth;
             for (int step = 0; step < 3; step++)
             {
@@ -242,13 +243,14 @@ public sealed partial class BoardView
             }
         }
 
-        void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color)
+        void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color, Color? endColor = null)
         {
-            foreach (Vector3 point in new[] { a, b, c, a, c, d })
+            Vector3[] points = [a, b, c, a, c, d];
+            for (int i = 0; i < points.Length; i++)
             {
                 mesh.SetNormal(Vector3.Up);
-                mesh.SetColor(color);
-                mesh.AddVertex(point);
+                mesh.SetColor(i is 2 or 4 or 5 ? endColor ?? color : color);
+                mesh.AddVertex(points[i]);
             }
 
             quadCount++;
