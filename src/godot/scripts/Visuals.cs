@@ -22,7 +22,7 @@ public static class Visuals
     public static readonly Color CoordinateLabelOutline = ToColor(BoardLabelStyle.CoordinateLabelOutline);
 
     /// <summary>可落子地砖（草地，terrain-model 缺省地表）。map-restyle 段A：参考图的岛面是淡紫灰的浅色石面，草色只靠草丛装饰（段C）读出来。</summary>
-    public static readonly Color TilePlayable = Color.Color8(204, 196, 212);
+    public static readonly Color TilePlayable = Color.Color8(188, 180, 198);
 
     /// <summary>土路地表：暖褐色，比草地与岩台暗；两侧辅以短轮迹。</summary>
     public static readonly Color TileRoad = Color.Color8(190, 150, 120);
@@ -34,7 +34,7 @@ public static class Visuals
     /// 荒漠地表（terrain-surfaces）：比土路更浅更白的沙色。去色后仍与土路、草地拉开；
     /// 与土路的区分主要靠格角的仙人掌 / 兽骨（段 1 补装饰）。
     /// </summary>
-    public static readonly Color TileDesert = Color.Color8(224, 196, 132);
+    public static readonly Color TileDesert = Color.Color8(236, 212, 150);
 
     /// <summary>仙人掌（荒漠装饰）：偏灰的橄榄绿，比林地树冠浅、比沼泽亮；轮廓是竖柱带侧臂，不是锥形树冠。</summary>
     public static readonly Color Cactus = Color.Color8(96, 160, 120);
@@ -61,7 +61,7 @@ public static class Visuals
     public static readonly Color TileMarsh = Color.Color8(96, 126, 118);
 
     /// <summary>岩台地表：冷灰石面，与障碍岩石靠材质和裂纹区分；形状提示是裂纹与加厚边缘。</summary>
-    public static readonly Color TileCrag = Color.Color8(150, 140, 168);
+    public static readonly Color TileCrag = Color.Color8(140, 130, 160);
 
     /// <summary>浅滩地表：亮青水色，与草地拉开灰度；与深水靠高度、水纹和鹅卵石区分。</summary>
     public static readonly Color TileShallows = Color.Color8(150, 232, 226);

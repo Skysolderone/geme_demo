@@ -498,7 +498,7 @@ public sealed partial class BoardView : Node3D
             // 暖色主光 + 柔和阴影：高台、树、棋子落下影子，层次才读得出来（基准图的"温暖自然光"）。
             RotationDegrees = new Vector3(-52f, -38f, 0f),
             LightColor = Color.Color8(255, 244, 218),
-            LightEnergy = 1.12f,
+            LightEnergy = 1.0f,
             ShadowEnabled = true,
             ShadowBlur = 2.2f,
             ShadowOpacity = 0.48f,
@@ -568,9 +568,9 @@ public sealed partial class BoardView : Node3D
                 AmbientLightSource = global::Godot.Environment.AmbientSource.Color,
                 // map-restyle 段A：偏紫的柔和天光更亮一档，阴影面也保持粉彩，不发黑。
                 AmbientLightColor = Color.Color8(214, 206, 234),
-                AmbientLightEnergy = 0.60f,
+                AmbientLightEnergy = 0.50f,
                 TonemapMode = global::Godot.Environment.ToneMapper.Filmic,
-                TonemapWhite = 1.5f,
+                TonemapWhite = 1.4f,
                 AdjustmentEnabled = true,
                 AdjustmentSaturation = 1f,
             },
