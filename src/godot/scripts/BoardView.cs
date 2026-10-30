@@ -69,6 +69,7 @@ public sealed partial class BoardView : Node3D
     private float? _batchScale;
     private int _unbatchedObstacles;
     private int _partMultiMeshes;
+    private int _runeRings;
     private readonly Dictionary<Coord, PieceNode> _boardPieces = [];
     private readonly Dictionary<Coord, PieceNode> _capturedPieces = [];
     private int _pieceEmphasis = -1;
@@ -144,6 +145,7 @@ public sealed partial class BoardView : Node3D
         _levels.Clear();
         _partBatches.Clear();
         _unbatchedObstacles = 0;
+        _runeRings = 0;
         _boardPieces.Clear();
         _capturedPieces.Clear();
         _width = board.Width;
@@ -249,6 +251,20 @@ public sealed partial class BoardView : Node3D
         Vector3 stepY = BoardGeometry.Center(new Coord(0, 1), _width, _height) - gridOrigin;
         int deepCells = 0, bridgedCells = 0, bankLips = 0;
 
+        // 装饰套件自证（map-restyle 段C）：按部件名记放在了哪些格，Build 末尾打一行 [deco]（草丛只报格数，其余列格记法，方便截图对准）。
+        var deco = new SortedDictionary<string, List<Coord>>(StringComparer.Ordinal);
+        TerrainParts.Kind Decor(TerrainParts.Kind kind, Coord at)
+        {
+            if (!deco.TryGetValue(kind.Name, out List<Coord>? cells))
+            {
+                cells = [];
+                deco[kind.Name] = cells;
+            }
+
+            cells.Add(at);
+            return kind;
+        }
+
         int variant = 0;
         int boardRocks = 0;
         var zoneStrips = new SortedDictionary<int, int>();
@@ -332,8 +348,9 @@ public sealed partial class BoardView : Node3D
             {
                 // 棋盘内的岩石（link-map-terrain 6.1，D4 中间带 0–2 格）：本战场的一格地形，不是场景装饰——按棋盘格画（障碍色地砖 + 岩石部件，不在松树 / 断柱里挑，
                 // 免得读成林地），逐格节点挂在地砖与装饰层（场景面砖与合批装饰是整块 MultiMesh）。归属只读视图模型的棋盘清单。
+                // map-restyle 段C：岩石之外按坐标散列换成水晶 / 火盆 / 拱门 / 宝箱——都是石材 / 器物，仍读作"此格不可落子"而不是林地。
                 color = Visuals.TileObstacle;
-                Node3D rock = TerrainParts.Create(TerrainParts.Rock, variant++);
+                Node3D rock = TerrainParts.Create(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: false), cell.Coord), variant++);
                 rock.Position = center;
                 _decoration.AddChild(rock);
                 AddTileStack(tiles, cell.Coord, center, cell.Height, SurfaceOf(color), color);
@@ -343,11 +360,10 @@ public sealed partial class BoardView : Node3D
 
             if (!playable)
             {
-                // 场景格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹。都只是"此格不可落子"的装饰。
+                // 场景格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹，map-restyle 段C 再加水晶 / 火盆 / 拱门 / 宝箱。
+                // 都只是"此格不可落子"的装饰。同一变体的各格合成 MultiMesh 画（board-render-perf D2）：变体序号与逐格变换都不变。
                 color = Visuals.TileObstacle;
-                int pick = unchecked((int)(((uint)(cell.Coord.X * 73856093) ^ (uint)(cell.Coord.Y * 19349663)) % 100u));
-                // 同一变体的各格合成 MultiMesh 画（board-render-perf D2）：挑选规则、变体序号与逐格变换都不变。
-                AddObstacle(pick < 40 ? TerrainParts.Rock : pick < 82 ? TerrainParts.Pines : TerrainParts.Ruins, variant++, center);
+                AddObstacle(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: true), cell.Coord), variant++, center);
             }
             else if (cell.BirthZone is int zone)
             {
@@ -422,6 +438,13 @@ public sealed partial class BoardView : Node3D
                 _decoration.AddChild(shallows);
             }
 
+            // 草丛（map-restyle 段C）：只撒在草地 / 土路格的一个格角（林地 / 荒漠 / 沼泽 / 岩台 / 浅滩的格角已有点缀），约每 7–8 格一簇，h>0 的格也撒。
+            // 格角与有无都按坐标散列，不动 variant 计数器（否则后面岩石 / 松树 / 小树的档号整体平移、段A / 段B 定稿的画面会变）；合批走 AddObstacle 同一条路。
+            if (playable && cell.Surface is Surface.Grass or Surface.Road && TileVariant(cell.Coord, 40) % 100 < 13)
+            {
+                AddObstacle(Decor(TerrainParts.Grass, cell.Coord), (int)(TileVariant(cell.Coord, 41) & 3), center);
+            }
+
             // 场景格只作装饰：铺满整格、不留缝也不垫衬底，相邻场景格连成一片——不出现会被读成"可落子"的格线。
             // 场景格同色（障碍格不参与明暗交替），合成一个 MultiMesh（board-render-perf D2）。
             // 面砖材质按基色共用（2.3）：同基色的格拿到同一份，压暗时每份改一次。
@@ -436,10 +459,10 @@ public sealed partial class BoardView : Node3D
             AddTileStack(tiles, cell.Coord, center, cell.Height, material, color);
         }
 
-        // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内岩石逐格画了几格。
+        // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内障碍格逐格画了几格（map-restyle 段C 起不只是岩石，各件见 [deco]）。
         if (zoneStrips.Count > 0 || boardRocks > 0)
         {
-            GD.Print($"[zone] 出生区描边：{(zoneStrips.Count == 0 ? "无" : string.Join("、", zoneStrips.Select(kv => $"出生区 {BirthZoneLabel.Number(kv.Key)} {kv.Value} 段")))}；棋盘内岩石 {boardRocks} 格（按棋盘格画）");
+            GD.Print($"[zone] 出生区描边：{(zoneStrips.Count == 0 ? "无" : string.Join("、", zoneStrips.Select(kv => $"出生区 {BirthZoneLabel.Number(kv.Key)} {kv.Value} 段")))}；棋盘内障碍 {boardRocks} 格（按棋盘格画）");
         }
 
         AddTerrainRelief(board, tiles);
@@ -472,6 +495,9 @@ public sealed partial class BoardView : Node3D
         GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_partMultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
             + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
         GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count + _inlayMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
+
+        // 自证行（map-restyle 段C）：装饰套件各放了几格（草丛在可落子格角，其余在不可落子格）、中立平台符文环几块。
+        GD.Print($"[deco] 装饰套件：{(deco.Count == 0 ? "无" : string.Join("、", deco.Select(kv => $"{kv.Key} {kv.Value.Count} 格{(kv.Key == TerrainParts.Grass.Name ? string.Empty : $"（{string.Join(" ", kv.Value.Select(c => c.ToNotation()))}）")}")))}；中立平台符文环 {_runeRings} 块");
 
         BuildCoordinateLabels(low, high);
 
@@ -1358,6 +1384,12 @@ public sealed partial class BoardView : Node3D
             var plateNode = new Node3D { Name = $"Plate{index}" };
             root.AddChild(plateNode);
 
+            // 中立平台的符文环（map-restyle 段C）：锁定后公共平台整块可见、在棋盘清单里逐格画，环加在这里；插旗阶段的 NeutralPlates 只有轮廓、底下还没有格，不加。
+            if (plate.Kind == BoardPlateKind.Public)
+            {
+                AddRuneRing(plate, level, new Vector3(midX, top, midZ));
+            }
+
             // 内部格线：压在地砖之间的缝上，略高于面砖、低于一切叠加标记（标记最低在 +0.008）。
             for (int column = 1; column < plate.Width; column++)
             {
@@ -1676,6 +1708,52 @@ public sealed partial class BoardView : Node3D
             Position = position,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
+    }
+
+    /// <summary>不可落子格的造型散列（0–99）：只按坐标，同一张图永远同一副样子；棋盘内岩石格与场景格共用这一个散列、各有一张阈值表。</summary>
+    private static int ObstacleHash(Coord coord) =>
+        unchecked((int)(((uint)(coord.X * 73856093) ^ (uint)(coord.Y * 19349663)) % 100u));
+
+    /// <summary>
+    /// 不可落子格放哪件（map-restyle 段C）：场景格在巨石 / 松树丛 / 断柱遗迹之外再分出水晶 / 火盆 / 拱门 / 宝箱；棋盘内岩石格不挑松树 / 断柱（会读成林地），
+    /// 只在岩石与四件石材 / 器物之间挑。阈值按 link:5:4 实测调过：该图场景格只有 4 格、棋盘内岩石 27 格，四件都要出现。
+    /// </summary>
+    private static TerrainParts.Kind ObstacleKindOf(int pick, bool scenery) => scenery
+        ? pick < 30 ? TerrainParts.Rock : pick < 58 ? TerrainParts.Pines : pick < 70 ? TerrainParts.Ruins
+            : pick < 80 ? TerrainParts.Crystal : pick < 88 ? TerrainParts.Brazier : pick < 94 ? TerrainParts.Arch : TerrainParts.Chest
+        : pick < 48 ? TerrainParts.Rock : pick < 68 ? TerrainParts.Crystal : pick < 80 ? TerrainParts.Brazier : pick < 90 ? TerrainParts.Arch : TerrainParts.Chest;
+
+    /// <summary>
+    /// 中立平台的符文环（map-restyle 段C）：圆心在平台外接矩形中心，半径取短边的一半再退 0.6 格（离边框一段距离），薄片贴在平台顶面（y ≤ +0.0045）。
+    /// 环按段裁剪：段中点所在格不是本层的可落子格（深水、棋盘内岩石）就不建，不在河面上悬空。挂在装饰层（随信息层一起缩小），只是装饰、不改平台格数与边框，
+    /// 也不改拾取（地面拾取是解析几何；薄片低于一切棋子）。
+    /// </summary>
+    private void AddRuneRing(BoardPlate plate, int level, Vector3 center)
+    {
+        float radius = ((Math.Min(plate.Width, plate.Height) * 0.5f) - 0.6f) * BoardGeometry.CellSize;
+        if (radius < BoardGeometry.CellSize)
+        {
+            return;
+        }
+
+        // 偏移 → 格：BoardGeometry.Center 的平面映射是 x = (X − (W−1)/2)·CellSize、z = −(Y − (H−1)/2)·CellSize，用 (0,0) 格的格心反推。
+        Vector3 origin = BoardGeometry.Center(new Coord(0, 0), _width, _height);
+        bool Keep(Vector3 offset)
+        {
+            Vector3 p = center + offset;
+            var coord = new Coord((int)MathF.Round((p.X - origin.X) / BoardGeometry.CellSize), (int)MathF.Round((origin.Z - p.Z) / BoardGeometry.CellSize));
+            return plate.Contains(coord) && _levels.TryGetValue(coord, out int at) && at == level;
+        }
+
+        var ring = new Node3D { Name = "RuneRing", Position = center };
+        ring.AddChild(new MeshInstance3D
+        {
+            Mesh = TerrainParts.RuneRingMesh(radius, Keep),
+            MaterialOverride = TerrainParts.RuneMaterial,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+        _decoration.AddChild(ring);
+        _runeRings++;
     }
 
     /// <summary>

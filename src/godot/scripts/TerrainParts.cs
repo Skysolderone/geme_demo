@@ -49,6 +49,9 @@ public static class TerrainParts
     private static readonly Color ArtIvory = Color.Color8(236, 230, 226);
     private static readonly Color ArtWater = Color.Color8(70, 186, 190);
     private static readonly Color ArtFoam = Color.Color8(226, 243, 238);   // 象牙偏青：河岸泡沫 / 浅滩带，比水面亮、比地砖低调
+    private static readonly Color ArtCrystalLight = Color.Color8(214, 172, 240);   // 段C：晶簇里那根发亮的小晶
+    private static readonly Color ArtFlame = Color.Color8(255, 170, 72);   // 段C：火盆火舌（不受光）
+    private static readonly Color ArtEmber = Color.Color8(234, 98, 46);   // 段C：火盆余烬（不受光）
 
     // 障碍与装饰（map-elements-v2 段 C 用 LowPolyMesh 重建；档数在 LowPoly 一处，建模函数按它取模）。pines / ruins 只服务场景格，按裁决 M3 不重建、不扩档。
     public static readonly Kind Rock = new("rock", LowPoly.RockVariants, v => Themed("rock", LowPoly.Rock(v), v));
@@ -62,6 +65,13 @@ public static class TerrainParts
     public static readonly Kind FenceX = new("fence_x", 1, _ => Themed("fence", LowPoly.Fence(alongX: true), 0));
     public static readonly Kind FenceZ = new("fence_z", 1, _ => Themed("fence", LowPoly.Fence(alongX: false), 0));
     public static readonly Kind Bridge = new("bridge", 1, _ => Themed("bridge", LowPoly.Bridge(), 0));
+
+    // 粉彩浮岛装饰套件（map-restyle 段C）：草丛散在可落子格的格角，其余四件只在不可落子格（BoardView 按坐标散列挑）；都走 AddObstacle 合批。
+    public static readonly Kind Grass = new("grass", LowPoly.GrassVariants, v => Themed("grass", LowPoly.Grass(v), v), "所在格的地砖上表面（草簇在第 v 个格角内侧）");
+    public static readonly Kind Crystal = new("crystal", LowPoly.CrystalVariants, v => Themed("crystal", LowPoly.Crystal(v), v));
+    public static readonly Kind Brazier = new("brazier", LowPoly.BrazierVariants, v => Themed("brazier", LowPoly.Brazier(v), v));
+    public static readonly Kind Arch = new("arch", LowPoly.ArchVariants, v => Themed("arch", LowPoly.Arch(v), v));
+    public static readonly Kind Chest = new("chest", LowPoly.ChestVariants, v => Themed("chest", LowPoly.Chest(v), v));
 
     // —— 地块部件（map-elements-v2 段 A，design D2 / D3）：每件只有一个 MeshInstance3D、一个 surface，棋盘逐格只取它的网格（见 PieceOf）。
 
@@ -154,7 +164,7 @@ public static class TerrainParts
     public static readonly Kind[] All =
     [
         Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip,
-        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud,
+        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest,
     ];
 
     /// <summary>单网格部件取出的网格与它自带的材质（自带材质可能为空：由调用方覆盖的部件只带中性白）。</summary>
@@ -351,8 +361,77 @@ public static class TerrainParts
         "shallows" => part == "Pebble" ? ArtStone.Lightened(0.24f) : ArtLightTeal.Lightened(0.45f),
         "fence" => ArtWood,
         "bridge" => part == "Deck" ? ArtDeck : part == "Rope" ? ArtIvory : ArtWood,
+        "grass" => part == "BladesLight" ? ArtLightTeal : ArtTeal,
+        "crystal" => part switch { "Base" => ArtStone, "Shade" => ArtDarkStone, "Glow" => ArtCrystalLight, _ => ArtCrystal },
+        "brazier" => part switch { "Shade" => ArtDarkStone, "Ember" => ArtEmber, "Flame" => ArtFlame, _ => ArtStone },
+        "arch" => part == "Shade" ? ArtDarkStone : ArtStone,
+        "chest" => part switch { "Lid" => ArtDeck, "Band" => ArtGold, "Shade" => ArtDarkStone, _ => ArtWood },
         _ => original,
     };
+
+    private static StandardMaterial3D? _runeMaterial;
+
+    /// <summary>符文环材质（全图共用一份）：白底哑光、打开顶点色，颜色全由 <see cref="RuneRingMesh"/> 的顶点色给出。</summary>
+    public static StandardMaterial3D RuneMaterial => _runeMaterial ??= VertexMaterial(Colors.White, 1f);
+
+    /// <summary>
+    /// 中立平台的符文环（map-restyle 段C）：贴在平台顶面的薄片——外圈紫晶色宽带、内圈古金细带、两带之间八道深石短刻与四枚开口朝外的 V 形符文、
+    /// 中心一圈六边形紫晶细带，全是顶点着色的贴地 Ribbon（y 0.0035–0.0045：高于地砖角饰 0.0015、低于平台格线 0.006 与一切标记）。
+    /// 半径由 BoardView 按平台尺寸给；每段只在 <paramref name="keep"/>（段中点相对平台中心的偏移）认为底下是本层平地时才建——河面 / 棋盘内岩石上方不留悬空碎段。
+    /// 参数随平台变化，所以这一件不进 <see cref="All"/>、不导出快照。
+    /// </summary>
+    public static ArrayMesh RuneRingMesh(float radius, Func<Vector3, bool> keep)
+    {
+        ArgumentNullException.ThrowIfNull(keep);
+        const float bandY = 0.0035f, glyphY = 0.0045f;
+        var parts = new List<(ArrayMesh, Transform3D)>();
+        void Polyline(IReadOnlyList<Vector3> points, float width, Color tint)
+        {
+            for (int i = 0; i + 1 < points.Count; i++)
+            {
+                if (keep((points[i] + points[i + 1]) * 0.5f))
+                {
+                    parts.Add((LowPolyMesh.Ribbon([points[i], points[i + 1]], width, tint: tint), Transform3D.Identity));
+                }
+            }
+        }
+
+        static Vector3[] Circle(float r, int sides, float y, float phase)
+        {
+            var ring = new Vector3[sides + 1];
+            for (int k = 0; k <= sides; k++)
+            {
+                float a = phase + (Mathf.Tau * (k % sides) / sides);
+                ring[k] = new Vector3(MathF.Cos(a) * r, y, MathF.Sin(a) * r);
+            }
+
+            return ring;
+        }
+
+        Polyline(Circle(radius, 48, bandY, 0f), 0.10f, ArtCrystal);
+        Polyline(Circle(radius * 0.80f, 40, bandY, 0f), 0.05f, ArtGold);
+        Polyline(Circle(radius * 0.22f, 6, bandY, Mathf.Pi / 6f), 0.05f, ArtCrystal);
+        for (int k = 0; k < 8; k++)
+        {
+            float a = Mathf.Tau * k / 8f;
+            var dir = new Vector3(MathF.Cos(a), 0f, MathF.Sin(a));
+            Polyline([(dir * (radius * 0.85f)) + new Vector3(0f, glyphY, 0f), (dir * (radius * 0.95f)) + new Vector3(0f, glyphY, 0f)], 0.04f, ArtDarkStone);
+        }
+
+        for (int k = 0; k < 4; k++)
+        {
+            float a = Mathf.Tau * (k + 0.5f) / 4f;
+            var dir = new Vector3(MathF.Cos(a), 0f, MathF.Sin(a));
+            var side = new Vector3(-dir.Z, 0f, dir.X);
+            var lift = new Vector3(0f, glyphY, 0f);
+            Vector3 tip = (dir * (radius * 0.42f)) + lift;
+            Vector3 left = (dir * (radius * 0.64f)) - (side * (radius * 0.08f)) + lift;
+            Vector3 right = (dir * (radius * 0.64f)) + (side * (radius * 0.08f)) + lift;
+            Polyline([left, tip, right], 0.04f, ArtDarkStone);
+        }
+
+        return LowPolyMesh.Merge(parts);
+    }
 
     private static ArrayMesh TileTopMesh(int variant)
     {
