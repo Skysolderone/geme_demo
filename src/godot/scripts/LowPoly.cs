@@ -341,6 +341,12 @@ public static class LowPoly
     /// <summary>宝箱档数。</summary>
     public const int ChestVariants = 2;
 
+    /// <summary>小石块档数（map-surface 裁决 4；档 v 在格角 v，只用前三个角）。</summary>
+    public const int PebbleVariants = 3;
+
+    /// <summary>小花档数（map-surface 裁决 4；档即花色 0 粉 / 1 黄 / 2 白，档 v 在格角 v + 1）。</summary>
+    public const int FlowerVariants = 3;
+
     /// <summary>
     /// 岩石（棋盘内岩石格与场景格巨石）：一大一中两块多面岩（大块浅、中块深）+ 一块小石 + 两粒碎石，挤在一格之内、底部没入地砖，
     /// 读作"一格岩石"——灰色、块状、没有任何锥形或绿色，不会被读成林地。返回节点原点在地砖上表面。
@@ -494,29 +500,30 @@ public static class LowPoly
 
     // —— 粉彩浮岛装饰套件（map-restyle 段C）：草丛散在可落子格的格角，水晶 / 火盆 / 拱门 / 宝箱只放不可落子格（BoardView 按坐标散列挑）。
     //    结构同 Rock：根下一层各一个 MeshInstance3D（NewPartBatch 认这个形状才能合批）；底色只是占位，TerrainParts.Themed 按部件名重染成 Art 色。
-    //    高度上限沿用松树的依据：障碍格件 ≤ 0.70，60° 俯角下向身后投不到半格；草丛 ≤ 0.12 且落在棋子底座（0.36）与出生区亮条（0.43 起）之间。
+    //    高度上限沿用松树的依据：障碍格件 ≤ 0.70，60° 俯角下向身后投不到半格；草丛 ≤ 0.20（map-surface 裁决 4 放大前 0.12）且在棋子底座（0.36）之外。
 
     /// <summary>
-    /// 草丛（可落子格的格角）：七片三棱草叶挤成一簇，簇心在第 <paramref name="variant"/> 个格角（角序同 <see cref="Trees"/>）内侧 0.40 处，
-    /// 叶底沿两轴都在 0.38–0.42、叶尖最远到 0.426——整簇落在格角 0.12 带内（作业单口径），也在棋子底座（0.36）之外、出生区亮条（0.43 起）之内；
-    /// 高 ≤ 0.12，不遮落点与标记。返回节点原点在地砖上表面。
+    /// 草丛（可落子格的格角；map-surface 裁决 4 放大：带宽 0.12 → 0.22、高 0.12 → 0.20）：九片三棱草叶挤成一簇，簇心在第 <paramref name="variant"/> 个格角
+    /// （角序同 <see cref="Trees"/>）内侧 0.39 处，叶底散在簇心 ±0.065 内（叶底半径 0.024）、叶尖最远到 0.497——整簇落在格角 0.22 带（0.28–0.50）内，
+    /// 最内点离格心 0.43 仍在棋子底座（0.36）之外；高 ≤ 0.20，60° 俯角下向身后压不到半格，不遮落点与标记。返回节点原点在地砖上表面。
     /// </summary>
     public static Node3D Grass(int variant)
     {
         int v = Wrap(variant, GrassVariants);
         Vector2[] corners = [new(-1f, -1f), new(1f, -1f), new(1f, 1f), new(-1f, 1f)];
         int seed = 2101 + (v * 11);
-        var tuft = new Vector3(corners[v].X * 0.40f, -0.004f, corners[v].Y * 0.40f);
+        // 簇心 0.35：整簇落在 0.28–0.43 带内，避开出生区亮条（0.43–0.50），草叶不从亮条里穿出。
+        var tuft = new Vector3(corners[v].X * 0.35f, -0.004f, corners[v].Y * 0.35f);
         var deep = new List<(ArrayMesh, Transform3D)>();
         var light = new List<(ArrayMesh, Transform3D)>();
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < 9; i++)
         {
-            float a = (Mathf.Tau * i / 7f) + (LowPolyMesh.Unit(seed, i) * 0.7f);
-            float r = i == 0 ? 0f : 0.004f + (0.004f * LowPolyMesh.Unit(seed, 10 + i));
+            float a = (Mathf.Tau * i / 9f) + (LowPolyMesh.Unit(seed, i) * 0.6f);
+            float r = i == 0 ? 0f : 0.02f + (0.045f * LowPolyMesh.Unit(seed, 10 + i));
             var at = tuft + new Vector3(MathF.Cos(a) * r, 0f, MathF.Sin(a) * r);
-            float height = 0.075f + (0.045f * LowPolyMesh.Unit(seed, 20 + i));
-            var lean = new Vector2(MathF.Cos(a), MathF.Sin(a)) * 0.006f;   // 叶尖朝簇外微倾
-            (((i + v) & 1) == 0 ? deep : light).Add((LowPolyMesh.Frustum(0.012f, 0f, height, 3, 0.92f + (0.08f * LowPolyMesh.Unit(seed, 30 + i)), lean, a),
+            float height = 0.12f + (0.08f * LowPolyMesh.Unit(seed, 20 + i));
+            var lean = new Vector2(MathF.Cos(a), MathF.Sin(a)) * 0.018f;   // 叶尖朝簇外微倾
+            (((i + v) & 1) == 0 ? deep : light).Add((LowPolyMesh.Frustum(0.024f, 0f, height, 3, 0.92f + (0.08f * LowPolyMesh.Unit(seed, 30 + i)), lean, a),
                 new Transform3D(Basis.Identity, at)));
         }
 
@@ -678,6 +685,77 @@ public static class LowPoly
         root.AddChild(Merged("Lid", lid, Visuals.Timber));
         root.AddChild(Merged("Band", band, Visuals.Timber));
         root.AddChild(Merged("Shade", shade, Visuals.Rock.Darkened(0.14f)));
+        return root;
+    }
+
+    // —— 格角点缀（map-surface 裁决 4）：小石块 / 小花与草丛一样撒在草地 / 土路可落子格的格角。合批只收格心、不带旋转，所以格角烙在档号里：
+    //    小石块档 v 在格角 v（0–2）、小花档 v 在格角 v + 1（1–3），BoardView 据此让一格里的三类点缀互不占角。都贴地（≤ 0.07），不遮落点与标记。
+
+    /// <summary>
+    /// 小石块（可落子格的格角）：三颗压扁的多面小石挤在第 <paramref name="variant"/> 个格角内侧 0.38 处，一颗略大的浅石 + 两颗深色小石；
+    /// 占地 0.28–0.49、高 ≤ 0.05，落在格角 0.22 带内。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Pebble(int variant)
+    {
+        int v = Wrap(variant, PebbleVariants);
+        Vector2[] corners = [new(-1f, -1f), new(1f, -1f), new(1f, 1f), new(-1f, 1f)];
+        int seed = 2601 + (v * 7);
+        var at = new Vector3(corners[v].X * 0.38f, 0f, corners[v].Y * 0.38f);
+        var stone = new List<(ArrayMesh, Transform3D)>();
+        var shade = new List<(ArrayMesh, Transform3D)>();
+        for (int i = 0; i < 3; i++)
+        {
+            float a = (Mathf.Tau * i / 3f) + (LowPolyMesh.Unit(seed, i) * 1.2f);
+            float d = i == 0 ? 0f : 0.04f + (0.018f * LowPolyMesh.Unit(seed, 10 + i));
+            float r = (i == 0 ? 0.042f : 0.026f) + (0.008f * LowPolyMesh.Unit(seed, 20 + i));
+            var pos = at + new Vector3(MathF.Cos(a) * d, r * 0.3f, MathF.Sin(a) * d);
+            ArrayMesh rock = LowPolyMesh.FacetRock(r, 6, 0.18f, seed + 30 + i, new Vector3(1.25f, 0.65f, 1f));
+            (i == 0 ? stone : shade).Add((rock, new Transform3D(new Basis(Vector3.Up, LowPolyMesh.Unit(seed, 40 + i) * Mathf.Tau), pos)));
+        }
+
+        var root = new Node3D { Name = "Pebble" };
+        root.AddChild(Merged("Stone", stone, Visuals.Rock));
+        root.AddChild(Merged("Shade", shade, Visuals.Rock.Darkened(0.14f)));
+        return root;
+    }
+
+    /// <summary>
+    /// 小花（可落子格的格角）：三朵五瓣小花立在第 <paramref name="variant"/> + 1 个格角内侧 0.38 处，花色按档 0 粉 / 1 黄 / 2 白——
+    /// 瓣的部件名带色名（PetalPink / PetalYellow / PetalWhite），<see cref="TerrainParts"/> 按名重染；这里的底色只是占位。
+    /// 茎 ≤ 0.05、花顶 ≤ 0.07，占地 0.30–0.46，落在格角 0.22 带内。返回节点原点在地砖上表面。
+    /// </summary>
+    public static Node3D Flower(int variant)
+    {
+        int v = Wrap(variant, FlowerVariants);
+        Vector2[] corners = [new(-1f, -1f), new(1f, -1f), new(1f, 1f), new(-1f, 1f)];
+        Vector2 corner = corners[(v + 1) % 4];
+        int seed = 2701 + (v * 5);
+        var at = new Vector3(corner.X * 0.38f, 0f, corner.Y * 0.38f);
+        var stem = new List<(ArrayMesh, Transform3D)>();
+        var petal = new List<(ArrayMesh, Transform3D)>();
+        var heart = new List<(ArrayMesh, Transform3D)>();
+        for (int i = 0; i < 3; i++)
+        {
+            float a = (Mathf.Tau * i / 3f) + LowPolyMesh.Unit(seed, i);
+            float d = 0.035f + (0.02f * LowPolyMesh.Unit(seed, 10 + i));
+            float height = 0.035f + (0.015f * LowPolyMesh.Unit(seed, 20 + i));
+            var pos = at + new Vector3(MathF.Cos(a) * d, 0f, MathF.Sin(a) * d);
+            stem.Add((LowPolyMesh.Frustum(0.006f, 0.004f, height, 4, 0.95f), new Transform3D(Basis.Identity, pos)));
+            petal.Add((LowPolyMesh.Patch(0.022f, 5, 0.008f, seed + 30 + i, 0.25f, 0.9f),
+                new Transform3D(new Basis(Vector3.Up, LowPolyMesh.Unit(seed, 40 + i) * Mathf.Tau), pos + new Vector3(0f, height - 0.002f, 0f))));
+            heart.Add((LowPolyMesh.Frustum(0.007f, 0.005f, 0.008f, 5), new Transform3D(Basis.Identity, pos + new Vector3(0f, height + 0.005f, 0f))));
+        }
+
+        (string petals, Color placeholder) = v switch
+        {
+            0 => ("PetalPink", Visuals.Urgent),
+            1 => ("PetalYellow", Visuals.Cursor),
+            _ => ("PetalWhite", Visuals.Bone),
+        };
+        var root = new Node3D { Name = "Flower" };
+        root.AddChild(Merged("Stem", stem, Visuals.TreeCanopy));
+        root.AddChild(Merged(petals, petal, placeholder));
+        root.AddChild(Merged("Heart", heart, Visuals.PineAutumn));
         return root;
     }
 

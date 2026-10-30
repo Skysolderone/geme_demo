@@ -52,6 +52,8 @@ public static class TerrainParts
     private static readonly Color ArtCrystalLight = Color.Color8(214, 172, 240);   // 段C：晶簇里那根发亮的小晶
     private static readonly Color ArtFlame = Color.Color8(255, 170, 72);   // 段C：火盆火舌（不受光）
     private static readonly Color ArtEmber = Color.Color8(234, 98, 46);   // 段C：火盆余烬（不受光）
+    private static readonly Color ArtBlossom = Color.Color8(242, 150, 186);   // map-surface 裁决 4：粉花瓣
+    private static readonly Color ArtButter = Color.Color8(250, 222, 96);   // map-surface 裁决 4：黄花瓣（比 ArtGold 亮而不发褐）
 
     // 障碍与装饰（map-elements-v2 段 C 用 LowPolyMesh 重建；档数在 LowPoly 一处，建模函数按它取模）。pines / ruins 只服务场景格，按裁决 M3 不重建、不扩档。
     public static readonly Kind Rock = new("rock", LowPoly.RockVariants, v => Themed("rock", LowPoly.Rock(v), v));
@@ -66,12 +68,16 @@ public static class TerrainParts
     public static readonly Kind FenceZ = new("fence_z", 1, _ => Themed("fence", LowPoly.Fence(alongX: false), 0));
     public static readonly Kind Bridge = new("bridge", 1, _ => Themed("bridge", LowPoly.Bridge(), 0));
 
-    // 粉彩浮岛装饰套件（map-restyle 段C）：草丛散在可落子格的格角，其余四件只在不可落子格（BoardView 按坐标散列挑）；都走 AddObstacle 合批。
+    // 粉彩浮岛装饰套件（map-restyle 段C）：草丛散在可落子格的格角，水晶 / 火盆 / 拱门 / 宝箱只在不可落子格（BoardView 按坐标散列挑）；都走 AddObstacle 合批。
     public static readonly Kind Grass = new("grass", LowPoly.GrassVariants, v => Themed("grass", LowPoly.Grass(v), v), "所在格的地砖上表面（草簇在第 v 个格角内侧）");
     public static readonly Kind Crystal = new("crystal", LowPoly.CrystalVariants, v => Themed("crystal", LowPoly.Crystal(v), v));
     public static readonly Kind Brazier = new("brazier", LowPoly.BrazierVariants, v => Themed("brazier", LowPoly.Brazier(v), v));
     public static readonly Kind Arch = new("arch", LowPoly.ArchVariants, v => Themed("arch", LowPoly.Arch(v), v));
     public static readonly Kind Chest = new("chest", LowPoly.ChestVariants, v => Themed("chest", LowPoly.Chest(v), v));
+
+    // 格角点缀（map-surface 裁决 4）：小石块 / 小花与草丛一样撒在草地 / 土路可落子格的格角，格角烙在档号里（合批不带旋转，见 LowPoly.Pebble / Flower）。
+    public static readonly Kind Pebble = new("pebble", LowPoly.PebbleVariants, v => Themed("pebble", LowPoly.Pebble(v), v), "所在格的地砖上表面（石堆在第 v 个格角内侧）");
+    public static readonly Kind Flower = new("flower", LowPoly.FlowerVariants, v => Themed("flower", LowPoly.Flower(v), v), "所在格的地砖上表面（花簇在第 v + 1 个格角内侧）");
 
     // —— 地块部件（map-elements-v2 段 A，design D2 / D3）：每件只有一个 MeshInstance3D、一个 surface，棋盘逐格只取它的网格（见 PieceOf）。
 
@@ -164,7 +170,7 @@ public static class TerrainParts
     public static readonly Kind[] All =
     [
         Rock, Ruins, Pines, Trees, Desert, Marsh, Crag, Shallows, FenceX, FenceZ, Bridge, TileTop, SideSlope, SideCliff, Liner, BankLip,
-        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest,
+        Rim, ZoneStrip, PlateFrame, PlateCorner, IslandLayer, IslandSpike, Cloud, Grass, Crystal, Brazier, Arch, Chest, Pebble, Flower,
     ];
 
     /// <summary>单网格部件取出的网格与它自带的材质（自带材质可能为空：由调用方覆盖的部件只带中性白）。</summary>
@@ -366,6 +372,9 @@ public static class TerrainParts
         "brazier" => part switch { "Shade" => ArtDarkStone, "Ember" => ArtEmber, "Flame" => ArtFlame, _ => ArtStone },
         "arch" => part == "Shade" ? ArtDarkStone : ArtStone,
         "chest" => part switch { "Lid" => ArtDeck, "Band" => ArtGold, "Shade" => ArtDarkStone, _ => ArtWood },
+        // map-surface 裁决 4：小石块的浅石比 ArtStone 再压一档——淡紫石地砖（188,180,198）上 ArtStone 几乎看不见；花色只按瓣的部件名分。
+        "pebble" => part == "Shade" ? ArtDarkStone : ArtStone.Darkened(0.12f),
+        "flower" => part switch { "Stem" => ArtTeal, "Heart" => ArtGold, "PetalPink" => ArtBlossom, "PetalYellow" => ArtButter, _ => ArtIvory },
         _ => original,
     };
 

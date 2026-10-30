@@ -49,20 +49,20 @@ _surfaces = [{
 "vertex_data": PackedByteArray("yMhBvc3MzD7OJRe9zSUXPc3MzD7IyEG9pB+RPJqZGT/txz48zSUXPc3MzD7IyEG9x8hBPc3MzD7PJRc9pB+RPJqZGT/txz48x8hBPc3MzD7PJRc9yyUXvc3MzD7KyEE9pB+RPJqZGT/txz48yyUXvc3MzD7KyEE9xMhBvc3MzD7UJRe9pB+RPJqZGT/txz48kNmQPc3MzD7Atbm9rtagPc3MzD4dceG8q+ORPJxhCT8qWqu9rtagPc3MzD4dceG8sul7PM3MzD6kfKG8q+ORPJxhCT8qWqu9sul7PM3MzD6kfKG8WAH4O83MzD6guKm9q+ORPJxhCT8qWqu9WAH4O83MzD6guKm9kdmQPc3MzD7Atbm9q+ORPJxhCT8qWqu9wLW5Pc3MzD6R2ZA9IXHhPM3MzD6w1qA9g3FfPfD7ED+xidk8IXHhPM3MzD6w1qA9rHyhPM3MzD6g6Xs8g3FfPfD7ED+xidk8rHyhPM3MzD6g6Xs8o7ipPc3MzD6IAfg7g3FfPfD7ED+xidk8o7ipPc3MzD6IAfg7vbW5Pc3MzD6U2ZA9g3FfPfD7ED+xidk8jdmQvc3MzD7Ctbk9rtagvc3MzD4sceE8XUjIvAfMDT/yL2g9rtagvc3MzD4sceE8lul7vM3MzD6sfKE8XUjIvAfMDT/yL2g9lul7vM3MzD6sfKE8UAH4u83MzD6iuKk9XUjIvAfMDT/yL2g9UAH4u83MzD6iuKk9jNmQvc3MzD7Dtbk9XUjIvAfMDT/yL2g9vxm/9PJXpoi/Gb/08lemiL8Zv/TyV6aIgfIVmkCLNMaB8hWaQIs0xoHyFZpAizTGeYyXjp5xI495jJeOnnEjj3mMl46ecSOPxyWfmmCDo7HHJZ+aYIOjsccln5pgg6Oxyt6hqw19ydHK3qGrDX3J0creoasNfcnR84mDpUhnzp3ziYOlSGfOnfOJg6VIZ86dQxUSiGKMOLtDFRKIYow4u0MVEohijDi7YwD18RFyoYdjAPXxEXKhh2MA9fERcqGHK4ttmuttVZYri22a621VliuLbZrrbVWWXx9ukwiIirVfH26TCIiKtV8fbpMIiIq1ywn+8vxp7YbLCf7y/GnthssJ/vL8ae2G9O0inkeJwMj07SKeR4nAyPTtIp5HicDI0ifrnHaBTbDSJ+ucdoFNsNIn65x2gU2w+xVV9HNc/Yf7FVX0c1z9h/sVVfRzXP2HovZolpKM+8Oi9miWkoz7w6L2aJaSjPvDGYz8keVwGZEZjPyR5XAZkRmM/JHlcBmR")
 }]
 
-[node name="Brazier1" type="Node3D" unique_id=896564912]
+[node name="Brazier1" type="Node3D" unique_id=309154949]
 
-[node name="Stone" type="MeshInstance3D" parent="." unique_id=2051772934]
+[node name="Stone" type="MeshInstance3D" parent="." unique_id=1324423186]
 material_override = ExtResource("1_cl7pa")
 mesh = SubResource("brazier_1_0")
 
-[node name="Shade" type="MeshInstance3D" parent="." unique_id=62018497]
+[node name="Shade" type="MeshInstance3D" parent="." unique_id=575042909]
 material_override = ExtResource("2_qwcxl")
 mesh = SubResource("brazier_1_1")
 
-[node name="Ember" type="MeshInstance3D" parent="." unique_id=196144139]
+[node name="Ember" type="MeshInstance3D" parent="." unique_id=27362130]
 material_override = ExtResource("3_4bpmn")
 mesh = SubResource("brazier_1_2")
 
-[node name="Flame" type="MeshInstance3D" parent="." unique_id=82817668]
+[node name="Flame" type="MeshInstance3D" parent="." unique_id=1778669888]
 material_override = ExtResource("4_po5e5")
 mesh = SubResource("brazier_1_3")

@@ -49,21 +49,21 @@ _surfaces = [{
 "vertex_data": PackedByteArray("EomoPQrXoz0efZU91n1cPQrXoz376Kg9EomoPSlcjz4efZU91n1cPQrXoz376Kg9KpAAPQrXoz3zI4A9EomoPSlcjz4efZU9KpAAPQrXoz3zI4A9zDYZPQrXoz0a5gc9EomoPSlcjz4efZU9zDYZPQrXoz0a5gc9jeWGPQrXoz3BHMI8EomoPSlcjz4efZU9jeWGPQrXoz3BHMI8ZNy0PQrXoz1ymDI9EomoPSlcjz4efZU9ZNy0PQrXoz1ymDI9EomoPQrXoz0efZU9EomoPSlcjz4efZU9/J//f3dirpP8n/9/d2Kuk/yf/393Yq6T5kjIiuikI6fmSMiK6KQjp+ZIyIropCOnFhfrqPNoIbMWF+uo82ghsxYX66jzaCGzzxV15QdUto/PFXXlB1S2j88VdeUHVLaPNfXmyFqvnqg19ebIWq+eqDX15shar56oPer/f/lq2L096v9/+WrYvT3q/3/5ati9")
 }]
 
-[node name="Crystal2" type="Node3D" unique_id=149138918]
+[node name="Crystal2" type="Node3D" unique_id=359639731]
 transform = Transform3D(-0.087155715, 0, -0.9961947, 0, 1, 0, 0.9961947, 0, -0.087155715, 0, 0, 0)
 
-[node name="Base" type="MeshInstance3D" parent="." unique_id=1550609497]
+[node name="Base" type="MeshInstance3D" parent="." unique_id=2002141897]
 material_override = ExtResource("1_cbof0")
 mesh = SubResource("crystal_2_0")
 
-[node name="Shade" type="MeshInstance3D" parent="." unique_id=989984796]
+[node name="Shade" type="MeshInstance3D" parent="." unique_id=837250919]
 material_override = ExtResource("2_5ips0")
 mesh = SubResource("crystal_2_1")
 
-[node name="Crystal" type="MeshInstance3D" parent="." unique_id=12058983]
+[node name="Crystal" type="MeshInstance3D" parent="." unique_id=1174987571]
 material_override = ExtResource("3_esu1d")
 mesh = SubResource("crystal_2_2")
 
-[node name="Glow" type="MeshInstance3D" parent="." unique_id=1756447680]
+[node name="Glow" type="MeshInstance3D" parent="." unique_id=152649191]
 material_override = ExtResource("4_x020c")
 mesh = SubResource("crystal_2_3")
