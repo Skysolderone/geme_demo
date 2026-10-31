@@ -13,8 +13,8 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 /// </summary>
 /// <remarks>
 /// 保护区只断言代码保证的部分（map-coastline 段 F 实测）：海湾不咬保护区、平台格与坡道朝外格不被切角 / 海湾 / 湖泊 / 岩区占用。
-/// 湖泊 / 岩区目前会落进座位 + 2、中立平台 + 3 的边距环（种子 1–20 每张图都有），这条是否要禁待负责人裁决，本类不断言。
-/// 变异验证（段 F 实跑，过滤 岛形Tests，共 16 条用例）：记录在各方法注释里。
+/// 湖泊 / 岩区（map-coastline 裁决 F1）：座位外 2 格那一圈不放；中立平台外 3 格那一圈允许（样本里确实放到了，防止排除范围被误扩到中立平台）。
+/// 变异验证（段 F 实跑，过滤 岛形Tests，共 16 条用例；裁决 F1 加一条后 19 条）：记录在各方法注释里。
 /// </remarks>
 public class 岛形Tests(ITestOutputHelper output)
 {
@@ -198,6 +198,37 @@ public class 岛形Tests(ITestOutputHelper output)
             Assert.All(kept, c => Assert.False(gen.Lakes.Contains(c) || gen.RockClusters.Contains(c), $"{at}：平台 / 坡道朝外格 {c.ToNotation()} 被湖泊 / 岩区占用"));
             Assert.All(outlets, c => Assert.True(map.IsPlayable(c) && map.HeightAt(c) == 0, $"{at}：坡道朝外格 {c.ToNotation()} 不是可落子低地"));
         }
+    }
+
+    [Theory]
+    [MemberData(nameof(Players))]
+    public void 座位外2格不放湖泊岩区且中立平台外圈允许(int players)
+    {
+        // map-coastline 裁决 F1：湖泊（未架桥深水团中不属于河道的部分，即 GenerateDetailed 的 Lakes）与岩区（内陆岩石团，RockClusters）
+        // 不得落进座位外接矩形外 2 格（EdgeGap）那一圈——出生区四周保持可落子；中立平台外 3 格那一圈允许，样本口径上 20 张图里至少有一格落在那里（排除没被扩到中立平台）。
+        // 变异：PlaceClusters 的低地候选去掉 !seatRing.Contains(c)（即退回 F1 之前，段 F 实跑）→ 本条 ×3 红（2 / 3 / 4 人都有湖泊 / 岩区落进座位外 2 格，如 link:1:2 的 M13），岛形Tests 其余 16 条仍绿；还原后 19 条全绿。
+        int neutralRingCells = 0;
+        foreach ((ulong seed, LinkMapGenerator.IslandGeneration gen) in Generations(players))
+        {
+            string at = $"link:{seed}:{players}";
+            MapData map = gen.Map;
+            HashSet<Coord> SeatOrNeutralRing(BoardPlateKind kind, int gap) =>
+            [
+                .. map.Boards.Where(p => kind == BoardPlateKind.Birth ? p.Kind == BoardPlateKind.Birth : p.Kind != BoardPlateKind.Birth)
+                    .SelectMany(p => Enumerable.Range(p.Origin.Y - gap, p.Height + (2 * gap))
+                        .SelectMany(y => Enumerable.Range(p.Origin.X - gap, p.Width + (2 * gap)).Select(x => new Coord(x, y))))
+                    .Where(map.Contains),
+            ];
+
+            HashSet<Coord> seatRing = SeatOrNeutralRing(BoardPlateKind.Birth, 2);
+            Assert.Equal(players, map.Boards.Count(p => p.Kind == BoardPlateKind.Birth));
+            Assert.All(seatRing, c => Assert.False(gen.Lakes.Contains(c), $"{at}：座位外 2 格 {c.ToNotation()} 是湖泊"));
+            Assert.All(seatRing, c => Assert.False(gen.RockClusters.Contains(c), $"{at}：座位外 2 格 {c.ToNotation()} 是岩区"));
+            neutralRingCells += SeatOrNeutralRing(BoardPlateKind.Public, 3).Count(c => !seatRing.Contains(c) && (gen.Lakes.Contains(c) || gen.RockClusters.Contains(c)));
+        }
+
+        output.WriteLine($"{players} 人 种子 1–20：中立平台外 3 格内（不含座位外 2 格）的湖泊 / 岩区格 共 {neutralRingCells}");
+        Assert.True(neutralRingCells > 0, $"样本口径：{players} 人 20 张图中立平台外 3 格内一格湖泊 / 岩区都没有");
     }
 
     [Theory]

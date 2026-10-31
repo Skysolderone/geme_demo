@@ -12,7 +12,8 @@ namespace Siege.Core.Board.Maps;
 /// <para><b>先落平台、后啃岸线</b>：平台落位 / 主题 / 平台内部 / 坡道都在布局流上按矩形算（<see cref="TryLayout"/>），岸线在其后只读岸线流——布局流的消费顺序一步不动，
 /// 同种子的平台清单与平台内地形与引入岸线之前逐格相同；掩码每次布局只啃一次，低地重抽只重抽填充。</para>
 /// <para><b>保护区</b>（裁决 1）：座位外接矩形 + 外 <see cref="EdgeGap"/> 格、中立平台外接矩形 + 外 <see cref="PlateGap"/> 格、坡道朝外格，海湾一格都不得咬进去；
-/// 内陆要素（湖泊 / 岩区）只避开平台格与坡道朝外格，边距环与间隔环不对它们设防（map-coastline 段 F 实测：连环一起禁，4 人图的低地不够填到目标占比，生成失败；只禁座位边距环可行但 4 人低地重抽最多 18 次，待负责人裁决）。海湾只从岛缘向内逐列连续咬，咬掉的格必然与岛外连通，岛内不会出现虚空；掩码另做 4 邻连通自检（<see cref="Battlefields"/>，几何四邻分量的唯一实现），
+/// 内陆要素（湖泊 / 岩区）避开平台格、坡道朝外格与座位外 <see cref="EdgeGap"/> 格那一圈（map-coastline 裁决 F1：出生区周边保持可落子、开局有地可下）；
+/// 中立平台外 <see cref="PlateGap"/> 格那一圈对它们不设防（连这一圈一起禁，4 人图的低地不够填到目标占比，生成失败）。候选变少，投放尝试上限随之由 1500 提到 3000（见 <see cref="MaxClusterAttempts"/>），耗时验收见裁决 F2。海湾只从岛缘向内逐列连续咬，咬掉的格必然与岛外连通，岛内不会出现虚空；掩码另做 4 邻连通自检（<see cref="Battlefields"/>，几何四邻分量的唯一实现），
 /// 不通即在同一条流上重咬，仍不通退到只切角。</para>
 /// <para><b>切角与座位角的几何</b>（实施修订）：座位贴 <see cref="EdgeGap"/> 落在矩形角，座位角格到矩形角的曼哈顿距离恰为 4，切角 ≥ 5 就会咬掉座位格；
 /// 原固定切角 3 本就切进了座位 2 格边距环的角块。所以有平台（座位或贴边中立平台）占住的角切角封顶在不碰平台格与坡道朝外格的最大值（座位角恒为 4），
@@ -58,8 +59,12 @@ public static partial class LinkMapGenerator
     public const int TargetNonPlayableMax = 29;
     public const int MaxNonPlayablePercent = 35;
 
-    /// <summary>一次低地尝试里湖泊 / 岩区的最多投放尝试次数（含长不够、破坏连通而放弃的）；用完仍不到目标即重抽低地。</summary>
-    internal const int MaxClusterAttempts = 1500;
+    /// <summary>
+    /// 一次低地尝试里湖泊 / 岩区的最多投放尝试次数（含长不够、破坏连通而放弃的）；用完仍不到目标即重抽低地。
+    /// map-coastline 裁决 F1：座位外 2 格不放团后候选变少，原 1500 次时 4 人图种子 1–20 有 15 张因投放尝试用完重抽低地、单张最多 18 次；
+    /// 放到 3000 后投放不再是重抽原因（剩下的重抽全是河道画不通，F1 之前就有），最多 6 次；再加到 6000 重抽次数不再下降，只多耗在饱和的尝试上。
+    /// </summary>
+    internal const int MaxClusterAttempts = 3000;
 
     /// <summary>岸线流在一次布局里的消费顺序：四角切角 → 四条边各一段保留岸线 → 逐边逐湾（间隔 → 长度 → 深度 → 逐列噪声）；掩码不通即整段重来。</summary>
     private static Island Carve(Island rect, PlateLayout layout, RandomStream coast)
@@ -250,7 +255,7 @@ public static partial class LinkMapGenerator
 
     /// <summary>
     /// 内陆湖泊与岩区（裁决 2 / 3）：目标百分比在 <see cref="TargetNonPlayableMin"/>–<see cref="TargetNonPlayableMax"/> 里抽一个，然后逐团投放（种类 → 格数 → 起点 → 逐格生长）直到非可落子格不低于目标。
-    /// 候选格：低地（岛上、非平台、非坡道朝外格）、不在岛缘、不是水 / 岩石 / 已有团、且不与河道（含桥）/ 湖泊 / 岩区四邻相邻（团与团、团与河道互不相接，桥的两岸也不会被堵）。
+    /// 候选格：低地（岛上、非平台、非坡道朝外格、不在座位外 <see cref="EdgeGap"/> 格那一圈——裁决 F1）、不在岛缘、不是水 / 岩石 / 已有团、且不与河道（含桥）/ 湖泊 / 岩区四邻相邻（团与团、团与河道互不相接，桥的两岸也不会被堵）。
     /// 每团放下前查"切比雪夫距离 1 的一圈陆地格沿四邻连成一环"，不成环即放弃这一团（见类注释）。候选用尽或尝试用完仍不到目标返回 <c>false</c>（调用方重抽低地）。
     /// </summary>
     private static bool PlaceClusters(
@@ -266,7 +271,22 @@ public static partial class LinkMapGenerator
         int face = island.Count;
         int target = TargetNonPlayableMin + coast.NextInt(TargetNonPlayableMax - TargetNonPlayableMin + 1);
         int nonPlayable = fixedNonPlayable + water.Count - bridges.Count;
-        HashSet<Coord> lowland = [.. island.Cells().Where(c => !layout.InPlate(c) && !layout.RampOutlets.Contains(c))];
+
+        // map-coastline 裁决 F1：座位外接矩形外 EdgeGap 格那一圈不放湖泊 / 岩区（座位格本身已由 InPlate 排除）——出生区四周留成可落子地，开局不被水 / 岩堵在门口。
+        // 只排座位这一圈：中立平台外 PlateGap 格那一圈允许（一起禁则 4 人图低地不够填到目标占比）。
+        var seatRing = new HashSet<Coord>();
+        foreach (BoardPlate seat in layout.Plates.Where(p => p.Kind == BoardPlateKind.Birth))
+        {
+            for (int y = seat.Origin.Y - EdgeGap; y < seat.Origin.Y + seat.Height + EdgeGap; y++)
+            {
+                for (int x = seat.Origin.X - EdgeGap; x < seat.Origin.X + seat.Width + EdgeGap; x++)
+                {
+                    seatRing.Add(new Coord(x, y));
+                }
+            }
+        }
+
+        HashSet<Coord> lowland = [.. island.Cells().Where(c => !layout.InPlate(c) && !layout.RampOutlets.Contains(c) && !seatRing.Contains(c))];
 
         bool Occupied(Coord c) => water.Contains(c) || lakes.Contains(c) || rockClusters.Contains(c);
         bool Land(Coord c) => island.Contains(c) && !layout.InPlate(c) && !lakes.Contains(c) && !rockClusters.Contains(c) && (!water.Contains(c) || bridges.Contains(c));

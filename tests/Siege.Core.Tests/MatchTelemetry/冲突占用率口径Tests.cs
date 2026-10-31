@@ -91,8 +91,9 @@ public class 冲突占用率口径Tests
         // map-expand-25 段 A3（地图变了：不放静态信物格后布局流前移，坡道与低地重抽，平台不变）：1485 → 1484。
         // seat-gap-25（地图变了：link:1:4 改为 49×49 四角座位岛）：1484 → 1927。
         // map-coastline（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道，非可落子约占岛面三成；平台不变）：1927 → 1368。
-        Assert.All(sample, l => Assert.Equal(1368, l.Header.PlayableCells));
-        Assert.All(sample, l => Assert.Equal(1368, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
+        // map-coastline 裁决 F1（湖泊 / 岩区不进座位外 2 格，岸线流消费变了）：1368 → 1366。
+        Assert.All(sample, l => Assert.Equal(1366, l.Header.PlayableCells));
+        Assert.All(sample, l => Assert.Equal(1366, MatchLog.Parse(l.DeterministicText()).Header.PlayableCells));
 
         // 报告段落在真实批次上也能算出来（可能全批次无提子，那就只断言段落存在与分母自洽）。
         BalanceReport report = BalanceAnalyzer.Analyze(sample);

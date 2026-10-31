@@ -115,7 +115,8 @@ public class 地图文件往返Tests
         // 1 号平台（河流主题，F 列河道）的预置桥 F10。
         // seat-gap-25 段 A（link:1:4 换成 49×49 的四角座位岛）：入口取岛中心 Z25；出生区格取 G7（1 号座位 E5 的核心区左下角）；2 号座位左下角 AN5（双字母列）；
         // 1 号座位（河流主题）的预置桥 F8。
-        Assert.Contains("\"CentralEntrance\": \"Z25\"", json, StringComparison.Ordinal);
+        // map-coastline 裁决 F1（湖泊 / 岩区不进座位外 2 格，岸线流消费变了）：岛中心 Z25 成了岩区格（不可落子），入口按"离中心最近的可落子低地、先行后列"取 Z24；其余三处不变。
+        Assert.Contains("\"CentralEntrance\": \"Z24\"", json, StringComparison.Ordinal);
         Assert.Contains("\"G7\"", json, StringComparison.Ordinal);
         Assert.Contains("\"Origin\": \"AN5\"", json, StringComparison.Ordinal);
         Assert.Contains("\"F8\"", json, StringComparison.Ordinal);

@@ -65,7 +65,9 @@ public class 候选格上限Tests
     /// 旧值 1E6AC219F967E612CC550AD7A933BA42BC9E7706599D65F27442FE5FD16F0B4D；四条路径（对局内容集 v1 逐步相同 / 带入带出关闭 / 开启但无人带入 / 批量跑局缺省关闭带入）实跑得到同一新值。</para>
     /// <para>map-coastline 重钉（地图变了：裁决 5 同标识出新图——link:1:4 改为不规则岸线 + 湖泊 / 岩区 / 加宽河道，可落子 1927 → 1368，平台落位 / 主题 / 平台内部不变；AI 未改，同一配置的走法随之变）：
     /// 旧值 C115BEB097ADC3875459A150358203B6C5AE4DDA220872FFE9EE69A6355CC61D；四条路径（对局内容集 v1 逐步相同 / 带入带出关闭 / 开启但无人带入 / 批量跑局缺省关闭带入）实跑得到同一新值。</para>
-    internal const string LinkGoldenTurnHash = "80E6545E46FB86F01D287C519D0E91E25622CEB3E0ECF171424C90ED259660A2";
+    /// <para>map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了，link:1:4 可落子 1368 → 1366；AI 未改，同一配置的走法随之变）：
+    /// 旧值 80E6545E46FB86F01D287C519D0E91E25622CEB3E0ECF171424C90ED259660A2；四条路径实跑仍得到同一新值。</para>
+    internal const string LinkGoldenTurnHash = "E93A43AC2399B8F84044F48F3197C5983F6E323CC2441646AE25015C4107077F";
 
     /// <summary>
     /// ai-whole-batch 守门（规格「整批候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给整批候选开关 0 时的小回合快照哈希——
@@ -76,8 +78,9 @@ public class 候选格上限Tests
     /// relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01，仍与 EditSeedOff 同值、与缺省开的 <see cref="LinkGoldenTurnHash"/> 不同。
     /// relic-redesign 段 C1 重钉（信物维改为势力增量口径 + AI 挂出改为势力增量最大落点，AI 评价版本 12 → 13；盘面有信物起同一配置的走法随之变）：旧值 1F68747E41B1158C6AF3035364EE51D478322ED49C6D929E5B0618087A8956B2，仍与 EditSeedOff 同值、与缺省开的 <see cref="LinkGoldenTurnHash"/> 不同。
     /// seat-gap-25 段 A 重钉（地图变了：四角出生座位岛 + 中立平台，盲选座位互斥；AI 未改）：旧值 D0173938F25DEB73846035FC0EB280D60353D61F50267924B9121B792692C47C，仍与另一开关 0 路径同值。
-    /// map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道；AI 未改）：旧值 DDEFFB362B73E7702241030B38B7B43E71A75FECA85CF0C1BB10D7CDEED53CF6，仍与另一开关 0 路径同值。</remarks>
-    internal const string LinkGoldenTurnHashWholeBatchOff = "BFCB87BF24F86A4BC1D10815EB207FC5BF4AFE39C784A87BAB291B1A92866E44";
+    /// map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道；AI 未改）：旧值 DDEFFB362B73E7702241030B38B7B43E71A75FECA85CF0C1BB10D7CDEED53CF6，仍与另一开关 0 路径同值。
+    /// map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了；AI 未改）：旧值 BFCB87BF24F86A4BC1D10815EB207FC5BF4AFE39C784A87BAB291B1A92866E44，仍与另一开关 0 路径同值。</remarks>
+    internal const string LinkGoldenTurnHashWholeBatchOff = "9A9A3871CD4B8D5F45224684540190B158CB90D2D9AE0D878AEB2FFFC4087B86";
 
     /// <summary>
     /// ai-bridge-candidate 守门（规格「搭桥候选」Scenario「关闭时逐步不变」）：<see cref="LinkGoldenConfig"/> 显式给搭桥候选开关 0 时的小回合快照哈希——
@@ -88,8 +91,9 @@ public class 候选格上限Tests
     /// relic-redesign 接线段 W1 重钉（旧信物删除 + 地图信物第 3 大回合起预告、第 4 大回合起落位，AI 评价版本 11 → 12；同一配置的走法随之变）：旧值 622BD1876D688FD2CD8C33BC3D90C4FC91BFFB2107FD76FFD75CD3AB80884A01（仍与 WholeBatchOff 同值）。
     /// relic-redesign 段 C1 重钉（信物维改为势力增量口径 + AI 挂出改为势力增量最大落点，AI 评价版本 12 → 13；盘面有信物起同一配置的走法随之变）：旧值 1F68747E41B1158C6AF3035364EE51D478322ED49C6D929E5B0618087A8956B2（仍与 WholeBatchOff 同值）。
     /// seat-gap-25 段 A 重钉（地图变了：四角出生座位岛 + 中立平台，盲选座位互斥；AI 未改）：旧值 D0173938F25DEB73846035FC0EB280D60353D61F50267924B9121B792692C47C，仍与另一开关 0 路径同值。
-    /// map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道；AI 未改）：旧值 DDEFFB362B73E7702241030B38B7B43E71A75FECA85CF0C1BB10D7CDEED53CF6，仍与另一开关 0 路径同值。</remarks>
-    internal const string LinkGoldenTurnHashEditSeedOff = "BFCB87BF24F86A4BC1D10815EB207FC5BF4AFE39C784A87BAB291B1A92866E44";
+    /// map-coastline 重钉（地图变了：不规则岸线 + 湖泊 / 岩区 / 加宽河道；AI 未改）：旧值 DDEFFB362B73E7702241030B38B7B43E71A75FECA85CF0C1BB10D7CDEED53CF6，仍与另一开关 0 路径同值。
+    /// map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了；AI 未改）：旧值 BFCB87BF24F86A4BC1D10815EB207FC5BF4AFE39C784A87BAB291B1A92866E44，仍与另一开关 0 路径同值。</remarks>
+    internal const string LinkGoldenTurnHashEditSeedOff = "9A9A3871CD4B8D5F45224684540190B158CB90D2D9AE0D878AEB2FFFC4087B86";
 
     /// <summary><see cref="LinkGoldenTurnHash"/> 的跑局配置（<c>link:1</c>、种子 31、标准、24 个小回合、写死口径）。</summary>
     internal static RunConfig LinkGoldenConfig() =>

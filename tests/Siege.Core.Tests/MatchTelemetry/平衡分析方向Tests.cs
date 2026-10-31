@@ -183,8 +183,9 @@ public class 平衡分析方向Tests
         // 主题行的公共信物、地图规模的信物格数），第 12 项新内容来源改为四种新棋子。旧值 EB8CF108… / 45017B88…。
         // seat-gap-25 段 A 重钉（地图变了：link:1:4 改为四角出生座位岛 + 中立平台；盲选座位互斥，样本座次与走法随之变；首部棋盘只列座位，按主题统计段随之变）；旧值 EC001B28… / 088551F5…。
         // map-coastline 重钉（地图变了：裁决 5 同标识出新图——link:1:4 改为不规则岸线 + 湖泊 / 岩区 / 加宽河道，可落子 1927 → 1368，平台不变；AI 未改，样本走法随之变）；旧值 64330608… / 903E5CD5…。
-        Assert.True("96090C6190D1D15EDE021C6C355C0B71F1BBC6D60D3ED1C0DB9BFBAD0F53F1B4" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
-        Assert.True("EFD6EBA4D4AE84578C59C05BEA224AD543A74F362B4FD5C4C6D989ABB3D139FC" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // map-coastline 裁决 F1 重钉（湖泊 / 岩区不进座位外 2 格，岸线流消费变了，link:1:4 可落子 1368 → 1366；AI 未改，样本走法随之变）：旧值 96090C61… / EFD6EBA4…。
+        Assert.True("1EAADA2135410D536CF63EE37FB1847BDFDC16DEBCA0FD8CB86C14F5EB8E0AF7" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
+        Assert.True("E06C6A1CD84A4A7E88B73E5B7BB2BB4DC3550714A09AE33707CBC18FFB31D176" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>
