@@ -116,8 +116,10 @@ public class 链接模式下落后者的停手阈值Tests
         // 规格："并列最高视为最高"——两人各一枚角上的孤子、势力相等 → 不算落后，阈值为缺省值，AI Pass。
         // open-map：link:1 棋盘 0（R3 起 6×7）的西南角紧贴棋盘 2（多一口气），改用东南角（FarCorner）与东北角两枚孤子，各 2 气、势力 3。
         // map-expand-25 段 A2：棋盘 1（Q5–V10）东南角 V5 的两口气是 V6 与坡道 U5，东北角 V10 的两口气是 V9 / U10，崖壁外的低地不通气。
+        // map-coastline（同标识出新图，裁决 5）：座位 1（AN5–AU12）东南角外的 AV5 / AU4 被切角 4 切成虚空，东南角 AU5 只剩 2 格领地（势力 3）、东北角 AU12 有 3 格（势力 4），
+        // 不再相等；改用西侧两角——西南 AN5 与西北 AN12 各覆盖 4 格空地（崖下低地与坡道），势力都是 5。规则不变，只换了恰好势力相等的两格。
         // 判别力：比较由严格大于改为大于等于即红。
-        MatchFlow match = Started([Zone, Zone, 3, 2]).Place(P0, FarCorner).Place(P1, BirthCell(Map, Zone, Side - 1, Map.BirthBoard(Zone).Height - 1));
+        MatchFlow match = Started([Zone, Zone, 3, 2]).Place(P0, Corner(0, Map.BirthBoard(Zone).Height - 1)).Place(P1, Corner(0, 0));
         MatchPublicView view = match.Publish();
         Assert.Equal(view.Power!.Of(P1).Total, view.Power.Of(P0).Total);   // 样本口径
 

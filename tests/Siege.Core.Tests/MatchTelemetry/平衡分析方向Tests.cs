@@ -182,8 +182,9 @@ public class 平衡分析方向Tests
         // relic-redesign W1 重钉（规则与报告格式都变了）：信物从第 3 大回合起刷新预告、第 4 大回合落位，样本里的走法随之变；报告删去旧信物各段（信物控制、收敛 / 未收敛分组、
         // 主题行的公共信物、地图规模的信物格数），第 12 项新内容来源改为四种新棋子。旧值 EB8CF108… / 45017B88…。
         // seat-gap-25 段 A 重钉（地图变了：link:1:4 改为四角出生座位岛 + 中立平台；盲选座位互斥，样本座次与走法随之变；首部棋盘只列座位，按主题统计段随之变）；旧值 EC001B28… / 088551F5…。
-        Assert.True("643306080EC7A55FADC8E5AFE47A3CFDB967FCE202172716FF0557B390E34709" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
-        Assert.True("903E5CD5D1442831141EEACB1F62457FE64B1FFD5F867266A3C12788531CFFF0" == ranked, $"RankedSample 报告哈希：{ranked}");
+        // map-coastline 重钉（地图变了：裁决 5 同标识出新图——link:1:4 改为不规则岸线 + 湖泊 / 岩区 / 加宽河道，可落子 1927 → 1368，平台不变；AI 未改，样本走法随之变）；旧值 64330608… / 903E5CD5…。
+        Assert.True("96090C6190D1D15EDE021C6C355C0B71F1BBC6D60D3ED1C0DB9BFBAD0F53F1B4" == sample, $"Sample 报告哈希：{sample}；RankedSample 报告哈希：{ranked}");
+        Assert.True("EFD6EBA4D4AE84578C59C05BEA224AD543A74F362B4FD5C4C6D989ABB3D139FC" == ranked, $"RankedSample 报告哈希：{ranked}");
     }
 
     /// <summary>经文本往返复制一份日志并把首部内容集改为 <paramref name="set"/>。</summary>

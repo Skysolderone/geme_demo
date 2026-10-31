@@ -18,6 +18,7 @@ namespace Siege.Core.Tests.MapDefinition;
 /// seat-gap-25 段 A（换图，原值见各用例注释）：link:1:2 改为 49×37 画布的东西两座位岛——1 号座位 E15–M22（林地）、2 号座位 AN15–AU22（林地，核心区 AP17–AR19）、
 /// 中立平台 AB17–AJ24（混合）、G26–M33（混合）、Q28–W33（河流，V 列河道、桥 V30），可落子 1419；预算改为可落子 1350–1480、出生区恰 2 个、中立平台 2–3、画布恰 49×37。
 /// "干净"的载体平台由 6 号平台 Q25–V30 改为 2 号座位 AN15–AU22（没有岩石与栅栏，西北角有 4 格深水）。
+/// map-coastline 裁决 2 / 5（同标识出新图）：岛形改为不规则岸线、内陆加湖泊 / 岩区 / 加宽河道，link:1:2 可落子 1419 → 972，预算改为 900–1060；平台落位、主题与平台内部不变（布局流不动），其余用例的坐标照旧。
 /// </remarks>
 public class 地图静态校验规则Tests
 {
@@ -40,7 +41,7 @@ public class 地图静态校验规则Tests
         MapData map = Link();
         MapValidationResult result = MapValidator.Validate(map);
         Assert.True(result.IsValid, result.ToString());
-        Assert.Equal(1419, map.PlayableCount);   // seat-gap-25：原 833（30×30 岛）
+        Assert.Equal(972, map.PlayableCount);    // map-coastline：原 1419（矩形切角岛）；seat-gap-25 之前 833（30×30 岛）
         Assert.Equal(5, map.Boards.Length);      // 2 个座位 + 3 块中立平台（原 6 块平台）
         Assert.DoesNotContain("RelicCells", MapFile.ToJson(map), StringComparison.Ordinal);   // 不放静态信物格（段 A3；relic-redesign W1 起地图数据没有该字段）
         Assert.Equal("AN15", Clean.Origin.ToNotation());
@@ -54,25 +55,25 @@ public class 地图静态校验规则Tests
     [Fact]
     public void 可落子格越界()
     {
-        // 2 人浮空岛可落子格区间 1250–1480（MapValidator 声明表；seat-gap-25 段 A 种子 1–600 实测 1324–1440 外留余量，原 760–876）。
-        // 下界：低地（平台外）按坐标序挖掉 170 格 → 1419 − 170 = 1249；上界：画布全部开放。
+        // 2 人浮空岛可落子格区间 900–1060（MapValidator 声明表；map-coastline 种子 1–20 实测 953–1001 外留约 5%，原 seat-gap-25 的 1250–1480、更早 760–876）。
+        // 下界：低地（平台外）按坐标序挖掉 73 格 → 972 − 73 = 899；上界：画布全部开放。
         MapData map = Link();
-        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(170)];
+        Coord[] rocks = [.. map.AllCoords().Where(c => map.IsPlayable(c) && !map.Boards.Any(b => b.Contains(c))).Order().Take(73)];
         MapData tooFew = map with { Obstacles = map.Obstacles.Union(rocks) };
-        Assert.Equal(1249, tooFew.PlayableCount);
+        Assert.Equal(899, tooFew.PlayableCount);
         MapValidationFailure low = Assert.Single(
             MapValidator.Validate(tooFew).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
-        Assert.Contains("可落子格为 1249", low.Message, StringComparison.Ordinal);
-        Assert.Contains("1250–1480", low.Message, StringComparison.Ordinal);
+        Assert.Contains("可落子格为 899", low.Message, StringComparison.Ordinal);
+        Assert.Contains("900–1060", low.Message, StringComparison.Ordinal);
         Assert.Throws<MapValidationException>(() => GameBoard.Load(tooFew));
 
-        // 上界 1480 同样要挡住：区间只有下界有算例时，把上界写得更大只会让消息文本变化，行为上一条测试都不红。
+        // 上界 1060 同样要挡住：区间只有下界有算例时，把上界写得更大只会让消息文本变化，行为上一条测试都不红。
         MapData tooOpen = map with { Obstacles = [] };
-        Assert.True(tooOpen.PlayableCount > 1480, tooOpen.PlayableCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.True(tooOpen.PlayableCount > 1060, tooOpen.PlayableCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         MapValidationFailure high = Assert.Single(
             MapValidator.Validate(tooOpen).Failures, f => f.Code == "PLAYABLE_COUNT_OUT_OF_RANGE");
         Assert.Contains($"可落子格为 {tooOpen.PlayableCount}", high.Message, StringComparison.Ordinal);
-        Assert.Contains("1250–1480", high.Message, StringComparison.Ordinal);
+        Assert.Contains("900–1060", high.Message, StringComparison.Ordinal);
     }
 
     [Fact]

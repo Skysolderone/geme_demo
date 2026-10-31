@@ -6,8 +6,9 @@ namespace Siege.Core.Tests.LinkMapGeneration;
 
 /// <summary>
 /// 规格：任务 10-26-map-expand-25 design D2–D5（多平台浮空岛）/ prd 验收标准：岛尺寸、平台数与尺寸、平台高度与坡道、低地河道与桥、岛缘点缀、全图气边连通、不放静态信物格（段 A3）；
-/// 任务 10-28-seat-gap-25 design E1–E3 / prd 验收标准：长方形岛 45×33 / 45×45、恰 n 个 8×8 出生座位且两两间距 ≥ 25、中立平台数 2–3 / 3–4 / 4–5、中央入口。
-/// 种子 1–20 × 人数 2 / 3 / 4，全部判定在测试内独立算（岛范围、切角、座位位置、间距、坡道朝外格、气边连通都不读生成器的私有实现）。
+/// 任务 10-28-seat-gap-25 design E1–E3 / prd 验收标准：长方形岛 45×33 / 45×45、恰 n 个 8×8 出生座位且两两间距 ≥ 25、中立平台数 2–3 / 3–4 / 4–5、中央入口；
+/// 任务 10-31-map-coastline 裁决 1–3：岛形改为不规则掩码（岛面 = 画布内不与留白连通的格，测试内用留白泛洪独立求出，与 Godot 段 G 同一定义）、河道 1–2 格宽、湖泊 4–9 格、岩区 3–6 格。
+/// 种子 1–20 × 人数 2 / 3 / 4，全部判定在测试内独立算（岛范围、座位位置、间距、坡道朝外格、气边连通都不读生成器的私有实现）。岛形本身（切角、海湾、保护区、占比）见 岛形Tests。
 /// </summary>
 /// <remarks>
 /// 变异验证（map-expand-25 段 A1 实跑，过滤 LinkMapGeneration 命名空间）：
@@ -35,16 +36,41 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>岛上的格（测试内独立算式）：在 [M, M+W)×[M, M+H) 内，且到最近两条边的距离之和 ≥ 3（四角各切去直角边 3 的三角）。</summary>
-    private static bool OnIsland(Coord c, (int W, int H) size)
-    {
-        int dx = Math.Min(c.X - M, M + size.W - 1 - c.X), dy = Math.Min(c.Y - M, M + size.H - 1 - c.Y);
-        return dx >= 0 && dy >= 0 && dx + dy >= 3;
-    }
+    /// <summary>
+    /// 岛面（map-coastline 裁决 1 / 7，测试内独立实现）：从画布四边的障碍格出发沿几何四邻在障碍格里泛洪，泛到的是虚空（岛外、切角、海湾、贴岸的零星岩石）；其余格是岛上的格。
+    /// 按地图实例记忆，避免每条用例重算。
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MapData, HashSet<Coord>> IslandMemo = new();
 
-    /// <summary>岛缘一圈：岛上，且东南西北至少一个方向的下一格不在岛上（坐标算术）。</summary>
-    private static bool OnIslandEdge(Coord c, (int W, int H) size) =>
-        OnIsland(c, size) && new[] { (0, -1), (0, 1), (-1, 0), (1, 0) }.Any(d => c.X + d.Item1 >= 0 && c.Y + d.Item2 >= 0 && !OnIsland(new Coord(c.X + d.Item1, c.Y + d.Item2), size));
+    internal static HashSet<Coord> IslandOf(MapData map) => IslandMemo.GetValue(map, static m =>
+    {
+        var voidCells = new HashSet<Coord>();
+        var queue = new Queue<Coord>();
+        foreach (Coord c in m.AllCoords().Where(c => (c.X == 0 || c.Y == 0 || c.X == m.Width - 1 || c.Y == m.Height - 1) && m.Obstacles.Contains(c)))
+        {
+            voidCells.Add(c);
+            queue.Enqueue(c);
+        }
+
+        while (queue.Count > 0)
+        {
+            foreach (Coord n in Adjacency.Neighbors(m.Width, m.Height, queue.Dequeue()))
+            {
+                if (m.Obstacles.Contains(n) && voidCells.Add(n))
+                {
+                    queue.Enqueue(n);
+                }
+            }
+        }
+
+        return [.. m.AllCoords().Where(c => !voidCells.Contains(c))];
+    });
+
+    private static bool OnIsland(Coord c, MapData map) => IslandOf(map).Contains(c);
+
+    /// <summary>岛缘一圈：岛上，且东南西北至少一个方向的下一格不在岛上。</summary>
+    private static bool OnIslandEdge(Coord c, MapData map) =>
+        OnIsland(c, map) && Adjacency.Neighbors(map.Width, map.Height, c).Any(n => !OnIsland(n, map));
 
     /// <summary>两矩形之间相隔的格数，取横纵较大者（裁决 S1 的间距口径，测试内独立算式；重叠方向为负）。</summary>
     private static int Gap(BoardPlate p, BoardPlate q) =>
@@ -72,6 +98,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
     public void 岛外接尺寸按人数(int players)
     {
         // seat-gap-25 prd 验收：岛外接尺寸 2 人 45×33，3 / 4 人 45×45（不含留白）；design E1：画布 (W+2M)×(H+2M)。
+        // map-coastline 裁决 1：岛形改为掩码，但画布与可落子格外接矩形不变——岛面全部落在 [M, M+W)×[M, M+H) 内，留白一圈仍是障碍。
         (int w, int h) = Size[players];
         Assert.Equal((w, h), LinkMapGenerator.IslandSize(players));
         foreach ((ulong seed, MapData map) in Maps(players))
@@ -82,7 +109,8 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
             Coord[] playable = [.. map.AllCoords().Where(map.IsPlayable)];
             Assert.Equal(w, playable.Max(c => c.X) - playable.Min(c => c.X) + 1);
             Assert.Equal(h, playable.Max(c => c.Y) - playable.Min(c => c.Y) + 1);
-            Assert.All(map.AllCoords().Where(c => !OnIsland(c, (w, h))), c => Assert.True(map.Obstacles.Contains(c), $"{at}：岛外 / 切角 {c.ToNotation()} 不是障碍"));
+            Assert.All(IslandOf(map), c => Assert.True(c.X >= M && c.X < M + w && c.Y >= M && c.Y < M + h, $"{at}：岛面 {c.ToNotation()} 越出外接矩形"));
+            Assert.All(map.AllCoords().Where(c => c.X < M || c.Y < M || c.X >= M + w || c.Y >= M + h), c => Assert.True(map.Obstacles.Contains(c), $"{at}：留白 {c.ToNotation()} 不是障碍"));
             Assert.Equal(players, map.MaxPlayers);
             Assert.Equal($"link:{seed}:{players}", map.Id);
         }
@@ -181,7 +209,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
         {
             Coord expected = map.IsPlayable(centre)
                 ? centre
-                : map.AllCoords().Where(c => OnIsland(c, (w, h)) && map.IsPlayable(c) && map.HeightAt(c) == 0)
+                : map.AllCoords().Where(c => OnIsland(c, map) && map.IsPlayable(c) && map.HeightAt(c) == 0)
                     .OrderBy(c => Math.Abs(c.X - centre.X) + Math.Abs(c.Y - centre.Y)).ThenBy(c => c.Y).ThenBy(c => c.X).First();
             Assert.Equal(expected, map.CentralEntrance);
         }
@@ -193,7 +221,6 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
     {
         // design D3：平台内可落子格除坡道外 h=2；坡道 h=1、草地、2–3 个、在外圈非角格、两两不在同一条边、朝外的格是 h=0 可落子低地；
         // 坡道之外平台与低地之间没有气边（崖壁）——平台内可落子格沿气边走出平台只能经坡道。
-        (int W, int H) w = Size[players];
         var rampCounts = new HashSet<int>();
         foreach ((ulong seed, MapData map) in Maps(players))
         {
@@ -209,7 +236,7 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
                 foreach (Coord ramp in ramps)
                 {
                     Coord o = Assert.IsType<Coord>(Outward(p, ramp));
-                    Assert.True(OnIsland(o, w) && map.IsPlayable(o) && map.HeightAt(o) == 0 && !InPlate(map, o), $"{at}：坡道 {ramp.ToNotation()} 朝外 {o.ToNotation()} 不是低地");
+                    Assert.True(OnIsland(o, map) && map.IsPlayable(o) && map.HeightAt(o) == 0 && !InPlate(map, o), $"{at}：坡道 {ramp.ToNotation()} 朝外 {o.ToNotation()} 不是低地");
                     Assert.Equal(Surface.Grass, map.SurfaceAt(ramp));
                     sides.Add((o.X - ramp.X, o.Y - ramp.Y));
                     Assert.Contains(o, Adjacency.LibertyNeighbors(map, ramp));   // 坡道两头都通（h0 → h1 → h2）
@@ -257,48 +284,73 @@ public class 浮空岛布局Tests(ITestOutputHelper output)
     [MemberData(nameof(Players))]
     public void 低地有N条河道各两座桥(int players)
     {
-        // design D4：平台外、岛内、非切角为低地（h=0）；河道 n 条，各是 1 格宽的深水折线、恰 2 座不相邻的预置桥；不占坡道朝外格。
-        (int W, int H) w = Size[players];
+        // design D4：平台外、岛内为低地（h=0）；河道 n 条，各是深水折线、恰 2 座不相邻的预置桥；不占坡道朝外格。
+        // map-coastline 裁决 3：河道 1–2 格宽（没有 3×3 全是深水的块）；低地深水团里带桥的是河道、不带桥的是湖泊（4–9 格），两类都不相接（各自按几何四邻分团）；
+        // 桥的两岸都通（桥格至少两个气边邻格）。
+        int widened = 0;
+        int lakesTotal = 0;
         foreach ((ulong seed, MapData map) in Maps(players))
         {
             string at = $"link:{seed}:{players}";
-            Coord[] lowland = [.. map.AllCoords().Where(c => OnIsland(c, w) && !InPlate(map, c))];
+            Coord[] lowland = [.. map.AllCoords().Where(c => OnIsland(c, map) && !InPlate(map, c))];
             Assert.All(lowland, c => Assert.Equal(0, map.HeightAt(c)));
-            List<List<Coord>> rivers = Clumps([.. lowland.Where(c => map.SurfaceAt(c) == Surface.DeepWater)]);
+            List<List<Coord>> water = Clumps([.. lowland.Where(c => map.SurfaceAt(c) == Surface.DeepWater)]);
+            List<List<Coord>> rivers = [.. water.Where(w => w.Any(map.HasBridge))];
+            List<List<Coord>> lakes = [.. water.Where(w => !w.Any(map.HasBridge))];
             Assert.True(rivers.Count == players, $"{at}：低地河道 {rivers.Count} 条");
             HashSet<Coord> outlets = [.. map.Boards.SelectMany(p => p.Cells().Where(c => map.IsPlayable(c) && map.HeightAt(c) == 1).Select(c => Outward(p, c)!.Value))];
             foreach (List<Coord> river in rivers)
             {
                 Assert.True(river.Count >= 6, $"{at}：河道只有 {river.Count} 格");
-                Assert.All(river, c => Assert.True(river.Count(o => Adjacency.AreAdjacent(o, c)) <= 2, $"{at}：河道在 {c.ToNotation()} 不是 1 格宽"));
+                HashSet<Coord> cells = [.. river];
+                Assert.DoesNotContain(river, c => TestMaps.Rect(c.X, c.Y, 3, 3).All(cells.Contains));   // 宽 ≤ 2
+                widened += river.Count(c => river.Count(o => Adjacency.AreAdjacent(o, c)) >= 3);
                 Coord[] bridges = [.. river.Where(map.HasBridge)];
                 Assert.Equal(2, bridges.Length);
                 Assert.False(Adjacency.AreAdjacent(bridges[0], bridges[1]), $"{at}：两座桥相邻");
                 Assert.DoesNotContain(river, outlets.Contains);
+                Assert.All(bridges, b => Assert.True(Adjacency.LibertyNeighbors(map, b).Length >= 2, $"{at}：桥 {b.ToNotation()} 两岸不通"));
             }
+
+            foreach (List<Coord> lake in lakes)
+            {
+                Assert.InRange(lake.Count, LinkMapGenerator.LakeMin, LinkMapGenerator.LakeMax);
+                Assert.DoesNotContain(lake, c => OnIslandEdge(c, map));   // 内陆
+                Assert.DoesNotContain(lake, outlets.Contains);
+            }
+
+            lakesTotal += lakes.Count;
         }
+
+        Assert.True(widened > 20 * players, $"样本口径：20 张图里加宽到 2 格的河道格只有 {widened} 个");
+        Assert.True(lakesTotal >= 20, $"样本口径：20 张图里只有 {lakesTotal} 个湖泊");
     }
 
     [Theory]
     [MemberData(nameof(Players))]
     public void 岛缘林地与少量岩石(int players)
     {
-        // design D4：低地的林地只在岛缘一圈；低地岩石（障碍）2 –(n+1) 格、都在岛缘、不在坡道朝外格。
-        (int W, int H) w = Size[players];
+        // design D4：低地的林地只在岛缘一圈。map-coastline 裁决 3 / 7：低地障碍只有岩区——3–6 格一团、不在岛缘（贴岸的障碍在数据上就是岸线凹口，表现层也当虚空）；
+        // 生成器仍在岛缘放 2–(n+1) 格零星岩石，但它们贴岸、四邻有掩码外的格，按留白泛洪口径与岸外连通而算虚空（贴岸的障碍与海湾在数据上无法区分，表现层同样不铺岛面），
+        // 所以泛洪岛面上的低地障碍只剩岩区；零星岩石落在掩码内、泛洪岛面外这一点由 岛形Tests「岛面四邻连通且没有内部虚空」断言。
         int forestTotal = 0;
+        int clustersTotal = 0;
         foreach ((ulong seed, MapData map) in Maps(players))
         {
             string at = $"link:{seed}:{players}";
-            Coord[] lowland = [.. map.AllCoords().Where(c => OnIsland(c, w) && !InPlate(map, c))];
+            Coord[] lowland = [.. map.AllCoords().Where(c => OnIsland(c, map) && !InPlate(map, c))];
             Coord[] forest = [.. lowland.Where(c => map.SurfaceAt(c) == Surface.Forest)];
-            Coord[] rocks = [.. lowland.Where(map.Obstacles.Contains)];
-            Assert.All(forest, c => Assert.True(OnIslandEdge(c, w), $"{at}：林地 {c.ToNotation()} 不在岛缘"));
-            Assert.All(rocks, c => Assert.True(OnIslandEdge(c, w), $"{at}：岩石 {c.ToNotation()} 不在岛缘"));
-            Assert.InRange(rocks.Length, 2, players + 1);
+            Assert.All(forest, c => Assert.True(OnIslandEdge(c, map), $"{at}：林地 {c.ToNotation()} 不在岛缘"));
             forestTotal += forest.Length;
+
+            List<List<Coord>> clusters = Clumps([.. lowland.Where(map.Obstacles.Contains)]);
+            Assert.All(clusters, k => Assert.InRange(k.Count, LinkMapGenerator.RockClusterMin, LinkMapGenerator.RockClusterMax));
+            Assert.All(clusters, k => Assert.DoesNotContain(k, c => OnIslandEdge(c, map)));
+            clustersTotal += clusters.Count;
         }
 
         Assert.True(forestTotal > 20 * players, $"样本口径：20 张图的岛缘林地合计只有 {forestTotal} 格");
+        Assert.True(clustersTotal >= 20 * players, $"样本口径：20 张图的岩区合计只有 {clustersTotal} 团");
     }
 
     [Theory]
