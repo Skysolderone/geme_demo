@@ -36,6 +36,8 @@ namespace Siege.Core.Tests.AiDecision;
 /// link-map-surfaces 1.3（F1 / F2）再重钉：相对第一次重钉的首个分歧在第 5 个小回合（第 2 大回合 P0：原落 Q4 挨着新岩台 P4，现落 P4）；相对改前基线仍是第 3 个小回合。
 /// ai-whole-batch 1.6 重钉（整批候选缺省开）：首个分歧在第 11 个小回合（第 3 大回合 P0）：原落 K7 普通 + K8 倍增 + L8 普通，现选中剪枝候选 K7 + L8（整批总分 496）；
 /// 改前文件另存为 <c>decisions-link1-seed3-wb0.txt</c>，开关 0 下逐字节相同。
+/// map-coastline（裁决 5：同标识出新图）重录：首个分歧在第 1 大回合 P3 的首批（原 H5 / E8 / G8，现 H5 / H6 / G8——座位 1 西侧边距环里的崖下空地成了岩区），逐份说明见 <see cref="决策序列基线Tests"/>。
+/// map-coastline 裁决 F1（湖泊 / 岩区不进座位外 2 格）再录：第 1 大回合 P3 首批 H5 / H6 / G8 → H5 / E8 / G8（西侧岩区没了，回到 E8），逐份说明见 <see cref="决策序列基线Tests"/>。
 /// </remarks>
 public class 决策序列基线_链接模式Tests
 {

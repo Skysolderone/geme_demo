@@ -1,5 +1,5 @@
 # AI 决策序列基线（board-link-mode 3.4，裁决 C5）
-# map=link:1:4 digest=941775BDBC5CD00AAF62C3745CD5DACF9459AF55F116E8CE2579DB5EF7974AC3 seed=1 players=4 difficulty=Standard zones=2,3,1,0
+# map=link:1:4 digest=6A0ECAB53DCD1C15863F1243B5F1A8E6281893F5D2D3CBE2740169C12CCD6381 seed=1 players=4 difficulty=Standard zones=2,3,1,0
 # cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
 # maxMajorRounds=6
 # 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
@@ -15,16 +15,16 @@
 3	P3	R:2:Synergy,0:Basic,1:Basic D:G5:Artisan+B:F5,E11:Basic,H12:Basic
 3	P1	R:0:Fortress,1:Basic,4:Basic D:AN43:Basic,AQ44:Fortress,AQ45:Synergy
 3	P0	R:1:Fortress,2:Basic,3:Basic D:L41:Basic,E44:Fortress
-4	P2	R:4:Synergy,0:Basic,3:Bannerman D:T4:Basic,W4:Basic,S26:Basic
-4	P1	R:4:Fortress,0:Basic,1:Line D:R27:Fortress
-4	P3	R:0:Fortress,1:Basic,3:Basic D:N4:Fortress
-4	P0	R:3:Synergy,2:Line,0:Artisan D:AK4:Line
-5	P2	R:0:Basic,3:Bannerman,4:Basic D:P5:Basic,R5:Basic
-5	P3	R:0:Fortress,1:Chain D:Y5:Fortress
-5	P1	R:4:Synergy,0:Basic,1:Basic D:AC5:Line
-5	P0	R:4:Synergy,3:Line,2:Basic D:U6:Line
-6	P2	R:0:Multiplier,1:Basic,2:Basic D:AB14:Multiplier,AN14:Bannerman,AB15:Synergy
-6	P3	R:0:Synergy,1:Basic,2:Basic D:AA6:Bannerman,AE6:Basic,AF6:Synergy
-6	P1	R:2:Multiplier,0:Basic,1:Basic D:AJ6:Multiplier
-6	P0	R:1:Fortress,2:Basic,4:Basic D:O7:Fortress
+4	P2	R:4:Synergy,0:Basic,3:Bannerman D:N4:Basic,AM4:Basic,AF9:Basic
+4	P1	R:4:Fortress,0:Basic,1:Line D:O6:Fortress
+4	P3	R:0:Fortress,1:Basic,3:Basic D:S6:Fortress,AN14:Basic
+4	P0	R:3:Synergy,2:Line,0:Artisan D:L9:Line
+5	P2	R:0:Basic,3:Bannerman,4:Basic D:AK10:Basic,AL10:Basic,AG13:Basic
+5	P3	R:0:Fortress,1:Chain D:O11:Fortress,M17:Basic
+5	P1	R:4:Synergy,0:Basic,1:Basic D:Z11:Line
+5	P0	R:4:Synergy,3:Line,2:Basic D:N13:Line
+6	P2	R:0:Multiplier,1:Basic,2:Basic D:AK13:Multiplier
+6	P3	R:0:Synergy,1:Basic,2:Basic D:Z14:Synergy,AA14:Basic,AS14:Basic
+6	P1	R:2:Multiplier,0:Basic,1:Basic D:E15:Multiplier,AH21:Basic
+6	P0	R:1:Fortress,2:Basic,4:Basic D:O15:Fortress
 # end phase=InProgress majorRound=7 reason=- turns=24

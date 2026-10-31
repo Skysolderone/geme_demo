@@ -1,5 +1,5 @@
 # AI 决策序列基线（board-link-mode 3.4，裁决 C5）
-# map=link:1:4 digest=941775BDBC5CD00AAF62C3745CD5DACF9459AF55F116E8CE2579DB5EF7974AC3 seed=2 players=4 difficulty=Standard zones=3,1,2,0
+# map=link:1:4 digest=6A0ECAB53DCD1C15863F1243B5F1A8E6281893F5D2D3CBE2740169C12CCD6381 seed=2 players=4 difficulty=Standard zones=3,1,2,0
 # cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
 # maxMajorRounds=6
 # 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
@@ -15,16 +15,16 @@
 3	P0	R:1:Fortress,4:Fortress,3:Multiplier D:AN43:Fortress,AQ44:Fortress,AQ45:Multiplier
 3	P2	R:2:Multiplier,0:Line,3:Line D:H38:Line,L43:Multiplier,E44:Line
 3	P1	R:2:Line,1:Basic,4:Basic D:AQ8:Basic,AT8:Line
-4	P3	R:2:Multiplier,0:Basic,1:Sentry D:T4:Basic,W4:Basic,W19:Multiplier
-4	P0	R:1:Fortress,3:Fortress,0:Basic D:N4:Fortress,P4:Fortress,V20:Artisan+F:W19-W20
-4	P2	R:1:Synergy,0:Chain,3:Chain D:AK4:Synergy,AL4:Basic,R5:Synergy
-4	P1	R:0:Line,1:Fortress,2:Basic D:Y5:Fortress
-5	P0	R:4:Synergy,0:Bannerman,1:Line D:AC5:Line
-5	P3	R:2:Fortress,0:Basic,1:Basic D:O6:Fortress
-5	P2	R:0:Synergy,2:Fortress D:U6:Fortress
-5	P1	R:3:Synergy,1:Basic,2:Basic D:AA6:Line
-6	P3	R:0:Chain,1:Line,2:Chain D:AB8:Line,AC8:Chain
-6	P0	R:0:Chain,1:Bannerman,2:Basic D:AE6:Synergy,AF6:Chain,AG6:Basic
-6	P2	R:3:Fortress,4:Fortress,0:Bannerman D:Q7:Fortress,W7:Fortress
-6	P1	R:0:Basic,1:Artisan,3:Basic D:AJ7:Basic
+4	P3	R:2:Multiplier,0:Basic,1:Sentry D:AM4:Multiplier,AF9:Basic,AV9:Sentry
+4	P0	R:1:Fortress,3:Fortress,0:Basic D:N4:Fortress,O6:Fortress
+4	P2	R:1:Synergy,0:Chain,3:Chain D:S6:Basic,AK10:Basic,AN14:Basic
+4	P1	R:0:Line,1:Fortress,2:Basic D:O11:Fortress
+5	P3	R:4:Synergy,0:Bannerman,1:Line D:AO11:Line,AG13:Synergy,M17:Basic
+5	P0	R:2:Fortress,0:Basic,1:Basic D:Z11:Fortress
+5	P2	R:0:Synergy,2:Fortress D:AL12:Fortress
+5	P1	R:3:Synergy,1:Basic,2:Basic D:N13:Line
+6	P3	R:1:Line,3:Line,4:Line D:Z14:Line,AS14:Line,O15:Line
+6	P0	R:0:Chain,1:Bannerman,2:Basic D:AH21:Basic
+6	P2	R:3:Fortress,4:Fortress,0:Bannerman D:E15:Fortress,R15:Fortress
+6	P1	R:0:Basic,1:Artisan,3:Basic D:AB15:Basic
 # end phase=InProgress majorRound=7 reason=- turns=24

@@ -172,7 +172,9 @@ public class 终端活形与禁入标示Tests
 
         Assert.Equal(LifeState.Alive, arrangedLife);   // 前提：摆出来的确是已确定活形
         Assert.Equal(0, exit);
-        string[] boardRows = [.. text.Split('\n').Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s{0,2}\d{1,2} ( [#~.?+] |\d[BFLMSA][ @]|x\d | \d |\*[BFLMSA] | [pcdove] )+ \d+\s*$"))];
+        // map-coastline（同标识出新图，裁决 5）：岛形改为不规则岸线、内陆加湖泊 / 岩区后几乎每一行都有不在战场里的格（海湾、湖泊、岩区），终端照旧画成 3 个空格；
+        // 行模式补上这一种格（"   "），否则整盘一行都匹配不上。渲染与规则都没变。
+        string[] boardRows = [.. text.Split('\n').Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s{0,2}\d{1,2} (   | [#~.?+] |\d[BFLMSA][ @]|x\d | \d |\*[BFLMSA] | [pcdove] )+ \d+\s*$"))];
         Assert.True(boardRows.Length >= 20, $"只找到 {boardRows.Length} 行棋盘");
         Assert.Contains(boardRows, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"\d[BFLMSA]@"));   // 终端按看盘者编号显示玩家：P1 显示为 2
         Assert.Contains(boardRows, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"x\d "));

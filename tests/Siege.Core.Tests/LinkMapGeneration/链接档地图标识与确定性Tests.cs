@@ -131,7 +131,7 @@ public class 链接档地图标识与确定性Tests
         // retire-legacy-maps：仓库根目录改取 TestPaths.RepoRoot()（原 FrontierFixtures.RepoRoot，原样迁出）。
         // Scenario：生成只用地图种子派生的随机源与整数运算——生成器源码不得出现对局种子、时钟、环境与浮点。
         string src = Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Core", "Board", "Maps");
-        string[] files = [Path.Combine(src, "LinkMapGenerator.cs"), Path.Combine(src, "LinkMapGenerator.Themes.cs"), Path.Combine(src, "LinkMapGenerator.Surfaces.cs"), Path.Combine(src, "LinkMapId.cs")];   // link-map-terrain：主题地形拆在 .Themes.cs；link-map-surfaces：新地表叠加在 .Surfaces.cs
+        string[] files = [Path.Combine(src, "LinkMapGenerator.cs"), Path.Combine(src, "LinkMapGenerator.Themes.cs"), Path.Combine(src, "LinkMapGenerator.Surfaces.cs"), Path.Combine(src, "LinkMapGenerator.Coast.cs"), Path.Combine(src, "LinkMapId.cs")];   // link-map-terrain：主题地形拆在 .Themes.cs；link-map-surfaces：新地表叠加在 .Surfaces.cs；map-coastline：岸线与内陆要素在 .Coast.cs
         var banned = new Regex(@"GameSeed|DateTime|Stopwatch|Environment\.TickCount|Random\.Shared|new Random\(|Guid\.NewGuid|\bdouble\b|\bfloat\b|\bdecimal\b|Math\.Round|Math\.Floor|Math\.Ceiling");
         foreach (string file in files)
         {
@@ -172,7 +172,7 @@ public class 链接档地图标识与确定性Tests
         //    对局流程（Siege.Core/Match）不见地图随机源、不直接生成地图、不出现地图种子——它只拿到生成好的 MapData 与标识字符串。
         string core = Path.Combine(TestPaths.RepoRoot(), "src", "Siege.Core");
         string maps = Path.Combine(core, "Board", "Maps");
-        string[] generatorNames = ["MapRandom.cs", "LinkMapGenerator.cs", "LinkMapGenerator.Themes.cs", "LinkMapGenerator.Surfaces.cs", "LinkMapId.cs"];
+        string[] generatorNames = ["MapRandom.cs", "LinkMapGenerator.cs", "LinkMapGenerator.Themes.cs", "LinkMapGenerator.Surfaces.cs", "LinkMapGenerator.Coast.cs", "LinkMapId.cs"];   // map-coastline：岸线流 ForLinkCoast 在 .Coast.cs 消费
         Assert.All(generatorNames, name => Assert.DoesNotContain("GameSeed", File.ReadAllText(Path.Combine(maps, name)), StringComparison.Ordinal));
         // MapRandom.cs 同样禁浮点、时钟与环境（原 生成确定性Tests.生成器源码不含散列次序遍历_浮点_时钟与环境 扫过它；LinkMapGenerator / LinkMapId 由上面「对局种子不影响地图」扫）。
         Assert.DoesNotMatch(

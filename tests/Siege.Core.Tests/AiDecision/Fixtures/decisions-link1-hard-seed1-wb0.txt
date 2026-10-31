@@ -1,5 +1,5 @@
 # AI 决策序列基线（board-link-mode 3.4，裁决 C5）
-# map=link:1:4 digest=941775BDBC5CD00AAF62C3745CD5DACF9459AF55F116E8CE2579DB5EF7974AC3 seed=1 players=4 difficulty=Hard zones=2,3,1,0
+# map=link:1:4 digest=6A0ECAB53DCD1C15863F1243B5F1A8E6281893F5D2D3CBE2740169C12CCD6381 seed=1 players=4 difficulty=Hard zones=2,3,1,0
 # cellLimit=24 passThreshold=20 contentSet=V2 artisanWeight=10
 # maxMajorRounds=6
 # 每行：大回合<TAB>玩家<TAB>本小回合的决策条目（O: 弃牌 R: 征募 D: 部署 X: 被拒）；S 战场结算
@@ -15,16 +15,16 @@
 3	P1	R:2:Synergy,3:Multiplier,0:Basic D:AP38:Basic,AN41:Basic,AQ44:Multiplier
 3	P0	R:0:Fortress,1:Basic,2:Artisan D:H38:Basic,L43:Artisan+X:M43,E44:Fortress
 3	P2	R:1:Fortress,2:Basic,3:Basic D:AS5:Basic,AU9:Basic,AO11:Fortress
-4	P3	R:4:Synergy,0:Basic,3:Bannerman D:T4:Basic,W4:Basic,S26:Basic,R27:Synergy
-4	P2	R:4:Fortress,0:Basic,1:Line D:N4:Fortress
-4	P0	R:0:Fortress,1:Basic,3:Basic D:AK4:Fortress
-4	P1	R:3:Synergy,0:Artisan,1:Artisan D:P5:Basic,Q5:Synergy
-5	P3	R:0:Basic,1:Boundary,3:Bannerman D:Y5:Boundary
-5	P2	R:0:Fortress,2:Artisan D:AE5:Fortress,X6:Artisan+F:X5-Y5,Z6:Artisan+F:Y5-Z5,Y7:Artisan+F:Y5-Y6
-5	P0	R:4:Synergy,2:Multiplier,0:Basic D:Y4:Artisan+F:W4-X4,S6:Multiplier
-5	P1	R:4:Synergy,0:Multiplier,1:Multiplier D:AC6:Multiplier,AG6:Multiplier
-6	P2	R:0:Multiplier,1:Basic,2:Basic D:P21:Line,P22:Basic,P23:Multiplier,G32:Bannerman
-6	P3	R:0:Synergy,1:Basic,2:Basic D:AL6:Basic,O7:Basic,U7:Basic,V7:Synergy
-6	P1	R:2:Multiplier,0:Basic,1:Basic D:AJ7:Multiplier
-6	P0	R:1:Fortress,0:Multiplier,2:Basic D:Q8:Fortress
+4	P3	R:4:Synergy,0:Basic,3:Bannerman D:N4:Basic,AM4:Basic,O6:Basic,AF9:Synergy
+4	P2	R:4:Fortress,0:Basic,1:Line D:S6:Fortress,AN14:Line
+4	P0	R:0:Fortress,1:Basic,3:Basic D:N9:Fortress
+4	P1	R:3:Synergy,0:Artisan,1:Artisan D:AK10:Basic,AL10:Synergy
+5	P3	R:0:Basic,1:Boundary,3:Bannerman D:O11:Boundary,AG13:Basic,M17:Bannerman
+5	P2	R:0:Fortress,2:Artisan,1:Chain D:Z11:Fortress,P12:Artisan+F:O11-P11,O13:Artisan+F:O11-O12
+5	P0	R:4:Synergy,2:Multiplier,0:Basic D:AK13:Multiplier
+5	P1	R:4:Synergy,0:Multiplier,1:Multiplier D:Z14:Multiplier,AS14:Multiplier
+6	P3	R:0:Multiplier,1:Basic,2:Basic D:N14:Multiplier
+6	P2	R:0:Synergy,1:Basic,2:Basic D:E15:Basic,AH21:Basic
+6	P1	R:2:Multiplier,0:Basic,1:Basic D:R15:Multiplier
+6	P0	R:1:Fortress,0:Multiplier,2:Basic D:AB15:Fortress
 # end phase=InProgress majorRound=7 reason=- turns=24
