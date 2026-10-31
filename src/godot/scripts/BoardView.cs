@@ -262,7 +262,7 @@ public sealed partial class BoardView : Node3D
         List<Vector3> slabTops = [];
         foreach (BoardCellView cell in board.Cells)
         {
-            // 外圈留白和切角没有地面，只保留坐标标注的画布空间。
+            // 虚空格（外圈留白、切角与海湾——与画布外圈连通的障碍格，map-coastline 裁决 7）没有地面：不铺面砖、不放装饰、不铺衬底。
             if (!islandCells.Contains(cell.Coord))
             {
                 continue;
@@ -536,6 +536,22 @@ public sealed partial class BoardView : Node3D
         GD.Print($"[deco] 装饰套件：{(deco.Count == 0 ? "无" : string.Join("、", deco.Select(kv => $"{kv.Key} {DecoCells(kv.Key, kv.Value)}")))}；中立平台符文环 {_runeRings} 块");
         GD.Print($"[patch] 草地分片（map-surface 裁决 3）：淡紫石 {patchCells[0]} / 淡草绿 {patchCells[1]} / 淡泥褐 {patchCells[2]} 格");
 
+        // 自证行（map-coastline 裁决 7）：岛面 / 虚空格数、被岛面包住的内陆障碍格数、"海湾格"——视图里判为虚空、但同一行左右或同一列上下两侧都有地面的格
+        //（改前按行跨度会被铺成平地的那些，列前 8 格供海湾近景截图 --shot-cell= 对准），以及"对角夹点"——两岛面格只在格角对角相触的格角数
+        //（AddFloatingIsland 在那里四段共点、斜接退回各自法线，近景里要看一眼岩沿是否张缝）。
+        var groundCells = board.Cells.Where(c => c.Terrain == Terrain.Playable || c.Surface == Surface.DeepWater).Select(c => c.Coord).ToList();
+        var rowSpan = groundCells.GroupBy(c => c.Y).ToDictionary(g => g.Key, g => (Min: g.Min(c => c.X), Max: g.Max(c => c.X)));
+        var columnSpan = groundCells.GroupBy(c => c.X).ToDictionary(g => g.Key, g => (Min: g.Min(c => c.Y), Max: g.Max(c => c.Y)));
+        Coord[] bays = [.. board.Cells.Select(c => c.Coord).Where(c => !islandCells.Contains(c)
+            && ((rowSpan.TryGetValue(c.Y, out var row) && c.X > row.Min && c.X < row.Max)
+                || (columnSpan.TryGetValue(c.X, out var column) && c.Y > column.Min && c.Y < column.Max)))];
+        int inland = board.Cells.Count(c => islandCells.Contains(c.Coord) && c.Terrain != Terrain.Playable && c.Surface != Surface.DeepWater);
+        int pinches = islandCells.Count(c =>
+            (IslandAt(islandCells, c.X + 1, c.Y + 1, _width, _height) && !IslandAt(islandCells, c.X + 1, c.Y, _width, _height) && !IslandAt(islandCells, c.X, c.Y + 1, _width, _height))
+            || (IslandAt(islandCells, c.X + 1, c.Y - 1, _width, _height) && !IslandAt(islandCells, c.X + 1, c.Y, _width, _height) && !IslandAt(islandCells, c.X, c.Y - 1, _width, _height)));
+        GD.Print($"[island] 岛面 {islandCells.Count} 格（内陆障碍 {inland} 格）、视图内虚空 {board.Cells.Count() - islandCells.Count} 格；对角夹点 {pinches} 处；海湾格 {bays.Length} 格"
+            + (bays.Length == 0 ? string.Empty : $"（{string.Join(" ", bays.Take(8).Select(c => c.ToNotation()))}{(bays.Length > 8 ? " …" : string.Empty)}）"));
+
         BuildCoordinateLabels(low, high);
 
         _overlay = new Node3D { Name = "Overlay" };
@@ -729,14 +745,58 @@ public sealed partial class BoardView : Node3D
         _ => SurfaceHint.None,
     };
 
-    // 按每一行可见的可落子格和水面确定岛的横向范围，保留其间的障碍，外围空白不铺地。
+    /// <summary>
+    /// 岛面格（map-coastline 裁决 7）：从画布外圈出发、沿 4 邻只在"非地面格"里泛洪，泛到的是虚空，视图里其余的格是岛面。
+    /// </summary>
+    /// <remarks>
+    /// 为什么不再按行跨度：不规则岛有四边海湾（1–4 格深），海湾在数据里是障碍格，按"每行可落子格的横向跨度"铺会把海湾填成平地、断崖也不沿海湾落。
+    /// 改成"与留白连通的障碍格 = 虚空"后，海湾与外圈留白一起成了虚空，断崖（AddFloatingIsland 的 border 段）自然沿海湾走；
+    /// 被岛面包住的内陆岩区与外界不连通，仍是岛面、仍走障碍装饰。地面 = 可落子格或深水格（未架桥深水在数据里也是障碍，但它是河 / 湖，属于岛）。
+    /// 不在本次视图里的格（插旗阶段只见部分）一律当虚空、可被泛洪穿过——与改前"留白格不铺地面"的口径一致。
+    /// 纯表现：只读视图模型的地表与坐标，4 邻用坐标算术，不调规则内核的邻接查询（visual-style-baseline）。
+    /// </remarks>
     private static HashSet<Coord> IslandCells(DefaultBoardView board)
     {
-        var spans = board.Cells.Where(c => c.Terrain == Terrain.Playable || c.Surface == Surface.DeepWater)
-            .GroupBy(c => c.Coord.Y)
-            .ToDictionary(g => g.Key, g => (Min: g.Min(c => c.Coord.X), Max: g.Max(c => c.Coord.X)));
-        return [.. board.Cells.Where(c => spans.TryGetValue(c.Coord.Y, out var span)
-            && c.Coord.X >= span.Min && c.Coord.X <= span.Max).Select(c => c.Coord)];
+        var ground = new HashSet<Coord>(board.Cells.Where(c => c.Terrain == Terrain.Playable || c.Surface == Surface.DeepWater).Select(c => c.Coord));
+        var hollow = new HashSet<Coord>();
+        var frontier = new Queue<Coord>();
+        void Seep(int x, int y)
+        {
+            // 先判界再建 Coord：Coord 的构造会拒绝负下标，画布外不必建格。
+            if (x < 0 || y < 0 || x >= board.Width || y >= board.Height)
+            {
+                return;
+            }
+
+            var at = new Coord(x, y);
+            if (!ground.Contains(at) && hollow.Add(at))
+            {
+                frontier.Enqueue(at);
+            }
+        }
+
+        // 种子 = 画布四边上的非地面格（等价于从画布外那一圈留白往里渗）。
+        for (int y = 0; y < board.Height; y++)
+        {
+            for (int x = 0; x < board.Width; x++)
+            {
+                if (x == 0 || y == 0 || x + 1 == board.Width || y + 1 == board.Height)
+                {
+                    Seep(x, y);
+                }
+            }
+        }
+
+        while (frontier.Count > 0)
+        {
+            Coord c = frontier.Dequeue();
+            Seep(c.X + 1, c.Y);
+            Seep(c.X - 1, c.Y);
+            Seep(c.X, c.Y + 1);
+            Seep(c.X, c.Y - 1);
+        }
+
+        return [.. board.Cells.Select(c => c.Coord).Where(c => !hollow.Contains(c))];
     }
 
     private static bool IslandAt(HashSet<Coord> cells, int x, int y, int width, int height) =>
