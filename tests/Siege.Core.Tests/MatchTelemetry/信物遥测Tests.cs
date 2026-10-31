@@ -171,16 +171,18 @@ public class 信物遥测Tests(Xunit.Abstractions.ITestOutputHelper output)
         // 第 4 / 6 / 8 大回合各落位一批。断言合计拾取次数 > 0，且每局都有落位事件可数（预告件数 ≥ 落位件数，被占格跳过只少不多；落位格数 = Count）。
         // 样本口径：标准难度（信物维参与评价；简单难度不算信物维，只会顺带拾取，不能证明估值生效）；生成图才有出生平台以外的刷新格（平坦手写载体整局刷不出信物，不能作样本）。
         // 局数小、只证"会拾取"，不作任何比例结论。实测（C1）：2 人 4 局 + 4 人 2 局约 1 分钟，拾取 9 次。
+        // map-coastline 裁决 F5（2026-10-31）：岛内多了三成湖泊 / 岩区，信物离 AI 更远，原 16 / 32 个小回合内落位 18 次、拾取 0 次；
+        // 样本拉长到 2 人 24、4 人 48 个小回合（不改局数、难度与断言）。
         var logs = new List<MatchLog>();
         for (ulong seed = 1; seed <= 4; seed++)
         {
-            RunConfig two = SimFixtures.Config(seedStart: seed, turnLimit: 16, difficulty: AiDifficulty.Standard, players: 2) with { MapId = "link:1:2" };
+            RunConfig two = SimFixtures.Config(seedStart: seed, turnLimit: 24, difficulty: AiDifficulty.Standard, players: 2) with { MapId = "link:1:2" };
             logs.Add(MatchSession.Create(two, seed).Run());
         }
 
         for (ulong seed = 1; seed <= 2; seed++)
         {
-            RunConfig four = SimFixtures.Config(seedStart: seed, turnLimit: 32, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4" };
+            RunConfig four = SimFixtures.Config(seedStart: seed, turnLimit: 48, difficulty: AiDifficulty.Standard) with { MapId = "link:1:4" };
             logs.Add(MatchSession.Create(four, seed).Run());
         }
 
