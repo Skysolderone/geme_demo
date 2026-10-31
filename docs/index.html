@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>围杀 Siege — 围棋式围杀 × 地块争夺的回合制策略构筑</title>
-<meta name="description" content="《围杀 Siege》：4 人回合制策略构筑游戏原型。五块主题棋盘拼成一张图，先在自己的棋盘上筑阵，第 4 大回合起全图交战。围棋式围杀、地块争夺与“加值 × 倍率”成长。提供 Windows 下载。">
+<meta name="description" content="《围杀 Siege》：2–4 人回合制策略构筑游戏原型。各占浮空岛上一块出生座位，先在自己的座位里筑阵，第 4 大回合起全岛交战。围棋式围杀、地块争夺与“加值 × 倍率”成长。提供 Windows 下载。">
 <meta property="og:title" content="围杀 Siege">
 <meta property="og:description" content="开放地图版：先筑阵、再全图交战的围棋式回合制策略构筑原型。">
 <meta property="og:image" content="assets/hero-v050.jpg">
@@ -156,25 +156,25 @@
         <i style="background:var(--red)"></i><i style="background:var(--blue)"></i><i style="background:var(--amber)"></i><i style="background:var(--purple)"></i>
       </div>
       <h1>围杀 Siege<small>回合制策略构筑 · 原型</small></h1>
-      <p class="lead">四方各选一块主题棋盘，五块棋盘拼成一张图。前三个大回合只在自己的棋盘上筑阵，第四个大回合起全图开放：像围棋一样围住对手的棋串把它提走，抢地块、找信物，把“加值 × 倍率”滚成势力。</p>
+      <p class="lead">2–4 方各占浮空岛上一块出生座位，座位之间隔着至少 25 格战场。前三个大回合只在自己的座位里筑阵，第四个大回合起全岛开放：像围棋一样围住对手的棋串把它提走，抢地块、夺信物，把“加值 × 倍率”滚成势力。</p>
       <div class="cta">
-        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.6.0/Siege-windows-x64-v0.6.0.zip">下载 Windows 版<span>64 位 · 约 72 MB · v0.6.0</span></a>
+        <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.7.0/Siege-windows-x64-v0.7.0.zip">下载 Windows 版<span>64 位 · 约 72 MB · v0.7.0</span></a>
         <a class="btn ghost" href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>
       </div>
-      <p class="note">当前版本 v0.6.0 战斗流程 MVP（2026-10-26）。单机人机对局，1 名玩家对 3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
-      <div class="shot"><img src="assets/hero-v050.jpg" width="1600" height="900" alt="第 4 大回合的开放地图：砂岩与苔绿的棋盘浮在浅青天空下，四方棋子散在各自的棋盘上，河流、桥、栅栏与高台穿插其间，远处是浮岛"></div>
+      <p class="note">当前版本 v0.7.0 浮空岛版（2026-10-31）。单机人机对局，1 名玩家对 1–3 个 AI；免安装，解压即玩。macOS 版暂未提供。首次打开的系统提示见<a href="#download">下载与安装</a>。</p>
+      <div class="shot"><img src="assets/hero-v070.jpg" width="1600" height="900" alt="第 7 大回合的浮空岛全景：淡紫石面与草地、亮青河道和湖泊铺满不规则的岛面，四角是四方的出生座位，中间散着中立平台与信物预告，远处是浮岛与云海"></div>
     </div>
   </div>
 
   <section id="play">
     <div class="wrap">
       <h2>怎么玩</h2>
-      <p class="sub">一局 4 人：你和 3 个 AI。没有固定轮数，整轮所有人都 Pass、棋盘填满或只剩一人时按势力排名；最迟第 100 大回合强制结算。胜负应当能用落点、排布和取舍来解释，而不是刷新运气。</p>
+      <p class="sub">一局 2–4 人：你和 1–3 个 AI。没有固定轮数，整轮所有人都 Pass、棋盘填满或只剩一人时按势力排名；最迟第 100 大回合强制结算。胜负应当能用落点、排布和取舍来解释，而不是刷新运气。</p>
 
       <ol class="loop">
-        <li><strong>盲选棋盘</strong>五块棋盘各有主题：高台、河流、林地、栅栏阵、混合。插旗即锁定，可以和别人选同一块。</li>
-        <li><strong>筑阵三回合</strong>第 1–3 大回合只能在自己的棋盘落子与改造，全图都看得见。</li>
-        <li><strong>全图交战</strong>第 4 大回合起任何空格都能落，越过接缝去围别人。</li>
+        <li><strong>盲选座位</strong>每人一块 8×8 出生座位，座位之间至少隔 25 格战场，战场里有中立平台、河道与桥。插旗即锁定；撞了座位时后选者改派到空座位。</li>
+        <li><strong>筑阵三回合</strong>第 1–3 大回合只能在自己的座位里落子与改造，全岛都看得见。</li>
+        <li><strong>全岛交战</strong>第 4 大回合起任何空格都能落，抢中立平台、过桥去围别人。</li>
         <li><strong>征募与批次</strong>每回合从展示的候选里挑棋子；一次暂放多枚，看完预演再整批确认。</li>
         <li><strong>势力与先手</strong>独占空格算领地，加上棋串军势就是势力；排名高的下一大回合先行动。</li>
       </ol>
@@ -203,7 +203,7 @@
   <section id="shots">
     <div class="wrap">
       <h2>截图</h2>
-      <p class="sub">全部是 v0.5.0 游戏内实拍，v0.6.0 新增的信息面板、回合摘要与军势揭示未在图中。棋盘、地形与棋子是引擎里的低多边形模型，背后是一张宽幅浮岛天空图。</p>
+      <p class="sub">主图是 v0.7.0 游戏内实拍；下面几张是 v0.5.0 实拍，那时的地图还是五块主题棋盘、美术是砂岩苔绿，v0.7.0 的浮空岛、出生座位与粉彩画面以主图为准。棋盘、地形与棋子是引擎里的低多边形模型，背后是一张宽幅浮岛天空图。</p>
       <div class="gallery">
         <figure class="wide"><img src="assets/open-board-v050.jpg" width="1600" height="900" loading="lazy" alt="第 10 大回合的全图：四方棋子已经越过接缝混在一起">
           <figcaption><b>全图交战。</b>第 4 大回合起棋盘之间的接缝不再是界线，四方在同一张图上争地块、互相围杀。</figcaption></figure>
@@ -226,17 +226,17 @@
       <div class="dl">
         <div class="card" style="--c:var(--ink)">
           <h3>Windows</h3>
-          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.6.0/Siege-windows-x64-v0.6.0.zip">Siege-windows-x64-v0.6.0.zip<span>Windows 10 / 11，64 位 · v0.6.0</span></a>
+          <a class="btn" href="https://github.com/Skysolderone/geme_demo/releases/download/v0.7.0/Siege-windows-x64-v0.7.0.zip">Siege-windows-x64-v0.7.0.zip<span>Windows 10 / 11，64 位 · v0.7.0</span></a>
           <ol>
             <li>解压整个文件夹（<code>Siege.exe</code>、<code>Siege.pck</code> 和 <code>data_Siege.Godot_windows_x86_64</code> 要放在一起，别只拿出 exe）。</li>
             <li>运行 <code>Siege.exe</code>。</li>
             <li>出现“Windows 已保护你的电脑”时：点“更多信息”→“仍要运行”。</li>
           </ol>
-          <p class="note" style="word-break:break-all">SHA256：<code>2915CFD5CD4BB0AFDAAB2CDF6CCBBC69732375D0378A06842FBA1A18493D9745</code></p>
+          <p class="note" style="word-break:break-all">SHA256：<code>9EDB39569E3634CAC194C353E0480DDC267E4422BA4A87F7422DF4E9662DC2FF</code></p>
         </div>
         <div class="card" style="--c:var(--line)">
           <h3>macOS</h3>
-          <p>v0.6.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
+          <p>v0.7.0 暂未提供 macOS 版。旧的 v0.3.0 有 macOS 包，但那是另一条开发线、规则不同，见<a href="https://github.com/Skysolderone/geme_demo/releases">全部版本</a>。</p>
         </div>
       </div>
       <p class="note">显卡需要支持 Vulkan。不需要另装 .NET，运行时已经打在包里。遇到问题请到 <a href="https://github.com/Skysolderone/geme_demo/issues">Issues</a> 反馈。</p>
@@ -281,6 +281,16 @@ godot --path src/godot -- --map=link:12345          # 直接开一张指定种�
     <div class="wrap">
       <h2>更新记录</h2>
       <div class="log">
+        <h3>v0.7.0 浮空岛版 <time datetime="2026-10-31">2026-10-31</time></h3>
+        <ul>
+          <li><b>浮空岛与出生座位</b>：开局可选 2 / 3 / 4 人；每人一块 8×8 出生座位，座位之间至少隔 25 格战场，战场里有中立平台、河道与桥。前 3 个大回合只能落在自己的座位里，第 4 个大回合起全岛开放。</li>
+          <li><b>不规则岸线</b>：岛缘按种子咬出海湾、四角切角大小不一；内陆多了湖泊与岩区，河道 1–2 格宽，非可落子约占岛面三成。同一个地图标识会得到和 v0.6.0 不同的地图。</li>
+          <li><b>信物挂在棋子上</b>：对局中按批次在地图上预告、落位，抢到即随棋子携带；可带入至多 5 件（其中保险至多 2 件）。旧的静态信物格移除。</li>
+          <li><b>粉彩浮岛画面</b>：淡紫灰石面、亮青水面、绳栏木桥、阶梯断崖与瀑布；草地成片分色，格角有草丛、小石、小花，障碍格有水晶、火盆、石拱门、宝箱，中立平台有符文环。</li>
+          <li><b>去棋盘感</b>：默认只留淡淡的格线、隐藏坐标；按 <kbd>T</kbd> 打开信息层时格线与坐标清晰显示。加了环境光遮蔽与更重的阴影。</li>
+        </ul>
+      </div>
+      <div class="log" style="margin-top:22px">
         <h3>v0.6.0 战斗流程 MVP <time datetime="2026-10-26">2026-10-26</time></h3>
         <ul>
           <li><b>完整战斗流程</b>：插旗选盘 → 征募暂放 → 预演确认 → 结算揭示 → 回合摘要 → 终局排名，一局能顺畅打完。本版是后续开发的基础版（<code>base-v1</code>）。</li>
