@@ -18,7 +18,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 9. 行动顺序。
 10. 每名玩家的在局 / 出局 / 弃赛状态，以及战场是否已结算及其胜者。
 
-插旗阶段只公开 5 块出生棋盘的占位（位置、宽高、主题名），棋盘内容按 `match-setup`「匿名同时插旗」在锁定前不可见。
+插旗阶段只公开 n 块出生座位的占位（位置、宽高、主题名），棋盘内容按 `match-setup`「匿名同时插旗」在锁定前不可见。大图插旗阶段公开整张基图的地形与合规旗格集合；各玩家的旗格与座位编号同一时机——锁定那一刻——公开（big-map D3）。
 
 #### Scenario: 改造结果公开
 - **WHEN** 某玩家的匠人在自己的出生棋盘内立了一道栅栏
@@ -52,6 +52,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 2. 玩家当前的私人征募面板及其选择过程。
 3. 对手每种手牌的具体数量。
 4. 对手尚未确认的批次部署。
+5. 锁定前他人已插的旗（小图的座位编号、大图的旗格，big-map D3：旗格比座位编号泄露更多，公开只在锁定那一刻）。
 
 该边界 SHALL 在数据层成立，MUST NOT 仅依赖界面遮挡。
 
@@ -69,7 +70,7 @@ TBD - created by archiving change add-tactical-ui. Update Purpose after archive.
 
 #### Scenario: 数据层边界
 - **WHEN** 检查提供给非持有者的数据结构
-- **THEN** 结构中不存在上述四类信息的字段，而不是存在但被界面遮挡
+- **THEN** 结构中不存在上述五类信息的字段，而不是存在但被界面遮挡
 
 ### Requirement: 本大回合的 Pass 名单
 

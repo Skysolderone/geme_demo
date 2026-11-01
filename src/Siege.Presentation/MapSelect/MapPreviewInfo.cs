@@ -40,6 +40,13 @@ public static class MapPreviewInfo
 
         int zones = board.Cells.Where(c => c.BirthZone is not null).Select(c => c.BirthZone).Distinct().Count();
         int playable = board.Cells.Count(c => c.Terrain == Terrain.Playable);
+        if (board.Tier == MapTier.Large)
+        {
+            // big-map：大图没有座位占位，预览就是整张基图的地形（信息公开口径见 match-setup「大图自由插旗」）；说明写大陆尺寸、可落子格数、中立平台块数与插旗口径。
+            int plates = board.Boards.IsDefaultOrEmpty ? 0 : board.Boards.Count(b => b.Kind == BoardPlateKind.Public);
+            return $"{board.Width}×{board.Height} 画布的大陆，可落子 {playable} 格、{plates} 块中立平台；{Labels.FlagLayout}。前 3 个大回合只在旗帜周围构筑、第 4 大回合起全图开战";
+        }
+
         string text = $"{board.Width}×{board.Height}，{zones} 个出生区，可落子 {playable} 格";
         if (board.Boards.IsDefaultOrEmpty)
         {

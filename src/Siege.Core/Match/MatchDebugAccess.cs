@@ -42,6 +42,11 @@ internal sealed class MatchDebugAccess
     /// </summary>
     internal void LockFlagsAs(IEnumerable<(PlayerId Player, int Zone)> seats)
     {
+        if (_match.Flags.IsLarge)
+        {
+            throw new InvalidOperationException("LockFlagsAs 只支持小图（出生座位编号）；大图请经 MatchFlow.PlantSequentiallyAt / PlantPrototypeAt 以旗格锁定（big-map D3 / D4）。");
+        }
+
         _match.Flags.RestoreLocked(seats.Select(s => KeyValuePair.Create(s.Player, s.Zone)));
         _match.LockFlags();
     }

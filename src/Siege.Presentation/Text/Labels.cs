@@ -120,6 +120,33 @@ public static class Labels
     /// 选图界面的源码不直接引用生成器（选图界面守门），经这里取文案。
     /// </summary>
     public static string SeatLayout => $"玩家各占一个出生座位，座位之间至少隔 {Core.Board.Maps.LinkMapGenerator.SeatGap} 格战场，其余为中立平台";
+    /// <summary>
+    /// 大图自由插旗的一句话（big-map 裁决 2 / 4 / 5）：插旗面板与新局面板共用，间距与出生范围只取 <see cref="Core.Match.FlagRules"/> 的常量，不另写数字。
+    /// </summary>
+    public static string FlagLayout =>
+        $"全图任一合规格都可插旗，旗与旗之间至少隔 {Core.Match.FlagRules.FlagGap} 格；锁定后旗帜周围 {Core.Match.FlagRules.BirthPlateSide}×{Core.Match.FlagRules.BirthPlateSide} 是构筑范围、{Core.Match.FlagRules.BirthRingSide}×{Core.Match.FlagRules.BirthRingSide} 是出生圈";
+
+    /// <summary>新局界面尺寸选项的显示名（big-map 裁决 11）：小 = 浮空岛、大 = 150×150 大陆；边长只取生成器常量。</summary>
+    public static string TierName(Core.Board.MapTier tier) =>
+        tier == Core.Board.MapTier.Large ? $"大（{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}）" : "小（浮空岛）";
+
+    /// <summary>新局界面的尺寸说明一行（选图界面不直接引用生成器与规则常量，经这里取）。</summary>
+    public static string TierHint =>
+        $"小：浮空岛、座位盲选；大：{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide} 大陆、全图自由插旗、第 {Core.Match.MatchOptions.DefaultRoundCapLarge} 大回合到点按势力结算。";
+
+    /// <summary>新局界面选大图时的开头说明。</summary>
+    public static string LargeMapIntro =>
+        $"大图：{Core.Board.Maps.LinkMapGenerator.LargeIslandSide}×{Core.Board.Maps.LinkMapGenerator.LargeIslandSide} 大陆，{FlagLayout}；第 4 大回合起全图开战，第 {Core.Match.MatchOptions.DefaultRoundCapLarge} 大回合到点按势力结算。地图由地图种子、人数与尺寸决定。";
+
+    /// <summary>大图插旗阶段的构筑期说明（big-map 裁决 5）：前三个大回合限在旗帜周围 13×13 落子、改造。</summary>
+    public static string FlagBuildHint =>
+        $"前三个大回合限在旗帜周围 {Core.Match.FlagRules.BirthPlateSide}×{Core.Match.FlagRules.BirthPlateSide} 落子、改造；\n第四回合起可在全图行动（含中立平台）。\n全员整轮 Pass、只剩一人，\n或到第 {Core.Match.MatchOptions.DefaultRoundCapLarge} 大回合按势力结算时终局。";
+
+    /// <summary>
+    /// 回合横幅的大回合标题（big-map 裁决 6：大图界面明示"第 X / 60 大回合"，分母取对局的大回合上限；小图照旧不带分母）。
+    /// </summary>
+    public static string MajorRoundTitle(int majorRound, int roundCap, Core.Board.MapTier tier) =>
+        tier == Core.Board.MapTier.Large && roundCap > 0 ? $"第 {majorRound} / {roundCap} 大回合" : $"第 {majorRound} 大回合";
 
     /// <summary>终端大回合开始行的上限段：<c>上限 100（还剩 97）</c>；不启用时 <c>上限 不启用</c>。</summary>
     public static string RoundCapStatus(int roundCap, int majorRound) =>

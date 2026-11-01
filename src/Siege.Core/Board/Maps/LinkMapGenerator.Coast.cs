@@ -67,19 +67,19 @@ public static partial class LinkMapGenerator
     internal const int MaxClusterAttempts = 3000;
 
     /// <summary>岸线流在一次布局里的消费顺序：四角切角 → 四条边各一段保留岸线 → 逐边逐湾（间隔 → 长度 → 深度 → 逐列噪声）；掩码不通即整段重来。</summary>
-    private static Island Carve(Island rect, PlateLayout layout, RandomStream coast)
+    private static Island Carve(Island rect, PlateLayout layout, RandomStream coast, TierGeometry g)
     {
         bool[] guarded = GuardedCells(rect, layout);
         for (int attempt = 0; attempt <= MaxCoastRedraws; attempt++)
         {
-            Island island = DraftCoast(rect, layout, guarded, coast, bays: true);
+            Island island = DraftCoast(rect, layout, guarded, coast, g, bays: true);
             if (Battlefields.Of(island.Preview()).Count == 1)
             {
                 return island;
             }
         }
 
-        return DraftCoast(rect, layout, guarded, coast, bays: false);
+        return DraftCoast(rect, layout, guarded, coast, g, bays: false);
     }
 
     /// <summary>保护区（裁决 1）：座位 + 外 <see cref="EdgeGap"/>、中立平台 + 外 <see cref="PlateGap"/>、坡道朝外格；按岛矩形索引。</summary>
@@ -109,18 +109,23 @@ public static partial class LinkMapGenerator
         return guarded;
     }
 
-    private static Island DraftCoast(Island rect, PlateLayout layout, bool[] guarded, RandomStream coast, bool bays)
+    private static Island DraftCoast(Island rect, PlateLayout layout, bool[] guarded, RandomStream coast, TierGeometry g, bool bays)
     {
         int w = rect.Width, h = rect.Height;
         var mask = new bool[w * h];
         Array.Fill(mask, true);
+        (int cutMin, int cutMax) = g.CornerCut;
+        (int bayMinDepth, int bayMaxDepth) = g.BayDepth;
+        (int bayMinLength, int bayMaxLength) = g.BayLength;
+        (int bayGapMin, int bayGapMax) = g.BayGap;
+        int reservedShore = g.ReservedShore;
 
-        // ① 四角切角：先抽 4–7，再封顶到不碰任何平台格与坡道朝外格（座位角恒为 4）。角的次序：西南、东南、西北、东北。
+        // ① 四角切角：先抽 4–7（大图 12–24），再封顶到不碰任何平台格与坡道朝外格（座位角恒为 4）。角的次序：西南、东南、西北、东北。
         var cuts = ImmutableArray.CreateBuilder<int>(4);
         for (int corner = 0; corner < 4; corner++)
         {
-            int k = CornerCutMin + coast.NextInt(CornerCutMax - CornerCutMin + 1);
-            int cap = CornerCutMax;
+            int k = cutMin + coast.NextInt(cutMax - cutMin + 1);
+            int cap = cutMax;
             foreach (Coord c in layout.Plates.SelectMany(p => p.Cells()).Concat(layout.RampOutlets))
             {
                 cap = Math.Min(cap, CornerDistance(rect, corner, c));
@@ -147,8 +152,8 @@ public static partial class LinkMapGenerator
                 int length = edge < 2 ? w : h;
                 (int cutA, int cutB) = edge switch { 0 => (cuts[0], cuts[1]), 1 => (cuts[2], cuts[3]), 2 => (cuts[0], cuts[2]), _ => (cuts[1], cuts[3]) };
                 reserved[edge] = new bool[length];
-                int start = cutA + coast.NextInt(length - cutA - cutB - ReservedShore + 1);
-                for (int t = start; t < start + ReservedShore; t++)
+                int start = cutA + coast.NextInt(length - cutA - cutB - reservedShore + 1);
+                for (int t = start; t < start + reservedShore; t++)
                 {
                     reserved[edge][t] = true;
                 }
@@ -167,7 +172,7 @@ public static partial class LinkMapGenerator
                     }
 
                     int d = 0;
-                    while (d < BayMaxDepth)
+                    while (d < bayMaxDepth)
                     {
                         int index = rect.Index(ShoreCell(rect, edge, t, d + 1));
                         if (!mask[index] || guarded[index])
@@ -197,13 +202,13 @@ public static partial class LinkMapGenerator
                     }
 
                     int cursor = pos;
-                    while (runEnd - cursor >= BayGapMin + BayMinLength)
+                    while (runEnd - cursor >= bayGapMin + bayMinLength)
                     {
-                        int gap = BayGapMin + coast.NextInt(BayGapMax - BayGapMin + 1);
-                        int bayLength = BayMinLength + coast.NextInt(BayMaxLength - BayMinLength + 1);
-                        int bayDepth = BayMinDepth + coast.NextInt(BayMaxDepth - BayMinDepth + 1);
+                        int gap = bayGapMin + coast.NextInt(bayGapMax - bayGapMin + 1);
+                        int bayLength = bayMinLength + coast.NextInt(bayMaxLength - bayMinLength + 1);
+                        int bayDepth = bayMinDepth + coast.NextInt(bayMaxDepth - bayMinDepth + 1);
                         int start = cursor + gap;
-                        if (start + BayMinLength > runEnd)
+                        if (start + bayMinLength > runEnd)
                         {
                             break;
                         }
@@ -266,11 +271,17 @@ public static partial class LinkMapGenerator
         HashSet<Coord> lakes,
         HashSet<Coord> rockClusters,
         int fixedNonPlayable,
-        RandomStream coast)
+        RandomStream coast,
+        TierGeometry g)
     {
-        int face = island.Count;
-        int target = TargetNonPlayableMin + coast.NextInt(TargetNonPlayableMax - TargetNonPlayableMin + 1);
-        int nonPlayable = fixedNonPlayable + water.Count - bridges.Count;
+        // 分母：小图 = 掩码内岛面；大图 = 外接矩形（段 A 追加裁决 20：大陆的海岸虚空计入非可落子，可落子约 1.5 万 ≈ 外接矩形的 67%）。
+        bool large = g.Tier == MapTier.Large;
+        int face = large ? island.Width * island.Height : island.Count;
+        int target = g.TargetNonPlayable.Min + coast.NextInt(g.TargetNonPlayable.Max - g.TargetNonPlayable.Min + 1);
+        int nonPlayable = fixedNonPlayable + water.Count - bridges.Count + (large ? face - island.Count : 0);
+        (int lakeMin, int lakeMax) = g.LakeSize;
+        (int rockMin, int rockMax) = g.RockClusterSize;
+        ImmutableArray<Coord> cells = island.Cells();
 
         // map-coastline 裁决 F1：座位外接矩形外 EdgeGap 格那一圈不放湖泊 / 岩区（座位格本身已由 InPlate 排除）——出生区四周留成可落子地，开局不被水 / 岩堵在门口。
         // 只排座位这一圈：中立平台外 PlateGap 格那一圈允许（一起禁则 4 人图低地不够填到目标占比）。
@@ -299,28 +310,43 @@ public static partial class LinkMapGenerator
         // 候选起点只在放下一团之后才变，失败的尝试（长不够、不成环）不重算。
         List<Coord>? lakeSeeds = null;
         List<Coord>? rockSeeds = null;
-        for (int attempt = 0; attempt < MaxClusterAttempts && nonPlayable * 100 < target * face; attempt++)
+        for (int attempt = 0; attempt < g.MaxClusterAttempts && nonPlayable * 100 < target * face; attempt++)
         {
             bool lake = coast.NextInt(2) == 0;
-            int size = lake ? LakeMin + coast.NextInt(LakeMax - LakeMin + 1) : RockClusterMin + coast.NextInt(RockClusterMax - RockClusterMin + 1);
+            int size = lake ? lakeMin + coast.NextInt(lakeMax - lakeMin + 1) : rockMin + coast.NextInt(rockMax - rockMin + 1);
             HashSet<Coord> sameKind = lake ? lakes : rockClusters;
             var current = new HashSet<Coord>();
-            List<Coord> seeds = (lake ? lakeSeeds : rockSeeds) ?? [.. island.Cells().Where(c => Eligible(c, current, sameKind))];
-            if (lake)
+            Coord first;
+            if (large)
             {
-                lakeSeeds = seeds;
+                // 大图（D2）：均匀撒点 + 局部尝试——在岛面里均匀抽一格，不合格即算一次失败尝试，不维护全图候选表（22500 格重扫一遍比一次投放贵得多）。
+                first = cells[coast.NextInt(cells.Length)];
+                if (!Eligible(first, current, sameKind))
+                {
+                    continue;
+                }
             }
             else
             {
-                rockSeeds = seeds;
+                List<Coord> seeds = (lake ? lakeSeeds : rockSeeds) ?? [.. cells.Where(c => Eligible(c, current, sameKind))];
+                if (lake)
+                {
+                    lakeSeeds = seeds;
+                }
+                else
+                {
+                    rockSeeds = seeds;
+                }
+
+                if (seeds.Count == 0)
+                {
+                    return false;
+                }
+
+                first = seeds[coast.NextInt(seeds.Count)];
             }
 
-            if (seeds.Count == 0)
-            {
-                return false;
-            }
-
-            var cluster = new List<Coord> { seeds[coast.NextInt(seeds.Count)] };
+            var cluster = new List<Coord> { first };
             current.Add(cluster[0]);
             while (cluster.Count < size)
             {
@@ -335,7 +361,7 @@ public static partial class LinkMapGenerator
                 current.Add(next);
             }
 
-            if (cluster.Count < (lake ? LakeMin : RockClusterMin) || !RingConnected(current, Land))
+            if (cluster.Count < (lake ? lakeMin : rockMin) || !RingConnected(current, Land))
             {
                 continue;
             }

@@ -64,7 +64,8 @@ public static class Replayer
         map ??= MapCatalog.Resolve(mapId);
 
         // 先比地图内容摘要：不同就停在首部，MUST NOT 带着另一张图继续逐步比对。旧日志没有摘要 → 跳过（不回填）。
-        string digest = MapFile.Digest(map);
+        // big-map D4：大图首部的摘要是落座图的——先按首部旗格在基图上重做落座再比；重建对局仍从基图开始（盲选会重做出同样的旗格）。
+        string digest = MapFile.Digest(SeatedMap.Of(map, header));
         if (header.MapDigest is { } recordedDigest && !string.Equals(recordedDigest, digest, StringComparison.Ordinal))
         {
             var stub = new MatchLog { Header = header with { MapDigest = digest } };

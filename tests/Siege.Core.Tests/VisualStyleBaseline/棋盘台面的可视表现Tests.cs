@@ -79,8 +79,10 @@ public class 棋盘台面的可视表现Tests
         Assert.Contains("board.ObstacleArtAt(cell.Coord)", boardView, StringComparison.Ordinal);
         Assert.Contains("ObstacleArt.BoardRock", boardView, StringComparison.Ordinal);
 
-        // 棋盘上的逐格装饰（林地的树、棋盘内岩石）挂在装饰层 _decoration（open-map 段 B：拼接滑入与滑动父节点已删除，BoardView 不再有 ApplySlide）。
-        Assert.Contains("_decoration.AddChild(rock)", boardView, StringComparison.Ordinal);
+        // 棋盘上的逐格装饰（林地的树、棋盘内岩石）挂在装饰层（open-map 段 B：拼接滑入与滑动父节点已删除，BoardView 不再有 ApplySlide）。
+        // big-map 段 B（规格 visual-style-baseline「大图的分块渲染」：装饰"按区块各一套"）：岩石挂在格所属 CellSink 的装饰节点——小图常驻 sink 的装饰节点就是 _decoration、大图为区块自己的 Decoration。
+        Assert.Contains("sink.Decoration.AddChild(rock)", boardView, StringComparison.Ordinal);
+        Assert.Contains("new CellSink(tiles, _decoration,", boardView, StringComparison.Ordinal);
         Assert.DoesNotContain("ApplySlide", boardView, StringComparison.Ordinal);
     }
 }

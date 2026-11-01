@@ -65,10 +65,7 @@ public sealed partial class BoardView : Node3D
     private readonly Dictionary<Coord, int> _levels = [];
     private Node3D _decoration = null!;
     private Node3D _batch = null!;
-    private readonly Dictionary<string, PartBatch?> _partBatches = [];
     private float? _batchScale;
-    private int _unbatchedObstacles;
-    private int _partMultiMeshes;
     private int _runeRings;
     private readonly Dictionary<Coord, PieceNode> _boardPieces = [];
     private readonly Dictionary<Coord, PieceNode> _capturedPieces = [];
@@ -97,8 +94,59 @@ public sealed partial class BoardView : Node3D
     /// </summary>
     private HashSet<Coord> _visible = [];
 
-    /// <summary>地砖容器。</summary>
+    /// <summary>地砖容器（流式模式下各区块节点挂在它下面）。</summary>
     private Node3D _tiles = null!;
+    // ---------- 分块渲染（big-map 裁决 9 / D9） ----------
+
+    /// <summary>区块边长（格）。小图 45×45 = 3×3 区块、全部常驻；大图 150×150 = 10×10 区块、按注视点流式加载。</summary>
+    public const int ChunkSide = 16;
+
+    /// <summary>加载集半径：注视点所在区块 ± 2 圈（5×5 = 80×80 格，最远缩放 28 下一屏约 43×24 格）。</summary>
+    public const int ChunkRadius = 2;
+
+    /// <summary>流式模式（大图）：地砖按区块合成 MultiMesh、只建相机附近区块、无格地面 + 局部格网。小图为 false，走改前的逐格节点路径（画面逐像素不变）。</summary>
+    private bool _streaming;
+    private int _chunkColumns;
+    private int _chunkRows;
+    private (int X, int Y)? _chunkCenter;
+    private readonly Dictionary<(int X, int Y), Node3D> _loadedChunks = [];
+    private readonly Dictionary<(int X, int Y), PartBatchSet> _chunkParts = [];
+    private readonly Dictionary<(int X, int Y), Node3D> _chunkDecorations = [];
+    private readonly Dictionary<(int X, int Y), (int MultiMeshes, int Instances)> _chunkStats = [];
+    private List<BoardCellView>[] _chunkCells = [];
+    private Action<BoardCellView, CellSink>? _emitCell;
+    private ImmutableArray<FenceEdge> _fences = [];
+    private int _chunkLoads;
+    private int _chunkUnloads;
+    private int _chunkInstances;
+    private int _chunkMultiMeshes;
+    private int _pickVersion;
+    private PartBatchSet _parts = null!;
+    private StandardMaterial3D? _slabMaterial;
+    private StandardMaterial3D? _waterMaterial;
+
+    /// <summary>视图模型里的全部格；<see cref="_visible"/> 是其中已加载区块里的格（常驻模式二者相同）。</summary>
+    private HashSet<Coord> _viewCells = [];
+
+    /// <summary>局部格网（big-map 裁决 7，流式模式专用）：合法范围 / 信息层全格一片、光标 7×7 一片，各一个网格；小图为 <c>null</c>（沿用衬底格缝与墨线）。</summary>
+    private Node3D? _localGrid;
+    private MeshInstance3D? _gridRange;
+    private MeshInstance3D? _gridCursor;
+    private bool _cursorGrid;
+    private Coord? _cursorCell;
+    private int _gridRangeCells;
+
+    /// <summary>大图插旗阶段光标处的 9×9 出生圈 / 13×13 构筑范围预览（D9）。</summary>
+    private Node3D? _flagPreview;
+
+    /// <summary>光标周围局部格网的边长（裁决 7：7×7）。</summary>
+    public const int CursorGridSide = 7;
+
+    /// <summary>是否流式模式（大图）：GameRoot 据此决定小地图、区块更新与拾取抽样。</summary>
+    public bool Streaming => _streaming;
+
+    /// <summary>已加载 / 全部区块数（自证）。</summary>
+    public (int Loaded, int Total) ChunkCounts => (_loadedChunks.Count, _chunkColumns * _chunkRows);
 
     /// <summary>上一次搭建时本机出生棋盘（占位 Own）的左下角与画布尺寸：拼接后布局变化时据此算本机棋盘的平面位移，相机注视点随之平移（board-link-mode F.4）。</summary>
     private (Coord Origin, int Width, int Height)? _ownPlacement;
@@ -136,7 +184,26 @@ public sealed partial class BoardView : Node3D
         ArgumentNullException.ThrowIfNull(zoneOwners);
 
         // 幂等：插旗锁定后要按出生区归属重染地砖，会再搭一次；地形被改造、或布局指纹变了（插旗锁定展开全图）后，Refresh 也会再搭一次（见 DefaultBoardView.LayoutKey）。
+        long buildStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         Clear(this);
+        _loadedChunks.Clear();
+        _chunkParts.Clear();
+        _chunkDecorations.Clear();
+        _chunkStats.Clear();
+        _chunkMultiMeshes = 0;
+        _chunkInstances = 0;
+        _chunkCenter = null;
+        _chunkCells = [];
+        _emitCell = null;
+        _slabMaterial = null;
+        _waterMaterial = null;
+        _localGrid = null;
+        _gridRange = null;
+        _gridCursor = null;
+        _gridRangeCells = 0;
+        _cursorCell = null;
+        _flagPreview = null;
+        _pickVersion++;
         int loadedBefore = TerrainParts.LoadedCount;
         int generatedBefore = TerrainParts.GeneratedCount;
         _zoneOwners = zoneOwners;
@@ -149,15 +216,20 @@ public sealed partial class BoardView : Node3D
         _boxMeshes.Clear();
         _tileMeshes.Clear();
         _levels.Clear();
-        _partBatches.Clear();
-        _unbatchedObstacles = 0;
+        _batchScale = null;
         _runeRings = 0;
         _plateGridLines = null;
         _boardPieces.Clear();
         _capturedPieces.Clear();
         _width = board.Width;
         _height = board.Height;
-        _visible = [.. board.Cells.Select(c => c.Coord)];
+        // 分块（D9）：区块按 16×16 划分、键 = (x / 16, y / 16)；大图流式（只建注视点 ± 2 圈的区块），小图全部常驻、逐格节点——与引入分块之前逐像素相同。
+        _streaming = board.Tier == MapTier.Large;
+        _chunkColumns = (_width + ChunkSide - 1) / ChunkSide;
+        _chunkRows = (_height + ChunkSide - 1) / ChunkSide;
+        _viewCells = [.. board.Cells.Select(c => c.Coord)];
+        _visible = _streaming ? [] : _viewCells;
+        _fences = board.Fences.IsDefault ? [] : board.Fences;
 
         // 画幅（board-link-mode 裁决 D26 / tasks 4.4）：底座、坐标标注与相机可行矩形都以"全部可见格 ∪ 各块占位"的格包围盒为准（锁定后 = 整张地图）；
         // 旧地图没有占位、视图含全图每一格，包围盒就是整张图，与引入之前逐值相同。格包围盒 → 平面矩形只经 BoardGeometry.Center 的那一份映射。
@@ -183,6 +255,7 @@ public sealed partial class BoardView : Node3D
         var tiles = new Node3D { Name = "Tiles" };
         AddChild(tiles);
         _tiles = tiles;
+        _parts = new PartBatchSet(_batch);
 
         // 出生区的外圈格（四邻里有不属于同一区的格）：归属色只重染外圈，内部只淡淡带一点，让草地本色露出来。只是渲染，不进规则。
         Dictionary<Coord, int> zoneOf = board.Cells.Where(c => c.BirthZone is not null).ToDictionary(c => c.Coord, c => c.BirthZone!.Value);
@@ -258,27 +331,35 @@ public sealed partial class BoardView : Node3D
         int boardRocks = 0;
         int[] patchCells = new int[3];
         var zoneStrips = new SortedDictionary<int, int>();
-        StandardMaterial3D? slabMaterial = null;
         List<Vector3> slabTops = [];
+
+        // 层数对全图一次登记（分块与否都如此，D9）：拾取只靠它（BoardGeometry.TryPick 按层求交），未加载区块的格照样按几何拾到同一格。
         foreach (BoardCellView cell in board.Cells)
+        {
+            if (cell.Terrain == Terrain.Playable && islandCells.Contains(cell.Coord))
+            {
+                _levels[cell.Coord] = cell.Height;
+            }
+        }
+
+        // "建一格"（D9）：常驻路径紧接着对全部格按视图次序各调一遍——节点、计数与画面与改前的逐格循环逐位相同；流式路径存成委托，加载区块时只对该区块的格调用，
+        // 节点落进区块自己的 sink（地砖 / 石沿 / 亮条 / 水面合成 MultiMesh，装饰按区块合批）。流式下装饰档号按坐标散列（variant 计数器随加载次序变、不可复现），常驻下仍是递增计数器。
+        int Variant(Coord at, int salt) => _streaming ? TileVariant(at, 50 + salt) : variant++;
+        void EmitCell(BoardCellView cell, CellSink sink)
         {
             // 虚空格（外圈留白、切角与海湾——与画布外圈连通的障碍格，map-coastline 裁决 7）没有地面：不铺面砖、不放装饰、不铺衬底。
             if (!islandCells.Contains(cell.Coord))
             {
-                continue;
+                return;
             }
             bool playable = cell.Terrain == Terrain.Playable;
-            if (playable)
-            {
-                _levels[cell.Coord] = cell.Height;
-            }
 
             if (cell.Surface == Surface.DeepWater)
             {
                 // 深水：水面低于同层地砖，不可落子；架桥后桥面与地砖齐平、可落子。
                 Vector3 waterCenter = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
                 Color water = Visuals.DeepWater;
-                _tileMaterials.Add((AddWater(tiles, waterCenter, water), water));
+                AddWater(sink, waterCenter, water);
                 deepCells++;
 
                 // 每条"邻格不是深水"的边一件石沿（含架桥的格：石沿顶低于桥面，桥面盖住重叠的那 0.01）。
@@ -296,7 +377,7 @@ public sealed partial class BoardView : Node3D
                     // 沿 X 走向的边（上下两侧）再压低 0.005：格角上相遇的两件石沿必是一纵一横，顶面错开、不共面闪烁。
                     Vector3 half = ((stepX * dx) + (stepY * dy)) * 0.5f;
                     Vector3 lift = new(0f, dy != 0 ? -0.005f : 0f, 0f);
-                    AddBankLip(tiles, TerrainParts.PieceOf(TerrainParts.BankLip, TileVariant(cell.Coord, 10 + e)), waterCenter + half + lift, -half);
+                    sink.Lip(TerrainParts.PieceOf(TerrainParts.BankLip, TileVariant(cell.Coord, 10 + e)), waterCenter + half + lift, -half);
                     bankLips++;
                 }
 
@@ -312,11 +393,11 @@ public sealed partial class BoardView : Node3D
                         bridge.RotationDegrees = new Vector3(0f, 90f, 0f);
                     }
 
-                    tiles.AddChild(bridge);
+                    sink.Tiles.AddChild(bridge);
                     bridgedCells++;
                 }
 
-                continue;
+                return;
             }
 
             Vector3 center = BoardGeometry.Center(cell.Coord, _width, _height, cell.Height);
@@ -326,17 +407,7 @@ public sealed partial class BoardView : Node3D
                 patchCells[GrassPatch(cell.Coord)]++;
             }
 
-            Color color = cell.Surface switch
-            {
-                Surface.Grass => GrassPatchColor(GrassPatch(cell.Coord)),
-                Surface.Road => Visuals.TileRoad,
-                Surface.Forest => Visuals.TileForest,
-                Surface.Desert => Visuals.TileDesert,
-                Surface.Marsh => Visuals.TileMarsh,
-                Surface.Crag => Visuals.TileCrag,
-                Surface.Shallows => Visuals.TileShallows,
-                _ => Visuals.TilePlayable,
-            };
+            Color color = cell.Surface == Surface.Grass ? GrassPatchColor(GrassPatch(cell.Coord)) : SurfaceTileColorOf(cell.Surface) ?? Visuals.TilePlayable;
             if (playable && cell.Height > 0)
             {
                 color = cell.Height == 1 ? color.Lightened(0.07f) : color.Lerp(new Color(0.98f, 0.96f, 1.0f), 0.30f).Lightened(0.06f);
@@ -347,12 +418,12 @@ public sealed partial class BoardView : Node3D
                 // 免得读成林地），逐格节点挂在地砖与装饰层（场景面砖与合批装饰是整块 MultiMesh）。归属只读视图模型的棋盘清单。
                 // map-restyle 段C：岩石之外按坐标散列换成水晶 / 火盆 / 拱门 / 宝箱——都是石材 / 器物，仍读作"此格不可落子"而不是林地。
                 color = Visuals.TileObstacle;
-                Node3D rock = TerrainParts.Create(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: false), cell.Coord), variant++);
+                Node3D rock = TerrainParts.Create(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: false), cell.Coord), Variant(cell.Coord, 0));
                 rock.Position = center;
-                _decoration.AddChild(rock);
-                AddTileStack(tiles, cell.Coord, center, cell.Height, SurfaceOf(color), color);
+                sink.Decoration.AddChild(rock);
+                AddTileStack(sink, cell.Coord, center, cell.Height, SurfaceOf(color), color);
                 boardRocks++;
-                continue;
+                return;
             }
 
             if (!playable)
@@ -360,7 +431,7 @@ public sealed partial class BoardView : Node3D
                 // 场景格的造型按坐标散列挑（同一张图永远同一副样子，不用随机数）：巨石 / 松树丛 / 断柱遗迹，map-restyle 段C 再加水晶 / 火盆 / 拱门 / 宝箱。
                 // 都只是"此格不可落子"的装饰。同一变体的各格合成 MultiMesh 画（board-render-perf D2）：变体序号与逐格变换都不变。
                 color = Visuals.TileObstacle;
-                AddObstacle(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: true), cell.Coord), variant++, center);
+                sink.Parts.Add(Decor(ObstacleKindOf(ObstacleHash(cell.Coord), scenery: true), cell.Coord), Variant(cell.Coord, 1), center, sink.Decoration);
             }
             else if (cell.BirthZone is int zone)
             {
@@ -383,56 +454,41 @@ public sealed partial class BoardView : Node3D
                     // 与改前的描边盒逐值同包围盒：贴在格内侧边缘、略高于面砖，不占落点。归属色、不受光、不投影。
                     zoneStrips[zone] = zoneStrips.GetValueOrDefault(zone) + 1;
                     float half = BoardGeometry.CellSize * 0.5f;
-                    tiles.AddChild(new MeshInstance3D
-                    {
-                        Mesh = TerrainParts.PieceOf(TerrainParts.ZoneStrip, 0).Mesh,
-                        MaterialOverride = edge,
-                        Transform = new Transform3D(Facing(new Vector3(-dx, 0f, dy)), center + new Vector3(dx * half, 0f, -dy * half)),
-                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                    });
+                    sink.Instance(TerrainParts.PieceOf(TerrainParts.ZoneStrip, 0).Mesh, edge,
+                        new Transform3D(Facing(new Vector3(-dx, 0f, dy)), center + new Vector3(dx * half, 0f, -dy * half)), shadow: false);
                 }
             }
 
-            // 棋盘格式的轻微明暗交替（参考图的草地拼块感），只动亮度、不动色相；障碍格不参与。
-            if (playable && ((cell.Coord.X + cell.Coord.Y) & 1) == 0)
+            // 棋盘格式的轻微明暗交替（参考图的草地拼块感），只动亮度、不动色相；障碍格不参与。大图（裁决 7：地面默认完全无格）不做交替——棋盘格本身就是一种格。
+            if (!_streaming && playable && ((cell.Coord.X + cell.Coord.Y) & 1) == 0)
             {
                 color = color.Darkened(0.05f);
             }
 
             if (playable && cell.Surface == Surface.Forest)
             {
-                Node3D trees = TerrainParts.Create(TerrainParts.Trees, variant++);
-                trees.Position = center;
-                _decoration.AddChild(trees);
+                sink.Ornament(TerrainParts.Trees, Variant(cell.Coord, 2), center);
             }
 
             // 新地表的形状提示（terrain-surfaces S-8）：和林地的小树一样放在装饰层，渲染在一切判读信息之下。
             if (playable && cell.Surface == Surface.Desert)
             {
-                Node3D desert = TerrainParts.Create(TerrainParts.Desert, variant++);
-                desert.Position = center;
-                _decoration.AddChild(desert);
+                sink.Ornament(TerrainParts.Desert, Variant(cell.Coord, 3), center);
             }
 
             if (playable && cell.Surface == Surface.Marsh)
             {
-                Node3D marsh = TerrainParts.Create(TerrainParts.Marsh, variant++);
-                marsh.Position = center;
-                _decoration.AddChild(marsh);
+                sink.Ornament(TerrainParts.Marsh, Variant(cell.Coord, 4), center);
             }
 
             if (playable && cell.Surface == Surface.Crag)
             {
-                Node3D crag = TerrainParts.Create(TerrainParts.Crag, variant++);
-                crag.Position = center;
-                _decoration.AddChild(crag);
+                sink.Ornament(TerrainParts.Crag, Variant(cell.Coord, 5), center);
             }
 
             if (playable && cell.Surface == Surface.Shallows)
             {
-                Node3D shallows = TerrainParts.Create(TerrainParts.Shallows, variant++);
-                shallows.Position = center;
-                _decoration.AddChild(shallows);
+                sink.Ornament(TerrainParts.Shallows, Variant(cell.Coord, 6), center);
             }
 
             // 草丛（map-restyle 段C；map-surface 裁决 4 加密 13% → 28%）：只撒在草地 / 土路格的一个格角（林地 / 荒漠 / 沼泽 / 岩台 / 浅滩的格角已有点缀），h>0 的格也撒。
@@ -443,7 +499,7 @@ public sealed partial class BoardView : Node3D
                 if (TileVariant(cell.Coord, 40) % 100 < 28)
                 {
                     grassCorner = (int)(TileVariant(cell.Coord, 41) & 3);
-                    AddObstacle(Decor(TerrainParts.Grass, cell.Coord), grassCorner, center);
+                    sink.Parts.Add(Decor(TerrainParts.Grass, cell.Coord), grassCorner, center, sink.Decoration);
                 }
 
                 // 小石块 / 小花（map-surface 裁决 4）：合批只收格心、不带旋转，格角烙在档号里——小石块档 v 在格角 v（0–2）、小花档 v 在格角 v + 1（1–3），
@@ -458,7 +514,7 @@ public sealed partial class BoardView : Node3D
                         pebbleCorner = (pebbleCorner + 1) % 3;
                     }
 
-                    AddObstacle(Decor(TerrainParts.Pebble, cell.Coord), pebbleCorner, center);
+                    sink.Parts.Add(Decor(TerrainParts.Pebble, cell.Coord), pebbleCorner, center, sink.Decoration);
                 }
 
                 if (TileVariant(cell.Coord, 44) % 100 < 16)
@@ -469,7 +525,7 @@ public sealed partial class BoardView : Node3D
                         flower = (flower + 1) % 3;
                     }
 
-                    AddObstacle(Decor(TerrainParts.Flower, cell.Coord), flower, center);
+                    sink.Parts.Add(Decor(TerrainParts.Flower, cell.Coord), flower, center, sink.Decoration);
                 }
             }
 
@@ -479,12 +535,37 @@ public sealed partial class BoardView : Node3D
             StandardMaterial3D material = SurfaceOf(color);
             if (plated && !playable)
             {
-                slabMaterial = material;
-                slabTops.Add(center);
-                continue;
+                _slabMaterial = material;
+                sink.SlabTops.Add(center);
+                return;
             }
 
-            AddTileStack(tiles, cell.Coord, center, cell.Height, material, color);
+            AddTileStack(sink, cell.Coord, center, cell.Height, material, color);
+        }
+
+        if (_streaming)
+        {
+            // 流式：按区块归档视图里的格，加载时再建；此刻一个区块都不建（加载集要等相机位姿定下来，见 Build 末尾）。
+            _chunkCells = new List<BoardCellView>[_chunkColumns * _chunkRows];
+            for (int i = 0; i < _chunkCells.Length; i++)
+            {
+                _chunkCells[i] = [];
+            }
+
+            foreach (BoardCellView cell in board.Cells)
+            {
+                _chunkCells[ChunkIndex(ChunkOf(cell.Coord))].Add(cell);
+            }
+
+            _emitCell = EmitCell;
+        }
+        else
+        {
+            var resident = new CellSink(tiles, _decoration, _parts, batched: false, slabTops);
+            foreach (BoardCellView cell in board.Cells)
+            {
+                EmitCell(cell, resident);
+            }
         }
 
         // 自证行（link-map-terrain 6.1）：出生区描边按核心区画——链接档每个可见核心区是 3×3 实心平地，四边各 3 段、共 12 段；棋盘内障碍格逐格画了几格（map-restyle 段C 起不只是岩石，各件见 [deco]）。
@@ -494,10 +575,10 @@ public sealed partial class BoardView : Node3D
         }
 
         AddTerrainRelief(board, tiles);
-        BuildPartBatches();
-        if (slabMaterial is not null)
+        _parts.Build();
+        if (!_streaming && _slabMaterial is not null)
         {
-            AddSceneSlabs(tiles, slabTops, slabMaterial);
+            AddSceneSlabs(tiles, slabTops, _slabMaterial);
         }
 
         if (plated)
@@ -508,9 +589,12 @@ public sealed partial class BoardView : Node3D
         AddPlaceholders(board.Placeholders);
         AddNeutralOutlines(board.NeutralPlates);
 
-        foreach (FenceEdge fence in board.Fences)
+        if (!_streaming)
         {
-            AddFence(tiles, fence);
+            foreach (FenceEdge fence in board.Fences)
+            {
+                AddFence(tiles, fence);
+            }
         }
 
         AddFloatingIsland(board, islandCells, apron, frameCenter, spanX + (apron * BoardGeometry.CellSize), spanZ + (apron * BoardGeometry.CellSize));
@@ -519,9 +603,9 @@ public sealed partial class BoardView : Node3D
         GD.Print($"[water] 深水 {deepCells} 格（架桥 {bridgedCells} 格）、河岸石沿 {bankLips} 件");
         GD.Print("[rim] 底座外圈石沿 0 件（map-surface 裁决 2 撤除）");
         GD.Print($"[parts] 本次搭建地形部件：资源 {TerrainParts.LoadedCount - loadedBefore} 件、程序生成 {TerrainParts.GeneratedCount - generatedBefore} 件（{TerrainParts.Directory}）");
-        PartBatch[] batches = [.. _partBatches.Values.OfType<PartBatch>()];
-        GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_partMultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
-            + $"未合批（逐格各建节点）{_unbatchedObstacles} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(slabMaterial is null ? 0 : 1)} 个");
+        PartBatch[] batches = [.. _parts.Batches];
+        GD.Print($"[batch] 障碍装饰合批 {batches.Sum(b => b.Centers.Count)} 格：变体 {batches.Length} 种、子网格 {batches.Sum(b => b.Parts.Length)} 个归入 MultiMesh {_parts.MultiMeshes} 个、实例 {batches.Sum(b => b.Centers.Count * b.Parts.Length)} 个；"
+            + $"未合批（逐格各建节点）{_parts.Unbatched} 格；场景面砖 {slabTops.Count} 格、MultiMesh {(_slabMaterial is null ? 0 : 1)} 个");
         GD.Print($"[batch] 地砖与台面归并（节点逐格保留，共用资源）：面砖材质 {_surfaceMaterials.Count} 份、衬底材质 {_linerMaterials.Count} 份、描边 / 边框材质 {_flatMaterials.Count + _inlayMaterials.Count} 份、盒网格 {_boxMeshes.Count} 份、地块部件网格 {_tileMeshes.Count} 份");
 
         // 自证行（map-restyle 段C；map-surface 裁决 4）：装饰套件各放了几格（草丛 / 小石块 / 小花在可落子格角，其余在不可落子格）、中立平台符文环几块。
@@ -571,6 +655,14 @@ public sealed partial class BoardView : Node3D
             Visible = false,
         };
         AddChild(_cursor);
+        if (_streaming)
+        {
+            // 局部格网与插旗预览只在大图上有（裁决 7 / D9）；小图的场景树一个节点都不多。
+            _localGrid = new Node3D { Name = "LocalGrid" };
+            AddChild(_localGrid);
+            _flagPreview = new Node3D { Name = "FlagPreview" };
+            AddChild(_flagPreview);
+        }
 
         AddChild(new DirectionalLight3D
         {
@@ -698,9 +790,442 @@ public sealed partial class BoardView : Node3D
             Rig.Rebound(bounds, focus, shiftX, shiftZ);
         }
 
+        // big-map D9：大图分块流式加载，不提供全局预览（整张 150×150 一屏时绝大部分区块都没建）；M 键另作小地图显隐（GameRoot）。小图恒启用、行为不变。
+        Rig.OverviewEnabled = !_streaming;
+
         Camera = new Camera3D { Fov = CameraPose.FovDegrees };
         AddChild(Camera);
         ApplyCameraPose();
+
+        if (_streaming)
+        {
+            // 初始加载集按此刻的注视点（新建相机在画幅中心；重搭时保位姿）。
+            UpdateStreaming();
+        }
+
+        double buildMs = System.Diagnostics.Stopwatch.GetElapsedTime(buildStarted).TotalMilliseconds;
+        GD.Print($"[build] 建场景 {buildMs:0} ms：{(_streaming ? $"大图流式，区块 {_chunkColumns}×{_chunkRows}，已加载 {ChunkCounts.Loaded} / {ChunkCounts.Total}" : $"小图常驻，区块 {_chunkColumns}×{_chunkRows} 全部常驻（逐格节点）")}，格 {board.Cells.Length}（可落子 {_levels.Count}）");
+    }
+    // ---------- 分块流式加载（big-map D9） ----------
+
+    /// <summary>某格所在的区块键。</summary>
+    private static (int X, int Y) ChunkOf(Coord c) => (c.X / ChunkSide, c.Y / ChunkSide);
+
+    private int ChunkIndex((int X, int Y) key) => (key.Y * _chunkColumns) + key.X;
+
+    /// <summary>某格是否在已加载区块里（常驻模式恒为真）。</summary>
+    public bool IsLoaded(Coord c) => !_streaming || _loadedChunks.ContainsKey(ChunkOf(c));
+
+    /// <summary>
+    /// 按相机注视点更新加载集（D9：注视点所在区块 ± <see cref="ChunkRadius"/> 圈）：注视区块没变什么都不做；变了就增量加载 / 卸载并返回 <c>true</c>（调用方据此重画棋子与叠加层）。
+    /// 由 GameRoot 每帧在相机输入之后调用一次——不挂在 <see cref="ApplyCameraPose"/> 上：<c>--pick-check</c> 一帧内置位几千次，挂在那里会把自检拖成区块抖动。
+    /// 常驻模式（小图）恒返回 <c>false</c>。
+    /// </summary>
+    public bool UpdateStreaming()
+    {
+        if (!_streaming || _emitCell is null)
+        {
+            return false;
+        }
+
+        // 注视点 → 格：世界 → 格只经 BoardGeometry 的那一份反算；注视点可能落在画幅外沿（可行矩形含标注边距），出界夹到边缘格（NearestCell）。
+        CameraPose pose = Rig.Pose;
+        Coord focus = BoardGeometry.NearestCell(new Vector3(pose.FocusX, 0f, pose.FocusZ), _width, _height);
+
+        (int X, int Y) center = ChunkOf(focus);
+        if (_chunkCenter == center)
+        {
+            return false;
+        }
+
+        _chunkCenter = center;
+        var wanted = new HashSet<(int X, int Y)>();
+        for (int y = Math.Max(0, center.Y - ChunkRadius); y <= Math.Min(_chunkRows - 1, center.Y + ChunkRadius); y++)
+        {
+            for (int x = Math.Max(0, center.X - ChunkRadius); x <= Math.Min(_chunkColumns - 1, center.X + ChunkRadius); x++)
+            {
+                wanted.Add((x, y));
+            }
+        }
+
+        int unloaded = 0, loaded = 0;
+        foreach ((int X, int Y) key in _loadedChunks.Keys.Where(k => !wanted.Contains(k)).ToList())
+        {
+            UnloadChunk(key);
+            unloaded++;
+        }
+
+        // 加载次序：离注视区块近的先建（切比雪夫距离），同距按键序——确定性，与相机怎么到达这里无关。
+        foreach ((int X, int Y) key in wanted.Where(k => !_loadedChunks.ContainsKey(k)).OrderBy(k => Math.Max(Math.Abs(k.X - center.X), Math.Abs(k.Y - center.Y))).ThenBy(k => k.Y).ThenBy(k => k.X))
+        {
+            LoadChunk(key);
+            loaded++;
+        }
+
+        _pickVersion++;
+        GD.Print($"[chunks] 注视格 {focus.ToNotation()} → 区块 ({center.X}, {center.Y})：本次加载 {loaded}、卸载 {unloaded}，已加载 {_loadedChunks.Count} / {_chunkColumns * _chunkRows}，累计加载 {_chunkLoads}、卸载 {_chunkUnloads}；"
+            + $"当前已加载区块共 MultiMesh {_chunkMultiMeshes} 个、实例 {_chunkInstances} 个");
+        return true;
+    }
+
+    private void LoadChunk((int X, int Y) key)
+    {
+        var chunk = new Node3D { Name = $"Chunk_{key.X}_{key.Y}" };
+        _tiles.AddChild(chunk);
+        var decoration = new Node3D { Name = "Decoration" };
+        chunk.AddChild(decoration);
+        var batchRoot = new Node3D { Name = "Batch" };
+        chunk.AddChild(batchRoot);
+        var parts = new PartBatchSet(batchRoot);
+        var sink = new CellSink(chunk, decoration, parts, batched: true, []);
+        foreach (BoardCellView cell in _chunkCells[ChunkIndex(key)])
+        {
+            _emitCell!(cell, sink);
+        }
+
+        foreach (FenceEdge fence in _fences)
+        {
+            // 两端任一格在本区块就画（跨区块边界的栅栏在两边各画一件、同位同形）：只按 A 端归档会在 A 端区块未加载而 B 端已加载时让栅栏消失。
+            if (ChunkOf(fence.A) == key || ChunkOf(fence.B) == key)
+            {
+                AddFence(chunk, fence);
+            }
+        }
+
+        if (_slabMaterial is not null && sink.SlabTops.Count > 0)
+        {
+            AddSceneSlabs(chunk, sink.SlabTops, _slabMaterial);
+        }
+
+        parts.Build();
+        if (_batchScale is { } scale)
+        {
+            parts.SetScale(scale);
+            foreach (Node3D ornament in decoration.GetChildren().OfType<Node3D>())
+            {
+                ornament.Scale = Vector3.One * scale;
+            }
+        }
+
+        int multiMeshes = sink.Flush(chunk) + parts.MultiMeshes;
+        int instances = sink.Instances + parts.Batches.Sum(b => b.Centers.Count * b.Parts.Length);
+        _chunkStats[key] = (multiMeshes, instances);
+        _chunkMultiMeshes += multiMeshes;
+        _chunkInstances += instances;
+        _loadedChunks[key] = chunk;
+        _chunkParts[key] = parts;
+        _chunkDecorations[key] = decoration;
+        foreach (BoardCellView cell in _chunkCells[ChunkIndex(key)])
+        {
+            _visible.Add(cell.Coord);
+        }
+
+        _chunkLoads++;
+    }
+
+    private void UnloadChunk((int X, int Y) key)
+    {
+        Node3D chunk = _loadedChunks[key];
+        _loadedChunks.Remove(key);
+        _chunkParts.Remove(key);
+        _chunkDecorations.Remove(key);
+        if (_chunkStats.Remove(key, out (int MultiMeshes, int Instances) stats))
+        {
+            _chunkMultiMeshes -= stats.MultiMeshes;
+            _chunkInstances -= stats.Instances;
+        }
+        _tiles.RemoveChild(chunk);
+        chunk.QueueFree();
+        foreach (BoardCellView cell in _chunkCells[ChunkIndex(key)])
+        {
+            _visible.Remove(cell.Coord);
+        }
+
+        _chunkUnloads++;
+    }
+
+    /// <summary>全部装饰容器：常驻的 Decoration + 各已加载区块的 Decoration（信息层压暗时整体缩放）。</summary>
+    private IEnumerable<Node3D> DecorationRoots()
+    {
+        yield return _decoration;
+        foreach (Node3D node in _chunkDecorations.Values)
+        {
+            yield return node;
+        }
+    }
+
+    /// <summary>全部合批集：常驻一套 + 各已加载区块各一套。</summary>
+    private IEnumerable<PartBatchSet> PartSets()
+    {
+        yield return _parts;
+        foreach (PartBatchSet set in _chunkParts.Values)
+        {
+            yield return set;
+        }
+    }
+
+    /// <summary>
+    /// "建一格"的落点（D9）：常驻路径是整张图共用的 Tiles / Decoration / 合批集，逐格节点与改前相同；流式路径每个区块一套，
+    /// 地砖件、石沿、亮条、水面按 (网格, 材质, 投影) 归并成 MultiMesh，装饰走区块自己的合批集。
+    /// </summary>
+    private sealed class CellSink(Node3D tiles, Node3D decoration, PartBatchSet parts, bool batched, List<Vector3> slabTops)
+    {
+        private readonly Dictionary<(Mesh Mesh, Material Material, bool Shadow), List<Transform3D>> _instances = [];
+
+        public Node3D Tiles { get; } = tiles;
+
+        public Node3D Decoration { get; } = decoration;
+
+        public PartBatchSet Parts { get; } = parts;
+
+        public bool Batched { get; } = batched;
+
+        public List<Vector3> SlabTops { get; } = slabTops;
+
+        /// <summary>已登记的刚体实例数（流式）。</summary>
+        public int Instances { get; private set; }
+
+        /// <summary>一件刚体地形件（亮条等）：常驻逐格一个节点（与改前同一份属性），流式只登记变换。</summary>
+        public void Instance(Mesh mesh, Material material, Transform3D transform, bool shadow)
+        {
+            if (!Batched)
+            {
+                Tiles.AddChild(new MeshInstance3D
+                {
+                    Mesh = mesh,
+                    MaterialOverride = material,
+                    Transform = transform,
+                    CastShadow = shadow ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+                return;
+            }
+
+            Register(mesh, material, shadow, transform);
+        }
+
+        /// <summary>只给位置的地块部件（面砖、侧面、衬底）：常驻走改前的 <c>Mesh / MaterialOverride / Position</c> 三项，流式登记平移变换。</summary>
+        public void Piece(Mesh mesh, Material material, Vector3 position)
+        {
+            if (!Batched)
+            {
+                Tiles.AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = material, Position = position });
+                return;
+            }
+
+            Register(mesh, material, shadow: true, new Transform3D(Basis.Identity, position));
+        }
+
+        /// <summary>河岸石沿：常驻走改前的 <see cref="AddBankLip"/> 节点；流式登记带朝向的变换（同一欧拉角 → 同一基）。</summary>
+        public void Lip(TerrainParts.Piece piece, Vector3 position, Vector3 inward)
+        {
+            if (!Batched)
+            {
+                AddBankLip(Tiles, piece, position, inward);
+                return;
+            }
+
+            Register(piece.Mesh, piece.Material ?? CliffMaterial, shadow: false,
+                new Transform3D(Basis.FromEuler(new Vector3(0f, MathF.Atan2(inward.X, inward.Z), 0f)), position));
+        }
+
+        /// <summary>逐格装饰（林地小树、新地表点缀）：常驻逐格实例化到装饰层（与改前相同），流式交给区块合批集（不能合批的退回逐格节点）。</summary>
+        public void Ornament(TerrainParts.Kind kind, int variant, Vector3 center)
+        {
+            if (!Batched)
+            {
+                Node3D node = TerrainParts.Create(kind, variant);
+                node.Position = center;
+                Decoration.AddChild(node);
+                return;
+            }
+
+            Parts.Add(kind, variant, center, Decoration);
+        }
+
+        /// <summary>把登记的实例合成 MultiMesh 挂到 <paramref name="into"/>；返回 MultiMesh 个数。</summary>
+        public int Flush(Node3D into)
+        {
+            foreach (((Mesh mesh, Material material, bool shadow), List<Transform3D> transforms) in _instances)
+            {
+                var multi = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = transforms.Count };
+                for (int i = 0; i < transforms.Count; i++)
+                {
+                    multi.SetInstanceTransform(i, transforms[i]);
+                }
+
+                into.AddChild(new MultiMeshInstance3D
+                {
+                    Multimesh = multi,
+                    MaterialOverride = material,
+                    CastShadow = shadow ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+            }
+
+            int count = _instances.Count;
+            _instances.Clear();
+            return count;
+        }
+
+        private void Register(Mesh mesh, Material material, bool shadow, Transform3D transform)
+        {
+            if (!_instances.TryGetValue((mesh, material, shadow), out List<Transform3D>? list))
+            {
+                list = [];
+                _instances[(mesh, material, shadow)] = list;
+            }
+
+            list.Add(transform);
+            Instances++;
+        }
+    }
+
+    // ---------- 局部格网与插旗预览（big-map 裁决 7 / D9，流式专用） ----------
+
+    /// <summary>
+    /// 合法范围 / 信息层全格的格网（裁决 7）：<paramref name="cells"/> 里已加载、可落子的格沿四边画细墨线（同一条边只画一次），一个网格。
+    /// 常驻模式（小图）没有这一层。
+    /// </summary>
+    private void SetRangeGrid(IEnumerable<Coord> cells)
+    {
+        if (_localGrid is null)
+        {
+            return;
+        }
+
+        Coord[] drawn = [.. cells.Where(c => _visible.Contains(c) && _levels.ContainsKey(c)).Distinct()];
+        _gridRangeCells = drawn.Length;
+        ReplaceGridMesh(ref _gridRange, drawn);
+    }
+
+    /// <summary>光标周围 7×7 的格网（裁决 7）：只在部署阶段（<see cref="_cursorGrid"/>）且光标在格上时画。</summary>
+    private void SetCursorGrid()
+    {
+        if (_localGrid is null)
+        {
+            return;
+        }
+
+        if (!_cursorGrid || _cursorCell is not { } at)
+        {
+            ReplaceGridMesh(ref _gridCursor, []);
+            return;
+        }
+
+        int reach = CursorGridSide / 2;
+        var cells = new List<Coord>();
+        Coord low = BoardGeometry.ClampToBoard(at.X - reach, at.Y - reach, _width, _height);
+        Coord high = BoardGeometry.ClampToBoard(at.X + reach, at.Y + reach, _width, _height);
+        for (int y = low.Y; y <= high.Y; y++)
+        {
+            for (int x = low.X; x <= high.X; x++)
+            {
+                var c = new Coord(x, y);
+                if (_visible.Contains(c) && _levels.ContainsKey(c))
+                {
+                    cells.Add(c);
+                }
+            }
+        }
+
+        ReplaceGridMesh(ref _gridCursor, cells);
+    }
+
+    private void ReplaceGridMesh(ref MeshInstance3D? node, IReadOnlyCollection<Coord> cells)
+    {
+        if (node is not null)
+        {
+            _localGrid!.RemoveChild(node);
+            node.QueueFree();
+            node = null;
+        }
+
+        if (cells.Count == 0)
+        {
+            return;
+        }
+
+        node = new MeshInstance3D { Mesh = GridMesh(cells), MaterialOverride = GridInk, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        _localGrid!.AddChild(node);
+    }
+
+    private static readonly StandardMaterial3D GridInk = Visuals.Flat(Visuals.BoardGridLine);
+
+    /// <summary>格网网格：每格四条边各一条细墨线（0.035 宽、0.006 高，与棋盘台面的墨线同规格），同一条边同一层只画一次；位置只经 <see cref="CenterOf"/> 推出。</summary>
+    private ArrayMesh GridMesh(IReadOnlyCollection<Coord> cells)
+    {
+        const float lineWidth = 0.035f;
+        const float lineHeight = 0.006f;
+        const float half = BoardGeometry.CellSize * 0.5f;
+        var tool = new SurfaceTool();
+        tool.Begin(Mesh.PrimitiveType.Triangles);
+        var drawn = new HashSet<(int, int, int)>();
+        foreach (Coord c in cells)
+        {
+            Vector3 center = CenterOf(c);
+            int level = LevelOf(c) ?? 0;
+            float y = center.Y + lineHeight;
+            // 倍格点阵里的边键：横边 (2x+1, 2y+dy)、竖边 (2x+dx, 2y+1)；同一条边同一层只画一次（相邻两格共边）。
+            foreach ((int dx, int dy) in new[] { (0, 1), (0, -1), (1, 0), (-1, 0) })
+            {
+                if (!drawn.Add(((2 * c.X) + 1 + dx, (2 * c.Y) + 1 + dy, level)))
+                {
+                    continue;
+                }
+
+                bool alongX = dy != 0;
+                Vector3 at = center + new Vector3(dx * half, 0f, -dy * half);
+                Vector3 size = alongX ? new Vector3(BoardGeometry.CellSize + lineWidth, 0f, lineWidth) : new Vector3(lineWidth, 0f, BoardGeometry.CellSize + lineWidth);
+                Vector3 a = new(at.X - (size.X * 0.5f), y, at.Z - (size.Z * 0.5f));
+                Vector3 b = new(at.X + (size.X * 0.5f), y, at.Z - (size.Z * 0.5f));
+                Vector3 cc = new(at.X + (size.X * 0.5f), y, at.Z + (size.Z * 0.5f));
+                Vector3 d = new(at.X - (size.X * 0.5f), y, at.Z + (size.Z * 0.5f));
+                foreach (Vector3 v in new[] { a, b, cc, a, cc, d })
+                {
+                    tool.SetNormal(Vector3.Up);
+                    tool.AddVertex(v);
+                }
+            }
+        }
+
+        return tool.Commit();
+    }
+
+    /// <summary>
+    /// 大图插旗阶段光标处的预览（D9）：9×9 出生圈的实线框 + 13×13 构筑范围的细框，合规取出生区提示色、不合规取警示色（合规与否由调用方经 Core 唯一实现判定，这里只画）。
+    /// <c>null</c> 即清掉。常驻模式（小图）没有这一层。
+    /// </summary>
+    public void SetFlagPreview(Coord? cell, bool legal)
+    {
+        if (_flagPreview is null)
+        {
+            return;
+        }
+
+        Clear(_flagPreview);
+        if (cell is not { } at)
+        {
+            return;
+        }
+
+        Color color = legal ? Visuals.BirthHint : Visuals.Urgent;
+        Frame(at, FlagRules.RingReach, 0.08f, 0.05f, Visuals.Flat(color));
+        Frame(at, FlagRules.PlateReach, 0.035f, 0.02f, Visuals.Flat(new Color(color, 0.55f)));
+
+        void Frame(Coord center, int reach, float width, float height, StandardMaterial3D material)
+        {
+            const float half = BoardGeometry.CellSize * 0.5f;
+            Vector3 a = BoardGeometry.Center(BoardGeometry.ClampToBoard(center.X - reach, center.Y - reach, _width, _height), _width, _height);
+            Vector3 b = BoardGeometry.Center(BoardGeometry.ClampToBoard(center.X + reach, center.Y + reach, _width, _height), _width, _height);
+            float minX = Math.Min(a.X, b.X) - half, maxX = Math.Max(a.X, b.X) + half;
+            float minZ = Math.Min(a.Z, b.Z) - half, maxZ = Math.Max(a.Z, b.Z) + half;
+            float midX = (minX + maxX) * 0.5f, midZ = (minZ + maxZ) * 0.5f;
+            float y = a.Y + (height * 0.5f) + 0.01f;
+            float spanX = maxX - minX + width, spanZ = maxZ - minZ + width;
+            _flagPreview!.AddChild(new MeshInstance3D { Mesh = BoxOf(new Vector3(spanX, height, width)), MaterialOverride = material, Position = new Vector3(midX, y, minZ), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+            _flagPreview.AddChild(new MeshInstance3D { Mesh = BoxOf(new Vector3(spanX, height, width)), MaterialOverride = material, Position = new Vector3(midX, y, maxZ), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+            _flagPreview.AddChild(new MeshInstance3D { Mesh = BoxOf(new Vector3(width, height, spanZ)), MaterialOverride = material, Position = new Vector3(minX, y, midZ), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+            _flagPreview.AddChild(new MeshInstance3D { Mesh = BoxOf(new Vector3(width, height, spanZ)), MaterialOverride = material, Position = new Vector3(maxX, y, midZ), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        }
     }
 
     /// <summary>
@@ -755,7 +1280,22 @@ public sealed partial class BoardView : Node3D
     /// 不在本次视图里的格（插旗阶段只见部分）一律当虚空、可被泛洪穿过——与改前"留白格不铺地面"的口径一致。
     /// 纯表现：只读视图模型的地表与坐标，4 邻用坐标算术，不调规则内核的邻接查询（visual-style-baseline）。
     /// </remarks>
-    private static HashSet<Coord> IslandCells(DefaultBoardView board)
+    /// <summary>
+    /// 六种非草地地表 → 地砖基色的唯一映射（守门 <c>新地表判断唯一Tests</c> 允许清单里本文件登记为"地砖色"）：3D 地砖与小地图底图（<see cref="Minimap"/>）共用。
+    /// 草地按坐标分片（<see cref="GrassPatchColor"/>）、深水 / 障碍另有分支，都不在此——其余返回 <c>null</c>，由调用方取各自的缺省色。
+    /// </summary>
+    internal static Color? SurfaceTileColorOf(Surface surface) => surface switch
+    {
+        Surface.Road => Visuals.TileRoad,
+        Surface.Forest => Visuals.TileForest,
+        Surface.Desert => Visuals.TileDesert,
+        Surface.Marsh => Visuals.TileMarsh,
+        Surface.Crag => Visuals.TileCrag,
+        Surface.Shallows => Visuals.TileShallows,
+        _ => null,
+    };
+
+    internal static HashSet<Coord> IslandCells(DefaultBoardView board)
     {
         var ground = new HashSet<Coord>(board.Cells.Where(c => c.Terrain == Terrain.Playable || c.Surface == Surface.DeepWater).Select(c => c.Coord));
         var hollow = new HashSet<Coord>();
@@ -1060,7 +1600,7 @@ public sealed partial class BoardView : Node3D
     private static readonly StandardMaterial3D SlopeMaterial = SideFallback(Visuals.SlopeSide);
     private static readonly StandardMaterial3D CliffMaterial = SideFallback(Visuals.CliffSide);
 
-    private void AddTileStack(Node3D parent, Coord coord, Vector3 top, int level, StandardMaterial3D surface, Color color)
+    private void AddTileStack(CellSink sink, Coord coord, Vector3 top, int level, StandardMaterial3D surface, Color color)
     {
         for (int layer = 1; layer <= level; layer++)
         {
@@ -1069,7 +1609,13 @@ public sealed partial class BoardView : Node3D
             // 侧面色带铺满整格（CellSize）：高台读作一整块实心的土 / 岩，而不是一根根立柱之间透着黑缝。部件锚点在该层带的顶面中心。
             bool cliff = level == 2;
             TerrainParts.Piece side = TerrainParts.PieceOf(cliff ? TerrainParts.SideCliff : TerrainParts.SideSlope, TileVariant(coord, layer));
-            AddTilePiece(parent, side.Mesh, side.Material ?? (cliff ? CliffMaterial : SlopeMaterial), new Vector3(top.X, bandTop, top.Z));
+            AddTilePiece(sink, side.Mesh, side.Material ?? (cliff ? CliffMaterial : SlopeMaterial), new Vector3(top.X, bandTop, top.Z));
+        }
+        if (sink.Batched)
+        {
+            // 大图（裁决 7：地面默认完全无格）：不放衬底、面砖铺满整格（CellSize × TileHeight 的平板，同地表相邻格连成一片地面），格只由局部格网画出。
+            AddTilePiece(sink, BoxOf(new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize)), surface, top - new Vector3(0f, BoardGeometry.TileHeight * 0.5f, 0f));
+            return;
         }
 
         // 面砖之下垫一块铺满整格的薄衬底，颜色取面砖压暗：面砖之间那 0.10 的缝露出的就是它——
@@ -1080,17 +1626,17 @@ public sealed partial class BoardView : Node3D
         // 衬底网格不变（TerrainParts.Liner），只改锚点高度；拾取仍先打中面砖顶面，--pick-check 复核。
         const float liner = TerrainParts.LinerThickness;
         const float groove = 0.04f;
-        AddTilePiece(parent, TerrainParts.PieceOf(TerrainParts.Liner, 0).Mesh, LinerOf(color), top - new Vector3(0f, groove + (liner * 0.5f), 0f));
+        AddTilePiece(sink, TerrainParts.PieceOf(TerrainParts.Liner, 0).Mesh, LinerOf(color), top - new Vector3(0f, groove + (liner * 0.5f), 0f));
 
         // 顶板：部件锚点在地砖上表面中心；变体只做细微色差（O-1），明暗棋盘格与出生区淡染仍靠底色。
-        AddTilePiece(parent, TerrainParts.PieceOf(TerrainParts.TileTop, TileVariant(coord, 0)).Mesh, surface, top);
+        AddTilePiece(sink, TerrainParts.PieceOf(TerrainParts.TileTop, TileVariant(coord, 0)).Mesh, surface, top);
     }
 
-    /// <summary>放一件地块部件：逐格一个节点，网格与材质共用。</summary>
-    private void AddTilePiece(Node3D parent, Mesh mesh, Material material, Vector3 position)
+    /// <summary>放一件地块部件：常驻逐格一个节点（网格与材质共用）；流式登记到区块的 MultiMesh。</summary>
+    private void AddTilePiece(CellSink sink, Mesh mesh, Material material, Vector3 position)
     {
         _tileMeshes.Add(mesh);
-        parent.AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = material, Position = position });
+        sink.Piece(mesh, material, position);
     }
 
     /// <summary>
@@ -1317,51 +1863,165 @@ public sealed partial class BoardView : Node3D
         public int[] Offsets { get; } = new int[parts.Length];
     }
 
-    /// <summary>在某格放一件障碍装饰：该变体能合批就只登记格心，否则保留逐格各建一件节点的原画法。</summary>
-    private void AddObstacle(TerrainParts.Kind kind, int variant, Vector3 center)
-    {
-        string key = kind.FileName(variant);
-        if (!_partBatches.TryGetValue(key, out PartBatch? batch))
-        {
-            batch = NewPartBatch(kind, variant);
-            _partBatches[key] = batch;
-        }
-
-        if (batch is null)
-        {
-            Node3D obstacle = TerrainParts.Create(kind, variant);
-            obstacle.Position = center;
-            _decoration.AddChild(obstacle);
-            _unbatchedObstacles++;
-            return;
-        }
-
-        TerrainParts.CountLoaded();
-        batch.Centers.Add(center);
-    }
-
     /// <summary>
-    /// 该变体的合批模板；不能合批时为 <c>null</c>：没有资源（程序生成的造型逐格不同），或模板不是"根下一层、各带一个网格、不带逐面材质"的形状
-    /// （MultiMesh 只能整批给一个网格配一份覆盖材质）。
+    /// 一套障碍装饰合批（board-render-perf D2 → big-map D9 按区块归档）：常驻模式整张图一套（挂在 DecorationBatch 下，与改前同一份逻辑）；流式模式每个已加载区块一套（挂在区块节点下）。
     /// </summary>
-    private PartBatch? NewPartBatch(TerrainParts.Kind kind, int variant)
+    private sealed class PartBatchSet(Node3D root)
     {
-        if (TerrainParts.Template(kind, variant) is not { } template)
+        private readonly Dictionary<string, PartBatch?> _batches = [];
+
+        /// <summary>模板与 MultiMesh 的挂点。</summary>
+        public Node3D Root { get; } = root;
+
+        /// <summary>未合批（逐格各建节点）的格数。</summary>
+        public int Unbatched { get; private set; }
+
+        /// <summary>建出的 MultiMesh 个数。</summary>
+        public int MultiMeshes { get; private set; }
+
+        /// <summary>当前写入实例变换时用的缩放；<c>null</c> 即尚未按信息层缩放过。</summary>
+        public float? Scale { get; private set; }
+
+        public IEnumerable<PartBatch> Batches => _batches.Values.OfType<PartBatch>();
+
+        /// <summary>在某格放一件障碍装饰：该变体能合批就只登记格心，否则保留逐格各建一件节点的原画法（挂到 <paramref name="fallback"/>）。</summary>
+        public void Add(TerrainParts.Kind kind, int variant, Vector3 center, Node3D fallback)
         {
-            return null;
+            string key = kind.FileName(variant);
+            if (!_batches.TryGetValue(key, out PartBatch? batch))
+            {
+                batch = NewPartBatch(kind, variant);
+                _batches[key] = batch;
+            }
+
+            if (batch is null)
+            {
+                Node3D obstacle = TerrainParts.Create(kind, variant);
+                obstacle.Position = center;
+                fallback.AddChild(obstacle);
+                Unbatched++;
+                return;
+            }
+
+            TerrainParts.CountLoaded();
+            batch.Centers.Add(center);
         }
 
-        MeshInstance3D[] parts = [.. template.GetChildren().OfType<MeshInstance3D>()];
-        if (!template.Visible || parts.Length == 0 || parts.Length != template.GetChildCount() || !parts.All(IsPlainPart))
+        /// <summary>
+        /// 该变体的合批模板；不能合批时为 <c>null</c>：没有资源（程序生成的造型逐格不同），或模板不是"根下一层、各带一个网格、不带逐面材质"的形状
+        /// （MultiMesh 只能整批给一个网格配一份覆盖材质）。
+        /// </summary>
+        private PartBatch? NewPartBatch(TerrainParts.Kind kind, int variant)
         {
-            template.Free();
-            return null;
+            if (TerrainParts.Template(kind, variant) is not { } template)
+            {
+                return null;
+            }
+
+            MeshInstance3D[] parts = [.. template.GetChildren().OfType<MeshInstance3D>()];
+            if (!template.Visible || parts.Length == 0 || parts.Length != template.GetChildCount() || !parts.All(IsPlainPart))
+            {
+                template.Free();
+                return null;
+            }
+
+            // 模板留在场景树里（隐藏、不画）：读全局变换要在树内；随 Build 开头的 Clear（或区块卸载）一并释放。
+            template.Visible = false;
+            Root.AddChild(template);
+            return new PartBatch(template, parts);
         }
 
-        // 模板留在场景树里（隐藏、不画）：读全局变换要在树内；随 Build 开头的 Clear 一并释放。
-        template.Visible = false;
-        _batch.AddChild(template);
-        return new PartBatch(template, parts);
+        /// <summary>
+        /// 全部格登记完之后建 MultiMesh 并写入实例变换。形状参数相同、覆盖材质与投影设置也相同的子网格归入同一个 MultiMesh（D2「同一网格 + 同一材质」）——
+        /// 几个变体里其实是同一个石块 / 同一段树干，只是摆放不同，摆放由实例变换承担。网格 / 覆盖材质 / 投影设置照抄模板。
+        /// </summary>
+        public void Build()
+        {
+            var groups = new Dictionary<(string Shape, Rid Material, GeometryInstance3D.ShadowCastingSetting Shadow, uint Layers), List<(PartBatch Batch, int Part)>>();
+            foreach (PartBatch batch in Batches)
+            {
+                for (int p = 0; p < batch.Parts.Length; p++)
+                {
+                    MeshInstance3D part = batch.Parts[p];
+                    var key = (ShapeKeyOf(part.Mesh), part.MaterialOverride?.GetRid() ?? default, part.CastShadow, part.Layers);
+                    if (!groups.TryGetValue(key, out List<(PartBatch Batch, int Part)>? members))
+                    {
+                        members = [];
+                        groups[key] = members;
+                    }
+
+                    members.Add((batch, p));
+                }
+            }
+
+            foreach (List<(PartBatch Batch, int Part)> members in groups.Values)
+            {
+                MeshInstance3D first = members[0].Batch.Parts[members[0].Part];
+                var mesh = new MultiMesh
+                {
+                    TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+                    Mesh = first.Mesh,
+                    InstanceCount = members.Sum(m => m.Batch.Centers.Count),
+                };
+                int offset = 0;
+                foreach ((PartBatch batch, int p) in members)
+                {
+                    batch.Meshes[p] = mesh;
+                    batch.Offsets[p] = offset;
+                    offset += batch.Centers.Count;
+                }
+
+                Root.AddChild(new MultiMeshInstance3D
+                {
+                    Multimesh = mesh,
+                    MaterialOverride = first.MaterialOverride,
+                    CastShadow = first.CastShadow,
+                    Layers = first.Layers,
+                });
+            }
+
+            MultiMeshes = groups.Count;
+            Scale = null;
+            WriteTransforms();
+        }
+
+        /// <summary>
+        /// 信息层压暗时装饰整体缩小（<see cref="SceneTreatment.DecorationContrastPercent"/>）：逐格节点是各自绕格心缩放，
+        /// 合批的实例照同样的做法——在模板根上设缩放，再重写全部实例变换。缩放没变就不重写。
+        /// </summary>
+        public void SetScale(float scale)
+        {
+            if (Scale == scale)
+            {
+                return;
+            }
+
+            Scale = scale;
+            foreach (PartBatch batch in Batches)
+            {
+                batch.Template.Scale = Vector3.One * scale;
+            }
+
+            WriteTransforms();
+        }
+
+        private void WriteTransforms()
+        {
+            // 合批层与装饰层一样直接挂在棋盘节点下、不带变换；棋盘节点也不带变换时，模板子网格的全局变换就是实例相对合批层的变换（引擎算的）。
+            // 否则退回在这里相乘（数值上等价，不保证最后一位相同）。
+            bool readBack = Root.IsInsideTree() && Root.GlobalTransform == Transform3D.Identity;
+            foreach (PartBatch batch in Batches)
+            {
+                for (int i = 0; i < batch.Centers.Count; i++)
+                {
+                    batch.Template.Position = batch.Centers[i];
+                    for (int p = 0; p < batch.Parts.Length; p++)
+                    {
+                        batch.Meshes[p].SetInstanceTransform(batch.Offsets[p] + i, readBack ? batch.Parts[p].GlobalTransform : batch.Template.Transform * batch.Parts[p].Transform);
+                    }
+                }
+            }
+        }
     }
 
     private static bool IsPlainPart(MeshInstance3D part) =>
@@ -1371,60 +2031,6 @@ public sealed partial class BoardView : Node3D
         && part.MaterialOverlay is null
         && part.Transparency == 0f
         && Enumerable.Range(0, mesh.GetSurfaceCount()).All(surface => part.GetSurfaceOverrideMaterial(surface) is null);
-
-    /// <summary>
-    /// 全部格登记完之后建 MultiMesh 并写入实例变换。形状参数相同、覆盖材质与投影设置也相同的子网格归入同一个 MultiMesh（D2「同一网格 + 同一材质」）——
-    /// 几个变体里其实是同一个石块 / 同一段树干，只是摆放不同，摆放由实例变换承担。网格 / 覆盖材质 / 投影设置照抄模板。
-    /// </summary>
-    private void BuildPartBatches()
-    {
-        var groups = new Dictionary<(string Shape, Rid Material, GeometryInstance3D.ShadowCastingSetting Shadow, uint Layers), List<(PartBatch Batch, int Part)>>();
-        foreach (PartBatch batch in _partBatches.Values.OfType<PartBatch>())
-        {
-            for (int p = 0; p < batch.Parts.Length; p++)
-            {
-                MeshInstance3D part = batch.Parts[p];
-                var key = (ShapeKeyOf(part.Mesh), part.MaterialOverride?.GetRid() ?? default, part.CastShadow, part.Layers);
-                if (!groups.TryGetValue(key, out List<(PartBatch Batch, int Part)>? members))
-                {
-                    members = [];
-                    groups[key] = members;
-                }
-
-                members.Add((batch, p));
-            }
-        }
-
-        foreach (List<(PartBatch Batch, int Part)> members in groups.Values)
-        {
-            MeshInstance3D first = members[0].Batch.Parts[members[0].Part];
-            var mesh = new MultiMesh
-            {
-                TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
-                Mesh = first.Mesh,
-                InstanceCount = members.Sum(m => m.Batch.Centers.Count),
-            };
-            int offset = 0;
-            foreach ((PartBatch batch, int p) in members)
-            {
-                batch.Meshes[p] = mesh;
-                batch.Offsets[p] = offset;
-                offset += batch.Centers.Count;
-            }
-
-            _batch.AddChild(new MultiMeshInstance3D
-            {
-                Multimesh = mesh,
-                MaterialOverride = first.MaterialOverride,
-                CastShadow = first.CastShadow,
-                Layers = first.Layers,
-            });
-        }
-
-        _partMultiMeshes = groups.Count;
-        _batchScale = null;
-        WritePartTransforms();
-    }
 
     /// <summary>
     /// 网格的形状键：不带自身材质与额外选项的盒 / 球 / 柱按生成参数逐位比较（参数相同即顶点相同）；其余网格（如美术替换的模型）只认同一份资源。
@@ -1450,41 +2056,13 @@ public sealed partial class BoardView : Node3D
         return $"rid {mesh.GetRid().Id}";
     }
 
-    /// <summary>
-    /// 信息层压暗时装饰整体缩小（<see cref="SceneTreatment.DecorationContrastPercent"/>）：逐格节点是各自绕格心缩放，
-    /// 合批的实例照同样的做法——在模板根上设缩放，再重写全部实例变换。缩放没变就不重写。
-    /// </summary>
+    /// <summary>信息层压暗时装饰整体缩小：常驻一套与各已加载区块的合批集一起缩放（缩放没变的那一套自己跳过）。</summary>
     private void ScalePartBatches(float scale)
     {
-        if (_batchScale == scale)
-        {
-            return;
-        }
-
         _batchScale = scale;
-        foreach (PartBatch batch in _partBatches.Values.OfType<PartBatch>())
+        foreach (PartBatchSet set in PartSets())
         {
-            batch.Template.Scale = Vector3.One * scale;
-        }
-
-        WritePartTransforms();
-    }
-
-    private void WritePartTransforms()
-    {
-        // 合批层与装饰层一样直接挂在本节点下、不带变换；本节点也不带变换时，模板子网格的全局变换就是实例相对合批层的变换（引擎算的）。
-        // 否则退回在这里相乘（数值上等价，不保证最后一位相同）。
-        bool readBack = IsInsideTree() && _batch.GlobalTransform == Transform3D.Identity;
-        foreach (PartBatch batch in _partBatches.Values.OfType<PartBatch>())
-        {
-            for (int i = 0; i < batch.Centers.Count; i++)
-            {
-                batch.Template.Position = batch.Centers[i];
-                for (int p = 0; p < batch.Parts.Length; p++)
-                {
-                    batch.Meshes[p].SetInstanceTransform(batch.Offsets[p] + i, readBack ? batch.Parts[p].GlobalTransform : batch.Template.Transform * batch.Parts[p].Transform);
-                }
-            }
+            set.SetScale(scale);
         }
     }
 
@@ -1972,10 +2550,26 @@ public sealed partial class BoardView : Node3D
     /// <summary>深水格：比同层地砖低 <see cref="WaterDrop"/> 的蓝色水面 + 两道浅色波纹（装饰，贴在水面上）。返回水面材质以便信息层降饱和。</summary>
     private static readonly PlaneMesh FlowPlane = new() { Size = new Vector2(BoardGeometry.CellSize, BoardGeometry.CellSize), Orientation = PlaneMesh.OrientationEnum.Y };
 
-    private static StandardMaterial3D AddWater(Node3D parent, Vector3 top, Color color)
+    private void AddWater(CellSink sink, Vector3 top, Color color)
     {
-        StandardMaterial3D material = Visuals.Matte(color, 0.55f);
         const float drop = WaterDrop;
+        if (sink.Batched)
+        {
+            // 流式：全图一份水体材质（常驻路径逐格各建一份，这里不必）、两件实例进区块 MultiMesh。
+            if (_waterMaterial is null)
+            {
+                _waterMaterial = Visuals.Matte(color, 0.55f);
+                _tileMaterials.Add((_waterMaterial, color));
+            }
+
+            sink.Instance(BoxOf(new Vector3(BoardGeometry.CellSize, BoardGeometry.TileHeight, BoardGeometry.CellSize)), _waterMaterial,
+                new Transform3D(Basis.Identity, top - new Vector3(0f, drop - WaterSurfaceLift + (BoardGeometry.TileHeight * 0.5f), 0f)), shadow: true);
+            sink.Instance(FlowPlane, Visuals.WaterFlow, new Transform3D(Basis.Identity, top + new Vector3(0f, -drop + 0.012f, 0f)), shadow: false);
+            return;
+        }
+
+        StandardMaterial3D material = Visuals.Matte(color, 0.55f);
+        Node3D parent = sink.Tiles;
         parent.AddChild(new MeshInstance3D
         {
             // 水体铺满整格：相邻水格连成一片，河才读作"一条在流的河"而不是一格格水池。
@@ -1994,7 +2588,7 @@ public sealed partial class BoardView : Node3D
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
 
-        return material;
+        _tileMaterials.Add((material, color));
     }
 
     /// <summary>栅栏沿两格的公共边立起：放在两格格心的中点（即缝上）、取两格中较高一层的地砖面。</summary>
@@ -2016,6 +2610,12 @@ public sealed partial class BoardView : Node3D
         {
             _cursor.Position = CenterOf(c) + new Vector3(0f, 0.014f, 0f);
         }
+
+        if (_cursorCell != coord)
+        {
+            _cursorCell = coord;
+            SetCursorGrid();
+        }
     }
 
     /// <summary>
@@ -2030,7 +2630,8 @@ public sealed partial class BoardView : Node3D
         LibertyThresholds thresholds,
         TurnFlash flash,
         Coord? focus = null,
-        ShowMask? mask = null)
+        ShowMask? mask = null,
+        IReadOnlySet<Coord>? gridRange = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(treatment);
@@ -2048,9 +2649,12 @@ public sealed partial class BoardView : Node3D
 
         _environment.Environment.AdjustmentSaturation = treatment.SaturationPercent / 100f;
         float decorationScale = 0.72f + (0.28f * treatment.DecorationContrastPercent / 100f);
-        foreach (Node3D ornament in _decoration.GetChildren().OfType<Node3D>())
+        foreach (Node3D root in DecorationRoots())
         {
-            ornament.Scale = Vector3.One * decorationScale;
+            foreach (Node3D ornament in root.GetChildren().OfType<Node3D>())
+            {
+                ornament.Scale = Vector3.One * decorationScale;
+            }
         }
 
         ScalePartBatches(decorationScale);
@@ -2083,6 +2687,17 @@ public sealed partial class BoardView : Node3D
         if (_plateGridLines is { } gridLines)
         {
             gridLines.Visible = layerOpen;
+        }
+        // 大图的局部格网（裁决 7 / D9，流式专用）：信息层打开时已加载区块全格；否则只画调用方给的合法落子 / 改造范围（Core 唯一实现）；光标 7×7 只在本人部署阶段随光标画。
+        if (_localGrid is not null)
+        {
+            SetRangeGrid(layerOpen ? _visible : (gridRange ?? Enumerable.Empty<Coord>()));
+            bool cursorGrid = world.IsViewerTurn && world.Public.View.Stage == TurnStage.Deploy;
+            if (cursorGrid != _cursorGrid)
+            {
+                _cursorGrid = cursorGrid;
+                SetCursorGrid();
+            }
         }
 
         PreviewPresentation? preview = world.Preview(thresholds);
@@ -2460,7 +3075,8 @@ public sealed partial class BoardView : Node3D
         HashSet<Coord> onBoard = [];
         foreach (BoardCellView cell in board.Cells)
         {
-            if (cell.Occupant is not { } occupant || mask.Hidden.Contains(cell.Coord))
+            // D9：棋子仍逐格建节点，但只对已加载区块建（常驻模式 _visible 含视图里全部格，这一句不筛掉任何格）。
+            if (cell.Occupant is not { } occupant || mask.Hidden.Contains(cell.Coord) || !_visible.Contains(cell.Coord))
             {
                 continue;
             }

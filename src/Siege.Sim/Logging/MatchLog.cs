@@ -467,6 +467,17 @@ public sealed record LogHeader
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<int>? LockedFlagCounts { get; init; }
 
+    /// <summary>地图档位（big-map D1 / D7）：只在大图的局写出 <c>Large</c>；小图不写（首部逐字节不变），缺字段即小图。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MapTier { get; init; }
+
+    /// <summary>
+    /// 大图各玩家锁定的旗格（围棋记法；下标 = 玩家在 <see cref="Players"/> 里的位置，与 <see cref="Zones"/> 对齐；big-map D4 / D7）。只在大图的局写出。
+    /// 回放先按它在基图上重做落座（<see cref="Siege.Core.Match.FlagRules.Seat"/>）再比 <see cref="MapDigest"/>——大图的开局图摘要是落座图的摘要。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Flags { get; init; }
+
     /// <summary>
     /// 开局的出生棋盘（board-link-mode F.3；下标 = 出生棋盘编号）：只在链接模式的局写出。离线即可按它把坐标归到棋盘与主题，不必按地图标识重建地图（open-map 起地图整局不变）。
     /// </summary>

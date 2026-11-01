@@ -103,7 +103,7 @@ public sealed partial class MatchFlow
 
             SettlementReason? reason = members.All(passed.Contains) ? SettlementReason.AllPassed
                 : !HasPlayableEmptyCell(id) ? SettlementReason.BoardFull
-                : Options.RoundCap > 0 && MajorRound >= Options.RoundCap ? SettlementReason.RoundCap
+                : RoundCap > 0 && MajorRound >= RoundCap ? SettlementReason.RoundCap
                 : null;
             if (reason is { } r)
             {

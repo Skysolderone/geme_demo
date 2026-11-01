@@ -47,13 +47,17 @@ public sealed partial class MatchFlow
     private int _eventSequence;
     private Func<EffectSnapshot, EffectSnapshot>? _snapshotTransform;
 
+    /// <summary>是否经静态校验建局（<see cref="Create"/> / <see cref="Restore"/>）：大图锁定时的落座图同样过一遍校验；测试专用的未校验建局不校验落座图。</summary>
+    private readonly bool _validated;
+
     private MatchFlow(
         MapData map, GameBoard board, GameSeed seed, ImmutableArray<PlayerId> players,
-        HandLedger hands, BoardHistory history, MatchOptions options)
+        HandLedger hands, BoardHistory history, MatchOptions options, bool validated)
     {
         Board = board;
         Seed = seed;
         Options = options;
+        _validated = validated;
         _players = players;
         Hands = hands;
         History = history;
@@ -81,14 +85,14 @@ public sealed partial class MatchFlow
         ArgumentNullException.ThrowIfNull(map);
         GameBoard board = GameBoard.Load(map);
         options ??= MatchOptions.Default;
-        return Build(map, board, seed, players, options);
+        return Build(map, board, seed, players, options, validated: true);
     }
 
     /// <summary>测试专用：跳过地图校验。建局约束（链接图标识、人数恰等于地图人数）照常执行。</summary>
     internal static MatchFlow CreateUnvalidated(MapData map, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions? options = null) =>
-        Build(map, GameBoard.LoadUnvalidated(map), seed, players, options ?? MatchOptions.Immediate);
+        Build(map, GameBoard.LoadUnvalidated(map), seed, players, options ?? MatchOptions.Immediate, validated: false);
 
-    private static MatchFlow Build(MapData map, GameBoard board, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions options)
+    private static MatchFlow Build(MapData map, GameBoard board, GameSeed seed, IEnumerable<PlayerId> players, MatchOptions options, bool validated)
     {
         ArgumentNullException.ThrowIfNull(players);
         ImmutableArray<PlayerId> list = [.. players.Order()];
@@ -111,13 +115,15 @@ public sealed partial class MatchFlow
         RecruitWeights.RequireValidArtisanWeight(options.ArtisanWeight);
         ContentSets.RequireValid(options.ContentSet);
         ScoringVersions.RequireValid(options.ScoringVersion);
-        RequireValidRoundCap(options.RoundCap);
+        // big-map D6：未显式给大回合上限即按地图档位取缺省（小图 100、大图 60），此后对局里 Options.RoundCap 恒为解析后的整数。
+        options = options with { RoundCap = options.RoundCap ?? MatchOptions.DefaultRoundCapFor(map.Tier) };
+        RequireValidRoundCap(options.RoundCap.Value);
         // relic-redesign D5：校验各玩家带入清单（≤ 5 件、保险 ≤ 2；库存由入口层对照档案校验）。带入件不改开局手牌、不派生任何子流：
         // 关闭或全员不带入时与引入带入之前逐步相同；带入件挂出之前不在盘面上，不产生任何效果（R14）。
         RequireValidCarryIns(options.CarryInOut, options.CarryIns, list);
 
         return new MatchFlow(map, board, seed, list,
-            new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet), new BoardHistory(), options);
+            new HandLedger(list, seed, options.ArtisanWeight, options.ContentSet), new BoardHistory(), options, validated);
     }
 
     // ---------- 组成部分 ----------
@@ -146,8 +152,14 @@ public sealed partial class MatchFlow
     /// <summary>恢复自不含匠人权重字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultArtisanWeight"/> 回填。</summary>
     public bool ArtisanWeightBackfilled { get; private set; }
 
-    /// <summary>大回合上限安全网（cycle-stop D2，match-setup「大回合上限配置」；0 = 不启用）。对局配置，始终公开，入存档。</summary>
-    public int RoundCap => Options.RoundCap;
+    /// <summary>大回合上限安全网（cycle-stop D2，match-setup「大回合上限配置」；0 = 不启用）。对局配置，始终公开，入存档。建局时已按档位解析（big-map D6），这里恒为整数。</summary>
+    public int RoundCap => Options.RoundCap ?? MatchOptions.DefaultRoundCapFor(Tier);
+
+    /// <summary>地图档位（big-map D1）：小图 / 大图。开局固定。</summary>
+    public MapTier Tier => Board.BaseMap.Tier;
+
+    /// <summary>大回合上限是否就是该档位的缺省值（big-map D6；界面据此写"第 X / 60 大回合"）。</summary>
+    public bool RoundCapIsDefault => RoundCap == MatchOptions.DefaultRoundCapFor(Tier);
 
     /// <summary>恢复自不含大回合上限字段的旧存档时为 <c>true</c>：按 <see cref="MatchOptions.DefaultRoundCap"/> 回填（裁决 C4 / D4：安全网默认开启）。</summary>
     public bool RoundCapBackfilled { get; private set; }
@@ -263,6 +275,23 @@ public sealed partial class MatchFlow
             Require(player).BirthZone = zone;
         }
 
+        // big-map D4：大图在锁定这一刻物化出生区与出生棋盘——基图 + 旗格 → 落座图，原地换进盘面（空盘、无改造，持有盘面引用的各层每次都现读 Map）。
+        // 这是对局里唯一一次地图变化，由 (标识, 旗格) 完全决定；存档 / 回放按同一函数重做。
+        if (Flags.IsLarge && Board.BaseMap.BirthZones.IsDefaultOrEmpty)
+        {
+            MapData seated = FlagRules.Seat(Board.BaseMap, Flags.LockedCells);
+            if (_validated)
+            {
+                MapValidationResult result = MapValidator.Validate(seated);
+                if (!result.IsValid)
+                {
+                    throw new MapValidationException(result);
+                }
+            }
+
+            Board.Reseat(seated);
+        }
+
         RecordLockedFlagCounts(zones);
 
         _order = Shuffle(_players);
@@ -276,7 +305,10 @@ public sealed partial class MatchFlow
         MajorRound = 1;
         Phase = MatchPhase.InProgress;
         RecalculateDerived();
-        Emit(FlowEventKind.FlagsLocked, null, $"出生区 {string.Join(" ", zones.Select(kv => $"{kv.Key}:{BirthZoneLabel.Number(kv.Value)}"))}；首回合顺序 {string.Join(">", _order)}");
+        string flags = Flags.IsLarge
+            ? string.Join(" ", zones.Select(kv => $"{kv.Key}:{BirthZoneLabel.Number(kv.Value)}@{Flags.FlagCellOf(kv.Key)!.Value.ToNotation()}"))
+            : string.Join(" ", zones.Select(kv => $"{kv.Key}:{BirthZoneLabel.Number(kv.Value)}"));
+        Emit(FlowEventKind.FlagsLocked, null, $"出生区 {flags}；首回合顺序 {string.Join(">", _order)}");
     }
 
     /// <summary>原型替代路径：依次插旗并锁定，产出与同时插旗完全相同的对局状态。</summary>
@@ -296,10 +328,47 @@ public sealed partial class MatchFlow
     public ImmutableArray<(PlayerId Player, int Zone)> PlantPrototype((PlayerId Player, int Zone)? manual = null)
     {
         RequirePhase(MatchPhase.FlagPlanting);
+        if (Flags.IsLarge)
+        {
+            // big-map D3：大图没有座位编号可选——人工选旗格走 PlantPrototypeAt；没有人工选择即全员盲选旗格。
+            if (manual is { } m)
+            {
+                throw new SiegeRuleException($"地图 {Map.Id} 是大图，人工插旗须给旗格（PlantPrototypeAt），不是出生座位编号 {BirthZoneLabel.Of(m.Zone)}。");
+            }
+
+            return PlantPrototypeAt(null);
+        }
+
         // 实现裁决 B2 / seat-gap-25 E4：flag-pick 子流在空座位里均匀盲选，座位互斥。
         ImmutableArray<(PlayerId Player, int Zone)> choices = PrototypeZoneAssignment.AssignBlind(Board.BaseMap, Seed, _players, manual);
         PlantSequentially(choices);
         return choices;
+    }
+
+    /// <summary>
+    /// 大图的原型插旗路径（big-map D3）：<paramref name="manual"/> 是人工指定的旗格，其余玩家经 <see cref="PrototypeZoneAssignment.AssignBlindCells"/> 用 <c>flag-pick</c> 子流在合规旗格里均匀盲选，
+    /// 依次插旗并锁定（太近的旗按先后改派）。返回锁定后每名玩家的出生区编号（顺序同 <see cref="Players"/>）；旗格见 <see cref="FlagPlanting.FlagCellOf"/>。小图拒绝。
+    /// </summary>
+    public ImmutableArray<(PlayerId Player, int Zone)> PlantPrototypeAt((PlayerId Player, Coord Cell)? manual)
+    {
+        RequirePhase(MatchPhase.FlagPlanting);
+        if (!Flags.IsLarge)
+        {
+            throw new SiegeRuleException($"地图 {Map.Id} 是小图，人工插旗须给出生座位编号（PlantPrototype）。");
+        }
+
+        ImmutableArray<(PlayerId Player, Coord Cell)> choices = PrototypeZoneAssignment.AssignBlindCells(Board.BaseMap, Seed, _players, manual);
+        Flags.PlantSequentiallyAt(choices);
+        LockFlags();
+        return [.. _players.Select(p => (p, Flags.FlagOf(p)!.Value))];
+    }
+
+    /// <summary>原型替代路径（大图）：依次按旗格插旗并锁定（big-map D3）。</summary>
+    public void PlantSequentiallyAt(IEnumerable<(PlayerId Player, Coord Cell)> choices)
+    {
+        RequirePhase(MatchPhase.FlagPlanting);
+        Flags.PlantSequentiallyAt(choices);
+        LockFlags();
     }
 
     // ---------- 小回合阶段机 ----------
@@ -524,6 +593,8 @@ public sealed partial class MatchFlow
             PassedThisRound = PassedThisRound,
             RoundCap = RoundCap,
             ScoringVersion = ScoringVersion,
+            Tier = Tier,
+            RoundCapIsDefault = RoundCapIsDefault,
         };
     }
 

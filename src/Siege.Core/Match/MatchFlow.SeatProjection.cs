@@ -17,6 +17,10 @@ namespace Siege.Core.Match;
 /// </remarks>
 public sealed partial class MatchFlow
 {
+    /// <summary>最近一次投影用到的战场与它的格集合（<see cref="VisibleCellsOf"/> 的缓存）。</summary>
+    private Battlefield? _visibleField;
+    private ImmutableHashSet<Coord>? _visibleCells;
+
     /// <summary>按座位投影的公开快照（见类型说明）。</summary>
     public MatchPublicView PublishSeatProjection(PlayerId seat)
     {
@@ -26,7 +30,7 @@ public sealed partial class MatchFlow
             return full;
         }
 
-        ImmutableHashSet<Coord> visible = [.. field.Cells];
+        ImmutableHashSet<Coord> visible = VisibleCellsOf(field);
         ImmutableHashSet<PlayerId> sameField = [.. _players.Where(p => _records[p].BirthZone is int z && field.BirthZones.Contains(z))];
 
         GameBoard board = full.Board;   // Publish 给的已是副本
@@ -58,8 +62,24 @@ public sealed partial class MatchFlow
         }
 
         GameBoard board = projected.Clone();
-        StripOutside(board, [.. field.Cells]);
+        StripOutside(board, VisibleCellsOf(field));
         return result with { ProjectedBoard = board };
+    }
+
+    /// <summary>
+    /// 战场 <paramref name="field"/> 的格集合，按战场实例缓存（big-map 段 C，追加裁决 38：纯性能、输出逐字节不变）。<see cref="GameBoard.Battlefields"/> 按地图实例记忆化，
+    /// 地图不变时每次拿到同一个 <see cref="Battlefield"/>；改造换上新地图后引用随之变、缓存自然失效。此前每次预演投影都把约 1.5 万格重建成 <see cref="ImmutableHashSet{T}"/>，
+    /// 占大图上一次 AI 部署决策八成以上的时间。
+    /// </summary>
+    private ImmutableHashSet<Coord> VisibleCellsOf(Battlefield field)
+    {
+        if (_visibleCells is null || !ReferenceEquals(field, _visibleField))
+        {
+            _visibleField = field;
+            _visibleCells = [.. field.Cells];
+        }
+
+        return _visibleCells;
     }
 
     /// <summary>本座位所在的战场；插旗阶段或尚未锁定出生棋盘时为 <c>null</c>（不投影）。</summary>
@@ -72,5 +92,5 @@ public sealed partial class MatchFlow
     }
 
     private static void StripOutside(GameBoard board, ImmutableHashSet<Coord> visible) =>
-        board.RemoveStones([.. board.AllCoords().Where(c => board[c].Occupant is not null && !visible.Contains(c))]);
+        board.RemoveStones([.. board.OccupiedCoords().Where(c => !visible.Contains(c))]);
 }

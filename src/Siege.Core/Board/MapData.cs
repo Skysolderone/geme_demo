@@ -27,6 +27,12 @@ public sealed record MapData
     /// </summary>
     public MapProfile Profile { get; init; } = MapProfile.Link;
 
+    /// <summary>
+    /// 尺寸档（big-map D1），缺省 <see cref="MapTier.Small"/>（三段标识的浮空岛），由生成器写入。校验器按它选预算行，插旗与对局时长缺省按它分流；
+    /// 气、提子、覆盖、势力等规则内核不读它。小图的地图导出文件不写出它。
+    /// </summary>
+    public MapTier Tier { get; init; } = MapTier.Small;
+
     /// <summary>障碍格：岩石等不可通行地块。</summary>
     public required ImmutableHashSet<Coord> Obstacles { get; init; }
 

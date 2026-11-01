@@ -111,8 +111,17 @@ internal static class PlayCommand
         string lookahead = search.LookaheadWidth > 0 ? $"（前瞻宽度 {search.LookaheadWidth}）" : string.Empty;
         output.WriteLine($"种子 {seed}（用 --seed {seed} 可重开这一局）  你是玩家{seat}，对手 {playerCount - 1} 名 {difficulty} AI{lookahead}");
         output.WriteLine("目标：终局时势力最高。势力 = 你独占的空格数 + 你所有棋串的军势。");
-        output.WriteLine($"流程：玩家各占一个出生座位，座位之间至少隔 {LinkMapGenerator.SeatGap} 格战场（低地、河道与桥），其余为中立平台（不可出生）；前 3 个大回合只能在自己的出生座位内落子与改造，第 4 大回合起全图可落（含低地与中立平台）；"
-            + "全员在一个大回合内全部 Pass、或地图填满即结算终局，势力最高者胜；只剩一人也终局。曾有势力而势力降到 0 即出局。");
+        if (map.Tier == MapTier.Large)
+        {
+            // big-map 裁决 2 / 4 / 5 / 6：大图没有座位——全图自由插旗、旗间距 ≥ 60、锁定时物化 13×13 出生棋盘、缺省 60 大回合到点按势力结算。
+            output.WriteLine($"流程：大图 {map.Width - (2 * LinkMapGenerator.Margin)}×{map.Height - (2 * LinkMapGenerator.Margin)} 全图自由插旗——输入一个合规旗格的坐标即旗，任意两旗相距 ≥ {FlagRules.FlagGap} 格（太近的旗锁定时按插旗先后改派）；锁定时以旗为心物化 {FlagRules.BirthPlateSide}×{FlagRules.BirthPlateSide} 出生棋盘，前 3 个大回合只能在其中落子与改造，第 4 大回合起全图可落；"
+                + $"全员在一个大回合内全部 Pass、或到第 {MatchOptions.DefaultRoundCapLarge} 大回合结束即按势力结算终局，势力最高者胜；只剩一人也终局。曾有势力而势力降到 0 即出局。");
+        }
+        else
+        {
+            output.WriteLine($"流程：玩家各占一个出生座位，座位之间至少隔 {LinkMapGenerator.SeatGap} 格战场（低地、河道与桥），其余为中立平台（不可出生）；前 3 个大回合只能在自己的出生座位内落子与改造，第 4 大回合起全图可落（含低地与中立平台）；"
+                + "全员在一个大回合内全部 Pass、或地图填满即结算终局，势力最高者胜；只剩一人也终局。曾有势力而势力降到 0 即出局。");
+        }
 
         output.WriteLine("围棋式提子：一批棋落下后，对手没有气的棋串被整串提走；你自己的棋串落完仍无气则整批不合法。");
         if (store is not null)
@@ -126,9 +135,19 @@ internal static class PlayCommand
 
         try
         {
-            int zone = ChooseZone(match, me, map, input, output, render, quitWarning);
-            // 其余玩家的座位由 Core 的唯一实现给出（frontier-map D4 / board-link-mode B2 / seat-gap-25 E4）：在空座位里盲选，座位互斥；本机先插旗，必得所选座位。
-            match.PlantPrototype((me, zone));
+            int? zone = null;
+            if (match.Flags.IsLarge)
+            {
+                // big-map D3 / D7：大图按坐标自由插旗；其余玩家由 Core 的唯一实现在合规旗格里盲选（flag-pick），本机排在最前插旗，太近的 AI 旗锁定时改派、本机必得所选旗格。
+                Coord cell = ChooseFlagCell(match, me, map, input, output, render, quitWarning);
+                match.PlantPrototypeAt((me, cell));
+            }
+            else
+            {
+                zone = ChooseZone(match, me, map, input, output, render, quitWarning);
+                // 其余玩家的座位由 Core 的唯一实现给出（frontier-map D4 / board-link-mode B2 / seat-gap-25 E4）：在空座位里盲选，座位互斥；本机先插旗，必得所选座位。
+                match.PlantPrototype((me, zone.Value));
+            }
             arrange?.Invoke(match);
 
             var runner = new MatchRunner(match);
@@ -148,7 +167,14 @@ internal static class PlayCommand
             }
 
             // 盲选（match-setup「匿名同时插旗」）：seat-gap-25 E4 起座位互斥，锁定后每个座位恰一人；原"同一块棋盘上还有…"分支再也走不到，删去。
-            output.WriteLine($"你锁定了 {BirthZoneLabel.Number(zone)} 号出生座位；其余玩家各占一个座位，与你至少隔 {LinkMapGenerator.SeatGap} 格战场。");
+            if (zone is { } seatZone)
+            {
+                output.WriteLine($"你锁定了 {BirthZoneLabel.Number(seatZone)} 号出生座位；其余玩家各占一个座位，与你至少隔 {LinkMapGenerator.SeatGap} 格战场。");
+            }
+            else
+            {
+                output.WriteLine($"你的旗在 {match.Flags.FlagCellOf(me)!.Value.ToNotation()}（{BirthZoneLabel.Number(match.StateOf(me).BirthZone!.Value)} 号出生棋盘，旗心 {FlagRules.BirthPlateSide}×{FlagRules.BirthPlateSide}）；其余玩家的旗与你至少相距 {FlagRules.FlagGap} 格。");
+            }
 
             output.WriteLine($"第 1 大回合顺序随机：{string.Join(" > ", match.ActionOrder.Select(p => BoardRenderer.Label(p, me)))}");
 
@@ -284,6 +310,51 @@ internal static class PlayCommand
             {
                 return z - 1;
             }
+        }
+    }
+
+    /// <summary>
+    /// 大图的自由插旗（big-map 裁决 4，D3 / D7）：画一遍整张基图（只有中立平台记号，没有座位占位），再读一个围棋记法坐标；
+    /// 不是坐标、越界或不是合规旗格（<see cref="FlagRules.IsLegalFlagCell"/>，唯一实现）各提示一次再重读。看不到别人的旗。
+    /// </summary>
+    private static Coord ChooseFlagCell(MatchFlow match, PlayerId me, MapData map, TextReader input, TextWriter output, BoardRenderer render, string? quitWarning)
+    {
+        render.Board(match.PublishSeatProjection(me), me, zones: true);
+        output.WriteLine();
+        while (true)
+        {
+            output.Write($"自由插旗：输入旗格坐标（围棋记法，如 J14）。合规旗格 = 可落子、高度 0、非桥、不在平台内，旗心 {FlagRules.BirthPlateSide}×{FlagRules.BirthPlateSide} 在图内且与中立平台隔开，旗心 {FlagRules.BirthRingSide}×{FlagRules.BirthRingSide} 内可落子 ≥ {FlagRules.MinRingPlayable}；看不到别人的旗，选中即锁定，与别人太近按插旗先后改派 > ");
+            string? line = input.ReadLine() ?? throw new PlayQuitException();
+            line = line.Trim();
+            if (line is "q" or "quit")
+            {
+                if (quitWarning is null || Confirm(quitWarning + "确认退出？(y/N) ", input, output))
+                {
+                    throw new PlayQuitException();
+                }
+
+                continue;
+            }
+
+            if (!Coord.TryParse(line, out Coord cell))
+            {
+                output.WriteLine($"  \"{line}\" 不是坐标：列字母（跳过 I）+ 自下而上的行号，例如 J14。");
+                continue;
+            }
+
+            if (!map.Contains(cell))
+            {
+                output.WriteLine($"  {cell.ToNotation()} 在地图之外。");
+                continue;
+            }
+
+            if (!FlagRules.IsLegalFlagCell(map, cell))
+            {
+                output.WriteLine($"  {cell.ToNotation()} 不是合规旗格。");
+                continue;
+            }
+
+            return cell;
         }
     }
 

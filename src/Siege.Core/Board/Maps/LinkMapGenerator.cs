@@ -5,7 +5,10 @@ using Siege.Core.Determinism;
 namespace Siege.Core.Board.Maps;
 
 /// <summary>
-/// 链接档地图生成器（规格 link-map-generation；map-expand-25 D1–D5 / 裁决 Q3–Q6、R1–R6；seat-gap-25 E1–E3 / 裁决 S1–S6）。唯一入口 <see cref="Generate(ulong, int)"/>：由地图种子与人数生成一整座<b>长方形浮空岛</b>——
+/// 链接档地图生成器（规格 link-map-generation；map-expand-25 D1–D5 / 裁决 Q3–Q6、R1–R6；seat-gap-25 E1–E3 / 裁决 S1–S6；big-map D2）。唯一入口 <see cref="Generate(ulong, int, MapTier)"/>。
+/// <b>大图</b>（<see cref="MapTier.Large"/>，big-map 裁决 3 / 12）：不分人数统一 <see cref="LargeIslandSide"/>×<see cref="LargeIslandSide"/> 的大陆，不预置出生座位（出生区在插旗锁定时由 <c>FlagRules.Seat</c> 物化），
+/// 中立平台 14–18 块均匀落位、河道 6–9 条、湖泊 / 岩区按"均匀撒点 + 局部尝试"投放到非可落子占外接矩形 29%–32%；几何常量见 <see cref="TierGeometry"/>，小图路径上的每一次随机消费与引入档位之前相同。
+/// <b>小图</b>（三段标识）：由地图种子与人数生成一整座<b>长方形浮空岛</b>——
 /// 恰 n 个 8×8 出生座位（位置只由人数决定），任意两座位外接矩形间距 ≥ <see cref="SeatGap"/>，座位之间的战场里散布 n–(n+1) 块 6–8 边长的中立平台；
 /// 平台（座位与中立平台一视同仁）为 h=2 高台、四周崖壁、各有 2–3 个 h=1 坡道；平台之间是 h=0 低地，夹 n 条深水河道（各 2 座预置桥），岛缘点缀林地与少量岩石。
 /// 座位是出生棋盘（<see cref="BoardPlateKind.Birth"/>），中立平台是公共棋盘（<see cref="BoardPlateKind.Public"/>，带主题、不可出生）；地图在对局中不变（<see cref="MapData.MapVersion"/> 恒为 0）。
@@ -70,7 +73,95 @@ public static partial class LinkMapGenerator
     /// <summary>平台主题（D3 / 裁决 R3）：河流 / 林地 / 栅栏阵 / 混合四选一、可重复；不再出现高台。</summary>
     internal static readonly ImmutableArray<BoardTheme> IslandThemes = [BoardTheme.River, BoardTheme.Forest, BoardTheme.Palisade, BoardTheme.Mixed];
 
-    private static readonly ConcurrentDictionary<(ulong Seed, int Players), MapData> Cache = new();
+    // ---------- 大图档（big-map 裁决 3 / 12，D2）：不分人数统一 150×150 的大陆，不预置出生座位 ----------
+
+    /// <summary>大图外接矩形边长（裁决 3：不随人数变化；画布 150 + 2 × <see cref="Margin"/> = 154）。</summary>
+    public const int LargeIslandSide = 150;
+
+    /// <summary>大图的中立平台数区间（D2：按面积放大，14–18 块）。</summary>
+    public const int LargeNeutralPlateMin = 14;
+    public const int LargeNeutralPlateMax = 18;
+
+    /// <summary>大图的河道数区间（D2：6–9 条，布局流抽一次）。</summary>
+    public const int LargeRiverMin = 6;
+    public const int LargeRiverMax = 9;
+
+    /// <summary>大图河道主线在走满这么多格之前绕过平台崖下接着走（小图 <see cref="RiverReach"/> 18 按边长比例放大）。</summary>
+    internal const int LargeRiverReach = 60;
+
+    /// <summary>大图四角切角的直角边区间与海湾的深度 / 沿边长度 / 间隔区间、每条边保留的原岸线长度（按边长比例放大；段 A 追加裁决 20）。</summary>
+    public const int LargeCornerCutMin = 12;
+    public const int LargeCornerCutMax = 24;
+    public const int LargeBayMinDepth = 3;
+    public const int LargeBayMaxDepth = 10;
+    public const int LargeBayMinLength = 10;
+    public const int LargeBayMaxLength = 36;
+    internal const int LargeBayGapMin = 2;
+    internal const int LargeBayGapMax = 6;
+    internal const int LargeReservedShore = 8;
+
+    /// <summary>大图湖泊 / 岩区的格数区间（D2 按面积放大：湖 6–16、岩区 3–8；段 A 追加裁决 20）。</summary>
+    public const int LargeLakeMin = 6;
+    public const int LargeLakeMax = 16;
+    public const int LargeRockClusterMin = 3;
+    public const int LargeRockClusterMax = 8;
+
+    /// <summary>
+    /// 大图非可落子格占<b>外接矩形</b>（150×150，不是掩码内岛面）的目标区间（段 A 追加裁决 20：大陆的海岸虚空计入分母，可落子约 1.5 万 ≈ 67%）；硬上限沿用 <see cref="MaxNonPlayablePercent"/>。
+    /// </summary>
+    public const int LargeTargetNonPlayableMin = 29;
+    public const int LargeTargetNonPlayableMax = 32;
+
+    /// <summary>大图一次低地尝试里湖泊 / 岩区的最多投放尝试次数：大图按"均匀撒点 + 局部尝试"投放（D2），单次尝试便宜，上限放到 40000。</summary>
+    internal const int LargeMaxClusterAttempts = 40000;
+
+    /// <summary>大图岛缘零星岩石数的基数与随机幅度（小图为 2 + NextInt(人数)）。</summary>
+    internal const int LargeEdgeRockBase = 10;
+    internal const int LargeEdgeRockSpread = 10;
+
+    /// <summary>大图自由插旗（裁决 2 / 4 / 5，D3 / D4）：任意两旗切比雪夫距离下限、锁定时物化的出生平台边长（旗心半径 6）与出生圈边长（旗心半径 4）。</summary>
+    public const int LargeFlagGap = 60;
+    public const int LargeBirthPlateSide = 13;
+    public const int LargeBirthRingSide = 9;
+
+    /// <summary>
+    /// 一档的几何常量（big-map D2 / implement 段 A 第 2 条）：小图取类顶部的既有常量，大图取 <c>Large*</c> 常量。小图路径上每一次随机消费都经同样的常量，取值与引入档位之前相同。
+    /// </summary>
+    internal sealed record TierGeometry(
+        MapTier Tier,
+        (int Min, int Max) CornerCut,
+        (int Min, int Max) BayDepth,
+        (int Min, int Max) BayLength,
+        (int Min, int Max) BayGap,
+        int ReservedShore,
+        int RiverReach,
+        (int Min, int Max) LakeSize,
+        (int Min, int Max) RockClusterSize,
+        (int Min, int Max) TargetNonPlayable,
+        int MaxClusterAttempts)
+    {
+        /// <summary>小图：按人数的既有浮空岛几何；大图：150×150。</summary>
+        internal (int Width, int Height) IslandSize(int players) =>
+            Tier == MapTier.Small ? LinkMapGenerator.IslandSize(players) : (LargeIslandSide, LargeIslandSide);
+
+        /// <summary>中立平台数区间：小图按人数 n–(n+1)，大图 14–18。</summary>
+        internal (int Min, int Max) NeutralPlates(int players) =>
+            Tier == MapTier.Small ? NeutralPlateCount(players) : (LargeNeutralPlateMin, LargeNeutralPlateMax);
+
+        /// <summary>是否预置出生座位（只有小图）。</summary>
+        internal bool HasSeats => Tier == MapTier.Small;
+
+        internal static TierGeometry Of(MapTier tier) => tier switch
+        {
+            MapTier.Small => new(tier, (CornerCutMin, CornerCutMax), (BayMinDepth, BayMaxDepth), (BayMinLength, BayMaxLength), (BayGapMin, BayGapMax), LinkMapGenerator.ReservedShore, LinkMapGenerator.RiverReach,
+                (LakeMin, LakeMax), (RockClusterMin, RockClusterMax), (TargetNonPlayableMin, TargetNonPlayableMax), LinkMapGenerator.MaxClusterAttempts),
+            MapTier.Large => new(tier, (LargeCornerCutMin, LargeCornerCutMax), (LargeBayMinDepth, LargeBayMaxDepth), (LargeBayMinLength, LargeBayMaxLength), (LargeBayGapMin, LargeBayGapMax), LargeReservedShore, LargeRiverReach,
+                (LargeLakeMin, LargeLakeMax), (LargeRockClusterMin, LargeRockClusterMax), (LargeTargetNonPlayableMin, LargeTargetNonPlayableMax), LargeMaxClusterAttempts),
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "链接图的档位只能是小图或大图。"),
+        };
+    }
+
+    private static readonly ConcurrentDictionary<(ulong Seed, int Players, MapTier Tier), MapData> Cache = new();
 
     /// <summary>四个朝向（南、北、西、东）的坐标增量：只做坐标算术（坡道朝外、河道前进），不用来枚举邻居。</summary>
     private static readonly ImmutableArray<(int Dx, int Dy)> Directions = [(0, -1), (0, 1), (-1, 0), (1, 0)];
@@ -89,18 +180,21 @@ public static partial class LinkMapGenerator
         return (players, players + 1);
     }
 
-    /// <summary>按完整标识（<c>link:&lt;种子&gt;:&lt;人数&gt;</c>）生成初始地图。</summary>
+    /// <summary>按完整标识（<c>link:&lt;种子&gt;:&lt;人数&gt;[:&lt;档&gt;]</c>）生成初始地图。</summary>
     public static MapData Generate(string mapId)
     {
-        (ulong seed, int players) = LinkMapId.Parse(mapId);
-        return Generate(seed, players);
+        (ulong seed, int players, MapTier tier) = LinkMapId.Parse(mapId);
+        return Generate(seed, players, tier);
     }
 
-    /// <summary>生成初始地图。<see cref="MapData.Id"/> 为规范化标识，<see cref="MapData.MaxPlayers"/> 为人数，<see cref="MapData.MapVersion"/> 为 0。结果按 (种子, 人数) 缓存（地图不可变）。</summary>
-    public static MapData Generate(ulong mapSeed, int players)
+    /// <summary>生成小图档初始地图（三段标识）。</summary>
+    public static MapData Generate(ulong mapSeed, int players) => Generate(mapSeed, players, MapTier.Small);
+
+    /// <summary>生成初始地图。<see cref="MapData.Id"/> 为规范化标识，<see cref="MapData.MaxPlayers"/> 为人数，<see cref="MapData.Tier"/> 为档位，<see cref="MapData.MapVersion"/> 为 0。结果按 (种子, 人数, 档位) 缓存（地图不可变）。</summary>
+    public static MapData Generate(ulong mapSeed, int players, MapTier tier)
     {
         LinkMapId.RequirePlayers(players);
-        return Cache.GetOrAdd((mapSeed, players), static key => Layout(key.Seed, key.Players, overlaySurfaces: true).Map);
+        return Cache.GetOrAdd((mapSeed, players, tier), static key => Layout(key.Seed, key.Players, key.Tier, overlaySurfaces: true).Map);
     }
 
     /// <summary>
@@ -120,19 +214,19 @@ public static partial class LinkMapGenerator
         ImmutableHashSet<Coord> RockClusters);
 
     /// <summary>生成初始地图并给出中间产物（测试用：逐平台核对、重抽次数分布；不缓存）。</summary>
-    internal static IslandGeneration GenerateDetailed(ulong mapSeed, int players)
+    internal static IslandGeneration GenerateDetailed(ulong mapSeed, int players, MapTier tier = MapTier.Small)
     {
         LinkMapId.RequirePlayers(players);
-        return Layout(mapSeed, players, overlaySurfaces: true);
+        return Layout(mapSeed, players, tier, overlaySurfaces: true);
     }
 
     /// <summary>
     /// 测试接缝（link-map-surfaces D5 / 规格 Scenario「新地表不改其余地形」）：同一标识、不做新地表叠加的地图。不缓存，不经 <see cref="MapCatalog"/>，任何入口都拿不到它。
     /// </summary>
-    internal static MapData GenerateWithoutSurfaces(ulong mapSeed, int players)
+    internal static MapData GenerateWithoutSurfaces(ulong mapSeed, int players, MapTier tier = MapTier.Small)
     {
         LinkMapId.RequirePlayers(players);
-        return Layout(mapSeed, players, overlaySurfaces: false).Map;
+        return Layout(mapSeed, players, tier, overlaySurfaces: false).Map;
     }
 
     /// <summary>
@@ -147,32 +241,36 @@ public static partial class LinkMapGenerator
     /// 叠加只改平台中间带的草地，不影响前面任何一步的判定，所以 <paramref name="overlaySurfaces"/> 为 <c>false</c> 的对照图与正式图只差新地表。
     /// 成品过一遍链接档静态校验，不通过即生成器缺陷（抛 <see cref="MapGenerationException"/>）。
     /// </summary>
-    private static IslandGeneration Layout(ulong mapSeed, int players, bool overlaySurfaces)
+    private static IslandGeneration Layout(ulong mapSeed, int players, MapTier tier, bool overlaySurfaces)
     {
-        string id = LinkMapId.Format(mapSeed, players);
-        (int width, int height) = IslandSize(players);
+        TierGeometry g = TierGeometry.Of(tier);
+        string id = LinkMapId.Format(mapSeed, players, tier);
+        (int width, int height) = g.IslandSize(players);
         Island rect = Island.Rectangle(width, height);
-        RandomStream rng = MapRandom.ForLinkLayout(mapSeed, players);
-        RandomStream coast = MapRandom.ForLinkCoast(mapSeed, players);
+        RandomStream rng = MapRandom.ForLinkLayout(mapSeed, players, tier);
+        RandomStream coast = MapRandom.ForLinkCoast(mapSeed, players, tier);
         for (int layoutRedraw = 0; layoutRedraw <= MaxLayoutRedraws; layoutRedraw++)
         {
-            if (TryLayout(rect, players, rng) is not { } layout)
+            if (TryLayout(rect, players, rng, g) is not { } layout)
             {
                 continue;
             }
 
-            Island island = Carve(rect, layout, coast);
+            Island island = Carve(rect, layout, coast, g);
+            // 大图（D2 预算）：河道自检改走"干图气边图 + 水格屏蔽"（见 LibertyGraph），每张布局只向 Adjacency.LibertyNeighbors 问一次；小图照旧逐河整图 LibertySplit。
+            LibertyGraph? graph = g.Tier == MapTier.Small ? null
+                : new LibertyGraph(Assemble("link-island-preview", players, g.Tier, island, layout, layout.Boards, new Lowland([], [], [], [], [], [])));
             for (int lowlandRedraw = 0; lowlandRedraw <= MaxLowlandRedraws; lowlandRedraw++)
             {
-                if (TryLowland(island, players, layout, rng, coast) is not { } lowland)
+                if (TryLowland(island, players, layout, rng, coast, g, graph) is not { } lowland)
                 {
                     continue;
                 }
 
                 BoardTerrain[] boards = overlaySurfaces
-                    ? OverlaySurfaces(layout.Boards, MapRandom.ForLinkSurfaces(mapSeed, players))
+                    ? OverlaySurfaces(layout.Boards, MapRandom.ForLinkSurfaces(mapSeed, players, tier))
                     : [.. layout.Boards];
-                MapData map = Assemble(id, players, island, layout, boards, lowland);
+                MapData map = Assemble(id, players, tier, island, layout, boards, lowland);
                 MapValidationResult validation = MapValidator.Validate(map);
                 if (!validation.IsValid)
                 {
@@ -332,9 +430,9 @@ public static partial class LinkMapGenerator
         ImmutableHashSet<Coord> RockClusters);
 
     /// <summary>一次布局尝试（D2 / D3）：平台落位 → 主题 → 平台内部 → 坡道。放不下返回 <c>null</c>（调用方在同一条流上重抽）。</summary>
-    private static PlateLayout? TryLayout(Island island, int players, RandomStream rng)
+    private static PlateLayout? TryLayout(Island island, int players, RandomStream rng, TierGeometry g)
     {
-        if (PlacePlates(island, players, rng) is not { } rects)
+        if (PlacePlates(island, players, rng, g) is not { } rects)
         {
             return null;
         }
@@ -394,35 +492,69 @@ public static partial class LinkMapGenerator
     /// 抽到的尺寸没有候选时退到 6×6 再找（不消费随机）；仍没有就停止追加。中立平台放够下限即成功，否则返回 <c>null</c>。
     /// 结果座位在前（按左下角先行后列）、中立平台在后（同样排序），保证 <see cref="MapData.Boards"/> 里出生棋盘 i 即出生区 i。
     /// </summary>
-    private static List<BoardPlate>? PlacePlates(Island island, int players, RandomStream rng)
+    private static List<BoardPlate>? PlacePlates(Island island, int players, RandomStream rng, TierGeometry g)
     {
-        (int min, int max) = NeutralPlateCount(players);
+        (int min, int max) = g.NeutralPlates(players);
         int target = min + rng.NextInt(max - min + 1);
-        List<BoardPlate> plates = [.. island.Seats(players)];
+        int seats = g.HasSeats ? players : 0;
+        List<BoardPlate> plates = g.HasSeats ? [.. island.Seats(players)] : [];
         var neutral = new List<BoardPlate>();
         while (neutral.Count < target)
         {
             int width = PlateMinSide + rng.NextInt(PlateMaxSide - PlateMinSide + 1);
             int height = PlateMinSide + rng.NextInt(PlateMaxSide - PlateMinSide + 1);
-            List<BoardPlate> spots = PlateSpots(island, plates, width, height);
-            if (spots.Count == 0 && (width, height) != (PlateMinSide, PlateMinSide))
+            BoardPlate? chosen;
+            if (g.Tier == MapTier.Small)
             {
-                spots = PlateSpots(island, plates, PlateMinSide, PlateMinSide);
+                List<BoardPlate> spots = PlateSpots(island, plates, width, height);
+                if (spots.Count == 0 && (width, height) != (PlateMinSide, PlateMinSide))
+                {
+                    spots = PlateSpots(island, plates, PlateMinSide, PlateMinSide);
+                }
+
+                chosen = spots.Count == 0 ? null : spots[rng.NextInt(spots.Count)];
+            }
+            else
+            {
+                chosen = ScatterPlate(island, plates, width, height, rng);
             }
 
-            if (spots.Count == 0)
+            if (chosen is not { } plate)
             {
                 break;
             }
 
-            BoardPlate chosen = spots[rng.NextInt(spots.Count)];
-            plates.Add(chosen);
-            neutral.Add(chosen);
+            plates.Add(plate);
+            neutral.Add(plate);
         }
 
         return neutral.Count >= min
-            ? [.. plates.Take(players).OrderBy(p => p.Origin.Y).ThenBy(p => p.Origin.X), .. neutral.OrderBy(p => p.Origin.Y).ThenBy(p => p.Origin.X)]
+            ? [.. plates.Take(seats).OrderBy(p => p.Origin.Y).ThenBy(p => p.Origin.X), .. neutral.OrderBy(p => p.Origin.Y).ThenBy(p => p.Origin.X)]
             : null;
+    }
+
+    /// <summary>大图一块中立平台的落位尝试次数上限（均匀抽原点，与已放平台间隔 ≥ <see cref="PlateGap"/> 即落下）。</summary>
+    internal const int LargePlateTries = 40;
+
+    /// <summary>
+    /// 大图的平台落位（段 A 追加裁决 20）：不用小图的"贴紧"候选（在 150×150 上会让平台沿岛边与彼此连成一串、中部空无一物），改为在合法原点范围内均匀抽原点，
+    /// 与全部已放平台间隔 ≥ <see cref="PlateGap"/> 即落下；连抽 <see cref="LargePlateTries"/> 次都撞上即放弃这一块（调用方按下限判定成败）。
+    /// </summary>
+    private static BoardPlate? ScatterPlate(Island island, List<BoardPlate> placed, int width, int height, RandomStream rng)
+    {
+        int low = Margin + EdgeGap;
+        int highX = Margin + island.Width - EdgeGap - width;
+        int highY = Margin + island.Height - EdgeGap - height;
+        for (int attempt = 0; attempt < LargePlateTries; attempt++)
+        {
+            var plate = new BoardPlate(new Coord(low + rng.NextInt(highX - low + 1), low + rng.NextInt(highY - low + 1)), width, height, BoardPlateKind.Public);
+            if (placed.All(p => MapValidator.PlatesApart(p, plate, PlateGap)))
+            {
+                return plate;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>宽 <paramref name="width"/>、高 <paramref name="height"/> 的平台全部"贴紧"的合法落位，先行后列。</summary>
@@ -481,18 +613,20 @@ public static partial class LinkMapGenerator
     /// 一次低地尝试（D4；map-coastline 裁决 2 / 3）：n 条河道（各 2 座预置桥，再按岸线流加宽到 1–2 格）→ 湖泊 / 岩区填到目标占比（岸线流，见 <see cref="PlaceClusters"/>）
     /// → 岛缘林地 → 岛缘岩石，然后全图可落子格沿气边须连通。不满足返回 <c>null</c>（调用方在同一条流上重抽低地）。
     /// </summary>
-    private static Lowland? TryLowland(Island island, int players, PlateLayout layout, RandomStream rng, RandomStream coast)
+    private static Lowland? TryLowland(Island island, int players, PlateLayout layout, RandomStream rng, RandomStream coast, TierGeometry g, LibertyGraph? graph)
     {
         var water = new HashSet<Coord>();
         var bridges = new HashSet<Coord>();
-        for (int k = 0; k < players; k++)
+        // 河道数：小图恰 n 条（人数）；大图在 6–9 里由布局流抽一次（D2）。
+        int rivers = g.Tier == MapTier.Small ? players : LargeRiverMin + rng.NextInt(LargeRiverMax - LargeRiverMin + 1);
+        for (int k = 0; k < rivers; k++)
         {
             // map-coastline：一条河道画完（主线 → 两座桥 → 加宽）先单独做一次全图气边连通自检——出岸又回岸、或者绕着平台兜圈的河道会把一片低地围成两座桥都够不着的口袋，
             // 这种情况在同一条流上只重抽这一条（至多 MaxRiverRedraws 次），不急着把前面画好的河道一起作废；仍不行才重抽整段低地。
             bool placed = false;
             for (int redraw = 0; !placed && redraw <= MaxRiverRedraws; redraw++)
             {
-                if (DrawRiver(island, layout, water, rng) is not { } river)
+                if (DrawRiver(island, layout, water, rng, g) is not { } river)
                 {
                     continue;
                 }
@@ -518,8 +652,11 @@ public static partial class LinkMapGenerator
                 HashSet<Coord> widened = WidenRiver(island, layout, water, river, [first, second], coast);
                 HashSet<Coord> trialWater = [.. water, .. river, .. widened];
                 HashSet<Coord> trialBridges = [.. bridges, first, second];
-                MapData trial = Assemble("link-island-preview", players, island, layout, layout.Boards, new Lowland([.. trialWater], [.. trialBridges], [], [], [], []));
-                if (!MapValidator.LibertySplit(trial).IsEmpty)
+                // 小图：组装试图、整图气边连通自检（MapValidator.LibertySplit，唯一判定）。大图：同一判定在干图气边图上做——未架桥的水格屏蔽掉，其余格的气边与试图逐格相同（见 LibertyGraph）。
+                bool split = graph is null
+                    ? !MapValidator.LibertySplit(Assemble("link-island-preview", players, g.Tier, island, layout, layout.Boards, new Lowland([.. trialWater], [.. trialBridges], [], [], [], []))).IsEmpty
+                    : !graph.ConnectedWithout([.. trialWater.Where(c => !trialBridges.Contains(c))]);
+                if (split)
                 {
                     continue;
                 }
@@ -539,7 +676,7 @@ public static partial class LinkMapGenerator
         int plateNonPlayable = layout.Boards.Sum(b => b.Rocks.Count + b.Surfaces.Count(kv => kv.Value == Surface.DeepWater && !b.Bridges.Contains(kv.Key)));
         var lakes = new HashSet<Coord>();
         var rockClusters = new HashSet<Coord>();
-        if (!PlaceClusters(island, layout, water, bridges, lakes, rockClusters, plateNonPlayable, coast))
+        if (!PlaceClusters(island, layout, water, bridges, lakes, rockClusters, plateNonPlayable, coast, g))
         {
             return null;
         }
@@ -558,11 +695,17 @@ public static partial class LinkMapGenerator
             }
         }
 
-        int rockCount = 2 + rng.NextInt(players);
+        int rockCount = g.Tier == MapTier.Small ? 2 + rng.NextInt(players) : LargeEdgeRockBase + rng.NextInt(LargeEdgeRockSpread);
+        // 大图：岛缘格 × 岩区格的 Any(AreAdjacent) 是 600 × 2000 × 岩石数的扫描，改为"四邻之一在集合里"（同一判据的另一种写法），候选基数只算一次；小图路径原样。
+        List<Coord>? edgeBase = g.Tier == MapTier.Small ? null
+            : [.. island.Cells().Where(c => Free(c) && !forest.Contains(c)
+                && !Directions.Any(d => bridges.Contains(Step(c, d, 1)) || rockClusters.Contains(Step(c, d, 1))))];
         for (int k = 0; k < rockCount; k++)
         {
-            List<Coord> spots = [.. island.Cells().Where(c => Free(c) && !forest.Contains(c) && !rocks.Contains(c)
-                && !bridges.Any(b => Adjacency.AreAdjacent(b, c)) && !rockClusters.Any(r => Adjacency.AreAdjacent(r, c)) && RingConnected([c], Land))];
+            List<Coord> spots = edgeBase is null
+                ? [.. island.Cells().Where(c => Free(c) && !forest.Contains(c) && !rocks.Contains(c)
+                    && !bridges.Any(b => Adjacency.AreAdjacent(b, c)) && !rockClusters.Any(r => Adjacency.AreAdjacent(r, c)) && RingConnected([c], Land))]
+                : [.. edgeBase.Where(c => !rocks.Contains(c) && RingConnected([c], Land))];
             if (spots.Count == 0)
             {
                 break;
@@ -572,7 +715,7 @@ public static partial class LinkMapGenerator
         }
 
         var lowland = new Lowland([.. water], [.. bridges], [.. forest], [.. rocks], [.. lakes], [.. rockClusters]);
-        MapData preview = Assemble("link-island-preview", players, island, layout, layout.Boards, lowland);
+        MapData preview = Assemble("link-island-preview", players, g.Tier, island, layout, layout.Boards, lowland);
         return MapValidator.LibertySplit(preview).IsEmpty ? lowland : null;
     }
 
@@ -616,8 +759,9 @@ public static partial class LinkMapGenerator
     /// 走满 <see cref="MinRiverLength"/> 格后碰到岛缘即停，走满 <see cref="RiverReach"/> 格后碰到某平台崖下也停（map-coastline：不足即绕过崖下接着走）。
     /// 不进平台、海湾 / 切角与坡道朝外格，不挨着自己走过的格（保持 1 格宽），也不挨着别的河道。走投无路时已走满 <see cref="MinRiverLength"/> 格就到此为止，否则返回 <c>null</c>。
     /// </summary>
-    private static List<Coord>? DrawRiver(Island island, PlateLayout layout, HashSet<Coord> water, RandomStream rng)
+    private static List<Coord>? DrawRiver(Island island, PlateLayout layout, HashSet<Coord> water, RandomStream rng, TierGeometry g)
     {
+        int reach = g.RiverReach;
         bool Open(Coord c) => island.Contains(c) && !layout.InPlate(c) && !layout.RampOutlets.Contains(c) && !water.Contains(c)
             && !water.Any(w => Adjacency.AreAdjacent(w, c));
         bool Cliff(Coord c) => layout.Plates.Any(p => UnderCliff(p, c));
@@ -642,7 +786,7 @@ public static partial class LinkMapGenerator
             // map-coastline：出岸之后不再贴岸走（走满 MinRiverLength 后碰岸即停），走满 RiverReach 之前不贴崖走（崖下与岸边各留一条低地，河道不把平台与岸之间、
             // 两个海湾之间的窄道堵死——贴岸 / 贴崖的河道会把夹在中间的格围成无桥可达的口袋）；走满之后碰崖即停。
             bool Next(Coord c) => Open(c) && !path.Contains(c) && !path.Take(path.Count - 1).Any(p => Adjacency.AreAdjacent(p, c))
-                && (path.Count + 1 >= MinRiverLength || !island.OnEdge(c)) && (path.Count + 1 >= RiverReach || !Cliff(c));
+                && (path.Count + 1 >= MinRiverLength || !island.OnEdge(c)) && (path.Count + 1 >= reach || !Cliff(c));
             int roll = rng.NextInt(6);
             int[] order = roll < 4 ? [heading, Left(heading), Right(heading)] : roll == 4 ? [Left(heading), heading, Right(heading)] : [Right(heading), heading, Left(heading)];
             int chosen = Array.FindIndex(order, d => Next(Step(here, Directions[d], 1)));
@@ -654,7 +798,7 @@ public static partial class LinkMapGenerator
             heading = order[chosen];
             Coord next = Step(here, Directions[heading], 1);
             path.Add(next);
-            if ((path.Count >= MinRiverLength && island.OnEdge(next)) || (path.Count >= RiverReach && Cliff(next)))
+            if ((path.Count >= MinRiverLength && island.OnEdge(next)) || (path.Count >= reach && Cliff(next)))
             {
                 return path;
             }
@@ -682,6 +826,7 @@ public static partial class LinkMapGenerator
     private static MapData Assemble(
         string id,
         int players,
+        MapTier tier,
         Island island,
         PlateLayout layout,
         IReadOnlyList<BoardTerrain> boards,
@@ -718,6 +863,7 @@ public static partial class LinkMapGenerator
             Height = island.CanvasHeight,
             MaxPlayers = players,
             Profile = MapProfile.Link,
+            Tier = tier,
             Obstacles = obstacles.ToImmutable(),
             TerrainData = terrain,
             BirthZones = [.. layout.Plates.Where(p => p.Kind == BoardPlateKind.Birth).Select(p => (ImmutableHashSet<Coord>)[.. p.CoreCells()])],
@@ -746,5 +892,90 @@ public static partial class LinkMapGenerator
             .ThenBy(c => c.Y)
             .ThenBy(c => c.X)
             .First();
+    }
+
+    /// <summary>
+    /// 干图（平台落位后、还没有任何河道 / 湖泊 / 岩石的试图）的气边图（big-map D2 预算）：每个可落子格的气边邻格只向 <see cref="Adjacency.LibertyNeighbors"/>（唯一实现）问一次、存成下标表。
+    /// 之后每条河道的连通自检只需把未架桥的水格屏蔽掉再广度优先：水格不可落子即被移出，桥格可落子且高度 / 栅栏与干图相同，其余格的气边也不因水而变——
+    /// 所以"干图气边 − 被屏蔽的格"与在试图上重算 <see cref="Adjacency.LibertyNeighbors"/> 逐格相同（气边只看两格的可落子、高差与其间栅栏）。整数下标数组上的广度优先比逐格查地图字典快两个数量级。
+    /// 只供生成器大图分支的河道自检；低地收尾与成品仍走 <see cref="MapValidator.LibertySplit"/> / <see cref="MapValidator.Validate"/>。
+    /// </summary>
+    private sealed class LibertyGraph
+    {
+        private readonly int _width;
+        private readonly bool[] _playable;
+        private readonly int[][] _adjacent;
+        private readonly int _playableCount;
+
+        internal LibertyGraph(MapData dry)
+        {
+            _width = dry.Width;
+            int size = dry.Width * dry.Height;
+            _playable = new bool[size];
+            _adjacent = new int[size][];
+            foreach (Coord c in dry.AllCoords())
+            {
+                int i = Index(c);
+                if (!dry.IsPlayable(c))
+                {
+                    _adjacent[i] = [];
+                    continue;
+                }
+
+                _playable[i] = true;
+                _playableCount++;
+                _adjacent[i] = [.. Adjacency.LibertyNeighbors(dry, c).Select(Index)];
+            }
+        }
+
+        private int Index(Coord c) => (c.Y * _width) + c.X;
+
+        /// <summary>把 <paramref name="blocked"/>（未架桥的水格等不可落子格）移出后，其余可落子格是否沿气边连成一片。</summary>
+        internal bool ConnectedWithout(HashSet<Coord> blocked)
+        {
+            var removed = new bool[_playable.Length];
+            int remaining = _playableCount;
+            foreach (Coord c in blocked)
+            {
+                int i = Index(c);
+                if (_playable[i] && !removed[i])
+                {
+                    removed[i] = true;
+                    remaining--;
+                }
+            }
+
+            if (remaining == 0)
+            {
+                return true;
+            }
+
+            int start = Array.FindIndex(_playable, 0, p => p);
+            while (removed[start])
+            {
+                start = Array.FindIndex(_playable, start + 1, p => p);
+            }
+
+            var visited = new bool[_playable.Length];
+            var queue = new Queue<int>();
+            visited[start] = true;
+            queue.Enqueue(start);
+            int reached = 1;
+            while (queue.Count > 0)
+            {
+                int here = queue.Dequeue();
+                foreach (int n in _adjacent[here])
+                {
+                    if (!visited[n] && !removed[n])
+                    {
+                        visited[n] = true;
+                        reached++;
+                        queue.Enqueue(n);
+                    }
+                }
+            }
+
+            return reached == remaining;
+        }
     }
 }

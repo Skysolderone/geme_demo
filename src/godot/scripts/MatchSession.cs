@@ -70,8 +70,8 @@ public sealed class MatchSession
     /// <summary>最近一次被拒绝的操作说明；无则为 <c>null</c>。</summary>
     public FailurePresentation? LastFailure { get; private set; }
 
-    /// <summary>一行状态提示。</summary>
-    public string Notice { get; private set; } = string.Empty;
+    /// <summary>一行状态提示（界面层的操作提示也写这里，如大图点到不合规旗格）。</summary>
+    public string Notice { get; set; } = string.Empty;
 
     /// <summary>
     /// 大回合上限提示条（cycle-stop 裁决 S3）：上限启用且还剩 ≤ 5 个大回合时为"第 X 大回合结束时按势力结算（还剩 M 个大回合）"，否则 <c>null</c>。
@@ -111,6 +111,8 @@ public sealed class MatchSession
 
     /// <summary>是否还在等玩家插旗。</summary>
     public bool AwaitingZone => Match.Phase == MatchPhase.FlagPlanting;
+    /// <summary>大图（big-map D1）：自由插旗、分块渲染、小地图、对局时长 60；小图一切照旧。开局固定。</summary>
+    public bool IsLargeMap => Match.Tier == MapTier.Large;
 
     /// <summary>轮到本机玩家行动。</summary>
     public bool IsMyTurn => Match.Phase == MatchPhase.InProgress && Match.CurrentPlayer == Me;
@@ -279,15 +281,71 @@ public sealed class MatchSession
             _zoneOwners.TryAdd(chosen, player);
         }
 
+        StartAi();
+
+        // seat-gap-25 E4：座位互斥，本机先插旗、必得所选座位，其余玩家改派到空座位。原"同棋盘：…"读的是同战场玩家——open-map 起唯一战场即全员，那句会把所有对手都列成"同棋盘"，删去。
+        Notice = $"{BirthZoneLabel.Number(zone)} 号出生座位锁定，其余玩家各占一个座位。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
+        Rebuild();
+    }
+    /// <summary>某格是不是本机此刻可插旗的合规旗格（big-map D3）：只在大图插旗阶段为真，判定只走 Core 唯一实现 <see cref="FlagRules.IsLegalFlagCell"/>，这里不复刻规则。</summary>
+    public bool IsLegalFlagCell(Coord cell) => AwaitingZone && IsLargeMap && FlagRules.IsLegalFlagCell(Match.Map, cell);
+
+    /// <summary>
+    /// 无人值守演示在大图上插旗用的格（big-map D9）：合规旗格集合（Core 唯一实现 <see cref="FlagPlanting.LegalCells"/>，先行后列）的正中一格——确定性、不消费随机，且落在图的内部而不是边角。
+    /// </summary>
+    public Coord DemoFlagCell()
+    {
+        ImmutableArray<Coord> legal = Match.Flags.LegalCells;
+        if (legal.IsEmpty)
+        {
+            throw new SiegeRuleException($"地图 {Match.Map.Id} 没有任何合规旗格。");
+        }
+
+        return legal[legal.Length / 2];
+    }
+
+    /// <summary>
+    /// 大图自由插旗（big-map 裁决 4 / D3）：本机玩家把旗插在 <paramref name="cell"/>（须合规，否则 Core 拒绝、提示留在 <see cref="Notice"/>），其余玩家由 Core 的唯一实现在合规旗格里盲选
+    /// （<see cref="MatchFlow.PlantPrototypeAt"/>：本机先插、必保住原旗；太近的旗按插旗先后改派），选中即锁定并开始第 1 大回合。锁定后 <see cref="ZoneOwners"/> 记每个出生区的玩家。
+    /// </summary>
+    public void ChooseCell(Coord cell)
+    {
+        if (!AwaitingZone || !IsLargeMap)
+        {
+            return;
+        }
+
+        ImmutableArray<(PlayerId Player, int Zone)> choices;
+        try
+        {
+            choices = Match.PlantPrototypeAt((Me, cell));
+        }
+        catch (SiegeRuleException ex)
+        {
+            Notice = ex.Message;
+            Rebuild();
+            return;
+        }
+
+        foreach ((PlayerId player, int chosen) in choices)
+        {
+            _zoneOwners.TryAdd(chosen, player);
+        }
+
+        StartAi();
+        int zone = choices.First(c => c.Player == Me).Zone;
+        Notice = $"旗锁定在 {Match.Flags.FlagCellOf(Me)!.Value.ToNotation()}（{BirthZoneLabel.Number(zone)} 号出生区，旗帜周围 {FlagRules.BirthPlateSide}×{FlagRules.BirthPlateSide} 为构筑范围）。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
+        Rebuild();
+    }
+
+    /// <summary>锁定之后给其余玩家装上 AI 控制者（两档插旗入口共用）。</summary>
+    private void StartAi()
+    {
         _runner = new MatchRunner(Match);
         foreach (PlayerId player in Match.Players.Where(p => p != Me))
         {
             _runner.SetController(player, HeuristicAi.Create(Match, player, Difficulty, Weights, Search));
         }
-
-        // seat-gap-25 E4：座位互斥，本机先插旗、必得所选座位，其余玩家改派到空座位。原"同棋盘：…"读的是同战场玩家——open-map 起唯一战场即全员，那句会把所有对手都列成"同棋盘"，删去。
-        Notice = $"{BirthZoneLabel.Number(zone)} 号出生座位锁定，其余玩家各占一个座位。第 1 大回合顺序：{string.Join(" > ", Match.ActionOrder.Select(Siege.Presentation.Text.Labels.Player))}";
-        Rebuild();
     }
 
     /// <summary>

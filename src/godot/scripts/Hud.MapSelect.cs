@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using Siege.Core.Ai;
+using Siege.Core.Board;
 using Siege.Presentation.MapSelect;
 using Siege.Presentation.Style;
 using Siege.Presentation.Text;
@@ -20,6 +21,8 @@ public sealed partial class Hud
 {
     private readonly List<Button> _difficultyButtons = [];
     private readonly List<Button> _playerButtons = [];
+    private readonly List<Button> _tierButtons = [];
+    private Label _mapIntroText = null!;
     private Control? _selectRoot;
     private PanelContainer? _selectPanel;
     private LineEdit _mapSeedInput = null!;
@@ -37,6 +40,8 @@ public sealed partial class Hud
 
     /// <summary>点选人数（2 / 3 / 4 之一）。</summary>
     public event Action<int>? MapPlayersPicked;
+    /// <summary>点选尺寸（小 / 大，big-map 裁决 11）。</summary>
+    public event Action<MapTier>? MapTierPicked;
 
     /// <summary>点选 AI 难度（四档之一）。</summary>
     public event Action<AiDifficulty>? MapDifficultyPicked;
@@ -83,6 +88,19 @@ public sealed partial class Hud
             button.Text = (active ? "● " : "○ ") + $"{players} 人";
             Ui.Selected(button, active);
         }
+        for (int i = 0; i < _tierButtons.Count; i++)
+        {
+            MapTier tier = MapSelectModel.TierOptions[i];
+            bool active = tier == model.Tier;
+            Button button = _tierButtons[i];
+            button.Text = (active ? "● " : "○ ") + Labels.TierName(tier);
+            Ui.Selected(button, active);
+        }
+
+        // 说明随尺寸切换：小图是座位盲选，大图是全图自由插旗（文案经 Labels 取 Core 常量）。
+        _mapIntroText.Text = model.Tier == MapTier.Large
+            ? Labels.LargeMapIntro
+            : $"{Siege.Presentation.Text.Labels.SeatLayout}（不可出生）；每名玩家盲选一个座位，前 3 个大回合在自己座位构筑，第 4 大回合起全岛开战。地图由地图种子与人数决定。";
 
         for (int i = 0; i < _difficultyButtons.Count; i++)
         {
@@ -105,6 +123,7 @@ public sealed partial class Hud
             _selectPanel = null;
             _difficultyButtons.Clear();
             _playerButtons.Clear();
+            _tierButtons.Clear();
         }
 
         _root.Visible = true;
@@ -124,7 +143,8 @@ public sealed partial class Hud
         _selectPanel = panel;
 
         body.AddChild(Ui.Text("开始新局", Ui.PanelBorder, UiTheme.BodyFontPx + 4));
-        body.AddChild(Ui.Text($"{Siege.Presentation.Text.Labels.SeatLayout}（不可出生）；每名玩家盲选一个座位，前 3 个大回合在自己座位构筑，第 4 大回合起全岛开战。地图由地图种子与人数决定。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        _mapIntroText = Ui.Text(string.Empty, Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true);
+        body.AddChild(_mapIntroText);
 
         body.AddChild(Ui.Separator());
         body.AddChild(Ui.Heading("地图种子"));
@@ -173,6 +193,20 @@ public sealed partial class Hud
 
         body.AddChild(playersRow);
         body.AddChild(Ui.Text("你和 AI 一共几名玩家；岛的大小与平台块数随人数变。", Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
+        // 尺寸（big-map 裁决 11）：小 = 现行浮空岛（三段标识），大 = 150×150 大陆、全图自由插旗（标识带 :l）；缺省小。
+        body.AddChild(Ui.Separator());
+        body.AddChild(Ui.Heading("尺寸"));
+        var tierRow = new HBoxContainer();
+        foreach (MapTier tier in MapSelectModel.TierOptions)
+        {
+            Button option = Ui.Action(Labels.TierName(tier), 118);
+            option.Pressed += () => MapTierPicked?.Invoke(tier);
+            _tierButtons.Add(option);
+            tierRow.AddChild(option);
+        }
+
+        body.AddChild(tierRow);
+        body.AddChild(Ui.Text(Labels.TierHint, Ui.MutedText, UiTheme.BodyFontPx - 2, wrap: true));
 
         // AI 难度（expert-lookahead D10）：四档，缺省标准（命令行 --difficulty= 预选）。
         body.AddChild(Ui.Separator());

@@ -75,9 +75,14 @@ dotnet run --project src/Siege.Sim -c Release -- map --map link:1
 - 构建 C#：`dotnet build src/godot/Siege.Godot.csproj`（**Debug**——Godot 在编辑器外读 Debug 程序集，只做 Release 构建会跑到旧代码；`--build-solutions --quit` 会挂住不自退，不用）。
 - 四步自检（规格 simulation-harness「自检四步」）：
   1. `-- --auto-demo`：插旗锁定 → 构筑期（第 1–3 大回合各一条），`[flow]` 已见各步通过 + 开局对准自证，退出 0。
-  2. `-- --auto-demo --pick-check --seed=5`：锁定后对全图跑一轮拾取（192/192，`terrain-density` 后；`terrain-barriers` 后 202/202，原 214/214）即退出 0。
+  2. `-- --auto-demo --pick-check --seed=5`：锁定后对全图跑一轮拾取（**1366/1366**，`link:1:4` 四人 45×45 浮空岛，big-map 段 B 实测 2026-11-01；此前 192/192、202/202、214/214 是旧图的数）即退出 0。
   3. `-- --map-select --auto-demo`：新局界面五步（非法种子 / 合法种子 / 换一张 / 回到进入时的种子 / 开始）再接演示；第 4 步节点守门为"建局后 = 进入时 + 主题名标注数"。
   4. `-- --auto-demo --rounds=0 --seed=5`：跑到终局，`[flow]` 要求四步齐全（插旗锁定 → 构筑期 → 全图解禁 → 终局），任一步不符退出 1。
+  5. 大图（big-map 段 B，`link:<种子>:<人数>:l`；**不要加 `--rounds=0`**——段 C 之前全图阶段的 AI 没有预筛、跑不动；无人值守不接受 `--zone=`）：
+     - `-- --auto-demo --pick-check --seed=5 --map=link:5:4:l --rounds=1 --mute --no-carry`：`[flag]` 三条（点不合规格只提示、Core 拒绝、点合规格即锁定）、`[minimap]` 往返 2000/2000、`[pick-check]` 抽样 2000/2000（8×8 扫描位姿）、`[build]` 建场景 ≤ 2 s、`[chunks]` 已加载 25/100，退出 0。
+     - `-- --auto-demo --map=link:7:4:l --rounds=1 --mute --no-carry`：`[flow]` 插旗锁定 + 构筑期通过，退出 0（headless 14 帧约 20 s，几乎全在 Core 的 Publish / AI）。
+     - 非 headless `-- --auto-demo --map=link:7:4:l --rounds=1 --mute --no-carry --screenshot=<绝对路径>:8 --perf-sample=5`（采样在取图后冻结时进行，须带 `--screenshot=`）：`[perf-steady]` 稳定 fps ≥ 30。
+     - 小图零改动守门：`--fixed-fps 60 -- --map=link:5:4 --auto-demo --rounds=1 --mute --no-carry --screenshot=<绝对路径>:60` 改前 / 改后 PNG 逐字节相等（`link:9:3` 同）；小图 headless 自检日志只多 `[build] 建场景 … 小图常驻` 一行。
 - 第 3 条曾偶发退出 1（"换一张"到一屏看不全的图后全局预览关不掉），已修复：`4706c4e` 起稳定退出 0，复位逻辑现收在 `BoardCamera.Rebound`（见「后续 change」第 14 项）。
 - 换出生棋盘看取景：`-- --auto-demo --zone=<1–5> --seed=<S>`。
 - 截图（非 headless）命令与人工试玩清单：`art/open-map/README.md`（锁定后全图、第 4 大回合跨棋盘落子）、`art/link-map-terrain/README.md`（五主题、棋盘内岩石 `link:9`）、`art/link-map-surfaces/README.md`（锁定后整图，`link:1` 十格新地表（F1 / F2 后），四种点缀）、`art/map-elements-v2/README.md`（地图元素部件化：改前改后全局预览与近景、灰度图、绘制调用对照）。

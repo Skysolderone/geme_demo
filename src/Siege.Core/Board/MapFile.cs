@@ -35,6 +35,8 @@ public static class MapFile
             MaxPlayers = map.MaxPlayers,
             // retire-legacy-maps 4.1（L7）：规格档恒写出（原"标准档不写出"随标准档删除）；链接图的导出文件本就写着 Link，逐字节不变。
             Profile = map.Profile.ToString(),
+            // big-map D1：档位只在大图写出；小图（缺省）不写，小图的导出文件与引入档位之前逐字节相同。
+            Tier = map.Tier == MapTier.Small ? null : map.Tier.ToString(),
             // 空清单不写出：既有地图的导出文件与引入棋盘清单之前逐字节相同（board-map D2）。
             Boards = map.Boards.IsDefaultOrEmpty
                 ? null
@@ -84,6 +86,7 @@ public static class MapFile
         List<List<string>> zones = Required(dto.BirthZones, "BirthZones");
         Dictionary<string, string> exemptions = Required(dto.PocketExemptions, "PocketExemptions");
         MapProfile profile = ParseProfile(dto.Profile);
+        MapTier tier = ParseTier(dto.Tier);
 
         return new MapData
         {
@@ -92,7 +95,8 @@ public static class MapFile
             Height = dto.Height,
             MaxPlayers = dto.MaxPlayers,
             Profile = profile,
-            Boards = ParseBoards(dto.Boards, profile),
+            Tier = tier,
+            Boards = ParseBoards(dto.Boards, profile, tier),
             MapVersion = ParseMapVersion(dto.MapVersion),
             Obstacles = Parse(Required(dto.Obstacles, "Obstacles")),
             BirthZones = [.. zones.Select((z, i) => Parse(Required(z, $"BirthZones[{i}]")))],
@@ -154,7 +158,7 @@ public static class MapFile
     /// 链接档的棋盘（出生棋盘与公共棋盘，seat-gap-25 E2）MUST 带主题，主题只认枚举名（大小写不敏感，不认数字），缺失或无法识别都指名该棋盘拒绝加载，不取缺省主题。
     /// 边长区间、棋盘内无障碍、出生棋盘与出生区对应、主题两两不同等属于静态校验，不在文件格式里判。
     /// </summary>
-    private static ImmutableArray<BoardPlate> ParseBoards(List<BoardDto>? boards, MapProfile profile)
+    private static ImmutableArray<BoardPlate> ParseBoards(List<BoardDto>? boards, MapProfile profile, MapTier tier)
     {
         if (boards is null)
         {
@@ -176,20 +180,37 @@ public static class MapFile
                 throw new FormatException($"地图文件的 Boards[{i}] 为 {dto.Width}×{dto.Height}：棋盘的宽与高必须为正。");
             }
 
-            plates.Add(new BoardPlate(Coord.Parse(Required(dto.Origin, $"Boards[{i}].Origin")), dto.Width, dto.Height, dto.Kind, ParseTheme(dto, i, ref birth, profile)));
+            plates.Add(new BoardPlate(Coord.Parse(Required(dto.Origin, $"Boards[{i}].Origin")), dto.Width, dto.Height, dto.Kind, ParseTheme(dto, i, ref birth, profile, tier)));
         }
 
         return plates.MoveToImmutable();
     }
 
+    /// <summary>
+    /// 档位字段（big-map D1）：缺省（省略）即小图；只接受枚举名 <c>Small</c> / <c>Large</c>，其余响亮失败。
+    /// </summary>
+    private static MapTier ParseTier(string? raw)
+    {
+        if (raw is null)
+        {
+            return MapTier.Small;
+        }
+
+        string text = raw.Trim();
+        return Enum.TryParse(text, ignoreCase: true, out MapTier value) && Enum.IsDefined(value)
+            ? value
+            : throw new FormatException($"地图文件的档位 Tier 为 \"{raw}\"：只接受 Small（小图，可省略）或 Large（大图）。");
+    }
+
     /// <summary>棋盘清单第 <paramref name="index"/> 项的主题；<paramref name="birth"/> 是到这一项为止的出生棋盘计数（出生棋盘编号 = 计数 − 1，用于报文）。</summary>
-    private static BoardTheme? ParseTheme(BoardDto dto, int index, ref int birth, MapProfile profile)
+    private static BoardTheme? ParseTheme(BoardDto dto, int index, ref int birth, MapProfile profile, MapTier tier)
     {
         string where = dto.Kind == BoardPlateKind.Birth ? $"Boards[{index}]（出生棋盘 {BirthZoneLabel.Number(birth++)}）" : $"Boards[{index}]（公共棋盘）";
         // seat-gap-25 E2：链接档的公共棋盘（中立平台）同样必须带主题，原"只有出生棋盘带主题"放宽；链接档是唯一规格档，非链接档的口径已无对象。
+        // big-map D4：大图的出生棋盘是锁定时物化的 13×13 低地平台，不带主题（缺省 null），只有中立平台仍须带主题。
         if (dto.Theme is null)
         {
-            return profile == MapProfile.Link
+            return profile == MapProfile.Link && !(tier == MapTier.Large && dto.Kind == BoardPlateKind.Birth)
                 ? throw new FormatException($"地图文件的 {where} 缺少主题字段 Theme：链接档的棋盘（出生座位与中立平台）必须带主题（{LegalThemes}），不取缺省主题。")
                 : null;
         }
@@ -407,6 +428,10 @@ public static class MapFile
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         [JsonConverter(typeof(ProfileTextConverter))]
         public string? Profile { get; set; }
+
+        /// <summary>尺寸档（big-map D1）。省略即小图；小图写出时也省略，大图写 <c>Large</c>。</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Tier { get; set; }
 
         /// <summary>棋盘清单（board-map）。省略即空清单；空清单写出时也省略。</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
